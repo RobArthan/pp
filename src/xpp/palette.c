@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.27 2004/10/26 15:41:18 rda Exp rda $ 
+ * $Id: palette.c,v 2.28 2004/11/23 15:52:51 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -386,7 +386,8 @@ static void type_char_cb(
 	buf[0] = cbdata;
 	buf[1] = '\0';
 
-	if(XmTextGetSelectionPosition(text_w, &start, &end)) {
+	if(	XmTextGetSelectionPosition(text_w, &start, &end)
+	&&	start < end) {
 		XmTextReplace(text_w, start, end, buf);
 		XmTextClearSelection(text_w, CurrentTime);
 	} else {

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.58 2004/11/19 15:59:00 rda Exp rda $ 
+ * $Id: search.c,v 2.59 2004/11/23 15:52:51 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -664,7 +664,8 @@ static Boolean search_either(
 	XmTextPosition pl, pr;
 	pattern = XmTextGetString(search_data.search_w);
 	text_buf = XmTextGetString(search_data.text_w);
-	if(XmTextGetSelectionPosition(search_data.text_w, &pl, &pr)) {
+	if(	XmTextGetSelectionPosition(search_data.text_w, &pl, &pr)
+	&&	pl < pr) {
 		start_point = (dir == FORWARDS ? pr : pl);
 	} else {
 		start_point = XmTextGetInsertionPosition(search_data.text_w);
@@ -720,8 +721,8 @@ static Boolean replace_selection(
 {
 	XmTextPosition left, right;
 	char *replacement, *rep_pattern;
-	if(XmTextGetSelectionPosition(cbdata->text_w, &left, &right)
-		&& left != right ) {
+	if(	XmTextGetSelectionPosition(cbdata->text_w, &left, &right)
+	&&	left < right ) {
 		rep_pattern  = XmTextGetString(cbdata->replace_w);
 		if(use_wildcards) {
 			long int text_len =right - left, rep_len;

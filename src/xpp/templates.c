@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.26 2004/08/08 11:06:01 rda Exp rda $ 
+ * $Id: templates.c,v 2.27 2004/11/23 15:52:51 rda Exp rda $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -410,7 +410,8 @@ static void templates_cb(
 		return;
 	}
 
-	if(XmTextGetSelectionPosition(text_w, &start, &end)) {
+	if(	XmTextGetSelectionPosition(text_w, &start, &end)
+	&&	start < end) {
 		XmTextReplace(text_w, start, end, *cbdata);
 		XmTextClearSelection(text_w, CurrentTime);
 	} else {
