@@ -1,5 +1,10 @@
-% imp047.doc %Z% $Date$ $Revision$ $RCSfile$
+% imp047.doc  %Z% $Date$ $Revision$ $RCSfile$
+
+doctex imp047 ; texdvi imp047
+bibtex imp047
+
 =TEX
+% imp047.doc  %Z% $Date$ $Revision$ $RCSfile$
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
 \makeindex
@@ -27,11 +32,11 @@
 \begin{document}
 \makeTPPfrontpage
 \vfill
-\begin{centering}
+\begin{center}
 \bf Copyright \copyright\ : International Computers Ltd \number\year
-\end{centering}
+\end{center}
 \pagebreak
-\section{Document control}
+\section{Document Control}
 \subsection{Contents List}
 \tableofcontents
 \subsection{Document Cross References}
@@ -40,11 +45,20 @@
 
 \subsection{Changes History} 
 \begin{description}
-\item [Issue \SCCSversion (\TPPdate{\FormatDate{$Date$%
-}})]
+\item [Issue 1.19 (\TPPdate{\FormatDate{92/03/03}})]
 First draft version.
+
+\item [Issue \SCCSversion (\TPPdate{\FormatDate{$Date$
+}})]
+	Restructure function $dest\_ZTERM$ to meet the needs of the
+	pretty printer.  This is done by adding function
+	$basic\_dest\_ZTERM$ to do the actual destruction or production
+	of error message arguments, this function is used by
+	$dest\_ZTERM$ and by the pretty printer.
+
 \end{description}
-%\subsection{Changes forecast}
+%\subsection{Changes Forecast}
+\newpage
 \section{GENERAL}
 \subsection{Scope}
 This document contains the implementation of the constructor, discriminator and destructor functions corresponding to the primitive constructors of Z.
@@ -59,7 +73,11 @@ The functions in this document are dependent on the Release 1 HOL System.
 \section{ERROR REPORTING}
 For performance reasons, the arguments of the various constructors below are not checked for well-formedness or suitability and
 it will therefore be possible, indeed easy, to construct terms which are not legal in our extended Z syntax.
-Such terms will be identified by the pretty printer \cite{?} and will normally, though not necessarily, be errors.
+(The constructors might be bypassed entirely and the HOL constructors
+used to generate terms with the names of Z~constants.) Such terms must
+be handled by the pretty printer~\cite{DS/FMU/IED/DTD031} in a way that allows them to
+be read back by the HOL and Z parsers and generate a term with the same
+meaning.
 Of course, where the term construction fails due to some error detected in the underlying HOL or ML, it is intecepted and reported as helpfully as possible.
 \section{STRUCTURE PREAMBLE}
 =SML
@@ -67,7 +85,7 @@ structure €ZTypesAndTerms› : ZTypesAndTerms = struct
 =TEX
 We open the structure containing the support package (see \cite{DS/FMU/IED/IMP048}).
 =SML
-open ZTypesAndTermsSupport
+open ZTypesAndTermsSupport;
 =TEX
 \section{DERIVED HOL CONSTRUCTORS}
 The functions defined here are an ad-hoc collection of constructors, destructors and discriminators which, at the time of writing, were not provided by the ICL HOL system.
@@ -77,46 +95,92 @@ fun	€list_mk_≠_type› ((tyl,ty):TYPE list * TYPE) :TYPE = fold mk_≠_type tyl ty;
 =TEX
 \section{AUXILIARY FUNCTIONS}
 \subsection{Name Destruction}
-We need the inverse of the name construction functions (defined in \cite{DS/FMU/IED/DTD048}).
+We need the inverse of the name construction functions (defined in
+\cite{DS/FMU/IED/DTD048}).  Given a name formed as a simple identifier
+followed by a sequence of name lists with each name list in square
+brackets function $dest\_Z\_name$ returns the identifier name plus a
+list of lists.  Thus a name like
+
+=GFT
+	"abc[de,fg,hi][jk,lm][no][p,r,s]"
+=TEX
+
+is split into the following pieces
+
+=GFT
+	("abc",
+	[	["de", "fg", "hi"],
+		["jk", "lm"],
+		["no"],
+		["p", "r", "s"]
+	])
+=TEX
+
+Function $dest\_Z\_name$ splits up well formed names by interpreting the
+square brackets and commas, it complains about mal-formed names.
+
 =SML
-fun	€dest_Z_name› (s:string) :string * string list list =
-	let	fun	frt l = rev(tl(rev l));
-		fun	lst l = hd(rev l);
-		fun	f [] r = r
-		|	f ("["::t) (n,[]) = f t (n,[[]])
-		|	f ("["::t) (n,cl) = f t (n,cl @ [[]])
-		|	f ("]"::t) r = f t r
-		|	f (","::t) (n,cl) = 
-				let	val (fcl,lcl) = (frt cl,lst cl)
-				in
-					f t (n,fcl @ [lcl @ [""]])
-				end
-		|	f (h::t) (n,[]) = f t (n ^ h,[])
-		|	f (h::t) (n,cll) = (
-				case lst cll of
-					[] => f t (n,(frt cll) @ [[h]])
-				|	cl => f t (n,(frt cll) @ [(frt cl) @ [(lst cl) ^ h]])
-				)
+fun	€dest_Z_name› (s:string) :string * string list list = (
+let
+	exception bad_name;
+
+	fun	addnam (nil:string list) (cl:string list)
+			: string list = cl
+	|	addnam n cl = (implode(rev n)) :: cl
+	;
+
+	fun	aux(nil, Value _, _) = raise bad_name
+	|	aux(nil, Nil, pl) = rev pl
+
+	|	aux("["::t (*=]=*), Value _, _) = raise bad_name
+	|	aux("["::t (*=]=*), Nil, pl) = aux(t, Value(nil, nil), pl)
+
+	|	aux(","::t, Nil, _) = raise bad_name
+	|	aux(","::t, Value(cn, cl), pl) = aux(t, Value(nil, addnam cn cl), pl)
+
+	|	aux((*=[=*) "]"::t, Nil, _) = raise bad_name
+	|	aux((*=[=*) "]"::t, Value(cn, cl), pl) = aux(t, Nil, (rev(addnam cn cl)) :: pl)
+
+	|	aux(ch::t, Nil, _) = raise bad_name
+	|	aux(ch::t, Value(cn, cl), pl) = aux(t, Value(ch::cn, cl), pl)
+	;
+
+	fun	get_id(nil, prev) = (nil, prev)
+	|	get_id(l as ("["::_ (*=]=*)), prev) = (l, prev)
+	|	get_id(","::t, _) = raise bad_name
+	|	get_id((*=[=*) "]"::t, _) = raise bad_name
+	|	get_id(ch::t, prev) = get_id(t, ch :: prev)
+	;
+in
+	let
+		val (tail, front) = get_id(explode s, nil)
 	in
-		f (explode s) ("",[])
+		(implode(rev front), aux(tail, Nil, nil))
 	end
-	handle Fail _ => fail "dest_Z_name" 47000 [fn () => s];
+	handle Fail _ => fail "dest_Z_name" 47000 [fn () => s]
+	| bad_name => fail "dest_Z_name" 47000 [fn () => s]
+end
+);
 =TEX
 \section{Z TYPES}
 The following sections describe the constructor, discriminator and destructor functions for each of the five Z type constructors.
 \subsection{The Datatype ZTYPE}
-This datatype is used by the general mapping functions $mk\_ZTYPE$, $is\_ZTYPE$ and $dest\_ZTYPE$ (q.v.).
+
+The general mapping functions $mk\-\_ZTYPE$, $is\-\_ZTYPE$ and
+$dest\-\_ZTYPE$, which are declared later in this document, use this
+datatype.
+
 =SML
-datatype	€ZTYPE› = 	ZgivenT of string
-		|		ZvarT of string
-		|		ZpowerT of TYPE
-		|		ZtupleT of TYPE list
-		|		ZschemaT of (string * TYPE) list;
+datatype	€ZTYPE› = 	€ZgivenT› of string
+		|		€ZvarT› of string
+		|		€ZpowerT› of TYPE
+		|		€ZtupleT› of TYPE list
+		|		€ZschemaT› of (string * TYPE) list;
 =TEX
 \subsection{The General Destructor Function}
 This function converts a HOL type to the appropriate form of the above datatype (providing, of course, that it represents a valid Z type).
 =SML
-fun	dest_ZTYPE (ty:TYPE) :ZTYPE =
+fun	€dest_ZTYPE› (ty:TYPE) :ZTYPE =
 	case dest_simple_type ty of
 		Vartype s => (
 			case explode s of
@@ -127,7 +191,7 @@ fun	dest_ZTYPE (ty:TYPE) :ZTYPE =
 	|	Ctype(s,tyl) => (
 			case (dest_Z_name s,tyl) of
 				(("Z'T",[[n]]),tyl) => 
-					if PolyML.makestring(length tyl) = n
+					if string_of_int(length tyl) = n
 					then ZtupleT tyl
 					else fail "" 0 []
 			|	(("Z'S",[cl]),tyl) => 
@@ -149,12 +213,14 @@ fun	€is_ZTYPE› (t:TYPE) :bool =
 \subsection{Given Sets}
 =SML
 fun	€mk_ZgivenT› (s:string) :TYPE = mk_ctype(s,[]);
+
 fun	€is_ZgivenT› (ty :TYPE) :bool = (
 	case dest_ZTYPE ty of	
 		ZgivenT _ => true
 	|	_ => false
 	)
 	handle Fail _ => false;
+
 fun	€dest_ZgivenT› (ty :TYPE) :string = (
 	case dest_ZTYPE ty of
 		ZgivenT s => s
@@ -165,12 +231,14 @@ fun	€dest_ZgivenT› (ty :TYPE) :string = (
 \subsection{Generic Variables}
 =SML
 fun	€mk_ZvarT› (s:string) :TYPE = mk_vartype("'" ^ s);
+
 fun	€is_ZvarT› (ty :TYPE) :bool = (
 	case dest_ZTYPE ty of	
 		ZvarT _ => true
 	|	_ => false
 	)
 	handle Fail _ => false;
+
 fun	€dest_ZvarT› (ty :TYPE) :string = (
 	case dest_ZTYPE ty of
 		ZvarT s => s
@@ -181,12 +249,14 @@ fun	€dest_ZvarT› (ty :TYPE) :string = (
 \subsection{Set Types}
 =SML
 fun	€mk_ZpowerT› (ty:TYPE) :TYPE = mk_ctype("SET",[ty]);
+
 fun	€is_ZpowerT› (ty :TYPE) :bool = (
 	case dest_ZTYPE ty of	
 		ZpowerT _ => true
 	|	_ => false
 	)
 	handle Fail _ => false;
+
 fun	€dest_ZpowerT› (ty :TYPE) :TYPE = (
 	case dest_ZTYPE ty of
 		ZpowerT t => t
@@ -198,12 +268,14 @@ fun	€dest_ZpowerT› (ty :TYPE) :TYPE = (
 =SML
 fun	€mk_ZtupleT› (tyl:TYPE list) :TYPE = 
 		tuple_type tyl;
+
 fun	€is_ZtupleT› (ty :TYPE) :bool = (
 	case dest_ZTYPE ty of	
 		ZtupleT _ => true
 	|	_ => false
 	)
 	handle Fail _ => false;
+
 fun	€dest_ZtupleT› (ty :TYPE) :TYPE list = (
 	case dest_ZTYPE ty of
 		ZtupleT tyl => tyl
@@ -215,12 +287,14 @@ fun	€dest_ZtupleT› (ty :TYPE) :TYPE list = (
 =SML
 fun	€mk_ZschemaT› (itym:(string * TYPE) list) :TYPE =
 		bind_type itym;
+
 fun	€is_ZschemaT› (ty :TYPE) :bool = (
 	case dest_ZTYPE ty of	
 		ZschemaT _ => true
 	|	_ => false
 	)
 	handle Fail _ => false;
+
 fun	€dest_ZschemaT› (ty :TYPE) :(string * TYPE) list = (
 	case dest_ZTYPE ty of
 		ZschemaT itym => itym
@@ -240,87 +314,216 @@ fun	€mk_ZTYPE›	(ZgivenT(s:string) :ZTYPE) :TYPE = mk_ZgivenT s
 \section{Z TERMS}
 The following describes the constructor, discriminator and destructor functions for Z terms.
 \subsection{The Datatype ZTERM}
-This datatype is used by the generalised mapping functions $mk\_ZTERM$, $is\_ZTERM$ and $dest\_ZTERM$ (q.v.).
+
+The general mapping functions $mk\-\_ZTERM$, $is\-\_ZTERM$ and
+$dest\-\_ZTERM$, which are declared later in this document, use this
+datatype.
+
 =SML
-datatype	€ZTERM› = 	Zdec of TERM list * TERM
-		|		Zdecsexp of TERM * string
-		|		Zdecl of TERM list
-		|		Zeq of TERM * TERM
-		|		Zç of TERM * TERM
-		|		Ztrue
-		|		Zfalse
-		|		Z≥ of TERM
-		|		Z± of TERM * TERM
-		|		Z≤ of TERM * TERM
-		|		Z¥ of TERM * TERM
-		|		Z§ of TERM * TERM
-		|		Z∂ of TERM * TERM * TERM
-		|		Z∂â1 of TERM * TERM * TERM
-		|		Zµ of TERM * TERM * TERM
-		|		Zpredsexp of TERM * string
-		|		Zlvar of string * TYPE * TERM list
-		|		Zgvar of string * TYPE * TERM list
-		|		Zint of string
-		|		Zß¢ of TYPE * TERM list
-		|		Zsetd of TYPE * TERM list
-		|		Zseta of TERM * TERM * TERM
-		|		Z of TERM
-		|		ZT of TERM list
-		|		Z∏ of TERM list
-		|		Z  of TERM * string
-		|		Zsel of TERM * string
-		|		Zapp of TERM * TERM
-		|		ZÃ of TERM * TERM * TERM
-		|		ZÕ of TERM * TERM * TERM
-		|		Zâs of TERM * TERM
-		|		Zdecâs of TERM * string
-		|		Zpreâs of TERM
-		|		Z≥âs of TERM
-		|		Z±âs of TERM * TERM
-		|		Z≤âs of TERM * TERM
-		|		Z¥âs of TERM * TERM
-		|		Z§âs of TERM * TERM
-		|		Z˘âs of TERM * TERM
-		|		Zhideâs of TERM * string list
-		|		Z∂âs of TERM * TERM * TERM
-		|		Z∂â1âs of TERM * TERM * TERM
-		|		Zµâs of TERM * TERM * TERM
-		|		ZÑâs of TERM
-		|		Zòâs of TERM
-		|		Zªâs of TERM * TERM;
+datatype	€ZTERM›
+		=	 	€Zdec› of TERM list * TERM
+		|		€Zdecsexp› of TERM * string
+		|		€Zdecl› of TERM list
+		|		€Zeq› of TERM * TERM
+		|		€Zç› of TERM * TERM
+		|		€Ztrue›
+		|		€Zfalse›
+		|		€Z≥› of TERM
+		|		€Z±› of TERM * TERM
+		|		€Z≤› of TERM * TERM
+		|		€Z¥› of TERM * TERM
+		|		€Z§› of TERM * TERM
+		|		€Z∂› of TERM * TERM * TERM
+		|		€Z∂â1› of TERM * TERM * TERM
+		|		€Zµ› of TERM * TERM * TERM
+		|		€Zpredsexp› of TERM * string
+		|		€Zlvar› of string * TYPE * TERM list
+		|		€Zgvar› of string * TYPE * TERM list
+		|		€Zint› of string
+		|		€Zß¢› of TYPE * TERM list
+		|		€Zsetd› of TYPE * TERM list
+		|		€Zseta› of TERM * TERM * TERM
+		|		€Z› of TERM
+		|		€Ztuple› of TERM list
+		|		€Z∏› of TERM list
+		|		€Z › of TERM * string
+		|		€Zsel› of TERM * string
+		|		€Zapp› of TERM * TERM
+		|		€ZÃ› of TERM * TERM * TERM
+		|		€ZÕ› of TERM * TERM * TERM
+		|		€Zâs› of TERM * TERM
+		|		€Zdecâs› of TERM * string
+		|		€Zpreâs› of TERM
+		|		€Z≥âs› of TERM
+		|		€Z±âs› of TERM * TERM
+		|		€Z≤âs› of TERM * TERM
+		|		€Z¥âs› of TERM * TERM
+		|		€Z§âs› of TERM * TERM
+		|		€Z˘âs› of TERM * TERM
+		|		€Zhideâs› of TERM * string list
+		|		€Z∂âs› of TERM * TERM * TERM
+		|		€Z∂â1âs› of TERM * TERM * TERM
+		|		€Zµâs› of TERM * TERM * TERM
+		|		€ZÑâs› of TERM
+		|		€Zòâs› of TERM
+		|		€Zªâs› of TERM * TERM
+		;
 =TEX
-\subsection{The General Destructor Function}
-This function converts a HOL term to the appropriate form of the above datatype (providing, of course, that it represents a valid Z object).
-It consists of a simple case analysis on the name of the rator of the supplied term and is therefore not foolproof; obvious cases of invalid Z are caught at the end.
+
+\subsection{Result of Basic Destructor Function}
+
+This function converts a HOL term to the appropriate form of the
+datatype $ZTERM$, or to an encoding of why it could not be converted.
+The encoded failure value is intended for use by the pretty
+printer~\cite{DS/FMU/IED/DTD031,DS/FMU/IED/DTD064}, it contains values
+showing how (in some cases) the term might be HOL if it were modified
+slightly.  The return value from the basic destructor function is
+in type $BDZ$ (named for `Basic Destroy Z').
+
 =SML
-local
-val 	CI = Combinators.I;
-fun	dest (t:TERM) :string * string list list * TERM list =
-	let	val (c,al) = strip_app t;
-		val (cn,_) = dest_const c handle Fail _ => dest_var c;
-		val (s,cl) = dest_Z_name cn;
+datatype €BDZ›
+	=	€bdz_ok›	of ZTERM
+	|	€bdz_not_Z›	of int
+	|	€bdz_fail›	of {
+			€bdz_f_code›	: int,
+			€bdz_f_compc›	: int,
+			€bdz_f_argc›	: int
+		}
+	;
+=TEX
+
+Successful destruction returns $bdz\_ok$ with the Z term.  Value
+$bdz\_fail$ is returned when the term is similar to a Z~term (i.e., it
+has a known constructor but the wrong number of arguments).  In this
+case the $bdz\_f\_compc$ and $bdz\_f\_argc$ fields tell how many component
+lists and arguments (respectively) are allowed in a well formed
+Z~term.  Value $bdz\_not\_Z$ is returned when the term is not
+recognisable as a Z~term.  In cases where insufficient component lists
+or arguments are given to a known constructor either $bdz\_fail$ or
+$bdz\_not\_Z$ may be returned.
+
+\subsection{Destructor Utilities}
+
+=SML
+fun €zdest_0_0›(nil, nil, _, v) = bdz_ok v
+| zdest_0_0(_, _, e, _) = bdz_not_Z 47900
+;
+
+fun €zdest_1_gt0›(_, nil, e, _) = bdz_not_Z 47900
+| zdest_1_gt0(_::_, a, _, v) = bdz_ok(v a)
+| zdest_1_gt0(_, _, e, _) = bdz_not_Z 47900
+;
+
+fun €zdest_0_1›(nil, [x], _, v) = bdz_ok(v x)
+| zdest_0_1 (_, _::_::_, e, _) =
+	bdz_fail{bdz_f_code=e, bdz_f_compc=0, bdz_f_argc=1}
+| zdest_0_1(_, _, e, _) = bdz_not_Z 47900
+;
+
+fun €zdest_0_2›(nil, [x, y], _, v) = bdz_ok(v(x,y))
+| zdest_0_2 (_, _::_::_::_, e, _) =
+	bdz_fail{bdz_f_code=e, bdz_f_compc=0, bdz_f_argc=2}
+| zdest_0_2(_, _, e, _) = bdz_not_Z 47900
+;
+
+fun €zdest_1_1›([_], [x], _, v) = bdz_ok(v x)
+| zdest_1_1 (_, _::_::_, e, _) =
+	bdz_fail{bdz_f_code=e, bdz_f_compc=1, bdz_f_argc=1}
+| zdest_1_1(_, _, e, _) = bdz_not_Z 47900
+;
+
+fun €zdest_2_2›([_, _], [x, y], _, v) = bdz_ok(v(x, y))
+| zdest_2_2 (_, _::_::_::_, e, _) =
+	bdz_fail{bdz_f_code=e, bdz_f_compc=2, bdz_f_argc=2}
+| zdest_2_2(_, _, e, _) = bdz_not_Z 47900
+;
+=IGN
+fun €zdest_gt0_0›(nil, nil, e, _) = bdz_not_Z 47900
+| zdest_gt0_0(_, nil, _, v) = bdz_ok v
+| zdest_gt0_0(_, _, e, _) = bdz_not_Z 47900
+;
+=TEX
+
+=SML
+fun €dest_val_tuple›(name:string, ty: TYPE, constr:string * TYPE * TERM list -> ZTERM,
+		arg_tm:TERM, e:int) : BDZ = (
+	let
+		val (arg_fn, args) = strip_app arg_tm;
+		val (arg_name, arg_ty) = dest_const arg_fn;
 	in
-		(s,cl,al)
+		case dest_Z_name arg_name
+		of ("Z'T", [_]) =>
+			bdz_ok(constr(name, snd(dest_≠_type ty), args))
+		| _ =>
+			bdz_fail{bdz_f_code=e,
+				bdz_f_compc=0, bdz_f_argc=0}
 	end
-	handle Fail _ => term_fail "dest_ZTERM" 47900 [t];
-fun	dest_abstraction (t:TERM) :TERM list =
+	handle Fail _ =>
+		bdz_fail{bdz_f_code=e, bdz_f_compc=0, bdz_f_argc=0}
+);
+=TEX
+
+=SML
+fun	€dest_abstraction› (t:TERM) :TERM list =
 		snd(strip_app(snd(strip_Ã t)))
 	handle Fail _ => term_fail "dest_ZTERM" 47901 [t];
-in
-fun	€dest_ZTERM› (t:TERM) :ZTERM = (
-	case dest t of
 =TEX
+
+\subsection{The Basic Destructor Function}
+
+Function $basic\_dest\_ZTERM$ does the work of destroying a term to
+yield its Z~structure.  The arguments are in the result of applying
+$strip\_app$ to a term.  (This parameterisation is of benefit to the
+pretty printer~\cite{DS/FMU/IED/DTD031}.)
+
+The main part of this function is a large case clause which switches
+depending on the name of the constant at the head of the stripped
+application, the other cases are simple and dealt with in the
+immedaitely following block of code.
+
+=SML
+fun €basic_dest_ZTERM› (hdterm:TERM, args:TERM list) : BDZ = (
+	case dest_simple_term hdterm
+	of App _ => bdz_not_Z 47900
+	| SimpleÃ _ => bdz_not_Z 47900
+	| Var (name, ty) => (
+		case args
+		of nil => bdz_ok(Zlvar(name, ty,[]))
+		| [tm] => dest_val_tuple(name, ty, Zlvar, tm, 47090)
+		| _ => bdz_fail{bdz_f_code=47090,
+				bdz_f_compc=0, bdz_f_argc=1}
+	)
+	| Const (name, ty) => (
+		let
+			val (identifier, comp_list) = dest_Z_name name;
+		in
+			case identifier
+=TEX
+
+The $case$ clause started on the line above opens up the Z~term based
+on the names of the constant.  The various options are catered for in
+the following sections, the end of the function is in
+section~\ref{EndOfFunctionBDZ}.
+
+=TEX
+
 \subsubsection{Declarations}
 First we look for declarations, beginning with variables.
 =SML
-		("Z'dec",[],[x]) => (
-			Zdec((dest_list ** CI)(dest_pair x))
-		handle Fail _ => term_fail "dest_ZTERM" 47910 [t]
-		)
+of "Z'dec" => (
+	case (comp_list, args)
+	of ([],[x]) => (
+		bdz_ok(Zdec((dest_list ** Combinators.I)(dest_pair x)))
+		handle Fail _ => bdz_not_Z 47900
+	)
+	| _ => bdz_fail{bdz_f_code=47910, bdz_f_compc=0, bdz_f_argc=1}
+)
 =TEX
 Then schema declarations.
 =SML
-	|	("Z'decsexp",[],[x]) => (
+| "Z'decsexp" => (
+	case (comp_list, args)
+	of ([],[x]) => (
 		let	val (bind,sch) = dest_pair x;
 			val btym = map dest_var (snd(strip_app bind));
 			val stym = dest_ZschemaT(dest_ZpowerT(type_of sch));
@@ -328,58 +531,106 @@ Then schema declarations.
 					(explode(fst(hd btym))) from 
 					(length(explode(fst(hd stym)))));
 		in
-			Zdecsexp(sch,d)
+			bdz_ok(Zdecsexp(sch,d))
 		end
-		handle Fail _ => term_fail "dest_ZTERM" 47911 [t]
+		handle Fail _ => bdz_not_Z 47911
 		)
+	| _ => bdz_fail{bdz_f_code=47911, bdz_f_compc=0, bdz_f_argc=1}
+)
 =TEX
 And composite declarations.
-Note that all declarations used in other constructs must be of this form, even if only on of the above forms is used (it is even possible to have an empty declaration under certain circumstances).
+Note that all declarations used in other constructs must be of this
+form, even if only one of the above forms is used (it is even possible
+to have an empty declaration under certain circumstances).
 =SML
-	|	("Z'decl",[],[x]) => (
-			Zdecl(dest_list x)
-		handle Fail _ => term_fail "dest_ZTERM" 47912 [t]
-		)
+| "Z'decl" => (
+	case (comp_list, args)
+	of ([],[x]) => (
+		bdz_ok(Zdecl(dest_list x))
+		handle Fail _ => bdz_not_Z 47912
+	)
+	| _ => bdz_fail{bdz_f_code=47912, bdz_f_compc=0, bdz_f_argc=1}
+)
 =TEX
 \subsubsection{Predicates}
-The logical connectives, true and false map directly on to the equivalent HOL constants.
+
+The logical connectives, `true' and `false', map directly on to the
+equivalent HOL constants.
+
 =SML
-	|	("=",[],[x,y]) => (Zeq(x,y))
-	|	("ç",[],[x,y]) => (Zç(x,y))
-	|	("T",[],[]) => (Ztrue)
-	|	("F",[],[]) => (Zfalse)
-	|	("≥",[],[x]) => (Z≥(x))
-	|	("±",[],[x,y]) => (Z±(x,y))
-	|	("≤",[],[x,y]) => (Z≤(x,y))
-	|	("¥",[],[x,y]) => (Z¥(x,y))
-	|	("§",[],[x,y]) => (Z§(x,y))
+| "T"	=> zdest_0_0(comp_list, args, 47900, Ztrue)
+| "F"	=> zdest_0_0(comp_list, args, 47900, Zfalse)
 =TEX
+
+Equality and equivalence both use the HOL `$=$' constant, they are distinguished by the
+types of their operands.  Equivalence has both arguments of type $BOOL$.
+
+=IGN
+| "="	=> zdest_0_2(comp_list, args, 47220, Zeq)
+| "§"	=> zdest_0_2(comp_list, args, 47280, Z§)
 =SML
-	|	("Z'∂",[_],[x]) => (
-		case dest_abstraction x of
-			[d,p,v] => Z∂(d,p,v)
-		|	_ => fail "" 0 []
-		handle Fail _ => term_fail "dest_ZTERM" 47920 [t]
+| "="	=> (
+	case (comp_list, args)
+	of (nil,[x, y]) => (
+		bdz_ok(	(if type_of x =: BOOL andalso type_of y =: BOOL
+			then Z§
+			else Zeq
+			)(x,y)
 		)
+	)
+	| (_, _::_::_::_) =>
+		bdz_fail{bdz_f_code=47220, bdz_f_compc=0, bdz_f_argc=2}
+	| _ => bdz_not_Z 47900
+)
+=TEX
+
+=SML
+| "ç"	=> zdest_0_2(comp_list, args, 47230, Zç)
+| "≥"	=> zdest_0_1(comp_list, args, 47240, Z≥)
+| "±"	=> zdest_0_2(comp_list, args, 47250, Z±)
+| "≤"	=> zdest_0_2(comp_list, args, 47260, Z≤)
+| "¥"	=> zdest_0_2(comp_list, args, 47270, Z¥)
 =TEX
 =SML
-	|	("Z'∂â1",[_],[x]) => (
-		case dest_abstraction x of
-			[d,p,v] => Z∂â1(d,p,v)
+| "Z'∂" => (
+	case (comp_list, args)
+	of ([_],[x]) => (
+		case dest_abstraction x
+		of	[d,p,v] => bdz_ok(Z∂(d,p,v))
 		|	_ => fail "" 0 []
-		handle Fail _ => term_fail "dest_ZTERM" 47921 [t]
-		)
+		handle Fail _ => bdz_not_Z 47920
+	)
+	| _ => bdz_fail{bdz_f_code=47920, bdz_f_compc=0, bdz_f_argc=1}
+)
 =TEX
 =SML
-	|	("Z'µ",[_],[x]) => (
+| "Z'∂â1" => (
+	case (comp_list, args)
+	of ([_],[x]) => (
 		case dest_abstraction x of
-			[d,p,v] => Zµ(d,p,v)
+			[d,p,v] => bdz_ok(Z∂â1(d,p,v))
 		|	_ => fail "" 0 []
-		handle Fail _ => term_fail "dest_ZTERM" 47922 [t]
-		)
+		handle Fail _ => bdz_not_Z 47921
+	)
+	| _ => bdz_fail{bdz_f_code=47921, bdz_f_compc=0, bdz_f_argc=1}
+)
 =TEX
 =SML
-	|	("Z'predsexp",[],[x]) => (
+| "Z'µ" => (
+	case (comp_list, args)
+	of ([_],[x]) => (
+		case dest_abstraction x of
+			[d,p,v] => bdz_ok(Zµ(d,p,v))
+		|	_ => fail "" 0 []
+		handle Fail _ => bdz_not_Z 47922
+	)
+	| _ => bdz_fail{bdz_f_code=47922, bdz_f_compc=0, bdz_f_argc=1}
+)
+=TEX
+=SML
+| "Z'predsexp" => (
+	case (comp_list, args)
+	of ([],[x]) => (
 		let	val (bind,sch) = dest_pair x;
 			val btym = map dest_var (snd(strip_app bind));
 			val stym = dest_ZschemaT(dest_ZpowerT(type_of sch));
@@ -387,51 +638,74 @@ The logical connectives, true and false map directly on to the equivalent HOL co
 					(explode(fst(hd btym))) from 
 					(length(explode(fst(hd stym)))));
 		in
-			Zpredsexp(sch,d)
+			bdz_ok(Zpredsexp(sch,d))
 		end
-		handle Fail _ => term_fail "dest_ZTERM" 47923 [t]
-		)
+		handle Fail _ => bdz_not_Z 47923
+	)
+	| _ => bdz_fail{bdz_f_code=47923, bdz_f_compc=0, bdz_f_argc=1}
+)
 =TEX
 \subsubsection{Terms}
-We must postpone the handling of local and global variables until the end because they do not have an easily identifiable constant part.
+
+We must postpone the handling of local and global variables until the
+end of the case clause because they do not have an easily identifiable
+constant part.
+
 =SML
-	|	("Z'int",[],[tm]) => (Zint(fst(dest_const tm)))
+| "Z'int" => (
+	case (comp_list, args)
+	of ([],[tm]) => (
+		bdz_ok(Zint(fst(dest_const tm)))
+		handle Fail _ => bdz_not_Z 47105
+	)
+	| _ => bdz_fail{bdz_f_code=47105, bdz_f_compc=0, bdz_f_argc=1}
+)
 =TEX
 =SML
-	|	("Z'ß¢",[],[x]) => (
+| "Z'ß¢" => (
+	case (comp_list, args)
+	of ([],[x]) => (
 		case dest_ctype(type_of x) of
-			("LIST",[t]) => Zß¢(t,dest_list x)
+			("LIST",[t]) => bdz_ok(Zß¢(t,dest_list x))
 		|	_ => fail "" 0 []
-		handle Fail _ => term_fail "dest_ZTERM" 47930 [t]
-		)
+		handle Fail _ => bdz_not_Z 47110
+	)
+	| _ => bdz_fail{bdz_f_code=47110, bdz_f_compc=0, bdz_f_argc=1}
+)
 =TEX
 =SML
-	|	("Z'setd",[],[x]) => (
+| "Z'setd" => (
+	case (comp_list, args)
+	of ([],[x]) => (
 		case dest_ctype(type_of x) of
-			("LIST",[t]) => Zsetd(t,dest_list x)
+			("LIST",[t]) => bdz_ok(Zsetd(t,dest_list x))
 		|	_ => fail "" 0 []
-		handle Fail _ => term_fail "dest_ZTERM" 47931 [t]
-		)
+		handle Fail _ => bdz_not_Z 47120
+	)
+	| _ => bdz_fail{bdz_f_code=47120, bdz_f_compc=0, bdz_f_argc=1}
+)
 =TEX
 =SML
-	|	("Z'seta",[_],[x]) => (
+| "Z'seta" => (
+	case (comp_list, args)
+	of ([_],[x]) => (
 		case dest_abstraction x of
-			[d,p,v] => Zseta(d,p,v)
+			[d,p,v] => bdz_ok(Zseta(d,p,v))
 		|	_ => fail "" 0 []
-		handle Fail _ => term_fail "dest_ZTERM" 47932 [t]
-		)
+		handle Fail _ => bdz_not_Z 47130
+	)
+	| _ => bdz_fail{bdz_f_code=47130, bdz_f_compc=1, bdz_f_argc=1}
+)
 =TEX
 =SML
-	|	("Z'",[],[x]) => Z(x)
+| "Z'"	=> zdest_0_1	(comp_list, args, 47140, Z)
+| "Z'T"	=> zdest_1_gt0	(comp_list, args, 47150, Ztuple)
+| "Z'∏"	=> zdest_1_gt0	(comp_list, args, 47160, Z∏)
 =TEX
 =SML
-	|	("Z'T",[_],x) => ZT(x)
-=TEX
-=SML
-	|	("Z'∏",[_],x) => Z∏(x)
-=TEX
-=SML
-	|	("Z' ",[],[x]) => (
+| "Z' " => (
+	case (comp_list, args)
+	of ([],[x]) => (
 		let	val (bind,sch) = dest_pair x;
 			val btym = map dest_var (snd(strip_app bind));
 			val stym = dest_ZschemaT(dest_ZpowerT(type_of sch));
@@ -439,147 +713,182 @@ We must postpone the handling of local and global variables until the end becaus
 					(explode(fst(hd btym))) from 
 					(length(explode(fst(hd stym)))));
 		in
-			Z (sch,d)
+			bdz_ok(Z (sch,d))
 		end
-		handle Fail _ => term_fail "dest_ZTERM" 47933 [t]
-		)
+		handle Fail _ => bdz_not_Z 47170
+	)
+	| _ => bdz_fail{bdz_f_code=47170, bdz_f_compc=0, bdz_f_argc=1}
+)
 =TEX
 =SML
-	|	("Z'S",[_,[s]],[x]) => Zsel(x,s)
+| "Z'S" => (
+	case (comp_list, args)
+	of ([_,[s]],[x]) => bdz_ok(Zsel(x,s))
+	| _ => bdz_fail{bdz_f_code=47180, bdz_f_compc=2, bdz_f_argc=1}
+)
+
 =TEX
 =SML
-	|	("Z'app",[],[x]) => (
-			Zapp(dest_pair x)
-		handle Fail _ => term_fail "dest_ZTERM" 47934 [t]
-		)
+| "Z'app" => (
+	case (comp_list, args)
+	of ([],[x]) => (
+		bdz_ok(Zapp(dest_pair x))
+		handle Fail _ => bdz_not_Z 47190
+	)
+	| _ => bdz_fail{bdz_f_code=47190, bdz_f_compc=0, bdz_f_argc=1}
+)
 =TEX
 =SML
-	|	("Z'Ã",[_],[x]) => (
+| "Z'Ã" => (
+	case (comp_list, args)
+	of ([_],[x]) => (
 		case dest_abstraction x of
-			[d,p,t,v] => ZÃ(d,p,v)
+			[d,p,t,v] => bdz_ok(ZÃ(d,p,v))
 		|	_ => fail "" 0 []
-		handle Fail _ => term_fail "dest_ZTERM" 47935 [t]
-		)
+		handle Fail _ => bdz_not_Z 47200
+	)
+	| _ => bdz_fail{bdz_f_code=47200, bdz_f_compc=0, bdz_f_argc=1}
+)
 =TEX
 =SML
-	|	("Z'Õ",[_],[x]) => (
+| "Z'Õ" => (
+	case (comp_list, args)
+	of ([_],[x]) => (
 		case dest_abstraction x of
-			[d,p,v] => ZÕ(d,p,v)
+			[d,p,v] => bdz_ok(ZÕ(d,p,v))
 		|	_ => fail "" 0 []
-		handle Fail _ => term_fail "dest_ZTERM" 47936 [t]
-		)
+		handle Fail _ => bdz_not_Z 47936
+	)
+	| _ => bdz_fail{bdz_f_code=47936, bdz_f_compc=0, bdz_f_argc=1}
+)
 =TEX
 \subsubsection{Schemas}
 =SML
-	|	("Z'âs",[_],[x]) => (
+| "Z'âs" => (
+	case (comp_list, args)
+	of ([_],[x]) => (
 		case dest_abstraction x of
-			[d,p] => Zâs(d,p)
+			[d,p] => bdz_ok(Zâs(d,p))
 		|	_ => fail "" 0 []
-		handle Fail _ => term_fail "dest_ZTERM" 47940 [t]
-		)
+		handle Fail _ => bdz_not_Z 47940
+	)
+	| _ => bdz_fail{bdz_f_code=47940, bdz_f_compc=0, bdz_f_argc=1}
+)
 =TEX
 =SML
-	|	("Z'decâs",[_,[]],[x]) => Zdecâs(x,"")
-	|	("Z'decâs",[_,[s]],[x]) => Zdecâs(x,s)
+| "Z'decâs" => (
+	case (comp_list, args)
+	of ([_,[]],[x]) => bdz_ok(Zdecâs(x,""))
+	| ([_,[s]],[x]) => bdz_ok(Zdecâs(x,s))
+	| _ => bdz_fail{bdz_f_code=47340, bdz_f_compc=1, bdz_f_argc=1}
+)
 =TEX
 =SML
-	|	("Z'preâs",[_],[x]) => Zpreâs(x)
+| "Z'preâs"	=> zdest_1_1(comp_list, args, 47350, Zpreâs)
+| "Z'≥âs"	=> zdest_0_1(comp_list, args, 47360, Z≥âs)
+| "Z'±âs"	=> zdest_2_2(comp_list, args, 47370, Z±âs)
+| "Z'≤âs"	=> zdest_2_2(comp_list, args, 47380, Z≤âs)
+| "Z'¥âs"	=> zdest_2_2(comp_list, args, 47390, Z¥âs)
+| "Z'§âs"	=> zdest_2_2(comp_list, args, 47400, Z§âs)
+| "Z'˘âs"	=> zdest_2_2(comp_list, args, 47410, Z˘âs)
 =TEX
 =SML
-	|	("Z'≥âs",[],[x]) => Z≥âs(x)
+| "Z'hideâs" => (
+	case (comp_list, args)
+	of ([_,sl],[x]) => bdz_ok(Zhideâs(x,sl))
+	| _ => bdz_fail{bdz_f_code=47420, bdz_f_compc=2, bdz_f_argc=1}
+)
 =TEX
 =SML
-	|	("Z'±âs",[_,_],[x,y]) => Z±âs(x,y)
-=TEX
-=SML
-	|	("Z'≤âs",[_,_],[x,y]) => Z≤âs(x,y)
-=TEX
-=SML
-	|	("Z'¥âs",[_,_],[x,y]) => Z¥âs(x,y)
-=TEX
-=SML
-	|	("Z'§âs",[_,_],[x,y]) => Z§âs(x,y)
-=TEX
-=SML
-	|	("Z'˘âs",[_,_],[x,y]) => Z˘âs(x,y)
-=TEX
-=SML
-	|	("Z'hideâs",[_,sl],[x]) => Zhideâs(x,sl)
-=TEX
-=SML
-	|	("Z'∂âs",[_,_],[x,y]) => (
+| "Z'∂âs" => (
+	case (comp_list, args)
+	of ([_,_],[x,y]) => (
 		case dest_abstraction x of
-			[d,p] => Z∂âs(d,p,y)
+			[d,p] => bdz_ok(Z∂âs(d,p,y))
 		|	_ => fail "" 0 []
-		handle Fail _ => term_fail "dest_ZTERM" 47941 [t]
-		)
+		handle Fail _ => bdz_not_Z 47941
+	)
+	| _ => bdz_fail{bdz_f_code=47941, bdz_f_compc=2, bdz_f_argc=2}
+)
 =TEX
 =SML
-	|	("Z'∂â1âs",[_,_],[x,y]) => (
+| "Z'∂â1âs" => (
+	case (comp_list, args)
+	of ([_,_],[x,y]) => (
 		case dest_abstraction x of
-			[d,p] => Z∂â1âs(d,p,y)
+			[d,p] => bdz_ok(Z∂â1âs(d,p,y))
 		|	_ => fail "" 0 []
-		handle Fail _ => term_fail "dest_ZTERM" 47942 [t]
-		)
+		handle Fail _ => bdz_not_Z 47942
+	)
+	| _ => bdz_fail{bdz_f_code=47942, bdz_f_compc=2, bdz_f_argc=2}
+)
 =TEX
 =SML
-	|	("Z'µâs",[_,_],[x,y]) => (
+| "Z'µâs" => (
+	case (comp_list, args)
+	of ([_,_],[x,y]) => (
 		case dest_abstraction x of
-			[d,p] => Zµâs(d,p,y)
+			[d,p] => bdz_ok(Zµâs(d,p,y))
 		|	_ => fail "" 0 []
-		handle Fail _ => term_fail "dest_ZTERM" 47943 [t]
-		)
+		handle Fail _ => bdz_not_Z 47943
+	)
+	| _ => bdz_fail{bdz_f_code=47943, bdz_f_compc=2, bdz_f_argc=2}
+)
 =TEX
 =SML
-	|	("Z'Ñâs",[_],[x]) => ZÑâs(x)
-=TEX
-=SML
-	|	("Z'òâs",[_],[x]) => Zòâs(x)
-=TEX
-=SML
-	|	("Z'ªâs",[_,_],[x,y]) => Zªâs(x,y)
+| "Z'Ñâs"	=> zdest_1_1(comp_list, args, 47460, ZÑâs)
+| "Z'òâs"	=> zdest_1_1(comp_list, args, 47470, Zòâs)
+| "Z'ªâs"	=> zdest_2_2(comp_list, args, 47480, Zªâs)
 =TEX
 \subsubsection{Local and Global Variables}
 =SML
-	|	(_,[],[]) => ((
-			case unbind_gvar_term t of
-				(n,ty) => Zgvar(n,ty,[]))
-			handle Fail _ => (
-			case dest_var t of
-				(n,ty) => Zlvar(n,ty,[])
-			)
-			handle Fail _ => term_fail "dest_ZTERM" 47900 [t]
-			)
-=TEX
-=SML
-	|	(_,[],[tm]) => (
-		let	val (c,_) = strip_app t;
-			val tml = (
-				case dest tm of
-					("Z'T",[_],x) => x
-				|	_ => fail "" 0 []);
-		in
-			(
-			case unbind_gvar_term c of
-				(n,ty) => Zgvar(n,snd(dest_≠_type ty),tml)
-			)
-			handle Fail _ => (
-			case dest_var c of
-				(n,ty) => Zlvar(n,snd(dest_≠_type ty),tml)
-			)
-		end
-		handle Fail _ => term_fail "dest_ZTERM" 47900 [t]
+| _ => (
+	case (comp_list, args)
+	of (nil, nil) => (
+		(	case unbind_gvar_name name
+			of n => bdz_ok(Zgvar(n, ty,[]))
+		) handle Fail _ => bdz_not_Z 47100
 		)
+	| (nil, [tm]) => (
+		(	case unbind_gvar_name name
+			of n => dest_val_tuple(n, ty, Zgvar, tm, 47100)
+		) handle Fail _ => bdz_not_Z 47100
+		)
+	| _ => bdz_fail{bdz_f_code=47100, bdz_f_compc=0, bdz_f_argc=1}
+)
 =TEX
-\subsubsection{Errors}
-Finally, if all this fails, the supplied term simply isn't Z.
+
+\subsubsection{End of the Basic Destructor Function}
+\label{EndOfFunctionBDZ}
+
 =SML
-	|	_ => term_fail "dest_ZTERM" 47900 [t]
-	)
+		end (* of let in case Const *)
+	) (* end of case Const (name, ty) => ... *)
+	(* end of case dest_simple_term hdterm ... *)
 	handle X => pass_on X "dest_ZTERM" "dest_ZTERM" 
-end (* of function dest_ZTERM *);
+) (* end of function basic_dest_ZTERM *);
 =TEX
-\subsection{The General Discriminator Function}
+
+\subsection{The General Z Destructor Function}
+
+Function $dest\_ZTERM$ provides the normal interface for
+destroying arbitrary Z~terms.  
+
+=SML
+fun	€dest_ZTERM› (t:TERM) :ZTERM = (
+let
+	val bdz_ans = basic_dest_ZTERM (strip_app t);
+	fun sh(s, v) = diag_string("dest_ZTERM: ans is " ^ s ^ " " ^ (string_of_int v));
+in
+	case bdz_ans
+	of bdz_ok zt => zt
+	| bdz_not_Z e => term_fail "dest_ZTERM" e [t]
+	| bdz_fail{bdz_f_code=e, ...} => term_fail "dest_ZTERM" e [t]
+end
+);
+=TEX
+
+\subsection{The General Z Discriminator Function}
 =SML
 fun	€is_ZTERM› (t:TERM) :bool =
 	let	val x = dest_ZTERM t
@@ -588,6 +897,8 @@ fun	€is_ZTERM› (t:TERM) :bool =
 	end
 	handle Fail _ => false;
 =TEX
+\section{Constructor, Destructor and Discriminator Functions}
+
 \subsection{Declaration Destructors}
 =SML
 fun	€dest_Zdec› (t:TERM) :(TERM list * TERM) =
@@ -595,16 +906,18 @@ fun	€dest_Zdec› (t:TERM) :(TERM list * TERM) =
 		Zdec(tml,tm) => (tml,tm)
 	|	_ => fail "" 0 []
 	handle Fail _ => term_fail "dest_Zdec" 47061 [t];
+
 fun	€dest_Zdecsexp› (t:TERM) :TERM * string =
 	case dest_ZTERM t of
 		Zdecsexp(tm,s) => (tm,s)
 	|	_ => fail "" 0 []
 	handle Fail _ => term_fail "dest_Zdecsexp" 47071 [t];
+
 fun	€dest_Zdecl› (t:TERM) :TERM list =
 	case dest_ZTERM t of
 		Zdecl tml => tml
 	|	_ => fail "" 0 []
-	handle Fail _ => term_fail "dest_Zdecl" 47080 [t];
+	handle Fail _ => term_fail "dest_Zdecl" 47912 [t];
 =TEX
 The following function, which produces a type map from a declaration, will frequently be required below.
 =SML
@@ -621,7 +934,7 @@ fun	f ([] :TERM list) :(string * TYPE)list = []
 in
 fun	€dest_decl› (t:TERM) :(string * TYPE)list =
 		f (dest_Zdecl t)
-	handle Fail _ => term_fail "dest_decl" 47080 [t]
+	handle Fail _ => term_fail "dest_decl" 47912 [t]
 end;
 =TEX
 \subsection{Declaration Discriminators}
@@ -631,11 +944,13 @@ fun	€is_Zdec› (t:TERM) :bool =
 		Zdec(tml,tm) => true
 	|	_ => false
 	handle Fail _ => false;
+
 fun	€is_Zdecsexp› (t:TERM) :bool =
 	case dest_ZTERM t of
 		Zdecsexp(tm,s) => true
 	|	_ => false
 	handle Fail _ => false;
+
 fun	€is_Zdecl› (t:TERM) :bool =
 	case dest_ZTERM t of
 		Zdecl tml => true
@@ -649,71 +964,61 @@ fun	€dest_Zeq› (t:TERM) :TERM * TERM =
 		Zeq(tm1,tm2) => (tm1,tm2) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Zeq" 47220 [t];
-=TEX
-=SML
+
 fun	€dest_Zç› (t:TERM) :TERM * TERM = 
 	case dest_ZTERM t of 
 		Zç(tm1,tm2) => (tm1,tm2) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Zç" 47230 [t];
-=TEX
-=SML
+
 fun	€dest_Z≥› (t:TERM) :TERM = 
 	case dest_ZTERM t of 
 		Z≥(tm1) => (tm1) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Z≥" 47240 [t];
-=TEX
-=SML
+
 fun	€dest_Z±› (t:TERM) :TERM * TERM = 
 	case dest_ZTERM t of 
 		Z±(tm1,tm2) => (tm1,tm2) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Z±" 47250 [t];
-=TEX
-=SML
+
 fun	€dest_Z≤› (t:TERM) :TERM * TERM = 
 	case dest_ZTERM t of 
 		Z≤(tm1,tm2) => (tm1,tm2) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Z≤" 47260 [t];
-=TEX
-=SML
+
 fun	€dest_Z¥› (t:TERM) :TERM * TERM = 
 	case dest_ZTERM t of 
 		Z¥(tm1,tm2) => (tm1,tm2) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Z¥" 47270 [t];
-=TEX
-=SML
+
 fun	€dest_Z§› (t:TERM) :TERM * TERM = 
 	case dest_ZTERM t of 
 		Z§(tm1,tm2) => (tm1,tm2) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Z§" 47280 [t];
-=TEX
-=SML
+
 fun	€dest_Z∂› (t:TERM) :TERM * TERM * TERM = 
 	case dest_ZTERM t of 
 		Z∂(d,p,v) => (d,p,v) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Z∂" 47290 [t];
-=TEX
-=SML
+
 fun	€dest_Z∂â1› (t:TERM) :TERM * TERM * TERM = 
 	case dest_ZTERM t of 
 		Z∂â1(d,p,v) => (d,p,v) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Z∂â1" 47300 [t];
-=TEX
-=SML
+
 fun	€dest_Zµ› (t:TERM) :TERM * TERM * TERM = 
 	case dest_ZTERM t of 
 		Zµ(d,p,v) => (d,p,v) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Zµ" 47310 [t];
-=TEX
-=SML
+
 fun	€dest_Zpredsexp› (t:TERM) :TERM * string = 
 	case dest_ZTERM t of 
 		Zpredsexp(tm1,s) => (tm1,s) 
@@ -727,85 +1032,73 @@ fun	€is_Zeq› (t:TERM) :bool =
 		Zeq(tm1,tm2) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Zç› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Zç(tm1,tm2) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Ztrue› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Ztrue => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Zfalse› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Zfalse => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Z≥› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Z≥(tm1) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Z±› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Z±(tm1,tm2) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Z≤› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Z≤(tm1,tm2) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Z¥› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Z¥(tm1,tm2) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Z§› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Z§(tm1,tm2) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Z∂› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Z∂(d,p,v) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Z∂â1› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Z∂â1(d,p,v) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Zµ› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Zµ(d,p,v) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Zpredsexp› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Zpredsexp(tm1,s) => true 
@@ -819,92 +1112,79 @@ fun	€dest_Zlvar› (t:TERM) :string * TYPE * TERM list =
 		Zlvar(s,ty,tml) => (s,ty,tml) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Zlvar" 47090 [t];
-=TEX
-=SML
+
 fun	€dest_Zgvar› (t:TERM) :string * TYPE * TERM list = 
 	case dest_ZTERM t of 
 		Zgvar(s,ty,tml) => (s,ty,tml) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Zgvar" 47100 [t];
-=TEX
-=SML
+
 fun	€dest_Zint› (t:TERM) :string = 
 	case dest_ZTERM t of 
 		Zint(s) => (s) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Zint" 47105 [t];
-=TEX
-=SML
+
 fun	€dest_Zß¢› (t:TERM) :TYPE * TERM list = 
 	case dest_ZTERM t of 
 		Zß¢(ty,tml) => (ty,tml) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Zß¢" 47110 [t];
-=TEX
-=SML
+
 fun	€dest_Zsetd› (t:TERM) :TYPE * TERM list = 
 	case dest_ZTERM t of 
 		Zsetd(ty,tml) => (ty,tml) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Zsetd" 47120 [t];
-=TEX
-=SML
+
 fun	€dest_Zseta› (t:TERM) :TERM * TERM * TERM = 
 	case dest_ZTERM t of 
 		Zseta(d,p,v) => (d,p,v) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Zseta" 47130 [t];
-=TEX
-=SML
+
 fun	€dest_Z› (t:TERM) :TERM = 
 	case dest_ZTERM t of 
 		Z(tm) => (tm) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Z" 47140 [t];
-=TEX
-=SML
+
 fun	€dest_Ztuple› (t:TERM) :TERM list = 
 	case dest_ZTERM t of 
-		ZT(tml) => (tml) 
+		Ztuple(tml) => (tml) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Ztuple" 47150 [t];
-=TEX
-=SML
+
 fun	€dest_Z∏› (t:TERM) :TERM list = 
 	case dest_ZTERM t of 
 		Z∏(tml) => (tml) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Z∏" 47160 [t];
-=TEX
-=SML
+
 fun	€dest_Z › (t:TERM) :TERM * string = 
 	case dest_ZTERM t of 
 		Z (tm,s) => (tm,s) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Z " 47170 [t];
-=TEX
-=SML
+
 fun	€dest_Zsel› (t:TERM) :TERM * string = 
 	case dest_ZTERM t of 
 		Zsel(tm,s) => (tm,s) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Zsel" 47180 [t];
-=TEX
-=SML
+
 fun	€dest_Zapp› (t:TERM) :TERM * TERM = 
 	case dest_ZTERM t of 
 		Zapp(f,a) => (f,a) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Zapp" 47190 [t];
-=TEX
-=SML
+
 fun	€dest_ZÃ› (t:TERM) :TERM * TERM * TERM = 
 	case dest_ZTERM t of 
 		ZÃ(d,p,v) => (d,p,v) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_ZÃ" 47200 [t];
-=TEX
-=SML
+
 fun	€dest_ZÕ› (t:TERM) :TERM * TERM * TERM = 
 	case dest_ZTERM t of 
 		ZÕ(d,p,v) => (d,p,v) 
@@ -918,92 +1198,79 @@ fun	€is_Zlvar› (t:TERM) :bool =
 		Zlvar(s,ty,tml) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Zgvar› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Zgvar(s,ty,tml) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Zint› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Zint(s) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Zß¢› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Zß¢(tml) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Zsetd› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Zsetd(tml) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Zseta› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Zseta(d,p,v) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Z› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Z(tm) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Ztuple› (t:TERM) :bool = 
 	case dest_ZTERM t of 
-		ZT(tml) => true 
+		Ztuple(tml) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Z∏› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Z∏(tml) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Z › (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Z (tm,s) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Zsel› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Zsel(tm,s) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Zapp› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Zapp(f,a) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_ZÃ› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		ZÃ(d,p,v) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_ZÕ› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		ZÕ(d,p,v) => true 
@@ -1016,107 +1283,92 @@ fun	€dest_Zâs› (t:TERM) :TERM * TERM =
 	case dest_ZTERM t of 
 		Zâs(d,p) => (d,p) 
 	|	_ => fail "" 0 [] 
-	handle Fail _ => term_fail "dest_Zâs" 47070 [t];
-=TEX
-=SML
+	handle Fail _ => term_fail "dest_Zâs" 47940 [t];
+
 fun	€dest_Zdecâs› (t:TERM) :TERM * string = 
 	case dest_ZTERM t of 
 		Zdecâs(tm,s) => (tm,s) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Zdecâs" 47340 [t];
-=TEX
-=SML
+
 fun	€dest_Zpreâs› (t:TERM) :TERM = 
 	case dest_ZTERM t of 
 		Zpreâs(tm) => (tm) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Zpreâs" 47350 [t];
-=TEX
-=SML
+
 fun	€dest_Z≥âs› (t:TERM) :TERM = 
 	case dest_ZTERM t of 
 		Z≥âs(tm) => (tm) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Z≥âs" 47360 [t];
-=TEX
-=SML
+
 fun	€dest_Z±âs› (t:TERM) :TERM * TERM = 
 	case dest_ZTERM t of 
 		Z±âs(tm1,tm2) => (tm1,tm2) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Z±âs" 47370 [t];
-=TEX
-=SML
+
 fun	€dest_Z≤âs› (t:TERM) :TERM * TERM = 
 	case dest_ZTERM t of 
 		Z≤âs(tm1,tm2) => (tm1,tm2) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Z≤âs" 47380 [t];
-=TEX
-=SML
+
 fun	€dest_Z¥âs› (t:TERM) :TERM * TERM = 
 	case dest_ZTERM t of 
 		Z¥âs(tm1,tm2) => (tm1,tm2) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Z¥âs" 47390 [t];
-=TEX
-=SML
+
 fun	€dest_Z§âs› (t:TERM) :TERM * TERM = 
 	case dest_ZTERM t of 
 		Z§âs(tm1,tm2) => (tm1,tm2) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Z§âs" 47400 [t];
-=TEX
-=SML
+
 fun	€dest_Z˘âs› (t:TERM) :TERM * TERM = 
 	case dest_ZTERM t of 
 		Z˘âs(tm1,tm2) => (tm1,tm2) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Z˘âs" 47410 [t];
-=TEX
-=SML
+
 fun	€dest_Zhideâs› (t:TERM) :TERM * string list = 
 	case dest_ZTERM t of 
 		Zhideâs(tm,sl) => (tm,sl) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Zhideâs" 47420 [t];
-=TEX
-=SML
+
 fun	€dest_Z∂âs› (t:TERM) :TERM * TERM * TERM = 
 	case dest_ZTERM t of 
 		Z∂âs(d,p,v) => (d,p,v) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Z∂âs" 47430 [t];
-=TEX
-=SML
+
 fun	€dest_Z∂â1âs› (t:TERM) :TERM * TERM * TERM = 
 	case dest_ZTERM t of 
 		Z∂â1âs(d,p,v) => (d,p,v) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Z∂â1âs" 47440 [t];
-=TEX
-=SML
+
 fun	€dest_Zµâs› (t:TERM) :TERM * TERM * TERM = 
 	case dest_ZTERM t of 
 		Zµâs(d,p,v) => (d,p,v) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Zµâs" 47450 [t];
-=TEX
-=SML
+
 fun	€dest_ZÑâs› (t:TERM) :TERM = 
 	case dest_ZTERM t of 
 		ZÑâs(tm) => (tm) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_ZÑâs" 47460 [t];
-=TEX
-=SML
+
 fun	€dest_Zòâs› (t:TERM) :TERM = 
 	case dest_ZTERM t of 
 		Zòâs(tm) => (tm) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_Zòâs" 47470 [t];
-=TEX
-=SML
+
 fun	€dest_Zªâs› (t:TERM) :TERM * TERM = 
 	case dest_ZTERM t of 
 		Zªâs(tm1,tm2) => (tm1,tm2) 
@@ -1130,106 +1382,91 @@ fun	€is_Zâs› (t:TERM) :bool =
 		Zâs(d,p) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Zdecâs› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Zdecâs(tm,s) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Zpreâs› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Zpreâs(tm) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Z≥âs› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Z≥âs(tm) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Z±âs› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Z±âs(tm1,tm2) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Z≤âs› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Z≤âs(tm1,tm2) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Z¥âs› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Z¥âs(tm1,tm2) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Z§âs› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Z§âs(tm1,tm2) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Z˘âs› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Z˘âs(tm1,tm2) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Zhideâs› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Zhideâs(tm,sl) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Z∂âs› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Z∂âs(d,p,v) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Z∂â1âs› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Z∂â1âs(d,p,v) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Zµâs› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Zµâs(d,p,v) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_ZÑâs› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		ZÑâs(tm) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Zòâs› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Zòâs(tm) => true 
 	|	_ => false 
 	handle Fail _ => false;
-=TEX
-=SML
+
 fun	€is_Zªâs› (t:TERM) :bool = 
 	case dest_ZTERM t of 
 		Zªâs(tm1,tm2) => true 
@@ -1240,6 +1477,7 @@ fun	€is_Zªâs› (t:TERM) :bool =
 There are three constructors below which generate systematically decorated bindings from schemas: schema references as declarations, schema references as predicates and theta terms.
 We therefore provide the following general function for doing this.
 =SML
+local open ZTypesAndTermsSupport in
 fun	€mk_binding› ((sch,d):TERM * string) :TERM =
 	let	val itym = dest_ZschemaT(dest_ZpowerT(type_of sch));
 		val itym' = map (fn(s,t) => (pack_IDENT(s,d),t)) itym;
@@ -1248,7 +1486,8 @@ fun	€mk_binding› ((sch,d):TERM * string) :TERM =
 	in
 		list_mk_app(bcons,argl)
 	end
-	handle Fail _ => term_fail "mk_binding" 47070 [sch];
+	handle Fail _ => term_fail "mk_binding" 47940 [sch];
+end;
 =TEX
 \subsection{Declaration Constructors}
 =SML
@@ -1303,58 +1542,45 @@ fun	€mk_Zç› ((tm1,tm2):TERM * TERM) :TERM =
 True and False and the logical connectives in Z map directly into the corresponding HOL constants.
 =SML
 val	€mk_Ztrue› :TERM = mk_const("T",BOOL);
-=TEX
-=SML
+
 val	€mk_Zfalse› :TERM = mk_const("F",BOOL);
-=TEX
-=SML
+
 val	€mk_Z≥› :TERM -> TERM = mk_≥
 	handle X => pass_on X "mk_≥" "mk_Z≥";
-=TEX
-=SML
+
 val	€mk_Z±› :(TERM * TERM) -> TERM = mk_±
 	handle X => pass_on X "mk_±" "mk_Z±";
-=TEX
-=SML
+
 val	€mk_Z≤› :(TERM * TERM) -> TERM = mk_≤
 	handle X => pass_on X "mk_≤" "mk_Z≤";
 
-=TEX
-=SML
 val	€mk_Z¥› :(TERM * TERM) -> TERM = mk_¥
 	handle X => pass_on X "mk_¥" "mk_Z¥";
 
-=TEX
-=SML
 val	€mk_Z§› :(TERM * TERM) -> TERM = mk_§
 	handle X => pass_on X "mk_§" "mk_Z§";
 
-=TEX
-=SML
 fun	€mk_Z∂› ((d,p,v):TERM * TERM * TERM) :TERM = 
 	let	val itym = dest_decl d
 	in
 		mk_app(∂_bterm itym,g2_abs(d,p,v,itym))
 	end
 	handle X => reraise X "mk_Z∂";
-=TEX
-=SML
+
 fun	€mk_Z∂â1› ((d,p,v):TERM * TERM * TERM) :TERM = 
 	let	val itym = dest_decl d
 	in
 		mk_app(∂â1_bterm itym,g2_abs(d,p,v,itym))
 	end
 	handle X => reraise X "mk_Z∂â1";
-=TEX
-=SML
+
 fun	€mk_Zµ› ((d,p,v):TERM * TERM * TERM) :TERM = 
 	let	val itym = dest_decl d
 	in
 		mk_app(µ_bterm itym,g2_abs(d,p,v,itym))
 	end
 	handle X => reraise X "mk_Zµ";
-=TEX
-=SML
+
 fun	€mk_Zpredsexp› ((sch,d):TERM * string) :TERM = 
 	let	val bind = mk_binding(sch,d);
 		val bty = type_of bind;
@@ -1377,8 +1603,7 @@ fun	€mk_Zß¢› ((ty,tml):TYPE * TERM list) :TERM =
 			[] => mk_app(zseq,mk_empty_list ty)
 		|	_ => mk_app(zseq,mk_list tml)
 	end;
-=TEX
-=SML
+
 fun	€mk_Zsetd› ((ty,tml):TYPE * TERM list) :TERM = 
 	let	val listy = mk_ctype("LIST",[ty]);
 		val setty = mk_ZpowerT ty;
@@ -1389,8 +1614,7 @@ fun	€mk_Zsetd› ((ty,tml):TYPE * TERM list) :TERM =
 			[] => mk_app(zset,mk_empty_list ty)
 		|	_ => mk_app(zset,mk_list tml)
 	end;
-=TEX
-=SML
+
 fun	€mk_Zseta› ((d,p,v):TERM * TERM * TERM) :TERM = 
 	let	val itym = dest_decl d;
 		val vty = type_of v;
@@ -1408,22 +1632,19 @@ fun	€mk_Z› (tm:TERM) :TERM =
 	in
 		mk_app(zpset,tm)
 	end;
-=TEX
-=SML
+
 fun	€mk_Ztuple› (tml:TERM list) :TERM = 
 	let	val tyl = map type_of tml;
 	in
 		list_mk_app(tuple_cterm tyl,tml)
 	end;
-=TEX
-=SML
+
 fun	€mk_Z∏› (tml:TERM list) :TERM = 
 	let	val tyl = map (dest_ZpowerT o type_of) tml;
 	in
 		list_mk_app(prod_cterm tyl,tml)
 	end;
-=TEX
-=SML
+
 fun	€mk_Z › ((sch,d):TERM * string) :TERM = 
 	let	val bind = mk_binding(sch,d);
 		val bty = type_of bind;
@@ -1433,15 +1654,13 @@ fun	€mk_Z › ((sch,d):TERM * string) :TERM =
 	in
 		mk_app(con,mk_pair(bind,sch))
 	end;
-=TEX
-=SML
+
 fun	€mk_Zsel› ((tm,s):TERM * string) :TERM = 
 	let	val tym = dest_ZschemaT(type_of tm);
 	in
 		mk_app(bind_pterm tym s,tm)
 	end;
-=TEX
-=SML
+
 fun	€mk_Zapp› ((tm1,tm2):TERM * TERM) :TERM = 
 	let	val fty = type_of tm1;
 		val aty = type_of tm2;
@@ -1461,6 +1680,7 @@ fun	f ([]:ZTERM list) :TERM list = []
 |	f (Zdec(tml,_)::ztml) = tml @ (f ztml)
 |	f (Zdecsexp(sch,d)::ztml) = (mk_Z (sch,d)) :: (f ztml)
 |	f _ = term_fail "mk_ZÃ" 0 [];
+
 fun	chartuple ((Zdecl tml):ZTERM) :TERM = (
 		case (f (map dest_ZTERM tml)) of
 			[] => fail "mk_ZÃ" 0 []
@@ -1487,8 +1707,7 @@ fun	€mk_ZÕ› ((d,p,v):TERM * TERM * TERM) :TERM =
 	in
 		mk_app(Õ_bterm tym vty,g2_abs(d,p,v,tym))
 	end;
-=TEX
-=SML
+
 fun	€mk_Zlvar› ((s,ty,tml):string * TYPE * TERM list) :TERM = 
 		case tml of [] 	=> mk_var(s,ty)
 		| _		=> 
@@ -1496,8 +1715,7 @@ fun	€mk_Zlvar› ((s,ty,tml):string * TYPE * TERM list) :TERM =
 			in
 				mk_app(mk_var(s,cty),mk_Ztuple tml)
 			end;
-=TEX
-=SML
+
 fun	€mk_Zgvar› ((s,ty,tml):string * TYPE * TERM list) :TERM =
 		case tml of [] 	=> bind_gvar_term (s,ty)
 		| _		=> 
@@ -1505,8 +1723,7 @@ fun	€mk_Zgvar› ((s,ty,tml):string * TYPE * TERM list) :TERM =
 			in
 				mk_app(bind_gvar_term (s,cty),mk_Ztuple tml)
 			end;
-=TEX
-=SML
+
 fun	€mk_Zint› (s:string) :TERM = 
 	let	val nty = mk_ctype("Ó",[]);
 		val zty = mk_ctype("˙",[]);
@@ -1522,122 +1739,105 @@ fun	€mk_Zâs› ((d,p):TERM * TERM) :TERM =
 	in
 		mk_app (schema_bterm itym, g1_abs(d,p,itym))
 	end;
-=TEX
-=SML
+
 fun	€mk_Zdecâs› ((tm,s):TERM * string) :TERM =
 	let	val tym = dest_ZschemaT(dest_ZpowerT(type_of tm));
 	in
 		mk_app(bind_decor_term tym s,tm)
 	end;
-=TEX
-=SML
+
 fun	€mk_Zpreâs› (tm:TERM) :TERM =
 	let	val tym = dest_ZschemaT(dest_ZpowerT(type_of tm));
 	in
 		mk_app(bind_pre_term tym,tm)
 	end;
-=TEX
-=SML
+
 fun	€mk_Z≥âs› (tm:TERM) :TERM =
 	let	val tym = dest_ZschemaT(dest_ZpowerT(type_of tm));
 	in
 		mk_app(bind_≥_term tym,tm)
 	end;
-=TEX
-=SML
+
 fun	€mk_Z±âs› ((tm1,tm2):TERM * TERM) :TERM =
 	let	val tym1 = dest_ZschemaT(dest_ZpowerT(type_of tm1));
 		val tym2 = dest_ZschemaT(dest_ZpowerT(type_of tm2));
 	in
 		list_mk_app(bind_±_term tym1 tym2,[tm1,tm2])
 	end;
-=TEX
-=SML
+
 fun	€mk_Z≤âs› ((tm1,tm2):TERM * TERM) :TERM =
 	let	val tym1 = dest_ZschemaT(dest_ZpowerT(type_of tm1));
 		val tym2 = dest_ZschemaT(dest_ZpowerT(type_of tm2));
 	in
 		list_mk_app(bind_≤_term tym1 tym2,[tm1,tm2])
 	end;
-=TEX
-=SML
+
 fun	€mk_Z¥âs› ((tm1,tm2):TERM * TERM) :TERM =
 	let	val tym1 = dest_ZschemaT(dest_ZpowerT(type_of tm1));
 		val tym2 = dest_ZschemaT(dest_ZpowerT(type_of tm2));
 	in
 		list_mk_app(bind_¥_term tym1 tym2,[tm1,tm2])
 	end;
-=TEX
-=SML
+
 fun	€mk_Z§âs› ((tm1,tm2):TERM * TERM) :TERM =
 	let	val tym1 = dest_ZschemaT(dest_ZpowerT(type_of tm1));
 		val tym2 = dest_ZschemaT(dest_ZpowerT(type_of tm2));
 	in
 		list_mk_app(bind_§_term tym1 tym2,[tm1,tm2])
 	end;
-=TEX
-=SML
+
 fun	€mk_Z˘âs› ((tm1,tm2):TERM * TERM) :TERM =
 	let	val tym1 = dest_ZschemaT(dest_ZpowerT(type_of tm1));
 		val tym2 = dest_ZschemaT(dest_ZpowerT(type_of tm2));
 	in
 		list_mk_app(bind_˘_term tym1 tym2,[tm1,tm2])
 	end;
-=TEX
-=SML
+
 fun	€mk_Zhideâs› ((tm,sl):TERM * string list) :TERM =
 	let	val tym = dest_ZschemaT(dest_ZpowerT(type_of tm));
 	in
 		mk_app(bind_hide_term tym sl,tm)
 	end;
-=TEX
-=SML
+
 fun	€mk_Z∂âs› ((d,p,v):TERM * TERM * TERM) :TERM =
 	let	val dtym = dest_decl d;
 		val vtym = dest_ZschemaT(dest_ZpowerT(type_of v));
 	in
 		list_mk_app(∂âs_bterm dtym vtym,[g1_abs(d,p,dtym),v])
 	end;
-=TEX
-=SML
+
 fun	€mk_Z∂â1âs› ((d,p,v):TERM * TERM * TERM) :TERM =
 	let	val dtym = dest_decl d;
 		val vtym = dest_ZschemaT(dest_ZpowerT(type_of v));
 	in
 		list_mk_app(∂â1âs_bterm dtym vtym,[g1_abs(d,p,dtym),v])
 	end;
-=TEX
-=SML
+
 fun	€mk_Zµâs› ((d,p,v):TERM * TERM * TERM) :TERM =
 	let	val dtym = dest_decl d;
 		val vtym = dest_ZschemaT(dest_ZpowerT(type_of v));
 	in
 		list_mk_app(µâs_bterm dtym vtym,[g1_abs(d,p,dtym),v])
 	end;
-=TEX
-=SML
+
 fun	€mk_ZÑâs› (tm:TERM) :TERM =
 	let	val tym = dest_ZschemaT(dest_ZpowerT(type_of tm));
 	in
 		mk_app(bind_Ñ_term tym,tm)
 	end;
-=TEX
-=SML
+
 fun	€mk_Zòâs› (tm:TERM) :TERM =
 	let	val tym = dest_ZschemaT(dest_ZpowerT(type_of tm));
 	in
 		mk_app(bind_ò_term tym,tm)
 	end;
-=TEX
-=SML
+
 fun	€mk_Zªâs› ((tm1,tm2):TERM * TERM) :TERM =
 	let	val tym1 = dest_ZschemaT(dest_ZpowerT(type_of tm1));
 		val tym2 = dest_ZschemaT(dest_ZpowerT(type_of tm2));
 	in
 		list_mk_app(bind_ª_term tym1 tym2,[tm1,tm2])
 	end;
-=TEX
-=SML
 =TEX
 \subsection{The General Constructor Function}
 This function uses the constructors defined above to convert a $ZTERM$ to the corresponding $TERM$.
@@ -1665,7 +1865,7 @@ fun	€mk_ZTERM›	(Zdec(tml:TERM list,tm:TERM) :ZTERM) :TERM = mk_Zdec(tml,tm)
 |	mk_ZTERM	(Zsetd(ty:TYPE,tml:TERM list)) = mk_Zsetd(ty,tml)
 |	mk_ZTERM	(Zseta(tm1:TERM,tm2:TERM,tm3:TERM)) = mk_Zseta(tm1,tm2,tm3)
 |	mk_ZTERM	(Z(tm:TERM)) = mk_Z tm
-|	mk_ZTERM	(ZT(tml:TERM list)) = mk_Ztuple tml
+|	mk_ZTERM	(Ztuple(tml:TERM list)) = mk_Ztuple tml
 |	mk_ZTERM	(Z∏(tml:TERM list)) = mk_Z∏ tml
 |	mk_ZTERM	(Z (tm:TERM,s:string)) = mk_Z (tm,s)
 |	mk_ZTERM	(Zsel(tm:TERM,s:string)) = mk_Zsel(tm,s)
