@@ -1,0 +1,905 @@
+% imp084.doc   %Z% $Date$ $Revision$ $RCSfile$
+
+=TEX
+% imp084.doc   %Z% $Date$ $Revision$ $RCSfile$
+\documentstyle[hol1,11pt,TQ]{article}
+
+\TPPtitle{Implementation of Propositional Equality Proof Procedures}
+\def\TPPheadtitle{Implementation of Propositional Equality\cr Proof Procedures}
+\TPPref{DS/FMU/IED/IMP084}
+\def\SCCSissue{$Revision$%
+}
+\TPPissue{\SCCSissue}
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPproject{FST PROJECT}
+%\TPPstatus{Approved}
+\TPPstatus{Draft}
+\TPPtype{SML Literate Script}
+\TPPkeywords{HOL}
+\TPPauthor{A.J. Hammon & WIN01}  %% Mandatory field
+\TPPauthorisation{R.D.~Arthan & FST Team Leader}
+\TPPabstract{This document contains the implementation of proof
+	procedures for propositional equalities.}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	Library
+}}
+
+%\ftlinepenalty=9999
+\makeindex
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\underscoreoff
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+\makeTPPfrontpage
+
+\vfill
+\begin{center}
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+\end{center}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{DOCUMENT CONTROL}
+
+%********************************************************************
+
+\subsection{Contents List}
+\tableofcontents
+% \listoftables
+
+%********************************************************************
+
+\subsection{Document Cross References}
+
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+%********************************************************************
+
+\subsection{Changes History}
+
+\begin{description}
+
+\item[\FormatDate{$Date$%
+}, issue \SCCSissue~]
+	Initial drafts.
+
+%\item[\FormatDate{$Date$%
+%}, issue \SCCSissue~]
+
+\end{description}
+
+%********************************************************************
+
+%\subsection{Changes Forecast} \label{ChangesForecast}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%\newpage
+\section{GENERAL}
+
+%********************************************************************
+
+\subsection{Scope}
+
+This document contains the implementation of the proof procedures for
+propositional equality in the \Product{} system, it implements the
+interfaces defined in the detailed design~\cite{DS/FMU/IED/DTD084}.
+
+%********************************************************************
+
+\subsection{Introduction}
+
+%--------------------------------------------------------------------
+
+\subsubsection{Purpose and Background}
+
+Much useful simplification can be performed when we have theorems
+containing sets of equalities.
+
+%--------------------------------------------------------------------
+
+%\subsubsection{Dependencies}
+
+%--------------------------------------------------------------------
+
+%\subsubsection{Interface}
+%\subsubsection{Algorithms}
+%\subsubsection{Possible Enhancements}
+
+%--------------------------------------------------------------------
+
+%\subsubsection{Deficiencies}
+
+%--------------------------------------------------------------------
+
+%\subsubsection{Terminology}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{PRELUDE}
+
+=SML
+structure ÛPropositionalEqualityÝ : PropositionalEquality = struct
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{UTILITIES}
+
+Some useful functions.
+
+=SML
+fun Ûsimplify_opt_listÝ (Nil : 'a OPT, b) : 'a list = b
+| simplify_opt_list (Value a, b) = a::b
+;
+=TEX
+
+Counting the number of occurances of terms is useful for an optimisation.
+
+=SML
+local
+	fun aux (t:TERM, nil:(TERM * int) list) : (TERM * int) list =
+		(t, 1) :: nil
+	| aux (t, prev as ((pt, pc)::rest)) =
+		if pt ~=$ t
+		then (pt, pc+1) :: rest
+		else (t, 1) :: prev
+	;
+in
+
+fun Ûcount_termsÝ (tl:TERM list) : (TERM * int) list =
+	fold aux tl nil
+;
+
+end;
+=TEX
+
+%********************************************************************
+
+\subsection{Sorting Types And Terms}
+
+We want to find a term that is the `smallest' of the available terms in
+each equality group.  We find such a term by sorting so that constants
+come before variables which come before function applications which
+come before lambda abstractions; the more complex terms are considered
+recursively.  This order is found by function $term_value$ which does a
+simple recursive pass through the term giving values to each
+component.  If two terms are equal according to $term_value$ then
+$term_order$ is used to determine the correct order.
+
+Two variations of the sort are provided.  One discards duplicate terms
+whereas the other keeps them.
+
+Note that a copy of function $term_value$ is given in the detailed
+design~\cite{DS/FMU/IED/DTD084}.
+
+=SML
+local (* for sorting *)
+
+fun Ûterm_valueÝ(tm:TERM) : int = (
+	case dest_simple_term tm
+	of Const _ => 1
+	| Var _ => 2
+	| App (t1, t2) => 3 + (term_value t1) + (term_value t2)
+	| SimpleÌ (t1, t2) => 4 + (term_value t1) + (term_value t2)
+);
+
+
+fun Ûmy_int_term_order_keep_allÝ (v1:int, t1:TERM) (v2:int, t2:TERM) : int = (
+	if v1 = v2
+	then	case term_order t1 t2 of 0 => ~1 | x => x
+	else	v1 - v2
+);
+
+
+fun Ûmy_term_orderÝ (t1:TERM) (t2:TERM) : int = (
+	let
+		val v1 = term_value t1;
+		val v2 = term_value t2;
+	in
+		if v1 = v2
+		then	term_order t1 t2
+		else	v1 - v2
+	end
+);
+
+in (* local for sorting *)
+=TEX
+
+=SML
+fun Ûsort_terms_keep_allÝ(tms:TERM list) : TERM list = (
+	let
+		val tms2 = map (fn t => (term_value t, t)) tms;
+		val tms3 = Sort.sort my_int_term_order_keep_all tms2;
+	in
+		map snd tms3
+	end
+);
+
+fun Ûreorder_thmÝ(thm, lhs, rhs) = (
+	if my_term_order lhs rhs >= 0
+	then
+		(thm, lhs, rhs)
+	else
+		(eq_sym_rule thm, rhs, lhs)
+);
+
+end (* of local for sorting *)
+=TEX
+
+=IGN
+val Ûdiag_in_thmsÝ = ref true;
+val Ûdiag_out_thmsÝ = ref true;
+
+local
+	fun sh s th = output(std_out, "\t" ^ s ^ ":\t" ^ (string_of_thm th) ^ "\n");
+in
+fun Ûdiag_prop_eq_ruleÝ(thms:THM list) : THM list = (
+	let
+		val SE1 = if !diag_in_thms then map (sh "in") thms else nil;
+		val ans = prop_eq_rule thms;
+		val SE2 = if !diag_in_thms then map (sh "out") thms else nil;
+	in
+		ans
+	end
+);
+end;
+=TEX
+
+%********************************************************************
+
+\section{Decomposed Theorems}
+
+Rather than having to perform repeated decompositions of theorems about
+equality we define a tuple which holds an equality theorem and it
+comparands.  In the early processing of these theorems it is useful to
+have the type of the comparands available.
+
+=SML
+type ÛTHM_BITS_TYÝ = THM * TERM * TERM * TYPE;
+type ÛTHM_BITSÝ = THM * TERM * TERM;
+=TEX
+
+%********************************************************************
+
+\section{Manipulating Decomposed Theorems}
+
+=SML
+fun Ûthm_bits_type_orderÝ	((_, _, _, t1):THM_BITS_TY)
+				((_, _, _, t2):THM_BITS_TY) : int = (
+	case type_order t1 t2 of 0 => ~1 | x => x
+);
+=TEX
+
+This function determines whether a given theorem is about equality
+where its comparands are not equal.  Depending on this determination
+return the theorem and its components as a value of type $THM_BITS_TY$;
+or if it is about equality but it comparands are equal return nothing;
+or otherwise just return the theorem.
+
+=SML
+fun Ûthm_to_thm_bits_optÝ (th:THM) : (THM_BITS_TY OPT) * (THM OPT) = (
+	let
+		val (lhs, rhs) = dest_eq(concl th);
+	in
+		if lhs ~=$ rhs
+		then	(Nil, Nil)
+		else	(Value(th, lhs, rhs, type_of lhs), Nil)
+	end
+	handle Fail _ => (Nil, Value th)
+);
+=TEX
+
+=SML
+fun Ûthm_bits_contains_lhsÝ (nil:THM_BITS list) (_:TERM) = false
+| thm_bits_contains_lhs ((_, lhs, _)::more) tm =
+	(lhs ~=$ tm) orelse thm_bits_contains_lhs more tm
+;
+=TEX
+
+Split a list of $THM_BITS_TY$ values into a list of lists where the members
+of the inner list all have comparands of the same type.  The argument
+list should be already sorted by comparand type.
+
+=SML
+fun Ûsplit_thm_bits_by_typeÝ (pll:THM_BITS_TY list list) (pl:THM_BITS_TY list)
+		(nil:THM_BITS_TY list) : THM_BITS_TY list list =
+	pl :: pll
+| split_thm_bits_by_type pll nil (h::t) =
+	split_thm_bits_by_type pll [h] t
+| split_thm_bits_by_type pll (pl as ((_, _, _, t1)::_))
+		(more as ((hm as (_, _, _, t2))::tm)) = 
+	if t1 =: t2
+	then	split_thm_bits_by_type pll (hm::pl) tm
+	else	split_thm_bits_by_type (pl::pll) nil more
+;
+=TEX
+
+At each stage in finding the equality groups we need to select the
+equalities that refer to a particular term.  Function $split_thmbits$
+splits a list of theorems and components into two lists:  one which has
+all the theorems mentioning the given term; the other list has the
+remaining theorems.
+
+=SML
+fun Ûsplit_thmbitsÝ(tm:TERM, nil:THM_BITS list)
+		: THM_BITS list * THM_BITS list =
+	(nil, nil)
+| split_thmbits(tm:TERM, (thb as (_:THM, l, r))::thb_more) = (
+	let
+		val (a1, a2) = split_thmbits(tm, thb_more);
+	in
+		if tm ~=$ l orelse tm ~=$ r
+		then
+			(thb::a1, a2)
+		else
+			(a1, thb::a2)
+	end
+);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{MAKING NEW THEOREMS}
+
+%********************************************************************
+
+\section{Creation of Result Theorems}
+
+Function $make_new_thmbits$ creates a new theorem from two existing
+theorems.  Theorem $thm$ has $rtm$ as its right hand comparand, its
+left hand comparand is one side of $thm1$ but we do not know which
+side.  We want to make a new theorem which equates $rtm$ to the other
+side of $thm1$.
+
+=SML
+fun Ûmake_new_thmbitsÝ (thm:THM) (rtm:TERM) ((thm1:THM, lhs1, lhs2):THM_BITS)
+		: THM_BITS = (
+	(eq_trans_rule thm1 thm, lhs1, rtm)
+	handle Fail _ => (eq_trans_rule (eq_sym_rule thm1) thm, lhs2, rtm)
+);
+=TEX
+
+%********************************************************************
+
+\section{Theorems in One Equavalence Class}
+
+Function $get_thms$ creates all the theorems of a single equavalence
+class.  It behaves much like $do_one_equiv_class$ whose description in
+section~\ref{AboutRemakeEqualities2} should be read before this
+description.
+
+The first argument of $get_thms$ is a convenience where the results of
+earlier recursive calls are pased through, this saves needing to have
+an inner $let$ clause to catch the result of the recursive call and
+repackage it with the results of the current call.  This argument
+also allows us to compare new theorems with existing ones to aviod
+adding multiple copies of the same theorem.
+
+Function $get_thms$ behaves much like $do_one_equiv_class$ but rather
+than a list of terms it has a list containing theorems that are all
+members of an equality group.  The right hand comparands are the
+required target of the equalities, the left hand comparands are to be
+searched for within the $not_yet_matched$ theorems.
+
+As in $do_one_equiv_class$ we split the $not_yet_matched$ theorems into
+two groups.  This time if $group1$ is empty then we have found all
+theorems with a direct equality to the left hand comparand of $eq1$,
+which is the head theorem.  In this case we save the theorem and loop.
+
+When $group1$ is not empty we make a set of new theorems where the term
+which equals left hand comparand of $eq1$ is rewritten as the target
+right hand comparand, the new theorems are properly oriented.  We have
+now processed all equalities containing the left hand comparand of
+$eq1$ so it is saved.  The new theorems contain more terms which are
+equal to the target right hand comparand, so we add them (by list
+concatenation) to the end of the equality group, then loop.
+
+=SML
+fun Ûget_thmsÝ(prev_res:THM_BITS list, nil:THM_BITS list,
+		not_yet_matched:THM_BITS list)
+		: THM_BITS list * THM_BITS list =
+	(prev_res, not_yet_matched)
+
+| get_thms(prev_res, (eq1 as (eq1_th, eq1l, eq1r))::eq_more, not_yet_matched) = (
+	if thm_bits_contains_lhs prev_res eq1l
+	then
+		get_thms(prev_res, eq_more, not_yet_matched)
+	else
+		case
+			split_thmbits(eq1l, not_yet_matched)
+		of (nil, _) =>
+			get_thms(eq1::prev_res, eq_more, not_yet_matched)
+		| (ggroup1, ggroup2) =>
+			let
+				val new_thmbits = map (make_new_thmbits eq1_th eq1r) ggroup1;
+			in
+				get_thms(eq1::prev_res, eq_more @ new_thmbits, ggroup2)
+			end
+);
+=TEX
+
+%********************************************************************
+
+\subsection{Theorems in One Equavalence Class}
+\label{AboutRemakeEqualities2}
+
+In $do_one_equiv_class$ we are given the list of terms involved in all
+the equalities, this is sorted so that the head element is to be the
+right hand side of all the equalities with terms it is equal to.  We
+are also given (as $ll$) the equalities and their comparands.  We split
+the equalities into two groups:  $group1$ is those containing the head
+element as either side and $group2$ is those that do not have the head
+element as either side.  We expect to often find that first group is
+empty, this corresponds to having found all equalities containing the
+term during an earlier pass.  In such cases we just ignore the head
+element and loop again.  (If we discard all the terms but have some
+equalities left over then something has gone wrong --- design error
+84002.)
+
+When $group1$ is not empty we recast its theorems in the correct order,
+i.e., with the correct right hand side, then we call $get_thms$ to find
+and create the whole equality group of the head element, it also
+returns those members of $group2$ that are not in the equality group.
+
+Function $do_one_equiv_class$ then calls itself to process the next
+equality group.
+
+=SML
+fun Ûdo_one_equiv_classÝ (nil : TERM list) (nil : THM_BITS list) : THM list list = nil
+| do_one_equiv_class nil _ = error "prop_eq_rule" 84002 nil
+| do_one_equiv_class (hd_term::more_tms) ll = (
+	case split_thmbits(hd_term, ll)
+	of (nil, _) =>
+		do_one_equiv_class more_tms ll
+	| (group1, group2) => (
+		let
+			val (equal_grp, other_eqs) =
+				get_thms(nil, map reorder_thm group1, group2);
+			val equal_grp1 = map (fn (a, _, _) => a) equal_grp;
+		in
+			equal_grp1 :: (do_one_equiv_class more_tms other_eqs)
+		end
+	)
+);
+=TEX
+
+%********************************************************************
+
+\subsection{Theorems in All Equivalence Classes}
+
+In $do_all_equivalences$ we are concerned with starting the process of
+building the new sets of equalities.  First we find the ``lowest'' term
+in our term ordering and use this as the target for the right hand side
+of the derived equalities.  Before creating the equalities we make a
+simple check to see if it is worth doing the detailed examination of
+the equality chains.
+
+=SML
+fun Ûdo_all_equivalencesÝ (ll:THM_BITS list) : THM list = (
+	let
+		val tms1 : TERM list = flat (map (fn (_, a, b) => [a, b]) ll);
+		val tms2 : TERM list = sort_terms_keep_all tms1;
+
+		val tms3 = count_terms tms2;
+	in
+		if all tms3 (fn (_, 1) => true | _ => false)
+		then
+			map ((fn (a, _, _) => a) o reorder_thm) ll
+		else
+			flat(do_one_equiv_class (map fst tms3) ll)
+	end
+);
+=TEX
+
+%********************************************************************
+
+\subsection{Entry to Making New Theorems}
+
+Function $prop_eq_rule$ is the entry point to the theorem manipulation.
+
+=SML
+fun Ûprop_eq_ruleÝ (inthms:THM list) : THM list * THM list = (
+	let
+		val thm_bits1 = map thm_to_thm_bits_opt inthms;
+		val no_eq_thms = fold simplify_opt_list (map snd thm_bits1) nil;
+		val thm_bits3 = fold simplify_opt_list (map fst thm_bits1) nil;
+		val thm_bits4 = Sort.sort thm_bits_type_order thm_bits3;
+		val thm_bits5 = split_thm_bits_by_type nil nil thm_bits4;
+		val thm_bits6 = map (fn x => map (fn (a, b, c, _) => (a, b, c)) x) thm_bits5;
+		val thm_bits7 = map do_all_equivalences thm_bits6;
+	in
+		(flat thm_bits7, no_eq_thms)
+	end
+);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{TACTICS AND TACTICALS}
+
+Function $is_non_bool_eq$ is like $is_eq$ with the additional check that
+its arguments are not boolean.
+
+=SML
+fun Ûis_non_bool_eqÝ (t:TERM) :bool = (
+	let
+		val (lhs, rhs) = dest_eq t;
+	in
+		not(type_of lhs =: BOOL)
+	end
+	handle Fail _ => false
+);
+=TEX
+
+=SML
+fun Ûprop_eq_prove_tacÝ (thms: THM list) : TACTIC = (
+	contr_tac
+	THEN
+	DROP_ASMS_T ( fn (asms:THM list) => 
+		let
+			val asm_not_eqs = asms drop (is_non_bool_eq o concl);
+			val asm_eqs = asms drop (not o is_non_bool_eq o concl);
+
+			val (new_eqs, _) = prop_eq_rule (asm_eqs @ thms);
+			fun rw t = rewrite_rule new_eqs t handle Fail _ => t;
+			val new_rest = map rw asm_not_eqs;
+		in
+			MAP_EVERY strip_asm_tac (new_rest @ asm_eqs)
+		end)
+);
+=TEX
+
+Now the associated conversion.
+
+=SML
+val Ûprop_eq_prove_convÝ : THM list -> CONV = (fn thl => fn tm =>
+	let	val th = tac_proof(([], tm), prop_eq_prove_tac thl);
+	in	¤_t_intro  th
+	end	handle ex => reraise ex "prop_eq_prove_conv"
+);
+=TEX
+
+
+=SML
+fun ÛASM_PROP_EQ_TÝ (thm_tac: THM list -> TACTIC) : THM list -> TACTIC = (
+	fn (thms:THM list) => (
+	fn gl as (asms:TERM list, conc:TERM) => (
+	let
+		val asm_eqs = asms drop (not o is_eq);
+		val thmlist = thms @ (map asm_rule asm_eqs);
+		val can = flat o map (current_ad_rw_canon());
+		val (new_eqs, rest) = prop_eq_rule (can thmlist);
+	in
+		LIST_DROP_ASM_T asm_eqs (fn (_:THM list) => (
+			(thm_tac (new_eqs @ rest))
+			THEN
+			MAP_EVERY strip_asm_tac (map asm_rule asm_eqs)
+		))
+	end
+	gl
+)));
+=TEX
+
+=SML
+fun ÛPROP_EQ_TÝ (thm_tac: THM list -> TACTIC) : THM list -> TACTIC = (
+	fn (thms:THM list) => (
+	let
+		val can = flat o map (current_ad_rw_canon());
+		val (new_eqs, rest) = prop_eq_rule (can thms);
+	in
+		LIST_DROP_ASM_T nil (fn (_:THM list) => (
+			(thm_tac (new_eqs @ rest))
+			THEN
+		MAP_EVERY strip_asm_tac new_eqs
+		))
+	end
+));
+=TEX
+
+=IGN
+push_goal(nil, ¬a=b ± a=x ± b=y ´ x=y®);
+a(prove_tac nil);
+a(ASM_PROP_EQ_T rewrite_tac nil);
+a(PROP_EQ_T rewrite_tac nil);
+a(PC_T1 "prop_eq" prove_tac nil);
+a(PC_T1 "prop_eq" asm_prove_tac nil);
+
+(* Provable: *)
+push_goal(nil, ¬c=x ± c=h ± h=e ± e=f ± f=g ± g=d ± d=j ± j=b ± b=y ´ x=y®);
+a(REPEAT strip_tac);
+a(ASM_PROP_EQ_T rewrite_tac nil);
+
+(* Not provable: *)
+push_goal(nil, ¬c=x ± g=x ± c=h ± h=e ± e=f ± f=g ± g=d ± j=b ± b=y ´ x=y®);
+a(REPEAT strip_tac);
+a(ASM_PROP_EQ_T rewrite_tac nil);
+
+(* Not provable: *)
+push_goal(nil, ¬c=x ± g=x ± c=h ± h=e ± e=f ± f=g ± g=d ± j=b ± b=y ´ x=y®);
+a(prop_eq_prove_tac nil);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{THE PAIR CONVERSIONS}
+
+We need to be able to solve propositional equality problems involving
+pairs.  This is readily done by breaking paired values into their
+components, that is by rewriting with the following theorem then
+stripping then using the propositional equality reasoning rules.
+
+=GFT
+µ a b
+·	(	Fst (a, b) = a   )
+±	(	Snd (a, b) = b   )
+±	(	a = b ¤ Fst a = Fst b ± Snd a = Snd b   )
+±	(	³ (a = b) ¤ ³ (Fst a = Fst b ± Snd a = Snd b)   )
+=TEX
+
+=IGN
+push_goal(nil, ¬
+µ a b ·	(	Fst (a, b) = a   )
+±	(	Snd (a, b) = b   )
+±	(	a = b ¤ Fst a = Fst b ± Snd a = Snd b   )
+±	(	³ (a = b) ¤ ³ (Fst a = Fst b ± Snd a = Snd b)   )
+®);
+a(rewrite_tac [pair_clauses]);
+a(pure_once_rewrite_tac [prove_rule [pair_clauses] ¬µ x · x = (Fst x, Snd x)®]);
+a(rewrite_tac [pair_clauses]);
+
+
+Note that once we have the proof contexts available then the goal is proved by:
+a(PC_T1 "prop_eq_pair" prove_tac nil);
+=TEX
+
+Note that these theorems are not ideal.  A term of the form
+=INLINEFT
+¬(x,y) = b®
+=TEX
+{} will be first rewritten to
+=INLINEFT
+¬Fst (x,y) = Fst b ± Snd (x,y) = Snd b®
+=TEX
+{} and then be rewritten to
+=INLINEFT
+¬x = Fst b ± y = Snd b®
+=TEX
+{} which, whilst it works, will include two copies of both $x$ and $y$
+which are soon discarded but it may take some effort to recognise them
+and then do the actual discarding.
+
+To improve the situation we try several theorems, in a particular
+order, to find the most useful rewrite.
+
+=SML
+local
+	val pair_term = ¬
+		µ a b c d w x y z
+		· (	Fst(a,b) = x		¤ a = x  )
+		± (	Snd(a,b) = y		¤ b = y  )
+		± (	x = Fst(a,b)		¤ x = a  )
+		± (	y = Snd(a,b)		¤ y = b  )
+		± (	(a,b) = (c,d)		¤ a = c ± b = d  )
+		± (	(a,b) = z		¤ a = Fst z ± b = Snd z  )
+		± (	z = (a,b)		¤ Fst z = a ± Snd z = b  )
+		± (	z = w			¤ Fst z = Fst w ± Snd z = Snd w  )
+	®;
+
+	val aux_thm = prove_rule [pair_clauses] ¬µ x · x = (Fst x, Snd x)®;
+
+	val pair_thm = tac_proof((nil, pair_term),
+		rewrite_tac [pair_clauses]
+		THEN pure_once_rewrite_tac [aux_thm]
+		THEN rewrite_tac [pair_clauses]);
+
+	val rw_thms = map all_µ_intro ((strip_±_rule o all_µ_elim) pair_thm);
+
+in
+
+val Ûpair_eq_convÝ : CONV = fn tm => (
+	FIRST_C(map simple_eq_match_conv rw_thms) tm
+	handle E => divert E "simple_eq_match_conv" "pair_eq_conv" 84001
+			[fn () => string_of_term tm]
+);
+
+end;
+=TEX
+
+We might have included these next four clauses in local $pair_term$
+above, but they are not really needed since each of them may be
+achieved by two applications of $pair_eq_conv$ which is likely to be
+more efficient overall than having to check for four extra clauses in
+every usage of the conversion.
+
+=GFT
+		± (	Fst(a,b) = Fst(c,d)	¤ a = c  )
+		± (	Snd(a,b) = Snd(c,d)	¤ b = d  )
+		± (	Fst(a,b) = Snd(d,c)	¤ a = c  )
+		± (	Snd(a,b) = Fst(d,c)	¤ b = d  )
+=TEX
+
+Using the conversion and tactics above we can readily prove
+the following theorem with the two tactic applications shown.
+
+=GFT Example
+push_goal(nil, ¬
+s=k ±
+Fst k=l ± l=m ± m=j ±
+Snd k=h ± h=g ± g=n ±
+(j,n)=a ± a=q ± q=r ±
+Fst r=p ±
+Snd q=Fst b ± Fst b=c d ± c d=e
+´
+Fst s=p ± Snd k=e
+®);
+
+a(conv_tac (TOP_MAP_C pair_eq_conv));
+a(prop_eq_prove_tac nil);
+=TEX
+
+Note that with the proof contexts defined below this proof becomes:
+
+=GFT Example
+a(PC_T1 "prop_eq_pair" prove_tac nil);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{THE PROOF CONTEXTS}
+
+=SML
+val Ûpair_eq_cxtÝ : EQN_CXT = [(¬x=y®, pair_eq_conv)];
+=TEX
+
+%********************************************************************
+
+\subsection{Component Proof Contexts}
+
+=SML
+val _ = new_pc Û"'prop_eq"Ý;
+val _ = set_pr_tac prop_eq_prove_tac "'prop_eq";
+val _ = set_pr_conv prop_eq_prove_conv "'prop_eq";
+val _ = commit_pc "'prop_eq";
+=TEX
+
+=SML
+val _ = new_pc Û"'prop_eq_pair"Ý;
+val _ = set_pr_tac prop_eq_prove_tac "'prop_eq_pair";
+val _ = set_pr_conv prop_eq_prove_conv "'prop_eq_pair";
+val _ = set_rw_eqn_cxt pair_eq_cxt "'prop_eq_pair";
+val _ = set_st_eqn_cxt pair_eq_cxt "'prop_eq_pair";
+val _ = set_sc_eqn_cxt pair_eq_cxt "'prop_eq_pair";
+val _ = commit_pc "'prop_eq_pair";
+=TEX
+
+%********************************************************************
+
+\subsection{Full Proof Contexts}
+
+=SML
+val _ = new_pc Û"prop_eq"Ý;
+val _ = merge_pcs ["predicates","'prop_eq"] "prop_eq";
+val _ = commit_pc "prop_eq";
+=TEX
+
+=SML
+val _ = new_pc Û"prop_eq_pair"Ý;
+val _ = merge_pcs ["predicates","'prop_eq_pair"] "prop_eq_pair";
+val _ = set_rw_eqn_cxt pair_eq_cxt "prop_eq_pair";
+val _ = set_st_eqn_cxt pair_eq_cxt "prop_eq_pair";
+val _ = set_sc_eqn_cxt pair_eq_cxt "prop_eq_pair";
+val _ = commit_pc "prop_eq_pair";
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{FINALE}
+
+=SML
+end (* of structure PropositionalEquality *);
+
+open PropositionalEquality;
+=TEX
+
+=IGN
+
+The propositional equality proof contexts required are the same for
+stripping goals and stripping
+theorems. We take numeric $=$ and $¼$ as the atomic
+predicates which we will deal with. The possibilities are:
+{\em(i)} put the operands a ground atomic predicate in A.N.F. and cancel like terms;
+{\em(ii)} convert a negated atomic predicate into an atomic one;
+{\em(iii)} convert a predicate formed with $<$, $¾$ or $>$ into an atomic one;
+{\em(iv)} convert the negation of a predicate formed with $<$, $¾$ or $>$ into an atomic one;
+and
+{\em(v)} attempt to evaluate ground inequalities.
+...=SML
+val strip_cxt = [
+
+	(¬x = y®, î_eq_conv),
+	(¬x ¼ y®, ¼_conv),
+
+	(¬³x = y®, make_¼_conv THEN_C RANDS_C (TRY_C ¼_cancel_conv)),
+	(¬³x ¼ y®, make_¼_conv THEN_TRY_C ¼_cancel_conv),
+
+	(¬x < y®, make_¼_conv THEN_TRY_C ¼_cancel_conv),
+	(¬x ¾ y®, make_¼_conv THEN_TRY_C ¼_cancel_conv),
+	(¬x > y®, make_¼_conv THEN_TRY_C ¼_cancel_conv),
+
+	(¬³x < y®, make_¼_conv THEN_TRY_C ¼_cancel_conv),
+	(¬³x ¾ y®, make_¼_conv THEN_TRY_C ¼_cancel_conv),
+	(¬³x > y®, make_¼_conv THEN_TRY_C ¼_cancel_conv),
+
+	(¬x = y®, î_eq_cancel_conv),
+	(¬x ¼ y®, ¼_cancel_conv)];
+...=TEX
+...=SML
+val _ = new_pc Û"'lin_arith"Ý;
+val _ = set_rw_eqn_cxt strip_cxt "'lin_arith";
+val _ = set_st_eqn_cxt strip_cxt "'lin_arith";
+val _ = set_sc_eqn_cxt strip_cxt "'lin_arith";
+val _ = set_pr_tac lin_arith_prove_tac "'lin_arith";
+val _ = set_pr_conv lin_arith_prove_conv "'lin_arith";
+val _ = commit_pc "'lin_arith";
+...=TEX
+...=SML
+val _ = new_pc Û"lin_arith"Ý;
+val _ = merge_pcs ["predicates","'lin_arith"] "lin_arith";
+val _ = commit_pc "lin_arith";
+...=TEX
+\section{OTHER TACTICS}
+...=SML
+fun Ûscale_asm_tacÝ (t : TERM) (asm : TERM) : TACTIC = (fn gl =>
+	(DROP_ASM_T asm (fn th => strip_asm_tac (scale_rule t th)) gl)
+	handle ex => reraise ex "scale_asm_tac"
+);
+...=TEX
+...=SML
+fun Ûscale_nth_asm_tacÝ (t : TERM) (n : int) : TACTIC = (fn gl =>
+	(DROP_NTH_ASM_T n (fn th => strip_asm_tac (scale_rule t th)) gl)
+	handle ex => reraise ex "scale_nth_asm_tac"
+);
+...=TEX
+...=SML
+fun Ûlist_scale_nth_asm_tacÝ (tns : (TERM * int) list) : TACTIC = (fn gl => 
+	let	val (ts, ns) = split tns;
+	in	LIST_DROP_NTH_ASM_T ns (EVERY o zip (map (fn t => strip_asm_tac o scale_rule t) ts)) gl
+	end handle ex => reraise ex "list_scale_nth_asm_tac"
+);
+...=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%********************************************************************
+%--------------------------------------------------------------------
+
+=TEX
+
+\makeatletter
+\def\refstepcounter#1{\stepcounter{#1}\global\edef\@currentlabel{\csname
+	p@#1\endcsname\csname the#1\endcsname}}
+\makeatother
+
+%\twocolumn[\section{INDEX}]
+\section{INDEX}
+
+\footnotesize
+\printindex
+
+\onecolumn
+
+\end{document}
+
+
