@@ -3255,6 +3255,50 @@ fun €new_scope_pack_body› (ident : ID) : unit = (
 \subsection{The SID function new\_scope\_with}
 
 =SML
+fun €new_ids› (p : PACKAGE) : ID list = (
+	let	val {vc_vars, consts_types, formal_procs,
+			informal_funs, formal_funs, aux_vars} = p;
+		val v = flat (map #vars vc_vars);
+		fun do_enums ({type_def,...} : TYPE_DEF TYPE_DECL) = (
+			case type_def of
+				TDEnumTypeDef etd =>		#vals etd
+			|	_ =>				[]
+		);
+		val c_t_ident_s = flat (map (fn ct =>
+				case ct of
+					BDConstDecl cd =>	#consts cd
+				|	BDTypeDecl td =>	#name td :: do_enums td
+				|	BDSubtypeDecl std =>	[#name std]
+				|	_ =>			[]
+				) consts_types);
+		val p = map #name formal_procs;
+		val f1 = map #name informal_funs;
+		val f2 = map (#name o #informal_fun) formal_funs;
+		val a = flat (map z_names_of_z_dec aux_vars);
+	 
+	in
+		list_cup [v, c_t_ident_s, p, f1, f2, a]
+	end
+);
+=TEX
+The following function returns true if $id$ or any of its attributes are in the set of $newids$, or any of its initial variables.
+=SML
+fun €is_id_in_package› (newids : ID list) (id : ID) = (
+	let	fun remove_tail (lhs, "â"::"0"::rest) = (
+			(implode o rev) lhs
+		) | remove_tail (lhs, "v"::rest) = (
+			(implode o rev) lhs
+		) | remove_tail (lhs, c::rest) = (
+			remove_tail (c::lhs, rest)
+		) | remove_tail (lhs, []) = (
+			(implode o rev) lhs
+		);
+	in
+		remove_tail ([], explode id) mem newids
+	end
+);
+=TEX
+=SML
 fun €prefix_id› (ident : ID) (n : string) : ID = (
 	trans_id (ident dot "")^n
 );
@@ -3283,17 +3327,16 @@ fun €prefix_vardecl› (ident : ID) ({vars, tmark} : VAR_DECL) : VAR_DECL = (
 );
 =TEX
 =SML
-fun €prefix_spec_stmt› (ident : ID) (spec : SPEC) : SPEC = (
+fun €prefix_spec_stmt› (ident : ID) (newids : ID list) (spec : SPEC) : SPEC = (
 	let	val {w, pre, post, w0} = spec;
 		val w'= map (prefix_id ident) w;
 		val w0' = map (prefix_id ident) w0;
-		val side = set_current_ti_context[];
 		val pretm = z_predexp_of_z_tm pre;
 		val posttm = z_predexp_of_z_tm post;
-		val vars = flat (map frees [pretm, posttm]) drop ((fn tm =>
-			case (current_cn_env o fst o dest_var) tm of
-					Nil => true
-					|_ => false));
+		fun not_to_be_changed tm = not (is_id_in_package newids
+			((fst o dest_var) tm));
+		val fr_vars = flat (map frees [pretm, posttm]);
+		val vars = fr_vars drop not_to_be_changed;
 		val new_vars = map (prefix_z_lvar ident) vars;
 		val subs = combine new_vars vars;
 		val pre' = ZTmQuotation (subst subs pretm, Nil);
@@ -3304,12 +3347,12 @@ fun €prefix_spec_stmt› (ident : ID) (spec : SPEC) : SPEC = (
 );
 =TEX
 =SML
-fun €prefix_formal_proc› (ident : ID)
+fun €prefix_formal_proc› (ident : ID) (newids : ID list)
 		({name, formal_ids, spec} : FORMAL_PROC)
 			: FORMAL_PROC = (
-	{	name=prefix_id ident name,
+	{	name = prefix_id ident name,
 		formal_ids = formal_ids,
-		spec=prefix_spec_stmt ident spec
+		spec = prefix_spec_stmt ident newids spec
 	}
 );
 =TEX
@@ -3323,9 +3366,9 @@ fun €prefix_informal_fun› (ident : ID)
 );
 =TEX
 =SML
-fun €prefix_formal_fun› (ident : ID)
+fun €prefix_formal_fun› (ident : ID) (newids : ID list)
 		({spec, informal_fun} : FORMAL_FUN) : FORMAL_FUN = (
-	{	spec = prefix_spec_stmt ident spec,
+	{	spec = prefix_spec_stmt ident newids spec,
 		informal_fun = prefix_informal_fun ident informal_fun
 	}
 );
@@ -3404,7 +3447,8 @@ fun €create_spec_from_tmpbody_theory› (parent : string) (ident : ID) = (
 
 		val inf_funs = map (prefix_informal_fun ident)
 						(#informal_funs package);
-		val form_funs = map (prefix_formal_fun ident)
+		val newids = new_ids package;
+		val form_funs = map (prefix_formal_fun ident newids)
 						(#formal_funs package);
 
 		val side = open_theory parent;
@@ -3415,9 +3459,6 @@ fun €create_spec_from_tmpbody_theory› (parent : string) (ident : ID) = (
 				(do_const_thms ident const_thms);
 		map set_par_names (inf_funs @ map #informal_fun form_funs);
 		map add_type_name (map (prefix_id ident) type_names);
-		update_user_datum cn_spec_ud_key
-			(UD_String(pack_spec_name ident,
-			[UD_Int (current_level(),[])]));
 		open_theory thy;
 		()
 	   ) handle ex => (
@@ -3497,6 +3538,9 @@ fun €create_pack_spec_z_doc› (ident : ID) : unit = (
 
 			delete_tmpbody_theory parent ident;
 
+			update_user_datum cn_spec_ud_key
+				(UD_String(pack_spec_name ident,
+				[UD_Int (current_level(),[])]));
 			()
 		)
 	   )	handle ex => (
@@ -3525,9 +3569,12 @@ fun €new_scope_with› (ident : ID) : unit = (
 				speclabel_flag = false,
 				till_flag = false
 			};
+			val ti_cxt = set_current_ti_context (#aux_vars package1);
+
 			val vc_vars1 = map (prefix_vardecl ident)
 							(#vc_vars package1);
-			val formal_procs1 = map (prefix_formal_proc ident)
+			val newids = new_ids package1;
+			val formal_procs1 = map (prefix_formal_proc ident newids)
 						(#formal_procs package1);
 			val vc_aux_vars1 = map (prefix_aux_vars ident)
 					(#aux_vars package1);
