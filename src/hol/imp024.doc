@@ -6,8 +6,9 @@
 
 \TPPtitle{Implementation of `Oppen' Formatting Routines}
 \TPPref{DS/FMU/IED/IMP024}
-\TPPissue{$Revision$%
+\def\SCCSissue{$Revision$%
 }
+\TPPissue{\SCCSissue}
 \TPPdate{\FormatDate{$Date$%
 }}
 \TPPproject{FST PROJECT}
@@ -40,11 +41,6 @@ lasp -s -u imp024.OKwords imp024.doc > zz1
 \TPPauthorisation{R.B.~Jones & FMU Manager}
 \TPPabstract{This document contains Oppen-style formatting routines for
 	Release~1 of ICL~HOL.}
-\TPPabstractB{This version of the document is a placeholder for the
-	real formatting routines.  The routine here are designed
-	to do a very simple formatting job.  They fill the
-	output lines with the text to be output rather than laying
-	it out according to its structure.}
 \TPPdistribution{\parbox[t]{4.0in}{%
 	Library
 }}
@@ -97,13 +93,15 @@ lasp -s -u imp024.OKwords imp024.doc > zz1
 	In this case the implementation of the routines simply formats
 	the argument text without attempting to lay it out neatly.
 
+\item[\FormatDate{$Date$%
+}, issue \SCCSissue ] Implement the Oppen-style formatting algorithms
+	given in~\cite{Oppen80}.
+
 \end{description}
 
 %********************************************************************
 
 \subsection{Changes Forecast} \label{ChangesForecast}
-
-Implement the Oppen-style formatting algorithms given in~\cite{Oppen80}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -114,20 +112,139 @@ Implement the Oppen-style formatting algorithms given in~\cite{Oppen80}.
 
 \subsection{Scope}
 
-This document contains the Oppen-style formatting routines for Release~1 of
-the ICL HOL system.
+This document contains the Oppen-style formatting routines for
+Release~1 of the ICL HOL system.
 
 %********************************************************************
 
 \subsection{Introduction}
 
-A suite of routines for Oppen style printing into a string.  The
-general idea is that the function $oppen_format$ is parameterised much
-like $PolyML.install_pp$, but it has an additional argument which is
-the value to be printed.
+A suite of routines for Oppen style printing.  The general idea is that
+the function $oppen_format$ is parameterised much like
+$PolyML.install_pp$, but it has an additional argument which is the
+value to be printed.
 
-Our first version of the Oppen style formatter is very simplistic,
-basically it outputs any text it is given as soon as possible.
+%********************************************************************
+
+%\subsection{Purpose and Background}
+%\subsection{Dependencies}
+%\subsection{Interface}
+%\subsection{Deficiencies}
+%\subsection{Terminology}
+
+%********************************************************************
+
+\subsection{Algorithm}
+
+A version of Oppen's pretty printing algorithm, which is given in the
+appendix of~\cite{Oppen80}, is used here.  The main difference between
+the algorithms of~\cite{Oppen80} and here is the treatment of the scan
+buffer and the scan stack.  Other differences come from the use of
+Standard~ML rather than the indexed arrays.
+
+Oppen's algorithm can be explained as two two co-routines.  A stream of
+tokens which include begin-end pairs indicating nesting, space tokens
+indicating spacing or line breaks, and strings to be output is read by
+the first routine.  This routine recognises the token nesting, it
+attaches the sum of the lengths of string tokens to the preceding space
+token, it attaches the sum of the lengths of the strings and space
+tokens in a begin-end pair to the begin token.  These tokens enhanced
+tokens are read by the second co-routine which uses the lengths to see
+if the streams will fit onto the current line, and thus how the space
+tokens should be interpreted.  The output from the second routine
+is text which is ready for printing.
+
+In these discussions a `stream' is either a sequence of strings or it
+is a sequence of tokens starting and finishing with begin and end
+tokens.
+
+The second co-routine is the simpler and is discussed first.  It
+receives a sequence of tokens, each token contains length information,
+begin tokens give the length of their stream, space tokens give their
+own natural length plus the length of the strings up to but not
+including the next space token or to the end of stream.  The tokens are
+treaded as follows.
+
+\begin{description}
+
+\item[string] Output immediately.
+
+\item[begin] The indentation value is added to the current indentation
+	margin and this value is pushed onto a stack.
+
+\item[space] The spacing style of the current stream is checked by
+	looking at the value of the top of the stack, there are three
+	cases.
+
+	\begin{enumerate}
+
+	\item When the stream (i.e., the natural width of the space
+		plus the widths of the following strings) fits then the
+		natural width of the space is output.
+
+	\item When the current stream was too big to fit and the
+		spacing is consistent then a newline and spaces (the
+		number is obtained from the stack top value) are
+		output, plus the extra spaces given with the space
+		token
+
+	\item When the current stream was too big to fit and the
+		spacing is inconsistent then if the stream starting
+		with this space fits then output the natural width of
+		the space, otherwise treat as a consistent space.
+
+	\end{enumerate}
+
+\item[end] The top of the stack is popped.
+
+\end{description}
+
+The first co-routine works out the lengths.  In~\cite{Oppen80} an array
+is used to provide a lookahead buffer so that the lengths to be
+attached to space and begin tokens can be calculated.  Tokens are added
+at the `right hand end' of this buffer, tokens at the `left hand end'
+which have a known length are removed and passed to the other
+co-routine.  The lengths can only be calculated by considering the
+nesting of the begins and ends so a stack is maintained, it holds
+pointers into the buffer to show where the unmatched begin tokens
+occur.  The same stack is used to work out the lengths to be attached
+to space tokens and so it also contains pointers to them.
+
+The features of the `efficient but less simple algorithm'
+of~\cite{Oppen80} are relevant here.  The lengths attached to space and
+begin tokens only need to be correct for sequences that might fit onto
+a line.  For sequences that cannot fit is is sufficient to know that
+they are too big and give them a large value.  This allows the tokens
+to be removed from the left hand end of the buffer for printing since
+it is known how to print them, i.e., what sort of spacing to use.
+In~\cite{Oppen80} this technique means that values need to be popped
+from the bottom of the stack of pointer into the buffer.
+
+Here a different data structure is used, essentially a list of lists.
+The inner list holds strings, the outer list is of tuples comprising
+the space or begin token, the length (with a validity flag) of the
+stream starting at that token, and the inner list.  The stack structure
+of Oppen's algorithm is not made explicit, the places it might point to
+are entries in the outer list.
+
+%********************************************************************
+
+\subsection{Possible Enhancements}
+
+Efficiency improvements
+
+\begin{itemize}
+
+\item Avoid the list reversals in function $flush_scan_buffer$ by
+	holding two lists for the scan buffer, one forward and one
+	backward such that with their tail glued together they form the
+	whole buffer.
+
+\item In function $set_counts_for_space$ merge space tokens with a
+	known length into the adjacent tuple.  This avoids the function
+	needing to skip past  many tuples whose length is known.
+
+\end{itemize}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -136,157 +253,625 @@ basically it outputs any text it is given as soon as possible.
 \section{PRELUDE}
 
 =SML
-structure ‚OppenFormatting· = struct
+structure ‚OppenFormatting· : OppenFormatting = struct
 =TEX
 
 =SML
-type ‚oppen_funs· =
+type ‚OPPEN_FUNS· =
 			(string -> unit)		(* addstring *)
 		*	(int * bool -> unit)		(* beginb *)
 		*	(int * int -> unit)		(* space *)
 		*	(unit -> unit)			(* endb *);
 =TEX
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{FORMATTER}
+
+Almost the whole of the Oppen formatter is enclosed in one large
+function, the end of the routine is in section~\ref{FunctionCompletion}
+below.  Having this style has several benefits.  It allows the nesting
+of invocation of the formatter --- although no good purpose for that is
+known.  It allows a clean entry to the routine under all conditions,
+all data is initialised when the routine starts.  It allows the
+Standard~ML system to garbage collect all of the mutable data created
+within the routine after it completes.
+
 %********************************************************************
 
-=IGN
-val pp_mark : bool ref = ref false;
-val _ =
-new_flag {name = "‚pp_mark·",  control=pp_mark, default=fn () => false};
-=TEX
-
-=IGN
-set_flag("pp_mark", true);
-set_flag("pp_mark", false);
-=TEX
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-\section{OPPEN STRING PRINTING}
+\subsection{Function Header}
 
 =SML
-fun ‚oppen_format_as_string·
+fun ‚oppens_routine·
+		(‚deliver_line· : string -> unit)
+		(‚get_width· : unit -> int)
+		(‚printer· : OPPEN_FUNS -> 'a -> unit)
+		(‚value· : 'a)
+		: unit = (
+let
+=TEX
+
+%********************************************************************
+
+\subsection{Line Widths}
+
+Function $get_width$ gives the desired maximum line width.  From which
+$margin_protect$ is derived, it is used to prevent very deep structures
+having an indentation exceeding the maximum line width.  Also
+$oversize_length$ is set to a value greater than the maximum line width
+to provide a length for long streams whose exact length is unknown but
+which are too big to fit on the current line, this is called
+$sizeInfinity$ in the appendix of~\cite{Oppen80}, it also corresponds
+to the value $999999$ in section~4 of~\cite{Oppen80}.  Finally, a
+failure message is issued in the desired maximum line width is too
+small for sensible printing.
+
+=SML
+val ‚margin· = get_width();
+
+val ‚margin_minimum· = 20;
+
+val ‚margin_protect· : int = margin div 4;
+
+val ‚oversize_length· : int = margin * 2;
+
+val side_effect = (
+	if margin < margin_minimum
+	then
+		fail "oppen_printer" 24001 [
+			fn () => string_of_int margin,
+			fn () => string_of_int margin_minimum]
+	else ()
+);
+=TEX
+
+%********************************************************************
+
+\subsection{Tokens}
+
+Tokens corresponding to calls of the formatting entry points are used
+in various places.  The arguments of each of these correspond to the
+arguments given to the Oppen interface functions in type $OPPEN_FUNS$,
+the additional arguments with $t_beginb$ and $t_space$ hold the length
+of the block that starts with that token.
+
+=SML
+datatype ‚TOKEN·
+	=	‚t_addstring·	of string
+	|	‚t_beginb·	of int		(* indentation *)
+				* bool		(* true => consistent *)
+				* int		(* block size *)
+	|	‚t_endb·
+	|	‚t_space·	of int		(* normal spaces *)
+				* int		(* extra indentation *)
+				* int		(* block size *)
+	;
+=TEX
+
+%********************************************************************
+
+\subsection{Print Phase}
+
+%--------------------------------------------------------------------
+
+\subsubsection{Print Stack}
+
+Printing uses a print stack to hold information about indentation
+margins and a flag which indicates how the block is to be printed.  The
+value held for the indentation point is the number of characters
+allowed on subsequent lines, the default value is thus the same as
+$margin$, the number of characters allowed on a line.  flag holds
+$b_fits$ when the block fits onto the current line and so no line
+breaking is required, other either $b_consistent$ or $b_inconsistent$
+showing how to perform line breaking.
+
+=SML
+datatype ‚BREAK·
+	=	‚b_fits·
+	|	‚b_consistent·
+	|	‚b_inconsistent·
+	;
+=TEX
+
+=SML
+local (* print stack *)
+
+val ‚print_stack· : (int * BREAK) list ref = ref nil;
+
+val ‚default_break· = b_inconsistent
+val ‚default_margin· = margin;
+
+in (* print stack *)
+=TEX
+
+The stack is maintained simply by adding and removing tuples ad the
+head of the list.  To prevent text running wildly off the right hand
+end of the available line width a simple scheme is used where the
+margin is forced back to the left hand margin.
+
+=SML
+fun ‚ps_push·(available, cons) : unit = (
+	print_stack := (	if available < margin_protect
+				then default_margin
+				else available,
+			cons) :: (!print_stack)
+);
+=TEX
+
+Popping an empty stack indicates that there are too many end tokens,
+but looking at an empty stack can mean that a space token is used
+outside of the outermost begin end pair.  The first case is not
+harmful, whilst it is undesirable it seems better to keep on printing
+rather than to fail.  The second case must be handled cleanly.   If
+insufficient end tokens are received the stack will not be cleared,
+there are no harmful effects.
+
+=SML
+fun ‚ps_pop· () : unit = (
+	case !print_stack
+	of h :: t => print_stack := t
+	| _ => ()
+);
+
+fun ‚ps_top· () : (int * BREAK) = (
+	case !print_stack
+	of h :: _ => h
+	| _ => (default_margin, default_break)
+);
+
+fun ‚ps_top_posn· () : int = (
+	case !print_stack
+	of (p, _) :: _ => p
+	| _ => default_margin
+);
+
+end (* print stack *);
+=TEX
+
+%--------------------------------------------------------------------
+
+\subsubsection{Assembling Lines of Text}
+
+The print phase receives line segments for assembly into lines which
+are delivered when the line is completed.  The line segments are held
+in a list with the list head representing the rightmost segment on the
+line.
+
+=SML
+local (* line assembly *)
+
+val ‚line· : string list ref = ref nil;
+
+in (* line assembly *)
+
+fun ‚emit_string· (str:string) : unit = (
+	line := str :: (!line)
+);
+
+fun ‚emit_spaces·(how_many:int) : unit = (
+let
+	fun aux nn = if nn <= 0 then nil else " " :: (aux (nn-1));
+in
+	line := (implode(aux how_many)) :: (!line)
+end
+);
+
+fun ‚emit_nl_spaces·(how_many:int) : unit = (
+let
+	fun aux nn = if nn <= 0 then nil else " " :: (aux (nn-1));
+in
+	deliver_line(implode(rev(!line)));
+	line := [implode(aux how_many)]
+end
+);
+
+fun ‚emit_nl·() : unit = (
+	deliver_line(implode(rev(!line)));
+	line := nil
+);
+
+end (* line assembly *);
+=TEX
+
+%--------------------------------------------------------------------
+
+\subsubsection{Left and Right Totals}
+
+To assist with length calculations two counters are maintained.  In
+$left_total$ we hold the number of characters from the outermost
+enclosing block that have been passed to the print phase.  In
+$right_total$ we hold the number of characters found so far in the
+outermost enclosing block.  This contains those that have been output
+so far (i.e., $left_total$) plus all the characters currently held in
+the buffer.  The difference between these two counters is the length of
+the information held in the scan buffer if it were to be printed all on
+one line.
+
+=SML
+val ‚left_total· : int ref = ref 1;
+val ‚right_total· : int ref = ref 1;
+=TEX
+
+%--------------------------------------------------------------------
+
+\subsubsection{Space Left on the Current Line}
+
+Space left in the current line is recorded.
+
+=SML
+val ‚space_left· : int ref = ref margin;
+=TEX
+
+%--------------------------------------------------------------------
+
+\subsubsection{Printing}
+
+Print out a token.
+
+=SML
+fun	‚print·((t_addstring str):TOKEN) : unit = (
+		space_left := (!space_left) - (size str);
+		emit_string str
+	)
+|	print(t_beginb(indent, cons, len)) = (
+		if len > (!space_left)
+		then
+			ps_push(ps_top_posn() - indent,
+				if cons
+				then b_consistent
+				else b_inconsistent)
+		else
+			ps_push(0, b_fits)
+	)
+|	print(t_endb) = (
+		ps_pop()
+	)
+|	print(t_space(norm_sp, extra_sp, len)) = (
+		case ps_top()
+		of (_, b_fits) => (		space_left := (!space_left) - norm_sp;
+						emit_spaces norm_sp
+			)
+		| (offset, b_consistent) => (	space_left := offset - extra_sp;
+						emit_nl_spaces(margin - (!space_left))
+					)
+		| (offset, b_inconsistent) =>
+			if len > (!space_left)
+			then (
+				space_left := offset - extra_sp;
+				emit_nl_spaces(margin - (!space_left))
+			) else (
+				space_left := offset - norm_sp;
+				emit_spaces norm_sp
+			)
+	)
+;
+=TEX
+
+%********************************************************************
+
+\subsection{Scanning Phase}
+
+A buffer hold tokens read from the input.  This is essentially a queue,
+tokens are removed from the left to be printed, new tokens are added at
+the right.  Associated with each token is a value which is calculated
+as the tokens are added.  Associated with each string is its length.
+Associated with each $t_beginb$ is the space needed to print the block
+it begins.  This is the sum of the lengths of the strings in the block
+plus the sum of the normal lengths of the $t_space$ tokens, plus the
+sizes of contained blocks.  Associated with each $t_endb$ is the value
+zero.  Associated with each $t_space$ is the number of normal space
+characters plus the number of characters needed by the next block in
+the stream.
+
+When the tokens are initially added at the right the lengths may be
+unknown, the purpose of the buffer is to hold the tokens until the
+length can be calculated.
+
+%--------------------------------------------------------------------
+
+\subsubsection{Scan Buffer}
+
+The buffer is held as a list of lists of tokens.  The outer lists
+correspond to points where space, begin and end tokens are added.  Each
+of these list entries is a tuple, comprising:  the opening token, the
+space, begin or end; the inner list of tokens; a flag with $true$
+indicating that the length is known.  Calculated lengths are held in
+space and begin tokens.
+
+The lengths of blocks are initially unknown so the length validity flag
+is set $false$ and the length field is set to a value which allows
+calculation of the correct value later on in the procesing.  When the
+length validity flag is $false$ the tokens may not be printed.  For
+space and begin tokens the length field is set to the negation of
+$right_total$, then the correct value is calculated as follows.  For
+space tokens the correct value is its own size plus the sum of the
+sizes of strings up to but not including the next space token, which is
+the difference between the values of $right_total$ at the two space
+tokens.  Thus we just add the current value of $right_total$ to the
+earlier negated value.  For begin tokens the logic is similar, but the
+length is only known when a space after the matching end is found.
+
+The inner lists hold tokens whose length are fixed, namely string
+tokens.
+
+=SML
+type ‚BUFFER_ENTRY· =
+	(	TOKEN
+	*	TOKEN list
+	*	bool
+	);
+
+val ‚scan_buffer· : BUFFER_ENTRY list ref = ref nil;
+=TEX
+
+%--------------------------------------------------------------------
+
+\subsubsection{Setting Length Counts}
+
+On receiving a space token the counts for the previous block can be
+worked out.  If this space was preceded (ignoring the intervening
+strings) by:
+
+\begin{itemize}
+
+\item another space then the length of that preceding space can be set
+
+\item an end token then the size of any space preceding that, and the
+	size of the whole block can be set, i.e., the appropriate begin
+	must be found and its size set
+
+\item a begin token then we can do no more.
+
+\end{itemize}
+
+As blocks may be nested, a space token may complete several blocks,
+this happens when there were several end and string tokens with no
+intervening space tokens.  A space may also complete a block which
+contains other blocks whose length is known.
+
+=SML
+fun ‚set_counts_for_space·() : unit = (
+let
+	fun aux k (nil:BUFFER_ENTRY list) = (nil:BUFFER_ENTRY list)
+	| aux k ((h as (_, _, true)) :: rest) = h :: (aux k rest)
+	| aux k (sb as ((t_beginb(i, c, len), toks, false) :: rest)) =
+		if k > 0
+		then
+			(t_beginb(i, c, len + (!right_total)), toks, true) :: (aux (k-1) rest)
+		else
+			sb
+	| aux k ((t_endb, toks, false) :: rest) =
+		(t_endb, toks, true) :: (aux (k+1) rest)
+	| aux k ((t_space(n, e, len), toks, false) :: rest) =
+		(t_space(n, e, len + (!right_total)), toks, true) :: (if k > 0 then aux k rest else rest)
+	| aux k ((opener, toks, false) :: rest) =
+		(opener, toks, true) :: (aux k rest)
+	;
+in
+	scan_buffer := aux 0 (!scan_buffer)
+end
+);
+=TEX
+
+At end of stream all the counts must be set to some known value so that
+the whole buffer may be flushed.  The correct value for the counts is
+the same as if we had just received 
+
+=SML
+fun ‚set_all_counts·() : unit = (
+let
+	fun aux nil = nil
+	| aux ((h as (_, _, true)) :: rest) = h :: (aux rest)
+	| aux (((t_beginb(i, c, len), toks, false) :: rest)) =
+			(t_beginb(i, c, len + (!right_total)), toks, true) :: (aux rest)
+	| aux ((t_space(n, e, len), toks, false) :: rest) =
+			(t_space(n, e, len + (!right_total)), toks, true) :: aux rest
+	| aux ((opener, toks, false) :: rest) =
+			(opener, toks, true) :: (aux rest)
+	;
+in
+	scan_buffer := aux (!scan_buffer)
+end
+);
+=TEX
+
+%--------------------------------------------------------------------
+
+\subsubsection{Flushing the Buffer}
+
+Function $flush_scan_buffer$ provides the way of moving tokens out of
+the scan buffer for printing.  (This function is called $check_stream$
+in~\cite{Oppen80}).  Tokens can be moved out only when the length of
+their containing block is known.  However, if the whole text to be
+printed were contained within a pair of begin and end tokens, the
+length associated with the begin token would only be known at the end
+of the whole input --- this is the problem with the first algorithm
+presented in Oppen's paper~\cite{Oppen80} and which the second
+algorithm overcomes.  The rationale is that we do not need the correct
+length for large blocks, is is sufficient to know that a block is too
+large to fit in the space left on the current line of text being
+printed.
+
+This routine attempts to remove several entries from the tail of the
+list holding the scan buffer.  If the buffer's contents indicate an
+overly long block then at least one list entry may be removed.  Given
+that one entry is to be removed the whole list is reversed, then as
+many head entries as possible are removed, finally the remaining list
+is reversed again and stored as the new scan buffer contents.
+
+The boolean argument is set $true$ when the scan buffer is to be
+completely flushed, regardless of what the length information
+indicates.  This will be used when the end of the whole input stream
+has been read.  Normally the argument is set $false$ to indicate the
+flushing only of items whose length is known.
+
+=SML
+fun ‚flush_scan_buffer·(force:bool) : unit = (
+let
+	fun print_it(t as t_space(norm_sp,_,_)) = (print t; left_total := (!left_total) + norm_sp)
+	| print_it(t as t_addstring str) = (print t; left_total := (!left_total) + (size str))
+	| print_it t= print t
+	;
+
+	fun rev_print nil = ()
+	| rev_print (h::t) = (rev_print t ; print h);
+
+	fun print_aux(opener, toks) = (
+		print opener;
+		rev_print toks
+	);
+
+	fun print_entry(t_beginb(i, c, len), toks, false) =
+		print_aux(t_beginb(i, c, oversize_length), toks)
+	| print_entry(t_space(n, e, len), toks, false) =
+		print_aux(t_space(n, e, oversize_length), toks)
+	| print_entry(opener, toks, _) =
+		print_aux(opener, toks)
+	;
+
+	fun aux (nil:BUFFER_ENTRY list) = nil
+	| aux ((h as (_, _, true)) :: rest) = (
+			print_entry h;
+			aux rest
+		)
+	| aux(sb as (h :: rest)) = (
+		if force orelse (!right_total) - (!left_total) > (!space_left)
+		then (
+			print_entry h;
+			aux rest
+		) else
+			sb
+	);
+in
+	if force orelse (!right_total) - (!left_total) > (!space_left)
+	then
+		scan_buffer := rev(aux(rev(!scan_buffer)))
+	else
+		()
+end
+);
+=TEX
+
+%********************************************************************
+
+\subsection{Oppen Functions}
+
+These functions are provided to users of the Oppen printing system.
+
+=SML
+fun ‚beginb·(indent, cons) : unit = (
+	case !scan_buffer
+	of nil => (left_total := 1; right_total := 1)
+	| _ => ()
+	;
+	scan_buffer := (t_beginb(indent, cons, ~(!right_total)), nil, false) :: (!scan_buffer)
+);
+=TEX
+
+=SML
+fun ‚addstring·(str:string) : unit = (
+	case !scan_buffer
+	of nil => print(t_addstring str)
+	| (opener, toks, known) :: rest => (
+			scan_buffer := (opener, (t_addstring str) :: toks, known) :: rest;
+			right_total := (!right_total) + (size str);
+			flush_scan_buffer(false)
+		)
+);
+=TEX
+
+=SML
+fun ‚space·(norm_sp:int, extra_sp:int) : unit = (
+	case !scan_buffer
+	of nil => (left_total := 1; right_total := 1)
+	| _ => ()
+	;
+	set_counts_for_space();
+	scan_buffer := (t_space(norm_sp, extra_sp, ~(!right_total)), nil, false) :: (!scan_buffer);
+	right_total := (!right_total) + norm_sp
+);
+=TEX
+
+=SML
+fun ‚endb·() : unit = (
+	case !scan_buffer
+	of nil => print t_endb
+	| sb => scan_buffer := (t_endb, nil, false) :: sb
+);
+=TEX
+
+=SML
+	val ‚o_funs· = (addstring, beginb, space, endb) : OPPEN_FUNS;
+=TEX
+
+%********************************************************************
+
+\subsection{End of Strean}
+
+At end of the text to be printed the scan buffer must be emptied.
+
+=SML
+fun ‚end_of_stream·() : unit = (
+	case !scan_buffer
+	of nil => ()
+	| _ => (		set_all_counts();
+			flush_scan_buffer(true);
+			case !scan_buffer
+			of nil => ()
+			| _ => fail "oppen_printer" 24002 nil
+	)
+);
+=TEX
+
+%********************************************************************
+
+\subsection{Function Completion} \label{FunctionCompletion}
+
+Printing is achieved by invoking the caller's printing routine with the
+four Oppen printing routines, emptying the scan buffer and finally
+emptying the line buffer.
+
+=SML
+in
+	printer o_funs value;
+	end_of_stream();
+	emit_nl()
+end
+) (* of function oppens_routine *);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{FUNCTIONS IN SIGNATURE}
+
+To be called $oppen_format$.
+
+=SML
+fun ‚oppen_format·
 		(get_width : unit -> int)
-		(printer : oppen_funs -> 'a -> unit)
+		(printer : OPPEN_FUNS -> 'a -> unit)
 		(value : 'a)
 		: string list = (
 let
-	val width = get_width();
+	val prev_lines : string list ref = ref nil;
 
-	val depth = ref 0;
-
-	val depth : int ref = ref 0;
-
-	type line_record = {			free	: int,
-						cur	: string list,
-						prev	: string list
-	};
-
-	val lines : line_record ref = ref {	free	= width,
-						cur	= [],
-						prev	= []
-	};
-
-	fun add_to_line str : unit = (
-	let
-		val str_width = size str;
-		val {free=p_free, cur=p_cur, prev=p_prev} = !lines;
-	in
-		lines := (	if p_free > str_width
-				then
-					{	free	= p_free - str_width,
-						cur	= str :: p_cur,
-						prev	= p_prev
-					}
-				else
-					{	free	= width - str_width,
-						cur	= str :: nil,
-						prev	= (implode(rev p_cur)) :: p_prev
-					})
-	end);
-
-	fun addstring(s : string)	: unit = add_to_line s;
-	fun space(_: int, _: int)		: unit = add_to_line " ";
-	fun beginb(_: int, _:bool)	: unit = add_to_line " ";
-	fun endb()			: unit = add_to_line " ";
-
-	val o_funs = (addstring, beginb, space, endb) : oppen_funs
+	fun deliver_line s = prev_lines := s :: (!prev_lines);
 in
-	(printer o_funs value;
-	let
-		val {free=p_free, cur=p_cur, prev=p_prev} = !lines;
-	in
-		rev((implode(rev p_cur)) :: p_prev)
-	end)
+	oppens_routine deliver_line get_width printer value;
+	rev (!prev_lines)
 end);
-=TEX
-
-=IGN
-	fun mark_begin_end ch = (
-		if !pp_mark
-		then  " ." ^ ch ^ (string_of_int(!depth)) ^ ". "
-		else " ")
-
-	fun beginb(_: int, _:bool)	: unit = (
-		depth := (!depth) + 1;
-		add_to_line(mark_begin_end "b")
-	);
-	fun endb()			: unit = (
-		add_to_line(mark_begin_end "e");
-		depth := (!depth) - 1
-	);
 =TEX
 
 =SML
 fun ‚oppen_print·
 		(get_width : unit -> int)
-		(printer : oppen_funs -> 'a -> unit)
+		(printer : OPPEN_FUNS -> 'a -> unit)
 		(value : 'a)
 		: unit = (
 let
-	val width = get_width();
-
-	val depth = ref 0;
-
-	type line_record = {			free	: int,
-						cur	: string list
-	};
-
-	val lines : line_record ref = ref {	free	= width,
-						cur	= []
-	};
-
-	fun add_to_line str : unit = (
-	let
-		val str_width = size str;
-		val {free=p_free, cur=p_cur} = !lines;
-	in
-		lines := (	if p_free > str_width
-				then
-					{	free	= p_free - str_width,
-						cur	= str :: p_cur
-					}
-				else
-					{	free	= width - str_width,
-						cur	= (
-							output(std_out, implode(rev p_cur));
-							str :: nil)
-					})
-	end);
-
-	fun addstring(s : string)	: unit = add_to_line s;
-	fun space(_: int, _: int)		: unit = add_to_line " ";
-	fun beginb(_: int, _:bool)	: unit = add_to_line " ";
-	fun endb()			: unit = add_to_line " ";
-
-	val o_funs = (addstring, beginb, space, endb) : oppen_funs
+	fun deliver_line s = output(std_out, s);
 in
-	(printer o_funs value;
-	let
-		val {free=p_free, cur=p_cur} = !lines;
-	in
-		output(std_out, implode(rev p_cur))
-	end)
+	oppens_routine deliver_line get_width printer value
 end);
 =TEX
 
@@ -299,11 +884,41 @@ end (* of structure OppenFormatting *);
 =TEX
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{TEST PLAN}
+
+A number of tests are required, these basically exercise all the
+interfaces to the routines supplied by this structure.  Most of the
+tests will exercise function $oppen_format$ on the grounds that it may
+be tested by examining its results.  Function $oppen_print$ is small
+and very similar to $oppen_format$ but its results are printed by side
+effect, testing of it will be by observing that a few test cases give
+the correct output.
+
+Particular tests required include the following.
+
+\begin{itemize}
+
+\item Variations of line length with the same streams.
+
+\item Basic confidence tests with short well-formed streams.  These use
+	various combinations of the functions from type $OPPEN_FUNS$.
+
+\item Nested streams, with both consistent and inconsistent line
+	breaking.
+
+\item Long strings and long sequences of strings, to check the long
+	line processing.
+
+\item Various indentation values (the integer argument to $beginb$ and
+	the second argument to $space$).
+
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %********************************************************************
 %--------------------------------------------------------------------
-
-\end{document}
 
 \newpage
 
