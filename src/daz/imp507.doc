@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.274 $ $RCSfile: imp507.doc,v $ $Date: 2004/08/20 16:16:59 $
+% imp507.doc %Z% $Revision: 1.275 $ $RCSfile: imp507.doc,v $ $Date: 2004/08/29 11:37:35 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.274 $%
+\def\SCCSversion{$Revision: 1.275 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/08/20 16:16:59 $%
+\TPPdate{\FormatDate{$Date: 2004/08/29 11:37:35 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -212,6 +212,7 @@ by doing all the work of checking and generating the VC terms in {\it call\_vcs}
 \item[Issue 1.273] Fixed anomaly in use of replacement environment. 
 \item[Issue 1.274] Performance tweaks in type inference context handling to avoid list-based processing of the contexts.
 \item[Issue 1.275] Implemented distinction between empty private part and omitted private part.
+\item[Issue 1.276] Renamings and use clauses now propagate into subunit, dec and spec environments.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -706,6 +707,23 @@ fun €subunit_vc_vars›
 );
 =TEX
 =SML
+fun €subunit_renamings›
+	 ({	zmod,
+		specif_flag,
+		specif,
+		in_scope,
+		globs
+	} : SUBUNIT,
+	renamings : (Z_ID * Z_ID) list) : SUBUNIT = (
+	{	zmod		=	zmod,
+		specif_flag	=	specif_flag,
+		specif		=	specif,
+		in_scope	=	in_scope_renamings (in_scope, renamings),
+		globs		=	globs
+	}
+);
+=TEX
+=SML
 fun €subunit_formal_procs› 
 	(dicto : ENV_DICT OPT)
 	({	zmod,
@@ -792,6 +810,13 @@ fun €declab_vc_vars›
 );
 =TEX
 =SML
+fun €declab_renamings›
+	(declab as {in_scope, ...} : DECLAB,
+	renamings : (Z_ID * Z_ID) list) : DECLAB = (
+	declab_in_scope(declab,  in_scope_renamings  (in_scope, renamings))
+);
+=TEX
+=SML
 fun €declab_formal_procs› 
 	(dicto : ENV_DICT OPT)
 	(declab as {in_scope, ...} : DECLAB,
@@ -852,6 +877,25 @@ fun €speclab_vc_vars›
 	till_flag		=	till_flag,
 	wp_env			=	wp_env,
 	in_scope		=	in_scope_vc_vars dicto (in_scope, new_vc_vars)
+	}
+);
+=TEX
+=SML
+fun €speclab_renamings› 
+	({spec,
+	formal_body_flag,
+	fun_flag,
+	till_flag,
+	wp_env,
+	in_scope
+	} : SPECLAB,
+	renamings : (Z_ID * Z_ID)  list) : SPECLAB = (
+	{spec 			=	spec,
+	formal_body_flag	=	formal_body_flag,
+	fun_flag		=	fun_flag,
+	till_flag		=	till_flag,
+	wp_env			=	wp_env,
+	in_scope		=	in_scope_renamings (in_scope, renamings)
 	}
 );
 =TEX
@@ -7223,6 +7267,78 @@ fun €renames_opsym›
 			[fn _ => name2, fn _ => new]
 ) | renames_opsym _ = ();
 =TEX
+=TEX
+\subsection{Propagating renamings into the environments}
+=SML
+fun €update_subunit_env_renamings› (renamings :  (Z_ID * Z_ID) list) : unit = (
+	let	val dec_lab1 = #dec_lab (block 1);
+		fun do1_subunit
+			(id1_id2_s as
+				(id1_id2,
+				s as {in_scope as {dec_labels, ...}, ...})
+					: string * SUBUNIT) = (
+			if	dec_lab1 mem dec_labels
+			then	(id1_id2,
+				subunit_renamings (s,  renamings))
+			else	id1_id2_s
+		);
+	in	subunit_env := map do1_subunit (!subunit_env)
+	end
+);
+=TEX
+=SML
+fun €update_dec_env_renamings› (renamings :  (Z_ID * Z_ID) list) : unit = (
+	let	val dec_lab1 = #dec_lab (block 1);
+		fun do1_dec_label
+			(dec_label_s as
+				(dec_label,
+				s as {in_scope as {dec_labels, ...}, ...})
+					: string * DECLAB) = (
+			if	dec_lab1 mem dec_labels
+			then	(dec_label,
+				declab_renamings (s, renamings))
+			else	dec_label_s
+		);
+	in	dec_env := map do1_dec_label (!dec_env)
+	end
+);
+=TEX
+=SML
+fun €update_spec_env_renamings› (renamings :  (Z_ID * Z_ID) list) : unit = (
+	let	val dec_lab1 = #dec_lab (block 1);
+		fun not_a_var_renaming (_, z_id) = (
+			case current_cn_env z_id of
+				Value{info = EIEnvVar _, ...} => false
+			|	_ => true
+		);
+		val new_vars = map fst (renamings drop not_a_var_renaming);
+		fun do1_spec_label
+			(spec_label_s as
+				(spec_label,
+				s as {spec as {w, ...},
+					in_scope as {dec_labels, ...}, ...})
+					: string * SPECLAB) = (
+			if	dec_lab1 mem dec_labels
+			then	(spec_label,
+				speclab_w(
+					speclab_renamings (s, renamings),
+					new_vars cup w))
+			else	spec_label_s
+		);
+	in	spec_env := map do1_spec_label (!spec_env)
+	end
+);
+=TEX
+The schema conjunction from the specification is implemented as sequential composition.
+=SML
+fun €update_envs_renamings› (renamings :  (Z_ID * Z_ID) list) : unit = (
+	if	test_flag #declabel_flag 1
+	then	(update_subunit_env_renamings renamings;
+		update_dec_env_renamings renamings;	
+		update_spec_env_renamings renamings)
+	else	()
+);
+=TEX
 \subsection{The SID function renames\_object}
 The implementation organises the logic a little differently from the specification but with the
 same effect. It checks whether the renaming is a constant renaming simply by trying to
@@ -7268,6 +7384,7 @@ fun €renames_object_common›
 			check_new_spark_ids current_cn_env [new_zname];
 			blocks :=
 			block_renamings(block1, [renaming]):: tl (!blocks);
+			update_envs_renamings [renaming];
 			Value renaming
 		end
 		end
@@ -7340,7 +7457,7 @@ fun €check_pack_complete›
 ) | check_pack_complete {zmod, ...} = error "check_pack_complete" 507079 [fn _ => zmod];
 =TEX
 \subsection{The SID function renames\_pack}
-{\it renames\_pack} processes a package effectively by replaying a set of renaming and
+{\it renames\_pack} processes a package renaming effectively by replaying a set of renaming and
 subtype declarations asserting that the new expanded names declared by each declaration in the
 package are equal to the old expanded names as in:
 \begin{verbatim}
@@ -7447,9 +7564,11 @@ fun €renames_pack› (old_name : ID , new_name : ID)  : unit = (
 );
 =TEX
 \subsection{The SID function use\_pack}
-{\it use\_pack} processes adds an entry $(unex, ex)$ into the use clause substitutions in
+{\it use\_pack} processes adds an entry $(unex, ex)$ into
 the running environment for every type, object and subprogram in the package, where
 $unex$ is the unexpanded name for the entity and $ex$ is the expanded name.
+These entries are also propagated into the subunit, dec and spec environments if the
+use clause appears in the expansion of a declaration label.
 =SML
 fun €use_pack› (name : ID)  : unit = (
 	let	val pack = 
@@ -7473,7 +7592,8 @@ fun €use_pack› (name : ID)  : unit = (
 	in	map (check_new_z_id zids_in_scope) newids;
 		check_new_spark_ids current_cn_env newids;
 		blocks :=
-			block_renamings(block1, new_subs):: tl (!blocks)
+			block_renamings(block1, new_subs):: tl (!blocks);
+		update_envs_renamings new_subs
 	end
 );
 =TEX
