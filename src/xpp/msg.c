@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2003/07/17 11:37:16 $ $Revision: 2.32 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2003/07/18 13:25:25 $ $Revision: 2.33 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -87,7 +87,7 @@ void help_dialog(Widget w, char *str)
 	static Widget dialog, pane, help_text;
 	Atom WM_DELETE_WINDOW;
 	Dimension h;
-	Arg args[8];
+	Arg args[12];
 	if(!dialog) {
 		dialog = XtVaCreatePopupShell("xpp-Help",
 			xmDialogShellWidgetClass, get_top_shell(w),
@@ -109,6 +109,7 @@ void help_dialog(Widget w, char *str)
 		XtSetArg(args[5], XmNwordWrap,              True);
 		XtSetArg(args[6], XmNrows,                  HELP_SCREEN_HEIGHT);
 		XtSetArg(args[7], XmNcolumns,               HELP_LINE_LEN);
+		XtSetArg(args[8], XmNtraversalOn,             False);
 		help_text = XmCreateScrolledText(pane, "help-text", args, 8);
 		XtManageChild(help_text);
 		form = XtVaCreateWidget("form", xmFormWidgetClass, pane,

@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.63 2003/06/26 11:40:03 rda Exp rda $
+ * $Id: mainw.c,v 2.64 2003/06/26 13:45:00 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -842,6 +842,7 @@ static Boolean setup_main_window(
 		XtSetArg(args[i], XmNeditMode,	 		XmMULTI_LINE_EDIT); ++i;
 		XtSetArg(args[i], XmNautoShowCursorPosition, 	False); ++i;
 		XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
+		XtSetArg(args[i], XmNtraversalOn, 	False); ++i;
 
 		journal = XmCreateScrolledText(mainpanes, "journal", args, i);
 		attach_ro_edit_popup(journal);
