@@ -98,6 +98,12 @@ is printed. Also, corrected an error in $is\_varstruct$.
 \item [Issue 2.10 (13th April 1992)]
 Changes due to CR0017.
 
+\item[Issue 2.10, \FormatDate{92/05/13} ]
+Major enhancement to type inference to resolve overloaded aliases properly.
+This has involved te introduction of an intermediate pass over the
+structure, done when overloaded aliases are detected during pass one of
+type inference.
+ 
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -173,13 +179,25 @@ open Parser Unification SparseArray;
 val €ti_verbose› = ref false;
 val €array_size› = 100;
 
+val _ = if contains (map fst (get_flags()))
+			"ti_verbose"
+	then	()
+	else	new_flag{name = "ti_verbose",
+			control = ti_verbose,
+			default = fun_true,
+			check = fun_true
+	};
+=IGN
 val _ =
 new_flag {name = "ti_verbose", control=ti_verbose, check=fun_true, default = fun_true};
-
+=SML
 type €ENV› = string -> (EXTYPE*bool);
 type €INF_TUPLE› = EXTYPE TM * EXTYPE;
 
 val €ti_subs› = new_subs array_size;
+
+val €contains_overloaded_aliases› = ref false;
+val €tmp_subs› = new_subs array_size;
 =TEX
 
 \subsection{General Utilities}
@@ -187,8 +205,8 @@ val €ti_subs› = new_subs array_size;
 =SML
 fun €type_of_const› (s : string) : TYPE OPT = (
 	case get_const_info s of
-		Value (t,_) => Value t
-		|       Nil => Nil
+		Value (t, _) => Value t
+		|Nil => Nil
 );
 =TEX
 
@@ -324,14 +342,18 @@ fun €init_env› (tm : 'a TM) : ENV = (
 		val freemap = new_name freevars;
 	in
 	   (fn s =>
-		case type_of_const s of
-			Value t => (replaced t, false)
-			  | Nil =>
-				(
+		case get_const_info s of
+			Value (t, [idty]) => (
+				(replaced t, false)
+			)| Value (t, _) => (
+				contains_overloaded_aliases := true;
+				(replaced t, false)
+			)| Nil => (
 				(type_to_extype (lassoc3
 				  (!ti_context_info) s), true)
 				handle (Fail msg) =>
-				(ExVartype(Unknown(lassoc3 freemap s)), false))
+				(ExVartype(Unknown(lassoc3 freemap s)), false)
+			)
 	handle (Fail msg) =>
 		error "init_env" 16101 [fn() => s]
 	    )
@@ -343,14 +365,19 @@ fun €grow_env› (env : ENV) (tm : 'a TM) : ENV = (
 		val freemap = new_name freevars;
 	in
 	   (fn s =>
-		case type_of_const s of
-			Value t => (replaced t, false)
-			  | Nil =>
+		case get_const_info s of
+			Value (t, [idty]) => (
+				(replaced t, false)
+			)| Value (t, _) => (
+				contains_overloaded_aliases := true;
+				(replaced t, false)
+			)| Nil => (
 				if s mem freevars
 				then
 					(ExVartype(Unknown(lassoc3 freemap s)), false)
 				else
 					env s
+			)
 	handle (Fail msg) =>
 		error "grow_env" 16101 [fn() => s]
 	    )
@@ -620,8 +647,9 @@ fun €plu› (x1::x2::rest) = "s"
 =TEX
 The error handlers for printing diagnostics are
 introduced below.
+
 =SML
-fun €handle_app› tm1 tm2 ty1 ty2 = (
+fun €handle_app› (tm1 :TY TM) (tm2 : TY TM) (ty1 : EXTYPE) (ty2 : EXTYPE) : unit = (
 let	fun aux (ty as ExVartype (Unknown x)) = (
 		case sub_opt (ti_subs, x) of
 		Nil => ty
@@ -659,7 +687,7 @@ in
 end);
 =TEX
 =SML
-fun €handle_display› tml types ierr = (
+fun €handle_display› (tml : TY TM list) (types : EXTYPE list) (ierr: int) : unit = (
 let	
 	fun sort1 (i1 : int, (tm1:string, ty1:string)) (i2, (tm2, ty2)) =
 		if ty1 = ty2 then
@@ -691,7 +719,7 @@ in
 end);
 =TEX
 =SML
-fun €handle_let› tm1 tm2 ty1 ty2 = (
+fun €handle_let› (tm1 : TY TM) (tm2 : TY TM) (ty1 : EXTYPE) (ty2 : EXTYPE) : unit = (
 	ti_errline 16560 [];
 	ti_errline 16561 [];
 	ti_errline 16562 [format_tm format_ty tm1,
@@ -701,7 +729,7 @@ fun €handle_let› tm1 tm2 ty1 ty2 = (
 );
 =TEX
 =SML
-fun €handle_setcomp› tm ty = (
+fun €handle_setcomp› (tm : TY TM) (ty : EXTYPE) : unit = (
 	ti_errline 16520 [];
 	ti_errline 16521 [];
 	ti_errline 16562 [format_tm format_ty tm,
@@ -709,7 +737,7 @@ fun €handle_setcomp› tm ty = (
 );
 =TEX
 =SML
-fun €handle_cond1› tm ty = (
+fun €handle_cond1› (tm : TY TM) (ty : EXTYPE) : unit = (
 	ti_errline 16550 [];
 	ti_errline 16521 [];
 	ti_errline 16562 [format_tm format_ty tm,
@@ -717,7 +745,7 @@ fun €handle_cond1› tm ty = (
 );
 =TEX
 =SML
-fun €handle_cond2› tm1 tm2 ty1 ty2 = (
+fun €handle_cond2› (tm1 : TY TM) (tm2 : TY TM) (ty1 : EXTYPE) (ty2 : EXTYPE) : unit = (
 	ti_errline 16551 [];
 	ti_errline 16561 [];
 	ti_errline 16562 [format_tm format_ty tm1,
@@ -727,7 +755,7 @@ fun €handle_cond2› tm1 tm2 ty1 ty2 = (
 );
 =TEX
 =SML
-fun €handle_tmtyped tm1› ty1 ty2 = (
+fun €handle_tmtyped› (tm1 : TY TM) (ty1 : EXTYPE) (ty2 : EXTYPE) : unit = (
 	ti_errline 16530 [];
 	ti_errline 16531 [format_tm format_ty tm1,
 				format_extype1 ty1];
@@ -735,7 +763,7 @@ fun €handle_tmtyped tm1› ty1 ty2 = (
 );
 =TEX
 =SML
-fun €handle_varstruct› a = (
+fun €handle_varstruct› (a : TY TM) : unit  = (
 	ti_errline 16010 [format_tm format_ty a]
 );
 =TEX
@@ -743,7 +771,7 @@ The general error handler follows. It never
 returns, and always calls fail which raises the
 exception, $Fail$.
 =SML
-fun €ti_error_handler› term info env = (
+fun €ti_error_handler› (term : TY TM) (info : TIERROR) (env : ENV) : 'a = (
 	(
 	ti_errline 16001 [format_tm format_ty term];
 	case info of
@@ -1003,7 +1031,102 @@ and
 ; (* End of definition of function ti and its friends *)
 =TEX
 
-\subsection{Conversion of a term to a ``HOL Term''}
+\subsection{Checking Overloading}
+
+=SML
+fun €handle_res_ovl1› (tm : EXTYPE TM) (idtyl : (string * EXTYPE) list) : 'a = (
+	ti_errline 16001 [format_tm format_extype1 tm];
+	ti_errline 16070 [];
+	ti_errline 16071 [format_tm format_extype1 tm];
+	map (fn (id, ty) => ti_errline 16073 [id, format_extype1 ty]) idtyl;
+	fail "HOL-Parser" 16000 []
+);
+
+=TEX
+
+=SML
+fun €handle_res_ovl2› (tm : EXTYPE TM) (idtyl : (string * EXTYPE) list) : 'a  = (
+	ti_errline 16001 [format_tm format_extype1 tm];
+	ti_errline 16070 [];
+	ti_errline 16072 [format_tm format_extype1 tm];
+	map (fn (id, ty) => ti_errline 16073 [id, format_extype1 ty]) idtyl;
+	fail "HOL-Parser" 16000 []
+);
+
+=TEX
+
+=SML
+fun €match_unique› (ty : EXTYPE)  (idtyl : (string * EXTYPE) list)
+					: (string * EXTYPE) list = (
+let	val ty' = sub_type ti_subs ty;
+	fun unify_opt ty1 (s, ty2) = (
+	let	val side = init_subs tmp_subs
+	in
+				(unify tmp_subs (ty1, ty2);
+					Value (s, ty2))
+				handle Fail _ => Nil
+	end);
+	fun aux ty idtyl = map (fn x => unify_opt ty x) idtyl;
+	fun strip (Nil::rest) = strip rest
+	  | strip (Value x :: rest) = x :: strip rest
+	  | strip [] = [];
+in
+	strip (aux ty' idtyl)
+end);
+=TEX
+=SML
+fun €resolve_overloading› (term : EXTYPE TM) : EXTYPE TM = (
+let	fun €res_ovl› (term as (TmTyped (Id s, ty))) = (
+		case get_const_info s of
+		Nil => TmTyped (Id s, ty)
+		|Value (_, [_]) => TmTyped (Id s, ty)
+		|Value (_, idtyl) => (
+			let	val idtyl' = map (fn (id, ty) => (id, replaced ty)) idtyl;
+			in
+				case match_unique ty idtyl' of
+				[] => handle_res_ovl1 term idtyl'
+				|[(s', ty')] => (
+					let	val side = unify ti_subs (ty, ty')
+							handle Fail msg =>
+							error "res_ovl" 16101
+								[fn()=>get_message msg];
+					in
+						TmTyped (Id s', sub_type ti_subs ty')
+					end)
+				|idtyl'' => handle_res_ovl2 term idtyl''
+			end)
+	) | res_ovl (Binder (s, a, b)) = Binder (s, res_ovl a, res_ovl b)
+	  | res_ovl (Let (tl, a)) = (
+		let	val (lx, ly) = split tl;
+			val tl' = combine (map res_ovl lx) (map res_ovl ly);
+		in
+			Let (tl', res_ovl a)
+		end)
+	  | res_ovl (Cond (c, a, b)) = Cond (res_ovl c, res_ovl a, res_ovl b)
+	  | res_ovl (App (f, a, fix)) = (
+		let	val a' = res_ovl a;
+		in
+			 App (res_ovl f, a', fix)
+		end)
+	  | res_ovl (TmTyped (a,ty)) = TmTyped (res_ovl a, ty)
+	  | res_ovl (TmAq tm) = TmAq tm
+	  | res_ovl (SetDisplay tl) = SetDisplay (map res_ovl tl)
+	  | res_ovl (SetComprehension (a,b)) = SetComprehension (res_ovl a, res_ovl b)
+	  | res_ovl (ListDisplay tl) =  ListDisplay (map res_ovl tl)
+	  | res_ovl (Id s) = error "res_ovl" 16101 [fn() => "Invalid Id Construct"]
+	  | res_ovl (CharLit c) = CharLit c
+	  | res_ovl (StringLit s) = StringLit s
+	  | res_ovl (NumLit i) = NumLit i
+in
+	if (!contains_overloaded_aliases)
+	then
+		res_ovl term
+	else
+		term
+end);
+=TEX
+
+\subsection{Conversion of a Term to a ``HOL Term''}
 
 =SML
 fun €extm_to_term› (namemap : (int * string) list) ((Binder ("Ã", a, b))
@@ -1048,7 +1171,7 @@ fun €extm_to_term› (namemap : (int * string) list) ((Binder ("Ã", a, b))
 	end)
   | extm_to_term namemap (TmTyped (Id s, ty)) = ((
 	(case type_of_const s of
-		Value _ => resolve_alias
+		Value _ => mk_const
 	|	Nil => mk_var)
 			(s, extype_to_type1 namemap ty)
 	)
@@ -1108,25 +1231,15 @@ fun €extm_to_term› (namemap : (int * string) list) ((Binder ("Ã", a, b))
 \subsection{The Type Inference Mechanism Glue}
 
 =SML
-fun €make_term1› (tm : TY TM) : INF_TUPLE = (
-	let	val side_effect = start_again();
-		val env = init_env tm;
-		val sd = init_subs ti_subs;
-	in
-		ti env tm
-	end
-);
-=TEX
-=SML
-fun €make_term2› ((tm, ty) : INF_TUPLE) : TERM = (
-	let	val namemap = get_tyvar_info tm;
-	in
-		extm_to_term namemap tm
-	end
-);
-=TEX
-=SML
-val €make_term› : TY TM -> TERM = make_term2 o make_term1;
+fun €make_term› (tm : TY TM) : TERM = (
+let	val side = (start_again(); init_subs ti_subs;
+			contains_overloaded_aliases := false);
+	val env = init_env tm;
+	val tm' = resolve_overloading (fst (ti env tm));
+	val namemap = get_tyvar_info tm';
+in
+		extm_to_term namemap tm'
+end);
 =TEX
 
 =SML
