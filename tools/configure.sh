@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.14 2002/10/30 11:16:10 rda Exp rda $
+# $Id: configure.sh,v 1.15 2002/10/30 11:29:34 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -289,5 +289,6 @@ do
 	fi
 done
 out "sed $HTMLEDIT  <$CWD/src/index.html.src > $PPTARGETDIR/doc/index.html"
+out "cp $CWD/src/lemma1.gif $CWD/src/newpplogo.gif $PPTARGETDIR/doc"
 out "echo Installation complete"
 echo "If you are happy with these settings, now run ./install to install ProofPower."
