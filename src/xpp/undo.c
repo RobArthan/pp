@@ -119,7 +119,7 @@ void undo_motion_cb(
 	UndoBuffer			*ub,
 	XmTextVerifyCallbackStruct	cbs)
 {
-	ub->moved_away = True;
+	/* ub->moved_away = True; */
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -150,7 +150,6 @@ void undo_modify_cb(
 	UndoBuffer			*ub,
 	XmTextVerifyCallbackStruct	*cbs)
 {
-	Boolean restart = ub->moved_away;
 	NAT len;
 	char *cut_chars;
 
@@ -158,8 +157,14 @@ void undo_modify_cb(
 /* XmGetSelection doesn't seem to work as one might like in a 
  * callback like this. However XmTextGetSubstring is just the job
  */
-
-	if(cbs->startPos < cbs->endPos) {
+	if(	!ub->undoing &&
+		cbs->endPos == cbs->startPos + 1 &&
+		cbs->endPos == ub->last &&
+		ub->last > ub-> first) {
+				/* deleting last character of current typing */
+		--ub->last;
+	} else if(cbs->startPos < cbs->endPos) {
+				/* deleted something else */
 		len = cbs->endPos - cbs->startPos;
 		cut_chars = XtMalloc(len + 1);
 		if(XmTextGetSubstring(ub->text_w,
@@ -174,10 +179,12 @@ void undo_modify_cb(
 			ub->last = cbs->startPos + cbs->text->length;	
 			ub->oldtext = cut_chars;
 		}
-	} else if (restart) {
+	} else if (ub->moved_away || ub->last != cbs->startPos) {
+					/* started typing somewhere new */
 		reinit_undo_buffer(ub, cbs, True);
 		ub->last = cbs->startPos + cbs->text->length;
 	} else {
+					/* just carried on typing */
 		ub->last += cbs->text->length;
 	}
 	if(ub->menu_w) {
