@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.23 2003/07/23 14:02:14 rda Exp rda $
+ * $Id: options.c,v 2.24 2004/02/09 16:41:37 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -463,7 +463,7 @@ if(!global_options.edit_only) {
  *	state = 0	- looking for next word.
  *	state = 1	- in word looking for next space.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-char **get_arg_list(void) {
+char **get_arg_list(char *cmd_line) {
 	static char **argv;
 	static char *buf;
 	char *p;
@@ -474,9 +474,9 @@ char **get_arg_list(void) {
 	if(argv) {
 		XtFree((char *)argv);
 	}
-	siz = strlen(global_options.command_line);
+	siz = strlen(cmd_line);
 	buf = XtMalloc(siz + 1);
-	strcpy(buf, global_options.command_line);
+	strcpy(buf, cmd_line);
 	for(p = buf, state = 0, argc = 0; *p; ++p) {
 		switch(state) {
 			case 0:

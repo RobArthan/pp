@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.26 2004/02/02 15:01:35 rda Exp rda $
+ * $Id: xpp.c,v 2.27 2004/02/02 16:47:00 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -31,6 +31,10 @@
 #define XtCAddNewlineMode		"AddNewlineMode"
 #define XtNcommandLineList		"commandLineList"
 #define XtCCommandLineList		"CommandLineList"
+#define XtNdefaultCommand		"defaultCommand"
+#define XtCDefaultCommand		"DefaultCommand"
+#define XtNargumentChecker		"argumentChecker"
+#define XtCArgumentChecker		"ArgumentChecker"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files: 
@@ -125,6 +129,8 @@ typedef struct {
 	char *abandon_reply;
 	char *command_line_list;
 	int  add_new_line_mode;
+	char *default_command;
+	char *argument_checker;
 } XppResources;
 
 XppResources xpp_resources;
@@ -183,6 +189,24 @@ static XtResource resources[] = {
 		XtOffsetOf(XppResources, add_new_line_mode),
 		XtRImmediate,
 		(XtPointer) 1
+	},
+	{
+		XtNdefaultCommand,
+		XtCDefaultCommand,
+		XtRString,
+		sizeof(char *),
+		XtOffsetOf(XppResources, default_command),
+		XtRString,
+		""
+	},
+	{
+		XtNargumentChecker,
+		XtCArgumentChecker,
+		XtRString,
+		sizeof(char *),
+		XtOffsetOf(XppResources, argument_checker),
+		XtRString,
+		""
 	}
 };
 
@@ -307,7 +331,7 @@ void set_pp_home(void)
 		putenv(x_search_path);
 		env_diag("using %s", x_search_path);
 	} else {
-		env_diag("using callers values for XUSERFILESEARCHPATH", "");
+		env_diag("using caller's value for XUSERFILESEARCHPATH", "");
 	}
 }
 
@@ -360,19 +384,55 @@ Boolean check_option(char *option,  char*keyword)
 	&&	*option == '-'
 	&&	!strncmp(option + 1, keyword, l - 1);
 }
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * check_sep: check for command line options, and set up some of the static data accordingly.
- * Returns number of argv items to skip
+ * Append an argument onto the command line string.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-int check_sep(int argc, char **argv)
+static char *append_arg(char *cmd_line, char *arg)
 {
+	char *res;
+	if(cmd_line == NULL) {
+		if((res = XtMalloc(strlen(arg) + 1)) == NULL) {
+			msg("system error",
+			"cannot allocate space for command-line\n");
+			exit(52);
+		}
+		strcpy(res, arg);
+	} else {
+		if((res = XtRealloc(cmd_line, strlen(cmd_line) + strlen(arg) + 2)) == NULL) {
+			msg("system error",
+			"cannot allocate space for command-line\n");
+			exit(54);
+		}
+		strcat(res," ");
+		strcat(res, arg);
+	}
+	return res;
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Process non-X options and set up the command line
+ * Note this needs to be an XtMalloced string for various other
+ * parts of the code to work, even in an edit-only session.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+	
+static char *get_command_line(int argc, char **argv, Boolean *use_default_command)
+{
+	char *res;
 	int i;
+	Boolean have_non_xpp_arg = False;
+	Boolean just_collect = False;
+
 	synchronous = False;
 	havefonts = False;
 	file_name = NULL;
-	global_options.edit_only = True;
+	global_options.edit_only = False;
+	res = NULL;
+	*use_default_command = True;
+
 	for (i = 1; i < argc; i += 1) {
-		if(check_option(argv[i], "blocking")) {
+		if(just_collect) {
+			res = append_arg(res, argv[i]);
+		} else if(check_option(argv[i], "blocking")) {
 			synchronous = True;
 		} else if(check_option(argv[i], "havefonts")) {
 			havefonts = True;
@@ -390,58 +450,59 @@ int check_sep(int argc, char **argv)
 				file_name = "";
 			}
 		} else if (check_option(argv[i], "command")) {
+			if(have_non_xpp_arg) {
+				usage();
+				exit(55);
+			}
 			global_options.edit_only = False;
-			i += 1;
-			break;
-		} else if(file_name == NULL) {
+			just_collect = True;
+			*use_default_command = False;
+		} else if (check_option(argv[i], "--")) {
+			res = append_arg(res, argv[i]);			
+			just_collect = True;
+		} else if(i == 1 && argv[i][0] != '-') {
 			file_name = argv[i];
 		} else {
-			break;
+			have_non_xpp_arg = True;
+			res = append_arg(res, argv[i]);
 		}
 	}
-	global_options.edit_only = global_options.edit_only && i == argc;
-	return i;
+	if(res == NULL){
+		res = XtMalloc(1);
+		res[0] = '\0';
+		global_options.edit_only = True;
+	}
+	return res;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Process non-X options and set up the command line
- * Note this needs to be an XtMalloced string for various other
- * parts of the code to work, even in an edit-only session.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-static char *get_command_line(int argc, char **argv)
+ * default_command_line: check the arguments if the argument
+ * checker resource has been set. Prefix the command line with
+ * the default command string (and a space). Return the command line.
+ * cmd_line argument must have been malloced and may be re-alloced.
+ * **** **** **** **** **** **** **** **** **** **** **** ****/
+char *default_command_line(char *cmd_line)
 {
-	int i, siz, skip, len;
-	char *p, *res;
-
-	skip = check_sep(argc, argv);
-
-	siz = 1;
-
-	for(i = skip; i < argc; ++i) {
-		siz += strlen(argv[i]) + 1;
-	};
-
-	if((res = XtMalloc(siz)) == NULL) {
-		msg("system error",
-		"cannot allocate space for command-line\n");
-		exit(52);
-	};
-
-	p = res;
-
-	for(i = skip; i < argc; ++i) {
-		len = strlen(argv[i]);
-		strcpy(p, argv[i]);
-		p[len] = ' ';
-		p += len + 1;
-	};
-	if (skip < argc) {
-		 *(p - 1) = '\0';
-	} else {
-		 *p = '\0';
+	char *tmp;
+	if(xpp_resources.argument_checker && *xpp_resources.argument_checker) {
+		tmp = XtMalloc(strlen(xpp_resources.argument_checker) + 1);
+		strcpy(tmp, xpp_resources.argument_checker);
+		tmp = append_arg(tmp, cmd_line);
+		int  ret_code = new_session(get_arg_list(tmp), False);
+		if(ret_code != 0) {
+			exit(ret_code);
+		}
+		XtFree(tmp);
 	}
-	return res;
+	if(xpp_resources.default_command && *xpp_resources.default_command) {
+		tmp = XtMalloc(strlen(xpp_resources.default_command) + 1);
+		strcpy(tmp, xpp_resources.default_command);
+		tmp = append_arg(tmp, cmd_line);
+		XtFree(cmd_line);
+		return tmp;
+	} else {
+		return cmd_line;
+	}
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -458,14 +519,15 @@ static char *get_command_line(int argc, char **argv)
  * is doing xsets as well). The right place is taken to be immediately after
  * any X options and before any xpp-specific ones.
  * 3) There are various bits of global state to be set up (see code)
- * 4) If we are going to run in the background, then the child we fork to do
+ * 4) If there is an argument checker to be run, we run it.
+ * 5) If we are going to run in the background, then the child we fork to do
  * the work inherits our X connection, so the file descriptor given by the
  * connection number must not be closed on the exec, so we need to do the
  * appropriate fcntls to ensure (a) that we do inherit the X connection and
  * (b) other applications exec'ed by us do not (if they are X application, e.g.,
  * inside a Poly/ML ProofPower session using the ML Motif interface, then
  * they will set up their own connection).
- * 5) If we are going to spawn a new xpp because we've had to change th
+ * 6) If we are going to spawn a new xpp because we've had to change th
  * font path, then the spawned copy will set up its own connection.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
@@ -473,6 +535,8 @@ int main(int argc, char **argv)
 {
 	char **retry_argv;
 	int i, orig_argc, num_x_args;
+	Boolean use_default_command;
+	char *cmd_line;
 
 	argv0 = argv[0];
 	orig_argc = argc;
@@ -513,7 +577,13 @@ int main(int argc, char **argv)
 	text_translations = xpp_resources.text_translations;
 	templates = xpp_resources.templates;
 
-	global_options.command_line = get_command_line(argc, argv);
+	cmd_line = get_command_line(argc, argv, &use_default_command);
+	
+	if(!global_options.edit_only && use_default_command) {
+		global_options.command_line = default_command_line(cmd_line);
+	} else {
+		global_options.command_line = cmd_line;	
+	}
 
 	global_options.interrupt_prompt = xpp_resources.interrupt_prompt;
 
@@ -527,7 +597,7 @@ int main(int argc, char **argv)
 	:	xpp_resources.add_new_line_mode;
 
 	command_line_list = xpp_resources.command_line_list;
-	
+
 	(void) fcntl(ConnectionNumber(XtDisplay(root)), F_SETFD, 0);
 
 	if (!havefonts && get_pp_fonts())  {

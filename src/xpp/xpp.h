@@ -232,7 +232,7 @@ typedef enum {
 	extern void init_options(
 		Widget	owner_w);
 	extern void add_options_tool(void);
-	extern char **get_arg_list(void);
+	extern char **get_arg_list(char *cmd_line);
 	extern void set_read_only(Boolean read_only);
 	extern void set_file_type(FileType file_type);
 	extern GlobalOptions orig_global_options;
@@ -253,7 +253,7 @@ typedef enum {
 	extern void send_to_application(
 		char	*buf,
 		NAT	siz);
-	extern void new_session(char *argv[], Boolean async);
+	extern int new_session(char *argv[], Boolean async);
 	extern void new_editor_session(void);
 	extern void new_command_session(void);
 	extern void run_in_background(void);

@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.43 2003/08/01 11:13:13 rda Exp rda $
+ * $Id: pterm.c,v 2.44 2004/02/02 14:30:03 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -620,7 +620,7 @@ void get_pty(void)
 /*
  * Now get the command line options for the command and exec it:
  */
-		arglist = get_arg_list();
+		arglist = get_arg_list(global_options.command_line);
 		execvp(arglist[0], arglist);
 	/* **** error if reach here **** */
 		msg("system error", "could not exec");
@@ -1298,7 +1298,7 @@ static void default_sigs(void)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * new_session: run another xpp session. either synchronously
+ * new_session: run a program. either synchronously
  * or asynchronously as determined by Bollean parameter.
  *
  * If asynchronous, we actually fork a child which then forks again and
@@ -1309,7 +1309,7 @@ static void default_sigs(void)
  * without which we would be spawning a generation of zombies.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-void new_session(char *argv[], Boolean async)
+int new_session(char *argv[], Boolean async)
 {
 	pid_t new_pid;
 	new_pid = fork();
@@ -1333,7 +1333,7 @@ void new_session(char *argv[], Boolean async)
 					exit(13);
 				}
 				/* exec argv[0] "" */
-				execvp(argv0, argv);
+				execvp(argv[0], argv);
 				/* **** error if reach here **** */
 				msg("system error", "could not exec");
 				perror("xpp");
@@ -1344,7 +1344,8 @@ void new_session(char *argv[], Boolean async)
 			}
 		} else {
 			/* Parent - wait for the child */
-			wait(0);
+			waitpid(new_pid, 0, 0);
+			return 0;
 		}
 	} else { /* synchronous */
 		if (new_pid < 0) { /* Cannot fork */
@@ -1360,14 +1361,20 @@ void new_session(char *argv[], Boolean async)
 				exit(13);
 			}
 			/* exec argv[0] "" */
-			execvp(argv0, argv);
+			execvp(argv[0], argv);
 			/* **** error if reach here **** */
 			msg("system error", "could not exec");
 			perror("xpp");
 			exit(22);
 		} else  {
+			int status;
 			/* Parent - wait for the child */
-			wait(0);
+			waitpid(new_pid, &status, 0);
+			if(WIFEXITED(status)) {
+				return(WEXITSTATUS(status));
+			} else {
+				return(255);
+			}
 		}
 	}
 }
