@@ -69,6 +69,8 @@
 \item[Issues 1.87-1.89] Annotations and pragmas (enhancements 1 and 20)
 \item[Issue 1.90] Enhancements 5 and 7 plus fix of bug 17 (batch 2).
 \item[Issue 1.91] Enhancements 10.
+\item[Issue 1.92] Fixed bug 3 (batch 2).
+\item[Issue 1.93] Fixed bug 4 (batch 2) and made $new\_parent\_aux$ less plaintive.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1382,18 +1384,20 @@ The next function adds a new parent to the current theory, and makes an entry of
 
 =SML
 fun €new_parent_aux› (thy : string) : unit = (
-	(	new_parent thy;
-		update_user_datum cn_new_parent_ud_key
-			(UD_String(thy, [UD_Int (current_level(),[])])) )
-	handle Fail msg => (
-		if	thy mem get_descendants "min"
-		then	comment "new_parent_aux" 507034
-				[fn () => thy,
-				 get_current_theory_name,
-				fn () => get_message msg]
-		else	comment "new_parent_aux" 507035
-				[fn () => thy, get_current_theory_name]
-	)
+	if	not (thy mem get_parents "-")
+	then	(	new_parent thy;
+			update_user_datum cn_new_parent_ud_key
+				(UD_String(thy, [UD_Int (current_level(),[])])) )
+		handle Fail msg => (
+			if	thy mem get_descendants "min"
+			then	comment "new_parent_aux" 507034
+					[fn () => thy,
+					 get_current_theory_name,
+					fn () => get_message msg]
+			else	comment "new_parent_aux" 507035
+					[fn () => thy, get_current_theory_name]
+		)
+	else	()
 );
 =TEX
 The following function creates a new theory (with a given list of theories to be made parents in addition to the current theory) and tries to make sure
@@ -1741,10 +1745,25 @@ fun €term_of_vc› (vc as (decs, (asms, conc)) : VC) : TERM = (
 	end
 );
 =TEX
+For various (good) reasons, the underlying {\Product} operations of adding new parent or saving a onjecture (e.g., a VC) do not increment the level counter.
+In order for the Z document generator to be able to output the necessary commands in the right place, we make and deletes a dummy type declaration before storing each batch of VCs to force the level counter up.
+In order to avoid a potential infinite loop (e.g., if the current theory is not writable), the attempt to do this dummy declaration is abandoned after 10,000 goes (this protects the code against an extremely unlikely event!)
 =SML
 fun €store_vcs› (label : LABEL, vcs: VC list) : unit = (
-	map (store_vc_term label) (map term_of_vc vcs);
-	()
+	let	fun dummy_decl i = (
+			if	i < 10000
+			then	let	val tyn = "CN'DUMMY_TYPE" ^ string_of_int i;
+				in	((	(icl'Kernel.icl'new_type(tyn, 0); ())
+						handle Fail _ => dummy_decl (i+1));
+					icl'Kernel.icl'delete_extension();
+					()	)
+				end	handle Fail _ => ()
+			else	()
+		);
+		val side_effect = dummy_decl 0;
+	in	map (store_vc_term label) (map term_of_vc vcs);
+		()
+	end
 );
 =TEX
 \subsection{Creating ProofPower Theories}
@@ -4596,6 +4615,9 @@ fun €get_replacement› (lab : string) : REPLACEMENT OPT = (
 	s_lookup lab (!repl_env)
 );
 =TEX
+For various (good) reasons, the underlying {\Product} operations of adding new parent or saving a onjecture (e.g., a VC) do not increment the level counter.
+In order for the Z document generator to be able to output the necessary commands in the right place, we make and deletes a dummy type declaration on each web clause to force the level counter up.
+In order to avoid a potential infinite loop (e.g., if the current theory is not writable), the attempt to do this dummy declaration is abandoned after 10,000 goes (this protects the code against an extremely unlikely event!)
 =SML
 fun €cn_z_generator› (w : WEB_CLAUSE) : unit = (
 	let	val save_zg_state = get_z_generator_state();
