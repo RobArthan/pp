@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.80 2004/02/11 21:00:03 rda Exp rda $
+ * $Id: mainw.c,v 2.81 2004/02/11 21:45:31 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -290,17 +290,21 @@ static MenuItem tools_menu_items[] = {
     {NULL}
 };
 
-#define CMD_MENU_EXECUTE    0
-#define CMD_MENU_RETURN     1
-#define CMD_MENU_SEMICOLON  2
-/* Item 3 is a separator */
-#define CMD_MENU_ABANDON    4
-#define CMD_MENU_INTERRUPT  5
-/* Item 6 is a separator */
-#define CMD_MENU_KILL       7
-#define CMD_MENU_RESTART    8
+/* Item 2 is a separator */
+#define CMD_MENU_EXECUTE    2
+#define CMD_MENU_RETURN     3
+#define CMD_MENU_SEMICOLON  4
+/* Item 5 is a separator */
+#define CMD_MENU_ABANDON    6
+#define CMD_MENU_INTERRUPT  7
+/* Item 8 is a separator */
+#define CMD_MENU_KILL       9
+#define CMD_MENU_RESTART    10
 
 static MenuItem cmd_menu_items[] = {
+    { "Command Line ...", &xmPushButtonGadgetClass, 'C', NULL, NULL,
+        popup_command_line_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
+    MENU_ITEM_SEPARATOR,
     { "Execute Selection", &xmPushButtonGadgetClass, 'x', "Ctrl<Key>x", "Ctrl-X",
         cmd_menu_cb, (XtPointer)CMD_MENU_EXECUTE, (MenuItem *)NULL, False },
     { "Return", &xmPushButtonGadgetClass, 'e', "Ctrl<Key>m", "Ctrl-M",
@@ -317,9 +321,6 @@ static MenuItem cmd_menu_items[] = {
         cmd_menu_cb, (XtPointer)CMD_MENU_KILL, (MenuItem *)NULL, False },
     { "Restart", &xmPushButtonGadgetClass, 'R', NULL, NULL,
         cmd_menu_cb, (XtPointer)CMD_MENU_RESTART, (MenuItem *)NULL, False },
-    MENU_ITEM_SEPARATOR,
-    { "Command Line ...", &xmPushButtonGadgetClass, 'C', NULL, NULL,
-        popup_command_line_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
     {NULL}
 };
 
