@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%  %Z% $Revision: 1.57 $ $RCSfile: imp062.doc,v $ $Date: 2002/10/17 16:26:32 $
+%  %Z% $Revision: 1.58 $ $RCSfile: imp062.doc,v $ $Date: 2004/01/19 12:44:00 $
 =TEX
 % TQtemplatetex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -21,10 +21,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of Z Type Inferrer}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP062}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.57 $%
+\def\SCCSversion{$Revision: 1.58 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 16:26:32 $%
+\TPPdate{\FormatDate{$Date: 2004/01/19 12:44:00 $%
 }}
 \TPPstatus{Draft}                    %% Mandatory field
 \TPPtype{SML Literate Script}
@@ -132,6 +132,7 @@ Enhanced representation of the environment.
 \item[Issue 1.56] Copyright and banner updates for open source release.
 \item[Issue 1.57] PPZed-specific updates for open source release
 \item[Issue 1.58] The Z universal set is now called ƒ.
+\item[Issue 1.59] Fixed bug in treatment of decorated free variables.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -2065,7 +2066,7 @@ numbers and subsection numbers.
 let	fun find_in_scope (ident as (n, d)) = (
 	let
 		val exd = (rev o explode) d;
-		fun aux (decor as d0::rest) res =
+		fun aux (decor as (d0::rest)) res =
 		let	val sd = (implode o rev) decor;
 		in
 			case env_lookup env (n, sd) of
@@ -2073,7 +2074,7 @@ let	fun find_in_scope (ident as (n, d)) = (
 			|BoundVar ty => ((n, sd), BoundVar (sub_type zti_subs ty), res)
 			|_ => aux rest (d0::res)
 		end
-		  | aux [] res = (
+		  | aux [] res = PolyML.print (
 			case env_lookup env (n, "") of
 			GlobalVar ty => ((n, ""), GlobalVar (sub_type zti_subs ty), res)
 			|BoundVar ty => ((n, ""), BoundVar (sub_type zti_subs ty), res)
@@ -2084,6 +2085,7 @@ let	fun find_in_scope (ident as (n, d)) = (
 		case aux exd [] of
 		(id, GlobalVar ty, res) => (id, GlobalVar ty, implode res)
 		|(id, BoundVar ty, res) => (id, BoundVar ty, implode res)
+		|(id, FreeVar ty, res) => (id, FreeVar ty, implode res)
 		|(_, other, _) => (ident, other, "")
 	end);
 =TEX
@@ -2112,6 +2114,8 @@ in
 		ti_z_tm env (ZTmGVar (id', Nil, tml))
 	)|(id', BoundVar ty', "") => (
 		local_variable id ty'
+	)|(id', FreeVar (Value ty'), "") => (
+		local_variable id ty'
 	)|(id', GlobalVar ty', d') => (
 		case manifest ((fn (ExType("­", [_,t])) => t | t => t) ty') of
 		SchemaType _ => (
@@ -2128,15 +2132,19 @@ in
 			let	val ty'' = setup_new_var id;
 			in	local_variable id ty''
 			end
-
-
+	)|(id', FreeVar (Value ty'), d') => (
+		case manifest ((fn (ExType ("­", [_,t])) => t | t => t) ty') of
+		SchemaType _ => (
+			ti_z_tm env (ZTmDecor (ZTmLVar (id', Nil, tml), d'))
+		) |_ =>
+			let	val ty'' = setup_new_var id;
+			in	local_variable id ty''
+			end
 	)|(_, FreeVar Nil, _) => (
 		let	val ty' = setup_new_var id;
 		in
 			local_variable id ty'
 		end
-	)|(_, FreeVar (Value ty'), _) => (
-		local_variable id ty'
 	)
 end
 )
