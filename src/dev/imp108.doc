@@ -158,6 +158,7 @@ while !line <> "" do (line := ExtendedIO.input_line is; output(std_out, !line));
 structure ÛPPCompilerÝ : PPCompiler = struct
 	type ÛTEXT_SOURCEÝ = unit -> string;
 	type ÛTEXT_FILTERÝ = string -> string;
+	type ÛHANDLERÝ = exn -> unit;
 	type ÛinstreamÝ = BasicIO.instream;
 =TEX
 First some fairly low-level stuff to turn a $TEXT\_SOURCE$ into an
@@ -246,18 +247,18 @@ The next function underpins the two interface functions.
 It's parameterisation is like that of $mk\_text\_reader$:
 the name parameter is ignored if a stream is supplied.
 =SML
-exception	ÛPPCompilerÝ of exn;
 fun Ûcompile_eitherÝ (
 	f : TEXT_SOURCE,
 	name : string,
-	isopt : TextIO.instream option) = (
+	isopt : TextIO.instream option,
+	handler : HANDLER) = (
 	let	val reader = mk_text_reader(f, name, isopt);
 		val strm = TextIO.mkInstream
 			(TextIO.StreamIO.mkInstream(reader, NONE));
 		fun go () = (
 			Compiler.Interact.useStream strm
 			handle ex => (
-				raise PPCompiler ex
+				handler ex
 			)
 		);
 	in	go()
@@ -267,27 +268,30 @@ fun Ûcompile_eitherÝ (
 The two interface functions are now just a question of assembling
 the pieces:
 =SML
-fun Ûcompile1Ý (name : string, f : TEXT_SOURCE, g : TEXT_FILTER) : unit = (
+fun Ûcompile1Ý (name : string, f : TEXT_SOURCE, g : TEXT_FILTER, h : HANDLER)
+				: unit = (
 	let	fun say s = TextIO.output(std_out, g s);
 		fun flush () = TextIO.flushOut std_out;
 		val old = !Compiler.Control.Print.out;
 	in	Compiler.Control.Print.out := {flush = flush, say = say};
-		compile_either(f, name, NONE);
+		compile_either(f, name, NONE, h);
 		Compiler.Control.Print.out := old
 	end
 );
-fun Ûcompile2Ý (strm : instream, f : TEXT_SOURCE, g : TEXT_FILTER) : unit = (
+fun Ûcompile2Ý (strm : instream, f : TEXT_SOURCE, g : TEXT_FILTER, h : HANDLER)
+				: unit = (
 	let	fun say s = TextIO.output(std_out, g s);
 		fun flush () = TextIO.flushOut std_out;
 		val old = !Compiler.Control.Print.out;
 	in	Compiler.Control.Print.out := {flush = flush, say = say};
-		compile_either(f, "", SOME strm);
+		compile_either(f, "", SOME strm, h);
 		Compiler.Control.Print.out := old
 	end
 );
 =TEX
 The rest of the compiler interface functions are just renamings of existing functions:
 =SML
+val ÛuseÝ = use;
 val Ûsave_stateÝ : string -> bool = SMLofNJ.exportML;
 val ÛexitÝ : int -> unit = OS.Process.exit;
 =TEX
@@ -327,16 +331,37 @@ end (* of structure PPCompiler *);
 \subsection{String Processing}
 =SML
 structure ÛPPStringÝ : PPString = struct
-	val ÛimplodeÝ : string list -> string = SML90.implode;
-	val ÛexplodeÝ : string -> string list = SML90.explode;
+	open SML90;
+	fun string_of_exn (ex : exn) : string = (
+		let	val nm = exnName ex;
+			val msg = exnMessage ex;
+		in	"(Exception: " ^
+			(if	msg = ""
+			then	nm
+			else	nm ^ ": " ^ msg) ^ ")"
+		end
+	);
 end (* of structure PPString *);
 open PPString;
+=TEX
+\subsection{String Processing}
+=SML
+structure ÛPPArrayÝ : PPArray = struct
+	open Array;
+	val arrayoflist : 'a list -> 'a array = fromList;
+	open General;
+end (* of structure PPArray *);
+open PPArray;
 =TEX
 \twocolumn[\section{INDEX}]
 \small
 \printindex
 
 \end{document}
+
+use"dtd108.sml";
+use"imp108.sml";
+
 structure S = struct
 	datatype T = MkT of string list
 end;
@@ -357,3 +382,21 @@ S.MkT["ABCDEF", "GHIJKL", "MNOPQR", "STUVWX",
 	"ABCDEF", "GHIJKL", "MNOPQR", "STUVWX",
 	"ABCDEF", "GHIJKL", "MNOPQR", "STUVWX",
 	"ABCDEF", "GHIJKL", "MNOPQR", "STUVWX"];
+
+fun f () = ExtendedIO.input_line std_in;
+
+fun h ex = (
+	output(std_out, "EXCEPTION: "^ string_of_exn ex ^ "\n")
+);
+fun handler (ex : exn) : unit = (
+	case ex of 
+		Fail msg =>  output(std_out, "EXCEPTION: "^ string_of_exn ex ^ "\n")
+	|	Error msg => output(std_out, "EXCEPTION: "^ string_of_exn ex ^ "\n")
+	|	_ => raise ex
+);
+
+PPCompiler.compile2(std_in, f, Combinators.I, handler);
+
+val arr = arrayoflist [1,2,3];
+sub(arr, 3);
+1 div 0;
