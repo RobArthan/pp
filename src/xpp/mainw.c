@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.23 2002/05/15 11:02:48 phil Exp rda $
+ * $Id: mainw.c,v 2.24 2002/05/18 10:21:36 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -11,7 +11,7 @@
  * the user interface for interacting with the interactive program.
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char rcsid[] = "$Id: mainw.c,v 2.23 2002/05/15 11:02:48 phil Exp rda $";
+static char rcsid[] = "$Id: mainw.c,v 2.24 2002/05/18 10:21:36 rda Exp rda $";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:
@@ -363,15 +363,20 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * set_icon_name: get the file name out of the script editor's
+ * set_icon_name_and_title: get the file name out of the script editor's
  * namestring label; strip away any directory names and use
- * the resulting file name as the icon name for the root window.
+ * the resulting file name as the icon name for the root window (for
+ * mwm-style icon boxes) and (together with the xpp title and version
+ * string) as the root window title (for the title bar under most
+ * window managers).
  * Relies on the no_file_message string not containing any
  * `/' characters.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void set_icon_name(void)
+static void set_icon_name_and_title(void)
 {
 	char *fname, *p;
+	char *root_title;
+	int root_title_len;
 	fname = XmTextGetString(namestring);
 	if(!fname || !*fname) {
 /* no file name; shouldn't happen; do nothing */
@@ -384,6 +389,14 @@ static void set_icon_name(void)
 			++p;
 		}
 		XtVaSetValues(root, XmNiconName, p, NULL);
+		root_title_len = strlen(title) + strlen(p) + 3; /* ": " + '0' */
+		if((root_title = XtMalloc(root_title_len)) != NULL) {
+			strcpy(root_title, title);
+			strcat(root_title, ": ");
+			strcat(root_title, p);
+			XtVaSetValues(root, XmNtitle, root_title, NULL);
+			XtFree(root_title);
+		} /* else malloc failed - don't bother */
 		XtFree(fname);
 	}
 }
@@ -719,7 +732,7 @@ static Boolean setup_main_window(
 */
 	}
 	reinit_changed(False);
-	set_icon_name();
+	set_icon_name_and_title();
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Initialise options and templates packages
@@ -790,7 +803,7 @@ static void file_menu_cb(
 		} else {
 			if(save_file(script, fname)) {
 				flash_file_name(fname);
-				set_icon_name();
+				set_icon_name_and_title();
 				reinit_changed(True);
 			}
 		}
@@ -808,7 +821,7 @@ static void file_menu_cb(
 				setup_reopen_menu(oldfname);
 			}
 			flash_file_name(fname);
-			set_icon_name();
+			set_icon_name_and_title();
 			reinit_changed(True);
 			set_menu_item_sensitivity(filemenu,
 				FILE_MENU_SAVE, True);
@@ -846,7 +859,7 @@ static void file_menu_cb(
 						setup_reopen_menu(oldfname);
 					}
 					flash_file_name(fname);
-					set_icon_name();
+					set_icon_name_and_title();
 					reinit_changed(False);
 					set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
 				} else {
@@ -879,7 +892,7 @@ static void file_menu_cb(
 				break;
 			}
 			flash_file_name(fname);
-			set_icon_name();
+			set_icon_name_and_title();
 			reinit_changed(False);
 			XtFree(fname);
 		};
@@ -896,7 +909,7 @@ static void file_menu_cb(
 				setup_reopen_menu(oldfname);
 			}
 			flash_file_name(no_file_message);
-			set_icon_name();
+			set_icon_name_and_title();
 			reinit_changed(False);
 			set_menu_item_sensitivity(filemenu,
 				FILE_MENU_SAVE, False);
@@ -979,7 +992,7 @@ static void reopen_cb(
 				setup_reopen_menu(oldfname);
 			}
 			flash_file_name(fname);
-			set_icon_name();
+			set_icon_name_and_title();
 			reinit_changed(False);
 			set_menu_item_sensitivity(filemenu,
 				FILE_MENU_SAVE, True);

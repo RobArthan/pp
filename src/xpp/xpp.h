@@ -8,7 +8,7 @@
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #ifdef _xpp
-static char rcsid_h[] = "$Id: xpp.h,v 2.11 2002/03/21 16:36:43 phil Exp phil $";
+static char rcsid_h[] = "$Id: xpp.h,v 2.12 2002/05/15 11:02:48 phil Exp rda $";
 #endif
 
 
@@ -293,3 +293,7 @@ typedef struct menu_item {
 	extern
 #endif
 	char *command_line_list;
+#ifndef _xpp
+	extern
+#endif
+	char *title;

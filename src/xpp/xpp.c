@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.4 2001/11/16 17:20:38 rda Exp phil $
+ * $Id: xpp.c,v 2.5 2002/03/12 14:48:20 phil Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -44,9 +44,9 @@ char *templates;
 char *command_line_list;
 
 #ifdef BUILDTITLE
-static char *title = BUILDTITLE;
+char *title = BUILDTITLE;
 #else
-static char *title = "xpp (test version)";
+char *title = "xpp (test version)";
 #endif
 static char *file_name;
 
