@@ -1,0 +1,967 @@
+=TEX
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation of the Resolution Facilities}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP067}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{SML Literate Script}
+\TPPkeywords{}
+\TPPauthor{K.Blackburn & WIN01}
+\TPPauthorisation{R.D.Arthan & FST Team Leader}
+\TPPabstract{This document contains the implementation
+of the resolution facilities in ICL HOL.}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	    Library
+}}
+\begin{document}
+\makeTPPfrontpage
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History} 
+\begin{description}
+\item [Issues 1.1] 
+First version.
+
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+Tools giving some sort of resolution facility
+are called for in \cite{DS/FMU/IED/HLD012}.
+This document provides an implementation for these tools.
+A design for such tools is given in \cite{DS/FMU/IED/DTD067}.
+This document provides an implementations for them.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains an implementation for the
+resolution tools.
+\subsubsection{Dependencies}
+This document takes its signature from \cite{DS/FMU/IED/DTD067}.
+\subsubsection{Deficiencies}
+None known.
+\subsubsection{Possible Enhancements}
+None known.
+
+\section{PREAMBLE}
+=IGN
+structure ÛResolutionÝ : Resolution = struct
+=TEX
+=IGN
+val lthy = open_theory "basic_hol";
+val _ = push_proof_context ();
+=TEX
+\section{THE CODE}
+Using $rewrite\_rule$ as a simplifier is crude!
+=SML
+local
+	val simp_rewrites_thm = 
+	tac_proof(([],
+	¬(µ x:'a· T) ± (¶ x :'a· T) ± 
+	³(µ x:'a· F) ± ³(¶ x :'a· F) ±
+	((¶‰1 x:'a·T) ¤ (¶ x ·µ y:'a · y = x)) ±
+	(³(¶‰1 x:'a·F)) ±
+	(µ t1 t2· (if T then t1 else t2) = t1 ± (if F then t1 else t2) = t2)
+	±
+	(µ t· (T ´ t ¤ t) ± (F ´ t ¤ T) ± (t ´ T ¤ T) ± 
+                  (t ´ F ¤ ³ t))
+	±
+	(µ t· (T ² t) ± (t ² T) ± (F ² t ¤ t) ± (t ² F ¤ t) ±
+         (t ² t ¤ t) ± (t ² ³ t ¤ T) ± (³ t ² t ¤ T))
+	±
+	(µ t· (T ± t ¤ t) ± (t ± T ¤ t) ± ³ (F ± t) ± ³ (t ± F) ±
+        (t ± t ¤ t))
+	±
+	(µ t· (³ T ¤ F) ± (³ F ¤ T))
+	±
+	(µ t· ((T ¤ t) ¤ t) ± ((t ¤ T) ¤ t) ± ((F ¤ t) ¤ ³ t) ±
+        ((t ¤ F) ¤ ³ t))®),
+	rewrite_tac[¶‰1_thm] THEN REPEAT strip_tac);
+	val rw = pure_rewrite_rule[simp_rewrites_thm];
+in
+fun Ûbasic_resolve_ruleÝ (subterm:TERM) (pthm:THM) (nthm:THM) : THM = (
+let	val cases_thm = (simple_µ_elim subterm bool_cases_axiom)
+		handle complaint =>
+		divert complaint "simple_µ_elim" "basic_resolve_rule" 
+		3031 [fn () => string_of_term subterm];
+	val (¤_T,¤_F) = dest_²(concl cases_thm);
+	val pF = subst[(mk_f,subterm)] (concl pthm);
+	val nT = subst[(mk_t,subterm)] (concl nthm);
+	val pthm' = pure_once_rewrite_rule[asm_rule ¤_F]
+		(²_right_intro nT pthm)
+		handle complaint =>
+		divert complaint "pure_once_rewrite_rule" "basic_resolve_rule" 
+		67009 [fn () => string_of_term subterm,
+			fn () => string_of_term (concl pthm)];
+	val nthm' = pure_once_rewrite_rule[asm_rule ¤_T]
+		(²_left_intro pF nthm)
+		handle complaint =>
+		divert complaint "pure_once_rewrite_rule" "basic_resolve_rule" 
+		67009 [fn () => string_of_term subterm,
+			fn () => string_of_term (concl nthm)];
+	val base_thm = ²_elim cases_thm nthm' pthm';
+in
+	all_µ_intro(rw base_thm)
+	handle complaint =>
+	if area_of complaint = "rewrite_rule"
+	then base_thm
+	else reraise complaint (area_of complaint)
+end);
+end; (* of local simp_rewrites_thm *)
+=TEX
+=SML
+fun Ûbasic_resolve_tacÝ (subterm : TERM) 
+	(asm1 : TERM, subs1 : TERM list) 
+
+	(asm2: TERM, subs2 : TERM list) : TACTIC = (fn (asms,gl) =>
+	LIST_GET_ASM_T [asm1,asm2] 
+		(fn lst =>
+		let	val thm1 = list_simple_µ_elim subs1 (hd lst);
+			val thm2 = list_simple_µ_elim subs2 (hd(tl lst));
+			val thm3 = basic_resolve_rule subterm thm1 thm2;
+			val cthm3 = concl thm3;
+		in
+			if (cthm3 = mk_f) orelse (cthm3 = mk_t)
+				orelse (cthm3 term_mem asms) 
+			then strip_asm_tac thm3
+			else asm_tac thm3
+		end)
+		(asms,gl)
+);
+=TEX
+\subsection{Term Unification}
+An algorithm for type unification:
+\begin{enumerate}
+\item
+Substitute type variables not found at all in either term
+for the specialisable type variables in either term.
+(Not necessary if known to be done already).
+\item
+Initialise the type substitution maps to send the instantiable type variables to $Nil$.
+We can then merge the test for instantiable to what it is
+instantiated to.
+\item
+Consider what the first type is is:
+\begin{description}
+\item[Type Variable]
+\begin{description}
+\item{If already instantiated}
+Then unify the second type with the instantiation.
+\item{Else if instantiable}
+(i.e. recorded as instantiated to $Nil$)
+Then check for its occurrence in the second type,
+and if not then record the first type instantiated to the $Value$ of the second.
+\item{Else}
+(i.e. not in instantiation list)
+The second type must either be
+\begin{itemize}
+\item
+an instantiable type variable, 
+either uninstantiated,
+in which case it should be recorded as instantiated to $Value$ of the
+first type,
+or instantiated in which case its instantiation should
+be unified with the first type,
+\item
+or an uninstantiable type variable, equal in name to the first.
+\end{itemize}
+\end{description}
+\item[Compound Type]
+Consider what the second type is is:
+\begin{description}
+\item[Type Variable]
+This must be an instantiable type variable, 
+either uninstantiated,
+in which case it should be recorded as instantiated to the
+first type,
+or instantiated in which case its instantiation should
+be unified with the first type.
+\item[Compound Type]
+In whichcase thetype constructor names must be equal, and the type 
+arguments unifiable.
+\end{description}
+\end{description}
+\end{enumerate}
+
+An algorithm for term unification:
+\begin{enumerate}
+\item
+Substitute term variables not found at all in either term
+for the specialisable term variables in either term.
+\item
+Substitute type variables not found at all in either term
+for the specialisable type variables in either term.
+(This prevents having to do this for the individual type unifications).
+\item
+Initialise the bound variable matching, to empty,
+specialisation and instantiation to mapping the variables to $Nil$.
+\item
+Consider what the first term is:
+\begin{description}
+\item[Variable]
+Determine its actual type, and consider that:
+\begin{description}
+\item[If a bound variable]
+Then the second term must be the corresponding bound variable of the other term,
+and the other type, when expanded out, must already be equal.
+\item[Else if already specialised]
+(i.e. mapped to $Value$ of something in the specialisation map)
+Then unify what it is specialised to, and the second term.
+\item[Else if it may be specialised]
+(i.e. mapped to $Nil$ in the specialisation map)
+Then unify its type to the type of the second term,
+then expand out the second term, looking for
+occurs checks,
+then record the first term as specialised to the $Value$ of the second term.
+\item[Else]
+(i.e. not mapped in the specialisation map)
+The second term must, after expansion, be either
+\begin{itemize}
+\item
+the same named variable, with a type unifiable to the first.
+\item
+or a unbound, specialisable variable, with a type unifiable to
+the first,
+in which case record the second term as specialised to the first term.
+\end{itemize}
+\end{description}
+
+\item[Constant]
+Consider what the second term is:
+\begin{description}
+\item[Variable]
+Determine its actual type, and consider that:
+\begin{description}
+\item[If a bound variable]
+Fail.
+\item[Else if already specialised]
+Then unify what it is specialised to, and the first term.
+\item[Else if it may be specialised]
+Then unify its type to the type of the constant,
+then record the second term as specialised to the first term.
+\item[Else]
+Fail.
+\end{description}
+
+\item[Constant]
+The second term must be the same name, with 
+a type unifiable to the first.
+\item[Application]
+Fail
+\item[Abstraction]
+Fail
+\end{description}
+
+\item[Application]
+Consider what the second term is:
+\begin{description}
+\item[Variable]
+Determine its actual type, and consider that:
+\begin{description}
+\item[If a bound variable]
+Fail.
+\item[Else if already specialised]
+Then unify what it is specialised to, and the first term.
+\item[Else if it may be specialised]
+Then unify its type to the type of the application,
+then record the second term as specialised to the first term.
+\item[Else]
+Fail.
+\end{description}
+\item[Application]
+Unify the two arguments, and then the two functions
+(the order is based on the grounds the types and subterms of the arguments are likely
+to be smaller).
+\item[Abstraction]
+Fail
+\end{description}
+
+\item[Abstraction]
+Consider what the second term is:
+\begin{description}
+\item[Variable]
+Determine its actual type, and consider that:
+\begin{description}
+\item[If a bound variable]
+Fail.
+\item[Else if already specialised]
+Then unify what it is specialised to, and the first term.
+\item[Else if it may be specialised]
+Then unify its type to the type of the abstraction,
+then record the second term as specialised to the first term.
+\item[Else]
+Fail.
+\end{description}
+\item[Application]
+Fail.
+\item[Abstraction]
+Unify the types of the abstractions.
+Then record the fact that the two bound variables are indeed
+such while traversing the body.
+Then unify the two bodies.
+The undo the recording of the bound variables.
+\end{description}
+
+\end{description}
+\end{enumerate}
+=SML
+fun Ûlist_string_variantÝ (av:string list) ([]:string list) : string list = []
+| list_string_variant av (h:: t) = (
+let	val h' = string_variant av h;
+in
+	h' :: list_string_variant (h'::av) t
+end);
+=IGN
+list_string_variant ["p","q''","r'","r"] ["q", "q'", "q'''", "r''", "s"];
+=SML
+fun Ûterm_tytm_varsÝ (tm : TERM) : TERM list * string list = (
+let	fun aux _ (App (f, a)) = (
+	let	val (tv1,ty1) = aux f (dest_simple_term f);
+		val (tv2,ty2) = aux a (dest_simple_term a);
+	in
+		((tv1 cup tv2), (ty1 cup ty2))
+	end
+	) | aux _ (Const (_, ty)) = ([],type_tyvars ty)
+	  | aux tm (Var (nm,ty)) = ([tm],type_tyvars ty)
+	  | aux _ (SimpleÌ (v, b)) = (
+	let val (tv1,ty1) = aux b (dest_simple_term b);
+	in
+		(tv1 grab v, ty1 cup type_tyvars (type_of v))
+	end)
+in
+	aux tm (dest_simple_term tm)
+end);
+
+=TEX
+=TEX
+To make the term and type variables unique in two terms:
+=SML
+fun ÛuniquifyÝ (((tm1:TERM) ,(ms1: TERM list), (mi1:TYPE list)),
+	((tm2:TERM), (ms2:TERM list), (mi2:TYPE list))) :
+	((TERM * TERM list * TYPE list) * (TERM * TERM list * TYPE list)) = (
+let	val (tv_tm1, ty_tm1) = term_tytm_vars tm1;
+	val (tv_tm2, ty_tm2) = term_tytm_vars tm2;
+	val tv1_fixed = tv_tm1 diff ms1;
+	val tv2_fixed = tv_tm2 diff ms2;
+	val tv1_avoid = tv1_fixed @ tv2_fixed;
+	val tv1' = list_variant tv1_avoid ms1;
+	val tv2_avoid = tv1_avoid @ tv1';
+	val tv2' = list_variant tv2_avoid ms2;
+	val tm1' = subst(combine tv1' ms1) tm1;
+	val tm2' = subst(combine tv2' ms2) tm2;
+	val nm_mi1 = map dest_vartype mi1;
+	val nm_mi2 = map dest_vartype mi2;
+	val ty1_fixed = ty_tm1 diff nm_mi1;
+	val ty2_fixed = ty_tm2 diff nm_mi2;
+	val ty1_avoid = ty1_fixed @ ty2_fixed;
+	val mi1s' = list_string_variant ty1_avoid nm_mi1;
+	val mi1' = map mk_vartype mi1s';
+	val ty1_insts = (combine mi1' mi1);
+	val ty2_avoid = ty1_avoid @ mi1s';
+	val mi2' = map mk_vartype (list_string_variant ty2_avoid nm_mi2);
+	val ty2_insts = (combine mi2' mi2);
+	val tm1'' = inst [] ty1_insts tm1';
+	val tm2'' = inst [] ty2_insts tm2';
+	val ms1' = map (inst [] ty1_insts) tv1';
+	val ms2' = map (inst [] ty2_insts) tv2';
+in
+	((tm1'',ms1',mi1'),(tm2'',ms2',mi2'))
+end);
+=IGN
+uniquify ¬a ± (µ b:'a· f b ² c) ² g (b:'a) ± h (d:'d)® [¬a:BOOL®,¬b:'a®,¬c:BOOL®] [¬:'a®,¬:'d®]
+¬a ± (µ b:'a· f b ² c) ² g (b:'a) ± h (d:'d)® [¬a:BOOL®,¬d:'d®] [¬:'a®,¬:'d®];
+
+
+=TEX
+Expand out a type, checking for the presence of an instantiable type
+variable as you go (an ``occurs'' check).
+=SML
+fun Ûexpand_check_typeÝ (match:(TYPE * TYPE OPT)list) (ty1:TYPE)
+	(ty2: TYPE): TYPE = (
+let	fun aux inside ty =
+	if is_vartype ty
+	then (case lassoc5 match ty of
+	Nil => ty (* not instantiable, so not ty1 *)
+	| Value Nil => if inside andalso ty1 = ty
+		then type_fail "term_unify" 67012 [ty1,ty2]
+		else ty
+	| Value (Value ty') => 
+		if ty' = ty
+		then (if inside andalso ty = ty1
+			then type_fail "term_unify" 67012 [ty1,ty2]
+			else ty
+		) else aux inside ty'
+	)
+	else (let val (nm,tys) = dest_ctype ty
+	in
+		mk_ctype(nm,map (aux true) tys)
+	end)
+in
+	aux false ty2
+end);
+=TEX
+=SML
+fun Ûexpand_typeÝ (match:(TYPE * TYPE OPT)list) (ty2: TYPE): TYPE = (
+let	fun aux ty =
+	if is_vartype ty
+	then (case lassoc5 match ty of
+	Nil => ty 
+	| Value Nil => ty
+	| Value (Value ty') => 
+		if ty = ty'
+		then ty
+		else aux ty')
+	else (let val (nm,tys) = dest_ctype ty
+	in
+		mk_ctype(nm,map aux tys)
+	end)
+in
+	aux ty2
+end);
+=TEX
+We do a very cheap and cheerful bound variable hider in the 
+following.
+=SML
+fun Ûexpand_termÝ (tymatch:(TYPE * TYPE OPT)list) 
+	(fvmatch: (TERM * TERM OPT)list)
+	(tm:TERM):TERM = (
+let	fun aux _ (App(f,a)) = mk_app(
+		aux f (dest_simple_term f), 
+		aux a (dest_simple_term a))
+	| aux _ (Const(nm,ty)) = mk_const(nm, expand_type tymatch ty)
+	| aux v (Var (nm,ty)) = (case lassoc5 fvmatch v of
+		Nil => mk_var(nm, expand_type tymatch ty)
+		| Value Nil => mk_var(nm, expand_type tymatch ty)
+		| Value(Value tm') => 
+			if v = tm'
+			then v
+			else aux tm' (dest_simple_term tm')
+	) | aux _ (SimpleÌ(v,bdy)) = mk_simple_Ì (
+		let val (nm,ty) = dest_var v
+		in
+		mk_var(nm, expand_type tymatch ty)
+		end,
+		expand_term tymatch ((v,Nil)::fvmatch) bdy)
+in
+	aux tm (dest_simple_term tm)
+end);
+=TEX
+=SML
+fun Ûexpand_check_termÝ (tymatch:(TYPE * TYPE OPT)list) 
+	(ifvmatch: (TERM * TERM OPT)list)
+	(mv:TERM) 
+	(tm:TERM):TERM = (
+let	val (mvnm,mvty)  = dest_var mv;
+	val mv' = mk_var(mvnm, expand_type tymatch mvty);
+	fun aux _ _ fvmatch (App(f,a)) = mk_app(
+		aux true f fvmatch (dest_simple_term f), 
+		aux true a fvmatch (dest_simple_term a))
+	| aux _ _  fvmatch (Const(nm,ty)) = mk_const(nm, expand_type tymatch ty)
+	| aux inside v fvmatch (Var (nm,ty)) = (case lassoc5 fvmatch v of
+		Nil => mk_var(nm, expand_type tymatch ty)
+		| Value Nil => (let val nv = mk_var(nm, expand_type tymatch ty);
+			in
+			if inside andalso mv' = nv
+			then term_fail "term_unify" 67012 [mv, tm]
+			else nv
+			end
+		) | Value(Value tm') => 
+			if v = tm'
+			then (if inside andalso mv' = v
+				then term_fail "term_unify" 67012 [mv, tm]
+				else v)
+			else aux inside tm' fvmatch (dest_simple_term tm')
+	) | aux _  _ fvmatch (SimpleÌ(v,bdy)) = (mk_simple_Ì (
+		let val (nm,ty) = dest_var v
+		in
+		mk_var(nm, expand_type tymatch ty)
+		end,
+		aux true bdy ((v,Nil)::fvmatch) (dest_simple_term bdy)))
+in
+	aux false tm ifvmatch (dest_simple_term tm)
+end);
+=TEX
+=SML
+fun Ûtype_unifyÝ (match:(TYPE * TYPE OPT)list) (ty1:TYPE)
+	(ty2: TYPE): (TYPE * TYPE OPT)list = (
+let	fun aux mth [] [] = mth
+	| aux mth (t1 :: rest1) (t2 :: rest2) = (
+		aux (type_unify mth t1 t2) rest1 rest2
+	) | aux _ _ _ = type_fail "term_unify" 67005 [ty1,ty2];
+in
+	if is_vartype ty1
+	then (case lassoc5 match ty1 of
+	Nil => ((* fixed type variable *)
+		if is_vartype ty2
+		then (case lassoc5 match ty2 of
+		Nil => ( if ty1 = ty2
+			then match
+			else type_fail "term_unify" 67007 [ty1,ty2,ty1]
+		) | Value Nil => (
+			match overwrite (ty2,Value ty1)
+		) | Value(Value ty2') => (
+			type_unify match ty1 ty2'
+		)) else
+		(type_fail "term_unify" 67005 [ty1,ty2]
+		)
+	) | Value Nil => ((* as yet uninstantiated *)
+	let	val ty2' = expand_check_type match ty1 ty2;
+	in
+		match overwrite (ty1,Value ty2')
+	end
+	) | Value(Value ty1') => (* instantiated *)
+		type_unify match ty1' ty2
+	)
+	else ((* a compound type *)
+		if is_vartype ty2
+		then (case (lassoc5 match ty2) of
+		Nil => type_fail "term_unify" 67005 [ty1,ty2]
+		| Value Nil => (
+			match overwrite (ty2,Value ty1)
+		) | Value(Value ty2') => (
+			type_unify match ty1 ty2'
+		))
+		else (
+		let	val (nm1,tys1) = dest_ctype ty1;
+			val (nm2,tys2) = dest_ctype ty2;
+		in
+			if (nm1 = nm2)
+			then aux match tys1 tys2
+			else type_fail "term_unify" 67005 [ty1,ty2]
+		end)
+	)
+end);
+=IGN
+type_unify [(¬:'a®,Nil),(¬:'c®,Nil),(¬:'d®,Nil)]
+	¬:'a ­ 'b ­ BOOL ­ ('c ¸ 'd)®
+	¬:'c ­ 'c ­ 'd ­ ('a ¸ BOOL)®;
+type_unify [(¬:'a®,Nil),(¬:'c®,Nil),(¬:'d®,Nil)]
+	¬:'a ­ 'b ­ BOOL ­ ('c ¸ 'd)®
+	¬:'c ­ 'c ­ 'd ­ (BOOL ¸ BOOL)®;
+type_unify [(¬:'a®,Nil),(¬:'c®,Nil),(¬:'d®,Nil)]
+	¬:'a ®
+	¬: ('a ¸ 'd)®;
+=TEX
+=IGN
+term_unify ((¬a ± (µ b:'a· f b ² c) ² g (b:'a) ± h (d:'d)®,
+	[¬a:BOOL®,¬b:'a®,¬c:BOOL®], [¬:'a®,¬:'d®]),
+	(¬a ± (µ b:'a· f b ² c) ² g (b:'a) ± h (d:'d)®, [¬a:BOOL®,¬d:'d®], [¬:'a®,¬:'d®]));
+
+=SML
+fun  Ûterm_unifyÝ ((itm1: TERM, ims1: TERM list, imi1: TYPE list),
+	(itm2: TERM, ims2: TERM list, imi2: TYPE list))
+	: 
+	((TYPE * TYPE) list * (TERM * TERM) list) *
+	((TYPE * TYPE) list * (TERM * TERM) list) = (
+let	
+=TEX
+Initialisation:
+=SML
+	val ((tm1,ms1,mi1),(tm2,ms2,mi2)) = (
+		uniquify ((itm1, ims1, imi1), (itm2, ims2, imi2))
+	);
+	val itymatch = map (fn ty => (ty,Nil)) (mi1 @ mi2);
+	val ifvmatch = map (fn tm => (tm,Nil)) (ms1 @ ms2);
+	val trans_mi1 = combine(imi1)(mi1);
+	val trans_ms1 = combine(ims1)(ms1);
+	val trans_mi2 = combine(imi2)(mi2);
+	val trans_ms2 = combine(ims2)(ms2);
+
+=TEX
+=SML
+	fun tmaux2 (tymatch, fvmatch) bvmatch (App(f1, a1)) (App(f2, a2)) = (
+		tmaux2 (tmaux2 (tymatch, fvmatch) bvmatch 
+				(dest_simple_term f1) (dest_simple_term f2))
+			bvmatch 
+			(dest_simple_term a1) 
+			(dest_simple_term a2)
+	) | tmaux2 (tymatch, fvmatch) bvmatch (Const(s1,ty1))(Const(s2,ty2)) = (
+		if (s1 = s2)
+		then (type_unify tymatch ty1 ty2, fvmatch)
+		else term_fail "term_unify" 67005 [itm1,itm2]
+	) | tmaux2 (tymatch, fvmatch) bvmatch (SimpleÌ(v1,b1))(SimpleÌ(v2,b2)) = (
+		
+		let	val bvmatch' = (v1, v2) :: bvmatch;
+			val tymatch' = type_unify tymatch (type_of v1) (type_of v2);
+		in	tmaux2 (tymatch', fvmatch) bvmatch' 
+			(dest_simple_term b1) (dest_simple_term b2)
+		end
+	) | tmaux2 (tymatch, fvmatch) bvmatch stm1 stm2 = (
+let
+=TEX
+Auxiliary functions handling variables:
+=SML
+	fun tmaux0 (tymatch:(TYPE * TYPE OPT)list, 
+			(fvmatch:(TERM * TERM OPT)list))
+			bvmatch (tm1:TERM) (v2: TERM) = (
+		case rassoc5 bvmatch v2 of
+		Nil => (
+			if any (frees tm1) (fn x => any bvmatch (fn (x1, _) => (x = x1)))
+			then term_fail "term_unify" 67005 [itm1,itm2]
+
+			else case lassoc5 fvmatch v2 of
+			Value(Value tm1') => (
+					tmaux2 (tymatch, fvmatch) bvmatch 
+					(dest_simple_term tm1) 
+					(dest_simple_term tm1')
+			) |	Value Nil => (
+					let	val tymatch' =
+					type_unify tymatch (type_of tm1) (type_of v2);
+					in	(tymatch', fvmatch overwrite 
+						(v2, Value (expand_check_term 
+						 tymatch fvmatch v2 tm1)))
+					end
+			) | 	Nil => (
+			if is_var tm1
+			then (case lassoc5 fvmatch tm1 of
+			Value(Value tm1') => (
+					tmaux2 (tymatch, fvmatch) bvmatch
+					(dest_simple_term tm1) 
+					(dest_simple_term tm1')
+			) |	Value Nil => (
+					let	val tymatch' =
+					type_unify tymatch (type_of tm1) (type_of v2);
+					in	(tymatch', fvmatch overwrite (tm1, Value v2))
+					end
+			) | Nil => (
+			let	val (nm1,vty1) = dest_var tm1;
+				val (nm2,vty2) = dest_var v2;
+			in
+				(if nm1 = nm2
+				then (type_unify tymatch vty1 vty2, fvmatch)
+				else term_fail "term_unify" 67005 [itm1,itm2])
+			end
+			))
+			else term_fail "term_unify" 67005 [itm1,itm2])			
+		) |	Value _ => term_fail "term_unify" 67005 [itm1,itm2]
+	);
+=TEX
+=SML
+	fun tmaux1 (tymatch, fvmatch) (bvmatch : (TERM * TERM) list) 
+			tm1 v2 = (
+		if is_var tm1
+		then	(let	val v1ty1 = dest_var tm1;
+			in case lassoc5 bvmatch tm1 of
+				Value vty => (
+					if vty = v2 andalso rassoc5 bvmatch vty = Value tm1
+					then (tymatch, fvmatch)
+					else term_fail "term_unify" 67005 [itm1,itm2]
+			) |	Nil => tmaux0 (tymatch, fvmatch) bvmatch tm1 v2
+			end)
+		else 	tmaux0 (tymatch, fvmatch) bvmatch tm1 v2
+	);
+
+=TEX
+Back to the body of tmaux2
+=SML
+in
+		case stm1 of
+		(Var v1) =>
+		tmaux1 (tymatch, fvmatch) bvmatch (mk_simple_term stm2) (mk_var v1) 
+		| _ => case stm2 of
+		(Var v2) =>
+		tmaux1 (tymatch, fvmatch) bvmatch (mk_simple_term stm1) (mk_var v2)
+		| _ => term_fail "term_unify" 67005 [itm1,itm2]
+end);
+=TEX
+=SML
+	val (otymatch,ofvmatch) = tmaux2 (itymatch, ifvmatch) [] 
+		(dest_simple_term tm1)
+		(dest_simple_term tm2);
+	fun get_ty_inst trans_mi ty = (
+	let	val used_ty = lassoc3 trans_mi ty;
+	in
+		(expand_type otymatch used_ty, ty)
+	end); 
+	val omi1 = map (get_ty_inst trans_mi1) imi1;
+	val omi2 = map (get_ty_inst trans_mi2) imi2;
+	fun get_tm_subst trans_ms tm = (
+	let	val used_tm = lassoc3 trans_ms tm;
+	in
+		(expand_term otymatch ofvmatch used_tm, tm)
+	end); 
+	val oms1 = map (get_tm_subst trans_ms1) ims1;
+	val oms2 = map (get_tm_subst trans_ms2) ims2;
+in
+	((omi1,oms1),(omi2,oms2))
+end);
+=IGN
+term_unify ((¬a®,[],[]),(¬a®,[],[]));
+term_unify ((¬a®,[],[]),(¬b®,[],[]));
+term_unify ((¬a®,[¬a®],[]),(¬b®,[¬b®],[]));
+term_unify ((¬a®,[¬a®],[]),(¬b®,[],[]));
+term_unify ((¬a®,[],[]),(¬b®,[¬b®],[]));
+term_unify ((¬a:'a®,[¬a:'a®],[¬:'a®]),(¬b:'b®,[¬b:'b®],[¬:'b®]));
+term_unify ((¬a:'a®,[¬a:'a®],[¬:'a®]),(¬b:'b®,[¬b:'b®],[]));
+term_unify ((¬a:'a®,[¬a:'a®],[]),(¬b:'b®,[¬b:'b®],[¬:'b®]));
+term_unify ((¬®,[],[]),(¬®,[],[]));
+term_unify ((¬®,[],[]),(¬®,[],[]));
+term_unify ((¬®,[],[]),(¬®,[],[]));
+term_unify ((¬®,[],[]),(¬®,[],[]));
+term_unify ((¬®,[],[]),(¬®,[],[]));
+
+fun free_unify tm1 tm2 = (term_unify
+	((tm1,frees tm1,map mk_vartype(term_tyvars tm1)),
+	(tm2,frees tm2,map mk_vartype(term_tyvars tm2)))
+);
+fun setup_unify tm1 tm2 = 
+	((tm1,frees tm1,map mk_vartype(term_tyvars tm1)),
+	(tm2,frees tm2,map mk_vartype(term_tyvars tm2)));
+free_unify ¬f:'a ­ 'b® ¬g:'a ­ 'b®;
+free_unify ¬f x® ¬g y®;
+free_unify ¬Ì x · f x® ¬Ì y · g y®;
+
+free_unify ¬f x® ¬g (y:'c)®;
+
+=TEX
+=IGN
+val lsubgoal_package_quiet = set_flag("subgoal_package_quiet",true);
+=TEX
+\section{EPILOGUE}
+=IGN
+val _ = open_theory lthy;
+val _ = pop_proof_context();
+val lsubgoal_package_quiet = set_flag("subgoal_package_quiet",
+	lsubgoal_package_quiet);
+end; (* of structure Resolution *)
+open ExistenceProofs;
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+=IGN
+push_goal([],¬(µ x y z · R x y ± R y z ´ R x z) ±
+ (µ x y · R x y ´ R y x) ±
+ (µ x · ¶ y · R x y) ´
+ (µ x · R x x)®);
+ a(c_contr_tac);
+a(list_spec_nth_asm_tac 3 [¬x®,¬x®]); (* useless *)
+
+(* comparing 2 vs 3 suggests need preprocessing, or embedded
+   skolemisation *)
+
+push_goal([],¬(µ x y z · R x y ± R y z ´ R x z) ±
+ (µ x y · R x y ´ R y x) ±
+ (¶ f · µ x · R x (f x)) ´
+ (µ x · R x x)®);
+ a(c_contr_tac);
+a(list_spec_nth_asm_tac 3 [¬x®,¬x®]); (* useless *)
+a(list_spec_asm_tac ¬µ x y· R x y ´ R y x® [¬x'®,¬f x'®]);
+(* *** Goal "1" *** *)
+a(spec_asm_tac ¬µ x· R x (f x)® ¬x'®);
+
+
+(* *** Goal "2" *** *)
+a(spec_asm_tac ¬µ x· R x (f x)® ¬x'®);
+a(list_spec_asm_tac ¬µ x y· R x y ´ R y x® [¬x''®,¬x''®]);
+(* *** Goal "2.1" *** *)
+a(list_spec_asm_tac ¬µ x y z· R x y ± R y z ´ R x z® [¬x®,¬y''®,¬x®]);
+
+(* *** Goal "2.1.1" *** *)
+a(list_spec_asm_tac ¬µ x y z· R x y ± R y z ´ R x z® [¬x'''®,¬y'''®,¬f x'''®]);
+(* *** Goal "2.1.1.1" *** *)
+a(spec_asm_tac  ¬µ x· R x (f x)® ¬x'''®);
+a(list_spec_asm_tac ¬µ x y z· R x y ± R y z ´ R x z® [¬x''''®,¬x'''''®,¬f x'''''®]);
+(* *** Goal "2.1.1.1.1" *** *)
+a(spec_asm_tac  ¬µ x· R x (f x)® ¬x'''''®);
+
+
+a(basic_resolve_tac ¬® 
+	(¬®,[])
+	(¬®,[]));
+
+push_goal([],¬(µ x y z · R x y ± R y z ´ R x z) ±
+ (µ x y · R x y ´ R y x) ±
+ (¶ f · µ x · R x (f x)) ´
+ (µ x · R x x)®);
+a(c_contr_tac);
+a(basic_resolve_tac ¬R x x® 
+	(¬µ x y· R x y ´ R y x®,[¬x®,¬x®])
+	(¬³ R x x®,[])); 
+a(basic_resolve_tac ¬R x' (f x')® 
+	(¬µ x· R x (f x)®,[¬x'®])
+	(¬µ x y· R x y ´ R y x®,[¬x'®,¬f x'®]));
+a(basic_resolve_tac ¬R x' x'® 
+	(¬µ x y· R x y ´ R y x®,[¬x'®,¬x'®])
+	(¬µ x y· R x y ´ R y x®,[¬x'®,¬x'®]));
+a(basic_resolve_tac ¬R x x® 
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬x®,¬y®,¬x®])
+	(¬³ R x x®,[]));
+a(basic_resolve_tac ¬R x' (f x')® 
+	(¬µ x· R x (f x)®,[¬x'®])
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬x'®,¬f x'®,¬z®]));
+a(basic_resolve_tac ¬R x' (f x')® 
+	(¬µ x· R x (f x)®,[¬x'®])
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬z®,¬x'®,¬f x'®]));
+a(basic_resolve_tac ¬R y x'® 
+	(¬µ x y· R x y ´ R y x®,[¬x'®,¬y®])
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬y®,¬x'®,¬z®]));
+	(* best to do all specialisation *)
+a(basic_resolve_tac ¬R y x'® 
+	(¬µ x y· R x y ´ R y x®,[¬x'®,¬y®])
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬z®,¬y®,¬x'®]));
+a(basic_resolve_tac ¬R x' z® 
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬x'®,¬y®,¬z®])
+	(¬µ x y· R x y ´ R y x®,[¬z®,¬x'®]));
+a(basic_resolve_tac ¬R x' y® 
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬x'®,¬y®,¬z®])
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬x'®,¬z®,¬y®]));
+a(basic_resolve_tac ¬R y z® 
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬x'®,¬y®,¬z®])
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬y®,¬x'®,¬z®]));
+a(basic_resolve_tac ¬R (f x') x'® 
+	(¬µ x'· R (f x') x'®,[¬x'®])
+	(¬µ x y· R x y ´ R y x®,[¬f x'®, ¬x'®]));
+a(basic_resolve_tac ¬R (f x') x'® 
+	(¬µ x'· R (f x') x'®,[¬x'®])
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬f x'®,¬x'®,¬z®]));
+a(basic_resolve_tac ¬R (f x') x'® 
+	(¬µ x'· R (f x') x'®,[¬x'®])
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬z®,¬f x'®,¬x'®]));
+a(basic_resolve_tac ¬R x (f x)® 
+	(¬µ x· R x (f x)®,[¬x®])
+	(¬µ y· ³ (R x y ± R y x)®,[¬f x®]));
+a(basic_resolve_tac ¬R x y® 
+	(¬µ x y· R x y ´ R y x®,[¬y®,¬x®])
+	(¬µ y· ³ (R x y ± R y x)®,[¬y®]));
+a(basic_resolve_tac ¬R x y® 
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬x®,¬z®,¬y®])
+	(¬µ y· ³ (R x y ± R y x)®,[¬y®]));
+a(basic_resolve_tac ¬R y x® 
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬y®,¬z®,¬x®])
+	(¬µ y· ³ (R x y ± R y x)®,[¬y®]));
+
+a(basic_resolve_tac ¬R (f x) x® 
+	(¬µ x'· R (f x') x'®,[¬x®])
+	(¬µ y· ³ (R x y ± R y x)®,[¬f x®]));
+a(basic_resolve_tac ¬R x x® 
+	(¬µ x' z· R (f x') z ´ R x' z®,[¬x®,¬x®])
+	(¬³ R x x®,[]));
+a(basic_resolve_tac ¬R(f x') (f(f x'))® 
+	(¬µ x· R x (f x)®,[¬f x'®])
+	(¬µ x' z· R (f x') z ´ R x' z®,[¬x'®,¬f(f x')®]));
+a(basic_resolve_tac ¬R(f x') z® 
+	(¬µ x y· R x y ´ R y x®,[¬z®,¬f x'®])
+	(¬µ x' z· R (f x') z ´ R x' z®,[¬x'®,¬z®]));
+a(basic_resolve_tac ¬R x' z® 
+	(¬µ x' z· R (f x') z ´ R x' z®,[¬x'®,¬z®])
+	(¬µ x y· R x y ´ R y x®,[¬x'®,¬z®]));
+a(basic_resolve_tac ¬R(f x') z® 
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬f x'®,¬y®,¬z®])
+	(¬µ x' z· R (f x') z ´ R x' z®,[¬x'®,¬z®]));
+a(basic_resolve_tac ¬R (f x') x'® 
+	(¬µ x'· R (f x') x'®,[¬x'®])
+	(¬µ x' z· R (f x') z ´ R x' z®,[¬x'®,¬x'®]));
+a(basic_resolve_tac ¬R x y® 
+	(¬µ x' z· R (f x') z ´ R x' z®,[¬x®,¬y®])
+	(¬µ y· ³ (R x y ± R y x)®,[¬y®]));
+a(basic_resolve_tac ¬R y x® 
+	(¬µ x' z· R (f x') z ´ R x' z®,[¬y®,¬x®])
+	(¬µ y· ³ (R x y ± R y x)®,[¬y®]));
+a(basic_resolve_tac ¬R x' (f x')® 
+	(¬µ x· R x (f x)®,[¬x'®])
+	(¬µ z x'· R z x' ´ R z (f x')®,[¬x'®,¬f x'®]));
+a(basic_resolve_tac ¬R y x'® 
+	(¬µ x y· R x y ´ R y x®,[¬x'®,¬y®])
+	(¬µ z x'· R z x' ´ R z (f x')®,[¬y®,¬x'®]));
+a(basic_resolve_tac ¬R z (f x')® 
+	(¬µ z x'· R z x' ´ R z (f x')®,[¬z®,¬x'®])
+	(¬µ x y· R x y ´ R y x®,[¬z®,¬(f x')®]));
+
+etc until
+
+a(basic_resolve_tac ¬R (f x) x® 
+	(¬µ x'· R (f x') x'®,[¬x®])
+	(¬³ R (f x) x®,[]));
+pop_thm();
+
+(* set of support just being  ¬³ R x x® *)
+push_goal([],¬(µ x y z · R x y ± R y z ´ R x z) ±
+ (µ x y · R x y ´ R y x) ±
+ (¶ f · µ x · R x (f x)) ´
+ (µ x · R x x)®);
+a(c_contr_tac);
+a(basic_resolve_tac ¬R x x® 
+	(¬µ x y· R x y ´ R y x®,[¬x®,¬x®])
+	(¬³ R x x®,[])); 
+a(basic_resolve_tac ¬R x x® 
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬x®,¬y®,¬x®])
+	(¬³ R x x®,[]));
+a(basic_resolve_tac ¬R x (f x)® 
+	(¬µ x· R x (f x)®,[¬x®])
+	(¬µ y· ³ (R x y ± R y x)®,[¬f x®]));
+
+a(basic_resolve_tac ¬R x y® 
+	(¬µ x y· R x y ´ R y x®,[¬y®,¬x®])
+	(¬µ y· ³ (R x y ± R y x)®,[¬y®]));
+a(basic_resolve_tac ¬R x y® 
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬x®,¬z®,¬y®])
+	(¬µ y· ³ (R x y ± R y x)®,[¬y®]));
+a(basic_resolve_tac ¬R y x® 
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬y®,¬z®,¬x®])
+	(¬µ y· ³ (R x y ± R y x)®,[¬y®]));
+a(basic_resolve_tac ¬R (f x) x® 
+	(¬µ x y· R x y ´ R y x®,[¬x®,¬f x®])
+	(¬³ R (f x) x®,[]));
+a(basic_resolve_tac ¬R (f x) x® 
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬f x®,¬y®,¬x®])
+	(¬³ R (f x) x®,[]));
+a(basic_resolve_tac ¬R y x® 
+	(¬µ x y· R x y ´ R y x®,[¬x®,¬y®])
+	(¬µ y· ³ R y x®,[¬y®]));
+a(basic_resolve_tac ¬R y x® 
+	(¬µ x y z· R x y ± R y z ´ R x z®,[¬y®,¬z®,¬x®])
+	(¬µ y· ³ R y x®,[¬y®]));
+a(basic_resolve_tac ¬R x (f x)® 
+	(¬µ x· R x (f x)®,[¬x®])
+	(¬µ z y· ³ (R x z ± R z y) ² ³ R y x®,[¬f x®,¬y®]));
+a(basic_resolve_tac ¬R z (f z)® 
+	(¬µ x· R x (f x)®,[¬z®])
+	(¬µ z y· ³ (R x z ± R z y) ² ³ R y x®,[¬z®,¬f z®]));
+a(basic_resolve_tac ¬R x z® 
+	(¬µ x y· R x y ´ R y x®,[¬z®,¬x®])
+	(¬µ z y· ³ (R x z ± R z y) ² ³ R y x®,[¬z®,¬y®]));
+a(basic_resolve_tac ¬R z y® 
+	(¬µ x y· R x y ´ R y x®,[¬z®,¬y®])
+	(¬µ z y· ³ (R x z ± R z y) ² ³ R y x®,[¬z®,¬y®]));
+a(basic_resolve_tac ¬R y x® 
+	(¬µ x y· R x y ´ R y x®,[¬y®,¬x®])
+	(¬µ z y· ³ (R x z ± R z y) ² ³ R y x®,[¬z®,¬y®]));
+
+
+
+a(basic_resolve_tac ¬® 
+	(¬®,[])
+	(¬®,[]));
+a(basic_resolve_tac ¬® 
+	(¬®,[])
+	(¬®,[]));
+
+
+
+
+
