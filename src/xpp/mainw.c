@@ -418,6 +418,7 @@ if(global_options.edit_only) {
 }
 	toolsmenu = setup_pulldown_menu(
 		menubar, "Tools", 'T', False, tools_menu_items);
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Edit menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -552,9 +553,14 @@ if( !global_options.edit_only ) {
 	};
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Initialise options package
+ * Initialise options and templates packages
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	init_options(script);
+
+	if(!init_templates_tool(script)) {
+		set_menu_item_sensitivity(toolsmenu, TOOLS_MENU_TEMPLATES, False);
+	}
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Management and Realisation:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -693,7 +699,7 @@ XmAnyCallbackStruct *cbs;
 		add_palette(script);
 		break;
 	case TOOLS_MENU_TEMPLATES:
-		add_templates(script);
+		add_templates_tool(script);
 		break;
 	case TOOLS_MENU_SEARCH_REPLACE:
 		add_search_tool(script);

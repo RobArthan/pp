@@ -185,8 +185,9 @@ typedef struct menu_item {
 		Widget	w);
 #endif
 #ifndef _templates
-	extern Boolean add_templates(
+	extern Boolean init_templates_tool(
 		Widget	w);
+	extern void add_templates_tool();
 #endif
 #ifndef _undo
 	extern void clear_undo(

@@ -30,16 +30,16 @@
 
 #include "xpp.h"
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * static data:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
 
 typedef struct {
 	Widget text_w; Widget templates_w;
 } TemplatesData;
 
 static TemplatesData templates_data[MAX_TEMPLATES_FORMS];
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * get_templates_data: get template information from the resource
- * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 typedef struct {
 	char * bitmap_file;
@@ -58,44 +58,88 @@ static TemplateCallbackData template_callback_data[MAX_TEMPLATES];
 static TemplateEntry template_table[MAX_TEMPLATES];
 static NAT template_table_size;
 
-Bool get_templates_data()
+static char *bad_templates_msg =
+"An error was detected while setting up the templates tool. "
+"It was not possible to generate any templates from the templates resource. "
+"The templates tool will not be available in this session.";
+
+static char *bad_pixmap_msg =
+"An error was detected while setting up the templates tool. "
+"The image name \"%s\" could not be used to make a label for a push-button.";
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * get_templates_data: get template information from the resource
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+
+static void get_templates_data()
 {
 	char *ptr = templates;
 	NAT i;
 
 	while (*ptr != '/' && *ptr != '\0') ptr++;
+	template_table_size = 0;
+	if(!*ptr) {
+		return;
+	}
 	for (	i = 0;
-		i < MAX_TEMPLATES && *++ptr != '\0';
+		i < MAX_TEMPLATES && *++ptr;
 		i++) {
+			++template_table_size;
 			template_table[i].bitmap_file = ptr;
-			while (*ptr != '/' && *ptr != '\0') ptr++;
+			while (*ptr != '/' && *ptr) ptr++;
 			if (*ptr == '/') {
 				*ptr = '\0';
 			} else {
-				break;
+				template_table[i].expansion = "";
+				return;
 			};
-			template_table[i].expansion = ++ptr;
-			while (*ptr != '/' && *ptr != '\0') ptr++;
+			template_table[i].expansion = *++ptr ? ptr : "";
+			while (*ptr != '/' && *ptr) ptr++;
 			if (*ptr == '/') {
 				*ptr = '\0';
 			} else {
-				break;
+				return;
 			};
 	};
-	template_table_size = i + 1;
-	return True;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * add_templates: attach templates to a text widget
+ * get_pixmap: get pixmap to use as a label on one of the push-buttons
+ * inform the user if something goes wrong.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-Bool add_templates(w)
-Widget w;
+static Pixmap get_pixmap (Widget w, char *name)
+{	Pixmap result;
+	result = XmGetPixmap(XtScreen(w), name, (Pixel) 1, (Pixel) 0);
+	if(result == XmUNSPECIFIED_PIXMAP) {
+		char *msg;
+		msg = XtMalloc(strlen(name) + strlen(bad_pixmap_msg) + 1);
+		if(msg) {
+			sprintf(msg, bad_pixmap_msg, name);
+			ok_dialog(w, msg);
+		}
+	}
+	return result;
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * init_templates_tool: setup templates tool to a text widget, but do
+ * not display it yet. Do this in order to decide whether or not to
+ * enable the menu item for the tool; if the user hasn't specified
+ * template resources, the menu item won't be enabled. Also can
+ * notify user of errors in the template resource early.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+Bool init_templates_tool(Widget w)
 {
 	NAT i, x, y, twi, fbase;
 	Widget shell, form, button;
-	void templates_cb();
+	static void templates_cb();
+
+	if(!templates || !*templates) { /* resource not set up */
+		return False;
+	};
 
 	for(	twi= 0;
 		twi< MAX_TEMPLATES_FORMS &&
@@ -110,13 +154,12 @@ Widget w;
 		return False;
 	};
 
-	if((form = templates_data[twi].templates_w) != NULL) {
-		XtManageChild(form);
-		XtPopup(XtParent(form), XtGrabNone);
-		return True;
-	};
-
 	get_templates_data();
+
+	if(!template_table_size) {	/* Couldn't parse anything */
+		ok_dialog(w, bad_templates_msg);
+		return False;
+	};
 
 	fbase = (template_table_size + 1) & ~0x01;
 
@@ -140,11 +183,8 @@ Widget w;
 
 		button = XtVaCreateManagedWidget("button",
 			xmPushButtonGadgetClass, form,
-			XmNlabelPixmap,	XmGetPixmap(
-						   XtScreen(form),
-						   template_table[i].bitmap_file,
-						   (Pixel) 1,
-						   (Pixel) 0),
+			XmNlabelPixmap,	get_pixmap(w,
+						   template_table[i].bitmap_file),
 			XmNlabelType,		XmPIXMAP,
 			XmNleftAttachment,	XmATTACH_POSITION,
 			XmNleftPosition,	x,
@@ -163,17 +203,38 @@ Widget w;
 			(XtPointer) &(template_callback_data[i]) );
 	};
 
-	XtManageChild(form);
-	XtPopup(shell, XtGrabNone);
-
 	return True;
 }
 
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * add_templates_tool: pop up the templates tool.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+void add_templates_tool(Widget w)
+{
+	NAT twi;
+	Widget form;
+
+	for(	twi= 0;
+		twi< MAX_TEMPLATES_FORMS &&
+		templates_data[twi].text_w != w &&
+		templates_data[twi].templates_w != NULL ;
+		++twi) {
+		continue;
+	};
+
+	if(	twi < MAX_TEMPLATES_FORMS
+	&&	(form = templates_data[twi].templates_w) != NULL) {
+		XtManageChild(form);
+		XtPopup(XtParent(form), XtGrabNone);
+	};
+}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * templates_cb: simulate typing of a character into a text widget
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-void templates_cb(w, cbdata, cbs)
+static void templates_cb(w, cbdata, cbs)
 Widget w;
 TemplateCallbackData * cbdata;
 XmPushButtonCallbackStruct *cbs;
