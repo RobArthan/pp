@@ -77,7 +77,7 @@ defined in \cite{DS/FMU/IED/???}.
 \subsection{Dependencies}
 \subsection{Interface}
 =SML
-signature icl'SlrpDriver = sig
+signature SlrpDriver = sig
 exception SYNTAX_ERROR;
 exception PARSER_ERROR of string;
 eqtype STATE;
@@ -129,7 +129,8 @@ val slrp'parse:
 	(''tok, ''lc, 'pp) REDUCTION_TABLE ->
 	(''tok, ''lc, 'pp) RESOLVER ->
 	(''tok, ''lc) CLASSIFIER ->
-	(''tok, ''lc, 'pp) ERROR_ROUTINE -> (unit -> ''tok) -> 'pp;
+	(''tok, ''lc, 'pp) ERROR_ROUTINE ->
+	('st -> (''tok * 'st)) -> 'st -> 'pp;
 end;
 =TEX
 \subsection{Possible Enhancements}
@@ -137,7 +138,7 @@ end;
 \section{UTILITIES}
 =TEX
 =SML
-structure icl'SlrpDriver : icl'SlrpDriver= struct
+structure SlrpDriver : SlrpDriver= struct
 =TEX
 =SML
 open EfficientDictionary;
@@ -153,20 +154,6 @@ val alpha_sort = Sort.sort Sort.stringorder;
 =TEX
 =SML
 fun bound list = length list - 1;
-=TEX
-=SML
-fun chat msg = (diag_line msg);
-=TEX
-=SML
-fun indices (list : ''a list) (what : ''a) = (
-	let	fun aux n (a :: more) = (
-			if a = what
-			then n :: aux (n+1) more
-			else aux (n+1) more
-		) | aux _ _ = [];
-	in	aux 0 list
-	end
-);
 =TEX
 \section{DATA TYPES FOR THE DRIVER}
 We differ slightly from \cite{Aho86} in that we work with two stacks, one
@@ -328,25 +315,26 @@ fun slrp'parse
 	(reducers : (''tok, ''lc, 'pp)REDUCTION_TABLE)
 	(resolver : (''tok, ''lc, 'pp) RESOLVER)
 	(classify : (''tok, ''lc)CLASSIFIER)
-	(error : (''tok, ''lc, 'pp)ERROR_ROUTINE) : (unit -> ''tok) ->'pp = (
+	(error : (''tok, ''lc, 'pp)ERROR_ROUTINE)
+	(reader : 'st -> (''tok * 'st)) : 'st -> 'pp = (
 	let	open Array;
 		val init_ss = [s0];
 		val init_is = [];
 		val fetch_action = lookup_action resolver actions;
 		val fetch_reducer = lookup_reducer reducers;
 		val fetch_goto = lookup_goto gotos;
-		fun go reader tok = (fn (ss, is) =>
+		fun go (tok, st) = (fn (ss, is) =>
 			let	val lc = classify tok;
 				val s = hd ss;
 			in	case fetch_action tok is s lc of 
-					Shift s' => go reader (reader())((s' :: ss), Token(tok, lc) :: is)
+					Shift s' => go (reader st)((s' :: ss), Token(tok, lc) :: is)
 				|	Reduce((nt, alt), r) => (
 						let	val reducer = fetch_reducer nt alt;
 							val A = reducer is;
 							val ss' = ss from r;
 							val is' = is from r;
 							val s' = fetch_goto (hd ss') nt;
-						in go reader tok (s' :: ss', Parsed A :: is')
+						in go (tok, st) (s' :: ss', Parsed A :: is')
 						end
 				) |	Accept => ((ss, is)
 				) |	Error =>(
@@ -358,8 +346,8 @@ fun slrp'parse
 			end
 		);
 	in
-		(fn reader => (
-			case go reader (reader()) (init_ss, init_is)of
+		(fn st => (
+			case go (reader st) (init_ss, init_is)of
 				(_, [Parsed res]) => res
 			|	_ => raise PARSER_ERROR "stacks corrupt at end of parse"))
 	end
@@ -411,7 +399,7 @@ fun simple_resolver (prec : (('tok * 'lc) * ('tok * 'lc)) -> RESOLUTION)
 );
 =TEX
 =SML
-end; (* of structure icl'SlrpDriver *)
+end; (* of structure SlrpDriver *)
 =TEX
 \twocolumn[\section{INDEX}]
 \small
