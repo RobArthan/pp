@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.2 2002/10/20 17:21:26 rda Exp rda $
+# $Id: configure.sh,v 1.3 2002/10/20 20:26:43 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -75,9 +75,10 @@ then	case "$PPMOTIFLINKING" in
 		static)  true;;
 		*)	give_up "PPCOMPILER must be one of POLYML or SMLNJ";;
 	esac
+	echo "Using $PPMOTIFLINKING linking for Motif as specified"
 else	PPMOTIFLINKING=dynamic
+	echo "Using $PPMOTIFLINKING linking"
 fi
-echo "Using $PPMOTIFLINKING linking for Motif as specified"
 #
 # Find a target directory
 #
