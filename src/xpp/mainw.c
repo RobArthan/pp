@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$
+ * mainw.c 1.59 94/04/28
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -988,35 +988,39 @@ Boolean application_alive()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Data transfer from application:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static NAT bytes_since_last_pause;
-#define PAUSE_AFTER 200
-#define PAUSE_FOR 50
 
-static void get_from_application(unused_w, unused_p)
-Widget unused_w;
-XtPointer unused_p;
+static void get_from_application(
+	XtPointer	unused_p,
+	int		*unused_source,
+	XtInputId	*unused_id)
 {
 	NAT ct;
-	static	char buf[1001]; /* allow for null-termination in scroll_out */
-	static void start_listening_again();
-	while(application_alive()
-	&&	(ct = read(control_fd, buf, 1000)) > 0
-	&&	(scroll_out(buf, ct, False),
-			(bytes_since_last_pause += ct) < PAUSE_AFTER)) {
-		;
+	char buf[1001]; /* allow for null-termination in scroll_out */
+	static Boolean get_from_app_work_proc();
+	if((ct = read(control_fd, buf, 1000)) > 0) {
+		scroll_out(buf, ct, False);
 	}
-	if(bytes_since_last_pause > PAUSE_AFTER) {
-		bytes_since_last_pause = 0;
+	if(ct == 1000) { /* Probably more to do */
 		XtRemoveInput(app_ip_req);
-		XtAppAddTimeOut(app, PAUSE_FOR, start_listening_again, NULL);
+		XtAppAddWorkProc(app, get_from_app_work_proc, (XtPointer) NULL);
 	}		
 }
 
-static void start_listening_again()
+static Boolean get_from_app_work_proc(XtPointer unused_p)
 {
-	app_ip_req = XtAppAddInput(app,
-		control_fd, (XtPointer) XtInputReadMask,
-		get_from_application, NULL);
+	NAT ct;
+	char buf[1001]; /* allow for null-termination in scroll_out */
+	if((ct = read(control_fd, buf, 1000)) > 0) {
+		scroll_out(buf, ct, False);
+	}
+	if(ct == 1000) { /* Probably more to do */
+		return False;	/* arrange to be called again */ 
+	} else	{
+		app_ip_req = XtAppAddInput(app,
+			control_fd, (XtPointer) XtInputReadMask,
+			get_from_application, NULL);
+		return True;
+	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Data transfer to application:
