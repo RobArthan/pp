@@ -202,6 +202,11 @@ fun âMAP_FIRST_Tá (tacf : 'a -> TACTIC) (things : 'a list) : TACTIC = (
 =SML
 val âMAP_FIRSTá : ('a -> TACTIC) -> 'a list -> TACTIC = MAP_FIRST_T;
 =TEX
+=TEX
+=SML
+fun âCOND_Tá (p : GOAL -> bool) (tac1 : TACTIC) (tac2 : TACTIC) : TACTIC = (fn gl =>
+	(if p gl then tac1 else tac2) gl
+);
 =SML
 fun âREPEAT_Tá (tac : TACTIC) : TACTIC = (fn g =>
 	((tac THEN REPEAT_T tac) ORELSE_T id_tac) g
@@ -224,6 +229,14 @@ fun âREPEAT_N_Tá (n : int) (tac : TACTIC) : TACTIC = (
 =SML
 val âREPEAT_Ná : int -> TACTIC -> TACTIC = REPEAT_N_T;
 =TEX
+=SML
+fun âREPEAT_UNTIL_Tá (p : GOAL -> bool) (tac : TACTIC) : TACTIC = (
+	REPEAT (COND_T p fail_tac tac)
+);
+=TEX
+=SML
+val âREPEAT_UNTILá : (GOAL -> bool) -> TACTIC -> TACTIC = REPEAT_UNTIL_T;
+=TEX
 \section{BASIC THEOREM TACTICALS AND COMBINATORS}
 =SML
 type âTHM_TACTICá = THM -> TACTIC;
@@ -240,32 +253,32 @@ fun  (ttcl1 : THM_TACTICAL) âORELSE_TTCLá (ttcl2 : THM_TACTICAL)
 );
 =TEX
 =SML
-val âid_ttclá : THM_TACTICAL = Combinators.I;
+val âID_THENá : THM_TACTICAL = Combinators.I;
 =TEX
 =SML
-fun âfail_with_ttclá (area : string) (msg : int) (inserts : (unit -> string) list)
+fun âFAIL_WITH_THENá (area : string) (msg : int) (inserts : (unit -> string) list)
 						: THM_TACTICAL = (fn _ =>
 	fail area msg inserts
 );
 =TEX
 =SML
-val âfail_ttclá : THM_TACTICAL = (fn _ =>
-	fail "fail_ttcl" 9401 []
+val âFAIL_THENá : THM_TACTICAL = (fn _ =>
+	fail "FAIL_THEN" 9401 []
 );
 =TEX
 =SML
 fun âREPEAT_TTCLá (ttcl : THM_TACTICAL) : THM_TACTICAL= (fn ttac => fn th =>
-	((ttcl THEN_TTCL (REPEAT_TTCL ttcl)) ORELSE_TTCL id_ttcl) ttac th
+	((ttcl THEN_TTCL (REPEAT_TTCL ttcl)) ORELSE_TTCL ID_THEN) ttac th
 );
 =TEX
 =SML
 fun âEVERY_TTCLá (ttcls : THM_TACTICAL list) : THM_TACTICAL = (
-	fold op THEN_TTCL ttcls id_ttcl
+	fold op THEN_TTCL ttcls ID_THEN
 );
 =TEX
 =SML
 fun âFIRST_TTCLá (ttcls : THM_TACTICAL list) : THM_TACTICAL= (
-	fold op ORELSE_TTCL ttcls (fail_with_ttcl "FIRST_TTCL" 9402 [])
+	fold op ORELSE_TTCL ttcls (FAIL_WITH_THEN "FIRST_TTCL" 9402 [])
 );
 =TEX
 \section{BASIC TACTICALS}
@@ -290,14 +303,14 @@ fun âDROP_ASM_Tá (tm : TERM) (thmtac : (THM -> TACTIC))
 fun âTOP_ASM_Tá (thmtac : (THM -> TACTIC)) : TACTIC = (fn gl as (asms, _) =>
 	case asms of
 		asm :: _ => thmtac (asm_rule asm) gl
-	|	_ =>  fail "TOP_ASM_T" 9303 []
+	|	_ =>  fail "TOP_ASM_T" 9302 []
 );
 =TEX
 =SML
 fun âPOP_ASM_Tá (thmtac : (THM -> TACTIC)) : TACTIC = (fn (asms, conc) =>
 	case asms of
-		asm :: more => (thmtac (asm_rule asm))(more, conc)
-	|	_ =>  fail "POP_ASM_T" 9303 []
+		asm :: more => (thmtac (asm_rule asm))(more term_less asm, conc)
+	|	_ =>  fail "POP_ASM_T" 9302 []
 );
 =TEX
 =SML
@@ -308,6 +321,19 @@ fun âGET_ASMS_Tá (thmstac : (THM list -> TACTIC)) : TACTIC = (fn gl as (asms, _)
 =SML
 fun âDROP_ASMS_Tá (thmstac : (THM list -> TACTIC)) : TACTIC = (fn (asms, conc) =>
 	(thmstac (map asm_rule asms))([], conc)
+);
+=TEX
+=SML
+fun âGET_NTH_ASM_Tá (i : int) (thmtac : (THM -> TACTIC))
+						: TACTIC = (fn gl as (asms, _) =>
+	((GET_ASM_T  (nth (i-1) asms) thmtac) gl)
+	handle ex => divert ex "nth" "GET_NTH_ASM_T" 9303 [fn () => string_of_int i]
+);
+=SML
+fun âDROP_NTH_ASM_Tá (i : int) (thmtac : (THM -> TACTIC))
+						: TACTIC = (fn gl as (asms, _) =>
+	((DROP_ASM_T  (nth (i-1) asms) thmtac) gl)
+	handle ex => divert ex "nth" "DROP_NTH_ASM_T" 9303 [fn () => string_of_int i]
 );
 =TEX
 \subsection{Utility Tacticals}
@@ -336,7 +362,9 @@ fun âLEMMA_Tá (newsg : TERM) (thmtac : THM -> TACTIC) : TACTIC = (fn gl as (asms
 	in	((asms, newsg) :: sgs,
 		(fn (thm :: thms) => prove_asm_rule thm (pf thms) |
 		[] => bad_proof "LEMMA_T"))
-	end
+	end	handle ex =>	if area_of ex = "asm_rule"
+				then term_fail "LEMMA_T" 9403 [newsg]
+				else raise ex
 );
 =TEX
 =SML
@@ -347,9 +375,16 @@ fun âCHANGED_Tá (tac : TACTIC) : TACTIC = (fn gl =>
 	case tac gl of
 		sgp as ([gl'], _) => (
 			if seq_eq gl gl'
-			then	fail "CHANGED_T" 9302 []
+			then	fail "CHANGED_T" 9401 []
 			else sgp
 	) |	sgp => sgp
+);
+=TEX
+=SML
+fun âSOLVED_Tá (tac : TACTIC) : TACTIC = (fn gl =>
+	case tac gl of
+		sgp as ([], _) => (sgp
+	) |	sgp => fail "SOLVED_T" 9402 []
 );
 =TEX
 \section{BASIC TACTICS 2}
