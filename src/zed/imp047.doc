@@ -8,13 +8,13 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp047.doc  %Z% $Date: 2003/07/16 14:12:02 $ $Revision: 1.52 $ $RCSfile: imp047.doc,v $
+% imp047.doc  %Z% $Date: 2004/01/19 12:44:00 $ $Revision: 1.53 $ $RCSfile: imp047.doc,v $
 
 doctex imp047 ; texdvi imp047
 bibtex imp047
 
 =TEX
-% imp047.doc  %Z% $Date: 2003/07/16 14:12:02 $ $Revision: 1.52 $ $RCSfile: imp047.doc,v $
+% imp047.doc  %Z% $Date: 2004/01/19 12:44:00 $ $Revision: 1.53 $ $RCSfile: imp047.doc,v $
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
 \makeindex
@@ -24,10 +24,10 @@ bibtex imp047
 \TPPtitle{Implementation for Z Types and Terms}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Z Types and Terms}
 \TPPref{DS/FMU/IED/IMP047}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.52 $%
+\def\SCCSversion{$Revision: 1.53 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2003/07/16 14:12:02 $%
+\TPPdate{\FormatDate{$Date: 2004/01/19 12:44:00 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -102,6 +102,7 @@ $basic\_dest\_z\_term$ checks schema predicates more carefully now.
 and schemas-as-predicates in which a signature variable is bound to a global variable.
 The destructor for Ê-terms now checks the operand more carefully.
 \item[Issue 1.53] The Z universal set is now called ƒ.
+\item[Issue 1.54] Performance improvements to {\em dest\_z\_name}.
 \end{description}
 %\subsection{Changes Forecast}
 \newpage
@@ -180,71 +181,140 @@ square brackets and commas, it complains about mal-formed names.
 
 The implementation of function $dest\_z\_name$ merits some discussion.
 Their intention is to split a Z~identifier into its component pieces
-whilst detecting malformed Z~identifiers.  The first stage, in function
-$hide\_subscripts$, is to split the identifier into its component
-augmented characters, where an augmented character includes any
-subscripting.  Function $get\_id$ extracts any leading name then
-function $aux$ does the main work of splitting at square brackets and
-commas.  It has three arguments: (1)~the unprocessed characters of the
-identifier; (2)~details of the `current' pair of square brackets; and
-(3)~information from previous pairs of square brackets.  Argument
-(2)~is $Nil$ before opening and after square brackets between them it
-is a pair of values comprising: (2.1)~the characters of the current
-name; and (2.2)~a list of the previous comma separated names.
+whilst detecting malformed Z~identifiers. 
+Function $get\_id$ extracts any leading name then
+function $get\_boxed\_lists$ does the work of splitting at square brackets and
+commas. 
 
-=SML
+The rules implemented are that the Z constant name comprises a possibly empty
+``head'', followed by zero or more ``boxed lists'',  followed by an optional ``projector''.
+Each boxed list is a comma-delimited list of arguments enclosed in square brackets.
+The head is delimited by the opening square bracket of the first boxed list or by the end
+of the name if there are no boxed lists.
+Commas and square brackets can only appear in the head, the arguments or the projector if they are escaped by a subscript character.
+A subscript character may not be followed by another subscript character.
+Boxed lists do not nest so an opening square bracket can only appear escaped in a boxed list.
+
+=SMLLITERAL
 local
-	exception bad_name;
+	exception BadName;
+	open String;
 
-	fun	addnam (nil:string list) (cl:string list)
-			: string list = cl
-	|	addnam n cl = (implode(rev n)) :: cl
-	;
+fun get_id s  = (
+	let	val size_s = size s;
+		fun aux ix = (		
+			if	ix = size_s
+			then	(s, Nil)
+			else	case sub(s, ix) of
+					#"["	=> (
+					(substring(s, 0, ix), Value(extract(s, ix, NONE)))
+				) |	#"]" => raise BadName
+				|	#"," => raise BadName
+				|	#"‰" => 	(
+					if	ix = 0
+					then	raise BadName
+					else if	ix + 1 = size_s
+					then	raise BadName
+					else if	sub(s, ix + 1) = #"‰"
+					then	raise BadName
+					else	aux (ix + 2)
+				) |	_ => aux (ix + 1)
+		);
+	in	aux 0
+	end
+);
+=IGN
+get_id "abc[";
+get_id "abc";
+get_id "[][][";
+get_id "abc[xyz, abc][a][c]";
+(get_id "ab]c" ; fail "" 0 []) handle Badname => ();
+(get_id "ab‰" ; fail "" 0 []) handle Badname => ();
+(get_id "ab‰‰" ; fail "" 0 []) handle Badname => ();
+(get_id "‰abc" ; fail "" 0 []) handle Badname => ();
 
-	fun	get_id(nil, prev) = (nil, prev)
-	|	get_id(l as ("["::_ (*=]=*)), prev) = (l, prev)
-	|	get_id(","::t, _) = raise bad_name
-	|	get_id((*=[=*) "]"::t, _) = raise bad_name
-	|	get_id(ch::t, prev) = get_id(t, ch :: prev)
-	;
 
-	fun	aux(nil, Value _, _) = raise bad_name
-	|	aux(nil, Nil, pl) = (rev pl, Nil)
-
-	|	aux("["::t (*=]=*), Value _, _) = raise bad_name
-	|	aux("["::t (*=]=*), Nil, pl) = aux(t, Value(nil, nil), pl)
-
-	|	aux(","::t, Nil, _) = raise bad_name
-	|	aux(","::t, Value(cn, cl), pl) = aux(t, Value(nil, addnam cn cl), pl)
-
-	|	aux((*=[=*) "]"::t, Nil, _) = raise bad_name
-	|	aux((*=[=*) "]"::t, Value(cn, cl), pl) = aux(t, Nil, (rev(addnam cn cl)) :: pl)
-
-	|	aux(l as(ch::t), Nil, pl) = (
-			case get_id(l, nil)
-			of (nil, nam) => (rev pl, Value(implode(rev nam)))
-			| _ => raise bad_name
-		)
-	|	aux(ch::t, Value(cn, cl), pl) = aux(t, Value(ch::cn, cl), pl);
-=SMLLITERAL	
-	fun	hide_subscripts(nil, prev) = rev prev
-	|	hide_subscripts(_::"‰"::"‰" :: _, _) = raise bad_name
-	|	hide_subscripts(_::"‰"::nil, _) = raise bad_name
-	|	hide_subscripts(c1::"‰"::c2::t, prev) = hide_subscripts((c1^"‰"^c2)::t, prev)
-	|	hide_subscripts(c::t, prev) = hide_subscripts(t, c::prev)
-	;
+=SMLLITERAL
+fun get_boxed_lists (s : string) : string list list * string OPT = (
+	let	fun add_name (s, sz) acc = (
+			if	sz = 0
+			then	acc
+			else	substring(s, 0, sz)::acc
+		);
+		fun aux1 acc ix s = (		
+			if	ix = size s
+			then	raise BadName
+			else	case sub(s, ix) of
+					#"["	=> raise BadName
+				|	#"]" =>  (
+					if	ix + 1 = size s
+					then	(rev(add_name(s,  ix) acc), "")
+					else	(rev(add_name(s, ix) acc),
+						(extract(s, ix+1, NONE)))
+				) |	#"," => (
+					if	ix + 1 =size s
+					then	raise BadName
+					else	aux1 (add_name(s, ix) acc)
+						0 (extract(s, ix + 1, NONE))
+				) |	#"‰" => 	(
+					if	ix + 1 = size s
+					then	raise BadName
+					else if	sub(s, ix + 1) = #"‰"
+					then	raise BadName
+					else	aux1 acc (ix + 2) s
+				) |	_ => aux1 acc (ix + 1) s
+		);
+		fun aux2 acc ix s = (
+			if	ix = size s
+			then	raise BadName
+			else	case sub(s, ix) of
+					#"[" =>  (
+					if	ix + 1 = size s
+					then	raise BadName
+					else	let	val (sl, rest) =
+						aux1 [] 0 (extract(s, 1, NONE));
+						in	if	size rest = 0
+							then	(rev (sl::acc), Nil)
+							else if	sub(rest, 0) = #"["
+							then	aux2 (sl::acc) 0 rest
+							else
+		let	val (head, tail) = get_id rest; 
+		in	case tail of
+			 	Nil => (
+				(rev (sl::acc), if head = "" then Nil else Value head)
+			) | 	Value _ => raise BadName
+		end
+						end
+				) |	_ => raise BadName
+		);
+	in	aux2 [] 0 s
+	end
+);
+=IGN
+get_boxed_lists "[abc]";
+get_boxed_lists "[abc,d,e]";
+get_boxed_lists "[abc‰,d,e]";
+get_boxed_lists "[abc‰,d,e][]";
+get_boxed_lists "[]";
+get_boxed_lists "[][]abc";
+get_boxed_lists "[aa][bb‰,x]abc";
 =SML
 in
 fun	Ûdest_z_nameÝ (s:string) :string * string list list * string OPT = (
-let		val (tail, front) = get_id(hide_subscripts(explode s, nil),nil);
-		val (boxed_lists, projector) = aux(tail, Nil, nil);
-in
-		(implode(rev front), boxed_lists, projector)
-end
-handle Fail _ => fail "dest_z_name" 47000 [fn () => s]
-| bad_name => fail "dest_z_name" 47000 [fn () => s]
+	(case get_id s of
+		(head, Nil) => (head, [], Nil)
+	|	(head, Value tail) => 
+		let	val (boxed_lists, projector) = get_boxed_lists tail;
+		in	(head, boxed_lists, projector)
+		end
+	)	handle Fail _ => fail "dest_z_name" 47000 [fn () => s]
+	|	BadName => fail "dest_z_name" 47000 [fn () => s]
 );
 end;
+=IGN
+dest_z_name "Abcd[]";
+dest_z_name "abc[d,,,,]";
+dest_z_name "abc[d,]";
 =TEX
 The following function tests for multiple occurrences of a string in a list
 of same.
