@@ -63,6 +63,8 @@ Added up to $asm\_inst\_type\_rule$.
 Corrected $simple\_„_elim$.
 \item [Issue 1.7]
 Added most of the rest.
+\item [Issue 1.8]
+Added the rest.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -90,7 +92,7 @@ rel001 makefile.
 
 \section{THE ABSTRACT DATA TYPE $THM$}
 =SML
-(* structure âDerivedInferenceRulesá : DerivedInferenceRules = struct *)
+structure âDerivedInferenceRulesá : DerivedInferenceRules = struct
 =TEX
 \subsection{Utilities}
 We will often wish to just pass on error messages,
@@ -367,7 +369,7 @@ fun âfail_with_convá (str : string) : CONV = (
 =TEX
 \subsubsection{Conversionals}
 =SML
-fun (cnv1 : CONV) âTHEN_Cá (cnv2 : CONV) = (fn (tm: TERM) =>
+fun (cnv1 : CONV) âTHEN_Cá (cnv2 : CONV) : CONV = (fn (tm: TERM) =>
 let
 	val thm1 = cnv1 tm;
 	val rhs_thm1 = snd(dest_eq (concl thm1));
@@ -381,7 +383,7 @@ list_divert complaint "THEN_C" [
 	("eq_trans_rule",7102,[])]);
 =TEX
 =SML
-fun (cnv1 : CONV) âFURTHER_Cá (cnv2 : CONV) = (fn (tm: TERM) =>
+fun (cnv1 : CONV) âFURTHER_Cá (cnv2 : CONV) : CONV = (fn (tm: TERM) =>
 let
 	val thm1 = cnv1 tm
 in
@@ -395,7 +397,7 @@ in
 end);
 =TEX
 =SML
-fun (cnv1 : CONV) âORELSE_Cá (cnv2 : CONV) = (fn (tm: TERM) =>
+fun (cnv1 : CONV) âORELSE_Cá (cnv2 : CONV) : CONV = (fn (tm: TERM) =>
 	cnv1 tm
 handle (Fail _) =>
 	cnv2 tm
@@ -425,7 +427,7 @@ fun âTRY_Cá (cnv : CONV) : CONV = (fn (tm : TERM) =>
 );
 =TEX
 =SML
-fun âREPEAT1_Cá (cnv : CONV) = (fn (tm : TERM) =>
+fun âREPEAT1_Cá (cnv : CONV)  : CONV = (fn (tm : TERM) =>
 	(cnv FURTHER_C (REPEAT1_C cnv)) tm
 );
 =TEX
@@ -636,7 +638,7 @@ divert complaint "‚_mp_rule" "conv_rule" 7104 []);
 \section{DERIVED INFERENCE RULES}
 We will be saving theorems as we go along, so we need to ensure we are saving them into theory misc:
 =SML
-open_theory "misc";
+val sideeffect = open_theory "misc";
 =TEX
 An alias:
 =SML
@@ -1294,19 +1296,29 @@ end;
 Can only do $Š\_match\_mp\_rule$ after we have $ƒ\_elim$.
 =SML
 fun âstrip_Š_ruleá (thm : THM) : THM = (
-	if is_Š(concl thm)
-	then strip_Š_rule(undisch_rule thm)
-	else thm
+let
+	val (p, q) = dest_Š (concl thm);
+	val s1 = asm_rule p;
+	val s2 = Š_elim thm s1;
+in
+	strip_Š_rule s2
+end
+handle (Fail _) => thm
 );
 =TEX
-Note that the following will merge $\alpha$-convertible
-assumptions into single hypotheses.
 =SML
 fun âall_Š_introá (thm : THM) : THM = (
-	if is_nil(hyps thm)
-	then thm
-	else all_Š_intro(Š_intro (hd(hyps thm)) thm)
-);
+let	
+	val hs = hyps thm;
+	val s1 = fold (uncurry Š_intro) hs thm;
+in
+	(prof "all_Š_intro";
+	s1)
+end);
+=IGN
+val t1 = €_intro (asm_rule T)(asm_rule F);
+all_Š_intro t1;
+all_Š_intro(strip_Š_rule(€_intro(asm_rule T)(asm_rule F)));
 =TEX
 Local theorem:
 ó
@@ -2252,7 +2264,12 @@ This is because we want this function to fail fast as well are succeed fast.
 =SML
 fun âsimple_eq_match_1_convá (thm : THM) : CONV = (
 let
-	val (t1,_) = dest_eq (snd(strip_ƒ (concl thm)))
+	val (t1,_) = dest_eq (snd(strip_ƒ (concl thm)));
+
+in
+(fn (tm :TERM) =>
+let	val (tym,tmm) = term_match tm t1;
+	val s2 = inst_type_rule tym thm;	
 
 	fun aux1 (athm : THM) : THM = (
 	let
@@ -2261,17 +2278,14 @@ let
 		aux1 (simple_ƒ_elim (rassoc1 tmm qv) athm)
 	end
 	handle (Fail _) => athm);
-in
-(fn (tm :TERM) =>
-let	val (tym,tmm) = term_match tm t1;
-	val s2 = inst_type_rule tym thm;	
+
 	val s3 = aux1 s2;
 	val s4 = eq_trans_rule (refl_conv tm) s3;
 in
 	(prof "simple_eq_match_1_conv";
 	s4)
 end
-handle (Fail _) => fail "simple_eq_match_conv" 7076 []
+handle (Fail _) => fail "simple_eq_match_1_conv" 7076 []
 )
 end
 handle complaint =>
@@ -2602,11 +2616,163 @@ end; (* of local val s1 = ... *)
 simple_Œ_ƒ_conv »Œ(ƒ z : 'b Ž f z (x:'b))¼;
 simple_Œ_„_conv »Œ(„ z : 'b Ž f z (x:'b))¼;
 =TEX
+\subsection{Concerning € and Š}
+ó
+s … ƒ a b c Ž ((a € b) Š c) ‚ (a Š b Š c)
+s … ƒ a b c Ž (a Š b Š c) ‚ ((a € b) Š c)
+æ
+=SML
+local
+	val s1 = asm_rule »a € b¼;
+	val s2 = €_left_elim s1;
+	val s3 = €_right_elim s1;
+	val s4 = asm_rule »a : BOOL¼;
+	val s5 = asm_rule »b : BOOL¼;
+	val s6 = €_intro s4 s5;
+	val s7 = asm_rule »(a € b) Š c¼;
+	val s8 = Š_elim s7 s6;
+	val s9 = Š_intro »b : BOOL¼ s8;
+	val s10 = Š_intro »a : BOOL¼ s9;
+	val s11 = Š_intro »(a € b) Š c¼ s10;
 
+	val s12 = asm_rule »a Š b Š c¼;
+	val s13 = Š_elim s12 s2;
+	val s14 = Š_elim s13 s3;
+	val s15 = Š_intro »a € b¼ s14;
+	val s16 = Š_intro »a Š b Š c¼ s15;
+	
+	val s17 = ‚_intro s11 s16;
+	val s18 = simple_list_ƒ_intro [»a : BOOL¼, »b : BOOL¼, »c : BOOL¼] s17;
+	val s19 = eq_sym_rule s17;
+	val s20 = simple_list_ƒ_intro [»a : BOOL¼, »b : BOOL¼, »c : BOOL¼] s19;
+in
+fun âŠ_€_ruleá (thm : THM) : THM = (
+let val (a,(b,c)) = (Combinators.I ** dest_Š)(dest_Š (concl thm));
+	val mf_s1 = simple_list_ƒ_elim [a,b,c] s20;
+	val mf_s2 = ‚_mp_rule mf_s1 thm;
+in
+	(prof "Š_€_rule";
+	mf_s2)
+end
+handle complaint =>
+divert complaint "dest_Š" "Š_€_rule" 7008 []
+);
 
+fun â€_Š_ruleá (thm : THM) : THM = (
+let val ((a,b),c) = (dest_€ ** Combinators.I)(dest_Š (concl thm));
+	val mf_s1 = simple_list_ƒ_elim [a,b,c] s18;
+	val mf_s2 = ‚_mp_rule mf_s1 thm;
+in
+	(prof "Š_€_rule";
+	mf_s2)
+end
+handle complaint =>
+list_divert complaint "€_Š_rule" [
+	("dest_€",7009,[]),
+	("dest_Š",7009,[])]
+);
+end;
+=IGN
+Š_€_rule (asm_rule »a Š b Š c¼);
+€_Š_rule (asm_rule »(a € b) Š c¼);
+=TEX
+\subsection{Concerning „$_1$}
+=SML
+local
+	val s1 = ap_arg_rule »P : 'a ‹ BOOL¼ „%down%1_def;
+	val s2 = all_simple_%beta%_rule s1;
+	val s3 = simple_ƒ_intro »P : 'a ‹ BOOL¼ s2;
+in
+	val „%down%1_thm = save_thm("â„%down%1_thmá",s3)
+end;
+=TEX
+=SML
+fun simple_„%down%1_intro (thm1 : THM) (thm2 : THM) : THM = (
+let
+	val (x,rest) = simple_dest_ƒ (concl thm2);
+	val (Px,(x',t)) = (Combinators.I ** dest_eq)(dest_Š rest);
+	val sideeffect = if x = x'
+		then ()
+		else fail "simple_„%down%1_intro" 7067 [];
+	val (tym, tmm) = term_match (concl thm1) Px;
+	val sideeffect = if is_nil tym 
+		then ()
+		else fail "simple_„%down%1_intro" 7067 [];
+	val witness = case tmm of
+		[(w,_)] => w
+		| [] => t
+		| _ => fail "simple_„%down%1_intro" 7067 [];
+	val abs = simple_mk_abs(x,Px);
+	val P_t = mk_comb(abs, witness);
+	val P_x = mk_comb(abs, x);
+	val s1 = simple_%beta%_conv P_t;
+	val s2 = eq_sym_rule s1;
+	val s3 = ‚_mp_rule s2 thm1;
+	val s4 = simple_%beta%_conv P_x;
+	val s5 = eq_sym_rule s4;
+	val mgvs = mg_variables [BOOL, type_of x] (frees rest);
+	val mgv = hd mgvs;
+	val mgv1 = hd(tl mgvs);
+	val s6 = all_simple_ƒ_elim thm2;
+	val template = mk_Š(mgv,mk_eq(x,t));
+	val s7 = subst_rule [(s5,mgv)] template s6;
+	val s8 = simple_ƒ_intro x s7;
+	val s9 = €_intro s3 s8;
+	val template2 = simple_mk_„(mgv1,
+		mk_€(mk_comb(abs,mgv1),
+		simple_mk_ƒ(x,
+		mk_Š(
+		P_x, mk_eq(x,mgv1)))));
+	val s10 = simple_„_intro template2 s9;
+	val s11 = inst_type_rule[(type_of x,mk_vartype "'a")] „%down%1_thm;
+	val s12 = simple_ƒ_elim abs s11;
+	val s13 = eq_sym_rule s12;
+	val s14 = ‚_mp_rule s13 s10;
+	val s15 = conv_rule(RAND_C (simple_%alpha%_conv (fst(dest_var x)))) s14;
+in
+	(prof "simple_„%down%1_intro";
+	s15)
+end);
+=IGN
+val e1 = %alpha%_conv »( x : † Ž x)¼ »( y : † Ž y)¼;
+val e2 = asm_rule »ƒ tt Ž (tt = ( y : † Ž y)) Š (tt = ( z : † Ž z))¼;
+simple_„%down%1_intro e1 e2;
+val e3 = asm_rule »q 3 (y:'a) :BOOL¼;
+val e4 = asm_rule »ƒ tt : † Ž q tt (y : 'a) Š tt = 3¼;
+simple_„%down%1_intro e3 e4;
+
+=TEX
+=SML
+fun âsimple_„%down%1_elimá (thm : THM) : THM = (
+let 
+	val (_,bdy) = dest_comb (concl thm);
+	val (x,_) = simple_dest_abs bdy;
+	val (xt,bt) = dest_funtype(type_of bdy);
+	val s1 = inst_type_rule [(xt,mk_vartype "'a")] „%down%1_thm;
+	val s2 = simple_ƒ_elim bdy s1;
+	val s3 = ‚_mp_rule s2 thm;
+	val s4 = conv_rule (BINDER_C
+		((RAND_C(BINDER_C(RATOR_C(RAND_C simple_%beta%_conv))))
+		THEN_C
+		(RATOR_C(RAND_C simple_%beta%_conv)))) s3;
+	val s5 = conv_rule(RAND_C (simple_%alpha%_conv (fst(dest_var x)))) s4;
+in
+	(prof "simple_„%down%1_elim";
+	s5)
+end
+handle complaint =>
+list_divert complaint "simple_„%down%1_elim" [
+	("dest_comb",7015,[]),
+	("simple_dest_abs",7015,[]),
+	("dest_fun",7015,[]),
+	("‚_mp_rule",7015,[])]
+);
+=IGN
+simple_„%down%1_elim (simple_„%down%1_intro e3 e4);
+=TEX
 \section{END OF THE STRUCTURE}
 =SML
-(* end; structure DerivedInferenceRules *)
+end; (* of structure DerivedInferenceRules *)
 =TEX
 \twocolumn[\section{INDEX}]
 \small
