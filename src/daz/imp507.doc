@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.166 $ $RCSfile: imp507.doc,v $ $Date: 2000/10/17 13:55:15 $
+% imp507.doc %Z% $Revision: 1.167 $ $RCSfile: imp507.doc,v $ $Date: 2000/10/17 15:58:47 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.166 $%
+\def\SCCSversion{$Revision: 1.167 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2000/10/17 13:55:15 $%
+\TPPdate{\FormatDate{$Date: 2000/10/17 15:58:47 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -127,6 +127,7 @@ statements in stubs.
 \item[Issue 1.165] Fixed {\LaTeX} error.
 \item[Issue 1.166] CTLE II R2/2: reverse loops.
 \item[Issue 1.167] CTLE II R2/10: multiple with clauses (causes a minor change to syntax).
+\item[Issue 1.168] CTLE II R1/9: SPARK 83 attributes.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1361,6 +1362,7 @@ The following are the user data key reserved for the Compliance Tool.
 =SML
 val €cn_pars_ud_key› = "CN'formal_pars";
 val €cn_types_ud_key› = "CN'types";
+val €cn_constants_ud_key› = "CN'constants";
 val €cn_theories_ud_key› = "CN'theories";
 val €cn_spec_ud_key› = "CN'createspec";
 val €cn_subunit_ud_key› = "CN'createsubunit";
@@ -1541,51 +1543,61 @@ fun €z_id_of_id› (n : ID) : Z_ID = (
 local
 fun €wanted› (fun_name : ID) (UD_String (i, _)) = (i = fun_name)
 |   wanted _ _ = false;
-fun €fun_name_par_names› ({name, formal_pars, ...} : INFORMAL_FUN)
-	: ID * ID list= (
-	(name, (flat o map (#vars o #var_decl)) formal_pars)
+fun €fun_name_par_names› ({name, formal_pars, return_type} : INFORMAL_FUN)
+	: ID * ID list * TMARK = (
+	(name, (flat o map (#vars o #var_decl)) formal_pars, return_type)
 );
-in
-fun €get_par_names› (fun_name : Z_ID) : (Z_ID list * ID list) OPT = (
-	let	val uds = (snd o dest_ud_string o
-			switch find (wanted fun_name) o snd o dest_ud_string o
-			get_user_datum (get_const_theory (z_id_of_id fun_name)))
-				cn_pars_ud_key;
-		val gs = (map (fst o dest_ud_string) o snd o dest_ud_string)
-				(hd uds);
-		val ps = (map (fst o dest_ud_string) o snd o dest_ud_string)
-				(hd (tl uds));
-	in	Value (gs, ps)
-	end	handle Fail _ => Nil
-);
-fun €set_par_names› (globals : Z_ID list) (inf_fun : INFORMAL_FUN) : unit = (
-	let	val (fun_name, pars) = fun_name_par_names inf_fun;
-		val old = (snd o dest_ud_string o get_user_datum "-") cn_pars_ud_key
+fun €add_globs_pars_return›
+	(globals : Z_ID list) (fun_name : ID) (pars : ID list) (ret_ty : TMARK): unit = (
+	let	val old = (snd o dest_ud_string o get_user_datum "-") cn_pars_ud_key
 			handle Fail _ => [];
 		val gs = UD_String("", map (fn g => UD_String(g, [])) globals);
 		val ps = UD_String("", map (fn p => UD_String(p, [])) pars);
+		val r = UD_String(ret_ty, []);
 		val new = 
-			UD_String(fun_name, [gs, ps])
+			UD_String(fun_name, [gs, ps, r])
 			:: (old drop wanted fun_name);
 	in	set_user_datum(cn_pars_ud_key, UD_String("", new))
 	end
 );
+in
+fun €get_spark_function_info› (fun_name : Z_ID) : (Z_ID list * ID list * TMARK) OPT = (
+	let	val uds = (snd o dest_ud_string o
+			switch find (wanted fun_name) o snd o dest_ud_string o
+			get_user_datum (get_const_theory (z_id_of_id fun_name)))
+				cn_pars_ud_key;
+	in	case uds of
+			[gl, pl, r] => (Value(
+			(map (fst o dest_ud_string) o snd o dest_ud_string) (hd uds),
+			(map (fst o dest_ud_string) o snd o dest_ud_string) (hd (tl uds)),
+			fst(dest_ud_string r)))
+		| _ => Nil
+	end	handle Fail _ => Nil
+);
+fun €add_spark_function_info›
+	(globals : Z_ID list)
+	(inf_fun : INFORMAL_FUN) : unit = (
+	let	val (fun_name, pars, ret_ty) = fun_name_par_names inf_fun;
+	in	add_globs_pars_return globals fun_name pars ret_ty
+	end
+);
 end;
 =TEX
-\subsection{Classifying Type Marks}
+\subsection{Information about SPARK Types and Constants}
 When a basic declaration causes a Z global variable to be defined,
 we may later need to know whether the Z global variable corresponds to
 a SPARK type or a SPARK constant.
 For record types, we also need to record the order of the component names.
 To do this a list of type names and associated component names from the SPARK type declarations is maintained in the theory.
+A global variable will not be a type unless it has an entry in this list.
 =TEX
 =SML
-fun €add_type_info› (tyn : ID, compns : ID list) : unit = (
+fun €add_spark_type_info› (tyn : ID, compns : ID list) : unit = (
 	let	val	enc_compns = map (fn n => UD_String(n, [])) compns;
 	in	update_user_datum cn_types_ud_key (UD_String(tyn, enc_compns))
 	end
 );
-fun €get_type_info› (n : ID) : ID list OPT = (
+fun €get_spark_type_info› (n : ID) : ID list OPT = (
 	let	fun aux (UD_String (tyn, cmps)::more) = (
 			if	tyn = n
 			then	Value (map (fst o dest_ud_string) cmps)
@@ -1595,6 +1607,25 @@ fun €get_type_info› (n : ID) : ID list OPT = (
 		val thy = get_const_theory (z_id_of_id n)
 		val infos = ((snd o dest_ud_string o get_user_datum thy)
 					cn_types_ud_key)
+				handle Fail _ => [];
+	in	aux infos
+	end	handle Fail _ => Nil
+);
+=TEX
+=SML
+fun €add_spark_constant_info› (tyn : ID, tmark : ID) : unit = (
+	update_user_datum cn_constants_ud_key (UD_String(tyn, [UD_String(tmark, [])]))
+);
+fun €get_spark_constant_info› (n : ID) : ID OPT = (
+	let	fun aux (UD_String (tyn, [tmk])::more) = (
+			if	tyn = n
+			then	Value (fst(dest_ud_string tmk))
+			else	aux more
+		) | aux (_::more) = (aux more
+		) | aux [] = Nil;
+		val thy = get_const_theory (z_id_of_id n)
+		val infos = ((snd o dest_ud_string o get_user_datum thy)
+					cn_constants_ud_key)
 				handle Fail _ => [];
 	in	aux infos
 	end	handle Fail _ => Nil
@@ -1610,9 +1641,12 @@ fun comp_names(TDRecordTypeDef {decl} : TYPE_DEF) = (
 fun €set_basic_decl_info› (pfx : ID -> ID) (bd : BASIC_DECL) : unit = (
 	case bd of
 		BDTypeDecl {name, type_def} => (
-			add_type_info (pfx (name), comp_names type_def)
-	) |	BDSubtypeDecl std => add_type_info (pfx (#name std), [])
-	|	BDPrivateTypeDecl ptd => add_type_info (pfx (#id ptd), [])
+			add_spark_type_info (pfx (name), comp_names type_def)
+	) |	BDSubtypeDecl std => add_spark_type_info (pfx (#name std), [])
+	|	BDPrivateTypeDecl ptd => add_spark_type_info (pfx (#id ptd), [])
+	|	BDConstDecl cd => (map (fn c =>
+				add_spark_constant_info (pfx c, #tm cd)
+			) (#consts cd); ())
 	|	_ => ()
 );
 =TEX
@@ -1698,14 +1732,18 @@ if it's neither a function nor a type name, its an `other'.
 
 =SML
 fun €env_info_of_g_var› (zn : ID) (ty : TYPE) : (TYPE * ENV_INFO) = (
-	case get_par_names zn of
-		Value gsps => (ty, EIEnvFunction gsps)
+	case get_spark_function_info zn of
+		Value gspstm => (ty, EIEnvFunction gspstm)
 	|	Nil => (
 			ty,
-			case get_type_info zn of
+			case get_spark_type_info zn of
 				Value (ns as _::_) => EIEnvRecordType ns
 			|	Value _ => EIEnvOtherType
-			|	Nil => EIEnvOther
+			|	Nil => (
+				case get_spark_constant_info zn of
+					Value tmk => EIEnvConstant tmk
+				|	Nil => EIEnvOther
+			)
 	)
 );
 =TEX
@@ -3531,7 +3569,7 @@ fun €inf_fun_pack_spec› (inf_fun: INFORMAL_FUN) : unit = (
 =SML
 fun €inf_fun_otherwise› (inf_fun: INFORMAL_FUN) : unit = (
 	store_para(trans_informal_fun inf_fun);
-	set_par_names [] inf_fun
+	add_spark_function_info [] inf_fun
 );
 =TEX
 =SML
@@ -3616,7 +3654,7 @@ fun €form_fun_pack_body› (form_fun: FORMAL_FUN) : unit = (
 			error "form_fun_pack_body" 507012 [fn()=>block_name2];
 		val formal_funs4 = #formal_funs package4;
 	in	store_para(trans_formal_fun current_cn_env form_fun);
-		set_par_names (#globals form_fun) (#informal_fun form_fun);
+		add_spark_function_info (#globals form_fun) (#informal_fun form_fun);
 		if	any
 			formal_funs4
 			(fn f => #name(#informal_fun f) = block_name1)
@@ -3674,7 +3712,7 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 			fail "form_fun_subunit" 507011
 	 			[fn()=>block_name2, fn()=>block_name1];
 	in	store_para(trans_formal_fun current_cn_env form_fun);
-		set_par_names (#globals form_fun) (#informal_fun form_fun);
+		add_spark_function_info (#globals form_fun) (#informal_fun form_fun);
 		subunit_env := s_delete tbn1_bn2 (!subunit_env);
 		if	#specif_flag subunit3
 		then	
@@ -3719,7 +3757,7 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 =SML
 fun €form_fun_otherwise› (form_fun: FORMAL_FUN) : unit = (
 	store_para(trans_formal_fun current_cn_env form_fun);
-	set_par_names (#globals form_fun) (#informal_fun form_fun)
+	add_spark_function_info (#globals form_fun) (#informal_fun form_fun)
 );
 =TEX
 =SML
@@ -4668,10 +4706,10 @@ fun €create_prefixed_spec_from_internal_theory›
 		val thychange1 = open_package_spec_theory ident;
 		val informal_fun_paras = map trans_informal_fun pinformal_funs;
 		fun par_aux (ff:FORMAL_FUN) = (
-			set_par_names (#globals ff) (#informal_fun ff)
+			add_spark_function_info (#globals ff) (#informal_fun ff)
 		);
 		val dummy = (
-			map (set_par_names []) pinformal_funs;
+			map (add_spark_function_info []) pinformal_funs;
 			map par_aux pformal_funs;
 			map	(set_basic_decl_info
 				   (prefix_package_id ident newids))

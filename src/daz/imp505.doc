@@ -1,4 +1,4 @@
-% %Z% $Date: 2000/10/17 16:52:00 $ $Revision: 1.68 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2000/10/20 15:58:27 $ $Revision: 1.69 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -98,6 +98,7 @@
 \item[Issue 1.66] CTLE II enhancement R1/2 --- ``others'' in case statements.
 \item[Issues 1.67, 1.68] CTLE II enhancement R1/3 --- reverse loops.
 \item[Issues 1.69] CTLE II enhancement R1/5 --- range attributes as ranges.
+\item[Issues 1.70] CTLE II R1/9 --- SPARK 83 attributes.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -247,117 +248,8 @@ fun ÛnullÝ ({a, ...} : WP_PARS) : RESULT = (
 );
 =TEX
 \subsection{Assignment Statement}\label{wp-assignment}
-First of all we have to implement {\it tmark\_of\_prefix}
-this requires some auxiliary functions. The first batch
-of these pick apart the defining axiom for a Z term
-that is the translation of a SPARK type mark and return
-the term that is the translation of a the type mark
-for a component selected from the original SPARK type.
-=SML
-fun Ûdo_array_defÝ (tm : Z_EXP) : Z_EXP = (
-	let	val t1 = snd(dest_eq tm);
-		val (_, _, ts) = dest_z_gvar t1;
-	in	hd(tl ts)
-	end
-);
 =TEX
-=SML
-fun Ûdo_uncon_array_defÝ (tm : Z_EXP) : Z_EXP = (
-	let	val t1 = dest_z_ð(snd(dest_z_(fst(dest_± tm))));
-		val (_, _, ts) = dest_z_gvar t1;
-	in	hd(tl ts)
-	end
-);
-=TEX
-=SML
-fun Ûdo_subtype_con_defÝ (tm : Z_EXP) : Z_EXP = (
-	let	val t1 = snd(dest_eq tm);
-		val (decl, _, _) = dest_z_seta t1;
-
-	in	(snd o dest_z_dec o hd o dest_z_decl) decl
-	end
-);
-=TEX
-=SML
-fun Ûdo_subtype_uncon_defÝ (tm : Z_EXP) : Z_EXP = (
-	snd(dest_eq tm)
-);
-=TEX
-=SML
-fun Ûdo_rec_defÝ (tm : Z_EXP) (sel : string) : Z_EXP = (
-	let	val t1 = snd(dest_eq tm);
-		val decs = (dest_z_decl o fst o dest_z_h_schema) t1;
-		fun do_decs decs = (
-			let	val (ts, t) = dest_z_dec (hd decs);
-			in	if	any ts (fn t => fst(dest_var t) = sel)
-				then	t
-				else	do_decs (tl decs)
-			end
-		)
-	in	do_decs decs
-	end
-);
-=TEX
-The data type {\it SEL} represents a single component selection.
-For arrays, the index value is not relevant to the type calculation
-for a record selection, we need to know the component name:
-=SML
-datatype ÛSELÝ = ArraySel | RecordSel of ID;
-=TEX
-The next auxiliary function takes a list of selectors and applies
-them to a Z expression representing a base type to give the
-Z expression for the selected type (as the translation of a type
-mark --- if we don't get a global variable, then the SPARK program
-is ill-formed in some way.)
-=SML
-fun Ûindexed_typeÝ (base : Z_EXP) (sels : SEL list) : Z_EXP = (
-	case sels of
-	[] 	=>	(base
-	) | ArraySel :: more
-		=> (
-		let	val def = snd (dest_thm (z_get_spec base));
-			fun go tm = (
-				(do_array_def tm) handle Fail _ =>
-				(do_uncon_array_def tm) handle Fail _ =>
-				(go 	((do_subtype_con_def tm) handle Fail _ =>
-					 (do_subtype_uncon_def tm)))
-			);
-		in	indexed_type (go def) more
-		end
-	) | RecordSel s :: more
-		=> (
-		let	val def = snd (dest_thm (z_get_spec base));
-			fun go tm = (
-				(do_rec_def tm s) handle Fail _ =>
-				(go (do_subtype_uncon_def tm))
-			);
-		in	indexed_type (go def) more
-		end
-	)
-);
-=TEX
-Using {\it indexed\_type} we can now define {\it tmark\_of\_prefix}
-as required by the formal specification.
-=SML
-fun Ûtmark_of_prefixÝ (env : CN_ENV) (zpfx : Z_EXP) : Z_ID = (
-	let	fun strip_prefix sels tm = (
-			case dest_z_term tm of
-				ZApp(t, _) => strip_prefix (ArraySel :: sels) t
-			|	ZSel‰s(t, s) => strip_prefix (RecordSel s :: sels) t
-			|	ZLVar(s, _, _) => (s, sels)
-			|	_ => fail "tmark_of_prefix" 505028 []
-		);
-		val (var, sels) = strip_prefix [] zpfx;
-		val base_tmark = case env var of
-			Value(_, EIEnvVar x) => x
-		|	_ => fail "tmark_of_prefix" 505028 [];
-	in	case dest_z_term(indexed_type (mk_z_gvar(base_tmark, BOOL, [])) sels) of
-			ZGVar(tmark, _, _) => tmark
-		|	_ => fail "tmark_of_prefix" 505028 []
-	end
-);
-=TEX
-Now we define {\it z\_record\_update}, which has some tricky type instantiation
+{\it z\_record\_update} has some tricky type instantiation
 to do (the problem is that the order (and number) of the generic parameters
 does not correspond one-to-one with the binding components, because
 binding components that shared a type mark in the type declaration have just
@@ -414,7 +306,9 @@ let	val zprefix = trans_exp env prefix;
 	val side = dest_z_schema_type(type_of zprefix)
 			handle Fail _ => fail "record_assign" 505027 [];
 	val name' = prefix;
-	val ze' = z_record_update(tmark_of_prefix env zprefix, selector, zprefix, ze); 
+	val tmark = tmark_of_prefix env zprefix
+			handle Fail _ => fail "record_assign" 505028 [];
+	val ze' = z_record_update(tmark, selector, zprefix, ze); 
 in
 	assign {wp = wp, a = a, wp_env = wp_env} (name', ze')
 end
