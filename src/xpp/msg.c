@@ -14,6 +14,7 @@
 #define _msg
 #define YES 1
 #define NO 2
+#define CANCEL -1
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files: 
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -183,6 +184,7 @@ Boolean yes_no_dialog(Widget w, char *question)
 	XmStringFree(text);
 	XtManageChild(dialog);
 	XtPopup(XtParent(dialog), XtGrabNone);
+	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 	XBell(XtDisplay(root), 50);
 	while (!reply) {
 		if(XtAppPending(app)) {
@@ -193,6 +195,68 @@ Boolean yes_no_dialog(Widget w, char *question)
 	return reply == YES;
 }
 
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * yes_no_cancel_dialog: ask a question with a mandatory yes/no/cancel answer
+ * By abuse of the Motif intentions, this uses the help button for cancel.
+ * Return is 1 for yes; 0 for no; and -1 for cancel.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+int yes_no_cancel_dialog(Widget w, char *question)
+{
+	static Widget dialog;
+	XmString text, yes, no, cancel, confirm;
+	Atom WM_DELETE_WINDOW;
+	static NAT reply;
+	/* 0 = not replied; otherwise YES/NO/CANCEL */
+	static void yes_no_cb(), cancel_cb();
+	reply = 0;
+	if (!dialog) {
+		dialog = XmCreateQuestionDialog(w, "yes_no", NULL, 0);
+		yes = XmStringCreateSimple(   "   Yes   ");
+		no = XmStringCreateSimple(    "   No   ");
+		cancel = XmStringCreateSimple(" Cancel ");
+		confirm = XmStringCreateSimple("Confirm-or-Cancel");
+		XtVaSetValues(dialog,
+			XmNdialogStyle,		XmDIALOG_FULL_APPLICATION_MODAL,
+			XmNokLabelString,	yes,
+			XmNcancelLabelString,	no,
+			XmNhelpLabelString,	cancel,
+			XmNdialogTitle, 	confirm,
+			XmNdialogType,		XmDIALOG_QUESTION,
+			NULL);
+		XtAddCallback(dialog, XmNokCallback, yes_no_cb, &reply);
+		XtAddCallback(dialog, XmNcancelCallback, yes_no_cb, &reply);
+		XtAddCallback(dialog, XmNhelpCallback, cancel_cb, &reply);
+		WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
+			"WM_DELETE_WINDOW",
+			False);
+		XmAddWMProtocolCallback(XtParent(dialog),
+			WM_DELETE_WINDOW,
+			cancel_cb,
+			&reply);
+		XmStringFree(yes);
+		XmStringFree(no);
+		XmStringFree(cancel);
+		XmStringFree(confirm);
+	}
+	text = format_msg(question, MSG_LINE_LEN);
+	XtVaSetValues(dialog, XmNmessageString, text, NULL);
+	XmStringFree(text);
+	XtManageChild(dialog);
+	XtPopup(XtParent(dialog), XtGrabNone);
+	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
+	XBell(XtDisplay(root), 50);
+	while (!reply) {
+		if(XtAppPending(app)) {
+			XtAppProcessEvent(app, XtIMAll);
+		}
+	};
+	XtPopdown(XtParent(dialog));
+	return (reply >= 0 ? reply == YES : -1);
+}
+/*
+ * Call-backs for the above two.
+ */
 static void yes_no_cb(Widget w, NAT *reply, XmAnyCallbackStruct *cbs)
 {
 	switch (cbs->reason) {
@@ -210,6 +274,12 @@ static void yes_no_destroy_cb(Widget w, NAT *reply, XmAnyCallbackStruct *cbs)
 {
 	*reply = NO;
 }
+
+static void cancel_cb(Widget w, NAT *reply, XmAnyCallbackStruct *cbs)
+{
+	*reply = CANCEL;
+}
+
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * ok_dialog: error message which the user must confirm
@@ -255,6 +325,7 @@ void ok_dialog(Widget w, char *msg)
 	XmStringFree(text);
 	XtManageChild(dialog);
 	XtPopup(XtParent(dialog), XtGrabNone);
+	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 	XBell(XtDisplay(root), 50);
 	while (!confirmed) {
 		if(XtAppPending(app)) {
@@ -315,6 +386,7 @@ char *file_dialog(Widget w, char *opn)
 	XtManageChild(dialog);
 
 	XtPopup(XtParent(dialog), XtGrabNone);
+	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 
 	while (!reply) {
 		if(XtAppPending(app)) {

@@ -75,6 +75,10 @@ static char* revert_message =
 static char *send_error_message = 
 "A system error occurred writing to the application.";
 
+static char *add_new_line_message = 
+"The selection to be executed does not end in a new-line character."
+"Do you want a new-line to be added to it?";
+
 static char *no_file_message =
 	/* This message just displayed instead of the file name */
 "* NO FILE NAME *";
@@ -837,7 +841,7 @@ void check_quit_cb (Widget w, XtPointer cd, XmAnyCallbackStruct cbs)
 	};
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Executing text from the selection in a text window:
+ * Executing text from the selection in a text window.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 Bool execute_command()
@@ -845,16 +849,28 @@ Bool execute_command()
 	char *cmd;
 	NAT len;
 	XmTextPosition dontcare;
+	int add_nl;
 	Widget w = script;
-/*
-	if(XmTextGetSelectionPosition(w, &dontcare, &dontcare)) {
-		w = journal;
-	}
-*/
-	if(	XmTextGetSelectionPosition(w, &dontcare, &dontcare)
-	&&	(cmd = XmTextGetSelection(w))) {
+
+	if(	XmTextGetSelectionPosition(script, &dontcare, &dontcare)
+	&&	(cmd = XmTextGetSelection(script))) {
 		len = strlen(cmd);
-		send_to_application(cmd, len);
+		add_nl =	cmd[len] == '\n'
+			?	0
+			:	global_options.execute_new_line_mode
+					== EXECUTE_ADD_NEW_LINES
+			?	1
+			:	global_options.execute_new_line_mode
+						== EXECUTE_PROMPT_NEW_LINES
+			?	yes_no_cancel_dialog(root, add_new_line_message)
+			:	0;
+				
+		if(add_nl >= 0) { /* don't cancel */
+				send_to_application(cmd, len);
+				if(add_nl) {
+					send_to_application("\n", 1);
+				}
+		}
 		XtFree(cmd);
 		return True;
 	} else {

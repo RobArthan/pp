@@ -141,6 +141,9 @@ typedef struct menu_item {
 	extern Boolean yes_no_dialog(
 		Widget	w,
 		char	*question);
+	extern int yes_no_cancel_dialog(
+		Widget	w,
+		char	*question);
 	extern void ok_dialog(
 		Widget	w,
 		char	*msg);

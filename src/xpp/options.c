@@ -22,6 +22,16 @@
 #include "xpp.h"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * When init_options is called (towards the beginning of a session)
+ * from mainw.c, it sets up the values of the global options variable
+ * whcih have not yet been fixed and stashes a copy of the result in
+ * the following variable, which is used if the user wants to
+ * rest the values.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+GlobalOptions	orig_global_options;
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * init_options: create a tool allowing global options to
  * be examined and set. The tool is set-up - but not popped up
  * at the beginning of each session - this allows the user to
@@ -62,9 +72,15 @@ static Widget
 					command_lab, command_text,
 				journal_max_form,
 					journal_max_lab, journal_max_text,
+		execute_new_line_frame,
+			execute_new_line_radio_buttons,
 		button_frame,
 			button_form,
 				apply_btn, reset_btn, dismiss_btn;
+/*
+ * We use a variable to record the state of the radio buttons:
+ */
+static char	execute_new_line_button_state = EXECUTE_ADD_NEW_LINES;
 
 void init_options(Widget owner_w)
 {
@@ -74,7 +90,10 @@ void init_options(Widget owner_w)
 		apply_cb(),
 		reset_cb(),
 		dismiss_cb(),
-		journal_max_cb();
+		journal_max_cb(),
+		execute_new_line_cb();
+
+	XmString s1, s2, s3;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Else ... have to create a new one 
@@ -177,6 +196,29 @@ if(!global_options.edit_only) {
 	copy_font_list(command_text, owner_w);
 	copy_font_list(journal_max_text, owner_w);
 
+	execute_new_line_frame = XtVaCreateManagedWidget(
+		"execute-new-line-frame",
+		xmFrameWidgetClass,		shell_row_col,
+		NULL);
+
+	s1 = XmStringCreateSimple("`Execute' adds missing new-lines");
+	s2 = XmStringCreateSimple("`Execute' prompts for new-lines");
+	s3 = XmStringCreateSimple("`Execute' ignores missing new-lines");
+
+	execute_new_line_radio_buttons = XmVaCreateSimpleRadioBox(
+		shell_row_col,
+		"execute-new-line-frame",
+		execute_new_line_button_state,
+		execute_new_line_cb,
+		XmVaRADIOBUTTON, s1, NULL, NULL, NULL,
+		XmVaRADIOBUTTON, s2, NULL, NULL, NULL,
+		XmVaRADIOBUTTON, s3, NULL, NULL, NULL,
+		NULL);
+
+	XmStringFree(s1);
+	XmStringFree(s2);
+	XmStringFree(s3);
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * add callbacks to restrict journal_max_text to numbers
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -242,6 +284,8 @@ if(!global_options.edit_only) {
 	global_options.delete_backup_after_save =
 		XmToggleButtonGetState(delete_backup_toggle);
 
+	global_options.execute_new_line_mode = execute_new_line_button_state;
+
 	if(journal_max_text) {
 		char	*journal_max_buf;
 		long unsigned m;
@@ -249,6 +293,16 @@ if(!global_options.edit_only) {
 		sscanf(journal_max_buf, "%ul", &m);
 		global_options.journal_max = (m >= 2000 ? m : 2000);
 	};
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * save initial setting for later resets
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+	orig_global_options = global_options;
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * use reset as a handy way to store the values in the widgets
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
 	reset_cb(NULL, NULL, NULL);
 }
 
@@ -321,7 +375,8 @@ void add_option_tool()
 			XtManageChild(journal_max_form);
 			XtManageChild(command_form);
 			XtManageChild(app_row_col);
-			XtManageChild(app_frame);
+			XtManageChild(execute_new_line_radio_buttons);
+			XtManageChild(execute_new_line_frame);
 		}
 		XtManageChild(edit_row_col);
 		XtManageChild(edit_frame);
@@ -349,12 +404,15 @@ static void apply_cb(
 	}
 	if(journal_max_text) {
 		char	*journal_max_buf;
+		char buf[20];
 		long unsigned m;
 		journal_max_buf = XmTextGetString(journal_max_text);
 		sscanf(journal_max_buf, "%ul", &m);
 		global_options.journal_max = (m >= 2000 ? m : 2000);
+		sprintf(buf, "%ul", global_options.journal_max);
+		XmTextSetString(journal_max_text, buf);
 	};
-	reset_cb(NULL, NULL, NULL);
+	global_options.execute_new_line_mode = execute_new_line_button_state;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -365,6 +423,9 @@ static void reset_cb(
 	XtPointer			u2,
 	XmPushButtonCallbackStruct	u3)
 {
+	Widget *btns;
+
+	global_options = orig_global_options;
 	XmToggleButtonSetState(backup_toggle,
 		global_options.backup_before_save, False);
 	XmToggleButtonSetState(delete_backup_toggle,
@@ -378,6 +439,10 @@ static void reset_cb(
 		sprintf(buf, "%ul", global_options.journal_max);
 		XmTextSetString(journal_max_text, buf);
 	}
+	XtVaGetValues(execute_new_line_radio_buttons,
+		XmNchildren,		&btns, NULL);
+	XmToggleButtonSetState(btns[orig_global_options.execute_new_line_mode],
+			True, True);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -389,6 +454,18 @@ static void dismiss_cb(
 	XmPushButtonCallbackStruct	u3)
 {
 	XtPopdown(shell);
+}
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * dismiss callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void execute_new_line_cb(
+	Widget				w,
+	int				btn_n,
+	XmAnyCallbackStruct		cbs)
+{
+	execute_new_line_button_state = btn_n;
 }
 
 
