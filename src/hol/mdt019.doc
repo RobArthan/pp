@@ -1,4 +1,4 @@
-%  mdt011.doc  %Z% $Date$ $Revision$ $RCSfile$
+%  mdt011.doc  @(#) 92/02/26 1.12 mdt019.doc
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -76,8 +76,11 @@ Defended against theories installed later than ``misc''.
 \item[Issue 1.8, \FormatDate{92/01/20} ] Updated to use new fonts.
 \item[Issue 1.9]
 Fixed duplicated test identities.
-\item[Issue \SCCSversion]
+\item[Issue 1.12]
 Mods for enhanced error handling in parser.
+\item [Issue 1.13 (8th April 1992)]
+Changes required by CR0016.
+
 \end{description}
 % \subsection{Changes Forecast}
 \pagebreak
@@ -176,12 +179,46 @@ new_type("sigma", 2);
 val tm = mk_var("", BOOL);
 val ty = BOOL;
 =TEX
+=SML
+fun list_eq (eq:'a * 'a -> bool) ((a :: x), (b :: y)) : bool = (
+	eq(a,b) andalso list_eq eq (x, y)
+) | list_eq eq ([], []) = true
+| list_eq _ _ = false;
+=TEX
+=SML
+fun ty_eq (TyAq a, TyAq b) = a =: b
+| ty_eq (TyAtom a, TyAtom b) = a = b
+| ty_eq (TyCompound (a,b,c), TyCompound (d,e,f)) = list_eq ty_eq (a,d) 
+	andalso b = e andalso c = f
+| ty_eq _ = false;
+=TEX
+=SML
+fun tm_eq (App (a,b,c), App(d,e,f)) = tm_eq(a,d) andalso
+	tm_eq (b,e) andalso (c = f)
+| tm_eq (Binder (a,b,c), Binder(d,e,f)) = a = d andalso 
+	tm_eq (b,e) andalso tm_eq (c,f)
+| tm_eq (CharLit a, CharLit b) = a = b
+| tm_eq (Cond (a,b,c), Cond(d,e,f)) = tm_eq(a,d) andalso tm_eq(b,e) 
+	andalso tm_eq(c,f)
+| tm_eq (Id a, Id b) = a = b
+| tm_eq (Let (a,b), Let (c,d)) = list_eq 
+	(fn ((a1,a2),(b1,b2)) => tm_eq(a1,b1) andalso tm_eq(a2, b2)) (a, c)
+	andalso tm_eq(b,d)
+| tm_eq (ListDisplay a, ListDisplay b) = list_eq tm_eq (a,b)
+| tm_eq (NumLit a, NumLit b) = a = b
+| tm_eq (SetComprehension(a,b), SetComprehension(c,d)) = tm_eq(a,c) andalso tm_eq(b,d)
+| tm_eq (SetDisplay a, SetDisplay b) = list_eq tm_eq (a,b)
+| tm_eq (StringLit a, StringLit b) = a = b
+| tm_eq (TmAq a, TmAq b) = a =$ b
+| tm_eq (TmTyped (a,b), TmTyped(c,d)) = tm_eq(a,c) andalso ty_eq(b,d)
+| tm_eq _ = false;
+=TEX
 \section{THE TESTS}
 \subsection{Group 1}
 The first block of tests in group 1 checks out the alternatives
 for $Tm$ (and also $OTm$ and $OptTms$).
 =SML
-store_mt_results_show mt_run
+store_mt_results_show (mt_runf tm_eq)
 [
  ("Parser.1.1.1", test_parse, ¬µx·y®, Binder ("µ", x , y) ),
  ("Parser.1.1.2", test_parse, ¬let x = y in x®, Let([(x, y)], x) ),
@@ -212,7 +249,7 @@ The second block in group 1 checks out the alternatives for $Ty$
 (and $Typars$).
 =SML
 fun xty ty = TmTyped(x, ty);
-store_mt_results_show mt_run
+store_mt_results_show (mt_runf tm_eq)
 [
  ("Parser.1.2.1", test_parse, ¬x:BOOL®, xty(TyAtom"BOOL") ),
  ("Parser.1.2.2", test_parse, ¬x:¬%down%SML: ty®®, xty(TyAq ty) ),
@@ -226,7 +263,7 @@ store_mt_results_show mt_run
 The third block in group 1 checks out the alternatives for $V$ and $V1$:
 =SML
 fun pair x y = App(App(Id ",", x, Lex.Nonfix), y, get_fixity ",");
-store_mt_results_show mt_run
+store_mt_results_show (mt_runf tm_eq)
 [
  ("Parser.1.3.1", test_parse, ¬Ìx·y®, Binder("Ì", x, y) ),
  ("Parser.1.3.2a", test_parse, ¬Ìx:'a·y®, Binder("Ì", xty(TyAtom"'a"), y) ),
@@ -238,7 +275,7 @@ store_mt_results_show mt_run
 =TEX
 The fourth block in group 1 checks out the alternatives for $L$, $Vs$ and $V1s$:
 =SML
-store_mt_results_show mt_run
+store_mt_results_show (mt_runf tm_eq)
 [
  ("Parser.1.4.1", test_parse, ¬let x = y in z®, Let([(x, y)], z) ),
  ("Parser.1.4.2", test_parse, ¬let (a, b) = y in z®, Let([(pair a b, y)], z) ),
@@ -362,7 +399,7 @@ store_mt_results_show mt_run
 =TEX
 The fifth block in group 2 checks disambiguation rule 2.1.1/4:
 =SML
-store_mt_results_show mt_run
+store_mt_results_show (mt_runf tm_eq)
 [
  ("Parser.2.5.1a", test_parse, ¬x y z®, App(App(x, y, Lex.Nonfix), z, Lex.Nonfix))
 ];
@@ -394,7 +431,7 @@ We check that complex binders and local definitions
 behave by comparing abbreviated forms
 with their expansions:
 =SML
-store_mt_results_show mt_run
+store_mt_results_show (mt_runf tm_eq)
 [
  ("Parser.3.1b", test_parse, ¬Ìx y·x®, test_parse¬Ìx·Ìy·x®),
  ("Parser.3.2b", test_parse, ¬Ìx y:'a·x®, test_parse¬Ìx:'a·Ìy:'a·x®),

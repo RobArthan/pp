@@ -70,6 +70,8 @@ Minor corrections.
 \item [Issue 1.19, 1.20(12th March 1992)] Various minor additions and extensions.
 \item [Issue 1.21 (30th March 1992)]
 Added $GET/DROP\_FILTER\_ASMS\_T$.
+\item [Issue 1.22 (1st April 1992)]
+Changes required by CR0016.
 \end{description}
 \subsection{Changes Forecast}
 Most of the text outside the documentation boxes is a discussion
@@ -115,12 +117,6 @@ fun €mapshape› (fns : (('a list -> 'b) * int) list)(args : 'a  list) : 'b list =
 	) |	[] => []
 );
 =TEX
-The following ought perhaps be elsewhere, and infix:
-=SML
-fun €term_diff› (tml1:TERM list) (tml2:TERM list): TERM list =  (
-	fold ((op less) o swap) tml2 tml1
-);
-=TEX
 =SML
 fun €bad_proof› (name : string) = (
 	error name 9001 []
@@ -128,10 +124,10 @@ fun €bad_proof› (name : string) = (
 =TEX
 =SML
 fun €seq_eq› ((asms1, conc1) : GOAL) ((asms2, conc2) : GOAL) : bool = (
-	let	fun	aux (t1 :: more1) (t2 :: more2) = %alpha%_eq t1 t2 andalso aux more1 more2
+	let	fun	aux (t1 :: more1) (t2 :: more2) = t1 ~=$ t2 andalso aux more1 more2
 		|	aux [] [] = true
 		|	aux _ _ = false;
-	in	%alpha%_eq conc1 conc2 andalso aux asms1 asms2
+	in	conc1 ~=$ conc2 andalso aux asms1 asms2
 	end
 );
 =TEX
@@ -185,6 +181,20 @@ acceptable
 	end);
 =TEX
 =SML
+fun €llassoc1› ((x, y) :: rest : (TERM * TERM) list) (what : TERM) : TERM = (
+	if x =$ what
+	then y
+	else llassoc1 rest what
+) | llassoc1 [] what = what;
+=TEX
+=SML
+fun €llassoc3› ((x, y) :: rest : (TERM * 'b) list) (what : TERM) : 'b = (
+	if x =$ what
+	then y
+	else llassoc3 rest what
+) | llassoc3 [] _ = fail "lassoc3" 1005 [];
+=TEX
+=SML
 in
 fun €rename_tac› (renamings: (TERM * string) list) : TACTIC = (
 let	val dummy = map (dest_var o fst) renamings
@@ -198,7 +208,7 @@ Traverse a list of terms applying $make\_ok$ and renamings.
 =SML
 	fun lvariant acc [] = []
 	| lvariant acc (a :: x) = (
-	let	val a1 = lassoc1 renamings' a;
+	let	val a1 = llassoc1 renamings' a;
 		val (a1nm,a1ty) = dest_var a1;
 		val a2nm = make_ok acc a1nm;
 	in
@@ -222,10 +232,10 @@ fun trav subs slist tm (App (f,a)) = (
 	handle (Fail _) =>
 	mk_app(f,trav subs slist a (dest_simple_term a))
 ) | trav subs slist tm (Var (nm,ty)) = (
-	lassoc3 subs tm
+	llassoc3 subs tm
 ) | trav subs slist tm (Const _) = fail "" 0 []
 | trav subs slist tm (SimpleÃ(x,bdy)) = (
-let	val x1 = lassoc1 renamings' x;
+let	val x1 = llassoc1 renamings' x;
 	val (x1nm,x1ty) = dest_var x1;
 	val x2nm = make_ok slist x1nm;
 	val x2 = mk_var(x2nm,x1ty);
@@ -243,11 +253,10 @@ The main function:
 =SML
 in
 (fn (asms,conc) => 
-let	val glfrees = list_cup (frees conc :: map frees asms);
+let	val glfrees = list_union (op =$) (frees conc :: map frees asms);
 	val newfrees1 = lvariant [] glfrees;
-	val init_subs = mapfilter (fn (a,b) => if a = b
-		then fail "" 0 []
-		else (a,b)) (combine glfrees newfrees1);
+	val init_subs = (combine glfrees newfrees1) drop 
+		(fn (a,b) => a =$ b);
 	val init_names = map (fst o dest_var) newfrees1;
 	val asms' = map (fn asm => trav1 init_subs init_names asm) asms;
 	val conc' = trav1 init_subs init_names conc;
@@ -499,7 +508,7 @@ fun €LIST_DROP_ASM_T› (tml : TERM list)
 		(thmtac : (THM list -> TACTIC))
 					: TACTIC = (fn (asms, conc) =>
 	if all tml (fn tm => tm term_mem asms)
-	then (thmtac (map asm_rule tml))(term_diff asms tml, conc)
+	then (thmtac (map asm_rule tml))(asms term_diff tml, conc)
 	else term_fail "LIST_DROP_ASM_T" 9301 
 		[find tml (fn tm => not(tm term_mem asms))]
 );
@@ -668,7 +677,7 @@ val op €THEN_TRY_LIST› : (TACTIC * TACTIC list) -> TACTIC =
 \section{BASIC TACTICS 2}
 =SML
 fun €accept_tac› (thm : THM) : TACTIC = (fn (asms, conc) =>
-	if %alpha%_eq conc (concl thm) 
+	if conc ~=$ (concl thm) 
 	then	([], (fn [] => thm | _ => bad_proof "accept_tac"))
 	else	fail "accept_tac" 9102 [
 		fn () => string_of_thm thm,
@@ -734,9 +743,9 @@ local
 	fun aux1 (asm :: more) thm = ¥_intro asm (aux1 more thm)
 	| aux1 [] thm = thm;
 	fun chk_asms (asm :: more) = (
-		if any more (%alpha%_eq asm)
-		then term_fail "tac_proof" 9505 [asm, find more (%alpha%_eq asm)]
-		else if type_of asm <> BOOL
+		if any more (fn x => x ~=$ asm)
+		then term_fail "tac_proof" 9505 [asm, find more (fn x => x ~=$ asm)]
+		else if not(type_of asm =: BOOL)
 		then term_fail "tac_proof" 9506 [asm]
 		else chk_asms more
 	) | chk_asms [] = ();
@@ -747,7 +756,7 @@ in
 fun €tac_proof› (gl as (asms, conc) : GOAL, tac : TACTIC) : THM = (
 	let	val side_effect1 = chk_asms asms;
 		val side_effect2 = (
-			if type_of conc <> BOOL
+			if not(type_of conc =: BOOL)
 			then term_fail  "tac_proof" 9507 [conc]
 			else ());
 		val thm = (simple_tac_proof(gl, tac))
