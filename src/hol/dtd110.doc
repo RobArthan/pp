@@ -98,6 +98,8 @@ lasp -s -u dtd005.OKwords dtd005.doc > zz1
 
 }%
 
+\item[21 August 1991, issue 1.8 ] Changes for ID0032.
+
 \end{description}
 
 %********************************************************************
@@ -110,6 +112,10 @@ system builder's guide~\cite{DS/FMU/IED/USR008} and should be
 moved into that document.  When that happens the descriptions in the
 reference manual entries should be rewritten to refer to the system
 builder's guide.
+
+Make $add_new_symbols$ errors 5100, 5101 and 5102 abandon the whole
+operation.  This cannot be done until the extended character set is
+rationalised.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -135,19 +141,26 @@ design is implemented in~\cite{DS/FMU/IED/IMP005}.
 
 \subsection{Introduction}
 
-The `basic reader writer' of the Release 1 ICL HOL system supports an
+The reader writer comprises two main parts, structures $ReaderWriter$
+and $ReaderWriterSupport$, plus extensions for each of the supported
+languages.  The first extension is in structure $HOLReaderWriter$ for
+the HOL language.
+
+The `basic reader writer' of the Release 1 ICL HOL system is
+in structure $ReaderWriter$, it supports an
 extension to Standard~ML that allows `pretty characters' to be used in
 Standard~ML text; in particular, in Standard~ML identifiers and
-strings.  This interface is provided by three functions, see
-section~\ref{PrimaryUserInterface}, which allow the enhanced ML text to
+strings.  This interface is provided by a small number of functions, see
+section~\ref{PrimaryUserInterface}.  These allow the enhanced ML text to
 be read from the terminal, from a named text file, or from a
 Standard~ML string.
 
-A second part of the basic reader writer, the `embedding interface',
+A second part of the basic reader writer, the `embedding interface'
+in structure $ReaderWriterSupport$,
 allows readers for other languages to be embedded, allowing the
 (enhanced) Standard~ML to be used as a metalanguage for supporting work
 in other languages.  Part of the embedding interface provides for
-characters in the users source text to switch between languages, text
+characters in the user's source text to switch between languages, text
 in an embedded language is treated as a Standard~ML string that is
 passed as an argument to a language specific analysis routine ---
 typically for lexical analysis, parsing, etc.
@@ -222,8 +235,8 @@ into a named file.
 \section{BASIC READER WRITER}
 
 The basic reader writer offers a small number of interfaces, basically
-those for directing the ICL~HOL to its source text.  Additional
-interfaces are provided in the support structure for embedding
+those for directing the ICL~HOL system to its source text.  Additional
+interfaces are provided in structure $ReaderWriterSupport$ for embedding
 additional languages.
 
 %--------------------------------------------------------------------
@@ -243,6 +256,8 @@ File and terminal reading and writing functions.
 5010	Unknown language requested by symbol `?0` with language name `?1`
 5011	Unknown language requested
 5014	Newline found in string after `?0`
+5030	End of file in quotation
+5032	End of file found in Standard ML quotation
 =IGN
 Spare error codes
 5009
@@ -257,11 +272,11 @@ Codes 5500-5599 reserved for sections of text.
 5526-5530
 5533-5999
 =FAILUREC
-Several error messages are provided to report faults in the users
+Several error messages are provided to report faults in the user's
 textual input to the ICL HOL system, they may be produced from all of
 the routines $usefile$, $usestring$ and $useterminal$.  Some error
-messages might be associated with particular routines in the reader
-writer support $ReaderWriterSupport$ structure but that is incidental
+messages might be associated with particular routines in the
+$ReaderWriterSupport$ structure but that is incidental
 to most users, so they are all gathered here.
 =ENDDOC
 
@@ -282,8 +297,14 @@ Error messages given with signature for $ReaderWriter$.
 Flag $usefile_non_stop_mode$.
 =ENDDOC
 
+These messages are written to the standard output by $usefile$ after
+errors are detected, they show where the error occured within the text
+read.  After message 5502 is produced $usefile$ continues reading the
+input file.  After the othe messages $usefile$ stops reading and
+returns to its caller.
+
 =FAILURE
-5501	Character `?0` read too often, abandoning file ?1 at character number ?2
+5501	DESIGN ERROR Character `?0` read too often, abandoning file ?1 at character number ?2
 5502	Exception+ ?0 handled by usefile at line ?1 when in `non_stop_mode`
 5503	Exception+, abandoning file ?0 at line ?1
 =TEX
@@ -297,8 +318,13 @@ Read Standard~ML with pretty characters allowed, from the given string.
 Error messages given with signature for $ReaderWriter$.
 =ENDDOC
 
+These messages are written to the standard output by $usestring$ after
+errors are detected, they show where the error occured within the text
+read.  After these messages are produced $usestring$ stops reading and
+returns to its caller.
+
 =FAILURE
-5511	Character `?0` read too often, abandoning string at character number ?1
+5511	DESIGN ERROR Character `?0` read too often, abandoning string at character number ?1
 5512	Exception+, abandoning string at character number ?0
 =TEX
 
@@ -312,23 +338,28 @@ outermost level of the ML system.  To return to the default PolyML
 terminal reader use $abandon_reader_writer$.
 
 This routine prompts to the conventions of PolyML but uses the strings
-``{\tt:>~}'' and ``{\tt:>~}'', the PolyML prompts do not have the
+``{\tt:>~}'' and ``{\tt:\#~}'', the PolyML prompts do not have the
 colon.
 
-Typing control-D, or reading the end-of-file, causes the function
+Typing two control-D characters to the terminal prompt,
+or reading the end-of-file, causes the function
 $PolyML.quit$ to be called.
-
-Typing control-X to this routine (when it is looking for input)
-abandons the current {\em topdec.}
 =SEEALSO
 Error messages given with signature for $ReaderWriter$.
 =ENDDOC
+
+These messages are written to the standard output by $useterminal$
+after errors are detected.  Messages 5523 and 5525 are produced when
+$useterminal$ stops reading the input, it then returns to its caller.
+The other messages are status reports about the processing of some
+input text, after producing them $useterminal$ continues reading
+from the terminal.
 
 =FAILURE
 5521	Exception+ ?0 handled by useterminal
 5522	Exception+ ?0 ?1 raised
 5523	End of input to useterminal.  Quit.
-5524	Character `?0` read too often, abandoning current input
+5524	DESIGN ERROR Character `?0` read too often, abandoning current input
 5525	Abandoning reader writer
 =TEX
 
@@ -343,8 +374,9 @@ forces an exit from that routine.
 =DOC
 (* âusefile_non_stop_modeá  - boolean flag declared by new_flag, default: false *)
 =DESCRIBE
-Makes $usefile$ continue reading text (if the flag is true) or stop
-reading (if false) from the file after an error is reported.  Default
+Makes $usefile$ continue reading text (if the flag is $true$) or stop
+reading (if $false$) from the file after an error is reported by PolyML,
+this includes both syntax and execution errors.  Default
 is to stop reading.
 =ENDDOC
 %--------------------------------------------------------------------
@@ -352,21 +384,24 @@ is to stop reading.
 val âask_at_terminalá : string -> string;
 =DESCRIBE
 Asks a question at the terminal by writing out the given string then
-reading a single line of text which is returned.
+reading a single line of text which is returned.  Characters are read
+until a newline or end of file is reached, in the first case the
+the returned string will end with a newline. 
 
 Any characters in the type ahead buffer of the terminal input stream
-are read and saved for later analysis by the normal reading functions
+before $ask_at_terminal$ is called
+are read and saved (for later analysis by the normal reading functions)
 before the prompt is output and the response is read.
-
-This function uses the PolyML function $ExtendedIO.can_input$ to
-determine how many characters are available in the type ahead buffer,
-they are read.  It next outputs the prompt, and finally makes a single
-call of $ExtendedIO.input_line$.
 =FAILURE
 5012	Function `useterminal` is not active
 5013	Input stream is not a terminal, nothing read
 =ENDDOC
 %--------------------------------------------------------------------
+
+This function uses the PolyML function $ExtendedIO.can_input$ to
+determine how many characters are available in the type ahead buffer,
+they are read.  It next outputs the prompt, and finally makes a single
+call of $ExtendedIO.input_line$.
 
 Strings produced by, for example, converting parts of HOL terms into
 textual form may contain keywords that should be converted into other
@@ -446,7 +481,7 @@ percent keywords.
 
 \subsection{Diagnostic Support}
 
-Reader function should avoid producing fault messages, where possible
+Reader functions should avoid producing fault messages, where possible
 they should be left to the language recogniser to report.  Some faults
 can only be reported by reader functions, for these cases the following
 functions are available.
@@ -454,7 +489,7 @@ functions are available.
 In general a fault is reported by calling either $local_error$ or
 $local_warn$ and adding details of the error code to the text produced
 and continuing.  In the macro processing analogy a short fault report
-is written into the macro processors output at the place of detection
+is written into the macro processor's output at the place of detection
 of an error.  Functions $add_error_code$ and $add_error_codes$ are
 provided to give a uniform style for these short reports.
 
@@ -469,6 +504,9 @@ $error$ and $fail$ of {\tt DS/FMU/IED/DTD002}.
 =SEEALSO
 Functions $error$ and $fail$.
 =ENDDOC
+
+These messages are used by $local_error$ and $local_warn$ for the
+text they output.
 
 =FAILURE
 5531	*** WARNING ?0 from ?1: ?2
@@ -494,14 +532,14 @@ to the diagnostic outputs required.
 
 \begin{center}
 \begin{tabular}{crp{4in}}
-\multicolumn{2}{c}{Value}&	Purpose\\
-$2^0$&1&	Text passed to PolyML.\\
-$2^1$&2&        Text passed to PolyML, but showing the list structure
+\multicolumn{2}{c}{Value}&	Information Output\\
+$2^0$&$1$&	Text passed to PolyML.\\
+$2^1$&$2$&        Text passed to PolyML, but showing the list structure
 		passed by routines such as $get_ML_any$.\\
-$2^2$&4&	Characters as they are read.\\
-$2^3$&8&	Text passed to the writer function before any
+$2^2$&$4$&	Characters as they are read.\\
+$2^3$&$8$&	Text passed to the writer function before any
 		translation is performed.\\
-$2^4$&16&	Prevents text from being translated before output by the
+$2^4$&$16$&	Prevents text from being translated before output by the
 		writer function.\\
 \end{tabular}
 \end{center}
@@ -582,17 +620,14 @@ Error 5007
 =DESCRIBE
 Each symbol is defined in a three-element tuple of this type.  Elements
 of the tuple are as follows.  First, a non-empty list of the keywords
-that may used for this symbol, the preferred keyword is at the head of
-the list.  These keywords exclude the enclosing percent signs.
-Second, an optional character (normally an extended character)
+that may used for this symbol.  These keywords exclude
+the enclosing percent signs.  Second, an optional character
 for the symbol.  Third, a value of datatype $NAME_CLASS$ indicating
 the characteristics of the symbol.
 
 The pretty character field, when used, contains a single character.
-Normally it has decimal code greater than 127.  Lower values may be
-used to achieve keywords for single characters, care should be taken to
-avoid converting such characters into keywords on output when using
-this facility.
+It may be the letter ``{\tt Q}'' or any character
+with decimal code greater than 127.
 =SEEALSO
 Function $add_new_symbols$, for details of the validation of values
 of this type.
@@ -600,6 +635,14 @@ of this type.
 	([	"fn",
 		"lambda"],	Value "",			Simple),
 =ENDDOC
+
+A symbol may be known by several keywords.  E.g., {\tt\%fn\%} and
+{\tt\%lambda\%} are alternative names for the symbol with ``$\lambda$''
+as its extended character.  When outputting text with
+$use_extended_chars$ set to $false$ any extended characters are
+replaced by uses of the ``preferred'' keyword which is at the head of
+the keyword list.
+
 %--------------------------------------------------------------------
 =DOC
 	val âadd_new_symbolsá : PRETTY_NAME list -> unit;
@@ -607,15 +650,20 @@ of this type.
 Adds details of new symbols to the data structures characterising all
 known symbols.  There is some validation of the symbols added, the list
 of names should not be empty, the individual names should not
-contain two adjacent ``{\tt Q}''s, duplicates and
+contain two adjacent ``{\tt Q}''s and
 the character field should have
-a single character.
+a single character which is either a ``{\tt Q}'' or has decimal code
+greater than 127.
 =FAILURE
 5100	Keyword `?0` has adjacent `Q`s
 5101	Empty keyword list
 5102	Invalid pretty character `?0` with keyword `?1`
 5103	Keyword `?0` duplicated
 5104	Character `?0` duplicated
+=FAILUREC
+Errors 5100, 5101 and 5102 are issued as warnings against
+particular parts of the argument value, they do not prevent
+the other parts from being added to the data structures.
 =ENDDOC
 %--------------------------------------------------------------------
 =DOC
@@ -719,7 +767,9 @@ All other cases are passed back as a single character in $SymCharacter$.
 val âread_symbolá : READER_ENV -> SYMBOL;
 =DESCRIBE
 Reads one or more characters and returns a value of type $SYMBOL$.  No
-fault reports are made by this routine.
+errors are reported by this routine.  The routine reads as many
+characters as necessary to form a symbol.  End of file is returned as a
+$SYMBOL$ value comprising a control-D character.
 =ENDDOC
 %--------------------------------------------------------------------
 =DOC
@@ -736,14 +786,18 @@ which the comment braces `{\tt (*}' and `{\tt *)}' are properly
 balanced.  This routine is entered when the opening round bracket of
 the comment has been read, the opening asterisk is the first unread
 character.
-Note that Standard~ML comments separate lexical items,
-see~\cite[section~2.5]{Milner90}, thus the calling routine should not
-simply discard the comment.
+Note that Standard~ML comments separate lexical items thus the calling
+routine should not simply discard the comment, it might replace the
+comment with a space character to ensure the lexical items remain
+separated.
 =FAILURE
 5001	End of file found in comment
 =SEEALSO
 Type $READER_ENV$.
 =ENDDOC
+
+See~\cite[section~2.5]{Milner90} for the syntax of Standard~ML comments.
+
 %--------------------------------------------------------------------
 
 \subsection{Reading Higher Level Objects}
@@ -760,18 +814,17 @@ is to form an equivalent string that can be read by a Standard~ML
 compiler, and to defer as much validation of the string as possible to
 that compiler.  Minimal validation is performed on escape sequences.
 Well-formed layout sequences (i.e., the sequence ``{\hbox{\verb|\|{\em
-f..f\/}\verb|\|}}'' from~\cite[section~2.2, page~3]{Milner90}) are
+f..f\/}\verb|\|}}'') are
 removed, characters not recognised as formatting ones are retained and
 wrapped between ``\verb|\ |'' and ``\verb| \|'' for later checking by
 the Standard~ML compiler.  Pretty characters are translated to their
 three digit decimal form.
 
-Function $get_ML_string$ reads a string as specified
-in~\cite[section~2.2, page~3]{Milner90}
+Function $get_ML_string$ reads a Standard~ML string.
 
 Function $get_primed_string$ reads a string enclosed with single
-left-hand primes~(~{\tt`}~).  These are as in~\cite[section~2.2,
-page~3]{Milner90} but with the meanings of the single~(~{\tt`}~) and
+left-hand primes~(~{\tt`}~).  These are similar to Standard~ML strings
+but with the meanings of the single~(~{\tt`}~) and
 double~(~{\tt"}~) prime characters interchanged.
 
 An end of file found in the string indicates that there is no more
@@ -787,6 +840,9 @@ additionally their numbers passed back in the result.
 =SEEALSO
 Type $READER_ENV$.
 =ENDDOC
+
+The syntax of Standard~ML strings is defined
+in~\cite[section~2.2, page~3]{Milner90}.
 
 Note that error code 5014 could be deferred for detection and reporting
 by the Standard~ML compiler but the PolyML compiler's error messages is
@@ -822,7 +878,7 @@ $get_round_braces$ respectively.
 val âget_ML_anyá : READER_ENV -> string list -> string list
 =DESCRIBE
 Assemble a section of Standard~ML text starting with the first unread
-character.  Text is read upto the first semi colon `{\tt;}', unmatched
+character.  Text is read up to the first semi colon `{\tt;}', unmatched
 closing bracket or ending keyword.  A semi colon will be read and added
 to the returned text, a closing bracket or ending keyword is left
 unread for the calling
@@ -847,7 +903,7 @@ characters are denoted by their decimal code in three digits, preceded
 by a backslash.  Function $string_of_int3$ gives a three character with
 leading zeros representation of small positive numbers.  In general the
 routine $PolyML.makestring$ cannot be used, if the value last passed to
-of $PolyML.print_depth$ is zero then $PolyML.makestring$ converts
+$PolyML.print_depth$ is zero then $PolyML.makestring$ converts
 numbers into three dots.
 =FAILURE
 5040	DESIGN ERROR:Number ?0 is too big or is negative
@@ -893,7 +949,7 @@ Where:
 
 \begin{description}
 
-\item[$name$ ] is a identifier in the extended Standard~ML.
+\item[$name$ ] is an identifier in the extended Standard~ML.
 
 \item[$white_space$ ] is a space or a tab character.
 
@@ -924,8 +980,8 @@ definition where the text is macro processed into a call of a
 Standard~ML function with a HOL term as argument.  The HOL term being a
 pair with first component a name (or names) and its type, second
 component a predicate defining the properties of that name.  The source
-text looks is of the form ``{\tt\%SHA\% x : num \%BT\% x > 3 \%EHA\%}''
-and is processed into the HOL term ``{\tt(( x : num ), ( x > 3 ))}''
+text is of the form ``{\tt\%SHA\% x :{} num \%BT\% x > 3 \%EHA\%}''
+and is processed into the HOL term ``{\tt(( x :{} num ), ( x > 3 ))}''
 where the brackets are provided by the macro processing, the two
 leading brackets from the third string argument, the two final brackets
 from the particular end keyword used.
@@ -958,11 +1014,11 @@ of the quotation added to its head.
 val âadd_general_readerá : string * string * READER_FUNCTION -> unit;
 val âadd_specific_readerá : string * string * READER_FUNCTION -> unit;
 =DESCRIBE
-Adds reader functions to the data base of known readers.  The first
+Adds reader functions to the database of known readers.  The first
 string is the language name, e.g., ``{\tt HOL}'' and ``{\tt HOL:}'',
 the second string holds the name of a Standard~ML constructor which is
 to be written before the quotation when it occurs in within languages
-other than Standard~ML.  Expected values of the second string are
+other than Standard~ML.  Typical values of the second string are
 ``{\tt Lex.Term}'' and ``{\tt Lex.Type}''.
 =FAILURE
 5033	Reader already present for language `?0`
@@ -972,7 +1028,7 @@ other than Standard~ML.  Expected values of the second string are
 val âlook_up_general_readerá : string -> (READER_FUNCTION * string) OPT;
 val âlook_up_specific_readerá : string -> (READER_FUNCTION * string) OPT;
 =DESCRIBE
-Looks up readers in the data base of known readers.  The argument
+Looks up readers in the database of known readers.  The argument
 string is matched against the first string given in the call of the
 $add_\ldots_reader$, if the reader is known then the corresponding
 constructor string and reader function are returned.  The value $Nil$
@@ -1002,38 +1058,29 @@ read denote the language of the quotation.  The boolean argument
 indicates whether the left hand context is in Standard~ML text or in a
 quotation of another language.
 =FAILURE
+5004	Unknown keyword `?0`
+5006	Unknown extended character `?0` (decimal ?1)
+5010	Unknown language requested by symbol `?0` with language name `?1`
+5011	Unknown language requested
+5030	End of file in quotation
 5031	End of file in language name of general quotation
 =ENDDOC
 %--------------------------------------------------------------------
-=DOC
-(* val âSML_readerá : READER_FUNCTION; *)
-=DESCRIBE
-This routine is not intended to be called by any user code, it
-is used when reading Standard~ML quotations.
-=FAILURE
-5032	End of file found in Standard~ML quotation
-=ENDDOC
-%--------------------------------------------------------------------
-=DOC
-(* val âskipping_readerá : READER_FUNCTION; *)
-=DESCRIBE
-This routine is not intended to be called by any user code, it
-is provided for error recovery purposes.  It is used for any quotation
-for which no reader has been provided, it just reads text discarding
-its input until an unmatched quotation ending symbol is found.
-Quotation opening symbols read during the skipping must be matched by
-balancing ending symbol.  This routine does not attempt to understand
-string or character literals, or comments.  All characters are
-considered significant.
 
-This routine is designed to assist in error recovery by consuming the
-text of large quotations rather than stopping reading at the first
-detected problem.  Thus the language recognisers (probably the
-Standard~ML compiler in this case) will not receive large amounts of
-text they cannot handle, and will not produce copious error messages.
-=FAILURE
-5030	End of file in quotation
-=ENDDOC
+Error 5011 is issued for any quotation for which no reader has been
+provided by the $add_\ldots_reader$ functions.  After error 5011 is
+issued, text is skipped until (and including) the first unmatched
+quotation ending symbol is found.  Quotation opening symbols read
+during this skipping must be matched by balancing ending symbol.  There
+is no attempt to understand string or character literals or comments.
+All characters are considered significant.  The routine is designed to
+assist in error recovery by consuming the text of large quotations
+rather than stopping reading at the first detected problem.  Thus the
+language recognisers (probably the Standard~ML compiler in this case)
+will not receive large amounts of text they cannot handle, and will not
+produce copious error messages.  A number of the error messages given
+with structure $ReaderWriter$ may be generated during this skipping.
+
 %--------------------------------------------------------------------
 =DOC
 val âSML_recogniserá : string * string * 'a * string -> 'a;
@@ -1041,13 +1088,13 @@ val âSML_recogniserá : string * string * 'a * string -> 'a;
 This routine is not intended to be directly called by any user code, it
 is provided to allow the quotation of Standard~ML text.  The context of
 use of this routine is that the ``macro processing'' of the Standard~ML
-quotation ``{\tt\%down\%SML 42 }'' yields the text
-``{\tt(ReaderWriterSupport.SML_recogniser ("", "SML", 42 , ""))}''
+quotation ``{\tt\%<\%\%down\%SML 42 \%>\%}'' yields the text
+``{\tt(ReaderWriterSupport.SML_recogniser ("\%<\%", "SML", 42 , "\%>\%"))}''
 which is read by the Standard~ML compiler.
 =FAILURE
+5032	End of file found in Standard ML quotation
 5050	Incorrect symbols starting or ending of Standard ML quotation: `?0`, `?1`, `?2`
 =ENDDOC
-
 %--------------------------------------------------------------------
 
 \subsection{Completion of Reader Writer Support}
@@ -1095,13 +1142,13 @@ There are three main test areas for the reader writer.
 
 \end{itemize}
 
-These areas are distinguished by the sort of testing that sensible to
+These areas are distinguished by the sort of testing that is sensible to
 do.  Many aspects of the first two could probably be tested using the
 module test harness~\cite{DS/FMU/IED/DTD013}, but doing so would
 involve excessive work and would result in opaque test scripts.
 
 Reasonable behaviour is determined by actually using the reader writer
-during the compilation of the much of the ICL~HOL system.  This is
+during the compilation of much of the ICL~HOL system.  This is
 because it is written using the extended Standard~ML supported by the
 reader writer.  If the modules of the ICL~HOL system compile
 successfully producing the correct signatures then a large portion of
@@ -1168,6 +1215,7 @@ used for these.  Note that successful execution of the module tests
 also demonstrates both reasonable behaviour and correct processing.
 Functions with an argument of type $READER_ENV$ cannot easily be
 tested here since they work by side effect upon that argument.
+The tests cover the following.
 
 \begin{itemize}
 
