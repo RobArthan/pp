@@ -60,7 +60,7 @@ This document contains the implementation for the Compliance Notation Parser to 
 \subsection{Changes History}  % to get section number `0.3'
 \begin{description}
 
-\item[Issue 1.1-1.53] Initial Drafts.
+\item[Issue 1.1-1.55] Initial Drafts.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -442,27 +442,30 @@ The following reference variable keeps a note of the last unlabelled kslot or sp
 val €unlabelled_stack› : string OPT ref = ref Nil;
 val €unlabelled_provisional› : string OPT ref = ref Nil;
 val €unlabelled_counter› : int ref = ref 1;
+val €last_label› : LABEL ref = ref "Nothing";
 =TEX
 
 =SML
 type €CN_PARSER_STATE› = {
     unlabelled_stack : string OPT,
     unlabelled_provisional : string OPT,
-    unlabelled_counter : int
+    unlabelled_counter : int,
+    last_label : LABEL
     };
 =TEX
 
 =SML
 fun €implicit_label_of_int› (i : int) = (
-    string_of_int i ^ "s"
+    string_of_int i ^ "s" ^ "ucceeds" ^ (!last_label)
     );
 
 fun €int_of_implicit_label› (s : string) = (
-    (
-    case rev(explode s)
-    of ("s"::ns) => (nat_of_string o implode o rev) ns
-    |  _ =>        0
-    ) handle _ => 0
+	let	fun find_sep ("s"::rest) = rest
+		  | find_sep (x::rest) = find_sep rest
+		  | find_sep [] = [];
+	in
+		(nat_of_string o implode o rev o find_sep o rev o explode) s
+	end handle _ => 0
     );
 =TEX
 
@@ -471,7 +474,8 @@ fun €get_cn_parser_state› (() : unit) : CN_PARSER_STATE = (
     {
         unlabelled_stack = !unlabelled_stack,
         unlabelled_provisional = !unlabelled_provisional,
-        unlabelled_counter = !unlabelled_counter
+        unlabelled_counter = !unlabelled_counter,
+        last_label = !last_label
     }
     );
 =TEX
@@ -480,7 +484,16 @@ fun €get_cn_parser_state› (() : unit) : CN_PARSER_STATE = (
 fun €set_cn_parser_state› (cnps : CN_PARSER_STATE) : unit = (
     unlabelled_stack := #unlabelled_stack cnps;
     unlabelled_provisional := #unlabelled_provisional cnps;
-    unlabelled_counter := #unlabelled_counter cnps
+    unlabelled_counter := #unlabelled_counter cnps;
+    last_label := #last_label cnps
+    );
+=TEX
+=SML
+fun €reset_cn_parser_state› () : unit = (
+    unlabelled_stack := Nil;
+    unlabelled_counter := 1;
+    unlabelled_provisional := Nil;
+    last_label := "Nothing"
     );
 =TEX
 
@@ -498,8 +511,8 @@ then
 else    (
     unlabelled_provisional := Nil;
     parse_error 503001
-    "there is already an unlabelled, \
-    \unexpanded k-slot or specification statement in the script"
+    "There is already an unlabelled, \
+    \unexpanded K-Slot or Specification Statement in the script"
     )
     );
 =TEX
@@ -513,7 +526,7 @@ fun €update_unlabelled_stack› (() : unit) : unit = (
         then    (
             unlabelled_provisional := Nil;
             parse_error 503001
-            "there is already an unlabelled, unexpanded slot in the script"
+            "There is already an unlabelled, unexpanded K-Slot or Specification Statement in the script"
         )
         else    ()
     else    (
@@ -1295,6 +1308,7 @@ fun red_statement2 (Parsed(PPStmt(STSpecNoIvars{spec=spec, ...}))) = (
 
 fun red_statement3 (Parsed(PPStmt(STSpecNoIvars{spec=spec, ...})))
 			(Parsed(PPId label)) = (
+    last_label := label;
     PPStmt(STSpecNoIvars{spec=spec, label=label}))
 |   red_statement3 _ _ = stack_error "red_statement3";
 
@@ -1313,8 +1327,9 @@ fun red_statement5 _ (Token ((LCZ,CNZ z1), _)) _
 		(Parsed(PPId label)) = (
     let		val (n, ty) = process_con_z_decl z1;
     in
+        (last_label := label;
         PPLogCon{x=n, t=ty, e=mk_z_true, spec=s,
-			pre1 = mk_z_true, label=label}
+			pre1 = mk_z_true, label=label})
     end)
 |   red_statement5 _ _ _ _ _ =
         stack_error "red_statement5";
@@ -1388,6 +1403,7 @@ fun red_k_slot1 _ (Token ((LCKSlot,CNKSlot lx), _)) _ = (
         stack_error "red_k_slot1";
 
 fun red_k_slot2 _ (Token ((LCKSlot,CNKSlot lx), _)) _ (Parsed(PPId lab)) = (
+    last_label := lab;
     PPKSlot{content=format_input_items lx, label= lab})
 |   red_k_slot2 _ _ _ _ =
         stack_error "red_k_slot2";
@@ -2219,8 +2235,9 @@ in
 The implementation of this function is at the beginning of section \ref{REDUCTIONFUNCTIONS}.
 =SML
 type €CN_PARSER_STATE› = CN_PARSER_STATE;
-val €set_cn_parser_state› = set_cn_parser_state;
 val €get_cn_parser_state› = get_cn_parser_state;
+val €set_cn_parser_state› = set_cn_parser_state;
+val €reset_cn_parser_state› = reset_cn_parser_state;
 val €name_to_tmark›  = name_to_tmark;
 val €z_predexp_of_z_tm›  = z_predexp_of_z_tm;
 =TEX
