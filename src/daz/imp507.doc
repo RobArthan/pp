@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.276 $ $RCSfile: imp507.doc,v $ $Date: 2004/08/31 16:25:08 $
+% imp507.doc %Z% $Revision: 1.277 $ $RCSfile: imp507.doc,v $ $Date: 2004/09/01 16:50:56 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.276 $%
+\def\SCCSversion{$Revision: 1.277 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/08/31 16:25:08 $%
+\TPPdate{\FormatDate{$Date: 2004/09/01 16:50:56 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -214,6 +214,7 @@ by doing all the work of checking and generating the VC terms in {\it call\_vcs}
 \item[Issue 1.275] Implemented distinction between empty private part and omitted private part.
 \item[Issue 1.276] Renamings and use clauses now propagate into subunit, dec and spec environments.
 \item[Issue 1.277] Multiple use clauses for the same package now allowed in full generality.
+\item[Issue 1.277] Forward declarations of suprograms now propagate into 
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -4956,23 +4957,20 @@ fun €update_spec_env_fun›
 );
 =TEX
 =SML
-fun €update_envs_inf_fun›
+fun €update_envs_fun›
+	(formal : bool)
 	(inffun : INFORMAL_FUN) : unit = (
 	if	test_flag #declabel_flag 1
-	then	(update_subunit_env_fun false [] inffun;
-		update_dec_env_fun false [] inffun;	
-		update_spec_env_fun false [] inffun)
+	then	(update_subunit_env_fun formal [] inffun;
+		update_dec_env_fun formal [] inffun;	
+		update_spec_env_fun formal [] inffun)
 	else	()
 );
 =TEX
 =SML
 fun €update_envs_form_fun›
 	(formfun : FORMAL_FUN) : unit = (
-	if	test_flag #declabel_flag 1
-	then	(update_subunit_env_fun true (#globals formfun) (#informal_fun formfun);
-		update_dec_env_fun true (#globals formfun) (#informal_fun formfun);	
-		update_spec_env_fun true (#globals formfun) (#informal_fun formfun))
-	else	()
+	update_envs_fun true (#informal_fun formfun)
 );
 =TEX
 \subsection{The SID function stub\_spec\_fun}
@@ -5028,7 +5026,7 @@ fun €inf_fun_pack_spec› (inf_fun: INFORMAL_FUN) : unit = (
 fun €inf_fun_otherwise›  (inf_fun: INFORMAL_FUN): unit = (
 	store_para(trans_informal_fun inf_fun);
 	set_spark_function_info false [] inf_fun;
-	update_envs_inf_fun inf_fun
+	update_envs_fun false inf_fun
 );
 =TEX
 =SML
@@ -7221,12 +7219,13 @@ fun €renames_fun_otherwise›
 		fun mk_ps (name, (tmark, _)) : PARAM_SPEC = (
 			{mode = MSparkIn true, var_decl = {vars = [name], tmark = tmark}}
 		);
-		val _ =set_spark_function_info true
-			old_deps
+		val inffun = 
 			{name = new_zname,
 			formal_pars =map mk_ps new_pars_tmarks_defs ,
 			par_names_defs = par_names_defs,
 			return_type = old_return_tmark};
+		val _ =set_spark_function_info true old_deps inffun;
+		val _ = update_envs_fun true inffun;
 		val new_zname = trans_id new;
 		val parainfo = AbbDefInfo(new_zname, [], tm);
 	in	bd_store_para parainfo; ()
@@ -7259,11 +7258,12 @@ fun €renames_opsym›
 		fun mk_ps (name, (tmark, _)) : PARAM_SPEC = (
 			{mode = MSparkIn true, var_decl = {vars = [name], tmark = tmark}}
 		);
-		val _ =set_spark_function_info true []
-			{name = new_zname,
+		val inffun = {name = new_zname,
 			formal_pars =map mk_ps new_pars_tmarks_defs ,
 			par_names_defs = par_names_defs,
 			return_type =res_tmark};
+		val _ =set_spark_function_info true [] inffun;
+		val _ = update_envs_fun true inffun;
 		val parainfo = AbbDefInfo(new_zname, [], tm);
 	in	bd_store_para parainfo; ()
 	end	handle Fail msg =>
@@ -8204,7 +8204,8 @@ and €do_declaration› (y as (DDeclarationKSlot (
 ) | do_declaration (y as (DFunctionDeclaration x) : DECLARATION) = (
 	let	val (formal, globals, inffun) = do_function_spec x;
 	in	end_scope();
-		set_spark_function_info formal globals inffun
+		set_spark_function_info formal globals inffun;
+		update_envs_fun formal inffun
 	end
 ) | do_declaration (y as (DPackageDeclaration x) : DECLARATION) = (
 	do_package_spec x
@@ -8352,7 +8353,8 @@ and €do_function_stub› (
 	begin_stub();
 	let	val (formal, globals, inffun) = do_function_spec fun_spec;
 	in	end_scope();
-		set_spark_function_info formal globals inffun
+		set_spark_function_info formal globals inffun;
+		update_envs_fun formal inffun
 	end;
 	end_stub()
 )
@@ -8368,13 +8370,15 @@ and €do_external_procedure_stub› (
 	proc_spec : PROCEDURE_DECLARATION) = (
 	do_procedure_spec proc_spec;
 	add_proc_env();
+	update_envs_proc();
 	end_scope()
 )
 and €do_external_function_stub› (
 	fun_spec : FUNCTION_DECLARATION) = (
 	let	val (formal, globals, inffun) = do_function_spec fun_spec;
 	in	end_scope();
-		set_spark_function_info formal globals inffun
+		set_spark_function_info formal globals inffun;
+		update_envs_fun formal inffun
 	end
 )
 (*
@@ -8406,7 +8410,8 @@ and €do_proper_body› (y as (PBProcedure
 		map (check_fail () do_declaration) declarative_part;
 		vcs_body (check_fail (STNull SNImplicit) do_statement statement);
 		end_scope();
-		set_spark_function_info formal globals inffun
+		set_spark_function_info formal globals inffun;
+		update_envs_fun formal inffun
 	end
 ) | do_proper_body (y as (PBPackage 
 	{name, decls, statement, annotation, ...}) : PROPER_BODY) = (
