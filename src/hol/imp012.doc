@@ -6,10 +6,10 @@
 \TPPtitle{Implementation for the Interface to the Abstract Data Type $THM$}  %% Mandatory field
 \def\TPPheadtitle{Implementation for the \cr Interface to the Abstract Data Type $THM$}
 \TPPref{DS/FMU/IED/IMP012}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.13 $
+\def\SCCSversion{$Revision: 2.14 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 1993/12/09 11:12:57 $ %
+\TPPdate{\FormatDate{$Date: 2001/08/09 13:09:40 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -75,6 +75,8 @@ Added type, term and theorem compactification.
 Added $get\_theory\_names$.
 \item [Issue 2.14 (9th August 2001)]
 Implemented caching for {\it get\_defn}, {\it get\_thm} and {\it get\_axiom}.
+\item[Issue 2.15]
+Allowed for use of ordered efficient dictionaries in theory data type.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -630,9 +632,19 @@ let	val dummy = case (get_current_theory_status()) of
 		then fail caller 6076 [fn () => get_current_theory_name()]
 		else ();
 
-	val {con_env = con_env,ty_env = ty_env,
-		axiom_dict = axiom_dict, thm_dict = thm_dict,
-		defn_dict = defn_dict,...} = icl'get_theory "-";
+	val {con_env = oe_con_env,ty_env = oe_ty_env,
+		axiom_dict = oe_axiom_dict, thm_dict = oe_thm_dict,
+		defn_dict = oe_defn_dict,...} = icl'get_theory "-";
+
+	val con_env = oe_flatten oe_con_env;
+
+	val ty_env = oe_flatten oe_ty_env;
+
+	val axiom_dict = oe_flatten oe_axiom_dict;
+
+	val thm_dict = oe_flatten oe_thm_dict;
+
+	val defn_dict = oe_flatten oe_defn_dict;
 
 	val (del_con,del_lev1) = split (map (fn (name,{ty = ty,level = lev,...}) => 
 			((name, ty),lev))
@@ -691,14 +703,18 @@ let	val dummy = case (get_current_theory_status()) of
 			[if length del_defns = 1 then "" else "s"] ^ 
 			(format_list I del_defns ", ")]])
 		) "; ";
+(*
 =TEX
 We now ask the interactive user whether he wishes everything
 necessary to be deleted.
 =SML
+*)
 	val dummy = warn caller 12012 [(fn () => target),(fn () => to_be_d)];
+(*
 =TEX
 We now have permission to proceed:
 =SML
+*)
 	val dl = list_cup[del_lev1, del_lev2, del_lev3, del_lev4];
 
 	val dummy = (map (fn xt => notify_before_ksc (DeleteConst (mk_const xt))) del_con;
@@ -727,7 +743,7 @@ let	val cnt = fst(strip_app icnt);
 		term_fail "delete_const" 12014 [icnt];
 	val {con_env = con_env,...} = icl'get_theory "-";
 
-	val {level = level, ty = ty} = force_value(s_lookup cnm con_env)
+	val {level = level, ty = ty} = force_value(oe_lookup cnm con_env)
 		handle complaint =>
 		divert complaint "force_value" "delete_const" 12001 
 			[fn () => get_current_theory_name (),
@@ -747,7 +763,7 @@ end);
 fun Ûdelete_typeÝ (tnm : string) : unit = (
 let	val {ty_env = ty_env,...} = icl'get_theory "-";
 
-	val {level = level, ...} = force_value(s_lookup tnm ty_env)
+	val {level = level, ...} = force_value(oe_lookup tnm ty_env)
 		handle complaint =>
 		divert complaint "force_value" "delete_type" 12002 
 			[fn () => get_current_theory_name (),
@@ -760,7 +776,7 @@ end);
 fun Ûdelete_axiomÝ (anm : string) : unit = (
 let	val {axiom_dict = axiom_dict,...} = icl'get_theory "-";
 
-	val ax = force_value(s_lookup anm axiom_dict)
+	val ax = force_value(oe_lookup anm axiom_dict)
 		handle complaint =>
 		divert complaint "force_value" "delete_axiom" 12003
 			[fn () => get_current_theory_name (),
@@ -882,7 +898,14 @@ handle complaint => pass_on complaint "icl'new_spec" "new_spec");
 The functions in this section become time-critical in applications like
 {\ProductZ} where definition and axiom schemata are implemented by
 demand-driven introduction of types and constants. To make them efficient
-the definitions, theorems and axioms are cached. If the theorem being sought
+the definitions, theorems and axioms are cached. This is considered to
+be worthwhile even now that efficient dictionaries are used within the
+individual theories, since the current theory may have many ancestors and
+the average number of types and constants etc. in each ancestor is likely
+to be fairly small.
+
+
+If the theorem being sought
 is not in the cache, the following uncached versions of the functions are used.
 =SML
 fun Ûuncached_get_defnÝ (thynm : string) ( key : string) : THM = (
@@ -896,7 +919,7 @@ let	val {defn_dict = defn_dict,...} = icl'get_theory thynm
 		then fail "get_defn" 12010 [(fn () => thynm)]
 		else ();
 
-	val res = s_lookup key defn_dict;
+	val res = oe_lookup key defn_dict;
 in
 	case res of
 	Value thm => thm
@@ -915,7 +938,7 @@ let	val {axiom_dict = axiom_dict,...} = icl'get_theory thynm
 		then fail "get_axiom" 12010 [(fn () => thynm)]
 		else ();
 
-	val res = s_lookup key axiom_dict;
+	val res = oe_lookup key axiom_dict;
 in
 	case res of
 	Value thm => thm
@@ -934,7 +957,7 @@ let	val {thm_dict = thm_dict,...} = icl'get_theory thynm
 		then fail "get_thm" 12010 [(fn () => thynm)]
 		else ();
 
-	val res = s_lookup key thm_dict;
+	val res = oe_lookup key thm_dict;
 in
 	case res of
 	Value thm => thm
@@ -1152,7 +1175,17 @@ let	val {defn_dict = defn_dict,...} = icl'get_theory thynm
 		pass_on complaint "icl'get_theory" "get_defns";
 
 in
-	compact_tsd defn_dict
+	compact_tsd (oe_flatten defn_dict)
+end);
+=TEX
+=SML
+fun Ûget_defn_dictÝ (thynm : string) : THM OE_DICT = (
+let	val {defn_dict = defn_dict,...} = icl'get_theory thynm
+		handle complaint =>
+		pass_on complaint "icl'get_theory" "get_defn_dict";
+
+in
+	defn_dict
 end);
 =TEX
 =SML
@@ -1162,7 +1195,17 @@ let	val {axiom_dict = axiom_dict,...} = icl'get_theory thynm
 		pass_on complaint "icl'get_theory" "get_axioms";
 
 in
-	compact_tsd axiom_dict
+	compact_tsd (oe_flatten axiom_dict)
+end);
+=TEX
+=SML
+fun Ûget_axiom_dictÝ (thynm : string) : THM OE_DICT = (
+let	val {axiom_dict = axiom_dict,...} = icl'get_theory thynm
+		handle complaint =>
+		pass_on complaint "icl'get_theory" "get_axiom_dict";
+
+in
+	axiom_dict
 end);
 =TEX
 =SML
@@ -1172,7 +1215,17 @@ let	val {thm_dict = thm_dict,...} = icl'get_theory thynm
 		pass_on complaint "icl'get_theory" "get_thms";
 
 in
-	compact_tsd thm_dict
+	compact_tsd (oe_flatten thm_dict)
+end);
+=TEX
+=SML
+fun Ûget_thm_dictÝ (thynm : string) : THM OE_DICT = (
+let	val {thm_dict = thm_dict,...} = icl'get_theory thynm
+		handle complaint =>
+		pass_on complaint "icl'get_theory" "get_thm_dict";
+
+in
+	thm_dict
 end);
 =TEX
 =SML
@@ -1183,7 +1236,7 @@ let	val {con_env = con_env,...} = icl'get_theory thynm
 
 	fun env_to_term (nm,{ty=ty,level=level}) = mk_const(nm,ty);
 in
-	map env_to_term con_env
+	map env_to_term (oe_flatten con_env)
 end);
 =TEX
 =SML
@@ -1195,7 +1248,7 @@ let	val {ty_env = ty_env,...} = icl'get_theory thynm
 	fun env_to_type (nm,{arity = arity,level=level}) = mk_ctype(nm,
 		map (fn n => mk_vartype("'" ^ string_of_int n))(interval 1 arity));
 in
-	map env_to_type ty_env
+	map env_to_type (oe_flatten ty_env)
 end);
 =TEX
 =SML
