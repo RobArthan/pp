@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.48 2004/11/27 13:57:26 rda Exp rda $
+ * $Id: pterm.c,v 2.49 2004/11/30 17:24:49 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -607,7 +607,7 @@ void get_pty(void)
  /******************************************************************/
 		close(slave_fd);
 
-		if(fcntl(control_fd, F_SETFL, O_NDELAY) < 0) {
+		if(fcntl(control_fd, F_SETFL, O_NONBLOCK) < 0) {
 			msg("system error", "fcntl on application would not permit non-blocking i/o");
 			perror("xpp");
 			exit(7);
