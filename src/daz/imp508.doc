@@ -1,4 +1,4 @@
-% imp508.doc   %Z% $Date: 2002/01/30 10:38:01 $ $Revision: 1.88 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2002/02/28 12:40:54 $ $Revision: 1.89 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.88 $%
+\def\SCCSversion{$Revision: 1.89 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/01/30 10:38:01 $%
+\TPPdate{\FormatDate{$Date: 2002/02/28 12:40:54 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -107,9 +107,10 @@ Adjusted $ENV\_INFO$ and allowed for type conversions.
 \item[Issue 1.82--1.85] Added code for R0006: free use of subtype indications and ranges.
 \item[Issue 1.86] R0021: domain condition generation --- revised specification does not
 generate a domain condition for a $\Xi$ argument to a function.
-\item[Issue 1.87,1.88] R0044: array range sliding.
-\item[Issues 1.89] Changed {\it INFORMAL\_FUNCTION} to {\it Informal\_Function}
+\item[Issues 1.87,1.88] R0044: array range sliding.
+\item[Issue 1.89] Changed {\it INFORMAL\_FUNCTION} to {\it Informal\_Function}
 to avoid possible clash with an Ada name.
+\item[Issues 1.90] Sliding now handled properly in aggregates.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -789,14 +790,14 @@ fun €indexed_type› (base : Z_EXP) (sels : SEL list) : Z_EXP = (
 	[] 	=>	(base
 	) | ArraySel :: more
 		=> (
-		let	val def = snd (dest_thm (z_get_spec base));
+		let	fun abb_def_rhs t = snd (dest_thm (z_get_spec t));
 			fun go tm = (
 				(do_array_def tm) handle Fail _ =>
 				(do_uncon_array_def tm) handle Fail _ =>
-				(go 	((do_subtype_con_def tm) handle Fail _ =>
-					 (do_subtype_uncon_def tm)))
+				(go 	(abb_def_rhs (do_subtype_con_def tm) handle Fail _ =>
+					 abb_def_rhs (do_subtype_uncon_def tm)))
 			);
-		in	indexed_type (go def) more
+		in	indexed_type (go (abb_def_rhs base)) more
 		end
 	) | RecordSel s :: more
 		=> (
@@ -1301,6 +1302,12 @@ fun €con_array_range_from_tmark› (tmark : Z_EXP) : Z_EXP OPT = (
 	Value(con_array_range_from_tmarkf tmark)
 	handle Fail _ => Nil
 );
+fun €slide_to_component_tmark› (ze : Z_EXP, tmark : Z_EXP, sel : SEL) : Z_EXP = (
+	(case con_array_range_from_tmark (indexed_type tmark [sel]) of
+		Nil => ze
+	|	Value r => slide(ze, r))
+	handle Fail _ => ze
+);
 =TEX
 \section{TRANSLATING SPARK EXPRESSIONS}
 
@@ -1481,8 +1488,12 @@ let	val record_components = (
 			Value (_, EIEnvRecordType (cmps as _::_)) => cmps
 		|	_ => fail "exp_rec_agg_pos_z" 508026 [fn()=>tm]
 	);
-	val zbinds = combine record_components comps
+	val comp_name_z_exps = combine record_components comps
 		handle Fail _ => fail "exp_rec_agg_pos" 508027 [fn()=>tm];
+	val tmark_zexp = trans_exp env (EId tm);
+	val zbinds = map
+		(fn (c, ze) => (c, slide_to_component_tmark(ze, tmark_zexp, RecordSel c)))
+			comp_name_z_exps;
 in
 	z_binding zbinds
 end
@@ -1503,7 +1514,10 @@ let	fun named_assoc_to_ids_exp {choice, comp} = (
 	in
 		aux choice comp 
 	end);
-	val zbinds = flat (map named_assoc_to_ids_exp named_assocs);
+	val tmark_zexp = trans_exp env (EId tm);
+	val zbinds = map
+		(fn (c, ze) => (c, slide_to_component_tmark(ze, tmark_zexp, RecordSel c)))
+			(flat (map named_assoc_to_ids_exp named_assocs));
 in	z_binding zbinds
 end
 ) | exp_rec_agg_named _ _ = fail "trans_exp" 508054 []
@@ -1515,7 +1529,7 @@ The test using less-than rather than not-equals defends the code from
 non-termination if something weird goes wrong in {\it array\_dim}.
 =SML
 and €trans_array_agg_exp› (env : CN_ENV)
-	(aa_env as {this, max, ...} : ARRAY_AGG_ENV) (e : EXP) : Z_EXP = (
+	(aa_env as {this, max, tname} : ARRAY_AGG_ENV) (e : EXP) : Z_EXP = (
 	if	this < max + 1
 	then	case e of
 		EArrayAggPos ap => exp_array_agg_pos env aa_env ap
@@ -1523,8 +1537,8 @@ and €trans_array_agg_exp› (env : CN_ENV)
 	|	EArrayAggOthers ao =>  exp_array_agg_others env aa_env ao
 	|	EArrayAggNamed an =>  exp_array_agg_named env aa_env an
 	|	EArrayAggNamedOthers ano => exp_array_agg_named_others env aa_env ano
-	|	_ => fail "trans_array_agg_exp" 508054 []
-	else	trans_exp env e
+	|	_ => fail "trans_array_agg_exp" 508062 []
+	else	slide_to_component_tmark(trans_exp env e, trans_exp env (EId tname), ArraySel)
 )
 =TEX
 \subsection{Translating Unary Expressions}
