@@ -48,6 +48,13 @@
 First version.
 \item [Issue 1.2]
 Added $hyps$ and $concl$.
+\item [Issue 1.3]
+Added $is\_theory\_ancestor$, reimplemented $get\_ancestors$.
+The name atom ``theorem(s)'' has been consistently changed
+to ``thm(s)'', 
+``definition(s)'' to ``defn(s)''.
+and ``constant(s)'' to ``const(s)''.
+Removed $pass\_on$.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -90,20 +97,6 @@ Then we open up the Kernel:
 open icl'Kernel;
 open SimpleDictionary;
 =TEX
-\subsection{Utilities}
-We will often wish to just pass on error messages,
-just changing the source area of the message if it is from
-particular function.
-Thus:
-=SML
-fun âpass_oná (e : exn) (fromnm : string) (tonm : string) : 'a = (
-let val efrom = area_of e
-in
-	if efrom = fromnm
-	then reraise e tonm
-	else reraise e efrom
-end);
-=TEX
 \subsection{Kernel State Change Material}
 As any operation that changes the kernel state must notify
 the list of functions managed by the functions $on\_kernel\_state\_change$,
@@ -129,7 +122,7 @@ datatype âKERNEL_STATE_CHANGEá
 		|	âNewConstá of string * TYPE
 		|	âNewTypeá of string * int
 		|	âSimpleNewDefinitioná of (string * string * TERM) * THM
-		|	âNewTypeDefinitioná of (string * string * (string list) * THM) * THM
+		|	âNewTypeDefná of (string * string * (string list) * THM) * THM
 		|	âNewSpecificationá of (string list * int * THM) * THM
 		|	âSetUserDatumá of string * USER_DATUM;
 
@@ -154,7 +147,7 @@ end; (* local *)
 These are generally strait forward:
 =SML
 fun âopen_theoryá (nm : string) : unit = (
-let val ot_res = icl'open_theory nm;
+let	val ot_res = icl'open_theory nm;
 	val ot_res' = (map icl'get_theory_name ** map icl'get_theory_name) ot_res;
 in
 	notify_ksc (OpenTheory (nm, ot_res'));
@@ -164,7 +157,7 @@ handle complaint => pass_on complaint "icl'open_theory" "open_theory");
 =TEX
 =SML
 fun âdelete_theoryá (nm : string) : unit = (
-let val dummy = icl'delete_theory nm;
+let	val dummy = icl'delete_theory nm;
 in
 	notify_ksc (DeleteTheory nm);
 	()
@@ -173,7 +166,7 @@ handle complaint => pass_on complaint "icl'delete_theory" "delete_theory");
 =TEX
 =SML
 fun ânew_theoryá (nm : string) : unit = (
-let val dummy = (icl'new_theory nm; icl'open_theory nm);
+let	val dummy = (icl'new_theory nm; icl'open_theory nm);
 in
 	notify_ksc (NewTheory nm);
 	()
@@ -182,7 +175,7 @@ handle complaint => pass_on complaint "icl'new_theory" "new_theory");
 =TEX
 =SML
 fun ânew_parentá (nm : string) : unit = (
-let val np_res = icl'new_parent nm;
+let	val np_res = icl'new_parent nm;
 	val np_res' = map icl'get_theory_name np_res;
 in
 	notify_ksc (NewParent (nm, np_res'));
@@ -192,7 +185,7 @@ handle complaint => pass_on complaint "icl'new_parent" "new_parent");
 =TEX
 =SML
 fun âlock_theoryá (nm : string) : unit = (
-let val dummy = icl'lock_theory nm;
+let	val dummy = icl'lock_theory nm;
 in
 	notify_ksc (LockTheory nm);
 	()
@@ -201,7 +194,7 @@ handle complaint => pass_on complaint "icl'lock_theory" "lock_theory");
 =TEX
 =SML
 fun âunlock_theoryá (nm : string) : unit = (
-let val dummy = icl'unlock_theory nm;
+let	val dummy = icl'unlock_theory nm;
 in
 	notify_ksc (UnlockTheory nm);
 	()
@@ -210,7 +203,7 @@ handle complaint => pass_on complaint "icl'unlock_theory" "unlock_theory");
 =TEX
 =SML
 fun âduplicate_theoryá (fromnm : string, tonm : string) : unit = (
-let val dummy = icl'duplicate_theory fromnm tonm;
+let	val dummy = icl'duplicate_theory fromnm tonm;
 in
 	notify_ksc (DuplicateTheory (fromnm, tonm));
 	()
@@ -225,7 +218,7 @@ val âconclá : THM -> TERM = snd o dest_thm;
 =TEX
 =SML
 fun âthm_theoryá (thm : THM) : string = (
-let val {theory = {name = iname,...},...} = icl'dest_thm thm;
+let	val {theory = {name = iname,...},...} = icl'dest_thm thm;
 in
 	icl'get_theory_name iname
 	handle complaint => 
@@ -235,7 +228,7 @@ end);
 =TEX
 =SML
 fun âsave_thmá (key : string, thm : THM) : THM = (
-let val saved = icl'list_save_thm ([key], thm);
+let	val saved = icl'list_save_thm ([key], thm);
 in
 	notify_ksc (SaveThm (key, thm));
 	saved
@@ -244,7 +237,7 @@ handle complaint => pass_on complaint "icl'list_save_thm" "save_thm");
 =TEX
 =SML
 fun âlist_save_thmá (keys : string list, thm : THM) : THM = (
-let val saved = icl'list_save_thm (keys, thm);
+let	val saved = icl'list_save_thm (keys, thm);
 in
 	notify_ksc (ListSaveThm (keys, thm));
 	saved
@@ -253,7 +246,7 @@ handle complaint => pass_on complaint "icl'list_save_thm" "list_save_thm");
 =TEX
 =SML
 fun âdelete_thmá (key : string) : THM = (
-let val thm = icl'delete_thm key;
+let	val thm = icl'delete_thm key;
 in
 	notify_ksc (DeleteThm key);
 	thm
@@ -270,7 +263,7 @@ Given a level, give a list of the levels that need deleting.
 We presume a well-formed $del\_levels$ list.
 =SML
 fun âdeleted_levelsá (level : int) : int list = (
-let val {del_levels = del_levels,current_level = current_level, ...} = icl'get_theory "-";
+let	val {del_levels = del_levels,current_level = current_level, ...} = icl'get_theory "-";
 
 	fun get_levels llevel ((lb,ub) :: lst) = (
 		if llevel < lb
@@ -302,8 +295,8 @@ let	val dummy = case (get_current_theory_status()) of
 		else ();
 
 	val {con_env = con_env,ty_env = ty_env,
-		axiom_dict = axiom_dict, theorem_dict = theorem_dict,
-		definition_dict = definition_dict,...} = icl'get_theory "-";
+		axiom_dict = axiom_dict, thm_dict = thm_dict,
+		defn_dict = defn_dict,...} = icl'get_theory "-";
 
 	val (del_con,del_lev1) = split (map (fn (name,{ty = ty,level = lev,...}) => ((name, ty),lev))
 		(con_env drop (fn (_,{level = lev,...}) => lev < level)));
@@ -312,7 +305,7 @@ let	val dummy = case (get_current_theory_status()) of
 		(ty_env drop (fn (_,{level = lev,...}) => lev < level)));
 
 	val del_thms = map (fn (key,_) => key)
-		(theorem_dict drop (fn (_,thm) => 
+		(thm_dict drop (fn (_,thm) => 
 			let val {level = lev,...} = icl'dest_thm thm
 			in lev < level end));
 
@@ -326,7 +319,7 @@ let	val dummy = case (get_current_theory_status()) of
 	val (del_defns, del_lev4) = split(map (fn (key,thm) => (key,
 			let val {level = lev,...} = icl'dest_thm thm
 			in lev end))
-		(definition_dict drop (fn (_,thm) => 
+		(defn_dict drop (fn (_,thm) => 
 			let val {level = lev,...} = icl'dest_thm thm
 			in lev < level end)));
 
@@ -360,31 +353,31 @@ end);
 =TEX
 We can now give the deletion functions:
 =SML
-fun âdelete_constantá (cnt : TERM) : unit = (
-let val (cnm, cty) = dest_const cnt
+fun âdelete_constá (cnt : TERM) : unit = (
+let	val (cnm, cty) = dest_const cnt
 		handle complaint =>
-		divert complaint "dest_const" "delete_constant" 12008 [];
+		divert complaint "dest_const" "delete_const" 12008 [];
 
 	val {con_env = con_env,...} = icl'get_theory "-";
 
 	val {level = level, ty = ty} = force_value(s_lookup cnm con_env)
 		handle complaint =>
-		divert complaint "force_value" "delete_constant" 12001 
+		divert complaint "force_value" "delete_const" 12001 
 			[fn () => get_current_theory_name (),
 			 fn () => cnm];
 
 	val dummy = if ty <> cty
-		then fail "delete_constant" 12001 
+		then fail "delete_const" 12001 
 			[fn () => get_current_theory_name (),
 			 fn () => cnm]
 		else ();
 in
-	delete_to_level "delete_constant" cnm level
+	delete_to_level "delete_const" cnm level
 end);
 =TEX
 =SML	
 fun âdelete_typeá (tnm : string) : unit = (
-let val {ty_env = ty_env,...} = icl'get_theory "-";
+let	val {ty_env = ty_env,...} = icl'get_theory "-";
 
 	val {level = level, ...} = force_value(s_lookup tnm ty_env)
 		handle complaint =>
@@ -397,7 +390,7 @@ end);
 =TEX
 =SML	
 fun âdelete_axiomá (anm : string) : unit = (
-let val {axiom_dict = axiom_dict,...} = icl'get_theory "-";
+let	val {axiom_dict = axiom_dict,...} = icl'get_theory "-";
 
 	val ax = force_value(s_lookup anm axiom_dict)
 		handle complaint =>
@@ -412,7 +405,7 @@ end);
 =TEX
 =SML
 fun ânew_axiomá (key : string, tm : TERM) : THM = (
-let val saved = icl'new_axiom ([key], tm);
+let	val saved = icl'new_axiom ([key], tm);
 in
 	notify_ksc (NewAxiom ((key, tm),saved));
 	saved
@@ -421,7 +414,7 @@ handle complaint => pass_on complaint "icl'new_axiom" "new_axiom");
 =TEX
 =SML
 fun ânew_constá (cnm : string, ty : TYPE) : TERM = (
-let val saved = icl'new_const (cnm, ty);
+let	val saved = icl'new_const (cnm, ty);
 in
 	notify_ksc (NewConst (cnm, ty));
 	saved
@@ -430,7 +423,7 @@ handle complaint => pass_on complaint "icl'new_const" "new_const");
 =TEX
 =SML
 fun ânew_typeá (cnm : string, arity : int) : TYPE = (
-let val saved = icl'new_type (cnm, arity);
+let	val saved = icl'new_type (cnm, arity);
 in
 	notify_ksc (NewType (cnm, arity));
 	saved
@@ -439,7 +432,7 @@ handle complaint => pass_on complaint "icl'new_type" "new_type");
 =TEX
 =SML
 fun ânew_typeá (cnm : string, arity : int) : TYPE = (
-let val saved = icl'new_type (cnm, arity);
+let	val saved = icl'new_type (cnm, arity);
 in
 	notify_ksc (NewType (cnm, arity));
 	saved
@@ -448,7 +441,7 @@ handle complaint => pass_on complaint "icl'new_type" "new_type");
 =TEX
 =SML
 fun âset_user_datumá (key : string, ud : USER_DATUM) : unit = (
-let val {user_data = user_data,...} = icl'get_theory "-";
+let	val {user_data = user_data,...} = icl'get_theory "-";
 
 	val dummy =  case (get_current_theory_status()) of
 		TSNormal => ()
@@ -467,7 +460,7 @@ end);
 =TEX
 =SML
 fun âget_user_datumá (thynm : string) (key : string) : USER_DATUM = (
-let val {user_data = user_data,...} = icl'get_theory thynm
+let	val {user_data = user_data,...} = icl'get_theory thynm
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_user_datum";
 
@@ -481,35 +474,35 @@ end);
 =TEX
 \subsection{Definitional Mechanisms}
 =SML
-fun âsimple_new_definitioná (key : string, cnm : string, tm : TERM) : THM = (
-let val saved = icl'new_definition ([key], cnm, tm);
+fun âsimple_new_defná (key : string, cnm : string, tm : TERM) : THM = (
+let	val saved = icl'new_defn ([key], cnm, tm);
 in
 	notify_ksc (SimpleNewDefinition ((key, cnm, tm), saved));
 	saved
 end
-handle complaint => pass_on complaint "icl'new_definition" "simple_new_definition");
+handle complaint => pass_on complaint "icl'new_defn" "simple_new_defn");
 =TEX
 =SML
 fun ânew_typeá (cnm : string, arity : int) : TYPE = (
-let val saved = icl'new_type (cnm, arity);
+let	val saved = icl'new_type (cnm, arity);
 in
 	notify_ksc (NewType (cnm, arity));
 	saved
 end
 handle complaint => pass_on complaint "icl'new_type" "new_type");
 =SML
-fun ânew_type_definitioná (key : string, name : string, 
+fun ânew_type_defná (key : string, name : string, 
 	typars : string list, defthm : THM): THM = (
-let val saved = icl'new_type_definition ([key], name, typars, defthm);
+let	val saved = icl'new_type_defn ([key], name, typars, defthm);
 in
-	notify_ksc (NewTypeDefinition ((key, name, typars, defthm), saved));
+	notify_ksc (NewTypeDefn ((key, name, typars, defthm), saved));
 	saved
 end
-handle complaint => pass_on complaint "icl'new_type_definition" "new_type_definition");
+handle complaint => pass_on complaint "icl'new_type_defn" "new_type_defn");
 =TEX
 =SML
 fun ânew_specificationá (keys : string list, ndef : int, defthm : THM) : THM = (
-let val saved = icl'new_specification (keys, ndef, defthm);
+let	val saved = icl'new_specification (keys, ndef, defthm);
 in
 	notify_ksc (NewSpecification ((keys, ndef, defthm), saved));
 	saved
@@ -520,27 +513,27 @@ handle complaint => pass_on complaint "icl'new_specification" "new_specification
 
 \subsubsection{Accessing Individual Theorems}
 =SML
-fun âget_definitioná (thynm : string) ( key : string) : THM = (
-let val {definition_dict = definition_dict,...} = icl'get_theory thynm
+fun âget_defná (thynm : string) ( key : string) : THM = (
+let	val {defn_dict = defn_dict,...} = icl'get_theory thynm
 		handle complaint =>
-		pass_on complaint "icl'get_theory" "get_definition";
+		pass_on complaint "icl'get_theory" "get_defn";
 
 	val {inscope = inscope,...} = icl'get_theory_info thynm;
 
 	val dummy = if not inscope 
-		then fail "get_definition" 12010 [(fn () => thynm)]
+		then fail "get_defn" 12010 [(fn () => thynm)]
 		else ();
 
-	val res = s_lookup key definition_dict;
+	val res = s_lookup key defn_dict;
 in
 	case res of
 	Value thm => thm
-	| _ => fail "get_definition" 12004 [(fn () => thynm),(fn () => key)]
+	| _ => fail "get_defn" 12004 [(fn () => thynm),(fn () => key)]
 end);
 =TEX
 =SML
 fun âget_axiomá (thynm : string) ( key : string) : THM = (
-let val {axiom_dict = axiom_dict,...} = icl'get_theory thynm
+let	val {axiom_dict = axiom_dict,...} = icl'get_theory thynm
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_axiom";
 
@@ -558,28 +551,28 @@ in
 end);
 =TEX
 =SML
-fun âget_theoremá (thynm : string) ( key : string) : THM = (
-let val {theorem_dict = theorem_dict,...} = icl'get_theory thynm
+fun âget_thmá (thynm : string) ( key : string) : THM = (
+let	val {thm_dict = thm_dict,...} = icl'get_theory thynm
 		handle complaint =>
-		pass_on complaint "icl'get_theory" "get_theorem";
+		pass_on complaint "icl'get_theory" "get_thm";
 
 	val {inscope = inscope,...} = icl'get_theory_info thynm;
 
 	val dummy = if not inscope 
-		then fail "get_theorem" 12010 [(fn () => thynm)]
+		then fail "get_thm" 12010 [(fn () => thynm)]
 		else ();
 
-	val res = s_lookup key theorem_dict;
+	val res = s_lookup key thm_dict;
 in
 	case res of
 	Value thm => thm
-	| _ => fail "get_theorem" 12006 [(fn () => thynm),(fn () => key)]
+	| _ => fail "get_thm" 12006 [(fn () => thynm),(fn () => key)]
 end);
 =TEX
 \subsubsection{Theory Names and Ancestry}
 =SML
 fun âtheory_namesá ((): unit) : string list = (
-let val hier = icl'get_hierarchy();
+let	val hier = icl'get_hierarchy();
 in
 	map fst (hier drop 
 		(fn (_,{status = status,...}) => status = TSDeleted))
@@ -589,32 +582,54 @@ In the following we are really only finding out whether a theory name exists whe
 its parents just to start off the process that $all\_anc$ could do by itself.
 =SML
 fun âget_ancestorsá (thynm : string) : string list = (
-let val hier = icl'get_hierarchy();
+let 	val hier = icl'get_hierarchy();
 
-	val {parents = parents,...} = icl'get_theory thynm
-		handle complaint =>
-		pass_on complaint "icl'get_theory" "get_ancestors";
-
-	fun all_anc (acc :: rest) sofar = (
-		if acc mem sofar
-		then all_anc rest sofar
-		else let val res = case (s_lookup acc hier) of
+	fun aux ((nm:string), (sofar:string list)) = (
+	if nm mem sofar
+	then sofar
+	else (
+	let 	val parents = case (s_lookup nm hier) of
 			Value {contents={parents=pnts,...},...} => pnts
-			| _ => error "get_ancestors" 6041 []
-		in
-			all_anc (rest cup (map icl'get_theory_name res))
-				(acc :: sofar)
-		end
-	) | all_anc [] sofar = sofar;
+			| _ => fail "get_ancestors" 6035 [fn () => nm];
+	in
+		fold aux (map icl'get_theory_name parents) (nm :: sofar)
+	end));
 in
-	if thynm = "-"
-	then all_anc (map icl'get_theory_name parents) [get_current_theory_name()]
-	else all_anc (map icl'get_theory_name parents) [thynm]
+	aux 
+	((if thynm = "-"
+	then get_current_theory_name ()
+	else thynm),
+	[])
+end);
+=TEX
+=SML
+fun âis_theory_ancestorá (thy1 : string) (thy2 : string) : bool = (
+let 	val hier = icl'get_hierarchy();
+	val nm1 = (if thy1 = "-"
+		then get_current_theory_name ()
+		else thy1);
+	val nm2 = (if thy2 = "-"
+		then get_current_theory_name ()
+		else thy2);
+
+	fun aux (nm :string) = (
+	(nm1 = nm) orelse
+	(let 	val parents = case (s_lookup nm hier) of
+			Value {contents={parents=pnts,...},...} => pnts
+			| _ => fail "get_ancestors" 6035 [fn () => nm];
+		val nmparents = map icl'get_theory_name parents
+	in
+		nm1 mem nmparents
+		orelse
+		(any nmparents aux)
+	end));
+in
+	aux nm2
 end);
 =TEX
 =SML
 fun âget_parentsá (thynm : string) : string list = (
-let val {parents = parents,...} = icl'get_theory thynm
+let	val {parents = parents,...} = icl'get_theory thynm
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_parents";
 in
@@ -623,7 +638,7 @@ end);
 =TEX
 =SML
 fun âget_childrená (thynm : string) : string list = (
-let val {children=children,...} = icl'get_theory_info thynm
+let	val {children=children,...} = icl'get_theory_info thynm
 		handle complaint =>
 		pass_on complaint "icl'get_theory_info" "get_children";
 in
@@ -632,7 +647,7 @@ end);
 =TEX
 =SML
 fun âget_descendantsá (thynm : string) : string list = (
-let val hier = icl'get_hierarchy();
+let	val hier = icl'get_hierarchy();
 
 	val {children=children,...} = icl'get_theory_info thynm
 		handle complaint =>
@@ -673,18 +688,18 @@ end);
 =TEX
 
 =SML
-fun âget_definitionsá (thynm : string) : (string list * THM) list = (
-let val {definition_dict = definition_dict,...} = icl'get_theory thynm
+fun âget_defnsá (thynm : string) : (string list * THM) list = (
+let	val {defn_dict = defn_dict,...} = icl'get_theory thynm
 		handle complaint =>
-		pass_on complaint "icl'get_theory" "get_definitions";
+		pass_on complaint "icl'get_theory" "get_defns";
 
 in
-	compact_tsd definition_dict
+	compact_tsd defn_dict
 end);
 =TEX
 =SML
 fun âget_axiomsá (thynm : string) : (string list * THM) list = (
-let val {axiom_dict = axiom_dict,...} = icl'get_theory thynm
+let	val {axiom_dict = axiom_dict,...} = icl'get_theory thynm
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_axioms";
 
@@ -693,20 +708,20 @@ in
 end);
 =TEX
 =SML
-fun âget_theoremsá (thynm : string) : (string list * THM) list = (
-let val {theorem_dict = theorem_dict,...} = icl'get_theory thynm
+fun âget_thmsá (thynm : string) : (string list * THM) list = (
+let	val {thm_dict = thm_dict,...} = icl'get_theory thynm
 		handle complaint =>
-		pass_on complaint "icl'get_theory" "get_theorems";
+		pass_on complaint "icl'get_theory" "get_thms";
 
 in
-	compact_tsd theorem_dict
+	compact_tsd thm_dict
 end);
 =TEX
 =SML
-fun âget_constantsá (thynm : string) : TERM list = (
-let val {con_env = con_env,...} = icl'get_theory thynm
+fun âget_constsá (thynm : string) : TERM list = (
+let	val {con_env = con_env,...} = icl'get_theory thynm
 		handle complaint =>
-		pass_on complaint "icl'get_theory" "get_constants";
+		pass_on complaint "icl'get_theory" "get_consts";
 
 	fun env_to_term (nm,{ty=ty,level=level}) = mk_const(nm,ty);
 in
@@ -715,7 +730,7 @@ end);
 =TEX
 =SML
 fun âget_typesá (thynm : string) : TYPE list = (
-let val {ty_env = ty_env,...} = icl'get_theory thynm
+let	val {ty_env = ty_env,...} = icl'get_theory thynm
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_types";
 
@@ -728,7 +743,7 @@ end);
 =SML
 fun âget_theory_statusá (thynm : string) : THEORY_STATUS =
 (
-let val {status = status,...} = icl'get_theory_info thynm
+let	val {status = status,...} = icl'get_theory_info thynm
 		handle complaint =>
 		pass_on complaint "icl'get_theory_info" "get_theory_status";
 in
