@@ -66,9 +66,12 @@ Various minor mods as a result of testing canons.
 All rewrite functions now fail when applying an equation produces no change.
 \item [Issue 1.12]
 Tidying up.
+\item [Issue 1.13]
+Re-implementation to follow ideas of \cite{DS/FMU/IED/DTD051}.
 \end{description}
 \subsection{Changes Forecast}
-None.
+The move of $evaluate\_proof\_context$ to after the resolution
+material, when it arrives..
 \section{GENERAL}
 \subsection{Scope}
 This document contains a detailed design for the 
@@ -99,13 +102,14 @@ Note also that the order of declaration given in this document will
 not necessarily reflect the order of implementation in
 \cite{DS/FMU/IED/IMP026}.
 \subsubsection{Dependencies}
-Though this document is only dependent on \cite{DS/FMU/IMP008}
-and \cite{DS/FMU/IMP007},
-it is placed after \cite{DS/FMU/IMP028} in the system build makefile.
+Though this document depends upon \cite{DS/FMU/IMP028}.
 \subsubsection{Deficiencies}
 None known.
 \subsubsection{Possible Enhancements}
 None known.
+\subsubsection{Terminology}
+A {\em conversion net} is more properly called a conversion discrimination net: discrimination nets are described in 
+\cite{DS/FMU/IED/DTD008}.
 \section{INFIX DIRECTIVES}
 The following canonicalisation function combinators are used with
 infix notation:
@@ -298,7 +302,8 @@ $id\_can$, $fail\_can$, $THEN\_CAN$, $REPEAT\_CAN$, $EVERY\_CAN$,
 \subsection{Canonicalisation For Rewriting}\label{CanonicalisationForRewriting}
 The discussion in section \ref{CANONICALISATIONDiscussion}
 of canonicalisation for rewriting actually
-described a simpler process than the one which we adopt for standard use.
+described a simpler process than the one which we adopt for standard use
+(i.e. place in the initial rewriting proof context).
 
 We adopt the following criteria for the rewriting canonicalisation:
 
@@ -339,6 +344,10 @@ without prejudicing criterion 1 (by dint of the basic rewrites which
 can evaluate disjunctions and existential terms in which the operands or body
 is $T$).
 
+After all this canonicalisation we then universally quantify
+the resulting theorems in all free variables only in the conclusions, other than those
+that were free in the original.
+
 A variant canonicalisation would strip implications
 into the assumption list, as well as adding the unstripped form.
 The effects caused by this could be unfortunate if unconstrained,
@@ -372,22 +381,82 @@ $Œ\_rewrite\_canon$, $simple\_ƒ\_rewrite\_canon$.
 =FAILURE
 26203	the conclusion of the theorem is already an equation
 =ENDDOC
+=DOC
+val âREWRITE_CANá : CANON -> CANON;
+=DESCRIBE
+For rewriting, after all other canonicalisation we will usually
+wish to then universally quantify
+the resulting theorems in all free variables that are only in in the conclusion, other than those
+that were free anywhere in the original theorem, before
+any canonicalisation.
+A canonicalisation is transformed to work this way is done by $REWRITE\_CAN$.
 =TEX
+=DOC
+val âinitial_rw_canoná : CANON;
+=DESCRIBE
+This is the initial rewrite canonicalisation function,
+defined as
+ó
+val initial_rw_canon =
+	REWRITE_CAN
+	(REPEAT_CAN(FIRST_CAN [
+	simple_ƒ_rewrite_canon,
+	€_rewrite_canon,
+	simple_Œ_rewrite_canon,
+	‚_t_rewrite_canon]));
+æ
+This is the repeated application of the first applicable
+operation in the following list:
+\begin{enumerate}
+\item
+stripping universal quantifiers;
+\item
+dividing conjunctive theorems into their conjuncts;
+\item
+changing $…Œ(t1  t2)$ to $Œt1 € Œt2$;
+\item
+changing $…Œ„xŽt$ to $ƒxŽŒt$;
+\item
+changing $…Œt$ to $t ‚ F$;
+\item
+if none of the above apply, changing $…t$ to $…t = T$.
+
+Finally, after all this canonicalisation we then universally quantify
+the resulting theorems in all free variables other than those
+that were free in the original.
+
+\end{enumerate}
+
+=ENDDOC
+\section{EQUATIONAL CONTEXTS REVISITED}
+We can now express the function that creates an equational context of of a theorem canonicalised by the
+other parameter:
+=DOC
+val âcthm_for_eqn_cxtá : CANON -> THM -> EQN_CXT;
+=DESCRIBE
+A canonicalised theorem (giving a list of theorems)
+may be converted into an equational context by $cthm\_for\_eqn\_cxt$.
+ó
+fun cthm_for_eqn_cxt canon thm = map thm_for_eqn_cxt (canon thm);
+æ
+Canoncalised theorems that do not match the necessary pattern
+for an equational context will be discarded.
+=ENDDOC
 \section{THE REWRITING FUNCTIONS}
 \subsection{The Underlying Conversion}
 The following general and powerful conversion is at the heart of all the other
 rewriting functions.
 =DOC
-val âprim_rewrite_convá : (TERM * CONV) list -> CANON -> 
-	THM list -> (CONV -> CONV) -> THM list -> CONV
+val âprim_rewrite_convá : CONV NET -> CANON -> 
+	(CONV -> CONV) -> EQN_CXT -> THM list -> CONV;
 =DESCRIBE
 The primitive rewrite conversion.
 =CONVERSION
 prim_rewrite_conv
-(other_conv : (TERM * CONV) list)
+(initial_net: CONV NET)
 (canon : CANON)
-(basis : THM list)
 (traverse : CONV -> CONV)
+(with_eqn_cxt : EQN_CXT)
 (with_thms : THM list)
 »t¼
 É
@@ -400,16 +469,12 @@ rewriting. The failure of the conversion constructed by $prim\_rewrite\_conv$ wi
 
 The arguments have the following effects:
 \begin{description}
-\item[other\_conv]
-If a particular sub-term
-matches (by free variable and type instantiation) any terms of this
-list, then the associated conversions will be added to the applicable rewrite conversions generated by the following arguments.
-Members of the list will be applied to the sub-term until
-one succeeds, or all fail.
-This can be used to cause, e.g., $\beta$ reduction, during rewriting.
+\item[initial\_net]
+This is a pre-calculated conversion net, that will serve
+as the initial rewriting that may be done.
 \item[canon]
 This is the canonicalisation functions
- will be applied to all of the $basis$ and $with\_thms$ theorems, to produce a list of theorems to be rewritten with from these inputs.
+ will be applied to all of the $with\_thms$ theorems, to produce a list of theorems to be rewritten with from these inputs.
 This will generally involve producing canonical or simplified
 forms of the original theorems.
 
@@ -423,11 +488,12 @@ N.b. free variables are not instantiated.
 An equation whose left-hand side matches the term being rewritten
 in such a way that rewriting would not change the term
 is treated as if it did not match the term.
-\item[basis]
-This is a basic set of theorems to rewrite with.
 \item[traverse]
 This is a conversional, which defines the traversal of term $t$ by the
 rewriting conversion derived from $prim\_rewrite\_conv$'s other arguments.
+\item [with$\_$eqn$\_$cxt]
+This defines an additional equational context to be
+added directly into the rewriting rules.
 \item[with$\_$thms]
 This is an additional set of theorems to be processed by $canon$
 and the results used in rewriting.
@@ -439,24 +505,23 @@ a variety of the first four parameters.
 Note that $prim\_rewrite\_conv$ preprocesses its arguments in various ways.
 The preprocessing for an argument
 takes place as soon as that argument is supplied, so, for example,
-the overhead of preprocessing $basis$ need not be incurred in calls with
-the same $basis$ but different $with\_thms$.
+the overhead of preprocessing $with\_eqn\_cxt$ need not be incurred in calls with
+the same $with\_eqn\_cxt$ but different $with\_thms$.
 =ENDDOC
 \subsection{Rules}
 =DOC
-val âprim_rewrite_ruleá : (TERM * CONV) list -> CANON -> 
-
-	THM list -> (CONV -> CONV) -> THM list -> THM -> THM;
+val âprim_rewrite_ruleá : CONV NET -> CANON -> 
+	(CONV -> CONV) -> EQN_CXT -> THM list -> THM -> THM;
 =DESCRIBE
 This is the inference rule based on $prim\_rewrite\_conv$ (q.v.),
 with the same parameters as that function, except for the last
 argument:
 =RULE
 prim_rewrite_rule
-(other_conv : (TERM * CONV) list)
+(initial_net: CONV NET)
 (canon : CANON)
-(basis : THM list)
 (traverse : CONV -> CONV)
+(with_eqn_cxt : EQN_CXT)
 (with_thms : THM list)
 É
 ö … t
@@ -481,14 +546,16 @@ val âonce_fasm_rewrite_ruleá : THM list -> (TERM -> bool) -> THM -> THM;
 val âpure_once_fasm_rewrite_ruleá : THM list -> (TERM -> bool) -> THM -> THM;
 =DESCRIBE
 These are the standard rewriting rules.
-They use the canonicalisation rule set up by $set\_rewrite\_canons$(q.v.) to
-preprocess their theorems.
+They use the canonicalisation rule held by the proof context (see, e.g, $push\-\_proof\-\_context$)
+as $rw\_canon$ to
+preprocess the theorem list.
+The context is accessed at the point when the rules are given a list of
+theorems.
 
-If a rule is ``pure'' then there are no default rewrite theorems,
-otherwise the rewriting theorems given by $set\_basic\_rewrites$
-(q.v.) will be the default rewriting theorems, and 
-the conversions set by $set\_rewrite\_convs$(q.v.)
-will be used.
+If a rule is ``pure'' then there is no default rewriting,
+otherwise the default rewriting conversion net
+held by the proof context as $rw\_net$ will be used
+in addition to user supplied material.
 
 If a rule is ``once'' then rewriting will proceed from the root
 of the of the conclusion of the theorem to be rewritten, towards the leaves,
@@ -515,14 +582,16 @@ val âonce_rewrite_convá : THM list -> CONV;
 val âpure_once_rewrite_convá : THM list -> CONV;
 =DESCRIBE
 These are the standard rewriting conversions.
-They all use the canonicalisation rule $rewrite\_canon$(q.v.) to
-preprocess their theorems.
+They use the canonicalisation rule held by the proof context (see, e.g, $push\-\_proof\-\_context$)
+as $rw\_canon$ to
+preprocess the theorem list.
+The context is accessed at the point when the rules are given a list of
+theorems.
 
-If a conversion is ``pure'' then there are no default rewrite theorems,
-otherwise the $basic\_rewrites$ (of $set\_basic\_rewrites$(q.v.))
-will be the default rewriting theorems and 
-the conversions set by $set\_rewrite\_convs$(q.v.)
-will be used.
+If a conversion is ``pure'' then there is no default rewriting,
+otherwise the default rewriting conversion net
+held by the proof context as $rw\_net$ will be used
+in addition to user supplied material.
 
 If a conversion is ``once'' then rewriting will proceed from the root
 of the rewritten conversion's term argument, towards the leaves,
@@ -535,19 +604,19 @@ This may cause non-terminating looping.
 =ENDDOC
 \subsection{Tactics}
 =DOC
-val âprim_rewrite_tacá : (TERM * CONV) list -> CANON -> 
+val âprim_rewrite_tacá : CONV NET -> CANON -> 
 
-	THM list -> (CONV -> CONV) -> THM list -> TACTIC;
+	(CONV -> CONV) -> EQN_CXT -> THM list -> TACTIC;
 =DESCRIBE
 This is the inference rule based on $prim\_rewrite\_conv$ (q.v.),
 with the same parameters as that function, except for the last
 argument:
 =TACTIC
 prim_rewrite_tac
-(other_conv : (TERM * CONV) list)
+(initial_net: CONV NET)
 (canon : CANON)
-(basis : THM list)
 (traverse : CONV -> CONV)
+(with_eqn_cxt : EQN_CXT)
 (with_thms : THM list)
 É
 { ö } … t
@@ -572,23 +641,25 @@ val âonce_fasm_rewrite_tacá : THM list -> (TERM -> bool) -> TACTIC;
 val âpure_once_fasm_rewrite_tacá : THM list -> (TERM -> bool) -> TACTIC;
 =DESCRIBE
 These are the rewriting tactics.
-They all use the canonicalisation rule $rewrite\_canon$(q.v.) to
-preprocess their theorems.
+They use the canonicalisation rule held by the proof context (see, e.g, $push\-\_proof\-\_context$)
+as $rw\_canon$ to
+preprocess the theorem list.
+The context is accessed at the point when the rules are given a list of
+theorems.
 
-If a rule is ``pure'' then there are no default rewrite theorems,
-otherwise the rewriting theorems given by $set\_basic\_rewrites$
-(q.v.) will be the default rewriting theorems, and 
-the conversions set by $set\_rewrite\_convs$(q.v.)
-will be used.
+If a tactic is ``pure'' then there is no default rewriting,
+otherwise the default rewriting conversion net
+held by the proof context as $rw\_net$ will be used
+in addition to user supplied material.
 
-If a rule is ``once'' then rewriting will proceed from the root
+If a tactic is ``once'' then rewriting will proceed from the root
 of the conclusion of the goal to be rewritten, towards the leaves,
 and will not descend through any rewritten subterm.
 If not, rewriting will continue, moving from the root to the leaves, repeating if any rewriting is successful, until there is no rewriting redex
 anywhere within the rewritten conclusion.
 This may cause non-terminating looping.
 
-If a rule is ``asm'' then the theorems rewritten with will include
+If a tactic is ``asm'' then the theorems rewritten with will include
 the $asm\_rule$d assumptions of the goal.
 
 If a rule is ``fasm'' then the theorems rewritten with will include
@@ -614,102 +685,18 @@ These are rewriting tactics parameterised to take only one theorem.
 This parameterisation is convenient to use with the many tactic
 generating functions, such as $LEMMA\_T$, which take a theorem tactic
 as an argument.
-They all use the canonicalisation rule $rewrite\_canon$(q.v.) to
-preprocess the theorem.
 
-If a rule is ``pure'' then there are no default rewrite theorems,
-otherwise the rewriting theorems given by $set\_basic\_rewrites$
-(q.v.) will be the default rewriting theorems, and 
-the conversions set by $set\_rewrite\_convs$(q.v.)
-will be used.
-
-If a rule is ``once'' then rewriting will proceed from the root
-of the conclusion of the goal to be rewritten, towards the leaves,
-and will not descend through any rewritten subterm.
-If not, rewriting will continue, moving from the root to the leaves, repeating if any rewriting is successful, until there is no rewriting redex
-anywhere within the rewritten conclusion.
-This may cause non-terminating looping.
-
-If a rule is ``asm'' then the theorems rewritten with will include
-the $asm\_rule$d assumptions of the goal.
-
-If a rule is ``fasm'' then the theorems rewritten with will include
-the $asm\_rule$d assumptions which satisfy the predicate on terms supplied of the theorem being rewritten.
+See, e.g. $rewrite\_tac$ for the details of the differences
+between these tactics.
 =FAILURE
 26001	no rewriting occurred
+=FAILUREC
+Errors will be reported as if from the corresponding $_tac$:
+e.g. from $rewrite\_tac$ rather than $rewrite\_thm\_tac$.
+This allows a simple implementation, and for there to be
+no functionality change even in errors between
+using singleton lists with the originals, and these functions.
 =ENDDOC
-\section{PARAMETERISING REWRITING}
-The following functions allow the user to modify the
-standard pattern of rewriting.
-=DOC
-val âset_rewrite_canonsá : (string * CANON) list -> unit;
-=DESCRIBE
-This sets the canonicalisation functions used in $rewrite\_conv$ and
-its relatives.
-The functions are applied repeatedly to each theorem
-until none of them are applicable. The
-resulting theorems are then generalised (using
-$simple\_ƒ\_intro$) over all free variables which did not appear free
-in the original theorem.
-
-$set\_rewrite\_canon$ does not effect instances of the rewrite rules and conversions that which have already been applied to the list of theorems to rewrite with.
-
-The strings are for information only.
-=SEEALSO
-$basic\_rewrite\_canon$
-=ENDDOC
-
-=DOC
-val âget_rewrite_canonsá : unit -> (string * CANON) list;
-=DESCRIBE
-This returns the list of
-canonicalisation functions used in $rewrite\_conv$ and
-its relatives.
-=SEEALSO
-$set\_rewrite\_canons$
-=ENDDOC
-
-=DOC
-val âset_basic_rewritesá : THM list -> THM list;
-=DESCRIBE
-This sets the list of default rewrites used by $rewrite\_conv$,
-$rewrite\_rule$, $rewrite\_tac$, etc.
-It returns the previously set value.
-
-This will only take effect for instances of the rewrite rules and conversions that have not yet been applied to 
-the list of theorems to rewrite with.
-=ENDDOC
-
-=DOC
-val âget_basic_rewritesá : unit -> THM list;
-=DESCRIBE
-This returns the list of default rewrites used by $rewrite\_conv$,
-=SEEALSO
-$set\_basic\_rewrites$
-=ENDDOC
-
-=DOC
-val âset_rewrite_convsá : ((TERM * CONV) list) -> unit;
-=DESCRIBE
-This sets the list of conversions used by $rewrite\_conv$,
-$rewrite\_rule$, $rewrite\_tac$, etc,
-in addition to rewriting with equations.
-
-
-This will only take effect for instances of the rewrite rules and conversions that have not yet been applied to 
-the list of theorems to rewrite with.
-=ENDDOC
-
-=DOC
-val âget_rewrite_convsá : unit -> ((TERM * CONV) list);
-=DESCRIBE
-This returns the list of conversions used in addition to
-the rewriting theorems by $rewrite\_conv$,
-$rewrite\_rule$, $rewrite\_tac$, etc.
-=SEEALSO
-$set\_rewrite\_convs$
-=ENDDOC
-=TEX
 \section{BASIC REWRITES}\label{BASICREWRITES}
 The following portmanteau box contains the basic rewriting theorems which
 are to be proved and set up as the basic rewrites in the implementation
@@ -752,9 +739,47 @@ if_rewrite_thm … ƒ t1 t2:'aŽ((if T then t1 else t2) = t1) € (if F then t1 else t
 
 simple_%beta%_rewrite_thm … ƒ t1:'a; t2:'bŽ(( xŽt1)t2) = t1
 æ
-The theorems are saved in the theory ``misc''.
+The theorems are saved in the theory ``misc'',
+and given their design in the design for that theory.
 =SEEALSO
 $fst\_rewrite_thm$, $snd\_rewrite_thm$, $fst\_snd\_rewrite_thm$.
+=ENDDOC
+=DOC
+val âinitial_rewrite_proof_contextá : PROOF_CONTEXT;
+val âeinitial_rewrite_proof_contextá : EPROOF_CONTEXT;
+=DESCRIBE
+$initial\_rewrite\_proof\_context$ takes $initial\_strip\_proof\_context$,
+and replaces the entry for $rw\_canon$ with $initial\_rw\_canon$
+and $rw\_eqn\_cxt$ with:
+ó
+(flat(map (cthm_for_eqn_cxt initial_rw_canon) [
+	eq_rewrite_thm,
+	‚_rewrite_thm,
+	Œ_rewrite_thm,
+	€_rewrite_thm,
+	_rewrite_thm,
+	Š_rewrite_thm,
+	if_rewrite_thm,
+	ƒ_rewrite_thm,
+	„_rewrite_thm,
+	%beta%_rewrite_thm])) @
+[ (»( x Ž y) z¼, simple_%beta%_conv) ];
+æ
+$einitial\_rewrite\_proof\_context$ takes $einitial\_strip\_proof\_context$,
+and replaces the entry for $rw\_canon$ with $initial\_rw\_canon$
+and $rw\_eqn\_cxt$ with
+the net formed from the above equational context, $cxt$, by 
+$make\_net$.
+=ENDDOC
+\section{EVALUATION OF PROOF CONTEXTS}
+The following function needs implementing after the
+methods of initialising all configurable proof tools have been introduced.
+Thus it will probably migrate from this document in the future.
+=DOC
+val âevaluate_proof_contextá : PROOF_CONTEXT -> EPROOF_CONTEXT;
+=DESCRIBE
+This function converts the user-presentation style of a 
+proof context into one that may be set using $push\_proof\_context$ (q.v).
 =ENDDOC
 =TEX
 \section{END OF THE SIGNATURE}
