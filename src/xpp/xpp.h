@@ -138,6 +138,9 @@ typedef struct menu_item {
 		MenuItem	*items);
 #endif
 #ifndef _msg
+	extern XmString format_msg(
+		char *msg,
+		NAT line_len);
 	extern void help_dialog(
 		Widget	w,
 		char	*msg);
