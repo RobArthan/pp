@@ -71,6 +71,7 @@ Minor typographical corrections.
 \item[Issues 1.17,1.18] Fixed DRA bug (batch 1) 2
 \item[Issue 1.19] Fixed DRA bug (batch 2) 7.
 \item[Issue 1.20] Attempt at bug 5 (V0.6).
+\item[Issue 1.21] Optimised space utilisation.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -128,11 +129,11 @@ Function to add a new element to our sorted list.
 =SML
 local
     fun €add_sorted› ([],[]) (a,b) = [(a,b)]
-    |   add_sorted (ys,rest as ((xy as (x, _))::xs)) (ab as (a, _) : int*'a) =
+    |   add_sorted (ys, rest as ((xy as (x, _))::xs)) (ab as (a, _) : int*'a) =
         (   if a<x
-            then ys@ (ab ::  rest) 
-            else add_sorted (ys@[xy],xs) ab )
-    |   add_sorted (xs,[]) ab = (xs@[ab])
+            then rev ys @ (ab :: rest) 
+            else add_sorted (xy :: ys, xs) ab )
+    |   add_sorted (xs,[]) ab = (rev (ab :: xs))
 in
     fun €add_sorted_to_list› (xs : (int*'a) list)
         (x : int*'a) = (add_sorted ([],xs) x)
@@ -144,7 +145,7 @@ Function to remove everything in the sorted list before a given number.
 =SML
 fun €delete_sorted› ([]) (n : int) = []
 |   delete_sorted ((a,b)::xs) (n : int) =
-    (if a<=n then [] else [(a,b)])@(delete_sorted xs n);
+    (if a<=n then delete_sorted xs n else (a,b) :: delete_sorted xs n);
 =TEX
 
 Functions to add a single element of each type to our dictionary.
@@ -615,9 +616,8 @@ and €fmt_z_document› (thyn : string) (level : int) (flag : bool) =
     in
         vc_text := !vc_text @ vcs;
         st
-            handle Fail _ =>
+    end     handle Fail _ =>
             fail "fmt_z_document" 511005 [fn()=>thyn]
-    end;
 =TEX
 
 \subsection{Epilogue}
@@ -625,7 +625,7 @@ and €fmt_z_document› (thyn : string) (level : int) (flag : bool) =
 Functions to print the Z Document to the the screen or to a file.
 
 =SML
-fun fmt_doc ( thy : string ) : string = (
+fun fmt_doc (out : string -> unit) ( thy : string ) : unit = (
 	let	val thyn = if thy = "-" then get_current_theory_name() else thy;
 		val father = (hd o rev o get_parents) thyn;
 		val side1 = vc_text := [];
@@ -636,20 +636,22 @@ fun fmt_doc ( thy : string ) : string = (
 			::	""
 			::	fmt_z_document thyn ~1 true
 		);
-		val answer = fmt_string_list (part1 @ !vc_text);
-	in	vc_text := [];
-		answer
+	in	map out part1;
+		map out (!vc_text);
+		vc_text := []
 	end
 );
 
 fun €print_z_document› (thy : string) : unit =
-    diag_line (fmt_doc thy);
+     (fmt_doc diag_line thy);
 
 fun €output_z_document› ({out_file : string, script : string}) =
     let val stream = open_out out_file;
-        val text = ReaderWriter.translate_for_output (fmt_doc script);
-    in
-        output (stream, text);
+        fun out s = (
+		output(stream, ReaderWriter.translate_for_output s);
+		output(stream, "\n")
+	);
+    in  fmt_doc out script;
         close_out stream
     end;
 =TEX
