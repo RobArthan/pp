@@ -1,4 +1,4 @@
-% imp508.doc   %Z% $Date: 2000/06/01 14:53:03 $ $Revision: 1.57 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2000/06/14 16:41:09 $ $Revision: 1.58 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.57 $%
+\def\SCCSversion{$Revision: 1.58 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2000/06/01 14:53:03 $%
+\TPPdate{\FormatDate{$Date: 2000/06/14 16:41:09 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -88,6 +88,7 @@ Adjusted $ENV\_INFO$ and allowed for type conversions.
 \item[Issue 1.55] Updates for new INTEGER type.
 \item[Issue 1.56] Enhancement R3.
 \item[Issue 1.57] Enhancement R2.
+\item[Issue 1.57] Enhancement R1.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -318,10 +319,14 @@ fun Ûz_crossÝ (exp1 : Z_EXP, exp2 : Z_EXP) : Z_EXP = (
 =TEX
 =SML
 fun Ûz_many_crossÝ (tms : Z_EXP list) : Z_EXP = (
-	let	val prod = mk_z_¸ tms;
-	in	¸_gen_semantic_const prod;
-		prod
-	end
+	case	tms of
+		[tm] => tm
+	|	_ => (
+		let	val prod = mk_z_¸ tms;
+		in	¸_gen_semantic_const prod;
+			prod
+		end
+	)
 );
 =TEX
 =SML
@@ -354,6 +359,16 @@ fun Ûz_bindingÝ (cmpvals : (string * Z_EXP) list) : Z_EXP = (
 	let	val bdg = mk_z_binding cmpvals;
 	in	binding_gen_semantic_const bdg;
 		bdg
+	end
+);
+=TEX
+=SML
+fun Ûz_tupleÝ ([exp] : Z_EXP list) : Z_EXP = (
+	exp
+) | z_tuple (exps : Z_EXP list) : Z_EXP = (
+	let	val tuple = mk_z_tuple exps;
+	in	tuple_gen_semantic_const tuple;
+		tuple
 	end
 );
 =TEX
@@ -770,13 +785,18 @@ val		ÛzfstÝ = trans_id "FIRST"
 	and	ÛzrangeÝ = trans_id "RANGE";
 =TEX
 =SML
+fun ÛdimenÝ (zid : Z_ID, n : int) : Z_ID  = (
+	zid ^ "v" ^ string_of_int n
+);
+=TEX
+=SML
 fun Ûexp_idÝ (env : CN_ENV) (ident : ID) : Z_EXP = (
 	zid env (trans_id ident)
-)
+);
 =TEX
 \subsection{Translating Aggregates (Positional Array)}
 =SML
-and Ûexp_array_agg_posÝ (env : CN_ENV)
+fun Ûexp_array_agg_posÝ (env : CN_ENV)
 	({tmark as Value tm, comps} : EXP AGG_POS) : Z_EXP = (
 let	val zop = z_minus;
 	val zleft = z_num one;
@@ -968,13 +988,16 @@ end
 =TEX
 \subsection{Translating Indexed Components}
 =SML
-and Ûexp_indexed_compÝ (env : CN_ENV) ({prefix, index} : EXP INDEXED_COMP)
+and Ûexp_indexed_compÝ (env : CN_ENV)
+	({prefix, index as EArrayAggPos{comps, tmark as Nil}} : EXP INDEXED_COMP)
 		: Z_EXP = (
 let	val zfun = trans_exp env prefix;
-	val zargs = [trans_exp env index];
+	val zargs = map (trans_exp env) comps;
 in
 	z_fun_call (zfun, zargs)
 end
+) |  Ûexp_indexed_compÝ _ _ = (
+	fail "exp_indexed_comp" 508056 []
 )
 =TEX
 \subsection{Translating Selected Components}
@@ -1253,12 +1276,12 @@ Is it a type conversion?
 =TEX
 No... It must be an indexed component for real. So check for errors...
 =SML
-	) |(_, EArrayAggPos{comps=[comp],...}) => (
-		EIndexedComp{prefix=adjust_exp env p,
-					index = adjust_exp env comp}
-
 	) |(_, EArrayAggPos {comps=[], ...}) => (
 		fail "adjust_indexed_comp" 508035 [fn()=> name_to_tmark p]
+
+	) |(_, EArrayAggPos{comps=comps, tmark=Nil}) => (
+		EIndexedComp{prefix=adjust_exp env p,
+			index = EArrayAggPos{comps = map (adjust_exp env) comps, tmark = Nil}}
 
 	) |(_, EArrayAggPos _) => (
 		fail "adjust_indexed_comp" 508055 [fn()=> name_to_tmark p]
@@ -1967,8 +1990,46 @@ fun Ûtrans_basic_decl1Ý (env : CN_ENV) (bd : BASIC_DECL)
 	)
 );
 =TEX
-
-
+\section{Support for Multidimensional Arrays}
+=SML
+fun Ûarray_agg_defÝ (num : int) : unit = (
+	let	fun mk_gvar name = (
+			let val ty = mk_z_power_type(mk_z_var_type name);
+			in	mk_z_lvar(name, ty, [])
+			end
+		);
+		val ns = map string_of_int (interval 1 num);
+		val g_ns = map (mk_gvar o (fn n => "g" ^ n)) ns;
+		val g = mk_gvar "g";
+		val prod = z_many_cross g_ns;
+		val uncurried_tm = z_tfun(prod, g);
+		fun mk_curried_tm [] = g
+		|   mk_curried_tm (g_n::more) = z_tfun(g_n, mk_curried_tm more);
+		val curried_tm = mk_curried_tm g_ns;
+		val sig_tm = z_tfun(curried_tm, uncurried_tm);
+		val sig_ty = dest_z_power_type (type_of sig_tm);
+		val fun_var = mk_z_lvar("array_agg" ^ (string_of_int num), sig_ty, []);
+		val sig_decl = mk_z_decl[mk_z_dec([fun_var], sig_tm)];
+		val f = mk_z_lvar("f", dest_z_power_type(type_of curried_tm), []);
+		fun mk_x_n (v, n) = (
+			mk_z_lvar("x" ^ n, dest_z_power_type (type_of v), [])
+		);
+		val x_ns = map mk_x_n (combine g_ns ns);
+		val tuple = mk_z_tuple x_ns;
+		val lhs = mk_z_app(mk_z_app(fun_var, f), tuple);
+		fun mk_rhs t [] = t
+		|   mk_rhs t (x_n::more) = mk_rhs (mk_z_app(t, x_n)) more;
+		val rhs = mk_rhs f x_ns;
+		val eqn = mk_z_eq(lhs, rhs);
+		fun dec_of_var (v, e) = mk_z_dec([v], e);
+		val x_decs = map dec_of_var (combine x_ns g_ns); 
+		val pred = mk_z_µ(mk_z_decl(dec_of_var(f, curried_tm)::x_decs), mk_t, eqn);
+		val idtys = [dest_var fun_var];
+	in	update_theory_db_with_parainfo
+		(AxDesInfo(map (fst o dest_var) (g_ns @ [g]), sig_decl, Value pred, idtys))
+	end
+);
+=TEX
 \section{EPILOGUE}
 
 =SML
