@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.32 2004/02/18 17:20:42 rda Exp rda $
+ * $Id: xpp.c,v 2.33 2004/02/19 18:41:40 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -446,57 +446,64 @@ static char *get_command_line(int argc, char **argv, Boolean *use_default_comman
 	*use_default_command = True;
 	opterr = 0;
 
-	while( (optarg = 0, option_ch = getopt(argc, argv, xpp_resources.option_string)) != GETOPTDONE
-	&&	!have_minus_c ) {
-		switch(option_ch) {
-			case 'b':
-				synchronous = True;
-				break;
-			case 'h' :
-				havefonts = True;
-				break;
-			case 'r' :
-				global_options.read_only = True;
-				break;
-			case 'f' :
-				if(file_name != NULL) {
+	do {
+		optarg = 0;
+		option_ch = getopt(argc, argv, xpp_resources.option_string);
+		if(option_ch == GETOPTDONE) {
+			if(optind < argc && file_name == NULL) {
+				file_name = argv[optind];
+				optind += 1;
+			}
+		} else {
+			switch(option_ch) {
+				case 'b':
+					synchronous = True;
+					break;
+				case 'h' :
+					havefonts = True;
+					break;
+				case 'r' :
+					global_options.read_only = True;
+					break;
+				case 'f' :
+					if(file_name != NULL) {
+						usage();
+						exit(53);
+					}
+					file_name = optarg;
+					break;
+				case 'c' :
+					if(have_non_xpp_arg) {
+						usage();
+						exit(55);
+					}
+					global_options.edit_only = False;
+					for(i = optind; i < argc; i += 1) {
+						res = append_arg(res, argv[i]);
+					}
+					have_minus_c = True;
+					*use_default_command = False;
+					break;
+				case '?' :
+				case ':' :
+					sprintf(error_msg, "illegal option: -%c", (char) optopt);
+					msg("command line syntax", error_msg);
 					usage();
-					exit(53);
-				}
-				file_name = optarg;
-				break;
-			case 'c' :
-				if(have_non_xpp_arg) {
-					usage();
-					exit(55);
-				}
-				global_options.edit_only = False;
-				for(i = optind; i < argc; i += 1) {
-					res = append_arg(res, argv[i]);
-				}
-				have_minus_c = True;
-				*use_default_command = False;
-				break;
-			case '?' :
-				sprintf(error_msg, "illegal option: -%c", (char) optopt);
-				msg("command line syntax", error_msg);
-				usage();
-				exit(57);
-				break;
-			default:
-				have_non_xpp_arg = True;
-				sprintf(opt_buf, "-%c", (char) option_ch);
-				res = append_arg(res, opt_buf);
-				if(optarg != 0) {
-					res = append_arg(res, optarg);
-				}
-		}	
-	}
-
-	if(!have_minus_c && have_non_xpp_arg) {
-		if( !strcmp(argv[optind-1], "--") ) {
-			res = append_arg(res, "--");
+					exit(57);
+					break;
+				default:
+					have_non_xpp_arg = True;
+					sprintf(opt_buf, "-%c", (char) option_ch);
+					res = append_arg(res, opt_buf);
+					if(optarg != 0) {
+						res = append_arg(res, optarg);
+					}
+			}	
 		}
+	} while (!have_minus_c && option_ch != GETOPTDONE);
+
+	if(!have_minus_c && have_non_xpp_arg && !strcmp(argv[optind-1], "--") ) {
+		res = append_arg(res, "--");
 		for(i = optind; i < argc; i += 1) {
 			res = append_arg(res, argv[i]);
 		}		
