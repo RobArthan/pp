@@ -1,4 +1,4 @@
-% %Z% $Date: 2002/05/03 16:48:02 $ $Revision: 1.29 $ $RCSfile: imp504.doc,v $
+% %Z% $Date: 2002/05/25 12:06:51 $ $Revision: 1.30 $ $RCSfile: imp504.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Web Clause Processor}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP504}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.29 $%
+\def\SCCSversion{$Revision: 1.30 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/05/03 16:48:02 $%
+\TPPdate{\FormatDate{$Date: 2002/05/25 12:06:51 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -72,6 +72,7 @@ This document contains the implementation for the compliance notation web clause
 \item[Issue 1.26] CTLE II R1/11 --- nested packages.
 \item[Issue 1.27] Added syntax check only flag.
 \item[Issue 1.28] Full syntax-check-only mode.
+\item[Issue 1.29] DECLARE keyword now recognised (for block statements).
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -105,7 +106,7 @@ val €has_no_label› = "__empty";
 val €corrupt_hypertext_info› = "__corrupt";
 =TEX
 =SML
-fun €extract_labels_from_statement› (STNull) = ([]
+fun €extract_labels_from_statement› (STNull : STATEMENT)  : LABEL list = ([]
 ) | extract_labels_from_statement (STImplicitNull) = ([]
 ) | extract_labels_from_statement (STAssign _) = ([]
 ) | extract_labels_from_statement (STSpecNoIvars {label,...}) = (
@@ -163,7 +164,7 @@ fun €mark_place_for_function_specification›
 );
 =TEX
 =SML
-fun €extract_labels_from_subprog_spec› (SSProcedure proc_spec) = (
+fun €extract_labels_from_subprog_spec› (SSProcedure proc_spec) : LABEL list = (
 	mark_place_for_procedure_specification proc_spec
 ) | extract_labels_from_subprog_spec (SSFunction fun_spec) = (
 	mark_place_for_function_specification fun_spec
@@ -171,12 +172,12 @@ fun €extract_labels_from_subprog_spec› (SSProcedure proc_spec) = (
 =TEX
 =SML
 fun €extract_labels_from_renaming_decl› (RDSubprogram
-		{subprogram_specification,...}) = (
+		{subprogram_specification,...}) : LABEL list = (
 	extract_labels_from_subprog_spec subprogram_specification
 ) | extract_labels_from_renaming_decl _  = [];
 =TEX
 =SML
-fun €extract_labels_from_declaration› (DDeclarationKSlot ({label,...}, _)) = (
+fun €extract_labels_from_declaration› (DDeclarationKSlot ({label,...}, _): DECLARATION) : LABEL list = (
 	[label]
 ) | extract_labels_from_declaration (DRenamingDeclaration rd) = (
 	extract_labels_from_renaming_decl rd
@@ -205,10 +206,12 @@ fun €extract_labels_from_declaration› (DDeclarationKSlot ({label,...}, _)) = (
 ) | extract_labels_from_declaration (DAuxiliary _) = ([]
 ) | extract_labels_from_declaration (DUsing {basic_decls,...}) = ([]
 )
+(*
 =TEX
 =SML
+*)
 and €extract_labels_from_proper_body› (PBProcedure
-		{procedure_spec,declarative_part,statement}) = (
+		{procedure_spec,declarative_part,statement} : PROPER_BODY) : LABEL list = (
 	mark_place_for_procedure_specification procedure_spec @
 	flat (map extract_labels_from_declaration declarative_part) @
 	extract_labels_from_statement statement
@@ -223,7 +226,8 @@ and €extract_labels_from_proper_body› (PBProcedure
 );
 =TEX
 =SML
-fun €extract_labels_from_comp_unit› (CUPackageDeclaration {visible_decs,private_decs,...}) = (
+fun €extract_labels_from_comp_unit›
+	(CUPackageDeclaration {visible_decs,private_decs,...} : COMPILATION_UNIT) : LABEL list = (
 	flat (map extract_labels_from_declaration visible_decs) @
 	flat (map extract_labels_from_declaration private_decs)
 ) | extract_labels_from_comp_unit (CUProperBody pb) = (
@@ -233,7 +237,7 @@ fun €extract_labels_from_comp_unit› (CUPackageDeclaration {visible_decs,private_
 );
 =TEX
 =SML
-fun €extract_labels_from_kslot_comp_unit› (KCUKSlot {label,...}) = (
+fun €extract_labels_from_kslot_comp_unit› (KCUKSlot {label,...} : KSLOT_COMPILATION_UNIT) : LABEL list = (
 	[label]
 ) | extract_labels_from_kslot_comp_unit (KCUUnit {comp_unit,...}) = (
 	extract_labels_from_comp_unit comp_unit
@@ -241,7 +245,7 @@ fun €extract_labels_from_kslot_comp_unit› (KCUKSlot {label,...}) = (
 );
 =TEX
 =SML
-fun €extract_labels_from_annotation› (ANKSlot {label,...}::more) = (
+fun €extract_labels_from_annotation› (ANKSlot {label,...}::more : ANN list) : LABEL list = (
 	label :: extract_labels_from_annotation more
 ) | extract_labels_from_annotation (_ :: more) = (
 	extract_labels_from_annotation more
@@ -250,7 +254,17 @@ fun €extract_labels_from_annotation› (ANKSlot {label,...}::more) = (
 );
 =TEX
 =SML
-fun €extract_labels_from_web_clause› (WCCompilation comp_units) = (
+fun €extract_labels_from_statement_or_block› (SOBStatement s : STATEMENT_OR_BLOCK) : LABEL list = (
+	extract_labels_from_statement s
+) | extract_labels_from_statement_or_block (SOBBlock{declarative_part = Nil, statement =s, ...}) = (
+	extract_labels_from_statement s
+) | extract_labels_from_statement_or_block (SOBBlock{declarative_part = Value dp, statement =s, ...}) = (
+	flat (map extract_labels_from_declaration dp) @
+	extract_labels_from_statement s
+);
+=SML
+fun €extract_labels_from_web_clause› (WCCompilation comp_units : WEB_CLAUSE) 
+	: (LABEL OPT *  LABEL list) = (
 	(Nil, flat (map extract_labels_from_kslot_comp_unit comp_units))
 ) | extract_labels_from_web_clause (WCReplacedByCompilation {label,comp}) = (
 	(Value label, flat (map extract_labels_from_kslot_comp_unit comp))
@@ -263,9 +277,9 @@ fun €extract_labels_from_web_clause› (WCCompilation comp_units) = (
 ) | extract_labels_from_web_clause (WCReplacedByArbitraryAda {label,...}) = (
 	(Value label,[])
 ) | extract_labels_from_web_clause (WCRefinedBy {label,statement}) = (
-	(Value label, extract_labels_from_statement statement)
+	(Value label, extract_labels_from_statement_or_block statement)
 ) | extract_labels_from_web_clause (WCReplacedBy {label,statement}) = (
-	(Value label, extract_labels_from_statement statement)
+	(Value label, extract_labels_from_statement_or_block statement)
 ) | extract_labels_from_web_clause (WCReplacedByAnnotation {label,replacement}) = (
 	(Value label, extract_labels_from_annotation replacement)
 );
