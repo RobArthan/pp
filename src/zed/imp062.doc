@@ -21,7 +21,8 @@
 \TPPauthor{D.J.~King&WIN01}
 %\TPPauthors{R.D.~Arthan&WIN01\\D.J.~King&WIN01\\G.T.~Scullard&MAN05}
 \TPPauthorisation{R.D.~Arthan & FMU Manager}
-\TPPabstract{A type inference mechanism for Z}
+\TPPabstract{This document contains the Standard ML code for the type
+inferrer for HOL/Z.}
 %\TPPabstractB{}
 %\TPPabstractC{}
 %\TPPabstractD{}
@@ -57,21 +58,66 @@
 \bibliography{fmu}
 \subsection{Changes History}
 \begin{description}
-\item[\SCCSversion (3 March 1992)] Initial version.
+\item[\SCCSversion (9 June 1992)] Initial version.
 
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
 \section{GENERAL}
 \subsection{Scope}
+This document contains an implementation of the Z type inferrer described in
+\cite{DS/FMU/IED/DTD062}, and responds to that document. The type inferrer
+comprises part of the Z user interface which is overviewed in \cite{DS/FMU/IED/HLD018}.
+
 \subsection{Introduction}
 \subsubsection{Purpose and Background}
+The purpose of the Z type inferrer is check Z paragraphs as produced by the
+Z parser \cite{DS/FMU/IED/DTD061}, according to the typing rules written down in
+the detailed design for the type inferrer \cite{DS/FMU/IED/DTD062}. The type inferrer
+yields a correctly typed term, and a substitution function containing all the necessary
+typing information for the paragraph. If the paragraph is ill-typed, then error
+information is returned, for subsequent printing out by a function provided in the
+type inferrer structure.
+
 \subsubsection{Dependencies}
+
+The type inferrer is contained within the structure $ZTypeInference$, which is
+constrained by the signature of the same name, specified in \cite{DS/FMU/IED/DTD062}.
+
 \subsubsection{Interface}
+
+The following interfaces to the type inferrer module are made public:
+
+\begin{itemize}
+
+\item[1.]
+Functions which permit formatting of the abstract syntax tree for Z paragraphs and
+their components.
+
+\item[2.]
+A function for formatting error information returned by the type inferrer.
+
+\item[3.]
+The function which type infers Z paragraphs $type\_check\_zpara$.
+
+\end{itemize}
+
 \subsubsection{Algorithms}
 \subsubsection{Possible Enhancements}
+
+The coding of the variable environment as a combination of pure functional overriding,
+and imperative programming could be made more elegant by implementating environment
+frame stack as a list of frames.
+
 \subsubsection{Deficiencies}
+
+There is no decent error handling for a case of generic actuals being incompatible
+with the type of the defined constant.
+
+
 \section{PREAMBLE}
+First we introduce the structure for Z type inference.
+
 SML
 structure ÛZTypeInferenceÝ : ZTypeInference = struct
 =TEX
@@ -81,21 +127,16 @@ SML
 
 =TEX
 
-\section{MISCELLANEOUS STUBS}
-=SML
-fun Ûget_template_infoÝ tmp = Nil;
-=TEX
-
-@Z
-rel _  _ , _ = _
-°
-
-
 \subsection{Flags and Switches}
+
+The flag $zti\_standard\_z$ denotes that type inference is to be carried
+out according to the rules which denote standard (rather than extended) Z.
+
 =SML
 val Ûzti_standard_zÝ = ref true;
-
 =TEX
+
+The following declarations define space for the substitution function.
 =SML
 val Ûzarray_sizeÝ = 100;
 val Ûzti_subsÝ = new_subs zarray_size;
@@ -103,6 +144,12 @@ val Ûzti_subsÝ = new_subs zarray_size;
 
 \section{CONVERTING STRINGS TO IDENTIFIERS ETC.}
 
+The following definitions are used to encode ellipsis and underscores which can
+occur in templates.
+
+The rest of the functions introduced in this section support for converting between
+strings and identifiers (represented as template, decoration pairs)
+.
 =SMLLITERAL
 val stubell = "è";
 val stubus = "›";
@@ -247,6 +294,11 @@ end);
 
 \section{FORMATTING Z SCHEMA TEXT AND TERMS}
 
+The functions introduced in this section permit the formatting of Z paragraphs
+represented as an abstract syntax tree, and the parts which comprise
+Z paragraphs. These interfaces are intended to be public as they will no
+doubt prove useful to applications programmers and testers.
+
 =SML
 fun Ûformat_identÝ ((tmp, d) : IDENT) : string = (
 	(format_template tmp)^d
@@ -305,8 +357,8 @@ fun Ûformat_otyÝ oty = (
 =SML
 fun Ûformat_zdecÝ (dec : Z_DEC) = (
 	case dec of
-		ZDec (idl, tm) => (format_list format_ident idl ", ")^" : "^(format_ztm tm)
-	|	ZSchemaDec tm => format_ztm tm
+		ZDec (idl, tm, _) => (format_list format_ident idl ", ")^" : "^(format_ztm tm)
+	|	ZSchemaDec (tm, _) => format_ztm tm
 )
 =TEX
 =SML
@@ -317,9 +369,9 @@ and Ûformat_zdec_listÝ (decl : Z_DEC list) = (
 )
 =TEX
 =SML
-and Ûformat_zschtextÝ (sch as (dl, Value tm) : Z_SCH_TEXT) = (
+and Ûformat_zschtextÝ (sch as (dl, Value tm, _) : Z_SCH_TEXT) = (
 	(format_list format_zdec dl "; ")^" | "^(format_ztm tm)
-) | format_zschtext (sch as (dl, Nil)) = (
+) | format_zschtext (sch as (dl, Nil, _)) = (
 	format_list format_zdec dl "; "
 )
 =TEX
@@ -436,14 +488,14 @@ fun Ûformat_zparaÝ (p : Z_PARA) : string = (
 	ZParaAbbDef (id, idl, tm, oty) =>
 		(format_ident id)^(format_ident_list idl)
 			^" ¦ "^(format_ztm tm)^(format_oty oty)
-	|ZParaSchBox (id, idl, sch as (decl, otm), oty) =>
+	|ZParaSchBox (id, idl, sch as (decl, otm, _), oty) =>
 		"ÿ"^(format_ident id)^(format_ident_list idl)^"ü"^
 		(format_zdec_list decl)^(
 			case otm of
 			Nil => "ˆ"
 			|Value tm => "÷"^(format_ztm tm)^"ˆ"
 		)
-	|ZParaAxDes (idl, sch as (decl, otm), _) =>
+	|ZParaAxDes (idl, sch as (decl, otm, _), _) =>
 		"@ZAX"^(format_ident_list idl)^
 		(format_zdec_list decl)^(
 			case otm of
@@ -485,7 +537,6 @@ fun Ûex_ðÝ t = ExType ("ð", [t]);
 val Ûex_úÝ = ExType ("ú", []);
 val Ûex_stringÝ = ExType ("LIST", [ExType ("CHAR",[])]);
 fun Ûex_­Ý (f, a) = ExType ("­", [f, a]);
-fun Ûex_ªÝ (f, a) = ExType ("ª", [f, a]);
 val Ûex_boolÝ = ExType ("BOOL", []);
 =TEX
 
@@ -872,22 +923,43 @@ fun Ûprint_zerrorÝ ((FailedZTm (term, env, details)) : ERROR_INFO) = (
 val table:(IDENT * Z_VAR_TYPE) list ref = ref [];
 =TEX
 =SML
-fun Ûinit_zenvÝ (genformals : IDENT list) : Z_ENV = (
-let	val dummy = start_again();
-	val side = (table := (map (fn id => (id, (BoundVar(ExType("ð",
-		[ExVartype(Known("'"^(ident_to_string id)))]))))) genformals));
+fun Ûsub_tyÝ (env:Z_ENV) : Z_ENV = (
+	fn id =>
+		case env id of
+		GlobalVar ty => GlobalVar (sub_type zti_subs ty)
+		|BoundVar ty => BoundVar (sub_type zti_subs ty)
+		|FreeVar (Value ty) => FreeVar  (Value (sub_type zti_subs ty))
+		|FreeVar Nil => FreeVar Nil
+);
+=TEX
 
+=SML
+local
+	fun freety id = (id, BoundVar (ex_ð (ExType (ident_to_string id, []))));
+	fun formal id = (id, BoundVar (ex_ð (ExVartype(Known("'"^(ident_to_string id))))));
+in
+fun Ûinit_zenvÝ (ftdef : bool) (genformals : IDENT list) : Z_ENV = (
+let	val dummy = start_again();
+	val side = if ftdef
+		then
+			table := (map freety genformals)
+		else
+			table := (map formal genformals);
 in
 	fn id => (
-	case lassoc5 (!table) id of
-	Nil => (
-		case get_const_info (ident_to_string id) of
-		Nil =>	FreeVar Nil
-		| Value (ty, _) => GlobalVar (replaced ty)
-	) |Value vty => vty
+		case lassoc5 (!table) id of
+		Value vty => vty
+		|Nil => (
+			case get_const_info (ident_to_string id) of
+			Value (ty, _) =>
+				GlobalVar (replaced ty)
+			|Nil =>
+				FreeVar Nil
+		)
 	)
 end
 );
+end (* of local ... in *);
 =TEX
 =SML
 fun Ûupdate_zenvÝ (env : Z_ENV) (id : IDENT) : Z_ENV = (
@@ -936,30 +1008,8 @@ fun Ûdec_boundvarsÝ (env : Z_ENV) (idtyl : (IDENT * EXTYPE) list) : Z_ENV = (
 );
 =TEX
 =SML
-fun Ûenv_formalsÝ () : IDENT list = (
-let	fun f [] = []
-	  | f (h::t) = (
-		case h of
-		(x,BoundVar ty) => (x::(f t))
-		|_ => (f t)
-		)
-in
-	f (!table)
-end);
-=TEX
-=SML
 fun Ûshow_envÝ () : (IDENT * Z_VAR_TYPE) list = (
 	!table
-);
-=TEX
-=SML
-fun Ûsub_tyÝ (env:Z_ENV) : Z_ENV = (
-	fn id =>
-		case env id of
-		GlobalVar ty => GlobalVar (sub_type zti_subs ty)
-		|BoundVar ty => BoundVar (sub_type zti_subs ty)
-		|FreeVar (Value ty) => FreeVar  (Value (sub_type zti_subs ty))
-		|FreeVar Nil => FreeVar Nil
 );
 =TEX
 
@@ -1065,12 +1115,12 @@ fun  ÛmanifestÝ (ty:EXTYPE) : MANIFEST_EXTYPE = (
 );
 =TEX
 =SML
-fun ÛchartupleÝ ((decls, tm) : Z_SCH_TEXT) : Z_TM = (
-let	fun f (ZDec(ids, tm)) = (
+fun ÛchartupleÝ ((decls, tm, _) : Z_SCH_TEXT) : Z_TM = (
+let	fun f (ZDec(ids, tm, _)) = (
 		map (fn id => ZTmLVar(id, Nil, [])) ids
-	) | f (ZSchemaDec (ZTmDecor (tm1, d))) = (
+	) | f (ZSchemaDec (ZTmDecor (tm1, d), _)) = (
 		[ZTmÊ(tm1, d)]
-	) | f (ZSchemaDec tm1) = (
+	) | f (ZSchemaDec (tm1, _)) = (
 		[ZTmÊ(tm1, "")]
 	);
 in
@@ -1081,6 +1131,49 @@ in
 			|tms => ZTmTuple tms)
 	|decls => ZTmTuple(flat (map f decls)
 	)
+end);
+=TEX
+
+=SML
+fun Ûmake_chartupleÝ ((decls, _, _) : Z_SCH_TEXT) : Z_TM * EXTYPE = (
+let	fun f (ZDec(ids, tm, Value ty)) = (
+	let	val ty' = case sub_type zti_subs ty of
+				ExType ("ð", [ty'']) => ty''
+				| _ => error "make_chartuple.1" 62999 [];
+	in
+		(map (fn id => ZTmLVar(id, Nil, [])) ids, ty')
+	end
+
+	) | f (ZSchemaDec (ZTmDecor (tm, d), Value ty)) = (
+	let	val ty' = case sub_type zti_subs ty of
+				ExType ("ð", [ty'']) => ty''
+				| _ => error "make_chartuple.2" 62999 [];
+	in
+		([ZTmÊ(tm, d)], ty')
+	end
+		
+	) | f (ZSchemaDec (tm, Value ty)) = (
+	let	val ty' = case sub_type zti_subs ty of
+				ExType ("ð", [ty'']) => ty''
+				| _ => error "make_chartuple.3" 62999 [];
+	in
+		([ZTmÊ(tm, "")], ty')
+	end
+	) | f _ = error "make_chartuple" 62999 [];
+in
+	case decls of
+	[] => error "make_chartuple" 62998 [fn()=>"empty declaration"]
+	|[decl] =>
+		(case f decl of
+			([tm], ty) => (tm, ty)
+			|(tms, ty) => (ZTmTuple tms, ty)
+		)
+	|decls =>
+		let	val (tml, tyl) = split (map f decls)
+			val rty = tuple_extype tyl;
+		in
+			(ZTmTuple(flat tml), rty)
+		end
 end);
 =TEX
 
@@ -1142,7 +1235,7 @@ environment is not extended at this point.
 The following function achieves this:
 
 =SML
-fun Ûti_dec_pass_1Ý (env : Z_ENV) (zdec as ZSchemaDec tm : Z_DEC)
+fun Ûti_dec_pass_1Ý (env : Z_ENV) (zdec as ZSchemaDec (tm, _) : Z_DEC)
 				: Z_DEC * Z_ENV * (IDENT * EXTYPE) list = (
 let	val (tm', ty') = ti_ztm env tm;
 in
@@ -1150,33 +1243,34 @@ in
 	SchemaType idtyl => (
 		let	val env' = dec_boundvars env idtyl;
 		in
-			(ZSchemaDec tm', env',  idtyl)
+			(ZSchemaDec (tm', Value ty'), env',  idtyl)
 		end)
 	|_ => raise ZExn (FailedZDec2 (zdec, env, tm', ty'))
 end)
-  | ti_dec_pass_1 env (zdec as ZDec (ids, tm)) = (
+  | ti_dec_pass_1 env (zdec as ZDec (ids, tm, _)) = (
 let	val unk = ExVartype (Unknown (next_name()));
 	val idtyl = map (fn id => (id, unk)) ids;
 	val env' = dec_boundvars env idtyl;
 in
-	(ZDec (ids, tm), env', idtyl)
+	(ZDec (ids, tm, Nil), env', idtyl)
 end)
 =TEX
 
 =SML
-and Ûti_zdec_pass_2Ý (env : Z_ENV) ((zdec as ZSchemaDec tm) : Z_DEC, _, idtyl) = (
+and Ûti_zdec_pass_2Ý (env : Z_ENV) ((zdec as ZSchemaDec (tm, _)) : Z_DEC, _, idtyl) = (
 	(zdec, idtyl)
 )
-  | ti_zdec_pass_2 env (zdec as ZDec (ids, tm), _, idtyl) = (
+  | ti_zdec_pass_2 env (zdec as ZDec (ids, tm, _), _, idtyl) = (
 let	val (tm', ty') = ti_ztm env tm;
 	val ty'' = (
 		case ty' of
 		ExType ("ð", [ty'']) => ty''
 		|_ =>raise ZExn (FailedZDec1 (zdec, env, tm', ty'))
 		);
-	val side = map (curry (unify zti_subs) ty'') (map snd idtyl);
+	val side = map (curry (unify zti_subs) ty'') (map snd idtyl)
+		handle Fail _ => fail "ti_zdec_pass_2" 62901 [];
 in
-	(ZDec (ids, tm'), idtyl)
+	(ZDec (ids, tm', Value (sub_type zti_subs ty')), idtyl)
 end)
 =TEX
 
@@ -1193,7 +1287,7 @@ end)
 =TEX
 
 =SML
-and Ûlist_ti_zdecÝ env zdecl = (
+and Ûlist_ti_zdecÝ (env : Z_ENV) (zdecl : Z_DEC list) : (Z_DEC list * Z_ENV * (IDENT * EXTYPE) list) = (
 let	val pass1 = map (ti_dec_pass_1 env) zdecl;
 	val idtyl =  map_compat pass1 [];
 	val (_, envl, _) = split3 pass1;
@@ -1207,7 +1301,7 @@ let	val pass1 = map (ti_dec_pass_1 env) zdecl;
 	val pass2 = map (ti_zdec_pass_2 env') pass1;
 	val idtyl' = map (fn (id,ty) => (id, sub_type zti_subs ty)) idtyl;
 in
-	(map fst pass2, env', idtyl')
+	(map fst pass2, sub_ty env', idtyl')
 end)
 =TEX
 \section{INFERRING TYPES IN Z SCHEMAS}
@@ -1220,19 +1314,19 @@ to have more contextual information for reporting informative
 error messages than $ti\_zschtext$. 
 
 =SML
-and Ûti_zschtextÝ (env : Z_ENV) (schtext : Z_SCH_TEXT as (ds, otm))
+and Ûti_zschtextÝ (env : Z_ENV) (schtext : Z_SCH_TEXT as (ds, otm, oty))
 			: Z_SCH_TEXT * Z_ENV * (IDENT * EXTYPE) list = (
 let	val (ds', env', idtyl) = list_ti_zdec env ds;
 in
 	case otm of
-	Nil =>		((ds', Nil), env', idtyl)
+	Nil =>		((ds', Nil, Nil), env', idtyl)
 	|Value tm => (
 		let	val (tm', ty') = ti_ztm env' tm;
 			val side = unify zti_subs (ty', ex_bool)
 				handle Fail msg =>
 				raise ZExn (FailedZSchText (schtext, env, tm', ty'));
 		in
-			((ds', Value tm'), env', idtyl)
+			((ds', Value tm', Value ty'), env', idtyl)
 		end)
 end)
 =TEX
@@ -1498,26 +1592,31 @@ end)
 		ZTmTuple tml => ti_ztm env (ZTmLVar (id, Nil, tml))
 		| _ => fail "ti_ztm" 62901 [fn()=>"(gen) Bad Generic argument"]
 		)
-	|(_, ZClRel) =>
-		let	val (tma', tya') = ti_ztm env tma;
-		in
-			case tma of
-			ZTmTuple _ =>
-				(ZTm (tma', (ZTmLVar (id, Nil, []))), ex_bool)
-			| _ => fail "ti_ztm" 62901 [fn()=>"(rel) Bad Generic argument"]
-		end
+	|(_, ZClRel) => (
+		case tma of
+		ZTmTuple [tma'] =>
+			ti_ztm env (ZTmFancyApp ((TmplIn (StubUS, ("", Nil), StubUS), ""),
+				ZTmTuple [tma', (ZTmLVar (id, Nil, []))]))
+		|ZTmTuple _ =>
+			ti_ztm env (ZTmFancyApp ((TmplIn (StubUS, ("", Nil), StubUS), ""),
+				ZTmTuple [tma, (ZTmLVar (id, Nil, []))]))
+		| _ => fail "ti_ztm" 62901 [fn()=>"(rel) Bad Generic argument"]
+		)
 	|(_, ZClFun _) =>
-let	val (tmf', tyf) = ti_ztm env (ZTmLVar (id, Nil, []));
-	val (tma', tya) = ti_ztm (sub_ty env) tma;
-	val tvn = next_name();
-	val tyr = ExVartype(Unknown tvn);
-	val side = unify zti_subs (tyf, ex_ð (tuple_extype([tya,tyr])))
-			handle Fail _ =>
-			raise ZExn (FailedZTm (term, env,
-				FailedFancyApp (id, tma', tyf, tya)));
-in
-	(ZTmFancyApp(id, tma'), sub_type zti_subs tyr)
-end)
+	let	val (tmf', tyf) = ti_ztm env (ZTmLVar (id, Nil, []));
+		val (tma', tya) = ti_ztm (sub_ty env) tma;
+		val tya' = case manifest tya of
+			TupleType [ty] => ty
+			|_ => tya;
+		val tvn = next_name();
+		val tyr = ExVartype(Unknown tvn);
+		val side = unify zti_subs (tyf, ex_ð (tuple_extype([tya',tyr])))
+				handle Fail _ =>
+				raise ZExn (FailedZTm (term, env,
+					FailedFancyApp (id, tma', tyf, tya')));
+	in
+		(ZTmFancyApp(id, tma'), sub_type zti_subs tyr)
+	end)
 =TEX
 
 \subsection{Ì-abstraction}
@@ -1961,7 +2060,7 @@ in
 )| ti_ztm env (ZTmLVar ((TmplNon ("false", Nil), ""), Nil, tml)) = (
 	(ZTmTruth false, ex_bool)
 )| ti_ztm env (term as ZTmLVar (id as (n, d), _, tml)) = (
-let	fun find_glob_in_scope (ident as (n, d)) = (
+let	fun find_in_scope (ident as (n, d)) = (
 	let
 		val exd = (rev o explode) d;
 		fun aux (decor as d0::rest) res =
@@ -1969,22 +2068,25 @@ let	fun find_glob_in_scope (ident as (n, d)) = (
 		in
 			case env (n, sd) of
 			GlobalVar ty => ((n, sd), GlobalVar ty, res)
+			|BoundVar ty => ((n, sd), BoundVar ty, res)
 			|_ => aux rest (d0::res)
 		end
 		  | aux [] res = (
 			case env (n, "") of
 			GlobalVar ty => ((n, ""), GlobalVar ty, res)
+			|BoundVar ty => ((n, ""), BoundVar ty, res)
 			|other => ((n, ""), other, res)
 			);
 	in
 		case aux exd [] of
 		(id, GlobalVar ty, res) => (id, GlobalVar ty, implode res)
+		|(id, BoundVar ty, res) => (id, BoundVar ty, implode res)
 		|(_, other, _) => (ident, other, "")
 	end);
 	fun gen_actuals id tml ty = (
 		case tml of
 		[] => (
-			(ZTmLVar(id, Value ty, []), ty)
+			(ZTmLVar(id, Value (sub_type zti_subs ty), []), ty)
 		)|_ => (
 			let	val ttmlist = list_ti_ztm env tml;
 				val (ttml,tyl) = split ttmlist
@@ -2000,43 +2102,51 @@ let	fun find_glob_in_scope (ident as (n, d)) = (
 				(ZTmLVar(id, Value vty, ttml), vty)
 			end)
 	);
+	fun setup_new_var id = (
+	let	val newenv = update_zenv env id
+			handle ZExn (FailedZFreeVar id) =>
+			raise ZExn (FailedZTm (term, env, FailedFreeVar id));
+	in
+		case newenv id of
+		FreeVar (Value ty) => ty
+		|_ =>  error "ti_ztm" 62998
+			[fn ()=> "ZTmLVar (bound or global var. went undetected)"]
+	end);
+
 in
-	case find_glob_in_scope id of
+	case find_in_scope id of
 	(id', GlobalVar ty', "") => (
 		ti_ztm env (ZTmGVar (id', Nil, tml))
+	)|(id', BoundVar ty', "") => (
+		gen_actuals id tml ty'
 	)|(id', GlobalVar ty', d') => (
 		case manifest ty' of
 		SchemaType _ => (
 			ti_ztm env (ZTmDecor (ZTmGVar (id', Nil, tml), d'))
 		) |_ =>
-			let	val newenv = update_zenv env id
-					handle ZExn (FailedZFreeVar id) =>
-					raise ZExn (FailedZTm (term, env, FailedFreeVar id));
-				val ty'' = (case newenv id of
-					BoundVar ty => ty
-					|FreeVar (Value ty) => ty
-					|_ =>  error "ti_ztm" 62998 [fn ()=>
-						"ZTmLVar (impossible.1)"]
-					);
+			let	val ty'' = setup_new_var id;
 			in
 				gen_actuals id tml ty''
 			end
-	)|(id', BoundVar ty', "") => (
-		gen_actuals id tml ty'
+	)|(id', BoundVar ty', d') => (
+		case manifest ty' of
+		SchemaType _ => (
+			ti_ztm env (ZTmDecor (ZTmLVar (id', Nil, tml), d'))
+		) |_ =>
+			let	val ty'' = setup_new_var id;
+			in
+				gen_actuals id tml ty''
+			end
+
+
 	)|(id', FreeVar Nil, "") => (
-		let	val newenv = update_zenv env id
-				handle ZExn (FailedZFreeVar id) =>
-				raise ZExn (FailedZTm (term, env, FailedFreeVar id));
-			val ty' = case newenv id of
-				FreeVar (Value ty) => ty
-				|_ =>  error "ti_ztm" 62998 [fn ()=>
-					"ZTmLVar (impossible)"];
+		let	val ty' = setup_new_var id;
 		in
 			gen_actuals id tml ty'
 		end
 	)|(id', FreeVar (Value ty'), "") => (
 		gen_actuals id tml ty'
-	)|_ => error "ti_ztm" 62998 [fn ()=> "ZTmLVar (impossible.2)"]
+	)|_ => error "ti_ztm" 62998 [fn ()=> "ZTmLVar (cannot have a decorated free var.)"]
 end
 )
 =TEX
@@ -2046,20 +2156,16 @@ end
 =SML
  | ti_ztm env (term as ZTmGVar (id as (n, d), _, tml)) = (
 	case (env id, tml, id) of 
-	(GlobalVar (ExType ("­",[domty,ranty])), [], (TmplNon ("U", Nil),"")) => 
-		let	val (bnam,gentyl) = (
-				case domty of
-				ExType(b, l) => (b, l)
-				| _ => fail "ti_ztm" 62998 [fn()=>"Bad generic constant"]);
+	(GlobalVar (ExType ("­",[domty, _])), [], (TmplNon ("U", Nil),"")) => 
+		let	val gentyl = untuple_extype domty
+				handle Fail _ => [domty];
 			val ztml' = map (fn x => ZTmGVar((TmplNon ("Totality",Nil),""), Nil, [])) gentyl;
 		in
 			ti_ztm env (ZTmGVar(id, Nil, ztml'))
 		end
-	| (GlobalVar (ExType ("­",[domty,ranty])),[],_) => 
-		let	val (bnam,gentyl) = (
-				case domty of
-				ExType(b,l) => (b,l)
-				| _ => fail "ti_ztm" 62998 [fn()=>"Bad generic constant"]);
+	| (GlobalVar (ExType ("­",[domty, _])),[],_) => 
+		let	val gentyl = untuple_extype domty
+				handle Fail _ => [domty];
 			val ztml' = map (fn x => ZTmGVar((TmplNon("U",Nil), ""),Nil, []))
 									 gentyl;
 		in
@@ -2076,7 +2182,7 @@ end
 				(ZTmGVar(id, Value vty, tml'), vty)
 			end
 	| (GlobalVar ty, [], _) =>	(ZTmGVar(id, Value ty, []), ty)
-	|_ => fail "ti_ztm" 62998 [fn()=>"ZTmGVar: Not a constant"]
+	|_ => error "ti_ztm" 62998 [fn()=>"ZTmGVar (The environment has no knowledge of this constant"]
 )
 =TEX
 
@@ -2190,7 +2296,7 @@ fun Ûformat_zinferredÝ inf = (
 =TEX
 =SML
 fun Ûti_zparaÝ (p as ZParaAbbDef (id, formals, tm, Nil): Z_PARA) : ZINFERRED = (
-let	val env = init_zenv formals;
+let	val env = init_zenv false formals;
 	val (tm', ty') = ti_ztm env tm;
 in
 	Inferred (ZParaAbbDef (id, formals, tm', Value ty'), zti_subs)
@@ -2201,7 +2307,7 @@ end
 =TEX
 =SML
 ) | ti_zpara (p as ZParaSchBox (id, formals, sch, Nil)) = (
-let	val env = init_zenv formals;
+let	val env = init_zenv false formals;
 	val (sch', env', idtyl) = ti_zschtext env sch;
 	val ty = ex_ð (bind_extype idtyl);
 in
@@ -2215,7 +2321,7 @@ end
 =TEX
 =SML
 ) | ti_zpara  (ZParaAxDes (formals, sch, Nil)) = (
-let	val env = init_zenv formals;
+let	val env = init_zenv false formals;
 	val (sch', env', idtyl) = ti_zschtext env sch;
 in
 	Inferred (ZParaAxDes (formals, sch', Value idtyl), zti_subs)
@@ -2226,7 +2332,7 @@ end
 
 =SML
 ) | ti_zpara (p as ZParaFreeType ftdef) = (
-let	val env = init_zenv (map fst ftdef);
+let	val env = init_zenv true (map fst ftdef);
 	fun ftbranch ftid (id, Nil, Nil) = (id, Nil, Nil)
 	  | ftbranch ftid (id, Nil, Value tm) = (
 	let	val (tm', ty') = ti_ztm env tm;
@@ -2245,7 +2351,7 @@ end
 ) | ti_zpara (p as ZParaGivenSet (idl, Nil)) = (
 	Inferred (p, zti_subs)
 ) | ti_zpara (p as ZParaGivenSet (idl, Value (formals, tm))) = (
-let	val env = init_zenv (idl@formals);
+let	val env = init_zenv false (idl@formals);
 	val (tm', ty') = ti_ztm env tm;
 	val side = unify zti_subs (ty', ex_bool)
 		handle Fail msg =>
@@ -2256,7 +2362,7 @@ end
 =TEX
 =SML
 ) | ti_zpara (p as ZParaConstraint (idl, tm)) = (
-let	val env = init_zenv idl;
+let	val env = init_zenv false idl;
 	val (tm', ty') = ti_ztm env tm;
 	val side = unify zti_subs (ty', ex_bool)
 		handle Fail msg =>
@@ -2267,7 +2373,7 @@ end
 =TEX
 =SML
 ) | ti_zpara (p as ZParaConjecture (id, formals, tm)) = (
-let	val env = init_zenv formals;
+let	val env = init_zenv false formals;
 	val (tm', ty') = ti_ztm env tm;
 	val side = unify zti_subs (ty', ex_bool)
 		handle Fail msg =>
@@ -2278,7 +2384,7 @@ end
 =TEX
 =SML
 ) | ti_zpara (p as ZParaTerm (formals, tm, Nil)) = (
-let	val env = init_zenv formals;
+let	val env = init_zenv false formals;
 	val (tm', ty') = ti_ztm env tm;
 in
 	Inferred (ZParaTerm (formals, tm', Value ty'), zti_subs)
@@ -2309,4 +2415,58 @@ end (* of structure ZTypeInference *);
 =TEX
 
 \end{document}
+
+
+=IGN
+
+fun tc p = type_check_zpara {standard = true} p;
+fun tf p = diag_line (format_zinferred (tc p));
+
+  new_theory"ft";
+
+ ¹Z
+[ú, î]
+°
+
+ ñ[x : ú | x = x']®;
+
+
+
+ ¹Z
+ZLIST ::= ZNil | ZCons (ZITEM ¸ ZLIST)
+&
+ZITEM ::= ZNumber ú | ZSet (ð î)
+ °
+
+
+
+val para = ñ1 ½ 0®;
+val env = init_zenv false [];
+
+val term = ZTmGVar ((TmplNon ("ZNumber", Nil), ""), Nil, []);
+val tml = [];
+val id = (TmplNon ("ZNumber", Nil), "");
+val (GlobalVar (ExType ("­",[domty, _])), [], (TmplNon ("U", Nil),"")) = (env id, tml, id);
+val (GlobalVar (ExType ("­",[domty, _])),[],_) = (env id, tml, id); (* case 2 *)
+	(* gives val domty = ExType ("ú", []) *)
+val gentyl = untuple_extype domty handle Fail _ => [domty];
+val ztml' = map (fn x => ZTmGVar((TmplNon("U",Nil), ""),Nil, [])) gentyl;
+
+val term' = ZTmGVar(id, Nil, ztml');
+val tml = ztml';
+val (GlobalVar (ExType ("­",[domty, _])), [], (TmplNon ("U", Nil),"")) = (env id, tml, id);
+val (GlobalVar (ExType ("­",[domty, _])),[],_) = (env id, tml, id); (* case 2 *)
+val (GlobalVar (ty as ExType("­",[domty,ranty])), _, _) = (env id, tml, id); (* case 3 *)
+val (tml', tyl') = split (list_ti_ztm env tml);
+val argty = case tyl' of [ty] => ty | _ => tuple_extype tyl';
+val resty = ExVartype(Unknown (next_name()));
+val side = unify zti_subs (ExType ("­",[domty, ranty]), ExType ("­", [argty, resty]));
+
+
+
+
+
+
+
+
 
