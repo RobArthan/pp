@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$ 
+ * msg.c 1.12 94/07/21 
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -153,8 +153,8 @@ Boolean yes_no_dialog(Widget w, char *question)
 	reply = 0;
 	if (!dialog) {
 		dialog = XmCreateQuestionDialog(w, "yes_no", NULL, 0);
-		yes = XmStringCreateSimple("Yes");
-		no = XmStringCreateSimple("No");
+		yes = XmStringCreateSimple("   Yes   ");
+		no = XmStringCreateSimple("   No   ");
 		confirm = XmStringCreateSimple("Confirm");
 		XtVaSetValues(dialog,
 			XmNdialogStyle,		XmDIALOG_FULL_APPLICATION_MODAL,
@@ -163,7 +163,7 @@ Boolean yes_no_dialog(Widget w, char *question)
 			XmNdialogTitle, 	confirm,
 			XmNdialogType,		XmDIALOG_QUESTION,
 			NULL);
-		XtDestroyWidget(
+		XtUnmanageChild(
 			XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON));
 		XtAddCallback(dialog, XmNokCallback, yes_no_cb, &reply);
 		XtAddCallback(dialog, XmNcancelCallback, yes_no_cb, &reply);
@@ -224,7 +224,7 @@ void ok_dialog(Widget w, char *msg)
 	confirmed = False;
 	if (!dialog) {
 		dialog = XmCreateQuestionDialog(w, "ok", NULL, 0);
-		ok = XmStringCreateSimple("OK");
+		ok = XmStringCreateSimple("   OK   ");
 		error = XmStringCreateSimple("Error");
 		XtVaSetValues(dialog,
 			XmNdialogStyle,		XmDIALOG_FULL_APPLICATION_MODAL,
@@ -235,9 +235,9 @@ void ok_dialog(Widget w, char *msg)
 		XtVaSetValues(XtParent(dialog),
 			XmNdeleteResponse,	XmDO_NOTHING,
 			NULL);
-		XtDestroyWidget(
+		XtUnmanageChild(
 			XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON));
-		XtDestroyWidget(
+		XtUnmanageChild(
 			XmMessageBoxGetChild(dialog, XmDIALOG_CANCEL_BUTTON));
 		XtAddCallback(dialog, XmNokCallback, ok_cb, &confirmed);
 		WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
