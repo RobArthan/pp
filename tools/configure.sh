@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.33 2004/12/18 13:15:54 rda Exp $
+# $Id: configure.sh,v 1.34 2004/12/20 17:16:01 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -70,8 +70,18 @@
 # Here we go ...
 #
 give_up(){
-	echo configure: error: $*
+	echo ERROR: $* 1>&2
 	exit 1
+}
+#
+warn(){
+	echo WARNING: $* 1>&2
+}
+#
+check_bin(){
+	if	! which $1 >/dev/null 2>&1
+	then	warn $2
+	fi
 }
 #
 # Set locale to C (i.e., turn off all localisations so that things text-processing is 8-bit clean
@@ -165,11 +175,12 @@ done
 if	[ "$dev" = y -o "$hol" = y -o "$zed" = y -o "$daz" = y ]
 then	if	[ "${PPCOMPILER:-}" != "" ]
 	then	case "$PPCOMPILER" in
-			POLYML) T="Poly/ML";;
-			SMLNJ)  T="Standard ML of New Jersey";;
+			POLYML) T="Poly/ML"; C="poly";;
+			SMLNJ)  T="Standard ML of New Jersey"; C="sml";;
 			*)	give_up "PPCOMPILER must be one of POLYML or SMLNJ";;
 		esac
 		echo "Using $T as specified"
+		check_bin "$C$" "$C not found; $T must be installed if you specify PPCOMPILER=$PPCOMPILER"
 	elif	which poly >/dev/null 2>&1
 	then	echo "Using Poly/ML"
 		PPCOMPILER=POLYML
@@ -179,10 +190,8 @@ then	if	[ "${PPCOMPILER:-}" != "" ]
 	else	give_up "cannot find a Standard ML compiler"
 	fi
 	if	[ "$PPCOMPILER" = SMLNJ ]
-	then	if	which .arch-n-opsys >/dev/null 2>&1
-		then	true
-		else	echo "The installation bin directory for Standard ML of New Jersey needs to be on your path"
-			give_up "cannot find .arch-n-opsys"
+	then	if	! which .arch-n-opsys >/dev/null 2>&1
+		then	give_up ".arch-n-opsys not found: to build with SML/NJ the installation bin directory must be on your path"
 		fi
 	fi
 	#
@@ -200,7 +209,17 @@ then	if	[ "${PPCOMPILER:-}" != "" ]
 	fi
 fi
 #
-# Find out how to link Motif
+# Check for various tbings we need:
+# C compiler. It has to be gcc at the moment.
+check_bin "gcc" "gcc not found"
+# TeX and LaTeX.
+check_bin "latex" "TeX and LaTeX software not found"
+# A representative sample of the text utilities we need
+check_bin "nl" "nl text line-numbering utility not found"
+check_bin "ed" "ed line editor not found"
+check_bin "nroff" "nroff text formatting program not found"
+#
+# Find out how to link Motif and where the Motif includes and libraries are:
 #
 if	[ "$xpp" = y ]
 then	if	[ "${PPMOTIFLINKING:-}" != "" ]
@@ -220,8 +239,17 @@ then	if	[ "${PPMOTIFLINKING:-}" != "" ]
 	USERCLIBS=${PPUSERCLIBS:-}
 	if	[ "${PPMOTIFHOME:-}" != "" ]
 	then	echo "Using $PPMOTIFHOME for Motif include files and binaries"
-		USERCFLAGS="-I$PPMOTIFHOME/include $USERCFLAGS"
+	elif	[ -d /usr/X11R6/include/Xm ]
+	then	PPMOTIFHOME=/usr/X11R6
+	elif	[ -d /usr/openwin/include/Xm ]
+	then	PPMOTIFHOME=/usr/openwin
+	elif	[ -d /usr/include/Xm ]
+	then	PPMOTIFHOME=/usr
+	fi
+	if	[ "${PPMOTIFHOME:-}" != "" ]
+	then	USERCFLAGS="-I$PPMOTIFHOME/include $USERCFLAGS"
 		USERCLIBS="-L$PPMOTIFHOME/lib $USERCLIBS"
+	else	warn "Motif installation not found"
 	fi
 fi
 #
