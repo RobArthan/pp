@@ -298,7 +298,7 @@ end (* of structure *);
 structure ÛCNParserÝ = struct
 =TEX
 =SML
-open CNParser;
+open CaseIndependence CNParser;
 =TEX
 We give the reduction functions in the order of their appearance
 in the grammar of \cite{ISS/HAT/DAZ/DTD503}. When several reduction
@@ -359,6 +359,10 @@ datatype ÛPPARSEDÝ =
 =SML
 fun format_label (n : string) = (
 	"("^n^")"
+);
+
+fun different_ids (id1 : ID, id2 : ID) : bool = (
+	not (to_upper id1 = to_upper id2)
 );
 
 fun name_to_tmark (e : EXP) : TMARK = (
@@ -696,8 +700,12 @@ fun red_basic_declarative_item2 (Parsed(PPRepresentationClause rc)) = (
 
 val red_body1 = red_accept;
 val red_body2 = red_accept;
-val red_proper_body1 = red_accept;
-val red_proper_body2 = red_accept;
+
+fun red_proper_body1 (Parsed(PPProperBody p)) = (
+	PPDeclarations[DProperBody p]
+) | red_proper_body1 _ = stack_error "red_proper_body1";
+
+val red_proper_body2 = red_proper_body1;
 =TEX
 =SML
 fun red_name1 (Token ((_,CNText name), _)) = (
@@ -711,10 +719,16 @@ val red_name4 = red_accept;
 SPARK manual 4.1.1:
 =SML
 fun red_indexed_component (Parsed(PPExp n)) (Parsed(PPExp index)) = (
-	case n of
-	EAttribute {prefix=prefix,attribute_desig=ADAttrib ad} => (
+	case (n, index) of
+	(EAttribute {prefix=prefix,attribute_desig=ADAttrib ad}, _) => (
 		PPExp(EAttribute
 			{prefix=prefix,attribute_desig=ADAttribArg(ad,index)})
+	) | (_, EArrayAggNamedOthers _) => (
+		parse_error 503001 "OTHERS is not allowed here"
+	) | (_, EArrayAggPosOthers _) => (
+		parse_error 503001 "OTHERS is not allowed here"
+	) | (_, EArrayAggOthers _) => (
+		parse_error 503001 "OTHERS is not allowed here"
 	) |_ => (
 		PPExp(EIndexedComp{prefix=n, index=index})
 	)
@@ -755,9 +769,16 @@ fun red_aggregate _ (Parsed p) _ = (
 =TEX
 =SML
 fun red_component_association1 (Parsed(PPAgg{tm=tm,named_assocs=na,others=ot})) = (
-	case ot of
-	Value oe => PPExp (EArrayAggNamedOthers{tmark="__component_association",agg_named={named_assocs=na},others={others=oe}})
-	|Nil => PPExp (EArrayAggNamed{named_assocs=na})
+	case (ot, na) of
+	(Value oe, _::_) => (
+		PPExp (EArrayAggNamedOthers{tmark="__component_association",
+			agg_named={named_assocs=na},others={others=oe}})
+	)| (Value oe, _) => (
+		PPExp (EArrayAggOthers{tmark="__component_association",
+			others={others=oe}})
+	)|(Nil, _) => (
+		PPExp (EArrayAggNamed{named_assocs=na})
+	)
 ) | red_component_association1 _ = stack_error "red_component_association1";
 
 val red_component_association2 = red_accept;
@@ -1134,9 +1155,14 @@ SPARK manual 5.5:
 =SML
 fun red_loop_statement (Parsed(PPIds ids)) (Parsed p) (Parsed(PPExps es))
 	_ (Parsed(PPStatement st)) _ _ (Parsed(PPIds ids')) _ = (
-let	val side =	if	ids' <> ids
+let	val side = case (ids', ids) of
+		([id'], [id]) => (
+			if different_ids (id', id)
 			then	parse_error 503001 "LOOP names do not match"
-			else	();
+			else	()
+		)| _ => (
+			()
+		);
 	val name = case ids of
 			[id] => Value id
 			|_ => Nil;
@@ -1265,20 +1291,20 @@ fun red_procedure_specification4 _ (Token ((_,CNText id), _)) (Parsed (PPFormals
 	PPProcedureSpecification{name=id,formal_part=f,spec=Value s}
 ) | red_procedure_specification4 _ _ _ _= stack_error "red_procedure_specification4";
 
-fun red_function_specification1 _ (Parsed (PPId des)) _ (Token ((_,CNText name), _)) = (
-	PPFunctionSpecification{designator=des, return=name,formal_part=[],spec=Nil}
+fun red_function_specification1 _ (Parsed (PPId des)) _ (Parsed(PPExp n)) = (
+	PPFunctionSpecification{designator=des, return=name_to_tmark n,formal_part=[],spec=Nil}
 ) | red_function_specification1 _ _ _ _ = stack_error "red_function_specification1";
 
-fun red_function_specification2 _ (Token ((_,CNText des), _)) _ (Token ((_,CNText name), _)) (Parsed(PPStmt(STSpecNoIvars s))) = (
-	PPFunctionSpecification{designator=des, return=name,formal_part=[],spec=Value s}
+fun red_function_specification2 _ (Token ((_,CNText des), _)) _ (Parsed(PPExp n)) (Parsed(PPStmt(STSpecNoIvars s))) = (
+	PPFunctionSpecification{designator=des, return=name_to_tmark n,formal_part=[],spec=Value s}
 ) | red_function_specification2 _ _ _ _ _ = stack_error "red_function_specification2";
 
-fun red_function_specification3 _ (Parsed (PPId des)) (Parsed(PPFormals f)) _ (Token ((_,CNText name), _)) = (
-	PPFunctionSpecification{designator=des, return=name,formal_part=f,spec=Nil}
+fun red_function_specification3 _ (Parsed (PPId des)) (Parsed(PPFormals f)) _ (Parsed(PPExp n)) = (
+	PPFunctionSpecification{designator=des, return=name_to_tmark n,formal_part=f,spec=Nil}
 ) | red_function_specification3 _ _ _ _ _ = stack_error "red_function_specification3";
 
-fun red_function_specification4 _ (Parsed (PPId des)) (Parsed(PPFormals f)) _ (Token ((_,CNText name), _)) (Parsed(PPStmt(STSpecNoIvars s))) = (
-	PPFunctionSpecification{designator=des, return=name,formal_part=f,spec=Value s}
+fun red_function_specification4 _ (Parsed (PPId des)) (Parsed(PPFormals f)) _ (Parsed(PPExp n)) (Parsed(PPStmt(STSpecNoIvars s))) = (
+	PPFunctionSpecification{designator=des, return=name_to_tmark n,formal_part=f,spec=Value s}
 ) | red_function_specification4 _ _ _ _ _ _ = stack_error "red_function_specification4";
 =TEX
 SPARK manual 6.1:
@@ -1313,7 +1339,7 @@ SPARK manual 6.3:
 =SML
 fun red_subprogram_body1 (Parsed (PPProcedureSpecification ps)) _ (Parsed (PPSubprogram (d, s, id))) = (
 let	val {name=id',...} = ps;
-	val side =	if	id' <> id
+	val side =	if	different_ids (id', id)
 			then	parse_error 503001 "PROCEDURE identifiers do not match"
 			else	();
 in
@@ -1323,7 +1349,7 @@ end
 
 fun red_subprogram_body2 (Parsed (PPFunctionSpecification fs)) _ (Parsed (PPSubprogram (d, s, id))) = (
 let	val {designator=id',...} = fs;
-	val side =	if	id' <> id
+	val side =	if	different_ids (id', id)
 			then	parse_error 503001 "FUNCTION designators do not match"
 			else	();
 in
@@ -1382,11 +1408,12 @@ val red_actual_parameter = red_accept;
 =TEX
 SPARK manual 7.1:
 =SML
-fun red_package_declaration (Parsed p) _ = (p
+fun red_package_declaration (Parsed (PPPackageSpecification p)) _ = (
+	PPDeclarations[DPackageDeclaration p]
 ) | red_package_declaration _ _ = stack_error "red_package_declaration";
 
 fun red_package_specification1 _ (Token ((_,CNText id), _)) _ (Parsed(PPDeclarations v)) _ (Token ((_,CNText id'), _)) = (
-let	val side =	if	id' <> id
+let	val side =	if	different_ids (id', id)
 			then	parse_error 503001 "PACKAGE names do not match"
 			else	();
 in
@@ -1395,7 +1422,7 @@ end
 ) | red_package_specification1 _ _ _ _ _ _ = stack_error "red_package_specification1";
 
 fun red_package_specification2 _ (Token ((_,CNText id), _)) _ (Parsed(PPDeclarations v)) _  (Parsed(PPDeclarations p)) _ (Token ((_,CNText id'), _)) = (
-let	val side =	if	id' <> id
+let	val side =	if	different_ids (id', id)
 			then	parse_error 503001 "PACKAGE names do not match"
 			else	();
 in
@@ -1433,7 +1460,7 @@ val red_pdec2 = red_accept;
 =TEX
 =SML
 fun red_package_body _ _ (Token ((_,CNText id), _)) _ (Parsed(PPSubprogram (d,s, _))) _ (Token ((_,CNText id'), _)) _ = (
-let	val side =	if	id' <> id
+let	val side =	if	different_ids (id', id)
 			then	parse_error 503001 "PACKAGE names do not match"
 			else	();
 in
@@ -1525,16 +1552,16 @@ fun red_with_clause _ (Parsed (PPIds ids)) _ = (
 =TEX
 SPARK manual 10.2:
 =SML
-fun red_body_stub1 (Parsed p) _ _ _ = (
-	p
+fun red_body_stub1 (Parsed (PPProcedureSpecification ps)) _ _ _ = (
+	PPDeclarations [DProcedureStub ps]
 ) | red_body_stub1 _ _ _ _ = stack_error "red_body_stub1";
 
-fun red_body_stub2 (Parsed p) _ _ _ = (
-	p
+fun red_body_stub2 (Parsed (PPFunctionSpecification fs)) _ _ _ = (
+	PPDeclarations [DFunctionStub fs]
 ) | red_body_stub2 _ _ _ _ = stack_error "red_body_stub2";
 
-fun red_body_stub3 _ _ (Parsed p) _ _ _ = (
-	p
+fun red_body_stub3 _ _ (Parsed (PPId id)) _ _ _ = (
+	PPDeclarations [DPackageStub id]
 ) | red_body_stub3 _ _ _ _ _ _ = stack_error "red_body_stub3";
 
 fun red_subunit _ _ (Token ((_,CNText id), _)) _ (Parsed (PPProperBody p)) = (
