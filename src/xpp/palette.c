@@ -126,6 +126,7 @@ Widget w;
 			XmNbottomAttachment,	XmATTACH_POSITION,
 			XmNbottomPosition,	y + 1,
 			NULL);
+		copy_font_list(button, w);
 		XmStringFree(lab);
 		cbdata = (twi << 8) | (prettychars[i] & 0xff);
 		XtAddCallback(button, XmNactivateCallback, type_char_cb,
