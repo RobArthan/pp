@@ -84,7 +84,7 @@ Various more or less cosmetic adjustments could doubtless to be made.
 =TEX
 \section{FRONT END}
 =SML
-structure ÛCNBrowserFrontEndÝ (* : CNBrowserFrontEnd *) = struct
+structure ÛCNBrowserFrontEndÝ : CNBrowserFrontEnd = struct
 local
 open  XWindows Motif;
 =TEX
@@ -402,10 +402,180 @@ end (* of structure CNBrowserFrontEnd *);
 =IGNSML
 structure ÛCNVCBrowserÝ : CNVCBrowser = struct 
 =TEX
-=IGNSML
-open CNZGenerator;
+\subsection{Preamble}
+=SML
+open CNZGenerator CNTypes CNTypes1 CNTypes2 CNSparkOutput;
+=TEX
+\subsection{Help Text}
+=SML
+val Ûhelp_textÝ : unit -> string list = Combinators.K [
+"*** This is the Compliance Notation VC Browser ***",
+"",
+"Compliance notation clauses are shown on the left and VCs on the right.",
+"",
+"Double-click on the name of a clause or a VC to see it.",
+"",
+"Pressing a `Select' button makes the list above the button" ^
+" show only the items corresponding to the selection in the other list.",
+"",
+"Pressing a `Reset' button makes the list above the button show everything again."
+];
+=TEX
+\subsection{List of Web Clause Names}
+=SML
+fun Ûweb_clause_namesÝ ((): unit) : string list = (
+	let val {repl_env, spark_prog, ...} = get_cn_state();
+	in	map kslot_compilation_unit_name spark_prog
+	@	map fst repl_env
+	end
+);
+=SML
+val Ûleft_keysÝ = Sort.sort Sort.string_order o web_clause_names;
+=TEX
+\subsection{Web Clauses}
+=SML
+fun Ûvc_browser_fmt_infoÝ (() : unit) : PP_FMT_INFO = {
+	tabs = 4,
+	line_length = 40,
+	fmtfn = Nil
+};
 =TEX
 =SML
+fun Ûtext_of_kslot_compilation_unitÝ (kscu: KSLOT_COMPILATION_UNIT)
+			: string list = (
+	map snd (fmt_kslot_compilation_unit (vc_browser_fmt_info()) kscu)
+);
+=TEX
+=SML
+fun Ûtext_of_declarationÝ (d: DECLARATION)
+			: string list = (
+	map snd (fmt_declaration (vc_browser_fmt_info()) d)
+);
+=TEX
+=SML
+fun Ûtext_of_statementÝ (s: STATEMENT)
+			: string list = (
+	map snd (fmt_statement (vc_browser_fmt_info()) s)
+);
+=TEX
+=SML
+fun Ûtext_of_replacementÝ (rplcmnt : REPLACEMENT) : string list = (
+	case rplcmnt of
+		ReplaceComp {comp, ...} => (
+			"Ã" :: flat (map text_of_kslot_compilation_unit comp)
+	) |	ReplacePPart {private, ...} => (
+			"Ã" :: flat (map text_of_declaration private)
+	) |	ReplaceVPart {visible, ...} => (
+			"Ã" :: flat (map text_of_declaration visible)
+	) |	ReplaceDecl {decls, ...} => (
+			"Ã" :: flat (map text_of_declaration decls)
+	) |	ReplaceStat {statement, ...} => (
+			"é" :: text_of_statement statement
+	) |	UnReplaced (rsort, lbl) => ["TBS"]
+);
+=TEX
+=SML
+fun Ûtext_of_repl_env_entryÝ ((lbl, rplcmnt) : string * REPLACEMENT) : string list = (
+	lbl :: text_of_replacement rplcmnt
+);
+=TEX
+=SML
+fun Ûleft_key_to_textÝ (key : string) : string = (
+	let	val {spark_prog, repl_env, ...} = get_cn_state();
+	in
+		format_list Combinators.I
+		((text_of_repl_env_entry
+			(find repl_env(fn (k, _) => k = key)))
+			handle Fail _ => (
+		(text_of_kslot_compilation_unit
+			(find spark_prog (fn kscu => kslot_compilation_unit_name kscu = key)))
+		) handle Fail _ =>[get_error_message 506001 [key]])
+		"\n"
+	end
+);
+=TEX
+\subsection{VC Names}
+=SML
+fun Ûvc_namesÝ ((): unit) : string list = (
+	(Sort.sort Sort.string_order o flat o map fst o get_conjectures) "-"
+);
+val Ûright_keysÝ : unit -> string list = vc_names;
+=TEX
+\subsection{VCs}
+=SML
+fun Ûright_key_to_textÝ (key : string) : string = (
+	format_list Combinators.I
+	(	key ::
+		 "?ô" ::
+		 PrettyPrinter.format_term1
+	 		false
+	 		(#line_length(vc_browser_fmt_info()))
+			(get_conjecture "-" key))
+	"\n"
+);
+=TEX
+\subsection{Filtering the Clauses}
+=SML
+fun make_label_prefix (wcn : string) : string = (
+	(case explode wcn of
+		"(" :: more => (implode o rev o tl o rev) more ^ "u"
+	|	"$" :: more => implode more ^ "s"
+	|	_ => wcn ^ "u")
+);
+=TEX
+=SML
+fun prefix_of_vc_name (vcn : string) : string * string = (
+	let	fun aux acc [] = (acc, "?")
+		|   aux acc (ch :: more) = (
+			if	"a" <= ch andalso ch <= "z"
+			then	(acc, ch)
+			else	aux (acc^ch) more
+		);
+	in	case explode vcn of
+			"v" :: "c" :: more => aux "" more
+		|	_ => (vcn, "?")
+	end
+);
+=TEX
+=SML
+fun find_clause (vcn : string) : string list = (
+	let	val (nm, ch) = prefix_of_vc_name vcn;
+	in	if	is_all_decimal nm
+		then	case ch of
+				"u" => ["(" ^ nm ^ ")"]
+			|	_ => ["$" ^ nm]
+		else	[nm]
+	end
+);
+=TEX
+=SML
+val Ûleft_filterÝ : string -> string list = find_clause;
+=TEX
+\subsection{Filtering the VCs}
+=SML
+fun Ûfind_vcsÝ (cln : string) : string list = (
+	let	val pfx = make_label_prefix cln;
+	in	vc_names() drop (fn n => (op ^ o prefix_of_vc_name) n <> pfx)
+	end
+);
+=TEX
+=SML
+val right_filter : string -> string list = find_vcs;
+=TEX
+\suibsection{Entry Point}
+=SML
+fun Ûbrowse_vcsÝ (() : unit) : unit = (
+	let	val shell = CNBrowserFrontEnd.gen_correlator_tool{
+			left_keys = left_keys,
+			right_keys = right_keys,
+			left_filter = left_filter,
+			right_filter = right_filter,
+			left_key_to_text = left_key_to_text,
+			right_key_to_text =right_key_to_text,
+			help_text =help_text};
+	in	()
+	end
+);
 =IGNSML
 end (* of structure CNVCBrowser *);
 =TEX
@@ -414,63 +584,6 @@ end (* of structure CNVCBrowser *);
 \printindex
 \end{document}
 
-=IGN
-val left_keys = Sort.sort Sort.string_order o theory_names;
-val right_keys = Sort.sort Sort.string_order o
-	(fn () => flat(map fst(flat (map get_thms (theory_names())))));
-val left_filter = fn n => Sort.sort Sort.string_order (theory_names());
-val right_filter = Sort.sort Sort.string_order o
-	(fn n => flat(map fst(get_thms n)));
-fun string_of_theory (thyn : string) : string = (
-	let	val cur_thy = get_current_theory_name();
-	in let val se1 = open_theory thyn
-			handle Fail _ => open_theory"basic_hol";
-		val p = case get_language "-" of
-			"Z" => z_output_theory1 | _ => output_theory1;
-		val file_name = "/tmp/pp_temp";
-		val se2 = p {theory = thyn, out_file = "/tmp/pp_temp"};
-		val instrm = open_in file_name;
-		val res = input(instrm, 10000000);
-		val se3 = close_in instrm;
-		val se4 = open_theory cur_thy;
-	in	res
-	end	handle Fail _ => (open_theory cur_thy ; "")
-	end
-);
-val left_key_to_text = string_of_theory;
-val right_key_to_text = (fn n =>
-	let	val names = theory_names();
-		val cur_thy = get_current_theory_name();
-		fun aux [] = t_thm
-		|   aux (thy :: thys) = (
-			(open_theory thy; get_thm thy n) handle Fail _ => aux thys
-		);
-		val res = format_list
-			Combinators.I
-			(PrettyPrinter.format_thm1 40 (aux names)) "\n";
-	in	open_theory cur_thy; res
-	end
-);
-val help_text = Combinators.K [
-"*** This is the Compliance Notation VC Browser ***",
-"",
-"Compliance notation clauses are listed on the left and VCs on the right.",
-"",
-"Double-click on the name of a clause or a VC to see it.",
-"",
-"Pressing a `Select' button makes the list above the button" ^
-" only show the items which correspond to the selection in the other list.",
-"",
-"Pressing a `Reset' button makes the list above the button show everything again."
-];
-val shell = CNBrowserFrontEnd.gen_correlator_tool{
-	left_keys = left_keys,
-	right_keys = right_keys,
-	left_filter = left_filter,
-	right_filter = right_filter,
-	left_key_to_text = left_key_to_text,
-	right_key_to_text =right_key_to_text,
-	help_text =help_text};
 (*
 print_status();
 open_theory"z_library";
