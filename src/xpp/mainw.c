@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$
+ * $Id: mainw.c,v 2.5 1999/03/28 11:07:01 rda Exp xpp $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -24,7 +24,9 @@
 
 #include <stdio.h>
 #include <string.h>
+#ifndef LINUX
 #include <stropts.h>
+#endif
 
 #include "xpp.h"
 
@@ -213,8 +215,13 @@ static MenuItem edit_menu_items[] = {
         edit_menu_cb, (XtPointer)EDIT_MENU_PASTE, (MenuItem *)NULL, False },
     { "Clear", &xmPushButtonGadgetClass, 'l', NULL, NULL,
         edit_menu_cb, (XtPointer)EDIT_MENU_CLEAR, (MenuItem *)NULL, False },
-    { "Undo", &xmPushButtonGadgetClass, 'l', "<Key>Undo", NULL,
+#ifdef SOLARIS
+    { "Undo", &xmPushButtonGadgetClass, 'U', "<Key>Undo", NULL,
         edit_menu_cb, (XtPointer)EDIT_MENU_UNDO, (MenuItem *)NULL, False },
+#else
+    { "Undo", &xmPushButtonGadgetClass, 'U', "Ctrl<Key>z", NULL,
+        edit_menu_cb, (XtPointer)EDIT_MENU_UNDO, (MenuItem *)NULL, False },
+#endif
     NULL,
 };
 
