@@ -22,6 +22,7 @@ doc4tex imp025
 tex4dvi imp025
 bibtex imp025
 doc4tex imp025 ; tex4dvi imp025
+doc4tex imp025 ; tex4dvi imp025 ; bibtex imp025
 dvipage imp025 &
 
 doc4errors imp025
@@ -36,12 +37,9 @@ lasp -s -u imp025.OKwords imp025.doc > zz1
 \TPPkeywords{HOL}
 \TPPauthor{A.J. Hammon & WIN01}  %% Mandatory field
 \TPPauthorisation{R.B.~Jones & FMU Manager}
-\TPPabstract{This document contains the pretty printer for Release~1
-	of ICL~HOL.}
-\TPPabstractB{This version of the document contains a HOL-specific
-	pretty printer.  It has been produced to aid the production and
-	testing of the rest of Release~1 ICL~HOL pending the production
-	of the proper pretty printer.}
+\TPPabstract{This document contains the user interface to
+	the pretty printer.  It also installs the pretty printing
+	functions into the PolyML printer.}
 \TPPdistribution{\parbox[t]{4.0in}{%
 	Library
 }}
@@ -89,18 +87,19 @@ lasp -s -u imp025.OKwords imp025.doc > zz1
 
 \begin{description}
 
-\item[31 May 1991, issue 1.1 ] This issue is an authors draft.
+\item[10 June 1991, issue 1.3 ] Simple HOL only pretty printer for use
+	during development of the rest of ICL HOL until the real pretty
+	printer is available.
 
 \item[\FormatDate{$Date$%
-}, issue \SCCSissue ] Corrections to printing algorithm.
+}, issue \SCCSissue~] First issue of the real pretty printer.
+
 
 \end{description}
 
 %********************************************************************
 
-\subsection{Changes Forecast} \label{ChangesForecast}
-
-Replace with the proper pretty printer.
+%\subsection{Changes Forecast} \label{ChangesForecast}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -111,10 +110,9 @@ Replace with the proper pretty printer.
 
 \subsection{Scope}
 
-This document contains the a simple pretty printer for use during the
-development of Release~1 of the ICL HOL system.  This pretty printer is
-intended to be replaced with a fully functional pretty printer when it
-becomes available.
+This document contains the pretty printer for the ICL HOL system, it
+implements the interfaces defined in the detailed design
+in~\cite{DS/FMU/IED/DTD025}.
 
 %********************************************************************
 
@@ -122,41 +120,33 @@ becomes available.
 
 %--------------------------------------------------------------------
 
-%\subsubsection{Purpose and Background}
-%\subsubsection{Dependencies}
-%\subsubsection{Interface}
-%\subsubsection{Algorithms}
-%\subsubsection{Possible Enhancements}
+%\subsection{Purpose and Background}
 
 %--------------------------------------------------------------------
 
-\subsubsection{Deficiencies}
+\subsection{Dependencies}
 
-HOL pairs are not handled, some special manipulation of these is
-required to ensure that (1)~the comma is always protected by brackets;
-and that (2)~pairs of pairs have unnecessary brackets removed.
+This is last of the four structures that together form the HOL pretty
+printer.  This document depends upon the other three structures:
+Oppen style printing~\cite{DS/FMU/IED/IMP024};
+pretty printer support~\cite{DS/FMU/IED/IMP031};
+and,
+HOL pretty printer functions~\cite{DS/FMU/IED/IMP032}.
 
 %--------------------------------------------------------------------
 
-\subsubsection{Terminology}
+%\subsection{Interface}
+%\subsection{Algorithms}
+%\subsection{Possible Enhancements}
 
-\begin{description}
+%--------------------------------------------------------------------
 
-\item[Associativity ] When operators are combined to form expressions
-	the evaluation order must be defined.  For example the
-	expression `$1-2-3$' may be `$(1-2)-3$' which yields `$-4$' or
-	it may be `$1-(2-3)$' which yields `$0$', the chosen order is
-	known as the associativity of the operator.  Left associativity
-	means grouped together on the left, or with brackets on the
-	left.  Correspondingly, right associativity means grouped
-	together on the right, or with brackets on the right.  Thus a
-	left associative subtract gives `$1-2-3 = -4$' and a right
-	associative subtract gives `$1-2-3 = 0$'.
+%\subsection{Deficiencies}
 
-%\item[Left Associativity ] See Associativity.
-%\item[Right Associativity ] See Associativity.
+%--------------------------------------------------------------------
 
-\end{description}
+%\subsection{Terminology}
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -172,729 +162,149 @@ and that (2)~pairs of pairs have unnecessary brackets removed.
 structure âPrettyPrinterá : PrettyPrinter = struct
 
 open OppenFormatting;
+open PrettyPrinterSupport;
+open HOLPrettyPrinter;
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{CALLED INTERFACE FOR PRINTERS}
+
+These functions are the outermost printing functions for the supported
+types.  They all produce a textual form of their main argument by using
+the set of Oppen printing functions provided as another argument.
+
+%********************************************************************
+
+\subsection{Types}
+
+At present there is no support for printing types in languages other
+than HOL.  All HOL types (i.e., of Standard~ML type $TYPE$) are printed
+out using the HOL syntax.
+
+=SML
+fun âshow_typeá (oppen_funs:OPPEN_FUNS) (ty:TYPE) = (
+	let
+		val lang ="HOL:";
+
+		val env = initial_env lang oppen_funs;
+	in
+		start_new_language env lang;
+		main_type_pp env ty;
+		conclude_new_language env lang
+	end
+);
 =TEX
 
 %********************************************************************
 
-\subsection{Bracket Reduction}
+\subsection{Terms}
 
-All HOL text occurs within a particular precedence context, these
-precedences are ordered in the same way as in the concrete syntax.
-``High'' precedences bind more tightly than ``low'' precedences.  Each
-concrete syntax production (not the actual concrete syntax
-of~\cite{DS/FMU/IED/DEF001}, rather an idealised syntax) assumes a
-particular precedence level, if it is used in a higher precedence
-context then it must be enclosed in round brackets.  The round brackets
-themselves assume the highest available precedence level, thus never
-need to be enclosed.  The context within round brackets is the lowest
-available precedence level allowing any concrete syntax production to
-be used without brackets.
-
-Precedence levels of the other concrete syntax productions are
-generally simple to decide.  All the self-bracketing forms assume
-highest available precedence level and enclose the lowest.
-
-Using the precedence levels the basic algorithm for printing part of
-the HOL term language is then as follows.  A recursive routine
-traverses the input term outputting parts of the term as they are
-reached.  Arguments to the routine include the term to be printed and
-the precedence level of the current context.  The term is analysed by
-examining its constructors.  Each case arm corresponds to a particular
-concrete syntax form which has its own precedence level.  If the
-context level is higher than that of the concrete syntax form then
-brackets are required.
-
-Precedence levels are identified by the constructors of $Prec_Context$,
-they are ordered by the comparison function $ge_prec$ which are
-declared below.  There are three partial orderings required, for terms,
-for types and for varstructs.  The processing of lists of declarations
-from the abbreviated form of nested binders (concrete
-syntax~\cite{DS/FMU/IED/DEF001} productions $BinDec$, $Block$ and
-$Vars_Ty$) are handled outside of the precedence structure.
-
-\begin{itemize}
-
-\item The concrete syntax~\cite{DS/FMU/IED/DEF001} production $Tm$ has
-	the largest number of the precedence levels, most are readily
-	derived.  Infix, postfix and prefix operators are treated at
-	the same level with constructor $pc_oper$, operator precedence
-	and associativity is handled by carrying extra information in
-	its arguments.  Functional application is left associative,
-	pairing is right associative, these are treated by having
-	distinct left and right precedences.
-
-\item Types and terms both have infix operators, a common constructor
-	is used.  Postfix type operators have higher precedence than
-	the infix type operators.  Constructor $pc_post_type$ is used.
-
-\item Varstructs can occur in contexts where brackets are desirable if
-	type is required, particularly in a {\tt let} clause declaring
-	a local function.  This needs constructors for two precedence
-	levels, $pc_varstruct_list$ and $pc_typed_varstruct$ are used.
-	Other uses are self-delimiting and so brackets are not
-	required.
-
-\end{itemize}
-
-Common high and low precedences are used, otherwise the three
-orderings do not interact.
-Two further precedence levels are added for forcing brackets around
-paired values, these have lower precedence than the common low value.
-The pairing precedences are only used in conjunction with rules from
-concrete syntax production $Tm$. 
-
-Infix operators interact with {\tt if}, {\tt let} and binder terms.  As
-the left hand argument no bracket is required, as the right hand
-argument brackets are required.
+The first task when printing terms is to determine which language to
+use.  A simple algorithm is used here: if the outermost construct in
+the term is a constant applied to a list of arguments then the language
+of that constant is chosen, in all other cases ``HOL'' is chosen.
 
 =SML
-datatype âLeft_Rightá
-	=	âlr_leftá
-	|	âlr_rightá
-=TEX
+fun âshow_termá (oppen_funs:OPPEN_FUNS) (tm:TERM) = (
+	let
+		val lang =	case get_first_const tm
+				of Value name => get_const_language name
+				| Nil => "HOL";
 
-=SML
-datatype âPrec_Contextá
-	=	âpc_highestá
-	|	âpc_if_let_bindá
-	|	âpc_operá		of int * Left_Right
-	|	âpc_apply_rightá
-	|	âpc_apply_leftá
-	|	âpc_typingá
-	|	âpc_if_let_bind_lastá
-	|	âpc_lowestá
-
-	|	âpc_varstruct_listá
-	|	âpc_typed_varstructá
-
-	|	âpc_post_typeá
-
-	|	âpc_pair_rightá
-	|	âpc_pair_leftá
-	;
-=TEX
-
-Function $ge_prec$ works mainly by comparing integers derived from the
-constructors.  The exception relates to operators where there is a
-second level of precedences.
-This coding style was chosen because it is because that is easier to
-understand and easier to produce than the full pattern match between
-all precedence pairs.
-
-The printing precedences are changed from the parsing ones to
-accommodate the rule that {\tt if}, {\tt let} and binder terms 
-extend as far as possible to the right.  We arrange that these three
-term forms are always bracketed if they occur as the argument of an
-operator or as the left or right arguments of function application.
-
-A simple mechanism is used to produce a fully bracketed form, namely by
-getting virtually all precedence comparisons to indicate that brackets
-are required.
-
-=SML
-val pp_fully_bracketed : bool ref = ref false;
-val _ =
-new_flag {name = "âpp_fully_bracketedá",  control=pp_fully_bracketed, default=fn () => false};
-=TEX
-
-=IGN
-set_flag("pp_fully_bracketed", true);
-set_flag("pp_fully_bracketed", false);
-=TEX
-
-{\ftlinepenalty=9999
-=SML
-local
-	fun	âpc_ordá	pc_highest		= 80
-	|	pc_ord		(pc_oper _)		= 50
-	|	pc_ord		pc_apply_right		= 40
-	|	pc_ord		pc_apply_left		= 30
-	|	pc_ord		pc_if_let_bind		= 26
-	|	pc_ord		pc_if_let_bind_last	= 25
-	|	pc_ord		pc_typing		= 20
-	|	pc_ord		pc_lowest		= 10
-
-	|	pc_ord		pc_pair_right		= 7
-	|	pc_ord		pc_pair_left		= 6
-
-	|	pc_ord		pc_varstruct_list	= 70
-	|	pc_ord		pc_typed_varstruct	= 60
-
-	|	pc_ord		pc_post_type		= 60
-	;
-
-	val infix_assoc_side = lr_left;
-in
-	infix ge_prec;
-
-	fun	outer âge_precá inner = (
-		if !pp_fully_bracketed
-		then
-			outer <> pc_lowest
-		else
-			case (outer, inner)
-			of	(pc_oper(pri_outer, side), pc_oper(pri_inner, _)) =>
-						pri_outer > pri_inner
-					orelse	(pri_outer = pri_inner andalso side = infix_assoc_side)
-			|	_ => (pc_ord outer) >= (pc_ord inner)
-	);
-
-	val âpc_applyá =	if pc_apply_left ge_prec pc_apply_right
-				then pc_apply_left
-				else pc_apply_right
-end;
-=TEX
-}
-
-=SML
-fun âlocal_warná (area : string) (id : int) (inserters : (unit -> string) list) : unit = (
-	diag_string(
-			"*** WARNING "
-		^	(string_of_int id)
-		^	" from "
-		^	area
-		^	": "
-		^	(get_error_message id (map (fn f => f())inserters))
-	)
+		val env = initial_env lang oppen_funs;
+	in
+		start_new_language env lang;
+		main_term_pp env tm;
+		conclude_new_language env lang
+	end
 );
 =TEX
 
-=SML
-fun	âfixity_as_stringá (Infix _) = "infix"
-|	fixity_as_string (Prefix _) = "prefix"
-|	fixity_as_string (Postfix _) = "postfix"
-|	fixity_as_string (Nonfix) = "nonfix"
-|	fixity_as_string (Binder) = "binder"
-=TEX
+%********************************************************************
 
-=SML
-fun âprec_ofá oper usage = (
-	case (get_fixity oper, usage)
-	of	(Infix pre,	Infix _)	=> pre
-	|	(Prefix pre,	Prefix _)	=> pre
-	|	(Postfix pre,	Postfix _)	=> pre
-	|	(f_oper, _) => (
-			local_warn "pretty_printer" 25001 [
-				fn () => oper,
-				fn () => fixity_as_string f_oper,
-				fn () => fixity_as_string usage];
-			0)
-);
-=TEX
+\subsection{Theorems}
 
-=IGN
-Precedence levels are based upon the HOL concrete
-syntax~\cite{DS/FMU/IED/DEF001}, the values chosen are selected as
-follows.
-
-{
-\def\AssEnc#1#2{Context: assumes $#1$, encloses $#2$.}
-\def\AssNoneEnc#1{Context: none assumed, encloses $#1$.}
-\def\AssEncNone#1{Context: assumes $#1$.}
-
-\begin{description}
-\item[Terms] \strut
-
-	\begin{description}
-
-	\item[Self-bracketing forms ] These are already enclosed by
-		round, curly or square braces.
-		\AssEnc{pc_highest}{pc_lowest}
-
-	\item[Between elements of sets and lists ]
-		\AssEnc{pc_highest}{pc_lowest}
-
-	\item[Names and anti quotations ] These are self-delimiting,
-		they do not enclose any text relevant to the HOL printer.
-		\AssEncNone{pc_highest}
-
-	\item[Functional application ]  This is right associative.
-		\AssEnc{pc_apply}{pc_apply}
-
-		\begin{description}
-
-		\item[Left hand operand ] \AssNoneEnc{pc_apply_left}
-
-		\item[Right hand operand ] \AssNoneEnc{pc_apply_right}
-
-		\end{description}
-
-	\item[Explicit typing ] \AssEnc{pc_typing}{pc_typing}
-
-	\item[Infix term operators ] These have precedences, those with
-		equal precedence associate to the right; thus, in the
-		term $(a+b)+c$ the brackets may be omitted.
-		\AssEncNone{pc_oper(_, lr_left)}
-
-		\begin{description}
-
-		\item[Left hand operand ] \AssNoneEnc{pc_oper(_, lr_left)}
-
-		\item[Right hand operand ] \AssNoneEnc{pc_oper(_, lr_right)}
-
-		\end{description}
-
-	\item[Prefix and postfix term operators ] These are treated as
-		infix term operators used with a void argument, they
-		fit into the same precedence scheme.
-
-	\item[`if', `let' and binders ]  These start with an explicit
-		keyword or with a binder name.  The term that completes
-		them continues as far as possible to the right.  Thus
-		these need to be enclosed by brackets on some
-		occasions.  There is no precedence distinction between
-		the three forms. \AssEncNone{pc_if_let_bind}
-
-		\begin{description}
-
-		\item[Between pairs of keywords ] \strut
-
-			\begin{description}
-
-			\item[`if' `then']  \AssNoneEnc{pc_lowest}
-
-			\item[`then' `else']  \AssNoneEnc{pc_lowest}
-
-			\item[`=' `and']  \AssNoneEnc{pc_lowest}
-
-			\item[`=' `in']  \AssNoneEnc{pc_lowest}
-
-			\end{description}
-
-		\item[Concluding term ]  \AssNoneEnc{pc_if_let_bind_last}
-
-		\end{description}
-
-	\item[Varstructs ] Structured list of names.
-		\AssEnc{pc_highest}{pc_lowest}
-
-	\item[Typing ] \AssEnc{pc_typing}{pc_typing}
-
-	\item[Bracketing ] \AssEnc{pc_highest}{pc_lowest}
-
-	\item[Commas that form tuples ] These are treated as right
-		associative infix operators.  \AssEncNone{pc_oper}
-
-		\begin{description}
-
-		\item[Left hand operand ] \AssNoneEnc{pc_oper(_, lr_left)}
-
-		\item[Right hand operand ] \AssNoneEnc{pc_oper(_, lr_right)}
-
-		\end{description}
-
-	\item[Declarative part of `let' terms ] This is the text
-			between the `{\tt let}' and the `{\tt in}'.
-
-		\begin{description}
-
-		\item[Structured list of names ] This is the text
-			between the `{\tt let}' and the `{\tt =}', or
-			between the `{\tt and}' and the `{\tt =}'. {}
-			\AssEncNone{pc_lowest}
-
-		\item[Term ]  \AssNoneEnc{pc_lowest}
-
-		\end{description}
-
-	\item[Declarative part of binders ] The list of blocks and the
-		list of variable structures are outside the scope of
-		this table.
-
-	\end{description}
-
-\item[Types] \strut
-
-	\begin{description}
-
-	\item[Postfix type operators with a single argument ]
-		\AssEnc{pc_post_type}{pc_post_type}
-
-	\item[Postfix type operators with multiple arguments ] These
-		have their arguments bracketted and separated by
-		commas.  \AssEnc{pc_post_type}{pc_lowest}
-
-	\item[Infix type operators ] These are treated the same as
-		infix term operators, they are right associative.
-		\AssEncNone{pc_oper}
-
-		\begin{description}
-
-		\item[Left hand operand ] \AssNoneEnc{pc_oper(_, lr_left)}
-
-		\item[Right hand operand ] \AssNoneEnc{pc_oper(_, lr_right)}
-
-		\end{description}
-
-	\end{description}
-
-\end{description}
-}
-=TEX
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-\section{BASIC HOL TYPE PRINTER}
-
-A first version of the HOL pretty printer just decodes the basic HOL
-constructors, it omits all type information in its output.
-
-{\ftlinepenalty=9999
-=SML
-fun âtype_printerá	(o_funs as (addstring, beginb, space, endb):OPPEN_FUNS)
-			(prec : Prec_Context) (t : TYPE) = (
-let
-	val ty_p = type_printer o_funs;
-
-	fun show_two pc oper (tm1, tm2) = (
-		let
-			val op_prec = prec_of oper (Infix 0);
-			val br = pc ge_prec (pc_oper(op_prec, lr_right))
-				(* lr_right, above, is arbitrary *)
-		in(
-			beginb(0, false);
-			if br then addstring "(" else ();
-			ty_p (pc_oper(op_prec, lr_left)) tm1;
-			space(1,0);
-			addstring oper;
-			space(1,0);
-			ty_p (pc_oper(op_prec, lr_right)) tm2;
-			if br then addstring ")" else ();
-			endb()
-		)end
-	)
-in
-	if is_funtype t
-	then
-		show_two prec "‹" (dest_funtype t)
-	else if is_vartype t
-	then
-		addstring(dest_vartype t)
-	else
-		case dest_type t
-		of ("‰", [t1, t2]) =>
-			show_two prec "‰" (t1, t2)
-		| (name, nil) => 		addstring name
-		| (name, t1 :: nil) => (		beginb(0, false);
-						ty_p pc_post_type t1;
-						space(1,0);
-						addstring name;
-						endb())
-		| (name, t1 :: rest) => (	beginb(0, false);
-						addstring "(";
-						ty_p pc_lowest t1;
-						map	(fn tx => (	addstring ",";
-									space(1,0);
-									ty_p pc_lowest tx))
-							rest;
-						addstring ")";
-						space(1,0);
-						addstring name;
-						endb())
-end
-);
-=TEX
-}
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-\section{BASIC HOL TERM PRINTER}
-
-A first version of the HOL pretty printer just decodes the basic HOL
-constructors.  The controls on showing types are all or nothing at
-present.
-
-=SML
-val pp_show_types : bool ref = ref false;
-val _ =
-new_flag {name = "âpp_show_typesá",  control=pp_show_types, default=fn () => false};
-=TEX
-
-=IGN
-set_flag("pp_show_types", true);
-set_flag("pp_show_types", false);
-=TEX
-
-=IGN
-%	Copied from DS/FMU/IED/DTD004 isue 1.6 91/04/15
-
-%	datatype âDEST_TERMá = âDVará of string * TYPE |
-%		âDConstá of string * TYPE |
-%		âDCombá of TERM * TERM |
-%		âDAbsá of TERM * TERM |
-%		âDEqá of TERM * TERM |
-%		âDŠá of TERM * TERM |
-%		âDŒá of TERM |
-%		âDPairá of TERM * TERM |
-%		âD€á of TERM * TERM |
-%		âDá of TERM * TERM |
-%		âD‚á of TERM * TERM |
-%		âDLetá of ((TERM * TERM)list * TERM) |
-%		âDEnumSetá of (TERM list * TYPE) |
-%		âDSetá of TERM * TERM |
-%		âDListá of (TERM list * TYPE) |
-%		âDƒá of TERM * TERM |
-%		âD„á of TERM * TERM |
-%		âD‡á of TERM * TERM |
-%		âDIfá of (TERM * TERM * TERM);
-
-=TEX
-{\ftlinepenalty=9999
-=SML
-fun âterm_printerá	(o_funs as (addstring, beginb, space, endb):OPPEN_FUNS)
-			(prec : Prec_Context) (t : TERM) = (
-let
-	val tm_p = term_printer o_funs;
-
-	fun open_br con true = (beginb(2, con); addstring "(")
-	| open_br con false = beginb(0, con);
-
-	fun close_br br = (if br then addstring ")" else (); endb());
-
-	fun ty_p_open pc = open_br false (!pp_show_types andalso pc ge_prec pc_typing);
-
-	fun ty_p_close pc ty = (
-		if !pp_show_types
-		then (	space(1,0);
-			addstring ":";
-			space(1,0);
-			type_printer o_funs pc_lowest ty;
-			close_br(pc ge_prec pc_typing)
-			)
-		else endb()
-	);
-
-	fun show_two pc oper (tm1, tm2) = (
-		let
-			val op_prec = prec_of oper (Infix 0);
-			val br = pc ge_prec (pc_oper(op_prec, lr_right))
-				(* lr_right, above, is arbitrary *)
-		in(
-			open_br false br;
-			tm_p (pc_oper(op_prec, lr_left)) tm1;
-			space(1,0);
-			addstring oper;
-			space(1,0);
-			tm_p (pc_oper(op_prec, lr_right)) tm2;
-			close_br br
-		)end
-	);
-
-	fun show_binder pc bind (tm1, tm2) = (
-		let
-			val br = pc ge_prec pc_if_let_bind
-		in(
-			open_br false br;
-			addstring bind;
-			space(1,0);
-			tm_p pc_lowest tm1;
-			space(1,0);
-			addstring "Ž";
-			space(1,0);
-			tm_p pc_if_let_bind_last tm2;
-			close_br br
-		)end
-	);
-
-	fun do_grouping pc start (elems, ty) finish grouper= (
-		ty_p_open prec;
-		beginb(0, false);
-		addstring start;
-		beginb(2, false);
-		case elems
-		of nil => ()
-		| h::t => (	tm_p pc_lowest h;
-				map	(fn e => (	addstring ";";
-							space(1,0);
-							tm_p pc_lowest e))
-					t;
-				());
-		endb();
-		addstring finish;
-		endb();
-		ty_p_close prec (mk_type(grouper,[ty])))
-in
-	case dest_term t
-	of	DVar	(s, ty) => (ty_p_open prec; addstring s; ty_p_close prec ty)
-	|	DConst	(s, ty) => (
-			ty_p_open prec;
-			case get_fixity s of Nonfix => () | _ => addstring "$";
-			addstring s;
-			ty_p_close prec ty
-		)
-	|	DComb	(tm1, tm2) =>
-			let
-				val br = prec ge_prec pc_apply
-			in(
-				open_br false br;
-				tm_p pc_apply_left tm1;
-				space(1,0);
-				tm_p pc_apply_right tm2;
-				close_br br
-			)end
-	|	DAbs	two => show_binder prec "" two
-	|	DEq	two => show_two prec "=" two
-	|	DŠ	two => show_two prec "Š" two
-	|	DŒ	tm =>
-			let
-				val op_prec = pc_oper(prec_of "Œ" (Prefix 0), lr_right);
-				val br = prec ge_prec op_prec
-			in(
-				open_br false br;
-				addstring "Œ";
-				space(1,0);
-				tm_p op_prec tm;
-				close_br br
-			)end
-	|	DPair	(tm1, tm2) =>
-			let
-				val br = prec ge_prec pc_pair_left
-			in(
-				open_br false br;
-				tm_p pc_pair_left tm1;
-				addstring ",";
-				space(1,0);
-				tm_p pc_pair_right tm2;
-				close_br br
-			)end
-	|	D€	two => show_two prec "€" two
-	|	D	two => show_two prec "" two
-	|	D‚	two => show_two prec "‚" two
-	|	DLet	(assocs, tm) =>
-			let
-				val br = prec ge_prec pc_if_let_bind
-			in(
-				open_br true br;
-				revfold	(fn ((lhs, rhs), prefix) => (
-						addstring prefix;
-						tm_p pc_lowest lhs;
-						addstring " = ";
-						tm_p pc_lowest  rhs;
-						space(1,0);
-						"and ")
-					) assocs "let ";
-				addstring "in";
-				space(1,2);
-				tm_p pc_if_let_bind_last tm;
-				close_br br
-			)end
-	|	DEnumSet elems => do_grouping prec "{" elems "}" "SET"
-	|	DSet	two => (
-				beginb(0, false);
-				addstring "{";
-				beginb(2, false);
-				show_two pc_lowest "|" two;
-				endb();
-				addstring "}";
-				endb())
-	|	DList	 elems => do_grouping prec "[" elems "]" "LIST"
-	|	Dƒ	two => show_binder prec "ƒ" two
-	|	D„	two => show_binder prec "„" two
-	|	D‡	two => show_binder prec "‡" two
-	|	DIf	(tm1, tm2, tm3) =>
-			let
-				val br = prec ge_prec pc_if_let_bind
-			in(
-				open_br true br;
-				addstring "if ";
-				tm_p pc_lowest tm1;
-				space(1,0);
-				addstring "then ";
-				tm_p pc_lowest tm2;
-				space(1,0);
-				addstring "else ";
-				tm_p pc_if_let_bind_last tm3;
-				close_br br
-			)end
-end
-);
-=TEX
-}
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-\section{CALLED INTERFACE FOR PRINTERS}
-
-=SML
-fun âshow_termá(o_funs as (addstring, beginb, space, endb):OPPEN_FUNS) (t : TERM) = (
-	(
-		beginb(0, false);
-		addstring "»";
-		term_printer o_funs pc_lowest t;
-		addstring "¼";
-		endb()
-	) handle E => (
-		output(std_out, "Exception " ^ (PolyML.makestring E)
-			^ " handled by show_term\n");
-		raise E
-	)
-);
-=TEX
-
-=SML
-fun âshow_typeá(o_funs as (addstring, beginb, space, endb):OPPEN_FUNS) (t : TYPE) = (
-	(
-		beginb(0, false);
-		addstring "»:";
-		type_printer o_funs pc_lowest t;
-		addstring "¼";
-		endb()
-	) handle E => (
-		output(std_out, "Exception " ^ (PolyML.makestring E)
-			^ " handled by show_term\n");
-		raise E
-	)
-);
-=TEX
+Theorems are considered to be a series of terms, each of which is
+printed in isolation.
 
 =SML
 fun âshow_theoremá(o_funs as (addstring, beginb, space, endb):OPPEN_FUNS) (th : THM) = (
 let
 	val (assumptions, conclusion) = dest_thm th;
 
-	fun aux t s = (
-		space(1, 4);
-		beginb(4, false);
-		term_printer o_funs pc_lowest t;
-		addstring s;
-		endb()
+	fun aux t s = (	space(1, 4);
+			beginb(4, false);
+			show_term o_funs t;
+			addstring s;
+			endb()
 	);
 
 	fun pr_ass nil = ()
 	| pr_ass (a :: nil) = aux a ""
 	| pr_ass (a :: rest) = (aux a ","; pr_ass rest);
-
 in
-	(
-		beginb(0, true);
-		pr_ass assumptions ;
-		space(1, 2);
-		beginb(2, false);
-		addstring "… ";
-		term_printer o_funs pc_lowest conclusion;
-		endb();
-		endb()
-	) handle E => (
-		output(std_out, "Exception " ^ (PolyML.makestring E)
-			^ " handled by show_term\n");
-		raise E
-	)
-end);
+	beginb(0, true);
+	pr_ass assumptions ;
+	space(1, 2);
+	beginb(2, false);
+	addstring "… ";
+	show_term o_funs conclusion;
+	endb();
+	endb()
+end
+);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\newpage
+\section{INSTALLATION}
+
+%********************************************************************
+
+\subsection{Installing PolyML Printers}
+
+Based on observation of PolyML and the function $PolyML.install_pp$ it
+seems that any unhandled exceptions from the installed printing
+function are quietly ignored.  As there is considerable complexity in
+the pretty printing code in this document and, furthermore, users may
+add their own printing functions it seems desirable to catch and report
+any problems.
+
+=SML
+local
+	fun âi_show_termá a b = (
+		(show_term a b)
+		handle E => (	output(std_out, "Exception " ^ (PolyML.makestring E)
+					^ " handled by show_term\n");
+				raise E)
+	);
+
+	fun âi_show_typeá a b = (
+		(show_type a b)
+		handle E => (	output(std_out, "Exception " ^ (PolyML.makestring E)
+					^ " handled by show_type\n");
+				raise E)
+	);
+
+	fun âi_show_theoremá a b = (
+		(show_theorem a b)
+		handle E => (	output(std_out, "Exception " ^ (PolyML.makestring E)
+					^ " handled by show_theorem\n");
+				raise E)
+	);
+in
+
+val side_effect = PolyML.âinstall_pp  i_show_termá;
+val side_effect = PolyML.âinstall_pp  i_show_typeá;
+val side_effect = PolyML.âinstall_pp  i_show_theoremá;
+
+end;
 =TEX
 
 %********************************************************************
 
-\subsection{Installing Type and Term Printers}
-
-=SML
-val side_effect = PolyML.âinstall_pp  show_termá;
-val side_effect = PolyML.âinstall_pp  show_typeá;
-val side_effect = PolyML.âinstall_pp  show_theoremá;
-=TEX
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-\section{Interfaces for Signature}
+\subsection{Pretty Printing Interface}
 
 =SML
 fun âformat_termá(t : TERM) : string list = (
@@ -911,6 +321,24 @@ fun âformat_theoremá(t : THM) : string list = (
 =TEX
 
 =SML
+fun âformat_term1á (l : int) (t : TERM) : string list = (
+	oppen_format (fn () => l) show_term t
+);
+
+fun âformat_type1á (l : int) (t : TYPE) : string list = (
+	oppen_format (fn () => l) show_type t
+);
+
+fun âformat_theorem1á (l : int) (t : THM) : string list = (
+	oppen_format (fn () => l) show_theorem t
+);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{FINALE}
+
+=SML
 end (* of structure PrettyPrinter *);
 =TEX
 
@@ -919,14 +347,13 @@ end (* of structure PrettyPrinter *);
 %********************************************************************
 %--------------------------------------------------------------------
 
-\newpage
-
 \makeatletter
 \def\refstepcounter#1{\stepcounter{#1}\global\edef\@currentlabel{\csname
 	p@#1\endcsname\csname the#1\endcsname}}
 \makeatother
 
-\twocolumn[\section{INDEX}] \label{Index}
+%\twocolumn[\section{INDEX}]
+\section{INDEX}
 
 \footnotesize
 \printindex
