@@ -105,7 +105,7 @@ structure ‚BasicError· : BasicError = struct
 =TEX
 \subsection{Types}
 =SML
-datatype ‚MESSAGE· = ‚Message· of unit -> {area:string, id:int, inserts:string list};
+datatype ‚MESSAGE· = ‚Message· of {area:string, id:int, inserters:(unit -> string) list};
 =TEX
 \subsection{Exceptions}
 =SML
@@ -129,7 +129,8 @@ or trappable.
 We therefore need the following simple function to raise errors.
 =SML
 fun ‚scream· (area : string) (msg : int) (inserts : string list): 'a = (
-	raise (Error(Message(fn () => {area=area, id=msg, inserts=inserts})))
+	raise (Error(Message({area=area, id=msg,
+		inserters=map (fn x => (fn () => x))inserts})))
 );
 =TEX
 Note the use of $makestring$ below is compiler-specific (but
@@ -189,10 +190,10 @@ fun ‚icl'change_error_message· (arg as {id:int, text: string}) : unit = (
 \subsection{Simple Error Reporting 1}
 =SML
 fun ‚report· (area : string) (id : int) (inserters : (unit -> string) list) : MESSAGE = (
-	Message (fn () => {
+	Message ({
 		area=area,
 		id=id,
-		inserts = map (fn f => f())inserters})
+		inserters = inserters})
 );
 =SML
 fun ‚fail· (area : string) (id : int) (inserters : (unit -> string) list) : 'a = (
@@ -204,23 +205,11 @@ fun ‚error· (area : string) (id : int) (inserters : (unit -> string) list) : 'a 
 );
 =TEX
 \subsection{Printing Errors}
-The format of the message for on PolyML is:
-ÛExample Format
-Error raised by <area>:<the message>:Error <number>
-Ê
-This fits in with the PolyML format for printing
-an exception as:
-ÛExample Format
-Exception- <exception constructor> <exception value> raised
-Ê
-since the overall appearance is then, e.g.
-ÛExample Format
-Exception- Fail Error raised by <the message> Error <number>
-Ê
 
 =SML
 fun ‚give_message· (Message msg:MESSAGE) : string = (
-	let	val {area:string, id:int, inserts:string list} = msg();
+	let	val {area:string, id:int, inserters:(unit->string)list} = msg;
+		val inserts = map (fn f=> f())inserters;
 		val number = PolyML.makestring id;
 	in	"ERROR " ^ number ^ " raised by " ^ area ^ ": " ^
 		(give_error_message id inserts)
@@ -241,7 +230,6 @@ val _ = let
 					else addstring ch);
 					aux chs
 				);
-				val text = give_message msg;
 			in	beginb(0, false);
 				addstring "*** ";
 				aux(explode(give_message msg));
@@ -257,31 +245,40 @@ val _ = let
 fun ‚divert· (exn : exn) (from : string) (to: string) (new_id:int) (inserters:(unit->string)list): 'a = (
 	case exn of
 		Fail (Message msg) => (
-			raise Fail (Message(fn () =>
-	let val {area, id, inserts} = msg ()
+			raise Fail (Message(
+	let	val {area, id, inserters} = msg;
 	in	if area = from
-		then {area=to, id=new_id, inserts = map(fn f => f())inserters}
-		else {area=area, id=id, inserts=inserts}
+		then {area=to, id=new_id, inserters = inserters}
+		else msg
 	end		))
 		) | Other => raise Other
 );
 =SML
 fun ‚list_divert· (exn : exn) (to : string)
-	(triples :(string * int * (unit -> string) list)list): 'a = (
+	(triples :(string * int * ((unit -> string) list))list): 'a = (
 	case exn of
 		Fail (Message msg) => (
-			raise Fail (Message(fn () =>
-	let val {area, id, inserts} = msg ()
-		fun aux [] = {area=area, id=id, inserts=inserts}
+			raise Fail (Message(
+	let	val {area, id, inserters} = msg;
+		fun aux [] = msg
 		|  aux ((from, new_id, inserters)::rest) = (
 			if area = from
-			then {area=to, id=new_id, inserts = map(fn f => f())inserters}
+			then {area=to, id=new_id, inserters = inserters}
 			else aux rest
 		);
 	in	aux triples
 	end		))
 		) | Other => raise Other
 );
+=SML
+fun ‚area_of· ((Fail(Message {area, ...})) : exn) : string= area
+|   area_of Other = raise Other;
+=SML
+fun ‚reraise· ((Fail(Message {area, id, inserters})) : exn) (new_area: string) : 'a = (
+	raise (Fail(Message{area=new_area, id=id, inserters=inserters}))
+)
+|   reraise Other _ = raise Other;
+=SML
 end; (* Of structure BasicError *)
 =SML
 open BasicError;
@@ -426,7 +423,7 @@ open SystemControl;
 new_error_message {id=100, text="?0 not expected here"};
 fail "foo" 100 [];
 fail "foo" 200 [];
-fail "foo" 100 [fn()=>"BLAH"];
+fail "foo" 100 [fn()=>(output(std_out, "Boo!\n"); "BLAH")];
 new_error_message {id=101, text="?0 not expected after ?1?. ??"};
 fail "foo" 101 [(fn()=>"BLAH"), (fn ()=>"BAH")];
 error "foo" 101 [(fn()=>"B"), (fn ()=>"BAH")];
