@@ -84,6 +84,63 @@ open CNTypes CNTypes1 CNTypes2 CNBasicDeclsAndExprs ZParagraphs
 	CNVCGenerator CNParser ZUserInterfaceSupport;
 =TEX
 
+The following functions are used to identify names for web clauses and are used in the naming of VCs.
+=SML
+fun Ûk_slot_nameÝ ({content, label} : K_SLOT) : string = label;
+fun Ûpackage_declaration_nameÝ
+	({name, visible_decs, private_decs} : DECLARATION PACKAGE_DECLARATION)
+	: string = (
+	name
+);
+fun Ûprocedure_specification_nameÝ
+	({name, ...} : PROCEDURE_SPECIFICATION) : string = (
+	name
+);
+fun Ûfunction_specification_nameÝ
+	({designator, ...} : FUNCTION_SPECIFICATION) : string = (
+	designator
+);
+
+fun Ûprocedure_body_nameÝ ({procedure_spec, ...} : DECLARATION PROCEDURE_BODY)
+	: string = (
+	procedure_specification_name procedure_spec
+);
+fun Ûfunction_body_nameÝ ({function_spec,...} : DECLARATION FUNCTION_BODY)
+	: string = (
+	function_specification_name function_spec
+);
+fun Ûpackage_body_nameÝ ({name, ...} : DECLARATION PACKAGE_BODY) : string = (
+	name
+);
+=TEX
+=SML
+fun Ûproper_body_nameÝ (pb : PROPER_BODY) : string = (
+	case pb of
+		PBProcedure prc => procedure_body_name prc
+	|	PBFunction fnc =>  function_body_name fnc
+	|	PBPackage pck => package_body_name pck
+);
+fun Ûsubunit_nameÝ ({name, proper_body} : COMP_SUBUNIT) : string = (
+	name ^ "o" ^ proper_body_name proper_body
+);
+fun Ûcompilation_unit_nameÝ (cu : COMPILATION_UNIT) : string = (
+	case cu of
+		CUPackageDeclaration d => package_declaration_name d
+	|	CUProperBody b => proper_body_name b
+	|	CUSubUnit s => subunit_name s
+);
+
+fun Ûcontext_compilation_unit_nameÝ
+	({context, comp_unit} : CONTEXT_COMPILATION_UNIT) = (
+	compilation_unit_name comp_unit
+);
+fun Ûk_slot_compilation_unit_nameÝ (kcu : KSLOT_COMPILATION_UNIT) : string = (
+	case kcu of
+		KCUKSlot ks => k_slot_name ks
+	|	KCUUnit ccu => context_compilation_unit_name ccu
+);
+=TEX
+
 \subsection{Component Update Functions}
 =SML
 fun Ûpackage_vc_varsÝ (
@@ -1619,11 +1676,11 @@ fun Ûvar_pack_specÝ (var_decl : VAR_DECL) : unit = (
 			(package_vc_vars(package,
 					#vc_vars package @ [var_decl]))
 			(!pack_env)
-			;comment "var_pack_spec(TBS)" 507000
+	(* TBS *)		;comment "var_pack_spec: " 503001
 				[fn()=>"pack_spec_flag is set"];()
 		end
 	else
-			comment "var_pack_spec(TBS)" 507000
+	(* TBS *)		comment "var_pack_spec: " 503001
 				[fn()=>"pack_spec_flag not set"];
 			()
 );
@@ -2127,7 +2184,8 @@ fun Ûform_proc_pack_body_commonÝ (form_proc: FORMAL_PROC)
 		val block_name2 = #block_name(#declab block2);
 		val package4 = (force_value(s_lookup block_name2 (!pack_env)))
 			handle Fail _ =>
-			error "form_fun_pack_body" 507012 [fn()=>block_name2];
+			error "form_proc_pack_body_common" 507012
+					[fn()=>block_name2];
 		val formal_procs4 = #formal_procs package4;
 		val formal_proc3 =
 			find 
@@ -2277,8 +2335,8 @@ fun Ûform_proc_pack_body_auxÝ (frees : Z_ID list, aux_vars : Z_ID list)
 		blocks :=
 		block_vc_vars(block1, vc_vars1 cup conc_vars):: tl (!blocks);
 		store_vcs (#name formal_proc3, call_vcs(speclab5a, st));
-		comment "form_proc_pack_body_aux" 507000
-			[fn()=>"(TBS) temporary diagnostic"]
+		comment "form_proc_pack_body_aux" 503001
+			[fn()=>"is being called here"] (* TBS *)
 	end
 );
 =TEX
@@ -2955,7 +3013,8 @@ fun Ûnew_scope_pack_bodyÝ (ident : ID) : unit = (
 			till_flag = false
 		};
 		val vc_vars1 = #vc_vars package1;
-		val block = block_vc_vars(empty_block, vc_vars1);
+		val block = block_vc_vars(
+			block_flags(empty_block, flags), vc_vars1);
 	in
 		populate_theory_with_types_consts ident;
 		blocks := block :: !blocks
@@ -3043,41 +3102,42 @@ fun Ûpopulate_package_spec_theoryÝ (ident : ID) : unit = (
 			handle Fail _ => open_package_spec_theory ident;
 		generate_spec_theory ident;
 
-(*		open_theory father;
+		open_theory father;
 		force_delete_theory (pack_tmpbody_name ident)
 			handle _ => ();
-*)		open_theory thy
-
+		open_theory thy
 	end
 );
 =TEX
 $do\_pack\_spec$ updates the specification theory rather than $new\_scope\_with$. When $new\_scope\_with$ is called, the specification theory will have already been populated with the appropriate constants, types and functions.
 =SML
 fun Ûnew_scope_withÝ (ident : ID) : unit = (
-	let	val package1 = force_value(s_lookup ident (!pack_env))
-			handle Fail _ =>
-			fail "new_scope_with" 507030 [fn()=>ident];
-		val flags = {
-			pack_spec_flag = false,
-			pack_body_flag = false,
-			stub_flag = false,
-			subunit_flag = false,
-			formal_body_flag = false,
-			fun_flag = false,
-			declabel_flag = false,
-			speclabel_flag = false,
-			till_flag = false
-		};
-		val vc_vars1 = #vc_vars package1;
-		val vc_aux_vars1 = #aux_vars package1;
-		val formal_procs1 = #formal_procs package1;
-		val block = block_vc_vars(empty_block, vc_vars1);
-		val block = block_vc_aux_vars(empty_block, vc_aux_vars1);
-		val block = block_formal_procs(block, formal_procs1);
-	in	populate_package_spec_theory ident;
-		new_parent (pack_spec_name ident) handle Fail _ => ();
-		blocks := block :: !blocks
-	end
+
+	case s_lookup ident (!pack_env) of
+	Nil => ()
+	|Value package1 => (
+		   let	val flags = {
+				pack_spec_flag = false,
+				pack_body_flag = false,
+				stub_flag = false,
+				subunit_flag = false,
+				formal_body_flag = false,
+				fun_flag = false,
+				declabel_flag = false,
+				speclabel_flag = false,
+				till_flag = false
+			};
+			val vc_vars1 = #vc_vars package1;
+			val vc_aux_vars1 = #aux_vars package1;
+			val formal_procs1 = #formal_procs package1;
+			val block = block_vc_vars(empty_block, vc_vars1);
+			val block = block_vc_aux_vars(empty_block, vc_aux_vars1);
+			val block = block_formal_procs(block, formal_procs1);
+		in	populate_package_spec_theory ident;
+			new_parent (pack_spec_name ident) handle Fail _ => ();
+			blocks := block :: !blocks
+		end
+	)
 );
 =TEX
 \subsection{The SID function end\_scope\_comp\_unit}
