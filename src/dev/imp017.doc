@@ -120,8 +120,26 @@ exception âSLRP_ERRORá of string;
 =TEX
 \section{UTILITIES}\label{UTILITIES}
 \subsection{Miscellany}
+In order, (a) to make the output from the program more easily understood,
+and (b) to make some as yet unidentified algorithm operate correctly,
+it is helpful to have (i) a version of $grab$ which adds the new element
+at the end of the list, and (ii) a version of $cup$ which accumulates its
+second operand into its first:
 =SML
+infix 4 rgrab;
+fun (x :: xs : ''a list) ârgrabá (what : ''a) = (
+	if x = what
+	then x :: xs
+	else x :: (xs rgrab what)
+) | ([] : ''a list) rgrab (what : ''a) = [what];
 =TEX
+=SML
+infix 4 rcup;
+fun (list1 : ''a list) ârcupá (list2 : ''a list) : ''a list = (
+	revfold (fn(x, xs) => xs rgrab x) list2 list1
+);
+=TEX
+The following formulation of $nth$ is more natural here:
 =SML
 val âmy_nthá : 'a list -> int -> 'a = switch nth;
 =TEX
@@ -278,7 +296,7 @@ The function $closure$ is just as in \cite{Aho77}.
 =SML
 fun âclosureá (g : ''a GRAMMAR) (items : ''a item list) : ''a item list = (
 	let	fun aux1 res symB = (
-			res cup map (fn i => (symB, i, 0)) (interval 0 (bound (expand g symB)))
+			res rcup map (fn i => (symB, i, 0)) (interval 0 (bound (expand g symB)))
 		);
 		fun aux2 res (item::more) = (
 			(aux2 (aux1 res (follower g item)) more)
@@ -317,7 +335,7 @@ fun âitemsá  (g : ''a GRAMMAR) (sen : string) : ''a item list list = (
 		fun aux2 res (items :: more) = (
 			case aux1 items of
 				[] => aux2 res more
-			|	xs => aux2 (res cup map (goto g items) xs) more
+			|	xs => aux2 (res rcup map (goto g items) xs) more
 		) | aux2 res [] = res;
 		fun aux3 items = (
 			let	val newitems = aux2 items items
@@ -339,8 +357,8 @@ fun âfirstá (g : ''a GRAMMAR) : (''a SYMBOL * (''a OPT list)) list = (
 	let	val step1 = map (fn s => (Terminal s, [Value s])) (give_terms g);
 		fun step2_aux1 alts = (
 			case alts of
-				(Terminal a :: _)  :: more => step2_aux1 more grab (Value a)
-			|	[] :: more=> step2_aux1 more grab Nil
+				(Terminal a :: _)  :: more => step2_aux1 more rgrab (Value a)
+			|	[] :: more=> step2_aux1 more rgrab Nil
 			|	_ :: more=> step2_aux1 more
 			|	[] => []
 		);
@@ -353,17 +371,17 @@ fun âfirstá (g : ''a GRAMMAR) : (''a SYMBOL * (''a OPT list)) list = (
 				((nt as (NonTerminal _)) :: alt')  :: more => (
 					let	val new = lassoc3 tab nt
 					in	if Nil mem new
-						then (new less Nil)cup step3_aux1 tab (alt' :: more)
-						else new cup step3_aux1 tab more
+						then (new less Nil)rcup step3_aux1 tab (alt' :: more)
+						else new rcup step3_aux1 tab more
 					end
-			) |	[] :: more => [Nil] cup step3_aux1 tab more
+			) |	[] :: more => [Nil] rcup step3_aux1 tab more
 			|	_ :: more => step3_aux1 tab more
 			|	[] => []
 		);
  		fun step3_aux2 tab ((nt, alts) :: more) = (
 			let	val old = lassoc3 tab(NonTerminal nt);
 				val new = step3_aux1 tab alts;
-				val tab' = tab overwrite (NonTerminal nt, old cup new);
+				val tab' = tab overwrite (NonTerminal nt, old rcup new);
 			in	step3_aux2 tab' more
 			end
 		) | step3_aux2 tab [] = tab;
@@ -385,7 +403,7 @@ fun âfollowá (g : ''lc GRAMMAR) (sen : string) (eos : ''lc): (string * (''lc lis
 		fun first_syms (sym :: more) = (
 			let	val firsts = lassoc3 first_tab sym;
 			in	if Nil mem firsts
-				then (firsts less Nil) cup first_syms more
+				then (firsts less Nil) rcup first_syms more
 				else firsts
 			end
 		) | first_syms [] = [Nil];
@@ -394,10 +412,10 @@ fun âfollowá (g : ''lc GRAMMAR) (sen : string) (eos : ''lc): (string * (''lc lis
 				(NonTerminal b :: more) => (
 					let	val oldb = lassoc3 tab b;
 						val firstmore = first_syms more;
-						val newb = oldb cup 
+						val newb = oldb rcup 
 							(if Nil mem firstmore
 							then	lassoc3 tab a
-							cup map	force_value(firstmore less Nil)
+							rcup map	force_value(firstmore less Nil)
 							else map force_value firstmore);
 					in	doalt a (tab overwrite (b, newb)) more
 					end
@@ -442,15 +460,15 @@ fun âslr_tablesá (g : ''_lc GRAMMAR) (eos : ''_lc) (sen : string)
 		fun make_actions items ((item as (NonTerminal nt, alt, dot)) :: more) = (
 			case my_follower item of
 				Value(a as (Terminal lc)) => (
-					make_actions items more grab
+					make_actions items more rgrab
 					(lc, Shift(item_index(goto g items a)))
 			) |	Value _ => (make_actions items more
 			) |	Nil => (
 					if nt <> sen
 					then let	fun f lc = (lc, Reduce((nt, alt), dot));
 							val lcs = lassoc3 (follow g sen eos) nt;
-					in	make_actions items more cup map f lcs
-					end else make_actions items more grab (eos, Accept) 
+					in	make_actions items more rcup map f lcs
+					end else make_actions items more rgrab (eos, Accept) 
 			)
 		) | make_actions _ _ = [];
 		val non_terms = map fst g;
@@ -783,7 +801,7 @@ fun âmake_grammar_and_reduction_tableá (PG_Grammar(G as ((sen,_)::_)) : P_GRAMMA
 			then NonTerminal s
 			else Terminal(VarClass s);
 		val Y = map (fn(x, y) => (x, map (fn (a,b) =>(map make_sym a, b)) y)) G';
-		fun folder((def, alts), g) = g overwrite (def, lassoc4 g nil def cup alts);
+		fun folder((def, alts), g) = g overwrite (def, lassoc4 g nil def rcup alts);
 		val AG = revfold folder Y nil;
 	in	(strip_action AG, make_reduction_table AG)
 	end
