@@ -15,8 +15,7 @@
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
 \TPPkeywords{}
-%\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
-\TPPauthors{R.D.~Arthan & WIN01\\K.~Blackburn & WIN01}
+\TPPauthor{R.D.~Arthan & WIN01}
 \TPPauthorisation{R.B.~Jones & FMU Manager}
 \TPPabstract{This document contains the detailed design of conversions which
 perform normalisation of monomials in a commutative and associative operator
@@ -47,8 +46,11 @@ algebra).}
 
 \subsection{Changes history} 
 \begin{description}
-\item[\SCCSversion~(\FormatDate{$Date$%
+\item[1.1 (\FormatDate{$Date$%
 })] First draft (adapted from prototype implementation of \cite{DS/FMU/IED/SML023}) for comment.
+\item[\SCCSversion~(\FormatDate{$Date$%
+})] Amended in the light of comments. Added $ANF\_C$ and description of
+error handling.
 \end{description}
 \subsection{Changes forecast}
 Error messages and numbers TBA.
@@ -109,7 +111,7 @@ in this fashion, for example.
 
 Many useful special effects can be achieved by adjusting the ordering
 relation used on terms. For example, arranging for the immediate
-successor of any boolean term $t$ is $³t$ greatly simplifies elimination
+successor of any boolean term $t$ to be $³t$ greatly simplifies elimination
 of trivial conjuncts when the polynomial normalisation is used to find
 conjunctive normal form. Consequently, we supply reasonably general
 means for creating ordering relations on terms as part of the normalisation
@@ -200,7 +202,7 @@ term_order t1 t2
 =TEX
 \ is negative if $t1$ precedes $t2$, $0$ if $t1$ and $t2$ are
 equivalent and positive if $t2$ precedes $t1$.
-The ordering used is, with two exceptions, that all constants precede all variables
+The ordering used is, with some exceptions, that all constants precede all variables
 which precede all abstractions which precede all applications.
 Lexicographic ordering on the immediate constituents
 gives the ordering within each of these four classes (using alphabetic
@@ -213,16 +215,24 @@ type_order
 term_order
 =TEX
 \ recursively to order the constituents as appropriate).
-The exceptions are that any term of the form
+The exceptions are {\em(i)} that any term of the form
 =INLINEFT
 ³t
 =TEX
-\ comes immediately after $t$ and that the numeric literals
+\ comes immediately after $t$, {\em(ii)} that the numeric literals
 =INLINEFT
 0, 1, ...
 =TEX
 \ are taken in numeric rather than alphabetic order and come before all other
-terms.
+terms, and {\em(iii)} that terms of the form
+=INLINEFT
+i * x
+=TEX
+\ where $i$ is a numeric literal are ordered so that the terms
+=INLINEFT
+x, 0*x, 1*x, 2*x, ...
+=TEX
+\ are consecutive.
 
 =INLINEFT
 gen_term_order
@@ -234,7 +244,7 @@ gen_term_order special
 =TEX
 , the idea is that whenever two terms, $tm1$ and $tm2$ say,
 are compared, $special$ is applied to them to produce
-two pairs, $(tm1,\,k1)$ and $(tm2,\,k2)$ say. These
+two pairs, $(tm1',\,k1)$ and $(tm2',\,k2)$ say. These
 pairs are then compared lexicographically (using the
 ordering recursively for the first components).
 It is the caller's responsibility to provide an argument $special$ which
@@ -243,7 +253,7 @@ A sufficient condition is only to use functions
 $special$ with the property that for some
 disjoint sets of terms $X_1$, $X_2$, \ldots, we have that
 $special\,tm=(tm,\,0)$ if $tm \not\in X_i$ for any $i$
-and that $special\,tm=(x_i,\,f_i tm)$ if $tm \in X_i$,
+and that $special\,tm=(x_i,\,f_i(tm))$ if $tm \in X_i$,
 where $x_i$ is a fixed element of $X_i$ and $f_i$
 is a fixed injection of $X_i$ into the natural numbers.
 =ENDDOC
@@ -264,19 +274,19 @@ t1 = t2
 =INLINEFT
 ASYM_C c
 =TEX
-\ is a conversion which behaves like $c$ on terms $t$ for which
+\ is a conversion which behaves like $c$ on terms $t1$ for which
 =INLINEFT
-c t
+c t1
 =TEX
 \ is a theorem with conclusion
 =INLINEFT
-t = t1
+t1 = t2
 =TEX
-\ where $t1$ (strictly) precedes $t$ in the standard ordering on terms given by 
+\ where $t2$ (strictly) precedes $t1$ in the standard ordering on terms given by 
 =INLINEFT
 term_order
 =TEX
-q.v. and fails on other terms.
+\ q.v. and fails on other terms.
 
 =INLINEFT
 GEN_ASYM_C
@@ -288,18 +298,20 @@ ASYM_C
 \ but allows the ordering function used to be supplied as a parameter.
 The parameter is interpreted as an ordering relation on terms
 in the same sense as the ordering relations used by $sort$, q.v.
+=FAILURE
+81010	The conversion did not decrease the order of the term
+81011	On argument ?0 the conversion returned ?1 which is not an equation
 =ENDDOC
+\section{GENERAL MONOMIAL NORMALISATION}
 =DOC 
-	val Ûsort_convÝ : 
-		(TERM -> TERM -> int) ->
-		THM -> THM -> 
-		CONV -> CONV ->
-		CONV:
+	val Ûsort_convÝ : (TERM -> TERM -> int) ->
+		THM -> THM -> CONV -> CONV -> CONV;
 =DESCRIBE
-This conversion normalises a term constructed from literals
+This conversion normalises a term constructed from atoms
 using an associative and commutative binary operator,
-$op$ say.
-Here, by ``literal'' we mean any term which is not of the form
+$op$ say.  For clarity, we write two operator with infix syntax although
+it need not actually be an infix constant.
+Here, by ``atom'' we mean any term which is not of the form
 =INLINEFT
 t1 op t2
 =TEX
@@ -312,22 +324,23 @@ t = t‰1 op t‰2 op ...
 =INLINEFT
 t‰i
 =TEX
-are in non-decreasing order with respect to the ordering on terms given
+\ are in non-decreasing order with respect to the ordering on terms given
 by the first parameter.
 
 The associativity and commutativity of the operator are given as the two
 theorem parameters (which are also used to infer what $op$ is; n.b. $op$
 can be an arbitrary term, it need not be a constant).
-The remaining parameters are conversions which are applied to each literal
+The remaining parameters are conversions which are applied to each atom
 as it is encountered and to each subterm of the form
 =INLINEFT
 t = t‰i op ...
 =TEX
 \ as it is created.
-
 In more detail the parameters are, in order, as follows:
 
 \begin{enumerate}
+\parsep=0.4\parsep
+\itemsep=0.4\itemsep
 \item
 A term ordering, such as $term\_order$, q.v.
 \item
@@ -339,37 +352,39 @@ A theorem of the form
 \item
 A theorem of the form
 =INLINEFT
-ô µx y z·t(t x y) z = t y (t x z)
-=TEX
-.
-(i.e. if the term $t$ is an infix operator, $op$ say:
-=INLINEFT
 ô µx y z·(x op y) op z = x op y op z
 =TEX
-).
+.
 \item
 A conversion to be applied to each subterm of the form:
 =INLINEFT
-t = t‰i op ...
+t‰i op ...
 =TEX
-\ as it is created.
+\ whenever that such a subterm is created.
 \item
-A conversion to be applied to each literal as it is encountered.
+A conversion to be applied to each atom as it is encountered.
 \end{enumerate}
 
-Note that either of the conversions supplied as parameters may introduce new non-literal
+Note that either of the conversions supplied as parameters may introduce new non-atomic
 subterms. These are normalised recursively as they are produced.
 Typically, however, these conversions are used just to simplify sub-terms.
+
+The conversions supplied as arguments may signal that they do not
+wish to change a subterm, $t$ say, either by failing or by returning $t = t$,
+the former approach is more efficient.
+=FAILURE
+81021	?0 does not have the form ô t1 op t2 = t2 op t1
+81022	?0 does not have the form ô (t1 op t2) op t3 = t1 op (t2 op t3)
+81029	Internal error: unexpected error in term normalisation package
 =ENDDOC
+\section{GENERAL POLYNOMIAL NORMALISATION}
 =DOC 
-	val Ûpoly_convÝ :
-		(TERM -> TERM -> int) ->
+	val Ûpoly_convÝ : (TERM -> TERM -> int) ->
 		THM -> THM -> THM -> THM -> THM ->
-		CONV -> CONV -> CONV ->
-		CONV;
+		CONV -> CONV -> CONV -> CONV;
 =DESCRIBE
-This conversion normalises terms constructed from literals using two operators,
-both associative and commutative, the second of which one, say
+This conversion normalises terms constructed from atoms using two operators,
+both associative and commutative, the second of which, say
 =INLINEFT
 op‰*
 =TEX
@@ -377,8 +392,9 @@ op‰*
 =INLINEFT
 op‰+
 =TEX
-.
-Here, by ``literal'' we mean any term which is not of the form
+. For clarity, we write the two operators with infix syntax although
+they need not actually be infix constants.
+Here, by ``atom'' we mean any term which is not of the form
 =INLINEFT
 t1 op‰+ t2
 =TEX
@@ -400,30 +416,31 @@ by the first parameter and have the form
 =INLINEFT
 s‰1 op‰* s‰2 op‰* ...
 =TEX
-where the
+, where the
 =INLINEFT
 s‰i
 =TEX
-are literals and are in non-decreasing order.
+\ are atoms and are in non-decreasing order.
 
 The associativity and commutativity of the operators and the distributivity
 are given as the five
 theorem parameters (which are also used to infer what the two operators are;
 n.b. the operators
 can be arbitrary terms, they need not be constants).
-The remaining parameters are conversions which are applied to each literal
+The remaining parameters are conversions which are applied to each atom
 as it is encountered and to each subterm of the form
 =INLINEFT
-t = t‰i op‰+ ...
+t‰i op‰+ ...
 =TEX
-\ or.
+\ or
 =INLINEFT
-t = t‰i op‰* ...
+t‰i op‰* ...
 =TEX
-\ as they are created.
-
+\ as it id created.
 In more detail the parameters are, in order, as follows:
 \begin{enumerate}
+\parsep=0.4\parsep
+\itemsep=0.4\itemsep
 \item
 A term ordering, such as $term\_order$, q.v.
 \item
@@ -432,16 +449,6 @@ A theorem of the form
 ô µx y·x op‰+ y = y op‰+ x
 =TEX
 .
-(n.b.
-=INLINEFT
-op‰+
-=TEX
-and
-=INLINEFT
-op‰*
-=TEX
-need not be infix constants, however, for clarity, we write them in
-infix form here)
 \item
 A theorem of the form
 =INLINEFT
@@ -471,20 +478,26 @@ A conversion to be applied to any subterm of the form
 =INLINEFT
 t‰i op‰+ ...
 =TEX
-\ as it is created.
+\ whenever such a subterm is created.
 \item
 A conversion to be applied to any subterm of the form
 =INLINEFT
 t‰i op‰* ...
 =TEX
-\ as it is created.
+\ whenever such a subterm is created.
 \item
-A conversion to be applied to any literal as it is encountered.
+A conversion to be applied to any atom as it is encountered.
 \end{enumerate}
-Note that any of the conversions supplied as parameters may introduce new non-literal
+Note that any of the conversions supplied as parameters may introduce new non-atomic
 subterms. These are normalised recursively as they are produced.
 Typically, however, these conversions are used just to simplify sub-terms.
-
+The conversions may signal that they do not
+wish to change a subterm, $t$ say, either by failing or by returning $t = t$,
+the former approach is more efficient.
+=FAILURE
+81023	?0 does not have the form ô t1 op1 (t2 op2 t3) = (t1 op1 t2) op2 (t1 op1 t3)
+81024	?0 and ?1 do not have the forms  ô t1 op1 t2 = t2 op1 t1
+	and  ô t1 op1 (t2 op2 t3) = (t1 op1 t2) op2 (t1 op1 t3)
 =ENDDOC
 =DOC 
 	val Ûcnf_convÝ : CONV;
@@ -495,38 +508,40 @@ This is a conversion which proves theorems of the form
 =TEX
 \ where $t2$ is in conjunctive normal form, i.e. either $T$ or $F$
 or a conjunction of one or more disjunctions
-in which each disjunct is a propositional literal. Here, by literal
+in which each disjunct is a propositional atom. Here, by atom
 we mean either a term whose principal connective is not a propositional
 calculus connective or the negation of such a term.
 
 The conversion simplifies disjunctions and conjunctions
 as they are generated according to the following schema.
 =GFT
+a ± T	­	a
+T ± a	­	a
+F ± a	­	F
+a ± F	­	F
+a ± a	­	a
+a ± ³a	­	F
+
 a ² T	­	T
 T ² a	­	T
 F ² a	­	a
 a ² F	­	a
 a ² a	­	a
 a ² ³a	­	T
-a ² T	­	T
-T ² a	­	T
-F ² a	­	a
-a ² F	­	a
-a ² a	­	a
-a ² ³a	­	T
+
 ³T	­	F
 ³F	­	T
 =TEX
 
 Note, however, that more global simplifications are not done,
 e.g. there is no attempt to eliminate a conjunct all of whose constituent
-literals are contained in another conjunct.
+atoms are contained in another conjunct.
 Thus, the conversion will not automatically prove tautologies.
 =SEEALSO
 =INLINEFT
 strip_tac
 =TEX
-and
+\ and
 =INLINEFT
 taut_rule
 =TEX
@@ -542,39 +557,41 @@ This is a conversion which proves theorems of the form
 =TEX
 \ where $t2$ is in disjunctive normal form, i.e. either $T$ or $F$
 or a disjunction of one or more conjunctions
-in which each conjunct is a propositional literal. Here, by literal
+in which each conjunct is a propositional atom. Here, by atom
 we mean either a term whose principal connective is not a propositional
 calculus connective or the negation of such a term.
 
 The conversion simplifies disjunctions and conjunctions
 as they are generated according to the following schema.
 =GFT
+a ± T	­	a
+T ± a	­	a
+F ± a	­	F
+a ± F	­	F
+a ± a	­	a
+a ± ³a	­	F
+
 a ² T	­	T
 T ² a	­	T
 F ² a	­	a
 a ² F	­	a
 a ² a	­	a
 a ² ³a	­	T
-a ² T	­	T
-T ² a	­	T
-F ² a	­	a
-a ² F	­	a
-a ² a	­	a
-a ² ³a	­	T
+
 ³T	­	F
 ³F	­	T
 =TEX
 
 Note, however, that more global simplifications are not done,
 e.g. there is no attempt to eliminate a disjunct all of whose constituent
-literals are contained in another disjunct.
+atoms are contained in another disjunct.
 Thus, the conversion will not automatically prove tautologies.
 
 =SEEALSO
 =INLINEFT
 strip_tac
 =TEX
-and
+\ and
 =INLINEFT
 taut_rule
 =TEX
@@ -585,21 +602,25 @@ in most cases.
 
 =DOC 
 	val Ûanf_convÝ : CONV;
+	val ÛANF_CÝ : CONV -> CONV;
 =DESCRIBE
-This is a conversion which proves theorems of the form
+=INLINEFT
+anf_conv
+=TEX
+\ is a conversion which proves theorems of the form
 =INLINEFT
 ô t1 = t2
 =TEX
-\ where $t1$ is a term formed from literals of type î and
+\ where $t1$ is a term formed from atoms of type î and
 $t2$ is in what we may call additive normal form, i.e. it has the form:
 =INLINEFT
-t = t‰1 + t‰2 + ...
+t‰1 + t‰2 + ...
 =TEX
 , where the 
 =INLINEFT
 t‰i
 =TEX
-have the form
+\ have the form
 =INLINEFT
 s‰1 * s‰2 * ...
 =TEX
@@ -607,8 +628,8 @@ where the
 =INLINEFT
 s‰i
 =TEX
-are literals.
-Here, by literal
+\ are atoms.
+Here, by atom
 we mean a term which is not of the form
 =INLINEFT
 t‰1 + t‰2 + ...
@@ -627,18 +648,34 @@ t‰i
 within them,
 the factors
 =INLINEFT
-s‰i
+s‰j
 =TEX
-are given in increasing order with respect to the ordering
+\ are given in increasing order with respect to the ordering
 on terms given by the function 
 =INLINEFT
 term_order
 =TEX
-, q.v. Arithmetic computation is carried out on literals to ensure
+, q.v. Arithmetic computation is carried out on atoms to ensure
 that at most one of the summands is a numeric literal and that, within
 each summand, at most one factor is a numeric literal. Any literal appears
 at the beginning of its factor or summand and addition of $0$
 or multiplication by $1$ is simplified out.
+
+=INLINEFT
+ANF_C conv
+=TEX
+\ is a conversion which acts like
+=INLINEFT
+anf_conv
+=TEX
+\ but which applies
+=INLINEFT
+conv
+=TEX
+\ to each atom as it is encountered (and normalises the result recursively).
+The argument conversion  may signal that it does not
+wish to change a subterm, $t$ say, either by failing or by returning $t = t$,
+the former approach is more efficient.
 =ENDDOC
 \section{EPILOGUE}
 =SML
