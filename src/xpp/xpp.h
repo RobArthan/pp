@@ -141,6 +141,9 @@ typedef struct menu_item {
 	extern void text_show_position(
 		Widget text_w,
 		XmTextPosition pos);
+	extern void fix_pane_height(
+			Widget child_w,
+			Widget scale_w);
 void blink_owner_cb(
 	Widget					w,
 	Widget					text_w,

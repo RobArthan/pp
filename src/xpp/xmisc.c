@@ -239,4 +239,21 @@ void text_show_position(
 	XmTextEnableRedisplay(text_w);
 }
 	
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * fix_pane_height: fix the height of a child pane in a paned widget.
+ * scale_w is a widget from which to take the height. 
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void fix_pane_height(
+	Widget child_w,
+	Widget scale_w)
+{
+	Dimension height;
+	XtVaGetValues(scale_w,
+		XmNheight, 		&height,
+		NULL);
+	XtVaSetValues(child_w,
+		XmNpaneMaximum,	height,
+		XmNpaneMinimum,	height,
+		NULL);
+}
 
