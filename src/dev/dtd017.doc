@@ -1,4 +1,4 @@
-%  dtd017.doc   %Z% $Date: 1992/05/26 13:38:08 $ $Revision: 2.4 $ $RCSfile: dtd017.doc,v $
+%  dtd017.doc   %Z% $Date: 2000/07/31 14:24:54 $ $Revision: 2.5 $ $RCSfile: dtd017.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -12,10 +12,10 @@
 %\TPPpart{}
 \TPPtitle{SLR Parser Generator}  %% Mandatory field
 \TPPref{DS/FMU/IED/DTD017}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.4 $%
+\def\SCCSversion{$Revision: 2.5 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 1992/05/26 13:38:08 $%
+\TPPdate{\FormatDate{$Date: 2000/07/31 14:24:54 $%
 }}  %% Mandatory field (with sensible default)
 \TPPstatus{Approved}
 %\TPPstatus{Draft}
@@ -76,8 +76,11 @@ The description has been introduced in the documentation box for
 $Slrp.slrp$.
 \item [Issue 2.4 (26th May 1992)]
 Renamings from version 1.5 of DS/FMU/IED/WRK038.
-
-%\item[Issue \SCCSversion, \FormatDate{$Date: 1992/05/26 13:38:08 $%
+\item [Issues 2.5,2.6 (1st August 2000)]
+The examples have been updated to handle the revised Standard ML value polymorphism restriction.
+A shell script to run the parser generator has been added and the error handling
+of the ML interface has been rationalised to facilitate this.
+%\item[Issue \SCCSversion, \FormatDate{$Date: 2000/07/31 14:24:54 $%
 %}]
 
 \end{description}
@@ -208,10 +211,10 @@ The following is an example of an extended grammar:
 	E	=	E, `Plus`, T			(add x1 x3)
 		|	T 				(fetch x1);
 
-	T	=	T, `Times`, F			(mul x1 x3)
+	T	=	T, `Times`, F		(mul x1 x3)
 		|	F				(fetch x1);
 
-	F	=	`Lbrack`, E, `Rbrack`		(fetch x2)
+	F	=	`Lbrack`, E, `Rbrack`	(fetch x2)
 		|	Num				(conv x1);
 =TEX
 
@@ -237,22 +240,54 @@ We will refer to this example as the pocket calculator example in the
 rest of this document.
 \section{CODE GENERATION}
 The output from \Slrp\ is some Standard ML source text, which, when compiled,
-defines three tables and a function, as shown in the following skeletal
+defines two tables and two function, as shown in the following skeletal
 listing of the output produced for the pocket calculator example:
 =GFT Example
-val slrp'actions = Array.arrayoflist[
-[(Num,Shift 5),(Lbrack,Shift 4)],[(Plus,Shift 6),(Eos,Accept)],[
-...
-];
-val slrp'gotos = Array.arrayoflist[
-...
-];
+local
+	....
+val slrp'a2=[[(Eos,Reduce(("T",1),1)),(Plus,Reduce(("T",1),1)),
+(Times,Reduce(("T",1),1)),(Rbrack,Reduce(("T",1),1))]]@slrp'a3;
+val slrp'a1=[[(Eos,Reduce(("T",0),3)),(Plus,Reduce(("T",0),3)),
+(Times,Reduce(("T",0),3)),(Rbrack,Reduce(("T",0),3))]]@slrp'a2;
+in
+val slrp'actions=PPArray.arrayoflist slrp'a1;
+end;
+local
+	....
+val slrp'g2=[[]]@slrp'g3;
+val slrp'g1=[[]]@slrp'g2;
+in
+val slrp'gotos=PPArray.arrayoflist slrp'g1;
+end;
 val slrp'reducers = list_e_merge initial_E_DICT[
 ("F",[(fn(x3::x2::x1::_)=>(fetch x2)|_=>raise PARSER_ERROR"invalid reduction"),
 ...
 ];
-val slrp'gen_parser = slrp'parse 0 slrp'actions slrp'gotos slrp'reducers;
+local
+	...
+fun slrp'r2()=[("E",[
+(fn(x3::x2::x1::stk)=>(add x1 x3)|_=>raise PARSER_ERROR"invalid reduction"),
+(fn(x1::stk)=>(fetch x1)|_=>raise PARSER_ERROR"invalid reduction")])]@slrp'r3();
+fun slrp'r1()=[("F",[
+(fn(x3::x2::x1::stk)=>(fetch x2)|_=>raise PARSER_ERROR"invalid reduction"),
+(fn(x1::stk)=>(conv x1)|_=>raise PARSER_ERROR"invalid reduction")])]@slrp'r2();
+in
+fun slrp'reducers () = list_e_merge initial_e_dict (slrp'r1());
+end;
+fun slrp'gen_parser x = slrp'parse 10 slrp'actions slrp'gotos (slrp'reducers()) x;
 =TEX
+The function
+=INLINEFT
+slrp'reducers
+=TEX
+\ would more logically be given as a table; however, the Standard ML
+value polymorphism restriction requires the unnecessary »-redex.
+The function
+=INLINEFT
+slrp'gen_parser
+=TEX
+ is the actual parsing function.
+
 This code must be compiled in a context 
 including the following:
 
@@ -329,9 +364,10 @@ fun pc_classify "*" = Times
 \item
 The default error routine will serve our needs here. It requires an
 argument which is a function giving the string form of a token. Since our
-tokens are already strings this is easy to arrange:
+tokens are already strings this is easy to arrange (using a semantically
+irrelevant »-redex to circumvent the value polymorphism restriction):
 =GFT Example SML
-val pc_error = default_error (fn s => s);
+fun pc_error () = default_error (fn s => s);
 =TEX
 \item
 Now we need to define a reader. For simplicity, let us construct the
@@ -350,7 +386,7 @@ fun pc_reader (ip : string list) : string * string list = (
 The desired parser may now be obtained by  applying
 $slrp'gen\_parser$ as follows:
 =GFT Example SML
-val pc_parser = slrp'gen_parser default_resolver pc_classify pc_error pc_reader;
+val pc_parser = slrp'gen_parser default_resolver pc_classify (pc_error()) pc_reader;
 =TEX
 To test our parser we build a simple lexical analyser, e.g.:
 
@@ -419,8 +455,8 @@ Here when we run \Slrp\ we will see the following message:
 =GFT Example Output
 1 conflict detected (1 shift/reduce, 0 reduce/reduce)
 +++ Dynamic Actions +++
-State 6 on symbol Op
-        Either shift to 4 or reduce by E = E, Op, E | ...
+State 3 on symbol Op
+        Either shift to 6 or reduce by E = E, Op, E | ...
 =TEX
 
 Let us see what happens if we ignore this message
@@ -501,7 +537,7 @@ in \cite{DS/FMU/IED/DTD018}.)
 
 We then define the parser as follows.
 =GFT Example Code
-val pc_parser = slrp'gen_parser (simple_resolver pc_compare) pc_classify pc_error pc_reader;
+val pc_parser = slrp'gen_parser (simple_resolver pc_compare) pc_classify (pc_error()) pc_reader;
 =TEX
 Defining $pc$ as before, we see that the case which used to fail now
 works as we would like:
@@ -538,20 +574,28 @@ this internal representation for the grammar.%
 \pagebreak
 \section{INTERFACE}
 The parser generator is to be compiled during system
-build into a separate ML database, $sun{\cal N}slrp.db$, ${\cal N}= 3, 4$.
+build into a separate ML database.
 This is then invoked using the {\it slrp} function defined below to construct part of
-the source of the ICL HOL parser.
-A shell script also called {\it slrp} can be (and is) used to do this.
+the source of the various object language parsers.
+A shell script also called {\it slrp} can be (and is normally) used to do this, see below.
 =DOC
 signature €Slrp› = sig
 =DESCRIBE
 This is the signature of a structure containing an SLR(1) parser
 generator, \Slrp.
-It is not included as part of the release 1 HOL system.
+It is not included as part of the release 1 HOL system,
+but is packaged in a separate ML database called {\it slrp}.
 =ENDDOC
-The parser generator is invoked using the following function $slrp$.
+The parser generator may be invoked from ML code using the following function {\it slrp}.
 =DOC
-val €slrp› : {in_file : string, out_file : string, logfile : string, eos:string, loglevel:int} -> unit
+val €slrp› : {
+	in_file	: string,
+	out_file	: string,
+	eos:string,
+	log_file	: string,
+	log_level:int} -> unit;
+
+exception €SlrpError› of string;
 =DESCRIBE
 $slrp$ is used to invoke \Slrp, an SLR(1) parser generator. 
 It is part of the {\Product} developer toolkit.
@@ -565,12 +609,16 @@ $slrp'gen\_parser$ which acts as a parser for the supplied grammar.
 $eos$ gives the name of the lexical class denoting end of input.
 
 The integer {\it loglevel} determines the amount
-of log information to be written to the file named {\it logfile}.
-{\it logfile} is  ignored if {\it loglevel = 2}.
+of log information to be written to the file named {\it log\_file}.
+{\it log\_file} is  ignored if {\it log\_level = 2}.
 
 See the description of the shell script {\it slrp} below for more information.
 
-{\it loglevel = 2} is the most useful level during development of a parser.
+{\it log\_level = 2} is the most useful level during development of a parser.
+
+If any errors are detected, a report is sent to the standard output and
+to the log file (if {\it log\_level $>$ 0}) and then the exception
+{\it SlrpError} is raised.
 =ENDDOC
 
 =SML
@@ -579,14 +627,17 @@ end; (* of signature Slrp *)
 =SML
 (* Comment out the description of the shell script in the SML file:
 =DOC
-	€slrp› [-l n] -e eos file
+	€slrp› [-l n] -e eos -f grammar_file
 =DESCRIBE
 The shell script {\it slrp} runs the \Slrp parser generator.
 It is part of the {\Product} developer toolkit.
 
-The {\it file} argument gives the name of a file containing the
-input the input file for \Slrp. This file must have a ``.txt''
-file name extension, e.g. {\it myparser.txt}.
+The {\it -f grammar\_file} option identifies a file containing the
+input for \Slrp. The file name must have a ``.txt''
+file name extension, e.g. {\it myparser.txt}, so
+``.txt'' is appended to {\it grammar\_file}, if not already present,
+e.g., {\it myparser} is treated as {\it myparser.txt}.
+
 The SML code output by \Slrp is written to a file whose name
 is formed by replacing the ``.txt'' extension with ``.sml'',
 e.g., {\it myparser.sml}; log information (see below), if any,
@@ -597,16 +648,16 @@ The input file should contain a BNF grammar in which optional fragments of
 Standard ML may be supplied in brackets at the end of each alternative.
 The identifiers $x1$, $x2$, ... may be used to refer to
 the successive components of the alternative in these Standard ML fragments.
-The identifier $stk$ may be used to refer to the parsing stack.
+The identifier {\it stk} may be used to refer to the parsing stack.
 It is provided to allow the user to access the left context of the input.
 The left context does not include the stack items referred to as
-$x1$, $x2$, ... .
+{\it x1 ,  x2 , ... }.
 See above for more information on the input format and for examples.
 
 $eos$ gives the name of the lexical class denoting end of input.
 
-The option {\it -l} may be used to specify an integer $n$ determining the amount
-of log information to be written to the file named $logfile$, as follows:
+The option {\it -l} may be used to specify an integer {\it n} determining the level
+of log information to be written to the file named {\it log\_file}, as follows:
 
 \begin{center}
 \begin{tabular}{|l|p{4in}|}\hline

@@ -12,7 +12,7 @@ Don't worry about this!
 %\TPPpart{}
 \TPPtitle{SLR Parser Generator}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP017}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.26 $%
+\def\SCCSversion{$Revision: 1.27 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 %\TPPdate{}  %% Mandatory field (with sensible default)
@@ -47,7 +47,7 @@ A simple SLR parser generator is implemented.}
 \vfill
 \begin{centering}
 
-\bf Copyright \copyright\ : International Computers Ltd \number\year
+\bf Copyright \copyright\ : Lemma 1 Ltd \number\year
 
 \end{centering}
 
@@ -102,10 +102,14 @@ Renamings from version 1.5 of DS/FMU/IED/WRK038.
 \item[Issue 1.25 (8th February 1999)] Updates for SML'97.
 \item[Issue 1.26 (17th February 1999)] Corrected missing comma in reduction-table output code.
 \item[Issue 1.27 (21st April 1999)] New strategy for code to generate tables to circumvent SML-NJ compile-time problem.
+\item[Issue 1.28 (1st August 2000)]
+A shell script to run the parser generator has been added and the error handling
+of the ML interface has been rationalised to facilitate this --- after reporting
+an error, the interface now raises an exception that can be trapped by the
+code piped in from the script.
 \end{description}
 \subsection{Changes Forecast}
-The SLRP code is to be re-structured at some time in
-the future.
+None --- although a move to LALR(1) (a la {\tt yacc}) might be worthwhile one day.
 
 \pagebreak
 \section{GENERAL}
@@ -136,11 +140,13 @@ Section \ref{OUTPUTROUTINES} contains functions to write the tables out to
 the output file (as fragments of Standard ML).
 
 Finally, section \ref{INTERFACE} pulls all the earlier pieces together to
-give the function $slrp$ which is the user interface to the parser
-generator.
+give the function {\it slrp} which is the ML user interface to the parser
+generator and the {\it slrp} shell script which can be used to call it from make-files etc.
 
 \subsection{Dependencies}
 The code is dependent on \cite{DS/FMU/IED/DTD018}.
+It also depends on the makefile (or a developer working interactively) to
+define two strings at the ML top level: {\it system\_version} and {\it copyright}.
 
 \section{PREAMBLE}\label{PREAMBLE}
 =TEX
@@ -150,15 +156,15 @@ structure €Slrp› : Slrp = struct
 The following banner is written to the log file and to standard output
 whenever the parser generator is run.
 =SML
-val €banner› : string = "SLRP Parser Generator (0.$Revision: 1.26 $) Copyright (C) ICL 1991";
+val €banner› : string = "SLRP Parser Generator  (" ^ product_version ^ ")  " ^ copyright;
 =TEX
 =SML
 open EfficientDictionary SlrpDriver;
 =TEX
 The following exception is raised in the event of, e.g., i/o errors.
-It is caught in $slrp$ and so is never visible to the user.
+It is caught in {\it slrp} and so is never visible to the user.
 =SML
-exception €SLRP_ERROR› of string;
+exception €SlrpError› of string;
 =TEX
 The action, goto and reduction tables produced are constructed out of lists.
 The length of those lists is configuable by changing the value of the reference
@@ -175,7 +181,7 @@ val _ = if contains (map fst (get_int_controls()))
 			default=(fn x => 1),
 			check=(fn x =>
 				if x > 0 then true
-				else raise SLRP_ERROR
+				else raise SlrpError
 				  "slrp_break must be a positive number")
 	};
 =TEX
@@ -288,7 +294,7 @@ fun €chat› (msg : string) = (output(std_out, msg));
 =TEX
 =SML
 fun €read_file› ("": string) : string = 
-	raise SLRP_ERROR "an empty filename is not allowed for the input file"
+	raise SlrpError "an empty filename is not allowed for the input file"
 |   read_file (file : string) = (
 	let	val ip = open_in file;
 		fun aux () = (
@@ -301,7 +307,7 @@ fun €read_file› ("": string) : string =
 		val res = implode(aux());
 	in	close_in ip; res
 	end	handle ex as Io _ =>
-		raise SLRP_ERROR("i/o failure on input file: " ^ file ^ " (" ^ string_of_exn ex ^ ")")
+		raise SlrpError("i/o failure on input file: " ^ file ^ " (" ^ string_of_exn ex ^ ")")
 );
 =TEST
 read_file "" (* FAILS *);
@@ -314,21 +320,21 @@ val €log_file› : outstream ref = ref std_out;
 in
 =TEX
 =SML
-fun €open_logfile› (file : string) : unit = (
+fun €open_log_file› (file : string) : unit = (
 	(if file <> ""
 	then log_file := open_out file
-	else raise SLRP_ERROR "an empty filename is not allowed for the log file")
+	else raise SlrpError "an empty filename is not allowed for the log file")
 	handle ex as Io _ =>
-	raise SLRP_ERROR("i/o failure on log file: " ^ file ^ " (" ^ string_of_exn ex ^ ")")
+	raise SlrpError("i/o failure on log file: " ^ file ^ " (" ^ string_of_exn ex ^ ")")
 );
 =TEX
 =SML
-fun €flush_logfile› () : unit = (
+fun €flush_log_file› () : unit = (
 	ExtendedIO.flush_out (!log_file)
 );
 =TEX
 =SML
-fun €close_logfile› () : unit = (
+fun €close_log_file› () : unit = (
 	close_out (!log_file)
 );
 =TEX
@@ -336,7 +342,7 @@ fun €close_logfile› () : unit = (
 fun €log› (msg : string) = (
 	output(!log_file, msg)
 	handle ex as Io _ =>
-	raise SLRP_ERROR("i/o failure on output file (" ^ string_of_exn ex ^ ")")
+	raise SlrpError("i/o failure on output file (" ^ string_of_exn ex ^ ")")
 );
 end; (* of local ... in ... end *)
 =TEX
@@ -515,7 +521,7 @@ let	val sd = (nt_dict := initial_e_dict);
 		FNonTerm (
 			case e_lookup name (!nt_dict) of
 			Value nt =>	nt
-			| _ =>		raise SLRP_ERROR "make_grammar")
+			| _ =>		raise SlrpError "make_grammar")
 	fun aux3 rhs = map (map aux2) rhs;
 	fun aux4 (nt, rhs) =
 		(nt,  PPArray.arrayoflist
@@ -703,7 +709,7 @@ fun €slr_tables› (g : ''_lc GRAMMAR) (eos : ''_lc) (sen : string)
 	let	open PPArray;
 		val g' = make_grammar g;
 		val sent = (case e_lookup sen (!nt_dict) of 
-			Nil => raise SLRP_ERROR "SLR_TABLES"
+			Nil => raise SlrpError "SLR_TABLES"
 			|Value x => x);
 		val C = make_items g' sent;
 		val n = bound C;
@@ -750,7 +756,7 @@ fun €slr_tables› (g : ''_lc GRAMMAR) (eos : ''_lc) (sen : string)
 					any items (fn (nt, 0, 0) => nt = sent
 						|   _ => false)))
 		handle Fail _ =>
-		raise SLRP_ERROR
+		raise SlrpError
 		"the sentence symbol is not in the list of items";
 	in	(actions, gotos, Ijs, g', init_state)
 	end
@@ -1076,7 +1082,7 @@ fun €make_grammar_and_reduction_table› (PG_Grammar(G as ((sen,_)::_)) : P_GRAMMA
 		val AG = revfold folder Y nil;
 	in	(strip_action AG, make_reduction_table AG)
 	end
-) | make_grammar_and_reduction_table _ = raise SLRP_ERROR "invalid argument";
+) | make_grammar_and_reduction_table _ = raise SlrpError "invalid argument";
 =TEX
 \subsection{Lexical Analyser}
 =TEX
@@ -1088,7 +1094,7 @@ Most of the lexical analyser is declared within this local block.
 =SML
 local
 
-    exception €LEX_FAIL› of string;
+    exception €LexFail› of string;
 
     val €ord0›	= ord "0";
     val €ord9›	= ord "9";
@@ -1234,12 +1240,12 @@ the start quote character.
 		("\\" :: _ :: rest) =>
 			rec_quote_rest qtch (collect (tl cs, tok))
 		| ("\\" :: _) =>
-			raise (LEX_FAIL "escaped character at end of string")
+			raise (LexFail "escaped character at end of string")
 		| (ch :: rest) =>
 			if (ch = qtch)
 			then (rest, tok)
 			else rec_quote_rest qtch (collect (cs, tok))
-		| _ => raise (LEX_FAIL "unmatched quote")
+		| _ => raise (LexFail "unmatched quote")
             );
         in
             if next_is_quoter cs
@@ -1260,7 +1266,7 @@ finished by the matching right bracket.
 		else rec_action_rest (i-1) (collect (cs, tok))
 	else if not (is_nil cs)
 	then rec_action_rest i (collect(cs, tok))
-	else raise (LEX_FAIL "unmatched left bracket")
+	else raise (LexFail "unmatched left bracket")
     );
 =TEX
 =SML
@@ -1282,7 +1288,7 @@ Left and right comment symbols must balance. $rec\_comment\_rest$ arranges for t
 		else rec_comment_rest (i-1) (tl(tl cs))
 	else if not (is_nil cs)
 	then rec_comment_rest i (tl cs)
-	else raise (LEX_FAIL "unmatched comment symbol")
+	else raise (LexFail "unmatched comment symbol")
     );
 =TEX
 =SML
@@ -1325,7 +1331,7 @@ part of the input.
                case tk of
                    (KNOWN cls, tk) => (cls, tk):: tokenise recognisers cs'
 	      |	   (COMMENT, _) => tokenise recognisers cs'
-              |    (UNKNOWN, tk) =>  raise LEX_FAIL 
+              |    (UNKNOWN, tk) =>  raise LexFail 
 			("did not recognise: " ^ (hd cs'))
            end
        )
@@ -1345,9 +1351,8 @@ The interface to the lexical analyser is the following function.
 
     fun €BNF_lex_string› (text : string) : BNF_lex_item list = (
 	(tokenise recognisers (explode text))
-	handle (LEX_FAIL msg) => (
-            output(std_out, "Lexical analysis error: " ^ msg ^ "\n");
-            nil
+	handle (LexFail msg) => (
+            raise SlrpError ("Lexical analysis error: " ^ msg)
         )
     );
 =TEX
@@ -1369,8 +1374,16 @@ BNF_lex_string "(* A C (* B C *) *) () () (jj)";
 val €BNF_classify› : BNF_lex_item -> BNF_lex_class = fst;
 =TEX
 =SML
-val €BNF_error› : (BNF_lex_item, BNF_lex_class, 'a, 'b) ERROR_ROUTINE =
-					fn x => default_error format_BNF_lex_item x;
+=SML
+val €BNF_error› : (BNF_lex_item, BNF_lex_class, 'a, 'b) ERROR_ROUTINE = (fn (tok, stk, _, _) => 
+	let	val do_tok = format_BNF_lex_item;
+		val msg =
+			if	any stk (fn Token _ => true | _ => false)
+			then	do_tok tok ^ " not expected after: " ^ format_stack do_tok stk
+			else	do_tok tok ^ " not expected here";
+	in	raise SlrpError ("Syntax error: " ^ msg)
+	end
+);
 =TEX
 =SML
 val €BNF_end_of_string› : BNF_lex_item = (BNF_eos, "<End-of-Input>");
@@ -1438,7 +1451,7 @@ fun €resolve_reduce_reduce› (g : ('lc)GRAMMAR) (acts : ACTION list) : ACTION lis
 					if nt = nt'
 					then i
 					else index nt (i+1) more
-				) | index _ _ [] = raise SLRP_ERROR "invalid non-terminal";
+				) | index _ _ [] = raise SlrpError "invalid non-terminal";
 				val (i1, i2) = (index nt1 0 g, index nt2 0 g);
 			in	if i1 = i2
 				then	if alt1 <= alt2
@@ -1555,7 +1568,7 @@ fun €resolve_either›(g : ('lc)GRAMMAR) (acts : ACTION list) : ACTION = (
 			[(act1 as Reduce x), (act2 as Shift s)] => Dynamic(s, x)
 		|	[(act1 as Shift s), (act2 as Reduce x)] => Dynamic(s, x)
 		|	[act] => act
-		|	other => raise SLRP_ERROR "failure in conflict resolution"
+		|	other => raise SlrpError "failure in conflict resolution"
 	end
 );
 =TEX
@@ -1585,9 +1598,9 @@ in
 fun €open_out_file› (file : string) : unit = (
 	(if file <> ""
 	then out_file := open_out file
-	else raise SLRP_ERROR "an empty filename is not allowed for the output file")
+	else raise SlrpError "an empty filename is not allowed for the output file")
 	handle ex as Io _ =>
-	raise SLRP_ERROR("i/o failure on output file: " ^ file ^ " (" ^ string_of_exn ex ^ ")")
+	raise SlrpError("i/o failure on output file: " ^ file ^ " (" ^ string_of_exn ex ^ ")")
 );
 =TEX
 =SML
@@ -1610,14 +1623,14 @@ fun €put_string› (s:string):unit = ((
 		)
 	end
 )	handle ex as Io _ =>
-	raise SLRP_ERROR("i/o failure on output file (" ^ string_of_exn ex ^ ")")
+	raise SlrpError("i/o failure on output file (" ^ string_of_exn ex ^ ")")
 );
 fun €put_line› (s:string):unit = ((
 	output(!out_file, s);
 	output(!out_file,"\n");
 	cursor := 0
 )	handle ex as Io _ =>
-	raise SLRP_ERROR("i/o failure on output file (" ^ string_of_exn ex ^ ")")
+	raise SlrpError("i/o failure on output file (" ^ string_of_exn ex ^ ")")
 );
 end; (* of local ... in ... end *)
 =SML
@@ -1841,11 +1854,12 @@ fun €output_parser›
 =TEST
 =TEX
 \section{INTERFACE} \label{INTERFACE}
-The parser generator is invoked using the following function $slrp$.
+\subsection{ML Interface}
+The parser generator is invoked using the following function {\it slrp}.
 Its first three parameters are the names of the input file, output file and
-log file. The fourth parameter is the name of the
+the name of the
 end of input lexical class.
-The remaining parameter is an integer which determines the level
+The remaining parameters give the name of a log file and an integer which determines the level
 of log information as follows:
 
 \begin{centering}
@@ -1862,41 +1876,41 @@ $\geq 3$ & As 2 together with a listing of the full action table before resoluti
 \end{tabular}
 \end{centering}
 =SML
-fun €slrp› {in_file : string, out_file : string, logfile : string, eos:string, loglevel:int} : unit = (
-	let	fun my_log msg = (if loglevel > 0 then log msg else ());
-	in let	val se1 = chat(burst banner);
-		val se2 = (open_out_file out_file;
-			if loglevel > 0 then open_logfile logfile else ());
-		val se3 = my_log (burst banner);
+fun €slrp› {in_file : string, out_file : string, log_file : string, eos:string, log_level:int} : unit = (
+	(let	val se00 = if log_level > 0 then open_log_file log_file else ();
+		fun my_log msg = (if log_level > 0 then log msg else ());
+	in let	val se01 = chat(burst banner);
+		val se02 = my_log (burst banner);
+		val se03 = open_out_file out_file;
 		val (grm, reducers) = BNF_parse in_file;
-		val se3a = (if loglevel >= 2
+		val se04 = (if log_level >= 2
 			then (	log "\n"; log(burst "Grammar"); log"\n";
 				print_grammar format_sym_class grm;
 				log "\n"; log(burst "Terminal Symbols"); log"\n";
 				print_terms format_sym_class grm;
-				flush_logfile() )
+				flush_log_file() )
 			else ());
 		val (actions, gotos, Ijs, eff_grammar, init) = slr_tables grm (PuncClass eos) sentence_symbol;
-		val se4 = (if loglevel >= 2
+		val se05 = (if log_level >= 2
 			then (	log "\n"; log(burst "State Table"); log"\n";
 				print_states (grm, format_sym_class) Ijs eff_grammar)
 			else ());
 		val confs = conflicts actions;
 		val conf_msg = conflict_summary confs;
-		val se6 = (if loglevel >= 2
+		val se07 = (if log_level >= 2
 			then (	log "\n"; log(burst "Conflicts"); log"\n";
 				chat conf_msg;
 				my_log conf_msg; my_log "\n";
 				print_conflicts log (grm, format_sym_class) confs)
 			else(chat conf_msg; my_log"\n"; my_log conf_msg));
-		val se7 = (if loglevel >= 3
+		val se08 = (if log_level >= 3
 			then (	log "\n"; log(burst "Action Table"); log"\n";
 				print_action_table log (grm, format_sym_class) actions)
 			else());
-		val se8 = (if not(is_nil confs)
+		val se09 = (if not(is_nil confs)
 			then resolve_conflicts grm actions
 			else ());
-		val se9 = (if not(is_nil confs)
+		val se10 = (if not(is_nil confs)
 			then (	my_log "\n"; my_log(burst "Dynamic Actions"); my_log"\n";
 				print_dynamic_actions my_log (grm, format_sym_class) actions;
 				chat(burst "Dynamic Actions");
@@ -1904,15 +1918,71 @@ fun €slrp› {in_file : string, out_file : string, logfile : string, eos:string, l
 			else());
 		val se11 = output_parser do_sym_class grm actions gotos reducers init;
 		val se12 = (chat (burst "End of Run"); my_log "\n"; my_log (burst "End of Run"));
-	in	(close_logfile(); close_out_file())
-	end	handle SLRP_ERROR msg =>
-		(chat "*** ERROR "; chat msg; chat "\n";
-		 my_log "*** ERROR "; my_log msg; my_log "\n")
-	end
+	in	(close_out_file(); close_log_file())
+	end	handle ex as SlrpError msg =>
+		(my_log "*** ERROR "; my_log msg; my_log "\n"; raise ex)
+	end	handle ex as SlrpError msg =>
+		(chat "*** ERROR "; chat msg; chat "\n"; raise ex))
+	handle ex as PARSER_ERROR msg =>
+	(chat "*** INTERNAL ERROR IN SLRP "; chat msg; chat "\n"; raise SlrpError msg)
 );
 =TEX
 =SML
 end; (* of structure Slrp *)
+=TEX
+\subsection{Shell Interface}
+=DUMP slrp
+#!/bin/sh
+# slrp From: $Id:$
+# Shell script to run the SLRP Parser Generator
+if test -z "$PROGNAME"
+then
+	PROGNAME=`basename $0`
+	USAGE="$PROGNAME [-l log_level] -e eos -f grammar_file"
+fi
+LOGLEVEL=2
+EOS=
+INFILE=
+while getopts l:e:f: arg
+do
+	case $arg in
+		l)	LOGLEVEL=$OPTARG ;;
+		e)	EOS=$OPTARG ;;
+		f)	INFILE=$OPTARG ;;
+	esac
+done
+shift `expr $OPTIND - 1`
+if	test -n "$*" -o -z "$EOS" -o -z "$INFILE"
+then
+	echo "$PROGNAME: usage: $USAGE"
+	exit 1
+fi
+if	test `expr "$INFILE" : ".*\\.txt\$"` -eq 0
+then
+	INFILE=$INFILE.txt
+fi
+if	test `expr "$LOGLEVEL" : "[0-9]*$"` -eq 0
+then
+	echo "$PROGNAME: the -l option must be a number"	
+	exit 1
+fi
+DIR=`dirname $INFILE`
+BASE=`basename $INFILE .txt`
+OUTFILE=$DIR/$BASE.sml
+LOGFILE=$DIR/$BASE.log
+ML="(Slrp.slrp{\
+	in_file=\"$INFILE\",\
+	out_file=\"$OUTFILE\",\
+	eos=\"$EOS\",\
+	log_file=\"$LOGFILE\",\
+	log_level=$LOGLEVEL}; PPCompiler.exit 0)\
+	handle _ => PPCompiler.exit 1;"
+eval `.arch-n-opsys`
+DBNAME=`findfile slrp.$HEAP_SUFFIX $PATH`
+echo $ML | sml @SMLload=$DBNAME
+=TEX
+=SH
+chmod +x slrp
 =TEX
 \twocolumn[\section{INDEX}]
 \small
@@ -1927,12 +1997,12 @@ fun dump_string file string = (
 );
 
 dump_string "slr.tst"(
-"E	= E, `Plus`, T (add x1 x3)			\n" ^
-"	| T (fetch x1);			\n" ^
-"T	= T, `Times`, F (mul x1 x3)		\n	" ^
-"	| F (fetch x1);\n" ^
-"F	= `Lbrack`, E, `Rbrack` (fetch x2)	\n		" ^
-"	| Num (conv x1);			\n");
+"E    = E, `Plus`, T (add x1 x3)            \n" ^
+"    | T (fetch x1);            \n" ^
+"T    = T, `Times`, F (mul x1 x3)        \n    " ^
+"    | F (fetch x1);\n" ^
+"F    = `Lbrack`, E, `Rbrack` (fetch x2)    \n        " ^
+"    | Num (conv x1);            \n");
 
 
 datatype LC3 = Plus | Times | Lbrack | Rbrack | Num | Eos | Wrong;
@@ -1947,7 +2017,7 @@ fun fetch (Parsed (x:int)) = x
 fun conv (Token (n:string, _)) = nat_of_string n
 |   conv _ = raise PARSER_ERROR "corrupt stack";
 val resolver3 = default_resolver;
-val error3 = default_error Combinators.I;
+fun error3 () = default_error Combinators.I;
 fun lex3 (s : string) : string list = (
 	let	val chars = explode s;
 		fun get_num acc (x :: more) = (
@@ -1977,10 +2047,10 @@ fun classify3 "*" = Times
 |   classify3 ")" = Rbrack
 |   classify3 "<end-of-input>" = Eos
 |   classify3 Other = if is_all_decimal Other then Num else Wrong;
-Slrp.slrp {in_file="slr.tst", out_file="slr.sml", logfile ="slr.log", eos ="Eos", loglevel=2};
+Slrp.slrp {in_file="slr.tst", out_file="slr.sml", log_file ="slr.log", eos ="Eos", log_level=2};
 open EfficientDictionary;
-PolyML.use"slr.sml";
-val parser3 = slrp'gen_parser resolver3 classify3 error3 reader3 o lex3;
+use"slr.sml";
+val parser3 = slrp'gen_parser resolver3 classify3 (error3()) reader3 o lex3;
 
 parser3"1001+42";
 parser3"1001 * 42";
@@ -1991,15 +2061,19 @@ parser3"(((((((1+2)+3)+4)+5)+6)+7)+8)";
 parser3"((((((1+2)+3)+4)+5)+6)+7)+8)" (* error case *);
 parser3"((((((((((1+2)+3)+4)+5)+6)+7)+8)" (* error case *);
 
-Slrp.slrp {in_file="", out_file="boo", logfile ="goo", eos ="Eos", loglevel=42};
-Slrp.slrp {in_file="/dev/null", out_file="boo", logfile ="goo", eos ="Eos", loglevel=42};
+Slrp.slrp {in_file="", out_file="boo", log_file ="goo", eos ="Eos", log_level=42};
+Slrp.slrp {in_file="/dev/null", out_file="boo", log_file ="goo", eos ="Eos", log_level=42};
+Slrp.slrp {in_file="test1.txt", out_file="boo", log_file ="goo", eos ="Eos", log_level=42};
+Slrp.slrp {in_file="test2.txt", out_file="boo", log_file ="goo", eos ="Eos", log_level=42};
+Slrp.slrp {in_file="test3.txt", out_file="boo", log_file ="goo", eos ="Eos", log_level=42};
+Slrp.slrp {in_file="test4.txt", out_file="test4.sml", log_file ="goo", eos ="Eos", log_level=42};
 
 dump_string "slr.tst"(
-"E	= E, `sub`, E, `sup`, E		\n" ^
-"	| E, `sub`, E			\n" ^
-"	| E, `sup`, E			\n" ^
-"	| `{`, E, `}`;			\n");
+"E    = E, `sub`, E, `sup`, E        \n" ^
+"    | E, `sub`, E            \n" ^
+"    | E, `sup`, E            \n" ^
+"    | `{`, E, `}`;            \n");
 
-Slrp.slrp {in_file="slr.tst", out_file="slr.sml", logfile ="slr.log", eos ="Eos", loglevel=2};
+Slrp.slrp {in_file="slr.tst", out_file="slr.sml", log_file ="slr.log", eos ="Eos", log_level=2};
 
 
