@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.40 2002/12/10 16:35:42 rda Exp rda $
+ * $Id: mainw.c,v 2.41 2002/12/11 00:15:01 rda Exp $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -94,27 +94,27 @@ XtAppContext app; /* global because needed in msg.c */
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Widget       Parent   Purpose
- * root         -         the top level of the hierarchy
- * frame        root      main window
- * work         frame     work area
- * infobar      work      manager form for next four
- * infolabel    infobar   label indicating whether file has been modified, etc.
- * linenumber	infobar   current line number indicator
- * logo         infobar   ProofPower logo
- * filename     infobar   rowcol for the next two:
- * filelabel    filename  label for name of file being edited
- * namestring   filename  displays name of file being edited
- * lnpopup	linenumber popup menu to enable/disable the line number indicator
- * mainpanes    work       paned window for the script and journal window
- * script       mainpanes  the script being edited
- * journal      mainpanes  displays application output
- * menubar      frame      the menu bar at the top of the main window
- * filemenu     menubar    the file menu
- * toolsmenu    menubar    the tools menu
- * editmenu     menubar    the edit menu
- * popupeditmenu menubar   the popup edit menu
- * cmdmenu      menubar    the command menu
- * helpmenu     menubar    the help menu
+ * root         -           the top level of the hierarchy
+ * frame        root        main window
+ * mainpanes    frame       paned window for scriptpanes and journal window
+ * scriptpanes	mainpanes   paned window for infobar and script
+ * infobar      scriptpanes manager form for next four
+ * infolabel    infobar     label indicating if file has been modified, etc.
+ * linenumber	infobar     current line number indicator
+ * logo         infobar     ProofPower logo
+ * filename     infobar     rowcol for the next two:
+ * filelabel    filename    label for name of file being edited
+ * namestring   filename    displays name of file being edited
+ * lnpopup	linenumber  popup menu to enable/disable line number indicator
+ * script       scriptpanes the script being edited
+ * journal      mainpanes   displays application output
+ * menubar      frame       the menu bar at the top of the main window
+ * filemenu     menubar     the file menu
+ * toolsmenu    menubar     the tools menu
+ * editmenu     menubar     the edit menu
+ * popupeditmenu menubar    the popup edit menu
+ * cmdmenu      menubar     the command menu
+ * helpmenu     menubar     the help menu
  *
  * All widgets have the same name in the widget hierarchy
  * as their C name.
@@ -126,9 +126,9 @@ Widget  script,
 	journal;	/* global because needed in pterm.c */
 
 static Widget
-	frame, work, infobar, filelabel, filename, infolabel, newfile,
+	frame, infobar, filelabel, filename, infolabel, newfile,
 	namestring, logo, linenumber, lnpopup,
-	mainpanes,
+	mainpanes, scriptpanes,
 	menubar, filemenu, toolsmenu, popupeditmenu, editmenu, cmdmenu, helpmenu;
 
 XtPointer undo_ptr;
@@ -399,7 +399,7 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * journal_resize_hanlder: work-around for Motif's treatment
+ * journal_resize_handler: work-around for Motif's treatment
  * of resizing the journal window using the sash. What we want to
  * do is keep the insertion position visible after the resize if
  * it was visible before.
@@ -592,10 +592,10 @@ static Boolean setup_main_window(
 		root, NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Working area:
+ * Working area: a user resizable paned window for the script and journal windows
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	work = XtVaCreateWidget("work",
+	mainpanes = XtVaCreateWidget("mainpanes",
 		xmPanedWindowWidgetClass,
 		frame, NULL);
 
@@ -675,11 +675,19 @@ static Boolean setup_main_window(
 	}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Paned window for info bar and script window
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+	scriptpanes = XtVaCreateWidget("scriptpanes",
+		xmPanedWindowWidgetClass,
+		mainpanes, NULL);
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * Info Bar: File-name area and logo
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	infobar = XtVaCreateWidget("infobar",
-		xmFormWidgetClass, work,
+		xmFormWidgetClass, scriptpanes,
 		NULL);
 
 
@@ -742,14 +750,6 @@ static Boolean setup_main_window(
 	XtAddEventHandler(linenumber, ButtonPressMask, False, post_ln_popup_menu, NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * User resizables paned window for the script and journal windows
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-	mainpanes = XtVaCreateWidget("mainpanes",
-		xmPanedWindowWidgetClass,
-		work, NULL);
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
  * Script window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	i = 0;
@@ -759,7 +759,7 @@ static Boolean setup_main_window(
 	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
 	XtSetArg(args[i], XmNselectionArrayCount, 		3); ++i;
 
-	script = XmCreateScrolledText(mainpanes, "script", args, i);
+	script = XmCreateScrolledText(scriptpanes, "script", args, i);
 
 	XtOverrideTranslations(script, text_translations);
 
@@ -894,7 +894,7 @@ static Boolean setup_main_window(
 		XtManageChild(journal);
 	}
 	XtManageChild(mainpanes);
-	XtManageChild(work);
+	XtManageChild(scriptpanes);
 	XtManageChild(frame);
 
 	XtRealizeWidget(root);
