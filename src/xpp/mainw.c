@@ -1417,8 +1417,8 @@ Bool execute_command()
 		w = journal;
 	}
 */
-	if(XmTextGetSelectionPosition(w, &dontcare, &dontcare)) {
-		cmd = XmTextGetSelection(w);
+	if(	XmTextGetSelectionPosition(w, &dontcare, &dontcare)
+	&&	(cmd = XmTextGetSelection(w))) {
 		len = strlen(cmd);
 		send_to_application(cmd, len);
 		XtFree(cmd);
