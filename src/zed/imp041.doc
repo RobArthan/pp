@@ -74,6 +74,9 @@ moved into mixed HOL/Z.
 \item [Issue 1.20 (26th October 1992)]
 Changes after comments - rearrangement of material
 amongst 041, 042 and 043. 
+\item [Issue 1.22 (9th November 1992)]
+Changes after comments - proof context changes,
+added $z\_µ\_tac$, etc, replaced $z\_defn\_conv$ by $z\_para\_pred\_conv$, etc, added $z\_decl\_pred\_conv$.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -162,26 +165,6 @@ in
 	vs
 end);
 =TEX
-Find the Z constants (i.e. declared in 
-=INLINEFT
-get_descendants "z_language"
-=TEX
-) in a term.
-Note we return terms, not name/type pairs like
-$term\_consts$.
-=SML
-fun Ûterm_z_constsÝ (tm : TERM) : TERM list = (
-let	val in_thys = get_descendants "z_language";
-	val hol_cons = term_consts tm;
-	val zed_consts = mapfilter
-		(fn (nm,ty) => if get_const_theory nm mem in_thys
-			then mk_const(nm,ty)
-			else fail "" 0 [])
-		hol_cons;
-in
-	zed_consts
-end);
-=TEX
 =FRULE 1
 ¶_¤_rule
 ¬x®
@@ -195,9 +178,12 @@ fun Û¶_¤_ruleÝ x t = app_fun_rule
 	(mk_const("¶",mk_­_type(mk_­_type(type_of x,BOOL),BOOL)))
 	(Ì_eq_rule x t);
 =TEX
+=SML
+local
+=TEX
 Protected $Á$ conversion:
 =SML
-fun Ûprot_Á_convÝ (nm:string) : CONV = 
+fun prot_Á_conv (nm:string) : CONV = 
 	simple_Á_conv nm ORELSE_C (fn tm =>
 	if is_simple_Ì tm
 	then (let	val newnm = string_variant(map (fst o dest_var) (frees tm)) nm;
@@ -205,6 +191,7 @@ fun Ûprot_Á_convÝ (nm:string) : CONV =
 		simple_Á_conv newnm tm
 	end)
 	else fail_conv tm);
+in
 =TEX
 Rename a sequence of quantified variables:
 =SML
@@ -219,6 +206,7 @@ in
 	(RAND_C (prot_Á_conv nm)) THEN_C BINDER_C (seq_binder_simple_Á_conv x)
 end
 ) | seq_binder_simple_Á_conv [] = id_conv;
+end;
 =TEX
 \subsubsection{Conversionals}
 Apply through all $Ì$'s.
@@ -226,14 +214,6 @@ Apply through all $Ì$'s.
 fun (ÛALL_SIMPLE_Ì_CÝ (cnv:CONV) : CONV) tm = 
 	(SIMPLE_Ì_C (ALL_SIMPLE_Ì_C cnv)
 	ORELSE_C cnv) tm;
-=TEX
-Apply to the last $µ$ in a sequence.
-=SML
-fun ÛLAST_SIMPLE_µ_CÝ (conv:CONV): CONV = (fn tm =>
-	if is_simple_µ (snd(dest_simple_µ tm))
-	then (SIMPLE_BINDER_C (LAST_SIMPLE_µ_C conv)) tm
-	else conv tm
-);
 =TEX
 Diagnostic Conversional:
 =SML
@@ -272,28 +252,13 @@ cnv3 a3 = ô a3 = a3'
 fun ÛLIST_OP_CÝ [cnv] = cnv
 | LIST_OP_C ((cnv:: cnvl):CONV list) :CONV = 
 	APP_C(RAND_C cnv, LIST_OP_C cnvl)
-| LIST_OP_C [] = fail "LIST_±_C" 0 [];
+| LIST_OP_C [] = fail "LIST_OP_C" 0 [];
 =TEX
 \subsubsection{Projection Conversions}
 Force the generation of semantic constants, if necessary:
 =SML
 val _ = ñ(d ¦ d, p ¦ p, t ¦ t, v ¦ v)®;
 val _ = ñ(d ¦ d, p ¦ p, v ¦ v)®;
-=SML
-val Ûdpvt_proj_thmÝ:THM = all_µ_intro(list_±_intro
-	(strip_±_rule (all_µ_elim (get_spec ¬$"Z'S[d,p,t,v]v"®))
-		to 3));
-local
-	val cnjs = strip_±_rule(all_µ_elim dpvt_proj_thm);
-in
-	val (Ûd_dptv_proj_convÝ,Ûp_dptv_proj_convÝ,
-		Ût_dptv_proj_convÝ, Ûv_dptv_proj_convÝ) = 
-		case (map (fn t => simple_eq_match_conv
-			(all_µ_intro t)) cnjs) of
-		[a,b,c,d] => (a,b,c,d)
-		| _ => fail "" 0 [];
-end;
-=TEX
 =SML
 val Ûdpv_proj_thmÝ:THM = all_µ_intro(list_±_intro
 	(strip_±_rule (all_µ_elim (get_spec ¬$"Z'S[d,p,v]v"®))
@@ -307,15 +272,6 @@ in
 		(all_µ_intro (hd (tl cnjs)));
 	val Ûv_dpv_proj_convÝ = simple_eq_match_conv1
 		(all_µ_intro (hd (tl (tl cnjs))));
-end;
-=TEX
-=SML
-local
-	val cnjs = strip_±_rule(all_µ_elim (get_specñ(x,y).1®));
-in
-val Ûtuple2_1_proj_convÝ = simple_eq_match_conv1 (all_µ_intro (hd cnjs));
-val Ûtuple2_2_proj_convÝ = simple_eq_match_conv1 (all_µ_intro (hd (tl cnjs)));
-;
 end;
 =TEX
 
@@ -1574,6 +1530,29 @@ val (d,p,v) = dest_z_µ
 	ñµ x :X; y,z : Y; p,q,r : X; [a,b : Z | a = b] · true®;
 DECL_C dec_pred_conv d;
 =TEX
+=SML
+val Ûz_decl_pred_convÝ : CONV = (fn tm => (
+	DECL_C dec_pred_conv) tm
+	handle complaint =>
+	divert complaint "DECL_C" "z_decl_pred_conv" 47912
+		[fn () => string_of_term tm]
+);
+=TEX
+=SML
+local
+	val cnv1 = simple_eq_match_conv1 z'µ_def;
+	val cnv2 = simple_eq_match_conv1 z'µbody_def;
+in
+val Ûz_µ_tacÝ :TACTIC = (fn gl =>
+	(conv_tac cnv1 THEN
+	REPEAT µ_tac THEN
+	conv_tac (cnv2 THEN_C LEFT_C (LEFT_C z_decl_pred_conv)))
+	gl
+	handle (Fail _) =>
+	fail "z_µ_tac" 41030 []
+);
+end;
+=TEX
 The following applies a conversion to each member of a declaration,
 without disturbing the declaration form.
 =SML	
@@ -1671,7 +1650,7 @@ DECL_INTRO_C pred_dec_conv
 =SML
 val Ûz_µ_elim_conv2Ý :CONV = (fn tm =>
 	(z_µ_elim_conv THEN_C ALL_SIMPLE_µ_C(LEFT_C
-		(LEFT_C(DECL_C dec_pred_conv))))
+		(LEFT_C z_decl_pred_conv)))
 	tm
 	handle complaint =>
 	pass_on complaint "z_µ_elim_conv" "z_µ_elim_conv2"
@@ -2091,7 +2070,7 @@ let	val (d,p,v) = dest_z_µ (concl thm)
 		pass_on complaint "inst_type_rule" "z_µ_elim";
 	val s3 = µ_elim_by_template specs s2;
 	val s4 = conv_rule cnv2 s3;
-	val s5 = conv_rule (LEFT_C(LEFT_C (DECL_C dec_pred_conv))) s4;
+	val s5 = conv_rule (LEFT_C(LEFT_C  z_decl_pred_conv)) s4;
 	val s6 = check_is_z_thm "z_µ_elim" s5;
 		(* should actually make any renaming changes
 		   the declaration to the thm *)
@@ -2504,7 +2483,7 @@ z_¶_intro_conv ¬¶ x:ú· ¶ z:'a·¶ y:ú · ‘d® ± ‘p® ± ‘v®®;
 =TEX
 =SML
 val Ûz_¶_elim_conv2Ý :CONV = (fn tm =>
-	((z_¶_elim_conv THEN_C ALL_SIMPLE_¶_C(LEFT_C(DECL_C dec_pred_conv)))
+	((z_¶_elim_conv THEN_C ALL_SIMPLE_¶_C(LEFT_C z_decl_pred_conv))
 	tm)
 	handle complaint =>
 	pass_on complaint "z_¶_elim_conv" "z_¶_elim_conv2"
@@ -2676,7 +2655,7 @@ in
 	CHECK_IS_Z_T "z_¶_tac" (conv_tac cnv1 THEN
 	¶_by_template_tac wittemp THEN
 	conv_tac cnv2 THEN
-	conv_tac (LEFT_C (DECL_C dec_pred_conv))) (asms,conc)
+	conv_tac (LEFT_C  z_decl_pred_conv)) (asms,conc)
 end);
 end;
 =GFT Examples
@@ -2695,7 +2674,7 @@ drop_main_goal();
 =TEX
 
 \subsection{Concerning Unique Existence}
-\subsubsections{Utilities}
+\subsubsection{Utilities}
 =SML
 fun (seq_simple_Â_conv:CONV) (tm:TERM) = (
 	(simple_Â_conv
@@ -2738,7 +2717,7 @@ in
 	else new
 end);
 =TEX
-\subsubsections{Main Act}
+\subsubsection{Main Act}
 =SML
 local
 val cnv1 = simple_eq_match_conv1 (taut_rule ¬µ x y z·
@@ -2876,7 +2855,7 @@ end;
 =TEX
 \subsection{Canonicalisation}
 =SML
-val Ûz_defn_marker_thmsÝ = 	
+val Ûz_para_pred_marker_thmsÝ = 	
 		[get_spec ¬$"Z'Constraint"®,
 		get_spec ¬$"Z'FreeTypeDef"®,
 		get_spec ¬$"Z'GivenSet"®,
@@ -2886,48 +2865,78 @@ val Ûz_defn_marker_thmsÝ =
 		];
 
 local
-	val indicators = map simple_eq_match_conv1 z_defn_marker_thms
+	val indicators = map simple_eq_match_conv1 z_para_pred_marker_thms;
 	
 in
-val Ûz_defn_convÝ : CONV = FIRST_C (indicators @
-	[fn tm => term_fail "z_defn_conv" 41082 [tm]]);
+val Ûz_para_pred_convÝ : CONV = (
+	FIRST_C (indicators @
+	[fn tm => term_fail "z_para_pred_conv" 41082 [tm]])
+	THEN_TRY_C
+	ALL_SIMPLE_µ_C(LEFT_C z_decl_pred_conv)
+);
 
-fun Ûz_defn_canonÝ (thm : THM) : THM list = (
+fun Ûz_para_pred_canonÝ (thm : THM) : THM list = (
 	[conv_rule (FIRST_C (indicators
-	@ [fn _ => thm_fail "z_defn_canon" 41080 [thm]])) thm]
+	@ [fn _ => thm_fail "z_para_pred_canon" 41080 [thm]])
+		THEN_TRY_C
+		ALL_SIMPLE_µ_C(LEFT_C z_decl_pred_conv)) thm]
 );
 end;
 =GFT Example
 Only if library available.
-z_defn_canon (get_spec ¬$"z'_ ª _"®);
+z_para_pred_canon (get_spec ¬$"z'_ ª _"®);
 =TEX
 =SML
-local
-	val cnv1 = simple_eq_match_conv1 (taut_rule¬µ x · T ± x ¤ x®);
-	fun cnv2 tm = ((cnv1 THEN_C cnv2) ORELSE_C 
-		(RIGHT_C cnv2) ORELSE_C
-		id_conv) tm;
-	val cnv3 = simple_eq_match_conv1 (taut_rule¬µ x · x ± T ¤ x®)
-		ORELSE_C
-		(simple_eq_match_conv1 (taut_rule¬µ x · T ± x ¤ x®));
-	val cnv4 = simple_eq_match_conv1 (taut_rule¬µ x · T ´ x ¤ x®);	
-in
+fun Ûz_get_specÝ (cst : TERM) : THM = (
+	conv_rule (TRY_C z_para_pred_conv)
+	(get_spec cst)
+	handle complaint =>
+	pass_on complaint "get_spec" "z_get_spec"
+);
+=TEX
+=SML
 fun Ûz_µ_rewrite_canonÝ (thm : THM) : THM list = (
-let	val s1 = conv_rule 
-		(z_µ_elim_conv THEN_C ALL_SIMPLE_µ_C
-		(LEFT_C(LEFT_C (DECL_C (dec_pred_conv THEN_TRY_C _u_lang_conv)
-		THEN_C cnv2) THEN_C
-		(TRY_C cnv3))
-		THEN_TRY_C cnv4)) thm
+let	val s1 = conv_rule z_µ_elim_conv2 thm
 in
 	[s1]
 end
 handle complaint =>
-divert complaint "z_µ_elim_conv" "z_µ_rewrite_canon" 41081 
+divert complaint "z_µ_elim_conv2" "z_µ_rewrite_canon" 41081 
 	[fn () => string_of_thm thm]);
-end;
 =GFT Examples
 z_µ_rewrite_canon (asm_rule ñµ x,y :X | x = z · x = y®);
+=TEX
+=SML
+local
+	val cnv1 = simple_eq_match_conv1 (taut_rule¬µ x · T ´ x ¤ x®);
+	val cnv2 = pure_rewrite_conv[taut_rule¬µ x · T ± x ¤ x®,
+			taut_rule¬µ x · x ± T ¤ x®];
+in
+fun Ûz_´_rewrite_canonÝ (thm : THM) : THM list = (
+let	val s1 = if is_´ (concl thm)
+		then conv_rule(
+			LEFT_C (±_C (TRY_C _u_lang_conv)
+			THEN_TRY_C cnv2)
+			THEN_TRY_C cnv1)
+			thm
+		else thm_fail "z_´_rewrite_canon" 41083 [thm];
+	val dummy = if concl s1 ~=$ concl thm
+		then thm_fail "z_´_rewrite_canon" 41084 [thm]
+		else ()
+in
+	[s1]
+end);
+end;
+=GFT Examples
+(z_µ_rewrite_canon THEN_CAN(REPEAT_CAN µ_rewrite_canon)
+	THEN_CAN z_´_rewrite_canon)
+	 (asm_rule ñµ x,y :U;z:U | true · x = y®);
+(z_µ_rewrite_canon THEN_CAN(REPEAT_CAN µ_rewrite_canon)
+	THEN_CAN z_´_rewrite_canon)
+	 (asm_rule ñµ x,y :X;z:Y | true · x = y®); 
+(z_µ_rewrite_canon THEN_CAN(REPEAT_CAN µ_rewrite_canon)
+	THEN_CAN z_´_rewrite_canon)
+	 (asm_rule ñµ x,y :X;z:Y | x = z · x = y®); (* fail - no change *)
 =TEX
 =SML
 fun Ûz_³_rewrite_canonÝ (thm : THM) : THM list = (
@@ -3105,8 +3114,17 @@ val Ûz_quantifiers_elim_tacÝ : TACTIC = (
 )
 end;
 =TEX
+=SML
+val Ûz_strip_tacÝ : TACTIC = (fn gl =>
+	(z_µ_tac ORELSE_T strip_tac)
+	gl
+	handle complaint =>
+	pass_on complaint "strip_tac" "z_strip_tac"
+);
+=TEX
 
 \subsection{Proof Contexts}
+\subsubsection{Contents for Proof Contexts - Automatic Proof a la HOL}
 =SML
 local
 open Resolution;
@@ -3159,13 +3177,52 @@ divert complaint "tac_proof" "z_basic_prove_conv" 76001 [fn () => string_of_term
 end);
 end;
 =TEX
+\subsubsection{Contents for Proof Contexts - Automatic Proof by Chaining}
 =SML
-
-val _ = delete_pc "z_predicates" handle Fail _ => ();
-val _ = new_pc "z_predicates";
+fun Ûfc_prove_fc_tacÝ (ct : int) : TACTIC = (
+	let	fun aux2 ct ths = (
+			if ct > 0
+			then	FC_T1 id_canon (fn thl =>
+				let	val canned = flat (map fc_canon1 thl);
+				in	MAP_EVERY strip_asm_tac thl THEN
+					aux2 (ct-1) (thl @ ths)
+				end
+				) ths
+			else	fail_tac
+		);
+	in	GET_ASMS_T (fn ths => aux2 ct (flat (map fc_canon1 ths)))
+	end
+);
+=TEX
+=SML
+fun Ûz_fc_prove_tacÝ (thms: THM list) : TACTIC = (
+	(DROP_ASMS_T (MAP_EVERY (strip_asm_tac o 
+	(fn thm => rewrite_rule thms thm
+		handle (Fail _) => thm)) o rev) THEN
+	(TRY_T (rewrite_tac thms)) THEN
+	SOLVED_T (
+		contr_tac THEN
+		z_quantifiers_elim_tac THEN
+		all_asm_fc_tac[] THEN fc_prove_fc_tac 4
+	))
+	ORELSE (fn (_, cc) => term_fail "z_fc_prove_tac" 76001 [cc])
+);
+fun Ûz_fc_prove_convÝ (thms: THM list) : CONV = (
+(fn tm =>
+(¤_t_intro (
+tac_proof(([],tm),z_ fc_prove_tac thms))
+)
+handle complaint =>
+divert complaint "tac_proof" "z_fc_prove_conv" 76001 [fn () => string_of_term tm]));
+=TEX
+\subsubsection{Implementation of Proof Contexts}
+Basic language reasoning about predicates in a prof context:
+=SML
+val _ = delete_pc "'z_predicates" handle Fail _ => ();
+val _ = new_pc "'z_predicates";
 val _ = set_rw_eqn_cxt [(¬p q®,u_lang_conv), 
 	(¬$"Z'µ" x®,z_µ_inv_conv),
-	(¬$"Z'¶" x®,z_¶_inv_conv)]"z_predicates";
+	(¬$"Z'¶" x®,z_¶_inv_conv)]"'z_predicates";
 val _ = add_rw_thms ([¤_rewrite_thm, 
 	³_rewrite_thm, 
 	eq_rewrite_thm,
@@ -3174,26 +3231,26 @@ val _ = add_rw_thms ([¤_rewrite_thm,
 	µ_rewrite_thm,
 	´_rewrite_thm,
 	_u_thm]
-	@ z_defn_marker_thms) "z_predicates";
+	@ z_para_pred_marker_thms) "'z_predicates";
 val _ = set_st_eqn_cxt [(¬³ x®,z_³_in_conv),
 	(¬$"Z'¶" x®,z_¶_elim_conv2),
 	(¬$"Z'¶‰1" x®,z_¶‰1_conv),
 	(¬x  y®,_u_lang_conv),
 	(¬³(x  y)®, RAND_C _u_lang_conv),
 	(¬$"Z'µ" x®,z_µ_inv_conv)
-	] "z_predicates";
+	] "'z_predicates";
 val _ = add_st_thms ([´_thm,
 	¤_thm, 
 	µ_rewrite_thm,
 	eq_rewrite_thm]
-	@ z_defn_marker_thms) "z_predicates";
+	@ z_para_pred_marker_thms) "'z_predicates";
 val _ = set_sc_eqn_cxt [(¬$"Z'µ" x®,z_µ_elim_conv2),
 	(¬$"Z'¶‰1" x®,z_¶‰1_conv),
 	(¬³ x®,z_³_in_conv),
 	(¬x  y®,_u_lang_conv),
 	(¬³(x  y)®, RAND_C _u_lang_conv),
 	(¬$"Z'µ" x®,z_¶_inv_conv)
-	] "z_predicates";
+	] "'z_predicates";
 val _ = (let
 	val thm1 = taut_rule ¬µa b·(a ² ³b) ¤ (b ´ a)®;
 	val thm2 = taut_rule ¬µa b·³ a ² b ¤ a ´ b®;
@@ -3202,22 +3259,25 @@ in
 add_sc_thms ([¤_thm, 
 	eq_rewrite_thm,
 	thm1,thm2,thm3]
-	@ z_defn_marker_thms) "z_predicates"
+	@ z_para_pred_marker_thms) "'z_predicates"
 end);
 
 val _ =set_rw_canons [
 	µ_rewrite_canon, z_³_rewrite_canon,
 	±_rewrite_canon, f_rewrite_canon,
-	z_µ_rewrite_canon, z_defn_canon] "z_predicates";
-val _ =set_pr_tac z_basic_prove_tac "z_predicates";
-val _ =set_pr_conv z_basic_prove_conv "z_predicates";
+	z_µ_rewrite_canon, z_para_pred_canon,
+	z_´_rewrite_canon] "'z_predicates";
+val _ =set_pr_tac z_basic_prove_tac "'z_predicates";
+val _ =set_pr_conv z_basic_prove_conv "'z_predicates";
 val _ =set_cs_¶_convs[basic_prove_¶_conv, 
-	ALL_SIMPLE_¶_C z_defn_conv,
+	ALL_SIMPLE_¶_C z_para_pred_conv,
 	z_¶_elim_conv] 
-	"z_predicates";
+	"'z_predicates";
 val _ =set_¶_vs_thms [tt_to_¶_vs (type_of ñ(x,y)®),
-		tt_to_¶_vs (type_of (mk_z_tuple [ñwit®]))] "z_predicates";
+		tt_to_¶_vs (type_of (mk_z_tuple [ñwit®]))] "'z_predicates";
+val _ = commit_pc "'z_predicates";
 =TEX
+Split off non-language  proof context:
 =SML
 
 val _ = delete_pc "'z_decl" handle Fail _ => ();
@@ -3237,10 +3297,25 @@ val _ =set_pr_conv z_basic_prove_conv "'z_decl";
 val _ =set_cs_¶_convs[] 
 	"'z_decl";
 val _ =set_¶_vs_thms [] "'z_decl";
+val _ = commit_pc "'z_decl";
+=TEX
+Complete proof context based on above:
+=SML
+val _ = delete_pc "z_predicates" handle Fail _ => ();
+val _ = new_pc "z_predicates";
+val _ = merge_pcs ["'z_predicates","'z_decl"] "z_predicates";
+val _ = commit_pc "z_predicates";
+=TEX
+Forwarding chaining proof context:
+=SML
+val _ = new_pc Û"'z_fc"Ý;
+val _ = set_pr_tac z_fc_prove_tac "'z_fc";
+val _ = set_pr_conv z_fc_prove_conv "'z_fc";
+val _ = commit_pc Û"'z_fc"Ý; 
 =TEX
 =SML
 val _ = repeat pop_pc;
-val _ = push_merge_pcs ["z_predicates","'z_decl"];
+val _ = push_pc "z_predicates";
 val _ = delete_pc "'z_predicate_calculus_build";
 =GFT
 push_goal([],ñµ x, y:U · (x ± y) = (y ± x)®);
