@@ -101,6 +101,8 @@ Corrected error handling for $∂â1\_intro$.
 Added fancy variants on $fc\_canon$.
 \item [(Issue 1.33,1.34 (16th February 1993)]
 Modified forward chaining.
+\item [(Issue 1.35]
+New forward chaining canon.
 \end{description}
 \subsection{Changes Forecast}
 More detailed descriptions of the tricky algorithms.
@@ -1092,6 +1094,29 @@ Note that
 \ is not available when this document is compiled so we cannot
 use it in $cans$ below.
 =SML
+fun µ_fc_canon (th : THM) : THM list  = (dest_µ(concl th); [all_µ_elim th]);
+fun ≤_fc_canon (th : THM) : THM list = (
+	let	val (ant, _) = dest_¥ (concl th);
+		val (a, b) = dest_≤ ant;
+		val th1 = ≤_left_intro a (asm_rule b);
+		val th2 = ≤_right_intro b (asm_rule a);
+		val th3 = disch_rule b (¥_elim th th1);
+		val th4 = disch_rule a (¥_elim th th2);
+	in	[th3, th4]
+	end
+);
+fun ∂_fc_canon (th : THM) : THM list = (
+	let	val c = concl th;
+		val (ant, _) = dest_¥ c;
+		val (x, b) = dest_∂ ant;
+		val x' = varstruct_variant
+			(flat(map frees(c::asms th))) x;
+		val b' = subst[(x',x)]b;
+		val th1 = ∂_intro ant (asm_rule b');
+		val th2 = disch_rule b' (¥_elim th th1);
+	in	[th2]
+	end
+);
 fun €FORWARD_CHAIN_CAN› (cans : CANON list) (thm : THM) : THM list = (
 let	fun aux_canon thm = (
 	let	val st = current_ad_st_conv();
@@ -1102,7 +1127,6 @@ let	fun aux_canon thm = (
 				handle Fail _ => th1
 			end	handle Fail _ => th
 		);
-		fun µ_fc_canon th = (dest_µ(concl th); [all_µ_elim th]);
 		fun ±_fc_canon th = (
 			let	val (ant, _) = dest_¥ (concl th);
 				val (a, _) = dest_± ant;
@@ -1111,28 +1135,7 @@ let	fun aux_canon thm = (
 			in	map (fc_disch_rule a) (aux_canon th2)
 			end
 		);
-		fun ≤_fc_canon th = (
-			let	val (ant, _) = dest_¥ (concl th);
-				val (a, b) = dest_≤ ant;
-				val th1 = ≤_left_intro a (asm_rule b);
-				val th2 = ≤_right_intro b (asm_rule a);
-				val th3 = disch_rule b (¥_elim th th1);
-				val th4 = disch_rule a (¥_elim th th2);
-			in	[th3, th4]
-			end
-		);
-		fun ∂_fc_canon th = (
-			let	val c = concl th;
-				val (ant, _) = dest_¥ c;
-				val (x, b) = dest_∂ ant;
-				val x' = varstruct_variant
-					(flat(map frees(c::asms th))) x;
-				val b' = subst[(x',x)]b;
-				val th1 = ∂_intro ant (asm_rule b');
-				val th2 = disch_rule b' (¥_elim th th1);
-			in	[th2]
-			end
-		);
+		fun §_fc_canon th =[fst(§_elim th)];
 		fun ¥_fc_canon th = (
 			let	val (ant, _) = dest_¥ (concl th);
 			in	case dest_term ant of
@@ -1150,7 +1153,6 @@ let	fun aux_canon thm = (
 			end
 			end
 		);
-		fun §_fc_canon th =[fst(§_elim th)];
 		fun sc_canon th = [conv_rule sc th];
 		fun other_canon th = (
 			let	val c = concl th;
@@ -1184,6 +1186,77 @@ val €fc_canon› : CANON = forward_chain_canon;
 val €§_canon› : CANON = ((fn (x, y) => [x,y]) o §_elim);
 val €forward_chain_canon1› : CANON = FC_CAN [§_canon];
 val €fc_canon1› : CANON = forward_chain_canon1;
+=TEX
+=SML
+fun €FORWARD_CHAIN_§_CAN› (cans : CANON list) (thm : THM) : THM list = (
+let	fun aux_canon thm = (
+	let	fun is_opt_≥_§ tm = (
+			(dest_§ tm; true)
+				handle Fail _ => (
+					(dest_§ (dest_≥ tm); true)
+						handle Fail _ => false)
+		);
+		val st = COND_C (not o is_opt_≥_§) (current_ad_st_conv()) fail_conv;
+		val sc = COND_C (not o is_opt_≥_§) (current_ad_sc_conv()) fail_conv;
+		fun fc_disch_rule tm th = (
+			let	val th1 = disch_rule tm th;
+			in	(conv_rule (LEFT_C st) th1)
+				handle Fail _ => th1
+			end	handle Fail _ => th
+		);
+		fun ±_fc_canon th = (
+			let	val (ant, _) = dest_¥ (concl th);
+				val (a, _) = dest_± ant;
+				val th1 = ±_¥_rule th;
+				val th2 = undisch_rule th1;
+			in	map (fc_disch_rule a) (aux_canon th2)
+			end
+		);
+		fun ¥_fc_canon th = (
+			let	val (ant, _) = dest_¥ (concl th);
+			in	case dest_term ant of
+					DT => [¥_elim th t_thm]
+				|	DF => []
+				|	_	=>
+					if (is_≥ ant
+					andalso dest_≥ ant term_mem asms th)
+					orelse (mk_≥ ant term_mem asms th)
+					then	[]
+					else
+			let
+				val th1 = undisch_rule th;
+			in	map (fc_disch_rule ant) (aux_canon th1)
+			end
+			end
+		);
+		fun sc_canon th = [conv_rule sc th];
+		fun other_canon th = (
+			let	val c = concl th;
+			in	case dest_term c of
+				D¥ _ => fail_canon th
+			|	DF => fail_canon th
+			|	DT => []
+			|	_ =>
+				let	val ≥_c = mk_≥ c;
+					val th1 = ≥_elim mk_f (asm_rule ≥_c) th;
+					val th2 = ¥_intro ≥_c th1;
+				in	[th2]
+				end
+			end
+		);
+	in	REPEAT_CAN(CHANGED_CAN(FIRST_CAN(cans @ [
+			±_rewrite_canon, µ_fc_canon, ±_fc_canon,
+			≤_fc_canon, ∂_fc_canon,
+			¥_fc_canon, sc_canon, other_canon]))) thm
+	end
+);
+in	(REWRITE_CAN aux_canon) thm
+end
+);
+=SML
+val €FC_§_CAN› : CANON list -> CANON = FORWARD_CHAIN_§_CAN;
+val €forward_chain_§_canon› : CANON = FC_§_CAN [];
+val €fc_§_canon› : CANON = forward_chain_§_canon;
 =TEX
 \subsection{Concerning §}
 N.B. the error handling on $simple\_§\_match\_mp\_rule$
