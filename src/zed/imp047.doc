@@ -296,7 +296,8 @@ local
 val 	CI = Combinators.I;
 fun	dest (t:TERM) :string * string list list * TERM list =
 	let	val (c,al) = strip_app t;
-		val (s,cl) = dest_Z_name(fst(dest_const c));
+		val (cn,_) = dest_const c handle Fail _ => dest_var c;
+		val (s,cl) = dest_Z_name cn;
 	in
 		(s,cl,al)
 	end
@@ -391,6 +392,10 @@ The logical connectives, true and false map directly on to the equivalent HOL co
 		)
 =TEX
 \subsubsection{Terms}
+We must postpone the handling of local and global variables until the end because they do not have an easily identifiable constant part.
+=SML
+	|	("Z'int",[],[tm]) => (Zint(fst(dest_const tm)))
+=TEX
 =SML
 	|	("Z'¾¿",[],[x]) => (
 		case dest_ctype(type_of x) of
@@ -473,6 +478,7 @@ The logical connectives, true and false map directly on to the equivalent HOL co
 		)
 =TEX
 =SML
+	|	("Z'dec%down%s",[_,[]],[x]) => Zdec%down%s(x,"")
 	|	("Z'dec%down%s",[_,[s]],[x]) => Zdec%down%s(x,s)
 =TEX
 =SML
@@ -531,6 +537,38 @@ The logical connectives, true and false map directly on to the equivalent HOL co
 =TEX
 =SML
 	|	("Z'¯%down%s",[_,_],[x,y]) => Z¯%down%s(x,y)
+=TEX
+\subsubsection{Local and Global Variables}
+=SML
+	|	(_,[],[]) => ((
+			case dest_const t of
+				(n,ty) => Zgvar(n,ty,[]))
+			handle Fail _ => (
+			case dest_var t of
+				(n,ty) => Zlvar(n,ty,[])
+			)
+			handle Fail _ => term_fail "dest_ZTERM" 47900 [t]
+			)
+=TEX
+=SML
+	|	(_,[],[tm]) => (
+		let	val (c,_) = strip_app t;
+			val tml = (
+				case dest tm of
+					("Z'T",[_],x) => x
+				|	_ => fail "" 0 []);
+		in
+			(
+			case dest_const c of
+				(n,ty) => Zgvar(n,snd(dest_‹_type ty),tml)
+			)
+			handle Fail _ => (
+			case dest_var c of
+				(n,ty) => Zlvar(n,snd(dest_‹_type ty),tml)
+			)
+		end
+		handle Fail _ => term_fail "dest_ZTERM" 47900 [t]
+		)
 =TEX
 \subsubsection{Errors}
 Finally, if all this fails, the supplied term simply isn't Z.
@@ -1253,13 +1291,13 @@ fun	âmk_Zdeclá (tml:TERM list) :TERM =
 val	âmk_Zeqá :(TERM * TERM) -> TERM = mk_eq
 	handle X => pass_on X "mk_eq" "mk_Zeq";
 =TEX
-The membership constructor will accept terms whose types are unsuitable, however the definition of the constant $$ will prevent any damage being done.
 =SML
 fun	âmk_Zá ((tm1,tm2):TERM * TERM) :TERM = 
-	let	val ty = list_mk_‹_type([type_of tm1,type_of tm2],BOOL);
+	let	val ty = list_mk_‹_type([type_of tm1,mk_ZpowerT(type_of tm1)],BOOL);
 	in
 		list_mk_app(mk_const("",ty),[tm1,tm2])
-	end;
+	end
+	handle X => pass_on X "mk_app" "mk_Z";
 =TEX
 True and False and the logical connectives in Z map directly into the corresponding HOL constants.
 =SML
@@ -1422,8 +1460,13 @@ fun	f ([]:ZTERM list) :TERM list = []
 |	f (Zdec(tml,_)::ztml) = tml @ (f ztml)
 |	f (Zdecsexp(sch,d)::ztml) = (mk_Z­(sch,d)) :: (f ztml)
 |	f _ = term_fail "mk_Z" 0 [];
-fun	chartuple ((Zdecl tml):ZTERM) :TERM = mk_Ztuple(f (map dest_ZTERM tml))
-|	chartuple _ = term_fail "mk_Z" 0 [];
+fun	chartuple ((Zdecl tml):ZTERM) :TERM = (
+		case (f (map dest_ZTERM tml)) of
+			[] => fail "mk_Z" 0 []
+		|	[tm] => tm
+		|	tml' => mk_Ztuple tml'
+		)
+|	chartuple _ = fail "mk_Z" 0 [];
 in
 fun	âmk_Zá ((d,p,v):TERM * TERM * TERM) :TERM =
 	let	val t = chartuple(dest_ZTERM d);
@@ -1433,6 +1476,7 @@ fun	âmk_Zá ((d,p,v):TERM * TERM * TERM) :TERM =
 	in
 		mk_app(_bterm tym tty vty,g3_abs(t,d,p,v,tym))
 	end
+	handle	Fail _ => term_fail "mk_Z" 47201 [d,p,v]
 end;
 =TEX
 =SML
@@ -1446,12 +1490,20 @@ fun	âmk_Z‡á ((d,p,v):TERM * TERM * TERM) :TERM =
 =SML
 fun	âmk_Zlvará ((s,ty,tml):string * TYPE * TERM list) :TERM = 
 		case tml of [] 	=> mk_var(s,ty)
-		| _		=> mk_app(mk_var(s,ty),mk_Ztuple tml);
+		| _		=> 
+			let	val cty = mk_‹_type(mk_ZtupleT(map type_of tml),ty);
+			in
+				mk_app(mk_var(s,cty),mk_Ztuple tml)
+			end;
 =TEX
 =SML
 fun	âmk_Zgvará ((s,ty,tml):string * TYPE * TERM list) :TERM =
 		case tml of [] 	=> mk_const(s,ty)
-		| _		=> mk_app(mk_const(s,ty),mk_Ztuple tml);
+		| _		=> 
+			let	val cty = mk_‹_type(mk_ZtupleT(map type_of tml),ty);
+			in
+				mk_app(mk_const(s,cty),mk_Ztuple tml)
+			end;
 =TEX
 =SML
 fun	âmk_Zintá (s:string) :TERM = 
