@@ -176,6 +176,7 @@ void get_pty()
 
 		tio.c_oflag &= ~OLCUC;
 		tio.c_oflag &= ~ONLCR;
+		tio.c_oflag &= ~XTABS;
 		tio.c_oflag |= OCRNL;
 
 		tio.c_cc[VINTR] = CINTR;
