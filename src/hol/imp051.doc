@@ -1788,8 +1788,103 @@ in
 			fn () => string_of_thm res]
 end);
 =TEX
+\subsection {Pruning the Theory Hierarchy}
+=SML
+local
+	fun interactive () : bool = (
+	ExtendedIO.is_term_in std_in
+	);
 
+	fun aux [] = fail "" 0 []
+	| aux (a::x) = (open_theory a; a)
+		handle (Fail _) => aux x;
+	fun inscope athy = (
+	let 	val {inscope = inscope,...} =
+		icl'Kernel.icl'get_theory_info athy;
+	in
+		inscope
+	end
+	handle complaint =>
+	pass_on complaint "icl'get_theory_info" "prune_at_theory");
 
+	fun cannot_delete athy = (
+	let 	val {status = status, inscope = inscope,...} =
+		icl'Kernel.icl'get_theory_info athy;
+	in
+		inscope orelse not(status = TSNormal)
+	end);
+	fun delete_loop [] = ()
+	| delete_loop td = (
+	let val deleted = mapfilter (fn nm => (delete_theory nm;nm)) td;
+	in
+		if is_nil deleted
+		then error "prune_at_theory" 51004 [fn () =>
+			format_list (Combinators.I) 
+			td ", "]
+		else delete_loop (td diff deleted)
+	end);
+in
+fun Ûprune_at_theoryÝ (thy : string) = (
+let	val dthy = if thy = "-"
+		then get_current_theory_name()
+		else thy;
+	val ctn = get_current_theory_name();
+	val ct_changes = if inscope dthy
+		then (let val par = get_parents dthy;
+		in
+			(Value (aux par))
+			handle (Fail _) =>
+			(case par of
+			[] => fail "prune_at_theory" 51008 [fn () => dthy]
+			| [nm] => fail "prune_at_theory" 51006 [fn () => nm, fn () => dthy]
+			| _ => fail "prune_at_theory" 51002 
+				[fn () => (format_list (Combinators.I) par ", "),
+				 fn () => dthy])
+		end)
+		else Nil;
+	val to_delete = get_descendants dthy
+		handle complaint =>
+		pass_on complaint "get_descendants" "prune_at_theory";
+	val dummy = (case (filter cannot_delete to_delete) of
+		[] => ()
+		| [nm] => (open_theory ctn; 
+			fail "prune_at_theory" 51007 [fn () => nm])
+		| nd => (open_theory ctn; 
+			fail "prune_at_theory" 51003 [fn () =>
+			format_list (Combinators.I) nd ", "]));
+	val dummy = if interactive()
+		then ((case ct_changes of 
+		Nil => warn "prune_at_theory" 51013 [
+			fn () => format_list (Combinators.I) to_delete ", "]
+		| Value nct => warn "prune_at_theory" 51009 [
+			fn () => format_list (Combinators.I) to_delete ", ",
+			fn () => ctn,
+			fn () => nct])
+		handle complaint =>
+		(open_theory ctn; raise complaint))
+		else (diag_line (case ct_changes of 
+		Nil => get_error_message 51013 [
+			format_list (Combinators.I) to_delete ", "]
+		| Value nct => get_error_message 51009 [
+			format_list (Combinators.I) to_delete ", ",
+			ctn,
+			nct]));
+
+	val dummy = delete_loop to_delete;
+	val to_delete_mod = map (fn nm => get_error_message 51018 [nm]) to_delete;
+
+	fun delete_pcs [] = ()
+	| delete_pcs ((nm,thy) :: x) = (
+		if thy mem to_delete_mod
+		then (delete_pc nm; delete_pcs x)
+		else delete_pcs x
+	);
+	val dummy = delete_pcs (get_pcs());
+in
+	()
+end);
+end;
+=TEX	
 \section{END OF SIGNATURE}
 =SML
 val _ = open_theory lthy;
