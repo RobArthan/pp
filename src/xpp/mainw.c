@@ -82,7 +82,7 @@ static Boolean changed = False;
 static char *undo_redo[2] = {"Undo", "Redo"};
 
 static char* changed_message =
-"The contents of the script editor have changed. Do you want to throw away the changes?";
+"The text has been edited. Do you want to throw away the changes?";
 
 static char* help_message =
 "\

@@ -56,7 +56,7 @@ static char *no_message_space_message =
 	 "Not enough memory is available to report a file error";
 
 static char *overwrite_message =
-	 "The file %s exists. Do you want to overwrite it?";
+	 "The file \"%s\" exists. Do you want to overwrite it?";
 
 static char *read_error_message =
 	 "Error reading the file \"%s\"";
