@@ -1,4 +1,4 @@
-% imp511.doc   %Z% $Date$ $Revision$ $RCSfile$
+% imp511.doc   @(#) 96/08/09 1.21 imp511.doc
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -72,6 +72,9 @@ Minor typographical corrections.
 \item[Issue 1.19] Fixed DRA bug (batch 2) 7.
 \item[Issue 1.20] Attempt at bug 5 (V0.6).
 \item[Issue 1.21] Optimised space utilisation.
+\item[Issue 1.22] Addressed issue 3 of DRA bugs and issues list,
+July 14th 1997, being a problem with formatting Z definitions.
+
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -90,9 +93,11 @@ The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD511}.  The modu
 =SML
 structure €CNZOutput› : CNZOutput = struct
 local
+=SML
         open icl'Kernel;
         open PrettyPrinter;
         open ZUserInterfaceSupport;
+=SML
 in
 =TEX
 
@@ -128,15 +133,15 @@ Function to add a new element to our sorted list.
 
 =SML
 local
-    fun €add_sorted› ([],[]) (a,b) = [(a,b)]
-    |   add_sorted (ys, rest as ((xy as (x, _))::xs)) (ab as (a, _) : int*'a) =
+    fun add_sorted [] ab = [ab]
+    |   add_sorted (rest as ((xy as (x, _))::xs)) (ab as (a, _) : int*'a) =
         (   if a<x
-            then rev ys @ (ab :: rest) 
-            else add_sorted (xy :: ys, xs) ab )
-    |   add_sorted (xs,[]) ab = (rev (ab :: xs))
+            then (ab :: rest) 
+            else xy :: add_sorted xs ab
+	);
 in
     fun €add_sorted_to_list› (xs : (int*'a) list)
-        (x : int*'a) = (add_sorted ([],xs) x)
+        (x : int*'a) = (add_sorted xs x)
 end;
 =TEX
 
@@ -176,57 +181,57 @@ fun €add_sort_new_parent› (dict) ((num, thy) : int * string) =
     add_sorted_to_list dict (num, (PTParent thy));
 =TEX
 
+=SML
+fun €get_type_level› (thynm : string) (tyname : string) : int OPT = (
+let	val {ty_env = ty_env,...} = icl'Kernel.icl'get_theory thynm;
+	val {level=level,...} = force_value(s_lookup tyname ty_env);
+in
+	Value level
+end
+handle (Fail_) => Nil);
+=TEX
 Functions to add lists of elements to our dictionary.
 =SML
-fun €add_sort_defns› (dict) ([] : (string list * THM) list) = dict
-|   add_sort_defns (dict) (defn::defns : (string list * THM) list) =
-    let val newdict = add_sort_defn dict defn
-    in
-        add_sort_defns newdict defns
-    end;
-fun €add_sort_axioms› (dict) ([] : (string list * THM) list) = dict
-|   add_sort_axioms (dict) (axm::axms : (string list * THM) list) =
-    let val newdict = add_sort_axiom dict axm
-    in
-        add_sort_axioms newdict axms
-    end;
-fun €add_sort_vcs› (dict) ([] : (string list * (int * TERM)) list) = dict
-|   add_sort_vcs (dict) (vc::more : (string list * (int*TERM)) list) =
-    let val newdict = add_sort_vc dict vc
-    in
-        add_sort_vcs newdict more
-    end;
-fun €add_sort_fixs› (dict) ([] : (CLASS * TEMPLATE) list ) = dict
-|   add_sort_fixs (dict) (fix::fixs : (CLASS * TEMPLATE) list) =
-    let val newdict = add_sort_fix dict fix
-    in
-        add_sort_fixs newdict fixs
-   end;
-fun €add_sort_create_specs› (dict) ([] : USER_DATUM list) = dict
-|   add_sort_create_specs (dict) (spec::xs : USER_DATUM list) =
+fun €aux_fold› (f : 'a list -> 'b -> 'a list)
+	(old : 'a list) (toadd : 'b list) : 'a list = (
+let fun aux d [] = d
+    | aux d (a :: x) = aux (f d a) x;
+in
+	aux old toadd
+end);
+=TEX
+
+=SML
+val €add_sort_defns› = aux_fold add_sort_defn;
+
+val €add_sort_axioms› = aux_fold add_sort_axiom;
+
+val €add_sort_vcs›  = aux_fold add_sort_vc;
+
+val €add_sort_fixs› = aux_fold add_sort_fix;
+
+
+val €add_sort_create_specs› = aux_fold (fn dict => fn spec => 
     let val thy = (fst o dest_ud_string) spec;
         val num = (fst o dest_ud_int o hd o snd o dest_ud_string) spec;
-        val newdict = add_sort_create_spec dict (num, thy)
     in
-        add_sort_create_specs newdict xs
-    end;
-fun €add_sort_create_subunits› (dict) ([] : USER_DATUM list) = dict
-|   add_sort_create_subunits (dict) (subunit::xs : USER_DATUM list) =
+        add_sort_create_spec dict (num, thy)
+    end);
+
+val €add_sort_create_subunits› = aux_fold (fn dict => fn subunit =>
     let val thy = (fst o dest_ud_string) subunit;
         val num = (fst o dest_ud_int o hd o snd o dest_ud_string) subunit;
         val thy_level = (fst o dest_ud_int o hd o snd o dest_ud_int o hd o snd o dest_ud_string) subunit;
-        val newdict = add_sort_create_subunit dict (num, (thy,thy_level))
     in
-        add_sort_create_subunits newdict xs
-    end;
-fun €add_sort_new_parents› (dict) ([] : USER_DATUM list) = dict
-|   add_sort_new_parents (dict) (parent::xs : USER_DATUM list) =
+        add_sort_create_subunit dict (num, (thy,thy_level))
+    end);
+
+val €add_sort_new_parents› = aux_fold (fn dict => fn parent => 
     let val thy = (fst o dest_ud_string) parent;
         val num = (fst o dest_ud_int o hd o snd o dest_ud_string) parent;
-        val newdict = add_sort_new_parent dict (num, thy)
     in
-        add_sort_new_parents newdict xs
-    end;
+        add_sort_new_parent dict (num, thy)
+    end);
 =TEX 
 
 These functions get some of the information we require from the theory user data.
@@ -272,7 +277,9 @@ fun €add_create_subunits› (dict) (thyn : string) =
     add_sort_create_subunits dict (get_create_subunits thyn);
 fun €add_new_parents› (dict) (thyn : string) =
     add_sort_new_parents dict (get_new_parents thyn);
+
 =TEX
+
 
 \subsection{Formatting}
 
@@ -295,23 +302,21 @@ Generally useful functions
 fun €fmt_string_list› ([] : string list) = ""
 |   fmt_string_list (x::xs : string list) =
     x^"\n"^(fmt_string_list xs);
-fun €concat_string_list› ([] : string list) =""
-|   concat_string_list (x::xs : string list) =
-        x^(concat_string_list xs);
+fun €concat_string_list› (xs : string list) = implode xs;
 fun €fmt_semi_colon› ([] : string list) = []
 |   fmt_semi_colon ([x] : string list) = [x^";"]
-|   fmt_semi_colon (x::xs : string list) = [x]@(fmt_semi_colon xs);
+|   fmt_semi_colon (x::xs : string list) = (x :: fmt_semi_colon xs);
 fun €fmt_body› ([] : string list) = []
 |   fmt_body (x::xs : string list) = ["‹ "^x]@(fmt_body xs);
 fun €fmt_prefix_tab› ([] : string list) = []
 |   fmt_prefix_tab (x::xs : string list) =
-        [z_output_tab^x]@(fmt_prefix_tab xs);
-fun €dest_z_many_±› (t : TERM) =
-    if (is_z_± t)
-        then
-            (dest_z_many_± (fst (dest_z_± t)))@
-            (dest_z_many_± (snd (dest_z_± t)))
-        else [t];
+        (z_output_tab^x :: fmt_prefix_tab xs);
+
+fun €dest_z_many_±› (t : TERM) = (
+let	val (l, r) = dest_z_± t;
+in
+	dest_z_many_± l @ dest_z_many_± r
+end handle (Fail _) => [t]);
 =TEX
 
 Formatting functions for Declarations.
@@ -391,7 +396,7 @@ local
     (fmt_body expstr)@["∞"];
 in
     fun €fmt_abbdef› (defn : THM) =
-        let val (var,exp) = dest_eq (snd (dest_thm (z_thm_rule defn)));
+        let val (var,exp) = dest_eq (snd (strip_µ(concl (z_thm_rule defn))));
             val varstr = (format_term false var);
             val expstr = (format_term false exp);
             val block = (concat_string_list (varstr@expstr))
@@ -410,27 +415,6 @@ end;
 	);
 =TEX
 
-Formatting functions for Definitions
-=SML
-fun €fmt_defns› (defn : THM) = (
-	let	val (_,p) = (dest_thm defn);
-		val (q,_) = (dest_app p);
-	in let    val (r,_) = (dest_const q);
-	in	if r = "Z'AbbDef"
-		then	fmt_abbdef (defn)
-		else if	 r = "Z'SchBox"
-		then	fmt_schbox (defn)
-		else	thm_fail "fmt_defns" 511002 [defn]
-	end	handle Fail _ => 
-		let	val (gset, u) = dest_eq p;
-		in	if	is_u u
-			then	fmt_gset gset
-			else	thm_fail "fmt_defns" 511002 [defn]
-		end
-	end	handle Fail _ => thm_fail "fmt_defns" 511002 [defn]
-);
-=TEX
-
 Formatting functions for Axioms
 =SML
 fun get_declared_consts (decl : TERM) : TERM list = (
@@ -446,9 +430,8 @@ fun get_declared_consts (decl : TERM) : TERM list = (
 	end
 );
 =SML
-fun €fmt_axioms› (axiom : THM) =
-    let val (_,axm) = dest_thm axiom;
-    in let
+fun €fmt_axiom_body› (axm : TERM) =
+    let
         val (_,gbody) = dest_app axm;
 	 val (gpars, body) = strip_µ gbody;
         val (decl,pred) = dest_± body;
@@ -490,9 +473,46 @@ fun €fmt_axioms› (axiom : THM) =
 =SML
         fmt_body (format_term false axm) @
 =SMLLITERAL
-        ["∞"]
+        ["∞"];
+=TEX
+
 =SML
-   end;
+fun €fmt_axioms› (axiom : THM) = (
+    let val axm = concl axiom;
+    in
+	fmt_axiom_body axm
+    end);
+=TEX
+Formatting functions for Definitions
+=SML
+fun €fmt_defns› (defn : THM) = (
+	let	val c = concl defn;
+		val p = (let val (root, parts) = strip_app c;
+			in
+				if ((fst(dest_const root) = "ConstSpec")
+					 handle Fail _ => false)
+				then ((snd o dest_eq o concl o ¬_conv o
+					mk_app)
+					(hd parts, hd(tl parts)))
+				else c
+			end);
+		val (q,_) = (dest_app p);
+	in let    val (r,_) = (dest_const q);
+	in	if r = "Z'AbbDef"
+		then	fmt_abbdef (defn)
+		else if	 r = "Z'SchBox"
+		then	fmt_schbox (defn)
+		else if r = "Z'AxDes"
+		then fmt_axiom_body p
+		else thm_fail "fmt_defns" 511002 [defn]
+	end	handle Fail _ => 
+		let	val (gset, u) = dest_eq p;
+		in	if	is_u u
+			then	fmt_gset gset
+			else	thm_fail "fmt_defns" 511002 [defn]
+		end
+	end	handle Fail _ => thm_fail "fmt_defns" 511002 [defn]
+);
 =TEX
 
 Formatting functions for VCs.
@@ -585,9 +605,14 @@ and €fmt_paragraph› (PTAxiom thm) = (fmt_axioms thm)
 |   fmt_paragraph (PTSpec thy) = (fmt_create_spec thy)
 |   fmt_paragraph (PTSubunit su) = (fmt_create_subunit su)
 |   fmt_paragraph (PTParent thy) = (fmt_new_parent thy)
-and €fmt_paragraphs› ((n,l)::ls : (int*(Z_DOC_PARAGRAPH)) list) =
-        (fmt_paragraph l)@[""]@(fmt_paragraphs ls)
-|   fmt_paragraphs ([]) = []
+and €fmt_paragraphs› ((n,l)::ls : (int*(Z_DOC_PARAGRAPH)) list) = (
+let	val paral = fmt_paragraph l
+			handle (Fail f) =>
+			["(* " ^ get_message_text f ^ " *)"];
+in
+	paral @ [""] @ (fmt_paragraphs ls)
+end
+) |   fmt_paragraphs ([]) = []
 =TEX
 
 Formatting function for the whole Z Document.  Takes as arguments the name of a theory, an integer and a flag.
@@ -616,8 +641,8 @@ and €fmt_z_document› (thyn : string) (level : int) (flag : bool) =
     in
         vc_text := !vc_text @ vcs;
         st
-    end     handle Fail _ =>
-            fail "fmt_z_document" 511005 [fn()=>thyn]
+    end     handle (f as Fail _) =>
+            reraise f "fmt_z_document";
 =TEX
 
 \subsection{Epilogue}
