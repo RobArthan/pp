@@ -262,7 +262,7 @@ let	val genitoks = ZTLsqbrack::((rev o tl o rev) ztokens)@[ZTRsqbrack, ZTEos];
 			ParGeneralTerm (
 			PredFancyFix(TmplPre (("", Nil), StubUS), "", [[p2]]),
 			Nil))
-		) |_ => parse_error 503001 "There is unexpected input after the post-condition"
+		) |_ => parse_error 503001 "unexpected input after the post-condition"
 	);
 	val (pretm_opt, posttm) = apply_pi zpara;
 	val standard = get_flag "standard_z_terms";
@@ -301,7 +301,7 @@ structure ÛCNParserÝ = struct
 open CNParser;
 =TEX
 We give the reduction functions in the order of their appearance
-in the grammar of 'cite{ISS/HAT/DAZ/DTD503}'. When several reduction
+in the grammar of \cite{ISS/HAT/DAZ/DTD503}. When several reduction
 functions would be the same, we use $val$ bindings for the various
 instances.
 
@@ -319,8 +319,10 @@ datatype ÛPPARSEDÝ =
 		|	PPCompilationUnit of (ID list * COMPILATION_UNIT)
 		|	PPComponentClauses of COMPONENT_CLAUSE list
 		|	PPComponents of COMPONENT list
+		|	PPConstraint of CONSTRAINT
 		|	PPDeclarations of DECLARATION list
 		|	PPDiscriminantPart of VAR_DECL
+		|	PPDiscreteRange of DISCRETE_RANGE
 		|	PPElsIf of (EXP * STMT) list
 		|	PPExp of EXP
 		|	PPExps of EXP list
@@ -338,7 +340,6 @@ datatype ÛPPARSEDÝ =
 		|	PPPrimedIdentifier of (ID * ID)
 		|	PPProcedureSpecification of PROCEDURE_SPECIFICATION
 		|	PPProperBody of PROPER_BODY
-		|	PPRealConstraint of (EXP * EXP RANGE)
 		|	PPReltail of (BIN_OP * EXP)
 		|	PPRenamingDeclaration of RENAMING_DECLARATION
 		|	PPRepresentationClause of REPRESENTATION_CLAUSE
@@ -347,7 +348,7 @@ datatype ÛPPARSEDÝ =
 		|	PPStatement of STATEMENT
 		|	PPSubprogram of (DECLARATION list * STATEMENT * ID)
 		|	PPSubprogramSpec of SUBPROGRAM_SPECIFICATION
-		|	PPSubtypeDeclaration of (EXP * EXP * EXP OPT)
+		|	PPSubtypeDeclaration of (EXP * CONSTRAINT)
 		|	PPTypeDef of TYPE_DEF
 		|	PPUnaryOp of UNARY_OP
 		|	PPVarDecls of VAR_DECL list
@@ -360,29 +361,33 @@ fun format_label (n : string) = (
 	"("^n^")"
 );
 
-fun name_to_tmark (e : EXP) :  TMARK = (
-	"TMARK_stub"
+fun name_to_tmark (e : EXP) : TMARK = (
+	case e of
+	EId id =>
+		id
+	|EInt n =>
+		n
+	|ESelectedComp {prefix=p, selector=s} =>
+		(name_to_tmark p)^"."^s
+	|EIndexedComp {prefix=p, index=i} =>
+		(name_to_tmark p)^"("^(name_to_tmark i)^")"
+	|EAttribute {prefix=p, attribute_desig=ad} =>
+		(name_to_tmark p)^"'"^
+		(
+			case ad of
+			ADAttrib a => a
+			|ADAttribArg (a, e) => a^"("^(name_to_tmark e)^")"
+		)
+	|_ => "__unknown"
 );
 
-fun range_attribute_to_range (e :EXP) : EXP RANGE OPT = (
-	(* Temporary fix *)
-	Value {lo=e, hi=e}
+fun sr_expression_to_range ((e,v) : (EXP * EXP OPT)) : EXP RANGE = (
+	{lo=e, hi=v}
 );
 
-fun sr_expression_to_range_opt {no_r_attr : bool} ((e,v) : (EXP * EXP OPT)) : EXP RANGE OPT = (
-	case v of
-	Value e2 => Value {lo=e, hi=e2}
-	|Nil => if no_r_attr
-		then
-			Nil
-		else
-			range_attribute_to_range e
-);
-
-fun sr_expression_to_expression_opt ((e,v) : (EXP * EXP OPT)) : EXP OPT = (
-	case sr_expression_to_range_opt {no_r_attr=true} (e,v) of
-	Value _ => Nil
-	|Nil => Value e
+fun sr_expression_to_expression ((e1, Nil) : (EXP * EXP OPT)) : EXP = (e1
+) | sr_expression_to_expression _ = (
+	parse_error 503001 "a RANGE is not permitted here"
 );
 =TEX
 =SML
@@ -492,21 +497,19 @@ val red_type_definition4 = red_accept;
 val red_type_definition5 = red_accept;
 =TEX
 =SML
-fun red_subtype_declaration _ (Token ((_,CNText id), _)) _ (Parsed(PPSubtypeDeclaration (n,e,v))) _ = (
-	case v of
-	Value e2 => (
-		PPBasicDecls[BDSubtypeDecl{name=id,sub_ind={tmark=name_to_tmark n,con=CRangeCon{lo=e,hi=e2}}}]
-	) |Nil => (
-		PPBasicDecls[BDSubtypeDecl{name=id,sub_ind={tmark=name_to_tmark n,con=CIndexCon(name_to_tmark e)}}]
-	)
+fun red_subtype_declaration _ (Token ((_,CNText id), _)) _ (Parsed(PPSubtypeDeclaration (n, c))) _ = (
+	PPBasicDecls[BDSubtypeDecl{name=id,sub_ind={tmark=name_to_tmark n,con=c}}]
 ) | red_subtype_declaration _ _ _ _ _ = stack_error "red_subtype_declaration";
 
-fun red_subtype_indication (Parsed(PPExp n)) (Parsed(PPSRExpression (e,v))) = (
-		PPSubtypeDeclaration(n, e, v)
+fun red_subtype_indication (Parsed(PPExp n)) (Parsed(PPConstraint c)) = (
+		PPSubtypeDeclaration(n, c)
 ) | red_subtype_indication _ _ = stack_error "red_subtype_indication";
 =TEX
 =SML
-val red_constraint1 = red_accept;
+fun red_constraint1 (Parsed(PPSRExpression (e,v))) = (
+	PPConstraint (CRange {lo=e, hi=v})
+) | red_constraint1 _ = stack_error "red_constraint1";
+
 val red_constraint2 = red_accept;
 val red_constraint3 = red_accept;
 =TEX
@@ -521,41 +524,38 @@ fun red_enumeration_type_definition _ (Parsed(PPIds ids)) _ = (
 =TEX
 =SML
 fun red_integer_type_definition (Parsed(PPSRExpression sr)) = (
-	case sr_expression_to_range_opt {no_r_attr=false} sr of
-	Value r =>
-		PPTypeDef(TDIntTypeDef r)
-	|Nil =>
-		parse_error 503001 "a range is expected"
+	PPTypeDef(TDIntTypeDef (sr_expression_to_range sr))
 ) | red_integer_type_definition _ = stack_error "red_integer_type_definition";
 
-val red_real_type_definition1 = red_accept; (* PPRealConstraint *)
-val red_real_type_definition2 = red_accept; (* PPRealConstraint *)
+fun red_real_type_definition1 (Parsed(PPConstraint(CFloating c))) = (
+	PPTypeDef(TDFloatingTypeDef c)
+) | red_real_type_definition1 _ = stack_error "red_real_type_definition1";
+
+fun red_real_type_definition2 (Parsed(PPConstraint (CFixed c))) = (
+	PPTypeDef(TDFixedTypeDef c)
+) | red_real_type_definition2 _ = stack_error "red_real_type_definition2";
 =TEX
+
 SPARK manual 3.5.7:
 =SML
-val red_floating_point_constraint1 = red_accept;
+fun red_floating_point_constraint1 (Parsed(PPExp e)) = (
+	PPConstraint(CFloating{exp=e, range=Nil})
+) | red_floating_point_constraint1 _ = stack_error "red_floating_point_constraint1";
+
 fun red_floating_point_constraint2 (Parsed(PPExp e)) (Parsed(PPSRExpression sr)) = (
-	case sr_expression_to_range_opt {no_r_attr=false} sr of
-	Value r =>
-		PPRealConstraint(e, r)
-	|Nil =>
-		parse_error 503001 "a range is expected"
+	PPConstraint(CFloating{exp=e, range=Value (sr_expression_to_range sr)})
 ) | red_floating_point_constraint2 _ _ = stack_error "red_floating_point_constraint2";
-
-
 
 fun red_floating_accuracy_definition _ (Parsed p) = (p
 ) | red_floating_accuracy_definition _ _ = stack_error "red_floating_accuracy_definition";
 =TEX
 =SML
-val red_fixed_point_constraint1 = red_accept;
+fun red_fixed_point_constraint1 (Parsed(PPExp e)) = (
+	PPConstraint(CFixed{exp=e, range=Nil})
+) | red_fixed_point_constraint1 _ = stack_error "red_fixed_point_constraint1";
 
 fun red_fixed_point_constraint2 (Parsed(PPExp e)) (Parsed(PPSRExpression sr)) = (
-	case sr_expression_to_range_opt {no_r_attr=false} sr of
-	Value r =>
-		PPRealConstraint(e, r)
-	|Nil =>
-		parse_error 503001 "a range is expected"
+		PPConstraint(CFixed{exp=e, range=Value (sr_expression_to_range sr)})
 ) | red_fixed_point_constraint2 _ _ = stack_error "red_fixed_point_constraint2";
 
 fun red_fixed_accuracy_definition _ (Parsed p) = (p
@@ -567,11 +567,11 @@ val red_array_type_definition2 = red_accept;
 =TEX
 =SML
 fun red_unconstrained_array_definition _ _ (Parsed(PPExps nl)) _ _ (Parsed(PPExp n)) = (
-	PPTypeDef(TDUnconArrayDef{index="tbs",comp="tbs"})
+	PPTypeDef(TDUnconArrayDef{index=map name_to_tmark nl,comp=name_to_tmark n})
 ) | red_unconstrained_array_definition _ _ _ _ _ _ = stack_error "red_unconstrained_array_definition";
 
 fun red_constrained_array_definition _ (Parsed(PPExps nl)) _ (Parsed(PPExp n)) = (
-	PPTypeDef(TDConArrayDef{index="tbs", comp="tbs"})
+	PPTypeDef(TDConArrayDef{index=map name_to_tmark nl,comp=name_to_tmark n})
 ) | red_constrained_array_definition _ _ _ _ = stack_error "red_constrained_array_definition";
 =TEX
 =SML
@@ -599,17 +599,13 @@ fun red_name_list2 (Parsed(PPExp n)) _ (Parsed(PPExps nl)) = (
 	PPExps (n::nl)
 ) | red_name_list2 _ _ _ = stack_error "red_name_list2";
 =TEX
-TBS Information lost in the following...
 =SML
-fun red_discrete_range1 (Parsed (PPExp e)) (Parsed p) = (
-let	val side = name_to_tmark e;
-in
-		p
-end
+fun red_discrete_range1 (Parsed (PPExp e)) (Parsed (PPSRExpression (e2,v))) = (
+	PPDiscreteRange(DRConstrained{tmark=name_to_tmark e, range={lo=e2,hi=v}})
 ) | red_discrete_range1 _ _ = stack_error "red_discrete_range1";
 
-fun red_discrete_range2 (Parsed p) = (
-	p
+fun red_discrete_range2 (Parsed (PPSRExpression (e,v))) = (
+	PPDiscreteRange(DRRange{lo=e,hi=v})
 ) | red_discrete_range2 _ = stack_error "red_discrete_range2";
 
 fun red_record_type_definition _ (Parsed(PPComponents cs)) _ _ = (
@@ -617,7 +613,9 @@ fun red_record_type_definition _ (Parsed(PPComponents cs)) _ _ = (
 ) | red_record_type_definition _ _ _ _ = stack_error "red_record_type_definition";
 =TEX
 =SML
-val red_component_list1 = red_accept;
+fun red_component_list1 (Parsed(PPVarDecls v)) = (
+	PPComponents[CDeclaration v]
+) | red_component_list1 _ = stack_error "red_component_list1";
 
 fun red_component_list2 (Parsed(PPVariantPart vp)) = (
 	PPComponents[CVariantPart vp]
@@ -713,7 +711,13 @@ val red_name4 = red_accept;
 SPARK manual 4.1.1:
 =SML
 fun red_indexed_component (Parsed(PPExp n)) (Parsed(PPExp index)) = (
-	PPExp(EIndexedComp{prefix=n, index=index})
+	case n of
+	EAttribute {prefix=prefix,attribute_desig=ADAttrib ad} => (
+		PPExp(EAttribute
+			{prefix=prefix,attribute_desig=ADAttribArg(ad,index)})
+	) |_ => (
+		PPExp(EIndexedComp{prefix=n, index=index})
+	)
 ) | red_indexed_component _ _ = stack_error "red_indexed_component";
 =TEX
 SPARK manual 4.1.3:
@@ -732,17 +736,17 @@ fun red_expression_list1 (Parsed(PPExp e)) = (
 	PPExps [e]
 ) | red_expression_list1 _ = stack_error "red_expression_list1";
 
-fun red_expression_list2 (Parsed(PPExp e)) _ (Parsed(PPExps es)) = (
-	PPExps (e::es)
+fun red_expression_list2 (Parsed(PPExps es)) _ (Parsed(PPExp e)) = (
+	PPExps (es@[e])
 ) | red_expression_list2 _ _ _ = stack_error "red_expression_list2";
 =TEX
 =SML
 fun red_attribute1 (Parsed(PPExp n)) (Token ((_,CNText primedid), _)) = (
-	PPExp(EIndexedComp{prefix=n, index=EId primedid})
+	PPExp(EAttribute{prefix=n, attribute_desig=ADAttrib ((implode o tl o explode) primedid)})
 ) | red_attribute1 _ _ = stack_error "red_attribute1";
 
-fun red_attribute2 (Token ((CharacterLiteral,CNText id), _)) (Token ((_,CNText primedid), _)) = (
-	PPExp(EIndexedComp{prefix=EId id, index=EId primedid})
+fun red_attribute2 (Token ((CharacterLiteral,CNString id), _)) (Token ((_,CNText primedid), _)) = (
+	PPExp(EAttribute{prefix=ECharacterLiteral id, attribute_desig=ADAttrib ((implode o tl o explode) primedid)})
 ) | red_attribute2 _ _ = stack_error "red_attribute2";
 
 fun red_aggregate _ (Parsed p) _ = (
@@ -756,9 +760,7 @@ fun red_component_association1 (Parsed(PPAgg{tm=tm,named_assocs=na,others=ot})) 
 	|Nil => PPExp (EArrayAggNamed{named_assocs=na})
 ) | red_component_association1 _ = stack_error "red_component_association1";
 
-fun red_component_association2 (Parsed(PPExps es)) = (
-	PPExp(EArrayAggPos{tmark="__component_association",comps = es})
-) | red_component_association2 _ = stack_error "red_component_association2";
+val red_component_association2 = red_accept;
 
 =TEX
 =SML
@@ -790,14 +792,19 @@ fun red_aggregate_choice_list3 (Parsed(PPAggregateChoices v)) _ (Parsed(PPAggreg
 	|_ => parse_error 503001 "OTHERS cannot be in a choice list"
 ) | red_aggregate_choice_list3 _ _ _ = stack_error "red_aggregate_choice_list3";
 =TEX
+TBS - cannot produce ACAggChoiceSingle at present - do later.
 =SML
-fun red_aggregate_choice (Parsed(PPSRExpression (e,v))) = (
-	case v of
-	Value e2 => PPAggregateChoices([ACAggChoiceRange{lo=e,hi=e2}], false)
-	|Nil => PPAggregateChoices([ACAggChoiceSingle e], false)
+fun red_aggregate_choice (Parsed(PPDiscreteRange dr)) = (
+	PPAggregateChoices([ACAggChoiceRange dr], false)
 ) | red_aggregate_choice _ = stack_error "red_aggregate_choice";
 
-val red_positional_association = red_accept;
+fun red_positional_association1 (Parsed(PPExps es)) = (
+	PPExp(EArrayAggPos{tmark="__positional_association",comps = es})
+) | red_positional_association1 _ = stack_error "red_positional_association1";
+
+fun red_positional_association2 (Parsed(PPExps es)) _ _ _ (Parsed(PPExp e)) = (
+	PPExp(EArrayAggPosOthers{agg_pos={tmark="__positional_association",comps=es}, others={others=e}})
+) | red_positional_association2 _ _ _ _ _ = stack_error "red_positional_association2";
 =TEX
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 =SML
@@ -834,24 +841,13 @@ fun red_xor_relation1 _ x2 =		(red_logrel1 BOSparkXor x2);
 fun red_xor_relation2 _ x2 x3 =		(red_logrel2 BOSparkXor x2 x3);
 =TEX
 =SML
-fun red_relation1 (Parsed(PPSRExpression (sr as (e, _)))) = (
-	case sr_expression_to_expression_opt sr of
-	Value e => PPExp e
-	|Nil => stack_error "red_relation1_a"
+fun red_relation1 (Parsed(PPSRExpression sr)) = (
+	PPExp (sr_expression_to_expression sr)
 ) | red_relation1 _ = stack_error "red_relation1";
 
 fun red_relation2 (Parsed(PPSRExpression sr1)) (Parsed(PPBinaryOp b)) (Parsed(PPSRExpression sr2)) = (
-let	val e1 = ( case sr_expression_to_expression_opt sr1 of
-			Value e1 => e1
-			|Nil => stack_error "red_relation1_a"
-		);
-	val e2 = ( case sr_expression_to_expression_opt sr2 of
-			Value e2 => e2
-			|Nil => stack_error "red_relation1_b"
-		);
-in
-	PPExp(EBinExp{left=e1,bop=b, right=e2})
-end
+	PPExp(EBinExp{left=sr_expression_to_expression sr1,bop=b,
+				right=sr_expression_to_expression sr2})
 ) | red_relation2 _ _ _ = stack_error "red_relation2";
 
 fun red_relation3 p1 _ p2 = red_relation2 p1 (Parsed(PPBinaryOp BOSparkMem)) p2;
@@ -950,10 +946,16 @@ fun red_multiplying_operator4 x1 = PPBinaryOp BOSparkRem;
 =SML
 fun red_qualified_expression (Parsed(PPExp n)) _ (Parsed(PPExp e)) = (
 	case e of
-		EArrayAggNamedOthers{agg_named=an,others=ot,...} =>
-			PPExp(EArrayAggNamedOthers{tmark=name_to_tmark n,agg_named=an,others=ot})
-		|EArrayAggPos{comps=es,...} =>
+		EArrayAggPos{comps=es,...} =>
 			PPExp(EArrayAggPos{tmark=name_to_tmark n,comps=es})
+		|EArrayAggPosOthers{agg_pos=ap,others=others} =>
+			PPExp(EArrayAggPosOthers{agg_pos=ap, others=others})
+		|EArrayAggOthers{tmark=n,others=others} =>
+			PPExp(EArrayAggOthers{tmark=n,others=others})
+		|EArrayAggNamed{named_assocs=na} =>
+			PPExp(EArrayAggNamed{named_assocs=na})
+		|EArrayAggNamedOthers{agg_named=an,others=ot,...} =>
+			PPExp(EArrayAggNamedOthers{tmark=name_to_tmark n,agg_named=an,others=ot})
 		|_ => stack_error "red_qualified_expression_a"
 ) | red_qualified_expression _ _ _ = stack_error "red_qualified_expression";
 =TEX
@@ -983,7 +985,7 @@ val red_statement2  = red_accept;
 fun red_statement3 _ (Token ((LCZ,CNZ z1), _)) _ (Parsed(PPStmt(STSpecNoIvars s))) = (
 let	val (n, ty) = process_con_decl z1;
 in
-	PPLogCon{x=n, e=ty,spec=s, pre1 = ñstub®}
+	PPLogCon{x=n, e=ty,spec=s, pre1 = ñtrue®}
 end
 ) | red_statement3 _ _ _ _ = stack_error "red_statement3";
 
@@ -1014,7 +1016,7 @@ let	val (pre, post) =
 		(Value pre', post') => (pre', post')
 		|(Nil, post') => (ñtrue®, post');
 in
-	PPStmt(STSpecNoIvars{w=process_frame z1,w0=["<Stub>"],pre=pre,post=post, label=LExplicit lab})
+	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=pre,post=post, label=LExplicit lab})
 end
 ) | red_specification_statement3 _ _ _ _ _ _ = stack_error "red_specification_statement3";
 
@@ -1025,39 +1027,13 @@ in
 end
 ) | red_specification_statement4 _ _ _ _ _ _ = stack_error "red_specification_statement4";
 =TEX
-
-=IGN
-fun red_specification_statement1 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ = (
-	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=ñtrue®,post=process_condition z2, label=LImplicit})
-) | red_specification_statement1 _ _ _ _ _ = stack_error "red_specification_statement1";
-
-fun red_specification_statement2 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ (Token ((LCZ,CNZ z3), _)) _ = (
-	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=process_condition z2 ,post=process_condition z3, label=LImplicit})
-) | red_specification_statement2 _ _ _ _ _ _ _ = stack_error "red_specification_statement2";
-
-fun red_specification_statement3 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ = (
-	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=process_condition z2, post=ñtrue®, label=LImplicit})
-) | red_specification_statement3 _ _ _ _ _ = stack_error "red_specification_statement3";
-
-fun red_specification_statement4 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ (Parsed(PPId lab)) = (
-	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=ñtrue®,post=process_condition z2, label=LExplicit lab})
-) | red_specification_statement4 _ _ _ _ _ _ = stack_error "red_specification_statement4";
-
-fun red_specification_statement5 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ (Token ((LCZ,CNZ z3), _)) _ (Parsed(PPId lab)) = (
-	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=process_condition z2 ,post=process_condition z3, label=LExplicit lab})
-) | red_specification_statement5 _ _ _ _ _ _ _ _ = stack_error "red_specification_statement5";
-
-fun red_specification_statement6 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ (Parsed(PPId lab))= (
-	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=process_condition z2,post=ñtrue®, label=LExplicit lab})
-) | red_specification_statement6 _ _ _ _ _ _ = stack_error "red_specification_statement6";
-=TEX
 =SML
 fun red_label _ (Token ((LCNumericLiteral,CNText n), _)) _ = (
 	if is_all_decimal n
 	then
 		PPId (format_label n)
 	else
-		parse_error 503001 "the label can only contain digits"
+		parse_error 503001 "label can only contain digits"
 ) | red_label _ _ _ = stack_error "red_label";
 
 fun red_k_slot1 (Token ((LCKSlot,CNKSlot lx), _)) = (
@@ -1116,15 +1092,15 @@ val red_condition = red_accept;
 =TEX
 =SML
 fun red_case_statement _ (Parsed(PPExp e)) _ (Parsed(PPCaseAlternatives cs))
-	others _ _ _ = (
-	PPStmt(STCase{e=e, s=cs})
+	(Parsed(PPStmt others)) _ _ _ = (
+	PPStmt(STCase{e=e, s=cs, others=others})
 ) | red_case_statement _ _ _ _ _ _ _ _ = stack_error "red_case_statement";
 
 val red_case_statement_alternative_list1 = red_accept;
 
-fun red_case_statement_alternative_list2 (Parsed(PPCaseAlternatives [c]))
-	(Parsed(PPCaseAlternatives cs)) = (
-	PPCaseAlternatives (c::cs)
+fun red_case_statement_alternative_list2 (Parsed(PPCaseAlternatives cs))
+	(Parsed(PPCaseAlternatives [c])) = (
+	PPCaseAlternatives (cs@[c])
 ) | red_case_statement_alternative_list2 _ _ =
 	stack_error "red_case_statement_alternative_list2";
 
@@ -1141,24 +1117,25 @@ fun red_case_choice_list2 (Parsed(PPCaseChoices [ac])) _
 	(Parsed(PPCaseChoices acl)) = (
 	PPCaseChoices(ac::acl)
 ) | red_case_choice_list2 _ _ _ = stack_error "red_acase_choice_list2";
-
-fun red_case_choice (Parsed(PPSRExpression (e,v))) = (
-	case v of
-	Value e2 => PPCaseChoices[CCCaseRange{lo=e,hi=e2}]
-	|Nil => PPCaseChoices[CCCaseExp e]
+=TEX
+TBS Cannot produce CCCaseExp at present.
+=SML
+fun red_case_choice (Parsed(PPDiscreteRange dr)) = (
+	PPCaseChoices[CCCaseRange dr]
 ) | red_case_choice _ = stack_error "red_case_choice";
 
 val red_others_part1 = PPStmt STImplicitNull;
-fun red_others_part2 _ _ (Parsed(PPStatement st)) = (
+
+fun red_others_part2 _ _ _ (Parsed(PPStatement st)) = (
 	PPStmt (statement_to_stmt st)
-) | red_others_part2 _ _ _ = stack_error "red_others_part2";
+) | red_others_part2 _ _ _ _ = stack_error "red_others_part2";
 =TEX
 SPARK manual 5.5:
 =SML
 fun red_loop_statement (Parsed(PPIds ids)) (Parsed p) (Parsed(PPExps es))
 	_ (Parsed(PPStatement st)) _ _ (Parsed(PPIds ids')) _ = (
 let	val side =	if	ids' <> ids
-			then	parse_error 503001 "loop names do not match"
+			then	parse_error 503001 "LOOP names do not match"
 			else	();
 	val name = case ids of
 			[id] => Value id
@@ -1227,20 +1204,12 @@ fun red_loop_parameter_specification2 (Token ((_,CNText id), _)) _ _
 
 fun red_loop_parameter_specification3 (Token ((_,CNText id), _)) _
 	(Parsed(PPExp n)) _ (Parsed(PPSRExpression sr)) = (
-	case sr_expression_to_range_opt {no_r_attr=false} sr of
-	Value r =>
-		PPFor(id, name_to_tmark n, LDForwards, Value r)
-	|Nil =>
-		parse_error 503001 "a range is expected"
+		PPFor(id, name_to_tmark n, LDForwards, Value (sr_expression_to_range sr))
 ) | red_loop_parameter_specification3 _ _ _ _ _ =
 	stack_error "red_loop_parameter_specification3";
 
 fun red_loop_parameter_specification4 (Token ((_,CNText id), _)) _ _ (Parsed(PPExp n)) _ (Parsed(PPSRExpression sr)) = (
-	case sr_expression_to_range_opt {no_r_attr=false} sr of
-	Value r =>
-		PPFor(id, name_to_tmark n, LDReverse, Value r)
-	|Nil =>
-		parse_error 503001 "a range is expected"
+	PPFor(id, name_to_tmark n, LDReverse, Value (sr_expression_to_range sr))
 ) | red_loop_parameter_specification4 _ _ _ _ _ _ =
 	stack_error "red_loop_parameter_specification4";
 
@@ -1331,8 +1300,8 @@ fun red_parlist2 (Parsed (PPFormals f1)) _ (Parsed(PPFormals f2)) = (
 	PPFormals (f1@f2)
 ) | red_parlist2 _ _ _ = stack_error "red_parlist2";
 
-fun red_parameter_specification (Parsed(PPIds ids)) _ (Parsed(PPMode m)) (Token ((_,CNText name), _)) = (
-	PPFormals[{idlist=ids,mode=m,name=name}]
+fun red_parameter_specification (Parsed(PPIds ids)) _ (Parsed(PPMode m)) (Parsed(PPExp n)) = (
+	PPFormals[{idlist=ids,mode=m,name=name_to_tmark n}]
 ) | red_parameter_specification _ _ _ _ = stack_error "red_parameter_specification";
 ;
 val red_mode1 = PPMode MSparkIn;
@@ -1345,7 +1314,7 @@ SPARK manual 6.3:
 fun red_subprogram_body1 (Parsed (PPProcedureSpecification ps)) _ (Parsed (PPSubprogram (d, s, id))) = (
 let	val {name=id',...} = ps;
 	val side =	if	id' <> id
-			then	parse_error 503001 "procedure identifiers do not match"
+			then	parse_error 503001 "PROCEDURE identifiers do not match"
 			else	();
 in
 	PPProperBody (PBProcedure {procedure_spec=ps,declarative_part=d,statement=s})
@@ -1355,7 +1324,7 @@ end
 fun red_subprogram_body2 (Parsed (PPFunctionSpecification fs)) _ (Parsed (PPSubprogram (d, s, id))) = (
 let	val {designator=id',...} = fs;
 	val side =	if	id' <> id
-			then	parse_error 503001 "function designators do not match"
+			then	parse_error 503001 "FUNCTION designators do not match"
 			else	();
 in
 	PPProperBody (PBFunction {function_spec=fs,declarative_part=d,statement=s})
@@ -1403,7 +1372,7 @@ fun red_package_declaration (Parsed p) _ = (p
 
 fun red_package_specification1 _ (Token ((_,CNText id), _)) _ (Parsed(PPDeclarations v)) _ (Token ((_,CNText id'), _)) = (
 let	val side =	if	id' <> id
-			then	parse_error 503001 "package names do not match"
+			then	parse_error 503001 "PACKAGE names do not match"
 			else	();
 in
 	PPPackageSpecification {name=id,visible_decs=v,private_decs=[]}
@@ -1412,7 +1381,7 @@ end
 
 fun red_package_specification2 _ (Token ((_,CNText id), _)) _ (Parsed(PPDeclarations v)) _  (Parsed(PPDeclarations p)) _ (Token ((_,CNText id'), _)) = (
 let	val side =	if	id' <> id
-			then	parse_error 503001 "package names do not match"
+			then	parse_error 503001 "PACKAGE names do not match"
 			else	();
 in
 	PPPackageSpecification {name=id,visible_decs=v,private_decs=p}
@@ -1450,7 +1419,7 @@ val red_pdec2 = red_accept;
 =SML
 fun red_package_body _ _ (Token ((_,CNText id), _)) _ (Parsed(PPSubprogram (d,s, _))) _ (Token ((_,CNText id'), _)) _ = (
 let	val side =	if	id' <> id
-			then	parse_error 503001 "package names do not match"
+			then	parse_error 503001 "PACKAGE names do not match"
 			else	();
 in
 	PPProperBody(PBPackage{name=id,decls=d,statement=s})
@@ -1601,9 +1570,7 @@ fun red_component_pack2 (Parsed(PPComponentClauses [c])) (Parsed(PPComponentClau
 SPARK manual 13.4:
 =SML
 fun red_component_clause (Parsed(PPExp n)) _ (Parsed(PPExp e)) _ (Parsed(PPSRExpression (e1,v))) _ = (
-	case v of
-	Value e2 => PPComponentClauses[{exp=e, range=ACAggChoiceRange {lo=e1,hi=e2}}]
-	|Nil => PPComponentClauses[{exp=e, range=ACAggChoiceSingle e1}]
+	PPComponentClauses[{exp=e, range={lo=e1,hi=v}}]
 ) | red_component_clause _ _ _ _ _ _ = stack_error "red_component_clause";
 =TEX
 
@@ -1631,8 +1598,6 @@ local
 =TEX
 =INCLUDE
 dtd503.grm.sml
-=IGN
-fun slrp'gen_parser x1 x2 x3 x4 = fn _ => 
 =SML
 in
 =TEX

@@ -196,8 +196,9 @@ Array\_Def models array types.
 ‹	index, comp : TMARK
 à¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸
 
+The index can be a list of type marks, so this is modelled below.
 =SML
-type €ARRAY_DEF› (* = {index : TMARK, comp : TMARK} *);
+type €ARRAY_DEF› (* = {index : TMARK list, comp : TMARK} *);
 =TEX
 
 \subsubsection{Variable Declarations}
@@ -257,8 +258,24 @@ An integer type is characterised by its range.
 ‹	lo, hi : EXP
 à¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸
 
+A range can be just a range attribute which can be represented by one expression. To support this, we use the lo to store the range attribute and make the hi optional. 
 =SML
-type ('EXP) €RANGE› (* = {lo : 'EXP, hi : 'EXP} *);
+type ('EXP) €RANGE› (* = {lo : 'EXP, hi : 'EXP OPT} *);
+=TEX
+
+\subsubsection{Real Types}
+=SML
+type 'EXP €FLOATING_POINT_CONSTRAINT› (* = {
+	exp : 'EXP,
+	range : 'EXP RANGE OPT
+	} *);
+
+type 'EXP €FIXED_POINT_CONSTRAINT› (* = 'EXP FLOATING_POINT_CONSTRAINT *);
+=TEX
+
+=SML
+type 'EXP €FLOATING_TYPE_DEF› (* = 'EXP FLOATING_POINT_CONSTRAINT *);
+type 'EXP €FIXED_TYPE_DEF› (* = 'EXP FIXED_POINT_CONSTRAINT *);
 =TEX
 
 \subsubsection{Private Types}
@@ -273,18 +290,20 @@ type €PRIVATE_TYPE_DEF› (* = {
 TYPE\_DEF brings all the above type definitions together.
 
 πZ
-TYPE_DEF ::= enum_type_def (ENUM_TYPE_DEF) | int_type_def (RANGE) |
-		uncon_array_def (ARRAY_DEF) | con_array_def (ARRAY_DEF) |
-		record_type_def (RECORD_TYPE_DEF)
+TYPE_DEF ::= enum_type_def Enum_Type_Def | int_type_def (Range[EXP]) |
+		uncon_array_def Array_Def | con_array_def Array_Def |
+		record_type_def Record_Type_Def
 ∞
 
 The datatype for TYPE\_DEF is declared with other datatypes co-recursively with EXP in section \ref{TypeDefExpr}.
 
-An additional constructor is provided for private types.
+An additional constructor is provided for private types and for reals.
 =GFT
-datatype 'EXP €TYPE_DEF› =
+datatype €TYPE_DEF› =
 			€TDEnumTypeDef› of ENUM_TYPE_DEF
-		|	€TDIntTypeDef› of 'EXP RANGE
+		|	€TDIntTypeDef› of EXP RANGE
+		|	€TDFloatingTypeDef› of EXP FLOATING_TYPE_DEF
+		|	€TDFixedTypeDef› of EXP FIXED_TYPE_DEF
 		|	€TDUnconArrayDef› of ARRAY_DEF
 		|	€TDConArrayDef› of ARRAY_DEF
 		|	€TDRecordTypeDef› of RECORD_TYPE_DEF
@@ -311,14 +330,17 @@ type 'TYPE_DEF €TYPE_DECL› (* = {name : ID, discr : VAR_DECL, type_def : 'TYPE_D
 Subtype\_Decl models subtype declarations.
 
 πZ
-CONSTRAINT ::= range_con (RANGE) | index_con (TMARK)
+CONSTRAINT ::= range_con (Range[EXP]) | index_con TMARK
 ∞
 
 The datatype for CONSTRAINT is declared with other datatypes co-recursively with EXP in section \ref{TypeDefExpr}.
+
+A constraint can also be a fixed or a floating point constraint. The following changes remedy this.
 =GFT
 datatype €CONSTRAINT› =
-			€CRangeCon› of ('EXP) Range
-		|	€CIndexCon› of TMARK;
+			€CRange› of EXP RANGE
+		|	€CFloating› of EXP FLOATING_POINT_CONSTRAINT
+		|	€CFixed› of EXP FIXED_POINT_CONSTRAINT;
 =TEX
 
 Sub\_Ind is a subtype indication.
@@ -361,8 +383,8 @@ type €DEFERRED_CONST_DECL› (* = {consts : ID list, tmark : TMARK} *);
 
 \subsubsection{Type Definition for Basic Declarations}
 πZ
-BASIC_DECL ::= const_decl (CONST_DECL) | type_decl (TYPE_DECL) |
-		subtype_decl (SUBTYPE_DECL)
+BASIC_DECL ::= const_decl (Const_Decl) | type_decl (Type_Decl) |
+		subtype_decl (Subtype_Decl)
 ∞
 
 The datatype for BASIC\_DECL is declared with other datatypes co-recursively with EXP in section \ref{TypeDefExpr}.
@@ -424,13 +446,26 @@ Agg\_Choice is an aggregate choice with terms separated by ``|''.
 
 πZ
 ‹	AGG_CHOICE ::=
-‹		agg_choice_range (RANGE) | agg_choice_single (EXP)
+‹		agg_choice_range (Range[EXP]) | agg_choice_single EXP
 ∞
+
+
+A discrete range can be a type mark with an optional range constraint. The abstract syntax is modified to cover this.
+=SML
+type 'EXP €DISCRETE_RANGE_CONSTRAINED› (* =  {
+	tmark : TMARK,
+	range : 'EXP RANGE} *);
+=TEX
+=GFT
+datatype €DISCRETE_RANGE› =
+			€DRRange› of EXP RANGE
+		|	€DRConstrained› of EXP DISCRETE_RANGE_CONSTRAINED
+=TEX
 
 The datatype for AGG\_CHOICE is declared with other datatypes co-recursively with EXP in section \ref{TypeDefExpr}.
 =GFT
 datatype €AGG_CHOICE› =
-			€ACAggChoiceRange› of (EXP) RANGE
+			€ACAggChoiceRange› of DISCRETE_RANGE
 		|	€ACAggChoiceSingle› of EXP;
 =TEX
 
@@ -571,7 +606,7 @@ type €MEM_OP› (* = BIN_OP *);
 
 
 =SML
-type ('EXP) €MEM_RANGE› (* = {left : 'EXP, mop : MEM_OP, range : ('EXP) RANGE} *);
+type ('EXP) €MEM_RANGE› (* = {left : 'EXP, mop : MEM_OP, range : 'EXP RANGE} *);
 =TEX
 
 
@@ -610,9 +645,10 @@ datatype €ATTRIB_DESIG› =
 ‹	attribute_desig : ATTRIB_DESIG
 à¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸
 
+The prefix can in fact be a name (i.e., an expression).
 =SML
-type ('ATTRIB_DESIG) €ATTRIBUTE›
-	(* = {prefix : ID, attribute_desig : 'ATTRIB_DESIG} *);
+type ('EXP,'ATTRIB_DESIG) €ATTRIBUTE›
+	(* = {prefix : 'EXP, attribute_desig : 'ATTRIB_DESIG} *);
 =TEX
 
 \subsubsection{Indexed Component}
@@ -696,7 +732,9 @@ type Z_EXP (* = TERM *);
 =SML
 datatype €TYPE_DEF› =
 			€TDEnumTypeDef› of ENUM_TYPE_DEF
-		|	€TDIntTypeDef› of (EXP) RANGE
+		|	€TDIntTypeDef› of EXP RANGE
+		|	€TDFloatingTypeDef› of EXP FLOATING_TYPE_DEF
+		|	€TDFixedTypeDef› of EXP FIXED_TYPE_DEF
 		|	€TDUnconArrayDef› of ARRAY_DEF
 		|	€TDConArrayDef› of ARRAY_DEF
 		|	€TDRecordTypeDef› of COMPONENT RECORD_TYPE_DEF
@@ -704,8 +742,9 @@ datatype €TYPE_DEF› =
 =TEX
 =SML
 and €CONSTRAINT› =
-			€CRangeCon› of (EXP) RANGE
-		|	€CIndexCon› of TMARK
+			€CRange› of EXP RANGE
+		|	€CFloating› of EXP FLOATING_POINT_CONSTRAINT
+		|	€CFixed› of EXP FIXED_POINT_CONSTRAINT
 =TEX
 =SML
 and €BASIC_DECL› =
@@ -716,8 +755,13 @@ and €BASIC_DECL› =
 		|	€BDSubtypeDecl› of (CONSTRAINT) SUBTYPE_DECL
 =TEX
 =SML
+and €DISCRETE_RANGE› =
+			€DRRange› of EXP RANGE
+		|	€DRConstrained› of EXP DISCRETE_RANGE_CONSTRAINED
+=TEX
+=SML
 and €AGG_CHOICE› =
-			€ACAggChoiceRange› of (EXP) RANGE
+			€ACAggChoiceRange› of DISCRETE_RANGE
 		|	€ACAggChoiceSingle› of EXP
 =TEX
 =SML
@@ -735,7 +779,8 @@ and €EXP› =
 		€EArrayAggNamedOthers› of (AGG_CHOICE, EXP) AGG_NAMED_OTHERS |
 		€ERecAggPos› of (EXP) AGG_POS | €ERecAggNamed› of (EXP) REC_AGG_NAMED |
 		€EUnaryExp› of (EXP) UNARY_EXP | €EBinExp› of (EXP) BIN_EXP |
-		€EMemRange› of (EXP) MEM_RANGE | €EAttribute› of (ATTRIB_DESIG) ATTRIBUTE |
+		€EMemRange› of (EXP) MEM_RANGE |
+		€EAttribute› of (EXP,ATTRIB_DESIG) ATTRIBUTE |
 		€EIndexedComp› of (EXP) INDEXED_COMP |
 		€ESelectedComp› of (EXP) SELECTED_COMP |
 		€EFunCall› of (EXP) FUN_CALL |
@@ -843,10 +888,11 @@ I.e., ELSIF is the same as writing ELSEIF. In order to make the input reproducab
 ‹	CASE_CHOICE ::= case_exp EXP | case_range Range
 ∞
 
+The case choice can be a discrete range.
 =SML
 datatype €CASE_CHOICE› =
 				€CCCaseExp› of EXP
-			|	€CCCaseRange› of (EXP) RANGE;
+			|	€CCCaseRange› of DISCRETE_RANGE;
 =TEX
 
 ˇCase_Alternative[STMT]¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸
@@ -857,9 +903,12 @@ datatype €CASE_CHOICE› =
 ‹	E : EXP;
 ‹	s : seqâ1 Case_Alternative
 à¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸
+
+A Case statement can have an others part.
 =SML
-	type ('STMT) €CASE_ALTERNATIVE› (* = {choices : CASE_CHOICE list, p : 'STMT}; *)
-	type ('STMT) €CASE› (* = {e : EXP, s : ('STMT) CASE_ALTERNATIVE list}; *)
+type 'STMT €CASE_ALTERNATIVE› (* = {choices : CASE_CHOICE list, p : 'STMT}; *)
+type 'STMT €CASE› (* = {e : EXP, s : ('STMT) CASE_ALTERNATIVE list,
+				others : 'STMT}; *)
 =TEX
 \subsubsection{Loop}\label{loop}
 
@@ -911,13 +960,15 @@ type €STATIC_EXP› (* = EXP; *)
 datatype €LOOP_DIRECTION› =
 				LDForwards
 			|	LDReverse;
-
+=TEX
+Also, if the range is denoted by an attribute, then the range attribute is stored in the $lo$ component. The $hi$ component is therefore optional and its absence denotes that the $lo$ component denotes a range attribute.
+=SML
 type 'STMT €FOR_STATIC› (* = {
 	name : ID OPT,
 	i : ID,
 	tmark : ID,
 	lo : STATIC_EXP,
-	hi : STATIC_EXP,
+	hi : STATIC_EXP OPT,
 	dir : LOOP_DIRECTION,
 	loop : 'STMT LOOP}; *)
 =TEX
@@ -1039,8 +1090,11 @@ datatype €STMT›	= 	€STNull›
 ‹	≤
 ‹		hi é STATIC_EXP
 à¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸
+A loop may have an optional name. 
+Also, if the range is denoted by an attribute, then the range attribute is stored in the $lo$ component. The $hi$ component is therefore optional and its absence denotes that the $lo$ component denotes a range attribute.
+
 =SML
-	type €FOR_NON_STATIC› (* = {i : ID, lo : STATIC_EXP, hi : STATIC_EXP, loop : STMT LOOP}; *)
+	type €FOR_NON_STATIC› (* = {name : ID OPT, i : ID, lo : STATIC_EXP, hi : STATIC_EXP OPT, loop : STMT LOOP}; *)
 =TEX
 \subsubsection{Logical Constants}\label{logical-constants}
 πZAX
@@ -1177,7 +1231,7 @@ type €ENUMERATION_REPRESENTATION_CLAUSE› (* = {
 
 type €COMPONENT_CLAUSE› (* = {
 	exp : EXP,
-	range : AGG_CHOICE} *);
+	range : EXP RANGE} *);
 
 type €RECORD_REPRESENTATION_CLAUSE› (* = {
 	name : ID,
