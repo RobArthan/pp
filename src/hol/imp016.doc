@@ -111,11 +111,17 @@ At present, there are no known deficiencies in this document.
 \section{THE STANDARD ML CODE FOR TYPE INFERENCE}
 
 =SML
-structure âTypeInferenceá : TypeInference = struct
+structure âTypeInferenceá = struct
 =TEX
 
 =SML
 open Parser Unification;
+
+val TIverbose = ref false;
+
+val _ =
+new_flag {name = "TIverbose", control=TIverbose, default = fn () => false};
+
 type âENVá = string -> (EXTYPE*bool);
 type âINF_TUPLEá = EXTYPE TM * EXTYPE * SUBS;
 =TEX
@@ -205,8 +211,16 @@ fun âcontext_mapá ((tm::tml) : TERM list) :
 	)
 	  | context_map _ = [];
 
-fun âset_contextá (tml : TERM list) : unit = 
-	context_info := context_map tml;
+fun âset_contextá (tml : TERM list) : unit = (
+let	val allterms = list_term_union (map frees tml);
+	val di = all_different (map (fst o dest_var) allterms);
+in
+	if di
+	then
+		context_info := context_map tml
+	else
+		fail "HOL type inferrer" 16040 []
+end);
 
 fun âget_contextá (() : unit) : TERM list =
 	(map mk_var (!context_info));
@@ -444,6 +458,35 @@ fun âget_tyvar_info_tyá (phi : SUBS) (ty : EXTYPE) : (int * string) list = (
 );
 =TEX
 
+=SML
+fun âvars_in_contextá (term : TY TM) (env : ENV) : TERM list = (
+let	val freevars = fv_set term;
+	fun aux (var::rest) =
+	let	val (exty, flag) = env var
+	in
+		if flag
+		then
+			(mk_var (var, lassoc3 (!context_info) var))::(aux rest)
+		else
+			aux rest
+	end
+	  | aux _ = nil;
+in
+	aux freevars
+end
+);
+
+fun âvars_in_termá (term : TY TM) (env : ENV) : (string*EXTYPE) list = (
+let	val freevars = fv_set term;
+	fun aux (var::rest) =
+		(var, (fst o env) var)::(aux rest)
+	  | aux _ = nil;
+in
+	aux freevars
+end
+);
+=TEX
+
 \subsection{Handling and Displaying Errors}
 
 =SML
@@ -500,7 +543,35 @@ fun âti_failá (msg : int) (term : TY TM) (inserts : string list) : 'a = (
 =TEX
 
 =SML
-fun âunify1á (phi : SUBS) ((t1, t2) : EXTYPE * EXTYPE) (term : TY TM) : SUBS = (
+fun âti_errcontextá (tml : (string*EXTYPE) list) (phi : SUBS): unit = (
+let	val thing = map (fv_in_exty phi) (map snd tml);
+	val knowns = flat (map fst thing);
+	val unknowns = flat (map snd thing);
+	val side_effect = start_tyvar_name();
+
+	val namemap = get_tyvar_names (knowns, elim_repeats unknowns);
+	fun aux (((var,exty)::tml) : (string*EXTYPE) list) =
+		(ti_errline 16055 [var, (format_extype phi namemap exty)];
+		aux tml)
+	  | aux _ = ();
+in
+	if get_flag "TIverbose"
+	then
+	(
+		(case tml of
+		nil	=> ()
+		|Other	=> (ti_errline 16050 [];
+				aux  tml; ())
+		);
+		())
+	else
+		()
+end);
+
+=TEX
+
+=SML
+fun âunify1á (phi : SUBS) ((t1, t2) : EXTYPE * EXTYPE) (term : TY TM) (env : ENV) : SUBS = (
 	unify phi (t1, t2)
 	handle Fail msg =>
 		(ti_errline 16001 [];
@@ -508,12 +579,13 @@ fun âunify1á (phi : SUBS) ((t1, t2) : EXTYPE * EXTYPE) (term : TY TM) : SUBS = (
 			[format_tm format_ty term];
 		ti_errline 16020 [format_extype1 phi t1, format_extype1 phi t2];
 		ti_errline 16022 [get_message msg];
+		ti_errcontext (vars_in_term term env) phi;
 		fail "HOL type inferrer"  16000 [])
 );
 =TEX
 
 =SML
-fun âlist_unify1á (phi : SUBS) (tl : EXTYPE list) (term : TY TM) : SUBS = (
+fun âlist_unify1á (phi : SUBS) (tl : EXTYPE list) (term : TY TM) (env : ENV) : SUBS = (
 	list_unify phi tl
 	handle Fail msg =>
 		(ti_errline 16001 [];
@@ -521,7 +593,8 @@ fun âlist_unify1á (phi : SUBS) (tl : EXTYPE list) (term : TY TM) : SUBS = (
 			[format_tm format_ty term];
 		ti_errline 16021 [format_list ((curry op ^ ":") o format_extype1 phi) tl ", "];
 		ti_errline 16022 [get_message msg];
-	fail "HOL type inferrer"  16000 [])
+		ti_errcontext (vars_in_term term env) phi;
+		fail "HOL type inferrer"  16000 [])
 );
 =TEX
 
@@ -599,7 +672,7 @@ and
 
 	let
 		fun rep_unify1 (psi::psil) (typair::tyl) term = (
-			(unify1 psi typair term)::(rep_unify1 psil tyl term)
+			(unify1 psi typair term env)::(rep_unify1 psil tyl term)
 		 )| rep_unify1 _ _ _ = [id_subs];
 
 		fun ti_components env (t::tml) = (
@@ -645,8 +718,8 @@ and
 				(case list_ti env [c,a,b] of
 				([cc,aa,bb],p)	=> (cc,aa,bb,p)
 				| _		=> error "ti_cond" 16100 []);
-		val psi' = unify1 psi (cty, type_to_extype BOOL) term;
-		val psi'' = unify1 psi' (aty, bty) term
+		val psi' = unify1 psi (cty, type_to_extype BOOL) term env;
+		val psi'' = unify1 psi' (aty, bty) term env
 	in
 		(Cond (ctm, atm, btm), bty, psi'')
 	end)
@@ -661,7 +734,7 @@ and
 		val ty = ExVartype(Unknown(next_name()));
 		val psi = scomp apsi fpsi;
 		val nty = funt aty ty;
-		val phi = unify1 psi (fty, nty) term;
+		val phi = unify1 psi (fty, nty) term env;
 	in
 		(App (ftm, atm, fix), ty, phi)
 	end)
@@ -672,7 +745,7 @@ and
 âti_tmtypedá (env : ENV) (a : TY TM) (ty : TY) (term : TY TM) : INF_TUPLE = (
 	let	val (atm, aty, apsi) = ti env a;
 		val exty = (type_to_extype o ty_to_type) ty;
-		val psi = unify1 apsi (aty, exty) term;
+		val psi = unify1 apsi (aty, exty) term env;
 	in
 		(atm, aty, psi)
 	end)
@@ -687,7 +760,7 @@ and
 âti_setdisplayá (env : ENV) (tl : TY TM list) (term : TY TM) : INF_TUPLE = (
 	let	val (tmlist, psi) = list_ti env tl;
 		val (timl, tiyl, tpsil) = split3 tmlist;
-		val phi = list_unify1 psi tiyl term;
+		val phi = list_unify1 psi tiyl term env;
 		val ty = 
 			(case tiyl of
 			  nil => ExVartype(Unknown(next_name()))
@@ -710,7 +783,7 @@ and
 			val (btm, bty, bpsi) = ti newenv' b;
 			val psi = scomp bpsi apsi;
 			val boolty = type_to_extype BOOL;
-			val phi = unify1 psi (bty, boolty) term;
+			val phi = unify1 psi (bty, boolty) term env;
 		in
 			(SetComprehension (atm, btm),
 				ExType ("SET", [aty]) , phi)
@@ -724,7 +797,7 @@ and
 
 	let	val (tmlist, psi) = list_ti env tl;
 		val (timl, tiyl, tpsil) = split3 tmlist;
-		val phi = list_unify1 psi tiyl term;
+		val phi = list_unify1 psi tiyl term env;
 		val ty = 
 			(case tiyl of
 			  nil => ExVartype(Unknown(next_name()))
