@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.42 2003/07/24 13:09:52 rda Exp $
+ * $Id: pterm.c,v 2.43 2003/08/01 11:13:13 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -1298,8 +1298,10 @@ static void default_sigs(void)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * new_session: fork and exec another xpp session.
- * We actually fork a child which then forks again and
+ * new_session: run another xpp session. either synchronously
+ * or asynchronously as determined by Bollean parameter.
+ *
+ * If asynchronous, we actually fork a child which then forks again and
  * the grand-child becomes the new xpp process. The
  * child then exits, which makes init rather than this xpp
  * be the parent of the new xpp process. This saves us having
@@ -1307,22 +1309,51 @@ static void default_sigs(void)
  * without which we would be spawning a generation of zombies.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-void new_session(char *argv[])
+void new_session(char *argv[], Boolean async)
 {
 	pid_t new_pid;
 	new_pid = fork();
 
-	if (new_pid < 0) { /* Cannot fork */
-		msg("system error", "fork failed");
-		perror("xpp");
-	} else if (new_pid == 0) { 
-		new_pid = fork();
+	if(async) { /* asynchronous */
 		if (new_pid < 0) { /* Cannot fork */
 			msg("system error", "fork failed");
 			perror("xpp");
+			exit(18);
 		} else if (new_pid == 0) { 
-			 /* Grandchild */
-			 /* become session leader */
+			new_pid = fork();
+			if (new_pid < 0) { /* Cannot fork */
+				msg("system error", "fork failed");
+				perror("xpp");
+			} else if (new_pid == 0) { 
+				 /* Grandchild */
+				 /* become session leader */
+				if(setsid() < 0) {
+					msg("system error", "setsid failed");
+					perror("xpp");
+					exit(13);
+				}
+				/* exec argv[0] "" */
+				execvp(argv0, argv);
+				/* **** error if reach here **** */
+				msg("system error", "could not exec");
+				perror("xpp");
+				exit(19);
+			} else {
+				/* Child - exit */
+				exit(0);
+			}
+		} else {
+			/* Parent - wait for the child */
+			wait(0);
+		}
+	} else { /* synchronous */
+		if (new_pid < 0) { /* Cannot fork */
+			msg("system error", "fork failed");
+			perror("xpp");
+			exit(20);
+		}
+		if(new_pid == 0) { /* Child */
+			/* become session leader */
 			if(setsid() < 0) {
 				msg("system error", "setsid failed");
 				perror("xpp");
@@ -1333,13 +1364,11 @@ void new_session(char *argv[])
 			/* **** error if reach here **** */
 			msg("system error", "could not exec");
 			perror("xpp");
-		} else {
-			/* Child - exit */
-			exit(0);
+			exit(22);
+		} else  {
+			/* Parent - wait for the child */
+			wait(0);
 		}
-	} else {
-		/* Parent - wait for the child */
-		wait(0);
 	}
 }
 
@@ -1351,7 +1380,7 @@ void new_editor_session(void)
 {
 	static char *argv[] = {"", "-b", "", 0};
 	argv[0] = argv0;
-	new_session(argv);
+	new_session(argv, True);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * new_command_session: start a command session
@@ -1361,7 +1390,7 @@ void new_command_session(void)
 {
 	static char *argv[] = {"", "-b", "", "", 0};
 	argv[0] = argv0;
-	new_session(argv);
+	new_session(argv, True);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  *  run_in_background: fork and then have the parent exit.

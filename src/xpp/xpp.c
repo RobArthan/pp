@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.21 2004/01/26 12:13:34 rda Exp rda $
+ * $Id: xpp.c,v 2.22 2004/02/02 11:35:41 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -443,21 +443,43 @@ static char *get_command_line(int argc, char **argv)
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * main:
+ * Apart from starting up Xt, there are several complications here:
+ *
+ * 1) We have to take a copy of the command line arguments, before Xt has
+ * tinkered with them. This is for the case where this instance of xpp is just
+ * going to use the X connection to set the font path and then another xpp
+ * is going to be exec'ed to provide the user interface.
+ * 2) If we are going to exec another xpp, we need to pass it the -h option
+ * in the right place in the argument list to prevent it trying to mess with the
+ * font path (there being a possibility for weird behaviour if another process
+ * is doing xsets as well). The right place is taken to be immediately after
+ * any X options and before any xpp-specific ones.
+ * 3) There are various bits of global state to be set up (see code)
+ * 4) If we are going to run in the background, then the child we fork to do
+ * the work inherits our X connection, so the file descriptor given by the
+ * connection number must not be closed on the exec, so we need to do the
+ * appropriate fcntls to ensure (a) that we do inherit the X connection and
+ * (b) other applications exec'ed by us do not (if they are X application, e.g.,
+ * inside a Poly/ML ProofPower session using the ML Motif interface, then
+ * they will set up their own connection).
+ * 5) If we are going to spawn a new xpp because we've had to change th
+ * font path, then the spawned copy will set up its own connection.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 int main(int argc, char **argv)
 {
-	char **retry_args;
-	int i;
+	char **retry_argv;
+	int i, orig_argc;
 
 	argv0 = argv[0];
-	retry_args = (char **) XtMalloc((argc+2)*(sizeof(char*)));
-	retry_args[0] = argv0;
-	retry_args[1] = "-havefonts";
-	for(i = 1; i <  argc; i += 1) {
-		retry_args[i+1] = argv[i];
+	orig_argc = argc;
+	retry_argv = (char **) XtMalloc((argc+2)*(sizeof(char*)));
+	for(i = 0; i <  argc; i += 1) {
+		retry_argv[i] = argv[i];
 	}
-	retry_args[i+1] = (char*) 0;
+	retry_argv[++i] = (char*) 0;
+	retry_argv[++i] = (char*) 0;
+
 	set_pp_home();
 
 	root = XtOpenApplication(&app,
@@ -469,6 +491,12 @@ int main(int argc, char **argv)
 		NULL, /* no fallback resources */
 		applicationShellWidgetClass,
 		NULL, 0); /* default widget resources*/
+
+	for(i = orig_argc - 1; i > orig_argc - argc + 1; i -= 1) { /* move non-X arguments up 1 place */
+		retry_argv[i+1] = retry_argv[i];
+	}
+
+	retry_argv[orig_argc - argc + 1] = "-h";
 
 	(void) fcntl(ConnectionNumber(XtDisplay(root)), F_SETFD, 1);
 
@@ -503,14 +531,17 @@ int main(int argc, char **argv)
 	(void) fcntl(ConnectionNumber(XtDisplay(root)), F_SETFD, 0);
 
 	if (!havefonts && get_pp_fonts())  {
-		new_session(retry_args);
+		/* Need to restart to pick up the fonts added to the path by get_pp_fonts */
+		/* don't need X any more: */
+		XtDestroyApplicationContext(app);
+		(void) fcntl(ConnectionNumber(XtDisplay(root)), F_SETFD, 1);
+		/* Start again asynchronously or synchronously as appropriate */
+		new_session(retry_argv, !synchronous);
 		exit(0);
-	}
-
-	if(!synchronous) {
+	} else if(!synchronous) {
 		run_in_background();
 	} else {
-		XtFree((char*)retry_args);
+		XtFree((char*)retry_argv);
 	}
 
 	(void) fcntl(ConnectionNumber(XtDisplay(root)), F_SETFD, 1);

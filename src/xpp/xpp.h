@@ -253,6 +253,7 @@ typedef enum {
 	extern void send_to_application(
 		char	*buf,
 		NAT	siz);
+	extern void new_session(char *argv[], Boolean async);
 	extern void new_editor_session(void);
 	extern void new_command_session(void);
 	extern void run_in_background(void);
