@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2003/05/21 10:54:16 $ $Revision: 2.21 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2003/05/21 11:01:30 $ $Revision: 2.22 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -684,8 +684,13 @@ void startup_dialog(Widget w, char **cmd_line, char **file_name)
 		XmStringFree(s);
 	} else {
 		dialog = XmCreateQuestionDialog(w, "startup-dialog", NULL, 0);
+		s = XmStringCreateSimple("   OK   ");
+		XtVaSetValues(dialog,
+			XmNokLabelString,	s,
+			NULL);
 		XtUnmanageChild(
 			XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON));
+		XmStringFree(s);
 	}
 #ifdef EDITRES
 	add_edit_res_handler(dialog);
