@@ -51,17 +51,19 @@ void help_dialog(w, str)
 Widget w;
 char *str;
 {
-	Widget help_dialog, pane, help_text, form, widget;
+	Widget dialog_w, pane, help_text, form, widget;
 	extern void ok_reply();
 	Arg args[9];
 	char buf[BUFSIZ];
 
-	help_dialog = XtVaCreatePopupShell("Help",
+	TRACE("help_dialog");
+
+	dialog_w = XtVaCreatePopupShell("Help",
 		xmDialogShellWidgetClass, get_top_shell(w),
 		XmNdeleteResponse, XmDESTROY,
 		NULL);
 
-	pane = XtVaCreateWidget("pane", xmPanedWindowWidgetClass, help_dialog,
+	pane = XtVaCreateWidget("pane", xmPanedWindowWidgetClass, dialog_w,
 		/* XmNsashWidth,  1, /* PanedWindow won't let us set these to 0! */
 		/* XmNsashHeight, 1, /* Make small so user doesn't try to resize */
 		NULL);
@@ -94,7 +96,7 @@ char *str;
 		XmNshowAsDefault,        True,
 		XmNdefaultButtonShadowThickness, 1,
 		NULL);
-	XtAddCallback(widget, XmNactivateCallback, ok_reply, help_dialog);
+	XtAddCallback(widget, XmNactivateCallback, ok_reply, dialog_w);
 
 	XtManageChild(form);
 	{
@@ -105,13 +107,19 @@ char *str;
 
 	XtManageChild(pane);
 
-	XtPopup(help_dialog, XtGrabNone);
+	XtPopup(dialog_w, XtGrabNone);
+
+	LEAVE("help_dialog");
 }
 
 void ok_reply(widget, shell)
 Widget widget, shell;
 {
+	TRACE("ok_reply");
+
 	XtDestroyWidget(shell);
+
+	LEAVE("ok_reply");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -123,9 +131,11 @@ char *question;
 {
 	static Widget dialog;
 	XmString text, yes, no, confirm;
-	static int reply;
+	static NAT reply;
 	/* 0 = not replied; otherwise YES/NO */
 	extern void yes_no_cb();
+
+	TRACE("yes_no_dialog");
 
 	reply = 0;
 
@@ -159,15 +169,19 @@ char *question;
 			XtAppProcessEvent(app, XtIMAll);
 		}
 	};
+
 	XtPopdown(XtParent(dialog));
-	return (reply == YES);
+
+	RETURN("yes_no_dialog", reply == YES);
 }
 
 void yes_no_cb(w, reply, cbs)
 Widget w;
-int *reply;
+NAT *reply;
 XmAnyCallbackStruct *cbs;
 {
+	TRACE("yes_no_cb");
+
 	switch (cbs->reason) {
 		case XmCR_OK:
 			*reply = YES;
@@ -176,8 +190,9 @@ XmAnyCallbackStruct *cbs;
 			*reply = NO;
 			break;
 		default:
-			return;
+			break;
 	}
+	LEAVE("yes_no_cb");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -189,8 +204,9 @@ char *msg;
 {
 	static Widget dialog;
 	XmString text, ok, error;
-	static int reply;
+	static NAT reply;
 	/* 0 = not replied; */
+	TRACE("ok_dialog");
 
 	reply = 0;
 
@@ -225,6 +241,7 @@ char *msg;
 		}
 	};
 	XtPopdown(XtParent(dialog));
+	LEAVE("ok_dialog");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -241,10 +258,12 @@ char *opn;
 	static Widget dialog;
 	XmString ok, title;
 	void file_sel_cb();
-	static int reply;
+	static NAT reply;
 	/* 0 = not replied; */
 
+	TRACE("file_dialog");
 	reply = 0;
+
 
 	if (!dialog) {
 		dialog = XmCreateFileSelectionDialog(w, "filesel",
@@ -256,7 +275,6 @@ char *opn;
 
 		XtVaSetValues(dialog,
 			XmNdialogStyle,		XmDIALOG_FULL_APPLICATION_MODAL,
-			XmNokLabelString,	ok,
 			XmNdialogTitle, 	title,
 			NULL);
 
@@ -285,9 +303,9 @@ char *opn;
 	XtPopdown(XtParent(dialog));
 
 	if(reply == YES) {
-		return(file_name);
+		RETURN("file_dialog", file_name);
 	} else {
-		return(NULL);
+		RETURN("file_dialog", NULL);
 	};
 
 }
@@ -295,9 +313,11 @@ char *opn;
 
 void file_sel_cb(w, reply, cbs)
 Widget w;
-int *reply;
+NAT *reply;
 XmFileSelectionBoxCallbackStruct *cbs;
 {
+	TRACE("file_sel_cb");
+
 	switch (cbs->reason) {
 		case XmCR_OK:
 			(void) XmStringGetLtoR(cbs->value,
@@ -309,6 +329,8 @@ XmFileSelectionBoxCallbackStruct *cbs;
 			*reply = NO;
 			break;
 		default:
-			return;
+			break;
 	}
+
+	LEAVE("file_sel_sb");
 }

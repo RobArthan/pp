@@ -36,16 +36,20 @@
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void toggle_menu_item_sensitivity(w, i)
 Widget w;
-int i;
+NAT i;
 {
 	Widget *btns;
-	int num_btns;
+	NAT num_btns;
 	Bool sens;
+	TRACE("toggle_menu_item_sensitivity");
+
 	XtVaGetValues(w, XmNchildren, &btns,
 		XmNnumChildren, &num_btns, NULL);
 	if (0 <= i && i < num_btns) {
 		XtSetSensitive(btns[i], !XtIsSensitive(btns[i]));
-	}
+	};
+
+	LEAVE("toggle_menu_item_sensitivity");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -54,17 +58,21 @@ int i;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void set_menu_item_sensitivity(w, i, b)
 Widget w;
-int i;
+NAT i;
 Bool b;
 {
 	Widget *btns;
-	int num_btns;
+	NAT num_btns;
 	Bool sens;
+	TRACE("set_menu_item_sensitivity");
+
 	XtVaGetValues(w, XmNchildren, &btns,
 		XmNnumChildren, &num_btns, NULL);
 	if (0 <= i && i < num_btns) {
 		XtSetSensitive(btns[i], b);
-	}
+	};
+
+	LEAVE("set_menu_item_sensitivity");
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set_menu_item_label: given a menu w change the
@@ -72,13 +80,15 @@ Bool b;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void set_menu_item_label(w, i, lab)
 Widget w;
-int i;
+NAT i;
 char *lab;
 {
 	Widget *btns;
-	int num_btns;
+	NAT num_btns;
 	XmString str;
 	Bool sens;
+	TRACE("set_menu_item_label");
+
 	XtVaGetValues(w, XmNchildren, &btns,
 		XmNnumChildren, &num_btns, NULL);
 	if (0 <= i && i < num_btns) {
@@ -87,7 +97,9 @@ char *lab;
 			XmNlabelString, str,
 			NULL);
 		XmStringFree(str);
-	}
+	};
+
+	LEAVE("set_menu_item_label");
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * check_text_window_limit: helps to manage the text windows
@@ -99,10 +111,10 @@ char *lab;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void check_text_window_limit(w, max)
 Widget w;
-long max;
+NAT max;
 {
 	XmTextPosition siz;
-	long bytes_to_go;
+	NAT bytes_to_go;
 
 	char *text, *p;
 	char *fmt =
@@ -110,14 +122,16 @@ long max;
 	char *msg =
 	"**** Text lost when buffer exceeded dddddddddddd bytes ****\n";
 
+	TRACE("check_text_window_limit");
+
 	if(max < 1000) {
-		return;
+		LEAVE("check_text_window_limit");
 	};
 
 	siz = XmTextGetLastPosition(w);
 
 	if(siz <= max) {
-		return;
+		LEAVE("check_text_window_limit");
 	};
 
 	bytes_to_go = siz / 20;
@@ -138,4 +152,5 @@ long max;
 
 	XmTextReplace(w, 0, bytes_to_go, msg);
 
+	LEAVE("check_text_window_limit");
 }

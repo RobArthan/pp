@@ -53,7 +53,7 @@ static char prettychars[] = {
 0x00} ;
 
 typedef struct {
-	Widget text_w, palette_w
+	Widget text_w, palette_w;
 } PaletteData;
 
 static PaletteData palette_info[MAX_PALETTES];
@@ -67,10 +67,12 @@ Widget w;
 {
 	XmString lab;
 	char buf[2];
-	long i, n_chars, x, y, twi;
-	unsigned long cbdata;
+	NAT i, n_chars, x, y, twi;
+	NAT cbdata;
 	Widget shell, form, button;
 	void type_char_cb();
+
+	TRACE("add_palette");
 
 	for(	twi= 0;
 		twi< MAX_PALETTES &&
@@ -82,13 +84,13 @@ Widget w;
 
 	if(twi>= MAX_PALETTES) {
 		msg("palette creation", "no more space for palettes");
-		return(False);
+		RETURN("add_palette", False);
 	};
 
 	if((form = palette_info[twi].palette_w) != NULL) {
 		XtManageChild(form);
 		XtPopup(XtParent(form), XtGrabNone);
-		return;
+		RETURN("add_palette", True);
 	};
 
 	n_chars = strlen(prettychars);
@@ -129,13 +131,13 @@ Widget w;
 		XmStringFree(lab);
 		cbdata = (twi << 8) | (prettychars[i] & 0xff);
 		XtAddCallback(button, XmNactivateCallback, type_char_cb,
-			cbdata);
+			(XtPointer) cbdata);
 	};
 
 	XtManageChild(form);
 	XtPopup(shell, XtGrabNone);
 
-	return(True);
+	RETURN("add_palette", True);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -144,20 +146,22 @@ Widget w;
 
 void type_char_cb(w, cbdata, cbs)
 Widget w;
-unsigned long cbdata;
+NAT cbdata;
 XmPushButtonCallbackStruct *cbs;
 {
 	char buf[2];
-	int text_index = cbdata >> 8;
+	NAT text_index = cbdata >> 8;
 	XmTextPosition start, end;
 	Widget text_w;
+
+	TRACE("type_char_cb");
 
 	if(text_index >= MAX_PALETTES ||
 		!(text_w = palette_info[text_index].text_w)) {
 		char *m = "unexpected argument 0xXXXXXXXX";
 		sprintf(m, "unexpected argument 0x%x", cbdata);
 		msg("palette handler", m);
-		return;
+		LEAVE("type_char_cb");
 	};
 
 	buf[0] = cbdata & 0xff;
@@ -174,6 +178,7 @@ XmPushButtonCallbackStruct *cbs;
 	XmTextSetInsertionPosition(text_w, start + 1);
 	XmTextShowPosition(text_w, start);
 
+	LEAVE("type_char_cb");
 }
 
 
