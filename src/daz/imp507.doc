@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.191 $ $RCSfile: imp507.doc,v $ $Date: 2002/05/07 18:09:12 $
+% imp507.doc %Z% $Revision: 1.192 $ $RCSfile: imp507.doc,v $ $Date: 2002/05/08 16:20:25 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.191 $%
+\def\SCCSversion{$Revision: 1.192 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/05/07 18:09:12 $%
+\TPPdate{\FormatDate{$Date: 2002/05/08 16:20:25 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -142,6 +142,7 @@ statements in stubs.
 \item[Issue 1.190] Spring 2002 enhancements: return and exit statements.
 \item[Issue 1.191] Spring 2002 enhancements: subprogram renaming.
 \item[Issue 1.192] Spring 2002 enhancements: object renaming.
+\item[Issue 1.193] Spring 2002 enhancements: package renaming and use clauses.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1942,12 +1943,17 @@ fun Ûget_tmark_from_inscopeÝ (recur : Z_ID -> (TYPE OPT * ENV_INFO) OPT)
 		fun do_renamings [] = Nil
 		|    do_renamings ((new, old)::more) = (
 			if	new = n
-			then	case recur old of
-					Value (ty, EIEnvVar(tmk, _)) => (
+			then	case get_tmark_from_inscope (fn _ => Nil)  old inscope of
+					x as Value (ty, EIEnvVar(tmk, _)) =>  (
 					Value(ty, EIEnvVar(tmk, Value old))
-				) |	_ => (
-					error "get_tmark_from_inscope" 507069
-					[fn _ => old, fn _ => new]
+				) |	Nil =>  (
+					case recur old of
+						Value (ty, EIEnvVar(tmk, _)) => (
+						Value(ty, EIEnvVar(tmk, Value old))
+					) |	_ => (
+						error "get_tmark_from_inscope" 507069
+						[fn _ => old, fn _ => new]
+					)
 				)
 			else	do_renamings more
 		);
@@ -2044,8 +2050,7 @@ fun Ûcurrent_cn_envÝ (n : Z_ID) : (TYPE * ENV_INFO) OPT = (
 =SML
 fun Ûcn_env_of_in_scopeÝ (in_scope : IN_SCOPE) (n : Z_ID)
 	: (TYPE * ENV_INFO) OPT = (
-	let	val recur = switch (get_tmark_from_inscope (fn _ => Nil)) in_scope;
-	in	case get_tmark_from_inscope recur n in_scope of
+	case get_tmark_from_inscope (fn _ => Nil) n in_scope of
 		Value (Value ty, ei) => ( Value (ty, ei)
 	) |	Value (Nil, _) => (env_retry n
 	) |	Nil => (
@@ -2053,7 +2058,6 @@ fun Ûcn_env_of_in_scopeÝ (in_scope : IN_SCOPE) (n : Z_ID)
 				Value ty => Value(env_info_of_g_var n ty)
 			|	Nil => env_retry n
 	)
-	end
 );
 =TEX
 =SML
@@ -2125,10 +2129,18 @@ fun Ûti_context_of_in_scopeÝ (inscope : IN_SCOPE) : TERM list = (
 			in	avs @ map av_av0 avs
 			end
 		);
-		val {vc_vars, vc_pars, vc_log_cons, vc_aux_vars, ...} = inscope;
+		fun do_renamings [] = []
+		|    do_renamings ((new, old)::more) = (
+			case cn_env_of_in_scope inscope old of
+					Value (ty, _) => (
+					v_v0 false ty new @ do_renamings more
+				) |	Nil => (
+					do_renamings more
+				)
+		);
+		val {vc_vars, vc_pars, vc_log_cons, vc_aux_vars, renamings, ...} = inscope;
 	in	do_log_cons vc_log_cons @ do_aux_vars vc_aux_vars
-			@ do_pars vc_pars @ do_vars vc_vars
-(* renamings TBS *)
+			@ do_pars vc_pars @ do_vars vc_vars @ do_renamings renamings
 	end
 );
 =TEX
@@ -5815,8 +5827,69 @@ fun Ûrenames_objectÝ (obj_ren : OBJECT_RENAMING)
 =TEX
 \subsection{The SID function renames\_pack}
 =SML
-fun Ûrenames_packÝ ({old_name, new_name} : PACKAGE_RENAMING)  : unit = (
-		comment "do_declaration" 505001 [fn _=>"Package renaming TBS"]
+fun Ûrenames_packÝ (old_name : ID , pack : PACKAGE)  : unit = (
+	let	val {vc_vars, consts_types, formal_procs, informal_funs, formal_funs, renamings,
+			aux_vars, zmod} = pack;
+		val newids = new_ids pack;
+		fun const_def id = (
+			BDConstDecl{
+				consts= [id],
+				expr = EId (prefix_id old_name id),
+				tm = Nil}
+		);
+		fun subtype_def id = (
+			BDSubtypeDecl{
+				name = id,
+				sub_ind = {tmark = prefix_id old_name id, con = CNoCon}}
+		);
+		fun get_consts_types acc [] = rev acc
+		|   get_consts_types acc (BDConstDecl{consts, ...}::more) = (
+			get_consts_types
+			(map const_def consts @acc) more
+		) | get_consts_types acc  (BDTypeDecl{name, ...}::more) = (
+			get_consts_types(subtype_def name::acc) more
+		) | get_consts_types acc (BDSubtypeDecl{name, ...}::more) = (
+			get_consts_types (subtype_def name::acc) more
+		) | get_consts_types acc (_::more) = (
+			get_consts_types acc more
+		);
+		val bds_to_do = get_consts_types [] consts_types;
+		val _ = map basic_declaration bds_to_do;
+		val funs_to_do = map (const_def  o #name) 
+			(informal_funs @ map #informal_fun formal_funs);
+		val _ = map basic_declaration funs_to_do;
+		val newids = new_ids pack;
+		fun do_renaming (new, old)   = (
+			renames_object
+			{new_name = new, 
+			 old_name = trans_id (prefix_package_id  old_name newids
+				(implode (map (fn "o" => "." |  ch => ch) (explode old)))),
+			 tmark = ""}
+		);
+		val vars = flat (map #vars vc_vars);
+		val _ = (map do_renaming o (fn v => combine v v)) vars;
+		val _ = map do_renaming renamings;
+		val avls_to_do = map z_names_of_z_dec aux_vars;
+		val _ = map (map do_renaming o (fn l => combine l l)) avls_to_do;
+		fun untrans_par  ({var_decl = {vars, tmark}, mode} : PARAM_SPEC)
+			 : PARAMETER_SPECIFICATION = (
+			{idlist = vars, mode = mode, name = tmark}
+		);
+		fun untrans_fp ({name, formal_ids, par_names, globals, spec} : FORMAL_PROC) 
+			: SUBPROGRAM_SPECIFICATION = (SSProcedure
+				{name = name, formal_part = map untrans_par formal_ids,
+				 spec = Value spec, annotation = [], globals = globals}
+		);
+		fun do_formal_proc (fp as {name, ...}) = (
+			let	 val ss = untrans_fp fp;
+			in	renames_proc{subprogram_specification = ss,
+					name1 = Value old_name,
+					name2 = name}
+			end
+		)
+		val _ = map do_formal_proc formal_procs;
+	in	()
+	end
 );
 =TEX
 \section{STUBS AND SUBUNITS}\label{STUBSANDSUBUNITS}
@@ -6080,7 +6153,12 @@ fun expand_names (ns : ID list) : Z_ID list = (
 				force_value o get_const_type) (z_id_of_id n))
 			handle Fail _ => [n]
 		);
-	in	flat (map aux ns)
+		fun undo_renamings zn = (
+			let	val (zn', _, _) = dest_z_lvar (zid current_cn_env zn);
+			in	zn'
+			end
+		);
+	in	map undo_renamings(flat (map aux ns))
 	end
 );
 =TEX
@@ -6252,6 +6330,19 @@ fun Ûadjust_using_decÝ ({aux, basic_decls, invariant} : SI_USING_DEC)
 	end
 );
 =TEX
+=SML
+fun Ûuse_packÝ (name : ID) : unit = (
+	case s_lookup name (!pack_env) of
+		Value pack  => (
+			renames_pack (name, pack)
+	) |	Nil  => fail "do_declaration" 507063 [fn _ => name]
+);
+=TEX
+=SML
+fun Ûuse_clauseÝ (UCUse names : USE_CLAUSE) : unit = (
+	map use_pack names; ()
+) | use_clause _ = ();
+=TEX
 The following reflects the SID functions for $dec$, $basic\_declaration$, $renaming\_declaration$, $subprogram\_declaration$ and {\it pack\_stub}.
 Note that the $with\_context$ is an argument used for package declarations so that when the package theories are created, the $with$ packages can become parents.
 
@@ -6284,15 +6375,24 @@ fun Ûdo_declarationÝ (y as (DDeclarationKSlot (
 				renames_opsym y
 	) |	RDObject y => (
 				renames_object y
-	) |	RDPackage y => (
-			renames_pack y
+	) |	RDPackage (y as {old_name, new_name}) => (
+			case (s_lookup new_name (!pack_env), s_lookup old_name (!pack_env)) of
+				(Nil, Value pack) => (
+					new_scope_pack_spec new_name;
+					renames_pack (old_name, pack);
+					end_scope();
+					update_envs_pack_spec new_name
+			) |	(Value _, _) => fail "do_declaration" 507061
+					[fn _ => old_name, fn _ => new_name]
+			|	(_, Nil) => fail "do_declaration" 507062
+					[fn _ => old_name, fn _ => new_name]
 	)
 ) | do_declaration (y as (DBasicDecl x) : DECLARATION) = (
 	map do_basic_declaration (adjust_basic_decls current_cn_env [x]); ()
 ) | do_declaration (y as (DRepresentationClause x) : DECLARATION) = (
 	comment "do_declaration" 507017 []
 ) | do_declaration (y as (DUseClause x) : DECLARATION) = (
-	comment "do_declaration" 505001 [fn _ => "support for use clauses is TBS"]
+	use_clause x
 ) | do_declaration (y as (DProperBody x) : DECLARATION) = (
 	do_proper_body x
 ) | do_declaration (y as (DProcedureDeclaration x) : DECLARATION) = (
@@ -6540,17 +6640,17 @@ end);
 fun Ûdo_context_compilation_unitÝ
 	({context, references, comp_unit, annotation, ...}
 		: CONTEXT_COMPILATION_UNIT) : unit = (
-	let	fun get_withs acc [] = flat (rev acc)
-		|   get_withs acc (CIWith ids::more) = get_withs (ids::acc) more
-		|   get_withs acc (CIUse (UCUseType ids)::more) = get_withs acc more
-		|   get_withs acc (CIUse (UCUse ids)::more) = (
-			comment "do_context_compilation_unit" 505001
-			[fn _ => "support for use clauses is TBS"];
-			get_withs acc more
-		) |   get_withs acc (CIPragma _::more) = get_withs acc more;
-		val withed_packs = get_withs [] context;
+	let	fun get_withs_uses (wacc, uacc) [] =
+			(flat (rev wacc), rev uacc)
+		|   get_withs_uses (wacc, uacc) (CIWith ids::more) =
+			get_withs_uses (ids::wacc, uacc) more
+		|   get_withs_uses (wacc, uacc) (CIUse u::more) = (
+			get_withs_uses (wacc, u::uacc) more
+		) |   get_withs_uses accs (CIPragma _::more) = get_withs_uses accs more;
+		val (withed_packs, use_clauses) = get_withs_uses ([], []) context;
 		val packs_to_with = context_clause_check withed_packs references;
 	in	map new_scope_with packs_to_with;
+		map use_clause use_clauses;
 		do_annotation annotation;
 		do_compilation_unit comp_unit;
 		end_scope_comp_unit()
