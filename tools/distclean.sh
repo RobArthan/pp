@@ -10,7 +10,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: distclean.sh,v 1.1 2002/10/20 17:01:37 rda Exp rda $
+# $Id: distclean.sh,v 1.2 2002/10/22 15:10:24 rda Exp rda $
 #
 give_up(){
 	echo configure: $*
@@ -51,5 +51,5 @@ TODELETE="`{ { echo $TOKEEP | tr ' ' '\n'; }; ls; } | sort | uniq -u`"
 #
 # Delete them:
 #
-rm -f $TODELETE
+rm -rf $TODELETE
 
