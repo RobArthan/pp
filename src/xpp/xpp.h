@@ -280,6 +280,9 @@ typedef struct menu_item {
 #ifdef EDITRES
 	extern	void add_edit_res_handler(Widget shell);
 #endif
+#ifdef LISTWIDGETS
+	extern	void list_widget_hierarchy(Widget w);
+#endif
 /* Module: xpp */
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * GLOBAL DATA: the source file xpp.c which contains main is

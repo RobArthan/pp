@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.59 2003/05/21 10:54:16 rda Exp rda $
+ * $Id: mainw.c,v 2.60 2003/06/24 15:36:43 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -941,7 +941,12 @@ static Boolean setup_main_window(
 	set_menu_item_sensitivity(filemenu,
 		FILE_MENU_REVERT, !file_info.new);
 
+#ifdef LISTWIDGETS
+	list_widget_hierarchy(root);
+#endif
+
 	return True;
+
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.29 2003/05/08 13:39:18 rda Exp $ 
+ * $Id: search.c,v 2.30 2003/05/22 11:44:45 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -622,6 +622,10 @@ Boolean add_search_tool(Widget text_w)
 	XtManageChild(line_no_form);
 	XtManageChild(action_form);
 	XtManageChild(paned);
+
+#ifdef LISTWIDGETS
+	list_widget_hierarchy(search_data.shell_w);
+#endif
 
 	XtPopup(shell, XtGrabNone);
 

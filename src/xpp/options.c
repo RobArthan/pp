@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.15 2003/02/07 17:06:17 rda Exp rda $
+ * $Id: options.c,v 2.16 2003/02/09 17:43:37 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -321,7 +321,7 @@ if(!global_options.edit_only) {
 
 	XtAddCallback(journal_max_text, XmNmodifyVerifyCallback,
 		(XtCallbackProc)number_verify_cb, (XtPointer)NULL);
-}
+} /* now stuff common to edit-only and command sessions */
 	button_frame = XtVaCreateManagedWidget("button-frame",
 		xmFrameWidgetClass,		shell_row_col,
 		NULL);
@@ -447,6 +447,10 @@ if(!global_options.edit_only) {
 	add_new_line_cb(NULL, NULL, NULL);
 
 	set_file_type(UNIX);
+
+#ifdef LISTWIDGETS
+	list_widget_hierarchy(shell);
+#endif
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
