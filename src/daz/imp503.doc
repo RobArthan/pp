@@ -322,7 +322,7 @@ datatype ÛPPARSEDÝ =
 		|	PPConstraint of CONSTRAINT
 		|	PPDeclarations of DECLARATION list
 		|	PPDiscriminantPart of VAR_DECL
-		|	PPDiscreteRange of DISCRETE_RANGE
+		|	PPDiscrete of (ID OPT * (EXP * EXP OPT))
 		|	PPElsIf of (EXP * STMT) list
 		|	PPExp of EXP
 		|	PPExps of EXP list
@@ -359,11 +359,13 @@ datatype ÛPPARSEDÝ =
 fun format_label (n : string) = (
 	"("^n^")"
 );
-
+=TEX
+=SML
 fun different_ids (id1 : ID, id2 : ID) : bool = (
 	not (to_upper id1 = to_upper id2)
 );
-
+=TEX
+=SML
 fun name_to_tmark (e : EXP) : TMARK = (
 	case e of
 	EId id =>
@@ -383,12 +385,33 @@ fun name_to_tmark (e : EXP) : TMARK = (
 		)
 	|_ => "__unknown"
 );
-
-fun sr_expression_to_range ((e,v) : (EXP * EXP OPT)) : EXP RANGE = (
-	{lo=e, hi=v}
+=TEX
+=SML
+fun is_range_attribute (EAttribute{attribute_desig=ad,...}) = (
+	case ad of
+	ADAttrib attname =>	to_upper attname = "RANGE"
+	|ADAttribArg (attname,_) =>
+				to_upper attname = "RANGE"
+) | is_range_attribute _ = false;
+=TEX
+=SML
+fun sr_expression_to_range ((e1, Value e2) : (EXP * EXP OPT)) : EXP RANGE = (
+	RRange{lo=e1, hi=e2}
+) | sr_expression_to_range (e, Nil) = (
+	if is_range_attribute e
+	then
+		RRangeAttr e
+	else
+		parse_error 503001 "a RANGE is expected here"
 );
-
-fun sr_expression_to_expression ((e1, Nil) : (EXP * EXP OPT)) : EXP = (e1
+=TEX
+=SML
+fun sr_expression_to_expression ((e, Nil) : (EXP * EXP OPT)) : EXP = (
+	if is_range_attribute e
+	then
+		parse_error 503001 "a RANGE is not permitted here"
+	else
+		e
 ) | sr_expression_to_expression _ = (
 	parse_error 503001 "a RANGE is not permitted here"
 );
@@ -504,13 +527,24 @@ fun red_subtype_declaration _ (Token ((_,CNText id), _)) _ (Parsed(PPSubtypeDecl
 	PPBasicDecls[BDSubtypeDecl{name=id,sub_ind={tmark=name_to_tmark n,con=c}}]
 ) | red_subtype_declaration _ _ _ _ _ = stack_error "red_subtype_declaration";
 
-fun red_subtype_indication (Parsed(PPExp n)) (Parsed(PPConstraint c)) = (
+fun red_subtype_indication1 (Parsed(PPExp n)) (Parsed(PPConstraint c)) = (
 		PPSubtypeDeclaration(n, c)
-) | red_subtype_indication _ _ = stack_error "red_subtype_indication";
+) | red_subtype_indication1 _ _ = stack_error "red_subtype_indication1";
+
+fun red_subtype_indication2 (Parsed(PPExp n))  = (
+	case n of
+	EIndexedComp{prefix=prefix,index=index} => (
+		case index of
+		EArrayAggPos{comps=comps,...} =>
+			PPSubtypeDeclaration(prefix, (CIndex comps))
+		|_ => parse_error 503001 "an index constraint was expected"
+	) | _ =>
+		stack_error "red_subtype_indication2_a"
+) | red_subtype_indication2 _ = stack_error "red_subtype_indication2";
 =TEX
 =SML
-fun red_constraint1 (Parsed(PPSRExpression (e,v))) = (
-	PPConstraint (CRange {lo=e, hi=v})
+fun red_constraint1 (Parsed(PPSRExpression sr)) = (
+	PPConstraint (CRange (sr_expression_to_range sr))
 ) | red_constraint1 _ = stack_error "red_constraint1";
 
 val red_constraint2 = red_accept;
@@ -591,7 +625,7 @@ fun red_index_subtype_definition (Parsed p) _ _ = (
 	p
 ) | red_index_subtype_definition _ _ _ = stack_error "red_index_subtype_definition";
 fun red_index_constraint _ (Parsed p) _ = (
-	p
+	p	
 ) | red_index_constraint _ _ _ = stack_error "red_index_constraint";
 
 fun red_name_list1 (Parsed(PPExp n)) = (
@@ -603,12 +637,12 @@ fun red_name_list2 (Parsed(PPExp n)) _ (Parsed(PPExps nl)) = (
 ) | red_name_list2 _ _ _ = stack_error "red_name_list2";
 =TEX
 =SML
-fun red_discrete_range1 (Parsed (PPExp e)) (Parsed (PPSRExpression (e2,v))) = (
-	PPDiscreteRange(DRConstrained{tmark=name_to_tmark e, range={lo=e2,hi=v}})
+fun red_discrete_range1 (Parsed (PPExp e)) (Parsed (PPSRExpression sr)) = (
+	PPDiscrete(Value (name_to_tmark e), sr)
 ) | red_discrete_range1 _ _ = stack_error "red_discrete_range1";
 
-fun red_discrete_range2 (Parsed (PPSRExpression (e,v))) = (
-	PPDiscreteRange(DRRange{lo=e,hi=v})
+fun red_discrete_range2 (Parsed (PPSRExpression sr)) = (
+	PPDiscrete(Nil, sr)
 ) | red_discrete_range2 _ = stack_error "red_discrete_range2";
 
 fun red_record_type_definition _ (Parsed(PPComponents cs)) _ _ = (
@@ -810,10 +844,21 @@ fun red_aggregate_choice_list3 (Parsed(PPAggregateChoices v)) _ (Parsed(PPAggreg
 	|_ => parse_error 503001 "OTHERS cannot be in a choice list"
 ) | red_aggregate_choice_list3 _ _ _ = stack_error "red_aggregate_choice_list3";
 =TEX
-TBS - cannot produce ACAggChoiceSingle at present - do later.
 =SML
-fun red_aggregate_choice (Parsed(PPDiscreteRange dr)) = (
-	PPAggregateChoices([ACAggChoiceRange dr], false)
+fun red_aggregate_choice (Parsed(PPDiscrete (idopt, sr))) = (
+	case (idopt, sr) of
+	(Value id, _) => (
+		PPAggregateChoices([ACAggChoiceRange(DRConstrained
+				{tmark=id,range=sr_expression_to_range sr})],false)
+	) |(Nil, (e1, Value e2)) => (
+		PPAggregateChoices([ACAggChoiceRange(DRRange(sr_expression_to_range sr))],false)
+	) |(Nil, (e, Nil)) => (
+		if is_range_attribute e
+		then
+			PPAggregateChoices([ACAggChoiceRange(DRRange(sr_expression_to_range sr))],false)
+		else
+			PPAggregateChoices([ACAggChoiceSingle(sr_expression_to_expression sr)],false)
+	)
 ) | red_aggregate_choice _ = stack_error "red_aggregate_choice";
 
 fun red_positional_association1 (Parsed(PPExps es)) = (
@@ -868,8 +913,15 @@ fun red_relation2 (Parsed(PPSRExpression sr1)) (Parsed(PPBinaryOp b)) (Parsed(PP
 				right=sr_expression_to_expression sr2})
 ) | red_relation2 _ _ _ = stack_error "red_relation2";
 
-fun red_relation3 p1 _ p2 = red_relation2 p1 (Parsed(PPBinaryOp BOSparkMem)) p2;
-fun red_relation4 p1 _ _ p2 = red_relation2 p1 (Parsed(PPBinaryOp BOSparkNotmem)) p2;
+fun red_relation3 (Parsed(PPSRExpression sr1)) _ (Parsed(PPSRExpression sr2)) = (
+	PPExp(EMemRange{left=sr_expression_to_expression sr1, mop=BOSparkMem,
+				range=sr_expression_to_range sr2})
+) | red_relation3 _ _ _ = stack_error "red_relation3";
+
+fun red_relation4 (Parsed(PPSRExpression sr1)) _ _ (Parsed(PPSRExpression sr2)) = (
+	PPExp(EMemRange{left=sr_expression_to_expression sr1, mop=BOSparkNotMem,
+				range=sr_expression_to_range sr2})
+) | red_relation4 _ _ _ _ = stack_error "red_relation4";
 =TEX
 =SML
 fun red_sr_expression1 (Parsed(PPExp e)) = (
@@ -1125,10 +1177,21 @@ fun red_case_choice_list2 (Parsed(PPCaseChoices [ac])) _
 	PPCaseChoices(ac::acl)
 ) | red_case_choice_list2 _ _ _ = stack_error "red_acase_choice_list2";
 =TEX
-TBS Cannot produce CCCaseExp at present.
 =SML
-fun red_case_choice (Parsed(PPDiscreteRange dr)) = (
-	PPCaseChoices[CCCaseRange dr]
+fun red_case_choice (Parsed(PPDiscrete (idopt, sr))) = (
+	case (idopt, sr) of
+	(Value id, _) => (
+		PPCaseChoices[CCCaseRange(DRConstrained
+				{tmark=id,range=sr_expression_to_range sr})]
+	) |(Nil, (e1, Value e2)) => (
+		PPCaseChoices[CCCaseRange(DRRange(sr_expression_to_range sr))]
+	) |(Nil, (e, Nil)) => (
+		if is_range_attribute e
+		then
+			PPCaseChoices[CCCaseRange(DRRange(sr_expression_to_range sr))]
+		else
+			PPCaseChoices[CCCaseExp(sr_expression_to_expression sr)]
+	)
 ) | red_case_choice _ = stack_error "red_case_choice";
 
 val red_others_part1 = PPStmt STImplicitNull;
@@ -1162,9 +1225,9 @@ in
 			PPStmt(STWhile{name=name, g=c, loop={t=till, stmt=s}})
 	) |PPFor(id, tm, dir, opr) => (
 		case opr of
-		Value {lo=lo,hi=hi} => (
-			PPStmt(STForStatic{name=name, tmark=tm, i=id, lo=lo,
-			hi=hi, dir=dir,loop={t=till, stmt=s}})
+		Value range => (
+			PPStmt(STForStatic{name=name, tmark=tm, i=id,
+			range=range, dir=dir,loop={t=till, stmt=s}})
 		) |Nil => (
 			PPStmt(STForTmark{name=name,i=id, tmark=tm, dir=dir,
 			loop={t=till, stmt=s}})
@@ -1605,8 +1668,8 @@ fun red_component_pack2 (Parsed(PPComponentClauses [c])) (Parsed(PPComponentClau
 =TEX
 SPARK manual 13.4:
 =SML
-fun red_component_clause (Parsed(PPExp n)) _ (Parsed(PPExp e)) _ (Parsed(PPSRExpression (e1,v))) _ = (
-	PPComponentClauses[{name=n, exp=e, range={lo=e1,hi=v}}]
+fun red_component_clause (Parsed(PPExp n)) _ (Parsed(PPExp e)) _ (Parsed(PPSRExpression sr)) _ = (
+	PPComponentClauses[{name=n, exp=e, range=sr_expression_to_range sr}]
 ) | red_component_clause _ _ _ _ _ _ = stack_error "red_component_clause";
 =TEX
 
