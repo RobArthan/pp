@@ -62,8 +62,8 @@ parser.}
 \subsection{Changes History}  % to get section number `0.3'
 \begin{description}
 
-\item[Issues 1.1-1.22] Initial Versions.
-\item[Issue 1.23 (7th October 1994)] Added support for auxiliary expressions.
+\item[Issues 1.1-1.28] Initial Versions.
+\item[Issue 1.29] Annotations and pragmas enhancements.
 
 \end{description}
 \subsection{Changes Forecast}
@@ -238,6 +238,7 @@ fun €is_plusminus› (c : string) = c = "+" orelse c = "-";
 fun €is_dot› (c : string) = c = ".";
 fun €is_hash› (c : string) = c = "#";
 fun €is_space› c = c <= " ";
+fun €is_horiz_space› c = c = " " orelse c = "\t";
 =TEX
 =SML
 fun €is_digit›  (d : string) = (
@@ -295,7 +296,7 @@ val €delimiter› : string list list =
 	(Sort.sort (switch(Sort.lexicographic Sort.string_order)) o map explode)
 	["&", "'", "(", ")", "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", 
 	">", "|", "=>", "..", "**", ":=", "/=", ">=", "<=", "<<", ">>", "<>",
-	"Ñ", "[", "]", "{","}", "∑", "˚", "˝", "ß","¢", "√", "È"];
+	"Ñ", "[", "]", "{","}", "∑", "˚", "˝", "ß","¢", "√", "È", "--", "--#"];
 =TEX
 =SML
 fun next_is_delimiter (cs : string list) = (
@@ -309,6 +310,13 @@ fun €skip_space› (st as (cs as (c :: more), tk) : LEX_STATE) : LEX_STATE = (
 	else st
 ) | skip_space (st as ([], _)) = st;
 =TEX
+=SML
+fun €skip_horiz_space› (st as (cs as (c :: more), tk) : LEX_STATE) : LEX_STATE = (
+	if is_horiz_space c
+	then skip_horiz_space (more, tk)
+	else st
+) | skip_horiz_space (st as ([], _)) = st;
+=TEX
 $next$ is used to apply a classifier function such as $is\_digit$
 to the first character in the input part of a state. It returns false
 if the input part is empty.
@@ -318,10 +326,12 @@ fun €next› (test : string -> bool) ((c :: _, _) : LEX_STATE) = test c
 =TEX
 When a lexeme 
 has been recognised, the following material is used to classify the result.
+(Note that an annotation may be reclassified as a hidden part depending on what follows the characters ``\verb"--#"''.)
 =SML
 val €class_table› = list_e_merge initial_e_dict [
 	("ABS",		LCAbs),
 	("&",		LCAmpersand),
+	("--#",		LCAnnotation),
 	("AND",		LCAnd),
 	("ARRAY",	LCArray),
 	("AT",		LCAt),
@@ -332,6 +342,7 @@ val €class_table› = list_e_merge initial_e_dict [
 	("CASE",	LCCase),
 	(":",		LCColon),
 	(",",		LCComma),
+	("--",		LCComment),
 	("CONSTANT",	LCConstant),
 	("CON",		LCCon),
 	(")",		LCCrd),
@@ -372,6 +383,7 @@ val €class_table› = list_e_merge initial_e_dict [
 	("PACKAGE",	LCPackage),
 	("+",		LCPlus),
 	("'",		LCPrime),
+	("PRAGMA",	LCPragma),
 	("PRIVATE",	LCPrivate),
 	("PROCEDURE",	LCProcedure),
 	("RECORD",	LCRecord),
@@ -452,7 +464,6 @@ fun  €rec_delimiter› ( (cs, _) : LEX_STATE ) : LEX_STATE = (
 =TEX
 \subsection{Recognition of Identifiers}
 
-\subsection{Recognition of Alphanumeric Sequences}
 =SML
 fun €rec_identifier_aux› (st : LEX_STATE) : LEX_STATE = (
 	let	fun aux st = (
@@ -615,15 +626,119 @@ fun €rec_next_token› (st : LEX_STATE) : LEX_STATE = (
 	end
 );
 =TEX
-\subsection{Lexical Analyser}
+\section{LEXICAL ANALYSER}
 The following constitute some essential requirements of this lexical analyser.
-\begin{enumerate}
-\item
-The function to read over the Z necessitates the matching of brackets in the Z in order that we don't terminate the lookahead too early. This bracket matching is best done in the function $lookahead$.
+The function $rec\_next\_token$ allows us to recognise the next lexeme
+in an input stream according to the SPARK (and Compliance Notation) lexis.
+We must now put this to use in constructing the overall lexical analyser.
+To do this we must handle embedded Z and also annotations and comments.
+To handle embedded Z we need to be able to recognise the end of the Z fragment while using the Z lexical analyser to process the Z lexemes.
+To handle comments and annotations is just a question of scanning to the end of line (or in the case of the hide annotation to the end marker for the annotation).
 
-\end{enumerate}
+\subsection{Comments}
+In the following, we often have a list of strings which is the exploded form of the unread part of the current $INPUT$ fragment, and a list of subsequent unread $INPUT$s.
+The function $ignore\_comment$ assumes a comment start symbol has just been read
+and skips on in the two lists to the end of a line.
 =SML
-val z_lex1 = (rev o tl o rev o ZLex.z_lex);
+fun €ignore_comment› (slist : string list) (rest : INPUT list)
+	: (string list * INPUT list)  = (
+	case slist of 
+		("\n" :: more) => (more, rest)
+	|	(_ :: more) => ignore_comment more rest
+	|	[] => (
+		case rest of
+			Lex.Text s :: inputs => ignore_comment (explode s) inputs
+		|	_ :: inputs => ignore_comment [] inputs
+		|	[] => ([], [])
+	)
+);
+=TEX
+\subsection{Annotations}
+The function $spark\_annotation$ assumes an annotation symbol has just been read.
+It returns a $CN\_LEX\_ITEM$ containing the text of the annotation (without the start symbol or final new-line_) together with
+two lists giving the unread part of the input (cf. $ignore\_comment$).
+To define this function we use separate auxiliaries for the case of a hide directive and for the other (simpler) annotations.
+=SML
+fun €simple_annotation› (acc : string)
+		(slist : string list) (rest : INPUT list)
+	: (CN_LEX_ITEM * string list * INPUT list)  = (
+	case slist of 
+		("\n" :: more) => ((LCAnnotation, (CNText acc)), more, rest)
+	|	(ch :: more) => simple_annotation (acc ^ ch) more rest
+	|	[] => (
+		case rest of
+			Lex.Text s :: inputs =>
+				simple_annotation acc (explode s) inputs
+		|	Lex.String s :: inputs =>
+				simple_annotation (acc ^ "\"" ^ s ^ "\"") [] inputs
+		|	_ :: inputs => ((LCAnnotation, (CNText acc)), [], rest)
+		|	[] => ((LCAnnotation, (CNText acc)), [], [])
+	)
+);
+=TEX
+=SML
+fun €hide_annotation› (desig : string) (penult : string) (ult : string)
+		(acc : string)
+		(slist : string list) (rest : INPUT list)
+	: (CN_LEX_ITEM * string list * INPUT list)  = (
+	case slist of 
+		("\n" :: more) =>
+			hide_annotation desig penult ult (acc ^ "\n") more rest
+	|	[] => (
+		case rest of
+			Lex.Text s :: inputs =>
+				hide_annotation desig penult ult acc (explode s) inputs
+		|	Lex.String s :: inputs =>
+				hide_annotation desig "" ""
+				(acc ^ "\"" ^ s ^ "\"") [] inputs
+		|	_ :: inputs => ((LCHiddenPart, (CNText acc)), [], rest)
+		|	[] => ((LCHiddenPart, (CNText acc)), [], [])
+	) |	_ => (
+		let	val st as (chs1, _) = skip_horiz_space(slist, Unknown);
+			val (chs, suc) = rec_next_token st;
+		in	case suc of
+				Known tok => (
+		let val last = (implode (slist to (length slist - length chs - 1)));
+		in	if	penult = "END" andalso ult = desig
+			then	if	tok = ";"
+				then	
+	((LCHiddenPart, (CNText (acc ^ last))), chs, rest)
+				else
+	fail "CN-Parser" 501004  [fn () => desig]
+			else
+	hide_annotation desig ult (to_upper tok) (acc^last) chs rest
+		end
+			) | _ => (
+				case chs1 of
+				"\n" :: more =>
+	hide_annotation desig penult ult (acc^"\n") more rest
+				| _ => (* give up *)
+	fail "CN-Parser" 501005  [fn () => desig]
+			)
+		end
+	)
+);
+=TEX
+=SML
+fun €spark_annotation› 
+		(slist : string list) (rest : INPUT list)
+	: (CN_LEX_ITEM * string list * INPUT list)  = (
+	let val st = skip_horiz_space(slist, Unknown);
+	in	case rec_next_token(st) of
+			st' as (chs, Known h) => (
+				if to_upper h = "HIDE"
+				then	case rec_next_token(skip_horiz_space (chs, Unknown)) of
+					(chs, Known desig) => (
+	let	val d = to_upper desig;
+	in	hide_annotation
+		d "" ""
+		(implode (slist to (length slist - length chs - 1))) chs rest
+	end
+					) | _=> simple_annotation "" slist rest
+				else	simple_annotation "" slist rest
+			) | _ => simple_annotation "" slist rest
+	end
+);
 =TEX
 =SML
 val €z_delimiters› = [
@@ -694,28 +809,8 @@ fun €find_in_text› (terml : CN_LEX_CLASS list)
 			bracket_depth=brk})
 	end
 );
-=IGN
-fun mk_ih s =
-	{left_input=[],left_text=[],right_text=explode s, right_input=[],
-		bracket_depth=0} : INPUT_HANDLE;
-
-val terml = [LCIdentifier, LCRSqBrack];
-val c'="hihgjghj";
-val {left_input, left_text, right_text, right_input, bracket_depth}=
-	(mk_ih "bc[de∑f]gIDENTIFIER,hi]kjm");
-
-find_in_text [LCFatDot, LCRSqBrack] (mk_ih "x");
-find_in_text [LCFatDot, LCRSqBrack] (mk_ih "xdfdf]");
-find_in_text [LCFatDot, LCRSqBrack] (mk_ih "abc∑");
-find_in_text [LCFatDot, LCRSqBrack] (mk_ih "abc∑def");
-find_in_text [LCFatDot, LCRSqBrack] (mk_ih "abc[def]ghi]");
-find_in_text [LCFatDot, LCRSqBrack] (mk_ih "bc[de∑f]ghi]kjm");
-find_in_text [LCBy] (mk_ih "==,BY],hihgjghj]IdentifierRkjm");
-find_in_text [LCImplement]
-	(mk_ih "==,[IMPLEMENT],hihgjghj Implement Rkjm");
 =TEX
 =SML
-
 fun €find_in_input› (terml : CN_LEX_CLASS list)
 	(ih as {left_input, left_text, right_text, right_input, bracket_depth}
 		: INPUT_HANDLE)
@@ -757,29 +852,12 @@ fun €find_in_input› (terml : CN_LEX_CLASS list)
 			)
 		end
 );
-=IGN
-find_in_text [LCFatDot, LCRSqBrack];
-fun mk_inp_ih s =
-	{left_input=[],left_text=[],right_text=[], right_input=s,
-		bracket_depth=0} : INPUT_HANDLE;
-
-find_in_input [LCFatDot, LCRSqBrack] (mk_inp_ih [Lex.Text "abc"]);
-find_in_input [LCFatDot, LCRSqBrack] (mk_inp_ih [Lex.Text "abc]"]);
-find_in_input [LCFatDot, LCRSqBrack] (mk_inp_ih [Lex.Text "abc∑"]);
-find_in_input [LCFatDot, LCRSqBrack] (mk_inp_ih [Lex.Text "abc∑def"]);
-find_in_input [LCFatDot, LCRSqBrack] (mk_inp_ih [Lex.Text "abc[∑d{ef]gh}i]"]);
-find_in_input [LCFatDot, LCRSqBrack] (mk_inp_ih [Lex.Text "ab(c∑"]);
-find_in_input [LCFatDot, LCRSqBrack] (mk_inp_ih [Lex.Text "abc",Lex.Text "def∑"]);
-find_in_input [LCFatDot, LCRSqBrack] (mk_inp_ih [Lex.Text "ab(c∑",Lex.Text "de∑f)]g"]);
-find_in_input [LCFatDot, LCRSqBrack] (mk_inp_ih [Lex.Text "ab(c∑",
-						Lex.String"xyz",Lex.Text "de∑f)]g"]);
-find_in_input [LCFatDot, LCRSqBrack] (mk_inp_ih [Lex.Text "abc∑"]);
-find_in_input [LCFatDot, LCRSqBrack] (mk_inp_ih [Lex.Text "abc∑"]);
 
 =TEX
 
 =SML
-fun €read_until› (classification : CN_LEX_CLASS, cn_fun)
+fun €read_until› (classification : CN_LEX_CLASS,
+				cn_fun : Lex.INPUT list -> CN_TOKEN)
 			(terml : CN_LEX_CLASS list) (iplist : INPUT list)			 
 		: CN_LEX_ITEM list = (
 let	val (found, ih') = find_in_input terml
@@ -809,16 +887,6 @@ in
 	else
 		left_cxt
 end)
-=IGN
-read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc]"];
-read_until [LCFatDot, LCRSqBrack] [Lex.Text "ab(c∑",Lex.String"x",
-				Lex.Text "de∑f)]g"];
-read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc"];
-read_until ["]"] [Lex.Text "pre, post]"];
-read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc]"];
-read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc]"];
-read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc]"];
-read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc]"];
 =TEX
 =SML
 and €spark_xtext› (slist : string list) (rest : INPUT list) : CN_LEX_ITEM list  = (
@@ -827,7 +895,9 @@ in
 	case skip_space st of
 	([], _) => spark_lex rest
 	| other => (
-		case skip_space(rec_next_token other) of
+	let	val unskipped = rec_next_token other;
+	in
+		case skip_space unskipped of
 		st' as (srest, Known s) => (
 			let	val res as (class, _) = classify true s;
 			in case (class, lassoc5 z_delimiters class) of
@@ -845,13 +915,22 @@ in
 					(class, (CNString o implode o tl
 							o rev o tl o explode) s)
 					::spark_xtext srest rest
-
+				)|(LCComment, Nil) => (
+					let val (srest', rest') =
+						ignore_comment srest rest;
+					in	spark_xtext srest' rest'
+					end
+				)|(LCAnnotation, Nil) => (
+					let val (tok, srest', rest') =
+						spark_annotation (fst unskipped)rest;
+					in	tok :: spark_xtext srest' rest'
+					end
 				)|(_, Nil) => 	
 					res::spark_xtext srest rest
 			end
 		)| (_, Unknown) =>
 			fail "CN-Parser" 501001 [fn() => implode slist]
-	)
+	end)
 end)
 =TEX
 =SML
@@ -886,3 +965,69 @@ end (* of structure CNLex *);
 \twocolumn[\section{INDEX}]
 \printindex
 \end{document}
+=IGN
+fun mk_ih s =
+	{left_input=[],left_text=[],right_text=explode s, right_input=[],
+		bracket_depth=0} : INPUT_HANDLE;
+
+val terml = [LCIdentifier, LCRSqBrack];
+val c'="hihgjghj";
+val {left_input, left_text, right_text, right_input, bracket_depth}=
+	(mk_ih "bc[de∑f]gIDENTIFIER,hi]kjm");
+
+find_in_text [LCFatDot, LCRSqBrack] (mk_ih "x");
+find_in_text [LCFatDot, LCRSqBrack] (mk_ih "xdfdf]");
+find_in_text [LCFatDot, LCRSqBrack] (mk_ih "abc∑");
+find_in_text [LCFatDot, LCRSqBrack] (mk_ih "abc∑def");
+find_in_text [LCFatDot, LCRSqBrack] (mk_ih "abc[def]ghi]");
+find_in_text [LCFatDot, LCRSqBrack] (mk_ih "bc[de∑f]ghi]kjm");
+find_in_text [LCBy] (mk_ih "==,BY],hihgjghj]IdentifierRkjm");
+find_in_text [LCImplement]
+	(mk_ih "==,[IMPLEMENT],hihgjghj Implement Rkjm");
+=IGN
+fun mk_ih s =
+	{left_input=[],left_text=[],right_text=explode s, right_input=[],
+		bracket_depth=0} : INPUT_HANDLE;
+
+val terml = [LCIdentifier, LCRSqBrack];
+val c'="hihgjghj";
+val {left_input, left_text, right_text, right_input, bracket_depth}=
+	(mk_ih "bc[de∑f]gIDENTIFIER,hi]kjm");
+
+find_in_text [LCFatDot, LCRSqBrack] (mk_ih "x");
+find_in_text [LCFatDot, LCRSqBrack] (mk_ih "xdfdf]");
+find_in_text [LCFatDot, LCRSqBrack] (mk_ih "abc∑");
+find_in_text [LCFatDot, LCRSqBrack] (mk_ih "abc∑def");
+find_in_text [LCFatDot, LCRSqBrack] (mk_ih "abc[def]ghi]");
+find_in_text [LCFatDot, LCRSqBrack] (mk_ih "bc[de∑f]ghi]kjm");
+find_in_text [LCBy] (mk_ih "==,BY],hihgjghj]IdentifierRkjm");
+find_in_text [LCImplement]
+	(mk_ih "==,[IMPLEMENT],hihgjghj Implement Rkjm");
+=IGN
+read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc]"];
+read_until [LCFatDot, LCRSqBrack] [Lex.Text "ab(c∑",Lex.String"x",
+				Lex.Text "de∑f)]g"];
+read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc"];
+read_until ["]"] [Lex.Text "pre, post]"];
+read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc]"];
+read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc]"];
+read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc]"];
+read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc]"];
+=IGN
+open CNLex;
+val spark_lex = cn_lex (Combinators.I);
+spark_lex [Lex.Text "abcd def (12)"];
+spark_lex [Lex.Text "-- abcd def (12) \n xyz (10);"];
+spark_lex [Lex.Text "foo(); \n -- abcd def (12) \n xyz (10);"];
+spark_lex [Lex.Text "foo(); \n -- abcd def (12)", Lex.String "str",
+	Lex.Text "def", Lex.Text"ghi \n xyz (10);"];
+spark_lex [Lex.Text "--#       X"];
+spark_lex [Lex.Text "--# abcdef", Lex.String "boo"];
+spark_lex [Lex.Text "--# abcdef", Lex.String "boo", Lex.Text"def\n\n\nf();"];
+spark_lex [Lex.Text "--# hide FRED \n begin \n do_something; \n end FRED ;",
+	Lex.Text "\n more "];
+spark_lex [Lex.Text "--# hide FRED X end FRED ; \n BOO "];
+spark_lex [Lex.Text "--# hide FRED \n begin \n do_something; \n f(",
+	Lex.String "abcd", Lex.Text "); \n end FRED ;",
+	Lex.Text "\n more "];
+spark_lex [Lex.Text "pragma foo ; "];
