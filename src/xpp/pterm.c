@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.40 2003/07/07 15:57:40 rda Exp rda $
+ * $Id: pterm.c,v 2.41 2003/07/08 14:21:07 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -315,14 +315,23 @@ static int q_size, q_head, q_tail;
 static char *queue_malloc_failed_message = 
 "Could not allocate memory for application transfer queue.";
 
-static char* signal_handled_message1 =
+static char* signal_handled_message =
 "fatal error: signal %d: %s";
 
-static char* signal_handled_message2 =
+static char* attempt_to_save_message =
 "attempting to save the editor text";
 
-static char* signal_handled_message3 =
+static char* initialisation_error_message =
 "apparently during X initialisation";
+
+static char* xt_error_handled_message =
+"X Toolkit Intrinsics error";
+
+static char* x_error_handled_message =
+"X protocol error";
+
+static char* x_io_error_message =
+"connection failure";
 
 static char* signal_in_signal_handler_message =
 "fatal error in signal handler";
@@ -1178,10 +1187,10 @@ static void panic_exit(char * m, NAT code)
 		kill_application();
 	}
 	if(script) {
-		msg(m, signal_handled_message2);
+		msg(m, attempt_to_save_message);
 		panic_save(script);
 	} else {
-		msg(m, signal_handled_message3);
+		msg(m, initialisation_error_message);
 	}
 	exit(code);
 }
@@ -1190,16 +1199,35 @@ static void panic_exit(char * m, NAT code)
 static void sig_panic_handler(int sig)
 {
 	char msg_buf[80];
-	sprintf(msg_buf, signal_handled_message1, sig, sig_desc(sig)); 
+	sprintf(msg_buf, signal_handled_message, sig, sig_desc(sig)); 
 	panic_exit(msg_buf, 15);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * The xt_error_handler also calls panic_exit.
+ * xt_error_handler also calls panic_exit ...
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void xt_error_handler(char * m)
 {
-	panic_exit(m, 16);
+	msg(xt_error_handled_message, m);
+	panic_exit("exiting", 16);
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * as does x_error_handler ...
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static int x_error_handler(Display *d, XErrorEvent *ev)
+{
+	char error_text[100];
+	XGetErrorText(d, ev->error_code, error_text, 100);
+	msg(x_error_handled_message, error_text);
+	panic_exit("exiting", 17);
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * and x_io_error_handler ...
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static int x_io_error_handler(Display *d)
+{
+	msg(x_error_handled_message, x_io_error_message);
+	panic_exit("exiting", 17);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * handle signals and Xt errors: the derivation of the following list
@@ -1237,13 +1265,15 @@ void handle_sigs(void)
 				break;
 		}
 	}
-	XtAppSetErrorHandler(app, xt_error_handler);
 #ifdef HAS_RTSIGNALS
 	acts.sa_handler = sig_panic_handler;
 	for(i = SIGRTMIN; i <= SIGRTMAX; i += 1) {
 		sigaction(i, &acts, 0);
 	}
 #endif		
+	XtAppSetErrorHandler(app, xt_error_handler);
+	(void) XSetErrorHandler(x_error_handler);
+	(void) XSetIOErrorHandler(x_io_error_handler);
 }
 
 
