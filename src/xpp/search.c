@@ -397,7 +397,7 @@ Bool add_search_tool(Widget text_w)
 		XtOverrideTranslations(line_no_text, translations);
 	}
 	XtVaGetValues(text_w, XmNfontList, &fontlist, NULL);
-	if(translations != NULL) {
+	if(fontlist != NULL) {
 		XtVaSetValues(search_text, XmNfontList, fontlist, NULL);
 		XtVaSetValues(replace_text, XmNfontList, fontlist, NULL);
 		XtVaSetValues(line_no_text, XmNfontList, fontlist, NULL);
