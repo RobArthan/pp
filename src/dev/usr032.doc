@@ -92,9 +92,9 @@ Contact: Rob Arthan < rda@lemma-one.com >
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.14 $%
+\def\Version{$Revision: 1.15 $%
 }
-\def\Date{\FormatDate{$Date: 2003/04/14 16:51:24 $%
+\def\Date{\FormatDate{$Date: 2003/04/15 16:31:30 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -127,7 +127,8 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %%%%% CHANGES HISTORY:
 \subsection{Changes History}
 \begin{description}
-\item[Issues 1.1 -- 1.n] Author's initial drafts.
+\item[Issues 1.1 -- 1.15] Author's initial drafts.
+\item[Issue 1.16] First complete version.
 \end{description}
 
 
@@ -171,17 +172,20 @@ for C and ML-Yacc for Standard ML. {\SLRP} differs from these in that the parser
 is table-driven rather than comprising a mixture of tables and decision-making code. The tables
 are interpreted by a simple polymorphic parser-driver function that takes as its arguments
 functions that you supply to carry out application-specific tasks such as reading the input stream
-and reporting errors. The organisation of the parser code is easy to understand and the code may
-easily be modified, if necessary.
+and reporting errors. The parser driver function is supplied as part of a simple API that provides
+support for coding these functions. Another difference between {\SLRP} and {\tt yacc} or
+{\tt bison} is that it supports dynamic rather than static resolution of parsing conflicts. This makes it easy
+to implement language features such as user-defined operator precedences.
 
 {\SLRP} does not include an automatic lexical analyser generator. It does support production
 of a generic parser from a grammar. This means that {\SLRP}  can automatically
 generate the semantic actions for you.  The result is a complete
 working parser whose input is a sequence of terminal symbols in the same format as was
-used in the grammar and whose output is a parse tree. This provides a framework which
-you can adapt to provide the parsing functionality that your application requires.
-It also makes it easy to experiment with the design of the language or
+used in the grammar and whose output is a parse tree.
+This makes it easy to experiment with the design of the language or
 the grammar without committing a lot of effort to writing code.
+The generic parser is supplied as part of an API that you can use or adapt
+to provide the parsing functionality that your application requires.
 
 {\SLRP} is currently available to run with the Poly/ML or Standard ML of New Jersey compilers.
 The output from {\SLRP} is Standard ML code that should work with any Standard ML compiler.
@@ -220,16 +224,23 @@ ML, that reads strings of grammar symbols and outputs parse trees.
 parser support code to implement a lexical analyser and how to add semantic
 actions to the grammar and so implement a complete working parser for a simple
 calculator program.
-\item[Section~\ref{HOWITWORKS}] gives a brief introduction to the theory behind LALR(1)
-parsing techniques and explains the concept of shift/reduce and reduce/reduce conflicts
+\item[Section~\ref{HOWITWORKS}] gives a brief introduction to the theory behind the LALR(1)
+parsing technique and explains the concept of shift/reduce and reduce/reduce conflicts
 that tend to arise when working with more complex languages and grammars.
 \item[Section~\ref{CONFLICTS}] discusses some of the common problems that arise, such
 as errors in the grammar; it gives some useful techniques for working with ambiguous
 grammars, e.g., for languages which are best expressed using numeric operator precedence.
 \item[Section~\ref{ERRORS}] shows you how to develop a parser
 with more sophisticated error handling and error recovery.
-\item[The appendices] give the full Standard ML code for the examples in section~\ref{COMPLETING}
-and reference documentation about {\SLRP}.
+\item[Appendix~\ref{EXAMPLES}] give the full Standard ML code for the examples
+in the earlier sections.
+\item[Appendix~\ref{COMMAND}] describes the {\SLRP} command line interface.
+\item[Appendix~\ref{INPUTFORMAT}] gives the BNF grammar for the SLRP input format.
+\item[Appendix~\ref{LIBRARY}] describes the library of Standard ML utility types and functions
+that is supplied with {\SLRP}.
+\item[Appendix~\ref{DRIVERAPI}] gives detailed reference documentation for the parser driver API.
+\item[Appendix~\ref{GENERICPARSERAPI}] gives detailed reference documentation for
+the generic parser API.
 \end{description}
 
 
@@ -833,17 +844,17 @@ The LR(0) automaton is a machine whose input comprises
 the graph and a string of terminal symbols. The states
 of the automaton are the nodes of the graph. The automaton ``consumes'' its input string, symbol
 by symbol working from left to right, but it need not consume a new symbol on every transition.
-At each stage of its computation it carries out one of the following types of transition,
-where $s$ represents its current state:
+At each stage of its computation it carries out one of the following types of transition:
 
 \begin{description}
-\item[Accept:] if $s$ is ``accept'', then the input
+\item[Accept:] if the current state $s$ is ``accept'', then the input
 string is a sentence of the language, the sequence of reductions which
 have been carried out determine a parse tree for it, and the automaton stops, accepting
 the input string;
-\item[Shift:] if there is an edge leading from $s$ to some state $s'$ that is labelled with
-the current input symbol, then the automaton can consume the input symbol
-and move to state $s'$;
+\item[Shift:] if there is an edge labelled with
+the current input symbol and
+leading from the current state $s$ to some state $s'$, then the automaton can consume the
+input symbol and move to state $s'$;
 \item[Reduce:] if there is a path in the automaton from some state $s'$ leading
 to the current state $s$, and, if there is a grammar rule, $X = \alpha$, such that:
 \begin{enumerate}
@@ -897,7 +908,8 @@ same nonterminal are possible, then the alternative that appeared first is taken
 
 After this heuristic has  been applied, there will be at most one conflict for each state
 and input symbol and that will be a shift/reduce conflict. Section~\ref{CONFLICTS} below
-discusses how you can check that the built-in static resolution of reduce/reduce conflicts is correct
+discusses how you can check that the built-in static resolution of reduce/reduce conflicts is appropriate
+for your application
 and how you can work with grammars that have shift/reduce conflicts by supplying ML code
 to resolve conflicts dynamically.
 
@@ -923,31 +935,7 @@ For example, the two items in state 207 show the position in a parse when
 the then-part of an if statement has just been identified.
 This is discussed in more detail in section~\ref{SHIFTREDUCE}.
 
-\subsection{{\SLRP} Implementation Details}
-
-The LR(1) automaton is implemented in {\SLRP} by the grammar-independent
-parser driver code in \cite{DS/FMU/IED/DTD018,DS/FMU/IED/IMP018}.
-This implements a generic LR(1) automaton as an ML function {\it slrp'parse}.
-In the implementation,  all the information the automaton needs
-about the LR(0) graph, the grammar and the lookahead
-table are encoded in a compact way in two tables called the action table and the goto table.
-The implementation maintains two stacks to represent the path in the graph
-that led from the root to the current state (one stack for the states and one for the edges).
-
-The function {\it slrp'parse} takes 8 parameters. The first four of these parameters are values that
-are computed by {\SLRP}: the first of these
-gives the initial state of the automaton; the next two give action
-table and goto table; the fourth parameter gives reduction table containing the
-semantic action functions that are applied whenever a reduction transition is
-taken.
-
-The function {\em slrp'gen\_parser} is then generated by {\SLRP} as the result of applying
-{\it slrp'parse} to an initial state value and a trio of tables that it
-computes for your grammar. The remaining four parameters
-of {\it slrp'parse} become the parameters to {\it slrp'gen\_parser} as discussed
-at the beginning of section~\ref{COMPLETING} above.
-
-\begin{Fig}{LR(0) State Table and Conflict Listing}{lr0.state.table}
+\begin{Fig}[t]{LR(0) State Table and Conflict Listing}{lr0.state.table}
 \small
 \tabstop=0.7\tabstop
 =GFT
@@ -977,7 +965,36 @@ State 207 on symbol `else`
 =TEX
 \end{Fig}
 
-\clearpage
+%\clearpage
+
+\subsection{{\SLRP} Parser Driver Implementation Details}
+
+The LR(1) automaton is implemented in {\SLRP} by the grammar-independent
+parser driver code in \cite{DS/FMU/IED/DTD018,DS/FMU/IED/IMP018}.
+Reference documentation for the parser dirver API is given in appendix~\ref{DRIVERAPI} of
+this document.
+
+The parser driver API implements a generic LR(1) automaton as an ML function {\it slrp'parse}.
+In the implementation,  all the information the automaton needs
+about the LR(0) graph, the grammar and the lookahead
+table are encoded in a compact way in two tables called the action table and the goto table.
+The implementation maintains two stacks to represent the path in the graph
+that led from the root to the current state (one stack for the states and one for the edges).
+
+The function {\it slrp'parse} takes 8 parameters. The first four of these parameters are values that
+are computed by {\SLRP}: the first of these
+gives the initial state of the automaton; the next two give action
+table and goto table; the fourth parameter gives reduction table containing the
+semantic action functions that are applied whenever a reduction transition is
+taken.
+
+The function {\em slrp'gen\_parser} is then generated by {\SLRP} as the result of applying
+{\it slrp'parse} to an initial state value and a trio of tables that it
+computes for your grammar (see appendix~\ref{DRIVERAPI} for more information).
+The remaining four parameters
+of {\it slrp'parse} become the parameters to {\it slrp'gen\_parser} as discussed
+at the beginning of section~\ref{COMPLETING} above.
+\newpage
 \section{AMBIGUOUS GRAMMARS}\label{CONFLICTS}
 
 This section is intended to help you understand and deal with shift/reduce and reduce/reduce
@@ -1006,7 +1023,7 @@ tells the parser what to do.
 section~\ref{ConfRes} above. You must check that this heuristic is appropriate for
 your language.
 \item A grammar with a few well understood conflicts that you can resolve dynamically
-is often a much better solution than a more complicated grammar without the conflicts.
+is often a better solution than a more complicated grammar without the conflicts.
 \end{itemize}
 
 \subsection{Debugging a Grammar}
@@ -1018,7 +1035,7 @@ sequence of symbols. Figure~\ref{c.broken} shows some fragments of the
 grammar for C as given in ~\cite{LEMMA1/DEV/WRK064} seeded with a few minor errors
 along these lines. These modifications introduce 200 conflicts into the grammar.
 
-There is no general rule for finding mistakes that give rise to conflicts in a grammar. The following suggestions
+There is no general rule for debugging a grammar. The following suggestions
 may be helpful:
 
 \begin{itemize}
@@ -1028,7 +1045,7 @@ and which rules are causing the problem.
 \item In the case of a large grammar
 like the one for C, try analysing sublanguages such as expressions, statements and declarations
 separately. This will often reduce the amount of information you need to process to find the
-source of the problems.
+source of the problem, particularly if there are several unrelated errors in the grammar.
 \item If the problem seems to be related to missing or ambiguous
 punctuation in the grammar, then try temporarily introducing distinctive delimiters
 for the main syntactic categories, e.g., for C, try putting distinctive keywords
@@ -1066,7 +1083,7 @@ relational_expression
 	| relational_expression, `>`, shift_expression
 	| relational_expression, `<=`, shift_expression
 	| relational_expression, `<=`, shift_expression
-			(* typo: should be `>=` *)
+			(* typo: should be `>=` - duplicates previous alternative *)
 	;
 =TEX
 \end{Fig}
@@ -1083,8 +1100,7 @@ nonterminal it chooses the first one.
 
 An example that gives rise to several reduce/reduce conflicts
 is given in figure~\ref{usr032e.grm.txt}. This example shows a modification to part of the grammar
-of figure~\ref{usr032b.grm.txt} which produces reduce/reduce conflicts and
-which makes parsing ambiguous.
+of figure~\ref{usr032b.grm.txt} which produces reduce/reduce conflicts.
 The heuristic will cause the alternatives with two minus signs or two plus signs to be used
 in favour of the ones with just one sign.
 
@@ -1161,11 +1177,11 @@ type ('tok, 'lc, 'pp)RESOLVER
 =TEX
 The RESOLVER function is called when a lookahead token giving rise to a shift/reduce conflict
 is encountered, its arguments have the form $(x, stack, r)$ where $x$ is a pair containing
-the lexical value and lexical class of the lookahead token, $stack$ is the parse stack, and $r$
+the lexical value and lexical class of the lookahead token, $stack$ is the parser driver input stack, and $r$
 describes the possible reduction by giving the nonterminal name, the index of the
 alternative (0-based indexing) and the state to be entered.
 Most applications do not need all this information, but there are situations where it is useful.
-As we shall see shortly, the API provides a function to make one common approach (based on
+As we shall see shortly, the parser driver API provides a function to make one common approach (based on
 operator precedence) a little easier.
 
 \subsubsection{If-then-else}
@@ -1182,6 +1198,13 @@ could hardle be simpler:
 =GFT
 fun c_resolver _ = DoShift;
 =TEX
+
+Note that if the C language rule said that an ambiguous else-part belonged to the outer
+if-statement, then it would not be satisfactory to use the grammar of~\cite{LEMMA1/DEV/WRK063}
+and a RESOLVER that always reduces --- the resulting parser would reject valid
+statements such as  ``{\tt while(a) if(b) f(); else g();}''. To achieve the desired effect, you
+would either have to rework the grammar or supply a more complicated RESOLVER that
+examined the input stack to check if it is appropriate to reduce.
 
 \subsubsection{Operator Precedence}
 Our next example shows a widely used technique. The grammar in figure~\ref{usr032f.grm.txt}
@@ -1369,7 +1392,8 @@ sed -e '/^ExpressionList/,/;/d' \
 =TEX
 } % \Hide
 
-Figure~\ref{usr032j.grm.txt} shows a transformation to the production for {\it Application}
+Figure~\ref{usr032j.grm.txt} shows a transformation to the productions for {\it Application}
+and {\it ExpressionList}
 which gives a grammar that defines the same language as that
 of figure~\ref{usr032j.grm.txt} but with no conflicts.
 The transformed grammar distinguishes between lists of identifiers and lists of more complex expressions.
@@ -1416,16 +1440,17 @@ NonIdExpression =	`(`, Expression, `)`
 =TEX
 \section{ERROR HANDLING}\label{ERRORS}
 
-The function {\it default\_error} implements the simplest error handling strategy of all: it
+As mentioned at the head of section~\ref{STARTING}, one of the parameters to the {\SLRP}
+parser driver is an ERROR ROUTINE: an ML function you provide to deal with
+errors. This function is called whenever there is no entry in the action table telling the
+parser how to respond to the lookahead token.
+The function {\it default\_error} is an error routine that implements the simplest error handling strategy of all: it
 just prints an error message and raises an exception. This can be a perfectly acceptable
 approach, e.g., see the code in figure~\ref{actions.parser}, which catches the exception,
 and continues trying to parse the input if it is running interactively.
 
-As mentioned at the head of section~\ref{STARTING}, one of the parameters to the {\SLRP}
-parser driver is an ERROR ROUTINE, which is an ML function you provide to deal with
-errors. This function is called whenever there is no entry in the action table telling the
-parser how to respond to the lookahead token.
-The type of this function is an instance of the following type:
+
+The type of the ERROR ROUTINE is an instance of the following type:
 =GFT
 type ('tok, 'lc, 'pp, 'st)ERROR_ROUTINE
  	= 'tok * ('tok, 'lc, 'pp)INPUT_STACK * STATE_STACK * 'st
@@ -1460,10 +1485,6 @@ returns that token and the current READER state to the parser telling it
 to unwind its stacks back to their initial state. If there is no more input available
 it raises an exception which is handled in the parser function and causes a tidy
 exit.
-
-The purpose of this section has been simply to show how the ML interfaces
-for error handling operate. More complex error recovery strategies
-can be designed using these interfaces.
 
 
 \clearpage
