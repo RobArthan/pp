@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.16 2003/02/09 17:43:37 rda Exp rda $
+ * $Id: options.c,v 2.17 2003/06/25 10:55:03 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -113,7 +113,7 @@ static void	apply_cb(CALLBACK_ARGS),
 
 void init_options(Widget owner_w)
 {
-	XmString lab, s1, s2, s3;
+	XmString lab, s, s1, s2, s3;
 	Widget w;
 
 	if(shell) { /* defend against being called twice */
@@ -238,14 +238,17 @@ if(!global_options.edit_only) {
 		XmNfractionBase,		10,
 		NULL);
 
-	command_lab = XtVaCreateManagedWidget("Command Line:",
+	s = XmStringCreateSimple("Command Line:");
+	command_lab = XtVaCreateManagedWidget("command-line-label",
 		xmLabelWidgetClass,		command_form,
+		XmNlabelString,			s,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_FORM,
 		XmNrightAttachment,		XmATTACH_POSITION,
 		XmNrightPosition,		3,
 		NULL);
+	XmStringFree(s);
 
 	command_text = XtVaCreateManagedWidget("command-line",
 		xmTextWidgetClass,		command_form,
@@ -266,14 +269,17 @@ if(!global_options.edit_only) {
 		XmNfractionBase,		10,
 		NULL);
 
-	journal_max_lab = XtVaCreateManagedWidget("Journal Size:",
+	s = XmStringCreateSimple("Journal Size:");
+	journal_max_lab = XtVaCreateManagedWidget("journal-max-label",
 		xmLabelWidgetClass,		journal_max_form,
+		XmNlabelString,			s,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_FORM,
 		XmNrightAttachment,		XmATTACH_POSITION,
 		XmNrightPosition,		3,
 		NULL);
+	XmStringFree(s);
 
 	journal_max_text = XtVaCreateManagedWidget("journal-max",
 		xmTextWidgetClass,		journal_max_form,

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2003/05/22 10:31:19 $ $Revision: 2.26 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2003/06/25 10:55:03 $ $Revision: 2.27 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -749,10 +749,10 @@ void startup_dialog(Widget w, char **cmd_line, char **file_name)
 		s =XmStringCreateSimple("Please enter the command line you wish to run:");
 		cmd_label =  XtVaCreateManagedWidget("command-line-label:",
 			xmLabelWidgetClass,		cmd_form,
+			XmNlabelString,			s,
 			XmNtopAttachment,		XmATTACH_FORM,
 			XmNleftAttachment,			XmATTACH_FORM,
 			XmNrightAttachment,		XmATTACH_FORM,
-			XmNlabelString,			s,
 			XmNalignment,			XmALIGNMENT_BEGINNING,
 			NULL);
 
@@ -786,11 +786,14 @@ void startup_dialog(Widget w, char **cmd_line, char **file_name)
 	}
 
 	if(need_file_name) {
-		empty_file = XtVaCreateManagedWidget("Empty File",
+		s =XmStringCreateSimple("Empty File");
+		empty_file = XtVaCreateManagedWidget("empty-file",
 			xmPushButtonWidgetClass,
 			dialog,
+			XmNlabelString,			s,
 			NULL);
 		XtAddCallback(empty_file, XmNactivateCallback, file_cancel_cb, &reply);
+		XmStringFree(s);
 	}
 
 	XtManageChild(dialog);
