@@ -126,6 +126,10 @@ typedef struct menu_item {
 	extern Boolean *save_file_as(
 		Widget	text,
 		char	*name);
+	extern Boolean save_string_as(
+		Widget	w,
+		char	*data,
+		char	*name);
 	extern Boolean *include_file(
 		Widget	text,
 		char	*name);

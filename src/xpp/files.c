@@ -235,6 +235,37 @@ Boolean save_file_as(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * save_string_as: store string given as argument into a named file.
+ * Asks for confirmation if the file already exists.
+ * E.g., used to mplement `save selection as' in a file menu
+ * Treats NULL data same as "" (just a frill).
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+Boolean save_string_as(
+	Widget	w,
+	char	*data,
+	char	*name)
+{
+	FILE *fp;
+	Boolean success;
+	struct stat status;
+
+	if(stat(name, &status) == 0) { /* file exists */
+		char msg_buf[200];
+		if(!S_ISREG(status.st_mode)) {
+			file_error_dialog(w, save_not_reg_message, name);
+			return False;
+		};
+		sprintf(msg_buf, overwrite_message, name);
+		if(!yes_no_dialog(w, msg_buf)) {
+			return False;
+		}
+	}; /* else file doesn't exist so no checks needed */
+	success = store_file_contents(w, name, (data ? data : ""));
+	return success;
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * open_file: open a file and load it into a text widget given the
  * widget and the file name 
  * Implements `open' in a file menu.

@@ -97,6 +97,9 @@ static char* help_message =
  replaced by a message amongst many introduced by\n\
  a more general mechanism";
 
+static char *no_selection_message =
+	 "No text has been selected";
+
 static char* quit_message =
 "Do you really want to quit?";
 
@@ -168,6 +171,109 @@ static pid_t child_pgrp;
 static XtInputId app_ip_req;
 
 static Boolean listening;
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Forward declarations of menu item and other callback routines.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void
+	file_menu_cb(),
+	tools_menu_cb(),
+	edit_menu_cb(),
+	cmd_menu_cb(),
+	help_menu_cb(),
+	close_down_cb(),
+	script_modify_cb(),
+	script_motion_cb();
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Menu descriptions:
+ * N.b. the parts of what follows which deal with menu item
+ * sensitivity require each item macro to be the same as the
+ * position of the item in the menu; if new items are added
+ * in the middle of a menu, macros for later entries should
+ * be incremented accordingly.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+#define FILE_MENU_SAVE			0
+#define FILE_MENU_SAVE_AS		1
+#define FILE_MENU_SAVE_SELECTION	2
+#define FILE_MENU_OPEN			3
+#define FILE_MENU_INCLUDE		4
+#define FILE_MENU_EMPTY_FILE		5
+#define FILE_MENU_QUIT			6
+
+static MenuItem file_menu_items[] = {
+    { "Save", &xmPushButtonGadgetClass, 'S', NULL, NULL,
+        file_menu_cb, (XtPointer)FILE_MENU_SAVE, (MenuItem *)NULL, False },
+    { "Save as ...",  &xmPushButtonGadgetClass, 'a', NULL, NULL,
+        file_menu_cb, (XtPointer)FILE_MENU_SAVE_AS, (MenuItem *)NULL, False },
+    { "Save Selection as ...",  &xmPushButtonGadgetClass, 'l', NULL, NULL,
+        file_menu_cb, (XtPointer)FILE_MENU_SAVE_SELECTION, (MenuItem *)NULL, False },
+    { "Open ...",  &xmPushButtonGadgetClass, 'O', NULL, NULL,
+        file_menu_cb, (XtPointer)FILE_MENU_OPEN, (MenuItem *)NULL, False },
+    { "Include ...",  &xmPushButtonGadgetClass, 'I', NULL, NULL,
+        file_menu_cb, (XtPointer)FILE_MENU_INCLUDE, (MenuItem *)NULL, False },
+    { "Empty File",  &xmPushButtonGadgetClass, 'N', NULL, NULL,
+        file_menu_cb, (XtPointer)FILE_MENU_EMPTY_FILE, (MenuItem *)NULL, False },
+    { "Quit",  &xmPushButtonGadgetClass, 'Q', NULL, NULL,
+        file_menu_cb, (XtPointer)FILE_MENU_QUIT, (MenuItem *)NULL, False },
+    NULL,
+};
+
+#define TOOLS_MENU_PALETTE	0
+
+static MenuItem tools_menu_items[] = {
+    { "Palette", &xmPushButtonGadgetClass, 'P', NULL, NULL,
+        tools_menu_cb, (XtPointer)TOOLS_MENU_PALETTE, (MenuItem *)NULL, False },
+    NULL,
+};
+
+#define EDIT_MENU_CUT		0
+#define EDIT_MENU_COPY		1
+#define EDIT_MENU_PASTE		2
+#define EDIT_MENU_CLEAR		3
+#define EDIT_MENU_UNDO		4
+
+static MenuItem edit_menu_items[] = {
+    { "Cut", &xmPushButtonGadgetClass, 'C', NULL, NULL,
+        edit_menu_cb, (XtPointer)EDIT_MENU_CUT, (MenuItem *)NULL, False },
+    { "Copy", &xmPushButtonGadgetClass, 'o', NULL, NULL,
+        edit_menu_cb, (XtPointer)EDIT_MENU_COPY, (MenuItem *)NULL, False },
+    { "Paste", &xmPushButtonGadgetClass, 'P', NULL, NULL,
+        edit_menu_cb, (XtPointer)EDIT_MENU_PASTE, (MenuItem *)NULL, False },
+    { "Clear", &xmPushButtonGadgetClass, 'l', NULL, NULL,
+        edit_menu_cb, (XtPointer)EDIT_MENU_CLEAR, (MenuItem *)NULL, False },
+    { "Undo", &xmPushButtonGadgetClass, 'l', "<Key>Undo", NULL,
+        edit_menu_cb, (XtPointer)EDIT_MENU_UNDO, (MenuItem *)NULL, False },
+    NULL,
+};
+
+#define CMD_MENU_EXECUTE	0
+#define CMD_MENU_RETURN		1
+#define CMD_MENU_INTERRUPT	2
+#define CMD_MENU_KILL		3
+#define CMD_MENU_RESTART	4
+
+static MenuItem cmd_menu_items[] = {
+    { "Execute", &xmPushButtonGadgetClass, 'x', "Ctrl<Key>x", "Ctrl-X",
+        cmd_menu_cb, (XtPointer)CMD_MENU_EXECUTE, (MenuItem *)NULL, False },
+    { "Return", &xmPushButtonGadgetClass, 'e', "Ctrl<Key>m", "Ctrl-M",
+        cmd_menu_cb, (XtPointer)CMD_MENU_RETURN, (MenuItem *)NULL, False },
+    { "Interrupt", &xmPushButtonGadgetClass, 'I', "Ctrl<Key>c", "Ctrl-C",
+        cmd_menu_cb, (XtPointer)CMD_MENU_INTERRUPT, (MenuItem *)NULL, False },
+    { "Kill", &xmPushButtonGadgetClass, 'K', NULL, NULL,
+        cmd_menu_cb, (XtPointer)CMD_MENU_KILL, (MenuItem *)NULL, False },
+    { "Restart", &xmPushButtonGadgetClass, 'R', NULL, NULL,
+        cmd_menu_cb, (XtPointer)CMD_MENU_RESTART, (MenuItem *)NULL, False },
+    NULL,
+};
+
+#define	HELP_MENU_GENERAL	0
+static MenuItem help_menu_items[] = {
+    { "General", &xmPushButtonGadgetClass, 'G', "Help", "Help",
+        help_menu_cb, (XtPointer)HELP_MENU_GENERAL, (MenuItem *)NULL, False },
+    NULL,
+};
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * X MANAGEMENT OF THE MAIN WINDOW
@@ -257,107 +363,12 @@ static void reinit_changed()
 		XtFree(undo_buffer.oldtext);
 		undo_buffer.oldtext = NULL;
 	}
-	set_menu_item_sensitivity(editmenu, 4, False);
+	set_menu_item_sensitivity(editmenu, EDIT_MENU_UNDO, False);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * X initialisation:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-/*
- * Forward declarations of menu item and other callback routines.
- */
-
-static void
-	file_menu_cb(),
-	tools_menu_cb(),
-	edit_menu_cb(),
-	cmd_menu_cb(),
-	help_menu_cb(),
-	close_down_cb(),
-	script_modify_cb(),
-	script_motion_cb();
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Menu descriptions:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-#define FILE_MENU_SAVE		0
-#define FILE_MENU_SAVE_AS	1
-#define FILE_MENU_OPEN		2
-#define FILE_MENU_INCLUDE	3
-#define FILE_MENU_NEW		4
-#define FILE_MENU_QUIT		5
-
-static MenuItem file_menu_items[] = {
-    { "Save", &xmPushButtonGadgetClass, 'S', NULL, NULL,
-        file_menu_cb, (XtPointer)FILE_MENU_SAVE, (MenuItem *)NULL, False },
-    { "Save as ...",  &xmPushButtonGadgetClass, 'a', NULL, NULL,
-        file_menu_cb, (XtPointer)FILE_MENU_SAVE_AS, (MenuItem *)NULL, False },
-    { "Open ...",  &xmPushButtonGadgetClass, 'O', NULL, NULL,
-        file_menu_cb, (XtPointer)FILE_MENU_OPEN, (MenuItem *)NULL, False },
-    { "Include",  &xmPushButtonGadgetClass, 'I', NULL, NULL,
-        file_menu_cb, (XtPointer)FILE_MENU_INCLUDE, (MenuItem *)NULL, False },
-    { "New",  &xmPushButtonGadgetClass, 'N', NULL, NULL,
-        file_menu_cb, (XtPointer)FILE_MENU_NEW, (MenuItem *)NULL, False },
-    { "Quit",  &xmPushButtonGadgetClass, 'Q', NULL, NULL,
-        file_menu_cb, (XtPointer)FILE_MENU_QUIT, (MenuItem *)NULL, False },
-    NULL,
-};
-
-#define TOOLS_MENU_PALETTE	0
-
-static MenuItem tools_menu_items[] = {
-    { "Palette", &xmPushButtonGadgetClass, 'P', NULL, NULL,
-        tools_menu_cb, (XtPointer)TOOLS_MENU_PALETTE, (MenuItem *)NULL, False },
-    NULL,
-};
-
-#define EDIT_MENU_CUT		0
-#define EDIT_MENU_COPY		1
-#define EDIT_MENU_PASTE		2
-#define EDIT_MENU_CLEAR		3
-#define EDIT_MENU_UNDO		4
-
-static MenuItem edit_menu_items[] = {
-    { "Cut", &xmPushButtonGadgetClass, 'C', NULL, NULL,
-        edit_menu_cb, (XtPointer)EDIT_MENU_CUT, (MenuItem *)NULL, False },
-    { "Copy", &xmPushButtonGadgetClass, 'o', NULL, NULL,
-        edit_menu_cb, (XtPointer)EDIT_MENU_COPY, (MenuItem *)NULL, False },
-    { "Paste", &xmPushButtonGadgetClass, 'P', NULL, NULL,
-        edit_menu_cb, (XtPointer)EDIT_MENU_PASTE, (MenuItem *)NULL, False },
-    { "Clear", &xmPushButtonGadgetClass, 'l', NULL, NULL,
-        edit_menu_cb, (XtPointer)EDIT_MENU_CLEAR, (MenuItem *)NULL, False },
-    { "Undo", &xmPushButtonGadgetClass, 'l', "<Key>Undo", NULL,
-        edit_menu_cb, (XtPointer)EDIT_MENU_UNDO, (MenuItem *)NULL, False },
-    NULL,
-};
-
-#define CMD_MENU_EXECUTE	0
-#define CMD_MENU_RETURN		1
-#define CMD_MENU_INTERRUPT	2
-#define CMD_MENU_KILL		3
-#define CMD_MENU_RESTART	4
-
-static MenuItem cmd_menu_items[] = {
-    { "Execute", &xmPushButtonGadgetClass, 'x', "Ctrl<Key>x", "Ctrl-X",
-        cmd_menu_cb, (XtPointer)CMD_MENU_EXECUTE, (MenuItem *)NULL, False },
-    { "Return", &xmPushButtonGadgetClass, 'e', "Ctrl<Key>m", "Ctrl-M",
-        cmd_menu_cb, (XtPointer)CMD_MENU_RETURN, (MenuItem *)NULL, False },
-    { "Interrupt", &xmPushButtonGadgetClass, 'I', "Ctrl<Key>c", "Ctrl-C",
-        cmd_menu_cb, (XtPointer)CMD_MENU_INTERRUPT, (MenuItem *)NULL, False },
-    { "Kill", &xmPushButtonGadgetClass, 'K', NULL, NULL,
-        cmd_menu_cb, (XtPointer)CMD_MENU_KILL, (MenuItem *)NULL, False },
-    { "Restart", &xmPushButtonGadgetClass, 'R', NULL, NULL,
-        cmd_menu_cb, (XtPointer)CMD_MENU_RESTART, (MenuItem *)NULL, False },
-    NULL,
-};
-
-#define	HELP_MENU_GENERAL	0
-static MenuItem help_menu_items[] = {
-    { "General", &xmPushButtonGadgetClass, 'G', "Help", "Help",
-        help_menu_cb, (XtPointer)HELP_MENU_GENERAL, (MenuItem *)NULL, False },
-    NULL,
-};
 
 static setup_main_window(
 	Bool	edit_only,
@@ -436,7 +447,6 @@ static setup_main_window(
 	XtAddCallback(script,
 		XmNmodifyVerifyCallback, script_modify_cb, NULL);
 
-
 	XtAddCallback(script,
 		XmNmotionVerifyCallback, script_motion_cb, NULL);
 
@@ -475,7 +485,7 @@ if( !edit_only ) {
 
 	editmenu = setup_pulldown_menu(
 		menubar, "Edit", '\0', False, edit_menu_items);
-	set_menu_item_sensitivity(editmenu, 4, False);
+	set_menu_item_sensitivity(editmenu, EDIT_MENU_UNDO, False);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Command menu:
@@ -509,8 +519,10 @@ if( !edit_only ) {
 		XmTextFieldSetString(namestring, file_name);
 		XmTextFieldShowPosition(namestring, strlen(file_name));
 		reinit_changed();
+		set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
 	} else {
 		XmTextFieldSetString(namestring, no_file_message);
+		set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, False);
 	};
 
 /* Lines marked !!! below are a work-around for  a Motif/X bug whereby
@@ -575,14 +587,14 @@ Widget w;
 NAT i;
 XmAnyCallbackStruct *cbs;
 {
-	char *fname = NULL;
+	char *fname;
+	char *buf;
 
 	switch(i) {
 	case FILE_MENU_SAVE:
 		fname = XmTextGetString(namestring);
 		if(!fname || !*fname || *fname == '*') {
-/* No file name: just do nothing for now */
-			break;
+/* No file name: just do nothing */
 		} else {
 			save_file(script, fname);
 			reinit_changed();
@@ -591,22 +603,39 @@ XmAnyCallbackStruct *cbs;
 	case FILE_MENU_SAVE_AS:
 		fname = file_dialog(frame, "Save");
 		if(!fname || !*fname || *fname == '*') {
-/* No file name: just do nothing for now */
-			break;
+/* No file name: just do nothing */
 		} else if(save_file_as(script, fname)) {
 			show_new_file_name(fname);
 			reinit_changed();
+			set_menu_item_sensitivity(filemenu,
+				FILE_MENU_SAVE, True);
+			if(fname != NULL) {XtFree(fname);};
 		};
-		if(fname != NULL) {XtFree(fname);};
+		break;
+	case FILE_MENU_SAVE_SELECTION:
+		if((buf = XmTextGetSelection(script)) == NULL) {
+			ok_dialog(script, no_selection_message);
+		} else {
+			fname = file_dialog(frame, "Save Selection");
+			if(!fname || !*fname || *fname == '*') {
+/* No file name: just do nothing */
+			} else {
+				save_string_as(script, buf, fname);
+				XtFree(buf);
+			}
+			if(fname != NULL) {XtFree(fname);};
+		};
 		break;
 	case FILE_MENU_OPEN:
 		if(!changed || yes_no_dialog(root, changed_message)) {
 			fname = file_dialog(frame, "Open");
 			if(!fname || !*fname || *fname == '*') {
-/* No file name: just do nothing for now */
+/* No file name: just do nothing */
 			} else if(open_file(script, fname)) {
 				show_new_file_name(fname);
 				reinit_changed();
+				set_menu_item_sensitivity(filemenu,
+					FILE_MENU_SAVE, True);
 			};
 			if(fname != NULL) {XtFree(fname);};
 		}
@@ -614,17 +643,19 @@ XmAnyCallbackStruct *cbs;
 	case FILE_MENU_INCLUDE:
 		fname = file_dialog(frame, "Include");
 		if(!fname || !*fname || *fname == '*') {
-/* No file name: just do nothing for now */
+/* No file name: just do nothing */
 			break;
 		};
 		include_file(script, fname);
 		if(fname != NULL) {XtFree(fname);};
 		break;
-	case FILE_MENU_NEW:
+	case FILE_MENU_EMPTY_FILE:
 		if(!changed || yes_no_dialog(root, changed_message)) {
 			XmTextFieldSetString(namestring, no_file_message);
 			XmTextSetString(script, "");
 			reinit_changed();
+			set_menu_item_sensitivity(filemenu,
+				FILE_MENU_SAVE, False);
 		}
 		break;
 	case FILE_MENU_QUIT:
@@ -808,6 +839,7 @@ Widget w;
 XtPointer d;
 XmTextVerifyCallbackStruct *cbs;
 {
+	XmTextPosition dontcare;
 	undo_buffer.moved_away = True;
 }
 
@@ -868,12 +900,12 @@ XmTextVerifyCallbackStruct *cbs;
 	} else {
 		undo_buffer.last += cbs->text->length;
 	}
-	set_menu_item_sensitivity(editmenu, 4, undo_buffer.can_undo);
+	set_menu_item_sensitivity(editmenu, EDIT_MENU_UNDO, undo_buffer.can_undo);
 /* If this isn't the call invoked by the XmReplace in do_undo */
 /* The menu label should revert to "Undo": */
 	if(!undoing) {
 		undo_redo_index = 0;
-		set_menu_item_label(editmenu, 4, undo_redo[0]);
+		set_menu_item_label(editmenu, EDIT_MENU_UNDO, undo_redo[0]);
 	}
 }
 
@@ -911,7 +943,7 @@ Widget w;
 		lst = undo_buffer.last;
 		XmTextReplace(w, fst, lst, str);
 		undo_redo_index = 1 - undo_redo_index;
-		set_menu_item_label(editmenu, 4,
+		set_menu_item_label(editmenu, EDIT_MENU_UNDO,
 				undo_redo[undo_redo_index]);
 		if(len) {
 			XmTextSetSelection(w, fst, fst+len, CurrentTime);
