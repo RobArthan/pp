@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.29 2003/05/20 15:16:13 rda Exp rda $
+ * $Id: pterm.c,v 2.30 2003/05/21 11:01:06 rda Exp $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -1029,6 +1029,11 @@ static void xt_error_handler(char * m)
  * the common problems. Earlier versions of this code also used to
  * catch SIGSYS on Solaris, but this has been removed since it's not
  * portable and there is no evidence that the SIGSYS signal ever occurred.
+ *
+ * SIGHUP is ignored because if this xpp is running detached (i.e., it has
+ * been started from the New Command Session menu item in another instance
+ * of xpp) the close of the control file descriptor which occurs when the user
+ * kills or restarts the application will cause the kernel to send a SIGHUP).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void handle_sigs(void)
 {
@@ -1042,6 +1047,8 @@ void handle_sigs(void)
 	sigaction(SIGSEGV, &acts, 0);
 	sigaction(SIGBUS, &acts, 0);
 	sigaction(SIGFPE, &acts, 0);
+	acts.sa_handler = SIG_IGN;
+	sigaction(SIGHUP, &acts, 0);
 	XtAppSetErrorHandler(app, xt_error_handler);
 }
 
@@ -1059,6 +1066,7 @@ static void default_sigs(void)
 	sigaction(SIGSEGV, &acts, 0);
 	sigaction(SIGBUS, &acts, 0);
 	sigaction(SIGFPE, &acts, 0);
+	sigaction(SIGHUP, &acts, 0);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
