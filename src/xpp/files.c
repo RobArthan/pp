@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.15 2003/01/30 12:50:49 rda Exp rda $
+ * $Id: files.c,v 2.16 2003/01/30 12:59:01 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -356,6 +356,8 @@ static char *get_file_contents(
 						ft_state = FT_MAC;
 						break;
 					default:
+						ft_state = FT_MAC;
+						*p++ = '\n';
 						*p++ = whatgot;
 						break;
 				}
