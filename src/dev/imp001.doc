@@ -72,7 +72,8 @@ Improving known space hogs: mem, drop and lassoc5.
 \item [Issue 2.13 (6th February 1998)]
 Made implementation of length SML97-compatible.
 \item [Issues 2.14-2.17 (6th March 1999)] Added $Integer$ structure.
-\item [Issues 2.18 (16th July 2001)] Added $DynamicArray$ structure.
+\item [Issue 2.18 (16th July 2001)] Added $DynamicArray$ structure.
+\item [Issue 2.19 (30th July 2001)] New slicker hash function in $EfficientDictionary$ structure.
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -1013,39 +1014,26 @@ open SimpleDictionary;
 structure €EfficientDictionary› : EfficientDictionary = struct
 =TEX
 The technique we use for the more efficient dictionaries
-is essentially the standard compiler writer's technique
-of hash addressing with chaining to handle collisions
-(see, for example, \cite{Bornat79}).
+is binary search trees using a hashing function to avoid
+problems with partially sorted input data causing degenerate
+tree structures.
 
-To access such a dictionary given a string $s$, we first
-compute a $hash$ $key$, which is an integer, $k$ say, in some
-fixed range. We then use $k$ to index an array of lists of
-pairs. The $k$-th entry in this array is, effectively,
-a simple dictionary representing the restriction of the
-dictionary (viewed as a partial function) to elements
-with hash key $k$.
-
-Since Standard ML has no array data type we use binary
-trees to simulate arrays. Note that these trees never
+Note that these trees never
 grow to have more than $R$ (internal) nodes where
-$R$ is the number of possible hash keys. The idea of
+$R$ is the number of possible hash keys (which is however very large). The idea of
 using the hashing approach rather than binary search trees with
-one node per dictionary entry is to avoid string
-comparisons.
+one node per dictionary entry is to avoid string comparisons and to avoid partially
+sorted input data causing the trees to degenerate into lists.
 
 (For a typical access in a dictionary with $N$ entries,
 with $N >> R$,
 we are performing approximately $\log R$ integer comparisons plus
 $N / 2 R$ string equality tests, rather than $\log N$
-string comparisons. Since the string comparison operation
-is not supplied as primitive in Standard ML, it seems
-likely that $N$ would have to be much larger than
-is expected here for the tree search technique to be more
-efficient. This assertion has not been scientifically
-verified.)
+string comparisons. 
 
 The code for the more efficient dictionaries is quite
-straightforward. We use the prefix $e\_$ to distinguish
+straightforward except, perhaps for the hashing function.
+We use the prefix $e\_$ to distinguish
 names from those used for the simple dictionaries.
 We package the dictionary code in an abstract data type
 since the implementation may well change if the performance
@@ -1060,31 +1048,52 @@ abstype 'a €E_DICT›	=	€Leaf›
 with
 =TEX
 The hashing function, $hash$ is local to the abstract
-data type. The function chosen has no special merit
-except that it is reasonably simple and appears to give
-an acceptable spread of values for some typical strings.
-Essentially, we divide the string into three-character
-slices starting at the left and adding null characters
-to the right of the last slice if necessary. We view
-each three-character slice as a base 256 number and
-take the sum of the slices modulo $2^{24} - 1$.
-The hash key is the result of this taken modulo 127.
+data type. The function chosen treats each string of
+bytes as a binary number with the bits in reverse order.
+Since we do not wish to do multiple precision arithmetic here,
+we reduce the number modulo $n$ for $n$ a prime number close
+to a power of 2.
+For $n$, we use $2^{22}-3$, which is the
+largest prime number that can safely be multiplied by 256
+on a system where the maximum integer is $2^{30}-1$.
+This will work for Standard ML of New Jersey and any other
+reasonable ML compiler and is believed to give reasonably balanced
+trees for most likely input data.
+
+To handle the bit reversal efficiently we use a lookup vector
+indexed by the bytes of the string being hashed.
 =SML
 local
 	open SimpleDictionary;
-	val prime = 127;
-	val H = 256;
-	val Hsq = 256 * 256;
-	val Hcubedless1 = 256 * 256 * 256 - 1;
-	fun hash (s : string) : int = (
+	val bit_rev_table = (
+		PPVector.vector
 		let
-			fun  aux (X1 :: []) = (ord X1 * Hsq)
-			|  aux (X1 :: X2 :: []) = (ord X2 * H + ord X1) * H
-			| aux (X1 :: X2 :: X3 :: rest) =
-				(((((ord X3 * H) + ord X2) * H) + ord X1)  + aux rest)
-				mod Hcubedless1
-			|  aux [] = 0;
-		in	aux (explode s) mod prime
+			fun bit_rev (nbits : int) (what : int) : int = (
+				if	what = 0
+				then	what
+				else	let	fun two_to_the 0 = 1
+						|   two_to_the n = 2 * two_to_the (n-1);
+						val this_power = two_to_the (nbits-1)
+					in	(if what mod 2 = 0 then 0 else this_power) +
+						bit_rev (nbits-1) (what div 2)
+					end
+			);
+		in	map (bit_rev 8) (interval 0 255)
+		end
+	);
+	val prime = 4194301;
+	val H = 256;
+	fun get_byte (s, i) = (
+		PPVector.sub(bit_rev_table, SML97BasisLibrary.Char.ord(String.sub(s, i)))
+	);
+	fun hash (s : string) : int = (
+		let	val len = size s;
+			fun aux acc i = (
+				if	i < 0
+				then	acc
+				else	aux ((acc * H + get_byte(s, i)) mod prime) (i-1)
+			);
+		in	aux 0 (len-1)
 		end
 	);
 in
