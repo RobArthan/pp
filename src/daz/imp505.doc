@@ -1,4 +1,4 @@
-% %Z% $Date: 2002/02/14 15:57:00 $ $Revision: 1.93 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2002/03/13 12:50:50 $ $Revision: 1.94 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -115,6 +115,8 @@
 \item[Issue 1.91] Fixed {\LaTeX} errors.
 \item[Issues 1.92, 1.93] Fixed bug in {\it proc\_call\_param}.
 \item[Issue 1.94] R0056: default parameter modes supported properly.
+\item[Issue 1.95] Fixing bug in type-checking during preprocessing of
+procedure calls.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -842,6 +844,26 @@ in	let	val (v, ty) = dest_var sl_tm;
 	end
 );
 =TEX
+The following function type-checks the pre- and post-condition of a procedure
+call in the appropriate context, restoring the original context afterwards.
+=SML
+fun Ûz_preds_in_callee_cxtÝ
+	(env : CN_ENV)
+	({name, formal_ids, ...} : FORMAL_PROC)
+	(ztms : Z_TM list)
+			: Z_PRED list = (
+	let	val old_cxt = get_ti_context();
+		val extra_cxt = ti_context_of_formal_ids env formal_ids;
+		val extra_ns = map (fst o dest_var) extra_cxt;
+		val filt_old_cxt = old_cxt drop (fn t => fst(dest_var t) mem extra_ns);
+		val new_cxt =  extra_cxt @ filt_old_cxt;
+		val side1 = set_ti_context new_cxt;
+		val zps = map z_predexp_of_z_tm ztms;
+		val side2  = set_ti_context old_cxt;
+	in	zps
+	end
+);
+=TEX
 In the following, the {\it Spec} of the specification is just given by the
 pre- and post-condition as Z predicates. The frames are irrelevant to
 the weakest pre-condition calculation.
@@ -849,17 +871,11 @@ the weakest pre-condition calculation.
 =SML
 fun Ûproc_call_specÝ (env : CN_ENV)
 		({actuals, ...} : (AGG_CHOICE,EXP) PROC_CALL)
-		({name, formal_ids, spec={w, w0, pre, post}, ...} : FORMAL_PROC)
+		(fp as {name, formal_ids, spec={pre, post, ...}, ...} : FORMAL_PROC)
 			: Z_PRED * Z_PRED * STATEMENT * Z_PRED list * Z_PRED list = (
-let	val old_cxt = get_ti_context();
-	val extra_cxt = ti_context_of_formal_ids env formal_ids;
-	val extra_ns = map (fst o dest_var) extra_cxt;
-	val filt_old_cxt = old_cxt drop (fn t => fst(dest_var t) mem extra_ns);
-	val new_cxt =  extra_cxt @ filt_old_cxt;
-	val side1 = set_ti_context new_cxt;
-	val pre1 = z_predexp_of_z_tm pre;
-	val post1 = z_predexp_of_z_tm post;
-	val side2  = set_ti_context old_cxt;
+let	val pre1_post1 = z_preds_in_callee_cxt env fp [pre, post];
+	val pre1 = hd pre1_post1;
+	val post1 = hd(tl pre1_post1);
 	val var_decls = map #var_decl formal_ids;
 	val names = ((map trans_id) o flat
 				o (map #vars)) var_decls;
@@ -1102,7 +1118,7 @@ to {\it vcs} as necessary to ensure that the check is then made on all specifica
 statements in the script. 
 =SML
 local
-fun Ûadj_stmt_auxÝ (wp : WP_ENV)
+fun Ûadj_stmt_auxÝ (wp as {env, ...} : WP_ENV)
 			(is_first : bool)
 				(s : STATEMENT)
 					: STATEMENT = (
@@ -1138,15 +1154,16 @@ in
 						}
 				else	fail "adjust_statement" 505092 []
 	) |	STProcNoIvars piv =>
-		let	fun find_spec id ((fproc::rest) : FORMAL_PROC list) = (
+		let	fun find_formal_proc id ((fproc::rest) : FORMAL_PROC list) = (
 				if (#name fproc) = id
-				then	Value (#spec fproc)
-				else	find_spec id rest
-			) | find_spec id [] = Nil;
+				then	Value fproc
+				else	find_formal_proc id rest
+			) | find_formal_proc id [] = Nil;
 		in
-			case find_spec (#name piv) (#formal_procs wp) of
-			Value sp => (
-				if	any_initial_variables_z_tm (#post sp)
+			case find_formal_proc (#name piv) (#formal_procs wp) of
+			Value fp => (
+				if	any_initial_variables_z_pred
+					(hd(z_preds_in_callee_cxt env fp [#post(#spec fp)]))
 				then	if	is_first
 					then	SProcIvars piv
 					else	fail "adjust_statement" 505093 []
@@ -1311,12 +1328,6 @@ end
 =SML
 fun op ÛcapÝ (a, b) = (a cup b) diff (a diff b) diff (b diff a);
 =TEX
-
-=SML
-fun Ûfree_vars_zpredÝ (zp : Z_PRED) : Z_ID list = (
-	 (map ((fn (n,_,_) => n) o dest_z_lvar) o frees) zp
-);
-=TEX
 =SML
 fun Ûentire_var_expÝ (cn_env : CN_ENV) (e : EXP) : ID = (
 	let	fun aux (EId id) = id
@@ -1395,8 +1406,6 @@ fun Ûanti_aliasing_parsÝ (fp : FORMAL_PROC) (pc : (AGG_CHOICE,EXP)PROC_CALL)
 	let	val formal_ids = #formal_ids fp;
 		val var_decls = map (fn {var_decl, ...} => var_decl) formal_ids;
 		val formals = flat (map (fn {vars, ...} => vars) var_decls);
-		val pre = (z_predexp_of_z_tm o #pre o #spec) fp;
-		val post = (z_predexp_of_z_tm o #post o #spec) fp;
 		val trans_formals = map trans_id formals;
 	in
 		(formals, #globals fp)
