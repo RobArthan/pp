@@ -1372,9 +1372,9 @@ fun Ûcart_prodÝ (env : CN_ENV) (par_specs : PARAM_SPEC list) : Z_EXP = (
 );
 =TEX
 =SML
-fun Ûfun_declÝ
-	(env : CN_ENV)
-	({name, formal_pars, return_type} : INFORMAL_FUN) : Z_DECL = (
+fun Ûfun_decl_auxÝ
+	((env, {name, formal_pars, return_type})
+	: CN_ENV * INFORMAL_FUN) : Z_DECL * TERM * TERM = (
 	let	val zn = trans_id name;
 		val z_ret_ty = zid env (trans_id return_type);
 		val zexp = (
@@ -1382,10 +1382,15 @@ fun Ûfun_declÝ
 				[] => z_ret_ty
 			|	non_empty => z_tfun(cart_prod env formal_pars,
 						 z_ret_ty));
-		val zvar = mk_z_lvar(zn, (dest_z_power_type o type_of) zexp, []);
-	in	mk_z_dec([zvar], zexp)
+		val lvar = mk_z_lvar(zn, (dest_z_power_type o type_of) zexp, []);
+		val gvar = mk_z_gvar(zn, (dest_z_power_type o type_of) zexp, []);
+	in	(mk_z_dec([lvar], zexp), lvar, gvar)
 	end
 );
+=TEX
+We can defined $fun\_decl$ in terms of $fun\_decl\_aux$ by throwing away the second and third parts of the result value and currying the function.
+=SML
+val Ûfun_declÝ = curry ((fn (d, _, _) => d) o fun_decl_aux);
 =TEX
 =SML
 fun Ûvc_local_declsÝ (seqs : SEQUENT list,
@@ -1394,40 +1399,58 @@ fun Ûvc_local_declsÝ (seqs : SEQUENT list,
 		wp_env = {fun_header, env, ...}, ...} : SPECLAB)
 		: VC list = (
 let
+(*
 =TEX
 Every variable in $vc\_vars$ and its corresponding initial variable is introduced.
 =SML
+*)
 	fun do_vars var = (
 		[trans_id var, trans_id var ^ "‰0"]
 	);
 	fun var_decl_decls {vars, tmark} =
 		trans_decl env {vars = (flat o (map do_vars)) vars, tmark=tmark};
+(*
 =TEX
 The following function implements the check for input parameters specified in \cite[section 5.5]{DRA/CIS/CSE3/TR/94/27/1.2}.
 =SML
+*)
 	fun param_spec_decls {var_decl, mode} = (
 		case mode of
 		MSparkIn => trans_decl env var_decl
 		|	_ => var_decl_decls var_decl
 	);
+(*
 =TEX
 =SML
+*)
 	val decls = map var_decl_decls vc_vars @ map param_spec_decls vc_pars;
 
+(*
 =TEX
 Add the logical constants (no initial versions).
 =SML
+*)
 	val decls = vc_log_cons @ decls;
+(*
 =TEX
 \raggedright{If $formal\_body\_flag$ and $fun\_flag$ are $true$, add a declaration of the function (obtained from $fun\_header$).}
 =SML
-	val decls =	if	formal_body_flag andalso fun_flag
-			then	(fun_decl env fun_header) :: decls
-			else	decls;
+*)
+	val (decls, subs_fn) =
+		if	formal_body_flag andalso fun_flag
+			then	let 	val (d, l, g) = fun_decl_aux
+								(env,fun_header);
+				in	(d :: decls, subst [(l, g)])
+				end
+			else	(decls, Combinators.I);
+
+	val seqs1 = map (fn (d,c) => (d, subs_fn c)) seqs;
+(*
 =TEX
 
 Remove any declarations which are not needed by the sequent.
 =SML
+*)
 	fun drop_vars vns vardecl = (
 	let	val (vars, ty) = dest_z_dec vardecl;
 		val vartys = map dest_var vars;
@@ -1446,7 +1469,7 @@ Remove any declarations which are not needed by the sequent.
 		(flat ddecs, seq)
 	end
 	);
-	val res = map (add_decls decls) seqs;
+	val res = map (add_decls decls) seqs1;
 in
 	res
 end
