@@ -1,0 +1,1933 @@
+%Z% $Id$
+=TEX
+% %Z% $Id$
+\documentstyle[11pt,TQ,hol1]{article}
+
+\TPPtitle{Implementation of the UNIX Interface for ProofPower under Solaris 2}
+\TPPref{DS/FMU/IED/IMP099}
+\def\SCCSissue{$Revision$%
+}
+\TPPissue{\SCCSissue}
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPproject{FST PROJECT}
+
+\TPPstatus{Draft}
+\TPPtype{Literate Script}
+\TPPkeywords{HOL}
+\TPPauthor{K. Blackburn & WIN01}  %% Mandatory field
+\TPPauthorisation{R.D.~Arthan & FST Team Leader}
+\TPPabstract{This document contains the implementation of the
+	\Product{} UNIX Interface, and in particular the 
+	standard way of invoking \Product{}.}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	Library
+}}
+
+\ftlinepenalty=9999
+\makeindex
+
+\underscoreoff
+
+\begin{document}
+\makeTPPfrontpage
+\vfill
+\begin{center}
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+\end{center}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+
+\begin{description}
+\item[Issue 1.1]
+First version based in DS/FMU/IED/IMP069.
+
+\item[Issue 1.2]
+Corrected document reference number.
+
+\item[Issue 1.3]
+Recoded $pp$ to use $getopts$ and added flags to $pp$ to enable it to support batch loading of files.
+Also recoded $zed$ and $hol$ to invoke $pp$ rather than to run code which is a duplicate.
+
+\item[Issue 1.4]
+Changed occurrence of imp021 to be imp101.
+
+\item[Issue 1.5]
+Fixed problem with initialisation scripts.
+
+\item[Issue 1.6]
+Fixed bug 121
+
+\item[Issue 1.7]
+Fixing signal trapping effect from Solaris 2.5.1 in pp in interactive mode.
+\end{description}
+
+\subsection{Changes Forecast}
+None known.
+
+\newpage
+
+\section{GENERAL}
+
+\subsection{Scope}
+
+This document contains the implementation of the \Product{}/ UNIX  interface programs under Solaris 2
+called for by~\cite{DS/FMU/IED/HLD005},
+and given a detailed design in \cite{DS/FMU/IED/DTD099}.
+
+\subsection{Introduction}
+
+\subsubsection{Purpose and Background}
+This document contains the implementation of the \Product/ UNIX  interface programs for Solaris 2
+given a detailed design in \cite{DS/FMU/IED/DTD099}.
+
+\subsubsection{Dependencies}
+None of the commands will work without access to a \Product{} database of a certain minimum functionality
+(the initial system built via \cite{DS/FMU/IED/IMP101}
+satisfies the criteria)
+and (in this first release) Poly/ML.
+
+\subsubsection{Interface}
+
+The user interface is described in the style of UNIX manual pages in
+\cite{DS/FMU/IED/HLD005}.
+
+\subsubsection{Possible Enhancements}
+None known.
+
+\subsubsection{Deficiencies}
+None known.
+
+\newpage
+\section{STRUCTURE OF THIS DOCUMENT}
+
+The program code in this document may be extracted for
+compilation.  The whole of the text may be used as source to the
+\LaTeX{} document processing system, after some formatting instructions
+are added to the text of the program code.  The {\tt sieve} program
+(see \cite{DS/FMU/IED/DTD053}) perfoms the necessary extraction and
+adding of format instructions.  This process is known as
+``sieving''.  The source text is augmented by sieving directives
+which delimit the sorts of text.   The {\tt sieve} program is driven
+by steering files which describe how to process the various sorts of
+text.
+
+Thus the commands given an implementation in this document will be 
+implemented by shell scripts ``sieved'' from \cite{DS/FMU/IED/IMP099}.
+An appropriate invocation of sieving is just:
+
+\begin{verbatim}
+docsml imp099
+\end{verbatim}
+
+\section{RUN A SESSION}
+In outline the program $pp$ and its special invocations ($hol$ and $zed$) should in order:
+\begin{enumerate}
+\item
+Do initial argument proccessing;
+\item
+Find a database;
+\item
+Enable the list of initialisation script names and current theory name to be accessed.
+\item
+Run {\tt poly} on the database.
+\end{enumerate}
+The program relies on the start of session initialisation
+routines of \cite{DS/FMU/IED/DTD036} to set the line length,
+load up the theory hierarchy,
+set the current theory,
+and read in the named scripts,
+before returning control to the user.
+These actions are done by consulting the UNIX environment,
+and the value of $icl'database\_info$.
+
+\subsection{Program {\tt hol}}
+=DUMP hol
+#! /bin/sh
+#	hol   From: $Id$ %Z%
+#
+# Shell script to start an ProofPower-HOL session
+PROGNAME=hol
+USAGE="$PROGNAME [-d database[#theoryname]] [-i files] [-f files [-n|-s] [-v]] [-- ml_flags]"
+export PROGNAME USAGE
+pp -d hol $*
+=TEX
+\subsection{Program {\tt zed}}
+=DUMP zed
+#! /bin/sh
+#	zed   From: $Id$ %Z%
+#
+# Shell script to start an ProofPower-Z session
+PROGNAME=zed
+USAGE="$PROGNAME [-d database[#theoryname]] [-i files] [-f files [-n|-s] [-v]] [-- ml_flags]"
+export PROGNAME USAGE
+pp -d zed $*
+=TEX
+\subsection{Program {\tt pp}}
+=DUMP pp
+#! /bin/sh
+#	pp   From: $Id$ %Z%
+#
+# Shell script to start an ProofPower session
+
+if test -z "$PROGNAME"
+then
+	PROGNAME=`basename $0`
+	USAGE=\
+"$PROGNAME -d database[#theoryname] [-i files] [-f files [-n|-s] [-v]] [-- ml_flags]"
+fi
+USAGEMSG="usage: $USAGE"
+ARCH=`arch`
+BATCH=""
+DBN=""
+FILES=""
+INITS=""
+MLFLAGS=""
+NFLAG=""
+VERBOSE="false"
+SFLAG=""
+SAVE_ON_SUCCESS="true"
+SAVE_ON_FAIL="false"
+=TEX
+
+Process arguments
+
+=DUMPMORE pp
+while getopts d:i:f:nsv arg
+do
+	case $arg in
+	d)	DBN=$OPTARG ;;
+	i)	INITS="$INITS,$OPTARG" ;;
+	f)	BATCH="y"
+		FILES="$FILES,$OPTARG" ;;
+	n)	NFLAG="y"
+		if test -n "$SFLAG"
+		then
+			SFLAG=""
+			echo "$PROGNAME: warning: -s flag ignored" >&2
+		fi ;;
+	s)	if test -z "$NFLAG"
+		then
+			SFLAG="y"
+		else
+			SFLAG=""
+			echo "$PROGNAME: warning: -s flag ignored" >&2
+		fi ;;
+	v)	VERBOSE="true" ;;
+	esac
+done
+shift `expr $OPTIND - 1`
+MLFLAGS=$*
+
+if test -z "$BATCH"
+then
+	if test -n "$NFLAG" -or -n "$SFLAG"
+	then
+		echo "the flags -n and -s are only meaningful with the -f flag" >&2
+		echo $USAGEMSG >&2
+		exit 1
+	fi
+	if test  "$VERBOSE" = "true"
+	then
+		echo "the flag -v is only meaningful with the -f flag" >&2
+		echo $USAGEMSG >&2
+		exit 1
+	fi
+fi
+=TEX
+
+Make sure we have a database name:
+
+=DUMPMORE pp
+if test -z "$DBN"
+then
+	echo $USAGEMSG >&2
+	exit 1
+fi
+=TEX
+
+Get the basename and directory path:
+
+=DUMPMORE pp
+DATABASE=`echo $DBN|sed -e "s/#.*//"` >&2
+if test `basename $DATABASE` = $DATABASE
+then
+	DDATABASE=""
+	BDATABASE=`basename $DATABASE`
+else
+	DDATABASE=`dirname $DATABASE`"/"
+	BDATABASE=`basename $DATABASE`
+fi
+=TEX
+
+Test for correct suffix, or none at all:
+
+=DUMPMORE pp
+NOSUFFIX_BASENAME=`echo $BDATABASE | sed -e "s/\..*//"`
+if test $NOSUFFIX_BASENAME = `basename $BDATABASE .sparc-solaris`
+then
+	BDATABASE=$NOSUFFIX_BASENAME
+else
+	echo $PROGNAME": database $DATABASE has suffix other than .sparc-solaris" >&2
+	exit 1
+fi
+=TEX
+
+Extract current theory name:
+
+=DUMPMORE pp
+hol_current_theory=`echo $DBN| grep "#" | sed -e "s/.*#//"`
+export hol_current_theory
+hol_initialisation_scripts=$INITS
+export hol_initialisation_scripts
+=TEX
+
+Find a database:
+
+=DUMPMORE pp
+if   findfile $DDATABASE$BDATABASE.sparc-solaris $PATH > /dev/null
+then
+	DATABASEFN=`findfile $DDATABASE$BDATABASE.sparc-solaris $PATH`
+else
+	echo $PROGNAME": database $BDATABASE not found" >&2
+	exit 1
+fi
+if test -r $DATABASEFN
+then
+	:
+else
+	echo $PROGNAME": database $DATABASE not readable" >&2
+	exit 1
+fi
+=TEX
+
+Get an absolute pathname
+
+=DUMPMORE pp
+PWD=`pwd | sed -e 's/\\//\\\\\\//g'`
+DATABASEFN=`echo $DATABASEFN | sed -e "s/^\.\///" -e "s/^[^/]/$PWD\/&/"`
+=TEX
+
+Get an initialisation error file:
+
+=DUMPMORE pp
+hol_initialisation_error_file=/tmp/hol_initialisation_error_file.$$
+'rm' -f $hol_initialisation_error_file
+export hol_initialisation_error_file
+=TEX
+
+trap resetting on normal exit (0) and others.
+From this point on need to set $exit\_status$ rather than use $exit$ command.
+=DUMPMORE pp
+exit_status=1
+trap "'rm' -f $hol_initialisation_error_file ; \
+	exit \$exit_status" 0
+trap "'rm' -f $hol_initialisation_error_file ; \
+	exit 1" 1 3 15
+touch $hol_initialisation_error_file
+if test "$NFLAG" = "y"
+then
+	SAVE_ON_SUCCESS="false"
+else	if test "$SFLAG" = "y"
+	then
+		SAVE_ON_FAIL="true"
+	fi
+fi
+#
+#
+=TEX
+Process the file names to produce a comma-separated list for poly.
+=DUMPMORE pp
+OLDIFS=$IFS
+IFS=,
+PROGR_FLAG=
+for I in $FILES
+do
+	if [ -z "$PROGR_FLAG" ]
+	then
+		PROGR_FLAG="y"
+		QUOTED_NAMES="\"$I\""
+	else
+		QUOTED_NAMES=$QUOTED_NAMES,"\"$I\""
+	fi
+done
+IFS=$OLDIFS
+=TEX
+
+Run the session:
+=DUMPMORE pp
+if test -n "$BATCH"
+then
+	trap "'rm' -f $hol_initialisation_error_file ; \
+		exit 1" 2
+	COMMAND=" \
+	  let \
+	    val reset_quiet = set_flag(\"subgoal_package_quiet\","$VERBOSE") \
+					handle Fail _ => false; \
+	    val ok = HOLSystem.load_files ["$QUOTED_NAMES"]; \
+	    val dummy = set_flag(\"subgoal_package_quiet\", reset_quiet) \
+					handle Fail _ => false; \
+	  in \
+		if ok \
+		then	if "$SAVE_ON_SUCCESS" \
+			then	save_and_exit 0 \
+			else	exit 0 \
+		else	if "$SAVE_ON_FAIL" \
+			then	save_and_exit 1 \
+			else	exit 1 \
+	  end;"
+	echo $COMMAND | sml $MLFLAGS @SMLload=$DATABASEFN 2>&1
+	EXIT_STATUS=$?
+else
+	sml $MLFLAGS @SMLload=$DATABASEFN
+	EXIT_STATUS=$?
+fi
+#
+=TEX
+
+Check that the program exited with status 0:
+=DUMPMORE pp
+if test $EXIT_STATUS -ne 0
+then
+	echo "$PROGNAME :\"sml @SMLload=$DATABASEFN\" exited with status $EXIT_STATUS" >&2
+	exit_status=1
+	exit 1
+fi
+=TEX
+
+Check that there were no initialisation errors:
+=DUMPMORE pp
+if test -s $hol_initialisation_error_file
+then
+	echo "$PROGNAME: initialisation of session" >&2
+	. $hol_initialisation_error_file
+	exit_status=1
+	exit 1
+fi
+=TEX
+Clean exit:
+=DUMPMORE pp
+exit_status=0
+=TEX
+
+=TEX
+Now make the programs executable
+=SH
+chmod +x hol zed pp
+=TEX
+\section{CHILD DATABASES}
+\subsection{Program {\tt pp\_make\_database}}
+In outline this program should in order:
+\begin{enumerate}
+\item
+Do initial argument proccessing;
+\item
+Find the parent database file name;
+\item
+Determine the new database's filename and actual name;
+\item
+Run poly on the parent database,
+\item
+Try to see whether 
+=GFTSHOW
+icl'Kernel.icl'new_hierarchy();
+=TEX
+succeeds.
+If not,
+freeze the theory hierarchy.
+=GFTSHOW
+icl'Kernel.icl'freeze_hierarchy();
+=TEX
+\item
+Make a child database, with the selected new file name.
+=GFTSHOW
+PolyML.make_database name;
+\item
+Save and quit the Poly/ML session.
+\item
+Start a Poly/ML session on the child database
+\item
+Restore reader/writer and pretty printer by:
+=GFTSHOW
+abandon_reader_writer() handle _ => ();
+use_terminal();
+PrettyPrinter.pp_init();
+BasicError.icl'error_init();
+Initialisation.init();
+=TEX
+\item
+Create a new theory hierarchy, binding it appropriately:
+=GFTSHOW
+val icl'theory_hierarchy = Value (icl'Kernel.icl'new_hierarchy ());
+=TEX
+\item
+Load that hierarchy.
+\item
+Open the selected parent theory and then create
+a new theory.
+=GFTSHOW
+open_theory <pttheory>;
+new_theory <cttheory>;
+=TEX
+\item
+Save and quit.
+=GFTSHOW
+save_and_quit();
+=TEX
+
+\end{enumerate}
+If the process fails part way through delete the child database.
+=DUMP pp_make_database
+#! /bin/sh
+#	pp_make_database   From: $Id$ %Z%
+#
+# Shell script to create an ProofPower child database
+
+PROGNAME=`basename $0`
+USAGE="$PROGNAME [-f] [-p parentdatabase[#parenttheoryname]] newdatabase[#cachetheory]"
+USAGEMSG="$PROGNAME: usage: $USAGE"
+ARCH=`arch`
+LOGFILE=/tmp/pp_make_database.log.$
+=TEX
+Process arguments
+=DUMPMORE pp_make_database
+
+PARENT="pp_hol"
+FORCE=1
+while true
+do
+	case $1 in
+	-p)		PARENT="$2"	; shift ; shift	;;
+	-f)		FORCE=0		; shift ;;
+	-*)		echo "Bad flag for $PROGNAME: $1" >&2
+			echo $USAGEMSG >&2
+								  exit 1 ;;
+	*)							  break ;;
+	esac
+done
+=TEX
+Test that there is a child database name
+=DUMPMORE pp_make_database
+if test $# -ne 1
+then
+	echo $USAGEMSG >&2
+	exit 1
+fi
+
+NEWDB=$1
+PDATABASE=`echo $PARENT|sed -e "s/#.*//"`
+if test `basename $PDATABASE` = $PDATABASE
+then
+	PDDATABASE=""
+	PBDATABASE=`basename $PDATABASE`
+else
+	PDDATABASE=`dirname $PDATABASE`"/"
+	PBDATABASE=`basename $PDATABASE`
+fi
+
+hol_current_theory=`echo $PARENT| grep "#" | sed -e "s/.*#//"`
+CDATABASE=`echo $NEWDB|sed -e "s/#.*//"`
+
+export hol_current_theory
+
+=TEX
+Test the nature of the child database name:
+=DUMPMORE pp_make_database
+
+if test ! `basename $CDATABASE` = $CDATABASE
+then
+	echo "$PROGNAME: $CDATABASE may not begin with a directory path" 
+	exit 1
+fi
+if test ! `echo $CDATABASE | sed -e "s/\..*//"` = $CDATABASE
+then
+	echo "$PROGNAME: $CDATABASE may not have a suffix" 
+	exit 1
+fi
+
+CCACHE=`echo $NEWDB| grep "#" | sed -e "s/.*#//"`
+if test ""$CCACHE = ""
+then	CCACHE="cache'"$CDATABASE
+fi
+if test ""$CCACHE = ""
+then	
+	echo "$PROGNAME: No name for new cache theory"
+	exit 1
+fi
+=TEX
+Test for correct suffix of parent database, or none at all:
+=DUMPMORE pp_make_database
+NOSUFFIX_BASENAME=`echo $PBDATABASE | sed -e "s/\..*//"`
+if test $NOSUFFIX_BASENAME = `basename $PBDATABASE .db`
+then
+	PBDATABASE=$NOSUFFIX_BASENAME
+else
+	echo $PROGNAME": $PDATABASE has suffix other than .db"
+	exit 1
+fi	
+=TEX
+Check that the parent database name doesn't start with a known, incorrect, architecture name:
+=DUMPMORE pp_make_database
+PDATABASENM=`echo $PBDATABASE | sed -e 's/^'$ARCH'//'`
+for anarch in sun3 sun4 
+do 	if echo $PDATABASENM | grep '^'$anarch >/dev/null
+	then echo "$PDATABASE starts with incorrect architecture name" 
+		exit 1
+	fi 
+done
+=TEX
+Find a parent database:
+=DUMPMORE pp_make_database
+if   findfile $PDDATABASE$PDATABASENM.sparc-solaris $PATH > /dev/null
+then
+	PDATABASEFN=`findfile $PDDATABASE$PDATABASENM.sparc-solaris $PATH`
+else
+	echo "$PROGNAME: $PDATABASE not found"
+	exit 1
+fi
+=TEX
+=DUMPMORE pp_make_database
+if test -r $PDATABASEFN
+then
+	:
+else
+	echo $PROGNAME": $PDATABASE not readable"
+	exit 1
+fi
+=TEX
+Get an absolute pathname
+=DUMPMORE pp_make_database
+PWD=`pwd | sed -e 's/\\//\\\\\\//g'`
+PDATABASEFN=`echo $PDATABASEFN | sed -e "s/^\.\///" -e "s/^[^/]/$PWD\/&/"`
+=TEX
+Delete the child database file, if it exists:
+=DUMPMORE pp_make_database
+CHILDDB=$CDATABASE.sparc-solaris
+if test -s $CHILDDB
+then 	if test $FORCE = 0
+	then 'rm' $CHILDDB
+	else 'rm' -i $CHILDDB
+	fi
+fi
+if test -s $CHILDDB
+then	
+	echo "$PROGNAME: Chose not to delete pre-existing child database, so quit"
+	exit 1
+fi
+=TEX
+Get an initialisation error file:
+=DUMPMORE pp_make_database
+hol_initialisation_error_file=/tmp/hol_initialisation_error_file.$$
+'rm' -f $hol_initialisation_error_file
+export hol_initialisation_error_file
+=TEX
+Delete the child database if anything goes wrong,
+always delete the initialisation error file.
+From now on must set $exit\_status$ rather than use $exit$ command.
+=DUMPMORE pp_make_database
+exit_status=1
+
+trap "'rm' -f $hol_initialisation_error_file; \
+	'rm' -f $LOGFILE; \
+	exit \$exit_status" 0
+trap "'rm' -f $CHILDDB; 
+	'rm' -f $LOGFILE; \
+	'rm' -f $hol_initialisation_error_file; \
+	exit 1" 1 2 3 15
+
+touch $hol_initialisation_error_file
+=TEX
+Assign to a variable whether the database is writeable
+=DUMPMORE pp_make_database
+if test -w $PDATABASEFN
+then 
+	PARENTWRITEABLE="true"
+else
+	PARENTWRITEABLE="false"
+fi
+=TEX
+Run the parent session:
+=DUMPMORE pp_make_database
+
+sml @SMLload=$PDATABASEFN > $LOGFILE << smlcommands1
+=TEX
+Now the actual commands to the session:
+
+First a few sanity checks - quoted parent theories must
+exist, and the new cache theory name must niether be ``''
+nor currently exist.
+=DUMPMORE pp_make_database
+if "$hol_current_theory"<>""
+then (open_theory "$hol_current_theory"
+	handle _ =>
+	(diag_string ("cannot open parent theory"^"$hol_current_theory");
+	PPCompiler.exit 0))
+else ();
+
+(
+	open_theory "$CCACHE";
+	diag_string "New cache theory exists in parent database";
+	PPCompiler.exit 0
+)
+handle _ => ();
+=TEX
+Since matters are reasonably sane, carry on with the desired
+commands.
+We only need to save the database if we needs to freeze the
+hierarchy.
+=DUMPMORE pp_make_database
+val saveit = ref false;
+((icl'Kernel.icl'new_hierarchy() ; ())
+handle (Fail _) =>
+((icl'Kernel.icl'freeze_hierarchy();saveit := true)
+handle (Fail _) => 
+(diag_string "pp_make_database: Need to freeze parent dababase hierarchy, but cannot";
+PPCompiler.exit 0;())));
+
+if (!saveit) andalso not($PARENTWRITEABLE)
+then (diag_string ("pp_make_database: Need to freeze" ^
+	"and save parent database hierarchy," ^
+	"but cannot write to database");
+	PPCompiler.exit 0;())
+else ();
+PPBuild.pp'save_name := "$CHILDDB";
+(PPBuild.pp'save(); ()) 
+handle _ =>
+(diag_string ("pp_make_database: unable to make child database" );
+	PPCompiler.exit 0;());
+
+if (!saveit)
+then save_and_quit()
+else quit();
+
+smlcommands1
+# end of commands to parent database
+=TEX
+Check that the program exited with status 0:
+=DUMPMORE pp_make_database
+EXIT_STATUS=$?
+if test $EXIT_STATUS -ne 0
+then
+	cat $LOGFILE
+	echo "$PROGNAME: creation of child database" >&2
+	echo "\"sml @SMLload=$PDATABASEFN\" exited with status $EXIT_STATUS" >&2
+	exit_status=1
+	exit 1
+fi
+=TEX
+Check that there were no initialisation errors:
+=DUMPMORE pp_make_database
+if test -s $hol_initialisation_error_file
+then
+	cat $LOGFILE
+	echo "$PROGNAME: creation of child database" >&2
+	. $hol_initialisation_error_file
+fi
+=TEX
+Quit if the child database has not been made
+=DUMPMORE pp_make_database
+if test -r $CHILDDB
+then
+	echo "$PROGNAME: parent database $PDATABASEFN now has a frozen theory hierarchy" >&2
+else
+	cat $LOGFILE
+	echo "$PROGNAME: Unable to create child database" >&2
+	exit_status=1
+	exit 1
+fi
+=TEX
+The setting of $hol\_current\_theory$ remains the same.
+
+Start a Poly/ML session on the child database
+=DUMPMORE pp_make_database
+sml @SMLload=`pwd`/$CHILDDB >> $LOGFILE << smlcommands2
+=TEX
+The actual commands:
+=DUMPMORE pp_make_database
+abandon_reader_writer() handle _ => ();
+use_terminal();
+PrettyPrinter.pp_init();
+BasicError.icl'error_init();
+Initialisation.init();
+val icl'theory_hierarchy = Value (icl'Kernel.icl'new_hierarchy ());
+
+icl'Kernel.icl'load_hierarchy (force_value icl'theory_hierarchy);
+=TEX
+The desired parent theory is already open (if possible):
+=DUMPMORE pp_make_database
+new_theory "$CCACHE";
+set_cache_theories ("$CCACHE" :: get_cache_theories());
+save_and_quit();
+
+smlcommands2
+# end of commands to child database
+=TEX
+Check that the program exited with status 0:
+=DUMPMORE pp_make_database
+EXIT_STATUS=$?
+if test $EXIT_STATUS -ne 0
+then
+	cat $LOGFILE
+	echo "$PROGNAME: initialisation of child database" >&2
+	echo "\"sml\" exited with status $EXIT_STATUS" >&2
+	exit_status=1
+	exit 1
+fi
+=TEX
+Check that there were no initialisation errors:
+=DUMPMORE pp_make_database
+if test -s $hol_initialisation_error_file
+then
+	cat $LOGFILE
+	echo "$PROGNAME: initialisation of child database" >&2
+	. $hol_initialisation_error_file
+	exit_status=1
+	exit 1
+fi
+=TEX
+Clean exit:
+=DUMPMORE pp_make_database
+echo "Child database $CHILDDB created and initialised" >&2
+exit_status=0
+=TEX
+Now make this executable
+=SH
+chmod +x pp_make_database
+=TEX
+\section{THEORY LISTINGS}
+\subsection{Program {\tt hol\_list}}
+In outline this program should in order:
+\begin{enumerate}
+\item
+Do initial argument proccessing;
+\item
+Find a database;
+\item
+Enable the list of theory names to be accessed, or equivalent
+for other arguments to {\tt hol\_list}.
+\item
+Run {\tt poly} on the database.
+\item
+Print out desired information.
+\end{enumerate}
+The program relies on the start of session initialisation
+routines of \cite{DS/FMU/IED/DTD036} to set the line length,
+load up the theory hierarchy,
+set the current theory,
+and read in the named scripts,
+before returning control to the user.
+These actions are done by consulting the UNIX environment,
+and the value of $icl'database\_info$.
+
+Actually setting the line length is currently worthless
+because $output\_theory$ assumes a fixed line length of an A4 page of \LaTeX.
+=DUMP hol_list
+#! /bin/sh
+#	hol_list   From: $Id$ %Z%
+#
+# Shell script to list HOL theories
+PROGNAME=`basename $0`
+USAGE="$PROGNAME [-i script] [-d database[#theory]] [-c] [-a | theory ...]"
+USAGEMSG="$PROGNAME: usage: $USAGE"
+ARCH=`arch`
+=TEX
+Process arguments
+=DUMPMORE hol_list
+
+hol_initialisation_scripts=""
+DBN="hol"
+ALL=1
+print_caches="no"
+verbose="no"
+while true
+do
+	case $1 in
+	-a)	ALL=0 ; shift ;;
+	-c)	print_caches="yes" ; shift ;;
+	-d)	DBN="$2"; shift ; shift	;;
+	-i)	hol_initialisation_scripts="$hol_initialisation_scripts,$2"	; shift ; shift	;;
+	-v)	verbose="yes" ; shift ;;
+	-*)	echo "Bad flag for $PROGNAME: $1" >&2;
+		echo $USAGEMSG >&2 >&2;
+		exit 1 ;;
+	*)							  break ;;
+	esac
+done
+export hol_initialisation_scripts
+=TEX
+Make sure that, if necessary, the arguments have been used up:
+=DUMPMORE hol_list
+if test $ALL -eq 0
+then
+	if test $# -ne 0
+	then
+		echo $USAGEMSG >&2
+		exit 1
+	fi
+fi
+DATABASE=`echo $DBN|sed -e "s/#.*//"`
+if test `basename $DATABASE` = $DATABASE
+then
+	DDATABASE=""
+	BDATABASE=`basename $DATABASE`
+else
+	DDATABASE=`dirname $DATABASE`"/"
+	BDATABASE=`basename $DATABASE`
+fi
+hol_current_theory=`echo $DBN| grep "#" | sed -e "s/.*#//"`
+export hol_current_theory
+=TEX
+Test for correct suffix, or none at all:
+=DUMPMORE hol_list
+NOSUFFIX_BASENAME=`echo $BDATABASE | sed -e "s/\..*//"`
+if test $NOSUFFIX_BASENAME = `basename $BDATABASE .db`
+then
+	BDATABASE=$NOSUFFIX_BASENAME
+else
+	echo $PROGNAME": database $DATABASE has suffix other than .db" >&2
+	exit 1
+fi	
+=TEX
+Check that the database name doesn't start with a known, incorrect, architecture name:
+=DUMPMORE hol_list
+DATABASENM=`echo $BDATABASE | sed -e 's/^'$ARCH'//'`
+for anarch in sun3 sun4 
+do 	if echo $DATABASENM | grep '^'$anarch >/dev/null
+	then echo "$DATABASE starts with incorrect architecture name"  >&2
+		exit 1
+	fi 
+done
+=TEX
+Find a database:
+=DUMPMORE hol_list
+if   findfile $DDATABASE$DATABASENM.sparc-solaris $PATH > /dev/null
+then
+	DATABASEFN=`findfile $DDATABASE$ARCH$DATABASENM.db $PATH`
+else
+	echo "$PROGNAME: database $DATABASE not found" >&2
+	exit 1
+fi
+=TEX
+=DUMPMORE hol_list
+if test -r $DATABASEFN
+then
+	:
+else
+	echo $PROGNAME": database $DATABASE not readable" >&2
+	exit 1
+fi
+=TEX
+Check that the database name doesn't start with a known architecture name:
+=DUMPMORE hol_list
+for anarch in sun3 sun4 
+do 	if echo $DATABASENM | grep '^'$anarch >/dev/null
+	then echo "$PROGNAME: $DATABASE starts with incorrect architecture name" >&2 
+		exit 1
+	fi 
+done
+=TEX
+Get an absolute pathname
+=DUMPMORE hol_list
+PWD=`pwd | sed -e 's/\\//\\\\\\//g'`
+DATABASEFN=`echo $DATABASEFN | sed -e "s/^\.\///" -e "s/^[^/]/$PWD\/&/"`
+=TEX
+Get the list of files to print:
+=DUMPMORE hol_list
+if test $ALL -eq 0
+then
+	hol_print_theories=""
+elif test $# -eq 0
+then hol_print_theories="just names,"
+else hol_print_theories=""
+fi
+while test $# -ne 0
+do
+	hol_print_theories=$hol_print_theories","$1 ; shift
+done
+export hol_print_theories
+=TEX
+Allow $poly$ to work out whether we want to print caches:
+=DUMPMORE hol_list
+export print_caches
+=TEX	
+
+=TEX
+Get an initialisation error file:
+=DUMPMORE hol_list
+hol_initialisation_error_file=/tmp/hol_initialisation_error_file.$$
+'rm' -f $hol_initialisation_error_file
+export hol_initialisation_error_file
+=TEX
+From now on must set $exit\_status$ rather than use $exit$ command.
+=DUMPMORE hol_list
+exit_status=1
+
+TEMP_FILE=/tmp/`basename $0`.$$
+trap "'rm' -f $TEMP_FILE; \
+	'rm' -f $hol_initialisation_error_file;
+	exit \$exit_status" 0
+trap "'rm' -f $TEMP_FILE; \
+	'rm' -f $hol_initialisation_error_file;
+	exit 1" 1 2 3 15
+touch $hol_initialisation_error_file
+=TEX
+Run the session:
+=DUMPMORE hol_list
+
+poly $DATABASEFN > $TEMP_FILE  << smlcommands3
+=TEX
+The commands:
+=DUMPMORE hol_list
+let
+open ListerSupport;
+val {print = bprint_cache, out = boutput_cache, out1 = boutput_cache1} =
+	gen_theory_lister
+	[LSBanner, LSParents, LSChildren, 
+	LSADSection (fn nm => "Notes"),
+	LSADString(fn nm => ([],"This theory is a cache theory; its contents have not been listed.")),
+	LSTrailer];
+val print_cache = bprint_cache (fn nm => get_error_message 33031 [nm]);
+val output_cache = boutput_cache (fn nm => get_error_message 33031 [nm]);
+val output_cache1 = boutput_cache1 (fn nm => get_error_message 33031 [nm]);
+val print_caches = get_shell_var "print_caches";
+val caches = get_cache_theories();
+
+fun output_a_theory thnm = (
+	open_theory thnm
+	handle _ => open_theory (#theory icl'database_info);
+	(if print_caches = "yes" orelse not(thnm mem caches)
+	then
+		output_theory {theory = thnm, out_file = ""}
+	else
+		output_cache {theory = thnm, out_file = ""})
+	handle complaint => (diag_line "";
+	pass_on complaint "output_theory" "hol_list")
+);
+
+fun aux acc [] = (if is_nil acc
+		then ()
+		else (output_a_theory (implode(rev acc)))
+) | aux acc ("," :: rest) = ((if is_nil acc
+		then ()
+		else (output_a_theory (implode(rev acc))));
+			aux [] rest
+)| aux acc (a :: x) = aux (a :: acc) x;
+val hol_theories = Sort.sort Sort.string_order 
+	(filter (fn nm => get_language nm = "HOL") 
+	(get_descendants "min"));
+val to_print = get_shell_var "hol_print_theories";
+in
+(diag_line "START_OF_LISTING"; 
+(case to_print of
+	"" => (map output_a_theory hol_theories; ())
+	| "just names," =>
+		(map diag_line hol_theories; ()) 
+	| _ => aux [] (explode to_print));
+diag_line "END_OF_LISTING")
+end;
+quit();
+=TEX
+After the commands - only output listing material:
+=DUMPMORE hol_list
+smlcommands3
+=TEX
+Check that the program exited with status 0:
+=DUMPMORE hol_list
+EXIT_STATUS=$?
+if test $EXIT_STATUS -ne 0
+then
+	cat $TEMP_FILE
+	echo "$PROGNAME: \"poly $DATABASEFN\" exited with status $EXIT_STATUS" >&2
+	exit_status=1
+	exit 1
+fi
+=TEX
+Check that there were no initialisation errors:
+=DUMPMORE hol_list
+if test -s $hol_initialisation_error_file
+then
+	echo "$PROGNAME: initialisation of listing" >&2
+	. $hol_initialisation_error_file
+	exit_status=1
+	exit 1
+fi
+=TEX
+Otherwise print the relevant parts out:
+=DUMPMORE hol_list
+if grep START_OF_LISTING $TEMP_FILE > /dev/null
+then if grep END_OF_LISTING $TEMP_FILE > /dev/null
+then
+	if test $verbose = "yes"
+	then
+		cat $TEMP_FILE >&2
+	else
+		sed -e '1,/START_OF_LISTING/ d' \
+		-e '/END_OF_LISTING/,$ d' \
+		-e '/val it = () : unit/d' < $TEMP_FILE
+	fi
+else
+	cat $TEMP_FILE >&2
+	echo >&2
+	echo "$PROGNAME: exited with ill-formed listing" >&2
+	exit_status=1
+	exit 1
+fi
+else
+	cat $TEMP_FILE >&2
+	echo >&2
+	echo "$PROGNAME: exited with ill-formed listing" >&2
+	exit_status=1
+	exit 1
+fi
+
+=TEX
+Clean exit:
+=DUMPMORE hol_list
+exit_status=0
+=TEX
+Now make this executable
+=SH
+chmod +x hol_list
+=TEX
+\subsection{Program {\tt zed\_list}}
+=DUMP zed_list
+#! /bin/sh
+#	zed_list   From: $Id$ %Z%
+#
+# Shell script to list Z theories
+PROGNAME=`basename $0`
+USAGE="$PROGNAME [-c] [-d database[#theory]] [-i script] [-v] [-a | theory ...]"
+USAGEMSG="$PROGNAME: usage: $USAGE"
+ARCH=`arch`
+=TEX
+Process arguments
+=DUMPMORE zed_list
+
+hol_initialisation_scripts=""
+DBN="zed"
+ALL=1
+print_caches="no"
+verbose="no"
+while true
+do
+	case $1 in
+	-a)	ALL=0 ; shift ;;
+	-c)	print_caches="yes" ; shift ;;
+	-d)	DBN="$2" ; shift ; shift ;;
+	-i)	hol_initialisation_scripts="$hol_initialisation_scripts,$2"	; shift ; shift	;;
+	-v)	verbose="yes"; shift ;;
+	-*)	echo "Bad flag for $PROGNAME: $1" >&2;
+		echo $USAGEMSG >&2;
+		exit 1 ;;
+	*)							  break ;;
+	esac
+done
+export hol_initialisation_scripts
+=TEX
+Make sure that, if necessary, the arguments have been used up:
+=DUMPMORE zed_list
+if test $ALL -eq 0
+then
+	if test $# -ne 0
+	then
+		echo $USAGEMSG >&2
+		exit 1
+	fi
+fi
+DATABASE=`echo $DBN|sed -e "s/#.*//"`
+if test `basename $DATABASE` = $DATABASE
+then
+	DDATABASE=""
+	BDATABASE=`basename $DATABASE`
+else
+	DDATABASE=`dirname $DATABASE`"/"
+	BDATABASE=`basename $DATABASE`
+fi
+hol_current_theory=`echo $DBN| grep "#" | sed -e "s/.*#//"`
+export hol_current_theory
+=TEX
+Test for correct suffix, or none at all:
+=DUMPMORE zed_list
+NOSUFFIX_BASENAME=`echo $BDATABASE | sed -e "s/\..*//"`
+if test $NOSUFFIX_BASENAME = `basename $BDATABASE .db`
+then
+	BDATABASE=$NOSUFFIX_BASENAME
+else
+	echo $PROGNAME": database $DATABASE has suffix other than .db" >&2
+	exit 1
+fi	
+=TEX
+Check that the database name doesn't start with a known, incorrect, architecture name:
+=DUMPMORE zed_list
+DATABASENM=`echo $BDATABASE | sed -e 's/^'$ARCH'//'`
+for anarch in sun3 sun4 
+do 	if echo $DATABASENM | grep '^'$anarch >/dev/null
+	then echo "$DATABASE starts with incorrect architecture name"  >&2
+		exit 1
+	fi 
+done
+=TEX
+Find a database:
+=DUMPMORE zed_list
+if   findfile $DDATABASE$DATABASENM.sparc-solaris $PATH > /dev/null
+then
+	DATABASEFN=`findfile $DDATABASE$ARCH$DATABASENM.db $PATH`
+else
+	echo "$PROGNAME: database $DATABASE not found" >&2
+	exit 1
+fi
+=TEX
+=DUMPMORE zed_list
+if test -r $DATABASEFN
+then
+	:
+else
+	echo $PROGNAME": database $DATABASE not readable" >&2
+	exit 1
+fi
+=TEX
+Check that the database name doesn't start with a known architecture name:
+=DUMPMORE zed_list
+for anarch in sun3 sun4 
+do 	if echo $DATABASENM | grep '^'$anarch >/dev/null
+	then echo "$PROGNAME: $DATABASE starts with incorrect architecture name"  >&2
+		exit 1
+	fi 
+done
+=TEX
+Get an absolute pathname
+=DUMPMORE zed_list
+PWD=`pwd | sed -e 's/\\//\\\\\\//g'`
+DATABASEFN=`echo $DATABASEFN | sed -e "s/^\.\///" -e "s/^[^/]/$PWD\/&/"`
+=TEX
+Get the list of files to print:
+=DUMPMORE zed_list
+if test $ALL -eq 0
+then
+	zed_print_theories=""
+elif test $# -eq 0
+then zed_print_theories="just names,"
+else zed_print_theories=""
+fi
+while test $# -ne 0
+do
+	zed_print_theories=$zed_print_theories","$1 ; shift
+done
+export zed_print_theories
+=TEX
+Allow $poly$ to work out whether we want to print caches:
+=DUMPMORE zed_list
+export print_caches
+=TEX	
+
+=TEX
+Get an initialisation error file:
+=DUMPMORE zed_list
+hol_initialisation_error_file=/tmp/hol_initialisation_error_file.$$
+'rm' -f $hol_initialisation_error_file
+export hol_initialisation_error_file
+=TEX
+From now on must set $exit\_status$ rather than use $exit$ command.
+=DUMPMORE zed_list
+exit_status=1
+
+TEMP_FILE=/tmp/`basename $0`.$$
+trap "'rm' -f $TEMP_FILE; \
+	'rm' -f $hol_initialisation_error_file;
+	exit \$exit_status" 0
+trap "'rm' -f $TEMP_FILE; \
+	'rm' -f $hol_initialisation_error_file;
+	exit 1" 1 2 3 15
+touch $hol_initialisation_error_file
+=TEX
+Run the session:
+=DUMPMORE zed_list
+
+poly $DATABASEFN > $TEMP_FILE  << smlcommands3
+=TEX
+The commands:
+=DUMPMORE zed_list
+let
+open ListerSupport;
+val {print = bprint_cache, out = boutput_cache, out1 = boutput_cache1} =
+	gen_theory_lister
+	[LSBanner, LSParents, LSChildren, 
+	LSADSection (fn nm => "Notes"),
+	LSADString(fn nm => ([],"This theory is a cache theory; its contents have not been listed.")),
+	LSTrailer];
+val print_cache = bprint_cache (fn nm => get_error_message 65002 [nm]);
+val output_cache = boutput_cache (fn nm => get_error_message 65001 [nm]);
+val output_cache1 = boutput_cache1 (fn nm => get_error_message 65001 [nm]);
+val print_caches = get_shell_var "print_caches";
+val caches = get_cache_theories();
+
+fun output_a_theory thnm = (
+	open_theory thnm
+	handle _ => open_theory (#theory icl'database_info);
+	(if print_caches = "yes" orelse not(thnm mem caches)
+	then
+		z_output_theory {theory = thnm, out_file = ""}
+	else
+		output_cache {theory = thnm, out_file = ""}
+	)
+	handle complaint => (diag_line "";
+	pass_on complaint "output_theory" "zed_list")
+);
+
+fun aux acc [] = (if is_nil acc
+		then ()
+		else (output_a_theory (implode(rev acc)))
+) | aux acc ("," :: rest) = ((if is_nil acc
+		then ()
+		else (output_a_theory (implode(rev acc))));
+			aux [] rest
+)| aux acc (a :: x) = aux (a :: acc) x;
+val zed_theories = Sort.sort Sort.string_order 
+	(filter (fn nm => get_language nm = "Z") 
+	(get_descendants "min"));
+val to_print = get_shell_var "zed_print_theories";
+in
+(diag_line "START_OF_LISTING"; 
+(case to_print of
+	"" => (map output_a_theory zed_theories; ())
+	| "just names," =>
+		(map diag_line zed_theories; ()) 
+	| _ => aux [] (explode to_print));
+diag_line "END_OF_LISTING")
+end;
+quit();
+=TEX
+After the commands - only output listing material:
+=DUMPMORE zed_list
+smlcommands3
+=TEX
+Check that the program exited with status 0:
+=DUMPMORE zed_list
+EXIT_STATUS=$?
+if test $EXIT_STATUS -ne 0
+then
+	cat $TEMP_FILE
+	echo "$PROGNAME: \"poly $DATABASEFN\" exited with status $EXIT_STATUS" >&2
+	exit_status=1
+	exit 1
+fi
+=TEX
+Check that there were no initialisation errors:
+=DUMPMORE zed_list
+if test -s $hol_initialisation_error_file
+then
+	echo "$PROGNAME: initialisation of listing" >&2
+	. $hol_initialisation_error_file
+	exit_status=1
+	exit 1
+fi
+=TEX
+Otherwise print the relevant parts out:
+=DUMPMORE zed_list
+if grep START_OF_LISTING $TEMP_FILE > /dev/null
+then if grep END_OF_LISTING $TEMP_FILE > /dev/null
+then
+	if test $verbose = "yes"
+	then
+		cat $TEMP_FILE >&2
+	else
+		sed -e '1,/START_OF_LISTING/ d' \
+		-e '/END_OF_LISTING/,$ d' \
+		-e '/val it = () : unit/d' < $TEMP_FILE
+	fi
+else
+	cat $TEMP_FILE >&2
+	echo >&2
+	echo "$PROGNAME: exited with ill-formed listing" >&2
+	exit_status=1
+	exit 1
+fi
+else
+	cat $TEMP_FILE >&2
+	echo >&2
+	echo "$PROGNAME: exited with ill-formed listing" >&2
+	exit_status=1
+	exit 1
+fi
+
+=TEX
+Clean exit:
+=DUMPMORE zed_list
+exit_status=0
+=TEX
+Now make this executable
+=SH
+chmod +x zed_list
+=TEX
+
+\subsection{Program {\tt pp\_list}}
+=DUMP pp_list
+#! /bin/sh
+#	pp_list   From: $Id$ %Z%
+#
+# Shell script to list ProofPower theories
+PROGNAME=`basename $0`
+USAGE="$PROGNAME [-c] -d database[#theory] [-i script] [-l lang] [-v] [-a | theory ...]"
+USAGEMSG="$PROGNAME: usage: $USAGE"
+ARCH=`arch`
+=TEX
+Process arguments
+=DUMPMORE pp_list
+
+hol_initialisation_scripts=""
+DBN=""
+ALL=1
+print_caches="no"
+languages=""
+verbose="no"
+while true
+do
+	case $1 in
+	-a)	ALL=0 ; shift ;;
+	-c)	print_caches="yes" ; shift ;;
+	-d)	DBN="$2" ; shift ; shift ;;
+	-i)	hol_initialisation_scripts="$hol_initialisation_scripts,$2"	; shift ; shift	;;
+	-l)	languages="$languages$2," ; shift ; shift ;;
+	-v)	verbose="yes"; shift ;;
+	-*)	echo "Bad flag for $PROGNAME: $1" >&2;
+		echo $USAGEMSG >&2;
+		exit 1 ;;
+	*)							  break ;;
+	esac
+done
+if test "x$DBN" = "x"
+then
+	echo $USAGEMSG >&2
+	exit 1
+fi
+export hol_initialisation_scripts
+export languages
+=TEX
+Make sure that, if necessary, the arguments have been used up:
+=DUMPMORE pp_list
+if test $ALL -eq 0
+then
+	if test $# -ne 0
+	then
+		echo $USAGEMSG >&2
+		exit 1
+	fi
+fi
+DATABASE=`echo $DBN|sed -e "s/#.*//"`
+if test `basename $DATABASE` = $DATABASE
+then
+	DDATABASE=""
+	BDATABASE=`basename $DATABASE`
+else
+	DDATABASE=`dirname $DATABASE`"/"
+	BDATABASE=`basename $DATABASE`
+fi
+hol_current_theory=`echo $DBN| grep "#" | sed -e "s/.*#//"`
+export hol_current_theory
+=TEX
+Test for correct suffix, or none at all:
+=DUMPMORE pp_list
+NOSUFFIX_BASENAME=`echo $BDATABASE | sed -e "s/\..*//"`
+if test $NOSUFFIX_BASENAME = `basename $BDATABASE .db`
+then
+	BDATABASE=$NOSUFFIX_BASENAME
+else
+	echo $PROGNAME": database $DATABASE has suffix other than .db" >&2
+	exit 1
+fi	
+=TEX
+Check that the database name doesn't start with a known, incorrect, architecture name:
+=DUMPMORE pp_list
+DATABASENM=`echo $BDATABASE | sed -e 's/^'$ARCH'//'`
+for anarch in sun3 sun4 
+do 	if echo $DATABASENM | grep '^'$anarch >/dev/null
+	then echo "$DATABASE starts with incorrect architecture name"  >&2
+		exit 1
+	fi 
+done
+=TEX
+Find a database:
+=DUMPMORE pp_list
+if   findfile $DDATABASE$ARCH$DATABASENM.db $PATH > /dev/null
+then
+	DATABASEFN=`findfile $DDATABASE$ARCH$DATABASENM.db $PATH`
+else
+	echo "$PROGNAME: database $DATABASE not found" >&2
+	exit 1
+fi
+=TEX
+=DUMPMORE pp_list
+if test -r $DATABASEFN
+then
+	:
+else
+	echo $PROGNAME": database $DATABASE not readable" >&2
+	exit 1
+fi
+=TEX
+Check that the database name doesn't start with a known architecture name:
+=DUMPMORE pp_list
+for anarch in sun3 sun4 
+do 	if echo $DATABASENM | grep '^'$anarch >/dev/null
+	then echo "$PROGNAME: $DATABASE starts with incorrect architecture name" >&2 
+		exit 1
+	fi 
+done
+=TEX
+Get an absolute pathname
+=DUMPMORE pp_list
+PWD=`pwd | sed -e 's/\\//\\\\\\//g'`
+DATABASEFN=`echo $DATABASEFN | sed -e "s/^\.\///" -e "s/^[^/]/$PWD\/&/"`
+=TEX
+Get the list of files to print:
+=DUMPMORE pp_list
+if test $ALL -eq 0
+then
+	print_theories=""
+elif test $# -eq 0
+then print_theories="just names,"
+else print_theories=""
+fi
+while test $# -ne 0
+do
+	print_theories=$print_theories","$1 ; shift
+done
+export print_theories
+=TEX
+Allow $poly$ to work out whether we want to print caches:
+=DUMPMORE pp_list
+export print_caches
+=TEX	
+
+=TEX
+Get an initialisation error file:
+=DUMPMORE pp_list
+hol_initialisation_error_file=/tmp/hol_initialisation_error_file.$$
+'rm' -f $hol_initialisation_error_file
+export hol_initialisation_error_file
+=TEX
+From now on must set $exit\_status$ rather than use $exit$ command.
+=DUMPMORE pp_list
+exit_status=1
+
+TEMP_FILE=/tmp/`basename $0`.$$
+trap "'rm' -f $TEMP_FILE; \
+	'rm' -f $hol_initialisation_error_file;
+	exit \$exit_status" 0
+trap "'rm' -f $TEMP_FILE; \
+	'rm' -f $hol_initialisation_error_file;
+	exit 1" 1 2 3 15
+touch $hol_initialisation_error_file
+=TEX
+Run the session:
+=DUMPMORE pp_list
+
+poly $DATABASEFN > $TEMP_FILE  << smlcommands3
+=TEX
+The commands below set up printing for caches;
+setup printers for the various possible languages;
+=DUMPMORE pp_list
+local
+open ListerSupport;
+val {print = bprint_cache, out = boutput_cache, out1 = boutput_cache1} =
+	gen_theory_lister
+	[LSBanner, LSParents, LSChildren, 
+	LSADSection (fn nm => "Notes"),
+	LSADString(fn nm => ([],"This theory is a cache theory; its contents have not been listed.")),
+	LSTrailer];
+val print_cache = bprint_cache (fn nm => get_error_message 33031 [nm]);
+val output_cache1 = boutput_cache1 (fn nm => get_error_message 33031 [nm]);
+in
+val output_cache = boutput_cache (fn nm => get_error_message 33031 [nm]);
+end;
+local
+	val ordA = ord "A";
+	val ordZ = ord "Z";
+	val orda = ord "a";
+	val change = orda-ordA;
+fun lcase c = (
+	if ord c >= ordA andalso ord c <= ordZ
+	then chr (ord c + change)
+	else c
+);
+in
+val word_lcase = implode o map lcase o explode;
+end;
+
+local
+
+val languages_source = get_shell_var "languages";
+fun mk_languages acc [] = [implode (rev acc)]
+| mk_languages acc [","] = [implode(rev acc)]
+| mk_languages acc ("," :: x) = (implode(rev acc) :: mk_languages [] x)
+| mk_languages acc (a :: x) = mk_languages (a :: acc) x;
+in
+val languages = if languages_source = ""
+		then []
+		else mk_languages [] (explode languages_source);
+
+val language_procs = (("HOL","output_theory") :: 
+	map (fn lang =>
+	(use_string(word_lcase lang ^ "_output_theory;"); (lang,word_lcase lang ^ "_output_theory"))
+	handle _ =>
+	(lang,"output_theory"))
+	(((map get_language (get_descendants "min")) cup languages) less "HOL"));
+end;
+let
+val print_caches = get_shell_var "print_caches";
+val caches = get_cache_theories();
+
+fun output_lang_theory lang {theory = thnm, out_file = out_file} = (
+	(use_string( lassoc3 language_procs lang ^  
+		"{theory = \""^thnm^"\", out_file = \""^out_file^"\"};"))
+);
+
+fun output_a_theory thnm lang = (
+	open_theory thnm
+	handle _ => open_theory (#theory icl'database_info);
+	(if print_caches = "yes" orelse not(thnm mem caches)
+	then
+		output_lang_theory lang {theory = thnm, out_file = ""}
+	else
+		output_cache {theory = thnm, out_file = ""}
+	)
+	handle complaint => (diag_line "";
+	pass_on complaint "output_theory" "pp_list")
+);
+
+val single_language = (case languages of
+	[] => Nil
+	| _ => Value(hd languages));
+
+val output_a_theory1 = (
+	case single_language of
+	Nil => (fn thnm => output_a_theory thnm (get_language thnm))
+	| Value sl => (fn thnm => output_a_theory thnm sl)
+);
+
+val output_a_theory2 = (fn thnm => output_a_theory thnm (get_language thnm));
+
+fun aux acc [] = (if is_nil acc
+		then ()
+		else (output_a_theory1 (implode(rev acc)))
+) | aux acc ("," :: rest) = ((if is_nil acc
+		then ()
+		else (output_a_theory1 (implode(rev acc))));
+			aux [] rest
+)| aux acc (a :: x) = aux (a :: acc) x;
+
+val do_theories = (Sort.sort Sort.string_order 
+	(
+	if languages = []
+	then (get_descendants "min")
+	else filter (fn nm => (get_language nm) mem languages)
+	(get_descendants "min")
+	)
+);
+
+val print_theories = get_shell_var "print_theories";
+in
+(diag_line "START_OF_LISTING"; 
+(case print_theories of
+	"" => (map output_a_theory2 do_theories; ())
+	| "just names," =>
+		(map diag_line do_theories; ()) 
+	| _ => aux [] (explode print_theories));
+diag_line "END_OF_LISTING")
+end ; 
+quit();
+=TEX
+After the commands - only output listing material:
+=DUMPMORE pp_list
+smlcommands3
+=TEX
+Check that the program exited with status 0:
+=DUMPMORE pp_list
+EXIT_STATUS=$?
+if test $EXIT_STATUS -ne 0
+then
+	cat $TEMP_FILE
+	echo "$PROGNAME: \"poly $DATABASEFN\" exited with status $EXIT_STATUS" >&2
+	exit_status=1
+	exit 1
+fi
+=TEX
+Check that there were no initialisation errors:
+=DUMPMORE pp_list
+if test -s $hol_initialisation_error_file
+then
+	echo "$PROGNAME: initialisation of listing" >&2
+	. $hol_initialisation_error_file
+	exit_status=1
+	exit 1
+fi
+=TEX
+Otherwise print the relevant parts out:
+=DUMPMORE pp_list
+if grep START_OF_LISTING $TEMP_FILE > /dev/null
+then if grep END_OF_LISTING $TEMP_FILE > /dev/null
+then
+	if test $verbose = "yes"
+	then
+		cat $TEMP_FILE >&2
+	else
+		sed -e '1,/START_OF_LISTING/ d' \
+		-e '/END_OF_LISTING/,$ d' \
+		-e '/val it = () : unit/d' < $TEMP_FILE
+	fi
+else
+	cat $TEMP_FILE >&2
+	echo >&2
+	echo "$PROGNAME: exited with ill-formed listing" >&2
+	exit_status=1
+	exit 1
+fi
+else
+	cat $TEMP_FILE >&2
+	echo >&2
+	echo "$PROGNAME: exited with ill-formed listing" >&2
+	exit_status=1
+	exit 1
+fi
+
+=TEX
+Clean exit:
+=DUMPMORE pp_list
+exit_status=0
+=TEX
+Now make this executable
+=SH
+chmod +x pp_list
+=TEX
+
+
+\subsection{Program {\tt hol\_read}}
+In outline this program should in order:
+\begin{enumerate}
+\item
+Do initial argument proccessing;
+\item
+Find a database;
+\item
+Do something
+\item
+Run {\tt poly} on the database.
+\item
+Print out desired information.
+\end{enumerate}
+The program relies on the start of session initialisation
+routines of \cite{DS/FMU/IED/DTD036} to set the line length,
+load up the theory hierarchy,
+set the current theory,
+and read in the named scripts,
+before returning control to the user.
+These actions are done by consulting the UNIX environment,
+and the value of $icl'database\_info$.
+=DUMP pp_read
+#! /bin/sh
+#	pp_read   From: $Id$ %Z%
+#
+# Shell script to list HOL theories
+PROGNAME=`basename $0`
+USAGE="$PROGNAME [-d database[#theory]] [-i script] [-v] argument"
+USAGEMSG="$PROGNAME: usage: $USAGE"
+ARCH=`arch`
+=TEX
+Process arguments
+=DUMPMORE pp_read
+
+hol_initialisation_scripts=""
+DBN="hol"
+verbose="no"
+ALL=1
+while true
+do
+	case $1 in
+	-d)	DBN="$2" ; shift ; shift ;;
+	-i)	hol_initialisation_scripts="$hol_initialisation_scripts,$2"	; shift ; shift	;;
+	-v)	verbose="yes" ; shift ;;
+	-*)	echo "Bad flag for $PROGNAME: $1 >&2"
+		echo $USAGEMSG >&2
+								  exit 1 ;;
+	*)							  break ;;
+	esac
+done
+=TEX
+Make sure that there is 1 argument:
+=DUMPMORE pp_read
+if test $# -ne 1
+then
+	echo $USAGEMSG >&2
+	exit 1
+fi
+
+argument=$1
+export hol_initialisation_scripts
+=TEX
+=DUMPMORE pp_read
+
+DATABASE=`echo $DBN|sed -e "s/#.*//"`
+if test `basename $DATABASE` = $DATABASE
+then
+	DDATABASE=""
+	BDATABASE=`basename $DATABASE`
+else
+	DDATABASE=`dirname $DATABASE`"/"
+	BDATABASE=`basename $DATABASE`
+fi
+hol_current_theory=`echo $DBN| grep "#" | sed -e "s/.*#//"`
+export hol_current_theory
+=TEX
+Test for correct suffix, or none at all:
+=DUMPMORE pp_read
+NOSUFFIX_BASENAME=`echo $BDATABASE | sed -e "s/\..*//"`
+if test $NOSUFFIX_BASENAME = `basename $BDATABASE .db`
+then
+	BDATABASE=$NOSUFFIX_BASENAME
+else
+	echo $PROGNAME": database $DATABASE has suffix other than .db" >&2
+	exit 1
+fi	
+=TEX
+Check that the database name doesn't start with a known, incorrect, architecture name:
+=DUMPMORE pp_read
+DATABASENM=`echo $BDATABASE | sed -e 's/^'$ARCH'//'`
+for anarch in sun3 sun4 
+do 	if echo $DATABASENM | grep '^'$anarch >/dev/null
+	then echo "$DATABASE starts with incorrect architecture name"  >&2
+		exit 1
+	fi 
+done
+=TEX
+Find a database:
+=DUMPMORE pp_read
+if   findfile $DDATABASE$DATABASENM.db $PATH > /dev/null
+then
+	DATABASEFN=`findfile $DDATABASE$DATABASENM.sparc-solaris $PATH`
+else
+	echo "$PROGNAME: database $DATABASE not found" >&2
+	exit 1
+fi
+=TEX
+=DUMPMORE pp_read
+if test -r $DATABASEFN
+then
+	:
+else
+	echo $PROGNAME": database $DATABASE not readable" >&2
+	exit 1
+fi
+=TEX
+Check that the database name doesn't start with a known architecture name:
+=DUMPMORE pp_read
+for anarch in sun3 sun4 
+do 	if echo $DATABASENM | grep '^'$anarch >/dev/null
+	then echo "$PROGNAME: $DATABASE starts with incorrect architecture name" >&2 
+		exit 1
+	fi 
+done
+=TEX
+Get an absolute pathname
+=DUMPMORE pp_read
+PWD=`pwd | sed -e 's/\\//\\\\\\//g'`
+DATABASEFN=`echo $DATABASEFN | sed -e "s/^\.\///" -e "s/^[^/]/$PWD\/&/"`
+=TEX
+Get an initialisation error file:
+=DUMPMORE pp_read
+hol_initialisation_error_file=/tmp/hol_initialisation_error_file.$$
+'rm' -f $hol_initialisation_error_file
+export hol_initialisation_error_file
+=TEX
+From now on must set $exit\_status$ rather than use $exit$ command.
+=DUMPMORE pp_read
+exit_status=1
+
+TEMP_FILE=/tmp/`basename $0`.$$
+trap "'rm' -f $TEMP_FILE; \
+	'rm' -f $hol_initialisation_error_file;
+	exit \$exit_status" 0
+trap "'rm' -f $TEMP_FILE; \
+	'rm' -f $hol_initialisation_error_file;
+	exit 1" 1 2 3 15
+touch $hol_initialisation_error_file
+=TEX
+Run the session:
+=DUMPMORE pp_read
+poly $DATABASEFN > $TEMP_FILE << smlcommands1
+(diag_line "START_OF_LISTING";
+diag_line (PolyML.makestring ($argument));
+diag_line "END_OF_LISTING");
+quit();
+smlcommands1
+=TEX
+Check that the program exited with status 0:
+=DUMPMORE pp_read
+EXIT_STATUS=$?
+if test $EXIT_STATUS -ne 0
+then
+	cat $TEMP_FILE
+	echo "$PROGNAME: \"poly $DATABASEFN\" exited with status $EXIT_STATUS" >&2
+	exit_status=1
+	exit 1
+fi
+=TEX
+Check that there were no initialisation errors:
+=DUMPMORE pp_read
+if test -s $hol_initialisation_error_file
+then
+	echo "$PROGNAME: initialisation of read" >&2
+	. $hol_initialisation_error_file
+	exit_status=1
+	exit 1
+fi
+=TEX
+Otherwise print the relevant parts out:
+=DUMPMORE pp_read
+if grep START_OF_LISTING $TEMP_FILE > /dev/null
+then if grep END_OF_LISTING $TEMP_FILE > /dev/null
+then
+	if test $verbose = "yes"
+	then
+		cat $TEMP_FILE >&2
+	else
+		sed -e '1,/START_OF_LISTING/ d' \
+		-e '/END_OF_LISTING/,$ d' \
+		-e '/val it = () : unit/d' < $TEMP_FILE
+	fi
+else
+	cat $TEMP_FILE >&2
+	echo >&2
+	echo "$PROGNAME: exited with ill-formed listing" >&2
+	exit_status=1
+	exit 1
+fi
+else
+	cat $TEMP_FILE >&2
+	echo >&2
+	echo "$PROGNAME: exited with ill-formed listing" >&2
+	exit_status=1
+	exit 1
+fi
+
+=TEX
+Clean exit:
+=DUMPMORE pp_read
+exit_status=0
+=TEX
+Now make this executable
+=SH
+chmod +x pp_read
+=TEX
+
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
