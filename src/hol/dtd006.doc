@@ -60,10 +60,15 @@ Some minor tidying up.
 Quoted theorems now quoted in $`...`$
 \item [Issue 1.4,1.5]
 Added theory management material.
+\item [Issue 1.6]
+Changes after discussions with RDA on structure of ADT $THM$.
+Added $get\_type\_arity$, $icl'order\-\_of\_\-defn\_and\-\_axiom$, modified $icl'new\-\_specification$.
 \end{description}
 \subsection{Changes forecast}
 There may be debate about which functions should be named $icl'\ldots$.
-The entries concerning user-data in theories are currently vague.
+Some of the text outside of the documentation boxes is phrased as
+questions of design or implementation, and later issues should
+have these questions resolved.
 \section{GENERAL}
 \subsection{Scope}
 This document contains a detailed design for the 
@@ -101,7 +106,11 @@ It also requires the logic to subsume the typed lambda calculus.
 \subsubsection{Deficiencies}
 
 \subsubsection{Possible Enhancements}
+\section{INFIX DIRECTIVES}
 
+=SML
+infix 4 thm_eq;
+=TEX
 \section{THE ABSTRACT DATA TYPE $THM$}
 =DOC
 signature âicl'Theoremsá = sig
@@ -110,6 +119,19 @@ This provides the abstract data type $THM$.
 This includes its
 primitive and built-in inference rules,
 and its theory management material.
+=FAILURE
+6008	DESIGN ERROR : Current theory corrupted
+6077	DESIGN ERROR : Current hierarchy corrupted
+6066	Theorem was created in the context of theory ?0 which is not in scope
+6065	Theorem not valid as it may depend on a deleted axiom or definition
+=FAILUREC
+The first two of above are two conceivable design errors, which
+are common to many of the functions.
+The second two are errors common to most the inference rules,
+and some other functions within the signature.
+All the errors will be left with the source being the original 
+raiser of the error,
+but are collected here for conciseness.
 =ENDDOC
 \subsection{The Type of Theorems}
 =DOC
@@ -132,13 +154,15 @@ This is the type of conversions, that is, inference rules
 whose last argument is a term, and whose result is an equation
 whose LHS is precisely that term (no $\alpha$-conversion).
 All conversion names will have $\_conv$ as their conventional suffix.
-The type is to be used as a subset of $TERM\ ->\ THM$.
+The type is to be used as a subset of $:TERM\ ->\ THM$.
 =ENDDOC
 =DOC
 val âdest_thmá : THM -> SEQ;
 =DESCRIBE
 This returns the representation of a theorem, as a list of assumptions and a conclusion.
 =ENDDOC
+This will not test whether the theorem is valid while destroying
+it, as the result is ``harmless'' even if the theorem is invalid.
 =DOC
 val âtheory_thmá : THM -> string;
 =DESCRIBE
@@ -147,10 +171,76 @@ This allows the theorem's context to be determined.
 =FAILURE
 6031	Theorem was proven in a now deleted theory
 =ENDDOC
+This will not test whether the theorem is valid (other than the existence of its theory) while destroying
+it, as the result is ``harmless'' even if the theorem is invalid.
+=DOC
+val âthm_eqá : (THM * THM) -> bool;
+=DESCRIBE
+Tests whether, within the context of the current state of the current theory, the two theorems
+are valid, and whether their conclusions and assumptions are equal.
+It returns false if either theorem is invalid, or the conclusions
+and assumptions are not equal.
+=ENDDOC
+$(fn$ $thm$ $=>$ $thm$ $thm\_eq$ $thm)$ would serve as a test for
+the validity of a theorem: do we need a more explicit one available
+outside of the ADT.
 =TEX
+\subsection{Holding User Data}
+=DOC
+datatype âUSER_DATUMá =
+	âUD_Termá of TERM * (USER_DATUM list) |
+	âUD_Typeá of TYPE * (USER_DATUM list) |
+	âUD_Stringá of string * (USER_DATUM list) |
+	âUD_Intá of int * (USER_DATUM list);
+=DESCRIBE
+This provides a monomorphic type of trees whose leaves may be labelled by terms, types,
+strings or integers, where the type of label may differ from leaf to leaf.
+=USES
+This type is used in the type $USER\_DATA$, and may be used elsewhere, as a means of storing data that may be represented in a ``reasonably general'' structure for ICL HOL related purposes, that also is
+not polymorphic.
+=ENDDOC
+Note that we wish to be able to save objects of this type in files,
+and thus we could not have objects of a monomorphic function type as a new kind of label (though encodings of them might be possible).
+=DOC
+type âTHEORY_USER_DATAá;
+=DESCRIBE
+This is the type of data that functions external to
+the abstract data type may store and manipulate within 
+a particular theory.
+It will be used to include such details as the fixity of types and 
+constants.
+It will be implemented as:
+óML
+type THEORY_USER_DATA = (USER_DATUM ref) S_DICT;
+æ
+=ENDDOC
+By making this a dictionary of references the structure, and the garbage created by modifying the structure, is kept at a minimum.
+On the other hand, it does allow 
+the implementor to cause modifications
+without checking whether the theory is read-only, deleted, etc
+(though they are strongly recommended not to, but to use the interfaces).
 \subsection{The Type of Theories}
 =DOC
-type âTHEORYá;
+eqtype âicl'THEORY_NAMEá;
+=DESCRIBE
+The user will see each theory named by a string.
+Internally however this name will be represented and manipulated 
+as objects of type $icl'THEORY\_NAME$.
+This is defined to be equal to the integers.
+=ENDDOC
+=DOC
+eqtype âicl'DEF_LEVELá;
+=DESCRIBE
+A theory will contain a current definition level, of this type,
+that is incremented by 1  at each definition or axiom saved in the
+theory.
+Various things, in particular theorems, are created and saved with a field
+set to their current definition level.
+This definition level mechanism is used to allow sound deletion of 
+definitions and theorems.
+=ENDDOC
+=DOC
+type âicl'THEORYá;
 =DESCRIBE
 A theory is a collection of type names, constants, and theorems,
 plus some information about these things (such as fixity),
@@ -159,41 +249,80 @@ The user will start their HOL session within a current theory,
 that perhaps possesses some parent theories.
 They may then add to the theory by operations upon its contents,
 or change theory by an operation upon theory attributes.
-=ENDDOC
-=DOC
-type âTHEORY_USER_DATAá;
-=DESCRIBE
-This is the type of data that functions external to
-the abstract data type may store and manipulate within 
-a particular theory.
-It will include such details as the fixity of types and 
-constants.
-=SEEALSO
-$set\_user\_data$ and $get\_user\_data$.
-=ENDDOC
-=DOC
-type âTHEORY_CONTENTSá;
-=DESCRIBE
-This is a user-orientated presentation of the data within a theory.
-It is a tuple of the following elements:
+The user is recommended to use the access functions provided,
+rather than manipulate a ``raw'' theory.
 
-\begin{tabular}{| p{4in} | l |} \hline
-Contents & Type \\ \hline
-Name of Theory & string \\
-Types declared in theory, as a name * arity list & (string * int) list \\
-Constants declared in theory, as a name * most-general-type list & (string * TYPE) list \\
-Parents of theory & string list \\
-Axioms of theory, as a key * axiom list & (string * THM) list \\
-Definitions (types and constants) of theory, as a key * definition list & (string * THM) list \\
-Theorems (other than definitions and axioms) of theory, as a key * theorem list & (string * THM) list \\
-User data of theory & THEORY$\_$USER$\_$DATA \\ \hline
+It is implemented as a labelled record type, as follows:
+
+\begin{tabular}{|p{0.7in}|p{1.8in}|p{3.2in}|} \hline
+Label & Type & Description \\ \hline
+$name$ & $icl'THEORY\_NAME$ & Internal representation of theory name. \\
+$ty\_env$ & $(int$ $*$ $icl'DEF\_LEVEL)$ $S\_DICT$ & 
+A dictionary indexed by type constructor names, returning arity, and definition level. \\
+$con\_env$ & $(TYPE$ $*$ $icl'DEF\_LEVEL$ $)$ $S\_DICT$ & A dictionary indexed by constant name, returning the type and definition level. \\
+$parents$ & $icl'THEORY\_NAME$ $list$ & Names of parents of theory. \\
+$ud\_levels$ & $(icl'DEF\_LEVEL$ $*$ $icl'DEF\_LEVEL)$ $list$ &
+A list of ranges of undeleted definition levels - if empty then
+no levels have been deleted. \\
+$axiom\_$ $dict$ & $THM$ $S\_DICT$ &
+A dictionary indexed by axiom keys, returning an axiom's sequent
+and axiom level. \\
+$definition\_$ $dict$ & $THM$ $S\_DICT$ &
+A dictionary indexed by definition keys, returning a definition's sequent
+and axiom level. \\
+$theorem\_$ $dict$ & $THM$ $S\_DICT$ &
+A dictionary indexed by theorem keys, returning a theorem's sequent
+and axiom level. \\
+$current\_$ $level$ & $icl'DEF\_LEVEL$ & The current definition level. \\
+$user\_data$ & $THEORY\_USER\_DATA$ $ref$ & The user data stored
+in the theory. \\ \hline
 \end{tabular}
-
 =ENDDOC
 \subsection{The Type of Hierarchies}
 =DOC
-type âHIERARCHYá;
+datatype âTHEORY_STATUSá =
+	âTSNormalá | âTSLockedá | âTSAncestorá | âTSDeletedá;
 =DESCRIBE
+Objects of this datatype indicate the status of a theory within a hierarchy, being:
+\begin{tabular}{| l | p{5.0in} |} \hline
+Constructor & Description \\ \hline
+TSNormal & Theory is present and may be written to. \\
+TSLocked & Theory is present, and cannot be written to as it is locked by $icl'lock\_theory$ (q.v.). \\
+TSAncestor & Theory is present, and cannot be written to as it is an in an ancestor hierarchy to the current one \\
+TSDeleted & Theory has been deleted. \\ \hline
+\end{tabular}
+=ENDDOC
+I see no reason to make this $icl'$ed.
+=DOC
+type âicl'I_THEORY_INFOá;
+=DESCRIBE
+This is a interface presentation of the information about a theory
+held in a hierarchy.
+It provides no means to cause inconsistencies, which the internal
+representation would have.
+However, the user is recommended to use the access functions provided,
+rather than manipulate a ``raw'' $icl'I\_THEORY\_INFO$.
+It is a labelled record type, as follows:
+
+\begin{tabular}{|l|p{1.5in}|p{3.7in}|} \hline
+Label & Type & Description \\ \hline
+status & $THEORY\_STATUS$ & Current status of the theory. \\
+inscope & $bool$ & Is the theory currently in scope (i.e. can
+its theorems, types and constants be usefully referred to). \\
+contents & $icl'THEORY$ & The theory contents. \\
+children & $icl'THEORY\_NAME$ $list$ & List of the immediate children of the theory. \\
+name & $string$ & The name of the theory, as a string. \\ \hline
+\end{tabular}
+=ENDDOC
+=DOC
+type âicl'I_HIERARCHYá;
+=DESCRIBE
+This is a interface presentation of the information about a hierarchy.
+It provides no means to cause inconsistencies, which the internal
+representation would have.
+The user is recommended to use the access functions provided,
+rather than manipulate a ``raw'' $icl'I\_HIERARCHY$.
+
 A hierarchy is a collection of theories, together with
 information about those theories.
 In particular, it records whether theories are in scope, and whether
@@ -202,10 +331,20 @@ The user will start their HOL session within a current theory hierarchy,
 that perhaps possesses some parent hierarchies.
 The may then modify the hierarchy by operations upon its contents,
 or change hierarchy.
+This interface type is defined as an association list of theory names
+and their information:
+ó
+type icl'I_HIERARCHY = (string * icl'I_THEORY_INFO) list
+æ
 =ENDDOC
 
-
 \subsection{Primitive Rules of Inference}
+All the inference rules will check that the theorems they
+are given are valid (i.e. do not belong to theories that are out
+of scope, nor were they potentially derived from now deleted
+definitions or axioms).
+They will not check that their term arguments are well-formed, however,
+as this cannot introduce logical inconsistencies.
 \subsubsection{subst\_rule}
 =DOC
 val âsubst_ruleá : (THM * TERM) list -> TERM -> THM -> THM;
@@ -219,7 +358,6 @@ subst_rule
 É
 ö1 ¡ ... ön ¡ ö … t[t1',...tn']
 =TEX
-
 $subst\_rule$ $[(thm_1, x_1),\ldots,(thm_n, x_n)]$ $template$ $thm$
 returns a theorem in which $template$ determines where in $thm$ the $thm_i$ are substituted.
 The $x_i$ must be variables.
@@ -391,11 +529,11 @@ refl_conv
 ($ALL\_CONV$ and $REFL$ in Cambridge HOL)
 \subsubsection{simple\_$\beta$\_conv}
 =DOC
-val âsimple_%beta_convá : TERM -> THM;
+val âsimple_%beta%_convá : TERM -> THM;
 =DESCRIBE
 Apply a $\beta$-reduction to a simple abstraction.
 =CONVERSION
-simple_%beta_conv
+simple_%beta%_conv
 »( x Ž t1[x]) t2¼
 É
 É
@@ -403,7 +541,7 @@ simple_%beta_conv
 =TEX
 Or, if the term is of type $BOOL$:
 =CONVERSION
-simple_%beta_conv
+simple_%beta%_conv
 »( x Ž t1[x]) t2¼
 É
 É
@@ -568,14 +706,14 @@ and $x$ is a variable.
 2.	ö … ƒ x Ž t2[x]					Hypothesis
 3.	ö … (P Ž P = x.T)( x Ž t2[x])		subst_rule 1,2
 4.	… (P Ž P = x Ž T)( x Ž t2[x]) = (( x Ž t2[x]) = x.T)
-							simple_%beta_conv
+							simple_%beta%_conv
 5.	ö … ( x Ž t2[x]) = x Ž T			subst_rule 4,3
 6.	… ( x Ž t2[x]) t1 ‚ ( x Ž t2[x]) t1		eq_refl_rule
 7.	ö … ( x Ž t2[x]) t1 ‚ (x Ž T) t1		subst_rule 5,6
-8.	ö … ( x Ž t2[x]) t1 ‚ t2'[t1]			simple_%beta_conv
+8.	ö … ( x Ž t2[x]) t1 ‚ t2'[t1]			simple_%beta%_conv
 9.	ö … t2'[t1] ‚ ( x Ž t2[x]) t1			eq_sym_rule 8
 10.	ö … t2'[t1] ‚ (x Ž T) t1			subst_rule 9,5
-11.	… (x Ž T) t1 ‚ T				simple_%beta_conv
+11.	… (x Ž T) t1 ‚ T				simple_%beta%_conv
 12.	ö … t2'[t1] ‚ T				subst_rule 10,11
 13.	ö … t2'[t1]					‚_T_elim 12
 æ
@@ -729,7 +867,7 @@ First we prove $ƒx Ž T$
 1.	… (x Ž T) = x Ž T				eq_refl_rule
 2.	… ((x Ž T) = x Ž T) ‚ T			‚_T_intro 1
 3.	… (P Ž P = x Ž T)(x Ž T) ‚ ((x Ž T) = x Ž T)
-							simple_%beta_conv
+							simple_%beta%_conv
 4.	… (P Ž P = x Ž T)(x Ž T) ‚ T		subst_rule 3, 2
 5.	… $ƒ = (P Ž P = x Ž T)			inst_type applied to Definition
 6.	… (P Ž P = x Ž T) = $ƒ			eq_sym_rule 5
@@ -758,7 +896,7 @@ val âinst_term_ruleá : (TERM * TERM) list -> THM -> THM;
 Parallel instantiation of term variables within a theorem's conclusion to some other values.
 =RULE
 inst_term_rule
-[(»t1¼, »x1¼), ..., (»tn¼, »xn¼)]
+[..., (»ti¼, »xi¼), ...]
 É
 ö … t[x1, ..., xn]
 É
@@ -891,53 +1029,52 @@ or are not given a design for other reasons.
 We list such items now:
 \begin{description}
 \item[items of type $PDS\_STATE$]
-These are modelled by hidden ML $ref$ variables 
-$icl'current\_theory$, $icl'current\_hierarchy$, 
-$icl'theory\_store$, $icl'hierarchy\_store$, and $icl'theorem\_store$.
-\item [$current\_theory$]
-Modelled by $ref$ variable $icl'current\_theory$,
-and hidden from the user.
-\item [$current\_hierarchy$]
-Modelled by $ref$ variable $icl'current\_hierarchy$,
-and hidden from the user.
-\item [$theory\_store$]
-Modelled by $ref$ variable $icl'theory\_store$,
-and hidden from the user.
-\item [$hierarchy\_store$]
-Modelled by $ref$ variable $icl'hierarchy\_store$,
-and hidden from the user.
-\item [$theorem\_store$]
-Modelled by $ref$ variable $icl'theorem\_store$,
+These are modelled by hidden ML $ref$ variables, and are described
+under their labels in the following list.
+The interfaces to these are such that they cannot compromise the soundness of the system.
+\item[$icl'current\_theory$ and $current\_theory\_contents$]\ 
+
+Interface: $get\_current\_theory\_name$, mixed with $icl'get\_theory$.
+Modelled by the hidden ref variable $icl'current\-\_theory$
+\item[$icl'current\_hierarchy$]
+Interface: $icl'get\_current\_hierarchy\_name$.
+This is modelled by the hidden ref variable $icl'current\_hierarchy$.
+\item[$icl'theory\_store$ and $(dest\_)theory\_contents$]\
+
+Interface: $icl'get\_theory$.
+Modelled as part of the ML database - a theory is a labelled record
+type and so does not need a $dest\_$ function.
+\item[$icl'hierarchy\_store$]
+Interfaces: $icl'get\_hierarchy$ and $icl'get\_theory\_info$.
+Modelled as part of the ML database.
+\item[$icl'theorem\_store$]
+There is no interface to $icl'theorem\_store$.
+Modelled as part of the ML database.
 and hidden from the user.
 \item[$initial\_state$]
 Modelled by the initialisation of the components of state.
-\item[$theory\_contents$]
-Hidden, as it would provide uncontrolled access to critical
-material.
 \item[$interpret\_...$]
 Only formal constructs of the specification.
-\item[$dest\_state$, $dest\_theory\_contents$]
+\item[$dest\_state$]
 Hidden, as they would provide uncontrolled access to critical material.
-\item[$current\_theory\_contents$]
-Hidden, as it would provide uncontrolled access to critical material.
 \item[$current\_abstract\_theory$]
 Only a formal construct of the specification.
 \item[$theory\_info$]
+Interface: $icl'get\_theory\_info$.
 Hidden, as it would provide uncontrolled access to critical material.
 \item[$current\_theory\_status$]
-Hidden, as it would provide uncontrolled access to critical material.
-This might have uses in the user interface.
+Interface: $get\_current\_theory\_status$.
 \item[$check\_thm$, $check\_thm\_address$, $fetch\_thms$]
 No external use.
 \item[$arbitrary\_theory$, $empty\_theory$]
 Only a formal construct of the specification.
-\item[Material from section 6]
-Purely concerned with ``good'' systems and a formal construct of the specification.
+\item[Material from section 6:]
+This is purely concerned with ``good'' systems and a formal construct of the specification.
 \end{description}
 
 \subsubsection{Operations on Hierarchies}
 =DOC
-val âicl'initial_hierarchyá : HIERARCHY;
+val âicl'initial_hierarchyá : icl'I_HIERARCHY;
 =DESCRIBE
 This is the initial hierarchy, called ``initial'', with just one empty theory called ``initial'', which starts as in scope and modifiable.
 =ENDDOC
@@ -962,19 +1099,44 @@ The current theory remains unchanged.
 6032	?0 is not a known hierarchy
 6033	?0 is not a descendant of the current hierarchy, ?1
 =ENDDOC
+We expect that for a user each ICL HOL session will take place within one
+hierarchy, and that hierarchy manipulation will be handled during the invocation of ICL HOL.
 =DOC
-val âicl'close_hierarchyá : unit -> unit;
+val âicl'get_hierarchyá : string -> icl'I_HIERARCHY;
 =DESCRIBE
-???????????????????????????????
-There must be some way of getting out of a pile of hierarchies
-back to the initial hierarchy.
-This is it!
-Presumably can only go so far back, and thus the noted failure.
+Returns an interface presentation of a named hierarchy.
+The string ``-'' is understood by this function to mean the current hierarchy.
+=SEEALSO
+$icl'I\_HIERARCHY$
 =FAILURE
-6034	Cannot close the current hierarchy
+6074	There is no hierarchy called ?0 in scope
 =ENDDOC
-Should there be some method of showing a hierarchies contents to the user?
-If so, how should they perceive it?
+=DOC
+val âicl'get_theory_infoá : string -> string -> icl'I_THEORY_INFO;
+=DESCRIBE
+$icl'get\_theory\_info$ $hier$ $theory$ returns an interface presentation of the information about the theory named $theory$ 
+held within a hierarchy $hier$.
+=SEEALSO
+$icl'I\_HIERARCHY$
+=FAILURE
+6074	There is no hierarchy called ?0 in scope
+6075	There is no theory ?0 in hierarchy ?1
+=ENDDOC
+=DOC
+val âicl'get_theory_nameá : string -> icl'THEORY_NAME -> string;
+=DESCRIBE
+$icl'get\_theory\_name$ $hier$ $nm$ returns the actual theory name associated with $nm$, a $icl'THEORY\_NAME$, by the hierarchy $hier$.
+The string ``-'' is understood by this function to mean the current hierarchy.
+=FAILURE
+6074	There is no hierarchy called ?0 in scope
+6076	There is no theory associated with ?0
+=ENDDOC
+=DOC
+val âicl'get_current_hierarchy_nameá : unit -> string;
+=DESCRIBE
+Returns the current hierarchies name.
+=ENDDOC
+
 \subsubsection{Operations of Theory Attributes}
 The specification presumes that a new theory hierarchy is created as the result of
 each of the following operations, which will be a replacement for
@@ -1024,7 +1186,7 @@ User data will be set to default values by the above - use $set\_user\_data$ to 
 =DOC
 val âicl'lock_theoryá : string -> unit;
 =DESCRIBE
-If the named theory exists, and is currently writeable,
+If the named theory exists, and is currently writable,
 then it is made read-only.
 This locking may be unlocked using $icl'unlock\_theory$(q.v.).
 =FAILURE
@@ -1055,46 +1217,24 @@ declarations.
 =USES
 To allow the user to modify and experiment with a theory that
 has child theories that are not involved in the experiment,
-and would perhaps clash with the experiments.
+and would perhaps clash with the experiment.
 =FAILURE
 6035	Theory ?0 is not present in the current hierarchy
 6036	Theory ?0 has been deleted from the current hierarchy
 =ENDDOC
+Should this be $icl'$ed?
 \subsubsection{Operations on Theory Contents}
-=DOC
-val âicl'set_user_dataá : THEORY_USER_DATA -> THEORY_USER_DATA;
-=DESCRIBE
-This sets the current theories user data to the value
-given, returning the old value.
-Regardless of the data input this function cannot introduce 
-inconsistencies.
-=SEEALSO
-$icl'get\_user\_data$
-=FAILURE
-6008	DESIGN ERROR : Current theory corrupted
-6037	Theory ?0 is read-only
-=ENDDOC
-=DOC
-val âicl'get_user_dataá : string -> THEORY_USER_DATA;
-=DESCRIBE
-This returns the named theories user data.
-Regardless of the data this function cannot introduce 
-inconsistencies.
-=SEEALSO
-$icl'get\_user\_data$
-=FAILURE
-6008	DESIGN ERROR : Current theory corrupted
-=ENDDOC
+There are no access points to the user data material, other than
+$get\_theory$, provided in this signature.
 =DOC
 val âicl'save_thmá : (string * THM) -> THM;
 =DESCRIBE
 $icl'save\_thm$ $(key, thm)$ attempts to save $thm$ under the key $key$ 
 in the current theory.
-It will fail if $thm$ is not in scope, the current theory is read-only, or if $key$ has already been used to save a theorem in
+It will fail if $thm$ is not valid, the current theory is read-only, or if $key$ has already been used to save a theorem in
 the current theory.
 The function returns $thm$.
 =FAILURE
-6008	DESIGN ERROR : Current theory corrupted
 6037	Theory ?0 is read-only
 6039	Key ?0 has already been used for a theorem in theory ?1
 =ENDDOC
@@ -1103,15 +1243,17 @@ say, $icl'new\_definition$.
 =DOC
 val âicl'delete_definitioná : string -> unit;
 =DESCRIBE
-$icl'delete\_definition$ $key$ attempts to delete the definition
+$icl'delete\_definition$ $key$ attempts to delete the definition,
+and the constants it declares,
 saved in the current theory under $key$.
+The definition must have been created via either of the primitive interfaces
+$icl'new\_definition$ or $icl'new\_specification$.
 The deletion will only occur if the definition was the most recent (as yet undeleted) definition or axiom within the current theory.
 If it is not the most recent, then before it is deleted the user will have to request the
 deletion of all subsequent definitions or axioms.
-Note that all theorems created in the theory since the deleted definition 
-will become unusable after the deletion.
+Note that, amongst other effects, all theorems, types and constants created in the theory since the deleted definition was created
+will become unusable after the deletion, and could be redefined.
 =FAILURE
-6008	DESIGN ERROR : Current theory corrupted
 6037	Theory ?0 is read-only
 6050	Key ?0 is not used for a definition in theory ?1
 6041	Key ?0 is not the most recent undeleted definition or axiom in
@@ -1124,9 +1266,11 @@ definition, because the theorem is unusable.
 
 Is deleting definitions meant to also undeclare the constants 
 so defined?
+The above is written as such.
 Or is it just to ensure that the user can always be sure
 that their usable theorems can be derived from definitions
 and axioms that will be currently in scope?
+It also deletes any entries made after the deleted definition caused by $new\_type$ and $new\_constant$.
 =DOC
 val âicl'delete_axiomá : string -> unit;
 =DESCRIBE
@@ -1135,10 +1279,9 @@ saved in the current theory under $key$.
 The deletion will only occur if the axiom was the most recent (as yet undeleted) definition or axiom within the current theory.
 If it is not the most recent, then before it is deleted the user will have to request the
 deletion of all subsequent subsequent definitions or axioms.
-Note that all theorems created in the theory since the deleted axiom 
-will become unusable after the deletion.
+Note that, amongst other effects, all theorems, constants and types created in the theory since the deleted axiom was created
+will become unusable after the deletion, and could be redeclared.
 =FAILURE
-6008	DESIGN ERROR : Current theory corrupted
 6037	Theory ?0 is read-only
 6043	Key ?0 is not used for an axiom in theory ?1
 6044	Key ?0 is not the most recent undeleted definition or axiom in
@@ -1150,6 +1293,17 @@ There is no point in the function returning the deleted
 axiom, because the theorem is unusable.
 
 =DOC
+val âicl'order_of_defn_and_axiomá : unit -> (bool * string)list;
+=DESCRIBE
+When we wish to delete a definition (including specifications) or axiom we can only delete
+the most recent one, in the current theory.
+Thus their order is important to a tidy user interface
+to such deletions.
+This function returns a list of keys and flags.
+The keys are the names of the axioms and definitions in the current theory, and the flag is a boolean: if true then
+the key is for an axiom, otherwise for a definition.
+=ENDDOC
+=DOC
 val âicl'delete_thmá : string -> unit;
 =DESCRIBE
 $icl'delete\_thm$ $key$ attempts to delete the theorem
@@ -1157,7 +1311,6 @@ saved in the current theory under $key$.
 It will only fail if the key does not refer to a theorem, or the theory
 is read-only.
 =FAILURE
-6008	DESIGN ERROR : Current theory corrupted
 6037	Theory ?0 is read-only
 6046	Key ?0 is not used for an theorem in theory ?1
 =ENDDOC
@@ -1171,7 +1324,6 @@ or incorrectly typed constant),
 the current theory is read-only, or $key$ has already been used for
 an axiom.
 =FAILURE
-6008	DESIGN ERROR : Current theory corrupted
 6037	Theory ?0 is read-only
 6047	Key ?0 has already been used for an axiom in theory ?1
 6048	Term argument is ill-formed in theory ?0
@@ -1187,9 +1339,13 @@ $TYPE$, into the current theory.
 The function returns the constant as a term, with the stated
 most general type.
 =FAILURE
-6008	DESIGN ERROR : Current theory corrupted
 6049	There is a constant called ?0 already in scope
+6063	There is a constant called ?0 in the descendants of the
+	current theory
 =ENDDOC
+We expect that a constant's fixity will be set by a separate 
+function call, rather than being bound up in a user-level
+$new\_const$.
 =DOC
 val ânew_typeá : (string * int) -> TYPE;
 =DESCRIBE
@@ -1199,9 +1355,12 @@ current theory.
 The function returns the new type with sufficient arguments $'1, '2, \ldots$
 to provide a well formed type.
 =FAILURE
-6008	DESIGN ERROR : Current theory corrupted
 6070	There is a type called ?0 already in scope
+6034	There is a type called ?0 in the descendants of the current theory
 =ENDDOC
+We expect that a type's fixity will be set by a separate 
+function call, rather than being bound up in a user-level
+$new\_type$ function.
 \subsubsection{Definitional Mechanisms for Theories}
 =DOC
 val âicl'new_definitioná : (string * string * TERM) -> THM;
@@ -1216,10 +1375,11 @@ presuming that the theorem is well-formed.
 If either the constant or theorem introduction fails then
 the function will not change the current theory.
 =FAILURE
-6008	DESIGN ERROR : Current theory corrupted
 6037	Theory ?0 is read-only
 6048	Term argument is ill-formed in theory ?0
 6049	There is a constant called ?0 already in scope
+6063	There is a constant called ?0 in the descendants of the
+	current theory
 6051	Key ?0 has already been used for an definition in theory ?1
 6058	Term contains type variables not found in type of term itself
 6059	Term contains free variables
@@ -1234,12 +1394,12 @@ $icl'new\_type\_definition$ $(key, name, typars, defthm)$
 declares a new type with name $name$, and arity the length of
 $typars$.
 It also creates a defining theorem for the type, saves it in the current theory under $key$, and also returns it.
-$defthm$ must be of the form
+$defthm$ must be of the form:
 ó
 … „ x : type Ž p x
 æ
 with no assumptions.
-The defining theorem will then be of the form
+The defining theorem will then be of the form:
 ó
 … „ f : typars name ‹ type Ž 
 	TypeDefinition (p: type ‹ BOOL) f
@@ -1248,9 +1408,9 @@ where $TypeDefinition$ is defined so as to state that its predicate argument
 $p$ is non-empty, and its function argument $f$ is a bijection
 between the new type and the subset of $type$ delineated by $p$.
 =FAILURE
-6008	DESIGN ERROR : Current theory corrupted
 6037	Theory ?0 is read-only
 6070	There is a type called ?0 already in scope
+6034	There is a type called ?0 in the descendants of the current theory
 6052	Key ?0 has already been used for an type definition theorem in theory ?1
 6053	Theorem must not have assumptions
 6054	Theorem is not of the form: `… „ x Ž p x`
@@ -1259,36 +1419,41 @@ between the new type and the subset of $type$ delineated by $p$.
 6057	Theorem contains type variables not found in type variable parameter list
 =ENDDOC
 =DOC
-val âicl'new_specificationá : (string * THM) -> THM;
+val âicl'new_specificationá : (string list * int * THM) -> THM;
 =DESCRIBE
-$icl'new\_specification$ $(key, `… „ x_1,\ldots,x_n\ Ž\ p[x_1,\ldots,x_n]')$
-will introduce new constants named and typed from the $x_i$.
-It will also save a defining theorem in the current theory of the
+$icl'new\_specification$ $(keylist$, $ndef$, $`… „ x_1,\ldots,x_n\ Ž\ p[x_1,\ldots,x_n]')$
+will introduce $ndef$ new constants named and typed from the $x_i$.
+It will also save a defining theorem under each of the names in
+$keylist$ in the current theory of the
 form `$… p[c_1,\ldots,c_n]$' where $c_i$ is the constant with the
 name and type of $x_i$.
 If either the constant or theorem introduction fails then
 the function will not change the current theory.
 =FAILURE
-6008	DESIGN ERROR : Current theory corrupted
 6037	Theory ?0 is read-only
 6049	There is a constant called ?0 already in scope
+6063	There is a constant called ?0 in the descendants of the
+	current theory
 6060	Theorem is not of the form `… „ x1,...,xn Ž p[x1,...,xn]`
 6051	Key ?0 has already been used for an definition in theory ?1
 6053	Theorem must not have assumptions
 6056	Theorem contains free variables
-6061	Theorem contains type variables not found in the type of
+6071	Must define at least one constant
+6064	Theorem must be existentially quantified at least ?0 times
+6061	Theorem contains type variables ?0 not found in the type of
 	all the constants to be defined
 6016	Theorem is not of the form `… „ x1,...,xn Ž p[x1,...,xn]`
 	where the »xi¼ are all distinct
 =ENDDOC
+There is no reason why the list of keys cannot be empty,
+though the reasons for doing it are rare.
+Similarly, $ndef$ could be allowed to be $0$, which forms an odd way of 
+saving a theorem as a definition, though we do not currently allow this option.
+
 We do not need Cambridge HOL's $flag\_name\_list$ parameter, that lists
 the names of the new constants, and their lexical properties.
-The names come from the existential quantifiers, the properties
+The names come from the existential quantifiers, the number from $ndef$, the properties
 from separate user directives.
-There will be a small problem if the defining predicate is to
-be an existential term - some trick would have to be used to break
-the sequence of existentials
-(e.g. have the property being $T\ €\ „ x Ž \ldots$).
 =DOC
 val âicl'new_parentá : string -> unit;
 =DESCRIBE
@@ -1298,128 +1463,52 @@ It will fail if the parent theory does not exist,
 or if making it a parent causes clashes in the current theory
 or its children.
 =FAILURE
-6008	DESIGN ERROR : Current theory corrupted
+6035	Theory ?0 is not present in the current hierarchy
+6036	Theory ?0 has been deleted from the current hierarchy
 6037	Theory ?0 is read-only
 6067	Making ?0 a parent would cause a clash
 =ENDDOC
 Error 6067 should be more informative.
-Error 6035 and 6036 could applied either to the current theory,
+Error 6035 and 6036 could be called because of either the current theory,
 or the new parent.
 \subsubsection{Theory Access Functions}
+Many of the theory access functions will be found
+in the interface document, \cite{DS/FMU/IED/DTD012}.
+The ones below are provided as they may be more efficiently
+implemented within the abstract data type, than by
+an interface function accessing the results of just
+$icl'get\_theory\_hierarchy$.
 These functions provide various primitive views of a theory.
-All could be subsumed in the first function, called $get\_theory\_contents$,
-which is the basis for various derived functions.
-However, a theory is has more efficient lookup functions
-than $THEORY\_CONTENTS$ suggests, and therefore
-direct hooks into these mechanisms are provided.
 
-All the following recognise ``-'' to indicate the current theory name.
 =DOC
-val âget_theory_contentsá : string -> THEORY_CONTENTS;
+val âicl'get_theoryá : string -> icl'THEORY;
 =DESCRIBE
-This returns the named theories contents in a form that is
-useful to a user, and cannot lead to inconsistencies,
-e.g. by returning addresses of ML variables that the user
+This returns the named theory in its ``raw'' state.
+This cannot lead to logical inconsistencies,
+e.g. by returning addresses of ``trusted'' ML variables that the user
 could modify without going through the proper interface functions.
+However, the user is recommended to use the interface functions,
+rather than directly access the theory.
+
+This function recognises ``-'' as indicating the current theory name.
 =SEEALSO
-$THEORY\_CONTENTS$ for the structure of the result
+$THEORY$ for the structure of the result
 =FAILURE
 6035	Theory ?0 is not present in the current hierarchy
 6036	Theory ?0 has been deleted from the current hierarchy
 6062	Theory ?0 is not in scope
 =ENDDOC
 =DOC
-val âget_definitioná : string -> string -> THM;
-=DESCRIBE
-$get\_definition$ $theory$ $key$ returns the definition with key $key$,
-found in theory $theory$.
-=FAILURE
-6035	Theory ?0 is not present in the current hierarchy
-6036	Theory ?0 has been deleted from the current hierarchy
-6062	Theory ?0 is not in scope
-6063	Theory ?0 does not have a definition with key ?1
-=ENDDOC
-=DOC
-val âget_axiomá : string -> string -> THM;
-=DESCRIBE
-$get\_axiom$ $theory$ $key$ returns the axiom with key $key$,
-found in theory $theory$.
-=FAILURE
-6035	Theory ?0 is not present in the current hierarchy
-6036	Theory ?0 has been deleted from the current hierarchy
-6062	Theory ?0 is not in scope
-6064	Theory ?0 does not have an axiom with key ?1
-=ENDDOC
-=DOC
-val âget_theoremá : string -> string -> THM;
-=DESCRIBE
-$get\_theorem$ $theory$ $key$ returns the theorem with key $key$,
-found in theory $theory$.
-=FAILURE
-6035	Theory ?0 is not present in the current hierarchy
-6036	Theory ?0 has been deleted from the current hierarchy
-6062	Theory ?0 is not in scope
-6065	Theory ?0 does not have a theorem with key ?1
-=ENDDOC
-=DOC
-val âget_typeá : string -> string -> TYPE;
-=DESCRIBE
-$get\_type$ $theory$ $name$ returns the type with name $name$,
-found in theory $theory$.
-Its type parameters are taken from the sequence $:'1, :'2, \ldots$.
-=FAILURE
-6035	Theory ?0 is not present in the current hierarchy
-6036	Theory ?0 has been deleted from the current hierarchy
-6062	Theory ?0 is not in scope
-6066	Theory ?0 does not have a type with name ?1
-=ENDDOC
-=DOC
-val âget_constantá : string -> string -> TERM;
-=DESCRIBE
-$get\_constant$ $theory$ $name$ returns the constant with name $name$
-found in theory $theory$.
-The term returned has the most general type originally given for the constant.
-=FAILURE
-6035	Theory ?0 is not present in the current hierarchy
-6036	Theory ?0 has been deleted from the current hierarchy
-6062	Theory ?0 is not in scope
-6066	Theory ?0 does not have a type with name ?1
-=ENDDOC
-=DOC
-val âcurrent_theory_nameá : unit -> string;
+val âget_current_theory_nameá : unit -> string;
 =DESCRIBE
 Returns the current theories name.
-=FAILURE
-6008	DESIGN ERROR : Current theory corrupted
 =ENDDOC
 =DOC
-val âtheory_namesá : unit -> string list;
+val âget_current_theory_statusá : unit -> THEORY_STATUS;
 =DESCRIBE
-This returns the list of undeleted theories in the current state,
-whether in scope or not.
+Returns the current theories status.
 =ENDDOC
-I think this is worth making visible.
-=DOC
-val âget_ancestorsá : string -> string list;
-=DESCRIBE
-This returns all the ancestors of the named theory, including
-the theory itself.
-=FAILURE
-6035	Theory ?0 is not present in the current hierarchy
-6036	Theory ?0 has been deleted from the current hierarchy
-=ENDDOC
-This will be needed to implement other features in the abstract data type,
-and could be useful to the user, though it has the feels of a 
-derived function.
-=DOC
-val âget_descendantsá : string -> string list;
-=DESCRIBE
-This returns all the descendants of the named theory, including
-itself.
-=FAILURE
-6035	Theory ?0 is not present in the current hierarchy
-6036	Theory ?0 has been deleted from the current hierarchy
-=ENDDOC
+
 =SML
 end(* signature of icl'Theorems *);
 =TEX
