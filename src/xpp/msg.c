@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2003/05/20 16:03:16 $ $Revision: 2.20 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2003/05/21 10:54:16 $ $Revision: 2.21 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -654,7 +654,7 @@ char *file_dialog(Widget w, char *opn)
 void startup_dialog(Widget w, char **cmd_line, char **file_name)
 {
 	Widget dialog;
-	Widget empty_file, cmd_form, cmd_label, cmd_text;
+	Widget empty_file, cmd_form, cmd_label, cmd_text, file_text;
 	XmString s;
 	Atom WM_DELETE_WINDOW;
 	static int reply;	/* 0 = not replied/YES/NO*/
@@ -769,21 +769,25 @@ void startup_dialog(Widget w, char **cmd_line, char **file_name)
 	XtManageChild(dialog);
 
 	XtPopup(XtParent(dialog), XtGrabNone);
+
+	if(need_file_name) {
+		file_text = XmFileSelectionBoxGetChild(dialog, XmDIALOG_TEXT);
+	}
+
 	if(need_cmd_line) {
 		XmProcessTraversal(cmd_text, XmTRAVERSE_CURRENT);
 	} else {
-		XmProcessTraversal(dialog, XmTRAVERSE_HOME);
+		XmProcessTraversal(file_text, XmTRAVERSE_CURRENT);
 	}
 
 	while (!reply) {
 		poll(&reply);
 		if(reply == YES && need_file_name)  {
-			Widget t = XmFileSelectionBoxGetChild(dialog, XmDIALOG_TEXT);
-			*file_name = XmTextFieldGetString(t);
+			*file_name = XmTextFieldGetString(file_text);
 			if(	!**file_name
 			||	(*file_name)[strlen(*file_name) - 1] == '/') {
 				beep();
-				XmProcessTraversal(dialog, XmTRAVERSE_HOME);
+				XmProcessTraversal(file_text, XmTRAVERSE_CURRENT);
 				reply = 0;
 				continue;
 			}
