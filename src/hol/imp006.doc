@@ -73,7 +73,13 @@ Added $icl'seal\_hierarchy$.
 Use $term\_mem$ etc.
 \item [Issue 1.13]
 Corrected error message, and execution, of $simple\_list\_ƒ\_elim$. 
-
+\item [Issue 1.14]
+Errors 6008, 6032, 6036, 6041, 6065, 6066, 6070, 6072, 6073, 6074, 6083 are now all raised by $error$ not $fail$
+(only some were before).
+The name atom ``theorem(s)'' has been consistently changed
+to ``thm(s)'', 
+and ``definition(s)'' to ``defn(s)''.
+Corrected result of $get\_con\_env\ ""$.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -164,8 +170,8 @@ $icl'duplicate\_theory$ & Multiple ``in place'' modifications to the hierarchy
 $delete\_extension$ & Deletions from environments and an assignment to current theory address(2,3). \\
 $icl'new\_const$ & Addition to constant environment and an assignment to current theory address(2,3). \\
 $icl'new\_type$ & Addition to type environment and an assignment to current theory address(2,3). \\
-$icl'new\_definition$ & Addition to constant environment and an assignment to current theory address(2,3). \\
-$icl'new\_type\_definition$ & Addition to type environment and an assignment to current theory address(2,3). \\
+$icl'new\_defn$ & Addition to constant environment and an assignment to current theory address(2,3). \\
+$icl'new\_type\_defn$ & Addition to type environment and an assignment to current theory address(2,3). \\
 $icl'new\_specification$ & Additions to constant environment and an assignment to current theory address(2,3). \\
 $icl'new\_parent$ & Additions to constant and type environments, an assignment to current theory address, and ``in place'' modifications to the hierarchy (new parent and current theory)(2,3). \\ \hline
 \end{tabular}
@@ -355,10 +361,12 @@ entry does not exist:
 =SML
 fun âsub_iaá ((arr : '_a INFINITE_ARRAY), index : int) = ((
 	if index < 0
-	then error "update_ia" 6070 []
+	then error "sub_ia" 6070 []
 	else (nth (index div sz) (sub(arr, index mod sz))))
 	handle complaint =>
-		divert complaint "nth" "sub_ia" 6070 []
+		if area_of complaint = "nth"
+		then error "sub_ia" 6070 []
+		else reraise complaint (area_of complaint)
 );
 =TEX
 =SML
@@ -400,8 +408,8 @@ and
 		parents : int list,
 		del_levels : (int * int) list,
 		axiom_dict : THM S_DICT,
-		definition_dict : THM S_DICT,
-		theorem_dict : THM S_DICT,
+		defn_dict : THM S_DICT,
+		thm_dict : THM S_DICT,
 		current_level : int,
 		user_data : USER_DATA ref}
 and
@@ -433,8 +441,8 @@ type âTHEORYá = {
 		parents : int list,
 		del_levels : (int * int) list,
 		axiom_dict : THM S_DICT,
-		definition_dict : THM S_DICT,
-		theorem_dict : THM S_DICT,
+		defn_dict : THM S_DICT,
+		thm_dict : THM S_DICT,
 		current_level : int,
 		user_data : USER_DATA ref};
 =TEX
@@ -475,8 +483,8 @@ fun âempty_theoryá (nm: int) (pnts : int list) : icl'THEORY = (
 	 parents = pnts,
 	 del_levels = [],
 	 axiom_dict = initial_s_dict,
-	 definition_dict = initial_s_dict,
-	 theorem_dict = initial_s_dict,
+	 defn_dict = initial_s_dict,
+	 thm_dict = initial_s_dict,
 	 current_level = 0,
 	 user_data = ref initial_s_dict}
 );
@@ -556,14 +564,18 @@ fun âadd_con_envá (lst:{ty:TYPE, level:int} S_DICT)
 	(edict:{ty:TYPE, level:int} E_DICT): {ty:TYPE, level:int} E_DICT= (
 	list_e_merge edict lst
 	handle complaint =>
-	divert complaint "e_extend" "add_con_env" 6073 []
+		if area_of complaint = "e_extend"
+		then error "add_con_env" 6073 []
+		else reraise complaint (area_of complaint)
 );
 
 fun âadd_ty_envá (lst:{arity:int, level:int} S_DICT) 
 	(edict:{arity:int, level:int} E_DICT) : {arity:int, level:int} E_DICT = (
 	list_e_merge edict lst
 	handle complaint =>
-	divert complaint "e_extend" "add_ty_env" 6073 []
+		if area_of complaint = "e_extend"
+		then error "add_ty_env" 6074 []
+		else reraise complaint (area_of complaint)
 );
 =TEX
 The following functions look up a named entry in the value constructor or type constructor scopes.
@@ -579,16 +591,21 @@ local
 in
 fun âget_con_envá (nm : string): {ty:TYPE, level:int} OPT = (
 let 	val {con_env=con_env,...} = !current;
+in
+	if nm = "" 
+	then e_lookup "" con_env
+	else (let
 	val ordnm = ord nm;
 in
-	if (ordnm = ordquote) andalso (size nm = 2)
+	(if (ordnm = ordquote) andalso (size nm = 2)
 	then Value {ty=CHAR, level = 0}
 	else if	(ordnm = orddquote)
 	then Value {ty = STRING, level = 0}
 	else if	(ord0 <= ordnm andalso ordnm <= ord9 andalso
 		(is_all_decimal nm))
 	then Value {ty = †, level = 0}
-	else e_lookup nm con_env
+	else e_lookup nm con_env)
+end)
 end);
 end;
 
@@ -659,7 +676,7 @@ in
 
 	fun âwf_termá (tm : TERM) : bool =
 	let val tyv = term_type_constructors tm;
-		val con = term_constants tm;
+		val con = term_consts tm;
 
 	in
 		auxty tyv andalso auxcon con
@@ -668,8 +685,8 @@ in
 	fun âwf_seqá ((tml , tm) : SEQ) : bool =
 	let val tyv = list_cup (term_type_constructors tm ::
 			map term_type_constructors tml);
-		val con = list_cup (term_constants tm ::
-			map term_constants tml);
+		val con = list_cup (term_consts tm ::
+			map term_consts tml);
 	in
 		auxty tyv andalso auxcon con
 	end;
@@ -700,13 +717,13 @@ let 	val {hierarchy = hier{lookup=lookup, top_theory=top_theory},
 		= sub_ia(lookup,iname);
 in
 	if status = TSDeleted
-	then fail caller 6036 [(fn () => ename),(fn () => string_of_int iname)]
+	then error caller 6036 [(fn () => ename),(fn () => string_of_int iname)]
 	else if theory <> contents
 	then error caller 6072 [fn () => "Internal "^string_of_int iname]
 	else if not inscope
-	then fail caller 6066 [fn () => ename]
+	then error caller 6066 [fn () => ename]
 	else if range_mem(level, del_levels)
-	then fail caller 6065 [fn () => ename]
+	then error caller 6065 [fn () => ename]
 	else ()
 end);
 =TEX
@@ -1388,8 +1405,8 @@ A theory is an ancestor of the current one if and only if it is in scope.
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = user_data} = !theory;
 
@@ -1412,8 +1429,8 @@ The following detects clashes, as well as discovering the new scopes.
 		parents = (fthy :: parents),
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = user_data};
 =TEX
@@ -1529,8 +1546,8 @@ let 	val {hierarchy = hierarchy as hier{lookup=lookup, top_theory=top_theory},
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = user_data} = !contents1;
 
@@ -1544,8 +1561,8 @@ let 	val {hierarchy = hierarchy as hier{lookup=lookup, top_theory=top_theory},
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = ref(!user_data)});
 
@@ -1623,15 +1640,15 @@ let 	val dummy = (check_thm "icl'list_save_thm" theorem;
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = user_data} = !ctheory; (* spec. step 1 *)
 =TEX
 The definition level of the saved theorem is 0 if it is from
 an ancestor theory, as described in the specification.
 =SML
-	val new_theorem = Thm{level = if (theory = ctheory)
+	val new_thm = Thm{level = if (theory = ctheory)
 			then current_level
 			else 0,
 		theory = ctheory,
@@ -1641,15 +1658,15 @@ We test that all the keys are new (part of spec. step 2) at the same time as
 adding new entries to the dictionary, by using $s\_extend$
 (spec. step 3).
 =SML
-	val new_theorem_dict = (fold (fn (x,y) => x y)
+	val new_thm_dict = (fold (fn (x,y) => x y)
 		(map (fn key => fn dct =>
-			s_extend key new_theorem dct
+			s_extend key new_thm dct
 			handle complaint =>
 			divert complaint "s_extend" "icl'list_save_thm" 6039
 		 [(fn () => key),
 		  (fn () => get_current_theory_name())])
 		keys)
-		theorem_dict);
+		thm_dict);
 
 	val new_thy = Thy{name = iname,
 		ty_env = ty_env,
@@ -1657,13 +1674,13 @@ adding new entries to the dictionary, by using $s\_extend$
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = new_theorem_dict,
+		defn_dict = defn_dict,
+		thm_dict = new_thm_dict,
 		current_level = current_level,
 		user_data = user_data}
 in
 	ctheory := new_thy; (* spec. step 4 *)
-	new_theorem
+	new_thm
 end);
 =TEX
 The following is a function to delete the last extension to the current theory.
@@ -1680,8 +1697,8 @@ let 	val {hierarchy = hierarchy as hier{lookup=lookup, ...},
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = user_data} = !theory;
 
@@ -1696,7 +1713,7 @@ We want the last level at which something was defined
 (specification step 2).
 All the following lists are always manipulated such that their head
 will be the last declaration of their kind.
-N.B. this does not hold true of $theorem\_dict$,
+N.B. this does not hold true of $thm\_dict$,
 as it may save theorems from other theories at level 0.
 
 In the following $ll\_def$ should always be less than or equal $ll\_con$, but we check, just in case.
@@ -1707,7 +1724,7 @@ In the following $ll\_def$ should always be less than or equal $ll\_con$, but we
 	val ll_con = case con_env of
 		[] => 0
 		| ((_,{level=llc,...})::_) => llc;
-	val ll_def = case definition_dict of
+	val ll_def = case defn_dict of
 		[] => 0
 		| ((_,Thm{level=lld,...})::_) => lld;
 	val ll_axiom = case axiom_dict of
@@ -1719,11 +1736,11 @@ In the following $ll\_def$ should always be less than or equal $ll\_con$, but we
 	val dummy = (
 		if last_level = 0
 		then fail "icl'delete_extension" 6050 [fn () => ename]
-		else if (any theorem_dict (fn (_,Thm{level=ll,...}) => 
+		else if (any thm_dict (fn (_,Thm{level=ll,...}) => 
 			ll >= last_level))
 		then fail "icl'delete_extension" 6077 
 			[(fn () => ename),
-			(fn () => let val (key,_) = (find theorem_dict 
+			(fn () => let val (key,_) = (find thm_dict 
 				(fn (_,Thm{level=ll,...}) =>
 				 ll >= last_level))
 				in key end)]
@@ -1750,7 +1767,7 @@ but we are very cautious).
 	val new_axiom_dict = axiom_dict drop 
 		(fn (_,Thm{level=ll,...}) => ll >= last_level);
 
-	val new_definition_dict = definition_dict drop 
+	val new_defn_dict = defn_dict drop 
 		(fn (_,Thm{level=ll,...}) => ll >= last_level);
 
 	val new_thy = Thy{name = iname,
@@ -1759,8 +1776,8 @@ but we are very cautious).
 		parents = parents,
 		del_levels = new_del_levels,
 		axiom_dict = new_axiom_dict,
-		definition_dict = new_definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = new_defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level+1,
 		user_data = user_data};
 in
@@ -1788,20 +1805,20 @@ let 	val {theory=theory, inconsistent=inconsistent,...} = !current;
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = user_data} = !theory;
 
 	val dummy = check_c_writable "icl'delete_thm"; (* spec. step 1 *)
 
-	val dthm = (force_value(s_lookup key theorem_dict)
+	val dthm = (force_value(s_lookup key thm_dict)
 		handle complaint =>
 		divert complaint "force_value" "icl'delete_thm" 6046 [
 				fn x => key,
 				fn x => get_current_theory_name()]);
 
-	val new_theorem_dict = s_delete key theorem_dict; (* spec step 2 *)
+	val new_thm_dict = s_delete key thm_dict; (* spec step 2 *)
 
 	val new_thy = Thy{name = iname,
 		ty_env = ty_env,
@@ -1809,8 +1826,8 @@ let 	val {theory=theory, inconsistent=inconsistent,...} = !current;
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = new_theorem_dict,
+		defn_dict = defn_dict,
+		thm_dict = new_thm_dict,
 		current_level = current_level,
 		user_data = user_data}
 in
@@ -1829,8 +1846,8 @@ let 	val {theory=theory,...} = !current;
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = user_data} = !theory;
 	
@@ -1866,8 +1883,8 @@ We both check for an unused key (part of specification step 1 *), and insert a n
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = new_axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level+1,
 		user_data = user_data}
 in
@@ -1893,8 +1910,8 @@ let 	val {hierarchy=hierarchy, theory=theory, ty_env=cty_env,
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = user_data} = !theory;
 	
@@ -1918,8 +1935,8 @@ let 	val {hierarchy=hierarchy, theory=theory, ty_env=cty_env,
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level+1,
 		user_data = user_data};
 
@@ -1946,8 +1963,8 @@ let 	val {hierarchy=hierarchy, theory=theory, ty_env=cty_env,
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = user_data} = !theory;
 	
@@ -1972,8 +1989,8 @@ let 	val {hierarchy=hierarchy, theory=theory, ty_env=cty_env,
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level+1,
 		user_data = user_data};
 
@@ -1991,7 +2008,7 @@ The following is a function to declare a new, named, constant to be equal to som
 Interrupting the body of the main $let$ statement may leave the state with the $inconsistent$ flag set.
 Note that the function assumes the presence of $=$ as a valid constant.
 =SML
-fun âicl'new_definitioná (keys : string list, cnm : string, vl : TERM) : THM = (
+fun âicl'new_defná (keys : string list, cnm : string, vl : TERM) : THM = (
 let 	val {hierarchy=hierarchy, theory=theory, ty_env=cty_env,
 		 con_env=ccon_env, inconsistent=inconsistent,sealed=sealed} = !current;
 
@@ -2001,8 +2018,8 @@ let 	val {hierarchy=hierarchy, theory=theory, ty_env=cty_env,
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = user_data} = !theory;
 
@@ -2010,20 +2027,20 @@ let 	val {hierarchy=hierarchy, theory=theory, ty_env=cty_env,
 =TEX
 Do the checks required (other than on keys):
 =SML
-	val dummy = (check_c_writable "icl'new_definition";
+	val dummy = (check_c_writable "icl'new_defn";
 		(case const_in_anc_or_des cnm of
-		InScope => fail "icl'new_definition" 6049 [fn () => cnm]
-		| InDescendant => fail "icl'new_definition" 6063 [fn () => cnm]
+		InScope => fail "icl'new_defn" 6049 [fn () => cnm]
+		| InDescendant => fail "icl'new_defn" 6063 [fn () => cnm]
 		| NotPresent => ());
 		if keys = []
-		then fail "icl'new_definition" 6031 []
+		then fail "icl'new_defn" 6031 []
 		else if not (wf_term vl)
-		then fail "icl'new_definition" 6048 [fn () => get_current_theory_name()]
+		then fail "icl'new_defn" 6048 [fn () => get_current_theory_name()]
 		else if not(is_nil (frees vl))
-		then fail "icl'new_definition" 6059 
+		then fail "icl'new_defn" 6059 
 			[fn () => format_list (fst o dest_var) (frees vl) ", "]
 		else if not(is_nil((term_tyvars vl) diff (type_tyvars ctype)))
-		then fail "icl'new_definition" 6058 
+		then fail "icl'new_defn" 6058 
 			[fn () => format_list (Combinators.I) 
 			 ((term_tyvars vl) diff (type_tyvars ctype)) ", "]
 
@@ -2044,15 +2061,15 @@ Now build up the new material:
 		theory=theory, 
 		sequent = ([], mk_eq(new_const, vl))};
 
-	val new_definition_dict = (fold (fn (x,y) => x y)
+	val new_defn_dict = (fold (fn (x,y) => x y)
 		(map (fn key => fn dct =>
 			s_extend key new_defn dct
 			handle complaint =>
-			divert complaint "s_extend" "icl'new_definition" 6051 
+			divert complaint "s_extend" "icl'new_defn" 6051 
 			[(fn () => key), 
 			 (fn () => get_current_theory_name())])
 		keys)
-		definition_dict);
+		defn_dict);
 
 	val new_thy = Thy{name = iname,
 		ty_env = ty_env,
@@ -2060,8 +2077,8 @@ Now build up the new material:
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = new_definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = new_defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level+1,
 		user_data = user_data};
 in
@@ -2075,9 +2092,9 @@ end);
 =TEX
 The following is a function to introduce a new type definition.
 Interrupting the body of the main $let$ statement may leave the state with the $inconsistent$ flag set.
-Note that the function assumes the presence of $TypeDefinition$ and $„$ as valid constants.
+Note that the function assumes the presence of $TypeDefn$ and $„$ as valid constants.
 =SML
-fun âicl'new_type_definitioná (keys : string list, tnm : string, 
+fun âicl'new_type_defná (keys : string list, tnm : string, 
 		typars : string list,
 		defthm : THM as Thm{sequent = (hyps, concl),...}) : THM = (
 let 	val {hierarchy=hierarchy, theory=theory, ty_env=cty_env, 
@@ -2089,33 +2106,33 @@ let 	val {hierarchy=hierarchy, theory=theory, ty_env=cty_env,
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = user_data} = !theory;
 =TEX
 Do the checks required (other than on keys):
 =SML
-	val dummy = (check_c_writable "icl'new_type_definition";
+	val dummy = (check_c_writable "icl'new_type_defn";
 		(case type_in_anc_or_des tnm of
-		InScope => fail "icl'new_type_definition" 6045 [fn () => tnm]
-		| InDescendant => fail "icl'new_type_definition" 6034 [fn () => tnm]
+		InScope => fail "icl'new_type_defn" 6045 [fn () => tnm]
+		| InDescendant => fail "icl'new_type_defn" 6034 [fn () => tnm]
 		| NotPresent => ());
-		check_thm "icl'new_type_definition" defthm;
+		check_thm "icl'new_type_defn" defthm;
 		if not(wf_seq (hyps, concl))
-		then fail "icl'new_type_definition" 6087 [fn () => get_current_theory_name()]
+		then fail "icl'new_type_defn" 6087 [fn () => get_current_theory_name()]
 		else if keys = []
-		then fail "icl'new_type_definition" 6031 []
+		then fail "icl'new_type_defn" 6031 []
 		else if hyps <> []
-		then fail "icl'new_type_definition" 6053 []
+		then fail "icl'new_type_defn" 6053 []
 		else if not(is_nil (frees concl))
-		then fail "icl'new_type_definition" 6056 
+		then fail "icl'new_type_defn" 6056 
 			[fn () => format_list (fst o dest_var) (frees concl) ", "]
 		else if not(is_nil((term_tyvars concl) diff typars))
-		then fail "icl'new_type_definition" 6057
+		then fail "icl'new_type_defn" 6057
 			[fn () => format_list (Combinators.I) ((term_tyvars concl) diff typars) ", "] 
 		else if not(all_different typars)
-		then fail "icl'new_type_definition" 6079 
+		then fail "icl'new_type_defn" 6079 
 			[fn () => two_the_same typars]
 		else ());
 =TEX
@@ -2123,12 +2140,12 @@ Now build up the new material:
 =SML
 	val (x,(p, x1)) = (Combinators.I ** dest_comb)(simple_dest_„ concl)
 		handle complaint =>
-		list_divert complaint "icl'new_type_definition"
+		list_divert complaint "icl'new_type_defn"
 			[("dest_comb", 6055,[]),
 			 ("simple_dest_„", 6054, [])];
 
 	val dummy = if not(x=x1)
-		then fail "icl'new_type_definition" 6080 []
+		then fail "icl'new_type_defn" 6080 []
 		else ();
 
 	val arity = length typars;
@@ -2139,7 +2156,7 @@ Now build up the new material:
 
 	val f = mk_var("f",ftype); (* cannot be present in p, from frees test *)
 
-	val td = mk_const("TypeDefinition",mk_fun(type_of p,
+	val td = mk_const("TypeDefn",mk_fun(type_of p,
 		mk_fun(ftype, BOOL)));
 
 	val seq_concl = simple_mk_„(f, list_mk_comb (td, [p, f]));
@@ -2154,16 +2171,16 @@ Now build up the new material:
 
 	val new_cty_env = add_ty_env [ (tnm,ty_decl)] cty_env;
 
-	val new_definition_dict = (fold (fn (x,y) => x y)
+	val new_defn_dict = (fold (fn (x,y) => x y)
 		(map (fn key => fn dct =>
 			s_extend key new_type_defn dct
 			handle complaint =>
 			divert complaint "s_extend" 
-				"icl'new_type_definition" 6052
+				"icl'new_type_defn" 6052
 				 [(fn () => key),
 				 (fn () => get_current_theory_name())])
 		keys)
-		definition_dict);
+		defn_dict);
 
 	val new_thy = Thy{name = iname,
 		ty_env = new_ty_env,
@@ -2171,8 +2188,8 @@ Now build up the new material:
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = new_definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = new_defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level+1,
 		user_data = user_data};
 in
@@ -2200,8 +2217,8 @@ let 	val {hierarchy=hierarchy, theory=theory, ty_env=cty_env,
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = user_data} = !theory;
 =TEX
@@ -2290,7 +2307,7 @@ Now put everything in the correct place:
 		theory=theory, 
 		sequent = ([], new_concl)};
 
-	val new_definition_dict = (fold (fn (x,y) => x y)
+	val new_defn_dict = (fold (fn (x,y) => x y)
 		(map (fn key => fn dct =>
 			s_extend key new_defn dct
 			handle complaint =>
@@ -2299,7 +2316,7 @@ Now put everything in the correct place:
 				(fn () => get_current_theory_name())])
 
 		keys)
-		definition_dict);
+		defn_dict);
 
 	val new_thy = Thy{name = iname,
 		ty_env = ty_env,
@@ -2307,8 +2324,8 @@ Now put everything in the correct place:
 		parents = parents,
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
-		definition_dict = new_definition_dict,
-		theorem_dict = theorem_dict,
+		defn_dict = new_defn_dict,
+		thm_dict = thm_dict,
 		current_level = current_level+1,
 		user_data = user_data};
 in
@@ -2777,11 +2794,11 @@ the inner quantifier's instantiation has effect, and the
 outer one is ignored.
 =SML
 local
-	fun n_simple_ƒ 0 acc tm = (acc,tm)
-	| n_simple_ƒ n acc tm = (
+	fun simple_n_ƒ 0 acc tm = (acc,tm)
+	| simple_n_ƒ n acc tm = (
 	let val (v,bdy) = simple_dest_ƒ tm
 	in
-		n_simple_ƒ (n-1) (acc @ [v]) bdy
+		simple_n_ƒ (n-1) (acc @ [v]) bdy
 	end);
 
 	fun type_fails [] = ""
@@ -2796,7 +2813,7 @@ let 	val dummy = check_thm "icl'simple_list_ƒ_elim" thrm;
 
 	val ninsts = length tml;
 	
-	val (bvl, bdy) = (n_simple_ƒ ninsts [] concl
+	val (bvl, bdy) = (simple_n_ƒ ninsts [] concl
 		handle complaint =>
 		divert complaint "simple_dest_ƒ" "icl'simple_list_ƒ_elim" 6018 [fn () => string_of_int ninsts]);
 
@@ -2808,13 +2825,7 @@ let 	val dummy = check_thm "icl'simple_list_ƒ_elim" thrm;
 in
 	mk_current_thm(hyps, new_concl)
 end);
-end; (* local fun n_simple_ƒ = *)
-=IGN
-As a test of whether we got the local variable subs right:
-icl'Kernel.icl'simple_list_ƒ_elim [mk_T, mk_F]
-	(icl'Kernel.icl'asm_rule »ƒ x x : BOOL Ž x¼);
-should give 
-	ƒ x Ž ƒ x Ž x … F
+end; (* local fun simple_n_ƒ = *)
 =TEX
 \subsection{icl'eq\_trans\_rule}
 =RULE
