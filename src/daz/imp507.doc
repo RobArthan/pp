@@ -1679,6 +1679,17 @@ fun Ûset_in_scope_ti_contextÝ (in_scope : IN_SCOPE) : TERM list = (
 );
 =TEX
 =SML
+fun Ûset_package_ti_contextÝ (package : PACKAGE) : TERM list = (
+	set_in_scope_ti_context {
+		vc_pars = [],
+		vc_vars = #vc_vars package,
+		dec_labels = [],
+		vc_aux_vars = #aux_vars package,
+		vc_log_cons = [],
+		formal_procs = []}
+);
+=TEX
+=SML
 fun Ûz_names_of_in_scopeÝ (in_scope : IN_SCOPE) : Z_ID list  = (
 	(map (fst o dest_var) o ti_context_of_in_scope) in_scope
 );
@@ -2025,14 +2036,6 @@ fun Ûupdate_envs_varÝ (var_decl : VAR_DECL) : unit = (
 		update_spec_env_var var_decl)
 	else	()
 );
-=TEX
-=IGN
-val d1 = cn_basic_decl_of_string "x : constant Integer := 42;";
-val d2 = cn_basic_decl_of_string "x : constant Integer;";
-val d3 = cn_basic_decl_of_string "type zed is range 0 .. 20;";
-val d4 = cn_basic_decl_of_string "y : Integer;";
-val d5 = cn_basic_decl_of_string "type why is private;";
-trans_basic_decl env d5;
 =TEX
 \subsection{The SID Function add\_var\_env}
 =SML
@@ -3331,29 +3334,60 @@ fun Ûprefix_idÝ (ident : ID) (n : string) : ID = (
 	trans_id (ident dot "")^n
 );
 =TEX
+The following prefixes the variables and global variables in a Z term (i.e. predicate, declaration or expression); 
+it is given as parameters the name of the package, the list of names defined in the package together with the term to be processed.
 =SML
-fun Ûprefix_aux_varsÝ (ident : ID) (av : Z_DECL) : Z_DECL = (
-	let	val (ds, dty) = dest_z_dec av;
-		val exds = map dest_z_lvar ds;
-		val new_exds = map (fn (n, ty, acts) =>
-				(prefix_id ident n, ty, acts)) exds;
+fun Ûprefix_termÝ (ident : ID) (newids : ID list) (tm : TERM) : TERM = (
+	let	fun var_subs acc [] = (acc
+		) | var_subs acc (v::vs) = (
+			let	val (n, ty) = dest_var v;
+			in	if	is_id_in_package newids n
+				then	var_subs
+					((mk_var(prefix_id ident n, ty), v)::acc)
+					vs
+				else	var_subs acc vs
+			end
+		);
+		fun const_subs acc [] = (acc
+		) | const_subs acc ((n, ty)::cs) = (
+			case explode n of
+				"z"::"'"::more => (
+				let	val zn = implode more;
+				in	if	is_id_in_package newids zn
+					then	const_subs
+	((mk_const("z'"^prefix_id ident zn, ty), mk_const(n, ty))::acc)
+						cs
+					else	const_subs acc cs
+				end	handle Fail _ => const_subs acc cs
+			) | _ => const_subs acc cs
+		);
+		val subs = var_subs [] (frees tm) @
+					const_subs [] (term_consts tm);
 	in
-		mk_z_dec (map mk_z_lvar new_exds, dty)
+		subst subs tm
 	end
 );
 =TEX
 =SML
-fun Ûprefix_z_lvarÝ (ident : ID) (tm : Z_EXP) : Z_EXP = (
-	(mk_var o (fn (n, ty) => (prefix_id ident n, ty)) o dest_var) tm
+fun Ûprefix_aux_varsÝ (ident : ID) (newids : ID list)
+			(av : Z_DECL) : Z_DECL = (
+	prefix_term ident newids av
 );
 =TEX
 =SML
-fun Ûprefix_vardeclÝ (ident : ID) ({vars, tmark} : VAR_DECL) : VAR_DECL = (
-	{	vars = map (prefix_id ident) vars,
-		tmark=tmark
-	}
+fun Ûprefix_tmarkÝ (ident : ID) (newids : ID list) (tmark : TMARK) : TMARK = (
+	if is_id_in_package newids tmark
+	then prefix_id ident tmark
+	else tmark
 );
 =TEX
+=SML
+fun Ûprefix_vardeclÝ (ident : ID) (newids : ID list)
+				({vars, tmark} : VAR_DECL) : VAR_DECL = (
+	{	vars = 		map (prefix_id ident) vars,
+		tmark=		prefix_tmark ident newids tmark
+	}
+);
 =SML
 fun Ûprefix_spec_stmtÝ (ident : ID) (newids : ID list) (spec : SPEC) : SPEC = (
 	let	val {w, pre, post, w0} = spec;
@@ -3361,14 +3395,8 @@ fun Ûprefix_spec_stmtÝ (ident : ID) (newids : ID list) (spec : SPEC) : SPEC = (
 		val w0' = map (prefix_id ident) w0;
 		val pretm = z_predexp_of_z_tm pre;
 		val posttm = z_predexp_of_z_tm post;
-		fun not_to_be_changed tm = not (is_id_in_package newids
-			((fst o dest_var) tm));
-		val fr_vars = flat (map frees [pretm, posttm]);
-		val vars = fr_vars drop not_to_be_changed;
-		val new_vars = map (prefix_z_lvar ident) vars;
-		val subs = combine new_vars vars;
-		val pre' = ZTmQuotation (subst subs pretm, Nil);
-		val post' = ZTmQuotation (subst subs posttm, Nil);
+		val pre' = ZTmQuotation (prefix_term ident newids pretm, Nil);
+		val post' = ZTmQuotation (prefix_term ident newids posttm, Nil);
 	in
 		{w = w', w0 = w0', pre = pre', post = post'}
 	end
@@ -3385,20 +3413,18 @@ fun Ûprefix_formal_procÝ (ident : ID) (newids : ID list)
 );
 =TEX
 =SML
-fun Ûprefix_informal_funÝ (ident : ID)
+fun Ûprefix_informal_funÝ (ident : ID) (newids : ID list)
 		({name, formal_pars, return_type} : INFORMAL_FUN)
 			: INFORMAL_FUN = (
 	{	name = prefix_id ident name,
 		formal_pars = formal_pars,
-		return_type = return_type}
+		return_type = prefix_tmark ident newids return_type}
 );
 =TEX
 =SML
-fun Ûprefix_formal_funÝ (ident : ID) (newids : ID list)
-		({spec, informal_fun} : FORMAL_FUN) : FORMAL_FUN = (
-	{	spec = prefix_spec_stmt ident newids spec,
-		informal_fun = prefix_informal_fun ident informal_fun
-	}
+fun Ûprefix_formal_procsÝ (ident : ID) (newids : ID list)
+		(fps : FORMAL_PROC list) : FORMAL_PROC list  = (
+	map (prefix_formal_proc ident newids) fps
 );
 =TEX
 =SML
@@ -3474,19 +3500,17 @@ fun Ûcreate_spec_from_tmpbody_theoryÝ
 
 		val (type_names,const_thms) = tmpbody_types_and_const_thms ident;
 
-		val inf_funs = map (prefix_informal_fun ident)
-						(#informal_funs package);
 		val newids = new_ids package;
-		val form_funs = map (prefix_formal_fun ident newids)
-						(#formal_funs package);
-
+		val pfx_funs = map (prefix_informal_fun ident newids)
+			(#informal_funs package @
+			map #informal_fun (#formal_funs package));
 		val side = open_theory parent;
 		val side = new_package_spec_theory context ident
 				handle Fail _ => open_package_spec_theory ident;
 	in (
 		map update_theory_db_with_parainfo
 				(do_const_thms ident const_thms);
-		map set_par_names (inf_funs @ map #informal_fun form_funs);
+		map set_par_names pfx_funs;
 		map add_type_name (map (prefix_id ident) type_names);
 		open_theory thy;
 		()
@@ -3549,6 +3573,13 @@ fun Ûpopulate_theory_with_types_constsÝ (ident : ID) : unit = (
 	end
 );
 =TEX
+The following deals with the creation of the package specification theory,
+which contains the types, constants and funtions of the package with their names prefixed.
+This is the theory which is made a parent of the script theory when a package is withed.
+This activity corresponds to those parts of $new\_scope\with$ concerned with outputing a ``module'' to the Z document.
+
+To create the theory, we first create a temporary ``body'' theory with the unprefixed names.
+This is very like what happens when a package body is processed, except that in this case the theory is also populated with functions.
 =SML
 fun Ûcreate_tmpbody_theoryÝ (context : ID list) (parent : string) (ident : ID) : unit = (
 	let	val thy = get_current_theory_name();
@@ -3557,8 +3588,7 @@ fun Ûcreate_tmpbody_theoryÝ (context : ID list) (parent : string) (ident : ID) :
 		new_package_tmpbody_theory context ident
 			handle Fail _ => open_package_tmpbody_theory ident;
 		populate_theory_with_types_consts ident;
-		populate_theory_with_functions ident;
-		open_theory thy
+		populate_theory_with_functions ident
 	   )	handle ex => (
 			open_theory thy;
 			delete_tmpbody_theory parent ident
@@ -3568,29 +3598,34 @@ fun Ûcreate_tmpbody_theoryÝ (context : ID list) (parent : string) (ident : ID) :
 	end
 );
 =TEX
+In $new\_scope\_with$, we also need to prefix names occurring in the specification statements in any formal procedures in the withed package.
+In order to do the relevant substitutions, we need to type check the Z predicates in the specification statements.
+This type checking must be carried out with the temporary body theory as the current theory.
+The following function creates the temporary body theory and returns the formal procedures with the relevant names prefixed.
+If the package specification theory has not already been created it creates it.
+Finally, it deletes the temporary body theory.
 =SML
-fun Ûcreate_pack_spec_z_docÝ (context : ID list) (ident : ID) : unit = (
+fun Ûcreate_pack_spec_z_docÝ
+	(context : ID list) (ident : ID) (newids : ID list)
+		(fps : FORMAL_PROC list) : FORMAL_PROC list = (
 	let	val parent = get_parent_name ();
-	in (
-		if pack_spec_name ident mem (get_descendants parent)
-		then
-			()
+	in let	val cur_thy = get_current_theory_name();
+		val se1 = create_tmpbody_theory context parent ident;
+		val res = prefix_formal_procs ident newids fps;
+		val se2 = open_theory cur_thy;
+	in	(if pack_spec_name ident mem (get_descendants parent)
+		then	delete_tmpbody_theory parent ident
 		else	(
-			create_tmpbody_theory context parent ident;
-
-			create_spec_from_tmpbody_theory context parent ident;
-
+			create_spec_from_tmpbody_theory context parent ident);
 			delete_tmpbody_theory parent ident;
-
 			update_user_datum cn_spec_ud_key
 				(UD_String(pack_spec_name ident,
-				[UD_Int (current_level(),[])]));
-			()
-		)
-	   )	handle ex => (
+				[UD_Int (current_level(),[])])
+		));
+		res
+	end	handle ex => (
 			delete_tmpbody_theory parent ident;
-			reraise ex "create_pack_spec_z_doc"
-		)
+			reraise ex "create_pack_spec_z_doc")
 	end
 );
 =TEX
@@ -3599,14 +3634,10 @@ fun Ûcreate_pack_spec_z_docÝ (context : ID list) (ident : ID) : unit = (
 fun Ûnew_scope_withÝ (ident : ID) : unit = (
 	case s_lookup ident (!pack_env) of
 	Nil => ()
-	|Value package1 => (
+	|Value package => (
 		
-		let	val new_thy_name = pack_spec_name ident;
-		in	if	new_thy_name mem get_ancestors "-"
-			then	()
-			else
 		let
-			val context = #pack_spec_with_modules package1;
+			val context = #pack_spec_with_modules package;
 			val flags = {
 				pack_spec_flag = false,
 				pack_body_flag = false,
@@ -3618,23 +3649,21 @@ fun Ûnew_scope_withÝ (ident : ID) : unit = (
 				speclabel_flag = false,
 				till_flag = false
 			};
-			val ti_cxt = set_current_ti_context (#aux_vars package1);
-
-			val vc_vars1 = map (prefix_vardecl ident)
-							(#vc_vars package1);
-			val newids = new_ids package1;
-			val formal_procs1 = map (prefix_formal_proc ident newids)
-						(#formal_procs package1);
-			val vc_aux_vars1 = map (prefix_aux_vars ident)
-					(#aux_vars package1);
-			val block = block_vc_vars(empty_block, vc_vars1);
-			val block = block_vc_aux_vars(empty_block, vc_aux_vars1);
+			val ti_cxt = set_package_ti_context package;
+			val newids = new_ids package;
+			val vc_vars1 = map (prefix_vardecl ident newids)
+							(#vc_vars package);
+			val vc_aux_vars1 = map (prefix_aux_vars ident newids)
+					(#aux_vars package);
+			val formal_procs1 =
+				create_pack_spec_z_doc context ident newids
+					(#formal_procs package);
+			val block = block_flags(empty_block, flags);
+			val block = block_vc_vars(block, vc_vars1);
+			val block = block_vc_aux_vars(block, vc_aux_vars1);
 			val block = block_formal_procs(block, formal_procs1);
-		in	create_pack_spec_z_doc context ident;
-			new_parent_aux new_thy_name handle Fail _ => ();
-			blocks := block :: !blocks;
-			()
-		end
+		in	new_parent_aux (pack_spec_name ident) handle Fail _ => ();
+			blocks := block :: !blocks
 		end
 	)
 );
