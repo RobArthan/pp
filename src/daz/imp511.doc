@@ -81,10 +81,10 @@ The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD511}.  The modu
 \subsection{Known Deficencies}
 \subsection{Possible Enhancements}
 =TEX
-\section{Start of Structure ZOutputSupport}
+\section{Start of Structure z_output}
 \subsection{Preamble}
 =SML
-structure €ZOutputSupport› : ZOutputSupport = struct
+structure €CNZOutput› : CNZOutput = struct
 local
         open icl'Kernel;
         open PrettyPrinter;
@@ -98,24 +98,24 @@ Datatype used while storing information in the Dictionary.
 =SML
 datatype €Z_DOC_PARAGRAPH› = PTAxiom of THM
                            | PTDefn of THM
-                           | PTVC of string * THM
+                           | PTVC of string * TERM
                            | PTFixity of CLASS * TEMPLATE;
 =TEX
 
 Number governing the position of the fixity paragraphs in the output document.  Set to zero ensures they all appear at the beginning.
 =SML
-val €ZOutput_fixity_num› = 0;
+val €z_output_fixity_num› = 0;
 =TEX
 
 Function to add a new element to our sorted list.
 =SML
 local
     fun €add_sorted› ([],[]) (a,b) = [(a,b)]
-    |   add_sorted (ys,(x,y)::xs) ((a,b) : int*'a) =
-        (if a<x
-            then ys@[(a,b)]@[(x,y)]@xs
-            else add_sorted (ys@[(x,y)],xs) (a,b) )
-    |   add_sorted (xs,[]) (a,b) = (xs@[(a,b)])
+    |   add_sorted (ys,rest as ((xy as (x, _))::xs)) (ab as (a, _) : int*'a) =
+        (	if a<x
+		then ys@ (ab ::  rest) 
+		else add_sorted (ys@[xy],xs) ab )
+    |   add_sorted (xs,[]) ab = (xs@[ab])
 in
     fun €add_sorted_to_list› (xs : (int*'a) list)
         (x : int*'a) = (add_sorted ([],xs) x)
@@ -134,17 +134,16 @@ fun €add_sort_axiom› (dict) ((nms, thm) : (string list * THM))  =
     in
         add_sorted_to_list dict (num, (PTAxiom thm))
     end;
-fun €add_sort_VC› (dict) ((nms, thm) : (string list * THM)) =
-    let val num = #level(icl'dest_thm thm);
-        val nm = hd nms
+fun €add_sort_vc› (dict) ((nms, (num, tm)) : (string list * (int * TERM))) =
+    let val nm = hd nms
     in
-        add_sorted_to_list dict (num, (PTVC (nm,thm)))
+        add_sorted_to_list dict (num, (PTVC (nm,tm)))
     end;
 fun €add_sort_fix› (dict) ((clss, tmpl) : (CLASS * TEMPLATE)) =
-    add_sorted_to_list dict (ZOutput_fixity_num, (PTFixity (clss, tmpl)));
+    add_sorted_to_list dict (z_output_fixity_num, (PTFixity (clss, tmpl)));
 =TEX
 
-Functions to add lists of elements to out dictionary.
+Functions to add lists of elements to ourdictionary.
 =SML
 fun €add_sort_defns› (dict) ([] : (string list * THM) list) = dict
 |   add_sort_defns (dict) (defn::defns : (string list * THM) list) =
@@ -158,11 +157,11 @@ fun €add_sort_axioms› (dict) ([] : (string list * THM) list) = dict
     in
         add_sort_axioms newdict axms
     end;
-fun €add_sort_VCs› (dict) ([] : (string list * THM) list) = dict
-|   add_sort_VCs (dict) (VC::VCs : (string list * THM) list) =
-    let val newdict = add_sort_VC dict VC
+fun €add_sort_vcs› (dict) ([] : (string list * (int * TERM)) list) = dict
+|   add_sort_vcs (dict) (vc::more : (string list * (int*TERM)) list) =
+    let val newdict = add_sort_vc dict vc
     in
-        add_sort_VCs newdict VCs
+        add_sort_vcs newdict more
     end;
 fun €add_sort_fixs› (dict) ([] : (CLASS * TEMPLATE) list ) = dict
 |   add_sort_fixs (dict) (fix::fixs : (CLASS * TEMPLATE) list) =
@@ -184,10 +183,10 @@ fun €add_axioms› (dict) (thyn : string) =
     in
         add_sort_axioms dict axms
     end;
-fun €add_VCs› (dict) (thyn : string) =
-    let val VCs = rev(get_thms thyn)
+fun €add_vcs› (dict) (thyn : string) =
+    let val vcl = rev(get_conjectures thyn)
     in
-        add_sort_VCs dict VCs
+        add_sort_vcs dict vcl
     end;
 fun €add_fixs› (dict) (thyn : string) =
     let val fixs = rev(get_zfixity_infos thyn)
@@ -205,11 +204,11 @@ val €z_thm_rule› : THM -> THM = conv_rule (TRY_C z_para_pred_conv);
 
 Information needed by the formatting functions.
 =SML
-val €ZOutput_tab_width› = 4;
-fun €ZOutput_mk_tab› (i : int) =
-    (if i = 0 then "" else " "^(ZOutput_mk_tab (i-1)));
-val €ZOutput_tab› = (ZOutput_mk_tab ZOutput_tab_width);
-val €ZOutput_ll› = get_line_length();
+val €z_output_tab_width› = 4;
+fun €z_output_mk_tab› (i : int) =
+    (if i = 0 then "" else " "^(z_output_mk_tab (i-1)));
+val €z_output_tab› = (z_output_mk_tab z_output_tab_width);
+val €z_output_ll› = get_line_length();
 =TEX
 
 Generally useful functions
@@ -227,7 +226,7 @@ fun €fmt_body› ([] : string list) = []
 |   fmt_body (x::xs : string list) = ["‹ "^x]@(fmt_body xs);
 fun €fmt_prefix_tab› ([] : string list) = []
 |   fmt_prefix_tab (x::xs : string list) =
-        [ZOutput_tab^x]@(fmt_prefix_tab xs);
+        [z_output_tab^x]@(fmt_prefix_tab xs);
 fun €dest_z_many_±› (t : TERM) =
     if (is_z_± t)
         then
@@ -307,7 +306,7 @@ in
             val varstr = (format_term false var);
             val expstr = (format_term false exp);
             val block = (concat_string_list (varstr@expstr))
-            val n = (ZOutput_ll-(2*ZOutput_tab_width))
+            val n = (z_output_ll-(2*z_output_tab_width))
         in
             if ((length o explode) block) < n
                 then
@@ -358,14 +357,13 @@ fun €fmt_axioms› (axiom : THM) =
     end;
 =TEX
 
-Formatting functions for VCs.  At the moment VCs are held as theorems, but this may change in the future.
+Formatting functions for VCs.
 =SML
-fun €fmt_VCs› (nm : string, VCthm : THM) =
-    let val term = (snd (dest_thm VCthm));
-        val termstr = (format_term1 false (ZOutput_ll - ZOutput_tab_width) term)
+fun €fmt_vcs› (nm : string, term : TERM) =
+    let val termstr = (format_term1 false (z_output_ll - z_output_tab_width) term)
     in
-        ["(*","‹ "^nm^" ?Ù"]@
-        (fmt_body (fmt_prefix_tab termstr))@["*)"]
+        ["πZ","‹ "^nm^" ?Ù"]@
+        (fmt_body (fmt_prefix_tab termstr))@["∞"]
     end;
 =TEX
 
@@ -400,8 +398,8 @@ Formatting functions for Z Paragraphs.
 =SML
 fun €fmt_paragraph› (PTAxiom thm) = (fmt_axioms thm)
 |   fmt_paragraph (PTDefn thm) = (fmt_defns thm)
-|   fmt_paragraph (PTVC (nm,thm)) = (fmt_VCs (nm,thm))
-|   fmt_paragraph (PTFixity (clss,tmpl)) = (fmt_fixs (clss,tmpl));
+|   fmt_paragraph (PTVC nmtm) = (fmt_vcs nmtm)
+|   fmt_paragraph (PTFixity ct) = (fmt_fixs ct);
 fun €fmt_paragraphs› ((n,l)::ls : (int*(Z_DOC_PARAGRAPH)) list) =
         (fmt_paragraph l)@[""]@(fmt_paragraphs ls)
 |   fmt_paragraphs ([]) = [];
@@ -410,51 +408,37 @@ fun €fmt_paragraphs› ((n,l)::ls : (int*(Z_DOC_PARAGRAPH)) list) =
 Formatting function for the whole Z Document.
 =SML
 fun €fmt_z_document› (thyn : string) = 
-    let val ZOutput_dict = [] : (int*(Z_DOC_PARAGRAPH)) list;
-        val ZOutput_dict = add_axioms ZOutput_dict thyn;
-        val ZOutput_dict = add_defns ZOutput_dict thyn;
-        val ZOutput_dict = add_VCs ZOutput_dict thyn;
-        val ZOutput_dict = add_fixs ZOutput_dict thyn
+    let val z_output_dict = [] : (int*(Z_DOC_PARAGRAPH)) list;
+        val z_output_dict = add_axioms z_output_dict thyn;
+        val z_output_dict = add_defns z_output_dict thyn;
+        val z_output_dict = add_vcs z_output_dict thyn;
+        val z_output_dict = add_fixs z_output_dict thyn
     in
-        fmt_string_list (fmt_paragraphs ZOutput_dict)
+        fmt_string_list (fmt_paragraphs z_output_dict)
     end;
 =TEX
 
 \subsection{Epilogue}
 
-=SML
-end (* local ... in *);
-end (* signature ZOupputSupport*);
-=TEX
-
-\section{Start of strucure ZOutput}
-
-=SML
-structure €ZOutput› : ZOutput = struct
-=TEX
-
 Functions to print the Z Document to the the screen or to a file.
 
 =SML
-val €fmt_z_document› = ZOutputSupport.fmt_z_document;
-fun €print_z_document› ({theory : string}) : unit =
-    diag_line (fmt_z_document theory);
-fun €output_z_document› ({out_file:string, theory : string}) =
+fun €print_z_document› (thy : string) : unit =
+    diag_line (fmt_z_document thy);
+fun €output_z_document› ({out_file:string, script : string}) =
     let val stream = open_out out_file;
         val text =
-            ReaderWriter.translate_for_output (fmt_z_document theory)
+            ReaderWriter.translate_for_output (fmt_z_document script)
     in
         output (stream, text);
         close_out stream
     end;
 =TEX
 
-\subsection{End of structure ZOutput}
-
-The structure ZOutput is opened.
+\subsection{End of structure CNZOutput}
 =SML
-end (* of structure ZOutput *);
-open ZOutput;
+end (* of local open ... in ... end *);
+end (* of structure CNZOutput *);
 =TEX
 
 \small
