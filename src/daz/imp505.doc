@@ -85,6 +85,7 @@
 \item[Issue 1.48] k-slots as annotations.
 \item[Issue 1.49] Fixing $analyse\_log\_con$.
 \item[Issue 1.50] Improved message 505063.
+\item[Issue 1.51] Improved use of substitutions and common  subterms.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -178,7 +179,9 @@ fun Ûlist_subÝ ((p, xes) :Z_PRED * ((Z_ID * Z_EXP) list)) : Z_PRED = (
 	else	let	fun mk_subs (x : Z_ID, e : Z_EXP) = (
 				(e, mk_var(x, type_of e))
 			);
-			val p' = subst (map mk_subs xes) p;
+			val isubs1 = (map mk_subs xes);
+			val isubs2 = isubs1 drop (fn (a, b) => (a =$ b));
+			val p' = var_subst isubs2 p;
 			val back_to_z_conv = TRY_C(TOP_MAP_C (
 				z_schema_pred_conv1 ORELSE_C
 				z_Ê_conv1 ORELSE_C
@@ -329,8 +332,9 @@ fun Ûif_then_elseÝ	({wp, a, wp_env as {env,...}} : WP_PARS)
 			({g, p, q,...} : STMT IF_THEN_ELSE) : RESULT = (
 let	val {wp = wp1, side = side1} = wp (SStmt p, a, wp_env);
 	val {wp = wp2, side = side2} = wp (SStmt q, a, wp_env);
-	val wp = (z_eq(trans_exp env g, zid env "TRUE") %Longrightarrow% wp1) @
-		(z_eq(trans_exp env g, zid env "FALSE") %Longrightarrow% wp2);
+	val g' = trans_exp env g;
+	val wp = (z_eq(g', zid env "TRUE") %Longrightarrow% wp1) @
+		(z_eq(g', zid env "FALSE") %Longrightarrow% wp2);
 	val side = side1 @ side2;
 in
 	{wp = wp, side = side}
@@ -439,8 +443,9 @@ let	val {w, w0, pre, post} = case stmt of
 		|_ => fail "loop" 505022 [];
 	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
-	val wp = ([z_eq(trans_exp env g, zid env "TRUE")] ô pre1) ::
-			(z_eq(trans_exp env g, zid env "FALSE")
+	val g' = trans_exp env g;
+	val wp = ([z_eq(g', zid env "TRUE")] ô pre1) ::
+			(z_eq(g', zid env "FALSE")
 				%Longrightarrow% a);
 	val side = case t of
 			Value till => (post1 %Longrightarrow% wp) @
@@ -473,7 +478,8 @@ let	val side = if dir = LDForwards
 	val zop = z_add;
 	val zleft = zid env zi;
 	val zright = z_num 1;
-	val zran = z_elem (zid env zi, z_rng (zlo, zhi));
+	val zid_zi = zid env zi;
+	val zran = z_elem (zid_zi, z_rng (zlo, zhi));
 	val z_bin_exp_theta = z_bin_exp (zleft, zop, zright);
 	val wp = [[z_less_eq (zlo, zhi)] ô sub(pre1, zi, zlo)] @
 		(z_greater (zlo, zhi) %Longrightarrow% a);
@@ -481,7 +487,7 @@ let	val side = if dir = LDForwards
 			Value till => (
 				zran %Longrightarrow% ((z_predexp_of_z_tm till) %Longrightarrow% a)
 			) | Nil => [];
-	val side = [[zran, z_noteq(zid env zi, zhi), post1] ô 
+	val side = [[zran, z_noteq(zid_zi, zhi), post1] ô 
 			sub(pre1, zi, z_bin_exp (zleft, zop, zright))] @
 			(sub(post1, zi, zhi) %Longrightarrow% a) @
 			till_part;
@@ -1500,8 +1506,9 @@ fun Ûfun_decl_auxÝ
 				[] => z_ret_ty
 			|	non_empty => z_tfun(cart_prod env formal_pars,
 						 z_ret_ty));
-		val lvar = mk_z_lvar(zn, (dest_z_power_type o type_of) zexp, []);
-		val gvar = mk_z_gvar(zn, (dest_z_power_type o type_of) zexp, []);
+		val t_zexp = (dest_z_power_type o type_of) zexp;
+		val lvar = mk_z_lvar(zn, t_zexp, []);
+		val gvar = mk_z_gvar(zn, t_zexp, []);
 	in	(mk_z_dec([lvar], zexp), lvar, gvar)
 	end
 );
@@ -1523,8 +1530,10 @@ Every variable in $vc\_vars$ and its corresponding initial variable is introduce
 =SML
 *)
 	fun do_vars var = (
-		[trans_id var, init_var(trans_id var)]
-	);
+	let	val t_v = trans_id var;
+	in
+		[t_v, init_var t_v]
+	end);
 	fun var_decl_decls {vars, tmark} =
 		trans_decl env {vars = (flat o (map do_vars)) vars, tmark=tmark};
 (*
