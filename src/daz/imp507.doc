@@ -1305,14 +1305,14 @@ fun (x : ID) €dot› (y : ID) = x ^ "." ^ y;
 See \cite{ISS/HAT/DAZ/HLD501} for further information on the reasons for having the following functions which are invoked when compilation units are processed and when a new script is started.
 =SML
 fun €new_script_theory› (name : string) : unit = (
-	let	val thy = name;
+	let	val thy = trans_id name;
 	in	new_theory thy
 	end
 );
 =TEX
 =SML
 fun €new_package_spec_theory› (name : string) : unit = (
-	let	val thy = name ^ "__spec";
+	let	val thy = trans_id (name ^ "__spec");
 	in	new_theory thy
 		handle Fail _ =>
 		fail "new_package_spec_theory" 507023 [fn()=>thy, fn()=>name]
@@ -1321,15 +1321,25 @@ fun €new_package_spec_theory› (name : string) : unit = (
 =TEX
 The following needs no error handling --- it is only called when the theory is known to exist already.
 =SML
+fun €pack_spec_name› (name : string) : string = (
+	(trans_id name) ^ "__SPEC"
+);
+=TEX
+=SML
+fun €pack_body_name› (name : string) : string = (
+	(trans_id name) ^ "__BODY"
+);
+=TEX
+=SML
 fun €open_package_spec_theory› (name : string) : unit = (
-	let	val thy = name ^ "__spec";
+	let	val thy = pack_spec_name name;
 	in	open_theory thy
 	end
 );
 =TEX
 =SML
 fun €new_package_body_theory› (name : string) : unit = (
-	let	val thy = name ^ "__body";
+	let	val thy = pack_body_name name;
 	in	new_theory thy
 		handle Fail _ =>
 		fail "new_package_body_theory" 507024 [fn()=>thy, fn()=>name]
@@ -1338,7 +1348,7 @@ fun €new_package_body_theory› (name : string) : unit = (
 =TEX
 =SML
 fun €open_package_body_theory› (name : string) : unit = (
-	let	val thy = name ^ "__body";
+	let	val thy = trans_id (name ^ "__body");
 	in	open_theory thy
 		handle Fail _ => 
 		fail "open_package_body_theory" 507028 [fn()=>thy, fn()=>name]
@@ -1348,7 +1358,7 @@ fun €open_package_body_theory› (name : string) : unit = (
 =SML
 fun €new_body_stub_theory› (unit_name : string, subunit_name : string) : unit = (
 	let	val su_name = unit_name dot subunit_name;
-		val thy = su_name ^ "__stub"
+		val thy = trans_id (su_name ^ "__stub");
 	in	duplicate_theory ("-", thy)
 		handle Fail _ =>
 		fail "new_body_stub_theory" 507026 [fn()=>thy, fn()=>su_name]
@@ -1366,7 +1376,7 @@ fun €open_subunit_theory› (unit_name : string, x : PROPER_BODY) : unit = (
 				name
 		));
 		val su_name = unit_name dot subunit_name;
-		val thy = su_name ^ "__stub";
+		val thy = trans_id (su_name ^ "__stub");
 	in	open_theory thy
 		handle Fail _ => 
 		fail "open_subunit_theory" 507027 [fn()=>thy, fn()=>su_name]
@@ -2605,7 +2615,6 @@ fun €new_scope_pack_spec› (ident : ID) : unit = (
 );
 =TEX
 \subsection{The SID function new\_scope\_pack\_body}
-In the following, $basic\_decl\_otherwise$ is used to update the theory database with the constants and types.
 =SML
 fun €new_scope_pack_body› (ident : ID) : unit = (
 	let	val package1 = force_value(s_lookup ident (!pack_env));
@@ -2621,58 +2630,14 @@ fun €new_scope_pack_body› (ident : ID) : unit = (
 			till_flag = false
 		};
 		val vc_vars1 = #vc_vars package1;
-		val consts_types1 = #consts_types package1;
 		val block = block_vc_vars(empty_block, vc_vars1);
-	in	open_package_body_theory ident
-			handle Fail _ =>
-			fail "new_scope_pack_body" 507008 [fn () => ident];
-		map basic_decl_otherwise consts_types1
-			handle ex => reraise ex "new_scope_pack_body";
+	in	
 		blocks := block :: !blocks
 	end	
 );
 =TEX
+
 \subsection{The SID function new\_scope\_with}
-=IGN
-fun €new_ids› (p : PACKAGE) : ID list = (
-	let	val {vc_vars, consts_types, formal_procs,
-			informal_funs, formal_funs} = p;
-		val v = flat (map #vars vc_vars);
-		fun do_enums ({type_def,...} : TYPE_DEF TYPE_DECL) = (
-			case type_def of
-				TDEnumTypeDef etd =>		#vals etd
-			|	_ =>				[]
-		);
-		val c_t_ident_s = flat (map (fn ct =>
-				case ct of
-					BDConstDecl cd =>	#consts cd
-				|	BDTypeDecl td =>	#name td :: do_enums td
-				|	BDSubtypeDecl std =>	[#name std]
-				|	_ =>			[]
-				) consts_types);
-		val p = map #name formal_procs;
-		val f1 = map #name informal_funs;
-		val f2 = map (#name o #informal_fun) formal_funs;
-	 
-	in
-		list_cup [v, c_t_ident_s, p, f1, f2]
-	end
-);
-=TEX
-=SML
-fun €prefix_var› (ident : ID) (bds : BASIC_DECL list)
-		({vars, tmark} : VAR_DECL) : VAR_DECL = (
-	let	fun p n = trans_id (ident dot n);
-	in	if	any bds
-			(fn	BDTypeDecl {name, ...} => ident = name
-			|	BDSubtypeDecl {name, ...} => ident = name
-			|	BDPrivateTypeDecl {id, ...} => ident = id
-			|	_ => false)
-		then	{vars = map p vars, tmark = p tmark}
-		else	{vars = map p vars, tmark = tmark}
-	end
-);
-=TEX
 =SML
 fun €update_spec_theory_with_consts_types› (ident : ID) = (
 	let	val side = open_package_body_theory ident;
@@ -2710,6 +2675,61 @@ fun €update_spec_theory_with_consts_types› (ident : ID) = (
 );
 =TEX
 =SML
+fun €populate_package_spec_theory› (ident : ID) : unit = (
+	let	val thy = get_current_theory_name();
+		val parents_of_pack = (rev o get_parents o pack_body_name) ident;
+	in
+		(open_theory o hd) parents_of_pack;
+		new_package_spec_theory ident
+			handle Fail _ => open_package_spec_theory ident;
+		(map new_parent o tl) parents_of_pack handle _ => [];
+		update_spec_theory_with_consts_types ident;
+
+		open_theory thy
+	end
+);
+=TEX
+=SML
+fun €populate_package_body_theory› (with_context : ID list) (ident : ID) : unit = (
+	let	val package1 = force_value(s_lookup ident (!pack_env));
+		val consts_types1 = #consts_types package1;
+		val parents_of_pack = map pack_spec_name with_context;
+	in
+		map new_parent parents_of_pack handle _ => [];
+		map basic_decl_otherwise consts_types1
+			handle ex => reraise ex "populate_package_body_theory";
+		()
+	end
+);
+=TEX
+=IGN
+fun €new_package_theories› (with_context : ID list) (ident : ID) : unit = (
+	let	val package1 = force_value(s_lookup ident (!pack_env));
+		val consts_types1 = #consts_types package1;
+		val thy = get_current_theory_name();
+		val pack_spec_names = map pack_spec_name with_context;
+	in
+		new_package_body_theory ident
+			handle Fail _ =>
+			open_package_body_theory ident;
+		map new_parent pack_spec_names handle _ => [];
+		map basic_decl_otherwise consts_types1
+			handle ex => reraise ex "new_package_theories";
+
+		(open_theory o hd o rev o get_parents) "-";
+		new_package_spec_theory ident
+			handle Fail _ => open_package_spec_theory ident;
+		map new_parent pack_spec_names handle _ => [];
+		update_spec_theory_with_consts_types ident;
+
+		open_theory thy;
+
+		diag_line "**** TBS - new_package_theories not yet complete ****"
+
+	end
+);
+=TEX
+=SML
 fun €new_scope_with› (ident : ID) : unit = (
 	let	val package1 = force_value(s_lookup ident (!pack_env));
 		val flags = {
@@ -2727,10 +2747,7 @@ fun €new_scope_with› (ident : ID) : unit = (
 		val formal_procs1 = #formal_procs package1;
 		val block = block_vc_vars(empty_block, vc_vars1);
 		val block = block_formal_procs(block, formal_procs1);
-	in	open_package_spec_theory ident
-			handle Fail _ => new_package_spec_theory ident;
-		update_spec_theory_with_consts_types ident;
-		diag_line "**** TBS - new_scope_with not yet complete ****";
+	in
 		blocks := block :: !blocks
 	end	
 );
@@ -3067,9 +3084,9 @@ fun €do_statement› (y as (SStmt x) : STATEMENT) = (
 	error "do_statement" 507019 []
 );
 =TEX
-The following reflects the SID functions for $dec$, $basic\_declaration$ and $subprogram\_declaration$:
+The following reflects the SID functions for $dec$, $basic\_declaration$ and $subprogram\_declaration$. Note that the $with\_context$ is an argument used for package declarations so that when the package theories are created, the $with$ packages can become parents.
 =SML
-fun €do_declaration› (y as (DDeclarationKSlot (
+fun €do_declaration› (with_context : ID list) (y as (DDeclarationKSlot (
 	{label, content}, dkty)) : DECLARATION) = (
 	let	val rsty = case dkty of
 					DKDeclaration => RSDeclaration
@@ -3079,9 +3096,9 @@ fun €do_declaration› (y as (DDeclarationKSlot (
 		new_k_slot(label, rsty, get_current_theory_name())
 	end;
 	k_slot_dec label
-) | do_declaration (y as (DRenamingDeclaration x) : DECLARATION) = (
+) | do_declaration _ (y as (DRenamingDeclaration x) : DECLARATION) = (
 	comment "do_declaration" 507016 []
-) | do_declaration (y as (DBasicDecl x) : DECLARATION) = (
+) | do_declaration _ (y as (DBasicDecl x) : DECLARATION) = (
 	case x of
 		BDTypeDecl _ => (basic_declaration x
 	) |	BDSubtypeDecl _ => (basic_declaration x
@@ -3093,23 +3110,23 @@ fun €do_declaration› (y as (DDeclarationKSlot (
 	) |	BDDeferredConstDecl _ => (comment "do_declaration" 507021 []
 	) |	BDPrivateTypeDecl _ => (comment "do_declaration" 507022 []
 	)
-) | do_declaration (y as (DRepresentationClause x) : DECLARATION) = (
+) | do_declaration _ (y as (DRepresentationClause x) : DECLARATION) = (
 	comment "do_declaration" 507017 []
-) | do_declaration (y as (DProperBody x) : DECLARATION) = (
+) | do_declaration _ (y as (DProperBody x) : DECLARATION) = (
 	do_proper_body x
-) | do_declaration (y as (DProcedureDeclaration x) : DECLARATION) = (
+) | do_declaration _ (y as (DProcedureDeclaration x) : DECLARATION) = (
 	do_procedure_spec x;
 	end_scope()
-) | do_declaration (y as (DFunctionDeclaration x) : DECLARATION) = (
+) | do_declaration _ (y as (DFunctionDeclaration x) : DECLARATION) = (
 	do_function_spec x;
 	end_scope()
-) | do_declaration (y as (DPackageDeclaration x) : DECLARATION) = (
-	do_package_spec x
-) | do_declaration (y as (DProcedureStub x) : DECLARATION) = (
+) | do_declaration with_context (y as (DPackageDeclaration x) : DECLARATION) = (
+	do_package_spec with_context x
+) | do_declaration _ (y as (DProcedureStub x) : DECLARATION) = (
 	do_procedure_stub x
-) | do_declaration (y as (DFunctionStub x) : DECLARATION) = (
+) | do_declaration _ (y as (DFunctionStub x) : DECLARATION) = (
 	do_function_stub x
-) | do_declaration (y as (DPackageStub x) : DECLARATION) = (
+) | do_declaration _ (y as (DPackageStub x) : DECLARATION) = (
 	do_package_stub x
 )
 (*
@@ -3175,15 +3192,17 @@ and €do_function_spec› (
 (*
 =TEX
 The following reflects the SID functions for $package\_specification$:
+Note that the package specification and package body theories are created and populated here rather than during $new\_scope\_pack\_body$ and $new\_scope\_with$.
 =SML
 *)
-and €do_package_spec› (
+and €do_package_spec› (with_context : ID list) (
 	{name, visible_decs, private_decs}
 			: DECLARATION PACKAGE_DECLARATION) = (
 	new_scope_pack_spec name;
-	map do_declaration visible_decs;
-	map do_declaration private_decs;
-	end_scope()
+	map (do_declaration with_context) visible_decs;
+	map (do_declaration with_context) private_decs;
+	end_scope();
+	populate_package_body_theory with_context name
 )
 (*
 =TEX
@@ -3224,7 +3243,7 @@ package\_body\\
 and €do_proper_body› (y as (PBProcedure 
 	{procedure_spec, declarative_part, statement}) : PROPER_BODY) : unit = (
 	do_procedure_spec procedure_spec;
-	map do_declaration declarative_part;
+	map (do_declaration []) declarative_part;
 	do_statement statement;
 	vcs_body statement;
 	update_envs_proc();
@@ -3233,44 +3252,45 @@ and €do_proper_body› (y as (PBProcedure
 ) | do_proper_body (y as (PBFunction 
 	{function_spec, declarative_part, statement}) : PROPER_BODY) = (
 	do_function_spec function_spec;
-	map do_declaration declarative_part;
+	map (do_declaration []) declarative_part;
 	do_statement statement;
 	vcs_body statement;
 	end_scope()
 ) | do_proper_body (y as (PBPackage 
 	{name, decls, statement}) : PROPER_BODY) = (
 	new_scope_pack_body name;
-	map do_declaration decls;
+	map (do_declaration []) decls;
 	do_statement statement;
 	end_scope()
 );
 =TEX
 The following reflects the SID functions for $subunit$.
-Note that the `\_\_body' theory is created when a package declaration is encountered.
 =SML
-fun €do_compilation_unit›
+fun €do_compilation_unit› (with_context : ID list)
 	(y as (CUPackageDeclaration (x as {name, ...})) : COMPILATION_UNIT) : unit = (
 	new_package_body_theory name;
-	do_declaration (DPackageDeclaration x)
-) | do_compilation_unit (y as (CUProperBody x) : COMPILATION_UNIT) = (
+	do_declaration with_context (DPackageDeclaration x)
+) | do_compilation_unit with_context (y as (CUProperBody x)) = (
 	(case x of
 		PBPackage {name, ...} => (
 			open_package_body_theory name
 	) | _ 	=> ());
-	do_declaration (DProperBody x)
-) | do_compilation_unit (y as (CUSubUnit {name, proper_body}) : COMPILATION_UNIT) = (
+	do_declaration with_context (DProperBody x)
+) | do_compilation_unit with_context (y as (CUSubUnit {name, proper_body})) = (
 	open_subunit_theory (name, proper_body);
 	new_scope_subunit name;
-	do_declaration(DProperBody proper_body);
+	do_declaration with_context (DProperBody proper_body);
 	end_scope()
 );
 =TEX
-The following reflects the SID functions for the productions $compilation\_unit$ and $simple\_name\_list$ (occuring in a $with\_clause$):
+The following reflects the SID functions for the productions $compilation\_unit$ and $simple\_name\_list$ (occuring in a $with\_clause$). Note that the package specification theory and the package body theory are created when the package specification is processed and not when the $with$ clause is encountered; i.e., $new\_scope\_with$ is called in those places.
+
 =SML
 fun €do_context_compilation_unit›
 	({context, comp_unit} : CONTEXT_COMPILATION_UNIT) : unit = (
+	map populate_package_spec_theory context;
 	map new_scope_with context;
-	do_compilation_unit comp_unit;
+	do_compilation_unit context comp_unit;
 	end_scope_comp_unit()
 );
 =TEX
@@ -3305,7 +3325,7 @@ let	val {label=label, private=private} = x;
 	val current_theory = get_current_theory_name ();
 in	open_label_theory label;
 	update_replacement_env(label, ReplacePPart x);
-	map do_declaration (#private x);
+	map (do_declaration []) (#private x);
 	lazy_open_theory current_theory
 end
 ) | do_web_clause (y as (WCReplacedByVisiblePart x) : WEB_CLAUSE) = (
@@ -3313,7 +3333,7 @@ let	val {label=label,visible=visible} = x;
 	val current_theory = get_current_theory_name ();
 in	open_label_theory label;
 	update_replacement_env(label, ReplaceVPart x);
-	map do_declaration (#visible x);
+	map (do_declaration []) (#visible x);
 	lazy_open_theory current_theory
 end
 ) | do_web_clause (y as (WCReplacedByDecl x) : WEB_CLAUSE) = (
@@ -3322,7 +3342,7 @@ let	val {label=label,decls=decls} = x;
 in	open_label_theory label;
 	update_replacement_env(label, ReplaceDecl x);
 	new_scope_dec_replace x;
-	map do_declaration decls;
+	map (do_declaration []) decls;
 	update_envs_remove_declabel x;
 	end_scope();
 	lazy_open_theory current_theory
