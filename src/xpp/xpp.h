@@ -4,13 +4,12 @@
  *
  * xpp.h - main include file for the X/Motif ProofPower Interface
  *
- * (c) ICL 1993
+ * (c) ICL 1993, 1994
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * MACROS
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-
 #define NAT Cardinal
 #define INT long int
 
@@ -30,10 +29,17 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * TYPE DEFS
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-/* **** **** **** **** **** **** **** **** **** **** **** ****
+typedef struct {
+	Boolean			edit_only;
+	Boolean			backup_before_save;
+	Boolean			delete_backup_after_save;
+	NAT			journal_max;
+	String			command_line;}
+		GlobalControls;	
+/*
  * The following is based on the ideas in Heller's
  * `Motif Programming Manual'. See menus.c for the implementation.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
+ */
 typedef struct menu_item {
 	char		*label;		/* label for this item */
 					/* NULL means last item */
@@ -49,6 +55,16 @@ typedef struct menu_item {
 					/* Ignored if not submenu */
 		MenuItem;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * GLOBAL DATA: for no particular reason, the source file
+ * controls.c which constructs the tool for setting the controls
+ * is chosen to define the global data (other files get it as
+ * external data).
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+#ifndef _controls
+	extern
+#endif
+	GlobalControls		global_controls;
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * EXTERNS
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 /*
@@ -58,7 +74,6 @@ typedef struct menu_item {
  */
 #ifndef _mainw
 	extern void main_window_go(
-		Bool edit_only,
 		char	*file_name);
 	extern XtAppContext app;
 	extern Widget root;
@@ -119,10 +134,16 @@ typedef struct menu_item {
 	extern void copy_font_list(
 		Widget	to_w,
 		Widget	from_w);
+void blink_owner_cb(
+	Widget					w,
+	Widget					text_w,
+	XmPushButtonCallbackStruct		*unused);
+void number_verify_cb(
+	Widget				unused1,
+	XtPointer			unused2,
+	XmTextVerifyCallbackStruct	*cbs);
 #endif
 #ifndef _xpp
-	extern char *cmd_buf;
-	extern char *arglist[];
 #endif
 #ifndef _edit
 	extern void *setup_edit(
@@ -151,4 +172,10 @@ typedef struct menu_item {
 #ifndef _cmdline
 	extern void add_cmd_line(
 		Widget	text_w);
+#endif
+#ifndef _controls
+	extern void init_controls(
+		Widget	owner_w);
+	extern void add_control_tool();
+	extern char **get_arg_list();
 #endif

@@ -175,10 +175,6 @@ static Widget
  * limits on text window sizes in the main window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static NAT journal_max = 2000;
-
-static NAT command_max = 2000;
-
 static int control_fd;
 
 static pid_t child_pid;
@@ -249,15 +245,18 @@ static MenuItem file_menu_items[] = {
  */
 #define TOOLS_MENU_SEARCH_REPLACE		0
 #define TOOLS_MENU_PALETTE			1
-#define TOOLS_MENU_SCRIPT_VIEWER		2
-#define TOOLS_MENU_JOURNAL_VIEWER		3
-#define TOOLS_MENU_CMD_LINE			4
+#define TOOLS_MENU_CONTROLS			2
+#define TOOLS_MENU_SCRIPT_VIEWER		3
+#define TOOLS_MENU_JOURNAL_VIEWER		4
+#define TOOLS_MENU_CMD_LINE			5
 
 static MenuItem tools_menu_items[] = {
     { "Search and Replace", &xmPushButtonGadgetClass, 'S', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_SEARCH_REPLACE, (MenuItem *)NULL, False },
     { "Palette", &xmPushButtonGadgetClass, 'P', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_PALETTE, (MenuItem *)NULL, False },
+    { "Controls", &xmPushButtonGadgetClass, 'N', NULL, NULL,
+        tools_menu_cb, (XtPointer)TOOLS_MENU_CONTROLS, (MenuItem *)NULL, False },
     { "Viewer", &xmPushButtonGadgetClass, 'V', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_SCRIPT_VIEWER, (MenuItem *)NULL, False },
     { "Viewer (Journal)", &xmPushButtonGadgetClass, 'J', NULL, NULL,
@@ -360,7 +359,7 @@ Boolean ignored;
 
 	XmTextSetInsertionPosition(journal, last_pos);
 
-	check_text_window_limit(journal,  journal_max);
+	check_text_window_limit(journal,  global_controls.journal_max);
 
 
 }
@@ -412,7 +411,6 @@ static void reinit_changed()
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static setup_main_window(
-	Bool	edit_only,
 	char	*file_name)
 {
 	Arg args[12];
@@ -475,13 +473,14 @@ static setup_main_window(
 		NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Command window:
+ * Script window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	i = 0;
 	XtSetArg(args[i], XmNeditable, 			True); ++i;
 	XtSetArg(args[i], XmNeditMode, 			XmMULTI_LINE_EDIT); ++i;
 	XtSetArg(args[i], XmNautoShowCursorPosition, 	True); ++i;
 	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
+	XtSetArg(args[i], XmNselectionArrayCount, 		3); ++i;
 
 	script = XmCreateScrolledText(work, "script", args, i);
 
@@ -494,7 +493,7 @@ static setup_main_window(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Journal window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-if( !edit_only ) {
+if( !global_controls.edit_only ) {
 	i = 0;
 	XtSetArg(args[i], XmNeditable, 			False); ++i;
 	XtSetArg(args[i], XmNeditMode,	 		XmMULTI_LINE_EDIT); ++i;
@@ -517,7 +516,7 @@ if( !edit_only ) {
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Tools menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-if(edit_only) {
+if(global_controls.edit_only) {
 	tools_menu_items[TOOLS_MENU_JOURNAL_VIEWER].label = NULL;
 }
 	toolsmenu = setup_pulldown_menu(
@@ -533,7 +532,7 @@ if(edit_only) {
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Command menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-if( !edit_only ) {
+if( !global_controls.edit_only ) {
 	cmdmenu = setup_pulldown_menu(
 		menubar, "Command", 'C', False, cmd_menu_items);
 }
@@ -594,12 +593,16 @@ if( !edit_only ) {
 /* !!! */		XtParseTranslationTable(trans_tab));
 /* !!! */};
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Initialise controls package
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+	init_controls(script);
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * Management and Realisation:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	XtManageChild(filename);
 	XtManageChild(menubar);
 	XtManageChild(script);
-if( !edit_only ) {
+if( !global_controls.edit_only ) {
 	XtManageChild(journal);
 }
 	XtManageChild(work);
@@ -748,6 +751,9 @@ XmAnyCallbackStruct *cbs;
 		break;
 	case TOOLS_MENU_CMD_LINE:
 		add_cmd_line(script);
+		break;
+	case TOOLS_MENU_CONTROLS:
+		add_control_tool();
 		break;
 	default:
 		break;
@@ -1106,6 +1112,7 @@ gotpty:
 		write(control_fd, " ", 1);	/* Tell child to exec */
 	} else { /* Child */
 		char	buf;
+		char **arglist;
 		close(control_fd);
 		dup2(slave_fd, 0);
 		dup2(slave_fd, 1);
@@ -1114,6 +1121,7 @@ gotpty:
 			close(slave_fd);
 		};
 		read(0, &buf, 1);		/* Wait until told */
+		arglist = get_arg_list();
 		execvp(arglist[0], arglist);
 	/* **** error if reach here **** */
 		msg("system error", "could not exec");
@@ -1464,11 +1472,10 @@ Bool execute_command()
  * main entry point:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void main_window_go(
-	Bool	edit_only,
 	char	*file_name)
 {
-	setup_main_window(edit_only, file_name);
-if( !edit_only ) {
+	setup_main_window(file_name);
+if( !global_controls.edit_only ) {
 	get_pty();
 }
 	handle_sigs();

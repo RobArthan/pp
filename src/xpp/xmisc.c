@@ -158,3 +158,63 @@ void copy_font_list (
 	}
 }
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * blink owner callback: this callback expects the callback data to
+ * be a text widget. It arranges for the text widget to blink for
+ * a while.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void blink_owner_cb(
+	Widget					w,
+	Widget					text_w,
+	XmPushButtonCallbackStruct		*unused)
+{
+	static void unhighlight();
+	XmTextSetHighlight(text_w,
+		0,
+		XmTextGetLastPosition(text_w),
+		XmHIGHLIGHT_SELECTED);
+	XtAppAddTimeOut(app,
+		500,
+		(XtTimerCallbackProc)unhighlight,
+		text_w);
+
+}
+
+static void unhighlight(
+	Widget			text_w,
+	XtIntervalId		*unused)
+{
+	XmTextPosition left, right;
+	XmTextSetHighlight(text_w,
+			0,
+			XmTextGetLastPosition(text_w),
+			XmHIGHLIGHT_NORMAL);
+	if(XmTextGetSelectionPosition(text_w, &left, &right) &&
+		left != right) {
+		XmTextSetHighlight(text_w,
+			left, right, XmHIGHLIGHT_SELECTED);
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * number_verify_cb: callback to be used as a modify/verify
+ * callback to a text (field) widget to ensure that
+ * the text field contains only a number.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void number_verify_cb(
+	Widget				unused1,
+	XtPointer			unused2,
+	XmTextVerifyCallbackStruct	*cbs)
+{
+	int i, j;
+	char *p = cbs->text->ptr; /* Not modified later */
+	for(i = 0; i < cbs->text->length; ++i) {
+		if(!isdigit(p[i])) {
+			for(j = i; j < cbs->text->length; ++j) {
+				p[j] = p[j+1];
+				--cbs->text->length;
+				--i;
+			}
+		}
+	}
+}

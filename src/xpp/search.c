@@ -134,7 +134,6 @@ Bool add_search_tool(Widget text_w)
 		replace_all_cb(),
 		search_set_cb(),
 		replace_set_cb(),
-		line_no_modify_cb(),
 		line_no_set(),
 		line_no_set_cb(),
 		goto_line_no_cb();
@@ -366,9 +365,8 @@ Bool add_search_tool(Widget text_w)
 	XtAddCallback(replace_set_btn, XmNactivateCallback,
 		replace_set_cb, (XtPointer)(&search_data));
 
-	XtAddCallback(line_no_text,
-		XmNmodifyVerifyCallback, line_no_modify_cb,
-			(XtPointer)(&search_data));
+	XtAddCallback(line_no_text, XmNmodifyVerifyCallback,
+		(XtCallbackProc)number_verify_cb, (XtPointer)NULL);
 
 	XtAddCallback(line_no_set_btn, XmNactivateCallback,
 		line_no_set_cb, (XtPointer)(&search_data));
@@ -621,27 +619,6 @@ static void replace_set_cb(
 	XtFree(sel);
 }
 
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Monitor input typed into line number string.
- * Discards non-digits.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void line_no_modify_cb(
-	Widget				w,
-	SearchData			*cbdata,
-	XmTextVerifyCallbackStruct	*cbs)
-{
-	int i, j;
-	char *p = cbs->text->ptr; /* Not modified later */
-	for(i = 0; i < cbs->text->length; ++i) {
-		if(!isdigit(p[i])) {
-			for(j = i; j < cbs->text->length; ++j) {
-				p[j] = p[j+1];
-				--cbs->text->length;
-				--i;
-			}
-		}
-	}
-}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * line number setting callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */

@@ -44,6 +44,10 @@ static char *cant_write_backup_message =
 	"An error has occurred while taking a backup. "
 	"Do you want the file \"%s\" to be overwritten anyway?";
 
+static char *cant_open_file_to_backup_message =
+	"Cannot read the file \"%s\" to take a backup. "
+	"Do you want it to be overwritten anyway?";
+
 static char *cant_open_backup_message =
 	"Cannot open a backup file. "
 	"Do you want the file \"%s\" to be overwritten anyway?";
@@ -185,6 +189,9 @@ static char *get_file_contents(
  * The first parameter is the name of a widget to own any error
  * message dialogues.
  * The second parameter is a pointer to the file name.
+ * The third parameter is set to point to the name of the backup file.
+ * This will be NULL unless a backup file was successfully written.
+ * This should be XtFree'd when finished with (unless NULL).
  * False is returned if anything goes wrong (and if False is
  * returned, the user will have been presented with an error
  * message dialogue).
@@ -192,27 +199,35 @@ static char *get_file_contents(
 
 static Boolean backup_file(
 	Widget	w,
-	char	*name)
+	char	*name,
+	char	**backup_name)
 {
 	struct stat status;
 	NAT siz;
 	FILE *fp, *backup_fp;
-	char *backup_name;
 
-	siz = strlen(name);
-	if((fp = fopen(name, "r")) == NULL) {
-			/* presumably no previous file */
+	*backup_name = NULL;
+	if(stat(name, &status) == 0) { /* file exists */
+		if((fp = fopen(name, "r")) == NULL) {
+			return file_yes_no_dialog(w,
+					cant_open_file_to_backup_message, name);
+		};
+	} else { /* else file doesn't exist so no backup needed */
 		return True;
 	};
-	if((backup_name = XtMalloc(siz + 5)) == NULL) {
+
+	siz = strlen(name);
+	if((*backup_name = XtMalloc(siz + 5)) == NULL) {
 		file_error_dialog(w,
 			no_backup_name_space_message, name);
 		return False;
 	};
-	strcpy(backup_name, name);
-	strcpy(backup_name + siz, ".old");
-	if((backup_fp = fopen(backup_name, "w")) == NULL) {
+	strcpy(*backup_name, name);
+	strcpy(*backup_name + siz, ".old");
+	if((backup_fp = fopen(*backup_name, "w")) == NULL) {
 		fclose(fp);
+		XtFree(*backup_name);
+		*backup_name = NULL;
 		return file_yes_no_dialog(w,
 				cant_open_backup_message, name);
 	} else {
@@ -226,12 +241,13 @@ static Boolean backup_file(
 					cant_write_backup_message, name);
 				fclose(backup_fp);
 				fclose(fp);
-				unlink(backup_name);
+				unlink(*backup_name);
+				XtFree(*backup_name);
+				*backup_name = NULL;
 				return reply;
 			}
 		}
 	};
-	XtFree(backup_name);
 	fclose(fp);
 	fclose(backup_fp);
 	return True;
@@ -254,24 +270,34 @@ static Boolean store_file_contents(
 	char	*name,
 	char	*buf)
 {
-	struct stat status;
 	NAT siz;
 	FILE *fp;
+	char *backup_name = NULL;
 
 	siz = strlen(buf);
-	if(!backup_file(w, name)) {
-		return False;
-	};
+	if(global_controls.backup_before_save) {
+		if(!backup_file(w, name, &backup_name)) {
+			return False;
+		};
+	}
 	if((fp = fopen(name, "w")) == NULL) {
 		file_error_dialog(w, cant_write_message, name);
+		if(backup_name) {XtFree(backup_name);}
 		return False;
 	};
 	if(fwrite(buf, sizeof(char), siz, fp) != siz) {
 		file_error_dialog(w, read_error_message, name);
 		fclose(fp);
+		if(backup_name) {XtFree(backup_name);}
 		return False;
 	};
 	fclose(fp);
+	if(backup_name) {
+		if(global_controls.delete_backup_after_save) {
+			unlink(backup_name);
+		}
+		XtFree(backup_name);
+	}
 	return True;
 }
 

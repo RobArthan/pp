@@ -5,8 +5,6 @@
 
 #define _xpp
 
-#define MAX_ARGS 	256
-
 #define XtNcommandLine	"commandLine"
 #define XtCCommandLine	"CommandLine"
 
@@ -23,13 +21,7 @@
  * Static and global data
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-char *cmd_buf;
-
-char *arglist[MAX_ARGS + 1];
-
 char *file_name;
-
-Bool edit_only = False;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Following option table reserves single lower-case letter
@@ -90,12 +82,12 @@ char **argv;
 	int l, acc;
 	if(argc == 1) {
 		file_name = NULL;
-		edit_only = True;
+		global_controls.edit_only = True;
 		return argc;
 	};
 	if(argc == 2) {
 		file_name = argv[1];
-		edit_only = True;
+		global_controls.edit_only = True;
 		return argc;
 	};
 	if(	(l = strlen(argv[1])) <= strlen("-file")
@@ -115,7 +107,7 @@ char **argv;
 	&&	!strncmp(argv[acc + 1], "-command", l) ) {
 		return acc + 2;
 	} else {
-		edit_only = (argc == acc + 1);
+		global_controls.edit_only = (argc == acc + 1);
 		return acc + 1;
 	}
 }
@@ -124,22 +116,14 @@ char **argv;
  * Set up non-X arguments
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-void set_up_arglist(argc, argv)
+static char *get_command_line(argc, argv)
 int argc;
 char **argv;
 {
-	int i, siz, skip;
-	char *p;
+	int i, siz, skip, len;
+	char *p, *res;
 
 	skip = check_sep(argc, argv);
-
-	if(argc - skip > MAX_ARGS) {
-		char buf[256];
-		sprintf(buf,
-		"too many command-line arguments (max %d)", MAX_ARGS);
-		msg("xpp", buf);
-		exit(51);
-	};
 		
 	siz = 0;
 
@@ -147,22 +131,22 @@ char **argv;
 		siz += strlen(argv[i]) + 1;
 	};
 
-	if((cmd_buf = XtMalloc(siz)) == NULL) {
+	if((res = XtMalloc(siz)) == NULL) {
 		msg("xpp",
 		"cannot allocate space for command-line\n");
 		exit(52);
 	};
 
-	p = cmd_buf;
+	p = res;
 
 	for(i = skip; i < argc; ++i) {
+		len = strlen(argv[i]);
 		strcpy(p, argv[i]);
-		arglist[i - skip] = p;
-		p += strlen(argv[i]) + 1;
+		p[len] = ' ';
+		p += len + 1;
 	};
-
-	arglist[i - skip] = NULL;
-
+	(skip < argc ? *(p - 1) : *p) = '\0';
+	return res;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -180,8 +164,8 @@ char **argv;
 		&argc,
 		argv, NULL, NULL);
 
-	set_up_arglist(argc, argv);
+	global_controls.command_line = get_command_line(argc, argv);
 
-	main_window_go(edit_only, file_name);
+	main_window_go(file_name);
 	exit(0);
 }
