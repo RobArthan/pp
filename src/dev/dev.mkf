@@ -1,6 +1,6 @@
 ######################################################################
 #
-#	dev.mkf from $Header: /home/rda/dev/RCS/dev.mkf,v 1.4 2000/09/11 09:25:06 rda Exp rda $
+#	dev.mkf from $Header: /home/rda/dev/RCS/dev.mkf,v 1.5 2000/09/11 12:11:09 rda Rel rda $
 #
 #	makefile for the for the ProofPower development tools
 #
@@ -29,13 +29,49 @@ PRODUCT=$(PRODNAME)-$(PPVER)
 CWD=$(shell pwd)
 COPYRIGHT="Copyright Lemma 1 Ltd. 2000"
 
+# Compiler specifics:
+ifeq ($(PPCOMPILER), POLYML)
+# Architecture type (used as a file-name suffix for images by NJML)
+HEAP_SUFFIX=		"polydb"
+# Commands to build the empty database
+EXPORT="PolyML.commit();"
+SLRPSTARTMLCMD=	val product_version : string = \"$(RELEASE)\";\
+	val copyright : string = \"Copyright (c) Lemma 1 Ltd. 2002\";\
+	use\"dtd108.sml\"; use\"imp108.sml\"; \
+	PolyML.commit();
+SLRPSTARTCMD= cat /usr/lib/poly/ML_dbase > $(SLRPDB);\
+	echo "$(SLRPSTARTMLCMD)" | poly $(SLRPDB)
+# Command to run ML
+RUNML="poly"
+MLDBPFX=""
+# Command to garbage-collect the database
+DBGC="poly"
+DBGCARG="-d"
+else
+ifeq ($(PPCOMPILER), SMLNJ)
 # Architecture type (used as a file-name suffix for images by NJML)
 HEAP_SUFFIX=		$(shell eval `.arch-n-opsys`; echo $$HEAP_SUFFIX)
+# Commands to build the empty database
+SLRPSTARTMLCMD=	val product_version : string = \"$(RELEASE)\";\
+	val copyright : string = \"Copyright (c) Lemma 1 Ltd. 2002\";\
+	use\"dtd108.sml\"; use\"imp108.sml\"; \
+	PPBuild.pp'save_name := \"$(SLRPDBNAME)\"; \
+	SMLofNJ.exportML \"$(SLRPDBNAME)\";
+SLRPSTARTCMD= echo "$(SLRPSTARTMLCMD)" | sml
+# Command to run ML
+RUNML="sml"
+MLDBPFX="@SMLload="
+# Command to garbage-collect the database
+DBGC="echo"
+DBGCARG="database garbage collection not needed with SML/NJ"
+endif
+endif
+# Distinctive tag for binary distribution file
+BINTAG=$(shell eval `make -s arch-os; arch-os`; echo $$ARCH-$$OS-$$PPCOMPILER | dd conv=lcase 2>/dev/null)
 
 # database names
 SLRPDBNAME=	slrpdb
 SLRPDB=		$(SLRPDBNAME).$(HEAP_SUFFIX)
-SLRPDBLDD=	$(SLRPDBNAME).ldd
 
 TESTTOOLS	 = doctch
 TESTTOOLS	+= doctds
@@ -72,8 +108,6 @@ MLFLAGS=
 #
 ######################################################################
 
-dtd108.ldd: $(SLRPDBLDD)
-imp108.ldd: dtd108.ldd
 dtd002.ldd: imp108.ldd
 imp002.ldd: dtd002.ldd
 dtd001.ldd: imp002.ldd
@@ -83,6 +117,8 @@ imp018.ldd: dtd018.ldd
 dtd017.ldd: imp018.ldd
 imp017.ldd: dtd017.ldd
 
+arch-os: dtd108.sml
+
 ######################################################################
 #
 #	Building the SLR Parser Generator
@@ -90,15 +126,6 @@ imp017.ldd: dtd017.ldd
 ######################################################################
 
 $(SLRPDB): imp017.ldd
-
-$(SLRPDBLDD):
-	rm -f $(SLRPDB)
-	echo	val product_version = \"$(PRODUCT)\"\; \
-		val copyright = \"$(COPYRIGHT)\"\; \
-		SMLofNJ.exportML \"$(SLRPDBNAME)\"\; \
-		| sml
-	chmod u+wr $(SLRPDB)
-	@touch $(SLRPDBLDD)
 
 dtd002.sml \
 imp002.sml : dtd002.doc imp002.doc hol.svf
@@ -186,6 +213,7 @@ srcdir:	reldir
 binrel: bindir $(SLRPDB) $(SHELLSCRIPTS) README.dev
 	cp $(SLRPDB) release/bin
 	cp $(SHELLSCRIPTS) release/bin
+	cp arch-os release/bin
 	cp README.dev release
 	chmod -R a-w release
 	chmod -R g-w release
@@ -232,28 +260,14 @@ veryclean: clean
 #
 ######################################################################
 
-dtd108.ldd: dtd108.sml
-	@rm -f $@ $*.err 2>/dev/null
-	@echo "Compiling (code)" $<
-	@echo "use \"$<\"; SMLofNJ.exportML \"$(SLRPDBNAME)\";"\
-	        | sml $(MLFLAGS) @SMLload=$(SLRPDB) > $*.err
-	@echo "+++ Compiled $<: OK (Compilation Run Complete) +++" >> $*.err
-	@mv $*.err $@
-
-imp108.ldd: imp108.sml
-	@rm -f $@ $*.err 2>/dev/null
-	@echo "Compiling (code)" $<
-	@echo "use \"$<\"; PPBuild.pp'save_name := \"$(SLRPDBNAME)\";" \
-		"PPBuild.pp'save();"\
-	        | sml $(MLFLAGS) @SMLload=$(SLRPDB) > $*.err
-	@echo "+++ Compiled $<: OK (Compilation Run Complete) +++" >> $*.err
-	@mv $*.err $@
+dtd108.ldd imp108.ldd: dtd108.sml imp108.sml
+	$(SLRPSTARTCMD)  | tee dtd108.ldd > imp108.ldd
 
 %.ldd: %.sml
 	@rm -f $@ $*.err 2>/dev/null
 	@echo "Compiling (code)" $<
 	@echo "PPCompiler.gc_messages false; PPBuild.pp'load \"$<\";"\
-	        | sml $(MLFLAGS) @SMLload=$(SLRPDB) > $*.err
+	        | $(RUNML) $(MLFLAGS) $(MLDBPFX)$(SLRPDB) > $*.err
 	@echo "+++ Compiled $<: OK (Compilation Run Complete) +++" >> $*.err
 	@mv $*.err $@
 
@@ -261,7 +275,7 @@ imp108.ldd: imp108.sml
 	@rm -f $@ $.err 2>/dev/null
 	@echo "Compiling (test)" $<
 	@echo "PPBuild.pp'use \"$<\"; PPCompiler.exit 0;" \
-		| sml $(MLFLAGS) @SMLload=$(SLRPDB) > $*.err
+		| $(RUNML) $(MLFLAGS) $(MLDBPFX)$(SLRPDB) > $*.err
 	@mv $*.err $@
 
 %.sml: %.doc hol.svf
