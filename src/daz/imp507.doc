@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.240 $ $RCSfile: imp507.doc,v $ $Date: 2002/12/10 15:36:15 $
+% imp507.doc %Z% $Revision: 1.241 $ $RCSfile: imp507.doc,v $ $Date: 2002/12/15 14:45:01 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.240 $%
+\def\SCCSversion{$Revision: 1.241 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/12/10 15:36:15 $%
+\TPPdate{\FormatDate{$Date: 2002/12/15 14:45:01 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -188,8 +188,8 @@ being renamed is defined in the same package specification.
 \item[Issue 1.235, 1.236] Schema references in function $\Xi$-lists.
 \item[Issue 1.237] Rationalisation of formal procedures in package bodies (part of R0066).
 \item[Issues 1.238, 1.239] Code changes for R0066.
-\item[Issues 1.240] Now takes a theory checkpoint before each web clause and rolls
-back if an exception is raised.
+\item[Issue 1.240] Now takes a theory checkpoint before each web clause and rolls back if an exception is raised.
+\item[Issue 1.241] Added exception logging.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -8589,18 +8589,52 @@ fun Ûget_replacementÝ (lab : string) : REPLACEMENT OPT = (
 );
 =TEX
 =SML
-abstype ÛCN_STATEÝ = CNState of Z_GENERATOR_STATE * Z_GENERATOR_STATE E_DICT
+type ÛCN_EXCEPTION_LOGÝ = string list S_DICT;
+abstype ÛCN_STATEÝ =
+	CNState of Z_GENERATOR_STATE *
+	Z_GENERATOR_STATE E_DICT *
+	CN_EXCEPTION_LOG
 with
 (*
 =TEX
 =SML
 *)
-	val Ûinitial_cn_stateÝ : CN_STATE = CNState (init_z_generator_state, initial_e_dict);
+	val Ûinitial_cn_stateÝ : CN_STATE = CNState (init_z_generator_state, initial_e_dict, initial_s_dict);
+(*
+=TEX
+
+=SML
+*)
+	val Ûexception_logÝ : CN_EXCEPTION_LOG ref = ref initial_s_dict;
+(*
+=TEX
+In the following, the special first two clauses are for SML/NJ (for which {\it string\_of\_exn} loses information).
+=SML
+*)
+	fun Ûtext_of_exnÝ (Fail msg : exn) : string = get_message msg
+	|   text_of_exn (Error msg) = get_message msg
+	|  text_of_exn ex = string_of_exn ex;
+
+	fun Ûadd_exception_log_entryÝ (ex : exn) = (
+		exception_log :=
+		s_enter (!script_name)
+		(case s_lookup (!script_name) (!exception_log) of
+			Value msgs => text_of_exn ex::msgs
+		|	Nil => [text_of_exn ex])
+		(!exception_log)
+	);
+
+	fun Ûget_exception_logsÝ (() : unit) : CN_EXCEPTION_LOG = !exception_log;
+
+	fun Ûdelete_exception_logÝ (script : string) : unit = (
+		exception_log := !exception_log drop (fn (k, _) => k = script)
+	);
 (*
 =TEX
 It is now important not to save the state if an exception is raised. 
 =SML
 *)
+
 	fun Ûcommon_z_generatorÝ (sco : bool) (w : WEB_CLAUSE) : unit = (
 		let	val save_zg_state = get_z_generator_state();
 			val pp_state = checkpoint "cn";
@@ -8615,7 +8649,8 @@ It is now important not to save the state if an exception is raised.
 				set_ti_context save_ti_cxt;
 				let	val thy = get_current_theory_name ();
 				in	rollback pp_state;
-					open_theory thy handle Fail _ => ()
+					open_theory thy handle Fail _ => ();
+					add_exception_log_entry ex
 				end;
 				raise ex
 			);
@@ -8623,6 +8658,7 @@ It is now important not to save the state if an exception is raised.
 			set_ti_context save_ti_cxt
 		end
 	);
+
 	fun Ûcn_z_generatorÝ (w : WEB_CLAUSE) : unit = (
 		common_z_generator false w
 	);
@@ -8635,6 +8671,7 @@ It is now important not to save the state if an exception is raised.
 *)
 	fun Ûrestart_cn_z_generatorÝ (():unit) : unit = (
 		set_z_generator_state init_z_generator_state;
+		exception_log := initial_s_dict;
 		reset_cn_parser_state()
 	);
 (*
@@ -8680,13 +8717,15 @@ expected to see in the following.
 *)
 	fun Ûdo_new_scriptÝ (continue : bool)
 		{	name : string,
-			state = CNState (zg_state, st_db) : CN_STATE} : unit = (
+			state = CNState (zg_state, st_db, exn_log) : CN_STATE} : unit = (
 		let	val old_state = get_z_generator_state ();
 			val old_state_db = !state_db;
+			val old_exn_log = !exception_log;
 			val thy = get_current_theory_name();
 		in
 		(	set_z_generator_state zg_state;
 			state_db := st_db;
+			exception_log := exn_log;
 			open_theory "cn";
 			new_theory_aux [] name;
 			set_cn_created();
@@ -8696,6 +8735,7 @@ expected to see in the following.
 		) handle ex => (
 			set_z_generator_state old_state;
 			state_db := old_state_db;
+			exception_log := old_exn_log;
 			open_theory thy;
 			reraise ex "new_script"
 			)
@@ -8709,14 +8749,16 @@ expected to see in the following.
 *)
 	fun Ûdo_new_script1Ý (continue : bool)
 		{	name : string,
-			state = CNState (zg_state, st_db) : CN_STATE,
+			state = CNState (zg_state, st_db, exn_log) : CN_STATE,
 			library_theories : string list} : unit = (
 		let	val old_state = get_z_generator_state ();
 			val old_state_db = !state_db;
+			val old_exn_log = !exception_log;
 			val thy = get_current_theory_name();
 		in
 		(	set_z_generator_state zg_state;
 			state_db := st_db;
+			exception_log := exn_log;
 			open_theory "cn";
 			new_theory_aux [] name;
 			set_cn_created();
@@ -8733,6 +8775,7 @@ expected to see in the following.
 		) handle ex => (
 			set_z_generator_state old_state;
 			state_db := old_state_db;
+			exception_log := old_exn_log;
 			open_theory thy;
 			reraise ex "new_script1"
 			)
@@ -8754,19 +8797,20 @@ expected to see in the following.
 		= do_new_script1 true;
 
 	fun Ûget_cn_stateÝ (() : unit) : CN_STATE = (
-		CNState (get_z_generator_state(), !state_db)
+		CNState (get_z_generator_state(), !state_db, !exception_log)
 	);
 
-	fun Ûset_cn_stateÝ (CNState (zg_state, st_db) : CN_STATE) : unit = (
+	fun Ûset_cn_stateÝ (CNState (zg_state, st_db, exn_log) : CN_STATE) : unit = (
 		set_z_generator_state zg_state;
 		state_db := st_db;
+		exception_log := exn_log;
 		save_z_generator_state();
 		(open_theory o #script_name) zg_state
 			handle Fail _ => open_theory "cn"
 	);
 
 	fun Ûget_saved_cn_stateÝ (script : string) : CN_STATE = (
-		CNState (get_saved_z_generator_state script, !state_db)
+		CNState (get_saved_z_generator_state script, !state_db, !exception_log)
 		handle ex => reraise ex "get_saved_cn_state"
 	);
 (*
@@ -8970,6 +9014,7 @@ fun Ûdelete_scriptÝ (scr : string) : unit = (
 		restore_subunit_env thys;
 		state_db := list_e_merge initial_e_dict
 			(e_flatten (!state_db) drop (fn (k, _) => k mem scrs));
+		map delete_exception_log scrs;
 		open_theory "cn";
 		delete_theories thys;
 		comment "delete_script" 507091 [fn _ => scr];
