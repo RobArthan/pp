@@ -90,6 +90,10 @@ typedef struct menu_item {
 	extern Boolean add_palette(
 		Widget	w);
 #endif
+#ifndef _find
+	extern Boolean add_find_tool(
+		Widget	w);
+#endif
 #ifndef _xmisc
 	extern void set_menu_item_sensitivity(
 		Widget	w,	/* menu widget */
