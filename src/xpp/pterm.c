@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.33 2003/06/16 16:21:20 rda Exp robarthan $
+ * $Id: pterm.c,v 2.34 2003/06/17 22:10:32 robarthan Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -414,9 +414,7 @@ static sig_info	sig_infos []  = {
 #ifdef SIGPOLL
 	{"pollable event",		SIGPOLL,	H_FATAL, },
 #endif
-#ifdef SIGPROF
-	{"profiling time expired",	SIGPROF,	H_FATAL, },
-#endif
+/* SIGPROF is left to the calling environment to decide so that gprof and the like work */
 #ifdef SIGSYS
 	{"bad system call",		SIGSYS,		H_FATAL, },
 #endif
@@ -517,7 +515,7 @@ void get_pty(void)
 	}
 
 	tio.c_lflag |= ISIG;
-	tio.c_lflag |= ICANON;
+	tio.c_lflag &= ~ICANON;
 	tio.c_lflag &= ~ECHO;
 	tio.c_lflag &= ~PENDIN;
 	tio.c_lflag &= ~NOFLSH;
