@@ -40,10 +40,12 @@ of the tools for introducing HOL product types.}
 
 \subsection{Changes History} 
 \begin{description}
-\item [Issues 1.1] 
+\item [Issue 1.1] 
 First version.
-\item [Issues 1.2] 
+\item [Issues 1.2,1.3] 
 Try based on cacheing implications.
+\item [Issue 1.4]
+Split cacheing into two.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -58,35 +60,42 @@ This document provides an implementations for them.
 This document contains an implementation for the
 tools introducing HOL product types.
 
-$labelled\_product\_spec$ and $unlabelled\_product\_spec$
-both are implemented in terms of $cached\_product\_rule$,
-and, should they require a new invocation of that function,
-$cached\-\_product\-\_rule$ about half the total executiontime of the first function, and will take the bulk of the total execution time of the second (unlabelled).
-With the current implementation (January 1992) the timings for $cached\-\_product\-\_rule$ are:
+$labelled\_product\_spec$ and $unlabelled\-\_product\-\_spec$
+are implemented in terms of the subsidiary functions $cached\-\_(un)labelled\-\_product\-\_rule$,
+and, should they require a new invocation of those function,
+will take longer.
+With the current implementation (January 1992) the timings for proving labelled and unlabelled cacheing theorems assuming that the $n - 1^{th}$ theorem is cached, and
+labelled and unlabelled product types assuming the required cached theories are present,
+are as follows:
 
-\begin{tabular} {l | l l l l l l l l l }
-n = & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 \\ \hline
-Time(secs) &  \\
+\begin{tabular} {l | l l l l l l l l l l l}
+n = & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 & 11 & 12 \\ \hline
+lab. cache & 1.1 & 1.1 & 1.9 & 2.5 & 3.3 & 4.8 & 6.7 & 9.4 & 12.3 & 16.4 & 21.3 \\
+unlab. cache & 0.8 & 1.0 & 1.5 & 2.0 & 2.1 & 2.8 & 4.0 & 4.8 & 6.0 & 7.4 &  9.3 \\
+lab. & 0.4  & 0.9 & 1.1 & 1.5 & 2.3 & 3.3 & 4.3 & 5.8 & 7.3 & 9.5 & 12.1 \\
+unlab. & 0.4 & 0.6 & 1.1 & 1.5 & 1.9 & 2.9 & 3.8 & 4.6 & 6.2 & 7.4 & 9.3 \\
 \end{tabular}
 
 \subsubsection{Dependencies}
 This document takes its signature from \cite{DS/FMU/IED/DTD059}.
 \subsubsection{Deficiencies}
-The initial cache theory is not set to a necessarily good value.
+In particular circumstances a function might add material into theories
+but not complete the requested additions, leving an untidy state.
+This would be particularly unfortunate in a cache theory,
+where the partial effort cannot be deleted.
+Some effort is made to prevent this, but it is not completely secured.
 \subsubsection{Possible Enhancements}
 None known.
 
-\section{Preamble}
-=IGN
+\section{PREAMBLE}
+=SML
 structure âProductTypesá : ProductTypes = struct
 =TEX
-\section{THE THEORY}
+We need to work in some cache theory, probably set aside for that purpose alone.
 =SML
 val lthy = get_current_theory_name ();
 val _ = open_theory "pair";
-val _ = new_theory "first_cache_theory";
 val _ = push_proof_context pair_epc;
-=IGN
 val lsubgoal_package_quiet = set_flag("subgoal_package_quiet",
 	true);
 =TEX
@@ -113,13 +122,35 @@ val âtvcá = »:'c¼;
 val âtv1á = »:'1¼;
 val âtv2á = »:'2¼;
 =TEX
+Create $:(...((ty1 ‰ ty2) ‰ ty3) ...)$:
+=SML
+fun ârlist_mk_‰_typeá tys = (
+let	fun aux [ty] = ty
+	| aux (ty :: rest) = mk_‰_type(aux rest,ty)
+	| aux _ = fail "rlist_mk_‰_type" 0 [];
+in
+	aux (rev tys)
+end);
+=TEX
+Create $(...((c1\ €\ c2)\ €\ c3)...)$:
+=SML
+fun ârlist_mk_€á cnjs = (
+let	fun aux [cnj] = cnj
+	| aux (cnj :: rest) = mk_€(aux rest,cnj)
+	| aux _ = fail "rlist_mk_€" 0 [];
+in
+	aux (rev cnjs)
+end);
+=TEX
 
 \subsection{Timing}
 The following value allows timing to be invoked as on one off
 (false invokes timing).
 A reference variable is inappropriate.
+These functions are not currently used in the document,
+but would become useful if further tuning is required.
 =SML
-val ânotimingá = false;
+val ânotimingá = true;
 =TEX
 Time the application of a tactic to a goal, and its resulting proof to its
 arguments.
@@ -212,78 +243,14 @@ fun âLALL_€_Cá conv : CONV = (fn tm =>
 );
 =TEX
 \subsection{Rules}
-=RULE
-„_€_left_rule
-É
-ö … „ x Ž p[x] € q[x]
-É
-ö … „ x Ž p[x]
-=TEX
-=SML
-local
-	val lthm = tac_proof(([],»ƒ p q Ž („ x : 'a Žp x € q x) Š $„ p¼),
-		once_rewrite_tac[eq_sym_rule
-		(simple_ƒ_elim »p:'a ‹ BOOL¼
-		(inst_type_rule [(BOOL,tvb)] eta_axiom))] THEN
-		rewrite_tac[] THEN
-		REPEAT strip_tac THEN
-		simple_„_tac »x:'a¼ THEN
-		goal_in_asms_tac);
-in
-fun â„_€_left_ruleá (thm : THM) = (
-let	val (x,bdy) = dest_simple_„ (concl thm);
-	val (c1,c2) = dest_€ bdy;
-	val s1 = inst_type_rule [(type_of x,tva)] lthm;
-	val s2 = list_simple_ƒ_elim[mk_simple_(x,c1),
-		mk_simple_(x,c2)] s1;
-	val s3 = conv_rule(RATOR_C(
-		RAND_C(BINDER_C(€_C2 simple_%beta%_conv simple_%beta%_conv))))
-		 s2;
-	val s4 = Š_elim s3 thm
-in
-	s4
-end);
-end;
-=TEX
-=RULE
-„_€_right_rule
-É
-ö … „ x Ž p[x] € q[x]
-É
-ö … „ x Ž q[x]
-=TEX
-=SML
-local
-	val lthm = tac_proof(([],»ƒ p q Ž („ x : 'a Žp x € q x) Š $„ q¼),
-		once_rewrite_tac[eq_sym_rule
-		(simple_ƒ_elim »q:'a ‹ BOOL¼
-		(inst_type_rule [(BOOL,tvb)] eta_axiom))] THEN
-		rewrite_tac[] THEN
-		REPEAT strip_tac THEN
-		simple_„_tac »x:'a¼ THEN
-		goal_in_asms_tac);
-in
-fun â„_€_right_ruleá (thm : THM) = (
-let	val (x,bdy) = dest_simple_„ (concl thm);
-	val (c1,c2) = dest_€ bdy;
-	val s1 = inst_type_rule [(type_of x,tva)] lthm;
-	val s2 = list_simple_ƒ_elim[mk_simple_(x,c1),
-		mk_simple_(x,c2)] s1;
-	val s3 = conv_rule(RATOR_C
-		(RAND_C(BINDER_C(€_C2 simple_%beta%_conv simple_%beta%_conv)))) s2;
-	val s4 = Š_elim s3 thm
-in
-	s4
-end);
-end;
-=TEX
 A limited form of matching $type\_lemmas\_thm$:
 =RULE
 simple_match_type_lemmas_thm
 É
 … „ f: ty1 ‹ ty2 Ž TypeDefn ( x Ž T) f
 É
-… „ abs repŽ (ƒ a:ty1Ž abs (rep a) = a) € (ƒ r:ty2Ž rep (abs r) = r)
+… „ abs repŽ (ƒ a:ty1Ž abs (rep a) = a) € 
+	(ƒ r:ty2Ž rep (abs r) = r)
 =TEX
 =SML
 local
@@ -312,24 +279,6 @@ val âpair_eq_thmá = tac_proof(([],
 val â„__x_t_thmá = tac_proof(([],»„ x:'a Ž ( x Ž T) x¼),
 	rewrite_tac[]);
 =TEX
-=SML
-fun ârlist_mk_‰_typeá tys = (
-let	fun aux [ty] = ty
-	| aux (ty :: rest) = mk_‰_type(aux rest,ty)
-	| aux _ = fail "rlist_mk_‰_type" 0 [];
-in
-	aux (rev tys)
-end);
-=TEX
-=SML
-fun ârlist_mk_€á cnjs = (
-let	fun aux [cnj] = cnj
-	| aux (cnj :: rest) = mk_€(aux rest,cnj)
-	| aux _ = fail "rlist_mk_€" 0 [];
-in
-	aux (rev cnjs)
-end);
-=TEX
 Each theorem in the below is associated with a ``matching''
 conversion.
 =SML
@@ -353,7 +302,8 @@ lpair_ƒ_conv
 »ƒ p : '1 ‰ '2 Ž f[p]¼
 É
 É
-… (ƒ p : '1 ‰ '2 Ž f[p]) ‚ (ƒ p1 p2 Ž f [(p1, p2)])
+… (ƒ p : '1 ‰ '2 Ž f[p]) ‚ 
+	(ƒ p1 p2 Ž f [(p1, p2)])
 =TEX
 =SML
 local
@@ -363,8 +313,10 @@ fun âlpair_ƒ_convá tm = (
 let	val (_,abs) = dest_app tm;
 	val ptype = fst(dest_‹_type(type_of abs));
 	val tyinsts = type_match ptype atype;
-	val s1 = simple_ƒ_elim abs (inst_type_rule tyinsts lpair_ƒ_thm);
-	val s2 = conv_rule(RAND_C(BINDER_C(BINDER_C simple_%beta%_conv))) s1;
+	val s1 = simple_ƒ_elim abs 
+		(inst_type_rule tyinsts lpair_ƒ_thm);
+	val s2 = conv_rule(RAND_C(BINDER_C
+		(BINDER_C simple_%beta%_conv))) s1;
 in
 	s2
 end
@@ -390,7 +342,8 @@ lpair_„_conv
 »„ p : '1 ‰ '2 Ž f[p]¼
 É
 É
-… („ p : '1 ‰ '2 Ž f[p]) ‚ („ p1 p2 Ž f [(p1, p2)])
+… („ p : '1 ‰ '2 Ž f[p]) ‚ 
+	(„ p1 p2 Ž f [(p1, p2)])
 =TEX
 =SML
 local
@@ -401,7 +354,8 @@ let	val (_,abs) = dest_app tm;
 	val ptype = fst(dest_‹_type(type_of abs));
 	val tyinsts = type_match ptype atype;
 	val s1 = simple_ƒ_elim abs (inst_type_rule tyinsts lpair_„_thm);
-	val s2 = conv_rule(RAND_C(BINDER_C(BINDER_C simple_%beta%_conv))) s1;
+	val s2 = conv_rule(RAND_C(BINDER_C
+		(BINDER_C simple_%beta%_conv))) s1;
 in
 	s2
 end
@@ -428,7 +382,8 @@ lpair_„_conv1
 »„ p : 'a ‹ '1 ‰ '2 Ž f[p]¼
 É
 É
-… („ p : 'a ‹ '1 ‰ '2 Ž f[p]) ‚ („ p1 p2 Ž f [( x Ž (p1 x, p2 x))])
+… („ p : 'a ‹ '1 ‰ '2 Ž f[p]) ‚ 
+	(„ p1 p2 Ž f [( x Ž (p1 x, p2 x))])
 =TEX
 =SML
 local
@@ -472,7 +427,8 @@ l„_pair_conv
 »„ p : '1 ‰ '2 ‹ 'a Ž f[p]¼
 É
 É
-… („ p : '1 ‰ '2 ‹ 'a Ž f[p]) ‚ („ p' Ž f [((x,y) Ž p' x y)])
+… („ p : '1 ‰ '2 ‹ 'a Ž f[p]) ‚ 
+	(„ p' Ž f [((x,y) Ž p' x y)])
 =TEX
 =SML
 local
@@ -529,45 +485,63 @@ fun âget_cache_theoriesá (():unit) : string list = (!cache_theories);
 end;
 =TEX
 \subsection{Defining n-tuples}
-We need to initialise $cached\_product\_rule$ by saving the result of $cached\_product\_rule$ $1$ in the initial cache theory.
+We will declare the method of getting the two keys 
+for saving cached theorems once for all.
+=SML
+fun âclp_keyá (num:int):string = string_of_int num ^ "CachedLabelledProduct";
+fun âcup_keyá (num:int):string = string_of_int num ^ "CachedUnlabelledProduct";
+=TEX
+We need to initialise $cached\_labelled\_product\_rule$ by saving the result of $cached\_labelled\_product\_rule$ $1$ in the initial cache theory,
+and similarly with the unlabelled product.
 =SML
 val _ = open_theory(hd(get_cache_theories()));
-
-val tuple1_thm = save_thm("1TUPLE",(
+=TEX
+=SML
+val âcache_labelled_thm1á = (
 	push_goal([],
 	»(„ abs : '1 ‹ 'a Ž
 	 „ rep : 'a ‹ '1 Ž
 	 (ƒ aŽ abs(rep a) = a) € (ƒ r Ž rep(abs r) = r))
 	Š
 	„ 1Tuple:'1 ‹ 'a Ž
-	(„ Lab1_1Ž ƒ t x1Ž Lab1_1 (1Tuple x1) = x1 € 1Tuple (Lab1_1 t) = t) €
-	(ƒ x1 y1Ž 1Tuple x1 = 1Tuple y1 ‚ x1 = y1) € (ƒ tŽ „ x1Ž t = 1Tuple x1)¼);
+	(„ Lab1_1Ž ƒ t x1Ž Lab1_1 (1Tuple x1) = x1 € 1Tuple (Lab1_1 t) = t)¼);
+	a strip_tac;
+	a(simple_„_tac »abs : '1 ‹ 'a¼);
+	a(simple_„_tac »rep:'a ‹ '1¼ THEN asm_rewrite_tac[]);
+	pop_thm());
+=TEX
+=SML
+val âcache_unlabelled_thm1á = (
+	push_goal([],
+	»(„ abs : '1 ‹ 'a Ž
+	 „ rep : 'a ‹ '1 Ž
+	 (ƒ aŽ abs(rep a) = a) € (ƒ r Ž rep(abs r) = r))
+	Š
+	„ 1Tuple:'1 ‹ 'a Ž
+	(ƒ x1 y1Ž 1Tuple x1 = 1Tuple y1 ‚ x1 = y1) € 
+		(ƒ tŽ „ x1Ž t = 1Tuple x1)¼);
 	a strip_tac;
 	a(simple_„_tac »abs : '1 ‹ 'a¼);
 	a(REPEAT €_tac);
-	a(simple_„_tac »rep:'a ‹ '1¼ THEN asm_rewrite_tac[]);
 	a(REPEAT simple_ƒ_tac THEN ‚_T2 
 		(fn thm => ante_tac(ap_fun_rule »rep:'a ‹ '1¼  thm) THEN
 		asm_rewrite_tac[])
 		(fn thm => pure_rewrite_tac[thm, eq_rewrite_thm]));
 	a(simple_ƒ_tac THEN simple_„_tac »(rep:'a ‹ '1) t¼ 
 		THEN asm_rewrite_tac[]);
-	pop_thm()));
+	pop_thm());
 =TEX
-Now we can define $cached\_product\_rule$ itself.
-
-Start of main function.
-Notice the addition of timing material to determine when this
-is so slow - these will be removed in any product version.
+Now we can define $cached\_labelled\_product\_rule$ itself.
 =SML
-fun âcached_product_ruleá (arg: int) : THM = (
+fun âcached_labelled_product_ruleá (arg: int) : THM = (
 let
+	val was_thy = get_current_theory_name();
 =TEX
 The following finds pre-existing copies of the $cached\_product\_rule$
 theorem, should they exist.
 =SML
 fun âfind_n_tupleá (n:int):THM OPT = (
-let	val key = string_of_int n ^ "TUPLE";
+let	val key = clp_key n;
 	fun aux [] = Nil
 	| aux (thy :: rest) = (Value(get_thm thy key)
 		handle (Fail _) => aux rest);
@@ -579,17 +553,19 @@ The following declares a new n-tuple type, knowing that the type isn't
 in scope.
 =SML
 fun âdeclare_n_tupleá (n:int) :THM = (
-let	val last_thm = cached_product_rule (n-1);
-	val was_thy = get_current_theory_name();
-	val cache_thy = (hd(get_cache_theories()))
+let	val cache_thy = (hd(get_cache_theories()))
 		handle complaint =>
-		divert complaint "hd" "cached_product_rule" 59006 [];
+		divert complaint "hd" "cached_labelled_product_rule" 59006 [];
 	val sideeffect = if is_theory_ancestor cache_thy was_thy
 		then ()
-		else fail "cached_product_rule" 59002 [fn () => cache_thy];
+		else fail "cached_labelled_product_rule" 59002 
+			[fn () => cache_thy];
+	val last_thm = cached_labelled_product_rule (n-1);
+	val sideeffect = diag_string(get_error_message 59012 [string_of_int n]);
+in let
 	val sideeffect = open_theory cache_thy;
 	val nstr = string_of_int n;
-	val key = nstr ^ "TUPLE";
+	val key = clp_key n;
 	val inters = map string_of_int (interval 1 n);
 	val tyvars = map (fn x => mk_vartype("'"^ x)) inters;
 	val xi = map (fn x => mk_var("x"^x,mk_vartype("'"^ x))) inters;
@@ -601,7 +577,6 @@ let	val last_thm = cached_product_rule (n-1);
 	val t = mk_var("t",tva);
 	val ntuple_args = list_mk_app(ntuple,xi);
 	val succedent = mk_simple_„(ntuple,
-	  mk_€(
 		list_mk_simple_„(labs,
 		list_mk_simple_ƒ((t :: xi),
 		rlist_mk_€(
@@ -612,15 +587,7 @@ let	val last_thm = cached_product_rule (n-1);
 		list_mk_app(ntuple,
 		map (fn lab => mk_app(lab,t)) labs),
 		t)])))
-		,
-		mk_€(
-		 (list_mk_simple_ƒ(xi @ yi,mk_‚(mk_eq(ntuple_args,list_mk_app(ntuple,yi)),
-			rlist_mk_€(map (fn (x,y) => mk_eq(x,y)) (combine xi yi))))),
-		 (mk_simple_ƒ(t,
-		 list_mk_simple_„(xi,
-			 mk_eq(t,ntuple_args))))
-		)
-	));
+			);
 	val ntuple_type = rlist_mk_‰_type tyvars;
 	val abs = mk_var("abs",mk_‹_type(ntuple_type,tva));
 	val rep = mk_var("rep",mk_‹_type(tva,ntuple_type));
@@ -637,15 +604,14 @@ let	val last_thm = cached_product_rule (n-1);
 	val thm_concl = mk_Š(antecedent, succedent);
 =TEX
 We now have the theorems conclusion, $thm\_concl$: now to prove it.
-We do so by instantiating the $n-1\sup{th}$ theorem.
+We do so by instantiating the $n-1^{th}$ theorem.
 =SML
 	val old_tyvars = rev(tl(rev tyvars));
 	val tyinsts = ((mk_‰_type(tv1,tv2),tv1) ::
 		combine  (tl(tl tyvars)) (tl old_tyvars));
-	val s1 = time_rule "s1" (inst_type_rule tyinsts) last_thm;
-	val s2 = time_rule "s2" (Š_elim s1) (asm_rule antecedent);
-	val s3 = time_rule "s3" (conv_rule (BINDER_C
-		(€_C2 ((ALL_SIMPLE_„_C (BINDER_C lpair_ƒ_conv))
+	val s1 = inst_type_rule tyinsts last_thm;
+	val s2 = conv_rule (RAND_C(((BINDER_C
+		((ALL_SIMPLE_„_C (BINDER_C lpair_ƒ_conv))
 			THEN_C lpair_„_conv1
 			THEN_C ALL_SIMPLE_„_C
 			(ALL_SIMPLE_ƒ_C
@@ -655,34 +621,159 @@ We do so by instantiating the $n-1\sup{th}$ theorem.
 			)
 			(ONCE_MAP_C simple_%beta%_conv))
 ))
-			(€_C2 (lpair_ƒ_conv THEN_C
+			)
+		THEN_C l„_pair_conv THEN_C ONCE_MAP_C l_%beta%_conv)
+		) THEN_C
+		%alpha%_conv thm_concl) s1;
+	val sideeffect = save_thm(key,s2)
+		handle complaint =>
+		pass_on complaint "save_thm" "cached_labelled_product_rule";
+	val sideeffect = open_theory was_thy;
+in
+	s2
+end
+handle (complaint as (Fail _)) =>
+(open_theory was_thy;
+if area_of complaint = "cached_labelled_product_rule"
+then reraise complaint "cached_labelled_product_rule"
+else fail "cached_labelled_product_rule" 59003 [fn () => string_of_int n])
+end
+);
+=TEX
+Main function:
+=SML
+in
+	if arg < 1 
+	then fail "cached_labelled_product_rule" 59001 
+		[fn () => string_of_int arg]
+	else if arg = 1
+	then (if is_theory_ancestor "pair" was_thy 
+		then cache_labelled_thm1
+		else fail "cached_labelled_product_rule" 59017 [])
+	else (case (find_n_tuple arg) of
+	Value thm => thm
+	| Nil => declare_n_tuple arg)
+
+end); (* of cached_labelled_product_rule *)
+=TEX
+We define $cached\_unlabelled\_product\_rule$ in a similar manner.
+=SML
+fun âcached_unlabelled_product_ruleá (arg: int) : THM = (
+let
+	val was_thy = get_current_theory_name();
+=TEX
+The following finds pre-existing copies of the $cached\_product\_rule$
+theorem, should they exist.
+=SML
+fun âfind_n_tupleá (n:int):THM OPT = (
+let	val key = cup_key n;
+	fun aux [] = Nil
+	| aux (thy :: rest) = (Value(get_thm thy key)
+		handle (Fail _) => aux rest);
+in
+		aux (get_cache_theories())
+end);
+=TEX
+The following declares a new n-tuple type, knowing that the type isn't
+in scope.
+=SML
+fun âdeclare_n_tupleá (n:int) :THM = (
+let	val cache_thy = (hd(get_cache_theories()))
+		handle complaint =>
+		divert complaint "hd" "cached_unlabelled_product_rule" 59006 [];
+	val sideeffect = if is_theory_ancestor cache_thy was_thy
+		then ()
+		else fail "cached_unlabelled_product_rule" 59002 
+			[fn () => cache_thy];
+	val last_thm = cached_unlabelled_product_rule (n-1);
+	val sideeffect = diag_string(get_error_message 59013 [string_of_int n]);
+in let
+	val sideeffect = open_theory cache_thy;
+	val nstr = string_of_int n;
+	val key = cup_key n;
+	val inters = map string_of_int (interval 1 n);
+	val tyvars = map (fn x => mk_vartype("'"^ x)) inters;
+	val xi = map (fn x => mk_var("x"^x,mk_vartype("'"^ x))) inters;
+	val yi = map (fn x => mk_var("y"^x,mk_vartype("'"^ x))) inters;
+	val ntuple = mk_var(nstr^ "Tuple",list_mk_‹_type (tyvars @ [tva]));
+	val t = mk_var("t",tva);
+	val ntuple_args = list_mk_app(ntuple,xi);
+	val succedent = mk_simple_„(ntuple,
+		mk_€(
+		 (list_mk_simple_ƒ(xi @ yi,mk_‚(
+			mk_eq(ntuple_args,list_mk_app(ntuple,yi)),
+			rlist_mk_€(map (fn (x,y) => mk_eq(x,y)) (combine xi yi))))),
+		 (mk_simple_ƒ(t,
+		 list_mk_simple_„(xi,
+			 mk_eq(t,ntuple_args))))
+		)
+	);
+	val ntuple_type = rlist_mk_‰_type tyvars;
+	val abs = mk_var("abs",mk_‹_type(ntuple_type,tva));
+	val rep = mk_var("rep",mk_‹_type(tva,ntuple_type));
+	val avar = mk_var("a",tva);
+	val rvar = mk_var("r",ntuple_type);
+	val antecedent = (
+		list_mk_simple_„([abs,rep],
+		mk_€
+		(mk_simple_ƒ(avar,
+		mk_eq(mk_app(abs,mk_app(rep,avar)),avar)),
+		mk_simple_ƒ(rvar,
+		mk_eq(mk_app(rep,mk_app(abs,rvar)),rvar))))
+	);
+	val thm_concl = mk_Š(antecedent, succedent);
+=TEX
+We now have the theorems conclusion, $thm\_concl$: now to prove it.
+We do so by instantiating the $n-1^{th}$ theorem.
+=SML
+	val old_tyvars = rev(tl(rev tyvars));
+	val tyinsts = ((mk_‰_type(tv1,tv2),tv1) ::
+		combine  (tl(tl tyvars)) (tl old_tyvars));
+	val s1 = inst_type_rule tyinsts last_thm;
+	val s2 = conv_rule ((RAND_C((BINDER_C
+		(€_C2 (lpair_ƒ_conv THEN_C
 				ONCE_MAP_C lpair_ƒ_conv THEN_C
 				ALL_SIMPLE_ƒ_C (RAND_C(LEFTMOST_€_C 
 					(simple_eq_match_1_conv pair_eq_thm))))
-				(BINDER_C lpair_„_conv)))
-		)) s2;
-	val s4 = time_rule "s4" (conv_rule (l„_pair_conv THEN_C ONCE_MAP_C l_%beta%_conv)) s3;
-	val s5 = time_rule "s5" (conv_rule (%alpha%_conv thm_concl))
-		(all_Š_intro s4);
-	val sideeffect = save_thm(key,s5);
+				(BINDER_C lpair_„_conv))
+		) THEN_C
+		l„_pair_conv THEN_C ONCE_MAP_C l_%beta%_conv))
+		THEN_C %alpha%_conv thm_concl)
+		 s1;
+	val sideeffect = save_thm(key,s2)
+		handle complaint =>
+		pass_on complaint "save_thm" "cached_unlabelled_product_rule";
 	val sideeffect = open_theory was_thy;
 in
-	s5
+	s2
+end
+handle (complaint as (Fail _)) =>
+(open_theory was_thy;
+if area_of complaint = "cached_unlabelled_product_rule"
+then reraise complaint "cached_unlabelled_product_rule"
+else fail "cached_unlabelled_product_rule" 59004 [fn () => string_of_int n])
 end);
 =TEX
 Main function:
 =SML
 in
 	if arg < 1 
-	then fail "cached_product_rule" 59001 [fn () => string_of_int arg]
+	then fail "cached_unlabelled_product_rule" 59001 
+		[fn () => string_of_int arg]
+	else if arg = 1
+	then (if is_theory_ancestor "pair" was_thy 
+		then cache_unlabelled_thm1
+		else fail "cached_unlabelled_product_rule" 59017 [])
 	else (case (find_n_tuple arg) of
 	Value thm => thm
 	| Nil => declare_n_tuple arg)
 
-end); (* of cached_product_rule *)
+end); (* of cached_unlabelled_product_rule *)
 =TEX
 \subsection{Labelled Products}
 =IGN
+new_theory "first_cache_theory";
+new_theory "temp";
 new_parent "†";
 
 val inp2 = {tyname = "HOLD2",tykey = "HOLD2",conname = "Hold2",
@@ -700,53 +791,64 @@ val inp4 = {tyname = "HOLD4",tykey = "HOLD4",conname = "Hold4",
 
 val inp5 = {tyname = "HOLD5",tykey = "HOLD5",conname = "Hold5",
 	constkeys= ["Hold5","First5","Second5","Third5","Fourth5","Fifth5"],
-	labels = [("First5",†),("Second5",»:'1¼),("Third5",»:'2¼),("Fourth5",»:'1 ‰ '2¼),("Fifth5",»:'3¼)],
+	labels = [("First5",†),("Second5",»:'1¼),("Third5",»:'2¼),
+		("Fourth5",»:'1 ‰ '2¼),("Fifth5",»:'3¼)],
 	tyvars = Value[»:'1¼,»:'2¼,»:'3¼]};
 val inp6 = {tyname = "HOLD6",tykey = "HOLD6",conname = "Hold6",
-	constkeys= ["Hold6","First6","Second6","Third6","Fourth6","Fifth6","Sixth6"],
-	labels = [("First6",†),("Second6",»:'1¼),("Third6",»:'2¼),("Fourth6",»:'1 ‰ '2¼),("Fifth6",»:'3¼),("Sixth6",»:'1¼)],
+	constkeys= ["Hold6","First6","Second6","Third6","Fourth6",
+		"Fifth6","Sixth6"],
+	labels = [("First6",†),("Second6",»:'1¼),("Third6",»:'2¼),
+		("Fourth6",»:'1 ‰ '2¼),("Fifth6",»:'3¼),("Sixth6",»:'1¼)],
 	tyvars = Value[»:'1¼,»:'2¼,»:'3¼]};
 val inp7 = {tyname = "HOLD7",tykey = "HOLD7",conname = "Hold7",
-	constkeys= ["Hold7","First7","Second7","Third7","Fourth7","Fifth7","Sixth7","Seventh"],
-	labels = [("First7",†),("Second7",»:'1¼),("Third7",»:'2¼),("Fourth7",»:'1 ‰ '2¼),("Fifth7",»:'3¼),("Sixth7",»:'1¼),
+	constkeys= ["Hold7","First7","Second7","Third7","Fourth7",
+		"Fifth7","Sixth7","Seventh"],
+	labels = [("First7",†),("Second7",»:'1¼),("Third7",»:'2¼),
+		("Fourth7",»:'1 ‰ '2¼),("Fifth7",»:'3¼),("Sixth7",»:'1¼),
 	("Seventh7",»:'1 ‰ '3¼)],
 	tyvars = Value[»:'1¼,»:'2¼,»:'3¼]};
 val inp8 = {tyname = "HOLD8",tykey = "HOLD8",conname = "Hold8",
-	constkeys= ["Hold8","First8","Second8","Third8","Fourth8","Fifth8","Sixth8","Seventh8","Eighth8"],
-	labels = [("First8",†),("Second8",»:'1¼),("Third8",»:'2¼),("Fourth8",»:'1 ‰ '2¼),("Fifth8",»:'3¼),("Sixth8",»:'1¼),
+	constkeys= ["Hold8","First8","Second8","Third8","Fourth8",
+		"Fifth8","Sixth8","Seventh8","Eighth8"],
+	labels = [("First8",†),("Second8",»:'1¼),("Third8",»:'2¼),
+		("Fourth8",»:'1 ‰ '2¼),("Fifth8",»:'3¼),("Sixth8",»:'1¼),
 	("Seventh8",»:'1 ‰ '3¼),("Eighth8",»:'3 ‰ '2¼)],
 	tyvars = Value[»:'1¼,»:'2¼,»:'3¼]};
 =SML
 fun âlabelled_product_specá {tyname:string, tykey:string, conname:string, 
-	constkeys:string list, labels:(string*TYPE)list, tyvars:(TYPE list)OPT} : THM = (
+	constkeys:string list, labels:(string*TYPE)list, 
+		tyvars:(TYPE list)OPT} : THM = (
 let	val sideeffect = if is_nil constkeys orelse is_nil labels
 		then fail "labelled_product_spec" 59010 []
 		else();
 	val nlabels = length labels;
-	val nstr = string_of_int nlabels;
-	val tuple_thm = cached_product_rule nlabels
+	val tuple_thm = cached_labelled_product_rule nlabels
 		handle complaint =>
-		pass_on complaint "cached_product_rule" "labelled_product_spec";
-	val tuple_type = fst(dest_‹_type(type_of(fst(dest_simple_„(fst(dest_Š (concl tuple_thm)))))));
+		pass_on complaint "cached_labelled_product_rule" 
+			"labelled_product_spec";
+	val tuple_type = fst(dest_‹_type(type_of(fst(dest_simple_„(
+		fst(dest_Š (concl tuple_thm)))))));
 	val (lab_nms,lab_types) = split labels;
 	val rep_type = rlist_mk_‰_type lab_types;
-	val lab_tyvars = list_cup(map (fn x => map mk_vartype (type_tyvars x)) lab_types);
+	val lab_tyvars = list_cup(map 
+		(fn x => map mk_vartype (type_tyvars x)) lab_types);
 	val used_tyvars = case tyvars of
 		Nil => lab_tyvars
 		| Value tys => (if lab_tyvars subset tys
 			then (map dest_vartype tys
 				handle complaint =>
-				pass_on complaint "dest_vartype" "labelled_product_spec"; tys)
-			else fail "labelled_product_spec" 6057 [
-			fn () => "A label",
-			fn () => format_list(dest_vartype) (lab_tyvars diff tys) ", "]);
+				pass_on complaint "dest_vartype" 
+					"labelled_product_spec"; tys)
+			else fail "labelled_product_spec" 59015 [
+			fn () => format_list(dest_vartype) 
+				(lab_tyvars diff tys) ", "]);
 	val abs_type = mk_ctype(tyname, used_tyvars);
 	val „_thm = inst_type_rule[(rep_type, tva)] „__x_t_thm;
 =TEX
 Before we actually declare the new type we attempt to ensure that we will be able to introduce the new constants
 as requested.
 We do not catch the failure of constants being already defined in child theories,
-nor are we very good at presenting al the errors we know.
+nor are we very good at presenting all the errors we know.
 =SML
 	val used_keys = mapfilter (fn x => (get_defn "-" x;x))
 		(tykey :: constkeys);
@@ -758,7 +860,8 @@ nor are we very good at presenting al the errors we know.
 		(conname :: lab_nms);
 	val sideeffect = if is_nil used_constants
 		then ()
-		else fail "labelled_product_spec" 6049 [fn () => hd used_constants];
+		else fail "labelled_product_spec" 6049 
+			[fn () => hd used_constants];
 =TEX
 Now the definition itself, which will flush out any writability problems that constant specification will have.
 =SML
@@ -766,11 +869,11 @@ Now the definition itself, which will flush out any writability problems that co
 		handle complaint =>
 		pass_on complaint "new_type_defn" "labelled_product_spec";
 	val inters = map string_of_int (interval 1 nlabels);
-	val tyinsts = (abs_type,tva) :: (combine lab_types (map (fn s => mk_vartype ("'"^s)) inters));
-	val tuple_thm' = time_rule "tuple_thm'" (inst_type_rule tyinsts) tuple_thm;
-	val s1 = time_rule "s1" simple_match_type_lemmas_thm type_def;
-	val s2 = time_rule "s2" (Š_elim tuple_thm') s1;
-	val s3 = time_rule "s3" „_€_left_rule s2;
+	val tyinsts = (abs_type,tva) :: (combine lab_types 
+		(map (fn s => mk_vartype ("'"^s)) inters));
+	val tuple_thm' = inst_type_rule tyinsts	tuple_thm;
+	val s1 = simple_match_type_lemmas_thm type_def;
+	val s2 = Š_elim tuple_thm' s1;
 	val labs = map (fn (x,ty) => mk_var(x,mk_‹_type(abs_type,ty))) labels;
 	val xi = map mk_var(combine (map (fn x => "x"^x) inters) lab_types);
 	val con = mk_var(conname,list_mk_‹_type (lab_types @ [abs_type]));
@@ -789,12 +892,18 @@ Now the definition itself, which will flush out any writability problems that co
 		list_mk_app(con,
 		map (fn lab => mk_app(lab,t)) labs),
 		t)]))));
-	val s4 = time_rule "s4" (conv_rule (%alpha%_conv thm_concl)) s3;
+	val s3 = conv_rule (%alpha%_conv thm_concl) s2;
 in
-	(new_specification(constkeys,1+nlabels,s4)
+	(new_specification(constkeys,1+nlabels,s3)
 		handle complaint =>
-		pass_on complaint "new_specification" "labelled_product_spec")
-end); (* labelled_product_spec *)
+		pass_on complaint "new_specification" 
+			"labelled_product_spec")
+end
+handle (complaint as (Fail _)) =>
+if area_of complaint = "labelled_product_spec"
+then reraise complaint "labelled_product_spec"
+else fail "labelled_product_spec" 59014 [fn () => tyname]
+); (* labelled_product_spec *)
 =TEX
 \subsection{Unlabelled Products}
 =IGN
@@ -814,22 +923,26 @@ val ulp6 = {tyname="ULP6", tykey="ULP6", conname="Ulp6",
 	conkeys=["Ulp6"], tyi=[»:'a ‰ 'b¼,»:'a ‰ 'b¼,»:†¼,»:'c ‰ 'a¼,BOOL,»:'1¼], 
 	tyvars = Nil};
 val ulp7 = {tyname="ULP7", tykey="ULP7", conname="Ulp7", 
-	conkeys=["Ulp7"], tyi=[»:'d ‰ BOOL¼,»:'a ‰ 'b¼,»:'a ‰ 'b¼,»:†¼,»:'c ‰ 'a¼,BOOL,»:'1¼], 
+	conkeys=["Ulp7"], tyi=[»:'d ‰ BOOL¼,»:'a ‰ 'b¼,»:'a ‰ 'b¼,
+		»:†¼,»:'c ‰ 'a¼,BOOL,»:'1¼], 
 	tyvars = Nil};
 val ulp8 = {tyname="ULP8", tykey="ULP8", conname="Ulp8", 
-	conkeys=["Ulp8"], tyi=[»:'d ‰ BOOL¼,»:'a ‰ 'b¼,»:'a ‰ 'b¼,»:†¼,»:'c ‰ 'a¼,BOOL,»:'1¼,»:'4¼], 
+	conkeys=["Ulp8"], tyi=[»:'d ‰ BOOL¼,»:'a ‰ 'b¼,»:'a ‰ 'b¼,
+		»:†¼,»:'c ‰ 'a¼,BOOL,»:'1¼,»:'4¼], 
 	tyvars = Nil};
 =SML
 fun âunlabelled_product_specá {tyname:string, tykey:string, conname:string, 
 	conkeys:string list, tyi: TYPE list, tyvars:(TYPE list)OPT} : THM = (
-let	val sideeffect = if is_nil conkeys orelse is_nil tyi
+let	val sideeffect = if is_nil conkeys
 		then fail "unlabelled_product_spec" 59010 []
+		else if is_nil tyi
+		then fail "unlabelled_product_spec" 59011 []
 		else();
 	val nlabels = length tyi;
-	val nstr = string_of_int nlabels;
-	val tuple_thm = cached_product_rule nlabels
+	val tuple_thm = cached_unlabelled_product_rule nlabels
 		handle complaint =>
-		pass_on complaint "cached_product_rule" "labelled_product_spec";
+		pass_on complaint "cached_unlabelled_product_rule" 
+			"unlabelled_product_spec";
 	val rep_type = rlist_mk_‰_type tyi;
 	val lab_tyvars = list_cup(map (fn x => map mk_vartype (type_tyvars x)) tyi);
 	val used_tyvars = case tyvars of
@@ -837,17 +950,18 @@ let	val sideeffect = if is_nil conkeys orelse is_nil tyi
 		| Value tys => (if lab_tyvars subset tys
 			then (map dest_vartype tys
 				handle complaint =>
-				pass_on complaint "dest_vartype" "labelled_product_spec"; tys)
-			else fail "labelled_product_spec" 6057 [
-			fn () => "A label",
-			fn () => format_list(dest_vartype) (lab_tyvars diff tys) ", "]);
+				pass_on complaint "dest_vartype" 
+					"unlabelled_product_spec"; tys)
+			else fail "unlabelled_product_spec" 59016 [
+				fn () => format_list(dest_vartype) 
+				(lab_tyvars diff tys) ", "]);
 	val abs_type = mk_ctype(tyname, used_tyvars);
 	val „_thm = inst_type_rule[(rep_type, tva)] „__x_t_thm;
 =TEX
 Before we actually declare the new type we attempt to ensure that we will be able to introduce the new constants
 as requested.
 We do not catch the failure of constants being already defined in child theories,
-nor are we very good at presenting al the errors we know.
+nor are we very good at presenting all the errors we know.
 =SML
 	val used_keys = mapfilter (fn x => (get_defn "-" x;x))
 		(tykey :: conkeys);
@@ -861,24 +975,31 @@ nor are we very good at presenting al the errors we know.
 =TEX
 Now the definition itself, which will flush out any writability problems that constant specification will have.
 =SML
-	val type_def = new_type_defn (tyname,tykey,map dest_vartype used_tyvars, „_thm)
+	val type_def = new_type_defn (tyname,tykey,
+			map dest_vartype used_tyvars, „_thm)
 		handle complaint =>
 		pass_on complaint "new_type_defn" "unlabelled_product_spec";
 	val inters = map string_of_int (interval 1 nlabels);
-	val tyinsts = (abs_type,tva) :: combine tyi (map (fn s => mk_vartype ("'"^s)) inters);
+	val tyinsts = (abs_type,tva) :: combine tyi 
+		(map (fn s => mk_vartype ("'"^s)) inters);
 	val tuple_thm' = (inst_type_rule tyinsts tuple_thm);
-	val s1 = time_rule "s1" simple_match_type_lemmas_thm type_def;
-	val s2 = time_rule "s2" (Š_elim tuple_thm') s1;
-	val s3 = time_rule "s3" „_€_right_rule s2;
-	val s4 = time_rule "s4" (conv_rule(RAND_C (simple_%alpha%_conv conname))) s3;
+	val s1 = simple_match_type_lemmas_thm type_def;
+	val s2 = Š_elim tuple_thm' s1;
+	val s3 = conv_rule(RAND_C (simple_%alpha%_conv conname))
+		s2;
 in
-	(new_specification(conkeys,1,s4)
+	(new_specification(conkeys,1,s3)
 		handle complaint =>
 		pass_on complaint "new_specification" "unlabelled_product_spec")
-end); (* of unlabelled_product_spec *)
+end
+handle (complaint as (Fail _)) =>
+if area_of complaint = "unlabelled_product_spec"
+then reraise complaint "unlabelled_product_spec"
+else fail "unlabelled_product_spec" 59014 [fn () => tyname]
+); (* of unlabelled_product_spec *)
 =TEX
 \section{EPILOGUE}
-=IGN
+=SML
 val _ = open_theory lthy;
 val _ = pop_proof_context();
 val lsubgoal_package_quiet = set_flag("subgoal_package_quiet",
