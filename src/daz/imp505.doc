@@ -76,27 +76,22 @@ None.
 =TEX
 \pagebreak
 =SML
-structure €CNVCGenerator› = struct
-local
-	open CaseIndependence CNTypes CNBasicDeclsAndExprs;
-in
-=TEX
-SML
-	fun €free_ids› (ze : Z_EXP) : ID list = (map (fst o dest_var) (frees ze));
+infix 3 Ù;
+infix 4 %Longrightarrow%;
 =TEX
 =SML
-type SEQUENT=SEQ;
-type VC = Z_DECL list * SEQUENT;
+structure €CNVCGenerator› : CNVCGenerator = struct
+local
+	open CaseIndependence;
+	open CNEnvironmentTypes CNParser CNTypes CNBasicDeclsAndExprs;
+in
 =TEX
-
 \pagebreak
 \section{STRUCTURE OF VERIFICATION CONDITIONS}\label{VCSTRUCTURE}
 \subsection{Sequents}
 =SML
-infix 3 Ù;
 fun (H : Z_PRED list) Ù (c : Z_PRED) : SEQUENT = (H, c);
 
-infix 4 %Longrightarrow%;
 fun (h : Z_PRED) %Longrightarrow% (S : SEQUENT list) : SEQUENT list = (
 	map (fn (H, c) => (h :: H, c)) S
 );
@@ -147,42 +142,9 @@ See \cite{ISS/HAT/DAZ/DTD502}.
 
 \section{WEAKEST PRECONDITIONS}\label{WPS}
 \subsection{Environments}\label{environments}
-=SML
-type €PARAM_SPEC› = {var_decl : VAR_DECL, mode : MODE};
-type €FORMAL_PROC› = {name : ID, formal_ids : PARAM_SPEC list,
-				spec : SPEC};
-type €INFORMAL_FUN› = {name : ID, formal_pars : PARAM_SPEC list,
-				return_type : TMARK};
-type €WP_ENV› = {fun_header : INFORMAL_FUN, return : Z_PRED,
-			till : Z_PRED, formal_procs : FORMAL_PROC list,
-			env : CN_ENV};
-=IGN
-val spec_EG : SPEC =
-	{w = ["w"], w0 = ["w0"], pre = ÒtrueÆ, post = ÒtrueÆ, label=LImplicit};
-val var_decl_EG : VAR_DECL =
-	{vars = ["variable_name"], tmark = "integer"};
-val param_spec_EG : PARAM_SPEC =
-	{var_decl = var_decl_EG, mode = MSparkIn};
-val formal_proc_EG : FORMAL_PROC =
-	{name = "formal_proc", formal_ids = [param_spec_EG], spec = spec_EG};
-val informal_fun_EG : INFORMAL_FUN =
-	{name = "informal_fun", formal_pars = [param_spec_EG],
-		return_type = "result_type"};
-val wp_env = {fun_header = informal_fun_EG,
-		return = ÒtrueÆ, till = ÒtrueÆ,
-		formal_procs = [formal_proc_EG], env=env} : WP_ENV;
 =TEX
 \subsection{Other Preliminaries}\label{Preliminaries}
-=SML
-type €RESULT› = {wp : SEQUENT list, side : SEQUENT list};
-type €WP_TYPE› = (STATEMENT * SEQUENT list * WP_ENV) -> RESULT;
-type €WP_PARS› = {wp : WP_TYPE, a: SEQUENT list, wp_env : WP_ENV};
-
 =TEX
-=IGN
-val wp_pars :WP_PARS = {wp=wp, a=[], wp_env = wp_env};
-
-
 
 \subsection{Null Statement}\label{wp-null}
 =SML
@@ -211,7 +173,7 @@ end
 =TEX
 =SML
 fun €retrieve_type_mark› (env : CN_ENV) (exp : EXP) : TMARK = (
-let	val tmark = (to_upper o name_to_tmark) exp;
+let	val tmark = ((* to_upper o *)name_to_tmark) exp;
 in
 	case env tmark of
 	Value (_, EIEnvVar tmark') => tmark'
@@ -229,6 +191,9 @@ let	val name' = prefix;
 	fun do_comps sel = case lassoc5 record_components sel of 
 			Value _ => (e
 			)|Nil => ESelectedComp{prefix=prefix,selector=sel};
+	fun do_comps sel = if sel = selector 
+				then e
+				else ESelectedComp{prefix=prefix,selector=sel};
 	val comps = map (fn (a,_) => do_comps a) record_components;
 	val e' = ERecAggPos {tmark=tmark,comps=comps};
 in
@@ -236,6 +201,14 @@ in
 end
 );
 =TEX
+=IGN
+val name'=EId "MYREC";
+val e'=ERecAggPos
+   {comps =
+      [EId "SAT", ESelectedComp {prefix = EId "MYREC", selector = "D2"},
+         ESelectedComp {prefix = EId "MYREC", selector = "D3"}],
+      tmark = "REC"};
+
 =SML
 fun €assign› (wp_pars as {wp_env as {env, ...}, ...} : WP_PARS) ({name, e} : ASSIGN)
 			: RESULT = (
@@ -325,39 +298,41 @@ in
 end
 );
 =TEX
-SML
-fun €case_base› (env : CN_ENV) (e : EXP)
-			({when, p} : (STMT) CASE_SEG)
-			({wp, a, wp_env} : WP_PARS) : RESULT = (
-let	val {wp = WP1, side = side1} = wp env (stmt P, a, wp_env);
-	val elm = Òëtrans_exp EÆ ç Òzset (map trans_exp when)ÆÆ;
-in	{wp = elm %Longrightarrow% WP1, side = side1}
+=SML
+fun €case_base› ({wp, a, wp_env as {env,...}} : WP_PARS) (e : EXP)
+			({choices, p} : STMT CASE_ALTERNATIVE)
+			 : RESULT = (
+let	val {wp = wp1, side = side1} = wp (SStmt p, a, wp_env);
+	val wp' = z_elem (trans_exp env e, trans_case_choices env choices)
+			%Longrightarrow% wp1;
+in	{wp = wp', side = side1}
 end
 );
 =TEX
-SML
-fun €CASE_STEP› ({E, s} : (Stmt) Case,
-			pars as {wp, a, wp_env} : WP_PARS) : RESULT = (
+=SML
+fun €case_step› (pars as {wp, a, wp_env as {env,...}} : WP_PARS)
+		({e, s, others} : STMT CASE) : RESULT = (
 	case s of
-		[] =>
-		raise Empty_Case_STATEMENT "detected in VC generation"
-	|	[seg] =>
-		case_base(E, seg, pars)
-	|	({when, P} :: s') => (
-		let	val {wp = WP1, side = side1} = wp(stmt P, a, wp_env);
-			val {wp = WP2, side = side2} = CASE_STEP({E=E, s=s'}, pars);
-			val elm = Òëtrans_exp EÆ ç Òzset (map trans_exp when)ÆÆ;
-		in	{wp = (elm %Longrightarrow% WP1) @ WP2 , side = side1 @ side2}
+	[] =>
+		fail "case_step" 505001 [fn()=>"detected in VC generation"]
+	| [alt] =>
+		case_base pars e alt
+	| ({choices, p} :: s') => (
+		let	val {wp = wp1, side = side1} = wp (SStmt p, a, wp_env);
+			val {wp = wp2, side = side2} = case_step pars {e=e, s=s', others=others};
+			val elm = z_elem (trans_exp env e, trans_case_choices env choices)
+		in	{wp = (elm %Longrightarrow% wp1) @ wp2 , side = side1 @ side2}
 		end)
 );
 =TEX
-Note that $CASE\_STEP$ is recursive and does the full job. 
+Note that $case\_step$ is recursive and does the full job. 
 But by analogy with the naming convention we chose to adopt for the
 two case of specification statement in section \ref{wp-specification-no-ivars},
 we define the following.
-SML
-val €case_either› : Stmt Case * WP_PARS -> RESULT = CASE_STEP;
+=SML
+val €case_either› : WP_PARS -> STMT CASE -> RESULT = case_step;
 =TEX
+
 \subsection{Undecorated Loop}\label{wp-loop}
 =SML
 fun €loop› ({a, ...} : WP_PARS) ({t, stmt} : STMT LOOP)
@@ -402,27 +377,77 @@ end
 );
 =TEX
 \subsection{For Loop (Static Bounds)}\label{wp-for-static}
-SML
-fun €for_value› ({i = i, lo = lo, hi = hi,
-				loop = {u = u,
-					spec = spec as
-						{w, w0, pre, post}}} : For_Value,
-			pars as {wp, a, wp_env} : WP_PARS) : RESULT = (
-	let	val zi = trans_id i;
-		val zlo = trans_exp lo;
-		val zhi = trans_exp hi;
-		val zran = Òëzid ziÆ ç ëzloÆ .. ëzhiÆÆ;
-		val z_bin_exp_theta = Òëzid ziÆ + 1Æ;
-		val WP = [[] Ù sub(pre, zi, zlo)];
-		val side = [[zran, Òëzid ziÆ Ω ëzhiÆÆ, post] Ù 
-				sub(pre, zi, z_bin_exp_theta)] @
-			(sub(post, zi, zhi) %Longrightarrow% A) @
-			(zran %Longrightarrow% (u %Longrightarrow% A));
-	in	{wp = WP, side = side}
-	end
+=SML
+fun €for_static› ({a, wp_env={env, ...}, ...} : WP_PARS)
+	({i, tmark, range, dir, loop = {t, stmt}, ...} : STMT FOR_STATIC) : RESULT = (
+let	val side = if dir = LDForwards
+			then ()
+			else fail "for_static" 505001 [fn()=>"reverse not supported"];
+	val {lo, hi} = case range of
+			RRange r => r
+			|RRangeAttr _ =>
+				fail "for_static" 505001 [fn()=>"range attributes not supported"];
+	val {pre, post, ...} = case stmt of
+		STSpecNoIvars spec => spec
+		|_ => fail "for_static" 505001 [fn()=>
+			"Cannot proceed formally when loop body size > 1"];
+	val zi = trans_id i;
+	val zlo = trans_exp env lo;
+	val zhi = trans_exp env hi;
+	val zop = z_add;
+	val zleft = zid env zi;
+	val zright = z_num 1;
+	val zran = z_elem (zid env zi, z_rng (zlo, zhi));
+	val z_bin_exp_theta = z_bin_exp (zleft, zop, zright);
+	val wp = [[z_less_eq (zlo, zhi)] Ù sub(pre, zi, zlo)] @
+		(z_greater (zlo, zhi) %Longrightarrow% a);
+	val till_part = case t of
+			Value till => (
+				zran %Longrightarrow% (till %Longrightarrow% a)
+			) | Nil => [];
+	val side = [[zran, z_noteq(zid env zi, zhi), post] Ù 
+			sub(pre, zi, z_bin_exp (zleft, zop, zright))] @
+			(sub(post, zi, zhi) %Longrightarrow% a) @
+			till_part;
+in
+	{wp = wp, side = side}
+end
 );
 =TEX
-\subsection{Exit}\label{wp-exit}
+\subsection{For Loop (Type Mark as Range)}\label{wp-for-tmark}
+=SML
+fun €for_tmark› ({a, wp_env={env, ...}, ...} : WP_PARS)
+	({i, tmark, dir, loop = {t, stmt}, ...} : STMT FOR_TMARK) : RESULT = (
+let	val side = if dir = LDForwards
+			then ()
+			else fail "for_static" 505001 [fn()=>"reverse not supported"];
+	val {pre, post, ...} = case stmt of
+		STSpecNoIvars spec => spec
+		|_ => fail "for_static" 505001 [fn()=>
+			"Cannot proceed formally when loop body size > 1"];
+	val zi = trans_id i;
+	val zlo = zid env (trans_id tmark ^^ zfst);
+	val zhi = zid env (trans_id tmark ^^ zlst);
+	val zop = z_add;
+	val zleft = zid env zi;
+	val zright = z_num 1;
+	val zran = z_elem (zid env zi, z_rng (zlo, zhi));
+	val z_bin_exp_theta = z_bin_exp (zleft, zop, zright);
+	val wp = [[z_less_eq (zlo, zhi)] Ù sub(pre, zi, zlo)] @
+		(z_greater (zlo, zhi) %Longrightarrow% a);
+	val till_part = case t of
+			Value till => (
+				till %Longrightarrow% a
+			) | Nil => [];
+	val side = [[z_noteq(zid env zi, zhi), post] Ù 
+			sub(pre, zi, z_bin_exp (zleft, zop, zright))] @
+			(sub(post, zi, zhi) %Longrightarrow% a) @
+			till_part;
+in
+	{wp = wp, side = side}
+end
+);
+=TEX
 \subsection{Exit Statement (with Condition)}\label{wp-exit-with-cond}
 =SML
 fun €exit_when› ({a, wp_env={till, env, ...}, ...} : WP_PARS)
@@ -435,6 +460,7 @@ in	{wp = wp, side = []}
 end
 );
 =TEX
+\subsection{Exit}\label{wp-exit}
 =SML
 fun €cn_exit› ({wp_env={till, ...},...} : WP_PARS) : RESULT = (
 	{wp = [[] Ù till], side = []}
@@ -442,46 +468,36 @@ fun €cn_exit› ({wp_env={till, ...},...} : WP_PARS) : RESULT = (
 =TEX
 \subsection{Return}\label{wp-return}
 =TEX
-The following is a simplistic approximation/guess.
-SML
-fun €make_fun_call› ({name, formal_pars, return_type} : INFORMAL_FUN) : Z_EXP = (
-let	fun mk_par ({var_decl = {var, tmark}, ...} : PARAM_SPEC) : Z_EXP = (
-		mk_var(var, mk_ctype(tmark, []))
-	);
-	val par_tuple = mk_z_tuple(map mk_par formal_pars);
-	val res_ty = mk_ctype(return_type, []);
-	val func_ty = mk_z_power_type(mk_z_tuple_type
-			[type_of par_tuple, res_ty]);
-	val func = mk_z_gvar(name, func_ty, []);
-in	mk_z_app(func, par_tuple)
+$conv\_var\_decl$ is implemented in \cite{ISS/HAT/DAZ/IMP508}.
+=SML
+fun €cn_return› ({wp, a, wp_env= {env, fun_header={name, formal_pars, ...},
+			return, ...}} : WP_PARS)
+		({e} : RETURN) : RESULT = (
+let	val zfun = zid env (trans_id name);
+	val var_decls = map (fn {var_decl, ...} => var_decl) formal_pars;
+	val ids = flat (map (fn {vars, ...} => vars) var_decls);
+	val zargs = map (fn id => zid env (trans_id id)) ids;
+	val wp = [[z_eq(z_fun_call(zfun, zargs), trans_exp env e)] Ù return];
+	val side = [];
+in
+	{wp = wp, side = side}
 end
 );
 =TEX
-SML
-fun €cn_return› (env : CN_ENV) ({e} : RETURN)
-			({wp, a, wp_env= {fun_header, return, ...}} : WP_PARS)
-					: RESULT = (
-let	val zfun = zid env (trans_id name);
-	val zargs = fn i => zid env (trans_id (formal_pars i).var);
-	val wp = [[z_eq(z_fun_call
-	{wp = [[Òëmake_fun_call fun_headerÆ = ëtrans_exp EÆÆ] Ù return],
-	side = []}
-);
-=TEX
 \subsection{Procedure Call (No Initial Variables in Spec)}\label{wp-proc-call-no-ivars}
-Like the implementation of $make\_fun\_call$ above the following is another simplistic approximation/guess.
-It is assumed that the caller will have supplied the correct $Formal\_Proc$ from the environment.
-The formals and actuals must agree in number, and the library function $combine$, which turns a pair of equal length lists into a list of pairs, will raise the exception $Fail$ if they do not.
 =SML
-fun €proc_call_spec› ({actuals, ...} : (AGG_CHOICE,EXP) PROC_CALL,
-		{formal_ids, spec as {w, w0, pre, post, label}, ...}
-			: FORMAL_PROC) : SPEC = (
-spec);
-(*
-let	fun subs (actual : EXP,
-		{var_decl = {vars, ...}, ...} : PARAM_SPEC)
-			: (Z_ID * Z_EXP) = (var, trans_exp actual);
-	val subs_list = map subs (combine actuals formal_ids)
+fun €proc_call_spec› (env : CN_ENV)
+		({actuals, ...} : (AGG_CHOICE,EXP) PROC_CALL)
+		({formal_ids, spec as {w, w0, pre, post, label}, ...} : FORMAL_PROC)
+			: SPEC = (
+let	val var_decls = map (fn {var_decl, ...} => var_decl) formal_ids;
+	val names = flat (map (fn {vars, ...} => vars) var_decls);
+	val exps = case actuals of
+			APositional exps => exps
+			|ANamed nas => named_assocs_to_exps names nas;
+	fun subs (actual : EXP,	name : ID)
+			: (Z_ID * Z_EXP) = (name, trans_exp env actual);
+	val subs_list = map subs (combine exps names)
 		handle Fail _ =>
 		fail "proc_call_spec" 505001 [fn()=>"parameter list mismatch"];
 in	{w = w, w0 = w0,
@@ -490,10 +506,7 @@ in	{w = w, w0 = w0,
 	label=label}
 end
 );
-*)
 =TEX
-The relevant formal procedure may not be in the environment here.
-The library function $find$ will raise the exception $Fail$ if this is the case.
 =SML
 fun €proc_call_no_ivars› ({wp, a, wp_env as {formal_procs, env, ...}} : WP_PARS)
 		(pc as {name, actuals} : (AGG_CHOICE,EXP) PROC_CALL)
@@ -504,37 +517,11 @@ let	fun is_it ({name = n, ...} : FORMAL_PROC) : bool = (name = n);
 		handle Fail _ =>
 		fail "proc_call_no_ivars" 505001 [fn()=>"formal procedure not found"];
 in
-	wp (SStmt(STSpecNoIvars(proc_call_spec(pc, fp))), a, wp_env)
+	wp (SStmt(STSpecNoIvars(proc_call_spec env pc fp)), a, wp_env)
 end
 );
 =TEX
-\subsection{For Loop (Bounds with Variables)}\label{wp-for-var}
-SML
-fun €for_var› (({i = i, lo = lo, hi = hi,
-				loop = {u = u,
-					spec = spec as
-						{w, w0, pre, post}}},
-			q) : For_Var * Stmt,
-			pars as {wp, a, wp_env} : WP_PARS) : RESULT = (
-	let	val zi = trans_id i;
-		val zlo = trans_exp lo;
-		val zhi = trans_exp hi;
-		val zlo0 = subs_exp(zlo, w, w0);
-		val zhi0 = subs_exp(zhi, w, w0);
-		val zran = Òëzid ziÆ ç ëzlo0Æ .. ëzhi0ÆÆ;
-		val z_bin_exp_theta = Òëzid ziÆ + 1Æ;
-		val {wp = WP1, side = side1} = wp(stmt q, a, wp_env);
-		val WP = [[ÒëzloÆ º ëzhiÆÆ] Ù sub(pre, zi, zlo)] @
-			(ÒëzloÆ > ëzhiÆÆ %Longrightarrow% WP1);
-		val side = [[zran, Òëzid ziÆ Ω ëzhi0ÆÆ, post] Ù 
-				sub(pre, zi, z_bin_exp_theta)] @
-			(sub(post, zi, zhi0) %Longrightarrow% WP1) @
-			(zran %Longrightarrow% (u %Longrightarrow% WP1));
-	in	{wp = WP, side = side}
-	end
-);
-=TEX
-\subsection{Specification (With Initial Variables)}\label{wp-spec-ivars}
+\subsection{Specification Statement (with Initial Variables)}\label{wp-spec-ivars}
 =SML
 fun €spec_ivars› ({wp, a, wp_env as {env, ...}} : WP_PARS) (({pre, post, ...},q) : SPEC_IVARS * STMT)
 			 : RESULT = (
@@ -546,20 +533,68 @@ in
 end
 );
 =TEX
+\subsection{For Loop (Non-Static Bounds)}\label{wp-for-var}
+=SML
+fun €for_non_static› (pars as {wp, a, wp_env as {env, ...}} : WP_PARS)
+			(({i, range, loop = {t, stmt}, ...}, q) : FOR_NON_STATIC * STMT)
+			 : RESULT = (
+let	val {lo, hi} = case range of
+			RRange r => r
+			|RRangeAttr _ =>
+				fail "for_static" 505001
+					[fn()=>"range attributes not supported"];
+	val {pre, post, w, w0, ...} = case stmt of
+		STSpecNoIvars spec => spec
+		|_ => fail "for_static" 505001 [fn()=>
+			"Cannot proceed formally when loop body size > 1"];
+	val zi = trans_id i;
+	val zlo = trans_exp env lo;
+	val zhi = trans_exp env hi;
+	val zop = z_add;
+	val zleft = zid env zi;
+	val zright = z_num 1;
+	val zlo0 = subs_exp (zlo, w, w0);
+	val zhi0 = subs_exp(zhi, w, w0);
+	val zran = z_elem(zid env zi, z_rng (zlo0, zhi0));
+	val {wp = wp1, side = side1} = wp (SStmt q, a, wp_env);
+	val wp = [[z_less_eq (zlo, zhi)] Ù sub(pre, zi, zlo)] @
+		(z_greater(zlo, zhi) %Longrightarrow% wp1);
+	val till_part = case t of
+			Value till => (
+				zran %Longrightarrow% (till %Longrightarrow% wp1)
+			) | Nil => [];
+	val side = [[zran, z_noteq(zid env zi, zhi0), post] Ù 
+			sub(pre, zi, z_bin_exp(zleft, zop, zright))] @
+				(sub(post, zi, zhi0) %Longrightarrow% wp1) @
+				till_part;
+in
+	{wp = wp, side = side}
+end
+);
+=TEX
+
 \subsection{Logical Constant}\label{wp-log-con}
 =SML
+fun €analyse_log_con› (pre : Z_PRED) : (Z_EXP * Z_PRED) = (
+let	val (eqtm, pre1) = dest_z_± pre;
+	val (_, e) = dest_z_eq eqtm;
+in
+	(e, pre1)
+end
+handle _ => fail "analyse_log_con" 505001 [fn()=>"logical constant not of form CON X : T ∑ Ñ w [X=E ± pre1, post]"]
+);
+=TEX
+=SML
 fun €log_con› ({wp, a, wp_env as {env, ...}} : WP_PARS)
-	(({x, e, spec as {w, w0, pre, post,...}, pre1}, q) : LOG_CON * STMT)
+	(({x, t, spec as {w, w0, pre, post,...}, ...}, q) : LOG_CON * STMT)
 		: RESULT = (
 
-let	val {wp = wp1, side = side1} = wp (SStmt q, a, wp_env);
+let	val (e, pre1) = analyse_log_con pre;
+	val {wp = wp1, side = side1} = wp (SStmt q, a, wp_env);
 	val wp = [[] Ù sub(pre1, x, e)];
-	val zvar_ty = dest_z_power_type(type_of e);
-	val env' = fn id => if id = x then Value (zvar_ty, EIEnvVar "")					else env id;
-	val side = (* TBS -  z_eq
-		    * should this be z_mem 
-		    *)
-		z_eq(zid env' x, subs_exp (e,w,w0)) %Longrightarrow%
+	val zvar_ty = dest_z_power_type(type_of t);
+	val env' = fn id => if id = x then Value (zvar_ty, EIEnvVar "__none")					else env id;
+	val side = z_eq(zid env' x, subs_exp (e,w,w0)) %Longrightarrow%
 		(post %Longrightarrow% wp1) @ side1;
 in
 	{wp = wp, side = side}
@@ -576,7 +611,7 @@ let	fun is_it ({name = n, ...} : FORMAL_PROC) : bool = (name = n);
 		handle Fail _ =>
 		fail "proc_call_ivars" 505001 [fn()=>"formal procedure not found"];
 in
-	wp (SSpecIvars(proc_call_spec(pc, fp), q), a, wp_env)
+	wp (SSpecIvars(proc_call_spec env pc fp, q), a, wp_env)
 end
 );
 =TEX
@@ -587,71 +622,30 @@ let	val pars : WP_PARS = {wp = wp, a = a, wp_env = wp_env};
 in	case st of
 		SStmt STNull => null pars
 	|	SStmt STImplicitNull => null pars
-	|	SStmt (STAssign x) => assign pars x 
+	|	SStmt (STAssign x) => assign pars x
 	|	SStmt (STSpecNoIvars x) => spec_no_ivars_either pars x
 	|	SStmt (STSemicolon x) => semicolon pars x
 	|	SStmt (STIfThenElse x) => if_then_else pars x
-	|	SStmt (STCase x) => {wp=[],side=[]}
+	|	SStmt (STCase x) => case_either pars x
 	|	SStmt (STLoop x) => loop pars x
 	|	SStmt (STNamedLoop x) => named_loop pars x
 	|	SStmt (STWhile x) => cn_while pars x
-	|	SStmt (STForStatic x) => {wp=[],side=[]}
-	|	SStmt (STForTmark x) => {wp=[],side=[]}
+	|	SStmt (STForStatic x) => for_static pars x
+	|	SStmt (STForTmark x) => for_tmark pars x
 	|	SStmt (STExitWhen x) => exit_when pars x
 	|	SStmt (STExit) => cn_exit pars
-	|	SStmt (STRet x) => {wp=[],side=[]}
+	|	SStmt (STRet x) => cn_return pars x
 	|	SStmt (STProcNoIvars x) => proc_call_no_ivars pars x
 	|	SStmt (STKSlot x) => {wp=[],side=[]}
 	|	SSpecIvars x => spec_ivars pars x
-	|	SForNonStatic _ => {wp=[],side=[]}
+	|	SForNonStatic x => for_non_static pars x
 	|	SLogCon x => log_con pars x
 	|	SProcIvars x => proc_call_ivars pars x
 end
 );
-=IGN
-val assign_EG1 : Stmt = assign {x="a", E = Òa - bÆ}		(* a0 - b0 *);
-val assign_EG2 : Stmt = assign {x="b", E = Òa + bÆ}		(* a0 *);
-val assign_EG3 : Stmt = assign {x="a", E = Òb - aÆ}		(* b0 *);
-val semi_EG1 : Stmt = semicolon(assign_EG2, assign_EG3);
-val semi_EG2 : Stmt = semicolon(assign_EG1, semi_EG1);
-
-val A_EG = [([] Ù ÒP (a ∫ ˙) ± Q (b ∫ ˙)Æ)];
-val A_EG2 = [([] Ù Ò(a ∫ ˙)= bâ0 ± (b ∫ ˙)= aâ0Æ)];
-wp(stmt null, A_EG, wp_env_EG);
-wp(stmt (arr_assign array_assign_EG), A_EG, wp_env_EG);
-wp(stmt (assign assign_EG), A_EG2, wp_env_EG);
-wp(stmt semi_EG2, A_EG2, wp_env_EG);
-
-val my_conv : CONV = (fn tm =>
-	let	val vs = frees tm drop (fn t => not(type_of t =: type_ofÒ0Æ));
-		val vs' = Sort.sort term_order vs;
-		val convs = map (fn t => TRY_C(rewrite_conv[z_minus_thm, z_µ_elim t z_plus_order_thm])) vs';
-	in	EVERY_C convs
-	end	tm
-);
-my_conv Ò((a - b) + b) - a - b = bâ0 ± (a - b) + b = aâ0Æ;
 =TEX
 \pagebreak
 \section{VERIFICATION CONDITIONS}
-=SML
-type €FLAG› = bool;
-type €DEC_LABEL› = string;
-=TEX
-=SML
-type €IN_SCOPE› = {
-		vc_vars : VAR_DECL list,
-		vc_pars : PARAM_SPEC list,
-		vc_log_cons : Z_DECL list,
-		formal_procs : FORMAL_PROC list,
-		dec_labels : DEC_LABEL list};
-type €SPECLAB› = {
-		spec : SPEC,
-		formal_body_flag : FLAG,
-		fun_flag : FLAG,
-		till_flag : FLAG,
-		wp_env : WP_ENV,
-		in_scope : IN_SCOPE};
-=TEX
 =SML
 fun €vc_local_decls› (seqs : SEQUENT list,
 	{fun_flag, in_scope as {vc_vars, vc_pars, ...},
