@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.36 2003/07/03 12:11:36 rda Exp $
+ * $Id: pterm.c,v 2.37 2003/07/03 12:48:38 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -453,35 +453,7 @@ static sig_info	sig_infos []  = {
 
 static void default_sigs(void);
 static Boolean listening_state(int req);
-
-static void set_pty_attrs(int fd)
-{
-	struct termios tio;
-	if(	PUSH_MODULES(fd)
-	||	GET_ATTRS(fd, &tio)) {
-		msg("system error", "I/O control operation on pseudo-terminal failed (GET in parent)");
-		perror("xpp");
-		exit(4);
-	}
-
-	tio.c_lflag |= ISIG;
-	tio.c_lflag &= ~ICANON;
-	tio.c_lflag &= ~ECHO;
-	tio.c_lflag &= ~PENDIN;
-	tio.c_lflag &= ~NOFLSH;
-	tio.c_lflag &= ~TOSTOP;
-	tio.c_oflag &= ~OLCUC;
-	tio.c_oflag &= ~ONLCR;
-	tio.c_oflag &= ~XTABS;
-	tio.c_oflag |= OCRNL;
-	tio.c_cc[VINTR] = CINTR;
-
-	if(SET_ATTRS(fd, &tio)) {
-		msg("system error", "I/O control operation on pseudo-terminal failed (SET in parent)");
-		perror("xpp");
-		exit(5);
-	}
-}
+static void set_pty_attrs(int fd);
 
 void get_pty(void)
 {
@@ -638,6 +610,41 @@ void get_pty(void)
 		exit(12);
 	}
 }
+
+/*
+ * Set the terminal attributes in the pseudo-terminal
+ */
+static void set_pty_attrs(int fd)
+{
+	struct termios tio;
+	if(	PUSH_MODULES(fd)
+	||	GET_ATTRS(fd, &tio)) {
+		msg("system error", "I/O control operation on pseudo-terminal failed (GET in parent)");
+		perror("xpp");
+		exit(4);
+	}
+
+	tio.c_lflag |= ISIG;
+	tio.c_lflag &= ~ICANON;
+	tio.c_lflag &= ~ECHO;
+	tio.c_lflag &= ~PENDIN;
+	tio.c_lflag &= ~NOFLSH;
+	tio.c_lflag &= ~TOSTOP;
+	tio.c_oflag &= ~OLCUC;
+	tio.c_oflag &= ~ONLCR;
+	tio.c_oflag &= ~XTABS;
+	tio.c_oflag |= OCRNL;
+	tio.c_cc[VINTR] = CINTR;
+	tio.c_cc[VMIN] = 1;
+	tio.c_cc[VTIME] = 0;
+
+	if(SET_ATTRS(fd, &tio)) {
+		msg("system error", "I/O control operation on pseudo-terminal failed (SET in parent)");
+		perror("xpp");
+		exit(5);
+	}
+}
+
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Test whether the application is alive.
