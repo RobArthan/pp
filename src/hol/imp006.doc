@@ -46,7 +46,7 @@
 \begin{description}
 \item [Issue 1.1]
 First version.
-\item [Issue 1.2,1.3]
+\item [Issue 1.2,1.3,1.4]
 Still being created.
 \end{description}
 \subsection{Changes Forecast}
@@ -171,7 +171,7 @@ This is indicated by the error message:
 
 \section{THE ABSTRACT DATA TYPE $THM$}
 =SML
-(* structure âicl'Theoremsá : icl'Theorems = struct *)
+structure âicl'Kernelá : icl'Kernel = struct
 =TEX
 \subsection{Utilities}
 Give the maximum of a list of numbers.
@@ -266,16 +266,24 @@ extend_range (11,11) p;
 \subsection{Infinite Arrays}
 We implement Infinite arrays as finite arrays of lists of values.
 We expect that the lists will be short (generally only length 0 to 2, even in ``large'' applications, and we optimize for that).
-=SML
+We use the following signature, but as we are within a structure
+we can only use the $sig \ldots end$ part.
+ó
 signature âInfiniteArrayá = sig
 	type 'a âINFINITE_ARRAYá;
 	val âcreate_iaá : unit -> '_a INFINITE_ARRAY;
 	val âupdate_iaá : ('_a INFINITE_ARRAY * int * '_a) -> unit;
 	val âsub_iaá : ('_a INFINITE_ARRAY * int) -> '_a;
 end;
+æ
 =TEX
 =SML
-structure âInfiniteArrayá : InfiniteArray = struct
+structure âInfiniteArrayá : sig
+	type 'a INFINITE_ARRAY;
+	val create_ia : unit -> '_a INFINITE_ARRAY;
+	val update_ia : ('_a INFINITE_ARRAY * int * '_a) -> unit;
+	val sub_ia : ('_a INFINITE_ARRAY * int) -> '_a;
+	end = struct
 =TEX
 Introduce the array package:
 =SML
@@ -368,7 +376,7 @@ datatype âTHEORY_STATUSá =
 =TEX
 We will make the following an $abstype$ in the end.
 =SML
-datatype âTHMá = âthmá of {
+abstype âTHMá = âthmá of {
 		level : int,
 		theory : THEORY ref, 
 		sequent : SEQ}
@@ -397,8 +405,11 @@ In a hierarchy there will be theories with internal names $0$ to $top\_theory$, 
 =SML
 	âicl'HIERARCHYá = âhierá of {
 		lookup : icl'THEORY_INFO INFINITE_ARRAY,
-		top_theory : int};
-(* with *)
+		top_theory : int}
+=TEX
+There now follows the body of the $abstype$:
+=SML
+with
 =TEX
 \subsection{The State Type}
 =SML
@@ -418,6 +429,10 @@ type âTHEORY_INFOá = {
 		name : string};
 
 type âHIERARCHYá = (string * THEORY_INFO) list;
+=TEX
+\subsection{The Type of Conversions}
+=SML
+type âCONVá = TERM -> THM;
 =TEX
 \subsection{The Initial State}
 Give an empty theory, for initialisation
@@ -522,11 +537,26 @@ Look up a named entry in the value constructor or type constructor scopes.
 These two functions could be made available to the user or interface
 document, to allow, if nothing else, a ``what caused the well-formedness check to fail'' function to be written.
 =SML
-fun âget_con_envá (nm : string): {ty:TYPE, level:int} OPT = (
-let val {con_env=con_env,...} = !current
+local
+	val ordquote = ord("'");
+	val orddquote = ord("\"");
+	val ord0 = ord("0");
+	val ord9 = ord("9");
 in
-	e_lookup nm con_env
+fun âget_con_envá (nm : string): {ty:TYPE, level:int} OPT = (
+let val {con_env=con_env,...} = !current;
+	val ordnm = ord nm;
+in
+	if (ordnm = ordquote) andalso (length(explode nm) = 2)
+	then Value {ty=CHAR, level = 0}
+	else if	(ordnm = orddquote)
+	then Value {ty = STRING, level = 0}
+	else if	(ord0 <= ordnm andalso ordnm <= ord9 andalso
+		((nat_of_string nm; true) handle _ => false))
+	then Value {ty = †, level = 0}
+	else e_lookup nm con_env
 end);
+end;
 
 fun âget_ty_envá (nm : string):{arity:int, level:int} OPT = (
 let val {ty_env=ty_env,...} = !current
@@ -707,6 +737,15 @@ let val hier{lookup=lookup, top_theory=top_theory} =
 in
 	(nm = "-")
 	orelse aux top_theory
+end);
+=TEX
+Return the theory contents as a string:
+=SML
+fun âget_theory_contentsá (n : int) : THEORY = (
+let val hier{lookup=lookup, ...} = current_hierarchy();
+	val (ti {contents=contents,...}) = sub_ia(lookup, n);
+in
+	!contents
 end);
 =TEX
 Return the current theory name as a string:
@@ -896,7 +935,7 @@ The following function maps $f$ over each of the theory information cells in the
 As it is working through references it is misleading to
 return any value.
 =SML
-fun âmap_hierarchyá (f: icl'THEORY_INFO -> icl'THEORY_INFO) 
+fun âmap_hierarchyá (f: (int * icl'THEORY_INFO) -> icl'THEORY_INFO) 
 	(hir : icl'HIERARCHY) : unit = (
 let val hier{lookup=lookup, top_theory=top_theory} = 
 		hir;
@@ -904,7 +943,7 @@ let val hier{lookup=lookup, top_theory=top_theory} =
 		then (
 		let val old_ti = sub_ia(lookup, n)
 		in
-			update_ia(lookup,n,f old_ti);
+			update_ia(lookup,n,f (n,old_ti));
 			aux (n+1)
 		end) else ());
 in
@@ -983,7 +1022,7 @@ fun âicl'new_hierarchyá (x: unit) : icl'HIERARCHY = (
 let val {hierarchy=hierarchy, theory=theory, ty_env=ty_env, 
 		con_env=con_env, inconsistent=inconsistent} = !current;
 
-	fun make_anc (ti {status = status,
+	fun make_anc (n , ti {status = status,
 				inscope = inscope,
 				contents = contents,
 				children = children,
@@ -1100,10 +1139,6 @@ let val {hierarchy = hierarchy as hier{lookup=lookup, top_theory=top_theory},
 		contents = contents,
 		children = children,
 		name = name} = sub_ia(lookup,thyn);
-
-	val dummy = if status = TSDeleted
-		then fail "icl'open_theory" 6036 [fn x => nm]
-		else ();
 =TEX
 We take a copy of the current hierarchy to modify, and this will
 be put back in place.
@@ -1177,7 +1212,7 @@ let val {hierarchy = hierarchy as hier{lookup=lookup, ...},
 		name = name} = sub_ia(lookup,thyn);
 
 	val dummy = case status of
-		TSDeleted => fail "icl'delete_theory" 6036 [fn x => nm]
+		TSDeleted => error "icl'delete_theory" 6041 [fn x => nm]
 		| TSAncestor => fail "icl'delete_theory" 6071 [fn x => nm]
 		| TSLocked => fail "icl'delete_theory" 6037 [fn x => nm]
 		| TSNormal => 
@@ -1258,7 +1293,7 @@ let val thyn = internal_theory_name nm "icl'lock_theory";
 		name = name} = sub_ia(lookup,thyn);
 
 	val dummy = case status of
-		TSDeleted => fail "icl'lock_theory" 6036 [fn x => nm]
+		TSDeleted => error "icl'lock_theory" 6041 []
 		| TSAncestor => fail "icl'lock_theory" 6071 [fn x => nm]
 		| TSLocked => fail "icl'lock_theory" 6037 [fn x => nm]
 		| TSNormal => ();
@@ -1284,7 +1319,7 @@ let val thyn = internal_theory_name nm "icl'unlock_theory";
 		name = name} = sub_ia(lookup,thyn);
 
 	val dummy = case status of
-		TSDeleted => fail "icl'unlock_theory" 6036 [fn x => nm]
+		TSDeleted => error "icl'unlock_theory" 6041 []
 		| TSAncestor => fail "icl'unlock_theory" 6068 [fn x => nm]
 		| TSNormal => fail "icl'unlock_theory" 6068 [fn x => nm]
 		| TSLocked => ();
@@ -1320,10 +1355,6 @@ let val {hierarchy = hierarchy as hier{lookup=lookup, top_theory=top_theory},
 		children = children1,
 		name = name1}
 		= sub_ia(lookup,fromn);
-
-	val dummy = case status1 of
-		TSDeleted => fail "icl'duplicate_theory" 6036 [fn x => fromnm]
-		| _ => ();
 
 	val thy {name = frname,
 		ty_env = ty_env,
@@ -2040,18 +2071,17 @@ end);
 Add a new parent to the current theory.
 Interrupting the body of the main $let$ statement may leave the state with the $inconsistent$ flag set.
 =SML
-die;
 fun âicl'new_parentá (nm : string) : unit = (
 let val dummy = (check_c_writable "icl'new_parent";
 	if not(is_theory_name nm)
-	then fail 6035 "icl'new_parent" [fn () => nm]
-	else  ();
+	then fail "icl'new_parent" 6035 [fn () => nm]
+	else  ());
 
-	val fromn = internal_theory_name fromnm "icl'lock_theory";
+	val fthy = internal_theory_name nm "icl'new_parent";
 
-	val {hierarchy=hierarchy as hier{lookup=lookup, top_theory=top_theory}, 
-		theory=theory, ty_env=ty_env,
-		con_env=con_env, inconsistent=inconsistent}
+	val {hierarchy=hierarchy as hier{lookup=lookup, ...}, 
+		theory=theory, ty_env=cty_env,
+		con_env=ccon_env, inconsistent=inconsistent}
 		 = !current;
 
 	val ti {status = fstatus, 
@@ -2059,26 +2089,23 @@ let val dummy = (check_c_writable "icl'new_parent";
 		contents = fcontents,
 		children = fchildren,
 		name = fname}
-		= sub_ia(lookup, fromn);
+		= sub_ia(lookup, fthy);
 
 	val cthy = icl'get_current_theory_name();
 
 =TEX
 The ancestors of the current and parent theories
 =SML
-	val fthy_anc = theory_ancestors fromn;
+	val fthy_anc = theory_ancestors fthy;
 	val cthy_anc = theory_ancestors cthy;
 =TEX
-A theory is an ancestor of the current one if and only if it is in scope:
-unless the scope has been corrupted.
+A theory is an ancestor of the current one if and only if it is in scope.
 This ``feels'' like a good place to check for that sort of corruption.
 =SML
-	val dummy = if fstatus = TSDeleted
-		then fail "icl'new_parent" 6036 [fn () => fname]
-		else if finscope
+	val dummy = if finscope
 		then fail "icl'new_parent" 6082 [fn () => fname]
-		else if fromn mem fthy_anc
-		then error "icl'new_parent" 6041 []
+		else if cthy mem fthy_anc
+		then fail "icl'new_parent" 6084 [fn () => fname]
 		else ();
 
 	val nfti = (ti {status = fstatus, 
@@ -2087,130 +2114,7 @@ This ``feels'' like a good place to check for that sort of corruption.
 		children = (cthy :: fchildren),
 		name = fname});
 
-in
-	current := {hierarchy=hierarchy, theory=theory, ty_env=ty_env, 
-			con_env=con_env, inconsistent=true};
-	update_ia(lookup,ntop_theory,nti);
-	add_child ntop_theory [cthy];
-	current := {hierarchy=hierarchy, theory=theory, ty_env = new_ty_env, 
-		con_env=new_con_env, inconsistent=inconsistent};
-	ntop_theory
-end
-);
-=TEX
-=SML		
-(* end; abstype *)
-=TEX
-=SML
-(*  end; structure icl'Theorems *)
-=TEX
-\twocolumn[\section{INDEX}]
-\small
-\printindex
-\end{document}
-=IGN
-PolyML.print_depth 10;
-icl'new_theory "next";
-icl'new_theory "another";
-icl'open_theory "next";
-icl'new_theory "yet_again";
-fun naff n = ref(empty_theory n []);
-
-fun ptr_thy (n: int) : THEORY ref = (
-let val hier {lookup=lookup,...} = current_hierarchy();
-	val ti{contents=contents,...} = sub_ia(lookup,n)
-in
-	contents
-end);
-
-fun mk_seq (c:string) : SEQ = ([mk_const("Asm"^c,BOOL)],mk_const("Conc"^c,BOOL));
-
-fun mk_thm (c:string) (n:int) (lev: int) : THM = (
-	thm{level = lev,
-		sequent = mk_seq c,
-		theory = ptr_thy n}
-);
-
-(* Diagnostic printing: *)
-
-local
-fun lprint_type t = (
-let
-	fun aux ty = (
-	if is_vartype ty then 
-		(" " ^ dest_vartype ty)
-	else if is_funtype ty then
-		(let val(t1,t2) = dest_funtype ty
-		in
-		( "(" ^ aux t1 ^ " ‹" ^ aux t2 ^")" )
-		end)
-	else (let 
-		fun aux1 ("‰",[t1,t2]) = (
-		"(" ^ aux t1 ^ " ‰" ^ aux t2 ^")"
-		) | aux1 ((s,[])) = (
-		" " ^ s
-		) | aux1 ((s,tyl)) = (
-		"((" ^ implode (map ((fn x => x ^", ") o aux) tyl)^ ")" ^ s ^ ")")
-		in
-			aux1 (dest_type ty)
-		end)
-	)
-in
-	(":" ^ aux t)
-end);
-in
-val âprint_typeá = diag_string o lprint_type;
-val âstring_of_typeá = lprint_type;
-
-fun âprint_termá (tm: TERM) =
-let fun print_simple_dest_term (Comb(t1,t2)) = (
-	"Comb (" ^ print_simple_dest_term(simple_dest_term t1) ^", " ^
-		print_simple_dest_term(simple_dest_term t2) ^ ")"
-) | print_simple_dest_term (Const(s,ty)) = s ^ lprint_type ty
-| print_simple_dest_term (Var(s,ty)) = s ^ lprint_type ty
-| print_simple_dest_term (Abs(v,b)) = (
-	let val (vs,vt) = dest_var v
-	in
-	" " ^ vs ^ lprint_type vt ^ " Ž " ^ print_simple_dest_term (simple_dest_term b)
-	end);
-in
-	diag_string(print_simple_dest_term (simple_dest_term tm))
-end;
-end;
-(* 
-Then a term and sequent printing function that doesn't give the type information.
-*)
-local fun print_simple_dest_term (Comb(t1,t2)) = (
-	"(" ^ print_simple_dest_term(simple_dest_term t1) ^ " " ^
-		print_simple_dest_term(simple_dest_term t2) ^ ")"
-) | print_simple_dest_term (Const(s,ty)) = s
-| print_simple_dest_term (Var(s,ty)) = s
-| print_simple_dest_term (Abs(v,b)) = (
-	let val (vs,vt) = dest_var v
-	in
-	"( " ^ vs ^ " Ž " ^ print_simple_dest_term (simple_dest_term b) ^")"
-	end);
-in
-	fun âprint_term1á (tm: TERM): unit = (
-	diag_string(print_simple_dest_term (simple_dest_term tm))
-	);
-	fun âprint_seqá ((tml , tm): SEQ) : unit = (
-	diag_string( implode ((map (fn x =>
-		print_simple_dest_term (simple_dest_term x) ^", ") tml)
-		@
-		["… ", print_simple_dest_term (simple_dest_term tm)]))
-	);
-end;
-
-fun print_thm (key:string) (them : THM) : unit = (
-let val {level=level,theory=thy{name=iname,...},sequent=sequent} =
-		icl'dest_thm them
-	in
-		diag_string("In theory "^string_of_int iname^ ", at level "^string_of_int level^ ", with key "^key^":");
-		print_seq sequent
-end);
-
-fun print_thy (thy {name = iname,
+	val thy {name = iname,
 		ty_env = ty_env,
 		con_env = con_env,
 		parents = parents,
@@ -2219,289 +2123,826 @@ fun print_thy (thy {name = iname,
 		definition_dict = definition_dict,
 		theorem_dict = theorem_dict,
 		current_level = current_level,
-		user_data = user_data} : THEORY) : unit = (
-	diag_string("Internal name " ^ string_of_int iname ^
-		", Current Level " ^ string_of_int current_level^
-		", Parents " ^ implode
-		((map (fn x => string_of_int x ^ " ") parents)));
-	diag_string "***Types***";
-	map (fn (nm,{arity=arity,level=level}) =>
-		diag_string ("     " ^ nm ^ 
-			": arity="^string_of_int arity ^
-			", level="^string_of_int level))
-		ty_env;
-	diag_string "***Constants***";
-	map (fn (nm,{ty=ty,level=level}) =>
-		diag_string ("     " ^ nm ^ 
-			": ty="^string_of_type ty ^
-			", level="^string_of_int level))
-		con_env;
-	diag_string "***Theorems***";
-	map (fn (key,them) => print_thm key them) theorem_dict;
-	diag_string "***Definitions***";
-	map (fn (key,them) => print_thm key them) definition_dict;
-	diag_string "***Axioms***";
-	map (fn (key,them) => print_thm key them)axiom_dict;
-	()
+		user_data = user_data} = !theory;
+
+	val new_thys_in_scope = fthy_anc diff cthy_anc ;
+=TEX
+The following detects clashes, as well as discovering the new scopes.
+=SML
+	val (new_ty_env,new_con_env) = ((fold 
+		(fn (athy,tece) => add_thy_env (get_theory_contents athy) tece)
+		new_thys_in_scope
+		(cty_env, ccon_env))
+		handle complaint =>
+		list_divert complaint "new_parent" [
+			("add_ty_env",6067,[fn () => fname]),
+			("add_con_env",6067,[fn () => fname])]);
+
+	val new_thy = thy {name = iname,
+		ty_env = ty_env,
+		con_env = con_env,
+		parents = (fthy :: parents),
+		del_levels = del_levels,
+		axiom_dict = axiom_dict,
+		definition_dict = definition_dict,
+		theorem_dict = theorem_dict,
+		current_level = current_level,
+		user_data = user_data};
+=TEX
+Put the new ancestor theories in scope:
+=SML
+	fun put_in_scope [] = () 
+	| put_in_scope (n :: x) = (
+	let val ti{status = astatus, 
+		inscope = ainscope,
+		contents = acontents,
+		children = achildren,
+		name = aname} = sub_ia(lookup,n)
+	in
+		update_ia(lookup,n,ti{status = astatus, 
+			inscope = true,
+			contents = acontents,
+			children = achildren,
+			name = aname})
+	end);
+in
+	current := {hierarchy=hierarchy, theory=theory, ty_env=cty_env, 
+			con_env=ccon_env, inconsistent=true};
+	put_in_scope new_thys_in_scope;
+	add_child fthy [cthy];
+	theory := new_thy;
+	current := {hierarchy=hierarchy, theory=theory, ty_env = new_ty_env, 
+		con_env=new_con_env, inconsistent=inconsistent}
+end);
+=TEX
+Get a theories contents, by string name:
+=SML
+fun âicl'get_theoryá (nm : string) : THEORY = (
+let val iname = internal_theory_name nm "icl'get_theory"
+
+in
+	get_theory_contents iname
+end);
+=TEX
+Get the current theories status:
+=SML
+fun  âget_current_theory_statusá (() : unit) = (
+let val {hierarchy = hier{lookup=lookup,...}, theory = theory, ...} = !current;
+
+	val thy{name = iname,...} = !theory;
+
+	val (ti {status = status,...}) = sub_ia(lookup, iname);
+in
+	status
+end);
+=TEX
+
+\section{PRIMITIVE INFERENCE RULES OF ADT THM}
+\subsection{Utilities}
+Do union up to $\alpha$-conversion:
+=SML
+val â%alpha%_unioná : TERM list -> TERM list -> TERM list = union (uncurry aconv);
+=TEX
+Give the frees of a list of terms:
+=SML
+val âlist_freesá = list_cup o map frees;
+=TEX
+Then a membership test on this:
+=SML
+fun âlist_is_free_iná (x:TERM) (tms:TERM list) : bool = (
+	any tms (fn p => is_free_in x p)
 );
+=TEX
 
-fun print_ti ({status : THEORY_STATUS,
-	inscope : bool,
-	contents : THEORY,
-	children : int list,
-	name : string}:THEORY_INFO) : unit = (
-	diag_string ("Theory "^name^":");
-	diag_string((if inscope then "In Scope" else "Out of Scope") ^
-		", Children:" ^ implode 
-		(map (fn x => string_of_int x ^ ", ") children));
-	(case status of
-	TSNormal => diag_string "Status: Normal"
-	| TSDeleted => diag_string "Status: Deleted"
-	| TSLocked => diag_string "Status: Locked"
-	| TSAncestor => diag_string "Status: Ancestor");
-	print_thy contents
-);
-
-fun print_hierarchy (():unit) : unit = (
-	map (fn (p,q) => (diag_string("------ti key: "^p^"------");
-		print_ti q))
-	(icl'get_hierarchy ());
-	()
-);
-
-print_hierarchy ();
-icl'new_type("BOOL",0);
-print_ti(icl'get_theory_info "next");
-val † = icl'new_type ("†",0);
-print_ti(icl'get_theory_info "next");
-val n1 = icl'list_save_thm(["n1"], mk_thm "block" 1 1);
-val n2 = icl'list_save_thm(["n2"], mk_thm "block2" 1 1);
-icl'new_type("‰",2);
-icl'new_type("‹",2);
-val Zero = icl'new_const("0",†);
-val One = icl'new_const("1",†);
-val T = icl'new_const("T",BOOL);
-val F = icl'new_const("F",BOOL);
-print_ti(icl'get_theory_info "next");
-val n3 = icl'list_save_thm(["n3"], mk_thm "block3" 0 1);
-print_ti(icl'get_theory_info "next");
-icl'open_theory "min";
-icl'new_type("‰",2); (* fails *)
-val UNIT = icl'new_type ("UNIT",0);
-val Unit = icl'new_const("Unit",UNIT);
-print_ti(icl'get_theory_info "min");
-icl'open_theory "next";
-val AlsoUnit = icl'new_const("AlsoUnit",UNIT);
-icl'open_theory "min";
-val AlsoUnit2 = icl'new_const("AlsoUnit",UNIT); (* fails *)
-icl'open_theory "another";
-icl'new_type("BOOL",0);
-val T = icl'new_const("T",BOOL);
-val F = icl'new_const("F",BOOL);
-
-print_ti(icl'get_theory_info "another");
-wf_term F; (* true *)
-wf_term T; (* true *)
-icl'new_theory "yet_again"; (* fails *)
-icl'delete_extension();
-print_ti(icl'get_theory_info "another");
-val s1 = icl'list_save_thm(["s1"], mk_thm "from_min" 0 3);
-val s2 = icl'list_save_thm(["s2"], mk_thm "from_here" 2 5);
-wf_term F; (* false *)
-wf_term T; (* true *)
-icl'new_const("F",BOOL);
-print_ti(icl'get_theory_info "another");
-wf_term F; (* true *)
-wf_term T; (* true *)
-icl'delete_extension();
-icl'delete_extension(); (* fails *)
-icl'delete_thm "s2";
-icl'delete_extension();
-print_ti(icl'get_theory_info "another");
-val TorF = icl'new_const("TorF",BOOL);
-print_ti(icl'get_theory_info "another");
-wf_term TorF; (* true *)
-wf_term T; (* false *)
-wf_term F; (* false *)
-icl'delete_extension();
-print_ti(icl'get_theory_info "another");
-icl'delete_extension();
-print_ti(icl'get_theory_info "another");
-icl'delete_extension(); (* fails *)
-
-icl'open_theory "yet_again";
-icl'open_theory "yet_again";
-icl'new_axiom(["truth_axiom"],T);
-print_ti(icl'get_theory_info "yet_again");
-icl'new_axiom(["truth_axiom"],T); (* fails *)
-icl'new_axiom(["not so", "No way!"],F);
-icl'new_axiom(["testing"],mk_const("rubbish",BOOL)); (* fails *)
-icl'new_axiom(["testing"],mk_comb(mk_var("f",mk_fun(BOOL,BOOL)), T)); 
-print_ti(icl'get_theory_info "yet_again");
-icl'open_theory "another";
-icl'new_axiom(["testing2"],mk_comb(mk_var("f",mk_fun(BOOL,BOOL)), T)); (* fails *)
-icl'open_theory "yet_again";
-icl'new_axiom(["testing2"],mk_comb(mk_const("f",mk_fun(BOOL,BOOL)), T)); (* fails *)
-let val t = mk_type("rubbish",[])
+\subsection{icl'subst\_rule}
+=RULE
+icl'subst_rule
+É
+[ö1 … t1=t1', ... , ön … tn=tn']
+ö … t[t1,...tn]
+É
+ö1 ¡ ... ön ¡ ö … t[t1',...tn']
+=TEX
+The following local function takes the input list and hypotheses to $icl'subst\_rule$, and returns the 
+substitution lists for $var\_subst$, as well as the 
+new assumption list.
+It has but a single pass over the input list.
+=SML
+local 
+	fun two_subst_lists (lhslst : (TERM * TERM) list)
+		(rhslst : (TERM * TERM) list)
+		(new_hyps : TERM list) 
+		([] : (THM * TERM) list) :
+		(((TERM * TERM) list) * ((TERM * TERM) list) * (TERM list)) = (lhslst, rhslst, new_hyps)
+	| two_subst_lists lhslst rhslst new_hyps ((thmi,vari) :: lst) = (
+	let val (nhyps,(lhsi,rhsi)) = (check_thm "icl'subst_rule" thmi;
+		(((Combinators.I ** dest_eq)(dest_thm thmi))
+		handle complaint =>
+		divert complaint "dest_eq" "icl'subst_rule" 6002 []));
+	in
+		if not(is_var vari)
+		then fail "icl'subst_rule" 6003 []
+		else if type_of lhsi <> type_of vari
+		then fail "icl'subst_rule" 6029 [fn () => fst(dest_var vari)]
+		else (two_subst_lists ((lhsi, vari) :: lhslst)
+			((rhsi, vari) :: rhslst)
+			(%alpha%_union nhyps new_hyps)
+			lst)
+	end);
 in
-icl'new_axiom(["testing2"],mk_comb(mk_var("f",mk_fun(t,BOOL)), mk_var("x",t)))
-end; (* fails *)
-icl'lock_theory "yet_again";
-icl'new_axiom(["Truth_axiom"],T); (* fails *)
-icl'new_const("ForT",BOOL); (* fails *)
-icl'new_type("SOMETHING",3); (* fails *)
-icl'unlock_theory "yet_again";
-icl'new_axiom(["Truth_axiom"],T); 
-icl'new_const("ForT",BOOL); 
-icl'new_type("SOMETHING",3); 
-print_ti(icl'get_theory_info "yet_again");
-val s2 = icl'list_save_thm(["s2"], mk_thm "from_here" 2 5); (* fails *)
-icl'open_theory "another";
-val s2 = icl'list_save_thm(["s2"], mk_thm "from_here" 2 5); (* fails *)
-print_ti(icl'get_theory_info "rubbish"); (* fails *)
-icl'get_theory_name 0;
-icl'get_theory_name 5; (* fails *)
-icl'open_theory "rubbish";
-icl'new_theory "to_be_deleted";
-print_ti(icl'get_theory_info "to_be_deleted"); 
-icl'delete_theory "to_be_deleted";
-print_ti(icl'get_theory_info "to_be_deleted"); (* fails *)
-print_hierarchy();
-icl'open_theory "to_be_deleted"; (* fails *)
-
-icl'delete_theory "to_be_deleted"; (* fails *)
-icl'new_theory "to_be_deleted"; (* succeeds! *)
-print_ti(icl'get_theory_info "to_be_deleted");
-icl'delete_theory "to_be_deleted"; 
-
-icl'delete_theory "min"; (* fails *)
-icl'lock_theory "yet_again";
-print_ti(icl'get_theory_info "yet_again");
-icl'delete_theory "yet_again"; (* fails *)
-icl'lock_theory "yet_again"; (* fails *)
-icl'unlock_theory "yet_again";
-icl'open_theory "yet_again";
-icl'delete_theory "yet_again"; (* fails *)
-icl'lock_theory "to_be_deleted"; (* fails *)
-icl'lock_theory "rubbish"; (* fails *)
-icl'unlock_theory "to_be_deleted"; (* fails *)
-icl'unlock_theory "rubbish"; (* fails *)
-icl'unlock_theory "yet_again"; (* fails *)
-print_ti(icl'get_theory_info "next");
-icl'duplicate_theory "next" "copy_of_next";
-print_ti(icl'get_theory_info "copy_of_next");
-icl'duplicate_theory "rubbish" "copy_of_next"; (* fails *)
-icl'duplicate_theory "rubbish" "copy_of_rubbish"; (* fails *)
-icl'duplicate_theory "to_be_deleted" "copy_of_rubbish";
-icl'delete_thm "rubbish";
-val s2 = icl'list_save_thm(["s2"], mk_thm "from_here" 2 5); (* fails *)
-icl'new_definition (["True"],"True",mk_const("T",BOOL));
-icl'new_definition (["False"],"False",mk_const("F",BOOL));
-print_ti(icl'get_theory_info "-");
-icl'new_definition (["0"],"0",mk_const("0",†)); (* fails *)
-val zero_def = icl'new_definition (["Zero"],"Zero",mk_const("0",†));
-val Zero = mk_const("Zero",†);
-check_thm "test" zero_def;
-wf_term Zero;
-print_ti(icl'get_theory_info "-");
-icl'delete_extension ();
-print_ti(icl'get_theory_info "-");
-check_thm "test" zero_def;
-wf_term Zero;
-icl'new_definition ([],"rubbish",mk_const("F",BOOL));
-icl'new_definition (["False"],"False",mk_const("F",BOOL));
-icl'new_definition (["Somewhere"],"Somewhere",mk_const("Somehow",BOOL));
-icl'lock_theory "-";
-icl'new_definition (["Somewhere"],"Somewhere",mk_const("False",BOOL));
-icl'unlock_theory "-";
-icl'new_definition (["Somewhere"],"Somewhere",mk_var("Somehow",BOOL));
-val tv1 = mk_vartype "'1";
-val tv2 = mk_vartype "'2";
-icl'new_const("Everywhere",tv1);
-
-icl'new_definition (["Somewhere"],"Somewhere",
-	mk_comb(
-	simple_mk_abs(mk_var("Somehow",tv1),T),
-	mk_const("Everywhere",tv1)
-		)); (* fails *)
-
-(* icl'new_type("BOOL",0); *)
-icl'new_const("=",mk_fun(tv1, mk_fun(tv1, BOOL)));
-icl'new_const("„",mk_fun(mk_fun(tv1,BOOL),BOOL));
-icl'new_const("ƒ",mk_fun(mk_fun(tv1,BOOL),BOOL));
-icl'new_const("TypeDefinition",mk_fun(mk_fun(tv1,BOOL),
-	mk_fun(mk_fun(tv2,tv1),BOOL)));
-val Tv1Pred = icl'new_const("Tv1Pred",mk_fun(tv1,BOOL));
-
-local val x= mk_var("x",tv1)
+=TEX
+Main function:
+=SML
+fun âicl'subst_ruleá (thm_var_list : (THM * TERM) list)
+		(template : TERM)
+		(ithm as thm{sequent = (hyps,concl),...}) : THM = (
+let val dummy = check_thm "icl'subst_rule" ithm;
+	val {theory = theory,...} = !current;
+	val thy {current_level = current_level,...} = !theory;
 in
-val etype_exax = icl'new_axiom(["etype_exax"],
-	simple_mk_„(x,mk_comb(Tv1Pred,x)))
-end;
-val etype_def = icl'new_type_definition( [ "ETYPE"], "ETYPE", ["'1"], etype_exax);
-print_ti(icl'get_theory_info "-");
-local val x= mk_var("x",tv2)
-in
-val etype2_exax = icl'new_axiom(["etype2_exax"],
-	simple_mk_„(x,mk_comb(icl'inst [] [(tv2,"'1")]Tv1Pred,x)))
-end;
-val etype2_def = icl'new_type_definition( [ "ETYPE2"], "ETYPE2", ["'2"], etype2_exax);
-print_ti(icl'get_theory_info "-");
-icl'new_type_definition( [ "rubbish"], "BOOL", [], etype2_exax); (* fails *)
-icl'open_theory "min";
-icl'new_type_definition( [ "rubbish"], "BOOL", [], etype2_exax); (* fails *)
-icl'open_theory "yet_again";
-icl'new_type_definition( [ "rubbish"], "rubbish", [], mk_thm "hello" 0 0); (* fails *)
+	if is_nil thm_var_list
+	then (
+=TEX
+Just doing an alpha-conversion:
+=SML
+		if aconv concl template
+		then thm{level = current_level,
+			theory = theory,
+			sequent = (hyps, template)}
+		else fail "icl'subst_rule" 6001 []
+=TEX
+Doing a full substitution.
+Create (while checking) two lists, one of $lhs_i\ ‰\ var_i$,
+one of $rhs_i\ ‰\ var_i$; 
+create two terms from $template$,
+one with the $lhs$ substitutions, the other with the $rhs$;
+if the $lhs$ is $\alpha$-convertible to $concl$, then
+return the theorem that the $rhs$ term is a theorem.
 
-local val x= mk_var("x",tv2)
+=SML
+	) else (
+	let val (lhssubs, rhssubs, new_hyps) = two_subst_lists [] [] hyps thm_var_list;
+		val template_as_lhs = var_subst lhssubs template;
+		val template_as_rhs = var_subst rhssubs template;
+	in
+		if aconv concl template_as_lhs
+		then thm{level = current_level,
+			theory = theory,
+			sequent = (new_hyps, template_as_rhs)}
+		else fail "icl'subst_rule" 6001 []
+	end
+	)
+end); (* list clause *)
+end; (* local *)
+=TEX
+\subsection{icl'simple\_abs\_rule}
+=RULE
+icl'simple_abs_rule
+»x¼
+É
+ö … t1[x] = t2[x]
+É
+ö … ( x Ž t1[x]) = ( x Ž t2[x])
+=TEX
+And:
+=RULE
+icl'simple_abs_rule
+»x¼
+É
+ö … t1[x] ‚ t2[x]
+É
+ö … ( x Ž t1[x]) = ( x Ž t2[x])
+=TEX
+=SML
+fun âicl'simple_abs_ruleá (absvar : TERM) 
+	(thrm as thm {sequent = (hyps, concl),...} : THM) 
+	: THM = (
+let val (absvarnm, absvarty) = (dest_var absvar
+		handle complaint =>
+		divert complaint "dest_var" "icl'simple_abs_rule" 6004 []);
+
+	val dummy = (check_thm "icl'simple_abs_rule" thrm;
+		if list_is_free_in absvar hyps
+		then fail "icl'simple_abs_rule" 6005 [fn () => absvarnm]
+		else ());
+
+	val (lhs,rhs) = (dest_eq concl
+		handle complaint =>
+		divert complaint "dest_eq" "icl'simple_abs_rule" 6025 []);
+
+	val {theory = theory,...} = !current;
+
+	val thy {current_level = current_level,...} = !theory;
+
 in
-val etype3_exax = icl'new_axiom(["etype3_exax"],
-	simple_mk_ƒ(x,mk_comb(icl'inst [] [(tv2,"'1")]Tv1Pred,x)))
-end;
-val etype3_def = icl'new_type_definition( [ "ETYPE3"], "ETYPE3", ["'2"], etype3_exax); (* fails *)
-local val x= mk_var("x",tv1);
-	val y= mk_const("Everywhere",tv1);	
+	thm {level = current_level, theory = theory,
+		sequent = (hyps, mk_eq(mk_abs(absvar, lhs),
+			mk_abs(absvar, rhs)))}
+end);
+=TEX
+\subsection{icl'inst\_type\_rule}
+=RULE
+icl'inst_type_rule
+[(þ1, tyv1), ..., (þn,tyvn)]
+É
+ö … t[tyv1,...tyvn]
+É
+ö … t[þ1,...þn]
+=TEX
+=SML
+fun  âicl'inst_type_ruleá (talist: (TYPE * TYPE) list)
+	(thrm : THM as thm {sequent = (hyps, concl),...}) : THM = (
+let val dummy = check_thm "icl'simple_abs_rule" thrm;
+
+	val usingtvs : string list = map (fn (t,tv) =>  if is_vartype tv
+		then dest_vartype tv
+		else fail "icl'inst_type_rule" 6007 [])
+		talist;
+
+	val dummy = if any hyps (fn x => any (term_tyvars x)
+			(fn y => y mem usingtvs))
+		then fail "icl'inst_type_rule" 6006 
+			[fn () => (find (term_tyvars (find hyps (fn x => any (term_tyvars x)
+			(fn y => y mem usingtvs))))
+			(fn y => y mem usingtvs))]
+		else ();
+
+	val {theory = theory,...} = !current;
+
+	val thy {current_level = current_level,...} = !theory;
 in
-val etype4_exax = icl'new_axiom(["etype4_exax"],
-	simple_mk_„(x,mk_comb(Tv1Pred,y)))
-end;
-val etype4_def = icl'new_type_definition( [ "ETYPE4"], "ETYPE4", ["'1"], etype4_exax); (* fails *)
-local val x= mk_var("x",tv1);
-	val y= mk_const("Everywhere",tv1);	
+	thm{level = current_level, theory = theory,
+		sequent = (hyps, inst (list_frees hyps) talist concl)}
+end);
+=TEX
+\subsection{icl'Š\_intro}
+=RULE
+icl'Š_intro
+»t1¼
+É
+ö … t2
+É
+ö - {t1} … t1 Š t2
+=TEX
+=SML
+fun âicl'Š_introá (asm : TERM) (thrm : THM as thm{sequent = (hyps,concl),...}) : THM = (
+let val dummy = (check_thm "icl'Š_intro" thrm;
+	if type_of asm <> BOOL
+	then fail "icl'Š_intro" 6009 []
+	else ());
+
+	val {theory = theory,...} = !current;
+
+	val thy {current_level = current_level,...} = !theory;
 in
-val etype5_exax = icl'new_axiom(["etype5_exax"],
-	simple_mk_„(x,T))
-end;
-val etype5_def = icl'new_type_definition( [ "ETYPE5"], "ETYPE5", ["'1"], etype5_exax); (* fails *)
-icl'new_type_definition( [ "ETYPE6"], "ETYPE6", ["'2","'2"], etype2_exax); (* fails *)
-icl'new_const("Š",mk_fun(BOOL,mk_fun(BOOL,BOOL)));
+	thm{level = current_level, theory = theory,
+		sequent = (hyps drop (aconv asm), mk_Š(asm, concl))}
+end);
+=TEX
+\subsection{icl'Š\_elim}
+=RULE
+icl'Š_elim
+É
+ö1 … t1 Š t2; ö2 … t1'
+É
+ö1 ¡ ö2 … t2
+=TEX
+=SML
+fun âicl'Š_elimá (thrm1 : THM as thm{sequent = (hyps1,concl1),...})
+	(thrm2 : THM as thm{sequent = (hyps2,concl2),...}) : THM = (
+let val dummy = (check_thm "icl'Š_elim" thrm1;
+		check_thm "icl'Š_elim" thrm2);
+
+	val (hconcl1,cconcl1) = (dest_Š concl1 
+		handle complaint =>
+		divert complaint "dest_Š" "icl'Š_elim" 6010 []);
+
+	val {theory = theory,...} = !current;
+
+	val thy {current_level = current_level,...} = !theory;
+in
+	if aconv hconcl1 concl2
+	then thm{level = current_level, theory = theory,
+		sequent = (%alpha%_union hyps1 hyps2, cconcl1)}
+	else fail "icl'Š_elim" 6011 []
+end);
+=TEX
+\subsection{icl'asm\_rule}
+=RULE
+icl'asm_rule
+»t¼
+É
+É
+t … t
+=TEX
+=SML
+fun âicl'asm_ruleá (tm : TERM) : THM = (
+let val {theory = theory,...} = !current;
+
+	val thy {current_level = current_level,...} = !theory;
+in
+	if type_of tm = BOOL
+	then thm{level = current_level, theory = theory,
+		sequent = ([tm],tm)}
+	else fail "icl'asm_rule" 6009 []
+end);
+=TEX
+\subsection{icl'refl\_conv}
+=RULE
+icl'refl_conv
+»t¼
+É
+É
+… t = t
+=TEX
+Or, if $t$ is boolean:
+=RULE
+icl'refl_conv
+»t¼
+É
+É
+… t ‚ t
+=TEX
+=SML
+val âicl'refl_convá : CONV = (fn (tm : TERM) =>
+let val {theory = theory,...} = !current;
+
+	val thy {current_level = current_level,...} = !theory;
+in
+	thm{level = current_level, theory = theory,
+		sequent = ([],mk_eq(tm,tm))}
+end);
+=TEX
+\subsection{icl'simple\_$\beta$\_conv}
+=CONVERSION
+icl'simple_%beta%_conv
+»( x Ž t1[x]) t2¼
+É
+É
+… ( x Ž t1[x]) t2 = t1[t2]
+=TEX
+Or, if the term is of type $BOOL$:
+=CONVERSION
+icl'simple_%beta%_conv
+»( x Ž t1[x]) t2¼
+É
+É
+… ( x Ž t1[x]) t2 ‚ t1[t2]
+=TEX
+=SML
+val âicl'simple_%beta%_convá : CONV = (fn (tm : TERM) =>
+let val {theory = theory,...} = !current;
+
+	val thy {current_level = current_level,...} = !theory;
+	
+	val ((vr, t1), t2) = ((simple_dest_abs ** Combinators.I)(dest_comb tm)
+		handle complaint =>
+		list_divert complaint "icl'simple_%beta%_conv"
+			[("simple_dest_abs",6012,[]),
+			("dest_comb",6012,[])]);
+
+	val rhs = var_subst [(t2,vr)] t1;
+in
+	thm{level = current_level, theory = theory,
+		sequent = ([],mk_eq(tm,rhs))}
+end);
+=TEX
+\subsubsection{icl'suc\_conv}
+=RULE
+icl'suc_conv
+(mk_† (m+1))
+É
+É
+… ^(mk_†(m+1)) = Suc ^(mk_† m)
+=TEX
+=RULE
+icl'suc_conv
+(mk_† 0)
+É
+É
+… 0 = Zero
+=TEX
+The following inference rule relies on the wf-formedness of
+the following.
+=SML
 local
-	val So = mk_var("So",BOOL);
-	val IsSo = mk_var("IsSo",BOOL)
+	val âSucá = mk_const("Suc",mk_fun(†, †));
+	val âZeroá = mk_const("Zero", †);
 in
-	val so_isso_axiom = icl'new_axiom(["so_isso_axiom"],
-		list_mk_„([So,IsSo],mk_Š(So,IsSo)));
-end;
-val so_isso_def = icl'new_specification (["So","IsSo"],2,so_isso_axiom);
-print_ti(icl'get_theory_info "-");
-val x_def = icl'new_specification (["x"],1,etype5_exax);
-print_ti(icl'get_theory_info "-");
-icl'new_specification ([],1,etype5_exax); (* fails *)
-icl'new_specification (["x1"],0,etype5_exax); (* fails *)
-icl'new_specification (["x1"],1,etype5_exax); (* fails *)
-local val y = mk_var("y",BOOL)
+=TEX
+=SML
+val âicl'suc_convá : CONV = (fn (tm : TERM) =>
+let val {theory = theory,...} = !current;
+
+	val thy {current_level = current_level,...} = !theory;
+	
+	val nint = (dest_† tm
+		handle complaint =>
+		divert complaint "dest_†" "icl'suc_conv" 6013 []);
+
+	val rhs = if nint = 0
+		then Zero
+		else mk_comb(Suc, mk_† (nint - 1));
 in
-val y_ax = icl'new_axiom(["y_ax"],mk_„(y,T))
+	thm{level = current_level, theory = theory,
+		sequent = ([],mk_eq(tm,rhs))}
+end);
 end;
-icl'new_specification (["x"],1,y_ax); (* fails *)
-icl'new_specification (["x2"],1,mk_thm "hello" 0 0); (* fails *)
-icl'new_specification (["x1"],1,etype3_exax); (* fails *)
-local val p= mk_var("p",tv1);
-	val q= mk_var("q",BOOL);	
+=TEX
+\subsection{icl'string\_conv}
+=RULE
+icl'string_conv
+(mk_string ("c" :: t))
+É
+É
+… ^(mk_string("c" :: t)) = 
+Cons ^(mk_char("c")) ^(mk_string(t))
+=TEX
+Or:
+=RULE
+icl'string_conv
+(mk_string "")
+É
+É
+… ^(mk_string("")) = Nil
+=TEX
+=SML
+local
+	val SCons = mk_const("Cons",mk_fun(CHAR, mk_fun(STRING, STRING)));
+	val SNil = mk_const("Nil", STRING);
+	val orddquotes = ord("\"");
 in
-val pq_ax = icl'new_axiom(["pq_ax"],simple_mk_„(p,q))
+val âicl'string_convá : CONV = (fn (tm : TERM) =>
+let val {theory = theory,...} = !current;
+
+	val thy {current_level = current_level,...} = !theory;
+	
+	val sex = explode(dest_string tm)
+		handle complaint =>
+		divert complaint "dest_string" "icl'string_conv" 6014 [];
+
+	val rhs = if sex = []
+		then SNil
+		else list_mk_comb(SCons,
+			[mk_char(hd sex),
+			mk_string(implode (tl sex))]);
+
+in
+	thm{level = current_level, theory = theory,
+		sequent = ([],mk_eq(tm,rhs))}
+end);
 end;
-icl'new_specification (["x1"],1,pq_ax); (* fails *)
+=TEX
+\subsection{icl'char\_conv}
+=RULE
+icl'char_conv
+(mk_char("c"))
+É
+É
+… ^(mk_char("c")) = AbsChar ^(ord "c")
+=TEX
 
+=SML
+local 
+	val AbsChar = mk_const("AbsChar",mk_fun(†,CHAR));
+	val ordquotes = ord("'");
+in
+val âicl'char_convá : CONV = (fn (tm : TERM) =>
+let val {theory = theory,...} = !current;
 
+	val thy {current_level = current_level,...} = !theory;
+	
+	val cnum = ord(dest_char tm)
+		handle complaint =>
+		divert complaint "dest_char" "icl'char_conv" 6013 [];
+	
+	val rhs = mk_comb(AbsChar, mk_† cnum);
+in
+	thm{level = current_level, theory = theory,
+		sequent = ([],mk_eq(tm,rhs))}
+end);
+end;
+=TEX
+\section{BUILT-IN INFERENCE RULES OF ADT $THM$}
+\subsection{icl'eq\_sym\_rule}
+=RULE
+icl'eq_sym_rule
+É
+ö … t1 = t2
+É
+ö … t2 = t1
+=TEX
+And:
+=RULE
+icl'eq_sym_rule
+É
+ö … t1 ‚ t2
+É
+ö … t2 ‚ t1
+=TEX
+=SML
+fun âicl'eq_sym_ruleá (thrm : THM as thm{sequent = (hyps,concl),...}) : THM = (
+let val dummy = check_thm "icl'Š_elim" thrm;
 
+	val (lhs_concl,rhs_concl) = (dest_eq concl
+		handle complaint =>
+		divert complaint "dest_eq" "icl'eq_sym_rule" 6025 []);
+
+	val new_concl = mk_eq(rhs_concl, lhs_concl);
+
+	val {theory = theory,...} = !current;
+
+	val thy {current_level = current_level,...} = !theory;
+in
+	thm{level = current_level, theory = theory, sequent = (hyps, new_concl)}
+end);
+=TEX
+\subsubsection{icl'simple\_ƒ\_elim}
+=RULE
+icl'simple_ƒ_elim
+»t1¼
+É
+ö … ƒ x Ž t2[x]
+É
+ö … t2'[t1]
+=TEX
+=SML
+fun âicl'simple_ƒ_elimá (t1 : TERM) 
+	(thrm : THM as thm{sequent = (hyps,concl),...}) : THM = (
+let val dummy = check_thm "icl'simple_ƒ_elim" thrm;
+
+	val (bvar,bdy) = (simple_dest_ƒ concl
+		handle complaint =>
+		divert complaint "simple_dest_ƒ" "icl'simple_ƒ_elim" 6018 []);
+	val dummy = if type_of bvar <> type_of t1
+		then fail "icl'simple_ƒ_elim" 6019 [fn () => fst(dest_var bvar)]
+		else ();
+
+	val new_concl = var_subst[(t1,bvar)]bdy;
+
+	val {theory = theory,...} = !current;
+
+	val thy {current_level = current_level,...} = !theory;
+in
+	thm{level = current_level, theory = theory, sequent = (hyps, new_concl)}
+end);
+=TEX
+\subsubsection{icl'eq\_trans\_rule}
+=RULE
+icl'eq_trans_rule
+É
+ö1 … t1 = t2; ö2 … t2' = t3
+É
+ö1 ¡ ö2 … t3
+=TEX
+And:
+=RULE
+icl'eq_trans_rule
+É
+ö1 … t1 ‚ t2; ö2 … t2' ‚ t3
+É
+ö1 ¡ ö2 … t1 ‚ t3
+=TEX
+=SML
+fun âicl'eq_trans_ruleá (thrm1 : THM as thm{sequent = (hyps1,concl1),...})
+	(thrm2 : THM as thm{sequent = (hyps2,concl2),...}) : THM = (
+let val dummy = (check_thm "icl'Š_elim" thrm1;
+		check_thm "icl'Š_elim" thrm2);
+
+	val (lhs_concl1,rhs_concl1) = (dest_eq concl1 
+		handle complaint =>
+		divert complaint "dest_eq" "icl'eq_trans_rule" 6020 []);
+
+	val (lhs_concl2,rhs_concl2) = (dest_eq concl2
+		handle complaint =>
+		divert complaint "dest_eq" "icl'eq_trans_rule" 6021 []);
+
+	val dummy = if aconv rhs_concl1 lhs_concl2
+		then ()
+		else fail "icl'eq_trans_rule" 6022 [];
+
+	val new_concl = mk_eq(lhs_concl1,rhs_concl2);
+
+	val {theory = theory,...} = !current;
+
+	val thy {current_level = current_level,...} = !theory;
+in
+	thm{level = current_level, theory = theory,
+		sequent = (%alpha%_union hyps1 hyps2, new_concl)}
+end);
+=TEX
+\subsection{icl'mk\_comb\_rule}
+=RULE
+icl'mk_comb_rule
+É
+ö1 … u1 = u2; ö2 … v1 = v2
+É
+ö1 ¡ ö2 … u1 v1 = u2 v2
+=TEX
+=SML
+fun âicl'mk_comb_ruleá (thrm1 : THM as thm{sequent = (hyps1,concl1),...})
+	(thrm2 : THM as thm{sequent = (hyps2,concl2),...}) : THM = (
+let val dummy = (check_thm "icl'Š_elim" thrm1;
+		check_thm "icl'Š_elim" thrm2);
+
+	val (lhs_concl1,rhs_concl1) = (dest_eq concl1 
+		handle complaint =>
+		divert complaint "dest_eq" "icl'mk_comb_rule" 6020 []);
+
+	val (lhs_concl2,rhs_concl2) = (dest_eq concl2
+		handle complaint =>
+		divert complaint "dest_eq" "icl'mk_comb_rule" 6021 []);
+
+	val new_concl = mk_eq(mk_comb(lhs_concl1, lhs_concl2),
+		mk_comb(rhs_concl1,rhs_concl2))
+		handle complaint =>
+		divert complaint "mk_comb" "icl'mk_comb_rule" 6023 [];
+
+	val {theory = theory,...} = !current;
+
+	val thy {current_level = current_level,...} = !theory;
+in
+	thm{level = current_level, theory = theory,
+		sequent = (%alpha%_union hyps1 hyps2, new_concl)}
+end);
+=TEX
+\subsubsection{icl'‚\_mp\_rule}
+=RULE
+icl'‚_mp_rule
+É
+ö1 … t1 ‚ t2; ö2 … t1'
+É
+ö1 ¡ ö2 … t2
+=TEX
+=SML
+fun âicl'‚_mp_ruleá (thrm1 : THM as thm{sequent = (hyps1,concl1),...})
+	(thrm2 : THM as thm{sequent = (hyps2,concl2),...}) : THM = (
+let val dummy = (check_thm "icl'Š_elim" thrm1;
+		check_thm "icl'Š_elim" thrm2);
+
+	val (lhs_concl1,rhs_concl1) = (dest_‚ concl1 
+		handle complaint =>
+		divert complaint "dest_‚" "icl'‚_mp_rule" 6030 []);
+
+	val new_concl = if aconv lhs_concl1 concl2
+		then rhs_concl1
+		else fail "icl'‚_mp_rule" 6024 [];
+
+	val {theory = theory,...} = !current;
+
+	val thy {current_level = current_level,...} = !theory;
+in
+	thm{level = current_level, theory = theory,
+		sequent = (%alpha%_union hyps1 hyps2, new_concl)}
+end);
+=TEX
+\subsection{icl'simple\_ƒ\_intro}
+=RULE
+icl'simple_ƒ_intro
+»x¼
+É
+ö … t
+É
+ö … ƒ x Ž t
+=TEX
+=SML
+fun âicl'simple_ƒ_introá (x : TERM) 
+	(thrm : THM as thm{sequent = (hyps,concl),...}) : THM = (
+let val dummy = check_thm "icl'simple_ƒ_elim" thrm;
+
+	val (nmx, tyx) = dest_var x
+		handle complaint =>
+		divert complaint "dest_var" "icl'simple_ƒ_intro" 6004 [];
+		
+	val dummy = if list_is_free_in x hyps
+		then fail "icl'simple_ƒ_intro" 6005 [fn () => nmx]
+		else ();
+
+	val new_concl = simple_mk_ƒ(x,concl);
+
+	val {theory = theory,...} = !current;
+
+	val thy {current_level = current_level,...} = !theory;
+in
+	thm{level = current_level, theory = theory, sequent = (hyps, new_concl)}
+end);
+=TEX
+\subsection{icl'inst\_term\_rule}
+=RULE
+icl'inst_term_rule
+[..., (»ti¼, »xi¼), ...]
+É
+ö … t[x1, ..., xn]
+É
+ö … t[t1, ..., tn]
+=TEX
+=SML
+fun âicl'inst_term_ruleá (tvl : (TERM * TERM)list) 
+	(thrm : THM as thm{sequent = (hyps,concl),...}) : THM = (
+let val dummy = check_thm "icl'simple_ƒ_elim" thrm;
+
+	val svars = map (fn (t,x) => let val (xnm,xty) = (dest_var x
+			handle complaint =>
+			divert complaint "dest_var" "icl'inst_term_rule" 6026 [])
+		in
+			if type_of t = xty
+			then x
+			else fail "icl'inst_term_rule" 6027 [fn () => xnm]
+		end)		
+		tvl;
+		
+	val hfrees = list_frees hyps;
+ 
+	val dummy = if any svars (fn x => x mem hfrees)
+		then fail "icl'inst_term_rule" 6028 
+			[fn () => fst(dest_var(find svars (fn x => x mem hfrees)))]
+		else ();
+
+	val new_concl = var_subst tvl concl;
+
+	val {theory = theory,...} = !current;
+
+	val thy {current_level = current_level,...} = !theory;
+in
+	thm{level = current_level, theory = theory, sequent = (hyps, new_concl)}
+end);
+=TEX
+\subsection{icl'div2\_conv}
+=RULE
+icl'div2_conv
+(mk_† n)
+É
+É
+… ^(mk_† n) Div 2 = ^(mk_†(n div 2))
+=TEX
+=SML
+local 
+	val N2 = mk_† 2
+in
+val âicl'div2_convá : CONV = (fn (tm : TERM) =>
+let val (n,n2) = dest_bin_op "icl'div2_conv" 6085 "Div" tm;
+
+ 	val nint = (dest_† n
+		handle complaint =>
+		divert complaint "dest_†" "icl'div2_conv" 6085 []);
+	val dummy = if N2 <> n2
+		then fail "icl'div2_conv" 6085 []
+		else ();
+
+	val rhs = mk_† (nint div 2);
+
+	val {theory = theory,...} = !current;
+
+	val thy {current_level = current_level,...} = !theory;
+	
+in
+	thm{level = current_level, theory = theory,
+		sequent = ([],mk_eq(tm,rhs))}
+end);
+end;
+=TEX
+\subsection{icl'mod2\_conv}
+=RULE
+icl'mod2_conv
+(mk_† n)
+É
+É
+… ^(mk_† n) Mod 2 = ^(mk_†(n mod 2))
+=TEX
+=SML
+local 
+	val N2 = mk_† 2
+in
+val âicl'mod2_convá : CONV = (fn (tm : TERM) =>
+let val (n,n2) = dest_bin_op "icl'mod2_conv" 6086 "Mod" tm;
+
+ 	val nint = (dest_† n
+		handle complaint =>
+		divert complaint "dest_†" "icl'mod2_conv" 6086 []);
+	val dummy = if N2 <> n2
+		then fail "icl'mod2_conv" 6086 []
+		else ();
+
+	val rhs = mk_† (nint mod 2);
+
+	val {theory = theory,...} = !current;
+
+	val thy {current_level = current_level,...} = !theory;
+	
+in
+	thm{level = current_level, theory = theory,
+		sequent = ([],mk_eq(tm,rhs))}
+end);
+end;
+=TEX
+\section{END OF THE ADT}
+=SML
+end; (* abstype *)
+=TEX
+=SML
+end; (* structure icl'Kernel *)
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
