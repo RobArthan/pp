@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.26 2003/05/08 11:23:29 rda Exp rda $
+ * $Id: pterm.c,v 2.27 2003/05/08 12:44:47 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -360,14 +360,14 @@ void get_pty(void)
 	if( control_fd < 0) {
 		msg("system error", "no pseudo-terminal devices available");
 		perror("xpp");
-		exit(1);
+		exit(3);
 	}
 
 	if(	PUSH_MODULES(slave_fd)
 	||	GET_ATTRS(slave_fd, &tio)) {
 		msg("system error", "I/O control operation on slave fd failed (GET in parent)");
 		perror("xpp");
-		exit(11);
+		exit(4);
 	}
 
 	tio.c_lflag |= ISIG;
@@ -385,7 +385,7 @@ void get_pty(void)
 	if(SET_ATTRS(slave_fd, &tio)) {
 		msg("system error", "I/O control operation on slave fd failed (SET in parent)");
 		perror("xpp");
-		exit(12);
+		exit(5);
 	}
 #endif
 
@@ -409,7 +409,7 @@ void get_pty(void)
 	if (child_pid < 0) { /* Cannot fork */
 		msg("system error", "fork failed");
 		perror("xpp");
-		exit(5);
+		exit(6);
 	} else if (child_pid > 0) { 
  /******************************************************************/
  /* Parent */
@@ -506,7 +506,7 @@ void get_pty(void)
 		execvp(arglist[0], arglist);
 	/* **** error if reach here **** */
 		msg("system error", "could not exec");
-		exit(1);
+		exit(12);
 	}
 }
 
@@ -1090,7 +1090,7 @@ void new_editor(void)
 			if(setsid() < 0) {
 				msg("system error", "setsid failed");
 				perror("xpp");
-				exit(9);
+				exit(13);
 			}
 			/* exec argv[0] "" */
 			execlp(argv0, argv0, "", NULL);
@@ -1104,6 +1104,22 @@ void new_editor(void)
 	} else {
 		/* Parent - wait for the child */
 		wait(0);
+	}
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ *  run_in_background: fork and then have the parent exit.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void  run_in_background(void)
+{
+	pid_t new_pid;
+	new_pid = fork();
+
+	if (new_pid < 0) { /* Cannot fork */
+		msg("system error", "fork failed");
+		perror("xpp");
+		exit(14);
+	} else if (new_pid >  0) { 
+		exit(0);
 	}
 }
 

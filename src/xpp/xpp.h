@@ -213,6 +213,7 @@ typedef struct menu_item {
 		char	*buf,
 		NAT	siz);
 	extern void new_editor(void);
+	extern void run_in_background(void);
 /* Module: search */
 	extern Boolean add_search_tool(
 		Widget	w);
