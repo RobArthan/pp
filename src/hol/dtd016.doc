@@ -79,7 +79,12 @@ information (modified 16050, deleted 16055 and added 16051).
 Major enhancement to type inference to resolve overloaded aliases properly.
 Added description of overload handling and some examples of
 error messages gerenated when it is not possible to resolve overloading.
-
+\item[Issue 2.12 (\FormatDate{92/10/26}) ]
+Types of free variables in nested term quotations and the types of nested quotations
+themselves are now treated by unification taking their type variables as type
+unknowns rather than as fixed. The nested quotations are then instantiated
+as necessary, during term generation. Corrected description of typing
+rules for binders.
 \end{description}
 \subsection{Changes Forecast}
 
@@ -233,7 +238,7 @@ Type extension and unification
 Translation of an input term to a HOL term
 
 \item
-Resolution of aliases
+Resolution of overloaded aliases
 
 \end{enumerate}
 
@@ -337,6 +342,23 @@ conversion can be done at the same time as the conversion of a
 term into its corresponding HOL equivalent --- the last stage
 of type inference.
 
+\subsection{Overload Resolution}
+This, in fact, requires a separate pass over the data after type inference
+proper. However, this pass is quite simple and need not be executed if
+no overloaded aliases have been encountered in the earlier passes.
+From the user's point of view, the symbol table module of \cite{DS/FMU/IED/DTD020}
+and the type inferrer behave together in the following way. First of all,
+type inference proper is carried out on the assumption that each overloaded
+alias, i.e. each alias which has been declared at several different types,
+has as its type the antiunifier of these types (i.e. the least general
+type which has can be instantiated to each of them); then, for each overloaded
+alias in the term, the system determines whether exactly one of the types
+at which the alias has been declared can be instantiated to the type which
+has been inferred for that occurence of the overloaded alias: if there
+is exactly one such type, then the alias is resolved to the corresponding
+constant, otherwise, the overload resolution is ambiguous or impossible and
+an error is reported.
+
 \subsection{Conversion of a Term to a HOL Term}
 
 The conversion of a term to a HOL term is done when all the types
@@ -346,7 +368,13 @@ a single traversal of the term (containing extended types) is
 sufficient to convert sub-terms to sub-terms of a HOL term.
 Unknown type variables found at this stage are converted into
 HOL type variables which are identified as described in section
-\ref{FVNAMES}
+\ref{FVNAMES}. Nested term quotations are instantiated as necessary
+to ensure that they and all their free variables are compatible with
+their context within the term. The rules imposed during type inference
+are intended to such that this generation of HOL terms cannot fail.
+It is therefore a design error if it does.
+
+
 
 \subsubsection{Unknown Types} \label{FVNAMES}
 
@@ -372,11 +400,17 @@ types and those concerned with terms. These are further subdivided
 into rules which correspond to each production rule of the grammar
 defining TY and TM.
 
+(The notation being used for these type inference rules is not perfect
+and is currently intended as a short-hand for the developer or maintainer.
+Some more careful explanation of the notation generally,
+and thinking through of the treatment of the treatment of identifiers and
+overloading would be required to get a version sutitable for the user.)
+
 \subsection{Types}
 
 The inference rules for types are introduced first.
 
-\subsubsection{Atomic Types}
+\subsubsection{Atomic Type}
 
 Type atoms whose first character is ``\'\ '' will be
 assumed by the type inferrer to denote type variables.
@@ -399,7 +433,7 @@ First of s is NOT the character '
 ENV Ù TyAtom s ≠ mk_ctype (s, nil)
 =TEX
 
-\subsubsection{Compound Types}
+\subsubsection{Compound Type}
 
 Compound types will comprise a list of types, an identifier
 and a fixity. The fixity of the type is irrelevant to
@@ -421,9 +455,9 @@ ENV Ù TyCompound (tyl, s, _)
 	≠ mk_ctype (s, TYL)
 =TEX
 
-\subsubsection{Antiquoted Types}
+\subsubsection{Nested Type Quotation}
 
-An antiquoted type simply yields the type which is
+A nested type quotation simply yields the type which is
 a parameter to the value constructor $TyAq$.
 
 =FRULE 1 Rule
@@ -438,7 +472,7 @@ The inference rules for terms are now introduced. Each
 rule corresponds to a BNF production rule in the grammar
 describing a term produced by the parser (of type ``\'\ a'' TM).
 
-\subsubsection{Binders}
+\subsubsection{Binder}
 
 Ultimately, all binding constructors are represented as
 lambda abstractions. This case is therefore much simpler, and
@@ -455,7 +489,8 @@ binding constructor is "Ã"
 ENV Ù tâ1 ≠ Tâ1:”â1;
 
 ENV ´
-{n Ì VarInfo ”' | mk_var(n, ”') ç frees Tâ1}
+{n Ì VarInfo ”' |
+	mk_var(n, ”') ç frees Tâ1}
 	Ù tâ2 ≠ Tâ2:”â2
 ˜
 ENV Ù Binder ("Ã", tâ1, tâ2)
@@ -472,18 +507,19 @@ binding constructor is  NOT "Ã"
 ENV Ù tâ1 ≠ Tâ1:”â1;
 
 ENV Ù TmAtom (Id s)
-	≠ mk_const (s, (”â1 ≠ ”â2) ≠ ”â3);
+	≠ B:(”â1 ≠ ”â2) ≠ ”â3);
 
 ENV ´
-{n Ì VarInfo ”' | mk_var(n, ”') ç frees Tâ1}
+{n Ì VarInfo ”' |
+	mk_var(n, ”') ç frees Tâ1}
 	Ù tâ2 ≠ Tâ2:”â2
 ˜
 ENV Ù Binder (TmAtom (Id s), tâ1, tâ2)
-  ≠ (mk_app(mk_const (s, (”â1 ≠ ”â2) ≠ ”â3),
-    mk_Ã(Tâ1:”â1,Tâ2:”â2))):”â3
+  ≠ (mk_app(B:(”â1 ≠ ”â2) ≠ ”â3,
+	mk_Ã(Tâ1:”â1,Tâ2:”â))):”â3
 =TEX
 
-\subsubsection{Let}\label{Let}
+\subsubsection{$let$-term}\label{Let}
 
 The variable structures of the LHS of each clause in the
 let statement are put in the scope of the body of the let
@@ -492,19 +528,23 @@ body of the term.
 =FRULE 1 Rule
 Vâ1, Vâ2 ... are variable structures
 ˜
-ENV Ù vâ1 ≠ Vâ1:”â1; ENV Ù vâ2 ≠ Vâ2:”â2; ...
-	... ENV Ù vâs ≠ Vâs:”âs;
+ENV Ù vâ1 ≠ Vâ1:”â1;
+...
+ENV Ù vâs ≠ Vâs:”âs;
 
-ENV Ù tâ1 ≠ Tâ1:”â1; ENV Ù tâ2 ≠ Tâ2:”â2; ...
-	... ENV Ù tâs ≠ Tâs:”âs;
+ENV Ù tâ1 ≠ Tâ1:”â1;
+...
+ENV Ù tâs ≠ Tâs:”âs;
 
-ENV ´ { n Ì VarInfo ”' | mk_var(n, ”')
-  ç {frees Vâc | 1 º c º s}} Ù tm ≠ TM:”;
+ENV ´
+{ n Ì VarInfo ”' | mk_var(n, ”')
+  ç {frees Vâc | 1 º c º s}}
+	Ù tm ≠ TM:”;
 ˜
-ENV Ù Let ([(vâ1, tâ1), (vâ2, tâ2), ..., (vâs, tâs)], tm)
-  ≠ (mk_let ([(Vâ1:”â1, Tâ1:”â1),
-	(Vâ2:”â2, Tâ2:”â2), ...
-	    ... ,(Vâs:”âs,Tâs:”âs)],TM:”)):”
+ENV Ù
+  Let ([(vâ1, tâ1), ..., (vâs, tâs)], tm)
+   ≠ (mk_let ([(Vâ1, Tâ1),
+	    ... ,(Vâs,Tâs)],TM)):”
 =TEX
 \paragraph{Error Messages}
 The following are examples of error messages which can
@@ -524,18 +564,19 @@ The types inferred were:
 16562	   ¨?0:?1Æ
 =TEX
 
-\subsubsection{Conditional Terms}
+\subsubsection{Conditional Term}
 
 The condition must unify to a bool, and the consequences and the
 type of the overall term must all unify to the same type.
 
 =FRULE 1 Rule
 ˜
-ENV Ù c ≠ C:BOOL; ENV Ù tâ1 ≠ Tâ1:”;
+ENV Ù c ≠ C:BOOL
+ENV Ù tâ1 ≠ Tâ1:”
 ENV Ù tâ2 ≠ Tâ2:”
 ˜
 ENV Ù Cond (c, tâ1, tâ2)
-	≠ (mk_if (C:BOOL, Tâ1:”, Tâ2:”)):”
+	≠ (mk_if(C:BOOL, Tâ1, Tâ2)):”
 =TEX
 \paragraph{Error Messages}
 The following are examples of error messages which can
@@ -573,7 +614,7 @@ ENV Ù tâ1 ≠ Tâ1:(”â1 ≠ ”â2);
 ENV Ù tâ2 ≠ Tâ2:”â1
 ˜
 ENV Ù App (tâ1, tâ2, _)
-  ≠ (mk_app(Tâ1:(”â1 ≠ ”â2), Tâ2:”â1)):”â2
+  ≠ (mk_app(Tâ1, Tâ2)):”â2
 =TEX
 \paragraph{Error Messages}
 The following are examples of error messages which can
@@ -610,7 +651,7 @@ in section \ref{Let}.
 16545	Cannot apply ¨?0:?1Æ
 16546	          to ¨?0:?1Æ
 =TEX
-\subsubsection{TmTyped}
+\subsubsection{Type Constraint}
 
 This rule constrains the explicit typing of a term to be unified
 with the term.
@@ -639,29 +680,85 @@ Cannot constrain ¨`A`:CHARÆ
 16532	              to î?0Æ
 =TEX
 
-\subsubsection{TmAq}
+\subsubsection{Nested Term Quotation}
 
-The type of an antiquoted term is assumed to be that of the term.
-No explicit checking is done.
+In a nested term quotation, the type of the term quoted must be instantiable
+to a type compatible with the type inferred for the quotation. Moreover,
+term as a whole must be capable of being instantiated so that the types
+of its free variables are compatible with the context in which the
+quotation appears.
 
 =FRULE 1 Rule
 ˜
+ENV Ù vâ1 ≠ Vâ1:”â1∆;
+...
+ENV Ù vâs ≠ Vâs:”âs∆;
 ˜
-ENV Ù TmAq term:” ≠ term:”
+ENV Ù TmAq term:” ≠ term:”'
+=TEX
+where $”'$ is the type of the term in the quotation,
+=INLINEFT
+¨vâ1:”â1Æ, ..., ¨vâs:”âsÆ
+=TEX
+\ are the names and types of its free variables, $∆$ is some assignment
+of types to type variables, and, for any type $‘$, $‘∆$ denotes the
+result of instantiating $‘$ according to $∆$.
+Free variables which have the same names as constants in scope are
+ignored.
+It is an error if two distinct free variables of the term in the quotation
+have the same name, i.e. there are repetitions in the list of names
+=INLINEFT
+vâ1, ..., vâs
+=TEX
+.
+
+\paragraph{Error Messages}
+The following are examples of error messages which can
+be generated by a typing error when applying this
+inference rule.
+=EXAMPLE
+¨x ± ¨x = 1ÆÆ;
+Type error in ¨<term quotation>Æ
+A free variable in a nested quotation must be instantiable to have the same
+type as it has in the surrounding term
+In the nested quotation   ¨x = 1Æ
+the type of free variable ¨x:ÓÆ
+cannot be instantiated to îBOOLÆ
+=EXAMPLE
+let val t1 = ¨x:Ó≠ÓÆ; val t2 = ¨x:ÓÆ
+in	¨ëmk_app(t1, t2)ÆÆ
+end;
+Type error in ¨<term quotation>Æ
+In a nested quotation, no two distinct free variables may have the same name
+¨x xÆ has the following free variables:
+	¨x:Ó≠ÓÆ
+	¨x:ÓÆ
+=TEX
+=FAILURE
+16590	A free variable in a nested quotation must be instantiable to have the
+	same type as it has in the surrounding term
+16591	In the nested quotation   ?0
+16592	the type of free variable ¨?0:?1Æ
+16593	cannot be instantiated to î?0Æ
+16594	In a nested quotation, no two distinct free variables may have the
+	same name
+16595	?0  has the following free variables:
+16596	   ¨?0:?1Æ
 =TEX
 
-\subsubsection{SetDisplay}\label{SetDisplay}
+\subsubsection{Set Display}\label{SetDisplay}
 
 Each element in a set display must have the same type $”$. The overall set
 has the type $”SET$
 .
 =FRULE 1 Rule
 ˜
-ENV Ù tâ1 ≠ Tâ1:”; ENV Ù tâ2 ≠ Tâ2:”; ...
-	... ENV Ù tâs ≠ Tâs:”
+ENV Ù tâ1 ≠ Tâ1:”
+...
+ENV Ù tâs ≠ Tâs:”
 ˜
-ENV Ù SetDisplay ([tâ1, tâ2, ..., tâs])
-  ≠ (mk_enum_set ([Tâ1, Tâ2, ..., Tâs])):”SET
+ENV Ù SetDisplay ([tâ1, ..., tâs])
+  ≠ (mk_enum_set([Tâ1, ..., Tâs])):” SET
 =TEX
 
 \paragraph{Error Messages}
@@ -691,7 +788,7 @@ Type îCHARÆ inferred for the following element:
 16505	Type î?0Æ inferred for the following element?1:
 16506	   ¨?0Æ
 =TEX
-\subsubsection{SetComprehension}
+\subsubsection{Set Comprehension}
 
 The bound variable in a set comprehension is brought into the
 scope of the body of the comprehension. The type of the overall
@@ -702,11 +799,12 @@ expression is that of the bound variables
 ENV Ù tâ1 ≠ Tâ1:”;
 
 ENV ´
-{n Ì VarInfo ”' | mk_var(n, ”') ç frees Tâ1}
+{n Ì VarInfo ”' |
+  mk_var(n, ”') ç frees Tâ1}
 	Ù tâ2 ≠ Tâ2:”â2
 ˜
 ENV Ù SetComprehension (tâ1, tâ2)
-	≠ (mk_set_comp (Tâ1:”, Tâ2:BOOL)):”SET
+	≠ (mk_set_comp(Tâ1, Tâ2)):”SET
 =TEX
 \paragraph{Error Messages}
 The following are examples of error messages which can
@@ -723,18 +821,19 @@ The type inferred was:
 16520	The predicate must have type îBOOLÆ
 16521	The type inferred was:
 =TEX
-\subsubsection{ListDisplay}
+\subsubsection{List Display}
 
 Each element in a list display must have the same type $”$. The overall list
 has the type $”LIST$
 
 =FRULE 1 Rule
 ˜
-ENV Ù tâ1 ≠ Tâ1:”; ENV Ù tâ2 ≠ Tâ2:”; ...
-	... ENV Ù tâs ≠ Tâs:”
+ENV Ù tâ1 ≠ Tâ1:”
+...
+ENV Ù tâs ≠ Tâs:”
 ˜
-ENV Ù ListDisplay ([tâ1, tâ2, ..., tâs])
-  ≠ (mk_list ([Tâ1, Tâ2, ..., Tâs])):”LIST
+ENV Ù ListDisplay ([tâ1, ..., tâs])
+  ≠ (mk_list ([Tâ1, ..., Tâs])):”LIST
 =TEX
 
 \paragraph{Error Messages}
@@ -758,7 +857,7 @@ other parts of the error message.
 16510	The elements of a list display must have the same type
 =TEX
 
-\subsubsection{Identifiers}
+\subsubsection{Identifier}
 
 An identifier whose symbol is present in the symbol table will assume
 the type corresponding to the symbol table entry.
@@ -948,6 +1047,9 @@ val €is_varstruct› : 'a TM -> bool
 =DESCRIBE
 is\_varstruct determines whether or not a term (of type TM)
 is a variable structure.
+Note that a nested quotation may appear in a variable structure and
+is valid if it is, either, a variable whose name is not the same as a constant
+in scope, or, formed from such variables using only the pair constructor `$,$'.
 =ENDDOC
 =DOC
 val €make_type› : TY -> TYPE

@@ -264,18 +264,27 @@ fun Ûmake_typeÝ ((TyAtom s) : TY) : TYPE  = (
   |  make_type (TyAq ty) = ty;
 =TEX
 
-This determines whether or not a term is of the type
+The following are used to determine whether or not a term is of the type
 which can be a variable (i.e., a simple variable, a tuple etc.).
+First we give a function to implement this test on object language terms
+(as in nested quotations).
+=SML
+fun ol_is_varstruct (tm : TERM) : bool = (
+	case dest_term tm of
+		DPair (tm1, tm2) => ol_is_varstruct tm1 andalso ol_is_varstruct tm2
+	|	DVar (s, _) => is_Nil(type_of_const s)
+	|	_ => false
+);
+=TEX
+And now the test for $TM$s:
 =SML
 fun Ûis_varstructÝ (tm : 'a TM) : bool = (
 	case tm of
-		Id x =>
-			(case type_of_const x of
-			Value _ => false
-			| Nil	=> true)
+		Id x => is_Nil(type_of_const x)
 	|	TmTyped (t, _) => is_varstruct t
 	|	App (App (Id ",", a, _), b, _) =>
 			is_varstruct a andalso is_varstruct b
+	|	TmAq tm => ol_is_varstruct tm
 	|	Other => false
 );
 =TEX
@@ -322,7 +331,7 @@ fun Ûfv_setÝ ((Binder (s, a, b)) : 'a TM) : string list  = fv_set b diff fv_set 
   | fv_set (Cond (c, a, b)) = fv_set c cup fv_set a cup fv_set b
   | fv_set (App (f, a, _)) = fv_set f cup fv_set a
   | fv_set (TmTyped (a,_)) = fv_set a
-  | fv_set (TmAq tm) = nil
+  | fv_set (TmAq tm) = map (fst o dest_var) (frees tm)
   | fv_set (SetDisplay tl) = list_cup (map fv_set tl)
   | fv_set (SetComprehension (a,b)) = fv_set a cup fv_set b
   | fv_set (ListDisplay tl) =  list_cup (map fv_set tl)
@@ -385,7 +394,8 @@ fun Ûgrow_envÝ (env : ENV) (tm : 'a TM) : ENV = (
 =TEX
 
 \subsection{Identification of Free Variables}
-
+The following function extract type variable occurrences from extended
+types and terms
 =SML
 fun Ûfv_in_extyÝ (ty : EXTYPE) : string list * int list = (
 let	fun aux1 ty = 
@@ -463,9 +473,11 @@ fun Ûfv_in_extmÝ ((Binder ("Ì", a, b)) : EXTYPE TM) : string list * int list = (
 	in
 		(fk cup tk, fu cup tu)
 	end)
+  | fv_in_extm (TmTyped (TmAq _, ty)) = fv_in_exty ty
   | fv_in_extm (TmTyped (_, _)) =
 	error "fv_in_extm" 16101 [fn() => "Invalid TmTyped Construct"]
-  | fv_in_extm (TmAq tm) = (nil,nil)
+  | fv_in_extm (TmAq tm) =
+	error "fv_in_extm" 16101 [fn() => "Invalid Nested Quotation Construct"]
   | fv_in_extm (SetDisplay _ ) =
 	error "fv_in_extm" 16101 [fn() => "Invalid SetDisplay Construct"]
   | fv_in_extm (SetComprehension (a,b)) =
@@ -632,6 +644,8 @@ datatype ÛTIERRORÝ =
 	| ÛErrCond1Ý of (TY TM*EXTYPE)
 	| ÛErrCond2Ý of (TY TM*TY TM*EXTYPE*EXTYPE)
 	| ÛErrAppÝ of (TY TM*TY TM*EXTYPE*EXTYPE)
+	| ÛErrAqTm1Ý of (TERM*string*EXTYPE*EXTYPE)
+	| ÛErrAqTm2Ý of (TERM*(string*TYPE) list)
 	| ÛErrTmTypedÝ of (TY TM*EXTYPE*EXTYPE)
 	| ÛErrDisplayÝ of (TY TM list*EXTYPE list*int)
 	| ÛErrSetCompÝ of (TY TM*EXTYPE)
@@ -755,6 +769,31 @@ fun Ûhandle_cond2Ý (tm1 : TY TM) (tm2 : TY TM) (ty1 : EXTYPE) (ty2 : EXTYPE) : u
 );
 =TEX
 =SML
+fun Ûhandle_aqtm1Ý (aqtm : TERM) (n : string) (ty1 : EXTYPE) (ty2 : EXTYPE) : unit = (
+	ti_errline 16590 [];
+	ti_errline 16591 [string_of_term aqtm];
+	ti_errline 16592 [n, format_extype1 ty1];
+	ti_errline 16593 [format_extype1 ty2]
+);
+=TEX
+=SML
+fun Ûhandle_aqtm2Ý (aqtm : TERM) (fvs : (string * TYPE) list) : unit = (
+	let	fun order (s1, ty1) (s2, ty2) = (
+			case Sort.string_order s1 s2 of
+				0 => ~1
+			|	other => other
+		);
+		val newfvs = Sort.sort order fvs;
+		fun do1_fv (s, ty) = (
+			ti_errline 16596 [s, format_extype1 (type_to_extype ty)]
+		);
+	in	ti_errline 16594 [];
+		ti_errline 16595 [string_of_term aqtm];
+		map do1_fv newfvs; ()
+	end
+);
+=TEX
+=SML
 fun Ûhandle_tmtypedÝ (tm1 : TY TM) (ty1 : EXTYPE) (ty2 : EXTYPE) : unit = (
 	ti_errline 16530 [];
 	ti_errline 16531 [format_tm format_ty tm1,
@@ -783,6 +822,10 @@ fun Ûti_error_handlerÝ (term : TY TM) (info : TIERROR) (env : ENV) : 'a = (
 		handle_cond2 tm1 tm2 ty1 ty2
 	) | ErrApp (tm1, tm2, ty1, ty2) => (
 		handle_app tm1 tm2 ty1 ty2
+	) | ErrAqTm1 (tm, s, ty, exty) => (
+		handle_aqtm1 tm s ty exty
+	) | ErrAqTm2 (tm, fvs) => (
+		handle_aqtm2 tm fvs
 	) | ErrTmTyped (tm1, ty1, ty2) => (
 		handle_tmtyped tm1 ty1 ty2
 	) | ErrDisplay (tml, tyl, ierr) => (
@@ -933,9 +976,42 @@ fun ÛtiÝ (env : ENV) ((term as (Binder ("Ì", a, b))) : TY TM) : INF_TUPLE = (
 		(atm, aty)
 	end)
 =TEX
+Note that the following uses a trick. The type constraint placed on the
+nested quotation is not the type of the term; it is actually a compound
+type with a dummy type constructor and an argument list comprising
+first the type of the term and then the types of the free variables of
+the quoted term (in the order given by $frees$). The trick is required
+to communicate to the next phase the assignment of extended types
+to free variables chosen by $replaced$.
 =SML
   | ti env (term as (TmAq tm)) = (
-	TmAq tm, (type_to_extype o type_of) tm)
+	let	val nltyl = (map dest_var (frees tm))
+			drop (fn (n, _) => not(is_Nil(type_of_const n)));
+		val (nl, tyl) = split (map dest_var (frees tm));
+		val ty = mk_ctype("", type_of tm :: tyl);
+		val chk = (
+			if	all_different  nl
+			then	()
+			else	ti_error_handler
+				term (ErrAqTm2(tm, combine nl tyl)) env);
+		val exty = replaced ty;
+		val (tmty, netyl) = (
+			case exty of
+				ExType(_, t::tl) => (t, combine nl tl)
+			|	_	=> error "make_term" 16101
+				[fn()=> "Unexpected result from replaced"]
+		);
+		fun do1_var (n, vty) = (
+			let	val ety = (fst o env) n;
+			in	(unify ti_subs (ety, vty))
+				handle Fail msg =>
+				ti_error_handler
+				term (ErrAqTm1(tm, n, vty, ety)) env
+			end
+		);
+		val sd = (map do1_var netyl);
+	in	(TmTyped (TmAq tm, exty), tmty)
+	end)
 =TEX
 =SML
   | ti env (term as (SetDisplay tl)) = (
@@ -1074,6 +1150,8 @@ in
 	strip (aux ty' idtyl)
 end);
 =TEX
+Note that the only binder left is Ì when we get to resolve overloading so
+only the $Id$ case is interesting below (see how $ti$ handles binders above).
 =SML
 fun Ûresolve_overloadingÝ (term : EXTYPE TM) : EXTYPE TM = (
 let	fun Ûres_ovlÝ (term as (TmTyped (Id s, ty))) = (
@@ -1127,7 +1205,8 @@ end);
 =TEX
 
 \subsection{Conversion of a Term to a ``HOL Term''}
-
+Note that modifiers of the code below should look carefully to ensure that
+they understand the trick used by $ti$ for nested quotations.
 =SML
 fun Ûextm_to_termÝ (namemap : (int * string) list) ((Binder ("Ì", a, b))
 	: EXTYPE TM) : TERM = (
@@ -1198,8 +1277,19 @@ fun Ûextm_to_termÝ (namemap : (int * string) list) ((Binder ("Ì", a, b))
 	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message_text msg]
 
 	)
+  | extm_to_term namemap (TmTyped (TmAq tm, exty)) = (
+		let	val nltyl = (map dest_var (frees tm))
+			drop (fn (n, _) => not(is_Nil(type_of_const n)));
+			val ty' = extype_to_type1 namemap exty;
+			val tyl = map snd nltyl;
+			val ty = mk_ctype("", type_of tm :: tyl);
+			val tm' = inst [] (type_match ty' ty) tm
+				handle Fail msg =>
+				error "make_term" 16101
+				[fn()=> "Unexpected failure in type_match or inst"];
+		in	tm'
+		end)
   | extm_to_term namemap (TmTyped (a, ty)) = extm_to_term namemap a
-  | extm_to_term namemap (TmAq tm) = tm
   | extm_to_term namemap (SetDisplay _ ) =
 	error "extm_to_term" 16101 [fn() => "Invalid SetDisplay Construct"]
   | extm_to_term namemap (SetComprehension (a,b)) = (
@@ -1212,6 +1302,8 @@ fun Ûextm_to_termÝ (namemap : (int * string) list) ((Binder ("Ì", a, b))
 	end)
   | extm_to_term namemap (ListDisplay _ ) =
 	error "extm_to_term" 16101 [fn() => "Invalid ListDisplay Construct"]
+  | extm_to_term namemap (TmAq _ ) =
+	error "extm_to_term" 16101 [fn() => "Invalid Nested Quotation Construct"]
   | extm_to_term namemap (Id s) =
 	error "extm_to_term" 16101 [fn() => "Invalid Id Construct"]
   | extm_to_term namemap (CharLit c) = (
