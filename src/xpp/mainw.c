@@ -347,10 +347,15 @@ Boolean ignored;
 
 	last_pos = XmTextGetLastPosition(journal);
 
-	if(XmTextPosToXY(journal, ins_pos, &dontcare, &dontcare)) {
+	if(XmTextPosToXY(journal, (ins_pos ? ins_pos - 1 : 0),
+			&dontcare, &dontcare)) {
 		/* insertion position is visible: scroll */
-		while(!XmTextPosToXY(journal, last_pos, &dontcare, &dontcare)) {
-			XmTextScroll(journal, 1);
+		XmTextPosition old_top, new_top;
+		old_top = XmTextGetTopPosition(journal);
+		while(!XmTextPosToXY(journal, last_pos, &dontcare, &dontcare)
+		&&	old_top != (new_top = (XmTextScroll(journal, 1),
+					 XmTextGetTopPosition(journal)))) {
+			old_top = new_top;
 		};
 	};
 
