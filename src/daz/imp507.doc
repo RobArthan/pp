@@ -2024,7 +2024,7 @@ fun Ûspec_stmt_speclabelÝ ({spec : SPEC, label : LABEL}) : unit = (
 		val vc_log_con_ids = (map (fn (x,_,_) => x) o map dest_z_lvar
 				o flat o map (fst o dest_z_dec)) vc_log_cons1
 			handle _ => error "spec_stmt_speclabel" 507033 [];
-		val side = map (check_new_z_id ti_cxt) vc_log_con_ids;
+		val side = map (check_new_z_id [](* ti_cxt*)) vc_log_con_ids;
 		val vc_log_cons2_1 = vc_log_cons2 @ vc_log_cons1;
 		val in_scope1 : IN_SCOPE = {
 			dec_labels = dec_labels2,
@@ -2116,7 +2116,7 @@ fun Ûadd_log_con_envÝ (logical_con as {x, t, ...}: LOG_CON) : unit = (
 		val zdecl = mk_z_dec([zvar], zt);
 		val current_log_cons1 = #current_log_cons block1;
 
-	in	check_new_z_id (current_ti_context()) x;
+	in	check_new_z_id [] x;
 		check_new_spark_ids current_cn_env [x];
 		blocks := block_current_log_cons (
 					block_vc_log_cons(block1, [zdecl]),
@@ -3372,27 +3372,55 @@ fun Ûpopulate_package_spec_theoryÝ (ident : ID) : unit = (
 =TEX
 $do\_pack\_spec$ updates the specification theory rather than $new\_scope\_with$. When $new\_scope\_with$ is called, the specification theory will have already been populated with the appropriate constants, types and functions.
 
-fun Ûprefix_z_declÝ (zdecl : Z_DECL) = (
-	let	val (ds, dty) = dest_z_dec zdecl;
+=SML
+fun Ûprefix_idÝ (ident : ID) (n : string) : ID = (
+	trans_id (ident dot "")^n
+);
+=TEX
+=SML
+fun Ûprefix_aux_varsÝ (ident : ID) (av : Z_DECL) : Z_DECL = (
+	let	val (ds, dty) = dest_z_dec av;
 		val exds = map dest_z_lvar ds;
 		val new_exds = map (fn (n, ty, acts) =>
-				(prefix n, ty, acts)) exds;
+				(prefix_id ident n, ty, acts)) exds;
 	in
 		mk_z_dec (map mk_z_lvar new_exds, dty)
 	end
 );
-
-			
-;
-
+=TEX
+=SML
+fun Ûprefix_varÝ (ident : ID) (tm : TERM) = (
+	(mk_var o (fn (n, ty) => (prefix_id ident n, ty)) o dest_var) tm
+);
+=TEX
+=SML
+fun Ûprefix_spec_stmtÝ (ident : ID) (spec : SPEC) : SPEC = (
+	let	val {w, pre, post, w0} = spec;
+		val w'= map (prefix_id ident) w;
+		val w0' = map (prefix_id ident) w0;
+		val side = set_current_ti_context[];
+		val pretm = z_predexp_of_z_tm pre;
+		val posttm = z_predexp_of_z_tm post;
+		val vars = flat (map frees [pretm, posttm]) drop ((fn tm =>
+			case (current_cn_env o fst o dest_var) tm of
+					Nil => true
+					|_ => false));
+		val new_vars = map (prefix_var ident) vars;
+		val subs = combine new_vars vars;
+		val pre' = ZTmQuotation (subst subs pretm, Nil);
+		val post' = ZTmQuotation (subst subs posttm, Nil);
+	in
+		{w = w', w0 = w0', pre = pre', post = post'}
+	end
+);
+=TEX
 =SML
 fun Ûnew_scope_withÝ (ident : ID) : unit = (
 
 	case s_lookup ident (!pack_env) of
 	Nil => ()
 	|Value package1 => (
-		   let fun prefix n = trans_id (ident dot "")^n;
-		       val flags = {
+		   let val flags = {
 				pack_spec_flag = false,
 				pack_body_flag = false,
 				stub_flag = false,
@@ -3404,21 +3432,14 @@ fun Ûnew_scope_withÝ (ident : ID) : unit = (
 				till_flag = false
 			};
 			val vc_vars1 = map (fn {vars, tmark} =>
-				{vars = map prefix vars, tmark=tmark})
+				{vars = map (prefix_id ident) vars, tmark=tmark})
 							(#vc_vars package1);
 			val formal_procs1 = map (fn {name, formal_ids, spec} =>
-				{name=prefix name, formal_ids=formal_ids,
-					spec=spec}) (#formal_procs package1);
-			fun prefix_z_decl zdecl = (
-			let	val (ds, dty) = dest_z_dec zdecl;
-				val exds = map dest_z_lvar ds;
-				val new_exds = map (fn (n, ty, acts) =>
-						(prefix n, ty, acts)) exds;
-			in
-				mk_z_dec (map mk_z_lvar new_exds, dty)
-			end
-			);
-			val vc_aux_vars1 = map prefix_z_decl (#aux_vars package1);
+				{name=prefix_id ident name, formal_ids=formal_ids,
+					spec=prefix_spec_stmt ident spec})
+						(#formal_procs package1);
+			val vc_aux_vars1 = map (prefix_aux_vars ident)
+					(#aux_vars package1);
 			val block = block_vc_vars(empty_block, vc_vars1);
 			val block = block_vc_aux_vars(empty_block, vc_aux_vars1);
 			val block = block_formal_procs(block, formal_procs1);
@@ -3451,7 +3472,7 @@ fun Ûaux_varÝ (av : AUX_VAR) : unit = (
 		val zvar = mk_z_lvar(aux, (dest_z_power_type o type_of) zt, []);
 		val zdecl = mk_z_dec([zvar], zt);
 		val aux_vars1 = #aux_vars package drop (fn x => zdecl =$ x);
-	in	check_new_z_id (current_ti_context()) aux;
+	in	check_new_z_id [] aux;
 		pack_env :=
 		s_enter
 		block_name1
@@ -3502,10 +3523,18 @@ fun Ûusing_decÝ (ud: USING_DEC) : unit = (
 fun Ûadd_conc_vars_envÝ ((): unit) : unit = (
 	let	val block1 = block 1
 			handle Fail _ => error "add_conc_vars_env" 507006 [];
+		val block_name1 = #block_name(#declab block1);
+		val package = (force_value(s_lookup block_name1 (!pack_env)))
+			handle Fail _ =>
+			fail "add_conc_vars_env" 507008 [fn()=>block_name1];
+		val aux_vars = #aux_vars package;
 		val vc_vars1 = #vc_vars(#in_scope(#declab block1));
 		val using_decs = #using_decs block1;
 		val var_decls = (list_cup o map fst o map snd) using_decs;
-	in	blocks :=
+		val vars = (flat o map #vars) var_decls;
+	in	(* TBS - call check_new_z_id *)
+		check_new_spark_ids current_cn_env vars;
+		blocks :=
 		block_vc_vars(block1, vc_vars1 cup var_decls):: tl (!blocks)
 	end
 );
