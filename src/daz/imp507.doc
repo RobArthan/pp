@@ -2662,76 +2662,67 @@ fun €new_scope_pack_body› (ident : ID) : unit = (
 =TEX
 
 \subsection{The SID function new\_scope\_with}
+
 =SML
 fun €generate_spec_theory› (ident : ID) = (
 	let	val side = open_package_body_theory ident;
 		fun prefix n = trans_id (ident dot "")^n;
-		fun mk_subs_pair (tm : TERM) : (TERM * TERM) = (
+		fun mk_subs_pair mkx (tm : TERM) : (TERM * TERM) = (
 			let val (id, ty, _) = dest_z_gvar tm
 				handle ex => reraise ex
 					"generate_spec_theory";
 			in
-				(mk_z_gvar (prefix id, ty, []), tm)
+				(mkx (prefix id, ty, []), tm)
 			end
 		);
 		val consts = get_consts "-";
-		val const_subs = map mk_subs_pair consts;
-		fun do_const_subst tm = subst const_subs tm;
-		
-		val defs =
-			map (fn (names, thm) =>
-				(names, (	snd o dest_eq
-						o snd o dest_app
-						o snd o dest_thm) thm)
-			) ((rev o get_defns) "-");
-		val new_defs =
-			map (fn (names, tm) =>
-				(map prefix names, do_const_subst tm)) defs;
 
-		fun do_abbdef_para (names, defn) = (
-			map (fn n => AbbDefInfo (n, [], defn)) names
-		);
-		val abbdef_paras = flat (map do_abbdef_para new_defs);
+		val const_thms = rev (map (fn x => (x, (Value (get_spec x)
+						handle Fail _=> Nil))) consts);
 
-		val axioms =
-			map (fn (names, thm) =>
-				let val (decls, tm) = (dest_±
-						o snd o dest_app
-						o snd o dest_thm) thm;
-				in
-					(names, decls, tm)
-				end
-			) ((rev o get_axioms) "-");
-		fun axiom_subs  (names,decls,tm) = (
-			let	val freevars = frees tm;
-				val freevartab = map dest_z_lvar (frees tm);
-				val definedhere = flat((map (fn n => freevartab
-							drop (fn (s,_,_) => s <> n)))
-							names);
+		val side = open_package_spec_theory ident;
+		fun do_const_thms subs ((const, Nil) :: more) = (
+			let	val (name, ty, _) = dest_z_gvar const;
 			in
-				map (fn (n, ty, fmls) =>
-					(mk_z_lvar(prefix n, ty, fmls),
-					mk_z_lvar(n, ty, fmls))) definedhere
-			end);
-		fun do_ax_subst ax tm = subst (axiom_subs ax) tm;
-		val new_axioms =
-			map (fn (ax as (names, decls, tm)) =>
-				(	map prefix names,
-					do_const_subst decls,
-					do_ax_subst ax tm)) axioms;
-		fun do_ax_para (names, decls, defn) = (
-			map (fn n => AxDesInfo ([n], decls, Value defn, [])) names
-		);
-		val ax_paras = flat (map do_ax_para new_axioms);
+				new_const ((z_id_of_id o prefix) name, ty);
+				do_const_thms subs more
+			end
+		) | do_const_thms subs ((const, Value thm) :: more) = (
+			let	val (pty, tm) = (dest_app o snd o dest_thm) thm;
+				val (name, ty, _) = dest_z_gvar const;
+				val subs' = mk_subs_pair mk_z_gvar const::subs;
+				val subs'' = mk_subs_pair mk_z_lvar const::subs;
+				val prename = prefix name;
+			in
+			   	case (fst o dest_const) pty of
+				"Z'AxDes" => (
+					let val (decl, vp) = ((Combinators.I **
+								Value) o dest_± o
+								subst subs'') tm
+							handle Fail _ =>
+								(tm, Nil)
+					in
+						AxDesInfo ([],
+							decl, vp,
+							 [(prename, ty)])
+					end :: do_const_thms subs' more
+				) |"Z'AbbDef" => (
+					AbbDefInfo (prename, [], (subst subs''
+								o snd o dest_eq) tm)
+							 :: do_const_thms subs' more
+				) | _ => do_const_thms subs' more
+			end
+		) | do_const_thms _ [] = [];
 
-		val paras = ax_paras @ abbdef_paras;
+		val paras = do_const_thms [] const_thms;
 		
 	in
-		open_package_spec_theory ident;
 		map update_theory_db_with_parainfo paras; ()
-	end
+	end handle Fail _ =>
+		fail "generate_spec_theory" 0 [fn () => "Bother! Something nasty means I can't create the package specification theory"]
 );
 =TEX
+
 =SML
 fun €populate_package_spec_theory› (with_context : ID list)
 			(ident : ID) : unit = (
