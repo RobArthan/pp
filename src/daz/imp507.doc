@@ -84,6 +84,7 @@
 \item[Issue 1.115] Fixed omitted prefixing of parameter specifications (revealed by fixing bug 4 (V0.6) and running the integration tests (INT508).
 Also implemented remedies for issues 1 and 4 (V0.6).
 \item[Issue 1.116] Fixed wrong error message in $do\_stmt$..
+\item[Issue 1.117] Syntasx changes.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -4388,6 +4389,17 @@ fun €open_label_theory› (lab : string) : unit = (
 	|	_ => ()
 );
 =TEX
+Except where an annotation occurs as a statement or a declaration, we need to record the k-slots in an annotation in the replacement environment:
+=SML
+fun €do_annotation› (anns : ANNOTATION) : unit = (
+	let	fun do_ann (ANString _) = ()
+		|   do_ann (ANKSlot {content, label}) = (
+			new_k_slot(label, RSAnnotation, get_current_theory_name())
+		);
+	in	map do_ann anns; ()
+	end
+);
+=TEX
 The abstract syntax separates two forms of for-loop which are processed identically here.
 The following function does the common processing.
 =SML
@@ -4476,6 +4488,7 @@ fun €do_statement› (y as (SStmt x) : STATEMENT) = (
 =TEX
 
 The following reflects the SID functions for $dec$, $basic\_declaration$, $renaming\_declaration$, and $subprogram\_declaration$. Note that the $with\_context$ is an argument used for package declarations so that when the package theories are created, the $with$ packages can become parents.
+
 =SML
 fun €do_declaration› (y as (DDeclarationKSlot (
 	{label, content}, dkty)) : DECLARATION) = (
@@ -4546,11 +4559,13 @@ The following reflects the SID functions for $procedure\_specification$:
 =SML
 *)
 and €do_procedure_spec› (
-	{name, formal_part, spec as Value sp, ...} : PROCEDURE_SPECIFICATION) = (
+	{name, formal_part, spec as Value sp, annotation}
+		: PROCEDURE_SPECIFICATION) = (
 	let	val formal_proc : FORMAL_PROC =
 		{name=name, spec=sp, formal_ids = map mk_param_spec formal_part};
 	in	subunit_form name;
 		new_scope_proc_form name;
+		do_annotation annotation;
 		stub();
 		fformal_part formal_part;
 		stub_spec_proc formal_proc;
@@ -4558,11 +4573,12 @@ and €do_procedure_spec› (
 		curr_form_proc formal_proc
 	end
 ) | €do_procedure_spec› (
-	{name, formal_part, spec as Nil, ...} : PROCEDURE_SPECIFICATION) = (
+	{name, formal_part, spec as Nil, annotation} : PROCEDURE_SPECIFICATION) = (
 	subunit_inf name;
 	new_scope_proc_inf name;
-	stub();
-	fformal_part formal_part
+	fformal_part formal_part;
+	do_annotation annotation;
+	stub()
 )
 (*
 =TEX
@@ -4570,7 +4586,7 @@ The following reflects the SID functions for $function\_specification$:
 =SML
 *)
 and €do_function_spec› (
-	{designator, return, formal_part, spec as Value sp, ...}
+	{designator, return, formal_part, spec as Value sp, annotation, ...}
 			: FUNCTION_SPECIFICATION) = (
 	let	val informal_fun : INFORMAL_FUN =
 		{name=designator,
@@ -4580,6 +4596,7 @@ and €do_function_spec› (
 			{spec = sp, informal_fun = informal_fun};
 	in	subunit_form designator;
 		new_scope_fun_form designator;
+		do_annotation annotation;
 		stub();
 		fformal_part formal_part;
 		stub_spec_fun formal_fun;
@@ -4587,7 +4604,7 @@ and €do_function_spec› (
 		curr_form_fun formal_fun
 	end
 ) | €do_function_spec› (
-	{designator, return, formal_part, spec as Nil, ...}
+	{designator, return, formal_part, spec as Nil, annotation, ...}
 			: FUNCTION_SPECIFICATION) = (
 	let	val informal_fun : INFORMAL_FUN =
 		{name=designator,
@@ -4595,6 +4612,7 @@ and €do_function_spec› (
 		return_type = return};
 	in	subunit_inf designator;
 		new_scope_fun_inf designator;
+		do_annotation annotation;
 		stub();
 		fformal_part formal_part;
 		inf_fun informal_fun
@@ -4605,11 +4623,12 @@ and €do_function_spec› (
 The following reflects the SID functions for $package\_specification$:
 =SML
 *)
-and €do_package_spec› ({name, visible_decs, private_decs, ...}
+and €do_package_spec› ({name, visible_decs, private_decs, annotation}
 			: DECLARATION PACKAGE_DECLARATION) = (
 	let	val thy_name = pack_spec_name name;
 	in	if	not (thy_name mem get_theory_names())
 		then (	new_scope_pack_spec name;
+			do_annotation annotation;
 			map do_declaration visible_decs;
 			map do_declaration private_decs;
 			end_scope() )
@@ -4685,8 +4704,9 @@ and €do_proper_body› (y as (PBProcedure
 	vcs_body statement;
 	end_scope()
 ) | do_proper_body (y as (PBPackage 
-	{name, decls, statement, ...}) : PROPER_BODY) = (
+	{name, decls, statement, annotation}) : PROPER_BODY) = (
 	new_scope_pack_body name;
+	do_annotation annotation;
 	map do_declaration decls;
 	if any decls (fn d => case d of DUsing _ => true |_ => false)
 	then	(add_conc_vars_env();
@@ -4725,9 +4745,10 @@ fun €with_clause_check› (w::context) = (
 ) | with_clause_check _ = ();
 
 fun €do_context_compilation_unit›
-	({context, comp_unit, ...} : CONTEXT_COMPILATION_UNIT) : unit = (
+	({context, comp_unit, annotation, ...} : CONTEXT_COMPILATION_UNIT) : unit = (
 	with_clause_check context;
 	map new_scope_with context;
+	do_annotation annotation;
 	do_compilation_unit context comp_unit;
 	end_scope_comp_unit()
 );
@@ -4821,6 +4842,11 @@ let	val {label=label, ...} = x;
 in	comment "do_web_clause" 507039 [];
 	store_message_vc 507039 [];
 	update_replacement_env(label, ReplaceArbitrary x)
+end
+) | do_web_clause (y as (WCReplacedByAnnotation x) : WEB_CLAUSE) = (
+let	val {label=label, replacement=ann} = x;
+in	update_replacement_env(label, ReplaceAnnotation x);
+	do_annotation ann
 end
 );
 =TEX
