@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.248 $ $RCSfile: imp507.doc,v $ $Date: 2003/05/27 14:57:35 $
+% imp507.doc %Z% $Revision: 1.249 $ $RCSfile: imp507.doc,v $ $Date: 2003/06/18 16:33:50 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.248 $%
+\def\SCCSversion{$Revision: 1.249 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2003/05/27 14:57:35 $%
+\TPPdate{\FormatDate{$Date: 2003/06/18 16:33:50 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -198,6 +198,8 @@ Soundness warnings now distinctive,more systematic and logged.
 \item[Issue 1.248] R0091: apply the context clauses for a package specfication to the corresponding
 package body automatically.
 \item[Issue 1.249] R0096: improved formatting of nothing statement form in web clauses
+\item[Issue 1.250] Improved coverage of early type-checking of specification statements
+by doing all the work of checking and generating the VC terms in {\it call\_vcs}.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -3257,7 +3259,7 @@ For various (good) reasons, the underlying {\Product} operations of adding new p
 In order for the Z document generator to be able to output the necessary commands in the right place, we make and deletes a dummy type declaration before storing each batch of VCs to force the level counter up.
 In order to avoid a potential infinite loop (e.g., if the current theory is not writable), the attempt to do this dummy declaration is abandoned after 10,000 goes (this protects the code against an extremely unlikely event!)
 =SML
-fun €store_vcs› (	label : LABEL, vcs: VC list, osl : SPECLAB OPT, 
+fun €store_vcs› (	label : LABEL, vcs: TERM list, osl : SPECLAB OPT, 
 		routes : ROUTE OPT list, vcg_ctxt : VC_GEN_CONTEXT ) 					: unit = (
 	let	fun dummy_decl i = (
 			if	i < 10000
@@ -3270,7 +3272,7 @@ fun €store_vcs› (	label : LABEL, vcs: VC list, osl : SPECLAB OPT,
 			else	()
 		);
 		val side_effect = dummy_decl 0;
-		val vc_names = map (store_vc_term label) (map term_of_vc vcs);
+		val vc_names = map (store_vc_term label)  vcs;
 	in	
 		store_vc_context_and_origin(osl, vc_names, routes, 
 			map (#block_name o #declab) (!blocks), vcg_ctxt )
@@ -3288,7 +3290,7 @@ fun €store_para› (para : PARAINFO) : unit = (
 		ConjectureInfo(Value n, [], pred) => (
 			let	val bbn = get_bottom_block_name();
 			in	set_bottom_block_name n;
-				store_vcs(n, [([], ([], pred))], Nil, [Nil], 
+				store_vcs(n, [pred], Nil, [Nil], 
 					VCG_basic_declaration
 				);
 				set_bottom_block_name bbn
@@ -3296,10 +3298,15 @@ fun €store_para› (para : PARAINFO) : unit = (
 	) |	_ => update_theory_db_with_parainfo para
 );
 =TEX
-The following attempts to store a paragraph, and then tides everything
+The following attempts to store a paragraph, and then tidies everything
 away again.
 $delete\_top\_theory\_past\_level$ is taken verbatim from
 \cite{DS/FMU/IED/DTD049}.
+This is used when a function (formal or informal) is encountered in a package specification to check that
+the function name does not clash with an existing Z global variable and, for a formal function, to
+ensure that the pre- and post-conditions are well-typed. As currently coded, the function
+would not check that a conjecture has no free variables, but that check is not required in the
+current usage.
 =SML
 local
 open	icl'Kernel;
@@ -3374,17 +3381,11 @@ in
 end);
 in
 fun €test_store_para›  (para : PARAINFO) : unit = (
-	case para of
-		ConjectureInfo(Value n, [], pred) => (
-			term_of_vc ([], ([], pred));
-			()
-	) |	_ => (
 	let	val cl = current_level();
 		val dummy = update_theory_db_with_parainfo para;
 		val undo = delete_top_theory_past_level cl;
-	in
-		()
-	end)
+	in	()
+	end
 );
 end;
 =TEX
@@ -3613,13 +3614,13 @@ fun €add_formal_procs_wp_env›
 =TEX
 =SML
 fun €call_vcs›
-	((sl, st) : SPECLAB * STATEMENT) : VC list * ROUTE OPT list * SPEC = (
+	((sl, st) : SPECLAB * STATEMENT) : TERM list * ROUTE OPT list * SPEC = (
 	let	val sl1 = add_init_vars_speclab sl;
 		val sl1_st = (add_formal_procs_wp_env sl1, st);
 	in	diag_vc_args := sl1_st :: !diag_vc_args;
 		set_ti_context (ti_context_of_speclab sl1);
 		let 	val (vcs_routes, spc) = vcs sl1_st
-		in	(map fst vcs_routes, map snd vcs_routes, spc)
+		in	(map (term_of_vc o fst) vcs_routes, map snd vcs_routes, spc)
 		end
 	end
 );
@@ -4439,7 +4440,7 @@ a check to be made of the VCs of a procedure specification in a package
 specification.
 =SML
 fun €vcs_body_proc_aux› (st : STATEMENT) 
-			: (LABEL * (VC list *ROUTE OPT list * SPEC) * SPECLAB ) = (
+			: (LABEL * (TERM list *ROUTE OPT list * SPEC) * SPECLAB ) = (
 	let	val block1 = block 1;
 		val block2 = block 2;
 		val pack_body_flag2 = #pack_body_flag (#flags (#declab block2));
@@ -4537,8 +4538,7 @@ let
 	val new_block2 = block_declab (block2, new_declab2);
 	val dummy2 = (blocks := (block 1 :: (new_block2 :: tl(tl (!blocks)))));
 	(* create the vcs for a null statement *)
-	val (_, (vcs, routes, spec), _ ) = vcs_body_proc_aux (STNull SNNull);
-	val vcs = map term_of_vc vcs
+	val (_, (vcs, routes, spec), _ ) = vcs_body_proc_aux (STNull SNNull)
 		handle (exn as Fail _) =>
 		(blocks :=
 		block1 :: block2 :: tl(tl(!blocks));
