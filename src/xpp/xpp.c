@@ -89,8 +89,9 @@ char **argv;
 {
 	int l, acc;
 	if(argc < 2) {
-		usage();
-		exit(50);
+		file_name = NULL;
+		edit_only = True;
+		return argc;
 	};
 	if(	(l = strlen(argv[1])) <= strlen("-file")
 	&&	!strncmp(argv[1], "-file", l) ) {
@@ -107,10 +108,10 @@ char **argv;
 	if(	argc > acc + 1
 	&&	(l = strlen(argv[acc + 1])) <= strlen("-command")
 	&&	!strncmp(argv[acc + 1], "-command", l) ) {
-		return(acc + 2);
+		return acc + 2;
 	} else {
 		edit_only = (argc == acc + 1);
-		return(acc + 1);
+		return acc + 1;
 	}
 }
 
