@@ -32,6 +32,8 @@
 #define INPUT_CALLBACK_ARGS XtPointer,int*,XtInputId*
 #define ACTION_PROC_ARGS Widget,XEvent*,String*,Cardinal*
 
+#define APP_CLASS "Xpp"
+
 /* See the typedef for MenuItem for the following */
 
 #define MENU_ITEM_SEPARATOR	\
