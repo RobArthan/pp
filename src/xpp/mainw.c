@@ -358,6 +358,8 @@ Boolean ignored;
 		};
 	};
 
+	XmTextSetInsertionPosition(journal, last_pos);
+
 	check_text_window_limit(journal,  journal_max);
 
 
