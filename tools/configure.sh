@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.12 2002/10/29 23:19:19 rda Exp rda $
+# $Id: configure.sh,v 1.13 2002/10/30 00:32:48 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -168,7 +168,7 @@ case "${PPDOCFORMAT:-}" in
 	"")	DOPDF=n; DOPS=n;;
 	PDF)	DOPDF=y; DOPS=n;;
 	PS)	DOPDF=n; DOPS=y;;
-	*)	give_up "unsupported document format \"$PPDOCFORMAT\" (not on of PDF or PS)"
+	*)	give_up "unsupported document format \"$PPDOCFORMAT\" (not one of PDF or PS)"
 esac
 if	[ "$DOPDF" = y ]
 then	if	which dvipdfm >/dev/null 2>&1
