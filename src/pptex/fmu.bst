@@ -739,7 +739,11 @@ FUNCTION {sort.format.title}
   #1 global.string.max substring$
   sortify
 }
-
+% presort creates the key on which entries will be
+% sorted. If the entry is a projdoc we make a key
+% consisting of many `z's followed by the identity,
+% if that is present and non-empty (else the cite key).
+% If not a projdoc then we use author etc.
 FUNCTION {presort}
 {
   type$
@@ -748,7 +752,13 @@ FUNCTION {presort}
   { "zzzzzzzzzzzzzzzz"
     identity missing$
       { cite$ sortify    }
-      { identity sortify }
+      { identity
+        ""
+        =
+        { cite$ sortify    }
+        { identity sortify }
+        if$
+      }
     if$
     *
   }
