@@ -1,5 +1,6 @@
+% imp013.doc   %Z% $Date$ $Revision$ $RCSfile$
 =TEX
-% TQtemplate.tex
+% imp013.doc   %Z% $Date$ $Revision$ $RCSfile$
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
 \def\Hide#1{}
@@ -72,6 +73,8 @@ Add check for duplicated test identities in $summarize_mt_results$.
 
 
 \item[Issue \SCCSversion, \FormatDate{92/01/20} ] Updated to use new fonts.
+	Make exception handler in $mt_runf$ have the correct scope.
+	Improve performance of $summarize_mt_results$.
 
 \end{description}
 \subsection{Changes Forecast}
@@ -145,11 +148,12 @@ fun Ûmt_runfÝ (compare : ('b * 'c) -> bool)
 	(nil : (string * ('a -> 'b) * 'a * 'c) list)
 		: (string * bool) list = nil
   | mt_runf compare ((tcase, f, arg, res)::rest) = (
-	if compare(f arg,res)
+	(if compare(f arg,res)
 	then
 		(tcase,true)::mt_runf compare rest
 	else
 		(tcase,false)::mt_runf compare rest
+	)
 	handle	ANY => (tcase,false)::mt_runf compare rest);
 =TEX
 
@@ -245,6 +249,56 @@ fun Ûstore_mt_resultsÝ (f : 'a -> (string * bool) list) (x : 'a) : unit = (
 fun Ûget_mt_resultsÝ (() : unit) : (string * bool) list  = !accumulator;
 =TEX
 
+The results are held in an unsorted list of `(label * result)' pairs,
+we want to find if there are any duplicated labels.  To do this we sort
+the list counting occurances of items, then we discard any single
+occurance entries.  This task could be done in stages, namely:
+(1)~sort, (2)~count and discard.  A disadvantage is that, for large
+lists, these create large data structures.  Function $get_multiples$
+avoids this problem by doing every thing in one go, it avoids creating
+unnecessary large data structures.
+
+=SML
+fun Ûget_multiplesÝ (what : string list) : string list = (
+	let
+		fun strcmp x y =
+			if x = y
+			then 0
+			else if PolyML.StringBuiltIns.lt(x,y)
+			then ~1
+			else 1;
+
+		datatype TREE
+			= SLeaf
+			| SNode of string * int * TREE * TREE;
+
+		fun enter (item, SLeaf) = SNode(item, 1, SLeaf, SLeaf)
+		|   enter (item, SNode(x, c, l, r)) = (
+			let
+				val rel = strcmp item x;
+			in
+				if rel > 0
+				then SNode(x, c, l, enter(item, r))
+				else if rel < 0
+				then SNode(x, c, enter(item, l), r)
+				else SNode(x, c+1, l, r)
+			end
+		);
+
+		fun flatten SLeaf = []
+		|   flatten (SNode(x, c, l, r)) =
+			flatten l
+			@
+			(	if c>1
+				then x :: flatten r
+				else flatten r
+			);
+	in
+		flatten (fold enter what SLeaf)
+	end
+);
+=TEX
+
 $summarize\_results$ is more complicated because it returns
 a string made from various pieces.  First either a null or a list of
 duplicated test identities.  Second, a fixed string if the tests all
@@ -254,51 +308,28 @@ provided to do this work.
 
 =SML
 fun Ûsummarize_mt_resultsÝ (() : unit) : string = (
-	let	fun mt_failed nil = nil
-		  | mt_failed ((tcase,ok)::xs) = (
-			if ok = true
-			then
-				mt_failed xs
-			else
-				tcase::mt_failed xs);
-		fun mk_string_from_list nil = ""
-		  | mk_string_from_list (x::xs) =
-			" " ^ x ^ mk_string_from_list xs;
+	let
+		fun mt_failed(nil:(string * bool) list) : string list = nil
+		| mt_failed ((tcase,true)::xs) = mt_failed xs
+		| mt_failed ((tcase,false)::xs) = tcase::mt_failed xs;
 
-		fun strcmp x y =
-			if PolyML.StringBuiltIns.lt(x,y)
-			then ~1
-			else 1;
-
-		fun countof(e:string, h::t) =
-			if e = h
-			then 1 + countof(e, t)
-			else 1
-		| countof _ = 0;
-
-		fun uniqy (a::rest) =
-			if countof(a, rest) > 1
-			then a :: (uniqy rest)
-			else uniqy rest
-		| uniqy _ = nil;
-
-		val names = map fst (get_mt_results());
-
-		val dup_names = uniqy (Sort.sort strcmp names);
+		fun space_pad_list(nil:string list) : string list = "\n\n" :: nil
+		  | space_pad_list (x::xs) = " " :: x :: (space_pad_list xs);
 	in
-		(case dup_names
-		of nil => ""
-		| _ => "Duplicated test identities:"
-			^ mk_string_from_list dup_names
-			^ "\n\n"
-		)
-		^ (
-		case mt_failed (!accumulator)
-		of nil =>
-			"All module tests passed."
-		| ff =>
-			"The following module tests failed:"
-			^ mk_string_from_list ff
+		implode(
+			(case get_multiples(map fst(get_mt_results()))
+			of nil => nil
+			| dup_names => "Duplicated test identities:"
+				:: space_pad_list dup_names
+			)
+			@ (
+			case mt_failed (get_mt_results())
+			of nil =>
+				"All module tests passed." :: nil
+			| ff =>
+				"The following module tests failed:"
+				:: space_pad_list ff
+			)
 		)
 	end);
 =TEX
