@@ -1,4 +1,4 @@
-% imp508.doc   %Z% $Date: 2000/10/24 14:39:49 $ $Revision: 1.67 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2000/10/26 17:05:11 $ $Revision: 1.68 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.67 $%
+\def\SCCSversion{$Revision: 1.68 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2000/10/24 14:39:49 $%
+\TPPdate{\FormatDate{$Date: 2000/10/26 17:05:11 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -95,6 +95,7 @@ Adjusted $ENV\_INFO$ and allowed for type conversions.
 \item[Issues 1.66] Enhancement CTLE R1/5 --- range attributes as ranges
 \item[Issues 1.67] Enhancement CTLE II R1/9 --- SPARK 83 attributes
 \item[Issues 1.68] Enhancement CTLE II R1/11 --- nested packages
+\item[Issues 1.69-] Enhancement CTLE II R1/1 --- real types
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -355,7 +356,17 @@ fun €zid› (env : CN_ENV) (id : Z_ID) : Z_EXP = (
 );
 =TEX
 =SML
-val €z_num› : INTEGER -> Z_EXP = (mk_z_int o string_of_integer);
+val €z_num› : INTEGER -> Z_EXP = mk_z_signed_int;
+=TEX
+The following could be improved when more support for Z reals is
+available.
+=SML
+val €z_real_term› : TERM = Òa e bÆ;
+fun €z_real› (i : INTEGER, e : INTEGER) : Z_EXP = (
+	cn_subst
+	[(mk_z_signed_int i, "a"), (mk_z_signed_int e, "b")]
+	z_real_term
+);
 =TEX
 =SML
 val €z_string› : string -> Z_EXP = mk_z_string;
@@ -1044,7 +1055,7 @@ end);
 in (* of local ... in *)
 =TEX
 =SML
-fun €trans_int› (i : INT_LIT) : INTEGER = (
+fun €trans_int› (i : INT_REAL_LIT) : INTEGER = (
 	( (numeric_to_int_lit o fst o recog_numeric)
 		({base=[],m=[],n=[],expon=[]}, explode i)
 	) handle Fail _ => fail "trans_int" 508025 [fn()=>i]
@@ -1056,8 +1067,65 @@ end (* of local ... in *);
 =TEX
 \subsubsection{The Function $exp\_int\_lit$}
 =SML
-fun €exp_int_lit› (n : INT_LIT) : Z_EXP = (
+fun €exp_int_lit› (n : INT_REAL_LIT) : Z_EXP = (
 	z_num (trans_int n)
+);
+=TEX
+=TEX
+\subsection{Real Literals}{\label{RealLiterals}
+\subsubsection{The Function $trans\_real$}
+=SML
+local
+	open Lex;
+in
+fun trans_real (r : INT_REAL_LIT) : INTEGER * INTEGER = (
+	let	fun adjust ([] : string list, exp : int) = (
+			(["0"], 0)
+		) | adjust ("0"::more, exp) = (
+			adjust(more, exp + 1)
+		) | adjust (other, exp) = (
+			(other, exp)
+		);
+		fun exponent (acc, exp) [] = (
+			fail "trans_real" 508025 [fn _ => r]
+		) | exponent (acc, exp) chs = (
+			let	val (acc', exp') = adjust (acc, exp);
+				val i = integer_of_string (implode(rev acc'));
+				val e = integer_of_string (implode chs);
+			in	(i, e @+ integer_of_int exp')
+			end	handle Fail _ => fail "trans_real" 508025 [fn _ => r]
+		);
+		fun  after_point (acc, exp) (ch :: chs) = (
+			if	is_digit ch
+			then	after_point (ch::acc, exp - 1) chs
+			else if	ch = "E" orelse ch = "e"
+			then	exponent (acc, exp) chs
+			else	fail "trans_real" 508025 [fn _ => r]
+		) | after_point (acc, exp) [] = (
+			let	val (acc', exp') = adjust (acc, exp);
+				val i = integer_of_string (implode(rev acc'));
+			in	(i, integer_of_int exp')
+			end	handle Fail _ => fail "trans_real" 508025 [fn _ => r]
+			
+		);
+		fun before_point acc ("." :: chs) = (
+			after_point (acc, 0) chs
+		) | before_point acc (ch :: chs) = (
+			if	is_digit ch
+			then	before_point (ch::acc) chs
+			else	fail "trans_real" 508025 [fn _ => r]
+		) | before_point acc [] = (
+			after_point (acc, 0) []
+		);
+	in	before_point [] (explode r)
+	end
+);
+end;
+=TEX
+\subsubsection{The Function $exp\_real\_lit$}
+=SML
+fun €exp_real_lit› (n : INT_REAL_LIT) : Z_EXP = (
+	z_real (trans_real n)
 );
 =TEX
 \subsection{Character Literals}{\label{CharacterLiterals}
@@ -1107,7 +1175,6 @@ fun €trans_unary_op› (uop : UNARY_OP, zright : Z_EXP) : Z_EXP = (
 	end
 );
 =TEX
-
 \subsection{Binary Operators}
 =SML
 fun €bin_ops› (bop : BIN_OP) : Z_EXP list = (
@@ -1621,8 +1688,9 @@ and €exp_auxiliary_exp› (ae : Z_TM) : Z_EXP = (
 \subsection{The Function $trans\_exp$}
 =SML
 and €trans_exp› (env : CN_ENV) ((EId id) : EXP) : Z_EXP = exp_id env id
-  | trans_exp env (EInt n) = exp_int_lit n
-  | trans_exp env (e as EArrayAggPos _) = exp_array_agg env e
+  | trans_exp env (EIntReal n) = (
+		(exp_int_lit n) handle Fail _ => exp_real_lit n
+) | trans_exp env (e as EArrayAggPos _) = exp_array_agg env e
   | trans_exp env (e as EArrayAggPosOthers _) = exp_array_agg env e
   | trans_exp env (e as EArrayAggOthers _) = exp_array_agg env e
   | trans_exp env (e as EArrayAggNamed _) = exp_array_agg env e
@@ -1915,7 +1983,7 @@ and need not be called again.
 =SML
 and €adjust_exp› (env : CN_ENV) (exp as (EId id : EXP)) = (
 	adjust_id env id
-) | adjust_exp env (exp as (EInt _)) = (
+) | adjust_exp env (exp as (EIntReal _)) = (
 	exp
 ) | adjust_exp env (exp as (EArrayAggPos x)) = (
 	adjust_agg_pos env x
