@@ -1,4 +1,4 @@
-%  imp003.doc  %Z% $Date: 2001/07/28 15:54:32 $ $Revision: 2.20 $ $RCSfile: imp003.doc,v $
+%  imp003.doc  %Z% $Date: 2001/08/16 11:38:41 $ $Revision: 2.21 $ $RCSfile: imp003.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -7,10 +7,10 @@
 \TPPtitle{Implementation for Types and Terms}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Types and Terms}
 \TPPref{DS/FMU/IED/IMP003}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.20 $
+\def\SCCSversion{$Revision: 2.21 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2001/07/28 15:54:32 $%
+\TPPdate{\FormatDate{$Date: 2001/08/16 11:38:41 $%
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -80,6 +80,8 @@ often, e.g., in the conversions that move negation through quantifiers).
 \item [Issue 2.20] More minor performance upgrades.
 \item [Issue 2.21] Some tidying up and further optimisation of the term matching and
 substitution functions.
+\item [Issue 2.22] Now uses a string store --- this makes it stateful, but the system
+initialisation module can hide that from the user.
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
@@ -154,12 +156,74 @@ fun €string_variant› (vars : string list) (s : string) : string = (
 end; (* of local *)
 =TEX
 \subsection{Types}
+The local type $ID$ is the internal representation of a type or constant name.
+Short names are represented as strings, long ones as indexes into a string store.
+=SML
+datatype €ID› = 
+	€Short› of string |
+	€Long› of E_KEY *int;
+=TEX
+The following is the size of the longest names that we represent as strings.
+What this number should actually be is an interesting tuning issue.
+=SML
+val €max_short_name› = 12;
+=TEX
+Note that the abstract data type for types contains that for terms.
 =SML
 abstype €TYPE› = 
 	€LVartype› of string |
-	€LCtype› of string * TYPE list |
+	€LCtype› of ID * TYPE list |
 	€L≠Type› of (TYPE * TYPE)
+and €TYPES_AND_TERMS_STATE›  =
+	€State› of int S_DICT E_DICT ref
 with
+=TEX
+Management of the state:
+=SML
+	val €current_state› : int S_DICT E_DICT ref ref = ref (ref initial_e_dict);
+	fun €new_types_and_terms_state› (() : unit) : TYPES_AND_TERMS_STATE = (
+		let	val new_ref_dict = ref(!(!current_state));
+		in	State new_ref_dict
+		end
+	);
+	fun €set_types_and_terms_state› (State ref_dict : TYPES_AND_TERMS_STATE)  : unit = (
+		current_state := ref_dict
+	);
+=TEX
+Conversion between the internal and external representation of names:
+=SML
+	fun €id_of_string› (s : string)  : ID = (
+		if	size s <= max_short_name
+		then	Short s
+		else	Long (
+		let	val k = e_get_key s;
+		in	case e_key_lookup k (!(!current_state)) of 
+				Nil =>  (
+					!current_state := e_key_enter k [(s, 0)] (!(!current_state));
+					(k, 0)
+			) |	Value sd => (
+					case s_lookup s sd of
+						Nil => (
+						let	val l = length sd;
+						in	!current_state :=
+							e_key_enter k
+							((s, l)::sd) (!(!current_state));
+							(k, l)
+						end
+					) |	Value n => (k, n)
+			)
+		end)
+	);
+	fun €string_of_id› (Long(k, m)  : ID) : string = (
+		let	val sd = force_value(e_key_lookup k (!(!current_state)));
+			val (s, _) = find sd (fn (_, n) => m = n);
+		in	s
+		end	handle Fail _ => (
+				error "string_of_id"  3027 []
+		)
+	) | string_of_id (Short s) = s;
+=TEX
+=SML						
 datatype €DEST_SIMPLE_TYPE› = €Vartype› of string |
  	€Ctype› of (string * TYPE list);
 =TEX
@@ -190,7 +254,7 @@ We force $mk\_ctype$ to produce function types when appropriate -
 this ensures a single form for equal types.
 =SML
 fun €mk_ctype› (("≠",[t1,t2]): string * TYPE list) : TYPE = L≠Type(t1,t2)
-| mk_ctype ctl = LCtype ctl;
+| mk_ctype (c, tl) = LCtype (id_of_string c, tl);
 =TEX
 =SML
 val €mk_vartype› : string -> TYPE = LVartype;
@@ -199,13 +263,13 @@ val €mk_vartype› : string -> TYPE = LVartype;
 val €mk_≠_type› : (TYPE * TYPE) -> TYPE = L≠Type;
 =TEX
 =SML
-fun €dest_ctype› (LCtype stl : TYPE): string * TYPE list = stl
+fun €dest_ctype› (LCtype (i, tl) : TYPE): string * TYPE list = (string_of_id i, tl)
 | dest_ctype (L≠Type (t1, t2)) = ("≠", [t1, t2])
-| dest_ctype (LVartype s) = type_fail "dest_ctype" 3001 [(LVartype s)];
+| dest_ctype varty = type_fail "dest_ctype" 3001 [varty];
 =TEX
 =SML
 fun €dest_vartype› ((LVartype s):TYPE) : string = s
- | dest_vartype ty = type_fail "dest_vartype" 3019 [ty];
+ | dest_vartype cty = type_fail "dest_vartype" 3019 [cty];
 =TEX
 =SML
 fun €dest_≠_type› (L≠Type t1t2 : TYPE) : TYPE * TYPE = t1t2
@@ -230,10 +294,10 @@ fun €is_≠_type› ((L≠Type _):TYPE) : bool = true
 =SML
 fun €mk_simple_type› (Vartype nm : DEST_SIMPLE_TYPE) : TYPE = LVartype nm
 | mk_simple_type (Ctype ("≠",[ty1,ty2])) = L≠Type(ty1,ty2)
-| mk_simple_type (Ctype tctyl) = LCtype tctyl;
+| mk_simple_type (Ctype (nm, tyl)) = LCtype (id_of_string nm, tyl);
 
 fun €dest_simple_type› (LVartype nm : TYPE) : DEST_SIMPLE_TYPE = Vartype nm
-| dest_simple_type (LCtype tctyl) = Ctype tctyl
+| dest_simple_type (LCtype (id, tyl)) = Ctype (string_of_id id, tyl)
 | dest_simple_type (L≠Type (ty1,ty2)) = Ctype("≠",[ty1,ty2]);
 =TEX
 \subsection{The Type of Truth Values}
@@ -264,7 +328,7 @@ The local type $icl'TERM$ is introduced to allow this approach.
 local
 datatype €icl'TERM›	 =
 	€icl'Var› of string |
-	€icl'Const› of string |
+	€icl'Const› of ID |
 	€icl'App› of icl'TERM * icl'TERM * TYPE |
 	€icl'SimpleÃ› of string * icl'TERM;
 in
@@ -278,7 +342,7 @@ datatype €DEST_SIMPLE_TERM› = €Var› of string * TYPE |
 	€App› of TERM * TERM |
 	€SimpleÃ› of TERM * TERM;
 =TEX
-$=\$\$$ is a local function to express the equality of sdestroyed contants and variables.
+$=\$\$$ is a local function to express the equality of destroyed variables.
 =SML
 val op €=$› : (TERM * TERM) -> bool = fn (x, y) => x = y;
 val op €=$$› : ((string * TYPE) * (string * TYPE)) -> bool = fn (x, y) => x = y;
@@ -311,16 +375,16 @@ fun €dest_simple_term› (typed vl:TERM) : DEST_SIMPLE_TERM = (
 	case vl of
 	(icl'App(t1, t2, ty2), tyt1t2) => (
 		App (typed(t1, L≠Type (ty2, tyt1t2)), typed(t2, ty2))
-	) | (icl'Const s, ty) => Const (s, ty)
-	| (icl'Var s, ty) => Var (s, ty)
-	| (icl'SimpleÃ(str, tm), L≠Type(ty1, ty2)) => (
-		SimpleÃ (typed(icl'Var str, ty1), typed(tm, ty2))
-	) | _ => error "dest_simple_term" 3063 []
+	) | (icl'Const id, ty) => Const (string_of_id id, ty)
+	| (icl'Var nm, ty) => Var (nm, ty)
+	| (icl'SimpleÃ(nm, tm), L≠Type(ty1, ty2)) => (
+		SimpleÃ (typed(icl'Var nm, ty1), typed(tm, ty2))
+	) | _ => error "dest_simple_term" 3064 []
 );
 =TEX
 =SML
 fun €mk_simple_term› ((Var (s, ty)): DEST_SIMPLE_TERM) : TERM = typed(icl'Var s, ty)
-| mk_simple_term (Const (s, ty)) = typed(icl'Const s, ty)
+| mk_simple_term (Const (s, ty)) = typed(icl'Const (id_of_string s), ty)
 | mk_simple_term (App (ftm1 as typed(tm1, L≠Type (ty1,ty2)), ftm2 as typed(tm2,ty3))) = (
 	if (ty1 = ty3)
 	then typed(icl'App(tm1, tm2, ty3), ty2)
@@ -334,7 +398,7 @@ fun €mk_simple_term› ((Var (s, ty)): DEST_SIMPLE_TERM) : TERM = typed(icl'Var s,
 fun €type_of› ((typed (_, ty)):TERM):TYPE = ty;
 =TEX
 =SML
-fun €mk_var› ((v, ty):string * TYPE): TERM = typed (icl'Var v, ty);
+fun €mk_var› ((s, ty):string * TYPE): TERM = typed (icl'Var s, ty);
 
 fun €dest_var› ((typed (icl'Var s, ty)):TERM) : string * TYPE = (s, ty)
 | dest_var tm = term_fail "dest_var" 3007 [tm];
@@ -397,12 +461,12 @@ fun €mk_const›((v, ty):string * TYPE): TERM = (
 			if	size v = 1
 			then	PPVector.sub(mk_const_checks, ord v) ty
 			else	();
-	in	typed (icl'Const v, ty)
+	in	typed (icl'Const (id_of_string v), ty)
 	end
 );
 =TEX
 =SML
-fun €dest_const› (tm as (typed (icl'Const s, ty)): TERM):string * TYPE = (s, ty)
+fun €dest_const› (tm as (typed (icl'Const id, ty)): TERM):string * TYPE = (string_of_id id, ty)
 | dest_const tm = term_fail "dest_const" 3009 [tm];
 
 fun €is_const› ((typed (icl'Const _, _)): TERM):bool = true
@@ -490,15 +554,17 @@ In any case, it is significantly more efficient in space and
 speed than using {\it icl'frees} when it is applicable.
 =SML
 fun €is_free_var_in› (vsvty as (vs, vty): string * TYPE) (tm : TERM) : bool = (
-let	
-	fun ifvi (App (f, a)) = ifvi (dest_simple_term f) orelse ifvi (dest_simple_term a)
-	| ifvi (Const _) = false
-	| ifvi (Var s) = s =$$ vsvty
-	| ifvi (SimpleÃ (av, bdy)) = 
-		not(dest_var av =$$ vsvty)
-		andalso ifvi (dest_simple_term bdy)
-in
-	ifvi (dest_simple_term tm)
+let	fun ifvi  (t as typed(icl'App _, _)) = (
+		let	val (f, a) = dest_app t;
+		in	 ifvi f  orelse ifvi a
+		end
+	) | ifvi  (typed(icl'Const _, _)) = false
+	| ifvi  (typed(icl'Var s, ty)) = s = vs andalso ty = vty
+	| ifvi  (typed(icl'SimpleÃ (s, bdy), L≠Type(aty, bty))) =  (
+		not(s = vs andalso aty = vty)
+		andalso ifvi  (typed(bdy,bty))
+	) | ifvi _ = error "is_free_in" 3064 [];
+in	ifvi  tm
 end);
 =TEX
 =TEX
@@ -510,33 +576,33 @@ However this might encourage the compiler to do four tests on mismatched structu
 The following slightly longer formulation avoids this small performance risk.
 =SML
 fun (tm1 : TERM) €~=$› (tm2 : TERM) : bool = (
-let	fun aux (App (tm11, tm12)) tm2 = (fn map2to1 =>
-		case tm2 of
-			(App(tm21, tm22)) => (
-				aux(dest_simple_term tm11)(dest_simple_term tm21) map2to1
+let	fun aux (tm1 as typed(icl'App _, _)) tm2 = (fn map2to1 =>
+			let	val (tm11, tm12) = dest_app tm1;
+				val (tm21, tm22) = dest_app tm2;
+			in	aux tm11 tm21 map2to1
 				andalso
-				aux(dest_simple_term tm12)(dest_simple_term tm22) map2to1
-		) | _ => false
-	) | aux (Const c1) tm2 = (fn _ =>
+				aux tm12 tm22 map2to1
+			end	handle Fail _ => false
+	) | aux (tm1 as typed(icl'Const _, _)) tm2 = (fn _ =>
+		tm1 = tm2
+	)  | aux (tm1 as typed(icl'Var v1, ty1)) tm2 = (fn map2to1 =>
 		case tm2 of
-			(Const c2) => (c1 =$$ c2
-		) |	_ => false
-	)  | aux (Var v1) tm2 = (fn map2to1 =>
-		case tm2 of
-			(Var v2) => (lassoc1 map2to1 v1 = v2
-				andalso rassoc1 map2to1 v2 = v1
-		) | 	_ => false
-	) | aux (SimpleÃ(v1,b1)) tm2 = (fn map2to1 =>
-		case tm2 of
-			(SimpleÃ(v2, b2)) => (
-				(type_of v1 =: type_of v2)
+			(typed(icl'Var v2, ty2)) => 
+				lassoc1 map2to1 (v1, ty1) = (v2, ty2)
 				andalso
-				aux (dest_simple_term b1) (dest_simple_term b2) 
-				(((dest_var v1), (dest_var v2)) :: map2to1)
+				rassoc1 map2to1 (v2, ty2) = (v1, ty1)
+		|	_ => false
+	) | aux (typed(icl'SimpleÃ(v1,b1), L≠Type(aty1, bty1))) tm2 = (fn map2to1 =>
+		case tm2 of
+			(typed(icl'SimpleÃ(v2, b2), L≠Type(aty2, bty2))) => (
+				aty1 = aty2
+				andalso
+				aux (typed(b1, bty1)) (typed(b2, bty2))
+				(((v1, aty1), (v2, aty2)) :: map2to1)
 		) | _ => false
-	);
+	) | aux _ _ = error "~=$" 3064 [];
  	in
-		(tm1 =$ tm2) orelse (aux (dest_simple_term tm1) (dest_simple_term tm2) [])
+		(tm1 =$ tm2) orelse (aux tm1 tm2 [])
 	end
 );
 =TEX
@@ -610,7 +676,7 @@ matrix of a rewrite rule such as
 µx y z∑ (x + y) + z = x + (y + z)
 =TEX
 . Equally well, we should avoid computing the free variables more
-than once. For simplicity, we use an imperative approac (i.e., we
+than once. For simplicity, we use an imperative approach (i.e., we
 assign to references inside the substitution data structure).
 The applicative alternative would be to have the updated substitution be returned as
 an additional component of the result of {do\_subst} and passed through
@@ -651,7 +717,7 @@ local
 			else case rassoc5 RF a of
 				Value (_, ref (Value fvns)) => fvns @ bbaux x
 			|	Value (tm, r as ref Nil) => (
-					let	val fvns = map fst(icl'frees tm);
+					let	val fvns = map fst (icl'frees tm);
 						val _ = r := Value fvns;
 					in	fvns @ bbaux x
 					end
@@ -664,42 +730,44 @@ local
 	|   dest_app_node _ = (Leaf, Leaf);
 	fun €do_subst›
 		(RF : ((TERM * (string list OPT ref)) * (string * TYPE)) list)
-		(App(f, a) : DEST_SIMPLE_TERM, fvm : FV_MAP) : TERM = (
+		(t as typed(icl'App _, _) : TERM, fvm : FV_MAP) : TERM = (
 		let	val (fvm1, fvm2) = dest_app_node fvm;
-		in	let	val f' = do_subst RF (dest_simple_term f, fvm1);
+			val (f, a) = dest_app t;
+		in	let	val f' = do_subst RF (f, fvm1)
 			in
 				unchecked_mk_app(f',
-					(do_subst RF (dest_simple_term a, fvm2)
+					(do_subst RF (a, fvm2)
 					handle (Fail _) =>
 					a))
-			end
-			handle (Fail _) =>
-			unchecked_mk_app(f, do_subst RF(dest_simple_term a, fvm2))
+			end handle Fail _ =>
+				unchecked_mk_app(f,
+					(do_subst RF (a, fvm2)
+					handle (Fail _) =>
+					a))
 		end
-	) | do_subst _ (Const _, _) = raise just_fail
-	| do_subst RF (Var v, _) = fst(rassoc3 RF v)
-	| do_subst RF (tm as SimpleÃ (_, b), Leaf) = (
-		do_subst RF (tm, mk_fv_map b)
-	) | do_subst RF (SimpleÃ(vty, b), åNode(fvs, fvm1)) = (
-		let	val (s_ty as (s, ty)) = dest_var vty;
+	) | do_subst _ (typed(icl'Const _, _), _) = raise just_fail
+	| do_subst RF (typed(icl'Var v, ty), _) = fst(rassoc3 RF (v, ty))
+	| do_subst RF (tm as typed (icl'SimpleÃ (_, _), _), Leaf) = (
+		do_subst RF (tm, mk_fv_map (snd (dest_simple_Ã tm)))
+	) | do_subst RF (tm as typed (icl'SimpleÃ (s, b), tty as L≠Type(ty, bty)), åNode(fvs, fvm1)) = (
+		let	val s_ty  = (s, ty);
 		in 
 			if 	blackbox1 RF fvs s_ty
 			then
 			let	val new_frees = blackbox2 RF fvs s_ty;
 				val s' = string_variant new_frees s;
-				val vty' = mk_var (s', ty);
+				val vty' = typed(icl'Var s', ty);
 				val RRF = (((vty',ref (Value[s'])), s_ty) :: RF);
-			in	let	val b' = do_subst RRF
-						(dest_simple_term b, fvm1);
-				in	mk_simple_Ã(vty', b')
-				end handle (Fail _) => mk_simple_Ã(vty', b)
+			in	let	val typed(b', _) = do_subst RRF (typed(b, bty), fvm1);
+				in	typed(icl'SimpleÃ(s', b'), tty)
+				end handle (Fail _) => typed(icl'SimpleÃ(s', b), tty)
 			end
 			else
 			let
 				val RRF = RF drop (fn (_,av) => av = s_ty);
-				val b' = do_subst RRF (dest_simple_term b, fvm1);
+				val typed(b', _) = do_subst RRF (typed(b, bty), fvm1);
 			in
-				mk_simple_Ã(vty, b')
+				typed(icl'SimpleÃ(s, b'), tty)
 			end
 		end
 	) | do_subst _ _ = error "subst" 3064 [];
@@ -718,13 +786,13 @@ in
 fun €icl'subst› ([] : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = tm
 | icl'subst (R : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = (
 	let	val init_RF = (map 
-			(fn (tm,x as (_,ty)) => 
+			(fn (tm,x as (v, ty)) => 
 				if type_of tm = ty
 				then ((tm, ref Nil),x)
-				else term_fail "icl'subst" 3012 [tm,mk_var x]) 
+				else term_fail "icl'subst" 3012 [tm, typed(icl'Var v, ty)]) 
 			R);
 	in
-		do_subst init_RF (dest_simple_term tm, Leaf)
+		do_subst init_RF (tm, Leaf)
 		handle (Fail _) => tm
 	end
 );
@@ -736,20 +804,23 @@ The following  will fail if it causes no type instantiation.
 =SML
 fun €icl'inst_type› ([] : (TYPE * string) list) (mty : TYPE) : TYPE = raise just_fail
 | €icl'inst_type› (f : (TYPE * string) list) (mty : TYPE) : TYPE = (
-let	fun aux ty = (
-	if is_vartype ty
-	then rassoc3 f (dest_vartype ty)
-	else (
-		let	val (s,tyl) = dest_ctype ty;
-			fun aux1 [] = raise just_fail
+let	fun aux (LVartype v) = (
+		rassoc3 f v
+	) |  aux (L≠Type(ty1, ty2)) = (
+		let	val ty1' = aux ty1;
+			val ty2' = aux ty2 handle Fail _ => ty2;
+		in	L≠Type(ty1', ty2')
+		end	handle Fail _ => L≠Type(ty1, aux ty2)
+	) | aux (LCtype(c, tyl)) = (
+		let	fun aux1 [] = raise just_fail
 			| aux1 (a :: x) = (
 				let	val a' = aux a
 				in
 					a' :: map (fn t => aux t handle (Fail _) => t) x
 				end handle (Fail _) => a :: aux1 x
 			);
-		in	mk_ctype(s, aux1 tyl)
-		end)
+		in	LCtype(c, aux1 tyl)
+		end
 	);
 in	aux mty
 end);
@@ -758,58 +829,61 @@ end);
 local
 	fun	€inst_loc1› 
 		(tysubs : (TYPE * string) list)
-		(App(f, a) : DEST_SIMPLE_TERM)
+		(tm as typed(icl'App _, _) : TERM)
 		(vars : string list)
 		(varmap : ((string * TYPE) * (string * TYPE)) list)
 		: TERM = (
-		let	val fi = inst_loc1 tysubs (dest_simple_term f) vars varmap;
+		let	val (f, a) = dest_app tm;
+		in let	val fi = inst_loc1 tysubs f vars varmap;
 		in
 			unchecked_mk_app(fi,
-				(inst_loc1 tysubs (dest_simple_term a) vars varmap
+				(inst_loc1 tysubs a vars varmap
 				handle (Fail _) => a))
 		end
 		handle (Fail _) =>
-		let	val ai = inst_loc1 tysubs (dest_simple_term a) vars varmap;
+		let	val ai = inst_loc1 tysubs a vars varmap;
 		in
 			unchecked_mk_app(f,ai)
 		end
-	) | inst_loc1 tysubs (Const(s,ty)) vars varmap = (
-		mk_const(s, icl'inst_type tysubs ty)
-	) | inst_loc1 tysubs (Var(s,ty)) vars varmap = (
-		mk_var(lassoc3 varmap (s,ty))
-	) | inst_loc1 tysubs (SimpleÃ(v, b)) vars varmap = (
-		let	val sty as (s, ty) = dest_var v;
-			val s' = string_variant vars s;
-		in
-		((let	val ty' = icl'inst_type tysubs ty;
-		in mk_simple_Ã(mk_var (s',ty'),
-			(inst_loc1
-			tysubs
-			(dest_simple_term b)
-			(s' :: vars)
-			((sty, (s',ty')) :: varmap)
-			handle (Fail _) => b))
-		end) 
-		handle (Fail _) =>
-		if s = s'
-		then mk_simple_Ã(v,
-			inst_loc1
-			tysubs
-			(dest_simple_term b)
-			(s :: vars)
-			varmap)
-		else mk_simple_Ã(mk_var (s',ty),
-			(inst_loc1
-			tysubs
-			(dest_simple_term b)
-			(s' :: vars)
-			((sty, (s',ty)) :: varmap)
-			handle (Fail _) => b)))
 		end
-	);
+	) | inst_loc1 tysubs (typed(icl'Const s,ty)) vars varmap = (
+		typed(icl'Const s, icl'inst_type tysubs ty)
+	) | inst_loc1 tysubs (tm as typed(icl'Var s, ty)) vars varmap = (
+		mk_var(lassoc3 varmap (s, ty))
+	) | inst_loc1 tysubs (tm as typed(icl'SimpleÃ(s, b), L≠Type(ty, bty))) vars varmap = (
+		let	val s' = string_variant vars s;
+		in
+		let	val ty' = icl'inst_type tysubs ty;
+			val typed (b', bty') = inst_loc1
+				tysubs
+				(typed(b, bty))
+				(s' :: vars)
+				(((s, ty), (s', ty')) :: varmap)
+				handle Fail _ => typed(b, bty);
+		in	typed(icl'SimpleÃ (s', b'), L≠Type(ty', bty'))
+		end 
+		handle Fail _ =>
+		if s = s'
+		then	let	val typed (b', bty') = inst_loc1
+					tysubs
+					(typed(b, bty))
+					(s :: vars)
+					varmap;
+			in	 typed(icl'SimpleÃ(s, b'), L≠Type(ty, bty'))
+			end
+		else	let	val typed (b', bty') = inst_loc1
+					tysubs
+					(typed(b, bty))
+					(s' :: vars)
+					(((s, ty), (s',ty)) :: varmap)
+					handle Fail _ => typed(b, bty);
+			in	 typed(icl'SimpleÃ(s', b'), L≠Type(ty, bty'))
+			end
+		end
+	) | inst_loc1 _ _ _ _ = error "icl'inst" 3064 [];
 =TEX
 The following could perhaps be improved by using an accumulating argument and
-perhaps by mor precomputation.
+perhaps by more precomputation.
 =SML
 	fun €rename_dups› _ _ [] = []
 	| rename_dups tysubs av ((s, ty) :: rest) = (
@@ -846,7 +920,7 @@ in
 		(tm : TERM) : TERM = (
 		inst_loc1
 		tysubs
-		(dest_simple_term tm)
+		tm
 		[]
 		(inst_loc2 avoid tysubs (icl'frees tm))
 	);
