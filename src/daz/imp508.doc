@@ -1002,241 +1002,6 @@ fun Ûtrans_exp1Ý (env : CN_ENV) (exp : EXP) : Z_EXP OPT = (
 	handle Informal => Nil
 );
 =TEX
-\section{TRANSLATING SPARK BASIC DECLARATIONS}
-
-\subsection{Translating Constants}
-
-=SML
-fun Ûbasic_decl_constÝ
-		(env : CN_ENV)
-		({consts=consts, tm=tm, expr=expr} : EXP CONST_DECL) = (
-	map (fn c => z_eq_eq(trans_id c, trans_exp env expr)) consts
-);
-=TEX
-\subsection{Translating Enumeration Types}
-=SML
-val Ûú_tyÝ = ”ú®;
-val Ûðú_tyÝ = type_of ñú®;
-val Ûúú_tyÝ = type_of ñú ¸ ú®;
-=TEX
-=SML
-fun Ûenum_attribÝ (env : CN_ENV) (zid‰1, zid‰2, zid‰3) = (
-let	fun env' id = 
-		if id = (zid‰1 ^^ zlst)
-		then	Value (ú_ty, EIEnvOther)
-		else if id mem [zid‰1 ^^ zsuc, zid‰1 ^^ zpos]
-		then	Value (úú_ty,EIEnvOther)
-		else	env id;
-	val zexp = z_set_minus (zid env' zid‰1, z_set [zid env' (zid‰1 ^^ zlst)]);
-in
-	[z_eq_eq (zid‰1 ^^ zfst, zid env' zid‰2),
-	z_eq_eq (zid‰1 ^^ zlst, zid env' zid‰3),
-	z_eq_eq (zid‰1 ^^ zsuc, z_dom_res (zexp, zsucc)),
-	z_eq_eq(zid‰1 ^^ zpred, z_inv(zid env' (zid‰1 ^^ zsuc))),
-	z_eq_eq(zid‰1 ^^ zpos, z_id_rel (zid env' zid‰1)),
-	z_eq_eq(zid‰1 ^^ zval, z_inv(zid env' (zid‰1 ^^ zpos)))]
-end);
-=TEX
-=SML
-fun Ûbasic_decl_enumÝ (env : CN_ENV) (name : ID) (td : ENUM_TYPE_DEF) = (
-let	val {vals} = td;
-	val zname = trans_id name;
-	val zvals = map trans_id vals;
-	val znums = map z_num (interval 0 ((length vals)-1));
-	fun env' id = (
-		if id mem zvals
-		then
-			Value (ú_ty, EIEnvOther)
-		else if id = zname
-		then
-			Value (ðú_ty, EIEnvOther)
-		else
-			env id
-	);
-in
-	map (fn j => z_eq_eq j) (combine zvals znums) @
-	[z_eq_eq(zname, z_rng(zid env' (head zvals), zid env' (last zvals)))] @
-	enum_attrib env' (zname, head zvals, last zvals)
-end);
-=TEX
-\subsection{Translating Array Types}
-=SML
-fun Ûarray_attribÝ (env : CN_ENV) (zid‰1 : Z_ID, zid‰2 : Z_ID) : PARAINFO list = (
-	[z_eq_eq(zid‰1 ^^ zfst, zid env (zid‰2 ^^ zfst)),
-	z_eq_eq(zid‰1 ^^ zlst, zid env (zid‰2 ^^ zlst)),
-	z_eq_eq(zid‰1 ^^ zlength, z_size (zid env zid‰2)),
-	z_eq_eq(zid‰1 ^^ zrange, zid env zid‰2)]
-);
-=TEX
-=SML
-fun Ûbasic_decl_con_arrayÝ (env : CN_ENV) (name : ID) (td : ARRAY_DEF) = (
-let	val {index=index, comp=comp} = td;
-	val ind = case index of
-			[ind] => ind
-			|_ => go_informal "basic_decl_con_array" 508035 [];
-	val zname = trans_id name;
-	val zindex = trans_id ind;
-	val zcomp = trans_id comp;
-in
-	[z_eq_eq(zname, z_tfun(zid env zindex, zid env zcomp))] @
-		array_attrib env (zname, zindex)
-end);
-=TEX
-=SML
-fun Ûbasic_decl_uncon_arrayÝ (env : CN_ENV) (name : ID) (td : ARRAY_DEF) = (
-let	val {index=index, comp=comp} = td;
-	val ind = case index of
-			[ind] => ind
-			|_ => go_informal "basic_decl_uncon_array" 508035 []
-	val zname = trans_id name;
-	val zindex = trans_id ind;
-	val zcomp = trans_id comp;
-in
-	[z_eq_eq(zname, z_pfun(zid env zindex, zid env zcomp))]
-end);
-=TEX
-
-\subsection{Translating Record Types}
-=SML
-fun Ûconv_var_declÝ ({vars=vs, tmark=t} : VAR_DECL)
-		: {var : ID, tmark : TMARK} list = (
-	 map (fn id => {var=id, tmark=t}) vs
-);
-=TEX
-=SML
-fun Ûtrans_declÝ (env : CN_ENV) ({vars, tmark} : VAR_DECL) : Z_DECL = (
-let	val zvs = map trans_id vars;
-	val zexp = zid env (trans_id tmark);
-	val zvars = map (fn zv => mk_z_lvar (zv,
-						(dest_z_power_type o type_of) zexp,
-						[])) zvs;
-in
-	mk_z_dec (zvars, zexp)
-end);
-=TEX
-=SML
-fun Ûbasic_decl_recordÝ (env : CN_ENV) (name : ID)
-		({decl} : RECORD_TYPE_DEF) = (
-let	val z_sname = trans_id name;
-	val z_decls = map (trans_decl env) decl;
-in
-	[z_schema(z_sname, z_decls)]
-end);
-=TEX
-\subsection{Translating Integer Types}
-=SML
-fun Ûint_type_attribÝ (env : CN_ENV) (zid‰1, range) = (
-let	val {lo, hi} = trans_range range;
-in
-	[z_eq_eq(zid‰1 ^^ zfst, trans_exp env lo),
-	z_eq_eq(zid‰1 ^^ zlst, trans_exp env hi)]
-end
-);
-=TEX
-=SML
-fun Ûbasic_decl_int_typeÝ (env : CN_ENV) (name : ID) (range : EXP RANGE) = (
-let	val {lo, hi} = trans_range range;
-	val zname = trans_id name;
-in
-	[z_eq_eq(zname, z_rng(trans_exp env lo, trans_exp env hi))] @
-		int_type_attrib env (zname, RRange{lo=lo,hi=hi})
-end
-);
-=TEX
-
-\subsection{Translating Subtypes}
-=SML
-fun Ûrange_con_attribÝ (env : CN_ENV) (zid‰1 : Z_ID, zid‰2 : Z_ID, {lo,hi}
-		: EXP RANGELOHI) : PARAINFO list = (
-	[z_eq_eq (zid‰1 ^^ zfst, trans_exp env lo),
-	z_eq_eq (zid‰1 ^^ zlst, trans_exp env hi),
-	z_eq_eq (zid‰1 ^^ zsuc, zid env (zid‰2 ^^ zsuc)),
-	z_eq_eq (zid‰1 ^^ zpred, zid env (zid‰2 ^^ zpred)),
-	z_eq_eq (zid‰1 ^^ zpos, zid env (zid‰2 ^^ zpos)),
-	z_eq_eq (zid‰1 ^^ zval, zid env (zid‰2 ^^ zval))]
-);
-=TEX
-
-=SML
-fun Ûbasic_decl_subtype_range_conÝ (env : CN_ENV) (name : ID) (tmark : TMARK)
-		(range : EXP RANGE) = (
-let	val (lo, hi) =
-		case range of
-		RRange{lo,hi} => (lo, hi)
-		|_ => go_informal "basic_decl_subtype_range_con" 508020 [];
-	val zname = trans_id name;
-	val ztmark = trans_id tmark;
-in
-	[z_eq_eq(zname, z_rng(trans_exp env lo, trans_exp env hi))] @
-		range_con_attrib env (zname, ztmark, {lo=lo,hi=hi})
-end
-);
-=TEX
-
-=SML
-fun Ûbasic_decl_subtype_index_conÝ (env : CN_ENV) (name : ID) (tmark : TMARK)
-		(ci : EXP list) = (
-let	val zname = trans_id name;
-	val index = map name_to_tmark ci;
-	val ind = case index of
-			[ind] => ind
-			|_ => go_informal "basic_decl_subtype_index_con" 508035 []
-	val zindex = trans_id ind;
-	val zexp = zid env (trans_id tmark);
-	val var =  "UNC";
-	val zvar_ty = dest_z_power_type(type_of zexp);
-	val env' = fn id => if id = "UNC" then Value (zvar_ty, EIEnvVar tmark)
-					else env id; 
-	val zp = z_eq (z_dom (zid env' var), zid env' zindex);
-in
-	[z_eq_eq (zname, z_set_comp (trans_decl env' {vars=[var],tmark=tmark}, zp))] @
-	array_attrib env' (zname, zindex)
-end
-);
-=TEX
-
-\subsection{The Function $trans\_basic\_decl$}
-=SML
-fun Ûtrans_basic_declÝ (env : CN_ENV) ((BDConstDecl cd) : BASIC_DECL)
-		: PARAINFO list = (
-	basic_decl_const env cd
-) | trans_basic_decl env (BDTypeDecl {name,type_def=TDEnumTypeDef td,...}) = (
-	basic_decl_enum env name td
-) | trans_basic_decl env (BDTypeDecl {name,type_def=TDIntTypeDef range,...}) = (
-	basic_decl_int_type env name range
-) | trans_basic_decl env (BDTypeDecl {name,type_def=TDConArrayDef td,...}) = (
-	basic_decl_con_array env name td
-) | trans_basic_decl env (BDTypeDecl {name,type_def=TDUnconArrayDef td,...}) = (
-	basic_decl_uncon_array env name td
-) | trans_basic_decl env (BDTypeDecl {name,type_def=TDRecordTypeDef td,...}) = (
-	basic_decl_record env name td
-) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CRange cr},...}) = (
-	basic_decl_subtype_range_con env name tmark cr
-) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CIndex ci},...}) = (
-	basic_decl_subtype_index_con env name tmark ci
-) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CFloating _},...}) = (
-	go_informal "trans_basic_decl" 508037 []
-) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CFixed _},...}) = (
-	go_informal "trans_basic_decl" 508038 []
-) | trans_basic_decl env (BDTypeDecl {type_def=TDFloatingTypeDef _,...}) = (
-	go_informal "trans_basic_decl" 508037 []
-) | trans_basic_decl env (BDTypeDecl {type_def=TDFixedTypeDef _,...}) = (
-	go_informal "trans_basic_decl" 508038 []
-) | trans_basic_decl env (BDDeferredConstDecl _) = (
-	go_informal "trans_basic_decl" 508039 []
-) | trans_basic_decl env (BDVarDecl _) = (
-	go_informal "trans_basic_decl" 508040 []
-) | trans_basic_decl env (BDPrivateTypeDecl _) = (
-	go_informal "trans_basic_decl" 508041 []
-);
-=TEX
-=SML
-fun Ûtrans_basic_decl1Ý (env : CN_ENV) (bd : BASIC_DECL)
-			: PARAINFO list OPT = (
-	Value (trans_basic_decl env bd)
-	handle Informal => Nil
-);
-=TEX
 
 \section{ADJUSTMENT OF ABSTRACT SYNTAX FOR EXPRESSIONS}
 
@@ -1504,6 +1269,244 @@ fun Ûadjust_exp1Ý (env : CN_ENV) (exp : EXP) : EXP OPT = (
 	handle Informal => Nil
 );
 =TEX
+
+
+\section{TRANSLATING SPARK BASIC DECLARATIONS}
+
+\subsection{Translating Constants}
+
+=SML
+fun Ûbasic_decl_constÝ
+		(env : CN_ENV)
+		({consts=consts, tm=tm, expr=expr} : EXP CONST_DECL) = (
+	map (fn c => z_eq_eq(trans_id c, trans_exp env expr)) consts
+);
+=TEX
+\subsection{Translating Enumeration Types}
+=SML
+val Ûú_tyÝ = ”ú®;
+val Ûðú_tyÝ = type_of ñú®;
+val Ûúú_tyÝ = type_of ñú ¸ ú®;
+=TEX
+=SML
+fun Ûenum_attribÝ (env : CN_ENV) (zid‰1, zid‰2, zid‰3) = (
+let	fun env' id = 
+		if id = (zid‰1 ^^ zlst)
+		then	Value (ú_ty, EIEnvOther)
+		else if id mem [zid‰1 ^^ zsuc, zid‰1 ^^ zpos]
+		then	Value (úú_ty,EIEnvOther)
+		else	env id;
+	val zexp = z_set_minus (zid env' zid‰1, z_set [zid env' (zid‰1 ^^ zlst)]);
+in
+	[z_eq_eq (zid‰1 ^^ zfst, zid env' zid‰2),
+	z_eq_eq (zid‰1 ^^ zlst, zid env' zid‰3),
+	z_eq_eq (zid‰1 ^^ zsuc, z_dom_res (zexp, zsucc)),
+	z_eq_eq(zid‰1 ^^ zpred, z_inv(zid env' (zid‰1 ^^ zsuc))),
+	z_eq_eq(zid‰1 ^^ zpos, z_id_rel (zid env' zid‰1)),
+	z_eq_eq(zid‰1 ^^ zval, z_inv(zid env' (zid‰1 ^^ zpos)))]
+end);
+=TEX
+=SML
+fun Ûbasic_decl_enumÝ (env : CN_ENV) (name : ID) (td : ENUM_TYPE_DEF) = (
+let	val {vals} = td;
+	val zname = trans_id name;
+	val zvals = map trans_id vals;
+	val znums = map z_num (interval 0 ((length vals)-1));
+	fun env' id = (
+		if id mem zvals
+		then
+			Value (ú_ty, EIEnvOther)
+		else if id = zname
+		then
+			Value (ðú_ty, EIEnvOther)
+		else
+			env id
+	);
+in
+	map (fn j => z_eq_eq j) (combine zvals znums) @
+	[z_eq_eq(zname, z_rng(zid env' (head zvals), zid env' (last zvals)))] @
+	enum_attrib env' (zname, head zvals, last zvals)
+end);
+=TEX
+\subsection{Translating Array Types}
+=SML
+fun Ûarray_attribÝ (env : CN_ENV) (zid‰1 : Z_ID, zid‰2 : Z_ID) : PARAINFO list = (
+	[z_eq_eq(zid‰1 ^^ zfst, zid env (zid‰2 ^^ zfst)),
+	z_eq_eq(zid‰1 ^^ zlst, zid env (zid‰2 ^^ zlst)),
+	z_eq_eq(zid‰1 ^^ zlength, z_size (zid env zid‰2)),
+	z_eq_eq(zid‰1 ^^ zrange, zid env zid‰2)]
+);
+=TEX
+=SML
+fun Ûbasic_decl_con_arrayÝ (env : CN_ENV) (name : ID) (td : ARRAY_DEF) = (
+let	val {index=index, comp=comp} = td;
+	val ind = case index of
+			[ind] => ind
+			|_ => go_informal "basic_decl_con_array" 508035 [];
+	val zname = trans_id name;
+	val zindex = trans_id ind;
+	val zcomp = trans_id comp;
+in
+	[z_eq_eq(zname, z_tfun(zid env zindex, zid env zcomp))] @
+		array_attrib env (zname, zindex)
+end);
+=TEX
+=SML
+fun Ûbasic_decl_uncon_arrayÝ (env : CN_ENV) (name : ID) (td : ARRAY_DEF) = (
+let	val {index=index, comp=comp} = td;
+	val ind = case index of
+			[ind] => ind
+			|_ => go_informal "basic_decl_uncon_array" 508035 []
+	val zname = trans_id name;
+	val zindex = trans_id ind;
+	val zcomp = trans_id comp;
+in
+	[z_eq_eq(zname, z_pfun(zid env zindex, zid env zcomp))]
+end);
+=TEX
+
+\subsection{Translating Record Types}
+=SML
+fun Ûconv_var_declÝ ({vars=vs, tmark=t} : VAR_DECL)
+		: {var : ID, tmark : TMARK} list = (
+	 map (fn id => {var=id, tmark=t}) vs
+);
+=TEX
+=SML
+fun Ûtrans_declÝ (env : CN_ENV) ({vars, tmark} : VAR_DECL) : Z_DECL = (
+let	val zvs = map trans_id vars;
+	val zexp = zid env (trans_id tmark);
+	val zvars = map (fn zv => mk_z_lvar (zv,
+						(dest_z_power_type o type_of) zexp,
+						[])) zvs;
+in
+	mk_z_dec (zvars, zexp)
+end);
+=TEX
+=SML
+fun Ûbasic_decl_recordÝ (env : CN_ENV) (name : ID)
+		({decl} : RECORD_TYPE_DEF) = (
+let	val z_sname = trans_id name;
+	val z_decls = map (trans_decl env) decl;
+in
+	[z_schema(z_sname, z_decls)]
+end);
+=TEX
+\subsection{Translating Integer Types}
+=SML
+fun Ûint_type_attribÝ (env : CN_ENV) (zid‰1, range) = (
+let	val {lo, hi} = trans_range range;
+in
+	[z_eq_eq(zid‰1 ^^ zfst, trans_exp env lo),
+	z_eq_eq(zid‰1 ^^ zlst, trans_exp env hi)]
+end
+);
+=TEX
+=SML
+fun Ûbasic_decl_int_typeÝ (env : CN_ENV) (name : ID) (range : EXP RANGE) = (
+let	val {lo, hi} = trans_range range;
+	val zname = trans_id name;
+in
+	[z_eq_eq(zname, z_rng(trans_exp env lo, trans_exp env hi))] @
+		int_type_attrib env (zname, RRange{lo=lo,hi=hi})
+end
+);
+=TEX
+
+\subsection{Translating Subtypes}
+=SML
+fun Ûrange_con_attribÝ (env : CN_ENV) (zid‰1 : Z_ID, zid‰2 : Z_ID, {lo,hi}
+		: EXP RANGELOHI) : PARAINFO list = (
+	[z_eq_eq (zid‰1 ^^ zfst, trans_exp env lo),
+	z_eq_eq (zid‰1 ^^ zlst, trans_exp env hi),
+	z_eq_eq (zid‰1 ^^ zsuc, zid env (zid‰2 ^^ zsuc)),
+	z_eq_eq (zid‰1 ^^ zpred, zid env (zid‰2 ^^ zpred)),
+	z_eq_eq (zid‰1 ^^ zpos, zid env (zid‰2 ^^ zpos)),
+	z_eq_eq (zid‰1 ^^ zval, zid env (zid‰2 ^^ zval))]
+);
+=TEX
+
+=SML
+fun Ûbasic_decl_subtype_range_conÝ (env : CN_ENV) (name : ID) (tmark : TMARK)
+		(range : EXP RANGE) = (
+let	val (lo, hi) =
+		case range of
+		RRange{lo,hi} => (lo, hi)
+		|_ => go_informal "basic_decl_subtype_range_con" 508020 [];
+	val zname = trans_id name;
+	val ztmark = trans_id tmark;
+in
+	[z_eq_eq(zname, z_rng(trans_exp env lo, trans_exp env hi))] @
+		range_con_attrib env (zname, ztmark, {lo=lo,hi=hi})
+end
+);
+=TEX
+
+=SML
+fun Ûbasic_decl_subtype_index_conÝ (env : CN_ENV) (name : ID) (tmark : TMARK)
+		(ci : EXP list) = (
+let	val zname = trans_id name;
+	val index = map name_to_tmark ci;
+	val ind = case index of
+			[ind] => ind
+			|_ => go_informal "basic_decl_subtype_index_con" 508035 []
+	val zindex = trans_id ind;
+	val zexp = zid env (trans_id tmark);
+	val var =  "UNC";
+	val zvar_ty = dest_z_power_type(type_of zexp);
+	val env' = fn id => if id = "UNC" then Value (zvar_ty, EIEnvVar tmark)
+					else env id; 
+	val zp = z_eq (z_dom (zid env' var), zid env' zindex);
+in
+	[z_eq_eq (zname, z_set_comp (trans_decl env' {vars=[var],tmark=tmark}, zp))] @
+	array_attrib env' (zname, zindex)
+end
+);
+=TEX
+
+\subsection{The Function $trans\_basic\_decl$}
+=SML
+fun Ûtrans_basic_declÝ (env : CN_ENV) ((BDConstDecl {consts,tm,expr}) : BASIC_DECL)
+		: PARAINFO list = (
+	basic_decl_const env {consts=consts, tm=tm, expr=adjust_exp env expr}
+) | trans_basic_decl env (BDTypeDecl {name,type_def=TDEnumTypeDef td,...}) = (
+	basic_decl_enum env name td
+) | trans_basic_decl env (BDTypeDecl {name,type_def=TDIntTypeDef range,...}) = (
+	basic_decl_int_type env name range
+) | trans_basic_decl env (BDTypeDecl {name,type_def=TDConArrayDef td,...}) = (
+	basic_decl_con_array env name td
+) | trans_basic_decl env (BDTypeDecl {name,type_def=TDUnconArrayDef td,...}) = (
+	basic_decl_uncon_array env name td
+) | trans_basic_decl env (BDTypeDecl {name,type_def=TDRecordTypeDef td,...}) = (
+	basic_decl_record env name td
+) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CRange cr},...}) = (
+	basic_decl_subtype_range_con env name tmark cr
+) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CIndex ci},...}) = (
+	basic_decl_subtype_index_con env name tmark ci
+) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CFloating _},...}) = (
+	go_informal "trans_basic_decl" 508037 []
+) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CFixed _},...}) = (
+	go_informal "trans_basic_decl" 508038 []
+) | trans_basic_decl env (BDTypeDecl {type_def=TDFloatingTypeDef _,...}) = (
+	go_informal "trans_basic_decl" 508037 []
+) | trans_basic_decl env (BDTypeDecl {type_def=TDFixedTypeDef _,...}) = (
+	go_informal "trans_basic_decl" 508038 []
+) | trans_basic_decl env (BDDeferredConstDecl _) = (
+	go_informal "trans_basic_decl" 508039 []
+) | trans_basic_decl env (BDVarDecl _) = (
+	go_informal "trans_basic_decl" 508040 []
+) | trans_basic_decl env (BDPrivateTypeDecl _) = (
+	go_informal "trans_basic_decl" 508041 []
+);
+=TEX
+=SML
+fun Ûtrans_basic_decl1Ý (env : CN_ENV) (bd : BASIC_DECL)
+			: PARAINFO list OPT = (
+	Value (trans_basic_decl env bd)
+	handle Informal => Nil
+);
+=TEX
+
 
 \section{EPILOGUE}
 
