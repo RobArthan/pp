@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.48 2003/02/08 16:15:31 rda Exp rda $
+ * $Id: mainw.c,v 2.49 2003/02/12 16:34:01 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -1000,8 +1000,8 @@ static void file_menu_cb(
 /* No file name: just do nothing */
 			} else {
 				save_string_as(script, buf, fname);
-				XtFree(buf);
 			}
+			XtFree(buf);
 			if(fname != NULL) {XtFree(fname);};
 		};
 		break;
@@ -1467,8 +1467,8 @@ static Bool execute_command(void)
 	if(global_options.edit_only) {
 		return False;
 	}
-	if(	XmTextGetSelectionPosition(script, &dontcare, &dontcare)
-	&&	(cmd = XmTextGetSelection(script))) {
+	cmd = get_selection(script, no_selection_message);
+	if(cmd != NULL) {
 		len = strlen(cmd);
 		if(len == 0) {
 			return False;
