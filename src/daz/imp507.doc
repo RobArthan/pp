@@ -84,7 +84,15 @@ Because the implementations of the component update functions are rather long-wi
 \section{PREAMBLE AND AUXILIARIES}\ref{PREAMBLE}
 =SML
 structure €CNZGenerator› (* : CNZGenerator *) = struct
-open CNTypes CNTypes1 CNTypes2 CNBasicDeclsAndExprs;
+open CNTypes CNTypes1 CNTypes2 CNBasicDeclsAndExprs ZParagraphs;
+=TEX
+\subsection{TBS}
+The following gets around the use of a separate data type for labels.
+It is much more convenient here to represent an omitted label as an empty string.
+It would be better to make this change of representation throughout.
+=SML
+fun €string_of_label› (LExplicit s : LABEL) : string = s
+|    string_of_label LImplicit = "";
 =TEX
 \subsection{Component Update Functions}
 =SML
@@ -975,8 +983,6 @@ fun €basic_decl_pack_spec› (basic_decl : BASIC_DECL) : unit = (
 );
 =TEX
 =SML
-fun update_theory_db_with_parainfo pi = ();
-
 fun €basic_decl_otherwise› (basic_decl : BASIC_DECL) : unit = (
 	let	val para_infos = trans_basic_decl current_cn_env basic_decl;
 	in	map update_theory_db_with_parainfo para_infos; ()
@@ -1005,19 +1011,73 @@ fun €var_pack_spec› (var_decl : VAR_DECL) : unit = (
 	end
 );
 =TEX
-=IGN
+In the following, the local function, $do1\_subunit$ does the work specified in the Z spec for one unit-name-subunit-name pair.
+=SML
 fun €update_subunit_env_var› (var_decl : VAR_DECL) : unit = (
 	let	val dec_lab1 = #dec_lab (hd (!blocks));
-		val package = case (s_lookup block_name1 (!pack_env)) of
-			Value p => p
-		|	Nil => error "var_pack_spec" 507001 [];
-	in	pack_env :=
-		s_extend
-		block_name1
-		(package_vc_vars(package,
-				#vc_vars package @ [var_decl]))
-		(!pack_env)
+		fun do1_subunit
+			(id1_id2_s as
+				(id1_id2,
+				s as {in_scope as {dec_labels, vc_vars, ...}, ...})
+					: string * SUBUNIT) = (
+			if	dec_lab1 mem dec_labels
+			then	(id1_id2,
+				subunit_vc_vars(s, vc_vars grab var_decl))
+			else	id1_id2_s
+		);
+	in	subunit_env := map do1_subunit (!subunit_env)
 	end
+);
+=TEX
+In the following, the local function, $do1\_dec\_label$ does the work specified in the Z spec for one dec label.
+=SML
+fun €update_dec_env_var› (var_decl : VAR_DECL) : unit = (
+	let	val dec_lab1 = #dec_lab (hd (!blocks));
+		fun do1_dec_label
+			(dec_label_s as
+				(dec_label,
+				s as {in_scope as {dec_labels, vc_vars, ...}, ...})
+					: string * DECLAB) = (
+			if	dec_lab1 mem dec_labels
+			then	(dec_label,
+				declab_vc_vars(s, vc_vars grab var_decl))
+			else	dec_label_s
+		);
+	in	dec_env := map do1_dec_label (!dec_env)
+	end
+);
+=TEX
+In the following, the local function, $do1\_spec\_label$ does the work specified in the Z spec for one spec label.
+The identifiers in the variable declaration are translated first.
+=SML
+fun €update_spec_env_var› (var_decl : VAR_DECL) : unit = (
+	let	val dec_lab1 = #dec_lab (hd (!blocks));
+		val trans_vars = map trans_id (#vars var_decl);
+		fun do1_spec_label
+			(spec_label_s as
+				(spec_label,
+				{zmod,
+				spec_lab as {spec as {w, ...},
+					in_scope as {dec_labels, vc_vars, ...}, ...}})
+					: string * {zmod : ID, spec_lab : SPECLAB}) = (
+			if	dec_lab1 mem dec_labels
+			then	(spec_label,
+				{zmod = zmod,
+				spec_lab = speclab_w(
+					speclab_vc_vars(spec_lab, vc_vars grab var_decl),
+					trans_vars cup w)})
+			else	spec_label_s
+		);
+	in	spec_env := map do1_spec_label (!spec_env)
+	end
+);
+=TEX
+The schema conjunction from the specification is implemented as sequential composition.
+=SML
+fun €update_envs_var› (var_decl : VAR_DECL) : unit = (
+	update_subunit_env_var var_decl;
+	update_dec_env_var var_decl;	
+	update_spec_env_var var_decl
 );
 =TEX
 =IGN
@@ -1041,7 +1101,73 @@ trans_basic_decl env d5;
 \section{PACKAGES}\label{PACKAGES}
 \section{STUBS AND SUBUNITS}\label{STUBSANDSUBUNITS}
 \section{WEB CLAUSES}\label{WEBCLAUSES}
-
+=TEX
+In the following, those fields for the new block which are left undefined in the Z specification are borrowed from the empty block value.
+=SML
+fun €new_scope_dec_replace› ({label, decls} : REPLACED_BY_DECL) : unit = (
+	let	val lab = string_of_label label;
+	in
+	case s_lookup lab (!dec_env) of
+		Value declab => (
+			let	val block = {
+		declab = declab,
+		current_formal_proc = #current_formal_proc empty_block,
+		current_formal_fun = #current_formal_fun empty_block,
+		dec_lab = label,
+		spec_lab = #spec_lab empty_block,
+		till = #till empty_block};
+			in	blocks := block :: !blocks;
+				dec_env := s_delete lab (!dec_env)
+			end
+	) |	Nil => fail "new_scope_dec_replace" 507002
+			[fn () => lab]
+	end
+);
+=TEX
+In the following, the local function, $do1\_subunit$ does the work specified in the Z spec for one unit-name-subunit-name pair.
+=SML
+fun €update_subunit_env_remove_declabel› ({label, decls} : REPLACED_BY_DECL) : unit = (
+	let	fun do1_subunit
+			((id1_id2,
+				s as {in_scope as {dec_labels, ...}, ...})
+					: string * SUBUNIT) = (
+			(id1_id2,
+			subunit_dec_labels(s, dec_labels less label))
+		);
+	in	subunit_env := map do1_subunit (!subunit_env)
+	end
+);
+=TEX
+In the following, the local function, $do1\_dec\_label$ does the work specified in the Z spec for one dec label.
+=SML
+fun €update_dec_env_remove_declabel› ({label, decls} : REPLACED_BY_DECL) : unit = (
+	let	fun do1_dec_label
+			((dec_label,
+				s as {in_scope as {dec_labels, ...}, ...})
+					: string * DECLAB) = (
+			(dec_label,
+			declab_dec_labels(s, dec_labels less label))
+		);
+	in	dec_env := map do1_dec_label (!dec_env)
+	end
+);
+=TEX
+In the following, the local function, $do1\_spec\_label$ does the work specified in the Z spec for one spec label.
+=SML
+fun €update_spec_env_var› ({label, decls} : REPLACED_BY_DECL) : unit = (
+	let	fun do1_spec_label
+			((spec_label,
+				{zmod,
+				spec_lab as {in_scope as {dec_labels, ...}, ...}})
+					: string * {zmod : ID, spec_lab : SPECLAB}) = (
+			(spec_label,
+			{zmod = zmod,
+			spec_lab = speclab_dec_labels(spec_lab, dec_labels less label)})
+		);
+	in	spec_env := map do1_spec_label (!spec_env)
+	end
+);
+=TEX
 \section{INTERFACE}
 =SML
 =SML
