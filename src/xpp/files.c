@@ -183,35 +183,6 @@ static Boolean store_file_contents(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * open_file: open a file and load it into a text widget given the
- * widget and the file name 
- * Implements `open' in a file menu.
- * If name is NULL or an empty string it just empties out the
- * contents of the text window and returns False.
- * E.g., this is done when opening the file named on the
- * command line.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-Boolean open_file(
-		Widget	text,
-		char	*name)
-{
-	char *buf;
-
-	if(!(name && *name)) { /* NULL or empty */
-		XmTextSetString(text, "");
-		return False;
-	};
-	if((buf = get_file_contents(text, name)) != NULL) {
-		XmTextSetString(text, buf);
-		XtFree(buf);
-		return True;
-	} else {
-		return False;
-	}
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
  * save_file: store contents of a text widget into a named file
  * which will presumably already exist and may be overwritten
  * without confirmation.
@@ -261,5 +232,58 @@ Boolean save_file_as(
 	success = store_file_contents(text, name, buf);
 	XtFree(buf);
 	return success;
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * open_file: open a file and load it into a text widget given the
+ * widget and the file name 
+ * Implements `open' in a file menu.
+ * If name is NULL or an empty string it just empties out the
+ * contents of the text window and returns False.
+ * E.g., this is done when opening the file named on the
+ * command line.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+Boolean open_file(
+		Widget	text,
+		char	*name)
+{
+	char *buf;
+
+	if(!(name && *name)) { /* NULL or empty */
+		XmTextSetString(text, "");
+		return False;
+	};
+	if((buf = get_file_contents(text, name)) != NULL) {
+		XmTextSetString(text, buf);
+		XtFree(buf);
+		return True;
+	} else {
+		return False;
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * include_file: open a file and include it into a text widget given the
+ * widget and the file name 
+ * Implements `open' in a file menu.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+Boolean include_file(
+		Widget	text,
+		char	*name)
+{
+	char *buf;
+	XmTextPosition pos;
+
+	if((buf = get_file_contents(text, name)) != NULL) {
+		pos = XmTextGetInsertionPosition(text);
+		XmTextClearSelection(text, CurrentTime);
+		XmTextInsert(text, pos, buf);
+		XtFree(buf);
+		return True;
+	} else {
+		return False;
+	}
 }
 
