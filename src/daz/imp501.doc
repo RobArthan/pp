@@ -210,7 +210,6 @@ datatype €SPARK_LEX_CLASS›
 			|	€Case›
 			|	€CharacterLiteral›
 			|	€Colon›
-			|	€CommaOthers›
 			|	€Comma›
 			|	€CompLabel›
 			|	€Constant›
@@ -282,7 +281,7 @@ datatype €SPARK_LEX_CLASS›
 			|	€Then›
 			|	€TypeMark›
 			|	€Type›
-			|	€Until›
+			|	€Till›
 			|	€Use›
 			|	€VPartLabel›
 			|	€WhenOthers›
@@ -298,7 +297,9 @@ $SpecificationStatement$ is not a terminal and the syntax of a specification sta
 =SML
 			|	€GrkDelta›
 			|	€LSqBrack›
-			|	€RSqBrack›;
+			|	€RSqBrack›
+			|	€LBrace›
+			|	€RBrace›;
 =TEX
 The following is used in the type of the tokens produced by the SAL lexical analyser.
 =SML
@@ -384,7 +385,7 @@ val €delimiter› : string list list =
 	(Sort.sort (switch(Sort.lexicographic Sort.string_order)) o map explode)
 	["&", "'", "(", ")", "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", 
 	">", "|", "=>", "..", "**", ":=", "/=", ">=", "<=", "<<", ">>", "<>",
-	"Ñ", "[", "]"];
+	"Ñ", "[", "]", "{","}"];
 =TEX
 =SML
 fun next_is_delimiter (cs : string list) = (
@@ -426,7 +427,6 @@ val €class_table› = list_e_merge initial_e_dict [
 	("begin",	Begin),
 	("case",	Case),
 	(":",		Colon),
-	("@commaothers",CommaOthers),
 	(",",		Comma),
 	("constant",	Constant),
 	("con",		Con),
@@ -485,7 +485,7 @@ val €class_table› = list_e_merge initial_e_dict [
 	("subtype",	SubType),
 	("then",	Then),
 	("type",	Type),
-	("until",	Until),
+	("till",	Till),
 	("use",		Use),
 	("whenothers",	WhenOthers),
 	("when",	When),
@@ -497,7 +497,9 @@ The following are to support the Specification Statement
 =SML
 	("Ñ",		GrkDelta),
 	("[",		LSqBrack),
-	("]",		RSqBrack)
+	("]",		RSqBrack),
+	("{",		LBrace),
+	("}",		RBrace)
 			];
 
 =TEX
@@ -642,14 +644,14 @@ fun €spark_lex› (ip : INPUT list) : LEX_ITEM list = (
 =TEX
 \subsection{Pre-Processor for Compliance Notation}
 =SML
-fun €srch_symbol› (sym : string) (old : string list, new:string list)
-	: (string list * string list) OPT = (
+fun €srch_symbol› (syms : string list) (old : string list, new:string list)
+	: (string list * string * string list) OPT = (
 let	fun aux (s, next::rest) = (
 	let	val s' = s@[next];
 	in
-		if next = sym
+		if next mem syms
 		then
-			Value (s',rest)
+			Value (s, next, rest)
 		else
 			aux (s', rest)
 	end)
@@ -659,49 +661,60 @@ in
 end);
 =TEX
 =SML
-fun €srch_matching_rsqbrack› (count : int, old : string list, (s1::rest) : string list)
+fun €srch_matching› (left : string, right : string, old : string list, new : string list)
 		: (string list * string list) OPT = (
-let	val s' = old@[s1];
-in
-	if s1 = "["
-	then
-		srch_matching_rsqbrack (count+1, s', rest)
-	else if s1 = "]"
-	then
-		if count = 0
+let	fun €aux› (count, old, s1::rest) = (
+	let	val s' = old@[s1];
+	in
+		if s1 = left
 		then
-			Value (old, s1::rest)
+			aux (count+1, s', rest)
+		else if s1 = right
+		then
+			if count = 0
+			then
+				Value (old, s1::rest)
+			else
+				aux (count-1, s', rest)
 		else
-			srch_matching_rsqbrack (count-1, s', rest)
-	else
-		srch_matching_rsqbrack (count, s', rest)
-end)
-  | srch_matching_rsqbrack (count, old, []) = Nil;
+			aux (count, s', rest)
+	end
+	)| aux (_, _, []) = Nil;
+in
+	aux (0, old, new)
+end);
 =TEX
 =SML
 datatype €CN_INPUT› =	€SparkInput› of INPUT list
 		|	€ZInput› of INPUT list;
 =TEX
 =SML
-fun €do_upto_matching_rbrack› ((ip::rest) : INPUT list) : CN_INPUT list = (
-	case ip of
-	Lex.Text s => (
-		case srch_matching_rsqbrack (0, [], explode s) of
-		Value (left, right) => (
-			ZInput [Lex.Text (implode left)]
-				::do_upto_Ñ (Text (implode right)::rest)
-		)| Nil => (ZInput[Lex.Text s])::do_upto_matching_rbrack rest
-	) |other => (ZInput [other])::do_upto_matching_rbrack rest
-) | do_upto_matching_rbrack []  = []
+fun €do_upto_matching_rbrack› (brk : string) (ipl : INPUT list) : CN_INPUT list = (
+let	fun close s = (
+		if s = "[" then "]"
+		else "}");
+	fun aux (ip::rest) = (
+		case ip of
+		Lex.Text s => (
+			case srch_matching (brk, close brk, [], explode s) of
+			Value (left, right) => (
+				ZInput [Lex.Text (implode left)]
+					::do_upto_Ñ (Text (implode right)::rest)
+			)| Nil => (ZInput[Lex.Text s])::aux rest
+		) |other => (ZInput [other])::aux rest
+	) | aux []  = [];
+in
+	aux ipl
+end)
 =TEX
 =SML
 and €do_upto_lbrack› ((ip::rest) : INPUT list) : CN_INPUT list = (
 	case ip of
 	Lex.Text s => (
-		case srch_symbol "[" ([], explode s) of
-		Value (left, right) => (
-			(SparkInput [Lex.Text (implode left)]
-				::do_upto_matching_rbrack (Text (implode right)::rest)
+		case srch_symbol ["[", "{"] ([], explode s) of
+		Value (left, sym, right) => (
+			(ZInput [Lex.Text (implode left)]::SparkInput [Lex.Text sym]
+				::do_upto_matching_rbrack sym (Text (implode right)::rest)
 			)
 		)| Nil => (SparkInput[Lex.Text s])::do_upto_lbrack rest
 	) |other => (SparkInput [other])::do_upto_lbrack rest
@@ -712,9 +725,9 @@ and €do_upto_lbrack› ((ip::rest) : INPUT list) : CN_INPUT list = (
 and €do_upto_Ñ› ((ip::rest) : INPUT list) : CN_INPUT list = (
 	case ip of
 	Lex.Text s => (
-		case srch_symbol "Ñ" ([], explode s) of
-		Value (left, right) => (
-			(SparkInput [Lex.Text (implode left)]
+		case srch_symbol ["Ñ"] ([], explode s) of
+		Value (left, sym, right) => (
+			(SparkInput [Lex.Text ((implode left)^sym)]
 				::do_upto_lbrack (Text (implode right)::rest)
 			)
 		)| Nil => (SparkInput[Lex.Text s])::do_upto_Ñ rest
