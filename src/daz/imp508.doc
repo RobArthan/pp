@@ -80,14 +80,34 @@ The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD504}.
 
 \subsection{PREAMBLE}
 
-SML
-structure ÛCNBasicDeclsAndExprsÝ : CNBasicDeclsAndExprs  = struct
+=SML
+structure ÛCNBasicDeclsAndExprsÝ (*: CNBasicDeclsAndExprs *)  = struct
 local
 	open CaseIndependence CNTypes CNEnvironmentTypes ZProofMode;
 in
 =TEX
+
+\subsection{Environments}
+
 =SML
-fun name_to_tmark (e : EXP) : TMARK = (
+type CN_ENV = Z_ID -> TYPE;
+=IGN
+val Ûcn_envÝ = (
+let	val (id', _) = dest_const (mk_z_gvar(id, blip_a, []));
+in
+	case get_const_type id' of
+	Value ty => (
+		mk_z_gvar(id, ty, [])
+	)| Nil => (
+		fail "init_cn_env" 508001 [fn()=
+	)
+end
+);
+
+=TEX
+
+=SML
+fun Ûname_to_tmarkÝ (e : EXP) : TMARK = (
 	case e of
 	EId id =>
 		id
@@ -106,6 +126,34 @@ fun name_to_tmark (e : EXP) : TMARK = (
 		)
 	|_ => "__unknown"
 );
+=TEX
+
+
+=SML
+infix 3 ^^;
+fun zid1 Û^^Ý zid2 = (
+	zid1^"v"^zid2
+);
+=TEX
+TBS - The next function is extra.
+=SML
+fun Ûjoin_tmarksÝ ((s1::s2::rest) : string list) : string = (
+	s1^"y"^join_tmarks (s2::rest)
+) | join_tmarks (s::_) = s
+  | join_tmarks _ = "";
+=TEX
+=SML
+fun Ûz_decls_to_expÝ (zdecls : Z_DECL list) : Z_EXP = (
+let	fun dec (d,e) = mk_z_dec ([mk_z_lvar(d, type_of e, [])],e);
+in
+	mk_z_decl(map dec zdecls)
+end
+);
+=TEX
+=SML
+fun Ûtrans_rangeÝ ((RRange range) : EXP RANGE) : EXP RANGELOHI = (
+	range
+) | trans_range _ = fail "trans_range" 508001 [fn()=>"not supported"];
 =TEX
 =SML
 fun Ûbasic_decl_errorÝ (s : string) : 'a = (
@@ -173,7 +221,17 @@ val ÛzsuccÝ : Z_EXP = ñsucc®;
 =TEX
 =SML
 val Ûblip_aÝ = ”'a®;
-fun ÛzidÝ (id :Z_ID) : Z_EXP = mk_z_lvar(id, blip_a, []);
+fun ÛzidÝ (env : CN_ENV) (id :Z_ID) : Z_EXP = (
+let	val (id', _) = dest_const (mk_z_gvar(id, blip_a, []));
+in
+	case get_const_type id' of
+	Value ty => (
+		mk_z_gvar(id, ty, [])
+	)| Nil => (
+		mk_z_lvar (id, blip_a, [])
+	)
+end
+);
 =TEX
 =SML
 val Ûz_numÝ : int -> Z_EXP = (mk_z_int o string_of_int);
@@ -342,18 +400,13 @@ fun Ûz_eq_eqÝ (id : Z_ID, exp : Z_EXP) : PARAINFO = (
 );
 =TEX
 
-\section{TRANSLATING SPARK EXPRESSIONS}
-
 =SML
-val		ÛzfstÝ = trans_id "FIRST"
-	and	ÛzlstÝ = trans_id "LAST"
-	and	ÛzsucÝ = trans_id "SUCC"
-	and	ÛzpredÝ = trans_id "PRED"
-	and	ÛzposÝ = trans_id "POS"
-	and	ÛzvalÝ = trans_id "VAL"
-	and	ÛzlengthÝ = trans_id "LENGTH"
-	and	ÛzrangeÝ = trans_id "RANGE";
+fun Ûz_schemaÝ (name : Z_ID, decls : Z_DECL list) : PARAINFO = (
+	AbbDefInfo (name, [], z_decls_to_exp decls)
+);
 =TEX
+
+\section{TRANSLATING SPARK EXPRESSIONS}
 
 \subsection{Translating Identifiers}
 =SML
@@ -368,20 +421,30 @@ let	fun aux (c::rest) = (
 in
 	(implode o aux o explode) id
 end
-)
+);
 =TEX
 =SML
-and Ûexp_idÝ (ident : ID) : Z_EXP = (
-	zid (trans_id ident)
+val		ÛzfstÝ = trans_id "FIRST"
+	and	ÛzlstÝ = trans_id "LAST"
+	and	ÛzsucÝ = trans_id "SUCC"
+	and	ÛzpredÝ = trans_id "PRED"
+	and	ÛzposÝ = trans_id "POS"
+	and	ÛzvalÝ = trans_id "VAL"
+	and	ÛzlengthÝ = trans_id "LENGTH"
+	and	ÛzrangeÝ = trans_id "RANGE";
+=TEX
+=SML
+fun Ûexp_idÝ (env : CN_ENV) (ident : ID) : Z_EXP = (
+	zid env (trans_id ident)
 )
 =TEX
 \subsection{Translating Aggregates (Positional Array)}
 =SML
-and Ûexp_array_agg_posÝ ({tmark, comps} : EXP AGG_POS) : Z_EXP = (
+and Ûexp_array_agg_posÝ (env : CN_ENV) ({tmark, comps} : EXP AGG_POS) : Z_EXP = (
 let	val zop = z_minus;
 	val zleft = z_num 1;
-	val zright = zid(trans_id tmark ^^ zfst);
-	val zseq = map trans_exp comps;
+	val zright = zid env (trans_id tmark ^^ zfst);
+	val zseq = map (trans_exp env) comps;
 in
 	z_rel_comp(z_power(zsucc, z_bin_exp(zleft,zop, zright)), z_seq zseq)
 end
@@ -389,29 +452,29 @@ end
 =TEX
 \subsection{Translating Aggregates (Positional Array with Others)}
 =SML
-and Ûexp_array_agg_pos_othersÝ ({agg_pos as {tmark,comps}, others} : EXP AGG_POS_OTHERS) : Z_EXP = (
-	z_override(trans_exp (EArrayAggOthers {tmark=tmark,others=others}),
-		trans_exp (EArrayAggPos agg_pos))
+and Ûexp_array_agg_pos_othersÝ (env : CN_ENV) ({agg_pos as {tmark,comps}, others} : EXP AGG_POS_OTHERS) : Z_EXP = (
+	z_override(trans_exp env (EArrayAggOthers {tmark=tmark,others=others}),
+		trans_exp env (EArrayAggPos agg_pos))
 )
 =TEX
 \subsection{Translating Aggregates (Positional Array with Just Others)}
 =SML
-and Ûexp_array_agg_othersÝ ({tmark,others={others=ot}} : EXP AGG_OTHERS) : Z_EXP = (
-	z_cross(zid(trans_id tmark ^^ zrange), z_set [trans_exp ot])
+and Ûexp_array_agg_othersÝ (env : CN_ENV) ({tmark,others={others=ot}} : EXP AGG_OTHERS) : Z_EXP = (
+	z_cross(zid env (trans_id tmark ^^ zrange), z_set [trans_exp env ot])
 )
 =TEX
 \subsection{Translating Aggregates (Named Array)}
 =SML
-and Ûtrans_named_assocÝ ({choice,comp} : (AGG_CHOICE,EXP) NAMED_ASSOC) : Z_EXP = (
+and Ûtrans_named_assocÝ (env : CN_ENV) ({choice,comp} : (AGG_CHOICE,EXP) NAMED_ASSOC) : Z_EXP = (
 let	fun aux_range (ch::rest) = (
 		case ch of
 		ACAggChoiceRange (DRRange(RRange{lo,hi})) =>
-			z_rng(trans_exp lo, trans_exp hi)::aux_range rest
+			z_rng(trans_exp env lo, trans_exp env hi)::aux_range rest
 		|ACAggChoiceRange (DRRange _) =>
 			fail "trans_named_assoc" 508001
 				[fn()=>"range attributes not supported"] 
 		|ACAggChoiceRange (DRConstrained{range=RRange{lo,hi},...}) =>
-			z_rng(trans_exp lo, trans_exp hi)::aux_range rest
+			z_rng(trans_exp env lo, trans_exp env hi)::aux_range rest
 		|ACAggChoiceRange (DRConstrained _) =>
 			fail "trans_named_assoc" 508001
 				[fn()=>"range attributes not supported"] 
@@ -420,26 +483,26 @@ let	fun aux_range (ch::rest) = (
 	fun aux_singles (ch::rest) = (
 		case ch of
 		ACAggChoiceSingle exp =>
-			trans_exp exp::aux_singles rest
+			trans_exp env exp::aux_singles rest
 		|_ => aux_singles rest
 	) | aux_singles _ = [];
 	val zranges = aux_range choice;
 	val zsingles = aux_singles choice;
 in
-	z_cross (z_many_union(zranges @ [z_set zsingles]), z_set [trans_exp comp])
+	z_cross (z_many_union(zranges @ [z_set zsingles]), z_set [trans_exp env comp])
 end
 )
 =TEX
 =SML
-and Ûexp_array_agg_namedÝ ({named_assocs} : (AGG_CHOICE,EXP) AGG_NAMED) : Z_EXP = (
-	z_many_union (map trans_named_assoc named_assocs)
+and Ûexp_array_agg_namedÝ (env : CN_ENV) ({named_assocs} : (AGG_CHOICE,EXP) AGG_NAMED) : Z_EXP = (
+	z_many_union (map (trans_named_assoc env) named_assocs)
 )
 =TEX
 \subsection{Translating Aggregates (Named Array with Others)}
 =SML
-and Ûexp_array_agg_named_othersÝ ({tmark,agg_named,others} : (AGG_CHOICE,EXP) AGG_NAMED_OTHERS) : Z_EXP = (
-	z_override(trans_exp (EArrayAggOthers {tmark=tmark,others=others}),
-		trans_exp (EArrayAggNamed agg_named))
+and Ûexp_array_agg_named_othersÝ (env : CN_ENV) ({tmark,agg_named,others} : (AGG_CHOICE,EXP) AGG_NAMED_OTHERS) : Z_EXP = (
+	z_override(trans_exp env (EArrayAggOthers {tmark=tmark,others=others}),
+		trans_exp env (EArrayAggNamed agg_named))
 )
 =TEX
 \subsection{Translating Aggregates (Positional Record)}
@@ -450,7 +513,7 @@ and Ûretrieve_type_defÝ (tmark : TMARK) : TYPE_DEF = (
 )
 =TEX
 =SML
-and Ûexp_rec_agg_posÝ ({tmark, comps} : EXP AGG_POS) : Z_EXP = (
+and Ûexp_rec_agg_posÝ (env : CN_ENV) ({tmark, comps} : EXP AGG_POS) : Z_EXP = (
 let	val rcomps = case retrieve_type_def tmark of
 			TDRecordTypeDef {comps} => comps
 			|_ => fail "exp_rec_agg_pos" 508001
@@ -466,7 +529,7 @@ let	val rcomps = case retrieve_type_def tmark of
 				[fn()=>"variant records not supported"]
 	) | get_decls _ = [];
 	val zeqs = map (fn (d,c) =>
-			z_eq(zid(trans_id d), trans_exp c))
+			z_eq(zid env (trans_id d), trans_exp env c))
 			(combine (get_decls rcomps) comps);
 	val zp = z_many_and zeqs;
 in
@@ -475,8 +538,9 @@ end
 )
 =TEX
 \subsection{Translating Aggregates (Named Record)}
+TBS - explain the following...
 =SML
-and Ûexp_rec_agg_namedÝ ({tmark, named_assocs} : (AGG_CHOICE,EXP) REC_AGG_NAMED) : Z_EXP = (
+and Ûdo_assocsÝ (env : CN_ENV) ((assoc::rest) : (AGG_CHOICE,EXP) NAMED_ASSOC list) : Z_EXP list = (
 let	fun expand_assocs comp (ch::rest) = (
 		case ch of
 		ACAggChoiceSingle exp => (name_to_tmark exp, comp)
@@ -485,14 +549,20 @@ let	fun expand_assocs comp (ch::rest) = (
 				[fn()=>"range attributes not supported"]
 	) | expand_assocs _ _ = [];
 
-	fun do_assoc {choice, comp} = (
+	fun one_assoc {choice, comp} = (
 	let	val chcplist = expand_assocs comp choice;
 	in
 		map (fn (ch, comp) =>
-			z_eq (zid (trans_id ch), trans_exp comp)) chcplist
-	end
-	);
-	val zeqs = flat (map do_assoc named_assocs);
+			z_eq (zid env (trans_id ch), trans_exp env comp)) chcplist
+	end);
+in
+	one_assoc assoc@do_assocs env rest
+end
+) | do_assocs _ _ = []
+=TEX
+=SML
+and Ûexp_rec_agg_namedÝ (env : CN_ENV) ({tmark, named_assocs} : (AGG_CHOICE,EXP) REC_AGG_NAMED) : Z_EXP = (
+let	val zeqs = do_assocs env named_assocs;
 	val zp = z_many_and zeqs;
 in
 	z_mu (trans_id tmark, zp)
@@ -511,10 +581,10 @@ and Ûtrans_unary_opÝ (uop : UNARY_OP) = (
 )
 =TEX
 =SML
-and Ûexp_unary_expÝ ({uop, right} : EXP UNARY_EXP) : Z_EXP = (
+and Ûexp_unary_expÝ (env : CN_ENV) ({uop, right} : EXP UNARY_EXP) : Z_EXP = (
 	case uop of
-	UOSparkUnaryAdd => trans_exp right
-	|_ => 	z_unary_exp (trans_unary_op uop, trans_exp right)
+	UOSparkUnaryAdd => trans_exp env right
+	|_ => 	z_unary_exp (trans_unary_op uop, trans_exp env right)
 )
 =TEX
 
@@ -546,22 +616,17 @@ and Ûtrans_bin_opÝ (bop : BIN_OP) = (
 )
 =TEX
 =SML
-and Ûexp_bin_expÝ ({left, bop, right} : EXP BIN_EXP) : Z_EXP = (
-	z_bin_exp (trans_exp left, trans_bin_op bop, trans_exp right)
+and Ûexp_bin_expÝ (env : CN_ENV) ({left, bop, right} : EXP BIN_EXP) : Z_EXP = (
+	z_bin_exp (trans_exp env left, trans_bin_op bop, trans_exp env right)
 )
 =TEX
 \subsection{Translating Membership of a Range}
 =SML
-and Ûtrans_rangeÝ ((RRange range) : EXP RANGE) : EXP RANGELOHI = (
-	range
-) | trans_range _ = fail "trans_range" 508001 [fn()=>"not supported"]
-=TEX
-=SML
-and Ûexp_mem_rangeÝ ({left, mop, range} : EXP MEM_RANGE) : Z_EXP = (
+and Ûexp_mem_rangeÝ (env : CN_ENV) ({left, mop, range} : EXP MEM_RANGE) : Z_EXP = (
 let	val {lo=lo, hi=hi} = trans_range range;
-	val zright = z_rng(trans_exp lo, trans_exp hi);
+	val zright = z_rng(trans_exp env lo, trans_exp env hi);
 in
-	z_bin_exp (trans_exp left, trans_bin_op mop, zright)
+	z_bin_exp (trans_exp env left, trans_bin_op mop, zright)
 end
 )
 =TEX
@@ -569,15 +634,15 @@ end
 \subsection{Translating Attributes}
 TBS - name to tmark should not really be required...
 =SML
-and Ûexp_attribÝ ({prefix, attribute_desig=ADAttrib att} : (EXP,ATTRIB_DESIG) ATTRIBUTE) : Z_EXP = (
-	zid (trans_id (name_to_tmark prefix) ^^ trans_id att)
+and Ûexp_attribÝ (env : CN_ENV) ({prefix, attribute_desig=ADAttrib att} : (EXP,ATTRIB_DESIG) ATTRIBUTE) : Z_EXP = (
+	zid env (trans_id (name_to_tmark prefix) ^^ trans_id att)
 )
 =TEX
 The following covers $Exp\_Attrib\_Arg$
 =SML
-  | Ûexp_attribÝ ({prefix, attribute_desig=ADAttribArg(att,arg)} : (EXP,ATTRIB_DESIG) ATTRIBUTE) : Z_EXP = (
-let	val zfun = zid(trans_id (name_to_tmark prefix) ^^ trans_id att);
-	val zargs = [trans_exp arg];
+  | Ûexp_attribÝ env ({prefix, attribute_desig=ADAttribArg(att,arg)} : (EXP,ATTRIB_DESIG) ATTRIBUTE) : Z_EXP = (
+let	val zfun = zid env (trans_id (name_to_tmark prefix) ^^ trans_id att);
+	val zargs = [trans_exp env arg];
 in
 	z_fun_call (zfun, zargs)
 end
@@ -585,20 +650,23 @@ end
 =TEX
 \subsection{Translating Indexed Components}
 =SML
-and Ûexp_indexed_compÝ ({prefix, index} : EXP INDEXED_COMP) : Z_EXP = (
-	z_fun_call (trans_exp prefix, [trans_exp index])
+and Ûexp_indexed_compÝ (env : CN_ENV) ({prefix, index} : EXP INDEXED_COMP) : Z_EXP = (
+	case index of
+	EArrayAggPos {comps,...} =>
+		z_fun_call (trans_exp env prefix, map (trans_exp env) comps)
+	|_ => fail "exp_indexed_comp" 508001 [fn()=>"badly formed indexed component"]
 )
 =TEX
 \subsection{Translating Selected Components}
 =SML
-and Ûexp_selected_compÝ ({prefix, selector} : EXP SELECTED_COMP) : Z_EXP = (
-	z_selection (trans_exp prefix, trans_id selector)
+and Ûexp_selected_compÝ (env : CN_ENV) ({prefix, selector} : EXP SELECTED_COMP) : Z_EXP = (
+	z_selection (trans_exp env prefix, trans_id selector)
 )
 =TEX
 \subsection{Translating Functions Calls}
 =SML
-and Ûexp_fun_callÝ ({fun_name, args} : EXP FUN_CALL) : Z_EXP = (
-	z_fun_call (zid (trans_id fun_name), map trans_exp args)
+and Ûexp_fun_callÝ (env : CN_ENV) ({fun_name, args} : EXP FUN_CALL) : Z_EXP = (
+	z_fun_call (zid env (trans_id fun_name), map (trans_exp env) args)
 )
 =TEX
 \subsection{Translating Integer Literals}
@@ -619,31 +687,51 @@ and Ûexp_auxiliary_expÝ (ae : Z_EXP) : Z_EXP = (
 	ae
 )
 =TEX
-\subsection{The function $trans\_exp$}
+\subsection{Translating Qualified Expressions}
+This is additional to the specification...
+
 =SML
-and Ûtrans_expÝ (exp as (EId id) : EXP) : Z_EXP = exp_id id
-  | trans_exp (exp as (EInt n)) = exp_int_lit n
-  | trans_exp (exp as (EArrayAggPos ap)) = exp_array_agg_pos ap
-  | trans_exp (exp as (EArrayAggPosOthers ap)) = exp_array_agg_pos_others ap
-  | trans_exp (exp as (EArrayAggOthers ao)) = exp_array_agg_others ao
-  | trans_exp (exp as (EArrayAggNamed an)) = exp_array_agg_named an
-  | trans_exp (exp as (EArrayAggNamedOthers an)) = exp_array_agg_named_others an
-  | trans_exp (exp as (ERecAggPos ap)) = exp_rec_agg_pos ap
-  | trans_exp (exp as (ERecAggNamed an)) = exp_rec_agg_named an
-  | trans_exp (exp as (EUnaryExp ue)) = exp_unary_exp ue
-  | trans_exp (exp as (EBinExp be)) = exp_bin_exp be
-  | trans_exp (exp as (EMemRange be)) = exp_mem_range be
-  | trans_exp (exp as (EAttribute at)) = exp_attrib at
-  | trans_exp (exp as (EIndexedComp ic)) = exp_indexed_comp ic
-  | trans_exp (exp as (ESelectedComp sc)) = exp_selected_comp sc
-  | trans_exp (exp as (EFunCall fc)) = exp_fun_call fc
-  | trans_exp (exp as (EAuxiliaryExp ae)) = exp_auxiliary_exp ae
-  | trans_exp (exp as (EQualifiedExp q)) =
-	fail "trans_exp" 508001 [fn()=>"qualified expressions not supported"]
-  | trans_exp (exp as (EBracketed e)) = trans_exp e
-  | trans_exp (exp as (EStringLiteral c)) =
+and Ûexp_qualified_expÝ (env : CN_ENV) ({exp, tmark} : EXP QUALIFIED_EXPRESSION) : Z_EXP = (
+	case exp of
+	EArrayAggPos{comps,...} => (
+		exp_array_agg_pos env {comps=comps, tmark=tmark}
+	)| EArrayAggPosOthers{agg_pos={comps,...}, others} => (
+		exp_array_agg_pos_others env 
+			{agg_pos={comps=comps,tmark=tmark},others=others}
+	)| EArrayAggOthers{others,...} => (
+		exp_array_agg_others env {others=others,tmark=tmark}
+	)| EArrayAggNamed an => (
+		exp_array_agg_named  env an
+	)| EArrayAggNamedOthers {agg_named, others,...} => (
+		exp_array_agg_named_others env 
+			{agg_named=agg_named, others=others, tmark=tmark}
+	)|_ => fail "exp_qualified_exp" 508001 [fn()=>"badly formed qualified expression"]
+)
+=TEX
+\subsection{The Function $trans\_exp$}
+=SML
+and Ûtrans_expÝ (env : CN_ENV) ((EId id) : EXP) : Z_EXP = exp_id env id
+  | trans_exp env (EInt n) = exp_int_lit n
+  | trans_exp env (EArrayAggPos ap) = exp_array_agg_pos env ap
+  | trans_exp env (EArrayAggPosOthers ap) = exp_array_agg_pos_others env ap
+  | trans_exp env (EArrayAggOthers ao) = exp_array_agg_others env ao
+  | trans_exp env (EArrayAggNamed an) = exp_array_agg_named env an
+  | trans_exp env (EArrayAggNamedOthers an) = exp_array_agg_named_others env an
+  | trans_exp env (ERecAggPos ap) = exp_rec_agg_pos env ap
+  | trans_exp env (ERecAggNamed an) = exp_rec_agg_named env an
+  | trans_exp env (EUnaryExp ue) = exp_unary_exp env ue
+  | trans_exp env (EBinExp be) = exp_bin_exp env be
+  | trans_exp env (EMemRange be) = exp_mem_range env be
+  | trans_exp env (EAttribute at) = exp_attrib env at
+  | trans_exp env (EIndexedComp ic) = exp_indexed_comp env ic
+  | trans_exp env (ESelectedComp sc) = exp_selected_comp env sc
+  | trans_exp env (EFunCall fc) = exp_fun_call env fc
+  | trans_exp env (EAuxiliaryExp ae) = exp_auxiliary_exp ae
+  | trans_exp env (EQualifiedExp qe) = exp_qualified_exp env qe
+  | trans_exp env (EBracketed e) = trans_exp env e
+  | trans_exp env (EStringLiteral c) =
 	fail "trans_exp" 508001 [fn()=>"string literals not supported"]
-  | trans_exp (exp as (ECharacterLiteral c)) =
+  | trans_exp env (ECharacterLiteral c) =
 	fail "trans_exp" 508001 [fn()=>"character literals not supported"]
 ;
 =TEX
@@ -652,117 +740,203 @@ and Ûtrans_expÝ (exp as (EId id) : EXP) : Z_EXP = exp_id id
 
 \subsection{Translating Constants}
 
-=TEX
 =SML
-=TEX
-=SML
-fun basic_decl_const {consts=consts, tm=tm, expr=expr} = (
-	map (fn c => z_eq_eq(trans_id c, trans_exp expr)) consts
+fun Ûbasic_decl_constÝ (env : CN_ENV) {consts=consts, tm=tm, expr=expr} = (
+	map (fn c => z_eq_eq(trans_id c, trans_exp env expr)) consts
 );
 =TEX
-\subsection{Translating Types}
+\subsection{Translating Enumeration Types}
 =SML
-infix 3 ^^;
-fun zid1 Û^^Ý zid2 = (
-	zid1^"v"^zid2
-);
-=TEX
-=SML
-fun Ûenum_attribÝ (zid‰1, zid‰2, zid‰3) = (
-let	val zexp = z_set_minus (zid zid‰1, z_set[zid (zid‰1^^zlst)]);
+fun Ûenum_attribÝ (env : CN_ENV) (zid‰1, zid‰2, zid‰3) = (
+let	val zexp = z_set_minus (zid env zid‰1, z_set[zid env (zid‰1^^zlst)]);
 in
-	[z_eq_eq (zid‰1 ^^ zfst, zid zid‰2),
-	z_eq_eq (zid‰1 ^^ zlst, zid zid‰3),
+	[z_eq_eq (zid‰1 ^^ zfst, zid env zid‰2),
+	z_eq_eq (zid‰1 ^^ zlst, zid env zid‰3),
 	z_eq_eq (zid‰1 ^^ zsuc, z_dom_res (zexp, zsucc)),
-	z_eq_eq(zid‰1 ^^ zpred, z_inv(zid (zid‰1 ^^ zsuc))),
-	z_eq_eq(zid‰1 ^^ zpos, z_id_rel (zid zid‰1)),
-	z_eq_eq(zid‰1 ^^ zval, z_inv(zid(zid‰1 ^^ zpos)))]
+	z_eq_eq(zid‰1 ^^ zpred, z_inv(zid env (zid‰1 ^^ zsuc))),
+	z_eq_eq(zid‰1 ^^ zpos, z_id_rel (zid env zid‰1)),
+	z_eq_eq(zid‰1 ^^ zval, z_inv(zid env (zid‰1 ^^ zpos)))]
 end);
 =TEX
 =SML
-fun Ûbasic_decl_enumÝ ({name=name, type_def=type_def,...} : TYPE_DEF TYPE_DECL) = (
-let	val {vals=vals} =
-		case type_def of
-		TDEnumTypeDef td => td
-		|_ => basic_decl_error "basic_decl_enum";
+fun Ûbasic_decl_enumÝ (env : CN_ENV) (name : ID) (td : ENUM_TYPE_DEF) = (
+let	val {vals} = td;
 	val zname = trans_id name;
 	val zvals = map trans_id vals;
 	val znums = map z_num (interval 0 ((length vals)-1));
 in
 	map (fn j => z_eq_eq j) (combine zvals znums) @
-	[z_eq_eq(zname, z_rng(zid(head zvals), zid(last zvals)))] @
-	enum_attrib(zname, head zvals, last zvals)
+	[z_eq_eq(zname, z_rng(zid env (head zvals), zid env (last zvals)))] @
+	enum_attrib env (zname, head zvals, last zvals)
 end);
 =TEX
+\subsection{Translating Array Types}
 =SML
-fun Ûint_type_attribÝ (zid‰1, RRange{lo=lo, hi=hi}) = (
-	[z_eq_eq(zid‰1 ^^ zfst, trans_exp lo),
-	z_eq_eq(zid‰1 ^^ zlst, trans_exp hi)]
-) | int_type_attrib _ = basic_decl_error "int_type_attrib";
-=TEX
-=SML
-fun Ûbasic_decl_int_typeÝ ({name=name, type_def=type_def,...} : TYPE_DEF TYPE_DECL) = (
-let	val (lo, hi) =
-		case type_def of
-		TDIntTypeDef (RRange{lo=lo,hi=h}) => (lo, h)
-		|_ => basic_decl_error "basic_decl_enum";
-	val zname = trans_id name;
-in
-	[z_eq_eq(zname, z_rng(trans_exp lo, trans_exp hi))] @
-		int_type_attrib(zname, RRange{lo=lo,hi=hi})
-end);
-=TEX
-=SML
-fun Ûarray_attribÝ (zid‰1 : Z_ID, zid‰2 : Z_ID) : PARAINFO list = (
-	[z_eq_eq(zid‰1 ^^ zfst, zid (zid‰2 ^^ zfst)),
-	z_eq_eq(zid‰1 ^^ zlst, zid (zid‰2 ^^ zlst)),
-	z_eq_eq(zid‰1 ^^ zlength, z_size (zid zid‰2)),
-	z_eq_eq(zid‰1 ^^ zrange, zid zid‰2)]
+fun Ûarray_attribÝ (env : CN_ENV) (zid‰1 : Z_ID, zid‰2 : Z_ID) : PARAINFO list = (
+	[z_eq_eq(zid‰1 ^^ zfst, zid env (zid‰2 ^^ zfst)),
+	z_eq_eq(zid‰1 ^^ zlst, zid env (zid‰2 ^^ zlst)),
+	z_eq_eq(zid‰1 ^^ zlength, z_size (zid env zid‰2)),
+	z_eq_eq(zid‰1 ^^ zrange, zid env zid‰2)]
 );
 =TEX
-SML
-fun Ûbasic_decl_con_arrayÝ ({name=name, type_def=type_def,...} : TYPE_DEF TYPE_DECL) = (
-let	val {index=index, comp=comp} =
-		case type_def of
-		TDConArrayDef td => td
-		|_ => basic_decl_error "basic_decl_con_array";
+=SML
+fun Ûbasic_decl_con_arrayÝ (env : CN_ENV) (name : ID) (td : ARRAY_DEF) = (
+let	val {index=index, comp=comp} = td;
 	val zname = trans_id name;
-	val zindex = trans_id index;
+	val zindex = join_tmarks (map trans_id index);
 	val zcomp = trans_id comp;
 in
-	[z_eq_eq(zname, z_tfun(zid zindex, zid zcomp))] @
-		array_attrib(zname, zindex)
+	[z_eq_eq(zname, z_tfun(zid env zindex, zid env zcomp))] @
+		array_attrib env (zname, zindex)
+end);
+=TEX
+=SML
+fun Ûbasic_decl_uncon_arrayÝ (env : CN_ENV) (name : ID) (td : ARRAY_DEF) = (
+let	val {index=index, comp=comp} = td;
+	val zname = trans_id name;
+	val zindex = join_tmarks (map trans_id index);
+	val zcomp = trans_id comp;
+in
+	[z_eq_eq(zname, z_pfun(zid env zindex, zid env zcomp))]
+end);
+=TEX
+
+\subsection{Translating Record Types}
+TBS - explanation of the following...
+=SML
+fun Ûtrans_declsÝ (env : CN_ENV) ({vars, tmark} : VAR_DECL) : Z_DECL list = (
+let	val zexp = zid env (trans_id tmark);
+in
+	map (fn d => (trans_id d, zexp)) vars
+end);
+=TEX
+=SML
+fun Ûrec_varsÝ ({comps} : COMPONENT RECORD_TYPE_DEF) : VAR_DECL list  = (
+let	fun aux component = (
+		case component of
+		CDeclaration vardecls => vardecls
+		|_ => fail "rec_vars" 508001 [fn()=>"variant records not supported"]
+	);
+in
+	flat(map aux comps)
+end);
+=TEX
+=SML
+fun Ûbasic_decl_recordÝ (env : CN_ENV) (name : ID) (td : COMPONENT RECORD_TYPE_DEF) = (
+let	val z_sname = trans_id name;
+	val z_decls = flat(map (trans_decls env) (rec_vars td));
+in
+	[z_schema(z_sname, z_decls)]
+end);
+=TEX
+\subsection{Translating Integer Types}
+=SML
+fun Ûint_type_attribÝ (env : CN_ENV) (zid‰1, RRange{lo=lo, hi=hi}) = (
+	[z_eq_eq(zid‰1 ^^ zfst, trans_exp env lo),
+	z_eq_eq(zid‰1 ^^ zlst, trans_exp env hi)]
+) | int_type_attrib _ _ = basic_decl_error "int_type_attrib";
+=TEX
+=SML
+fun Ûbasic_decl_int_typeÝ (env : CN_ENV) (name : ID) (range : EXP RANGE) = (
+let	val (lo, hi) =
+		case range of
+		RRange{lo,hi} => (lo, hi)
+		|_ => basic_decl_error "basic_decl_int_type";
+	val zname = trans_id name;
+in
+	[z_eq_eq(zname, z_rng(trans_exp env lo, trans_exp env hi))] @
+		int_type_attrib env (zname, RRange{lo=lo,hi=hi})
 end);
 =TEX
 
 \subsection{Translating Subtypes}
+=SML
+fun Ûrange_con_attribÝ (env : CN_ENV) (zid‰1 : Z_ID, zid‰2 : Z_ID, {lo,hi} : EXP RANGELOHI) : PARAINFO list = (
+	[z_eq_eq (zid‰1 ^^ zfst, trans_exp env lo),
+	z_eq_eq (zid‰1 ^^ zlst, trans_exp env hi),
+	z_eq_eq (zid‰1 ^^ zsuc, zid env (zid‰2 ^^ zsuc)),
+	z_eq_eq (zid‰1 ^^ zpred, zid env (zid‰2 ^^ zpred)),
+	z_eq_eq (zid‰1 ^^ zpos, zid env (zid‰2 ^^ zpos)),
+	z_eq_eq (zid‰1 ^^ zval, zid env (zid‰2 ^^ zval))]
+);
+=TEX
+
+=SML
+fun Ûbasic_decl_subtype_range_conÝ (env : CN_ENV) (name : ID) (tmark : TMARK) (range : EXP RANGE) = (
+let	val (lo, hi) =
+		case range of
+		RRange{lo,hi} => (lo, hi)
+		|_ => fail "range_con_attrib" 508001 [fn()=>"range attributes not supported"];
+	val zname = trans_id name;
+	val ztmark = trans_id tmark;
+in
+	[z_eq_eq(zname, z_rng(trans_exp env lo, trans_exp env hi))] @
+		range_con_attrib env (zname, ztmark, {lo=lo,hi=hi})
+end
+);
+=TEX
+
+=SML
+fun Ûbasic_decl_subtype_index_conÝ (env : CN_ENV) (name : ID) (tmark : TMARK) (ci : EXP list) = (
+let	val zname = trans_id name;
+	val index = map name_to_tmark ci;
+	val zindex = join_tmarks (map trans_id index);
+	val zexp = zid env (trans_id tmark);
+	val zvar =  "u"
+	val zdecl = (zvar, zexp);
+	val zp = z_eq (z_dom (zid env zvar), zid env zindex);
+in
+	[z_eq_eq (zname, z_set_comp (zdecl, zp))] @
+	array_attrib env (zname, zindex)
+end
+);
+=TEX
+
+\subsection{The Function $trans\_basic\_decl$}
+=SML
+fun Ûtrans_basic_declÝ (env : CN_ENV) ((BDConstDecl cd) : BASIC_DECL) : PARAINFO list = (
+	basic_decl_const env cd
+) | trans_basic_decl env (BDTypeDecl {name,type_def=TDEnumTypeDef td,...}) = (
+	basic_decl_enum env name td
+) | trans_basic_decl env (BDTypeDecl {name,type_def=TDIntTypeDef range,...}) = (
+	basic_decl_int_type env name range
+) | trans_basic_decl env (BDTypeDecl {name,type_def=TDConArrayDef td,...}) = (
+	basic_decl_con_array env name td
+) | trans_basic_decl env (BDTypeDecl {name,type_def=TDUnconArrayDef td,...}) = (
+	basic_decl_uncon_array env name td
+) | trans_basic_decl env (BDTypeDecl {name,type_def=TDRecordTypeDef td,...}) = (
+	basic_decl_record env name td
+) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CRange cr},...}) = (
+	basic_decl_subtype_range_con env name tmark cr
+) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CIndex ci},...}) = (
+	basic_decl_subtype_index_con env name tmark ci
+) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CFloating _},...}) = (
+	fail "trans_basic_decl" 508001 [fn()=>"floating point not supported"]
+) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CFixed _},...}) = (
+	fail "trans_basic_decl" 508001 [fn()=>"fixed point not supported"]
+) | trans_basic_decl env (BDTypeDecl {type_def=TDFloatingTypeDef _,...}) = (
+	fail "trans_basic_decl" 508001 [fn()=>"floating point not supported"]
+) | trans_basic_decl env (BDTypeDecl {type_def=TDFixedTypeDef _,...}) = (
+	fail "trans_basic_decl" 508001 [fn()=>"fixed point not supported"]
+) | trans_basic_decl env (BDDeferredConstDecl _) = (
+	fail "trans_basic_decl" 508001 [fn()=>"deferred constants not supported"]
+) | trans_basic_decl env (BDVarDecl _) = (
+	fail "trans_basic_decl" 508001 [fn()=>"unexpected variable declaration"]
+) | trans_basic_decl env (BDPrivateTypeDecl _) = (
+	fail "trans_basic_decl" 508001 [fn()=>"private types not supported"]
+);
+=TEX
+
 
 \subsection{Epilogue}
 
 =SML
 end (* of local...in *);
 end (* structure CNBasicDeclsAndExprs *);
+open CNBasicDeclsAndExprs;
 =TEX
 
 \small
 \twocolumn[\section{INDEX}]
 \printindex
 \end{document}
-
-=IGN
-
- ¹CN
-(4)é
-p: constant integer := 3;
-°
-
- ¹CN
-(4)é
-type day is (mon,tue,wed,thu,fri,sat, sun);
-°
-
- ¹CN
-(4)é
-type hours is range 0..23;
-°
-
