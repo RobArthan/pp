@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.234 $ $RCSfile: imp507.doc,v $ $Date: 2002/12/05 12:30:27 $
+% imp507.doc %Z% $Revision: 1.235 $ $RCSfile: imp507.doc,v $ $Date: 2002/12/05 16:34:49 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.234 $%
+\def\SCCSversion{$Revision: 1.235 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/12/05 12:30:27 $%
+\TPPdate{\FormatDate{$Date: 2002/12/05 16:34:49 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -185,7 +185,7 @@ being renamed is defined in the same package specification.
 \item[Issue 1.230] Fixing problem with subtypes of record types with discriminants.
 \item[Issues 1.231--1.233] Script deletion.
 \item[Issue 1.234] Brought {\it form\_proc\_pack\_body\_aux} into line with latest change proposals.
-\itemn[Issue 1.235] First part of schema references in function $\Xi$-lists.
+\itemn[Issue 1.235, 1.236] Schema references in function $\Xi$-lists.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1566,6 +1566,12 @@ fun €flatten_env› ([] : ENV) : IN_SCOPE = (
 	(flatten_env blks)
 );
 =TEX
+The following function is used here and elsewhere to find the HOL name corresponding to a Z one.
+=SML
+fun €z_id_of_id› (n : ID) : Z_ID = (
+	(fst o dest_const o mk_z_gvar)(n, BOOL, [])
+);
+=TEX
 Now we define $subprog\_flatten\_env$: the $filter\_XXX$ functions implement
 the set comprehensions in the specification, with $filter_env$ fitting
 the results together into an $IN\_SCOPE$.
@@ -1577,9 +1583,15 @@ fun €subprog_flatten_env› ([] : ENV) : IN_SCOPE = (
 		val flags = #flags (#declab block1);
 	in	if	not(#formal_body_flag flags)
 		then	flatten_env blocks
-		else	let	val (name, globals) = subprog_info block1;
+		else	let	val (name, globals1) = subprog_info block1;
 				val blocks2 = blocks drop
 					(fn b => #block_name (#declab b) <> name);
+				fun aux n = (
+					((map fst o dest_z_schema_type o dest_z_power_type o
+					force_value o get_const_type) (z_id_of_id n))
+					handle Fail _ => [n]
+				);
+				val globals = flat (map aux globals1);
 				fun filter_vars ([] : VAR_DECL list) = []
 				|   filter_vars (vardec :: vardecs) = (
 					case #vars vardec drop
@@ -1969,11 +1981,6 @@ fun €new_theory_aux› (parents : string list) (thy : string) : unit = (
 When the global variable representing a SPARK function is stored in a theory, a user data entry giving its formal parameter list is also stored.
 This is later accessed via the $CN\_ENV$ when function calls using named parameter associations are translated into Z.
 
-The following function is used here and elsewhere to find the HOL name corresponding to a Z one.
-=SML
-fun €z_id_of_id› (n : ID) : Z_ID = (
-	(fst o dest_const o mk_z_gvar)(n, BOOL, [])
-);
 =TEX
 =IGN
 =SML
@@ -4996,12 +5003,22 @@ fun €z_forall_opt› (decs : Z_DECL list, zpred : Z_PRED) : Z_PRED = (
 );
 =TEX
 =SML
+fun €z_vars_of_env› (cnenv  :  CN_ENV )  (zi : Z_ID)  : bool = (
+	case cnenv zi of
+		Value(_, EIEnvVar _) => true
+	|	Value(_, EIEnvAuxVar _) => true
+	|	_  => false
+);
+=TEX
+=SML
 fun €z_var_decl› (cnenv : CN_ENV) (zname : Z_ID) : Z_DECL = (
-	let	val zexp = var_sig cnenv zname;
-		val ty = (dest_z_power_type o type_of) zexp;
-	in	mk_z_dec([mk_z_lvar(zname, ty, [])], zexp)
-	end
-	handle exn => pass_on exn "var_sig" "z_var_decl"
+	if	z_vars_of_env cnenv zname
+	then	let	val zexp = var_sig cnenv zname;
+			val ty = (dest_z_power_type o type_of) zexp;
+		in	mk_z_dec([mk_z_lvar(zname, ty, [])], zexp)
+		end
+		handle exn => pass_on exn "var_sig" "z_var_decl"
+	else	mk_z_schema_dec(var_sig cnenv zname, "")
 );
 =TEX
 The decision of which of the four cases to apply is made in $form\_fun$
@@ -7524,11 +7541,11 @@ fun €do_annotation› (anns : ANNOTATION) : unit = (
 );
 =TEX
 {\it expand\_names} looks for schema names appearing in frames 
-or global dependency lists and expands them
+or procedures global dependency lists and expands them
 into the corresponding list of signature variables.
 =SML
 fun expand_names (ns : ID list) : Z_ID list = (
-	let		fun aux n = (
+	let	fun aux n = (
 			((map fst o dest_z_schema_type o dest_z_power_type o
 				force_value o get_const_type) (z_id_of_id n))
 			handle Fail _ => [n]
@@ -7833,6 +7850,8 @@ and €do_procedure_spec› (
 =TEX
 The following reflects the SID functions for $function\_specification$.
 As for procedures, we make sure to call {\it fformal\_part} before expanding the frame.
+We do not expand schema names in the global dependency lists, since such a schema name
+represent a single component of the first parameter of the Z translation of the function.
 =SML
 *)
 and €do_function_spec› (
@@ -7849,9 +7868,8 @@ and €do_function_spec› (
 		formal_pars = map mk_param_spec formal_part,
 		par_names_defs = get_par_names_defs formal_part,
 		return_type = curr_real_name return};
-		val eg = expand_names globals;
 		val formal_fun : FORMAL_FUN =
-		{spec = expand_frame sp, informal_fun = informal_fun, globals = eg};
+		{spec = expand_frame sp, informal_fun = informal_fun, globals = globals};
 	in	curr_form_fun formal_fun;
 		stub_spec_fun formal_fun;
 		form_fun formal_fun
