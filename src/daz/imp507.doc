@@ -94,6 +94,8 @@ Also implemented remedies for issues 1 and 4 (V0.6).
 \item[Issue 1.125-126] Improved prefixing functions.
 \item[Issue 1.127-1.128] IUCT WP7 changes.
 \item[Issue 1.129 - 1.130] Changes for IUCT WP 2.
+\item[Issue 1.131] Further IUCT WP7 changes.
+
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1670,7 +1672,6 @@ This happens when declarations are translated for output to the Z document and w
 in the first case, the $CN\_ENV$ value required is taken from the running environment, in the second from the $In\_Scope$ part of the $Speclab$ which is the first part of the arguments to $vcs$.
 In either case, Z global variables are sought from the theory data base if there is no local declaration for them.
 
-=TEX
 We will need to be able to convert a type mark into an HOL type.
 This is done by looking in the theory database.
 The type there for a type $\tau$ will be $\tau$.
@@ -3782,10 +3783,8 @@ local
 		end
 	);
 in		
-fun €is_id_in_package› (newids : ID list) (id : ID) = (
-	let		in
-		any [base_name id] (fn anid => anid mem newids)
-	end
+fun €is_id_in_package› (newids : ID list) (id : ID) : bool = (
+	(base_name id) mem newids
 );
 end;
 =TEX
@@ -3821,7 +3820,7 @@ val €just_fail› = fail "just_fail" 3064  [] handle complaint => complaint;
 
 fun €type_subst_type› (subs : (string * string) list) (ty : TYPE) : TYPE = (
 let
-	(* boolean param is interpreted as "anything changed?" *)
+	(* bool param is interpreted as "anything changed?" *)
 	fun aux1 aty = (
 	let 	fun aux b [] = (
 			if b then [] else raise just_fail
@@ -3923,6 +3922,13 @@ fun €prefix_id› (ident : ID) (n : string) : ID = (
 	trans_id (ident dot "")^n
 );
 =TEX
+=SML
+fun €prefix_package_id› (ident : ID) (newids : ID list) (n : string) : ID = (
+	if (is_id_in_package newids n)
+	then prefix_id ident n
+	else n
+);
+=TEX
 The following prefixes the variables and global variables in a Z term (i.e. predicate, declaration or expression); 
 it is given as parameters the name of the package, the list of names defined in the package together with the term to be processed.
 =SML
@@ -3969,15 +3975,15 @@ fun €prefix_aux_vars› (ident : ID)
 =TEX
 =SML
 fun €prefix_tmark› (ident : ID) (newids : ID list) (tmark : TMARK) : TMARK = (
-	if is_id_in_package newids tmark
-	then prefix_id ident tmark
-	else tmark
+	prefix_package_id ident newids tmark
 );
 =TEX
+The following happens only to be used when the $vars$ list
+are all members of the package, but just in case we are careful.
 =SML
 fun €prefix_vardecl› (ident : ID) (newids : ID list)
 				({vars, tmark} : VAR_DECL) : VAR_DECL = (
-	{	vars = 		map (prefix_id ident) vars,
+	{	vars = 		map (prefix_package_id ident newids) vars,
 		tmark=		prefix_tmark ident newids tmark
 	}
 );
@@ -4011,8 +4017,8 @@ fun €prefix_spec_stmt› (ident : ID)
 			];
 (* end DESIGN ERROR checking code *)
 		val {w, pre, post, w0} = spec;
-		val w'= map (prefix_id ident) w;
-		val w0' = map (prefix_id ident) w0;
+		val w'= map (prefix_package_id ident newids) w;
+		val w0' = map (prefix_package_id ident newids) w0;
 		val pretm = z_predexp_of_z_tm pre;
 		val posttm = z_predexp_of_z_tm post;
 		val pre' = ZTmQuotation
@@ -4033,7 +4039,7 @@ fun €prefix_formal_proc› (ident : ID)
 			: FORMAL_PROC = (
 	let	val old_cxt = add_params_ti_context formal_ids;
 		val result = {	
-			name = prefix_id ident name,
+			name = prefix_package_id ident newids name,
 			formal_ids =
 				map
 				(prefix_param_spec ident newids)
@@ -4048,7 +4054,7 @@ fun €prefix_formal_proc› (ident : ID)
 fun €prefix_informal_fun› (ident : ID) (newids : ID list)
 		({name, formal_pars, return_type} : INFORMAL_FUN)
 			: INFORMAL_FUN = (
-	{	name = prefix_id ident name,
+	{	name = prefix_package_id ident newids name,
 		formal_pars = formal_pars,
 		return_type = prefix_tmark ident newids return_type}
 );
@@ -4073,9 +4079,9 @@ fun €prefix_formal_procs› (ident : ID)
 =TEX
 The following function does the prefixing of the given set paragraphs and returns a list of paragraph infos representing the prefixed paragraphs, together with a substitution list for use in prefixing appearances of type names in terms.
 =SML
-fun €prefix_given_sets›  (ident : ID) (names : ID list)
+fun €prefix_given_sets›  (ident : ID) (newids : ID list) (names : ID list)
 	: (string * string) list * PARAINFO list = (
-	let	val pfxd_names = map (prefix_id ident) names;
+	let	val pfxd_names = map (prefix_package_id ident newids) names;
 		fun do_gset n = GivenSetInfo([n], Nil);
 	in	(combine pfxd_names names, map do_gset pfxd_names)
 	end
@@ -4096,7 +4102,8 @@ fun €prefix_const_thms› (ident : ID)
 			let	val (name, ty, _) = dest_z_gvar const;
 			in
 				new_const
-				((z_id_of_id o prefix_id ident) name,
+				((z_id_of_id o prefix_package_id ident newids)
+					name,
 					ty_ty ty);
 				aux more
 			end
@@ -4104,7 +4111,7 @@ fun €prefix_const_thms› (ident : ID)
 			let	val (pty, tm1) = (dest_app o snd o dest_thm) thm;
 				val (name, ty1, _) = dest_z_gvar const;
 				val lvar = (mk_z_lvar o dest_z_gvar) const;
-				val prename = prefix_id ident name;
+				val prename = prefix_package_id ident newids name;
 				val tm = (prefix_term ident tysubs newids o 
 						subst [(lvar, const)]) tm1;
 				val ty = ty_ty ty1;
@@ -4149,7 +4156,7 @@ fun €prefix_conjectures› (ident : ID)
 			let 	val prefixed_tm = prefix_term ident tysubs newids tm;
 				val plist = map (fn n => 
 					ConjectureInfo(
-						Value (prefix_id ident (un_vc n)),
+						Value (prefix_package_id ident newids (un_vc n)),
 						 [], prefixed_tm)) sl;
 			in
 				plist @ aux more
@@ -4211,7 +4218,7 @@ fun €create_prefixed_spec_from_internal_theory›
 			(map #informal_fun (#formal_funs package));
 		val side = new_package_spec_theory context ident
 				handle Fail _ => open_package_spec_theory ident;
-		val (tysubs, paras1) = prefix_given_sets ident tys;
+		val (tysubs, paras1) = prefix_given_sets ident newids tys;
 		val paras2 = prefix_const_thms ident tysubs newids const_thms;
 		val paras3 = prefix_conjectures ident tysubs newids conjectures;
 		val thychange1 = open_theory internal_name;
@@ -4223,7 +4230,8 @@ fun €create_prefixed_spec_from_internal_theory›
 			map store_para paras2;
 			map store_para paras3;
 			map set_par_names pfx_funs;
-			map	(set_basic_decl_info(prefix_id ident))
+			map	(set_basic_decl_info
+				   (prefix_package_id ident newids))
 				(#consts_types package);
 			map store_para informal_fun_paras);
 		(* need to do other store_paras first to get right env *)
@@ -4266,7 +4274,7 @@ fun €z_prefix›
 			then	let 	val (tys, _) =
 						internal_theory_types_and_const_thms internal_name;
 
-					val (tysubs, _) = prefix_given_sets ident tys;
+					val (tysubs, _) = prefix_given_sets ident newids tys;
 				in	tysubs
 				end
 			else	create_prefixed_spec_from_internal_theory context ident;
@@ -4520,7 +4528,7 @@ fun €vcs_aux_initial› (st : STATEMENT) : unit = (
 fun €renames_proc_common›
 	({subprogram_specification = ss, name1 = pack, name2=old}
 		: SUBPROGRAM_RENAMING)
-	: unit = (
+	 : FORMAL_PROC OPT = (
 	case ss of
 		SSProcedure {name = new, ... } => (
 		   case s_lookup pack (!pack_env) of
@@ -4533,8 +4541,8 @@ fun €renames_proc_common›
 
 				val (tys, _) =
 					internal_theory_types_and_const_thms internal_name;
-
-				val (tysubs, _) = prefix_given_sets pack tys;
+				val newids = new_ids package;
+				val (tysubs, _) = prefix_given_sets pack newids tys;
 				val oldthy = get_current_theory_name();
 				val changethy = open_theory internal_name;
 				val {name=pname, formal_ids=pformal_ids,
@@ -4552,31 +4560,87 @@ fun €renames_proc_common›
 						{name = new,
 						formal_ids = pformal_ids,
 						spec = pspec};
-				val block1 as
-					{declab as
-						{in_scope as {formal_procs, ...},
-								...},
-					...} =	block 1;
-			in	blocks :=
-					(block_formal_procs
-						(block1, formal_proc3::formal_procs)
-						:: tl (!blocks))
+			in	Value formal_proc3
 			end	handle (exn as Fail f) =>
-				if (area_of exn = "find")
+				(if (area_of exn = "find")
 				then comment "renames_proc" 507036
 					[fn () => pack dot old]
 				else comment "renames_proc" 507044
 					[fn () => pack dot old,
-					fn () => get_message f]
-		) |	Nil => comment "renames_proc" 507038 [fn()=>pack]
-	) |	_ => ()
+					fn () => get_message f];
+				Nil)
+		) |	Nil => (comment "renames_proc" 507038 [fn()=>pack];
+				Nil)
+	) |	_ => Nil
 );
 =TEX
-!!! TEMPORARY MEASURE FOLLOWS !!!
 =SML
-val renames_proc_otherwise = renames_proc_common;
-val renames_proc = renames_proc_common;
-val renames_proc_pack_spec = renames_proc_common;
+fun €renames_proc_pack_spec›
+	(sr as {subprogram_specification = ss, name1 = pack, name2=old}
+		: SUBPROGRAM_RENAMING)
+	: unit = (
+let 	val oformal_proc3 = renames_proc_common sr;
+in
+	case oformal_proc3 of
+	Nil => ()
+	| Value formal_proc3 => case ss of
+		SSProcedure {name = new, ... } => (
+		   case s_lookup pack (!pack_env) of
+		   Value package => (
+			let	val block1 as
+					{declab = declab as
+						{in_scope as {formal_procs, ...},
+						block_name = block_name1,
+						 ...},
+					...} =	block 1;
+				val dummy = if (block_name1 = pack)
+					then fail "renames_proc_pack_spec"
+						507049 [fn () => old]
+					else ();
+				val package2 = force_value(
+					s_lookup block_name1 (!pack_env))
+					handle _ => fail "renames_proc_pack_spec"
+						507012 [fn ()=> block_name1];
+			in	pack_env :=
+					s_enter
+					block_name1
+					(package_formal_procs(package2,
+						(#formal_procs package2) @
+						[formal_proc3]))
+					(!pack_env)
+			end	handle (exn as Fail f) =>
+				() (* done in common *)
+		) |	Nil => () (* done in common *)
+	) |	_ => ()
+end);
+=TEX
+=SML
+fun €renames_proc_otherwise›
+	(sr as {subprogram_specification = ss, name1 = pack, name2=old}
+		: SUBPROGRAM_RENAMING)
+	: unit = (
+let	val oformal_proc3 = renames_proc_common sr;
+in
+	case oformal_proc3 of
+	Nil => ()
+	| Value formal_proc3 => 
+(let	val block1 as	{declab as
+			 {in_scope as {formal_procs, ...},
+			 ...},
+			 ...} =	block 1;
+in	blocks :=
+		(block_formal_procs (block1, formal_proc3::formal_procs) 
+		:: tl (!blocks))
+end)
+end);
+=TEX
+=SML
+fun €renames_proc› (sr : SUBPROGRAM_RENAMING)
+	: unit = (
+	if	test_flag #pack_spec_flag 1
+	then	renames_proc_pack_spec sr
+	else	renames_proc_otherwise sr
+);
 =TEX
 \subsection{The SID function renames\_fun}
 =SML
