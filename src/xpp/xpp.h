@@ -29,6 +29,7 @@ typedef struct {
 	Boolean			edit_only;
 	Boolean			backup_before_save;
 	Boolean			delete_backup_after_save;
+	char			execute_new_line_mode;
 	NAT			journal_max;
 	String			command_line;}
 		GlobalOptions;	
