@@ -64,18 +64,44 @@ type inference mechanism.}
 \item[Issue 1.1]
 First version, based on \cite{DS/FMU/IED/DTD016}.
 
+\item[Issue 1.2-1.7 May-July 1991]
+	Incremental versions of the type
+	inferrer during development.
+
 \item[Issue 1.8 25 July 1991]
 	Type $FIXITY$ now declared by~\cite{DS/FMU/IED/DTD015}.
 	Fix use of SCCS keywords.
 
-\item[Issue 1.9 29 July 1991]
+\item[Issue 1.9 26 July 1991]
+	Changed spelling of the word ``inferrer''. Also
+	changed the type of ENV to be a tuple.
+
+\item[Issue 1.10 29 July 1991]
 	Changed names of syntax functions.
 
-\item[Issue 1.10 30 July 1991]
+\item[Issue 1.11 30 July 1991]
 	Amended $sub\_ty$ to avoid serious performance problem arising
 	from duplicated call to environment function.
-\item[Issue 1.11 7 August 1991]
-        $new\_flag$ parameter change
+
+\item[Issue 1.12 2 August 1991]
+	Extended error handling in the area of context
+	support. If a variable is in a context and a unification
+	error occurs, then the error report indicates that
+	the variable was in the context.
+
+\item[Issue 1.13 6 August 1991]
+	Changed the name of the flag to $ti\_verbose$.
+	Added support for the expansion of type abbreviations.
+
+\item[Issue 1.14 7 August 1991]
+        Introduced a change to the parameters of $new\_flag$.
+
+\item[Issue 1.15 15 August 1991]
+	Added descriptive text. The signature is now
+	used (it was accidentally omitted from the definition
+	of the structure). Document is now ready for an
+	inspection.
+
 \end{description}
 \subsection{Changes forecast}
 None.
@@ -84,27 +110,48 @@ None.
 \subsection{Scope}
 
 This document contains the Standard ML code for implementing
-Unification. It corresponds to the
-detailed design of Unification as specified in \cite{DS/FMU/IED/DTD014}.
+the type inference mechanism for the ICL product HOL.
+It corresponds to the
+detailed design of type inference
+as specified in \cite{DS/FMU/IED/DTD016}.
 
 \subsection{Introduction}
 
+The type inference mechanism is a part of the ICL product
+HOL. This document contains the Standard ML code which
+implements the mechanism. Description of the functionality
+is only provided where it is considered that the
+code itself is complex. A description of the functional
+aspects of the mechanism can be found in
+\cite{DS/FMU/IED/DTD016}.
+
+The type inference mechanism should be built as part of the
+release for ICL product HOL. The procedures for building
+HOL are described in \cite{DS/FMU/IED/DTD021}.
+
+The interfaces which are externally available are described
+in the signature for type inference \cite{DS/FMU/IED/DTD016}
+but it is not expected or intended that the end user
+should make use of these interfaces. The structure
+is therefore left unopened.
+
 \subsubsection{Background and Purpose}
 
+The implementation of the type checker has been done
+in response to its detailed design \cite{DS/FMU/IED/DTD016}
+and its purpose is to infer all the types in any given
+HOL term.
 
 \subsubsection{Dependencies}
 
 The sml code in this document depends on the literate script
-contained in \cite{DS/FMU/IED/DTD014} for the signature of Unification,
+contained in \cite{DS/FMU/IED/DTD016} for the signature of
+$TypeInference$,
 and on~\cite{DS/FMU/IED/DTD015} for fixity information.
 
 \subsubsection{Possible Enhancements}
 
-This document and the Standard ML code contained within it is
-subject to change. The document will be inspected in due
-course according to project standards and procedures. Also,
-the Standard ML code will be tested using the tests specified in
-the document \cite{DS/FMU/IED/MDT016}.
+None are envisaged at present.
 
 \subsubsection{Deficiencies}
 
@@ -112,8 +159,11 @@ At present, there are no known deficiencies in this document.
 
 \section{THE STANDARD ML CODE FOR TYPE INFERENCE}
 
+This code is largely believed to be self-documenting. Where
+this is not considered to be the case, additional description
+has been provided.
 =SML
-structure âTypeInferenceá = struct
+structure âTypeInferenceá : TypeInference = struct
 =TEX
 
 =SML
@@ -192,6 +242,8 @@ fun âty_to_typeá ((TyAtom s) : TY) : TYPE  = (
   |  ty_to_type (TyAq ty) = ty;
 =TEX
 
+This determines whether or not a term is of the type
+which can be a variable (i.e., a simple variable, a tuple etc.).
 =SML
 fun âis_varstructá (tm : 'a TM) : bool = (
 	case tm of
@@ -217,31 +269,32 @@ fun âsub_tyá (env : ENV) (phi : SUBS) : ENV = (
 
 \subsection{Environment Management}
 
+The variable reference $ti\_context\_info$ is used to store the context.
+
 =SML
-val âcontext_infoá : (string*TYPE) list ref = ref [];
+val âti_context_infoá : (string*TYPE) list ref = ref [];
 
-fun âcontext_mapá ((tm::tml) : TERM list) :
+fun âti_context_mapá ((tm::tml) : TERM list) :
 		(string*TYPE) list = (
-		(map dest_var (frees tm))@(context_map tml)
+		(map dest_var (frees tm))@(ti_context_map tml)
 	)
-	  | context_map _ = [];
+	  | ti_context_map _ = [];
 
-fun âset_contextá (tml : TERM list) : unit = (
+fun âset_ti_contextá (tml : TERM list) : unit = (
 let	val allterms = list_term_union (map frees tml);
 	val di = all_different (map (fst o dest_var) allterms);
 in
 	if di
 	then
-		context_info := context_map tml
+		ti_context_info := ti_context_map tml
 	else
 		fail "HOL type inferrer" 16040 []
 end);
 
-fun âget_contextá (() : unit) : TERM list =
-	(map mk_var (!context_info));
+fun âget_ti_contextá (() : unit) : TERM list =
+	(map mk_var (!ti_context_info));
 
 =TEX
-
 =SML
 fun âfv_setá ((Binder (s, a, b)) : 'a TM) : string list  = fv_set b diff fv_set a
   | fv_set (Let (tl, a)) = (
@@ -276,7 +329,9 @@ fun âinit_envá (tm : 'a TM) : ENV = (
 		case type_of_const s of
 			Value t => (replaced t, false)
 			  | Nil =>
-				(							(type_to_extype (lassoc3 (!context_info) s), true)
+				(
+				(type_to_extype (lassoc3
+				  (!ti_context_info) s), true)
 				handle (Fail msg) =>
 				(ExVartype(Unknown(lassoc3 freemap s)), false))
 	handle (Fail msg) =>
@@ -509,9 +564,11 @@ fun âformat_extypeá (phi : SUBS) (namemap : (int * string) list) (t : EXTYPE) : 
 				  error "format_extype" 16100 [fn()=>get_message msg])
 			| Other => format_extype phi namemap Other)
 	|	ExType ("‹", [tya, tyb]) => (
-			brkt(format_extype phi namemap tya^" ‹ "^format_extype phi namemap tyb))
+			brkt(format_extype phi namemap tya^" ‹ "^format_extype phi
+								namemap tyb))
 	|	ExType ("‰", [tya, tyb]) => (
-			brkt(format_extype phi namemap tya^" ‰ "^format_extype phi namemap tyb))
+			brkt(format_extype phi namemap tya^" ‰ "^format_extype phi
+								namemap tyb))
 	|	ExType (s, tys) => (
 			brkt(format_list (format_extype phi namemap) tys ", ") ^ s)
 );
@@ -568,6 +625,10 @@ end);
 
 =TEX
 
+This is a version of the function $Unification.unify$
+which handles errors in conformant way to the
+error handling in type inference.
+
 =SML
 fun âunify1á (phi : SUBS) ((t1, t2) : EXTYPE * EXTYPE) (term : TY TM) (env : ENV) : SUBS = (
 	unify phi (t1, t2)
@@ -607,6 +668,9 @@ fun âextype_to_type1á (phi : SUBS) (namemap : (int * string) list) (ty : EXTYPE)
 
 \subsection{Production of a Term with Extended Types}
 
+The function $ti$ and its related functions introduced
+below implement the inference rules of \cite{DS/FMU/IED/DTD016}.
+
 =SML
 fun âtiá (env : ENV) ((term as (Binder (s, a, b))) : TY TM) : INF_TUPLE
 	= ti_binder env s a b term
@@ -625,7 +689,8 @@ fun âtiá (env : ENV) ((term as (Binder (s, a, b))) : TY TM) : INF_TUPLE
 =TEX
 =SML
 and
-âti_binderá (env : ENV) ("" : string) (a : TY TM) (b : TY TM) (term : TY TM) : INF_TUPLE = (
+âti_binderá (env : ENV) ("" : string) (a : TY TM) (b : TY TM) (term : TY TM)
+	: INF_TUPLE = (
 
 	if is_varstruct a
 	then
@@ -649,7 +714,8 @@ and
 =TEX
 =SML
 and
-âti_letá (env : ENV) (tmlist : (TY TM * TY TM) list) (a : TY TM) (term : TY TM) : INF_TUPLE = (
+âti_letá (env : ENV) (tmlist : (TY TM * TY TM) list) (a : TY TM) (term : TY TM)
+	: INF_TUPLE = (
 
 	let	fun rep_is_varstruct nil = true
 		  | rep_is_varstruct (x::xs) = (
@@ -666,7 +732,8 @@ and
 =TEX
 =SML
 and
-âti_let1á (env : ENV) (left : TY TM list) (right : TY TM list) (a : TY TM) (term : TY TM) : INF_TUPLE = (
+âti_let1á (env : ENV) (left : TY TM list) (right : TY TM list) (a : TY TM) (term : TY TM)
+	: INF_TUPLE = (
 
 	let
 		fun rep_unify1 (psi::psil) (typair::tyl) term = (
@@ -707,7 +774,8 @@ and
 =TEX
 =SML
 and
-âti_condá (env : ENV) (c : TY TM) (a : TY TM) (b : TY TM) (term : TY TM) : INF_TUPLE = (
+âti_condá (env : ENV) (c : TY TM) (a : TY TM) (b : TY TM) (term : TY TM)
+	: INF_TUPLE = (
 
 	let	val (	(ctm, cty, _),
 			(atm, aty, _),
@@ -724,7 +792,8 @@ and
 =TEX
 =SML
 and
-âti_appá (env : ENV) (f : TY TM) (a : TY TM) (fix : Lex.FIXITY) (term : TY TM) : INF_TUPLE = (
+âti_appá (env : ENV) (f : TY TM) (a : TY TM) (fix : Lex.FIXITY) (term : TY TM)
+	: INF_TUPLE = (
 
 	let	val (ftm, fty, fpsi) = ti env f;
 		val newenv = sub_ty env fpsi;
@@ -771,7 +840,8 @@ and
 =TEX
 =SML
 and
-âti_setcomprehensioná (env : ENV) (a : TY TM) (b : TY TM) (term : TY TM) : INF_TUPLE = (
+âti_setcomprehensioná (env : ENV) (a : TY TM) (b : TY TM) (term : TY TM)
+	: INF_TUPLE = (
 
 	if is_varstruct a
 	then
@@ -853,7 +923,8 @@ and
 \subsection{Conversion of a term to a ``HOL Term''}
 
 =SML
-fun âextm_to_termá (phi : SUBS) (namemap : (int * string) list) ((Binder ("", a, b)) : EXTYPE TM) : TERM = (
+fun âextm_to_termá (phi : SUBS) (namemap : (int * string) list) ((Binder ("", a, b))
+	: EXTYPE TM) : TERM = (
 
 	let	val ta = extm_to_term phi namemap a;
 		val tb = extm_to_term phi namemap b;
@@ -962,8 +1033,9 @@ fun âmake_term1á (tm : TY TM) : INF_TUPLE = (
 	end
 );
 =TEX
-=SML
 fun âmake_term2á ((tm, ty, phi) : EXTYPE TM * 'a * SUBS) : TERM = (
+=SML
+fun âmake_term2á ((tm, ty, phi) : INF_TUPLE) : TERM = (
 	let	val namemap = get_tyvar_info phi tm;
 	in
 		extm_to_term phi namemap tm
@@ -978,5 +1050,8 @@ val âmake_termá : TY TM -> TERM = make_term2 o make_term1;
 end; (* of structure TypeInference *)
 =TEX
 
+This concludes the Standard ML code for type inference.
+
 \twocolumn[\section{INDEX OF DEFINED TERMS}]
-\p
+\printindex
+\end{document}
