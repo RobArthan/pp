@@ -1,6 +1,6 @@
 ######################################################################
 #
-#	%Z% $Revision: 1.67 $ $RCSfile: daz.mkf,v $ $Date: 2004/01/19 14:36:22 $
+#	%Z% $Revision: 1.68 $ $RCSfile: daz.mkf,v $ $Date: 2004/01/19 14:59:52 $
 #
 #	makefile for the DAZ Project
 #
@@ -40,6 +40,8 @@ RELDIR=$(shell echo $${PPTARGETDIR:-release})
 PRODUCT=$(PRODNAME)-$(PPVER)
 CWD=$(shell pwd)
 HAVERCS=$(shell (test -d RCS && echo y ) || echo n)
+
+CACHE_SIZE=$(shell echo $${PPCACHESIZE:-50})
 
 # Compiler specifics:
 ifeq ($(PPCOMPILER), POLYML)
@@ -90,7 +92,6 @@ endif
 DAZSPECDB=	dazspc
 DAZDBLDD=	daz.ldd
 DESREADMEFILE=	README.dazdesdocs
-CACHESIZE=	50
 
 ifeq ($(PPTESTMASTERDB), y)
 TESTDB=		$(DAZDB)
@@ -108,7 +109,6 @@ BITMAPSDIR=	$(RELEASEDIR)/bitmaps
 
 # packing list for the developer source release (target src).
 PACKINGLIST=
-PACKINGLIST+= README.daz.src
 PACKINGLIST+= XppZTemplates
 PACKINGLIST+= XppDazExtraTemplates
 PACKINGLIST+= cnarbada.bmp
@@ -231,8 +231,8 @@ PACKINGLIST+= wrk523.doc # tools to build the three volumes of specification doc
 PACKINGLIST+= wrk524.doc # tools to type-check the three volumes
 
 
-# packing list for user source release (they get the computed README file not the master)
-DISTPACKINGLIST=$(subst README.$(SHORTNAME).src,README.$(SHORTNAME), $(PACKINGLIST))
+# packing list for user source release
+DISTPACKINGLIST=$(PACKINGLIST)
 
 # High Level Design
 DAZHLDS=	hld501.doc hld502.doc hld503.doc
@@ -513,8 +513,6 @@ TESTTOOLS=      doctch \
 # Flags for ML compiler.  Currently none
 MLFLAGS=
 
-# Initialisation file (required to run module tests)
-#DAZINIT=	daz_init.ML
 # DAZ database initialisation commands
 
 DAZBANNERCMD= "\
@@ -529,6 +527,13 @@ XDAZCMD= "\
 	PolyML.make \"mlsource/extra/Motif\"; \
 	open PPString ListUtilities; \
 	save_and_quit();"
+
+BUILDCACHECMD= "\
+	open_theory \"z_language\"; \
+	cached_labelled_product_rule $(CACHE_SIZE); \
+	repeat pop_pc; \
+	open_theory \"cn\"; \
+	save_and_quit ();"
 
 ######################################################################
 #
@@ -777,6 +782,7 @@ $(SIEVEVIEW):	daz.cpp
 
 dazbuilt.ldd: $(DAZLDDFILES)
 	@ rm -f dazbuilt.ldd
+	echo $(BUILDCACHECMD) | $(RUNML) $(MLDBPFX)$(DAZDB) > dazcache.ldd
 	$(MAKE) -f daz.mkf dazbannercmd
 	@-grep '+++ Compiled' $(DAZLDDFILES)
 	date > dazbuilt.ldd
@@ -793,7 +799,7 @@ dazbannercmd:
 	$(DBGC) $(DBGCARG) -c $(DAZDB)
 
 $(DAZDBLDD): $(SIEVEVIEW)
-	cat `findfile $(ZEDDB) $(PATH)` >$(DAZDB)
+	cat `findfile $(ZEDDB) $(PPDATABASEPATH)` >$(DAZDB)
 	echo "PPBuild.pp'save_name := \"daz\"; save_and_quit();" | pp -d ./$(DAZDB)
 	@touch $(DAZDBLDD)
 
@@ -879,19 +885,6 @@ sholisvcs.dvi: sholisvcs.doc
 	doctex sholisvcs
 	texdvi sholisvcs
 
-
-######################################################################
-#
-#	Making the product README file
-#
-######################################################################
-
-ifeq ($(HAVERCS), y)
-README.daz: README.daz.src
-	sed -e '/$$PPVER/s/$$PPVER/'"$$PPVER/g" \
-			< README.daz.src > README.daz
-endif
-
 ######################################################################
 #
 #	Constructing the release directory
@@ -909,6 +902,9 @@ bindir:	reldir
 	[ -d   $(RELDIR)/bin ] || mkdir $(RELDIR)/bin
 	[ -d   $(RELDIR)/app-defaults ] || mkdir $(RELDIR)/app-defaults
 	[ -d   $(RELDIR)/bitmaps ] || mkdir $(RELDIR)/bitmaps
+	
+dbdir:	reldir
+	[ -d   $(RELDIR)/db ] || mkdir $(RELDIR)/db
 
 docdir:	reldir
 	[ -d   $(RELDIR)/doc ] || mkdir $(RELDIR)/doc
@@ -916,10 +912,8 @@ docdir:	reldir
 srcdir:	reldir
 	[ -d   $(RELDIR)/src ] || mkdir $(RELDIR)/src
 
-binrel:	bindir dazbuilt.ldd README.daz $(XDAZDB) \
+binrel:	bindir $(XDAZDB) \
 	$(SIEVEVIEW) XppDazTemplates $(BITMAPFILES)
-	cp daz.$(HEAP_SUFFIX) $(RELDIR)/bin
-	cp README.daz $(RELDIR)
 	cp $(SIEVEVIEW) $(RELDIR)/bin/sieveview
 	cp XppDazTemplates $(RELDIR)/app-defaults
 	( cd $(RELDIR)/app-defaults; \
@@ -933,10 +927,16 @@ endif
 	chmod -R g-w $(RELDIR)
 	chmod -R u+w $(RELDIR)
 
+dbrel: dbdir dazbuilt.ldd 
+	cp daz.$(HEAP_SUFFIX) $(RELDIR)/db
+	chmod -R a-w $(RELDIR)
+	chmod -R g-w $(RELDIR)
+	chmod -R u+w $(RELDIR)
+
 build:	dazbuilt.ldd \
 	$(SIEVEVIEW) Xpp.ad $(BITMAPFILES)
 
-docrel:	docdir $(RELEASEDOCCONTENTS) README.daz
+docrel:	docdir $(RELEASEDOCCONTENTS)
 	cp $(RELEASEDOCCONTENTS) $(RELDIR)/doc
 	chmod -R a-w $(RELDIR)
 	chmod -R g-w $(RELDIR)
@@ -956,7 +956,9 @@ rcsrel:	srcdir
 	chmod -R g-w $(RELDIR)
 	chmod -R u+w $(RELDIR)
 
-inst:	binrel docrel
+bininst:	binrel dbrel
+
+inst:	bininst docrel
 
 bin:	binrel
 	cd $(RELDIR) && tar cvf $(CWD)/$(PRODUCT).bin.tar ./*

@@ -1,6 +1,6 @@
 ######################################################################
 #
-#	zed.mkf from %Z% $Date: 2003/07/17 09:42:13 $ $Revision: 1.38 $ $RCSfile: zed.mkf,v $
+#	zed.mkf from %Z% $Date: 2004/01/19 11:26:25 $ $Revision: 1.39 $ $RCSfile: zed.mkf,v $
 #
 #	makefile for the ZED database for ProofPower
 #
@@ -51,6 +51,8 @@ VERSION=$(shell echo $${PPVER:-`cat version  2>/dev/null || echo XXX.YYY.ZZZ`})
 RELDIR=$(shell echo $${PPTARGETDIR:-release})
 CWD=$(shell pwd)
 HAVERCS=$(shell (test -d RCS && echo y ) || echo n)
+
+CACHE_SIZE=$(shell echo $${PPCACHESIZE:-50})
 
 # Compiler specifics:
 ifeq ($(PPCOMPILER), POLYML)
@@ -164,8 +166,6 @@ MLFLAGS=
 
 # database initialisation commands
 
-CACHE_SIZE=	50
-
 ZCACHECMD= "\
 	open_theory \"fin_set\"; \
 	new_theory \"z_language\"; \
@@ -220,7 +220,6 @@ DESCDOCS += def007.skw
 
 # packing list for the source release (target src)
 PACKINGLIST=
-PACKINGLIST+= README.zed.src
 PACKINGLIST+= def001A.doc
 PACKINGLIST+= def001B.doc
 PACKINGLIST+= def001C.doc
@@ -368,8 +367,8 @@ PACKINGLIST+= wrk051.doc
 PACKINGLIST+= zed.mkf
 PACKINGLIST+= $(MANFILES)
 
-# packing list for user source release (they get the computed README file not the master)
-DISTPACKINGLIST=$(subst README.$(SHORTNAME).src,README.$(SHORTNAME), $(PACKINGLIST))
+# packing list for user source release
+DISTPACKINGLIST=$(PACKINGLIST)
 
 ######################################################################
 #
@@ -1067,7 +1066,7 @@ zed zedbuild: zed.ldd
 
 $(ZEDDB) $(ZEDDBLDD):
 		rm -f $(ZEDDB)
-		cp `findfile $(HOLDB) $(PATH)` $(ZEDDB)
+		cp `findfile $(HOLDB) $(PPDATABASEPATH)` $(ZEDDB)
 		chmod u+wr $(ZEDDB)
 		echo "PPBuild.pp'save_name := \"$(ZEDDBNAME)\"; save_and_quit();" | pp -d $(ZEDDB)
 		echo $(ZCACHECMD) | $(RUNML) $(MLDBPFX)$(ZEDDB)
@@ -1098,18 +1097,6 @@ test: $(ZEDDBLDD) $(ZEDMDTTTDS)
 
 ######################################################################
 #
-#	Making the README file
-#
-######################################################################
-
-ifeq ($(HAVERCS), y)
-README.zed: README.zed.src
-	sed -e '/$$PPVER/s/$$PPVER/'"$$PPVER/g" \
-			< README.zed.src > README.zed
-endif
-
-######################################################################
-#
 #	Constructing release directories
 #
 ######################################################################
@@ -1123,6 +1110,9 @@ reldir:
 	
 bindir:	reldir
 	[ -d   $(RELDIR)/bin ] || mkdir $(RELDIR)/bin
+	
+dbdir:	reldir
+	[ -d   $(RELDIR)/db ] || mkdir $(RELDIR)/db
 
 docdir:	reldir
 	[ -d   $(RELDIR)/doc ] || mkdir $(RELDIR)/doc
@@ -1135,21 +1125,25 @@ mandir:	reldir
 	[ -d   $(RELDIR)/man/man1 ] || mkdir $(RELDIR)/man/man1
 
 
-binrel: bindir zedbuilt.ldd $(SHELLSCRIPTS) README.zed
+binrel: bindir zedbuilt.ldd $(SHELLSCRIPTS) 
 	cp zed.$(HEAP_SUFFIX) $(RELDIR)/bin
 	cp $(SHELLSCRIPTS) $(RELDIR)/bin
-	cp README.zed $(RELDIR)
+	chmod -R a-w $(RELDIR)
+	chmod -R g-w $(RELDIR)
+	chmod -R u+w $(RELDIR)
+
+dbrel: dbdir zedbuilt.ldd $(SHELLSCRIPTS) 
+	cp zed.$(HEAP_SUFFIX) $(RELDIR)/db
 	chmod -R a-w $(RELDIR)
 	chmod -R g-w $(RELDIR)
 	chmod -R u+w $(RELDIR)
 
 build: zedbuilt.ldd $(SHELLSCRIPTS)
 
-docrel: docdir  $(RELEASEDOCFILES) $(RELEASESCRIPTS) README.zed \
+docrel: docdir  $(RELEASEDOCFILES) $(RELEASESCRIPTS) \
 		mandir $(MANFILES)
 	cp $(RELEASEDOCFILES) $(RELDIR)/doc
 	cp $(RELEASESCRIPTS) $(RELDIR)
-	cp README.zed $(RELDIR)
 	chmod -R a-w $(RELDIR)
 	chmod -R g-w $(RELDIR)
 	chmod -R u+w $(RELDIR)
@@ -1179,7 +1173,9 @@ doc:	docrel
 	cd $(CWD) && gzip $(PRODUCT).doc.tar && \
 	mv $(PRODUCT).doc.tar.gz $(PRODUCT).doc.tgz
 
-inst:	binrel docrel
+bininst:	binrel dbrel
+
+inst:	bininst docrel
 
 src:	rcsrel
 	cd $(RELDIR) && tar cvf $(CWD)/$(PRODUCT).src.tar ./*
