@@ -187,7 +187,7 @@ structure €SPARKLex› : SPARKLex = struct
 =SML
 local
 open CaseIndependence;
-open Lex;
+open Lex ZLex ZParser ZUserInterfaceSupport;
 in
 =TEX
 \subsection{Abstract Syntax for SPARK}
@@ -274,7 +274,6 @@ datatype €SPARK_LEX_CLASS›
 			|	€RRange›
 			|	€Semi›
 			|	€Separate›
-			|	€SpecificationStatement›
 			|	€SpecLabel›
 			|	€StarStar›
 			|	€Star›
@@ -294,11 +293,17 @@ datatype €SPARK_LEX_CLASS›
 			|	€Xor›
 			|	€ZDecl›
 			|	€Eos›
-			|	€AqTm›;
+			|	€Z›
+=TEX
+$SpecificationStatement$ is not a terminal and the syntax of a specification statement is part of the grammar. The Z predicates for pre- and post-condition are terminals and are captured by the $Z$ type constructor. Other terminals are required because of this change as follows:
+=SML
+			|	€GrkDelta›
+			|	€LSqBrack›
+			|	€RSqBrack›;
 =TEX
 The following is used in the type of the tokens produced by the SAL lexical analyser.
 =SML
-datatype €SPARK_TOKEN›	=	€SPARKAqTm› of TERM
+datatype €SPARK_TOKEN›	=	€SPARKZ› of ZUserInterfaceSupport.Z_TM
 			|	€SPARKText› of string
 			|	€SPARKString› of string
 			|	€SPARKEos›;
@@ -379,7 +384,8 @@ this.
 val €delimiter› : string list list =
 	(Sort.sort (switch(Sort.lexicographic Sort.string_order)) o map explode)
 	["&", "'", "(", ")", "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", 
-	">", "|", "=>", "..", "**", ":=", "/=", ">=", "<=", "<<", ">>", "<>"];
+	">", "|", "=>", "..", "**", ":=", "/=", ">=", "<=", "<<", ">>", "<>",
+	"Ñ", "[", "]"];
 =TEX
 =SML
 fun next_is_delimiter (cs : string list) = (
@@ -486,7 +492,15 @@ val €class_table› = list_e_merge initial_e_dict [
 	("when",	When),
 	("while",	While),
 	("with",	With),
-	("xor",		Xor)];
+	("xor",		Xor),
+=TEX
+The following are to support the Specification Statement
+=SML
+	("Ñ",		GrkDelta),
+	("[",		LSqBrack),
+	("]",		RSqBrack)
+			];
+
 =TEX
 =SML
 fun €classify› (what : string) : SPARK_LEX_CLASS = (
@@ -619,27 +633,97 @@ fun €SPARK_lex› (ip : INPUT list) : LEX_ITEM list = (
 	) |	Lex.Type ty :: more => (
 			fail "SPARK-Parser" 501011  [fn () => string_of_type ty]
 	) |	Lex.Term tm :: more => (
-			(AqTm, SPARKAqTm tm) :: SPARK_lex more
+			fail "SPARK-Parser" 501011  [fn () =>
+				"Antiquotation"]
 	) |	Lex.Separator s :: _ => (
 			fail "SPARK-Parser" 501011  [fn () => s]
 	) |	Lex.Error n :: more => (fail "lexical analyser" 15006 [fn () => string_of_int n]
 	) |	[] => [(Eos, SPARKEos)]
 );
 =TEX
+\subsection{Pre-Processor for Compliance Notation}
+=SML
+fun €extract_pre_post› (s:string) : (Z_TM * Z_TM) OPT = (
+let	val zgen = z_parser {is_quot=true} (z_lex ([Lex.Text ("SpecificationStatement["^s^"]")]));
+in
+	case zgen of
+	ZParaTerm ([], ZTmLVar (_, _, [pre, post]), _)
+		=> Value (pre, post)
+	|_ => Nil
 
-\section{DECLARATION PARSER}\label{DECLARATIONPARSER}
+end);
+=TEX
+=SML
+fun €srch_lsqbrack› (s : string list, []:string list) : (string list * string list)
+	 = (s, [])
+  | srch_lsqbrack (s, s1::rest) = (
+let	val s' = s@[s1];
+in
+	if s1 = "["
+	then
+		(s',rest)
+	else
+		srch_lsqbrack (s', rest)
+end);
+=TEX
+=SML
+fun €srch_rsqbrack› (_ : int) (s : string list, [] : string list)
+		: (string list * string list) = (s, [])
+  | srch_rsqbrack count (s, s1::rest) = (
+let	val s' = s@[s1];
+in
+	if s1 = "["
+	then
+		srch_rsqbrack (count+1) (s', rest)
+	else if s1 = "]"
+	then
+		if count = 0
+		then
+			(s, s1::rest)
+		else
+			srch_rsqbrack (count-1) (s', rest)
+	else
+		srch_rsqbrack count (s', rest)
+end);
+=TEX
+Still need to add error message in the following function?
+=SML
+fun €lex_spec_stmt› (s : string) : LEX_ITEM list OPT = (
+let	val ss = explode s;
+in
+	if hd(ss) = "Ñ"
+	then let
+		val (left,right) = srch_lsqbrack ([],ss);
+		val (zpart,rbrack) = srch_rsqbrack 0 ([],right);
+		val llex = SPARK_lex [Text (implode left)];
+		val (pre, post) = case (extract_pre_post o implode) zpart of
+			Value (pre, post) => (pre, post)
+			|Nil => fail "" 0 [];
+		val rlex = SPARK_lex [Text (implode rbrack)];
+		val zprelex = (Z, SPARKZ pre);
+		val zpostlex = (Z, SPARKZ post);
+	in
+		Value (llex@(zprelex::zpostlex::rlex))
+	end
+	else Nil
+end);
+
+fun €compliance_notation_lex› (ip as (Text s::more) : INPUT list) : LEX_ITEM list = (
+	case lex_spec_stmt s of
+	Value lex_items => lex_items@(SPARK_lex more)
+	|Nil => SPARK_lex ip
+) | compliance_notation_lex other = SPARK_lex other;
+=TEX
 \subsection{Miscellanea}
 =SML
 fun €format_lex_item›  ((_, tok) : LEX_ITEM) : string = (
 	case tok of
-		SPARKAqTm _	=> "¨ ... Æ"
+		SPARKZ _	=> "Ò ... Æ"
 	|	SPARKText s	=> s
 	|	SPARKString s	=> s
 	|	SPARKEos		=> "<end-of-input>"
 );
 =TEX
-\subsubsection{Sequence Type Definitions}
-\section{INTERFACE}
 \section{EPILOGUE}
 =SML
 end (* of local ... in *);
