@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.21 2002/11/14 14:51:43 rda Exp $
+ * $Id: pterm.c,v 2.22 2002/11/14 15:33:15 rda Exp $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -17,11 +17,186 @@
  *
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ PLATFORM-DEPENDENT ISSUES
+
+The platform-dependent parts of xpp are localised in this file. The code has evolved
+over the years to work with new platforms and new versions of old platforms. Some
+notes are in order to help with any future changes.
+
+The purpose of pterm.c is to implement a full duplex communication channel between
+xpp and the application it is running. The services and the functions that
+implement them are:
+
+Initialisation: get_pty - this sets up a full duplex communication channel between
+xpp and the application.
+
+Data transfer from application to xpp: get_from_application
+
+Data transfer from xpp to application: send_to_application, send_nl
+
+Control of the application: application_alive (test), interrupt_and_abandon, 
+interrupt_application, restart_application.
+
+The initialisation step (also used to re-initialise in restart_application) has several
+OS-dependent aspects. Data transfer from and to the application as coded here
+is not OS-dependent, but it care has had to be taken to ensure that it doesn't
+deadlock and to ensure that it doesn't swamp interaction with the user. The
+control functions are less problematic but they do interact with data transfer. Both
+data transfer and the control functions have to be careful about the possibility
+of signals.
+
+INITIALISATION
+
+The communication channel between xpp and the application is via  UN*X
+pseudo-terminal devices. A pseudo-terminal comprises a pair of entries
+in /dev which are linked by the operating system so that reads and writes
+by one process accessing one /dev entry appear as writes and reads to another
+process accessing the other one. The initialisation involves the following stages:
+
+1) Open the two pseudo-terminal devices giving two file descriptors, control
+and slave.
+
+2) Fork
+
+3a) Parent (xpp) closes the slave file descriptor, sets itself up to do non-blocking I/O
+on the control file descriptor and arranges to listen for input from it. Subsequent
+data transfers to the application are writes to the control file descriptor.
+
+3b) Child (the application-to-be) closes the control file descriptor, duplicates the slave
+file descriptor to become its standard input, output and error channels and then
+execs the application.
+
+There are several complications. The main one is that to to avoid the application starting
+to do output before xpp is listening, they need to synchronise. This is done by having
+the child process do a blocking read for a byte of data on its file descriptor, which the
+parent sends when it is ready. Also, the pseudo-terminal, which has very similar
+characteristics to a real terminal needs to be configured, e.g., to stop it doing input-line
+buffering or unwanted character conversions.
+
+In addition, there are several OS-dependent aspects: under SVR4 systems like Solaris
+you use special interfaces grantpt and unlockpt to open the two /dev files as an atomic
+operation. On other systems you just look for them in /dev (and pray that a competing
+process doesn't interfere). Also on some systems, the pseudo-terminal configuration
+has to be done in the child rather than the parent if xpp is started in the background.
+There is also some variation on how the configuration is done.
+
+DATA TRANSFER FROM APPLICATION
+
+Data transfer from the application is handled using an input callback procedure,
+get_from_application. However, the obvious approach of just having the input
+callback procedure always alert does not work - if the application is generating
+a lot of data fast, it will swamp the Xt input queue and the user interface will freeze
+(apart from updating the display of the data). The solution chosen is to read the
+have the input callback read a small block of data, and if it fills the block to unregister
+itself and register a work procedure to check for further data. This lets Xt give
+due priority to user interactions. A function listening_state is used to keep a close
+track on whether an input callback procedure is currently registered or not and
+to deal with some abnormal situations (e.g., when the application has died
+unexpectedly, but there's still some data from it left to process).
+
+DATA TRANSFER TO APPLICATION
+
+The code that transfers data to the application is actually quite simple. The main
+complication is that, while it is generally only asked to transfer just a small amount
+of data, say 10-10,000 bytes, it is sometimes required to deal with very large
+amounts, say 100,000 bytes or more. When a large data transfer is requested,
+if we tried to send the data all at once, the write might block. So we have to
+be prepared to try writing ever smaller amounts of data until we can get something
+through and then register a work procedure to deal with the residue. Since the
+user could try to transfer some more data before the work procedure is done, we need to
+maintain a queue of outgoing data.
+
+The code that deals with all this looks rather odd at first glance: it seems to be
+writing successive blocks of outgoing data into successive positions in
+the malloced array that represents the queue and reallocing more space at the
+end of the queue when new requests arrive. I.e., it looks as if the queue array is
+growing endlessly. It also looks as if each new arrival is processed completely
+as soon as it arrives. In fact what happens is as follows: old and new data
+is processed and dequeued until the application would block; if the queue is still too full to
+deal with a new arrival, then the queue contents are all shifted along in an attempt
+to make room before trying to realloc; and, finally, if the work procedure
+succeeds in draining the queue, it reallocs it back to its initial size The performance
+characteristics of this algorithm seem to be very good in practice..
+
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #define _pterm
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * OS dependencies:
+ *
+ * How to do ioctls and to get/set termio attributes:
+ *	USE_STREAMS - Solaris style STREAMS
+ *	USE_POSIX_TERMIO - use POSIX tcgetattr/tcsetattr
+ *	else ioctls direct on the file descriptor
+ * How to get a pseudo-terminal:
+ *	USE_GRANTPT - Solaris/SUSv3 grantpt/unlockpt
+ *	else hunt in /dev
+ * When to set termio attributes:
+ *	SET_ATTRS_IN_PARENT 
+ *	else do it in the child
+ *
+ * We now define the combinations to be used for the supported OSs.
+ * We make no claim that other combinations will work or that these
+ * combinations will work on other OSs even if they compile OK. 
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+#ifdef LINUX
+#undef USE_STREAMS
+#undef USE_POSIX_TERMIO /* historical: we probably could on more recent versions */
+#undef USE_GRANTPT
+#define SET_ATTRS_IN_PARENT
+#endif
+#ifdef MACOSX
+#undef USE_STREAMS
+#define USE_POSIX_TERMIO
+#undef USE_GRANTPT
+#define SET_ATTRS_IN_PARENT
+#endif
+#ifdef SOLARIS
+#define USE_STREAMS
+#undef USE_POSIX_TERMIO /* maybe we could */
+#define USE_GRANTPT
+#undef SET_ATTRS_IN_PARENT
+#endif
+/*
+ * The termio input and output control flags vary a little from system to system.
+ * We define the missing ones as zero (which works with our idioms for adding
+ * them in and taking them out)
+ */
+#ifdef MACOSX
+#define XTABS (OXTABS)
+#define OLCUC (0)
+#define OCRNL (0)
+#endif
+/*
+ * Macro to push required modules onto the pseudo-terminal device stack if
+ * if we're using STREAMS. It's an expression evaluating to 0 if all is OK.
+ */
+#ifdef USE_STREAMS
+#define PUSH_MODULES(FD) (\
+		ioctl(FD, I_PUSH, "ptem") < 0 \
+		||	ioctl(FD, I_PUSH, "ldterm") < 0 \
+		||	ioctl(FD, I_PUSH, "ttcompat") < 0)
+#else
+#define PUSH_MODULES(FD) (0)
+#endif
+/*
+ * Now macro to get & set the terminal attributes. Again these are
+ * expressions that evaluate to 0 if all is OK
+ */
+#ifdef USE_POSIX_TERMIO
+#define GET_ATTRS(FD, TIO) (tcgetattr(FD, TIO) < 0)
+#define SET_ATTRS(FD, TIO) (tcsetattr(FD, TCSANOW, TIO) < 0)
+#else
+#define GET_ATTRS(FD, TIO) (ioctl(FD, TCGETS, TIO) < 0)
+#define SET_ATTRS(FD, TIO) (ioctl(FD, TCSETS, TIO) < 0)
+#endif
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -33,12 +208,12 @@
 #include <string.h>
 #include <sys/ioctl.h>
 
-#ifndef LINUX
+#ifdef USE_STREAMS
 #include <stropts.h>
 #include <sys/filio.h>
 #include <sys/termio.h>
 #else
-#include <termio.h>
+#include <termios.h>
 #endif
 
 #include <signal.h>
@@ -140,9 +315,8 @@ void get_pty(void)
 	int i;
 	struct termios tio;
 	short line_length;
-#ifndef LINUX
+#ifdef USE_GRANT_PT
 /* On non-Linux (i.e., SVR4) we use the grantpt/lockpt interfaces */
-/* and do the termio set-up in the child process */
 	child_pid = 0; 
 	if ((control_fd = open("/dev/ptmx", O_RDWR)) < 0) {
 		msg("system error", "no pseudo-terminal devices available");
@@ -158,8 +332,7 @@ void get_pty(void)
 		exit(2);
 	};
 #else 
-/* On Linux we have to look for a pseudo-terminal ourselves */
-/* We do the termio set-up prior to the fork. */
+/* we have to look for a pseudo-terminal ourselves */
 	char line[32];
 	child_pid = 0; 
 	for(control_fd = -1, c = 'p'; control_fd < 0 && c <= 's'; c++) {
@@ -185,8 +358,9 @@ void get_pty(void)
 		exit(1);
 	}
 
-	if(ioctl(slave_fd, TCGETS, &tio) < 0 ) {
-		msg("system error", "ioctl (TCGETS in parent) on slave fd failed");
+	if(	PUSH_MODULES(slave_fd)
+	||	GET_ATTRS(slave_fd, &tio)) {
+		msg("system error", "I/O control operation on slave fd failed (GET in parent)");
 		perror("xpp");
 		exit(11);
 	}
@@ -203,8 +377,8 @@ void get_pty(void)
 	tio.c_oflag |= OCRNL;
 	tio.c_cc[VINTR] = CINTR;
 
-	if(ioctl(slave_fd, TCSETS, &tio) < 0 ) {
-		msg("system error", "ioctl (TCSETS in parent) on slave fd failed");
+	if(SET_ATTRS(slave_fd, &tio)) {
+		msg("system error", "I/O control operation on slave fd failed (SET in parent)");
 		perror("xpp");
 		exit(12);
 	}
@@ -284,15 +458,13 @@ void get_pty(void)
 		    close(tty_fd);
 		}
 
-#ifndef LINUX
-		if(	ioctl(STDIN, I_PUSH, "ptem") < 0
-		||	ioctl(STDIN, I_PUSH, "ldterm") < 0 
-		||	ioctl(STDIN, I_PUSH, "ttcompat") < 0
-		||	ioctl(STDIN, TCGETS, &tio) < 0 ) {
-			msg("system error", "ioctl (TCGETS in child) on slave fd failed");
+#ifndef SET_ATTRS_IN_PARENT
+		if(	PUSH_MODULES(STDIN)
+		||	GET_ATTRS(STDIN, &TIO) ) {
+			msg("system error", "I/O control operation on slave fd failed (GET in child)");
 			perror("xpp");
 			exit(10);
-		};
+		}
 		tio.c_lflag |= ISIG;
 		tio.c_lflag |= ICANON;
 		tio.c_lflag &= ~ECHO;
@@ -304,8 +476,8 @@ void get_pty(void)
 		tio.c_oflag &= ~XTABS;
 		tio.c_oflag |= OCRNL;
 		tio.c_cc[VINTR] = CINTR;
-		if(ioctl(STDIN, TCSETS, &tio) < 0 ) {
-			msg("system error", "ioctl (TCSETS in child) on slave fd failed");
+		if(SET_ATTRS(STDIN, &tio) ) {
+			msg("system error", "I/O control operation on slave fd failed (SET in child)");
 			perror("xpp");
 			exit(11);
 		}
@@ -539,13 +711,15 @@ static Boolean dequeue(void)
  * It returns true if it got its argument onto the queue.
  * Caller is expected to call try_drain_queue after this
  * to drain the queue and resize it as appropriate.
+ * The queue always has one more byte than q_size actually says it does
+ * to allow for scroll_out null-terminating a string right at the end.
  * **** **** **** **** **** ***. **** **** **** **** **** **** */
 static Boolean enqueue(char *buf, NAT siz)
 {
 	NAT buf_i, q_i;
 /* start the queue off if it's empty: */
 	if(queue == 0) {
-		queue = XtMalloc(INIT_Q_LEN);
+		queue = XtMalloc(INIT_Q_LEN+1);
 		if(queue == 0)  {
 			ok_dialog(root, queue_malloc_failed_message);
 			return False;
@@ -574,7 +748,7 @@ static Boolean enqueue(char *buf, NAT siz)
 /* if still not enough room, realloc: */
 
 		if(q_tail + siz + 1 > q_size) {
-			queue = XtRealloc(queue, q_tail + siz + 1);
+			queue = XtRealloc(queue, q_tail + siz + 2);
 			if(queue == 0) {
 				ok_dialog(root, queue_malloc_failed_message);
 				return False;
@@ -671,7 +845,7 @@ void interrupt_application (void)
 {
 	clear_queue();
 	if(application_alive()) {
-#ifndef LINUX
+#ifdef USE_STREAMS
 		ioctl(control_fd, I_FLUSH, FLUSHW);
 #endif
 		kill((pid_t)(-child_pid), SIGINT);
