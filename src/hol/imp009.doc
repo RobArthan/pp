@@ -62,6 +62,9 @@ Corrected error message for $conv\_tac$.
 \item[Issue 1.15, \FormatDate{92/01/20} ] Updated to use new fonts.
 \item [Issue 1.16]
 Put $translate\_for\_output$ around uses of $makestring$.
+\item [Issue 1.17]
+Changed message 9504.
+Minor corrections.
 \end{description}
 \subsection{Changes Forecast}
 Most of the text outside the documentation boxes is a discussion
@@ -213,8 +216,10 @@ fun €FIRST_T› (tacs : TACTIC list) : TACTIC = (fn gl =>
 val €FIRST› : TACTIC list -> TACTIC = FIRST_T;
 =TEX
 =SML
-fun €MAP_FIRST_T› (tacf : 'a -> TACTIC) (things : 'a list) : TACTIC = (
-	FIRST (map tacf things)
+fun €MAP_FIRST_T› (tacf : 'a -> TACTIC) (things : 'a list) : TACTIC = (fn (asms,gl) =>
+	FIRST (map tacf things) (asms,gl)
+	handle complaint =>
+	pass_on complaint "FIRST_T" "MAP_FIRST_T"
 );
 =TEX
 =SML
@@ -276,7 +281,8 @@ fun €CONV_THEN› (conv : CONV) : THM_TACTICAL = (fn ttac => fn thm =>
 	let	val thm1 = conv (concl thm);
 	in	(ttac(§_mp_rule thm1 thm)
 		handle ex => divert ex "§_mp_rule" "CONV_THEN" 9400 
-		[fn () => string_of_thm thm1])
+		[fn () => string_of_thm thm1,
+		fn () => string_of_term (concl thm)])
 	end
 );
 =TEX
@@ -467,14 +473,18 @@ fun  €asm_tac› (thm : THM) : TACTIC = (fn (asms, conc) =>
 =SML
 fun €conv_tac› (conv : CONV) : TACTIC = (fn (asms, conc) =>
 	let	val thm = conv conc;
-		val (lhs, rhs) = dest_eq (concl thm);
+		val (lhs, rhs) = dest_eq (concl thm)			handle complaint =>
+		divert complaint "dest_eq" "conv_tac" 9400
+			[fn () => string_of_thm thm,
+			 fn () => string_of_term conc];
 	in	if is_t rhs
 		then	([],
 			(fn _ => §_t_elim thm))
 		else ([(asms, rhs)],
 			(fn [thm1] => ((§_mp_rule (eq_sym_rule thm) thm1)
-				handle ex => divert ex "§_mp_rule" "conv_tac" 9400 
-				[fn () => string_of_thm thm])
+			handle ex => divert ex "§_mp_rule" "conv_tac" 9400 
+			[fn () => string_of_thm thm,
+			 fn () => string_of_term conc])
 			| _ => bad_proof "conv_tac"))
 	end
 );
@@ -504,32 +514,36 @@ with no assumptions then we can undischarge the $t_i$ to give the desired
 theorem, otherwise the tactic has not achieved the desired goal and we report
 an error.
 =SML
-fun tac_proof (gl as (asms, conc) : GOAL, tac : TACTIC) : THM = (
-	let	fun chk_asms (asm :: more) = (
-			if any more (%alpha%_eq asm)
-			then term_fail "tac_proof" 9505 [asm, find more (%alpha%_eq asm)]
-			else if type_of asm <> BOOL
-			then term_fail "tac_proof" 9506 [asm]
-			else chk_asms more
-		) | chk_asms [] = ();
-		val side_effect1 = chk_asms asms;
+local
+	fun aux1 (asm :: more) thm = ¥_intro asm (aux1 more thm)
+	| aux1 [] thm = thm;
+	fun chk_asms (asm :: more) = (
+		if any more (%alpha%_eq asm)
+		then term_fail "tac_proof" 9505 [asm, find more (%alpha%_eq asm)]
+		else if type_of asm <> BOOL
+		then term_fail "tac_proof" 9506 [asm]
+		else chk_asms more
+	) | chk_asms [] = ();
+	fun aux2 (_ :: more) thm = undisch_rule (aux2 more thm)
+	|   aux2 [] thm = thm;
+
+in
+fun €tac_proof› (gl as (asms, conc) : GOAL, tac : TACTIC) : THM = (
+	let	val side_effect1 = chk_asms asms;
 		val side_effect2 = (
 			if type_of conc <> BOOL
 			then term_fail  "tac_proof" 9507 [conc]
 			else ());
 		val thm = (simple_tac_proof(gl, tac))
 			handle exn => reraise exn "tac_proof";
-		fun aux1 (asm :: more) thm = ¥_intro asm (aux1 more thm)
-		| aux1 [] thm = thm;
 		val thm' = §_mp_rule(refl_conv(list_mk_¥(asms@[conc])))(aux1 asms thm)
-			handle Fail _ => fail "tac_proof" 9504 [];
-		fun aux2 (_ :: more) thm = undisch_rule (aux2 more thm)
-		|   aux2 [] thm = thm;
+			handle Fail _ => thm_fail "tac_proof" 9504 [thm];
 	in	case hyps thm' of
 			[] => aux2 asms thm'
-		|	_ => fail "tac_proof" 9504 []
+		|	_ => thm_fail "tac_proof" 9504 [thm]
 	end
 );
+end;
 =TEX
 =SML
 end; (* of structure Tactics1 *)

@@ -1,5 +1,5 @@
 =TEX
-\documentstyle[hol,11pt,TQ]{article}
+\documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
 \makeindex
 \TPPproject{FST PROJECT}  %% Mandatory field
@@ -13,8 +13,8 @@
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
 \TPPkeywords{}
-\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
-%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+\TPPauthors{K.~Blackburn & WIN01\\R.D.~Arthan & WIN01}
 \TPPauthorisation{R.D.Arthan & FST Team Leader}
 \TPPabstract{This document gives the module tests for the 
 first group of tactics and tacticals in ICL HOL.}
@@ -35,19 +35,22 @@ first group of tactics and tacticals in ICL HOL.}
 \bf Copyright \copyright\ : International Computers Ltd \number\year
 \end{centering}
 \pagebreak
-\section{Document control}
-\subsection{Contents list}
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
 \tableofcontents
-\subsection{Document cross references}
+\subsection{Document Cross References}
 \bibliographystyle{fmu}
 \bibliography{fmu}
 
-\subsection{Changes history}
+\subsection{Changes History}
 \begin{description}
 \item [Issue 1.1]
 First version.
+\item [Issue 1.2]
+Changed to new fonts.
+Added lots of new material.
 \end{description}
-\subsection{Changes forecast}
+\subsection{Changes Forecast}
 \section{GENERAL}
 \subsection{Scope}
 This document contains the module tests for the material
@@ -60,27 +63,43 @@ whose detailed design is given in in \cite{DS/FMU/IED/DTD009}.
 \subsubsection{Deficiencies}
 \section{TEST CASES}
 \begin{description}
+\item[Utilities]
+This checks the two utility functions provided in \cite{DS/FMU/IED/DTD009}.
 \item[Group 1]
 This checks the trivial tactics.
+\item[Group 2]
+This checks the simple tactic combinators.
+\item[Group 3]
+This checks the more advanced tactic combinators,
+and some utility tactics.
+\item[Group 4]
+This checks $(simple\_)tac\_proof$.
+\item[Error Cases]
+This checks the error handling of each of the functions.
 \end{description}
 \section{PREAMBLE}
+Initialise the test package:
 =SML
-open_theory"misc";
-new_theory"tst009";
-open Tactics1;
+usefile "dtd013.sml";
+usefile "imp013.sml";
 init_mt_results();
 =TEX
 =SML
+open_theory"basic_hol";
+delete_theory "tst009" handle _ => ();
+new_theory"tst009";
+open Tactics1;
+=TEX
+=SML
 fun forge_seq ((asms, conc) : GOAL) : THM = (
-	let	val tm = list_mk_ä (asms @ [conc]);
-		val key = format_list Combinators.I (PrettyPrinter.format_term tm)"";
-		val thm = (get_axiom "-" key) handle Fail _ => new_axiom(key, tm);
+	let	val tm = list_mk_¥ (asms @ [conc]);
+		val key = format_list string_of_term (conc::asms) "";
+		val thm = (get_axiom "-" key) handle Fail _ => new_axiom([key], tm);
 		fun aux [] thm = thm
 		|   aux (_ :: more) thm = aux more (undisch_rule thm);
 	in	aux asms thm
 	end
 );
-=SML
 fun forge_tac (tac : TACTIC) (gl : GOAL) : GOAL list * SEQ = (
 	let	val (sgs, pf) = tac gl;
 	in	(sgs, dest_thm(pf (map forge_seq sgs)))
@@ -89,58 +108,488 @@ fun forge_tac (tac : TACTIC) (gl : GOAL) : GOAL list * SEQ = (
 =TEX
 =SML
 fun chk_res ((sgs1:GOAL list, (asms1, conc1):SEQ), (sgs2:GOAL list, (asms2, conc2):SEQ)) : bool = (
-	sgs1 = sgs2 andalso aconv conc1 conc2 andalso
-	length asms1 = length asms2 andalso all (combine asms1 asms2)(uncurry aconv)
+	sgs1 = sgs2 andalso ¡_eq conc1 conc2 andalso
+	length asms1 = length asms2 andalso all (combine asms1 asms2)(uncurry ¡_eq)
 );
 =TEX
+To give some ability to split into multiple goals we
+provide $±\_tac$, for when it is not available from 
+structure $Tactics2$.
+=SML
+val €±_tac› : TACTIC = (fn (asms, conc) =>
+	let	val (t1, t2) = dest_± conc
+	in	([(asms, t1), (asms, t2)],
+			 fn [th1, th2] => ±_intro th1 th2
+			 |   _ => bad_proof "±_tac" )
+	end handle ex => divert ex "dest_±" "±_tac" 28031 []
+);
+=TEX
+We also provide $undisch\_t$ for a bit of variety.
+=SML
+fun €undisch_tac› (t1 : TERM) : TACTIC = (fn (asms, conc) =>
+	(if t1 term_mem asms
+	then ([(asms term_less t1, mk_¥(t1, conc))],
+		(fn [thm] => undisch_rule thm | _ => bad_proof "undisch_tac"))
+	else  term_fail "undisch_tac" 28052 [t1])
+	handle ex => divert ex "mk_¥" "undisch_tac" 28055 []
+);
+=TEX
+=SML
+fun €ante_tac› (thm : THM) : TACTIC = (fn (asms, conc) =>
+	([(asms, mk_¥(concl thm, conc))],
+	 fn [th] => ¥_elim th thm | _ => bad_proof "ante_tac")
+	handle ex => divert ex "mk_¥" "ante_tac" 28027 []
+);
+=TEX
+
 \section{TEST CODE AND DATA}
+
+\subsection{Utilities}
+=SML
+let
+fun sum_list lst = fold (fn (x,y) => x + y) lst 0;
+in
+store_mt_results mt_run [
+	("mapshape",
+	mapshape [(sum_list,3),(sum_list,2),(sum_list,1)],
+	[1,2,3,4,5,6],
+	[6,9,6])]
+end;
+store_mt_results mt_run_error [
+	("bad_proof",
+	bad_proof,
+	"a bad_proof",
+	gen_fail_msg "a bad_proof" 9001 [])];
+=TEX
+
 \section{Group 1}
 =SML
-val gl1_1 = ([ªb:BOOLº, ªa:BOOLº], ªa Ä bº);
-val gl1_2 = ([ªb:BOOLº, ªa:BOOLº], ª(çxéx)a Ä bº);
+val gl1_1 = ([¨b:BOOLÆ, ¨a:BOOLÆ], ¨a ± bÆ);
+val gl1_2 = ([¨b:BOOLÆ, ¨a:BOOLÆ], ¨(Ãx∑x)a ± bÆ);
 val gl1_3 = dest_thm bool_cases_axiom;
-val tm1_2 = ª(çyéy)a Ä bº;
-val sg1_2 = ([ªb:BOOLº, ªa:BOOLº], tm1_2);
+val tm1_2 = ¨(Ãy∑y)a ± bÆ;
+val sg1_2 = ([¨b:BOOLÆ, ¨a:BOOLÆ], tm1_2);
 store_mt_results_show (mt_runf chk_res)
 [
- ("Tactics1.1.1", forge_tac always_tac, gl1_1, ([gl1_1], gl1_1)),
- ("Tactics1.1.2", forge_tac (accept_tac(asm_rule tm1_2)), gl1_2, ([sg1_2], gl1_2)),
- ("Tactics1.1.2", forge_tac (accept_tac bool_cases_axiom), gl1_3, ([], gl1_3))
+ ("Tactics1.1.1", forge_tac id_tac, gl1_1, ([gl1_1], gl1_1)),
+ ("Tactics1.1.2", forge_tac (accept_tac(asm_rule tm1_2)), gl1_2, ([], ([tm1_2],tm1_2))),
+ ("Tactics1.1.3", forge_tac (accept_tac bool_cases_axiom), gl1_3, ([], gl1_3))
 ];
 =TEX
 \section{Group 2}
 =SML
-val tm2_1 = ª(çzéz)a Ä bº;
-val sg2_1 = ([ªb:BOOLº, ªa:BOOLº], tm2_1);
-val sg2_2 = ([], ªX:BOOLº);
-val tm2_2 = ªA1:BOOLº;
-val tm2_3 = ªA2:BOOLº;
-val tm2_4 = ªA3:BOOLº;
+val tm2_1 = ¨(Ãz∑z)a ± bÆ;
+val sg2_1 = ([¨b:BOOLÆ, ¨a:BOOLÆ], tm2_1);
+val sg2_2 = ([], ¨X:BOOLÆ);
+val tm2_2 = ¨A1:BOOLÆ;
+val tm2_3 = ¨A2:BOOLÆ;
+val tm2_4 = ¨A3:BOOLÆ;
 val tac2_1 = accept_tac o asm_rule;
 
 store_mt_results_show (mt_runf chk_res)
 [
- ("Tactics1.2.1", forge_tac(always_tac THEN always_tac), gl1_1, ([gl1_1], gl1_1)),
- ("Tactics1.2.2", forge_tac (accept_tac(asm_rule tm1_2) THEN accept_tac(asm_rule tm2_1)), gl2, ([sg3], gl2)),
+ ("Tactics1.2.1", forge_tac(id_tac THEN id_tac), gl1_1, ([gl1_1], gl1_1)),
+ ("Tactics1.2.2", forge_tac (accept_tac(asm_rule tm1_2) THEN accept_tac(asm_rule tm2_1)), sg2_1, ([], ([tm2_1],tm2_1))),
  ("Tactics1.2.3", forge_tac (accept_tac bool_cases_axiom THEN fail_tac), gl1_3, ([], gl1_3)),
  ("Tactics1.2.4", forge_tac (accept_tac bool_cases_axiom ORELSE fail_tac), gl1_3, ([], gl1_3)),
  ("Tactics1.2.5", forge_tac (fail_tac ORELSE accept_tac bool_cases_axiom), gl1_3, ([], gl1_3)),
- ("Tactics1.2.6", forge_tac (EVERY[accept_tac bool_cases_axiom, fail_tac]), gl1_3, ([], gl1_3)),
- ("Tactics1.2.7", forge_tac (EVERY[accept_tac(asm_rule tm1_2), accept_tac(asm_rule tm2_1)]), gl1_3, ([], gl1_3))
+ ("Tactics1.2.6", forge_tac (EVERY[accept_tac bool_cases_axiom, fail_tac]), gl1_3, ([], gl1_3))
 ];
+=TEX
+\subsection{Group 3}
+=SML
+val avar = ¨a:BOOLÆ;
+val bvar = ¨b:BOOLÆ;
+val cvar = ¨c:BOOLÆ;
+val Ã_0 = ¨a ± b ± cÆ;
+val Ã_1 = ¨(Ã z ∑ a ± b ± z) cÆ;
+val Ã_2 = ¨(Ã y z ∑ a ± y ± z) b cÆ;
+val Ã_3 = ¨(Ã x y z ∑ x ± y ± z)a b cÆ;
+val gl3_1 = ([avar, bvar],¨a ± bÆ);
+val gl3_1' = ([bvar,avar],¨a ± bÆ);
+val gl3_2 = ([],¨a ± b ± cÆ);
+val gl3_3 = ([],¨(a ± b ± c) ± (c ± d ± e)Æ);
+val one_¬_conv = ONCE_MAP_C simple_¬_conv;
+=TEX
+=SML
+store_mt_results_show (mt_runf chk_res)
+[("THEN_LIST",forge_tac (±_tac THEN_LIST[
+	 accept_tac(asm_rule avar),
+	 accept_tac(asm_rule bvar)]),
+	gl3_1,
+	([],gl3_1)),
+("MAP_EVERY",forge_tac (MAP_EVERY undisch_tac [avar, bvar]),
+	gl3_1,
+	([([],¨b ¥ a ¥ (a ± b)Æ)],gl3_1')),
+("FIRST",forge_tac (±_tac THEN FIRST [
+	 accept_tac(asm_rule avar),
+	 accept_tac(asm_rule bvar)]),
+	gl3_1,
+	([],gl3_1)),
+("MAP_FIRST",forge_tac (±_tac THEN MAP_FIRST accept_tac [
+	 (asm_rule avar),
+	 (asm_rule bvar)]),
+	gl3_1,
+	([],gl3_1)),
+("COND_T",forge_tac (±_tac THEN 
+	COND_T (fn (_,tm) => tm = avar)
+	 (accept_tac(asm_rule avar))
+	 (accept_tac(asm_rule bvar))),
+	gl3_1,
+	([],gl3_1)),
+("REPEAT",forge_tac (REPEAT ±_tac),
+	gl3_2,
+	([([],avar),([],bvar),([],cvar)],gl3_2)),
+("REPEAT_N",forge_tac (REPEAT_N 2 ±_tac),
+	gl3_3,
+	([([],avar),([],¨b ± cÆ),([],cvar),([],¨d ± eÆ)],gl3_3)),
+("REPEAT_UNTIL",forge_tac (REPEAT_UNTIL
+	 (fn (_,tm) => (not(is_±(snd(dest_± tm))))) ±_tac),
+	gl3_3,
+	([([],avar),([],¨b ± cÆ),([],cvar),([],¨d ± eÆ)],gl3_3)),
+("THEN_TTCL/CONV_THEN/asm_tac",forge_tac ((CONV_THEN one_¬_conv THEN_TTCL
+		CONV_THEN one_¬_conv) asm_tac 
+		(asm_rule Ã_3)),
+	([Ã_3],mk_t),
+	([([Ã_1,Ã_3],mk_t)],([Ã_3],mk_t))),
+("ORELSE_TTCL/CONV_THEN",forge_tac ((CONV_THEN fail_conv ORELSE_TTCL
+		CONV_THEN one_¬_conv) asm_tac 
+		(asm_rule Ã_3)),
+	([Ã_3],mk_t),
+	([([Ã_2,Ã_3],mk_t)],([Ã_3],mk_t))),
+("ID_THEN",forge_tac (ID_THEN asm_tac t_thm),
+	([],avar),
+	([([mk_t],avar)],([],avar))),
+("ORELSE_TTCL/FAIL_THEN",forge_tac ((FAIL_THEN ORELSE_TTCL
+		CONV_THEN one_¬_conv) asm_tac 
+		(asm_rule Ã_3)),
+	([Ã_3],mk_t),
+	([([Ã_2,Ã_3],mk_t)],([Ã_3],mk_t))),
+("ORELSE_TTCL/FAIL_WITH_THEN",forge_tac ((FAIL_WITH_THEN "FAIL_WITH_THEN" 9401 [] ORELSE_TTCL
+		CONV_THEN one_¬_conv) asm_tac 
+		(asm_rule Ã_3)),
+	([Ã_3],mk_t),
+	([([Ã_2,Ã_3],mk_t)],([Ã_3],mk_t))),
+("REPEAT_TTCL",forge_tac (REPEAT_TTCL (CONV_THEN one_¬_conv) asm_tac 
+		(asm_rule Ã_3)),
+	([Ã_3],mk_t),
+	([([Ã_0,Ã_3],mk_t)],([Ã_3],mk_t))),
+("EVERY_TTCL",forge_tac (EVERY_TTCL [CONV_THEN one_¬_conv,
+	 CONV_THEN one_¬_conv] asm_tac 
+		(asm_rule Ã_3)),
+	([Ã_3],mk_t),
+	([([Ã_1,Ã_3],mk_t)],([Ã_3],mk_t))),
+("FIRST_TTCL",forge_tac (FIRST_TTCL [FAIL_THEN,
+	 CONV_THEN one_¬_conv] asm_tac 
+		(asm_rule Ã_3)),
+	([Ã_3],mk_t),
+	([([Ã_2,Ã_3],mk_t)],([Ã_3],mk_t))),
+("id_tac",forge_tac id_tac, gl3_1, ([gl3_1],gl3_1)),
+("conv_tac",forge_tac (conv_tac one_¬_conv), 
+	([],Ã_3),
+	 ([([],Ã_2)],([],Ã_3))),
+("GET_ASM_T",forge_tac (GET_ASM_T avar ante_tac), 
+	gl3_1,
+	 ([([avar,bvar],¨a ¥ (a ± b)Æ)],gl3_1')),
+("LIST_GET_ASM_T",forge_tac (LIST_GET_ASM_T [bvar,avar] (MAP_EVERY ante_tac)), 
+	gl3_1,
+	 ([([avar,bvar],¨a ¥ b ¥ (a ± b)Æ)],gl3_1)),
+("DROP_ASM_T",forge_tac (DROP_ASM_T avar ante_tac), 
+	gl3_1,
+	 ([([bvar],¨a ¥ (a ± b)Æ)],gl3_1')),
+("LIST_DROP_ASM_T",forge_tac (LIST_DROP_ASM_T [bvar,avar] (MAP_EVERY ante_tac)), 
+	gl3_1,
+	 ([([],¨a ¥ b ¥ (a ± b)Æ)],gl3_1)),
+("TOP_ASM_T",forge_tac (TOP_ASM_T ante_tac), 
+	gl3_1,
+	 ([([avar,bvar],¨a ¥ (a ± b)Æ)],gl3_1')),
+("POP_ASM_T",forge_tac (POP_ASM_T ante_tac), 
+	gl3_1,
+	 ([([bvar],¨a ¥ (a ± b)Æ)],gl3_1')),
+("GET_ASMS_T",forge_tac (GET_ASMS_T (MAP_EVERY ante_tac)), 
+	gl3_1,
+	 ([([avar,bvar],¨b ¥ a ¥ (a ± b)Æ)],gl3_1')),
+("DROP_ASMS_T",forge_tac (DROP_ASMS_T (MAP_EVERY ante_tac)), 
+	gl3_1,
+	 ([([],¨b ¥ a ¥ (a ± b)Æ)],gl3_1')),
+("GET_NTH_ASM_T",forge_tac (GET_NTH_ASM_T 1 ante_tac), 
+	gl3_1,
+	 ([([avar,bvar],¨a ¥ (a ± b)Æ)],gl3_1')),
+("LIST_GET_NTH_ASM_T",forge_tac (LIST_GET_NTH_ASM_T [2,1] (MAP_EVERY ante_tac)), 
+	gl3_1,
+	 ([([avar,bvar],¨a ¥ b ¥ (a ± b)Æ)],gl3_1)),
+("DROP_NTH_ASM_T",forge_tac (DROP_NTH_ASM_T 1 ante_tac), 
+	gl3_1,
+	 ([([bvar],¨a ¥ (a ± b)Æ)],gl3_1')),
+("LIST_DROP_NTH_ASM_T",forge_tac (LIST_DROP_NTH_ASM_T [2,1] (MAP_EVERY ante_tac)), 
+	gl3_1,
+	 ([([],¨a ¥ b ¥ (a ± b)Æ)],gl3_1)),
+("ROTATE_T",forge_tac (ROTATE_T 1 ±_tac), 
+	gl3_1,
+	 ([([avar,bvar],bvar),([avar,bvar],avar)],gl3_1)),
+("TRY_T 1",forge_tac (TRY_T(ROTATE_T 1 ±_tac)), 
+	gl3_1,
+	 ([([avar,bvar],bvar),([avar,bvar],avar)],gl3_1)),
+("TRY_T 2",forge_tac (TRY_T fail_tac), 
+	gl3_1,
+	 ([gl3_1],gl3_1)),
+("CHANGED_T",forge_tac (CHANGED_T(TRY_T(ROTATE_T 1 ±_tac))), 
+	gl3_1,
+	 ([([avar,bvar],bvar),([avar,bvar],avar)],gl3_1)),
+("SOLVED_T",forge_tac (SOLVED_T(accept_tac (asm_rule avar))), 
+	([avar],avar),
+	 ([],([avar],avar))),
+("LEMMA_T",forge_tac (LEMMA_T bvar asm_tac), 
+	([],avar),
+	 ([([],bvar),([bvar],avar)],([],avar)))
+];
+=TEX
+\subsection{Group 4}
+Case $simple\_tac\_proof\ 2$ demonstates the lack of checks
+in that function.
+=SML
+store_mt_results mt_run [("simple_tac_proof 1",
+	dest_thm o simple_tac_proof,
+	(gl3_1,REPEAT strip_tac),
+	gl3_1),
+	("simple_tac_proof 2",
+	dest_thm o simple_tac_proof,
+	(([¨(Ãx∑x = x)Æ, ¨a:BOOLÆ], ¨TÆ),accept_tac t_thm),
+	([],mk_t))];
+=TEX
+=SML
+store_mt_results mt_run [("tac_proof",
+	dest_thm o tac_proof,
+	(gl3_1,REPEAT strip_tac),
+	gl3_1)];
+=TEX
+
+\subsection{Error Cases}
+=SML
+store_mt_results mt_run_fail [("THEN_LIST 9101",
+	forge_tac (±_tac THEN_LIST[
+	 accept_tac(asm_rule bvar)]),
+	gl3_1,
+	gen_fail_msg "THEN_LIST_T" 9101 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("FIRST 9105",
+	FIRST [],
+	gl3_1,
+	gen_fail_msg "FIRST_T" 9105 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("MAP_FIRST 9105",
+	MAP_FIRST ante_tac [],
+	gl3_1,
+	gen_fail_msg "MAP_FIRST_T" 9105 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("CONV_THEN 9400 a",
+	CONV_THEN (fn _ => t_thm) ante_tac,
+	t_thm,
+	gen_fail_msg "CONV_THEN" 9400 ["Ù T","¨TÆ"]),
+	("CONV_THEN 9400 b",
+	CONV_THEN (fn _ => refl_conv ¨FÆ) ante_tac,
+	t_thm,
+	gen_fail_msg "CONV_THEN" 9400 ["Ù F § F","¨TÆ"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("FAIL_THEN 9401",
+	FAIL_THEN,
+	ante_tac,
+	gen_fail_msg "FAIL_THEN" 9401 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("FAIL_WITH_THEN",
+	FAIL_WITH_THEN "FAIL_WITH_THEN" 9401 [],
+	ante_tac,
+	gen_fail_msg "FAIL_WITH_THEN" 9401 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("FIRST_TTCL 9402",
+	FIRST_TTCL [],
+	ante_tac,
+	gen_fail_msg "FIRST_TTCL" 9402 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("fail_tac 9201",
+	fail_tac,
+	gl3_1,
+	gen_fail_msg "fail_tac" 9201 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("fail_with_tac",
+	fail_with_tac "fail_with_tac" 9201 [],
+	gl3_1,
+	gen_fail_msg "fail_with_tac" 9201 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("accept_tac",
+	accept_tac t_thm,
+	gl3_1,
+	gen_fail_msg "accept_tac" 9102 ["Ù T","¨a ± bÆ"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("conv_tac 9400 a",
+	conv_tac (fn _ => t_thm),
+	gl3_1,
+	gen_fail_msg "conv_tac" 9400 ["Ù T","¨a ± bÆ"])];
+
+let val (sgs,prf) = (conv_tac (fn _ => refl_conv ¨FÆ) gl3_1);
+in
+store_mt_results mt_run_fail [
+	("conv_tac 9400 b",
+	prf,
+	[t_thm],
+	gen_fail_msg "conv_tac" 9400 ["Ù F § F","¨a ± bÆ"])]
+end;
+=TEX
+=SML
+store_mt_results mt_run_fail [("GET_ASM_T 9301",
+	GET_ASM_T ¨TÆ ante_tac,
+	gl3_1,
+	gen_fail_msg "GET_ASM_T" 9301 ["¨TÆ"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("LIST_GET_ASM_T 9301",
+	LIST_GET_ASM_T [¨TÆ] (MAP_EVERY ante_tac),
+	gl3_1,
+	gen_fail_msg "LIST_GET_ASM_T" 9301 ["¨TÆ"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("DROP_ASM_T 9301",
+	DROP_ASM_T ¨TÆ ante_tac,
+	gl3_1,
+	gen_fail_msg "DROP_ASM_T" 9301 ["¨TÆ"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("LIST_DROP_ASM_T 9301",
+	LIST_DROP_ASM_T [¨TÆ] (MAP_EVERY ante_tac),
+	gl3_1,
+	gen_fail_msg "LIST_DROP_ASM_T" 9301 ["¨TÆ"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("TOP_ASM_T 9302",
+	TOP_ASM_T ante_tac,
+	([],¨TÆ),
+	gen_fail_msg "TOP_ASM_T" 9302 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("POP_ASM_T 9302",
+	POP_ASM_T ante_tac,
+	([],¨TÆ),
+	gen_fail_msg "POP_ASM_T" 9302 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("GET_NTH_ASM_T 9303",
+	GET_NTH_ASM_T 4 ante_tac,
+	gl3_1,
+	gen_fail_msg "GET_NTH_ASM_T" 9303 ["4"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("LIST_GET_NTH_ASM_T 9303",
+	LIST_GET_NTH_ASM_T [4] (MAP_EVERY ante_tac),
+	gl3_1,
+	gen_fail_msg "LIST_GET_NTH_ASM_T" 9303 ["4"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("DROP_NTH_ASM_T 9303",
+	DROP_NTH_ASM_T 4 ante_tac,
+	gl3_1,
+	gen_fail_msg "DROP_NTH_ASM_T" 9303 ["4"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("LIST_DROP_NTH_ASM_T 9303",
+	LIST_DROP_NTH_ASM_T [4] (MAP_EVERY ante_tac),
+	gl3_1,
+	gen_fail_msg "LIST_DROP_NTH_ASM_T" 9303 ["4"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("CHANGED_T 9601",
+	CHANGED_T id_tac,
+	gl3_1,
+	gen_fail_msg "CHANGED_T" 9601 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("SOLVED_T 9602",
+	SOLVED_T ±_tac,
+	gl3_1,
+	gen_fail_msg "SOLVED_T" 9602 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("LEMMA_T 9603",
+	LEMMA_T ¨a:'aÆ ante_tac,
+	gl3_1,
+	gen_fail_msg "LEMMA_T" 9603 ["¨aÆ"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("simple_tac_proof 9501",
+	simple_tac_proof,
+	(([],¨a ± bÆ),±_tac),
+	gen_fail_msg "simple_tac_proof" 9501 ["[([], ¨aÆ), ([], ¨bÆ)]"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("simple_tac_proof 9502",
+	simple_tac_proof,
+	(([],¨a ± bÆ),fail_tac),
+	gen_fail_msg "simple_tac_proof" 9502 ["ERROR 9201 raised by fail_tac: failed as requested"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("simple_tac_proof 9503",
+	simple_tac_proof,
+	(([],¨a ± bÆ),(fn _ => ([],fn _ => fail "dummy" 9503 [fn () => "@"]))),
+	gen_fail_msg "simple_tac_proof" 9503 
+	["ERROR 9503 raised by dummy: the proof returned by the tactic failed: @"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("tac_proof 9501",
+	tac_proof,
+	(([],¨a ± bÆ),±_tac),
+	gen_fail_msg "tac_proof" 9501 ["[([], ¨aÆ), ([], ¨bÆ)]"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("tac_proof 9502",
+	tac_proof,
+	(([],¨a ± bÆ),fail_tac),
+	gen_fail_msg "tac_proof" 9502 ["ERROR 9201 raised by fail_tac: failed as requested"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("tac_proof 9503",
+	tac_proof,
+	(([],¨a ± bÆ),(fn _ => ([],fn _ => fail "dummy" 9503 [fn () => "@"]))),
+	gen_fail_msg "tac_proof" 9503 
+	["ERROR 9503 raised by dummy: the proof returned by the tactic failed: @"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("tac_proof 9504",
+	tac_proof,
+	(([],¨a ± bÆ),(fn _ => ([],fn _ => t_thm))),
+	gen_fail_msg "tac_proof" 9504 ["Ù T"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("tac_proof 9505",
+	tac_proof,
+	(([avar,avar,bvar],¨a ± bÆ),REPEAT strip_tac),
+	gen_fail_msg "tac_proof" 9505 ["¨aÆ","¨aÆ"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("tac_proof 9506",
+	tac_proof,
+	(([¨a:'aÆ,avar,bvar],¨a ± bÆ),REPEAT strip_tac),
+	gen_fail_msg "tac_proof" 9506 ["¨aÆ"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [("tac_proof 9507",
+	tac_proof,
+	(([avar,bvar],¨a:'aÆ),REPEAT strip_tac),
+	gen_fail_msg "tac_proof" 9507 ["¨aÆ"])];
+=TEX
+\subsection{End of Tests}
+=SML
+diag_string(summarize_mt_results());
+=TEX
+
 =TEX
 \printindex
 \end{document}
-
-
-=IGN
-val gl1 = ([ª(çxéx = x)yº, ªa:BOOLº], ªTº);
-val gl2 = ([ª(çxéx = x)º, ªa:BOOLº], ªTº);
-
-
-simple_tac_proof(gl1, accept_tac (asm_intro ª(çyéy=y)yºt_thm));
-simple_tac_proof(gl2, accept_tac (t_thm));
-
-tac_proof(gl1, accept_tac (asm_intro ª(çyéy=y)yºt_thm));
-tac_proof(gl1, accept_tac (asm_intro ª(çyéy=y)yº(asm_introªa:BOOLºt_thm)));
-tac_proof(gl2, accept_tac (asm_intro ª(çyéy=y)yºt_thm));
