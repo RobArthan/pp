@@ -177,7 +177,10 @@ lasp -s -u imp005.OKwords imp005.doc > zz1
 
 \item[Issues 2.20, 2.21, 2.22, 2.23]
 	Handling of Q's and percentage signs firmed up in $translate\_for\_output$.
-
+\item[Issue 2.24]
+	Port to NJML. The treatment of prompts is not as good as with Poly/ML.
+	This could perhaps be fixed with more work. At present a ``secondary''
+	or ``continuation'' prompt is not supported.
 \end{description}
 
 %********************************************************************
@@ -600,7 +603,8 @@ let
 			handle E => divert E "e_extend" "add_new_symbols"
 				5104 [fn () => ch])
 		else (	local_warn "add_new_symbols" 5102
-				[fn () => ch, fn () => PolyML.makestring names];
+				[fn () => ch, fn () => 
+					"[" ^ format_list Combinators.I names ", " ^ "]"];
 			dict)
 	);
 
@@ -2522,10 +2526,10 @@ fun €logit› (flag:bool ref) (proc:string) (str:string) : string = (
 
 fun €logit_list› (flag:bool ref) (proc:string) (str:string list) : string list = (
 	if !flag
-	then
-		(output(std_out, proc ^ "  " ^
-			(PolyML.makestring (map (fn x => (size x, x)) str)) ^ "\n");
-		str)
+	then	let	fun f s = "(" ^ string_of_int (size s) ^ ", " ^ s ^ ")";
+			fun g ss = "[" ^ format_list f ss ", " ^ "]"
+		in	(output(std_out, proc ^ "  " ^ g str ^ "\n"); str)
+		end
 	else
 		str
 );
@@ -3004,14 +3008,22 @@ translate_for_output ( "de" ^ Q ^ Q ^"delta"^ Q ^ Q);
 }
 
 =SMLPLAIN SML
-fun €writer› (s : string) : unit = (
+fun €writer› (s : string) : string = (
 let
 	val chars = logit RWchars_written "translate_for_output" s;
 in
-	output(std_out,	if	!RWwriter_convert
-				then	chars
-				else	translate_for_output chars)
+	if	!RWwriter_convert
+	then	chars
+	else	translate_for_output chars
 end);
+=TEX
+=SMLPLAIN SML
+fun €handler› (ex : exn) : unit = (
+	case ex of 
+		Fail msg => raw_diag_string (translate_for_output(get_message msg))
+	|	Error msg => raw_diag_string (translate_for_output(get_message msg))
+	|	_ => raise ex
+);
 =TEX
 
 %********************************************************************
@@ -3132,10 +3144,11 @@ let
 
 	fun €use_file_loop› () : unit = (
 		if look_ahead_char() <> ""
-		then (PolyML.compiler (get_ML_outermost reader, writer) (); 
+		then (PPCompiler.compile2 (cur_in,
+			get_ML_outermost reader, writer, handler); 
 			use_file_loop()
 			)
-		else (PolyML.compiler ((fn _ => ""), writer) ())
+		else PPCompiler.compile2 (cur_in, (fn _ => ""), writer, handler)
 	);
 in
 	while (
@@ -3148,7 +3161,7 @@ in
 		| E =>
 			if !use_file_non_stop_mode
 			then (
-				raw_diag_string(get_error_message 5502 [PolyML.makestring E,
+				raw_diag_string(get_error_message 5502 [string_of_exn E,
 					string_of_int (!line_number)]);
 				true)
 			else (
@@ -3231,10 +3244,13 @@ let
 
 	fun €use_string_loop› () : unit = (
 		if !cur_str <> nil
-		then (PolyML.compiler (get_ML_outermost reader, writer) (); 
+		then (PPCompiler.compile1 ("<use_string>",
+				get_ML_outermost reader, writer,
+					handler); 
 			use_string_loop()
 		)
-		else	(PolyML.compiler ((fn _ => ""), writer) ())
+		else	(PPCompiler.compile1 ("<use_string>",
+				(fn _ => ""), writer, handler))
 	);
 in
 	use_string_loop ()
@@ -3311,28 +3327,27 @@ end
 
 =SMLPLAIN SML
 val prompt1_default = ":> ";
-val prompt2_default = ":# ";
 
 val prompt1 : string ref = ref prompt1_default;
-val prompt2 : string ref = ref prompt2_default;
-
 val _ =
 new_string_control{name="prompt1", control=prompt1,
 	default = fn() => prompt1_default, check = check_prompt};
-
+=POLYML
+val prompt2_default = ":# ";
+val prompt2 : string ref = ref prompt2_default;
 val _ =
 new_string_control{name="prompt2", control=prompt2,
 	default = fn() => prompt2_default, check = check_prompt};
 =TEX
 
+
 =SMLPLAIN SML
 	val cur_prompt : string ref = ref(!prompt1);
 
 	val console_last : string ref = ref "\n";
-
 	fun issue_prompt() : unit = (
 		if !console_last = "\n"
-		then	output(std_out, !cur_prompt)
+		then	(output(std_out, !cur_prompt); ExtendedIO.flush_out std_out)
 		else	()
 	);
 =TEX
@@ -3370,16 +3385,18 @@ the terminal type ahead buffer into the look ahead buffer.
 local
 	fun read_next_character () = (
 		issue_prompt();
-
 		let
 			val last = 	case input(std_in, 1)
 					of "" => ""
 					|  ch => ch
 		in
 			console_last := last;
+=POLYML
 			if last <> "\n"
 			then	(cur_prompt := !prompt2; last)
-			else	last
+			else
+=SML
+				last
 		end
 	);
 in
@@ -3482,16 +3499,21 @@ fun €use_terminal› () : unit = (
 let
 	fun €use_term_loop› () : unit = (
 		if
-		      (if look_ahead_char() <> ""
-			then ((PolyML.compiler (get_ML_outermost reader, writer) ();
-				 true)
+		      (
+if look_ahead_char() <> "" then
+			((PPCompiler.compile1 (
+				"<use_terminal>",
+				get_ML_outermost reader,
+				writer,
+				handler);
+				true)
 			  handle TooManyReadEmpties => (raw_diag_string(get_error_message 5523 nil);
-				PolyML.quit(); false)
+				PPCompiler.exit 1; false)
 			  | Fail x => (raw_diag_string(get_error_message 5522
-					["Fail", PolyML.makestring x]);
+					["Fail", get_message x]);
 				true)
 			  | Error x => (raw_diag_string(get_error_message 5522
-					["Error", PolyML.makestring x]);
+					["Error", get_message x]);
 				true)
 			  | AbandonReaderWriter => (
 				raw_diag_string(get_error_message 5525 nil);
@@ -3503,10 +3525,12 @@ let
 				then (	raw_diag_string(get_error_message 5525 nil);
 					false)
 				else (true))
-		else (raw_diag_string(get_error_message 5523 nil);
-			PolyML.quit(); false)
+else (raw_diag_string(get_error_message 5523 nil);
+			PPCompiler.exit 1; false)
 		) (* end of if expression *)
-		then	(cur_prompt := !prompt1; use_term_loop ())
+		then	(
+			cur_prompt := !prompt1;
+			use_term_loop ())
 		else	() (* i.e. return to prompt that called use_terminal *)
 	)
 in
@@ -3519,10 +3543,9 @@ in
 	else
 		(
 			use_terminal_is_active := true;
-			cur_prompt := !prompt1;
 			abandoning := false;
+			cur_prompt := !prompt1;
 			console_last := "\n";
-
 			use_term_loop ();
 
 			use_terminal_is_active := false
@@ -3562,7 +3585,6 @@ let
 		case typed_ahead
 		of last ::_ => console_last := last
 		| _ => ();
-
 		read_ahead := (!read_ahead) @ (rev typed_ahead)
 	end
 	);
