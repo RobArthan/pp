@@ -297,28 +297,22 @@ val €subscriptor› : string list =
 fun €is_subscriptor› c = contains subscriptor c;
 =TEX
 =SML
-val €symbol› : string list =
-	["Á", "Í", "¿", "°", "ﬁ", "•", "Ä", "†", "ö",
-	"é", "®", "©", "·", "Å", "Ú", "í", "Ù", "ª", "∫",
-	"´", "ﬂ", "≠", "˛", "‡", "œ", "Ô", "è", "™",
-	"Ó", "˙", "º", "æ", "<", ">", "Î", "Î/", "Ω",
-	"+", "-", "*", "#", ".", "~", "Ç", "˚", "˝"
-];
-=TEX
-=SML
-val €symbol_dict› = mk_lex_dict initial_e_dict symbol;
-fun €is_symbol› c = (e_lookup c symbol_dict = Value true);
-=TEX
-=SML
 val €punctuation› : string list =
 	[",", ";", ":", "(", ")", "[", "]", "{", "}",
 	"ß", "¢", "/", "\\", "_", "±", "≤", "≥", "¥",
 	"§", "=", "ç", "µ", "∂", "∑", "", "∏", "¶",
-	"&", "˘", "::=", "?Ù", "Ê"];
+	"&", "ª", "˘", "Ê", "|"];
+=TEX
+The following punctuation symbols comprise more than
+one character and need special treatment.
+=SML
+val €ext_punctuation› : string list =
+	["::=", "?Ù"];
 =TEX
 =SML
 val €punctuation_dict› = mk_lex_dict initial_e_dict punctuation;
 fun €is_punctuation› c = (e_lookup c punctuation_dict = Value true);
+fun €is_ext_punctuation› c = contains ext_punctuation c;
 =TEX
 =SML
 val €greek› : string list =
@@ -330,6 +324,26 @@ val €greek› : string list =
 =SML
 val €greek_dict› = mk_lex_dict initial_e_dict greek;
 fun €is_greek› c = (e_lookup c greek_dict = Value true);
+=TEX
+=SML
+val €symbol› : string list =
+	["Á", "Í", "¿", "°", "ﬁ", "•", "Ä", "†", "ö",
+	"é", "®", "©", "·", "Å", "Ú", "í", "Ù", "∫",
+	"´", "ﬂ", "≠", "˛", "‡", "œ", "Ô", "è", "™",
+	"Ó", "˙", "º", "æ", "<", ">", "Î", "ã", "Ω",
+	"+", "-", "*", "#", ".", "~", "Ç", "˚", "˝"
+];
+=TEX
+=SML
+val €symbol_dict› = mk_lex_dict initial_e_dict symbol;
+=IGN
+fun €is_symbol› c = (e_lookup c symbol_dict = Value true);
+=SML
+fun €is_symbol› c =
+	not (is_alnum c) andalso
+	not (is_decor c) andalso
+	not (is_punctuation c) andalso
+	not (is_greek c);
 =TEX
 =SML
 fun €is_space› c = c <= " ";
@@ -413,10 +427,49 @@ fun €classify› (what : string) : Z_TOKEN = (
 $rec\_punctuation$ returns an appropriately updated state if the input
 begins with a punctuation, if not it raises $Unrecognised$. 
 =SML
+local
+	val ext_pl = map explode ext_punctuation;
+in
+fun €rec_ext_punctuation›  (st as (cl, k) : LEX_STATE) : LEX_STATE = (
+let	fun aux res _ [] = (res, true)
+	  | aux res (c1::rest1) (c2::rest2) = (
+		if c1 = c2 then aux (res@[c1]) rest1 rest2
+		else (res, false)
+	) | aux res [] _ = (res, false);
+
+	fun aux1 cl (cs::rest) = (
+	let	val (res, flag) = aux [] cl cs;
+	in
+		if flag then res
+		else aux1 cl rest
+	end)
+	  | aux1 cl [] = [];
+
+	fun subtr [] cl = cl
+	  | subtr (c1::rest1) (c2::rest2) =
+		subtr rest1 rest2
+	  | subtr cl [] = [];
+
+	val r = case aux1 cl ext_pl of
+		[] => raise Unrecognised
+		|other => other;
+	val r' = implode r;
+	val cl' = subtr r cl;
+
+in
+	case k of
+	Unknown => (cl', Known r')
+	|Known s => (cl', Known (s^r'))
+end);
+end (* of local ... in ... *);
+=TEX
+=SML
 fun €rec_punctuation›  (st : LEX_STATE) : LEX_STATE = (
-	if next is_punctuation st
-	then collect st
-	else raise Unrecognised
+	rec_ext_punctuation st
+	handle Unrecognised => (
+		if next is_punctuation st
+		then collect st
+		else raise Unrecognised)
 );
 =TEX
 \subsection{Recognition of an Alphabetic Character}
@@ -454,9 +507,11 @@ fun €rec_subscriptor› (st : LEX_STATE) : LEX_STATE = (
 \subsection{Recognition of the Subscript Character}
 =SML
 fun €rec_subscr› (st : LEX_STATE) : LEX_STATE = (
-	if not (next is_superscriptor st)
-	then collect st
-	else fail "Z Lexical Analyser" 60007 []
+	if next is_superscriptor st
+	then fail "Z Lexical Analyser" 60007 []
+	else case st of
+		([], _) => raise Unrecognised
+		|st => collect st
 );
 =TEX
 \subsection{Recognition of Underscore}
@@ -502,7 +557,7 @@ fun €rec_keyword› (st : LEX_STATE) : LEX_STATE = (
 	end
 );
 =TEX
-$rec\_symbolic$ uses $rec\_keyword$ to recognise a symbolic sequence:
+$rec\_symbol$ uses $rec\_keyword$ to recognise a symbolic sequence:
 =SML
 fun  €rec_symbol› (st : LEX_STATE) : LEX_STATE = (
 	if next is_symbol st
@@ -673,12 +728,12 @@ using the other recognisers.
 It raises $Unrecognised$ if the input is exhausted.
 =SML
 fun €rec_ns_lexeme› (st : LEX_STATE) : LEX_STATE = (
-	rec_decor st
-		handle Unrecognised => (rec_number st
-		handle Unrecognised => (rec_identifier st
+	rec_identifier st
 		handle Unrecognised => (rec_punctuation st
-		handle Unrecognised => (rec_subscriptor st))))
-	
+		handle Unrecognised => (rec_number st
+		handle Unrecognised => (rec_decor st
+		handle Unrecognised =>
+			fail "Z Lexical Analyser" 60008 [])))
 );
 =TEX
 \subsection{Lexical Analyser for Strings}
