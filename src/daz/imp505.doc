@@ -1,4 +1,4 @@
-% %Z% $Date: 2000/06/21 11:23:43 $ $Revision: 1.65 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2000/10/17 11:28:00 $ $Revision: 1.66 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -95,8 +95,9 @@
 \item[Issue 1.60] Prototyping enhancement R3 --- Assignment to Record Components.
 \item[Issue 1.61-1.64] Prototyping enhancement R2: Multiple Logical Constant Definitions.
 \item[Issue 1.65] Check on initial variables in pre-conditions added.
-\item[Issue 1.65] CTLE II enhancement R1/2 --- ``others'' in case statements.
-\end{description}
+\item[Issue 1.66] CTLE II enhancement R1/2 --- ``others'' in case statements.
+\\item[Issue 1.67] CTLE II enhancement R1/3 --- reverse loops.
+end{description}
 \subsection{Changes Forecast}
 None.
 \pagebreak
@@ -621,10 +622,7 @@ end
 =SML
 fun Ûfor_staticÝ ({a, wp_env={env, ...}, ...} : WP_PARS)
 	({i, tmark, range, dir, loop = {t, stmt}, ...} : STATEMENT FOR_STATIC) : RESULT = (
-let	val side = if dir = LDForwards
-			then ()
-			else fail "for_static" 505023 [];
-	val {lo, hi} = case range of
+let	val {lo, hi} = case range of
 			RRange {lo, hi} => {lo=adjust_exp env lo, hi=adjust_exp env hi}
 			|RRangeAttr _ =>
 				fail "for_static" 505020 [];
@@ -636,7 +634,8 @@ let	val side = if dir = LDForwards
 	val zi = trans_id i;
 	val zlo = trans_exp env lo;
 	val zhi = trans_exp env hi;
-	val zop = z_add;
+	val (zfinal, zop) =
+		if dir = LDForwards then (zhi, z_add) else (zlo, z_minus);
 	val zleft = zid env zi;
 	val zright = z_num one;
 	val zid_zi = zid env zi;
@@ -648,9 +647,9 @@ let	val side = if dir = LDForwards
 			Value till => (
 				zran %Longrightarrow% ((z_predexp_of_z_tm till) %Longrightarrow% a)
 			) | Nil => [];
-	val side = [[zran, z_noteq(zid_zi, zhi), post1] ô 
+	val side = [[zran, z_noteq(zid_zi, zfinal), post1] ô 
 			sub(pre1, zi, z_bin_exp (zleft, zop, zright))] @
-			(sub(post1, zi, zhi) %Longrightarrow% a) @
+			(sub(post1, zi, zfinal) %Longrightarrow% a) @
 			till_part;
 in
 	{wp = wp, side = side}
@@ -661,10 +660,7 @@ end
 =SML
 fun Ûfor_tmarkÝ ({a, wp_env={env, ...}, ...} : WP_PARS)
 	({i, tmark, dir, loop = {t, stmt}, ...} : STATEMENT FOR_TMARK) : RESULT = (
-let	val side = if dir = LDForwards
-			then ()
-			else fail "for_tmark" 505023 [];
-	val {pre, post, ...} = case stmt of
+let	val {pre, post, ...} = case stmt of
 		STSpecNoIvars {spec, ...} => spec
 		|_ => fail "for_tmark" 505022 [];
 	val pre1 = z_predexp_of_z_tm pre;
@@ -672,7 +668,8 @@ let	val side = if dir = LDForwards
 	val zi = trans_id i;
 	val zlo = zid env (trans_id tmark ^^ zfst);
 	val zhi = zid env (trans_id tmark ^^ zlst);
-	val zop = z_add;
+	val (zfinal, zop) =
+		if dir = LDForwards then (zhi, z_add) else (zlo, z_minus);
 	val zleft = zid env zi;
 	val zright = z_num one;
 	val zran = z_elem (zid env zi, z_rng (zlo, zhi));
@@ -683,9 +680,9 @@ let	val side = if dir = LDForwards
 			Value till => (
 				(z_predexp_of_z_tm till) %Longrightarrow% a
 			) | Nil => [];
-	val side = [[z_noteq(zid env zi, zhi), post1] ô 
+	val side = [[z_noteq(zid env zi, zfinal), post1] ô 
 			sub(pre1, zi, z_bin_exp (zleft, zop, zright))] @
-			(sub(post1, zi, zhi) %Longrightarrow% a) @
+			(sub(post1, zi, zfinal) %Longrightarrow% a) @
 			till_part;
 in
 	{wp = wp, side = side}
@@ -817,7 +814,7 @@ end
 \subsection{For Loop (Non-Static Bounds)}\label{wp-for-var}
 =SML
 fun Ûfor_non_staticÝ (pars as {wp, a, wp_env as {env, ...}} : WP_PARS)
-			({i, range, loop = {t, stmt}, ...} : STATEMENT FOR_NON_STATIC)
+			({i, range, loop = {t, stmt}, dir, ...} : STATEMENT FOR_NON_STATIC)
 			 : RESULT = (
 let	val {lo, hi} = case range of
 			RRange {lo, hi} => {lo=adjust_exp env lo, hi=adjust_exp env hi}
@@ -831,11 +828,12 @@ let	val {lo, hi} = case range of
 	val zi = trans_id i;
 	val zlo = trans_exp env lo;
 	val zhi = trans_exp env hi;
-	val zop = z_add;
 	val zleft = zid env zi;
 	val zright = z_num one;
 	val zlo0 = subs_exp (zlo, w, w0);
 	val zhi0 = subs_exp(zhi, w, w0);
+	val (zfinal0, zop) =
+		if dir = LDForwards then (zhi0, z_add) else (zlo0, z_minus);
 	val zran = z_elem(zid env zi, z_rng (zlo0, zhi0));
 	val wp = [[z_less_eq (zlo, zhi)] ô sub(pre1, zi, zlo)] @
 		(z_greater(zlo, zhi) %Longrightarrow% a);
@@ -843,9 +841,9 @@ let	val {lo, hi} = case range of
 			Value till => (
 				zran %Longrightarrow% ((z_predexp_of_z_tm till )%Longrightarrow% a)
 			) | Nil => [];
-	val side = [[zran, z_noteq(zid env zi, zhi0), post1] ô 
+	val side = [[zran, z_noteq(zid env zi, zfinal0), post1] ô 
 			sub(pre1, zi, z_bin_exp(zleft, zop, zright))] @
-				(sub(post1, zi, zhi0) %Longrightarrow% a) @
+				(sub(post1, zi, zfinal0) %Longrightarrow% a) @
 				till_part;
 in
 	{wp = wp, side = side}
@@ -1000,7 +998,7 @@ in
 			else if	not is_first
 			then	fail "adjust_statement" 505094 []
 			else	s
-	|	STForStatic (fs as {name,i,range,loop as {stmt, ...}, ...}) => (
+	|	STForStatic (fs as {name,i,range,loop as {stmt, ...}, dir, tmark}) => (
 			check_inner stmt;
 			if	is_static_for_loop wp fs
 			then	s
@@ -1008,7 +1006,9 @@ in
 				then	SForNonStatic {	name=name,
 							i=i,
 							range=range,
-							loop=loop
+							loop=loop,
+							dir = dir,
+							tmark = tmark
 						}
 				else	fail "adjust_statement" 505092 []
 	) |	STProcNoIvars piv =>
@@ -1464,7 +1464,7 @@ let	fun pass_over_statement (st : STATEMENT) = (
 		)|	STAnnotation _ => (
 		)|	SSpecIvars _ => (
 		)|	SLogCon _ => (
-		)|	SForNonStatic {name,i,range,loop} => (
+		)|	SForNonStatic {loop, ...} => (
 				pass_over_statement (#stmt loop)
 		)|	SProcIvars (proc as {name,actuals}) => (
 				check_1_d (name, speclab);
@@ -1624,7 +1624,7 @@ let	val local_resolver = resolver repl_function;
 				check_over_statement state (local_resolver label)
 		)|	SLogCon {label, ...} => (
 				check_over_statement state (local_resolver label)
-		)|	SForNonStatic {name,i,range,loop} => (
+		)|	SForNonStatic {loop, ...} => (
 				check_over_statement state (#stmt loop)
 		)|	SProcIvars _ => (
 				EndsInOther
