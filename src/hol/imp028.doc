@@ -87,6 +87,7 @@ fun  ‚C_CONTR_T· (thmtac : THM -> TACTIC) : TACTIC = (fn gl as (asms, conc) =>
 		);
 	in	(sgs, rule o pf)
 	end
+	handle ex => divert ex "mk_å" "C_CONTR_T" 28027 []
 );
 =TEX
 \subsection{Concerning Negation}
@@ -169,7 +170,11 @@ fun ‚CASES_T2· (t1 : TERM) (ttac1 : THM -> TACTIC) (ttac2 : THM -> TACTIC)
 			end
 			))
 	end
-	handle ex => divert ex "asm_rule" "CASES_T2" 28024 []
+	handle ex => (
+		if area_of ex = "asm_rule"
+		then term_fail "CASES_T2" 28022 [t1]
+		else raise ex
+	)
 );
 =TEX
 =SML
@@ -329,7 +334,7 @@ fun ‚f_thm_tac· (thm	 : THM) : TACTIC = (fn gl as (_, conc) =>
 =SML
 fun  ‚å_elim_tac· (tm : TERM) : TACTIC = (
 	if type_of tm <> BOOL
-	then fail "å_elim_tac" 28024 []
+	then term_fail "å_elim_tac" 28022 [tm]
 	else	(fn (asms, conc) =>
 			([(asms, tm), (asms, mk_å tm)],
 			 fn [th1, th2] => å_elim conc th1 th2
@@ -369,10 +374,11 @@ val  ‚Å_right_tac· : TACTIC = (fn (asms, conc) =>
 \subsection{Concerning ä}
 =SML
 fun ‚undisch_tac· (t1 : TERM) : TACTIC = (fn (asms, conc) =>
-	if t1 term_mem asms
+	(if t1 term_mem asms
 	then ([(asms term_less t1, mk_ä(t1, conc))],
 		(fn [thm] => undisch_rule thm | _ => bad_proof "undisch_tac"))
-	else  term_fail "undisch_tac" 28052 [t1]
+	else  term_fail "undisch_tac" 28052 [t1])
+	handle ex => divert ex "mk_ä" "undisch_tac" 28027 []
 );
 =TEX
 When we undischarge more than one assumption we need to be careful not
@@ -383,6 +389,13 @@ val ‚list_undisch_tac· : TERM list ->  TACTIC = MAP_EVERY (TRY_T o undisch_tac) 
 =TEX
 =SML
 val ‚all_undisch_tac· :  TACTIC = GET_ASMS_T (MAP_EVERY((TRY_T o undisch_tac) o concl));
+=TEX
+=SML
+fun ‚ante_tac· (thm : THM) : TACTIC = (fn (asms, conc) =>
+	([(asms, mk_ä(concl thm, conc))],
+	 fn [th] => ä_elim th thm | _ => bad_proof "ante_tac")
+	handle ex => divert ex "mk_ä" "ante_tac" 28027 []
+);
 =TEX
 \subsection{Concerning É}
 =SML
@@ -649,7 +662,7 @@ val ‚simple_Ñ%down%1_conv· : CONV = (fn tm =>
 =SML
 val ‚simple_å_Ñ%down%1_conv· : CONV = (fn tm =>
 	((RAND_C simple_Ñ%down%1_conv THEN_C simple_å_Ñ_conv) tm)
-	handle  Fail _ => fail "simple_å_Ñ%down%1_conv" 28091 []
+	handle  Fail _ => term_fail "simple_å_Ñ%down%1_conv" 28091 [tm]
 );
 =TEX
 \subsubsection{Concerning å}
@@ -658,7 +671,8 @@ val ‚simple_å_in_conv· : CONV = FIRST_C(
 		map simple_eq_match_conv
 		[å_å_thm, å_Ä_thm, å_Å_thm, å_ä_thm,
 		 å_Ç_thm, å_if_thm, å_t_thm, å_f_thm] 
-	@	[simple_å_É_conv, simple_å_Ñ_conv, simple_å_Ñ%down%1_conv]);
+	@	[simple_å_É_conv, simple_å_Ñ_conv, simple_å_Ñ%down%1_conv])
+	ORELSE_C (fn tm => term_fail "simple_å_in_conv" 28131 [tm]);
 =TEX
 =SML
 val ‚SIMPLE_å_IN_THEN· : THM_TACTICAL = (fn ttac => fn thm =>
@@ -777,11 +791,17 @@ end;
 We now give the remaining tactics.
 \subsection{Concerning $F$}
 =SML
-val ‚c_contr_tac· : TACTIC = C_CONTR_T strip_asm_tac;
+val ‚c_contr_tac· : TACTIC = (fn gl =>
+	(C_CONTR_T strip_asm_tac gl)
+	handle ex => pass_on ex "C_CONTR_T" "c_contr_tac"
+);
 =TEX
 \subsection{Concerning $å$}
 =SML
-fun ‚å_tac· (t : TERM) : TACTIC = å_T t strip_asm_tac;
+fun ‚å_tac· (t : TERM) : TACTIC = (fn gl =>
+	(å_T t strip_asm_tac gl)
+	handle ex => pass_on ex "å_T" "å_tac"
+);
 =TEX
 \subsection{Concerning Å}
 =SML
@@ -794,23 +814,38 @@ val ‚swap_Å_tac· : TACTIC = (fn gl =>
 );
 =TEX
 =SML
-fun ‚cases_tac· (tm : TERM) : TACTIC = CASES_T tm strip_asm_tac;
+fun ‚cases_tac· (tm : TERM) : TACTIC = (fn gl =>
+	(CASES_T tm strip_asm_tac gl)
+	handle ex => pass_on ex "CASES_T" "cases_tac"
+);
 =TEX
 \subsection{Concerning ä}
 =SML
-val ‚ä_tac· : TACTIC = ä_T strip_asm_tac;
+val ‚ä_tac· : TACTIC = (fn gl =>
+	(ä_T strip_asm_tac gl)
+	handle ex => pass_on ex "ä_T" "ä_tac"
+);
 =TEX
 \subsection{Concerning Ç}
 =SML
-val ‚Ç_tac· : TACTIC = Ç_T strip_asm_tac;
+val ‚Ç_tac· : TACTIC = (fn gl =>
+	(Ç_T strip_asm_tac gl)
+	handle ex => pass_on ex "Ç_tac" "Ç_tac"
+);
 =TEX
 \subsection{Concerning $if \ldots then \ldots else \ldots$}
 =SML
-val ‚if_tac· : TACTIC = IF_T strip_asm_tac;
+val ‚if_tac· : TACTIC = (fn gl =>
+	(IF_T strip_asm_tac gl)
+	handle ex => pass_on ex "IF_T" "if_tac"
+);
 =TEX
 \subsection{$lemma\_tac$}
 =SML
-fun ‚lemma_tac· (sg : TERM) : TACTIC = LEMMA_T sg strip_asm_tac;
+fun ‚lemma_tac· (sg : TERM) : TACTIC = (fn gl =>
+	(LEMMA_T sg strip_asm_tac gl)
+	handle ex => pass_on ex "LEMMA_T" "lemma_tac"
+);
 =TEX
 
 =SML
