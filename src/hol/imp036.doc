@@ -74,6 +74,8 @@ Added $reset\_flag$ $"subgoal\_package\_quiet"$.
 Changes to reflect needs of \cite{DS/FMU/IED/DTD069}.
 \item [Issue 1.6]
 Added $show\_status$.
+\item [Issue 1.7]
+Changed save and exit commands.
 \end{description}
 \subsection{Changes forecast}
 \pagebreak
@@ -125,15 +127,6 @@ val icl'database_info = Initialisation.icl'database_info;
 =SML
 structure €HOLSystem› : HOLSystem = struct
 =TEX
-=SML
-val €state_changed› : bool ref = ref true;
-=TEX
-=SML
-fun €state_change› (_ : KERNEL_STATE_CHANGE) : unit = (state_changed := true);
-=TEX
-=SML
-val side_effect2 = on_kernel_state_change state_change;
-=TEX
 The following turns off profiling, so that though the system build
 is profiled automatically, any further profiling must be
 requested.
@@ -151,21 +144,41 @@ to detect whether or not the return from the $PolyML.commit$ is in the same
 session or the new one. This works because in the new session the stream
 will have become closed.
 =SML
-fun €hol_save› (():unit) : unit = (
-	let	val strm = open_in "/";
-	in	state_changed := false;
-		PolyML.commit();
-		if	ExtendedIO.can_input(strm, 1)
-		then	()		(* same session *)
-		else	Initialisation.init()	(* new session *)
-	end
-);
-fun €hol_quit› (():unit) : unit = (
-	(if !state_changed
-	then warn "hol_quit" 36001 []
-	else ());
-	PolyML.quit()
-);
+
+fun €quit› (():unit) : unit = ((
+let	val resp = ask_at_terminal (get_error_message 36001 ["quit"]);
+in
+	if resp = "y\n"
+	then PolyML.quit()
+	else diag_line (get_error_message 36011 ["quit"])
+end)
+handle complaint =>
+if area_of complaint = "ask_at_terminal"
+then PolyML.quit()
+else raise complaint);
+
+fun €exit› (():unit) : unit = ((
+let	val resp = ask_at_terminal (get_error_message 36001 ["exit"]);
+in
+	if resp = "y\n"
+	then PolyML.quit()
+	else diag_line (get_error_message 36011 ["exit"])
+end)
+handle complaint =>
+if area_of complaint = "ask_at_terminal"
+then PolyML.quit()
+else raise complaint);
+
+fun €save_and_quit› () : unit = (
+let	val strm = open_in "/";
+in	PolyML.commit();
+	if	ExtendedIO.can_input(strm, 1)
+	then	(close_in strm;
+		PolyML.quit())	(* same session *)
+	else	Initialisation.init()	(* new session *)
+end);
+
+val €save_and_exit› : unit -> unit = save_and_quit;
 =TEX
 =SML
 
@@ -224,13 +237,6 @@ end;
 =TEX
 \subsection{Initialisation Steps}
 Numbered as in the detailed design:
-\subsubsection{State As Yet Unchanged}
-=SML
-fun €local_init› () : unit = (state_changed := false);
-=TEX
-=SML
-val initial1 = Initialisation.new_init_fun local_init;
-=TEX
 \subsubsection{Line Length}
 =SML
 fun €init_line_length› () : unit = (
