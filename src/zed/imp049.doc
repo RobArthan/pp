@@ -104,7 +104,7 @@ None known.
 \section{Z READER WRITER}
 
 =SMLPLAIN SML
-structure ÛZReaderWriterİ  = struct
+structure ÛZReaderWriterİ : ZReaderWriter = struct
 local
 open ReaderWriterSupport HOLReaderWriter;
 in
@@ -264,21 +264,223 @@ end (* local ... in *);
 end (* of structure ZReaderWriter *);
 =TEX
 
-
-\section{THE STRUCTURE FOR Z PARAGRAPHS}
-
+\section{TYPE CHECK ONLY MODE}
 
 =SML
-structure ÛZParagraphsİ = struct
+structure ÛZTypeCheckOnlyModeİ : ZTypeCheckOnlyMode = struct
+open ZUserInterfaceSupport  ZTypeInference ZTermGenerator;
+open ZTypesAndTermsSupport;
 =TEX
 =SML
-local
+fun Ûstring_of_identİ ((tmpl, dec) : IDENT) : string = (
+	string_of_template tmpl ^ dec
+);
+=TEX
+
+\subsection{Saving Types and Constants in the Theory}
+
+
+=SML
+fun Ûtype_of_formalİ (id : IDENT) : TYPE = (
+	mk_vartype ("'"^(string_of_ident id))
+);
+=TEX
+=SML
+fun Ûconsts_in_zparaİ (p : Z_PARA) : (string * TYPE) list = (
+	case p of
+	ZParaAbbDef (id, [], _, Value ty) =>
+		[(string_of_ident id, type_of_zextype ty)]
+	|ZParaAbbDef (id, formals, _, Value ty) => 
+	let	val fty = mk_ZtupleT (map mk_ZpowerT (map type_of_formal formals));
+		val aty = type_of_zextype ty;
+		val ty' = mk_­_type (fty, aty);
+	in
+		[(string_of_ident id, ty')]
+	end
+	|ZParaAbbDef (_, _, _, Nil) =>
+		fail "consts_in_zinferred" 62998 [fn()=>"Insufficient type info"]
+
+	|ZParaSchBox (id, [], _, Value ty) =>
+		[(string_of_ident id, type_of_zextype ty)]
+	|ZParaSchBox (id, formals, _, Value ty) => 
+	let	val fty = mk_ZtupleT (map mk_ZpowerT (map type_of_formal formals));
+		val aty = type_of_zextype ty;
+		val ty' = mk_­_type (fty, aty);
+	in
+		[(string_of_ident id, ty')]
+	end
+	|ZParaSchBox (_, _, _, Nil) =>
+		fail "consts_in_zinferred" 62998 [fn()=>"Insufficient type info"]
+
+	|ZParaAxDes ([], _, Value idtyl) => 
+		(map (fn (id, ty) => (string_of_ident id, type_of_zextype ty)) idtyl)
+	|ZParaAxDes (formals, _, Value idtyl) => 
+	let	val fty = mk_ZtupleT (map mk_ZpowerT (map type_of_formal formals));
+		val idtyl' = map (fn (id, ty) => (string_of_ident id,
+			mk_­_type (fty, (type_of_zextype ty)))) idtyl;
+	in
+		idtyl'
+	end
+	|ZParaAxDes (_, _, Nil) =>
+		fail "consts_in_zinferred" 62998 [fn()=>"Insufficient type info"]
+
+	|ZParaGivenSet (idl, _) =>
+	let	val sl = map string_of_ident idl;
+	in
+		map (fn s => (s, mk_ctype ("SET", [mk_ctype (s,[])]))) sl
+	end
+
+	|ZParaFreeType ftl =>
+	let	fun do_branch aty (id, Value fty, _) =
+		let	val fty' = case fty of
+					ExType ("SET", [fty']) => fty'
+					| _ => fail "consts_in_zinferred" 62901 [];
+			val ty' = (* ex_set (tuple_extype [fty', aty]); *)
+				fail "do_branch" 80201 [fn()=>"free types not implemented"]
+		in
+			(string_of_ident id, type_of_zextype ty')
+		end
+		  | do_branch aty (id, Nil, _) =
+			(string_of_ident id, type_of_zextype aty)
+		fun do_prod (id, branches) =
+		let	val s = string_of_ident id;
+			val aty = ExType (s, []);
+			val idty = (s, mk_ZpowerT (type_of_zextype aty));
+		in
+			idty::(map (do_branch aty) branches)
+		end
+		fun do_ftd (prod::rest) =
+			do_prod prod@do_ftd rest
+		  | do_ftd [] = [];
+	in
+		do_ftd ftl
+	end
+	|ZParaConstraint _ => []
+	|ZParaConjecture _ => []
+	|ZParaTerm _ => []
+	|ZParaFixity _ => []
+);
+=TEX
+=SML
+fun Ûnew_type_clashesİ ((tyname, arity) : (string * int)) : (string * int) list = (
+	case get_type_arity tyname of
+	Nil => []
+	|Value arity' => if (arity = arity')
+			then	[]
+			else	[(tyname, arity)]
+);
+
+fun Ûnew_type_nofailİ ((tyname, arity) : (string * int)) : unit = (
+	case get_type_arity tyname of
+	Nil => (new_type (tyname, arity);())
+	|Value arity' =>
+		if arity = arity'
+		then ()
+		else fail "new_type_nofail" 62998 []
+);
+
+fun Ûnew_const_clashesİ ((cname, ty) : (string * TYPE)) : (string * TYPE) list = (
+	case (get_const_info o bind_gvar_name)cname of
+	Nil => []
+	|Value (ty', _) => if (ty =: ty')
+			then	[]
+			else	[(cname, ty)]
+);
+
+fun Ûnew_const_nofailİ ((cname, ty) : (string * TYPE)) : unit = (
+let	val bname = bind_gvar_name cname;
+in
+	case get_const_info bname of
+	Nil => (new_const (bname, ty);())
+	|Value (ty', _) =>
+		if ty =: ty'
+		then ()
+		else fail "new_const_nofail" 62998 []
+end);
+=TEX
+=SML
+fun Ûupdate_theory_dbİ ((ZParaFixity fixinfo) : Z_PARA) : unit = (
+	set_zfixity_info fixinfo
+) | update_theory_db p =
+let	val consts = consts_in_zpara p;
+	val tys = list_cup (map (fn (s, ty) => type_tycons ty) consts);
+	val side =
+		case list_cup (map (fn ty => new_type_clashes ty) tys) of
+		[] => map new_type_nofail tys
+		|failures => fail "update_theory_db" 62998 [fn ()=>PolyML.makestring failures];
+	val side =
+		case flat (map (fn const => new_const_clashes const) consts) of
+		[] => map new_const_nofail consts
+		|failures => fail "update_theory_db" 62998 [fn ()=>PolyML.makestring failures];
+
+in
+	()
+end;
+=TEX
+=SML
+end (* of structure ZTypeCheckOnlyMode *);
+=TEX
+
+\section{PROOF SUPPORT MODE}
+=SML
+structure ÛZProofSupportModeİ : ZTypeCheckOnlyMode = struct
+open	ZUserInterfaceSupport;
+=TEX
+=SML
+fun Ûupdate_theory_dbİ ((ZParaFixity fixinfo) : Z_PARA) : unit = (
+	set_zfixity_info fixinfo
+) | update_theory_db _ = ();
+
+=TEX
+=SML
+end (* of structure ZProofSupportMode *);
+=TEX
+
+\section{THE STRUCTURE FOR Z PARAGRAPH PROCESSORS}
+
+=SML
+structure ÛZParagraphsİ : ZParagraphs = struct
+=TEX
+=SML
 	open Lex SymbolTable ReaderWriterSupport;
 	open HOLReaderWriter PrettyNames;
 	open ZReaderWriter;
 	open ZUserInterfaceSupport ZLex ZParser ZTypeInference ZTermGenerator;
-in
+
+val Ûztype_check_onlyİ = ref false;
+
+val _ = if contains (map fst (get_flags()))
+			"ztype_check_only"
+	then	()
+	else	new_flag{name = "ztype_check_only",
+			control = ztype_check_only,
+			default = fun_false,
+			check = fun_true
+	};
 =TEX
+
+
+\section{PARAGRAPH PROCESSING}
+
+=SML
+fun Ûterm_of_zparaİ ((ZParaTerm (_, tm, _)) : Z_PARA) : TERM = (
+	term_of_ztm tm
+) | term_of_zpara _ = (
+	fail "z_term_recogniser" 49001 []
+); 
+=TEX
+
+=SML
+fun Ûzpara_of_zinferredİ ((ZInferred p) : Z_INFERRED) : Z_PARA = (
+	p
+) | zpara_of_zinferred (ZTypeError inf) = (
+	print_zerror inf
+);
+=TEX
+
+
+\section{THE STRUCTURE FOR Z PARAGRAPHS}
+
 
 The first thing to do is to tell the reader/writer about the
 Z paragraph delimiting symbols.
@@ -314,23 +516,6 @@ val sd = map add_specific_reader [
 	] handle _ => [];
 =TEX
 
-\section{PARAGRAPH PROCESSING}
-
-=SML
-fun Ûterm_of_zparaİ (zp : Z_PARA) : TERM = (
-	case zp of
-	ZParaTerm (_, tm, _) => term_of_ztm tm
-); 
-=TEX
-
-=SML
-fun Ûzpara_of_zinferredİ ((ZInferred p) : Z_INFERRED) : Z_PARA = (
-	p
-) | zpara_of_zinferred (ZTypeError inf) = (
-	print_zerror inf
-);
-=TEX
-
 
 \section{PARAGRAPH RECOGNIZERS}
 
@@ -351,7 +536,11 @@ let	val side_effect =
 	val tokens = ZTAx::(zlex value);
 	val parsed = ZParser.zparser {is_quot = false, standard = true} tokens;
 	val type_checked = type_check_zpara {standard=true} parsed;
-in	type_checked
+	val para = zpara_of_zinferred type_checked;
+in
+	if get_flag "ztype_check_only"
+	then	ZTypeCheckOnlyMode.update_theory_db para
+	else	ZProofSupportMode.update_theory_db para
 end);
 
 =TEX
@@ -371,7 +560,11 @@ let	val side_effect =
 	val tokens = ZTAx::(zlex value);
 	val parsed = ZParser.zparser {is_quot = false, standard = true} tokens;
 	val type_checked = type_check_zpara {standard=true} parsed;
-in	type_checked
+	val para = zpara_of_zinferred type_checked;
+in
+	if get_flag "ztype_check_only"
+	then	ZTypeCheckOnlyMode.update_theory_db para
+	else	ZProofSupportMode.update_theory_db para
 end);
 
 =TEX
@@ -391,7 +584,11 @@ let	val side_effect =
 	val tokens = ZTSch::(zlex value);
 	val parsed = ZParser.zparser {is_quot = false, standard = true} tokens;
 	val type_checked = type_check_zpara {standard=true} parsed;
-in	type_checked
+	val para = zpara_of_zinferred type_checked;
+in
+	if get_flag "ztype_check_only"
+	then	ZTypeCheckOnlyMode.update_theory_db para
+	else	ZProofSupportMode.update_theory_db para
 end);
 =TEX
 \subsection{Z General Text Recogniser}
@@ -410,7 +607,11 @@ let	val side_effect =
 	val tokens = zlex value;
 	val parsed = ZParser.zparser {is_quot = false, standard = true} tokens;
 	val type_checked = type_check_zpara {standard=true} parsed;
-in	type_checked
+	val para = zpara_of_zinferred type_checked;
+in
+	if get_flag "ztype_check_only"
+	then	ZTypeCheckOnlyMode.update_theory_db para
+	else	ZProofSupportMode.update_theory_db para
 end);
 =TEX
 \section{RECOGNIZING Z TERMS}
@@ -433,11 +634,10 @@ let	val side_effect =
 		ZParaTerm _ => ()
 		|_ => fail "z_term_recogniser" 49001 [];
 	val type_checked = type_check_zpara {standard=false} parsed;
-	val holterm = (term_of_zpara o zpara_of_zinferred) type_checked;
-in	holterm
+	val para = zpara_of_zinferred type_checked;
+in	term_of_zpara para
 end);
 
-end (* local ... in *);
 
 =TEX
 
