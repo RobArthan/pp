@@ -91,9 +91,9 @@ Contact: Rob Arthan < rda@lemma-one.com >
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.7 $%
+\def\Version{$Revision: 1.8 $%
 }
-\def\Date{\FormatDate{$Date: 2003/03/11 17:16:39 $%
+\def\Date{\FormatDate{$Date: 2003/03/11 23:17:46 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -856,10 +856,12 @@ does not give a deterministic parser for the grammar.
 An LR(1) automaton is an LR(0) automaton equipped with a table telling it how to
 resolve conflicts, i.e., telling it
 what transition to make in each state for each possible input symbol.  This table
-is called the {\em lookahead} table. If a suitable lookahead
+is called the {\em lookahead} table.
+If a suitable lookahead
 table exists for the grammar and has exactly one possible transition for each combination of
 state and input symbol, then the grammar is unambiguous and the LR(1) automaton
-will provide a deterministic parser for it.
+will provide a deterministic parser for it. At each stage of a parse, the action of the parser
+is driven by by the next unconsumed input symbol, which we refer to as the {\it lookahead token}.
 
 There are several ways of attempting to calculate lookahead tables. The method used in {\SLRP} is first
 to apply a simple algorithm called SLR(1) to compute the LR(0)
@@ -1087,9 +1089,7 @@ Application =	Atom				(red_application1 x1)
 14:	Application = identifier., `(`, Expression, `)`
 ...
 +++ Conflicts +++
-
-LALR(1) lookahead sets resolved no conflicts
-
+...
 12 conflicts detected (0 shift/reduce, 12 reduce/reduce)
 
 State 12 on symbol LCEos
@@ -1103,7 +1103,7 @@ State 13 on symbol LCEos
 =TEX
 \end{Fig}
 
-The heruristic for removing reduce/reduce conflicts
+The heuristic for removing reduce/reduce conflicts
 works  nicely with some styles for presenting a grammar, but care should
 be taken to check that it does actually implement the language that you want.
 It is wise to check the state table and the conflicts in the listings carefully.
@@ -1118,7 +1118,8 @@ minus signs. From this you can conclude that it is always safe to reduce by the 
 comes first, and so this tiny optimisation to our calculator is acceptable.
 
 \clearpage
-\subsection{Shift/Reduce Conflicts}
+\subsection{Shift/Reduce Conflicts}\label{SHIFTREDUCE}
+
 When {\SLRP} detects shift/reduce conflicts, these always have to be resolved dynamically. I.e.,
 you must supply a RESOLVER function to tell the parser what to do when the conflict occurs.
 The function can either give the parser one of three options: Shift, Reduce or Error, or it can raise
@@ -1136,16 +1137,94 @@ type ('tok, 'lc, 'pp)ÛRESOLVERÝ
 	= ('tok * 'lc) * ('tok, 'lc, 'pp)ÛINPUT_STACKÝ * ((string * int) * int)
 		-> RESOLUTION;
 =TEX
+The RESOLVER function is called when a lookahead token giving rise to a shift/reduce conflict
+is encountered, its arguments have the form $(x, stack, r)$ where $x$ is a pair containing
+the lexical value and lexical class of the lookahead token, $stack$ is the parse stack, and $r$
+describes the possible reduction by giving the nonterminal name, the index of the
+alternative (0-based indexing) and the state to be entered.
+Most applications do not need all this information, but there are situations where it is useful.
+As we shall see shortly, the API provides a function to make one common approach easier.
 
-\label{SHIFTREDUCE}
-Figure~\ref{lr0.state.table} shows extracts from the listing of the state table for the grammar for
-C given in ~\cite{LEMMA1/DEV/WRK063} together with the description of the conflict that grammar
+For a first example, consider the example in figure~\ref{lr0.state.table}
+which shows extracts from the listing of the state table for the grammar for
+C given in~\cite{LEMMA1/DEV/WRK063} together with the description of the conflict that grammar
 gives rise to. This conflict is caused by a deliberate ambiguity in the grammar
 which does not specify whether the else-part in the statement ``{\tt if(a) if(b) f(); else g();}''
-belongs to the inner if-statement or the outer one.
+belongs to the inner if-statement or the outer one. The language rule is that the else-part should
+belong to the inner if-statement and that means the resolution should always be to shift. As this
+is the only conflict in the grammar, the RESOLVER function in~\cite{LEMMA1/DEV/WRK063}
+could hardle be simpler:
 
-\begin{Fig}[ht]{An Inherently Ambiguous Grammar}{usr032f.grm.txt}
+=GFT
+fun Ûc_resolverÝ _ = DoShift;
+=TEX
+
+Our next example shows a widely used technique. The grammar in figure~\ref{usr032f.grm.txt}
+actually specifies the same language of arithmetic expressions as the grammar of
+figure~\ref{usr032a.grm.txt} considered in section~\ref{STARTING} above. However,
+unlike the earlier grammar it is ambiguous: it no longer has
+the precedence rules for the arithmetic operators wired into it and so it allows an expression such as
+``$1*2 + 3*4$'' to be parsed in several different ways. 
+
+\begin{Fig}[ht]{A Grammar Requiring Operator Precedence Rules}{usr032f.grm.txt}
 =DUMP usr032f.grm.txt
+Expr =		Expr, InOp, Expr
+		|	PreOp, Expr
+		|	literal
+		|	identifier
+		|	identifier, `(`, Expr, `)`
+		|	`(`, Expr, `)`;
+
+InOp	= `+` |  `-` | `*` | `/`;
+
+PreOp	= `+`, `-`;
+=TEX
+\end{Fig}
+
+Figure~\ref{usr032f.grm.log} shows an extract from the {\SLRP} listing for the grammar.
+The remaining 6 conflicts are just like the ones shown but with `*', `+'  and
+`-' in place of `/'. From the state table, we can see that the conflict occurs when the
+parser has just got to the end of something that could be an {\it Expr} and the lookahead
+token is one of the {\it InOp} tokens. From the conflcts listing, we see that the possible reduction of this
+{\it Expr} is either as {\it Expr, InOp, Expr}, or as {\it PreOp, Expr}. This means that the
+conflict can be resolved by comparing the topmost terminal symbol on the stack with the lookahead
+token.
+
+\begin{Fig}{Operator Precedence --- Extracts from the Listing}{usr032f.grm.log}
+=GFT
++++ State Table +++
+...
+11:	Expr = Expr., InOp, Expr
+	Expr = Expr, InOp, Expr.
+	InOp = .`+`
+	InOp = .`-`
+	InOp = .`*`
+	InOp = .`/`
+12:	Expr = Expr., InOp, Expr
+	Expr = PreOp, Expr.
+	InOp = .`+`
+	InOp = .`-`
+	InOp = .`*`
+	InOp = .`/`
+...
++++ Conflicts +++
+
+...
+8 conflicts detected (8 shift/reduce, 0 reduce/reduce)
+
+State 11 on symbol `/`
+	Reduce by Expr = Expr, InOp, Expr | ...
+	Shift to 6
+...
+State 12 on symbol `/`
+	Reduce by Expr = ... | PreOp, Expr | ...
+	Shift to 6
+...
+=TEX
+\end{Fig}
+
+\begin{Fig}[ht]{An Inherently Ambiguous Grammar}{usr032g.grm.txt}
+=DUMP usr032g.grm.txt
 	S	= AB, C | A, BC;
 	AB	= | a, AB, b;
 	C	= | C, c;
@@ -1154,8 +1233,8 @@ belongs to the inner if-statement or the outer one.
 =TEX
 \end{Fig}
 
-\begin{Fig}[ht]{Resolving Ambiguities By Widening the Language}{usr032g.grm.txt}
-=DUMP usr032g.grm.txt
+\begin{Fig}[ht]{Resolving Ambiguities By Widening the Language}{usr032h.grm.txt}
+=DUMP usr032h.grm.txt
 	S	= A, B, C	
 			((fn Parsed  m => fn Parsed n => fn Parsed p =>
 			if	m <> n andalso n <> p
@@ -1170,8 +1249,8 @@ belongs to the inner if-statement or the outer one.
 =TEX
 \end{Fig}
 
-\begin{Fig}[p]{A non-LALR(1) Grammar}{usr032h.grm.txt}
-=DUMP usr032h.grm.txt
+\begin{Fig}[p]{A non-LALR(1) Grammar}{usr032i.grm.txt}
+=DUMP usr032i.grm.txt
 Command =		Expression
 		|	identifier, `(`, FormalParams, `)`, `=`,  Expression;
 
@@ -1201,13 +1280,15 @@ Sum =		Product
 		|	Sum, `-`, Product;
 =TEX
 \end{Fig}
+\Hide{
 =SH
 sed -e '/^ExpressionList/,/;/d' \
 	-e '/^Application/,/;/d' \
-	< usr032h.grm.txt > usr032i.grm.txt
+	< usr032i.grm.txt > usr032j.grm.txt
 =TEX
-\begin{Fig}[p]{Making a Grammar LALR(1)}{usr032i.grm.txt}
-=DUMPMORE usr032i.grm.txt
+} % \Hide
+\begin{Fig}[p]{Making a Grammar LALR(1)}{usr032j.grm.txt}
+=DUMPMORE usr032j.grm.txt
 Application =	Atom
 		|	`-`, Application
 		|	`+`, Application
