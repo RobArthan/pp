@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of Unification}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP014}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.7 $%
+\def\SCCSversion{$Revision: 2.8 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 15:10:58 $%
+\TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $%
 }}  %% Mandatory field (with sensible default)
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -93,6 +93,7 @@ Fixed bug in $extend$.
 
 \item[Issue 2.7] Copyright and banner updates for open source release.
 \item[Issue 2.8] PPHol-specific updates for open source release
+\item[Issue 2.9] Space and speed performance tweak to {\em sub\_type}.
 \end{description}
 \subsection{Changes forecast}
 None.
@@ -234,15 +235,30 @@ fun Ûtype_to_extypeİ (ty : TYPE) : EXTYPE = (
 =TEX
 $sub\_type$ applies a substitution to a type repeatedly until
 the substitution ceases to change the type.
-
+For efficiency, it is coded to raise an exception in subtrees of the type where no change occurs.
 =SML
-fun Ûsub_typeİ (phi : SUBS) (ExVartype(Known ty)) = ExVartype(Known ty)
-|   sub_type (phi : SUBS) (ty as (ExVartype(Unknown tvn))) = (
-	case sub_opt (phi, tvn) of
-		Nil => ty
-		| Value ty => sub_type phi ty)
-|   sub_type (phi : SUBS) (ExType(s, tyl)) = ExType(s, map (sub_type phi) tyl);
-
+fun Ûsub_typeİ (phi : SUBS) (exty : EXTYPE) : EXTYPE  = (
+	let	exception NoChange;
+		fun do_ty (ExVartype(Known _)) = (
+			raise NoChange
+		) | do_ty (ExVartype(Unknown tvn)) = (
+			case sub_opt (phi, tvn) of
+				Nil =>  raise NoChange
+			|	Value ty =>  (do_ty ty handle NoChange => ty)
+		) | do_ty (ExType(s, tyl)) = (
+			ExType(s, do_tyl false [] tyl)
+		) and do_tyl changed acc [] = (
+			if	changed
+			then	rev acc
+			else	raise NoChange
+		) | do_tyl changed acc (exty::more) = (
+			let	val exty' = do_ty exty;
+			in	do_tyl true (exty'::acc) more
+			end	handle NoChange => do_tyl changed (exty::acc) more
+		);
+	in	do_ty exty handle NoChange => exty
+	end
+);
 =TEX
 $new\_subs$ creates a new substitution array. The size
 $sz$ is passed to the sparse array package and determines
