@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.12 2003/01/29 16:31:43 rda Exp rda $
+ * $Id: files.c,v 2.13 2003/01/29 17:23:12 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -249,7 +249,7 @@ static char *get_file_contents(
 	char *buf, *p;
 	int whatgot;
 	enum {FT_ANY, FT_UNIX, FT_DOS_OR_MAC, FT_DOS,  FT_MAC,
-		FT_MIXED,  FT_DOS_CR, FT_MIXED_CR} ft_state;
+		FT_MIXED,  FT_DOS_CR, FT_MAC_CR, FT_MIXED_CR} ft_state;
 	FileType file_type;
 	if(stat(name, &status) != 0) {
 		if (cmdLine) {
@@ -295,8 +295,9 @@ static char *get_file_contents(
 	};
 	p = buf;
 	ft_state = FT_ANY;
-	while( (whatgot = getc(fp)) != EOF ) {
-		if(whatgot >= 0 && whatgot < ' '
+	while( !feof(fp) && !ferror(fp) ) {
+		whatgot = getc(fp);
+		if(whatgot != EOF && whatgot >= 0 && whatgot < ' '
 		&& whatgot != '\t' && whatgot != '\n' && whatgot != '\r') {
 			file_error_dialog(w, contains_nulls_message, name);
 			XtFree(buf);
@@ -310,7 +311,11 @@ static char *get_file_contents(
 						ft_state = FT_DOS_OR_MAC;
 						break;
 					case '\n':
-						ft_state = FT_UNIX; /* No break! */
+						ft_state = FT_UNIX;
+						*p++ = whatgot;
+						break;
+					case EOF:
+						break;
 					default:
 						*p++ = whatgot;
 						break;
@@ -322,6 +327,8 @@ static char *get_file_contents(
 						ft_state = FT_MIXED;
 						*p++ = '\n';
 						break;
+					case EOF:
+						break;
 					default:
 						*p++ = whatgot;
 						break;
@@ -330,12 +337,16 @@ static char *get_file_contents(
 			case FT_DOS_OR_MAC:
 				switch(whatgot) {
 					case '\r':
-						ft_state = FT_MAC;
+						ft_state = FT_MAC_CR;
 						*p++ = '\n';
-						*p++ = '\n'; /* consecutive CRs in Mac file */
 						break;
 					case '\n':
-						ft_state = FT_DOS; /* No break! */
+						ft_state = FT_DOS; 
+						*p++ = whatgot;
+						break;
+					case EOF:
+						ft_state = FT_MAC;
+						break;
 					default:
 						*p++ = whatgot;
 						break;
@@ -347,7 +358,11 @@ static char *get_file_contents(
 						ft_state = FT_DOS_CR;
 						break;
 					case '\n':
-						ft_state = FT_MIXED; /* No break! */
+						ft_state = FT_MIXED; 
+						*p++ = whatgot;
+						break;
+					case EOF:
+						break;
 					default:
 						*p++ = whatgot;
 						break;
@@ -360,6 +375,8 @@ static char *get_file_contents(
 						break;
 					case '\n':
 						ft_state = FT_MIXED; /* No break! */
+					case EOF:
+						break;
 					default:
 						*p++ = whatgot;
 						break;
@@ -370,6 +387,8 @@ static char *get_file_contents(
 					case '\r':
 						ft_state = FT_MIXED_CR;
 						break;
+					case EOF:
+						break;
 					default:
 						*p++ = whatgot;
 						break;
@@ -378,16 +397,39 @@ static char *get_file_contents(
 			case FT_DOS_CR:
 				switch(whatgot) {
 					case '\r':
-						ft_state = FT_MIXED;
-						*p++ = '\n'; /* consecutive CRs */
+						ft_state = FT_MIXED_CR;
 						*p++ = '\n';
 						break;
 					case '\n': /* CR/LF */
-						ft_state = FT_DOS; /* No break! */
+						ft_state = FT_DOS;
+						*p++ = '\n';
+						break;
+					case EOF:
+						ft_state = FT_MIXED;
 						*p++ = '\n';
 						break;
 					default:
 						ft_state = FT_MIXED;
+						*p++ = '\n';
+						*p++ = whatgot;
+						break;
+				}
+				break;
+			case FT_MAC_CR:
+				switch(whatgot) {
+					case '\r':
+						*p++ = '\n';
+						break;
+					case '\n': /* CR/LF */
+						ft_state = FT_MIXED;
+						*p++ = '\n';
+						break;
+					case EOF:
+						ft_state = FT_MAC;
+						*p++ = '\n';
+						break;
+					default:
+						ft_state = FT_MAC;
 						*p++ = '\n';
 						*p++ = whatgot;
 						break;
@@ -397,10 +439,12 @@ static char *get_file_contents(
 				ft_state = FT_MIXED;
 				switch(whatgot) {
 					case '\r':
-						*p++ = '\n'; /* consecutive CRs */
 						*p++ = '\n';
 						break;
 					case '\n': /* CR/LF */
+						*p++ = '\n';
+						break;
+					case EOF:
 						*p++ = '\n';
 						break;
 					default:
