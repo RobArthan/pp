@@ -220,12 +220,12 @@ static MenuItem file_menu_items[] = {
     NULL,
 };
 
-#define TOOLS_MENU_FIND_REPLACE	0
-#define TOOLS_MENU_PALETTE	1
+#define TOOLS_MENU_SEARCH_REPLACE	0
+#define TOOLS_MENU_PALETTE		1
 
 static MenuItem tools_menu_items[] = {
-    { "Find & Replace", &xmPushButtonGadgetClass, 'F', NULL, NULL,
-        tools_menu_cb, (XtPointer)TOOLS_MENU_FIND_REPLACE, (MenuItem *)NULL, False },
+    { "Search and  Replace", &xmPushButtonGadgetClass, 'F', NULL, NULL,
+        tools_menu_cb, (XtPointer)TOOLS_MENU_SEARCH_REPLACE, (MenuItem *)NULL, False },
     { "Palette", &xmPushButtonGadgetClass, 'P', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_PALETTE, (MenuItem *)NULL, False },
     NULL,
@@ -679,8 +679,8 @@ XmAnyCallbackStruct *cbs;
 	case TOOLS_MENU_PALETTE:
 		add_palette(script);
 		break;
-	case TOOLS_MENU_FIND_REPLACE:
-		add_find_tool(script);
+	case TOOLS_MENU_SEARCH_REPLACE:
+		add_search_tool(script);
 		break;
 	default:
 		break;

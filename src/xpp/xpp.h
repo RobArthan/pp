@@ -90,8 +90,8 @@ typedef struct menu_item {
 	extern Boolean add_palette(
 		Widget	w);
 #endif
-#ifndef _find
-	extern Boolean add_find_tool(
+#ifndef _search
+	extern Boolean add_search_tool(
 		Widget	w);
 #endif
 #ifndef _xmisc

@@ -93,7 +93,7 @@ Widget w;
 
 	n_chars = strlen(prettychars);
 
-	shell = XtVaCreatePopupShell("Palette",
+	shell = XtVaCreatePopupShell("xpp-Palette",
 		xmDialogShellWidgetClass, w,
 		NULL); 
 

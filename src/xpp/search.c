@@ -2,7 +2,7 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * $Id$ 
  *
- * find.c - support for find & replace for the X/Motif ProofPower Interface
+ * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
  * (c) ICL 1994
  *
@@ -11,9 +11,9 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-#define _find
+#define _search
 
-#define DO_FIND		0
+#define DO_SEARCH		0
 #define DO_REPLACE	1
 #define DO_REPLACE_ALL	2
 
@@ -39,13 +39,19 @@ static char *cant_goto_line_no =
 	"Running out of memory! "
 	"Not enough memory is left to move to the line number";
 
+static char *no_line_no = 
+	"Line number to go to is missing or zero";
+
 static char *no_room_for_global = 
 	"Running out of memory! "
 	"Not enough memory is left to perform the global replacement";
 
-static char *no_selection_find = 
+static char *no_search_string = 
+	"There is nothing in the search field";
+
+static char *no_selection_search = 
 	"There is no selection in the text window "
-	"to be copied into the find field";
+	"to be copied into the search field";
 
 static char *no_selection_replace = 
 	"There is no selection in the text window "
@@ -65,21 +71,21 @@ typedef struct {
 	Widget	text_w,
 		shell_w,
 		manager_w,
-		find_w,
+		search_w,
 		replace_w,
-		line_no_w;} FindData;
+		line_no_w;} SearchData;
 	
-static FindData find_data;
+static SearchData search_data;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * add_find_tool: attach a find & replace tool to a text widget
+ * add_search_tool: attach a search & replace tool to a text widget
  * This is long but only because it is repetitive.
  * The aim is a popup shell looking something like:
  *
  * | Search for:   | search string                    | Selection |
  * | Replace with: | replacement string               | Selection |
  * | Line Number:  | line number string               | Cursor |
- * |  Search   | Find & Replace | Replace All | Go to line number |
+ * |  Search   | Search & Replace | Replace All | Go to line number |
  *
  * Each `xyz' string here is a text field, labelled by the label to
  * its left. One its right is a push-button which can be used to
@@ -90,14 +96,14 @@ static FindData find_data;
  * searches etc.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-Bool add_find_tool(Widget text_w)
+Bool add_search_tool(Widget text_w)
 {
 	NAT cbdata;
 	Widget shell, rowcol,
-		find_form,
-		find_lab,
-		find_text,
-		find_set_btn,
+		search_form,
+		search_lab,
+		search_text,
+		search_set_btn,
 		replace_form,
 		replace_lab,
 		replace_text,
@@ -107,7 +113,7 @@ Bool add_find_tool(Widget text_w)
 		line_no_text,
 		line_no_set_btn,
 		button_form,
-		find_btn,
+		search_btn,
 		replace_btn,
 		replace_all_btn,
 		goto_line_no_btn;
@@ -115,22 +121,23 @@ Bool add_find_tool(Widget text_w)
 	char	*pattern;
 
 	static void
-		find_cb(),
-		find_set_cb(),
+		search_cb(),
+		search_set_cb(),
 		replace_set_cb(),
+		line_no_modify_cb(),
 		line_no_set(),
 		line_no_set_cb(),
 		goto_line_no_cb();
 
 
-	if((find_data.shell_w) != NULL) {
-		XtManageChild(find_data.manager_w);
-		XtPopup(find_data.shell_w, XtGrabNone);
+	if((search_data.shell_w) != NULL) {
+		XtManageChild(search_data.manager_w);
+		XtPopup(search_data.shell_w, XtGrabNone);
 		return True;
 	};
 
 
-	shell = XtVaCreatePopupShell("Find a String",
+	shell = XtVaCreatePopupShell("xpp-Search-and-Replace",
 		xmDialogShellWidgetClass, text_w,
 		NULL); 
 
@@ -142,13 +149,13 @@ Bool add_find_tool(Widget text_w)
  * Row 1:  | Search for: | search string | Selection
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	find_form = XtVaCreateWidget("find form",
+	search_form = XtVaCreateWidget("search form",
 		xmFormWidgetClass, rowcol,
 		XmNfractionBase,	12,
 		NULL);
 
-	find_lab = XtVaCreateManagedWidget("Search for:",
-		xmLabelWidgetClass,	find_form,
+	search_lab = XtVaCreateManagedWidget("Search for:",
+		xmLabelWidgetClass,	search_form,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_FORM,
@@ -157,8 +164,8 @@ Bool add_find_tool(Widget text_w)
 		XmNalignment,			XmALIGNMENT_BEGINNING,
 		NULL);
 
-	find_text = XtVaCreateManagedWidget("pp_text",
-		xmTextFieldWidgetClass,	find_form,
+	search_text = XtVaCreateManagedWidget("pp_text",
+		xmTextFieldWidgetClass,	search_form,
 		XmNtraversalOn,			True,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
@@ -167,8 +174,8 @@ Bool add_find_tool(Widget text_w)
 		XmNcolumns,			40,
 		NULL);
 
-	find_set_btn = XtVaCreateManagedWidget("Selection",
-		xmPushButtonWidgetClass,	find_form,
+	search_set_btn = XtVaCreateManagedWidget("Selection",
+		xmPushButtonWidgetClass,	search_form,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
@@ -253,7 +260,7 @@ Bool add_find_tool(Widget text_w)
 		NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Row 4:  | Search | Find & Replace | Replace All | Go to line number
+ * Row 4:  | Search | Search & Replace | Replace All | Go to line number
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	button_form = XtVaCreateWidget("button form",
@@ -261,7 +268,7 @@ Bool add_find_tool(Widget text_w)
 		XmNfractionBase,	16,
 		NULL);
 
-	find_btn = XtVaCreateManagedWidget("Search",
+	search_btn = XtVaCreateManagedWidget("Search",
 		xmPushButtonWidgetClass,	button_form,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
@@ -303,37 +310,41 @@ Bool add_find_tool(Widget text_w)
  * set up static data to contain necessary widget handles:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	find_data.text_w = text_w;
-	find_data.shell_w = shell;
-	find_data.manager_w = rowcol;
-	find_data.find_w = find_text;
-	find_data.replace_w = replace_text;
-	find_data.line_no_w = line_no_text;
+	search_data.text_w = text_w;
+	search_data.shell_w = shell;
+	search_data.manager_w = rowcol;
+	search_data.search_w = search_text;
+	search_data.replace_w = replace_text;
+	search_data.line_no_w = line_no_text;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * add callbacks (top to bottom then left to right).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	XtAddCallback(find_set_btn, XmNactivateCallback,
-		find_set_cb, (XtPointer)(&find_data));
+	XtAddCallback(search_set_btn, XmNactivateCallback,
+		search_set_cb, (XtPointer)(&search_data));
 
 	XtAddCallback(replace_set_btn, XmNactivateCallback,
-		replace_set_cb, (XtPointer)(&find_data));
+		replace_set_cb, (XtPointer)(&search_data));
+
+	XtAddCallback(line_no_text,
+		XmNmodifyVerifyCallback, line_no_modify_cb,
+			(XtPointer)(&search_data));
 
 	XtAddCallback(line_no_set_btn, XmNactivateCallback,
-		line_no_set_cb, (XtPointer)(&find_data));
+		line_no_set_cb, (XtPointer)(&search_data));
 
-	XtAddCallback(find_btn, XmNactivateCallback,
-		find_cb, (XtPointer)DO_FIND);
+	XtAddCallback(search_btn, XmNactivateCallback,
+		search_cb, (XtPointer)DO_SEARCH);
 
 	XtAddCallback(replace_btn, XmNactivateCallback,
-		find_cb, (XtPointer)DO_REPLACE);
+		search_cb, (XtPointer)DO_REPLACE);
 
 	XtAddCallback(replace_all_btn, XmNactivateCallback,
-		find_cb, (XtPointer)DO_REPLACE_ALL);
+		search_cb, (XtPointer)DO_REPLACE_ALL);
 
 	XtAddCallback(goto_line_no_btn, XmNactivateCallback,
-		goto_line_no_cb, (XtPointer)(&find_data));
+		goto_line_no_cb, (XtPointer)(&search_data));
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Initialise search string and line number:
@@ -342,18 +353,18 @@ Bool add_find_tool(Widget text_w)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	if(pattern = XmTextGetSelection(text_w)) {
-		XmTextSetString(find_text, pattern);
-		XmTextShowPosition(find_text, strlen(pattern));
+		XmTextSetString(search_text, pattern);
+		XmTextShowPosition(search_text, strlen(pattern));
 		XtFree(pattern);
 	}
 
-	line_no_set(&find_data);
+	line_no_set(&search_data);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Manage everything:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	XtManageChild(find_form);
+	XtManageChild(search_form);
 	XtManageChild(replace_form);
 	XtManageChild(line_no_form);
 	XtManageChild(button_form);
@@ -365,55 +376,55 @@ Bool add_find_tool(Widget text_w)
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * find callback.
+ * search callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void find_cb(
+static void search_cb(
 	Widget				w,
 	NAT				cbdata,
 	XmPushButtonCallbackStruct	cbs)
 {
 	long int left, len;
 	NAT start_point;
-	static long int find_string();
+	static long int search_string();
 	static void replace_all();
 	char *pattern, *text_buf, *replacement, *all_replaced;
-	pattern = XmTextGetString(find_data.find_w);
-	text_buf = XmTextGetString(find_data.text_w);
-	start_point = XmTextGetInsertionPosition(find_data.text_w);
-	find_string(pattern, text_buf, start_point, &left, &len);
+	pattern = XmTextGetString(search_data.search_w);
+	text_buf = XmTextGetString(search_data.text_w);
+	start_point = XmTextGetInsertionPosition(search_data.text_w);
+	search_string(pattern, text_buf, start_point, &left, &len);
 	if(left >= 0) {
 		switch(cbdata) {
-			case DO_FIND:
+			case DO_SEARCH:
 				XmTextSetSelection(
-					find_data.text_w,
+					search_data.text_w,
 					left,
 					left + len,
 					CurrentTime);
 				XmTextShowPosition(
-					find_data.text_w,
+					search_data.text_w,
 					left);
 				break;
 			case DO_REPLACE:
 				replacement = XmTextGetString(
-						find_data.replace_w);
+						search_data.replace_w);
 				XmTextReplace(
-					find_data.text_w,
+					search_data.text_w,
  					left,
 					left + strlen(pattern),
 					replacement);
 				XmTextSetSelection(
-					find_data.text_w,
+					search_data.text_w,
 					left,
 					left + strlen(replacement),
 					CurrentTime);
 				XmTextShowPosition(
-					find_data.text_w,
+					search_data.text_w,
 					left);
 				XtFree(replacement);
 				break;
 			case DO_REPLACE_ALL:
 				replacement = XmTextGetString(
-						find_data.replace_w);
+						search_data.replace_w);
 				replace_all(
 					pattern,
 					text_buf,
@@ -422,22 +433,22 @@ static void find_cb(
 					&start_point);
 				if(all_replaced == NULL) {
 					ok_dialog(
-						find_data.shell_w,
+						search_data.shell_w,
 						no_room_for_global);
 					XtFree(replacement);
 					break;
 				}
 				XmTextReplace(
-					find_data.text_w,
+					search_data.text_w,
 					0,
 					XmTextGetLastPosition(
-						find_data.text_w),
+						search_data.text_w),
 					all_replaced);
 				XmTextSetInsertionPosition(
-					find_data.text_w,
+					search_data.text_w,
 					start_point);
 				XmTextShowPosition(
-					find_data.text_w,
+					search_data.text_w,
 					start_point);
 				XtFree(replacement);
 				XtFree(all_replaced);
@@ -445,11 +456,13 @@ static void find_cb(
 			default:
 				break;
 		}
+	} else if (!(*pattern)){
+		ok_dialog(search_data.shell_w, no_search_string);
 	} else {
 		char *msg_buf = XtMalloc(strlen(pattern) +
 					strlen(not_found));
 		sprintf(msg_buf, not_found, pattern);
-		ok_dialog(find_data.shell_w, msg_buf);
+		ok_dialog(search_data.shell_w, msg_buf);
 	}
 	XtFree(pattern);
 	XtFree(text_buf);
@@ -457,21 +470,21 @@ static void find_cb(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * find field setting callback.
+ * search field setting callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void find_set_cb(
+static void search_set_cb(
 	Widget				w,
-	FindData			*cbdata,
+	SearchData			*cbdata,
 	XmPushButtonCallbackStruct	cbs)
 {
 	char *sel;
 	XmTextPosition ins_pos;
 	if((sel = XmTextGetSelection(cbdata->text_w)) == NULL) {
-		ok_dialog(cbdata->shell_w, no_selection_find);
+		ok_dialog(cbdata->shell_w, no_selection_search);
 		return;
 	};
-	ins_pos = XmTextFieldGetInsertionPosition(cbdata->find_w);
-	XmTextFieldInsert(cbdata->find_w, ins_pos, sel);
+	ins_pos = XmTextFieldGetInsertionPosition(cbdata->search_w);
+	XmTextFieldInsert(cbdata->search_w, ins_pos, sel);
 	XtFree(sel);
 }
 
@@ -480,7 +493,7 @@ static void find_set_cb(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void replace_set_cb(
 	Widget				w,
-	FindData			*cbdata,
+	SearchData			*cbdata,
 	XmPushButtonCallbackStruct	cbs)
 {
 	char *sel;
@@ -495,11 +508,32 @@ static void replace_set_cb(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Monitor input typed into line number string.
+ * Discards non-digits.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void line_no_modify_cb(
+	Widget				w,
+	SearchData			*cbdata,
+	XmTextVerifyCallbackStruct	*cbs)
+{
+	int i, j;
+	char *p = cbs->text->ptr; /* Not modified later */
+	for(i = 0; i < cbs->text->length; ++i) {
+		if(!isdigit(p[i])) {
+			for(j = i; j < cbs->text->length; ++j) {
+				p[j] = p[j+1];
+				--cbs->text->length;
+				--i;
+			}
+		}
+	}
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * line number setting callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void line_no_set_cb(
 	Widget				w,
-	FindData			*cbdata,
+	SearchData			*cbdata,
 	XmPushButtonCallbackStruct	cbs)
 {
 	static void line_no_set();
@@ -511,17 +545,23 @@ static void line_no_set_cb(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void goto_line_no_cb(
 	Widget				w,
-	FindData			*cbdata,
+	SearchData			*cbdata,
 	XmPushButtonCallbackStruct	cbs)
 {
 	static long int line_no_to_offset();
 	long int offset;
-	long int line_no;
+	long int line_no = 0;
 	char *line_no_string;
 
 	line_no_string = XmTextGetString(cbdata->line_no_w);
 
 	sscanf(line_no_string, "%ld", &line_no);
+
+	if(line_no <= 0) {
+		ok_dialog(cbdata->shell_w, no_line_no);
+		XtFree(line_no_string);
+		return;
+	}
 
 	offset = line_no_to_offset(cbdata->text_w, line_no);
 	if(offset == NO_MEMORY) {
@@ -532,6 +572,7 @@ static void goto_line_no_cb(
 		ok_dialog(cbdata->shell_w, buf);
 	} else {
 		XmTextSetTopCharacter(cbdata->text_w, offset);
+		XmTextSetInsertionPosition(cbdata->text_w, offset);
 	}
 	XtFree(line_no_string);
 }
@@ -556,10 +597,10 @@ static long int substr(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * find_string is the basic search function.
+ * search_string is the basic search function.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static void find_string(
+static void search_string(
 	char		*pattern,
 	char		*text_buf,
 	NAT		start_point,
@@ -694,7 +735,7 @@ static long int line_no_to_offset (Widget text_w, NAT line_no)
  * Support for line number setting callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static void line_no_set(FindData *cbdata)
+static void line_no_set(SearchData *cbdata)
 {
 	char line_no_string[16];
 	long int line_no;
