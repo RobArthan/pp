@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.31 2003/06/13 11:20:28 rda Exp rda $
+ * $Id: pterm.c,v 2.32 2003/06/16 16:11:07 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -152,7 +152,7 @@ before using them.
 #define _pterm
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * include files:
+ * OS-independent include files:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 #include <errno.h>
@@ -160,17 +160,7 @@ before using them.
 #include <stdio.h>
 #include <string.h>
 #include <sys/ioctl.h>
-
-#ifdef USE_STREAMS
-#include <stropts.h>
-#include <sys/filio.h>
-#include <sys/termio.h>
-#else
-#include <termios.h>
-#endif
-
 #include <signal.h>
-
 #include <sys/termios.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -255,6 +245,17 @@ before using them.
 #else
 #define GET_ATTRS(FD, TIO) (ioctl(FD, TCGETS, TIO) < 0)
 #define SET_ATTRS(FD, TIO) (ioctl(FD, TCSETS, TIO) < 0)
+#endif
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * OS-specific include files:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+#ifdef USE_STREAMS
+#include <stropts.h>
+#include <sys/filio.h>
+#include <sys/termio.h>
+#else
+#include <termios.h>
 #endif
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -378,6 +379,7 @@ static sig_info	sig_infos []  = {
 #ifdef SIGILL
 	{"illegal instruction",		SIGILL,		H_FATAL},
 #endif
+/* SIGINT done at end because they all have it: */
 #ifdef SIGINT
 	{"interrupt",		SIGINT,		H_ASK},
 #endif
@@ -438,11 +440,12 @@ static sig_info	sig_infos []  = {
 	{"stack fault",		SIGSTKFLT,	H_FATAL},
 #endif
 #ifdef SIGEMT
-	{"emulation trap",	SIGXFSZ,	H_FATAL}
+	{"emulation trap",	SIGXFSZ,	H_FATAL},
 #endif
 #ifdef SIGLOST
-	{"resource lost",	SIGXFSZ,	H_FATAL}
+	{"resource lost",	SIGXFSZ,	H_FATAL},
 #endif
+	0
 };
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Pseudo-terminal initialisation:
