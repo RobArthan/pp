@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.13 2001/11/16 17:19:56 rda Exp rda $
+ * $Id: pterm.c,v 2.14 2002/03/17 13:06:56 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -114,9 +114,20 @@ static char* carry_on_waiting_message =
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void get_from_application(INPUT_CALLBACK_ARGS);
+static Boolean get_from_app_work_proc(XtPointer);
+/*
+ * The argument to get_from_app_work_proc is one of the following two:
+ */
+#define	CONTINUE_LISTENING	0
+#define	STOP_LISTENING		1
+
+/*
+ * Listening states:
+ */
 #define	LISTEN	10
 #define	IGNORE	20
 #define	QUERY	30
+#define DEAD	40
 
 Boolean listening_state(int req)
 {
@@ -140,6 +151,14 @@ Boolean listening_state(int req)
 			};
 			break;
 		case QUERY:
+			break;
+		case DEAD:
+			if(listening) {
+	/* Set up work proc to see if there is any final output from app */
+				XtAppAddWorkProc(app,
+						get_from_app_work_proc,
+						(XtPointer) STOP_LISTENING);
+			};
 			break;
 	}
 	sigprocmask(SIG_SETMASK, &before, 0);
@@ -357,7 +376,7 @@ Boolean application_alive(void)
 	if(child_pid) {
 		waitpid(child_pid, NULL, WNOHANG);
 		if( kill(child_pid, 0) < 0 ) {
-			listening_state(IGNORE);
+			listening_state(DEAD);
 			close(control_fd);
 			return False;
 		} else {
@@ -372,8 +391,6 @@ Boolean application_alive(void)
  * Data transfer from application:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static Boolean get_from_app_work_proc(XtPointer);
-
 static void get_from_application(
 	XtPointer	unused_p,
 	int		*unused_source,
@@ -386,24 +403,30 @@ static void get_from_application(
 	}
 	if(ct == XFER_SIZE) { /* Probably more to do; stop listening to give X a chance */
 		listening_state(IGNORE);
-		XtAppAddWorkProc(app, get_from_app_work_proc, (XtPointer) NULL);
+		XtAppAddWorkProc(app,
+				get_from_app_work_proc,
+				(XtPointer) CONTINUE_LISTENING);
 	}		
 }
 
-static Boolean get_from_app_work_proc(XtPointer unused_p)
+static Boolean get_from_app_work_proc(XtPointer continue_flag)
 {
 	int ct;
 	char buf[XFER_SIZE+1]; /* allow for null-termination in scroll_out */
-	if(!application_alive()) { /* application has died since work proc was set up */
-		return True;
-	}
 	if((ct = read(control_fd, buf, XFER_SIZE)) > 0) {
 		scroll_out(buf, ct, False);
 	}
 	if(ct == XFER_SIZE) { /* Probably more to do */
 		return False;	/* arrange to be called again */ 
 	} else	{
-		listening_state(LISTEN);
+		switch((int)continue_flag) {
+			case CONTINUE_LISTENING:
+				listening_state(LISTEN);
+				break;
+			case STOP_LISTENING:
+				listening_state(IGNORE);
+				break;
+		}
 		return True;
 	}
 }
