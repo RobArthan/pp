@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.46 2004/02/10 22:43:47 rda Exp rda $
+ * $Id: pterm.c,v 2.47 2004/07/06 20:20:54 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -20,128 +20,147 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  PLATFORM-DEPENDENT ISSUES
 
-The platform-dependent parts of xpp are localised in this file. The code has evolved
-over the years to work with new platforms and new versions of old platforms. Some
-notes are in order to help with any future changes.
+The platform-dependent parts of xpp are localised in this file. The
+code has evolved over the years to work with new platforms and new
+versions of old platforms. Some notes are in order to help with any
+future changes.
 
-The purpose of pterm.c is to implement a full duplex communication channel between
-xpp and the application it is running. The services and the functions that
-implement them are:
+The purpose of pterm.c is to implement a full duplex communication
+channel between xpp and the application it is running. The services and
+the functions that implement them are:
 
-Initialisation: get_pty - this sets up a full duplex communication channel between
-xpp and the application.
+Initialisation: get_pty - this sets up a full duplex communication
+channel between xpp and the application.
 
 Data transfer from application to xpp: get_from_application
 
 Data transfer from xpp to application: send_to_application, send_nl
 
-Control of the application: application_alive (test), interrupt_and_abandon, 
-interrupt_application, restart_application.
+Control of the application: application_alive (test),
+interrupt_and_abandon, interrupt_application, restart_application.
 
-To localise 
-Starting a new xpp session: new_editor, new_command_session fork and exec a  new xpp session.
+To localise Starting a new xpp session: new_editor, new_command_session
+fork and exec a  new xpp session.
 
-The initialisation step (also used to re-initialise in restart_application) has several
-OS-dependent aspects. Data transfer from and to the application as coded here
-is not OS-dependent, but it care has had to be taken to ensure that it doesn't
-deadlock and to ensure that it doesn't swamp interaction with the user. The
-control functions are less problematic but they do interact with data transfer. Both
-data transfer and the control functions have to be careful about the possibility
-of signals.
+The initialisation step (also used to re-initialise in
+restart_application) has several OS-dependent aspects. Data transfer
+from and to the application as coded here is not OS-dependent, but it
+care has had to be taken to ensure that it doesn't deadlock and to
+ensure that it doesn't swamp interaction with the user. The control
+functions are less problematic but they do interact with data transfer.
+Both data transfer and the control functions have to be careful about
+the possibility of signals.
 
-To localise the potential system dependencies, this file also provides the following services
-which are required in both edit-only and command sessions:
+To localise the potential system dependencies, this file also provides
+the following services which are required in both edit-only and command
+sessions:
 
-Starting a new xpp session: new_editor, new_command_session - fork and exec a  new xpp session.
+Starting a new xpp session: new_editor, new_command_session - fork and
+exec a  new xpp session.
 
-Handling signals: handle_sigs - set up signal handlers to help preserve the user's work.
+Handling signals: handle_sigs - set up signal handlers to help preserve
+the user's work.
 
 INITIALISATION
 
 The communication channel between xpp and the application is via  UN*X
 pseudo-terminal devices. A pseudo-terminal comprises a pair of entries
-in /dev which are linked by the operating system so that reads and writes
-by one process accessing one /dev entry appear as writes and reads to another
-process accessing the other one. The initialisation involves the following stages:
+in /dev which are linked by the operating system so that reads and
+writes by one process accessing one /dev entry appear as writes and
+reads to another process accessing the other one. The initialisation
+involves the following stages:
 
-1) Open the two pseudo-terminal devices giving two file descriptors, control
-and slave.
+1) Open the two pseudo-terminal devices giving two file descriptors,
+control and slave.
 
 2) Fork
 
-3a) Parent (xpp) closes the slave file descriptor, sets itself up to do non-blocking I/O
-on the control file descriptor and arranges to listen for input from it. Subsequent
-data transfers to the application are writes to the control file descriptor.
+3a) Parent (xpp) closes the slave file descriptor, sets itself up to do
+non-blocking I/O on the control file descriptor and arranges to listen
+for input from it. Subsequent data transfers to the application are
+writes to the control file descriptor.
 
-3b) Child (the application-to-be) sets the signal handling back to the defaults,
-then closes the control file descriptor, then duplicates the slave file descriptor to
-become the standard input, output and error channels and finally
-execs the application.
+3b) Child (the application-to-be) sets the signal handling back to the
+defaults, then closes the control file descriptor, then duplicates the
+slave file descriptor to become the standard input, output and error
+channels and finally execs the application.
 
-There are several complications. The main one is that to to avoid the application starting
-to do output before xpp is listening, they need to synchronise. This is done by having
-the child process do a blocking read for a byte of data on its file descriptor, which the
-parent sends when it is ready. Also, the pseudo-terminal, which has very similar
-characteristics to a real terminal needs to be configured, e.g., to stop it doing input-line
-buffering or unwanted character conversions.
+There are several complications. The main one is that to to avoid the
+application starting to do output before xpp is listening, they need to
+synchronise. This is done by having the child process do a blocking
+read for a byte of data on its file descriptor, which the parent sends
+when it is ready. Also, the pseudo-terminal, which has very similar
+characteristics to a real terminal needs to be configured, e.g., to
+stop it doing input-line buffering or unwanted character conversions.
 
-In addition, there are several OS-dependent aspects: under SVR4 systems like Solaris
-you use special interfaces grantpt and unlockpt to open the two /dev files as an atomic
-operation. On other systems you just look for them in /dev (and pray that a competing
-process doesn't interfere). Also on some systems, the pseudo-terminal configuration
-has to be done in the child rather than the parent if xpp is started in the background.
-There is also some variation on how the configuration is done.
+In addition, there are several OS-dependent aspects: under SVR4-like
+systems like Solaris and now under Unix98 and later versions of POSIX
+compliant systems there are special interfaces grantpt and unlockpt
+which give access to the two /dev files as an atomic operation,
+via a pseudo-pseudo-device called /dev/ptmx. On BSD-like systems, there
+is an interface called openpty which generally gives better results than
+the fallback option, which is just to look for a free matching pair of control/slave devices in /dev (and pray that a competing process doesn't
+interfere by opening the slave device between your opens of the control
+device and the slave). Also on some systems, the pseudo-terminal configuration has
+to be done in the child rather than the parent if xpp is started in the
+background (this is probably historic now).  There is also some variation
+on how the configuration is done (e.g., with POSIX interfaces or with ioctl).
 
 DATA TRANSFER FROM APPLICATION
 
-Data transfer from the application is handled using an input callback procedure,
-get_from_application. However, the obvious approach of just having the input
-callback procedure always alert does not work - if the application is generating
-a lot of data fast, it will swamp the Xt input queue and the user interface will freeze
-(apart from updating the display of the data). The solution chosen is to read the
-have the input callback read a small block of data, and if it fills the block to unregister
-itself and register a work procedure to check for further data. This lets Xt give
-due priority to user interactions. A function listening_state is used to keep a close
-track on whether an input callback procedure is currently registered or not and
-to deal with some abnormal situations (e.g., when the application has died
-unexpectedly, but there's still some data from it left to process).
+Data transfer from the application is handled using an input callback
+procedure, get_from_application. However, the obvious approach of just
+having the input callback procedure always alert does not work - if the
+application is generating a lot of data fast, it will swamp the Xt
+input queue and the user interface will freeze (apart from updating the
+display of the data). The solution chosen is to read the have the input
+callback read a small block of data, and if it fills the block to
+unregister itself and register a work procedure to check for further
+data. This lets Xt give due priority to user interactions.  A function
+listening_state is used to keep a close track on whether an input
+callback procedure is currently registered or not and to deal with some
+abnormal situations (e.g., when the application has died unexpectedly,
+but there's still some data from it left to process).
 
 DATA TRANSFER TO APPLICATION
 
-The code that transfers data to the application is actually quite simple. The main
-complication is that, while it is generally only asked to transfer just a small amount
-of data, say 10-10,000 bytes, it is sometimes required to deal with very large
-amounts, say 100,000 bytes or more. When a large data transfer is requested,
-if we tried to send the data all at once, the write might block. So we have to
-be prepared to try writing ever smaller amounts of data until we can get something
-through and then register a work procedure to deal with the residue. Since the
-user could try to transfer some more data before the work procedure is done, we need to
-maintain a queue of outgoing data.
+The code that transfers data to the application is actually quite
+simple. The main complication is that, while it is generally only asked
+to transfer just a small amount of data, say 10-10,000 bytes, it is
+sometimes required to deal with very large amounts, say 100,000 bytes
+or more. When a large data transfer is requested, if we tried to send
+the data all at once, the write might block. So we have to be prepared
+to try writing ever smaller amounts of data until we can get something
+through and then register a work procedure to deal with the residue.
+Since the user could try to transfer some more data before the work
+procedure is done, we need to maintain a queue of outgoing data.
 
-The code that deals with all this looks rather odd at first glance: it seems to be
-writing successive blocks of outgoing data into successive positions in
-the malloced array that represents the queue and reallocing more space at the
-end of the queue when new requests arrive. I.e., it looks as if the queue array is
-growing endlessly. It also looks as if each new arrival is processed completely
-as soon as it arrives. In fact what happens is as follows: old and new data
-is processed and dequeued until the application would block; if the queue is still too full to
-deal with a new arrival, then the queue contents are all shifted along in an attempt
-to make room before trying to realloc; and, finally, if the work procedure
-succeeds in draining the queue, it reallocs it back to its initial size The performance
+The code that deals with all this looks rather odd at first glance: it
+seems to be writing successive blocks of outgoing data into successive
+positions in the malloced array that represents the queue and
+reallocing more space at the end of the queue when new requests arrive.
+I.e., it looks as if the queue array is growing endlessly. It also
+looks as if each new arrival is processed completely as soon as it
+arrives. In fact what happens is as follows: old and new data is
+processed and dequeued until the application would block; if the queue
+is still too full to deal with a new arrival, then the queue contents
+are all shifted along in an attempt to make room before trying to
+realloc; and, finally, if the work procedure succeeds in draining the
+queue, it reallocs it back to its initial size The performance
 characteristics of this algorithm seem to be very good in practice..
 
 STARTING NEW XPP SESSIONS
 
-This is straightforward. We arrange to do the exec in a grand-child of a suicidal
-child so that the new session ends up being owned by init and so will be reaped
-when it dies.
+This is straightforward. We arrange to do the exec in a grand-child of
+a suicidal child so that the new session ends up being owned by init
+and so will be reaped when it dies.
 
 SIGNAL HANDLING
 
 We adopt a table-driven approach: sig_infos defined below is a table of
-signal numbers and corresponding actions. See below. We also allow for the
-SUS V3 real-time signals. We check for the existence of the SIGxxx macros
-before using them.
+signal numbers and corresponding actions. See below. We also allow for
+the SUS V3 real-time signals. We check for the existence of the SIGxxx
+macros before using them.
 
 
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -179,7 +198,8 @@ before using them.
  *	USE_POSIX_TERMIO - use POSIX tcgetattr/tcsetattr
  *	else ioctls direct on the file descriptor
  * How to get a pseudo-terminal:
- *	USE_GRANTPT - Solaris/SUSv3 grantpt/unlockpt
+ *	USE_GRANTPT - SUSv3 grantpt/unlockpt
+ *	USE_OPENPTY - BSD openpty
  *	else hunt in /dev
  * When to set termio attributes:
  *	SET_ATTRS_IN_PARENT 
@@ -189,40 +209,46 @@ before using them.
  * Whether this OS has the SUS V3 real-time signals:
  *	HAS_RTSIGNALS (defined if it does)
  * We now define the combinations to be used for the supported OSs.
- * We make no claim that other combinations will work or that these
+ * We make no claim that other combinations that these
  * combinations will work on other OSs even if they compile OK. 
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #ifdef LINUX
-#undef USE_STREAMS
-#undef USE_POSIX_TERMIO /* historical: we probably could on more recent versions */
-#undef USE_GRANTPT
-#define SET_ATTRS_IN_PARENT
-#undef USE_CFMAKERAW /* again historical: we probably could now */
+	#undef  USE_STREAMS
+	#undef  USE_POSIX_TERMIO /* historical: we probably could on recent versions */
+	#define SET_ATTRS_IN_PARENT
+	#undef  USE_CFMAKERAW /* again historical: we probably could now */
 #endif
+
 #ifdef MACOSX
-#undef USE_STREAMS
-#define USE_POSIX_TERMIO
-#undef USE_GRANTPT
-#define SET_ATTRS_IN_PARENT
-#define USE_CFMAKERAW
+	#undef  USE_STREAMS
+	#define USE_POSIX_TERMIO
+	#define SET_ATTRS_IN_PARENT
+	#define USE_CFMAKERAW
 #endif
+
 #ifdef SOLARIS
-#define USE_STREAMS
-#undef USE_POSIX_TERMIO /* maybe we could */
-#define USE_GRANTPT
-#undef SET_ATTRS_IN_PARENT
-#undef USE_CFMAKERAW
+	#define USE_STREAMS
+	#undef  USE_POSIX_TERMIO /* maybe we could */
+	#undef  SET_ATTRS_IN_PARENT
+	#undef  USE_CFMAKERAW
 #endif
 /*
- * The termio input and output control flags vary a little from system to system.
- * We define the missing ones as zero (which works with our idioms for adding
- * them in and taking them out)
+ * MacOS X doesn't define some of the termio input and output control
+ * flags that are (or were) needed on Linux/Solaris. 
+ * We define the missing ones as zero (which works with the usual idioms for adding
+ * them in and taking them out).
+ * MacOS X also currently (up to 10.3.6) doesn't have grantpt but does
+ * have openpty.
  */
 #ifdef MACOSX
 #define XTABS (OXTABS)
 #define OLCUC (0)
 #define OCRNL (0)
+	#ifndef USE_GRANTPT
+		#define USE_OPENPTY
+	#endif
 #endif
+
 #if defined(SIGRTMIN) && defined(SIGRTMAX)
 #define HAS_RTSIGNALS
 #else
@@ -477,13 +503,12 @@ void get_pty(void)
 	char c;
 	int one = 1;
 	int slave_fd;
-	char *slavename;
+	char *slavename, line[32];
 	char *ptsname(int);
 	int i;
 	short line_length;
 #ifdef USE_GRANTPT
 /* When available, e.g., on SVR4, we use the grantpt/lockpt interfaces */
-	child_pid = 0; 
 	if ((control_fd = open("/dev/ptmx", O_RDWR)) < 0) {
 		msg("system error", "no pseudo-terminal devices available");
 		perror("xpp");
@@ -498,10 +523,15 @@ void get_pty(void)
 		exit(2);
 	};
 #else 
+#ifdef USE_OPENPTY
+	if( openpty(&control_fd, &slave_fd, NULL, NULL, NULL) < 0 ) {
+		msg("system error", "no pseudo-terminal devices available");
+		perror("xpp");
+		exit(3);
+	}
+#else
 /* we have to look for a pseudo-terminal ourselves */
-	char line[32];
-	child_pid = 0; 
-	for(control_fd = -1, c = 'p'; control_fd < 0 && c <= 's'; c++) {
+	for(control_fd = -1, c = 'p'; control_fd < 0 && c <= 'z'; c++) {
 		for(i = 0; control_fd < 0 && i < 16; i++) {
 			sprintf(line, "/dev/pty%c%x", c, i );
 	      		control_fd = open(line, O_RDWR);
@@ -523,7 +553,9 @@ void get_pty(void)
 		perror("xpp");
 		exit(3);
 	}
-#endif
+#endif /* ifdef USE_OPENPTY */
+#endif /* ifdef USE_GRANTPT */
+
 #ifdef SET_ATTRS_IN_PARENT
 	set_pty_attrs(slave_fd);
 #endif
@@ -589,7 +621,7 @@ void get_pty(void)
 
 		if (slave_fd > 2) {
 			close(slave_fd);
-		};
+		}
 
 		if(setsid() < 0) {
 			msg("system error", "setsid failed");
