@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.24 2004/02/02 14:35:19 rda Exp rda $
+ * $Id: xpp.c,v 2.25 2004/02/02 14:58:13 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -477,9 +477,6 @@ int main(int argc, char **argv)
 
 	retry_argv[num_x_args+1] = "-h";
 
-for(i = 0; i < orig_argc + 2; ++ i) {
-	fprintf(stderr, "retry_argv[%d]=\"%s\"\n", i, retry_argv[i]);
-}
 	(void) fcntl(ConnectionNumber(XtDisplay(root)), F_SETFD, 1);
 
 	XtVaSetValues(root,
