@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% %Z% $Date: 2004/08/20 16:16:59 $ $Revision: 1.131 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2004/10/25 15:21:57 $ $Revision: 1.132 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -26,7 +26,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation: Verification Condition Generator}  %% Mandatory field
 \def\TPPheadtitle{Verification Condition Generator}
 \TPPref{ISS/HAT/DAZ/IMP505}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.131 $%
+\def\SCCSversion{$Revision: 1.132 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 \TPPdate{\FormatDate{97/07/18%
@@ -155,6 +155,7 @@ More corrections to VC derivation code. Change names {\it Sequent\_Route} to
 \item[Issues 1.122-1.130] Reform of the Environments.
 \item[Issue 1.131] Performance improvements in {|em z\_preds\_in\_callee\_cxt} and {\em param\_tmp\_name}.
 \item[Issue 1.132] Allowed for adjustment to representation of procedures in the environment.
+\item[Issue 1.133] Fixed unsoundness arising from use of initial values of out mode parameters.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -1345,22 +1346,49 @@ end
 =TEX
 \subsection{Adjusting Statements}
 =SMLPLAIN
-fun €any_initial_variables_z_pred› (pred : Z_PRED) : bool = (
+fun €initial_variables_of_z_pred› (pred : Z_PRED) : Z_ID list = (
 let	val names = map (fst o dest_var) (frees pred);
 	fun is_init_var s =
 		case (rev o explode) s of
 			"0" :: "â" :: _ =>	true
 		|	_ => 			false;
 	
-in
-	any names (fn s => is_init_var s)
+in	names drop (not o is_init_var)
 end
+);
+=SML
+fun €any_initial_variables_z_pred› (pred : Z_PRED) : bool = (
+	not (is_nil(initial_variables_of_z_pred pred))
 );
 =TEX
 In the following, the renaming substitution is not relevant to the test being made.
 =SMLPLAIN
 fun €any_initial_variables_z_tm› (z_tm : Z_TM) : bool = (
 	any_initial_variables_z_pred (z_predexp_of_z_tm (Combinators.I) z_tm)
+);
+=TEX
+=SML
+fun €initial_variable_checks› (caller : string)
+	 (env : CN_ENV) (pre : Z_PRED,  post : Z_PRED) : unit = (
+	let	fun do1 n = (
+			case env n of
+				Value {info = EIEnvVar
+					{kind = VKPar MSparkOut, ...}, ...}  => (
+						fail caller
+						505097 [fn () => n]
+				) |	_ => ()
+		);
+	in	if	any_initial_variables_z_pred pre
+		then	fail caller 505095 []
+		else	(map do1 (initial_variables_of_z_pred post); ())
+	end	
+);
+=TEX
+=SML
+fun €initial_variable_checks_z_tm› (caller : string)
+	(env : CN_ENV) (pre : Z_TM, post : Z_TM) : unit = (
+	initial_variable_checks caller env
+	(z_predexp_of_z_tm (Combinators.I)  pre, z_predexp_of_z_tm (Combinators.I) post)
 );
 =TEX
 =SML
@@ -1400,21 +1428,21 @@ let	val check_inner = adj_stmt_aux wp false;
 	val adj_first = adj_stmt_aux wp is_first;
 in
 	case s of
-		STSpecNoIvars {spec, label, is_assertion}  =>
-			if	any_initial_variables_z_tm (#pre spec)
-			then	fail "adjust_statement" 505095 []
-			else if	any_initial_variables_z_tm (#post spec)
+		STSpecNoIvars {spec, label, is_assertion}  => (
+			initial_variable_checks_z_tm "adjust_statement"
+				env (#pre spec, #post spec);
+			if	any_initial_variables_z_tm (#post spec)
 			then	if	is_first
 				then	SSpecIvars {spec = spec, label = label}
 				else	fail "adjust_statement" 505091 []
 			else	s
-	|	SLogCon lc =>
-			if	any_initial_variables_z_tm (#pre (#spec lc))
-			then	fail "adjust_statement" 505095 []
-			else if	not is_first
+	) |	SLogCon lc => (
+			initial_variable_checks_z_tm "adjust_statement"
+				 env (#pre(#spec lc), #post(#spec lc));
+			if	not is_first
 			then	fail "adjust_statement" 505094 []
 			else	s
-	|	STForStatic (fs as {name,i,range,loop as {stmt, ...}, dir, tmark}) => (
+	) |	STForStatic (fs as {name,i,range,loop as {stmt, ...}, dir, tmark}) => (
 			check_inner stmt;
 			if	is_static_for_loop wp fs
 			then	s
@@ -1472,6 +1500,8 @@ in
 	) |	_ => s
 end
 );
+=TEX
+=SML
 fun €adjust_statement› (wp : WP_ENV) (st : STATEMENT) : STATEMENT = (
 			adj_stmt_aux wp true st
 );
@@ -2162,9 +2192,8 @@ let	val {spec as {w, w0, pre, post},
 		(subs_pred(pre1, w, w0) %Longrightarrow% sr_side);
          val (no_sr_s, routes) = extract_routes s 
 in
-	if	any_initial_variables_z_pred pre1
-	then	fail "vcs" 505095 []
-	else	(combine (vc_local_decls(no_sr_s, sl)) routes,
+	initial_variable_checks "vcs" env (pre1, post1);
+	(combine (vc_local_decls(no_sr_s, sl)) routes,
 		 {	w = w,
 			w0 = w0,
 			pre = z_quote (pre1, Nil),
