@@ -83,7 +83,7 @@ Changes in reaction to ID0021.
 Corrected message 6061.
 \item [Issue 1.14]
 Minor changes, in preparation for inspection.
-\item [Issue 1.15]
+\item [Issue 1.15, 1.16]
 Changes in response to deskcheck ID0042.
 \end{description}
 % \subsection{Changes Forecast}
@@ -109,17 +109,10 @@ than the raw minimum supplied by the abstract data type itself.
 \subsubsection{Dependencies}
 This document depends on \cite{DS/FMU/IED/IMP006}.
 \subsubsection{Deficiencies}
-None known.
+Error 6067 of $new\_parent$ would be best replaced by 
+an error that indicates the cause of the clash.
 \subsubsection{Possible Enhancements}
 None known.
-
-\subsubsection{Terminology}
-The following supplements the terminology used in those documents
-upon which this one depends.
-\begin{tabular}{p{1.3in} p{4.9in}}
-sealed theory & ICL and system extenders may seal a theory, ensuring that to be opened a theory must either be the sealed theory, or have it as a parent. Only one theory may be sealed at any time, and this is the ``sealed theory''. 
-This is done to prevent access to what is considered somehow an incomplete theory structure. \\
-\end{tabular}
 
 \section{DISCUSSION}
 A few minor policy decisions are worth noting:
@@ -134,7 +127,7 @@ only happen when it is current;
 functions so that an interactive user is less likely to omit an
 argument unwittingly.
 \item
-All functions that take a theory name as a string recognise
+all functions that take a theory name as a string recognise
 ``-'' as meaning the current theory.
 This will not be indicated in the individual documentation boxes.
 \end{enumerate}
@@ -153,7 +146,7 @@ data type $THM$.
 6038	?0 is ill-formed in current theory: constant name ?1 cannot have type used
 =FAILUREC
 The above are error messages various kinds of well-formedness check failures.
-A well-formedness check occurs on any types, terms and theorems saved in a theory, and thus these errors may occur for any function which saves types, terms or theorems in a theory.
+A well-formedness check occurs on any types, terms and theorems saved in a theory, and thus these errors may occur for any function in this signature which saves types, terms or theorems in a theory.
 =ENDDOC
 There are errors common to many kernel (i.e. from the abstract data type) functions, that
 are raised by $error$.
@@ -183,12 +176,11 @@ All specification and proof work is carried out in the context
 of some theory, referred to as the current theory.
 $open\_theory\,thy$ makes an existing theory $thy$ the current theory.
 =FAILURE
-6017	Theory ?0 is neither the sealed theory ?1, nor has it as a parent
+6017	Theory ?0 may not be opened (it is not a descendant of ?1 which must be in scope)
 6035	Theory ?0 is not present in the current hierarchy
 =FAILUREC
-One theory in the theory database is ``sealed'', and a theory may not be opened if it is neither that theory nor does not have that theory as a parent.
-If this is attempted then error 6017 is raised.
-Theories are only sealed by ICL or system extenders.
+Certain theories created when the system is constructed may
+not be subsequently opened, and attempts to open them give rise to error 6017.
 =ENDDOC
 
 =DOC
@@ -216,13 +208,14 @@ The new theory then becomes the current theory.
 =FAILURE
 6040	Theory ?0 is already present in current theory hierarchy
 =ENDDOC
+Note that the notifier functions are only notified of $NewTheory$, not $OpenTheory$ as well.
 =DOC
 val ânew_parentá : string -> unit;
 =DESCRIBE
 Adds the given parent theory to the list of parents of the current
 theory, considered as a set.
-It will fail if the parent theory does not exist, is already a parent of the current theory,
-or if making it a parent would bring a new theory into scope (perhaps the new parent itself)
+It will fail if the parent theory does not exist; is already a parent of the current theory;
+or if making it a parent would cause a clash by bringing a new theory into scope (perhaps the new parent itself)
 that declares a new type or constant that is already in scope,
 or is declared in the children of the current theory.
 =FAILURE
@@ -269,12 +262,14 @@ To allow the user to modify and experiment with a theory that
 has child theories that are not involved in the experiment,
 and would perhaps clash with the experiment.
 =FAILURE
-6026	Cannot duplicate the sealed theory ?0
-6042	Cannot duplicate ?0 as it is an ancestor of the sealed theory ?1
+6026	Theory ?0 may not be duplicated (it must always be in the scope of any opened theory)
+6042	Theory ?0 may not be duplicated (the duplicate would not be a descendant of ?1)
 6035	Theory ?0 is not present in the current hierarchy
 6040	Theory ?0 is already present in current theory hierarchy
 =FAILUREC
-To ensure that the duplicate theory can be opened by $open\_theory$ (q.v.) the system will prevent the duplication of the sealed theory or its ancestors, giving rise to errors 6026 and 6042.
+To ensure that the duplicate theory can be opened by $open\_theory$ (q.v.) the system will prevent the duplication of 
+theories which would give rise to error 6017 of $open\_theory$ if opened, and attempts to create such duplicates will give rise to
+error 6026 or 6042.
 =ENDDOC
 
 \subsection{Operations on Theorem Contents}
@@ -370,11 +365,10 @@ Note that the deletion will attempt to delete all necessary
 theorems before deleting constants, types, and axioms in single steps,
 and thus may fail with a partially modified theory.
 This is because checks in the interface may not be as definitive as those of the kernel.
-The ``before kernel state change'' functions will be notified only
- about the deleted constant itself.
 The ``on kernel state change'' functions will be notified as if
-a sequence of $delete\_thm$'s had been done, and then
-the necessary ``single step'' deletions of constants, types and axioms to achieve the goal.
+all necessary single step deletions, of theorems, constants, types and axioms to achieve the goal had been done, but after
+all the actual changes have been made.
+The ``before kernel state change'' functions will be notified of all the changes, as if single steps, before any are made.
 =FAILURE
 3009	?0 is not a constant
 6037	Theory ?0 is locked
@@ -383,6 +377,15 @@ the necessary ``single step'' deletions of constants, types and axioms to achiev
 12001	Theory ?0 does not contain the constant ?1 with the supplied type
 12012	Deletion of ?0 would require the deletion of ?1
 =ENDDOC
+The following strings are used in formatting the arguments of
+message 12012:
+=FAILURE
+12100	Constant?0:
+12101	Type?0:
+12102	Theorem?0:
+12103	Axiom?0:
+12104	Definition?0:
+=TEX
 
 =DOC
 val âdelete_typeá : string -> unit
@@ -400,11 +403,10 @@ Note that the deletion will attempt to delete all necessary
 theorems before deleting constants, types, and axioms in single steps,
 and thus may fail with a partially modified theory.
 This is because checks in the interface may not be as definitive as those of the kernel.
-The ``before kernel state change'' functions will be notified only
- about the deleted type itself.
 The ``on kernel state change'' functions will be notified as if
-a sequence of $delete\_thm$'s had been done, and then
-the necessary ``single step'' deletions of constants, types and axioms to achieve the goal.
+all necessary single step deletions, of theorems, constants, types and axioms to achieve the goal had been done, but after
+all the actual changes have been made.
+The ``before kernel state change'' functions will be notified of all the changes, as if single steps, before any are made.
 =FAILURE
 6037	Theory ?0 is locked
 6071	Theory ?0 is a read-only ancestor
@@ -429,11 +431,10 @@ Note that the deletion will attempt to delete all necessary
 theorems before deleting constants, types, and axioms in single steps,
 and thus may fail with a partially modified theory.
 This is because checks in the interface may not be as definitive as those of the kernel.
-The ``before kernel state change'' functions will be notified only
- about the deleted axiom itself.
 The ``on kernel state change'' functions will be notified as if
-a sequence of $delete\_thm$'s had been done, and then
-the necessary ``single step'' deletions of constants, types and axioms to achieve the goal.
+all necessary single step deletions, of theorems, constants, types and axioms to achieve the goal had been done, but after
+all the actual changes have been made.
+The ``before kernel state change'' functions will be notified of all the changes, as if single steps, before any are made.
 =FAILURE
 6037	Theory ?0 is locked
 6071	Theory ?0 is a read-only ancestor
@@ -539,7 +540,8 @@ The body of $value$ may not contain type variables that are not in the type of $
 6037	Theory ?0 is locked
 6049	There is a constant called ?0 already in scope
 6051	Key ?0 has already been used for a definition in theory ?1
-6058	the body of ?0 contains type variables not found in type of term itself, the variables being: ?1
+6058	the body of ?0 contains type variables not found in type of term itself,
+	the variables being: ?1
 6059	?0 contains the following free variables: ?1
 6063	There is a constant called ?0 in the descendants of the
 	current theory
@@ -785,9 +787,13 @@ This returns the status of the indicated theory.
 
 Subsystems such as the user interface need to be notified
 when state changes occur (e.g. when the current theory changes).
+Others may wish to prevent certain state changes,
+and need to be notified before such changes are attempted.
 We supply an interface which allows a function to be nominated to
-be called whenever a state change occurs. In general, there will be
-a list of such functions. The functions have a single argument which
+be called whenever a state change occurs,
+and another for functions to be called before any state change occurs. 
+In general, there will be
+lists of such functions. The functions have a single argument which
 encodes the type of operation, its arguments and where appropriate
 its result type. 
 
@@ -815,8 +821,7 @@ datatype âKERNEL_STATE_CHANGEá
 		|	âSetUserDatumá of string * USER_DATUM;
 =DESCRIBE
 This is an encoding of the arguments of
-the functions which change the state of the theory database in the lowest
-level of interface.
+the functions of the signature $KernelInterface$ which change the state of the theory database.
 When used to notify the system of a change that has been made
 certain additional information is also included. 
 If used to notify the system before a change is made the slots will be given ``null'' default values (``'', $[]$, $asm\_rule$ $mk\_t$).
@@ -854,7 +859,7 @@ val âon_kernel_state_changeá : (KERNEL_STATE_CHANGE -> unit) -> unit
 =DESCRIBE
 $on\_kernel\_state\_change\ f$
 nominates $f$ to be called whenever the theory database
-is modified by a low level interface. The argument to $f$ encodes the
+is modified by a function from the signature $KernelInterface$. The argument to $f$ encodes the
 operation which caused the modification together with its arguments and
 certain other additional information.
 A list of such functions is maintained, and the new function is put at the
@@ -863,7 +868,7 @@ function nominated by an earlier call of $on\-\_kernel\-\_state\-\_change$.
 
 Functions handled by $on\_kernel\_state\_change$ should not be
 coded to raise errors that are not handled by themselves,
-and the handler will not catch such errors either.
+as the handler will not catch such errors either.
 If the function is to prevent a change from happening $before\-\_kernel\-\_state\-\_change$ should be used instead.
 =SEEALSO
 $KERNEL\_STATE\_CHANGE$,
@@ -874,7 +879,7 @@ val âbefore_kernel_state_changeá : (KERNEL_STATE_CHANGE -> unit) -> unit
 =DESCRIBE
 $before\_kernel\_state\_change\ f$
 nominates $f$ to be called before the theory database
-is to be modified by a low level interface. The argument to $f$ encodes the
+is to be modified by functions from the signature $KernelInterface$. The argument to $f$ encodes the
 operation which caused the modification together with its arguments and
 certain other additional information
 (usually sets to null defaults for this function).
