@@ -71,6 +71,13 @@ $variant$ and $list\_variant$ improved.
 added $term\_fail$ and $type\_fail$.
 \item [Issue 1.10]
 Added functions on lists of terms, seen as sets under $\alpha$-convertibility.
+\item [Issue 1.11]
+Tweaked performance of $simple\_dest\_term$.
+Added $inst\_type$.
+The prefix $simple$ is moved to being the first prefix, bar $icl'$.
+Corrected result of 
+$mg\_variables$ of a term containing variables with "" as a name,
+and various other possible $ord\ ""$ errors.
 \end{description}
 \subsection{Changes forecast}
 \section{GENERAL}
@@ -210,13 +217,16 @@ Initially we are pedantic about matching function types arrows.
 After extensive testing we might assume the presence of matches in some functions, such as $simple\_dest\_term$,
 as their absence would indicate a design error, not a usage error.
 =SML
-fun âsimple_dest_termá ((typed (icl'Var s, ty)):TERM) : SIMPLE_DEST_TERM = Var (s, ty)
-| simple_dest_term (typed (icl'Const s, ty)) = Const (s,  ty)
-| simple_dest_term (typed (icl'Comb(t1, t2, ty2),tyt1t2)) = (
-	Comb (typed(t1, Funtype (ty2, tyt1t2)), typed(t2, ty2))
-) | simple_dest_term (typed (icl'Abs(str, tm), Funtype(ty1, ty2))) = (
-	Abs (typed(icl'Var str, ty1), typed(tm, ty2))
-) | simple_dest_term _ = error "simple_dest_term" 3063 [];
+fun âsimple_dest_termá (typed vl:TERM) : SIMPLE_DEST_TERM = (
+	case vl of
+	(icl'Comb(t1, t2, ty2), tyt1t2) => (
+		Comb (typed(t1, Funtype (ty2, tyt1t2)), typed(t2, ty2))
+	) | (icl'Const s, ty) => Const (s, ty)
+	| (icl'Var s, ty) => Var (s, ty)
+	| (icl'Abs(str, tm), Funtype(ty1, ty2)) => (
+		Abs (typed(icl'Var str, ty1), typed(tm, ty2))
+	) | _ => error "simple_dest_term" 3063 []
+);
 =TEX
 =SML
 fun  âsimple_mk_termá ((Var (s, ty)): SIMPLE_DEST_TERM) : TERM = typed(icl'Var s, ty)
@@ -328,6 +338,15 @@ fun âicl'inst_typeá (f : (TYPE * string) list) (ty : TYPE) : TYPE = (
 		end)
 );
 =TEX
+=SML
+fun âinst_typeá (f : (TYPE * TYPE) list) (ty : TYPE) : TYPE = (
+	icl'inst_type 
+		(map (fn (ty,tyv) => (ty,dest_vartype tyv)) f)
+		ty
+	handle complaint =>
+	divert complaint "dest_vartype" "inst_type" 3035 []
+);
+=TEX
 This function extracts the type constructors contained
 in a type.
 =SML
@@ -393,7 +412,7 @@ in
 end);
 =TEX
 =SML
-fun âlist_simple_mk_absá ((tml, f):TERM list * TERM): TERM = (
+fun âsimple_list_mk_absá ((tml, f):TERM list * TERM): TERM = (
 	fold simple_mk_abs tml f
 );
 
@@ -558,7 +577,7 @@ val âsimple_dest_ƒá : TERM -> (TERM * TERM) = (
 
 val âsimple_is_ƒá : TERM -> bool = simple_is_binder simple_dest_ƒ;
 
-fun âlist_simple_mk_ƒá ((tml, f):TERM list * TERM): TERM = (
+fun âsimple_list_mk_ƒá ((tml, f):TERM list * TERM): TERM = (
 	fold simple_mk_ƒ tml f
 );
 
@@ -572,7 +591,7 @@ val âsimple_dest_„á: TERM -> (TERM * TERM) = (
 
 val âsimple_is_„á : TERM -> bool = simple_is_binder simple_dest_„;
 
-fun âlist_simple_mk_„á ((tml, f):TERM list * TERM): TERM = (
+fun âsimple_list_mk_„á ((tml, f):TERM list * TERM): TERM = (
 	fold simple_mk_„ tml f
 );
 =TEX
@@ -621,7 +640,8 @@ in
 fun âis_chará (tm : TERM) : bool = (
 let val (tmn,tmty) = dest_const tm
 in
-	(tmty = CHAR) andalso 
+	(tmty = CHAR) andalso
+	(tmn <> "") andalso
 	(ordquote = ord tmn) andalso
 	(length(explode tmn) = 2)
 end
@@ -637,7 +657,7 @@ fun âmk_chará (str : string) : TERM = (
 fun âdest_chará (tm : TERM) : string = (
 let val (tmn,tmty) = dest_const tm;
 in
-	if (tmty = CHAR) andalso 
+	if (tmty = CHAR) andalso (tmn <> "") andalso
 		(ord tmn = ordquote) andalso 
 		(length (explode tmn) = 2)
 	then hd(tl(explode tmn))
@@ -658,6 +678,7 @@ fun âis_stringá (tm : TERM) : bool = (
 let val (tmn,tmty) = dest_const tm
 in
 	(tmty = STRING) andalso 
+	(tmn <> "") andalso
 	(orddquote = ord tmn)
 end
 handle Fail _ => false
@@ -668,7 +689,8 @@ fun âmk_stringá (str : string) : TERM = mk_const("\"" ^ str,STRING);
 fun âdest_stringá (tm : TERM) : string = (
 let val (tmn,tmty) = dest_const tm;
 in
-	if (tmty = STRING) andalso (ord tmn = orddquote)
+	if (tmty = STRING) andalso (tmn <> "") 
+		andalso (ord tmn = orddquote)
 	then implode(tl(explode tmn))
 	else fail "dest_string" 3025 []
 end
@@ -921,7 +943,7 @@ end);
 This function extracts the subterms of a term which
 are constants.
 =SML
-fun âterm_constantsá (tm : TERM) : (string * TYPE) list = (
+fun âterm_constsá (tm : TERM) : (string * TYPE) list = (
 let fun aux (Comb(f, a)) = aux(simple_dest_term f) cup aux(simple_dest_term a)
 	| aux (Var _) = []
 	| aux (Const c) = [c]
@@ -1219,13 +1241,17 @@ fun âmg_variablesá (tyl : TYPE list) (tml : TERM list) : TERM list =  (
 let fun mg_in_term acc (Comb(f, a)) = (
 	let val acc' = mg_in_term acc (simple_dest_term f)
 	in mg_in_term acc' (simple_dest_term a) end
-	) | mg_in_term acc (Var (s,_)) = if ord s = ord_mgn_prefix
+	) | mg_in_term acc (Var (s,_)) = if (s <> "") andalso 
+			(ord s = ord_mgn_prefix)
 		then acc grab s
 		else acc
 	| mg_in_term acc (Const _) = acc
-	| mg_in_term acc (Abs(v, b)) = if ord(fst(dest_var v)) = ord_mgn_prefix
-		then mg_in_term (acc grab (fst(dest_var v))) (simple_dest_term b)
-		else mg_in_term acc (simple_dest_term b);
+	| mg_in_term acc (Abs(v, b)) = 
+		let val vnm = fst(dest_var v) in
+		(if (vnm <> "") andalso ord vnm = ord_mgn_prefix
+		then mg_in_term (acc grab vnm) (simple_dest_term b)
+		else mg_in_term acc (simple_dest_term b))
+		end;
 
 	fun mg_in_terms acc (ltm :: ltml) = (
 	let val acc' = mg_in_term acc (simple_dest_term ltm)
