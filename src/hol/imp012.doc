@@ -58,6 +58,9 @@ Removed $pass\_on$.
 \item [Issue 1.5]
 Changed ``Definition'' to ``Defn'',
 Changed ``Constant'' to ``Const''.
+\item [Issue 1.6]
+Added ``before kernel state change'' material.
+Made $is\_theory\_ancestor$ uniform in its errors.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -130,18 +133,31 @@ datatype âKERNEL_STATE_CHANGEá
 		|	âSetUserDatumá of string * USER_DATUM;
 
 =TEX
-The notifier function is called $notify\_ksc$, and the list of
-functions to be notified is hidden, named $ksc\_functions$.
+The notifier functions are called $notify\_on\_ksc$ and
+$notify\_before\_ksc$, and the list of
+functions to be notified is hidden, named $on\_ksc\_functions$
+and $before\_ksc\_functions$.
 =SML
 local
-	val âksc_functionsá : ((KERNEL_STATE_CHANGE -> unit) list) ref = ref [];
+	val âon_ksc_functionsá : ((KERNEL_STATE_CHANGE -> unit) list) ref = ref [];
+	val âbefore_ksc_functionsá : ((KERNEL_STATE_CHANGE -> unit) list) ref = ref [];
 in
 	fun âon_kernel_state_changeá (to_notify : KERNEL_STATE_CHANGE -> unit) : unit = (
-		ksc_functions := (!ksc_functions) @ [to_notify]
+		on_ksc_functions := (!on_ksc_functions) @ [to_notify]
 	);
 
-	fun ânotify_kscá (ksc : KERNEL_STATE_CHANGE) : unit = (
-		map (fn f => f ksc) (!ksc_functions);
+	fun ânotify_on_kscá (ksc : KERNEL_STATE_CHANGE) : unit = (
+		map (fn f => f ksc) (!on_ksc_functions);
+		()
+	);
+
+	fun âbefore_kernel_state_changeá (to_notify : KERNEL_STATE_CHANGE -> unit) 
+		: unit = (
+		before_ksc_functions := (!before_ksc_functions) @ [to_notify]
+	);
+
+	fun ânotify_before_kscá (ksc : KERNEL_STATE_CHANGE) : unit = (
+		map (fn f => f ksc) (!before_ksc_functions);
 		()
 	);
 end; (* local *)
@@ -150,65 +166,72 @@ end; (* local *)
 These are generally strait forward:
 =SML
 fun âopen_theoryá (nm : string) : unit = (
-let	val ot_res = icl'open_theory nm;
+let	val side_effect = notify_before_ksc (OpenTheory (nm, ([],[])));
+	val ot_res = icl'open_theory nm;
 	val ot_res' = (map icl'get_theory_name ** map icl'get_theory_name) ot_res;
 in
-	notify_ksc (OpenTheory (nm, ot_res'));
+	notify_on_ksc (OpenTheory (nm, ot_res'));
 	()
 end
 handle complaint => pass_on complaint "icl'open_theory" "open_theory");
 =TEX
 =SML
 fun âdelete_theoryá (nm : string) : unit = (
-let	val dummy = icl'delete_theory nm;
+let	val side_effect = notify_before_ksc (DeleteTheory nm);
+	val dummy = icl'delete_theory nm;
 in
-	notify_ksc (DeleteTheory nm);
+	notify_on_ksc (DeleteTheory nm);
 	()
 end
 handle complaint => pass_on complaint "icl'delete_theory" "delete_theory");
 =TEX
 =SML
 fun ânew_theoryá (nm : string) : unit = (
-let	val dummy = (icl'new_theory nm; icl'open_theory nm);
+let	val side_effect = notify_before_ksc (NewTheory nm);
+	val dummy = (icl'new_theory nm; icl'open_theory nm);
 in
-	notify_ksc (NewTheory nm);
+	notify_on_ksc (NewTheory nm);
 	()
 end
 handle complaint => pass_on complaint "icl'new_theory" "new_theory");
 =TEX
 =SML
 fun ânew_parentá (nm : string) : unit = (
-let	val np_res = icl'new_parent nm;
+let	val side_effect = notify_before_ksc (NewParent (nm, []));
+	val np_res = icl'new_parent nm;
 	val np_res' = map icl'get_theory_name np_res;
 in
-	notify_ksc (NewParent (nm, np_res'));
+	notify_on_ksc (NewParent (nm, np_res'));
 	()
 end
 handle complaint => pass_on complaint "icl'new_parent" "new_parent");
 =TEX
 =SML
 fun âlock_theoryá (nm : string) : unit = (
-let	val dummy = icl'lock_theory nm;
+let	val side_effect = notify_before_ksc (LockTheory nm);
+	val dummy = icl'lock_theory nm;
 in
-	notify_ksc (LockTheory nm);
+	notify_on_ksc (LockTheory nm);
 	()
 end
 handle complaint => pass_on complaint "icl'lock_theory" "lock_theory");
 =TEX
 =SML
 fun âunlock_theoryá (nm : string) : unit = (
-let	val dummy = icl'unlock_theory nm;
+let	val side_effect = notify_before_ksc (UnlockTheory nm);
+	val dummy = icl'unlock_theory nm;
 in
-	notify_ksc (UnlockTheory nm);
+	notify_on_ksc (UnlockTheory nm);
 	()
 end
 handle complaint => pass_on complaint "icl'unlock_theory" "unlock_theory");
 =TEX
 =SML
 fun âduplicate_theoryá (fromnm : string, tonm : string) : unit = (
-let	val dummy = icl'duplicate_theory fromnm tonm;
+let	val side_effect = notify_before_ksc (DuplicateTheory (fromnm, ""));
+	val dummy = icl'duplicate_theory fromnm tonm;
 in
-	notify_ksc (DuplicateTheory (fromnm, tonm));
+	notify_on_ksc (DuplicateTheory (fromnm, tonm));
 	()
 end
 handle complaint => pass_on complaint "icl'duplicate_theory" "duplicate_theory");
@@ -231,27 +254,30 @@ end);
 =TEX
 =SML
 fun âsave_thmá (key : string, thm : THM) : THM = (
-let	val saved = icl'list_save_thm ([key], thm);
+let	val side_effect = notify_before_ksc (SaveThm (key, thm));
+	val saved = icl'list_save_thm ([key], thm);
 in
-	notify_ksc (SaveThm (key, thm));
+	notify_on_ksc (SaveThm (key, thm));
 	saved
 end
 handle complaint => pass_on complaint "icl'list_save_thm" "save_thm");
 =TEX
 =SML
 fun âlist_save_thmá (keys : string list, thm : THM) : THM = (
-let	val saved = icl'list_save_thm (keys, thm);
+let	val side_effect = notify_before_ksc (ListSaveThm (keys, thm));
+	val saved = icl'list_save_thm (keys, thm);
 in
-	notify_ksc (ListSaveThm (keys, thm));
+	notify_on_ksc (ListSaveThm (keys, thm));
 	saved
 end
 handle complaint => pass_on complaint "icl'list_save_thm" "list_save_thm");
 =TEX
 =SML
 fun âdelete_thmá (key : string) : THM = (
-let	val thm = icl'delete_thm key;
+let	val side_effect = notify_before_ksc (DeleteThm key);
+	val thm = icl'delete_thm key;
 in
-	notify_ksc (DeleteThm key);
+	notify_on_ksc (DeleteThm key);
 	thm
 end
 handle complaint => pass_on complaint "icl'delete_thm" "delete_thm");
@@ -348,16 +374,17 @@ We now have permission to proceed:
 
 	val dummy = map (fn x => icl'delete_extension ()) dl;
 in
-	map (fn xt => notify_ksc (DeleteConst (mk_const xt))) del_con;
-	map (fn t => notify_ksc (DeleteType t)) del_type;
-	map (fn ax => notify_ksc (DeleteAxiom ax)) del_axioms;
+	map (fn xt => notify_on_ksc (DeleteConst (mk_const xt))) del_con;
+	map (fn t => notify_on_ksc (DeleteType t)) del_type;
+	map (fn ax => notify_on_ksc (DeleteAxiom ax)) del_axioms;
 	()
 end);
 =TEX
 We can now give the deletion functions:
 =SML
 fun âdelete_constá (cnt : TERM) : unit = (
-let	val (cnm, cty) = dest_const cnt
+let	val side_effect = notify_before_ksc (DeleteConst cnt);
+	val (cnm, cty) = dest_const cnt
 		handle complaint =>
 		divert complaint "dest_const" "delete_const" 12008 [];
 
@@ -380,7 +407,8 @@ end);
 =TEX
 =SML	
 fun âdelete_typeá (tnm : string) : unit = (
-let	val {ty_env = ty_env,...} = icl'get_theory "-";
+let	val side_effect = notify_before_ksc (DeleteType tnm);
+	val {ty_env = ty_env,...} = icl'get_theory "-";
 
 	val {level = level, ...} = force_value(s_lookup tnm ty_env)
 		handle complaint =>
@@ -393,7 +421,8 @@ end);
 =TEX
 =SML	
 fun âdelete_axiomá (anm : string) : unit = (
-let	val {axiom_dict = axiom_dict,...} = icl'get_theory "-";
+let	val side_effect = notify_before_ksc (DeleteAxiom anm);
+	val {axiom_dict = axiom_dict,...} = icl'get_theory "-";
 
 	val ax = force_value(s_lookup anm axiom_dict)
 		handle complaint =>
@@ -408,43 +437,38 @@ end);
 =TEX
 =SML
 fun ânew_axiomá (key : string, tm : TERM) : THM = (
-let	val saved = icl'new_axiom ([key], tm);
+let	val side_effect = notify_before_ksc (NewAxiom ((key, tm),t_thm));
+	val saved = icl'new_axiom ([key], tm);
 in
-	notify_ksc (NewAxiom ((key, tm),saved));
+	notify_on_ksc (NewAxiom ((key, tm),saved));
 	saved
 end
 handle complaint => pass_on complaint "icl'new_axiom" "new_axiom");
 =TEX
 =SML
 fun ânew_constá (cnm : string, ty : TYPE) : TERM = (
-let	val saved = icl'new_const (cnm, ty);
+let	val side_effect = notify_before_ksc (NewConst (cnm, ty));
+	val saved = icl'new_const (cnm, ty);
 in
-	notify_ksc (NewConst (cnm, ty));
+	notify_on_ksc (NewConst (cnm, ty));
 	saved
 end
 handle complaint => pass_on complaint "icl'new_const" "new_const");
 =TEX
 =SML
 fun ânew_typeá (cnm : string, arity : int) : TYPE = (
-let	val saved = icl'new_type (cnm, arity);
+let	val side_effect = notify_before_ksc (NewType (cnm, arity));
+	val saved = icl'new_type (cnm, arity);
 in
-	notify_ksc (NewType (cnm, arity));
-	saved
-end
-handle complaint => pass_on complaint "icl'new_type" "new_type");
-=TEX
-=SML
-fun ânew_typeá (cnm : string, arity : int) : TYPE = (
-let	val saved = icl'new_type (cnm, arity);
-in
-	notify_ksc (NewType (cnm, arity));
+	notify_on_ksc (NewType (cnm, arity));
 	saved
 end
 handle complaint => pass_on complaint "icl'new_type" "new_type");
 =TEX
 =SML
 fun âset_user_datumá (key : string, ud : USER_DATUM) : unit = (
-let	val {user_data = user_data,...} = icl'get_theory "-";
+let	val side_effect = notify_before_ksc (SetUserDatum (key,ud));
+	val {user_data = user_data,...} = icl'get_theory "-";
 
 	val dummy =  case (get_current_theory_status()) of
 		TSNormal => ()
@@ -458,7 +482,7 @@ let	val {user_data = user_data,...} = icl'get_theory "-";
 	val dummy = (user_data := s_enter key (ref ud) (!user_data);
 		());
 in
-	notify_ksc (SetUserDatum (key,ud))
+	notify_on_ksc (SetUserDatum (key,ud))
 end);
 =TEX
 =SML
@@ -478,36 +502,31 @@ end);
 \subsection{Definitional Mechanisms}
 =SML
 fun âsimple_new_defná (key : string, cnm : string, tm : TERM) : THM = (
-let	val saved = icl'new_defn ([key], cnm, tm);
+let	val side_effect = notify_before_ksc (SimpleNewDefn ((key, cnm, tm), t_thm));
+	val saved = icl'new_defn ([key], cnm, tm);
 in
-	notify_ksc (SimpleNewDefn ((key, cnm, tm), saved));
+	notify_on_ksc (SimpleNewDefn ((key, cnm, tm), saved));
 	saved
 end
 handle complaint => pass_on complaint "icl'new_defn" "simple_new_defn");
 =TEX
 =SML
-fun ânew_typeá (cnm : string, arity : int) : TYPE = (
-let	val saved = icl'new_type (cnm, arity);
-in
-	notify_ksc (NewType (cnm, arity));
-	saved
-end
-handle complaint => pass_on complaint "icl'new_type" "new_type");
-=SML
 fun ânew_type_defná (key : string, name : string, 
 	typars : string list, defthm : THM): THM = (
-let	val saved = icl'new_type_defn ([key], name, typars, defthm);
+let	val side_effect = notify_before_ksc (NewTypeDefn ((key, name, typars, defthm), t_thm));
+	val saved = icl'new_type_defn ([key], name, typars, defthm);
 in
-	notify_ksc (NewTypeDefn ((key, name, typars, defthm), saved));
+	notify_on_ksc (NewTypeDefn ((key, name, typars, defthm), saved));
 	saved
 end
 handle complaint => pass_on complaint "icl'new_type_defn" "new_type_defn");
 =TEX
 =SML
 fun ânew_specificationá (keys : string list, ndef : int, defthm : THM) : THM = (
-let	val saved = icl'new_specification (keys, ndef, defthm);
+let	val side_effect = notify_before_ksc (NewSpecification ((keys, ndef, defthm), t_thm));
+	val saved = icl'new_specification (keys, ndef, defthm);
 in
-	notify_ksc (NewSpecification ((keys, ndef, defthm), saved));
+	notify_on_ksc (NewSpecification ((keys, ndef, defthm), saved));
 	saved
 end
 handle complaint => pass_on complaint "icl'new_specification" "new_specification");
@@ -614,12 +633,15 @@ let 	val hier = icl'get_hierarchy();
 	val nm2 = (if thy2 = "-"
 		then get_current_theory_name ()
 		else thy2);
+	val sideeffect = case (s_lookup nm1 hier) of
+		Value _ => ()
+		| _ => fail "is_theory_ancestor" 6035 [fn () => nm1];
 
 	fun aux (nm :string) = (
 	(nm1 = nm) orelse
 	(let 	val parents = case (s_lookup nm hier) of
 			Value {contents={parents=pnts,...},...} => pnts
-			| _ => fail "get_ancestors" 6035 [fn () => nm];
+			| _ => fail "is_theory_ancestor" 6035 [fn () => nm];
 		val nmparents = map icl'get_theory_name parents
 	in
 		nm1 mem nmparents
