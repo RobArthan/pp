@@ -1,5 +1,5 @@
+% imp002.doc   %Z% $Date$ $Revision$ $RCSfile$
 =TEX
-% TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
 \def\Hide#1{}
@@ -82,6 +82,8 @@ messages are not contained in ``***'' anymore.
 
 \item[Issue \SCCSversion, \FormatDate{92/02/26} ] Minor
 change to error message format.
+Avoid use of $PolyML.makestring$ by adding $string_of_int$. {}
+Make $setup_pp$ print error messages a word at a time.
 
 \end{description}
 \subsection{Changes Forecast}
@@ -95,8 +97,6 @@ This document contains the implementation of the
 material whose detailed design may be found in
 \cite{DS/FMU/IED/DTD002}.
 \subsection{Dependencies}
-Occasional use is made of the compiler-dependent
-function $PolyML.makestring$ (which most compilers have).
 The use of $PolyML.install\_pp$
 immediately after the definition of $give\_message$ is
 also compiler-specific.
@@ -122,6 +122,35 @@ structure €BasicError› : BasicError = struct
 =SML
 datatype €MESSAGE› = €Message› of {area:string, id:int, inserters:(unit -> string) list};
 =TEX
+\subsection{Formatting Numbers}
+
+Rather than use $PolyML.makestring$ we have
+$string\_of\_int$ which converts an integer into a decimal
+string. (SML's library function $makestring$ would
+nearly do, but we want negative numbers to be shown
+with a minus sign, and we do not want 
+to be affected by $PolyML.print\-\_depth$ being set to 0.)
+
+=SML
+local
+	val ord0 = ord "0"
+in
+fun €string_of_int› (n : int) : string = (
+	let	fun aux m = ( (* assumes m > 0 *)
+			case m div 10 of
+				0 => chr(ord0 + (m mod 10))
+			|	mdiv10 => aux mdiv10 ^ chr(ord0 + (m mod 10))
+		);
+	in	if n > 0
+		then aux n
+		else if n = 0
+		then "0"
+		else "-" ^ aux (~n)
+	end
+);
+end;
+=TEX
+
 \subsection{Exceptions}
 =SML
 exception €Fail› of MESSAGE;
@@ -148,16 +177,14 @@ fun €scream› (area : string) (msg : int) (inserts : string list): 'a = (
 		inserters=map (fn x => (fn () => x))inserts})))
 );
 =TEX
-Note the uses of $makestring$ below are compiler-specific (but
-most compilers have it).
 =SML
 fun €get_error_message› (id:int) (inserts:string list) : string = (
 	let	fun aux1 ({id=id', text=text'} :: rest) = (
 			if id' = id
 			then text'
 			else aux1 rest
-		) | aux1 [] = scream "get_error_message" 2002 [(PolyML.makestring id)];
-		fun aux2 [] i = "?" ^ PolyML.makestring i
+		) | aux1 [] = scream "get_error_message" 2002 [string_of_int id];
+		fun aux2 [] i = "?" ^ string_of_int i
 		|   aux2 (h::t) i = (if i <= 0 then h else aux2 t (i-1));
 		fun aux3 chs = (
 			case chs of
@@ -180,7 +207,7 @@ fun €new_error_message› (arg as {id:int, text: string}) : unit = (
 			if id' = id
 			then 	if text = text'
 				then aux rest
-				else let val msg = get_error_message 2001 [PolyML.makestring id];
+				else let val msg = get_error_message 2001 [string_of_int id];
 				in
 	output(std_out, "* " ^ msg ^ "\n [new_error_message.2001] *");
 					arg' :: rest
@@ -226,34 +253,55 @@ fun €get_message_text› (Message msg:MESSAGE) : string = (
 		val inserts = map (fn f=> f())inserters;
 	in	(get_error_message id inserts)
 		handle Error _ => ("* " ^
-			(get_error_message 2002 [PolyML.makestring id]) ^ "[get_error_message.2002]  *")
+			(get_error_message 2002 [string_of_int id]) ^ "[get_error_message.2002]  *")
 	end
 );
 fun €get_message› ((arg as (Message msg)):MESSAGE) : string = (
 	let	val {area:string, id:int, ...} = msg;
 		val text = get_message_text arg;
-		val number = PolyML.makestring id;
+		val number = string_of_int id;
 	in	(get_error_message 2003 [number, area, text])
 		handle Error _ => ("* " ^
-			(get_error_message 2002 [PolyML.makestring id]) ^ "[get_error_message.2002] *")
+			(get_error_message 2002 [string_of_int id]) ^ "[get_error_message.2002] *")
 	end
 );
 =TEX
 We arrange for PolyML automatically to format error reports
 using the following function.
+A simplistic coding here would process each space character
+with a call on the Oppen formatting routine $space$ and each
+other character with $addstring$, however this causes the
+reader writer~\cite{DS/FMU/IED/DTD005} to output text having
+capital letter~`Q's wrongly.  To avoid the reader writer
+problem the characters are gathered together, spaces are
+counted (via $p_int:PREV$) and non-spaces are assembled
+(via $p_str:PREV$); then these gathered items are output.
 =SML
 fun €setup_pp› (():unit) : unit = (
 	let
 		fun error_pp (addstring, beginb, space, endb) (msg:MESSAGE) = (
-			let	fun aux [] = (endb())
-				|   aux (ch :: chs) = (
-					(if ch = " "
-					then space(1, 0)
-					else addstring ch);
-					aux chs
-				);
-			in	beginb(0, false);
-				aux(explode(get_message msg))
+			let
+				datatype PREV	= p_str of string list
+						| p_int of int;
+
+				fun op_str nil = ()
+				| op_str ss = addstring(implode(rev ss));
+
+				fun aux (p_str ss) nil = op_str ss
+				| aux (p_int n) nil = space(n, 0)
+				| aux (p_str prev) (" " :: more) =
+					(op_str prev; aux (p_int 1) more)
+				| aux (p_str prev) (ch :: more) =
+					aux (p_str(ch :: prev)) more
+				| aux (p_int n) (" " :: more) =
+					aux (p_int(n+1)) more
+				| aux (p_int n) (ch :: more) =
+					(space(n, 0); aux (p_str[ch]) more)
+				;
+			in
+				beginb(0, false);
+				aux (p_str nil) (explode(get_message msg));
+				endb()
 			end 
 		);
 	in
