@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.12 2002/12/12 14:06:50 rda Exp rda $ 
+ * $Id: templates.c,v 2.13 2003/03/19 13:06:37 rda Exp rda $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -362,7 +362,7 @@ static void templates_cb(
 	};
 
 	if(get_map_state(text_w) != IsViewable) {
-		XBell(XtDisplay(root), 50);
+		beep();
 		return;
 	}
 

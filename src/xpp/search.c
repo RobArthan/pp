@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.25 2003/02/12 16:34:01 rda Exp rda $ 
+ * $Id: search.c,v 2.26 2003/03/19 13:06:37 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -23,7 +23,7 @@
 enum {FORWARDS, BACKWARDS};
 
 #define CHECK_MAP_STATE(SDP) \
-	{if (get_map_state((SDP)->text_w) != IsViewable) { XBell(XtDisplay(root), 50); return; }}
+	{if (get_map_state((SDP)->text_w) != IsViewable) { beep(); return; }}
 
 #include <stdio.h>
 #include <ctype.h>

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2002/12/12 14:06:50 $ $Revision: 2.15 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2003/02/10 13:16:33 $ $Revision: 2.16 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -230,7 +230,7 @@ Boolean yes_no_dialog(Widget w, char *question)
 	XtManageChild(dialog);
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
-	XBell(XtDisplay(root), 50);
+	beep();
 	poll(&reply);
 	XtPopdown(XtParent(dialog));
 	return reply == YES;
@@ -284,7 +284,7 @@ Boolean quit_new_dialog(Widget w, char *question)
 	XtManageChild(dialog);
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
-	XBell(XtDisplay(root), 50);
+	beep();
 	poll(&reply);
 	XtPopdown(XtParent(dialog));
 	return reply == YES;
@@ -343,7 +343,7 @@ int yes_no_cancel_dialog(Widget w, char *question)
 	XtManageChild(dialog);
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
-	XBell(XtDisplay(root), 50);
+	beep();
 	poll(&reply);
 	XtPopdown(XtParent(dialog));
 	return (reply >= 0 ? reply == YES : -1);
@@ -438,7 +438,7 @@ void ok_dialog(Widget w, char *msg)
 	XtManageChild(dialog);
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
-	XBell(XtDisplay(root), 50);
+	beep();
 	poll(&confirmed);
 	XtPopdown(XtParent(dialog));
 }
@@ -494,7 +494,7 @@ void memory_warning_dialog(Widget w, Boolean show)
 	XtManageChild(dialog);
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
-	XBell(XtDisplay(root), 50);
+	beep();
 	poll(&confirmed);
 	XtPopdown(XtParent(dialog));
 }
@@ -548,7 +548,7 @@ void nomemory_dialog(Widget w, Boolean show)
 	XtManageChild(dialog);
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
-	XBell(XtDisplay(root), 50);
+	beep();
 	poll(&confirmed);
 	XtPopdown(XtParent(dialog));
 }
@@ -624,7 +624,7 @@ char *file_dialog(Widget w, char *opn)
 	while (!reply) {
 		poll(&reply);
 		if(reply == YES && (!file_name || !*file_name)) {
-			XBell(XtDisplay(root), 50);
+			beep();
 			reply = 0;
 		}
 	};

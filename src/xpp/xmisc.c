@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.12 2003/02/13 13:01:07 rda Exp rda $
+ * $Id: xmisc.c,v 2.13 2003/03/03 15:23:41 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -65,6 +65,13 @@ static char *binary_data_message =
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static int num_selection_sources;
 static Widget selection_sources[MAX_SELECTION_SOURCES];
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * beep: ring the bell, typically as a lightweight error report.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void beep(void)
+{
+	 XBell(XtDisplay(root), 50);
+}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * get_map_state: get the map state of a window (IsUnmapped/IsUnviewable/IsViewable)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
