@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.5 2002/10/17 17:09:34 rda Exp rda $
+ * $Id: xmisc.c,v 2.6 2002/12/03 15:25:38 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -54,6 +54,8 @@ static char *too_many_selection_sources =
 	"DESIGN ERROR: too many attempts to register a text selection source";
 static char *no_selection_message =
 	 "No text is selected in this xpp session";
+static char *binary_data_message =
+	 "The text you are trying to enter contains binary data. The unprintable characters have been replaced by spaces.";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * static data
@@ -183,10 +185,11 @@ void copy_font_list (
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void unhighlight(Widget,XtIntervalId*);
 void blink_owner_cb(
-	Widget					w,
-	Widget					text_w,
-	XmPushButtonCallbackStruct		*unused)
+	Widget				w,
+	XtPointer				cbd,
+	XtPointer				cbs)
 {
+	Widget text_w = cbd;
 	XmTextSetHighlight(text_w,
 		0,
 		XmTextGetLastPosition(text_w),
@@ -220,17 +223,67 @@ static void unhighlight(
  * the text field contains only a number.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void number_verify_cb(
-	Widget				unused1,
-	XtPointer			unused2,
-	XmTextVerifyCallbackStruct	*cbs)
+	Widget		unused1,
+	XtPointer		unused2,
+	XtPointer		xtp)
 {
+	XmTextVerifyCallbackStruct *cbs = xtp;
 	int i;
 	char *p = cbs->text->ptr;
+	if(cbs->text->format != XmFMT_8_BIT) {
+		cbs -> doit = False;
+		return;
+	}
 	for(i = 0; i < cbs->text->length; ++i) {
 		if((p[i] & 0x80) || !isdigit(p[i] & 0x7f)) {
 			cbs->doit = False;
 			return;
 		}
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * text_verify_cb: callback to be used as a modify/verify
+ * callback to a text (field) widget to ensure that
+ * the text doesn't contain control characters or carriage returns.
+ * It maps carriage-returns to new-lines (which is crude, but simple).
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void text_verify_cb(
+	Widget		text_w,
+	XtPointer		unused2,
+	XtPointer		xtp)
+{
+	XmTextVerifyCallbackStruct *cbs = xtp;
+	int i, j;
+	char *p = cbs->text->ptr;
+	Boolean has_crs = False, has_controls = False;
+	if(cbs->text->format != XmFMT_8_BIT) {
+		cbs -> doit = False;
+		return;
+	}
+	for(i = 0; i < cbs->text->length; ++i) {
+		if(p[i] == '\r') {
+			has_crs = True;
+		} else if(control_chars[p[i]]) {
+			has_controls = True;
+			p[i] = ' ';
+		}
+	}
+	if(has_crs) {
+		for(i = 0, j = 0; j < cbs->text->length; ++i, ++j) {
+			if(p[j] == '\r') {
+				if(j + 1 < cbs->text->length && p[j+1] == '\n') {
+					j += 1;
+				} else {
+					p[j] = '\n';
+				}
+			}
+			p[i] = p[j];
+		}
+		cbs->text->length = i;
+	}
+	if(has_controls) {
+		ok_dialog(text_w, binary_data_message);
 	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
