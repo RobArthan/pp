@@ -1,0 +1,398 @@
+=TEX
+\documentstyle[hol,11pt,TQ]{article}
+\ftlinepenalty=9999
+\makeindex
+\TPPproject{IED 1563}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Release 1 ICL HOL: Module Tests for Types and Terms}  %% Mandatory field
+\def\TPPheadtitle{Release 1 ICL HOL \cr Module Tests for Types and Terms}
+\TPPref{DS/FMU/IED/MDT003}  %% Mandatory field
+\def\SCCSversion{$Revision$ %
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$ %
+}}
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{ML Literate Script}
+\TPPkeywords{}
+\TPPauthor{K.Blackburn & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.D.Arthan & Project Manager}
+\TPPabstract{A set of module tests are given for the 
+the types of HOL terms and types, namely $TERM$ and $TYPE$. It then gives some utility functions upon these.}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	    Library
+}}
+\begin{document}
+\makeTPPfrontpage
+\vfill
+\begin{centering}
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+\end{centering}
+\pagebreak
+\section{Document control}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history} 
+\begin{description}
+\item [Issue 1.1]
+First draft version.
+\end{description}
+%\subsection{Changes forecast}
+\section{GENERAL}
+\subsection{Scope}
+This document contains the module testing of the types and terms of ICL HOL, and utilities to handle them, required by Release 1 ICL HOL Product Requirement Specification \cite{DS/FMU/IED/DEF004}.
+The design is in \cite{DS/FMU/IED/DTD003}
+and it is
+implemented in \cite{DS/FMU/IED/IMP003}.
+
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains the module testing of the material given a design in \cite{DS/FMU/IED/DTD003},
+following the test policy given in that document and the general policy given in \cite{DS/FMU/IED/PLN008}.
+
+\subsubsection{Dependencies}
+This document is derived from the detailed design in \cite{DS/FMU/IED/DTD003},
+and is further influenced by the implementation, in  \cite{DS/FMU/IED/IMP003}.
+\subsubsection{Deficiencies}
+The coverage of the tests, as called for by the test specification, may currently be incomplete.
+
+\section{UTILITIES USED FOR TESTING}
+Flatten a list of strings into a single string.
+=SML
+fun flat_strings ss = implode(flat (map explode ss));
+=TEX
+A simple pair of printing routines for $TERM$ and $TYPE$.
+=SML
+local
+fun lprint_TYPE t = 
+let
+	fun aux (mk_vartype s) = " " ^ s
+	| aux (mk_type ("‹",[t1,t2])) = (
+		"(" ^ aux t1 ^ " ‹" ^ aux t2 ^")"
+	) | aux (mk_type ("‰",[t1,t2])) = (
+		"(" ^ aux t1 ^ " ‰" ^ aux t2 ^")"
+	) | aux (mk_type (ty,[])) = (
+		" " ^ ty
+	) | aux (mk_type (c,tl)) = "((" ^ flat_strings (map ((fn x => x ^", ") o aux) tl)^ ")" ^ c ^ ")"
+in
+	(":" ^ aux t)
+end;
+in
+val print_TYPE = diag_string o lprint_TYPE;
+
+fun print_TERM (tm: TERM) =
+let fun print_DEST_TERM (Comb(t1,t2)) = (
+	"Comb (" ^ print_DEST_TERM(dest_TERM t1) ^", " ^
+		print_DEST_TERM(dest_TERM t2) ^ ")"
+) | print_DEST_TERM (Const(s,ty)) = s ^ lprint_TYPE ty
+| print_DEST_TERM (Var(s,ty)) = s ^ lprint_TYPE ty
+| print_DEST_TERM (Abs(v,b)) = (
+	let val (vs,vt) = dest_var v
+	in
+	" " ^ vs ^ lprint_TYPE vt ^ " Ž " ^ print_DEST_TERM (dest_TERM b)
+	end);
+in
+	diag_string(print_DEST_TERM (dest_TERM tm))
+end;
+end;
+=TEX
+\section{THE TESTS}
+\subsection{Tests on Types}
+=SML
+infix 6 cross;
+fun t1 cross t2 = mk_type("‰",[t1,t2]);
+val BB = BOOL cross BOOL;
+print_TYPE BB;
+
+val BtoB = mk_fun(BOOL, BOOL);
+print_TYPE BtoB;
+dest_type BB;
+dest_type (mk_type("UNIT",[]));
+mk_type(dest_type BB) = BB;
+
+val tv1 = mk_vartype "'tv1";
+val tv2 = mk_vartype "'tv2";
+val tv3 = mk_vartype "'tv3";
+print_TYPE tv1;
+dest_type tv1; (* fails *)
+
+val ist = icl'inst_type [(BOOL, "'tv1"),(BB,"'tv3")];
+print_TYPE(ist tv1);
+print_TYPE(ist tv2);
+print_TYPE(ist tv3);
+print_TYPE(ist (tv1 cross tv2));
+print_TYPE(ist (tv3 cross tv2));
+
+infix 6 comma;
+fun t1 comma t2 = mk_const(",", (mk_fun(t1,mk_fun(t2,(t1 cross t2)))));
+val Comma = tv1 comma tv2;
+type_tycons(type_of Comma);
+type_tycons (ist (tv1 cross tv2));
+type_tyvars(type_of Comma);
+type_tyvars (ist (tv1 cross tv2));
+=TEX
+\subsection{Tests on Terms}
+=SML
+print_TERM Comma;
+print_TYPE(type_of Comma);
+dest_TERM Comma;
+
+val vtv1 = mk_var("vtv1",tv1);
+val vtv2 = mk_var("vtv2",tv2);
+print_TERM(mk_TERM(Var("vtv2",tv2)));
+val vtv3 = mk_var("vtv3",tv3);
+val v1 = mk_var("v1",BOOL);
+val v2 = mk_var("v2",mk_type("triple",[tv1,tv2,tv3]));
+val v3 = mk_var("v2",mk_type("triple",[tv3,BOOL,tv1]));
+val iv1 = icl'mk_var(" a b c = F",tv1);
+val iv2 = icl'mk_var(" a b c = T",BOOL);
+map print_TERM [iv1, iv2];
+mk_var(" a b c = F",tv1); (* fails *)
+mk_var(" a b c = T",BOOL); (* fails *)
+dest_var iv1; 
+dest_var v1; 
+dest_var (mk_const("c1",BOOL)); (* fails *)
+is_var iv1; 
+is_var v1; 
+is_var (mk_const("c1",BOOL)); 
+dest_TERM v1;
+
+mk_TERM (Comb(mk_var("v",BB),vtv1)); (* fails *)
+mk_TERM (Comb(mk_var("v",BtoB),vtv1)); (* fails *)
+
+val c1 = mk_const("c1",BOOL);
+print_TERM(mk_TERM (Const("c1",BOOL)));
+val c2 = mk_const("c2",mk_type("triple",[tv1,tv2,tv3]));
+val c3 = mk_const("c3",mk_type("triple",[tv3,BOOL,tv1]));
+val c4 = mk_const("c4",mk_fun(BOOL,mk_fun(tv2,tv3)));
+val c5 = mk_const("c5",mk_fun(tv1,mk_fun(tv2,BOOL)));
+val c6 = mk_const("c6",mk_fun(tv1,mk_fun(tv2,mk_fun(tv3,
+	mk_type("triple",[tv1,tv2,tv3])))));
+mk_const(" wrong",BOOL); (* fails *)
+map print_TERM [c1, c2, c3, c4, c5, c6];
+dest_const c1; 
+dest_const v1; (* fails *)
+is_const c1; 
+is_const v1;
+dest_TERM c3;
+
+val cm1 = mk_comb(c6,vtv1);
+val cm2 = mk_comb(cm1,vtv2);
+val cm3 = mk_comb(cm2,vtv3);
+print_TERM(mk_TERM(Comb(cm2,vtv3)));
+mk_comb(mk_var("v",BB),vtv1);
+mk_comb(mk_var("v",BtoB),vtv1);
+map print_TERM [cm1, cm2, cm3];
+dest_comb v1; (* fails *)
+is_comb cm1;
+is_comb c1;
+list_mk_comb (c6, [vtv1, vtv2, vtv3]) TERM_eq cm3;
+list_mk_comb (c6,[]) TERM_eq c6;
+strip_comb cm3;
+type_of cm3;
+(dest_TERM cm3);
+
+val a1 = mk_simple_abs(v1, cm3);
+val a2 = mk_simple_abs(v2,v2);
+val a3 = mk_simple_abs(genvar tv1, c2);
+val a4 = mk_simple_abs(iv1, c2);
+map print_TERM [a1, a2, a3, a4];
+mk_simple_abs(c1, c1); (* fails *)
+dest_simple_abs a1; 
+dest_simple_abs a4; 
+dest_simple_abs v1; (* fails *)
+is_simple_abs a1;
+is_simple_abs v1;
+print_TERM (list_mk_simple_abs ([vtv1, vtv2, vtv3], c6));
+list_mk_simple_abs ([],c6) TERM_eq c6;
+
+fun DEST_TERM_id x = ((mk_TERM (dest_TERM x)) TERM_eq x);
+
+map DEST_TERM_id [c1, c2, c3, c4, c5, c6, v1, v2, v3,
+	cm1, cm2, cm3, a1, a2, a3, iv1, iv2, a4];
+
+map type_of [c1, c2, c3, c4, c5, c6, v1, v2, v3,
+	cm1, cm2, cm3, a1, a2, a3, iv1, iv2, a4];
+
+=TEX
+=SML
+icl'frees cm3;
+icl'frees (mk_simple_abs(vtv2, cm3));
+map (op TERM_eq) (combine (frees cm3) (map mk_var (icl'frees cm3)));
+
+is_free_var_in (dest_var vtv1) cm3; 
+is_free_var_in (dest_var vtv1)
+	(list_mk_simple_abs ([vtv1, vtv2, vtv3], c6));
+=TEX
+We leave the testing of $mk\_bin\_op$, $equality$, $quantifier$ and their like to the testing
+of the functions that use them in their implementation.
+=SML
+val eq1 = mk_eq(c1,c1); 
+mk_eq(c1, c2); (* fails *)
+dest_eq c1; (* fails *)
+(dest_const ** dest_const)(dest_eq eq1);
+is_eq eq1; 
+is_eq c1;
+
+val T = mk_const("T",BOOL); 
+val F = mk_const("F",BOOL);
+val imp1 = (mk_Š (F,T));
+mk_Š(c2,c3); (* fails *)
+dest_Š c1;  (* fails *)
+dest_Š imp1;
+is_Š imp1;
+is_Š c1;
+(dest_const ** dest_const)(dest_Š imp1);
+
+list_mk_Š[]; (* fails *)
+list_mk_Š[vtv1, vtv2];
+strip_Š(list_mk_Š[T,F,T,F]);
+
+print_TERM (mk_simple_ƒ(vtv1, c1));
+(print_TERM ** print_TERM) (dest_simple_ƒ(mk_simple_ƒ(vtv1, c1)));
+mk_simple_ƒ(c1,c1); (* fails *)
+dest_simple_ƒ c1; (* fails *)
+is_simple_ƒ(mk_simple_ƒ(vtv1, c1));
+is_simple_ƒ c1;
+print_TERM(list_mk_simple_ƒ([vtv1, vtv2], c1));
+
+(print_TERM ** print_TERM) (dest_simple_„(mk_simple_„(vtv1,c1)));
+print_TERM(list_mk_simple_„([vtv1, vtv2], c1));
+mk_simple_„(c1, c1); (* fails *)
+dest_simple_„ c1; (* fails *)
+is_simple_„(mk_simple_„(vtv1, c1));
+is_simple_„ c1;
+print_TERM(list_mk_simple_„([vtv1, vtv2], c1));
+
+aconv vtv1 c1;
+aconv vtv1 vtv1;
+aconv (mk_simple_abs(mk_var ("A",BOOL),c1)) 
+	(mk_simple_abs(mk_var ("B",BOOL),c1)); 
+aconv (mk_simple_abs(vtv1, vtv1) )
+	(mk_simple_abs(mk_var ("'ntv1",tv1),vtv1)); 
+=TEX
+=SML
+icl'variant [] (dest_var vtv1);
+icl'variant [(dest_var vtv1)] (dest_var vtv1);
+icl'variant [(dest_var vtv1),(("vtv1'",tv1))] (dest_var vtv1);
+icl'variant [("vtv1",tv2)] (dest_var vtv1);
+(icl'subst [(T,("vtv1",tv2))] c1); (* fails *)
+print_TERM (icl'subst [(T,("v1",BOOL))] c1);
+print_TERM (icl'subst [(T,("v1",BOOL)),(F,("v2",BOOL))] (v1));
+print_TERM (icl'subst [(T,("v1",BOOL)),(F,("v2",BOOL))] (mk_var("v2",BOOL)));
+print_TERM (icl'subst [(T,("v1",BOOL)),(F,("v2",BOOL))] 
+	(mk_simple_„(mk_var("v2",BOOL), mk_var("v2",BOOL))));
+print_TERM (icl'subst [(T,("v1",BOOL)),(F,("v2",BOOL))]
+	 (mk_simple_ƒ(mk_var("v2",BOOL), v1)));
+
+print_TERM(rename ("v1",BOOL) "renamed_v1"
+	(mk_simple_„(v1, mk_var("v2",BOOL))));
+print_TERM(rename ("v1",BOOL) "renamed_v1"
+	(mk_simple_„(mk_var("v2",BOOL), v1)));
+print_TERM(rename ("v1",tv1) "renamed_v1"
+	(mk_simple_„(mk_var("v2",BOOL), v1)));
+
+print_TERM (icl'inst [("av1",tv1),("av2",tv2)]
+	[(BOOL,"'tv1"),(tv1,"'tv2")]
+	cm3);
+print_TERM (icl'inst [("av1",tv1),("av2",tv2)]
+	[(BOOL,"'tv1"),(tv1,"'tv2")]
+	(rename ("vtv2",tv2) "av1" cm3));
+
+=TEX
+=SML
+map print_TYPE (term_types cm3);
+(term_tyvars cm3);
+term_constants cm3;
+type_match BOOL tv1;
+type_match BOOL BB; (* fails *)
+type_match (mk_fun(tv1,mk_fun(tv2,tv1))) (mk_fun(tv2,mk_fun(tv1,tv2)));
+type_match (mk_fun(tv2,mk_fun(tv2,tv2))) (mk_fun(tv1,mk_fun(tv2,tv1))) ;
+type_match (mk_fun(BOOL,mk_fun(tv2,BB))) (mk_fun(tv1,mk_fun(tv2,tv1))) ; (* fails *)
+(map (print_TYPE ** print_TYPE) ** map (print_TERM ** print_TERM)) (term_match v1 v1);
+(map (print_TYPE ** print_TYPE) ** map (print_TERM ** print_TERM)) (term_match v2 vtv1);
+(map (print_TYPE ** print_TYPE) ** map (print_TERM ** print_TERM)) (term_match 
+	(list_mk_comb ((mk_const("trio",mk_fun(BOOL,mk_fun(tv2,
+	mk_fun(tv3, (BOOL cross tv2)))))),
+	[v1, vtv2,vtv3]))
+	(list_mk_comb ((mk_const("trio",mk_fun(tv1,mk_fun(tv2,mk_fun(tv3, 
+	(tv1 cross tv2)))))),
+	[vtv1, vtv2,vtv3])));
+(map (print_TYPE ** print_TYPE) ** map (print_TERM ** print_TERM)) (term_match 
+	(list_mk_comb ((mk_const("trio",mk_fun(BOOL,mk_fun(tv2,mk_fun(tv3, 
+	(BB cross tv2)))))),
+	[v1, vtv2,vtv3]))
+	(list_mk_comb ((mk_const("trio",mk_fun(tv1,mk_fun(tv2,mk_fun(tv3, 
+	(tv1 cross tv2)))))),
+	[vtv1, vtv2,vtv3]))); (* fails *)
+
+is_type_instance tv1 BOOL;
+is_type_instance BOOL tv1;
+
+print_TERM (genvar BOOL);print_TERM (genvar BOOL);print_TERM (genvar BOOL);
+mk_var(dest_var (genvar BOOL)); (* fails *)
+icl'mk_var(dest_var (genvar BOOL)); (* fails *)
+=TEX
+=SML
+(variant[c1]vtv1); (*fails *)
+print_TERM(variant [] vtv1);
+print_TERM(variant [] c1);
+print_TERM(variant [vtv1] vtv1);
+print_TERM(variant [vtv1,(mk_var("vtv1'",tv1))] vtv1);
+print_TERM(variant [mk_var("vtv1",tv2)] vtv1);
+print_TERM(variant [mk_var("vtv1",tv2)] vtv1);
+map print_TERM(list_variant[vtv1,(mk_var("vtv1'",tv1))]
+	[(mk_var("vtv1'",tv1)), vtv1]);
+
+is_free_in vtv1 vtv1;
+is_free_in vtv1 (mk_simple_abs(vtv1, vtv1));
+
+map print_TERM (frees cm3);
+map print_TERM (frees (mk_simple_abs(vtv2, cm3)));
+
+(var_subst [(T,c1)] c1); (* fails *)
+print_TERM (var_subst [(T,v1)] c1);
+print_TERM (var_subst [(T,v1),(F,mk_var("v2",BOOL))] (v1));
+print_TERM (var_subst [(T,v1),(F,mk_var("v2",BOOL))] (mk_var("v2",BOOL)));
+print_TERM (var_subst [(T,v1),(F,mk_var("v2",BOOL))] 
+	(mk_simple_„(mk_var("v2",BOOL), mk_var("v2",BOOL))));
+print_TERM (var_subst [(T,v1),(F,mk_var("v2",BOOL))] 
+	(mk_simple_ƒ(mk_var("v2",BOOL), v1)));
+
+print_TERM (subst [(v1,mk_Š(T,F))] (list_mk_Š[T,F,T,F]));
+
+val tm_replace_with_const : TERM -> TERM = (
+let fun replace_with_const l x = (
+	let val (n,ty) = dest_var x
+	in mk_var("rwc_" ^ n, ty) end)
+in
+	TERM_map replace_with_const
+end);
+
+print_TERM(tm_replace_with_const ( cm3));
+=TEX
+=SML
+print_TERM (inst [mk_var("av1",tv1),mk_var("av2",tv2)]
+	[(BOOL,tv1),(tv1,tv2)]
+	cm3);
+print_TERM (inst [mk_var("av1",tv1),mk_var("av2",tv2)]
+	[(BOOL,tv1),(tv1,tv2)]
+	(rename ("vtv2",tv2) "av1" cm3));
+print_TERM (inst [c1,mk_var("av2",tv2)]
+	[(BOOL,tv1),(tv1,tv2)]
+	(rename ("vtv2",tv2) "av1" cm3)); (* fails *)
+print_TERM (inst [mk_var("av1",tv1),mk_var("av2",tv2)]
+	[(BOOL,BB),(tv1,tv2)]
+	(rename ("vtv2",tv2) "av1" cm3)); (* fails *)
+=TEX
+\subsection{End of Tests}
+=SML
+PolyML.quit();
+=TEX
+\end{document}
