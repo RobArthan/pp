@@ -639,9 +639,10 @@ XmAnyCallbackStruct *cbs;
 		if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 		} else {
-			save_file(script, fname);
-			flash_file_name(fname);
-			reinit_changed();
+			if(save_file(script, fname)) {
+				flash_file_name(fname);
+				reinit_changed();
+			}
 		}
 		break;
 	case FILE_MENU_SAVE_AS:
@@ -712,6 +713,7 @@ XmAnyCallbackStruct *cbs;
 		if(!changed || yes_no_dialog(root, revert_message)) {
 			XmTextFieldSetString(namestring, no_file_message);
 			XmTextSetString(script, "");
+			flash_file_name(fname);
 			reinit_changed();
 			set_menu_item_sensitivity(filemenu,
 				FILE_MENU_SAVE, False);
