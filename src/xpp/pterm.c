@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.8 2000/05/25 09:47:38 rda Rel $
+ * $Id: pterm.c,v 2.9 2001/07/13 09:20:13 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -53,10 +53,6 @@
 #define STDOUT 1
 #define STDERR 2
 
-#ifdef LINUX
-#define sigset signal
-#endif
-
 /* For the following see "Data transfer from application" below */
 #define XFER_SIZE 8
 
@@ -75,8 +71,6 @@ static int control_fd;
 static pid_t child_pid;
 
 static XtInputId app_ip_req;
-
-static Boolean listening;
 
 /* For the following three see "Data transfer to application" below */
 static char queue[MAX_Q_LEN];
@@ -105,6 +99,47 @@ static char* carry_on_waiting_message =
 " Do you want to continue waiting for a response?";
 
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Listening to the application: the following function
+ * is used to toggle between the state where xp is listening
+ * for output from the application being run and the state
+ * where it is not. The state changes needs to be protected
+ * against signals.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+#define	LISTEN	10
+#define	IGNORE	20
+#define	QUERY	30
+
+Boolean listening_state(int req)
+{
+	static Boolean listening = False;
+	sigset_t now, before;
+	static void get_from_application();
+	static Boolean application_alive();
+	sigfillset(&now);
+	sigprocmask(SIG_BLOCK, &now, &before);
+	switch(req) {
+		case LISTEN:
+			if(application_alive() && !listening) {
+				app_ip_req = XtAppAddInput(app,
+					control_fd, (XtPointer) XtInputReadMask,
+					get_from_application, NULL);
+				listening = True;
+			}
+			break;
+		case IGNORE:
+			if(listening) {
+				XtRemoveInput(app_ip_req);
+				listening = False;
+			};
+			break;
+		case QUERY:
+			break;
+	}
+	sigprocmask(SIG_SETMASK, &before, 0);
+	return listening;
+}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Pseudo-terminal initialisation:
@@ -119,12 +154,12 @@ void get_pty()
 	char *slavename;
 	char *ptsname();
 	int i;
-	static void get_from_application();
+	static void get_from_application(), default_sigs();
 	struct termios tio;
-
 #ifndef LINUX
 /* On non-Linux (i.e., SVR4) we use the grantpt/lockpt interfaces */
 /* and do the termio set-up in the child process */
+	child_pid = 0; 
 	if ((control_fd = open("/dev/ptmx", O_RDWR)) < 0) {
 		msg("system error", "no pseudo-terminal devices available (1)");
 		perror("xpp");
@@ -142,6 +177,7 @@ void get_pty()
 /* On Linux we have to look for a pseudo-terminal ourselves */
 /* We do the termio set-up prior to the fork. */
 	char line[32];
+	child_pid = 0; 
 	for(control_fd = -1, c = 'p'; control_fd < 0 && c <= 's'; c++) {
 		for(i = 0; control_fd < 0 && i < 16; i++) {
 			sprintf(line, "/dev/pty%c%x", c, i );
@@ -208,10 +244,7 @@ void get_pty()
 			perror("xpp");
 			exit(8);
 		};
-		app_ip_req = XtAppAddInput(app,
-			control_fd, (XtPointer) XtInputReadMask,
-			get_from_application, NULL);
-		listening = True;
+		listening_state(LISTEN);
 		write(control_fd, "\n", 1);	/* Tell child to exec */
 
 	} else { 
@@ -221,6 +254,7 @@ void get_pty()
 		char	buf;
 		char **arglist;
 		int tty_fd;
+		default_sigs();
 		close(control_fd);
 		dup2(slave_fd, STDIN);
 		dup2(slave_fd, STDOUT);
@@ -287,10 +321,7 @@ Boolean application_alive()
 	if(child_pid) {
 		waitpid(child_pid, NULL, WNOHANG);
 		if( kill(child_pid, 0) < 0 ) {
-			if(listening) {
-				XtRemoveInput(app_ip_req);
-				listening = False;
-			};
+			listening_state(IGNORE);
 			close(control_fd);
 			return False;
 		} else {
@@ -316,9 +347,8 @@ static void get_from_application(
 	if((ct = read(control_fd, buf, XFER_SIZE)) > 0) {
 		scroll_out(buf, ct, False);
 	}
-	if(ct == XFER_SIZE) { /* Probably more to do */
-		XtRemoveInput(app_ip_req);
-		listening = False;
+	if(ct == XFER_SIZE) { /* Probably more to do; stop listening to give X a chance */
+		listening_state(IGNORE);
 		XtAppAddWorkProc(app, get_from_app_work_proc, (XtPointer) NULL);
 	}		
 }
@@ -336,10 +366,7 @@ static Boolean get_from_app_work_proc(XtPointer unused_p)
 	if(ct == XFER_SIZE) { /* Probably more to do */
 		return False;	/* arrange to be called again */ 
 	} else	{
-		app_ip_req = XtAppAddInput(app,
-			control_fd, (XtPointer) XtInputReadMask,
-			get_from_application, NULL);
-		listening = True;
+		listening_state(LISTEN);
 		return True;
 	}
 }
@@ -499,7 +526,7 @@ char *buf;
 NAT siz;
 {
 
-/* Check there's something listening: */
+/* Check there's something to talk to: */
 	if(!application_alive()) {
 		return;
 	};
@@ -633,10 +660,7 @@ void kill_application ()
 {
 	clear_queue();
 	if(application_alive()) {
-		if(listening) {
-			XtRemoveInput(app_ip_req);
-			listening = False;
-		};
+		listening_state(IGNORE);
 		kill((pid_t)(-child_pid), SIGKILL);
 		kill(child_pid, SIGKILL);
 		waitpid(child_pid, NULL, WUNTRACED);
@@ -661,9 +685,6 @@ void restart_application () {
 static void sigint_handler(int sig)
 {
 	XtAppAddTimeOut(app, 0, (XtTimerCallbackProc) check_quit_cb, root);
-#ifdef LINUX
-	sigset(SIGINT, sigint_handler);
-#endif
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -703,19 +724,38 @@ static void xt_error_handler(char * m)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * handle signals and Xt errors: the derivation of the following list
  * of OS signals to handle is not very scientific, but seems to catch
- * the common problems.
- * IT WOULD BE A GOOD IDEA TO MOVE TO USING THE POSIX SIGNAL HANDLING FUNCTIONS.
+ * the common problems. Earlier versions of this code also used to
+ * catch SIGSYS on Solaris, but this has been removed since it's not
+ * portable and there is no evidence that the SIGSYS signal ever occurred.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void handle_sigs()
 {
-	sigset(SIGINT, sigint_handler);
-	sigset(SIGSEGV, sigother_handler);
-	sigset(SIGBUS, sigother_handler);
-	sigset(SIGFPE, sigother_handler);
-#ifndef LINUX
-	sigset(SIGSYS, sigother_handler);
-#endif
+	struct sigaction acts;
+	acts.sa_handler = sigint_handler;
+	sigemptyset(&acts.sa_mask);
+	acts.sa_flags = 0;
+	sigaction(SIGINT, &acts, 0);
+	acts.sa_handler = sigother_handler;
+	sigaction(SIGSEGV, &acts, 0);
+	sigaction(SIGBUS, &acts, 0);
+	sigaction(SIGFPE, &acts, 0);
 	XtAppSetErrorHandler(app, xt_error_handler);
+}
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * restore signal handling to defaults:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void default_sigs()
+{
+	struct sigaction acts;
+	acts.sa_handler = SIG_DFL;
+	sigfillset(&acts.sa_mask);
+	acts.sa_flags = 0;
+	sigaction(SIGINT, &acts, 0);
+	sigaction(SIGSEGV, &acts, 0);
+	sigaction(SIGBUS, &acts, 0);
+	sigaction(SIGFPE, &acts, 0);
 }
 
 
