@@ -90,7 +90,6 @@ lasp -s -u imp064.OKwords imp064.doc > zz1
 \item[\FormatDate{$Date$%
 }, issue \SCCSissue~]
 	Initial drafts.
-	Added dummy for $ZRename‰s$
 %\item[\FormatDate{$Date$%
 %}, issue \SCCSissue~]
 
@@ -154,6 +153,8 @@ structure ÛZPrettyPrinterÝ : ZPrettyPrinter = struct
 =SML
 open PrettyPrinterSupport;
 infix gt_prec;
+
+open ZUserInterfaceSupport;
 =TEX
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -225,7 +226,13 @@ associative
 
 =IGN
 val pc_pred2 : PREC_CONTEXT = PcNormal(120, 0, false);
-val pc_pred2_pre : PREC_CONTEXT = PcNormal(120, 20, false);
+=TEX
+
+Relational operators have their own numeric precedance with a range of,
+effectively, plus or minus infinity.
+
+=SML
+val pc_pred2_rel : PREC_CONTEXT = PcNormal(118, 0, false);
 =TEX
 
 =SML
@@ -247,13 +254,23 @@ val pc_expr0_Ì_Í : PREC_CONTEXT = PcNormal(200, 10, false);
 val pc_expr0_¸ : PREC_CONTEXT = PcNormal(200, 30, false);
 =TEX
 
-Syntax rule $Expr1$ captures the fancy fix operators plus it is used by
+Syntax rule $Expr0$ captures the fancy fix generic operators which
+have their own numeric precedance with a range of,
+effectively, plus or minus infinity.
+
+=SML
+fun pc_expr0_gen (p:int) : PREC_CONTEXT = PcNormal(203, p, false);
+=TEX
+
+Syntax rule $Expr1$ captures the fancy fix function operators plus it is used by
 some other productions.  Have two precedance values:  one for its
 direct recursive uses (i.e., where $Expr1$ calls $Expr1$); the other
 for its other uses.
+Fancy fix function operators have their own numeric precedance with a
+range of, effectively, plus or minus infinity.
 
-=IGN
-val pc_expr1_in_fun : PREC_CONTEXT = PcNormal(210, 10, false);
+=SML
+fun pc_expr1_in_fun (p:int) : PREC_CONTEXT = PcNormal(206, p, false);
 =TEX
 
 =SML
@@ -316,7 +333,9 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\section{APPLICATION OF CONSTANT OR VARIABLE}
+\section{PRINTING AUXILIARY FUNCTIONS}
+
+\subsection{Simple Infix, Prefix and Postfix Operators}
 
 Function $Z_fun_app$ deals with the functionale application of
 constants.  The first term $orig_tm$ is the constant, the string
@@ -373,6 +392,8 @@ end
 );
 =TEX
 
+\subsection{Lists of Terms}
+
 There are several variations on lists.
 
 Some lists (typically those separated by commas or semicolons)
@@ -413,14 +434,196 @@ end
 );
 =TEX
 
+\subsection{Delta Schemas}
+
 =SML
-(* HERE *)
 fun Ûdo_„_˜Ý (cur_env:PP_ENV, name:string, tm:TERM) : PFUN_ANS = (
 	bracket(cur_env, pc_sch1_ref, false,
 		fn e => (do_prefix(name, tm) (set_prec pc_schema_name e))
 	)
 );
 =TEX
+
+\section{FANCY-FIX TERMS}
+
+=SML
+datatype ÛZ_PIECEÝ
+	=	Ûzp_termÝ	of TERM * PREC_CONTEXT
+	|	Ûzp_stringÝ	of string * ZFIXITY
+	;
+=TEX
+
+=SML
+fun Ûformat_fancy_fixÝ
+	(tmpl : TEMPLATE)
+=IGN
+	(decor : DECOR)
+=SML
+	(args : TERM list)
+	: Z_PIECE list OPT = (
+let
+=IGN
+	val ids =	case rev(tmpl_ids tmpl ZClRel)
+			of nil => nil
+			| (i, f)::t => (i ^decor, f)::t
+	;
+=SML
+	val ids = rev(tmpl_ids tmpl ZClRel);
+
+	val rids = rev ids;
+
+	fun aux1 names tms = (
+		fold	(fn ((n, t), prev) => (zp_string n) :: (zp_term(t, PcLowest)) :: prev)
+			(combine names tms)
+			nil
+	);
+
+	fun aux2 names tms = (
+		fold	(fn ((t, n), prev) => (zp_term(t, PcLowest)) :: (zp_string n) :: prev)
+			(combine tms names)
+			nil
+	);
+in
+	Value(	case tmpl
+		of TmplNon _ => (zp_string(hd ids)) :: (aux2 (tl ids) args)
+		| TmplIn _ => (zp_term(hd args, PcLowest)) :: (aux1 ids (tl args))
+		| TmplPre _ => aux1 ids args
+		| TmplPost _ => aux2 ids args
+	)
+end
+handle Fail _ => Nil
+);
+=TEX
+
+In determining whether a Z~identifier has some fancy fix form we make
+several consistency checks, these aim to ensure that the text printed
+is compatible with the various symbol table information and so the
+parser can read back the text to generate the same term.
+
+=SML
+fun Ûget_fancy_fixÝ(name:string, ty:TYPE, hd_term:TERM, arg_tm:TERM) : Z_PIECE list OPT = (
+let
+	val tmpl:TEMPLATE = template_of_string name;
+	val fst_tmpl_name:string = first_tmpl_id tmpl;
+in
+	if name = fst_tmpl_name
+	then
+		Nil
+	else
+		case get_zfixity_info fst_tmpl_name
+		of Value(_, [tmpl2]) =>
+			if tmpl = tmpl2
+			then
+				let
+					val stubs:STUB list = tmpl_stubs tmpl;
+					val num_stubs:int = length stubs;
+				in
+					if num_stubs = 1
+					then
+						(format_fancy_fix tmpl [arg_tm]) : Z_PIECE list OPT
+					else
+						(let
+							val args = dest_z_tuple arg_tm (* may fail *);
+						in
+							if length args = num_stubs
+							then
+								(format_fancy_fix tmpl args) : Z_PIECE list OPT
+							else
+								Nil : Z_PIECE list OPT
+						end handle Fail _ => Nil) : Z_PIECE list OPT
+				end
+			else
+				Nil
+		| _ => Nil
+end
+);
+=TEX
+
+=SML
+local
+	fun get_p(zp_term(_, p)) = p
+	| get_p(zp_string(_, (ff, cl))) = (
+		let
+			val clp =	case cl
+					of (ZClFun p) => pc_expr1_in_fun p
+					| ZClRel => pc_pred2_rel
+					| (ZClGen p) => pc_expr0_gen p
+		in
+			case ff
+			of ZFFBeginOp		=> PcHighest
+			| ZFFEndOp		=> PcHighest
+			| ZFFInOp		=> clp
+			| ZFFPostBeginOp	=> clp
+			| ZFFThenOp		=> PcLowest
+			| ZFFPostOp		=> clp
+			| ZFFPreEndOp		=> clp
+			| ZFFPreOp		=> clp
+		end
+	);
+
+	fun aux(p, prev) = if p gt_prec prev then prev else p;
+in
+
+fun Ûanalyse_precÝ (pieces:Z_PIECE list) : PREC_CONTEXT =(
+	fold aux (map get_p pieces) PcLowest
+);
+
+end;
+=TEX
+
+=SML
+fun Ûset_end_precsÝ (tm_prec:PREC_CONTEXT) (pieces:Z_PIECE list) : Z_PIECE list = (
+let
+	fun aux((zp_term(t, _))::more) = (zp_term(t, tm_prec)) :: more
+	| aux((h as zp_string _)::more) = h :: (aux more)
+	| aux nil = nil
+	;
+in
+	aux(rev(aux(rev pieces)))
+end
+);
+=TEX
+
+=SML
+fun Ûdo_Z_appÝ (cur_env:PP_ENV) (hd_term:TERM, arg_tm:TERM) : PFUN_ANS = (
+let
+	val PpEnv{pe_prec=prec, pe_addstring=addstring,
+		pe_beginb=beginb, pe_space=space, pe_endb=endb, ...} = cur_env;
+in
+	case
+		case
+			case dest_simple_term hd_term
+			of Const(name, ty) => get_fancy_fix(name, ty, hd_term, arg_tm)
+			| Var(name, ty) => get_fancy_fix(name, ty, hd_term, arg_tm)
+			| _  => Nil
+		of Value nil => Nil
+		| x => x
+	of Nil => bracket(cur_env, pc_expr2, false,
+			fn e => (
+				main_term_pp (set_prec pc_expr2_lhs e) hd_term;
+				space(1, 2);
+				main_term_pp (set_prec pc_expr2_rhs e) arg_tm
+			)
+		)
+	| Value pieces => (
+		let
+			val tm_prec:PREC_CONTEXT = analyse_prec pieces;
+			val pieces1:Z_PIECE list = set_end_precs tm_prec pieces;
+		in
+			bracket(cur_env, tm_prec, false,
+				fn e => (map(	fn zp_term(t, p) => main_term_pp (set_prec p e) t
+						| zp_string(s, _) => addstring s)
+						pieces1
+					; ()
+					)
+			)
+		end
+	)
+end
+);
+=TEX
+
+\section{APPLICATION OF CONSTANT OR VARIABLE}
 
 =SML
 fun ÛZ_fun_appÝ (cur_env:PP_ENV) (orig_tm:TERM) (alias:string)
@@ -617,13 +820,7 @@ Applications, here we must think about templates for fancy-fix
 operator invocations.
 
 =SML
-| Zapp(tm1, tm2) => bracket(cur_env, pc_expr2, false,
-	fn e => (
-		main_term_pp (set_prec pc_expr2_lhs e) tm1;
-		space(1, 2);
-		main_term_pp (set_prec pc_expr2_rhs e) tm2
-	)
-)
+| Zapp tms => do_Z_app cur_env tms
 | ZÌ tms => bracket(cur_env, pc_expr0_Ì_Í, true, do_binder("Ì", tms))
 | ZÍ tms => bracket(cur_env, pc_expr0_Ì_Í, true, do_binder("Í", tms))
 =TEX
@@ -688,9 +885,71 @@ Useage of a schema, with optional decoration.
 | Z„‰s tm => do_„_˜(cur_env, "„", tm)
 | Z˜‰s tm => do_„_˜(cur_env, "˜", tm)
 =TEX
-Now a dummy to prevent pattern match errors for schema renaming:
+
+According to the grammar in~\cite{Spivey1992} renaming is just an
+optional component of a schema reference, we therefore use the same
+precedance.
+
 =SML
-| ZRename‰s (tm,ididl) => PfNotPossible
+| ZRename‰s (tm, ididl) => (
+	let
+		fun pr_2ids(i1, i2) = (addstring i1; addstring "/"; addstring i2);
+
+		fun pr_comma_2ids ids = (addstring ","; space(1, 2); pr_2ids ids)
+	in
+		bracket(cur_env, pc_sch1_ref, false,
+			fn e => (
+				main_term_pp e tm;
+				space(1, 2);
+				addstring "[";
+				case ididl
+				of ids::nil => pr_2ids ids
+				| ids::more => (pr_2ids ids; map pr_comma_2ids more; ())
+				| nil => ();
+				addstring "]"
+			)
+		)
+	end
+)
+=TEX
+
+\subsection{Bindings}
+
+=SML
+| Zbinding binders => (
+	let
+		val new_env = set_prec PcLowest cur_env;
+
+		fun aux1(s, t) = (
+			beginb(2, true);
+			addstring s;
+			addstring " ¦";
+			space(1, 2);
+			main_term_pp new_env t;
+			endb()
+		);
+
+		fun aux2 b = (
+			addstring ",";
+			space(1, 2);
+			aux1 b
+		);
+	in
+		beginb(2, false);
+		addstring "(";
+		case binders
+		of b :: nil => aux1 b
+		| b :: more => (
+			aux1 b;
+			map aux2 more;
+			()
+		)
+		| nil => ();
+		addstring ")";
+		endb();
+		PfOk
+	end
+)
 =TEX
 
 \subsection{End of Function} \label{EndZFunApp}
