@@ -341,7 +341,6 @@ datatype ÛPPARSEDÝ =
 		|	PPProcedureSpecification of PROCEDURE_SPECIFICATION
 		|	PPProperBody of PROPER_BODY
 		|	PPReltail of (BIN_OP * EXP)
-		|	PPRenamingDeclaration of RENAMING_DECLARATION
 		|	PPRepresentationClause of REPRESENTATION_CLAUSE
 		|	PPSRExpression of (EXP * EXP OPT)
 		|	PPStmt of STMT
@@ -687,7 +686,9 @@ fun red_dec1 (Parsed(PPKSlot k)) = (
 val red_dec2 = red_accept;
 val red_dec3 = red_accept;
 val red_dec4 = red_accept;
-val red_dec5 = red_accept;
+fun red_dec5 (Parsed(PPProperBody p)) = (
+	PPDeclarations[DProperBody p]
+) | red_dec5 _ = stack_error "red_dec5";
 =TEX
 =SML
 fun red_basic_declarative_item1 (Parsed(PPBasicDecls bds)) = (
@@ -701,11 +702,8 @@ fun red_basic_declarative_item2 (Parsed(PPRepresentationClause rc)) = (
 val red_body1 = red_accept;
 val red_body2 = red_accept;
 
-fun red_proper_body1 (Parsed(PPProperBody p)) = (
-	PPDeclarations[DProperBody p]
-) | red_proper_body1 _ = stack_error "red_proper_body1";
-
-val red_proper_body2 = red_proper_body1;
+val red_proper_body1 = red_accept;
+val red_proper_body2 = red_accept;
 =TEX
 =SML
 fun red_name1 (Token ((_,CNText name), _)) = (
@@ -768,14 +766,13 @@ fun red_aggregate _ (Parsed p) _ = (
 ) | red_aggregate _ _ _ = stack_error "red_aggregate";
 =TEX
 =SML
-fun red_component_association1 (Parsed(PPAgg{tm=tm,named_assocs=na,others=ot})) = (
+fun red_component_association1 (Parsed(PPAgg{named_assocs=na,others=ot,...})) = (
 	case (ot, na) of
 	(Value oe, _::_) => (
-		PPExp (EArrayAggNamedOthers{tmark="__component_association",
+		PPExp (EArrayAggNamedOthers{tmark="__comp_assoc",
 			agg_named={named_assocs=na},others={others=oe}})
 	)| (Value oe, _) => (
-		PPExp (EArrayAggOthers{tmark="__component_association",
-			others={others=oe}})
+		PPExp (EArrayAggOthers{tmark="__comp_assoc", others={others=oe}})
 	)|(Nil, _) => (
 		PPExp (EArrayAggNamed{named_assocs=na})
 	)
@@ -966,18 +963,7 @@ fun red_multiplying_operator4 x1 = PPBinaryOp BOSparkRem;
 =TEX
 =SML
 fun red_qualified_expression (Parsed(PPExp n)) _ (Parsed(PPExp e)) = (
-	case e of
-		EArrayAggPos{comps=es,...} =>
-			PPExp(EArrayAggPos{tmark=name_to_tmark n,comps=es})
-		|EArrayAggPosOthers{agg_pos=ap,others=others} =>
-			PPExp(EArrayAggPosOthers{agg_pos=ap, others=others})
-		|EArrayAggOthers{tmark=n,others=others} =>
-			PPExp(EArrayAggOthers{tmark=n,others=others})
-		|EArrayAggNamed{named_assocs=na} =>
-			PPExp(EArrayAggNamed{named_assocs=na})
-		|EArrayAggNamedOthers{agg_named=an,others=ot,...} =>
-			PPExp(EArrayAggNamedOthers{tmark=name_to_tmark n,agg_named=an,others=ot})
-		|_ => stack_error "red_qualified_expression_a"
+	PPExp(EQualifiedExp{tmark=name_to_tmark n, exp=e})
 ) | red_qualified_expression _ _ _ = stack_error "red_qualified_expression";
 =TEX
 =SML
@@ -1261,9 +1247,12 @@ fun red_return_statement _ (Parsed(PPExp exp)) _ = (
 ) | red_return_statement _ _ _ = stack_error "red_return_statement";
 =TEX
 =SML
-fun red_subprogram_declaration1 (Parsed p) _ = (p
+fun red_subprogram_declaration1 (Parsed(PPProcedureSpecification p)) _ = (
+	PPDeclarations[DProcedureDeclaration p]
 ) | red_subprogram_declaration1 _ _ = stack_error "red_subprogram_declaration1";
-fun red_subprogram_declaration2 (Parsed p) _ = (p
+
+fun red_subprogram_declaration2 (Parsed(PPFunctionSpecification f)) _ = (
+	PPDeclarations[DFunctionDeclaration f]
 ) | red_subprogram_declaration2 _ _ = stack_error "red_subprogram_declaration2";
 
 fun red_subprogram_specification1 (Parsed(PPProcedureSpecification p)) = (
@@ -1387,12 +1376,12 @@ fun red_actual_parameter_part _ (Parsed p) _ = (
 
 fun red_parameter_association1 (Parsed(PPAgg{tm=tm,named_assocs=na,others=ot})) = (
 	case ot of
-	Value oe => PPExp (EArrayAggNamedOthers{tmark="__parameter_association",agg_named={named_assocs=na},others={others=oe}})
+	Value oe => PPExp (EArrayAggNamedOthers{tmark="__param_assoc",agg_named={named_assocs=na},others={others=oe}})
 	|Nil => PPExp (EArrayAggNamed{named_assocs=na})
 ) | red_parameter_association1 _ = stack_error "red_parameter_association1";
 
 fun red_parameter_association2 (Parsed(PPExps es)) = (
-	PPExp(EArrayAggPos{tmark="__parameter_association",comps = es})
+	PPExp(EArrayAggPos{tmark="__param_assoc",comps = es})
 ) | red_parameter_association2 _ = stack_error "red_parameter_association2";
 
 fun red_positional_parameter_association1 (Parsed(PPExp a)) = (
@@ -1429,6 +1418,7 @@ in
 	PPPackageSpecification {name=id,visible_decs=v,private_decs=p}
 end
 ) | red_package_specification2 _ _ _ _ _ _ _ _ = stack_error "red_package_specification2";
+
 val red_visible_part1 = red_accept;
 
 fun red_visible_part2 (Parsed (PPDeclarations d1)) (Parsed (PPDeclarations d2)) = ( 
@@ -1493,11 +1483,11 @@ fun red_deferred_constant_declaration (Parsed(PPIds ids)) _ _ (Parsed(PPExp n)) 
 ) | red_deferred_constant_declaration _ _ _ _ _ = stack_error "red_deferred_constant_declaration";
 
 fun red_renaming_declaration1 _ (Parsed (PPId opsym1)) (Parsed(PPFormals f)) _ (Parsed(PPExp n)) _ (Token ((_,CNText id), _)) _ (Parsed (PPId opsym2)) _ = (
-	PPRenamingDeclaration(RDFunction{opsym1=opsym1,formal_part=f,tmark=name_to_tmark n,name=id,opsym2=opsym2})
+	PPDeclarations[DRenamingDeclaration(RDFunction{opsym1=opsym1,formal_part=f,tmark=name_to_tmark n,name=id,opsym2=opsym2})]
 ) | red_renaming_declaration1 _ _ _ _ _ _ _ _ _ _ = stack_error "red_renaming_declaration1";
 
 fun red_renaming_declaration2 (Parsed (PPSubprogramSpec ss)) _ (Token ((_,CNText id1), _)) _ (Token ((_,CNText id2), _)) _ = (
-	PPRenamingDeclaration(RDSubprogram{subprogram_specification=ss,name1=id1,name2=id2})
+	PPDeclarations[DRenamingDeclaration(RDSubprogram{subprogram_specification=ss,name1=id1,name2=id2})]
 ) | red_renaming_declaration2 _ _ _ _ _ _ = stack_error "red_renaming_declaration21";
 
 =TEX
@@ -1560,12 +1550,12 @@ fun red_body_stub2 (Parsed (PPFunctionSpecification fs)) _ _ _ = (
 	PPDeclarations [DFunctionStub fs]
 ) | red_body_stub2 _ _ _ _ = stack_error "red_body_stub2";
 
-fun red_body_stub3 _ _ (Parsed (PPId id)) _ _ _ = (
+fun red_body_stub3 _ _ (Token ((_,CNText id), _)) _ _ _ = (
 	PPDeclarations [DPackageStub id]
 ) | red_body_stub3 _ _ _ _ _ _ = stack_error "red_body_stub3";
 
-fun red_subunit _ _ (Token ((_,CNText id), _)) _ (Parsed (PPProperBody p)) = (
-	PPCompilationUnit([], CUSubUnit{id=id, proper_body=p})
+fun red_subunit _ _ (Parsed(PPExp n)) _ (Parsed (PPProperBody p)) = (
+	PPCompilationUnit([], CUSubUnit{name=n, proper_body=p})
 ) | red_subunit _ _ _ _ _ = stack_error "red_subunit";
 =TEX
 =SML
@@ -1612,7 +1602,7 @@ fun red_component_pack2 (Parsed(PPComponentClauses [c])) (Parsed(PPComponentClau
 SPARK manual 13.4:
 =SML
 fun red_component_clause (Parsed(PPExp n)) _ (Parsed(PPExp e)) _ (Parsed(PPSRExpression (e1,v))) _ = (
-	PPComponentClauses[{exp=e, range={lo=e1,hi=v}}]
+	PPComponentClauses[{name=n, exp=e, range={lo=e1,hi=v}}]
 ) | red_component_clause _ _ _ _ _ _ = stack_error "red_component_clause";
 =TEX
 
