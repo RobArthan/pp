@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.173 $ $RCSfile: imp507.doc,v $ $Date: 2001/05/28 13:28:32 $
+% imp507.doc %Z% $Revision: 1.174 $ $RCSfile: imp507.doc,v $ $Date: 2001/07/06 14:22:27 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.173 $%
+\def\SCCSversion{$Revision: 1.174 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2001/05/28 13:28:32 $%
+\TPPdate{\FormatDate{$Date: 2001/07/06 14:22:27 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -131,6 +131,7 @@ statements in stubs.
 \item[Issues 1.169,1.170] CTLE II R2/1: global variable unsoundness.
 \item[Issue 1.171,1.172] CTLE II R1/11: nested packages.
 \item[Issue 1.173] Perfomance enhancement for type-checking of specification statements.
+\item[Issue 1.174] R0021: domain condition generation.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -2206,9 +2207,14 @@ fun Ûtest_store_paraİ  (para : PARAINFO) : unit = (
 );
 end;
 =TEX
-The following creates a term formed from the variable initialisations,
+The following creates a term formed from the variable initialisations and
+the domain conditions for the initialising expressions
 and combines it with a possible pre-existing pre-condition,
-and returns a $Z\_TM$, as that is what a $SPEC$ wants. 
+and returns a $Z\_TM$, as that is what a $SPEC$ wants.
+
+(The list reversal in function {\it aux} is for backwards compatibility.
+It puts the list in the same order as it was before the introduction of
+domain conditions).
 =SML
 local
 	val bool_extype = Unification.type_to_extype ”BOOL®;
@@ -2220,15 +2226,19 @@ fun Ûvar_inits_preİ
 	| Nil => ZTmTruth true
 ) 
 | var_inits_pre (opre : Z_TM OPT) (vi : EXP S_DICT) (cn_env : CN_ENV) : Z_TM = (
-let val vi_inits = map (fn (id, exp) =>
-		z_eq(zid cn_env (trans_id id),
-				trans_exp cn_env (adjust_exp cn_env exp)))
-		vi;
+let	fun aux acc ((id, exp)::more) = (
+		let	val ze = trans_exp cn_env (adjust_exp cn_env exp);
+			val dc = domain_conds cn_env ze;
+			val eqn = z_eq(zid cn_env (trans_id id), ze);
+		in	aux (eqn::dc@acc) more
+		end
+	) | aux acc [] = rev acc;
+	val vi_init_dcs = aux [] vi;
 in
 	case opre of 
-	Value pre => z_quote(z_many_and (z_pred_of_z_tm pre :: vi_inits), 
+	Value pre => z_quote(z_many_and (z_pred_of_z_tm pre :: vi_init_dcs), 
 		Value(bool_extype))
-	| Nil => z_quote(z_many_and vi_inits, Value(bool_extype))
+	| Nil => z_quote(z_many_and vi_init_dcs, Value(bool_extype))
 end
 handle exn => pass_on exn "zid" "var_inits_pre");
 end;

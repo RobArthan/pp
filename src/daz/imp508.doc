@@ -273,6 +273,7 @@ val		Ûz_char_litÝ =		ñ(char_lit _)®;
 val		Ûz_string_litÝ =		ñ(string_lit _)®;
 val		Ûz_real_unary_minusÝ =	ñ(~‰R _)®;
 val		Ûz_real_absÝ =		ñ(abs‰R _)®;
+val		Ûz_array_notÝ =		ñ(array_not _)®;
 =TEX
 \subsection{Z Binary Expressions}
 =SML
@@ -296,7 +297,6 @@ val		Ûz_remÝ =		ñ(_ rem _)®;
 val		Ûz_exponÝ =		ñ(_ ** _)®;
 val		Ûz_bool_memÝ =		ñ(_ mem _)®;
 val		Ûz_bool_notmemÝ =		ñ(_ notmem _)®;
-val		Ûz_array_notÝ =		ñ(array_not _)®;
 val		Ûz_array_andÝ =		ñ(_ array_and _)®;
 val		Ûz_array_orÝ =		ñ(_ array_or _)®;
 val		Ûz_array_xorÝ =		ñ(_ array_xor _)®;
@@ -2734,24 +2734,47 @@ fun Ûdomain_conds_auxÝ
 	|	ZSel‰s (ze, _) => recur ze
 	|	ZApp _ => (
 		let	val fargs as (f, args) = strip_z_app ze;
-			val (n, _, _) = dest_z_gvar f;
-		in	case e_lookup n tab of
-				Value func => func recur fargs
-			|	Nil => (
-				case snd(force_value (env_aux n)) of
-					EIEnvFunction _ => dom_aux [] ze
-				|	EIEnvVar _ => dom_aux [] ze
-				|	EIEnvConstant _ => dom_aux [] ze
-				|	EIEnvOther => (
-						if	is_succ_pred n
-						then	dom_aux [] ze
-						else	list_recur args
-				) |	_ => []
-			)
-		end	handle Fail _ => []
+		in	let	val (n, _, _) = dest_z_gvar f;
+			in	case e_lookup n tab of
+					Value func => ( func recur fargs
+					handle Fail _ =>
+					term_fail "domain_conds" 508070 [ze]
+				) |	Nil => (
+					case snd(force_value (env_aux n)) of
+						EIEnvFunction _ => dom_aux [] ze
+					|	EIEnvVar _ => dom_aux [] ze
+					|	EIEnvConstant _ => dom_aux [] ze
+					|	EIEnvOther => (
+							if	is_succ_pred n
+							then	dom_aux [] ze
+							else	list_recur args
+					) |	_ => []
+				)
+			end	handle Fail _ =>
+			let	val (n, _, _) = dest_z_lvar f;
+			in	case snd(force_value (env_aux n)) of
+					EIEnvVar _ => dom_aux [] ze
+				|	EIEnvOther => []
+			end
+		end handle Fail _ => []
 	) |	_ => []
 	end
 );
+=TEX
+=SML
+val Ûcn_no_domain_condsÝ : int = 0;
+val Ûcn_standard_domain_condsÝ : int = 1;
+val Ûcn_all_domain_condsÝ : int = 2;
+val Ûcn_domain_conds_controlÝ : int ref = ref cn_no_domain_conds;
+val _ = new_int_control{
+	name="cn_domain_conds",
+	control=cn_domain_conds_control,
+	default = (fn () => cn_no_domain_conds),
+	check = (fn x => x mem [
+		cn_no_domain_conds,
+		cn_standard_domain_conds,
+		cn_all_domain_conds
+	])} handle (Fail _) => () (* for syntax/type checking in development *);
 =TEX
 =SML
 fun Ûdc_operands_onlyÝ
@@ -2760,55 +2783,95 @@ fun Ûdc_operands_onlyÝ
 	list_term_union (map dc args)
 );
 =TEX
-In the following, we generally map ``impossible'' combinations of
-operators and operands onto empty domain condition lists.
+We now give the domain condition functions for the specific expressions
+such as integer division etc.
+These handle ``impossible'' combinations of
+operators and operands by raising an exception.
+To simplify the
+coding, the exception is caught by the caller, which is in a better
+position to include the invalid term in the error message.
+In fact, these exceptions can be provoked by extremely malicious use of auxiliary
+expressions, but that's acceptable, since a program containing
+auxiliary expressions cannot be compiled.
+
+E.g., in the following, the operator will be one of the operators {\it and\_then}
+or {\it or\_else}, so
+there must be exactly one operand which must be a pair (i.e., a 2-tuple).
+The handler and the second clause of the function definition therefore
+correspond to impossible conditions.
 =SML
-val Ûz_int_zeroÝ = z_num(trans_int "0");
-fun Ûdc_non_zero_int_rhsÝ
+fun Ûdc_and_then_or_elseÝ
+	(true_or_false : Z_EXP)
 	(dc : Z_EXP -> Z_PRED list)
-	((_, [arg]) : Z_EXP * Z_EXP list) = (
-	let	val rhs = hd(tl (dest_z_tuple arg));
-	in	dc arg term_grab z_noteq(rhs, z_int_zero)
-	end	handle Fail _ => []
-) | dc_non_zero_int_rhs _ _ = [];
-fun Ûdc_int_exponÝ
-	(dc : Z_EXP -> Z_PRED list)
-	((_, [arg]) : Z_EXP * Z_EXP list) = (
-	let	val rhs = hd(tl (dest_z_tuple arg));
-	in	dc arg term_grab z_less_eq(z_int_zero, rhs)
-	end	handle Fail _ => []
-) | dc_int_expon _ _ = [];
+	((_, [arg]) : Z_EXP * Z_EXP list) : Z_PRED list = (
+	let	val lhs_rhs = dest_z_tuple arg;
+		val lhs = hd lhs_rhs;
+		val rhs = hd(tl lhs_rhs);
+		val lhs_dcs = dc lhs;
+		val rhs_dcs = dc rhs;
+		val cond = mk_eq(lhs, true_or_false);
+		val cond_´_rhs_dcs = map (curry mk_´ cond) rhs_dcs;
+	in	lhs_dcs term_union cond_´_rhs_dcs
+	end	handle Fail _ => fail "domain_conds" 508070 []
+) | dc_and_then_or_else _ _ fargs = fail "domain_conds" 508070 [];
 =TEX
 =SML
-val Ûcn_real_arith_domain_conditionsÝ : bool ref = ref true;
+val Ûz_int_zeroÝ : Z_EXP = z_num(trans_int "0");
+fun Ûdc_non_zero_int_rhsÝ
+	(dc : Z_EXP -> Z_PRED list)
+	((_, [arg]) : Z_EXP * Z_EXP list)  : Z_PRED list = (
+	let	val rhs = hd(tl (dest_z_tuple arg));
+	in	dc arg term_grab z_noteq(rhs, z_int_zero)
+	end	handle Fail _ => fail "domain_conds" 508070 []
+) | dc_non_zero_int_rhs _ fargs = fail "domain_conds" 508070 [];
+=TEX
+
+=SML
+fun Ûdc_int_exponÝ
+	(dc : Z_EXP -> Z_PRED list)
+	((_, [arg]) : Z_EXP * Z_EXP list) : Z_PRED list = (
+	let	val rhs = hd(tl (dest_z_tuple arg));
+	in	dc arg term_grab z_less_eq(z_int_zero, rhs)
+	end	handle Fail _ => fail "domain_conds" 508070 []
+) | dc_int_expon _ _ = fail "domain_conds" 508070 [];
+=TEX
+=SML
 val Ûz_real_zeroÝ = z_real(trans_real "0.0");
 fun Ûdc_non_zero_real_rhsÝ
 	(dc : Z_EXP -> Z_PRED list)
-	((_, [arg]) : Z_EXP * Z_EXP list) = (
-	if	!cn_real_arith_domain_conditions
+	((_, [arg]) : Z_EXP * Z_EXP list) : Z_PRED list = (
+	if	!cn_domain_conds_control = cn_all_domain_conds
 	then	let	val rhs = hd(tl (dest_z_tuple arg));
 		in	dc arg term_grab z_noteq(rhs, z_real_zero)
-		end	handle Fail _ => []
+		end	handle Fail _ => fail "domain_conds" 508070 []
 	else	[]
-) | dc_non_zero_real_rhs _ _ = [];
+) | dc_non_zero_real_rhs _ _ = fail "domain_conds" 508070 [];
+=TEX
+=SML
 fun Ûdc_real_exponÝ
 	(dc : Z_EXP -> Z_PRED list)
-	((_, [arg]) : Z_EXP * Z_EXP list) = (
-	if	!cn_real_arith_domain_conditions
+	((_, [arg]) : Z_EXP * Z_EXP list) : Z_PRED list = (
+	if	!cn_domain_conds_control = cn_all_domain_conds
 	then	let	val lhs_rhs = dest_z_tuple arg;
 			val lhs = hd lhs_rhs;
 			val rhs = hd(tl lhs_rhs);
 			val disj1 = z_noteq(lhs, z_real_zero);
 			val disj2 = z_less_eq(z_int_zero, rhs);
 		in	dc arg term_grab mk_²(disj1, disj2)
-		end	handle Fail _ => []
+		end	handle Fail _ => fail "domain_conds" 508070 []
 	else	[]
-) | dc_real_expon _ _ = [];
+) | dc_real_expon _ _ = fail "domain_conds" 508070 [];
 =TEX
+The table below is build in three sections: (i) operators that just need
+the domain conditions for the operands to be calculated and united;
+(ii) the three integer operators that require non-zero right-hand operands
+(iii) other operators that need individual attention, viz.,
+integer exponentiation, real division, real exponentiation,
+AND THEN and OR ELSE.
 =SML
 val Ûdomain_cond_tableÝ : DOMAIN_COND_TABLE = list_e_merge initial_e_dict
 	(map (fn (ztm, f) => let val (n, _, _) = dest_z_gvar ztm; in (n, f) end)
-		(map (fn t => (t, dc_operands_only))
+(map (fn t => (t, dc_operands_only))
 [	z_unary_minus, z_abs,
 	z_real_unary_minus, z_real_abs,
 	z_bool_not, z_array_not,
@@ -2824,17 +2887,26 @@ val Ûdomain_cond_tableÝ : DOMAIN_COND_TABLE = list_e_merge initial_e_dict
 	z_real_add, z_real_minus, z_real_times,
 	z_bool_real_less, z_bool_real_less_eq,
 	z_bool_real_greater, z_bool_real_greater_eq	] @
-		map (fn t => (t, dc_non_zero_int_rhs))
+map (fn t => (t, dc_non_zero_int_rhs))
 [	z_intdiv, z_mod, z_rem	] @
 [	(z_expon, dc_int_expon),
 	(z_real_div, dc_non_zero_real_rhs),
-	(z_real_expon, dc_real_expon)	]	));
+	(z_real_expon, dc_real_expon),
+	(z_bool_and_then, dc_and_then_or_else ñTRUE®),
+	(z_bool_or_else, dc_and_then_or_else ñFALSE®	)	]	));
 =TEX
 =SML
-val Ûdomain_condsÝ : CN_ENV -> Z_EXP -> Z_PRED list =
-	domain_conds_aux domain_cond_table;
+val Ûdomain_condsÝ : CN_ENV -> Z_EXP -> Z_PRED list = (fn env =>
+	let	val dc = domain_conds_aux domain_cond_table env;
+	in	fn ze =>
+		if	!cn_domain_conds_control = cn_no_domain_conds
+		then	[]
+		else	dc ze
+	end
+);
 =IGN
-val dc = domain_conds_aux domain_cond_table env;
+val dc = CNBasicDeclsAndExprs.domain_conds env;
+set_int_control("cn_domain_conds", cn_standard_domain_conds);
 dcñF 1®;
 dcñF 1 (CON_REC.A)®;
 dcñINDEXvSUCC 1®;
@@ -2842,9 +2914,14 @@ dcñINDEXvPRED 1®;
 dcñINDEXvPREd 1®;
 dcñ(1 intdiv 2)®;
 dcñINDEXvPRED (1 intdiv 2)®;
-dcñINDEXvPRED (1 intdiv 2)®;
+dcñ (1 e 0 /‰R 2 e 0)®;
+set_int_control("cn_domain_conds", cn_all_domain_conds);
+dcñ (1 e 0 /‰R 2 e 0)®;
 dcñx ^‰Z y®;
 dcñt « {x í 1 intmod 2, y í 2 rem 3}®;
+dcñx greater 0 and_then y intmod x eq 0®;
+dcñx less_eq 0 or_else y intmod x eq 0®;
+dcñ1 e 0 /‰R x real_less_eq 0 e 0 or_else y /‰R x real_greater 10 e 0®;
 =TEX
 \section{EPILOGUE}
 

@@ -1,4 +1,4 @@
-% %Z% $Date: 2001/11/07 14:33:15 $ $Revision: 1.81 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2001/11/07 16:36:44 $ $Revision: 1.82 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -107,6 +107,7 @@
 \item[Issue 1.76] Added option to compactify pre- and post-conditions.
 \item[Issues 1.77,1.78] Enhancement R0003 --- record and array components as exported parameters.
 \item[Issues 1.79-1.82] Fixed {\it var\_sig} and the use of {\it adjust\_exp} etc. in the anti-aliasing checks.
+\item[Issue 1.83] R0021: domain condition generation.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -192,6 +193,14 @@ fun (h : Z_PRED) %Longrightarrow% (s : SEQUENT list) : SEQUENT list = (
 =SML
 fun Ûadd_hypsÝ ([] : Z_PRED list, s : SEQUENT list) : SEQUENT list = s
 |    add_hyps (h::more, s) = h %Longrightarrow% add_hyps (more, s);
+=TEX
+=SML
+fun Ûadd_domain_condsÝ (env : CN_ENV)
+	(zes : Z_EXP list, s : SEQUENT list) : SEQUENT list = (
+	let	val zps = list_term_union (map (domain_conds env) zes);
+	in	add_hyps (zps, s)
+	end
+);
 =TEX
 \pagebreak
 \section{Substitutions}
@@ -308,7 +317,7 @@ The implementation of $simple\_assign$ works on an assignment where the expressi
 =SML
 fun Ûsimple_assignÝ ({wp_env={env,...}, a, ...} : WP_PARS)
 		(x : ID) (ze : Z_EXP) : RESULT = (
-	{wp = subseq(a, trans_id x, ze), side = []}
+	{wp = add_domain_conds env ([ze], subseq(a, trans_id x, ze)), side = []}
 )
 (*
 =TEX
@@ -400,9 +409,10 @@ fun Ûif_then_elseÝ	({wp, a, wp_env as {env,...}} : WP_PARS)
 			({g, p, q,...} : STATEMENT IF_THEN_ELSE) : RESULT = (
 let	val {wp = wp1, side = side1} = wp (p, a, wp_env);
 	val {wp = wp2, side = side2} = wp (q, a, wp_env);
-	val g' = trans_exp env g;
-	val wp = (z_eq(g', zid env "TRUE") %Longrightarrow% wp1) @
-		(z_eq(g', zid env "FALSE") %Longrightarrow% wp2);
+	val ze = trans_exp env g;
+	val wp = add_domain_conds env ([ze],
+		(z_eq(ze, zid env "TRUE") %Longrightarrow% wp1) @
+		(z_eq(ze, zid env "FALSE") %Longrightarrow% wp2));
 	val side = side1 @ side2;
 in
 	{wp = wp, side = side}
@@ -463,10 +473,10 @@ fun Ûcase_baseÝ ({wp, a, wp_env as {env,...}} : WP_PARS) (e : EXP)
 			({choices, p} : STATEMENT CASE_ALTERNATIVE)
 			 : RESULT * Z_EXP = (
 let	val {wp = wp1, side = side1} = wp (p, a, wp_env);
-	val zchoices = trans_case_choices env choices;
-	val wp' = z_elem (trans_exp env e, zchoices)
-			%Longrightarrow% wp1;
-in	({wp = wp', side = side1}, zchoices)
+	val ze = trans_exp env e;
+	val zcs = trans_case_choices env choices;
+	val wp' = z_elem (ze, zcs) %Longrightarrow% wp1;
+in	({wp = add_domain_conds env ([ze, zcs], wp'), side = side1}, zcs)
 end
 );
 =TEX
@@ -487,11 +497,12 @@ fun Ûcase_stepÝ (pars as {wp, a, wp_env as {env,...}} : WP_PARS)
 				wp (p, a, wp_env);
 			val ({wp = wp2, side = side2}, rest) =
 				case_step pars {e=e, s=s', others=others};
-			val zchoices = trans_case_choices env choices;
-			val elm =
-				z_elem (trans_exp env e, zchoices)
-		in	({wp = (elm %Longrightarrow% wp1) @ wp2 , side = side1 @ side2},
-			 zchoices :: rest)
+			val ze = trans_exp env e;
+			val zcs = trans_case_choices env choices;
+			val wp3 = add_domain_conds env([ze, zcs],
+				(z_elem (ze, zcs) %Longrightarrow% wp1) @ wp2);
+		in	({wp = wp3 , side = side1 @ side2},
+			 zcs :: rest)
 		end
 );
 =TEX
@@ -503,15 +514,16 @@ handling the others part if present.
 =SML
 fun Ûcase_othersÝ (pars as {wp, a, wp_env as {env,...}} : WP_PARS)
 		(st as {e, others, ...} : STATEMENT CASE) : RESULT = (
-	let	val (res as {wp = wp1, side = side1}, zchoices) = case_step pars st;
+	let	val (res as {wp = wp1, side = side1}, exps) = case_step pars st;
+		val ze = trans_exp env e
 	in	case others of 
 		STImplicitNull => res
 	|	stmt =>
 		let	val {wp = wp2, side = side2} = wp(others, a, wp_env);
-			val wp = wp1 @ (z_notelem(trans_exp env e, z_many_union zchoices)
+			val wp = wp1 @ (z_notelem(ze, z_many_union exps)
 					%Longrightarrow% wp2);
 			val side = side1 @ side2;
-		in	{wp = wp, side = side}
+		in	{wp = add_domain_conds env (ze::exps, wp), side = side}
 		end
 	end
 );
@@ -550,10 +562,11 @@ let	val {w, w0, pre, post} = case stmt of
 		|_ => fail "loop" 505022 [];
 	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
-	val g' = trans_exp env g;
-	val wp = ([z_eq(g', zid env "TRUE")] ô pre1) ::
-			(z_eq(g', zid env "FALSE")
-				%Longrightarrow% a);
+	val ze = trans_exp env g;
+	val wp = add_domain_conds env([ze],
+		([z_eq(ze, zid env "TRUE")] ô pre1) ::
+			(z_eq(ze, zid env "FALSE")
+				%Longrightarrow% a));
 	val side = case t of
 			Value till => (post1 %Longrightarrow% wp) @
 					((z_predexp_of_z_tm till) %Longrightarrow% a)
@@ -583,16 +596,18 @@ let	val {lo, hi} = dest_range range;
 	val zid_zi = zid env zi;
 	val zran = z_elem (zid_zi, z_rng (zlo, zhi));
 	val z_bin_exp_theta = z_bin_exp (zleft, zop, zright);
-	val wp = [[z_less_eq (zlo, zhi)] ô sub(pre1, zi, zinitial)] @
-		(z_greater (zlo, zhi) %Longrightarrow% a);
+	val wp = add_domain_conds env ([zlo, zhi],
+		[[z_less_eq (zlo, zhi)] ô sub(pre1, zi, zinitial)] @
+		(z_greater (zlo, zhi) %Longrightarrow% a));
 	val till_part = case t of
 			Value till => (
 				zran %Longrightarrow% ((z_predexp_of_z_tm till) %Longrightarrow% a)
 			) | Nil => [];
-	val side = [[zran, z_noteq(zid_zi, zfinal), post1] ô 
+	val side = add_domain_conds env ([zfinal],
+			[[zran, z_noteq(zid_zi, zfinal), post1] ô 
 			sub(pre1, zi, z_bin_exp (zleft, zop, zright))] @
 			(sub(post1, zi, zfinal) %Longrightarrow% a) @
-			till_part;
+			till_part);
 in
 	{wp = wp, side = side}
 end
@@ -636,9 +651,10 @@ end
 fun Ûexit_whenÝ ({a, wp_env={till, env, ...}, ...} : WP_PARS)
 		({g} : EXIT_WHEN)
 			 : RESULT = (
-let	val zg = trans_exp env g;
-	val wp = ([z_eq(zg, zid env "TRUE")] ô till) ::
-		(z_eq(zg, zid env "FALSE") %Longrightarrow% a);
+let	val ze = trans_exp env g;
+	val wp = add_domain_conds env ([ze],
+		([z_eq(ze, zid env "TRUE")] ô till) ::
+		(z_eq(ze, zid env "FALSE") %Longrightarrow% a));
 in	{wp = wp, side = []}
 end
 );
@@ -660,7 +676,9 @@ let	val zfun = trans_fun_name env name;
 	val var_decls = map (fn {var_decl, ...} => var_decl) formal_pars;
 	val ids = flat (map (fn {vars, ...} => vars) var_decls);
 	val zargs = map (fn id => zid env (trans_id id)) ids;
-	val wp = [[z_eq(z_fun_call(zfun, zargs), trans_exp env e)] ô return];
+	val ze = trans_exp env e;
+	val wp = add_domain_conds env ([ze],
+		 [[z_eq(z_fun_call(zfun, zargs), ze)] ô return]);
 	val side = [];
 in
 	{wp = wp, side = side}
@@ -901,16 +919,18 @@ let	val {lo, hi} = dest_range range;
 	val (zinitial0, zfinal0, zop) =
 		if dir = LDForwards then (zlo0, zhi0, z_add) else (zhi0, zlo0, z_minus);
 	val zran = z_elem(zid env zi, z_rng (zlo0, zhi0));
-	val wp = [[z_less_eq (zlo, zhi)] ô sub(pre1, zi, zinitial0)] @
-		(z_greater(zlo, zhi) %Longrightarrow% a);
+	val wp = add_domain_conds env ([zlo, zhi],
+		[[z_less_eq (zlo, zhi)] ô sub(pre1, zi, zinitial0)] @
+		(z_greater(zlo, zhi) %Longrightarrow% a));
 	val till_part = case t of
 			Value till => (
 				zran %Longrightarrow% ((z_predexp_of_z_tm till )%Longrightarrow% a)
 			) | Nil => [];
-	val side = [[zran, z_noteq(zid env zi, zfinal0), post1] ô 
+	val side = add_domain_conds env ([zfinal0],
+		[[zran, z_noteq(zid env zi, zfinal0), post1] ô 
 			sub(pre1, zi, z_bin_exp(zleft, zop, zright))] @
 				(sub(post1, zi, zfinal0) %Longrightarrow% a) @
-				till_part;
+				till_part);
 in
 	{wp = wp, side = side}
 end
