@@ -16,10 +16,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for the Interface to the Abstract Data Type $THM$}  %% Mandatory field
 \def\TPPheadtitle{Implementation for the \cr Interface to the Abstract Data Type $THM$}
 \TPPref{DS/FMU/IED/IMP012}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.21 $
+\def\SCCSversion{$Revision: 2.22 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/12/14 17:55:51 $ %
+\TPPdate{\FormatDate{$Date: 2002/12/15 14:39:29 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -91,6 +91,7 @@ Allowed for use of ordered efficient dictionaries in theory data type.
 \item[Issue 2.17] PPHol-specific updates for open source release
 \item[Issue 2.18] Removed unnecessary level of indirection from the {\it USER\_DATA} data type.
 \item[Issues 2.19--2.21] Introduced checkpointing.
+\item[Issue 2.22] Relaxed restrictions on checkpointing.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1295,7 +1296,7 @@ type €CP_INFO› = {
 	int_name : int,
 	level : int,
 	user_data : USER_DATA,
-	has_children : bool,
+	read_only : bool,
 	thms : string list
 };
 
@@ -1323,28 +1324,18 @@ fun €checkpoint› (cp_thy : string) : CHECKPOINT = (
 						user_data = ref user_data,
 						thm_dict = thm_dict,
 						...},
-					children = children, ...} = icl'get_theory_info t;
-				val has_children = children <> [];
-				val thms = if has_children then [] else map fst (oe_flatten thm_dict);
+					children = children,
+					status, ...} = icl'get_theory_info t;
+				val read_only = children <> [] orelse status = TSAncestor;
+				val thms = if read_only then [] else map fst (oe_flatten thm_dict);
 			in {	name = t,
 				int_name = int_name,
 				level = level,
 				user_data = user_data,
-				has_children = has_children,
+				read_only = read_only,
 				thms = thms }
 			end
 		);
-		fun check_status t = (
-			case get_theory_status t of
-				TSNormal => ()
-			|	TSAncestor => (
-				case get_descendants t less t of
-					[] => fail "checkpoint"12019 [fn ()=>t]
-				|	_ => ()
-			) |	_ =>
-				fail "checkpoint"12018 [fn ()=>t]
-		);
-		val _ = map check_status thys;
 		val real_name = if cp_thy = "-" then get_current_theory_name() else cp_thy;
 	in	mk_checkpoint (cp_thy, map aux thys)
 	end
@@ -1388,7 +1379,7 @@ fun €rollback› (cp : CHECKPOINT) : unit = (
 		val _ = open_theory cp_thy
 			handle ex => pass_on ex "open_theory" "rollback";
 		val _ = map rec_del to_delete;
-		fun restore ({name, level, thms, has_children = false, user_data, ...} : CP_INFO ) = (
+		fun restore ({name, level, thms, read_only = false, user_data, ...} : CP_INFO ) = (
 			let	val _ = open_theory name;
 				val _ = unlock_theory name handle Fail _ => ();
 				val {user_data = ud,...} = icl'get_theory name;
@@ -1403,7 +1394,7 @@ fun €rollback› (cp : CHECKPOINT) : unit = (
 					fn  () => name,
 					fn () =>  get_message_text msg]
 
-		) | restore {has_children = true, ...} = ();
+		) | restore {read_only = true, ...} = ();
 	in	map restore infos;  ()
 	end
 	end
