@@ -15,8 +15,8 @@ Interface to the Abstract Data Type $THM$}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
 \TPPkeywords{}
-\TPPauthor{R.D. Arthan & WIN01}  %% Mandatory field
-%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%\TPPauthor{R.D. Arthan & WIN01}  %% Mandatory field
+\TPPauthors{R.D. Arthan & WIN01\\K. Blackburn & WIN01}
 \TPPauthorisation{R.D.Arthan & FST Team Leader}
 \TPPabstract{This document gives a detailed design for the 
 interface to the
@@ -25,7 +25,7 @@ This includes all those functions that the kernel of ICL HOL
 will need to interface to the abstract data type, but do not 
 need to be present within the abstract data type.}
 \TPPdistribution{\parbox[t]{4.0in}{%
-	    Library \\ KB \\RBJ
+	    Library \\ RDA \\ KB \\RBJ
 }}
 %\TPPclass{CLASSIFICATION}
 %\def\TPPheadlhs{}
@@ -50,9 +50,10 @@ need to be present within the abstract data type.}
 
 \subsection{Changes history}
 \begin{description}
-\item [Issue \SCCSversion (\FormatDate{$Date$%
-})] First draft.
-First version.
+\item [Issue 1.2]
+First full version: RDA.
+\item [Issue 1.3]
+Changes after comments: KB.
 \end{description}
 \subsection{Changes forecast}
 \pagebreak
@@ -71,7 +72,7 @@ The interfaces for the rules are considered in \cite{DS/FMU/IED/DTD007}.
 \subsubsection{Purpose and Background}
 This document contains the detailed design for the interface
 functions to the abstract data type $THM$.
-These functions give a user- or programmar- oriented interface rather
+These functions give a user- or programmer- oriented interface rather
 than the raw minimum supplied by the abstract data type itself.
 
 \subsubsection{Dependencies}
@@ -85,13 +86,17 @@ A few minor policy decisions are worth noting:
 
 \begin{enumerate}
 \item the interface provided uses strings for theory names throughout
-(rather than the numeric theory identifies used in the abstract data
+(rather than the numeric theory identifiers used in the abstract data
 type);
 \item as in the abstract data type, modifications to a theory may
 only happen when it is current;
 \item operations which change the state are formulated as uncurried
 functions so that an interactive user is less likely to omit an
 argument unwittingly.
+\item
+All functions that take a theory name as a string recognise
+``-'' as meaning the current theory.
+This will not be indicated in the individual documentation boxes.
 \end{enumerate}
 
 
@@ -109,7 +114,6 @@ Here we merely need to include that signature:
 =SML
 include KernelTypes;
 =TEX
-The following data type is used as the argument
 
 \section{THEORY MANAGEMENT OPERATIONS}
 \subsection{Operations on Hierarchies}
@@ -126,21 +130,20 @@ All specification and proof work is carried out in the context
 of some theory, referred to as the current theory.
 $open\_theory\,thy$ makes the theory $thy$ the current theory.
 =FAILURE
-6035    Theory ?0 is not present in the current hierarchy
-6036    Theory ?0 has been deleted from the current hierarchy
+6035	Theory ?0 is not present in the current hierarchy
 =ENDDOC
 
 =DOC
 val ‚delete_theory· : string -> unit;
 =DESCRIBE
 $delete\_theory\,thy$ removes the theory $thy$ from the theory database.
-This means that all theorems that were proven with the deleted 
-theory as the current theory will become unusable.
+This means, for instance, that all theorems that were proven with the deleted 
+theory as the current theory, and all constants and types declared within the theory will become out of scope.
 =FAILURE
 6035	Theory ?0 is not present in the current hierarchy
-6036	Theory ?0 has been deleted from the current hierarchy
 6037	Theory ?0 is locked
-6038	Theory ?0 has child theories
+6071	Theory ?0 is a read-only ancestor
+6076	Theory ?0 has child theories
 6069	Theory ?0 is in scope
 =ENDDOC
 
@@ -155,6 +158,22 @@ The new theory becomes the current theory.
 =FAILURE
 6040	Theory ?0 is already present in current theory hierarchy
 =ENDDOC
+=DOC
+val ‚new_parent· : string -> unit;
+=DESCRIBE
+Adds the given parent theory to the list of parents of the current
+theory, considered as a set.
+It will fail if the parent theory does not exist, is already in scope,
+or if making it a parent causes clashes in the current theory
+or its children.
+=FAILURE
+6035	Theory ?0 is not present in the current hierarchy
+6037	Theory ?0 is locked
+6071	Theory ?0 is a read-only ancestor
+6067	Making ?0 a parent would cause a clash
+6082	Theory ?0 is already an ancestor
+6084	Suggested parent ?0 is a child of the current theory
+=ENDDOC
 
 =DOC
 val ‚lock_theory· : string -> unit;
@@ -164,8 +183,8 @@ a locked theory are protected from further changes.
 A locked theory may be unlocked using $'unlock\_theory$(q.v.).
 =FAILURE
 6035	Theory ?0 is not present in the current hierarchy
-6036	Theory ?0 has been deleted from the current hierarchy
 6037	Theory ?0 is locked
+6071	Theory ?0 is a read-only ancestor
 =ENDDOC
 
 =DOC
@@ -175,7 +194,6 @@ $unlock\_theory\,thy$ causes the locked theory $thy$ to be unlocked,
 so that the contents of $thy$ may be changed.
 =FAILURE
 6035	Theory ?0 is not present in the current hierarchy
-6036	Theory ?0 has been deleted from the current hierarchy
 6068	Theory ?0 has not been locked
 =ENDDOC
 
@@ -186,13 +204,14 @@ $duplicate\_theory\,oldthy\,newthy$ creates a new theory,
 called $newthy$
 with the same contents and parents as $oldthy$,
 but without any children.
+The current theory remains unchanged.
 =USES
 To allow the user to modify and experiment with a theory that
 has child theories that are not involved in the experiment,
 and would perhaps clash with the experiment.
 =FAILURE
 6035	Theory ?0 is not present in the current hierarchy
-6036	Theory ?0 has been deleted from the current hierarchy
+6040	Theory ?0 is already present in current theory hierarchy
 =ENDDOC
 
 \subsection{Operations on Theory Contents}
@@ -207,8 +226,11 @@ val ‚thm_theory· : THM -> string;
 =DESCRIBE
 $thm\_theory\,thm$ returns the name of the theory which was current when
 $thm$ was proved.
+=FAILURE
+12007	Theorem proved in theory with internal name ?0, 
+	which is not present in current hierarchy
 =ENDDOC
-
+This will succeed even if the theory is deleted or out of scope.
 =DOC
 val ‚save_thm· : (string * THM) -> THM
 =DESCRIBE
@@ -216,6 +238,8 @@ $save\_thm(key, thm)$ causes $thm$ to be save under the key $key$ in the current
 theory
 =FAILURE
 6037	Theory ?0 is locked
+6071	Theory ?0 is a read-only ancestor
+6038	Sequent of theorem is not well-formed
 6039	Key ?0 has already been used for a theorem in theory ?1
 =ENDDOC
 
@@ -226,7 +250,9 @@ $list\_save\_thm(keys, thm)$ causes $thm$ to be save under the keys $keys$ in th
 theory
 =FAILURE
 6037	Theory ?0 is locked
+6071	Theory ?0 is a read-only ancestor
 6031	Key list may not be empty
+6038	Sequent of theorem is not well-formed
 6039	Key ?0 has already been used for a theorem in theory ?1
 =ENDDOC
 
@@ -234,17 +260,28 @@ theory
 val ‚delete_constant· : TERM -> unit
 =DESCRIBE
 $delete\_constant\,c$ deletes the constant $c$ and any other object which
-depends on $c$ from the current theory. If any objects other than $c$ and
+depends on $c$ from the current theory. If any saved objects other than $c$ and
 its defining theorem do depend on $c$, the interactive user will be notified
 and asked whether to proceed with the deletion.
 
 After the deletion
-ny theorems which have been proved since the definition of $c$ will no
+any theorems which have been proved since the definition of $c$ will no
 longer be usable for further proof.
+
+Note that the deletion will attempt to delete all necessary
+theorems before deleting constants, types, and axioms in single steps,
+and thus may fail with a partially modified theory.
+This is because checks in the interface may not be as definitive as those of the kernel.
+The kernel state change functions will be notified as if
+a sequence of $delete\_thm$'s had been done, and then
+the necessary ``single step'' deletions of constants, types and axioms to achieve the goal.
 =FAILURE
 6037	Theory ?0 is locked
-12001	Theory ?0 does not contain the constant ?1
-12002	?0 is not a constant
+6071	Theory ?0 is a read-only ancestor
+6076	Theory ?0 has child theories
+12001	Theory ?0 does not contain the constant ?1 with the supplied type
+12008	Term argument is not a constant
+12012	Deletion of ?0 would require the deletion of ?1
 =ENDDOC
 
 =DOC
@@ -258,9 +295,20 @@ and asked whether to proceed with the deletion.
 After the deletion
 ny theorems which have been proved since the definition of $ty$ will no
 longer be usable for further proof.
+
+Note that the deletion will attempt to delete all necessary
+theorems before deleting constants, types, and axioms in single steps,
+and thus may fail with a partially modified theory.
+This is because checks in the interface may not be as definitive as those of the kernel.
+The kernel state change functions will be notified as if
+a sequence of $delete\_thm$'s had been done, and then
+the necessary ``single step'' deletions of constants, types and axioms to achieve the goal.
 =FAILURE
 6037	Theory ?0 is locked
+6071	Theory ?0 is a read-only ancestor
+6076	Theory ?0 has child theories
 12002	Theory ?0 does not contain the type constructor ?1
+12012	Deletion of ?0 would require the deletion of ?1
 =ENDDOC
 
 =DOC
@@ -274,19 +322,32 @@ and asked whether to proceed with the deletion.
 
 After the deletion ny theorems which have been proved since the introduction
 of the axiom will no longer be usable for further proof.
+
+Note that the deletion will attempt to delete all necessary
+theorems before deleting constants, types, and axioms in single steps,
+and thus may fail with a partially modified theory.
+This is because checks in the interface may not be as definitive as those of the kernel.
+The kernel state change functions will be notified as if
+a sequence of $delete\_thm$'s had been done, and then
+the necessary ``single step'' deletions of constants, types and axioms to achieve the goal.
 =FAILURE
 6037	Theory ?0 is locked
+6071	Theory ?0 is a read-only ancestor
+6076	Theory ?0 has child theories
 12003	Theory ?0 does not contain an axiom under key ?1
+12012	Deletion of ?0 would require the deletion of ?1
 =ENDDOC
 
 =DOC
-val ‚delete_thm· : string -> unit
+val ‚delete_thm· : string -> THM;
 =DESCRIBE
 $delete\_thm\,key$ deletes the
 theorem stored under key $key$ from the current theory.
+It returns the deleted theorem.
 =FAILURE
 6037	Theory ?0 is locked
-12003	Theory ?0 does not contain a theorem under key ?1
+6071	Theory ?0 is a read-only ancestor
+6046	Key ?0 is not used for a theorem in theory ?1
 =ENDDOC
 
 =DOC
@@ -295,10 +356,11 @@ val ‚new_axiom· : (string * TERM) -> THM
 $new\_axiom(key, tm)$ stores the boolean term $tm$ an axiom in the
 current theory as an axiom under key $key$.
 =FAILURE
+6009	Term is not boolean
 6037	Theory ?0 is locked
 6047	Key ?0 has already been used for an axiom in theory ?1
 6048	Term argument is ill-formed in theory ?0
-6017	Term is not boolean
+6071	Theory ?0 is a read-only ancestor
 =ENDDOC
 
 =DOC
@@ -308,9 +370,12 @@ $new\_const$ $(name, type)$ introduces a new constant
 (with no defining theorem) called $name$, with most general type
 $TYPE$, into the current theory.
 =FAILURE
+6037	Theory ?0 is locked
 6049	There is a constant called ?0 already in scope
 6063	There is a constant called ?0 in the descendants of the
 	current theory
+6071	Theory ?0 is a read-only ancestor
+6075	Type argument is ill-formed in theory ?0
 =ENDDOC
 =DOC
 val ‚new_type· : (string * int) -> TYPE;
@@ -321,8 +386,10 @@ current theory.
 The function returns the new type with sufficient arguments $'1, '2, \ldots$
 to provide a well formed type.
 =FAILURE
+6037	Theory ?0 is locked
 6045	There is a type called ?0 already in scope
 6034	There is a type called ?0 in the descendants of the current theory
+6071	Theory ?0 is a read-only ancestor
 =ENDDOC
 
 =DOC
@@ -330,17 +397,20 @@ val ‚set_user_datum· : (string * USER_DATUM) -> unit;
 =DESCRIBE
 $set\_user\_datum(key, ud)$ assigns the new value $ud$ to the user data
 slot allocated to $key$ in the current theory.
-=FAILURE
-6045	There is a type called ?0 already in scope
-6034	There is a type called ?0 in the descendants of the current theory
+If an old value was present it will be overwritten.
+=ERRORS
+6037	Theory ?0 is locked
+6071	Theory ?0 is a read-only ancestor
 =ENDDOC
 
 =DOC
-val ‚set_user_datum· :  string -> string -> USER_DATUM OPT;
+val ‚get_user_datum· :  string -> string -> USER_DATUM;
 =DESCRIBE
 $get\_user\_datum\,thy\,key$ returns the value stored in the user data
-slot allocated to $key$ in the current theory, if any.
+slot allocated to $key$ in the theory $thy$, if any.
 =FAILURE
+6035	Theory ?0 is not present in the current hierarchy
+12009	No user data stored under key ?0 in theory ?1
 =ENDDOC
 
 
@@ -359,21 +429,22 @@ constant with name $name$, and with most general type being
 the type of $value$ in the current theory.
 It creates a theorem of the form `$Ö name = value$'
 (or `$Ö name Ç value$' if $value$ is boolean), and saves it as a definition
-under keys in $key$ in the current theory,
+under key $key$ in the current theory,
 provided the theorem is well-formed.
 If either the constant or theorem introduction fails then
 the function does not change the current theory.
 =FAILURE
-6031	Key list may not be empty
 6037	Theory ?0 is locked
 6048	Term argument is ill-formed in theory ?0
 6049	There is a constant called ?0 already in scope
+6051	Key ?0 has already been used for an definition in theory ?1
+6058	Term contains type variables not found in type of term itself, the variables being: ?0
+6059	Term contains the following free variables: ?0
 6063	There is a constant called ?0 in the descendants of the
 	current theory
-6051	Key ?0 has already been used for an definition in theory ?1
-6058	Term contains type variables not found in type of term itself
-6059	Term contains free variables
+6071	Theory ?0 is a read-only ancestor
 =ENDDOC
+Conventionally the key used will be the name of the constant defined, though reasons for different keys may arise.
 \subsubsection{$new\_type\_definition$}
 =DOC
 val ‚new_type_definition· : 
@@ -397,16 +468,20 @@ where $TypeDefinition$ is defined so as to state that its predicate argument
 $p$ is non-empty, and its function argument $f$ is a bijection
 between the new type and the subset of $type$ delineated by $p$.
 =FAILURE
+6034	There is a type called ?0 in the descendants of the current theory
 6037	Theory ?0 is locked
 6045	There is a type called ?0 already in scope
-6034	There is a type called ?0 in the descendants of the current theory
 6052	Key ?0 has already been used for an type definition theorem in theory ?1
 6053	Theorem must not have assumptions
-6054	Theorem is not of the form: `Ö Ñ x é p x`
-6055	Theorem is not of the form: `Ö Ñ x é p x` where ªxº  is a variable
-6056	Theorem contains free variables
-6057	Theorem contains type variables not found in type variable parameter list
-6031	Key list may not be empty
+6054	Theorem is not of the form: `Ö Ñ x é px` where ªxº  is a variable
+6055	Theorem is not of the form: `Ö Ñ x é p y` where ªxº  is a variable
+6056	Theorem contains the free variables: ?0
+6057	Theorem contains type variables not found in type variable parameter list,
+	type variables being: ?0
+6071	Theory ?0 is a read-only ancestor
+6079	?0 repeated in type parameter list
+6080	Theorem is not of the form: `Ö Ñ x é p y` where ªxº  equals ªxº
+6087	Theorem is ill-formed in theory ?0
 =ENDDOC
 \subsubsection{$new\_specification$}
 =DOC
@@ -421,37 +496,29 @@ name and type of $x_i$.
 If either the constant or theorem introduction fails then
 the function will not change the current theory.
 =FAILURE
+6016	Variable ª?0º, one of the ªxiº is repeated in theorem `Ö Ñ x1,...,xn é p[x1,...,xn]`
+	where the ªxiº must be distinct
 6031	Key list may not be empty
 6037	Theory ?0 is locked
+6044	Must define at least one constant
 6049	There is a constant called ?0 already in scope
-6063	There is a constant called ?0 in the descendants of the
-	current theory
-6060	Theorem is not of the form `Ö Ñ x1,...,xn é p[x1,...,xn]`
 6051	Key ?0 has already been used for an definition in theory ?1
 6053	Theorem must not have assumptions
-6056	Theorem contains free variables
-6044	Must define at least one constant
-6064	Theorem must be existentially quantified at least ?0 times
-6061	Theorem contains type variables ?0 not found in the type of
-	all the constants to be defined
-6016	Theorem is not of the form `Ö Ñ x1,...,xn é p[x1,...,xn]`
-	where the ªxiº are all distinct
+6056	Theorem contains the free variables: ?0
+6060	Theorem is not of the form `Ö Ñ x1 ... xn é p[x1,...,xn]`
+	where the ªxiº are variables, and n( = ?0) is the number of
+	constants to be defined
+6061	Theorem contains type variables not found in type
+	of constants to be defined itself, the variables being: ?0
+6063	There is a constant called ?0 in the descendants of the
+	current theory
+6071	Theory ?0 is a read-only ancestor
+6081	Type variable sets in types of variables must
+	all be the same
+6087	Theorem is ill-formed in theory ?0
 =ENDDOC
-\subsection{$new\_parent$}
-=DOC
-val ‚new_parent· : string -> unit;
-=DESCRIBE
-Adds the given parent theory to the list of parents of the current
-theory, considered as a set.
-It will fail if the parent theory does not exist,
-or if making it a parent causes clashes in the current theory
-or its children.
-=FAILURE
-6035	Theory ?0 is not present in the current hierarchy
-6036	Theory ?0 has been deleted from the current hierarchy
-6037	Theory ?0 is locked
-6067	Making ?0 a parent would cause a clash
-=ENDDOC
+Conventionally the keys used in $new\_specification$ will be the names of the constants defined, but there may arise reasons to allow different keys.
+Certainly, the convention is not forced upon the user.
 
 \subsection{Theory Access Functions}
 
@@ -462,9 +529,8 @@ val ‚get_definition· : string -> string -> THM;
 $get\_definition$ $theory$ $key$ returns the definition with key $key$,
 found in theory $theory$.
 =FAILURE
-12001	Theory ?0 is not present in the current hierarchy
-12002	Theory ?0 has been deleted from the current hierarchy
-12003	Theory ?0 is not in scope
+6035	Theory ?0 is not present in the current hierarchy
+12010	Theory ?0 is not in scope
 12004	Theory ?0 does not have a definition with key ?1
 =ENDDOC
 =DOC
@@ -473,9 +539,8 @@ val ‚get_axiom· : string -> string -> THM;
 $get\_axiom$ $theory$ $key$ returns the axiom with key $key$,
 found in theory $theory$.
 =FAILURE
-12001	Theory ?0 is not present in the current hierarchy
-12002	Theory ?0 has been deleted from the current hierarchy
-12003	Theory ?0 is not in scope
+6035	Theory ?0 is not present in the current hierarchy
+12010	Theory ?0 is not in scope
 12005	Theory ?0 does not have an axiom with key ?1
 =ENDDOC
 =DOC
@@ -484,12 +549,30 @@ val ‚get_theorem· : string -> string -> THM;
 $get\_theorem$ $theory$ $key$ returns the theorem with key $key$,
 found in theory $theory$.
 =FAILURE
-12001	Theory ?0 is not present in the current hierarchy
-12002	Theory ?0 has been deleted from the current hierarchy
-12003	Theory ?0 is not in scope
+6035	Theory ?0 is not present in the current hierarchy
+12010	Theory ?0 is not in scope
 12006	Theory ?0 does not have a theorem with key ?1
 =ENDDOC
+=DOC
+val ‚get_constant_type· : string -> TYPE OPT;
+=DESCRIBE
+If a constant with the given name is in scope, then its type is returned, otherwise $Nil$.
+=USES
+This is likely to be often used just as a rapid test for a constant being in scope.
+=ENDDOC
+=DOC
+val ‚get_type_arity· : string -> int OPT;
+=DESCRIBE
+If a type with the given name is in scope, then its arity is returned, otherwise $Nil$.
+=USES
+This is likely to be often used just as a rapid test for a type being in scope.
+=ENDDOC
 \subsubsection{Theory Names and Ancestry}
+=DOC
+val ‚get_current_theory_name· : unit -> string;
+=DESCRIBE
+Returns the name of the current theory.
+=ENDDOC
 =DOC
 val ‚theory_names· : unit -> string list;
 =DESCRIBE
@@ -501,6 +584,8 @@ val ‚get_ancestors· : string -> string list;
 =DESCRIBE
 This returns all the ancestors of the named theory, including
 the theory itself.
+=FAILURE
+6035	Theory ?0 is not present in the current hierarchy
 =ENDDOC
 =DOC
 val ‚get_parents· : string -> string list;
@@ -508,8 +593,7 @@ val ‚get_parents· : string -> string list;
 This returns the immediate parents of the named theory, (not including
 the theory itself).
 =FAILURE
-12001	Theory ?0 is not present in the current hierarchy
-12002	Theory ?0 has been deleted from the current hierarchy
+6035	Theory ?0 is not present in the current hierarchy
 =ENDDOC
 =DOC
 val ‚get_children· : string -> string list;
@@ -517,20 +601,15 @@ val ‚get_children· : string -> string list;
 This returns the immediate children of the named theory, (not including
 the theory itself).
 =FAILURE
-12001	Theory ?0 is not present in the current hierarchy
-12002	Theory ?0 has been deleted from the current hierarchy
+6035	Theory ?0 is not present in the current hierarchy
 =ENDDOC
-This will be needed to implement other features in the abstract data type,
-and could be useful to the user, though it has the feels of a 
-derived function.
 =DOC
 val ‚get_descendants· : string -> string list;
 =DESCRIBE
 This returns all the descendants of the named theory, including
 itself.
 =FAILURE
-12001	Theory ?0 is not present in the current hierarchy
-12002	Theory ?0 has been deleted from the current hierarchy
+6035	Theory ?0 is not present in the current hierarchy
 =ENDDOC
 \subsection{Accessing Theory Contents}
 =DOC
@@ -539,8 +618,7 @@ val ‚get_definitions· : string -> (string list * THM) list;
 This returns all the defining theorems stored in the indicated
 theory together with the keys under which they are stored.
 =FAILURE
-12001	Theory ?0 is not present in the current hierarchy
-12002	Theory ?0 has been deleted from the current hierarchy
+6035	Theory ?0 is not present in the current hierarchy
 =ENDDOC
 =DOC
 val ‚get_axioms· : string -> (string list * THM) list;
@@ -548,8 +626,7 @@ val ‚get_axioms· : string -> (string list * THM) list;
 This returns all the axioms stored in the indicated
 theory together with the keys under which they are stored.
 =FAILURE
-12001	Theory ?0 is not present in the current hierarchy
-12002	Theory ?0 has been deleted from the current hierarchy
+6035	Theory ?0 is not present in the current hierarchy
 =ENDDOC
 =DOC
 val ‚get_theorems· : string -> (string list * THM) list;
@@ -557,32 +634,34 @@ val ‚get_theorems· : string -> (string list * THM) list;
 This returns all the theorems stored in the indicated
 theory together with the keys under which they are stored.
 =FAILURE
-12001	Theory ?0 is not present in the current hierarchy
-12002	Theory ?0 has been deleted from the current hierarchy
+6035	Theory ?0 is not present in the current hierarchy
 =ENDDOC
 =DOC
 val ‚get_constants· : string -> TERM list;
 =DESCRIBE
 This returns (most general instances of) all the constants stored on a theory.
 =FAILURE
-12001	Theory ?0 is not present in the current hierarchy
-12002	Theory ?0 has been deleted from the current hierarchy
+6035	Theory ?0 is not present in the current hierarchy
 =ENDDOC
 =DOC
 val ‚get_types· : string -> TYPE list;
 =DESCRIBE
 This returns (canonical applications of) all the type constructors stored on a theory.
 =FAILURE
-12001	Theory ?0 is not present in the current hierarchy
-12002	Theory ?0 has been deleted from the current hierarchy
+6035	Theory ?0 is not present in the current hierarchy
 =ENDDOC
 \subsubsection{Accessing Status Information}
 =DOC
-val ‚get_status· : string -> THEORY_STATUS;
+val ‚get_current_theory_status· : unit -> THEORY_STATUS;
+=DESCRIBE
+Returns the current theories status.
+=ENDDOC
+=DOC
+val ‚get_theory_status· : string -> THEORY_STATUS;
 =DESCRIBE
 This returns the status of the indicated theory.
 =FAILURE
-12001	Theory ?0 is not present in the current hierarchy
+6035	Theory ?0 is not present in the current hierarchy
 =ENDDOC
 \section{NOTIFICATION OF STATE CHANGES}
 
@@ -599,9 +678,10 @@ datatype ‚KERNEL_STATE_CHANGE·
 		=	‚OpenTheory· of string * ((string list) * (string list))
 		|	‚DeleteTheory· of string
 		|	‚NewTheory· of string
+		|	‚NewParent· of string * (string list)
 		|	‚LockTheory· of string
 		|	‚UnlockTheory· of string
-		|	‚DuplicateTheory· of string
+		|	‚DuplicateTheory· of string * string
 		|	‚SaveThm· of string * THM
 		|	‚ListSaveThm· of string list * THM
 		|	‚DeleteConstant· of TERM
@@ -614,7 +694,7 @@ datatype ‚KERNEL_STATE_CHANGE·
 		|	‚SimpleNewDefinition· of (string * string * TERM) * THM
 		|	‚NewTypeDefinition· of (string * string * (string list) * THM) * THM
 		|	‚NewSpecification· of (string list * int * THM) * THM
-		|	‚NewParent· of string * (string list);
+		|	‚SetUserDatum· of string * USER_DATUM;
 =DESCRIBE
 This is an encoding of the arguments of
 the functions which change the state of the theory database in the lowest
@@ -661,12 +741,15 @@ certain other additional information.
 A list of such functions is maintained, and the new function is put at the
 end of the list, which means it may, if desired undo or overwrite the effects of a
 function nominated by an earlier call of $on\_kernel\_state\_change$.
-SEE ALSO
+
+Functions handled by $on\_kernel\_state\_change$ should not be
+coded to raise errors that are not handled by themselves,
+and the handler will not catch such errors either.
+=SEEALSO
 $KERNEL\_STATE\_CHANGE$
 =ENDDOC
-
 =SML
-end(* signature of Theorems *);
+end(* signature of KernelInterface *);
 =TEX
 \section{TEST POLICY}
 The functions in this document should be tested according to the
