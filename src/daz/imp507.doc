@@ -68,6 +68,7 @@
 \item[Issues 1.62-1.87] Various bug fixes
 \item[Issues 1.87-1.89] Annotations and pragmas (enhancements 1 and 20)
 \item[Issue 1.90] Enhancements 5 and 7 plus fix of bug 17 (batch 2).
+\item[Issue 1.91] Enhancements 10.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -3757,7 +3758,7 @@ fun €add_conc_vars_env› ((): unit) : unit = (
 		val block_name1 = #block_name(#declab block1);
 		val package = (force_value(s_lookup block_name1 (!pack_env)))
 			handle Fail _ =>
-			fail "add_conc_vars_env" 507008 [fn()=>block_name1];
+			fail "add_conc_vars_env" 507032 [fn()=>block_name1];
 		val av_names = flat (map z_names_of_z_dec (#aux_vars package));
 		val vc_vars1 = #vc_vars(#in_scope(#declab block1));
 		val using_decs = #using_decs block1;
@@ -3823,7 +3824,61 @@ fun €vcs_aux_initial› (st : STATEMENT) : unit = (
 	end
 );
 =TEX
+\section{RENAMING DECLARATIONS}\label{RENAMINGDECLARATIONS}
+\subsection{The SID function renames_proc}
+=SML
+fun €renames_proc›
+	({subprogram_specification = ss, name1 = pack, name2=old}
+		: SUBPROGRAM_RENAMING)
+	: unit = (
+	case ss of
+		SSProcedure {name = new, ... } => (
+			case s_lookup pack (!pack_env) of
+				Value package => (
+					let	val formal_proc2 as
+							{name, formal_ids, spec} =
+							find
+							(#formal_procs package)
+							(fn p => #name p = old);
+						val formal_proc3 =
+							{name = new,
+							formal_ids = formal_ids,
+							spec = spec};
+						val block1 as
+						{declab as
+						{in_scope as {formal_procs, ...},
+								...},
+						...} =	block 1;
+					in	blocks :=
+						(block_formal_procs
+						(block1, formal_proc3::formal_procs)
+						:: tl (!blocks))
+					end	handle Fail _ =>
+						comment "renames_proc" 507036
+						[fn () => pack dot old]
+			) |	Nil =>
+					comment "renames_proc" 507038 [fn()=>pack]
+	) |	_ => ()
+) | renames_proc _ = ();
+=TEX
+=SML
+fun €renames_fun›
+	({subprogram_specification = ss, name1 = pack, name2=old}
+		: SUBPROGRAM_RENAMING)
+	: unit = (
+	case ss of
+		SSFunction {designator = new, ... } => (
+			let	val tm = (zid current_cn_env o trans_id)
+								(pack dot old);
+				val parainfo = AbbDefInfo(new, [], tm);
+			in	update_theory_db_with_parainfo parainfo
+			end	handle Fail msg =>
+				comment "renames_proc" 507037
+					[fn () => get_message msg]
 
+	) | 	_ => ()
+) | renames_fun _ = ();
+=TEX
 \section{STUBS AND SUBUNITS}\label{STUBSANDSUBUNITS}
 \subsection{The SID function begin\_stub}
 =SML
@@ -4065,7 +4120,6 @@ fun €lazy_open_theory› (thy : string) : unit = (
 	else	open_theory thy
 );
 =TEX
-The following should
 =SML
 fun €open_label_theory› (lab : string) : unit = (
 	case s_lookup lab (!repl_env) of
@@ -4157,7 +4211,7 @@ fun €do_statement› (y as (SStmt x) : STATEMENT) = (
 );
 =TEX
 
-The following reflects the SID functions for $dec$, $basic\_declaration$ and $subprogram\_declaration$. Note that the $with\_context$ is an argument used for package declarations so that when the package theories are created, the $with$ packages can become parents.
+The following reflects the SID functions for $dec$, $basic\_declaration$, $renaming\_declaration$, and $subprogram\_declaration$. Note that the $with\_context$ is an argument used for package declarations so that when the package theories are created, the $with$ packages can become parents.
 =SML
 fun €do_declaration› (y as (DDeclarationKSlot (
 	{label, content}, dkty)) : DECLARATION) = (
@@ -4170,7 +4224,14 @@ fun €do_declaration› (y as (DDeclarationKSlot (
 	end;
 	k_slot_dec label
 ) | do_declaration (y as (DRenamingDeclaration x) : DECLARATION) = (
-	comment "do_declaration" 507016 []
+	case x of
+		RDSubprogram
+		(y as {subprogram_specification = SSProcedure _, ...}) =>
+				renames_proc y
+	|	RDSubprogram
+		(y as {subprogram_specification = SSFunction _, ...}) =>
+				renames_fun y
+	|	RDFunction _ => ()
 ) | do_declaration (y as (DBasicDecl x) : DECLARATION) = (
 	case x of
 		BDTypeDecl _ => (basic_declaration x
@@ -4391,7 +4452,7 @@ fun €with_clause_check› (w::context) = (
 	then	fail "with_clause_check" 507031 [fn () => w]
 	else	case s_lookup w (!pack_env) of
 			Value _ => with_clause_check context
-		|	Nil => comment "with_clause_check" 507032 [fn () => w]
+		|	Nil => comment "with_clause_check" 507038 [fn () => w]
 ) | with_clause_check _ = ();
 
 fun €do_context_compilation_unit›
