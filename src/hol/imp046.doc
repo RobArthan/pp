@@ -2,11 +2,11 @@
 \documentstyle[hol,11pt,TQ]{article}
 \ftlinepenalty=9999
 \makeindex
-\TPPproject{FORMAL METHODS UNIT}  %% Mandatory field
+\TPPproject{FST PROJECT}  %% Mandatory field
 %\TPPvolume{}
 %\TPPpart{}
-\TPPtitle{Modal Logic in HOL}  %% Mandatory field
-\TPPref{DS/FMU/IED/SML013}  %% Mandatory field
+\TPPtitle{Implementation of Constant Specification Tools}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP046}  %% Mandatory field
 \def\SCCSversion{$Revision$%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
@@ -15,12 +15,13 @@
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
 \TPPkeywords{}
-%\TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
-\TPPauthors{K.~Blackburn &WIN01\\R.D. Arthan &WIN01\\&}
+\TPPauthor{R.D. Arthan &WIN01}
 \TPPauthorisation{R.B.~Jones & FMU Manager}
-\TPPabstract{}
+\TPPabstract{This document contains the implementation
+of the tools supporting specification of constants in ICL HOL.
+The current issue is a temporary hack for experimental purposes.}
 \TPPdistribution{\parbox[t]{4.0in}{%
-	    R.D.~Arthan \\ K.~Blackburn
+	    Library \\
 }}
 \begin{document}
 \makeTPPfrontpage
@@ -37,20 +38,35 @@
 \bibliography{fmu}
 
 \subsection{Changes history} 
-First version.
-
+\begin{itemize}
+\item[\SCCSversion (\FormatDate{$Date$%
+})] First experimental version.
 \subsection{Changes forecast}
 
-Under development, highly incomplete, totally volatile.
+Under development.
 \pagebreak
 \section{GENERAL}
 \subsection{Scope}
-proof development system.
+Tools supporting specification of constants will be required in ICL HOL.
+This document contains a quick hack which will stand for the finished
+tools for experimental purposes.
 \subsection{Introduction}
+\section{Preamble}
+=SML
+structure ConstantSpecification : ConstantSpecification = struct
+=TEX
 \section{UTILITIES}
 =TEX
 =SML
 val ‚list_frees· : TERM list -> TERM list = list_term_union o map frees;
+=TEX
+=SML
+fun match_mk_app(f : TERM, a : TERM) : TERM = (
+	let	val (ty1, _) = dest_ã_type (type_of f)
+		val tym = type_match (type_of a) ty1;
+	in	mk_app(inst [] tym f, a)
+	end
+);
 =TEX
 \section{A SIMPLE FORM OF $new\_definition$}
 The following function is used for both the
@@ -82,7 +98,6 @@ after (i.e. within the scope of) any which are already
 present. Thus specialisation of the definitional axiom
 will work, more or less, as expected.
 =SML
-new_error_message{id=99900, text="defining term contains free variables"};
 =SML
 fun ‚arb_new_defn·
 	(argfun : TERM list-> TERM -> (TERM * CONV))
@@ -93,11 +108,10 @@ fun ‚arb_new_defn·
 		val check = case frees tm term_less f of
 				[] => ()
 			|	vs => (
-				warn "new_defn" 99900 []
-(* defining term contains the following free variables ?0 *)
+				warn "new_defn" 46000 [fn() => format_list string_of_term vs ", "]
 		);
 		val (v, ty) = dest_var f;
-		val newvs = vs term_union (frees tm term_less f);
+		val newvs = rev (rev(frees tm term_less f) term_union rev vs);
 		val tm' = list_mk_É (newvs, mk_eq(lhs, rhs));
 		val tm'' = list_mk_É (newvs, pred);
 		val (witness, conv) = argfun args rhs;
@@ -112,16 +126,16 @@ fun ‚arb_new_defn·
 		else list_divert ex "new_defn"
 			[("dest_eq",
 (* "defining term must be a (possibly universally quantified) equation" *)
-				99901, []),
+				46001, []),
 			("dest_var",
 (* "the left hand side of the defining equation must have the form `f' or `f a1 ... ak', where `f' is a variable" *)
-				99902, [])]
+				46002, [])]
 	)
 );
 =TEX
-The following simple $argfun$ suffices for the definitions
-we need to make in this document. It handles a dummy
-argument list comprising variables only.
+The following $argfun$ is used to define $new\_defn$.
+It handles a dummy
+argument list comprising variables or variable structures only.
 Note that we check for duplicated dummy arguments,
 even though $new\_specification$ would accept that
 case.
@@ -129,65 +143,109 @@ case.
 The algorithm is straightforward. We are trying to solve
 an equation $f\,a_1\,\ldots\,a_k = b$ for $f$. We work
 from right to left along the $a_i$, using the solution
-$F = çA.B$ of $F\,A = B$ for the one argument case.
+$F = çA.B$ of $F\,A = B$ for each argument which is simple variable
+and the solution
+$F = UNCURRY(çA_1\,A_2éB)$ for each argument which is a
+pair, $(A_1, A_2)$.
+In the latter case we recursively
+solve $F A_1\,A_2 = B$, to handle the cases when
+the $A_i$ are themselves pairs.
+
 We also need to supply a conversion which will prove
 that our solution is a solution. This conversion
 will be the trivial conversion if there are no
-dummy arguments. If there is just one argument then
-a beta conversion will suffice. For $n > 1$ the
-conversion for $n+1$ arguments is obtained by applying
-the conversion for $n$ arguments to the operator of
+dummy arguments. If there is just one argument
+and it is a variable then
+a simple $\beta$-conversion will suffice.
+If there is just one argument and it is a pair then
+we should compose the conversion which rewrites with the definition
+of $Uncurry$ to the conversion which
+handles the components of the pair taken as two arguments.
+
+For $k > 1$ the
+conversion for $k+1$ arguments is obtained by applying
+the conversion for $k$ arguments to the operator of
 a combination followed by a beta conversion.
+
 Conceptually, we are working from left to right along
 the arguments here (hence the use of $rev$ below, which
 is not actually needed in the simple case treated here).
 =SML
-fun ‚simple_arg_fun· (args : TERM list) (body : TERM) : TERM * CONV = (
+val ‚uncurry_conv· = simple_eq_match_conv (get_defn "pair" "Uncurry");
+val ‚uncurry· = ªUncurryº;
+=TEX
+=SML
+fun ‚arg_fun· (args : TERM list) (body : TERM) = (
 	let
 		fun make_term [] (body : TERM) = body
 		|   make_term (arg :: args : TERM list) (body : TERM) = (
 			if is_var arg andalso not(arg term_mem list_frees args)
-			then mk_ç(arg, make_term args body)
-			else fail "new_defn" 99903 []
-(* "argument ?0 on left hand side of definition is not valid" *)
+			then	mk_ç(arg, make_term args body)
+			else if is_pair arg
+			then	let	val (arg1, arg2) = dest_pair arg;
+				in	match_mk_app(uncurry, make_term (arg1::arg2::args) body)
+				end
+			else if arg term_mem (list_frees args)
+			then fail "new_defn" 46003 [fn ()=>string_of_term arg]
+			else fail "new_defn" 46004 [fn ()=>string_of_term arg]
 		);
-		fun make_conv (_::(args as (_ :: _))) = (
-			RATOR_C (make_conv args) THEN_C simple_%beta%_conv
-		) | make_conv [_] = simple_%beta%_conv
-		|   make_conv [] = id_conv;
-	in	if	(let	val argfrees = list_frees args
-			in	all (frees body) (fn v => v term_mem argfrees)
-			end)
+		fun make_conv (arg::args) = (
+			(if is_nil args
+				then id_conv
+				else RATOR_C (make_conv args))
+				THEN_C
+			(if is_var arg
+			then 	simple_%beta%_conv
+			else	let	val (arg1, arg2) = dest_pair arg;
+				in	uncurry_conv THEN_C make_conv[arg2, arg1]
+				end)
+		) | make_conv [] = id_conv;
+		val argfrees = list_frees args;
+	in	if	all (frees body) (fn v => v term_mem argfrees)
 		then	(make_term args body, make_conv (rev args))
-		else fail "new_defn" 99904 []
-(* "rhs of definition must not contain free variables not on the lhs" *)
+		else 	let val tms = frees body drop (fn v => v term_mem argfrees);
+			in fail "new_defn" 46005  (map (fn x=>fn()=>string_of_term x)tms)
+			end
 	end
 );
 =TEX
 =SML
-val ‚new_defn· : string list * TERM -> THM = arb_new_defn simple_arg_fun;
+val ‚new_defn· : string list * TERM -> THM = arb_new_defn arg_fun;
 =IGN
 new_theory"fred";
 new_defn(["thing1"], ªthing1 = Tº);
 new_defn([""], ªthing2 (x:IND) = Tº);
 new_defn(["abcdef", "ghij", "klmnop"], ªÉx; y; zéthing3 (x:IND) (y:BOOL) (z:IND)= (x,y,z)º);
+new_defn(["xx"], ªthing4 (x:IND, y:IND) = (y, x)º);
+new_defn(["thing5"], ªthing5 ((a,b), ((c,d),(e,f))) = a b c d e fº);
 open_theory"pair";
 delete_theory"fred";
 =TEX
-=IGN
-new_theory"fred";
 =SML
-fun ‚HOL_axiomatic_recogniser·(x, y, toks, z) = (
+fun ‚HOL_axiomatic_recogniser·
+	(x:string, y:string:string,
+		toks:Lex.INPUT list, z:string:string) : THM = (
 	let	val tm = HOL_term_recogniser(x, y, toks, z);
 	in	if is_pair tm
-		then let val (var, def) = dest_pair tm;
-		in	if is_var var
+		then let	val (var, def) = dest_pair tm;
+				val (_, pred) = strip_É def;
+				val (lhs, _) = dest_eq pred;
+				val (f, _) = strip_app lhs;
+		in	if is_var var andalso var = f
 			then new_defn([fst(dest_var var)], def)
-			else fail "const_def" 99905 []
-		end else fail "const_def" 99906 []
-	end
+			else fail "Constant Specification" 46010 []
+		end else fail "Constant Specification" 46012 []
+	end	handle ex => divert ex "dest_eq" "Constant Specification" 46010 []
 );
 =TEX
+\section{EPILOGUE}
+=SML
+end; (* of structure ConstantSpecification *)
+open ConstantSpecification;
+=TEX
+\end{document}
+=IGN
+new_theory"fred";
  »	thing:BOOL
 …
 	thing = T
@@ -196,9 +254,16 @@ fun ‚HOL_axiomatic_recogniser·(x, y, toks, z) = (
 …
 	thing2 x = T
 À
- »	thing3:IND ã BOOL
+ »	thing4
 …
-	Éxé thing3 x = T
+	Éaéthing4 ((a,b),c,d) Ç a = c Ä b = d
+À
+ »	thing5
+…
+	Éa b c déthing5 ((a,b),c,d) Ç a = c Ä b = d
+À
+ »	thing6
+…
+	Éa b c déthing6 (a,b) (c,d) e Ç a = c Ä b = d Ä e = a
 À
 =TEX
-\end{document}
