@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.258 $ $RCSfile: imp507.doc,v $ $Date: 2004/06/20 14:13:52 $
+% imp507.doc %Z% $Revision: 1.259 $ $RCSfile: imp507.doc,v $ $Date: 2004/06/21 16:32:48 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.258 $%
+\def\SCCSversion{$Revision: 1.259 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/06/20 14:13:52 $%
+\TPPdate{\FormatDate{$Date: 2004/06/21 16:32:48 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -1467,15 +1467,13 @@ val Ûinit_z_generator_stateÝ : Z_GENERATOR_STATE = (
 );
 =TEX
 \subsection{$flatten\_env$}
-To implement $flatten\_env$, we first need the function to merge two $IN\_SCOPE$s.
+To implement $flatten\_env$, we first need the function to combine two $IN\_SCOPE$s.
 SInce the environment dictionaries in the top-most block of the running environment includes the information from all lower blocks, we have only to collect together the declaration labels: the dictionary is just taken from the second block, which is expected to be the upper one.
 
-To restrict the scope of frame widening, the block names are also passed in and $dec\_labels$ are only taken from the second $IN\_SCOPE$ when the two block names are different.
+To restrict the scope of frame widening, the block names are also passed in and $dec\_labels$ are not taken from the second $IN\_SCOPE$ when the two block names are different.
 
-Passing empty strings for the block names will achieve the effect of the function of the
-same name in the specification subject to the condition that the second block parameter contains a dictionary that already includes the dictionary from the first block parameter.
 =SML
-fun Ûmerge_in_scopesÝ
+fun Ûmerge_declabsÝ
 	(block_name1 : ID)
 	({	dict=_,
 		dec_labels = dec_labels1} : IN_SCOPE)
@@ -1511,7 +1509,7 @@ fun Ûflatten_envÝ ([] : ENV) : IN_SCOPE = (
 ) |  flatten_env [blk] = (
 	#in_scope(#declab blk)
 ) |  flatten_env (blk1 :: (blks as (blk2 :: _))) = (
-	merge_in_scopes
+	merge_declabs
 	(#block_name  (#declab blk2))
 	(flatten_env blks)
 	(#block_name (#declab blk1))
@@ -1549,25 +1547,18 @@ fun Ûsubprog_flatten_envÝ ([] : ENV) : IN_SCOPE = (
 		else	let	val (name, globals1) = subprog_info block1;
 				val blocks2 = blocks drop
 					(fn b => #block_name (#declab b) <> name);
-				val in_scope4 = flatten_env blocks2;
-				val outer_blocks =  blocks drop
-					(fn b => #block_name (#declab b) = name);
-				val outer_in_scope = flatten_env outer_blocks;
+				val {dict, dec_labels} = flatten_env blocks2;
+				val {vc_vars, vc_pars, vc_aux_vars, vc_log_cons} =
+					get_local_vars dict;
 				val globals = expand_schema_sigs globals1;
-fun vars_pars_log_cons_aux_vars (in_scope : IN_SCOPE) : Z_ID list = (
-	let	fun is_not_v_p_lc_or_av  (_, {info as EIEnvVar _, ...}) = false
-		|    is_not_v_p_lc_or_av  (_, {info as EIEnvAuxVar _, ...}) = false
-		|    is_not_v_p_lc_or_av (_, {info as EIEnvLogCon _, ...}) = false
-		|    is_not_v_p_lc_or_av _ = true;
-	in	map fst (flatten_env_dict (#dict in_scope) drop is_not_v_p_lc_or_av)
-	end
-);
-				val cn_scope = globals cup 
-					(vars_pars_log_cons_aux_vars in_scope4 diff
-					vars_pars_log_cons_aux_vars outer_in_scope);
-				val in_scope3 = flatten_env blocks;
-			in	{dict = set_cn_scope (#dict in_scope4) cn_scope,
-				dec_labels = #dec_labels in_scope4}
+				val cn_scope =
+					globals cup
+					vc_vars cup
+					vc_pars cup
+					vc_aux_vars cup
+					vc_log_cons;
+			in	{dict = set_cn_scope dict cn_scope,
+				dec_labels = dec_labels}
 			end
 	end
 );
@@ -2095,7 +2086,7 @@ fun Ûspeclab_wp_env_from_in_scopeÝ  (
 	formal_body_flag,
 	fun_flag,
 	till_flag,
-	wp_env as {env, till, named_tills, return, fun_header, formal_procs},
+	wp_env as {env, till, named_tills, return, fun_header},
 	in_scope
 	} : SPECLAB) : SPECLAB = (
 	{spec 			=	spec,
@@ -2107,8 +2098,7 @@ fun Ûspeclab_wp_env_from_in_scopeÝ  (
 			till = till,
 			named_tills = named_tills,
 			return = return,
-			fun_header = fun_header,
-			formal_procs = formal_procs
+			fun_header = fun_header
 			},
 	in_scope		=	in_scope
 
@@ -2184,7 +2174,7 @@ fun Ûti_context_of_packageÝ (package as {vc_vars, aux_vars, var_renamings, ...}:
 =TEX
 =SML
 fun Ûset_package_ti_contextÝ (package : PACKAGE) : unit = (
-	set_in_scope_ti_context(ti_context_of_package package)
+	e_set_ti_context(ti_context_of_package package)
 );
 =TEX
 The following is used to add the typing context for a parameter list into the context temporarily. It returns the context which should be restored when the parameters are no longer needed.
@@ -2196,11 +2186,6 @@ fun Ûadd_params_ti_contextÝ (pars : PARAM_SPEC list) : TYPE E_DICT = (
 	in	e_set_ti_context(list_e_enter old (e_flatten to_add));
 		old
 	end
-);
-=TEX
-=SML
-fun Ûz_names_of_in_scopeÝ (in_scope : IN_SCOPE) : Z_ID list  = (
-	(map (fst o dest_var) o ti_context_of_in_scope) in_scope
 );
 =TEX
 =SML
@@ -2246,56 +2231,56 @@ vcg\_ctxt:: &  UDInt(4) [ vcg\_val ]\\
 \end{tabular}
 
 =SML
-val vcco_rc = 1; 
-val vcco_rud = 2;
-val vcco_pair = 3;
-val vcco_route = 4;
-val vcco_cud_elem = 5;
-val vcco_w = 6;
-val vcco_ntills = 7;
-val vcco_cud = 8;
-val vcco_names = 9;
-val vcco_elsf_true = 21;
-val vcco_elsf_false = 22;
-val vcco_any = 30;
-val vcco_null = 31;
-val vcco_assign = 32;
-val vcco_spec_via = 33;
-val vcco_spec_to_side = 34;
-val vcco_spec_pre_intro = 135;
-val vcco_semi =36;
-val vcco_end_semi = 37;
-val vcco_if_then = 38;
-val vcco_if_else = 39;
-val vcco_end_if = 40;
-val vcco_case_branch = 41;
-val vcco_case_others = 42;
-val vcco_end_case = 43;
-val vcco_loop_undec_via = 44;
-val vcco_loop_undec_pre_intro = 145;
-val vcco_loop_undec_pre_to_side = 146;
-val vcco_loop_undec_to_side = 47;
-val vcco_while_via = 48;
-val vcco_while_pre_intro = 149;
-val vcco_while_wp_to_side = 50;
-val vcco_while_to_side = 51;
-val vcco_for_via = 52;
-val vcco_for_pre_intro = 153;
-val vcco_for_pre_to_side = 154;
-val vcco_for_to_side = 55;
-val vcco_for_exit_to_side = 56;
-val vcco_exit_till_intro = 157;
-val vcco_exit_via = 58;
-val vcco_return_intro = 159;
-val vcco_proc_call = 60;
-val vcco_proc_call_end = 61;
-val vcco_proc_call_rng_intro = 162;
-val vcco_log_con_to_side = 63;
-val vcco_log_con_pre_intro = 164;
-val vcco_log_con_type_mem_intro = 165;
-val vcco_refinement_begin = 66;
-val vcco_refinement_intro = 167;
-val vcco_intros = 100;
+val  Ûvcco_rcÝ = 1; 
+val  Ûvcco_rudÝ = 2;
+val  Ûvcco_pairÝ = 3;
+val  Ûvcco_routeÝ = 4;
+val  Ûvcco_cud_elemÝ = 5;
+val  Ûvcco_wÝ = 6;
+val  Ûvcco_ntillsÝ = 7;
+val  Ûvcco_cudÝ = 8;
+val  Ûvcco_namesÝ = 9;
+val  Ûvcco_elsf_trueÝ = 21;
+val  Ûvcco_elsf_falseÝ = 22;
+val  Ûvcco_anyÝ = 30;
+val  Ûvcco_nullÝ = 31;
+val  Ûvcco_assignÝ = 32;
+val  Ûvcco_spec_viaÝ = 33;
+val  Ûvcco_spec_to_sideÝ = 34;
+val  Ûvcco_spec_pre_introÝ = 135;
+val  Ûvcco_semiÝ =36;
+val  Ûvcco_end_semiÝ = 37;
+val  Ûvcco_if_thenÝ = 38;
+val  Ûvcco_if_elseÝ = 39;
+val  Ûvcco_end_ifÝ = 40;
+val  Ûvcco_case_branchÝ = 41;
+val  Ûvcco_case_othersÝ = 42;
+val  Ûvcco_end_caseÝ = 43;
+val  Ûvcco_loop_undec_viaÝ = 44;
+val  Ûvcco_loop_undec_pre_introÝ = 145;
+val  Ûvcco_loop_undec_pre_to_sideÝ = 146;
+val  Ûvcco_loop_undec_to_sideÝ = 47;
+val  Ûvcco_while_viaÝ = 48;
+val  Ûvcco_while_pre_introÝ = 149;
+val  Ûvcco_while_wp_to_sideÝ = 50;
+val  Ûvcco_while_to_sideÝ = 51;
+val  Ûvcco_for_viaÝ = 52;
+val  Ûvcco_for_pre_introÝ = 153;
+val  Ûvcco_for_pre_to_sideÝ = 154;
+val  Ûvcco_for_to_sideÝ = 55;
+val  Ûvcco_for_exit_to_sideÝ = 56;
+val  Ûvcco_exit_till_introÝ = 157;
+val  Ûvcco_exit_viaÝ = 58;
+val  Ûvcco_return_introÝ = 159;
+val  Ûvcco_proc_callÝ = 60;
+val  Ûvcco_proc_call_endÝ = 61;
+val  Ûvcco_proc_call_rng_introÝ = 162;
+val  Ûvcco_log_con_to_sideÝ = 63;
+val  Ûvcco_log_con_pre_introÝ = 164;
+val  Ûvcco_log_con_type_mem_introÝ = 165;
+val  Ûvcco_refinement_beginÝ = 66;
+val  Ûvcco_refinement_introÝ = 167;
+val  Ûvcco_introsÝ = 100;
 =TEX
 We introduce a data type to represent the constructs of this in the same sense as 
 \textit{\slshape dest\_z\_term} in HOL Z. 
@@ -3142,24 +3127,6 @@ fun Ûadd_init_vars_speclabÝ ({spec, wp_env, fun_flag, in_scope,
 );
 =TEX
 =SML
-fun Ûadd_formal_procs_wp_envÝ
-	({spec, formal_body_flag, fun_flag, till_flag,
-		wp_env as {fun_header, env, return, till, named_tills, formal_procs},
-		in_scope} : SPECLAB) : SPECLAB = (
-	{spec = spec,
-	formal_body_flag = formal_body_flag,
-	fun_flag = fun_flag,
-	till_flag = till_flag,
-	wp_env = {	fun_header = fun_header,
-			env = env,
-			return = return,
-			till = till,
-			named_tills = named_tills,
-			formal_procs = #formal_procs in_scope},
-	in_scope = in_scope}
-);
-=TEX
-=SML
 fun Ûterms_of_vcsÝ
 	(acc : TERM list)
 	(gs_pre_post :  Z_ID list OPT * TERM * TERM)
@@ -3211,11 +3178,11 @@ fun Ûcall_vcsÝ
 	(globals : Z_ID list OPT)
 	((sl, st) : SPECLAB * STATEMENT) : TERM list * ROUTE OPT list * SPEC = (
 	let	val sl1 = add_init_vars_speclab sl;
-		val sl1_st = (add_formal_procs_wp_env sl1, st);
+		val sl1_st = (sl1, st);
 		fun unquote (ZTmQuotation (tm, _)) = tm
 		|   unquote _ = mk_t;
 	in	diag_vc_args := sl1_st :: !diag_vc_args;
-		set_ti_context (ti_context_of_speclab sl1);
+		e_set_ti_context (ti_context_of_speclab sl1);
 		let 	val (vcs_routes, spc as {pre, post, ...}) = vcs sl1_st;
 			val seqs = map fst vcs_routes;
 			val routes = map snd vcs_routes;
@@ -3226,7 +3193,7 @@ fun Ûcall_vcsÝ
 =TEX
 =SML
 fun Ûspeclab_update_specÝ
-	( sl : SPECLAB, s : SPEC ) : SPECLAB = 
+	( sl : SPECLAB, s : SPEC ) : SPECLAB = (
 	let 	val {spec,formal_body_flag,fun_flag,till_flag,wp_env,in_scope} = 
 			sl
 	in	{
@@ -3235,6 +3202,7 @@ fun Ûspeclab_update_specÝ
 			wp_env = wp_env, in_scope = in_scope
 		}
 	end
+);
 =TEX
 \section{BASIC DECLARATIONS}\label{BASICDECLARATIONS}
 \subsection{The SID Function basic\_declaration}
@@ -3338,11 +3306,11 @@ fun Ûupdate_subunit_env_varÝ (var_decl : VAR_DECL) : unit = (
 		fun do1_subunit
 			(id1_id2_s as
 				(id1_id2,
-				s as {in_scope as {dec_labels, vc_vars, ...}, ...})
+				s as {in_scope as {dec_labels, ...}, ...})
 					: string * SUBUNIT) = (
 			if	dec_lab1 mem dec_labels
 			then	(id1_id2,
-				subunit_vc_vars(s, vc_vars grab var_decl))
+				subunit_vc_vars Nil (s,  [var_decl]))
 			else	id1_id2_s
 		);
 	in	subunit_env := map do1_subunit (!subunit_env)
@@ -3356,11 +3324,11 @@ fun Ûupdate_dec_env_varÝ (var_decl : VAR_DECL) : unit = (
 		fun do1_dec_label
 			(dec_label_s as
 				(dec_label,
-				s as {in_scope as {dec_labels, vc_vars, ...}, ...})
+				s as {in_scope as {dec_labels, ...}, ...})
 					: string * DECLAB) = (
 			if	dec_lab1 mem dec_labels
 			then	(dec_label,
-				declab_vc_vars(s, vc_vars grab var_decl))
+				declab_vc_vars Nil (s, [var_decl]))
 			else	dec_label_s
 		);
 	in	dec_env := map do1_dec_label (!dec_env)
@@ -3377,12 +3345,12 @@ fun Ûupdate_spec_env_varÝ (var_decl : VAR_DECL) : unit = (
 			(spec_label_s as
 				(spec_label,
 				s as {spec as {w, ...},
-					in_scope as {dec_labels, vc_vars, ...}, ...})
+					in_scope as {dec_labels, ...}, ...})
 					: string * SPECLAB) = (
 			if	dec_lab1 mem dec_labels
 			then	(spec_label,
 				speclab_w(
-					speclab_vc_vars(s, vc_vars grab var_decl),
+					speclab_vc_vars Nil (s, [var_decl]),
 					trans_vars cup w))
 			else	spec_label_s
 		);
@@ -3474,14 +3442,12 @@ fun Ûadd_var_envÝ (var_decl : VAR_DECL) : unit = (
 			force_value(s_lookup block_name1 (!pack_env)))
 			handle Fail _ => [];
 		val av_names = flat (map z_names_of_z_dec avs);
-		val vc_vars1 = #vc_vars(#in_scope(#declab block1));
 		val vars = #vars var_decl;
-		val zids_in_scope = av_names cup
-			(z_names_of_in_scope o #in_scope o #declab) block1;
+		val zids_in_scope = (current_cn_env, av_names);
 	in	map (check_new_z_id zids_in_scope) vars;
 		check_new_spark_ids current_cn_env vars;
 		blocks :=
-		block_vc_vars(block1, vc_vars1 grab var_decl):: tl (!blocks)
+		block_vc_vars Nil (block1, [var_decl]):: tl (!blocks)
 	end
 );
 =TEX
@@ -3552,28 +3518,19 @@ fun Ûvcs_speclabel_auxÝ (just_checking : bool) ({label, statement = s} : REFINED
 		val spec_env_lab = force_value( s_lookup label (!spec_env) )
 			handle Fail _ => fail "vcs_speclabel" 507003
 				[fn () => label];
-		val {wp_env as {env, till, named_tills, return, fun_header, formal_procs},
+		val {wp_env as {env, till, named_tills, return, fun_header},
 			spec, in_scope, formal_body_flag, fun_flag, till_flag}
 			= spec_env_lab;
 		val current_for_vars1 = #current_for_vars block1;
 		val current_log_cons1 = #current_log_cons block1;
-		val in_scope1 = {
-			vc_vars = #vc_vars in_scope,
-			vc_pars = (#vc_pars in_scope) cup current_for_vars1,
-			vc_log_cons = (#vc_log_cons in_scope) @ current_log_cons1,
-			vc_aux_vars = #vc_aux_vars in_scope,
-			var_renamings = #var_renamings in_scope,
-			use_clause_subs = #use_clause_subs in_scope,
-			formal_procs = #formal_procs in_scope,
-			dec_labels = #dec_labels in_scope
-		};
+		val in_scope0 = in_scope_vc_pars Nil (in_scope, current_for_vars1);
+		val in_scope1 = in_scope_vc_log_cons Nil (in_scope0, current_log_cons1);
 		val wp_env1 :WP_ENV = {
 			env = cn_env_of_in_scope in_scope1,
 			till = till,
 			named_tills = named_tills,
 			return = return,
-			fun_header = fun_header,
-			formal_procs = formal_procs
+			fun_header = fun_header
 		};
 		val speclab : SPECLAB = {
 			spec = spec,
@@ -3604,59 +3561,56 @@ fun Ûspec_stmt_speclabelÝ ({spec : SPEC, label : LABEL}) : unit = (
 			fail "spec_stmt_speclabel" 507014 [fn ()=> spec_lab1];
 		val {formal_body_flag, fun_flag,
 			wp_env as {fun_header, return, named_tills, ...}, 
-			in_scope as {
-				vc_vars = vc_vars2,
-				vc_pars = vc_pars2,
-				vc_log_cons = vc_log_cons2,
-				vc_aux_vars = vc_aux_vars2,
-				var_renamings = var_renamings2,
-				use_clause_subs = use_clause_subs2,
-				dec_labels = dec_labels2,
-				formal_procs = formal_procs2}, ...} = speclab2;
-		val ti_cxt = set_in_scope_ti_context in_scope;
+			in_scope = in_scope2 as {dict = dict2, ...}, ...} = speclab2;
+		val _ = set_in_scope_ti_context in_scope2;
 		val till = #till block1;
 		val till_flag = #till_flag (#flags (#declab block1));
-		val env_pars = #vc_pars (flatten_env(!blocks));
-		val vc_pars = vc_pars2 @ env_pars;
-		val vc_log_cons1 = #vc_log_cons(#in_scope(#declab block1));
-		val vc_log_con_ids = flat (map z_names_of_z_dec vc_log_cons1);
-		val zids_in_scope = z_names_of_in_scope in_scope;
-		val side = map (check_new_z_id zids_in_scope) vc_log_con_ids;
-		val vc_log_cons2_1 = vc_log_cons2 @ vc_log_cons1;
-		val in_scope1 : IN_SCOPE = {
-			dec_labels = dec_labels2,
-			formal_procs = formal_procs2,
-			vc_log_cons = vc_log_cons2_1,
-			vc_aux_vars = vc_aux_vars2,
-			var_renamings = var_renamings2,
-			use_clause_subs = use_clause_subs2,
-			vc_vars = vc_vars2,
-			vc_pars = vc_pars			
-		};
-		val env = cn_env_of_in_scope in_scope1;
+		val env_pars = #vc_pars (get_local_vars(#dict(flatten_env(!blocks))));
+		val dict1 = #dict(#in_scope(#declab block1));
+		val {vc_log_cons = vc_log_con_ids1, ...} = get_local_vars dict1;
+		fun mk_log_con1 zn = (
+			case env_of_env_dict dict1 zn of
+				Value{info = EIEnvLogCon{decl, ...}, ...} => decl
+			|	_ => mk_t
+		);
+		fun mk_par1 zn = (
+			case env_of_env_dict dict1 zn of
+				Value{info = EIEnvVar{tmark = tm, kind = Par mode}, ...} =>
+					 {var_decl = {vars = [zn], tmark = tm},
+					  mode = mode}
+			|	_ => 	{var_decl = {vars = [], tmark = ""},
+					mode = MSparkIn true}
+		);
+		val vc_log_cons1 = map mk_log_con1 vc_log_con_ids1;
+		val zids_in_scope = (current_cn_env, []);
+		val side = map (check_new_z_id zids_in_scope) vc_log_con_ids1;
+		val in_scope0 : IN_SCOPE =
+			in_scope_vc_pars Nil (
+				in_scope_vc_log_cons Nil (in_scope2, vc_log_cons1),
+				map mk_par1 env_pars);
+		val env = cn_env_of_in_scope in_scope0;
 		val named_tills1 =
 			if	till_flag
 			then	case #current_loop_name block1 of
 					Value n => (n, till) :: named_tills
 				|	Nil => named_tills
 			else	named_tills;
-		val wp_env1 :WP_ENV = {
+		val wp_env0 :WP_ENV = {
 			env = env,
 			till = till,
 			named_tills = named_tills1,
 			return = return,
-			fun_header = fun_header,
-			formal_procs = formal_procs2
+			fun_header = fun_header
 		};
 		val speclab : SPECLAB = {
 			spec = spec,
 			formal_body_flag = formal_body_flag,
 			fun_flag = fun_flag,
 			till_flag = till_flag,
-			wp_env = wp_env1,
-			in_scope = in_scope1			
+			wp_env = wp_env0,
+			in_scope = in_scope0			
 		};
-		val side = set_in_scope_ti_context in_scope1;
+		val side = set_in_scope_ti_context in_scope0;
 		val chk = check_19 env Nil spec;
 	in	spec_env := s_extend label speclab (!spec_env)
 		handle Fail _ =>
@@ -3691,8 +3645,7 @@ fun Ûspec_stmt_otherwiseÝ ({spec : SPEC, label : LABEL}) : unit = (
 			till = till,
 			named_tills =  named_tills1,
 			return = z_pred_of_z_tm env return,
-			fun_header = fun_header,
-			formal_procs = []
+			fun_header = fun_header
 		};
 		val speclab : SPECLAB = {
 			spec = spec,
@@ -3728,8 +3681,6 @@ fun Ûk_slot_stmtÝ (label : LABEL) : SPEC = (
 );
 =TEX
 \subsection{The SID function add\_log\_con\_env}
-We reverse the list below because that makes the declarations in the
-VCs come out in the original order.
 Note that (fortunately!), this function makes no use of the pre- and post-conditions
 in the logical constant statement. Thus it does not interfere with the
 strategy for efficient, early, type-checking.
@@ -3746,13 +3697,12 @@ fun Ûadd_log_con_envÝ (defs : LOG_CON_DEF list) : unit = (
 		);
 		val zdecls = map make_decl xs_ts;
 		val current_log_cons1 = #current_log_cons block1;
-		val zids_in_scope = (z_names_of_in_scope o #in_scope o #declab)
-			 block1;
+		val zids_in_scope = (current_cn_env, []);
 		val xs = map fst xs_ts;
 	in	map (check_new_z_id zids_in_scope) xs;
 		check_new_spark_ids current_cn_env xs;
 		blocks := block_current_log_cons (
-					block_vc_log_cons(block1, zdecls),
+					block_vc_log_cons Nil (block1, zdecls),
 					zdecls @ current_log_cons1)
 				 :: tl (!blocks)
 	end
@@ -3762,7 +3712,10 @@ fun Ûadd_log_con_envÝ (defs : LOG_CON_DEF list) : unit = (
 =SML
 fun Ûremove_log_con_envÝ (() : unit) : unit = (
 	let	val block1 = block 1;
-	in	blocks := block_vc_log_cons(block1, []) :: tl (!blocks)
+		val dict = #dict(#in_scope(#declab block1));
+		val vc_log_cons = #vc_log_cons(get_local_vars dict);
+		val dict' = delete_from_env_dict dict vc_log_cons;
+	in	blocks := block_vc_log_cons (Value dict') (block1, []) :: tl (!blocks)
 	end
 );
 =TEX
@@ -3812,7 +3765,7 @@ fun Ûfor_paramÝ (i : ID, tmark : TMARK) : unit = (
 		val param_spec = {	mode = MSparkIn false,
 					var_decl = {vars = [i], tmark = tmark}};
 		val for_vars = #current_for_vars block2;
-	in	blocks := block_vc_pars (block1, [param_spec])
+	in	blocks := block_vc_pars Nil (block1, [param_spec])
 				:: block_current_for_vars
 					(block2, for_vars grab param_spec)
 				:: (tl o tl) (!blocks)
@@ -3832,19 +3785,11 @@ fun Ûtill_predÝ (t : Z_TM) : unit = (
 		then	let	val spec_env_lab =
 				force_value( s_lookup label (!spec_env) );
 				val {in_scope, ...} = spec_env_lab;
-				val in_scope' = {
-					vc_vars = #vc_vars in_scope,
-					vc_pars = (#vc_pars in_scope)
-							cup #current_for_vars block1,
-					vc_log_cons = (#vc_log_cons in_scope)
-							@ #current_log_cons block1,
-					vc_aux_vars = #vc_aux_vars in_scope,
-					var_renamings = #var_renamings in_scope,
-					use_clause_subs = #use_clause_subs in_scope,
-					formal_procs = #formal_procs in_scope,
-					dec_labels = #dec_labels in_scope
-				};
-			in	(set_in_scope_ti_context in_scope'; cn_env_of_in_scope in_scope')
+				val current_for_vars1 = #current_for_vars block1;
+				val current_log_cons1 = #current_log_cons block1;
+				val in_scope0 = in_scope_vc_pars Nil (in_scope, current_for_vars1);
+				val in_scope1 = in_scope_vc_log_cons Nil (in_scope0, current_log_cons1);
+			in	(set_in_scope_ti_context in_scope1; cn_env_of_in_scope in_scope1)
 			end	handle Fail _ => (set_current_ti_context[]; current_cn_env)
 		else	(set_current_ti_context[]; current_cn_env)
 		);
@@ -3867,6 +3812,17 @@ fun Ûnew_blockÝ ((): unit) : unit = (
 =TEX
 \subsection{The SID function update\_spec\_env\_block}
 =SML
+fun Ûmerge_in_scopesÝ
+	({	dict=dict1,
+		dec_labels = dec_labels1} : IN_SCOPE)
+	({	dict = dict2,
+		dec_labels = dec_labels2} : IN_SCOPE) : IN_SCOPE = (
+	{	dict = add_to_env_dict dict1 (flatten_env_dict dict2),
+		dec_labels = dec_labels1 cup dec_labels2
+	}
+);
+=TEX
+=SML
 fun Ûupdate_spec_env_blockÝ (():unit) : unit = (
 	let	val block1 = block 1;
 		val block2 = block 2;
@@ -3874,14 +3830,13 @@ fun Ûupdate_spec_env_blockÝ (():unit) : unit = (
 		val speclab3 = force_value( s_lookup label (!spec_env) )
 			handle Fail _ => fail "update_spec_env_block" 507003
 				[fn () => label];
-		val vc_vars1 = #vc_vars(#in_scope(#declab block1));
+		val vc_vars1 = #vc_vars(get_local_vars(#dict(#in_scope(#declab block1))));
 		val vc_inits1 = #var_inits(block1);
 		val w3 = #w(#spec speclab3);
-		val w_vcvars = list_cup (map (map trans_id o #vars) vc_vars1);
-		val w4 = w3 cup w_vcvars;
+		val w4 = w3 cup vc_vars1;
 		val in_scope1 = #in_scope(#declab block1);
 		val in_scope3 = #in_scope speclab3;
-		val in_scope4 = merge_in_scopes "" in_scope3 "" in_scope1;
+		val in_scope4 = merge_in_scopes in_scope3 in_scope1;
 		val pre4 =  var_inits_pre
 				(Value (#pre(#spec speclab3)))
 				vc_inits1 
@@ -4045,26 +4000,16 @@ fun Ûvcs_body_proc_auxÝ (st : STATEMENT)
 		val block2 = block 2;
 		val pack_body_flag2 = #pack_body_flag (#flags (#declab block2));
 		val current_formal_proc1 = #current_formal_proc block1;
-		val vc_vars1 = #vc_vars(#in_scope(#declab block1));
+		val vc_vars1 = #vc_vars(get_local_vars(#dict(#in_scope(#declab block1))));
 		val vc_inits1 = #var_inits(block1);
 		val post1 = #post(#spec current_formal_proc1);
 		val w1 = #w(#spec current_formal_proc1);
-		val w_vcvars = list_cup (map (map trans_id o #vars) vc_vars1);
-		val w = w1 cup w_vcvars;
+		val w = w1 cup vc_vars1;
 		val in_scope = subprog_flatten_env (!blocks);
-		val formal_procs = #formal_procs in_scope;
 		val current_for_vars1 = #current_for_vars block1;
 		val current_log_cons1 = #current_log_cons block1;
-		val in_scope1 = {
-			vc_vars = #vc_vars in_scope,
-			vc_pars = (#vc_pars in_scope) cup current_for_vars1,
-			vc_log_cons = (#vc_log_cons in_scope) @ current_log_cons1,
-			vc_aux_vars = #vc_aux_vars in_scope,
-			var_renamings = #var_renamings in_scope,
-			use_clause_subs = #use_clause_subs in_scope,
-			formal_procs = #formal_procs in_scope,
-			dec_labels = #dec_labels in_scope
-		};
+		val in_scope0 = in_scope_vc_pars Nil (in_scope, current_for_vars1);
+		val in_scope1 = in_scope_vc_log_cons Nil (in_scope0, current_log_cons1);
 		val _ = set_current_ti_context
 			(ti_context_of_formal_proc current_cn_env current_formal_proc1);
 		val env  = cn_env_of_in_scope in_scope1;
@@ -4073,8 +4018,7 @@ fun Ûvcs_body_proc_auxÝ (st : STATEMENT)
 			till = mk_z_true,
 			named_tills = [],
 			return = z_pred_of_z_tm env post1,
-			fun_header = dummy_informal_fun,
-			formal_procs = formal_procs
+			fun_header = dummy_informal_fun
 		};
 		val pre1 =  var_inits_pre
 				(Value (#pre(#spec current_formal_proc1)))
@@ -4131,8 +4075,7 @@ let
 			(force_value(s_lookup block_name2 (!pack_env)))
 			handle Fail _ =>
 			error "check_formal_proc" 507012 [fn()=>block_name2];
-	val new_in_scope2 = in_scope_vc_aux_vars (in_scope2, 
-		union (op =$) (#vc_aux_vars in_scope2) (#aux_vars package));
+	val new_in_scope2 = in_scope_vc_aux_vars Nil (in_scope2,  #aux_vars package);
 	val new_declab2 =  {block_name = block_name2,
 		flags = new_flags2,
 		in_scope = new_in_scope2};
@@ -5348,8 +5291,7 @@ fun Ûvcs_body_funÝ (st : STATEMENT) : SPEC = (
 			till = mk_z_true,
 			named_tills = [],
 			return = z_pred_of_z_tm env post1,
-			fun_header = #informal_fun current_formal_fun1,
-			formal_procs = formal_procs
+			fun_header = #informal_fun current_formal_fun1
 		};
 		val pre1 =  var_inits_pre
 				(Value (#pre(#spec current_formal_fun1)))
@@ -6488,8 +6430,7 @@ fun Ûadd_conc_vars_envÝ ((): unit) : unit = (
 		val using_decs = #using_decs block1;
 		val var_decls = (list_cup o map fst o map snd) using_decs;
 		val vars = (flat o map #vars) var_decls;
-		val zids_in_scope = av_names cup
-			(z_names_of_in_scope o #in_scope o #declab) block1;
+		val zids_in_scope = (current_cn_env, av_names);
 	in	map (check_new_z_id zids_in_scope) vars;
 		check_new_spark_ids current_cn_env vars;
 		blocks :=
@@ -6527,8 +6468,7 @@ fun Ûvcs_aux_initialÝ (st : STATEMENT) : SPEC = (
 			till = mk_z_true,
 			named_tills = [],
 			return = mk_z_true,
-			fun_header = dummy_informal_fun,
-			formal_procs = formal_procs
+			fun_header = dummy_informal_fun
 		};
 		val pre1 = var_inits_pre Nil vc_inits1 (#env wp_env)
 			handle exn =>
@@ -6943,8 +6883,7 @@ fun Ûrenames_object_commonÝ
 				handle Fail _ => [];
 			val av_names = flat (map z_names_of_z_dec avs);
 			val var_renamings1 = #var_renamings(#in_scope(#declab block1));
-			val zids_in_scope = av_names cup
-				(z_names_of_in_scope o #in_scope o #declab) block1;
+			val zids_in_scope = (current_cn_env, av_names);
 		in	map (check_new_z_id zids_in_scope) [new_zname];
 			check_new_spark_ids current_cn_env [new_zname];
 			blocks :=
@@ -7149,8 +7088,7 @@ fun Ûuse_packÝ (name : ID)  : unit = (
 			force_value(s_lookup block_name1 (!pack_env)))
 			handle Fail _ => [];
 		val av_names = flat (map z_names_of_z_dec avs);
-		val zids_in_scope = av_names cup
-			(z_names_of_in_scope o #in_scope o #declab) block1;
+		val zids_in_scope = (current_cn_env, av_names);
 	in	map (check_new_z_id zids_in_scope) newids;
 		check_new_spark_ids current_cn_env newids;
 		blocks :=
