@@ -1,0 +1,653 @@
+% imp501.doc   %Z% $Date$ $Revision$ $RCSfile$
+=TEX
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{DAZ PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation of the SAL/Z Parser}  %% Mandatory field
+\TPPref{ISS/HAT/DAZ/IMP501}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{D.J.~King & DAZ Team Leader}
+\TPPabstract{
+This document contains the implementation for the SPARK 
+parser.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	Library}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+
+\item[Issue \SCCSversion, \FormatDate{$Date$%
+} ] Initial Draft.
+
+\end{description}
+\subsection{Changes Forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the implementation for the lexical analyser and the
+lexis for SPARK.
+The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD501}.
+
+\subsection{Introduction}
+
+\subsection{Purpose and Background}
+
+\subsection{Algorithms}
+
+\subsection{Dependencies}
+
+\subsection{Known Deficencies}
+
+\subsection{Possible Enhancements}
+
+\section{CASE INDEPENDENCE}
+=SML
+structure €CaseIndependence› : CaseIndependence = struct
+=TEX
+=SML
+val ordA = ord "A";
+val orda = ord "a";
+=TEX
+=SML
+fun to_lower s = (
+	let fun aux ch = (
+		if ch >= "A" andalso ch <= "Z"
+		then chr(ord ch - ordA + orda)
+		else ch
+		);
+	in implode (map aux (explode s))
+	end
+);
+=TEX
+=SML
+fun to_upper s = (
+	let fun aux ch = (
+		if ch >= "a" andalso ch <= "z"
+		then chr(ord ch - orda + ordA)
+		else ch
+		);
+	in implode (map aux (explode s))
+	end
+);
+=TEX
+=SML
+val €name_cache› : string list E_DICT ref = ref initial_e_dict;
+=TEX
+=SML
+fun €cache_name› (n : string) : unit = (
+	let	val ln = to_lower n;
+	in	case e_lookup ln (!name_cache) of
+			Nil => name_cache := e_enter ln [n] (!name_cache)
+		|	Value ns => name_cache := e_enter ln (n::ns) (!name_cache)
+	end
+);
+=TEX
+=SML
+fun €cache_const› (c : TERM) : unit = (
+	let	val (n, _) = dest_const c;
+	in	cache_name n
+	end	handle Fail _ => error "cache_const" 501100 []
+);
+=TEX
+=SML
+fun €uncache_const› (c : TERM) : unit = (
+	let	val (n, _) = dest_const c;
+		val ln = to_lower n;
+	in	case e_lookup ln (!name_cache) of
+			Nil => ()
+		|	Value ns => name_cache := e_enter ln (ns less n) (!name_cache)
+	end
+);
+=TEX
+=SML
+fun €cache_theory› (thy : string) : unit = (
+	map cache_const (get_consts thy); ()
+);
+=TEX
+=SML
+fun €cache_ancestry› (thy : string) : unit = (
+	name_cache := initial_e_dict;
+	map cache_theory (get_ancestors thy); ()
+);
+=TEX
+=SML
+fun €ci_get_const_names› (n : string) : string list = (
+	case e_lookup n (!name_cache) of
+		Nil => []
+	|	Value ns => ns
+);
+=TEX
+=SML
+val _ = on_kernel_state_change
+	(fn	OpenTheory (current, (_, _)) => cache_ancestry current
+	|	NewParent _ => cache_ancestry(get_current_theory_name())
+	|	NewConst (c, _) => cache_name c
+	|	SimpleNewDefn ((_, c, _), _) => cache_name c
+	|	NewSpec ((_, i, thm), _) => (
+			map cache_name(map(fst o dest_var)
+			((fst(strip_∂((snd o dest_thm) thm))) to (i-1))); ()
+	)  |	DeleteConst c => uncache_const c
+	|	_ => ()
+);
+=TEX
+
+=SML
+end; (* of structure CaseIndependence *)
+=TEX
+\section{DATA TYPES}
+=SML
+structure €SPARKLex› : SPARKLex = struct
+=TEX
+=SML
+local
+open CaseIndependence;
+open Lex;
+in
+=TEX
+\subsection{Abstract Syntax for SPARK}
+=SML
+=TEX
+\subsection{Types for Lexical Analysis}
+The following data type represents the lexical classes which are the
+terminals of the grammar:
+=SML
+datatype €SPARK_LEX_CLASS›
+			=	€AbstractExpression›
+			|	€Abs›
+			|	€Ampersand›
+			|	€And›
+			|	€Array›
+			|	€At›
+			|	€Bar›
+			|	€BBody›
+			|	€Becomes›
+			|	€Begin›
+			|	€Case›
+			|	€CharacterLiteral›
+			|	€Colon›
+			|	€CommaOthers›
+			|	€Comma›
+			|	€CompLabel›
+			|	€Constant›
+			|	€Con›
+			|	€Crd›
+			|	€DecLabel›
+			|	€Delta›
+			|	€Digits›
+			|	€Div›
+			|	€DotDot›
+			|	€Dot›
+			|	€Else›
+			|	€ElsIf›
+			|	€End›
+			|	€Equals›
+			|	€Exit›
+			|	€FatDot›
+			|	€For›
+			|	€FunctionName›
+			|	€Function›
+			|	€GoesTo›
+			|	€GreaterEquals›
+			|	€GreaterThan›
+			|	€Identifier›
+			|	€If›
+			|	€In›
+			|	€Is›
+			|	€KSlot›
+			|	€LessEquals›
+			|	€LessGreat›
+			|	€LessThan›
+			|	€Limited›
+			|	€Loop›
+			|	€Minus›
+			|	€Mod›
+			|	€Na›
+			|	€NotEquals›
+			|	€Not›
+			|	€Null›
+			|	€NumericLiteral›
+			|	€Of›
+			|	€Ord›
+			|	€Or›
+			|	€Others›
+			|	€Out›
+			|	€Package›
+			|	€Plus›
+			|	€PPartLabel›
+			|	€Prime›
+			|	€Private›
+			|	€ProcedureName›
+			|	€Procedure›
+			|	€Record›
+			|	€RefinedBy›
+			|	€Rem›
+			|	€Renames›
+			|	€ReplacedBy›
+			|	€Return›
+			|	€Reverse›
+			|	€RRange›
+			|	€Semi›
+			|	€Separate›
+			|	€SpecificationStatement›
+			|	€SpecLabel›
+			|	€StarStar›
+			|	€Star›
+			|	€StmtLabel›
+			|	€StringLiteral›
+			|	€SubType›
+			|	€Then›
+			|	€TypeMark›
+			|	€Type›
+			|	€Until›
+			|	€Use›
+			|	€VPartLabel›
+			|	€WhenOthers›
+			|	€When›
+			|	€While›
+			|	€With›
+			|	€Xor›
+			|	€ZDecl›
+			|	€Eos›
+			|	€AqTm›;
+=TEX
+The following is used in the type of the tokens produced by the SAL lexical analyser.
+=SML
+datatype €SPARK_TOKEN›	=	€SPARKAqTm› of TERM
+			|	€SPARKText› of string
+			|	€SPARKString› of string
+			|	€SPARKEos›;
+=TEX
+The actual tokens returned by $SPARK\_lex$ are of the following type:
+=SML
+type €LEX_ITEM› = SPARK_LEX_CLASS * SPARK_TOKEN;
+=TEX
+\section{LEXICAL ANALYSER}
+The main lexical analysis algorithm is exception-driven
+using the following local exception:
+=SML
+exception €Unrecognised›;
+=TEX
+A state, $LEX\_STATE$, is used by most of the lexical analysis
+functions. The state is in two parts: first, the characters not yet tokenised,
+actually a list of strings of single characters produced by exploding
+the input text; second, the token immediately preceeding the first
+part.  The token may not be recognised (yet) so the token part of the
+state carries a success indicator.  On entry to an analysis function
+the state will be ``$(chars, (Unknown, \hbox{``''}))$''.
+=SML
+datatype €SUCCESS› = €Known› of string | €Unknown›;
+
+type €LEX_STATE›  = (string list) * SUCCESS;
+=TEX
+\subsection{Utilities}
+$collect$ adds the first character of the untokenised input text into the current token.
+=SML
+fun €collect› ( cstk : LEX_STATE ) : LEX_STATE = (
+	case cstk of
+		(c :: cs, Known s) => (cs, Known(s ^ c))
+	|	(c :: cs, Unknown) => (cs, Known c)
+	|	_ => error "SPARK-Parser" 15004 []
+);
+=TEX
+We need various character classifying functions:
+=SML
+=TEX
+=SML
+val €ord0›	= ord "0";
+val €ord9›	= ord "9";
+val €orda›	= ord "a";
+val €ordA›	= ord "A";
+val €ordz›	= ord "z";
+val €ordZ›	= ord "Z";
+=TEX
+=SML
+fun €is_digit›  (d : string) = (
+	let	val ordd = ord d
+	in	(ordd >= ord0) andalso (ordd <= ord9)
+	end
+);
+=TEX
+=SML
+fun €is_alpha›  (c : string) = (
+	let	val ordc = ord c
+	in		((ordc >= orda) andalso (ordc <= ordz))
+		orelse	((ordc >= ordA) andalso (ordc <= ordZ))
+	end
+);
+=TEX
+=SML
+fun €is_alnum›  (c : string) = (
+	is_alpha c orelse is_digit c
+);
+=TEX
+Note that the following list includes ``.'' but omits the string quotation
+character. ``.'' is included so that $is\_delimiter$ may be
+used to detect a character which may begin a delimiter symbol.
+
+The algorithms used to access the list $delimiter$
+assume that if one delimiter is a leading substring
+of another then the longer of the two will appear earlier
+in the list; a reverse lexicographical sort achieves
+this.
+=SML
+val €delimiter› : string list list =
+	(Sort.sort (switch(Sort.lexicographic Sort.string_order)) o map explode)
+	["&", "'", "(", ")", "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", 
+	">", "|", "=>", "..", "**", ":=", "/=", ">=", "<=", "<<", ">>", "<>"];
+=TEX
+=SML
+fun next_is_delimiter (cs : string list) = (
+	any delimiter (fn chs => cs to (length chs - 1) = chs)
+);
+=TEX
+=SML
+fun €is_space› c = c <= " ";
+=TEX
+=SML
+fun €is_us› c = c = "_";
+=TEX
+=SML
+fun €skip_space› (st as (cs as (c :: more), tk) : LEX_STATE) : LEX_STATE = (
+	if is_space c
+	then skip_space (more, tk)
+	else st
+) | skip_space (st as ([], _)) = st;
+=TEX
+$next$ is used to apply a classifier function such as $is\_digit$
+to the first character in the input part of a state. It returns false
+if the input part is empty.
+=SML
+fun €next› (test : string -> bool) ((c :: _, _) : LEX_STATE) = test c
+|   next _ ([], _) = false;
+=TEX
+When a lexeme 
+has been recognised, the following material is used to classify the result.
+=SML
+val €class_table› = list_e_merge initial_e_dict [
+	("abs",		Abs),
+	("&",		Ampersand),
+	("and",		And),
+	("array",	Array),
+	("at",		At),
+	("|",		Bar),
+	("body",	BBody),
+	(":=",		Becomes),
+	("begin",	Begin),
+	("case",	Case),
+	(":",		Colon),
+	("@commaothers",CommaOthers),
+	(",",		Comma),
+	("constant",	Constant),
+	("con",		Con),
+	(")",		Crd),
+	("delta",	Delta),
+	("digits",	Digits),
+	("/",		Div),
+	("..",		DotDot),
+	(".",		Dot),
+	("else",	Else),
+	("elsif",	ElsIf),
+	("end",		End),
+	("=",		Equals),
+	("exit",	Exit),
+	("∑",		FatDot),
+	("for",		For),
+	("function",	Function),
+	("=>",		GoesTo),
+	(">=",		GreaterEquals),
+	(">",		GreaterThan),
+	("if",		If),
+	("in",		In),
+	("is",		Is),
+	("<=",		LessEquals),
+	("<>",		LessGreat),
+	("<",		LessThan),
+	("limited",	Limited),
+	("loop",	Loop),
+	("-",		Minus),
+	("mod",		Mod),
+	("/=",		NotEquals),
+	("not",		Not),
+	("null",	Null),
+	("of",		Of),
+	("(",		Ord),
+	("Or",		Or),
+	("others",	Others),
+	("out",		Out),
+	("package",	Package),
+	("+",		Plus),
+	("'",		Prime),
+	("private",	Private),
+	("procedure",	Procedure),
+	("record",	Record),
+	("%sqsubseteq%",RefinedBy),
+	("rem",		Rem),
+	("renames",	Renames),
+	("replacedby",	ReplacedBy),
+	("return",	Return),
+	("reverse",	Reverse),
+	("range",	RRange),
+	(";",		Semi),
+	("separate",	Separate),
+	("**",		StarStar),
+	("*",		Star),
+	("subtype",	SubType),
+	("then",	Then),
+	("type",	Type),
+	("until",	Until),
+	("use",		Use),
+	("whenothers",	WhenOthers),
+	("when",	When),
+	("while",	While),
+	("with",	With),
+	("xor",		Xor)];
+=TEX
+=SML
+fun €classify› (what : string) : SPARK_LEX_CLASS = (
+	case e_lookup what  class_table of
+		Value cl => cl
+	|	Nil	=>	if	is_all_decimal what
+				then	NumericLiteral
+				else	Identifier
+);
+=TEX
+\subsection{Recognition of Delimiters}
+=SML
+fun get_next_delimiter (cs : string list) : string = (
+	implode (find delimiter (fn chs => cs to (length chs - 1) = chs))
+	handle ex => fail "SPARK-Parser" 501201 [fn()=>"invalid call of get_next_delimiter"]
+);
+=TEX
+$rec\_delimiter$ returns an appropriately updated state if the input
+begins with a delimiter symbol, if not it raises $Unrecognised$.
+=SML
+fun  €rec_delimiter› ( (cs, _) : LEX_STATE ) : LEX_STATE = (
+	if next_is_delimiter cs
+	then	let	val tk = get_next_delimiter cs;
+        	in	(cs from size tk, Known tk)
+		end
+	else	raise Unrecognised
+);
+=TEX
+\subsection{Recognition of Identifiers}
+\subsection{Recognition of Alphanumeric Sequences}
+=SML
+fun €rec_identifier_aux› (st : LEX_STATE) : LEX_STATE = (
+	let	fun aux st = (
+			if next is_alnum st orelse next is_us st
+			then aux (collect st)
+			else st
+		);
+	in	if next is_alnum st orelse next is_us st
+		then aux (collect st)
+		else raise Unrecognised
+	end
+);
+=TEX
+=SML
+fun €rec_identifier› (st : LEX_STATE) : LEX_STATE = (
+	if next is_alpha st
+	then	let	val (st', flag) = (rec_identifier_aux st, true)
+				handle Unrecognised => (st, false);
+		in	if flag
+			then	(* if next is_tilde st'
+				then (collect st')
+				else if next is_dot st'
+				then rec_identifier_aux (collect st')
+				else *) st'
+			else raise Unrecognised
+		end
+	else raise Unrecognised
+);
+=TEX
+\subsection{Recognition of Numbers}
+=TEX
+The following is a simplification of numbers used in SPARK and will be
+updated later.
+=SML
+fun €rec_number› (st : LEX_STATE) : LEX_STATE = (
+	let	fun aux st = (
+			if next is_digit st
+			then aux (collect st)
+			else st
+		);
+	in	if next is_digit st
+		then aux (collect st)
+		else raise Unrecognised
+	end
+);
+=TEX
+\subsection{Recognition of Lexemes}
+Function $rec\_next\_token$ picks off the next token from the input
+using the other recognisers.
+=SML
+fun €rec_next_token› (st : LEX_STATE) : LEX_STATE = (
+	let	val st' = skip_space st;
+	in		(((rec_delimiter st)
+		handle Unrecognised =>
+			(rec_identifier st))
+		handle Unrecognised =>
+			(rec_number st))
+		handle Unrecognised =>
+			(fst st, Unknown)
+	end
+);
+=TEX
+\subsection{Lexical Analyser for Strings}
+=SML
+=TEX
+$lex\_string$ converts an input string into a list of tokens.
+=SML
+fun €lex_string› (ip : string list) : LEX_ITEM list  = (
+	let	val st = skip_space (ip, Unknown);
+		fun   recur ct more = (
+			let	val cts = lex_string more;
+			in	ct :: cts
+			end
+		);
+	in	case skip_space st of
+			([], _) => []
+		|	other => (
+			case skip_space(rec_next_token other) of
+				st' as (ip', Known s) => (recur (classify s, SPARKText s) ip'
+			) |	st' as (ip', Unknown) => (
+					fail
+					"SPARK-Parser"
+					501011
+					[fn()=>	implode ip]
+			)
+		)
+	end
+);
+=TEX
+=SML
+fun €SPARK_lex› (ip : INPUT list) : LEX_ITEM list = (
+	case ip of
+		Text s :: more => (
+			lex_string (explode (to_lower s)) @
+			SPARK_lex more
+	) |	Lex.String s :: more => (
+			(StringLiteral, SPARKString s) :: SPARK_lex more
+	) |	Lex.Char s :: more => (
+			fail "SPARK-Parser" 501011  [fn () => s]
+	) |	Lex.Type ty :: more => (
+			fail "SPARK-Parser" 501011  [fn () => string_of_type ty]
+	) |	Lex.Term tm :: more => (
+			(AqTm, SPARKAqTm tm) :: SPARK_lex more
+	) |	Lex.Separator s :: _ => (
+			fail "SPARK-Parser" 501011  [fn () => s]
+	) |	Lex.Error n :: more => (fail "lexical analyser" 15006 [fn () => string_of_int n]
+	) |	[] => [(Eos, SPARKEos)]
+);
+=TEX
+
+\section{DECLARATION PARSER}\label{DECLARATIONPARSER}
+\subsection{Miscellanea}
+=SML
+fun €format_lex_item›  ((_, tok) : LEX_ITEM) : string = (
+	case tok of
+		SPARKAqTm _	=> "¨ ... Æ"
+	|	SPARKText s	=> s
+	|	SPARKString s	=> s
+	|	SPARKEos		=> "<end-of-input>"
+);
+=TEX
+\subsubsection{Sequence Type Definitions}
+\section{INTERFACE}
+\section{EPILOGUE}
+=SML
+end (* of local ... in *);
+=TEX
+=SML
+end (* of structure SPARKLex *);
+=TEX
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+\end{document}
