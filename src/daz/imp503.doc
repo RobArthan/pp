@@ -22,8 +22,7 @@
 %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
 \TPPauthorisation{D.J.~King & DAZ Team Leader}
 \TPPabstract{
-This document contains the implementation for the CN 
-parser.}
+This document contains the implementation for the Compliance Notation Parser to meet the DRA's requirements for a Compliance Tool.}
 %\TPPabstractB{}
 %\TPPabstractC{}
 %\TPPabstractD{}
@@ -62,31 +61,38 @@ parser.}
 \subsection{Changes History}  % to get section number `0.3'
 \begin{description}
 
-\item[Issue \SCCSversion, \FormatDate{$Date$%
-} ] Initial Draft.
+\item[Issue 1.1-1.n]
+} ] Initial Drafts.
 
 \end{description}
 \subsection{Changes Forecast}
+None.
 \pagebreak
 \section{GENERAL}
 \subsection{Scope}
-This document contains the implementation for the parser for
-HOL/Z.
-The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD503}.
+This document contains the implementation for the Compliance Notation parser for
+HOL/Z. It covers the parsing of Compliance Notation Web Clauses. For Web clauses constituting Z paragraphs, the {\Product} Z Parser is used.
+
+The detailed design for this implementation and the BNF form form of the implemented grammar is in \cite{ISS/HAT/DAZ/DTD503}.
+
 \subsection{Introduction}
 
 \subsection{Purpose and Background}
 
-\subsection{Algorithms}
+This document introduces the structure $CNParser$. This provides an implementation of a parser which corresponds to the language definition in \cite{ISS/HAT/DAZ/DTD502} which itself seeks to comply with DRA's specification of the concrete syntax of Compliance Notation.
 
-
-
-\subsection{Dependencies}
 
 \subsection{Known Deficencies}
+
+This implementation aims to fully support the language definition of \cite{ISS/HAT/DAZ/DTD502}.
+
 \subsection{Possible Enhancements}
+None known.
+
 =TEX
 \section{MISCELLANEOUS FUNCTIONS}\label{MISCELLANEOUSFUNCTIONS}
+
+First we introduce the structure wrapping.
 =SML
 structure ÛCNParserÝ = struct
 =TEX
@@ -95,8 +101,8 @@ We need to include the SLRP driver code at this point:
 imp018.sml
 =TEX
 =SML
-open CNTypes;
-open SlrpDriver;
+	open CNTypes SlrpDriver ZTermGenerator ZTypeInference
+	open ZUserInterfaceSupport
 =TEX
 \subsection{Miscellanea}
 $stack\_error$ is for use during context-free parsing when the parsing stack
@@ -112,7 +118,8 @@ the following two variables are set up by the functions
 $HOL\_parser$ and $HOL\_reader$. At any time during parsing $input\_toks$
 can be expected to contain the totality of the token stream being parsed
 and $toks\_read$ contains the offset in it of the token most recently
-read (or is =INLINEFT
+read (or is 
+=INLINEFT
 ~1
 =TEX
 \ if nothing has been read yet).
@@ -173,80 +180,59 @@ fun Ûparse_errorÝ (msg : int) (insert : string) : 'a = (
 \subsection{Support for Processing Z Fragments}
 =SML
 local
-	open ZLex ZParser ZTypeInference ZTermGenerator ZUserInterfaceSupport;
+	open ZLex ZParser ZUserInterfaceSupport;
 =TEX
+
 =SML
-fun Ûz_para_of_zinferredÝ ((ZInferred p) : Z_INFERRED) : Z_PARA = (
-	p
-) | z_para_of_zinferred (ZTypeError inf) = (
-	print_z_error inf
+fun Ûz_tm_of_z_paraÝ (zp : Z_PARA) : Z_TM = (
+	case zp of
+	ZParaTerm (_, z_tm, _) => z_tm
+	| _ => parse_error 503001 "weird error in z_tm_of_z_para"
 );
+
 =TEX
 =SML
-fun Ûterm_of_z_paraÝ ((ZParaTerm (gpars, tm, _)) : Z_PARA) : TERM = (
-let	val vns = map string_of_ident gpars;
-	val vs = map (fn vn => mk_var(vn, mk_z_power_type(mk_vartype ("'" ^ vn)))) 
-			vns;
-in	list_mk_µ(vs, (do_in_theory (force_get_cache_theory()) term_of_z_tm tm))
-end
-) | term_of_z_para _ = (
-	fail "z_term_recogniser" 49001 []
+fun Ûz_tm_of_z_tokensÝ (tokens : Z_TOKEN list) : Z_TM = (
+	(z_tm_of_z_para o (z_parser {is_quot = true})) tokens
 );
-=TEX
-=SML
-fun Ûz_term_of_z_tokensÝ (tokens : Z_TOKEN list) : TERM = (
-let
-	val standard = get_flag "standard_z_terms";
-	val parsed = z_parser {is_quot = true} tokens;
-	val side = case parsed of
-		ZParaTerm _ => ()
-		|_ => fail "z_term_recogniser" 49001 [];
-	val type_checked = type_check_z_para
-				{standard = standard, allow_frees = true} parsed;
-	val para = z_para_of_zinferred type_checked;
-in	term_of_z_para para
-end);
 =TEX
 =SML
 in
 =TEX
 =SML
-fun Ûprocess_con_declÝ (ztokens : ZLex.Z_TOKEN list) : (string * TERM) = (
+fun Ûprocess_con_declÝ (ztokens : ZLex.Z_TOKEN list) : (Z_ID * Z_TM) = (
 let	val schtoks = ZTLsqbrack::((rev o tl o rev) ztokens)@[ZTRsqbrack, ZTEos];
-	val zterm = z_term_of_z_tokens schtoks;
-	val dec = (
-		case (dest_z_decl o fst o dest_z_h_schema) zterm of
-		[dec] => (case dest_z_dec dec of
-			([c], ty) => (
-				(((fn (n,_,_) => n) o dest_z_lvar) c, ty)
-			) |_ => (
-				parse_error 503001 "only one logical constant can be introduced in a logical constant statement"
-			)
-		) |_ => parse_error 503001 "only one logical constant can be introduced in a logical constant statement"
-	);
 in
-	dec
+	case z_tm_of_z_tokens schtoks of
+	ZTmHorizSchema([ZDDec ([tmpl],ty, _)],_, _) =>
+		(string_of_ident tmpl, ty)
+	| _ => parse_error 503001 "ill-formed logical constant"
 end);
 =TEX
+=IGN
+open ZUserInterfaceSupport;
+val ztokens = [ZTId "x",ZTColon,ZTId "ú",ZTEos];
+val ztokens = [ZTId "true",ZTComma, ZTId "true",ZTEos];
+
+
 =SML
-fun Ûprocess_frameÝ ([] : ZLex.Z_TOKEN list) : ID list = []
+fun Ûprocess_frameÝ ([] : ZLex.Z_TOKEN list) : Z_ID list = []
   | process_frame [ZTEos] = []
   | process_frame ztokens = (
 let	val tuptoks = ZTLbrack::((rev o tl o rev) ztokens)@[ZTRbrack, ZTEos];
-	val zterm = z_term_of_z_tokens tuptoks;
-	val ids =
-		case dest_z_term zterm of
-		ZTuple ids => map (fst o dest_var) ids
-		|_ => [(fst o dest_var) zterm];
+	fun get_name (ZTmLVar (id, _, _)) = string_of_ident id
+	  | get_name _ = parse_error 503001 "badly formed frame";
 in
-	ids
+	case z_tm_of_z_tokens tuptoks of
+	ZTmTuple tml => map get_name tml
+	|_ => parse_error 503001 "badly formed frame"
 end);
 =TEX
 =SML
-val Ûprocess_pre_conditionÝ : ZLex.Z_TOKEN list -> TERM = z_term_of_z_tokens;
+val Ûprocess_pre_conditionÝ : ZLex.Z_TOKEN list -> Z_TM = z_tm_of_z_tokens;
 =TEX
 =SML
-fun Ûprocess_pre_and_post_conditionsÝ (ztokens : ZLex.Z_TOKEN list) : TERM OPT * TERM = (
+fun Ûprocess_pre_and_post_conditionsÝ (ztokens : ZLex.Z_TOKEN list) : Z_TM OPT * Z_TM = (
 let	val genitoks = ZTLsqbrack::((rev o tl o rev) ztokens)@[ZTRsqbrack, ZTEos];
 	val zpara = ZParserInternals.z_parser_pass_1 genitoks;
 	fun apply_pi p = (
@@ -267,23 +253,46 @@ let	val genitoks = ZTLsqbrack::((rev o tl o rev) ztokens)@[ZTRsqbrack, ZTEos];
 	val (pretm_opt, posttm) = apply_pi zpara;
 	val standard = get_flag "standard_z_terms";
 	fun aux parsed = (
-	let	val pp = ZParserInternals.z_parser_pass_2 {is_quot = true} parsed;
-		val type_checked = type_check_z_para
-				{standard = standard, allow_frees = true} pp;
-		val tzp = (case type_checked of
-				ZInferred p => p
-				|ZTypeError inf => print_z_error inf
-			);
-	in
-		term_of_z_para tzp
-	end);
+		(z_tm_of_z_para o (ZParserInternals.z_parser_pass_2
+			{is_quot = true})) parsed
+	);
 in
 	case pretm_opt of
 	Value pre => (Value (aux pre), aux posttm)
 	|Nil => (Nil, aux posttm)
 end);
 
-val Ûprocess_aux_expÝ : ZLex.Z_TOKEN list -> TERM = z_term_of_z_tokens;
+val Ûprocess_aux_expÝ : ZLex.Z_TOKEN list -> Z_TM = z_tm_of_z_tokens;
+=TEX
+The following functions support the external interface $z\_predexp\_of\_z\_tm$.
+=SML
+fun Ûz_para_of_zinferredÝ ((ZInferred p) : Z_INFERRED) : Z_PARA = (
+	p
+) | z_para_of_zinferred (ZTypeError inf) = (
+	print_z_error inf
+);
+=TEX
+=SML
+fun Ûterm_of_z_paraÝ ((ZParaTerm (gpars, tm, _)) : Z_PARA) : TERM = (
+let	val vns = map string_of_ident gpars;
+	val vs = map (fn vn => mk_var(vn, mk_z_power_type(mk_vartype ("'" ^ vn)))) 
+			vns;
+in	list_mk_µ(vs, (do_in_theory (force_get_cache_theory()) term_of_z_tm tm))
+end
+) | term_of_z_para _ = (
+	fail "z_term_recogniser" 49001 []
+);
+=TEX
+=SML
+fun Ûz_predexp_of_z_tmÝ (z_tm : Z_TM) : Z_EXP = (
+let
+	val standard = get_flag "standard_z_terms";
+	val z_para = ZParaTerm ([], z_tm, Nil);
+	val type_checked = type_check_z_para
+				{standard = standard, allow_frees = true} z_para;
+	val para = z_para_of_zinferred type_checked;
+in	term_of_z_para para
+end);
 =TEX
 =SML
 end (* local...in *);
@@ -367,6 +376,10 @@ fun Ûname_to_tmarkÝ (e : EXP) : TMARK = (
 		id
 	|_ => "__invalid"
 );
+=TEX
+=SML
+val Ûz_tm_trueÝ = ZTmLVar ((ZUserInterfaceSupport.TmplNon
+			("true", Nil), ""), Nil, []);
 =TEX
 =SML
 fun Ûis_range_attributeÝ (EAttribute{attribute_desig=ad,...}) = (
@@ -1026,7 +1039,7 @@ val red_statement2  = red_accept;
 fun red_statement3 _ (Token ((LCZ,CNZ z1), _)) _ (Parsed(PPStmt(STSpecNoIvars s))) = (
 let	val (n, ty) = process_con_decl z1;
 in
-	PPLogCon{x=n, t=ty, e=ñtrue®,spec=s, pre1 = ñtrue®}
+	PPLogCon{x=n, t=ty, e=mk_z_true, spec=s, pre1 = mk_z_true}
 end
 ) | red_statement3 _ _ _ _ = stack_error "red_statement3";
 
@@ -1038,16 +1051,17 @@ fun red_specification_statement1 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ 
 let	val (pre, post) =
 		case process_pre_and_post_conditions z2 of
 		(Value pre', post') => (pre', post')
-		|(Nil, post') => (ñtrue®, post');
+		|(Nil, post') => (z_tm_true, post');
 in
-	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=pre,post=post,label=LImplicit})
+	PPStmt(STSpecNoIvars{w=process_frame z1,
+		 w0=[], pre=pre, post=post, label=LImplicit})
 end
 ) | red_specification_statement1 _ _ _ _ _ = stack_error "red_specification_statement1";
 
 fun red_specification_statement2 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ = (
-let	val (pre, post) = (process_pre_condition z2, ñtrue®);
+let	val (pre, post) = (process_pre_condition z2, z_tm_true);
 in
-	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=pre,post=post,label=LImplicit})
+	PPStmt(STSpecNoIvars{w=process_frame z1, w0=[],pre=pre,post=post,label=LImplicit})
 end
 ) | red_specification_statement2 _ _ _ _ _ = stack_error "red_specification_statement2";
 
@@ -1055,14 +1069,14 @@ fun red_specification_statement3 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ 
 let	val (pre, post) =
 		case process_pre_and_post_conditions z2 of
 		(Value pre', post') => (pre', post')
-		|(Nil, post') => (ñtrue®, post');
+		|(Nil, post') => (z_tm_true, post');
 in
 	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=pre,post=post, label=LExplicit lab})
 end
 ) | red_specification_statement3 _ _ _ _ _ _ = stack_error "red_specification_statement3";
 
 fun red_specification_statement4 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ (Parsed(PPId lab))= (
-let	val (pre, post) = (process_pre_condition z2, ñtrue®);
+let	val (pre, post) = (process_pre_condition z2, z_tm_true);
 in
 	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=pre,post=post,label=LExplicit lab})
 end
@@ -1675,7 +1689,7 @@ We can now load the code generated by SLRP from the grammar
 of 'cite{ISS/HAT/DAZ/DTD503}'.
 =SML
 local
-	open CNParser;
+	open CNParser ZTypeInference;
 =TEX
 =INCLUDE
 dtd503.grm.sml
@@ -1685,7 +1699,12 @@ in
 \subsection{Conversion of Names to Type Marks}
 The implementation of this function is at the beginning of section \ref{REDUCTION FUNCTIONS}.
 =SML
-val Ûname_to_tmarkÝ = name_to_tmark;
+val Ûname_to_tmarkÝ :EXP -> TMARK = name_to_tmark;
+=TEX
+\subsection{Conversion of $Z\_TM$s to Z Predicates and Expressions}
+Z predicates and expressions are both mapped onto HOL terms and so one function will provide the translation of parsed Z terms which occur in contexts where predicates or expressions are expected.
+=SML
+val Ûz_predexp_of_z_tmÝ : Z_TM -> Z_PRED = z_predexp_of_z_tm;
 =TEX
 \subsection{The Parser Function Proper}
 
