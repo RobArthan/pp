@@ -61,9 +61,10 @@ Reimplemented some functions by ``failure''.
 Put $translate\_for\_output$ around uses of $makestring$.
 \item [Issue 2.7 (1st April 1992)]
 Changes required by CR0016.
-\item[Issue \SCCSversion (\FormatDate{$Date$
-})]
+\item[Issue 2.8]
 	Do not do any calls of $translate\_for\_output$, undo change~2.6.
+\item [Issue 2.9 (2nd July 1992)]
+Improve (?) $icl'subst$.
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
@@ -137,7 +138,6 @@ fun Ûstring_variantÝ (vars : string list) (s : string) : string = (
 );
 end; (* of local *)
 =TEX
-
 \subsection{Types}
 We implement types by using local definition to hide
 its data constructors, rather than declaring it as an abstract data type,
@@ -435,42 +435,51 @@ let	fun aux (App (tm11, tm12))(App(tm21, tm22)) map2to1 = (
 =TEX
 \subsubsection{Substitution}
 A destroyed variable renaming function, used in substitution:
-=IGN
-$new\_frees$ in the below, determines the free variables in the abstraction, changes those found in $R$ to their substitution, finds the frees in the results, and flattens these to gain a single list of resulting frees.
+
+In $aux$, $R$ is the local substitution, which is the original
+overriden by bound variables being sent to the ``same'' (perhaps renamed) variables.
+$RF$ maps the substituted variables onto the free variables
+in their substituition term.
+=SML
+fun flat_map f (a :: x) = f a @ flat_map f x
+| flat_map f [] = [];
+=TEX
 =SML
 fun Ûicl'substÝ ([] : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = tm
 | icl'subst (R : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = (
 let
-	fun aux R (App(f, a)) = (
-		let	val f' = aux R (dest_simple_term f);
+	fun aux R RF (App(f, a)) = (
+		let	val f' = aux R RF (dest_simple_term f);
 		in
 			mk_app(f',
-				(aux R (dest_simple_term a)
+				(aux R RF (dest_simple_term a)
 				handle (Fail _) =>
 				a))
 		end
 		handle (Fail _) =>
-		mk_app(f, aux R (dest_simple_term a)))
-	| aux R (Const c) = raise just_fail
-	| aux R (Var v) = rassoc3 R v
-	| aux R (SimpleÌ(vty, b)) = (
-		let	val (s, ty) = dest_var vty;
+		mk_app(f, aux R RF(dest_simple_term a)))
+	| aux R _ (Const c) = raise just_fail
+	| aux R _ (Var v) = rassoc3 R v
+	| aux R RF (SimpleÌ(vty, b)) = (
+		let	val (s_ty as (s, ty)) = dest_var vty;
 			val new_frees =
-				flat (map
-				(icl'frees o rassoc2 R mk_var)
-				(icl'frees b less (s, ty)));
-			val s' = string_variant (map fst new_frees) s;
+				flat_map
+				(rassoc2 RF (fn x => [fst x]))
+				(icl'frees b less s_ty);
+			val s' = string_variant new_frees s;
 		in 
 			if s' = s
-			then (let val RR = ((vty, (s, ty)) :: R);
-				val b' = aux RR (dest_simple_term b);
+			then (let val RR = ((vty, s_ty) :: R);
+				val RRF = (([s], s_ty) :: RF);
+				val b' = aux RR RRF (dest_simple_term b);
 			in
 				mk_simple_Ì(vty, b')
 			end)
 			else(let val vty' = mk_var (s', ty);
-				val RR = ((vty', (s, ty)) :: R);
+				val RR = ((vty', s_ty) :: R);
+				val RRF = (([s'], s_ty) :: RF);
 			in
-			(let	val b' = aux RR (dest_simple_term b);
+			(let	val b' = aux RR RRF (dest_simple_term b);
 			in mk_simple_Ì(vty', b')
 			end)
 			handle (Fail _) =>
@@ -478,14 +487,16 @@ let
 			end)
 		end
 	);
+	val init_RF = (map 
+		(fn (tm,x as (vnm,ty)) => 
+			if type_of tm = ty
+			then (map fst (icl'frees tm),x)
+			else term_fail "icl'subst" 3012 [tm,mk_var(vnm,ty)]) 
+		R);
 in
-	(map (fn (t, (vnm, ty)) => 
-		if type_of t = ty
-		then ()
-		else term_fail "icl'subst" 3012 [t,mk_var(vnm,ty)])
-		R;
-	(aux R (dest_simple_term tm)
-	 handle (Fail_) => tm))
+	(aux R init_RF (dest_simple_term tm)
+	 handle (Fail_) => tm
+	)
 end);
 =TEX
 \subsubsection{Instantiation of Types and Terms}
