@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.204 $ $RCSfile: imp507.doc,v $ $Date: 2002/05/25 12:06:02 $
+% imp507.doc %Z% $Revision: 1.205 $ $RCSfile: imp507.doc,v $ $Date: 2002/05/29 20:38:02 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.204 $%
+\def\SCCSversion{$Revision: 1.205 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/05/25 12:06:02 $%
+\TPPdate{\FormatDate{$Date: 2002/05/29 20:38:02 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -153,6 +153,7 @@ in the same package.
 \item[Issue 1.203] Changed signature of vcs for sequent origins necessitates changed use.
 \item[Issue 1.204] Support for full syntax-check-only mode.
 \item[Issue 1.205] Now storing the {\it consts\_types} component of a package in reverse order.
+\item[Issue 1.206] Liberalising treatment of use clauses.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -2698,6 +2699,25 @@ fun €call_vcs›
 =TEX
 \section{BASIC DECLARATIONS}\label{BASICDECLARATIONS}
 \subsection{The SID Function basic\_declaration}
+We use a supporting function that attempts to store a Z paragraph.
+If this fails, and if the paragraph is a (non-generic) abbreviation definition that is identical
+with an existing one, then the failure is suppressed. It returns true if a paragraph was stored.
+=SML
+fun €bd_store_para› (info : PARAINFO) : bool = (
+	(store_para info; true)
+	handle ex as (Fail _)  => (
+		case info of
+			AbbDefInfo(lhs, [], rhs) => (
+			let	val t = mk_z_gvar(lhs, type_of rhs, []);
+				val def = concl(z_get_spec t);
+			in	if	mk_eq(t, rhs) =$ def
+				then	false
+				else	raise ex
+			end
+		) |	_ => raise ex
+	)
+);
+=TEX
 The decision about which function to call is made in $basic\_declaration$ itself.
 =SML
 fun €basic_decl_pack_spec› (basic_decl : BASIC_DECL) : unit = (
@@ -2714,8 +2734,9 @@ fun €basic_decl_pack_spec› (basic_decl : BASIC_DECL) : unit = (
 		(!pack_env);
 		case para_info_opt of
 			Value para_infos => (
-				map store_para para_infos;
-				set_basic_decl_info Combinators.I basic_decl
+				if	any(map bd_store_para para_infos) Combinators.I
+				then	set_basic_decl_info Combinators.I basic_decl
+				else	()
 		)|	Nil =>	fail "basic_decl_pack_spec" 507041 []
 	end
 );
@@ -2727,8 +2748,9 @@ fun €basic_decl_otherwise› (basic_decl : BASIC_DECL) : unit = (
 	in
 		case para_info_opt of
 			Value para_infos => (
-				map store_para para_infos;
-				set_basic_decl_info Combinators.I basic_decl
+				if	any(map bd_store_para para_infos) Combinators.I
+				then	set_basic_decl_info Combinators.I basic_decl
+				else	()
 		)|	Nil =>	fail "basic_decl_otherwise" 507041 []
 	end
 );
@@ -5664,7 +5686,7 @@ fun €renames_proc_common›
 				val (tysubs, _) = prefix_given_sets pack newids tys;
 				val oldthy = get_current_theory_name();
 				val changethy = open_theory spec_script_name;
-				val {name=pname, formal_ids=pformal_ids, globals=g,
+				val old_fp as {name=pname, formal_ids=pformal_ids, globals=g,
 					par_names=_,  spec=pspec} : FORMAL_PROC = (
 					prefix_formal_proc
 						pack
@@ -5682,7 +5704,19 @@ fun €renames_proc_common›
 						globals = g,
 						par_names = par_names,
 						spec = pspec};
-			in	Value formal_proc3
+				val fps = #formal_procs (flatten_env(!blocks));
+				val new_fp  =
+					Value( find fps (fn {name, ...}  =>  name = new) )
+					handle Fail _ =>  Nil;
+			in	case new_fp of
+					Nil => Value formal_proc3
+				|	Value fp =>  (
+					if	conformant_specs old_fp fp
+					andalso	pformal_ids = #formal_ids fp
+					then	Nil
+					else	fail "renames_proc_common" 507059
+					[fn _ => old, fn _ => new]
+				)
 			end	handle (exn as Fail f) =>
 				(if (area_of exn = "find")
 				then comment "renames_proc" 507036
@@ -5696,25 +5730,29 @@ fun €renames_proc_common›
 	) |	_ => Nil
 ) | renames_proc_common
 	({subprogram_specification = ss, name1 = Nil, name2=old}) = (
-	let	val block2 = block 2;
-		val block_name2 = #block_name(#declab block2);
-		val fps = #formal_procs (flatten_env(!blocks));
+	let	val fps = #formal_procs (flatten_env(!blocks));
 		val (new, par_names) = get_name_and_par_names ss;
-		val old_fp  =
-			Value( find fps (fn {name, ...}  =>  name = name) )
-			handle Fail _ => (
-				fail "renames_proc_common" 507059
+		val old_fp  as {formal_ids, globals, spec, ...} =
+			find fps (fn {name, ...}  =>  name = old) 
+			handle Fail _ =>  fail "renames_proc_common" 507059
 				[fn _ => old, fn _ => new];
-				Nil
-			);
-	in	case old_fp of
-			Value {formal_ids, globals, spec, ...}  => (
-				Value{	name = new,
-					par_names = par_names,
-					formal_ids = formal_ids,
-					globals = globals,
-					spec = spec}
-		) |	Nil => Nil
+		val new_fp  =
+			Value( find fps (fn {name, ...}  =>  name = new) )
+			handle Fail _ =>  Nil;
+	in	case new_fp of
+				Nil  => (
+					Value{	name = new,
+						par_names = par_names,
+						formal_ids = formal_ids,
+						globals = globals,
+						spec = spec}
+		) |	Value fp =>  (
+				if	conformant_specs old_fp fp
+				andalso	formal_ids = #formal_ids fp
+				then	Nil
+				else	fail "renames_proc_common" 507059
+					[fn _ => old, fn _ => new]
+		)
 	end
 );
 =TEX
@@ -5795,7 +5833,7 @@ fun €renames_fun›
 		val _ =add_globs_pars_return globals new new_pars_tmarks res_tmark;
 		val new_zname = trans_id new;
 		val parainfo = AbbDefInfo(new_zname, [], tm);
-	in	store_para parainfo
+	in	bd_store_para parainfo; ()
 	end	handle Fail msg =>
 			fail "renames_fun" 507064
 			[fn _ => old_name, fn _ => new]
@@ -5825,7 +5863,8 @@ fun €renames_opsym›
 \subsection{The SID function renames\_object}
 The implementation organises the logic a little differently from the specification but with the
 same effect. It checks whether the renaming is a constant renaming simply by trying to
-store the relevant abbreviation definition in the current theory. This is guaranteed to
+store the relevant abbreviation definition in the current theory (using {\it bd\_store\_para} so that
+if the object renaming simply duplicates an earlier one it is accepted). This is guaranteed to
 fail if the renaming is a legal variable renaming. If it succeeds, then we're done, otherwise
 we do the appropriate work for variable renaming. Thus {\it renames\_object\_common}
 below does the work of both {\it renames\_var\_common} and {\it renames\_const}, hence
@@ -5840,13 +5879,25 @@ fun €renames_object_common›
 		val parainfo = AbbDefInfo(new_zname, [], tm);
 	in	store_para parainfo; Nil
 	end	handle Fail msg => (
-		let	val renaming as (new_zname, _)  =
+		let	val renaming as (new_zname, orig)  =
 			case current_cn_env old_zname of 
 				Value(_, EIEnvVar(_,  Nil)) =>  (new_zname, old_zname)
 			|	Value(_, EIEnvVar(_, Value orig)) => (new_zname, orig)
 			|	Value(_, EIEnvAuxVar (_,  Nil)) => (new_zname, old_zname)
 			|	Value(_, EIEnvAuxVar (_, Value orig)) => (new_zname, orig)
 			|	_ => fail "" 0 [] (* caught immediately *);
+		in	case current_cn_env new_zname of
+				Value(_, EIEnvVar(_, Value orig')) => (
+					if	orig' = orig
+					then	Nil
+					else	fail "" 0 [] (* caught immediately *)
+			) |	Value(_, EIEnvAuxVar (_, Value orig')) =>  (
+					if	orig' = orig
+					then	Nil
+					else	fail "" 0 [] (* caught immediately *)
+			) |	Value _ => fail "" 0 [] (* caught immediately *)
+			|	Nil =>
+		let
 			val block1 = block 1
 			handle Fail _ => error "add_var_env" 507006 [];
 			val block_name1 = #block_name(#declab block1);
@@ -5862,6 +5913,7 @@ fun €renames_object_common›
 			blocks :=
 			block_var_renamings(block1, var_renamings1 @ [renaming]):: tl (!blocks);
 			Value renaming
+		end
 		end
 	)
 	end	handle Fail _ => (
@@ -5965,6 +6017,9 @@ fun €renames_pack› (old_name : ID , pack : PACKAGE)  : unit = (
 		|   get_consts_types acc (BDConstDecl{consts, ...}::more) = (
 			get_consts_types
 			(map const_def consts @acc) more
+		) | get_consts_types acc  (BDTypeDecl{name, type_def as
+			TDEnumTypeDef {vals}}::more) = (
+			get_consts_types(subtype_def name::map const_def vals @ acc) more
 		) | get_consts_types acc  (BDTypeDecl{name, ...}::more) = (
 			get_consts_types(subtype_def name::acc) more
 		) | get_consts_types acc (BDSubtypeDecl{name, ...}::more) = (
