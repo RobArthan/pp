@@ -92,7 +92,7 @@ void help_dialog(Widget w, char *str)
 	Dimension h;
 	Arg args[8];
 	if(!dialog_w) {
-		dialog_w = XtVaCreatePopupShell("Help",
+		dialog_w = XtVaCreatePopupShell("xpp-Help",
 			xmDialogShellWidgetClass, get_top_shell(w),
 			XmNdeleteResponse, XmUNMAP,
 			NULL);

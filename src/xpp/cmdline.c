@@ -72,7 +72,7 @@ void add_cmd_line(Widget text_w)
 		return;
 	};
 
-	shell = XtVaCreatePopupShell("xpp_Command_Line",
+	shell = XtVaCreatePopupShell("xpp-Command-Line",
 		transientShellWidgetClass,	root,
 		XmNdeleteResponse,		XmUNMAP,
 		NULL); 
