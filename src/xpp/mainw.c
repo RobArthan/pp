@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.5 1999/03/28 11:07:01 rda Exp xpp $
+ * $Id: mainw.c,v 2.6 1999/04/20 13:13:46 xpp Rel rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -172,7 +172,7 @@ static MenuItem file_menu_items[] = {
      { "Empty File",  &xmPushButtonGadgetClass, 'E', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_EMPTY_FILE, (MenuItem *)NULL, False },
    MENU_ITEM_SEPARATOR,
-    { "Quit",  &xmPushButtonGadgetClass, 'Q', NULL, NULL,
+    { "Quit",  &xmPushButtonGadgetClass, 'Q', "Ctrl<Key>q", "Ctrl-Q",
         file_menu_cb, (XtPointer)FILE_MENU_QUIT, (MenuItem *)NULL, False },
     NULL,
 };
@@ -318,10 +318,10 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 			&dontcare, &dontcare)) {
 		/* insertion position is visible: scroll */
 		XmTextPosition old_top, new_top;
-		old_top = XmTextGetTopPosition(journal);
+		old_top = XmTextGetTopCharacter(journal);
 		while(!XmTextPosToXY(journal, last_pos, &dontcare, &dontcare)
 		&&	old_top != (new_top = (XmTextScroll(journal, 1),
-					 XmTextGetTopPosition(journal)))) {
+					 XmTextGetTopCharacter(journal)))) {
 			old_top = new_top;
 		};
 	};
@@ -387,7 +387,7 @@ static void flash_file_name(char *fname)
  * reinit_changed: unset changed flag and do other re-initialisations
  * when a file is saved, loaded or whatever
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void reinit_changed()
+static void reinit_changed(void)
 {
 	changed = False;
 	clear_undo(undo_ptr);
@@ -599,12 +599,12 @@ if( !global_options.edit_only ) {
 	if(open_file(script, file_name)) {
 		XmTextFieldSetString(namestring, file_name);
 		XmTextFieldShowPosition(namestring, strlen(file_name));
-		reinit_changed();
 		set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
 	} else {
 		XmTextFieldSetString(namestring, no_file_message);
 		set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, False);
 	};
+	reinit_changed();
 	set_icon_name();
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -640,10 +640,7 @@ if( !global_options.edit_only ) {
  * MENU PROCESSING
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-void post_popupeditmenu(w, x, event)
-Widget w;
-XtPointer x;
-XButtonPressedEvent *event;
+void post_popupeditmenu(Widget w, XtPointer x, XButtonPressedEvent *event)
 {
 	if (event->button == 3) {
 		XmMenuPosition(popupeditmenu, event);
@@ -651,10 +648,7 @@ XButtonPressedEvent *event;
 	}
 }
 
-void file_menu_cb(w, i, cbs)
-Widget w;
-NAT i;
-XmAnyCallbackStruct *cbs;
+void file_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
 {
 	char *fname;
 	char *buf;
@@ -761,10 +755,7 @@ XmAnyCallbackStruct *cbs;
 	};
 }
 
-static void tools_menu_cb(w, i, cbs)
-Widget w;
-NAT i;
-XmAnyCallbackStruct *cbs;
+static void tools_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
 {
 
 	switch(i) {
@@ -789,10 +780,7 @@ XmAnyCallbackStruct *cbs;
 /* Perhaps should test for success and make menu items insensitive */
 }
 
-static void edit_menu_cb(w, i, cbs)
-Widget w;
-NAT i;
-XmAnyCallbackStruct *cbs;
+static void edit_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
 {
 	static void do_undo();
 
@@ -838,10 +826,7 @@ XmAnyCallbackStruct *cbs;
    selection to cut, copy or paste. */
 }
 
-static void cmd_menu_cb(w, i, cbs)
-Widget w;
-NAT i;
-XmAnyCallbackStruct *cbs;
+static void cmd_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
 {
 	char *cmd;
 	Bool execute_command();
@@ -884,10 +869,7 @@ XmAnyCallbackStruct *cbs;
 	}
 }
 
-static void help_menu_cb(w, i, cbs)
-Widget w;
-NAT i;
-XmAnyCallbackStruct *cbs;
+static void help_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
 {
 	switch(i) {
 	case HELP_MENU_ABOUT_XPP:
@@ -918,10 +900,7 @@ XmAnyCallbackStruct *cbs;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Monitor typed input:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void script_modify_cb(w, d, cbs)
-Widget w;
-XtPointer d;
-XmTextVerifyCallbackStruct *cbs;
+static void script_modify_cb(Widget w, XtPointer d, XmTextVerifyCallbackStruct *cbs)
 {
 	if(!changed) {	/* Only do this when change from !changed to changed */
 		XtManageChild(modified);
@@ -949,7 +928,7 @@ void check_quit_cb (Widget w, XtPointer cd, XmAnyCallbackStruct cbs)
  * Executing text from the selection in a text window.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-Bool execute_command()
+Bool execute_command(void)
 {
 	char *cmd;
 	NAT len;
@@ -986,8 +965,7 @@ Bool execute_command()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * main entry point:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void main_window_go(
-	char	*file_name)
+void main_window_go(char *file_name)
 {
 	setup_main_window(file_name);
 if( !global_options.edit_only ) {

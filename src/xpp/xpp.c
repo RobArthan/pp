@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$
+ * $Id: xpp.c,v 2.2 1994/08/31 12:04:35 ach Rel rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -159,7 +159,7 @@ static XtResource resources[] = {
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Usage line
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void usage ()
+void usage (void)
 {
 	msg( "xpp",
 "usage: xpp [standard X Toolkit options] [-file fname] [-commmand command-line]");
@@ -173,9 +173,7 @@ void usage ()
  * Note can omit -command if there are no X options 
  * THIS AREA IS NOT VERY GOOD YET AND NEEDS A BIT MORE DESIGN THOUGHT
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-int check_sep(argc, argv)
-int argc;
-char **argv;
+int check_sep(int argc, char **argv)
 {
 	int l, acc;
 	if(argc == 1) {
@@ -214,9 +212,7 @@ char **argv;
  * Set up non-X arguments
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static char *get_command_line(argc, argv)
-int argc;
-char **argv;
+static char *get_command_line(int argc, char **argv)
 {
 	int i, siz, skip, len;
 	char *p, *res;
@@ -251,9 +247,7 @@ char **argv;
  * main:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-void main(argc, argv)
-int argc;
-char **argv;
+int main(int argc, char **argv)
 {
 	root = XtVaAppInitialize(&app,
 		"Xpp",
@@ -291,5 +285,5 @@ char **argv;
 	command_line_list = xpp_resources.command_line_list;
 
 	main_window_go(file_name);
-	exit(0);
+	return 0;
 }

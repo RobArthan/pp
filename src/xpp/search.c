@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$ 
+ * $Id: search.c,v 2.4 1999/03/07 16:20:21 rda Rel rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -612,7 +612,7 @@ static Boolean search_either(
 		result = False;
 	} else {
 		char *msg_buf = XtMalloc(strlen(pattern) +
-					strlen(not_found));
+					strlen(not_found) + 1);
 		sprintf(msg_buf, not_found, pattern);
 		ok_dialog(search_data.shell_w, msg_buf);
 		result = False;
@@ -718,7 +718,7 @@ static void replace_all_cb(
 		ok_dialog(cbdata->shell_w, no_search_string);
 	} else {
 		char *msg_buf = XtMalloc(strlen(pattern) +
-					strlen(not_found));
+					strlen(not_found) + 1);
 		sprintf(msg_buf, not_found, pattern);
 		ok_dialog(cbdata->shell_w, msg_buf);
 	}
@@ -976,7 +976,7 @@ static char * replace_all(
 			++p;
 		}
 	}
-	if((*result = XtMalloc(text_buf_len + extra)) == NULL) {
+	if((*result = XtMalloc(text_buf_len + extra + 1)) == NULL) {
 		return;
 	}
 	p = text_buf;
