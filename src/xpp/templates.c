@@ -178,7 +178,7 @@ TemplateCallbackData * cbdata;
 XmPushButtonCallbackStruct *cbs;
 {
 	NAT text_index = cbdata->text_index;
-	XmTextPosition start, end;
+	XmTextPosition start, end, after;
 	Widget text_w;
 
 	if(text_index >= MAX_TEMPLATES_FORMS ||
@@ -197,8 +197,9 @@ XmPushButtonCallbackStruct *cbs;
 		XmTextInsert(text_w, start, cbdata->expansion);
 	};
 
-	XmTextSetInsertionPosition(text_w, start);
-	XmTextShowPosition(text_w, start);
+	after = start + strlen (cbdata->expansion);
+	XmTextSetInsertionPosition(text_w, after);
+	XmTextShowPosition(text_w, after);
 }
 
 
