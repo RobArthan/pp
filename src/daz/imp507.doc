@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.263 $ $RCSfile: imp507.doc,v $ $Date: 2004/07/10 14:29:12 $
+% imp507.doc %Z% $Revision: 1.264 $ $RCSfile: imp507.doc,v $ $Date: 2004/07/11 12:20:32 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.263 $%
+\def\SCCSversion{$Revision: 1.264 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/07/10 14:29:12 $%
+\TPPdate{\FormatDate{$Date: 2004/07/11 12:20:32 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -492,7 +492,8 @@ fun €type_of_tmark› (dict : ENV_DICT) (tmark : TMARK) : TYPE = (
 			|	Value {tipe = Value ty, info = EIEnvOtherType, ...} => ty
 			|	_ => fail "type_of_tmark" 507127 [fn _ => tmark];
 	in	dest_z_power_type set_ty
-	end	handle Fail _ => fail "type_of_tmark" 507128 [fn _ => tmark]
+		handle Fail _ => fail "type_of_tmark" 507128 [fn _ => tmark]
+	end
 );
 =TEX
 
@@ -654,6 +655,23 @@ fun €in_scope_formal_procs›
 );
 =TEX
 =SML
+fun €subunit_in_scope›
+	 ({	zmod,
+		specif_flag,
+		specif,
+		in_scope,
+		globs
+	} : SUBUNIT,
+	new_in_scope : IN_SCOPE) : SUBUNIT = (
+	{	zmod		=	zmod,
+		specif_flag	=	specif_flag,
+		specif		=	specif,
+		in_scope	=	new_in_scope,
+		globs		=	globs
+	}
+);
+=TEX
+=SML
 fun €subunit_vc_vars›
 	(dicto : ENV_DICT OPT)
 	 ({	zmod,
@@ -737,31 +755,32 @@ fun €declab_declabel_flag›  (
 );
 =TEX
 =SML
-fun €declab_vc_vars›
-	(dicto : ENV_DICT OPT)
+fun €declab_in_scope›
 	({	block_name,
 		flags,
 		in_scope
 	} : DECLAB,
-	new_vc_vars : VAR_DECL list) : DECLAB = (
+	new_in_scope : IN_SCOPE) : DECLAB = (
 	{	block_name	=	block_name,
 		flags		=	flags,
-		in_scope	= in_scope_vc_vars dicto (in_scope, new_vc_vars)
+		in_scope	= new_in_scope
 	}
+);
+=TEX
+=SML
+fun €declab_vc_vars›
+	(dicto : ENV_DICT OPT)
+	(declab as {in_scope, ...} : DECLAB,
+	new_vc_vars : VAR_DECL list) : DECLAB = (
+	declab_in_scope(declab,  in_scope_vc_vars dicto (in_scope, new_vc_vars))
 );
 =TEX
 =SML
 fun €declab_formal_procs› 
 	(dicto : ENV_DICT OPT)
-	({	block_name,
-		flags,
-		in_scope
-	} : DECLAB,
+	(declab as {in_scope, ...} : DECLAB,
 	new_formal_procs : FORMAL_PROC list) : DECLAB = (
-	{	block_name	=	block_name,
-		flags		=	flags,
-		in_scope		= in_scope_formal_procs dicto (in_scope, new_formal_procs)
-	}
+	declab_in_scope(declab,  in_scope_formal_procs dicto (in_scope, new_formal_procs))
 );
 =TEX
 =SML
@@ -2100,7 +2119,8 @@ This is acceptable because in \cite{ISS/HAT/DAZ/DTD508}
 the information recorded for a constant is only used in handling
 attributes, which are not relevant for named numbers.
 =SML
-fun €set_basic_decl_info› (pfx : ID -> ID) (bd : BASIC_DECL) : unit = (
+fun €in_scope_basic_decl› (pfx : ID -> ID)
+	(in_scope : IN_SCOPE, bd : BASIC_DECL) : IN_SCOPE = (
 	let	val	info_s_dict = map env_entry_of_entity_info
 		(case bd of
 			BDTypeDecl {name, type_def} => (
@@ -2113,10 +2133,18 @@ fun €set_basic_decl_info› (pfx : ID -> ID) (bd : BASIC_DECL) : unit = (
 				(trans_id(pfx c),  entity_info_of_const_decl cd)
 			) cs)
 		|	_ => []);
-		val	block1 as {declab ={in_scope, ...}, ...} = block 1;
-		val	in_scope1a = in_scope_dict(in_scope,
+		val	in_scope' = in_scope_dict(in_scope,
 				add_to_env_dict (#dict in_scope) info_s_dict);
-		val	block1a = block_in_scope(block1, in_scope1a)
+	in	in_scope'
+	end
+);
+=TEX
+=TEX
+=SML
+fun €set_basic_decl_info› (pfx : ID -> ID) (bd : BASIC_DECL) : unit = (
+	let	val	block1 as {declab ={in_scope, ...}, ...} = block 1;
+		val	block1a = block_in_scope
+				(block1, in_scope_basic_decl pfx (in_scope, bd));
 	in	blocks := block1a :: tl(!blocks)
 	end
 );
@@ -3361,12 +3389,77 @@ fun €basic_decl_otherwise› (basic_decl : BASIC_DECL) : unit = (
 		)|	Nil =>	fail "basic_decl_otherwise" 507041 []
 	end
 );
+=SML
+fun €update_subunit_env_basic_decl› (bd : BASIC_DECL) : unit = (
+	let	val dec_lab1 = #dec_lab (block 1);
+		fun do1_subunit
+			(id1_id2_s as
+				(id1_id2,
+				s as {in_scope as {dec_labels, ...}, ...})
+					: string * SUBUNIT) = (
+			if	dec_lab1 mem dec_labels
+			then	(id1_id2,
+				subunit_in_scope (s, in_scope_basic_decl Combinators.I (in_scope, bd)))
+			else	id1_id2_s
+		);
+	in	subunit_env := map do1_subunit (!subunit_env)
+	end
+);
+=TEX
+label.
+=SML
+fun €update_dec_env_basic_decl› (bd : BASIC_DECL) : unit = (
+	let	val dec_lab1 = #dec_lab (block 1);
+		fun do1_dec_label
+			(dec_label_s as
+				(dec_label,
+				s as {in_scope as {dec_labels, ...}, ...})
+					: string * DECLAB) = (
+			if	dec_lab1 mem dec_labels
+			then	(dec_label,
+				declab_in_scope (s, in_scope_basic_decl Combinators.I (in_scope, bd)))
+			else	dec_label_s
+		);
+	in	dec_env := map do1_dec_label (!dec_env)
+	end
+);
+=TEX
+In the following, the local function, $do1\_spec\_label$ does the work specified in the Z spec for one spec label.
+The identifiers in the variable declaration are translated first.
+=SML
+fun €update_spec_env_basic_decl› (bd : BASIC_DECL) : unit = (
+	let	val dec_lab1 = #dec_lab (block 1);
+		fun do1_spec_label
+			(spec_label_s as
+				(spec_label,
+				s as {spec as {w, ...},
+					in_scope as {dec_labels, ...}, ...})
+					: string * SPECLAB) = (
+			if	dec_lab1 mem dec_labels
+			then	(spec_label,
+				speclab_in_scope (s, in_scope_basic_decl Combinators.I (in_scope, bd)))
+			else	spec_label_s
+		);
+	in	spec_env := map do1_spec_label (!spec_env)
+	end
+);
+=TEX
+The schema conjunction from the specification is implemented as sequential composition.
+=SML
+fun €update_envs_basic_decl› (bd : BASIC_DECL) : unit = (
+	if	test_flag #declabel_flag 1
+	then	(update_subunit_env_basic_decl bd;
+		update_dec_env_basic_decl bd;	
+		update_spec_env_basic_decl bd)
+	else	()
+);
 =TEX	
 =SML
 fun €basic_declaration› (basic_decl : BASIC_DECL) : unit = (
-	if	test_flag #pack_spec_flag 1
+	(if	test_flag #pack_spec_flag 1
 	then	basic_decl_pack_spec basic_decl
-	else	basic_decl_otherwise basic_decl
+	else	basic_decl_otherwise basic_decl);
+	update_envs_basic_decl basic_decl
 );
 =TEX
 =SML
