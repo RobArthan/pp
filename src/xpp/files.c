@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.23 2003/07/31 11:03:29 rda Exp $
+ * $Id: files.c,v 2.24 2003/08/01 11:13:13 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -951,6 +951,11 @@ Boolean open_file(
 		XmTextDisableRedisplay(text);
 		XmTextSetString(text, buf);
 		XtFree(buf);
+/*
+ * The following shouldn't be necessary according to the documentation on XmTextSetString.
+ * However Shift+Button1 selections don't work right without it.
+ */
+		XmTextSetInsertionPosition(text, 0);
 		XmTextEnableRedisplay(text);
 		current_file_status = &status;
 		return True;
