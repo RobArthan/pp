@@ -69,6 +69,9 @@ More changes as result of changes caused by IR0016.
 \item [Issue 1.9]
 Renamings of functions containing the name atom $simple$,
 and renaming of $aconv$.
+\item [Issue 1.10]
+Changes to match changes in issue 1.11 of \cite{DS/FMU/IED/DTD030},
+and various changes elsewhere in system.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -299,13 +302,17 @@ end);
 \subsection{Term Form Goals}
 First introduce $icl'TS$:
 =SML
-val âicl'ts_defá = simple_new_defn("icl'TS","icl'TS",» x : BOOL Ž x¼);
-val âicl'ts_thmá = save_thm("icl'ts_thm",
-	all_ƒ_intro(all_simple_%beta%_rule (ap_arg_rule »x : BOOL¼ icl'ts_def)));
+local
+val exists_icl'ts = tac_proof(([],»„ icl'TS Ž ƒ x Ž icl'TS x ‚ x¼),
+	(simple_„_tac » y : BOOL Ž y¼) THEN
+	simple_ƒ_tac THEN
+	rewrite_tac[]);
+in
+val âicl'ts_defá = new_specification(["icl'TS"],1,exists_icl'ts);
+end;
 val âicl'tsá = »icl'TS¼;
 val âicl'ts_rev_thmá = all_ƒ_intro(eq_sym_rule(
-	all_simple_%beta%_rule (ap_arg_rule »x : BOOL¼ icl'ts_def)));
-
+	all_simple_ƒ_elim icl'ts_def));
 =TEX
 We can now provide a function to make a term form of a goal.
 This does not check that all the assumptions are $\alpha$-convertably 
@@ -319,8 +326,8 @@ in
 end
 handle complaint =>
 list_divert complaint "mk_term_form_goal" [
-	("mk_app",30002,[fn () => PolyML.makestring conc]),
-	("list_mk_Š",30003,[fn () => PolyML.makestring
+	("mk_app",30002,[fn () => string_of_term conc]),
+	("list_mk_Š",30003,[fn () => string_of_term
 		(find asms (fn x => type_of x <> BOOL))])]
 );
 =TEX
@@ -397,7 +404,6 @@ fun âgs_equalá (GS{labelling = lg1, current_goal = cg1, goal_state_thm = gst1,..
 	(dest_thm gst1 = dest_thm gst2)
 );
 =TEX
-	
 
 Now the current state of the subgoal package:
 =SML
@@ -411,7 +417,7 @@ upon the main goal stack or undo buffer invalid, either
 due to change of scope or
 deletion of conservative extensions.
 The following function is thus set to be called before any such commands whenever the main goal stack is not empty.
-The function cannot test for benign changes, and so merely issues 
+The function cannot test for all benign changes, and so merely issues 
 a warning.
 =SML
 fun âsg_protect_vs_kscá (ksc: KERNEL_STATE_CHANGE) : unit = (
@@ -420,8 +426,11 @@ in
 	if is_nil main_goal_stack
 	then ()
 	else (case ksc of
-	OpenTheory _ => warn "open_theory" 30056 [fn () => "open_theory"]
-	| DeleteConst _ => warn "delete_const" 30056 [fn () => "delete_const"]
+	OpenTheory (thnm,_) => (
+		if thnm <> get_current_theory_name()
+		then (warn "open_theory" 30056 [fn () => "open_theory"])
+		else ()
+	) | DeleteConst _ => warn "delete_const" 30056 [fn () => "delete_const"]
 	| DeleteType _ => warn "delete_type" 30056 [fn () => "delete_type"]
 	| DeleteAxiom _ => warn "delete_axiom" 30056 [fn () => "delete_axiom"]
 	| _ => ())
@@ -434,11 +443,11 @@ We have a non-negative size of buffer:
 =SML
 local
 	val undo_buffer_length : int ref = ref 12;
-	val side_effect = new_int_control {
+(*	val side_effect = new_int_control {
 		name="undo_buffer_length",
 		control=undo_buffer_length,
 		default=(fn () => 12),
-		check= (fn x => x>= 0)};
+		check= (fn x => x>= 0)}; *)
 in
 fun âadd_to_bufferá (s:GOAL_STATE) (ub : GOAL_STATE list) : GOAL_STATE list = (
 	(s :: ub) to (!undo_buffer_length - 1)
@@ -518,7 +527,6 @@ and we obey the detailed design in setting ``?0'' to ``\\n''..
 fun âprint_goal_with_labelá (lab: LABEL) (gl : TERM) : unit = (
 	diag_line(get_error_message 30052 ["\n",string_of_label lab]);
 	print_goal (mk_goal_from_term gl)
-	
 );
 =TEX
 =SML
@@ -610,8 +618,8 @@ Return two $\alpha$-convertible terms:
 local
 fun âtwo_%alpha%_eqá ((a :: x): TERM list) : unit = (
 	if a term_mem x
-	then fail "push_goal" 30004 [(fn () => PolyML.makestring a), 
-		(fn () => PolyML.makestring(find x (fn y => %alpha%_eq a y)))]
+	then fail "push_goal" 30004 [(fn () => string_of_term a), 
+		(fn () => string_of_term(find x (fn y => %alpha%_eq a y)))]
 	else two_%alpha%_eq x
 ) | two_%alpha%_eq _ = ();
 =TEX
@@ -683,6 +691,8 @@ end);
 Create a theorem whose conclusion is the conclusion of a goal,
 which contains the goals assumptions, but in addition has
 the goal in term form as an assumption.
+Note that $all\_simple\_ƒ\_elim$ can cause renaming, and
+ so we need to get $conc'$, which might occasionally be different to $conc$.
 =SML
 fun âgoal_ruleá (goal as (asms,conc) : GOAL) : THM = (
 let	val tm_goal = mk_term_form_goal goal;
@@ -690,17 +700,18 @@ let	val tm_goal = mk_term_form_goal goal;
 	val s2 = all_simple_ƒ_elim s1;
 	val s3 = strip_Š_rule s2;
 	val conc' = snd(dest_app(concl s3));
-	val s4 = simple_ƒ_elim conc' icl'ts_thm;
+	val s4 = simple_ƒ_elim conc' icl'ts_def;
 	val s5 = ‚_mp_rule s4 s3;
 in
 	s5
 end);
 =TEX
+For the uses we expect of this function, any failure is a design error.
 =SML
 fun âtop_thm_ruleá (thm : THM) : THM = (
 let	val s1 = all_simple_ƒ_elim thm;
 	val s2 = strip_Š_rule s1;
-	val s3 = simple_ƒ_elim (snd(dest_app(concl s2))) icl'ts_thm;
+	val s3 = simple_ƒ_elim (snd(dest_app(concl s2))) icl'ts_def;
 	val s4 = ‚_mp_rule s3 s2;
 in
 	s4
@@ -732,6 +743,7 @@ in
 	fold do_one asms thm
 end);
 =TEX
+Any failure from this function is a design error.
 =SML
 fun âterm_form_goal_ruleá (expected_tfg : TERM list) 
 	(asms : TERM list) (thm : THM) : THM = (
@@ -746,6 +758,10 @@ end
 handle (Fail _) => error "term_form_goal_rule" 30020 []
 );
 =TEX
+The following returns a triplet: those members that are only 
+in $set1$, those that are in both, those that are only in $set2$.
+Only $set1$ might have duplicates when the function is called, 
+and the duplicates will be propagated to the resulting triplet.
 =SML
 fun âpartition_by_overlapá (set1 : TERM list) (set2 : TERM list) : 
 	((TERM list) * (TERM list) * (TERM list)) = (
@@ -757,7 +773,6 @@ let	fun aux acc1 acc2 acc3 (a :: x) = (
 in
 	aux [] [] set2 set1
 end);
-
 =TEX
 The following adds the appropriate new labelling information
 for any newly introduced goals, giving the user information about
@@ -1069,7 +1084,7 @@ let	val hys = hyps thm;
 	val replace_hyps = fold (uncurry prove_asm_rule) (rev hgoals) thm;
 	val mf_s1 = all_simple_ƒ_elim replace_hyps;
 	val mf_s2 = strip_Š_rule mf_s1;
-	val mf_s3 = simple_ƒ_elim (snd(dest_app(concl mf_s2))) icl'ts_thm
+	val mf_s3 = simple_ƒ_elim (snd(dest_app(concl mf_s2))) icl'ts_def
 	val mf_s4 = ‚_mp_rule mf_s3 mf_s2;
 in
 	mf_s4
@@ -1406,7 +1421,7 @@ let	val ulabs' = (map (fn (ls,tm) =>
 			all hys is_term_form_goal
 		then ()
 		else fail "modify_goal_state_thm" 30051 
-			[fn () => PolyML.makestring new_gst];
+			[fn () => string_of_thm new_gst];
 	val new_labelling1 = map (fn tm => (label1 ulabs' tm,tm)) hys;
 	val labs_used = flat(map fst new_labelling1);
 	val sideeffect = all_distinct lab_distinct labs_used;
