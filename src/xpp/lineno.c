@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: lineno.c,v 1.4 2004/11/19 15:34:22 rda Exp rda $ 
+ * $Id: lineno.c,v 1.5 2004/11/19 15:59:00 rda Exp rda $ 
  *
  * lineno.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -132,9 +132,9 @@ Boolean add_line_no_tool(Widget text_w)
 	Widget	*children;
 
 	XmString s;
+	XmTextPosition last_pos;
 
 	if((line_no_data.shell_w) != NULL) {
-		XmTextPosition last_pos;
 		XtManageChild(line_no_data.manager_w);
 		XtPopup(line_no_data.shell_w, XtGrabNone);
 		XmProcessTraversal(line_no_data.line_no_w, XmTRAVERSE_CURRENT);
@@ -325,6 +325,14 @@ Boolean add_line_no_tool(Widget text_w)
 		}
 	}
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Select all the text in the text window and give it the focus
+ * (so if the user just types it replaces what's there).
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+	XmTextSetSelection(
+		line_no_text,
+		0, XmTextGetLastPosition(line_no_text),
+		CurrentTime);
 	XmProcessTraversal(line_no_text, XmTRAVERSE_CURRENT);
 
 	return True;
@@ -387,13 +395,15 @@ static void goto_line_no_cb(
 
 	sscanf(line_no_string, "%ld", &line_no);
 
+	XtFree(line_no_string);
+
 	if(line_no <= 0) {
 		ok_dialog(cbdata->shell_w, no_line_no);
-		XtFree(line_no_string);
 		return;
 	}
 
 	line_no_to_offset(cbdata->text_w, line_no, &left, &right);
+
 	if(left == NO_MEMORY) {
 		ok_dialog(cbdata->shell_w, cant_goto_line_no);
 	} else if (left < 0) {
@@ -414,7 +424,11 @@ static void goto_line_no_cb(
 		XmTextSetSelection(cbdata->text_w,
 				left, right, CurrentTime);
 	}
-	XtFree(line_no_string);
+
+	XmTextSetSelection(
+		cbdata->line_no_w,
+		0, XmTextGetLastPosition(cbdata->line_no_w),
+		CurrentTime);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -488,6 +502,7 @@ static void line_no_to_offset(
 static void line_no_set(LineNoData *cbdata)
 {
 	char line_no_string[16];
+	XmTextPosition last_pos;
 	long int line_no;
 	if((line_no = get_line_no(cbdata->text_w)) <= 0) {
 		ok_dialog(cbdata->shell_w, cant_get_line_no);
@@ -495,6 +510,9 @@ static void line_no_set(LineNoData *cbdata)
 	}
 	sprintf(line_no_string, "%ld", get_line_no(cbdata->text_w));
 	XmTextSetString(cbdata->line_no_w, line_no_string);
+	last_pos = XmTextGetLastPosition(line_no_data.line_no_w);
+	XmTextSetInsertionPosition(line_no_data.line_no_w, last_pos);
+	XmTextShowPosition(line_no_data.line_no_w, last_pos);
 }
 
 
