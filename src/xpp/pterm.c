@@ -35,6 +35,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "X11/cursorfont.h"
 #include "xpp.h"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -86,7 +87,7 @@ static char* send_error_message =
 
 static char* carry_on_waiting_message = 
 "The application does not seem to have responded to the interrupt."
-"Do you want to continue waiting for a response?";
+" Do you want to continue waiting for a response?";
 
 
 
@@ -468,8 +469,8 @@ void interrupt_and_abandon ()
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Get output from the application looking for the interrupt prompt.
- * Ask the user what to do if no prompt is found within about 15 seconds.
- * If the suer wants to carry on waiting,it asks the user what to do about
+ * Ask the user what to do if no prompt is found within about 10 seconds.
+ * If the user wants to carry on waiting,it asks the user what to do about
  * every 60 seconds after the first try.
  * Returns True if the prompt is found; False if the user says to
  * give up trying.
@@ -481,6 +482,7 @@ static Boolean wait_for_prompt()
 	XmTextPosition last;
 	char buf[BUFSIZ + 1]; /* allow for null-termination in scroll_out */
 	char * prompt_buf;
+
 	prompt_len = strlen(global_options.interrupt_prompt);
 
 	if(prompt_len == 0) {
@@ -491,7 +493,7 @@ static Boolean wait_for_prompt()
 	}
 	got_prompt = result = False;
 	tries = 0;
-	delay = 15;
+	delay = 10;
 	while(True) {
 		if((ct = read(control_fd, buf, BUFSIZ)) > 0) {
 			scroll_out(buf, ct, False);
@@ -515,6 +517,7 @@ static Boolean wait_for_prompt()
 				result = False;
 				break;
 			}
+			XFlush(XtDisplay(root));
 			tries = 0;
 			delay = 60;
 		} else {
