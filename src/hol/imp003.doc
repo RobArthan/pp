@@ -1,4 +1,4 @@
-%  imp003.doc  %Z% $Date: 2001/07/24 20:22:55 $ $Revision: 2.17 $ $RCSfile: imp003.doc,v $
+%  imp003.doc  %Z% $Date: 2001/07/25 16:26:07 $ $Revision: 2.18 $ $RCSfile: imp003.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -7,10 +7,10 @@
 \TPPtitle{Implementation for Types and Terms}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Types and Terms}
 \TPPref{DS/FMU/IED/IMP003}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.17 $
+\def\SCCSversion{$Revision: 2.18 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2001/07/24 20:22:55 $%
+\TPPdate{\FormatDate{$Date: 2001/07/25 16:26:07 $%
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -470,7 +470,7 @@ overriden by bound variables being sent to the ``same'' (perhaps renamed) variab
 The first of each pair is both the term required,
 and the free variable names in that term.
 
-Earlier versions of this coce called {\it blackbox} which in turn called
+Earlier versions of this code called (the predecessor of) {\it blackbox2} which in turn called
 {\it icl'frees} whenever a $\lambda$-abstraction was encountered.
 This is very inefficient on large terms containing many nested binders.
 To improve this situation, the current code uses the following data
@@ -519,64 +519,94 @@ end;
 fun flat_map f (a :: x) = f a @ flat_map f x
 | flat_map f [] = [];
 =TEX
+The two black boxes are used to avoid variable capture.
+The first black box decides whether or not variable capture
+would occur. The second black box builds the list of terms
+needed by {\it string\_variant} to generate the new name for the bound
+variable. The idea is that the cost in space and time of generating
+the list in the second black box is avoided in the frequent case
+where no renaming is needed.
+
+Another optimisation is that as we have checked that the substituends
+and the substitutes have matching types, there is no need to check
+that the types on applications are correct when they are formed, so
+we use an unchecked version of {\it mk\_app}.
 =SML
 local
-	fun blackbox RF fvs s_ty = (
+	fun blackbox1
+		(RF : ((TERM * string list) * (string * TYPE)) list)
+		(fvs : (string * TYPE) list)
+		(s_ty as (s, _) : string * TYPE) : bool = (
+	let fun bbaux (a :: x) = (
+		if a = s_ty
+		then bbaux x
+		else case rassoc5 RF a of
+			Value (_,fvs) => s mem fvs orelse bbaux x
+			| _ => bbaux x
+	) | bbaux [] = false;
+	in
+		bbaux fvs
+	end);
+	fun blackbox2
+		(RF : ((TERM * string list) * (string * TYPE)) list)
+		(fvs : (string * TYPE) list)
+		(s_ty : string * TYPE) : string list = (
 	let fun bbaux (a :: x) = (
 		if a = s_ty
 		then bbaux x
 		else case rassoc5 RF a of
 			Value (_,fvs) => fvs @ bbaux x
 			| _ => (fst a :: bbaux x)
-	) | bbaux _ = [];
+	) | bbaux [] = [];
 	in
 		bbaux fvs
 	end);
-in
-fun Ûicl'substİ ([] : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = tm
-| icl'subst (R : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = (
-let
 	fun dest_app_node (AppNode (fvm1, fvm2)) = (fvm1, fvm2)
 	|   dest_app_node _ = (Leaf, Leaf);
-
-	fun aux RF (App(f, a), fvm) = (
+	fun unchecked_mk_app
+		((tm1 as typed(f, L­Type(_, ty2)), tm2 as typed(atm, aty)): 
+			TERM * TERM) : TERM = (
+		typed(icl'App(f, atm, aty), ty2)
+	) | unchecked_mk_app _ = error "subst" 3064 [];
+	fun do_subst RF (App(f, a), fvm) = (
 		let	val (fvm1, fvm2) = dest_app_node fvm;
-		in	let	val f' = aux RF (dest_simple_term f, fvm1);
+		in	let	val f' = do_subst RF (dest_simple_term f, fvm1);
 			in
-				mk_app(f',
-					(aux RF (dest_simple_term a, fvm2)
+				unchecked_mk_app(f',
+					(do_subst RF (dest_simple_term a, fvm2)
 					handle (Fail _) =>
 					a))
 			end
 			handle (Fail _) =>
-			mk_app(f, aux RF(dest_simple_term a, fvm2))
+			unchecked_mk_app(f, do_subst RF(dest_simple_term a, fvm2))
 		end
-	) | aux _ (Const _, _) = raise just_fail
-	| aux RF (Var v, _) = fst(rassoc3 RF v)
-	| aux RF (tm as SimpleÌ (_, b), Leaf) = (
-		aux RF (tm, mk_fv_map b)
-	) |aux RF (SimpleÌ(vty, b), ŒNode(fvs, fvm1)) = (
+	) | do_subst _ (Const _, _) = raise just_fail
+	| do_subst RF (Var v, _) = fst(rassoc3 RF v)
+	| do_subst RF (tm as SimpleÌ (_, b), Leaf) = (
+		do_subst RF (tm, mk_fv_map b)
+	) |do_subst RF (SimpleÌ(vty, b), ŒNode(fvs, fvm1)) = (
 		let	val (s_ty as (s, ty)) = dest_var vty;
-			val new_frees = blackbox RF fvs s_ty;
-			val s' = string_variant new_frees s;
 		in 
-			if s' = s
-			then (let val RRF = RF drop (fn (_,av) => av = s_ty);
-				val b' = aux RRF (dest_simple_term b, fvm1);
+			if 	blackbox1 RF fvs s_ty
+			then
+			let	val new_frees = blackbox2 RF fvs s_ty;
+				val s' = string_variant new_frees s;
+				val vty' = mk_var (s', ty);
+				val RRF = (((vty',[s']), s_ty) :: RF);
+			in	let	val b' = do_subst RRF
+						(dest_simple_term b, fvm1);
+				in	mk_simple_Ì(vty', b')
+				end handle (Fail _) => mk_simple_Ì(vty', b)
+			end
+			else
+			let
+				val RRF = RF drop (fn (_,av) => av = s_ty);
+				val b' = do_subst RRF (dest_simple_term b, fvm1);
 			in
 				mk_simple_Ì(vty, b')
-			end)
-			else(let val vty' = mk_var (s', ty);
-				val RRF = (((vty',[s']), s_ty) :: RF);
-			in
-			(let	val b' = aux RRF (dest_simple_term b, fvm1);
-			in mk_simple_Ì(vty', b')
-			end)
-			handle (Fail _) =>
-			mk_simple_Ì(vty', b)
-			end)
+			end
 		end
-	) | aux _ _ = error "subst" 3064 [];
+	) | do_subst _ _ = error "subst" 3064 [];
 =TEX
 The very last (non-error) case would occur for:
 =INLINEFT
@@ -588,14 +618,18 @@ where the current substitutions leave
 =TEX
 unchanged.
 =SML
+in
+fun Ûicl'substİ ([] : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = tm
+| icl'subst (R : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = (
+let
 	val init_RF = (map 
 		(fn (tm,x as (_,ty)) => 
 			if type_of tm = ty
-			then ((tm,map fst (icl'frees tm)),x)
+			then ((tm, map fst (icl'frees tm)),x)
 			else term_fail "icl'subst" 3012 [tm,mk_var x]) 
 		R);
 in
-	(aux init_RF (dest_simple_term tm, Leaf)
+	(do_subst init_RF (dest_simple_term tm, Leaf)
 	 handle (Fail _) => tm
 	)
 end);
