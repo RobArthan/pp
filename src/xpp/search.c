@@ -59,6 +59,9 @@ static char *no_selection_to_replace =
 static char *not_found = 
 	"Search pattern \"%s\" not found";
 
+static char *line_no_too_big1 =
+	"There is only 1 line in the file";
+
 static char *line_no_too_big =
 	"There are only %ld lines in the file";
 
@@ -640,9 +643,14 @@ static void goto_line_no_cb(
 	if(left == NO_MEMORY) {
 		ok_dialog(cbdata->shell_w, cant_goto_line_no);
 	} else if (left < 0) {
-		char buf[200];
-		sprintf(buf, line_no_too_big, -left - 1);
-		ok_dialog(cbdata->shell_w, buf);
+		long int lines = -left -1;
+		if(lines != 1) {
+			char buf[200];
+			sprintf(buf, line_no_too_big, lines);
+			ok_dialog(cbdata->shell_w, buf);
+		} else {
+			ok_dialog(cbdata->shell_w, line_no_too_big1);
+		}
 	} else {
 		XmTextSetTopCharacter(cbdata->text_w, left);
 		XtVaGetValues(cbdata->text_w, XmNrows, &nrows, NULL);
