@@ -13,8 +13,8 @@
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
 \TPPkeywords{}
-\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
-%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+\TPPauthors{R.D.~Arthan & WIN01 \\ K.~Blackburn & WIN01}
 \TPPauthorisation{R.D.Arthan & FST Team Leader}
 \TPPabstract{This document gives the module tests for the 
 first group of tactics and tacticals in ICL HOL.}
@@ -48,19 +48,25 @@ first group of tactics and tacticals in ICL HOL.}
 First version.
 \item [Issue 1.3]
 Tidying.
+\item [Issue 1.4]
+Adding new tests.
 \end{description}
 \subsection{Changes Forecast}
-None.
+Completion of coverage.
 \section{GENERAL}
 \subsection{Scope}
 This document contains the module tests for the material
 whose detailed design is given in in \cite{DS/FMU/IED/DTD009}.
 \subsection{Introduction}
-\subsubsection{Purpose and Background}
-
+We are pretty cursory in the following, doing little more than just demonstrating
+the tactics presence and error message origin.
 \subsubsection{Dependencies}
-
+The tests depend upon \cite{DS/FMU/IED/IMP028} and \cite{DS/FMU/IED/IMP013}.
+In addition, testing by the subgoal package (section \ref{subgoalpackage})
+depends on \cite{DS/FMU/IED/IMP030}.
 \subsubsection{Deficiencies}
+The testing could be more rigorous.
+The coverage is incomplete, even at the given level of rigour.
 \section{TEST CASES}
 \begin{description}
 \item[Group 1]
@@ -70,11 +76,13 @@ This checks the trivial tactics.
 =SML
 open_theory"misc";
 new_theory"tst009";
-open Tactics2;
+usefile "dtd013";
+usefile "imp013";
 init_mt_results();
+set_flag("subgoal_package_quiet",true);
 =TEX
-\section{TEST CODE AND DATA}
-\section{Group 1}
+\section{TESTS}
+\subsection{Testing by $tac\_proof$}
 =SML
 val th1 = tac_proof( ([], ªTº), t_tac );
 
@@ -91,10 +99,11 @@ val th6 = tac_proof( ([], ªåF:BOOLº),
 
 val th7 = tac_proof( ([], ªåF:BOOLº),
 	C_CONTR_T asm_tac THEN POP_ASM_T (accept_tac o å_å_elim) );
-
+=IGN
+Don't work, don't understand it:
 val th8 = tac_proof( ([], ªåFº),
 	å_T (fn th => asm_tac th THEN accept_tac(asm_ruleªFº)) );
-
+=TEX
 val th9 = tac_proof( ([ªFº, ªåFº], ªA:BOOLº),
 	å_elim_tac ªFº THEN
 		(accept_tac(asm_ruleªFº) ORELSE accept_tac(asm_ruleªåFº))  );
@@ -109,7 +118,6 @@ val th11 = tac_proof( ([], ªT Å Fº),
 val th12 = tac_proof( ([], ªF Å Tº),
 	Å_right_tac THEN t_tac  );
 =TEX
-Tests for other Å tactics deferred)
 =SML
 val th13 = tac_proof( ([], ªA ä Aº),
 	ä_T accept_tac  );
@@ -118,18 +126,353 @@ val th14 = tac_proof( ([], ªif a then a else åaº),
 	if_tac THEN POP_ASM_T accept_tac  );
 
 val th15 = tac_proof( ([], ªÉx:'aéÑy:'aéx = yº),
-	simple_strip_tac THEN simple_Ñ_tac ªxº THEN accept_tac(refl_conv ªxº));
+	strip_tac THEN simple_Ñ_tac ªxº THEN accept_tac(refl_conv ªxº));
 
 val th16 = tac_proof( ([], ªÉx:'aéÑ%down%1y:'aéx = yº),
-	simple_strip_tac THEN simple_Ñ%down%1_tac ªxº
+	strip_tac THEN simple_Ñ%down%1_tac ªxº
 	THEN_LIST
 		[accept_tac(refl_conv ªxº),
 		simple_É_tac THEN ä_T (accept_tac o eq_sym_rule)]);
-=IGN
+=TEX
+\subsection{Testing Using Subgoal Package}
+\label{subgoalpackage}
+The following functions apply a tactic to a selected goal
+and returns the resulting top goal. 
+This of course doesn't fully test tactics that return multiple
+goals.
+The functions differ in that $tac\_res1$ inputs and outputs
+both assumptions and conclusion, while $tac\_res$
+just assumes an empty assumption list.
+=SML
+fun ‚tac_res· tac goal = (push_goal([],goal);
+		a tac;
+		let val (asms,gl) = top_goal()
+		in
+			(drop_main_goal();
+			gl)
+		end);
+fun ‚tac_res1· tac (asms, goal) = (
+		push_goal(asms,goal);
+		a tac;
+		let val (asms,gl) = top_goal()
+		in
+			(drop_main_goal();
+			(asms,gl))
+		end);
+=TEX
+This function tests that a tactic proves a goal:
+=SML
+fun ‚tac_solve· tac (asms, goal) = (
+	dest_thm (tac_proof ((asms,goal),tac))
+	=
+	(asms, goal)
+);
+=TEX
+This function tests that a tactic fails on a goal:
+=SML
+fun ‚tac_fail· tac (asms, goal) = (
+	push_goal(asms,goal);
+	a tac
+	handle complaint =>
+	(drop_main_goal();
+	reraise complaint (area_of complaint))
+);
+=TEX
+=SML
 
+=TEX
+We use the initial stripping context:
+=SML
+val _ = push_proof_context einitial_strip_proof_context;
+=TEX
 
-\printindex
+\subsection{Equational Contexts}
+=SML
+store_mt_results mt_run [("thm_for_eqn_cxt",
+	(Combinators.I ** (fn f => snd(dest_thm (f ªyº))))
+		o thm_for_eqn_cxt,
+	all_É_intro (refl_conv ªxº),
+	(ªxº,ªy = yº))];
+store_mt_results mt_run_fail [("thm_for_eqn_cxt 7095",
+	thm_for_eqn_cxt,
+	t_thm,
+	gen_fail_msg "thm_for_eqn_cxt" 7095 ["Ö T"])];
+=TEX
+=SML
+let
+	val thm = tac_proof(([],ªÉ x é (x Ä x) = xº),
+		REPEAT strip_tac);
+in
+store_mt_results mt_run [("eqn_cxt_conv",
+	dest_thm o eqn_cxt_conv [thm_for_eqn_cxt thm],
+	ªy Ä yº,
+	([],ªy Ä y Ç yº))]
+end;
+store_mt_results mt_run_fail [("eqn_cxt_conv 28142",
+	eqn_cxt_conv [],
+	ªyº,
+	gen_fail_msg "eqn_cxt_conv" 28142 ["ªyº"])];
+=TEX
+\subsection{Stripping Tactics and Tacticals}
+We don't test much of the moving in of negations, as
+the tests for $simple\_å\_in\_conv$ may be considered adequate.
+=SML
+store_mt_results mt_run [
+	("strip_tac 1",
+	tac_res strip_tac,
+	ªÉ x é x Ä yº,
+	ªx Ä yº),
+	("strip_tac 2",
+	tac_res strip_tac,
+	ªa Ä bº,
+	ªa : BOOLº),
+	("strip_tac 3",
+	tac_res strip_tac,
+	ªa Å å bº,
+	ªb ä aº),
+	("strip_tac 4",
+	tac_res strip_tac,
+	ªå a Å bº,
+	ªa ä bº),
+	("strip_tac 5",
+	tac_res strip_tac,
+	ªa Å bº,
+	ªå a ä bº),
+	("strip_tac 6",
+	tac_res strip_tac,
+	ªa Ç bº,
+	ª(a ä b) Ä (b ä a)º),
+	("strip_tac 7",
+	tac_res strip_tac,
+	ªif a then (b:BOOL) else cº,
+	ª(a ä b) Ä (å a ä c)º),
+	("strip_tac 8",
+	tac_res strip_tac,
+	ªå (a Å b)º,
+	ªå a Ä å bº)];
+store_mt_results mt_run [
+	("strip_tac a1",
+	tac_res1 strip_tac,
+	([],ªa ä bº),
+	([ªa:BOOLº],ªb:BOOLº)),
+	("strip_tac a2",
+	tac_res1 strip_tac,
+	([ªa:BOOLº],ªa ä bº),
+	([ªa:BOOLº],ªb:BOOLº)),
+	("strip_tac a3",
+	tac_res1 strip_tac,
+	([],ª(a Ä b) ä cº),
+	([ªb:BOOLº,ªa:BOOLº],ªc:BOOLº)),
+	("strip_tac a4",
+	tac_res1 strip_tac,
+	([],ª(a Å b) ä cº),
+	([ªa:BOOLº],ªc:BOOLº)),
+	("strip_tac a5",
+	tac_res1 strip_tac,
+	([],ª(Ñ x é f x) ä aº),
+	([ªf x :BOOLº],ªa:BOOLº)),
+	("strip_tac a6",
+	tac_res1 strip_tac,
+	([],ª(a ä b) ä cº),
+	([ªå aº],ªc:BOOLº)),
+	("strip_tac a7",
+	tac_res1 strip_tac,
+	([],ª(a Ç b) ä cº),
+	([ªå bº,ªå aº],ªc : BOOLº)),
+	("strip_tac a8",
+	tac_res1 strip_tac,
+	([],ª(if a then b else c) ä dº),
+	([ªc:BOOLº,ªå aº],ªd:BOOLº)),
+	("strip_tac a9",
+	tac_res1 strip_tac,
+	([],ª(å( a Å b)) ä cº),
+	([ªå bº,ªå aº],ªc : BOOLº)),
+	("strip_tac a10",
+	tac_res1 strip_tac,
+	([],ª(Ñ%down%1 x é f x) ä aº),
+	([ªÉ x':'a é f x' ä x' = xº,ªf x:BOOLº],ªa:BOOLº))
+];
+store_mt_results mt_run [
+	("strip_tac tp1",
+	tac_solve strip_tac,
+	([],ªTº),
+	true),
+	("strip_tac tp2",
+	tac_solve strip_tac,
+	([ªa:BOOLº,ªb:BOOLº],ªa:BOOLº),
+	true),
+	("strip_tac tp3",
+	tac_solve strip_tac,
+	([],ª(a Ä b) ä aº),
+	true),
+	("strip_tac tp4",
+	tac_solve strip_tac,
+	([ªå aº],ª(a Ä b) ä cº),
+	true),
+	("strip_tac tp4",
+	tac_solve strip_tac,
+	([ªa:BOOLº],ªå (a Å b) ä cº),
+	true)
+];
+store_mt_results mt_run_fail [("strip_tac",
+	tac_fail strip_tac,
+	([],ªf x : BOOLº),
+	gen_fail_msg "strip_tac" 28003 ["ªf xº"])];
+=TEX
+$strip\_asm\_tac$ has been tested in testing $strip\_tac$,
+but for the record:
+=SML
+store_mt_results mt_run [("strip_asm_tac 1",
+	tac_res1 (strip_asm_tac (asm_rule ªa Ä bº)),
+	([ªa Ä bº],ªc:BOOLº),
+	([ªb:BOOLº,ªa:BOOLº,ªa Ä bº],ªc:BOOLº)),
+	("strip_asm_tac 2",
+	tac_res1 (strip_asm_tac t_thm),
+	([],ªc:BOOLº),
+	([],ªc:BOOLº))];
+=TEX
+$check\_asm\_tac$ has been tested in testing $strip\_tac$,
+but for the record:
+=SML
+store_mt_results mt_run [("check_asm_tac 1",
+	tac_res1 (check_asm_tac (Ä_left_elim(asm_rule ªa Ä bº))),
+	([ªa Ä bº],ªc:BOOLº),
+	([ªa:BOOLº,ªa Ä bº],ªc:BOOLº)),
+	("check_asm_tac 2",
+	tac_res1 (check_asm_tac t_thm),
+	([],ªc:BOOLº),
+	([],ªc:BOOLº))];
+=TEX
+$STRIP\_THM\_THEN$ has been tested in testing $strip\_tac$,
+but for the record:
+=SML
+store_mt_results mt_run [("STRIP_THM_THEN",
+	tac_res1 ((STRIP_THM_THEN strip_asm_tac) (asm_rule ªa Ä bº)),
+	([ªa Ä bº],ªc:BOOLº),
+	([ªb:BOOLº,ªa:BOOLº,ªa Ä bº],ªc:BOOLº))];
+store_mt_results mt_run_fail [("STRIP_THM_THEN 28003",
+	STRIP_THM_THEN strip_asm_tac,
+	t_thm,
+	gen_fail_msg "STRIP_THM_THEN" 28003 ["Ö T"])];
+=TEX
+$STRIP\_GOAL\_T$ has been tested in testing $strip\_tac$,
+but for the record:
+=SML
+store_mt_results mt_run [("STRIP_GOAL_T",
+	tac_res1 (STRIP_GOAL_T asm_tac),
+	([],ª(a Ä b) ä cº),
+	([ªa Ä bº],ªc : BOOLº))];
+store_mt_results mt_run_fail [("STRIP_GOAL_T 28003",
+	tac_fail (STRIP_GOAL_T asm_tac),
+	([],ªf x: BOOLº),
+	gen_fail_msg "STRIP_GOAL_T" 28003 ["ªf xº"])];
+=TEX
+=SML
+store_mt_results mt_run [
+	("goal_in_asms_tac",
+	tac_solve goal_in_asms_tac,
+	([ªa:BOOLº,ªb:BOOLº,ªc:BOOLº],ªb:BOOLº),
+	true)
+];
+store_mt_results mt_run_fail [
+	("goal_in_asms_tac 28002 a",
+	tac_fail goal_in_asms_tac,
+	([],ªa:BOOLº),
+	gen_fail_msg "goal_in_asms_tac" 28002 []),
+	("goal_in_asms_tac 28002 b",
+	tac_fail goal_in_asms_tac,
+	([ªb:BOOLº,ªc:BOOLº],ªa:BOOLº),
+	gen_fail_msg "goal_in_asms_tac" 28002 [])
+	];
+=TEX
+\subsection{Concerning $T$}
+=SML
+store_mt_results mt_run [
+	("t_tac",
+	tac_solve t_tac,
+	([ªa:BOOLº,ªb:BOOLº,ªc:BOOLº],ªTº),
+	true)
+];
+store_mt_results mt_run_fail [
+	("t_tac 28011",
+	tac_fail t_tac,
+	([],ªa:BOOLº),
+	gen_fail_msg "t_tac" 28011 [])];
+=TEX
+=SML
+store_mt_results mt_run [("Ç_t_tac 1",
+	tac_res Ç_t_tac,
+	ªT Ç aº,
+	ªa:BOOLº),
+	("Ç_t_tac 2",
+	tac_res Ç_t_tac,
+	ªa Ç Tº,
+	ªa:BOOLº)];
+store_mt_results mt_run_fail [
+	("Ç_t_tac 28012",
+	tac_fail Ç_t_tac,
+	([],ªa:BOOLº),
+	gen_fail_msg "Ç_t_tac" 28012 [])];
+=TEX
+\subsection{Concerning $F$}
+=SML
+store_mt_results mt_run [("contr_tac",
+	tac_res1 contr_tac,
+	([ªa:BOOLº,ªå a:BOOLº],ªc:BOOLº),
+	([ªa:BOOLº,ªå a:BOOLº],ªF:BOOLº))];
+store_mt_results mt_run [("f_thm_tac",
+	tac_res1 (f_thm_tac (asm_rule mk_f)),
+	([],ªa:BOOLº),
+	([],ªF:BOOLº))];
+store_mt_results mt_run_fail [("f_thm_tac 28021",
+	tac_fail (f_thm_tac t_thm),
+	([],ªa:BOOLº),
+	gen_fail_msg "f_thm_tac" 28021 ["Ö T"])];
+store_mt_results mt_run [("c_contr_tac",
+	tac_res1 c_contr_tac ,
+	([],ªa Å bº),
+	([ªå bº,ªå aº],ªFº))];
+store_mt_results mt_run [("C_CONTR_T",
+	tac_res1 (C_CONTR_T asm_tac) ,
+	([],ªa Å bº),
+	([ªå(a Å b)º],ªFº))];
+=TEX
+\subsection{END OF TESTS}
+=SML
+set_flag("subgoal_package_quiet",false);
+diag_string(summarize_mt_results ());
+=TEX
+=TEX
 \end{document}
+=IGN
+***********COPY**************
+store_mt_results mt_run [("",
+	tac_res ,
+	ªº,
+	ªº)];
+store_mt_results mt_run [("",
+	tac_res1 ,
+	([ªº],ªº),
+	([ªº],ªº))];
+store_mt_results mt_run [
+	("",
+	tac_solve ,
+	([],ªº),
+	true),
+];
+store_mt_results mt_run_fail [("",
+	tac_fail ,
+	([],ªº),
+	gen_fail_msg ""  [])];
+
+store_mt_results mt_run [("",
+	,
+	,
+	)];
+store_mt_results mt_run_fail [("",
+	,
+	,
+	gen_fail_msg ""  [])];
 
 set_goal([], ªa Ä bº);
 2 subgoals
