@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date$ $Revision$ $RCSfile$ 
+ * $Id$ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -87,7 +87,7 @@ Widget w;
 {
 	XmString lab;
 	char buf[2];
-	NAT i, n_chars, x, y, twi, fbase;
+	NAT i, x, y, twi, fbase;
 	NAT cbdata;
 	Widget shell, form, button;
 	void templates_cb();
@@ -117,8 +117,7 @@ Widget w;
 			template_table[i].bitmap_file);
 	}
 
-	n_chars = template_table_size;
-	fbase = 1 + ((n_chars-1) / 2);
+	fbase = /* 1 + ((template_table_size-1) / 2)*/ (template_table_size + 1) & ~0x01;
 
 	shell = XtVaCreatePopupShell("xpp-Templates",
 		xmDialogShellWidgetClass, w,
@@ -135,12 +134,12 @@ Widget w;
 
 	buf[1] = '\0';
 
-	for(i = 0; i < n_chars; ++i) {
+	for(i = 0; i < template_table_size; ++i) {
 
 		buf[0] = templates[i];
 		lab = XmStringCreateSimple(template_table[i].bitmap_file);
 		x = (fbase / 2) * (i % 2);
-		y = i / 2;
+		y = 2 * (i / 2);
 		button = XtVaCreateManagedWidget("button",
 			xmPushButtonGadgetClass, form,
 			XmNlabelString, lab, 
@@ -151,7 +150,7 @@ Widget w;
 			XmNtopAttachment,	XmATTACH_POSITION,
 			XmNtopPosition,	y,
 			XmNbottomAttachment,	XmATTACH_POSITION,
-			XmNbottomPosition,	y + 1,
+			XmNbottomPosition,	y + 2,
 			NULL);
 		copy_font_list(button, w);
 		XmStringFree(lab);
