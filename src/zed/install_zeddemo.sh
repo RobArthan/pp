@@ -1,7 +1,7 @@
 #! /bin/sh
 #
 # File: install_zeddemo
-# Derived from: $Header: /home/rda/zed/RCS/install_zeddemo.sh,v 1.1 2000/08/09 12:05:01 gill Exp rda $
+# Derived from: $Header: /home/rda/zed/RCS/install_zeddemo.sh,v 1.2 2000/09/11 14:01:19 rda Rel rda $
 #
 # Running this script sets up example database in the directory ./bin
 #
@@ -32,9 +32,8 @@ mv zed_course_work.doc zed_course_solutions.doc $doc
 sieve sml < wrk051.doc
 make -f wrk051.mkf all_zed
 
-eval `.arch-n-opsys`
 
-mv *.$HEAP_SUFFIX $bin
+mv example_zed.* $bin
 
 # Tidy up neatly, deleting all unnecessary files
 if test "x$deletebuilddir" = "xy"
