@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.24 2004/08/07 15:27:58 rda Exp rda $ 
+ * $Id: palette.c,v 2.25 2004/08/21 10:26:06 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -111,6 +111,9 @@ static void get_pretty_chars(PaletteConfig *palette_config)
 		ch = palette[i];
 		switch(ch) {
 			case '\n':
+				palette_config->pretty_chars
+					[palette_config->num_rows]
+						[col] = '\0';
 				if(col > 0) {
 					palette_config->num_rows += 1;
 				}
@@ -120,6 +123,9 @@ static void get_pretty_chars(PaletteConfig *palette_config)
 				col = 0;
 				break;
 			case '\0':
+				palette_config->pretty_chars
+					[palette_config->num_rows]
+						[col] = '\0';
 				if(col > 0) {
 					palette_config->num_rows += 1;
 				}
