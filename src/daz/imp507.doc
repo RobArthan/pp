@@ -97,7 +97,7 @@ The following functions are used to identify names for web clauses and are used 
 =SML
 fun €k_slot_name› ({content, label} : K_SLOT) : string = "kslot"^label;
 fun €package_declaration_name›
-	({name, visible_decs, private_decs} : DECLARATION PACKAGE_DECLARATION)
+	({name, ...} : DECLARATION PACKAGE_DECLARATION)
 	: string = (
 	name ^ "spec"
 );
@@ -140,16 +140,17 @@ fun €compilation_unit_name› (cu : COMPILATION_UNIT) : string = (
 );
 
 fun €context_compilation_unit_name›
-	({context, comp_unit} : CONTEXT_COMPILATION_UNIT) = (
+	({comp_unit, ...} : CONTEXT_COMPILATION_UNIT) = (
 	compilation_unit_name comp_unit
 );
 fun €kslot_compilation_unit_name› (kcu : KSLOT_COMPILATION_UNIT) : string = (
 	case kcu of
 		KCUKSlot ks => k_slot_name ks
 	|	KCUUnit ccu => context_compilation_unit_name ccu
+	|	KCUPragma ccu => "<pragma>"
 );
 =TEX
-\subsection{Making Z Precicates}
+\subsection{Making Z Predicates}
 In some places, we need to form the HOL term corresponding to a Z predicate.
 This may require coercion of a schema into a predicate:
 =SML
@@ -3968,7 +3969,7 @@ fun €update_replacement_env› ((label, repl) : LABEL * REPLACEMENT) : unit = (
 			|	Nil => 507003;
 		val side_effect =
 				if	msg_no <> 0
-				then	warn "update_replacement_env" 507003
+				then	warn "update_replacement_env" msg_no
 					[fn () => label]
 				else	();
 	in	repl_env := s_enter label repl (!repl_env)
@@ -4062,6 +4063,8 @@ and €do_stmt› (y as STNull : STMT) = (
 ) | do_stmt (y as (STKSlot {label, content}) : STMT) = (
 	new_k_slot(label, RSStatement, get_current_theory_name());
 	k_slot_stmt label
+) | do_stmt (y as (STPragma _) : STMT) = (
+) | do_stmt (y as (STAnnotation _) : STMT) = (
 );
 =TEX
 The following reflects the SID functions for $statement$ (see also $do\_stmt$).
@@ -4110,7 +4113,10 @@ fun €do_declaration› (y as (DDeclarationKSlot (
 			update_envs_var v;
 			add_var_env v
 	) |	BDDeferredConstDecl _ => (comment "do_declaration" 507021 []
-	) |	BDPrivateTypeDecl _ => ()
+	) |	BDPrivateTypeDecl _ => (
+	) |	BDPragma _ => (
+	) |	BDAnnotation _ => (
+	)
 ) | do_declaration (y as (DRepresentationClause x) : DECLARATION) = (
 	comment "do_declaration" 507017 []
 ) | do_declaration (y as (DProperBody x) : DECLARATION) = (
@@ -4129,6 +4135,10 @@ fun €do_declaration› (y as (DDeclarationKSlot (
 	do_function_stub x
 ) | do_declaration (y as (DPackageStub x) : DECLARATION) = (
 	do_package_stub x
+) | do_declaration (y as (DExternalProcedureStub x) : DECLARATION) = (
+	do_external_procedure_stub x
+) | do_declaration (y as (DExternalFunctionStub x) : DECLARATION) = (
+	do_external_function_stub x
 ) | do_declaration (y as (DAuxiliary x) : DECLARATION) = (
 	aux_var x
 ) | do_declaration (y as (DUsing (x as {basic_decls, ...})) : DECLARATION) = (
@@ -4143,7 +4153,7 @@ The following reflects the SID functions for $procedure\_specification$:
 =SML
 *)
 and €do_procedure_spec› (
-	{name, formal_part, spec as Value sp} : PROCEDURE_SPECIFICATION) = (
+	{name, formal_part, spec as Value sp, ...} : PROCEDURE_SPECIFICATION) = (
 	let	val formal_proc : FORMAL_PROC =
 		{name=name, spec=sp, formal_ids = map mk_param_spec formal_part};
 	in	subunit_form name;
@@ -4155,7 +4165,7 @@ and €do_procedure_spec› (
 		curr_form_proc formal_proc
 	end
 ) | €do_procedure_spec› (
-	{name, formal_part, spec as Nil} : PROCEDURE_SPECIFICATION) = (
+	{name, formal_part, spec as Nil, ...} : PROCEDURE_SPECIFICATION) = (
 	subunit_inf name;
 	new_scope_proc_inf name;
 	stub();
@@ -4167,7 +4177,7 @@ The following reflects the SID functions for $function\_specification$:
 =SML
 *)
 and €do_function_spec› (
-	{designator, return, formal_part, spec as Value sp}
+	{designator, return, formal_part, spec as Value sp, ...}
 			: FUNCTION_SPECIFICATION) = (
 	let	val informal_fun : INFORMAL_FUN =
 		{name=designator,
@@ -4184,7 +4194,7 @@ and €do_function_spec› (
 		curr_form_fun formal_fun
 	end
 ) | €do_function_spec› (
-	{designator, return, formal_part, spec as Nil}
+	{designator, return, formal_part, spec as Nil, ...}
 			: FUNCTION_SPECIFICATION) = (
 	let	val informal_fun : INFORMAL_FUN =
 		{name=designator,
@@ -4203,7 +4213,7 @@ The following reflects the SID functions for $package\_specification$:
 Note that the package specification and package body theories are created and populated here rather than during $new\_scope\_pack\_body$ and $new\_scope\_with$.
 =SML
 *)
-and €do_package_spec› ({name, visible_decs, private_decs}
+and €do_package_spec› ({name, visible_decs, private_decs, ...}
 			: DECLARATION PACKAGE_DECLARATION) = (
 	new_scope_pack_spec name;
 	map do_declaration visible_decs;
@@ -4231,8 +4241,24 @@ and €do_function_stub› (
 	end_stub()
 )
 and €do_package_stub› (
-	name : ID) = (
+	name : ID, _ : ANNOTATION OPT) = (
 	comment "do_package_stub" 507018 []
+)
+(*
+=TEX
+The following reflects the agreed treatment of external procedure and function ``stubs''.
+=SML
+*)
+and €do_external_procedure_stub› (
+	proc_spec : PROCEDURE_DECLARATION) = (
+	do_procedure_spec proc_spec;
+	add_proc_env();
+	end_scope()
+)
+and €do_external_function_stub› (
+	fun_spec : FUNCTION_DECLARATION) = (
+	do_function_spec fun_spec;
+	end_scope()
 )
 (*
 =TEX
@@ -4263,7 +4289,7 @@ and €do_proper_body› (y as (PBProcedure
 	vcs_body statement;
 	end_scope()
 ) | do_proper_body (y as (PBPackage 
-	{name, decls, statement}) : PROPER_BODY) = (
+	{name, decls, statement, ...}) : PROPER_BODY) = (
 	new_scope_pack_body name;
 	map do_declaration decls;
 	if any decls (fn d => case d of DUsing _ => true |_ => false)
@@ -4297,7 +4323,7 @@ fun €with_clause_check› (w::context) = (
 ) | with_clause_check _ = ();
 
 fun €do_context_compilation_unit›
-	({context, comp_unit} : CONTEXT_COMPILATION_UNIT) : unit = (
+	({context, comp_unit, ...} : CONTEXT_COMPILATION_UNIT) : unit = (
 	with_clause_check context;
 	map new_scope_with context;
 	do_compilation_unit comp_unit;
@@ -4314,6 +4340,8 @@ fun €do_kslot_compilation_unit›
 	(y as (KCUUnit x) : KSLOT_COMPILATION_UNIT) = (
 	set_bottom_block_name (kslot_compilation_unit_name y);
 	do_context_compilation_unit x
+) | do_kslot_compilation_unit
+	(KCUPragma _ : KSLOT_COMPILATION_UNIT) = (
 );
 =TEX
 The following reflects the SID functions for the production $web\_clause$.
@@ -4385,6 +4413,10 @@ in	open_label_theory label;
 	do_statement statement;
 	end_scope_stmt_label();
 	lazy_open_theory current_theory
+end
+) | do_web_clause (y as (WCReplacedByArbitraryAda x) : WEB_CLAUSE) = (
+let	val {label=label, ...} = x;
+in	update_replacement_env(label, ReplaceArbitrary x)
 end
 );
 =TEX
