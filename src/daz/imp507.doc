@@ -56,7 +56,7 @@ This document contains the implementation for the SPARK paragraph processor.}
 \tableofcontents
 \subsection{Document Cross References}
 \bibliographystyle{fmu}
-\bibliography{fmu}
+\bibliography{fmu,daz,hatdocs}
 
 \subsection{Changes History}  % to get section number `0.3'
 \begin{description}
@@ -81,7 +81,7 @@ Because the implementations of the component update functions are rather long-wi
 \subsection{Known Deficencies}
 \subsection{Possible Enhancements}
 =TEX
-\section{PREAMBLE AND AUXILIARIES}\ref{PREAMBLE}
+\section{PREAMBLE AND AUXILIARIES}\label{PREAMBLE}
 =SML
 structure €CNZGenerator› (* : CNZGenerator *) = struct
 open CNTypes CNTypes1 CNTypes2 CNBasicDeclsAndExprs ZParagraphs
@@ -778,7 +778,7 @@ val €subunit_env0› : SUBUNIT_ENV = initial_s_dict;
 val €dec_env0› : DEC_ENV = initial_s_dict;
 val €spec_env0› : SPEC_ENV = initial_s_dict;
 =TEX
-$empty\_block$ is the initial value for a block, as loosely specified in \cite{ISS/HAT/DTD513}.
+$empty\_block$ is the initial value for a block, as loosely specified in \cite{ISS/HAT/DAZ/DTD513}.
 Fields which are not specified there are given place-holder values.
 All the flags are set false, for convenience in defining $env0$.
 It is convenient to define some shared dummy values first:
@@ -835,7 +835,7 @@ Now we can define $env0$, exploiting the fact that all the flags are set to $fal
 =SML
 val €env0› : ENV = [empty_block];
 =TEX
-We also require initial values for the SPARK program and replacement environments discussed in \cite{ISS/HAT/DTD513}
+We also require initial values for the SPARK program and replacement environments discussed in \cite{ISS/HAT/DAZ/DTD513}
 =SML
 val €repl_env0› : REPL_ENV = initial_s_dict;
 val €spark_prog0› : SPARK_PROG = [];
@@ -1392,7 +1392,7 @@ fun €remove_log_con_env› (() : unit) : unit = (
 \section{LOOPS}\label{LOOPS}
 \subsection{The SID function new\_scope\_loop}
 =SML
-fun €new_scope_loop› (ident : ID) : unit = (
+fun €new_scope_loop› (() : unit) : unit = (
 	let	val block1 = block 1;
 		val {declab as {flags as 
 			{fun_flag, formal_body_flag, speclabel_flag, ...},
@@ -1473,8 +1473,7 @@ fun €subunit_form_inf_aux› (ident : ID, is_inf : bool) : unit = (
 			error "subunit_form_inf_aux" 507011 [fn()=>bn_id];
 		val in_scope' = #in_scope subunit1;
 		val block' = block_in_scope(block, in_scope');
-	in	open_theory bn_id;
-		blocks := block' :: tl (!blocks);
+	in	blocks := block' :: tl (!blocks);
 		if	is_inf
 		then	subunit_env := s_delete bn_id (!subunit_env)
 		else	()
@@ -2276,7 +2275,7 @@ fun €new_scope_with› (ident : ID) : unit = (
 	diag_line "***** NOT YET IMPLEMENTED ---- TBS ****"
 );
 =TEX
-\subsection{The SID function end_scope_comp_unit}
+\subsection{The SID function end\_scope\_comp\_unit}
 =SML
 fun €end_scope_comp_unit› ((): unit) : unit = (
 	blocks := [block 1]
@@ -2347,7 +2346,8 @@ fun €new_scope_dec_replace› ({label, decls} : REPLACED_BY_DECL) : unit = (
 \subsection{THE SID function update\_envs\_remove\_declabel}
 In the following, the local function, $do1\_subunit$ does the work specified in the Z spec for one unit-name-subunit-name pair.
 =SML
-fun €update_subunit_env_remove_declabel› ({label, decls} : REPLACED_BY_DECL) : unit = (
+fun €update_subunit_env_remove_declabel›
+		({label, decls} : REPLACED_BY_DECL) : unit = (
 	let	fun do1_subunit
 			((id1_id2,
 				s as {in_scope as {dec_labels, ...}, ...})
@@ -2449,24 +2449,24 @@ fun €end_scope_speclabel› (():unit) : unit = (
 val €new_scope_stmt_label›: LABEL -> unit = new_scope_speclabel;
 val €end_scope_stmt_label›: unit -> unit = end_scope_speclabel;
 =TEX
-\subsection{Replacement Environment Manipulation}
+\section{SPARK PROGRAM ENVIRONMENT}
+\subsection{The SID Function update\_replacement\_env}
 TBS - the error reporting here could usefully be made more sophisticated.
 (By checking that $repl$ and the replacement environment entry are of the same sort.)
 =SML
 fun €update_replacement_env› ((label, repl) : LABEL * REPLACEMENT) : unit = (
 	let	val lab = string_of_label label;
-		val (msg_no, theory_name) =
+		val msg_no =
 			case s_lookup lab (!repl_env) of
-				Value(UnReplaced (_, name)) => (0, name)
-			|	Value _ => (507004, "")
-			|	Nil => (507003, "");
+				Value(UnReplaced (_, name)) => 0
+			|	Value _ => 507004
+			|	Nil => 507003;
 		val side_effect =
 				if	msg_no <> 0
 				then	warn "update_replacement_env" 507003
 					[fn () => lab]
 				else	();
-	in	repl_env := s_enter lab repl (!repl_env);
-		open_theory theory_name
+	in	repl_env := s_enter lab repl (!repl_env)
 	end
 );
 =TEX
@@ -2493,34 +2493,85 @@ fun €classify_label› (lab : string) : REPL_SORT OPT = (
 );
 =TEX
 =SML
-fun €do_basic_decl› (y as (x) : BASIC_DECL) = (
+fun €get_replacement› (lab : string) : REPLACEMENT OPT = (
+	s_lookup lab (!repl_env)
 );
-fun €do_case_choice› (y as (CCCaseExp x) : CASE_CHOICE) = (
-) | do_case_choice (y as (CCCaseRange x) : CASE_CHOICE) = (
+=TEX
+For various reasons, the command for opening a theory in {\Product} does some work even if the theory being opened is already current.
+Since in CN processing the theory may change a lot, we use a more optimal approach here:
+=SML
+fun €lazy_open_theory› (thy : string) : unit = (
+	if	thy = "-" orelse thy = get_current_theory_name()
+	then	()
+	else	open_theory thy
 );
-fun €do_loop_direction› (y as LDForwards : LOOP_DIRECTION) = (
-) | do_loop_direction (y as LDReverse : LOOP_DIRECTION) = (
+=TEX
+=SML
+fun €open_label_theory› (lab : string) : unit = (
+	case s_lookup lab (!repl_env) of
+		Value(UnReplaced(_, thy)) => lazy_open_theory thy
+	|	_ => ()
 );
-fun €do_stmt› (y as STNull : STMT) = (
+=TEX
+The abstract syntax separates two forms of for-loop which are processed identically here.
+The following function does the common processing.
+=SML
+fun €do_for_loop› (i : ID, stmt : STMT, dir : LOOP_DIRECTION) = (
+	if	dir = LDForwards
+	then	(new_scope_loop();
+		for_param i;
+		do_stmt stmt;
+		end_scope())
+	else	(comment "do_stmt" 507012 [];
+		do_stmt stmt)
+)
+(*
+=TEX
+The following reflects the SID functions for $statement$ (see also $do\_statement$), $loop\_statement$ and $loop\_parameter\_specification$.
+
+To have the same order of invocation of the SID functions for for- and while- loop statements as in the specification, it is necessary to ``expand in line'' the processing for their constituent loops.
+=SML
+*)
+and €do_stmt› (y as STNull : STMT) = (
 ) | do_stmt (y as STImplicitNull : STMT) = (
 ) | do_stmt (y as (STAssign x) : STMT) = (
 ) | do_stmt (y as (STSpecNoIvars x) : STMT) = (
-) | do_stmt (y as (STSemicolon x) : STMT) = (
-) | do_stmt (y as (STIfThenElse x) : STMT) = (
-) | do_stmt (y as (STCase x) : STMT) = (
-) | do_stmt (y as (STLoop x) : STMT) = (
-) | do_stmt (y as (STNamedLoop x) : STMT) = (
-) | do_stmt (y as (STWhile x) : STMT) = (
-) | do_stmt (y as (STForStatic x) : STMT) = (
-) | do_stmt (y as (STForTmark x) : STMT) = (
+	new_k_slot(#label x, RSStatement, get_current_theory_name());
+	spec_stmt x
+) | do_stmt (y as (STSemicolon (x1, x2)) : STMT) = (
+	do_stmt x1;
+	do_stmt x2
+) | do_stmt (y as (STIfThenElse {p, q, ...}) : STMT) = (
+	do_stmt p;
+	do_stmt q
+) | do_stmt (y as (STCase {s, others, ...}) : STMT) = (
+	map (do_stmt o #p) s;
+	do_stmt others
+) | do_stmt (y as (STLoop {t, stmt}) : STMT) = (
+	new_scope_loop();
+	do_stmt stmt;
+	end_scope()
+) | do_stmt (y as (STNamedLoop {t, stmt, ...}) : STMT) = (
+	do_stmt (STLoop {t = t, stmt = stmt})
+) | do_stmt (y as (STWhile {loop as {t, stmt}, ...}) : STMT) = (
+	do_stmt (STLoop {t = t , stmt = stmt})
+) | do_stmt (y as (STForStatic {i, loop as {stmt, ...}, dir, ...}) : STMT) = (
+	do_for_loop(i, stmt, dir)
+) | do_stmt (y as (STForTmark {i, loop as {stmt, ...}, dir, ...}) : STMT) = (
+	do_for_loop(i, stmt, dir)
 ) | do_stmt (y as (STExitWhen x) : STMT) = (
 ) | do_stmt (y as STExit : STMT) = (
 ) | do_stmt (y as (STRet x) : STMT)  = (
 ) | do_stmt (y as (STProcNoIvars x) : STMT) = (
 ) | do_stmt (y as (STKSlot {label, content}) : STMT) = (
+	new_k_slot(label, RSStatement, get_current_theory_name());
 	k_slot_stmt label
 );
 =TEX
+The following reflects the SID functions for $statement$ (see also $do\_stmt$).
+Note that the parser is not expected to produce the $SSpecIvars$, $SForNonStatic$ or $SProcIvars$ alternatives, since it cannot carry out the necessary analysis of free variables.
+It uses the $STMT$ forms to carry the information on, since the $STATEMENT$ form is inadequately general.
+The $STATEMENT$ alternatives are produced where necessary in the VC generator.
 =SML
 fun €do_statement› (y as (SStmt x) : STATEMENT) = (
 	do_stmt x
@@ -2529,6 +2580,8 @@ fun €do_statement› (y as (SStmt x) : STATEMENT) = (
 ) | do_statement (y as (SForNonStatic x) : STATEMENT) = (
 	error "do_statement" 507019 []
 ) | do_statement (y as (SLogCon (log_con, stmt)) : STATEMENT) = (
+	new_k_slot(#label(#spec(log_con)),
+		RSStatement, get_current_theory_name());
 	add_log_con_env log_con;
 	spec_stmt (#spec log_con);
 	remove_log_con_env()
@@ -2539,11 +2592,22 @@ fun €do_statement› (y as (SStmt x) : STATEMENT) = (
 =SML
 fun €do_declaration› (y as (DDeclarationKSlot 
 	{label, content}) : DECLARATION) = (
+	new_k_slot(label, RSDeclaration, get_current_theory_name());
 	k_slot_dec label
 ) | do_declaration (y as (DRenamingDeclaration x) : DECLARATION) = (
 	comment "do_declaration" 507016 []
 ) | do_declaration (y as (DBasicDecl x) : DECLARATION) = (
-	do_basic_decl x
+	case x of
+		BDTypeDecl _ => (basic_declaration x
+	) |	BDSubtypeDecl _ => (basic_declaration x
+	) |	BDConstDecl _ => (basic_declaration x
+	) |	BDVarDecl v => (
+			var_pack_spec v;
+			update_envs_var v;
+			add_var_env v
+	) |	BDDeferredConstDecl _ => (comment "do_declaration" 507021 []
+	) |	BDPrivateTypeDecl _ => (comment "do_declaration" 507022 []
+	)
 ) | do_declaration (y as (DRepresentationClause x) : DECLARATION) = (
 	comment "do_declaration" 507017 []
 ) | do_declaration (y as (DProperBody x) : DECLARATION) = (
@@ -2557,7 +2621,9 @@ fun €do_declaration› (y as (DDeclarationKSlot
 ) | do_declaration (y as (DProcedureStub x) : DECLARATION) = (
 	do_procedure_stub x
 ) | do_declaration (y as (DFunctionStub x) : DECLARATION) = (
+	do_function_stub x
 ) | do_declaration (y as (DPackageStub x) : DECLARATION) = (
+	do_package_stub x
 )
 (*
 =TEX
@@ -2617,6 +2683,7 @@ and €do_function_spec› (
 )
 (*
 =TEX
+The following reflects the SID functions for $body\_stub$:
 =SML
 *)
 and €do_package_spec› (
@@ -2629,7 +2696,7 @@ and €do_package_spec› (
 )
 (*
 =TEX
-The following reflects the SID functions for $body\_stub$:
+The following reflects the SID functions for $package\_body$:
 =SML
 *)
 and €do_procedure_stub› (
@@ -2653,7 +2720,14 @@ and €do_package_stub› (
 )
 (*
 =TEX
-The following reflects the SID functions for $subprogram\_body$, $subprogram\_implementation$ and $package\_body$:
+The following reflects the SID functions for:
+
+\begin{tabular}{c}
+subprogram\_body\\
+subprogram\_implementation\\
+package\_body\\
+\end{tabular}
+
 =SML
 *)
 and €do_proper_body› (y as (PBProcedure 
@@ -2682,7 +2756,8 @@ and €do_proper_body› (y as (PBProcedure
 =TEX
 The following reflects the SID functions for $subunit$:
 =SML
-fun €do_compilation_unit› (y as (CUPackageDeclaration x) : COMPILATION_UNIT) : unit = (
+fun €do_compilation_unit›
+	(y as (CUPackageDeclaration x) : COMPILATION_UNIT) : unit = (
 	do_declaration (DPackageDeclaration x)
 ) | do_compilation_unit (y as (CUProperBody x) : COMPILATION_UNIT) = (
 	do_declaration (DProperBody x)
@@ -2719,52 +2794,58 @@ fun €do_web_clause› (y as (WCCompilation x) : WEB_CLAUSE) : unit = (
 ) | do_web_clause (y as (WCReplacedByCompilation x) : WEB_CLAUSE) = (
 let	val {label=label, comp=comp} = x;
 	val current_theory = get_current_theory_name ();
-in	update_replacement_env(label, ReplaceComp x);
+in	open_label_theory(string_of_label label);
+	update_replacement_env(label, ReplaceComp x);
 	map do_kslot_compilation_unit (#comp x);
-	open_theory current_theory
+	lazy_open_theory current_theory
 end
 ) | do_web_clause (y as (WCReplacedByPrivatePart x) : WEB_CLAUSE) = (
 let	val {label=label, private=private} = x;
 	val current_theory = get_current_theory_name ();
-in	update_replacement_env(label, ReplacePPart x);
+in	open_label_theory(string_of_label label);
+	update_replacement_env(label, ReplacePPart x);
 	map do_declaration (#private x);
-	open_theory current_theory
+	lazy_open_theory current_theory
 end
 ) | do_web_clause (y as (WCReplacedByVisiblePart x) : WEB_CLAUSE) = (
 let	val {label=label,visible=visible} = x;
 	val current_theory = get_current_theory_name ();
-in	update_replacement_env(label, ReplaceVPart x);
+in	open_label_theory(string_of_label label);
+	update_replacement_env(label, ReplaceVPart x);
 	map do_declaration (#visible x);
-	open_theory current_theory
+	lazy_open_theory current_theory
 end
 ) | do_web_clause (y as (WCReplacedByDecl x) : WEB_CLAUSE) = (
 let	val {label=label,decls=decls} = x;
 	val current_theory = get_current_theory_name ();
-in	update_replacement_env(label, ReplaceDecl x);
+in	open_label_theory(string_of_label label);
+	update_replacement_env(label, ReplaceDecl x);
 	new_scope_dec_replace x;
 	map do_declaration decls;
 	update_envs_remove_declabel x;
 	end_scope();
-	open_theory current_theory
+	lazy_open_theory current_theory
 end
 ) | do_web_clause (y as (WCRefinedBy x) : WEB_CLAUSE) = (
 let	val {label=label,statement=statement} = x;
 	val current_theory = get_current_theory_name ();
-in	update_replacement_env(label, ReplaceStat x);
+in	open_label_theory(string_of_label label);
+	update_replacement_env(label, ReplaceStat x);
 	new_scope_speclabel label;
 	do_statement statement;
 	vcs_speclabel x;
 	end_scope_speclabel();
-	open_theory current_theory
+	lazy_open_theory current_theory
 end
 ) | do_web_clause (y as (WCReplacedBy x) : WEB_CLAUSE) = (
 let	val {label=label,statement=statement} = x;
 	val current_theory = get_current_theory_name ();
-in	update_replacement_env(label, ReplaceStat x);
+in	open_label_theory(string_of_label label);
+	update_replacement_env(label, ReplaceStat x);
 	new_scope_stmt_label label;
 	do_statement statement;
 	end_scope_stmt_label();
-	open_theory current_theory
+	lazy_open_theory current_theory
 end
 );
 =TEX
