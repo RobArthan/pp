@@ -22,7 +22,7 @@ Don't worry about this!
 %\TPPpart{}
 \TPPtitle{SLR Parser Generator}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP017}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.39 $%
+\def\SCCSversion{$Revision: 1.40 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 %\TPPdate{}  %% Mandatory field (with sensible default)
@@ -129,6 +129,7 @@ Port to Poly/ML.
 of the printing code.
 \item[Issue1.40] Can now specify a constructor to apply to string literals in the action tables
 (and they are output as valid ML strings now).
+\item[Issue 1.41] Implemented execution timings.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -342,11 +343,6 @@ fun Ûread_fileÝ ("": string) : string =
 		raise SlrpError
 			("i/o failure on input file: " ^ file ^ " (" ^ string_of_exn ex ^ ")")
 );
-=TEST
-read_file "" (* FAILS *);
-read_file "/AARDVARK" (* FAILS *);
-read_file "/etc/passwd";
-let val str = read_file "slr.doc" in chat str end;
 =SML
 local
 val Ûlog_fileÝ : outstream OPT ref = ref Nil;
@@ -1241,8 +1237,7 @@ fun Ûlalr_lookahead_setsÝ
 	in	flat (map aux3  nts)
 	end
 );
-=IGN
-lalr_lookahead_sets actions gotos g st_ed nt_ed follow_tab;
+=TEX
 =SML
 fun Ûlog_lookahead_setÝ
 	(_ : ''lc -> string)
@@ -1414,16 +1409,6 @@ datatype ÛBNF_lex_classÝ	=	BNF_var
 			|	BNF_action
 			|	BNF_eos;
 =TEX
-=IGN
-fun fmt_BNF_lex_class (BNF_var : BNF_lex_class) : string = "Nam"
-| fmt_BNF_lex_class BNF_con = "Con"
-| fmt_BNF_lex_class BNF_eq = "="
-| fmt_BNF_lex_class BNF_semi = ";"
-| fmt_BNF_lex_class BNF_vert = "|"
-| fmt_BNF_lex_class BNF_comma = ","
-| fmt_BNF_lex_class BNF_action = "Action"
-| fmt_BNF_lex_class BNF_eos = "$";
-
 =SML
 type ÛBNF_lex_itemÝ = BNF_lex_class * string;
 =TEX
@@ -1852,15 +1837,6 @@ The interface to the lexical analyser is the following function.
 That completes the lexical analyser:
 =SML
 end; (* of local ... in ... end *)
-=TEST
-BNF_lex_string "";
-BNF_lex_string "a|,b";
-BNF_lex_string "=|,`abc`";
-BNF_lex_string "=|,`abc\\``";
-BNF_lex_string "(=|,)`abc\\``";
-BNF_lex_string "(=|,`abc\\``";
-BNF_lex_string "(=|,`abc\\``) (((b(((a)))b)))";
-BNF_lex_string "(* A C (* B C *) *) () () (jj)";
 =TEX
 \subsection{Parser Auxiliaries}
 =SML
@@ -2282,8 +2258,6 @@ let	val tabs = listsofarray gotos (get_int_control"slrp_break");
 in	output_table tabs aux "slrp'g" "slrp'gotos"
 end
 );
-=TEST
-output_goto_table gotos3;
 =TEX
 \subsection{Reduction Table}
 =SML
@@ -2349,8 +2323,6 @@ fun Ûoutput_driverÝ (init : STATE) = (
 	("fun slrp'gen_parser x = slrp'parse "
 	^ string_of_int init ^ " slrp'actions slrp'gotos (slrp'reducers()) x;")
 );
-=TEST
-output_driver 42;
 =TEX
 \subsection{Interface}
 =SML
@@ -2366,31 +2338,40 @@ fun Ûoutput_parserÝ
 	output_reduction_table g tab;
 	output_driver init
 );
-=TEST
 =TEX
 \section{INTERFACE} \label{INTERFACE}
+\subsection{Recording Execution Times}
+=SML
+local
+	open Timing;
+	val Ûexec_timesÝ : (string * int) list ref = ref[];
+in
+	fun Ûreset_exec_timesÝ (false : bool) : unit=()
+	|   reset_exec_times true = (
+		exec_times := [];
+		reset_stopwatch()
+	);
+	fun Ûstore_exec_timeÝ (false : bool)  (_:string): unit = ()
+	|   store_exec_time true desc = (
+		exec_times := (desc, read_stopwatch Milliseconds) :: !exec_times;
+		reset_stopwatch()
+	);
+	fun Ûreport_exec_timesÝ (false : bool) : unit = ()
+	|   report_exec_times true = (
+		chat  "\n"; chat (burst "Execution times"); chat "\n";
+		let	fun do1(desc, t) = (
+				chat desc; chat ": ";
+				chat (string_of_int t);
+				chat "ms.\n"
+			);
+		in	map do1 (rev(!exec_times));  chat "\n"
+		end
+	);
+end;
+=TEX
 \subsection{ML Interface}
-The parser generator is invoked using the following function {\it slrp}.
-Its first three parameters are the names of the input file, output file and
-the name of the
-end of input lexical class.
-The remaining parameters give the name of a log file and an integer which determines the level
-of log information as follows:
-
-\begin{centering}
-\begin{tabular}{|l|p{4in}|}\hline
-Level & Information Logged \\ \hline\hline
-$\leq 0$ & The log file parameter is ignored. \\ \hline
-$1$ & This gives a summary of the conflict
-resolution process and a listing of any conflicts requiring
-dynamic resolution. \\ \hline
-$2$ & As 1 together with a listing
-of the grammar and its terminals and the state table and a listing of any conflicts
-before resolution. \\ \hline
-$\geq 3$ & As 2 together with a listing of the full action table before resolution. \\ \hline
-\end{tabular}
-\end{centering}
-=IGN
+Se the detailed design for a desciption of the parameter interface.
+ =IGN
 val in_file = "t.txt";
 val out_file = "t.sml";
 val log_file = "t.log";
@@ -2398,6 +2379,7 @@ val eos = "eos";
 val quote_con = Nil;
 val log_level = 6;
 val slr_only = false;
+val timings = true;
 =SML
 fun ÛslrpÝ {
 	in_file : string,
@@ -2406,13 +2388,16 @@ fun ÛslrpÝ {
 	eos:string,
 	quote_con:string OPT,
 	log_level:int,
-	slr_only : bool} : unit = (
+	slr_only : bool,
+	timings : bool} : unit = (
 	(let	val se00 = if log_level > 0 then open_log_file log_file else ();
+		val _ = reset_exec_times timings;
 		fun my_log msg = (if log_level > 0 then log msg else ());
 	in let	val se01 = chat(burst banner);
 		val se02 = my_log (burst banner);
 		val se03 = open_out_file out_file;
 		val (grm, reducers) = BNF_parse in_file;
+		val _ = store_exec_time timings "Parsing grammar";
 		val se04 = (if log_level >= 2
 			then (	log "\n"; log(burst "Grammar"); log"\n";
 				print_grammar format_sym_class grm;
@@ -2421,19 +2406,25 @@ fun ÛslrpÝ {
 				flush_log_file() )
 			else ());
 		val sym_eos = EosClass eos;
+		val _ = reset_stopwatch();
 		val (actions, gotos, Ijs, eff_grammar, init) =
 			slr_tables grm sym_eos sentence_symbol;
+		val _ = store_exec_time timings "Building SLR(1) tables";
 		val se05 = (if log_level >= 2
 			then (	log "\n"; log(burst "State Table"); log"\n";
 				print_states (grm, format_sym_class) Ijs eff_grammar)
 			else ());
+		val _ = reset_stopwatch();
 		val confs1 = conflicts actions;
+		val _ = store_exec_time timings "Checking for SLR(1) conflicts";
 		val se06 = if slr_only then () else 
 				 lalr_resolve_conflicts
 				actions gotos eff_grammar
 				sentence_symbol sym_eos init
 				(map (fn (s, l, _) => (l, s)) confs1)
 				format_sym_class (log_level >= 5) (log_level >= 6);
+		val _ = if is_nil confs1 then  () else
+			store_exec_time timings "Calculating LALR(1) lookahead sets";
 		val confs2 = conflicts actions;
 		val conf_msg = conflict_summary confs2;
 		val se07 = (if log_level >= 2
@@ -2446,8 +2437,10 @@ fun ÛslrpÝ {
 			then (	log "\n"; log(burst "Action Table"); log"\n";
 				print_action_table log (grm, format_sym_class) actions)
 			else());
+		val _ = reset_stopwatch ();
 		val se09 = (if not(is_nil confs2)
-			then resolve_conflicts grm actions
+			then (resolve_conflicts grm actions;
+				store_exec_time timings "Resolving LALR(1) conflicts")
 			else ());
 		val se10 = (if not(is_nil confs2)
 			then (	my_log "\n"; my_log(burst "Dynamic Actions"); my_log"\n";
@@ -2455,13 +2448,16 @@ fun ÛslrpÝ {
 				chat(burst "Dynamic Actions");
 				print_dynamic_actions chat (grm, format_sym_class) actions)
 			else());
+		val _ = reset_stopwatch();
 		val se11 = output_parser (do_sym_class quote_con)
 				grm actions gotos reducers init;
+		val _ = store_exec_time timings "Writing parsing tables";
 		val se12 =
 			if log_level >= 4
 			then print_lr0_automaton_graph actions gotos init format_sym_class
 			else ();
-		val se13 = (chat (burst "End of Run");
+		val _ = report_exec_times timings;
+		val se14 = (chat (burst "End of Run");
 				my_log "\n"; my_log (burst "End of Run"));
 	in	(close_out_file(); close_log_file())
 	end	handle ex as SlrpError msg =>
@@ -2479,7 +2475,7 @@ end; (* of structure Slrp *)
 \subsection{Shell Interface}
 =DUMP slrp
 #!/bin/sh
-# slrp From: $Id: imp017.doc,v 1.39 2003/02/23 12:02:35 rda Exp rda $
+# slrp From: $Id: imp017.doc,v 1.40 2003/02/23 13:42:47 rda Exp rda $
 # Shell script to run the SLRP Parser Generator
 if test -z "$PROGNAME"
 then
@@ -2491,14 +2487,16 @@ EOS=
 INFILE=
 QUOTECONSUPPLIED=n
 SLRONLY=false
-while getopts l:e:f:sc: arg
+TIMINGS=false
+while getopts l:e:f:sc:t arg
 do
 	case $arg in
 		c)	QUOTECONSUPPLIED=y; QUOTECON=$OPTARG ;;
 		e)	EOS=$OPTARG ;;
 		f)	INFILE=$OPTARG ;;
 		l)	LOGLEVEL=$OPTARG ;;
-		s)	SLRONLY=true
+		s)	SLRONLY=true ;;
+		t)	TIMINGS=true
 	esac
 done
 shift `expr $OPTIND - 1`
@@ -2528,7 +2526,8 @@ then	ML="(Slrp.slrp{\
 		quote_con=Nil,\
 		log_file=\"$LOGFILE\",\
 		log_level=$LOGLEVEL,\
-		slr_only=$SLRONLY}; PPCompiler.exit 0)\
+		slr_only=$SLRONLY,\
+		timings=$TIMINGS}; PPCompiler.exit 0)\
 		handle _ => PPCompiler.exit 1;"
 else	ML="(Slrp.slrp{\
 		in_file=\"$INFILE\",\
@@ -2537,7 +2536,8 @@ else	ML="(Slrp.slrp{\
 		quote_con=Value \"$QUOTECON\",\
 		log_file=\"$LOGFILE\",\
 		log_level=$LOGLEVEL,\
-		slr_only=$SLRONLY}; PPCompiler.exit 0)\
+		slr_only=$SLRONLY,\
+		timings=$TIMINGS}; PPCompiler.exit 0)\
 		handle _ => PPCompiler.exit 1;"
 
 fi
