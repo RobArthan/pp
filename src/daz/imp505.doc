@@ -7,7 +7,7 @@
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
-\def\Hide#1{}
+def\Hide#1{}
 \def\Bool{``$\it{:}bool\,$''}
 \makeindex
 \TPPproject{DAZ PROJECT}  %% Mandatory field
@@ -77,6 +77,7 @@
 \item[Issue 1.40] Rationalised error reporting.
 \item[Issue 1.41] Fixed problem adjusting case selectors.
 \item[Issue 1.42] Fixed DRA bug 12 (V0.6).
+\item[Issue 1.43] Fixed DRA bug 4 (V0.6).
 
 \end{description}
 \subsection{Changes Forecast}
@@ -105,7 +106,7 @@ structure ÛCNVCGeneratorİ : CNVCGenerator = struct
 local
 	open CaseIndependence;
 	open CNTypes1 CNTypes2 CNParser CNTypes CNBasicDeclsAndExprs;
-	open ZUserInterfaceSupport ZGeneratedConstants;
+	open ZUserInterfaceSupport ZGeneratedConstants TypeInference;
 in
 =TEX
 \section{SUPPORTING FUNCTIONS}
@@ -115,6 +116,23 @@ The special exception $VCInformal$ and associated functions are therefore no lon
 The following function decorates a string with a subscript ``0'' and is used to give the initial version of a variable name.
 =SML
 fun Ûinit_varİ (name : string) : string = name ^ "‰0";
+=TEX
+The following functions are used to construct a type inference context for use when the specification statement of a procedure is type checked.
+=SML
+fun v_v0 (in_mode : bool) (ty : TYPE) (v : ID) : TERM list = (
+		if	in_mode
+		then	[mk_var(v, ty)]
+		else	[mk_var(init_var v, ty), mk_var(v, ty)]
+);
+fun ti_context_of_formal_ids (env : CN_ENV) ([] : PARAM_SPEC list)
+		: TERM list = []
+|  ti_context_of_formal_ids env ({var_decl as {vars, tmark}, mode} :: more) = (
+	let	val ty = dest_z_power_type (type_of (zid env (trans_id tmark)));
+		val inmode = case mode of MSparkIn => true | _ => false;
+	in	flat (map (v_v0 inmode ty) vars)
+		@ ti_context_of_formal_ids env more
+	end	handle Fail _ => fail "vcs" 508051 [fn()=>tmark]
+);
 =TEX
 \pagebreak
 \section{STRUCTURE OF VERIFICATION CONDITIONS}\label{VCSTRUCTURE}
@@ -543,8 +561,12 @@ fun Ûproc_call_specİ (env : CN_ENV)
 		({actuals, ...} : (AGG_CHOICE,EXP) PROC_CALL)
 		({name, formal_ids, spec={w, w0, pre, post}, ...} : FORMAL_PROC)
 			: (Z_EXP * Z_EXP) = (
-let	val pre1 = z_predexp_of_z_tm pre;
+let	val old_cxt = get_ti_context();
+	val new_cxt = ti_context_of_formal_ids env formal_ids @ old_cxt;
+	val side1 = set_ti_context new_cxt;
+	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
+	val side2  = set_ti_context old_cxt;
 	val var_decls = map (fn {var_decl, ...} => var_decl) formal_ids;
 	val names = ((map trans_id) o flat
 				o (map (fn {vars, ...} => vars))) var_decls;
