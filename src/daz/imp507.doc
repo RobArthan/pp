@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.236 $ $RCSfile: imp507.doc,v $ $Date: 2002/12/07 15:25:05 $
+% imp507.doc %Z% $Revision: 1.237 $ $RCSfile: imp507.doc,v $ $Date: 2002/12/08 13:54:53 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.236 $%
+\def\SCCSversion{$Revision: 1.237 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/12/07 15:25:05 $%
+\TPPdate{\FormatDate{$Date: 2002/12/08 13:54:53 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -187,6 +187,7 @@ being renamed is defined in the same package specification.
 \item[Issue 1.234] Brought {\it form\_proc\_pack\_body\_aux} into line with latest change proposals.
 \item[Issue 1.235, 1.236] Schema references in function $\Xi$-lists.
 \item[Issue 1.237] Rationalisation of formal procedures in package bodies (part of R0066).
+\item[Issue 1.238] First round of code changes for R0066.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1576,6 +1577,17 @@ fun Ûz_id_of_idÝ (n : ID) : Z_ID = (
 Now we define $subprog\_flatten\_env$: the $filter\_XXX$ functions implement
 the set comprehensions in the specification, with $filter_env$ fitting
 the results together into an $IN\_SCOPE$.
+=TEX
+=SML
+fun Ûexpand_schema_sigsÝ (ns : Z_ID list) : Z_ID list = (
+	let	fun aux n = (
+			((map fst o dest_z_schema_type o dest_z_power_type o
+			force_value o get_const_type) (z_id_of_id n))
+			handle Fail _ => [n]
+		);
+	in	flat (map aux ns)
+	end
+);
 =SML
 fun Ûsubprog_flatten_envÝ ([] : ENV) : IN_SCOPE = (
 	empty_in_scope
@@ -1587,12 +1599,7 @@ fun Ûsubprog_flatten_envÝ ([] : ENV) : IN_SCOPE = (
 		else	let	val (name, globals1) = subprog_info block1;
 				val blocks2 = blocks drop
 					(fn b => #block_name (#declab b) <> name);
-				fun aux n = (
-					((map fst o dest_z_schema_type o dest_z_power_type o
-					force_value o get_const_type) (z_id_of_id n))
-					handle Fail _ => [n]
-				);
-				val globals = flat (map aux globals1);
+				val globals = expand_schema_sigs globals1;
 				fun filter_vars ([] : VAR_DECL list) = []
 				|   filter_vars (vardec :: vardecs) = (
 					case #vars vardec drop
@@ -4574,10 +4581,10 @@ fun Ûform_proc_pack_body_commonÝ (form_proc: FORMAL_PROC)
 			(fn p => #name p = block_name1);
 		val _ = check_globals_proc block_name1 form_proc (#globals formal_proc3);
 		val vc_vars2 = #vc_vars(#in_scope(#declab block2));
-		val vc_vars5 = #vc_vars(flatten_env (tl (!blocks)));
 		val vc_vars4 = #vc_vars package4;
 		val vc_pars1 = #vc_pars (#in_scope (#declab block1));
 		val in_scope5a = subprog_flatten_env(!blocks);
+		val vc_vars5 = #vc_vars in_scope5a;
 		val vc_aux_vars5 = (#vc_aux_vars in_scope5a) term_diff (#aux_vars package4);
 		val var_renamings5 = #var_renamings in_scope5a;
 		val use_clause_subs5 = #use_clause_subs in_scope5a;
@@ -5045,6 +5052,34 @@ fun Ûtrans_formal_funÝ (cnenv : CN_ENV)
 );
 =TEX
 =SML
+fun  Ûtrans_formal_fun_nameÝ  (env : CN_ENV) (packopt : PACKAGE OPT)
+	(ff as {informal_fun = {name, ...}, globals = globals, ...} :FORMAL_FUN) : Z_EXP = (
+	let	val avs = case packopt of Value{aux_vars, ...} => aux_vars | Nil => [];
+		fun   do_aux_vars [] _ = Nil
+		|  do_aux_vars (dec :: more) n = (
+			case s_lookup n (map dest_var (frees dec)) of
+				Nil => do_aux_vars more n
+			|	Value ty =>
+				Value(ty, EIEnvAuxVar(snd(dest_z_dec dec), Nil))
+		);
+		fun env' n = (
+			case do_aux_vars avs n of
+				Nil => env n
+			|	v => v
+		);
+		val zf = hd (fst(dest_z_dec (fun_decl env' ff)));
+	in	case map (global_dep_par env') globals of
+			[] => zf
+		|	gs => z_fun_call(zf, gs)
+	end
+);
+=TEX
+=SML
+fun Ûsubs_exp_for_exp_in_predÝ (pred : Z_PRED, e1 : Z_EXP, e2 : Z_EXP) : Z_PRED = (
+	subst [(e2, e1)] pred
+);
+=TEX
+=SML
 fun Ûstore_trans_formal_funÝ (cnenv : CN_ENV)
 		(ff as {informal_fun = {name, ...}, ...} : FORMAL_FUN) : unit = (
 	let	val (para, _, _) = trans_formal_fun cnenv ff;
@@ -5106,10 +5141,9 @@ fun Ûform_fun_pack_specÝ (form_fun as {
 	end
 );
 =TEX
-The VC generator is responsible for distinguishing specification between statements with and without initial variables.
-Here, we follow the parser in generating the form without initial variables for it to modify as necessary.
 =SML
-fun Ûform_fun_pack_bodyÝ (form_fun: FORMAL_FUN) : unit = (
+fun Ûform_fun_pack_body_commonÝ (form_fun: FORMAL_FUN)
+	: (BLOCK * FORMAL_FUN * PACKAGE * SPECLAB) OPT = (
 	let	val block1 = block 1;
 		val block2 = block 2;
 		val block_name1 = #block_name(#declab block1);
@@ -5129,6 +5163,59 @@ fun Ûform_fun_pack_bodyÝ (form_fun: FORMAL_FUN) : unit = (
 			find 
 			formal_funs4
 			(fn f => #name(#informal_fun f) = block_name1);
+		val vc_pars1 = #vc_pars (#in_scope (#declab block1));
+		val in_scope5a = subprog_flatten_env(!blocks);
+		val vc_vars5 = #vc_vars in_scope5a;
+		val vc_aux_vars5 = (#vc_aux_vars in_scope5a) term_diff (#aux_vars package4);
+		val var_renamings5 = #var_renamings in_scope5a;
+		val use_clause_subs5 = #use_clause_subs in_scope5a;
+		val in_scope5 = {
+			dec_labels = [],
+			formal_procs = [],
+			vc_log_cons = [],
+			vc_aux_vars = vc_aux_vars5,
+			var_renamings = var_renamings5,
+			use_clause_subs = use_clause_subs5,
+			vc_vars = vc_vars5,
+			vc_pars = vc_pars1	
+		};
+		val wp_env5 :WP_ENV = {
+			env = cn_env_of_in_scope in_scope5,
+			till = mk_z_true,
+			named_tills = [],
+			return = mk_z_true,
+			fun_header = #informal_fun form_fun,
+			formal_procs = []
+		};
+		val speclab5 : SPECLAB = {
+			spec = #spec formal_fun3,
+			formal_body_flag = true,
+			fun_flag = true,
+			till_flag = false,
+			wp_env = wp_env5,
+			in_scope = in_scope5
+		};
+		val st = STSpecNoIvars{spec= #spec form_fun, label="", is_assertion = false};
+		val globals = #globals form_fun;
+		val globals3 = #globals formal_fun3;
+	in	Value(block2, formal_fun3, package4, speclab5)
+	end
+		else	Nil
+	end
+);
+
+=SML
+=TEX
+The VC generator is responsible for distinguishing specification between statements with and without initial variables.
+Here, we follow the parser in generating the form without initial variables for it to modify as necessary.
+=SML
+fun Ûform_fun_pack_bodyÝ
+	(block2 : BLOCK, formal_fun3 : FORMAL_FUN,
+			package4 : PACKAGE, speclab5 : SPECLAB)
+		(form_fun: FORMAL_FUN) : unit = (
+	let	val block1 = block 1;
+		val block_name1 = #block_name(#declab block1);
+		val block_name2 = #block_name(#declab block2);
 		val vc_pars1 = #vc_pars (#in_scope (#declab block1));
 		val in_scope5 = subprog_flatten_env(!blocks);
 		val wp_env5 :WP_ENV = {
@@ -5167,10 +5254,67 @@ fun Ûform_fun_pack_bodyÝ (form_fun: FORMAL_FUN) : unit = (
 				fn()=>block_name1]
 			end
 	end
-		else	()
+);
+=TEX
+=SML
+fun Ûform_fun_pack_body_auxÝ
+	(block2 : BLOCK, formal_fun3 : FORMAL_FUN,
+			package4 : PACKAGE, speclab5 : SPECLAB)
+		(avs : TERM list)
+		(form_fun: FORMAL_FUN) : unit = (
+	let	val block1 = block 1;
+		val spec3 = #spec formal_fun3;
+		val block_name1 = #block_name(#declab block1);
+		val block_name2 = #block_name(#declab block2);
+		val st = STSpecNoIvars{spec= #spec form_fun, label="", is_assertion = false};
+		val glob_vars = expand_schema_sigs (#globals formal_fun3);
+		val aux_vars4 = #aux_vars package4;
+		val aux_vars_decs = map dest_z_dec aux_vars4;
+		val aux_vars_newdecs = flat (map (fn (tml,ty) =>
+						map (fn t => (t,ty)) tml)
+							aux_vars_decs);
+		val aux_vars_tab = map (fn (tm, ty) => (dest_z_lvar tm, ty))
+							aux_vars_newdecs;
+		val aux_vars_tab1 = aux_vars_tab drop
+					(fn ((s, _, _), _) => not(s mem glob_vars));
+		val aux_vars = map (fn (lv,ty) => mk_z_dec([mk_z_lvar lv], ty))
+					aux_vars_tab1;
+		val using_decs2 = #using_decs block2;
+		val ud2_rel_image = (using_decs2 drop
+						(fn n => not (fst n mem glob_vars)));
+		val invs = (map snd o map snd) ud2_rel_image;
+		val pre5_matrix = z_many_and(z_pred_of_z_tm  current_cn_env (#pre spec3)::invs);
+		val pre5 = z_quote (z_exists (aux_vars, pre5_matrix), Nil);
+		val afunc = trans_formal_fun_name current_cn_env (Value package4) formal_fun3;
+		val cfunc = trans_formal_fun_name current_cn_env Nil form_fun;
+		val post5 = z_quote(z_forall(aux_vars, z_imp(pre5_matrix,
+			z_exists(aux_vars,
+				z_many_and(
+					subs_exp_for_exp_in_pred(
+						z_pred_of_z_tm  current_cn_env (#post spec3),
+						afunc, cfunc)::invs)))),
+			Nil);
+		val spec5 : SPEC = {
+			w = [],
+			w0 = [],
+			pre = pre5,
+			post = post5
+		};
+		val speclab5a : SPECLAB = {
+			spec = spec5,
+			formal_body_flag = false,
+			fun_flag = true,
+			till_flag = false,
+			wp_env = #wp_env speclab5,
+			in_scope = #in_scope speclab5
+		};
+		val (vcs, routes, spec) = call_vcs (speclab5, st);
+	in	store_vcs (
+				#name (#informal_fun formal_fun3), vcs, 
+				Value (speclab_update_spec(speclab5,spec)), 
+				routes, VCG_subprogram_spec)
 	end
 );
-
 =TEX
 =SML
 fun Ûcheck_globals_funÝ (block_name1 : string)
@@ -5246,15 +5390,33 @@ fun Ûform_fun_otherwiseÝ (form_fun: FORMAL_FUN) : unit = (
 	add_spark_function_info (#globals form_fun) (#informal_fun form_fun)
 );
 =TEX
+The following function is required to determine whether $form\_fun$ should call $form\_fun\_pack\_body$ or $form\_proc\_fun\_body\_aux$.
+It computes a list of HOL terms representing the set of variables which is tested in the first clause in the predicate part of the corresponding Z schemas in the specification.
 =SML
-fun Ûform_funÝ (form_fun: FORMAL_FUN) : unit = (
-	(if		test_flag #pack_spec_flag 2
-	then		form_fun_pack_spec
+fun Ûaux_vars_in_formal_funÝ (formal_fun3 as {globals, ...} : FORMAL_FUN)
+			(package4 : PACKAGE) : TERM list = (
+	let	val aux_vars4 = #aux_vars package4;
+		val glob_vars = expand_schema_sigs globals;
+		val aux_vars4_tms = (flat o map fst o map dest_z_dec) aux_vars4;
+	in
+		aux_vars4_tms drop (fn v => not (fst (dest_var v) mem glob_vars))
+	end
+);
+=TEX
+=SML
+fun Ûform_funÝ (frm_fun: FORMAL_FUN) : unit = (
+	if		test_flag #pack_spec_flag 2
+	then		form_fun_pack_spec frm_fun
 	else if		test_flag #pack_body_flag 2
-	then		form_fun_pack_body
+	then		case form_fun_pack_body_common frm_fun of
+				Value  (info as (_, formal_fun3, package4, _)) => (
+				case aux_vars_in_formal_fun formal_fun3 package4 of
+					[] => form_fun_pack_body info frm_fun
+				|	avs => form_fun_pack_body_aux info avs frm_fun
+			) |	Nil	=> ()
 	else if		test_flag #subunit_flag 2
-	then		form_fun_subunit
-	else		form_fun_otherwise) form_fun
+	then		form_fun_subunit frm_fun
+	else		form_fun_otherwise frm_fun
 );
 =TEX
 \subsection{The SID function curr\_form\_fun}
