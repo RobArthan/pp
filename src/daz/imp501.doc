@@ -412,21 +412,42 @@ val Ûclass_tableÝ = list_e_merge initial_e_dict [
 
 =TEX
 =SML
+fun Ûis_numericliteralÝ (s : string) = (
+	case explode s of
+	i::rest =>	is_digit i
+	|_ =>		false
+);
+=TEX
+=SML
+fun Ûis_primeÝ (s : string) = (
+	case explode s of
+	"'"::_ =>	true
+	|_ =>		false
+);
+=TEX
+=SML
 fun Ûis_primedidÝ (s : string) = (
-let	val xs = explode s;
-in
-	case xs of
-	"'"::_::rest => (
-		 true
-	) |_ => false
-end);
+	case explode s of
+	"'"::_::_ =>	true
+	|_ =>		false
+);
+=TEX
+=SML
+fun Ûis_characterliteralÝ (s : string) = (
+	case explode s of
+	"'"::_::"'"::rest =>	true
+	|_ =>			false
+);
+=TEX
 =SML
 fun ÛclassifyÝ (what : string) : CN_LEX_CLASS = (
 	case e_lookup (to_lower what) class_table of
 		Value cl => cl
 		|	Nil	=> (
-				if	is_all_decimal what
+				if	is_numericliteral what
 				then	LCNumericLiteral
+				else if is_characterliteral what
+				then	LCCharacterLiteral
 				else if is_primedid what
 				then	LCPrimedIdentifier
 				else	LCIdentifier
@@ -516,6 +537,23 @@ fun Ûrec_keywordÝ (st : LEX_STATE) : LEX_STATE = (
         end
 );
 =TEX
+\subsection{Recognition of Character Literals}
+=SML
+fun Ûrec_characterliteralÝ (st : LEX_STATE) : LEX_STATE = (
+	if next is_prime st
+	then	let	val st' = collect (collect st);
+		in
+			if next is_prime st'
+			then
+				collect st'
+			else
+				raise Unrecognised
+		end
+	else
+		raise Unrecognised
+);
+=TEX
+
 \subsection{Recognition of Primed Identifiers}
 =SML
 fun Ûrec_primedidÝ (st : LEX_STATE) : LEX_STATE = (
@@ -525,7 +563,6 @@ fun Ûrec_primedidÝ (st : LEX_STATE) : LEX_STATE = (
 	else
 		raise Unrecognised
 );
-
 =TEX
 
 \subsection{Recognition of Lexemes}
@@ -535,15 +572,17 @@ using the other recognisers.
 fun Ûrec_next_tokenÝ (st : LEX_STATE) : LEX_STATE = (
 	let	val st' = skip_space st;
 	in	
-		((((((rec_identifier st))
+		(((((((rec_identifier st))
 		handle Unrecognised =>
-			(rec_number st))
+			(rec_characterliteral st))
 		handle Unrecognised =>
 			(rec_primedid st))
 		handle Unrecognised =>
-			(rec_keyword st))
-		handle Unrecognised =>
 			(rec_delimiter st))
+		handle Unrecognised =>
+			(rec_number st))
+		handle Unrecognised =>
+			(rec_keyword st))
 		handle Unrecognised =>
 			(fst st, Unknown)
 	end
@@ -661,7 +700,7 @@ and Ûspark_xtextÝ (slist : string list) (rest : INPUT list) : CN_LEX_ITEM list  
 let	val st = skip_space (slist, Unknown);
 in
 	case skip_space st of
-	([], _) => []
+	([], _) => spark_lex rest
 	| other => (
 		case skip_space(rec_next_token other) of
 		st' as (srest, Known s) => (
@@ -678,6 +717,9 @@ in
 					::(spark_con (Lex.Text (implode srest)::rest))
 				)|LCLChevron => (
 					(spark_kslot (Lex.Text (implode (s::srest))::rest))
+				)|LCCharacterLiteral => (
+					(class, CNString ((implode o tl o rev
+					o tl o explode) s))::spark_xtext srest rest
 				)|_ =>
 					(class, CNText s)::spark_xtext srest rest
 
@@ -700,11 +742,11 @@ and Ûspark_lexÝ ((ip::more) : INPUT list) : CN_LEX_ITEM list = (
 	) |	Lex.String s => (
 			spark_string s more
 	) |	Lex.Char s => (
-			fail "CN-Parser" 501011  [fn () => s]
+			fail "CN-Parser" 501011  [fn () => "`"^s^"`"]
 	) |	Lex.Type ty => (
 			fail "CN-Parser" 501011  [fn () => string_of_type ty]
 	) |	Lex.Term tm => (
-			fail "CN-Parser" 501011  [fn () => "Antiquotation"]
+			fail "CN-Parser" 501011  [fn () => "antiquotation"]
 	) |	Lex.Separator s => (
 			fail "CN-Parser" 501011  [fn () => s]
 	) |	Lex.Error n => (fail "lexical analyser" 15006 [fn () => string_of_int n])
