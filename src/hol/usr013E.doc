@@ -1,0 +1,315 @@
+=TEX
+% usr013E.doc %Z% $Date$ $Revision$ $RCSfile$
+% COPYRIGHT (c) International Computers Limited, 1993
+\ignore{
+=SML
+(* usr013E.sml %Z% $Date$ $Revision$ $RCSfile$
+   COPYRIGHT (c) International Computers Limited, 1993 *)
+=TEX
+}
+
+\chapter{FORWARD PROOF}
+
+\section{Introduction}
+
+{\Product} follows the €LCF\ paradigm› \cite{gordon79}, in which an abstract data type implemented in a functional programming language (known as the €metalanguage›, in this case Standard ML) guarantees that a protected type ({\it THM} in this case) includes only values which have been obtained by computations which precisely correspond to proofs in the object language ({\ProductHOL}).
+
+{\Product} keeps track of which theorems have been proven and in what context, so that the user can always establish whether a theorem is valid and if so, from which axioms and definitions it has been derived.
+{\Product} does not keep track of how a theorem has been derived, once it has fully checked the validity of the derivation.
+Users of {\Product} will usually keep a record of how they have derived their theorems in a document (often referred to as a `proof script').
+{\Product} does provide some support for the preparation of such proof scripts and for their printing and processing, interactively or in batch.
+
+A €theorem› in {\Product} is a value of type €THM› computed from {\it axiom}s and {\it definition}s using {\it rule}s and {\it conversion}s.
+An €axiom› is a theorem introduced without proof, and recorded as such in the theory hierarchy.
+A €definition› is a special kind of axiom introduced by ``conservative'' mechanisms.
+A €rule› is a function which computes theorems.
+Rules may be logically €primitive\ rule›s, in which case the form part of the primitive abstract logic, €kernel\ rule›s in which case they are among the rules implemented directly in the logical kernel (which includes all the {\it primitive rules\/}), or they may be €derived\ rule›s, in which case they are implemented as standard ML functions which compute the required results using the {\it kernel rules\/}.
+A €conversion› is a special kind of rule which proves {\thm}s which are equations.
+A conversion takes a {\term} argument and (if successful) returns a {\thm} whose conclusion is an equation with the same {\term} on the left hand side of the equation.
+The idea of {\it derived rule}s as computations is due to Robin Milner.
+{\it conversion}s, a very important special case of {\it derived rule}s which form the basis for equational reasoning, were invented by Larry Paulson \cite{paulson83}.
+
+\section{Theorems}
+
+The {\hol} logic is a €sequent\ calculus›.
+A €sequent› is a value in Standard ML having an ML type named either €SEQ› or €GOAL› defined as: (TERM list) * TERM.
+Each {\term} in a {\it sequent} must have {\hol} {\type}\ îBOOLÆ.
+In such a {\it sequent} the list of TERMs on the left are known as €assumptions› or €asms› while the single {\term} on the right is the known as the €conclusion› or €concl› of the {\it sequent}.
+
+A {\it sequent} may be assigned a value in the context of a {\it HOL} €interpretation› and an assignment to the free variables occurring in the {\it sequent}.
+This value is defined using the rules for evaluation of {\term}s (see section \ref{SemanticsOfTerms}), which in the case of boolean {\term}s will always assign either the value ¨TÆ or ¨FÆ.
+The value assigned to the {\it sequent} will be ¨TÆ if the value assigned to the conclusion of the {\it sequent} is ¨TÆ, or if the value assigned to any one of the assumptions is ¨FÆ.
+
+A {\it sequent} is €satisfied› by an {\it interpretation} if it evaluates to ¨TÆ in the context of that {\it interpretation} for every {\welltyped} assignment of values to the free variables in the {\it sequent}.
+A {\it sequent} is €entailed› by a set of axioms and definitions if it is satisfied by every model which satisfies all of the axioms and definitions.
+
+The logic supported by {\Product} enables only those {\it sequent}s to be proven in the context of any collection of axioms and definitions which are {\it entailed} by those axioms and definitions.
+In the case that the only axioms in context are the five primitive axioms of the HOL logic the sequent `([],¨FÆ)' is not provable, no matter what collection of definitions are in context.
+({\Product} will reject any attempt to enter a definition which would enable the sequent to be proven).
+
+A theorem corresponds to a {\it sequent} which has been derived from axioms and definitions using the rules of the logic.
+Theorems are tagged with an indicator of the context in which they were derived (and because of this extra information are not identical with the corresponding sequent).
+
+{\ftlmargin=\leftmargin
+The {\it sequent} part of a theorem may be accessed using the following ML functions:
+=SML
+	€dest_thm›	: THM -> SEQ;
+	€asms›		: THM -> TERM list;
+	€concl›		: THM -> TERM;
+=TEX
+
+
+{\it dest_thm} returns the complete {\it sequent} corresponding to a value of type {\it THM}, while {\it asms} and {\it concl} return the left hand part of the the {\it sequent} (the assumptions) and the right hand part (the conclusion) respectively.
+
+No constructor is available which simply constructs a theorem from a {\it sequent}, since this may only be done by proof.
+The closest function to achieving this is:
+
+=SML
+	€new_axiom›	: (string list * TERM) -> THM;
+=TEX
+
+which, though returning the required theorem, does so only after this has been recorded as an axiom in the current theory.
+The strings supplied are keywords against which the theorem is stored in the theory, and may be used subsequently to retrieve the theorem from the theory.
+
+Theorems are displayed without `Quine corners' (`%
+=INLINEFT
+¨
+=TEX
+',`
+=INLINEFT
+Æ
+=TEX
+').
+Unlike {\term}s they cannot be parsed, they must be proven (or introduced as axioms).
+
+}%\ftlmargin=\leftmargin
+
+\section{The Primitive Logic}
+
+The primitive HOL logic can be described abstractly in very simple terms.
+
+There are three primitive {\type} constructors:
+
+\begin{itemize}
+\item
+€BOOL›
+
+A 0-ary {\type} constructor which denotes a set containing the two truth values (¨TÆ and ¨FÆ).
+
+\item
+€IND›
+
+A 0-ary {\type} constructor which denotes an infinite set of individuals.
+
+\item
+=INLINEFT
+€≠›
+=TEX
+
+A 2-ary {\type} constructor known as the `function space constructor' denoting the function which, given two sets (the {\it domain} and the {\it codomain}), returns the set of all functions which are total over the domain and have values in the codomain.
+\end{itemize}
+
+The primitive constants are:
+
+\begin{itemize}
+\item
+€=›
+
+the polymorphic curried infix equality function.
+
+\item
+€¥›
+
+The curried infix BOOLean operator which denotes material implication.
+
+\item
+€≈›
+
+Which denotes a polymorphic choice function
+\end{itemize}
+
+The primitive {\type} constructors and constants are introduced in theory €min›.
+A number of additional constants are defined in terms of these primitives in theory €log›, and then the five axioms of the HOL logic are introduced in theory €init›.
+
+There are seven {\it primitive rules} which complete the primitive logic.
+
+\section{The Logical Kernel}
+
+The €Logical\ Kernel› of {\Product} is that part of {\Product} which is critical to the checking of proofs and the soundness of the implemented logical system.
+
+The logical kernel implements the primitive logic and also a small number of non-primitive rules.
+
+Features which are not in the primitive logic are included in the logical kernel for two main reasons.
+
+Firstly, support for certain literals is in practice essential, but not directly addressed in the primitive logical basis.
+The literals supported at present are numeric literals, character literals, and string literals.
+Literals provide convenient concrete syntax for infinite families of constants.
+These constants in all cases could be introduced logically by the use of definitions were it not that an infinite number of definitions would be required.
+The literals are therefore treated as built in constants the definitions of which are obtained from conversions provided in the logical kernel.
+The {\type}s îÓÆ, îCHARÆ and îCHAR LISTÆ of these literals are therefore in the pervasive theories.
+
+Secondly, efficiency in computing and checking proofs is greatly improved if a small number of inference rules which could be implemented as derived rules are in fact implemented directly in the logical kernel.
+
+In addition to these rules, the mechanisms for undertaking conservative extensions ought strictly also be considered to be part of the logic, since flaws in their definition or implemetation might result in the logical system being rendered inconsistent.
+
+Closely associated with the logical kernel are the set of €pervasive\ theories›.
+These theories introduce the primitive {\typeconstructor}s and constants, and a number of definitions of other {\typeconstructor}s and constants.
+The theories contain all the definitions on which the soundness of the rules implemented in the logical kernel depend.
+The pervasive theories are {\it basic_hol} and its ancestors.
+No new theory may be introduced which does not have {\it basic_hol} as an ancestor.
+
+%The set of built in rules therefore includes also:
+
+%Making a total of ? rules supported by the logic.
+
+\section{Naming Conventions for Theorems and Rules}
+
+Certain naming conventions are useful in permitting theorems and rules to be located in the reference documentation (with the assistance of the KWIC index).
+
+\begin{itemize}
+\item €_axiom›
+
+Names ending with $\_axiom$ are used for axioms or for functions (e.g. $new\_axiom$) which introduce or access axioms.
+
+\item €_def› €_spec›
+
+Name suffixes used for definitions or specifications.
+
+\item €_thm› €_clauses›
+
+Name suffixes for theorems.
+Many theorems are conjuncts of several useful results, and in these cases the suffix {\it _clauses} is used in the theorem name.
+
+\item €_rule› €_elim› €_intro›
+
+Names ending in {\it _elim} are usually inference rules which eliminate some HOL construct (e.g. a conjunction).
+Names ending in {\it _intro} are inference rules which {\it introduce} the relevant construct.
+Other rules will normally end with {\it _rule}.
+
+\item €\_conv›
+
+Names ending in {\it _conv} are conversions, i.e. rules having type {\it TERM -$>$ THM} where the {\thm} is an equation (or bi-implication) with the {\term} as its left hand operand.
+
+\end{itemize}
+
+\section{A Selection of Useful Rules}
+
+\subsection{Assume Rule}
+
+The ML function €asm_rule› implements the primitive rule corresponding in a {\it sequent} calculus to making an assumption in a natural deduction proof.
+
+Given any BOOLean {\term}, {\it asm_rule} will return the theorem which has that {\term} both as its sole assumption and as its conclusion.
+
+=SML
+val thm1 = asm_rule ¨µx y:Ó∑ x*y > 0Æ;
+=GFT ProofPower Output
+val thm1 = µ x y∑ x * y > 0
+		Ù µ x y∑ x * y > 0 : THM   
+=TEX
+\subsection{Modus Ponens}
+
+The primitive rule often known as €modus\ ponens›, whose name in {\Product} is €¥_elim›, enables a theorem to be deduced once it has been proven that it is implied by some other proven fact.
+
+=SML
+val thm_a = asm_rule ¨a:BOOLÆ;
+val thm_b = asm_rule ¨a¥bÆ;
+=GFT ProofPower Output
+val thm_a = a Ù a : THM
+val thm_b = a ¥ b Ù a ¥ b : THM   
+=SML
+val thm_c = ¥_elim thm_b thm_a;
+=GFT ProofPower Output
+val thm_c = a ¥ b, a Ù b : THM   
+=TEX
+
+\subsection{Specialisation}
+
+The specialisation of a universal result to a particular case in performed by the rule €µ_elim›.
+
+The value to be used for specialisation is supplied as a {\term} in the first parameter, and must be consistent with the {\type} of the quantified variable.
+
+=SML
+val thm2 = µ_elim ¨455Æ thm1;
+=GFT ProofPower Output
+val thm2 = µ x y∑ x * y > 0 Ù µ y∑ 455 * y > 0 : THM   
+=TEX
+
+\subsection{Multiple Specialisation}
+
+Several nested universal quantifications can be specialised at once using €list_µ_elim›.
+In this case the values to be used for specialisation are supplied as a list of {\term}s.
+
+=SML
+val thm3 = list_µ_elim [¨455Æ,¨0Æ] thm1;
+=GFT ProofPower Output
+val thm3 = µ x y∑ x * y > 0 Ù 455 * 0 > 0 : THM   
+=TEX
+
+\subsection{Removing Outermost Universals}
+
+A special case of the above is the case where it is required to specialise all universals to the free variable having the same name as the variable used for quantification.
+€all_µ_elim› will accomplish this specialisation wihout need of any parameters.
+
+=SML
+val thm4 = all_µ_elim thm1;
+=GFT ProofPower Output
+val thm4 = µ x y∑ x * y > 0 Ù x * y > 0 : THM   
+=TEX
+
+\subsection{Splitting Conjunctions}
+
+From theorem whose conclusion is a conjunction, a list of theorems can be derived.
+The conclusions of these theorems are the individual conjuncts of the original theorem, and the assumptions are the same as those in the original theorem.
+
+In the context of the binding:
+=SML
+€plus_order_thm›;
+=GFT ProofPower output
+val it = Ù µ i m n
+  ∑ m + i = i + m ± (i + m) + n = i + m + n ± m + i + n = i + m + n : THM
+=TEX
+
+{\it plus_order_thm} can be broken apart by using €strip_±_rule› as follows:
+
+=SML
+val thm5 = all_µ_elim plus_order_thm;
+=GFT ProofPower output
+val thm5 = Ù m + i = i + m
+	± (i + m) + n = i + m + n
+	± m + i + n = i + m + n : THM
+=SML
+val thms1 = strip_±_rule thm5;
+=GFT ProofPower output
+val thms1 = [Ù m + i = i + m,
+	Ù (i + m) + n = i + m + n,
+	Ù m + i + n = i + m + n] : THM list
+=TEX
+
+\subsection{Adding Universals}
+
+A theorem may be {\it closed} by universally quantifying over all variables which have free occurrences in the conclusion of the theorem but not in any of its assumptions.
+€all_µ_intro› accomplishes this task.
+
+The ML function €nth› selects the nth element from a list.
+
+=SML
+nth 2 thms1;
+=GFT ProofPower output
+val it = Ù m + i + n = i + m + n : THM   
+=TEX
+
+=SML
+val thm6 = all_µ_intro (nth 2 thms1);
+=GFT ProofPower output
+val thm6 = Ù µ m i n∑ m + i + n = i + m + n : THM   
+=TEX
+
+If the quantifiers are required in some specific order €list_µ_intro› should be used and supplied with the list of variables over which universal quantification is desired.
+
+=SML
+val thm7 = list_µ_intro [¨iÆ,¨mÆ,¨nÆ] (nth 2 thms1);
+=GFT ProofPower output
+val thm7 = Ù µ i m n∑ m + i + n = i + m + n : THM   
+=TEX
+
+You should now be able to attempt the exercises in section \ref{ForwardProof}.
