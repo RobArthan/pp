@@ -1,5 +1,5 @@
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.66 2003/07/24 10:46:50 rda Exp rda $
+#/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * $Id: mainw.c,v 2.67 2003/07/24 11:13:32 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -837,21 +837,23 @@ static Boolean setup_main_window(
  * Journal window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	if( !global_options.edit_only ) {
+		Boolean editable;
 		Widget *children;
 		NAT num_children;
 
 		i = 0;
-		XtSetArg(args[i], XmNeditable, 			True); ++i;
 		XtSetArg(args[i], XmNeditMode,	 		XmMULTI_LINE_EDIT); ++i;
 		XtSetArg(args[i], XmNautoShowCursorPosition, 	False); ++i;
 		XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
-/*		XtSetArg(args[i], XmNtraversalOn, 	False); ++i; */
 
 		journal = XmCreateScrolledText(mainpanes, "journal", args, i);
 		attach_ro_edit_popup(journal);
 		register_selection_source(journal);
 		register_palette_client(journal);
 		copy_font_list(journal, script);
+
+		XtVaGetValues(journal, XmNeditable, &editable, NULL);
+		XtVaSetValues(journal, XmNtraversalOn, editable, NULL);
 
 		XtVaGetValues(mainpanes, XmNchildren, &children,
 			XmNnumChildren, &num_children, NULL);
