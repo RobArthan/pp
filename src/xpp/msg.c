@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2003/08/01 11:13:13 $ $Revision: 2.36 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2004/07/06 20:08:43 $ $Revision: 2.37 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -568,12 +568,12 @@ static void	file_cancel_cb(CALLBACK_ARGS),
 
 char *file_dialog(Widget w, char *opn)
 {
-	static Widget dialog;
+	static Widget dialog, dialog_text;
 	XmString s, title;
 	Atom WM_DELETE_WINDOW;
 	static int reply;	/* 0 = not replied/YES/NO*/
 	char *file_name;
-
+	XmString dir_mask;
 	reply = 0;
 
 	if (!dialog) {
@@ -597,6 +597,7 @@ char *file_dialog(Widget w, char *opn)
 			XmNdialogTitle, 	title,
 			NULL);
 		XmStringFree(title);
+		dialog_text = XmFileSelectionBoxGetChild(dialog, XmDIALOG_TEXT);
 	}
 
 	s = XmStringCreateSimple(opn);
@@ -609,16 +610,26 @@ char *file_dialog(Widget w, char *opn)
 
 	XtManageChild(dialog);
 
-	XmFileSelectionDoSearch(dialog, NULL);
+	file_name = XmTextFieldGetString(dialog_text);
+
+	XtVaGetValues(dialog,
+		XmNdirMask,	&dir_mask,
+		NULL);
+
+	XmFileSelectionDoSearch(dialog, dir_mask);
+
+	XmStringFree(dir_mask);
+
+	XmTextFieldSetString(dialog_text, file_name);
 
 	XtPopup(XtParent(dialog), XtGrabNone);
+
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 
 	while (!reply) {
 		poll(&reply);
 		if(reply == YES) {
-			Widget t = XmFileSelectionBoxGetChild(dialog, XmDIALOG_TEXT);
-			file_name = XmTextFieldGetString(t);
+			file_name = XmTextFieldGetString(dialog_text);
 			if(	!*file_name
 			||	file_name[strlen(file_name) - 1] == '/') {
 				beep();
