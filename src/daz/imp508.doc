@@ -1,4 +1,4 @@
-% imp508.doc   %Z% $Date: 2000/06/14 16:41:09 $ $Revision: 1.58 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2000/06/16 15:53:22 $ $Revision: 1.59 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.58 $%
+\def\SCCSversion{$Revision: 1.59 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2000/06/14 16:41:09 $%
+\TPPdate{\FormatDate{$Date: 2000/06/16 15:53:22 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -88,7 +88,7 @@ Adjusted $ENV\_INFO$ and allowed for type conversions.
 \item[Issue 1.55] Updates for new INTEGER type.
 \item[Issue 1.56] Enhancement R3.
 \item[Issue 1.57] Enhancement R2.
-\item[Issue 1.57] Enhancement R1.
+\item[Issues 1.58-1.60] Enhancement R1.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -117,7 +117,6 @@ structure ÛCNBasicDeclsAndExprsİ : CNBasicDeclsAndExprs = struct
 	open CNParser CNTypes ZGeneratedConstants ZParagraphs;
 	open ZUserInterfaceSupport;
 =TEX
-
 \section{CUSTOMIZED ENVIRONMENT HANDLING}
 
 =SML
@@ -133,10 +132,10 @@ datatype ÛENV_INFOİ =
 type ÛCN_ENVİ = Z_ID -> (TYPE * ENV_INFO) OPT;
 =TEX
 
-\section{MISCELLANEOUS SUPPORTING FUNCTIONS}
-
-As discussed with DRA during the enhancements programme, the treatment
-of constructs which cannot be handled formally has changed between releases 0.5 and 0.6.
+\section{SUPPORTING FUNCTIONS}
+\subsection{Miscellaneous}
+As discussed with DRA during the (first) enhancements programme, the treatment
+of constructs which cannot be handled formally changed between releases 0.5 and 0.6.
 Now that the user can bypass the formal processing of such a construct (as an arbitrary ada insertion), there is no need to attempt to continue processing when such a construct appears here, except in cases where failure to translate a construct is used to redirect the flow of control.
 In order to encourage better messages, the exception $Informal$ and associated functions have been removed and the usual {\Product} error mechanisms are used instead.
 =TEX
@@ -150,8 +149,90 @@ fun Ûdest_rangeİ ((RRange range) : EXP RANGE) : EXP RANGELOHI = (
 	range
 ) | dest_range _ = fail "dest_range" 508020 [];
 =TEX
+=TEX
 
+The following are not asked for in the specification but are convenient to have available at various points in the code.
+=SML
+val Ûú_tyİ = ”ú®;
+val Ûğú_tyİ = type_of ñú®;
+val Ûúú_tyİ = type_of ñú ¸ ú®;
+=TEX
+\section{Evaluation of Constant Expressions}
+Constant expressions need to be evaluated in the translation of array attributes with
+arguments and in deciding whether a VC needs to be generated 
+For various reasons, it has been agreed that attributes that are functions will not be statically evaluated.
 
+=TEX
+First of all we define a conversion which will expand the definition of a constant integer or set of integers providing the definition is a simple equation and providing the constant does not appear in the list provided as an extra argument (this is used to avoid looping in the presence of somewhat mailiciously conceived definitions).
+
+=SML
+fun Ûcn_const_convİ (consts : TERM list) : CONV = (fn tm =>
+	(if	tm term_mem consts
+	then	fail_conv
+	else	COND_C
+		(fn tm => is_const tm andalso
+			let val ty = type_of tm; in ty =: ú_ty orelse ty =: ğú_ty end)
+		(fn tm => simple_eq_match_conv (z_get_spec tm) tm)
+		fail_conv
+	) tm
+);
+=TEX
+Now conversions to handle a few other cases which are not directly handled by available tools.
+The conversion for \verb"#" is required for array length attributes.
+=SML
+val Ûz_minus_minus_thmİ = pc_rule1 "z_library" prove_rule[] ¬µi ·ñ~ ~i = i®®;
+
+val Ûz_minus_minus_convİ = simple_eq_match_conv z_minus_minus_thm;
+
+val Ûz_hash_thmİ = asm_rule ¬µi j·ñ#(i .. j) = (j - i) + 1®®;
+
+val Ûz_hash_convİ : CONV = simple_eq_match_conv z_hash_thm;
+=TEX
+Now a conversional for propagating a conversion into the operands of a unary or binary Z function.
+=SML
+fun ÛMY_Z_RANDS_Cİ (c : CONV) : CONV = (fn tm =>
+	(	((dest_z_tuple o snd o dest_z_app) tm;
+			RAND_C (RAND_C c AND_OR_C RATOR_C(RAND_C c)))
+				handle Fail _ => RAND_C c	) tm
+	
+);
+=TEX
+We put these pieces together to give the following conversion which does the required static evaluation of integer expressions.
+The parameter to the conversion is used to record which constants have had their definitions unwound somewhere in the branch of the expression tree currently being attacked and is used to avoid infinite recursion (e.g., if someone has used HOL to produce something which looks like a Z global variable with a definition like $X = X$ or $X = X + 0$.
+=SML
+fun Ûcn_eval_convİ (consts : TERM list) : CONV = (fn tm => (
+		MY_Z_RANDS_C (cn_eval_conv consts)
+		AND_OR_C
+		(fn t => (cn_const_conv consts
+			THEN_TRY_C cn_eval_conv (consts term_grab t)) t)
+		AND_OR_C (FIRST_C [
+				z_hash_conv,
+				z_subtract_minus_conv,
+				z_minus_minus_conv]
+			THEN_TRY_C cn_eval_conv consts)
+		AND_OR_C FIRST_C [
+			z_plus_conv,
+			z_times_conv,
+			cn_intmod_conv	,
+			cn_intdiv_conv	,
+			cn_rem_conv,
+			cn_star_star_conv,
+			z_abs_conv
+		])	tm
+);
+=TEX
+The following is the interface used in handling attributes.
+The handling of ranges uses the above function directly.
+=SML
+fun Ûeval_attr_argİ (ze : Z_EXP) : int = (
+	let	val n = (dest_z_signed_int o snd o dest_eq o
+				snd o dest_thm o TRY_C(cn_eval_conv[])) ze; 
+	in	if 	n @> integer_of_int 0
+		then	int_of_integer n
+		else	fail "" 0 [] (* immediately caught *)
+	end	handle	Fail _ => term_fail "eval_attr_arg" 508029 [ze]
+);
+=TEX
 \section{SUPPORT FOR Z ABSTRACT SYNTAX}
 \subsection{Z Unary Expressions}
 =SML
@@ -519,15 +600,6 @@ in
 end
 );
 =TEX
-\subsection{Miscellaneous}
-The following are not asked for in the specification but are convenient to have available at various points in the code.
-=SML
-val Ûú_tyİ = ”ú®;
-val Ûğú_tyİ = type_of ñú®;
-val Ûúú_tyİ = type_of ñú ¸ ú®;
-=TEX
-
-
 \section{INTEGER LITERALS}\label{INTEGERLITERALS}
 
 The translation of integer literals is non-trivial and several supporting functions for the translation of integer literals are introduced in this section. The function $trans\_int$ is introduced at the end of this section.
@@ -786,7 +858,7 @@ val		Ûzfstİ = trans_id "FIRST"
 =TEX
 =SML
 fun Ûdimenİ (zid : Z_ID, n : int) : Z_ID  = (
-	zid ^ "v" ^ string_of_int n
+	if n > 0 then zid ^ "v" ^ string_of_int n else zid
 );
 =TEX
 =SML
@@ -979,11 +1051,19 @@ The following covers $Exp\_Attrib\_Arg$
 =SML
   | Ûexp_attribİ env ({prefix, attribute_desig=ADAttribArg(att,arg)}
 		: (EXP,ATTRIB_DESIG) ATTRIBUTE) : Z_EXP = (
-let	val zfun = zid env (trans_id (name_to_tmark prefix) ^^ trans_id att);
-	val zargs = [trans_exp env arg];
-in
-	z_fun_call (zfun, zargs)
-end
+	if	trans_id att mem [zfst, zlst, zlength, zrange]
+	then
+		let	val zarg = trans_exp env arg;
+			val tmk = name_to_tmark prefix;
+		in
+			zid env (dimen(trans_id tmk ^^ trans_id att, eval_attr_arg zarg))
+		end
+	else
+		let	val zfun = zid env (trans_id (name_to_tmark prefix) ^^ trans_id att);
+			val zargs = [trans_exp env arg];
+		in
+			z_fun_call (zfun, zargs)
+		end
 )
 =TEX
 \subsection{Translating Indexed Components}
@@ -1399,68 +1479,7 @@ fun Ûadjust_exp1İ (env : CN_ENV) (exp : EXP) : EXP OPT = (
 \section{CHECKING FOR EMPTY RANGES}
 The code in this section implements check 14 from section 17.1 of volume I of the specifications.
 This requires evaluation of static expressions which is most conveniently done using proof.
-For various reasons, it has been agreed that attributes that are functions will not be statically evaluated.
 
-=TEX
-First of all we define a conversion which will expand the definition of a constant integer or set of integers providing the definition is a simple equation and providing the constant does not appear in the list provided as an extra argument (this is used to avoid looping in the presence of somewhat mailiciously conceived definitions).
-
-=SML
-local
-fun Ûcn_const_convİ (consts : TERM list) : CONV = (fn tm =>
-	(if	tm term_mem consts
-	then	fail_conv
-	else	COND_C
-		(fn tm => is_const tm andalso
-			let val ty = type_of tm; in ty =: ú_ty orelse ty =: ğú_ty end)
-		(fn tm => simple_eq_match_conv (z_get_spec tm) tm)
-		fail_conv
-	) tm
-);
-=TEX
-Now conversions to handle a few other cases which are not directly handled by available tools.
-The conversion for \verb"#" is required for array length attributes.
-=SML
-val Ûz_minus_minus_thmİ = pc_rule1 "z_library" prove_rule[] ¬µi ·ñ~ ~i = i®®;
-
-val Ûz_minus_minus_convİ = simple_eq_match_conv z_minus_minus_thm;
-
-val Ûz_hash_thmİ = asm_rule ¬µi j·ñ#(i .. j) = (j - i) + 1®®;
-
-val Ûz_hash_convİ : CONV = simple_eq_match_conv z_hash_thm;
-=TEX
-Now a conversional for propagating a conversion into the operands of a unary or binary Z function.
-=SML
-fun ÛMY_Z_RANDS_Cİ (c : CONV) : CONV = (fn tm =>
-	(	((dest_z_tuple o snd o dest_z_app) tm;
-			RAND_C (RAND_C c AND_OR_C RATOR_C(RAND_C c)))
-				handle Fail _ => RAND_C c	) tm
-	
-);
-=TEX
-We put these pieces together to give the following conversion which does the required static evaluation of integer expressions.
-The parameter to the conversion is used to record which constants have had their definitions unwound somewhere in the branch of the expression tree currently being attacked and is used to avoid infinite recursion (e.g., if someone has used HOL to produce something which looks like a Z global variable with a definition like $X = X$ or $X = X + 0$.
-=SML
-fun Ûcn_eval_convİ (consts : TERM list) : CONV = (fn tm => (
-		MY_Z_RANDS_C (cn_eval_conv consts)
-		AND_OR_C
-		(fn t => (cn_const_conv consts
-			THEN_TRY_C cn_eval_conv (consts term_grab t)) t)
-		AND_OR_C (FIRST_C [
-				z_hash_conv,
-				z_subtract_minus_conv,
-				z_minus_minus_conv]
-			THEN_TRY_C cn_eval_conv consts)
-		AND_OR_C FIRST_C [
-			z_plus_conv,
-			z_times_conv,
-			cn_intmod_conv	,
-			cn_intdiv_conv	,
-			cn_rem_conv,
-			cn_star_star_conv,
-			z_abs_conv
-		])	tm
-);
-=TEX
 The following function generates the VC for checking that a type or subtype defined by a range constraint is non-empty.
 =SML
 val Ûx_varİ = ñ(x º ğ ú)®;
@@ -1470,14 +1489,12 @@ fun Ûrange_check_vcİ (n : Z_ID) = (
 	subst[(mk_z_gvar(n, ğú_ty, []), x_var)] vc_pattern
 );
 =TEX
-The interface to the outside world is the following function
-The function reports an error if the range bounds can be evaluated and the range proves to be empty;
+The following function reports an error if the range bounds can be evaluated and the range proves to be empty;
 if the range can be evaluated and is non-empty then the function returns an empty list of paragraphs;
 if the range cannot be evaluated a paragraph containing a VC is returned.
 
 The somewhat strange way of expressing the decision-making arises from the desire to include the two equations in the message in the error case.
 =SML
-in
 fun Ûrange_check_vcsİ
 	(n : Z_ID) (lo : TERM) (hi : TERM) : PARAINFO list = (
 	(let	val lo_eqn = (concl o TRY_C(cn_eval_conv[])) lo;
@@ -1501,7 +1518,6 @@ fun Ûrange_check_vcsİ
 			[ConjectureInfo(Value n, [], range_check_vc n)])
 	))	()
 );
-end;
 =TEX
 
 \section{TRANSLATING SPARK BASIC DECLARATIONS}
@@ -1576,30 +1592,32 @@ end);
 =TEX
 \subsection{Translating Array Types}
 =SML
-fun Ûarray_attribİ (env : CN_ENV) (zid‰1 : Z_ID, zid‰2 : Z_ID) : PARAINFO list = (
-	[z_eq_eq(zid‰1 ^^ zfst, zid env (zid‰2 ^^ zfst)),
-	z_eq_eq(zid‰1 ^^ zlst, zid env (zid‰2 ^^ zlst)),
-	z_eq_eq(zid‰1 ^^ zlength, z_size (zid env zid‰2)),
-	z_eq_eq(zid‰1 ^^ zrange, zid env zid‰2)]
+fun Ûarray_attrib_auxİ (env : CN_ENV) (zid‰1 : Z_ID) (zid‰2 : Z_ID, i : int) : PARAINFO list = (
+	[z_eq_eq(dimen(zid‰1 ^^ zfst, i), zid env (zid‰2 ^^ zfst)),
+	z_eq_eq(dimen(zid‰1 ^^ zlst, i), zid env (zid‰2 ^^ zlst)),
+	z_eq_eq(dimen(zid‰1 ^^ zlength, i), z_size (zid env zid‰2)),
+	z_eq_eq(dimen(zid‰1 ^^ zrange, i), zid env zid‰2)]
+);
+=TEX
+The handler below catches failures from {\it hd}.
+=SML
+fun Ûarray_attribİ (env : CN_ENV) (zid : Z_ID, zids : Z_ID list) : PARAINFO list = (
+	let	val aux = array_attrib_aux env zid;
+		val zids_is = combine zids (interval 1 (length zids));
+	in	aux (hd zids, 0) @
+		flat (map aux zids_is)
+	end	handle Fail _ => fail "array_attrib" 508035 [] 
 );
 =TEX
 =SML
 fun Ûbasic_decl_con_arrayİ (env : CN_ENV) (name : ID)
-		({index=[head_index], comp=comp} : ARRAY_DEF) : PARAINFO list = (
-	let	val zname = trans_id name;
-		val zindex = trans_id head_index;
-		val zcomp = trans_id comp;
-	in
-		[z_eq_eq(zname, z_tfun(zid env zindex, zid env zcomp))] @
-			array_attrib env (zname, zindex)
-	end
-) | basic_decl_con_array env name
-	({index=index, comp=comp} : ARRAY_DEF) = (
+		({index=index, comp=comp} : ARRAY_DEF) : PARAINFO list = (
 	let	val zname = trans_id name;
 		val zindex = z_many_cross (map (zid env o trans_id) index);
 		val zcomp = trans_id comp;
 	in
-		[z_eq_eq(zname, z_tfun(zindex, zid env zcomp))]
+		[z_eq_eq(zname, z_tfun(zindex, zid env zcomp))] @
+		array_attrib env (zname, index)
 	end
 );
 =TEX
@@ -1852,17 +1870,11 @@ let	val zname = trans_id name;
 	val env' = fn id => if id = "array" then Value (zvar_ty, EIEnvVar tmark)
 					else env id; 
 	val index = map name_to_tmark ci;
-	val (zindex, attribs) = case index of
-		[ind]	=> 
-			let	val ti = trans_id ind;
-			in	(zid env' ti, array_attrib env' (zname, ti))
-			end
-	|	[]	=> fail "basic_decl_subtype_index_con" 508035 []
-	|	inds	=> (z_many_cross (map (zid env o trans_id) index), []);
-	val zp = z_eq (z_dom (zid env' var), zindex);
+	val zindex = map trans_id index;
+	val zp = z_eq (z_dom (zid env' var), z_many_cross(map (zid env) zindex));
 	val set_comp = z_set_comp (trans_decl env' {vars=[var],tmark=tmark}, zp)
 	val abb_def = z_eq_eq (zname, set_comp);
-in	abb_def :: attribs
+in	abb_def :: array_attrib env (zname, zindex)
 end
 );
 =TEX
