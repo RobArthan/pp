@@ -110,7 +110,7 @@ structure âTypeInferenceá : TypeInference = struct
 
 =SML
 open Parser Unification;
-type âENVá = string -> EXTYPE;
+type âENVá = string -> (EXTYPE*bool);
 type âINF_TUPLEá = EXTYPE TM * EXTYPE * SUBS;
 =TEX
 
@@ -130,10 +130,36 @@ fun âty_to_typeá ((TyAtom s) : TY) : TYPE  = (
 	then
 		mk_vartype s
 	else
-		mk_type (s, [])
+		case get_type_arity s of
+			Value 0 => mk_type (s, [])
+		|	Nil => mk_type (s, [])
+		|	Value x => fail "HOL type inferrer" 16030
+			[fn() => s,
+			 fn() => string_of_int x,
+			 fn() => if x = 1 then "" else "s",
+			 fn() => "0",
+			 fn() => "s"]
 )
   |  ty_to_type (TyCompound (tyl, s, _)) = (
-	mk_type (s, map ty_to_type tyl)
+	case get_type_arity s of
+	   Value x =>
+		let
+			val ltyl = length tyl
+		in
+		   if x = ltyl
+		   then
+			mk_type (s, map ty_to_type tyl)
+		   else
+			fail "HOL type inferrer" 16030
+			[fn() => s,
+			 fn() => string_of_int x,
+			 fn() => if x = 1 then "" else "s",
+			 fn() => string_of_int ltyl,
+			 fn() => if ltyl = 1 then "" else "s"
+			]
+		end
+
+	|  Nil => mk_type (s, map ty_to_type tyl)
 )
   |  ty_to_type (TyAq ty) = ty;
 
@@ -155,11 +181,28 @@ fun âis_varstructá (tm : 'a TM) : bool = (
 
 =SML
 fun âsub_tyá (env : ENV) (phi : SUBS) : ENV = (
-	(sub_type phi) o env
+	fn s => ((sub_type phi) ((fst o env) s), (snd o env) s)
 );
 =TEX
 
 \subsection{Environment Management}
+
+=SML
+val âcontext_infoá : (string*TYPE) list ref = ref [];
+
+fun âcontext_mapá ((tm::tml) : TERM list) :
+		(string*TYPE) list = (
+		(map dest_var (frees tm))@(context_map tml)
+	)
+	  | context_map _ = [];
+
+fun âset_contextá (tml : TERM list) : unit = 
+	context_info := context_map tml;
+
+fun âget_contextá (() : unit) : TERM list =
+	(map mk_var (!context_info));
+
+=TEX
 
 =SML
 fun âfv_setá ((Binder (s, a, b)) : 'a TM) : string list  = fv_set b diff fv_set a
@@ -193,8 +236,11 @@ fun âinit_envá (tm : 'a TM) : ENV = (
 	in
 	   (fn s =>
 		case type_of_const s of
-			Value t => replaced t
-			  | Nil => ExVartype(Unknown(lassoc3 freemap s))
+			Value t => (replaced t, false)
+			  | Nil =>
+				(							(type_to_extype (lassoc3 (!context_info) s), true)
+				handle (Fail msg) =>
+				(ExVartype(Unknown(lassoc3 freemap s)), false))
 	handle (Fail msg) =>
 		error "init_env" 16101 [fn() => s]
 	    )
@@ -207,11 +253,11 @@ fun âgrow_envá (env : ENV) (tm : 'a TM) : ENV = (
 	in
 	   (fn s =>
 		case type_of_const s of
-			Value t => replaced t
+			Value t => (replaced t, false)
 			  | Nil =>
 				if s mem freevars
 				then
-					ExVartype(Unknown(lassoc3 freemap s))
+					(ExVartype(Unknown(lassoc3 freemap s)), false)
 				else
 					env s
 	handle (Fail msg) =>
@@ -440,7 +486,7 @@ fun âti_failá (msg : int) (term : TY TM) (inserts : string list) : 'a = (
 	ti_errline 16001 [];
 	ti_errline 16002 [format_tm format_ty term];
 	ti_errline msg inserts;
-	fail "HOL type inferer"  16000 []
+	fail "HOL type inferrer"  16000 []
 );
 =TEX
 
@@ -453,7 +499,7 @@ fun âunify1á (phi : SUBS) ((t1, t2) : EXTYPE * EXTYPE) (term : TY TM) : SUBS = (
 			[format_tm format_ty term];
 		ti_errline 16020 [format_extype1 phi t1, format_extype1 phi t2];
 		ti_errline 16022 [get_message msg];
-		fail "HOL type inferer"  16000 [])
+		fail "HOL type inferrer"  16000 [])
 );
 =TEX
 
@@ -466,7 +512,7 @@ fun âlist_unify1á (phi : SUBS) (tl : EXTYPE list) (term : TY TM) : SUBS = (
 			[format_tm format_ty term];
 		ti_errline 16021 [format_list ((curry op ^ ":") o format_extype1 phi) tl ", "];
 		ti_errline 16022 [get_message msg];
-	fail "HOL type inferer"  16000 [])
+	fail "HOL type inferrer"  16000 [])
 );
 =TEX
 
@@ -683,7 +729,7 @@ and
 =SML
 and
 âti_idá (env : ENV) (s : string) : INF_TUPLE = (
-	let	val ty = env s;
+	let	val ty = (fst o env) s;
 	in
 		(TmTyped(Id s, ty), ty, id_subs)
 	end)
