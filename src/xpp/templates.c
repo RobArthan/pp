@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.27 2004/11/23 15:52:51 rda Exp rda $ 
+ * $Id: templates.c,v 2.28 2004/11/30 15:38:26 rda Exp $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -315,11 +315,8 @@ Boolean init_templates_tool(Widget w)
 
 	dismiss_btn = XtVaCreateManagedWidget("Dismiss",
 		xmPushButtonWidgetClass,	bottom_form,
-		XmNtopAttachment,		XmATTACH_WIDGET,
-		XmNtopWidget,			top_form,
-		XmNtopOffset,		4,
+		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
-		XmNbottomOffset,		4,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
 		XmNleftPosition,		2,
@@ -333,11 +330,8 @@ Boolean init_templates_tool(Widget w)
 
 	help_btn = XtVaCreateManagedWidget("Help",
 		xmPushButtonWidgetClass,	bottom_form,
-		XmNtopAttachment,		XmATTACH_WIDGET,
-		XmNtopWidget,			top_form,
-		XmNtopOffset,		4,
+		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
-		XmNbottomOffset,		4,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
 		XmNleftPosition,		13,
