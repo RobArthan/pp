@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.47 2004/07/06 20:20:54 rda Exp rda $
+ * $Id: pterm.c,v 2.48 2004/11/27 13:57:26 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -93,18 +93,33 @@ when it is ready. Also, the pseudo-terminal, which has very similar
 characteristics to a real terminal needs to be configured, e.g., to
 stop it doing input-line buffering or unwanted character conversions.
 
-In addition, there are several OS-dependent aspects: under SVR4-like
-systems like Solaris and now under Unix98 and later versions of POSIX
-compliant systems there are special interfaces grantpt and unlockpt
-which give access to the two /dev files as an atomic operation,
-via a pseudo-pseudo-device called /dev/ptmx. On BSD-like systems, there
-is an interface called openpty which generally gives better results than
-the fallback option, which is just to look for a free matching pair of control/slave devices in /dev (and pray that a competing process doesn't
-interfere by opening the slave device between your opens of the control
-device and the slave). Also on some systems, the pseudo-terminal configuration has
-to be done in the child rather than the parent if xpp is started in the
-background (this is probably historic now).  There is also some variation
-on how the configuration is done (e.g., with POSIX interfaces or with ioctl).
+In addition, there are several OS-dependent aspects:
+
+Under SVR4-like systems like Solaris and now under Unix98 and later
+versions of POSIX compliant systems there are special interfaces
+grantpt and unlockpt which give access to the two /dev files as an
+atomic operation, via a pseudo-pseudo-device called /dev/ptmx.
+
+On BSD-like systems, there is an interface called openpty which may
+give better results than the fallback option, which is just to look for
+a free matching pair of control/slave devices in /dev and pray that a
+competing process doesn't interfere by opening the slave device between
+your opens of the control device and the slave.
+
+Also on some systems, the pseudo-terminal configuration has to be done
+in the child rather than the parent if xpp is started in the background
+This is probably historic now.
+
+There is also variation on how the configuration is done i.e., with
+POSIX interfaces or with ioctl.
+
+On MacOS X (and possibly FreeBSD generally) you have to put the
+pseudo-terminal into exclusive to make restarting the application
+reliable. If this is not done, the OS appears to attempt to recycle the
+old control (master) pseudo-device before the old slave is ready to be
+reopened.
+
+
 
 DATA TRANSFER FROM APPLICATION
 
@@ -208,6 +223,8 @@ macros before using them.
  *	USE_CFMAKERAW (defined if so)
  * Whether this OS has the SUS V3 real-time signals:
  *	HAS_RTSIGNALS (defined if it does)
+ * Whether to put the slave pseudo-terminal into exclusive mode
+ * 	USE_TIOCEXCL
  * We now define the combinations to be used for the supported OSs.
  * We make no claim that other combinations that these
  * combinations will work on other OSs even if they compile OK. 
@@ -217,6 +234,7 @@ macros before using them.
 	#undef  USE_POSIX_TERMIO /* historical: we probably could on recent versions */
 	#define SET_ATTRS_IN_PARENT
 	#undef  USE_CFMAKERAW /* again historical: we probably could now */
+ 	#undef  USE_TIOCEXCL
 #endif
 
 #ifdef MACOSX
@@ -224,6 +242,7 @@ macros before using them.
 	#define USE_POSIX_TERMIO
 	#define SET_ATTRS_IN_PARENT
 	#define USE_CFMAKERAW
+ 	#define USE_TIOCEXCL
 #endif
 
 #ifdef SOLARIS
@@ -231,6 +250,7 @@ macros before using them.
 	#undef  USE_POSIX_TERMIO /* maybe we could */
 	#undef  SET_ATTRS_IN_PARENT
 	#undef  USE_CFMAKERAW
+ 	#undef  USE_TIOCEXCL
 #endif
 /*
  * MacOS X doesn't define some of the termio input and output control
@@ -695,6 +715,9 @@ static void set_pty_attrs(int fd)
 		perror("xpp");
 		exit(5);
 	}
+#ifdef	USE_TIOCEXCL
+	ioctl(fd, TIOCEXCL, 0);
+#endif
 }
 
 
