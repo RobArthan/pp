@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.269 $ $RCSfile: imp507.doc,v $ $Date: 2004/07/15 13:52:02 $
+% imp507.doc %Z% $Revision: 1.270 $ $RCSfile: imp507.doc,v $ $Date: 2004/07/17 14:58:02 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.269 $%
+\def\SCCSversion{$Revision: 1.270 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/07/15 13:52:02 $%
+\TPPdate{\FormatDate{$Date: 2004/07/17 14:58:02 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -207,7 +207,7 @@ by doing all the work of checking and generating the VC terms in {\it call\_vcs}
 \item[Issue 1.255] Fixed bug in {\it combine\_param\_specs}.
 \item[Issue 1.256] Fixed bug in {\it renames\_object\_common}.
 \item[Issue 1.257] Now allows duplicates in a use clause.
-\item[Issues 1.258-1.270] Reform of the Environments.
+\item[Issues 1.258-1.271] Reform of the Environments.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -2245,28 +2245,6 @@ fun €in_scope_fun›
 	new_function : INFORMAL_FUN) : IN_SCOPE = (
 		in_scope_dict(in_scope, add_function_to_dict formal globals (dict, new_function))
 ) ;
-=TEX
-=SML
-fun €package_fun›
-	(formal : bool)
-	(globals : Z_ID list)
-	 ({vc_vars, consts_types, formal_procs, informal_funs,
-		formal_funs, aux_vars, var_renamings, zmod, decl, local_dict, with_dict}
-	: PACKAGE,
-	new_function : INFORMAL_FUN) : PACKAGE = (
-	{	vc_vars				=	vc_vars,
-		consts_types			=	consts_types,
-		formal_procs			=	formal_procs,
-		informal_funs			=	informal_funs,
-		formal_funs			=	formal_funs,	
-		aux_vars			=	aux_vars,	
-		var_renamings			=	var_renamings,
-		zmod				=	zmod,
-		decl				=	decl,
-		local_dict				=	add_function_to_dict formal globals (local_dict, new_function),
-		with_dict				=	with_dict
-	}
-);
 =TEX
 =SML
 fun €speclab_wp_env_from_in_scope›  (
@@ -6670,7 +6648,8 @@ fun €new_scope_with› (ident : ID) : unit = (
 			val block = block_vc_aux_vars Nil (block, aux_vars1);
 			val block = block_formal_procs Nil (block, formal_procs1);
 			val block = block_renamings (block, var_renamings);
-			val package' = package_with_dict (package, dict);
+			val dict' = #dict(#in_scope(#declab block));
+			val package' = package_with_dict (package, dict');
 		in	new_parent_aux true (pack_spec_name ident);
 			pack_env := s_enter ident package' (!pack_env);
 			blocks := new_scope_common(block :: !blocks)
@@ -6772,15 +6751,14 @@ fun €new_scope_pack_body› (ident : ID) : unit = (
 			body_flag = true
 		};
 		val old_subunit_flag = test_flag #subunit_flag 1;
+		val _ = 	(if old_subunit_flag then () else new_parent_aux false (#zmod package1));
 		val dict = init_pack_body_dict(#local_dict package1, #vc_vars package1);
 		val block = block_vc_vars Nil (
 			block_dict  (
 				block_flags(empty_block, flags), dict),
 			#vc_vars package1);
 		val block' = block_block_name(block, ident);
-	in
-		(if old_subunit_flag then () else new_parent_aux false (#zmod package1));
-		blocks := new_scope_common (block' :: !blocks)
+	in	blocks := new_scope_common (block' :: !blocks)
 	end	
 );
 =TEX
@@ -6964,70 +6942,12 @@ end
 =TEX
 =SML
 fun €renames_proc_common›
-	(_ : FORMAL_PROC list)
-	({subprogram_specification = ss, name1 = Value pack, name2=old}
+	(pack_fps : FORMAL_PROC list)
+	({subprogram_specification = ss, name1, name2}
 		: SUBPROGRAM_RENAMING)
 	 : FORMAL_PROC OPT = (
-	case ss of
-		SSProcedure {name = new, ... } => (
-		   case s_lookup pack (!pack_env) of
-		   Value package => (
-			let	val spec_script_name = (#zmod package);
-				val formal_proc2  =
-					get_package_proc_spec "renames_proc_common"
-						(#formal_procs package)
-						old;
-				val (tys, _) =
-					spec_script_theory_types_and_const_thms spec_script_name;
-				val newids = new_ids package;
-				val (tysubs, _) = prefix_given_sets pack newids tys;
-				val oldthy = get_current_theory_name();
-				val changethy = open_theory spec_script_name;
-				val old_fp as {name=pname, formal_ids=pformal_ids, globals=g,
-					par_names_defs=old_par_names_defs, spec=pspec} = (
-					prefix_formal_proc
-						pack
-						tysubs
-						(new_ids package)
-						formal_proc2)
-					handle exn as (Fail _) =>
-					(open_theory oldthy;
-					 raise exn);
-				val changethy2 = open_theory oldthy;
-				val par_names_defs = snd(get_name_and_par_names_defs ss);
-				val formal_proc3 =
-						{name = new,
-						formal_ids = pformal_ids,
-						globals = g,
-						par_names_defs = par_names_defs,
-						spec = pspec};
-				val new_fp  =
-					case current_cn_env new of
-						Value{info = EIEnvProcedure{
-							formal = true,
-							formal_proc = fp}, ...} => 
-							Value fp
-					| _ => Nil;
-			in	case (new_fp, length par_names_defs = length old_par_names_defs) of
-					(Nil, true) => Value formal_proc3
-				|	_ => (
-					fail "renames_proc_common" 507059
-					[fn _ => old, fn _ => new]
-				)
-			end	handle (exn as Fail f) =>
-				(if (area_of exn = "find")
-				then comment "renames_proc_common" 507036
-					[fn () => pack dot old]
-				else comment "renames_proc" 507044
-					[fn () => pack dot old,
-					fn () => get_message f];
-				Nil)
-		) |	Nil => (comment "renames_proc" 507038 [fn()=>pack];
-				Nil)
-	) |	_ => Nil
-) | renames_proc_common pack_fps
-	({subprogram_specification = ss, name1 = Nil, name2=old}) = (
 	let	val (new, par_names_defs) = get_name_and_par_names_defs ss;
+		val old = trans_id(case name1 of Value pack => pack dot name2 | Nil => name2);
 		val old_fp  as {formal_ids, globals, spec, par_names_defs = old_par_names_defs, ...} =
 			get_proc_spec "renames_proc_common" current_cn_env  old
 			handle Fail _ => (
@@ -7480,7 +7400,7 @@ fun €renames_pack› (old_name : ID , new_name : ID)  : unit = (
 				informal_fun = {name, formal_pars, return_type, par_names_defs},
 				globals, ...} : FORMAL_FUN) 
 			: SUBPROGRAM_SPECIFICATION = (SSFunction
-				{designator = name,
+				{designator = prefix_id new_name name,
 				formal_part = map (untrans_par par_names_defs) formal_pars,
 				 return = return_type,
 				 spec = Nil, annotation = [], globals = globals}
@@ -7489,13 +7409,13 @@ fun €renames_pack› (old_name : ID , new_name : ID)  : unit = (
 			let	 val ss = untrans_ff ff;
 			in	renames_fun{subprogram_specification = ss,
 					name1 = Value old_name,
-					name2 = prefix_id new_name name}
+					name2 = name}
 			end
 		);
 		val _ = map do_formal_fun formal_funs;
 		fun untrans_fp ({name, formal_ids, globals, par_names_defs, ...} : FORMAL_PROC) 
 			: SUBPROGRAM_SPECIFICATION = (SSProcedure
-				{name = name,
+				{name =  prefix_id new_name name,
 				 formal_part = map (untrans_par par_names_defs) formal_ids,
 				 spec = Nil, annotation = [], globals = globals}
 		);
@@ -7503,7 +7423,7 @@ fun €renames_pack› (old_name : ID , new_name : ID)  : unit = (
 			let	 val ss = untrans_fp fp;
 			in	renames_proc{subprogram_specification = ss,
 					name1 = Value old_name,
-					name2 = prefix_id new_name name}
+					name2 = name}
 			end
 		);
 		val _ = map do_formal_proc formal_procs;
