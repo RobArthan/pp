@@ -50,6 +50,12 @@ This allows tactics to be used in a backward proof mechanism.}
 First version.
 \item [Issue 1.2]
 Major changes after RDA comments.
+\item [Issue 1.3]
+Main Goal stack made ``infinite''.
+Operations that change the number of states on this stack now inform the
+user about the current number.
+Added $top\_thm$.
+Added a relabelling feature to $modify\_goal\_state\_thm$.
 \end{description}
 \subsection{Changes forecast}
 Most of the text outside the documentation boxes is a discussion
@@ -82,6 +88,8 @@ In particular it depends on \cite{DS/FMU/IED/IMP009},
 in which
 the type abbreviations $TACTIC$, $GOAL$ and $PROOF$ are defined.
 \subsubsection{Deficiencies}
+The document mixes functions which are tools for the naive user
+and those for the advanced system builder, which makes for an uneven presentation.
 \subsubsection{Possible Enhancements}
 The subgoal package as stated provides no direct link to 
 whatever conversion package becomes available.
@@ -122,9 +130,7 @@ This produces an initial {\em goal state}, that is
 pushed onto 
 the {\em main goal stack}:
 the {\em current goal state} is always the top of the main goal stack.
-It is a finite stack, that will refuse
-user attempts to push more goal states onto it than it 
-can contain.
+It is an infinite stack (within memory bounds).
 The user may ``pop'' main goals from this stack either by achieving or abandoning (dropping) the current main goal.
 
 A goal state has a {\em current goal}, 
@@ -137,12 +143,15 @@ that achieves the current goal
 will become the current one
 (the next goal to a goal of a given label is defined in \ref{NextGoal}).
 The successful application of a tactic and of most other commands that affect the goal state will result in the
-current goal state being pushed onto the {\em undo buffer},
+current goal state being pushed onto the subgoal package's {\em undo buffer},
 and a new goal state based on the tactics application becomes the current one
 (replacing the top of the main goal stack).
 The user may then {\em undo} such commands by retriving past
 goal states from the undo buffer to the limit of the buffer.
 If the buffer fills then it will discard the oldest goal states to make room for new ones.
+Note that the undo buffer is not part of any goal state,
+and so, for example, pushing a goal onto the main goal stack
+discards the old undo buffer contents from the system.
 
 Each goal within a goal state will have one or more {\em labels},
 by which the goal may be referred to.
@@ -185,11 +194,14 @@ Sets a new current main goal, pushing it
 onto the main goal stack.
 The current (and only) goal will be the main goal, with label ``1''.
 The current subgoal will be displayed.
+The undo buffer will be emptied.
 =FAILURE
-30001	the main goal stack is full
+30001	there are now ?0 goals on the main goal stack
 30002	the conclusion of the goal, ?0, is not of type BOOL
 30003	an assumption of the goal, ?0, is not of type BOOL
 30004	two assumption of the goal (?0 and ?1) are %alpha%-convertible
+=FAILUREC
+Message 30001 is only for the users information.
 =ENDDOC
 =DOC
 val âpush_goal_state_thmá : THM -> unit;
@@ -201,11 +213,14 @@ set a new current main goal to be the conclusion of the input theorem
 The current goal will be the first assumption of the input theorem, viewed as a term form goal, with label ``1''.
 The other assumptions of the theorem will become subsequent goals with labels ``2'',``3'',...
 This new goal state is pushed onto the main goal stack.
+The undo buffer will be emptied.
 =USES
 For the advanced user, interested in partial proof.
 =FAILURE
-30001	the main goal stack is full
+30001	there are now ?0 goals on the main goal stack
 30005	theorem cannot be viewed as a goal state theorem
+=FAILUREC
+Message 30001 is only for the users information.
 =ENDDOC
 \subsection{Applying Tactics}
 \label{NextGoal}
@@ -274,9 +289,26 @@ restoring its current goal and labelling.
 If there is no top achieved theorem the function fails, having no effect.
 
 If the user wishes to examine the top achieved theorem, without
-popping the main goal stack they should use $top\_goal\_state\_thm$ and $simplify\_goal\_state\_thm$ (q.v.).
+popping the main goal stack they should use $top\_thm$ (q.v.).
 =SEEALSO
 $save\_pop\_thm$
+=FAILURE
+30001	there are now ?0 goals on the main goal stack
+30010	there is no current goal state
+30011	there is no top achieved theorem
+30024	modify_goal_state_thm has been used on current main goal
+=FAILUREC
+Message 30001 is only for the users information.
+=ENDDOC
+=DOC
+val âtop_thmá : unit -> THM;
+=DESCRIBE
+If available, this returns the top achieved theorem
+(i.e. the theorem whose sequent is the main goal),
+without affecting the current goal state.
+If there is no top achieved theorem the function fails.
+=SEEALSO
+$pop\_thm$, $save\_pop\_thm$
 =FAILURE
 30010	there is no current goal state
 30011	there is no top achieved theorem
@@ -291,11 +323,16 @@ as well as saving it under the given string key on the current theory,
 and then pops the previous goal state (if any) of the main goal stack,
 restoring its current goal and labelling.
 If there is no top achieved theorem, or the key is already used in the current theory, the function fails, having no effect.
+=SEEALSO
+$pop\_thm$, $top\_thm$
 =FAILURE
+30001	there are now ?0 goals on the main goal stack
 30010	there is no current goal state
 30011	there is no top achieved theorem
 30023	the key ?0 is already used in theory ?1
 30024	modify_goal_state_thm has been used on current main goal
+=FAILUREC
+Message 30001 is only for the users information.
 =ENDDOC
 =DOC
 val âtop_goal_state_thmá : unit -> THM;
@@ -330,7 +367,10 @@ val âdrop_main_goalá : unit -> unit;
 Pop the previous goal state (if any) from the main goal stack,
 throwing away any work on the current main goal.
 =FAILURE
+30001	there are now ?0 goals on the main goal stack
 30010	there is no current goal state
+=FAILUREC
+Message 30001 is only for the users information.
 =ENDDOC
 \subsection{Undoing and Redoing}
 =DOC
@@ -374,7 +414,8 @@ and then display it.
 =DOC
 val âtop_goal_stateá : unit -> GOAL_STATE;
 =DESCRIBE
-This provides the current goal state as a value.
+This provides the current goal state as a value:
+note that this does not contain the undo buffer.
 =SEEALSO
 $push\_goal\_state$
 =FAILURE
@@ -387,56 +428,14 @@ If the value given is ``well-formed'', then this function pushes the current goa
 and sets the given value as the current goal state.
 The most likely reason that a goal state value is ill-formed
 is that it is not being pushed in the same context as it was formed, e.g. it was formed in a theory that is now out of scope.
+The undo buffer will be emptied.
 =SEEALSO
 $top\_goal\_state$
 =FAILURE
-30001	the main goal stack is full
+30001	there are now ?0 goals on the main goal stack
 30022	goal state is ill-formed
-=ENDDOC
-\subsection{Modifying the Goal State Theorem}
-=DOC
-val âmodify_goal_state_thmá : (THM -> THM) -> unit;
-=DESCRIBE
-A rather drastic hook into the subgoal package that works as follows:
-\begin{enumerate}
-\item
-Extract the goal state theorem
-\item
-Apply a user-supplied inference rule to the theorem.
-\item
-Set the resulting theorem as if by $push\_goal\_state\_thm$,
-Thus the goals will be relabelled as all being
-``top level'' ones.
-\item
-Keep the old undo list, so this hook's effect can be undone.
-This step could not be mimicked by other functions available to the user.
-\end{enumerate}
-
-This will issue a warning on its use, and on attempting to extract 
-an achieved, or goal state, theorem from a goal state that
-is derived from the modified one,
-as it may alter the original main goal, so that the result of an apparently successful $pop\_thm$ might not be
-an achievement of the original main goal.
-=USES
-Two example uses of it are:
-\begin{enumerate}
-\item
-Add an assumption to the main goal ``on the fly''.
-This would involve adding the assumption to the
-conclusion of the goal state theorem,
-as well as to each goal's assumption list (held in a term form).
-This will save on having to restart the subgoal package if the original main
-goal was not satisfiable, but an additional assumption
-would allow it to become so.
-\item
-Combine two goals into one, by having the inference rule
-``merge'' the two assumptions representing the goals,
-into a single  term form goal.
-\end{enumerate}
-This is intended for system builders wishing to write extensions to the
-subgoal package.
-=FAILURE
-30024	modify_goal_state_thm has been used on current main goal
+=FAILUREC
+Message 30001 is only for the users information.
 =ENDDOC
 \subsection{Information Requests}
 =DOC
@@ -491,22 +490,10 @@ To determine what goals are left to achieve.
 =DOC
 val âprint_goal_stateá : GOAL_STATE -> unit;
 =DESCRIBE
-Print out user-orientated details of the given goal state.
+Pretty print the given goal state.
 =FAILURE
 =ENDDOC
 \subsection{Parameterising the Subgoal Package}
-=DOC
-(* âmain_goal_stack_lengthá : int *)
-=DESCRIBE
-This is a system control, handled by $set\_int\_control$, etc,
-which sets the maximum number of entries that can be held on
-the main goal stack: i.e. how many $push\_goal$ calls may be stacked before failure.
-This value includes counting the current goal state, that is
-at the top of the stack.
-It is initially set at 4.
-The control can neither be set to less than 1, nor to less than the current
-number of entries currently on the stack.
-=ENDDOC
 =DOC
 (* âundo_buffer_lengthá : int *)
 =DESCRIBE
@@ -515,6 +502,65 @@ which sets the maximum number of entries that can be held on
 the undo buffer: i.e. how many tactic applications, etc, may be undone
 It is initially set to 12,
 and cannot be made negative.
+=ENDDOC
+\subsection{Modifying the Goal State Theorem}
+=DOC
+val âmodify_goal_state_thmá : (THM -> THM) -> ((TERM * string list)list) -> unit;
+=DESCRIBE
+$modify\_goal\_state\_thm$ $rule$ $label$ is a rather drastic hook into the subgoal package that works as follows:
+\begin{enumerate}
+\item
+Extract the goal state theorem
+\item
+Apply a user-supplied inference rule $rule$ to the theorem.
+\item
+Make a new goal state, in which the goal state theorem is this
+ new theorem.
+\item
+In the new goal state label any goals (in term form) found 
+(up to $\alpha$-conversion) in the association list $label$
+with their corresponding labels.
+Multiple entries for the same term in the list will cause the labels to be 
+accumulated.
+\item
+Label otherwise unlabelled goals with unused single natural number labels (the first available ones from the list ``1'', ``2'',...)
+\item
+Treat this new goal state as if it had been created by a tactics application, e.g. it becomes the current goal state,
+the previous goal state is put on the undo list, the user is
+told the next goal to prove, etc.
+\end{enumerate}
+
+This will issue a warning on its use, and on attempting to extract 
+an achieved, or goal state, theorem from a goal state that
+is derived from the modified one,
+as it may alter the original main goal, so that the result of an apparently successful $pop\_thm$ might not be
+an achievement of the original main goal.
+=USES
+This function is intended for system builders wishing to write extensions to the package.
+
+Two example uses of it are:
+\begin{enumerate}
+\item
+Add an assumption to the main goal ``on the fly''.
+This would involve adding the assumption to the
+conclusion of the goal state theorem,
+as well as to each goal's assumption list (held in a term form).
+This will save on having to restart the subgoal package if the original main
+goal was not satisfiable, but an additional assumption
+would allow it to become so.
+\item
+Combine two goals into one, by having the inference rule
+``merge'' the two assumptions representing the goals,
+into a single  term form goal.
+\end{enumerate}
+Both these uses could allow the proof structure to be recovered
+using the $label$ association list.
+=FAILURE
+30024	modify_goal_state_thm has been used on current main goal
+30039	the following goals were not allocated labels by the label association list ?0
+30040	duplicate labels ?0 given for different terms
+=FAILUREC
+Message 30039 is only given for the users information.
 =ENDDOC
 
 \section{END OF THE SIGNATURE}
