@@ -232,12 +232,30 @@ fun €format_origin› (p : ORIGIN) : string = (
 =SML
 fun €format_constraint_type› Eq = "="
 |   format_constraint_type Less = "<"
-|   format_constraint_type LessEq = "<=";
+|   format_constraint_type LessEq = "º";
 =TEX
 =SML
-fun €format_constraint› ( (p, ty, c, o1) : CONSTRAINT ) : string = (
+fun €format_constraint› ( (p, ty, c, [(1,i)]) : CONSTRAINT ) : string = (
+	string_of_int i ^ ": " ^
+	format_poly p ^ " " ^ format_constraint_type ty ^ " " ^ string_of_int c
+) | format_constraint ((p, ty, c, o1)) : string = (
 	format_origin o1 ^ ": " ^
 	format_poly p ^ " " ^ format_constraint_type ty ^ " " ^ string_of_int c
+);
+=TEX
+=SML
+fun €diagnose› (itms : (int * TERM) list) (cts : CONSTRAINT list) : unit = (
+	let	fun format_itm (i, tm) = (
+			"X" ^ string_of_int i ^ " = " ^ string_of_term tm
+		);
+	in	diag_string(get_error_message 82100 []);
+		case itms of [] => () | _ => (
+			diag_string(get_error_message 82101 []);
+			(map (diag_string o format_itm) itms; ())
+		);
+		diag_string(get_error_message 82102 []);
+		map (diag_string o format_constraint) cts; ()
+	end
 );
 =TEX
 \subsection{Cross-multiplication and adding}
@@ -477,9 +495,11 @@ polynomials in the constraints to be in increasing order and to have no
 entries with zero coefficients (as required for the polynomial operations
 to work correctly).
 =SML
-fun €lin_arith_contr› (csl : CONSTRAINT list) : POLY = (
+fun €lin_arith_contr› (itms : (int * TERM) list) (csl : CONSTRAINT list) : POLY = (
 	(all_ineq_eliminate (all_eq_eliminate(map normalise_constraint csl));
-	 fail "system is satisfiable" 99999 [])
+	 case csl of
+		[] => fail "lin_arith_contr" 82111 []
+	|	_ => fail "lin_arith_contr" 82110 [fn()=>(diagnose itms csl; "")])
 	handle Contradiction (cs as (_, _, _, org)) => org
 );
 =TEX
@@ -582,6 +602,12 @@ val €º_cancel_conv_thm› = tac_proof(
 	REPEAT (µ_tac ORELSE ¥_tac) 
 	 THEN DROP_ASMS_T (MAP_EVERY (asm_tac o eq_sym_rule))
 	THEN asm_rewrite_tac[]);
+val €º_0_thm› = tac_proof(
+	([],¨µm n ∑ m + n º 0 § m = 0 ± n = 0Æ),
+	rewrite_tac[]);
+val €eq_0_thm› = tac_proof(
+	([],¨µm n ∑ m + n = 0 § m = 0 ± n = 0Æ),
+	rewrite_tac[]);
 =TEX
 =SML
 val €term_times_thm› = (tac_proof(([], ¨
@@ -618,7 +644,7 @@ val €make_eq_or_º_thm› = (tac_proof(([], ¨
 Æ),
 	rewrite_tac[greater_def, æ_def, less_def, ≥_º_thm, ≥_eq_thm]));
 =TEX
-Now $term\_times\_rule$ which we implement using nets:
+Now $scale\_rule$ which we implement using nets:
 =SML
 local
 val €term_times_net› = (
@@ -628,17 +654,17 @@ val €term_times_net› = (
 );
 val €t› = ¨t:ÓÆ;
 in
-fun €term_times_rule› (tm : TERM) : THM -> THM = (
+fun €scale_rule› (tm : TERM) : THM -> THM = (
 	if type_of tm =: Ó
 	then	(fn th =>
 		let	val thm = (case net_lookup term_times_net (concl th) of
 					[th] => th
-				| 	_=> thm_fail"term_times_rule" 82011 [th]
+				| 	_=> thm_fail"scale_rule" 82011 [th]
 			);
 		in	(simple_¥_match_mp_rule (inst_term_rule [(tm, t)] thm) th)
-			handle Fail _ => thm_fail"term_times_rule" 82011 [th]
+			handle Fail _ => thm_fail"scale_rule" 82011 [th]
 		end)
-	else	term_fail "term_times_rule" 82010 [tm]
+	else	term_fail "scale_rule" 82010 [tm]
 );
 end;
 =TEX
@@ -696,7 +722,7 @@ fun €sum2_rule_aux› (th1 : THM) (th2: THM) : THM = (
 );
 =TEX
 =SML
-fun €scale_rule› (a : int) (th : THM) : THM = (
+fun €lit_scale_rule› (a : int) (th : THM) : THM = (
 	let	val th1 = make_eq_or_º_rule th;
 		val scale_th = simple_µ_elim (mk_Ó(abs a)) (
 			case
@@ -715,7 +741,7 @@ fun €scale_rule› (a : int) (th : THM) : THM = (
 =TEX
 =SML
 fun €scale_and_sum2_rule› (a1 : int) (th1 : THM) (th2: THM) : THM = (
-	sum2_rule_aux (scale_rule a1 th1) (make_eq_or_º_rule th2)
+	sum2_rule_aux (lit_scale_rule a1 th1) (make_eq_or_º_rule th2)
 );
 =TEX
 =SML
@@ -723,7 +749,7 @@ fun €scaled_sum_rule› (aths : (int * THM) list) : THM = (
 	conv_rule (RANDS_C (TRY_C anf_conv))
 	(case aths of
 		[] => fail "sum2_rule" 9089 []
-	|	[(a, th)] => scale_rule a th
+	|	[(a, th)] => lit_scale_rule a th
 	|	(a, th) :: more => scale_and_sum2_rule a th(scaled_sum_rule more))
 );
 =TEX
@@ -888,7 +914,8 @@ that each atom is non-negative.
 =SML
 val €le› = ¨$ºÆ;
 fun €make_problem› (addlwbs : bool) (tml : TERM list) :
-		((int * TERM) * TERM) list
+		(int * TERM) list
+	*	((int * TERM) * TERM) list
 	*	((	CONSTRAINT
 		*	(int * TERM_CONSTRAINT)) list) = (
 	let	fun aux1 [] = []
@@ -904,7 +931,7 @@ fun €make_problem› (addlwbs : bool) (tml : TERM list) :
 		val stsl' = stsl @ extras;
 		val istsl = combine (interval 1 (length stsl')) stsl';
 		val ctl = map (make_constraint inds) istsl;
-	in	(map(fn (i, t)=> ((i, mk_var("@_"^string_of_int i, Ó)), t)) inds,
+	in	(inds, map(fn (i, t)=> ((i, mk_var("@_"^string_of_int i, Ó)), t)) inds,
 			combine ctl istsl)
 	end
 );
@@ -962,44 +989,20 @@ fun €make_actual_thm›
 =TEX
 =SML
 fun €lin_arith_rule› (addlwbs : bool) (tml : TERM list) : THM = (
-	let	val (ivtl, ctetcl) = make_problem addlwbs tml;
-		val p = lin_arith_contr (map fst ctetcl);
+	let	val (itms, ivtl, ctetcl) = make_problem addlwbs tml;
+		val p = lin_arith_contr itms (map fst ctetcl);
 	in	make_actual_thm ivtl p (map snd ctetcl)
 	end
 );
 =TEX
 =SML
 val €lin_arith_tac› : TACTIC = (
-		contr_tac
-	THEN	GET_ASMS_T (f_thm_tac o lin_arith_rule false o map concl)
+	GET_ASMS_T (f_thm_tac o lin_arith_rule false o map concl)
 );
 =TEX
 =SML
 val €lin_arith_tac1› : TACTIC = (
-		contr_tac
-	THEN	GET_ASMS_T (f_thm_tac o lin_arith_rule true o map concl)
-);
-=TEX
-=SML
-val €lin_arith_fc_canon›  : CANON = (fn thm =>
-	let	fun chk1 t = (
-			is_º t orelse
-			(type_of (fst (dest_eq t)) =: Ó)
-			handle Fail _ => false
-		);
-		fun chk2 t = (
-			let	val t1 = 
-				case rev(strip_¥ t) of
-					[tm] => tm
-				|	tm1 :: tm2 :: _ => (
-					if is_f tm1 then tm2 else tm1
-				) |	_ => mk_f;
-			in	chk1 t1 orelse (chk1 (dest_≥ t1))
-				handle Fail _ => false
-			end
-		);
-	in	fc_canon thm drop (not o chk2 o snd o strip_µ o concl)
-	end
+	GET_ASMS_T (f_thm_tac o lin_arith_rule true o map concl)
 );
 =TEX
 Now the tactic which is the automatic proof tactic
@@ -1008,9 +1011,10 @@ val €lin_arith_prove_tac› : THM list -> TACTIC = (fn thl => fn gl =>
 	((	all_asm_ante_tac
 	THEN_TRY 	rewrite_tac thl
 	THEN	contr_tac
-	THEN	ALL_ASM_FC_T1 lin_arith_fc_canon (MAP_EVERY strip_asm_tac) []
-	THEN	GET_ASMS_T (f_thm_tac o lin_arith_rule true o map concl)) gl)
-	handle	Fail _ => term_fail "lin_arith_prove_tac" 76001 [snd gl]
+	THEN	lin_arith_tac1) gl)
+	handle	Fail msg => fail "lin_arith_prove_tac" 82200
+			[(fn () =>get_message_text msg),
+			 (fn () => string_of_term (snd gl))]
 	
 );
 =TEX
@@ -1019,7 +1023,7 @@ and the associated conversion:
 val €lin_arith_prove_conv› : THM list -> CONV = (fn thl => fn tm =>
 	let	val th = tac_proof(([], tm), lin_arith_prove_tac thl);
 	in	§_t_intro  th
-	end	handle Fail _ => term_fail "lin_arith_prove_conv" 76001 [tm]
+	end	handle ex => reraise ex "lin_arith_prove_conv"
 );
 =TEX
 \section{OTHER RULES}
@@ -1145,7 +1149,10 @@ val strip_cxt = [
 
 	(¨≥x < yÆ, make_eq_or_º_conv),
 	(¨≥x æ yÆ, make_eq_or_º_conv),
-	(¨≥x > yÆ, make_eq_or_º_conv)];
+	(¨≥x > yÆ, make_eq_or_º_conv),
+
+	thm_eqn_cxt eq_0_thm,
+	thm_eqn_cxt º_0_thm];
 =TEX
 For rewriting, 
 =SML
@@ -1157,35 +1164,28 @@ val _ = set_pr_tac lin_arith_prove_tac "'lin_arith";
 val _ = set_pr_conv lin_arith_prove_conv "'lin_arith";
 val _ = commit_pc "'lin_arith";
 =TEX
+=SML
 val _ = new_pc €"lin_arith"›;
 val _ = merge_pcs ["predicates","'lin_arith"] "lin_arith";
 val _ = commit_pc "lin_arith";
 =TEX
 \section{OTHER TACTICS}
 =SML
-fun €scale_thm_tac› (t : TERM) (th : THM) : TACTIC = (
-	((REPEAT_TTCL STRIP_THM_THEN
-		(check_asm_tac o conv_rule (RANDS_C (TRY_C anf_conv)) o term_times_rule t)
-		o  make_eq_or_º_rule) th)
-			handle ex => reraise ex "scale_thm_tac"
-);
-=TEX
-=SML
 fun €scale_asm_tac› (t : TERM) (asm : TERM) : TACTIC = (fn gl =>
-	(DROP_ASM_T asm (scale_thm_tac t) gl)
+	(DROP_ASM_T asm (fn th => strip_asm_tac (scale_rule t th)) gl)
 	handle ex => reraise ex "scale_asm_tac"
 );
 =TEX
 =SML
-fun €scale_nth_asm_tac› (n : int) (t : TERM) : TACTIC = (fn gl =>
-	(DROP_NTH_ASM_T n (scale_thm_tac t) gl)
+fun €scale_nth_asm_tac› (t : TERM) (n : int) : TACTIC = (fn gl =>
+	(DROP_NTH_ASM_T n (fn th => strip_asm_tac (scale_rule t th)) gl)
 	handle ex => reraise ex "scale_nth_asm_tac"
 );
 =TEX
 =SML
-fun €list_scale_nth_asm_tac› (nts : (int * TERM) list) : TACTIC = (fn gl => 
-	let	val (ns, ts) = split nts;
-	in	LIST_DROP_NTH_ASM_T ns (EVERY o zip (map scale_thm_tac ts)) gl
+fun €list_scale_nth_asm_tac› (tns : (TERM * int) list) : TACTIC = (fn gl => 
+	let	val (ts, ns) = split tns;
+	in	LIST_DROP_NTH_ASM_T ns (EVERY o zip (map (fn t => strip_asm_tac o scale_rule t) ts)) gl
 	end handle ex => reraise ex "list_scale_nth_asm_tac"
 );
 =TEX
@@ -1223,12 +1223,12 @@ sum2_rule_aux æ_th1 æ_th2;
 sum2_rule_aux æ_th1 eq_th1;
 
 
-scale_rule 9 eq_th1;
-scale_rule ~42 eq_th1;
-scale_rule 11 º_th1;
-scale_rule ~1 º_th1;
-scale_rule 1001 æ_th1;
-scale_rule ~666 æ_th1;
+lit_scale_rule 9 eq_th1;
+lit_scale_rule ~42 eq_th1;
+lit_scale_rule 11 º_th1;
+lit_scale_rule ~1 º_th1;
+lit_scale_rule 1001 æ_th1;
+lit_scale_rule ~666 æ_th1;
 
 make_eq_or_º_rule eq_th1;
 make_eq_or_º_rule º_th1;
@@ -1271,7 +1271,7 @@ scaled_sum_rule aths;
 la_rule aths;
 
 
-push_goal([], ¨≥∂x1 x2 x3∑ x1 + x2 = 1 ± x1 = 1 + x2 ± x2 < x3 ± x3 = 0Æ);
+set_goal([], ¨≥∂x1 x2 x3∑ x1 + x2 = 1 ± x1 = 1 + x2 ± x2 < x3 ± x3 = 0Æ);
 
 a(contr_tac THEN DROP_ASMS_T (MAP_EVERY (strip_asm_tac o make_eq_or_º_rule)));
 
@@ -1279,7 +1279,7 @@ a lin_arith_tac;
 
 pop_thm();
 
-push_goal([], ¨≥∂x1 x2 x3∑x1 + x2 + x3 º x2 ± x1 > 0Æ);
+set_goal([], ¨≥∂x1 x2 x3∑x1 + x2 + x3 º x2 ± x1 > 0Æ);
 
 a(contr_tac THEN DROP_ASMS_T (MAP_EVERY (strip_asm_tac o make_eq_or_º_rule)));
 
@@ -1288,8 +1288,17 @@ a lin_arith_tac1;
 pop_thm();
 
 
-a(f_thm_tac (la_rule aths));
+set_goal([], ¨x1 + x2 + x3 º x2 ¥ x1 = 0Æ);
 
+a(PC_T1"lin_arith"prove_tac[]);
+
+pop_thm();
+
+set_goal([], ¨x1 + x2 + x3 º x4 ¥ x1 = 0Æ);
+
+a(PC_T1"lin_arith"prove_tac[]);
+
+pop_thm();
 
 qp_rule ¨≥∂x1 x2 x3∑ x1 + x2 = 1 ± x1 = 1 + x2 ± x2 < x3 ± x3 = 0Æ;
 qp_rule ¨≥∂x1 x2 x3∑x1 + x2 + x3 º x2 ± x1 > 0Æ;
@@ -1304,3 +1313,8 @@ fail "foo" 19001 [
 
 merge_pcs_rule1 ["sets_ext", "lin_arith"] prove_rule [] ¨{x | x < 0} = {}Æ;
 
+merge_pcs_rule1 ["hol1", "lin_arith"] prove_rule []
+	¨{(x, y) | x = y + x ± x + y = y } = {(0,0)}Æ;
+
+
+¨
