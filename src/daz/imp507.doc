@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.219 $ $RCSfile: imp507.doc,v $ $Date: 2002/08/08 13:10:57 $
+% imp507.doc %Z% $Revision: 1.220 $ $RCSfile: imp507.doc,v $ $Date: 2002/08/23 21:49:57 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.219 $%
+\def\SCCSversion{$Revision: 1.220 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/08/08 13:10:57 $%
+\TPPdate{\FormatDate{$Date: 2002/08/23 21:49:57 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -165,6 +165,7 @@ being renamed is defined in the same package specification.
 \item[Issue 1.217] R0052: block statements (and now tolerates syntax for default parameters).
 \item[Issue 1.218, 1.219] R0051: default parameters.
 \item[Issue 1.220] Fixed {\LaTeX} error.
+\item[Issue 1.221] Merged in changes for R0062. Store VC context and route as user data.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -205,7 +206,7 @@ fun €procedure_specification_name›
 	({name, ...} : PROCEDURE_SPECIFICATION) : string = (
 	name
 );
-fun €function_specification_name›
+ fun €function_specification_name›
 	({designator, ...} : FUNCTION_SPECIFICATION) : string = (
 	designator
 );
@@ -1723,6 +1724,7 @@ val €cn_script_library_theories_ud_key› = "CN'script_library_theories";
 val €cn_created_ud_key› = "CN'created";
 val €cn_compilation_unit_ud_key› = "CN'compilation_unit";
 val €cn_body_name_ud_key› = "CN'body_name";
+val €cn_vc_context_and_origin_key› = "CN'vc_context_origin";
 =TEX
 
 The following functions to open out theory user data
@@ -2465,13 +2467,579 @@ fun €z_names_of_z_dec› (zd : Z_DECL) : Z_ID list = (
 =TEX
 
 \subsection{Updating the Z Theory Database}
+We first describe the addition of context and origin for VCs and then 
+the addition of the VCs themselves.
+
+\subsubsection{Adding VC Context and Origin}
+The VC context and origin are described by user data according to this abstract syntax ( where 
+\texttt{ROUTE} is actually \texttt{TERM}):
+
+\begin{tabular}{ll}
+rcud::	&	UDInt(1) [rud, cud]\\
+rud::	&	UDInt(2)  pair(vcname, route) list\\
+pair('a,'b)::&	UDInt(3) ['a,'b]\\
+vcname::	 &	UDString(name) []\\
+route::   &       pair(block\_names, route\_elems)\\
+block\_names:: & 	vcnames \\
+route\elems::  & 	UDTerm(  ROUTE ) [])\\
+VRElsfInd:: &	UDInt(constructor\_number) []\\
+int::	&	UDInt(int) []\\
+Z\_STRING:: &       UDString(string) []\\
+&\\
+cud::& 		UDInt(8) pair(vcnames,cud\_elem) list\\
+vcnames::&  	UDInt(9) string list\\
+cud\_elem::&	UDInt(5)[w,pre,post,till,return,named\_tills,vcg\_ctxt]\\
+w::&		UDInt(6) string list\\
+string::	&	UDString(string) []\\
+term::	&	UDTerm(term) []\\
+pre::	&	term\\
+post::   &	term\\
+till::	&	term\\
+return::	 &	term\\
+named\_tills::&	UDInt(7) pair(string,till) list\\
+vcg\_ctxt:: &  UDInt(4) [ vcg\_val ]\\
+\end{tabular}
+
+=SML
+val vcco_rc = 1; 
+val vcco_rud = 2;
+val vcco_pair = 3;
+val vcco_route = 4;
+val vcco_cud_elem = 5;
+val vcco_w = 6;
+val vcco_ntills = 7;
+val vcco_cud = 8;
+val vcco_names = 9;
+val vcco_elsf_true = 21;
+val vcco_elsf_false = 22;
+val vcco_any = 30;
+val vcco_null = 31;
+val vcco_assign = 32;
+val vcco_spec_via = 33;
+val vcco_spec_to_side = 34;
+val vcco_spec_pre_intro = 135;
+val vcco_semi =36;
+val vcco_end_semi = 37;
+val vcco_if_then = 38;
+val vcco_if_else = 39;
+val vcco_end_if = 40;
+val vcco_case_branch = 41;
+val vcco_case_others = 42;
+val vcco_end_case = 43;
+val vcco_loop_undec_via = 44;
+val vcco_loop_undec_pre_intro = 145;
+val vcco_loop_undec_pre_to_side = 146;
+val vcco_loop_undec_to_side = 47;
+val vcco_while_via = 48;
+val vcco_while_pre_intro = 149;
+val vcco_while_wp_to_side = 50;
+val vcco_while_to_side = 51;
+val vcco_for_via = 52;
+val vcco_for_pre_intro = 153;
+val vcco_for_pre_to_side = 154;
+val vcco_for_to_side = 55;
+val vcco_for_exit_to_side = 56;
+val vcco_exit_till_intro = 157;
+val vcco_exit_via = 58;
+val vcco_return_intro = 159;
+val vcco_proc_call = 60;
+val vcco_proc_call_end = 61;
+val vcco_proc_call_rng_intro = 162;
+val vcco_log_con_to_side = 63;
+val vcco_log_con_pre_intro = 164;
+val vcco_log_con_type_mem_intro = 165;
+val vcco_refinement_begin = 66;
+val vcco_refinement_intro = 167;
+val vcco_intros = 100;
+=TEX
+We introduce a data type to represent the constructs of this in the same sense as 
+\textit{\slshape dest\_z\_term} in HOL Z. 
+=SML
+type vcco_context_type = (USER_DATUM * USER_DATUM * USER_DATUM * 
+				USER_DATUM * USER_DATUM * USER_DATUM) OPT *
+				USER_DATUM ;
+
+datatype vcco_term = 
+		VT_rcud of USER_DATUM * USER_DATUM 		(* 1 *)
+	|	VT_rud of USER_DATUM list			(* 2 *)
+	|	VT_pair of USER_DATUM * USER_DATUM		(* 3 *)
+	|	VT_name of string				(* UD_String *)
+	|	VT_vcnames of USER_DATUM list		(* 9 *)
+	|	VT_term of TERM				(* UD_Term *)				
+	|	VT_cud of USER_DATUM list			(* 8 *)
+	|	VT_context of vcco_context_type		(* 5 *)
+	|	VT_varnames of USER_DATUM list		(* 6 *)
+	|	VT_named_tills of USER_DATUM list		(* 7 *)
+	|	VT_vcg_context of VC_GEN_CONTEXT 		(* 4 *)
+	|	VT_vcg_refinement 			(* 1 *)
+	|	VT_vcg_subprogram_body			(* 2 *)
+	|	VT_vcg_subprogram_spec			(* 3 *)
+	|	VT_vcg_subunit_spec			(* 4 *)
+	|	VT_vcg_package_init			(* 5 *)
+	|	VT_vcg_basic_declaration			(* 6 *)
+	|	VT_vcg_unknown				(* 7 *)
+;
+
+
+fun mk_vcco(VT_rcud(x,y) : vcco_term ) : USER_DATUM 
+		      	= 	UD_Int(1,[x,y])
+|   mk_vcco(VT_rud udl) = 		UD_Int(2,udl)
+|   mk_vcco(VT_pair(x,y)) = 	UD_Int(3,[x,y])
+|   mk_vcco(VT_name s) = 		( UD_String(s,[]))
+|   mk_vcco(VT_vcnames vcnl) = 	UD_Int(9,vcnl)
+|   mk_vcco(VT_term term) = 	UD_Term(term,[])
+|   mk_vcco(VT_cud cudl) =		UD_Int(8,cudl)
+|   mk_vcco(VT_context(Value(w,pre,post,till,return,named_tills),vcgc)) = 
+				UD_Int(5,[w,pre,post,till,return,named_tills,vcgc])
+|   mk_vcco(VT_context(Nil,vcgc)) =	UD_Int(5,[vcgc])
+|   mk_vcco(VT_varnames vnl) = 	UD_Int(6,vnl)
+|   mk_vcco(VT_named_tills ntl) = 	UD_Int(7,ntl)
+|   mk_vcco(VT_vcg_refinement)   =		UD_Int(4,[UD_Int(1,[])])
+|   mk_vcco(VT_vcg_subprogram_body) = 	UD_Int(4,[UD_Int(2,[])])
+|   mk_vcco(VT_vcg_subprogram_spec) = 	UD_Int(4,[UD_Int(3,[])])
+|   mk_vcco(VT_vcg_subunit_spec)  = 	UD_Int(4,[UD_Int(4,[])])
+|   mk_vcco(VT_vcg_package_init)  = 	UD_Int(4,[UD_Int(5,[])])
+|   mk_vcco(VT_vcg_basic_declaration) = 	UD_Int(4,[UD_Int(6,[])])
+|   mk_vcco(VT_vcg_unknown) = 		UD_Int(4,[UD_Int(7,[])])
+|   mk_vcco(VT_vcg_context(VCG_refinement))   =	UD_Int(4,[UD_Int(1,[])])
+|   mk_vcco(VT_vcg_context(VCG_subprogram_body)) = 	UD_Int(4,[UD_Int(2,[])])
+|   mk_vcco(VT_vcg_context(VCG_subprogram_spec)) = 	UD_Int(4,[UD_Int(3,[])])
+|   mk_vcco(VT_vcg_context(VCG_subunit_spec))  = 	UD_Int(4,[UD_Int(4,[])])
+|   mk_vcco(VT_vcg_context(VCG_package_init))  = 	UD_Int(4,[UD_Int(5,[])])
+|   mk_vcco(VT_vcg_context(VCG_basic_declaration)) = 	UD_Int(4,[UD_Int(6,[])])
+|   mk_vcco(VT_vcg_context(VCG_unknown)) = 		UD_Int(4,[UD_Int(7,[])])
+
+
+fun dest_vcg_vcco(UD_Int(1,[])) = VT_vcg_context(VCG_refinement)
+|   dest_vcg_vcco(UD_Int(2,[])) = VT_vcg_context(VCG_subprogram_body)
+|   dest_vcg_vcco(UD_Int(3,[])) = VT_vcg_context(VCG_subprogram_spec)
+|   dest_vcg_vcco(UD_Int(4,[])) = VT_vcg_context(VCG_subunit_spec)
+|   dest_vcg_vcco(UD_Int(5,[])) = VT_vcg_context(VCG_package_init)
+|   dest_vcg_vcco(UD_Int(6,[])) = VT_vcg_context(VCG_basic_declaration)
+|   dest_vcg_vcco(UD_Int(7,[])) = VT_vcg_context(VCG_unknown)
+
+fun dest_vcco(UD_String(s, ignorelist) : USER_DATUM ) : vcco_term = 
+	if not(length ignorelist = 0) then fail "dest_vcco" 507085 []
+	else VT_name s
+|   dest_vcco(UD_Term(t, ignorelist)) = 
+	if not(length ignorelist = 0) then fail "dest_vcco" 507085 []
+	else VT_term t
+|   dest_vcco(UD_Int(1,[x,y]))  = VT_rcud(x,y)
+|   dest_vcco(UD_Int(2,udl)) = VT_rud udl
+|   dest_vcco(UD_Int(3,[x,y])) = VT_pair(x,y)
+|   dest_vcco(UD_Int(4,[v])) = dest_vcg_vcco v
+|   dest_vcco(UD_Int(5,[w,pre,post,till,return,named_tills,vcgc])) = 
+		VT_context(Value(w,pre,post,till,return,named_tills),vcgc)
+|   dest_vcco(UD_Int(5,[vcgc])) = VT_context(Nil,vcgc)
+|   dest_vcco(UD_Int(6,udl)) = VT_varnames udl
+|   dest_vcco(UD_Int(7,udl)) = VT_named_tills udl
+|   dest_vcco(UD_Int(8,udl)) = VT_cud udl
+|   dest_vcco(UD_Int(9,udl)) = VT_vcnames udl
+|   dest_vcco _ = fail "dest_vcco" 507085 [];
+
+=TEX
+We need operations to recover information about the route and context of a 
+VC   \textit{\slshape get_vc_context_route} delivering a pair of 
+ \textit{\slshape vc_clause_context} and \textit{\slshape ROUTE}. We also have a destructor
+for \textit{\slshape ROUTE} structure. 
+=SML
+fun get_z_constructor_name ( t : TERM ) : string = 
+(	case dest_z_term t of 
+		ZGVar(s,_,_) => s
+	|	ZApp(r,_) =>  
+			( case dest_z_term r of
+				ZGVar(s,_,_) => s
+			  | 	_ => fail "get_z_constructor_name"
+					507085 []
+			)
+	| 	_ => fail "get_z_constructor_name" 507085 []
+);
+
+fun get_z_construct_args (t : TERM ) : TERM list = 
+(	case dest_z_term t of 
+		ZApp(_,zargs) => 
+		(	case dest_z_term zargs of
+				ZTuple args => args
+			|	_ => fail "get_z_constructor_name"
+					507085 []  
+		)
+	| 	_ => fail "get_z_constructor_name" 507085 []
+);
+
+fun get_z_construct_single_arg (t : TERM ) : TERM = 
+(	case dest_z_term t of 
+		ZApp(_,arg) => arg  
+	| 	_ => fail "get_z_constructor_name" 507085 []
+);
+
+
+val vr_any =			Ò(VRAny _)Æ
+val vr_null =			Ò(VRNull _)Æ
+val vr_assign =			Ò(VRAssign _)Æ 
+val vr_spec_via =			Ò(VRSpecVia _)Æ 
+val vr_spec_to_side =		Ò(VRSpecToSide _)Æ 
+val vr_spec_pre_intro =		ÒVRSpecPreIntroÆ 
+val vr_semi =			Ò(VRSemi _)Æ 
+val vr_end_semi =			Ò(VREndSemi _)Æ 
+val vr_if_then =			Ò(VRIfThen _)Æ 
+val vr_if_else =			Ò(VRIfElse _)Æ
+val vr_end_if =			Ò(VREndIf _)Æ 
+val vr_case_branch =		Ò(VRCaseBranch _)Æ 
+val vr_case_others =		Ò(VRCaseOthers _)Æ
+val vr_end_case =			Ò(VREndCase _)Æ
+val vr_loop_undec_via =		Ò(VRLoopUndecVia _)Æ
+val vr_loop_undec_pre_intro =	ÒVRLoopUndecPreIntroÆ
+val vr_loop_undec_pre_to_side =	ÒVRLoopUndecPreToSideÆ
+val vr_loop_undec_to_side =	Ò(VRLoopUndecToSide _)Æ
+val vr_while_via =		Ò(VRWhileVia _)Æ
+val vr_while_pre_intro =		ÒVRWhilePreIntroÆ
+val vr_while_wp_to_side =		Ò(VRWhileWPToSide _)Æ
+val vr_while_to_side =		Ò(VRWhileToSide _)Æ
+val vr_for_via =			Ò(VRForVia _)Æ
+val vr_for_pre_intro =		ÒVRForPreIntroÆ
+val vr_for_pre_to_side =		ÒVRForPreToSideÆ
+val vr_for_to_side =		Ò(VRForToSide _)Æ
+val vr_for_exit_to_side =		Ò(VRForExitToSide _)Æ
+val vr_exit_till_intro =		ÒVRExitTillIntroÆ
+val vr_exit_via =			Ò(VRExitVia _)Æ
+val vr_return_intro =		ÒVRReturnIntroÆ
+val vr_proc_call =		Ò(VRProcCall _)Æ
+val vr_proc_call_end =		Ò(VRProcCallEnd _)Æ
+val vr_proc_call_rng_intro =	ÒVRProcCallRngIntroÆ
+val vr_log_con_to_side =		Ò(VRLogConToSide _)Æ
+val vr_log_con_pre_intro =		ÒVRLogConPreIntroÆ
+val vr_log_con_type_mem_intro =	ÒVRLogConTypeMemIntroÆ
+val vr_refinement_begin =		Ò(VRRefinementBegin _)Æ
+val vr_refinement_intro =		ÒVRRefinementIntroÆ;
+
+
+fun vcco_nullary(ct : TERM) : ( TERM * vc_route_arg ) =  (ct, VRA_unit () );
+
+fun vcco_unary(ct : TERM, r : ROUTE) : (TERM * vc_route_arg ) = 
+	(ct, VRA_rte (get_z_construct_single_arg r) );
+
+fun vcco_int_route( ct : TERM, r : ROUTE) : (TERM * vc_route_arg) =
+	let 	val [argi,argr] = get_z_construct_args r
+		val ZInt sn = dest_z_term argi
+		val n = case Int.fromString sn of 
+				SOME x => x
+			|	_ => fail "vcco_int_route" 507088 []
+	in 	(ct, VRA_int_rte(n,argr))
+	end;
+
+fun vcco_bool_route( ct : TERM, r : ROUTE) : (TERM * vc_route_arg) =
+	let 	val [elsfind, argr] = get_z_construct_args r
+		val elsfindstr = get_z_constructor_name elsfind		
+		val elsfindb = 	case elsfindstr of 
+					"VRElsfTrue" => true
+				|	"VRElsfFalse" => false
+				|	_ => fail "vcco_elsf_ind_route" 507087 []
+	in 	(ct, VRA_bool_rte(elsfindb,argr))
+	end;
+
+fun vcco_zstring( ct : TERM, r : ROUTE) : (TERM * vc_route_arg) = 
+	let 	val ZString s = dest_z_term (get_z_construct_single_arg r)
+	in	(ct, VRA_str s)
+	end;
+
+fun dest_route ( route : ROUTE ) : (TERM * vc_route_arg) = 
+case get_z_constructor_name route of
+ 	"VRAny _" =>   vcco_unary(vr_any,route)
+|	"VRNull _" => vcco_unary(vr_null,route)
+|	"VRAssign _" => vcco_unary(vr_assign,route)
+|	"VRSpecVia _" => vcco_unary(vr_spec_via, route)
+|	"VRSpecToSide _" => vcco_unary(vr_spec_to_side, route)
+|	"VRSpecPreIntro" => vcco_nullary(vr_spec_pre_intro)
+|	"VRSemi _" => vcco_unary(vr_semi, route)
+|	"VREndSemi _" => vcco_unary(vr_end_semi, route)
+|	"VRIfThen _" => vcco_bool_route(vr_if_then, route)
+|	"VRIfElse _" => vcco_bool_route(vr_if_else, route)
+|	"VREndIf _" => vcco_unary(vr_end_if, route)
+|	"VRCaseBranch _" => vcco_int_route(vr_case_branch, route)
+|	"VRCaseOthers _" => vcco_unary(vr_case_others, route)
+|	"VREndCase _" => vcco_unary(vr_end_case, route)
+|	"VRLoopUndecVia _" => vcco_unary(vr_loop_undec_via, route)
+|	"VRLoopUndecPreIntro" => vcco_nullary(vr_loop_undec_pre_intro)
+|	"VRLoopUndecPreToSide" => vcco_nullary(vr_loop_undec_pre_to_side)
+|	"VRLoopUndecToSide _" => vcco_unary(vr_loop_undec_to_side, route)
+|	"VRWhileVia _" => vcco_unary(vr_while_via, route)
+|	"VRWhilePreIntro" => vcco_nullary(vr_while_pre_intro)
+|	"VRWhileWPToSide _" => vcco_unary(vr_while_wp_to_side, route)
+|	"VRWhileToSide _" => vcco_unary(vr_while_to_side, route)
+|	"VRForVia _" => vcco_unary(vr_for_via, route)
+|	"VRForPreIntro" => vcco_nullary(vr_for_pre_intro)
+|	"VRForPreToSide" => vcco_nullary(vr_for_pre_to_side)
+|	"VRForToSide _" => vcco_unary(vr_for_to_side, route)
+|	"VRForExitToSide _" => vcco_unary(vr_for_exit_to_side, route)
+|	"VRExitTillIntro" => vcco_zstring(vr_exit_till_intro, route)
+|	"VRExitVia _" => vcco_unary(vr_exit_via, route)
+|	"VRReturnIntro" => vcco_nullary(vr_return_intro)
+|	"VRProcCall _" => vcco_unary(vr_proc_call, route)
+|	"VRProcCallEnd _" => vcco_unary(vr_proc_call_end, route)
+|	"VRProcCallRngIntro" => vcco_nullary(vr_proc_call_rng_intro)
+|	"VRLogConToSide _" => vcco_unary(vr_log_con_to_side, route)
+|	"VRLogConPreIntro" => vcco_nullary(vr_log_con_pre_intro)
+|	"VRLogConTypeMemIntro" => vcco_nullary(vr_log_con_type_mem_intro)
+|	"VRRefinementBegin _" => vcco_unary(vr_refinement_begin, route)
+|	"VRRefinementIntro" => vcco_nullary(vr_refinement_intro);
+
+=TEX
+When we want to use the origin and context we shall require a range of operations. We need to 
+find the context for a given vcname and unpack it.
+
+=SML
+fun get_vcco_data() : USER_DATUM = 
+	get_user_datum "-" cn_vc_context_and_origin_key
+	handle Fail _ =>  
+		mk_vcco(VT_rcud( mk_vcco(VT_rud []), mk_vcco(VT_cud []) ));
+
+fun find_route ( vcname : ID, trans : ID -> ID,  [] : USER_DATUM list ) 
+	: (ID list * (ROUTE OPT))  = ( [], Nil )
+|   find_route( vcname, trans, ud :: udd ) = 
+	let 	val VT_pair( udname, blockids_route ) = dest_vcco ud 
+		val VT_name name = dest_vcco udname
+	in	if trans name = vcname
+		then 	let	val VT_pair(bids,rte) = dest_vcco blockids_route
+				val VT_vcnames udblockids = dest_vcco bids
+				val blockids = 
+					map ((fn(VT_name s) => s) o dest_vcco) 
+						udblockids
+				val VT_term route = dest_vcco rte
+			in	(blockids, Value ( route ))
+			end
+		else find_route ( vcname, trans, udd )
+	end
+	handle Fail x => raise Fail x | _ => fail "find_route" 507085 [];
+
+fun get_named_till nmtl = 
+	let 	val VT_pair(udnm,udterm) = dest_vcco nmtl
+		val VT_name s = dest_vcco udnm
+		val VT_term t = dest_vcco udterm
+	in	(s,t)
+	end
+	handle Fail x => raise Fail x | _ => fail "get-named_till" 507085 [];
+
+fun get_clause_context_vcgc(udcontext : USER_DATUM ) 
+		: vc_clause_context OPT * VC_GEN_CONTEXT = 
+let	val VT_context( opt_parts, udvcg_context) = 	dest_vcco udcontext
+	val VT_vcg_context(vcgc) = dest_vcco udvcg_context
+in	case opt_parts of 
+		Nil => (Nil, vcgc)
+	|	Value (udw,udpre, udpost, udtill, udreturn, udnamed_tills) =>
+		let 	val VT_varnames udw = dest_vcco udw
+			val w = map (fn unm => case dest_vcco unm of VT_name s => s) udw
+			val VT_term pre = dest_vcco udpre
+			val VT_term post = dest_vcco udpost
+			val VT_term till = dest_vcco udtill
+			val VT_term return = dest_vcco udreturn
+			val VT_named_tills ntls = dest_vcco udnamed_tills
+			val named_tills = map get_named_till ntls
+		in	(Value (	{ w = w, pre = pre, post = post, till = till, 
+			  	  return = return, named_tills = named_tills
+				}
+			 ),
+			 vcgc
+			)
+		end
+end
+handle Fail x => raise Fail x | _ => fail "get_clause_context" 507085 [];
+
+fun member_trans (trans: (ID -> ID))  (vcname:ID) ([]:USER_DATUM list) : bool  = false
+|   member_trans trans vcname (s::ss)  =  
+		(case dest_vcco s of VT_name nm => 
+			trans nm = vcname  orelse 
+			member_trans trans vcname ss
+		)
+		handle Fail x => raise Fail x | _ => fail "member_trans" 507085 [];		
+ 
+fun member  vcname [] = false
+|   member vcname (s::ss)  =  
+		(case dest_vcco s of VT_name nm => 
+			nm = vcname  orelse 
+			member vcname ss
+		)
+		handle Fail x => raise Fail x | _ => fail "member" 507085 [];		
+ 
+
+fun find_context ( vcname : ID, trans : ID -> ID, [] : USER_DATUM list ) 
+	: vc_clause_context OPT * VC_GEN_CONTEXT = (Nil, VCG_unknown)
+|   find_context ( vcname, trans, cud_elem :: cud_elems ) = 
+	let 	val VT_pair(udnames, udcontext) = dest_vcco cud_elem
+		val VT_vcnames udnamelist = dest_vcco udnames
+	in	if member_trans  trans vcname udnamelist
+		then (get_clause_context_vcgc udcontext)
+		else find_context( vcname, trans, cud_elems )
+	end
+	handle Fail x => raise Fail x | _ => fail "find_context" 507085 [];	
+
+fun €get_vc_context_route› ( vcname : ID, trans : (ID -> ID) ) : vc_context_route = 
+	let 	val rcud = get_vcco_data()	
+		val VT_rcud(rud,cud)  = dest_vcco rcud
+		val VT_rud(rud_pairs) = dest_vcco rud
+		val (blockids, route_opt) = find_route(vcname, trans, rud_pairs)
+		val VT_cud(cud_elems) = dest_vcco cud 
+		val (context_opt, vcgc) = find_context(vcname, trans, cud_elems)
+	in	{route = route_opt, blockids = blockids, context = context_opt,
+		 vcg_context = vcgc
+		}	
+	end
+	handle Fail x => raise Fail x | _ => fail "get_vc_context_route" 507085 [];
+
+=TEX
+ Then we shall need to find the origin of a 
+VC from its name and form an abbreviated abstract syntax tree from the true abstract syntax
+of the clause and the recorded walk. We do this in a depth first left to right walk of the 
+tree in synchrony with a walk along the route. 
+
+Our unit of database atomicity is the web clause, so we can add one context and any number
+of origins and then put the data back again. 
+=SML
+
+
+fun set_vcco_data(vcd : USER_DATUM) : unit = 
+	set_user_datum(cn_vc_context_and_origin_key,vcd)
+	handle Fail x => raise Fail x | _ => fail "set_vcco_data" 507085 [];
+
+fun mk_vcco_pair( a: USER_DATUM, b : USER_DATUM ) : USER_DATUM = 
+	UD_Int(vcco_pair, [ a, b]);
+
+fun mk_vcco_string( s : string ) : USER_DATUM = UD_String(s,[]);
+
+fun mk_vcco_names ( s : string list ) : USER_DATUM = 
+	UD_Int(vcco_names, map mk_vcco_string s);
+
+fun mk_vcco_int( i : int ) : USER_DATUM = UD_Int(i,[]);
+
+fun mk_vcco_term( t : TERM) : USER_DATUM = UD_Term(t,[]);
+
+fun mk_vcco_elsfind( ei : int) : USER_DATUM = mk_vcco_int(ei);
+
+fun add_vc_rud(	vc_name : string, rud_elem : USER_DATUM, 
+		blockids : ID list, rcud : USER_DATUM) : USER_DATUM =
+	let 	val VT_rcud(rud,cud) = dest_vcco rcud;
+		val VT_rud(rud_elems) = dest_vcco rud;
+		val udblockid_list = map (mk_vcco o VT_name) blockids
+		val udblockids = mk_vcco(VT_vcnames(udblockid_list))
+		val blocks_rud_elem = mk_vcco(VT_pair( udblockids, rud_elem));
+		val name_rud = mk_vcco(VT_pair(mk_vcco(VT_name vc_name), blocks_rud_elem)); 
+		val nrud = mk_vcco(VT_rud(name_rud :: rud_elems));
+		val nrcud = mk_vcco(VT_rcud(nrud,cud));
+	in	nrcud
+	end
+	handle Fail x => raise Fail x | _ => fail "add_vc_rud" 507085 [];
+
+fun add_vc_cud(vc_names : string list, cud_elem : USER_DATUM, rcud : USER_DATUM) 
+	: USER_DATUM =
+	let 	val VT_rcud(rud,cud) = dest_vcco rcud;
+		val VT_cud(vcs_cud_elems) = dest_vcco cud;
+		val udvcnames = map (fn s => (mk_vcco o VT_name) s) vc_names;
+		val vcns = mk_vcco( VT_vcnames(udvcnames));
+		val np = mk_vcco(VT_pair(vcns, cud_elem));
+		val ncud = mk_vcco(VT_cud(np::vcs_cud_elems));
+		val nrcud = mk_vcco(VT_rcud(rud,ncud));
+	in	nrcud
+	end
+	handle Fail x => raise Fail x | _ => fail "add_vc_cud" 507085 [];
+
+
+
+fun mk_vcco_route ( route : ROUTE ) : USER_DATUM = 
+	UD_Term( route , [])
+=TEX
+Now we specify how to translate the context into user data.
+
+=SML
+fun 	add_vcs_rcud( 	[] : string list, [] : ROUTE OPT list, 
+			blockids : ID list, rcud : USER_DATUM ) 
+	: USER_DATUM 	= rcud
+|   	add_vcs_rcud( [] , _ , _, rcud  ) =
+		fail "add_vcs_rcud" 507088 []
+|	add_vcs_rcud( _ , [] , _, rcud  ) =
+		fail "add_vcs_rcud" 507088 []
+|	add_vcs_rcud( s :: ss, r::rr, blockids, rcud ) = 
+	(	case r of
+			Nil => ( add_vcs_rcud(ss,rr,blockids,rcud) ) 
+		|	Value aroute => 
+			add_vc_rud( s, mk_vcco_route aroute, blockids, 
+				add_vcs_rcud(ss,rr,blockids,rcud) )
+	)
+	handle Fail x => raise Fail x | _ => fail "add_vcs_rcud" 507085 [];
+
+=TEX
+This is used just to undo the effect of the \textit{\slshape z\_quote} at the end of 
+\textit{\slshape vcs}. 
+=SML
+fun term_from_quote(zt : Z_TM) : TERM = 
+	case zt of 
+		ZTmQuotation(t,ty) => t
+	|	_ => fail "term_from_quote" 507085 [];
+
+fun mk_vcco_context
+(	w : ID list, pre : TERM, post: TERM, till : TERM, return : TERM,
+	named_tills :  (ID * Z_PRED) list, vcg_ctxt : VC_GEN_CONTEXT
+) : USER_DATUM = 
+	let	val udws = map (fn s => (mk_vcco o VT_name) s) w
+		val udw = mk_vcco(VT_varnames udws)
+		val udpre = mk_vcco(VT_term pre)
+		val udpost = mk_vcco(VT_term post)
+		val udtill = mk_vcco(VT_term till)
+		val udreturn = mk_vcco(VT_term return)
+		val udnlts = map (fn( nm, t) => 
+				( mk_vcco(VT_name nm), mk_vcco(VT_term t)) ) named_tills
+		val udpairnlts = map (fn (x,y) => mk_vcco(VT_pair(x,y))) udnlts
+		val udnamed_tills = mk_vcco(VT_named_tills udpairnlts)
+	in	mk_vcco(VT_context(
+			Value(
+				udw,udpre,udpost,udtill,udreturn,udnamed_tills
+			), mk_vcco(VT_vcg_context(vcg_ctxt)))
+		)
+	end
+	handle Fail x => raise Fail x | _ => fail "mk_vcco_context" 507085 [];
+
+fun store_vc_context_and_origin
+	(	osl : SPECLAB OPT, vc_names : string list, routes :ROUTE OPT list, 
+		blockids : ID list, vcg_ctxt : VC_GEN_CONTEXT ) 
+	: unit =  
+	let	val rcud = get_vcco_data()
+		val rcud1 = add_vcs_rcud(vc_names,routes,blockids,rcud);
+		val rcud2 = 
+			case osl of 
+				Nil => 
+				add_vc_cud(
+					vc_names,
+					mk_vcco(VT_context(Nil,
+						mk_vcco(VT_vcg_context vcg_ctxt)
+					)),
+					rcud1
+				)
+			|	Value spclab =>
+
+				add_vc_cud( 
+					vc_names, 
+					mk_vcco_context(
+						#w(#spec spclab),
+						term_from_quote(#pre(#spec spclab)),
+						term_from_quote(#post(#spec spclab)),						
+						#till(#wp_env spclab),
+						#return(#wp_env spclab),
+						#named_tills(#wp_env spclab),
+					 	vcg_ctxt			
+					),
+					rcud1
+				)
+	in	set_vcco_data(rcud2)
+	end 
+	handle Fail x => raise Fail x | _ => fail "store_vc_context_and_origin" 507085 []
+;
+=TEX
+\subsubsection{Adding VCs}
 =SML
 fun €make_label_prefix› (wcn : string) : string = (
 	"vc" ^ wcn ^ "_"
 );
 =TEX
 =SML
-fun €store_vc_term› (label : LABEL) (tm : TERM) : unit = (
+fun €store_vc_term› (label : LABEL) (tm : TERM) : string = (
 	let	val bbn = get_bottom_block_name ();
 		val vc_lab =	make_label_prefix
 				(if 	bbn = "" orelse bbn = label
@@ -2480,8 +3048,8 @@ fun €store_vc_term› (label : LABEL) (tm : TERM) : unit = (
 		fun aux i = (
 			let val vc_name = vc_lab ^ string_of_int i;
 			in	if (get_conjecture "-" vc_name; false)
-						handle Fail _ => true
-				then	(new_conjecture ([vc_name], tm); ())
+  						handle Fail _ => true
+				then	(new_conjecture ([vc_name], tm); vc_name )
 				else	aux (i + 1)
 			end
 		);
@@ -2509,7 +3077,8 @@ For various (good) reasons, the underlying {\Product} operations of adding new p
 In order for the Z document generator to be able to output the necessary commands in the right place, we make and deletes a dummy type declaration before storing each batch of VCs to force the level counter up.
 In order to avoid a potential infinite loop (e.g., if the current theory is not writable), the attempt to do this dummy declaration is abandoned after 10,000 goes (this protects the code against an extremely unlikely event!)
 =SML
-fun €store_vcs› (label : LABEL, vcs: VC list) : unit = (
+fun €store_vcs› (	label : LABEL, vcs: VC list, osl : SPECLAB OPT, 
+		routes : ROUTE OPT list, vcg_ctxt : VC_GEN_CONTEXT ) 					: unit = (
 	let	fun dummy_decl i = (
 			if	i < 10000
 			then	let	val tyn = "CN'DUMMY_TYPE" ^ string_of_int i;
@@ -2521,8 +3090,10 @@ fun €store_vcs› (label : LABEL, vcs: VC list) : unit = (
 			else	()
 		);
 		val side_effect = dummy_decl 0;
-	in	map (store_vc_term label) (map term_of_vc vcs);
-		()
+		val vc_names = map (store_vc_term label) (map term_of_vc vcs);
+	in	
+		store_vc_context_and_origin(osl, vc_names, routes, 
+			map (#block_name o #declab) (!blocks), vcg_ctxt )
 	end
 );
 =TEX
@@ -2551,7 +3122,9 @@ fun €store_para› (para : PARAINFO) : unit = (
 		ConjectureInfo(Value n, [], pred) => (
 			let	val bbn = get_bottom_block_name();
 			in	set_bottom_block_name n;
-				store_vcs(n, [([], ([], pred))]);
+				store_vcs(n, [([], ([], pred))], Nil, [Nil], 
+					VCG_basic_declaration
+				);
 				set_bottom_block_name bbn
 			end
 	) |	_ => update_theory_db_with_parainfo para
@@ -2874,16 +3447,27 @@ fun €add_formal_procs_wp_env›
 =TEX
 =SML
 fun €call_vcs›
-	((sl, st) : SPECLAB * STATEMENT) : VC list * SPEC = (
+	((sl, st) : SPECLAB * STATEMENT) : VC list * ROUTE OPT list * SPEC = (
 	let	val sl1 = add_init_vars_speclab sl;
 		val sl1_st = (add_formal_procs_wp_env sl1, st);
 	in	diag_vc_args := sl1_st :: !diag_vc_args;
 		set_ti_context (ti_context_of_speclab sl1);
 		let 	val (vcs_routes, spc) = vcs sl1_st
-		in	(map fst vcs_routes, spc)
+		in	(map fst vcs_routes, map snd vcs_routes, spc)
 		end
 	end
 );
+
+fun €speclab_update_spec›
+	( sl : SPECLAB, s : SPEC ) : SPECLAB = 
+	let 	val {spec,formal_body_flag,fun_flag,till_flag,wp_env,in_scope} = 
+			sl
+	in	{
+			spec = s, formal_body_flag = formal_body_flag, 
+			fun_flag = fun_flag, till_flag = till_flag, 
+			wp_env = wp_env, in_scope = in_scope
+		}
+	end
 =TEX
 \section{BASIC DECLARATIONS}\label{BASICDECLARATIONS}
 \subsection{The SID Function basic\_declaration}
@@ -3230,8 +3814,12 @@ fun €vcs_speclabel_aux› (just_checking : bool) ({label, statement = sob} : REFIN
 			wp_env = wp_env1,
 			in_scope = in_scope1
 		};
-		val (vcs, spec) = call_vcs (speclab, statement)
-	in	if just_checking then () else store_vcs (label, vcs);
+		val (vcs, routes, spec) = call_vcs (speclab, statement)
+	in	if just_checking then () 
+		else 	store_vcs (label, vcs, 
+				Value (speclab_update_spec(speclab,spec)), routes,
+				VCG_refinement
+			);
 		spec
 	end
 );
@@ -3583,7 +4171,7 @@ fun €new_scope_proc_inf› (ident : ID) : unit = (
 	end		
 );
 =TEX
-\subsection{The SID function new\_scope\_proc\_inf}
+\subsection{The SID function new\_scope\_proc\_form}
 =SML
 fun €new_scope_proc_form› (ident : ID) : unit = (
 	let	val flags = {
@@ -3679,7 +4267,8 @@ The following is the meat of $vcs\_body\_proc$, placed here to allow
 a check to be made of the VCs of a procedure specification in a package
 specification.
 =SML
-fun €vcs_body_proc_aux› (st : STATEMENT) : (LABEL * (VC list * SPEC)) = (
+fun €vcs_body_proc_aux› (st : STATEMENT) 
+			: (LABEL * (VC list *ROUTE OPT list * SPEC) * SPECLAB ) = (
 	let	val block1 = block 1;
 		val block2 = block 2;
 		val pack_body_flag2 = #pack_body_flag (#flags (#declab block2));
@@ -3742,7 +4331,7 @@ fun €vcs_body_proc_aux› (st : STATEMENT) : (LABEL * (VC list * SPEC)) = (
 			wp_env = wp_env,
 			in_scope = in_scope1
 		};
-	in	(#name current_formal_proc1, call_vcs (speclab, st))
+	in	(#name current_formal_proc1, call_vcs (speclab, st), speclab)
 	end	
 );
 =TEX
@@ -3784,7 +4373,7 @@ let
 	val new_block2 = block_declab (block2, new_declab2);
 	val dummy2 = (blocks := (block 1 :: (new_block2 :: tl(tl (!blocks)))));
 	(* create the vcs for a null statement *)
-	val (_, (vcs, spec)) = vcs_body_proc_aux STNull;
+	val (_, (vcs, routes, spec), _ ) = vcs_body_proc_aux STNull;
 	val vcs = map term_of_vc vcs
 		handle (exn as Fail _) =>
 		(blocks :=
@@ -3968,8 +4557,12 @@ fun €form_proc_pack_body›
 			(speclab_vc_vars(speclab5, vc_vars5a));
 		val st = STSpecNoIvars{spec= #spec form_proc,
 					label="", is_assertion = false};
-		val (vcs, spec) = call_vcs (speclab5a, st);
-	in	store_vcs (#name formal_proc3, vcs);
+		val (vcs, routes, spec) = call_vcs (speclab5a, st);
+	in	store_vcs (
+			#name formal_proc3, vcs, 
+			Value (speclab_update_spec(speclab5a,spec)), routes,
+			VCG_subprogram_spec
+		);
 		spec
 	end
 );
@@ -4061,8 +4654,14 @@ fun €form_proc_pack_body_aux›
 			in_scope = in_scope5a
 		};
 		val st = STSpecNoIvars{spec= #spec form_proc, label="", is_assertion = false};
-		val (vcs, spec) = call_vcs (speclab5a, st);
-	in	store_vcs (#name formal_proc3, vcs);
+		val _ = blocks :=
+			block_vc_vars(block1, vc_vars1 cup conc_vars):: tl (!blocks);
+		val (vcs, routes, spec) = call_vcs (speclab5a, st);
+	in	store_vcs (
+			#name formal_proc3, vcs, 
+			Value (speclab_update_spec(speclab5a,spec)), routes,
+			VCG_subprogram_spec
+		);
 		spec
 	end
 );
@@ -4115,8 +4714,12 @@ fun €form_proc_subunit› (form_proc: FORMAL_PROC) : unit = (
 			wp_env = wp_env4,
 			in_scope = in_scope4
 		};
-		val (resulting_vcs, _) = call_vcs (speclab4, st)
-	in	store_vcs (block_name1, resulting_vcs)
+		val (resulting_vcs, routes, spec) = call_vcs (speclab4, st)
+	in	store_vcs (
+			block_name1, resulting_vcs, 
+			Value (speclab_update_spec(speclab4,spec)), routes,
+			VCG_subunit_spec
+		)
 	end
 		else	()
 	end
@@ -4463,8 +5066,11 @@ fun €form_fun_pack_body› (form_fun: FORMAL_FUN) : unit = (
 		val globals = #globals form_fun;
 		val globals3 = #globals formal_fun3;
 	in	if	globals = globals3
-		then	let	val (vcs, _) = call_vcs (speclab5, st);
-			in	store_vcs (block_name2, vcs)
+		then	let	val (vcs, routes, spec) = call_vcs (speclab5, st);
+			in	store_vcs (
+					block_name2, vcs, 
+					Value (speclab_update_spec(speclab5,spec)), 
+					routes, VCG_subprogram_spec)
 			end
 		else	let	fun fmt_strs [] () = (
 					"empty list of global dependencies"
@@ -4479,6 +5085,7 @@ fun €form_fun_pack_body› (form_fun: FORMAL_FUN) : unit = (
 		else	()
 	end
 );
+
 =TEX
 =SML
 fun €check_globals_fun› (block_name1 : string)
@@ -4536,8 +5143,12 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 		val globals = #globals form_fun;
 		val globals3 = #globs subunit3;
 		val _ = check_globals_fun block_name1 globals globals3;
-		val (vcs, _) = call_vcs(speclab4, st);
-	in	store_vcs (block_name2, vcs) 
+		val (vcs, routes, spec) = call_vcs(speclab4, st);
+	in	store_vcs (
+			block_name2, vcs, 
+			Value (speclab_update_spec(speclab4,spec)), routes,
+			VCG_subunit_spec
+		) 
 	end
 		else	()
 	end
@@ -4740,8 +5351,12 @@ The decision about which support function to call (if any) is made in $vcs\_body
 
 =SML
 fun €vcs_body_proc› (st : STATEMENT) : SPEC = (
-	let	val (lab, (vcs, spec)) = vcs_body_proc_aux st;
-	in	store_vcs (lab, vcs);
+	let	val (lab, (vcs, routes, spec), speclab ) = vcs_body_proc_aux st;
+	in	store_vcs (
+			lab, vcs, 
+			Value (speclab_update_spec(speclab,spec)), routes,
+			VCG_subprogram_body
+		);
 		spec
 	end
 );
@@ -4801,8 +5416,12 @@ fun €vcs_body_fun› (st : STATEMENT) : SPEC = (
 			wp_env = wp_env,
 			in_scope = in_scope1
 		};
-		val (vcs, spec) = call_vcs (speclab, st);
-	in	store_vcs((#name o #informal_fun) current_formal_fun1, vcs);
+		val (vcs, routes, spec) = call_vcs (speclab, st);
+	in	store_vcs(
+			(#name o #informal_fun) current_formal_fun1, vcs,
+			Value (speclab_update_spec(speclab,spec)), routes,
+			VCG_subprogram_body
+		);
 		spec
 	end	
 );
@@ -5970,8 +6589,12 @@ fun €vcs_aux_initial› (st : STATEMENT) : SPEC = (
 			wp_env = wp_env,
 			in_scope = in_scope1
 		};
-		val (vcs, res_spec) = call_vcs (speclab, st)
-	in	store_vcs(block_name1, vcs);
+		val (vcs, routes, res_spec) = call_vcs (speclab, st)
+	in	store_vcs(
+			block_name1, vcs, 
+			Value (speclab_update_spec(speclab,res_spec)), routes,
+			VCG_package_init
+		);
 		res_spec
 	end
 );
