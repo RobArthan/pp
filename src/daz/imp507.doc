@@ -990,7 +990,7 @@ The following functions are used to do this.
 
 =SML
 fun €z_id_of_id› (n : ID) : Z_ID = (
-	(fst o dest_const o mk_z_gvar)(trans_id n, BOOL, [])
+	(fst o dest_const o mk_z_gvar)(n, BOOL, [])
 );
 =TEX
 $get\_tmark\_from\_inscope$ searches an $IN\_SCOPE$ value for the type mark associated with a variable or parameter name:
@@ -1063,7 +1063,7 @@ fun €env_info_of_g_var› (zn : Z_ID) (ty : TYPE) = (
 =TEX
 =SML
 fun €current_cn_env› (n : ID) : (TYPE * ENV_INFO) OPT = (
-	case get_tmark_from_env (trans_id n) (!blocks) of
+	case get_tmark_from_env n (!blocks) of
 		Value tmark => (
 			case type_of_tmark tmark of
 				Value ty => Value (ty, EIEnvVar tmark)
@@ -1101,6 +1101,92 @@ fun €store_vcs› (vcs: VC list) : unit = (
 	()
 );
 =TEX
+\section{Creating ProofPower Theories}
+The material in this section uses the following, which is also required for the DRA specs.
+=SML
+infix dot;
+fun (x : ID) €dot› (y : ID) = x ^ "." ^ y;
+=TEX
+See \cite{ISS/HAT/DAZ/HLD501} for further information on the reasons for having the following functions which are invoked when compilation units are processed and when a new script is started.
+=SML
+fun €new_script_theory› (name : string) : unit = (
+	let	val thy = name;
+	in	new_theory thy
+	end
+);
+=TEX
+=SML
+fun €new_package_spec_theory› (name : string) : unit = (
+	let	val thy = name ^ "__spec";
+	in	new_theory thy
+		handle Fail _ =>
+		fail "new_package_spec_theory" 507023 [fn()=>thy, fn()=>name]
+	end
+);
+=TEX
+The following needs no error handling --- it is only called when the theory is known to exist already.
+=SML
+fun €open_package_spec_theory› (name : string) : unit = (
+	let	val thy = name ^ "__spec";
+	in	open_theory thy
+	end
+);
+=TEX
+=SML
+fun €new_package_body_theory› (name : string) : unit = (
+	let	val thy = name ^ "__body";
+	in	new_theory thy
+		handle Fail _ =>
+		fail "new_package_body_theory" 507024 [fn()=>thy, fn()=>name]
+	end
+);
+=TEX
+=SML
+fun €open_package_body_theory› (name : string) : unit = (
+	let	val thy = name ^ "__body";
+	in	open_theory thy
+		handle Fail _ => 
+		fail "open_package_body_theory" 507028 [fn()=>thy, fn()=>name]
+	end
+);
+=TEX
+=SML
+fun €new_main_program_theory› (name : string) : unit = (
+	let	val thy = name;
+	in	new_theory thy
+		handle Fail _ =>
+		fail "new_main_program_theory" 507025 [fn()=>thy, fn()=>name]
+	end
+);
+=TEX
+=SML
+fun €new_body_stub_theory› (unit_name : string, subunit_name : string) : unit = (
+	let	val su_name = unit_name dot subunit_name;
+		val thy = su_name ^ "__stub"
+	in	duplicate_theory ("-", thy)
+		handle Fail _ =>
+		fail "new_body_stub_theory" 507026 [fn()=>thy, fn()=>su_name]
+	end
+);
+=TEX
+=SML
+fun €open_subunit_theory› (unit_name : string, x : PROPER_BODY) : unit = (
+	let	val subunit_name =(case x of
+			PBProcedure {procedure_spec as {name, ...}, ...} => (
+				name
+		) |	PBFunction {function_spec as {designator, ...}, ...} => (
+				designator
+		) |	PBPackage {name, ...} => (
+				name
+		));
+		val su_name = unit_name dot subunit_name;
+		val thy = su_name ^ "__stub";
+	in	open_theory thy
+		handle Fail _ => 
+		fail "open_subunit_theory" 507027 [fn()=>thy, fn()=>su_name]
+	end
+);
+=TEX
 \section{BASIC DECLARATIONS}\label{BASICDECLARATIONS}
 \subsection{The SID Function basic\_declaration}
 The decision about which function to call is made in $basic\_declaration$ itself.
@@ -1111,7 +1197,7 @@ fun €basic_decl_pack_spec› (basic_decl : BASIC_DECL) : unit = (
 			Value p => p
 		|	Nil => error "basic_decl_pack_spec" 507001 [];
 	in	pack_env :=
-		s_extend
+		s_enter
 		block_name1
 		(package_consts_types(package,
 				#consts_types package @ [basic_decl]))
@@ -1141,7 +1227,7 @@ fun €var_pack_spec› (var_decl : VAR_DECL) : unit = (
 				Value p => p
 			|	Nil => error "var_pack_spec" 507001 [];
 		in	pack_env :=
-			s_extend
+			s_enter
 			block_name1
 			(package_vc_vars(package,
 					#vc_vars package @ [var_decl]))
@@ -1242,10 +1328,6 @@ fun €add_var_env› (var_decl : VAR_DECL) : unit = (
 );
 =TEX
 \section{DECLARATIONS}\label{DECLARATIONS}
-=SML
-infix dot;
-fun (x : ID) €dot› (y : ID) = x ^ "." ^ y;
-=TEX
 In the following, $block2$ is bound first to catch possible errors with a corrupt environment.
 =SML
 fun €k_slot_dec› (label : LABEL) : unit = (
@@ -1465,19 +1547,21 @@ The SID function $end\_scope$ used in processing these has already been defined 
 This SID function and the next are best handled by a common function with a parameter to determine what to do:
 =SML
 fun €subunit_form_inf_aux› (ident : ID, is_inf : bool) : unit = (
-	let	val block = hd(!blocks);
-		val block_name = #block_name(#declab block);
-		val bn_id = block_name dot ident;
-		val subunit1 = (force_value(s_lookup bn_id (!subunit_env)))
-			handle Fail _ =>
-			error "subunit_form_inf_aux" 507011 [fn()=>bn_id];
-		val in_scope' = #in_scope subunit1;
-		val block' = block_in_scope(block, in_scope');
-	in	blocks := block' :: tl (!blocks);
-		if	is_inf
-		then	subunit_env := s_delete bn_id (!subunit_env)
-		else	()
-	end
+	if	test_flag #subunit_flag 1
+	then	let	val block = hd(!blocks);
+			val block_name = #block_name(#declab block);
+			val bn_id = block_name dot ident;
+			val subunit1 = (force_value(s_lookup bn_id (!subunit_env)))
+				handle Fail _ =>
+				error "subunit_form_inf_aux" 507011 [fn()=>bn_id];
+			val in_scope' = #in_scope subunit1;
+			val block' = block_in_scope(block, in_scope');
+		in	blocks := block' :: tl (!blocks);
+			if	is_inf
+			then	subunit_env := s_delete bn_id (!subunit_env)
+			else	()
+		end
+	else	()
 );
 =TEX
 =SML
@@ -1555,7 +1639,7 @@ fun €stub› (() : unit) : unit = (
 				specif_flag	=	false,			
 				zmod		=	id1_id2
 			};
-		in	duplicate_theory("-", id1_id2)
+		in	new_body_stub_theory(id1, id2)
 			handle Fail _ => fail "stub" 507013 [fn() => id1_id2];
 			subunit_env := s_enter id1_id2 subunit (!subunit_env)
 		end
@@ -2262,17 +2346,51 @@ fun €new_scope_pack_body› (ident : ID) : unit = (
 		};
 		val vc_vars1 = #vc_vars package1;
 		val block = block_vc_vars(empty_block, vc_vars1);
-		val consts_types = #consts_types package1;
-		val side_effect = (blocks := block :: !blocks);
-		val para_infos = flat (map (trans_basic_decl current_cn_env) consts_types);
-	in	map update_theory_db_with_parainfo para_infos; ()
+	in	open_package_body_theory ident;
+		blocks := block :: !blocks
 	end	handle Fail _ => fail "new_scope_pack_body" 507008 [fn () => ident]	
 );
 =TEX
 \subsection{The SID function new\_scope\_with}
 =SML
+fun €prefix_var› (ident : ID) (bds : BASIC_DECL list)
+		({vars, tmark} : VAR_DECL) : VAR_DECL = (
+	let	fun p n = trans_id (ident dot n);
+	in	if	any bds
+			(fn	BDTypeDecl {name, ...} => ident = name
+			|	BDSubtypeDecl {name, ...} => ident = name
+			|	BDPrivateTypeDecl {id, ...} => ident = id
+			|	_ => false)
+		then	{vars = map p vars, tmark = p tmark}
+		else	{vars = map p vars, tmark = tmark}
+	end
+);
+=TEX
+=SML
 fun €new_scope_with› (ident : ID) : unit = (
-	diag_line "***** NOT YET IMPLEMENTED ---- TBS ****"
+	let	val package1 = force_value(s_lookup ident (!pack_env));
+		val flags = {
+			pack_spec_flag = false,
+			pack_body_flag = false,
+			stub_flag = false,
+			subunit_flag = false,
+			formal_body_flag = false,
+			fun_flag = false,
+			declabel_flag = false,
+			speclabel_flag = false,
+			till_flag = false
+		};
+		val vc_vars1 = map
+			(prefix_var ident (#consts_types package1))
+			(#vc_vars package1);
+		val block = block_vc_vars(empty_block, vc_vars1);
+	in	open_package_spec_theory ident
+		handle Fail _ => (
+			new_package_spec_theory ident;
+diag_line "**** TBS - new_scope_with not yet complete ****"
+		);
+		blocks := block :: !blocks
+	end	handle Fail _ => fail "new_scope_with" 507008 [fn () => ident]	
 );
 =TEX
 \subsection{The SID function end\_scope\_comp\_unit}
@@ -2754,14 +2872,25 @@ and €do_proper_body› (y as (PBProcedure
 	end_scope()
 );
 =TEX
-The following reflects the SID functions for $subunit$:
+The following reflects the SID functions for $subunit$.
+Note that the `\_\_body' theory is created when a package declaration is encountered.
 =SML
 fun €do_compilation_unit›
-	(y as (CUPackageDeclaration x) : COMPILATION_UNIT) : unit = (
+	(y as (CUPackageDeclaration (x as {name, ...})) : COMPILATION_UNIT) : unit = (
+	new_package_body_theory name;
 	do_declaration (DPackageDeclaration x)
 ) | do_compilation_unit (y as (CUProperBody x) : COMPILATION_UNIT) = (
+	(case x of
+		PBProcedure {procedure_spec as {name, ...}, ...} => (
+			new_main_program_theory name
+	) |	PBFunction {function_spec as {designator, ...}, ...} => (
+			new_main_program_theory designator
+	) |	PBPackage {name, ...} => (
+			open_package_body_theory name
+	));
 	do_declaration (DProperBody x)
 ) | do_compilation_unit (y as (CUSubUnit {name, proper_body}) : COMPILATION_UNIT) = (
+	open_subunit_theory (name_to_tmark name, proper_body);
 	new_scope_subunit (name_to_tmark name);
 	do_declaration(DProperBody proper_body);
 	end_scope()
@@ -2788,9 +2917,11 @@ fun €do_kslot_compilation_unit›
 The following reflects the SID functions for the production $web\_clause$:
 =SML
 fun €do_web_clause› (y as (WCCompilation x) : WEB_CLAUSE) : unit = (
-	update_spark_prog x;
+let	val current_theory = get_current_theory_name ();
+in	update_spark_prog x;
 	map do_kslot_compilation_unit x;
-	()
+	lazy_open_theory current_theory
+end
 ) | do_web_clause (y as (WCReplacedByCompilation x) : WEB_CLAUSE) = (
 let	val {label=label, comp=comp} = x;
 	val current_theory = get_current_theory_name ();
