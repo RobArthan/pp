@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.3 2002/10/20 20:26:43 rda Exp rda $
+# $Id: configure.sh,v 1.4 2002/10/20 20:29:19 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -176,10 +176,11 @@ out 'OLD_PATH=$PATH'
 out "PATH=.:"'$PATH'
 out "export PATH"
 #
-# Build slrp if it's needed and not going to be installed
+# Build pptex and also slrp if slrp's needed and not going to be installed
 #
 if	[ "$dev" != y -a \( "$hol" = y -o "$zed" = y -o "$daz" = y \) ]
-then	out "make -f dev.mkf build"
+then	out "make -f pptex.mkf build"
+	out "make -f dev.mkf build"
 fi
 #
 # Loop round the packages outputting the commands to compile them
