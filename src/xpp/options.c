@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.17 2003/06/25 10:55:03 rda Exp rda $
+ * $Id: options.c,v 2.18 2003/06/25 15:23:51 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -179,7 +179,7 @@ void init_options(Widget owner_w)
 	s1 = XmStringCreateSimple((char*)file_type_names[0]);
 	s2 = XmStringCreateSimple((char*)file_type_names[1]);
 	s3 = XmStringCreateSimple((char*)file_type_names[2]);
-	file_type_menu = XmVaCreateSimpleOptionMenu(file_type_frame, "menu", lab, 'T', 0, file_type_cb,
+	file_type_menu = XmVaCreateSimpleOptionMenu(file_type_frame, "file-type-menu", lab, 'T', 0, file_type_cb,
 		XmVaPUSHBUTTON, s1, NULL, NULL, NULL,
 		XmVaPUSHBUTTON, s2, NULL, NULL, NULL,
 		XmVaPUSHBUTTON, s3, NULL, NULL, NULL,
