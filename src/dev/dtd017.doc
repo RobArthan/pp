@@ -68,7 +68,7 @@ First draft for comment.
 \pagebreak
 \section{GENERAL}
 \subsection{Scope}
-This document contains the detailed design for an SLR parser generator,
+This document contains the detailed design for an SLR(1) parser generator,
 called \Slrp,
 to be used in constructing the parser for HOL in the ICL HOL system.
 It responds to the demand for such a tool made in \cite{DS/FMU/IED/HLD013}.
@@ -76,46 +76,63 @@ The parser generator itself is not intended to be part of the release 1 system.
 
 \subsection{Introduction}
 The parser generator uses the SLR(1) technique which is well-known
-in the compiler literature. Familiarity
-with the relevant parts of \cite{Aho77} will be useful
-for a reader of this document.
+in the compiler literature. Chapter 6 of \cite{Aho77} has been used
+as the main reference in its design and implementation.
 
 This document is a long way from a detailed design of the internal structure
 of a parser generator, the implementation document, \cite{DS/FMU/IED/IMP018}
-is much closer to that. Instead, what follows attempts to give a
+is much closer to that. Instead, it attempts to give a
 description of the parser generator which explains the services it supplies
-to the user, in user-oriented terms and frequently by means of examples.
- 
+to the user mainly by means of examples.
+This description is not self-contained. It is, however, intended that someone
+who reads section 6.1 of \cite{Aho77}, will be able to gain
+an adequate understanding of the parser generator.
+It will also be helpful for the reader first to glance at section 2 of
+\cite{DS/FMU/IED/DTD018}, which discusses the datatypes used in the
+generated parsers. End-user documentation may be derived by amalgamating
+material from these two sources with the information given here.
+
+The implementation is given on \cite{DS/FMU/IED/IMP017}.
+
 \subsection{Purpose and Background}
 See \cite{DS/FMU/IED/HLD013}.
 
 \subsection{Dependencies}
-The implementation will be dependent on \cite{DS/FMU/IED/IMP017}.
+The implementation will be dependent on \cite{DS/FMU/IED/IMP001}.
+The signature declaration in the design given
+here actually only depends on Standard ML facilities.
 
 \subsection{Possible Enhancements}
 It would be nice to have systematic support for the second
 simplest case of shift/reduce resolution, where different operator
 precedence schemes apply depending on the non-terminal for which
 reduction might be attempted.
-\subsection{Deficiencies}
-It would probably be useful to have an interface which let the grammar be read
+
+It migh be useful to have an interface which let the grammar be read
 in from the standard input.
+\subsection{Deficiencies}
+The output format currently used (shown in an example in this document)
+is a piece of Standard ML which takes is rather slow to compile on
+practical examples. This is apparently because it initialises arrays
+by presenting the desired values as lists of structured values and,
+when they have of the order of 100 elements, these lists take a long time
+to type-check. 
 \pagebreak
 \section{INPUT FORMAT}
-The BNF dialect used by \Slrp 
-is a subset of the British Standard (\cite{BS6154}),
+The BNF dialect used by \Slrp\
+is a subset of British Standard BNF, \cite{DS/FMU/IED/PLN009},
 extended to allow fragments of ML code to be given with any alternative.
 
 The subset is the one in which the only operators are concatenation
 and alternation and in which grouping with parentheses is not allowed.
-Empty alternatives are allowed. Alternatives may optionally be followed
-by an {\em action}, which is just a fragment of text.
+Empty alternatives are allowed. An alternative may optionally be followed
+by an {\em action}, which is just a fragment of Standard ML text.
 We refer to such an extended grammar as an {\em action grammar}.
 The BNF syntax for action grammars is as follows:
 
 =TEX
 Û
-	Grammar	=		Prod, `;`
+	Grammar	=	Prod, `;`
 			|	Prod, `;`, Grammar;
 
 	Prod		=	Name, `=`, Def;
@@ -132,19 +149,22 @@ The BNF syntax for action grammars is as follows:
 Ê
 
 The terminal symbols in the above grammar are, $Name$, $Constant$ and, $Action$.
-Names are formed using alphanumeric characters underscores.
+Names are formed using alphanumeric characters and underscores.
 Names denote non-terminal symbols or classes of terminal symbols.
 
 Constants start and finish with a backprime character `\verb"`"'.
 `\verb"`"' may appear within a constant provided it is preceded by a
-backslash character `\verb"\"'. Constants
+backslash character, `\verb"\"'. Constants
 are used to denote individual terminal symbols.
 
 Note that the distinction between names and constants for terminal symbols
 is purely for documentary purposes. \Slrp\ treats either sort of terminal
 in exactly the same way, and the generated parser is parameterised by
 a $CLASSIFIER$ function to map input tokens onto terminal symbols
-(see \cite{DS/FMU/IED/DTD018}).
+(see \cite{DS/FMU/IED/DTD018}). The names and constant symbols are used
+as Standard ML identifiers in the generated parser and so if the parser
+is to be syntactically correct they must be follow the rules for identifiers
+in Standard ML.
 
 Actions start with a left bracket, `\verb"(", and finish with
 a right bracket, `\verb")"'. Any brackets appearing within an action must
@@ -153,8 +173,10 @@ executed by the generated parser when a particular alternative has
 been recognised.
 The actions may be omitted, e.g., when using \Slrp\ to help design
 a grammar., The actions must either all be omitted or all be present.
-If they are omitted \Slrp\ proceeds as if each action had been supplied
-as `\verb"()"'.
+If they are omitted, \Slrp\ proceeds as if each action had been supplied
+as `\verb"()"'. Omitting the actions is appropriate when one is
+experimenting with a grammar, e.g. to convert a non-SLR(1) grammar into
+an SLR(1) one.
 
 Comments may be included in a grammar using the Standard ML comment
 symbols.
@@ -177,15 +199,23 @@ is the chosen sentence symbol for the language defined by the grammar.
 So here the sentences correspond to the non-terminal $E$.
 
 Note the convention adopted by \Slrp\ that $x1$, $x2$ etc. are used
-in an action to refer to the pieces of the corresponding alternative in
-the grammar. Thus in the alternative for addition above the action
-is call the function $add$ with the result of parsing the $E$ and the $T$ as
+in an action to refer to the symbols int the corresponding alternative in
+the grammar. Thus, in the alternative for addition above, the action
+is to call the function $add$ with the result of parsing the $E$ and the $T$ as
 its arguments.
+
+The values $x1$, $x2$, used to refer to the symbols
+in an alternative etc. have as their ML type an instance of the type
+$('tok, 'lc, 'pp)INPUT\_STACK\_ITEM$ described in \cite{DS/FMU/IED/DTD018}.
+This has two constructors: $Token$ and $Parsed$. The $Token$ constructor
+corresponds to a terminal symbol in an alternative, and $Parsed$ corresponds
+to a non-terminal. In the above example, all of the $x$s will be constructed
+with $Parsed$, except for $x1$ in the second alternative for $F$.
 
 We will refer to this example as the pocket calculator example in the
 rest of this document.
 \section{CODE GENERATION}
-The output form \Slrp\ is some Standard ML source text, which, when compiled,
+The output from \Slrp\ is some Standard ML source text, which, when compiled,
 defines three tables and a function, as shown in the following skeletal
 listing of the output produced for the pocket calculator example:
 ÛExample
@@ -212,9 +242,10 @@ the data types and functions defined in
 \item
 a datatype
 having a nullary constructor for each terminal
-symbol and for the end of sentence symbol;
+symbol and for a special end of sentence symbol (the name of this
+special symbol is one of the parameters to the parser generator);
 \item
-any supporting functions required by the action code.
+any supporting functions, types, etc. required by the action code.
 \end{enumerate}
 
 In the pocket calculator example the context required might be
@@ -234,9 +265,11 @@ fun conv (Token (n:string, _)) = nat_of_string n
 |   conv _ = raise PARSER_ERROR "corrupt stack";
 Ê
 
+
 Here we are constructing a parser for the pocket calculator language which
-computes the value of the expression it is parsed as it goes. Thus
-the parsing stack entries will have type an instance of
+computes the value of the expression it is parsed as it goes. As already
+mentioned the parsing stack entries which are the arguments
+to $add$, $mul$ and $conv$ will have type an instance of
 $(''tok, ''lc, int) INPUT\_STACK\_ITEM$. 
 
 The result of compiling the generated code in the above example
@@ -250,14 +283,18 @@ val slrp'gen_parser = fn : (string, PC_CLASS, int) RESOLVER ->
 (string, PC_CLASS) CLASSIFIER ->
 (string, PC_CLASS, int) ERROR_ROUTINE -> (string, 'a)READER -> 'a -> int
 Ê
-Thus $slrp'gen\_parser$ requires a resolver, a classifier
-an error routine and a reader function
+Thus $slrp'gen\_parser$ requires as its arguments a resolver, a classifier,
+an error routine, and a reader function to
 give a parser which will return integer values.
+The type definitions used for the arguments are explained
+in \cite{DS/FMU/IED/DTD017}:
 
-In this example, since the grammar does not
-generate any conflicts the default resolver supplied by
-\cite{DS/FMU/IED/DTD018} will do.
-
+{\ftlmargin=1in
+\begin{itemize}
+\item
+In this example, the default resolver described in
+\cite{DS/FMU/IED/DTD017} will do.
+\item
 The  following classifier function gives the usual ASCII syntax for
 arithmetical expressions.
 ÛExample SML
@@ -267,16 +304,15 @@ fun pc_classify "*" = Times
 |   pc_classify ")" = Rbrack
 |   pc_classify "<end-of-input>" = Eos
 |   pc_classify Other = if is_all_decimal Other then Num else Wrong;
-Slrp.slrp {infile="slr.tst", outfile="slr.sml", logfile ="slr.log", eos ="Eos", loglevel=2};
 Ê
-
+\item
 The default error routine will serve our needs here. It requires an
 argument which is a function giving the string form of a token. Since our
 tokens are already strings this is easy to arrange:
 ÛExample SML
 val pc_error = default_error (fn s => s);
 Ê
-
+\item
 Now we need to define a reader. For simplicity, let us construct the
 parser so that its input is given in its entirety as an exploded
 string before parsing commences.
@@ -288,12 +324,14 @@ fun pc_reader (ip : string list) : string * string list = (
 	|	[] => ("<end-of-input>", [])
 );
 Ê
-The desired parser may now be obtained by  instiantiating
+\end{itemize}}
+
+The desired parser may now be obtained by  applying
 $slrp'gen\_parser$ as follows:
 ÛExample SML
 val pc_parser = slrp'gen_parser default_resolver pc_classify pc_error pc_reader;
 Ê
-To test our parser we might build a simple lexical analyser, e.g.:
+To test our parser we build a simple lexical analyser, e.g.:
 
 ÛExample SML
 fun pc_lex (s : string) : string list = (
@@ -336,7 +374,7 @@ val it = 40320 : int
 \section{CONFLICT RESOLUTION}
 Not all grammars can be parsed by the SLR(1) technique.
 \Slrp\ will report the so-called conflicts which mean the grammar
-is no SLR(1).
+is not SLR(1).
 However non-SLR(1) grammars are often useful,e.g. an ambiguous grammar
 is never SLR(1) and ambiguous grammars can be very convenient.
 
@@ -346,8 +384,8 @@ and reduce/reduce conflicts.
 \subsection{Shift/Reduce Conflicts}
 We illustrate the use of a grammar with shift/reduce conflicts
 by a modification of the pocket calculator example, in which we merge
-the addition and multiplication operators into a single class $Op$ (perhaps
-with a view to supporting user-defined operators with user-defined
+the addition and multiplication operators into a single class $Op$ (as one
+would to support user-defined operators with user-defined
 precedences).
 
 ÛExample Grammar
@@ -395,8 +433,22 @@ val it = 42042 : int
 val it = 8008 : int   
 :> pc"1001 * 3 + 5";
 Exception- PARSER_ERROR "shift/reduce conflict" raised
-Exception++ failure handled by useterminal
 Ê
+
+What has happened is that on reading the $+$, the generated parser
+has to choose between the two possible ways of parsing 
+$1001*3+5$,
+i.e. it has to choose whether {\em(a)} to ``reduce'' the expression to the left of
+the $+$, i.e. to evaluate $1001*3$ before doing the addition,
+or {\em(b)} to ``shift'' the $+$, i.e. to defer evaluation of the multiplication
+until it has evaluated $3+5$.
+It makes this choice by calling the resolver function supplied as one
+of its arguments. As discussed in
+\cite{DS/FMU/IED/DTD018}, the resolver function makes a three-way choice:
+``shift'', ``reduce'' or ``error''. The default resolver we have used
+in the example always chooses error, which causes an exception to
+be raised as shown above.
+
 
 To resolve the problem we must supply a different resolver to
 $slrp'gen\_parser$. In the current example, we see by inspecting the
@@ -410,8 +462,7 @@ provision for this common case where the conflict can be resolved by
 comparing the current input token with the rightmost terminal in
 the reduction which could be made. This special provision comprises
 a function $simple\_resolver$  which takes as an argument
-a function to perform the comparison and returns one of $DoShift$,
-$DoReduce$ or $DoError$.
+a function to perform the comparison.
 In our example we might define the following comparison function
 ÛExample Code
 fun pc_compare ((s1, _), (s2, _)) = (
@@ -424,12 +475,15 @@ fun pc_compare ((s1, _), (s2, _)) = (
 );
 Ê
 
-and then define the parser as follows.
+($DoShift$ etc. are the constructors of a datatype $RESOLUTION$ discussed
+in \cite{DS/FMU/IED/DTD018}.)
+
+We then define the parser as follows.
 ÛExample Code
 val pc_parser = slrp'gen_parser (simple_resolver pc_compare) pc_classify pc_error pc_reader;
 Ê
-Definining $pc$ as before, we see that the case which used to fail now
-works as we would expect:
+Defining $pc$ as before, we see that the case which used to fail now
+works as we would like:
 ÛExample SML Session
 :> pc"1001 * 3 + 5";
 val it = 3008 : int   
@@ -437,14 +491,15 @@ val it = 3008 : int
 
 The simple technique supported by $simple\_resolver$ will handle
 many useful grammars. More complex cases can be handled by hand-coding
-a resolution function.
+a resolver function. The interface for the resolver function is
+described in \cite{DS/FMU/IED/DTD018}.
 
 \subsection{Reduce/Reduce Conflicts}
 Reduce/reduce conflicts occur much less often in practically useful
 grammars than shift/reduce conflicts.
 An example connected with an equation-typesetting preprocessor may be
 found in \cite{Aho77}. \Slrp\ does not cater for dynamic resolution of
-Reduce/reduce conflicts but instead adopts a simular rule for
+reduce/reduce conflicts but instead adopts a similar rule for
 resolving them to that adopted by the program YACC discussed in\cite{Aho77},
 namely, that a reduce/reduce conflict for two distinct non-terminals
 is resolved in favour of the production which appears first
@@ -452,18 +507,25 @@ in the grammar\footnote{%
 This rule is slightly complicated since,
 \Slrp\ allows several alternatives to be given for one non-terminal
 and also allows alternatives to be given in separate productions for the same non-terminal.
-Internally \Slrp\ brings all the alternatives for a given non-terminal
+Internally, \Slrp\ brings all the alternatives for a given non-terminal
 together as soon as it encounters the first production for that non-terminal.
 The reduce/reduce resolution is done using the ordering of alternatives within
 this internal representation for the grammar.%
 }.
 
 =TEX
+\pagebreak
 \section{INTERFACE}
+In the release 1 system, the parser generator is to be compiled during system
+build into a separate ML database, $sun{\cal N}slrp.db$, ${\cal N}= 3, 4$.
+This is then invoked using the $slrp$ function defined below to construct part of
+the source of the ICL HOL parser.
 =DOC
 signature ‚Slrp· = sig
 =DESCRIBE
-See DS/FMU/IED/DTD018
+This is the signature of a structure containing an SLR(1) parser
+generator, \Slrp.
+It is not included as part of the release 1 HOL system.
 =ENDDOC
 The parser generator is invoked using the following function $slrp$.
 Its first three parameters are the names of the input file, output file and
@@ -471,11 +533,9 @@ lo
 =DOC
 val ‚slrp· : {infile : string, outfile : string, logfile : string, eos:string, loglevel:int} -> unit
 =DESCRIBE
-See DS/FMU/IED/DTD018
-=ENDDOC
-$slrp$ is used to invoke an SLR(1) parser generator. It is not included
-as part of the release 1 HOL system. It is further documented
-in DS/FMU/IED/DTD017.
+$slrp$ is used to invoke \Slrp, an SLR(1) parser generator. 
+It is not included as part of the release 1 HOL system.
+It is further documented in \cite{DS/FMU/IED/DTD017}.
 
 $infile$ names the input file for $slrp$.
 The input file should contain a BNF grammar in which optional fragments of
@@ -484,7 +544,7 @@ The identifiers $x1$, $x2$, ... may be used to refer to
 the successive components of the alternative in these Standard ML fragments.
 
 $slrp$ writes to the output file, named by $outfile$,
-some Standard ML code which defines a function
+some Standard ML source text defining some tables and a function
 $slrp'gen\_parser$ which acts as a parser for the supplied grammar.
 
 $eos$ gives the name of the lexical class denoting end of input.
@@ -492,7 +552,7 @@ $eos$ gives the name of the lexical class denoting end of input.
 The integer $loglevel$ determines the amount
 of log information to be written to the file named $logfile$, as follows:
 
-\begin{centering}
+\begin{center}
 \begin{tabular}{|l|p{4in}|}\hline
 Level & Information Logged \\ \hline\hline
 $\leq 0$ & No log information is produced and the logfile parameter is ignored. \\ \hline
@@ -504,10 +564,10 @@ of the grammar and its terminals and the state table and a listing of any confli
 before resolution. \\ \hline
 $\geq 3$ & As 2 together with a listing of the full action table before resolution. \\ \hline
 \end{tabular}
-\end{centering}
+\end{center}
 
-$loglevel=2$ is by the most useful level during development of a parser.
-$loglevel=0$ or perhaps $1$ is appropriate to subsequent production runs.
+$loglevel=2$ is the most useful level during development of a parser.
+=ENDDOC
 
 =SML
 end; (* of signature Slrp *)
@@ -525,143 +585,3 @@ system then more comprehensive testing will be required.
 \printindex
 
 \end{document}
-=TEST
-fun dump_string file string = (
-	let	val os = open_out file;
-	in	(output(os, string); close_out os)
-	end
-);
-(* First Pocket Calculator Example: *)
-dump_string "slr.tst"(
-"E	= E, `Plus`, T (add x1 x3)			\n" ^
-"	| T (fetch x1);			\n" ^
-"T	= T, `Times`, F (mul x1 x3)		\n	" ^
-"	| F (fetch x1);\n" ^
-"F	= `Lbrack`, E, `Rbrack` (fetch x2)	\n		" ^
-"	| Num (conv x1);			\n");
-
-
-open SlrpDriver;
-datatype PC_CLASS = Plus | Times | Lbrack | Rbrack | Num | Eos | Wrong;
-
-fun add (Parsed (x:int)) (Parsed (y:int)) = x + y
-|   add _ _ = raise PARSER_ERROR "corrupt stack";
-fun mul (Parsed (x:int)) (Parsed (y:int)) = x * y
-|   mul _ _ = raise PARSER_ERROR "corrupt stack";
-fun fetch (Parsed (x:int)) = x
-|   fetch _= raise PARSER_ERROR "corrupt stack";
-fun conv (Token (n:string, _)) = nat_of_string n
-|   conv _ = raise PARSER_ERROR "corrupt stack";
-
-fun pc_classify "*" = Times
-|   pc_classify "+" = Plus
-|   pc_classify "(" = Lbrack
-|   pc_classify ")" = Rbrack
-|   pc_classify "<end-of-input>" = Eos
-|   pc_classify Other = if is_all_decimal Other then Num else Wrong;
-
-val pc_error = default_error (fn s => s);
-fun pc_reader (ip : string list) : string * string list = (
-	case ip of
-		(h :: more) => (h, more)
-	|	[] => ("<end-of-input>", [])
-);
-Slrp.slrp {infile="slr.tst", outfile="slr.sml", logfile ="slr.log", eos ="Eos", loglevel=2};
-open EfficientDictionary;
-PolyML.use"slr.sml";
-val pc_parser = slrp'gen_parser default_resolver pc_classify pc_error pc_reader;
-fun pc_lex (s : string) : string list = (
-	let	val chars = explode s;
-		fun get_num acc (x :: more) = (
-			if is_all_decimal x
-			then get_num (acc ^ x) more
-			else (acc, x :: more)
-		)  | get_num acc [] = (acc, []);
-		fun get_tok (x :: more) = (
-			if is_all_decimal x
-			then let val (num, rest) = get_num x more
-			in	num :: get_tok rest
-			end else if x = " "
-			then get_tok more
-			else x :: get_tok more
-		) | get_tok [] = []
-	in	get_tok chars
-	end
-);
-val pc : string -> int = pc_parser o pc_lex;
-
-pc"1001+42";
-pc"1001 * 42";
-pc"(1001)";
-pc"1001";
-pc"(1*(2*(3*(4*(5*(6*(7*8)))))))";
-pc"(((((((1+2)+3)+4)+5)+6)+7)+8)";
-pc"((((((1+2)+3)+4)+5)+6)+7)+8)" (* error case *);
-pc"((((((((((1+2)+3)+4)+5)+6)+7)+8)" (* error case *);
-
-
-(* Second pocket calculator example *)
-
-
-dump_string "slr.tst"(
-"E	= E, Op, E (apply x2 x1 x3)			\n" ^
-"	| `Lbrack`, E, `Rbrack` (fetch x2)	\n		" ^
-"	| Num (conv x1);			\n");
-
-Slrp.slrp {infile="slr.tst", outfile="slr.sml", logfile ="slr.log", eos ="Eos", loglevel=2};
-
-datatype PC_CLASS = Op | Lbrack | Rbrack | Num | Eos | Wrong;
-
-fun apply (Token("+", _)) (Parsed (x:int)) (Parsed (y:int)) = x + y
-|   apply (Token("*", _)) (Parsed (x:int)) (Parsed (y:int)) = x * y
-|   apply (Token(s, _)) _ _ = raise PARSER_ERROR ("operator " ^ s  ^ " not recognised")
-|   apply _ _ _ = raise PARSER_ERROR "corrupt stack";
-
-
-fun pc_classify "*" = Op
-|   pc_classify "+" = Op
-|   pc_classify "(" = Lbrack
-|   pc_classify ")" = Rbrack
-|   pc_classify "<end-of-input>" = Eos
-|   pc_classify Other = if is_all_decimal Other then Num else Wrong;
-
-open EfficientDictionary;
-PolyML.use"slr.sml";
-val pc_parser = slrp'gen_parser default_resolver pc_classify pc_error pc_reader;
-fun pc_lex (s : string) : string list = (
-	let	val chars = explode s;
-		fun get_num acc (x :: more) = (
-			if is_all_decimal x
-			then get_num (acc ^ x) more
-			else (acc, x :: more)
-		)  | get_num acc [] = (acc, []);
-		fun get_tok (x :: more) = (
-			if is_all_decimal x
-			then let val (num, rest) = get_num x more
-			in	num :: get_tok rest
-			end else if x = " "
-			then get_tok more
-			else x :: get_tok more
-		) | get_tok [] = []
-	in	get_tok chars
-	end
-);
-val pc : string -> int = pc_parser o pc_lex;
-
-pc"1001";
-pc"1001 * 42";
-pc"1001 * (3 + 5)";
-pc"1001 * 3 + 5";
-
-
-fun pc_compare ((s1, _), (s2, _)) = (
-	case (s1, s2) of
-		("+", "+") => DoReduce
-	|	("+", "*") => DoShift
-	|	("*", "+") => DoReduce
-	|	("*", "*") => DoReduce
-	|	_ => raise PARSER_ERROR "unrecognised operator"
-);
-val pc_parser = slrp'gen_parser (simple_resolver pc_compare) pc_classify pc_error pc_reader;
-
-val pc : string -> int = pc_parser o pc_lex;
