@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.13 2003/03/03 15:23:41 rda Exp rda $
+ * $Id: xmisc.c,v 2.14 2003/04/11 10:58:21 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -43,7 +43,6 @@
 #endif
 
 #include<Xm/Text.h>
-#include<varargs.h>
 
 #include "xpp.h"
 
