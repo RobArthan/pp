@@ -97,6 +97,8 @@ Added $get\_valid\_cache\_theories$.
 Now need to turn off type compactification.
 \item [Issue 1.31 (8th September 1993)]
 Fixed bug 134.
+\item [Issue 1.32 (12th June 1997)]
+Another attempt to speed $cached\_labelled\_product\_rule$.
 \end{description}
 \subsection{Changes Forecast}
 Anyone doing any extra work on this code should seriously consider
@@ -521,11 +523,11 @@ local
 in
 val €l_¬_conv› : CONV = (fn tm =>
 let	val (p,q) = dest_app tm;
-	val (q1,q2) = dest_pair q;
 	val (uc,p') = dest_app p;
 	val sideeffect = if fst(dest_const uc) <> "Uncurry"
 		then fail "l_¬_conv" 0 []
 		else ();
+	val (q1,q2) = dest_pair q;
 	val tyinsts = [(type_of q1,tva),(type_of q2,tvb),
 		(snd(dest_≠_type(snd(dest_≠_type(type_of p')))),tvc)];
 	val s1 = inst_type_rule tyinsts uncurry_def;
@@ -673,16 +675,35 @@ val €cache_unlabelled_thm1› = (
 		THEN asm_rewrite_tac[]);
 	pop_thm());
 =TEX
-Now we can define $cached\_labelled\_product\_rule$ itself.
+The following maximizes the sharing of the type variables.
 =SML
-fun €cached_labelled_product_rule› (arg: int) : THM = (
-let
-	val was_thy = get_current_theory_name();
+fun €clpr_aux› (labstr : string) (in_n : int) = (
+let fun aux (tyvars, xis, labs) (n : int) = (
+	if (n <= 0)
+	then (tyvars, xis, labs)
+	else (let 
+		val inter = string_of_int n;
+		val tyvar = mk_vartype("'"^ inter);
+		val xi = mk_var("x"^inter,tyvar);
+		val lab = mk_var(labstr^inter, mk_≠_type(tva,tyvar));
+	in
+		aux ((tyvar :: tyvars), (xi :: xis), (lab :: labs))
+			 (n-1)
+	end)
+	);
+in
+	aux ([],[],[]) in_n
+end);
+=TEX
+A heavily used pair of variables:
+=SML
+val €t_tva› =	mk_var("t",tva);
+val €a_tva› = mk_var("a",tva);
 =TEX
 The following finds pre-existing copies of the $cached\_product\_rule$
 theorem, should they exist.
 =SML
-fun €find_n_tuple› (n:int):THM OPT = (
+fun €clpr_find_n_tuple› (n:int):THM OPT = (
 let	val key = clp_key n;
 	fun aux [] = Nil
 	| aux (thy :: rest) = (Value(get_thm thy key)
@@ -690,6 +711,15 @@ let	val key = clp_key n;
 in
 		aux (get_valid_cache_theories())
 end);
+=TEX
+=SML
+val €l_pair_eq_thm_cnv› = simple_eq_match_conv1 pair_eq_thm;
+=TEX
+Now we can define $cached\_labelled\_product\_rule$ itself.
+=SML
+fun €cached_labelled_product_rule› (arg: int) : THM = (
+let
+	val was_thy = get_current_theory_name();
 =TEX
 The following declares a new n-tuple type, given
 the name of the cache theory knowing that the type isn't
@@ -704,38 +734,31 @@ let	val sideeffect = if is_theory_ancestor cache_thy was_thy
 in let
 	val nstr = string_of_int n;
 	val key = clp_key n;
-	val inters = map string_of_int (interval 1 n);
-	val tyvars = map (fn x => mk_vartype("'"^ x)) inters;
-	val xi = map (fn x => mk_var("x"^x,mk_vartype("'"^ x))) inters;
-	val yi = map (fn x => mk_var("y"^x,mk_vartype("'"^ x))) inters;
-	val ntuple = mk_var(nstr^ "Tuple",list_mk_≠_type (tyvars @ [tva]));
 	val labstr = "Lab"^nstr^"_";
-	val labs = map (fn x => mk_var(labstr^x,
-		mk_≠_type(tva,mk_vartype("'"^x)))) inters;
-	val t = mk_var("t",tva);
+	val (tyvars, xi, labs) = clpr_aux labstr n;
+	val ntuple = mk_var(nstr^ "Tuple",list_mk_≠_type (tyvars @ [tva]));
 	val ntuple_args = list_mk_app(ntuple,xi);
 	val succedent = mk_simple_∂(ntuple,
 		list_mk_simple_∂(labs,
-		list_mk_simple_µ((t :: xi),
+		list_mk_simple_µ((t_tva :: xi),
 		rlist_mk_±(
 		map (fn (lab,x) =>
 		mk_eq(mk_app(lab,ntuple_args),x))
 		(combine labs xi)
 		@ [mk_eq(
 		list_mk_app(ntuple,
-		map (fn lab => mk_app(lab,t)) labs),
-		t)])))
+		map (fn lab => mk_app(lab,t_tva)) labs),
+		t_tva)])))
 			);
 	val ntuple_type = rlist_mk_∏_type tyvars;
 	val abs = mk_var("abs",mk_≠_type(ntuple_type,tva));
 	val rep = mk_var("rep",mk_≠_type(tva,ntuple_type));
-	val avar = mk_var("a",tva);
 	val rvar = mk_var("r",ntuple_type);
 	val antecedent = (
 		list_mk_simple_∂([abs,rep],
 		mk_±
-		(mk_simple_µ(avar,
-		mk_eq(mk_app(abs,mk_app(rep,avar)),avar)),
+		(mk_simple_µ(a_tva,
+		mk_eq(mk_app(abs,mk_app(rep,a_tva)),a_tva)),
 		mk_simple_µ(rvar,
 		mk_eq(mk_app(rep,mk_app(abs,rvar)),rvar))))
 	);
@@ -756,7 +779,7 @@ We do so by instantiating the $n-1^{th}$ theorem.
 			(ALL_SIMPLE_µ_C
 			(±_C2
 			(LEFTMOST_±_C((RATOR_C(RAND_C simple_¬_conv))
-				THEN_C (simple_eq_match_conv1 pair_eq_thm))
+				THEN_C l_pair_eq_thm_cnv)
 			)
 			(ONCE_MAP_C simple_¬_conv))
 ))
@@ -790,29 +813,43 @@ in
 	then (if is_theory_ancestor "basic_hol" was_thy 
 		then cache_labelled_thm1
 		else fail "cached_labelled_product_rule" 59017 [])
-	else (case (find_n_tuple arg) of
+	else (case (clpr_find_n_tuple arg) of
 	Value thm => thm
 	| Nil => let	val cache_thy = force_get_cache_theory()
 			handle complaint =>
 			pass_on complaint "force_get_cache_theory"
 			"cached_labelled_product_rule";
-		in	case (find_n_tuple arg) of
+		in	case (clpr_find_n_tuple arg) of
 				Value thm => thm
 			|	Nil => declare_n_tuple cache_thy arg
 		end)
 
 end); (* of cached_labelled_product_rule *)
 =TEX
-We define $cached\_unlabelled\_product\_rule$ in a similar manner.
+The following maximizes the sharing of the type variables.
 =SML
-fun €cached_unlabelled_product_rule› (arg: int) : THM = (
-let
-	val was_thy = get_current_theory_name();
+fun €cupr_aux› (in_n : int) = (
+let fun aux (tyvars, xis, yis) (n : int) = (
+	if (n <= 0)
+	then (tyvars, xis, yis)
+	else (let 
+		val inter = string_of_int n;
+		val tyvar = mk_vartype("'"^ inter);
+		val xi = mk_var("x"^inter,tyvar);
+		val yi = mk_var("y"^inter,tyvar);
+	in
+		aux ((tyvar :: tyvars), (xi :: xis), (yi :: yis))
+			 (n-1)
+	end)
+	);
+in
+	aux ([],[],[]) in_n
+end);
 =TEX
 The following finds pre-existing copies of the $cached\_product\_rule$
 theorem, should they exist.
 =SML
-fun €find_n_tuple› (n:int):THM OPT = (
+fun €cupr_find_n_tuple› (n:int):THM OPT = (
 let	val key = cup_key n;
 	fun aux [] = Nil
 	| aux (thy :: rest) = (Value(get_thm thy key)
@@ -820,6 +857,13 @@ let	val key = cup_key n;
 in
 		aux (get_valid_cache_theories())
 end);
+=TEX
+
+We define $cached\_unlabelled\_product\_rule$ in a similar manner.
+=SML
+fun €cached_unlabelled_product_rule› (arg: int) : THM = (
+let
+	val was_thy = get_current_theory_name();
 =TEX
 The following declares a new n-tuple type, given
 the name of the cache theory knowing that the type isn't
@@ -834,33 +878,28 @@ let	val sideeffect = if is_theory_ancestor cache_thy was_thy
 in let
 	val nstr = string_of_int n;
 	val key = cup_key n;
-	val inters = map string_of_int (interval 1 n);
-	val tyvars = map (fn x => mk_vartype("'"^ x)) inters;
-	val xi = map (fn x => mk_var("x"^x,mk_vartype("'"^ x))) inters;
-	val yi = map (fn x => mk_var("y"^x,mk_vartype("'"^ x))) inters;
+	val (tyvars, xi, yi) = cupr_aux n;
 	val ntuple = mk_var(nstr^ "Tuple",list_mk_≠_type (tyvars @ [tva]));
-	val t = mk_var("t",tva);
 	val ntuple_args = list_mk_app(ntuple,xi);
 	val succedent = mk_simple_∂(ntuple,
 		mk_±(
 		 (list_mk_simple_µ(xi @ yi,mk_§(
 			mk_eq(ntuple_args,list_mk_app(ntuple,yi)),
 			rlist_mk_±(map (fn (x,y) => mk_eq(x,y)) (combine xi yi))))),
-		 (mk_simple_µ(t,
+		 (mk_simple_µ(t_tva,
 		 list_mk_simple_∂(xi,
-			 mk_eq(t,ntuple_args))))
+			 mk_eq(t_tva,ntuple_args))))
 		)
 	);
 	val ntuple_type = rlist_mk_∏_type tyvars;
 	val abs = mk_var("abs",mk_≠_type(ntuple_type,tva));
 	val rep = mk_var("rep",mk_≠_type(tva,ntuple_type));
-	val avar = mk_var("a",tva);
 	val rvar = mk_var("r",ntuple_type);
 	val antecedent = (
 		list_mk_simple_∂([abs,rep],
 		mk_±
-		(mk_simple_µ(avar,
-		mk_eq(mk_app(abs,mk_app(rep,avar)),avar)),
+		(mk_simple_µ(a_tva,
+		mk_eq(mk_app(abs,mk_app(rep,a_tva)),a_tva)),
 		mk_simple_µ(rvar,
 		mk_eq(mk_app(rep,mk_app(abs,rvar)),rvar))))
 	);
@@ -879,7 +918,7 @@ We do so by instantiating the $n-1^{th}$ theorem.
 		(±_C2 (lpair_µ_conv THEN_C
 				ONCE_MAP_C lpair_µ_conv THEN_C
 				ALL_SIMPLE_µ_C (RAND_C(LEFTMOST_±_C 
-					(simple_eq_match_conv1 pair_eq_thm))))
+					(l_pair_eq_thm_cnv))))
 				(SIMPLE_BINDER_C lpair_∂_conv))
 		) THEN_C
 		l∂_pair_conv THEN_C ONCE_MAP_C l_¬_conv))
@@ -910,13 +949,13 @@ in
 	then (if is_theory_ancestor "basic_hol" was_thy 
 		then cache_unlabelled_thm1
 		else fail "cached_unlabelled_product_rule" 59017 [])
-	else (case (find_n_tuple arg) of
+	else (case (cupr_find_n_tuple arg) of
 	Value thm => thm
 	| Nil => let	val cache_thy = force_get_cache_theory()
 			handle complaint =>
 			pass_on complaint "force_get_cache_theory"
 			"cached_unlabelled_product_rule";
-		in	case (find_n_tuple arg) of
+		in	case (cupr_find_n_tuple arg) of
 				Value thm => thm
 			|	Nil => declare_n_tuple cache_thy arg
 		end)
