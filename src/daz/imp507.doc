@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.187 $ $RCSfile: imp507.doc,v $ $Date: 2002/05/03 16:48:02 $
+% imp507.doc %Z% $Revision: 1.188 $ $RCSfile: imp507.doc,v $ $Date: 2002/05/04 13:48:39 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.187 $%
+\def\SCCSversion{$Revision: 1.188 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/05/03 16:48:02 $%
+\TPPdate{\FormatDate{$Date: 2002/05/04 13:48:39 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -138,6 +138,7 @@ statements in stubs.
 \item[Issue 1.184] R0065: duplicates in context clauses now allowed.
 \item[Issue 1.185] R0056: default parameter modes supported properly.
 \item[Issue 1.186-1.188] new syntax for interim spring 2002 release.
+\item[Issue 1.189] R0058: forward declarations of subprograms.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -3799,6 +3800,36 @@ fun €trans_formal_fun› (cnenv : CN_ENV)
 );
 =TEX
 =SML
+fun €store_trans_formal_fun› (cnenv : CN_ENV)
+		(ff as {informal_fun = {name, ...}, ...} : FORMAL_FUN) : unit = (
+	let	val para = trans_formal_fun cnenv ff;
+		val cname = trans_id name;
+		val cty_opt = get_const_type (z_id_of_id cname);
+		val pred = case para of
+			AxDesInfo(_, _, Value pred, _) => pred
+		| _ => error "store_trans_formal_fun" 507067 [];
+		fun clash_error () = (
+			fail "store_trans_formal_fun" 507068
+			[fn _ => cname, fn _ => name]
+		);
+	in	case cty_opt of
+			Nil => (
+			store_para para
+		) |	Value cty => (
+			let	val cterm = mk_z_gvar(cname, cty, []);
+				val cpred = snd (dest_±(concl(z_get_spec cterm)))
+					handle Fail _ => clash_error();
+				val vterm = mk_var(cname, cty);
+				val pred' = subst[(cterm, vterm)] pred;
+			in	if	cpred ~=$ pred'
+				then	()
+				else	clash_error()
+			end
+		)
+	end
+);
+=TEX
+=SML
 fun €form_fun_pack_spec› (form_fun: FORMAL_FUN) : unit = (
 	let	val test_save = test_store_para
 			(trans_formal_fun current_cn_env form_fun);
@@ -3830,7 +3861,7 @@ fun €form_fun_pack_body› (form_fun: FORMAL_FUN) : unit = (
 			handle Fail _ =>
 			error "form_fun_pack_body" 507012 [fn()=>block_name2];
 		val formal_funs4 = #formal_funs package4;
-	in	store_para(trans_formal_fun current_cn_env form_fun);
+	in	store_trans_formal_fun current_cn_env form_fun;
 		add_spark_function_info (#globals form_fun) (#informal_fun form_fun);
 		if	any
 			formal_funs4
@@ -3906,7 +3937,7 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 			handle Fail _ =>
 			fail "form_fun_subunit" 507011
 	 			[fn()=>block_name2, fn()=>block_name1];
-	in	store_para(trans_formal_fun current_cn_env form_fun);
+	in	store_trans_formal_fun current_cn_env form_fun;
 		add_spark_function_info (#globals form_fun) (#informal_fun form_fun);
 		subunit_env := s_delete tbn1_bn2 (!subunit_env);
 		if	#specif_flag subunit3
@@ -3943,7 +3974,7 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 =TEX
 =SML
 fun €form_fun_otherwise› (form_fun: FORMAL_FUN) : unit = (
-	store_para(trans_formal_fun current_cn_env form_fun);
+	store_trans_formal_fun current_cn_env form_fun;
 	add_spark_function_info (#globals form_fun) (#informal_fun form_fun)
 );
 =TEX
@@ -4062,6 +4093,29 @@ fun €update_envs_proc› (() : unit) : unit = (
 );
 =TEX
 \subsection{The SID function add\_proc\_env}
+The following function checks whether two formal procedures
+contain the same specification statement. (Ada type-checking
+guarantees conformance of the formal parameter parts). 
+=SML
+fun €conformant_specs›
+	({globals = gA, spec = {w = wA, w0 = w0A, pre = preA, post = postA}, ...}
+		 : FORMAL_PROC)
+	({globals = gB, spec = {w = wB, w0 = w0B, pre = preB, post = postB}, ...}
+		 : FORMAL_PROC)
+		: bool = (
+	let	val _ = set_current_ti_context[];
+		val tpreA = z_predexp_of_z_tm preA;
+		val tpreB = z_predexp_of_z_tm preB;
+		val tpostA = z_predexp_of_z_tm postA;
+		val tpostB = z_predexp_of_z_tm postB;
+	in	gA = gB andalso wA = wB andalso w0A = w0B andalso
+		tpreA ~=$ tpreB andalso tpostA ~=$ tpostB
+	end
+);
+=TEX
+In the following, we only need to look in the immediately surrounding declarative
+part and not further out (the rules on redeclarations in inner scopes
+will prevent there being any possibility of a clash with an outer procedure).
 =SML
 fun €add_proc_env› (() : unit) : unit = (
 	if	test_flag #formal_body_flag 1
@@ -4071,9 +4125,25 @@ fun €add_proc_env› (() : unit) : unit = (
 			val block2 = block 2;
 			val formal_procs2 =
 					#formal_procs(#in_scope(#declab block2));
-			val block2' = block_formal_procs(block2,
+			val n = #name current_formal_proc1;
+			fun already_there [] = false
+			|   already_there (fp::more) = (
+				if	#name fp = n
+				then	if	conformant_specs
+						fp
+						current_formal_proc1
+					then	true
+					else	fail "add_proc_env" 507066
+						[fn _ => n]
+				else	already_there more
+			);
+		in	if	already_there formal_procs2
+			then	()
+			else	let	val block2' = block_formal_procs(block2,
 					current_formal_proc1 :: formal_procs2);
-		in	blocks := block1 :: block2' :: tl(tl(!blocks))
+				in	blocks :=
+					block1 :: block2' :: tl(tl(!blocks))
+				end
 		end
 	else	()
 );
@@ -4481,7 +4551,7 @@ fun €prefix_term› (ident : ID)
 				let	val zn = implode more;
 				in	if	is_id_in_package newids zn
 					then	const_subs
-	((mk_const("z'"^prefix_id ident zn, ty), mk_const(n, ty))::acc)
+	((mk_const(z_id_of_id(prefix_id ident zn), ty), mk_const(n, ty))::acc)
 						cs
 					else	const_subs acc cs
 				end	handle Fail _ => const_subs acc cs
@@ -5693,7 +5763,7 @@ into the corresponding list of signature variables.
 fun expand_names (ns : ID list) : Z_ID list = (
 	let	fun aux n = (
 			((map fst o dest_z_schema_type o dest_z_power_type o
-				force_value o get_const_type) ("z'" ^ n))
+				force_value o get_const_type) (z_id_of_id n))
 			handle Fail _ => [n]
 		);
 	in	flat (map aux ns)
@@ -6081,11 +6151,11 @@ and €do_proper_body› (y as (PBProcedure
 	{procedure_spec as {name,...}, declarative_part, statement}) : PROPER_BODY)
 	: unit = (
 	do_procedure_spec procedure_spec;
+	add_proc_env();
 	subprogram_implementation();
 	map do_declaration declarative_part;
 	vcs_body (do_statement statement);
 	update_envs_proc();
-	add_proc_env();
 	end_scope()
 ) | do_proper_body (y as (PBFunction 
 	{function_spec as {designator,...}, declarative_part, statement}) : PROPER_BODY) = (
