@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% %Z% $Date: 2002/12/05 16:34:49 $ $Revision: 1.118 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2002/12/07 15:25:05 $ $Revision: 1.119 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -26,7 +26,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation: Verification Condition Generator}  %% Mandatory field
 \def\TPPheadtitle{Verification Condition Generator}
 \TPPref{ISS/HAT/DAZ/IMP505}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.118 $%
+\def\SCCSversion{$Revision: 1.119 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 \TPPdate{\FormatDate{97/07/18%
@@ -150,6 +150,7 @@ More corrections to VC derivation code. Change names {\it Sequent\_Route} to
 \item[Issue 1.115, 1.116] DAZ-specific updates to banner for open source release
 \item[Issue 1.117] Uniform treatment of block statements.
 \item[Issues 1.118, 1.119] Schema references in function $\Xi$-lists.
+\item[Issue 1.120] R0096: improved formatting of nothing statement form in web clauses
 \end{description}
 
 \subsection{Changes Forecast}
@@ -737,6 +738,14 @@ without an others part.
 {\it case\_others} then acts as the main entry point for case statements,
 calling {\it case\_step} to do do the non-others alternatives and then
 handling the others part if present.
+
+As agreed with QinetiQ, in the (unlikely) case where the others part is an explicit nothing statement,
+we do not generate any VCs for the others part, since the program will not have an others part
+and so, if it passes the compiler's checks on the exhaustive coverage of the case statement, the
+VCs are guaranteed to be true. We do not attempt to suppress VC generation if the others
+part comprises something like the sequential composition of two nothings (in general, it could
+comprise a sequential compositioin of nothings and specifications statements that will later
+be refined to nothings, but we cannot detect that case here).
 =SML
 fun Ûcase_othersÝ (pars as {wp, a, wp_env as {env,...}} : WP_PARS)
 		(st as {e, others, ...} : STATEMENT CASE) : RESULT = (
@@ -745,7 +754,8 @@ fun Ûcase_othersÝ (pars as {wp, a, wp_env as {env,...}} : WP_PARS)
 		val (res as {wp = wp1, side = side1}, exps) = case_step pars_in 1 st;
 		val ze = trans_exp env e
 	in	case others of 
-		STImplicitNull => res
+		(STNull SNImplicit) => res
+	|	(STNull SNNothing) => res
 	|	stmt =>
 		let	val {wp = wp2, side = side2} = wp(others, a_in, wp_env);
 			val wp2_g = (z_notelem(ze, z_many_union exps) %Longrightarrow% wp2);
@@ -1163,7 +1173,7 @@ let	val names = map fst par_names_defs;
 		fail "proc_call_spec" 505026 [fn () => name]
 	);
 	val (presubs, postsubs, dc_preds, vc_preds, asgns) =
-		do_params ([], [], [], [], STNull) adj_actuals formal_ids;
+		do_params ([], [], [], [], STNull SNImplicit) adj_actuals formal_ids;
 	val pre2 = list_sub(pre1, presubs);
 	val post2 = list_sub(post1, postsubs);
 	val spec = {w = w, w0=w0,
@@ -1494,8 +1504,7 @@ let	val pars as {wp_env as {env, ...}, ...} : WP_PARS =
 	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
 	val adjust = adjust_exp env;
 in	case adjust_statement wp_env st of
-		STNull => null pars
-	|	STImplicitNull => null pars
+		STNull _ => null pars
 	|	STAssign {name, e} =>
 			assign pars (adjust name, adjust_and_trans e)
 	|	STSpecNoIvars {spec={pre, post, w, ...}, ...} => 
@@ -1842,8 +1851,7 @@ fun Ûdo_soundness_checksÝ (
 let	fun pass_over_statement (st : STATEMENT) = (
 
 	case st of
-			STNull => (
-		)| 	STImplicitNull => (
+			STNull _ => (
 		)|	STAssign {name,e} => (
 				check_1_a
 				([name_to_entire_variable_name env name],
