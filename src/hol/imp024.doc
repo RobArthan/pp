@@ -24,6 +24,7 @@ make -f rel001.mkf imp024.dvi
 doc4tex imp024
 tex4dvi imp024
 bibtex imp024
+doc4tex imp024 ; tex4dvi imp024 ; bibtex imp024
 doc4tex imp024 ; tex4dvi imp024
 dvipage imp024 &
 
@@ -356,45 +357,37 @@ datatype ‚TOKEN·
 
 \subsubsection{Print Stack}
 
-Printing uses a print stack to hold information about indentation
-margins and a flag which indicates how the block is to be printed.  The
-value held for the indentation point is the number of characters
-allowed on subsequent lines, the default value is thus the same as
-$margin$, the number of characters allowed on a line.  flag holds
-$b_fits$ when the block fits onto the current line and so no line
-breaking is required, other either $b_consistent$ or $b_inconsistent$
-showing how to perform line breaking.
+Printing uses a stack of values of type $BREAK$ to hold information
+about how spaces are to be treated within blocks.  Value $b_fits$
+indicates that the block fits onto the current line and so no line
+breaking is required.  Values $b_consistent$ and $b_inconsistent$ show
+how to perform line breaking, the integer with them gives the
+indentation margin for the block.
 
 =SML
 datatype ‚BREAK·
 	=	‚b_fits·
-	|	‚b_consistent·
-	|	‚b_inconsistent·
+	|	‚b_consistent·		of int
+	|	‚b_inconsistent·	of int
 	;
 =TEX
 
 =SML
 local (* print stack *)
 
-val ‚print_stack· : (int * BREAK) list ref = ref nil;
+val ‚print_stack· : BREAK list ref = ref nil;
 
-val ‚default_break· = b_inconsistent
-val ‚default_margin· = margin;
+val ‚default_break· = b_inconsistent margin;
 
 in (* print stack *)
 =TEX
 
 The stack is maintained simply by adding and removing tuples ad the
-head of the list.  To prevent text running wildly off the right hand
-end of the available line width a simple scheme is used where the
-margin is forced back to the left hand margin.
+head of the list.
 
 =SML
-fun ‚ps_push·(available, cons) : unit = (
-	print_stack := (	if available < margin_protect
-				then default_margin
-				else available,
-			cons) :: (!print_stack)
+fun ‚ps_push· (x:BREAK) : unit = (
+	print_stack := x :: (!print_stack)
 );
 =TEX
 
@@ -413,16 +406,17 @@ fun ‚ps_pop· () : unit = (
 	| _ => ()
 );
 
-fun ‚ps_top· () : (int * BREAK) = (
+fun ‚ps_top· () : BREAK = (
 	case !print_stack
 	of h :: _ => h
-	| _ => (default_margin, default_break)
+	| _ => default_break
 );
 
 fun ‚ps_top_posn· () : int = (
 	case !print_stack
-	of (p, _) :: _ => p
-	| _ => default_margin
+	of (b_consistent i) :: _ => i
+	| (b_inconsistent i) :: _ => i
+	| _ => margin
 );
 
 end (* print stack *);
@@ -506,6 +500,15 @@ val ‚space_left· : int ref = ref margin;
 
 \subsubsection{Printing}
 
+To prevent text running wildly off the right hand end of the available
+line width when an excessive number of blocks are open a simple scheme
+is used where the margin is forced back to the left hand margin.
+
+One difference to Oppen's algorithm in~\cite{Oppen80} is that the
+indentation margin set here corresponds to the sum of the indentations
+in the open blocks rather than being the current position in the output
+line.
+
 Print out a token.
 
 =SML
@@ -516,31 +519,38 @@ fun	‚print·((t_addstring str):TOKEN) : unit = (
 |	print(t_beginb(indent, cons, len)) = (
 		if len > (!space_left)
 		then
-			ps_push(ps_top_posn() - indent,
-				if cons
-				then b_consistent
-				else b_inconsistent)
+			let
+				val new =		ps_top_posn() - indent;
+				val protected_new =	if new < margin_protect
+							then margin
+							else new;
+				val break =		if cons
+							then b_consistent
+							else b_inconsistent;
+			in
+				ps_push(break protected_new)
+			end
 		else
-			ps_push(0, b_fits)
+			ps_push b_fits
 	)
 |	print(t_endb) = (
 		ps_pop()
 	)
 |	print(t_space(norm_sp, extra_sp, len)) = (
 		case ps_top()
-		of (_, b_fits) => (		space_left := (!space_left) - norm_sp;
+		of b_fits => (			space_left := (!space_left) - norm_sp;
 						emit_spaces norm_sp
 			)
-		| (offset, b_consistent) => (	space_left := offset - extra_sp;
+		| b_consistent offset => (	space_left := offset - extra_sp;
 						emit_nl_spaces(margin - (!space_left))
 					)
-		| (offset, b_inconsistent) =>
+		| b_inconsistent offset =>
 			if len > (!space_left)
 			then (
 				space_left := offset - extra_sp;
 				emit_nl_spaces(margin - (!space_left))
 			) else (
-				space_left := offset - norm_sp;
+				space_left := (!space_left) - norm_sp;
 				emit_spaces norm_sp
 			)
 	)
@@ -580,7 +590,7 @@ space and begin tokens.
 
 The lengths of blocks are initially unknown so the length validity flag
 is set $false$ and the length field is set to a value which allows
-calculation of the correct value later on in the procesing.  When the
+calculation of the correct value later on in the processing.  When the
 length validity flag is $false$ the tokens may not be printed.  For
 space and begin tokens the length field is set to the negation of
 $right_total$, then the correct value is calculated as follows.  For
@@ -705,39 +715,39 @@ indicates.  This will be used when the end of the whole input stream
 has been read.  Normally the argument is set $false$ to indicate the
 flushing only of items whose length is known.
 
+%%	NOTE within function $flush_scan_buffer$ all the calls of
+%%	function $print$ must be made via $op_tok$.  During development
+%%	I (AJH) had lots of trouble due to getting this wrong!
+
 =SML
 fun ‚flush_scan_buffer·(force:bool) : unit = (
 let
-	fun print_it(t as t_space(norm_sp,_,_)) = (print t; left_total := (!left_total) + norm_sp)
-	| print_it(t as t_addstring str) = (print t; left_total := (!left_total) + (size str))
-	| print_it t= print t
+	fun op_tok(t as t_space(norm_sp,_,_)) = (print t; left_total := (!left_total) + norm_sp)
+	| op_tok(t as t_addstring str) = (print t; left_total := (!left_total) + (size str))
+	| op_tok t= print t
 	;
 
-	fun rev_print nil = ()
-	| rev_print (h::t) = (rev_print t ; print h);
+	fun op_tok_list nil = ()
+	| op_tok_list (h::t) = (op_tok_list t ; op_tok h);
 
-	fun print_aux(opener, toks) = (
-		print opener;
-		rev_print toks
-	);
-
-	fun print_entry(t_beginb(i, c, len), toks, false) =
-		print_aux(t_beginb(i, c, oversize_length), toks)
-	| print_entry(t_space(n, e, len), toks, false) =
-		print_aux(t_space(n, e, oversize_length), toks)
-	| print_entry(opener, toks, _) =
-		print_aux(opener, toks)
-	;
+	fun op_buf_ent(opener, toks) = (op_tok opener; op_tok_list toks);
 
 	fun aux (nil:BUFFER_ENTRY list) = nil
-	| aux ((h as (_, _, true)) :: rest) = (
-			print_entry h;
+	| aux ((opener, toks, true) :: rest) = (
+			op_buf_ent(opener, toks);
 			aux rest
 		)
 	| aux(sb as (h :: rest)) = (
 		if force orelse (!right_total) - (!left_total) > (!space_left)
 		then (
-			print_entry h;
+			case h
+			of (t_beginb(i, c, len), toks, false) =>
+				op_buf_ent(t_beginb(i, c, oversize_length), toks)
+			| (t_space(n, e, len), toks, false) =>
+				op_buf_ent(t_space(n, e, oversize_length), toks)
+			| (opener, toks, _) =>
+				op_buf_ent(opener, toks)
+			;
 			aux rest
 		) else
 			sb
@@ -764,7 +774,8 @@ fun ‚beginb·(indent, cons) : unit = (
 	of nil => (left_total := 1; right_total := 1)
 	| _ => ()
 	;
-	scan_buffer := (t_beginb(indent, cons, ~(!right_total)), nil, false) :: (!scan_buffer)
+	scan_buffer := (t_beginb(if indent < 0 then 0 else indent, cons, ~(!right_total)),
+		nil, false) :: (!scan_buffer)
 );
 =TEX
 
@@ -781,7 +792,11 @@ fun ‚addstring·(str:string) : unit = (
 =TEX
 
 =SML
-fun ‚space·(norm_sp:int, extra_sp:int) : unit = (
+fun ‚space·(normal_space:int, extra_space:int) : unit = (
+let
+	val norm_sp	= if normal_space	< 0 then 0 else normal_space;
+	val extra_sp	= if extra_space	< 0 then 0 else extra_space;
+in
 	case !scan_buffer
 	of nil => (left_total := 1; right_total := 1)
 	| _ => ()
@@ -789,6 +804,7 @@ fun ‚space·(norm_sp:int, extra_sp:int) : unit = (
 	set_counts_for_space();
 	scan_buffer := (t_space(norm_sp, extra_sp, ~(!right_total)), nil, false) :: (!scan_buffer);
 	right_total := (!right_total) + norm_sp
+end
 );
 =TEX
 
@@ -806,7 +822,7 @@ fun ‚endb·() : unit = (
 
 %********************************************************************
 
-\subsection{End of Strean}
+\subsection{End of Stream}
 
 At end of the text to be printed the scan buffer must be emptied.
 
