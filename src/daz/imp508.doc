@@ -89,10 +89,8 @@ infix 3 ^^;
 =TEX
 =SML
 structure €CNBasicDeclsAndExprs› : CNBasicDeclsAndExprs = struct
-local
 	open CNParser CNTypes ZGeneratedConstants ZParagraphs;
 	open ZUserInterfaceSupport;
-in
 =TEX
 
 \section{CUSTOMIZED ENVIRONMENT HANDLING}
@@ -101,7 +99,7 @@ in
 datatype €ENV_INFO› =
 			€EIEnvFunction› of ID list
 		|	€EIEnvVar› of TMARK
-		|	€EIEnvRecord›
+		|	€EIEnvRecordType›
 		|	€EIEnvOther›;
 =TEX
 =SML
@@ -1293,7 +1291,7 @@ and €adjust_others› (env : CN_ENV) ({others=oth} : EXP OTHERS) = (
 )
 and €adjust_agg_pos› (env : CN_ENV) ({tmark=t, comps=c} : EXP AGG_POS) = (
 	case env t of
-	Value (ty, EIEnvRecord) => (
+	Value (ty, EIEnvRecordType) => (
 			ERecAggPos {tmark=t, comps=map (adjust_exp env) c}
         ) |_ => (
 			EArrayAggPos {tmark=t, comps=map (adjust_exp env) c}
@@ -1318,7 +1316,7 @@ and €adjust_agg_named1› (env : CN_ENV) (t : TMARK) ({named_assocs=n}
 let	val n' = map (adjust_named_assoc env) n;
 in
 	case env t of
-	Value (ty, EIEnvRecord) => (
+	Value (ty, EIEnvRecordType) => (
 			ERecAggNamed {tmark=t, named_assocs=n'}
         ) |_ => (
 			EArrayAggNamed {named_assocs=n'}
@@ -1359,6 +1357,9 @@ and €adjust_indexed_comp›	(env : CN_ENV)
 let	val prename = name_to_tmark p;
 in
 	case (env prename, i) of
+=TEX
+Is it a function?
+=SML
 	(Value (_, EIEnvFunction _), EArrayAggPos{comps,...}) => (
 		EFunCall{fun_name=prename, args=map (adjust_exp env) comps}
 	) |(Value (_, EIEnvFunction names), EArrayAggNamed{named_assocs}) => (
@@ -1366,14 +1367,19 @@ in
 	in
 		EFunCall{fun_name=prename, args=map (adjust_exp env) args}
 	end
+=TEX
+No... It must be an indexed component for real. So check for errors...
+=SML
+	) |(_, EArrayAggPos{comps=[comp],...}) => (
+		EIndexedComp{prefix=adjust_exp env p,
+					index = adjust_exp env comp}
+
+	) |(_, EArrayAggPos _) => (
+		go_informal "adjust_indexed_comp" 508035 []
 
 	) |(_, EArrayAggNamed _) => (
-		fail "adjust_exp" 508047 [fn()=>name_to_tmark p]
-	) |(Value (_, _), EArrayAggPos{comps=[comp],...}) => (
-		EIndexedComp{prefix=adjust_exp env p, index = adjust_exp env comp}
-	) |(Value (_, _), EArrayAggPos _) => (
-		go_informal "adjust_indexed_comp" 508035
-			[]
+		fail "adjust_indexed_comp" 508047 [fn()=>name_to_tmark p]
+
 	) |_ => (
 		fail "adjust_indexed_comp" 508021 [fn()=>prename]
 
@@ -1381,7 +1387,22 @@ in
 end
 )
 and €adjust_selected_comp› env ({prefix=p, selector=s} : EXP SELECTED_COMP) = (
-	ESelectedComp{prefix=adjust_exp (env : CN_ENV) p, selector=s}
+	case p of
+	EId id => (
+		case env id of
+		Value (_, EIEnvVar tmark) => (
+		   case env tmark of
+		   Value (ty, EIEnvRecordType) => (
+			ESelectedComp{prefix=adjust_exp (env : CN_ENV) p,
+				selector=s}
+		   )| _ =>
+			adjust_exp env (EId (id^"."^s))
+		)| _ =>
+			adjust_exp env (EId (id^"."^s))
+
+	) | _ => 	(
+		ESelectedComp{prefix=adjust_exp (env : CN_ENV) p, selector=s}
+	)
 )
 and €adjust_qualified_expression›
 				(env : CN_ENV)
@@ -1462,7 +1483,6 @@ fun €adjust_exp1› (env : CN_ENV) (exp : EXP) : EXP OPT = (
 \section{EPILOGUE}
 
 =SML
-end (* of local...in *);
 end (* structure CNBasicDeclsAndExprs *);
 =TEX
 
