@@ -286,6 +286,7 @@ datatype ÛPPARSEDÝ =
 		|	PPComponentClauses of COMPONENT_CLAUSE list
 		|	PPComponents of COMPONENT list
 		|	PPDeclarations of DECLARATION list
+		|	PPDiscriminantPart of VAR_DECL
 		|	PPElsIf of (EXP * STMT) list
 		|	PPExp of EXP
 		|	PPExps of EXP list
@@ -307,19 +308,18 @@ datatype ÛPPARSEDÝ =
 		|	PPReltail of (BIN_OP * EXP)
 		|	PPRenamingDeclaration of RENAMING_DECLARATION
 		|	PPRepresentationClause of REPRESENTATION_CLAUSE
-		|	PPSimpleDeclaration of (ID list * ID)
 		|	PPSRExpression of (EXP * EXP OPT)
 		|	PPStmt of STMT
 		|	PPStatement of STATEMENT
 		|	PPSubprogram of (DECLARATION list * STATEMENT)
 		|	PPSubprogramSpec of SUBPROGRAM_SPECIFICATION
-		|	PPSubtypeDeclaration of (ID OPT * ID * EXP RANGE)
+		|	PPSubtypeDeclaration of (EXP * EXP * EXP OPT)
 		|	PPTypeDef of TYPE_DEF
 		|	PPUnaryOp of UNARY_OP
 		|	PPVarDecls of VAR_DECL list
 		|	PPVariants of COMPONENT VARIANT list
 		|	PPVariantPart of COMPONENT VARIANT_PART
-		|	PPWebClause of WEB_CLAUSE | PPtbs;
+		|	PPWebClause of WEB_CLAUSE;
 =TEX
 =SML
 fun format_rw_input (ip : Lex.INPUT list) = (
@@ -410,9 +410,7 @@ fun red_web_clause10  _ (Parsed (PPStatement s)) = (
 val red_basic_declaration1 = red_accept;
 val red_basic_declaration2 = red_accept;
 val red_basic_declaration3 = red_accept;
-fun red_basic_declaration4 (Parsed(PPSimpleDeclaration sd)) = (
-	PPtbs
-) | red_basic_declaration4 _ = stack_error "red_basic_declaration4";
+val red_basic_declaration4 = red_accept;
 val red_object_declaration1 = red_accept;
 val red_object_declaration2 = red_accept;
 =TEX
@@ -438,12 +436,13 @@ val red_type_declaration1 = red_accept;
 val red_type_declaration2 = red_accept;
 =TEX
 =SML
-fun red_full_type_declaration1 _ (Token ((_,CNText id), _)) (Parsed(PPSimpleDeclaration sd)) _ (Parsed(PPTypeDef td)) _ = (
-	PPtbs
+(* HERE *)
+fun red_full_type_declaration1 _ (Token ((_,CNText id), _)) (Parsed(PPDiscriminantPart d)) _ (Parsed(PPTypeDef td)) _ = (
+	PPBasicDecls[BDTypeDecl{name=id,discr=Value d, type_def=td}]
 ) | red_full_type_declaration1 _ _ _ _ _ _ = stack_error "red_full_type_declaration1";
 
 fun red_full_type_declaration2 _ (Token ((_,CNText id), _)) _ (Parsed(PPTypeDef td)) _ = (
-PPtbs
+	PPBasicDecls[BDTypeDecl{name=id,discr=Nil, type_def=td}]
 ) | red_full_type_declaration2 _ _ _ _ _ = stack_error "red_full_type_declaration2";
 
 =TEX
@@ -455,16 +454,17 @@ val red_type_definition4 = red_accept;
 val red_type_definition5 = red_accept;
 =TEX
 =SML
-fun red_subtype_declaration _ (Token ((_,CNText id), _)) _ (Parsed(PPSubtypeDeclaration (Nil,n,r))) _ = (
-	PPSubtypeDeclaration(Value id, n, r)
+fun red_subtype_declaration _ (Token ((_,CNText id), _)) _ (Parsed(PPSubtypeDeclaration (n,e,v))) _ = (
+	case v of
+	Value e2 => (
+		PPBasicDecls[BDSubtypeDecl{name=id,sub_ind={tmark=name_to_tmark n,con=CRangeCon{lo=e,hi=e2}}}]
+	) |Nil => (
+		PPBasicDecls[BDSubtypeDecl{name=id,sub_ind={tmark=name_to_tmark n,con=CIndexCon(name_to_tmark e)}}]
+	)
 ) | red_subtype_declaration _ _ _ _ _ = stack_error "red_subtype_declaration";
 
-fun red_subtype_indication (Parsed(PPExp n)) (Parsed(PPSRExpression sr)) = (
-	case sr_expression_to_range_opt {no_r_attr=false} sr of
-	Value r =>
-		PPSubtypeDeclaration(Nil, name_to_tmark n, r)
-	|Nil =>
-		parse_error 0 "A range is expected"
+fun red_subtype_indication (Parsed(PPExp n)) (Parsed(PPSRExpression (e,v))) = (
+		PPSubtypeDeclaration(n, e, v)
 ) | red_subtype_indication _ _ = stack_error "red_subtype_indication";
 =TEX
 =SML
@@ -605,7 +605,7 @@ fun red_component_declaration (Parsed(PPIds ids)) _ (Parsed(PPExp n)) _ = (
 ) | red_component_declaration _ _ _ _ = stack_error "red_component_declaration";
 
 fun red_discriminant_part (Token ((_,CNText id), _)) _ (Parsed(PPExp n)) = (
-	PPSimpleDeclaration([id], name_to_tmark n)
+	PPDiscriminantPart{vars=[id], tmark=name_to_tmark n}
 ) | red_discriminant_part _ _ _ = stack_error "red_discriminant_part";
 
 fun red_variant_part _ (Token ((_,CNText id), _)) _ (Parsed(PPVariants v)) _ _ _ = (
@@ -1263,8 +1263,8 @@ fun red_subprogram_implementation (Parsed(PPDeclarations d)) _ (Parsed(PPStateme
 ) | red_subprogram_implementation _ _ _ _ _ _ = stack_error "red_subprogram_implementation";
 =TEX
 =SML
-fun red_procedure_call_statement (Parsed p) _ = (
-	p
+fun red_procedure_call_statement (Parsed (p as (PPExp e))) _ = (
+	PPStmt (STProcNoIvars{name="__procedure_call", actuals=[e]})
 ) | red_procedure_call_statement _ _ = stack_error "red_procedure_call_statement";
 
 fun red_actual_parameter_part _ (Parsed p) _ = (
@@ -1360,7 +1360,7 @@ fun red_private_type_declaration2 _ (Token ((_,CNText id), _)) _ _ _ _ = (
 ) | red_private_type_declaration2 _ _ _ _ _ _ = stack_error "red_private_type_declaration2";
 
 fun red_deferred_constant_declaration (Parsed(PPIds ids)) _ _ (Parsed(PPExp n)) _ = (
-	PPSimpleDeclaration (ids, name_to_tmark n)
+	PPBasicDecls[BDDeferredConstDecl{consts=ids,tmark=name_to_tmark n}]
 ) | red_deferred_constant_declaration _ _ _ _ _ = stack_error "red_deferred_constant_declaration";
 
 fun red_renaming_declaration1 _ (Parsed (PPId opsym1)) (Parsed(PPFormals f)) _ (Parsed(PPExp n)) _ (Token ((_,CNText id), _)) _ (Parsed (PPId opsym2)) _ = (
