@@ -43,8 +43,8 @@ XtTranslations text_translations;
 char *templates;
 char *command_line_list;
 
-#ifdef BUILDVERSION
-static char *title = "  xpp    v" BUILDVERSION "  ";
+#ifdef BUILDTITLE
+static char *title = BUILDTITLE;
 #else
 static char *title = "xpp (test version)";
 #endif
