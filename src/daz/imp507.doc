@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.228 $ $RCSfile: imp507.doc,v $ $Date: 2002/11/11 14:50:42 $
+% imp507.doc %Z% $Revision: 1.229 $ $RCSfile: imp507.doc,v $ $Date: 2002/11/11 16:31:59 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.228 $%
+\def\SCCSversion{$Revision: 1.229 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/11/11 14:50:42 $%
+\TPPdate{\FormatDate{$Date: 2002/11/11 16:31:59 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -181,7 +181,8 @@ being renamed is defined in the same package specification.
 \item[Issue 1.224] DAZ-specific updates to banner for open source release
 \item[Issue 1.225] Fix to get it to compile with SML/NJ again.
 \item[Issues 1.226--1.228] Uniform treatment of block statements.
-\item[Issue 1.229] Fixed wrong sequencing in the {\it do\_refinement\_rhs}.
+\item[Issue 1.229] Fixed wrong sequencing in {\it do\_refinement\_rhs}.
+\item[Issue 1.230] Fixing problem with subtypes of record types with discriminants.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -2066,12 +2067,21 @@ record must have at least one component).
 In accordance with the Ada rules, the discriminants are included, in order, as
 the leading sublist of the components.
 =SML
-fun comp_names(TDRecordTypeDef {decl, disc} : TYPE_DEF) : ID list * int = (
+fun €type_def_comp_names› (TDRecordTypeDef {decl, disc} : TYPE_DEF) : ID list * int = (
 	let	val discs = flat (map #vars disc);
 		val others = flat (map (#vars o fst) decl);
 	in	(discs @ others, length discs)
 	end
-) | comp_names _ = ([], 0);
+) | type_def_comp_names _ = ([], 0);
+=TEX
+... and when a record type with a discriminant is used in a subtype declaration, we
+need to calculate the component names for the subtype.
+=SML
+fun €sub_ind_comp_names›  (pfx : ID -> ID)  ({tmark, ...} : CONSTRAINT SUB_IND) : ID list * int = (
+	case get_spark_type_info (trans_id (pfx tmark)) of
+		Value (comps, ndiscs) => (comps, 0)
+	|	Nil => ([], 0)
+);
 =TEX
 In the following, named number declarations are just ignored.
 This is acceptable because in \cite{ISS/HAT/DAZ/DTD508}
@@ -2081,9 +2091,10 @@ attributes, which are not relevant for named numbers.
 fun €set_basic_decl_info› (pfx : ID -> ID) (bd : BASIC_DECL) : unit = (
 	case bd of
 		BDTypeDecl {name, type_def} => (
-			add_spark_type_info (pfx (name), comp_names type_def)
-	) |	BDSubtypeDecl std => add_spark_type_info (pfx (#name std), ([], 0))
-	|	BDPrivateTypeDecl ptd => add_spark_type_info (pfx (#id ptd), ([], 0))
+			add_spark_type_info (pfx name, type_def_comp_names type_def)
+	) |	BDSubtypeDecl ({name, sub_ind}) => (
+		add_spark_type_info (pfx name,  sub_ind_comp_names pfx sub_ind)
+	) |	BDPrivateTypeDecl ptd => add_spark_type_info (pfx (#id ptd), ([], 0))
 	|	BDConstDecl {consts = cs, tm = Value tmark, ...} => (map (fn c =>
 				add_spark_constant_info (pfx c, tmark)
 			) cs; ())
@@ -6275,7 +6286,7 @@ fun €create_prefixed_spec›
 			map par_aux pformal_funs;
 			map	(set_basic_decl_info
 				   (prefix_package_id ident newids))
-				(#consts_types package);
+				(rev (#consts_types package));
 			map store_para informal_fun_paras);
 		(* need to do other store_paras first to get right env *)
 		val formal_fun_paras =
