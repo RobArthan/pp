@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation of Unification}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP014}  %% Mandatory field
-\def\SCCSversion{$Revision$
+\def\SCCSversion{$Revision$%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date$
+\TPPdate{\FormatDate{$Date$%
 }}  %% Mandatory field (with sensible default)
 \TPPstatus{Approved}			%% Mandatory field
 \TPPtype{Specification}
@@ -68,6 +68,11 @@ This is an approved version of issue 1.6.
 Fixed bug in unify which caused an error message not to
 have the unknown parameters filled in.
 
+\item[Issue 2.3 20 November 1991]
+Changed the representation of the substitution function
+from a binary tree to sparse array. This increases
+the speed significantly.
+
 \end{description}
 \subsection{Changes forecast}
 None.
@@ -97,15 +102,11 @@ contained in \cite{DS/FMU/IED/DTD014} for the signature of Unification.
 
 \subsubsection{Possible Enhancements}
 
-This document and the Standard ML code contained within it is
-subject to change. The document will be inspected in due
-course according to project standards and procedures. Also,
-the Standard ML code will be tested using the tests specified in
-the document \cite{DS/FMU/IED/MDT014}.
+None.
 
 \subsubsection{Deficiencies}
 
-At present, there are no known deficiencies in this document.
+None known.
 
 \section{THE STRUCTURE $Unification$}
 
@@ -120,7 +121,14 @@ and utilities.
 =SML
 structure âUnificationá : Unification = struct
 =TEX
+The substitution supporting functions and the substitution
+type use the structure $SparseArray$.
+=SML
+open SparseArray;
+=TEX
+
 \subsection{The type $EXTYPE$}
+
 The type of extended types (i.e. types containing type unknowns) is
 the following type $EXTYPE$.
 =SML
@@ -128,56 +136,57 @@ datatype âEXVARá = âKnowná of string | âUnknowná of int;
 
 datatype âEXTYPEá = âExVartypeá of EXVAR | âExTypeá of string * (EXTYPE list);
 =TEX
-The following function is needed to detect an error
-case during unification.
+
+The substitution is represented by a sparse array of
+extended types. The substitution which takes a type unknown
+onto an extended type is implemented as an array of
+extended types, the array index
+corresponding to the type unknown (a natural number).
+A substitution which does not take a type unknown onto anything
+is represented by an empty cell. The sparse array function
+$sub\_opt$ returns $Nil$ when an empty cell is encountered.
+
 =SML
-fun âtyvars_setá (ExVartype(Known _)) (tvn : int) = false
-|   tyvars_set (ExVartype(Unknown tvn')) (tvn : int) = tvn = tvn'
-|   tyvars_set (ExType(_, tyl)) (tvn : int) = any tyl (fn ty => tyvars_set ty tvn);
+type âSUBSá = EXTYPE SPARSE_ARRAY;
+=TEX
+The following function is needed to detect an error
+case during unification. It detects whether or not the
+type unknown occurs in any of the extended types which
+repeated application of the substitution  gives, returning
+true or false.
+=SML
+fun âtyvars_setá (phi:SUBS) (ExVartype(Known _)) (tvn : int) = false
+|   tyvars_set phi (ExVartype(Unknown tvn')) (tvn : int) = (
+	case sub_opt (phi, tvn) of
+		Nil => (tvn = tvn')
+	|	Value ty => tyvars_set phi ty tvn
+) | tyvars_set phi (ExType(_, tyl)) (tvn : int) = any tyl (fn ty => tyvars_set phi ty tvn);
 =TEX
 \subsection{Substitutions}
+
 The unification algorithm works using so-called
 substitutions. These are functions from
 type unknowns to (extended) types.
 They have the property that they differ from
 the identity function (on the set of all type unknowns)
 in only finitely many places.
-For efficiency, we use binary trees with
-integer keys to represent the substitutions.
-=SML
-datatype âSUBSá = âLeafá | âNodeá of (int * EXTYPE * SUBS * SUBS);
-=TEX
-$apply\_subs$ applies a substitution to a type
-unknown (represented as an integer).
-=SML
-fun âapply_subsá (phi : SUBS) (what : int) : EXTYPE = (
-	case phi of
-		Leaf => ExVartype(Unknown what)
-	|	Node(i, tty, l, r) => (
-			if i < what
-			then	apply_subs r what
-			else if i = what
-			then	tty
-			else apply_subs l what
-		)
-);
-=TEX
+
 When the type inference process is complete (and also
 for formatting error messages), we need to be able
 to convert extended types back into types using the
 most general typing which has been computed as a
 substitution.
+
 =SML
 fun âextype_to_typeá (phi : SUBS) (namemap : (int * string) list)
 	 (ExVartype(Known x)) = (
 	mk_vartype x
 ) | extype_to_type phi namemap (ExVartype(Unknown x)) = (
-	case apply_subs phi x of
-		ExVartype(Unknown y) =>
-			(mk_vartype (lassoc3 namemap y)
+	case sub_opt (phi, x) of
+		Nil => (mk_vartype (lassoc3 namemap x)
 			handle Fail msg =>
-				fail "extype_to_type" 14003 [fn () => string_of_int y])
-	|	Other => extype_to_type phi namemap Other
+				fail "extype_to_type" 14003 [fn () => string_of_int x])
+		| Value y => extype_to_type phi namemap y
 ) | extype_to_type phi namemap (ExType(s, l)) = (
 	mk_ctype(s, map (extype_to_type phi namemap) l)
 );
@@ -203,90 +212,87 @@ fun âtype_to_extypeá (ty : TYPE) : EXTYPE = (
 	end
 );
 =TEX
-$insert$ inserts an entry into a substitution (overwriting
-any existing entry with the same key).
-=SML
-fun âinsertá ((n, tty) : int * EXTYPE) (phi : SUBS) : SUBS = (
-	case phi of
-		Leaf => Node(n, tty, Leaf, Leaf)
-	|	Node(i, tty', l, r) => (
-			if i < n
-			then	Node(i, tty', l, insert(n, tty)r)
-			else if i = n
-			then	Node(i, tty, l, r)
-			else Node(i, tty', insert(n, tty)l, r)
-		)
-);
-=TEX
-$sub\_type$ applies a substitution to a type.
+$sub\_type$ applies a substitution to a type repeatedly until
+the substitution ceases to change the type.
+
 =SML
 fun âsub_typeá (phi : SUBS) (ExVartype(Known ty)) = ExVartype(Known ty)
-|   sub_type (phi : SUBS) (ExVartype(Unknown tvn)) = apply_subs phi tvn
+|   sub_type (phi : SUBS) (ty as (ExVartype(Unknown tvn))) = (
+	case sub_opt (phi, tvn) of
+		Nil => ty
+		| Value ty => sub_type phi ty)
 |   sub_type (phi : SUBS) (ExType(s, tyl)) = ExType(s, map (sub_type phi) tyl);
+
 =TEX
-$scomp\,sub2\,sub1$ is the composition of the
-substitutions $sub2$ and $sub1$. This is just the functional
-composition, $sub2\,o\,sub1$.
-$id\_subs$ is the identity substitution.
+$new\_subs$ creates a new substitution array. The size
+$sz$ is passed to the sparse array package and determines
+the array size. The array is an indexed array of
+lists. The larger the array, the shorter the lists in the
+array, and hence the faster the lookup time. If the
+array is too large, then space is wasted. A value of
+100 for $sz$ gives reasonable performance for the ICL HOL
+type inferrer. $init\_subs$ returns a substitution to the
+identity function.
+
 =SML
-val âid_subsá : SUBS = Leaf;
+fun ânew_subsá (sz:int) : SUBS = array sz;
+val âinit_subsá  : SUBS -> unit = scratch;
 =TEX
-In terms of our representation of the functions as
-trees this amounts to merging the trees but replacing
-each extended type in $sub1$ by its instance under
-$sub2$.
-=SML
-fun âscompá (sub2: SUBS) (sub1 : SUBS) : SUBS =  (
-	case sub1 of
-		Leaf => sub2
-	|	Node(i, tty, l, r) => (
-			let	val s1 = insert (i, sub_type sub2 tty) sub2;
-			in	scomp(scomp s1 l) r
-			end
-	)
-);
-=TEX
-$list\_scomp$ takes a list of substitutions an produces
-the composition of the substitutions.
-=SML
-fun âlist_scompá (nil : SUBS list) : SUBS = id_subs
-  | list_scomp phi_list = (
-	let	fun aux phi nil = phi
-		  | aux phi (psi::rest) =
-			aux (scomp phi psi) rest;
-	in
-		aux id_subs phi_list
-	end
-);
-=TEX
-$delta\,tvn\,ty$ is the substitution which acts as the
-identity on all type unknowns other than $tvn$ and
-sends that to $ty$.
-=SML
-fun âdeltaá (tvn : int) (ty : EXTYPE) : SUBS = Node(tvn, ty, Leaf, Leaf);
-=TEX
+
+The substitution array implements a form of structure sharing.
+For example, a substitution:\\
+\ \\
+$\{?1 \mapsto ?3, ?2 \mapsto ?3\}$\\
+\ \\
+extended by $?3 \mapsto (?4‹?5‹?6)$, yields\\
+\ \\
+$\{?1 \mapsto ?3, ?2 \mapsto ?3, ?3 \mapsto (?4‹?5‹?6)\}$,\\
+\ \\
+whereas
+without structure sharing (which was the case in the previous
+version of this algorithm and the HOL prototype), the
+substitution was represented as:\\
+\ \\
+$\{?1 \mapsto (?4‹?5‹?6), ?2 \mapsto (?4‹?5‹?6)\}$.
+\ \\
+Each occurrence of the unknown is substituted during unification.
+With structure sharing, the substitution is deferred.
+To find what $?1$ maps to, two look-ups to
+the substitution array are required, the first look-up yields
+$?3$, the second, $(?4‹?5‹?6)$. Further look-ups using
+$?4$, $?5$, and $?6$ will fail (yielding Nil). This gives
+$(?4‹?5‹?6)$ as the type which $?1$ maps to.
+
 $extend\,\phi\,tvn\,ty$ is $\phi$ modified to send
-$tvn$ to $ty$. Provided $\phi$ is an {\em idempotent}
-substitution (i.e $\phi\,o\phi = \phi$),
-the resulting substitution must also be idempotent
-and an exception is raised if this would not be so.
-This error condition occurs in solving equations
+$tvn$ to $ty$.
+An exception is raised when solving equations
 of the form $?1‹?1=?1$ which arise from
 terms like ``$f f$'' (for $f$ a variable).
+
+This is the so-called ``occurs check''. Note that it guarantees
+that the substitution array contains no loops. i.e., that if
+$R : † \leftrightarrow †$ denotes the relation between
+type unknown names such that $x\  R\  y\  \leftrightarrow\  y$ occurs somewhere
+in $sub\_opt (\phi,\  x)$, then the transitive closure $R^+$ of $R$
+is irreflexive, i.e., $Œ x\  R^+\  x$ for all x.
+To see this note that $extend\  \phi\  tvn$ is never called when
+tvn already has an entry in $\phi$. (See the use of
+$extend$ in $unify$). 
+
 =SML
-fun âextendá (phi : SUBS) (tvn : int) (ty : EXTYPE) : SUBS = (
+fun âextendá (phi : SUBS) (tvn : int) (ty : EXTYPE) : unit = (
 	case ty of
-		ExVartype(Unknown tvn') => (
-			if tvn = tvn'
-			then phi
-			else scomp (delta tvn ty) phi
-	) |	ExType(s, tyl) => (
-			if tyvars_set ty tvn
+	ExVartype(Unknown tvn') => (
+		if tvn = tvn'
+		then
+			()
+		else	if tyvars_set phi ty tvn
 			then fail "unify" 14002 []
-			else scomp (delta tvn ty) phi
-	) |	ExVartype(Known _) => (
-			scomp (delta tvn ty) phi
-	)
+			else update (phi, tvn, ty))
+	| Other =>
+		if tyvars_set phi ty tvn
+		then fail "unify" 14002 []
+		else update (phi, tvn, ty)
 );
 =TEX
 \subsection{The Unification Algorithm}
@@ -317,22 +323,19 @@ the solution.
 If the types cannot be unified, fail is called which
 raises an exception with the contructor ``Fail''.
 =SML
-
-
-fun âunifyá (phi : SUBS) (ty, ty') : SUBS = (
+fun âunifyá (phi : SUBS) (ty, ty') : unit = (
 	case ty of
 		ExVartype(Unknown tvn) => (
-			case apply_subs phi tvn of
-				ExVartype(Unknown tvn') => (
-					if tvn = tvn'
-					then extend phi tvn (sub_type phi ty')
-					else unify phi (ExVartype(Unknown tvn'), sub_type phi ty')
-			) |	phitvn => unify phi (phitvn, sub_type phi ty')
+			case sub_opt (phi, tvn) of
+				Nil => (
+					extend phi tvn ty'
+				) |Value phitvn => (
+					unify phi (phitvn, ty'))
 	) |	ExVartype(Known kty) => (
 			case ty' of
 				ExVartype(Known kty') => (
 					if kty = kty'
-					then phi
+					then ()
 					else fail "unify" 14001 [fn () => kty,
 								 fn () => kty']
 			) |	ExVartype(Unknown _ ) => unify phi (ty', ty)
@@ -343,7 +346,7 @@ fun âunifyá (phi : SUBS) (ty, ty') : SUBS = (
 				ExVartype _ => unify phi (ty', ty)
 			|	ExType(s', tyl') => (
 					if s = s' andalso length tyl = length tyl'
-					then (fold o uncurry o switch) unify (combine tyl tyl') phi
+					then ((map (unify phi) (combine tyl tyl'));())
 					else fail "unify" 14001 [fn () => s,
 								 fn () => s']
 			)
@@ -356,13 +359,20 @@ finds the unification $t1$ and $t2$, the unification of
 $t2$ with $t3$, and so on, folding in the substitution.
 At the end of the process, the substitution function
 yielded is the unification of all the types in the list.
+The substitution $phi$ is yielded as a side-effect of
+unify, and the function returns $unit$.
 
 =SML
-fun âlist_unifyá (phi : SUBS) (nil : EXTYPE list) : SUBS = phi
-  | list_unify phi [ty] = phi
-  | list_unify phi (x1::x2::xs) = (
-	list_unify (unify phi (x1, x2)) (x2::xs)
-);
+fun âlist_unifyá (phi : SUBS) (tyl : EXTYPE list) : unit = (
+let	fun aux (x1::x2::xs) = (
+		let	val sd = unify phi (x1, x2);
+		in
+			aux (x2::xs)
+		end)
+	  | aux _ = ();
+in
+	aux tyl
+end);
 =TEX
 \subsection{Further Utilities}
 
@@ -417,13 +427,6 @@ fun âreplacedá (ty : TYPE) : EXTYPE = (
 	end
 );
 =TEX
-$funt$ constructs extended function types.
-=SML
-fun âfuntá (ty1 : EXTYPE) (ty2 : EXTYPE) : EXTYPE = (
-	ExType("‹", [ty1, ty2])
-);
-=TEX
-That concludes the structure:
 =SML
 end; (* of structure Unification *)
 =TEX

@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Detailed Design for Unification}  %% Mandatory field
 \TPPref{DS/FMU/IED/DTD014}  %% Mandatory field
-\def\SCCSversion{$Revision$
+\def\SCCSversion{$Revision$%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date$
+\TPPdate{\FormatDate{$Date$%
 }}  %% Mandatory field (with sensible default)
 \TPPstatus{Approved}			%% Mandatory field
 \TPPtype{Specification}
@@ -64,31 +64,16 @@ unifier of two types.
 \subsection{Changes history}  % to get section number `0.3'
 
 \begin{description}
-\item[Issue 1.1]
-Initial version, adapted from the HOL prototype version
-described in DS/FMU/IED/SML007.
-
-\item[Issue 1.2]
-Corrected some minor typos. Added more description
-about extended types. Revised section \ref{NamingConventions}.
-
-\item[Issue 1.3]
-Changed the arrow in the function ``funt'' from ``->''
-to ``‹''. Also, changed the names of the value constructors
-for extended types to be in line with the standard.
-
-\item[Issue 1.4]
-Added the function $type\_to\_extype$. In the
-prototype, its equivalent was notionally part of
-the type inference mechanism. Changed the interface
-of $extype\_to\_type$ and added the
-functions $type\_to\_extype$ and $list\_scomp$.
-
-\item[Issue 1.5 15 August 1991]
-	Changes made as required by Desk Check ID0035.
+\item[Issue 1.1 - 1.5]
+Initial versions.
 
 \item[Issue 2.1 15 August 1991]
-	This is an approved version of Issue 1.5.
+This is an approved version of Issue 1.5.
+
+\item[Issue 2.2 20 November 1991]
+Changed the representation of the substitution function
+from a binary tree to sparse array. This increases
+the speed significantly.
 
 \end{description}
 
@@ -121,7 +106,7 @@ the approach described in \cite{PeytonJones86}. This
 describes a way of identifying the types of all the
 elements in a term, as a process of solving linear
 equations. The approach used here draws heavily from
-\cite{PeytonJones86}, and the reader is refered to
+\cite{PeytonJones86}, and the reader is referred to
 this reference for background to the design of
 the unification algorithm adopted here.
 
@@ -136,6 +121,12 @@ following areas:
 \begin{enumerate}
 
 \item
+The substitution function was represented as a binary
+tree. It is now represented as a sparse array and
+uses structure sharing to improve space and time
+utilization.
+ 
+\item
 Exception and error handling will not be done locally
 anymore. Use has been made of the generic error handling
 facilities described in \cite{DS/FMU/IED/DTD002}.
@@ -149,7 +140,6 @@ Naming conventions have been changed in accordance
 with \cite{DS/FMU/IED/DEF003}.
 
 \end{enumerate}
-
 
 The support for unification of HOL types are
 potentially of use in constructing parsers for other
@@ -199,7 +189,7 @@ This contains no explicit type information
 at all. However the theory database contains
 information about the types of the constants
 in the term: ``$=$'' has the polymorphic type
-``$:'a‹'a‹'a$'' and ``$F$'' has type ``$:bool$''.
+``$:'a‹'a‹bool$'' and ``$F$'' has type ``$:bool$''.
 It follows that the bound variable ``$x$'' must have type
 ``$:bool$'', whence the instance of ``$=$'' has type
 `$:bool‹bool‹bool$'', whence the free variable ``$a$'' must
@@ -321,35 +311,23 @@ in unification and type inference.
 \subsection{Substitutions}
 
 Unification is carried out by using a substitution function.
-This is a partial finite function mapping an extended type
+This is a partial finite function mapping a type unknown
 to an extended type.
 
 =DOC
 	type âSUBSá
 
 =DESCRIBE
-$SUBS$ denotes the type of a substitution function.
+$SUBS$ denotes the type of a substitution function. $SUBS$ is
+an assignable data structure (based on arrays) allocated
+by $new\_subs$, updated by $unify$ and $list\_unify$, and
+re-initialised by $init\_subs$.
 =ENDDOC
 
-There are two forms of applying a substitution. The
-first is using $apply\_subs$. This maps an unknown
-type, represented as a number onto an extended type.
-For example, if the unknown type is $Unknown\ 4$,
-then $apply\_subs\ 4$ will yield the extended
-type according to the substitution function, $SUBS$
-corresponding to $Unknown\ 4$.
-
-=DOC
-	val âapply_subsá : SUBS -> int -> EXTYPE
-=DESCRIBE
-$apply\_subs$ applies a substitution to a type
-unknown (represented as an integer).
-=ENDDOC
-
-The other form of applying a substitution is to
-use the function $sub\_type$. This takes an extended
-type uses the substitution given by the finite function
-$SUBS$ to yield an extended type, $EXTYPE$.
+$sub\_type$ takes an extended
+type and uses the substitution given by the finite function
+$SUBS$ to yield an extended type, $EXTYPE$. The substitution
+is repeatedly applied until no further substitution is made.
 =DOC
 	val âsub_typeá : SUBS -> EXTYPE -> EXTYPE
 =DESCRIBE
@@ -359,15 +337,13 @@ $sub\_type$ applies a substitution to a extended type.
 The function $extype\_to\_type$ translates an extended type
 to a type. Since not all extended types have a
 corresponding type (ie. unknown types), special action
-is required to handle these cases. If a value true
-is supplied as second parameter to $extype\_to\_type$,
-and an attempt is made to translate a type unknown, then
-$extype\_to\_type$ will create a new name for the type.
-If however, the parameter is set to false, then
-if $extype\_to\_type$ attempts to translate a type
-unknown, an exception with the ``Fail'' constructor
-will be raised. This gives the type inferrer the
-choice in dealing with the translation of unknown types.
+is required to handle these cases. If an 
+attempt is made to translate a type unknown, then
+$extype\_to\_type$ will create a new name for the type according
+to the name map supplied as the second argument.
+
+The function $type\_\to\_extype$ converts a type into
+an extended type. The function is total.
 
 =DOC
 	val âextype_to_typeá : SUBS -> ((int * string) list) -> EXTYPE -> TYPE
@@ -385,48 +361,35 @@ an extended type.
 14003	No entry for type unknown ?0 found in the name-map
 =ENDDOC
 
-It is useful to create the composition of two substitutions.
-For this, the function $scomp$ is provided.
+The following two functions create and initialize substitutions.
 =DOC
-	val âscompá : SUBS -> SUBS -> SUBS
+	val ânew_subsá : int -> SUBS
+	val âinit_subsá : SUBS -> unit
 =DESCRIBE
-$scomp\,sub2\,sub1$ is the composition of the
-substitutions $sub2$ and $sub1$. This is just the functional
-composition, $sub2\,o\,sub1$.
-=ENDDOC
-A version applied to a list of substitutions will be
-required in the type inferrer.
-=DOC
-	val âlist_scompá : SUBS list -> SUBS
-=DESCRIBE
-$list\_scomp$ applied to a list $[sub1,\ sub2,\ sub3,\ ...]$
-produces the composition of all the substitutions in the
-list. ie $sub1\ o\ sub2\ o\ sub3\ o\ ...$.
-=ENDDOC
-
-The identity substitution, $id\_subs$ will also be useful.
-=DOC
-	val âid_subsá : SUBS
-=DESCRIBE
-$id\_subs$ is the substitution function which when applied
-to an extended type, yields the same extended type. It
-is the identity function.
+$new\_subs$ creates a new substitution which is initially
+the identity function. The array size to be used is passed as
+a parameter. A typical value (for the HOL type
+inferrer) would be 100.
+$init\_subs$ takes a substitution and changes it to be
+the identity function as a side-effect.
 =ENDDOC
 
 \subsection{Unification functions}
 
 The function $unify$ computes the unifier of two
-extended types and yields a substitution function. This
+extended types and modifies the substitution as
+a side-effect. This new substitution
 can later be applied to type unknowns in a term to
 find out what they are. If the unification fails then
 an exception is raised.
 =DOC
-	val âunifyá : SUBS -> EXTYPE * EXTYPE -> SUBS
+	val âunifyá : SUBS -> EXTYPE * EXTYPE -> unit
 
 =DESCRIBE
 $unify$ computes the unifier of two
 extended types with respect to a substitution function.
-The unifier is in the form of a substitution function.
+The unifier is in the form of a substitution function which
+is computed as a side-effect.
 =FAILURE
 14001	Failed to unify type constructors ?0 with ?1. 
 14002	Unification would cause a loop. 
@@ -436,10 +399,11 @@ It will also be useful to have a function which computes
 the unifier of a list of types.
 
 =DOC
-	val âlist_unifyá : SUBS -> EXTYPE list -> SUBS
+	val âlist_unifyá : SUBS -> EXTYPE list -> unit
 =DESCRIBE
 The function $list\_unify$ computes the unifier of
-a list of extended types.
+a list of extended types and changes the substitution as
+a side-effect.
 =ENDDOC
 
 \subsection{Further Utilities}
@@ -480,14 +444,6 @@ type variables in the new type by type unknowns using a
 different set of type unknowns on every invocation.
 =ENDDOC
 
-=DOC
-	val âfuntá : EXTYPE -> EXTYPE -> EXTYPE
-=DESCRIBE
-$funt$ constructs extended function types. Supplied
-with two arguments, t1 and t2, funt will construct the
-extended function type, represented
-as $ExType(``‹'',[t1,t2])$.
-=ENDDOC
 
 This completes the signature for the structure Unification.
 =SML
