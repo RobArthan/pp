@@ -15,7 +15,7 @@
 \TPPkeywords{}
 \TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
 %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
-\TPPauthorisation{R.D.Arthan & FMU Manager}
+\TPPauthorisation{R.D.Arthan & FST Team Leader}
 \TPPabstract{This document gives an implementation for functions concerning derived terms that are not used in defining the type $THM$.}
 \TPPdistribution{\parbox[t]{4.0in}{%
 	    Library
@@ -31,10 +31,12 @@
 \makeTPPfrontpage
 \vfill
 \begin{centering}
+
 \bf Copyright \copyright\ : International Computers Ltd \number\year
+
 \end{centering}
 \pagebreak
-\section{Document Control}
+\section{DOCUMENT CONTROL}
 \subsection{Contents List}
 \tableofcontents
 \subsection{Document Cross References}
@@ -62,14 +64,16 @@ Reimplemented $strip\_binder$ and $strip\_abs$,
 added $strip\_simple\_binder$,
 changed $?\_T$ and $?\_F$ to $?\_t$ and $\_f$.
 \item [Issue 1.9,1.10,1.11]
-Changes in response to inspection IR0017.
+Changes in response to inspection ID0017.
 \item [Issue 1.12]
 Renamings of functions containing the name atom $simple$,
 and renaming of $aconv$.
 \item [Issue 1.13]
 Tidying up prior to desk check.
+\item [Issue 1.14]
+Changes in response to deskcheck ID0091.
 \end{description}
-\subsection{Changes forecast}
+\subsection{Changes Forecast}
 \section{GENERAL}
 \subsection{Scope}
 This document contains an implementation of some functions for derived terms of ICL HOL, and functions to handle them, called for by section 4.2 of the Release 1 ICL HOL Product Requirement Specification \cite{DS/FMU/IED/DEF004}.
@@ -82,7 +86,6 @@ The design is in \cite{DS/FMU/IED/DTD004}.
 This document contains an implementation of functions for derived terms of ICL HOL, and functions to handle them.
 \subsubsection{Dependencies}
 This document's signature is given in \cite{DS/FMU/IED/DTD004}.
-It relies on those files indicated by the ICL HOL release 001 makefile.
 \subsubsection{Deficiencies}
 None known.
 \subsubsection{Possible Enhancements}
@@ -93,20 +96,43 @@ None known.
 structure âTypesAndTermsá : TypesAndTerms = struct
 =TEX
 First gain the items implemented in $icl'TypesAndTerms$.
-Opening that structure here allows a seamless (at the user interface level) movement of items between them.
+Opening that structure here allows an invisible (at the user interface level) movement of items between the two structures.
 =SML
 open icl'TypesAndTerms;
 =TEX
+\subsection{Generic Binders}
 =SML
-val âmk_tá : TERM = mk_const("T",BOOL);
-fun âis_tá (tm : TERM) : bool = (tm = mk_t);
-=TEX
-=SML
-val âmk_fá : TERM = mk_const("F",BOOL);
-fun âis_fá (tm : TERM) : bool = (tm = mk_f);
-=TEX
+fun âmk_binderá (area : string) (msg : int) (binder:TYPE -> TYPE -> TERM) 
+	((v, b) : TERM * TERM) : TERM = (
+	
+	(mk_app (binder (type_of v) (type_of b), 
+		mk_(v, b)))
+	handle complaint => 
+	case area_of complaint of
+	"mk_" => pass_on complaint "mk_" area
+	| _ => term_fail area msg [v,b]
+);
 
-As the $selector$ in the below is likely to just an error-trapped attempt to to apply the $destroyer$ this is less efficient than it might be in some instances.
+fun âdest_binderá (area_name : string) (msg : int) (op_name : string)
+	(tm : TERM) : TERM * TERM = (
+	let	val (binder, abs) = dest_app tm;
+		val (var, body) = dest_ abs;
+	in	if fst (dest_const binder) = op_name
+		then (var, body)
+		else fail area_name msg []
+	end
+	handle (Fail _) => term_fail area_name msg [tm]
+);
+
+fun âis_binderá (op_name : string) (tm : TERM) : bool = (
+	let	val (binder, bdy) = dest_app tm;
+	in	is_ bdy
+		andalso
+		(fst (dest_const binder) = op_name)
+	end
+	handle (Fail _) => false
+);
+=TEX
 =SML
 fun âlist_mk_binderá (maker : TERM * TERM -> TERM) 
 	((tml, tm) : TERM list * TERM) : TERM = (
@@ -115,9 +141,51 @@ let	fun aux [] = tm
 in
 	aux tml
 end);
-
 =TEX
-Pairing:
+=SML
+fun âstrip_binderá (op_name : string) (tm : TERM) : TERM list * TERM = (
+let	fun aux (tm1:TERM) : (TERM list * TERM) = (
+	let	val (binder, abs) = dest_app tm1;
+		val (var, body) = dest_ abs;
+	in	if fst (dest_const binder) = op_name
+		then (let val (vs,bd) = aux body;
+		in
+			((var :: vs) , bd)
+		end)
+		else ([],tm1)
+	end
+	handle (Fail _) => ([],tm1)
+	);
+in
+	aux tm
+end);
+fun âstrip_simple_binderá (op_name : string) (tm : TERM) : TERM list * TERM = (
+let	fun aux (tm1:TERM) : (TERM list * TERM) = (
+	let	val (binder, abs) = dest_app tm1;
+		val (var, body) = dest_simple_ abs;
+	in	if fst (dest_const binder) = op_name
+		then (let val (vs,bd) = aux body;
+		in
+			((var :: vs) , bd)
+		end)
+		else ([],tm1)
+	end
+	handle (Fail _) => ([],tm1)
+	);
+in
+	aux tm
+end);
+=TEX
+\subsection{Truth Values}
+=SML
+val âmk_tá : TERM = mk_const("T",BOOL);
+fun âis_tá (tm : TERM) : bool = (tm = mk_t);
+=TEX
+=SML
+val âmk_fá : TERM = mk_const("F",BOOL);
+fun âis_fá (tm : TERM) : bool = (tm = mk_f);
+=TEX
+\subsection{Pairs}
 =SML
 fun âmk_‰_typeá ((t1, t2) : TYPE * TYPE): TYPE = mk_ctype("‰", [t1, t2]);
 
@@ -148,27 +216,24 @@ val âdest_pairá : TERM -> (TERM * TERM) = dest_bin_op "dest_pair" 4003 ",";
 
 val âis_pairá : TERM -> bool = is_bin_op ",";
 =TEX
-=SML
-fun âuncurryá (t1:TYPE) (t2:TYPE) (t3:TYPE):TERM = (
-	mk_const("Uncurry",
-	mk_‹_type(mk_‹_type(t1,mk_‹_type(t2, t3)), mk_‹_type(mk_‰_type(t1, t2), t3)))
-);
-=TEX
-The following function can handle an arbitrarily nested paired abstraction.
+\subsection{(Paired) -abstractions}
 =SML
 local
-	fun uncurry (t1:TYPE) (t2:TYPE) (t3:TYPE):TERM = (
+fun Uncurry (t1:TYPE) (t2:TYPE) (t3:TYPE):TERM = (
 	mk_const("Uncurry",
 	mk_‹_type(mk_‹_type(t1,mk_‹_type(t2, t3)), mk_‹_type(mk_‰_type(t1, t2), t3)))
 );
 in
+=TEX
+The following function can handle an arbitrarily nested paired abstraction.
+=SML
 fun âmk_á ((x, y): TERM * TERM) : TERM = (
 	(if is_pair x
 	then (let val (a,b) = dest_pair x;
 		val ta = type_of a and
 			tb = type_of b
 	in
-		mk_app(uncurry ta tb (type_of y),
+		mk_app(Uncurry ta tb (type_of y),
 			mk_(a, mk_(b, y)))
 	end)
 	else mk_simple_(x, y))
@@ -212,71 +277,7 @@ end
 handle (Fail _) => ([],tm)
 );
 =TEX
-=SML
-fun âmk_binderá (area : string) (msg : int) (binder:TYPE -> TYPE -> TERM) 
-	((v, b) : TERM * TERM) : TERM = (
-	
-	(mk_app (binder (type_of v) (type_of b), 
-		mk_(v, b)))
-	handle complaint => 
-	case area_of complaint of
-	"mk_" => pass_on complaint "mk_" area
-	| _ => term_fail area msg [v,b]
-);
-
-fun âdest_binderá (area_name : string) (msg : int) (op_name : string)
-	(tm : TERM) : TERM * TERM = (
-	let	val (binder, abs) = dest_app tm;
-		val (var, body) = dest_ abs;
-	in	if fst (dest_const binder) = op_name
-		then (var, body)
-		else fail area_name msg []
-	end
-	handle (Fail _) => term_fail area_name msg [tm]
-);
-
-fun âis_binderá (op_name : string) (tm : TERM) : bool = (
-	let	val (binder, bdy) = dest_app tm;
-	in	is_ bdy
-		andalso
-		(fst (dest_const binder) = op_name)
-	end
-	handle (Fail _) => false
-);
-
-fun âstrip_binderá (op_name : string) (tm : TERM) : TERM list * TERM = (
-let	fun aux (tm1:TERM) : (TERM list * TERM) = (
-	let	val (binder, abs) = dest_app tm1;
-		val (var, body) = dest_ abs;
-	in	if fst (dest_const binder) = op_name
-		then (let val (vs,bd) = aux body;
-		in
-			((var :: vs) , bd)
-		end)
-		else ([],tm1)
-	end
-	handle (Fail _) => ([],tm1)
-	);
-in
-	aux tm
-end);
-fun âstrip_simple_binderá (op_name : string) (tm : TERM) : TERM list * TERM = (
-let	fun aux (tm1:TERM) : (TERM list * TERM) = (
-	let	val (binder, abs) = dest_app tm1;
-		val (var, body) = dest_simple_ abs;
-	in	if fst (dest_const binder) = op_name
-		then (let val (vs,bd) = aux body;
-		in
-			((var :: vs) , bd)
-		end)
-		else ([],tm1)
-	end
-	handle (Fail _) => ([],tm1)
-	);
-in
-	aux tm
-end);
-=TEX
+\subsection{Conjunctions}
 =SML
 val âmk_€á : (TERM * TERM) -> TERM = mk_bin_op "mk_€" 3031 3015 (bin_bool_op "€");
 
@@ -288,6 +289,7 @@ val âlist_mk_€á : TERM list -> TERM = list_mk_bin_op "list_mk_€" 3031 3015 (bin_
 
 val âstrip_€á : TERM -> TERM list = strip_bin_op "€";
 =TEX
+\subsection{Disjunctions}
 =SML
 val âmk_á : (TERM * TERM) -> TERM = mk_bin_op "mk_" 3031 3015 (bin_bool_op "");
 
@@ -299,6 +301,7 @@ val âlist_mk_á : TERM list -> TERM = list_mk_bin_op "list_mk_" 3031 3015 (bin_
 
 val âstrip_á : TERM -> TERM list = strip_bin_op "";
 =TEX
+\subsection{Bi-implications}
 =SML
 val âmk_‚á : (TERM * TERM) -> TERM = mk_bin_op "mk_‚" 3031 3015 (bin_bool_op "=");
 
@@ -317,6 +320,7 @@ in
 end
 handle (Fail _) => false);
 =TEX
+\subsection{Conditionals}
 =SML
 fun âmk_ifá (c : TERM, y : TERM, n : TERM) : TERM = (
 let	val cty = type_of c;
@@ -349,6 +353,7 @@ fun âdest_ifá (tm : TERM) : (TERM * TERM * TERM) = (
 	term_fail "dest_if" 4006 [tm]
 );
 =TEX
+\subsection{Let-terms}
 We implement $mk\_let$ to carry out three steps:
 \begin{enumerate}
 \item
@@ -476,6 +481,7 @@ in
 	aux trm []
 end);		 
 =TEX
+\subsection{List-terms}
 =SML
 local
 	fun mk_LIST ty = mk_ctype("LIST",[ty])
@@ -527,6 +533,7 @@ fun âis_listá (tm : TERM) : bool = (
 );
 end (* local mk_LIST *);
 =TEX
+\subsection{Enumerated Sets} 
 =SML
 local
 	fun mk_SET ty = mk_ctype("SET",[ty])
@@ -593,9 +600,12 @@ in
 	val âis_set_compá : TERM -> bool = is_binder "SetComp";
 
 end (* local lmk_set_comp *);
-
+=TEX
+\subsection{Negations}
+=SML
 end (* local mk_SET *);
 =TEX
+
 =SML
 local 
 	fun Negate _ = mk_const("Œ", mk_‹_type (BOOL, BOOL));
@@ -626,6 +636,7 @@ in
 	aux 0 tm
 end);
 =TEX
+\subsection{(Paired) ƒ-terms}
 =SML
 local 
 	fun Forall t1 _ = quantifier "ƒ" t1 BOOL;
@@ -641,7 +652,10 @@ val âlist_mk_ƒá : (TERM list * TERM) -> TERM = list_mk_binder mk_ƒ;
 val âstrip_ƒá : TERM -> (TERM list * TERM) = strip_binder "ƒ";
 
 end (* local Forall *);
+
+val âstrip_simple_ƒá : TERM -> (TERM list * TERM) = strip_simple_binder "ƒ";
 =TEX
+\subsection{(Paired) „-terms}
 =SML
 local
 	fun Exists t1 _ = quantifier "„" t1 BOOL;
@@ -657,7 +671,10 @@ val âlist_mk_„á : (TERM list * TERM) -> TERM = list_mk_binder mk_„;
 val âstrip_„á : TERM -> (TERM list * TERM) = strip_binder "„";
 
 end (* local Exists *);
+
+val âstrip_simple_„á : TERM -> (TERM list * TERM) = strip_simple_binder "„";
 =TEX
+\subsection{Simple and Paired „$_1$-terms}
 =SML
 local
 	fun Exists1 t1 _ = quantifier "„%down%1" t1 BOOL;
@@ -683,6 +700,7 @@ val âdest_„%down%1á : TERM -> TERM * TERM = (
 val âis_„%down%1á : TERM -> bool = is_binder "„%down%1";
 end (* local Exists1 *);
 =TEX
+\subsection{‡-terms}
 =SML
 local 
 	fun Select t1 _ = mk_const("‡", mk_‹_type(mk_‹_type(
@@ -699,11 +717,6 @@ val âlist_mk_‡á : (TERM list * TERM) -> TERM = list_mk_binder mk_‡;
 val âstrip_‡á : TERM -> (TERM list * TERM) = strip_binder "‡";
 
 end (* local Select *);
-=TEX
-=SML
-val âstrip_simple_ƒá : TERM -> (TERM list * TERM) = strip_simple_binder "ƒ";
-
-val âstrip_simple_„á : TERM -> (TERM list * TERM) = strip_simple_binder "„";
 =TEX
 \subsection{The Type of Destroyed Derived Terms}
 =SML
