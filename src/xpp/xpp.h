@@ -168,6 +168,9 @@ typedef enum {
 		char *name,
 		char **dir,
 		char **base);
+	char * find_file(
+		char *name,
+		char *dirs);
 /* Module: help.c (automatically generated during build) */
 	#include "help.h"
 /* Module: mainw */

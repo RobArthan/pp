@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.15 2003/06/25 12:22:40 rda Exp rda $
+ * $Id: xpp.c,v 2.16 2004/01/24 17:32:55 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -199,7 +199,7 @@ void usage (void)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void set_pp_home(void)
 {
-	char *env_val, *dir, *base, *real_name, *find_file_path, *env_entry, *x_search_path;
+	char *env_val, *dir, *base, *real_name, *find_file_path, *env_entry, *unix_path, *x_search_path;
 /*
  * The first part of this is closely based on what the shell scripts like pp do.
  * If the environment variable PPENVDEBUG is set and non-empty, we output diagnostics about all this.
@@ -223,13 +223,32 @@ void set_pp_home(void)
 /*
  * Otherwise, compute PPHOME as the parent of the parent of the directory containing the
  * file identified by argv[0]. E.g., if invoked as /usr/share/pp/bin/xpp, that's /usr/share/pp.
+ * Be careful if invoked via the search path, when argv0 will typically not be a full path name.
+ * If PATH is not set, give up.
  */
-		real_name = get_real_name(argv0);
+		unix_path = getenv(PATH);
+		if(unix_path == NULL) {
+			msg("initialisation warning", PATH " has not been set by caller");
+			return;
+		}
+		if(strchr(argv0, '/') == NULL) { /* must have been invoked via PATH */
+			char *n;
+			n = find_file(argv0, unix_path);
+			if(n != NULL) {
+				real_name = get_real_name(n);
+				XtFree(n);
+			} else {
+				real_name = NULL;
+			}
+		} else {
+			real_name = get_real_name(argv0);
+		}
 		if(!real_name) {
 			env_diag("cannot find real path to executable %s", argv0);
 			msg("initialisation error", "cannot locate the ProofPower installation directory");
 			exit(51);
 		}
+		env_diag("invoked as %s", real_name);
 		split_file_name(real_name, &dir, &base);
 		XtFree(real_name);
 		XtFree(base);
@@ -248,17 +267,14 @@ void set_pp_home(void)
  * That way you can use one version of xpp to run several different versions of ProofPower,
  * by giving full path names for the ProofPower command on  the xpp command line.
  */
-		env_val = getenv(PATH);
-		env_entry = (char*) XtMalloc(strlen(PATH) + strlen(pp_home) + strlen(env_val) + 3);
+		env_entry = (char*) XtMalloc(strlen(PATH) + strlen(pp_home) + strlen(unix_path) + 3);
 /*
  * Do set up the path. Otherwise out-of-the-box running won't be so easy.
  */		strcpy(env_entry, PATH);
 		strcat(env_entry, "=");
 		strcat(env_entry, pp_home);
-		if(env_val != NULL) {
-			strcat(env_entry, ":");
-			strcat(env_entry, env_val);
-		}
+		strcat(env_entry, ":");
+		strcat(env_entry, unix_path);
 /*
  * No setenv on Solaris so we have to use putenv. The memory allocation question shouldn't be too
  * bad as we only do this once.
