@@ -117,8 +117,8 @@ typedef struct menu_item {
 		Widget	w,
 		NAT	max);
 	extern void copy_font_list(
-		Widget	to_text_w,
-		Widget	from_text_w);
+		Widget	to_w,
+		Widget	from_w);
 #endif
 #ifndef _xpp
 	extern char *cmd_buf;

@@ -146,14 +146,14 @@ NAT max;
  * widget to another.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void copy_font_list (
-	Widget	to_text_w,
-	Widget from_text_w)
+	Widget	to_w,
+	Widget from_w)
 {
 	XmFontList fontlist;
 
-	XtVaGetValues(from_text_w, XmNfontList, &fontlist, NULL);
+	XtVaGetValues(from_w, XmNfontList, &fontlist, NULL);
 	if(fontlist != NULL) {
-		XtVaSetValues(to_text_w,
+		XtVaSetValues(to_w,
 		XmNfontList, fontlist, NULL);
 	}
 }
