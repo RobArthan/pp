@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.81 2004/02/11 21:45:31 rda Exp rda $
+ * $Id: mainw.c,v 2.82 2004/03/09 17:15:39 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -269,9 +269,9 @@ static MenuItem edit_menu_items[] = {
     { "Redo", &xmPushButtonGadgetClass, 'R', NULL, NULL,
         script_redo_cb, (XtPointer)0, (MenuItem *)NULL, False },
     MENU_ITEM_SEPARATOR,
-    { "Search and Replace ...", &xmPushButtonGadgetClass, 'S', NULL, NULL,
+    { "Search and Replace ...", &xmPushButtonGadgetClass, 'S', "Ctrl<Key>f", "Ctrl-F",
         popup_search_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
-    { "Goto Line ...", &xmPushButtonGadgetClass, 'G', NULL, NULL,
+    { "Goto Line ...", &xmPushButtonGadgetClass, 'G', "Ctrl<Key>l", "Ctrl-L",
         popup_line_no_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
     {NULL}
 };

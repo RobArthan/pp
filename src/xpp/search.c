@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.47 2004/03/31 20:16:25 rda Exp rda $ 
+ * $Id: search.c,v 2.48 2004/04/03 12:29:21 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -109,14 +109,16 @@ static char *re_error =
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	
 static SearchData search_data;
+
+static Boolean ignore_case, use_wildcards;
+
 /*
  * Forward declarations for callbacks etc.
  */
-static void	search_backwards_cb(CALLBACK_ARGS),
+static void	toggle_button_cb(CALLBACK_ARGS),
+		search_backwards_cb(CALLBACK_ARGS),
 		search_forwards_cb(CALLBACK_ARGS),
 		search_set_cb(CALLBACK_ARGS),
-		search_backwards_replace_cb(CALLBACK_ARGS),
-		search_forwards_replace_cb(CALLBACK_ARGS),
 		empty_search_cb(CALLBACK_ARGS),
 		empty_replace_cb(CALLBACK_ARGS),
 		replace_cb(CALLBACK_ARGS),
@@ -125,7 +127,6 @@ static void	search_backwards_cb(CALLBACK_ARGS),
 		replace_search_backwards_cb(CALLBACK_ARGS),
 		replace_search_forwards_cb(CALLBACK_ARGS),
 		dismiss_cb(CALLBACK_ARGS),
-		options_cb(CALLBACK_ARGS),
 		help_cb(CALLBACK_ARGS);
 
 static void line_no_set(SearchData*);
@@ -170,19 +171,23 @@ static MenuItem replace_text_edit_menu_items[] = {
  * This is long but only because it is repetitive.
  * The aim is a popup shell looking something like:
  *
- * | <= Search    |  <= & Replace | := Selection |
- * | Search =>    |  => & Replace | Clear        |
- * |   <text to search for >                     |
- * | Replace      |  Replace & <= | := Selection |
- * | Replace All  | Replace & =>  | Clear        |
- * |   <text to replace with >                   |
- * -----------------------
- * | Dismiss    |  Options | Help  |
+ * | * Ignore case * Use wildcards |
+ * | <= Search    Search =>        |
+ * |-------------------------------|
+ * |   <text to search for >       |
+ * |-----------------------------+-|
+ * | Replace      |  Replace All   |
+ * | Replace & <= | Replace & =>   | 
+ * |-------------------------------|
+ * |   <text to replace with >     |
+ * |-------------------------------|
+ * | Dismiss     | Help            |
  *
  * Each `<...>' here is a text field
- * The `:= ...' push-buttons can be used to
- * include the selection from the text widget in the search and
- * replacement strings .
+ * The '*'s are toggle buttons. The + is a paned window sash control.
+ * Pull-right menus can be used for standard edit operations
+ * and to clear the contents of the text widgets
+ * or to replace their contents with the current selection.
  * The other push-buttons actually initiate searches etc.
  * The options button pops up the options tool.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -192,22 +197,17 @@ Boolean add_search_tool(Widget text_w)
 	NAT cbdata;
 	Widget shell, paned, search_form, replace_form,
 		action_form,
+		ignore_case_toggle,
+		use_wildcards_toggle,
 		search_backwards_btn,
 		search_forwards_btn,
-		search_set_btn,
-		search_backwards_replace_btn,
-		search_forwards_replace_btn,
-		search_clear_btn,
 		search_text,
 		replace_btn,
 		replace_all_btn,
-		replace_set_btn,
 		replace_search_backwards_btn,
 		replace_search_forwards_btn,
-		replace_clear_btn,
 		replace_text,
 		dismiss_btn,
-		options_btn,
 		help_btn;
 
 	char	*pattern;
@@ -241,8 +241,7 @@ Boolean add_search_tool(Widget text_w)
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Part 1:
- * | <= Search    |  <= & Replace | := Selection |
- * | Search =>    |  => & Replace | Clear        |
+ * | <= Search    | Search =>    | 
  * |   <text to search for >                     |
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
@@ -251,16 +250,46 @@ Boolean add_search_tool(Widget text_w)
 		XmNfractionBase,		24,
 		NULL);
 
+	s = XmStringCreateSimple("Ignore case");
+
+	ignore_case_toggle = XtVaCreateManagedWidget("ignore-case",
+		xmToggleButtonWidgetClass,	search_form,
+		XmNlabelString,			s,
+		XmNleftAttachment,		XmATTACH_FORM,
+		XmNrightAttachment,		XmATTACH_POSITION,
+		XmNrightPosition,		12,
+		XmNtopAttachment,		XmATTACH_FORM,
+		XmNbottomAttachment,		XmATTACH_POSITION,
+		XmNbottomPosition,	12,
+		NULL);
+
+	XmStringFree(s);
+
+	s = XmStringCreateSimple("Use wildcards");
+
+	use_wildcards_toggle = XtVaCreateManagedWidget("use-wildcards",
+		xmToggleButtonWidgetClass,		search_form,
+		XmNlabelString,		s,
+		XmNleftAttachment,		XmATTACH_POSITION,
+		XmNrightAttachment,		XmATTACH_FORM,
+		XmNleftPosition,		12,
+		XmNtopAttachment,		XmATTACH_FORM,
+		XmNbottomAttachment,		XmATTACH_POSITION,
+		XmNbottomPosition,	12,
+		NULL);
+
+	XmStringFree(s);
+
 	s = XmStringCreateSimple("<= Search");
 	search_backwards_btn = XtVaCreateManagedWidget("backwards",
 		xmPushButtonWidgetClass,	search_form,
 		XmNlabelString,		s,
 		XmNleftAttachment,		XmATTACH_FORM,
 		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNrightPosition,		8,
-		XmNtopAttachment,		XmATTACH_FORM,
-		XmNbottomAttachment,		XmATTACH_POSITION,
-		XmNbottomPosition,		12,
+		XmNrightPosition,		12,
+		XmNtopAttachment,		XmATTACH_POSITION,
+		XmNtopPosition,		12,
+		XmNbottomAttachment,		XmATTACH_FORM,
 		NULL);
 	XmStringFree(s);
 
@@ -268,65 +297,11 @@ Boolean add_search_tool(Widget text_w)
 	search_forwards_btn = XtVaCreateManagedWidget("forwards",
 		xmPushButtonWidgetClass,	search_form,
 		XmNlabelString,		s,
-		XmNleftAttachment,		XmATTACH_FORM,
-		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNrightPosition,		8,
-		XmNtopAttachment,		XmATTACH_POSITION,
-		XmNtopPosition,			12,
-		XmNbottomAttachment,		XmATTACH_FORM,
-		NULL);
-	XmStringFree(s);
-
-	s = XmStringCreateSimple("<= & Replace");
-	search_backwards_replace_btn = XtVaCreateManagedWidget("backwards-and-replace",
-		xmPushButtonWidgetClass,	search_form,
-		XmNlabelString,		s,
-		XmNleftAttachment,		XmATTACH_POSITION,
-		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNleftPosition,		8,
-		XmNrightPosition,		16,
-		XmNtopAttachment,		XmATTACH_FORM,
-		XmNbottomAttachment,		XmATTACH_POSITION,
-		XmNbottomPosition,		12,
-		NULL);
-	XmStringFree(s);
-
-	s = XmStringCreateSimple("=> & Replace");
-	search_forwards_replace_btn = XtVaCreateManagedWidget("forwards-and-replace",
-		xmPushButtonWidgetClass,	search_form,
-		XmNlabelString,		s,
-		XmNleftAttachment,		XmATTACH_POSITION,
-		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNleftPosition,		8,
-		XmNrightPosition,		16,
-		XmNtopAttachment,		XmATTACH_POSITION,
-		XmNtopPosition,			12,
-		XmNbottomAttachment,		XmATTACH_FORM,
-		NULL);
-	XmStringFree(s);
-
-	s = XmStringCreateSimple(":= Selection");
-	search_set_btn = XtVaCreateManagedWidget("becomes-selection",
-		xmPushButtonWidgetClass,	search_form,
-		XmNlabelString,		s,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_FORM,
-		XmNleftPosition,		16,
-		XmNtopAttachment,		XmATTACH_FORM,
-		XmNbottomAttachment,		XmATTACH_POSITION,
-		XmNbottomPosition,		12,
-		NULL);
-	XmStringFree(s);
-
-	s = XmStringCreateSimple("Empty");
-	search_clear_btn = XtVaCreateManagedWidget("clear",
-		xmPushButtonWidgetClass,	search_form,
-		XmNlabelString,		s,
-		XmNleftAttachment,		XmATTACH_POSITION,
-		XmNrightAttachment,		XmATTACH_FORM,
-		XmNleftPosition,		16,
+		XmNleftPosition,		12,
 		XmNtopAttachment,		XmATTACH_POSITION,
-		XmNtopPosition,			12,
+		XmNtopPosition,		12,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		NULL);
 	XmStringFree(s);
@@ -338,8 +313,8 @@ Boolean add_search_tool(Widget text_w)
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Part 2:
- * | Replace      | Replace & <=  | := Selection |
- * | Replace All  | Replace & =>  | Clear        |
+ * | Replace      | Replace All  |
+ * | Replace & <=  | Replace & =>  |
  * |   <text to replace with >                   |
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
@@ -355,7 +330,7 @@ Boolean add_search_tool(Widget text_w)
 		XmNlabelString,		s,
 		XmNleftAttachment,		XmATTACH_FORM,
 		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNrightPosition,		8,
+		XmNrightPosition,		12,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_POSITION,
 		XmNbottomPosition,		12,
@@ -366,12 +341,12 @@ Boolean add_search_tool(Widget text_w)
 	replace_all_btn = XtVaCreateManagedWidget("replace-all",
 		xmPushButtonWidgetClass,	replace_form,
 		XmNlabelString,		s,
-		XmNleftAttachment,		XmATTACH_FORM,
-		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNrightPosition,		8,
-		XmNtopAttachment,		XmATTACH_POSITION,
-		XmNtopPosition,			12,
-		XmNbottomAttachment,		XmATTACH_FORM,
+		XmNleftAttachment,		XmATTACH_POSITION,
+		XmNleftPosition,		12,
+		XmNrightAttachment,		XmATTACH_FORM,
+		XmNtopAttachment,		XmATTACH_FORM,
+		XmNbottomAttachment,		XmATTACH_POSITION,
+		XmNbottomPosition,			12,
 		NULL);
 	XmStringFree(s);
 
@@ -379,13 +354,12 @@ Boolean add_search_tool(Widget text_w)
 	replace_search_backwards_btn = XtVaCreateManagedWidget("replace-and-backwards",
 		xmPushButtonWidgetClass,	replace_form,
 		XmNlabelString,		s,
-		XmNleftAttachment,		XmATTACH_POSITION,
+		XmNleftAttachment,		XmATTACH_FORM,
 		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNleftPosition,		8,
-		XmNrightPosition,		16,
-		XmNtopAttachment,		XmATTACH_FORM,
-		XmNbottomAttachment,		XmATTACH_POSITION,
-		XmNbottomPosition,		12,
+		XmNrightPosition,		12,
+		XmNtopAttachment,		XmATTACH_POSITION,
+		XmNtopPosition,		12,
+		XmNbottomAttachment,		XmATTACH_FORM,
 		NULL);
 	XmStringFree(s);
 
@@ -394,41 +368,13 @@ Boolean add_search_tool(Widget text_w)
 		xmPushButtonWidgetClass,	replace_form,
 		XmNlabelString,		s,
 		XmNleftAttachment,		XmATTACH_POSITION,
-		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNleftPosition,		8,
-		XmNrightPosition,		16,
+		XmNleftPosition,		12,
+		XmNrightAttachment,		XmATTACH_FORM,
 		XmNtopAttachment,		XmATTACH_POSITION,
 		XmNtopPosition,			12,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		NULL);
 	XmStringFree(s);
-
-	s = XmStringCreateSimple(":= Selection");
-	replace_set_btn = XtVaCreateManagedWidget("becomes-selection",
-		xmPushButtonWidgetClass,	replace_form,
-		XmNlabelString,		s,
-		XmNleftAttachment,		XmATTACH_POSITION,
-		XmNrightAttachment,		XmATTACH_FORM,
-		XmNleftPosition,		16,
-		XmNtopAttachment,		XmATTACH_FORM,
-		XmNbottomAttachment,		XmATTACH_POSITION,
-		XmNbottomPosition,		12,
-		NULL);
-	XmStringFree(s);
-
-	s = XmStringCreateSimple("Empty");
-	replace_clear_btn = XtVaCreateManagedWidget("clear",
-		xmPushButtonWidgetClass,	replace_form,
-		XmNlabelString,		s,
-		XmNleftAttachment,		XmATTACH_POSITION,
-		XmNrightAttachment,		XmATTACH_FORM,
-		XmNleftPosition,		16,
-		XmNtopAttachment,		XmATTACH_POSITION,
-		XmNtopPosition,			12,
-		XmNbottomAttachment,		XmATTACH_FORM,
-		NULL);
-	XmStringFree(s);
-
 /*
  * Now take a snapshot of the children before creating the replacement text widget.
  */
@@ -449,7 +395,7 @@ Boolean add_search_tool(Widget text_w)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Part 4:
  * -----------------------
- * | Dismiss    |  Options | Help  |
+ * | Dismiss    |  Help  |
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	action_form = XtVaCreateWidget("search-replace-action-form",
@@ -465,24 +411,10 @@ Boolean add_search_tool(Widget text_w)
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNleftPosition,		1,
-		XmNrightPosition,		7,
+		XmNleftPosition,		3,
+		XmNrightPosition,		9,
 		NULL);
 	XmStringFree(s);
-
-	s = XmStringCreateSimple("Options");
-	options_btn = XtVaCreateManagedWidget("options",
-		xmPushButtonWidgetClass,	action_form,
-		XmNlabelString,		s,
-		XmNtopAttachment,		XmATTACH_FORM,
-		XmNbottomAttachment,		XmATTACH_FORM,
-		XmNleftAttachment,		XmATTACH_POSITION,
-		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNleftPosition,		9,
-		XmNrightPosition,		15,
-		NULL);
-	XmStringFree(s);
-
 
 	s = XmStringCreateSimple("Help");
 	help_btn = XtVaCreateManagedWidget("help",
@@ -492,8 +424,8 @@ Boolean add_search_tool(Widget text_w)
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNleftPosition,		17,
-		XmNrightPosition,		23,
+		XmNleftPosition,		15,
+		XmNrightPosition,		21,
 		NULL);
 	XmStringFree(s);
 
@@ -529,23 +461,17 @@ Boolean add_search_tool(Widget text_w)
 
 	XtAddCallback(replace_text, XmNmodifyVerifyCallback, text_verify_cb, NULL);
 
+	XtAddCallback(ignore_case_toggle, XmNvalueChangedCallback,
+		toggle_button_cb, (XtPointer)(&ignore_case));
+
+	XtAddCallback(use_wildcards_toggle, XmNvalueChangedCallback,
+		toggle_button_cb, (XtPointer)(&use_wildcards));
+
 	XtAddCallback(search_backwards_btn, XmNactivateCallback,
 		search_backwards_cb, (XtPointer)(&search_data));
 
 	XtAddCallback(search_forwards_btn, XmNactivateCallback,
 		search_forwards_cb, (XtPointer)(&search_data));
-
-	XtAddCallback(search_set_btn, XmNactivateCallback,
-		search_set_cb, (XtPointer)(&search_data));
-
-	XtAddCallback(search_backwards_replace_btn, XmNactivateCallback,
-		search_backwards_replace_cb, (XtPointer)(&search_data));
-
-	XtAddCallback(search_forwards_replace_btn, XmNactivateCallback,
-		search_forwards_replace_cb, (XtPointer)(&search_data));
-
-	XtAddCallback(search_clear_btn, XmNactivateCallback,
-		empty_search_cb, (XtPointer)(&search_data));
 
 	XtAddCallback(replace_btn, XmNactivateCallback,
 		replace_cb, (XtPointer)(&search_data));
@@ -553,26 +479,26 @@ Boolean add_search_tool(Widget text_w)
 	XtAddCallback(replace_all_btn, XmNactivateCallback,
 		replace_all_cb, (XtPointer)(&search_data));
 
-	XtAddCallback(replace_set_btn, XmNactivateCallback,
-		replace_set_cb, (XtPointer)(&search_data));
-
 	XtAddCallback(replace_search_backwards_btn, XmNactivateCallback,
 		replace_search_backwards_cb, (XtPointer)(&search_data));
 
 	XtAddCallback(replace_search_forwards_btn, XmNactivateCallback,
 		replace_search_forwards_cb, (XtPointer)(&search_data));
 
-	XtAddCallback(replace_clear_btn, XmNactivateCallback,
-		empty_replace_cb, (XtPointer)(&search_data));
-
 	XtAddCallback(dismiss_btn, XmNactivateCallback,
 		dismiss_cb, (XtPointer)(&search_data));
 
-	XtAddCallback(options_btn, XmNactivateCallback,
-		options_cb, (XtPointer)(&search_data));
-
 	XtAddCallback(help_btn, XmNactivateCallback,
 		help_cb, (XtPointer)NULL);
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * set up initial values of search-replace options which the user
+ * sets in the resource file by initialising search-replace tool widgets.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+	ignore_case = XmToggleButtonGetState(ignore_case_toggle);
+
+	use_wildcards =XmToggleButtonGetState(use_wildcards_toggle);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Set up popup edit menus.
@@ -659,6 +585,18 @@ Boolean add_search_tool(Widget text_w)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Toggle button callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void toggle_button_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
+{
+	Boolean *flag = cbd;
+	*flag = XmToggleButtonGetState(w);
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * dismiss callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void dismiss_cb(
@@ -669,17 +607,6 @@ static void dismiss_cb(
 	SearchData *cbdata = cbd;
 	XmProcessTraversal(cbdata->default_focus_w, XmTRAVERSE_CURRENT);
 	XtPopdown(cbdata->shell_w);
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * options callback.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void options_cb(
-	Widget		w,
-	XtPointer	cbd,
-	XtPointer	cbs)
-{
-	add_options_tool();
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -802,7 +729,7 @@ static Boolean replace_selection(
 	if(XmTextGetSelectionPosition(cbdata->text_w, &left, &right)
 		&& left != right ) {
 		rep_pattern  = XmTextGetString(cbdata->replace_w);
-		if(!global_options.use_reg_exps) {
+		if(use_wildcards) {
 			replacement = rep_pattern;
 		} else {
 			long int text_len =right - left, rep_len;
@@ -927,38 +854,6 @@ static void replace_all_cb(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * search backwards & replace callback.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void search_backwards_replace_cb(
-	Widget		w,
-	XtPointer	cbd,
-	XtPointer	cbs)
-{
-	SearchData *cbdata = cbd;
-	cbdata->default_focus_w = w;
-	CHECK_MAP_STATE(cbdata)
-	if(search_either(w, cbdata, BACKWARDS)) {
-		(void) replace_selection(w, cbdata);
-	}
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * search forwards & replace callback.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void search_forwards_replace_cb(
-	Widget		w,
-	XtPointer	cbd,
-	XtPointer	cbs)
-{
-	SearchData *cbdata = cbd;
-	cbdata->default_focus_w = w;
-	CHECK_MAP_STATE(cbdata)
-	if(search_either(w, cbdata, FORWARDS)) {
-		(void) replace_selection(w, cbdata);
-	}
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
  * replace & search backwards callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void replace_search_backwards_cb(
@@ -1071,7 +966,7 @@ static bm_search_t *bm_search_comp(char *pattern)
 		return bm;
 	}
 	strcpy(&(bm->pattern)[0], pattern);
-	if(global_options.ignore_case) {
+	if(ignore_case) {
 		for(i = 0; i < len; ++i) {
 			(bm->pattern)[i]= toupper((bm->pattern)[i]);
 		}
@@ -1105,7 +1000,7 @@ static Substring bm_search_exec(bm_search_t *bm, char *text)
 		}
 	}
 	while(i >= 0 && text[cursor]) {
-		char ch = global_options.ignore_case ? toupper(text[cursor+i]) : text[cursor+i];
+		char ch = ignore_case ? toupper(text[cursor+i]) : text[cursor+i];
 		if(ch == (bm->pattern)[i]) { /* possible match at cursor */
 			i -= 1;
 		} else { /* no match at cursor; slide up according to index value: */
@@ -1138,7 +1033,7 @@ static regex_t *re_search_comp(char *pattern)
 	static regex_t preg;
 	int cflags = REG_EXTENDED | REG_NEWLINE;
 	int error_code;
-	if(global_options.ignore_case) {
+	if(ignore_case) {
 		cflags |= REG_ICASE;
 	}
 	error_code = regcomp(&preg, pattern, cflags);
@@ -1308,7 +1203,7 @@ static long int re_replacement_text(
  * searched is 0, just set up static data for future use.
  * If both pattern and text are 0, reset static data and free any malloced space;
  * Make sure to reset before returning control to the user, else they might
- * change the value of global_options.use_reg_exps or global_options.ignore_case.
+ * change the value of use_wildcards or ignore_case.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static Substring search_forwards(
 	char		*pattern,
@@ -1322,13 +1217,13 @@ static Substring search_forwards(
 		comp = last_comp;
 	} else {
 		if(last_comp != 0) {
-			if(global_options.use_reg_exps) {
+			if(use_wildcards) {
 				regfree((regex_t *)comp);
 			} else {
 	 			XtFree((char*)last_comp);
 			}
 		}
-		if (global_options.use_reg_exps) {
+		if (use_wildcards) {
 			comp = re_search_comp(pattern);
 		} else {
 			comp = bm_search_comp(pattern);
@@ -1337,7 +1232,7 @@ static Substring search_forwards(
 	}
 	if(pattern == 0 && text == 0) {
 		if(last_comp != 0) {
-			if(global_options.use_reg_exps) {
+			if(use_wildcards) {
 				regfree((regex_t *)comp);
 			} else {
 	 			XtFree((char*)last_comp);
@@ -1348,7 +1243,7 @@ static Substring search_forwards(
 	} else if (text == 0 || comp == 0) { /* this is were syntax errors in reg. exps. show up */
 		result.offset = -1;
 	} else {
-		if(global_options.use_reg_exps) {
+		if(use_wildcards) {
 			result = re_search_exec(comp, text + offset,
 				offset == 0 || text[offset-1] == '\n');
 		} else {
@@ -1425,7 +1320,7 @@ static void replace_all(
 	while(*p) {
 		ss = search_forwards(0, text_buf, p - text_buf);
 		if(ss.offset >= 0) {
-			if(global_options.use_reg_exps) {
+			if(use_wildcards) {
 				rep_len = re_replacement_text(rep_pattern, p, &ss, 0);
 				extra += rep_len - ss.length;
 			} else {
@@ -1447,7 +1342,7 @@ static void replace_all(
 		ss = search_forwards(0, text_buf, p - text_buf);
 		if(ss.offset >= 0) {
 			strncpy(q, p, ss.offset);
-			if(global_options.use_reg_exps) {
+			if(use_wildcards) {
 				rep_len = re_replacement_text(rep_pattern, p, &ss, q+ss.offset);
 			} else {
 				strncpy(q + ss.offset, rep_pattern, rep_pattern_len);

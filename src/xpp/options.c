@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.24 2004/02/09 16:41:37 rda Exp rda $
+ * $Id: options.c,v 2.25 2004/02/10 21:47:07 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -54,10 +54,10 @@ GlobalOptions	orig_global_options;
  * edit-only session. Frames are used to group controls of similar types.
  *
  * Editor Controls
- * File type: Unix/MS-DOS/Macintosh
  *	 [] Take backup before writing file 
  *	 [] Delete backup after successful write
  *	 [] Read only
+ * File type: Unix/MS-DOS/Macintosh
  * Application Controls
  *	Command Line:		pp -d foo	
  *	Journal Length:	10000
@@ -82,10 +82,6 @@ static Widget
 		file_type_frame,
 			file_type_menu,
 				*file_type_buttons,
-		search_replace_frame,
-			search_replace_row_col,
-				ignore_case_toggle,
-				use_reg_exps_toggle,
 		app_frame,
 			app_row_col,
 				command_form,
@@ -196,33 +192,6 @@ void init_options(Widget owner_w)
 	if(global_options.read_only) {
 		XmToggleButtonSetState(read_only_toggle,True, False);
 	}
-
-	search_replace_frame = XtVaCreateManagedWidget("search-replace-frame",
-		xmFrameWidgetClass,	shell_row_col,
-		NULL);
-
-	search_replace_row_col = XtVaCreateManagedWidget("search-replace-row-col",
-		xmRowColumnWidgetClass,	search_replace_frame,
-		XmNorientation,		XmVERTICAL,
-		NULL);
-
-	lab = XmStringCreateSimple("Ignore case in searches");
-
-	ignore_case_toggle = XtVaCreateManagedWidget("ignore-case",
-		xmToggleButtonWidgetClass,	search_replace_row_col,
-		XmNlabelString,			lab,
-		NULL);
-
-	XmStringFree(lab);
-
-	lab = XmStringCreateSimple("Treat search strings as regular expressions");
-
-	use_reg_exps_toggle = XtVaCreateManagedWidget("use-regular-expressions",
-		xmToggleButtonWidgetClass,	search_replace_row_col,
-		XmNlabelString,			lab,
-		NULL);
-
-	XmStringFree(lab);
 
 if(!global_options.edit_only) {
 	app_frame = XtVaCreateManagedWidget("app-frame",
@@ -415,12 +384,6 @@ if(!global_options.edit_only) {
 	global_options.read_only =
 		XmToggleButtonGetState(read_only_toggle);
 
-	global_options.ignore_case =
-		XmToggleButtonGetState(ignore_case_toggle);
-
-	global_options.use_reg_exps =
-		XmToggleButtonGetState(use_reg_exps_toggle);
-
 	if(journal_max_text) {
 		char	*journal_max_buf;
 		long unsigned m;
@@ -528,8 +491,6 @@ void add_options_tool(void)
 		}
 		XtManageChild(edit_row_col);
 		XtManageChild(edit_frame);
-		XtManageChild(search_replace_row_col);
-		XtManageChild(search_replace_frame);
 		XtManageChild(shell_row_col);
 		XtPopup(shell, XtGrabNone);
 	}
@@ -568,12 +529,6 @@ static void apply_cb(
 		XmToggleButtonGetState(read_only_toggle);
 
 	global_options.file_type = file_type_mirror;
-
-	global_options.ignore_case =
-		XmToggleButtonGetState(ignore_case_toggle);
-
-	global_options.use_reg_exps =
-		XmToggleButtonGetState(use_reg_exps_toggle);
 
 	global_options.add_new_line_mode = add_new_line_mode_mirror;
 
@@ -621,16 +576,11 @@ static void reset_cb(
 
 	XtVaSetValues(file_type_menu, XmNmenuHistory, file_type_buttons[options->file_type], NULL);
 
-	XmToggleButtonSetState(ignore_case_toggle,
-		options->ignore_case, False);
-
-	XmToggleButtonSetState(use_reg_exps_toggle,
-		options->use_reg_exps, False);
-
 	if(command_text) {
 		XmTextSetString(command_text,
 			options->command_line);
 	}
+
 	if(journal_max_text) {
 		char buf[20];
 		unsigned long m = options->journal_max;

@@ -57,9 +57,6 @@ typedef struct {
 	Boolean			delete_backup_after_save;
 	Boolean			read_only;
 	FileType		file_type;
-/* search-replace options: */
-	Boolean			ignore_case;
-	Boolean			use_reg_exps;
 /* journal option: */
 	NAT			journal_max;
 /* command menu options: */
