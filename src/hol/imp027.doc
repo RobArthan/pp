@@ -39,7 +39,7 @@ They mainly concern handling paired abstractions.}
 
 \end{centering}
 \pagebreak
-\section{Document Control}
+\section{DOCUMENT CONTROL}
 \subsection{Contents List}
 \tableofcontents
 \subsection{Document Cross References}
@@ -50,8 +50,11 @@ They mainly concern handling paired abstractions.}
 \begin{description}
 \item [Issue 1.1,1.2,1.3]
 First drafts.
+\item [Issue 1.4]
+Changes to match issue 1.8 of \cite{DS/FMU/IED/DTD027}.
 \end{description}
-% \subsection{Changes Forecast}
+\subsection{Changes Forecast}
+More detailed descriptions of the tricky algorithms.
 \section{GENERAL}
 \subsection{Scope}
 This document contains an implementation of the derived rules of inference part II.
@@ -192,27 +195,83 @@ fun âtwo_the_sameá ((a:''a) :: x) : ''a OPT = (
  	else two_the_same x
 ) | two_the_same [] = Nil;
 =TEX
+The following function makes a variant variable structure
+from a given list of frees, and duplicates within.
+The conditional is given to prevent a new term being incorporated
+that is equal to the old one.
+=SML
+fun âvarstruct_variantá (na : TERM list) (tm : TERM) : TERM = (
+let	val nms = (map (fst o dest_var) na) cup []
+		handle complaint =>
+		pass_on complaint "dest_var" "varstruct_variant";
+	fun aux anms tm = (
+		if is_var tm
+		then (let val (nm,ty) = dest_var tm;
+			val nm' = string_variant anms nm;
+		in
+			((nm' :: anms), mk_var(nm', ty))
+		end)
+		else (let val (v1,v2) = dest_pair tm;
+			val (anms',v2') = aux anms v2;
+			val (anms'',v1') = aux anms' v1;
+		in
+			(anms'', mk_pair(v1',v2'))
+		end)
+	);
+	val tm' = snd(aux nms tm)
+in
+	if tm' = tm
+	then tm
+	else tm'
+end
+handle complaint =>
+divert complaint "dest_pair" "varstruct_variant" 4016
+	[fn () => string_of_term tm]);
+=TEX
 Rename duplicate variables in a variable structure:
 note this will fail on items that are not variable structures.
+It must only rename name {\em and} type duplicates,
+not just naming duplicates.
+It must not rename any variable that was not initially duplicated.
+I.e. the avoid list is only for new names, not current ones.
+In these conditions it differs from $varstruct\_variant$,
+and should only be used when these conditions are appropriate.
 =SML
-fun âreplace_dupsá (av: TERM list) (tm : TERM) = (
-let	fun rd_aux av tm1 = (
+fun  ârename_dupsá (av: TERM list) (tm : TERM) = (
+let	val orig_vars = frees tm;
+	val av_nms = list_cup [(map (fst o dest_var) (orig_vars @ av))];
+	fun rd_aux av seen tm1 = (
 		if is_var tm1
-		then (let val new = variant av tm1 in
-			((new :: av),new)
-		end
+		then (if tm1 mem seen
+			then (let 
+			val (nm,ty) = dest_var tm1;
+			val new_nm = string_variant av nm;
+			val new = mk_var(new_nm,ty);
+			in
+			(((new_nm :: av),seen),new)
+			end)
+			else ((av, (tm1 :: seen)), tm1)
 		) else (let val (ftm,stm) = dest_pair tm1;
-			val (av',stm') = rd_aux av stm;
-			val (av'',ftm') = rd_aux av' ftm;
+			val ((av',seen'),stm') = rd_aux av seen stm;
+			val ((av'',seen''),ftm') = rd_aux av' seen' ftm;
 		in
-			(av'', mk_pair(ftm',stm'))
+			((av'', seen''), mk_pair(ftm',stm'))
 		end)
 	);
 in
-	snd(rd_aux av tm)
-end);
+	snd(rd_aux av_nms [] tm)
+end
+handle complaint =>
+divert complaint "dest_pair" "rename_dups" 4016
+	[fn () => string_of_term tm]);
+=IGN
+Tests:
+rename_dups [] »(x,y)¼; (* »(x,y)¼ *)
+rename_dups [] (mk_pair(»x:'a¼,»x:'b¼)); (* »(x,x)¼ *)
+rename_dups [] »(x,x)¼; (* »(x',x)¼ *)
+rename_dups [] »(x',x,x)¼; (* »(x',x'',x)¼ *)
 =TEX
-\subsection{Core Paired abstraction Functions}
+\subsection{Core Paired Abstraction Functions}
 The following functions provide a core, around which,
 in combination with the rules for \cite{DS/FMU/IED/DTD007},
 we can implement the other rules of \cite{DS/FMU/IED/DTD027}.
@@ -400,34 +459,6 @@ in
 	res
 end);
 =TEX
-The following function makes a variant variable structure
-from a given list of frees, and duplicates within.
-The conditional is given to prevent a new term being used
-that is equal to the old one.
-=SML
-fun âvarstruct_variantá (na : TERM list) (tm : TERM) : TERM = (
-let	val nms = (map (fst o dest_var) na) cup [];
-	fun aux anms tm = (
-		if is_var tm
-		then (let val (nm,ty) = dest_var tm;
-			val nm' = string_variant anms nm;
-		in
-			((nm :: anms), mk_var(nm', ty))
-		end)
-		else (let val (v1,v2) = dest_pair tm;
-			val (anms',v1') = aux anms v1;
-			val (anms'',v2') = aux anms' v2;
-		in
-			(anms'', mk_pair(v1',v2'))
-		end)
-	);
-	val tm' = snd(aux nms tm)
-in
-	if tm' = tm
-	then tm
-	else tm'
-end);
-=TEX
 =SML
 fun âlist_ƒ_elimá (tml : TERM list) (thm : THM): THM = (
 	list_simple_ƒ_elim tml thm
@@ -495,7 +526,9 @@ let	val conc = concl thm;
 		else ();
 	val unbound_cf = cf diff tf;
 	val avoid = (unbound_cf @ hf);
-	val tm' = replace_dups avoid tm;
+	val tm' = rename_dups avoid tm
+		handle complaint =>
+		pass_on complaint "rename_dups" "ƒ_intro";
 	val (vs1,vs2) = dest_pair tm';
 	val s1 = conv_rule (fn x:TERM => eq_sym_rule 
 		((RATOR_C %beta%_conv THEN_C %beta%_conv)
@@ -507,9 +540,7 @@ let	val conc = concl thm;
 	val s6 = conv_rule(simple_eq_match_conv sƒ_uncurry_thm) s5;
 in
 	s6
-end
-handle complaint =>
-divert complaint "dest_pair" "ƒ_intro" 4016 [fn () => string_of_term tm]);
+end);
 end;
 =SML
 val âƒ_uncurry_convá : CONV = (fn (tm : TERM) =>
@@ -684,7 +715,8 @@ This should leave a theorem in the desired form, because
 the replacement for $f$ should be of the right form for the result to
 be displayed as $„\ tm\ Ž\ conc$.
 \end{enumerate}
-
+There is a certain amount of trickery involving removing
+duplicate names in the variable structure in the below.
 =SML
 fun â„_introá (tm : TERM) (thm : THM) = (
 	simple_„_intro tm thm
@@ -700,16 +732,14 @@ let	val (vs,bdy) = dest_„ tm
 			fn () =>string_of_term tm,
 			fn () => string_of_thm thm];
 	val cf = frees conc;
-	val tf = frees vs;
-	val hf = list_cup(map frees (hyps thm));
-	val unbound_cf = cf diff tf;
-	val avoid = (unbound_cf @ hf);
-	val vs' = replace_dups avoid vs;
-	val (vs1,vs2) = dest_pair vs';
+	val tf = frees tm;
+	val vs' = rename_dups (cf @ tf) vs;
+	val (vs1',vs2') = dest_pair vs';
+	val (vs1,vs2) = dest_pair vs;
 	val ivs1 = subst einsts vs1;
 	val ivs2 = subst einsts vs2;
 	val ivs = mk_pair(ivs1,ivs2);
-	val bit = list_mk_([vs1,vs2],bdy);
+	val bit = list_mk_([vs1',vs2'],bdy);
 	val s1 = conv_rule (fn x:TERM => eq_sym_rule 
 		((RATOR_C %beta%_conv THEN_C %beta%_conv)
 		(list_mk_app(bit,[ivs1,ivs2])))) thm;
@@ -720,6 +750,7 @@ let	val (vs,bdy) = dest_„ tm
 		(inst_type_rule ty_inst ssnd_thm);
 	val s2 = conv_rule (APP_C((RAND_C (fn x => ivs1_thm),
 			(fn x => ivs2_thm)))) s1;
+	val hf = list_cup (map frees (hyps thm));
 	val x = hd(gen_vars [type_of vs] (cf @ hf));
 	val template = mk_simple_„(x, 
 		list_mk_app(bit,[mk_fst x, mk_snd x]));
@@ -753,7 +784,7 @@ let	val cthm1 = concl thm1;
 	val fs_cthm2 = frees cthm2
 	val all_frees = fs_thm1 cup fs_cthm2 cup 
 		list_cup (map frees (hyps thm2));
-	val vs' = replace_dups (all_frees diff fvs) vs;
+	val vs' = rename_dups (all_frees diff fvs) vs;
 	val t1v = mk_app (t1, vs');
 	val tvx = (case gen_vars [BOOL] (all_frees @ (frees vs')) of
 		[term] => term
@@ -1265,7 +1296,7 @@ These follow the same pattern as the simple rules.
 local
 	val prc = TRY_C(pure_rewrite_conv [sfst_snd_thm]);
 in
-fun „%down%1_intro (thm1 : THM) (thm2 : THM) : THM = (
+fun â„%down%1_introá (thm1 : THM) (thm2 : THM) : THM = (
 let	val (x,rest) = dest_ƒ (concl thm2);
 	val (Px,(x',t)) = (Combinators.I ** dest_eq)(dest_Š rest);
 	val side_effect = if x = x'
@@ -1324,8 +1355,19 @@ end;
 =TEX
 =SML
 fun â„%down%1_elimá (thm : THM) : THM = (
-let	val (_,bdy) = dest_app (concl thm);
+let	val conc = concl thm;
+	val sideffect = if not (is_„%down%1 conc)
+		then thm_fail "„%down%1_elim" 27022 [thm]
+		else ();
+	val (_,bdy) = dest_app conc;
 	val (x,bdy') = dest_ bdy;
+	val y = varstruct_variant (frees x @ frees bdy') x;
+	val tmt = snd(term_match y x);
+	val tm1 = mk_eq(y,x);
+	val tm2 = var_subst tmt bdy';
+	val tm3_ = mk_(y,mk_Š(tm2,tm1));
+	val tm3 = mk_ƒ(y,mk_Š(tm2,tm1));
+	val target_tm = mk_„(x,mk_€(bdy',tm3));
 	val (xt,bt) = dest_‹_type(type_of bdy);
 	val s1 = inst_type_rule [(xt,mk_vartype "'a")] „%down%1_thm;
 	val s2 = simple_ƒ_elim bdy s1;
@@ -1339,12 +1381,11 @@ let	val (_,bdy) = dest_app (concl thm);
 	val ƒ_bit = snd(dest_€ „_bdy);
 	val ƒ_bit' = subst[(x,t)] ƒ_bit;
 	val bdy'' = mk_(x,mk_€(bdy',ƒ_bit'));
-	val s5 = _varstruct_conv bdy'' abs;
-	val s6 = ap_fun_rule quant s5;
-	val s7 = ‚_mp_rule s6 s4;
+	val s5 = conv_rule (RAND_C (_varstruct_conv bdy'')) s4;
+	val s6 = conv_rule (CBINDER_C(RAND_C(RAND_C (_varstruct_conv tm3_)))) s5;;
 in
 	(prof "„%down%1_elim";
-	s7)
+	s6)
 end
 handle complaint =>
 list_divert complaint "„%down%1_elim" [
@@ -1354,6 +1395,50 @@ list_divert complaint "„%down%1_elim" [
 	("‚_mp_rule",27022,[fn () => string_of_thm thm])]
 );
 =TEX
+The following is very similar to the implementation of $„_1\_elim$, and could have been used to code that function.
+=SML
+val â„%down%1_convá : CONV = (fn tm =>
+let	val sideffect = if not (is_„%down%1 tm)
+		then term_fail "„%down%1_conv" 27053 [tm]
+		else ();
+	val (_,bdy) = dest_app tm;
+	val (x,bdy') = dest_ bdy;
+	val y = varstruct_variant (frees x @ frees bdy') x;
+	val tmt = snd(term_match y x);
+	val tm1 = mk_eq(y,x);
+	val tm2 = var_subst tmt bdy';
+	val tm3_ = mk_(y,mk_Š(tm2,tm1));
+	val tm3 = mk_ƒ(y,mk_Š(tm2,tm1));
+	val target_tm = mk_„(x,mk_€(bdy',tm3));
+	val (xt,bt) = dest_‹_type(type_of bdy);
+	val s1 = inst_type_rule [(xt,mk_vartype "'a")] „%down%1_thm;
+	val s2 = simple_ƒ_elim bdy s1;
+	val s3 = eq_trans_rule (refl_conv tm) s2;
+	val s4 = conv_rule (RAND_C(CBINDER_C
+		((RAND_C(CBINDER_C(RATOR_C(RAND_C %beta%_conv))))
+		THEN_C
+		(RATOR_C(RAND_C %beta%_conv))))) s3;
+	val (quant,abs) = dest_app (snd(dest_eq(concl s4)));
+	val (t,„_bdy) = dest_simple_ abs;
+	val ƒ_bit = snd(dest_€ „_bdy);
+	val ƒ_bit' = subst[(x,t)] ƒ_bit;
+	val bdy'' = mk_(x,mk_€(bdy',ƒ_bit'));
+	val s5 = conv_rule (RAND_C(RAND_C (_varstruct_conv bdy''))) s4;
+	val s6 = conv_rule (RAND_C(CBINDER_C(RAND_C
+		(RAND_C (_varstruct_conv tm3_))))) s5;;
+in
+	(prof "„%down%1_conv";
+	s6)
+end
+handle complaint =>
+list_divert complaint "„%down%1_conv" [
+	("dest_app",27022,[fn () => string_of_term tm]),
+	("dest_",27022,[fn () => string_of_term tm]),
+	("dest_fun",27022,[fn () => string_of_term tm]),
+	("‚_mp_rule",27022,[fn () => string_of_term tm])]
+);
+=TEX
+
 \subsection{Concerning ‡}
 =SML
 val â„_‡_convá : CONV = (fn (tm:TERM) =>
@@ -1414,7 +1499,7 @@ local
 		rewrite_tac[set_clauses]);
 in
 val â_convá : CONV = (fn tm:TERM =>
-let	val (x,S) = dest_bin_op "_conv" 44001 "" tm;
+let	val (x,S) = dest_bin_op "_conv" 27002 "" tm;
 	val (v,pv) = dest_set_comp S;
 	val s1 = inst_type_rule [(type_of x, tva)] aux_thm;
 	val s2 = list_ƒ_elim[x, mk_(v,pv)] s1;
@@ -1440,7 +1525,7 @@ in
 end)
 end
 handle (Fail _) =>
-term_fail "_conv" 44001 [tm])
+term_fail "_conv" 27002 [tm])
 end;
 =TEX
 =SML
@@ -1450,7 +1535,7 @@ local
 in
 fun âenum_set_ruleá (tm : TERM) (tml : TERM list): THM = (
 	if not(tm term_mem tml)
-	then term_fail "enum_set_rule" 27027 [tm]
+	then term_fail "enum_set_rule" 27001 [tm]
 	else 
 (let	val es = mk_enum_set tml
 		handle complaint =>
