@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.18 2002/10/31 10:19:57 rda Exp $
+# $Id: configure.sh,v 1.20 2002/12/20 15:55:44 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -226,6 +226,7 @@ out 'give_up(){'
 out '	echo "install: installation failed; see $1 for more details"'
 out '	exit 1'
 out '}'
+out 'date +"OpenProofPower installation begins [%c] ..."'
 out 'if [ "$1" = "" -o "$1" = "-d" ]'
 out 'then'
 TAB="	"
@@ -244,7 +245,7 @@ out "export PATH"
 out "echo \"Building $ACTTARGETS\""
 out "echo \"See $CWD/build.log for messages\""
 out "if	make -f install.mkf $ACTTARGETS >$CWD/build.log 2>&1"
-out "then	echo Build complete ..."
+out 'then	date +"Build complete [%c] ..."'
 out "else	give_up $CWD/build.log"
 out "fi"
 #
@@ -314,5 +315,5 @@ out "sed $HTMLEDIT  <$CWD/src/index.html.src > $PPTARGETDIR/doc/index.html"
 out "cp $CWD/src/lemma1.gif $CWD/src/newpplogo.gif $PPTARGETDIR/doc"
 TAB=
 out "fi"
-out "echo Installation complete"
+out 'date +"Installation complete [%c]"'
 echo "If you are happy with these settings, now run ./install to install ProofPower."
