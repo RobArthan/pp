@@ -88,7 +88,6 @@ The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD503}.
 =TEX
 \section{MISCELLANEOUS FUNCTIONS}\label{MISCELLANEOUSFUNCTIONS}
 =SML
-val debug : ZTypeInference.Z_INFERRED OPT ref = ref Nil;
 structure ÛCNParserÝ = struct
 =TEX
 We need to include the SLRP driver code at this point:
@@ -154,6 +153,108 @@ fun Ûparse_errorÝ (msg : int) (insert : string) : 'a = (
 	raise SYNTAX_ERROR
 );
 =TEX
+\subsection{Support for Processing Z Fragments}
+=SML
+local
+	open ZLex ZParser ZTypeInference ZTermGenerator ZUserInterfaceSupport;
+
+fun Ûterm_of_z_paraÝ ((ZParaTerm (gpars, tm, _)) : Z_PARA) : TERM = (
+let	val vns = map string_of_ident gpars;
+	val vs = map (fn vn => mk_var(vn, mk_z_power_type(mk_vartype ("'" ^ vn)))) 
+			vns;
+in	list_mk_µ(vs, (do_in_theory (force_get_cache_theory()) term_of_z_tm tm))
+end
+) | term_of_z_para _ = (
+	fail "z_term_recogniser" 49001 []
+);
+=TEX
+=SML
+fun Ûz_para_of_zinferredÝ ((ZInferred p) : Z_INFERRED) : Z_PARA = (
+	p
+) | z_para_of_zinferred (ZTypeError inf) = (
+	print_z_error inf
+);
+=TEX
+=SML
+fun Ûz_term_of_z_tokensÝ (tokens : Z_TOKEN list) : TERM = (
+let
+	val standard = get_flag "standard_z_terms";
+	val parsed = z_parser {is_quot = true} tokens;
+	val side = case parsed of
+		ZParaTerm _ => ()
+		|_ => fail "z_term_recogniser" 49001 [];
+	val type_checked = type_check_z_para
+				{standard = standard, allow_frees = true} parsed;
+	val para = z_para_of_zinferred type_checked;
+in	term_of_z_para para
+end);
+=TEX
+=SML
+fun Ûschema_tokensÝ (ztokens : ZLex.Z_TOKEN list) = (
+	ZTLsqbrack::((rev o tl o rev) ztokens)@[ZTRsqbrack, ZTEos]
+);
+
+fun Ûtuple_tokensÝ (ztokens : ZLex.Z_TOKEN list) = (
+	ZTLbrack::((rev o tl o rev) ztokens)@[ZTRbrack, ZTEos]
+);
+
+fun Ûpi_tokensÝ (ztokens : ZLex.Z_TOKEN list) = (
+	(ZTId "")::ZTLbrack::((rev o tl o rev) ztokens)@[ZTRbrack, ZTEos]
+);
+
+in
+=TEX
+=SML
+fun Ûz_tm_of_z_tokensÝ (tokens : Z_TOKEN list) : TERM = (
+let
+	val standard = get_flag "standard_z_terms";
+	val parsed = z_parser {is_quot = true} tokens;
+	val side = case parsed of
+		ZParaTerm _ => ()
+		|_ => fail "z_term_recogniser" 49001 [];
+	val type_checked = type_check_z_para
+				{standard = standard, allow_frees = true} parsed;
+	val para = z_para_of_zinferred type_checked;
+in	term_of_z_para para
+end);
+=TEX
+=SML
+fun Ûprocess_frameÝ (ztokens : ZLex.Z_TOKEN list) : ID list = (
+let	val zterm = z_term_of_z_tokens (tuple_tokens ztokens);
+	val ids =
+		case dest_z_term zterm of
+		ZTuple ids => map (fst o dest_var) ids
+		|_ => [(fst o dest_var) zterm];
+in
+	ids
+end);
+=TEX
+=SML
+fun Ûprocess_con_declÝ (ztokens : ZLex.Z_TOKEN list) : (string * TERM) = (
+let	val zterm = z_term_of_z_tokens (schema_tokens ztokens);
+	val dec = (
+		case (dest_z_decl o fst o dest_z_h_schema) zterm of
+		[dec] => (case dest_z_dec dec of
+			([c], ty) => (
+				(((fn (n,_,_) => n) o dest_z_lvar) c, ty)
+			) |_ => (
+				parse_error 0 "process_con_decl"
+			)
+		) |_ => parse_error 0 "process_con_decl"
+	) handle _ => parse_error 0 "process_con_decl";
+in
+	dec
+end);
+=TEX
+=SML
+fun Ûprocess_conditionÝ (ztokens : ZLex.Z_TOKEN list) : TERM = (
+	z_term_of_z_tokens (pi_tokens ztokens)
+);
+=TEX
+=SML
+end (* local...in *);
+=TEX
+
 =SML
 end (* of structure *);
 =TEX
@@ -171,106 +272,6 @@ functions would be the same, we use $val$ bindings for the various
 instances.
 
 =SML
-local
-	open ZLex ZParser ZTypeInference  ZTermGenerator ZUserInterfaceSupport;
-
-fun term_of_z_para ((ZParaTerm (gpars, tm, _)) : Z_PARA) : TERM = (
-let	val vns = map string_of_ident gpars;
-	val vs = map (fn vn => mk_var(vn, mk_z_power_type(mk_vartype ("'" ^ vn)))) 
-			vns;
-in	list_mk_µ(vs, (do_in_theory (force_get_cache_theory()) term_of_z_tm tm))
-end
-) | term_of_z_para _ = (
-	fail "z_term_recogniser" 49001 []
-);
-
-fun z_para_of_zinferred ((ZInferred p) : Z_INFERRED) : Z_PARA = (
-	p
-) | z_para_of_zinferred (ZTypeError inf) = (
-	print_z_error inf
-);
-
-fun Ûz_term_of_z_tokensÝ (tokens : Z_TOKEN list) : TERM = (
-let
-	val standard = get_flag "standard_z_terms";
-	val parsed = z_parser {is_quot = true} tokens;
-	val side = case parsed of
-		ZParaTerm _ => ()
-		|_ => fail "z_term_recogniser" 49001 [];
-	val type_checked = type_check_z_para
-				{standard = standard, allow_frees = true} parsed;
-	val side = (debug := Value type_checked);
-	val para = z_para_of_zinferred type_checked;
-in	term_of_z_para para
-end);
-
-fun schema_tokens (ztokens : ZLex.Z_TOKEN list) = (
-	ZTLsqbrack::((rev o tl o rev) ztokens)@[ZTRsqbrack, ZTEos]
-);
-
-fun tuple_tokens (ztokens : ZLex.Z_TOKEN list) = (
-	ZTLbrack::((rev o tl o rev) ztokens)@[ZTRbrack, ZTEos]
-);
-
-in
-
-fun Ûz_tm_of_z_tokensÝ (tokens : Z_TOKEN list) : TERM = (
-let
-	val standard = get_flag "standard_z_terms";
-	val parsed = z_parser {is_quot = true} tokens;
-	val side = case parsed of
-		ZParaTerm _ => ()
-		|_ => fail "z_term_recogniser" 49001 [];
-	val type_checked = type_check_z_para
-				{standard = standard, allow_frees = true} parsed;
-	val side = (debug := Value type_checked);
-	val para = z_para_of_zinferred type_checked;
-in	term_of_z_para para
-end);
-
-fun Ûprocess_frameÝ (ztokens : ZLex.Z_TOKEN list) : ID list = (
-let	val zterm = z_term_of_z_tokens (tuple_tokens ztokens);
-	val ids =
-		case dest_z_term zterm of
-		ZTuple ids => map (fst o dest_var) ids
-		|_ => [(fst o dest_var) zterm];
-in
-	ids
-end);
-
-fun Ûprocess_con_declÝ (ztokens : ZLex.Z_TOKEN list) : (string * TERM) = (
-let	val zterm = z_term_of_z_tokens (schema_tokens ztokens);
-	val dec = (
-		case (dest_z_decl o fst o dest_z_h_schema) zterm of
-		[dec] => (case dest_z_dec dec of
-			([c], ty) => (
-				(((fn (n,_,_) => n) o dest_z_lvar) c, ty)
-			) |_ => (
-				parse_error 0 "process_con_decl"
-			)
-		) |_ => parse_error 0 "process_con_decl"
-	) handle _ => parse_error 0 "process_con_decl";
-in
-	dec
-end);
-
-val Ûprocess_pre_conditionÝ : ZLex.Z_TOKEN list -> TERM = z_term_of_z_tokens;
-
-fun Ûprocess_pre_and_post_conditionsÝ (ztokens : ZLex.Z_TOKEN list) : (TERM OPT * TERM) = (
-let	(*val zterm = z_term_of_z_tokens (tuple_tokens ztokens);
-	val prepost =
-		case dest_z_term zterm of
-		ZTuple [pre, post] => (Value pre, post)
-		|_ => (Nil, zterm)
-	*)
-	val prepost = (Value ñstub®, ñstub®);
-in
-	prepost
-end);
-end (* local...in *);
-=TEX
-
-=SML
 type AGG = {tm : TMARK OPT, named_assocs : (AGG_CHOICE,EXP) NAMED_ASSOC list, others : EXP OPT};
 	
 datatype ÛPPARSEDÝ =
@@ -283,10 +284,12 @@ datatype ÛPPARSEDÝ =
 		|	PPCaseChoices of CASE_CHOICE list
 		|	PPCompilationUnit of (ID list * COMPILATION_UNIT)
 		|	PPComponentClauses of COMPONENT_CLAUSE list
+		|	PPComponents of COMPONENT list
 		|	PPDeclarations of DECLARATION list
 		|	PPElsIf of (EXP * STMT) list
 		|	PPExp of EXP
 		|	PPExps of EXP list
+		|	PPFor of (ID * ID * LOOP_DIRECTION * EXP RANGE OPT)
 		|	PPFormals of PARAMETER_SPECIFICATION list
 		|	PPFunctionSpecification of FUNCTION_SPECIFICATION
 		|	PPId of ID
@@ -300,18 +303,23 @@ datatype ÛPPARSEDÝ =
 		|	PPPrimedIdentifier of (ID * ID)
 		|	PPProcedureSpecification of PROCEDURE_SPECIFICATION
 		|	PPProperBody of PROPER_BODY
+		|	PPRealConstraint of (EXP * EXP RANGE)
 		|	PPReltail of (BIN_OP * EXP)
 		|	PPRenamingDeclaration of RENAMING_DECLARATION
 		|	PPRepresentationClause of REPRESENTATION_CLAUSE
+		|	PPSimpleDeclaration of (ID list * ID)
 		|	PPSRExpression of (EXP * EXP OPT)
 		|	PPStmt of STMT
 		|	PPStatement of STATEMENT
 		|	PPSubprogram of (DECLARATION list * STATEMENT)
 		|	PPSubprogramSpec of SUBPROGRAM_SPECIFICATION
+		|	PPSubtypeDeclaration of (ID OPT * ID * EXP RANGE)
 		|	PPTypeDef of TYPE_DEF
 		|	PPUnaryOp of UNARY_OP
-		|	PPWebClause of WEB_CLAUSE
-		|	PPtbs;
+		|	PPVarDecls of VAR_DECL list
+		|	PPVariants of COMPONENT VARIANT list
+		|	PPVariantPart of COMPONENT VARIANT_PART
+		|	PPWebClause of WEB_CLAUSE | PPtbs;
 =TEX
 =SML
 fun format_rw_input (ip : Lex.INPUT list) = (
@@ -363,61 +371,58 @@ fun red_web_clause1 (Parsed (PPKSlotCUList cul)) = (
 ) | red_web_clause1 _ = stack_error "red_web_clause1";
 
 fun red_web_clause2 (Token ((_, CNText lab), _)) _ (Parsed (PPKSlotCUList cul)) = (
-	PPWebClause (WCReplacedByCompilation {label=lab,comp=cul})
+	PPWebClause (WCReplacedByCompilation {label=LExplicit lab,comp=cul})
 ) | red_web_clause2 _ _ _ = stack_error "red_web_clause2";
 
 fun red_web_clause3 (Token ((_,CNText lab), _)) _ (Parsed (PPDeclarations d)) = (
-	PPWebClause (WCReplacedByPrivatePart {label=lab, private=d})
+	PPWebClause (WCReplacedByPrivatePart {label=LExplicit lab, private=d})
 ) | red_web_clause3 _ _ _ = stack_error "red_web_clause3";
 
 fun red_web_clause4 (Token ((_,CNText lab), _)) _ (Parsed (PPDeclarations d)) = (
-	PPWebClause (WCReplacedByVisiblePart {label=lab, visible=d})
+	PPWebClause (WCReplacedByVisiblePart {label=LExplicit lab, visible=d})
 ) | red_web_clause4 _ _ _ = stack_error "red_web_clause4";
 
 fun red_web_clause5 (Token ((_,CNText lab), _)) _ (Parsed (PPDeclarations d)) = (
-	PPWebClause (WCReplacedByDecl {label=lab, decls=d})
+	PPWebClause (WCReplacedByDecl {label=LExplicit lab, decls=d})
 ) | red_web_clause5 _ _ _ = stack_error "red_web_clause5";
 
 fun red_web_clause6 (Token ((_,CNText lab), _)) _ (Parsed (PPStatement s)) = (
-	PPWebClause (WCReplacedBy {label=lab, statement=s})
+	PPWebClause (WCReplacedBy {label=LExplicit lab, statement=s})
 ) | red_web_clause6 _ _ _ = stack_error "red_web_clause6";
 
 fun red_web_clause7 (Token ((_,CNText lab), _)) _ (Parsed (PPStatement s)) = (
-	PPWebClause (WCRefinedBy {label=lab, statement=s})
+	PPWebClause (WCRefinedBy {label=LExplicit lab, statement=s})
 ) | red_web_clause7 _ _ _ = stack_error "red_web_clause7";
 
 fun red_web_clause8 _ (Parsed (PPStatement s)) = (
-	PPWebClause (WCRefinedBy {label="*", statement=s})
+	PPWebClause (WCRefinedBy {label=LImplicit, statement=s})
 ) | red_web_clause8 _ _ = stack_error "red_web_clause8";
 
 fun red_web_clause9 (Token ((_,CNText lab), _)) _ (Parsed (PPStatement s)) = (
-	PPWebClause (WCReplacedBy {label=lab, statement=s})
+	PPWebClause (WCReplacedBy {label=LExplicit lab, statement=s})
 ) | red_web_clause9 _ _ _ = stack_error "red_web_clause9";
 
 fun red_web_clause10  _ (Parsed (PPStatement s)) = (
-	PPWebClause (WCReplacedBy {label="*", statement=s})
+	PPWebClause (WCReplacedBy {label=LImplicit, statement=s})
 ) | red_web_clause10 _ _ = stack_error "red_web_clause10";
 =TEX
 =SML
 val red_basic_declaration1 = red_accept;
 val red_basic_declaration2 = red_accept;
 val red_basic_declaration3 = red_accept;
-val red_basic_declaration4 = red_accept;
+fun red_basic_declaration4 (Parsed(PPSimpleDeclaration sd)) = (
+	PPtbs
+) | red_basic_declaration4 _ = stack_error "red_basic_declaration4";
 val red_object_declaration1 = red_accept;
 val red_object_declaration2 = red_accept;
 =TEX
 =SML
 fun red_constant_declaration (Parsed(PPIds ids)) _ _ (Parsed(PPExp n)) _ (Parsed(PPExp e)) _ = (
-let	val tm = name_to_tmark n;
-	fun aux (id::rest) = (
-		(BDConstDecl{const=id, tm=tm, expr=e})::aux rest
-	) | aux _ = [];
-in
-	PPBasicDecls(aux ids)
-end
+	PPBasicDecls[BDConstDecl{consts=ids, tm=name_to_tmark n, expr=e}]
 ) | red_constant_declaration _ _ _ _ _ _ _ = stack_error "red_constant_declaration";
 
-fun red_variable_declaration (Parsed(PPIds ids)) _ x3 x4 = (PPtbs
+fun red_variable_declaration (Parsed(PPIds ids)) _ (Parsed(PPExp n)) _ = (
+	PPBasicDecls[BDVarDecl{vars=ids, tmark=name_to_tmark n}]
 ) | red_variable_declaration _ _ _ _ = stack_error "red_variable_declaration";
 
 fun red_identifier_list1 (Token ((_,CNText id), _)) = (
@@ -433,19 +438,34 @@ val red_type_declaration1 = red_accept;
 val red_type_declaration2 = red_accept;
 =TEX
 =SML
-fun red_full_type_declaration1 x1 x2 x3 x4 x5 x6 = PPtbs;
-fun red_full_type_declaration2 x1 x2 x3 x4 x5 = PPtbs;
+fun red_full_type_declaration1 _ (Token ((_,CNText id), _)) (Parsed(PPSimpleDeclaration sd)) _ (Parsed(PPTypeDef td)) _ = (
+	PPtbs
+) | red_full_type_declaration1 _ _ _ _ _ _ = stack_error "red_full_type_declaration1";
+
+fun red_full_type_declaration2 _ (Token ((_,CNText id), _)) _ (Parsed(PPTypeDef td)) _ = (
+PPtbs
+) | red_full_type_declaration2 _ _ _ _ _ = stack_error "red_full_type_declaration2";
+
 =TEX
 =SML
 val red_type_definition1 = red_accept;
 val red_type_definition2 = red_accept;
-val red_type_definition3 = red_accept;
+val red_type_definition3 = red_accept;(**)
 val red_type_definition4 = red_accept;
 val red_type_definition5 = red_accept;
 =TEX
 =SML
-fun red_subtype_declaration x1 x2 x3 x4 x5 = PPtbs;
-fun red_subtype_indication x1 x2 = PPtbs;
+fun red_subtype_declaration _ (Token ((_,CNText id), _)) _ (Parsed(PPSubtypeDeclaration (Nil,n,r))) _ = (
+	PPSubtypeDeclaration(Value id, n, r)
+) | red_subtype_declaration _ _ _ _ _ = stack_error "red_subtype_declaration";
+
+fun red_subtype_indication (Parsed(PPExp n)) (Parsed(PPSRExpression sr)) = (
+	case sr_expression_to_range_opt {no_r_attr=false} sr of
+	Value r =>
+		PPSubtypeDeclaration(Nil, name_to_tmark n, r)
+	|Nil =>
+		parse_error 0 "A range is expected"
+) | red_subtype_indication _ _ = stack_error "red_subtype_indication";
 =TEX
 =SML
 val red_constraint1 = red_accept;
@@ -462,28 +482,55 @@ fun red_enumeration_type_definition _ (Parsed(PPIds ids)) _ = (
 ) | red_enumeration_type_definition _ _ _ = stack_error "red_enumeration_type_definition";
 =TEX
 =SML
-val red_integer_type_definition = red_accept;
-val red_real_type_definition1 = red_accept;
-val red_real_type_definition2 = red_accept;
-val red_floating_point_constraint1 = red_accept;
+fun red_integer_type_definition (Parsed(PPSRExpression sr)) = (
+	case sr_expression_to_range_opt {no_r_attr=false} sr of
+	Value r =>
+		PPTypeDef(TDIntTypeDef r)
+	|Nil =>
+		parse_error 0 "A range is expected"
+) | red_integer_type_definition _ = stack_error "red_integer_type_definition";
+
+val red_real_type_definition1 = red_accept; (* PPRealConstraint *)
+val red_real_type_definition2 = red_accept; (* PPRealConstraint *)
 =TEX
+SPARK manual 3.5.7:
 =SML
-fun red_floating_point_constraint2 x1 x2 = PPtbs;
-fun red_floating_accuracy_definition x1 x2 = PPtbs;
+val red_floating_point_constraint1 = red_accept;
+fun red_floating_point_constraint2 (Parsed(PPExp e)) (Parsed(PPSRExpression sr)) = (
+	case sr_expression_to_range_opt {no_r_attr=false} sr of
+	Value r =>
+		PPRealConstraint(e, r)
+	|Nil =>
+		parse_error 0 "A range is expected"
+) | red_floating_point_constraint2 _ _ = stack_error "red_floating_point_constraint2";
+
+
+
+fun red_floating_accuracy_definition _ (Parsed p) = (p
+) | red_floating_accuracy_definition _ _ = stack_error "red_floating_accuracy_definition";
 =TEX
 =SML
 val red_fixed_point_constraint1 = red_accept;
-=TEX
-=SML
-fun red_fixed_point_constraint2 x1 x2 = PPtbs;
-fun red_fixed_accuracy_definition x1 x2 = PPtbs;
+
+fun red_fixed_point_constraint2 (Parsed(PPExp e)) (Parsed(PPSRExpression sr)) = (
+	case sr_expression_to_range_opt {no_r_attr=false} sr of
+	Value r =>
+		PPRealConstraint(e, r)
+	|Nil =>
+		parse_error 0 "A range is expected"
+) | red_fixed_point_constraint2 _ _ = stack_error "red_fixed_point_constraint2";
+
+fun red_fixed_accuracy_definition _ (Parsed p) = (p
+) | red_fixed_accuracy_definition _ _ = stack_error "red_fixed_accuracy_definition";
 =TEX
 =SML
 val red_array_type_definition1 = red_accept;
 val red_array_type_definition2 = red_accept;
 =TEX
 =SML
-fun red_unconstrained_array_definition x1 x2 x3 x4 x5 x6 = PPtbs;
+fun red_unconstrained_array_definition _ _ (Parsed(PPExps nl)) _ _ (Parsed(PPExp n)) = (
+	PPTypeDef(TDUnconArrayDef{index="tbs",comp="tbs"})
+) | red_unconstrained_array_definition _ _ _ _ _ _ = stack_error "red_unconstrained_array_definition";
 
 fun red_constrained_array_definition _ (Parsed(PPExps nl)) _ (Parsed(PPExp n)) = (
 	PPTypeDef(TDConArrayDef{index="tbs", comp="tbs"})
@@ -514,6 +561,7 @@ fun red_name_list2 (Parsed(PPExp n)) _ (Parsed(PPExps nl)) = (
 	PPExps (n::nl)
 ) | red_name_list2 _ _ _ = stack_error "red_name_list2";
 =TEX
+TDS Information lost in the following...
 =SML
 fun red_discrete_range1 (Parsed (PPExp e)) (Parsed p) = (
 let	val side = name_to_tmark e;
@@ -526,25 +574,54 @@ fun red_discrete_range2 (Parsed p) = (
 	p
 ) | red_discrete_range2 _ = stack_error "red_discrete_range2";
 
-fun red_record_type_definition x1 x2 x3 x4 = PPtbs;
+fun red_record_type_definition _ (Parsed(PPComponents cs)) _ _ = (
+	PPTypeDef(TDRecordTypeDef{comps=cs})
+) | red_record_type_definition _ _ _ _ = stack_error "red_record_type_definition";
 =TEX
 =SML
 val red_component_list1 = red_accept;
-val red_component_list2 = red_accept;
+
+fun red_component_list2 (Parsed(PPVariantPart vp)) = (
+	PPComponents[CVariantPart vp]
+) | red_component_list2 _ = stack_error "red_component_list2";
 =TEX
 =SML
-fun red_component_list3 x1 x2 = PPtbs;
+fun red_component_list3 (Parsed(PPVarDecls vds)) (Parsed(PPVariantPart vp)) = (
+	PPComponents[CDeclarationVariant{decls=vds, variant=vp}]
+) | red_component_list3 _ _ = stack_error "red_component_list3";
+
 fun red_component_list4 (Token ((LCNull,_), _)) = (
-	PPStmt STNull
+	PPComponents [CNone]
 ) | red_component_list4 _ = stack_error "red_component_list4";
-fun red_component_declaration_list1 x1 = PPtbs;
-fun red_component_declaration_list2 x1 x2 = PPtbs;
-fun red_component_declaration x1 x2 x3 x4 = PPtbs;
-fun red_discriminant_part x1 x2 x3 = PPtbs;
-fun red_variant_part x1 x2 x3 x4 x5 x6 x7 = PPtbs;
-fun red_variant_list1 x1 = PPtbs;
-fun red_variant_list2 x1 x2 = PPtbs;
-fun red_variant x1 x2 x3 x4 = PPtbs;
+
+val red_component_declaration_list1 = red_accept;
+
+fun red_component_declaration_list2 (Parsed(PPVarDecls[v])) (Parsed(PPVarDecls vs)) = (
+	PPVarDecls (v::vs)
+) | red_component_declaration_list2 _ _ = stack_error "red_component_declaration_list2";
+
+fun red_component_declaration (Parsed(PPIds ids)) _ (Parsed(PPExp n)) _ = (
+	PPVarDecls [{vars=ids, tmark=name_to_tmark n}]
+) | red_component_declaration _ _ _ _ = stack_error "red_component_declaration";
+
+fun red_discriminant_part (Token ((_,CNText id), _)) _ (Parsed(PPExp n)) = (
+	PPSimpleDeclaration([id], name_to_tmark n)
+) | red_discriminant_part _ _ _ = stack_error "red_discriminant_part";
+
+fun red_variant_part _ (Token ((_,CNText id), _)) _ (Parsed(PPVariants v)) _ _ _ = (
+	PPVariantPart{id=id, variants=v}
+) | red_variant_part _ _ _ _ _ _ _ = stack_error "red_variant_part";
+
+val red_variant_list1 = red_accept;
+
+fun red_variant_list2 (Parsed(PPVariants [v])) (Parsed(PPVariants vs)) = (
+	PPVariants (v::vs)
+) | red_variant_list2 _ _ = stack_error "red_variant_list2";
+
+fun red_variant _ (Parsed(PPIds ids)) _ (Parsed(PPComponents cl)) = (
+	PPVariants [{ids=ids, comp=cl}]
+) | red_variant _ _ _ _ = stack_error "red_variant";
+
 fun red_variant_choice_list1 (Token ((_,CNText id), _)) = (
 	PPIds [id]
 ) | red_variant_choice_list1 _ = stack_error "red_variant_choice_list1";
@@ -573,8 +650,14 @@ val red_dec4 = red_accept;
 val red_dec5 = red_accept;
 =TEX
 =SML
-fun red_basic_declarative_item1 _ = PPDeclarations [];
-fun red_basic_declarative_item2 _ = PPDeclarations [];
+fun red_basic_declarative_item1 (Parsed(PPBasicDecls bds)) = (
+	PPDeclarations(map (fn x => DBasicDecl x) bds)
+) | red_basic_declarative_item1 _ = stack_error "red_basic_declarative_item1";
+
+fun red_basic_declarative_item2 (Parsed(PPRepresentationClause rc)) = (
+	PPDeclarations [DRepresentationClause rc]
+) | red_basic_declarative_item2 _ = stack_error "red_basic_declarative_item2";
+
 val red_body1 = red_accept;
 val red_body2 = red_accept;
 val red_proper_body1 = red_accept;
@@ -800,8 +883,8 @@ fun red_primary3 (Token ((LCStringLiteral,CNText n), _)) = (
 
 val red_primary4 = red_accept;
 val red_primary5 = red_accept;
-fun red_primary6 _ (Parsed p) _ = (
-	p
+fun red_primary6 _ (Parsed (PPExp e)) _ = (
+	PPExp (EBracketed e)
 ) | red_primary6 _ _ _ = stack_error "red_primary6";
 
 val red_primary7 = red_accept;
@@ -873,38 +956,28 @@ val red_statement5 = red_accept;
 
 =SML
 fun red_specification_statement1 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ = (
-let	val (pre, post) =
-		case process_pre_and_post_conditions z2 of
-		(Value pre', post') => (pre', post')
-		|(Nil, post') => (ñTRUE®, post');
-in
-	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=pre,post=post})
-end
+	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=ñtrue®,post=process_condition z2, label=LImplicit})
 ) | red_specification_statement1 _ _ _ _ _ = stack_error "red_specification_statement1";
 
-fun red_specification_statement2 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ = (
-let	val (pre, post) = (process_pre_condition z2, ñTRUE®);
-in
-	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=pre,post=post})
-end
-) | red_specification_statement2 _ _ _ _ _ = stack_error "red_specification_statement2";
+fun red_specification_statement2 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ (Token ((LCZ,CNZ z3), _)) _ = (
+	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=process_condition z2 ,post=process_condition z3, label=LImplicit})
+) | red_specification_statement2 _ _ _ _ _ _ _ = stack_error "red_specification_statement2";
 
-fun red_specification_statement3 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ (Parsed(PPId lab))= (
-let	val (pre, post) =
-		case process_pre_and_post_conditions z2 of
-		(Value pre', post') => (pre', post')
-		|(Nil, post') => (ñTRUE®, post');
-in
-	PPStmt(STSpecNoIvars{w=process_frame z1,w0=["<Stub>"],pre=pre,post=post})
-end
-) | red_specification_statement3 _ _ _ _ _ _ = stack_error "red_specification_statement3";
+fun red_specification_statement3 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ = (
+	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=process_condition z2, post=ñtrue®, label=LImplicit})
+) | red_specification_statement3 _ _ _ _ _ = stack_error "red_specification_statement3";
 
-fun red_specification_statement4 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ (Parsed(PPId lab))= (
-let	val (pre, post) = (process_pre_condition z2, ñTRUE®);
-in
-	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=pre,post=post})
-end
+fun red_specification_statement4 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ (Parsed(PPId lab)) = (
+	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=ñtrue®,post=process_condition z2, label=LExplicit lab})
 ) | red_specification_statement4 _ _ _ _ _ _ = stack_error "red_specification_statement4";
+
+fun red_specification_statement5 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ (Token ((LCZ,CNZ z3), _)) _ (Parsed(PPId lab)) = (
+	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=process_condition z2 ,post=process_condition z3, label=LExplicit lab})
+) | red_specification_statement5 _ _ _ _ _ _ _ _ = stack_error "red_specification_statement5";
+
+fun red_specification_statement6 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ (Parsed(PPId lab))= (
+	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=process_condition z2,post=ñtrue®, label=LExplicit lab})
+) | red_specification_statement6 _ _ _ _ _ _ = stack_error "red_specification_statement6";
 =TEX
 =SML
 fun red_label _ (Token ((LCNumericLiteral,CNText n), _)) _ = (
@@ -912,11 +985,11 @@ fun red_label _ (Token ((LCNumericLiteral,CNText n), _)) _ = (
 ) | red_label _ _ _ = stack_error "red_label";
 
 fun red_k_slot1 (Token ((LCKSlot,CNKSlot lx), _)) = (
-	PPKSlot{content=format_rw_input lx, label="*"}
+	PPKSlot{content=format_rw_input lx, label=LImplicit}
 ) | red_k_slot1 _ = stack_error "red_k_slot1";
 
 fun red_k_slot2 (Token ((LCKSlot,CNKSlot lx), _)) (Parsed(PPId lab)) = (
-	PPKSlot{content=format_rw_input lx, label=lab}
+	PPKSlot{content=format_rw_input lx, label=LExplicit lab}
 ) | red_k_slot2 _ _ = stack_error "red_k_slot2";
 =TEX
 =SML
@@ -962,9 +1035,7 @@ fun red_else_part2 _ (Parsed(PPStmt s)) = (
 	PPStmt s
 ) | red_else_part2 _ _ = stack_error "red_else_part2";
 
-fun red_condition (Parsed (PPExp exp)) = (
-	PPExp (EId "<exp-stub>")
-) | red_condition _ = stack_error "red_condition";
+val red_condition = red_accept;
 =TEX
 =SML
 fun red_case_statement _ (Parsed(PPExp e)) _ (Parsed(PPCaseAlternatives cs)) others _ _ _ = (
@@ -1000,41 +1071,85 @@ fun red_others_part2 _ _ (Parsed(PPStmt s)) = (
 ) | red_others_part2 _ _ _ = stack_error "red_others_part2";
 =TEX
 SPARK manual 5.5:
-TBS The loop construct loses information. This needs to be remedied in the AS.
 =SML
-fun red_loop_statement _ x2 (Parsed(PPExps t)) _ (Parsed(PPStmt s)) _ _ _ _ = (
-	PPtbs
+fun red_loop_statement (Parsed(PPIds ids)) (Parsed p) (Parsed(PPExps es)) _ (Parsed(PPStatement st)) _ _ _ _ = (
+let	val name = case ids of
+			[id] => Value id
+			|_ => Nil;
+	val till = case es of
+			[EAuxiliaryExp tm] => Value tm
+			|_ => Nil;
+	val s = (case st of
+			SStmt(STSpecNoIvars s) => s
+			| _ => parse_error 0
+				"A loop can only contain a specification statement"
+		);
+in
+	case p of
+	PPExp c => (
+			PPStmt(STWhile{name=name, g=c, loop={t=till, spec=s}})
+	) |PPFor(id, tm, dir, opr) => (
+		case opr of
+		Value {lo=lo,hi=hi} => (
+			PPStmt(STForStatic{name=name, tmark=tm, i=id, lo=lo, hi=hi, dir=dir,loop={t=till, spec=s}})
+		) |Nil => (
+			PPStmt(STForTmark{name=name,i=id, tmark=tm, dir=dir, loop={t=till, spec=s}})
+		)
+	) | PPId "__no_scheme" => (
+		case name of
+		Value n => (
+			PPStmt(STNamedLoop{name=n,t=till, spec=s})
+		) |Nil => (
+			PPStmt(STLoop{t=till, spec=s})
+		)
+	) | _ => stack_error"red_loop_statement_a"
+end
 ) | red_loop_statement _ _ _ _ _ _ _ _ _ = stack_error "red_loop_statement";
 
-val red_name_opt11 = PPExps[];
+val red_name_opt11 = PPIds[];
 
 fun red_name_opt12 (Token ((_,CNText id), _)) _ = (
-	PPExp(EId id)
+	PPIds [id]
 ) | red_name_opt12 _ _ = stack_error "red_name_opt12";
 
 val red_name_opt21 = PPExps [];
+
 fun red_name_opt22 (Token ((_,CNText id), _)) = (
 	PPExps [EId id]
 ) | red_name_opt22 _ = stack_error "red_name_opt22";
 
-val red_iteration_scheme_opt1 = PPtbs;
-fun red_iteration_scheme_opt2 x1 = PPtbs;
-fun red_iteration_scheme1 x1 x2 = PPtbs;
-fun red_iteration_scheme2 x1 x2 = PPtbs;
-fun red_loop_parameter_specification1 (Token ((LCZ,CNZ z), _)) _ (Parsed(PPExp n)) = (
-	PPtbs
+val red_iteration_scheme_opt1 = PPId "__no_scheme";
+
+val red_iteration_scheme_opt2 = red_accept;
+
+fun red_iteration_scheme1 _ (Parsed p) = (p
+) | red_iteration_scheme1 _ _ = stack_error "red_iteration_scheme1";
+
+fun red_iteration_scheme2 _ (Parsed p) = (p
+) | red_iteration_scheme2 _ _ = stack_error "red_iteration_scheme2";
+
+fun red_loop_parameter_specification1 (Token ((_,CNText id), _)) _ (Parsed(PPExp n)) = (
+	PPFor(id,name_to_tmark n, LDForwards, Nil)
 ) | red_loop_parameter_specification1 _ _ _ = stack_error "red_loop_parameter_specification1";
 
-fun red_loop_parameter_specification2 (Token ((LCZ,CNZ z), _)) _ _ (Parsed(PPExp n)) = (
-	PPtbs
+fun red_loop_parameter_specification2 (Token ((_,CNText id), _)) _ _ (Parsed(PPExp n)) = (
+	PPFor(id,name_to_tmark n, LDReverse, Nil)
 ) | red_loop_parameter_specification2 _ _ _ _ = stack_error "red_loop_parameter_specification2";
 
-fun red_loop_parameter_specification3 (Token ((LCZ,CNZ z), _)) _ (Parsed(PPExp n)) _ (Parsed(PPSRExpression (e, v))) = (
-	PPtbs
+fun red_loop_parameter_specification3 (Token ((_,CNText id), _)) _ (Parsed(PPExp n)) _ (Parsed(PPSRExpression sr)) = (
+	case sr_expression_to_range_opt {no_r_attr=false} sr of
+	Value r =>
+		PPFor(id, name_to_tmark n, LDForwards, Value r)
+	|Nil =>
+		parse_error 0 "A Range is expected"
 ) | red_loop_parameter_specification3 _ _ _ _ _ = stack_error "red_loop_parameter_specification3";
 
-fun red_loop_parameter_specification4 (Token ((LCZ,CNZ z), _)) _ _ (Parsed(PPExp n)) _ (Parsed(PPSRExpression (e, v))) = (
-	PPtbs
+fun red_loop_parameter_specification4 (Token ((_,CNText id), _)) _ _ (Parsed(PPExp n)) _ (Parsed(PPSRExpression sr)) = (
+	case sr_expression_to_range_opt {no_r_attr=false} sr of
+	Value r =>
+		PPFor(id, name_to_tmark n, LDReverse, Value r)
+	|Nil =>
+		parse_error 0 "A Range is expected"
 ) | red_loop_parameter_specification4 _ _ _ _ _ _ = stack_error "red_loop_parameter_specification4";
 
 val red_till_opt1 = PPExps [];
@@ -1237,14 +1352,16 @@ val red_package_initialization = red_accept;
 SPARK manual 7.4:
 =SML
 fun red_private_type_declaration1 _ (Token ((_,CNText id), _)) _ _ _ = (
-	PPtbs
+	PPTypeDef(TDPrivateTypeDef{id=id,limited=false})
 ) | red_private_type_declaration1 _ _ _ _ _ = stack_error "red_private_type_declaration1";
 
 fun red_private_type_declaration2 _ (Token ((_,CNText id), _)) _ _ _ _ = (
-	PPtbs
+	PPTypeDef(TDPrivateTypeDef{id=id,limited=true})
 ) | red_private_type_declaration2 _ _ _ _ _ _ = stack_error "red_private_type_declaration2";
 
-fun red_deferred_constant_declaration x1 x2 x3 x4 x5 = PPtbs;
+fun red_deferred_constant_declaration (Parsed(PPIds ids)) _ _ (Parsed(PPExp n)) _ = (
+	PPSimpleDeclaration (ids, name_to_tmark n)
+) | red_deferred_constant_declaration _ _ _ _ _ = stack_error "red_deferred_constant_declaration";
 
 fun red_renaming_declaration1 _ (Parsed (PPId opsym1)) (Parsed(PPFormals f)) _ (Parsed(PPExp n)) _ (Token ((_,CNText id), _)) _ (Parsed (PPId opsym2)) _ = (
 	PPRenamingDeclaration(RDFunction{opsym1=opsym1,formal_part=f,tmark=name_to_tmark n,name=id,opsym2=opsym2})
