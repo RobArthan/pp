@@ -7,15 +7,15 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 *******************************************************************************/
-/* $Id: imp096.doc,v 1.13 2003/03/17 17:03:12 robarthan Exp $
+/* $Id: imp096.doc,v 1.14 2003/06/11 15:04:28 rda Exp $
 
 =TEX
-% $Id: imp096.doc,v 1.13 2003/03/17 17:03:12 robarthan Exp $
+% $Id: imp096.doc,v 1.14 2003/06/11 15:04:28 rda Exp $
 \documentstyle[11pt,TQ,hol1]{article}
 
 \TPPtitle{Sieve and Findfile Utilities}
 \TPPref{DS/FMU/IED/IMP096}
-\def\SCCSissue{$Revision: 1.13 $
+\def\SCCSissue{$Revision: 1.14 $
 }
 
 =IGNORE
@@ -442,6 +442,7 @@ char *copricl = "@(#) 94/04/06 1.3 imp096.doc Copyright (C) ICL 1991, 1992";
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <regex.h>
 
 #define bool short
 #define true 1
@@ -753,12 +754,12 @@ wanted the memory
 \HOLindexEntry{malloc_and_check}
 =SIEVE_PROG
 */
-char *
+void *
 malloc_and_check(unsigned size, int err)
 {
-	char * area;
+	void * area;
 
-	area = (char *)malloc(size);
+	area = malloc(size);
 
 	if(area == NULL) {
 		error1("cannot allocate work area");
@@ -945,6 +946,7 @@ struct keyword_information{
 #define KW_WHITE 8
 	char *name;		/* The keyword */
 	char *macro;		/* Equivalent macro, or NULL */
+	regex_t *tex_arg;		/* R.E. defining the TeX argument of this keyword, if non-null */
 };
 /*
 =TEX
@@ -984,9 +986,10 @@ struct kw_information {
 =TEX
 
 \HOLindexEntry{add_new_keyword}
-{\tt add_new_keyword} : Add details of a new keyword.  The strings
-passed will not be overwritten so there is no need to allocate new
-space for them.
+{\tt add_new_keyword} : Add details of a new keyword. 
+It is caller's responsibility to have allocated space that will
+not be overwritten later for the string and regular expression
+arguments.
 
 =SIEVE_PROG
 */
@@ -995,7 +998,8 @@ add_new_keyword(
 	char *name,
 	int code,
 	int kind,
-	char *macro)
+	char *macro,
+	regex_t * tex_arg)
 {
 	struct keyword_information *ki;
 	int len = strlen(name);
@@ -1031,6 +1035,7 @@ add_new_keyword(
 	ki->orig_kind = orig_kind;
 	ki->act_kind = kind;
 	ki->macro = macro;
+	ki-> tex_arg = tex_arg;
 
 	if(kwi.num_keywords>1 && strcmp(kwi.keyword[kwi.num_keywords-1].name,
 				name) < 0) {
@@ -2424,7 +2429,7 @@ initialize(void)
 	for(i=0; i<256; i++)
 		kwi.char_code[i] = NULL;
 
-	add_new_keyword("%%", -1, KW_SIMPLE, "\\%");
+	add_new_keyword("%%", -1, KW_SIMPLE, "\\%", NULL);
 
 	SET_DIRECTIVE_CHAR('%');
 	SET_DIRECTIVE_CHAR('=');
@@ -2716,7 +2721,7 @@ overwrite(int tab_ent, int using_view, char *filt)
 			tab->cfa[0].opt_flags = 0;
 		} else {
 			tab->has_copy_action = 1;
-			text = malloc_and_check(len_filt+1, 9801);
+			text = malloc_and_check(len_filt+1, 101);
 			tab->is_one_liner = 1;
 			tab->num_actions = 1;
 			tab->cfa[0].action_type = FILTER_ACT;
@@ -2771,7 +2776,7 @@ insert(char *cat, int using_view, char *filt)
 			first_char);
 	}
 
-	text = malloc_and_check(len_cat+1, 9802);
+	text = malloc_and_check(len_cat+1, 102);
 	(void)strcpy(text, cat);
 	table[max_cat].cat = text;
 	table[max_cat].min_args = -1;
@@ -3049,7 +3054,7 @@ decode_action_line(
 			case ECHO_ACT :
 			case FILTER_ACT:
 				if(len_filt != 0) {
-					text = malloc_and_check(len_filt+1, 9803);
+					text = malloc_and_check(len_filt+1, 103);
 					(void)strcpy(text, filt);
 					tab->cfa[act_num].action_str = text;
 					if(verify_macro_calls(tab->max_args, filt))
@@ -3106,6 +3111,54 @@ get_char_code(char *line, int *value)
 }
 /*
 =TEX
+A keyword may be defined to have a {\TeX} argument, given as a regular expression
+following a {\#} sign not escaped by a backslash in the macro part of the keyword file line.
+The  following function checks for this regular expression, replaces the {\#} sign by a null
+terminator and compiles the regular expression (into a malloced buffer). The return
+value is a pointer to the compiled regular expression or null, if there is no {\TeX} argument.
+
+\HOLindexEntry{get_tex_arg}
+=SIEVE_PROG
+*/
+regex_t
+*get_tex_arg(char *macro)
+{
+	char *p = macro;
+	char escaped = false;
+	regex_t *result = NULL;
+	int error_code;
+	int cflags = REG_EXTENDED;
+	while(*p) {
+		if(escaped) {
+			escaped = false;
+		} else if (*p == '\\') {
+			escaped = true;
+		} else if (*p == '#') {
+			break;
+		}
+		p += 1;
+	}
+	if(*p == '#') {
+		*p = '\0';
+		p += 1;
+		result = malloc_and_check(sizeof(*result), 108);
+		error_code = regcomp(result, p, cflags);
+		if(error_code != 0) {
+			char *errbuf;
+			int errbufsize = regerror(error_code, result, 0, 0);
+			errbuf = malloc_and_check(errbufsize, 109);
+			(void) regerror(error_code, result, errbuf, errbufsize);
+			grumble(" error in regular expression: %s", errbuf,
+				&keyword_F, true);
+			free(errbuf);
+			free(result);
+			result = 0;
+		}
+	}
+	return result;		
+}
+/*
+=TEX
 
 \HOLindexEntry{read_keyword_file}
 {\tt read_keyword_file} : Read the body of the keyword file.
@@ -3141,6 +3194,7 @@ read_keyword_file(char *name)
 		char * code_kw_str;
 		int code;
 		char * macro;
+		regex_t * tex_arg;
 
 		read_steering_line(line, &keyword_F);
 
@@ -3217,8 +3271,9 @@ read_keyword_file(char *name)
 			}
 
 			add_new_keyword(strdup(def_kw), -1, KW_SAMEAS_UNKNOWN,
-				strdup(code_kw_str));
+				strdup(code_kw_str), NULL);
 		} else {
+
 			if(!get_char_code(code_kw_str, &code)) {
 				grumble1("unreadable or out of range char code",
 					&keyword_F, true);
@@ -3236,10 +3291,13 @@ read_keyword_file(char *name)
 				continue;					/* CONTINUE */
 			}
 
+			tex_arg = get_tex_arg(macro);
+
 			add_new_keyword(strdup(def_kw), code, kind,
 				macro != NULL && macro[0] != '\0'
 			?	strdup(macro)
-			:	(char*)NULL);
+			:	(char*)NULL,
+				tex_arg);
 		}
 	}
 
@@ -3270,7 +3328,7 @@ open_output(dir_info *di, cat_filt_action *cf)
 	int file_name_length = 0;
 
 	if(file_name_area == NULL) {
-		file_name_area = malloc_and_check(MACRO_EXP_SIZE+1, 9804);
+		file_name_area = malloc_and_check(MACRO_EXP_SIZE+1, 104);
 	}
 
 	di->cur_fp = stdout;
@@ -3371,7 +3429,7 @@ do_non_copy_actions(dir_info *di)
 	char *op_text = "";
 
 	if(macro_exp_area == NULL) {
-		macro_exp_area = malloc_and_check(MACRO_EXP_SIZE+1, 9804);
+		macro_exp_area = malloc_and_check(MACRO_EXP_SIZE+1, 105);
 	}
 
 	while(di->cur_act_index < tab->num_actions) {
@@ -3609,7 +3667,6 @@ after the copied characters if the length is exceeded.  Return the
 number of characters copied.  This differs from the C library routines
 {\tt strcpy} and {\tt strncpy} which return the address of the output
 string.
-
 =SIEVE_PROG
 */
 int
@@ -3734,9 +3791,12 @@ overflowing the line length macro {\tt MAIN_LEEWAY} allows a little
 leeway for adding a few single characters.  The value allows at least
 the number of characters that the conversions below may create.
 
+\HOLindexEntry{MAX_TEX_ARG_NESTING}
+{\tt MAX_TEX_ARG_NESTING} defines the length of the stack containing {\
 =SIEVE_PROG
 */
 #define MAIN_LEEWAY (MAX_KW_LEN+5)
+#define MAX_TEX_ARG_NESTING (16)
 
 void
 main_convert(
@@ -3760,6 +3820,8 @@ main_convert(
 	int opt_kw_warn = flags & OPT_WARN_KW;
 	int opt_flag_kw = opt_do_kw && opt_do_latex && (flags & OPT_FLAG_KW);
 	int opt_do_white = flags & OPT_WHITE;
+	int tex_arg_stack[MAX_TEX_ARG_NESTING];
+	int tex_arg_stack_head = -1;
 
 	int spin_count = 5;
 
@@ -3813,10 +3875,16 @@ main_convert(
 
 	while((ch = (in_line[inp] & 0xFF)) != '\0' && outp < lenout_line) {
 		int top_inp = inp;  /* To test that the code below increments "inp" */
+		regex_t *tex_arg = NULL;
 
 		if(debug & D_MAIN_CONVERT_CH)
 			(void)printf("main_convert: inp=%d  ch=%d:%c  outp=%d\n",
 				inp, ch, ch, outp);
+
+		while(tex_arg_stack_head >= 0 && inp == tex_arg_stack[tex_arg_stack_head]) {
+			out_line[outp++] = '}';
+			tex_arg_stack_head -= 1;
+		}
 
 		switch(ch) {
 		case '%': if(opt_do_kw) {
@@ -3847,10 +3915,16 @@ main_convert(
 						/* Convert it to LaTeX form */
 						outp += copy_string(curkw->macro,
 							&out_line[outp], lenout_line-outp);
-					} else if((opt_do_latex || opt_do_char) && curkw->ech != -1) {
+						tex_arg = curkw->tex_arg;
+					} else if(opt_do_latex && curkw->ech != -1) {
 						/* Convert to LaTeX form */
 						outp += copy_PrNN(&out_line[outp],
 							curkw->ech);
+					} else if(opt_do_char && curkw->ech != -1) {
+						/* Convert to LaTeX form */
+						outp += copy_PrNN(&out_line[outp],
+							curkw->ech);
+						tex_arg = curkw->tex_arg;
 					} else if(opt_conv_kw && curkw->ech != -1) {
 						/* Replace with the extended character */
 						out_line[outp++] = curkw->ech;
@@ -3971,6 +4045,9 @@ main_convert(
 					} else {
 						outp += copy_PrNN(&out_line[outp], ch);
 					}
+					if(curkw != NULL) {
+						tex_arg = curkw->tex_arg;
+					}
 				} else if (opt_do_conv_ext) {
 					if(curkw != NULL && curkw->name != NULL) {
 						/* Convert it to LaTeX form */
@@ -4011,6 +4088,22 @@ main_convert(
 				EXIT(35);					/* EXIT */
 			}
 		}
+
+		if(tex_arg != NULL && tex_arg_stack_head < MAX_TEX_ARG_NESTING) {
+			int eflags = REG_NOTBOL;
+			int error_code;
+			regmatch_t pmatch;
+			error_code = regexec(tex_arg, &in_line[inp], 1, &pmatch, eflags);
+			out_line[outp++] = '{';
+			tex_arg_stack_head += 1;
+			if(error_code == 0 && pmatch.rm_so == 0) {
+				tex_arg_stack[tex_arg_stack_head] = inp + pmatch.rm_eo;
+			} else {
+				tex_arg_stack[tex_arg_stack_head] = inp;
+			}
+		} else if (tex_arg != NULL) {
+			grumble1("TeX argument stack overflow", file_F, true);
+		}
 	}
 
 	if(outp >= lenout_line) {
@@ -4021,6 +4114,11 @@ main_convert(
 
 	/* The next few lines MUST not add more than "MAIN_LEEWAY" characters */
 	lenout_line += MAIN_LEEWAY;
+
+	while(tex_arg_stack_head >= 0) {
+		out_line[outp++] = '}';
+		tex_arg_stack_head -= 1;
+	}
 
 	if(opt_do_line_verbatim) {
 		/* Add end of line text */
@@ -4060,7 +4158,7 @@ process_line(char *line, dir_info *di)
 	int a_flags = di->tab->cfa[di->cur_act_index].opt_flags;
 
 	if(convert_area == NULL) {
-		convert_area = malloc_and_check(MACRO_EXP_SIZE+1, 9807);
+		convert_area = malloc_and_check(MACRO_EXP_SIZE+1, 107);
 	}
 
 	if(debug & D_PROCESS_LINE) {
@@ -4131,7 +4229,7 @@ set_up_for_copy_action(dir_info *di)
 	int cur_action = di->tab->cfa[di->cur_act_index].action_type;
 
 	if(expanded_filter == NULL) {
-		expanded_filter = malloc_and_check(MACRO_EXP_SIZE+1, 9806);
+		expanded_filter = malloc_and_check(MACRO_EXP_SIZE+1, 106);
 	}
 
 	di->cur_fp = stdout;
@@ -5126,7 +5224,7 @@ the {\tt findfile_prog} view of the document is obtained.
 
 #ifndef SIEVE_PROG
 
-char *coprlemma1_ff = "$Id: imp096.doc,v 1.13 2003/03/17 17:03:12 robarthan Exp $ Copyright (C) Lemma 1 Ltd. 1992-2001";
+char *coprlemma1_ff = "$Id: imp096.doc,v 1.14 2003/06/11 15:04:28 rda Exp $ Copyright (C) Lemma 1 Ltd. 1992-2001";
 extern char *find_file(char *name, char *dirs);
 
 #include<stdio.h>
