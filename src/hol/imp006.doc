@@ -89,7 +89,10 @@ Corrected a flaw in $icl'open\_theory$ concerning scopes.
 Corrected a flaw in $icl'new\_parent$ concerning scope checking.
 Added $valid\_thm$.
 \item [Issue 1.18]
-Changed as result of changes caused by IR0016.\end{description}
+Changed as result of changes caused by IR0016.
+\item [Issue 1.19]
+Changes to match issue 1.17 of \cite{DS/FMU/IED/DTD006}.
+\end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
 \subsection{Scope}
@@ -480,6 +483,32 @@ type âHIERARCHYá = (string * THEORY_INFO) list;
 =SML
 type âCONVá = TERM -> THM;
 =TEX
+\subsection{Theorem Failures}
+We provide local functions for formatting theorems and terms for
+error messages, so that there is a single point of change
+should the available formatting facilities improve.
+=SML
+fun âerror_format_thmá (thm : THM) : unit -> string = (
+	fn () => PolyML.makestring thm
+);
+fun âerror_format_termá (tm : TERM) : unit -> string = (
+	fn () => PolyML.makestring tm
+);
+fun âthm_failá (area : string) (msg : int) (thml : THM list) : 'a = (
+	fail area msg (map error_format_thm thml)
+);
+=TEX
+We often wish to destroy a theorem equation into its assumptions, LHS and RHS,
+giving an error if it fails:
+=SML
+fun âdest_thm_eqá (area : string) (msg : int) (thm as Thm{sequent=(hyps,concl),...} : THM) : (TERM list * (TERM * TERM)) = (
+	(hyps,dest_eq concl) 
+	handle complaint =>
+	case (area_of complaint) of
+	"dest_eq" => thm_fail area msg [thm]
+	| _ => reraise complaint (area_of complaint)
+);
+=TEX
 \subsection{The Initial State}
 The following is a function to give an empty theory, for initialisation
 or deletion purposes.
@@ -707,7 +736,7 @@ Note that we do not check the well-formedness of the sequent,
 as this is not required by the specification.
 =SML
 fun âcheck_thmá (caller: string)
-	(Thm {level = level, theory=theory, ...} : THM) : unit = (
+	(thm as Thm {level = level, theory=theory, ...} : THM) : unit = (
 let 	val {hierarchy = hier{lookup=lookup, top_theory=top_theory},
 		inconsistent=inconsistent,...} = !current;
 
@@ -717,7 +746,8 @@ let 	val {hierarchy = hier{lookup=lookup, top_theory=top_theory},
 		then error caller 6083 []
 		else if (0 <= iname) andalso (iname <= top_theory)
 		then ()
-		else error caller 6072 [fn () => "Internal "^string_of_int iname];
+		else error caller 6072 [error_format_thm thm,
+			fn () => "Internal "^string_of_int iname];
 
 	val ThyInfo{status = status,
 		inscope = inscope,
@@ -727,13 +757,17 @@ let 	val {hierarchy = hier{lookup=lookup, top_theory=top_theory},
 		= sub_ia(lookup,iname);
 in
 	if status = TSDeleted
-	then error caller 6036 [(fn () => ename),(fn () => string_of_int iname)]
+	then error caller 6036 [error_format_thm thm,
+		(fn () => ename),
+		(fn () => string_of_int iname)]
 	else if theory <> contents
 	then error caller 6072 [fn () => "Internal "^string_of_int iname]
 	else if not inscope
-	then error caller 6066 [fn () => ename]
+	then error caller 6066 [error_format_thm thm,
+		fn () => ename]
 	else if range_mem(level, del_levels)
-	then error caller 6065 [fn () => ename]
+	then error caller 6065 [error_format_thm thm,
+		fn () => ename]
 	else ()
 end);
 =TEX
@@ -1062,7 +1096,6 @@ let 	val hier{lookup=lookup1, top_theory=top_theory1} =
 		= sub_ia(lookup2,n) 
 	in
 		(status1 = status2) andalso
-		(inscope1 = inscope2) andalso
 		(contents1 = contents2) andalso
 		(name1 = name2) andalso
 		aux (n-1)
@@ -1076,12 +1109,10 @@ end);
 \subsection{Operations on Hierarchies}
 These functions follow the specification of \cite{DS/FMU/IED/SPC005}.
 
-The following function gives the process of creating a new hierarchy from the current one.
-We first take a copy, we then modify its contents by reference,
-we then make the current state have this new hierarchy as its current
-one, as well as returning this value.
+The following sets all non-deleted theories to have 
+status TSancestor.
 =SML
-fun âicl'new_hierarchyá (x: unit) : icl'HIERARCHY = (
+fun âicl'freeze_hierarchyá (() : unit) : unit = (
 let 	val {hierarchy=hierarchy, theory=theory, ty_env=ty_env, 
 		con_env=con_env, inconsistent=inconsistent,sealed=sealed} = !current;
 
@@ -1107,7 +1138,37 @@ in
 	current := {hierarchy = hcopy, theory=theory, ty_env=ty_env, 
 		con_env=con_env, inconsistent=inconsistent, sealed=sealed};
 		(* spec. step 2 *)
-	hcopy (* spec. step 3 *)
+	() 
+end);
+=TEX
+
+The following function gives the process of creating a new hierarchy from the current one,
+but fails if any ancestor has status other than 
+$TSancestor$ or $TSdeleted$. 
+We first take a copy, we then modify its contents by reference,
+we then make the current state have this new hierarchy as its current
+one, as well as returning this value.
+=SML
+fun âicl'new_hierarchyá (() : unit) : icl'HIERARCHY = (
+let 	val {hierarchy=hierarchy, theory=theory, ty_env=ty_env, 
+		con_env=con_env, inconsistent=inconsistent,sealed=sealed} = !current;
+
+	fun test_anc (n , ti as ThyInfo{status = status,
+				inscope = inscope,
+				contents = contents,
+				children = children,
+				name = name})
+		=
+		if (status <> TSDeleted) andalso (status <> TSAncestor)
+		then fail "icl'new_hierarchy" 6090 [fn () => string_of_int n]
+		else ti;
+
+	val hcopy = copy_hierarchy hierarchy;
+
+	val dummy = map_hierarchy test_anc hcopy; (* spec. step ? *)
+
+in
+	hcopy (* spec. step ? *)
 end);
 =TEX
 Now we give a ``load hierarchy'' function, as demanded by the specification.
@@ -1152,10 +1213,37 @@ in
 	aux top_theory
 end);
 =TEX
+The bulk of the following is taken up with ensuring
+that there will be no unopennable theories.
 =SML
 fun âicl'seal_hierarchyá (() : unit) : unit = (
 let 	val {hierarchy=hierarchy, theory=theory, ty_env=ty_env, 
 		con_env=con_env, inconsistent=inconsistent,sealed=sealed} = !current;
+
+	val hier{lookup=lookup, top_theory=top_theory} = hierarchy;
+
+	val cthynm = icl'get_current_theory_name ();
+
+	val c_anc_des = theory_ancestors cthynm cup 
+		theory_descendants cthynm;
+
+	fun aux	n = (if n > top_theory
+		then ()
+		else if n mem c_anc_des
+		then aux (n+1)
+		else (let val (ThyInfo{status = status,
+			inscope = inscope,
+			contents = contents,
+			children = children,
+			name = name}) = sub_ia(lookup,n);
+		in
+			if status <> TSDeleted
+			then fail "icl'seal_hierarchy" 6004 [fn () => name]
+			else aux (n+1)
+		end) 
+			
+		);
+	val side_effect = aux 0;
 in
 	current := {hierarchy = hierarchy, theory=theory, ty_env=ty_env, 
 		con_env=con_env, inconsistent=inconsistent,
@@ -1408,26 +1496,6 @@ let 	val dummy = (check_c_writable "icl'new_parent";
 
 	val cthy = icl'get_current_theory_name();
 
-=TEX
-The ancestors of the current and parent theories:
-=SML
-	val fthy_anc = theory_ancestors fthy;
-	val cthy_anc = theory_ancestors cthy;
-=TEX
-A theory is an ancestor of the current one if and only if it is in scope.
-=SML
-	val dummy = if finscope
-		then fail "icl'new_parent" 6082 [fn () => fname]
-		else if cthy mem fthy_anc
-		then fail "icl'new_parent" 6084 [fn () => fname]
-		else ();
-
-	val nfti = (ThyInfo{status = fstatus, 
-		inscope = finscope,
-		contents = fcontents,
-		children = (cthy :: fchildren),
-		name = fname});
-
 	val Thy{name = iname,
 		ty_env = ty_env,
 		con_env = con_env,
@@ -1438,6 +1506,25 @@ A theory is an ancestor of the current one if and only if it is in scope.
 		thm_dict = thm_dict,
 		current_level = current_level,
 		user_data = user_data} = !theory;
+=TEX
+The ancestors of the current and parent theories:
+=SML
+	val fthy_anc = theory_ancestors fthy;
+	val cthy_anc = theory_ancestors cthy;
+=TEX
+A theory is an ancestor of the current one if and only if it is in scope.
+=SML
+	val dummy = if fthy mem parents
+		then fail "icl'new_parent" 6082 [fn () => fname]
+		else if cthy mem fthy_anc
+		then fail "icl'new_parent" 6084 [fn () => fname]
+		else ();
+
+	val nfti = (ThyInfo{status = fstatus, 
+		inscope = finscope,
+		contents = fcontents,
+		children = (cthy :: fchildren),
+		name = fname});
 
 	val new_thys_in_scope = fthy_anc diff cthy_anc ;
 =TEX
@@ -1560,6 +1647,12 @@ let 	val {hierarchy = hierarchy as hier{lookup=lookup, top_theory=top_theory},
 
 	val fromn = internal_theory_name fromnm "icl'duplicate_theory";
 
+	val dummy = if sealed = fromn
+		then fail "icl'duplicate_theory" 6026 [fn () => fromnm]
+		else if sealed mem (theory_ancestors  fromn)
+		then ()
+		else fail "icl'duplicate_theory" 6042 [fn () => fromnm];
+
 	val ntop_theory = top_theory+1;
 
 	val ThyInfo{status = status1,
@@ -1653,10 +1746,10 @@ end);
 Save a theorem under a list of keys:
 =SML
 fun âicl'list_save_thmá (keys : string list, 
-	theorem : THM as Thm {level = level, theory=theory, sequent = sequent}) : THM = (
-let 	val dummy = (check_thm "icl'list_save_thm" theorem;
+	thm : THM as Thm {level = level, theory=theory, sequent = sequent}) : THM = (
+let 	val dummy = (check_thm "icl'list_save_thm" thm;
 		if not (wf_seq sequent)
-		then fail "icl'list_save_thm" 6038 []
+		then thm_fail "icl'list_save_thm" 6038 [thm]
 		else if keys = []
 		then fail "icl'list_save_thm" 6031 []
 		else check_c_writable "icl'list_save_thm"); (* part of spec. step 2 *)
@@ -1887,7 +1980,7 @@ let 	val {theory=theory,...} = !current;
 		then fail "icl'new_axiom" 6009 []
 		else if wf_term tm
 		then ()
-		else fail "icl'new_axiom" 6048 [fn () => get_current_theory_name ()]); 
+		else term_fail "icl'new_axiom" 6038 [tm]); 
 			(* spec step 1 *)
 
 	val new_axiom = Thm{level = current_level+1, 
@@ -1946,7 +2039,7 @@ let 	val {hierarchy=hierarchy, theory=theory, ty_env=cty_env,
 	
 	val dummy = (check_c_writable "icl'new_const";
 		if not(wf_type ty)
-		then fail "icl'new_const" 6075 [fn () => get_current_theory_name ()]
+		then type_fail "icl'new_const" 6038 [ty]
 		else (case const_in_anc_or_des nm of
 		InScope => fail "icl'new_const" 6049 [fn () => nm]
 		| InDescendant => fail "icl'new_const" 6063 [fn () => nm]
@@ -2064,13 +2157,14 @@ Do the checks required (other than on keys):
 		if keys = []
 		then fail "icl'new_defn" 6031 []
 		else if not (wf_term vl)
-		then fail "icl'new_defn" 6048 [fn () => get_current_theory_name()]
+		then term_fail "icl'new_defn" 6038 [vl]
 		else if not(is_nil (frees vl))
-		then fail "icl'new_defn" 6059 
-			[fn () => format_list (fst o dest_var) (frees vl) ", "]
+		then fail "icl'new_defn" 6059 [error_format_term vl,
+			fn () => format_list (fst o dest_var) (frees vl) ", "]
 		else if not(is_nil((term_tyvars vl) diff (type_tyvars ctype)))
 		then fail "icl'new_defn" 6058 
-			[fn () => format_list (Combinators.I) 
+			[error_format_term vl,
+			 fn () => format_list (Combinators.I) 
 			 ((term_tyvars vl) diff (type_tyvars ctype)) ", "]
 
 		else ()
@@ -2149,14 +2243,15 @@ Do the checks required (other than on keys):
 		| NotPresent => ());
 		check_thm "icl'new_type_defn" defthm;
 		if not(wf_seq (hyps, concl))
-		then fail "icl'new_type_defn" 6087 [fn () => get_current_theory_name()]
+		then thm_fail "icl'new_type_defn" 6038 [defthm]
 		else if keys = []
 		then fail "icl'new_type_defn" 6031 []
 		else if hyps <> []
-		then fail "icl'new_type_defn" 6053 []
+		then thm_fail "icl'new_type_defn" 6053 [defthm]
 		else if not(is_nil (frees concl))
 		then fail "icl'new_type_defn" 6056 
-			[fn () => format_list (fst o dest_var) (frees concl) ", "]
+			[error_format_thm defthm,
+			 fn () => format_list (fst o dest_var) (frees concl) ", "]
 		else if not(is_nil((term_tyvars concl) diff typars))
 		then fail "icl'new_type_defn" 6057
 			[fn () => format_list (Combinators.I) ((term_tyvars concl) diff typars) ", "] 
@@ -2167,14 +2262,15 @@ Do the checks required (other than on keys):
 =TEX
 Now build up the new material:
 =SML
-	val (x,(p, x1)) = (Combinators.I ** dest_app)(simple_dest_„ concl)
+	val (x,(p, x1)) = ((Combinators.I ** dest_app)(simple_dest_„ concl)
 		handle complaint =>
-		list_divert complaint "icl'new_type_defn"
-			[("dest_app", 6055,[]),
-			 ("simple_dest_„", 6054, [])];
+		case (area_of complaint) of
+		"dest_app" => thm_fail "icl'new_type_defn" 6055 [defthm]
+		| "simple_dest_„" => thm_fail "icl'new_type_defn" 6054 [defthm]
+		| _ => reraise complaint (area_of complaint));
 
 	val dummy = if not(x=x1)
-		then fail "icl'new_type_defn" 6080 []
+		then thm_fail "icl'new_type_defn" 6080 [defthm]
 		else ();
 
 	val arity = length typars;
@@ -2256,18 +2352,17 @@ Do the checks required (other than on keys, and theorem form):
 	val dummy = (check_c_writable "icl'new_specification";
 		check_thm "icl'new_specification" defthm;
 		if not(wf_seq (hyps, concl))
-		then fail "icl'new_specification" 6087 
-			[fn () => get_current_theory_name()]
+		then thm_fail "icl'new_specification" 6038 [defthm]
 		else if keys = []
 		then fail "icl'new_specification" 6031 []
 		else if not(is_nil (frees concl))
-		then fail "icl'new_specification" 6056	
-			[fn () => format_list (fst o dest_var) (frees concl) ", "]
-
+		then fail "icl'new_specification" 6056
+			[error_format_thm defthm,
+			 fn () => format_list (fst o dest_var) (frees concl) ", "]	
 		else if ndef < 1
 		then fail "icl'new_specification" 6044 []
 		else if hyps <> []
-		then fail "icl'new_specification" 6053 []
+		then thm_fail "icl'new_specification" 6053 [defthm]
 		else ()
 		);
 =TEX
@@ -2279,7 +2374,8 @@ Now build up the new material:
 		else (let val (x,bdy) = simple_dest_„ tm
 			handle complaint =>
 			divert complaint "simple_dest_„" "icl'new_specification" 
-			6060 [fn () => string_of_int ndef]
+			6060 [error_format_thm defthm,
+				fn () => string_of_int ndef]
 		in
 			nexists (n-1) bdy (res @ [x])
 		end)
@@ -2292,14 +2388,16 @@ Now build up the new material:
 Check the results of picking apart the theorem:
 =SML
 	val dummy = (if any (tl xlist) (fn x => not((term_tyvars x) set_eq xtyvars)) 
-		then fail "icl'new_specification" 6081 []
+		then term_fail "icl'new_specification" 6081 [hd xlist, 
+			find (tl xlist) (fn x => not((term_tyvars x) set_eq xtyvars))]
 		else if ((term_tyvars bdt) diff xtyvars) <> []
 		then fail "icl'new_specification" 6061
 			[fn () => format_list (Combinators.I) 
 			 ((term_tyvars concl) diff xtyvars) ", "]
 		else if not(all_different xlist)
 		then fail "icl'new_specification" 6016 
-			[fn () => fst(dest_var(two_the_same xlist))]
+			[fn () => fst(dest_var(two_the_same xlist)),
+			 error_format_thm defthm]
 		else ();
 		map (fn x =>
 			let val (cnm,ty) = dest_var x
@@ -2430,15 +2528,13 @@ local
 		(((TERM * TERM) list) * ((TERM * TERM) list) * (TERM list)) = (
 		lhslst, rhslst, new_hyps
 	) | two_subst_lists lhslst rhslst new_hyps ((thmi,vari) :: lst) = (
-	let val (nhyps,(lhsi,rhsi)) = (((Combinators.I ** dest_eq)(dest_thm thmi))
-		handle complaint =>
-		divert complaint "dest_eq" "icl'subst_rule" 6002 []);
+	let val (nhyps,(lhsi,rhsi)) = dest_thm_eq "icl'subst_rule" 6002 thmi;
 	in
 		if not(is_var vari)
-		then fail "icl'subst_rule" 6003 []
+		then term_fail "icl'subst_rule" 3007 [vari]
 		else if type_of lhsi <> type_of vari
-		then fail "icl'subst_rule" 6029 
-			[fn () => fst(dest_var vari)]
+		then fail "icl'subst_rule" 6029 [error_format_thm thmi, 
+			error_format_term vari]
 		else (two_subst_lists ((lhsi, vari) :: lhslst)
 			((rhsi, vari) :: rhslst)
 			(nhyps term_union new_hyps)
@@ -2515,21 +2611,18 @@ icl'simple__eq_rule
 ö … ( x Ž t1[x]) = ( x Ž t2[x])
 =TEX
 =SML
-fun âicl'simple__eq_ruleá (absvar : TERM) 
-	(thrm as Thm{sequent = (hyps, concl),...} : THM) 
+fun âicl'simple__eq_ruleá (absvar : TERM) (thrm : THM) 
 	: THM = (
-let 	val (absvarnm, absvarty) = (dest_var absvar
-		handle complaint =>
-		pass_on complaint "dest_var" "icl'simple__eq_rule");
-
-	val dummy = (check_thm "icl'simple__eq_rule" thrm;
-		if list_is_free_in absvar hyps
-		then fail "icl'simple__eq_rule" 6005 [fn () => absvarnm]
+let 	 val dummy = (check_thm "icl'simple__eq_rule" thrm;
+		if not(is_var absvar)
+		then term_fail "icl'simple__eq_rule" 3007 [absvar]
 		else ());
 
-	val (lhs,rhs) = (dest_eq concl
-		handle complaint =>
-		divert complaint "dest_eq" "icl'simple__eq_rule" 6025 []);
+	val (hyps,(lhs,rhs)) = dest_thm_eq "icl'simple__eq_rule" 6020 thrm;
+
+	val dummy = if list_is_free_in absvar hyps
+		then term_fail "icl'simple__eq_rule" 6005 [absvar]
+		else ();
 in
 	mk_current_thm (hyps, 
 		mk_eq(simple_mk_(absvar, lhs),simple_mk_(absvar, rhs)))
@@ -2551,15 +2644,15 @@ let 	val dummy = check_thm "icl'inst_type_rule" thrm;
 
 	val usingtvs : string list = map (fn (t,tv) => (dest_vartype tv
 		handle complaint =>
-		divert complaint "dest_vartype" "icl'inst_type_rule" 6007 []))
+		pass_on complaint "dest_vartype" "icl'inst_type_rule"))
 		talist;
 
 	val dummy = if any hyps (fn x => any (term_tyvars x)
 			(fn y => y mem usingtvs))
 		then fail "icl'inst_type_rule" 6006 
-			[fn () => (find (term_tyvars (find hyps (fn x => any (term_tyvars x)
+			[fn () => find (term_tyvars (find hyps (fn x => any (term_tyvars x)
 			(fn y => y mem usingtvs))))
-			(fn y => y mem usingtvs))]
+			(fn y => y mem usingtvs)]
 		else ();
 in
 	mk_current_thm(hyps, inst (list_frees hyps) talist concl)
@@ -2578,7 +2671,7 @@ icl'Š_intro
 fun âicl'Š_introá (asm : TERM) (thrm : THM as Thm{sequent = (hyps,concl),...}) : THM = (
 let 	val dummy = (check_thm "icl'Š_intro" thrm;
 	if type_of asm <> BOOL
-	then fail "icl'Š_intro" 6009 []
+	then term_fail "icl'Š_intro" 3031 [asm]
 	else ());
 in
 	mk_current_thm(hyps term_less asm, mk_Š(asm, concl))
@@ -2600,11 +2693,13 @@ let 	val dummy = (check_thm "icl'Š_elim" thrm1;
 
 	val (hconcl1,cconcl1) = (dest_Š concl1 
 		handle complaint =>
-		divert complaint "dest_Š" "icl'Š_elim" 6010 []);
+		case (area_of complaint) of
+		"dest_Š" => thm_fail "icl'Š_elim" 6010 [thrm1]
+		| _ => reraise complaint (area_of complaint));
 in
 	if aconv hconcl1 concl2
 	then mk_current_thm(hyps1 term_union hyps2, cconcl1)
-	else fail "icl'Š_elim" 6011 []
+	else thm_fail "icl'Š_elim" 6011 [thrm1, thrm2]
 end);
 =TEX
 \subsection{icl'asm\_rule}
@@ -2619,7 +2714,7 @@ t … t
 fun âicl'asm_ruleá (tm : TERM) : THM = (
 	if type_of tm = BOOL
 	then mk_current_thm([tm],tm)
-	else fail "icl'asm_rule" 6009 []
+	else term_fail "icl'asm_rule" 6009 [tm]
 );
 =TEX
 \subsection{icl'refl\_conv}
@@ -2663,10 +2758,10 @@ icl'simple_%beta%_conv
 val âicl'simple_%beta%_convá : CONV = (fn (tm : TERM) =>
 let 	val ((vr, t1), t2) = ((simple_dest_ ** Combinators.I)(dest_app tm)
 		handle complaint =>
-		list_divert complaint "icl'simple_%beta%_conv"
-			[("simple_dest_",6012,[]),
-			("dest_app",6012,[])]);
-
+		case (area_of complaint) of
+		"simple_dest_" => term_fail "icl'simple_%beta%_conv" 6012 [tm]
+		| "dest_app" => term_fail "icl'simple_%beta%_conv" 6012 [tm]
+		| _ => reraise complaint (area_of complaint));
 	val rhs = var_subst [(t2,vr)] t1;
 in
 	mk_current_thm([],mk_eq(tm,rhs))
@@ -2699,7 +2794,7 @@ in
 val âicl'suc_convá : CONV = (fn (tm : TERM) =>
 let	val nint = (dest_† tm
 		handle complaint =>
-		divert complaint "dest_†" "icl'suc_conv" 6013 []);
+		pass_on complaint "dest_†" "icl'suc_conv");
 
 	val rhs = if nint = 0
 		then Zero
@@ -2736,7 +2831,7 @@ in
 val âicl'string_convá : CONV = (fn (tm : TERM) =>
 let 	val sex = explode(dest_string tm)
 		handle complaint =>
-		divert complaint "dest_string" "icl'string_conv" 6014 [];
+		pass_on complaint "dest_string" "icl'string_conv";
 
 	val rhs = if sex = []
 		then SNil
@@ -2766,7 +2861,7 @@ in
 val âicl'char_convá : CONV = (fn (tm : TERM) =>
 let 	val cnum = ord(dest_char tm)
 		handle complaint =>
-		divert complaint "dest_char" "icl'char_conv" 6015 [];
+		pass_on complaint "dest_char" "icl'char_conv";
 	
 	val rhs = mk_app(AbsChar, mk_† cnum);
 in
@@ -2795,12 +2890,10 @@ icl'eq_sym_rule
 ö … t2 ‚ t1
 =TEX
 =SML
-fun âicl'eq_sym_ruleá (thrm : THM as Thm{sequent = (hyps,concl),...}) : THM = (
+fun âicl'eq_sym_ruleá (thrm : THM) : THM = (
 let 	val dummy = check_thm "icl'eq_sym_rule" thrm;
 
-	val (lhs_concl,rhs_concl) = (dest_eq concl
-		handle complaint =>
-		divert complaint "dest_eq" "icl'eq_sym_rule" 6025 []);
+	val (hyps,(lhs_concl,rhs_concl)) = dest_thm_eq "icl'eq_sym_rule" 6020 thrm;
 
 	val new_concl = mk_eq(rhs_concl, lhs_concl);
 in
@@ -2829,12 +2922,6 @@ local
 	in
 		simple_n_ƒ (n-1) (acc @ [v]) bdy
 	end);
-
-	fun type_fails [] = ""
-	| type_fails ((tm,v):: rest) = (
-		if type_of tm <> type_of v
-		then (fst(dest_var v) ^" " ^ type_fails rest)
-		else type_fails rest);
 in
 fun âicl'simple_list_ƒ_elimá (tml : TERM list) 
 	(thrm : THM as Thm{sequent = (hyps,concl),...}) : THM = (
@@ -2844,13 +2931,17 @@ let 	val dummy = check_thm "icl'simple_list_ƒ_elim" thrm;
 	
 	val (bvl, bdy) = (simple_n_ƒ ninsts [] concl
 		handle complaint =>
-		divert complaint "simple_dest_ƒ" "icl'simple_list_ƒ_elim" 6018 [fn () => string_of_int ninsts]);
+		case (area_of complaint) of
+		"simple_dest_ƒ" => fail "icl'simple_list_ƒ_elim" 6018 
+			[error_format_thm thrm,
+			fn () => string_of_int ninsts]
+		| _ => reraise complaint (area_of complaint));
 
 	val subs = rev(combine tml bvl);
 
 	val new_concl = (var_subst subs bdy
 		handle complaint =>
-		divert complaint "var_subst" "icl'simple_list_ƒ_elim" 6019 [fn () => type_fails subs]);
+		pass_on complaint "var_subst" "icl'simple_list_ƒ_elim");
 in
 	mk_current_thm(hyps, new_concl)
 end);
@@ -2873,22 +2964,17 @@ icl'eq_trans_rule
 ö1 ¡ ö2 … t1 ‚ t3
 =TEX
 =SML
-fun âicl'eq_trans_ruleá (thrm1 : THM as Thm{sequent = (hyps1,concl1),...})
-	(thrm2 : THM as Thm{sequent = (hyps2,concl2),...}) : THM = (
+fun âicl'eq_trans_ruleá (thrm1 : THM) (thrm2 : THM) : THM = (
 let 	val dummy = (check_thm "icl'eq_trans_rule" thrm1;
 		check_thm "icl'eq_trans_rule" thrm2);
 
-	val (lhs_concl1,rhs_concl1) = (dest_eq concl1 
-		handle complaint =>
-		divert complaint "dest_eq" "icl'eq_trans_rule" 6020 []);
+	val (hyps1,(lhs_concl1,rhs_concl1)) = dest_thm_eq "icl'eq_trans_rule" 6020 thrm1;
 
-	val (lhs_concl2,rhs_concl2) = (dest_eq concl2
-		handle complaint =>
-		divert complaint "dest_eq" "icl'eq_trans_rule" 6021 []);
+	val (hyps2,(lhs_concl2,rhs_concl2)) = dest_thm_eq "icl'eq_trans_rule" 6020 thrm2;
 
 	val dummy = if aconv rhs_concl1 lhs_concl2
 		then ()
-		else fail "icl'eq_trans_rule" 6022 [];
+		else thm_fail "icl'eq_trans_rule" 6022 [thrm1, thrm2];
 
 	val new_concl = mk_eq(lhs_concl1,rhs_concl2);
 in
@@ -2904,23 +2990,20 @@ icl'mk_app_rule
 ö1 ¡ ö2 … u1 v1 = u2 v2
 =TEX
 =SML
-fun âicl'mk_app_ruleá (thrm1 : THM as Thm{sequent = (hyps1,concl1),...})
-	(thrm2 : THM as Thm{sequent = (hyps2,concl2),...}) : THM = (
+fun âicl'mk_app_ruleá (thrm1 : THM) (thrm2 : THM) : THM = (
 let 	val dummy = (check_thm "icl'mk_app_rule" thrm1;
 		check_thm "icl'mk_app_rule" thrm2);
 
-	val (lhs_concl1,rhs_concl1) = (dest_eq concl1 
-		handle complaint =>
-		divert complaint "dest_eq" "icl'mk_app_rule" 6020 []);
+	val (hyps1,(lhs_concl1,rhs_concl1)) = dest_thm_eq "icl'mk_app_rule" 6020 thrm1;
 
-	val (lhs_concl2,rhs_concl2) = (dest_eq concl2
-		handle complaint =>
-		divert complaint "dest_eq" "icl'mk_app_rule" 6021 []);
+	val (hyps2,(lhs_concl2,rhs_concl2)) = dest_thm_eq "icl'mk_app_rule" 6020 thrm2;
 
 	val new_concl = mk_eq(mk_app(lhs_concl1, lhs_concl2),
 		mk_app(rhs_concl1,rhs_concl2))
 		handle complaint =>
-		divert complaint "mk_app" "icl'mk_app_rule" 6023 [];
+		case (area_of complaint) of
+		"mk_app" => thm_fail "icl'mk_app_rule" 6023 [thrm1, thrm2]
+		| _ => reraise complaint (area_of complaint);
 in
 	mk_current_thm(hyps1 term_union hyps2, new_concl)
 end);
@@ -2934,18 +3017,20 @@ icl'‚_mp_rule
 ö1 ¡ ö2 … t2
 =TEX
 =SML
-fun âicl'‚_mp_ruleá (thrm1 : THM as Thm{sequent = (hyps1,concl1),...})
+fun âicl'‚_mp_ruleá (thrm1 : THM)
 	(thrm2 : THM as Thm{sequent = (hyps2,concl2),...}) : THM = (
 let 	val dummy = (check_thm "icl'‚_mp_rule" thrm1;
 		check_thm "icl'‚_mp_rule" thrm2);
 
-	val (lhs_concl1,rhs_concl1) = (dest_eq concl1 
-		handle complaint =>
-		divert complaint "dest_eq" "icl'‚_mp_rule" 6030 []);
+	val (hyps1,(lhs_concl1,rhs_concl1)) = dest_thm_eq "icl'‚_mp_rule" 6030 thrm1;
+
+	val side_effect = if type_of lhs_concl1 <> BOOL
+		then thm_fail "icl'‚_mp_rule" 6030 [thrm1]
+		else ();
 
 	val new_concl = if aconv lhs_concl1 concl2
 		then rhs_concl1
-		else fail "icl'‚_mp_rule" 6024 [];
+		else thm_fail "icl'‚_mp_rule" 6024 [thrm1, thrm2];
 in
 	mk_current_thm(hyps1 term_union hyps2, new_concl)
 end);
@@ -2960,19 +3045,17 @@ icl'simple_ƒ_intro
 ö … ƒ x Ž t
 =TEX
 =SML
-fun âicl'simple_ƒ_introá (x : TERM) 
+fun âicl'simple_ƒ_introá (tm : TERM) 
 	(thrm : THM as Thm{sequent = (hyps,concl),...}) : THM = (
 let 	val dummy = check_thm "icl'simple_ƒ_intro" thrm;
-
-	val (nmx, tyx) = (dest_var x
-		handle complaint =>
-		pass_on complaint "dest_var" "icl'simple_ƒ_intro");
 		
-	val dummy = (if list_is_free_in x hyps
-		then fail "icl'simple_ƒ_intro" 6005 [fn () => nmx]
+	val dummy = (if not(is_var tm)
+		then term_fail "icl'simple_ƒ_intro" 3007 [tm]
+		else if list_is_free_in tm hyps
+		then term_fail "icl'simple_ƒ_intro" 6005 [tm]
 		else ());
 
-	val new_concl = simple_mk_ƒ(x,concl);
+	val new_concl = simple_mk_ƒ(tm,concl);
 in
 	mk_current_thm(hyps, new_concl)
 end);
@@ -2992,21 +3075,21 @@ fun âicl'inst_term_ruleá (tvl : (TERM * TERM)list)
 let 	val dummy = check_thm "icl'inst_term_rule" thrm;
 
 	val svars = (map (fn (t,x) => (
-		let val (xnm,xty) = (dest_var x
+		let val (_,xty) = (dest_var x
 			handle complaint =>
 			pass_on complaint "dest_var" "icl'inst_term_rule")
 		in
 			if type_of t = xty
 			then x
-			else fail "icl'inst_term_rule" 6027 [fn () => xnm]
+			else term_fail "icl'inst_term_rule" 6027 [t,x]
 		end))		
 		tvl);
 		
 	val hfrees = list_frees hyps;
  
 	val dummy = if any svars (fn x => x mem hfrees)
-		then fail "icl'inst_term_rule" 6028 
-			[fn () => fst(dest_var(find svars (fn x => x mem hfrees)))]
+		then term_fail "icl'inst_term_rule" 6028 
+			[find svars (fn x => x mem hfrees)]
 		else ();
 
 	val new_concl = var_subst tvl concl;
@@ -3031,10 +3114,12 @@ let 	val (n,n2) = dest_bin_op "icl'div2_conv" 6085 "Div" tm;
 
  	val nint = (dest_† n
 		handle complaint =>
-		divert complaint "dest_†" "icl'div2_conv" 6085 []);
+		case (area_of complaint) of
+		"dest_†" => term_fail "icl'div2_conv" 6085 [tm]
+		| _ => reraise complaint (area_of complaint));
 
 	val dummy = if N2 <> n2
-		then fail "icl'div2_conv" 6085 []
+		then term_fail "icl'div2_conv" 6085 [tm]
 		else ();
 
 	val rhs = mk_† (nint div 2);
@@ -3060,10 +3145,12 @@ let 	val (n,n2) = dest_bin_op "icl'mod2_conv" 6086 "Mod" tm;
 
  	val nint = (dest_† n
 		handle complaint =>
-		divert complaint "dest_†" "icl'mod2_conv" 6086 []);
+		case (area_of complaint) of
+		"dest_†" => term_fail "icl'mod2_conv" 6086 [tm]
+		| _ => reraise complaint (area_of complaint));
 
 	val dummy = if N2 <> n2
-		then fail "icl'mod2_conv" 6086 []
+		then term_fail "icl'mod2_conv" 6086 [tm]
 		else ();
 
 	val rhs = mk_† (nint mod 2);
