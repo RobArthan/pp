@@ -400,8 +400,6 @@ void help_dialog1(Widget w)
 
 		};
 
-		XtDestroyWidget (help_item);
-
 		XtManageChild(help_form);
 
 		dismiss_btn_area = XtVaCreateWidget("dismiss_btn_area",
