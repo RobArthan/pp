@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.257 $ $RCSfile: imp507.doc,v $ $Date: 2004/02/21 16:07:17 $
+% imp507.doc %Z% $Revision: 1.258 $ $RCSfile: imp507.doc,v $ $Date: 2004/06/20 14:13:52 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.257 $%
+\def\SCCSversion{$Revision: 1.258 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/02/21 16:07:17 $%
+\TPPdate{\FormatDate{$Date: 2004/06/20 14:13:52 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -207,7 +207,7 @@ by doing all the work of checking and generating the VC terms in {\it call\_vcs}
 \item[Issue 1.255] Fixed bug in {\it combine\_param\_specs}.
 \item[Issue 1.256] Fixed bug in {\it renames\_object\_common}.
 \item[Issue 1.257] Now allows duplicates in a use clause.
-\item[Issue 1.258] Reform of the Environments (in progress).
+\item[Issues 1.258-1.259] Reform of the Environments (in progress).
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -456,16 +456,27 @@ fun €package_decl› (
 	}	
 );
 =TEX
-We will need to be able to convert a type mark into an HOL type.
+We will need to be able to convert an Ada type mark into the HOL type for elements of the Ada type:
 =SML
 fun €type_of_tmark› (dict : ENV_DICT) (tmark : TMARK) : TYPE = (
 	let	val set_ty =
 			case env_of_env_dict dict (trans_id tmark) of
-				Value {tipe, info = EIEnvRecordType _, ...} => tipe
-			|	Value {tipe, info = EIEnvOtherType, ...} => tipe
+				Value {tipe = Value ty, info = EIEnvRecordType _, ...} => ty
+			|	Value {tipe = Value ty, info = EIEnvOtherType, ...} => ty
 			|	_ => fail "type_of_tmark" 507127 [fn _ => tmark];
 	in	dest_z_power_type set_ty
 	end	handle Fail _ => fail "type_of_tmark" 507128 [fn _ => tmark]
+);
+=TEX
+
+=SML
+fun €in_scope_dict›
+	({
+		dict = dict,
+		dec_labels = dec_labels} : IN_SCOPE, 
+	new_dict : ENV_DICT) = (
+	{	dict = new_dict,
+		dec_labels = dec_labels}
 );
 =TEX
 The following refines the specification by providing the ability to extend the existing dictionary rather than just replacing it.
@@ -474,12 +485,12 @@ If the optional first argument is nil, the new variables are entered into the ex
 =SML
 fun €in_scope_vc_vars›
 	(Nil : ENV_DICT OPT)
-	({
+	(in_scope as {
 		dict = dict,
-		dec_labels = dec_labels} : IN_SCOPE, 
+		dec_labels = _} : IN_SCOPE, 
 	new_vc_vars : VAR_DECL list) : IN_SCOPE = (
 		let	fun mk_var_info zn tmark = (
-				{tipe = type_of_tmark dict tmark,
+				{tipe = Value (type_of_tmark dict tmark),
 				canon_name = zn,
 				info = EIEnvVar{kind = Var, tmark = tmark}}
 			);
@@ -488,8 +499,7 @@ fun €in_scope_vc_vars›
 			fun aux2 (v, tmk) = (v, mk_var_info v tmk);
 			val vars_infos = map aux2 vars_tmarks;
 			val new_dict = add_to_env_dict dict vars_infos
-		in	{dict = new_dict,
-			dec_labels = dec_labels}
+		in	in_scope_dict(in_scope, new_dict)
 		end
 ) | in_scope_vc_vars (Value dict) ({dict = _, dec_labels} , new_vc_vars)= (
 	in_scope_vc_vars Nil ({dict = dict, dec_labels = dec_labels}, new_vc_vars)
@@ -499,13 +509,13 @@ The following two can handle declarations containing more than one auxiliary var
 =SML
 fun €in_scope_vc_aux_vars›
 	(Nil : ENV_DICT OPT)
-	({
+	(in_scope as {
 		dict = dict,
-		dec_labels = dec_labels} : IN_SCOPE, 
+		dec_labels = _} : IN_SCOPE, 
 	new_vc_aux_vars : TERM list) : IN_SCOPE = (
 		let	fun mk_aux_var_info ((zn, ty), zset) = (
 				(zn,
-				{tipe = ty,
+				{tipe = Value ty,
 				canon_name = zn,
 				info = EIEnvAuxVar{
 					in_scope = true,
@@ -516,8 +526,7 @@ fun €in_scope_vc_aux_vars›
 			val simple_decs = flat (map aux1 compound_decs);
 			val aux_vars_infos = map mk_aux_var_info simple_decs;
 			val new_dict = add_to_env_dict dict aux_vars_infos
-		in	{dict = new_dict,
-			dec_labels = dec_labels}
+		in	in_scope_dict(in_scope, new_dict)
 		end
 ) | in_scope_vc_aux_vars (Value dict) ({dict = _, dec_labels} , new_vc_aux_vars)= (
 	in_scope_vc_aux_vars Nil ({dict = dict, dec_labels = dec_labels}, new_vc_aux_vars)
@@ -526,13 +535,13 @@ fun €in_scope_vc_aux_vars›
 =SML
 fun €in_scope_vc_log_cons›
 	(Nil : ENV_DICT OPT)
-	({
+	(in_scope as {
 		dict = dict,
-		dec_labels = dec_labels} : IN_SCOPE, 
+		dec_labels = _} : IN_SCOPE, 
 	new_vc_log_cons : TERM list) : IN_SCOPE = (
 		let	fun mk_aux_var_info ((zn, ty), zset) = (
 				(zn,
-				{tipe = ty,
+				{tipe = Value ty,
 				canon_name = zn,
 				info = EIEnvLogCon{
 					in_scope = true,
@@ -543,8 +552,7 @@ fun €in_scope_vc_log_cons›
 			val simple_decs = flat (map aux1 compound_decs);
 			val log_cons_infos = map mk_aux_var_info simple_decs;
 			val new_dict = add_to_env_dict dict log_cons_infos
-		in	{dict = new_dict,
-			dec_labels = dec_labels}
+		in	in_scope_dict(in_scope, new_dict)
 		end
 ) | in_scope_vc_log_cons (Value dict) ({dict = _, dec_labels} , new_vc_log_cons)= (
 	in_scope_vc_log_cons Nil ({dict = dict, dec_labels = dec_labels}, new_vc_log_cons)
@@ -553,12 +561,12 @@ fun €in_scope_vc_log_cons›
 =SML
 fun €in_scope_vc_pars›
 	(Nil : ENV_DICT OPT)
-	({
+	(in_scope as {
 		dict = dict,
-		dec_labels = dec_labels} : IN_SCOPE, 
+		dec_labels = _} : IN_SCOPE, 
 	new_vc_pars : PARAM_SPEC list) : IN_SCOPE = (
 		let	fun mk_par_info zn tmark mode = (
-				{tipe = type_of_tmark dict tmark,
+				{tipe = Value(type_of_tmark dict tmark),
 				canon_name = zn,
 				info = EIEnvVar{kind = Par mode, tmark = tmark}}
 			);
@@ -569,8 +577,7 @@ fun €in_scope_vc_pars›
 			fun aux2 ((v, tmk), mode) = (v, mk_par_info v tmk mode);
 			val pars_infos = map aux2 pars_tmarks_modes;
 			val new_dict = add_to_env_dict dict pars_infos
-		in	{dict = new_dict,
-			dec_labels = dec_labels}
+		in	in_scope_dict(in_scope, new_dict)
 		end
 ) | in_scope_vc_pars (Value dict) ({dict = _, dec_labels} , new_vc_pars)= (
 	in_scope_vc_pars Nil ({dict = dict, dec_labels = dec_labels}, new_vc_pars)
@@ -579,9 +586,9 @@ fun €in_scope_vc_pars›
 The additional optional environment dictionary does not make sense for the following update function:
 =SML
 fun €in_scope_renamings›
-	({
+	(in_scope as {
 		dict = dict,
-		dec_labels = dec_labels} : IN_SCOPE, 
+		dec_labels = _} : IN_SCOPE, 
 	renamings : (Z_ID * Z_ID) list) : IN_SCOPE = (
 		let	fun mk_renamed_info (new, orig) = (
 				(new,
@@ -592,21 +599,20 @@ fun €in_scope_renamings›
 			);
 			val names_infos = map mk_renamed_info renamings;
 			val new_dict = add_to_env_dict dict names_infos
-		in	{dict = new_dict,
-			dec_labels = dec_labels}
+		in	in_scope_dict(in_scope, new_dict)
 		end
 );
 =TEX
 =SML
 fun €in_scope_formal_procs›
 	(Nil : ENV_DICT OPT)
-	({
+	(in_scope as {
 		dict = dict,
-		dec_labels = dec_labels} : IN_SCOPE, 
+		dec_labels = _} : IN_SCOPE, 
 	new_formal_procs : FORMAL_PROC list) : IN_SCOPE = (
 		let	fun mk_proc_info (fp as {name, ...}) = (
 				(name,
-				{tipe = BOOL,
+				{tipe = Nil,
 				canon_name = name,
 				info = EIEnvProcedure{
 					formal = true,
@@ -614,8 +620,7 @@ fun €in_scope_formal_procs›
 			);
 			val procs_infos = map mk_proc_info new_formal_procs;
 			val new_dict = add_to_env_dict dict procs_infos
-		in	{dict = new_dict,
-			dec_labels = dec_labels}
+		in	in_scope_dict(in_scope, new_dict)
 		end
 ) | in_scope_formal_procs (Value dict) ({dict = _, dec_labels} , new_formal_procs)= (
 	in_scope_formal_procs Nil ({dict = dict, dec_labels = dec_labels}, new_formal_procs)
@@ -1751,9 +1756,6 @@ We collect together here those parts of the code concerned with this which do no
 
 The following are the user data key reserved for the Compliance Tool.
 =SML
-val €cn_pars_ud_key› = "CN'formal_pars";
-val €cn_types_ud_key› = "CN'types";
-val €cn_constants_ud_key› = "CN'constants";
 val €cn_theories_ud_key› = "CN'theories";
 val €cn_spec_ud_key› = "CN'createspec";
 val €cn_subunit_ud_key› = "CN'createsubunit";
@@ -1970,155 +1972,95 @@ fun €new_theory_aux› (parents : string list) (thy : string) : unit = (
 	()
 );
 =TEX
-
-\subsection{Function Parameter Lists}
-When the global variable representing a SPARK function is stored in a theory, a user data entry giving its formal parameter list is also stored.
-This is later accessed via the $CN\_ENV$ when function calls using named parameter associations are translated into Z.
-
 =TEX
-=IGN
+\subsection{The Environment for Volumes II and III}
+=TEX
+If a name is not found in the environment, it may be a prefixed name
+of an item in the enclosing package or subprogram body. In that case,
+we may strip off the prefix and invite the caller to try again.
+(If we do this, the type in the returned value is a dummy).
 =SML
-local
-fun €wanted› (fun_name : ID) (UD_String (i, _)) = (i = fun_name)
-|   wanted _ _ = false;
-fun €fun_name_par_names› ({name, formal_pars, par_names_defs, return_type} : INFORMAL_FUN)
-	: ID * (ID * (ID * Z_EXP OPT)) list * TMARK = (
-	let 	fun get_tmarks {vars, tmark} = (
-			map (fn v =>  tmark) vars
-		);
-		val ts = flat (map (get_tmarks o #var_decl) formal_pars);
-		val par_info = map (fn (t, (n, d)) => (n, (t, d))) (combine ts par_names_defs)
-			handle Fail _ => error "fun_name_par_names" 507078[];
-	in	(name, par_info, return_type)
-	end
-);
-in
-fun €add_globs_pars_return›
-	(globals : Z_ID list) (fun_name : ID) (pars_tmarks_defs : (ID * (ID * Z_EXP OPT)) list) (ret_ty : TMARK): unit = (
-	let	val old = (snd o dest_ud_string o get_user_datum "-") cn_pars_ud_key
-			handle Fail _ => [];
-		fun enc_par_tmark (p, (t, Nil)) = UD_String(p, [UD_String(t, [])])
-		| enc_par_tmark (p, (t, Value e)) = UD_String(p, [UD_String(t, [UD_Term(e, [])])]);
-		val gs = UD_String("", map (fn g => UD_String(g, [])) globals);
-		val ps = UD_String("", map enc_par_tmark pars_tmarks_defs);
-		val r = UD_String(ret_ty, []);
-		val new = 
-			UD_String(fun_name, [gs, ps, r])
-			:: (old drop wanted fun_name);
-	in	set_user_datum(cn_pars_ud_key, UD_String("", new))
-	end
-);
-fun €get_spark_function_info› (fun_name : Z_ID) : (Z_ID list * (ID * (ID * Z_EXP OPT)) list * TMARK) OPT = (
-	let	fun get_it thy = (snd o dest_ud_string o
-			switch find (wanted fun_name) o snd o dest_ud_string o
-			get_user_datum (thy))
-				cn_pars_ud_key;
-		val uds = get_it "-" handle Fail _ => get_it (get_const_theory (z_id_of_id fun_name));
-		fun get_term_opt udl = (
-			(Value o fst o dest_ud_term o hd) udl handle Fail _ => Nil
-		);
-	in	case uds of
-			[gl, pl, r] => (Value(
-			(map (fst o dest_ud_string) o snd o dest_ud_string) gl,
-			(map ((Combinators.I ** ((Combinators.I ** get_term_opt) o
-				dest_ud_string o hd)) o dest_ud_string) o snd o dest_ud_string)  pl,
-			fst(dest_ud_string r)))
-		| _ => Nil
-	end	handle Fail _ => Nil
-);
-fun €add_spark_function_info›
-	(globals : Z_ID list)
-	(inf_fun : INFORMAL_FUN) : unit = (
-	let	val (fun_name, pars, ret_ty) = fun_name_par_names inf_fun;
-	in	add_globs_pars_return globals fun_name pars ret_ty
-	end
-);
-end;
-=IGN
-val ps1 : PARAM_SPEC = {var_decl={vars = ["P1"], tmark = "T1"}, mode = MSparkIn true};
-val if1 : INFORMAL_FUN = {name = "F1", formal_pars = [ps1],  return_type="RT1"};
-new_const("z'" ^ #name if1, BOOL);
-add_spark_function_info [] [Value mk_t] if1;
-get_spark_function_info "F1";
-val inf_fun = if1;
-val ps2 : PARAM_SPEC = {var_decl={vars = ["P2", "P3"], tmark = "T2"}, mode = MSparkIn false};
-val if2 : INFORMAL_FUN = {name = "F2", formal_pars = [ps1, ps2], return_type="RT2"};
-new_const("z'" ^ #name if2, BOOL);
-add_spark_function_info ["A", "B"] [Nil, Value mk_t, Value Ò1Æ ]if2 ;
-get_spark_function_info "F1";
-get_spark_function_info "F2";
-=TEX
-\subsection{Information about SPARK Types and Constants}
-When a basic declaration causes a Z global variable to be defined,
-we may later need to know whether the Z global variable corresponds to
-a SPARK type or a SPARK constant.
-For record types, we also need to record the order of the component names.
-To do this a list of type names and associated component names from the SPARK type declarations is maintained in the theory.
-A global variable will not be a type unless it has an entry in this list.
-=TEX
-=IGN
-=SML
-fun €add_spark_type_info› (tyn : ID, (compns : ID list, ndiscs : int)) : unit = (
-	let	val enc = UD_Int(ndiscs, [])::map (fn n => UD_String(n, [])) compns;
-	in	update_user_datum cn_types_ud_key (UD_String(tyn, enc))
-	end
-);
-fun €get_spark_type_info› (n : ID) : (ID list * int) OPT = (
-	let	fun aux (UD_String (tyn, cmps)::more) = (
-			if	tyn = n
-			then	Value (map (fst o dest_ud_string) (tl cmps),
-					(fst o dest_ud_int o hd) cmps)
-			else	aux more
-		) | aux (_::more) = (aux more
-		) | aux [] = Nil;
-		val thy = get_const_theory (z_id_of_id n)
-		val infos = ((snd o dest_ud_string o get_user_datum thy)
-					cn_types_ud_key)
-				handle Fail _ => [];
-	in	aux infos
-	end	handle Fail _ => Nil
+fun €env_retry› (env : CN_ENV) : CN_ENV  = (fn n =>
+	case env n of
+		res as Value _ => res
+	|	Nil =>
+		case
+			let	fun match ("o"::c1s) [] = (
+					implode c1s
+				) | match (c1::c1s) (c2::c2s) = (
+					if c1 = c2 then match c1s c2s else ""
+				) | match _ _ = "";
+				fun hunt _ [] = Nil
+				|   hunt en (body::bodies) = (
+				case match en (explode body) of
+						"" => hunt en bodies
+					|	new_n => Value new_n
+				);
+			in	hunt (explode n) (get_parent_body_names())
+			end
+		of
+			Value n' => env n'
+		|	Nil => Nil		
 );
 =TEX
 =SML
-fun €add_spark_constant_info› (tyn : ID, tmark : ID) : unit = (
-	update_user_datum cn_constants_ud_key (UD_String(tyn, [UD_String(tmark, [])]))
-);
-fun €get_spark_constant_info› (n : ID) : ID OPT = (
-	let	fun aux (UD_String (tyn, [tmk])::more) = (
-			if	tyn = n
-			then	Value (fst(dest_ud_string tmk))
-			else	aux more
-		) | aux (_::more) = (aux more
-		) | aux [] = Nil;
-		val thy = get_const_theory (z_id_of_id n)
-		val infos = ((snd o dest_ud_string o get_user_datum thy)
-					cn_constants_ud_key)
-				handle Fail _ => [];
-	in	aux infos
-	end	handle Fail _ => Nil
+fun €cn_env_of_in_scope› (in_scope as{dict, ...} : IN_SCOPE) : CN_ENV  = (
+	env_retry (env_of_env_dict dict)
 );
 =TEX
-To help with processing record types the following function takes a type definition and returns a list giving the component names in order and the number of discriminants
-for a record type (if any, i.e., the list is empty and the number is 0
-except when a record type definition is processed --- this works because a
-record must have at least one component).
+=SML
+val €current_cn_env› : CN_ENV = env_retry (fn (n : Z_ID) =>
+	cn_env_of_in_scope
+	((#in_scope(#declab(hd(!blocks))))
+		handle Fail _ => fail "current_cn_env" 507130 [fn _ => n])
+	n
+);
+=TEX
+To help with processing record types the following function takes a type definition and
+for a record type returnsthe appropriate entity info giving the component names in order and the number of discriminants.
 In accordance with the Ada rules, the discriminants are included, in order, as
 the leading sublist of the components.
+For other sorts of Ada type we need only record the fact that the Z global variable represents an Ada type.
 =SML
-fun €type_def_comp_names› (TDRecordTypeDef {decl, disc} : TYPE_DEF) : ID list * int = (
+fun €entity_info_of_type_def› (TDRecordTypeDef {decl, disc} : TYPE_DEF) : ENTITY_INFO = (
 	let	val discs = flat (map #vars disc);
 		val others = flat (map (#vars o fst) decl);
-	in	(discs @ others, length discs)
+		val ty = force_value
+	in	EIEnvRecordType{comp_names = discs @ others, num_discs = length discs}
 	end
-) | type_def_comp_names _ = ([], 0);
+) | entity_info_of_type_def _ = EIEnvOtherType;
 =TEX
 ... and when a record type with a discriminant is used in a subtype declaration, we
 need to calculate the component names for the subtype.
 =SML
-fun €sub_ind_comp_names›  (pfx : ID -> ID)  ({tmark, ...} : CONSTRAINT SUB_IND) : ID list * int = (
-	case get_spark_type_info (trans_id (pfx tmark)) of
-		Value (comps, ndiscs) => (comps, 0)
-	|	Nil => ([], 0)
+fun €entity_info_of_sub_ind›  (pfx : ID -> ID)  ({tmark, ...} : CONSTRAINT SUB_IND)
+	: ENTITY_INFO = (
+	case current_cn_env (trans_id (pfx tmark)) of
+		Value {info = EIEnvRecordType{comp_names, ...}, ...}  => (
+			EIEnvRecordType{comp_names =comp_names, num_discs =0}
+	) |	_ => EIEnvOtherType
+);
+=TEX
+... and for a private type declaration, we need to say it is an ``other type'' (since we don't know yet).
+=SML
+fun €entity_info_of_private_type_decl› (_ : PRIVATE_TYPE_DECL) : ENTITY_INFO = (
+	 EIEnvOtherType
+);
+=TEX
+... and for a constant declaration, we need to record the type mark (which may be omitted if this is a named number declaration).
+=SML
+fun €entity_info_of_const_decl› ({tm, ...} : EXP CONST_DECL) : ENTITY_INFO = (
+	 case tm of
+		Value tm => EIEnvConstant{tmark = tm}
+	|	Nil => EIEnvOther
+);
+=TEX
+Once we have the environment info, we can generate the environment info for it.
+We do not need to provide the type here, but we do if it is available: subsequently, when the environment info is used,
+{\em env\_of\_env\_dict} will fill it in from the HOL type of the constant if it is not in the environment info.
+=SML
+fun €env_entry_of_entity_info› (zn : Z_ID, ent_inf : ENTITY_INFO) : Z_ID * ENV_INFO = (
+	(zn, {tipe = get_const_type zn, info = ent_inf, canon_name = zn})
 );
 =TEX
 In the following, named number declarations are just ignored.
@@ -2127,201 +2069,24 @@ the information recorded for a constant is only used in handling
 attributes, which are not relevant for named numbers.
 =SML
 fun €set_basic_decl_info› (pfx : ID -> ID) (bd : BASIC_DECL) : unit = (
-	case bd of
-		BDTypeDecl {name, type_def} => (
-			add_spark_type_info (pfx name, type_def_comp_names type_def)
-	) |	BDSubtypeDecl ({name, sub_ind}) => (
-		add_spark_type_info (pfx name,  sub_ind_comp_names pfx sub_ind)
-	) |	BDPrivateTypeDecl ptd => add_spark_type_info (pfx (#id ptd), ([], 0))
-	|	BDConstDecl {consts = cs, tm = Value tmark, ...} => (map (fn c =>
-				add_spark_constant_info (pfx c, tmark)
-			) cs; ())
-	|	_ => ()
-);
-=TEX
-\subsection{Constructing $CN\_ENV$s}
-The code here must pass type information into the functions defined in \cite{ISS/HAT/DAZ/DTD505,ISS/HAT/DAZ/DTD508} using the data type $CN\_ENV$ defined in \cite{ISS/HAT/DAZ/DTD508}.
-This happens when declarations are translated for output to the Z document and when VCs are generated;
-in the first case, the $CN\_ENV$ value required is taken from the running environment, in the second from the $In\_Scope$ part of the $Speclab$ which is the first part of the arguments to $vcs$.
-In either case, Z global variables are sought from the theory data base if there is no local declaration for them.
-
-=TEX
-$get\_tmark\_from\_inscope$ searches an $IN\_SCOPE$ value for the type mark associated with a variable or parameter name, or the type associated with an auxiliary variable.
-The recur parameter is needed to handle variable renamings, for which we sometimes have to look
-in outer scopes to find the information we need. It is caller's responsibility to supply a value
-for this parameter that will not cause an infinite recursion.
-
-In dealing with use clause substitutions, we return a value with a dummy type if the
-expanded name cannot be found in the supplied {\it IN\_SCOPE}. This occurs
-when the expanded name references a procedure in the used package.
-=SML
-fun €get_tmark_from_inscope› (recur : Z_ID -> (TYPE OPT * ENV_INFO) OPT)
-	 (n : Z_ID) (inscope : IN_SCOPE)
-	: (TYPE OPT * ENV_INFO) OPT = (
-	let	fun do_vars [] = Nil
-		|   do_vars ({vars, tmark} :: more) = (
-			if	n mem vars
-			then	Value tmark
-			else	do_vars more
-		);
-		fun do_pars [] = Nil
-		|   do_pars ({var_decl as {vars, tmark}, mode} :: more) = (
-			if	n mem vars
-			then	Value tmark
-			else	do_pars more
-		);
-		fun do_aux_vars [] = Nil
-		|  do_aux_vars (dec :: more) = (
-			case s_lookup n (map dest_var (frees dec)) of
-				Nil => do_aux_vars more
-			|	Value ty =>
-				Value(ty, snd(dest_z_dec dec))
-		);
-		fun do_renamings [] = Nil
-		|    do_renamings ((new, old)::more) = (
-			if	new = n
-			then	case get_tmark_from_inscope (fn _ => Nil)  old inscope of
-					x as Value (ty, EIEnvVar(tmk, _)) =>  (
-					Value(ty, EIEnvVar(tmk, Value old))
-				) |	_ =>  (
-					case recur old of
-						Value (ty, EIEnvVar(tmk, _)) => (
-						Value(ty, EIEnvVar(tmk, Value old))
-					) |	Value (ty, EIEnvAuxVar(tm, _)) => (
-						Value(ty, EIEnvAuxVar(tm, Value old))
-					) |	_ => (
-						error "get_tmark_from_inscope" 507069
-						[fn _ => old, fn _ => new]
-					)
-				)
-			else	do_renamings more
-		);
-		fun do_use_clause_subs [] = Nil
-		|    do_use_clause_subs ((unex, ex)::more) = (
-			if	unex = n
-			then	case get_tmark_from_inscope (fn _ => Nil)  ex inscope of
-					x as Value (ty, _) =>  (
-					Value(ty, EIEnvRetry ex)
-				) |	_ =>  (
-					case recur ex of
-						Value (ty, _) => (
-						Value(ty, EIEnvRetry ex)
-					) |	_ =>  (
-						Value(Value BOOL, EIEnvRetry ex)
-					)
-				)
-			else	do_use_clause_subs more
-		);
-		fun tmark_to_type tmk = (
-			type_of_tmark (
-			case get_tmark_from_inscope recur tmk inscope of
-				Value(_, EIEnvRetry ex) => ex
-			|	_ => tmk)
-		);
-	in	case do_vars (#vc_vars inscope) of
-			Value tmk	=> Value(tmark_to_type tmk, EIEnvVar (tmk, Nil))
-		|	Nil		=> (
-		case do_pars (#vc_pars inscope) of
-			Value tmk	=> Value(tmark_to_type tmk, EIEnvVar (tmk, Nil))
-		|	Nil		=> (
-		case do_aux_vars (#vc_aux_vars inscope) of
-			Value (ty, tm)	=> Value(Value ty, EIEnvAuxVar (tm, Nil))
-		|	Nil		=> (
-		case do_renamings (#var_renamings inscope)  of 
-			x as Value _	=> x
-		|	Nil		=> do_use_clause_subs (#use_clause_subs inscope)
-		)))
+	let	val	info_s_dict = map env_entry_of_entity_info
+		(case bd of
+			BDTypeDecl {name, type_def} => (
+				[(trans_id (pfx name), entity_info_of_type_def type_def)]
+		) |	BDSubtypeDecl ({name, sub_ind}) => (
+				[(trans_id (pfx name), entity_info_of_sub_ind pfx sub_ind)]
+		) |	BDPrivateTypeDecl (ptd as{id, ...}) =>  (
+				[(trans_id (pfx id), entity_info_of_private_type_decl ptd)]
+		) |	BDConstDecl(cd as  {consts = cs, ...}) => (map (fn c =>
+				(trans_id(pfx c),  entity_info_of_const_decl cd)
+			) cs)
+		|	_ => []);
+		val	block1 as {declab ={in_scope, ...}, ...} = block 1;
+		val	in_scope1a = in_scope_dict(in_scope,
+				add_to_env_dict (#dict in_scope) info_s_dict);
+		val	block1a = block_in_scope(block1, in_scope1a)
+	in	blocks := block1a :: tl(!blocks)
 	end
-);
-=TEX
-Now $get\_tmark\_from\_env$, which searches the running environment using the previous function to look for the required type mark.
-=SML
-fun €get_tmark_from_env› (_ : Z_ID) ([] : ENV) : (TYPE OPT * ENV_INFO) OPT = (
-	Nil
-) | €get_tmark_from_env› n (block :: more) = (
-	case get_tmark_from_inscope (switch get_tmark_from_env more) n (#in_scope (#declab block)) of
-			Nil		=> get_tmark_from_env n more
-		|	v as Value _	=> v
-);
-=TEX
-If we don't find anything in the running environment, then the only remaining possibility is that the name is that of a SPARK function, constant or type stored as a global variable in the theory database.
-In this case the stored type is correct as it stands (no  to take away).
-=SML
-fun €type_of_g_var› (zn : Z_ID) : TYPE OPT = (
-	(case get_const_type zn of
-		Value ty => (Value ty)
-	|	Nil => Nil)
-);
-=TEX
-If we have the a global variable, then we need to classify it as a function, or record type type mark or other sort of SPARK entity.
-for a function, we also need the formal parameter list.
-To make this classification, we first check to see whether any formal parameters have been associated with the name:
-if so, then it's a function and we have the parameter names to hand;
-if it's not a function but is a type name, we dismantle the type: if its a set of bindings, then this is a record type mark; otherwise it's an `other type';
-if it's neither a function nor a type name, its an `other'.
-
-=SML
-fun €env_info_of_g_var› (zn : ID) (ty : TYPE) : (TYPE * ENV_INFO) = (
-	case get_spark_function_info zn of
-		Value gspstm => (ty, EIEnvFunction gspstm)
-	|	Nil => (
-			ty,
-			case get_spark_type_info zn of
-				Value (info as (_::_, _)) => EIEnvRecordType info
-			|	Value _ => EIEnvOtherType
-			|	Nil => (
-				case get_spark_constant_info zn of
-					Value tmk => EIEnvConstant tmk
-				|	Nil => EIEnvOther
-			)
-	)
-);
-=TEX
-If a name is not found in the environment, it may be a prefixed name
-of an item in the enclosing package or subprogram body. In that case,
-we may strip off the prefix and invite the caller to try again.
-(If we do this, the type in the returned value is a dummy).
-=SML
-fun €env_retry› (n : Z_ID) : (TYPE * ENV_INFO) OPT = (
-	let	fun match ("o"::c1s) [] = (
-			implode c1s
-		) | match (c1::c1s) (c2::c2s) = (
-			if c1 = c2 then match c1s c2s else ""
-		) | match _ _ = "";
-		fun hunt _ [] = Nil
-		|   hunt en (body::bodies) = (
-			case match en (explode body) of
-				"" => hunt en bodies
-			|	new_n => Value (BOOL, EIEnvRetry new_n)
-		);
-	in	hunt (explode n) (get_parent_body_names())
-	end			
-);
-=TEX
-The following treats the case where it has not been possible to convert the type mark for a name found in the environment into a type as if the name were not declared. 
-=SML
-fun €current_cn_env› (n : Z_ID) : (TYPE * ENV_INFO) OPT = (
-	case get_tmark_from_env n (!blocks) of
-		Value (Value ty, ei) => ( Value (ty, ei)
-	) |	Value (Nil, _) => (env_retry n
-	) | 	Nil => (
-			case type_of_g_var (z_id_of_id n) of
-				Value ty => Value(env_info_of_g_var n ty)
-			|	Nil => env_retry n
-	)
-);
-=TEX
-=SML
-fun €cn_env_of_in_scope› (in_scope : IN_SCOPE) (n : Z_ID)
-	: (TYPE * ENV_INFO) OPT = (
-	case get_tmark_from_inscope (fn _ => Nil) n in_scope of
-		Value (Value ty, ei) => ( Value (ty, ei)
-	) |	Value (Nil, _) => (env_retry n
-	) |	Nil => (
-			case type_of_g_var (z_id_of_id n) of
-				Value ty => Value(env_info_of_g_var n ty)
-			|	Nil => env_retry n
-	)
 );
 =TEX
 =SML
@@ -2353,92 +2118,22 @@ fun €speclab_wp_env_from_in_scope›  (
 \subsection{ProofPower Type Inference Context}
 =TEX
 =SML
-fun €ti_context_of_in_scope› (inscope : IN_SCOPE) : TERM list = (
-	let	fun v_v0 (in_mode : bool) (ty : TYPE) (v : ID) : TERM list = (
-			if	in_mode
-			then	[mk_var(v, ty)]
-			else	[mk_var(v ^ "â0", ty), mk_var(v, ty)]
-		);
-		fun tmark_to_type tmk = (
-			type_of_tmark (
-			case get_tmark_from_inscope (fn _ => Nil) tmk inscope of
-				Value(_, EIEnvRetry ex) => ex
-			|	_ => tmk)
-		);
-		fun do_vars [] = []
-		|   do_vars ({vars, tmark} :: more) = (
-			case tmark_to_type tmark of
-				Nil => do_vars more
-			|	Value ty => (
-				flat
-				(do_vars more :: map (v_v0 false ty) vars)
-			)
-		);
-		fun do_pars [] = []
-		|   do_pars ({var_decl as {vars, tmark}, mode} :: more) = (
-			case tmark_to_type tmark of
-				Nil => do_pars more
-			|	Value ty => (
-				flat
-				(do_pars more ::
-					map (v_v0
-					(case mode of MSparkIn _ => true | _ => false)
-						 ty) vars)
-			)
-		);
-		fun do_log_cons (log_cons : Z_DECL list) = (
-			(flat o map (fst o dest_z_dec)) log_cons
-		);
-		fun do_aux_vars (aux_vars : Z_DECL list) = (
-			let	val avs = (flat o map (fst o dest_z_dec)) aux_vars;
-			    	fun av_av0 tm = (
-					let	val (n, ty) = dest_var tm;
-					in	mk_var(n^"â0", ty)
-					end
-				);
-			in	avs @ map av_av0 avs
-			end
-		);
-		fun do_renamings [] = []
-		|    do_renamings ((new, old)::more) = (
-			case cn_env_of_in_scope inscope old of
-					Value (ty, _) => (
-					v_v0 false ty new @ do_renamings more
-				) |	Nil => (
-					do_renamings more
-				)
-		);
-		fun do_use_clause_subs [] = []
-		|    do_use_clause_subs ((unex, ex)::more) = (
-			case cn_env_of_in_scope inscope ex of
-					Value (ty, EIEnvVar _) => (
-					v_v0 false ty unex @ do_use_clause_subs more
-				) |	Value (ty, _) => (
-					v_v0 true ty unex @ do_use_clause_subs more
-				) |	Nil => (
-					do_use_clause_subs more
-				)
-		);
-		val {vc_vars, vc_pars, vc_log_cons,
-			vc_aux_vars, var_renamings, use_clause_subs, ...} = inscope;
-	in	do_log_cons vc_log_cons @ do_aux_vars vc_aux_vars
-			@ do_pars vc_pars @ do_vars vc_vars
-			@ do_renamings var_renamings @ do_use_clause_subs use_clause_subs
-	end
+fun €ti_context_of_in_scope› (inscope : IN_SCOPE) : TYPE E_DICT = (
+	ti_context_of_env_dict (#dict inscope)
 );
 =TEX
 =SML
-fun €ti_context_of_subunit› (subunit : SUBUNIT) : TERM list = (
+fun €ti_context_of_subunit› (subunit : SUBUNIT) : TYPE E_DICT = (
 	ti_context_of_in_scope (#in_scope subunit)
 );
 =TEX
 =SML
-fun €ti_context_of_declab› (declab : DECLAB) : TERM list = (
+fun €ti_context_of_declab› (declab : DECLAB) :TYPE E_DICT = (
 	ti_context_of_in_scope (#in_scope declab)
 );
 =TEX
 =SML
-fun €ti_context_of_speclab› (speclab : SPECLAB) : TERM list = (
+fun €ti_context_of_speclab› (speclab : SPECLAB) : TYPE E_DICT = (
 	if	#formal_body_flag speclab andalso #fun_flag speclab
 	then	let 	val cxt = ti_context_of_in_scope (#in_scope speclab);
 			val env = cn_env_of_in_scope (#in_scope speclab);
@@ -2447,63 +2142,58 @@ fun €ti_context_of_speclab› (speclab : SPECLAB) : TERM list = (
 				informal_fun = inf_fun,
 				spec = dummy_spec,
 				globals	 = 
-				case env (#name inf_fun) of
-					Value(_, EIEnvFunction (gs, _, _)) => gs
+				case env (trans_id (#name inf_fun)) of
+					Value{info =EIEnvFunction {deps = gs, ...}, ...} => gs
 				|	_ =>
 					fail "ti_context_of_speclab" 508081 [fn()=> #name inf_fun]};
-		in	fun_decl env form_fun :: cxt
+		in	list_e_enter cxt (map dest_var(frees(fun_decl env form_fun)))
 		end
 	else	ti_context_of_in_scope (#in_scope speclab)
 );
 =TEX
 =SML
-fun €ti_context_of_block› (block : BLOCK) : TERM list = (
+fun €ti_context_of_block› (block : BLOCK) : TYPE E_DICT = (
 	ti_context_of_declab (#declab block)
 );
 =TEX
 =SML
-fun €current_ti_context› (() : unit) : TERM list = (
-	flat (map (ti_context_of_block) (!blocks))
+fun €current_ti_context› (() : unit) : TYPE E_DICT = (
+	ti_context_of_block (block 1)
 );
 =TEX
 =SML
 fun €set_current_ti_context› (ts : TERM list) : unit = (
-	set_ti_context(ts @ current_ti_context())
+	e_set_ti_context
+	(list_e_enter (current_ti_context()) (map dest_var(flat(map frees ts))))
 );
 =TEX
 =SML
-fun €set_in_scope_ti_context› (in_scope : IN_SCOPE) : TERM list = (
-	set_ti_context(ti_context_of_in_scope in_scope);
-	get_ti_context()
+fun €set_in_scope_ti_context› (in_scope : IN_SCOPE) : unit = (
+	e_set_ti_context(ti_context_of_in_scope in_scope)
 );
 =TEX
 =SML
-fun €set_package_ti_context› (package : PACKAGE) : TERM list = (
-	set_in_scope_ti_context {
-		vc_pars = [],
-		vc_vars = #vc_vars package,
-		dec_labels = [],
-		vc_aux_vars = #aux_vars package,
-		var_renamings = #var_renamings package,
-		use_clause_subs = [],
-		vc_log_cons = [],
-		formal_procs = []}
+fun €ti_context_of_package› (package as {vc_vars, aux_vars, var_renamings, ...}: PACKAGE)
+	: TYPE E_DICT  = (
+	ti_context_of_in_scope(
+		in_scope_renamings(
+			in_scope_vc_aux_vars Nil
+				(in_scope_vc_vars Nil (empty_in_scope, vc_vars), aux_vars),
+			var_renamings))
+);
+=TEX
+=SML
+fun €set_package_ti_context› (package : PACKAGE) : unit = (
+	set_in_scope_ti_context(ti_context_of_package package)
 );
 =TEX
 The following is used to add the typing context for a parameter list into the context temporarily. It returns the context which should be restored when the parameters are no longer needed.
 =SML
-fun €add_params_ti_context› (pars : PARAM_SPEC list) : TERM list = (
-	let	val old = get_ti_context();
-		val to_add = ti_context_of_in_scope {
-				vc_pars = pars,
-				vc_vars = [],
-				dec_labels = [],
-				vc_aux_vars = [],
-				var_renamings = [],
-				use_clause_subs = [],
-				vc_log_cons = [],
-				formal_procs = []};
-	in	set_ti_context(to_add @ old);
+fun €add_params_ti_context› (pars : PARAM_SPEC list) : TYPE E_DICT = (
+	let	val old = e_get_ti_context();
+		val to_add = ti_context_of_in_scope (in_scope_vc_pars Nil
+				(empty_in_scope, pars));
+	in	e_set_ti_context(list_e_enter old (e_flatten to_add));
 		old
 	end
 );
@@ -6522,6 +6212,7 @@ fun €create_prefixed_spec›
 		fun par_aux (ff:FORMAL_FUN) = (
 			add_spark_function_info (#globals ff) (#informal_fun ff)
 		);
+(* TBS: !!! Need to sort out the order here: the stuff that sets up the ENV_INFOs needs the constants to have been stored in the current theory before the ENV_INFOs are calculated *)
 		val dummy = (
 			map (add_spark_function_info []) pinformal_funs;
 			map par_aux pformal_funs;
