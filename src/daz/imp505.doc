@@ -94,7 +94,7 @@ infix 4 %Longrightarrow%;
 structure €CNVCGenerator› : CNVCGenerator = struct
 local
 	open CaseIndependence;
-	open CNTypes2 CNParser CNTypes CNBasicDeclsAndExprs
+	open CNTypes2 CNParser CNTypes CNBasicDeclsAndExprs;
 	open ZUserInterfaceSupport;
 in
 =TEX
@@ -603,10 +603,11 @@ handle _ => fail "analyse_log_con" 505001 [fn()=>"logical constant not of form C
 =TEX
 =SML
 fun €log_con› ({wp, a, wp_env as {env, ...}} : WP_PARS)
-	(({x, t, spec as {w, w0, pre, post,...}, ...}, q) : LOG_CON * STMT)
+	(({x, t, spec as {w, pre, post,...}, ...}, q) : LOG_CON * STMT)
 		: RESULT = (
 
 let	val (e, pre1) = analyse_log_con (z_predexp_of_z_tm pre);
+	val w0 = map (fn s => s ^ "â0") w;
 	val {wp = wp1, side = side1} = wp (SStmt q, a, wp_env);
 	val wp = [[] Ù sub(pre1, x, e)];
 	val zvar_ty = (dest_z_power_type o type_of o z_predexp_of_z_tm) t;
@@ -633,6 +634,80 @@ in
 end
 );
 =TEX
+\subsection{Adjusting Statements}
+
+=SML
+fun €any_initial_variables› (z_tm : Z_TM) : bool = (
+let	val pred = z_predexp_of_z_tm z_tm;
+	val names = map (fst o dest_var) (frees pred);
+	fun is_init_var s =
+		case (rev o explode) s of
+			"0" :: "â" :: _ =>	true
+		|	_ => 			false;
+	
+in
+	any names (fn s => is_init_var s)
+end
+);
+=TEX
+=SML
+fun €is_static_for_loop› (wp : WP_ENV) (fs : STMT FOR_STATIC) : bool = (
+let	fun no_vars_in_exp exp = (
+		case (term_vars o (trans_exp (#env wp))) exp of
+			[] =>	true
+		|	_ =>	false
+	);
+in
+	case (#range fs) of
+	RRange {lo, hi} =>
+		no_vars_in_exp lo andalso no_vars_in_exp hi
+	|RRangeAttr _ => true
+end
+);
+=TEX
+=SML
+fun €adjust_statement› (wp : WP_ENV) (st as SStmt s : STATEMENT)
+		: STATEMENT = (
+	case s of
+		STSpecNoIvars sni =>
+			if	any_initial_variables (#post sni)
+			then	SSpecIvars (sni, STImplicitNull)
+			else	st
+	|	STForStatic (fs as {name,i,range,loop, ...}) =>
+			if	is_static_for_loop wp fs
+			then	st
+			else	SForNonStatic ({	name=name,
+							i=i,
+							range=range,
+							loop=loop
+						}, STImplicitNull)
+	|	STProcNoIvars piv => (
+		let	fun find_spec id ((fproc::rest) : FORMAL_PROC list) = (
+				if (#name fproc) = id
+				then	(#spec fproc)
+				else	find_spec id rest
+			) | find_spec _ _ = fail "adjust_statement" 505001
+				[fn()=>"cannot proceed formally"];
+		in
+			if	any_initial_variables (#post (find_spec
+								(#name piv)
+								(#formal_procs wp)))
+			then	SProcIvars (piv, STImplicitNull)
+			else	st
+		end
+	) |	STSemicolon (st1, st2) => (
+			case adjust_statement wp (SStmt st1) of
+				SStmt st1' => SStmt s
+			|	SSpecIvars (si, _) => SSpecIvars (si, st2)
+			|	SForNonStatic (fns, _) => SForNonStatic (fns, st2)
+			|	SProcIvars (piv, _) => SProcIvars (piv, st2)
+			|	SLogCon lc => SLogCon lc
+			)
+	|	_ => st
+
+) | adjust_statement _ other = other;
+=TEX
+
 \subsection{$wp$}\label{wp}
 
 =SML
@@ -641,7 +716,7 @@ let	val pars as {wp_env as {env, ...}, ...} : WP_PARS =
 			{wp = wp, a = a, wp_env = wp_env};
 	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
 	val adjust = adjust_exp env;
-in	case st of
+in	case adjust_statement wp_env st of
 		SStmt STNull => null pars
 	|	SStmt STImplicitNull => null pars
 	|	SStmt (STAssign {name, e}) =>
@@ -677,48 +752,76 @@ end
 \section{VERIFICATION CONDITIONS}
 =SML
 fun €vc_local_decls› (seqs : SEQUENT list,
-	{fun_flag, in_scope as {vc_vars, vc_pars, ...},
-		wp_env={env, ...}, ...} : SPECLAB)
+	{formal_body_flag, fun_flag,
+		in_scope as {vc_vars, vc_pars, vc_log_cons, ...},
+		wp_env = {fun_header, env, ...}, ...} : SPECLAB)
 		: VC list = (
-let	fun do_vars var = (
+let
+=TEX
+Every variable in $vc\_vars$ and its corresponding initial variable is introduced.
+=SML
+	fun do_vars var = (
 		[trans_id var, trans_id var ^ "â0"]
 	);
 	fun var_decl_decls {vars, tmark} =
-		{vars = (flat o (map do_vars)) vars, tmark=tmark};
+		trans_decl env {vars = (flat o (map do_vars)) vars, tmark=tmark};
+=TEX
+The following function implements the check for input parameters specified in \cite[section 5.5]{DRA/CIS/CSE3/TR/94/27/1.0}.
+=SML
 	fun param_spec_decls {var_decl, mode} = (
-		var_decl_decls var_decl
+		case mode of
+		MSparkIn => trans_decl env var_decl
+		|	_ => var_decl_decls var_decl
 	);
+=TEX
+=SML
 	val decls = map var_decl_decls vc_vars @ map param_spec_decls vc_pars;
-	fun drop_vars vns {vars, tmark} = (
-		{vars=vars drop (fn var => not (var mem vns)),tmark=tmark}
-	);
+
+=TEX
+Add the logical constants (no initial versions).
+=SML
+	val decls = vc_log_cons @ decls;
+=TEX
+If $formal\_body\_flag$ and $fun\_flag$ are $true$, add a declaration of the function (obtained from $fun\_header$). \footnote{When the type mark is "\_\_function", it is replaced in $trans\_decl$ with the appropriate function type from the environment.}
+
+=SML
+	val decls =	if	formal_body_flag andalso fun_flag
+			then	(trans_decl env
+				{vars= [#name fun_header], tmark = "__function"})
+					:: decls
+			else	decls;
+=TEX
+
+Remove any declarations which are not needed by the sequent.
+=SML
+	fun drop_vars vns vardecl = (
+	let	val (vars, ty) = dest_z_dec vardecl;
+		val vartys = map dest_var vars;
+		val dvartys = vartys drop (fn (v,ty) => not (v mem vns));
+	in
+		case dvartys of
+			[] =>	[]
+		|	_ =>	[mk_z_dec (map mk_var dvartys, ty)]
+	end);
 	fun frees_in_seq (seq as (h, c)) = (
 		map (fst o dest_var) (flat(frees c :: map frees h))
 	);
 	fun add_decls decs seq = (
-		let	val vns = frees_in_seq seq;
-			val ddecs = map (drop_vars vns) decs;
-		in	(ddecs drop (fn {vars, tmark} => vars=[]),
-			seq)
-		end
+	let	val ddecs = map ((drop_vars o frees_in_seq) seq) decs;
+	in
+		(flat ddecs, seq)
+	end
 	);
-	fun conv_var_decl ({vars=vs, tmark=t} : VAR_DECL)
-			: {var : ID, tmark : TMARK} list = (
-		map (fn id => {var=id, tmark=t}) vs
-	);		
-	fun mk_z_decl_part  (vartml, seq) =
-		(((map (trans_decl env)) o flat o (map conv_var_decl)) vartml, seq);
 	val res = map (add_decls decls) seqs;
-
 in
-	map mk_z_decl_part res
+	res
 end
 );
 =TEX
 =SML
 fun €vcs› ((sl as {spec as {w, w0, pre, post, ...},
 			wp_env, ...}, st): SPECLAB * STATEMENT)
-			(*: VC list*) = (
+			: VC list = (
 let	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
 	val {wp, side} = wp (st, [[] Ù post1], wp_env);
@@ -746,5 +849,13 @@ end (* structure CNVCGenerator *);
 \twocolumn[\section{INDEX OF DEFINED TERMS}]
 \printindex
 \end{document}
+
+=IGN
+
+CNZGenerator.diag_vc_args;
+CNVCGenerator.vcs (hd(!CNZGenerator.diag_vc_args));
+use_file"wrk001";
+val (sl as {spec as {w, w0, pre, post, ...},
+			wp_env, ...}, st)= hd(! CNZGenerator.diag_vc_args);
 
 
