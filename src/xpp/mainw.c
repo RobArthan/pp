@@ -3,7 +3,7 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * $Id$
  *
- * cmdwin.c -  main window operations for the X/Motif ProofPower
+ * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
  *
  * (c) ICL 1993
@@ -108,11 +108,11 @@ XtAppContext app; /* global because needed in msg.c */
  * root		-	 the top level of the hierarchy
  * frame	root	 main window
  * work		frame	 work area
- * display	work	 displays application output
+ * journal	work	 displays application output
  * filename     work     rowcol for the next two:
  * filelabel    filename label for name of file being edited
  * namestring   filename displays name of file being edited
- * command	work	 command line input
+ * script	work	 the script being edited
  * menubar	frame	 the menu bar at the top of the main window
  * filemenu	menubar	 the file menu
  * toolsmenu	menubar	 the tools menu
@@ -120,9 +120,9 @@ XtAppContext app; /* global because needed in msg.c */
  * cmdmenu	menubar	 the command menu
  * helpmenu	menubar	 the help menu
  *
- * All widgets except command have the same name in the
+ * All widgets except script have the same name in the
  * widget hierarchy as their C name above except:
- * 	command is called "pp_text" in the Widget hierarchy
+ * 	script is called "pp_text" in the Widget hierarchy
  * 	to allow keyboard translation resources to be set up
  * 	for all text input windows at one go.
  *	all menus are called "menu" for similar reasons
@@ -132,14 +132,14 @@ XtAppContext app; /* global because needed in msg.c */
 Widget root;	/* global because needed in xpp.c */
 
 static Widget
-	frame, work, display, filename, filelabel, namestring, command,
+	frame, work, journal, filename, filelabel, namestring, script,
 	menubar, filemenu, toolsmenu, editmenu, cmdmenu, helpmenu;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * limits on text window sizes in the main window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static NAT display_max = 2000;
+static NAT journal_max = 2000;
 
 static NAT command_max = 2000;
 
@@ -159,10 +159,10 @@ static BOOL listening;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * scroll_out: given a buffer, buf, containing ct characters
- * of interest, write them to the display window, display.
+ * of interest, write them to the journal window, journal.
  * If the insertion position is visible, then the window is scrolled,
  * otherwise the new characters are written out of sight and
- * the display window text is left where it is.
+ * the journal window text is left where it is.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void scroll_out(buf, ct, ignored)
@@ -177,27 +177,27 @@ BOOL ignored;
 	char overwritten;
 
 
-	ins_pos = XmTextGetLastPosition(display);
+	ins_pos = XmTextGetLastPosition(journal);
 
 /* need to temporarily null-terminate the buffer: */
 
 	overwritten = buf[ct];
 	buf[ct] = '\0';
 
-	XmTextInsert(display, ins_pos, buf);
+	XmTextInsert(journal, ins_pos, buf);
 
 	buf[ct] = overwritten;
 
-	last_pos = XmTextGetLastPosition(display);
+	last_pos = XmTextGetLastPosition(journal);
 
-	if(XmTextPosToXY(display, ins_pos, &dontcare, &dontcare)) {
+	if(XmTextPosToXY(journal, ins_pos, &dontcare, &dontcare)) {
 		/* insertion position is visible: scroll */
-		while(!XmTextPosToXY(display, last_pos, &dontcare, &dontcare)) {
-			XmTextScroll(display, 1);
+		while(!XmTextPosToXY(journal, last_pos, &dontcare, &dontcare)) {
+			XmTextScroll(journal, 1);
 		};
 	};
 
-	check_text_window_limit(display,  display_max);
+	check_text_window_limit(journal,  journal_max);
 
 
 }
@@ -217,8 +217,8 @@ static void
 	cmd_menu_cb(),
 	help_menu_cb(),
 	close_down_cb(),
-	command_modify_cb(),
-	command_motion_cb();
+	script_modify_cb(),
+	script_motion_cb();
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu descriptions:
@@ -301,7 +301,7 @@ static MenuItem help_menu_items[] = {
     NULL,
 };
 
-setup_cmdwin(Bool edit_only)
+static setup_main_window(Bool edit_only)
 {
 	Arg args[12];
 	NAT i;
@@ -371,14 +371,14 @@ setup_cmdwin(Bool edit_only)
 	XtSetArg(args[i], XmNautoShowCursorPosition, 	True); ++i;
 	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
 
-	command = XmCreateScrolledText(work, "pp_text", args, i);
+	script = XmCreateScrolledText(work, "pp_text", args, i);
 
-	XtAddCallback(command,
-		XmNmodifyVerifyCallback, command_modify_cb, NULL);
+	XtAddCallback(script,
+		XmNmodifyVerifyCallback, script_modify_cb, NULL);
 
 
-	XtAddCallback(command,
-		XmNmotionVerifyCallback, command_motion_cb, NULL);
+	XtAddCallback(script,
+		XmNmotionVerifyCallback, script_motion_cb, NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Display window:
@@ -392,7 +392,7 @@ if( !edit_only ) {
 	XtSetArg(args[i], XmNautoShowCursorPosition, 	False); ++i;
 	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
 
-	display = XmCreateScrolledText(work, "display", args, i);
+	journal = XmCreateScrolledText(work, "journal", args, i);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu bar:
@@ -446,9 +446,9 @@ if( !edit_only ) {
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	XtManageChild(filename);
 	XtManageChild(menubar);
-	XtManageChild(command);
+	XtManageChild(script);
 if( !edit_only ) {
-	XtManageChild(display);
+	XtManageChild(journal);
 }
 	XtManageChild(work);
 	XtManageChild(frame);
@@ -477,7 +477,11 @@ XmAnyCallbackStruct *cbs;
 		break;
 	case FILE_MENU_OPEN:
 		fname = file_dialog(frame, "Open");
-		load_file(command, fname);
+		if(open_file(script, fname)) {
+			XmTextFieldSetString(namestring, fname);
+			XmTextFieldShowPosition(namestring, strlen(fname));
+		};
+		if(fname != NULL) {XtFree(fname);};
 		break;
 	case FILE_MENU_INCLUDE:
 		fname = file_dialog(frame, "Include");
@@ -492,11 +496,6 @@ XmAnyCallbackStruct *cbs;
 		break;
 	};
 
-	if(fname != NULL) {
-		XmTextFieldSetString(namestring, fname);
-		XmTextFieldShowPosition(namestring, strlen(fname));
-		XtFree(fname);
-	};
 
 
 }
@@ -509,7 +508,7 @@ XmAnyCallbackStruct *cbs;
 
 	switch(i) {
 	case TOOLS_MENU_PALETTE:
-		add_palette(command);
+		add_palette(script);
 /* Perhaps should test for success and make this menu item insensitive */
 		break;
 	default:
@@ -528,22 +527,22 @@ XmAnyCallbackStruct *cbs;
 
 	switch(i) {
 	case EDIT_MENU_CUT:
-		result = XmTextCut(command, CurrentTime);
+		result = XmTextCut(script, CurrentTime);
 		break;
 	case EDIT_MENU_COPY:
-		result = XmTextCopy(command, CurrentTime);
-		if(!result && display) {
-			result = XmTextCopy(display, CurrentTime);
+		result = XmTextCopy(script, CurrentTime);
+		if(!result && journal) {
+			result = XmTextCopy(journal, CurrentTime);
 		};
 		break;
 	case EDIT_MENU_PASTE:
-		result = XmTextPaste(command);
+		result = XmTextPaste(script);
 		break;
 	case EDIT_MENU_CLEAR:
-		XmTextClearSelection(command, CurrentTime);
+		XmTextClearSelection(script, CurrentTime);
 		break;
 	case EDIT_MENU_UNDO:
-		do_undo(command);
+		do_undo(script);
 		break;
 	default:
 		break;
@@ -626,7 +625,7 @@ XmAnyCallbackStruct *cbs;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Monitor cursor motions:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void command_motion_cb(w, d, cbs)
+static void script_motion_cb(w, d, cbs)
 Widget w;
 XtPointer d;
 XmTextVerifyCallbackStruct *cbs;
@@ -656,7 +655,7 @@ BOOL cu;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Monitor typed input:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void command_modify_cb(w, d, cbs)
+static void script_modify_cb(w, d, cbs)
 Widget w;
 XtPointer d;
 XmTextVerifyCallbackStruct *cbs;
@@ -699,11 +698,11 @@ XmTextVerifyCallbackStruct *cbs;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Do an undo. Note that the text replacement will cause
- * the modify/verify call back command_modify_cb to be invoked
+ * the modify/verify call back script_modify_cb to be invoked
  * so that the next undo will undo the undo (i.e. undo + undo = redo).
  * Since this will change the undo buffer we must copy the relevant
  * fields. We must set the moved_away field to indicate that we're
- * command_modify_cb is to stop accumulating changes.
+ * script_modify_cb is to stop accumulating changes.
  * Any text inserted by the undo is selected and the insertion
  * position is set to the end of the undo point. The beginning
  * of the new selection (or the insertion point if no text was
@@ -1034,7 +1033,11 @@ NAT siz;
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Signal handling for the controller process. SIGINT (Cntl-C)
+ * Signal handling for the controller process.
+ * Following treats signals similarly to window close
+ * or selection of quit from the command menu.
+ *
+ * Previously tried making it so that SIGINT (Cntl-C)
  * on the controller process causes SIGINT to the application
  * if it's running.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -1043,15 +1046,12 @@ NAT sig, code;
 struct sigcontext *scp;
 char *addr;
 {
-	if(application_alive()) {
-		clear_queue();
-		kill((pid_t)-child_pgrp, sig);
-	}
+	XtAppAddTimeOut(app, 0, close_down_cb, root);
 }
 
 static void handle_sigs()
 {
-	signal(SIGINT, sig_handler);
+	sigset(SIGINT, sig_handler);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1133,10 +1133,10 @@ Bool execute_command()
 	char *cmd;
 	NAT len;
 	XmTextPosition dontcare;
-	Widget w = command;
+	Widget w = script;
 /*
 	if(XmTextGetSelectionPosition(w, &dontcare, &dontcare)) {
-		w = display;
+		w = journal;
 	}
 */
 	if(XmTextGetSelectionPosition(w, &dontcare, &dontcare)) {
@@ -1153,13 +1153,13 @@ Bool execute_command()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * main entry point:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void cmdwin(Bool edit_only)
+void main_window_go(Bool edit_only)
 {
-	setup_cmdwin(edit_only);
+	setup_main_window(edit_only);
 if( !edit_only ) {
 	get_pty();
-	handle_sigs();
 }
+	handle_sigs();
 	XtRealizeWidget(root);
 	XtAppMainLoop(app);
 }
