@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.22 2004/08/06 15:20:36 rda Exp rda $ 
+ * $Id: palette.c,v 2.23 2004/08/06 16:23:19 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -67,14 +67,15 @@ void popup_palette(Widget w)
 {
 	XmString lab;
 	char label_buf[2], name_buf[sizeof "charXX"];
-	NAT i, j, x, y;
-	NAT cbdata;
-	Widget shell, outer_form, inner_form, button, dismiss_btn, help_btn;
-
+	int i, j, x, y, num_children;
+	int cbdata;
+	Widget shell, paned, top_form, bottom_form, button, dismiss_btn, help_btn;
+	Widget *children;
+	
 	palette_info.text_w = w;
-	if((outer_form = palette_info.palette_w) != NULL) {
-		XtManageChild(outer_form);
-		XtPopup(XtParent(outer_form), XtGrabNone);
+	if((paned = palette_info.palette_w) != NULL) {
+		XtManageChild(paned);
+		XtPopup(XtParent(paned), XtGrabNone);
 		return;
 	} /* else ... */
 
@@ -86,22 +87,16 @@ void popup_palette(Widget w)
 #endif
 	common_dialog_setup(shell, 0, 0);
 
-	outer_form = XtVaCreateWidget("outer-form",
-		xmFormWidgetClass, shell,
-		XmNfractionBase, 	17,
-		XmNautoUnmanage,	False,
+	paned = XtVaCreateWidget("paned",
+		xmPanedWindowWidgetClass, 	shell,
 		NULL);
 
-	inner_form = XtVaCreateWidget("inner-form",
-		xmFormWidgetClass, outer_form,
+	palette_info.palette_w = paned;
+
+	top_form = XtVaCreateWidget("top-form",
+		xmFormWidgetClass, paned,
 		XmNfractionBase, 	FRACTION_BASE,
-		XmNtopAttachment,	XmATTACH_FORM,
-		XmNleftAttachment,		XmATTACH_FORM,
-		XmNrightAttachment,	XmATTACH_FORM,
-		XmNautoUnmanage,	False,
 		NULL);
-
-	palette_info.palette_w = outer_form;
 
 	label_buf[1] = '\0';
 
@@ -116,7 +111,7 @@ void popup_palette(Widget w)
 			x = XUNITS*j;
 			y = YUNITS*i;
 			button = XtVaCreateManagedWidget(name_buf,
-				xmPushButtonGadgetClass, inner_form,
+				xmPushButtonGadgetClass, top_form,
 				XmNlabelString, lab,
 				XmNleftAttachment,	XmATTACH_POSITION,
 				XmNleftPosition,	x,
@@ -135,31 +130,35 @@ void popup_palette(Widget w)
 		}
 	}
 
+	bottom_form = XtVaCreateWidget("bottom-form",
+		xmFormWidgetClass, paned,
+		XmNfractionBase, 	16,
+		XmNautoUnmanage,	False,
+		NULL);
+
 	lab = XmStringCreateSimple("Dismiss");
 	dismiss_btn = XtVaCreateManagedWidget("dismiss",
-		xmPushButtonWidgetClass,	outer_form,
+		xmPushButtonWidgetClass,	bottom_form,
 		XmNlabelString,		lab,
-		XmNtopAttachment,		XmATTACH_WIDGET,
-		XmNtopWidget,		inner_form,
+		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
-		XmNleftPosition,		2,
+		XmNleftPosition,		1,
 		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNrightPosition,		6,
+		XmNrightPosition,		5,
 		XmNtraversalOn,	False,
 		NULL);
 	XmStringFree(lab);
 
-	XtVaSetValues(outer_form,
+	XtVaSetValues(bottom_form,
 		XmNcancelButton,	dismiss_btn,
 		NULL);
 
 	lab = XmStringCreateSimple("Help");
 	help_btn = XtVaCreateManagedWidget("help",
-		xmPushButtonWidgetClass,	outer_form,
+		xmPushButtonWidgetClass,	bottom_form,
 		XmNlabelString,		lab,
-		XmNtopAttachment,		XmATTACH_WIDGET,
-		XmNtopWidget,		inner_form,
+		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNleftPosition,		11,
@@ -172,9 +171,27 @@ void popup_palette(Widget w)
 	XtAddCallback(dismiss_btn, XmNactivateCallback, dismiss_cb, 0);
 	XtAddCallback(help_btn, XmNactivateCallback,help_cb, 0);
 
-	XtManageChild(inner_form);
-	XtManageChild(outer_form);
+	XtManageChild(top_form);
+	XtManageChild(bottom_form);
+	XtManageChild(paned);
 	XtPopup(shell, XtGrabNone);
+
+	fix_pane_height(bottom_form, bottom_form);
+
+	XtVaGetValues(paned,
+		XmNchildren,		&children,
+		XmNnumChildren,		&num_children,
+		NULL);
+
+	for(i = 0; i < num_children; ++i) {
+		if(!strcmp(XtName(children[i]), "Sash")) {
+			XtVaSetValues(children[i],
+				XmNheight,	1,
+				XmNwidth,	1,
+				XmNsensitive,	False,
+				NULL);
+		}
+	}
 
 }
 
