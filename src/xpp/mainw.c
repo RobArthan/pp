@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.29 2002/08/14 14:46:29 rda Exp $
+ * $Id: mainw.c,v 2.30 2002/10/17 17:09:34 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -622,15 +622,18 @@ static Boolean setup_main_window(
 	register_selection_source(namestring);
 
 	s1 = XmStringCreateSimple("(Modified)");
-	modified = XtVaCreateManagedWidget("filelabel",
+	modified = XtVaCreateManagedWidget("modified",
 		xmLabelWidgetClass, filename,
 		XmNlabelString,	s1,
 		NULL);
 	XmStringFree(s1);
 
-	newfile = XtVaCreateManagedWidget("filelabel",
+	s1 = XmStringCreateSimple("(New)");
+	newfile = XtVaCreateManagedWidget("newfile",
 		xmLabelWidgetClass, 	filename,
+		XmNlabelString,	s1,
 		NULL);
+	XmStringFree(s1);
 
 	logo = XtVaCreateManagedWidget("logo",
 		xmLabelWidgetClass, infobar,
