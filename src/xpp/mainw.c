@@ -1035,7 +1035,7 @@ Widget w;
 XtPointer cd;
 XmAnyCallbackStruct cbs;
 {
-	if(yes_no_dialog(w, quit_message)) {
+	if(yes_no_dialog(root, quit_message)) {
 		kill_application();
 		exit(0);
 	};
