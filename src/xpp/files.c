@@ -56,9 +56,11 @@ static char *read_error_message =
 static char *write_error_message =
 	 "Error writing the file \"%s\"";
 
+static char *contains_nulls_message =
+	" The file \"%s\" contains binary data and cannot be edited";
+
 static char *no_message_space_message =
 	 "Not enough memory is available to report a file error";
-
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Private functions:
@@ -93,7 +95,8 @@ static void file_error_dialog(
  * If all is well the return value is a pointer to a buffer
  * containing the contents of the file as a null-terminated
  * character array.
- * The buffer should be XtFree'd when caller is done with it.
+ * The buffer should be XtFree'd when caller is done with it
+ * (if it is not NULL).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static char *get_file_contents(
@@ -131,6 +134,11 @@ static char *get_file_contents(
 	};
 	fclose(fp);
 	buf[siz] = '\0';
+	if(strlen(buf) != siz) { /* use strlen to check for null chars */
+		file_error_dialog(w, contains_nulls_message, name);
+		XtFree(buf);
+		return NULL;
+	}
 	return buf;
 }
 
