@@ -86,8 +86,13 @@ spaced fonts. The code may be adapted to work with proportionately
 spaced fonts as follows:
 
 \section{PREAMBLE}
-=IGN_SML
-structure âTheoryListerá : TheoryLister = struct
+=SML
+structure âListerá : Lister = struct
+open PrettyPrinter;
+open Sort;
+=IGN
+fun my_get_terminators (s:string) = get_terminators ();
+val format_thm1 = format_theorem1;
 =SML
 =TEX
 \subsection{Utilities}
@@ -220,15 +225,35 @@ units  as used in $make\_table$;
 the desired width of the lines to be
 output;
 \item[$indent$]
-the minimum desired field
-width for labels.
+the minimum desired field width for labels.
 \item[$pad$]
 a function to pad out a string, with
 precomputed length as returned by $make\_table$, to a given length
 (it may  also add text formatting red-tape);
 \item[$boln$]a string to be output at the beginning of each line of output;
 \item[$eoln$]a string to be output at the end of each line of output.
+\item[$bbanner$]a string to be output before the banner at the beginning
+of the listing
+\item[$ebanner$]a string to be output after the banner at the beginning
+of the listing
+\item[$btrailer$]a string to be output before the trailer at the end
+of the listing
+\item[$etrailer$]a string to be output after the trailer at the end
+of the listing
+\item[$bsection$]a string to be output before each section heading
+\item[$esection$]a string to be output after each section heading
+\item[$btable$]a string to be output before each multicolumn table
+\item[$etable$]a string to be output after each multicolumn table
+\item[$bother$]a string to be output before each section which
+is not multicolumn table
+\item[$eother$]a string to be output after each section which
+is not multicolumn table
+\item[$ppwidth$] gives the length parameter to be passed to calls of
+pretty printer functions in order to fit them on lines allowing $indent$
+amount of space for a label. This is a hack to circumvent the fact that
+the pretty printer assumes fixed size characters at the moment.
 \end{description}
+
 =SML
 type IO_INFO = 	{
 		outp : string -> unit,
@@ -236,22 +261,33 @@ type IO_INFO = 	{
 		pad : int -> (string * int) -> string,
 		boln : string,
 		eoln : string,
+		bbanner : string,
+		ebanner : string,
+		btrailer : string,
+		etrailer : string,
+		bsection : string,
+		esection : string,
+		btable : string,
+		etable : string,
+		bother : string,
+		eother : string,
 		width : int,
-		indent : int};
-
+		indent : int,
+		ppwidth : int};
 =TEX
 $print\_table$ prints a labelled table.Note that $pad$ is applied when the label is printed, so that the
 length of its string argument may be longer than the given length.
 In this case the label is printed on a line of its own.
 =SML
 fun âprint_tableá
-	({	outp : string -> unit,
-		siz : string -> int,
-		pad : int -> (string * int) -> string,
-		boln : string,
-		eoln : string,
-		width : int,
-		indent : int} : IO_INFO)
+	({	outp,
+		siz,
+		pad,
+		boln,
+		eoln,
+		width,
+		indent,
+		...} : IO_INFO)
 	(label : string)
 	(items : string list) = (
 	let	val labwidth = siz label;
@@ -279,24 +315,46 @@ fun âprint_tableá
 );
 =TEX
 =SML
-fun tabpad (fieldwidth : int) (what : string, width : int) : string = (
+fun âtabpadá (fieldwidth : int) (what : string, width : int) : string = (
 	if width > fieldwidth orelse width = 0
 	then what
 	else what ^ tabs (fieldwidth - width + 1)
 );
 =TEX
 =SML
-fun out_line ({outp, boln, eoln, ...} : IO_INFO) (s : string) : unit = (
+fun âlatexpadá (fieldwidth : int) (what : string, width : int) : string = (
+	if width > fieldwidth orelse width = 0
+	then what
+	else what ^ tabs 1
+);
+=TEX
+=SML
+fun âout_lineá ({outp, boln, eoln, ...} : IO_INFO) (s : string) : unit = (
 	outp boln;
 	outp s;
 	outp eoln
 );
+=TEX
+The following little utility is needed in some places, where a list
+of strings is available and a single string is required:
+=SML
+val âcatá : string list -> string = switch(fold (op ^)) "";
 =IGN
-val myrec = {pad=tabpad, siz=tabsize,
+val myii : IO_INFO = {pad=tabpad, siz=tabsize,
 	outp= fn s=>output(std_out, s),
 	boln="", eoln="\n",
-	width=10, indent= 2};
-val mypt = print_table myrec;
+	bbanner= "=== ",
+	ebanner= " ===",
+	btrailer= "=== ",
+	etrailer= "=== ",
+	bsection= "--- ",
+	esection= "--- ",
+	btable= "",
+	etable= "",
+	bother= "",
+	eother= "",
+	width=80 div tabstop, indent= 2, ppwidth=(80 div tabstop-2)*tabstop};
+val mypt = print_table myii;
 mypt "label"["abcdefgh", "b", "c", "abcdefgh", "a", "b", "c"];
 val names = ["abbe","abbey","abbot","Abbott",
 "abbreviate","abc","abdicate","abdomen",
@@ -317,45 +375,404 @@ mypt "label"names;
 =TEX
 \subsection{Generic Lister Support};
 =TEX
+Note that the functions which use the pretty printer below
+change the flag $pp\_show\_HOL\_types$ as needed.
 =SML
-fun do_banner (ii : IO_INFO) (thyn : string) : unit = (
+val âshow_typesá : string = "pp_show_HOL_types";
+=TEX
+Note that the functions also assume that the theory being listed is in
+scope.
+=SML
+val âsorted_listingsá : bool ref = ref false;
+val âlisting_indentá : int ref = ref 2;
+=TEX
+=SML
+val âside_effectá = new_flag{name="sorted_listings",
+			control=sorted_listings, default=fn() => false};
+val âside_effectá = new_int_control{name="listing_indent",
+			control=listing_indent, check=
+			fn i =>	i >= 0 orelse fail "listing_indent" 33052 [],
+			default = fn() => 2};
+=TEX
+=SML
+fun âmysortá (namef : 'a -> string) (items : 'a list) : 'a list = (
+	if !sorted_listings
+	then sort (fn x => fn y => stringorder (namef x) (namef y)) items
+	else items
+);
+=SML
+fun âdo_bannerá (ii : IO_INFO) (thyn : string) : unit = (
 	if thyn = "-"
-	then out_line ii (get_error_message 33001 [get_current_theory_name()])
-	else out_line ii thyn
+	then (#outp ii)
+	(#bbanner ii ^ (get_error_message 33001 [get_current_theory_name()])
+	^ #ebanner ii)
+	else (#outp ii) 
+	(#bbanner ii ^ get_error_message 33001 [thyn]
+	^ #ebanner ii)
 );
 =TEX
 =SML
-fun do_parents (ii : IO_INFO) (thyn : string) = (
-	case get_parents thyn of
+fun âdo_sectioná	(ii : IO_INFO)
+			(msg : int)
+			(getter : string -> 'a list)	
+			(how : 'a list -> 'b)
+			(istable : bool)
+			(thyn : string) : unit = (
+	case getter thyn of
 		[] => ()
-	|	pars => (
-			out_line ii "";
-			out_line ii (get_error_message 33002 []);
-			out_line ii "";
-			print_table ii "" pars
+	|	items => (
+			(#outp ii)
+		(#bsection ii ^ get_error_message msg [] ^ #esection ii);
+			if istable
+			then (#outp ii) (#btable ii)
+			else (#outp ii) (#bother ii);
+			how items;
+			if istable
+			then (#outp ii) (#etable ii)
+			else (#outp ii) (#eother ii)
+	)
+);
+=SML
+fun âdo_parentsá (ii : IO_INFO) (thyn : string) : unit = (
+	do_section ii 33002 (mysort Combinators.I o get_parents)
+		(print_table ii "") true thyn
+);
+=TEX
+=SML
+fun âdo_childrená (ii : IO_INFO) (thyn : string) :unit = (
+	do_section ii 33003 (mysort Combinators.I o get_children)
+		(print_table ii "") true thyn
+);
+=TEX
+It would be most remarkable if the call to $format\_term1$ below did not
+deliver a list with exactly one element. However, the code below
+defends itself against this possibility by concatenating the elements of the
+list.
+=SML
+fun âdo_constsá (ii : IO_INFO) (thyn : string) :unit = (
+	let	val old_st = set_flag(show_types, false);
+	in let	fun do1 c = (
+			let	val lab = format_term1 (#ppwidth ii) c;
+				val ty = format_type1 (#ppwidth ii) (type_of c);
+			in	print_table ii (fold (op ^) lab "") ty
+			end
+		);
+	in	do_section ii 33004 (rev o get_consts)
+		(map do1 o mysort (fst o dest_const)) false thyn
+	end 	handle ex => (set_flag(show_types, old_st); raise ex);
+	set_flag(show_types, old_st); ()
+	end
+);
+=TEX
+=SML
+fun âdo_aliasesá (ii : IO_INFO) (thyn : string) :unit = (
+	let	val old_st = set_flag("pp_show_HOL_types", true);
+	in let	fun do1 (a, tm) = (
+			let	val tab = format_term1 (#ppwidth ii) tm;
+			in	print_table ii a tab
+			end
+		);
+	in	do_section ii 33005 (rev o get_aliases)
+		(map do1 o mysort fst) false thyn
+	end 	handle ex => (set_flag(show_types, old_st); raise ex);
+	set_flag(show_types, old_st); ()
+	end
+);
+=TEX
+=SML
+fun âdo_undeclared_aliasesá (ii : IO_INFO) (thyn : string) :unit = (
+	let	val old_st = set_flag("pp_show_HOL_types", true);
+	in let	fun do1 (a, tm) = (
+			let	val tab = format_term1 (#ppwidth ii) tm;
+			in	print_table ii a tab
+			end
+		);
+	in	do_section ii 33013 (rev o get_undeclared_aliases)
+		(map do1 o mysort fst) false thyn
+	end 	handle ex => (set_flag(show_types, old_st); raise ex);
+	set_flag(show_types, old_st); ()
+	end
+);
+=TEX
+=SML
+fun âdo_typesá (ii : IO_INFO) (thyn : string) :unit = (
+	let	fun do1 t = (
+			let	val ty = format_type1 (#ppwidth ii) t;
+			in	map (out_line ii) ty
+			end
+		);
+	in	do_section ii 33006 (rev o get_types)
+		(map do1 o mysort (fst o dest_type)) false thyn
+	end
+);
+=TEX
+=SML
+fun âdo_type_abbrevsá (ii : IO_INFO) (thyn : string) :unit = (
+	let	fun do1 (s, (args, ty)) = (
+			let	val lab = format_type1 (#ppwidth ii)
+				(mk_type(s, map mk_vartype args));
+				val tab = format_type1 (#ppwidth ii) ty
+			in	print_table ii (cat lab) tab
+			end
+		);
+	in	do_section ii 33007 (rev o get_type_abbrevs)
+		(map do1 o mysort fst) false thyn
+	end
+);
+=TEX
+=SML
+fun âdo_undeclared_type_abbrevsá (ii : IO_INFO) (thyn : string) :unit = (
+	do_section ii 33014
+	(mysort Combinators.I o rev o get_undeclared_type_abbrevs)
+	(print_table ii "") true thyn
+);
+=TEX
+We now define two functions which support the fixity part of the listing.
+Both of these functions do nothing if their list argument is empty.
+
+The function below always sorts the operators within each precedence (since
+the division by precedence destroys any useful ordering by order of
+definition).
+=SML
+fun âdo_prec_fixityá (_ : int)  (_ : IO_INFO)([] : (int * string) list) : unit  = ()
+|   do_prec_fixity  msg ii items = (
+	let	fun myorder (i1, s1) (i2, s2) = ( 
+			case i1 - i2 of
+				0 => stringorder s1 s2
+			|	x => x
+		);
+		val sitems = sort myorder items;
+		fun strip1 ( (i1, s1) :: (i2, s2) :: more ) = (
+			if i1 = i2
+			then	let val (this, rest) = strip1 ((i2, s2):: more);
+				in	((i1, s1) :: this, rest)
+				end
+			else	([(i1, s1)], (i2, s2) :: more)
+		) | strip1 ( (i1, s1) :: [] ) = ([(i1, s1)], [])
+		|   strip1 [] = ([], []);
+		fun go (iss as (i1, _) :: _) = (
+			let 	val (this, rest) = strip1 iss;
+				val lab = get_error_message msg[string_of_int i1];
+			in	print_table ii lab (map snd this);
+				go rest
+			end
+		) | go [] = ();
+	in	go sitems
+	end
+);
+=TEX
+For uniformity with the above function the following always sorts the
+identifiers.
+=SML
+fun âdo_other_fixityá (msg : int) (ii : IO_INFO) ([] : string list) = ()
+|   do_other_fixity  msg ii items = (
+	let	val sitems = sort stringorder items;
+		val lab = get_error_message msg[];
+	in	print_table ii lab items
+	end
+);
+=TEX
+=SML
+datatype âFIXITY_INFOá	=	Binders of string list
+			|	Infixes of (int * string) list
+			|	Nonfixes of string list
+			|	Postfixes of (int * string) list
+			|	Prefixes of (int * string) list;
+=TEX
+=SML
+fun âdo_fixitiesá (ii : IO_INFO) (items : FIXITY_INFO list) : unit = (
+	let	fun aux (Binders x) = do_other_fixity 33020 ii x
+		|   aux (Infixes x) = do_prec_fixity 33021 ii x
+		|   aux (Nonfixes x) = do_other_fixity 33022 ii x
+		|   aux (Postfixes x) = do_prec_fixity 33023 ii x
+		|   aux (Prefixes x) = do_prec_fixity 33024 ii x;
+	in	map aux items; ()
+	end
+);
+=TEX
+=SML
+fun âget_fixitiesá (thyn : string) : FIXITY_INFO list = (
+	let	fun add con [] acc = acc
+		|   add con xs acc = con xs :: acc;
+	in	add Binders (get_binders thyn) (
+		add Infixes (get_infixes thyn) (
+		add Nonfixes (get_nonfixes thyn) (
+		add Postfixes (get_postfixes thyn) (
+		add Prefixes (get_prefixes thyn) [] ))))
+	end
+		
+);
+=TEX
+=SML
+fun âdo_fixityá (ii : IO_INFO) (thyn : string) : unit = (
+	do_section ii 33008 get_fixities (do_fixities ii) true thyn
+);
+=TEX
+=SML
+fun âdo_terminatorsá (ii : IO_INFO) (thyn : string) : unit = (
+	do_section ii 33009 get_terminators (print_table ii "") true thyn
+);
+=TEX
+=SML
+fun âdo_undeclared_terminatorsá (ii : IO_INFO) (thyn : string) : unit = (
+	do_section ii 33015 get_undeclared_terminators (print_table ii "") true thyn
+);
+=TEX
+=SML
+fun âdo_thms_auxá (ii : IO_INFO) (items : (string list * THM) list) = (
+	let	fun do1 (name :: (more as (_ :: _)), thm) = (
+			out_line ii name;
+			do1 (more, thm) 
+		) | do1 (name :: [], thm) = (
+			let	val th = format_thm1 (#ppwidth ii) thm;
+			in	print_table ii name th
+			end
+		) | do1 ([], seq) = do1 ([""], seq);
+	in	map do1 (rev items)
+	end
+);
+=TEX
+=SML
+fun âdo_axiomsá (ii : IO_INFO) (thyn : string) = (
+	do_section ii 33010 get_axioms (do_thms_aux ii) false thyn
+);
+=TEX
+=SML
+fun âdo_defnsá (ii : IO_INFO) (thyn : string) = (
+	do_section ii 33011 get_defns (do_thms_aux ii) false thyn
+);
+=TEX
+=SML
+fun âdo_thmsá (ii : IO_INFO) (thyn : string) = (
+	do_section ii 33012 get_thms (do_thms_aux ii) false thyn
+);
+=TEX
+=SML
+fun âdo_trailerá (ii : IO_INFO) (thyn : string) : unit = (
+	if thyn = "-"
+	then out_line ii
+	(#btrailer ii ^ (get_error_message 33030 [get_current_theory_name()])
+	^ #etrailer ii)
+	else out_line ii 
+	(#btrailer ii ^ get_error_message 33030 [thyn]
+	^ #etrailer ii)
+);
+=TEX
+=SML
+fun âdo_theoryá (ii : IO_INFO) (thyn : string) : unit = (
+	if not (get_current_theory_name () mem get_descendants thyn)
+		handle ex => divert ex "get_descendants"
+			"do_theory" 33051 [fn () => thyn]
+	then fail "do_theory" 33050 [fn () => thyn]
+	else (
+		do_banner ii thyn;
+		do_parents ii thyn;
+		do_children ii thyn;
+		do_consts ii thyn;
+		do_aliases ii thyn;
+		do_undeclared_aliases ii thyn;
+		do_types ii thyn;
+		do_type_abbrevs ii thyn;
+		do_undeclared_type_abbrevs ii thyn;
+		do_fixity ii thyn;
+		do_terminators ii thyn;
+		do_undeclared_terminators ii thyn;
+		do_axioms ii thyn;
+		do_defns ii thyn;
+		do_thms ii thyn;
+		do_trailer ii thyn
+	)
+);
+=SML
+=TEX
+\subsection{The Screen Lister}
+The following computer of $IO\_INFO$s assumes (incorrectly) a fixed width font.
+The computation of the line length to use attempts to ensure that the
+minimum width of 20 spaces acceptable to the pretty printer is available.
+=SML
+fun âscreen_iiá () : IO_INFO = ( 
+	let	val ll = get_line_length () div tabstop;
+		val min = 20 div tabstop + !listing_indent + 1;
+		val actll = if ll < min then min else ll;
+	in	{	pad=tabpad,
+			siz=tabsize,
+			outp= fn s=>output(std_out, s),
+			boln="",
+			eoln="\n",
+			bbanner= "=== ",
+			ebanner= " ===\n",
+			btrailer= "\n=== ",
+			etrailer= " ===",
+			bsection= "\n--- ",
+			esection= " ---\n\n",
+			btable= "",
+			etable= "",
+			bother= "",
+			eother= "",
+			width=actll, indent = !listing_indent,
+			ppwidth=(actll - !listing_indent)*tabstop}
+	end
+);
+=TEX
+=SML
+fun âprint_theoryá (thyn : string) : unit = (
+	(do_theory (screen_ii()) thyn)
+	handle ex => (
+		if area_of ex = "do_theory"
+		then reraise ex "print_theory"
+		else raise ex
 	)
 );
 =TEX
+\subsection{The \LaTeX\ Lister}
+The following computer of $IO\_INFO$s assumes (incorrectly) a fixed width font
+of about 0.1 inch width for 6.5 inch printing width with a 1 inch indent. It works in units of 0.01 inches. 
 =SML
-fun do_children (ii : IO_INFO) (thyn : string) = (
-	case get_children thyn of
-		[] => ()
-	|	pars => (
-			out_line ii "";
-			out_line ii (get_error_message 33003 []);
-			out_line ii "";
-			print_table ii "" pars
-	)
+fun âlatex_iiá (filename : string) : IO_INFO = ( 
+	let	val stream = open_out filename;
+		val ll = 650;
+		val latextabstop = 100;
+		fun latexsize (s : string) : int = (
+			(size s * 10 + latextabstop) div latextabstop
+		);
+	in	{	pad=latexpad,
+			siz=latexsize,
+			outp= fn s=>output(stream, s),
+			boln="",
+			eoln="\n",
+			bbanner= "=THEORYLISTINGBANNER\n",
+			ebanner= "\n=TEX\n",
+			btrailer= "=THEORYLISTINGTRAILER\n",
+			etrailer= "\n=TEX\n",
+			bsection= "=THEORYLISTINGSECTION\n",
+			esection= "\n=TEX\n",
+			btable= "=THEORYLISTINGTABLE\n",
+			etable= "=TEX\n",
+			bother= "=THEORYLISTINGOTHER\n",
+			eother= "=TEX\n",
+			width=ll,
+			indent = 100,
+			ppwidth=(ll - latextabstop) div latexsize " "}
+	end	handle Io msg => fail "output_theory" 33051 [fn()=>msg]
 );
 =TEX
 =SML
+fun âoutput_theoryá {theory : string, outfile:string} : unit = (
+	(do_theory (latex_ii outfile) theory)
+	handle ex => (
+		if area_of ex = "do_theory"
+		then reraise ex "print_theory"
+		else raise ex
+	)
+);
 =TEX
 \section{EPILOGUE}
-=SML
-end; (* of structure TheoryLister *)
 =TEX
 =SML
-open SymbolTable;
+end; (* of structure Lister *)
+open Lister;
+=TEX
+=SML
 =TEX
 \small
 \twocolumn[\section{INDEX}]
@@ -364,10 +781,9 @@ open SymbolTable;
 \end{document}
 
 =IGN
-fun f s = (open_theory "†" ; new_theory s);
-open_theory (hd names);
+fun pt thyn = (open_theory thyn; print_theory thyn);
 
-new_theory "child";
-map new_parent (tl names);
-
-
+fun ot s = output_theory{theory=s, outfile=""};
+fun âdo_defnsá (ii : IO_INFO) (thyn : string) = (
+	do_section ii 33011 get_defns (do_thms_aux ii) false thyn
+);
