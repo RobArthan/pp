@@ -63,7 +63,7 @@ This document contains the implementation for the Z output function.}
 
 \item[Issue 1.1, \FormatDate{94/07/11}]
 Initial Draft.
-\item[Issue 1.2, \FormatDate{94/07/11}]
+\item[Issues 1.2, 1.3 \FormatDate{94/07/11}]
 Bug fixing
 
 end{description}
@@ -238,7 +238,7 @@ Formatting functions for Declarations.
 =SML
 fun €fmt_var› (ZGVar (n,_,_) : Z_TERM, x) = n
 |   fmt_var (ZLVar (n,_,_) : Z_TERM, x) = n
-|   fmt_var (d : Z_TERM,t) = "Unexpected term : "^(string_of_term t);
+|   fmt_var (_ : Z_TERM,x) = fail "fmt_var" 511001 [fn () => string_of_term t];
 fun €fmt_var_list› ([] : TERM list) = ""
 |   fmt_var_list ([x] : TERM list) = (fmt_var ((dest_z_term x),x))
 |   fmt_var_list (x::xs : TERM list) =
@@ -281,20 +281,32 @@ fun €fmt_schbox› (defn : THM) =
 
 Formatting functions for Z Abbreviation Definations
 =SML
-fun €fmt_abbdef› (defn : THM) =
-    let val (var,exp) = dest_eq (snd (dest_thm (z_thm_rule defn)));
-        val varstr = (format_term false var)@[" ¶ "];
-        val expstr = (format_term1 false (ZOutput_ll - ZOutput_tab_width) exp);
-        val block = varstr @ expstr;
+local
+    fun fmt_abbdef_aux1 (varstr,expstr) =
+        let val block = varstr@[" ¶ "]@expstr
     in
-        if (length (explode (concat_string_list block))) < ZOutput_ll
-        then
-            ["πZ"]@(fmt_body [concat_string_list block])@["∞"]
-        else
-            ["πZ"]@
-            (fmt_body block)@
-            ["∞"]
+        ["πZ"]@(fmt_body [concat_string_list block])@["∞"]
     end;
+    fun fmt_abbdef_aux2 (varstr,expstr) =
+    
+    ["πZ"]@
+    (fmt_body [concat_string_list (varstr@[" ¶"])])@
+    (fmt_body expstr)@["∞"];
+in
+    fun €fmt_abbdef› (defn : THM) =
+        let val (var,exp) = dest_eq (snd (dest_thm (z_thm_rule defn)));
+            val varstr = (format_term false var);
+            val expstr = (format_term false exp);
+            val block = (concat_string_list (varstr@expstr))
+            val n = (ZOutput_ll-(2*ZOutput_tab_width))
+        in
+            if ((length o explode) block) < n
+                then
+                    fmt_abbdef_aux1 (varstr,expstr)
+                else
+                    fmt_abbdef_aux2 (varstr,expstr)
+        end;
+end;
 =TEX
 
 Formatting functions for Definations
@@ -312,7 +324,7 @@ fun €fmt_defns› (defn : THM) =
             then
                 fmt_schbox (defn)
             else
-                ["Unknown defination type : "^r]
+                fail "fmt_defns" 511002 [fn () => r]
     end;
 =TEX
 
@@ -400,11 +412,12 @@ Functions to print the Z Document to the the screen or to a file.
 
 =SML
 val €fmt_z_document› = ZOutputSupport.fmt_z_document;
-fun €print_z_document› (thyn : string) : unit =
-    diag_line (fmt_z_document thyn);
+fun €print_z_document› ({theory : string}) : unit =
+    diag_line (fmt_z_document theory);
 fun €output_z_document› ({out_file:string, theory : string}) =
     let val stream = open_out out_file;
-        val text = (fmt_z_document theory)
+        val text =
+            ReaderWriter.translate_for_output (fmt_z_document theory)
     in
         output (stream, text);
         close_out stream
