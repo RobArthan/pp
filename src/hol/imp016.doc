@@ -89,8 +89,13 @@ $elim\_repeats$. Finally, renamed $ty\_to\_type$ to $make\_type$.
 Added code for handling errors and displaying informative
 diagnostics.
 
-\item[Issue \SCCSversion, \FormatDate{92/02/26} ]
+\item[Issue 2.8, \FormatDate{92/02/26} ]
 Modified error message printing in $handle\_cond1$.
+
+\item[Issue \SCCSversion, \FormatDate{92/03/02} ]
+When $ti\_verbose$ is set, more diagnostic information
+is printed. Also, corrected an error in $is\_varstruct$.
+
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -249,8 +254,8 @@ fun Ûis_varstructÝ (tm : 'a TM) : bool = (
 			Value _ => false
 			| Nil	=> true)
 	|	TmTyped (t, _) => is_varstruct t
-	|	App (Id ",", a, _) => is_varstruct a
-	|	App (f, a, _) => is_varstruct f andalso is_varstruct a
+	|	App (App (Id ",", a, _), b, _) =>
+			is_varstruct a andalso is_varstruct b
 	|	Other => false
 );
 =TEX
@@ -575,23 +580,18 @@ let	val thing = map fv_in_exty (map snd tml);
 
 	val namemap = get_tyvar_names (knowns, unknowns);
 	fun aux (((var,exty)::tml) : (string*EXTYPE) list) =
-		(ti_errline 16055 [var, (format_extype namemap exty)];
+		(ti_errline 16562 [var, (format_extype namemap exty)];
 		aux tml)
 	  | aux _ = ();
+	val cxtlen = length tml;
 in
-	if get_flag "ti_verbose"
-	then
-	(
-		(case tml of
-		nil	=> ()
-		|Other	=> (ti_errline 16050 [];
-				aux  tml; ())
-		);
-		())
-	else
-		()
+	case cxtlen of
+	0 => ()
+	|1 => (ti_errline 16050 [];
+			aux  tml; ())
+	|Several => (ti_errline 16051 [];
+			aux  tml; ())
 end);
-
 =TEX
 The data type $TIERROR$ is used to communicate
 type inference context information to the error
@@ -741,7 +741,7 @@ The general error handler follows. It never
 returns, and always calls fail which raises the
 exception, $Fail$.
 =SML
-fun Ûti_error_handlerÝ term info = (
+fun Ûti_error_handlerÝ term info env = (
 	(
 	ti_errline 16001 [format_tm format_ty term];
 	case info of
@@ -762,6 +762,10 @@ fun Ûti_error_handlerÝ term info = (
 	) | ErrVarstruct tm => (
 		handle_varstruct tm
 	); (* end case ... of *)
+	if get_flag "ti_verbose"
+	then
+		ti_errcontext (vars_in_term term env)
+	else	();
 	fail "HOL-Parser" 16000 []
 ));
 =TEX
@@ -795,7 +799,7 @@ fun ÛtiÝ (env : ENV) ((term as (Binder ("Ì", a, b))) : TY TM) : INF_TUPLE = (
 			((Binder ("Ì", atm, btm)), tty)
 		end
 	else
-		ti_error_handler term (ErrVarstruct a))
+		ti_error_handler term (ErrVarstruct a) env)
 =TEX
 =SML
   | ti env (term as (Binder (s, a, b))) = (
@@ -813,13 +817,13 @@ fun ÛtiÝ (env : ENV) ((term as (Binder ("Ì", a, b))) : TY TM) : INF_TUPLE = (
 			then
 				list_is_varstruct xs
 			else
-				ti_error_handler term (ErrVarstruct x));
+				ti_error_handler term (ErrVarstruct x) env);
 		val (left, right) = split tmlist;
 		val side_effect = list_is_varstruct left;
 		fun rep_unify ((ty1, ty2)::tyl) ((tm1, tm2)::tml) = (
 		let	val sd = unify ti_subs (ty1, ty2)
 			handle Fail msg =>
-			ti_error_handler term (ErrLet(tm1, tm2, ty1, ty2));
+			ti_error_handler term (ErrLet(tm1, tm2, ty1, ty2)) env;
 
 		in	rep_unify tyl tml
 		end)
@@ -858,9 +862,9 @@ fun ÛtiÝ (env : ENV) ((term as (Binder ("Ì", a, b))) : TY TM) : INF_TUPLE = (
 
 	[(ctm, cty), (atm, aty), (btm, bty)] => (
 		let	val sd = unify ti_subs (cty, type_to_extype BOOL)
-			   handle Fail msg => ti_error_handler term (ErrCond1(c, cty));
+			   handle Fail msg => ti_error_handler term (ErrCond1(c, cty)) env;
 			val sd = unify ti_subs (aty, bty)
-			   handle Fail msg => ti_error_handler term (ErrCond2(a, b, aty, bty));
+			   handle Fail msg => ti_error_handler term (ErrCond2(a, b, aty, bty)) env;
 		in
 			(Cond (ctm, atm, btm), bty)
 		end
@@ -880,7 +884,7 @@ fun ÛtiÝ (env : ENV) ((term as (Binder ("Ì", a, b))) : TY TM) : INF_TUPLE = (
 		val nty = ExType ("­",[aty, ty]);
 		val sd = unify ti_subs (fty, nty) 
 			handle Fail msg =>
-			ti_error_handler term (ErrApp(f, a, fty, aty));
+			ti_error_handler term (ErrApp(f, a, fty, aty)) env;
 	in
 		(App (ftm, atm, fix), ty)
 	end)
@@ -892,7 +896,7 @@ fun ÛtiÝ (env : ENV) ((term as (Binder ("Ì", a, b))) : TY TM) : INF_TUPLE = (
 		val exty = (type_to_extype o make_type) ty;
 		val sd = unify ti_subs (aty, exty)
 			handle Fail msg =>
-			ti_error_handler term (ErrTmTyped(a, aty, exty));
+			ti_error_handler term (ErrTmTyped(a, aty, exty)) env;
 	in
 		(atm, aty)
 	end)
@@ -907,7 +911,7 @@ fun ÛtiÝ (env : ENV) ((term as (Binder ("Ì", a, b))) : TY TM) : INF_TUPLE = (
 		val (timl, tiyl) = split tmlist;
 		val sd = list_unify ti_subs tiyl
 			handle Fail msg =>
-			ti_error_handler term (ErrDisplay(tl, tiyl, 16504));
+			ti_error_handler term (ErrDisplay(tl, tiyl, 16504)) env;
 		val ty = 
 			(case tiyl of
 			  nil => ExVartype(Unknown(next_name()))
@@ -930,14 +934,14 @@ fun ÛtiÝ (env : ENV) ((term as (Binder ("Ì", a, b))) : TY TM) : INF_TUPLE = (
 			val boolty = type_to_extype BOOL;
 			val sd = unify ti_subs (bty, boolty)
 				handle Fail msg =>
-				ti_error_handler term (ErrSetComp(b, bty));
+				ti_error_handler term (ErrSetComp(b, bty)) env;
 
 		in
 			(SetComprehension (atm, btm),
 				ExType ("SET", [aty]))
 		end
 	else
-		ti_error_handler term (ErrVarstruct a))
+		ti_error_handler term (ErrVarstruct a) env)
 =TEX
 =SML
   | ti env (term as (ListDisplay tl)) = (
@@ -945,7 +949,7 @@ fun ÛtiÝ (env : ENV) ((term as (Binder ("Ì", a, b))) : TY TM) : INF_TUPLE = (
 		val (timl, tiyl) = split tmlist;
 		val sd = list_unify ti_subs tiyl
 			handle Fail msg =>
-			ti_error_handler term (ErrDisplay(tl, tiyl, 16510));
+			ti_error_handler term (ErrDisplay(tl, tiyl, 16510)) env;
 		val ty = 
 			(case tiyl of
 			  nil => ExVartype(Unknown(next_name()))
