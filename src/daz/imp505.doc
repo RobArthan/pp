@@ -95,8 +95,7 @@ infix 5 cap;
 structure ÛCNVCGeneratorÝ : CNVCGenerator = struct
 local
 	open CaseIndependence;
-	open CNTypes2 CNParser CNTypes CNBasicDeclsAndExprs;
-	open CNSparkOutput;
+	open CNTypes1 CNTypes2 CNParser CNTypes CNBasicDeclsAndExprs;
 	open ZUserInterfaceSupport;
 in
 =TEX
@@ -841,12 +840,28 @@ end
 \pagebreak
 \section{APPLICATION OF CHECKS}
 
+
+\subsection{Useful Printing Functions in Lieu of CNSparkOutput}
+=SML
+fun Ûfmt_idÝ (n : ID) : string = CaseIndependence.get_external_name n;
+fun Ûfmt_id_listÝ ([] : ID list) = ""
+  | fmt_id_list ([x] : ID list) = (fmt_id x)
+  | fmt_id_list (x::xs: ID list) = (fmt_id x)^", "^(fmt_id_list xs);
+=TEX
+\subsection{The Error Printing Function}
 =SML
 fun Ûchecking_errorÝ (msg : string) (n : int) (ins) = (
 	diag_line (get_error_message 505050 []);
 	fail msg n ins
 );
 =TEX
+=SML
+fun Ûchecking_warningÝ (msg : string) (n : int) (ins) = (
+	diag_line (get_error_message 505050 []);
+	comment msg n ins
+);
+=TEX
+\subsection{The Checks}
 =SML
 fun Ûcheck_1_aÝ (id : ID list, speclab : SPECLAB) = (
 	if id diff #w (#spec speclab) = []
@@ -878,24 +893,6 @@ fun Ûcheck_1_dÝ (p : ID, speclab : SPECLAB) = (
 =TEX
 
 
-=SML
-datatype ÛSTMT_STATEÝ = Top | InLoop | InCase | OKToExit | InIfThenElse;
-=TEX
-=SML
-(* TBS - The following is never called - it should be! *)
-fun Ûcheck_3Ý (state : STMT_STATE, st : STMT) = (
-	case  st of
-		STExitWhen _ => (
-			if state = InLoop
-			then ()
-			else checking_error "check_3" 505065 []
-	) |	StExit => (
-			if state = OKToExit
-			then ()
-			else checking_error "check_3" 505066 []
-	)
-);
-=TEX
 
 \subsection{Anti-Aliasing Checks}
 
@@ -955,10 +952,10 @@ fun Ûanti_aliasing_actuals_modesÝ (speclab : SPECLAB)
 				APositional exps => exps
 			|	ANamed nas => named_assocs_to_exps formals nas)
 			handle Fail _ => fail "anti_aliasing_check_1" 505068
-						[fn() => name];
+						[fn() => fmt_id name];
 		val actuals_modes = combine actuals modes
 			handle Fail _ => fail "anti_aliasing_check_1" 505068
-						[fn() => name];
+						[fn() => fmt_id name];
 	in	combine actuals modes
 	end
 );
@@ -976,9 +973,7 @@ fun Ûanti_aliasing_check_1Ý (proc : (AGG_CHOICE,EXP)PROC_CALL)
 			val plural = if length exprs > 1 then "s" else "";
 		in
 			checking_error "anti_aliasing_check_1" 505069
-				[	fn()=>plural,
-					fn() => #name proc,
-					fn()=> fmt_exp_list exprs]
+				[fn() => fmt_id (#name proc)]
 		end
 		else (* OK *) ()
 	end
@@ -1007,9 +1002,9 @@ fun Ûanti_aliasing_check_2Ý (speclab : SPECLAB)
 		if inter_set = []
 		then (* OK *) ()
 		else	checking_error "anti_aliasing_check_2" 505071
-				[	fn()=>plural,
-					fn()=>name,
-					fn()=>fmt_id_list inter_set]
+				[	fn()=> plural,
+					fn()=> fmt_id name,
+					fn()=> fmt_id_list inter_set]
 	end
 );
 =TEX
@@ -1045,9 +1040,9 @@ fun Ûanti_aliasing_check_3Ý (speclab : SPECLAB)
 	in	if inter_set = []
 		then (* OK *) ()
 		else checking_error "anti_aliasing_check_3" 505072
-				[	fn()=>plural,
-					fn()=>name,
-					fn()=>fmt_id_list inter_set]
+				[	fn()=> plural,
+					fn()=> fmt_id name,
+					fn()=> fmt_id_list inter_set]
 	end
 );
 =TEX
@@ -1073,9 +1068,9 @@ fun Ûanti_aliasing_check_4Ý (speclab : SPECLAB)
 							then "s" else "";
 				     in
 					checking_error "anti_aliasing_check_4"
-					505073 [	fn()=>plural,
-							fn()=>name,
-							fn()=>fmt_id_list inter_set]
+					505073 [	fn()=> plural,
+							fn()=> fmt_id name,
+							fn()=> fmt_id_list inter_set]
 				     end
 			else	(* OK *) ()
 		end
@@ -1099,10 +1094,11 @@ fun Ûanti_aliasing_checkÝ (speclab : SPECLAB,
 	end
 );
 =TEX
+\subsection{Invoking the Checks}
 =SML
-fun Ûcn_checkÝ ((speclab, statement): SPECLAB * STATEMENT) : unit = (
+fun Ûdo_soundness_checks1Ý ((speclab, statement): SPECLAB * STATEMENT) : unit = (
 
-let	fun pass_over_stmt (state : STMT_STATE) (st : STMT) = (
+let	fun pass_over_stmt (st : STMT) = (
 
 	case st of
 			STNull => (
@@ -1112,32 +1108,24 @@ let	fun pass_over_stmt (state : STMT_STATE) (st : STMT) = (
 		)|	STSpecNoIvars {spec={w,w0,pre,post},label} => (
 				check_1_a (w, speclab)
 		)|	STSemicolon (s1,s2) => (
-				if state = OKToExit
-				then
-					(pass_over_stmt InIfThenElse s1;
-					pass_over_stmt state s2)
-				else
-					(pass_over_stmt state s1;
-					pass_over_stmt state s2)
+					(pass_over_stmt s1;
+					pass_over_stmt s2)
 		)|	STIfThenElse  {g,p,q,elsif} => (
-				if not elsif andalso state = InLoop
-				then	(pass_over_stmt OKToExit p;
-					pass_over_stmt OKToExit q)
-				else	(pass_over_stmt InIfThenElse p;
-					pass_over_stmt InIfThenElse q)
+					(pass_over_stmt p;
+					pass_over_stmt q)
 		)|	STCase {e,s,others} => (
-				map (fn st1 => pass_over_stmt InCase (#p st1)) s;
-				pass_over_stmt InCase others
+				map (fn st1 => pass_over_stmt (#p st1)) s;
+				pass_over_stmt others
 		)|	STLoop {t,stmt} => (
-				pass_over_stmt InLoop stmt
+				pass_over_stmt stmt
 		)|	STNamedLoop {name,t,stmt} => (
-				pass_over_stmt InLoop stmt
+				pass_over_stmt stmt
 		)|	STWhile {name,g,loop} => (
-				pass_over_stmt InLoop (#stmt loop)
+				pass_over_stmt (#stmt loop)
 		)|	STForStatic {name,i,tmark,range,dir,loop} => (
-				pass_over_stmt InLoop (#stmt loop)
+				pass_over_stmt (#stmt loop)
 		)|	STForTmark {name,i,tmark,dir,loop} => (
-				pass_over_stmt InLoop (#stmt loop)
+				pass_over_stmt (#stmt loop)
 		)|	STExitWhen {g} => (
 		)|	STExit => (
 				check_1_c speclab
@@ -1152,25 +1140,192 @@ let	fun pass_over_stmt (state : STMT_STATE) (st : STMT) = (
 	fun pass_over_statement (statement : STATEMENT) = (
 		case statement of
 			SStmt s => (
-				pass_over_stmt Top s
+				pass_over_stmt s
 		) |	SSpecIvars (si, st2) => (
-				pass_over_stmt Top st2
+				pass_over_stmt st2
 		) |	SLogCon (lc, st2) => (
-				pass_over_stmt Top st2
+				pass_over_stmt st2
 		) |	SForNonStatic ({name,i,range,loop}, st2) => (
-				pass_over_stmt InLoop (#stmt loop);
-				pass_over_stmt Top st2
+				pass_over_stmt (#stmt loop);
+				pass_over_stmt st2
 		) |	SProcIvars (proc as {name,actuals}, st2) => (
 				check_1_d (name, speclab);
 				anti_aliasing_check (speclab, proc);
-				pass_over_stmt Top st2
+				pass_over_stmt st2
 		)
 	);
 	in	pass_over_statement statement
 	end
 );
 =TEX
+=SML
+fun ÛresolverÝ (repl_function : LABEL -> REPLACEMENT OPT) (label : LABEL)
+			: STATEMENT = (
+	let	val repl = case repl_function label of
+					Nil => (
+						UnReplaced (RSStatement, "")
+				) |	Value repl => repl;
+	in
+		case repl of
+			ReplaceComp _ => (	SStmt STImplicitNull
+		) |    ReplacePPart _ => (	SStmt STImplicitNull
+		) |    ReplaceVPart _ => (	SStmt STImplicitNull
+		) |    ReplaceDecl _ => (	SStmt STImplicitNull
+		) |    RefineStat {statement, ...} => (	statement
+		) |    ReplaceStat {statement, ...}  => (	statement
+		) |    UnReplaced _ => (	SStmt STImplicitNull
+		)	
+	end
+);
+=TEX
+=SML
+datatype ÛCHECK_STATEÝ = ÛCSTopÝ | ÛCSInLoopÝ | ÛCSInCaseÝ
+		| ÛCSOKToExitÝ | ÛCSInIfThenElseÝ;
 
+=TEX
+=SML
+fun Ûcheck_3aÝ	 (state : CHECK_STATE, st : STMT) = (
+
+	case  st of
+		STExitWhen _ => (
+			if state = CSInLoop
+			then ()
+			else checking_warning "check_3a" 505065 []
+	) |	_ =>	error "check_3a" 505076 []
+);
+=TEX
+=SML
+fun Ûcheck_3bÝ	 (state : CHECK_STATE, st : STMT) = (
+
+	case  st of
+		STExit => (
+			if state = CSOKToExit
+			then ()
+			else checking_warning "check_3a" 505066 []
+	) |	_ =>	error "check_3b" 505077 []
+);
+=TEX
+=SML
+datatype ÛENDINGÝ = ÛEndsInReturnÝ | ÛEndsInOtherÝ;
+=TEX
+=SML
+fun Ûcheck_4aÝ	 (is_function_subprogram : bool) : unit = (
+
+	if is_function_subprogram
+	then
+		()
+	else
+		checking_warning "check_4a" 505078 []
+);
+
+fun Ûcheck_4bÝ	 (is_function_subprogram : bool,
+		 	ends_in_return : ENDING) : unit = (
+
+	if is_function_subprogram
+	then
+		case ends_in_return of
+			EndsInReturn => (
+		) |	EndsInOther =>
+				checking_warning "check_4b" 505079 []
+	else	()
+);
+=TEX
+
+=SML
+fun Ûdo_soundness_checks2Ý	(repl_function : LABEL -> REPLACEMENT OPT)
+				(is_function_subprogram : bool)
+				(statement : STATEMENT) : unit = (
+
+let	val local_resolver = resolver repl_function;
+	fun check_over_stmt (state : CHECK_STATE) (st : STMT) : ENDING = (
+
+	case st of
+			STNull => (	EndsInOther
+		)| 	STImplicitNull => ( EndsInOther
+		)|	STAssign {name,e} => ( EndsInOther
+		)|	STSpecNoIvars {spec,label} => (
+				check_over_statement state (local_resolver label)
+		)|	STSemicolon (s1,s2) => (
+				if state = CSOKToExit
+				then
+					(check_over_stmt CSInIfThenElse s1;
+					check_over_stmt state s2)
+				else
+					(check_over_stmt state s1;
+					check_over_stmt state s2)
+		)|	STIfThenElse  {g,p,q,elsif} => (
+				if not elsif andalso state = CSInLoop
+				then	(check_over_stmt CSOKToExit p;
+					check_over_stmt CSOKToExit q;
+					EndsInOther)
+				else	(check_over_stmt CSInIfThenElse p;
+					check_over_stmt CSInIfThenElse q;
+					EndsInOther)
+		)|	STCase {e,s,others} => (
+			let	val res =  map
+				   (fn st1 => check_over_stmt CSInCase (#p st1)) s;
+				val res1 = check_over_stmt CSInCase others;
+			in
+				if all (res1::res) (fn r => r = EndsInReturn)
+				then	EndsInReturn
+				else	EndsInOther
+			end
+		)|	STLoop {t,stmt} => (
+				check_over_stmt CSInLoop stmt;
+				EndsInOther
+		)|	STNamedLoop {name,t,stmt} => (
+				check_over_stmt CSInLoop stmt;
+				EndsInOther
+		)|	STWhile {name,g,loop} => (
+				check_over_stmt CSInLoop (#stmt loop);
+				EndsInOther
+		)|	STForStatic {name,i,tmark,range,dir,loop} => (
+				check_over_stmt CSInLoop (#stmt loop);
+				EndsInOther
+		)|	STForTmark {name,i,tmark,dir,loop} => (
+				check_over_stmt CSInLoop (#stmt loop);
+				EndsInOther
+		)|	STExitWhen {g} => (
+				check_3a (state, st);
+				EndsInOther
+		)|	STExit => (
+				check_3b (state, st);
+				EndsInOther
+		)|	STRet {e} => (
+				check_4a is_function_subprogram;
+				EndsInReturn
+		)|	STProcNoIvars (proc as {name,actuals}) => (
+				EndsInOther
+		)|	STKSlot {content,label} => (
+				check_over_statement state (local_resolver label);
+				EndsInOther
+
+		)
+	)
+	and check_over_statement (state : CHECK_STATE)
+					(statement : STATEMENT) = (
+		case statement of
+			SStmt s => (
+				check_over_stmt state s
+		) |	SSpecIvars ({spec,label}, st2) => (
+				check_over_statement state (local_resolver label);
+				check_over_stmt state st2
+		) |	SLogCon (lc, st2) => (
+				check_over_stmt state st2
+		) |	SForNonStatic ({name,i,range,loop}, st2) => (
+				check_over_stmt state (#stmt loop);
+				check_over_stmt state st2
+		) |	SProcIvars (proc as {name,actuals}, st2) => (
+				check_over_stmt state st2
+		)
+	);
+		val ends_in_return = check_over_statement CSTop statement;
+	in
+		check_4b (is_function_subprogram, ends_in_return);
+		()
+	end
+);
+=TEX
 \subsection{Variable Capture Checks}
 
 The following function is called from $add\_var\_env$ in \cite{ISS/HAT/DAZ/IMP507}.
@@ -1317,7 +1472,7 @@ let	val pre1 = z_predexp_of_z_tm pre;
 	val s = (pre1 %Longrightarrow% wp1) @
 		(subs_pred(pre1, w, w0) %Longrightarrow% side);
 in
-	cn_check (sl, st);
+	do_soundness_checks1 (sl, st);
 	vc_local_decls(s, sl)
 end
 	handle VCInformal =>
