@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.7 2002/10/22 15:10:24 rda Exp rda $
+# $Id: configure.sh,v 1.8 2002/10/22 16:38:32 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -109,7 +109,7 @@ then	( mkdir $PPTARGETDIR; rmdir $PPTARGETDIR ) || \
 elif	[ -d "$PPTARGETDIR" -a ! -w "$PPTARGETDIR" ]
 then	give_up "cannot write to the directory $PPTARGETDIR"
 fi
-if	[ `expr "$PPTARGETDIR" : '/'` != 1 ]
+if	[ `expr "$PPTARGETDIR" : '\/'` != 1 ]
 then	give_up "the target directory must be an absolute path name (i.e., begin with \"/\")"
 fi
 echo "Using $PPTARGETDIR as the installation target directory"
