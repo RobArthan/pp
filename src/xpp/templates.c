@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.23 2003/07/24 13:09:22 rda Exp rda $ 
+ * $Id: templates.c,v 2.24 2004/01/24 17:32:55 rda Exp rda $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -158,12 +158,12 @@ static Pixmap get_pixmap (Widget   w,
 		WhitePixelOfScreen(XtScreen(root)));
 	if(result == XmUNSPECIFIED_PIXMAP) { /* try in PPHOME/bitmaps */
 		char * alt_name = (char*) XtMalloc(
-			sizeof(BITMAP_TMPL)  +
-			sizeof(pp_home) +
-			sizeof(name) + 1);
+			strlen(BITMAP_TMPL)  +
+			strlen(pp_home) +
+			strlen(name) + 1);
 		sprintf(alt_name, BITMAP_TMPL, pp_home, name);
 		result = XmGetPixmap(XtScreen(w),
-				name,
+				alt_name,
 				BlackPixelOfScreen(XtScreen(root)),
 				WhitePixelOfScreen(XtScreen(root)));
 		XtFree(alt_name);
