@@ -87,6 +87,7 @@
 \item[Issue 1.50] Improved message 505063.
 \item[Issue 1.51] Improved use of substitutions and common  subterms.
 \item[Issue 1.51-1.54] IUCT WP 4.
+\item[Issue 1.55] Check 1(a) now applies to procedure calls too.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1033,12 +1034,12 @@ fun Ûanti_aliasing_parsÝ (fp : FORMAL_PROC) (pc : (AGG_CHOICE,EXP)PROC_CALL)
 );
 =TEX
 The following function makes a pair-wise list of actual parameters (EXPs) with their modes (which are extracted from the corresponding $formal\_proc$).
+The actuals are in the order given in the procedure specification.
 =SML
-fun Ûanti_aliasing_actuals_modesÝ (env : CN_ENV) (speclab : SPECLAB)
+fun Ûanti_aliasing_actuals_modesÝ (env : CN_ENV) (formal_proc : FORMAL_PROC)
 				(proc : (AGG_CHOICE, EXP) PROC_CALL) :
 			(EXP * MODE) list = (
 	let	val name = #name proc;
-		val formal_proc = find_formal_proc speclab (#name proc);
 		val formal_ids = #formal_ids formal_proc;
 		val var_decls_modes = map (fn {var_decl, mode,...}
 					=> (var_decl,mode)) formal_ids;
@@ -1085,11 +1086,10 @@ fun Ûanti_aliasing_check_1Ý (proc : (AGG_CHOICE,EXP)PROC_CALL)
 
 =TEX
 =SML
-fun Ûanti_aliasing_check_2Ý (speclab : SPECLAB)
+fun Ûanti_aliasing_check_2Ý (formal_proc : FORMAL_PROC)
 				(proc : (AGG_CHOICE,EXP)PROC_CALL)
 				(actuals_modes : (EXP * MODE) list) : unit = (
 	let	val name = #name proc;
-		val formal_proc = find_formal_proc speclab name;
 		val (_, trans_globals) = anti_aliasing_pars formal_proc proc;
 		val set = map fst (actuals_modes drop
 				(fn am => not (	snd am = MSparkInOut orelse
@@ -1127,10 +1127,10 @@ end (* local ... in *);
 =TEX
 =SML
 fun Ûanti_aliasing_check_3Ý (speclab : SPECLAB)
+				(formal_proc : FORMAL_PROC)
 				(proc : (AGG_CHOICE,EXP)PROC_CALL)
 				(actuals_modes : (EXP * MODE) list) : unit = (
 	let	val name = #name proc;
-		val formal_proc = find_formal_proc speclab name;
 		val (_, trans_globals) = anti_aliasing_pars formal_proc proc;
 		val w = (#w o #spec) formal_proc;
 		val actuals = map fst actuals_modes;
@@ -1150,10 +1150,10 @@ fun Ûanti_aliasing_check_3Ý (speclab : SPECLAB)
 =TEX
 =SML
 fun Ûanti_aliasing_check_4Ý (speclab : SPECLAB)
+				(formal_proc : FORMAL_PROC)
 				(proc : (AGG_CHOICE,EXP)PROC_CALL)
 				(actuals_modes : (EXP * MODE) list) : unit = (
 	let	val name = #name proc;
-		val formal_proc = find_formal_proc speclab (#name proc);
 		val (_, trans_globals) = anti_aliasing_pars formal_proc proc;
 		val cn_env = (#env o #wp_env) speclab;
 		fun pair_wise (a_m_1::a_m_2::rest) = (
@@ -1180,19 +1180,41 @@ fun Ûanti_aliasing_check_4Ý (speclab : SPECLAB)
 	in	 pair_wise actuals_modes
 	end
 );
-
+=TEX
+The following function computes the effective frame of a procedure call --- the frame that obtained by substituting actual parameters for formals in the original frame.
+=SML
+fun Ûproc_frameÝ (env : CN_ENV)
+			({formal_ids, spec={w, ...}, ...} : FORMAL_PROC )
+			(actuals_modes : (EXP * MODE) list)
+				: Z_ID list = (
+	let	val var_decls = map (fn {var_decl, ...} => var_decl) formal_ids;
+		val formals = flat (map (fn {vars, ...} => vars) var_decls);
+		val table = combine formals (map fst actuals_modes);
+		fun aux (v :: vs) = (
+			(case lassoc5 table v of
+				Nil => v
+			|	Value e =>
+				name_to_entire_variable_name	(adjust_exp env e))
+			:: aux vs
+		) | aux [] = [];
+	in	aux w
+	end
+);
 =TEX
 =SML
 fun Ûanti_aliasing_checkÝ (env : CN_ENV) (speclab : SPECLAB,
 				proc : (AGG_CHOICE,EXP)PROC_CALL) = (
-	let	val actuals_modes = anti_aliasing_actuals_modes env speclab proc
+	let	val formal_proc = find_formal_proc speclab (#name proc);
+		val actuals_modes =
+			anti_aliasing_actuals_modes env formal_proc proc
 			handle Fail _ =>
 			fail "anti_aliasing_check" 505068 [fn()=> #name proc];
 	in
 		anti_aliasing_check_1 proc actuals_modes;
-		anti_aliasing_check_2 speclab proc actuals_modes;
-		anti_aliasing_check_3 speclab proc actuals_modes;
-		anti_aliasing_check_4 speclab proc actuals_modes
+		anti_aliasing_check_2 formal_proc proc actuals_modes;
+		anti_aliasing_check_3 speclab formal_proc proc actuals_modes;
+		anti_aliasing_check_4 speclab formal_proc proc actuals_modes;
+		check_1_a(proc_frame env formal_proc actuals_modes, speclab)
 	end
 );
 =TEX
