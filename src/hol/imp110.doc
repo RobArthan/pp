@@ -145,6 +145,9 @@ lasp -s -u imp005.OKwords imp005.doc > zz1
 \item[14 May, issue 1.7 ] Extensive changes.  New form of quotation of
 	other languages.  Better split between the three structures.
 
+\item[17 May, issue 1.7 ] Restructure function $useterminal$ and add
+	function $ask_at_terminal$.
+
 \end{description}
 
 %********************************************************************
@@ -1416,7 +1419,6 @@ in
 	of (*=(=*)	")"	=>	prev
 	|  (*=[=*)	"]"	=>	prev
 	|  (*={=*)	"}"	=>	prev
-	|  		"\^T"	=>	prev
 	|  		"\^D"	=>	prev
 	| 		_ => (
 		case read_symbol R
@@ -2834,17 +2836,21 @@ end);
 
 \subsection{Reading from a Terminal -- {\tt useterminal}}
 
-=SML
-fun âuseterminalá () : unit = (
-let
-=TEX
+It only makes sense to have one invocation of $useterminal$, by
+contrast calls to function $usefile$ may be nested, one file may
+include another.  This means that the basic reading functions (i.e.,
+the `$f_\ldots$' functions) need to be declared within $usefile$ so
+that they and any file related data items, such as the stream and the
+lookahead buffer, are local to that invocation.  Calls of function
+$usestring$ may be nested with calls of $usefile$. {} With
+$useterminal$ only one invocation is allowed because of the handling of
+the read ahead and the type ahead buffers.
+Most of the local data and functions for $useterminal$ are declared
+outside the function making the text of $useterminal$ itself smaller
+than either $usefile$ of $usestring$, although the function and its support
+is larger.
 
-Whilst reading from a terminal several points must be dealt with in
-addition to those needed for the other two readers.
-
-\begin{itemize}
-
-\item Prompts are required when the system wants the user to enter some
+Prompts are required when the system wants the user to enter some
 	characters.  Input is line based, the operating system provides
 	line editing and only passes the characters when an end-of-line
 	character is typed.  Second and later lines of a {\em topdec\/}
@@ -2854,6 +2860,7 @@ addition to those needed for the other two readers.
 	character is a new line or a control-X.
 
 =SML
+local (* for useterminal and ask_at_terminal *)
 	val prompt1 = ":> ";
 	val prompt2 = ":# ";
 
@@ -2868,7 +2875,7 @@ addition to those needed for the other two readers.
 	);
 =TEX
 
-\item The control-X character is taken to mean break as soon as
+The control-X character is taken to mean break as soon as
 	possible to the main prompt of this reader, ignoring any text
 	typed and processed already.
 
@@ -2876,11 +2883,11 @@ addition to those needed for the other two readers.
 	exception QuitTopDec;
 =TEX
 
-\item All exceptions should be fielded by the reader, they should be
+All exceptions should be fielded by the reader, they should be
 	reported to standard output, then the next {\em topdec\/}
 	solicited.
 
-\item Counting of times a character is used should take place just as
+Counting of times a character is used should take place just as
 	in the other readers, to reduce the chances of run-away
 	recursion of the parsing routines.
 
@@ -2889,16 +2896,24 @@ addition to those needed for the other two readers.
 	exception Read_too_often of string;
 =TEX
 
-\end{itemize}
+The lookahead buffer holds characters which have actually been read,
+they are held until required by the parser.  The head of the list holds
+the next character to be read, pushed back characters are added to the
+head.
 
-All the reading of characters is handled by one routine which deals
+=SML
+	val read_ahead : string list ref = ref nil;
+=TEX
+
+Reading of characters is mainly handled by one routine which deals
 with prompting as required.  The second-line of a {\em topdec\/} is
 considered to have started only after a character other than a new line
 has been read.
+Characters are also read by function $ask_at_terminal$ which empties
+the terminal type ahead buffer into the look ahead buffer.
 
 =SML
-local (* for read_char and look_ahead_char *)
-
+local
 	fun read_next_character () = (
 		issue_prompt();
 
@@ -2915,18 +2930,7 @@ local (* for read_char and look_ahead_char *)
 			else	last
 		end
 	);
-=TEX
-
-Character lookahead is simulated here by actually reading a character,
-and remembering it until it is read by the parser.  Routines to read and
-lookahead must then examine this remembered value.  The lookahead just
-returns the value whereas a read empties it.
-
-=SML
-	val read_ahead : string list ref = ref nil;
-
-in (* local for read_char and look_ahead_char *)
-
+in
 	fun read_char () : string = (
 		case !read_ahead
 		of nil =>	read_next_character()
@@ -2939,13 +2943,15 @@ in (* local for read_char and look_ahead_char *)
 				in	(read_ahead := [ch]; ch) end
 		| h :: _ =>	h
 	);
+end;
+=TEX
 
+=SML
 	fun ât_push_backá ("":string) : unit = ()
 	| t_push_back (chars:string) : unit = (
 		logit RWchars_read "t_push_back            " chars;
 		read_ahead := screen_for_push_back chars (!read_ahead)
 	);
-end (* of local for read_char and look_ahead_char *)
 =TEX
 
 The functions passed in a $READER_ENV$ record are very similar\footnote{We
@@ -3019,6 +3025,12 @@ a check for abandoning in the ``others'' clause of the match for
 exceptions below.
 
 =SML
+val âuseterminal_is_activeá : bool ref = ref false;
+
+in (* local for useterminal and ask_at_terminal *)
+
+fun âuseterminalá () : unit = (
+let
 	fun âuse_term_loopá () = (
 		if (PolyML.compiler (get_ML_outermost reader, writer) (); true)
 			handle EndOfInput => (diag_string 
@@ -3050,15 +3062,76 @@ exceptions below.
 		else	()
 	)
 in
-	cur_prompt := prompt1;
-	abandoning := false;
+	if !useterminal_is_active
+	then
+		()
+	else
+		(
+			useterminal_is_active := true;
+			cur_prompt := prompt1;
+			abandoning := false;
+			console_last := "\n";
 
-	use_term_loop ()
+			use_term_loop ();
+
+			useterminal_is_active := false
+		)
 end);
 =IGN
-
+Alternatively:
 			output(std_out, "End of input to useterminal.  Commit and quit.\n");
 			PolyML.commit();
+=TEX
+
+The PolyML input output system has a `type ahead' buffer which is normally
+invisible, however when questions are to be asked of the user at the terminal
+the type ahead buffer must be emptied before reading the users answer.
+Failing to empty the buffer may mean the wrong text being taken as the
+answer, and that text
+
+Recording the contents of the type ahead buffer is only performed
+on terminals, do nothing for other type of input.
+
+=SML
+fun âask_at_terminalá (prompt:string) : string = (
+let
+	fun read_terminal_type_ahead_buffer  () : unit = (
+	let
+		fun aux prev_ch = (
+			if ExtendedIO.can_input(std_in, 1)
+			then
+				aux((input(std_in, 1)) :: prev_ch)
+			else
+				prev_ch
+		);
+
+		val typed_ahead = aux nil;
+	in
+		case typed_ahead
+		of last ::_ => console_last := last
+		| _ => ();
+
+		read_ahead := (!read_ahead) @ (rev typed_ahead)
+	end
+	);
+in
+	if  !useterminal_is_active
+	then
+		if ExtendedIO.is_term_in std_in
+		then
+			(	read_terminal_type_ahead_buffer();
+				output(std_out, prompt);
+				ExtendedIO.flush_out std_out;
+				ExtendedIO.input_line std_in
+			)
+		else
+			fail "ask_at_terminal" 5013 []
+	else
+		fail "ask_at_terminal" 5012 []
+
+end) (* of ask_at_terminal *);
+
+end (* of local for useterminal and ask_at_terminal *);
 =TEX
 
 %********************************************************************
