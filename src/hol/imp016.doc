@@ -117,10 +117,10 @@ structure âTypeInferenceá = struct
 =SML
 open Parser Unification;
 
-val TIverbose = ref false;
+val ti_verbose = ref false;
 
 val _ =
-new_flag {name = "TIverbose", control=TIverbose, default = fn () => false};
+new_flag {name = "ti_verbose", control=ti_verbose, default = fn () => true};
 
 type âENVá = string -> (EXTYPE*bool);
 type âINF_TUPLEá = EXTYPE TM * EXTYPE * SUBS;
@@ -137,15 +137,29 @@ fun âtype_of_constá (s : string) : TYPE OPT = (
 =TEX
 
 =SML
+fun âeval_type_consá (s : string, tyl : TYPE list) : TYPE = (
+	if is_type_abbrev s
+	then
+		expand_type_abbrev (s, tyl)
+	else
+		mk_ctype (s, tyl)
+);
+=TEX
+
+=SML
 fun âty_to_typeá ((TyAtom s) : TY) : TYPE  = (
 	if (hd o explode) s = "'"
 	then
-		mk_vartype s
+		if is_type_abbrev s
+		then
+			expand_type_abbrev (s, [])
+		else
+			mk_vartype s
 	else
-		case get_type_arity s of
-			Value 0 => mk_ctype (s, [])
-		|	Nil => mk_ctype (s, [])
-		|	Value x => fail "HOL type inferrer" 16030
+		case get_type_info s of
+			Value (0, _) => eval_type_cons (s, [])
+		|	Nil => fail "HOL type inferrer" 16060 [fn() => s]
+		|	Value (x, _) => fail "HOL type inferrer" 16030
 			[fn() => s,
 			 fn() => string_of_int x,
 			 fn() => if x = 1 then "" else "s",
@@ -153,14 +167,14 @@ fun âty_to_typeá ((TyAtom s) : TY) : TYPE  = (
 			 fn() => "s"]
 )
   |  ty_to_type (TyCompound (tyl, s, _)) = (
-	case get_type_arity s of
-	   Value x =>
+	case get_type_info s of
+	   Value (x, _) =>
 		let
 			val ltyl = length tyl
 		in
 		   if x = ltyl
 		   then
-			mk_ctype (s, map ty_to_type tyl)
+			eval_type_cons (s, map ty_to_type tyl)
 		   else
 			fail "HOL type inferrer" 16030
 			[fn() => s,
@@ -171,10 +185,9 @@ fun âty_to_typeá ((TyAtom s) : TY) : TYPE  = (
 			]
 		end
 
-	|  Nil => mk_ctype (s, map ty_to_type tyl)
+	|  Nil => fail "HOL type inferrer" 16060 [fn() => s]
 )
   |  ty_to_type (TyAq ty) = ty;
-
 =TEX
 
 =SML
@@ -459,23 +472,6 @@ fun âget_tyvar_info_tyá (phi : SUBS) (ty : EXTYPE) : (int * string) list = (
 =TEX
 
 =SML
-fun âvars_in_contextá (term : TY TM) (env : ENV) : TERM list = (
-let	val freevars = fv_set term;
-	fun aux (var::rest) =
-	let	val (exty, flag) = env var
-	in
-		if flag
-		then
-			(mk_var (var, lassoc3 (!context_info) var))::(aux rest)
-		else
-			aux rest
-	end
-	  | aux _ = nil;
-in
-	aux freevars
-end
-);
-
 fun âvars_in_termá (term : TY TM) (env : ENV) : (string*EXTYPE) list = (
 let	val freevars = fv_set term;
 	fun aux (var::rest) =
@@ -555,7 +551,7 @@ let	val thing = map (fv_in_exty phi) (map snd tml);
 		aux tml)
 	  | aux _ = ();
 in
-	if get_flag "TIverbose"
+	if get_flag "ti_verbose"
 	then
 	(
 		(case tml of
