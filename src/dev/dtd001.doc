@@ -1,0 +1,904 @@
+=TEX
+\documentstyle[hol,11pt,TQ]{article}
+\ftlinepenalty=9999
+\makeindex
+\TPPproject{IED 1563}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Detailed Design for Standard ML Utilities}  %% Mandatory field
+\TPPref{DS/FMU/IED/DTD001}  %% Mandatory field
+\def\SCCSversion{$Revision$
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$
+}}
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{SML Literate Script}
+\TPPkeywords{}
+\TPPauthor{K.Blackburn & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.D.Arthan & Project Manager}
+\TPPabstract{Utility functions for use in the prototype HOL
+system are given a detailed design in this document.}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	    Library
+}}
+\begin{document}
+\makeTPPfrontpage
+\vfill
+\begin{centering}
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+\end{centering}
+\pagebreak
+\section{Document control}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history} 
+\begin{description}
+\item 1.1
+First draft version.
+Based on \cite{DS/FMU/IED/SML001}.
+Name changes from that are currently recorded in 
+\[~kb/ied/NameChanges\]
+\end{description}
+%\subsection{Changes forecast}
+\section{GENERAL}
+\subsection{Scope}
+This document contains a detailed design, implemented in \cite{DS/FMU/IED/imp001}.
+
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document gives a detailed design, in the form of signatures and informal descriptions,  of a number of general purpose
+Standard ML objects
+which are of use in coding the prototype HOL system.
+Many of these are general functions which
+support some common functional programming idioms.
+\subsubsection{Dependencies}
+The definitions in this document are self-contained
+and depend only on the Standard ML facilities defined
+in \cite{Harper86}.
+\subsubsection{Deficiencies}
+The treatment of I/O currently supports only output
+of messages to the terminal (i.e. UNIX standard output)
+and a crude facility for dumping string data to a file.
+These facilities may well need revision.
+\subsubsection{Possible Enhancements}
+Versions of the general functions defined here
+may well be supplied with particular
+Standard ML compilers. It may improve performance if
+the supplied versions are used.
+
+The proposed pretty character set would be useful in giving clearer examples,
+error messages etc.
+\section{INFIXES USED IN THIS DOCUMENT}
+A Standard ML $infix$ command must be given at the `top level'.
+Thus we give the commands here for those functions declared in the following signatures.
+=SML
+infix 4 drop;
+infix 4 less;
+infix 4 grab;
+infix 4 cup;
+infix 3 mem;
+infix 3 subset;
+infix 2 diff;
+infix 4 overwrite;
+infix 4 list_overwrite;
+infix 4 roverwrite;
+infix 4 list_roverwrite;
+infix 5 from;
+infix 5 to;
+infix 4 **;
+=TEX
+\section{SHARED TYPES IN THIS DOCUMENT}
+=DOC
+signature âdtd001SharedTypesá = sig
+=SYNOPSIS
+Any new types to dtd001 mentioned in more than one signature
+will be declared in this signature.
+The associated structure is also declared in dtd001.
+=DOC
+datatype 'a âOPTá = âNilá | âValueá of 'a;
+=SYNOPSIS
+A type of ``optional'' values.
+=USES
+The datatype $'a\;OPT$ is useful for implementing
+partial functions for which raising an exception
+is not an appropriate action for undefined cases.
+=SEEALSO
+Signature $ListUtilities$.
+=DOC
+type 'a âs_dictá;
+=SYNOPSIS
+The type of simple dictionaries.
+=SEEALSO
+Signature $SimpleDictionary$.
+=SML
+end (* dtd001SharedTypes signature *);
+=TEX
+We now declare the shared type structure:
+=SML
+structure âdtd001SharedTypesá : dtd001SharedTypes = struct
+	datatype 'a âOPTá = âNilá | âValueá of 'a;
+	type 'a âs_dictá = (string * 'a) list;
+end;
+open dtd001SharedTypes;
+=TEX
+\section{ERROR HANDLING}
+As a temporary measure we introduce an error signature:
+this will be removed when properly available.
+=SML
+signature icl'error1 = sig
+	exception âFailá of string * string;
+	val scream : string -> string -> 'a
+end;
+=TEX
+\section{LIST UTILITIES}
+=DOC
+signature âListUtilitiesá = sig
+=SYNOPSIS
+Holds a variety of utility Standard ML list functions.
+=TEX
+\subsection{Some Useful Datatypes and Functions upon them}
+=DOC
+val âforce_valueá : 'a OPT -> 'a;
+=SYNOPSIS
+Force a $'a\;OPT$ into a $'a$
+=FAILURE
+\begin{verbatim}
+"Argument may not be Nil"
+\end{verbatim}
+=TEX
+=DOC
+type (''a, 'b) âgrelá;
+=SYNOPSIS
+Used for representing binary relations between differing types.
+=USES
+In combination with the associative look-up functions and
+overwrite etc., which are defined in this signature, are often convenient.
+=DOC
+type ''a ârelá;
+=SYNOPSIS
+Used for representing binary relations within one type.
+=USES
+In combination with the associative look-up functions and
+overwrite etc., which are defined in this signature, are often convenient.
+=TEX
+\newpage
+\subsection{List Processing Functions}
+\subsubsection{A Miscellany}
+$hd$ and $tl$ are the usual destructor functions for
+lists.
+=DOC
+val âhdá : 'a list -> 'a;
+=SYNOPSIS
+Returns first element of a list.
+=FAILURE
+\begin{verbatim}
+"An empty list has no head"
+\end{verbatim}
+=SEEALSO
+tl
+=DOC
+val âtlá : 'a list -> 'a list;
+=SYNOPSIS
+Returns all but the first element of a list.
+=FAILURE
+\begin{verbatim}
+"An empty list has no tail"
+\end{verbatim}
+=SEEALSO
+hd
+=DOC
+val âfoldá : ('a * 'b -> 'b) -> 'a list -> 'b -> 'b;
+=SYNOPSIS
+Fold a list into a single value.
+=EXAMPLE
+fold f [x1, x2, ...., xk] b = 
+f(x1, f(x2, ... f (xk, b))...)
+=SEEALSO
+revfold
+=DOC
+val ârevfoldá : ('a * 'b -> 'b) -> 'a list -> 'b -> 'b;
+=SYNOPSIS
+Fold a list into a single value.
+=EXAMPLE
+revfold f [x1, x2, ...., xk] b = 
+f(xk, ..., f(x2, f (x1, b))...)
+=SEEALSO
+fold
+=DOC
+val âlengthá : 'a list -> int;
+=SYNOPSIS
+$length$ returns the length of a list.
+=TEX
+\subsection{Lists as Sets}
+$drop$,  $less$ and $grab$ are infix operators with priority 4 (lower than
+`::' and higher than `=').
+$drop$ and $less$ are essentially the set difference operation.
+$grab$ is union with a singleton set.
+
+=DOC
+val âdropá : 'a list * ('a -> bool) -> 'a list;
+=SYNOPSIS
+$list\,drop\,cond$ is the list obtained by deleting all members
+of $list$ for which the boolean function $cond$ returns true.
+=DOC
+val âlessá : ''a list * ''a -> ''a list;
+=SYNOPSIS
+$list\,less\,what$ is the list obtained by deleting all members
+of $list$ which are equal to $what$.
+=DOC
+val âgrabá : ''a list * ''a -> ''a list;
+=SYNOPSIS
+$list\, grab\,what$ is the list obtained by inserting $what$
+at the end of $list$ if it is not a member of it already.
+
+=DOC
+val âunioná : ('a * 'a -> bool) -> 'a list -> 'a list -> 'a list;
+=SYNOPSIS
+A prefix binary union operation for lists, with parameterised equality test.
+=DESCRIBE
+$union$ is essentially a binary union operation for lists.
+Since we need it for types such as $TERM$, which are
+not equality types, it has a parameter giving the relation to be
+used to determine equality of members of the lists.
+In some cases it may be important for the order of members of the union
+to be known. The rule is that $union\,eq\,list1\,list2$ returns
+the list obtained by concatenating $list1$ and the list obtained
+by deleting those members, $y$, of $list2$ for which there is a
+member, $x$, of $list2$ with $eq(x,\,y)\,=\,true$.
+Note also that if one of the lists is small it should
+be supplied as the second list argument if speed is of
+the essence.
+
+=SEEALSO
+$cup$, $list\_union$, $list\_cup$
+=DOC
+val âcupá : ''a list * ''a list -> ''a list;
+=SYNOPSIS
+An infix binary union operation for lists, with Standard ML equality test.
+=SEEALSO
+$union$, $list\_cup$, $list\_union$
+=DOC
+val âlist_unioná : ('a * 'a -> bool) -> 'a list list -> 'a list;
+=SYNOPSIS
+A distributed union operation for lists, with parameterised equality test.
+=EXAMPLE
+list_union eq [list0, list1, ...] = union eq (list0 union eq (list1 ...)).
+=SEEALSO
+$union$, $list\_cup$.
+=DOC
+val âlist_cupá : ''a list list -> ''a list;
+=SYNOPSIS
+A distributed union operation for lists, with Standard ML equality test.
+=SEEALSO
+$cup$, $list\_union$
+=DOC
+val âfindá : 'a list -> ('a -> bool) -> 'a;
+=SYNOPSIS
+$find$ searches for a member of a list satisfying a given condition and
+returns such a member if there is one.
+=FAILURE
+\begin{verbatim}
+"Element cannot be found in list"
+\end{verbatim}
+=DOC
+val âcontainsá : ''a list -> ''a -> bool;
+=SYNOPSIS
+The prefix function $contains$ searches for a member of
+a list equal to a given value and returns true iff. it finds one.
+=SEEALSO
+$mem$
+=DOC
+val âmemá : ''a * ''a list -> bool;
+=SYNOPSIS
+The infix function $mem$ searches for a member of
+a list equal to a given value and returns true iff. it finds one.
+=SEEALSO
+$contains$
+=DOC
+val âanyá : 'a list -> ('a -> bool) -> bool;
+=SYNOPSIS
+$any$ returns true iff. some element of a list satisfies a given
+condition.
+=DOC
+val âallá : 'a list -> ('a -> bool) -> bool;
+=SYNOPSIS
+$all$ returns true iff. all elements of a list satisfy a given
+property.
+=DOC
+val âsubsetá : ''a list * ''a list -> bool;
+=SYNOPSIS
+$l1\,subset\,l2$ is true iff. all the elements of $l1$
+are  also elements of $l2$
+=DOC
+val âdiffá : ''a list * ''a list -> ''a list;
+=SYNOPSIS
+$diff$ is the set difference operator for lists.
+=TEX
+\subsection{Lists of Pairs as Functions and Relations}
+We will frequently implement functions or relations as
+lists of pairs. The following associative lookup functions are
+used to implement application of such functions or relations.
+We will need a number of variations on the same theme.
+Each variation has left- and right-handed versions.
+
+=DOC
+val âlassoc_1á : (''a * ''a) list -> ''a -> ''a;
+=SYNOPSIS
+View a list of pairs as
+representing a total function, first to second of pair, and apply it.
+The function
+is made total by taking the argument as the result if there is no
+appropriate member of the list.
+=DOC
+val ârassoc_1á : (''a * ''a) list -> ''a -> ''a;
+=SYNOPSIS
+View a list of pairs as
+representing a total function, second to first of pair, and apply it.
+The function
+is made total by taking the argument as the result if there is no
+appropriate member of the list.
+
+
+In the second variation, an ML function
+to compute the value in this case is supplied as an argument.
+=DOC
+val âlassoc_2á : (''a * 'b) list -> (''a -> 'b) -> ''a -> 'b;
+=SYNOPSIS
+View a list of pairs as
+representing a total function, first to second of pair, and apply it.
+The function
+is made total by returning the function argument applied to the other argument as the result if there is no
+appropriate member of the list.
+=DOC
+val ârassoc_2á : ('a * ''b) list -> (''b -> 'a) -> ''b -> 'a;
+=SYNOPSIS
+View a list of pairs as
+representing a total function, second to first of pair, and apply it.
+The function
+is made total by returning the function argument applied to the other argument as the result if there is no
+appropriate member of the list.
+=DOC
+val âlassoc_3á : (''a * 'b) list -> ''a -> 'b;
+=SYNOPSIS
+View a list of pairs as
+representing a partial function, first to second of pair, and apply it.
+=FAILURE
+\begin{verbatim}
+"no such value in association list"
+\end{verbatim}
+=DOC
+val ârassoc_3á : ('a * ''b) list -> ''b -> 'a;
+=SYNOPSIS
+View a list of pairs as
+representing a partial function, second to first of pair, and apply it.
+=FAILURE
+\begin{verbatim}
+"no such value in association list"
+\end{verbatim}
+=DOC
+val âlassoc_4á : (''a * 'b) list -> 'b -> ''a -> 'b;
+=SYNOPSIS
+View a list of pairs as
+representing a total function, first to second of pair, and apply it.
+The function
+is made total by returning the default argument as the result if there is no
+appropriate member of the list.
+=DOC
+val ârassoc_4á : ('a * ''b) list -> 'a -> ''b -> 'a;
+=SYNOPSIS
+View a list of pairs as
+representing a total function, second to first of pair, and apply it.
+The function
+is made total by returning the default argument as the result if there is no
+appropriate member of the list.
+=DOC
+val âlassoc_5á : (''a * 'b) list -> ''a -> 'b OPT;
+=SYNOPSIS
+View a list of pairs as
+representing a partial function, first to second of pair, and apply it.
+The partiality is indicated by using the `optional' type, $OPT$.
+=DOC
+val ârassoc_5á : ('a * ''b) list -> ''b -> 'a OPT;
+=SYNOPSIS
+View a list of pairs as
+representing a partial function, second to first of pair, and apply it.
+The partiality is indicated by using the `optional' type, $OPT$.
+=DOC
+val âoverwriteá : (''a * 'b) list * (''a * 'b) -> (''a * 'b) list;
+=SYNOPSIS
+View a list of pairs as a function from first to second of pair, and overwrite with the maplet.
+supplied.
+=SEEALSO
+$roverwrite$, $list\_overwrite$
+=DOC
+val âlist_overwriteá : (''a * 'b) list * (''a * 'b) list -> (''a * 'b) list;
+=SYNOPSIS
+View a list of pairs as a function from first to second of pair, and overwrite with the a list of maplets (the second of the pair of arguments).
+=SEEALSO
+$overwrite$, $list\_roverwrite$.
+=DOC
+val âroverwriteá : ('a * ''b) list * ('a * ''b) -> ('a * ''b) list;
+=TEX
+View a list of pairs as a function from second to first of pair, and overwrite with the maplet
+supplied.
+=DOC
+val âlist_roverwriteá : ('a * ''b) list * ('a * ''b) list -> ('a * ''b) list;
+=SYNOPSIS
+View a list of pairs as a function from second to first of pair, and overwrite with the a list of maplets (the second of the pair of arguments).
+=TEX
+\subsection{Another Miscellany}
+
+=DOC
+val âis_nilá : 'a list -> bool;
+=SYNOPSIS
+$is\_nil$ tests whether a list is empty([]). It can be
+used for lists of types which do not admit equality.
+=DOC
+val âflatá : 'a list list -> 'a list;
+=SYNOPSIS
+$flat$ takes a list of lists and returns the result of
+concatenating them all.
+=DOC
+val âsplitá : ('a * 'b) list -> 'a list * 'b list;
+=SYNOPSIS
+Split a list of pairs into a pair of lists.
+=EXAMPLE
+split [(x_0, y_0), (x_1, y_1), ... (x_k, y_k)] =
+[x_0, x_1, ... , x_k],  [y_0, y_1, ... , y_k]
+=SEEALSO
+$split3$, $combine$
+=DOC
+val âsplit3á : ('a * 'b * 'c) list -> 'a list * 'b list * 'c list;
+=SYNOPSIS
+Split a list of triples into a triple of lists.
+$split3$ is the analogue of $split$ for lists of triples.
+=SEEALSO
+$split$
+=TEX
+
+(NB - deliberately not called $split\_3$).
+=DOC
+val âcombineá : 'a list -> 'b list -> ('a * 'b) list;
+=SYNOPSIS
+$combine$ is the left inverse of $split$, that combines a pair of lists into a list of pairs.
+=FAILURE
+\begin{verbatim}
+"cannot combine unequal length lists"
+\end{verbatim}
+=SEEALSO
+$split$
+=DOC
+val âall_differentá : ''a list -> bool;
+=SYNOPSIS
+$all\_different$ determines whether a list has any
+repeated entries.
+=DOC
+val âall_distinctá : ('a * 'a -> bool) -> 'a list -> bool;
+=SYNOPSIS
+$all\_distinct$ determines whether a list has any
+repeated entries using a given function to test for
+equality.
+=DOC
+val âfromá : 'a list * int -> 'a list
+;
+=SYNOPSIS
+The infix function $from$ takes
+the trailing slice of a list. 
+=EXAMPLE
+[0,1,2,3] from 2 = [2,3]
+=SEEALSO
+$to$
+=DOC
+val âtoá : 'a list * int -> 'a list;
+=SYNOPSIS
+The infix function $to$ takes
+the initial slice of a list.
+=EXAMPLE
+[0,1,2,3] to 2 = [0,1,2]
+=SEEALSO
+$from$
+=DOC
+val âintervalá : int -> int -> int list;
+=SYNOPSIS
+$interval\;a\;b$ is the list $[a,a+1,a+2\ldots,b]$.
+This is taken to be $[]$ if $a > b$ and to be $[a]$
+if $a = b$.
+=TEX
+\subsection{End of ListUtilities}
+=SML
+end (* of ListUtilities signature *);
+=TEX
+\section{FUNCTION UTILITIES}
+=DOC
+signature âFunctionUtilitiesá = sig
+=SYNOPSIS
+Holds a variety of utility Standard ML functions concerned with functions.
+=TEX
+\subsection{Pairs}
+=DOC
+val âfstá : 'a * 'b -> 'a;
+=SYNOPSIS
+$fst$ and $snd$ are the projection functions for pairs.
+=DOC
+val âsndá : 'a * 'b -> 'b;
+=SYNOPSIS
+$fst$ and $snd$ are the projection functions for pairs.
+=DOC
+val âswapá  : 'a * 'b -> 'b * 'a;
+=SYNOPSIS
+$swap$ interchanges the elements of a pair
+=TEX
+\subsection{Functionals}
+Certain higher-order functions are very useful.
+
+=DOC
+val âcurryá  : ('a * 'b -> 'c) -> 'a -> 'b -> 'c;
+=SYNOPSIS
+$curry$ and $uncurry$ convert a function with a pair
+of arguments into a function with an argument pair (and
+vice versa).
+=DOC
+val âuncurryá : ('a -> 'b -> 'c) -> 'a * 'b -> 'c;
+=SYNOPSIS
+$curry$ and $uncurry$ convert a function with a pair
+of arguments into a function with an argument pair (and
+vice versa).
+=DOC
+val âswitchá  : ('a -> 'b -> 'c) -> 'b -> 'a -> 'c
+;
+=SYNOPSIS
+$switch$ reverse the order of the arguments of a
+two argument function.
+=DOC
+val â**á  : ('a -> 'b) * ('c -> 'd) -> 'a * 'c -> 'b * 'd;
+=SYNOPSIS
+The infix operator ``**'', with precedence 4 (higher
+than ``$o$''), gives the function induced by a pair
+of functions from the product of their domains to
+the product of their codomains. (To use categorical
+language it is is the morphisms part of the product
+functor.)
+=DOC
+val âfunpowá  : int -> ('a -> 'a) -> 'a -> 'a;
+=SYNOPSIS
+For non-negative $n$,
+$funpow (n:int) (f:'a‹'a)$ is $f^n$, i.e. the
+function $xŽf(f( ... f(f x) ....)$, where $f$
+appears $n$ times.
+=FAILURE
+\begin{verbatim}
+"first argument must not be negative"
+\end{verbatim}
+=SML
+end (* of FunctionUtilities signature *);
+=SYNOPSIS
+\section{COMBINATORS}
+It can be convenient to have the definitions of
+certain combinators. We package these in a structure
+(since their conventional names are single letters).
+=DOC
+signature âCombinatorsá = sig
+=SYNOPSIS
+Holds the traditional three combinators, $S$, $K$, $I$.
+=DOC
+val âIá : 'a -> 'a
+=SYNOPSIS
+The identity combinator.
+=DOC
+val âSá : ('a -> 'b -> 'c) -> ('a -> 'b) -> 'a -> 'c
+=SYNOPSIS
+The duplication combinator.
+=DOC
+val âKá : 'a -> 'b -> 'a
+=SYNOPSIS
+The deletion combinator.
+=SML
+end (* of Combinators signature *);
+=SYNOPSIS
+\section{I/O}
+=DOC
+signature âInputOutputá = sig
+=SYNOPSIS
+Holds a variety of utility Standard ML functions concerned with input and output.
+=TEX
+Currently we offer a very rudimentary output facility
+for messages to the user.
+
+We first need a mechanism for the user to set and get a line length, that defaults to 80.
+{\em set\_line\_length} returns the old value of the
+setting.
+The actual value, {\em line\_length}, is a declared locally, to prevent direct interference with it.
+=DOC
+val âset_line_lengthá : int -> int
+=SYNOPSIS
+Set the output line length, returning the previous line length.
+Default length is 80.
+=FAILURE
+\begin{verbatim}
+"line length must be at least 20"
+\end{verbatim}
+=DOC
+val âget_line_lengthá : unit -> int
+=SYNOPSIS
+Returns current output line length.
+
+=DOC
+val âdiag_stringá : string -> unit;
+=SYNOPSIS
+$diag\_string$ outputs
+a string on the standard output stream.
+If the string exceeds the value of {\em get\_line\_length} it attempts to split the string into tokens, to fit within the line length.
+A token is taken to be an initial string of spaces, followed by exclusively non-space characters.
+=DOC
+val âlist_diag_stringá : string list -> unit;
+=SYNOPSIS
+$list\_diag\_string$ outputs a list of strings
+onto the standard output stream. The strings in the list
+are concatenated (with spaces to separate them) and then
+output with $diag\_string$. 
+=DOC
+val âdiag_lineá : string -> unit;
+=SYNOPSIS
+$diag\_line$ outputs a string to the standard output
+stream followed by a new line.
+It is intended for use in printing formatted terms,
+theorems and the like (for which the pretty printer
+will have included new lines within the string if
+necessary ).
+=DOC
+val âdump_stringá : string -> string -> unit;
+=SYNOPSIS
+Dump a string to a file of the given name.
+The first argument is the file name.
+=DOC
+val âformat_listá : ('a -> string) -> 'a list -> string -> string;
+=SYNOPSIS
+$format\_list$ is used to format a list of items for printing
+as a string, given a function to format a single item
+and a string to separate elements of a multi-element
+list.
+=SML
+end (* of InputOutput signature *);
+=TEX
+\section{CHARACTER UTILITIES}
+=DOC
+signature âCharacterUtilitiesá = sig
+=SYNOPSIS
+Holds a variety of utility Standard ML functions concerned character handling.
+=DOC
+val âis_all_graphicalá : string -> bool;
+=SYNOPSIS
+$is\_all\_graphical$ checks whether a string consists
+of one or more graphical characters (ASCII code 33 to 126).
+=DOC
+val âis_all_decimalá : string -> bool;
+=SYNOPSIS
+$is\_all\_decimal$ checks whether a string consists
+of one or more decimal digits.
+=DOC
+val âstrip_spacesá : string -> string;
+=SYNOPSIS
+$strip\_spaces$ removes space characters from
+a string.
+=DOC
+val âgensymá : unit -> int;
+=SYNOPSIS
+Successive applications of $gensym$ return
+successive integers.
+=TEX
+\subsection{Numeric Conversions}
+=DOC
+val ânat_of_stringá : string -> int;
+=SYNOPSIS
+$nat\_of\_string$ converts a string into non-negative
+integer (using decimal notation). 
+=FAILURE
+\begin{verbatim}
+"not given a decimal string"
+"string is empty" 
+\end{verbatim}
+=DOC
+val âstring_of_intá  : int -> string;
+=SYNOPSIS
+$string\_of\_int$ converts an integer into a decimal
+string.
+=SEEALSO
+$makestring$ of Standard ML.
+=SML
+end (* of CharacterUtilities signature *);
+=TEX
+
+\section{DICTIONARIES}
+To implement HOL theories and the theory hierarchy
+we need to represent the type and constant environments
+of the formal specification (\cite{DS/FMU/IED/SPC001}).
+These environments are essentially partial functions from
+$string$ to values of suitable type.
+
+The operations required on these partial functions
+are: application,
+extension by a singleton function, deletion of elements
+from the domain and overwriting both
+by singleton functions and by arbitrary partial function.
+This is similar to what is typically required for
+the symbol table of a compiler.
+We will call a data structure together with functions
+to perform these operations a ``dictionary''.
+
+We offer two generic implementations of dictionaries
+here. The first implementation uses linear search
+and performs slowly when the data structures become
+large. The second implementation uses a hash addressing technique
+and gives considerably more efficient access than the simple
+implementation to larger data structures.
+
+\subsection{Simple Dictionaries}
+=DOC
+signature âSimpleDictionaryá = sig
+=SYNOPSIS
+Holds a set of Standard ML functions concerned with a linear search
+dictionary.
+=DESCRIBE
+The implementation will use linear search
+and performs slowly when the data structures become
+large.
+ 
+Its functions very straightforward. We use the prefix $s\_$ to
+distinguish the types and functions involved from those
+used for the more efficient technique.
+
+After defining a simple dictionary to be a list of
+pairs, the functions for accessing and modifying
+dictionaries are essentially just interfaces to the
+partial function operations defined in
+signature $ListUtilities$.
+
+The type of simple dictionaries is declared in signature $dtd001SharedTypes$.
+=DOC
+val âs_lookupá : string -> 'a s_dict -> 'a OPT;
+=SYNOPSIS
+$s\_lookup$ implements application (of the dictionary
+viewed as a partial function).
+=DOC
+val âs_enterá : string -> 'a -> 'a s_dict -> 'a s_dict;
+=SYNOPSIS
+$s\_enter$ implements overwriting by a singleton function.
+=DOC
+val âs_extendá : string -> 'a -> 'a s_dict -> 'a s_dict;
+=SYNOPSIS
+$s\_extend$ implements extension by a singleton function,
+that is to say it is like $s\_enter$.
+=FAILURE
+\begin{verbatim}
+"<string> is already in dictionary"
+\end{verbatim}
+=DOC
+val âs_deleteá : string -> 'a s_dict -> 'a s_dict;
+=SYNOPSIS
+$s\_delete$ deletes an element of the domain of a dictionary.
+If the element is not in the domain it returns the
+dictionary unchanged.
+=DOC
+val âs_mergeá : 'a s_dict -> 'a s_dict -> 'a s_dict;
+=SYNOPSIS
+$s\_merge$ extends one dictionary by another.
+=FAILURE
+Will get the $s\_extend$ failure message if an element is common to the domains of both dictionaries.
+=SML
+end (* of SimpleDictionary signature *);
+=SYNOPSIS
+\subsection{Efficient Dictionaries}
+=DOC
+signature âEfficientDictionaryá = sig
+=SYNOPSIS
+A dictionary based on hash search techniques.
+=DESCRIBE
+The technique we use for the more efficient dictionaries
+is essentially the standard compiler writer's technique
+of hash addressing with chaining to handle collisions
+(see, for example, \cite{Bornat79}).
+
+We discuss the detailed algorithm in \cite{DS/FMU/IED/imp001}.
+The signature is essentially that of simple dictionaries, 
+only the desire to open these structures at the same time,
+and a few additional functions,
+means that the signatures are not unified.
+
+Its functions are similar to those of $SimpleDictionary$.
+=DOC
+type 'a âe_dictá;
+=SYNOPSIS
+The type of efficient dictionaries.
+=DOC
+val âe_lookupá : string -> 'a e_dict -> 'a OPT
+=SYNOPSIS
+$e\_lookup$ implements application (of the dictionary
+viewed as a partial function).
+
+=DOC
+val âe_enterá : string -> 'a -> 'a e_dict -> 'a e_dict;
+=SYNOPSIS
+$e\_enter$ implements overwriting by a singleton function.
+=DOC
+val âe_extendá : string -> 'a -> 'a e_dict -> 'a e_dict;
+=SYNOPSIS
+$e\_extend$ implements extension by a singleton function,
+that is to say it is like $e\_enter$.
+=FAILURE
+\begin{verbatim}
+"<string> is already in dictionary"
+\end{verbatim}
+=DOC
+val âe_deleteá : string -> 'a e_dict -> 'a e_dict;
+=SYNOPSIS
+$s\_delete$ deletes an element of the domain of a dictionary.
+If the element is not in the domain it returns the
+dictionary unchanged.
+
+=DOC
+val âe_flattená : 'a e_dict -> 'a s_dict;
+=SYNOPSIS
+$e\_flatten$ converts an efficient dictionary into a simple one.
+=DOC
+val âlist_e_mergeá : 'a e_dict -> 'a s_dict -> 'a e_dict;
+=SYNOPSIS
+$list_e\_merge$ extends an efficient dictionary by a simple
+one. 
+=FAILURE
+Will get the $s\_extend$ failure message if an element is common to the domains of both dictionaries.
+=DOC
+val âe_mergeá : 'a e_dict -> 'a e_dict -> 'a e_dict;
+=SYNOPSIS
+$e\_merge$ extends one efficient dictionary by another.
+=FAILURE
+Will get the $s\_extend$ failure message if an element is common to the domains of both dictionaries.
+=DOC
+val âinitial_e_dictá : 'a e_dict;
+=SYNOPSIS
+The empty dictionary, which
+gives a starting point for the use of the efficient dictionary functions.
+=SML
+end (* of EfficientDictionary signature *);
+=TEX
+\section{CODE PROFILING}
+=DOC
+signature âProfilingá = sig
+=SYNOPSIS
+The signature contains definitions may be used to record
+statistics, e.g., on the number of times certain
+functions have been called.
+=DOC
+val âprofilingá : bool ref;
+=SYNOPSIS
+Turns profiling on (if true) or off (if false).
+=DOC
+val âprofá : string -> unit;
+=SYNOPSIS
+Indicates that a call to the named function has been made.
+=USES
+A single call to this function should be made in any function to be profiled.
+=DOC
+val âcountsá : string -> int;
+=SYNOPSIS
+Returns the number of calls to $prof$ with the given string.
+=DOC
+val âprint_statsá : unit -> unit;
+=SYNOPSIS
+Prints all profiling data currently held.
+=DOC
+val âgive_statsá : unit -> int s_dict;
+=SYNOPSIS
+Returns the current profiling data as a simple dictionary.
+=SML
+end(* of Profiling signature *);
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
