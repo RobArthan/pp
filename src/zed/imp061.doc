@@ -74,6 +74,7 @@ Global rename from wrk038.doc issue 1.9.
 Added structure ZParserInternals.
 \item[Issue 1.26 (16th February 1999)]
 Relaxed dependency on makestring.
+\item[Issue 1.27] Update for new INTEGER type.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -377,7 +378,7 @@ fun €format_z_token›  (tok : Z_TOKEN) : string = (
 	|	ZTDecor s	=>	s
 	|	ZTChar s	=>	"<unexpected token: " ^ s ^ ">"
 	|	ZTString s	=>	"\"" ^ s ^ "\""
-	|	ZTNumber n	=>	string_of_int n
+	|	ZTNumber n	=>	string_of_integer n
 	|	ZTAx		=>	"πZAX"
 	|	ZTSch		=>	"ˇ"
 	|	ZTEnd		=>	"<unexpected token: ZTEnd>"
@@ -529,19 +530,27 @@ fun €red_templates› (Token (tk, _)) (Parsed (PPTemplates tmpls)) stk = (
 		stack_error "red_templates(2)" (x1::x2::stk);
 =TEX
 =SML
+local
+	val max_prec : INTEGER = @@"1000000";
+in
 fun €red_prec_templates› (Token (tk, c1)) (Token (ZTNumber p, c2))
 	(Parsed (PPTemplates tmpls)) stk = (
+if	p @<= max_prec
+then
 	PPParagraph
 	(case tk of
-		ZTFun => ParFixity(ZClFun p, tmpls)
-	|	ZTGen => ParFixity(ZClGen p, tmpls)
+		ZTFun => ParFixity(ZClFun (int_of_integer p), tmpls)
+	|	ZTGen => ParFixity(ZClGen (int_of_integer p), tmpls)
 	|	ZTRel =>
 			red_error
 			((Token (tk, c1)) :: stk) [Token (ZTNumber p, c2)]
 			61011 []
 	|	other => raise PARSER_ERROR "red_prec_templates")
+else	red_error ((Token (tk, c1)) :: stk) [Token (ZTNumber p, c2)]
+	61013 [string_of_integer p, string_of_integer max_prec]
 ) | red_prec_templates x1 x2 x3 stk =
 		stack_error "red_prec_templates(2)" (x1::x2::x3::stk);
+end;
 =TEX
 =SML
 fun €red_accept› (Parsed pp) _ = (pp
@@ -1620,6 +1629,7 @@ a flag indicating whether the context demands an expression.
 The flag is true if an expression is required and false if
 a predicate is allowed.
 =SML
+val €max_selector› : INTEGER = @@"1000000";
 fun €x_pred› (expr : bool) (p : PRED) : Z_TM = (
 	case p of
 		PredQuantifier (q, decl, p1opt, p2) => 
@@ -1690,7 +1700,14 @@ fun €x_pred› (expr : bool) (p : PRED) : Z_TM = (
 			if is_var_name p2
 			then	ZTmSelâB(x_pred true p1, x_var_name p2)
 			else (case p2 of
-				PredNumber n => ZTmSelâT(x_pred true p1, n)
+				PredNumber n => 
+					if n @<= max_selector
+					then ZTmSelâT
+						(x_pred true p1,
+						 int_of_integer n)
+					else phase_2_error 61014
+						[string_of_integer n,
+						 string_of_integer max_selector]
 			| 	_ => phase_2_error 61007 [format_pred p2]
 			)		
 	|	PredIdDec _ => ZTmLVar(x_var_name p, Nil, [])
