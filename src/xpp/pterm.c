@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.38 2003/07/03 13:09:18 rda Exp rda $
+ * $Id: pterm.c,v 2.39 2003/07/03 13:50:47 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -184,6 +184,8 @@ before using them.
  * When to set termio attributes:
  *	SET_ATTRS_IN_PARENT 
  *	else do it in the child
+ * Whether to use cfmakeraw
+ *	USE_CFMAKERAW (defined if so)
  * Whether this OS has the SUS V3 real-time signals:
  *	HAS_RTSIGNALS (defined if it does)
  * We now define the combinations to be used for the supported OSs.
@@ -195,18 +197,21 @@ before using them.
 #undef USE_POSIX_TERMIO /* historical: we probably could on more recent versions */
 #undef USE_GRANTPT
 #define SET_ATTRS_IN_PARENT
+#undef USE_CFMAKERAW /* again historical: we probably could now */
 #endif
 #ifdef MACOSX
 #undef USE_STREAMS
 #define USE_POSIX_TERMIO
 #undef USE_GRANTPT
 #define SET_ATTRS_IN_PARENT
+#define USE_CFMAKERAW
 #endif
 #ifdef SOLARIS
 #define USE_STREAMS
 #undef USE_POSIX_TERMIO /* maybe we could */
 #define USE_GRANTPT
 #undef SET_ATTRS_IN_PARENT
+#undef USE_CFMAKERAW
 #endif
 /*
  * The termio input and output control flags vary a little from system to system.
@@ -624,6 +629,9 @@ static void set_pty_attrs(int fd)
 		exit(4);
 	}
 
+#ifdef USE_CFMAKERAW
+	(void) cfmakeraw(&tio);
+#else
 	tio.c_lflag |= ISIG;
 	tio.c_lflag &= ~ICANON;
 	tio.c_lflag &= ~ECHO;
@@ -635,6 +643,7 @@ static void set_pty_attrs(int fd)
 	tio.c_cc[VINTR] = CINTR;
 	tio.c_cc[VMIN] = 1;
 	tio.c_cc[VTIME] = 0;
+#endif
 
 	if(SET_ATTRS(fd, &tio)) {
 		msg("system error", "I/O control operation on pseudo-terminal failed (SET in parent)");
