@@ -241,7 +241,11 @@ void text_show_position(
 	
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * fix_pane_height: fix the height of a child pane in a paned widget.
- * scale_w is a widget from which to take the height. 
+ * scale_w is a widget from which to take the height. Often the two
+ * arguments will be the same widget, viz., the manager widget for
+ * the widgets in the pane. However, in that case, fix_pane_height
+ * has to be called after the shell containing the pane widget has been
+ * realized (or popped up), it would seem in most cases.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void fix_pane_height(
 	Widget child_w,
