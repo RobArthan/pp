@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.28 2004/11/30 15:38:26 rda Exp $ 
+ * $Id: templates.c,v 2.29 2005/01/26 17:49:20 rda Exp rda $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -232,8 +232,7 @@ static Pixmap get_pixmap (Widget   w,
  * template resources, the menu item won't be enabled. Also can
  * notify user of errors in the template resource early.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void	help_cb(CALLBACK_ARGS),
-		dismiss_cb(CALLBACK_ARGS),
+static void	templates_help_cb(CALLBACK_ARGS),
 		templates_cb(CALLBACK_ARGS);
 
 
@@ -262,7 +261,7 @@ Boolean init_templates_tool(Widget w)
 #ifdef EDITRES
 	add_edit_res_handler(shell);
 #endif
-	common_dialog_setup(shell, 0, 0);
+	common_dialog_setup(shell, popdown_cb, shell);
 
 	paned = XtVaCreateWidget("paned",
 		xmPanedWindowWidgetClass, 	shell,
@@ -340,10 +339,10 @@ Boolean init_templates_tool(Widget w)
 		NULL);
 
 	XtAddCallback(help_btn, XmNactivateCallback,
-		help_cb, (XtPointer) &template_table);
+		templates_help_cb, (XtPointer) &template_table);
 
 	XtAddCallback(dismiss_btn, XmNactivateCallback,
-		dismiss_cb, shell);
+		popdown_cb, shell);
 
 	XtVaGetValues(paned,
 		XmNchildren,		&children,
@@ -423,8 +422,10 @@ static void templates_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * templates_help_dialog: put up an information window without grabbing control
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void dismiss_cb(CALLBACK_ARGS);
-static void templates_help_dialog(Widget w)
+static void templates_help_cb(
+	Widget w,
+	XtPointer cbd,
+	XtPointer cbs)
 {
 	Widget dismiss_btn_area, dismiss_btn;
 	static Widget	shell,
@@ -442,13 +443,13 @@ static void templates_help_dialog(Widget w)
 	} /* else */
 
 	shell = XtVaCreatePopupShell("xpp-Help",
-		xmDialogShellWidgetClass,	w,
+		xmDialogShellWidgetClass,	root,
 		XmNdeleteResponse,		XmUNMAP,
 		NULL);
 #ifdef EDITRES
 	add_edit_res_handler(shell);
 #endif
-	common_dialog_setup(shell, 0, 0);
+	common_dialog_setup(shell, popdown_cb, shell);
 	help_pane = XtVaCreateWidget("help-pane",
 		xmPanedWindowWidgetClass,	shell,
 		XmNsashWidth,			1,
@@ -541,7 +542,7 @@ static void templates_help_dialog(Widget w)
 		NULL);
 
 	XtAddCallback(dismiss_btn, XmNactivateCallback,
-			dismiss_cb, shell);
+			popdown_cb, shell);
 
 	XtManageChild(dismiss_btn_area);
 
@@ -558,26 +559,5 @@ static void templates_help_dialog(Widget w)
 	fix_pane_height(form, form);
 	fix_pane_height(dismiss_btn_area, dismiss_btn_area);
 }
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * help callback.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-static void help_cb(
-	Widget		w,
-	XtPointer	cbd,
-	XtPointer	cbs)
-{
-	templates_help_dialog(root);
-}
-
-static void dismiss_cb(
-	Widget		w,
-	XtPointer	shell,
-	XtPointer	cbs)
-{
-	XtPopdown((Widget)shell);
-}
-
 
 

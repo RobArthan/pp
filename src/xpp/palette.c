@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.28 2004/11/23 15:52:51 rda Exp rda $ 
+ * $Id: palette.c,v 2.29 2004/11/30 15:38:26 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -60,10 +60,6 @@ static char *no_config_msg =
  * static data:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static PaletteData palette_info = { NULL, NULL };
-
-static void dismiss_cb(CALLBACK_ARGS);
-
-static void help_cb(CALLBACK_ARGS);
 
 static int gcd(int x, int y)
 {
@@ -205,7 +201,7 @@ void popup_palette(Widget w)
 #ifdef EDITRES
 	add_edit_res_handler(shell);
 #endif
-	common_dialog_setup(shell, 0, 0);
+	common_dialog_setup(shell, popdown_cb, shell);
 
 	paned = XtVaCreateWidget("paned",
 		xmPanedWindowWidgetClass, 	shell,
@@ -304,8 +300,8 @@ void popup_palette(Widget w)
 		NULL);
 	XmStringFree(lab);
 
-	XtAddCallback(dismiss_btn, XmNactivateCallback, dismiss_cb, 0);
-	XtAddCallback(help_btn, XmNactivateCallback,help_cb, 0);
+	XtAddCallback(dismiss_btn, XmNactivateCallback, popdown_cb, shell);
+	XtAddCallback(help_btn, XmNactivateCallback,help_cb, (XtPointer) Help_Palette_Tool);
 
 	XtManageChild(top_form);
 	XtManageChild(bottom_form);
@@ -406,29 +402,3 @@ static void type_char_cb(
  */
 	set_input_focus(text_w);
 }
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * dismiss callback.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void dismiss_cb(
-	Widget		w,
-	XtPointer	cbd,
-	XtPointer	cbs)
-{
-	XtPopdown(XtParent(palette_info.palette_w));
-}
-
-
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * help callback.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void help_cb(
-	Widget		w,
-	XtPointer	cbd,
-	XtPointer	cbs)
-{
-	help_dialog(root, Help_Palette_Tool);
-}
-
-
