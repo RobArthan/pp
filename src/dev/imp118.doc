@@ -48,9 +48,9 @@ Contact: Rob Arthan < rda@lemma-one.com >
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.6 $%
+\def\Version{$Revision: 1.7 $%
 }
-\def\Date{\FormatDate{$Date: 2003/03/07 13:51:45 $%
+\def\Date{\FormatDate{$Date: 2003/03/07 14:14:06 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -85,6 +85,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \item[Issues 1.1 to 1.5 ] First drafts.
 \item[ Issue 1.6 ] Improved representation of {\it LEX\_VALUE}.
 \item[ Issues 1.7, 1.8 ] Better interface and format for tree printing.
+\item[ Issue 1.9 ] More polymorphic generic  parser interface.
 
 \end{description}
 
@@ -171,22 +172,22 @@ For us, lexical values and lexical classes are much the same thing except that t
 value includes the actual string that made up the value in the input and the line number
 on which it occurred.
 =SML
-type €LEX_VALUE› = LEX_CLASS * (string * int);
+type 'lc €LEX_VALUE› = 'lc * (string * int);
 =TEX
 Now we give the classifier function, which is the {\it CLASSIFIER} argument of the function
 {\it slrp'gen\_parser} defined by the ML code that \Slrp\ generates.
 =SML
-val €classifier› : LEX_VALUE -> LEX_CLASS = fst;
+val €classifier› : ('lc LEX_VALUE,  'lc) CLASSIFIER = fst;
 =TEX
 The default ERROR ROUTINE needs a function to format a lexical value as a string:
 =SML
-fun €string_of_lex_value› ((LCIdentifier _, (s, _)) : LEX_VALUE) : string = s
+fun €string_of_lex_value› ((LCIdentifier _, (s, _)) : LEX_CLASS LEX_VALUE) : string = s
 |   string_of_lex_value (LCString _, (s, _))  = "`" ^ s ^ "`"
 |  string_of_lex_value (LCEos, _) = "<end-of-input>";
 =TEX
 It is also useful to have a function to extract the line number.
 =SML
-fun €line_number_of_lex_value› ((_, (_, ln)) : LEX_VALUE) : int = ln;
+fun €line_number_of_lex_value› ((_, (_, ln)) : 'lc LEX_VALUE) : int = ln;
 =TEX
 \subsection{Tokenising an Input Line}
 In this section we give the specific example of a lexical analyser that is needed for the
@@ -206,16 +207,16 @@ datatype €CONTINUATION_STATUS› =
 The following datatype is used to record what we know about the current
 token: we either don't know what it is, or we do know what it is and it has a lexical value, or we've found a comment or we're continuing something from an earlier line (whose number is recorded for use in error messages).
 =SML
-datatype €LEX_STATUS› =
+datatype 'lc €LEX_STATUS› =
 		€Unknown›
-	|	€Known› of LEX_VALUE
+	|	€Known› of 'lc LEX_VALUE
 	|	€Comment›
 	|	€Continuation› of int * CONTINUATION_STATUS;
 =TEX
 A state of the lexical analyser comprises a list giving the unread characters in the current line
 together with our current status:
 =SML
-type €LEX_STATE› = (string list * LEX_STATUS);
+type 'lc €LEX_STATE› = (string list * 'lc LEX_STATUS);
 =TEX
 The tokens for the generic lexical analyser are the same as the tokens that denote
 terminal symbols in \Slrp. These are either alpanumeric identifiers starting with
@@ -282,7 +283,7 @@ fun €lex_fail› (msg : string) : 'a = raise LexFail(get_line_number(), msg);
 =TEX
 We will need a function to skip space.
 =SML
-fun €skip_space› ((chs, status) : LEX_STATE)  : LEX_STATE = (
+fun €skip_space› ((chs, status) :  'lc LEX_STATE)  : 'lc LEX_STATE = (
 	if	check_next is_space chs
 	then	skip_space(tl chs, status)
 	else	(chs, status)
@@ -303,8 +304,8 @@ local
 		is_star ch1 andalso is_rbracket ch2
 	) | check_next_is_rcomment _ = false;
 in
-fun €rec_comment› (([], status as (Continuation (_, InComment))) : LEX_STATE)
-	: LEX_STATE = ([], status)
+fun €rec_comment› (([], status as (Continuation (_, InComment))) : 'lc LEX_STATE)
+	: 'lc LEX_STATE = ([], status)
 |  rec_comment (chs, status as Continuation (_, InString _)) = (chs, Unknown)
 |   rec_comment (chs, status) = (
 	if	check_next_is_lcomment chs
@@ -326,7 +327,7 @@ fun €reset_comment_nesting› (():unit) : unit = comment_nesting := 0;
 end (* of local ... in ... end *);
 =TEX
 =SML
-fun €rec_identifier› ((chs, status) : LEX_STATE) : LEX_STATE = (
+fun €rec_identifier› ((chs, status) : LEX_CLASS LEX_STATE) : LEX_CLASS LEX_STATE = (
 	let	fun aux acc chs = (
 			if	check_next is_alnum chs
 			then	aux (hd chs::acc) (tl chs)
@@ -343,7 +344,8 @@ fun €rec_identifier› ((chs, status) : LEX_STATE) : LEX_STATE = (
 );
 =TEX
 =SML
-fun €rec_quoted› ((chs, Continuation(_, InComment)) : LEX_STATE) : LEX_STATE = 
+fun €rec_quoted› ((chs, Continuation(_, InComment)) : LEX_CLASS LEX_STATE)
+	: LEX_CLASS LEX_STATE = 
 	(chs, Unknown)
 |   rec_quoted ((chs, status) ) = (
 	let	fun aux ln acc chs = (
@@ -372,8 +374,8 @@ fun €rec_quoted› ((chs, Continuation(_, InComment)) : LEX_STATE) : LEX_STATE =
 );
 =TEX
 =SML
-fun €rec_first›  (recs : (LEX_STATE -> LEX_STATE) list)
-	((cs) : LEX_STATE) : LEX_STATE = (
+fun €rec_first›  (recs : ('lc LEX_STATE -> 'lc LEX_STATE) list)
+	(cs : 'lc LEX_STATE) : 'lc LEX_STATE = (
 	let	fun aux [] ([], status) = ([], status)
 		|   aux [] (ch::more, status) =
 			lex_fail
@@ -389,7 +391,7 @@ fun €rec_first›  (recs : (LEX_STATE -> LEX_STATE) list)
 =TEX
 In the following the order is important.
 =SML
-val rec_token : LEX_STATE -> LEX_STATE =
+val rec_token : LEX_CLASS LEX_STATE ->  LEX_CLASS LEX_STATE =
 	rec_first [rec_comment, rec_quoted, rec_identifier];
 =TEX
 The rest of the material in this section is re-usable boiler plate code that takes the
@@ -418,9 +420,8 @@ type €IN_CHAR_STREAM› = {
 We provide functions to fashion an input character stream
 out of a input file name (which could raise an i/o exception) \ldots.
 =SML
-fun €in_char_stream_of_file› (name : string) : IN_CHAR_STREAM= (
-	let	val strm = open_in name;
-		val is_open : bool ref = ref true;
+fun €in_char_stream_of_instream› (strm : instream) : IN_CHAR_STREAM= (
+	let	val is_open : bool ref = ref true;
 		val buf : string list ref = ref [];
 		fun close () = (
 			if	!is_open
@@ -444,6 +445,10 @@ fun €in_char_stream_of_file› (name : string) : IN_CHAR_STREAM= (
 	in	{get = get, close = close, putback = putback}
 	end
 );
+=TEX
+=SML
+val €in_char_stream_of_file› : string -> IN_CHAR_STREAM =
+	in_char_stream_of_instream o open_in;
 =TEX
 \ldots or out of a string:
 =SML
@@ -492,8 +497,8 @@ from the current line and a flag which is true if we have not reached the end of
 =TEX
 \ftlinepenalty=999
 =SML
-fun €gen_reader› (rec_xxx : LEX_STATE -> LEX_STATE) (strm : IN_CHAR_STREAM) 
-	: (LEX_VALUE, string list * bool) READER = (
+fun €gen_reader› (eos : 'lc) (rec_xxx : 'lc LEX_STATE -> 'lc  LEX_STATE) (strm : IN_CHAR_STREAM) 
+	: ( 'lc LEX_VALUE, string list * bool) READER = (
 	let	val _ = (reset_line_number(); reset_comment_nesting());
 		fun get_next (chs as (_::_), flag) = (chs, flag)
 		|   get_next  ([], true) = (
@@ -514,7 +519,7 @@ fun €gen_reader› (rec_xxx : LEX_STATE -> LEX_STATE) (strm : IN_CHAR_STREAM)
 			) |	_ => (
 				case (chs, st) of
 					eof as ([], false) => (
-					((LCEos, ("", get_line_number())), eof)
+					((eos, ("", get_line_number())), eof)
 				) |	_ => 
 				let	val sb' as (chs', st') = get_next (chs, st);
 					val (chs'', status) = rec_xxx (chs', Unknown);
@@ -531,7 +536,7 @@ fun €gen_reader› (rec_xxx : LEX_STATE -> LEX_STATE) (strm : IN_CHAR_STREAM)
 		)	
 );
 val €reader›  : IN_CHAR_STREAM ->  
-	 (LEX_VALUE, string list * bool) READER = gen_reader rec_token;
+	 (LEX_CLASS LEX_VALUE, string list * bool) READER = gen_reader LCEos rec_token;
 =TEX
 \section{THE GENERIC SLRP PARSER}
 The generic SLRP parser produces parse trees which have the following type,
@@ -540,20 +545,20 @@ the name of a non-terminal in the grammar and the number of the alternative
 that gave rise to this node (counting from 1).
 To help with printing, for assign unique numbers for each leaf and node
 =SML
-datatype €GEN_PARSE_TREE› =
-		€Leaf› of LEX_VALUE
-	|	€Node› of (string * int) * GEN_PARSE_TREE list;
+datatype 'lc €GEN_PARSE_TREE› =
+		€Leaf› of 'lc LEX_VALUE
+	|	€Node› of (string * int) * 'lc GEN_PARSE_TREE list;
 =TEX
 The type of the generic reduction function is then based on the appropriate instantiation
 of the type {\it INPUT\_STACK\_ITEM}. Note that it does not use the {\it stk} argument (which
 provides full information about the left context of the parser that is not relevant here)
 =SML
 fun €generic_reducer› (nti  : string * int)
-	(xs : (LEX_VALUE, LEX_CLASS, GEN_PARSE_TREE)
+	(xs : ('lc LEX_VALUE, 'lc, 'lc GEN_PARSE_TREE)
 		INPUT_STACK_ITEM list) 
-	(stk : (LEX_VALUE, LEX_CLASS, GEN_PARSE_TREE)
+	(stk : ('lc LEX_VALUE, 'lc, 'lc GEN_PARSE_TREE)
 		INPUT_STACK_ITEM list) 
-	: GEN_PARSE_TREE = (
+	: 'lc GEN_PARSE_TREE = (
 	let	fun aux (Token (lv, _)) = Leaf lv
 		|   aux (Parsed tree) = tree;
 	in	Node(nti, map aux xs)
@@ -563,12 +568,13 @@ fun €generic_reducer› (nti  : string * int)
 We also provide a function for printing the tree. We present the tree as a kind of deduction
 using node addresses to label the instances of the rules.
 =SML
-fun €output_tree› (p : string -> unit) (t : GEN_PARSE_TREE) : unit = (
+fun €output_tree› (f : 'lc LEX_VALUE -> string)
+	(p : string -> unit) (t : 'lc GEN_PARSE_TREE) : unit = (
 	let	fun print_address addr = (
 			p(format_list (fn i => string_of_int i) (rev addr) ".")
 		);
 		fun symbol_of (Leaf lv) = (
-			string_of_lex_value lv ^
+			f lv ^
 			"(" ^ string_of_int (line_number_of_lex_value lv) ^ ")"
 		) | symbol_of (Node((nt, i), _)) = (
 			nt
@@ -593,28 +599,16 @@ fun €output_tree› (p : string -> unit) (t : GEN_PARSE_TREE) : unit = (
 );
 =TEX
 =SML
-val  €print_tree› : GEN_PARSE_TREE -> unit = output_tree (curry output std_out);
+val  €print_tree› : LEX_CLASS GEN_PARSE_TREE -> unit =
+	output_tree string_of_lex_value (curry output std_out);
 =TEX
-The above included code will define a function as follows where $'st$  represents the
-state of the READER function which is
-=INLINEFT
-string list * bool
-=TEX
-\ for our function {\it reader}.
-=GFT
-val slrp'gen_parser :
-   (LEX_VALUE, LEX_CLASS, GEN_PARSE_TREE) SlrpDriver.RESOLVER ->
-   (LEX_VALUE, LEX_CLASS) SlrpDriver.CLASSIFIER ->
-   (LEX_VALUE, LEX_CLASS, GEN_PARSE_TREE, 'st)
-	SlrpDriver.ERROR_ROUTINE ->
-   (LEX_VALUE, 'st) SlrpDriver.READER -> 'st -> GEN_PARSE_TREE;
 =SML
-type SLRP_GEN_PARSER =
-   (LEX_VALUE, LEX_CLASS, GEN_PARSE_TREE) SlrpDriver.RESOLVER ->
-   (LEX_VALUE, LEX_CLASS) SlrpDriver.CLASSIFIER ->
-   (LEX_VALUE, LEX_CLASS, GEN_PARSE_TREE, string list * bool)
+type 'lc SLRP_GEN_PARSER =
+   ('lc LEX_VALUE, 'lc, 'lc GEN_PARSE_TREE) SlrpDriver.RESOLVER ->
+   ('lc LEX_VALUE, 'lc) SlrpDriver.CLASSIFIER ->
+   ('lc LEX_VALUE, 'lc, 'lc GEN_PARSE_TREE, string list * bool)
 	SlrpDriver.ERROR_ROUTINE ->
-   (LEX_VALUE, string list * bool) SlrpDriver.READER -> string list * bool -> GEN_PARSE_TREE;
+   ('lc LEX_VALUE, string list * bool) SlrpDriver.READER -> string list * bool -> 'lc GEN_PARSE_TREE;
 
 =TEX
 To complete the generic parser we have only to provide the remaining arguments.
@@ -623,7 +617,8 @@ provides suitable defaults for the RESOLVER and ERROR ROUTINE.
 
 We construct two parsers: one for files and one for strings:
 =SML
-fun €parse_file› (slrp_gen_parser :SLRP_GEN_PARSER) (name : string) : GEN_PARSE_TREE = (
+fun €parse_file› (slrp_gen_parser : LEX_CLASS SLRP_GEN_PARSER) (name : string)
+	: LEX_CLASS GEN_PARSE_TREE = (
 	slrp_gen_parser
 	default_resolver
 	classifier
@@ -633,7 +628,8 @@ fun €parse_file› (slrp_gen_parser :SLRP_GEN_PARSER) (name : string) : GEN_PARSE_
 );
 =TEX
 =SML
-fun €parse_string› (slrp_gen_parser :SLRP_GEN_PARSER) (text : string) : GEN_PARSE_TREE = (
+fun €parse_string› (slrp_gen_parser : LEX_CLASS SLRP_GEN_PARSER) (text : string)
+	: LEX_CLASS GEN_PARSE_TREE = (
 	slrp_gen_parser
 	default_resolver
 	classifier
