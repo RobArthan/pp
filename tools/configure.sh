@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.22 2003/04/30 11:18:09 rda Exp rda $
+# $Id: configure.sh,v 1.23 2003/04/30 12:05:34 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -149,14 +149,17 @@ SUPPORTEDTARGETS="dev pptex xpp hol zed daz"
 if	[ "${PPTARGETS:-}" = "" ]
 then	PPTARGETS="pptex xpp hol zed daz"
 	USERDEFINEDTARGETS=n
-else	for f in $PPTARGETS
+elif	[ "${PPTARGETS:-}" = "all" ]
+then	PPTARGETS=$SUPPORTEDTARGETS
+	USERDEFINEDTARGETS=n
+else	USERDEFINEDTARGETS=y
+	for f in $PPTARGETS
 	do	case "$f" in
 			dev|pptex|xpp|hol|zed|daz)
 				true;;
 			*)	give_up "unrecognised package \"$f\" (not one of dev, pptex, xpp, hol, zed, daz)"
 		esac
 	done
-	USERDEFINEDTARGETS=y
 fi
 #
 # Look for packages to be installed:
@@ -166,20 +169,29 @@ if	[ ! -d src ]
 then	give_up "the directory $CWD/src does not exist"
 fi
 SOMETODO=n
-ACTTARGETS=
+for f in $SUPPORTEDTARGETS
+do
+	eval $f=n
+done
 for f in $PPTARGETS
-do	if	[ -f src/$f.mkf ]
+do	
+	if	[ -f src/$f.mkf ]
 	then	eval $f=y
 		SOMETODO=y
-		ACTTARGETS="$ACTTARGETS $f"
 	elif	[ "$USERDEFINEDTARGETS" = y ]
 	then	give_up "the make file $f.mkf is missing from the source directory"
-	else	eval $f=n
 	fi
 done
 if	[ $SOMETODO = n ]
 then	give_up "cannot find any packages to build in $CWD/src"
 fi
+ACTTARGETS=
+for f in $SUPPORTEDTARGETS
+do
+	if	eval [  \$$f = y  ]
+	then	ACTTARGETS="$ACTTARGETS $f"
+	fi
+done
 echo "Generating code to install the following packages: $ACTTARGETS"
 #
 # Check for document format requirements:
