@@ -50,7 +50,7 @@
 \item[Issue 1.1]
 First version based in DS/FMU/IED/IMP069.
 
-\item[Issue 1.2]
+\item[Issue 1.2,1.3]
 Miscellaneous improvements after module and system testing.
 \end{description}
 
@@ -426,26 +426,6 @@ If not,
 freeze the theory hierarchy.
 =GFTSHOW
 icl'Kernel.icl'freeze_hierarchy();
-=TEX
-\item
-Make a child database, with the selected new file name.
-=GFTSHOW
-PolyML.make_database name;
-\item
-Save and quit the Poly/ML session.
-\item
-Start a Poly/ML session on the child database
-\item
-Restore reader/writer and pretty printer by:
-=GFTSHOW
-abandon_reader_writer() handle _ => ();
-use_terminal();
-PrettyPrinter.pp_init();
-BasicError.icl'error_init();
-Initialisation.init();
-=TEX
-\item
-Create a new theory hierarchy, binding it appropriately:
 =GFTSHOW
 val icl'theory_hierarchy = Value (icl'Kernel.icl'new_hierarchy ());
 =TEX
@@ -465,7 +445,7 @@ save_and_quit();
 =TEX
 
 \end{enumerate}
-If the process fails part way through delete the child database.
+If the process fails through delete the child database.
 =DUMP pp_make_database
 #! /bin/sh
 #	pp_make_database   From: $Id$ %Z%
@@ -481,12 +461,12 @@ LOGFILE=/tmp/pp_make_database.log.$
 Process arguments
 =DUMPMORE pp_make_database
 PARENT=""
-FORCE=1
+FORCE=false
 while true
 do
 	case $1 in
 	-p)		PARENT="$2"	; shift ; shift	;;
-	-f)		FORCE=0		; shift ;;
+	-f)		FORCE=true	; shift ;;
 	-*)		echo "Bad flag for $PROGNAME: $1" >&2
 			echo $USAGEMSG >&2
 								  exit 1 ;;
@@ -588,15 +568,11 @@ Delete the child database file, if it exists:
 =DUMPMORE pp_make_database
 CHILDDB=$CDATABASE.sparc-solaris
 if test -s $CHILDDB
-then 	if test $FORCE = 0
-	then 'rm' $CHILDDB
-	else 'rm' -i $CHILDDB
+then 	if test $FORCE != true
+	then
+		echo "$PROGNAME: $CHILDDB already exists; use the -f flag to overwrite it"
+		exit 1
 	fi
-fi
-if test -s $CHILDDB
-then	
-	echo "$PROGNAME: Chose not to delete pre-existing child database, so quit"
-	exit 1
 fi
 =TEX
 Get an initialisation error file:
@@ -621,15 +597,6 @@ trap "'rm' -f $CHILDDB;
 
 touch $hol_initialisation_error_file
 =TEX
-Assign to a variable whether the database is writeable
-=DUMPMORE pp_make_database
-if test -w $PDATABASEFN
-then 
-	PARENTWRITEABLE="true"
-else
-	PARENTWRITEABLE="false"
-fi
-=TEX
 Run the parent session:
 =DUMPMORE pp_make_database
 
@@ -645,7 +612,7 @@ if "$hol_current_theory"<>""
 then (open_theory "$hol_current_theory"
 	handle _ =>
 	(diag_string ("cannot open parent theory"^"$hol_current_theory");
-	PPCompiler.exit 0))
+	PPCompiler.exit 1))
 else ();
 
 (
@@ -667,74 +634,11 @@ handle (Fail _) =>
 handle (Fail _) => 
 (diag_string "pp_make_database: Need to freeze parent dababase hierarchy, but cannot";
 PPCompiler.exit 0;())));
-
-if (!saveit) andalso not($PARENTWRITEABLE)
-then (diag_string ("pp_make_database: Need to freeze" ^
-	"and save parent database hierarchy," ^
-	"but cannot write to database");
-	PPCompiler.exit 0;())
-else ();
 PPBuild.pp'save_name := "$CHILDDB";
-(PPBuild.pp'save(); ()) 
-handle _ =>
-(diag_string ("pp_make_database: unable to make child database" );
-	PPCompiler.exit 0;());
-
-if (!saveit)
-then save_and_quit()
-else quit();
-
-smlcommands1
-# end of commands to parent database
-=TEX
-Check that the program exited with status 0:
-=DUMPMORE pp_make_database
-EXIT_STATUS=$?
-if test $EXIT_STATUS -ne 0
-then
-	cat $LOGFILE
-	echo "$PROGNAME: creation of child database" >&2
-	echo "\"sml @SMLload=$PDATABASEFN\" exited with status $EXIT_STATUS" >&2
-	exit_status=1
-	exit 1
-fi
-=TEX
-Check that there were no initialisation errors:
-=DUMPMORE pp_make_database
-if test -s $hol_initialisation_error_file
-then
-	cat $LOGFILE
-	echo "$PROGNAME: creation of child database" >&2
-	. $hol_initialisation_error_file
-fi
-=TEX
-Quit if the child database has not been made
-=DUMPMORE pp_make_database
-if test -r $CHILDDB
-then
-	echo "$PROGNAME: parent database $PDATABASEFN now has a frozen theory hierarchy" >&2
-else
-	cat $LOGFILE
-	echo "$PROGNAME: Unable to create child database" >&2
-	exit_status=1
-	exit 1
-fi
 =TEX
 The setting of $hol\_current\_theory$ remains the same.
-
-Start a Poly/ML session on the child database
 =DUMPMORE pp_make_database
-sml @SMLload=`pwd`/$CHILDDB >> $LOGFILE << smlcommands2
-=TEX
-The actual commands:
-=DUMPMORE pp_make_database
-abandon_reader_writer() handle _ => ();
-use_terminal();
-PrettyPrinter.pp_init();
-BasicError.icl'error_init();
-Initialisation.init();
 val icl'theory_hierarchy = Value (icl'Kernel.icl'new_hierarchy ());
-
 icl'Kernel.icl'load_hierarchy (force_value icl'theory_hierarchy);
 =TEX
 The desired parent theory is already open (if possible):
@@ -742,8 +646,7 @@ The desired parent theory is already open (if possible):
 new_theory "$CCACHE";
 set_cache_theories ("$CCACHE" :: get_cache_theories());
 save_and_quit();
-
-smlcommands2
+smlcommands1
 # end of commands to child database
 =TEX
 Check that the program exited with status 0:
@@ -763,7 +666,7 @@ Check that there were no initialisation errors:
 if test -s $hol_initialisation_error_file
 then
 	cat $LOGFILE
-	echo "$PROGNAME: initialisation of child database" >&2
+	echo "$PROGNAME: error creating child database" >&2
 	. $hol_initialisation_error_file
 	exit_status=1
 	exit 1
