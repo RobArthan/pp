@@ -98,7 +98,14 @@ fun âterm_failá (name : string) (msg : int) (tms : TERM list) = (
 );
 =TEX
 =SML
-val âhyp_memá  : TERM -> TERM list -> bool = present (uncurry aconv);
+infix 4 asm_mem;
+val op âasm_memá  : TERM * TERM list -> bool = uncurry(present (uncurry aconv));
+=TEX
+=SML
+infix 4 asm_less;
+fun (tms : TERM list) âasm_lessá (tm : TERM) : TERM list = (
+	tms drop (aconv tm)
+);
 =TEX
 =SML
 fun âseq_eqá ((asms1, conc1) : GOAL) ((asms2, conc2) : GOAL) : bool = (
@@ -153,10 +160,10 @@ fun (tac : TACTIC) âTHEN_LIST_Tá (tacs : TACTIC list) : TACTIC = (fn gl =>
 	end
 );
 =SML
-val op âTHEN_Lá : (TACTIC * TACTIC list) -> TACTIC = op THEN_LIST_T;
+val op âTHEN_LISTá : (TACTIC * TACTIC list) -> TACTIC = op THEN_LIST_T;
 =TEX
 =SML
-fun âLIST_THEN_Tá (tacs : TACTIC list) :  TACTIC = (fn gl =>
+fun âEVERY_Tá (tacs : TACTIC list) :  TACTIC = (fn gl =>
 	(fold (op THEN_T) tacs always_tac) gl
 );
 =TEX
@@ -164,7 +171,7 @@ fun âLIST_THEN_Tá (tacs : TACTIC list) :  TACTIC = (fn gl =>
 val âEVERYá : TACTIC list -> TACTIC = LIST_THEN_T;
 =TEX
 =SML
-fun âMAP_THEN_Tá (tacf : 'a -> TACTIC) (things : 'a list) : TACTIC = (
+fun âMAP_EVERY_Tá (tacf : 'a -> TACTIC) (things : 'a list) : TACTIC = (
 	LIST_THEN_T (map tacf things)
 );
 =TEX
@@ -180,16 +187,16 @@ fun ((tac1 : TACTIC) âORELSE_Tá (tac2 : TACTIC)) : TACTIC = (fn gl =>
 val op âORELSEá : (TACTIC * TACTIC) -> TACTIC = op ORELSE_T;
 =TEX
 =SML
-fun âLIST_ORELSE_Tá (tacs : TACTIC list) : TACTIC = (fn gl => 
-	(fold (op ORELSE_T) tacs (fail_with_tac "LIST_ORELSE_T" 9005 [])) gl
+fun âFIRST_Tá (tacs : TACTIC list) : TACTIC = (fn gl => 
+	(fold (op ORELSE_T) tacs (fail_with_tac "FIRST_T" 9005 [])) gl
 );
 =TEX
 =SML
 val âFIRSTá : TACTIC list -> TACTIC = LIST_ORELSE_T;
 =TEX
 =SML
-fun âMAP_ORELSE_Tá (tacf : 'a -> TACTIC) (things : 'a list) : TACTIC = (
-	LIST_ORELSE_T (map tacf things)
+fun âMAP_FIRST_Tá (tacf : 'a -> TACTIC) (things : 'a list) : TACTIC = (
+	FIRST (map tacf things)
 );
 =TEX
 =SML
@@ -248,12 +255,49 @@ fun âFIRST_TTCLá (ttcls : THM_TACTICAL list) : THM_TACTICAL= (
 );
 =TEX
 \section{BASIC TACTICALS}
+\subsection{Using Assumptions}
 =TEX
 =SML
-fun âMAP_ASM_Tá (thmstac : (THM list -> TACTIC)) : TACTIC = (fn gl as (asms, _) =>
+fun âGET_ASM_Tá (tm : TERM) (thmtac : (THM -> TACTIC))
+						: TACTIC = (fn gl as (asms, _) =>
+	if tm asm_mem asms
+	then thmtac (asm_rule tm) gl
+	else term_fail "GET_ASM_T" 9301 [tm]
+);
+=TEX
+=SML
+fun âDROP_ASM_Tá (tm : TERM) (thmtac : (THM -> TACTIC))
+						: TACTIC = (fn (asms, conc) =>
+	if tm asm_mem asms
+	then thmtac (asm_rule tm) (asms asm_less tm, conc)
+	else term_fail "DROP_ASM_T" 9301 [tm]
+);
+=TEX
+=SML
+fun âTOP_ASM_Tá (thmtac : (THM -> TACTIC)) : TACTIC = (fn gl as (asms, _) =>
+	case asms of
+		asm :: _ => thmtac (asm_rule asm) gl
+	|	_ =>  fail "TOP_ASM_T" 9303 []
+);
+=TEX
+=SML
+fun âPOP_ASM_Tá (thmtac : (THM -> TACTIC)) : TACTIC = (fn (asms, conc) =>
+	case asms of
+		asm :: more => thmtac (asm_rule asm) (more, conc)
+	|	_ =>  fail "POP_ASM_T" 9303 []
+);
+=TEX
+=SML
+fun âGET_ASMS_Tá (thmstac : (THM list -> TACTIC)) : TACTIC = (fn gl as (asms, _) =>
 	thmstac (map asm_rule asms) gl
 );
 =TEX
+=SML
+fun âDROP_ASMS_Tá (thmstac : (THM list -> TACTIC)) : TACTIC = (fn (asms, conc) =>
+	thmstac (map asm_rule asms) ([], conc)
+);
+=TEX
+\subsection{Utility Tacticals}
 =SML
 fun âROTATE_Tá (i : int) (tac : TACTIC) : TACTIC = (fn gl =>
 	case tac gl of
@@ -286,7 +330,7 @@ fun âLEMMA_Tá (newsg : TERM) (thmtac : THM -> TACTIC) : TACTIC = (fn gl as (asms
 fun âLIST_CHECK_THM_Tá (thms : THM list) (tac : TACTIC)
 					: TACTIC = (fn gl as (asms, _) =>
 	let	fun aux1 acc (tm :: more) = (
-			if hyp_mem tm asms
+			if tm asm_mem asms
 			then aux1 acc more
 			else aux1 (acc grab tm) more
 		) | aux1 acc [] = acc;
@@ -320,15 +364,6 @@ fun âCHANGED_Tá (tac : TACTIC) : TACTIC = (fn gl =>
 			then	fail "CHANGED_T" 9302 []
 			else sgp
 	) |	sgp => sgp
-);
-=TEX
-=TEX
-=SML
-fun âCHECK_ASM_Tá (tm : TERM) (thmtac : (THM -> TACTIC))
-						: TACTIC = (fn gl as (asms, _) =>
-	if hyp_mem tm asms
-	then thmtac (asm_rule tm) gl
-	else term_fail "CHECK_ASM_T" 9301 [tm]
 );
 =TEX
 \section{BASIC TACTICS 2}
