@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.22 2002/05/13 11:18:26 rda Exp phil $
+ * $Id: mainw.c,v 2.23 2002/05/15 11:02:48 phil Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -11,7 +11,7 @@
  * the user interface for interacting with the interactive program.
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char rcsid[] = "$Id: $";
+static char rcsid[] = "$Id: mainw.c,v 2.23 2002/05/15 11:02:48 phil Exp rda $";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:
@@ -244,9 +244,9 @@ static MenuItem edit_menu_items[] = {
     { "Redo", &xmPushButtonGadgetClass, 'R', "<Key>Redo", NULL,
         edit_menu_cb, (XtPointer)EDIT_MENU_REDO, (MenuItem *)NULL, False },
 #else
-    { "Undo", &xmPushButtonGadgetClass, 'U', "Ctrl<Key>z", NULL,
+    { "Undo", &xmPushButtonGadgetClass, 'U', "Ctrl<Key>z", "Ctrl-Z",
         edit_menu_cb, (XtPointer)EDIT_MENU_UNDO, (MenuItem *)NULL, False },
-    { "Redo", &xmPushButtonGadgetClass, 'R', "Ctrl<Key>r", NULL,
+    { "Redo", &xmPushButtonGadgetClass, 'R', "Ctrl<Key>r", "Ctrl-R",
         edit_menu_cb, (XtPointer)EDIT_MENU_REDO, (MenuItem *)NULL, False },
 #endif
     {NULL}
@@ -502,6 +502,10 @@ static Boolean setup_main_window(
  * Edit menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+/*
+ * edit_menu_items gets changed later on so be careful if moving this
+ * code
+ */
 	editmenu = setup_menu(
 		menubar, XmMENU_PULLDOWN, "Edit", 'E', False, edit_menu_items);
 	set_menu_item_sensitivity(editmenu, EDIT_MENU_UNDO, False);
@@ -627,6 +631,16 @@ static Boolean setup_main_window(
 	script = XmCreateScrolledText(mainpanes, "script", args, i);
 
 	XtOverrideTranslations(script, text_translations);
+
+/*
+ * The pop-up edit menu looks a bit neater if we get rid of the accelerator
+ * reminder in the pull-down one.
+ */
+	for(	i = 0;
+		i < sizeof(edit_menu_items)/sizeof(edit_menu_items[0]); 
+		i += 1 ) {
+		edit_menu_items[i].accelerator = NULL;
+	}
 
 	popupeditmenu = setup_menu(
 		script, XmMENU_POPUP, "", ' ', False, edit_menu_items);
