@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.17 2003/02/07 17:06:17 rda Exp rda $ 
+ * $Id: search.c,v 2.18 2003/02/07 17:07:22 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -20,16 +20,38 @@
 #define _search
 
 #define NO_MEMORY		-1
-#define FORWARDS		1
-#define BACKWARDS		2
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * include files: 
- * **** **** **** **** **** **** **** **** **** **** **** **** */
+enum {FORWARDS, BACKWARDS};
 #include <stdio.h>
 #include <ctype.h>
 
 #include "xpp.h"
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * typedefs
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+/*
+ * The following struct includes the various widgets that
+ * act as parameters to the various search and replace
+ * operations.
+ */
+typedef struct {
+	Widget	text_w,
+		shell_w,
+		manager_w,
+		search_w,
+		replace_w,
+		line_no_w;
+} SearchData;
+/*
+ * The following represents a substring of a C string, e.g.,
+ * for use in representing the result of a search operation.
+ * Use offset = -1 to represent "no such substring".
+ */
+typedef struct {
+	long int	offset;
+	long int	length;
+} Substring;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * messages
@@ -76,15 +98,6 @@ static char *line_no_too_big =
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * static data
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-typedef struct {
-	Widget	text_w,
-		shell_w,
-		manager_w,
-		search_w,
-		replace_w,
-		line_no_w;
-} SearchData;
 	
 static SearchData search_data;
 /*
@@ -642,13 +655,13 @@ static void search_backwards_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Support for search callbacks.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void search_string(char*,char*,long int,long int*,long int*,NAT);
+static Substring search_string(char*,char*,long int,NAT);
 static Boolean search_either(
 	Widget				w,
 	SearchData			*cbdata,
 	NAT				dir)
 {
-	long int left, len;
+	Substring ss;
 	NAT start_point;
 	char *pattern, *text_buf;
 	Boolean result;
@@ -660,15 +673,15 @@ static Boolean search_either(
 	} else {
 		start_point = XmTextGetInsertionPosition(search_data.text_w);
 	}
-	search_string(pattern, text_buf, start_point, &left, &len, dir);
-	if(left >= 0) {
+	ss = search_string(pattern, text_buf, start_point, dir);
+	if(ss.offset >= 0) {
 		text_show_position(
 			search_data.text_w,
-			left);
+			ss.offset);
 		XmTextSetSelection(
 			search_data.text_w,
-			left,
-			left + len,
+			ss.offset,
+			ss.offset + ss.length,
 			CurrentTime);
 		result = True;
 	} else if (!(*pattern)){
@@ -741,14 +754,14 @@ static void replace_all_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
-	long int left, len;
+	Substring ss;
 	NAT start_point;
 	char *pattern, *text_buf, *replacement, *all_replaced;
 	pattern = XmTextGetString(cbdata->search_w);
 	text_buf = XmTextGetString(cbdata->text_w);
 	start_point = XmTextGetInsertionPosition(cbdata->text_w);
-	search_string(pattern, text_buf, start_point, &left, &len,FORWARDS);
-	if(left >= 0) {
+	ss = search_string(pattern, text_buf, start_point, FORWARDS);
+	if(ss.offset >= 0) {
 		replacement = XmTextGetString(
 				cbdata->replace_w);
 		replace_all(
@@ -960,86 +973,97 @@ static void goto_line_no_cb(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * substr: is one string a leading substring of another.
- * returns number of matching characters in text being searched
- * if substring, 0 otherwise.
- * (brought out separately for future enhancement,
- *  e.g. to add regular expression matching).
- *  If pattern is supplied as NULL, the last non-NULL value
- *  passed is used.
+ * search_forwards: search a substring matching a pattern
+ * in a string. If pattern is 0, then use the pattern
+ * from the previous call, if any.  If the text to be
+ * searched is 0, just set up static data for future use.
+ * If both are 0, it will reset static data.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static long int substr(
+static Substring search_forwards(
 	char		*pattern,
 	char		*to_search)
 {
-	static long int len;
-	static char *last_pattern = NULL;
+	long int len;
+	static char *last_pattern = 0;
+	char *s;
+	Substring result;
 	if(pattern == 0) {
-		len = strlen(pattern);
 		pattern = last_pattern;
 	} else {
-		len = strlen(pattern);
+		last_pattern = pattern;
 	}
-	if(pattern == 0) {
-		return 0;
+	if(pattern == 0 || to_search == 0) {
+		result.offset = -1;
+		return result;
 	}
-	if(global_options.ignore_case) {
-		char *p = pattern;
-		char *t = to_search;
-		while (*p && *t && toupper(*p) == toupper(*t)) {
-			p += 1;
-			t += 1;
+	len = strlen(pattern);
+	for(s = to_search; *s; ++s) {
+		if(global_options.ignore_case) {
+			char *p = pattern;
+			char *t = s;
+			while (*p && *t && toupper(*p) == toupper(*t)) {
+				p += 1;
+				t += 1;
+			}
+			if(*p == '\0') {
+				result.offset = s - to_search;
+				result.length = len;
+				return result;
+			}				
+		} else {
+			if(strncmp(pattern, s, len) == 0) {
+				result.offset = s - to_search;
+				result.length = len;
+				return result;
+			}
 		}
-		return (*p != '\0' ? 0 : len);
-	} else {
-		return (strncmp(pattern, to_search, len) ? 0 : len);
 	}
+	result.offset = -1;
+	return result;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * search_string is the basic search function.
+ * search_string is the search function that can search cyclically in both directions.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static void search_string(
+static Substring search_string(
 	char		*pattern,
 	char		*text_buf,
 	long int 	start_point,
-	long int 	*offset,
-	long int 	*length,
 	NAT		direction)
 {
-	int i;
-	*length = 0;
+	Substring ss;;
 	if(direction == FORWARDS) {
-		for(i = start_point; text_buf[i]; ++i) {
-			if(*length = substr(pattern, text_buf + i)) {
-				break;
+		ss = search_forwards(pattern, text_buf + start_point);
+		if(ss.offset < 0) {
+			ss = search_forwards(0, text_buf);
+		} else {
+			ss.offset += start_point;
+		}
+		return ss;
+	} else { /* Do binary chop to search backwards: */
+		int upb, i;
+		Substring t;
+		ss = search_forwards(pattern, text_buf);
+		if(ss.offset < 0) {
+			return ss;
+		}
+		if(ss.offset < start_point) {
+			upb = start_point;
+		} else {
+			upb = strlen(text_buf);
+		}
+		for(i = (upb - ss.offset) / 2; i > 0; i = (upb - ss.offset) / 2) {
+			t = search_forwards(0, text_buf + ss.offset + i);
+			if(t.offset >= 0 && t.offset + ss.offset + i <  upb) {
+				ss.offset = t.offset + ss.offset + i;
+				ss.length = t.length;
+			} else {
+				upb = ss.offset + i;
 			}
 		}
-		if(!(*length)) {
-			for(i = 0;
-				i < start_point; ++i) {
-				if(*length = substr(pattern, text_buf + i)) {
-					break;
-				}
-			}
-		}
-	} else {
-		for(i = start_point - 1; i >= 0; --i) {
-			if(*length = substr(pattern, text_buf + i)) {
-				break;
-			}
-		}
-		if(!(*length)) {
-			for(i = strlen(text_buf) - 1;
-				i >= start_point; --i) {
-				if(*length = substr(pattern, text_buf + i)) {
-					break;
-				}
-			}
-		}
+		return ss;
 	}
-	*offset = (*length ? i : -1);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1054,19 +1078,22 @@ static void replace_all(
 	char	**result,
 	NAT	*start_point)
 {
-	long int text_buf_len, replacement_len, extra, matched_len;
+	long int text_buf_len, replacement_len, extra;
+	Substring ss;
 	char	*p, *q, *next_p, *sp;
 	text_buf_len = strlen(text_buf);
 	replacement_len = strlen(replacement);
 
 	p = text_buf;
 	extra = 0;
+	(void) search_forwards(pattern, 0);
 	while(*p) {
-		if(matched_len = substr(pattern, p)) {
-			extra += replacement_len - matched_len;
-			p += matched_len;
+		ss = search_forwards(0, p);
+		if(ss.offset >= 0) {
+			extra += replacement_len - ss.length;
+			p += ss.offset + ss.length;
 		} else {
-			++p;
+			break;
 		}
 	}
 	if((*result = XtMalloc(text_buf_len + extra + 1)) == NULL) {
@@ -1076,21 +1103,25 @@ static void replace_all(
 	q = *result;
 	sp = q + *start_point;
 	while(*p) {
-		if(matched_len = substr(pattern, p)) {
-			strncpy(q, replacement, replacement_len);
-			next_p = p + matched_len;
+		ss = search_forwards(0, p);
+		if(ss.offset >= 0) {
+			strncpy(q, p, ss.offset);
+			strncpy(q + ss.offset, replacement, replacement_len);
+			next_p = p + ss.offset + ss.length;
 			if(next_p - text_buf <= *start_point) {
-				sp += replacement_len - matched_len;
-			} else if (p - text_buf <= *start_point) {
-				sp = q;
+				sp += replacement_len - ss.length;
+			} else if (p + ss.offset - text_buf <= *start_point) {
+				sp = q + ss.offset;
 			}
 			p = next_p;
-			q += replacement_len;
+			q += ss.offset + replacement_len;
 		} else {
-			*q++ = *p++;
+			strcpy(q, p);
+			q += strlen(p);
+			break;
 		}
 	}
-	*q = '\0';
+	*q = '\0'; /* in case last match reached to end of text_buf */
 	*start_point = sp - *result;
 }
 
@@ -1098,7 +1129,7 @@ static void replace_all(
  * get_line_no returns the line number of the insertion position
  * in the text widget passed as an argument. It returns -1
  * if something went wrong (e.g., because we're in a multi-byte locale).
- * **** **** **** **** **** **** **** **** **** **** **** **** */
+. * **** **** **** **** **** **** **** **** **** **** **** **** */
 long int get_line_no(Widget text_w)
 {
 	XmTextPosition ins_pos, cur_pos;
