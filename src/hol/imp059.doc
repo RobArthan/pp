@@ -42,6 +42,8 @@ of the tools for introducing HOL product types.}
 \begin{description}
 \item [Issues 1.1] 
 First version.
+\item [Issues 1.2] 
+Try based on cacheing implications.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -57,14 +59,14 @@ This document contains an implementation for the
 tools introducing HOL product types.
 
 $labelled\_product\_spec$ and $unlabelled\_product\_spec$
-both are implemented in terms of $tuple\_spec$,
+both are implemented in terms of $cached\_product\_rule$,
 and, should they require a new invocation of that function,
-$tuple\-\_spec$ about half the total executiontime of the first function, and will take the bulk of the total execution time of the second (unlabelled).
-With the current implementation (January 1992) the timings for $tuple\-\_spec$ are:
+$cached\-\_product\-\_rule$ about half the total executiontime of the first function, and will take the bulk of the total execution time of the second (unlabelled).
+With the current implementation (January 1992) the timings for $cached\-\_product\-\_rule$ are:
 
 \begin{tabular} {l | l l l l l l l l l }
 n = & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 \\ \hline
-Time(secs) & 3.9 & 8.4 & 16.0 & 30.7 & 54.0 & 90.9 & 143.0 & 222.5 & 323.5 \\
+Time(secs) &  \\
 \end{tabular}
 
 \subsubsection{Dependencies}
@@ -75,7 +77,7 @@ The initial cache theory is not set to a necessarily good value.
 None known.
 
 \section{Preamble}
-=SML
+=IGN
 structure âProductTypesá : ProductTypes = struct
 =TEX
 \section{THE THEORY}
@@ -84,6 +86,7 @@ val lthy = get_current_theory_name ();
 val _ = open_theory "pair";
 val _ = new_theory "first_cache_theory";
 val _ = push_proof_context pair_epc;
+=IGN
 val lsubgoal_package_quiet = set_flag("subgoal_package_quiet",
 	true);
 =TEX
@@ -102,36 +105,21 @@ in
 end
 handle (Fail _) => [ty]);
 =TEX
-Returns the eventual last type in a repeated function type.
+Some type variables:
 =SML
-fun âlast_‹_typeá (ty:TYPE):TYPE = (
-let	val (_,ty2) = dest_‹_type ty
-in
-	last_‹_type ty2
-end
-handle (Fail _) => ty);
+val âtvaá = »:'a¼;
+val âtvbá = »:'b¼;
+val âtvcá = »:'c¼;
+val âtv1á = »:'1¼;
+val âtv2á = »:'2¼;
 =TEX
-The following are just quick ways of putting $Fst$ and $Snd$ on a term with a $‰$ type.
-=SML
-fun âmk_fstá tm = (
-let	val ttm = type_of tm;
-	val (ta,tb) = dest_‰_type ttm;
-in
-	mk_app(mk_const("Fst", mk_‹_type(ttm,ta)), tm)
-end);
-fun âmk_sndá tm = (
-let	val ttm = type_of tm;
-	val (ta,tb) = dest_‰_type ttm;
-in
-	mk_app(mk_const("Snd", mk_‹_type(ttm,tb)), tm)
-end);
-=TEX
+
 \subsection{Timing}
 The following value allows timing to be invoked as on one off
 (false invokes timing).
 A reference variable is inappropriate.
 =SML
-val ânotimingá = true;
+val ânotimingá = false;
 =TEX
 Time the application of a tactic to a goal, and its resulting proof to its
 arguments.
@@ -197,43 +185,7 @@ in
 end));
 =TEX
 
-\subsection{Conversions}
-The following will do all the noted $\beta$ conversion in 
-a term of the form:
-ó
-»( x1 ... xn Ž f[x1,...,xn])((y1 Ž f1[y1])z1)...((yn Ž fn[yn])zn)¼
-æ
-=SML
-fun âtailored_beta_convá tm = (
-	if is_app tm
-	then (((APP_C (tailored_beta_conv, simple_%beta%_conv))
-	THEN_C simple_%beta%_conv) tm)
-	else refl_conv tm
-);
-=TEX
-The following will do all the noted $\beta$ conversion in 
-a term of the form:
-ó
-»( x1 ... xn Ž f[x1,...,xn])y1 ... yn¼
-æ
-=SML
-fun âtailored_beta_conv1á tm = (
-	if is_app tm
-	then (((RATOR_C tailored_beta_conv1)
-	THEN_C simple_%beta%_conv) tm)
-	else refl_conv tm
-);
-=TEX
 \subsection{Conversionals}
-Distribute an always successful conversion over an equality:
-=SML
-fun âEQ_Cá conv tm = (
-let	val (eqt1,t2) = dest_app tm;
-	val (eq,t1) = dest_app eqt1
-in
-	mk_app_rule(ap_fun_rule eq (conv t1))(conv t2)
-end);
-=TEX
 Distribute two always successful conversions over a conjunction:
 =SML
 fun â€_C2á conv1 conv2 tm = (
@@ -243,17 +195,23 @@ in
 	mk_app_rule(ap_fun_rule cnj (conv1 t1))(conv2 t2)
 end);
 =TEX
-Distribute two always successful conversions over a pair:
+Apply a conversion to the leftmost conjunction.
 =SML
-fun âPAIR_C2á conv1 conv2 tm = (
-let	val (pairt1,t2) = dest_app tm;
-	val (pair,t1) = dest_app pairt1;
-in
-	mk_app_rule(ap_fun_rule pair (conv1 t1))(conv2 t2)
-end);
+fun âLEFTMOST_€_Cá conv : CONV = (fn tm =>
+	if is_€ tm
+	then RATOR_C(RAND_C(LEFTMOST_€_C conv)) tm
+	else conv tm
+);
+=TEX
+Apply a conversion to all conjuncts nested by $((...(c1 € c2) € c3 ...)$.
+=SML
+fun âLALL_€_Cá conv : CONV = (fn tm =>
+	if is_€ tm
+	then APP_C ((RAND_C(LALL_€_C conv)), conv) tm
+	else conv tm
+);
 =TEX
 \subsection{Rules}
-
 =RULE
 „_€_left_rule
 É
@@ -262,15 +220,30 @@ end);
 ö … „ x Ž p[x]
 =TEX
 =SML
+local
+	val lthm = tac_proof(([],»ƒ p q Ž („ x : 'a Žp x € q x) Š $„ p¼),
+		once_rewrite_tac[eq_sym_rule
+		(simple_ƒ_elim »p:'a ‹ BOOL¼
+		(inst_type_rule [(BOOL,tvb)] eta_axiom))] THEN
+		rewrite_tac[] THEN
+		REPEAT strip_tac THEN
+		simple_„_tac »x:'a¼ THEN
+		goal_in_asms_tac);
+in
 fun â„_€_left_ruleá (thm : THM) = (
 let	val (x,bdy) = dest_simple_„ (concl thm);
 	val (c1,c2) = dest_€ bdy;
+	val s1 = inst_type_rule [(type_of x,tva)] lthm;
+	val s2 = list_simple_ƒ_elim[mk_simple_(x,c1),
+		mk_simple_(x,c2)] s1;
+	val s3 = conv_rule(RATOR_C(
+		RAND_C(BINDER_C(€_C2 simple_%beta%_conv simple_%beta%_conv))))
+		 s2;
+	val s4 = Š_elim s3 thm
 in
-	tac_proof((hyps thm,mk_simple_„(x,c1)),
-	SIMPLE_„_THEN(asm_tac o €_left_elim) thm
-	THEN simple_„_tac x
-	THEN goal_in_asms_tac)
+	s4
 end);
+end;
 =TEX
 =RULE
 „_€_right_rule
@@ -280,152 +253,270 @@ end);
 ö … „ x Ž q[x]
 =TEX
 =SML
+local
+	val lthm = tac_proof(([],»ƒ p q Ž („ x : 'a Žp x € q x) Š $„ q¼),
+		once_rewrite_tac[eq_sym_rule
+		(simple_ƒ_elim »q:'a ‹ BOOL¼
+		(inst_type_rule [(BOOL,tvb)] eta_axiom))] THEN
+		rewrite_tac[] THEN
+		REPEAT strip_tac THEN
+		simple_„_tac »x:'a¼ THEN
+		goal_in_asms_tac);
+in
 fun â„_€_right_ruleá (thm : THM) = (
 let	val (x,bdy) = dest_simple_„ (concl thm);
 	val (c1,c2) = dest_€ bdy;
+	val s1 = inst_type_rule [(type_of x,tva)] lthm;
+	val s2 = list_simple_ƒ_elim[mk_simple_(x,c1),
+		mk_simple_(x,c2)] s1;
+	val s3 = conv_rule(RATOR_C
+		(RAND_C(BINDER_C(€_C2 simple_%beta%_conv simple_%beta%_conv)))) s2;
+	val s4 = Š_elim s3 thm
 in
-	tac_proof((hyps thm,mk_simple_„(x,c2)),
-	SIMPLE_„_THEN(asm_tac o €_right_elim) thm
-	THEN simple_„_tac x
-	THEN goal_in_asms_tac)
+	s4
 end);
+end;
 =TEX
-\subsection{Tactics}
-The following strips a conjunctive goal, and should complete
-the proof of each conjunct by the separate tactic given for it.
+A limited form of matching $type\_lemmas\_thm$:
+=RULE
+simple_match_type_lemmas_thm
+É
+… „ f: ty1 ‹ ty2 Ž TypeDefn ( x Ž T) f
+É
+… „ abs repŽ (ƒ a:ty1Ž abs (rep a) = a) € (ƒ r:ty2Ž rep (abs r) = r)
+=TEX
 =SML
-fun âREPEAT_€_COMPLETE_WITHá (tacs : TACTIC list) : TACTIC = (fn (asms, conc) =>
-let	val conjs = strip_€ conc;
-	val thms = map (fn (tac,conj) => 
-		let val (sgs,prf) = tac(asms,conj)
-		in
-		if is_nil sgs
-		then prf []
-		else fail "REPEAT_€_COMPLETE_WITH" 0 []
-		end)(combine tacs conjs);
+local
+	val s1 = simple_ƒ_elim »( x:'b Ž T)¼ type_lemmas_thm;
+	val s2 = rewrite_rule [] s1;
+	val atype = »:'a ‹ 'b¼;
 in
-	([],(fn _ => list_€_intro thms))
-end);
-=TEX
-The following is no more than a rewritten form of:
-ó
-fun list_simple_„_tac wits = MAP_EVERY simple_„_tac wits;
-æ
-Its execution is quite a time consuming process,
-taking the bulk of the time in handling the first conjunct
-in $tuple\_spec$ (and much of the total execution time).
-An efficient $list\_simple\_„\_intro$ would help.
-This timing information was gathered by the function's wrapping.
-=SML
-fun âlist_simple_„_tacá (wits : TERM list) : TACTIC = (fn(asms,gl) =>
-let	fun aux [] bdy =([(asms,bdy)],(fn x => x))
-	| aux (tm :: rest) bdy = (
-	let	val (x, b) = dest_simple_„ bdy;
-		val bdy' = var_subst[(tm, x)] b;
-		val (sgs,prf) = aux rest bdy';
-	in
-		(sgs, fn x => simple_„_intro bdy (prf x))
-	end);
-	val (msgs,mprf) = aux wits gl;
+fun âsimple_match_type_lemmas_thmá (thm : THM) : THM = (
+let	val (f,_) = dest_simple_„(concl thm);
+	val (ty1,ty2) = dest_‹_type (type_of f);
+	val tyinsts = [(ty1,tva),(ty2,tvb)];
 in
-	(msgs,(fn [thm] => mprf thm 
-		| _ => bad_proof "list_simple_„_tac"))
-end);
-=TEX
-Given a theorem that is a conjunction of (unquantified) equations of 
-variables and values, convert the goal, as if by rewriting,
-but with the knowledge of no repeated rewriting, and the
-form of the equations.
-=SML
-fun âsubst_vars_tacá (thm:THM) : TACTIC = (
-let	val thms = strip_€_rule thm;
-	val assoc_list = map (fn t => (fst(dest_eq(concl t)),t)) thms;
-	val cnv = (fn tm =>
-		if is_var tm
-		then lassoc3 assoc_list tm
-		else fail_conv tm);
-in
-	conv_tac(ONCE_MAP_C cnv)
-end);
-=TEX
-The following is a $strip\_asm\_tac$ tailored to 
-$tuple\_spec$'s needs when stripping previously
-proven results of $tuple\_spec$.
-=SML
-
-val âlstrip_asm_tacá = (SIMPLE_„_THEN
-	(fn thm =>
-	let	val thms = strip_€_rule thm;
-		val thm1 = hd thms;
-		val thm2 = hd(tl thms);
-	in
-		(TIME_TTCL "SIMPLE_„_THEN-lstrip_asm_tac" (REPEAT_TTCL SIMPLE_„_THEN)) asm_tac thm1
-		THEN
-		asm_tac thm2
-	end));
+	Š_elim (inst_type_rule tyinsts s2) thm
+end
+handle complaint =>
+reraise complaint "simple_match_type_lemmas_thm");
+end;
 =TEX
 \subsection{Theorems}
-Each theorem in the below is associated with a ``matching''
-conversion.
-=SML
-val âtvaá = »:'a¼;
-val âtvbá = »:'b¼;
-=TEX
 =SML
 val âpair_eq_thmá = tac_proof(([],
 	»ƒ x y p qŽ ((x,y) = (p,q)) ‚ ((x = p) € (y = q))¼),
 		rewrite_tac[pair_clauses]);
-fun âmatch_pair_eq_thm_convá tm = (
-let	val (t1,t2) = dest_eq tm;
-	val (t1a,t1b) = dest_pair t1;
-	val (t2a,t2b) = dest_pair t2;
+=TEX
+=SML
+val â„__x_t_thmá = tac_proof(([],»„ x:'a Ž ( x Ž T) x¼),
+	rewrite_tac[]);
+=TEX
+=SML
+fun ârlist_mk_‰_typeá tys = (
+let	fun aux [ty] = ty
+	| aux (ty :: rest) = mk_‰_type(aux rest,ty)
+	| aux _ = fail "rlist_mk_‰_type" 0 [];
 in
-	list_simple_ƒ_elim[t1a,t1b,t2a,t2b](inst_type_rule
-		[(type_of t1a, tva),(type_of t1b,tvb)]pair_eq_thm)
+	aux (rev tys)
 end);
-
+=TEX
+=SML
+fun ârlist_mk_€á cnjs = (
+let	fun aux [cnj] = cnj
+	| aux (cnj :: rest) = mk_€(aux rest,cnj)
+	| aux _ = fail "rlist_mk_€" 0 [];
+in
+	aux (rev cnjs)
+end);
+=TEX
+Each theorem in the below is associated with a ``matching''
+conversion.
+=SML
+val âlpair_ƒ_thmá = (
+	push_goal([],»ƒ f Ž (ƒ p : '1 ‰ '2 Ž f p) 
+		‚
+		(ƒ p1 p2 Ž f (p1,p2))¼);
+	a(REPEAT strip_tac);
+	(* *** Goal "1" *** *)
+	a(asm_rewrite_tac[]);
+	(* *** Goal "2" *** *)
+	a(LEMMA_T »p = (Fst p,Snd p)¼ once_rewrite_thm_tac);
+	(* *** Goal "2.1" *** *)
+	a(rewrite_tac[pair_clauses]);
+	(* *** Goal "2.2" *** *)
+	a(asm_rewrite_tac[]);
+	rewrite_rule[eta_axiom](pop_thm()));
+=TEX
+=CONVERSION
+lpair_ƒ_conv
+»ƒ p : '1 ‰ '2 Ž f[p]¼
+É
+É
+… (ƒ p : '1 ‰ '2 Ž f[p]) ‚ (ƒ p1 p2 Ž f [(p1, p2)])
+=TEX
+=SML
 local
-	val pcs = initial_rw_canon pair_clauses;
+	val atype = »:'1 ‰ '2¼;
 in
-val âfst_thmá = hd pcs;
-val âsnd_thmá = hd(tl pcs);
+fun âlpair_ƒ_convá tm = (
+let	val (_,abs) = dest_app tm;
+	val ptype = fst(dest_‹_type(type_of abs));
+	val tyinsts = type_match ptype atype;
+	val s1 = simple_ƒ_elim abs (inst_type_rule tyinsts lpair_ƒ_thm);
+	val s2 = conv_rule(RAND_C(BINDER_C(BINDER_C simple_%beta%_conv))) s1;
+in
+	s2
+end
+handle complaint =>
+reraise complaint "lpair_ƒ_conv");
+end; (* of local *)
+=TEX
+=SML
+val lpair_„_thm = (
+	push_goal([],»ƒ f Ž („ p : '1 ‰ '2 Ž f p) 
+		‚
+		(„ p1 p2 Ž f (p1,p2))¼);
+	a(REPEAT strip_tac);
+	(* *** Goal "1" *** *)
+	a(simple_„_tac »Fst p¼ THEN simple_„_tac »Snd p¼);
+	a(pure_rewrite_tac[pair_clauses] THEN goal_in_asms_tac);
+	(* *** Goal "2" *** *)
+	a(simple_„_tac »(p1,p2)¼ THEN goal_in_asms_tac);
+	rewrite_rule[eta_axiom](pop_thm()));
+=TEX
+=CONVERSION
+lpair_„_conv
+»„ p : '1 ‰ '2 Ž f[p]¼
+É
+É
+… („ p : '1 ‰ '2 Ž f[p]) ‚ („ p1 p2 Ž f [(p1, p2)])
+=TEX
+=SML
+local
+	val atype = »:'1 ‰ '2¼;
+in
+fun âlpair_„_convá tm = (
+let	val (_,abs) = dest_app tm;
+	val ptype = fst(dest_‹_type(type_of abs));
+	val tyinsts = type_match ptype atype;
+	val s1 = simple_ƒ_elim abs (inst_type_rule tyinsts lpair_„_thm);
+	val s2 = conv_rule(RAND_C(BINDER_C(BINDER_C simple_%beta%_conv))) s1;
+in
+	s2
+end
+handle complaint =>
+reraise complaint "lpair_„_conv");
+end; (* of local *)
+=TEX
+=SML
+val lpair_„_thm1 = (
+	push_goal([],»ƒ f Ž („ p : 'a ‹ '1 ‰ '2 Ž f p) 
+		‚
+		(„ p1 p2 Ž f ( x Ž (p1 x,p2 x)))¼);
+	a(REPEAT strip_tac);
+	(* *** Goal "1" *** *)
+	a(simple_„_tac »( x Ž Fst (p x))¼ THEN 
+	  simple_„_tac »( x Ž Snd (p x))¼);
+	a(rewrite_tac[pair_clauses, eta_axiom] THEN goal_in_asms_tac);
+	(* *** Goal "2" *** *)
+	a(simple_„_tac »( xŽ (p1 x, p2 x))¼ THEN goal_in_asms_tac);
+	rewrite_rule[eta_axiom](pop_thm()));
+=TEX
+=CONVERSION
+lpair_„_conv1
+»„ p : 'a ‹ '1 ‰ '2 Ž f[p]¼
+É
+É
+… („ p : 'a ‹ '1 ‰ '2 Ž f[p]) ‚ („ p1 p2 Ž f [( x Ž (p1 x, p2 x))])
+=TEX
+=SML
+local
+	val atype = »: 'a ‹ '1 ‰ '2¼;
+in
+fun âlpair_„_conv1á tm = (
+let	val (_,abs) = dest_app tm;
+	val ptype = fst(dest_‹_type(type_of abs));
+	val tyinsts = type_match ptype atype;
+	val s1 = simple_ƒ_elim abs (inst_type_rule tyinsts lpair_„_thm1);
+	val s2 = conv_rule(RAND_C(BINDER_C(BINDER_C simple_%beta%_conv))) s1;
+in
+	s2
+end
+handle complaint =>
+reraise complaint "lpair_„_conv1");
+end; (* of local *)
+=TEX
+=SML
+val â„_pair_conv_thmá = (
+	push_goal([],»ƒ f Ž($„ (f: (('1 ‰ '2) ‹ 'a) ‹ BOOL)) ‚
+		(„ con' Ž f ( (x, y) Ž  con' x y))¼);
+	a(once_rewrite_tac[eq_sym_rule
+		(simple_ƒ_elim »f:(('1 ‰ '2) ‹ 'a) ‹ BOOL¼
+		(inst_type_rule [(»:(('1 ‰ '2) ‹ 'a)¼,»:'a¼),
+			(»:BOOL¼,»:'b¼)] eta_axiom))]);
+	a(rewrite_tac[]);
+	a(REPEAT strip_tac);
+	(* *** Goal "1" *** *)
+	a(simple_„_tac » p q Ž x (p,q)¼);
+	a(rewrite_tac[eta_axiom]);
+	a(LEMMA_T »( (x',q) Ž x(x',q)) = ( y Ž x y)¼
+		(fn x => asm_rewrite_tac[x,eta_axiom]));
+	a (rewrite_tac[ext_thm, pair_clauses]);
+	(* *** Goal "2" *** *)
+	a(simple_„_tac »( (x, y)Ž con' x y)¼ THEN goal_in_asms_tac);
+	pop_thm());
+=TEX
+=CONVERSION
+l„_pair_conv
+»„ p : '1 ‰ '2 ‹ 'a Ž f[p]¼
+É
+É
+… („ p : '1 ‰ '2 ‹ 'a Ž f[p]) ‚ („ p' Ž f [((x,y) Ž p' x y)])
+=TEX
+=SML
+local
+	val atype = »:'1 ‰ '2 ‹ 'a¼;
+in
+fun âl„_pair_convá tm = (
+let	val (_,abs) = dest_app tm;
+	val ptype = fst(dest_‹_type(type_of abs));
+	val tyinsts = type_match ptype atype;
+	val s1 = simple_ƒ_elim abs (inst_type_rule tyinsts „_pair_conv_thm);
+	val s2 = conv_rule(RAND_C(BINDER_C simple_%beta%_conv)) s1;
+in
+	s2
+end
+handle complaint =>
+reraise complaint "l„_pair_conv");
+end; (* of local *)
+=TEX
+=SML
+local
+	val uncurry_def = (get_defn "pair" "Uncurry");
+in
+val âl_%beta%_convá : CONV = (fn tm =>
+let	val (p,q) = dest_app tm;
+	val (q1,q2) = dest_pair q;
+	val (uc,p') = dest_app p;
+	val sideeffect = if fst(dest_const uc) <> "Uncurry"
+		then fail "l_%beta%_conv" 0 []
+		else ();
+	val tyinsts = [(type_of q1,tva),(type_of q2,tvb),
+		(snd(dest_‹_type(snd(dest_‹_type(type_of p')))),tvc)];
+	val s1 = inst_type_rule tyinsts uncurry_def;
+	val s2 = list_simple_ƒ_elim[p',q1,q2] s1;
+	val s3 = conv_rule(RAND_C((RATOR_C simple_%beta%_conv) THEN_C
+		simple_%beta%_conv)) s2;
+in
+	s3
+end);
 end;
-=TEX
-=SML
-val âmatch_fst_thm_convá :CONV = (fn tm =>
-let	val (fst,pr) = dest_app tm;
-	val (t1,t2) = dest_pair pr;
-in
-	list_simple_ƒ_elim [t2,t1]
-	(inst_type_rule [(type_of t1,tva),(type_of t2,tvb)]
-	fst_thm)
-end);
-val âmatch_snd_thm_convá :CONV = (fn tm =>
-let	val (snd,pr) = dest_app tm;
-	val (t1,t2) = dest_pair pr;
-in
-	list_simple_ƒ_elim [t2,t1]
-	(inst_type_rule [(type_of t1,tva),(type_of t2,tvb)]
-	snd_thm)
-end);
-=TEX
-=SML
-val âfst_snd_thmá = tac_proof(([],»ƒ t:'a ‰ 'bŽ(Fst t, Snd t) = t¼),
-		rewrite_tac[pair_clauses]);
-=SML
-val âmatch_fst_snd_thm_convá : CONV = (fn tm =>
-let	val (t1,t2) = dest_pair tm;
-	val t1' = snd(dest_app t1);
-	val (ty1,ty2) = dest_‰_type (type_of t1');
-in
-	simple_ƒ_elim t1' 
-	(inst_type_rule [(ty1,tva),(ty2,tvb)]fst_snd_thm)
-end);
 =TEX
 \section{MAIN FUNCTIONS}
 \subsection{Theory Caches}
 We must have an initial cache theory to allow the special case
-of $tuple\_spec$ $1$ to be saved.
+of $cached\_product\_rule$ $1$ to be saved.
 We currently assume it is the current theory.
 =SML
 local
@@ -438,146 +529,82 @@ fun âget_cache_theoriesá (():unit) : string list = (!cache_theories);
 end;
 =TEX
 \subsection{Defining n-tuples}
-We need to initialise $tuple\_spec$ by saving the result of $tuple\_spec$ $1$ in the initial cache theory.
+We need to initialise $cached\_product\_rule$ by saving the result of $cached\_product\_rule$ $1$ in the initial cache theory.
 =SML
 val _ = open_theory(hd(get_cache_theories()));
-val tuple1_def = new_type_defn("1TUPLE","1TUPLE",["'1"],
-	tac_proof(([],»„ x : '1 Ž ( x Ž T) x¼),
-		rewrite_tac[]));
-val tuple1_thm = save_thm("1TUPLE",tac_proof(([],
-	»„ 1Tuple:'1 ‹ '1 1TUPLE Ž
-	(„ Lab1_1Ž ƒ t x1Ž Lab1_1 (1Tuple x1) = x1 € 1Tuple (Lab1_1 t) = t) €
-	(ƒ x1 y1Ž 1Tuple x1 = 1Tuple y1 ‚ x1 = y1) € (ƒ tŽ „ x1Ž t = 1Tuple x1)¼),
-	strip_asm_tac (rewrite_rule[] (simple_Š_match_mp_rule type_lemmas_thm tuple1_def))
-	THEN
-	simple_„_tac »abs : '1 ‹ '1 1TUPLE¼
-	THEN
-	REPEAT €_tac
-	THEN_LIST_T
-	[simple_„_tac »rep:'1 1TUPLE ‹ '1¼ THEN asm_rewrite_tac[],
-	REPEAT simple_ƒ_tac THEN ‚_T2 
-		(fn thm => ante_tac(ap_fun_rule »rep:'1 1TUPLE ‹ '1¼  thm) THEN
-		asm_rewrite_tac[])
-		(fn thm => pure_rewrite_tac[thm, eq_rewrite_thm]),
-	simple_ƒ_tac THEN simple_„_tac »(rep:'1 1TUPLE ‹ '1) t¼ 
-		THEN asm_rewrite_tac[]]));
-=TEX
-Now we can define $tuple\_spec$ itself.
 
-First two local rewriting functions:
-=SML
-local
-val rwc1 = pure_rewrite_conv[„_rewrite_thm];
-val rwr1 = prim_rewrite_rule empty_net id_canon TOP_MAP_C
-		[(»( x Ž y)z¼,simple_%beta%_conv)] 
-		[tac_proof(([],»ƒ t Ž (T ‚ t) ‚ t¼),
-			rewrite_tac[])];
-in
+val tuple1_thm = save_thm("1TUPLE",(
+	push_goal([],
+	»(„ abs : '1 ‹ 'a Ž
+	 „ rep : 'a ‹ '1 Ž
+	 (ƒ aŽ abs(rep a) = a) € (ƒ r Ž rep(abs r) = r))
+	Š
+	„ 1Tuple:'1 ‹ 'a Ž
+	(„ Lab1_1Ž ƒ t x1Ž Lab1_1 (1Tuple x1) = x1 € 1Tuple (Lab1_1 t) = t) €
+	(ƒ x1 y1Ž 1Tuple x1 = 1Tuple y1 ‚ x1 = y1) € (ƒ tŽ „ x1Ž t = 1Tuple x1)¼);
+	a strip_tac;
+	a(simple_„_tac »abs : '1 ‹ 'a¼);
+	a(REPEAT €_tac);
+	a(simple_„_tac »rep:'a ‹ '1¼ THEN asm_rewrite_tac[]);
+	a(REPEAT simple_ƒ_tac THEN ‚_T2 
+		(fn thm => ante_tac(ap_fun_rule »rep:'a ‹ '1¼  thm) THEN
+		asm_rewrite_tac[])
+		(fn thm => pure_rewrite_tac[thm, eq_rewrite_thm]));
+	a(simple_ƒ_tac THEN simple_„_tac »(rep:'a ‹ '1) t¼ 
+		THEN asm_rewrite_tac[]);
+	pop_thm()));
 =TEX
+Now we can define $cached\_product\_rule$ itself.
+
 Start of main function.
 Notice the addition of timing material to determine when this
 is so slow - these will be removed in any product version.
 =SML
-fun âtuple_specá (arg: int) : THM = (
+fun âcached_product_ruleá (arg: int) : THM = (
 let
 =TEX
-The following finds pre-existing copies of the $tuple\_spec$
+The following finds pre-existing copies of the $cached\_product\_rule$
 theorem, should they exist.
 =SML
-val start_time = System.processtime();
 fun âfind_n_tupleá (n:int):THM OPT = (
 let	val key = string_of_int n ^ "TUPLE";
-in
-	if is_Nil (get_type_arity key)
-	then Nil
-	else (let fun aux [] = fail "tuple_spec" 59003 [fn () => key]
+	fun aux [] = Nil
 	| aux (thy :: rest) = (Value(get_thm thy key)
-		handle (Fail _) => aux rest)
-	in
+		handle (Fail _) => aux rest);
+in
 		aux (get_cache_theories())
-	end)
 end);
 =TEX
 The following declares a new n-tuple type, knowing that the type isn't
 in scope.
 =SML
 fun âdeclare_n_tupleá (n:int) :THM = (
-let	val was_thy = get_current_theory_name();
-in let
+let	val last_thm = cached_product_rule (n-1);
+	val was_thy = get_current_theory_name();
 	val cache_thy = (hd(get_cache_theories()))
 		handle complaint =>
-		divert complaint "hd" "tuple_spec" 59006 [];
+		divert complaint "hd" "cached_product_rule" 59006 [];
 	val sideeffect = if is_theory_ancestor cache_thy was_thy
 		then ()
-		else fail "tuple_spec" 59002 [fn () => cache_thy];
-	val sideeffect = open_theory (hd(get_cache_theories()));
+		else fail "cached_product_rule" 59002 [fn () => cache_thy];
+	val sideeffect = open_theory cache_thy;
 	val nstr = string_of_int n;
 	val key = nstr ^ "TUPLE";
-	val sideffect = ((get_thm cache_thy key;fail "tuple_spec" 59004 [fn () => key])
-		handle complaint =>
-		if area_of complaint = "get_thm"
-		then ()
-		else reraise complaint (area_of complaint));
-	val inter = interval 1 n;
-	val inters = map string_of_int inter;
-	val tyvars = map (fn x => mk_vartype("'"^ x))
-		inters;
-=TEX
-We will do our proof work by a binary split, basing our proof for $n$
-on two previous theorems, one for $n\ div\ 2$, the other
-$n - (n\ div\ 2)$.
-We will access these theorems before creating the new type,
-perhaps causing a cascade of proof.
-=SML
-	val ndiv2 = n div 2;
-	val nrest = n - ndiv2;
-	val ndiv2_thm = tuple_spec ndiv2;
-	val nrest_thm = if ndiv2 = nrest
-		then ndiv2_thm
-		else tuple_spec nrest;
-	val nrest_thm' = inst_type_rule 
-		(combine (map (fn x => mk_vartype("'"^string_of_int x)) (interval (ndiv2+1) n))
-		(map (fn x => mk_vartype("'"^string_of_int x)) (interval 1 nrest)))
-		nrest_thm;
-	val cndiv2_thm = concl ndiv2_thm;
-	val cnrest_thm' = concl nrest_thm';
-	val ntuples = list_variant[][fst(dest_simple_„ cndiv2_thm),
-		fst(dest_simple_„ cnrest_thm')];
-	val tuple1 = hd ntuples;
-	val tuple2 = hd(tl ntuples);
-	val nlabels = list_variant[]
-		(fst(strip_simple_„(fst(dest_€(snd(dest_simple_„ cndiv2_thm))))) @
-		fst(strip_simple_„(fst(dest_€(snd(dest_simple_„ cnrest_thm'))))));
-	val rep_type = mk_‰_type (last_‹_type(type_of tuple1), 
-		last_‹_type(type_of tuple2));
-	val abs_type = mk_ctype(key,tyvars);
-	val x = mk_var("x",rep_type);
-	val „_thm_concl = mk_simple_„(x,
-		mk_app(mk_simple_(x,mk_t),x));
-	val „_thm = ‚_t_elim((BINDER_C simple_%beta%_conv
-		THEN_C rwc1)„_thm_concl);
-	val sideeffect = diag_string ("Defining type :"^key);
-	val n_tuple_def = new_type_defn (key,key,map dest_vartype tyvars, „_thm)
-		handle complaint =>
-		pass_on complaint "new_type_defn" "tuple_spec";
-	val done_defn_time = System.processtime();
-=TEX
-We now have the new type defined (by $n\_tuple\_def$), so let us create the form of the theorem
-we wish to prove:
-=SML
+	val inters = map string_of_int (interval 1 n);
+	val tyvars = map (fn x => mk_vartype("'"^ x)) inters;
 	val xi = map (fn x => mk_var("x"^x,mk_vartype("'"^ x))) inters;
 	val yi = map (fn x => mk_var("y"^x,mk_vartype("'"^ x))) inters;
-	val ntuple = mk_var(nstr^ "Tuple",list_mk_‹_type (tyvars @ [abs_type]));
+	val ntuple = mk_var(nstr^ "Tuple",list_mk_‹_type (tyvars @ [tva]));
 	val labstr = "Lab"^nstr^"_";
 	val labs = map (fn x => mk_var(labstr^x,
-		mk_‹_type(abs_type,mk_vartype("'"^x)))) inters;
-	val t = mk_var("t",abs_type);
+		mk_‹_type(tva,mk_vartype("'"^x)))) inters;
+	val t = mk_var("t",tva);
 	val ntuple_args = list_mk_app(ntuple,xi);
-	val thm_concl = mk_simple_„(ntuple,
+	val succedent = mk_simple_„(ntuple,
 	  mk_€(
 		list_mk_simple_„(labs,
 		list_mk_simple_ƒ((t :: xi),
-		list_mk_€(
+		rlist_mk_€(
 		map (fn (lab,x) =>
 		mk_eq(mk_app(lab,ntuple_args),x))
 		(combine labs xi)
@@ -588,193 +615,76 @@ we wish to prove:
 		,
 		mk_€(
 		 (list_mk_simple_ƒ(xi @ yi,mk_‚(mk_eq(ntuple_args,list_mk_app(ntuple,yi)),
-			list_mk_€(map (fn (x,y) => mk_eq(x,y)) (combine xi yi))))),
+			rlist_mk_€(map (fn (x,y) => mk_eq(x,y)) (combine xi yi))))),
 		 (mk_simple_ƒ(t,
 		 list_mk_simple_„(xi,
 			 mk_eq(t,ntuple_args))))
 		)
 	));
+	val ntuple_type = rlist_mk_‰_type tyvars;
+	val abs = mk_var("abs",mk_‹_type(ntuple_type,tva));
+	val rep = mk_var("rep",mk_‹_type(tva,ntuple_type));
+	val avar = mk_var("a",tva);
+	val rvar = mk_var("r",ntuple_type);
+	val antecedent = (
+		list_mk_simple_„([abs,rep],
+		mk_€
+		(mk_simple_ƒ(avar,
+		mk_eq(mk_app(abs,mk_app(rep,avar)),avar)),
+		mk_simple_ƒ(rvar,
+		mk_eq(mk_app(rep,mk_app(abs,rvar)),rvar))))
+	);
+	val thm_concl = mk_Š(antecedent, succedent);
 =TEX
-We now have the theorems conclusion, $thm\_concl$: now to prove it:
+We now have the theorems conclusion, $thm\_concl$: now to prove it.
+We do so by instantiating the $n-1\sup{th}$ theorem.
 =SML
-	val xito = xi to (ndiv2-1);
-	val xifrom = xi from ndiv2;
-	val abs = mk_var("abs",mk_‹_type(rep_type,abs_type));
-	val rep = mk_var("rep",mk_‹_type(abs_type,rep_type));
-	val n_tuple_witness =list_mk_simple_(xi,
-		mk_app(abs,
-		mk_pair(
-		list_mk_app(tuple1,xito),
-		list_mk_app(tuple2,xifrom))));
-	val rept = mk_app(rep,t);
-	val x_wits = (map (fn x => mk_app(x,mk_fst rept)))
-			(nlabels  to (ndiv2-1)) @
-		(map (fn x => mk_app(x,mk_snd rept))
-			(nlabels  from ndiv2));
-	val lab_wits = map (fn x => mk_simple_(t, x)) x_wits;
-	val start_proof_time = System.processtime();
-=TEX
-The actual start of the proof. We first strip 
-the definition of the new type, and the theorems for the
-supporting results of $tuple\_spec$.
-=SML
-	val res_thm = 
-	tac_proof(([],thm_concl),
-	TIME_T "full tactic"(
-	(TIME_T "stripping tuple thms"(lstrip_asm_tac ndiv2_thm THEN lstrip_asm_tac nrest_thm'))
-	THEN
-	(TIME_T "stripping type defn" (strip_asm_tac (rwr1 (simple_Š_match_mp_rule type_lemmas_thm n_tuple_def))))
-	THEN
-	TIME_T "main „" (simple_„_tac n_tuple_witness)
-	THEN
-=TEX
-We now pull out the assumptions into variables, to allow more
-precise handling,
-and include some customised matching conversions,
-tactics, etc.
-=SML
-	TIME_T "DROP_ASMS_T"
-	(DROP_ASMS_T (fn asms =>
-	let	val rep_abs_thm = nth 0 asms;
-		val abs_rep_thm = nth 1 asms;
-		val tuple2_eq_thm = nth 2 asms;
-		val tuple2_labs_back_thm = nth 3 asms;
-		val thm2s = initial_rw_canon tuple2_labs_back_thm;
-		val tuple2_back_thm = nth nrest thm2s;
-		val tuple2_labs_thms = thm2s to (nrest -1);
-		val tuple1_eq_thm = nth 4 asms;
-		val tuple1_labs_back_thm = nth 5 asms;
-		val thm1s = initial_rw_canon tuple1_labs_back_thm;
-		val tuple1_back_thm = nth ndiv2 thm1s;
-		val tuple1_labs_thms = thm1s to (ndiv2 - 1);
-		val match_rep_abs_thm_conv = (fn tm =>
-			simple_ƒ_elim(snd(dest_app(snd(dest_app tm)))) 
-			rep_abs_thm);
-		val match_abs_rep_thm_conv = (fn tm =>
-			simple_ƒ_elim(snd(dest_app(snd(dest_app tm)))) 
-			abs_rep_thm);
-		val match_tuple1_back_thm_conv = (fn tm =>
-			simple_ƒ_elim(snd(dest_app(snd(dest_app tm)))) 
-			tuple1_back_thm);
-		val match_tuple2_back_thm_conv = (fn tm =>
-			simple_ƒ_elim(snd(dest_app(snd(dest_app tm)))) 
-			tuple2_back_thm);
-		val ntuple_args_thm = tailored_beta_conv1 (list_mk_app(n_tuple_witness, xi));
-		val local_tac1 = (
-		conv_tac(RATOR_C(RAND_C (
-		((RAND_C (fn x => ntuple_args_thm))
-		THEN_C simple_%beta%_conv
-		THEN_C
-		(RAND_C(RAND_C match_rep_abs_thm_conv
-		THEN_C (match_fst_thm_conv))))
-		))))
-		;
-		val local_tac2 = (
-		conv_tac(RATOR_C(RAND_C (
-		((RAND_C (fn x => ntuple_args_thm))
-		THEN_C simple_%beta%_conv
-		THEN_C
-		(RAND_C(RAND_C match_rep_abs_thm_conv
-		THEN_C (match_snd_thm_conv))))
-		))))
-		;
-		val local_tac3 = (
-		conv_tac(RATOR_C(RAND_C (
-		(tailored_beta_conv THEN_C
-		RAND_C(PAIR_C2(match_tuple1_back_thm_conv)
-			(match_tuple2_back_thm_conv)		
-		THEN_C match_fst_snd_thm_conv)
-		THEN_C match_abs_rep_thm_conv
-		)))))
-		;
-	in
-	TIME_T "REPEAT_€_COMPLETE_WITH"
-	(REPEAT_€_COMPLETE_WITH	
-=TEX
-The proof is now split into handling three conjuncts,
-the first taking the bulk of the execution time.
-The first conjunct proves the existence of projection
-functions $Labn\_m$, and spends much of its time in $list\_simple\_„\_tac$.
-=SML
-	[(TIME_T "Conjunct 1"
-	(list_simple_„_tac lab_wits THEN 
-	REPEAT simple_ƒ_tac THEN 
-	REPEAT_€_COMPLETE_WITH
-	(map (fn thm => local_tac1 THEN 
-		accept_tac (list_simple_ƒ_elim (rev xito) thm)) 
-		tuple1_labs_thms @
-	map (fn thm => local_tac2 THEN 
-		accept_tac (list_simple_ƒ_elim (rev xifrom) thm)) 
-		tuple2_labs_thms 
-		@ [local_tac3 THEN accept_tac(refl_conv t)]
-	)
-	)),
-=TEX
-The second conjunct states a ``one-to-one'' result for the
-abstraction function.
-=SML
-	(TIME_T "Conjunct 2"
-	(REPEAT simple_ƒ_tac THEN  
-	 conv_tac(RATOR_C(RAND_C (EQ_C tailored_beta_conv1))) THEN
-		‚_T2 
-		(fn thm => (accept_tac o list_€_intro o strip_€_rule)(
-			conv_rule
-			((EQ_C match_rep_abs_thm_conv THEN_C
-			match_pair_eq_thm_conv THEN_C
-			€_C2 (fn _ => list_simple_ƒ_elim
-				(xito @ (yi to (ndiv2 - 1))) 
-				tuple1_eq_thm)
-			     (fn _ => list_simple_ƒ_elim
-				(xifrom @ (yi from (ndiv2))) 
-				tuple2_eq_thm)
-			
-			))
-			(ap_fun_rule rep thm)))
-		(fn thm => 
-		subst_vars_tac thm
-		THEN (fn (asms,gl) => accept_tac(refl_conv
-			(fst(dest_eq gl))) (asms,gl))))
-		),
-=TEX
-The third conjunct shows that the abstraction function ``covers'' the new type.
-=SML
-	(TIME_T "Conjunct 3"
-	(simple_ƒ_tac THEN list_simple_„_tac x_wits THEN 
-	conv_tac(RAND_C (tailored_beta_conv1
-	THEN_C RAND_C(PAIR_C2 (match_tuple1_back_thm_conv)
-		(match_tuple2_back_thm_conv)
-	THEN_C match_fst_snd_thm_conv)
-	THEN_C match_abs_rep_thm_conv))
-	THEN accept_tac (refl_conv t))
-	)
-	])
-	end))));
-	val done_proof_time = System.processtime();
-	val res = save_thm(key,res_thm);
+	val old_tyvars = rev(tl(rev tyvars));
+	val tyinsts = ((mk_‰_type(tv1,tv2),tv1) ::
+		combine  (tl(tl tyvars)) (tl old_tyvars));
+	val s1 = time_rule "s1" (inst_type_rule tyinsts) last_thm;
+	val s2 = time_rule "s2" (Š_elim s1) (asm_rule antecedent);
+	val s3 = time_rule "s3" (conv_rule (BINDER_C
+		(€_C2 ((ALL_SIMPLE_„_C (BINDER_C lpair_ƒ_conv))
+			THEN_C lpair_„_conv1
+			THEN_C ALL_SIMPLE_„_C
+			(ALL_SIMPLE_ƒ_C
+			(€_C2
+			(LEFTMOST_€_C((RATOR_C(RAND_C simple_%beta%_conv))
+				THEN_C (simple_eq_match_1_conv pair_eq_thm))
+			)
+			(ONCE_MAP_C simple_%beta%_conv))
+))
+			(€_C2 (lpair_ƒ_conv THEN_C
+				ONCE_MAP_C lpair_ƒ_conv THEN_C
+				ALL_SIMPLE_ƒ_C (RAND_C(LEFTMOST_€_C 
+					(simple_eq_match_1_conv pair_eq_thm))))
+				(BINDER_C lpair_„_conv)))
+		)) s2;
+	val s4 = time_rule "s4" (conv_rule (l„_pair_conv THEN_C ONCE_MAP_C l_%beta%_conv)) s3;
+	val s5 = time_rule "s5" (conv_rule (%alpha%_conv thm_concl))
+		(all_Š_intro s4);
+	val sideeffect = save_thm(key,s5);
 	val sideeffect = open_theory was_thy;
 in
-	res
-end
-handle complaint =>
-	(open_theory was_thy;
-	reraise complaint (area_of complaint))
-end
-);
+	s5
+end);
 =TEX
 Main function:
 =SML
 in
 	if arg < 1 
-	then fail "tuple_spec" 59001 [fn () => string_of_int arg]
+	then fail "cached_product_rule" 59001 [fn () => string_of_int arg]
 	else (case (find_n_tuple arg) of
 	Value thm => thm
 	| Nil => declare_n_tuple arg)
 
-end); (* of tuple_spec *)
-end; (* of local *)
+end); (* of cached_product_rule *)
 =TEX
 \subsection{Labelled Products}
 =IGN
+new_parent "†";
+
 val inp2 = {tyname = "HOLD2",tykey = "HOLD2",conname = "Hold2",
 	constkeys= ["Hold2","First2","Second2"],
 	labels = [("First2",†),("Second2",»:'1¼)],
@@ -807,14 +717,6 @@ val inp8 = {tyname = "HOLD8",tykey = "HOLD8",conname = "Hold8",
 	("Seventh8",»:'1 ‰ '3¼),("Eighth8",»:'3 ‰ '2¼)],
 	tyvars = Value[»:'1¼,»:'2¼,»:'3¼]};
 =SML
-local
-val rwc1 = pure_rewrite_conv[„_rewrite_thm];
-val rwr1 = prim_rewrite_rule empty_net id_canon TOP_MAP_C
-		[(»( x Ž y)z¼,simple_%beta%_conv)] 
-		[tac_proof(([],»ƒ t Ž (T ‚ t) ‚ t¼),
-			rewrite_tac[])];
-
-in
 fun âlabelled_product_specá {tyname:string, tykey:string, conname:string, 
 	constkeys:string list, labels:(string*TYPE)list, tyvars:(TYPE list)OPT} : THM = (
 let	val sideeffect = if is_nil constkeys orelse is_nil labels
@@ -822,12 +724,12 @@ let	val sideeffect = if is_nil constkeys orelse is_nil labels
 		else();
 	val nlabels = length labels;
 	val nstr = string_of_int nlabels;
-	val tuple_thm = tuple_spec nlabels
+	val tuple_thm = cached_product_rule nlabels
 		handle complaint =>
-		pass_on complaint "tuple_spec" "labelled_product_spec";
-	val nm_tuple_type = nstr^"TUPLE";
+		pass_on complaint "cached_product_rule" "labelled_product_spec";
+	val tuple_type = fst(dest_‹_type(type_of(fst(dest_simple_„(fst(dest_Š (concl tuple_thm)))))));
 	val (lab_nms,lab_types) = split labels;
-	val rep_type = mk_ctype(nm_tuple_type,lab_types);
+	val rep_type = rlist_mk_‰_type lab_types;
 	val lab_tyvars = list_cup(map (fn x => map mk_vartype (type_tyvars x)) lab_types);
 	val used_tyvars = case tyvars of
 		Nil => lab_tyvars
@@ -839,11 +741,7 @@ let	val sideeffect = if is_nil constkeys orelse is_nil labels
 			fn () => "A label",
 			fn () => format_list(dest_vartype) (lab_tyvars diff tys) ", "]);
 	val abs_type = mk_ctype(tyname, used_tyvars);
-	val x = mk_var("x",rep_type);
-	val „_thm_concl = mk_simple_„(x,
-		mk_app(mk_simple_(x,mk_t),x));
-	val „_thm = ‚_t_elim((BINDER_C simple_%beta%_conv
-		THEN_C rwc1)„_thm_concl);
+	val „_thm = inst_type_rule[(rep_type, tva)] „__x_t_thm;
 =TEX
 Before we actually declare the new type we attempt to ensure that we will be able to introduce the new constants
 as requested.
@@ -867,11 +765,12 @@ Now the definition itself, which will flush out any writability problems that co
 	val type_def = new_type_defn (tyname,tykey,map dest_vartype used_tyvars, „_thm)
 		handle complaint =>
 		pass_on complaint "new_type_defn" "labelled_product_spec";
-	val tuple_thm' = „_€_left_rule tuple_thm;
-	val inter = interval 1 nlabels;
-	val inters = map string_of_int inter;
-	val tyinsts = combine lab_types (map (fn s => mk_vartype ("'"^s)) inters);
-	val tuple_thm'' = inst_type_rule tyinsts tuple_thm';
+	val inters = map string_of_int (interval 1 nlabels);
+	val tyinsts = (abs_type,tva) :: (combine lab_types (map (fn s => mk_vartype ("'"^s)) inters));
+	val tuple_thm' = time_rule "tuple_thm'" (inst_type_rule tyinsts) tuple_thm;
+	val s1 = time_rule "s1" simple_match_type_lemmas_thm type_def;
+	val s2 = time_rule "s2" (Š_elim tuple_thm') s1;
+	val s3 = time_rule "s3" „_€_left_rule s2;
 	val labs = map (fn (x,ty) => mk_var(x,mk_‹_type(abs_type,ty))) labels;
 	val xi = map mk_var(combine (map (fn x => "x"^x) inters) lab_types);
 	val con = mk_var(conname,list_mk_‹_type (lab_types @ [abs_type]));
@@ -882,7 +781,7 @@ Now the definition itself, which will flush out any writability problems that co
 	val thm_concl = mk_simple_„(con,
 		list_mk_simple_„(labs,
 		list_mk_simple_ƒ((t :: xi),
-		list_mk_€(
+		rlist_mk_€(
 		map (fn (lab,x) =>
 		mk_eq(mk_app(lab,con_args),x))
 		(combine labs xi)
@@ -890,73 +789,12 @@ Now the definition itself, which will flush out any writability problems that co
 		list_mk_app(con,
 		map (fn lab => mk_app(lab,t)) labs),
 		t)]))));
-	val replabstr = "Lab"^nstr^"_";
-	val replabs = map (fn (x,ty) => mk_var(replabstr^x,
-		mk_‹_type(rep_type,ty))) (combine inters lab_types);
-	val ntuple = mk_var(nstr^ "Tuple",list_mk_‹_type (lab_types @ [rep_type]));
-	val ntuple_args = list_mk_app(ntuple,xi);
-	val con_wit = list_mk_simple_(xi,mk_app(abs,ntuple_args));
-	val lab_wits = map (fn x => 
-		mk_simple_(t,mk_app(x,mk_app(rep,t)))) replabs;
-	val res_thm = 
-	tac_proof(([],thm_concl),
-	TIME_T "Main tactic"
-	(TIME_T "stripping" (strip_asm_tac tuple_thm'' THEN 
-	strip_asm_tac (rwr1 (simple_Š_match_mp_rule type_lemmas_thm type_def)))
-	THEN
-	TIME_T "list_simple_„_tac" (list_simple_„_tac (con_wit :: lab_wits))
-	THEN
-	REPEAT simple_ƒ_tac THEN 
-	TIME_T "DROP_ASMS_T"
-	(DROP_ASMS_T (fn asms =>
-	let	val rep_abs_thm = nth 0 asms;
-		val abs_rep_thm = nth 1 asms;
-		val other_asm = nth 2 asms;
-		val other_asms = strip_€_rule
-			(all_simple_ƒ_elim other_asm);
-		val tuple_back_thm = (simple_ƒ_intro 
-			(fst(dest_simple_ƒ(concl other_asm))) 
-			(nth nlabels other_asms));
-		val tuple_labs_thms = other_asms to (nlabels-1);
- 		val match_rep_abs_thm_conv = (fn tm =>
-			simple_ƒ_elim(snd(dest_app(snd(dest_app tm)))) 
-			rep_abs_thm);
-		val match_abs_rep_thm_conv = (fn tm =>
-			simple_ƒ_elim(snd(dest_app(snd(dest_app tm)))) 
-			abs_rep_thm);
-		val match_tuple_back_thm_conv = (fn tm =>
-			simple_ƒ_elim(snd(dest_app(snd(dest_app tm)))) 
-			tuple_back_thm);
-		val ntuple_args_thm = tailored_beta_conv1 (list_mk_app(con_wit, xi));
-		val local_tac1 = (
-		conv_tac(RATOR_C(RAND_C (
-		((RAND_C (fn x => ntuple_args_thm))
-		THEN_C simple_%beta%_conv
-		THEN_C
-		(RAND_C match_rep_abs_thm_conv))
-		))))
-		;
-		val local_tac2 = (
-		conv_tac(RATOR_C(RAND_C (
-		(tailored_beta_conv THEN_C
-		RAND_C(match_tuple_back_thm_conv))
-		THEN_C match_abs_rep_thm_conv
-		))))
-		;
-	in
-	TIME_T "REPEAT_€_COMPLETE_WITH"
-	(REPEAT_€_COMPLETE_WITH	
-	(map (fn thm => local_tac1 THEN accept_tac thm) 
-		tuple_labs_thms
-		@ [local_tac2 THEN accept_tac(refl_conv t)]))
-	end
-	))));
+	val s4 = time_rule "s4" (conv_rule (%alpha%_conv thm_concl)) s3;
 in
-	(new_specification(constkeys,1+nlabels,res_thm)
+	(new_specification(constkeys,1+nlabels,s4)
 		handle complaint =>
 		pass_on complaint "new_specification" "labelled_product_spec")
 end); (* labelled_product_spec *)
-end; (* of local *)
 =TEX
 \subsection{Unlabelled Products}
 =IGN
@@ -982,14 +820,6 @@ val ulp8 = {tyname="ULP8", tykey="ULP8", conname="Ulp8",
 	conkeys=["Ulp8"], tyi=[»:'d ‰ BOOL¼,»:'a ‰ 'b¼,»:'a ‰ 'b¼,»:†¼,»:'c ‰ 'a¼,BOOL,»:'1¼,»:'4¼], 
 	tyvars = Nil};
 =SML
-local
-val rwc1 = pure_rewrite_conv[„_rewrite_thm];
-val rwr1 = prim_rewrite_rule empty_net id_canon TOP_MAP_C
-		[(»( x Ž y)z¼,simple_%beta%_conv)] 
-		[tac_proof(([],»ƒ t Ž (T ‚ t) ‚ t¼),
-			rewrite_tac[])];
-
-in
 fun âunlabelled_product_specá {tyname:string, tykey:string, conname:string, 
 	conkeys:string list, tyi: TYPE list, tyvars:(TYPE list)OPT} : THM = (
 let	val sideeffect = if is_nil conkeys orelse is_nil tyi
@@ -997,11 +827,10 @@ let	val sideeffect = if is_nil conkeys orelse is_nil tyi
 		else();
 	val nlabels = length tyi;
 	val nstr = string_of_int nlabels;
-	val tuple_thm = tuple_spec nlabels
+	val tuple_thm = cached_product_rule nlabels
 		handle complaint =>
-		pass_on complaint "tuple_spec" "labelled_product_spec";
-	val nm_tuple_type = nstr^"TUPLE";
-	val rep_type = mk_ctype(nm_tuple_type,tyi);
+		pass_on complaint "cached_product_rule" "labelled_product_spec";
+	val rep_type = rlist_mk_‰_type tyi;
 	val lab_tyvars = list_cup(map (fn x => map mk_vartype (type_tyvars x)) tyi);
 	val used_tyvars = case tyvars of
 		Nil => lab_tyvars
@@ -1013,11 +842,7 @@ let	val sideeffect = if is_nil conkeys orelse is_nil tyi
 			fn () => "A label",
 			fn () => format_list(dest_vartype) (lab_tyvars diff tys) ", "]);
 	val abs_type = mk_ctype(tyname, used_tyvars);
-	val x = mk_var("x",rep_type);
-	val „_thm_concl = mk_simple_„(x,
-		mk_app(mk_simple_(x,mk_t),x));
-	val „_thm = ‚_t_elim((BINDER_C simple_%beta%_conv
-		THEN_C rwc1)„_thm_concl);
+	val „_thm = inst_type_rule[(rep_type, tva)] „__x_t_thm;
 =TEX
 Before we actually declare the new type we attempt to ensure that we will be able to introduce the new constants
 as requested.
@@ -1039,90 +864,21 @@ Now the definition itself, which will flush out any writability problems that co
 	val type_def = new_type_defn (tyname,tykey,map dest_vartype used_tyvars, „_thm)
 		handle complaint =>
 		pass_on complaint "new_type_defn" "unlabelled_product_spec";
-	val tuple_thm' = „_€_right_rule tuple_thm;
-	val inter = interval 1 nlabels;
-	val inters = map string_of_int inter;
-	val tyinsts = combine tyi (map (fn s => mk_vartype ("'"^s)) inters);
-	val tuple_thm'' = inst_type_rule tyinsts tuple_thm';
-	val xi = map mk_var(combine (map (fn x => "x"^x) inters) tyi);
-	val yi = map mk_var(combine (map (fn x => "y"^x) inters) tyi);
-	val con = mk_var(conname,list_mk_‹_type (tyi @ [abs_type]));
-	val t = mk_var("t",abs_type);
-	val con_args = list_mk_app(con,xi);
-	val abs = mk_var("abs",mk_‹_type(rep_type,abs_type));
-	val rep = mk_var("rep",mk_‹_type(abs_type,rep_type));
-
-	val thm_concl = mk_simple_„(con,
-		mk_€(
-		(list_mk_simple_ƒ(xi @ yi,
-		 mk_‚(mk_eq(con_args,list_mk_app(con,yi)),
-			list_mk_€(map (fn (x,y) => mk_eq(x,y)) (combine xi yi))))),
-		 (mk_simple_ƒ(t,
-		 list_mk_simple_„(xi,
-			 mk_eq(t,con_args))))
-		));
-	val ntuple = mk_var(nstr^ "Tuple",list_mk_‹_type (tyi @ [rep_type]));
-	val ntuple_args = list_mk_app(ntuple,xi);
-	val con_wit = list_mk_simple_(xi,mk_app(abs,ntuple_args));
-	val res_thm = 
-	tac_proof(([],thm_concl),
-	TIME_T "Main tactic"
-	(TIME_T "stripping" (strip_asm_tac tuple_thm'' THEN 
-	strip_asm_tac (rwr1 (simple_Š_match_mp_rule type_lemmas_thm type_def)))
-	THEN
-	TIME_T "simple_„_tac" (simple_„_tac con_wit)
-	THEN
-	TIME_T "DROP_ASMS_T"
-	(DROP_ASMS_T (fn asms =>
-	let	val rep_abs_thm = nth 0 asms;
-		val abs_rep_thm = nth 1 asms;
-		val cover_thm = nth 2 asms;
-		val eq_thm = nth 3 asms;
- 		val match_rep_abs_thm_conv = (fn tm =>
-			simple_ƒ_elim(snd(dest_app(snd(dest_app tm)))) 
-			rep_abs_thm);
-		val match_abs_rep_thm_conv = (fn tm =>
-			simple_ƒ_elim(snd(dest_app(snd(dest_app tm)))) 
-			abs_rep_thm);
-	in
-	TIME_T "€_tac THEN_LIST_T"
-	(€_tac THEN_LIST_T	
-	[(REPEAT simple_ƒ_tac THEN 
-	conv_tac (RATOR_C(RAND_C (EQ_C tailored_beta_conv1)))
-	THEN 
-	‚_T2 
-		(fn thm => accept_tac(
-			conv_rule
-			((EQ_C match_rep_abs_thm_conv THEN_C
-			(fn _ => all_simple_ƒ_elim eq_thm)			
-			))
-			(ap_fun_rule rep thm)))
-		(fn thm => 
-		subst_vars_tac thm
-		THEN (fn (asms,gl) => accept_tac(refl_conv
-			(fst(dest_eq gl))) (asms,gl))
-		)),
-	(simple_ƒ_tac THEN 
-	REPEAT_TTCL STRIP_THM_THEN 
-	(fn sthm =>
-	list_simple_„_tac xi THEN
-	conv_tac(RAND_C (tailored_beta_conv1
-		THEN_C(RAND_C(fn _ => eq_sym_rule sthm))
-		THEN_C match_abs_rep_thm_conv)))
-		(simple_ƒ_elim (mk_app(rep,t)) cover_thm)
-	THEN accept_tac(refl_conv t)
-	)])
-	end
-	))));
+	val inters = map string_of_int (interval 1 nlabels);
+	val tyinsts = (abs_type,tva) :: combine tyi (map (fn s => mk_vartype ("'"^s)) inters);
+	val tuple_thm' = (inst_type_rule tyinsts tuple_thm);
+	val s1 = time_rule "s1" simple_match_type_lemmas_thm type_def;
+	val s2 = time_rule "s2" (Š_elim tuple_thm') s1;
+	val s3 = time_rule "s3" „_€_right_rule s2;
+	val s4 = time_rule "s4" (conv_rule(RAND_C (simple_%alpha%_conv conname))) s3;
 in
-	(new_specification(conkeys,1,res_thm)
+	(new_specification(conkeys,1,s4)
 		handle complaint =>
 		pass_on complaint "new_specification" "unlabelled_product_spec")
 end); (* of unlabelled_product_spec *)
-end; (* of local *)
 =TEX
 \section{EPILOGUE}
-=SML
+=IGN
 val _ = open_theory lthy;
 val _ = pop_proof_context();
 val lsubgoal_package_quiet = set_flag("subgoal_package_quiet",
@@ -1135,66 +891,6 @@ open ProductTypes;
 \printindex
 \end{document}
 =IGN
-This is a one shot proof, that works in isolation,
-and roughly doubles for each increment of $n$,
-with n = 5 being 33 seconds to evaluate.
-
-Create pair types and terms:
-
-fun list_mk_‰_type ([ty]:TYPE list):TYPE = ty
-| list_mk_‰_type (a :: x) = mk_‰_type (a, list_mk_‰_type x)
-| list_mk_‰_type [] = fail "list_mk_‰_type" 0 [];
-
-fun list_mk_pair ([tm]:TERM list):TERM = tm
-| list_mk_pair (a :: x) = mk_pair (a, list_mk_pair x)
-| list_mk_pair [] = fail "list_mk_pair" 0 [];
-
-local
-val rwc1 = pure_rewrite_conv[„_rewrite_thm];
-val rwr1 = prim_rewrite_rule empty_net id_canon TOP_MAP_C
-		[(»( x Ž y)z¼,simple_%beta%_conv)] 
-		[tac_proof(([],»ƒ t Ž (T ‚ t) ‚ t¼),
-			rewrite_tac[])];
-val rwt2 = asm_rewrite_tac(initial_rw_canon pair_clauses to 4);
-
-val rwt3 = pure_asm_rewrite_tac[tac_proof(([],»ƒ tŽ(t Š t) ‚ T¼),
-		rewrite_tac[]),
-		tac_proof(([],»ƒ x y p qŽ ((x,y) = (p,q)) ‚ ((x = p) € (y = q))¼),
-		rewrite_tac[pair_clauses])];
-val rwt4 = pure_asm_rewrite_tac[tac_proof(([],»ƒ tŽ(Fst t, Snd t) = t¼),
-		rewrite_tac[pair_clauses]),
-		eq_rewrite_thm];
-
-in
-	val rep_type = list_mk_‰_type tyvars;
-	val abs = mk_var("abs",mk_‹_type(rep_type,abs_type));
-	val rep = mk_var("rep",mk_‹_type(abs_type,rep_type));
-	val n_tuple_witness = list_mk_simple_(xi,
-		mk_app(abs,list_mk_pair xi));
-	fun aux [l] tm = [tm]
-	| aux (a :: x) tm = mk_fst tm :: aux x (mk_snd tm)
-	| aux _ _ = fail "tuple_spec" 0 [];
-	val x_wits = aux labs (mk_app(rep,t));
-	val lab_wits = map (fn x => mk_simple_(t,x)) x_wits;
-	val res_thm = 
-	tac_proof(([],thm_concl),
-	strip_asm_tac (rwr1 (simple_Š_match_mp_rule type_lemmas_thm n_tuple_def))
-	THEN
-	simple_„_tac n_tuple_witness
-	THEN
-	conv_tac all_simple_%beta%_conv
-	THEN
-	REPEAT €_tac
-	THEN_LIST_T
-	[MAP_EVERY_T simple_„_tac lab_wits THEN rwt2,
-	REPEAT simple_ƒ_tac THEN ‚_T2 
-		(fn thm => ante_tac(ap_fun_rule rep thm) THEN
-		rwt3)
-		(fn thm => pure_rewrite_tac[thm, eq_rewrite_thm]),
-	simple_ƒ_tac THEN MAP_EVERY_T simple_„_tac x_wits THEN rwt4]);
-
-
-
 fun stat_sort (nm1,x1) (nm2,x2) = if x1 = x2
 	then stringorder nm1 nm2
 	else x1 - x2;
