@@ -17,7 +17,7 @@
 \TPPkeywords{}
 \TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
 %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
-\TPPauthorisation{R.D.Arthan & FMU Manager}
+\TPPauthorisation{R.D.Arthan & FST Team Leader}
 \TPPabstract{}
 \TPPdistribution{\parbox[t]{4.0in}{%
 	    Project Library
@@ -88,21 +88,19 @@ Renamings of functions containing the name atom $simple$,
 and renaming of $\alpha\_eq$.
 \item [Issue 1.19, 1.20]
 Tidying up in preparation for a desk check.
+\item [Issue 1.21]
+Changes in reaction to deskcheck ID0090.
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
 \subsection{Scope}
-This document contains an implementation of the types and terms of ICL HOL, and functions to handle them, called for by section 4.2 of the Release 1 ICL HOL Product Requirement Specification \cite{DS/FMU/IED/DEF004}.
-The high-level specification for the code may be considered
-to be given in \cite{DS/FMU/IED/SPC001}.
-The design is in \cite{DS/FMU/IED/DTD003}.
+This document contains an implementation of the types and terms of ICL HOL.
+The design is given in \cite{DS/FMU/IED/DTD003}.
 \subsection{Introduction}
 \subsubsection{Purpose and Background}
 This document contains an implementation of the types and terms of ICL HOL, and functions to handle them.
 \subsubsection{Dependencies}
-This document takes its signature from \cite{DS/FMU/IED/DTD003},
-and also requires those files indicated as preceding it in the 
-rel001 makefile.
+This document takes its signature from \cite{DS/FMU/IED/DTD003}.
 \subsubsection{Deficiencies}
 None known.
 \subsubsection{Possible Enhancements}
@@ -194,11 +192,6 @@ fun âdest_simple_typeá (LVartype nm : TYPE) : DEST_SIMPLE_TYPE = Vartype nm
 val âBOOLá : TYPE = mk_ctype("BOOL", []);
 =TEX
 \subsection{Well-Formedness and the Type of Well-Formed Terms}
-Since we give the type of well-formed terms as an
-abstract datatype whose constructor functions raise
-exceptions if their arguments are incompatible, we do
-not need to define the well-formedness predicate.
-
 There is some choice for the
 representation for well-formed terms.
 At one extreme, we need only to know types in the leaves
@@ -220,15 +213,9 @@ term is a combination, when the type information is
 available ``just underneath''.
 The local type $TERM\_term$ is introduced to allow this approach.
 
-Instead of the $\it has\_mk\_\ldots$ functions,
-we give a constructor function ($mk\_\ldots$),
-a destructor function ($dest\_\ldots$) and
-a test function ($is\_\ldots$) for each syntactic
-class.
-
-We implement types by using local definition to hide
+We implement terms by using local definition to hide
 its data constructors, rather than declaring it as an abstract data type,
-to keep $TYPE$ an equality type.
+to keep $TERM$ an equality type.
 =SML
 local
 datatype âicl'TERMá	 =
@@ -256,9 +243,11 @@ fun âterm_failá (area : string) (msg : int) (tml : TERM list) : 'a = (
 	fail area msg (map (fn tm => (fn () => string_of_term tm)) tml)
 );
 =TEX
-Initially we are pedantic about matching function types arrows.
-After extensive testing we might assume the presence of matches in some functions, such as $dest\_simple\_term$,
-as their absence would indicate a design error, not a usage error.
+Initially we do check that the types of abstractions and the operators of
+applications have types formed by $L‹Type$,
+and provide default clauses to catch cases where no match is made,
+even when apparently unnecessary
+because of the supposed well-formedness of the terms.
 =SML
 fun âdest_simple_termá (typed vl:TERM) : DEST_SIMPLE_TERM = (
 	case vl of
@@ -388,9 +377,8 @@ end; (* of local defining TERM *)
 end; (* of local defining TYPE *)
 =TEX
 \subsection{Functions derived from Abstract Data Type $TYPE$ Part}
-$icl'inst\_type$ $alist$ $type$ recursively descends through $type$, replacing any type variables by whatever the association list $alist$ associates with them.
-If the association list does not contain a type variable found in $type$, then that type variable will not be changed.
-Replaced types are {\bf not} recursively processed by this function.
+Some of these functions could be improved by being placed within
+the abstract data type.
 =SML
 fun âicl'inst_typeá (f : (TYPE * string) list) (ty : TYPE) : TYPE = (
 	if is_vartype ty
@@ -473,6 +461,8 @@ in
 end);
 =TEX
 \subsection{Functions derived from Abstract Data Type $TERM$ Part}
+Some of these functions could be improved by being placed within
+the abstract data type.
 =SML
 fun âis_free_var_iná (vsvty as (vs, vty): string * TYPE) (tm : TERM) : bool = (
 let
@@ -592,9 +582,9 @@ fun âdest_mon_opá (area_name : string) (msg : int) (op_name : string)
 	let	val (rator, rand) = dest_app tm
 	in	if fst(dest_const rator) = op_name
 		then rand
-		else fail area_name msg []
+		else term_fail area_name msg [tm]
 	end
-	handle (Fail _) => fail area_name msg []
+	handle (Fail _) => term_fail area_name msg [tm]
 );
 
 fun âis_mon_opá (op_name : string) (tm : TERM) : bool = (
@@ -710,8 +700,7 @@ Numerics:
 fun âis_†á (tm : TERM) : bool = (
 let	val (tmn,tmty) = dest_const tm
 in
-	(tmty = †) andalso
-	((nat_of_string tmn; true) handle Fail _ => false)
+	(tmty = †) andalso (is_all_decimal tmn)
 end
 handle Fail _ => false
 );
@@ -1352,7 +1341,7 @@ The $nnn$ carries over to the name of each new variable, so that
 previously rejected names, and previously generated names are not 
 tried once more.
 This means we don't have to test the new names against themselves.
-\end{description}.
+\end{description}
 It replaces the very fast, if slightly uncertain $genvar$, of the prototype ICL HOL.
 It is less fast, but should always meet its specification.
 =SML
@@ -1419,11 +1408,13 @@ fun âvar_substá
 );
 =TEX
 \subsubsection{Mapping over Terms}
-This function is a minor convenience. In essence,
+This function is a minor convenience. 
+In essence,
 given a function, $tmfun$, and a term, $tm$, it traverses
 $tm$ (breadth first) looking for subterms for which
 the application $tmfun\,tm$ does not fail and replaces
-such subterms with $tmfun\,tm$. In fact, it is convenient
+such subterms with $tmfun\,tm$. 
+In fact, it is convenient
 for $tmfun$ to have as an extra parameter a list giving
 the bound variables which are in scope at the point of use.
 =SML
