@@ -13,7 +13,9 @@
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #define _search
 
-#define NO_MEMORY	-1
+#define NO_MEMORY		-1
+#define FORWARDS		1
+#define BACKWARDS		2
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files: 
@@ -87,7 +89,7 @@ static SearchData search_data;
  * | Search for:   | search string                    | Selection |
  * | Replace with: | replacement string               | Selection |
  * | Line Number:  | line number string               | Cursor |
- * |  Search   | Replace | Replace All | Go to line number |
+ * | < Search | Search > | Replace | Replace All | Go to line number |
  *
  * Each `xyz' string here is a text field, labelled by the label to
  * its left. One its right is a push-button which can be used to
@@ -115,7 +117,8 @@ Bool add_search_tool(Widget text_w)
 		line_no_text,
 		line_no_set_btn,
 		button_form,
-		search_btn,
+		search_backwards_btn,
+		search_forwards_btn,
 		replace_btn,
 		replace_all_btn,
 		goto_line_no_btn;
@@ -126,7 +129,8 @@ Bool add_search_tool(Widget text_w)
 	XmFontList fontlist;
 
 	static void
-		search_cb(),
+		search_backwards_cb(),
+		search_forwards_cb(),
 		replace_cb(),
 		replace_all_cb(),
 		search_set_cb(),
@@ -178,12 +182,11 @@ Bool add_search_tool(Widget text_w)
 		XmNtraversalOn,			True,
 		XmNeditMode,			XmMULTI_LINE_EDIT,
 		XmNrows,			2,
-		XmNcolumns,			40,
+		XmNcolumns,			16,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
 		XmNleftPosition,		2,
 		XmNrightPosition,		10,
-		XmNcolumns,			40,
 		NULL);
 
 	search_set_btn = XtVaCreateManagedWidget("Selection",
@@ -221,13 +224,12 @@ Bool add_search_tool(Widget text_w)
 		xmTextWidgetClass,		replace_form,
 		XmNeditMode,			XmMULTI_LINE_EDIT,
 		XmNrows,			2,
-		XmNcolumns,			40,
+		XmNcolumns,			16,
 		XmNtraversalOn,			True,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
 		XmNleftPosition,		2,
 		XmNrightPosition,		10,
-		XmNcolumns,			40,
 		NULL);
 
 	replace_set_btn = XtVaCreateManagedWidget("Selection",
@@ -268,7 +270,7 @@ Bool add_search_tool(Widget text_w)
 		XmNrightAttachment,		XmATTACH_POSITION,
 		XmNleftPosition,		2,
 		XmNrightPosition,		10,
-		XmNcolumns,			40,
+		XmNcolumns,			16,
 		NULL);
 
 	line_no_set_btn = XtVaCreateManagedWidget("Cursor",
@@ -282,23 +284,34 @@ Bool add_search_tool(Widget text_w)
 		NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Row 4:  | Search | Replace | Replace All | Go to line number
+ * Row 4:  | <= Search | Search => | Replace | Replace All | Go to line number
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	button_form = XtVaCreateWidget("button-form",
 		xmFormWidgetClass, 		rowcol,
 		XmNtraversalOn,			True,
-		XmNfractionBase,		12,
+		XmNfractionBase,		10,
 		NULL);
 
-	search_btn = XtVaCreateManagedWidget("Search",
+	search_backwards_btn = XtVaCreateManagedWidget("<= Search",
 		xmPushButtonWidgetClass,	button_form,
 		XmNtraversalOn,			True,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_FORM,
 		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNrightPosition,		3,
+		XmNrightPosition,		2,
+		NULL);
+
+	search_forwards_btn = XtVaCreateManagedWidget("Search =>",
+		xmPushButtonWidgetClass,	button_form,
+		XmNtraversalOn,			True,
+		XmNtopAttachment,		XmATTACH_FORM,
+		XmNbottomAttachment,		XmATTACH_FORM,
+		XmNleftAttachment,		XmATTACH_POSITION,
+		XmNrightAttachment,		XmATTACH_POSITION,
+		XmNleftPosition,		2,
+		XmNrightPosition,		4,
 		NULL);
 
 	replace_btn = XtVaCreateManagedWidget("Replace",
@@ -308,7 +321,7 @@ Bool add_search_tool(Widget text_w)
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNleftPosition,		3,
+		XmNleftPosition,		4,
 		XmNrightPosition,		6,
 		NULL);
 
@@ -320,17 +333,17 @@ Bool add_search_tool(Widget text_w)
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
 		XmNleftPosition,		6,
-		XmNrightPosition,		9,
+		XmNrightPosition,		8,
 		NULL);
 
-	goto_line_no_btn = XtVaCreateManagedWidget("Go to line number",
+	goto_line_no_btn = XtVaCreateManagedWidget("Go to line",
 		xmPushButtonWidgetClass,	button_form,
 		XmNtraversalOn,			True,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_FORM,
-		XmNleftPosition,		9,
+		XmNleftPosition,		8,
 		NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -361,8 +374,11 @@ Bool add_search_tool(Widget text_w)
 	XtAddCallback(line_no_set_btn, XmNactivateCallback,
 		line_no_set_cb, (XtPointer)(&search_data));
 
-	XtAddCallback(search_btn, XmNactivateCallback,
-		search_cb, (XtPointer)(&search_data));
+	XtAddCallback(search_backwards_btn, XmNactivateCallback,
+		search_backwards_cb, (XtPointer)(&search_data));
+
+	XtAddCallback(search_forwards_btn, XmNactivateCallback,
+		search_forwards_cb, (XtPointer)(&search_data));
 
 	XtAddCallback(replace_btn, XmNactivateCallback,
 		replace_cb, (XtPointer)(&search_data));
@@ -417,23 +433,51 @@ Bool add_search_tool(Widget text_w)
 	return True;
 }
 
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * search callback.
+ * search forwards callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void search_cb(
+static void search_forwards_cb(
 	Widget				w,
 	SearchData			*cbdata,
 	XmPushButtonCallbackStruct	cbs)
+{
+	static void search_either();
+	search_either(w, cbdata, FORWARDS);
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * search backwards callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void search_backwards_cb(
+	Widget				w,
+	SearchData			*cbdata,
+	XmPushButtonCallbackStruct	cbs)
+{
+	static void search_either();
+	search_either(w, cbdata, BACKWARDS);
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Support for search callbacks.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void search_either(
+	Widget				w,
+	SearchData			*cbdata,
+	NAT				dir)
 {
 	long int left, len;
 	NAT start_point;
 	static long int search_string();
 	char *pattern, *text_buf;
+	XmTextPosition pl, pr;
 	pattern = XmTextGetString(search_data.search_w);
 	text_buf = XmTextGetString(search_data.text_w);
-	start_point = XmTextGetInsertionPosition(search_data.text_w);
-	search_string(pattern, text_buf, start_point, &left, &len);
+	if(XmTextGetSelectionPosition(search_data.text_w, &pl, &pr)) {
+		start_point = (dir == FORWARDS ? pr : pl);
+	} else {
+		start_point = XmTextGetInsertionPosition(search_data.text_w);
+	};
+	search_string(pattern, text_buf, start_point, &left, &len, dir);
 	if(left >= 0) {
 		XmTextSetSelection(
 			search_data.text_w,
@@ -691,24 +735,41 @@ static void search_string(
 	char		*text_buf,
 	NAT		start_point,
 	long int 	*offset,
-	long int 	*length)
+	long int 	*length,
+	NAT		direction)
 {
-	char *p;
+	int i;
 	*length = 0;
-	for(p = text_buf + start_point; *p; ++p) {
-		if(*length = substr(pattern, p)) {
-			break;
-		}
-	}
-	if(!(*length)) {
-		for(p = text_buf;
-			p < text_buf + start_point; ++p) {
-			if(*length = substr(pattern, p)) {
+	if(direction == FORWARDS) {
+		for(i = start_point; text_buf[i]; ++i) {
+			if(*length = substr(pattern, text_buf + i)) {
 				break;
 			}
 		}
-	};
-	*offset = (*length ? p - text_buf : -1);
+		if(!(*length)) {
+			for(i = 0;
+				i < start_point; ++i) {
+				if(*length = substr(pattern, text_buf + i)) {
+					break;
+				}
+			}
+		}
+	} else {
+		for(i = start_point - 1; i >= 0; --i) {
+			if(*length = substr(pattern, text_buf + i)) {
+				break;
+			}
+		}
+		if(!(*length)) {
+			for(i = strlen(text_buf) - 1;
+				i >= start_point; --i) {
+				if(*length = substr(pattern, text_buf + i)) {
+					break;
+				}
+			}
+		}
+	}
+	*offset = (*length ? i : -1);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
