@@ -75,11 +75,10 @@ Changes to match changes in issue 1.11 of \cite{DS/FMU/IED/DTD030},
 and various changes elsewhere in system.
 \item [Issue 1.11]
 Fixed bug concerning $undo\_buffer\_length$.
-
-\item[\FormatDate{$Date$%
-}, issue \SCCSversion~]
-	Function $format_term$ has new argument.
-
+\item[Issue 1.12]
+Function $format_term$ has new argument.
+\item[Issue 1.13]
+Reacting to issue 1.12 of \cite{DS/FMU/IED/DTD030}.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -101,6 +100,28 @@ certain coding techniques may cause problems.
 \section{THE SUBGOAL PACKAGE}
 =SML
 structure âSubgoalPackageá : SubgoalPackage = struct
+=TEX
+\subsection{Quietening the Package}
+=SML
+local
+	val subgoal_package_quiet : bool ref = ref false;
+	val side_effect = new_flag {
+		name="subgoal_package_quiet",
+		control=subgoal_package_quiet,
+		default=(fn () => false),
+		check= (fn x => true)};
+in
+	fun âqdiag_stringá  (s : string) : unit = (
+		if (!subgoal_package_quiet)
+		then ()
+		else diag_string s
+	);
+	fun âqdiag_lineá (s : string) : unit = (
+		if (!subgoal_package_quiet)
+		then ()
+		else diag_line s
+	);
+end;
 =TEX
 \subsection{Labels}
 A label of a goal within the subgoal package state is a list of integers,
@@ -413,7 +434,7 @@ fun âgs_equalá (GS{labelling = lg1, current_goal = cg1, goal_state_thm = gst1,..
 );
 =TEX
 
-Now the current state of the subgoal package:
+Now we initialise the current state of the subgoal package:
 =SML
 val current : PACKAGE_STATE ref = ref {main_goal_stack = [], 
 	undo_buffer = [],
@@ -513,17 +534,17 @@ let	val orig_line_length = get_line_length();
 		val pad = implode(padding to (pad_asms_by - size nstr));
 		val hstring = get_error_message 30053 [pad ^ nstr];
 	in
-		(diag_line (hstring ^ hd asml);
-		map (fn x => diag_line (tpadding ^ x)) (tl asml))
+		(qdiag_line (hstring ^ hd asml);
+		map (fn x => qdiag_line (tpadding ^ x)) (tl asml))
 	end);
 	val sideeffect = set_line_length(orig_line_length - str_length);
 
 	val form_conc = PrettyPrinter.format_term true conc;
 in
 	(map print_asm (rev nasms);
-	diag_line (ts ^(hd form_conc));
-	map(fn x =>  diag_line(tpadding ^ x)) (tl form_conc);
-	diag_line "";
+	qdiag_line (ts ^(hd form_conc));
+	map(fn x =>  qdiag_line(tpadding ^ x)) (tl form_conc);
+	qdiag_line "";
 	set_line_length orig_line_length;
 	())
 end);
@@ -533,7 +554,7 @@ We presume 3052 contains that ``?0'' precedes ``?1'' in message 3052,
 and we obey the detailed design in setting ``?0'' to ``\\n''..
 =SML
 fun âprint_goal_with_labelá (lab: LABEL) (gl : TERM) : unit = (
-	diag_line(get_error_message 30052 ["\n",string_of_label lab]);
+	qdiag_line(get_error_message 30052 ["\n",string_of_label lab]);
 	print_goal (mk_goal_from_term gl)
 );
 =TEX
@@ -581,7 +602,7 @@ let	val {main_goal_stack = main_goal_stack,...} = !current;
 in
 	(case current_goal of
 		Value v => print_labelled_goal v
-		| Nil => diag_line(get_error_message 30026 []))
+		| Nil => qdiag_line(get_error_message 30048 []))
 end);
 =TEX
 =SML
@@ -599,6 +620,40 @@ let	val {main_goal_stack = main_goal_stack, ...} = !current;
 in
 	aux labs
 end);
+=TEX
+\subsection{Maintaining the Type Context}
+=SML
+local
+	val subgoal_package_ti_context : bool ref = ref true;
+	val side_effect = new_flag {
+		name="subgoal_package_ti_context",
+		control=subgoal_package_ti_context,
+		default=(fn () => true),
+		check= (fn x => true)};
+in
+	fun âset_ti_context_to_goalá ((asms,conc):GOAL) : unit = (
+		if (!subgoal_package_ti_context)
+		then TypeInference.set_ti_context (conc :: asms)
+		else ()
+	);
+	fun âset_ti_context_to_labelá (lab : LABEL OPT) : unit = (
+		if (!subgoal_package_ti_context)
+		then (case lab of
+			Nil => TypeInference.set_ti_context []
+			| Value lb =>  (
+let	val {main_goal_stack = main_goal_stack, ...} = !current;
+	val GS{labelling = lg,...} = case main_goal_stack of
+		(a :: _) => a
+		| [] =>  fail "print_labelled_goal" 30010 [];
+	val (asms,conc) = mk_goal_from_term(lookup_in_labelled 
+		"set_ti_context_to_label" lb lg);
+in
+TypeInference.set_ti_context (conc :: asms)
+end
+			))
+		else ()
+	);
+end;
 =TEX
 \subsection{Starting a New Main Goal}
 Check whether two distinct free variables in a goal have
@@ -650,7 +705,8 @@ let	val {main_goal_stack = main_goal_stack, ...} = !current;
 in
 	(current := {main_goal_stack = (new_gs :: main_goal_stack), 
 		undo_buffer = [], redo = []};
-	diag_line(get_error_message 30001 [string_of_int len_stack, opts]);
+	set_ti_context_to_goal goal;
+	qdiag_line(get_error_message 30001 [string_of_int len_stack, opts]);
 	print_labelled_goal [];
 	())
 end);
@@ -685,12 +741,13 @@ let	val {main_goal_stack = main_goal_stack, ...} = !current;
 in
 	(current := {main_goal_stack = (new_gs :: main_goal_stack), 
 		undo_buffer = [], redo = []};
-	diag_line(get_error_message 30001 [string_of_int len_stack, opts]);
+	set_ti_context_to_label cg;
+	qdiag_line(get_error_message 30001 [string_of_int len_stack, opts]);
 	case hys of
-	[] => diag_line(get_error_message 30048 [])
-	| [_] => (diag_line(get_error_message 30047 []);
+	[] => qdiag_line(get_error_message 30048 [])
+	| [_] => (qdiag_line(get_error_message 30047 []);
 		print_labelled_goal [])
-	| _ => (diag_line(get_error_message 30047 []);
+	| _ => (qdiag_line(get_error_message 30047 []);
 		print_goals_labelled(map (fn x => [x]) (rev(interval 1 (length hys)))));
 	())
 end);
@@ -806,8 +863,8 @@ Declare the number of subgoals:
 	val lother_goals = length other_goals;
 
 	val sideeffect = if lother_goals = 1
-		then diag_line(get_error_message 30037 ["1",""])
-		else diag_line(get_error_message 30037 [string_of_int lother_goals,"s"]);
+		then qdiag_line(get_error_message 30037 ["1",""])
+		else qdiag_line(get_error_message 30037 [string_of_int lother_goals,"s"]);
 =TEX
 We only want to note duplicates of pre-existing subgoals,
 other than the goal being worked on: it is not a duplication
@@ -818,7 +875,7 @@ to recreate this goal as a new subgoal.
 Then announce the unnecessary subgoals:
 =SML
 	val sideeffect = map (fn x => 
-		(diag_line(get_error_message 30033 []);
+		(qdiag_line(get_error_message 30033 []);
 		print_goal(mk_goal_from_term x)))
 		unnecessary;
 =TEX
@@ -915,7 +972,7 @@ Calculate the new current goal:
 =TEX
 Now present the accumulated information messages:
 =SML
-	val sideeffect = map diag_line accm';
+	val sideeffect = map qdiag_line accm';
 =TEX
 and return the new current goal label, and the new labelling.
 =SML
@@ -964,16 +1021,17 @@ let	val {main_goal_stack = main_goal_stack,
 		goal_state_thm = new_gst,
 		mgst = mgst};
 	val side_effect = if gs_equal new_gs current_goal_state
-		then diag_line(get_error_message 30034 [])
+		then qdiag_line(get_error_message 30034 [])
 		else ();
 in
 	(current := {main_goal_stack = new_gs :: tl main_goal_stack,
 		undo_buffer = add_to_buffer current_goal_state undo_buffer,
 		redo = []};
+	set_ti_context_to_label new_cg;
 	if generated_sgs = []
 	then (case new_cg of
-		Nil => diag_line(get_error_message 30036 [])
-		| Value v => (diag_line(get_error_message 30035 []);
+		Nil => qdiag_line(get_error_message 30036 [])
+		| Value v => (qdiag_line(get_error_message 30035 []);
 			print_labelled_goal v))
 	else ();
 	())
@@ -1002,8 +1060,14 @@ let	val {main_goal_stack = main_goal_stack,...} = !current;
 in
 	(current := {main_goal_stack = new_mgs, 
 		undo_buffer = [],redo = []};
-	if mgst then diag_line(get_error_message 30024 []) else ();
-	diag_line(get_error_message 30001 [
+	(case lnew_mgs of 
+	0 => set_ti_context_to_label Nil
+	| _ => (let val GS{current_goal = cg,...} = hd new_mgs
+		in
+		set_ti_context_to_label cg
+		end));
+	if mgst then qdiag_line(get_error_message 30024 []) else ();
+	qdiag_line(get_error_message 30001 [
 		string_of_int lnew_mgs,
 		if lnew_mgs = 1 then "" else "s"]);
 	if lnew_mgs > 0 then opt_print_current_goal() else ();
@@ -1031,8 +1095,14 @@ let	val {main_goal_stack = main_goal_stack,...} = !current;
 	val lnew_mgs = length new_mgs;
 in
 	(current := {main_goal_stack = new_mgs, undo_buffer = [],redo = []};
-	if mgst then diag_line(get_error_message 30024 []) else ();
-	diag_line(get_error_message 30001 [
+	(case lnew_mgs of 
+	0 => set_ti_context_to_label Nil
+	| _ => (let val GS{current_goal = cg,...} = hd new_mgs
+		in
+		set_ti_context_to_label cg
+		end));
+	if mgst then qdiag_line(get_error_message 30024 []) else ();
+	qdiag_line(get_error_message 30001 [
 		string_of_int lnew_mgs,
 		if lnew_mgs = 1 then "" else "s"]);
 	if lnew_mgs > 0 then opt_print_current_goal() else ();
@@ -1053,7 +1123,7 @@ let	val {main_goal_stack = main_goal_stack,...} = !current;
 
 	val res = top_thm_rule goal_state_thm;
 in
-	(if mgst then diag_line(get_error_message 30024 []) else ();
+	(if mgst then qdiag_line(get_error_message 30024 []) else ();
 	res)
 end);
 =TEX
@@ -1065,8 +1135,8 @@ let	val {main_goal_stack = main_goal_stack,...} = !current;
 		(a :: _) => a
 		| [] =>  fail "top_goal_state_thm" 30010 []);
 in
-	(if mgst then diag_line(get_error_message 30024 []) else ();
-	if is_nil(hyps goal_state_thm) then diag_line(get_error_message 30038 []) else ();
+	(if mgst then qdiag_line(get_error_message 30024 []) else ();
+	if is_nil(hyps goal_state_thm) then qdiag_line(get_error_message 30038 []) else ();
 	goal_state_thm)
 end);
 =TEX
@@ -1119,7 +1189,13 @@ let	val {main_goal_stack = main_goal_stack,...} = !current;
 in
 	(current := {main_goal_stack = new_mgs, 
 		undo_buffer = [], redo = []};
-	diag_line(get_error_message 30001 [
+	(case lnew_mgs of 
+	0 => set_ti_context_to_label Nil
+	| _ => (let val GS{current_goal = cg,...} = hd new_mgs
+		in
+		set_ti_context_to_label cg
+		end));
+	qdiag_line(get_error_message 30001 [
 		string_of_int lnew_mgs,
 		if lnew_mgs = 1 then "" else "s"]);
 	if lnew_mgs > 0 then opt_print_current_goal() else ();
@@ -1152,9 +1228,10 @@ in
 	(current := {main_goal_stack = new_gs :: tl main_goal_stack,
 		undo_buffer = new_undo,
 		redo = new_redo};
+	set_ti_context_to_label new_cg;
 	(case new_cg of
-		Nil => diag_line(get_error_message 30048 [])
-		| Value v => (diag_line(get_error_message 30047 []);
+		Nil => qdiag_line(get_error_message 30048 [])
+		| Value v => (qdiag_line(get_error_message 30047 []);
 			print_labelled_goal v));
 	())
 end);
@@ -1179,9 +1256,10 @@ in
 	(current := {main_goal_stack = new_gs :: tl main_goal_stack,
 		undo_buffer = new_undo,
 		redo = new_redo};
+	set_ti_context_to_label new_cg;
 	(case new_cg of
-		Nil => diag_line(get_error_message 30048 [])
-		| Value v => (diag_line(get_error_message 30047 []);
+		Nil => qdiag_line(get_error_message 30048 [])
+		| Value v => (qdiag_line(get_error_message 30047 []);
 			print_labelled_goal v));
 	())
 end);
@@ -1201,7 +1279,8 @@ let	val nlabel = label_of_string label
 	val GS{labelling = labelling, 
 		current_goal = current_goal, 
 		goal_state_thm = goal_state_thm,mgst = mgst} = current_gs;
-	val sideeffect = lookup_in_labelled "set_labelled_goal" nlabel labelling;
+	val (asms,conc) = mk_goal_from_term(lookup_in_labelled 
+		"set_labelled_goal" nlabel labelling);
 	val new_gs = GS{labelling = labelling, 
 		current_goal = Value nlabel, 
 		goal_state_thm = goal_state_thm,mgst = mgst};
@@ -1211,7 +1290,8 @@ in
 	(current := {main_goal_stack = new_gs :: tl main_goal_stack,
 		undo_buffer = new_undo,
 		redo = new_redo};
-	(diag_line(get_error_message 30047 []);
+	set_ti_context_to_goal (asms,conc);
+	(qdiag_line(get_error_message 30047 []);
 	print_labelled_goal nlabel);
 	())
 end);
@@ -1245,12 +1325,13 @@ let	val {main_goal_stack = main_goal_stack,...} = !current;
 	val lnew_mgs = length new_mgs;
 in
 	(current := {main_goal_stack = new_mgs, undo_buffer = [], redo = []};
-	diag_line(get_error_message 30001 [
+	set_ti_context_to_label current_goal;
+	qdiag_line(get_error_message 30001 [
 		string_of_int lnew_mgs,
 		if lnew_mgs = 1 then "" else "s"]);
 	(case current_goal of
-		Nil => diag_line(get_error_message 30048 [])
-		| Value v => (diag_line(get_error_message 30047 []);
+		Nil => qdiag_line(get_error_message 30048 [])
+		| Value v => (qdiag_line(get_error_message 30047 []);
 			print_labelled_goal v));
 	())
 end);
@@ -1364,15 +1445,15 @@ end;
 fun âprint_goal_stateá (gs as GS{labelling = labelling,
 	current_goal = current_goal,
 	goal_state_thm = goal_state_thm,...}: GOAL_STATE) : unit = (
-	diag_line(get_error_message 30049 []);
+	qdiag_line(get_error_message 30049 []);
 	print_goal (mk_goal_from_term(concl goal_state_thm));
 	case current_goal of
-	Nil => diag_line(get_error_message 30048 [])
+	Nil => qdiag_line(get_error_message 30048 [])
 	| Value v => (
-		diag_line(get_error_message 30050 []);
+		qdiag_line(get_error_message 30050 []);
 		map (uncurry print_goal_with_label) (fst labelling);
-		diag_line "";
-		diag_line(get_error_message 30047 []);
+		qdiag_line "";
+		qdiag_line(get_error_message 30047 []);
 		print_goal_with_label v (lookup_in_labelled "print_goal_state" 
 			v labelling)
 	);
@@ -1455,18 +1536,18 @@ let	val ulabs' = (map (fn (ls,tm) =>
 		goal_state_thm = new_gst,
 		mgst = changed_main_goal orelse mgst};
 	val side_effect = if gs_equal new_gs current_goal_state
-		then diag_line(get_error_message 30034 [])
+		then qdiag_line(get_error_message 30034 [])
 		else ();
 in
 	(current := {main_goal_stack = new_gs :: tl main_goal_stack,
 		undo_buffer = add_to_buffer current_goal_state undo_buffer,
 		redo = []};
 	if changed_main_goal 
-	then diag_line(get_error_message 30024 [])
+	then qdiag_line(get_error_message 30024 [])
 	else ();
 	(case new_cg of
-		Nil => diag_line(get_error_message 30048 [])
-		| Value v => (diag_line(get_error_message 30047 []);
+		Nil => qdiag_line(get_error_message 30048 [])
+		| Value v => (qdiag_line(get_error_message 30047 []);
 			print_labelled_goal v));
 	())
 end);
