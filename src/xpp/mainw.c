@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.41 2002/12/11 00:15:01 rda Exp $
+ * $Id: mainw.c,v 2.42 2002/12/13 13:23:56 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -501,7 +501,7 @@ void show_file_info(void)
 	Boolean started = False;
 	strcpy(info, "");
 	if(file_info.new || file_info.changed || global_options.read_only) {
-		strcat(info, "(");
+		strcat(info, "{");
 		if(file_info.new) {
 			strcat(info, "New");
 			started = True;
@@ -515,7 +515,7 @@ void show_file_info(void)
 			strcat(info, started ? ", r" : "R");
 			strcat(info, "ead only");
 		}
-		strcat(info, ")");
+		strcat(info, "}");
 	}
 	s = XmStringCreateSimple(info);
 	XtVaSetValues(infolabel,
