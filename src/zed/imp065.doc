@@ -1,0 +1,290 @@
+=TEX
+% TQtemplate.tex
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation of the Z Theory Lister}  %% Mandatory field
+\TPPref{DS/FMU/IED/DTD065}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$ %
+}}
+\TPPstatus{Draft}
+%\TPPstatus{Approved}
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.B.~Jones & HAT Manager}
+\TPPabstract{
+This document contains the implementation of the 
+theory lister module for \ProductZ.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	Library}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issue \SCCSversion (\FormatDate{$Date$%
+})] First draft.
+\end{description}
+\subsection{Changes Forecast}
+As determined by comments received.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the implementation the theory lister module for
+\ProductZ.
+The detailed design for this material is given in \cite{DS/FMU/IED/DTD065}.
+
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+See \cite{DS/FMU/IED/DTD065}.
+\subsubsection{Dependencies}
+The implementation is dependent on \cite{DS/FMU/IED/IMP041}.
+\subsubsection{Possible Enhancements}
+See cite{DS/FMU/IED/DTD065}.
+\subsubsection{Deficiencies}
+See cite{DS/FMU/IED/DTD065}.
+\pagebreak
+\section{PROLOGUE}
+=SML
+structure ÛZListerÝ : ZLister = struct
+=TEX
+We need help from lots of places which aren't open at the top level:
+=SML
+open	ListerSupport
+	PrettyPrinter
+	ZUserInterfaceSupport
+	Sort;
+=TEX
+\section{THE Z THEORY LISTER}
+This section contains the meat of the implementation. All that
+has to be done is to set up appropriate parameters to configure
+the generic lister of \cite{DS/FMU/IED/DTD033} to do what is needed.
+
+The rest of this section comprises a subsection for each section of
+the theory listing which isn't implemented just by reusing the HOL theory
+lister. Each of these subsections defines a function called something
+like $do\_thing$ which can serve as the argument to one of the $LSAD\ldots$
+constructors of the data type $LISTER\_SECTION$ which is used to
+configure the generic lister. After these subsections comes subsection
+defining functions for formatting banners and section header, and then
+finally we bring all the pieces together to define the
+theory listing functions for Z.
+
+\subsection{Global Variables}
+=SML
+fun label_of (c : TERM) : string list = (
+	format_term1 (not (is_z_gvar c)) (get_line_length ()) c
+);
+=TEX
+Given a global variable, the following generates the entry for
+it in the global variable section of the listing. The fiddling around
+is concerned with generics. The aim is to print something like $À$
+as:
+=GFT Example
+(_ À _)[X]	ð X ¸ ð X ª ð X
+=TEX
+=SML
+fun do_gvar (c : TERM) : (string list * TERM) = (
+	let	val ty = type_of c;
+	in let	fun mk_actpar t = mk_var(implode(tl(explode(
+				dest_vartype (dest_z_power_t t)))), t);
+		val (party, resty) = dest_­_type (type_of c);
+		val actpars = map mk_actpar (dest_z_tuple_t party);
+		val actpar = mk_z_tuple actpars;
+		val subs = combine actpars (map (mk_u o type_of) actpars);
+		val inst = mk_app(c, actpar);
+	in	(label_of inst, subst subs (z_term_of_type resty))
+	end	handle Fail _ => (label_of c, z_term_of_type ty)
+	end
+);
+fun Ûdo_gvarsÝ (thyn : string) : (string list * TERM) list= (
+	map do_gvar (get_consts thyn)
+);
+=TEX
+\subsection{Axioms}
+Axioms (and definitions) are fairly straightforward given the support
+for turning them into Z provided by \cite{DS/FMU/IED/DTD041}.
+=SML
+val Ûz_thm_ruleÝ : THM -> THM = conv_rule (TRY_C z_para_pred_conv);
+=TEX
+=SML
+fun Ûdo_axiomsÝ (thyn : string) : (string list * THM) list= (
+	map (Combinators.I ** z_thm_rule) (rev(get_axioms thyn))
+);
+=TEX
+\subsection{Definitions}
+=SML
+fun Ûdo_defnsÝ (thyn : string) : (string list * THM) list= (
+	map (Combinators.I ** z_thm_rule) (rev(get_defns thyn))
+);
+=TEX
+\subsection{Fixity}
+Given the formatting and theory access functions for fixity information
+of \cite{DS/FMU/IED/DTD079}, the only difficult bit here is
+grouping the fixity information into batches.
+=SML
+fun do_fixity (thyn : string) : (string list * string list) list = (
+	let	val infos = map (Combinators.I ** format_template)
+				(get_zfixity_infos thyn);
+		fun myorder (ZClFun i1, s1) (ZClFun i2, s2) = ( 
+			case i1 - i2 of
+				0 => string_order s1 s2
+			|	x => x
+		) | myorder  _ (ZClFun _, _) = 1
+		|   myorder (ZClGen i1, s1) (ZClGen i2, s2) = ( 
+			case i1 - i2 of
+				0 => string_order s1 s2
+			|	x => x
+		) | myorder  (ZClFun _, _) (ZClGen _, _) = ~1
+		|   myorder  _ (ZClGen _, _) = 1
+		|   myorder (ZClRel, s1) (ZClRel, s2) = ( 
+			string_order s1 s2
+		) | myorder  (ZClFun _, _) (ZClRel, _) = ~1
+		|   myorder  (ZClGen _, _) (ZClRel, _) = ~1;
+		val sitems = sort myorder infos;
+		fun strip1 ( (i1, s1) :: (i2, s2) :: more ) = (
+			if i1 = i2
+			then	let val (this, rest) = strip1 ((i2, s2):: more);
+				in	((i1, s1) :: this, rest)
+				end
+			else	([(i1, s1)], (i2, s2) :: more)
+		) | strip1 ( (i1, s1) :: [] ) = ([(i1, s1)], [])
+		|   strip1 [] = ([], []);
+		fun label (ZClFun i) = "fun " ^ string_of_int i
+		|   label (ZClGen i) = "gen " ^ string_of_int i
+		|   label ZClRel = "rel";
+		fun go (iss as (cl, _) :: _) = (
+			let 	val (this, rest) = strip1 iss;
+				val lab = label cl;
+			in	([lab], (map snd this)) :: go rest
+			end
+		) | go [] = [];
+	in	go sitems
+	end
+);
+=TEX
+\subsection{Banners}
+=SML
+fun print_banner (thyn : string) = (
+	get_error_message 65001 [if thyn = "-" then get_current_theory_name() else thyn]
+);
+=TEX
+=SML
+fun output_banner (thyn : string) = (
+	get_error_message 65002 [if thyn = "-" then get_current_theory_name() else thyn]
+);
+=TEX
+\subsection{Section Headers}
+=SML
+fun Ûglob_hdrÝ (thyn : string) = (
+	if	is_nil (get_consts thyn)
+	then	""
+	else	get_error_message 65003 []
+);
+=TEX
+=SML
+fun Ûaxiom_hdrÝ (thyn : string) = (
+	if	is_nil (get_axioms thyn)
+	then	""
+	else	get_error_message 33010 []
+);
+=TEX
+=SML
+fun Ûdefn_hdrÝ (thyn : string) = (
+	if	is_nil (get_defns thyn)
+	then	""
+	else	get_error_message 33011 []
+);
+=TEX
+=SML
+fun Ûfixity_hdrÝ (thyn : string) = (
+	if	is_nil (get_zfixity_infos thyn)
+	then	""
+	else	get_error_message 33008 []
+);
+=TEX
+\subsection{Configuring the Generic Lister}
+=SML
+val Ûz_listing_sectionsÝ = [
+	LSBanner,
+	LSParents,
+	LSChildren,
+	LSADSection glob_hdr,
+	LSADTerms do_gvars,
+	LSADSection fixity_hdr,
+	LSADTables do_fixity,
+	LSADSection axiom_hdr,
+	LSADThms do_axioms,
+	LSADSection defn_hdr,
+	LSADThms do_defns,
+	LSThms,
+	LSTrailer
+];
+=TEX
+=SML
+local
+val {print=pt, out=ot, out1=ot1} = gen_theory_lister z_listing_sections;
+in
+	fun z_print_theory (thy : string) : unit = (
+		(pt print_banner thy) handle ex => reraise ex "z_print_theory"
+	);
+	fun z_output_theory (par : {out_file:string, theory:string}) : unit = (
+		(ot output_banner par) handle ex => reraise ex "z_output_theory"
+	);
+	fun z_output_theory1 (par : {out_file:string, theory:string}) : unit = (
+		(ot1 print_banner par) handle ex => reraise ex "z_output_theory1"
+	)
+end;
+=TEX
+\section{EPILOGUE}
+=SML
+end (* of structure ZLister *);
+open ZLister;
+=TEX
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+
+\end{document}
+
+
