@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.26 2004/01/25 10:16:34 rda Exp rda $
+# $Id: configure.sh,v 1.27 2004/01/25 15:43:42 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -37,6 +37,12 @@
 #
 # PPPOLYDBASE      - name of file containing the initial Poly/ML database
 #                   (default: /usr/lib/poly/ML_dbase)
+#
+# PPCACHESIZE      - when ProofPower-Z is built, the HOL types
+#                    needed for Z schema types with up to
+#                    $PPCACHESIZE components are predefined.
+#                    (default: 50)
+#
 #
 # If any of these is an empty string, it is treated as if it were unset.
 #
@@ -215,6 +221,14 @@ then	if	which dvips >/dev/null 2>&1
 	fi
 fi
 #
+# Find the cachesize
+PPCACHESIZE=${PPCACHESIZE:-50}
+if	[ `expr  \( "$PPCACHESIZE" : '.*' \) = \
+		\( "$PPCACHESIZE" : '[0-9]*' \)` = 0 ]
+then
+	give_up "PPCACHESIZE must be a number"
+fi
+#
 # Build the script
 #
 TAB=
@@ -239,6 +253,7 @@ out "# Edit it at your own risk!"
 export_it PPCOMPILER
 export_it PPMOTIFLINKING
 export_it PPTARGETDIR
+export_it PPCACHESIZE
 out 'PPHOME=$PPTARGETDIR'
 out "export PPHOME"
 out 'PPDATABASEPATH=.:$PPTARGETDIR/db'
