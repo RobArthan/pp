@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.32 2003/06/16 16:11:07 rda Exp rda $
+ * $Id: pterm.c,v 2.33 2003/06/16 16:21:20 rda Exp robarthan $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -347,7 +347,7 @@ typedef struct  {
  * Some of these are guaranteed  to be defined by ANSI C, but by no means all,
  * so we defend ourselves against them not being defined (but not against against an
  * implementation which uses an enum to define them, which would be very unusual).
- * We attempt to handle or ignore all catchable signals that are default to terminating the process.
+ * We attempt to handle or ignore all catchable signals that default to terminating the process.
  *
  * SIGHUP has to be ignored because if this xpp is running detached (i.e., it has
  * been started from the New Command Session menu item in another instance
@@ -356,96 +356,98 @@ typedef struct  {
  */
 static sig_info	sig_infos []  = {
 #ifdef SIGABRT
-	{"abort",			SIGABRT,		H_FATAL},
+	{"abort",			SIGABRT,		H_FATAL, },
 #endif
 #ifdef SIGALRM
-	{"alarm clock",		SIGALRM,	H_FATAL},
+	{"alarm clock",		SIGALRM,	H_FATAL, },
 #endif
 #ifdef SIGBUS
-	{"bus error",		SIGBUS,		H_FATAL},
+	{"bus error",		SIGBUS,		H_FATAL, },
 #endif
 #ifdef SIGCHLD
-	{"child stopped or exited",	SIGCHLD,	H_DEFAULT},
+	{"child stopped or exited",	SIGCHLD,	H_DEFAULT, },
 #endif
 #ifdef SIGCONT
-	{"continue",		SIGCONT,	H_DEFAULT},
+	{"continue",		SIGCONT,	H_DEFAULT, },
 #endif
 #ifdef SIGFPE
-	{"floating point exception",	SIGFPE,		H_FATAL},
+	{"floating point exception",	SIGFPE,		H_FATAL, },
 #endif
 #ifdef SIGHUP
-	{"hangup",		SIGHUP,		H_IGNORE},
+	{"hangup",		SIGHUP,		H_IGNORE, },
 #endif
 #ifdef SIGILL
-	{"illegal instruction",		SIGILL,		H_FATAL},
+	{"illegal instruction",		SIGILL,		H_FATAL, },
 #endif
-/* SIGINT done at end because they all have it: */
 #ifdef SIGINT
-	{"interrupt",		SIGINT,		H_ASK},
+	{"interrupt",		SIGINT,		H_ASK, },
 #endif
 /* SIGKILL cannot be caught or ignored */
 #ifdef SIGPIPE
-	{"broken pipe",		SIGPIPE,		H_FATAL},
+	{"broken pipe",		SIGPIPE,		H_FATAL, },
 #endif
 #ifdef SIGQUIT
-	{"quit",			SIGQUIT,		H_FATAL},
+	{"quit",			SIGQUIT,		H_FATAL, },
 #endif
 #ifdef SIGSEGV
-	{"memory fault",		SIGSEGV,	H_FATAL},
+	{"memory fault",		SIGSEGV,	H_FATAL, },
 #endif
 /* SIGSTOP cannot be caught or ignored */
 #ifdef SIGTERM
-	{"terminated",		SIGTERM,	H_FATAL},
+	{"terminated",		SIGTERM,	H_FATAL, },
 #endif
 #ifdef SIGTSTP
-	{"stopped",		SIGTSTP,		H_DEFAULT},
+	{"stopped",		SIGTSTP,		H_DEFAULT, },
 #endif
 #ifdef SIGTTIN
-	{"stopped (tty input)",	SIGTTIN,		H_DEFAULT},
+	{"stopped (tty input)",	SIGTTIN,		H_DEFAULT, },
 #endif
 #ifdef SIGTTOU
-	{"stopped (tty output)",	SIGTTOU,		H_DEFAULT},
+	{"stopped (tty output)",	SIGTTOU,		H_DEFAULT, },
 #endif
 #ifdef SIGUSR1
-	{"user-defined signal 1",	SIGUSR1,	H_FATAL},
+	{"user-defined signal 1",	SIGUSR1,	H_FATAL, },
 #endif
 #ifdef SIGUSR2
-	{"user-defined signal 2",	SIGUSR2,	H_FATAL},
+	{"user-defined signal 2",	SIGUSR2,	H_FATAL, },
 #endif
 #ifdef SIGPOLL
-	{"pollable event",		SIGPOLL,	H_FATAL},
+	{"pollable event",		SIGPOLL,	H_FATAL, },
 #endif
 #ifdef SIGPROF
-	{"profiling time expired",	SIGPROF,	H_FATAL},
+	{"profiling time expired",	SIGPROF,	H_FATAL, },
 #endif
 #ifdef SIGSYS
-	{"bad system call",		SIGSYS,		H_FATAL},
+	{"bad system call",		SIGSYS,		H_FATAL, },
 #endif
 #ifdef SIGTRAP
-	{"trace trap",		SIGTRAP,		H_FATAL},
+	{"trace trap",		SIGTRAP,		H_FATAL, },
 #endif
 #ifdef SIGURG
-	{"urgent i/o condition",	SIGURG,		H_DEFAULT},
+	{"urgent i/o condition",	SIGURG,		H_DEFAULT, },
 #endif
 #ifdef SIGVTALRM
-	{"virtual timer expired",	SIGVTALRM,	H_FATAL},
+	{"virtual timer expired",	SIGVTALRM,	H_FATAL, },
 #endif
 #ifdef SIGXCPU
-	{"CPU time limit exceeded",	SIGXCPU,	H_FATAL},
+	{"CPU time limit exceeded",	SIGXCPU,	H_FATAL, },
 #endif
 #ifdef SIGXFSZ
-	{"file size limit exceeded",	SIGXFSZ,	H_FATAL},
+	{"file size limit exceeded",	SIGXFSZ,	H_FATAL, },
+#endif
+/* Non-SUS V3 signals: */
+#ifdef SIGWINCH
+	{"window size change",	SIGWINCH,	H_DEFAULT, },
 #endif
 #ifdef SIGSTKFLT
-	{"stack fault",		SIGSTKFLT,	H_FATAL},
+	{"stack fault",		SIGSTKFLT,	H_FATAL, },
 #endif
 #ifdef SIGEMT
-	{"emulation trap",	SIGXFSZ,	H_FATAL},
+	{"emulation trap",	SIGXFSZ,	H_FATAL, },
 #endif
 #ifdef SIGLOST
-	{"resource lost",	SIGXFSZ,	H_FATAL},
+	{"resource lost",	SIGXFSZ,	H_FATAL, },
 #endif
-	0
 };
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Pseudo-terminal initialisation:
