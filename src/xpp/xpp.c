@@ -146,7 +146,7 @@ void main(argc, argv)
 int argc;
 char **argv;
 {
-	debug = TRUE;
+	debug = MESSAGE | TRACING;
 
 	root = XtVaAppInitialize(&app,
 		"Xpp",
