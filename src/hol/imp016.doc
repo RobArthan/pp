@@ -1,4 +1,4 @@
-% imp016.doc   %Z% $Date: 2001/07/17 21:39:14 $ $Revision: 2.17 $ $RCSfile: imp016.doc,v $
+% imp016.doc   %Z% $Date: 2001/07/18 16:17:56 $ $Revision: 2.18 $ $RCSfile: imp016.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation of Type Inference}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP016}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.17 $%
+\def\SCCSversion{$Revision: 2.18 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2001/07/17 21:39:14 $%
+\TPPdate{\FormatDate{$Date: 2001/07/18 16:17:56 $%
 }}  %% Mandatory field (with sensible default)
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -109,6 +109,8 @@ type inference.
 \item[Issues 2.16 \FormatDate{01/0713} ] Performance experiments.
 
 \item[Issues 2.17,2.18 \FormatDate{01/07/13} ] Unification now uses dynamic arrays. 
+
+\item[Issues 2.19] Now supports intended meaning of {\it undeclare\_alias}. 
 
 \end{description}
 \subsection{Changes Forecast}
@@ -211,8 +213,8 @@ val Ûtmp_subsÝ = new_subs array_size;
 =SML
 fun Ûtype_of_constÝ (s : string) : TYPE OPT = (
 	case get_const_info s of
-		Value (t, _) => Value t
-		|Nil => Nil
+		Value (t, _::_) => Value t
+	|	_ => Nil
 );
 =TEX
 
@@ -360,10 +362,10 @@ fun Ûinit_envÝ (tm : 'a TM) : ENV = (
 		case get_const_info s of
 			Value (t, [idty]) => (
 				(replaced t, false)
-			)| Value (t, _) => (
+			)| Value (t, _::_) => (
 				contains_overloaded_aliases := true;
 				(replaced t, false)
-			)| Nil => (
+			)| _ => (
 				(type_to_extype (lassoc3
 				  (!ti_context_info) s), true)
 				handle (Fail msg) =>
@@ -383,10 +385,10 @@ fun Ûgrow_envÝ (env : ENV) (tm : 'a TM) : ENV = (
 		case get_const_info s of
 			Value (t, [idty]) => (
 				(replaced t, false)
-			)| Value (t, _) => (
+			)| Value (t, _::_) => (
 				contains_overloaded_aliases := true;
 				(replaced t, false)
-			)| Nil => (
+			)| _ => (
 				if s mem freevars
 				then
 					(ExVartype(Unknown(lassoc3 freemap s)), false)
@@ -1157,14 +1159,12 @@ in
 end);
 =TEX
 Note that the only binder left is Ì when we get to resolve overloading so
-only the $Id: imp016.doc,v 2.17 2001/07/17 21:39:14 rda Exp rda $ case is interesting below (see how $ti$ handles binders above).
+only the $Id: imp016.doc,v 2.18 2001/07/18 16:17:56 rda Exp rda $ case is interesting below (see how $ti$ handles binders above).
 =SML
 fun Ûresolve_overloadingÝ (term : EXTYPE TM) : EXTYPE TM = (
 let	fun Ûres_ovlÝ (term as (TmTyped (Id s, ty))) = (
 		case get_const_info s of
-		Nil => TmTyped (Id s, ty)
-		|Value (_, [_]) => TmTyped (Id s, ty)
-		|Value (_, idtyl) => (
+			Value (_, idtyl as (_::_)) => (
 			let	val idtyl' = map (fn (id, ty) => (id, replaced ty)) idtyl;
 			in
 				case match_unique ty idtyl' of
@@ -1178,21 +1178,22 @@ let	fun Ûres_ovlÝ (term as (TmTyped (Id s, ty))) = (
 						TmTyped (Id s', sub_type ti_subs ty')
 					end)
 				|idtyl'' => handle_res_ovl2 term idtyl''
-			end)
+			end
+		) |	_ => TmTyped (Id s, ty)
 	) | res_ovl (Binder (s, a, b)) = Binder (s, res_ovl a, res_ovl b)
 	  | res_ovl (Let (tl, a)) = (
 		let	val (lx, ly) = split tl;
 			val tl' = combine (map res_ovl lx) (map res_ovl ly);
 		in
 			Let (tl', res_ovl a)
-		end)
-	  | res_ovl (Cond (c, a, b)) = Cond (res_ovl c, res_ovl a, res_ovl b)
+		end
+	) | res_ovl (Cond (c, a, b)) = Cond (res_ovl c, res_ovl a, res_ovl b)
 	  | res_ovl (App (f, a, fix)) = (
 		let	val a' = res_ovl a;
 		in
 			 App (res_ovl f, a', fix)
-		end)
-	  | res_ovl (TmTyped (a,ty)) = TmTyped (res_ovl a, ty)
+		end
+	) | res_ovl (TmTyped (a,ty)) = TmTyped (res_ovl a, ty)
 	  | res_ovl (TmAq tm) = TmAq tm
 	  | res_ovl (SetDisplay tl) = SetDisplay (map res_ovl tl)
 	  | res_ovl (SetComprehension (a,b)) = SetComprehension (res_ovl a, res_ovl b)
@@ -1200,7 +1201,7 @@ let	fun Ûres_ovlÝ (term as (TmTyped (Id s, ty))) = (
 	  | res_ovl (Id s) = error "res_ovl" 16101 [fn() => "Invalid Id Construct"]
 	  | res_ovl (CharLit c) = CharLit c
 	  | res_ovl (StringLit s) = StringLit s
-	  | res_ovl (NumLit i) = NumLit i
+	  | res_ovl (NumLit i) = NumLit i;
 in
 	if (!contains_overloaded_aliases)
 	then
