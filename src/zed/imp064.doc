@@ -453,22 +453,16 @@ datatype ÛZ_PIECEÝ
 	;
 =TEX
 
+\subsection{Creation of the Pieces to Print}
+
 =SML
 fun Ûformat_fancy_fixÝ
+	(class:CLASS)
 	(tmpl : TEMPLATE)
-=IGN
-	(decor : DECOR)
-=SML
 	(args : TERM list)
 	: Z_PIECE list OPT = (
 let
-=IGN
-	val ids =	case rev(tmpl_ids tmpl ZClRel)
-			of nil => nil
-			| (i, f)::t => (i ^decor, f)::t
-	;
-=SML
-	val ids = rev(tmpl_ids tmpl ZClRel);
+	val ids = rev(tmpl_ids tmpl class);
 
 	val rids = rev ids;
 
@@ -495,49 +489,36 @@ handle Fail _ => Nil
 );
 =TEX
 
+\subsection{Identifying the Template}
+
 In determining whether a Z~identifier has some fancy fix form we make
 several consistency checks, these aim to ensure that the text printed
 is compatible with the various symbol table information and so the
 parser can read back the text to generate the same term.
 
 =SML
-fun Ûget_fancy_fixÝ(name:string, ty:TYPE, hd_term:TERM, arg_tm:TERM) : Z_PIECE list OPT = (
+fun Ûget_template_infoÝ(name:string) : (TEMPLATE * CLASS * STUBS) OPT = (
 let
-	val tmpl:TEMPLATE = template_of_string name;
-	val fst_tmpl_name:string = first_tmpl_id tmpl;
+	val tmpl = template_of_string name;
+	val fst_tmpl_name = first_tmpl_id tmpl;
 in
 	if name = fst_tmpl_name
 	then
 		Nil
 	else
 		case get_zfixity_info fst_tmpl_name
-		of Value(_, [tmpl2]) =>
+		of Value((_, class), [tmpl2]) =>
 			if tmpl = tmpl2
 			then
-				let
-					val stubs:STUB list = tmpl_stubs tmpl;
-					val num_stubs:int = length stubs;
-				in
-					if num_stubs = 1
-					then
-						(format_fancy_fix tmpl [arg_tm]) : Z_PIECE list OPT
-					else
-						(let
-							val args = dest_z_tuple arg_tm (* may fail *);
-						in
-							if length args = num_stubs
-							then
-								(format_fancy_fix tmpl args) : Z_PIECE list OPT
-							else
-								Nil : Z_PIECE list OPT
-						end handle Fail _ => Nil) : Z_PIECE list OPT
-				end
+				Value(templ, class, tmpl_stubs templ)
 			else
 				Nil
 		| _ => Nil
 end
 );
 =TEX
+
+\subsection{Printing the Pieces}
 
 =SML
 local
@@ -585,16 +566,59 @@ end
 =TEX
 
 =SML
-fun Ûdo_Z_appÝ (cur_env:PP_ENV) (hd_term:TERM, arg_tm:TERM) : PFUN_ANS = (
+fun Ûprint_piecesÝ (cur_env:PP_ENV) (pieces:Z_PIECE list) : PFUN_ANS = (
 let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring,
 		pe_beginb=beginb, pe_space=space, pe_endb=endb, ...} = cur_env;
+
+	val tm_prec:PREC_CONTEXT = analyse_prec pieces;
+	val pieces1:Z_PIECE list = set_end_precs tm_prec pieces;
+in
+	bracket(cur_env, tm_prec, false,
+		fn e => (map(	fn zp_term(t, p) => main_term_pp (set_prec p e) t
+				| zp_string(s, _) => addstring s)
+				pieces1
+			; ()
+			)
+	)
+end
+);
+=TEX
+
+\subsection{Dealing with Functional Applications}
+
+=SML
+fun Ûget_fancy_fixÝ(name:string, (* ty:TYPE, hd_term:TERM, *) arg_tm:TERM) : Z_PIECE list OPT = (
+	case get_template_info name
+	of Nil => Nil
+	| Value(templ, class, stubs) => (
+		if length stubs = 1
+		then
+			format_fancy_fix class tmpl [arg_tm]
+		else
+			let
+				val args = dest_z_tuple arg_tm (* may fail *);
+			in
+				if length args = length stubs
+				then
+					format_fancy_fix class tmpl args
+				else
+					Nil
+			end handle Fail _ => Nil
+	)
+);
+=TEX
+
+=SML
+fun Ûdo_Z_appÝ (cur_env:PP_ENV) (hd_term:TERM, arg_tm:TERM) : PFUN_ANS = (
+let
+	val PpEnv{pe_space=space, ...} = cur_env;
 in
 	case
 		case
 			case dest_simple_term hd_term
-			of Const(name, ty) => get_fancy_fix(name, ty, hd_term, arg_tm)
-			| Var(name, ty) => get_fancy_fix(name, ty, hd_term, arg_tm)
+			of Const(name, ty) => get_fancy_fix(name, (* ty, hd_term, *) arg_tm)
+			| Var(name, ty) => get_fancy_fix(name, (* ty, hd_term, *) arg_tm)
 			| _  => Nil
 		of Value nil => Nil
 		| x => x
@@ -605,21 +629,50 @@ in
 				main_term_pp (set_prec pc_expr2_rhs e) arg_tm
 			)
 		)
-	| Value pieces => (
-		let
-			val tm_prec:PREC_CONTEXT = analyse_prec pieces;
-			val pieces1:Z_PIECE list = set_end_precs tm_prec pieces;
-		in
-			bracket(cur_env, tm_prec, false,
-				fn e => (map(	fn zp_term(t, p) => main_term_pp (set_prec p e) t
-						| zp_string(s, _) => addstring s)
-						pieces1
-					; ()
-					)
-			)
-		end
-	)
+	| Value pieces => print_pieces cur_env pieces
 end
+);
+=TEX
+
+\subsection{Dealing with Generics}
+
+=SML
+fun Ûdo_genericÝ (cur_env:PP_ENV) (name:string, _:TYPE, tms:TERM list) : PFUN_ANS = (
+	case 
+		case get_template_info name
+		of Nil => Nil
+		| Value(templ, class, stubs) => (
+			if length tms = length stubs
+			then
+				format_fancy_fix class tmpl tms
+			else
+				Nil
+		)
+	of Value pieces => print_pieces cur_env pieces
+	| Nil => bracket(cur_env, pc_expr3_gvar, false,
+		fn e => (
+			addstring name;
+			do_wrapped_list("[", ",", "]", tms) e
+		)
+);
+=TEX
+
+\subsection{Dealing with Relations}
+
+=SML
+fun Ûdo_relationÝ (cur_env:PP_ENV, name:string, tms as (l:TERM, r:TERM)) : PFUN_ANS = (
+	case
+		case get_template_info name
+		of Nil => Nil
+		| Value(templ, class, stubs) => (
+			if length stubs = 2 (* l + r ==> 2 *)
+			then
+				format_fancy_fix class tmpl args
+			else
+				Nil
+		)
+	of Value pieces => print_pieces cur_env pieces
+	| Nil => bracket(cur_env, pc_pred2_, false, do_infix(name, tms))
 );
 =TEX
 
@@ -695,7 +748,7 @@ of Zdec(tms, dec_ty) => (
 
 =SML
 | Zeq tms => bracket(cur_env, pc_pred2_eq, false, do_infix("=", tms))
-| Z tms => bracket(cur_env, pc_pred2_, false, do_infix("", tms))
+| Z tms => do_relation(cur_env, "", tms)
 | Ztrue => (addstring "true"; PfOk)
 | Zfalse => (addstring "false"; PfOk)
 | Z³ tm => bracket(cur_env, pc_pred2_³, false, do_prefix("³", tm))
@@ -743,12 +796,7 @@ Global variables, $Zgvar$, have their generic parameters in the list
 	addstring name;
 	PfOk
 )
-| Zgvar(name, var_ty, tms) => bracket(cur_env, pc_expr3_gvar, false,
-	fn e => (
-		addstring name;
-		do_wrapped_list("[", ",", "]", tms) e
-	)
-)
+| Zgvar name_args => do_generic cur_env name_args
 =TEX
 
 =SML
