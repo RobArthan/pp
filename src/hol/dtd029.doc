@@ -122,9 +122,10 @@ infix 4 THEN1;
 =DOC
 signature ÛTactics3Ý = sig
 =DESCRIBE
-This provides the grouping of tactics for ICL HOL.
+This provides a third group of tactics.
 They are primarily concerned with adding handling for paired abstractions.
 =ENDDOC
+\section{TACTICS}
 \subsection{Concerning Tautologies}
 The following are all implemented using $simple\_taut\_tac$.
 =DOC
@@ -209,7 +210,6 @@ $simple\_taut\_tac$.
 =FAILURE
 27037	?0 is not tautologically true
 =ENDDOC
-Should this be $taut\_¤\_conv$?
 \subsection{Concerning ³}
 =DOC
 val Û³_in_tacÝ : TACTIC;
@@ -280,6 +280,188 @@ $simple\_µ\_tac$
 =FAILURE
 29001	Goal is not of the form: { ‡ } µ vs · t[vs]
 =ENDDOC
+\subsection{Concerning ´ and ¤}
+=DOC
+val Û´_thm_tacÝ : THM -> TACTIC;
+=DESCRIBE
+This is a tactic which uses a theorem whose conclusion is a possibly
+universally quantified implication, say
+=INLINEFT
+t1 ´ t2
+=TEX
+, to reduce a goal
+whose conclusion is an instance of $t2$ to the corresponding instance
+of $t1$.
+=FRULE 2 Tactic
+´_tac 
+‡1 ô t1 ´ t2
+÷
+{ ‡ } t2'
+÷
+{ ‡ } t1'
+=TEX
+where $t2'$ is an instance (under type instantiation and substitution)
+of $t2$ and $t1'$ is the corresponding instance of $t1$.
+
+N.B. this tactic strengthens the goal, i.e. it may result in unprovable
+subgoals even when the original goal was provable.
+=SEEALSO
+$back\_chain\_tac$ (which supplies a more general facility).
+=FAILURE
+29011	Goal is not an instance of: ?0
+29012	Theorem ?0 is not an implication or a universally quantified implication
+=ENDDOC
+
+=DOC
+val Ûback_chain_tacÝ : THM list -> TACTIC;
+=DESCRIBE
+This is a tactic which uses theorems whose conclusions are possibly
+universally quantified implications or bi-implications, to reason
+backwards from the conclusion of a goal. The tactic
+repeatedly performs the following steps:
+
+\begin{enumerate}
+\item
+Scan the list of theorems looking for an implication,
+=INLINEFT
+t1 ´ t2
+=TEX
+, or a bi-implication
+=INLINEFT
+t1 ¤ t2
+=TEX
+\ for which the conclusion of the goal is a substitution instance, $t2'$
+say, of $t2$. If no such theorem is found then stop.
+\item
+If in step 1, an applicable theorem, say $thm$, has been found reduce the goal to
+the corresponding instance of $t1$
+\item
+Repeatedly apply
+=INLINEFT
+µ_tac
+=TEX
+\ or
+=INLINEFT
+±_tac
+=TEX
+\ until neither of these is applicable.
+\item
+Delete $thm$ from the list of theorems and return to step 1.
+\end{enumerate}
+
+In step 4, only the first appearance of $thm$ is removed from the list,
+so that one can arrange for a theorem to be used more than once by the
+tactic by putting several copies of it in the list. 
+
+For example:  
+=FRULE 2 Example
+´_tac 
+[‡1 ô t1 ± (µx·t2) ´ t3,
+‡2 ô t4 ¤ t1,
+‡3 ô t5 ´ t2,
+÷
+{ ‡ } t3'
+÷
+{ ‡ } t4'; { ‡ } t5'
+=TEX
+
+(Here $t3'$ is some substitution instance of $t3$ and $t4'$ and $t5'$ are the
+corresponding instances of $t4$ and $t5$.)
+
+N.B. this tactic strengthens the goal, i.e. it may result in unprovable
+subgoals even when the original goal was provable.
+=SEEALSO
+$´\_thm\_tac$ (which is used to perform step 2).
+=FAILURE
+29012	Theorem ?0 is not a (possibly universally quantified) implication or
+	bi-implication
+=ENDDOC
+
+=DOC
+val Ûforward_chain_tacÝ : THM list -> TACTIC;
+val Ûasm_forward_chain_tacÝ : THM list -> TACTIC;
+val ÛFORWARD_CHAIN_TÝ : (THM list -> TACTIC) -> THM list -> TACTIC;
+val ÛASM_FORWARD_CHAIN_TÝ : (THM list -> TACTIC) -> THM list -> TACTIC;
+=DESCRIBE
+These are tactics and tacticals which use theorems whose conclusions are
+implications, or from which an implication can be derived using
+transformations described below, to reason
+forwards from the assumptions of a goal. 
+
+The basic step is to take a theorem of the form
+=INLINEFT
+‡ ô t1 ´ t2
+=TEX
+\ and an assumption of the form
+=INLINEFT
+t1'
+=TEX
+\ where $t1'$ is a substitution instance of $t1$ and to deduce the
+corresponding instance of $t2'$. The new theorem,
+=INLINEFT
+„ ô t2'
+=TEX
+\ say, is then either stripped into the assumptions (in the case of the
+tactics) or passed as a member of an argument
+to a tactic generating function (in the case of the tacticals).
+
+In the case of
+=INLINEFT
+forward_chain_tac
+=TEX
+\ and
+=INLINEFT
+FORWARD_CHAIN_T
+=TEX
+\ the implicative theorem is always a member of the list
+of theorems given as an argument.
+In the case of
+=INLINEFT
+asm_forward_chain_tac
+=TEX
+\ and
+=INLINEFT
+ASM_FORWARD_CHAIN_T
+=TEX
+\ implications in the assumptions are also used.
+In all cases each combination of an implicative theorem and an assumption
+is tried in turn.
+
+In order to give some control over the number of results generated,
+variables which appear free in a theorem are not considered as candidates
+for instantiation.
+
+A transformation is applied to the theorems in order to generate
+implications. The transformation
+is shown schematically in the following table.
+Here we use several meta-notations for
+descriptive purposes only: $st$ and $sc$ stand for the
+transformations effected by the
+theorem and conclusion stripping conversions in the current proof context
+(as returned by
+=INLINEFT
+current_ad_st_conv
+=TEX
+\ and
+=INLINEFT
+current_ad_sc_conv
+=TEX
+); $xf$ stands for a recursive application of the transformation process.
+$x'$ denotes a variable name
+chosen fresh each time a transformation involving it is used.
+=GFT
+ô A ± B		­	xf( ô A ); xf( ô B )
+ô µx·A		­	map (µ_intro (st¬x'®)) (xf( ô A[x'/x] ))
+ô ¶‰1x·A		­	(xf( ô (¶x·A) ± (µx x'·A ± A[x'/x] ´ x' = x) ))
+ô A ´ B		­	map (´_intro (st¬A®)) (xf( st¬A® ô sc¬B® ))
+ô A ± B ´ C	­	map (´_intro (st¬A®)) (xf( st¬A® ô B ´ C ))
+ô A ² B ´ C	­	xf( ô A ´ C ); xf( ô B ´ C )
+ô (¶x·A) ´ B	­	map (µ_intro ¬x'®) (xf( ô A[x'/x] ´ B ))
+ô A		­	xf( ô sc¬A® )
+=TEX
+=SEEALSO
+$back\_chain\_tac$.
+=ENDDOC
 
 \subsection{Concerning ¶}
 
@@ -288,7 +470,8 @@ val Û¶_tacÝ : TERM -> TACTIC ;
 =DESCRIBE
 Provide a witness for an existential subgoal.
 
-N.B. loses information.
+N.B. this tactic strengthens the goal, i.e. it may result in unprovable
+subgoals even when the original goal was provable.
 =FRULE 2 Tactic
 ¶_tac
 ¬t®
@@ -327,10 +510,14 @@ $SIMPLE\_¶\_THEN$
 =DOC
 val Û¶‰1_tacÝ : TERM -> TACTIC;
 =DESCRIBE
-Simplify a unique existentially quantified goal with a particular
-witness.
+Provide a witness for a goal with conclusion of the form
+=INLINEFT
+¶‰1x·t
+=TEX
+.
 
-N.B. loses information.
+N.B. this tactic strengthens the goal, i.e. it may result in unprovable
+subgoals even when the original goal was provable.
 =FRULE 2 Tactic
 ¶‰1_tac1
 ¬t®
@@ -577,10 +764,14 @@ val ÛTHEN1Ý : (TACTIC * TACTIC) -> TACTIC;
 =DESCRIBE
 $THEN\_T1$ is a tactical used as an infix operator.
 $tac1$ $THEN\_T1$ $tac2$ is the tactic that applies $tac1$
-and then applies $tac2$ to the first (if any) subgoal,
-the just being unchanged in the result.
+and then applies $tac2$ to the first of the resulting subgoals
+and $id\_tac$ to any other subgoals.
 If $tac1$ returns no subgoals, then nor will $tac1$ $THEN\_T1$ $tac2$.
 $THEN1$ is an alias for $THEN\_T1$.
+
+It is intended for use in conjunction with induction tactics or
+tactics like $lemma\_tac$ for which the first subgoal (i.e., the base
+case of the induction or the lemma) often has a simple proof.
 =SEEALSO
 $THEN$
 =FAILUREC
