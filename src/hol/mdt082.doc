@@ -39,9 +39,10 @@ in DS/FMU/IED/DTD082\cite{DS/FMU/IED/DTD082}.}
 
 \subsection{Changes history} 
 \begin{description}
-\item[\SCCSversion~(\FormatDate{$Date$%}
-)]]
-First draft.
+\item[1.1]
+First issue.
+\item[1.2]
+Update for new INTEGER type.
 \end{description}
 \subsection{Changes forecast}
 None.
@@ -115,7 +116,7 @@ infix 2 ++;
 infix 1 << <<= >> >>= ==;
 =TEX
 =SML
-datatype CP = C of int | X of int | op ++ of CP * CP | op ** of int * CP;
+datatype CP = C of INTEGER | X of int | op ++ of CP * CP | op ** of INTEGER * CP;
 =TEX
 =SML
 datatype CC =
@@ -126,17 +127,17 @@ datatype CC =
 	op == of CP * CP;
 =TEX
 =SML
-fun compile_p (cp : CP) : POLY * int = (
+fun compile_p (cp : CP) : POLY * INTEGER = (
 	let fun xma i1 (p1, c1) i2 (p2, c2) = (
 			(mult_and_add_poly i1 (normalise_poly p1) i2 (normalise_poly p2), 
-				i1*c1+i2*c2)
+				i1@*c1@+i2@*c2)
 	);
 	in
 		case cp of
 			C i => ([], i)
-		|	X i => ([(1, i)], 0)
-		| p1 ++ p2 => xma 1 (compile_p p1) 1 (compile_p p2)
-		| i ** p => xma i (compile_p p) 0 ([], 0)
+		|	X i => ([(one, i)], zero)
+		| p1 ++ p2 => xma one (compile_p p1) one (compile_p p2)
+		| i ** p => xma i (compile_p p) zero ([], zero)
 	end
 );
 =TEX
@@ -146,16 +147,16 @@ fun compile_c (i : int, cc : CC) : CONSTRAINT = (
 		fun comb ct cp1 cp2 a = (
 			let val (p1, c1) = compile_p cp1;
 				val (p2, c2) = compile_p cp2;
-			in	(mult_and_add_poly 1 p1 ~1 p2, ct, c2 - c1, [(a, i)])
+			in	(mult_and_add_poly one p1 (@~one) p2, ct, c2 @- c1, [(a, i)])
 			end
 		);
 	in
 		case cc of
-			cp1 << cp2 => comb Less cp1 cp2 1
-		| cp1 <<= cp2 => comb LessEq cp1 cp2 1
-		| cp1 >> cp2 => comb Less cp2 cp1 ~1
-		| cp1 >>= cp2 => comb LessEq cp2 cp1 ~1
-		| cp1 == cp2 => comb Eq cp1 cp2 1
+			cp1 << cp2 => comb Less cp1 cp2 one
+		| cp1 <<= cp2 => comb LessEq cp1 cp2 one
+		| cp1 >> cp2 => comb Less cp2 cp1 (@~one)
+		| cp1 >>= cp2 => comb LessEq cp2 cp1 (@~one)
+		| cp1 == cp2 => comb Eq cp1 cp2 one
 	end
 );
 =TEX
@@ -169,16 +170,16 @@ Now go testing. First of all the formatting routines:
 =SML
 store_mt_results_show mt_run [
 	("LinArith.1.1.1", format_poly, [], "0"),
-	("LinArith.1.1.2", format_poly, [(1,1)], "+X1"),
-	("LinArith.1.1.3", format_poly, [(~1,1)], "-X1"),
-	("LinArith.1.1.4", format_poly, [(5,1),(~100,2),(1000,99)],
+	("LinArith.1.1.2", format_poly, [(one,1)], "+X1"),
+	("LinArith.1.1.3", format_poly, [((@~one),1)], "-X1"),
+	("LinArith.1.1.4", format_poly, [(@@"5",1),(@@"~100",2),(@@"1000",99)],
 		"+5X1 -100X2 +1000X99")
 ];
 =TEX
 =SML
 val sys1_2 = make_sys [
 	X 1 <<= X 2,
-	X 1 ++ X 2 << C 99,
+	X 1 ++ X 2 << C (@@"99"),
 	X 1 == X 3
 ];
 store_mt_results_show mt_run [
@@ -192,22 +193,23 @@ store_mt_results_show mt_run [
 =TEX
 Now multiplication-and-addition for polynomials
 =SML
-val poly1 = (fst o compile_p)(2 ** X 1 ++ 2 ** X 3 ++ X 5);
-val poly2 = (fst o compile_p)(~3 ** X 1 ++ 4 ** X 3 ++ 2 ** X 4);
-val poly3 = (fst o compile_p)((3*2+2*4) ** X 3 ++ (2*2) ** X 4 ++ 3 ** X 5);
+val ii = integer_of_int;
+val poly1 = (fst o compile_p)(ii 2 ** X 1 ++ ii 2 ** X 3 ++ X 5);
+val poly2 = (fst o compile_p)(ii(~3) ** X 1 ++ ii 4 ** X 3 ++ ii 2 ** X 4);
+val poly3 = (fst o compile_p)(ii(3*2+2*4) ** X 3 ++ ii(2*2) ** X 4 ++ ii 3 ** X 5);
 store_mt_results_show mt_run [
-	("LinArith.1.3.1", mult_and_add_poly 3 poly1 2, poly2, poly3)
+	("LinArith.1.3.1", mult_and_add_poly (ii 3) poly1 (ii 2), poly2, poly3)
 ];
 =TEX
 Now multiplication-and-addition for constraints
 =SML
 val sys1_4 = make_sys [
-	3 ** X 1 ++ X 3 <<= C 2,
-	2 ** X 2  ++ ~1 ** X 3 << C 4
+	ii 3 ** X 1 ++ X 3 <<= C (ii 2),
+	ii 2 ** X 2  ++ ii (~1) ** X 3 << C (ii 4)
 ];
-val ans1_4 = ([(3, 1), (2, 2)], Less, 6, [(1, 1), (1, 2)]);
+val ans1_4 = ([(ii 3, 1), (ii 2, 2)], Less, ii 6, [(ii 1, 1), (ii 1, 2)]);
 store_mt_results_show mt_run [
-	("LinArith.1.4.1", mult_and_add_constraint 1 (nth 0 sys1_4) 1,
+	("LinArith.1.4.1", mult_and_add_constraint one (nth 0 sys1_4) one,
 			(nth 1 sys1_4), ans1_4)
 ];
 =TEX
@@ -218,14 +220,14 @@ val sys1_5_1 = make_sys [
 	X 0 <<= X 2,
 	X 1 <<= X 2,
 	X 0 <<= X 1,
-	X 0  ++ C 1 <<= X 1
+	X 0  ++ C (ii 1) <<= X 1
 ];
 val sys1_5_2 = make_sys [
 	X 1 <<= X 0,
 	X 0 <<= X 2,
 	X 1 <<= X 2,
 	X 0 <<= X 1,
-	X 1  ++ C 1 <<= X 0
+	X 1  ++ C (ii 1) <<= X 0
 ];
 val sys1_5_3 = make_sys [
 	X 0 == X 1,
@@ -234,14 +236,14 @@ val sys1_5_3 = make_sys [
 fun check1_5 (cts : CONSTRAINT list) : bool = (
 	let	fun aux [] = fail "mdt082_check1_5" 82110 []
 		|   aux [(i, x)] = (
-			mult_and_add_constraint i(nth (x-1) cts) 0([], Eq, 0, [])
+			mult_and_add_constraint i(nth (x-1) cts) zero ([], Eq, zero, [])
 		) | aux ((i, x) :: more) = (
-			mult_and_add_constraint i(nth (x-1) cts) 1 (aux more)
+			mult_and_add_constraint i(nth (x-1) cts) one (aux more)
 		)
 	in	case aux (lin_arith_contr cts) of
-			([], Eq, i, _) => not(0 = i)
-		|	([], LessEq, i, _) => not(0 <= i)
-		|	([], Less, i, _) => not(0 < i)
+			([], Eq, i, _) => not(zero = i)
+		|	([], LessEq, i, _) => not(zero @<= i)
+		|	([], Less, i, _) => not(zero @< i)
 		|	_ => false
 	end
 );
@@ -317,9 +319,9 @@ store_mt_results_show (mt_runf (op ~=#)) [
 	("LinArith.5.1.2", dest_thm o ¼_cancel_conv,
 		¬1 ¼ 2®, ([], ¬1 ¼ 2 ¤ 0 ¼ 1®)),
 	("LinArith.5.1.3", dest_thm o î_eq_cancel_conv,
-		¬142*99 = 457+2®, ([], ¬142*99 = 457+2 ¤ ‘mk_î (142*99-459)® = 0®)),
+		¬142*99 = 457+2®, ([], ¬142*99 = 457+2 ¤ ‘(mk_î o integer_of_int) (142*99-459)® = 0®)),
 	("LinArith.5.1.4", dest_thm o ¼_cancel_conv,
-		¬142*99 ¼ 457+2®, ([], ¬142*99 ¼ 457+2 ¤ ‘mk_î (142*99-459)® ¼ 0®)),
+		¬142*99 ¼ 457+2®, ([], ¬142*99 ¼ 457+2 ¤ ‘(mk_î o integer_of_int) (142*99-459)® ¼ 0®)),
 	("LinArith.5.1.5", dest_thm o î_eq_cancel_conv,
 		¬x+1 = 2®, ([], ¬x+1 = 2 ¤ x = 1®)),
 	("LinArith.5.1.6", dest_thm o ¼_cancel_conv,
