@@ -208,23 +208,90 @@ BOOL ignored;
  * X initialisation:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+/*
+ * Forward declarations of menu item and other callback routines.
+ */
+
+static void
+	file_menu_cb(),
+	tools_menu_cb(),
+	edit_menu_cb(),
+	cmd_menu_cb(),
+	help_menu_cb(),
+	close_down_cb(),
+	command_modify_cb(),
+	command_motion_cb();
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Menu descriptions:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static MenuItem file_menu_items[] = {
+    { "Save", &xmPushButtonGadgetClass, 'S', NULL, NULL,
+        file_menu_cb, (XtPointer)0, (MenuItem *)NULL, False },
+    { "Save as ...",  &xmPushButtonGadgetClass, 'a', NULL, NULL,
+        file_menu_cb, (XtPointer)1, (MenuItem *)NULL, False },
+    { "Open ...",  &xmPushButtonGadgetClass, 'O', NULL, NULL,
+        file_menu_cb, (XtPointer)2, (MenuItem *)NULL, False },
+    { "Include",  &xmPushButtonGadgetClass, 'I', NULL, NULL,
+        file_menu_cb, (XtPointer)3, (MenuItem *)NULL, False },
+    { "New",  &xmPushButtonGadgetClass, 'N', NULL, NULL,
+        file_menu_cb, (XtPointer)4, (MenuItem *)NULL, False },
+    { "Quit",  &xmPushButtonGadgetClass, 'Q', NULL, NULL,
+        file_menu_cb, (XtPointer)5, (MenuItem *)NULL, False },
+    NULL,
+};
+
+static MenuItem tools_menu_items[] = {
+    { "Palette", &xmPushButtonGadgetClass, 'P', NULL, NULL,
+        tools_menu_cb, (XtPointer)0, (MenuItem *)NULL, False },
+    NULL,
+};
+
+static MenuItem edit_menu_items[] = {
+    { "Cut", &xmPushButtonGadgetClass, 'C', NULL, NULL,
+        edit_menu_cb, (XtPointer)0, (MenuItem *)NULL, False },
+    { "Copy", &xmPushButtonGadgetClass, 'o', NULL, NULL,
+        edit_menu_cb, (XtPointer)1, (MenuItem *)NULL, False },
+    { "Paste", &xmPushButtonGadgetClass, 'P', NULL, NULL,
+        edit_menu_cb, (XtPointer)2, (MenuItem *)NULL, False },
+    { "Clear", &xmPushButtonGadgetClass, 'l', NULL, NULL,
+        edit_menu_cb, (XtPointer)3, (MenuItem *)NULL, False },
+    { "Undo", &xmPushButtonGadgetClass, 'l', "<Key>Undo", NULL,
+        edit_menu_cb, (XtPointer)4, (MenuItem *)NULL, False },
+    NULL,
+};
+
+static MenuItem cmd_menu_items[] = {
+    { "Execute", &xmPushButtonGadgetClass, 'x', "Ctrl<Key>x", "Ctrl-X",
+        cmd_menu_cb, (XtPointer)0, (MenuItem *)NULL, False },
+    { "Return", &xmPushButtonGadgetClass, 'e', "Ctrl<Key>m", "Ctrl-M",
+        cmd_menu_cb, (XtPointer)1, (MenuItem *)NULL, False },
+    { "Interrupt", &xmPushButtonGadgetClass, 'I', NULL, NULL,
+        cmd_menu_cb, (XtPointer)2, (MenuItem *)NULL, False },
+    { "Kill", &xmPushButtonGadgetClass, 'K', NULL, NULL,
+        cmd_menu_cb, (XtPointer)3, (MenuItem *)NULL, False },
+    { "Restart", &xmPushButtonGadgetClass, 'R', NULL, NULL,
+        cmd_menu_cb, (XtPointer)4, (MenuItem *)NULL, False },
+    { "Quit", &xmPushButtonGadgetClass, 'Q', NULL, NULL,
+        cmd_menu_cb, (XtPointer)5, (MenuItem *)NULL, False },
+    NULL,
+};
+
+static MenuItem help_menu_items[] = {
+    { "General", &xmPushButtonGadgetClass, 'G', "Help", "Help",
+        help_menu_cb, (XtPointer)0, (MenuItem *)NULL, False },
+    { "Other",  &xmPushButtonGadgetClass, 'O', NULL, NULL,
+        help_menu_cb, (XtPointer)1, (MenuItem *)NULL, False },
+    NULL,
+};
 
 setup_cmdwin(Bool edit_only)
 {
 	Arg args[12];
 	NAT i;
-	NAT nmenus;
 	XmString s1, s2, s3, s4, s5, s6, s7, s8;
 	Atom WM_DELETE_WINDOW;
-	static void
-		file_menu_cb(),
-		tools_menu_cb(),
-		edit_menu_cb(),
-		cmd_menu_cb(),
-		help_menu_cb(),
-		close_down_cb(),
-		command_modify_cb(),
-		command_motion_cb();
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Main window setup:  (root is created in main in xpp.c)
@@ -317,150 +384,39 @@ if( !edit_only ) {
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu bar:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-	s1 = XmStringCreateSimple("File");
-	s2 = XmStringCreateSimple("Tools");
-	s3 = XmStringCreateSimple("Edit");
-	s4 = XmStringCreateSimple("Command");
-	s5 = XmStringCreateSimple("Help");
-if(!edit_only) {
-	menubar = XmVaCreateSimpleMenuBar(frame, "menubar",
-		XmVaCASCADEBUTTON, s1, 'F',
-		XmVaCASCADEBUTTON, s2, 'T',
-		XmVaCASCADEBUTTON, s3, 'E',
-		XmVaCASCADEBUTTON, s4, 'C',
-		XmVaCASCADEBUTTON, s5, 'H', NULL);
-} else {
-	menubar = XmVaCreateSimpleMenuBar(frame, "menubar",
-		XmVaCASCADEBUTTON, s1, 'F',
-		XmVaCASCADEBUTTON, s2, 'T',
-		XmVaCASCADEBUTTON, s3, 'E',
-		XmVaCASCADEBUTTON, s5, 'H', NULL);
-}
-	XmStringFree(s1);
-	XmStringFree(s2);
-	XmStringFree(s3);
-	XmStringFree(s4);
-	XmStringFree(s5);
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Menus: nmenus is used to set the post_from_button argument
- * for XmVaCreateSimplePulldownMenu
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-	nmenus = 0;
+	menubar = XmVaCreateSimpleMenuBar(frame, "menubar", NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * File menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-	s1 = XmStringCreateSimple("Save");
-	s2 = XmStringCreateSimple("Save as...");
-	s3 = XmStringCreateSimple("Open...");
-	s4 = XmStringCreateSimple("Include...");
-	s5 = XmStringCreateSimple("New");
-	s6 = XmStringCreateSimple("Quit");
-
-	filemenu = XmVaCreateSimplePulldownMenu(
-		menubar, "menu", nmenus++, file_menu_cb,
-		XmVaPUSHBUTTON, s1, "S", NULL, NULL,
-		XmVaPUSHBUTTON, s2, "a", NULL, NULL,
-		XmVaPUSHBUTTON, s3, "O", NULL, NULL,
-		XmVaPUSHBUTTON, s4, "I", NULL, NULL,
-		XmVaPUSHBUTTON, s5, "N", NULL, NULL,
-		XmVaPUSHBUTTON, s6, "Q", NULL, NULL,
-		NULL);
-
-	XmStringFree(s1);
-	XmStringFree(s2);
-	XmStringFree(s3);
-	XmStringFree(s4);
-	XmStringFree(s5);
-	XmStringFree(s6);
-
-
+	filemenu = setup_pulldown_menu(
+		menubar, "File", '\0', False, file_menu_items);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Tools menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-	s1 = XmStringCreateSimple("Palette");
-
-	toolsmenu = XmVaCreateSimplePulldownMenu(
-		menubar, "menu", nmenus++, tools_menu_cb,
-		XmVaPUSHBUTTON, s1, 'P', NULL, NULL,
-		NULL);
-
-	XmStringFree(s1); 
+	toolsmenu = setup_pulldown_menu(
+		menubar, "Tools", '\0', False, tools_menu_items);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Edit menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-	s1 = XmStringCreateSimple("Cut");
-	s2 = XmStringCreateSimple("Copy");
-	s3 = XmStringCreateSimple("Paste");
-	s4 = XmStringCreateSimple("Clear");
-	s5 = XmStringCreateSimple(undo_redo[0]);
-	undo_redo_index = 0;
-	undoing = FALSE;
 
-	editmenu = XmVaCreateSimplePulldownMenu(
-		menubar, "menu", nmenus++, edit_menu_cb,
-		XmVaPUSHBUTTON, s1, 'C', NULL, NULL,
-		XmVaPUSHBUTTON, s2, 'o', NULL, NULL,
-		XmVaPUSHBUTTON, s3, 'P', NULL, NULL,
-		XmVaPUSHBUTTON, s4, 'l', NULL, NULL,
-		XmVaPUSHBUTTON, s5, NULL, "<Key>Undo", NULL,
-		NULL);
-
-	XmStringFree(s1);
-	XmStringFree(s2);
-	XmStringFree(s3);
-	XmStringFree(s4);
-	XmStringFree(s5);
-
+	editmenu = setup_pulldown_menu(
+		menubar, "Edit", '\0', False, edit_menu_items);
 	set_menu_item_sensitivity(editmenu, 4, False);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Command menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 if( !edit_only ) {
-	s1 = XmStringCreateSimple("Execute");
-	s2 = XmStringCreateSimple("Ctrl-X");
-	s3 = XmStringCreateSimple("Return");
-	s4 = XmStringCreateSimple("Ctrl-M");
-	s5 = XmStringCreateSimple("Interrupt Application");
-	s6 = XmStringCreateSimple("Kill Application");
-	s7 = XmStringCreateSimple("Restart Application");
-	s8 = XmStringCreateSimple("Quit");
-
-	cmdmenu = XmVaCreateSimplePulldownMenu(
-		menubar, "menu", nmenus++, cmd_menu_cb,
-		XmVaPUSHBUTTON, s1, 'x', "Ctrl<Key>x", s2,
-		XmVaPUSHBUTTON, s3, 'x', "Ctrl<Key>m", s4,
-		XmVaSEPARATOR,
-		XmVaPUSHBUTTON, s5, 'I', NULL, NULL,
-		XmVaPUSHBUTTON, s6, 'K', NULL, NULL,
-		XmVaPUSHBUTTON, s7, 'R', NULL, NULL,
-		XmVaPUSHBUTTON, s8, 'Q', NULL, NULL,
-		NULL);
-
-	XmStringFree(s1);
-	XmStringFree(s2);
-	XmStringFree(s3);
-	XmStringFree(s4);
-	XmStringFree(s5);
-	XmStringFree(s6);
-	XmStringFree(s7);
-	XmStringFree(s8);
+	cmdmenu = setup_pulldown_menu(
+		menubar, "Command", '\0', False, cmd_menu_items);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Help menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-	s1 = XmStringCreateSimple("General");
-	s2 = XmStringCreateSimple("Other");
+	helpmenu = setup_pulldown_menu(
+		menubar, "Help", 'H', False, help_menu_items);
 
-	helpmenu = XmVaCreateSimplePulldownMenu(
-		menubar, "menu", nmenus++, help_menu_cb,
-		XmVaPUSHBUTTON, s1, 'G', "Help", NULL,
-		XmVaPUSHBUTTON, s2, 'O', NULL, NULL,
-		NULL);
-
-	XmStringFree(s1);
-	XmStringFree(s2);
 
 	{
 		Widget *btns;

@@ -7,7 +7,7 @@
  * (c) ICL 1993
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-
+#include <Xm/XmAll.h>
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * MACROS
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -34,6 +34,30 @@
 #define LEAVE(X) {gen_diag(TRACING, "LEAVING", X); return;}
 
 #include <X11/Intrinsic.h>
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * TYPE DEFS
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * The following is based on the ideas in Heller's
+ * `Motif Programming Manual'.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+typedef struct menu_item {
+	char		*label;		/* label for this item */
+					/* NULL means last item */
+	WidgetClass	*class;		/* pushbutton, separator etc. */
+	char		mnemonic;	/* '\0' if no mnemonic */
+	char		*accelerator;	/* NULL if no accelerator */
+	char		*accelerator_text;
+	void		(*callback)();	/* NULL if no callback */
+	XtPointer	callback_data;
+	struct menu_item
+			*pullright;	/* NULL if not submenu */
+	Bool		pullright_tear_off_enabled;}
+					/* Ignored if not submenu */
+		MenuItem;
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * EXTERNS
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
 /*
  * For each module there is a section below to generate
  * extern declarations for its external interfaces (with the
@@ -59,6 +83,14 @@
 	extern void msg(
 		char	*s1,	/* title: ... */
 		char	*s2	/* ...: message */);
+#endif
+#ifndef _menus
+	extern	Widget setup_pulldown_menu(
+		Widget	parent,
+		char	*menu_title,
+		char	menu_mnemonic,
+		Bool	tear_off_enabled,
+		MenuItem	*items);
 #endif
 #ifndef _msg
 	extern void help_dialog(

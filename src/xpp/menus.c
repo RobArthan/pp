@@ -21,7 +21,7 @@
 #include "xpp.h"
 
 
-Widget setup_pulldown_menu(
+static Widget setup_pulldown_menu_aux(
 	Widget	parent,
 	char	*menu_title,
 	char	menu_mnemonic,
@@ -57,7 +57,7 @@ Widget setup_pulldown_menu(
  * Is this a pull-right submenu?
  */
 		if(item->pullright) {
-			w = setup_pulldown_menu(
+			w = setup_pulldown_menu_aux(
 				menu,
 				item->label,
 				item->mnemonic,
@@ -103,3 +103,19 @@ Widget setup_pulldown_menu(
 	return cascade;
 }
 
+Widget setup_pulldown_menu(
+	Widget	parent,
+	char	*menu_title,
+	char	menu_mnemonic,
+	Bool	tear_off_enabled,
+	MenuItem	*items)
+{
+	Widget	cascade, menu;
+	cascade = setup_pulldown_menu_aux(
+			parent, menu_title, menu_mnemonic, tear_off_enabled, items);
+	XtVaGetValues(
+			cascade,
+			XmNsubMenuId,	&menu,
+			NULL);
+	return menu;
+}
