@@ -1,0 +1,733 @@
+=TEX
+\documentstyle[hol,11pt,TQ]{article}
+\ftlinepenalty=9999
+\makeindex
+\TPPproject{IED 1563}  %% Mandatory field
+\TPPtitle{Implementation for the Interface to the Abstract Data Type $THM$}  %% Mandatory field
+\def\TPPheadtitle{Implementation for the \cr Interface to the Abstract Data Type $THM$}
+\TPPref{DS/FMU/IED/IMP012}  %% Mandatory field
+\def\SCCSversion{$Revision$
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$ %
+}}  %% Mandatory field
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{SML Literate Script}
+\TPPkeywords{}
+\TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.D.Arthan & FST Team Leader}
+\TPPabstract{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	    Project Library
+}}
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+\begin{document}
+\makeTPPfrontpage
+\vfill
+\begin{centering}
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+\end{centering}
+\pagebreak
+\section{Document Control}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1]
+First version.
+\end{description}
+\subsection{Changes Forecast}
+\section{GENERAL}
+\subsection{Scope}
+This document contains an implementation of the interface to the abstract data type $THM$, in particular the theory management material.
+This does not however include the
+primitive and built-in inference rules, which may be found in
+\cite{DS/FMU/IED/DTD007}.
+This is called for in section 4 of \cite{DS/FMU/IED/HLD007}.
+The high-level specification for the code is
+given in \cite{DS/FMU/IED/SPC003}, \cite{DS/FMU/IED/SPC004} and \cite{DS/FMU/IED/SPC005}.
+The design is in \cite{DS/FMU/IED/DTD012}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains an implementation of the interface to the abstract data type $THM$, in particular the theory management material.
+The interface is to provide a user- and implementor- friendly
+interface to the Kernel of the system, as the kernel is designed
+with only correctness, functionality and compactness in mind.
+\subsubsection{Dependencies}
+This document takes its signature from \cite{DS/FMU/IED/DTD012},
+and also requires those files indicated as preceding it in the 
+rel001 makefile.
+\subsubsection{Deficiencies}
+
+\subsubsection{Possible Enhancements}
+
+=TEX
+\newpage
+\section{THEORY MANAGEMENT OPERATIONS}
+We first start the structure:
+=SML
+structure KernelInterface : KernelInterface  = struct
+=TEX
+Then we open up the Kernel:
+=SML
+open icl'Kernel;
+open SimpleDictionary;
+=TEX
+\subsection{Utilities}
+We will often wish to just pass on error messages,
+just changing the source area of the message if it is from
+particular function.
+Thus:
+=SML
+fun âpass_oná (e : exn) (fromnm : string) (tonm : string) : 'a = (
+let val efrom = area_of e
+in
+	if efrom = fromnm
+	then reraise e tonm
+	else reraise e efrom
+end);
+=TEX
+As a temporary measure, until the real thing:
+=SML 
+fun âwarningá (area : string) (id : int) 
+	(opts : (unit -> string) list) : bool = (
+	diag_string("WARNING: from " ^ area ^", " ^
+		get_error_message id 
+			(map (fn f => f ()) opts));
+	true
+);
+=TEX
+\subsection{Kernel State Change Material}
+As any operation that changes the kernel state must notify
+the list of functions managed by $on\_kernel\_state\_change$,
+we need to provide that material first.
+
+First the type itself:
+=SML
+datatype âKERNEL_STATE_CHANGEá
+		=	âOpenTheoryá of string * ((string list) * (string list))
+		|	âDeleteTheoryá of string
+		|	âNewTheoryá of string
+		|	âNewParentá of string * (string list)
+		|	âLockTheoryá of string
+		|	âUnlockTheoryá of string
+		|	âDuplicateTheoryá of string * string
+		|	âSaveThmá of string * THM
+		|	âListSaveThmá of string list * THM
+		|	âDeleteConstantá of TERM
+		|	âDeleteTypeá of string
+		|	âDeleteAxiomá of string
+		|	âDeleteThmá of string
+		|	âNewAxiomá of string * TERM
+		|	âNewConstá of string * TYPE
+		|	âNewTypeá of string * int
+		|	âSimpleNewDefinitioná of (string * string * TERM) * THM
+		|	âNewTypeDefinitioná of (string * string * (string list) * THM) * THM
+		|	âNewSpecificationá of (string list * int * THM) * THM
+		|	âSetUserDatumá of string * USER_DATUM;
+
+=TEX
+The notifier function is called $notify\_ksc$, and the list of
+functions to be notified is hidden, named $ksc\_functions$.
+=SML
+local
+	val âksc_functionsá : ((KERNEL_STATE_CHANGE -> unit) list) ref = ref [];
+in
+	fun âon_kernel_state_changeá (to_notify : KERNEL_STATE_CHANGE -> unit) : unit = (
+		ksc_functions := (!ksc_functions) @ [to_notify]
+	);
+
+	fun ânotify_kscá (ksc : KERNEL_STATE_CHANGE) : unit = (
+		map (fn f => f ksc) (!ksc_functions);
+		()
+	);
+end; (* local *)
+=TEX
+\subsection{Operations on Theory Attributes}
+These are generally strait forward:
+=SML
+fun âopen_theoryá (nm : string) : unit = (
+let val ot_res = icl'open_theory nm;
+	val ot_res' = (map icl'get_theory_name ** map icl'get_theory_name) ot_res;
+in
+	notify_ksc (OpenTheory (nm, ot_res'));
+	()
+end
+handle complaint => pass_on complaint "icl'open_theory" "open_theory");
+=TEX
+=SML
+fun âdelete_theoryá (nm : string) : unit = (
+let val dummy = icl'delete_theory nm;
+in
+	notify_ksc (DeleteTheory nm);
+	()
+end
+handle complaint => pass_on complaint "icl'delete_theory" "delete_theory");
+=TEX
+=SML
+fun ânew_theoryá (nm : string) : unit = (
+let val dummy = (icl'new_theory nm; icl'open_theory nm);
+in
+	notify_ksc (NewTheory nm);
+	()
+end
+handle complaint => pass_on complaint "icl'new_theory" "new_theory");
+=TEX
+=SML
+fun ânew_parentá (nm : string) : unit = (
+let val np_res = icl'new_parent nm;
+	val np_res' = map icl'get_theory_name np_res;
+in
+	notify_ksc (NewParent (nm, np_res'));
+	()
+end
+handle complaint => pass_on complaint "icl'new_parent" "new_parent");
+=TEX
+=SML
+fun âlock_theoryá (nm : string) : unit = (
+let val dummy = icl'lock_theory nm;
+in
+	notify_ksc (LockTheory nm);
+	()
+end
+handle complaint => pass_on complaint "icl'lock_theory" "lock_theory");
+=TEX
+=SML
+fun âunlock_theoryá (nm : string) : unit = (
+let val dummy = icl'unlock_theory nm;
+in
+	notify_ksc (UnlockTheory nm);
+	()
+end
+handle complaint => pass_on complaint "icl'unlock_theory" "unlock_theory");
+=TEX
+=SML
+fun âduplicate_theoryá (fromnm : string, tonm : string) : unit = (
+let val dummy = icl'duplicate_theory fromnm tonm;
+in
+	notify_ksc (DuplicateTheory (fromnm, tonm));
+	()
+end
+handle complaint => pass_on complaint "icl'duplicate_theory" "duplicate_theory");
+=TEX
+\subsection{Operations on Theory Contents}
+$dest\_thm$ passes through without problem.
+
+=SML
+fun âthm_theoryá (thm : THM) : string = (
+let val {theory = {name = iname,...},...} = icl'dest_thm thm
+in
+	icl'get_theory_name iname
+end
+handle complaint => pass_on complaint "icl'get_theory_name" "thm_theory");
+=TEX
+=SML
+fun âsave_thmá (key : string, thm : THM) : THM = (
+let val saved = icl'list_save_thm ([key], thm);
+in
+	notify_ksc (SaveThm (key, thm));
+	saved
+end
+handle complaint => pass_on complaint "icl'list_save_thm" "save_thm");
+=TEX
+=SML
+fun âlist_save_thmá (keys : string list, thm : THM) : THM = (
+let val saved = icl'list_save_thm (keys, thm);
+in
+	notify_ksc (ListSaveThm (keys, thm));
+	saved
+end
+handle complaint => pass_on complaint "icl'list_save_thm" "list_save_thm");
+=TEX
+=SML
+fun âdelete_thmá (key : string) : THM = (
+let val thm = icl'delete_thm key;
+in
+	notify_ksc (DeleteThm key);
+	thm
+end
+handle complaint => pass_on complaint "icl'delete_thm" "delete_thm");
+=TEX
+It is convenient to provide the following function ``out of order'':
+=SML
+fun âget_current_theory_nameá (() : unit) : string = (
+	icl'get_theory_name(icl'get_current_theory_name ())
+);
+=TEX
+Given a level, give a list of the levels that need deleting.
+We presume a well-formed $del\_levels$ list.
+=SML
+fun âdeleted_levelsá (level : int) : int list = (
+let val {del_levels = del_levels,current_level = current_level, ...} = icl'get_theory "-";
+
+	fun get_levels llevel ((lb,ub) :: lst) = (
+		if level < lb
+		then (interval llevel (lb -1) @
+			get_levels (ub+1) lst)
+		else (get_levels (ub+1) lst)
+	) | get_levels llevel [] = interval llevel current_level;
+
+in
+	get_levels level del_levels
+end);
+=TEX
+For the following $delete\_$ functions we need an auxiliary ``delete to level'' function:
+=SML
+fun âdelete_to_levelá (caller : string) (target : string) (level : int) : unit = (
+let	val dummy = case (get_current_theory_status()) of
+		TSNormal => ()
+		| TSDeleted => error caller 6008 
+			[fn () => get_current_theory_name()]
+		| TSLocked => fail caller 6037
+			[fn () => get_current_theory_name()]
+		| TSAncestor => fail caller 6071
+			[fn () => get_current_theory_name()];
+
+	val {children = children,...} = icl'get_theory_info "-";
+
+	val dummy = if children <> [] 
+		then fail caller 6076 [fn () => get_current_theory_name()]
+		else ();
+
+	val {con_env = con_env,ty_env = ty_env,
+		axiom_dict = axiom_dict, theorem_dict = theorem_dict,
+		definition_dict = definition_dict,...} = icl'get_theory "-";
+
+	val del_con = map (fn (name,{ty = ty,...}) => (name, ty))
+		(con_env drop (fn (_,{level = lev,...}) => lev < level));
+
+	val del_type = map (fn (name,_) => name)
+		(ty_env drop (fn (_,{level = lev,...}) => lev < level));
+
+	val del_thms = map (fn (key,_) => key)
+		(theorem_dict drop (fn (_,thm) => 
+			let val {level = lev,...} = icl'dest_thm thm
+			in lev < level end));
+
+	val del_axioms = map (fn (key,_) => key)
+		(axiom_dict drop (fn (_,thm) => 
+			let val {level = lev,...} = icl'dest_thm thm
+			in lev < level end));
+
+	val del_defns = map (fn (key,_) => key)
+		(definition_dict drop (fn (_,thm) => 
+			let val {level = lev,...} = icl'dest_thm thm
+			in lev < level end));
+
+	val I = Combinators.I;
+
+	val to_be_d = (
+		"Constants:" ^ (format_list fst del_con ", ") ^
+		"; Types:" ^ (format_list I del_type ", ") ^
+		"; Theorems:" ^ (format_list I del_thms ", ") ^
+		"; Axioms:" ^ (format_list I del_axioms ", ") ^
+		"; Definitions:" ^ (format_list I del_defns ", "));
+=TEX
+We now ask the interactive user whether he wishes everything
+necessary to be deleted.
+=SML
+	val dummy = warning caller 12012 [(fn () => target),(fn () => to_be_d)];
+=TEX
+We now have permission to proceed:
+=SML
+	val dl = deleted_levels level;
+
+	val dummy = map delete_thm del_thms;
+
+	val dummy = map (fn x => icl'delete_extension ()) dl;
+in
+	map (fn xt => notify_ksc (DeleteConstant (mk_const xt))) del_con;
+	map (fn t => notify_ksc (DeleteType t)) del_type;
+	map (fn ax => notify_ksc (DeleteAxiom ax)) del_axioms;
+	()
+end);
+=TEX
+We can now give the deletion functions:
+=SML
+fun âdelete_constantá (cnt : TERM) : unit = (
+let val (cnm, cty) = dest_const cnt
+		handle complaint =>
+		divert complaint "dest_const" "delete_constant" 12008 [];
+
+	val {con_env = con_env,...} = icl'get_theory "-";
+
+	val {level = level, ty = ty} = force_value(s_lookup cnm con_env)
+		handle complaint =>
+		divert complaint "force_value" "delete_constant" 12001 
+			[fn () => get_current_theory_name (),
+			 fn () => cnm];
+
+	val dummy = if ty <> cty
+		then fail "delete_constant" 12001 
+			[fn () => get_current_theory_name (),
+			 fn () => cnm]
+		else ();
+in
+	delete_to_level "delete_constant" cnm level
+end);
+=TEX
+=SML	
+fun âdelete_typeá (tnm : string) : unit = (
+let val {ty_env = ty_env,...} = icl'get_theory "-";
+
+	val {level = level, ...} = force_value(s_lookup tnm ty_env)
+		handle complaint =>
+		divert complaint "force_value" "delete_type" 12002 
+			[fn () => get_current_theory_name (),
+			 fn () => tnm];
+in
+	delete_to_level "delete_type" tnm level
+end);
+=TEX
+=SML	
+fun âdelete_axiomá (anm : string) : unit = (
+let val {axiom_dict = axiom_dict,...} = icl'get_theory "-";
+
+	val ax = force_value(s_lookup anm axiom_dict)
+		handle complaint =>
+		divert complaint "force_value" "delete_axiom" 12003
+			[fn () => get_current_theory_name (),
+			 fn () => anm];
+
+	val {level = level,...} = icl'dest_thm ax;
+in
+	delete_to_level "delete_type" anm level
+end);
+=TEX
+=SML
+fun ânew_axiomá (key : string, tm : TERM) : THM = (
+let val saved = icl'new_axiom ([key], tm);
+in
+	notify_ksc (NewAxiom (key, tm));
+	saved
+end
+handle complaint => pass_on complaint "icl'new_axiom" "new_axiom");
+=TEX
+=SML
+fun ânew_constá (cnm : string, ty : TYPE) : TERM = (
+let val saved = icl'new_const (cnm, ty);
+in
+	notify_ksc (NewConst (cnm, ty));
+	saved
+end
+handle complaint => pass_on complaint "icl'new_const" "new_const");
+=TEX
+=SML
+fun ânew_typeá (cnm : string, arity : int) : TYPE = (
+let val saved = icl'new_type (cnm, arity);
+in
+	notify_ksc (NewType (cnm, arity));
+	saved
+end
+handle complaint => pass_on complaint "icl'new_type" "new_type");
+=TEX
+=SML
+fun ânew_typeá (cnm : string, arity : int) : TYPE = (
+let val saved = icl'new_type (cnm, arity);
+in
+	notify_ksc (NewType (cnm, arity));
+	saved
+end
+handle complaint => pass_on complaint "icl'new_type" "new_type");
+=TEX
+=SML
+fun âset_user_datumá (key : string, ud : USER_DATUM) : unit = (
+let val {user_data = user_data,...} = icl'get_theory "-";
+
+	val dummy = (user_data := s_enter key (ref ud) (!user_data);
+		());
+in
+	notify_ksc (SetUserDatum (key,ud))
+end);
+=TEX
+=SML
+fun âget_user_datumá (thynm : string) (key : string) : USER_DATUM = (
+let val {user_data = user_data,...} = icl'get_theory thynm
+		handle complaint =>
+		pass_on complaint "icl'get_theory" "get_user_datum";
+
+	val res = s_lookup key (!user_data);
+in
+	case res of
+	Value ud => (!ud)
+	| _ => fail "get_user_datum" 12009 [(fn () => key),
+		(fn () => thynm)]
+end);
+=TEX
+\subsection{Definitional Mechanisms}
+=SML
+fun âsimple_new_definitioná (key : string, cnm : string, tm : TERM) : THM = (
+let val saved = icl'new_definition ([key], cnm, tm);
+in
+	notify_ksc (SimpleNewDefinition ((key, cnm, tm), saved));
+	saved
+end
+handle complaint => pass_on complaint "icl'new_definition" "simple_new_definition");
+=TEX
+=SML
+fun ânew_typeá (cnm : string, arity : int) : TYPE = (
+let val saved = icl'new_type (cnm, arity);
+in
+	notify_ksc (NewType (cnm, arity));
+	saved
+end
+handle complaint => pass_on complaint "icl'new_type" "new_type");
+=SML
+fun ânew_type_definitioná (key : string, name : string, 
+	typars : string list, defthm : THM): THM = (
+let val saved = icl'new_type_definition ([key], name, typars, defthm);
+in
+	notify_ksc (NewTypeDefinition ((key, name, typars, defthm), saved));
+	saved
+end
+handle complaint => pass_on complaint "icl'new_type_definition" "new_type_definition");
+=TEX
+=SML
+fun ânew_specificationá (keys : string list, ndef : int, defthm : THM) : THM = (
+let val saved = icl'new_specification (keys, ndef, defthm);
+in
+	notify_ksc (NewSpecification ((keys, ndef, defthm), saved));
+	saved
+end
+handle complaint => pass_on complaint "icl'new_specification" "new_specification");
+=TEX
+\subsection{Theory Access Functions}
+
+\subsubsection{Accessing Individual Theorems}
+=SML
+fun âget_definitioná (thynm : string) ( key : string) : THM = (
+let val {definition_dict = definition_dict,...} = icl'get_theory thynm
+		handle complaint =>
+		pass_on complaint "icl'get_theory" "get_definition";
+
+	val {inscope = inscope,...} = icl'get_theory_info thynm;
+
+	val dummy = if not inscope 
+		then fail "get_definition" 12010 [(fn () => thynm)]
+		else ();
+
+	val res = s_lookup key definition_dict;
+in
+	case res of
+	Value thm => thm
+	| _ => fail "get_definition" 12004 [(fn () => thynm),(fn () => key)]
+end);
+=TEX
+=SML
+fun âget_axiomá (thynm : string) ( key : string) : THM = (
+let val {axiom_dict = axiom_dict,...} = icl'get_theory thynm
+		handle complaint =>
+		pass_on complaint "icl'get_theory" "get_axiom";
+
+	val {inscope = inscope,...} = icl'get_theory_info thynm;
+
+	val dummy = if not inscope 
+		then fail "get_axiom" 12010 [(fn () => thynm)]
+		else ();
+
+	val res = s_lookup key axiom_dict;
+in
+	case res of
+	Value thm => thm
+	| _ => fail "get_axiom" 12004 [(fn () => thynm),(fn () => key)]
+end);
+=TEX
+=SML
+fun âget_theoremá (thynm : string) ( key : string) : THM = (
+let val {theorem_dict = theorem_dict,...} = icl'get_theory thynm
+		handle complaint =>
+		pass_on complaint "icl'get_theory" "get_theorem";
+
+	val {inscope = inscope,...} = icl'get_theory_info thynm;
+
+	val dummy = if not inscope 
+		then fail "get_theorem" 12010 [(fn () => thynm)]
+		else ();
+
+	val res = s_lookup key theorem_dict;
+in
+	case res of
+	Value thm => thm
+	| _ => fail "get_theorem" 12004 [(fn () => thynm),(fn () => key)]
+end);
+=TEX
+\subsubsection{Theory Names and Ancestry}
+=SML
+fun âtheory_namesá ((): unit) : string list = (
+let val hier = icl'get_hierarchy();
+in
+	map fst (hier drop 
+		(fn (_,{status = status,...}) => status = TSDeleted))
+end);
+=TEX
+In the following we are really only finding out whether a theory name exists when we do $icl'get\_theory$, but we pick out 
+its parents just to start off the process that $all\_anc$ could do by itself.
+=SML
+fun âget_ancestorsá (thynm : string) : string list = (
+let val hier = icl'get_hierarchy();
+
+	val {parents = parents,...} = icl'get_theory thynm
+		handle complaint =>
+		pass_on complaint "icl'get_theory" "get_ancestors";
+
+	fun all_anc (acc :: rest) sofar = (
+		if acc mem sofar
+		then all_anc rest sofar
+		else let val res = case (s_lookup acc hier) of
+			Value {contents={parents=pnts,...},...} => pnts
+			| _ => error "get_ancestors" 6041 []
+		in
+			all_anc (rest cup (map icl'get_theory_name res))
+				(acc :: sofar)
+		end
+	) | all_anc [] sofar = sofar;
+in
+	if thynm = "-"
+	then all_anc (map icl'get_theory_name parents) [get_current_theory_name()]
+	else all_anc (map icl'get_theory_name parents) [thynm]
+end);
+=TEX
+=SML
+fun âget_parentsá (thynm : string) : string list = (
+let val {parents = parents,...} = icl'get_theory thynm
+		handle complaint =>
+		pass_on complaint "icl'get_theory" "get_parents";
+in
+	map icl'get_theory_name parents
+end);
+=TEX
+=SML
+fun âget_childrená (thynm : string) : string list = (
+let val {children=children,...} = icl'get_theory_info thynm
+		handle complaint =>
+		pass_on complaint "icl'get_theory_info" "get_children";
+in
+	map icl'get_theory_name children
+end);
+=TEX
+=SML
+fun âget_descendantsá (thynm : string) : string list = (
+let val hier = icl'get_hierarchy();
+
+	val {children=children,...} = icl'get_theory_info thynm
+		handle complaint =>
+		pass_on complaint "icl'get_theory_info" "get_descendants";
+
+	fun all_des (acc :: rest) sofar = (
+		if acc mem sofar
+		then all_des rest sofar
+		else let val res = case (s_lookup acc hier) of
+			Value {children=chn,...} => chn
+			| _ => error "get_descendants" 6041 []
+		in
+			all_des (rest cup (map icl'get_theory_name res))
+				(acc :: sofar)
+		end
+	) | all_des [] sofar = sofar;
+in
+	if thynm = "-"
+	then all_des (map icl'get_theory_name children) [get_current_theory_name()]
+	else all_des (map icl'get_theory_name children) [thynm]
+end);
+=TEX
+\subsection{Accessing Theory Contents}
+We want something to comapct a dictionary of theorems:
+=SML
+fun âcompact_tsdá ([] : THM S_DICT) : (string list * THM) list = []
+| compact_tsd ((nm, thm) :: tsd_list) = (
+let fun compact (accnms: string list) (accthm: THM) (((nm,thm) :: rest): THM S_DICT) : 
+			(string list * THM) list = (
+		if dest_thm accthm = dest_thm thm
+		then compact (nm :: accnms) accthm rest
+		else (((rev accnms), accthm) :: 
+			compact [nm] accthm rest)
+	) | compact accnms accthm [] = [((rev accnms), accthm)];
+in
+	compact [nm] thm tsd_list
+end);
+=TEX
+
+=SML
+fun âget_definitionsá (thynm : string) : (string list * THM) list = (
+let val {definition_dict = definition_dict,...} = icl'get_theory thynm
+		handle complaint =>
+		pass_on complaint "icl'get_theory" "get_definitions";
+
+in
+	compact_tsd definition_dict
+end);
+=TEX
+=SML
+fun âget_axiomsá (thynm : string) : (string list * THM) list = (
+let val {axiom_dict = axiom_dict,...} = icl'get_theory thynm
+		handle complaint =>
+		pass_on complaint "icl'get_theory" "get_axioms";
+
+in
+	compact_tsd axiom_dict
+end);
+=TEX
+=SML
+fun âget_theoremsá (thynm : string) : (string list * THM) list = (
+let val {theorem_dict = theorem_dict,...} = icl'get_theory thynm
+		handle complaint =>
+		pass_on complaint "icl'get_theory" "get_theorems";
+
+in
+	compact_tsd theorem_dict
+end);
+=TEX
+=SML
+fun âget_constantsá (thynm : string) : TERM list = (
+let val {con_env = con_env,...} = icl'get_theory thynm
+		handle complaint =>
+		pass_on complaint "icl'get_theory" "get_constants";
+
+	fun env_to_term (nm,{ty=ty,level=level}) = mk_const(nm,ty);
+in
+	map env_to_term con_env
+end);
+=TEX
+=SML
+fun âget_typesá (thynm : string) : TYPE list = (
+let val {ty_env = ty_env,...} = icl'get_theory thynm
+		handle complaint =>
+		pass_on complaint "icl'get_theory" "get_types";
+
+	fun env_to_type (nm,{arity = arity,level=level}) = mk_type(nm,
+		map (fn n => mk_vartype("'" ^ string_of_int n))(interval 1 arity));
+in
+	map env_to_type ty_env
+end);
+=TEX
+=SML
+fun âget_theory_statusá (thynm : string) : THEORY_STATUS =
+(
+let val {status = status,...} = icl'get_theory_info thynm
+		handle complaint =>
+		pass_on complaint "icl'get_theory_info" "get_descendants";
+in
+	status
+end);
+=TEX
+\subsection{End of Structure}
+=SML
+end; (* structure KernelInterface *)
+
+open KernelInterface;
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
