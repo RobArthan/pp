@@ -48,9 +48,9 @@ Contact: Rob Arthan < rda@lemma-one.com >
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 2.14 $%
+\def\Version{$Revision: 1.1 $%
 }
-\def\Date{\FormatDate{$Date: 2003/02/23 14:48:48 $%
+\def\Date{\FormatDate{$Date: 2003/02/27 13:26:15 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -82,7 +82,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \subsection{Changes History}
 \begin{description}
 
-\item[Issues 1.1 to 1.12 ] First drafts.
+\item[Issues 1.1 to 1.3 ] First drafts.
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -121,10 +121,9 @@ We currently run the generic parser on each of Ada 95, C, Java 1.1 and pascal.
 =SML
 (*
 =SH
-for f in ada9x c java11 pascal
+for f in ada9x c java11 pascal c1
 do
-	slrp -t -g -f $f.grm; cat $f.grm.sml > grammar.sml
-	docsml imp118; mv imp118.sml imp118.$f.sml
+	slrp -t -g -f $f.grm
 done
 =TEX
 =SML
@@ -141,7 +140,8 @@ map use [
 	"imp001.sml",
 	"dtd018.sml",
 	"imp018.sml",
-	"dtd118.sml"
+	"dtd118.sml",
+	"imp118.sml"
 	];
 map use [ "dtd013.sml",
 	"imp013.sml"];
@@ -157,9 +157,9 @@ TYPE identifier IS `(` identifier `,` identifier `)` `;`
 END identifier `;`
 =TEX
 =SML
-use "imp118.ada9x.sml";
 open GenericSlrpParser;
-val t = parse_file "mdt118.ada";
+use "ada9x.grm.sml";
+val t = parse_file slrp'gen_parser "mdt118.ada";
 print_tree (curry output std_out) t;
 fun f (Leaf _) = 1
 |   f (Node(_, children)) = (
@@ -171,27 +171,31 @@ mt_run[
 ];
 =TEX
 \section{C}
-=DUMP mdt118.c
-`int` identifier `(` `)`
+=DUMP mdt118.c.tok
+`typedef` TypeDefName  `*`Identifier`;`
+`int` Identifier `(` `)`
 `{`
-	typedef_name identifier `=` CONSTANT `;`
-	identifier `=` identifier `+` identifier`;`
-	`return` identifier`;`
+	`typedef` TypeDefName Identifier `;`
+	TypeDefName Identifier `=` IntegerConstant `;`
+	Identifier `=` Identifier `+` Identifier`;`
+	`return` Identifier`;`
 `}`
 =TEX
+=IGN
+PolyML.print_depth 4;
+val t = parse_string slrp'gen_parser "`int` Identifier `;`";
 =SML
-use "imp118.c.sml";
-open GenericSlrpParser;
-val t = parse_file "mdt118.c";
+use"c.grm.sml";
+val t = parse_file slrp'gen_parser "mdt118.c.tok";
 print_tree (curry output std_out) t;
-fun f (Leaf _) = 1
-|   f (Node(_, children)) = (
-	1 + fold (op +) (map f children) 0
-);
 store_mt_results
 mt_run[
-	("c.1", f, t, 108)
+	("c.1", f, t, 115)
 ];
+=IGN
+val r = reader (in_char_stream_of_string "`int` Identifier `;`");
+val s = ([], true);
+val (t, s) = r s;
 =TEX
 \section{JAVA 1.1}
 =DUMP mdt118.java
@@ -200,14 +204,9 @@ INTERFACE IDENTIFIER `{`
 `}`
 =TEX
 =SML
-use "imp118.java11.sml";
-open GenericSlrpParser;
-val t = parse_file "mdt118.java";
+use "java11.grm.sml";
+val t = parse_file slrp'gen_parser "mdt118.java";
 print_tree (curry output std_out) t;
-fun f (Leaf _) = 1
-|   f (Node(_, children)) = (
-	1 + fold (op +) (map f children) 0
-);
 store_mt_results
 mt_run[
 	("java11.1", f, t, 38)
@@ -231,23 +230,289 @@ END
 DOT
 =TEX
 =SML
-use "imp118.pascal.sml";
+use "pascal.grm.sml";
 open GenericSlrpParser;
-val t = parse_file "mdt118.p";
+val t = parse_file slrp'gen_parser "mdt118.p";
 print_tree (curry output std_out) t;
-fun f (Leaf _) = 1
-|   f (Node(_, children)) = (
-	1 + fold (op +) (map f children) 0
-);
 store_mt_results
 mt_run[
 	("pascal.1", f, t, 173)
 ];
+=TEX
+=TEX
+\section{CUSTOMISED EXAMPLE}
+We now develop something a little more like a real lexical analyser for C.
+We need to track the type definitions in the input, which we do by manipulating
+a type environment defined as follows (and in which when we push a new frame, we
+copy the dictionary from the outer frame into it).
+
+=SML
+val type_env : unit E_DICT list ref = ref [initial_e_dict];
+=TEX
+=SML
+fun c_classifier (LVIdentifier (s, _) : LEX_VALUE) : LEX_CLASS = (
+	case e_lookup s (hd(!type_env)) of
+		Value () => LCIdentifier "TypeDefName"
+	|	Nil => LCIdentifier "Identifier"
+) | c_classifier (LVString (s, _)) = LCString s
+|   c_classifier (LVEos _) = LCEos;
+=TEX
+val in_type_def : bool ref = ref false;
+=TEX
+We need the following custom reduction functions:
+=SML
+fun red_declaration (nt, i) (x1,x2) stk = (
+	(* declaration = unterminated_declaration, `;` *)
+	in_type_def := false;
+	generic_reducer (nt, i) [x1,x2] stk
+);
+fun red_storage_class_specifier_5 (nt, i) (x1) stk = (
+	(* storage_class_specifier = `typedef` *)
+	in_type_def := true;
+	generic_reducer (nt, i) [x1] stk
+);
+fun red_begin_block (nt, i) (x1) stk = (
+	(* begin_block = `{` *)
+	type_env := initial_e_dict :: !type_env;
+	generic_reducer (nt, i) [x1] stk
+);
+fun red_end_block (nt, i) (x1) stk = (
+	(* end_block = `}` *)
+	type_env := tl (!type_env);
+	generic_reducer (nt, i) [x1] stk
+);
+fun red_direct_declarator_1 (nt, i) (x1) stk = (
+	(* direct_declarator = identifier *)
+	(case x1 of
+		Parsed(Node(_, [Leaf(LVIdentifier (s, _), _)])) => (
+			if	!in_type_def
+			then	type_env := e_enter s () (hd(!type_env)) :: tl (!type_env)
+			else	()
+		) | _ => ()
+	);
+	generic_reducer (nt, i) [x1] stk
+);
+=TEX
+Now we construct a better lexical analyser.
+=SML
+val keyword_dict : unit E_DICT = list_e_merge initial_e_dict (map (fn s => (s, ())) [
+	"auto", "break", "case", "char", "const", "continue", "default", "double",
+	"do", "else", "enum", "extern", "float", "for", "goto", "if",
+	"int", "long", "register", "return", "short", "signed", "sizeof", "static",
+	"struct", "switch", "typedef", "union", "unsigned", "void", "volatile", "while"
+]);
+=TEX
+The following could be implemented more efficiently by adapting some of the analogous code
+from IMP118.
+=SML
+fun c_is_alpha ch = (
+		"a" <= ch andalso ch <= "z"
+	orelse	"A" <= ch andalso ch <= "Z"
+	orelse	ch = "_"
+);
+
+fun is_digit ch = "0" <= ch andalso ch <= "9";
+
+val is_alnum = c_is_alpha fun_or is_digit;
+=TEX
+=SML
+fun get_ident [] = Nil
+| get_ident (chs as (ch :: more)) = (
+	let	fun aux acc [] = Value(implode(rev acc), [])
+		|   aux acc (c::more) = (
+			if	is_alnum c
+			then	aux (c::acc) more
+			else	Value(implode(rev acc), c::more)
+		);
+	in	if	c_is_alpha ch
+		then	aux [ch] more
+		else	Nil
+	end
+);
+=TEX
+=SML
+fun rec_ident ((chs, status) : LEX_STATE) : LEX_STATE = (
+	case get_ident chs of
+		Value(n, more) => (
+			case e_lookup n keyword_dict of
+				Value _ =>(
+					 (more,
+					 Known (LVString (n, get_line_number())))
+			) |	Nil => (
+					 (more,
+					 Known (LVIdentifier (n, get_line_number())))
+			)
+	) |	Nil => (chs, Unknown)
+);
+=TEX
+=SML
+fun get_dec_num [] = Nil
+| get_dec_num (chs as (ch :: more)) = (
+	let	fun aux acc [] = Value(implode(rev acc), [])
+		|   aux acc (c::more) = (
+			if	is_digit c
+			then	aux (c::acc) more
+			else	Value(implode(rev acc), c::more)
+		);
+	in	if	is_digit ch
+		then	aux [ch] more
+		else	Nil
+	end
+);
+=TEX
+=SML
+fun rec_dec_num ((chs, status) : LEX_STATE) : LEX_STATE = (
+	case get_dec_num chs of
+		Value(n, more) => (
+			 (more,
+			 Known (LVIdentifier ("IntegerConstant", get_line_number())))
+	) |	Nil => (chs, Unknown)
+);
+=TEX
+=SML
+fun  get_punct (chs as (".":: ".":: ".":: more)) = Value((implode (chs to 2)), more)
+|    get_punct (chs as ("<":: "<":: "=":: more)) = Value((implode (chs to 2)), more)
+|    get_punct (chs as (">":: ">":: "=":: more)) = Value((implode (chs to 2)), more)
+|    get_punct (chs as ("!":: "=":: more)) = Value((implode (chs to 1)), more)
+|    get_punct (chs as ( "\037":: "=":: more)) = Value((implode (chs to 1)), more)
+|    get_punct (chs as ("&":: "&":: more)) = Value((implode (chs to 1)), more)
+|    get_punct (chs as ("&":: "=":: more)) = Value((implode (chs to 1)), more)
+|    get_punct (chs as ("*":: "=":: more)) = Value((implode (chs to 1)), more)
+|    get_punct (chs as ("+":: "+":: more)) = Value((implode (chs to 1)), more)
+|    get_punct (chs as ("+":: "=":: more)) = Value((implode (chs to 1)), more)
+|    get_punct (chs as ("-":: "-":: more)) = Value((implode (chs to 1)), more)
+|    get_punct (chs as ("-":: "=":: more)) = Value((implode (chs to 1)), more)
+|    get_punct (chs as ("-":: ">":: more)) = Value((implode (chs to 1)), more)
+|    get_punct (chs as ("/":: "=":: more)) = Value((implode (chs to 1)), more)
+|    get_punct (chs as ("<":: "<":: more)) = Value((implode (chs to 1)), more)
+|    get_punct (chs as ("<":: "=":: more)) = Value((implode (chs to 1)), more)
+|    get_punct (chs as ("=":: "=":: more)) = Value((implode (chs to 1)), more)
+|    get_punct (chs as (">":: ">":: more)) = Value((implode (chs to 1)), more)
+|    get_punct (chs as ("^":: "=":: more)) = Value((implode (chs to 1)), more)
+|    get_punct (chs as ("|":: "=":: more)) = Value((implode (chs to 1)), more)
+|    get_punct (chs as ("|":: "|":: more)) = Value((implode (chs to 1)), more)
+|    get_punct (chs as ("!":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as ( "\037":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as ("&":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as ("(":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as (")":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as ("*":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as ("+":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as (",":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as ("-":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as (".":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as ("/":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as (":":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as (";":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as ("<":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as ("=":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as (">":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as ("?":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as ("[":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as ("]":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as ("^":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as ("{":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as ("|":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as ("}":: more)) = Value((implode (chs to 0)), more)
+|    get_punct (chs as ("~":: more)) = Value((implode (chs to 0)), more)
+|    get_punct _ = Nil;
+=TEX
+=SML
+fun rec_punct ((chs, status) : LEX_STATE) : LEX_STATE = (
+	case get_punct chs of
+		Value(n, more) => (
+			(more, Known (LVString (n, get_line_number())))
+	) |	Nil => (chs, Unknown)
+);
+=TEX
+=SML
+val rec_any = rec_first[rec_ident, rec_punct, rec_dec_num];
+fun c_resolver _ = DoReduce;
+use"c1.grm.sml";
+fun c_parse_file name = (
+	type_env := [initial_e_dict];
+	slrp'gen_parser c_resolver c_classifier
+	(default_error string_of_lex_value)
+	(gen_reader rec_any (in_char_stream_of_file name))
+	([], true)
+);
+fun c_parse_string str = (
+	type_env := [initial_e_dict];
+	slrp'gen_parser c_resolver c_classifier
+	(default_error string_of_lex_value)
+	(gen_reader rec_any (in_char_stream_of_string str))
+	([], true)
+);
+=DUMP
+=TEX
+TBS: CharacterConstant, FloatingConstant, IntegerConstant, String
+=TEX
+=SML
+print_tree (curry output std_out) (c_parse_file "mdt118.c");
+print_tree (curry output std_out) (c_parse_file "t.c");
 =TEX
 \section{EPIILOGUE}
 =SML
 raw_diag_string (summarize_mt_results()^"\n");
 =TEX
 \end{document}
+=IGN
+val tests =[
+	"!=",
+	"!",
+	"%=",
+	 "\037",
+	"&&",
+	"&=",
+	"&",
+	"(",
+	")",
+	"*=",
+	"*",
+	"++",
+	"+=",
+	"+",
+	",",
+	"--",
+	"-=",
+	"->",
+	"-",
+	"...",
+	".",
+	"/=",
+	"/",
+	":",
+	";",
+	"<<=",
+	"<<",
+	"<=",
+	"<",
+	"==",
+	"=",
+	">>=",
+	">>",
+	">",
+	"?",
+	"[",
+	"]",
+	"^=",
+	"^",
+	"{",
+	"|=",
+	"|",
+	"||",
+	"}",
+	"~"];
+
+map f (map explode tests);
 
 
+map e_flatten((!type_env));
+
+rec_ident(explode"pattern", Unknown);
+
+val r = gen_reader rec_any (in_char_stream_of_file "t.c");
+val s = ([], true);
+type_env := e_enter "bm_search_t" () (hd( !type_env)) :: tl (!type_env);
+
+val (t, s) = r s;
