@@ -134,6 +134,9 @@ typedef struct menu_item {
 	extern void copy_font_list(
 		Widget	to_w,
 		Widget	from_w);
+	extern void text_show_position(
+		Widget text_w,
+		XmTextPosition pos);
 void blink_owner_cb(
 	Widget					w,
 	Widget					text_w,
