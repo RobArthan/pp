@@ -141,6 +141,10 @@ lasp -s -u imp005.OKwords imp005.doc > zz1
 
 \item[22 April 1991, issue 1.6 ] Changed from $initial\_E\_DICT$ to
 	$initial\_e\_dict$.
+
+\item[14 May, issue 1.7 ] Extensive changes.  New form of quotation of
+	other languages.  Better split between the three structures.
+
 \end{description}
 
 %********************************************************************
@@ -153,6 +157,16 @@ lasp -s -u imp005.OKwords imp005.doc > zz1
 	the system.  This will include producing proper handling of the
 	routines $PolyML.quit$ and $PolyML.commit$ together with the
 	implicit calling of $PolyML.commit$ at end of input.
+
+\item Provide the complete and proper set of pretty characters and
+	keywords in sections~\ref{PrettyCharacterDictionary}
+	and~\ref{PrettyCharactersForHOL}.
+
+\item Consider removing the bracket handling routines in the basic
+	reader writer, they were needed for the HOL~88 style of anti
+	quotation but seem unnecessary with the style now provided
+	here.  However, how does the error recovery cope when there is
+	less knowledge of the language structure?
 
 \end{enumerate}
 
@@ -261,53 +275,19 @@ embedding interface in structure $ReaderWriterSupport$.
 
 \subsection{Start of Basic Reader Writer}
 
-Everything goes in a structure.
+The reader writer structure, $ReaderWriter$, contains only those values
+that are required at top level, it is opened at the end of this file.
+All of the reader writer routines are actually declared in the support
+structure, $ReaderWriterSupport$, some of them are bound to names in
+the reader writer structure.
 
 =SML
-structure ‚ReaderWriter· : ReaderWriter = struct
-=TEX
-
-During development the capability to abandon this reader writer system
-and return to the PolyML default reader and writer is needed.  This is
-achieved by providing a local exception that is handled appropriately,
-together with a function to raise it.  This facility may be withdrawn
-for the proper release.  Calling this function from within $usefile$ or
-$usestring$ is allowed, the exception will be propagated out as far as
-possible.
-
-=SML
-exception AbandonReaderWriter;
-val abandoning = ref false;
-
-fun abandon_reader_writer () : unit = (
-	abandoning := true;
-	raise AbandonReaderWriter
-);
-=TEX
-
-%********************************************************************
-
-\subsection{Start of Embedding Interface}
-
-Most of the reader writer is placed in a structure within the main
-$ReaderWriter$ structure.  The items made visible from the outer
-structure are for the normal users of the system, those from the inner
-structure are provided to allow the embedding of other languages.
-
-=SML
-structure ‚ReaderWriterSupport· = struct
+structure ‚ReaderWriterSupport· : ReaderWriterSupport = struct
 =TEX
 
 %********************************************************************
 
 \subsection{Integers and Strings}
-
-Ordinal values of some characters are useful.
-
-=SML
-val ‚ord_0· = ord "0";
-val ‚ord_9· = ord "9";
-=TEX
 
 The string representation of integers is needed in various places.
 This is mainly to do with Standard~ML strings where some characters are
@@ -325,7 +305,7 @@ fun ‚string_of_int3· n = (
 		| 1 => "00" ^ str
 		| 2 => "0" ^ str
 		| 3 => str
-		| x => fail "string_of_int3" 5010
+		| x => fail "string_of_int3" 5040
 			[fn () => PolyML.makestring n]
 	end
 );
@@ -392,78 +372,19 @@ fun ‚local_error· (area : string) (id : int) (inserters : (unit -> string) list)
 );
 =TEX
 
-%********************************************************************
-
-\subsection{Diagnostics}
-
-Several control flags are provided in this structure for debugging
-purposes.  These flags are used throughout the rest of the structure.
-This section defines all of the debugging flags used by the reader
-writer.
+Details of warnings and errors are added to the generated text.
 
 =SML
-val RWchars_read = ref false;
-val _ =
-new_flag {name = "‚RWchars_read·",  control=RWchars_read, default=fn () => false};
-
-val RWchars_written = ref false;
-val _ =
-new_flag {name = "‚RWchars_written·",  control=RWchars_written, default=fn () => false};
-
-val RWphrases_read = ref false;
-val _ =
-new_flag {name = "‚RWphrases_read·",  control=RWphrases_read, default=fn () => false};
-
-val RWtext_read = ref false;
-val _ =
-new_flag {name = "‚RWtext_read·",  control=RWtext_read, default=fn () => false};
-
-val RNC = ref false;
-val _ =
-new_flag {name = "‚RNC·",  control=RNC, default=fn () => false};
+fun ‚add_error_code· (err_no:int, prev:string list) : string list = (
+	" ERROR__" ^ (string_of_int err_no) ^ " " :: prev
+);
 =TEX
 
-=IGN
-
-%--------------------------------------------------------------------
-
-It is useful to have the commands to set and clear these flags easily available.
-
-set_flag("RWchars_read", true);
-set_flag("RWchars_written", true);
-set_flag("RWphrases_read", true);
-set_flag("RWtext_read", true);
-set_flag("RNC", true);
-
-set_flag("RWchars_read", false);
-set_flag("RWchars_written", false);
-set_flag("RWphrases_read", false);
-set_flag("RWtext_read", false);
-set_flag("RNC", false);
-
-%--------------------------------------------------------------------
-
 =SML
-fun ‚logit· flag proc str = (
-	if !flag
-	then
-		(output(std_out, proc ^ "   " ^ (string_of_int(size str)) ^ "  <" ^
-			(	case str of "\n" => "\\n"
-				| "\^D" => "\\^D"
-				| x => x) ^ ">\n");
-		str)
-	else
-		str
-);
-
-fun ‚logit_list· flag proc (str:string list) = (
-	if !flag
-	then
-		(output(std_out, proc ^ "  " ^
-			(PolyML.makestring (map (fn x => (size x, x)) str)) ^ "\n");
-		str)
-	else
-		str
+fun	‚add_error_codes· (nil:int list, prev:string list) : string list =
+		prev
+|	add_error_codes (err_nos, prev) = (
+		fold add_error_code err_nos prev
 );
 =TEX
 
@@ -484,6 +405,7 @@ section~\ref{DeclareNameClass}.
 type ‚READER_ENV· = {
 	‚advance·			: unit -> string,
 	‚look_at_next·			: unit -> string,
+	‚push_back·			: string -> unit,
 	‚skip_and_look_at_next·	: unit -> string
 };
 =TEX
@@ -496,16 +418,15 @@ The system supports pretty characters in the source documents and on
 the printed output.  There are more characters available for output
 than can be contained in the eight bit character set that is
 available.  The additional pretty characters may be input by using a
-keyword approach where the keywords are introduced by a percent
-`{\tt\%}' character.  Details of all of the keywords and the actual
+keyword approach where the keywords are enclosed by percent
+`{\tt\%}' characters.  Details of all of the keywords and the actual
 pretty characters are included in a structure for use by other parts of
-the lexical analyser.
+the reader writer.
 
 To allow for the inclusion of other languages the structure is
 extensible.  It is initialised with the characters and keywords to
 support Standard~ML extended to allow pretty characters in identifiers
-and strings.  Later stages of this document\footnote{Or another
-document.} will extend the structure to support HOL and Z.
+and strings.
 
 =SML
 structure ‚PrettyNames· = struct
@@ -524,15 +445,13 @@ surrounding formal text which does not require processing by this
 reader writer.  Type $Ignore$ is for symbols which are to be completely
 ignored.
 
-More complex types are needed for embedding other languages.  Symbol of
+More complex types are needed for embedding other languages.  Symbols of
 type $Starting$ and $Ending$ are used (as their name suggests) to start
-and complete a section of embedded text.  Type $Middle$ is used within
-a section of embedded text.  The strings with the three constructors
-are added to the text presented to the \Compiler, they are described in
-section~\ref{FixedStringsForEmbeddingSymbols} where the details of how
-languages are embedded are given.  With type $Starting$ the function is
-the parsing function for the embedded language, it will perform a
-recursive decent (as described in section~\ref{ReaderWriter}) of the
+and complete sections of embedded text, the strings are included as the
+first and last characters in the generated text.  Type $Middle$ is used within
+a section of embedded text.  Type $Starting$ gives the reader function
+for the embedded language, it will perform a recursive decent analysis
+(as described in section~\ref{ReaderWriter}) of the
 next characters input.
 
 \label{DeclareNameClass}
@@ -542,15 +461,16 @@ datatype ‚NAME_CLASS·
 	=	‚Simple·
 	|	‚Ignore·
 	|	‚Invalid·
-	|	‚Starting·	of (READER_ENV -> string list -> string list) * string * string
+	|	‚Starting·	of (READER_ENV -> (string * bool) -> string -> bool ->
+					string list -> string list) * string
 	|	‚Middle·	of string
-	|	‚Ending·	of string * string
+	|	‚Ending·	of string
 	;
 =TEX
 
 For each distinct symbol a tuple is held.  It contains: a list of the
 alternative names for the symbol, with the preferred name at head; the
-pretty character, if any; and, the class of the name, that is where and
+pretty character, if any; and, the class of the name i.e., where and
 how it is used.
 
 =SML
@@ -560,6 +480,7 @@ type ‚PRETTY_NAME· = ( string list * string OPT * NAME_CLASS );
 %********************************************************************
 
 \subsection{Pretty Character Dictionary}
+\label{PrettyCharacterDictionary}
 
 The purpose of this data structure is to capture all of the names of
 the symbols together with their pretty characters and attributes.  The
@@ -586,7 +507,7 @@ val ‚char_dict·		: PRETTY_NAME E_DICT ref = ref initial_e_dict;
 To insert values into these dictionaries the following routines are
 provided.
 
-Some of the entries for pretty characters above are temporary, we do
+Some of the entries for pretty characters are temporary, we do
 not yet have the proper set of pretty characters.  To direct attention
 to the characters which are not correctly handled details will be
 obtained by examining the above list whilst the list produced remains
@@ -600,7 +521,7 @@ let
 	fun add_name(pcd as (names, _, _) : PRETTY_NAME, dict : PRETTY_NAME E_DICT
 			) : PRETTY_NAME E_DICT = (
 	let
-		fun moan_kw name = local_warn "add_new_symbols" 5006 [fn () => name];
+		fun moan_kw name = local_warn "add_new_symbols" 5100 [fn () => name];
 
 		fun ok_kw("Q"::"Q"::_) = false
 		| ok_kw(_::t) = ok_kw t
@@ -614,7 +535,7 @@ let
 		)
 	in
 		case names
-		of nil => (local_warn "add_new_symbols" 5015 nil; dict)
+		of nil => (local_warn "add_new_symbols" 5101 nil; dict)
 		| _ => fold aux names dict
 	end);
 
@@ -623,7 +544,7 @@ let
 	|   add_char(pcd as (names, Value ch, _), dict) = (
 		if size ch = 1 andalso ord ch >= 128
 		then	e_enter ch pcd dict
-		else (	local_warn "add_new_symbols" 5016  [fn () => PolyML.makestring names];
+		else (	local_warn "add_new_symbols" 5102  [fn () => PolyML.makestring names];
 			dict)
 	)
 in
@@ -829,16 +750,19 @@ Several symbols are provided for use with identifiers.
 
 Four new characters are created which have significant processing with
 respect to the way identifiers are formed.  Temporarily they will be
-used as follows, following the style used in~\cite{DS/FMU/IED/DEF002}
-to show the graphic, printed and ASCII forms of characters.
+used as follows.
 
 \begin{center}
-\begin{tabular}[t]{llll}
-Purpose&Graphic&Printed&ASCII\\[1ex]
+\begin{tabular}[t]{|l|l|l|l|}
+\hline
+Purpose&Graphics&Printed&Keyword\\
+&screen&form&\\
+&image&&\\\hline\hline
 Superscripts&$\sp+$&¬&{\tt\%up}\\
 Subscripts&$\sb 0$&„&{\tt\%down}\\
 \LaTeX\ inclusion&$\sb c$&∏&{\tt\%latex}\\
-Negation&${\rlap{$\times$}\hbox{$\,\times$}}$&™&{\tt\%negate}
+Negation&${\rlap{$\times$}\hbox{$\,\times$}}$&™&{\tt\%negate}\\
+\hline
 \end{tabular}
 \end{center}
 
@@ -896,32 +820,37 @@ Both may include pretty characters and keywords denoting pretty
 characters or other symbols.  The Standard~ML text is modified
 according to the nature of the pretty characters.
 
-The basis of the reader and writer is a recursive decent parser that
-understands the structure of both Standard~ML and HOL.  At first sight
-this seems overkill, but it is required so that anti quotations of
-Standard~ML within HOL can be properly delimited, which means that
-Standard~ML round braces be properly understood.  Both Standard~ML and
-HOL may include any character within string literals and comments, thus
-the reader must understand a considerable part of both languages.
+The basis of the reader writer is a recursive decent parser that
+understands part of the structure of Standard~ML, similarly the readers for
+embedded languages need to understand part of the structure of their language.
+At first sight this seems overkill, but it is required so that (for
+example) string literals and comments can be properly
+delimited.  Both Standard~ML and HOL may include any character within
+string literals and comments, thus the reader must recognise the
+context of use of all characters, it must therefore understand a
+considerable part of both languages.
 
 The rules for the code of the recursive decent parser are as follows.
 The main recursive function take as an argument the characters parsed
 and processed already, i.e., the characters to the left of the item to
-be matched by the called routine.  The most recently read character is
+be matched by the called routine, this is called the ``left hand
+context''.  The most recently read character is
 the first character of the item handled by the called routine.  This
 character is passed as an argument to some routines.  A routine is only
 called when it is appropriate.  When called the routine must read all
 the characters that are part of the input item it handles.  If the
-parse is successful it returns with the LHS string plus the newly
-matched characters.  If unsuccessful it calls $fail$ to report the
+parse is successful it returns with the new left hand
+context.  If unsuccessful it calls $fail$ to report the
 error.  On both types of exit the first unread character is the
 character that does not belong to the text already parsed.
 
 For efficiency reasons the characters parsed and processed already are
 held as a list of strings with the most recently parsed item at the
-head of the list.  A first attempt at the type of this argument would
+head of the list.  (A first attempt at the type of this argument might
 be a single string with text added to the right, however, string
-concatenation is thought to be inefficient.
+concatenation is thought to be inefficient.)  To create the string
+passed to the \Compiler{} the function ``$fn\;A=> implode(rev\;A)$''
+is applied to the list.
 
 %********************************************************************
 
@@ -932,31 +861,38 @@ concatenation is thought to be inefficient.
 \subsubsection{Reader Environment}
 \label{ReaderEnvironment}
 
-Routines are required for reading characters and giving a one character
-lookahead.  These routines considered to be the ``readers
-environment''.
+Routines are required for reading characters, for giving a one
+character lookahead, and for ``unreading'' characters (i.e., returning
+characters to the input stream so they will be read again).  These
+routines are considered to be the ``readers environment''.
 
 At all stages during parsing the work can be seen as follows.  Of the
 input text there is the ``portion already read'', the ``current
 character'' and the ``unread portion''.  The ``portion already read''
-will have been recorded (after some modifications) in $prev$ which is
+will have been recorded (after some modifications) in $prev$, the
+left hand context, which is
 one of the arguments of many of the parsing routines.  The
 ``current-character'' will be under processing by one of the recursive
 descent functions.  The first character of the ``unread-portion'' is
 called the next character.  At may stages there will be no current
 character, it will have been fully processed and added into the
-``portion already read''.
+left hand context.
 
-Function $advance$ assumes that the caller has properly dealt with the
+Function $advance$ is used when the caller has properly dealt with the
 current character, it reads a character and returns its value.
-Function $skip_and_look_at_next$ is similar, but does not return the
-value of the new current character.  Function $look_at_next$ does a one
-character lookahead and returns the value of that next character.
+Function $look_at_next$ does a one character lookahead and returns the
+value of that next character.  Function $skip_and_look_at_next$
+combines the above, it reads one character and discards its value, it
+then does a one character lookahead and returns the value of that next
+character.
 
-After end of file all routines return the character control-D, decimal
+After end of file all the reading routines return the character control-D, decimal
 code~4, whenever called.  For resilience of the code during testing the
 routines signal a fault if they return an excessive number of control-D
 characters, this is shown in section~\ref{ExcessiveControlDs}.
+
+Function $push_back$ adds its argument to the ``unread portion'' of the
+input text.
 
 The routines are placed in a record which is passed through the various
 routines of the lexical analyser.  The record, with the Standard~ML
@@ -981,48 +917,224 @@ which the comment braces `{\tt (*}' and `{\tt *)}' are properly
 balanced.  This routine is entered when the opening round bracket of
 the comment has been read, the opening asterisk is the first unread
 character.
+The entire comment is skipped leaving the first character after the
+comment as the first unread character.
+
+Standard~ML comments separate items, see~\cite[section~2.5]{Milner90},
+thus the caller of $skip_comment$ must arrange to replace the comment
+with an suitable separation.
 
 =SML
 fun ‚skip_comment· (R:READER_ENV) : unit = (
 let
-	val skip_and_read = #skip_and_look_at_next R;
-	val skip = #advance R;
-	fun aux (depth:int) : unit = (
-		case skip_and_read ()
-		of "(" =>	if skip_and_read () = "*"
-				then	aux (depth+1)
-				else	aux depth
-		|  "*" =>	if skip_and_read () = ")"
+	fun aux (skip:bool) (depth:int) : unit = (
+		if skip then (#advance R (); ()) else ();
+		case #look_at_next R ()
+		of "(" =>	if #skip_and_look_at_next R () = "*"
+				then	aux true (depth+1)
+				else	aux false depth
+		|  "*" =>	if #skip_and_look_at_next R () = ")"
 				then
+					(#advance R ();
 					if depth = 1
-					then	(skip (); ())
-					else	aux (depth-1)
-				else	aux depth
+					then	()
+					else	aux false (depth-1))
+				else	aux false depth
 		|  "\^D" =>	fail "skip_comment" 5001 nil
-		|  _   =>	aux depth
+		|  _   =>	aux true depth
 	)
 in
-	aux 1
+	aux true 1
 end);
 =TEX
 
 %--------------------------------------------------------------------
 
-\subsubsection{Formatting Characters}
+\subsubsection{Percent Keywords}
 
-Formatting characters are skipped over.  The string argument $next$
-here is the first unread character of the input text.
+Gather the characters of a percent keyword.  On entry the opening
+`{\tt\%}' is the next character.  The returned tuple contains the
+following values.
+
+\begin{itemize}
+
+\item The characters of the keyword, without the enclosing percents.
+
+\item The additional information found from looking up the keyword, or
+	$Nil$ for an unknown or empty keyword.
+
+\item A flag set true for a keyword with a closing percent sign, which
+	will have been read.
+
+\end{itemize}
+
+Note that for an input of two adjacent percent signs this routine
+returns the value ``$("", false, true)$''.
+
+This routine is a little different to the others in that it needs to do
+a multi-character look-ahead to gather the whole name to know how to
+treat the name and the enclosing `{\tt\%}' characters, whereas the rest
+of the system only needs one-character look-ahead.
 
 =SML
-fun ‚skip_format· (get : READER_ENV -> string list -> string list)
-		(R:READER_ENV) (prev:string list) (next:string) : string list = (
-	if		next = " "
-		orelse	next = "\n"
-		orelse	next = "\t"
-		orelse	next = "\^L"
-	then	skip_format get R prev (#skip_and_look_at_next R ())
-	else	get R (" " :: prev)
+fun ‚get_percent_name· (R:READER_ENV)
+		: (string * PrettyNames.PRETTY_NAME OPT * bool) = (
+	let
+		fun is_alphanumeric ch = (
+				(ch >= "a" andalso ch <= "z")
+			orelse	(ch >= "A" andalso ch <= "Z")
+			orelse	(ch >= "0" andalso ch <= "9")
+		);
+
+		fun collect_alphanumeric next = (
+			if is_alphanumeric next
+			then	next ^ (collect_alphanumeric(#skip_and_look_at_next R ()))
+			else	""
+		);
+
+		fun is_special ch = (
+			contains ["!", "&", "$", "#", "+", "-", "/", ":", "<", "=", ">",
+				"?", "@", "\\", "~", "'", "^", "|", "*"] ch
+		);
+
+		fun collect_specials next = (
+			if is_special next
+			then	next ^ (collect_specials(#skip_and_look_at_next R ()))
+			else	""
+		);
+
+		val next = #skip_and_look_at_next R ();
+
+		val name =
+			case collect_alphanumeric next
+			of ""	=> collect_specials next
+			| n	=> n;
+
+		val is_closed =
+			if #look_at_next R () = "%"
+			then	(#advance R (); true)
+			else	false
+	in
+		(name, PrettyNames.find_name name, is_closed)
+	end
 );
+=TEX
+
+%--------------------------------------------------------------------
+
+\subsubsection{Reading Logical Characters}
+
+In some parts of the reader writer we are interested in reading the
+next ``logical'' character rather than the next real character of the
+input.  By ``logical'' we mean that percent keywords have been read and
+their status found, similarly the status of extended characters is
+found.  Function $read_symbol$ achieves this task.  It returns a value
+of type $SYMBOL$.
+
+Note that function $read_symbol$ actually reads the symbol, it is thus
+not appropriate for those cases where lookahead is needed --- although
+a combination of $read_symbol$ and $push_back$ (see
+section~\ref{DeclareReaderEnv}) may be used.  For example, function
+$get_ML_any$ uses closing brackets to indicate the completion of the
+text it should gather, it leaves the closing bracket unread so that its
+caller may read the bracket.
+
+=SML
+datatype ‚SYMBOL·
+	=	‚SymCharacter·	of	string
+	|	‚SymWhite·		of	string
+	|	‚SymKnown·		of	string
+						* bool (* true => keyword *)
+						* PrettyNames.PRETTY_NAME
+	|	‚SymUnknownKw·	of	string
+						* bool (* true => has closing percent *)
+	|	‚SymUnknownChar·	of	string
+	|	‚SymDoublePercent·
+	;
+=TEX
+
+The meanings of the constructors of this type are as follows.
+
+\begin{description}
+\def\ITEM#1{\item[$#1$ ]}
+
+\ITEM{SymWhite} One or more formatting characters.
+
+\ITEM{SymKnown} An extended character or a keyword has been recognised
+	in the pretty character tables.  The string holds the character
+	or the keyword without its enclosing percent signs.  The bool
+	is true for a keyword, false for an extended character.  The
+	final value is the entry in the pretty character tables.
+
+\ITEM{SymUnknownKw} A keyword that is not known, or has no closing
+	percent sign, has been read.  The bool is true if a closing
+	percent sign was found.
+
+\ITEM{SymUnknownChar} An extended character that is not known in the
+	pretty character tables was found.
+
+\ITEM{SymDoublePercent} Two adjacent percent signs were found.
+
+\ITEM{SymCharacter} A single character that is not covered by the above
+	was found.  The character value is less than decimal~128.
+
+\end{description}
+
+=SML
+fun ‚read_symbol· (R:READER_ENV) : SYMBOL = (
+let
+	fun formatters next =
+	let
+		fun aux prev next =
+			if		next = " "
+				orelse	next = "\n"
+				orelse	next = "\t"
+				orelse	next = "\^L"
+			then	aux (next::prev) (#skip_and_look_at_next R ())
+			else	prev;
+	in
+		SymWhite(implode(rev(aux nil next)))
+	end;
+
+	val next = #look_at_next R ()
+in
+	case next
+	of "\t"	=>	formatters next
+	|  "\n"	=>	formatters next
+	|  " "	=>	formatters next
+	|  "\^L" =>	formatters next
+	|  "%"	=>	(	case get_percent_name R
+				of (kw, Value info, true) => SymKnown(kw, true, info)
+				| (kw, Value info, false) => SymUnknownKw(kw, false)
+				| ("", Nil, true) => SymDoublePercent
+				| (kw, Nil, is_closed) => SymUnknownKw(kw, is_closed)
+			)
+	|  _	=>	let
+				val ch = #advance R ();
+				val ord_ch = ord ch
+			in
+				if ord_ch > 127
+				then	case PrettyNames.find_char ch
+					of Value info => SymKnown(ch, false, info)
+					|  Nil	=> SymUnknownChar ch
+				else
+					SymCharacter ch
+			end
+end);
+=TEX
+
+The textual form of a symbol is wanted for some purposes.
+
+=SML
+fun	‚expand_symbol·((SymCharacter ch):SYMBOL) : string	= ch
+|	expand_symbol(SymWhite wh)				= wh
+|	expand_symbol(SymKnown(sym, true, info))			= "%" ^ sym ^ "%"
+|	expand_symbol(SymKnown(sym, false, info))			= sym
+|	expand_symbol(SymUnknownKw(sym, true))			= "%" ^ sym ^ "%"
+|	expand_symbol(SymUnknownKw(sym, false))		= "%" ^ sym
+|	expand_symbol(SymUnknownChar ch)			= ch
+|	expand_symbol(SymDoublePercent)				= "%%"
+;
 =TEX
 
 %--------------------------------------------------------------------
@@ -1117,37 +1229,45 @@ standard form, ``{\tt(*=}x{\tt=*)}'' where ``x'' is the missing
 characters.  The first example of one of these comments is a
 missing double quote in function $string_body$.
 
+An end of file found in the string indicates that there is no more
+input available, and so an immediate exit (via function $fail$) is
+taken.  All other errors detected in strings are reported as found (via
+function $local_error$) and have their numbers passed back to the
+caller.
+
 =SML
-fun ‚string_body· (ML_string:bool) (R:READER_ENV) prev = (
-	case #look_at_next R ()
-	of "\""		=> (	#advance R (); (*="=*)
+fun ‚string_body· (ML_string:bool) (R:READER_ENV) (prev:string list, preverrs:int list)
+			: (string list * int list) = (
+	case read_symbol R
+	of SymCharacter ch => (
+		case ch
+		of "\"" =>	(*="=*)
 				if ML_string
-				then	"\"" (*="=*) :: prev
-				else	string_body ML_string R ("\\\""::prev) (*="=*))
-	| "`"		=> (	#advance R ();
-				if ML_string
-				then	string_body ML_string R ("`"::prev)
-				else	"\"" :: prev (*="=*))
-	|  "\^D"	=> fail "string_body" 5007 nil
-	|  _		=>
-		let	val next = #advance R ();
-			val ord_next = ord next
-			val str =
-				if ord_next > 255
-				then
-					fail "string_body" 5010
-						[fn () => string_of_int ord_next]
-				else if ord_next > 127
-				then
-					"\\" ^ (string_of_int ord_next)
-				else if next = "\\"
-				then
-					handle_escape ML_string R
-				else
-					next
-		in
-			string_body ML_string R (str::prev)
-		end
+				then	("\"" (*="=*) :: prev, preverrs)
+				else	string_body ML_string R ("\\\"" (*="=*) :: prev, preverrs)
+		| "`" =>	if ML_string
+				then	string_body ML_string R ("`"::prev, preverrs)
+				else	("\"" (*="=*) :: prev, preverrs)
+		|  "\^D" =>	fail "string_body" 5002 nil
+		|  "\\"	=>	string_body ML_string R
+					((handle_escape ML_string R) :: prev, preverrs)
+		|  _ =>		string_body ML_string R (ch::prev, preverrs)
+		)
+	| SymDoublePercent => string_body ML_string R ("%" :: prev, preverrs)
+	| SymWhite wh => string_body ML_string R (wh::prev, preverrs)
+	| SymKnown(_, _, info) =>
+				string_body ML_string R ((
+					case info
+					of (_, Value ch, _) => "\\" ^ string_of_int3(ord ch)
+					| (names,_,Simple) => hd names
+				) :: prev, preverrs)
+	| SymUnknownKw(sym, _) => (
+				local_error "string_body" 5003 [fn () => sym, fn () =>
+					implode(rev(" ... " :: (prev to 10)))];
+				string_body ML_string R  (" 5003 " :: prev, 5003 :: preverrs))
+	| SymUnknownChar ch =>
+				string_body ML_string R
+					(("\\" ^ string_of_int3(ord ch))::prev, preverrs)
 );
 =TEX
 
@@ -1159,8 +1279,11 @@ string quote having been read.
 
 =SML
 fun ‚get_any_string· (ML_string:bool) (R:READER_ENV) prev = (
-	[implode(rev(string_body ML_string R ["\""]))] @ prev (*="=*)
-);
+let
+	val (str, errs) = string_body ML_string R (["\"" (*="=*)], nil)
+in
+	([implode(rev str)] @ prev, errs)
+end);
 
 in (* local for get_ML_string and get_primed_string *)
 
@@ -1169,82 +1292,6 @@ fun ‚get_ML_string· (R:READER_ENV) prev = get_any_string true R prev;
 fun ‚get_primed_string· (R:READER_ENV) prev = get_any_string false R prev;
 
 end (* of local for get_ML_string and get_primed_string *);
-=TEX
-
-%--------------------------------------------------------------------
-
-\subsubsection{Percent Keywords}
-
-The characters of a keyword that is enclosed with percent `{\tt\%}'
-characters are assembled here, and the keyword is looked up against the
-list of known keywords.
-
-This routine is a little different to the others in that it needs to do
-a multi-character look-ahead to gather the whole name to know how to
-treat the name and the enclosing `{\tt\%}' characters, whereas the rest
-of the system only needs one-character look-ahead.  The problem is that
-the names are several characters long; in the ML we require that all or
-none of the letters after a `{\tt\%}' are part of the name.  To
-overcome this the function will return a tuple of values.  The first
-element will give the characters read, but without any `{\tt\%}'
-characters.  The second entry will be the additional information found
-from looking up the keyword, or $Nil$ for an unknown keyword.
-The third entry is $true$ if the keyword was alphanumeric, $false$
-otherwise.  A forth entry is set to the error message text if an error
-has been raised because of a keyword without its closing `{\tt\%}',
-when no warning has been issued it is the empty string
-
-On entry a `{\tt\%}' is the next character.  Read the the name which is
-of two possible types:  most are a non-empty string of alphanumerics, a
-few are non-alphanumeric.
-
-=SML
-fun ‚get_percent_name· (R:READER_ENV)
-		: (string * PrettyNames.PRETTY_NAME OPT * bool * string) = (
-	let
-		fun is_alphanumeric ch = (
-				(ch >= "a" andalso ch <= "z")
-			orelse	(ch >= "A" andalso ch <= "Z")
-			orelse	(ch >= "0" andalso ch <= "9")
-		);
-
-		fun collect_alphanumeric next = (
-			if is_alphanumeric next
-			then	next ^ (collect_alphanumeric(#skip_and_look_at_next R ()))
-			else	""
-		);
-
-		fun is_special ch = (
-			contains ["!", "&", "$", "#", "+", "-", "/", ":", "<", "=", ">",
-				"?", "@", "\\", "~", "'", "^", "|", "*"] ch
-		);
-
-		fun collect_specials next = (
-			if is_special next
-			then	next ^ (collect_specials(#skip_and_look_at_next R ()))
-			else	""
-		);
-
-		val next = #skip_and_look_at_next R ();
-	in
-		case	(* tuple: (name, is_alpha) *)
-			case collect_alphanumeric next
-			of ""	=> (
-				(* No alphanumerics, look for specials *)
-				case collect_specials next
-				of ""	=> ("", false)
-				| n	=> (n, false)
-				)
-			| n	=> (n, true)
-		of ("", _) => ("", Nil, false, "")
-		| (n, is_alpha) =>
-			if #look_at_next R () = "%"
-			then (	#advance R ();
-				(n, PrettyNames.find_name n, is_alpha, ""))
-			else (	local_error "get_percent_name" 5014 [fn () => "%" ^ n];
-				(n, PrettyNames.find_name n, true, " *** ERROR 5014 *** "))
-	end
-);
 =TEX
 
 %--------------------------------------------------------------------
@@ -1269,7 +1316,7 @@ fun ‚get_round_braces· (get : READER_ENV -> string list -> string list)
 		(R:READER_ENV) (prev:string list) : string list = (
 	if #look_at_next R () = "*"
 	then
-		(skip_comment R; prev)
+		(skip_comment R; " " :: prev)
 	else
 		get_braces get R prev "(" ")"
 )
@@ -1311,11 +1358,11 @@ let
 					then	(#advance R ()) :: prev2
 					else if next = "\^D"
 					then	"\^D" :: prev2
-					else (	local_error "get_braces" 5005 [
+					else (	local_error "get_braces" 5008 [
 							fn () => next, fn () => first];
 						(if contains ["]", "}", ")"] next
 						then [#advance R ()]
-						else nil) @ (" *** ERROR 5005 *** " :: prev2))
+						else nil) @ (add_error_code(5008, prev2)))
 				end
 		| ["\^D"] =>	(#advance R ()) :: prev2
 		| new =>	more(new @ prev2)
@@ -1330,14 +1377,21 @@ end);
 \subsubsection{Main Parser Function}
 
 Function $get_ML_any$ is the main parser function.  It reads upto the
-first semi colon `{\tt;}' or closing bracket and then returns the text
-read.  A semi colon will be read and added to the returned text, a
-closing bracket is left unread for the calling routine.  The syntax
+first semi colon `{\tt;}', closing bracket or ending keyword and then
+returns the text read.  A semi colon will be read and added to the
+returned text, a closing bracket or ending keyword is left unread for
+the calling routine.  The syntax
 error where too many closing bracket are presented must be resolved by
 the outermost routine that calls this function.  The
 routines that handle text which may include semi colons, essentially
 those dealing with brackets, should repeatedly call $get_ML_any$ until
 the appropriate end of text is found.
+
+Some characters are used to indicate that $get_ML_any$ should return to
+its caller leaving that character unread, so that the caller may
+examine it further.  Most characters are actually read by this routine,
+or by those it calls.  This distinction leads to the nesting of the
+case expressions below.
 
 {\ftlinepenalty=9999
 =SML
@@ -1345,67 +1399,804 @@ fun ‚get_ML_any· (R:READER_ENV) (prev:string list) : string list= (
 let
 	open PrettyNames;
 
-	fun	echo(names, Nil) = " " ^ (hd names)
-	|	echo(names, Value ch) = " " ^ ch;
-
 	fun	do_keyword _ (names,_,Simple) p = get_ML_any R ("QQ"^(hd names)^"QQ"::p)
-	|	do_keyword k (_,_,Starting(proc, s1, s2)) p =
-			proc R ((s1 ^ "(\"" ^ (to_ML_string k) ^ "\", [icl'ol_text\"" ^ s2) :: p) (*="=*)
+	|	do_keyword k (_,_,(Starting(proc, str))) p = proc R k str true p
 	|	do_keyword _ (_,_,Middle str) p = get_ML_any R (str :: p)
-	|	do_keyword k (_,_,Ending(s1, s2)) p =
-			(s1 ^ "\"], \"" ^ (to_ML_string k) ^ "\")" ^ s2) :: p (*="=*)
+	|	do_keyword (k, is_keyword) (_,_,Ending _) p =
+			(#push_back R (if is_keyword then "%" ^ k ^ "%" else k); p)
 	|	do_keyword _ (_,_,Ignore) p = get_ML_any R p
-	|	do_keyword k (names,_,Invalid) p = (
-			local_error "get_ML_any" 5002 [fn () => k];
-			get_ML_any R (" *** ERROR 5002 *** ":: p));
+	|	do_keyword (k, is_keyword) (names,_,Invalid) p = (
+			local_error "get_ML_any" 5007
+				[fn () => if is_keyword then "%" ^ k ^ "%" else k];
+			get_ML_any R (add_error_code(5007, p)));
 
 	val next = #look_at_next R ()
 in
 	case next
-	of "("	=>	(#advance R (); get_ML_any R (get_round_braces get_ML_any R prev))
-	|  ")"	=>	prev
-	|  "["	=>	(#advance R (); get_ML_any R (get_box_braces get_ML_any R prev))
-	|  "]"	=>	prev
-	|  "{"	=>	(#advance R (); get_ML_any R (get_curly_braces get_ML_any R prev))
-	|  "}"	=>	prev
-	|  ";"	=>	(#advance R ()) :: prev
-	|  "\""	=>	(#advance R (); get_ML_string R prev) (*="=*)
-	|  "\t"	=>	skip_format get_ML_any R prev next
-	|  "\n"	=>	skip_format get_ML_any R prev next
-	|  " "	=>	skip_format get_ML_any R prev next
-	|  "\^L" =>	skip_format get_ML_any R prev next
-	|  "\^T" =>	prev
-	|  "\^D" =>	prev
-	|  "%"	=>	(	case get_percent_name R
-				of (name, Value info, _, ws)
-					=> do_keyword ("%" ^ name ^ "%") info (ws :: prev)
-				|  (n, Nil, false, ws)
-					=> get_ML_any R (	(case ws
-								of "" => "%" ^ n ^ "%"
-								| wss => wss)
-							:: prev)
-				|  (n, Nil, true, ws)
-					=> (	local_error "get_ML_any" 5003 [fn () => n, fn () =>
-							implode(rev(" ... " :: (prev to 10)))];
-						get_ML_any R (" *** ERROR 5003 *** "::ws::prev))
+	of (*=(=*)	")"	=>	prev
+	|  (*=[=*)	"]"	=>	prev
+	|  (*={=*)	"}"	=>	prev
+	|  		"\^T"	=>	prev
+	|  		"\^D"	=>	prev
+	| 		_ => (
+		case read_symbol R
+		of	SymCharacter ch => (
+				case ch
+				of "("	=>	(*=)=*) get_ML_any R
+						(get_round_braces get_ML_any R prev)
+				|  "["	=>	(*=]=*) get_ML_any R
+						(get_box_braces get_ML_any R prev)
+				|  "{"	=>	(*=}=*) get_ML_any R
+						(get_curly_braces get_ML_any R prev)
+				|  ";"	=>	ch :: prev
+				|  "\""	=>	let (*="=*)
+							val (prevB, errnos) = get_ML_string R prev;
+							val prevC = add_error_codes(errnos, prevB)
+						in
+							get_ML_any R prevC
+						end
+				|  "Q"	=>	get_ML_any R ("QQQQ" :: prev)
+				| _ =>		get_ML_any R (ch :: prev)
 			)
-	|  "Q"	=>	(#advance R (); get_ML_any R ("QQQQ" :: prev))
-	|  _	=>	let
-				val ch = #advance R ();
-				val ord_ch = ord ch
-			in
-				if ord_ch > 127
-				then	case find_char ch
-					of Value info
-						=> do_keyword ch info prev
-					|  Nil	=> (local_error "get_ML_any" 5004 [fn () => next,
-								fn () => string_of_int(ord_ch)];
-						get_ML_any R (" *** ERROR 5004 *** " :: prev))
-				else	get_ML_any R (ch :: prev)
-			end
-end)
+		|	SymWhite _ => get_ML_any R (" " :: prev)
+		|	SymDoublePercent => get_ML_any R ("%%" :: prev)
+		|	SymKnown(sym, is_keyword, info) =>
+				do_keyword (sym, is_keyword) info prev
+		|	SymUnknownKw(sym, _) => (
+				local_error "get_ML_any" 5003 [fn () => sym, fn () =>
+					implode(rev(" ... " :: (prev to 10)))];
+				get_ML_any R (add_error_code(5003, prev))
+			)
+		|	SymUnknownChar ch => (
+				local_error "get_ML_any" 5005 [fn () => next,
+					fn () => string_of_int(ord ch),
+					fn () => implode(rev(" ... " :: (prev to 10)))];
+				get_ML_any R (add_error_code(5005, prev))
+			)
+	)
+end);
 =TEX
 }
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{LANGUAGE NESTING}
+
+The reader writer is extensible in that support other languages may be
+added, the first such extension being for the HOL language.  Other
+languages are allowed by embedding them within Standard~ML text
+surrounded by certain percent-keywords or extended characters.
+
+A ``HOL quotation'' is a HOL term written in the language defined by
+the ICL HOL grammar~\cite{DS/FMU/IED/DEF001} and which is enclosed in
+the HOL term delimiting symbols (which are ``{\tt\%<\%}'' and
+``{\tt\%<\%}'' or their extended character equivalents).  Similarly one
+may have ``Z quotations'', ``Standard~ML quotations'' and so on.  (ML
+quotations are known as ``anti quotations'' in HOL~88.)
+
+The word ``language'' is used in a general sense in this document.
+Each set of enclosing symbols is considered to surround a different
+language although in practice the same language recogniser may be used
+for several set of enclosing symbols.  For example, the language of HOL
+terms may be used in term quotations and in three forms of HOL
+definition, namely axiomatic, infix axiomatic and schema definitions.
+
+Quotations may be included as parts of other quotations to any level of
+nesting.  The syntax for nesting is common across all supported
+languages, this syntax should be seen as a requirement upon any future
+embedded languages.
+
+All quotations yield values which are either HOL types or HOL terms,
+any particular quotation yields one of them.  Thus they may be used
+only in contexts where such values are allowed.  From the macro
+processing model of how quotations are processed each quotation is
+converted into a Standard~ML expression (of a Standard~ML-type that is
+either a HOL-type or a HOL-term).  Nesting of quotations means,
+therefore, nesting of Standard~ML expressions which will be processed
+by a Standard~ML compiler.  Text of languages other than Standard~ML is
+passed as string arguments to a recogniser for that language, it
+returns a value which is a HOL-type or a HOL-term.  Some recognisers
+are intended to be used at the Standard~ML top level (i.e., to be
+called as a Standard~ML $topdec$), their task is achieved by side
+effects, perhaps to declare a HOL constant.  These recognisers
+
+%********************************************************************
+
+\subsection{General Quotations}
+
+In all languages the two keywords `{\tt\%<\%}' and `{\tt\%>\%}' (and
+the corresponding extended characters) are used to denote embedding of
+text from another language.  The BNF syntax,
+see~\cite{ds/fmu/ied/pln009}, is as follows.
+
+ÛBNF
+quotation	=	'%<%', [ language_code ], quoted_text, '%>%';
+
+language_code	=	'%down%', name, white_space
+		|	':' ;
+Ê
+
+Where:
+
+\begin{description}
+
+\item[$name$ ] is a identifier in the extended Standard~ML.
+
+\item[$white_space$ ] is a space or a tab character.
+
+\item[$quoted_text$ ] is text in the named language.
+
+\end{description}
+
+The $name$ identifies the quoted language.  The default quotation is of
+a HOL term, which may also be indicated by a name of ``{\tt HOL}''.
+The colon form is equivalent to using the name ``{\tt HOL:}''.
+
+Convention.  Languages which yield HOL types should have a colon
+as the last character of their name.
+
+Note that including any space or tab characters before the
+$language_code$ will cause the default interpretation, as a HOL term.
+
+%********************************************************************
+
+\subsection{Other Quotations}
+
+Another form of quotation is used when the language text is enclosed by
+single symbols.  For example a HOL axiomatic definition is enclosed by
+the keywords ``{\tt\%SHA\%}'' and ``{\tt\%EHA\%}''.
+
+%********************************************************************
+
+\subsection{Supporting Other Languages}
+
+A goal when producing reader writers for embedded languages (indeed, a
+goal for the whole reader writer) is to make the reading as simple as
+possible, deferring as much as possible to the lexical analyser and
+parser for the particular language.  There are several simplifications
+that can be made, and which are made in the HOL reader writer that
+follows.
+
+\begin{itemize}
+
+\item Defer error detection and reporting as much as possible, leave it
+	to the lexical analyser or parser for the embedded language.
+	In this context there are many errors that the basic reader
+	writer is in a position to detect, but it passes them through to
+	the \Compiler{} knowing that the \Compiler{} will detect and
+	report them.
+
+\item Treat brackets in the same way as other symbols.  This means
+	allowing badly balanced brackets in the embedded text since the
+	parser will detect them.
+
+\item Use the functions provided in the basic reader writer, for
+	example to read and get information about percent keywords, and
+	to discard comment text.
+
+\item Treat character literals as strings, letting the lexical analyser
+	or parser complain if they are not exactly one character long.
+
+\end{itemize}
+
+Extensions are added in several pieces.
+
+\begin{enumerate}
+
+\item \label{ExtParser} A recursive descent parser for the new language, which {\em
+	must\/} conform to the conventions given in the preceding
+	sections, and particularly section~\ref{ReaderWriter}.  This
+	means it must also use the same reading functions which are
+	given in sections~\ref{DeclareReaderEnv}
+	and~\ref{ReaderEnvironment}.   It may use any of the existing
+	parsing functions, for example those dealing with comments and
+	strings.
+
+\item Additions to the name and character dictionaries, $name_dict$
+	and $char_dict$, to show how the languages special symbols are
+	treated.  These extensions include the symbols that start and
+	end sections of text of the new language.
+
+\item Additions to the dictionaries relating language names or
+	starting symbols to reading functions.
+
+\item \label{RWRoutine} A routine, but not part of this document, that
+	performs the proper lexical analysis, parsing and any other
+	processing required for the new language.
+
+\end{enumerate}
+
+%********************************************************************
+
+\subsection{Datatype for Parser Interface}
+\label{DatatypeForParserInterface}
+
+Considered as an imperative program, the output of the reader portion
+of the reader writer is a string of characters that are presented to a
+Standard~ML \Compiler.  In this context the text of any embedded
+language must be converted into Standard~ML, a convenient form would be
+a Standard~ML string preceded by a call of the routine produced for
+item~\ref{RWRoutine} listed above.  To allow embedded text to contain
+quotations the input to
+the parsing routine is actually a list of values of the following
+datatype.  Note that the actual declaration is made by the lexical
+analyser~\cite{ds/fmu/ied/dtd015}.  This declaration might be viewed
+as the task of the $ReaderWriterSupport$ structure.  It is not needed
+by anything in the reader writer, but arguably it should be defined
+here since it represents part of the general interface between the
+reader writer and the lexical analysers.  However, the datatype cannot be
+declared until the Standard~ML types $TYPE$ and $TERM$ are declared, these require
+a large portion of the ICL HOL system to be available and they are not
+declared until after the reader writer is declared.
+
+The exact form and usage of this declaration is determined by three
+parts of the ICL HOL system: the HOL lexical
+analyser~\cite{ds/fmu/ied/dtd015}; the symbol definitions passed to
+$add_new_symbols$ in section~\ref{PrettyCharactersForHOL} below; and,
+the code in the functions that generate text containing uses of the
+declaration.
+
+ÛSML Example
+structure ‚Lex· = struct
+	...
+	datatype ‚INPUT·
+		=	‚Text·		of string
+		|	‚String·		of string
+		|	‚Char·		of string
+		|	‚Type·		of TYPE
+		|	‚Term·		of TERM
+		|	‚Error·		of int
+			;
+	...
+end;
+Ê
+
+%\newpage
+
+The various constructors are used as follows.
+
+{\def\ITEM#1{\item[$#1$ ] }
+\begin{description}
+
+\ITEM{Lex.Text} Text of the new language, text that needs to be
+	lexically analysed, parsed, etc.  This text excludes strings
+	and character literals.
+
+\ITEM{Lex.String} Character strings of the embedded language,
+	these are strings as defined in~\cite[section~2.1]{Milner90}.
+	These need to be recognised
+	by the reader writer to prevent the wrong interpretation of
+	characters within them.  Since the reader writer has identified
+	them it seems appropriate to reduce the work of later stages of
+	the languages analysis by keeping them
+	as distinguished parts of the input text.
+
+\ITEM{Lex.Char} As $Lex.String$ but these strings are introduced by the
+	single left-hand prime~(~{\tt`}~) characters.  The name
+	`$Lex.Char$' derives from the HOL use of this, namely for
+	character literals --- the HOL recogniser has the task of
+	validating the number of characters passed.
+
+\ITEM{Lex.Term} A Standard~ML expression that yields a HOL
+	term.  This value is produced by a term anti quotation within
+	HOL text.  Note that the value given here is any Standard~ML
+	expression --- it must yield the correct Standard~ML type or an
+	error will be reported by the \Compiler{} --- which may contain
+	embedded text of another language which will be another list of
+	this datatype, which may contain another anti quotation, and so
+	on.
+
+\ITEM{Lex.Type} As $Lex.Term$, but for HOL types.
+
+\ITEM{Lex.Error} Used to indicate the approximate site of detection of
+	an error (whose code is also passed) in the object language
+	text.
+
+\end{description}}
+
+The reader writer assumes a simple balancing of the starting and ending
+symbols (from the constructors $PrettyNames.Starting$ and
+$PrettyNames.Ending$), it does not attempt to check that the correct
+symbols are used to start and end an embedded text.  The routines for
+the called language are expected to check for the correct matching.  To
+assist with this check the interface to the embedded language is a
+tuple comprising the actual opening symbol, the list described above
+and the actual closing symbol; its Standard~ML type is:
+`$(string\;*\;string\;*\;(Lex.INPUT\;list)\;*\;string)$' \ The
+order of these elements of the tuple reflects the order they are
+read and processed by the imperative aspects of the reader writer.
+
+The parsing routines return strings containing these constructors as
+follows.  Note that these rules are built into the code of the
+basic reader writer.
+
+\begin{itemize}
+
+\item All routines assume that they are entered when the string
+	``\verb|Lex.Text "|'' has recently been output, other
+	characters may also have been output, but the closing double
+	quote has not.
+
+\item Any routine that wants a constructor other than
+	``\verb|Lex.Text|'' must close the current string, produce
+	its own value, and start a new ``\verb|Lex.Text|', together
+	with the necessary list element separators.
+
+\end{itemize}
+
+%********************************************************************
+
+\subsection{Generated Standard~ML}
+
+A call from an ML context will yield the equivalent of
+
+ÛSML fragment
+( recogniser ( "starting symbol", "language name", quoted_text, "closing symbol" ))
+Ê
+
+Where:
+
+\begin{description}
+
+\item[$recogniser$ ] is derived from the language name, it has a
+	result type of either HOL-term or HOL-type.
+
+\item[$start_symbol$ ] is the symbol that introduced the quoted text,
+	a string.
+
+\item[$quoted_text$ ] is derived from the quoted text, it is a list
+	comprising strings and quotations.
+
+\item[$closing_symbol$ ] is the symbol that completed the quoted text,
+	a string.
+
+\end{description}
+
+A call from a non-ML context will have the above passed as an argument
+to either $Lex.Type$ or $Lex.Term$ depending on the way the language
+name was introduced to the reader writer.
+
+A language name that is not recognised will be processed in the same
+way, but the name used for $recogniser$ above will be that of a
+function that reports an error.  The reason for processing the text is
+to allow the whole of the erroneous input text to be skipped over, thus
+providing some measure of error recovery.
+
+%********************************************************************
+
+\subsection{Readers For Particular Languages}
+
+All readers that may be called by the basic reader writer have a type
+given by $READER_FUNCTION$, their string list argument is the left hand
+context of their call, this value must be returned.  Any new text
+assembled by the reader is added to the head of this list so that when
+it is reversed and then imploded (via the Standard~ML function ``$fn
+A=> implode(rev A)$'') the result is in the correct order.  This
+function is always called with a left hand context requiring a
+Standard~ML value, in other word, the text that the reader function
+produces should be an Standard~ML expression.  The type of that
+expression is either a HOL type or a HOL term if the text may be
+written as a quotation embedded in another language, this is the case
+when the reader is installed by $add_general_reader$. {} For readers
+installed by $add_specific_reader$ the expression may be of any type,
+but is usually of type unit, as it will normally be used as a
+Standard~ML topdec.
+
+=SML
+type ‚READER_FUNCTION·
+	= READER_ENV
+	-> (string * bool)		(* Starting symbol *)
+	-> string		(* Language name *)
+	-> string		(* Opening text *)
+	-> string list		(* Left hand context *)
+	-> string list;
+=TEX
+
+A simple reader function is required for skipping over text when an
+unknown language has been requested.
+
+=SML
+fun ‚skipping_reader· (R:READER_ENV) (start:string, is_keyword:bool)
+		(lang_name:string) (opening:string)
+		(prevA:string list) : string list = (
+let
+	open PrettyNames;
+
+	fun read (depth:int) (prev_errs:int list) : int list = (
+		case read_symbol R
+		of	SymCharacter ch => (
+				case ch
+				of "\^D" => fail "skipping_reader" 5030 []
+				| ch => read depth prev_errs
+			)
+		|	SymWhite _ => read depth prev_errs
+		|	SymKnown(_, _, (_, _, info)) => (
+				case info
+				of Starting _ => read (depth+1) prev_errs
+				| Ending _ =>
+					if depth = 1
+					then prev_errs
+					else read (depth-1) prev_errs
+				| _ => read depth prev_errs
+			)
+		|	SymUnknownKw(sym, _) => (
+				local_error "skipping_reader" 5004 [fn () => sym];
+				read depth (5004::prev_errs))
+		|	SymUnknownChar ch => (
+				local_error "skipping_reader" 5006 [fn () => ch,
+					fn () => string_of_int(ord ch)];
+				read depth (5006::prev_errs))
+		|	SymDoublePercent => read depth prev_errs
+	);
+
+	val errs = read 1 nil
+in
+	(local_error "skipping_reader" 5010
+		[fn () => if is_keyword then "%" ^ start ^ "%" else start,
+		fn () => lang_name];
+	add_error_codes(5010::errs, prevA))
+end
+);
+=TEX
+
+%********************************************************************
+
+\subsection{Reader Function Database}
+
+Two sets of reader functions are held.  A general reader handles
+embedded language text introduced by a ``{\tt\%<\%}'' or the
+corresponding extended character, which may be followed by the name of
+the particular language, it defaults to the HOL term language.  A
+specific reader handles language text introduced by a single
+keyword or extended character and where the closing character denotes
+the end of the extended Standard~ML topdec.
+
+=SML
+local (* for holding reader names *)
+
+open EfficientDictionary;
+
+val ‚general_reader· : (READER_FUNCTION * string) E_DICT ref = ref initial_e_dict;
+
+val ‚specific_reader· : (READER_FUNCTION * string) E_DICT ref = ref initial_e_dict;
+
+in
+
+fun ‚add_general_reader· (name:string, constructor:string,
+		reader:READER_FUNCTION) : unit = (
+	general_reader := e_enter name (reader, constructor) (!general_reader)
+);
+
+fun ‚look_up_general_reader· (name:string) : (READER_FUNCTION * string) OPT = (
+	e_lookup name (!general_reader)
+);
+
+fun ‚add_specific_reader· (name:string, constructor:string,
+		reader:READER_FUNCTION) : unit = (
+	specific_reader := e_enter name (reader, constructor) (!specific_reader)
+);
+
+fun ‚look_up_specific_reader· (name:string) : (READER_FUNCTION * string) OPT = (
+	e_lookup name (!specific_reader)
+);
+
+end (* of local for holding reader names *);
+=TEX
+
+%********************************************************************
+
+\subsection{General Quotation}
+
+{\ftlinepenalty=9999
+=SML
+local (* for function general_quotation *)
+
+fun ‚get_language_name· (R:READER_ENV) : string = (
+let
+	open PrettyNames;
+
+	fun get_name (prev:string list) : string list = (
+		case read_symbol R
+		of	SymWhite _ => prev
+		|	SymCharacter ch => (
+				case ch
+				of "\^D" => fail  "get_language_name" 5031 []
+				| _ => get_name (ch :: prev)
+			)
+		|	SymKnown(_, _, (_, _, Starting _)) => prev
+		|	SymKnown(_, _, (_, _, Ending _)) => prev
+		|	SymKnown(_, _, (_, _, Middle _)) => prev
+		|	SymKnown(_, _, (_, Value ch, _)) => get_name (ch :: prev)
+		|	SymKnown(_, _, (names, _, _)) => get_name ((hd names) :: prev)
+		|	SymUnknownKw(sym, _) => (
+				local_error ;
+				["_ERROR_"]
+			)
+		|	SymUnknownChar ch => (
+				local_error ;
+				["_ERROR_"]
+			)
+		|	SymDoublePercent => get_name ("%" :: prev)
+	);
+
+	val next = #look_at_next R ()
+in
+	if next = "%" orelse ord next > 127
+	then
+		case read_symbol R
+		of	SymKnown(sym, _, ("down"::_, _, _)) => implode(rev(get_name nil))
+		|	sym => (#push_back R (expand_symbol sym); "HOL")
+	else if next = ":"
+	then
+		(#advance R (); "HOL:")
+	else
+		"HOL"
+end
+);
+=TEX
+}
+
+On entry the opening quotation symbol (keyword or character, passed in
+$start$) has been read, the first character after the symbol is the
+first unread character.  The calling context is indicated by $in_ML$
+where $true$ denotes the quotation occurs in extended Standard~ML,
+$false$ denotes the quotation is from an object language.  The
+information about the opening quotation symbol is given as info.
+
+=SML
+in (* local for function general_quotation *)
+
+fun ‚general_quotation· (R:READER_ENV) (start:string * bool) (opening:string) (in_ML:bool)
+		(prevA:string list)
+		: string list = (
+let
+	val lang_name = get_language_name R;
+
+	val (reader, constructor) =
+			case look_up_general_reader lang_name
+			of Nil => (
+				local_error  "general_quotation" 5011 nil;
+				(skipping_reader, ""))
+			| Value x => x;
+
+	val (completion, prevB) =
+		if in_ML
+		then ("", prevA)
+		else (", Lex.Text\"", constructor :: "\", " :: prevA);
+in
+	completion :: (reader R start lang_name opening prevB)
+end
+);
+
+end (* of local for function general_quotation *);
+=TEX
+
+=SML
+fun ‚specific_quotation· (R:READER_ENV) (start:string, is_keyword:bool)
+		(opening:string) (in_ML:bool) (prevA:string list)
+		: string list = (
+let
+	val (reader, constructor) = 
+			case look_up_specific_reader start
+			of Nil => (
+				local_error  "specific_quotation" 5011 nil;
+				(skipping_reader, ""))
+			| Value x => x;
+
+	val (completion, prevB) =
+		if in_ML
+		then (";", prevA)
+		else (", Lex.Text\"", constructor :: "\", " :: prevA);
+in
+	completion :: (reader R (start, is_keyword) "" opening prevB)
+end
+);
+=TEX
+
+%********************************************************************
+
+\subsection{Reader for Standard~ML}
+
+Standard~ML may be quoted in other languages, the reading functions
+have been given earlier in this document, but they need an entry point
+of the correct type to be introduced to function $general_quotation$,
+and they need the correct wrapping when included in other languages.
+
+In common with other quoted languages a string of the following form is
+generated.
+
+ÛSML Example
+( recogniser ( "starting symbol", "language name", quoted_text, "closing symbol" ))
+Ê
+
+In this case function $ReaderWriterSupport.SML_recogniser$ is the
+$recogniser$, it just checks the validity of the three strings and
+returns the value of the $quoted_text$.
+
+=SML
+fun ‚SML_recogniser· (start:string, lang:string, value:'a, finish:string) : 'a = (
+let
+	fun kw_matches(str, kw) = (
+		kw = str orelse
+		case PrettyNames.find_name kw
+		of Value(names, ch_opt, _) =>
+			contains (	case ch_opt
+					of Value ch => ch :: names
+					| _ => names
+				) str
+		| Nil => false
+	);
+in
+	if		kw_matches(start, "<")
+	andalso	kw_matches(finish, ">")
+	andalso	(lang = "SML" orelse lang = "SML:")
+	then
+		value
+	else
+		fail "SML_recogniser" 5050 [fn () => start, fn () => lang, fn () => finish]
+end
+);
+=TEX
+
+Function $SML_reader$ gathers the actual text.  Function $get_ML_any$
+is called in a loop because its task is to read text up to but not
+including certain delimiters.  In this case we must read text up to and
+including the next $Ending$ symbol.  All other characters must be read
+and added to the output list.
+
+=SML
+fun ‚SML_reader· (R:READER_ENV) (start:string, is_keyword:bool)
+		(lang:string) (opening:string) (prevA:string list) : string list = (
+let
+	open PrettyNames;
+
+	val prevB =
+		opening ::
+		"\", " :: (*="=*)
+		lang ::
+		"\", \"" ::
+		start ::
+		"(\"" (*=")=*) ::
+		"ReaderWriterSupport.SML_recogniser" ::
+		"(" ::
+		prevA;
+
+	fun read prevC = (
+		case get_ML_any R nil
+		of nil => (	case read_symbol R
+				of	SymCharacter "\^D" =>
+						fail "SML_reader" 5032 nil
+				|	SymKnown(sym, _, (_, _, Ending str)) =>
+						(*=[((=*)	"\"))" :: sym :: ", \"" :: str :: prevC
+				|	SymWhite _ => read (" " :: prevC)
+				|	sym => read ((expand_symbol sym) :: prevC)
+			)
+		| "\^D"::nil =>	fail "SML_reader" 5032 nil
+		| x =>		read (x @ prevC)
+	);
+in
+	read prevB
+end
+);
+=TEX
+ 
+=SML
+val _ = add_general_reader("SML", "Lex.Term", SML_reader);
+val _ = add_general_reader("SML:", "Lex.Type", SML_reader);
+=TEX
+
+%********************************************************************
+
+\subsection{Completion of Basic Reader Writer}
+
+That ends the support structure.
+
+=SML
+end (* of structure ReaderWriterSupport *);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{READER WRITER}
+
+=SML
+structure ‚ReaderWriter· : ReaderWriter = struct
+
+open ReaderWriterSupport;
+=TEX
+
+During development the capability to abandon this reader writer system
+and return to the PolyML default reader and writer is needed.  This is
+achieved by providing a local exception that is handled appropriately,
+together with a function to raise it.  This facility may be withdrawn
+for the proper release.  Calling this function from within $usefile$ or
+$usestring$ is allowed, the exception will be propagated out as far as
+possible.
+
+=SML
+exception AbandonReaderWriter;
+val abandoning = ref false;
+
+fun abandon_reader_writer () : unit = (
+	abandoning := true;
+	raise AbandonReaderWriter
+);
+=TEX
+
+%********************************************************************
+
+\subsection{Diagnostics}
+
+Several control flags are provided in this structure for debugging
+purposes.  These flags are used throughout the rest of the structure.
+This section defines all of the debugging flags used by the reader
+writer.
+
+=SML
+val RWchars_read = ref false;
+val _ =
+new_flag {name = "‚RWchars_read·",  control=RWchars_read, default=fn () => false};
+
+val RWchars_written = ref false;
+val _ =
+new_flag {name = "‚RWchars_written·",  control=RWchars_written, default=fn () => false};
+
+val RWphrases_read = ref false;
+val _ =
+new_flag {name = "‚RWphrases_read·",  control=RWphrases_read, default=fn () => false};
+
+val RWtext_read = ref false;
+val _ =
+new_flag {name = "‚RWtext_read·",  control=RWtext_read, default=fn () => false};
+
+val RNC = ref false;
+val _ =
+new_flag {name = "‚RNC·",  control=RNC, default=fn () => false};
+=TEX
+
+=IGN
+
+%--------------------------------------------------------------------
+
+It is useful to have the commands to set and clear these flags easily available.
+
+set_flag("RWchars_read", true);
+set_flag("RWchars_written", true);
+set_flag("RWphrases_read", true);
+set_flag("RWtext_read", true);
+set_flag("RNC", true);
+
+set_flag("RWchars_read", false);
+set_flag("RWchars_written", false);
+set_flag("RWphrases_read", false);
+set_flag("RWtext_read", false);
+set_flag("RNC", false);
+
+%--------------------------------------------------------------------
+
+=SML
+fun ‚logit· flag proc str = (
+	if !flag
+	then
+		(output(std_out, proc ^ "   " ^ (string_of_int(size str)) ^ "  <" ^
+			(	case str of "\n" => "\\n"
+				| "\^D" => "\\^D"
+				| x => x) ^ ">\n");
+		str)
+	else
+		str
+);
+
+fun ‚logit_list· flag proc (str:string list) = (
+	if !flag
+	then
+		(output(std_out, proc ^ "  " ^
+			(PolyML.makestring (map (fn x => (size x, x)) str)) ^ "\n");
+		str)
+	else
+		str
+);
+=TEX
 
 %********************************************************************
 
@@ -1413,11 +2204,17 @@ end)
 
 This routine is called by $PolyML.compiler$ to read the next part of
 the input text.  It adopts a simple approach to text that $get_ML_any$
-cannot parse properly, it passes the first character that did not parse
+cannot parse properly, it passes the first symbol that did not parse
 on to its caller.  Consider an unmatched closing bracket which
 $get_ML_any$ cannot parse and so returns an empty string, the bracket
 is read here and returned for the caller to deal with, probably by
 issuing an error message.
+
+The case analysis on the result of $read_symbol$ below is complete, but
+we expect that most branches will never be taken as function
+$get_ML_any$ will have fully handled the characters.  For example, the
+$SymUnknown\ldots$ clauses should have already been reported as faults
+and thus have been read past.
 
 Text that parsed successfully here must be converted in the correct
 order into a single string.
@@ -1429,17 +2226,22 @@ val ‚sent_eof· = ref false;
 
 fun ‚get_ML· (R:READER_ENV) = (
 	case get_ML_any R nil
-	of nil =>	(	case #advance R ()
-				of "\^D" =>	if !sent_eof
-						then nil
-						else (sent_eof := true; ["\^D"])
-				| ch =>		(sent_eof := false; [ch]))
+	of nil =>	(
+		case read_symbol R
+		of	SymCharacter "\^D" =>
+				if !sent_eof
+				then nil
+				else (sent_eof := true; ["\^D"])
+		|	sym => (sent_eof := false; [expand_symbol sym])
+		)
 	| "\^D"::nil =>	if !sent_eof
 				then	nil
 				else	(sent_eof := true; [#advance R ()])
 	| x =>			(sent_eof := false; rev x)
-)
+);
+=TEX
 
+=SML
 in (* local for get_ML_outermost *)
 
 fun ‚get_ML_outermost· (R:READER_ENV) () : string = (
@@ -1447,22 +2249,11 @@ fun ‚get_ML_outermost· (R:READER_ENV) () : string = (
 		val ord_nl = ord "\n" and ord_tab = ord "\t"
 		and ord_ff = ord "\^L" and ord_eof = ord "\^D";
 
-		fun ok_chars(s : string) : bool = (
-			all (explode s) ((fn x => ((x >= 32 andalso x <= 127)
-					orelse x = ord_nl
-					orelse x = ord_tab
-					orelse x = ord_ff
-					orelse x = ord_eof)) o ord)
-		);
-
 		val text_read_list = get_ML R;
 		val text_read = implode text_read_list
 	in
 		logit_list	RWphrases_read	"get_ML_outermost" text_read_list;
 		logit		RWtext_read		"get_ML_outermost" text_read;
-		if ok_chars text_read
-		then	()
-		else	local_warn "get_ML_outermost" 5018 [fn () => text_read];
 		if text_read = ""
 		then	raise EndOfInput
 		else	text_read
@@ -1481,24 +2272,6 @@ case $PolyML.compiler$ skips over it without any problem.  There are
 other places in the string that could be optimised (e.g., spaces before
 and after brackets) but again, $PolyML.compiler$ skips over them more
 efficiently than this routine could remove them.
-
-%********************************************************************
-
-\subsection{Completion of Embedding Interface}
-
-Some of the declarations above are intended for use when embedding
-other languages.  The remaining declarations within structure
-$ReaderWriter$ are concerned with the main user interface of the reader
-writer.  The support structure is opened here so that its contents are
-readily available for the remainder of the basic reader writer, note
-that the signature constraint on the structure $ReaderWriter$ will keep
-the supporting declarations within their own structure.
-
-=SML
-end (* of structure ReaderWriterSupport *);
-
-open ReaderWriterSupport;
-=TEX
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \newpage
@@ -1703,7 +2476,8 @@ To stop the reader looping without reading new characters a counter is
 maintained of the number of times each character is passed to the
 parsing functions, a failure is reported when this exceeds a threshold
 value.  This threshold must be at least 3 since a character may be
-examined by $skip_format$ then looked at by $get_ML_any$ and then
+examined by one of the bracketed text functions
+then looked at by $get_ML_any$ and then
 advanced over.  Longer sequences may be possible but have not (yet!)
 been identified.
 
@@ -1720,7 +2494,7 @@ complex tasks are to recognise ASCII keywords and convert them to their
 equivalent pretty characters and to recognise the numeric values of
 pretty characters in strings and print the correct character.  The
 conversions are as follows.  A keyword is a sequence of alphanumerics enclosed in ``{\tt QQ}'' 
-characters, e.g., ``$pi$'' is encoded as ``{\tt QQpiQQ}''.
+characters, e.g., ``$\pi$'' is encoded as ``{\tt QQpiQQ}''.
 If a decoding is available then replace the
 whole keyword with the corresponding pretty character.  If no pretty
 character is available then replace the enclosing ``{\tt QQ}'' characters with
@@ -1755,6 +2529,8 @@ writer.
 =SML
 fun ‚writer· (s : string) : unit = (
 let
+	val ord_0 = ord "0";
+
 	fun get_kw (prev, nil) = (prev, true, nil)
 	|   get_kw (prev, "Q"::"Q"::t) = (prev, true, t)
 	|   get_kw (prev, h::t) = (	if	(h >= "A" andalso h <= "Z")
@@ -1763,21 +2539,21 @@ let
 					then	get_kw(prev ^ h, t)
 					else	(prev, false, h::t));
 
-	val e5017 = " *** ERROR 5017 *** ";
+	val e5009 = " (* ERROR 5009 *) ";
 
 	fun aux nil = []
 	|   aux ("Q"::"Q"::"Q"::"Q"::t) = "Q"::(aux t)
 	|   aux (f as "Q"::"Q"::"Q"::t) = (
-		local_error "writer" 5017 [fn () => implode f];
-		e5017 :: (aux t))
+		local_error "writer" 5009 [fn () => implode f];
+		e5009 :: (aux t))
 	|   aux (f as "Q"::"Q"::rest) = (
 		case	get_kw ("", rest)
-		of (_, false, t) => (local_error "writer" 5017 [fn () => implode f]; e5017 :: (aux t))
+		of (_, false, t) => (local_error "writer" 5009 [fn () => implode f]; e5009 :: (aux t))
 		|  (kw, true, t) => (	case	PrettyNames.find_name kw
 					of Value(_, Value ch, _)	=> ch
 					| _				=> "%" ^ kw ^ "%"
 				) :: (aux t))
-	|   aux (f as "Q"::t) = (local_error "writer" 5017 [fn () => implode f]; e5017 :: (aux t))
+	|   aux (f as "Q"::t) = (local_error "writer" 5009 [fn () => implode f]; e5009 :: (aux t))
 	|   aux ((h as "\"")::t) = h::(aux_str t)  (*="=*)
 	|   aux (h::t) = h::(aux t)
 
@@ -1796,7 +2572,7 @@ let
 			in
 				if ch > 127
 				then	(chr ch) :: (aux_str t)
-				else	"\\"::d1::(aux_str(d2::d3::t))
+				else	"\\"::d1::d2::d3::(aux_str t)
 			end
 		else
 			"\\"::d1::(aux_str(d2::d3::t)))
@@ -1810,6 +2586,26 @@ in
 end);
 =TEX
 }
+
+%********************************************************************
+
+\subsection{Input Pushback}
+
+The pushed back input stream is a list of single characters, it should
+not contain any empty strings or control-Ds.  Either of these may be
+wrongly interpreted as end of input.
+
+=SML
+fun ‚screen_for_push_back· (chars:string) (prev:string list) : string list = (
+let
+	fun aux ("\^D"::t) prevA = aux t prevA
+	| aux (""::t) prevA = aux t prevA
+	| aux (h::t) prevA = aux t (h::prevA)
+	| aux nil prevA = prevA
+in
+	aux (explode chars) prev
+end);
+=TEX
 
 %********************************************************************
 
@@ -1830,13 +2626,30 @@ new_flag {name = "‚usefile_non_stop_mode·",  control=usefile_non_stop_mode,
 =SML
 fun ‚usefile· (file:string) : unit = (
 let
-	val cur_in = open_in file;
+	val cur_in =	open_in file
+			handle IO => open_in(file ^ ".ML")
+			handle IO => open_in(file ^ ".sml");
 	val line_number = ref 1;
 	val copies_of_char_sent = ref 0;
 	exception Read_too_often of string;
 
+	val read_ahead : string list ref = ref nil;
+
+	fun read_char () : string = (
+		case !read_ahead
+		of nil =>	input(cur_in, 1)
+		| h :: t =>	(read_ahead := t; h)
+	);
+
+	fun look_ahead_char () : string = (
+		case !read_ahead
+		of nil =>	let	val ch = input(cur_in, 1)
+				in	(read_ahead := [ch]; ch) end
+		| h :: _ =>	h
+	);
+
 	fun ‚f_advance· () : string = (
-		case input(cur_in, 1)
+		case read_char()
 		of "" =>	if !copies_of_char_sent > max_copies_of_char_sent
 				then	raise Read_too_often "\\^D"
 				else	(copies_of_char_sent := (!copies_of_char_sent + 1);
@@ -1849,7 +2662,7 @@ let
 	);
 
 	fun ‚f_look_at_next· () = (
-		case lookahead cur_in
+		case look_ahead_char()
 		of "" =>	if !copies_of_char_sent > max_copies_of_char_sent
 				then	raise Read_too_often "\\^D"
 				else	(copies_of_char_sent := (!copies_of_char_sent + 1);
@@ -1860,16 +2673,33 @@ let
 					logit RWchars_read "f_look_at_next         " ch)
 	);
 
+	fun ‚f_push_back· ("":string) : unit = ()
+	| f_push_back (chars:string) : unit = (
+		logit RWchars_read "f_push_back            " chars;
+		read_ahead := screen_for_push_back chars (!read_ahead)
+	);
+
 	fun ‚f_skip_and_look_at_next· () = (
-		f_advance();
+		case read_char()
+		of "" =>	if !copies_of_char_sent > max_copies_of_char_sent
+				then	raise Read_too_often "\\^D"
+				else	(copies_of_char_sent := (!copies_of_char_sent + 1);
+					"\^D")
+		|  "\n" => (	copies_of_char_sent := 0;
+				line_number := !line_number + 1 ;
+				"\n")
+		|  ch => (	copies_of_char_sent := 0;
+				ch);
+
 		logit RWchars_read "f_skip_and_look_at_next"
-			(case lookahead cur_in
+			(case look_ahead_char()
 			of "" =>	"\^D"
 			|  ch =>	ch)
 	);
 
 	val reader = {	advance = f_advance,
 			look_at_next = f_look_at_next,
+			push_back = f_push_back,
 			skip_and_look_at_next = f_skip_and_look_at_next} : READER_ENV;
 
 	fun ‚use_file_loop· () = (
@@ -1892,13 +2722,13 @@ in
 			if !usefile_non_stop_mode
 			then (
 				diag_string(
-					"Exception++ " ^ (PolyML.makestring E)
+					"Exception+ " ^ (PolyML.makestring E)
 					^ " handled by usefile at line "
 					^ (string_of_int (!line_number)) ^ "\n");
 				true)
 			else (
 				diag_string(
-					"Exception++, abandoning file "
+					"Exception+, abandoning file "
 					^ file ^ " at line "
 					^ (string_of_int (!line_number)) ^ "\n");
 				close_in cur_in;
@@ -1948,8 +2778,23 @@ let
 					logit RWchars_read "s_look_at_next         " ch)
 	);
 
+	fun ‚s_push_back· ("":string) : unit = ()
+	| s_push_back (chars:string) : unit = (
+		logit RWchars_read "s_push_back            " chars;
+		cur_str := screen_for_push_back chars (!cur_str)
+	);
+
 	fun ‚s_skip_and_look_at_next· () = (
-		s_advance();
+		case !cur_str
+		of nil =>	if !copies_of_char_sent > max_copies_of_char_sent
+				then	raise Read_too_often "\\^D"
+				else	(copies_of_char_sent := (!copies_of_char_sent + 1);
+					"\^D")
+		|  ch::t =>	(copies_of_char_sent := 0;
+				char_number := !char_number + 1;
+				cur_str := t;
+				ch);
+
 		logit RWchars_read "s_skip_and_look_at_next"
 			(case !cur_str
 			of nil =>	"\^D"
@@ -1958,6 +2803,7 @@ let
 
 	val reader = {	advance = s_advance,
 			look_at_next = s_look_at_next,
+			push_back = s_push_back,
 			skip_and_look_at_next = s_skip_and_look_at_next} : READER_ENV;
 
 	fun ‚use_string_loop· () = (
@@ -1976,7 +2822,7 @@ in
 			raise Read_too_often ch)
 		| E => (
 			diag_string(
-				"Exception++, abandoning string at character "
+				"Exception+, abandoning string at character "
 				^ (string_of_int (!char_number)) ^ "\n");
 			raise E)
 	(* Only reach here after reading end-of-string *)
@@ -2051,7 +2897,7 @@ considered to have started only after a character other than a new line
 has been read.
 
 =SML
-local (* for read_char and lookahead_char *)
+local (* for read_char and look_ahead_char *)
 
 	fun read_next_character () = (
 		issue_prompt();
@@ -2077,23 +2923,29 @@ lookahead must then examine this remembered value.  The lookahead just
 returns the value whereas a read empties it.
 
 =SML
-	val ahead_char : string OPT ref = ref Nil;
+	val read_ahead : string list ref = ref nil;
 
-in (* local for read_char and lookahead_char *)
+in (* local for read_char and look_ahead_char *)
 
 	fun read_char () : string = (
-		case !ahead_char
-		of Nil =>	read_next_character()
-		| Value ch =>	(ahead_char := Nil; ch)
+		case !read_ahead
+		of nil =>	read_next_character()
+		| h :: t =>	(read_ahead := t; h)
 	);
 
-	fun lookahead_char () : string = (
-		case !ahead_char
-		of Nil =>	let	val ch = read_next_character()
-				in	(ahead_char := Value ch; ch) end
-		| Value ch =>	ch
-	)
-end (* of local for read_char and lookahead_char *)
+	fun look_ahead_char () : string = (
+		case !read_ahead
+		of nil =>	let	val ch = read_next_character()
+				in	(read_ahead := [ch]; ch) end
+		| h :: _ =>	h
+	);
+
+	fun ‚t_push_back· ("":string) : unit = ()
+	| t_push_back (chars:string) : unit = (
+		logit RWchars_read "t_push_back            " chars;
+		read_ahead := screen_for_push_back chars (!read_ahead)
+	);
+end (* of local for read_char and look_ahead_char *)
 =TEX
 
 The functions passed in a $READER_ENV$ record are very similar\footnote{We
@@ -2104,21 +2956,19 @@ needed.
 
 =SML
 	fun ‚t_advance· () : string = (
-		case read_char ()
-		of "\n" => (	copies_of_char_sent := 0;
-				logit RWchars_read "t_advance              " "\n")
-		|  ch => (	copies_of_char_sent := 0;
-				logit RWchars_read "t_advance              " ch)
+		copies_of_char_sent := 0;
+		logit RWchars_read "t_advance              " (read_char ())
 	);
 =TEX
 
-Note the call on $t_advance$ before raising $Read_too_often$, this is
+Note the call on $t_advance$ before raising $Read_too_often$ in 
+$t_look_at_next$, this is
 to force a way past the offending character.
 
 =SML
 	fun ‚t_look_at_next· () = (
 	let
-		val ch = lookahead_char()
+		val ch = look_ahead_char()
 	in
 		if !copies_of_char_sent > max_copies_of_char_sent
 		then	(t_advance(); raise Read_too_often ch)
@@ -2127,15 +2977,21 @@ to force a way past the offending character.
 	end);
 
 	fun ‚t_skip_and_look_at_next· () = (
-		t_advance();
+		read_char();
 		logit RWchars_read "t_skip_and_look_at_next"
-			(case lookahead_char()
-			of "" =>	"\^D"
-			|  ch =>	ch)
+			(case look_ahead_char()
+			of "" =>	if !copies_of_char_sent > max_copies_of_char_sent
+					then	raise Read_too_often "\\^D"
+					else	(copies_of_char_sent := (!copies_of_char_sent + 1);
+						"\^D")
+			|  ch => (	copies_of_char_sent := 0;
+					ch)
+			)
 	);
 
 	val reader = {	advance = t_advance,
 			look_at_next = t_look_at_next,
+			push_back = t_push_back,
 			skip_and_look_at_next = t_skip_and_look_at_next} : READER_ENV;
 =TEX
 
@@ -2169,10 +3025,10 @@ exceptions below.
 					"End of input to useterminal.  Quit.";
 				PolyML.quit(); false)
 			| Fail x => (diag_string(
-					"Exception++ Fail " ^ (PolyML.makestring x) ^ " raised");
+					"Exception+ Fail " ^ (PolyML.makestring x) ^ " raised");
 				true)
 			| Error x => (diag_string(
-					"Exception++ Error " ^ (PolyML.makestring x) ^ " raised");
+					"Exception+ Error " ^ (PolyML.makestring x) ^ " raised");
 				true)
 			| AbandonReaderWriter => (diag_string "Abandoning reader writer";
 				false)
@@ -2187,7 +3043,7 @@ exceptions below.
 				then (	diag_string "Abandoning reader writer";
 					false)
 				else (	diag_string(
-						"Exception++ " ^ (PolyML.makestring E)
+						"Exception+ " ^ (PolyML.makestring E)
 						^ " handled by useterminal");
 					true)
 		then	(cur_prompt := prompt1; use_term_loop ())
@@ -2209,289 +3065,11 @@ end);
 
 \subsection{Completion of Basic Reader Writer}
 
-That ends the structure.  Open it for the benefit of later structures.
-
 =SML
 end (* of structure ReaderWriter *);
 
 open ReaderWriter;
 =TEX
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-\newpage
-\section{SUPPORTING OTHER LANGUAGES}
-
-The reader writer is extensible in that support other languages may be
-added, the first such extension being for the HOL language.  Other
-languages are allowed by embedding them within Standard~ML text
-surrounded by language specific percent-keywords or pretty characters.
-
-A goal when producing reader writers for embedded languages (indeed, a
-goal for the whole reader writer) is to make the reading as simple as
-possible, deferring as much as possible to the lexical analyser and
-parser for the particular language.  There are several simplifications
-that can be made, and which are made in the HOL reader writer that
-follows.
-
-\begin{itemize}
-
-\item Defer error detection and reporting as much as possible, leave it
-	to the lexical analyser or parser for the embedded language.
-	In this context there are many errors that the basic reader
-	writer is in a position to detect, but it passes them through to
-	the \Compiler{} knowing that the \Compiler{} will detect and
-	report them.  To aid understanding of the error and where it
-	occurred (or at least where it was detected) the characters
-	``{\tt *** ERROR {\em number\/} *** }'' are passed to the
-	\Compiler.
-
-\item Treat brackets in the same way as other symbols.  This means
-	allowing badly balanced brackets in the embedded text since the
-	parser will detect them.
-
-\item Use the functions provided in the basic reader writer, for
-	example to read and get information about percent keywords, and
-	to discard comment text.
-
-\item Treat character literals as strings, letting the lexical analyser
-	or parser complain if they are not exactly one character long.
-
-\end{itemize}
-
-Extensions are added in several pieces.
-
-\begin{enumerate}
-
-\item \label{ExtParser} A recursive descent parser for the new language, which {\em
-	must\/} conform to the conventions given in the preceding
-	sections, and particularly section~\ref{ReaderWriter}.  This
-	means it must also use the same reading functions which are
-	given in sections~\ref{DeclareReaderEnv}
-	and~\ref{ReaderEnvironment}.   It may use any of the existing
-	parsing functions, for example those dealing with comments and
-	strings.
-
-\item Extensions to the name and character dictionaries, $name_dict$
-	and $char_dict$, to show how the languages special symbols are
-	treated.  These extensions include the symbols that start and
-	end sections of text of the new language.
-
-\item \label{RWRoutine} A routine, but not part of this document, that
-	performs the proper lexical analysis, parsing and any other
-	processing required for the new language.
-
-\end{enumerate}
-
-%********************************************************************
-
-\subsection{Datatype for Parser Interface}
-
-Considered as an imperative program, the output of the reader portion
-of the reader writer is a string of characters that are presented to a
-Standard~ML \Compiler.  In this context the text of any embedded
-language must be converted into Standard~ML, a convenient form would be
-a Standard~ML string preceded by a call of the routine produced for
-item~\ref{RWRoutine} listed above.  To allow embedded text to contain
-anti quotations (i.e., embedding Standard~ML text within embedded text)
-the input to
-the parsing routine is actually a list of values of the following
-datatype.  Note that the actual declaration is
-elsewhere.\footnote{Provide a reference. and make sure that this text,
-the contents of the starting and ending strings, and the lexical
-analysers agree on the names used in the datatype.}
-
-ÛSML Example
-datatype ‚icl'ol_input·	=	‚icl'ol_text·			of string
-			|	‚icl'ol_ML_string·		of string
-			|	‚icl'ol_primed_string·		of string
-			|	‚icl'ol_HOL_TYPE·		of TYPE
-			|	‚icl'ol_HOL_TERM·		of TERM
-			;
-Ê
-
-\begin{description}
-\item[Aside: ] \ \ \ \em This declaration could be made part of
-	structure $ReaderWriterSupport$, it is not needed by anything
-	in the reader writer, but arguably it should be defined there
-	since it represents part of the general interface between the
-	reader writer and the lexical analysers.  Perhaps the
-	declaration should be moved into the prelude with two-way
-	references to this section to preserve the order of the
-	narrative whilst putting the declarations in the correct
-	places.
-
-	The exact form and usage of this declaration is determined by
-	two parts of the ICL HOL system, strictly speaking, it is not
-	necessary to define it here. The parts are: the HOL lexical
-	analyser, see\footnote{Reference to be
-	supplied.}~\cite{HOLLexicalAnalyser}; and, the symbol
-	definitions passed to $add_new_symbols$ in
-	section~\ref{PrettyCharactersForHOL} below.
-
-	Note also that the datatype cannot be declared until the types
-	$TYPE$ and $TERM$ are declared, these require a large portion
-	of the ICL HOL system to be available.
-\end{description}
-
-%\newpage
-
-The various constructors are used as follows.
-
-{\def\ITEM#1{\item[$#1$ ] }
-\begin{description}
-
-\ITEM{icl'ol_text} Text of the new language, text that needs to be
-	lexically analysed, parsed, etc.  This text excludes strings
-	and character literals.
-
-\ITEM{icl'ol_ML_string} Character strings of the embedded language,
-	these are strings as defined in~\cite[section~2.1]{Milner90}.
-	These need to be recognised
-	by the reader writer to prevent the wrong interpretation of
-	characters within them.  Since the reader writer has identified
-	them it seems appropriate to reduce the work of later stages of
-	the languages analysis by keeping them
-	as distinguished parts of the input text.
-
-\ITEM{icl'ol_primed_string} As $icl'ol_ML_string$ but these strings
-	are introduced by the single left-hand prime~(~{\tt`}~)
-	characters.
-
-\ITEM{icl'ol_HOL_TERM} A Standard~ML expression that yields a HOL
-	term.  This value is produced by a term anti quotation within
-	HOL text.  Note that the value given here is any Standard~ML
-	expression --- it must yield the correct Standard~ML type or an
-	error will be reported by the \Compiler{} --- which may contain
-	embedded text of another language which will be another list of
-	this datatype, which may contain another anti quotation, and so
-	on.
-
-\ITEM{icl'ol_HOL_TYPE} As $icl'ol_HOL_TERM$, but for HOL types.
-
-\end{description}}
-
-The string output for the embedded language start symbol, i.e., the
-string argument of the constructor $PrettyNames.Starting$ should
-contain the name of the routine in item~\ref{RWRoutine} listed above
-plus any necessary brackets and the opening ``\verb|icl'ol_text|''.
-\ Correspondingly, the string argument of constructor
-$PrettyNames.Ending$ should contain the closing brackets and the
-closing double quote for the ``\verb|icl'ol_text|''.
-
-The reader writer assumes a simple balancing of the starting and ending
-symbols (from the constructors $PrettyNames.Starting$ and
-$PrettyNames.Ending$), it does not attempt to check that the correct
-symbols are used to start and end an embedded text.  The routines for
-the called language are expected to check for the correct matching.  To
-assist with this check the interface to the embedded language is a
-triple comprising the actual opening symbol, the list described above
-and the actual closing symbol; its Standard~ML type is:
-$(string\;*\;(icl'ol_input\;list)\;*\;string)$
-
-The parsing routines return strings containing these constructors as
-follows.  Note that these rules are built into the code of the
-basic reader writer.
-
-\begin{itemize}
-
-\item All routines assume that they are entered when the string
-	``\verb|icl'ol_text "|'' has recently been output, other
-	characters may also have been output, but the closing double
-	quote has not.
-
-\item Any routine that wants a constructor other than
-	``\verb|icl'ol_text|'' must close the current string, produce
-	its own value, and start a new ``\verb|icl'ol_text|', together
-	with the necessary list element separators.
-
-\end{itemize}
-
-%********************************************************************
-
-\subsection{Fixed Strings for Embedding Symbols}
-\label{FixedStringsForEmbeddingSymbols}
-
-Section~\ref{DataHeldForPrettyCharacters} defined datatype $NAME_CLASS$
-but deferred the description of the strings it is constructed from.
-
-With $Starting$ the first string contains Standard~ML text for the call
-of the parsing routine, extension~\ref{ExtParser} above; normally it
-should start with an open round bracket so that the whole sequence of
-text generated for the embedded text can be used as an expression.  The
-second string with $Starting$ contains characters to be added at the
-start of the embedded text, it will contain the first characters read
-by the routine called in the first string.
-
-Type $Middle$ contains text to be read by the embedded language
-parser.
-
-The first string with type $Ending$ contains text to be added to the
-end of the embedded text read by the embedded language parser.  The
-second string contains Standard~ML text to complete the call of the
-embedded language parser.
-
-\bigskip
-
-To explain the three embedding constructs in more detail, part of the HOL
-symbols are copied here as an example.
-
-ÛSML Example
-"SHA"		Starting(get_HOL_outer, "(def_HOL_axiomatic",	"(")
-
-"BT"],		Middle "),(* BT *)("
-
-"EHA"		Ending(")", ");")
-Ê
-
-A HOL axiomatic definition will be presented to the \Compiler{} as
-follows.  Consider the definition: ``{\tt\catcode`\%=12 %SHA% \ def
-\ %BT% \ pred \ %EHA%}''. \ This will be converted to the
-Standard~ML text in the centre column of the following table for
-presentation to the \Compiler.
-
-{\catcode`\%=12
-\begin{center}
-\begin{tabular}{|l|l|p{4in}|}\hline
-HOL text&			Standard~ML text&
-	Discussion\\\hline\hline
-{\tt%SHA%}&			{\tt(def_HOL_axiomatic}&
-	String 1 of $Starting$, this must give a function that expects
-	a triple of type $(string * icl'ol_input list * string)$ as its
-	argument.  The opening bracket here must be matched by string~2
-	of $Ending$.\\\hline
-&				{\tt("%SHA%",}&	
-	The starting symbol is copied as the first element of the
-	argument triple\\\hline
-&				{\tt[icl'ol_text"}&
-	Opening the list of object language segments\\\hline
-&				{\tt(}&	
-	String 2 of $Starting$\\\hline
-
-{\tt def}&			{\tt def}&
-	HOL text is copied\\\hline
-{\tt%BT%}&			{\tt),(* BT *)(}&
-	Big turn-style is expanded\\\hline
-{\tt pred}&			{\tt pred}&
-	HOL text is copied\\\hline
-{\tt%EHA%}&			{\tt)}&
-	String 1 of $Ending$\\\hline
-&				{\tt"],}&
-	Completion of the list of segments and of the second element of
-	the argument triple\\\hline
-&				{\tt"%EHA%")}&
-	The ending symbol is copied as the last element of the argument
-	triple\\\hline
-&				{\tt);}&
-	String 2 of $Ending$\\\hline
-\end{tabular}
-\end{center}
-}
-
-Axiomatic definitions are here given as a HOL pair, each part is
-enclosed in round brackets to avoid any problems when either part is
-itself a tuple, hence the extra brackets in string~2 of $Starting$,
-string~1 of $Ending$ and in the single string of $Middle$.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \newpage
@@ -2507,275 +3085,23 @@ open ReaderWriterSupport;
 
 \subsection{Warning Messages}
 
-Copy of the function in section~\ref{WarningMessages}.
+Faults detected in the embedded text are reported via $local_error$ as
+they occur, they are also noted in the generated output using these
+two functions.
 
 =SML
-fun ‚local_error· (area : string) (id : int) (inserters : (unit -> string) list) : unit = (
-	diag_string(
-			"*** ERROR "
-		^	(string_of_int id)
-		^	" from "
-		^	area
-		^	": "
-		^	(get_error_message id (map (fn f => f())inserters))
-	)
+fun ‚lex_error_code· (id : int, prev:string list) : string list = (
+	", Lex.Text\"" :: (*="=*)
+	"Lex.error " ^ (string_of_int id) ::
+	"\", " :: (*="=*)
+	prev
 );
-=TEX
 
-%********************************************************************
-
-\subsection{HOL Anti Quotation}
-
-Anti quotation allows text of other languages to be embedded in HOL, it
-may be of several forms.  All are introduced by a caret~`\verb|^|'
-character, this may be followed by a colon~`\verb|:|' denoting that a
-HOL type is being anti quoted, absence of the colon denotes a HOL
-term.  The caret and optional colon may be followed by white space and
-symbols of type $PrettyNames.Ignore$; the caret and colon may be
-separated by white space but not by $PrettyNames.Ignore$ symbols, a
-colon in this context is treated as the first character of a
-Standard~ML symbolic identifier.  There are then four further
-distinctions.
-
-\begin{enumerate}
-
-\item A opening round bracket denotes that a Standard~ML expression
-	follows, followed by a matching closing round bracket.
-
-\item \label{AqIdentifier} A Standard~ML identifier may be used, this
-	may contain pretty characters or their equivalent keywords.
-	Symbols from constructor $PrettyNames.Ignore$ are skipped over,
-	those from constructor $PrettyNames.Simple$ may be included
-	only in alphanumeric identifiers, all other types are not part
-	of the identifier, they have their normal meaning.
-
-\item A starting symbol (i.e., of class $PrettyNames.Starting$) denotes
-	an embedding of another language.  This text will be closed by
-	an ending symbol.
-
-\item Anything not in the previous three denotes a user error.  In
-	general the symbol or character found will be treated as if it
-	were the first symbol after an anti quotation, which in many
-	cases leads to an empty anti quotation.  This gives the
-	following interpretations of various sequences of text.
-
-	\begin{description}
-
-	\item[{\tt(*} ]  Gives an empty anti quotation.  The characters
-		are taken as the start of a HOL comment, after the
-		comment more HOL text is expected.
-
-	\item[Symbols ] of type $PrettyNames.Middle$, $\ldots Ending$
-		and $\ldots Invalid$ are taken as the first symbols
-		after the anti quotation.
-
-	\item[Other letters ] are treated as if they start an
-		identifier, see item~\ref{AqIdentifier} above.  In
-		particular, the sequence ``\verb|^%BH%:|'' is
-		considered to be an anti quotation of a HOL term which
-		is given by a Standard~ML identifier whose first letter
-		is the colon.
-
-	\end{description}
-
-\end{enumerate}
-
-Within these anti quotation categories an initial pretty character or
-percent keyword is treated differently from the later ones.  The
-initial one may be part of an identifier, or it may embed another
-language.  Later ones are only valid as parts of identifiers.
-In either case a symbol of type $PrettyNames.Ending$ completes the
-anti quotation.
-
-The value returned by this routine is a tuple containing the
-conventional list of strings, its second component is of type
-$AQ_TERMINATOR$, which will only be non-$AqNull$ if a pretty character
-or a keyword that is not part of the anti quotation is found.
-
-=SML
-datatype AQ_TERMINATOR	= AqNull
-			| AqChar of string
-			| AqKeyword of string;
-
-type GET_AQ_RES = string list * AQ_TERMINATOR;
-=TEX
-
-=SML
-fun ‚get_HOL_anti_quotation· (R:READER_ENV) (prevA:string list) :  GET_AQ_RES = (
-let
-	open PrettyNames;
-
-	fun skip_leading_format () : string = (
-		let
-			val ch = #look_at_next R ()
-		in
-			if ch = " " orelse ch = "\t" orelse ch = "\n" orelse ch = "\^L"	
-			then	(#advance R (); skip_leading_format ())
-			else	ch
-		end
-	);
-
-	fun	aq_term_as_string(AqNull)		= ""
-	|	aq_term_as_string(AqChar ch)	= ch
-	|	aq_term_as_string(AqKeyword kw)	= "%" ^ kw ^ "%"
-	;
-
-	type GET_ID = string list -> GET_AQ_RES;
-	type DO_KW = GET_ID -> AQ_TERMINATOR -> PrettyNames.PRETTY_NAME
-			-> GET_ID;
-=TEX
-
-Second and later keywords are treated here, those of types
-$PrettyNames.Simple$ and $\ldots.Ignore$ are are allowed, all others
-are treated as the end of the anti quotation.
-
-=SML
-	fun	do_later_kw (get_id:GET_ID) _ (names,_,Simple) p =
-								get_id ("QQ"^(hd names)^"QQ"::p)
-	|	do_later_kw get_id _ (_,_,Ignore) p =		get_id p
-	|	do_later_kw _ k (_,_,_) p =			(p, k);
-=TEX
-
-Known percent keywords are processed by the keyword function
-passed, unknown keywords are reported here.
-
-=SML
-	fun do_percent (do_kw:DO_KW) (get_id:GET_ID) prevB = (
-		case get_percent_name R
-		of (name, Value info, _, ws)
-			=> do_kw get_id (AqKeyword name) info (ws :: prevB)
-		|  (n, Nil, _, ws)
-			=> (
-				local_error "get_HOL_anti_quotation" 5008 [fn () => "%" ^ n ^ "%"];
-				(" *** ERROR 5008 *** " :: ws :: prevB, AqKeyword n)
-			)
-	)
-=TEX
-
-Anti quoted identifiers may be alphanumeric or symbolic, see
-\cite[section~2.4, page~4]{Milner90}, these next two functions gather
-the two identifier forms.
-
-=SML
-	and	get_alpha_id (prevC:string list) : GET_AQ_RES = (
-		case #look_at_next R ()
-		of "%"	=>	do_percent do_later_kw get_alpha_id prevC
-		|  next	=>
-			if ord next > 127
-			then (
-				#advance R ();
-				case find_char next
-				of Value info
-					=> do_later_kw get_alpha_id (AqChar next) info prevC
-				|  Nil	=> (prevC, AqChar next))
-			else if		(next >= "A" andalso next <= "Z")
-				orelse	(next >= "a" andalso next <= "z")
-				orelse	(next >= "0" andalso next <= "9")
-				orelse	next = "'"
-				orelse	next = "_"
-			then
-				get_alpha_id ((#advance R ()) :: prevC)
-			else
-				(prevC, AqNull)
-	)
-=TEX
-
-=SML
-	and	get_sym_id (prevD:string list) : GET_AQ_RES = (
-		case #look_at_next R ()
-		of "%"	=>	do_percent do_later_kw get_sym_id prevD
-		|  next	=>
-			if ord next > 127
-			then (
-				#advance R ();
-				case find_char next
-				of Value info
-					=> do_later_kw get_sym_id (AqChar next) info prevD
-				|  Nil	=> (prevD, AqChar next))
-			else if contains ["!", "&", "$", "#", "+", "-", "/", ":", "<",
-					"=", ">", "?", "@", "\\", "~", "`", "^", "|", "*"] next
-			then
-				get_sym_id ((#advance R ()) :: prevD)
-			else
-				(prevD, AqNull)
-	);
-=TEX
-
-The first keyword of an anti quotation may be part of an identifier
-(always alphanumeric); it may start a fragment of an embedded language;
-it may be an ignored symbol in which case the first character of the
-anti quotation proper must must be found again; all other keywords
-complete the anti quotation, which means that an empty anti quotation
-has been formed.
-
-=SML
-	fun	do_1st_kw _ _ (names,_,Simple) p =
-			get_alpha_id ("QQ"^(hd names)^"QQ"::p)
-	|	do_1st_kw _ k (_,_,Starting(proc, s1, s2)) p =
-			(proc R ((s1 ^ "(\""(*=")=*) ^ (to_ML_string(aq_term_as_string k))
-				^ "\", [icl'ol_text\"" ^ s2) :: p), AqNull)
-	|	do_1st_kw _ _ (_,_,Ignore) p =
-			do_1st_letter p
-	|	do_1st_kw _ k (_,_,_) p = (
-			local_error "get_HOL_anti_quotation" 5009 [fn () => aq_term_as_string k];
-			(" *** ERROR 5009 *** " :: p, k)
-		)
-=TEX
-
-The first letter of an anti quotation sets the nature of the anti
-quotation between the cases described at the top of this section.
-Opening round brackets, percent signs, and pretty characters are dealt
-with by the routines above.  Other characters denote Standard~ML
-identifiers or error cases.  The routines $get_alpha_id$ and
-$get_sym_id$ (when given an empty list) will return the identifier
-read, or an empty list if no such identifier can be read.  If neither
-yields an identifier then the character is reported as an error, it is
-left unread for the next routine to deal with, i.e., to include as part
-of the HOL text after the anti quotation.
-
-=SML
-	and do_1st_letter prevE = (
-		case skip_leading_format ()
-		of "("	=> (*=)=*)
-				(	(#advance R ();
-					case get_round_braces get_ML_any R nil
-					of nil => (
-						local_error "get_HOL_anti_quotation" 5011 [];
-						[" *** ERROR 5011 *** "])
-					| aq => aq
-				) @ prevE, AqNull)
-		|  "%"	=>	do_percent do_1st_kw get_alpha_id prevE
-		|  next	=>	if ord next > 127
-				then
-					case find_char next
-					of Value info
-						=> (#advance R ();
-							do_1st_kw get_alpha_id
-							(AqChar next)
-							info prevE)
-					|  Nil	=> (prevE, AqNull)
-				else
-					case	case get_alpha_id nil
-							of (nil, _) => get_sym_id nil
-							| id_t => id_t
-					of (nil, _) =>	(
-						local_error "get_HOL_anti_quotation" 5009
-								[fn () => next];
-						(" *** ERROR 5009 *** " :: prevE, AqNull))
-					| (id, t) =>	(id @ prevE, t)
-	);
-=TEX
-
-=SML
-	val aq_str = (	#advance R (); (* over the "^" *)
-			if skip_leading_format () = ":"
-			then	(#advance R (); " \", icl'ol_HOL_TYPE(" (*=)"=*))
-			else	" \", icl'ol_HOL_TERM(" (*=)"=*));
-
-	val (prevF, terminator) = do_1st_letter (aq_str :: prevA)
-in
-	((*=(=*) "), icl'ol_text\"" (*="=*) :: prevF, terminator)
-end);
+fun	‚lex_error_codes· (nil : int list, prev:string list) : string list =
+		prev
+|	lex_error_codes (errnos, prev) =
+		fold lex_error_code errnos prev
+;
 =TEX
 
 %********************************************************************
@@ -2787,103 +3113,125 @@ comments, all the other forms of bracket can simple be passed on for
 the HOL lexical analyser and parser to deal with.
 
 {\ftlinepenalty=9999
-=SML prev
-fun ‚get_HOL_any· (depth:int) (R:READER_ENV) (prevA:string list) : string list= (
+=SML
+fun ‚get_HOL_any· (R:READER_ENV) (prevA:string list) : string list= (
 let
 	open PrettyNames;
 
-	val get_more = get_HOL_any depth;
-
-	fun	do_keyword _ (_,Value ch,Simple) p		= get_more R ((to_ML_string ch) :: p)
-	|	do_keyword _ (names,Nil,Simple) p		= get_more R ("%" ^ (hd names) :: p)
-	|	do_keyword k (_,ch_opt,Starting _) p		= (
-			get_HOL_any (depth+1) R
-				(" " ^ (to_ML_string(case ch_opt of Nil => k | Value ch => ch))
-				^ " " :: p))
-	|	do_keyword _ (_,_,Middle str) p		= get_more R (str :: p)
-	|	do_keyword k (_,ch_opt,Ending(s1, s2)) p	= (
-			if depth = 1
-			then
-				(*=([=*) (s1 ^ "\"], \"" ^ k ^ "\")" ^ s2) :: p (*="=*)
-			else
-				get_HOL_any (depth-1) R
-				(" " ^ (to_ML_string (case ch_opt of Nil => k | Value ch => ch))
-				^ " " :: p))
-	|	do_keyword _ (_,_,Ignore) p			= get_more R p
-	|	do_keyword k (names,_,Invalid) p		= (
-			local_error "get_more" 5002[fn () => k];
-			get_more R (" *** ERROR 5002 *** ":: p));
+	fun	do_keyword _ (_,Value ch,Simple) p =
+			get_HOL_any R ((to_ML_string ch) :: p)
+	|	do_keyword _ (names,Nil,Simple) p =
+			get_HOL_any R ("%" ^ (hd names) :: p)
+	|	do_keyword k (info as (_,_, (Starting(proc, str)))) p =
+			get_HOL_any R (proc R k str false p)
+	|	do_keyword _ (_,_,Middle str) p =
+			get_HOL_any R (str :: p)
+	|	do_keyword (k, _) (_,ch_opt,Ending str) p =
+			((*=[(("=*)	"\"))" :: k :: "\"], \"" :: str :: p)
+	|	do_keyword _ (_,_,Ignore) p =
+			get_HOL_any R p
+	|	do_keyword (k, is_keyword) (names,_,Invalid) p = (
+			local_error "get_HOL_any" 5007
+				[fn () => if is_keyword then "%" ^ k ^ "%" else k];
+			get_HOL_any R (lex_error_code(5007, p)));
 
 	fun do_string ML_string = (
-		#advance R ();
 		let	val (read_string, ol_name) =
 				if ML_string
-				then	(get_ML_string, "icl'ol_ML_string")
-				else	(get_primed_string, "icl'ol_primed_string")
+				then	(get_ML_string, "Lex.String")
+				else	(get_primed_string, "Lex.Char");
+			val (str, errnos) = read_string R (ol_name :: "\", " :: prevA); (*="=*)
+			val text_so_far = ", Lex.Text\"" (*="=*) :: str;
 		in
-			get_more R (	", icl'ol_text\"" (*="=*)
-				:: (read_string R
-					(ol_name :: "\", " :: prevA))) (*="=*)
+			get_HOL_any R (lex_error_codes(errnos, text_so_far))
 		end
-	);
-
-	fun	handle_keyword (name, Value info, _, ws) prevB = (
-			do_keyword ("%" ^ name ^ "%") info (ws :: prevB))
-	|	handle_keyword (n, Nil, _, ws) prevB = (
-			local_error "get_HOL_any" 5003 [fn () => n, fn () =>
-							implode(rev(" ... " :: (prevB to 10)))];
-			get_more R (" *** ERROR 5003 *** " :: ws :: prevB)
-	);
-
-	fun handle_p_char ch prevC = (
-		case find_char ch
-		of Value info	=> do_keyword (to_ML_string ch) info prevC
-		|  Nil		=> (local_error "get_HOL_any" 5004
-						[fn () => ch,
-						fn () => string_of_int(ord ch)];
-				get_ML_any R (" *** ERROR 5004 *** " :: prevC))
 	);
 
 	val next = #look_at_next R ()
 in
-	case next
-	of "("	=>	(	#advance R ();
-				if #look_at_next R () = "*"
-				then
-					(skip_comment R; get_more R prevA)
-				else
-					get_more R ( "(" ::  prevA))
-	|  "\""	=>	do_string true (*="=*)
-	|  "`"	=>	do_string false
-	|  "\t"	=>	skip_format get_more R prevA next
-	|  "\n"	=>	skip_format get_more R prevA next
-	|  " "	=>	skip_format get_more R prevA next
-	|  "\^L" =>	skip_format get_more R prevA next
-	|  "\^D" =>	prevA
-	|  "%"	=>	handle_keyword (get_percent_name R) prevA
-	|  "^"	=> (	case get_HOL_anti_quotation R prevA
-			of (pp, AqNull) => get_more R pp
-			| (pp, AqChar ch) => handle_p_char ch pp
-			| (pp, AqKeyword kw) => handle_keyword(kw,
-					PrettyNames.find_name kw,
-					true(*actually, Don't care*), "") pp)
-	|  _	=>	let
-				val ch = #advance R ();
-				val ord_ch = ord ch
-			in
-				if ord_ch > 127
-				then	handle_p_char ch prevA
-				else	get_more R (ch :: prevA)
-			end
+	case read_symbol R
+	of	SymCharacter ch => (
+			case ch
+			of "("	=>	(	if #look_at_next R () = "*"
+						then
+							(skip_comment R;
+							get_HOL_any R (" " :: prevA))
+						else
+							get_HOL_any R ( "(" ::  prevA))
+			|  "\""	=>	do_string true (*="=*)
+			|  "`"	=>	do_string false
+			|  "\^D" =>	prevA
+			|  _ => 	get_HOL_any R (ch :: prevA)
+		)
+	|	SymWhite wh => get_HOL_any R (" " :: prevA)
+	|	SymKnown(sym, is_keyword, info) => do_keyword (sym, is_keyword) info prevA
+	|	SymDoublePercent => get_HOL_any R ("%%" :: prevA)
+	|	SymUnknownKw(sym, is_closed) => (
+			local_error "get_HOL_any" 5003 [fn () => sym, fn () =>
+							implode(rev(" ... " :: (prevA to 10)))];
+			get_HOL_any R (lex_error_code(5003, prevA))
+		)
+	|	SymUnknownChar ch => (
+			local_error "get_HOL_any" 5005
+						[fn () => ch,
+						fn () => string_of_int(ord ch),
+						fn () => implode(rev(" ... " :: (prevA to 10)))];
+				get_ML_any R (lex_error_code(5005, prevA))
+		)
 end);
 =TEX
 }
 
+%********************************************************************
+
+\subsection{Outer Level of the HOL Reader}
+
+HOL text is to be read, the opening symbol and language name are
+given.  Produce Standard~ML text as follows to add onto the left
+hand context.
+
+ÛSML Example
+( recogniser ( "starting symbol", "language name", quoted_text, "closing symbol" ))
+Ê
+
+Where the $quoted_text$ is a list of values of type $Lex.INPUT$, see
+section\ref{DatatypeForParserInterface}.  Function $HOL_reader$ is
+responsible for building the opening part of the Standard~ML text,
+function $get_HOL_any$ reads and assembles the quoted text (i.e., the
+body of the quotation) and the closing text.
+
 =SML
-fun ‚get_HOL_outer· (R:READER_ENV) (prev:string list) : string list= (
-	get_HOL_any 1 R prev
+fun ‚HOL_reader· (recogniser:string) (R:READER_ENV) (start:string, is_keyword:bool)
+		(lang:string) (opening:string) (prevA:string list) : string list = (
+let
+	val prevB =
+		opening ::
+		"\", [Lex.Text\"" ::
+		lang ::
+		"\", \"" ::
+		start ::
+		"(\"" (*=")=*) ::
+		recogniser ::
+		"(" ::
+		prevA;
+in
+	get_HOL_any R prevB
+end
 );
 =TEX
+
+%********************************************************************
+
+\subsection{Installing the HOL Reader}
+
+=SML
+val ‚HOL_term_reader· = HOL_reader "HOL_term_recogniser";
+val ‚HOL_type_reader· = HOL_reader "HOL_type_recogniser";
+
+val _ = add_general_reader("HOL", "Lex.Term", HOL_term_reader);
+val _ = add_general_reader("HOL:", "Lex.Type", HOL_type_reader);
+=TEX
+
 
 %********************************************************************
 
@@ -2907,7 +3255,7 @@ a Standard~ML function to achieve the definition.
 
 =SML
 local
-open ReaderWriterSupport.PrettyNames;
+open PrettyNames;
 
 in
 val _ = add_new_symbols [
@@ -2916,14 +3264,10 @@ val _ = add_new_symbols [
 Box drawing, symbols that start a box.
 
 =SMLLITERAL
-	([	"<"],		Value "ª",
-			Starting(get_HOL_outer, "(HOL_text",		"")),
-	([	"SHA"],	Value "»",
-			Starting(get_HOL_outer, "(def_HOL_axiomatic",	"(")),
-	([	"SHIA"],	Value "Á",
-			Starting(get_HOL_outer, "(def_HOL_infix",		"(")),
-	([	"SHS"],	Value "«",
-			Starting(get_HOL_outer, "(def_HOL_schema",	"(")),
+	([	"<"],		Value "ª",		Starting(general_quotation, "")),
+	([	"SHA"],	Value "»",		Starting(specific_quotation, "(")), (*=)=*)
+	([	"SHIA"],	Value "Á",		Starting(specific_quotation, "(")), (*=)=*)
+	([	"SHS"],	Value "«",		Starting(specific_quotation, "(")), (*=)=*)
 =TEX
 
 Box drawing, symbols that complete a box.  Some of the pretty
@@ -2931,13 +3275,13 @@ characters can denote the end of several different types of box, note
 the names used for end-of-Z boxes below.
 
 =SMLLITERAL
-	([	">"],		Value "º",			Ending("", ")")),
+	([	">"],		Value "º",			Ending ""),
 
 	([	"EHS",
 		"EZC",
-		"EZS"],	Value " ",			Ending(")", ");")),
+		"EZS"],	Value " ",			Ending (*=(=*) ")"),
 	([	"EHA",
-		"EZA"],	Value "À",			Ending(")", ");")),
+		"EZA"],	Value "À",			Ending (*=(=*) ")"),
 =TEX
 
 Box drawing, symbols used within boxes.
@@ -2946,11 +3290,26 @@ Box drawing, symbols used within boxes.
 	([	"BBR"],	Value "‡",			Ignore),
 	([	"BH"],		Value "Õ",			Ignore),
 	([	"BHH"],	Value "¸",			Ignore),
-	([	"BT"],		Value "…",			Middle "),(* BT *)("),
+	([	"BT"],		Value "…",			Middle "),("),
 	([	"BTR"],	Value "ﬂ",			Ignore),
 	([	"BV"],		Value "›",			Ignore)
 ]
 end (* of local *);
+=TEX
+
+Now the specific reading functions for the languages are introduced.
+
+=SMLLITERAL
+val _ =	map (fn (name, recogniser) =>
+		add_specific_reader(name, "NONE", HOL_reader recogniser))
+	[
+	("SHA",		"HOL_axiomatic_recogniser"),
+	("»",		"HOL_axiomatic_recogniser"),
+	("SHIA",	"HOL_infix_recogniser"),
+	("Á",		"HOL_infix_recogniser"),
+	("SHS",		"HOL_schema_recogniser"),
+	("«",		"HOL_schema_recogniser")
+	];
 =TEX
 
 %********************************************************************
