@@ -34,6 +34,13 @@ typedef struct {
 	String			command_line;}
 		GlobalOptions;	
 /*
+ * The following are the values of execute_new_line_mode:
+ */
+#define EXECUTE_ADD_NEW_LINES 0
+#define EXECUTE_PROMPT_NEW_LINES 1
+#define EXECUTE_IGNORE_NEW_LINES 2
+
+/*
  * The following is based on the ideas in Heller's
  * `Motif Programming Manual'. See menus.c for the implementation.
  */
