@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: lineno.c,v 1.1 2004/02/11 21:25:54 rda Exp rda $ 
+ * $Id: lineno.c,v 1.2 2004/07/08 16:56:21 rda Exp rda $ 
  *
  * lineno.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -120,14 +120,17 @@ Boolean add_line_no_tool(Widget text_w)
 {
 	NAT cbdata;
 	Widget shell, 
-		line_no_form,
+		paned,
+		top_form,
+		bottom_form,
 		goto_line_no_btn,
 		line_no_text,
 		dismiss_btn,
 		help_btn;
 
 	char	*pattern;
-	int	i, j;
+	int	i, j, num_children;
+	Widget	*children;
 
 	XmString s;
 
@@ -146,9 +149,8 @@ Boolean add_line_no_tool(Widget text_w)
 #endif
 	common_dialog_setup(shell, dismiss_cb,  (XtPointer)(&line_no_data));
 
-	line_no_form = XtVaCreateWidget("line-number-form",
-		xmFormWidgetClass, 		shell,
-		XmNfractionBase,		24,
+	paned = XtVaCreateWidget("paned",
+		xmPanedWindowWidgetClass, 		shell,
 		NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -157,27 +159,30 @@ Boolean add_line_no_tool(Widget text_w)
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+	top_form = XtVaCreateWidget("top-form",
+		xmFormWidgetClass, 		paned,
+		XmNfractionBase,		24,
+		NULL);
 
 	s = XmStringCreateSimple("Go to line:");
 	goto_line_no_btn = XtVaCreateManagedWidget("go-to-line",
-		xmPushButtonWidgetClass,	line_no_form,
+		xmPushButtonWidgetClass,	top_form,
 		XmNlabelString,		s,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,	XmATTACH_FORM,
 		XmNrightAttachment,	XmATTACH_POSITION,
 		XmNrightPosition,		12,
-		XmNbottomAttachment,	XmATTACH_POSITION,
-		XmNbottomPosition,	12,
+		XmNbottomAttachment,	XmATTACH_FORM,
 		NULL);
 	XmStringFree(s);
 
 	line_no_text = XtVaCreateManagedWidget("line-number",
-		xmTextWidgetClass,	line_no_form,
+		xmTextWidgetClass,	top_form,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,	XmATTACH_POSITION,
 		XmNleftPosition,		12,
 		XmNrightAttachment,	XmATTACH_FORM,
-		XmNbottomAttachment,	XmATTACH_POSITION,
+		XmNbottomAttachment,	XmATTACH_FORM,
 		XmNbottomPosition,	12,
 		NULL);
 
@@ -187,16 +192,20 @@ Boolean add_line_no_tool(Widget text_w)
  * | Dismiss    | Help  |
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+	bottom_form = XtVaCreateWidget("bottom-form",
+		xmFormWidgetClass, 		paned,
+		XmNfractionBase,		24,
+		NULL);
+
 	s = XmStringCreateSimple("Dismiss");
 	dismiss_btn = XtVaCreateManagedWidget("dismiss",
-		xmPushButtonWidgetClass,	line_no_form,
+		xmPushButtonWidgetClass,	bottom_form,
 		XmNlabelString,		s,
-		XmNtopAttachment,		XmATTACH_POSITION,
-		XmNtopPosition,		12,
+		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNleftPosition,		1,
+		XmNleftPosition,		2,
 		XmNrightPosition,		11,
 		NULL);
 	XmStringFree(s);
@@ -204,15 +213,14 @@ Boolean add_line_no_tool(Widget text_w)
 
 	s = XmStringCreateSimple("Help");
 	help_btn = XtVaCreateManagedWidget("help",
-		xmPushButtonWidgetClass,	line_no_form,
+		xmPushButtonWidgetClass,	bottom_form,
 		XmNlabelString,		s,
-		XmNtopAttachment,		XmATTACH_POSITION,
-		XmNtopPosition,		12,
+		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
 		XmNleftPosition,		13,
-		XmNrightPosition,		23,
+		XmNrightPosition,		22,
 		NULL);
 	XmStringFree(s);
 
@@ -222,14 +230,14 @@ Boolean add_line_no_tool(Widget text_w)
 
 	line_no_data.text_w = text_w;
 	line_no_data.shell_w = shell;
-	line_no_data.manager_w = line_no_form;
+	line_no_data.manager_w = paned;
 	line_no_data.line_no_w = line_no_text;
 	line_no_data.default_focus_w = goto_line_no_btn;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set up the text windows in the search dialog as selection sources
  * and palette clients. (This sounds silly but is intuitively right for
- * the line number widget - if focus is in the line number pushing
+ * the line number widget - if focus is in the line number, pushing
  * a palette button will cause a blink or a bleat and then send focus
  * back to the line number).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -291,9 +299,28 @@ Boolean add_line_no_tool(Widget text_w)
  * Manage everything:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	XtManageChild(line_no_form);
+	XtManageChild(top_form);
+	XtManageChild(bottom_form);
+	XtManageChild(paned);
 
 	XtPopup(shell, XtGrabNone);
+
+	fix_pane_height(bottom_form, bottom_form);
+
+	XtVaGetValues(paned,
+		XmNchildren,		&children,
+		XmNnumChildren,		&num_children,
+		NULL);
+
+	for(i = 0; i < num_children; ++i) {
+		if(!strcmp(XtName(children[i]), "Sash")) {
+			XtVaSetValues(children[i],
+				XmNheight,	1,
+				XmNwidth,	1,
+				XmNsensitive,	False,
+				NULL);
+		}
+	}
 
 	XmProcessTraversal(goto_line_no_btn, XmTRAVERSE_CURRENT);
 
