@@ -1,0 +1,422 @@
+% imp511.doc   %Z% $Date$ $Revision$ $RCSfile$
+=TEX
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{DAZ PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation: Z Output Function}  %% Mandatory field
+\TPPref{ISS/HAT/DAZ/IMP511}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Specification}
+\TPPkeywords{CN}
+\TPPauthor{A.C.~Hayward & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{D.J.~King & DAZ Team Leader}
+\TPPabstract{
+This document contains the implementation for the Z output function.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	Library}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{daz,fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+
+\item[Issue 1.1, \FormatDate{94/07/11}]
+Initial Draft.
+
+end{description}
+\subsection{Changes Forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD511}.  The module tests are in \cite{ISS/HAT/DAZ/WRK001}.
+\subsection{Introduction}
+\subsection{Purpose and Background}
+\subsection{Algorithms}
+\subsection{Dependencies}
+\subsection{Known Deficencies}
+\subsection{Possible Enhancements}
+=TEX
+\section{Start of Structure ZOutputSupport}
+\subsection{Preamble}
+=SML
+structure €ZOutputSupport› : ZOutputSupport = struct
+local
+        open icl'Kernel;
+        open PrettyPrinter;
+        open ZUserInterfaceSupport;
+in
+=TEX
+
+\subsection{Dictionary}
+
+Datatype used while storing information in the Dictionary.
+=SML
+datatype €Z_DOC_PARAGRAPH› = PTAxiom of THM
+                           | PTDefn of THM
+                           | PTVC of string * THM
+                           | PTFixity of CLASS * TEMPLATE;
+=TEX
+
+Number governing the position of the fixity paragraphs in the output document.  Set to zero ensures they all appear at the beginning.
+=SML
+val €ZOutput_fixity_num› = 0;
+=TEX
+
+Function to add a new element to our sorted list.
+=SML
+local
+    fun €add_sorted› ([],[]) (a,b) = [(a,b)]
+    |   add_sorted (ys,(x,y)::xs) ((a,b) : int*'a) =
+        (if a<x
+            then ys@[(a,b)]@[(x,y)]@xs
+            else add_sorted (ys@[(x,y)],xs) (a,b) )
+    |   add_sorted (xs,[]) (a,b) = (xs@[(a,b)])
+in
+    fun €add_sorted_to_list› (xs : (int*'a) list)
+        (x : int*'a) = (add_sorted ([],xs) x)
+end;
+=TEX
+
+Functions to add a single element of each type to our dictionary.
+=SML
+fun €add_sort_defn› (dict) ((nms, thm) : (string list * THM)) =
+    let val num = #level(icl'dest_thm thm);
+    in
+        add_sorted_to_list dict (num, (PTDefn thm))
+    end;
+fun €add_sort_axiom› (dict) ((nms, thm) : (string list * THM))  =
+    let val num = #level(icl'dest_thm thm);
+    in
+        add_sorted_to_list dict (num, (PTAxiom thm))
+    end;
+fun €add_sort_VC› (dict) ((nms, thm) : (string list * THM)) =
+    let val num = #level(icl'dest_thm thm);
+        val nm = hd nms
+    in
+        add_sorted_to_list dict (num, (PTVC (nm,thm)))
+    end;
+fun €add_sort_fix› (dict) ((clss, tmpl) : (CLASS * TEMPLATE)) =
+    add_sorted_to_list dict (ZOutput_fixity_num, (PTFixity (clss, tmpl)));
+=TEX
+
+Functions to add lists of elements to out dictionary.
+=SML
+fun €add_sort_defns› (dict) ([] : (string list * THM) list) = dict
+|   add_sort_defns (dict) (defn::defns : (string list * THM) list) =
+    let val newdict = add_sort_defn dict defn
+    in
+        add_sort_defns newdict defns
+    end;
+fun €add_sort_axioms› (dict) ([] : (string list * THM) list) = dict
+|   add_sort_axioms (dict) (axm::axms : (string list * THM) list) =
+    let val newdict = add_sort_axiom dict axm
+    in
+        add_sort_axioms newdict axms
+    end;
+fun €add_sort_VCs› (dict) ([] : (string list * THM) list) = dict
+|   add_sort_VCs (dict) (VC::VCs : (string list * THM) list) =
+    let val newdict = add_sort_VC dict VC
+    in
+        add_sort_VCs newdict VCs
+    end;
+fun €add_sort_fixs› (dict) ([] : (CLASS * TEMPLATE) list ) = dict
+|   add_sort_fixs (dict) (fix::fixs : (CLASS * TEMPLATE) list) =
+    let val newdict = add_sort_fix dict fix
+    in
+        add_sort_fixs newdict fixs
+   end;
+=TEX 
+
+These functions take a theory name as an argument, and add the relevant parts from that theory to our dictionary.
+=SML
+fun €add_defns› (dict) (thyn : string) =
+    let val defns = rev(get_defns thyn)
+    in
+        add_sort_defns dict defns
+    end;
+fun €add_axioms› (dict) (thyn : string) =
+    let val axms = rev(get_axioms thyn)
+    in
+        add_sort_axioms dict axms
+    end;
+fun €add_VCs› (dict) (thyn : string) =
+    let val VCs = rev(get_thms thyn)
+    in
+        add_sort_VCs dict VCs
+    end;
+fun €add_fixs› (dict) (thyn : string) =
+    let val fixs = rev(get_zfixity_infos thyn)
+    in
+        add_sort_fixs dict fixs
+    end;
+=TEX
+
+\subsection{Formatting}
+
+z_thm_rule is used to strip the Z Paragraph header from a theorem.
+=SML
+val €z_thm_rule› : THM -> THM = conv_rule (TRY_C z_para_pred_conv);
+=TEX
+
+Information needed by the formatting functions.
+=SML
+val €ZOutput_tab_width› = 4;
+fun €ZOutput_mk_tab› (i : int) =
+    (if i = 0 then "" else " "^(ZOutput_mk_tab (i-1)));
+val €ZOutput_tab› = (ZOutput_mk_tab ZOutput_tab_width);
+val €ZOutput_ll› = get_line_length();
+=TEX
+
+Generally useful functions
+=SML
+fun €fmt_string_list› ([] : string list) = ""
+|   fmt_string_list (x::xs : string list) =
+    x^"\n"^(fmt_string_list xs);
+fun €concat_string_list› ([] : string list) =""
+|   concat_string_list (x::xs : string list) =
+        x^(concat_string_list xs);
+fun €fmt_semi_colon› ([] : string list) = []
+|   fmt_semi_colon ([x] : string list) = [x^";"]
+|   fmt_semi_colon (x::xs : string list) = [x]@(fmt_semi_colon xs);
+fun €fmt_body› ([] : string list) = []
+|   fmt_body (x::xs : string list) = ["‹ "^x]@(fmt_body xs);
+fun €fmt_prefix_tab› ([] : string list) = []
+|   fmt_prefix_tab (x::xs : string list) =
+        [ZOutput_tab^x]@(fmt_prefix_tab xs);
+fun €dest_z_many_±› (t : TERM) =
+    if (is_z_± t)
+        then
+            (dest_z_many_± (fst (dest_z_± t)))@
+            (dest_z_many_± (snd (dest_z_± t)))
+        else [t];
+=TEX
+
+Formatting functions for Declarations.
+=SML
+fun €fmt_var› (ZGVar (n,_,_) : Z_TERM, x) = n
+|   fmt_var (ZLVar (n,_,_) : Z_TERM, x) = n
+|   fmt_var (d : Z_TERM,t) = "Unexpected term : "^(string_of_term t);
+fun €fmt_var_list› ([] : TERM list) = ""
+|   fmt_var_list ([x] : TERM list) = (fmt_var ((dest_z_term x),x))
+|   fmt_var_list (x::xs : TERM list) =
+        (fmt_var ((dest_z_term x),x))^", "^(fmt_var_list xs);
+fun €fmt_dec› ((v, t) : TERM list * TERM) =
+    [(fmt_var_list v)^" : "^(concat_string_list (format_term false t))];
+fun €fmt_dec_list› ([] : TERM list) = []
+|   fmt_dec_list ([x] : TERM list) = (fmt_dec (dest_z_dec x))
+|   fmt_dec_list (x::xs : TERM list) =
+    (fmt_semi_colon (fmt_dec (dest_z_dec x)))@(fmt_dec_list xs);
+=TEX
+
+Formatting functions for Predicates.
+=SML
+fun €fmt_pred_list› ([] : TERM list) = []
+|   fmt_pred_list ([x]: TERM list) = (format_term false x)
+|   fmt_pred_list (x::xs : TERM list) =
+    (fmt_semi_colon (format_term false x))@(fmt_pred_list xs);
+=TEX
+
+Formatting functions for Z Schema Boxes
+=SML
+fun €fmt_schbox_name› (t : TERM) =
+    let val s = (concat_string_list (format_term false t))
+    in
+        ["ˇ "^s^" ¸¸¸¸¸¸¸¸"]
+    end;
+fun €fmt_schbox› (defn : THM) =
+    let val (_,schema) = dest_thm (z_thm_rule defn);
+        val (name,body) = dest_eq schema;
+        val (decl, pred) = dest_z_h_schema body;
+    in
+        (fmt_schbox_name name)@
+        (fmt_body (fmt_dec_list (dest_z_decl decl)))@
+        ["˜¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸"]@
+        (fmt_body (fmt_pred_list (dest_z_many_± pred)))@
+        ["à¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸"]
+    end;
+=TEX
+
+Formatting functions for Z Abbreviation Definations
+=SML
+fun €fmt_abbdef› (defn : THM) =
+    let val (var,exp) = dest_eq (snd (dest_thm (z_thm_rule defn)));
+        val varstr = (format_term false var)@[" ¶ "];
+        val expstr = (format_term1 false (ZOutput_ll - ZOutput_tab_width) exp);
+        val block = varstr @ expstr;
+    in
+        if (length (explode (concat_string_list block))) < ZOutput_ll
+        then
+            ["πZ"]@(fmt_body [concat_string_list block])@["∞"]
+        else
+            ["πZ"]@
+            (fmt_body block)@
+            ["∞"]
+    end;
+=TEX
+
+Formatting functions for Definations
+=SML
+fun €fmt_defns› (defn : THM) =
+    let val (_,p) = (dest_thm defn);
+        val (q,_) = (dest_app p);
+        val (r,_) = (dest_const q);
+    in
+        if r = "Z'AbbDef"
+        then
+            fmt_abbdef (defn)
+        else
+            if r = "Z'SchBox"
+            then
+                fmt_schbox (defn)
+            else
+                ["Unknown defination type : "^r]
+    end;
+=TEX
+
+Formatting functions for Axioms
+=SML
+fun €fmt_axioms› (axiom : THM) =
+    let val (_,axm) = dest_thm axiom;
+        val (_,body) = dest_app axm;
+        val (decl,pred) = dest_± body;
+    in
+        ["πZAX"]@
+        (fmt_body (fmt_dec_list (dest_z_decl decl)))@
+        ["˜¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸"]@
+        (fmt_body (fmt_pred_list (dest_z_many_± pred)))@
+        ["∞"]
+    end;
+=TEX
+
+Formatting functions for VCs.  At the moment VCs are held as theorems, but this may change in the future.
+=SML
+fun €fmt_VCs› (nm : string, VCthm : THM) =
+    let val term = (snd (dest_thm VCthm));
+        val termstr = (format_term1 false (ZOutput_ll - ZOutput_tab_width) term)
+    in
+        ["(*","‹ "^nm^" ?Ù"]@
+        (fmt_body (fmt_prefix_tab termstr))@["*)"]
+    end;
+=TEX
+
+Formatting functions for Fixity Paragraphs
+=SML
+fun €fmt_fixs_fun› (i : int, tmpl : TEMPLATE) =
+    ["πZ"]@
+    (fmt_body ["fun "^(string_of_int i)^"    "^(format_template tmpl)])@
+    ["∞"];
+fun €fmt_fixs_gen› (i : int, tmpl : TEMPLATE) =
+    ["πZ"]@
+    (fmt_body ["gen "^(string_of_int i)^"    "^(format_template tmpl)])@
+    ["∞"];
+fun €fmt_fixs_rel› (tmpl : TEMPLATE) =
+    ["πZ"]@(fmt_body ["rel    "^(format_template tmpl)])@["∞"];
+fun €fmt_fixs› (ZClFun i : CLASS, tmpl : TEMPLATE) = (fmt_fixs_fun (i,tmpl))
+|   fmt_fixs (ZClGen i : CLASS, tmpl : TEMPLATE) = (fmt_fixs_gen (i,tmpl))
+|   fmt_fixs (ZClRel : CLASS, tmpl : TEMPLATE) = (fmt_fixs_rel tmpl);
+=TEX
+
+Formatting functions for Z Paragraphs.
+=SML
+fun €fmt_paragraph› (PTAxiom thm) = (fmt_axioms thm)
+|   fmt_paragraph (PTDefn thm) = (fmt_defns thm)
+|   fmt_paragraph (PTVC (nm,thm)) = (fmt_VCs (nm,thm))
+|   fmt_paragraph (PTFixity (clss,tmpl)) = (fmt_fixs (clss,tmpl));
+fun €fmt_paragraphs› ((n,l)::ls : (int*(Z_DOC_PARAGRAPH)) list) =
+        (fmt_paragraph l)@[""]@(fmt_paragraphs ls)
+|   fmt_paragraphs ([]) = [];
+=TEX
+
+Formatting function for the whole Z Document.
+=SML
+fun €fmt_Z_document› () = 
+    let val ZOutput_dict = [] : (int*(Z_DOC_PARAGRAPH)) list;
+        val ZOutput_dict = add_axioms ZOutput_dict "wrk001";
+        val ZOutput_dict = add_defns ZOutput_dict "wrk001";
+        val ZOutput_dict = add_VCs ZOutput_dict "wrk001";
+        val ZOutput_dict = add_fixs ZOutput_dict "wrk001"
+    in
+        fmt_string_list (fmt_paragraphs ZOutput_dict)
+    end;
+=TEX
+
+\subsection{Epilogue}
+
+=SML
+end (* local ... in *);
+end (* signature ZOupputSupport*);
+=TEX
+
+\section{Start of strucure ZOutput}
+
+=SML
+structure €ZOutput› : ZOutput = struct
+=TEX
+
+Functions to print the Z Document to the the screen or to a file.
+
+=SML
+val €fmt_Z_document› = ZOutputSupport.fmt_Z_document;
+fun €print_Z_document› ( () : unit ) : unit = diag_line (fmt_Z_document ());
+fun €output_Z_document› ({out_file:string}) =
+    let val stream = open_out out_file;
+        val text = (fmt_Z_document ())
+    in
+        output (stream, text);
+        close_out stream
+    end;
+=TEX
+
+\subsection{End of structure ZOutput}
+
+The structure ZOutput is opened.
+=SML
+end (* of structure ZOutput *);
+open ZOutput;
+=TEX
+
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+\end{document}
