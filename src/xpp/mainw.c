@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.9 2000/06/16 10:46:56 rda Exp rda $
+ * $Id: mainw.c,v 2.10 2000/06/21 11:54:19 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -140,6 +140,11 @@ static void
 static void setup_reopen_menu(char *filename);
 static void post_popupeditmenu();
 static Bool execute_command(void);
+static void execute_action(
+    Widget 		/* widget */,
+    XEvent*		/* event */,
+    String*		/* params */,
+    Cardinal*		/* num_params */);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu descriptions:
@@ -497,15 +502,15 @@ if( !global_options.edit_only ) {
 	}
 }
 /*
- * Users complain that the "Execute Selection" item in the command menu
+ * Users have complained that the "Execute Selection" item in the command menu
  * does not work when the caps lock modifier is present; however, Motif
  * pushbuttons don't support multiple accelerators and there is no
- * syntax to say we care about Ctrl but not Lock modifiers. We therefore
- * add execute_command in as an action function that can be accessed via
- * our translation table resource.
+ * syntax to say we care about Ctrl but not Lock modifiers. We have therefore
+ * provided an execute action function. With no parameters this is like
+ * Execute Selection; with parameters, it executes the parameters.
  */
 	action.string = "execute";
-	action.proc = (XtActionProc)execute_command;
+	action.proc = execute_action;
 	XtAppAddActions(app, &action, 1);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Help menu:
@@ -1083,6 +1088,27 @@ static Bool execute_command(void)
 		return False;
 	}
 }
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * execute action function; if no params does execute_command
+ * to execute selection; else params give strings to execute;
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void execute_action(
+    Widget 		widget,
+    XEvent*		unused_event,
+    String*		params,
+    Cardinal*		num_params)
+{
+	if(*num_params == 0) {
+		(void) execute_command();
+	} else {
+		int i;
+		for(i = 0; i < *num_params; i += 1) {
+			send_to_application(params[i], strlen(params[i]));
+		}
+	}
+}
+			
 		
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * main entry point:
