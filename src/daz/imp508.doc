@@ -85,6 +85,7 @@ Adjusted $ENV\_INFO$ and allowed for type conversions.
 \item[Issue 1.53] Improved an error message.
 \item[Issue 1.54] Updated references.
 \item[Issue 1.54] Updates for SML97.
+\item[Issue 1.55] Updates for new INTEGER type.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -212,7 +213,7 @@ fun €zid› (env : CN_ENV) (id : Z_ID) : Z_EXP = (
 );
 =TEX
 =SML
-val €z_num› : int -> Z_EXP = (mk_z_int o string_of_int);
+val €z_num› : INTEGER -> Z_EXP = (mk_z_int o string_of_integer);
 =TEX
 =SML
 val €z_tfun_term› : TERM = Òa ≠ bÆ;
@@ -613,99 +614,109 @@ The following gives a lookup table for extended digits to values upto 16.
 
 i.e., $[("0", 0), ("1", 1),...("F", 15)]$.
 =SML
-val €extended_digits› : (string * int) list = (
+val €extended_digits› : (string * INTEGER) list = (
 	combine
 		(map string_of_int (interval 0 9)@["A","B","C","D","E","F"])
-		(interval 0 15)
+		(map integer_of_int (interval 0 15))
 );
 =TEX
 The failure case below is caught by $trans\_int$.
 =SML
-fun €based_to_int› (10 : int) (sl : NUMBERS) = (
-	(nat_of_string o implode) sl handle _ => 0
-) | €based_to_int› base sl = (
-let	val valid = extended_digits to (base-1);
-	val sl' = map CaseIndependence.to_upper sl;
-	val f = lassoc3 valid;
-	fun aux (c::rest) = (
-		f c + base * aux rest
-	) | aux _ = 0;
-in
-	(aux o rev) sl' handle _ =>
-		fail "based_to_int" 0 []
-end);
-=TEX
-=SML
-fun €signed_nat_of_numbers› (sl : NUMBERS) : int = (
-let	val f = nat_of_string o implode;
-in
-	case sl of
-	("+"::n) => f n
-	|("-"::n) => ~(f n)
-	|_ => f sl
-end);
-=TEX
-=SML
-fun €basepow› (_ : int) (0 : int) : int = 1
-  | basepow base n = base * basepow base (n-1);
-=TEX
-The failure case below is caught by $trans\_int$.
-=SML
-fun €convert_base_exp› ((base, m, expon) : (int*int*int)) : int = (
-	if expon > 0
-	then	m * basepow base expon
-	else	let	val d = basepow base (~expon);
-			val res = m div d;
+val ten = @@"10";
+fun €based_to_integer› (base:int) (sl:string list) : INTEGER = (
+	if base = 10
+	then	(natural_of_string o implode) sl handle _ => zero
+	else	let	val valid = extended_digits to (base-1);
+			val sl' = map CaseIndependence.to_upper sl;
+			val f = lassoc3 valid;
+			val ibase = integer_of_int base;
+			fun aux (c::rest) = (
+				f c @+ ibase @* aux rest
+			) | aux _ = zero;
 		in
-			if res * d = m
-			then
-				res
-			else
-				fail "convert_base_exp" 0 []
+			(aux o rev) sl' handle _ =>
+				fail "based_to_integer" 0 []
 		end
 );
 =TEX
 =SML
-fun €no_of_digits_in› (base : int) (n : int) : int = (
-=POLYML
-	if PolyML.Alternative_Div_and_Mod.quot (n, base) > 0
-=NJML
-	if Int.quot(n, base) > 0
+fun €signed_nat_of_numbers› (sl : NUMBERS) : int = (
+	let	val f = nat_of_string o implode;
+	in
+		case sl of
+		("+"::n) => f n
+		|("-"::n) => ~(f n)
+		|_ => f sl
+	end
+);
+=TEX
 =SML
-	then
-		1 + no_of_digits_in base (n div base)
-	else
-		1
+fun €basepow› (base : int) (n : int) : INTEGER = (
+	let	val ibase = integer_of_int base;
+		fun aux n = (
+			if	n = 0
+			then	one
+			else	ibase @* aux (n-1)
+		);
+	in	aux n
+	end
 );
 =TEX
 The failure case below is caught by $trans\_int$.
 =SML
-fun €convert_base_dec_exp› ((base, m, n, expon) : (int*int*int*int)) : int = (
-let	val nd = (no_of_digits_in base n) - 1;
-	val df = expon - nd;
-	val offset = basepow base nd;
-in
-	if df >= 0
-	then
-		 convert_base_exp (base, (m * offset + n - offset), df)
-	else
-		fail "nil_aux" 0 []
-end);
+fun €convert_base_exp› ((base, m, expon) : (int*INTEGER*int)) : INTEGER = (
+	if expon > 0
+	then	m @* basepow base expon
+	else	let	val d = basepow base (~expon);
+			val res = m idiv d;
+		in
+			if res @* d = m
+			then	res
+			else	fail "convert_base_exp" 0 []
+		end
+);
 =TEX
-In the following, ``1'' is prefixed to the decimal part in order to preserve leadnig zeros when converting to an integer. It is removed in $convert\_base\_dec\_exp$.
 =SML
-fun €numeric_to_int_lit› ({base,m,n,expon} : NUMERIC) : int = (
+fun €no_of_digits_in› (base : int) (n : INTEGER) : int = (
+	let	val ibase = integer_of_int base;
+		fun aux n = (
+			if	n idiv ibase @> zero
+			then	1 + no_of_digits_in base (n idiv ibase)
+			else	1
+		);
+	in	aux (iabs n)
+	end
+);
+=TEX
+The failure case below is caught by $trans\_int$.
+=SML
+fun €convert_base_dec_exp› ((base, m, n, expon) :
+		int*INTEGER*INTEGER*int) : INTEGER = (
+	let	val nd = (no_of_digits_in base n) - 1;
+		val df = expon - nd;
+		val offset = basepow base nd;
+	in
+		if	df >= 0
+		then	convert_base_exp (base, (m @* offset @+ n @- offset), df)
+		else	fail "nil_aux" 0 []
+	end
+);
+=TEX
+In the following, ``1'' is prefixed to the decimal part in order to preserve leading zeros when converting to an integer. It is removed in $convert\_base\_dec\_exp$.
+=SML
+fun €numeric_to_int_lit› ({base,m,n,expon} : NUMERIC) : INTEGER = (
 let	val nbase = (nat_of_string o implode) base handle _ => 10;
 	fun add_prefix (n as (_::_)) = "1"::n
 	  | add_prefix _ = [];
-	val nm = based_to_int nbase m;
-	val nn = ((based_to_int nbase) o add_prefix) n;
+	val nm = based_to_integer nbase m;
+	val nn = ((based_to_integer nbase) o add_prefix) n;
 	val nexpon = signed_nat_of_numbers expon handle _ => 0;
 in
-	case (nbase,nm,nn,nexpon) of
-	(10, _, 0, 0) => nm
-	|(_, _, 0, _) => convert_base_exp (nbase,nm,nexpon)
-	|_ => convert_base_dec_exp (nbase,nm,nn,nexpon)
+	if	nbase = 10 andalso nn = zero andalso nexpon = 0
+	then	nm
+	else if nn = zero
+	then	convert_base_exp (nbase,nm,nexpon)
+	else	convert_base_dec_exp (nbase,nm,nn,nexpon)
 
 end);
 =TEX
@@ -714,7 +725,7 @@ end);
 in (* of local ... in *)
 =TEX
 =SML
-fun €trans_int› (i : INT_LIT) : int = (
+fun €trans_int› (i : INT_LIT) : INTEGER = (
 	( (numeric_to_int_lit o fst o recog_numeric)
 		({base=[],m=[],n=[],expon=[]}, explode i)
 	) handle Fail _ => fail "trans_int" 508025 [fn()=>i]
@@ -762,7 +773,7 @@ fun €exp_id› (env : CN_ENV) (ident : ID) : Z_EXP = (
 and €exp_array_agg_pos› (env : CN_ENV)
 	({tmark as Value tm, comps} : EXP AGG_POS) : Z_EXP = (
 let	val zop = z_minus;
-	val zleft = z_num 1;
+	val zleft = z_num one;
 	val zright = zid env (trans_id tm ^^ zfst);
 	val zseq = map (trans_exp env) comps;
 in
@@ -1451,7 +1462,7 @@ fun €range_check_vcs›
 				else	t
 			end
 		);
-	in	if	nlo <= nhi
+	in	if	nlo @<= nhi
 		then	(fn _ => [])
 		else	(fn _ =>
 				term_fail  "trans_basic_decl"
@@ -1517,7 +1528,7 @@ fun €basic_decl_enum› (env : CN_ENV) (name : ID) (td : ENUM_TYPE_DEF) = (
 let	val {vals} = td;
 	val zname = trans_id name;
 	val zvals = map trans_id vals;
-	val znums = map z_num (interval 0 ((length vals)-1));
+	val znums = map (z_num o integer_of_int) (interval 0 ((length vals)-1));
 	fun env' id = (
 		if id mem zvals
 		then
