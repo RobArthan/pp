@@ -148,7 +148,7 @@ Boolean yes_no_dialog(Widget w, char *question)
 	static Widget dialog;
 	XmString text, yes, no, confirm;
 	Atom WM_DELETE_WINDOW;
-	static NAT reply;
+	static int reply;
 	/* 0 = not replied; otherwise YES/NO */
 	static void yes_no_cb(), yes_no_destroy_cb();
 	reply = 0;
@@ -206,7 +206,7 @@ int yes_no_cancel_dialog(Widget w, char *question)
 	static Widget dialog;
 	XmString text, yes, no, cancel, confirm;
 	Atom WM_DELETE_WINDOW;
-	static NAT reply;
+	static int reply;
 	/* 0 = not replied; otherwise YES/NO/CANCEL */
 	static void yes_no_cb(), cancel_cb();
 	reply = 0;
