@@ -65,6 +65,7 @@
 \item[Issue 1.57] Corrected sequencing for some of the auxiliary variable SID functions.
 \item[Issue 1.58] Debugged auxiliary variable code.
 \item[Issues 1.59-1.61] Updates for integration with VC browser.
+\item[Issues 1.62-1.80] Various bug fixes
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1630,9 +1631,22 @@ fun Ûset_in_scope_ti_contextÝ (in_scope : IN_SCOPE) : TERM list = (
 	TypeInference.get_ti_context()
 );
 =TEX
+=SML
+fun Ûz_names_of_in_scopeÝ (in_scope : IN_SCOPE) : Z_ID list  = (
+	(map (fst o dest_var) o ti_context_of_in_scope) in_scope
+);
+=TEX
+=SML
+fun Ûz_names_of_z_decÝ (zd : Z_DECL) : Z_ID list = (
+	(map (fn (x,_,_) => x) o map dest_z_lvar
+				o fst o dest_z_dec) zd
+			handle _ => fail "z_names_of_z_dec" 507033 []
+);
+=TEX
+
 \subsection{Updating the Z Theory Database}
 =SML
-fun make_label_prefix (wcn : string) : string = (
+fun Ûmake_label_prefixÝ (wcn : string) : string = (
 	"vc" ^ wcn ^ "_"
 );
 =TEX
@@ -1960,9 +1974,17 @@ trans_basic_decl env d5;
 fun Ûadd_var_envÝ (var_decl : VAR_DECL) : unit = (
 	let	val block1 = block 1
 			handle Fail _ => error "add_var_env" 507006 [];
+		val block_name1 = #block_name(#declab block1);
+		val avs = #aux_vars (
+			force_value(s_lookup block_name1 (!pack_env)))
+			handle Fail _ => [];
+		val av_names = flat (map z_names_of_z_dec avs);
 		val vc_vars1 = #vc_vars(#in_scope(#declab block1));
 		val vars = #vars var_decl;
-	in	check_new_spark_ids current_cn_env vars;
+		val zids_in_scope = av_names cup
+			(z_names_of_in_scope o #in_scope o #declab) block1;
+	in	map (check_new_z_id zids_in_scope) vars;
+		check_new_spark_ids current_cn_env vars;
 		blocks :=
 		block_vc_vars(block1, vc_vars1 grab var_decl):: tl (!blocks)
 	end
@@ -2021,10 +2043,9 @@ fun Ûspec_stmt_speclabelÝ ({spec : SPEC, label : LABEL}) : unit = (
 		val env_pars = #vc_pars (flatten_env(!blocks));
 		val vc_pars = vc_pars2 @ env_pars;
 		val vc_log_cons1 = #vc_log_cons(#in_scope(#declab block1));
-		val vc_log_con_ids = (map (fn (x,_,_) => x) o map dest_z_lvar
-				o flat o map (fst o dest_z_dec)) vc_log_cons1
-			handle _ => error "spec_stmt_speclabel" 507033 [];
-		val side = map (check_new_z_id [](* ti_cxt*)) vc_log_con_ids;
+		val vc_log_con_ids = flat (map z_names_of_z_dec vc_log_cons1);
+		val zids_in_scope = z_names_of_in_scope in_scope;
+		val side = map (check_new_z_id zids_in_scope) vc_log_con_ids;
 		val vc_log_cons2_1 = vc_log_cons2 @ vc_log_cons1;
 		val in_scope1 : IN_SCOPE = {
 			dec_labels = dec_labels2,
@@ -2115,8 +2136,10 @@ fun Ûadd_log_con_envÝ (logical_con as {x, t, ...}: LOG_CON) : unit = (
 		val zvar = mk_z_lvar(x, (dest_z_power_type o type_of) zt, []);
 		val zdecl = mk_z_dec([zvar], zt);
 		val current_log_cons1 = #current_log_cons block1;
+		val zids_in_scope = (z_names_of_in_scope o #in_scope o #declab)
+			 block1;
 
-	in	check_new_z_id [] x;
+	in	check_new_z_id zids_in_scope x;
 		check_new_spark_ids current_cn_env [x];
 		blocks := block_current_log_cons (
 					block_vc_log_cons(block1, [zdecl]),
@@ -3472,7 +3495,10 @@ fun Ûaux_varÝ (av : AUX_VAR) : unit = (
 		val zvar = mk_z_lvar(aux, (dest_z_power_type o type_of) zt, []);
 		val zdecl = mk_z_dec([zvar], zt);
 		val aux_vars1 = #aux_vars package drop (fn x => zdecl =$ x);
-	in	check_new_z_id [] aux;
+		val zids_in_scope = (z_names_of_in_scope o #in_scope o #declab)
+				 block1;
+	in	check_new_z_id zids_in_scope aux;
+		check_new_spark_ids current_cn_env [aux];
 		pack_env :=
 		s_enter
 		block_name1
@@ -3527,12 +3553,14 @@ fun Ûadd_conc_vars_envÝ ((): unit) : unit = (
 		val package = (force_value(s_lookup block_name1 (!pack_env)))
 			handle Fail _ =>
 			fail "add_conc_vars_env" 507008 [fn()=>block_name1];
-		val aux_vars = #aux_vars package;
+		val av_names = flat (map z_names_of_z_dec (#aux_vars package));
 		val vc_vars1 = #vc_vars(#in_scope(#declab block1));
 		val using_decs = #using_decs block1;
 		val var_decls = (list_cup o map fst o map snd) using_decs;
 		val vars = (flat o map #vars) var_decls;
-	in	(* TBS - call check_new_z_id *)
+		val zids_in_scope = av_names cup
+			(z_names_of_in_scope o #in_scope o #declab) block1;
+	in	map (check_new_z_id zids_in_scope) vars;
 		check_new_spark_ids current_cn_env vars;
 		blocks :=
 		block_vc_vars(block1, vc_vars1 cup var_decls):: tl (!blocks)
