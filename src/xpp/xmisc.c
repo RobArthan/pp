@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.14 2003/04/11 10:58:21 rda Exp rda $
+ * $Id: xmisc.c,v 2.15 2003/06/19 14:35:27 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -557,10 +557,10 @@ static char *get_remote_selection(Boolean *timed_out)
 	return sel_req_info.data;
 }
 
+#ifdef EDITRES
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * add_edit_res_handler: add support for editres to a shell widget
  * **** **** **** **** **** **** **** **** **** **** **** ****/
-#ifdef EDITRES
 void add_edit_res_handler(Widget shell)
 {
 	XtAddEventHandler(shell,
@@ -570,3 +570,74 @@ void add_edit_res_handler(Widget shell)
 			NULL);
 }
 #endif
+
+#ifdef LISTWIDGETS
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * list_widget_hierarchy: output listing of widget hierarchy to standard error.
+ * Uses recursion creating linked lists on the stack to simplify (?) memory management.
+ * **** **** **** **** **** **** **** **** **** **** **** ****/
+#include <X11/IntrinsicP.h> /* to let us look at widget class names */
+typedef struct _path
+{
+	char		*data;
+	struct _path	*link;
+} path_cell, *path;
+static void print_path(path list)
+{
+	if(list == 0) {
+		fprintf(stderr, "%s%", APP_CLASS);
+		return;
+	} /* else */
+	print_path(list->link);
+	fprintf(stderr, ".%s", *list->data == '\0' ? "\"\"" : list->data);
+}
+static void list_widget_and_descendants(Widget w, path p)
+{
+	char *class_name;
+	path_cell cell;
+	cell.data = XtName(w);
+	cell.link = p;
+	fprintf(stderr, "%s ", (XtClass(w))->core_class.class_name);
+	print_path(&cell);
+	fprintf(stderr, "\n");
+	if(XtIsComposite(w)) {
+		Widget *children;
+		int i, num_children;
+		XtVaGetValues(w,
+			XmNchildren,		&children,
+			XmNnumChildren,		&num_children,
+			NULL);
+		for(i = 0; i < num_children; i += 1) {
+			list_widget_and_descendants(children[i], &cell);
+		}
+	}
+}
+static void get_ancestors_and_list(Widget w, Widget anc, path p)
+{
+	path_cell cell;
+	if(!XtIsShell(anc)) {
+		Widget parent = XtParent(anc);
+		cell.data = XtName(anc);
+		if(p != NULL) {
+			cell.link = p->link;
+			p-> link = &cell;
+		} else {
+			cell.link = &cell;
+		}
+		get_ancestors_and_list(w, parent, &cell);
+	} else {
+		path ancs;
+		if(p != 0) {
+			ancs = p-> link;
+			p->link = 0;
+		} else {
+			ancs = p;
+		}		
+		list_widget_and_descendants(w, ancs);
+	}
+}
+void list_widget_hierarchy(Widget w)
+{
+	get_ancestors_and_list(w, w, 0);
+}
+ #endif
