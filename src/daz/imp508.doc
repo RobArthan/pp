@@ -1,4 +1,4 @@
-% imp508.doc   %Z% $Date: 2002/07/09 13:57:54 $ $Revision: 1.102 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2002/07/13 11:12:32 $ $Revision: 1.103 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.102 $%
+\def\SCCSversion{$Revision: 1.103 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/07/09 13:57:54 $%
+\TPPdate{\FormatDate{$Date: 2002/07/13 11:12:32 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -120,7 +120,7 @@ to avoid possible clash with an Ada name.
 are now automatically used to qualify the initial expression.
 \item[Issue 1.101] Fixed bugs in {\it z\_predexp\_of\_z\_tm}.
 \item[Issue 1.102] R0078: ada constant declarations now translated into axiomatic descriptions.
-\item[Issue 1.103] R0054: reworked treatment of use clauses.
+\item[Issues 1.103, 1.104] R0054: reworked treatment of use clauses.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -3392,11 +3392,19 @@ val €universal_discrete_type› : TMARK = "universal_discrete";
 =SML
 val €gen_id_counters› : int S_DICT ref = ref initial_s_dict;
 val €reset_gen_id_counters› : unit -> unit = (fn () => gen_id_counters := initial_s_dict);
-
-val €generate_id_from_tmark› : TMARK -> TMARK = (
+fun €real_name› (env : CN_ENV) (tm : TMARK) : TMARK = (
+	let	val ztm = trans_id tm;
+	in	case env ztm of
+			Value(_, EIEnvRetry ex) => ex
+		|	_ => ztm
+	end
+);
+val €generate_id_from_tmark› : CN_ENV -> TMARK -> TMARK = (
+	fn	env =>
 	fn	tmark =>
-	let	fun aux i = (
-			let	val name = tmark ^ "s" ^ string_of_int i;
+	let	val tmark' = real_name env tmark;
+		fun aux i = (
+			let	val name = tmark' ^ "s" ^ string_of_int i;
 			in let	val (zname, _) = dest_const(mk_z_gvar(name, BOOL, []));
 			in	get_const_theory zname;
 				aux (i+1)
@@ -3404,25 +3412,30 @@ val €generate_id_from_tmark› : TMARK -> TMARK = (
 			end
 		);
 		val start = (
-			case s_lookup tmark (!gen_id_counters) of
+			case s_lookup tmark' (!gen_id_counters) of
 				Value j => j + 1
 			|	Nil => 1);
 		val (newi, res) = aux start;
-	in	gen_id_counters := s_enter tmark newi (!gen_id_counters);
+	in	gen_id_counters := s_enter tmark' newi (!gen_id_counters);
 		res
 	end
 );
 =TEX
 =SML
-val €generate_id› : CONSTRAINT SUB_IND -> TMARK = generate_id_from_tmark o #tmark;
-val €si_generate_id› : SI_SUB_IND -> TMARK = generate_id_from_tmark o #tmark;
+fun €generate_id›  (env : CN_ENV) : CONSTRAINT SUB_IND -> TMARK = (
+	generate_id_from_tmark env o #tmark
+);
+fun €si_generate_id› (env : CN_ENV) : SI_SUB_IND -> TMARK = (
+	generate_id_from_tmark env o #tmark
+);
 =TEX
 =SML
-fun €adjust_subtype› (si as {tmark, con} : CONSTRAINT SUB_IND) : BASIC_DECL list * TMARK = (
+fun €adjust_subtype› (env : CN_ENV)
+	(si as {tmark, con} : CONSTRAINT SUB_IND) : BASIC_DECL list * TMARK = (
 	case con of
-		CNoCon => ([], tmark)
+		CNoCon => ([], real_name env tmark)
 	|	_ => (
-		let	val name = generate_id si;
+		let	val name = generate_id env si;
 		in	([BDSubtypeDecl {
 				name = name,
 				sub_ind = si}], name)
@@ -3431,11 +3444,12 @@ fun €adjust_subtype› (si as {tmark, con} : CONSTRAINT SUB_IND) : BASIC_DECL list
 );
 =TEX
 =SML
-fun €adjust_si_discrete_range› (s : SI_DISCRETE_RANGE) : BASIC_DECL list * TMARK = (
+fun €adjust_si_discrete_range› (env :CN_ENV)
+	(s : SI_DISCRETE_RANGE) : BASIC_DECL list * TMARK = (
 	case s of
-		SIDiscreteRangeSubInd si => adjust_subtype si
+		SIDiscreteRangeSubInd si => adjust_subtype env si
 	|	SIDiscreteRangeRange r =>
-		adjust_subtype {
+		adjust_subtype env {
 			tmark = universal_discrete_type,
 			con = CRange r
 		}
@@ -3445,10 +3459,11 @@ In the following, it is caller's responsibility to have resolved any ambiguity
 about the form of the constraint as produced by the context-free parser.
 =SML
 fun €adjust_constraint›
+	(env : CN_ENV)
 	(si_con : SI_CONSTRAINT) : BASIC_DECL list * CONSTRAINT = (
 	case si_con of
 		SIIndexCon sdr => (
-			let	val (nds, nts) = split(map adjust_si_discrete_range sdr);
+			let	val (nds, nts) = split(map (adjust_si_discrete_range env) sdr);
 				val newexps = map EId nts;
 				val newdecl = flat nds;
 			in	(newdecl, CIndex newexps)
@@ -3471,7 +3486,7 @@ with more than one range.
 =SML
 fun €resolve_constraint› (env : CN_ENV) (tmark : TMARK)
 	(c as SIDiscriminantCon[e] : SI_CONSTRAINT) : SI_CONSTRAINT = (
-	case env tmark of
+	case env (real_name env tmark) of
 		Value(_, EIEnvRecordType (comp_names, ndiscs)) => (
 			case e of
 				EArrayAggPos{comps,...} => (
@@ -3501,9 +3516,9 @@ fun €adjust_general_subtype› (env : CN_ENV)
 		SINoCon => ([], tmark)
 	|	_ => (
 		let	val con = resolve_constraint env tmark con1;
-			val (newdecl', con') = adjust_constraint con;
+			val (newdecl', con') = adjust_constraint env con;
 			val si' = {tmark = tmark, con = con'};
-			val name = generate_id si';
+			val name = generate_id env si';
 		in	(newdecl' @ [BDSubtypeDecl{name = name, sub_ind = si'}], name)
 		end
 	)
@@ -3542,7 +3557,7 @@ fun €adjust_uncon_array_type_decl› (env : CN_ENV)
 =SML
 fun €adjust_con_array_type_decl› (env : CN_ENV)
 	(name : ID, {index, comp} : SI_ARRAY_DEF) : BASIC_DECL list = (
-	let	val (bds, index') = split(map adjust_si_discrete_range index);
+	let	val (bds, index') = split(map (adjust_si_discrete_range env) index);
 		val (newdecl', name') = adjust_general_subtype env comp;
 		val def' = TDConArrayDef{index = index', comp = name'};
 	in	flat bds @ newdecl' @ [BDTypeDecl {name = name, type_def = def'}]
@@ -3575,19 +3590,19 @@ fun €adjust_comp_decl› (env : CN_ENV) (disc : DISCRIMINANT_SPECIFICATION list)
 			EDiscreteRange(DRRange rng)
 		) | adjust_range (SIDiscreteRangeSubInd{
 			con = CNoCon, tmark}) = (
-			EId tmark
+			EId (real_name env tmark)
 		) | adjust_range _ = fail "adjust_comp_decl" 508105 [fn _ => hd vars];
 	in	case resolve_constraint env tmark con of
 			SIIndexCon ranges => (
 			if	any ranges is_dep_range
 				then	([],
-					({vars = vars, tmark = tmark},
+					({vars = vars, tmark = real_name env tmark},
 					 CCIndexCon(map adjust_range ranges)))
 			else	default()
 		) |	SIDiscriminantCon exps => (
 			if	any exps (is_dep_exp disc)
 			then	([],
-				({vars = vars, tmark = tmark},
+				({vars = vars, tmark = real_name env tmark},
 				 CCDiscCon exps))
 			else default()
 		) |	_ => default()
@@ -3607,8 +3622,8 @@ fun €adjust_record_type_decl› (env : CN_ENV)
 fun €adjust_subtype_decl› (env : CN_ENV)
 	(name : ID, {tmark, con = con1} : SI_SUB_IND) : BASIC_DECL list = (
 	let	val con = resolve_constraint env tmark con1;
-		val (newdecl', con') = adjust_constraint con;
-		val si' = {tmark = tmark, con = con'};
+		val (newdecl', con') = adjust_constraint env con;
+		val si' = {tmark = real_name env tmark, con = con'};
 	in	newdecl' @ [BDSubtypeDecl {name = name, sub_ind = si'}]
 	end
 );
@@ -3648,11 +3663,12 @@ fun €adjust_basic_decl› (env : CN_ENV)
 The three schemas of the specification (two cases plus a schema to combine them) all
 merge into one here:
 =SML
-fun €adjust_var_decl› ({vars, t as {tmark, con}} : SI_VAR_DECL) : SI_BASIC_DECL list * VAR_DECL = (
+fun €adjust_var_decl› (env : CN_ENV)
+	 ({vars, t as {tmark, con}} : SI_VAR_DECL) : SI_BASIC_DECL list * VAR_DECL = (
 	case con of
-		SINoCon => ([], {vars = vars, tmark = tmark})
+		SINoCon => ([], {vars = vars, tmark = real_name env tmark})
 	|	_ => (
-		let	val name = si_generate_id t;
+		let	val name = si_generate_id env t;
 			val basic_decl = SISubtypeDecl{name = name, type_def = t};
 		in	([basic_decl], {vars = vars, tmark = name})
 		end
@@ -3666,7 +3682,7 @@ fun €adjust_var_decls› (env : CN_ENV)
 	: BASIC_DECL list * VAR_DECL list = (
 	reset_gen_id_counters();
 	((flat o map (adjust_basic_decl env) o flat) ** Combinators.I)
-		(split(map adjust_var_decl vds))
+		(split(map (adjust_var_decl env) vds))
 );
 =TEX
 =SML
@@ -3674,12 +3690,12 @@ fun €adjust_basic_decls› (env : CN_ENV)
 	(bds : SI_BASIC_DECL list) : BASIC_DECL list = (
 	reset_gen_id_counters();
 	let	fun aux (SIVarDecl vd) = (
-			let	val (bds, vd') = adjust_var_decl vd;
+			let	val (bds, vd') = adjust_var_decl env vd;
 			in	flat (map (adjust_basic_decl env) bds) @
 					[BDVarDecl vd']
 			end
 		) | aux (SIVarDeclInit (vd, e)) = (
-			let	val (bds, vd' as {tmark, ...}) = adjust_var_decl vd;
+			let	val (bds, vd' as {tmark, ...}) = adjust_var_decl env vd;
 				val e' = EQualifiedExp{tmark = tmark, exp = e};
 			in	flat (map (adjust_basic_decl env) bds)
 					@ [BDVarDeclInit (vd', e')]

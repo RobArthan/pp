@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.211 $ $RCSfile: imp507.doc,v $ $Date: 2002/07/13 11:12:32 $
+% imp507.doc %Z% $Revision: 1.212 $ $RCSfile: imp507.doc,v $ $Date: 2002/07/14 17:18:18 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.211 $%
+\def\SCCSversion{$Revision: 1.212 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/07/13 11:12:32 $%
+\TPPdate{\FormatDate{$Date: 2002/07/14 17:18:18 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -160,6 +160,7 @@ in the same package.
 \item[Issue 1.212] Got {\it renames\_fun} and {renames\_proc} to work in
 a package specification when the subprogram
 being renamed is defined in the same package specification.
+\item[Issue 1.212] Completed treatment of use clauses.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -2899,16 +2900,6 @@ fun €basic_declaration› (basic_decl : BASIC_DECL) : unit = (
 );
 =TEX
 =SML
-fun €expand_var_decl› ({vars, tmark} : VAR_DECL) : VAR_DECL = (
-	let	val tmark' =
-			case current_cn_env tmark of
-				Value(_, EIEnvRetry ex) => ex
-			|	_ => tmark;
-	in	{vars = vars, tmark = tmark'}
-	end
-);
-=TEX
-=SML
 fun €var_pack_spec› (var_decl : VAR_DECL) : unit = (
 	if	test_flag #pack_spec_flag 1
 	then	let	val block_name1 = #block_name(#declab (block 1));
@@ -2919,7 +2910,7 @@ fun €var_pack_spec› (var_decl : VAR_DECL) : unit = (
 			s_enter
 			block_name1
 			(package_vc_vars(package,
-					#vc_vars package @ [expand_var_decl var_decl]))
+					#vc_vars package @ [var_decl]))
 			(!pack_env)
 		end
 	else
@@ -3707,20 +3698,32 @@ in	spec
 end);
 =TEX
 =SML
-fun €form_proc_pack_spec› (form_proc: FORMAL_PROC) : unit = (
+fun €form_proc_pack_spec› (form_proc as {
+		name,
+		formal_ids,
+		par_names,
+		globals,
+		spec
+	} : FORMAL_PROC) : unit = (
 	let	val block2 = block 2;
 		val block_name2 = #block_name(#declab block2);
 		val package =
 			(force_value(s_lookup block_name2 (!pack_env)))
 			handle Fail _ =>
 			error "form_proc_pack_spec" 507012 [fn()=>block_name2];
-		val dummy = check_formal_proc form_proc;
+		val spec1 = check_formal_proc form_proc;
+		val form_proc1 = {
+			name = name,
+			formal_ids = formal_ids,
+			par_names = par_names,
+			globals = globals,
+			spec = spec1};
 		val formal_procs = #formal_procs package;
 	in	pack_env :=
 		s_enter
 		block_name2
 		(package_formal_procs(package,
-				formal_procs @ [form_proc]))
+				formal_procs @ [form_proc1]))
 		(!pack_env)
 	end
 );
@@ -4200,7 +4203,7 @@ fun €trans_formal_fun› (cnenv : CN_ENV)
 			spec as {pre, post, ...},
 			informal_fun as {formal_pars, ...},
 			globals} : FORMAL_FUN)
-				: PARAINFO = (
+				: PARAINFO * Z_PRED * Z_PRED= (
 	let	val dec = fun_decl cnenv form_fun;
 		val pardecs = map z_par_decl formal_pars
 			handle exn => pass_on exn "z_par_decl" "trans_formal_fun";
@@ -4210,16 +4213,18 @@ fun €trans_formal_fun› (cnenv : CN_ENV)
 		val new_ti_cxt = frees dec term_union flat
 				(map frees (pardecs @ globdecs));
 		val side = set_current_ti_context new_ti_cxt;
-		val imp = z_imp(z_pred_of_z_tm cnenv pre, z_pred_of_z_tm cnenv post);
+		val z_pre = z_pred_of_z_tm cnenv pre;
+		val z_post = z_pred_of_z_tm cnenv post;
+		val imp = z_imp(z_pre, z_post);
 		val pred = z_forall_opt(globdecs, z_forall_opt(pardecs, imp));
-	in	AxDesInfo([], mk_z_decl[dec], Value pred, ntys)
+	in	(AxDesInfo([], mk_z_decl[dec], Value pred, ntys), z_pre, z_post)
 	end
 );
 =TEX
 =SML
 fun €store_trans_formal_fun› (cnenv : CN_ENV)
 		(ff as {informal_fun = {name, ...}, ...} : FORMAL_FUN) : unit = (
-	let	val para = trans_formal_fun cnenv ff;
+	let	val (para, _, _) = trans_formal_fun cnenv ff;
 		val cname = trans_id name;
 		val cty_opt = get_const_type (z_id_of_id cname);
 		val pred = case para of
@@ -4247,9 +4252,21 @@ fun €store_trans_formal_fun› (cnenv : CN_ENV)
 );
 =TEX
 =SML
-fun €form_fun_pack_spec› (form_fun: FORMAL_FUN) : unit = (
-	let	val test_save = test_store_para
+fun €form_fun_pack_spec› (form_fun as {
+	informal_fun,
+	spec = {w, w0, pre, post},
+	globals} : FORMAL_FUN) : unit = (
+	let	val (z_para, z_pre, z_post) =
 			(trans_formal_fun current_cn_env form_fun);
+		val _ = test_store_para z_para;
+		val form_fun1 = {
+			informal_fun = informal_fun,
+			spec = {
+				w = w,
+				w0 = w0,
+				pre = z_quote (z_pre, Nil),
+				post = z_quote (z_post, Nil)},
+			globals = globals};
 		val block2 = block 2;
 		val block_name2 = #block_name(#declab block2);
 		val package =
@@ -4261,7 +4278,7 @@ fun €form_fun_pack_spec› (form_fun: FORMAL_FUN) : unit = (
 		s_enter
 		block_name2
 		(package_formal_funs(package,
-				formal_funs @ [form_fun]))
+				formal_funs @ [form_fun1]))
 		(!pack_env)
 	end
 );
@@ -4421,9 +4438,16 @@ fun €curr_form_fun› (formal_fun : FORMAL_FUN) : unit = (
 \subsection{The SID function formal\_part}
 =TEX
 =SML
+fun €curr_real_name› (n : ID) : ID = (
+	case current_cn_env n of
+		Value (_, EIEnvRetry ex) => ex
+	|	_ => n
+);
+=TEX
+=SML
 fun €mk_param_spec› ({idlist, mode, name} : PARAMETER_SPECIFICATION)
 		: PARAM_SPEC = (
-	{mode = mode, var_decl = {vars = idlist, tmark = name}}
+	{mode = mode, var_decl = {vars = idlist, tmark = curr_real_name name}}
 );
 =TEX
 =SML
@@ -5475,7 +5499,7 @@ fun €create_prefixed_spec›
 			map store_para informal_fun_paras);
 		(* need to do other store_paras first to get right env *)
 		val formal_fun_paras =
-			map (trans_formal_fun current_cn_env) pformal_funs;
+			map ((fn (p, _, _) => p) o trans_formal_fun current_cn_env) pformal_funs;
 		val dummy1 = check_ff_xref pfx_funs formal_fun_paras;
 		val side = (blocks := tl (!blocks));
 	in	
@@ -6622,12 +6646,7 @@ or global dependency lists and expands them
 into the corresponding list of signature variables.
 =SML
 fun expand_names (ns : ID list) : Z_ID list = (
-	let	fun real_name n = (
-			case current_cn_env n of
-				Value (_, EIEnvRetry ex) => ex
-			|	_ => n
-		);
-		fun aux n = (
+	let		fun aux n = (
 			((map fst o dest_z_schema_type o dest_z_power_type o
 				force_value o get_const_type) (z_id_of_id n))
 			handle Fail _ => [n]
@@ -6637,7 +6656,7 @@ fun expand_names (ns : ID list) : Z_ID list = (
 			in	zn'
 			end	handle Fail _ => zn
 		);
-	in	map undo_var_renamings(flat (map (aux o real_name) ns))
+	in	map undo_var_renamings(flat (map (aux o curr_real_name) ns))
 	end
 );
 =TEX
@@ -6932,7 +6951,7 @@ and €do_function_spec› (
 	let	val informal_fun : INFORMAL_FUN =
 		{name=designator,
 		formal_pars = map mk_param_spec formal_part,
-		return_type = return};
+		return_type = curr_real_name return};
 		val eg = expand_names globals;
 		val formal_fun : FORMAL_FUN =
 		{spec = expand_frame sp, informal_fun = informal_fun, globals = eg};
@@ -6946,7 +6965,7 @@ and €do_function_spec› (
 	let	val informal_fun : INFORMAL_FUN =
 		{name=designator,
 		formal_pars = map mk_param_spec formal_part,
-		return_type = return};
+		return_type = curr_real_name return};
 	in	subunit_inf designator;
 		new_scope_fun_inf designator;
 		do_annotation annotation;
