@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.177 $ $RCSfile: imp507.doc,v $ $Date: 2001/12/15 22:21:37 $
+% imp507.doc %Z% $Revision: 1.178 $ $RCSfile: imp507.doc,v $ $Date: 2001/12/17 16:52:38 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.177 $%
+\def\SCCSversion{$Revision: 1.178 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2001/12/15 22:21:37 $%
+\TPPdate{\FormatDate{$Date: 2001/12/17 16:52:38 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -2397,6 +2397,7 @@ val Ûdiag_z_generator_stateÝ : Z_GENERATOR_STATE ref = (
 );
 val Ûdiag_web_clauseÝ : WEB_CLAUSE ref = ref (WCCompilation []);
 val Ûdiag_vc_argsÝ : (SPECLAB * STATEMENT) list ref = ref [];
+val Ûdiag_basic_decl_listÝ : BASIC_DECL list ref = ref [];
 =TEX
 \subsection{Interface to VC Generator}
 =TEX
@@ -5665,15 +5666,15 @@ fun Ûexpand_frameÝ ({w, w0, pre, post} : SPEC) : SPEC = (
 	end
 );
 =TEX
-The abstract syntax separates two forms of for-loop which are processed identically here.
-The following function does the common processing.
+The following function does the common processing for the various sorts of for loop
+in the abstract syntax.
 It returns the inner statement of the loop (with frames expanded).
 =SML
 fun Ûdo_for_loopÝ (t : Z_TM OPT, i : ID, stmt : STATEMENT,
-			tmark : TMARK, dir : LOOP_DIRECTION)
+			tmark : TMARK OPT, dir : LOOP_DIRECTION)
 		: STATEMENT = (
 	new_scope_loop();
-	for_param (i, tmark);
+	for_param (i, case tmark of Value t => t | _ => universal_discrete_type);
 	(case t of Value till => till_pred till | Nil => ());
 	let val res = do_statement stmt; in end_scope(); res end
 )
@@ -5743,7 +5744,7 @@ and Ûdo_statementÝ (y as STNull : STATEMENT) : STATEMENT = (y
 	end
 ) | do_statement
 	(y as (STForTmark {name, i, tmark, dir, loop as {stmt, t}}) : STATEMENT) = (
-	let	val expanded_stmt = do_for_loop(t, i, stmt, tmark, dir);
+	let	val expanded_stmt = do_for_loop(t, i, stmt, Value tmark, dir);
 	in	STForTmark {name = name, i = i, tmark = tmark, dir = dir,
 			loop= {stmt=expanded_stmt, t = t}}
 	end
@@ -5773,7 +5774,54 @@ and Ûdo_statementÝ (y as STNull : STATEMENT) : STATEMENT = (y
 	error "do_statement" 507019 []
 );
 =TEX
-
+The following processes a single {\itBASIC\_DECL}.
+=SML
+fun Ûdo_basic_declarationÝ (x : BASIC_DECL) : unit = (
+	diag_basic_decl_list := x :: !diag_basic_decl_list;
+	case x of
+		BDTypeDecl _ => (basic_declaration x
+	) |	BDSubtypeDecl _ => (basic_declaration x
+	) |	BDConstDecl _ => (basic_declaration x
+	) |	BDVarDecl v => (
+			var_pack_spec v;
+			update_envs_var v;
+			add_var_env v
+	) |	BDVarDeclInit (v, e) => (
+			var_pack_spec v;
+			update_envs_var v;
+			add_var_init_env (v, e);
+			add_var_env (v)
+	) |	BDDeferredConstDecl _ => (comment "do_declaration" 507021 []
+	) |	BDPrivateTypeDecl _ => (
+	) |	BDPragma _ => (
+	) |	BDAnnotation _ => (
+	)
+);
+=TEX
+The following functions look
+after the passage from {\it SI\_BASIC\_DECL}s to {\it BASIC\_DECL}s
+in a using declaration.
+=SML
+=TEX
+=SML
+fun Ûextract_vardeclsÝ ((bd::more) : BASIC_DECL list) : VAR_DECL list = (
+	case bd of
+		BDVarDecl vd => vd::extract_vardecls more
+	|	BDVarDeclInit (vd, init) => vd::extract_vardecls more
+	|	_ => extract_vardecls more
+) | extract_vardecls _ = [];
+=TEX
+=SML
+fun Ûadjust_using_decÝ ({aux, basic_decls, invariant} : SI_USING_DEC)
+	: USING_DEC = (
+	let	val basic_decls' = adjust_basic_decls basic_decls;
+	in	{aux = aux,
+		 concrete_vars = extract_vardecls basic_decls',
+		 basic_decls = basic_decls',
+		 invariant = invariant}
+	end
+);
+=TEX
 The following reflects the SID functions for $dec$, $basic\_declaration$, $renaming\_declaration$, $subprogram\_declaration$ and {\it pack\_stub}.
 Note that the $with\_context$ is an argument used for package declarations so that when the package theories are created, the $with$ packages can become parents.
 
@@ -5802,24 +5850,7 @@ fun Ûdo_declarationÝ (y as (DDeclarationKSlot (
 				renames_fun y
 	|	RDFunction _ => ()
 ) | do_declaration (y as (DBasicDecl x) : DECLARATION) = (
-	case x of
-		BDTypeDecl _ => (basic_declaration x
-	) |	BDSubtypeDecl _ => (basic_declaration x
-	) |	BDConstDecl _ => (basic_declaration x
-	) |	BDVarDecl v => (
-			var_pack_spec v;
-			update_envs_var v;
-			add_var_env v
-	) |	BDVarDeclInit (v, e) => (
-			var_pack_spec v;
-			update_envs_var v;
-			add_var_init_env (v, e);
-			add_var_env (v)
-	) |	BDDeferredConstDecl _ => (comment "do_declaration" 507021 []
-	) |	BDPrivateTypeDecl _ => (
-	) |	BDPragma _ => (
-	) |	BDAnnotation _ => (
-	)
+	map do_basic_declaration (adjust_basic_decls [x]); ()
 ) | do_declaration (y as (DRepresentationClause x) : DECLARATION) = (
 	comment "do_declaration" 507017 []
 ) | do_declaration (y as (DProperBody x) : DECLARATION) = (
@@ -5844,9 +5875,11 @@ fun Ûdo_declarationÝ (y as (DDeclarationKSlot (
 	do_external_function_stub x
 ) | do_declaration (y as (DAuxiliary x) : DECLARATION) = (
 	aux_var x
-) | do_declaration (y as (DUsing (x as {basic_decls, ...})) : DECLARATION) = (
-	map (do_declaration o DBasicDecl) basic_decls;
-	using_dec x
+) | do_declaration (y as (DUsing x) : DECLARATION) = (
+	let	val z as {basic_decls, ...} = adjust_using_dec x;
+	in	map do_basic_declaration basic_decls;
+		using_dec z
+	end
 )
 (*
 =TEX
@@ -6224,6 +6257,7 @@ fun Ûcn_z_generatorÝ (w : WEB_CLAUSE) : unit = (
 	let	val save_zg_state = get_z_generator_state();
 		val save_ti_cxt = get_ti_context();
 	in	diag_vc_args := [];
+		diag_basic_decl_list := [];
 		diag_web_clause := w;
 		(do_web_clause w)
 		handle ex => (
