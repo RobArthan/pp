@@ -72,6 +72,8 @@ Removed proof contexts "$build\_sets\_?$".
 Stopped recreating theory $hol$.
 \item [Issue 1.13 (22nd May 1992)]
 Bug fixing.
+\item [Issue 1.14 (27th May 1992)]
+Added $sets\_simple\_¶\_conv$.
 \end{description}
 \subsection{Changes Forecast}
 Further theorems, and some function tools will be later provided.
@@ -99,8 +101,9 @@ structure ÛSetsTheoryÝ : SetsTheory = struct
 val _ = open_theory "basic_hol";
 =IGN
 (* for use after main build complete *)
-(delete_theory "hol" handle _ => ());
-(delete_theory "sets" handle _ => ());
+open_theory "basic_hol";
+delete_theory "hol";
+delete_theory "sets";
 =SML
 val _ = new_theory "sets";
 val _ = push_merge_pcs ["propositions",
@@ -109,9 +112,7 @@ val _ = push_merge_pcs ["propositions",
 (* for use after main build complete *)
 open_theory "sum";
 new_theory "hol";
-new_parent "sets";
 new_parent "one";
-open_theory "sets";
 =TEX
 =SML
 val Ûis_set_rep_defÝ = new_spec(["IsSetRep", "is_set_rep_def"],1, (
@@ -554,6 +555,122 @@ in
 	else reraise complaint(area_of complaint)
 end);
 =TEX
+\subsection{A Preprocessor for Existence Proofs}
+\subsubsection{Utilities}
+=TEX
+The following is as $term\_map$ except that it processes the leaves
+first, and then comes out.
+It does not traverse created subterms.
+=SML
+fun Ûterm_map1Ý (tmfun :(TERM list) -> TERM -> TERM) (tm : TERM) : TERM = (
+let
+	fun aux
+		(bvs : TERM list)
+		(tm : TERM) 
+		(App(f, a)) = (
+		let	val (something,gothrough) = 
+			(let	val f' = aux bvs f (dest_simple_term f);
+			in
+			(true,mk_app(f',
+			(aux bvs a (dest_simple_term a) handle (Fail _) => a)))
+			end
+			handle (Fail _) =>
+			(true,mk_app(f,aux bvs a (dest_simple_term a)))
+			handle (Fail _) =>
+			(false,tm))
+		in
+			if something
+			then (tmfun bvs gothrough handle (Fail _) => gothrough)
+			else tmfun bvs tm
+		end
+	) | aux bvs tm (Const _) = (tmfun bvs tm)
+	| aux bvs tm (Var _) = (tmfun bvs tm)
+	| aux bvs tm (SimpleÌ(v, b)) = (
+		(tmfun bvs tm) handle (Fail _) =>
+			mk_simple_Ì(v, aux (v :: bvs) b (dest_simple_term b))
+	);
+in
+	aux [] tm (dest_simple_term tm)
+	handle (Fail _) => tm
+end);
+=TEX
+=SML
+val Ûdest_Ý = dest_bin_op "dest_" 0 "";
+val Ûmk_Ý = mk_bin_op "mk_" 0 0 
+	(fn ty1 => fn ty2 =>
+	mk_const("",list_mk_­_type[ty1,ty2,BOOL]));
+=TEX
+\subsubsection{Main Function}
+=SML
+
+val Ûsets_simple_¶_convÝ  : CONV = (fn tm =>
+let	val (f,bdy) = dest_simple_¶ tm
+		handle complaint =>
+		divert complaint "dest_simple_¶" 
+			"sets_simple_¶_conv"
+			44010 [fn () => string_of_term tm];
+	val ftys = strip_­_type (type_of f);
+	val dummy = if is_ctype (hd(rev ftys))
+		then ()
+		else term_fail "sets_simple_¶_conv" 44010 [tm];
+	val sety = case (dest_ctype(hd(rev ftys))) of
+		("SET",[ty]) => ty
+		| _ => term_fail "sets_simple_¶_conv" 44010 [tm];
+	val f' = variant (map mk_var (term_vars tm)) 
+		(mk_var(fst(dest_var f),
+			list_mk_­_type (rev(tl(rev ftys)) @
+				[sety,BOOL])));
+	val new_bdy = term_map1 (fn bvs => fn tm1 =>
+		if f term_mem bvs
+		then fail "" 0 [] (* always caught *)
+		else
+	let	val (m,s) = dest_ tm1;
+		val (root,rss) = (strip_app s);
+	in
+		if root =$ f
+		then list_mk_app (f', rss @ [m])
+		else fail "" 0 [] (* always caught *)
+	end) bdy;
+	val dummy = if f term_mem frees new_bdy
+		then term_fail "sets_simple_¶_conv" 44012 [tm,f]
+		else if new_bdy =$ bdy
+		then term_fail "sets_simple_¶_conv" 44011 [tm]
+		else ();
+	val new_tm = mk_simple_¶(f',new_bdy);
+	val arbvars = gen_vars ((rev(tl(rev ftys))) @ [sety]) [f',tm] ;
+	val marbvar = hd(rev arbvars);
+	val aarbvars = rev(tl(rev arbvars));
+	val conv_concl = mk_¤(tm,new_tm);
+in
+	(tac_proof(([],conv_concl),
+	conv_tac (TRY_C (all_Â_conv AND_OR_C 
+		TOP_MAP_C simple__comp_conv)) THEN
+	¤_T2 
+=TEX
+Old Term implies new term:
+=SML
+	(SIMPLE_¶_THEN (fn oldtmthm =>
+	 simple_¶_tac (list_mk_simple_Ì(arbvars,
+		mk_(marbvar,list_mk_app(f,aarbvars))))
+	 THEN conv_tac (TRY_C (all_Â_conv)) 
+	THEN accept_tac oldtmthm))
+=TEX
+New term implies old:
+=SML
+	(SIMPLE_¶_THEN (fn newtmthm =>
+	 simple_¶_tac (list_mk_simple_Ì(aarbvars,
+		mk_set_comp(marbvar,list_mk_app(f',arbvars))))
+	 THEN conv_tac (TRY_C (all_Â_conv AND_OR_C 
+		TOP_MAP_C simple__comp_conv))
+	 THEN accept_tac newtmthm))
+	)
+	handle complaint =>
+	divert complaint "tac_proof" "sets_simple_¶_conv"
+		44013 [fn () => string_of_term conv_concl]
+	)
+end);
+=TEX
+
 =TEX
 \section{EPILOGUE}
 We wish to make the pre-existing theory ``hol''
