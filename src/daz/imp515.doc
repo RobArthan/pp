@@ -1,4 +1,4 @@
-% imp515.doc   %Z% $Date: 2000/10/24 14:39:49 $ $Revision: 1.30 $ $RCSfile: imp515.doc,v $
+% imp515.doc   %Z% $Date: 2001/12/15 22:21:37 $ $Revision: 1.31 $ $RCSfile: imp515.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Compliance Tool Test Utilities}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP515}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.30 $%
+\def\SCCSversion{$Revision: 1.31 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2000/10/24 14:39:49 $%
+\TPPdate{\FormatDate{$Date: 2001/12/15 22:21:37 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -70,6 +70,7 @@
 \item[Issue 1.29] Updates for June 2000 enhancements.
 \item[Issue 1.30] CTLE II R1/9: SPARK 83 attributes.
 \item[Issue 1.31] R0037: support for named numbers.
+\item[Issue 1.32] Updates for new abstract syntax (R0006 changes).
 \end{description}
 \subsection{Changes Forecast}
 $fmt\_repl\_env$ has an untidy option, put in to make pattern matching 
@@ -146,7 +147,7 @@ end);
 =TEX
 
 =SML
-fun Ûcn_basic_decl_of_stringÝ (s : string) : BASIC_DECL = (
+fun Ûcn_si_basic_decl_of_stringÝ (s : string) : SI_BASIC_DECL = (
 let	val prefix = "(4) é ";
 	val result = cn_of_string (prefix^s);
 in
@@ -277,24 +278,42 @@ end
 =SML
 fun Ûcn_declareÝ (s : string) : unit = (
 	case cn_decl_of_string s of
-	DBasicDecl (BDVarDecl vd) => (
-		update_env_with_vars vd
-	)| DBasicDecl (BDVarDeclInit (vd,e)) => (
-		update_env_with_vars vd
-	)| DBasicDecl (bd as BDConstDecl {consts,tm=Value tm,expr}) => (
-		let	val paras = trans_basic_decl env bd;
+	DBasicDecl (SIVarDecl vd) => (
+		let	val (bds, vd') = adjust_var_decls [vd];
+			val paras = flat (map (trans_basic_decl env) bds);
+			
+		in	map update_theory_db_with_parainfo paras;
+			map update_env_with_vars vd';
+			()
+		end
+	)| DBasicDecl (SIVarDeclInit (vd,e)) => (
+		let	val (bds, vd') = adjust_var_decls [vd];
+			val paras = flat (map (trans_basic_decl env) bds);
+			
+		in	map update_theory_db_with_parainfo paras;
+			map update_env_with_vars vd';
+			()
+		end
+	)| DBasicDecl (bd as SIConstDecl _) => (
+		let	val adj_bds = adjust_basic_decls [bd];
+			val paras = flat (map (trans_basic_decl env) adj_bds);
+			val _ = map update_theory_db_with_parainfo paras;
+			fun do1 ty tm c = extend_env c ty (EIEnvConstant tm);
 			fun get_ty (id : ID) : TYPE = (
 				 (dest_z_power_type o type_of) (trans_exp env (EId id))
 			);
-			val ty = get_ty tm;
-			fun do1 c = extend_env c ty (EIEnvConstant tm);
-			val _ = map do1 consts;
-			val _ = map update_theory_db_with_parainfo paras;
-		in
-			()
+		in	case rev adj_bds of
+				BDConstDecl{consts,tm=Value tm,expr}:: _ => (
+				let	val ty = get_ty tm;
+				in	map (do1 ty tm) consts; ()
+				end
+			) | _ => (
+				diag_line("Weird result from adjust_basic_decls")
+			)
 		end
 	)| DBasicDecl bd => (
-		let	val paras = trans_basic_decl env bd;
+		let	val adj_bds = adjust_basic_decls [bd];
+			val paras = flat (map (trans_basic_decl env) adj_bds);
 			
 			val side = map update_theory_db_with_parainfo paras;
 		in
