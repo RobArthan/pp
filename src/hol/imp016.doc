@@ -98,7 +98,7 @@ At present, there are no known deficiencies in this document.
 
 
 =SML
-structure âTypeInferenceá : TypeInference = struct
+structure âTypeInferenceá = struct
 =TEX
 
 =SML
@@ -483,10 +483,6 @@ and
 and
 âti_let1á env left right a term = (
 	let
-		fun rep_grow_env env (tm::tml) = (
-			rep_grow_env (grow_env env tm) tml)
-		  | rep_grow_env _ _ = env;
-
 		fun rep_unify1 (psi::psil) (typair::tyl) term = (
 			(unify1 psi typair term)::(rep_unify1 psil tyl term)
 		 )| rep_unify1 _ _ _ = [id_subs];
@@ -500,18 +496,22 @@ and
 			end)
 		  | ti_components env nil = (env, nil);
 
-		val (newenv, x_left) = ti_components env left;
-		val (tm_left, ty_left, psi_left) = split3 x_left;
-		val (x_right, phi_right) = list_ti newenv right;
+		val (x_right, phi_right) = list_ti env right;
 		val (tm_right, ty_right, psi_right) = split3 x_right;
+		val env' = sub_ty env phi_right;
+
+		val (newenv, x_left) = ti_components env' left;
+		val (tm_left, ty_left, psi_left) = split3 x_left;
+
 		val newenv' = sub_ty newenv phi_right;
+
 		val tm_list = combine tm_left tm_right;
 		val ty_list = combine ty_left ty_right;
 		val psi_list = combine psi_right psi_left;
 		val c_psi_list = map (uncurry scomp) psi_list;
 
 		val phi_list = rep_unify1 c_psi_list ty_list term;
-		val phi = list_scomp phi_list;
+		val phi = (list_scomp o rev) phi_list;
 		val newenv'' = sub_ty newenv' phi;
 		val (atm, aty, aphi) = ti newenv'' a;
 		val phi' = scomp aphi phi;
@@ -658,6 +658,8 @@ fun âextm_to_termá (phi : SUBS) (namemap : (int * string)list)(Binder ("", a, b
 		val tb = extm_to_term phi namemap b;
 	in
 		mk_abs (ta, tb)
+		handle Fail msg =>
+			raise error "extm_to_term" 16101 [fn() => get_message msg]
 	end
   )|extm_to_term phi namemap (Binder (_, _, _)) =
 	raise error "extm_to_term" 16101 [fn()=>"Invalid Binder Construct"]
@@ -669,6 +671,8 @@ fun âextm_to_termá (phi : SUBS) (namemap : (int * string)list)(Binder ("", a, b
 		val ta = extm_to_term phi namemap a;
 	in
 		mk_let (til, ta)
+		handle Fail msg =>
+			raise error "extm_to_term" 16101 [fn() => get_message msg]
 	end)
   | extm_to_term phi namemap (Cond (c, a, b)) = (
 	let	val tc = extm_to_term phi namemap c;
@@ -676,12 +680,16 @@ fun âextm_to_termá (phi : SUBS) (namemap : (int * string)list)(Binder ("", a, b
 		val tb = extm_to_term phi namemap b;
 	in
 		mk_if (tc, ta, tb)
+		handle Fail msg =>
+			raise error "extm_to_term" 16101 [fn() => get_message msg]
 	end)
   | extm_to_term phi namemap (App (f, a, _)) = (
 	let	val tf = extm_to_term phi namemap f;
 		val ta = extm_to_term phi namemap a;
 	in
 		mk_comb (tf, ta)
+		handle Fail msg =>
+			raise error "extm_to_term" 16101 [fn() => get_message msg]
 	end)
   | extm_to_term phi namemap (TmTyped (Id s, ty)) = ((
 	(case type_of_const s of
@@ -689,23 +697,29 @@ fun âextm_to_termá (phi : SUBS) (namemap : (int * string)list)(Binder ("", a, b
 	|	Nil => mk_var)
 			(s, extype_to_type1 phi namemap ty)
 	)
-	handle Fail msg => error "extm_to_term" 16101
-		[fn() => get_message msg]
+	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message msg]
 	)
   | extm_to_term phi namemap (TmTyped (SetDisplay tl, ty)) = (
-	case tl of
+	(case tl of
 		nil =>	mk_empty_enum_set (extype_to_type1 phi namemap ty)
 		| _ =>	(let val til = map (extm_to_term phi namemap) tl
 			in
 				mk_enum_set til
 			end))
+
+	handle Fail msg => raise error "extm_to_term" 16101 [fn() => get_message msg]
+	)
   | extm_to_term phi namemap (TmTyped (ListDisplay tl, ty)) = (
-	case tl of
+	(case tl of
 		nil =>	mk_empty_list (extype_to_type1 phi namemap ty)
 		| _ =>	(let val til = map (extm_to_term phi namemap) tl
 			in
 				mk_list til
 			end))
+
+	handle Fail msg => raise error "extm_to_term" 16101 [fn() => get_message msg]
+
+	)
   | extm_to_term phi namemap (TmTyped (a, ty)) = extm_to_term phi namemap a
   | extm_to_term phi namemap (TmAq tm) = tm
   | extm_to_term phi namemap (SetDisplay _ ) =
@@ -715,14 +729,25 @@ fun âextm_to_termá (phi : SUBS) (namemap : (int * string)list)(Binder ("", a, b
 		val tb = extm_to_term phi namemap b;
 	in
 		mk_set (ta, tb)
+		handle Fail msg =>
+			raise error "extm_to_term" 16101 [fn() => get_message msg]
 	end)
   | extm_to_term phi namemap (ListDisplay _ ) =
 	error "extm_to_term" 16101 [fn() => "Invalid ListDisplay Construct"]
   | extm_to_term phi namemap (Id s) =
 	error "extm_to_term" 16101 [fn() => "Invalid Id Construct"]
-  | extm_to_term phi namemap (CharLit c) = (mk_char c)
-  | extm_to_term phi namemap (StringLit s) = (mk_string s)
-  | extm_to_term phi namemap (NumLit s) = (mk_† s);
+  | extm_to_term phi namemap (CharLit c) = (
+	mk_char c
+	handle Fail msg => raise error "extm_to_term" 16101 [fn() => get_message msg]
+	)
+  | extm_to_term phi namemap (StringLit s) = (
+	mk_string s
+	handle Fail msg => raise error "extm_to_term" 16101 [fn() => get_message msg]
+	)
+  | extm_to_term phi namemap (NumLit s) = (
+	mk_† s
+	handle Fail msg => raise error "extm_to_term" 16101 [fn() => get_message msg]
+	);
 =TEX
 
 =SML
