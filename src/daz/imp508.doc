@@ -75,7 +75,8 @@ Adjusted $ENV\_INFO$ and allowed for type conversions.
 \item[Issue 1.38] Enhancement 15.
 \item[Issue 1.39-1.41] Enhancements to basic declarations.
 \item[Issue 1.42] Enhancement 12 (type conversions) and rejig of enhancement 11.
-\item[Issues 1.43,1.44] Enhancement 3.
+\item[Issues 1.43-1.46] Enhancement 3.
+\item[Issue 1.47] Enhancement 18.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1305,6 +1306,113 @@ fun Ûadjust_exp1Ý (env : CN_ENV) (exp : EXP) : EXP OPT = (
 );
 =TEX
 
+\section{CHECKING FOR EMPTY RANGES}
+The code in this section implements check 14 from section 17.1 of volume I of the specifications.
+This requires evaluation of static expressions which is most conveniently done using proof.
+For various reasons, it has been agreed that attributes that are functions will not be statically evaluated.
+
+=TEX
+First of all we define a conversion which will expand the definition of a constant integer or set of integers providing the definition is a simple equation and providing the constant does not appear in the list provided as an extra argument (this is used to avoid looping in the presence of somewhat mailiciously conceived definitions).
+
+=SML
+local
+fun Ûcn_const_convÝ (consts : TERM list) : CONV = (fn tm =>
+	(if	tm term_mem consts
+	then	fail_conv
+	else	COND_C
+		(fn tm => is_const tm andalso
+			let val ty = type_of tm; in ty =: ú_ty orelse ty =: ðú_ty end)
+		(fn tm => simple_eq_match_conv (z_get_spec tm) tm)
+		fail_conv
+	) tm
+);
+=TEX
+Now conversions to handle a few other cases which are not directly handled by available tools.
+The conversion for \verb"#" is required for array ength attributes.
+=SML
+val Ûz_minus_minus_thmÝ = pc_rule1 "z_library" prove_rule[] ¬µi ·ñ~ ~i = i®®;
+
+val Ûz_minus_minus_convÝ = simple_eq_match_conv z_minus_minus_thm;
+
+val Ûz_hash_thmÝ = asm_rule ¬µi j·ñ#(i .. j) = (j - i) + 1®®;
+
+val Ûz_hash_convÝ : CONV = simple_eq_match_conv z_hash_thm;
+=TEX
+Now a conversional for propagating a conversion into the operands of a unary or binary Z function.
+=SML
+fun ÛMY_Z_RANDS_CÝ (c : CONV) : CONV = (fn tm =>
+	(	((dest_z_tuple o snd o dest_z_app) tm;
+			RAND_C (RAND_C c AND_OR_C RATOR_C(RAND_C c)))
+				handle Fail _ => RAND_C c	) tm
+	
+);
+=TEX
+We put these pieces together to give the following conversion which does the required static evaluation of integer expressions.
+The parameter to the conversion is used to record which constants have had their definitions unwound somewhere in the branch of the expression tree currently being attacked and is used to avoid infinite recursion (e.g., if someone has used HOL to produce something which looks like a Z global variable with a definition like $X = X$ or $X = X + 0$.
+=SML
+fun Ûcn_eval_convÝ (consts : TERM list) : CONV = (fn tm => (
+		MY_Z_RANDS_C (cn_eval_conv consts)
+		AND_OR_C
+		(fn t => (cn_const_conv consts
+			THEN_TRY_C cn_eval_conv (consts term_grab t)) t)
+		AND_OR_C (FIRST_C [
+				z_hash_conv,
+				z_subtract_minus_conv,
+				z_minus_minus_conv]
+			THEN_TRY_C cn_eval_conv consts)
+		AND_OR_C FIRST_C [
+			z_plus_conv,
+			z_times_conv,
+			cn_intmod_conv	,
+			cn_intdiv_conv	,
+			cn_rem_conv,
+			cn_star_star_conv,
+			z_abs_conv
+		])	tm
+);
+=TEX
+The following function generates the VC for checking that a type or subtype defined by a range constraint is non-empty.
+=SML
+val Ûx_varÝ = ñ(x º ð ú)®;
+val Ûvc_patternÝ = ñ‘x_var® ½ š®;
+ 
+fun Ûrange_check_vcÝ (n : Z_ID) = (
+	subst[(mk_z_gvar(n, ðú_ty, []), x_var)] vc_pattern
+);
+=TEX
+The interface to the outside world is the following function
+The function reports an error if the range bounds can be evaluated and the range proves to be empty;
+if the range can be evaluated and is non-empty then the function returns an empty list of paragraphs;
+if the range cannot be evaluated a paragraph containing a VC is returned.
+
+The somewhat strange way of expressing the decision-making arises from the desire to include the two equations in the message in the error case.
+=SML
+in
+fun Ûrange_check_vcsÝ
+	(n : Z_ID) (lo : TERM) (hi : TERM) : PARAINFO list = (
+	(let	val lo_eqn = (concl o TRY_C(cn_eval_conv[])) lo;
+		val hi_eqn = (concl o TRY_C(cn_eval_conv[])) hi;
+		val nlo = (dest_z_signed_int o snd o dest_eq) lo_eqn;
+		val nhi = (dest_z_signed_int o snd o dest_eq) hi_eqn;
+		fun show t = (
+			let	val (x, _) = dest_eq t;
+			in	if	is_z_signed_int x
+				then	x
+				else	t
+			end
+		);
+	in	if	nlo <= nhi
+		then	(fn _ => [])
+		else	(fn _ =>
+				term_fail  "trans_basic_decl"
+					508060 [show lo_eqn, show hi_eqn])
+	end	handle Fail _ => (fn _ =>
+			(comment "trans_basic_decl"508061 [fn _ => n];
+			[ConjectureInfo(Value n, [], range_check_vc n)])
+	))	()
+);
+end;
+=TEX
 
 \section{TRANSLATING SPARK BASIC DECLARATIONS}
 
@@ -1484,10 +1592,13 @@ end;
 fun Ûbasic_decl_int_typeÝ (env : CN_ENV) (name : ID) (range : EXP RANGE)
 	: PARAINFO list = (
 	let	val {lo, hi} = dest_range (adjust_range env range);
+		val tlo = trans_exp env lo;
+		val thi = trans_exp env hi;
 		val zname = trans_id name;
+		val vcs = range_check_vcs name tlo thi;
 	in
-		[z_eq_eq(zname, z_rng(trans_exp env lo, trans_exp env hi))] @
-			int_type_attrib env (zname, RRange{lo=lo,hi=hi})
+		(z_eq_eq(zname, z_rng(tlo, thi)) ::
+			int_type_attrib env (zname, RRange{lo=lo,hi=hi})) @ vcs
 	end
 );
 =TEX
@@ -1550,8 +1661,11 @@ fun Ûbasic_decl_subtype_range_conÝ (env : CN_ENV) (name : ID) (tmark : TMARK)
 		val te_hi = trans_exp1 env hi;
 	in	case (ztype =: ðú_ty, te_lo, te_hi) of
 			(true, Value l, Value h) =>
-				[z_eq_eq(zname, z_rng(l, h))] @
-				range_con_attrib env (zname, ztmark, {lo=lo,hi=hi})
+				let	val vcs = range_check_vcs name l h
+				in	z_eq_eq(zname, z_rng(l, h)) ::
+					range_con_attrib env
+					(zname, ztmark, {lo=lo,hi=hi}) @ vcs
+				end
 		|	_ =>	basic_decl_subtype_axdes env name tmark
 	end
 );

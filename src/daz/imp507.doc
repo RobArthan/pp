@@ -75,7 +75,7 @@
 \item[Issue 1.96] Fixed bug 18 (batch 2).
 \item[Issue 1.97] Enhancement 13.
 \item[Issues 1.98-1.103] Bug-fixing of enhancements.
-\item[Issue 1.104] Enhancement 3 (and a fairly major rework of the funcitons which support $new\_scope\_with$).
+\item[Issue 1.104] Enhancements 3 and 18 (and a fairly major rework of the funcitons which support $new\_scope\_with$).
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1780,7 +1780,7 @@ fun Ûterm_of_vcİ (vc as (decs, (asms, conc)) : VC) : TERM = (
 	end
 );
 =TEX
-For various (good) reasons, the underlying {\Product} operations of adding new parent or saving a onjecture (e.g., a VC) do not increment the level counter.
+For various (good) reasons, the underlying {\Product} operations of adding new parent or saving a conjecture (e.g., a VC) do not increment the level counter.
 In order for the Z document generator to be able to output the necessary commands in the right place, we make and deletes a dummy type declaration before storing each batch of VCs to force the level counter up.
 In order to avoid a potential infinite loop (e.g., if the current theory is not writable), the attempt to do this dummy declaration is abandoned after 10,000 goes (this protects the code against an extremely unlikely event!)
 =SML
@@ -1799,6 +1799,23 @@ fun Ûstore_vcsİ (label : LABEL, vcs: VC list) : unit = (
 	in	map (store_vc_term label) (map term_of_vc vcs);
 		()
 	end
+);
+=TEX
+The processing of declarations can give rise to VCs.
+These are delivered as conjecture paragraphs.
+In order to handle these vcs uniformly with other VCs, we use
+the following interface to the function for storing Z paragraphs.
+Currently VCs cannot be generic, and so the interface below does not cater for generic VCs.
+=SML
+fun Ûstore_paraİ (para : PARAINFO) : unit = (
+	case para of
+		ConjectureInfo(Value n, [], pred) => (
+			let	val bbn = get_bottom_block_name();
+			in	set_bottom_block_name n;
+				store_vcs(n, [([], ([], pred))]);
+				set_bottom_block_name bbn
+			end
+	) |	_ => update_theory_db_with_parainfo para
 );
 =TEX
 \subsection{Creating ProofPower Theories}
@@ -1988,7 +2005,7 @@ fun Ûbasic_decl_otherwiseİ (basic_decl : BASIC_DECL) : unit = (
 	in
 		case para_info_opt of
 			Value para_infos => (
-				map update_theory_db_with_parainfo para_infos;
+				map store_para para_infos;
 				set_basic_decl_info Combinators.I basic_decl
 		)|	Nil =>	fail "basic_decl_otherwise" 507041 []
 	end
@@ -2895,7 +2912,7 @@ fun Ûtrans_informal_funİ (f: INFORMAL_FUN) : PARAINFO = (
 =TEX
 =SML
 fun Ûinf_fun_otherwiseİ (inf_fun: INFORMAL_FUN) : unit = (
-	update_theory_db_with_parainfo(trans_informal_fun inf_fun);
+	store_para(trans_informal_fun inf_fun);
 	set_par_names inf_fun
 );
 =TEX
@@ -2956,7 +2973,7 @@ fun Ûform_fun_pack_bodyİ (form_fun: FORMAL_FUN) : unit = (
 			handle Fail _ =>
 			error "form_fun_pack_body" 507012 [fn()=>block_name2];
 		val formal_funs4 = #formal_funs package4;
-	in	update_theory_db_with_parainfo(trans_formal_fun form_fun);
+	in	store_para(trans_formal_fun form_fun);
 		set_par_names (#informal_fun form_fun);
 		if	any
 			formal_funs4
@@ -3010,7 +3027,7 @@ fun Ûform_fun_subunitİ (form_fun: FORMAL_FUN) : unit = (
 			handle Fail _ =>
 			fail "form_fun_subunit" 507011
 	 			[fn()=>block_name2, fn()=>block_name1];
-	in	update_theory_db_with_parainfo(trans_formal_fun form_fun);
+	in	store_para(trans_formal_fun form_fun);
 		set_par_names (#informal_fun form_fun);
 		subunit_env := s_delete bn1_bn2 (!subunit_env);
 		if	#specif_flag subunit3
@@ -3050,7 +3067,7 @@ fun Ûform_fun_subunitİ (form_fun: FORMAL_FUN) : unit = (
 =TEX
 =SML
 fun Ûform_fun_otherwiseİ (form_fun: FORMAL_FUN) : unit = (
-	update_theory_db_with_parainfo(trans_formal_fun form_fun);
+	store_para(trans_formal_fun form_fun);
 	set_par_names (#informal_fun form_fun)
 );
 =TEX
@@ -3633,8 +3650,8 @@ fun Ûcreate_spec_from_tmpbody_theoryİ
 		val (tysubs, paras1) = do_given_sets ident tys;
 		val paras2 = do_const_thms ident tysubs newids const_thms;
 	in (
-		map update_theory_db_with_parainfo paras1;
-		map update_theory_db_with_parainfo paras2;
+		map store_para paras1;
+		map store_para paras2;
 		map set_par_names pfx_funs;
 		map	(set_basic_decl_info(prefix_id ident))
 			(#consts_types package);
@@ -3662,9 +3679,9 @@ fun Ûpopulate_theory_with_functionsİ (ident : ID) : unit = (
 
 		val informal_funs = #informal_funs package1;
 		val informal_fun_paras = map trans_informal_fun informal_funs;
-		val se1 = map update_theory_db_with_parainfo informal_fun_paras;
+		val se1 = map store_para informal_fun_paras;
 		fun do_formal_fun ff = (
-			update_theory_db_with_parainfo(trans_formal_fun ff)
+			store_para(trans_formal_fun ff)
 		);
 		val formal_funs = #formal_funs package1;
 		val se2 = map do_formal_fun formal_funs;
@@ -4043,7 +4060,7 @@ fun Ûrenames_funİ
 			let	val tm = (zid current_cn_env o trans_id)
 								(pack dot old);
 				val parainfo = AbbDefInfo(new, [], tm);
-			in	update_theory_db_with_parainfo parainfo
+			in	store_para parainfo
 			end	handle Fail msg =>
 				comment "renames_proc" 507037
 					[fn () => get_message msg]
