@@ -54,6 +54,9 @@ Many changes while deciding upon a format.
 Changes made during writing implementation.
 \item [Issue 1.5]
 Names made pretty were appropriate, using material of \cite{DS/FMU/IED/DTD005}.
+\item [Issue 1.5]
+Added $term\_any$, $type\_any$, $term\_type\_constructors$, $dest\_vartype$, $is\_vartype$.
+Acted upon section 7 of issue 1.3 of \cite{DS/FMU/IED/WRK015}.
 \end{description}
 \subsection{Changes forecast}
 \section{GENERAL}
@@ -114,13 +117,24 @@ val âdest_typeá : TYPE -> string * TYPE list;
 =DESCRIBE
 Extract the arguments to $mk\_type$ by function rather than pattern-matching.
 =FAILURE
-3001	Argument is not of form: mk_type(<string>,<type list>)
-	but mk_vartype ?0
+3001	?0 is not of form: `mk_type(<string>,<type list>)'
+=ENDDOC
+=DOC
+val âdest_vartypeá : TYPE -> string;
+=DESCRIBE
+Extract the name of a type variable.
+=FAILURE
+3019	Argument is not of form: `mk_vartype <string>'
+=ENDDOC
+=DOC
+val âis_vartypeá : TYPE -> bool;
+=DESCRIBE
+Is the type a type variable. If it isn't then it must be a type construction.
 =ENDDOC
 =DOC
 val âmk_funá : (TYPE * TYPE) -> TYPE;
 =DESCRIBE
-$mk\_fun$ $(ty_1,\ ty_2)$ is $":ty_1 ‹ ty_2"$.
+$mk\_fun$ $(ty1,\ ty2)$ is $":ty1 ‹ ty2"$.
 =ENDDOC
 =DOC
 val âicl'inst_typeá : ((TYPE * string) list) -> TYPE -> TYPE;
@@ -138,6 +152,13 @@ This returns a list of names of type constructors, and the arity of their use, w
 val âtype_tyvarsá : TYPE -> string list;
 =DESCRIBE
 Returns the list of type variable names present in a type.
+=ENDDOC
+=DOC
+val âtype_anyá : (TYPE -> bool) -> TYPE -> bool;
+=DESCRIBE
+Given a predicate on types, tests to see if any sub-type of some type (or the type itself) satisfies the predicate.
+The search ceases on the first satisfaction, rather than all the
+tests being done and the results combined.
 =ENDDOC
 =DOC
 val âBOOLá : TYPE;
@@ -186,8 +207,9 @@ This may produce terms that are not well-formed within the context of some theor
 =SEEALSO
 $dest\_TERM$, $DEST\_TERM$
 =FAILURE
-3002	Given `Comb(f, x)', where `f' cannot be applied to `x'
-3003	Ill-formed argument to mk_TERM
+3002	Argument is `Comb(»f¼, »a¼)' where »f¼ has the wrong type to be applied to »a¼ 
+3003	Argument is `Comb(»f¼, »a¼)' where type of »f¼ not of form »:ty1 ‹ ty2¼
+3020	Argument is `Abs(»x¼, »t¼)' where »x¼ is not a variable
 =ENDDOC
 =DOC
 val âtype_ofá : TERM -> TYPE;
@@ -195,15 +217,11 @@ val âtype_ofá : TERM -> TYPE;
 This gives the type of a term.
 =ENDDOC
 =DOC
-val âicl'mk_vará : (string * TYPE) -> TERM;
+val âmk_vará : (string * TYPE) -> TERM;
 =DESCRIBE
 This produces a term with a variable's structure.
 
 This may produce terms that are not well-formed within the context of some theories.
-=USES
-For producing variable names that are arbitrary strings, in particular for generated variable names.
-=SEEALSO
-$mk\_var$
 =ENDDOC
 =DOC
 val âdest_vará: TERM -> (string * TYPE);
@@ -225,9 +243,6 @@ val âmk_constá : (string * TYPE) -> TERM;
 This produces a term with a constant's structure.
 
 This may produce terms that are not well-formed within the context of some theories.
-=FAILURE
-3004	The constant name `?0' must be non-empty and must not contain 
-	spaces or control characters
 =ENDDOC
 =DOC
 val âdest_constá: TERM -> (string * TYPE);
@@ -248,17 +263,17 @@ val âmk_combá : (TERM * TERM) -> TERM;
 =DESCRIBE
 This produces a term with a functional application structure.
 =FAILURE
-3005	Argument type must be compatible with function type
-3006	Operator type must be a function type
-=FAILUREC
-Further details of the errors will be given, before the above exceptions are raised.
+3005	Argument must have compatible types: `(»... : ty1 ‹ ty2¼, »...:ty1¼)'
+3006	Argument is `(»f¼, »a¼) where type of »f¼ not of form »:ty1 ‹ ty2¼ 
 =ENDDOC
+The uses of this function in the parser, etc, should catch 
+this functions error messages, and give more meaningful ones.
 =DOC
 val âdest_combá: TERM -> (TERM * TERM);
 =DESCRIBE
 Destroys a term with a function application structure.
 =FAILURE
-3010	Term is not a function application
+3010	Term is not of form »t1 t2¼ 
 =FAILUREC
 Further details of the errors will be given, before the above exceptions are raised.
 =ENDDOC
@@ -271,7 +286,7 @@ This function returns true iff. the term has a function application structure.
 val âlist_mk_combá : (TERM * TERM list) -> TERM;
 =DESCRIBE
 óDefinition
-list_mk_comb ("body", ["a","b","c",...]) = "body a b c ..."
+list_mk_comb (»t¼, [»t1¼,»t2¼,»t3¼,...]) = »t t1 t2 t3 ...¼ 
 æ
 =FAILUREC
 \paragraph{Failure}
@@ -282,7 +297,7 @@ val âstrip_combá : TERM -> TERM * TERM list;
 =DESCRIBE
 Splits a term into a head term, that is not an application, and the list of argument terms applied to that head term to form the original term.
 =EXAMPLE
-strip_comb "f (1+2) 3 4 5" = ("f", ["1+2", "3", "4", "5"])
+strip_comb »t t1 t2 t3 ...¼ = (»t¼, [»t1¼,»t2¼,»t3¼,...])
 =ENDDOC
 =DOC
 val âmk_simple_absá : (TERM * TERM) -> TERM;
@@ -290,7 +305,7 @@ val âmk_simple_absá : (TERM * TERM) -> TERM;
 This produces a term with an abstraction's structure.
 It may only abstract variables.
 =FAILURE
-3007	An abstraction must have a variable as its first argument.
+3007	Argument is not of form: `(»var¼, »t¼)'
 =FAILUREC
 Further details of the errors will be given, before the above exceptions are raised
 =SEEALSO
@@ -302,7 +317,7 @@ val âdest_simple_absá: TERM -> (TERM * TERM);
 Destroys a term with an abstraction's structure.
 It cannot destroy paired abstractions, being a inverse of $mk\_simple\_abs$.
 =FAILURE
-3011	Term is not an abstraction
+3011	Argument is not of form: » var Ž t¼ 
 =FAILUREC
 Further details of the errors will be given, before the above exceptions are raised.
 =SEEALSO
@@ -319,7 +334,7 @@ $is\_abs$
 val âlist_mk_simple_absá : (TERM list * TERM) -> TERM;
 =DESCRIBE
 óDefinition
-list_mk_simple_abs (["a","b","c",...], "body") =  a b c ... Ž body
+list_mk_simple_abs ([»x1¼,»x2¼,...],»t¼) = » x1 x2 ... Ž t¼ 
 æ
 This function will be implemented using $mk\_simple\_abs$, not $mk\_abs$.
 =FAILUREC
@@ -369,8 +384,8 @@ disallowed.
 val âmk_bin_opá : string -> int -> (TYPE -> TYPE -> TERM) ->
 	(TERM * TERM) -> TERM;
 =DESCRIBE
-$mk\_bin\_op$ $area$ $msg$ $rator$ $(tm_1, tm_2)$ attempts to form the term $tm_1\ rator'\ tm_2$.
-$rator'$ is gained by applying $rator$ to the types of $tm_1$ and $tm_2$.
+$mk\_bin\_op$ $area$ $msg$ $rator$ $(t, t2)$ attempts to form the term $t1\ rator'\ t2$.
+$rator'$ is gained by applying $rator$ to the types of $t1$ and $t2$.
 =FAILUREC
 \paragraph{Failure}
 The failure message for failing to apply $rator$ to its arguments will be from area $area$, and will have the text indexed by $msg$.
@@ -378,8 +393,7 @@ The failure message for failing to apply $rator$ to its arguments will be from a
 =DOC
 val âdest_bin_opá : string -> int -> string -> TERM -> (TERM * TERM);
 =DESCRIBE
-$dest\_bin\_op$ $area$ $msg$ $rator$ $term$ assumes that $term$ is of the form $tm_1\ rator\ tm_2$, and attempts to return $tm_1$ and
-$tm_2$.
+$dest\_bin\_op$ $area$ $msg$ $rator$ $term$ assumes that $term$ is of the form $t1\ rator\ t2$, and attempts to return the pair $t1, t2$.
 =FAILUREC
 \paragraph{Failure}
 The failure message for failing to apply $rator$ to its arguments will be from area $area$, and will have the text indexed by $msg$.
@@ -396,7 +410,10 @@ val âlist_mk_bin_opá : string -> int ->
 This function combines a list of terms using the given operator.
 Notice the bracketing in the example.
 =EXAMPLE
-list_mk_bin_op "€" [a, (b € c), d] = (a € ((b € c) € d))
+list_mk_bin_op area msg €_fun [»a¼, »b € c¼, »d¼] = 
+		»a € ((b € c) € d)¼ 
+=TEX
+where $€\_fun$ takes two (dummy) arguments and returns »€¼.
 =FAILURE
 3017	An empty list argument is not allowed
 =FAILUREC
@@ -411,7 +428,7 @@ This function strips a binary operator, attempting to destroy its term argument,
 A test not formed from the operator is returned unchanged,
 as a singleton list.
 =EXAMPLE
-strip_bin_op "€" (a € (b € c) € d) = [a, (b € c), d]
+strip_bin_op "€" »a € (b € c) € d¼ = [»a¼, »b € c¼, »d¼]
 =ENDDOC
 =DOC
 val âmk_mon_opá : string -> int -> (TYPE -> TERM) ->
@@ -426,7 +443,7 @@ The failure message for failing to apply $rator$ to its arguments will be from a
 =DOC
 val âdest_mon_opá : string -> int -> string -> TERM -> TERM;
 =DESCRIBE
-$dest\_mon\_op$ $area$ $msg$ $rator$ $term$ assumes that $term$ is of the form $rator\ term$, and attempts to return $term$.
+$dest\_mon\_op$ $area$ $msg$ $rator$ $term$ assumes that $term$ is of the form $rator\ t$, and attempts to return $t$.
 =FAILUREC
 \paragraph{Failure}
 The failure message for failing to apply $rator$ to its argument will be from area $area$, and will have the text indexed by $msg$.
@@ -441,7 +458,7 @@ val âmk_simple_binderá : string -> int -> (TYPE -> TYPE -> TERM) ->
 	(TERM * TERM) -> TERM;
 =DESCRIBE
 $mk\_binder$ $area$ $msg$ $binder$ $(var,\ body)$ generates the term:
-$binder( var\ Ž\ body)$.
+$»binder( var\ Ž\ body)¼$.
 The $var$ must be a term variable.
 =FAILUREC
 \paragraph{Failure}
@@ -450,8 +467,8 @@ If the term cannot be made, then the error will be from $area$, with a message i
 =DOC
 val âdest_simple_binderá : string -> int -> string -> TERM -> TERM * TERM;
 =DESCRIBE
-$dest\_binder$ $area$ $msg$ $binder$ $``binder( var Ž body)''$
-will give $(var,\ body)$.
+$dest\_binder$ $area$ $msg$ $binder$ $»binder( var Ž body)¼$
+will give $(»var¼,\ »body¼)$.
 =FAILUREC
 \paragraph{Failure}
 If the term cannot be destroyed, then the error will be from $area$, with a message indexed by $msg$.
@@ -464,14 +481,14 @@ $is\_simple\_binder$ $dest$ $term$ returns true iff. $dest$ can be applied to $t
 =DOC
 val âbin_bool_opá : string -> TYPE -> TYPE -> TERM;
 =DESCRIBE
-Returns a constant with the given name, and type $:BOOL\ ‹\ BOOL\ ‹\ BOOL$.
+Returns a constant with the given name, and type $»:BOOL\ ‹\ BOOL\ ‹\ BOOL¼$.
 The type arguments are dummies.
 =ENDDOC
 \subsubsection{Specific Derived Term Structure Functions}
 =DOC
 val âequalityá : TYPE -> TYPE -> TERM;
 =DESCRIBE
-Returns the constant $=$
+Returns the constant $»=¼$
  upon terms with the first type argument.
 The second type is a dummy argument.
 =ENDDOC
@@ -487,7 +504,7 @@ val âdest_eqá : TERM -> (TERM * TERM);
 =DESCRIBE
 A derived term destructor function for equalities.
 =FAILURE
-3014	Term is not an equation.
+3014	Term is not of form: »t = u¼ or »t ‚ u¼ 
 =ENDDOC
 =DOC
 val âis_eqá : TERM -> bool;
@@ -499,14 +516,14 @@ val âmk_Šá : (TERM * TERM) -> TERM;
 =DESCRIBE
 A derived term construction function for generating implications.
 =FAILURE
-3015	Implications are only between boolean terms
+3015	Implication is only between booleans
 =ENDDOC
 =DOC
 val âdest_Šá : TERM -> (TERM * TERM);
 =DESCRIBE
 A derived term destructor function for implications.
 =FAILURE
-3016	Term is not an implication
+3016	Term is not of form: »t Š u¼ 
 =ENDDOC
 =DOC
 val âis_Šá : TERM -> bool;
@@ -518,37 +535,37 @@ The following could alternatively have the signature $:(TERM\ list) * TERM -> TE
 val âlist_mk_Šá : TERM list -> TERM;
 =DESCRIBE
 óDefinition
-list_mk_Š ["a","b","c",...] = "a Š b Š c ..."
+list_mk_Š [»t1¼,»t2¼,...] = »t1 Š t2 Š ...¼ 
 æ
-Note that giving a singleton list containing a non-boolean term will return that term, rather than fail.
+Note that giving a singleton list containing a non-boolean will return that term, rather than fail.
 =FAILURE
 3017	An empty list argument is not allowed
-3018	Argument list must be of boolean terms
+3018	Argument list is not of booleans
 =ENDDOC
 The following could alternatively have the signature $:TERM\ ->\ (TERM\ list) * TERM$
 =DOC
 val âstrip_Šá : TERM -> TERM list;
 =DESCRIBE
 óDefinition
-strip_Š  "a Š b Š c ..." = ["a","b","c",...]
+strip_Š  »t1 Š t2 Š ...¼ = [»t1¼,»t2¼,...]
 æ
-Note that stripping a non-boolean term will result in that term, not a fail.
+Note that stripping a non-boolean will result in that term, not a fail.
 =ENDDOC
 =DOC
 val âquantifierá : string -> TYPE -> TYPE -> TERM;
 =DESCRIBE
-$quantifier$ $name$ $type$ $dummy$ returns a constant, with the given name, and type $: (type ‹ BOOL) ‹ BOOL$.
+$quantifier$ $name$ $type$ $dummy$ returns a constant, with the given name, and type $»: (ty ‹ BOOL) ‹ BOOL¼$.
 =ENDDOC
 =DOC
 val âmk_simple_ƒá : (TERM * TERM) -> TERM;
 =DESCRIBE
 A derived term construction function for generating foralls.
 óDefinition
-mk_simple_ƒ (var, body) = ƒ var Ž body
+mk_simple_ƒ (»var¼, »body¼) = »ƒ var Ž body¼ 
 æ
 $var$ must be a term variable.
 =FAILURE
-3031	Argument must have the form: (variable, boolean)
+3031	Argument is not of form: `(»var¼, »body : BOOL¼)'
 =SEEALSO
 $mk\_ƒ$
 =ENDDOC
@@ -558,7 +575,7 @@ val âdest_simple_ƒá : TERM -> (TERM * TERM);
 A derived term destructor function for foralls.
 It cannot destroy paired abstraction foralls, being the inverse of $mk\_simple\_ƒ$.
 =FAILURE
-3032	Term is not a simple forall
+3032	Term is not of form: »ƒ var Ž body¼ 
 =ENDDOC
 =DOC
 val âis_simple_ƒá : TERM -> bool;
@@ -569,10 +586,10 @@ A derived term test for forall, not formed with paired abstractions.
 val âlist_mk_simple_ƒá : TERM list * TERM -> TERM;
 =DESCRIBE
 óDefinition
-list_mk_simple_ƒ ["a","b","c",...] body = "ƒ a b c ... Ž body"
+list_mk_simple_ƒ [»x1¼,»x2¼,...] »body¼ = »ƒ x1 x2 ... Ž body¼ 
 æ
 This uses $mk\_simple\_ƒ$ to generate its result.
-Note that giving an empty list paired with a non-boolean term will return that term, rather than fail.
+Note that giving an empty list paired with a non-boolean will return that term, rather than fail.
 =FAILUREC
 \paragraph{Failure}
 This may give $mk\_simple\_ƒ$ error messages.
@@ -582,11 +599,11 @@ val âmk_simple_„á : (TERM * TERM) -> TERM;
 =DESCRIBE
 A derived term construction function for generating exists.
 óDefinition
-mk_„ (var, body) = „ var Ž body
+mk_„ (»var¼, »body¼) = »„ var Ž body¼
 æ
 $var$ must be a term variable.
 =FAILURE
-3031	Argument must have the form: (variable, boolean)
+3031	Argument is not of form: `(»var¼, »body : BOOL¼)'
 =SEEALSO
 $mk\_„$
 =ENDDOC
@@ -596,7 +613,7 @@ val âdest_simple_„á : TERM -> (TERM * TERM);
 A derived term destructor function for exists.
 It cannot destroy paired abstraction exists, being the inverse of $mk\_simple\_„$.
 =FAILURE
-3034	Term is not a simple exist
+3034	Term is not of form: »„ var Ž body¼
 =SEEALSO
 $dest\_„$
 =ENDDOC
@@ -609,10 +626,10 @@ A derived term test for exist, not formed with paired abstractions.
 val âlist_mk_simple_„á : TERM list * TERM -> TERM;
 =DESCRIBE
 óDefinition
-list_mk_simple_„ ["a","b","c",...] body = "„ a b c ... Ž body"
+list_mk_simple_„ [»x1¼,»x2¼,...] »body¼ = »„ x1 x2 ... Ž body¼
 æ
 This uses $mk\_simple\_„$ to generate its result.
-Note that giving an empty list paired with a non-boolean term will return that term, rather than fail.
+Note that giving an empty list paired with a non-boolean will return that term, rather than fail.
 =FAILUREC
 \paragraph{Failure}
 This may give $mk\_simple\_„$ error messages.
@@ -645,7 +662,7 @@ Note that the destroyed term variables must have the same types as the term that
 =SEEALSO
 $var\_subst$, $subst$
 =FAILURE
-3052	Invalid types in term substitution
+3052	Given `[...,(»t¼, string, »:ty¼),...]' where »t¼ not of type »:ty¼
 =ENDDOC
 =DOC
 val ârenameá : (string * TYPE) -> string -> TERM -> TERM;
@@ -669,9 +686,22 @@ val âterm_typesá : TERM -> TYPE list;
 Gives a list of all the types of constants, variables or abstraction variables within the term argument.
 =ENDDOC
 =DOC
+val âterm_anyá : (TERM -> bool) -> TERM -> bool;
+=DESCRIBE
+Given a predicate on terms, tests to see if any sub-term of some term (or the term itself) satisfies the predicate.
+The search ceases on the first satisfaction, rather than all the
+tests being done and the results combined.
+=ENDDOC
+=DOC
 val âterm_tyvarsá : TERM -> string list;
 =DESCRIBE
 Returns the list of type variable names present in types present within a term.
+=ENDDOC
+=DOC
+val âterm_type_constructorsá : TERM -> (string * int) list;
+=DESCRIBE
+Returns the set of type constructors and their arity
+(represented as a list).
 =ENDDOC
 =DOC
 val âterm_constantsá : TERM -> (string * TYPE) list;
@@ -682,12 +712,12 @@ are constants, giving destroyed constants in each case.
 =DOC
 val âtype_matchá : TYPE -> TYPE -> (TYPE * TYPE)list;
 =DESCRIBE
-$type\_match$ $ty_1$ $ty_2$ attempts to find if $ty_1$ is an instance of $ty_2$.
+$type\_match$ $ty1$ $ty2$ attempts to find if $ty1$ is an instance of $ty2$.
 If so, then it returns a list giving the correspondence between
-types in $ty_1$ with type variables in $ty_2$.
+types in $ty1$ with type variables in $ty2$.
 Trivial (i.e. (x,x)) correspondences are not noted.
 =FAILURE
-3053	The first type is not an instance of the second
+3053	First type is not an instance of the second
 =ENDDOC
 =DOC
 val âterm_matchá : TERM -> TERM -> (TYPE * TYPE) list * (TERM * TERM)list;
@@ -698,29 +728,20 @@ The first gives the correspondence between types in $tm_1$ with type variables i
 The second gives the correspondence between (type instantiated) terms in $tm_1$ with free variables in $tm_2$.
 Trivial (i.e. (x,x)) correspondences are not noted.
 =FAILURE
-3054	The first term is not an instance of the second
+3054	First term is not an instance of the second
 =ENDDOC
 =DOC
 val âis_type_instanceá : TYPE -> TYPE -> bool;
 =DESCRIBE
-$is\_type\_instance$ $ty_1$ $ty_2$ returns true iff $ty_1$ is an instance of $ty_2$.
+$is\_type\_instance$ $ty1$ $ty2$ returns true iff $ty1$ is an instance of $ty2$.
 =ENDDOC
 =DOC
-val âgenvará : TYPE -> TERM;
+val âmg_variablesá : TYPE list -> TERM list -> TERM list;
 =DESCRIBE
-Each application of $gen\_var$ returns a variable whose
-is different from that returned by any other application.
-The variable name starts with a space so that the variable
-name will also be different from that of any variable
-constructed with $mk\_var$. 
-=ENDDOC
-=DOC
-val âmk_vará : (string * TYPE) -> TERM;
-=DESCRIBE
-If the string is non-empty, and doesn't contain spaces, then a HOL term variable is formed in the obvious way from the argument.
-=FAILURE
-3055	Variable name `?0' must be non-empty and must not contain 
-	spaces or control characters
+$mg\_variables$ $tyl$ $tml$ generates a list of differently named machine-generated 
+variables, with the types in $tyl$, whose names are not present within any of the terms in $tml$ as variable names.
+=USES
+It will be much faster to make one call to this function with a list of types, than to make the equivalent number of individual type calls.
 =ENDDOC
 =DOC
 val âvariantá : TERM list -> TERM -> TERM;
@@ -728,7 +749,7 @@ val âvariantá : TERM list -> TERM -> TERM;
 $variant$ $stoplist$ $v$ returns a variant of variable $v$ that is not present in the $stoplist$.
 The variants are generated by sufficient priming.
 =FAILURE
-3056	Can only give a variant of a variable
+3056	Second argument is not a variable
 3057	First argument is not a list of term variables
 =SEEALSO
 $icl'variant$
@@ -755,7 +776,7 @@ $var\_subst$ $alist$ $term$ returns the term formed by, for each pair in $alist$
 
 Note that the term variables must have the same types as the term that is to replace them.
 =FAILURE
-3060	The second of each pair in the substitution list must be a term variable
+3060	First argument is not of form: `[(...,»var¼),...,(...,»var¼)]'
 =SEEALSO
 $icl'subst$, $subst$
 =ENDDOC
@@ -785,8 +806,8 @@ where $tv$ is a type variable that is to be instantiated to $return$.
 It will rename bound variables as necessary to prevent name capture problems.
 It will also not allow variables to become the same as those in the avoidance list, $alist$.
 =FAILURE
-3061	First argument must be a list of term variables
-3062	Second argument must be a list of (TYPE * type variables)
+3061	First argument is not a list of term variables
+3062	Second argument is not of form: `[...,(»:ty¼, »:type variable¼),...]'
 =ENDDOC
 =SML
 end(* signature of icl'TypesAndTerms *);

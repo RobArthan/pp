@@ -50,6 +50,8 @@ Based on the first part of DS/FMU/IED/SML002.
 \item [Issue 1.2]
 Minor corrections and prettifying of characters.
 Hid $TERM\_term$ from user.
+\item [Issue 1.3]
+Changes to mirror changes to version 1.5 of \cite{DS/FMU/IED/DTD003}.
 \end{description}
 \subsection{Changes forecast}
 \section{GENERAL}
@@ -86,6 +88,13 @@ fun âdest_typeá ((mk_vartype s):TYPE) : string * TYPE list = (
 ) | dest_type (mk_type(s, tl)) = (s, tl);
 =TEX
 =SML
+fun âdest_vartypeá ((mk_vartype s):TYPE) : string = s
+ | dest_vartype _ = fail "dest_vartype" 3019 [];
+=TEX
+=SML
+fun âis_vartypeá ((mk_vartype _):TYPE) : bool = true
+| is_vartype (mk_type _) = false;
+=SML
 fun âmk_funá ((ty1, ty2) : TYPE * TYPE) : TYPE = (
 	mk_type("‹", [ty1, ty2])
 );
@@ -111,6 +120,21 @@ in a type.
 =SML
 fun âtype_tyvarsá ((mk_vartype s): TYPE) : string list = [s]
 | type_tyvars (mk_type(_, tl)) = list_cup (map type_tyvars tl);
+=TEX
+=SML
+fun âtype_anyá (p : TYPE -> bool) (ty : TYPE) : bool = (
+let 	fun aux (mk_vartype _) = false
+	| aux (mk_type(_,tyl)) = ( 
+	let
+		fun list_type_any (lty :: ltyl) = (
+		p lty orelse aux lty orelse list_type_any ltyl
+		) | list_type_any [] = false
+	in
+		list_type_any tyl
+	end)
+in
+	p ty orelse aux ty
+end);	
 =TEX
 =SML
 val âBOOLá : TYPE = mk_type("BOOL", []);
@@ -149,11 +173,11 @@ class.
 
 =SML
 local
-	datatype TERM_term =
-	icl'Var of string |
-	icl'Const of string |
-	icl'Comb of TERM_term * TERM_term * TYPE |
-	icl'Abs of string * TERM_term
+	datatype âTERM_termá =
+	âicl'Vará of string |
+	âicl'Constá of string |
+	âicl'Combá of TERM_term * TERM_term * TYPE |
+	âicl'Absá of string * TERM_term
 in
 abstype âTERMá =
 	typed of TERM_term * TYPE
@@ -187,13 +211,14 @@ fun  âmk_TERMá ((Var (s, ty)): DEST_TERM) : TERM = typed(icl'Var s, ty)
 	else fail "mk_TERM" 3002 []
 ) | mk_TERM (Abs (typed(icl'Var s, ty1), typed(bdy, ty2))) = (
 	typed(icl'Abs(s, bdy), mk_fun(ty1, ty2))
-) | mk_TERM _ = fail "mk_TERM" 3003 [];
+) | mk_TERM (Comb _) = fail "mk_TERM" 3003 []
+  | mk_TERM (Abs _) = fail "mk_TERM" 3020 [];
 =TEX
 =SML
 fun âtype_ofá ((typed (_, ty)):TERM):TYPE = ty;
 =TEX
 =SML
-fun âicl'mk_vará ((v, ty):string * TYPE): TERM = typed (icl'Var v, ty);
+fun âmk_vará ((v, ty):string * TYPE): TERM = typed (icl'Var v, ty);
 
 fun âdest_vará ((typed (icl'Var s, ty)):TERM) : string * TYPE = (s, ty)
 |   dest_var _ = fail "dest_var" 3008 [];
@@ -202,11 +227,7 @@ fun âis_vará ((typed (icl'Var _, _)): TERM) : bool = true
 |   is_var _ = false;
 =TEX
 =SML
-fun âmk_constá((v, ty):string * TYPE): TERM = (
-	if is_all_graphical v
-	then typed (icl'Const v, ty) 
-	else fail "mk_const" 3004 [(fn s => v)]
-);
+fun âmk_constá((v, ty):string * TYPE): TERM = typed (icl'Const v, ty);
 
 fun âdest_constá ((typed (icl'Const s, ty)): TERM):string * TYPE = (s, ty)
 |   dest_const _ = fail "dest_const" 3009 [];
@@ -517,15 +538,15 @@ fun âicl'substá (R : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = (
 	let
 	fun aux R (Comb(f, a)) = mk_comb(aux R (dest_TERM f), aux R (dest_TERM a))
 	| aux R (Const c) = mk_const c
-	| aux R (Var v) = rassoc2 R icl'mk_var v
+	| aux R (Var v) = rassoc2 R mk_var v
 	| aux R (Abs(vty, b)) = (
 		let	val (s, ty) = dest_var vty
 			val new_frees =
 				flat (map
-				(icl'frees o rassoc2 R icl'mk_var)
+				(icl'frees o rassoc2 R mk_var)
 				(icl'frees b less (s, ty)));
 			val s' = icl'variant new_frees (s, ty)
-			val vty' = icl'mk_var (s', ty)
+			val vty' = mk_var (s', ty)
 			val RR = (vty', (s, ty)) :: R;
 			val b' = aux RR (dest_TERM b);
 		in mk_simple_abs(vty', b')
@@ -541,7 +562,7 @@ fun âicl'substá (R : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = (
 \subsubsection{Renaming}
 =SML
 fun ârenameá ((v, ty) : string * TYPE) (w : string) (tm : TERM) : TERM = (
-	icl'subst[(icl'mk_var(w, ty), (v, ty))]tm
+	icl'subst[(mk_var(w, ty), (v, ty))]tm
 );
 =TEX
 \subsubsection{Instantiation of Types and Terms}
@@ -558,12 +579,12 @@ local
 	) | inst_loc1 tysubs (Const(s,ty)) vars varmap = (
 		mk_const(s, icl'inst_type tysubs ty)
 	) | inst_loc1 tysubs (Var(s,ty)) vars varmap = (
-		icl'mk_var(lassoc3 varmap (s,ty))
+		mk_var(lassoc3 varmap (s,ty))
 	) | inst_loc1 tysubs (Abs(v, b)) vars varmap = (
 		let	val sty as (s, ty) = dest_var v
 			val ty' = icl'inst_type tysubs ty
 			val sty' = (icl'variant vars (s, ty'), ty')
-		in mk_simple_abs(icl'mk_var sty',
+		in mk_simple_abs(mk_var sty',
 			inst_loc1
 			tysubs
 			(dest_TERM b)
@@ -616,14 +637,43 @@ let	fun aux (Comb (f, a)) = (
 		aux (dest_TERM f) cup aux (dest_TERM a)
 	) | aux (Const (_, ty)) = [ty]
 	  | aux (Var (_,ty)) = [ty]
-	  | aux (Abs (v, b)) = aux (dest_TERM b) cup [type_of v]
+	  | aux (Abs (v, b)) = aux (dest_TERM b) grab (type_of v)
 in
 	aux(dest_TERM tm)
 end);
 =TEX
 =SML
+fun âterm_anyá (p : TERM -> bool) (tm : TERM) : bool = (
+let	fun aux (Comb (f, a)) = (
+		p f orelse p a orelse
+		aux (dest_TERM f) orelse
+		aux (dest_TERM a)
+	) | aux (Const _) = false
+	  | aux (Var _) = false
+	  | aux (Abs (v, b)) = (
+		p v orelse p b orelse
+		aux (dest_TERM b)
+	)
+in
+	p tm orelse aux (dest_TERM tm)
+end);
+=TEX
+=SML
 val âterm_tyvarsá = list_cup o (map type_tyvars) o term_types;
 =TEX
+=SML
+fun âterm_type_constructorsá (tm : TERM) : (string * int) list = (
+let
+	fun aux (Comb (f, a)) = (
+		aux (dest_TERM f) cup aux (dest_TERM a)
+	) | aux (Const (_, ty)) = type_tycons ty
+	  | aux (Var (_,ty)) = type_tycons ty
+	  | aux (Abs (v, b)) = aux (dest_TERM b) cup (type_tycons(type_of v))
+in
+	aux(dest_TERM tm)
+end);
+=TEX
+
 This function extracts the subterms of a term which
 are constants.
 =SML
@@ -818,10 +868,10 @@ removing trivial correspondences from the result.
 		let	val (tym, tmm) = tmaux2 ([], []) [] (dest_TERM tm1) (dest_TERM tm2);
 			val tym' = tym drop (fn (x, y) => x = mk_vartype y);
 			val tmm' = tmm drop
-		(fn (x, (s, ty)) => x TERM_eq icl'mk_var(s, icl'inst_type tym' ty));
+		(fn (x, (s, ty)) => x TERM_eq mk_var(s, icl'inst_type tym' ty));
 			val tmm'' = map (fn(x, (s,_)) => (x, (s, type_of x))) tmm';
 		in 	(map(Combinators.I ** mk_vartype)tym',
-			 map(Combinators.I ** icl'mk_var)tmm'')
+			 map(Combinators.I ** mk_var)tmm'')
 		end handle (Fail _) => fail "term_match" 3054 []
 	);
 end;
@@ -833,23 +883,6 @@ fun âis_type_instanceá (ty1 : TYPE) (ty2 : TYPE) : bool = (
 );
 =TEX
 \subsubsection{Functions Concerning Term Variables}
-Each application of $gen\_var$ returns a variable whose
-is different from that returned by any other application.
-The variable name starts with a space so that the variable
-name will also be different from that of any variable
-constructed with $mk\_var$ (see below). 
-=SML
-fun âgenvará ty = (
-	icl'mk_var(" genvar%" ^ string_of_int(gensym()), ty)
-);
-=TEX
-=SML
-fun âmk_vará(v, ty) = (
-	if is_all_graphical v
-	then icl'mk_var (v, ty) 
-	else fail "mk_var" 3055 [(fn (u:unit) => v)]
-	);
-=TEX
 =SML
 fun âvariantá (vs : TERM list) (v : TERM) : TERM = (
 	(if is_var v
@@ -863,7 +896,7 @@ fun âvariantá (vs : TERM list) (v : TERM) : TERM = (
 				then aux (n ^ "'")
 				else n
 			    )
-			in icl'mk_var(aux s, ty)
+			in mk_var(aux s, ty)
 			end
 	end)
 	else fail "variant" 3056 [])
@@ -876,11 +909,83 @@ fun âlist_variantá (av : TERM list) ([]: TERM list) : TERM list = []
 	end
 );
 =TEX
+The following is a function to create a list of
+machine genrated variables known to be different
+to any existing in a list of terms.
+It is very heavily tweaked for efficiency, and its local declarations are as follows.
+\begin{description}
+\item[mgn\_prefix]
+This is the starting prefix for all machine-generated variables,
+and should the prefix change, then only this declaraction need change.
+\item[ord\_mgn\_prefix]
+We hope that a fast if incomplete filter names is testing whether
+the first character of any encountered name is the same as that
+at the start of $mgn\_prefix$.
+We do this by using $ord$ which gives the ascii value of the first
+character in a string.
+We precompute this value for $mgn\_prefix$.
+\item[mg\_in\_term]
+This gives the list of possible machine-generated names already
+present in a single term, with no duplicates.
+\item[mg\_in\_terms]
+This gives the list of possible machine-generated names already
+present in a list of terms, with no duplicates.
+\item[mgs]
+This is the list of possible machine-generated names present in
+$mg\_variables$ term list.
+\item[base\_mgns]
+This is the list of names that will be used for our newly generated varibles, if there are no conflicts already.
+\item[create\_mgv]
+This creates one variable per type, named $(mgn\_prefix)nnn$,
+where $nnn$ is the first number (starting from 0) for which the name is not already
+in the list.
+The $nnn$ carries over to the name of each new variable, so that
+previously rejected names, and previously generated names are not 
+tried once more.
+This means we don't have to test the new names against themselves.
+\end{description}.
+It replaces the very fast, if slightly uncertain $genvar$, of the prototype ICL HOL.
+It is less fast, but should always meet its specification.
+=SML
+local
+	val mgn_prefix = "@_";
+	val ord_mgn_prefix = ord mgn_prefix
+in
+fun âmg_variablesá (tyl : TYPE list) (tml : TERM list) : TERM list =  (
+let fun mg_in_term acc (Comb(f, a)) = (
+	let val acc' = mg_in_term acc (dest_TERM f)
+	in mg_in_term acc' (dest_TERM a) end
+	) | mg_in_term acc (Var (s,_)) = if ord s = ord_mgn_prefix
+		then acc grab s
+		else acc
+	| mg_in_term acc (Const _) = acc
+	| mg_in_term acc (Abs(v, b)) = if ord(fst(dest_var v)) = ord_mgn_prefix
+		then mg_in_term (acc grab (fst(dest_var v))) (dest_TERM b)
+		else mg_in_term acc (dest_TERM b);
+
+	fun mg_in_terms acc (ltm :: ltml) = (
+	let val acc' = mg_in_term acc (dest_TERM ltm)
+	in mg_in_terms acc' ltml end
+	) | mg_in_terms acc [] = acc;
+
+	val mgs = mg_in_terms [] tml;
+
+	fun create_mgv n ((lty :: ltyl):TYPE list) : TERM list = (
+		if (mgn_prefix ^ string_of_int n) mem mgs
+		then create_mgv (n+1) (lty :: ltyl)
+		else (mk_var(mgn_prefix ^ string_of_int n, lty) :: 
+			create_mgv (n+1) ltyl)
+	) | create_mgv n [] = [];
+in
+	create_mgv 1 tyl
+end);
+end;
+=TEX
 =SML
 val âis_free_iná : TERM -> TERM -> bool = is_free_var_in o dest_var;
 =TEX
 =SML
-val âfreesá = map icl'mk_var o icl'frees;
+val âfreesá = map mk_var o icl'frees;
 =TEX
 $var\_subst$ is the direct interface to $icl'subst$.
 Thus, unlike $subst$ (see below), it is only capable of
@@ -932,7 +1037,8 @@ fun âsubstá
 	(subs : (TERM * TERM) list)
 	(tm : TERM) = (
 	let	val (xs, ys) = split subs;
-		val Xs = map (genvar o type_of) ys;
+		val terms = tm :: (xs @ ys); 
+		val Xs = mg_variables (map type_of ys) terms;
 		val ysXs = combine ys Xs;
 		fun aux bvs tm = (
 			let	val (t, X) = find ysXs (fn (u, Y) => aconv u tm);
