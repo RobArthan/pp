@@ -100,49 +100,75 @@ This is the signature for the structure containing the parser for HOL/Z.
 
 \section{DESIGN ISSUES}
 
+
+\subsection{Diagnostics}
 It is a requirement that the parser gives helpful diagnostics
 when the grammar recognises an error, and that it aims to point the
 user directly to the location of the error.
 
-It is sufficient in the Z parser to provide diagnostics which
-are similar to those in HOL; namely that the tokens already recognised
-are printed out, followed by a marker ``<?>'', and the symbol which
-was reached but unrecognised.
+For the syntax errors in which the input contains a token
+which prevents further parsing,
+it is sufficient in the Z parser to provide diagnostics
+similar to those in HOL, in which the tokens already recognised
+are printed out, followed by a marker ``$<?>$'', and the symbol which
+was unacceptable.
 
-The BNF grammar which has been chosen accepts a slightly larger language.
-Checks are made in some reduction functions which effectively
-restricts the accepted language. This technique is only used
-in a small number of cases, but allows higher level diagnostics to be
-produced. For example, if a predicate is provided in a place where
-an expression is expected, then the predicate will be parsed completely
-before a reduction function is called which prints an error. 
-
-\subsection{Templates}
-
-A function applied to an argument is represented either as a template
+It is necessary that diagnostic messages reproduce
+the user's input verbatim.
+One example where care is needed to ensure that this is possibly when
+printing out partially parsed input is in function applications:
+a function applied to an argument is represented either as a template
 e.g., Ò(\_ + \_) (1, 2)Æ, or with the fixity rule applied; thus
-Ò1 + 2Æ. It is necessary that diagnostic messages reproduce
-the user's input verbatim. There are at least two ways of achieving
-this.
+Ò1 + 2Æ. Other examples are constructs, such as set comprehensions
+with optional constituents.
 
-\begin{itemize}
-\item[1.]
-A count of the number of characters read is maintained, and used to
-print out the user's input upto the point where an error occurred.
-Since it is intended that post-processing in the reduction functions
-is carried out, it is necessary to maintain an up-to-date
-record of the number of characters read at each point a
-reduction is applied.
-
-\item[2.]
-The structural information necessary to reproduce the user's input
+To achieve a precise diagnostic message,
+any structural information necessary to reproduce the user's input
 needs to be maintained in the data structure which represents a
 parsed Z paragraph.
-
 This requires that the grammar be analysed for productions where structural
 information might be lost, and that information be recorded in the data
 structure for parsed paragraphs.
-\end{itemize}
+
+The BNF grammar which has been chosen accepts a slightly larger language.
+Checks are made to ensure that the input lies in
+the desired language (extended or standard as determined by user-settable
+options). This  allows higher level diagnostics to be
+produced. For example, if a predicate is provided in a place where
+an expression is expected, then the situation can be explained as such
+(rather than having to say that some token or other was not expected).
+Care has to be taken, however, to ensure that as much contextual information
+is included in the diagnostic report as given in the diagnostics for an
+unexpected token.
+
+\subsection{SLR Problems}
+
+It is quite hard to describe the language of \cite{DS/FMU/IED/DEF007} with
+a grammar which is directly amenable to automatic parser-generation,
+and the reference description in \cite{DS/FMU/IED/DEF007} uses a number
+of features of BS BNF which are not available with SLRP.
+To get round the problems we use two standard compiler-writer's tricks:
+
+\begin{enumerate}
+\item
+For constructs where the reference description imposes restrictions which
+are hard to describe using the available tools one uses a grammar for
+a superset of the language and makes checks that the input  is in
+the language during a second phase of parsing.
+An example of this arise from the $DecName$/$VarName$ distinction in
+\cite{DS/FMU/IED/DEF007} which goes against the grain of the usual treatment
+of bracketing.
+\item
+For constructs where the reference description makes short range contextual
+distinctions in the BNF, again one uses a superset and during a second phase of
+parsing, one transforms the parse tree to reflect the context. An example
+of this arises from the need to distinguish generic instantiations
+from horizontal schemas in certain contexts.
+\end{enumerate}
+
+The checks and transformations which are required are described alongside
+the affected productions and a check-list of them is given in section
+\ref{CHECKSANDTRANSFORMATIONS}.
 
 \section{GRAMMAR}
 
@@ -158,7 +184,6 @@ $Expr1$ to allow its re-use (possibly with some extra checks) in
 all places in the grammar where applied use
 of something approximately like a fancy-fix expression is called for.
 In more detail this works out as follows.
-
 
 \begin{enumerate}
 \item
@@ -264,7 +289,7 @@ be a given set definition.
 
 =DUMPMORE dtd061.grm.txt
 €GeneralTerm›	= Pred					(red_pred x1 stk)
-			| Pred, `Ampersand`, Pred			(red_pred_constraint x1 x2 x3 stk);
+			| Pred, `Ampersand`, Pred		(red_pred_constraint x1 x2 x3 stk);
 =TEX
 Note that in the second two forms the first $Pred$ has to be a given
 set definition and that these forms are only allowed when the
@@ -287,7 +312,7 @@ We take the meat of a $DefLhs$ just as $Expr1$. It is required that the expressi
 be a simple variable or a possibly fancy-fix
 generic instantiation thereof.
 =DUMPMORE dtd061.grm.txt
-€DefLhs›		= Expr1					(red_expr1_as_def_lhs x1 stk);
+€DefLhs›		= Expr1				(red_expr1_as_def_lhs x1 stk);
 =TEX
 \subsubsection{FreeType Definition}
 We take $Branches$ to be a `$\vert$' separated list of $Expr1$s.
@@ -302,7 +327,7 @@ the `$::=$' are the $DecName$s of \cite{DS/FMU/IED/DEF007}.
 					(red_free_types x1 x2 x3 x4 x5 stk);
 
 €Branches›		= Pred						(red_pred_as_branch x1 stk)
-			| Pred, `Bar`, Branches				(red_branches x1 x2 x3 stk);
+			| Pred, `Bar`, Branches			(red_branches x1 x2 x3 stk);
 =TEX
 \subsection{Axiomatic box}
 =DUMPMORE dtd061.grm.txt
@@ -310,7 +335,8 @@ the `$::=$' are the $DecName$s of \cite{DS/FMU/IED/DEF007}.
 					(red_ax_box_no_pred x1 x2 stk)
 			| `Ax`, `LSqBrk`, SomeExprs, `RSqBrk`, `Bars`, Decl
 					(red_gen_ax_box_no_pred x1 x2 x3 x4 x5 x6  stk)
-			| `Ax`, Decl, `St`, Pred			(red_ax_box_pred x1 x2 x3 x4 stk)
+			| `Ax`, Decl, `St`, Pred
+					(red_ax_box_pred x1 x2 x3 x4 stk)
 			| `Ax`, `LSqBrk`, SomeExprs, `RSqBrk`, `Bars`, Decl, `St`, Pred
 					(red_gen_ax_box x1 x2 x3 x4 x5 x6 x7 x8 stk);
 =TEX
@@ -318,7 +344,7 @@ the `$::=$' are the $DecName$s of \cite{DS/FMU/IED/DEF007}.
 As with constraint we just use $Pred$ for the notion of a possibly generic term:
 =DUMPMORE dtd061.grm.txt
 €Conjecture›		= `TurnStile`, Pred
-					(red_conjecture x1 x2 stk)
+					(red_no_id_conjecture x1 x2 stk)
 			| Id, `TurnStile`, Pred	
 					(red_id_conjecture x1 x2 x3 stk);
 =TEX
@@ -440,7 +466,8 @@ and then move them out to their proper position.
 			| Schema4, `BackSlash`, `LBrk`, SomeExprs, `RBrk`
 					(red_schema_hiding x1 x2 x3 x4 x5 stk);
 
-€RenameList›		= `LSqBrk`, Renames, `RSqBrk`			(red_rename_list x1 x2 x3 stk);
+€RenameList›		= `LSqBrk`, Renames, `RSqBrk`
+					(red_rename_list x1 x2 x3 stk);
 
 €Renames›		= Expr1, `Slash`, Expr1		(red_rename x1 x2 x3 stk)
 			| Expr1, `Slash`, Expr1, `Comma`, Renames
@@ -458,14 +485,17 @@ the grammar of $Decl$.
 =DUMPMORE dtd061.grm.txt
 €DeclMinusPred›	= DeclSemi, SomeExprs, `Colon`, Pred1
 					(red_decl_semi_var_decs_pred1 x1 x2 x3 x4 stk)
-			| DeclSemi, SomeExprs			(red_decl_semi_pred1 x1 x2 stk)
-			| SomeExprs, `Colon`, Pred1		(red_var_decs_pred1 x1 x2 x3 stk);
+			| DeclSemi, SomeExprs
+					(red_decl_semi_pred1 x1 x2 stk)
+			| SomeExprs, `Colon`, Pred1
+					(red_var_decs_pred1 x1 x2 x3 stk);
 
 
-€DeclSemi›		= SomeExprs, `Colon`, Pred1, `Semi`			(red_var_decs_pred1 x1 x2 x3 x4 stk)
-			| SomeExprs, `Semi`				(red_pred1_as_decl x1 x2 stk)
+€DeclSemi›		= SomeExprs, `Colon`, Pred1, `Semi`
+					(red_var_decs_pred1_semi x1 x2 x3 x4 stk)
+			| SomeExprs, `Semi`				(red_pred1_as_decl_semi x1 x2 stk)
 			| DeclSemi, SomeExprs, `Colon`, Pred1, `Semi`
-					(red_decl_semi_var_decs_pred1 x1 x2 x3 x4 x5 stk)
+					(red_decl_semi_var_decs_pred1_semi x1 x2 x3 x4 x5 stk)
 			| DeclSemi, SomeExprs, `Semi`
 					(red_decl_semi_pred1_semi x1 x2 x3 stk);
 =TEX
@@ -499,7 +529,7 @@ is a predicate.
 €Expr1›			= Expr2				(red_expr2_as_expr1 x1 stk)
 			| PreOp, Expr1			(red_pre_op x1 x2 stk)
 			| Expr1, PostOp			(red_post_op x1 x2 stk)
-			| Expr1, InOp, Expr1		(red_in_op x1 x2 stk)
+			| Expr1, InOp, Expr1		(red_in_op x1 x2 x3 stk)
 			| BeginOp, CoreExpr, EndOp
 					(red_bo_ce_eo x1 x2 x3 stk)
 			| BeginOp, CoreExpr, PreEndOp, Expr1
@@ -524,7 +554,7 @@ In both sorts of $SomeExprs$, the constituent $Pred1$s are contexts where
 only expressions are allowed. 
 =DUMPMORE dtd061.grm.txt
 €SomeExprs›		= Pred1				(red_pred1_as_some_exprs x1 stk)
-			| Pred1, `Comma`, SomeExprs		(red_some_exprs x1 x2 x3 stk);
+			| Pred1, `Comma`, SomeExprs	(red_pred1_comma_some_exprs x1 x2 x3 stk);
 =TEX
 In the first sort of $Expr2$, the constituent $Expr3$ is a context where an
 expression or predicate is allowed. In the other sort of $Expr2$
@@ -584,7 +614,7 @@ is currently some disagreement about its format.
 			| `LBrk`, Pred, `Comma`, SomeExprs, `RBrk`
 					(red_tuple x1 x2 x3 x4 x5 stk)
 			| `LBrace`, SomeExprs, `RBrace`	(red_set_display x1 x2 x3 stk)
-			| `LSeqBrk`, SomeExprs, `RSeqBrk`	(red_sequence_brk x1 x2 x3 stk)
+			| `LSeqBrk`, SomeExprs, `RSeqBrk`	(red_seq_display x1 x2 x3 stk)
 			| `LBrace`, Decl, `Bar`, Pred, `RBrace`
 					(red_set_comp_no_spot x1 x2 x3 x4 x5 stk)
 			| `LBrace`, DeclMinusPred, `RBrace`
@@ -613,7 +643,7 @@ is currently some disagreement about its format.
 =TEX
 
 
-=SH
+=IGN_SH
 date 1>&2
 (poly `arch`slrp.db <<!
 Slrp.slrp{
@@ -628,9 +658,112 @@ PolyML.quit();
 # )  | tee dtd061.grm.run 1>&2
 =TEX
 
+\section{CHECKS AND TRANSFORMATIONS}
+This section gives a check list of the checks and transformations
+required to transform a sentence of the language $Specification$ as defined
+in this document into a sentence of the language of the same name defined in
+\cite{DS/FMU/IED/DEF007}.
 \section{DATA TYPES}
-The first phase of the parser will return a value of type $ZTM$ defined
-in \cite{DS/FMU/IED/DTD062}.
+The parser will return a value of type $Z\_PARA$ defined
+as follows.
+\section{DATA TYPES AND STRUCTURES}
+
+The following types are used for identifiers and decoration:
+=SML
+type €ID›		(*	= string	*);
+type €DECOR›		(*	= string	*);
+=TEX
+We represent precedences using 
+the integers:
+=SML
+type €PREC›		(*	= int		*);
+=TEX
+The following types are used for the templates which
+record information about fancy-fix operators:
+=SML
+datatype €STUB›		= 	€StubUS›		(* _ *)
+			|	€StubEll›		(* ... *);
+
+type €CORE›		=	ID * ((STUB * ID) list * (STUB * ID)) OPT;
+
+datatype €TEMPLATE›	=	€TmplNon› of	CORE
+					(* id, {stub, id} *)
+			|	€TmplIn› of	(STUB * CORE * STUB)
+					(* stub, id, {stub, id}, stub *)	
+			|	€TmplPre› of	(CORE * STUB)
+					(* id, {stub, id}, stub *)
+			|	€TmplPost› of	(STUB * CORE)
+					(* {stub, id}, stub, id *);
+
+type €IDENT›	=	TEMPLATE * DECOR;
+=TEX
+
+=SML
+datatype €Z_IN_OP› =	ZInOp±	|	ZInOp≤	|	ZInOp¥	|	ZInOp§	|	ZInOpSemi;
+
+datatype €Z_QUANT› =	ZQuantµ	|	ZQuant∂	|	ZQuant∂â1;
+=TEX
+=SML
+datatype €Z_TM›	=	ZTmß¢ of EXTYPE OPT * Z_TM list
+		|	ZTmSetd of EXTYPE OPT * Z_TM list
+		|	ZTmSeta1 of Z_SCH_TEXT
+		|	ZTmSeta2 of Z_SCH_TEXT * Z_TM
+		|	ZTm of Z_TM
+		|	ZTmTuple of Z_TM list
+		|	ZTm∏ of Z_TM list
+		|	ZTm  of Z_TM * DECOR
+		|	ZTmSel of Z_TM * IDENT
+		|	ZTmApp of Z_TM * Z_TM
+		|	ZTmFancyApp of IDENT * Z_TM
+		|	ZTmÃ of Z_SCH_TEXT * Z_TM
+		|	ZTmÕ1 of Z_SCH_TEXT
+		|	ZTmÕ2 of Z_SCH_TEXT * Z_TM
+		|	ZTmSchema of Z_SCH_TEXT
+		|	ZtmDec of Z_TM * DECOR
+		|	ZTmpre of Z_TM
+		|	ZTm≥ of Z_TM
+		|	ZTmInOp of Z_IN_OP * Z_TM * Z_TM
+		|	ZTm≥âs of Z_TM
+		|	ZTmSchInOp of Z_IN_OP * Z_TM * Z_TM
+		|	ZTm˘ of Z_TM * Z_TM
+		|	ZTmHide of Z_TM * IDENT list
+		|	ZTmQuant of Z_QUANT * Z_SCH_TEXT * Z_TM
+		|	ZTmSchQuant of Z_QUANT * Z_SCH_TEXT * Z_TM
+		|	ZTmÑ of Z_TM
+		|	ZTmò of Z_TM
+		|	ZTmTruth of bool
+		|	ZTmEq of Z_TM * Z_TM
+		|	ZTmç of Z_TM * Z_TM
+		|	ZTmª of Z_TM * Z_TM
+		|	ZTmPipe of Z_TM * Z_TM
+		|	ZTm˙ of int
+		|	ZTmConstrained of Z_TM * Z_TM
+		|	ZTmLVar of IDENT*Z_TM list
+		|	ZTmGVar of IDENT*Z_TM list
+		|	ZTmLet of Z_EQ_DEF list * Z_TM
+		|	ZTmRename of Z_TM * ((IDENT * IDENT) list) 
+		|	ZTmBracketed of Z_TM
+=TEX
+=SML
+and €ZDEC›	=	ZdDec of IDENT list * Z_TM
+		|	ZdDecsexp of Z_TM * DECOR
+=TEX
+=SML
+withtype €Z_SCH_TEXT› =	ZDEC list * (Z_TM OPT)
+and	€Z_EQ_DEF› =	IDENT * Z_TM;
+=TEX
+
+=SML
+datatype €Z_PARA› =	ZParaAbbDef of IDENT * IDENT list * Z_TM * EXTYPE OPT
+|	ZParaSchBox of IDENT * IDENT list * Z_TM * EXTYPE OPT
+|	ZParaAxDes of IDENT list * Z_SCH_TEXT * (((IDENT * EXTYPE) list) OPT)
+|	ZParaFreeType of (IDENT * (IDENT * Z_TM) list) list
+|	ZParaGivenSet of IDENT list * ((IDENT list * Z_TM) OPT)
+|	ZParaConstraint of IDENT list * Z_TM
+|	ZParaConjecture of IDENT OPT * IDENT list * Z_TM
+|	ZParaTerm of IDENT list * Z_TM * EXTYPE OPT;
+=TEX
+
 =TEX
 \section{INTERFACE}
 =DOC
@@ -659,17 +792,28 @@ an error in the parser itself.
 =FAILURE
 61000	Syntax error
 61001	Syntax error in: ?0 <?> ?1
-61003	?0 is not expected after ¨ ?1
-61004	?0 is not a valid local definition
-61005	Parser error: corrupt parsing stack detected in ?0
-61006	Parser error: unexpected return value from slrp'gen_parser
-61007	Parser error: ?0
+61002	Syntax error in: ?0
+61003	?0 is not expected after ?1
+61004	?0 is not a valid ?1; it does not match the declared template ?2
+61004	?0 is not a valid ?1
+61005	?0 is not a valid operand for ?1
+61006	?0 is not valid here (a generic actual parameter list is only allowed after ?1)
 61010	A precedence number is not allowed in a `rel` fixity paragraph
+61205	Parser error: corrupt parsing stack detected in ?0
+61206	Parser error: unexpected return value from slrp'gen_parser
+61207	Parser error: ?0
 =ENDDOC
 =SML
 end; (* of signature Parser *)
 =TEX
+=FAILURE
+61101	template
+61102	VarName
+61103	DecName
+61104	Decl
+61105	Decl
 
+=TEX
 
 \section{TEST POLICY}
 The functions in this document are to be tested according to the
