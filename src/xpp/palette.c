@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.15 2003/07/17 11:37:16 rda Exp rda $ 
+ * $Id: palette.c,v 2.16 2003/07/18 13:25:25 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -68,6 +68,10 @@ typedef struct {
 
 static PaletteData palette_info = { NULL, NULL };
 
+
+static void dismiss_cb(CALLBACK_ARGS);
+static void help_cb(CALLBACK_ARGS);
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * popup_palette: pop up the palette widget (creating it if
  * necessary). The widget argument is the text widget to
@@ -81,12 +85,12 @@ void popup_palette(Widget w)
 	char label_buf[2], name_buf[sizeof "charXX"];
 	NAT i, n_chars, x, y;
 	NAT cbdata;
-	Widget shell, form, button;
+	Widget shell, outer_form, inner_form, button, dismiss_btn, help_btn;
 
 	palette_info.text_w = w;
-	if((form = palette_info.palette_w) != NULL) {
-		XtManageChild(form);
-		XtPopup(XtParent(form), XtGrabNone);
+	if((outer_form = palette_info.palette_w) != NULL) {
+		XtManageChild(outer_form);
+		XtPopup(XtParent(outer_form), XtGrabNone);
 		return;
 	} /* else ... */
 
@@ -99,13 +103,25 @@ void popup_palette(Widget w)
 	add_edit_res_handler(shell);
 #endif
 	common_dialog_setup(shell);
-	form = XtVaCreateWidget("form",
+
+	outer_form = XtVaCreateWidget("outer-form",
 		xmFormWidgetClass, shell,
-		XmNfractionBase, 	16,
+		XmNfractionBase, 	17,
 		XmNautoUnmanage,	False,
 		NULL);
 
-	palette_info.palette_w = form;
+	inner_form = XtVaCreateWidget("inner-form",
+		xmFormWidgetClass, outer_form,
+		XmNfractionBase, 	16,
+		XmNtopAttachment,	XmATTACH_FORM,
+		XmNleftAttachment,		XmATTACH_FORM,
+		XmNrightAttachment,	XmATTACH_FORM,
+		XmNbottomAttachment,	XmATTACH_POSITION,
+		XmNbottomPosition,	16,
+		XmNautoUnmanage,	False,
+		NULL);
+
+	palette_info.palette_w = outer_form;
 
 	label_buf[1] = '\0';
 
@@ -117,7 +133,7 @@ void popup_palette(Widget w)
 		x = 2 * (i % 8);
 		y = i / 8;
 		button = XtVaCreateManagedWidget(name_buf,
-			xmPushButtonGadgetClass, form,
+			xmPushButtonGadgetClass, inner_form,
 			XmNlabelString, lab,
 			XmNleftAttachment,	XmATTACH_POSITION,
 			XmNleftPosition,	x,
@@ -127,7 +143,6 @@ void popup_palette(Widget w)
 			XmNtopPosition,		y,
 			XmNbottomAttachment,	XmATTACH_POSITION,
 			XmNbottomPosition,	y + 1,
-			XmNtraversalOn,	False,
 			NULL);
 		copy_font_list(button, w);
 		XmStringFree(lab);
@@ -136,7 +151,45 @@ void popup_palette(Widget w)
 			(XtPointer) cbdata);
 	}
 
-	XtManageChild(form);
+	lab = XmStringCreateSimple("Dismiss");
+	dismiss_btn = XtVaCreateManagedWidget("dismiss",
+		xmPushButtonWidgetClass,	outer_form,
+		XmNlabelString,		lab,
+		XmNtopAttachment,		XmATTACH_POSITION,
+		XmNtopPosition,		16,
+		XmNbottomAttachment,		XmATTACH_FORM,
+		XmNleftAttachment,		XmATTACH_POSITION,
+		XmNleftPosition,		2,
+		XmNrightAttachment,		XmATTACH_POSITION,
+		XmNrightPosition,		6,
+		XmNtraversalOn,	False,
+		NULL);
+	XmStringFree(lab);
+
+	XtVaSetValues(outer_form,
+		XmNcancelButton,	dismiss_btn,
+		NULL);
+
+	lab = XmStringCreateSimple("Help");
+	help_btn = XtVaCreateManagedWidget("help",
+		xmPushButtonWidgetClass,	outer_form,
+		XmNlabelString,		lab,
+		XmNtopAttachment,		XmATTACH_POSITION,
+		XmNtopPosition,		16,
+		XmNbottomAttachment,		XmATTACH_FORM,
+		XmNleftAttachment,		XmATTACH_POSITION,
+		XmNleftPosition,		11,
+		XmNrightAttachment,		XmATTACH_POSITION,
+		XmNrightPosition,		15,
+		XmNtraversalOn,	False,
+		NULL);
+	XmStringFree(lab);
+
+	XtAddCallback(dismiss_btn, XmNactivateCallback, dismiss_cb, 0);
+	XtAddCallback(help_btn, XmNactivateCallback,help_cb, 0);
+
+	XtManageChild(inner_form);
+	XtManageChild(outer_form);
 	XtPopup(shell, XtGrabNone);
 
 }
@@ -217,5 +270,28 @@ static void type_char_cb(
 
 }
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * dismiss callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void dismiss_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
+{
+	XtPopdown(XtParent(palette_info.palette_w));
+}
+
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * help callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void help_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
+{
+	help_dialog(root, Help_Palette_Tool);
+}
 
 
