@@ -944,7 +944,7 @@ static void get_pty()
 			perror("xpp");
 			exit(7);
 		};
-		if(	ioctl(control_fd, FIONBIO, &one) < 0) {
+		if(ioctl(control_fd, FIONBIO, &one) < 0) {
 			msg("system error", "ioctl on control fd failed");
 			perror("xpp");
 			exit(8);
@@ -959,9 +959,9 @@ static void get_pty()
 		char **arglist;
 		struct termios tio;
 		close(control_fd);
-		dup2(slave_fd, 0);
-		dup2(slave_fd, 1);
-		dup2(slave_fd, 2);
+		dup2(slave_fd, STDIN);
+		dup2(slave_fd, STDOUT);
+		dup2(slave_fd, STDERR);
 		if (slave_fd > 2) {
 			close(slave_fd);
 		};
@@ -974,7 +974,7 @@ static void get_pty()
 		read(0, &buf, 1);		/* Wait until told */
 		if(	ioctl(0, I_PUSH, "ptem") < 0
 		||	ioctl(0, I_PUSH, "ldterm") < 0 
-		||	ioctl(0, I_PUSH, "ttcompat") < 0 
+		||	ioctl(0, I_PUSH, "ttcompat") < 0
 		||	ioctl(0, TCGETS, &tio) < 0 ) {
 			msg("system error", "ioctl on slave fd failed");
 			perror("xpp");
@@ -1316,10 +1316,10 @@ static void handle_sigs()
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void interrupt_application ()
 {
-	char cintr = CINTR;
 	clear_queue();
 	if(application_alive()) {
-		write(control_fd, &cintr, 1);
+		ioctl(control_fd, I_FLUSH, FLUSHW);
+		kill((pid_t)(-child_pid), SIGINT);
 	}
 }
 
