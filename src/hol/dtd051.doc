@@ -68,6 +68,8 @@ Added existence prover parameterisation.
 Changed to using a dictionary of proof contexts.
 \item [Issue 1.11]
 Variation on a theme.
+\item [Issue 1.12]
+Changes after comments on 1.11.
 \end{description}
 \subsection{Changes Forecast}
 The designer of this document needs to know which functions it may
@@ -175,7 +177,7 @@ by $thm\_eqn\_cxt$:
 thm_eqn_cxt `‡ ô µ x1 ... · LHS = RHS` ­
 	(LHS, simple_eq_match_1_conv `‡ ô µ x1 ... · LHS = RHS`)
 =TEX
-where the universal quantifiers must be simple.
+where the universal quantifiers must be simple binders.
 =SEEALSO
 $cthm\_eqn\_cxt$ which canonicalises
 a theorem before transformation.
@@ -204,7 +206,7 @@ This will change the individual context of all context-sensitive proof tools,
 to provide the best context available for the style of work they are to then carry out.
 \item
 To give a more experienced user the ability to merge
-together the effect of a number of proof contexts into the current proof context.
+together the effect of various proof contexts into the current proof context.
 \item
 To give the developer of, say, a new theory the means
 to create a proof context suitable for reasoning in that theory.
@@ -240,11 +242,11 @@ acceptable origin of data for other proof contexts.
 
 Mechanisms keep track of the origin of data in each of a 
 proof contexts fields by splitting it into subfields, to allow duplicated information to
-be discarded when merging data from a number of proof contexts in a single field.
+be discarded when merging data from various proof contexts in a single field.
 Each subfield is indexed by the proof context name from which it came.
 This is also why we commit proof contexts, and why they may
 only have data extracted for other proof contexts after their commital.
-More than one proof context may be uncommitted at one time.
+More than one proof context may be uncommitted at the same time.
 
 The data a user might enter into a proof context
 is not in the same form as context-sensitive applications accessing the proof context wish to see:
@@ -271,23 +273,25 @@ prove_¶_rule and its users
 
 The user data tools are:
 =GFT
-set_rw_eqn_cxt		get_rw_eqn_cxt
+set_rw_eqn_cxt	get_rw_eqn_cxt		add_rw_thms
 set_rw_canons		get_rw_canons
-set_st_eqn_cxt		get_st_eqn_cxt
-set_sg_eqn_cxt		get_sg_eqn_cxt
-set_cs_¶_rule		get_cs_¶_rule
-set_¶_cd_thm		get_¶_cd_thm
-set_¶_vs_thm		get_¶_vs_thm
+set_st_eqn_cxt		get_st_eqn_cxt		add_st_thms
+set_sg_eqn_cxt		get_sg_eqn_cxt		add_sg_thms
+set_cs_¶_rules		get_cs_¶_rules
+set_¶_cd_thms		get_¶_cd_thms		add_¶_cd_thms
+set_¶_vs_thms		get_¶_vs_thms
 =TEX
 In naming the interface functions we use the convention:
 =GFT
-<set|get>_<proof tool>_<modifier>
+<set|get|add>_<proof tool>_<modifier>
 =TEX
 The proof tools in the above are: $rw$ for rewriting,
 $st$ for stripping theorems, $sg$ for stripping goals,
 $cs$ for constant specifications,
 and $¶$ for the existence prover $prove\-\_¶\-\_conv$.
 $set$ and $get$ functions overwrite or access the database respectively.
+$add$ functions add unprocessed theorems
+into a proof context, using some form of automated processing.
 
 The applications data tools are:
 =GFT
@@ -296,8 +300,8 @@ icl'set_eval_ad_rw_canon		current_ad_rw_canon
 icl'set_eval_ad_st_conv		current_ad_st_conv
 icl'set_eval_ad_sg_conv		current_ad_sg_conv
 icl'set_eval_ad_cs_¶_rule		current_ad_cs_¶_rule
-icl'set_eval_ad_¶_cd_thm		current_ad_¶_cd_thm
-icl'set_eval_ad_¶_vs_thm		current_ad_¶_vs_thm
+icl'set_eval_ad_¶_cd_thms		current_ad_¶_cd_thms
+icl'set_eval_ad_¶_vs_thms		current_ad_¶_vs_thms
 =TEX
 In naming the applications data interface functions we use the convention:
 =GFT
@@ -311,8 +315,8 @@ $icl'set\_eval$
 sets the method of evaluating the associated user data into application data,
 and $current$ gives the current proof contexts application data.
 
-Note that the application data fields could be directly modified, to $v$ say,
-by setting the evaluation function to 
+Note that an application data field in an uncommitted proof context could be directly modified, to $v$ say,
+by setting its evaluation function to 
 =INLINEFT
 (fn _ => v)
 =TEX
@@ -337,14 +341,15 @@ val Ûnew_pcÝ : string -> unit;
 =DESCRIBE
 $new\_pc$ $new$
 creates a new 
-entry with key $to$.
+entry in the proof context database, with key $new$.
+The fields of the proof context are set to default values.
 A note will be made of the current theory,
 and its current definition level at the time of
 creation, and an error will be raised
 if an attempt is made to push the new proof context (see $push\_pc$) when
 that theory is not in scope, or when the definition level
 has been recorded as deleted.
-The definition level will recorded as deleted if, e.g., some definition
+The definition level will be recorded as deleted if, e.g., some definition
 or axiom that was in scope in the original theory has since been deleted.
 
 One responsibility of the creator of a proof context is to ensure that the theorems used within, or created by, the new context are also
@@ -362,32 +367,76 @@ Entry ``initial'' may not be deleted.
 51012	Initial proof context may not be deleted
 =ENDDOC
 =DOC
+val Ûcommit_pcÝ : string -> unit;
+=DESCRIBE
+This commits an entry the proof context database.
+=FAILURE
+51010	There is no proof context with key ?0
+51016	Proof context ?0 has been committed
+=ENDDOC
+=DOC
 val Ûshow_pcsÝ : unit -> (string * string) list;
 =DESCRIBE
 This lists the names of the proof contexts held in the proof context
 database, and the theory that was current at their time of creation.
-If the theory has since been deleted then the theory name will be given as ``(deleted)''.
+If the theory has since been deleted or if the definition level becomes deleted, e.g.
+because an axiom or definition has been deleted,
+then this will output 
+=INLINEFT
+("context name","theory name(out of scope/deleted/modified)")
+=TEX
 =ENDDOC
 =DOC
-val Ûcurrent_ad_nameÝ : unit -> string;
+val Ûshow_stack_pcsÝ : unit -> (string list * string) list;
 =DESCRIBE
-Returns the key of the entry from which the
-current proof context was copied.
+This lists the keys of the proof contexts held in the proof context
+stack, and the theory that was current at their time of creation.
+If a proof context is pushed onto the stack by, e.g. $push\_pc$, the ``keys'' will be the singleton list of the name of the source proof context.
+If a proof context is pushed onto the stack by, e.g. $push\_pcs$, the ``keys'' will be the list of the names of the source proof contexts.
+If the theory has since been deleted or if the definition level becomes deleted, e.g.
+because an axiom or definition has been deleted,
+then this will output 
+=GFT
+(["context name"],"theory name(out of scope/deleted/modified)")
+=TEX
+Note that this function does not report on the current proof context - 
+see $show\-\_current\-\_pc$ for this.
+=ENDDOC
+=FAILURE
+51018	?0 (out of scope/deleted/modified)
+=TEX
+=DOC
+val Ûshow_current_pcÝ : unit -> (string list * string);
+=DESCRIBE
+Returns the key(s) of the entries from which the
+current proof context was copied, and the theory in which the single
+proof context was created.
+If the theory has since been placed out of scope, deleted or if the definition level becomes deleted, e.g.
+because an axiom or definition has been deleted,
+then this will output 
+=GFT
+(["context name"],"theory name(out of scope/deleted/modified)")
+=TEX
 Note that the key may no longer access a proof context in the database identical to the current proof context.
 
-Merged proof contexts upon the stack  (from $push\_pcs$ and  $set\_pcs$) will have ``current proof context name'' of the names of the constituent proof contexts, comma'ed together.
+Merged proof contexts upon the stack  (from $push\_pcs$ and  $set\_pcs$) will have the list of names of the constituent proof contexts, singleton contexts will have singleton lists.
 =ENDDOC
 =DOC
 val Ûset_rw_eqn_cxtÝ : EQN_CXT -> string -> unit;
 val Ûget_rw_eqn_cxtÝ : string -> (EQN_CXT * string) list;
+val Ûadd_rw_thmsÝ : THM list -> string -> unit;
 =DESCRIBE
 These functions provide the interface to the equational context for rewriting (see e.g. $rewrite\_tac$)
 held in the user data of a proof context.
 ``setting'' overwrites the subfield whose key is the proof context's name,
 ``getting'' returns the entire field (which pairs data with
 proof context names).
+``adding'' processes its theorems by first canonicalising according to the stated proof contexts canonicalisation function, and then with $thm\_eqn\_cxt$ and
+then adds them into the subfield whose key is the proof context's name.
 =FAILURE
 51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
 51016	Proof context ?0 has been committed
 =ENDDOC
 =DOC
@@ -414,6 +463,8 @@ held in the user data of a proof context.
 proof context names).
 =FAILURE
 51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
 51016	Proof context ?0 has been committed
 =ENDDOC
 =DOC
@@ -431,6 +482,7 @@ $set\_rw\_canons$ for the associated user data.
 =DOC
 val Ûset_st_eqn_cxtÝ : EQN_CXT -> string -> unit;
 val Ûget_st_eqn_cxtÝ : string -> (EQN_CXT * string)list;
+val Ûadd_st_thmsÝ : THM list -> string -> unit;
 =DESCRIBE
 These functions provide the interface to the equational context for stripping theorems into the
 assumption list (see e.g. $strip\_tac$)
@@ -438,8 +490,12 @@ held in the user data of a proof context.
 ``setting'' overwrites the subfield whose key is the proof context's name,
 ``getting'' returns the entire field (which pairs data with
 proof context names).
+``adding'' processes its theorems  by first canonicalising according to the stated proof contexts canonicalisation function, and then with $thm\_eqn\_cxt$ and
+then adds them into the subfield whose key is the proof context's name.
 =FAILURE
 51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
 51016	Proof context ?0 has been committed
 =ENDDOC
 =DOC
@@ -457,14 +513,19 @@ $set\_st\_conv$ for the associated user data.
 =DOC
 val Ûset_sg_eqn_cxtÝ : EQN_CXT -> string -> unit;
 val Ûget_sg_eqn_cxtÝ : string -> (EQN_CXT * string) list;
+val Ûadd_sg_thmsÝ : THM list -> string -> unit;
 =DESCRIBE
 These functions provide the interface to the equational context for stripping goal conclusions (see e.g. $strip\_tac$)
 held in the user data of a proof context.
 ``setting'' overwrites the subfield whose key is the proof context's name,
 ``getting'' returns the entire field (which pairs data with
 proof context names).
+``adding'' processes its theorems by first canonicalising according to the stated proof contexts canonicalisation function, and then with $thm\_eqn\_cxt$ and
+then adds them into the subfield whose key is the proof context's name.
 =FAILURE
 51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
 51016	Proof context ?0 has been committed
 =ENDDOC
 =DOC
@@ -479,9 +540,9 @@ in the current proof context.
 $set\_sg\_conv$ for the associated user data.
 =ENDDOC
 =DOC
-val Ûset_cs_¶_ruleÝ : ((TERM -> THM) list) -> 
+val Ûset_cs_¶_rulesÝ : ((TERM -> THM) list) -> 
 	string -> unit;
-val Ûget_cs_¶_ruleÝ : string -> 
+val Ûget_cs_¶_rulesÝ : string -> 
 	((((TERM -> THM) list)*string) list);
 =DESCRIBE
 These functions provide the interface to the 
@@ -494,10 +555,12 @@ Each existence prover will be used in turn.
 proof context names).
 =FAILURE
 51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
 51016	Proof context ?0 has been committed
 =ENDDOC
 =DOC
-val Ûicl'set_eval_ad_cs_¶_ruleÝ : (((TERM -> THM) * string)list -> (TERM -> THM))
+val Ûicl'set_eval_ad_cs_¶_rulesÝ : ((TERM -> THM)list -> (TERM -> THM))
 	 -> unit;
 val Ûcurrent_ad_cs_¶_ruleÝ : unit -> (TERM -> THM);
 =DESCRIBE
@@ -508,10 +571,13 @@ The first sets the evaluator, the second extracts the field
 in the current proof context.
 =SEEALSO
 $set\_cs\_¶\_rule$ for the associated user data.
+=FAILURE
+51015	No automated existence prover in the current proof context succeeds
 =ENDDOC
 =DOC
-val Ûset_¶_cd_thmÝ : THM list -> string -> unit;
-val Ûget_¶_cd_thmÝ : string -> THM list;
+val Ûset_¶_cd_thmsÝ : THM list -> string -> unit;
+val Ûget_¶_cd_thmsÝ : string -> THM list;
+val Ûadd_¶_cd_thmsÝ : THM list -> string -> unit;
 =DESCRIBE
 These functions provide the interface to the
 unevaluated  
@@ -520,34 +586,36 @@ $prove\_¶\_conv$.
 There are no subfields to this field, so
 ``setting'' overwrites the field with the proof context's name,
 ``getting'' returns the field.
+``adding'' unions its theorem list with the proof contexts field.
 =SEEALSO
-See $evaluate\_¶\_cd\_thm$ for details upon the form
+See $evaluate\_¶\_cd\_thms$ for details upon the form
 of the theorems.
-$set\-\_ad\-\_¶\-\_cd\-\_thm$ for the associated application data.
 =FAILURE
 51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
 51016	Proof context ?0 has been committed
 =ENDDOC
 =DOC
-val Ûicl'set_eval_ad_¶_cd_thmÝ : (THM list -> 
+val Ûicl'set_eval_ad_¶_cd_thmsÝ : (THM list -> 
 	(TERM list * int list * TYPE * (TERM list)list * THM) list) -> unit;
-val Ûcurrent_ad_¶_cd_thmÝ : unit -> 
+val Ûcurrent_ad_¶_cd_thmsÝ : unit -> 
 	(TERM list * int list * TYPE * (TERM list)list * THM) list;
 =DESCRIBE
 These functions provide the interface to the 
 clausal definition theorem information for the existence prover
 $prove\_¶\_conv$.
-See $evaluate\_¶\_cd\_thm$ for details upon the form
+See $evaluate\_¶\_cd\_thms$ for details upon the form
 of the information.
 The first sets the evaluator, the second extracts the field
 in the current proof context.
 =SEEALSO
-$set\_¶_cd_thm$ for the associated user data.
+$set\_¶_cd_thms$ for the associated user data.
 =ENDDOC
 =DOC
-val Ûset_¶_vs_thmÝ : (string * (TERM list * THM)) list
+val Ûset_¶_vs_thmsÝ : (string * (TERM list * THM)) list
  	-> string -> unit;
-val Ûget_¶_vs_thmÝ : string -> (string * (TERM list * THM)) list;
+val Ûget_¶_vs_thmsÝ : string -> (string * (TERM list * THM)) list;
 =DESCRIBE
 These functions provide the interface to the
 variable structure information for the existence prover
@@ -573,12 +641,14 @@ There are no subfields to this field, so
 ``getting'' returns the field.
 =FAILURE
 51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
 51016	Proof context ?0 has been committed
 =ENDDOC
 =DOC
-val Ûicl'set_eval_ad_¶_vs_thmÝ : ((string * (TERM list * THM)) ->
+val Ûicl'set_eval_ad_¶_vs_thmsÝ : ((string * (TERM list * THM)) list ->
 	(string * (TERM list * THM)) list) -> unit;
-val Ûcurrent_ad_¶_vs_thmÝ : unit -> 
+val Ûcurrent_ad_¶_vs_thmsÝ : unit -> 
 	(string * (TERM list * THM)) list;
 =DESCRIBE
 These functions provide the interface to the application data
@@ -586,6 +656,8 @@ variable structure information for the existence prover
 $prove\_¶\_conv$.
 The first sets the evaluator, the second extracts the field
 in the current proof context.
+=SEEALSO
+$set\_¶\_vs\_thms$ for user data.
 =ENDDOC
 =DOC
 val Ûmerge_pcÝ : string list -> string -> unit;
@@ -596,10 +668,13 @@ discarding duplicates.
 For each field that has subfields the lists of subfields from each proof context are appended, discarding
 subfields with duplicate keys,
 and if a field is not divided into subfields, then the proof contexts fields are appended, discarding duplicates.
+
+Failure to extract any proof context for merging will result in the
+proof context $tokey$ being unchanged.
 =FAILURE
 51010	There is no proof context with key ?0
-51014	Proof context ?0 was created in theory ?1 which is not in scope
-51015	Proof context ?0 was created in theory ?1 in a now deleted definition level
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
 51016	Proof context ?0 has been committed
 51017	Proof context ?0 has not been committed
 =ENDDOC
@@ -612,12 +687,16 @@ discarding duplicates.
 Merging for each field that has subfields the lists of subfields is appending the proof contexts fields, discarding
 subfields with duplicate keys,
 and if a field is not divided into subfields, then the proof contexts fields are appended, discarding duplicates.
+
+Failure to extract any proof context for merging will result in the
+proof context $tokey$ being unchanged.
 =FAILURE
 51010	There is no proof context with key ?0
-51014	Proof context ?0 was created in theory ?1 which is not in scope
-51015	Proof context ?0 was created in theory ?1 in a now deleted definition level
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
 51016	Proof context ?0 has been committed
 51017	Proof context ?0 has not been committed
+51019	There is no field called ?0
 =ENDDOC
 =TEX
 We use a stack of (temporarily) superseded proof contexts to simplify the task 
@@ -635,13 +714,13 @@ $set\_pc$ discards the previous proof context, and
 and sets the proof context of the system to the proof 
 context with the given key.
 
-The current proof context is accessed by the functions prefixed $current\_ad\_$.
+The current proof context is accessed by the functions prefixed $current\_ad\_$, and by $show\-\_current\-\_pc$.
 =SEEALSO
 $pop\_pc$, $push\_pcs$, $set\_pcs$
 =FAILURE
 51010	There is no proof context with key ?0
-51014	Proof context ?0 was created in theory ?1 which is not in scope
-51015	Proof context ?0 was created in theory ?1 in a now deleted definition level
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
 =ENDDOC
 =DOC
 val Ûpush_pcsÝ : string list -> unit;
@@ -653,16 +732,17 @@ contexts with the given keys.
 $set\_pcs$ discards the previous proof context, and
 and sets the proof context of the system to the merge of the proof 
 contexts with the given keys.
-Merged proof contexts upon the stack will have ``current proof context name'' of the names of the constituent proof contexts, comma'ed together,
-and will be formed in the same manner as $merge\_pc$ would
-merge the named proof contexts into a empty proof context.
-However, the proof contexts used need not have been committed.
+Merged proof contexts upon the stack will have $current\-\_ad\-\_names$ giving the list of names of the constituent proof contexts, singleton contexts will have singleton lists.
+The proof contexts used need not have been committed.
+
+The current proof context is accessed by the functions prefixed $current\_ad\_$, and by $show\-\_current\-\_pc$.
 =SEEALSO
-$pop\_pc$
+$pop\_pc$, $push\_pc$, $set\_pc$
 =FAILURE
 51010	There is no proof context with key ?0
-51014	Proof context ?0 was created in theory ?1 which is not in scope
-51015	Proof context ?0 was created in theory ?1 in a now deleted definition level
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+51020	Must be at least one key in list
 =ENDDOC
 =DOC
 val Ûpop_pcÝ : unit -> unit;
@@ -671,7 +751,7 @@ This function unstacks the top of the proof context stack,
 sets the proof context of the system to it, and returns the previous current proof context.
 There will always be a current proof context, though it may be the trivial ``initial'' proof context.
 =SEEALSO
-$push\_pc$, $set\_pc$
+$push\_pc$, $set\_pc$, $push\_pcs$, $set\_pcs$
 =FAILURE
 51001	The proof context stack is empty
 =ENDDOC

@@ -13,7 +13,7 @@
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
 \TPPkeywords{}
-\TPPauthor{K.BLackburn & WIN01}  %% Mandatory field
+\TPPauthor{K.Blackburn & WIN01}  %% Mandatory field
 %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
 \TPPauthorisation{R.D.Arthan & FST Team Leader}
 \TPPabstract{This document gives an implementation providing proof contexts.}
@@ -57,8 +57,9 @@ Added $cs\_∂\_rule$ material.
 \item [Issue 1.5]
 Added existence prover parameterisation.
 
-\item[Issue \SCCSversion, \FormatDate{92/01/20} ] Updated to use new fonts.
-
+\item[Issue 1.6, \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 1.7]
+Changes to reflect issue 1.12 of \cite{DS/FMU/IED/DTD051}.
 \end{description}
 \subsection{Changes Forecast}
 As detailed design.
@@ -87,9 +88,16 @@ None known.
 As detailed design.
 \section{PREAMBLE}
 =SML
+val lthy = get_current_theory_name();
+open_theory "min";
+=SML
 structure €ProofContext› : ProofContext = struct
 =TEX
 \section{UTILITIES}
+=SML
+val €thm_union› : THM list -> THM list -> THM list = 
+	union (fn (a,b) => dest_thm a = dest_thm b);
+=TEX
 \section{EQUATIONAL CONTEXTS}
 An equational context is a list of conversions,
 each paired with term index. It represents a statement of
@@ -129,463 +137,879 @@ end;
 =TEX
 
 \section{TYPES}
+The following is the object stored in the stack and database of proof contexts.
 =SML
-abstype €PROOF_CONTEXT› = pc of {
-	name : string,
-	rw_eqn_cxt: EQN_CXT,
-	rw_canons: (THM -> THM list) list,	(* CANON list*)
-	st_eqn_cxt: EQN_CXT,
-	sg_eqn_cxt: EQN_CXT,
-	cs_∂_rule: TERM -> THM,
-	∂_cd_thm: THM list,
-	∂_vs_thm: (string * (TERM list * THM)) list
-	}
-and
+type €PROOF_CONTEXT› = {
+	rw_eqn_cxt: (EQN_CXT * string)list,
+	rw_canons: ((THM -> THM list) list * string)list,
+				(* CANON list * ... *)
+	st_eqn_cxt: (EQN_CXT * string) list,
+	sg_eqn_cxt: (EQN_CXT * string) list,
+	cs_∂_rules: ((TERM -> THM)list * string) list,
+	∂_cd_thms: THM list,
+	∂_vs_thms: (string * (TERM list * THM)) list,
 =TEX
+Now the evaluated parts:
 =SML
-€EPROOF_CONTEXT› = epc of {
-	name : string,
 	rw_net: CONV NET,
 	rw_canon: THM -> THM list,	(* CANON *)
 	st_conv: CONV,
 	sg_conv: CONV,
 	cs_∂_rule: TERM -> THM,
-	∂_cd_thm:  (TERM list * int list * TYPE * (TERM list)list * THM) list,
-	∂_vs_thm: (string * (TERM list * THM)) list
-	}
-with
+	∂_ad_cd_thms:  (TERM list * int list * TYPE * (TERM list)list * THM) list,
+	∂_ad_vs_thms:  (string * (TERM list * THM)) list,
 =TEX
-\section{CODE}
-\subsection{Within the ADT}
+And finally the commital data
 =SML
-fun €set_pc_name› (nm : string) (pc{name = name,
-		rw_eqn_cxt = rw_eqn_cxt,
-		rw_canons = rw_canons,
-		st_eqn_cxt = st_eqn_cxt,
-		sg_eqn_cxt = sg_eqn_cxt,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm} :
-		PROOF_CONTEXT): PROOF_CONTEXT = (
-	pc {name = nm,
-		rw_eqn_cxt = rw_eqn_cxt,
-		rw_canons = rw_canons,
-		st_eqn_cxt = st_eqn_cxt,
-		sg_eqn_cxt = sg_eqn_cxt,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm}
-);
-fun €get_pc_name› (pc lpc : PROOF_CONTEXT) : string = #name lpc;
+	names : string list,
+	theoryname : string,
+	a_valid_thm : THM,
+	committed : bool
+	};
 =TEX
+$a\_valid\_thm$ is intended to be set to a theorem generated 
+at the creation of the proof context, and if that is not valid (by $valid\_thm$) then the proof context itself is considered ``stale''.
+\section{DATA STRUCTURES AND ABSTRACT DATA TYPES}
+\subsection{Proof Context ``initial''}
 =SML
-fun €set_epc_name› (nm : string) (epc{name = name,
-		rw_net = rw_net,
-		rw_canon = rw_canon,
-		st_conv = st_conv,
-		sg_conv = sg_conv,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm} :
-		EPROOF_CONTEXT): EPROOF_CONTEXT = (
-	epc {name = nm,
-		rw_net = rw_net,
-		rw_canon = rw_canon,
-		st_conv = st_conv,
-		sg_conv = sg_conv,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm}
-);
-fun €get_epc_name› (epc lepc : EPROOF_CONTEXT) : string = #name  lepc;
-=TEX
-=SML
-fun €set_pc_rw_eqn_cxt› (ec : EQN_CXT) (pc{name = name,
-		rw_eqn_cxt = rw_eqn_cxt,
-		rw_canons = rw_canons,
-		st_eqn_cxt = st_eqn_cxt,
-		sg_eqn_cxt = sg_eqn_cxt,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm} :
-		PROOF_CONTEXT): PROOF_CONTEXT = (
-	pc {name = name,
-		rw_eqn_cxt = ec,
-		rw_canons = rw_canons,
-		st_eqn_cxt = st_eqn_cxt,
-		sg_eqn_cxt = sg_eqn_cxt,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm}
-);
-fun €get_pc_rw_eqn_cxt› (pc lpc : PROOF_CONTEXT) : EQN_CXT = #rw_eqn_cxt lpc;
-=TEX
-=SML
-fun €set_epc_rw_net› (cn : CONV NET) (epc{name = name,
-		rw_net = rw_net,
-		rw_canon = rw_canon,
-		st_conv = st_conv,
-		sg_conv = sg_conv,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm} :
-		EPROOF_CONTEXT): EPROOF_CONTEXT = (
-	epc {name = name,
-		rw_net = cn,
-		rw_canon = rw_canon,
-		st_conv = st_conv,
-		sg_conv = sg_conv,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm}
-);
-fun €get_epc_rw_net› (epc lepc : EPROOF_CONTEXT) : CONV NET = #rw_net lepc;
-=TEX
-=SML
-fun €set_pc_rw_canons› (cs : (THM -> THM list)list) (pc{name = name,
-		rw_eqn_cxt = rw_eqn_cxt,
-		rw_canons = rw_canons,
-		st_eqn_cxt = st_eqn_cxt,
-		sg_eqn_cxt = sg_eqn_cxt,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm} :
-		PROOF_CONTEXT): PROOF_CONTEXT = (
-	pc {name = name,
-		rw_eqn_cxt = rw_eqn_cxt,
-		rw_canons = cs,
-		st_eqn_cxt = st_eqn_cxt,
-		sg_eqn_cxt = sg_eqn_cxt,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm}
-);
-fun €get_pc_rw_canons› (pc lpc : PROOF_CONTEXT) : (THM -> THM list) list = (
-	#rw_canons lpc
-);
-=TEX
-=SML
-fun €set_epc_rw_canon› (cn : THM -> THM list) (epc{name = name,
-		rw_net = rw_net,
-		rw_canon = rw_canon,
-		st_conv = st_conv,
-		sg_conv = sg_conv,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm} :
-		EPROOF_CONTEXT): EPROOF_CONTEXT = (
-	epc {name = name,
-		rw_net = rw_net,
-		rw_canon = cn,
-		st_conv = st_conv,
-		sg_conv = sg_conv,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm}
-);
-fun €get_epc_rw_canon› (epc lepc : EPROOF_CONTEXT) : THM -> THM list = #rw_canon lepc;
-=TEX
-=SML
-fun €set_pc_st_eqn_cxt› (ec : EQN_CXT) (pc{name = name,
-		rw_eqn_cxt = rw_eqn_cxt,
-		rw_canons = rw_canons,
-		st_eqn_cxt = st_eqn_cxt,
-		sg_eqn_cxt = sg_eqn_cxt,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm} :
-		PROOF_CONTEXT): PROOF_CONTEXT = (
-	pc {name = name,
-		rw_eqn_cxt = rw_eqn_cxt,
-		rw_canons = rw_canons,
-		st_eqn_cxt = ec,
-		sg_eqn_cxt = sg_eqn_cxt,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm}
-);
-fun €get_pc_st_eqn_cxt› (pc lpc : PROOF_CONTEXT) : EQN_CXT = #st_eqn_cxt lpc;
-=TEX
-=SML
-fun €set_epc_st_conv› (cn : CONV) (epc{name = name,
-		rw_net = rw_net,
-		rw_canon = rw_canon,
-		st_conv = st_conv,
-		sg_conv = sg_conv,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm} :
-		EPROOF_CONTEXT): EPROOF_CONTEXT = (
-	epc {name = name,
-		rw_net = rw_net,
-		rw_canon = rw_canon,
-		st_conv = cn,
-		sg_conv = sg_conv,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm}
-);
-fun €get_epc_st_conv› (epc lepc : EPROOF_CONTEXT) : CONV = #st_conv lepc;
-=TEX
-=SML
-fun €set_pc_sg_eqn_cxt› (ec : EQN_CXT) (pc{name = name,
-		rw_eqn_cxt = rw_eqn_cxt,
-		rw_canons = rw_canons,
-		st_eqn_cxt = st_eqn_cxt,
-		sg_eqn_cxt = sg_eqn_cxt,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm} :
-		PROOF_CONTEXT): PROOF_CONTEXT = (
-	pc {name = name,
-		rw_eqn_cxt = rw_eqn_cxt,
-		rw_canons = rw_canons,
-		st_eqn_cxt = st_eqn_cxt,
-		sg_eqn_cxt = ec,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm}
-);
-fun €get_pc_sg_eqn_cxt› (pc lpc : PROOF_CONTEXT) : EQN_CXT = #sg_eqn_cxt lpc;
-=TEX
-=SML
-fun €set_epc_sg_conv› (cn : CONV) (epc{name = name,
-		rw_net = rw_net,
-		rw_canon = rw_canon,
-		st_conv = st_conv,
-		sg_conv = sg_conv,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm} :
-		EPROOF_CONTEXT): EPROOF_CONTEXT = (
-	epc {name = name,
-		rw_net = rw_net,
-		rw_canon = rw_canon,
-		st_conv = st_conv,
-		sg_conv = cn,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm}
-);
-fun €get_epc_sg_conv› (epc lepc : EPROOF_CONTEXT) : CONV = #sg_conv lepc;
-=TEX
-=SML
-fun €set_pc_cs_∂_rule› (ep : TERM -> THM) (pc{name = name,
-		rw_eqn_cxt = rw_eqn_cxt,
-		rw_canons = rw_canons,
-		st_eqn_cxt = st_eqn_cxt,
-		sg_eqn_cxt = sg_eqn_cxt,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm} :
-		PROOF_CONTEXT): PROOF_CONTEXT = (
-	pc {name = name,
-		rw_eqn_cxt = rw_eqn_cxt,
-		rw_canons = rw_canons,
-		st_eqn_cxt = st_eqn_cxt,
-		sg_eqn_cxt = sg_eqn_cxt,
-		cs_∂_rule = ep,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm}
-);
-fun €get_pc_cs_∂_rule› (pc lpc : PROOF_CONTEXT) : TERM -> THM = #cs_∂_rule lpc;
-=TEX
-=SML
-fun €set_epc_cs_∂_rule› (ep : TERM -> THM) (epc{name = name,
-		rw_net = rw_net,
-		rw_canon = rw_canon,
-		st_conv = st_conv,
-		sg_conv = sg_conv,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm} :
-		EPROOF_CONTEXT): EPROOF_CONTEXT = (
-	epc {name = name,
-		rw_net = rw_net,
-		rw_canon = rw_canon,
-		st_conv = st_conv,
-		sg_conv = sg_conv,
-		cs_∂_rule = ep,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm}
-);
-fun €get_epc_cs_∂_rule› (epc lepc : EPROOF_CONTEXT) : CONV = #cs_∂_rule lepc;
-=TEX
-=SML
-fun €set_pc_∂_cd_thm› (cd_thm : THM list) (pc{name = name,
-		rw_eqn_cxt = rw_eqn_cxt,
-		rw_canons = rw_canons,
-		st_eqn_cxt = st_eqn_cxt,
-		sg_eqn_cxt = sg_eqn_cxt,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm} :
-		PROOF_CONTEXT): PROOF_CONTEXT = (
-	pc {name = name,
-		rw_eqn_cxt = rw_eqn_cxt,
-		rw_canons = rw_canons,
-		st_eqn_cxt = st_eqn_cxt,
-		sg_eqn_cxt = sg_eqn_cxt,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = cd_thm,
-		∂_vs_thm = ∂_vs_thm}
-);
-fun €get_pc_∂_cd_thm› (pc lpc : PROOF_CONTEXT) : THM list = #∂_cd_thm lpc;
-=TEX
-=SML
-fun €set_epc_∂_cd_thm› 
-	(cd_thm : (TERM list * int list * TYPE * (TERM list)list * THM) list)
-	 (epc{name = name,
-		rw_net = rw_net,
-		rw_canon = rw_canon,
-		st_conv = st_conv,
-		sg_conv = sg_conv,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm} :
-		EPROOF_CONTEXT): EPROOF_CONTEXT = (
-	epc {name = name,
-		rw_net = rw_net,
-		rw_canon = rw_canon,
-		st_conv = st_conv,
-		sg_conv = sg_conv,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = cd_thm,
-		∂_vs_thm = ∂_vs_thm}
-);
-fun €get_epc_∂_cd_thm› (epc lepc : EPROOF_CONTEXT) : 
-	(TERM list * int list * TYPE * (TERM list)list * THM) list = #∂_cd_thm lepc;
-=TEX
-=SML
-fun €set_pc_∂_vs_thm› (vs_thm : (string * (TERM list * THM)) list) (pc{name = name,
-		rw_eqn_cxt = rw_eqn_cxt,
-		rw_canons = rw_canons,
-		st_eqn_cxt = st_eqn_cxt,
-		sg_eqn_cxt = sg_eqn_cxt,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm} :
-		PROOF_CONTEXT): PROOF_CONTEXT = (
-	pc {name = name,
-		rw_eqn_cxt = rw_eqn_cxt,
-		rw_canons = rw_canons,
-		st_eqn_cxt = st_eqn_cxt,
-		sg_eqn_cxt = sg_eqn_cxt,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = vs_thm}
-);
-fun €get_pc_∂_vs_thm› (pc lpc : PROOF_CONTEXT) :
-	 (string * (TERM list * THM)) list = #∂_vs_thm lpc;
-=TEX
-=SML
-fun €set_epc_∂_vs_thm› (vs_thm : (string * (TERM list * THM)) list) 
-	(epc{name = name,
-		rw_net = rw_net,
-		rw_canon = rw_canon,
-		st_conv = st_conv,
-		sg_conv = sg_conv,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = ∂_vs_thm} :
-		EPROOF_CONTEXT): EPROOF_CONTEXT = (
-	epc {name = name,
-		rw_net = rw_net,
-		rw_canon = rw_canon,
-		st_conv = st_conv,
-		sg_conv = sg_conv,
-		cs_∂_rule = cs_∂_rule,
-		∂_cd_thm = ∂_cd_thm,
-		∂_vs_thm = vs_thm}
-);
-fun €get_epc_∂_vs_thm› (epc lepc : EPROOF_CONTEXT) : 
-	(string * (TERM list * THM)) list = #∂_vs_thm lepc;
-=TEX
-=SML
-val €initial_pc›: PROOF_CONTEXT = pc {name = "initial_pc",
+fun €empty_pc› (committed : bool)(names : string list): PROOF_CONTEXT = {
 	rw_eqn_cxt = [],
 	rw_canons = [],
 	st_eqn_cxt = [],
 	sg_eqn_cxt = [],
-	cs_∂_rule = (fn (tm:TERM) => fail "cs_∂_rule" 0 []),
-	∂_cd_thm = [],
-	∂_vs_thm = []};
-val €initial_epc› : EPROOF_CONTEXT = epc  {name = "initial_epc",
+	cs_∂_rules = [],
+	∂_cd_thms = [],
+	∂_vs_thms = [],
+=TEX
+Now the evaluated parts:
+=SML
 	rw_net = empty_net,
-	rw_canon = (fn thm => [thm]),
+	rw_canon = (fn thm => [thm]),	(* CANON *)
 	st_conv = fail_conv,
 	sg_conv = fail_conv,
-	cs_∂_rule = (fn (tm:TERM) => fail "cs_∂_rule" 0 []),
-	∂_cd_thm = [],
-	∂_vs_thm = []};
+	cs_∂_rule = (fn _ => fail "icl'set_eval_ad_cs_∂_rules" 51015 []),
+	∂_ad_cd_thms = [],
+	∂_ad_vs_thms = [],
 =TEX
+And finally the commital data
 =SML
-fun €merge_proof_context› (pc{name = name1,
-		rw_eqn_cxt = rw_eqn_cxt1,
-		rw_canons = rw_canons1,
-		st_eqn_cxt = st_eqn_cxt1,
-		sg_eqn_cxt = sg_eqn_cxt1,
-		cs_∂_rule = cs_∂_rule1,
-		∂_cd_thm = ∂_cd_thm1,
-		∂_vs_thm = ∂_vs_thm1} :
-		PROOF_CONTEXT)
-	(pc{name = name2,
-		rw_eqn_cxt = rw_eqn_cxt2,
-		rw_canons = rw_canons2,
-		st_eqn_cxt = st_eqn_cxt2,
-		sg_eqn_cxt = sg_eqn_cxt2,
-		cs_∂_rule = cs_∂_rule2,
-		∂_cd_thm = ∂_cd_thm2,
-		∂_vs_thm = ∂_vs_thm2} :
-		PROOF_CONTEXT) = 
-	(pc{name = name1 ^ " and " ^ name2,
-		rw_eqn_cxt = rw_eqn_cxt1 @ rw_eqn_cxt2,
-		rw_canons = rw_canons1 @ rw_canons2,
-		st_eqn_cxt = st_eqn_cxt1 @ st_eqn_cxt2,
-		sg_eqn_cxt = sg_eqn_cxt1 @ sg_eqn_cxt2,
-		cs_∂_rule = (fn (tm:TERM) => (cs_∂_rule1 tm
-			handle (Fail _) => cs_∂_rule2 tm)),
-		∂_cd_thm = ∂_cd_thm1 @ ∂_cd_thm2,
-		∂_vs_thm = ∂_vs_thm1 @ ∂_vs_thm2} :
-		PROOF_CONTEXT)
-end; (* of ADT PROOF_CONTEXT *)
+	names = names,
+	theoryname = get_current_theory_name(),
+	a_valid_thm = icl'Kernel.icl'refl_conv (mk_var("a",BOOL)),
+	committed = committed
+	};
 =TEX
-The following is the (hidden) current proof context,
-and proof context stack,
-manipulated by the following visible functions.
+Now the initial proof context (local only):
 =SML
-val €current_proof_context› : EPROOF_CONTEXT ref = ref initial_epc;
+val €initial_pc› = empty_pc true ["initial"];
+=TEX
+\subsection{Database of Proof Contexts}
+Unsurprisingly, this is a simple dictionary, stored in an assignable variable.
+=SML
+local
+	val pc_db : (PROOF_CONTEXT S_DICT) ref = ref (
+		s_enter "initial" initial_pc initial_s_dict);
+in
+=TEX
+Local declarations:
+=SML
+fun €get_pc› (caller: string) (key : string) : PROOF_CONTEXT = (
+	case s_lookup key (!pc_db) of
+	Value (pc as {a_valid_thm = a_valid_thm,theoryname=theoryname,...}) => (
+		if valid_thm a_valid_thm
+		then pc
+		else fail caller 51014 [(fn () => key),(fn () => theoryname)]
+	) | Nil => fail caller 51010 [fn () => key]
+);
 
-val €proof_context_stack› : (EPROOF_CONTEXT list) ref = ref [];
+fun €extend_pc› (caller: string) (key : string) (pc : PROOF_CONTEXT) : unit = ((
+	pc_db := s_extend key pc (!pc_db);
+	())
+	handle (Fail _) =>
+	fail caller 51011 [fn () => key]
+);
+
+fun €change_pc› (caller: string) (key : string) 
+	(pcf : PROOF_CONTEXT -> PROOF_CONTEXT) : unit = (
+let	val opc as {committed = committed,...} = get_pc caller key;
+	val sideeeffect = if committed 
+		then fail caller 51016 [fn () => key]
+		else ();
+in
+	(pc_db := s_enter key (pcf opc) (!pc_db);
+	())
+end);
+=TEX
+Seen in signature:
+=SML
+local
+	fun detail (key,({theoryname = theoryname,
+		a_valid_thm = a_valid_thm, ...}:PROOF_CONTEXT)) = (
+		if valid_thm a_valid_thm
+		then (key,theoryname)
+		else (key,get_error_message 51018 [theoryname])
+	);
+in
+fun €show_pcs› () : (string * string)list = (
+	map detail (!pc_db)
+);
+end;
+=TEX
+Seen in signature:
+=SML
+fun €delete_pc› (key : string) :unit = (
+	if key = "initial"
+	then fail "delete_pc" 51012 []
+	else (
+	case s_lookup key (!pc_db) of
+	Value _ => (
+		pc_db := s_delete key (!pc_db);
+		()
+	) | Nil => fail "delete_pc" 51010 [fn () => key])
+);
 =TEX
 =SML
-fun €get_proof_context› () : EPROOF_CONTEXT = (!current_proof_context);
-
-fun €push_proof_context› (pc : EPROOF_CONTEXT) : unit = (
-	proof_context_stack := (!current_proof_context) :: (!proof_context_stack);
-	current_proof_context := pc;
+fun €new_pc› (new: string) : unit = (
+	extend_pc "new_pc" new (empty_pc false [new])
+);
+=TEX
+End of database functions
+=SML
+end;
+=TEX
+\subsection{Proof Context Stack}
+The current proof context is not actually on the proof context
+stack, but separate.
+=SML
+local
+	val pc_stack : (PROOF_CONTEXT list) ref = ref [];
+in
+fun push_pc_stack pc = (pc_stack := (pc :: (!pc_stack));());
+fun pop_pc_stack caller = (
+	case (!pc_stack) of
+	[] => fail caller 51001 []
+	| (a :: x) => (pc_stack := x; a)
+);
+local
+	fun detail (({theoryname = theoryname,
+		a_valid_thm = a_valid_thm, names = names, ...}:PROOF_CONTEXT)) = (
+		if valid_thm a_valid_thm
+		then (names,theoryname)
+		else (names,get_error_message 51018 [theoryname])
+	);
+in
+fun €show_stack_pcs› () : (string list * string)list = (
+	map detail (!pc_stack)
+);
+end;
+end; (* of local pc_stack *)
+=TEX
+\subsection{Current Proof Context}
+=SML
+local
+	val current_pc : PROOF_CONTEXT ref = ref initial_pc;
+	val ad_rw_net = ref (#rw_net initial_pc);
+	val ad_rw_canon = ref (#rw_canon initial_pc);
+	val ad_st_conv = ref (#st_conv initial_pc);
+	val ad_sg_conv = ref (#sg_conv initial_pc);
+	val ad_cs_∂_rules = ref (#cs_∂_rule initial_pc);
+	val ad_∂_ad_cd_thms = ref (#∂_ad_cd_thms initial_pc);
+	val ad_∂_ad_vs_thms = ref (#∂_ad_vs_thms initial_pc);
+in
+=TEX
+Set the current proof context:
+=SML
+fun set_current_pc pc = (
+	current_pc := pc;
+	ad_rw_net := (#rw_net pc);
+	ad_rw_canon := (#rw_canon pc);
+	ad_st_conv := (#st_conv pc);
+	ad_sg_conv := (#sg_conv pc);
+	ad_cs_∂_rules := (#cs_∂_rule pc);
+	ad_∂_ad_cd_thms := (#∂_ad_cd_thms pc);
+	ad_∂_ad_vs_thms := (#∂_ad_vs_thms pc);
 	()
 );
-fun €pop_proof_context› () : EPROOF_CONTEXT = (
-let	val cpc = (!current_proof_context);
-	val (top, rest) = case (!proof_context_stack) of
-		[] => fail "pop_proof_context" 51001 []
-		| (head :: tail) => (head, tail);
+=TEX
+Access the current proof context:
+=SML
+fun €current_ad_rw_net› ():CONV NET = (!ad_rw_net);
+fun €current_ad_rw_canon› ():THM -> THM list = (!ad_rw_canon);
+fun €current_ad_st_conv› ():CONV = (!ad_st_conv);
+fun €current_ad_sg_conv› ():CONV = (!ad_sg_conv);
+fun €current_ad_cs_∂_rule› ():TERM -> THM = (!ad_cs_∂_rules);
+fun €current_ad_∂_cd_thms› ()
+	: (TERM list * int list * TYPE * (TERM list)list * THM) list
+	= (!ad_∂_ad_cd_thms);
+fun €current_ad_∂_vs_thms› ():(string * (TERM list * THM)) list 
+	= (!ad_∂_ad_vs_thms);
+
+fun €show_current_pc› () : (string list * string) = (
+	if valid_thm (#a_valid_thm (!current_pc))
+	then ((#names (!current_pc)),(#theoryname (!current_pc)))
+	else ((#names (!current_pc)),get_error_message 51018 [(#theoryname (!current_pc))])
+);
+
+fun €get_current_pc› () = (!current_pc);
+=TEX
+End of current proof context stuff:
+=SML
+end;
+=TEX
+\subsection{Evaluation Functions}
+We cannot express $eval\_ad\_rw\_canon$ properly yet.
+=SML
+local
+val eval_ad_rw_net : (EQN_CXT -> CONV NET) ref = ref make_net;
+val eval_ad_rw_canon : ((THM -> THM list) list -> (THM -> THM list)) ref = 
+	ref (fn _ => fn thm => [thm]);
+val eval_ad_st_conv : (EQN_CXT -> CONV) ref = ref eqn_cxt_conv;
+val eval_ad_sg_conv : (EQN_CXT -> CONV) ref = ref eqn_cxt_conv;
+
+local
+	fun try_all [] tm = fail "current_ad_cs_∂_rule" 51015 []
+	| try_all (afun :: x) tm = (
+		afun tm
+		handle (Fail _) =>
+		try_all x tm
+	);
 in
-	(current_proof_context := top;
-	proof_context_stack := rest;
-	cpc)
+val eval_ad_cs_∂_rules : ((TERM -> THM) list -> (TERM -> THM)) ref = ref try_all;
+end;
+	
+val eval_ad_∂_ad_cd_thms : (THM list -> 
+	(TERM list * int list * TYPE * (TERM list)list * THM) list) ref = 
+	ref (fn _ => []);
+val eval_ad_∂_ad_vs_thms : ((string * (TERM list * THM)) list ->
+	(string * (TERM list * THM)) list) ref = ref Combinators.I;
+in
+fun €icl'set_eval_ad_rw_net› (f:(EQN_CXT -> CONV NET)) : unit =
+	(eval_ad_rw_net := f; ());
+fun €icl'set_eval_ad_rw_canon› (f:((THM -> THM list) list -> 
+	(THM -> THM list))) : unit =
+	(eval_ad_rw_canon := f; ());
+fun €icl'set_eval_ad_st_conv› (f:(EQN_CXT -> CONV)) : unit = 
+	(eval_ad_st_conv := f; ());
+fun €icl'set_eval_ad_sg_conv› (f:(EQN_CXT -> CONV)) : unit =
+	(eval_ad_sg_conv := f; ());
+fun €icl'set_eval_ad_cs_∂_rules› (f:((TERM -> THM)list -> (TERM -> THM))) =
+	(eval_ad_cs_∂_rules := f; ());
+fun €icl'set_eval_ad_∂_cd_thms› (f:(THM list -> 
+	(TERM list * int list * TYPE * (TERM list)list * THM) list)) =
+	(eval_ad_∂_ad_cd_thms := f; ());
+fun €icl'set_eval_ad_∂_vs_thms› (f:((string * (TERM list * THM)) list ->
+	(string * (TERM list * THM)) list)) =
+	(eval_ad_∂_ad_vs_thms := f; ());
+=TEX
+Now the method of evaluating a proof context:
+=SML
+fun €evaluate_proof_context› (
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}
+	: PROOF_CONTEXT) : PROOF_CONTEXT = 
+	{
+	rw_eqn_cxt = rw_eqn_cxt,
+	rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt,
+	sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules,
+	∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms,
+	rw_net = (!eval_ad_rw_net) (flat(map fst rw_eqn_cxt)),
+	rw_canon = (!eval_ad_rw_canon) (flat(map fst rw_canons)),
+	st_conv = (!eval_ad_st_conv) (flat(map fst st_eqn_cxt)),
+	sg_conv = (!eval_ad_sg_conv) (flat(map fst sg_eqn_cxt)),
+	cs_∂_rule = (!eval_ad_cs_∂_rules) (flat(map fst cs_∂_rules)),
+	∂_ad_cd_thms = (!eval_ad_∂_ad_cd_thms) ∂_cd_thms,
+	∂_ad_vs_thms  = (!eval_ad_∂_ad_vs_thms) ∂_vs_thms,
+	names = names,
+	theoryname = theoryname,
+	a_valid_thm = a_valid_thm,
+	committed = committed};
+=TEX
+End of evaluating things.
+=SML
+end;
+=TEX
+\section{OTHER FUNCTIONS}
+\subsection{Setting and Getting User Data}
+\subsubsection{Rewriting Equations Context}
+=SML
+fun €set_rw_eqn_cxt› (ec:EQN_CXT) (key:string) : unit =  (
+change_pc "set_rw_eqn_cxt" key 
+(fn 
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}
+ =>
+	{
+	rw_eqn_cxt = rw_eqn_cxt roverwrite (ec,key), rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed})
+);
+fun €get_rw_eqn_cxt› (key:string) : (EQN_CXT * string) list = (
+	#rw_eqn_cxt (get_pc "get_rw_eqn_cxt" key)
+);
+=TEX
+In adding the theorems we canonicalise them by what the
+proof context would evaluate as its current canonicalisation.
+=SML
+fun €add_rw_thms› (thms:THM list) (key:string) : unit =  (
+change_pc "add_rw_thms" key 
+((fn 
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}:PROOF_CONTEXT
+ =>
+	let val cthms = map thm_eqn_cxt(flat (map rw_canon thms));
+	in
+	{
+	rw_eqn_cxt = (case rassoc5 rw_eqn_cxt key of
+		Value x => rw_eqn_cxt roverwrite ((cthms @ x),key)
+		| Nil =>  ((cthms, key) :: rw_eqn_cxt)), 
+	rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}
+	end)
+o
+evaluate_proof_context)
+);
+=TEX
+\subsubsection{Rewriting Canonicalisation}
+=SML
+fun €set_rw_canons› (can: (THM -> THM list) list) (key:string) : unit =  (
+change_pc "set_rw_canons" key 
+(fn 
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}
+ =>
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons roverwrite (can,key),
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed})
+);
+fun €get_rw_canons› (key:string) : ((THM -> THM list) list * string) list = (
+	#rw_canons (get_pc "get_rw_canons" key)
+);
+=TEX
+\subsubsection{Theorem Stripping Equational Context}
+=SML
+fun €set_st_eqn_cxt› (ec:EQN_CXT) (key:string) : unit =  (
+change_pc "set_st_eqn_cxt" key 
+(fn 
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}
+ =>
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt roverwrite (ec,key), sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed})
+);
+fun €get_st_eqn_cxt› (key:string) : (EQN_CXT * string) list = (
+	#st_eqn_cxt (get_pc "get_st_eqn_cxt" key)
+);
+=TEX
+In adding the theorems we canonicalise them by what the
+proof context would evaluate as its current canonicalisation.
+=SML
+fun €add_st_thms› (thms:THM list) (key:string) : unit =  (
+change_pc "add_st_thms" key 
+((fn 
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}:PROOF_CONTEXT
+ =>
+	let val cthms = map thm_eqn_cxt(flat (map rw_canon thms));
+	in
+	{
+	rw_eqn_cxt = rw_eqn_cxt, 
+	rw_canons = rw_canons,
+	st_eqn_cxt = (case rassoc5 st_eqn_cxt key of
+		Value x => st_eqn_cxt roverwrite ((cthms @ x),key)
+		| Nil =>  ((cthms, key) :: st_eqn_cxt)), 
+	sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}
+	end)
+o
+evaluate_proof_context)
+);
+=TEX
+\subsubsection{Goal Stripping Equational Context}
+=SML
+fun €set_sg_eqn_cxt› (ec:EQN_CXT) (key:string) : unit =  (
+change_pc "set_sg_eqn_cxt" key 
+(fn 
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}
+ =>
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt roverwrite (ec,key),
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed})
+);
+fun €get_sg_eqn_cxt› (key:string) : (EQN_CXT * string) list = (
+	#sg_eqn_cxt (get_pc "get_sg_eqn_cxt" key)
+);
+=TEX
+=SML
+fun €add_sg_thms› (thms:THM list) (key:string) : unit =  (
+change_pc "add_sg_thms" key 
+((fn 
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}:PROOF_CONTEXT
+ =>
+	let val cthms = map thm_eqn_cxt(flat (map rw_canon thms));
+	in
+	{
+	rw_eqn_cxt = rw_eqn_cxt, 
+	rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, 
+	sg_eqn_cxt = (case rassoc5 sg_eqn_cxt key of
+		Value x => sg_eqn_cxt roverwrite ((cthms @ x),key)
+		| Nil =>  ((cthms, key) :: sg_eqn_cxt)),
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}
+	end)
+o
+evaluate_proof_context)
+);
+=TEX
+
+\subsubsection{Automated Existence Provers}
+=SML
+fun €set_cs_∂_rules› (rls : (TERM -> THM) list) (key:string) : unit =  (
+change_pc "set_cs_∂_rules" key 
+(fn 
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}
+ =>
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules roverwrite (rls,key), ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed})
+);
+fun €get_cs_∂_rules› (key:string) : ((TERM -> THM) list * string) list = (
+	#cs_∂_rules (get_pc "get_cs_∂_rules" key)
+);
+=TEX
+\subsubsection{Clausal Definition Theorems}
+=SML
+fun €set_∂_cd_thms› (cd : THM list) (key:string) : unit =  (
+change_pc "set_∂_cd_thms" key 
+(fn 
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}
+ =>
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = cd,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed})
+);
+fun €get_∂_cd_thms› (key:string) : THM list = (
+	#∂_cd_thms (get_pc "get_∂_cd_thms" key)
+);
+=TEX
+=SML
+fun €add_∂_cd_thms› (thms:THM list) (key:string) : unit =  (
+change_pc "add_∂_cd_thms" key 
+(fn 
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}:PROOF_CONTEXT
+ =>
+	{
+	rw_eqn_cxt = rw_eqn_cxt, 
+	rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, 
+	sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, 
+	∂_cd_thms = thm_union thms ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}
+	)
+);
+=TEX
+\subsubsection{Variable Structure Theorems}
+=SML
+local
+val union_bits = union (fn ((str1,(tml1,thm1)) ,(str2,(tml2,thm2))) =>
+	str1 = str2 andalso (tml1 = tml2) andalso (dest_thm thm1 = dest_thm thm2))
+in
+fun €set_∂_vs_thms› (vs : (string * (TERM list * THM))list) (key:string) : unit =  (
+change_pc "set_∂_vs_thms" key 
+(fn 
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}
+ =>
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = union_bits ∂_vs_thms vs, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed})
+);
+end;
+fun €get_∂_vs_thms› (key:string) : (string * (TERM list * THM))  list = (
+	#∂_vs_thms (get_pc "get_∂_vs_thms" key)
+);
+=TEX
+
+\subQsection{Functions upon Proof Contexts}
+=SML
+fun €commit_pc› (key:string) : unit =  (
+change_pc "commit_pc" key 
+((fn 
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}
+ =>
+	{
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = true})
+o evaluate_proof_context)
+);
+=TEX
+N.B. the second of the pair is ``the master'', to which the first is added in.
+=SML
+local
+val union_bits = union (fn ((str1,(tml1,thm1)) ,(str2,(tml2,thm2))) =>
+	str1 = str2 andalso (tml1 = tml2) andalso (dest_thm thm1 = dest_thm thm2))
+in
+fun €local_merge_pc› (caller:string) (test_committed:bool) (({
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}:PROOF_CONTEXT),
+	({
+	rw_eqn_cxt = rw_eqn_cxt1, rw_canons = rw_canons1,
+	st_eqn_cxt = st_eqn_cxt1, sg_eqn_cxt = sg_eqn_cxt1,
+	cs_∂_rules = cs_∂_rules1, ∂_cd_thms = ∂_cd_thms1,
+	∂_vs_thms = ∂_vs_thms1, rw_net = rw_net1,
+	rw_canon = rw_canon1, st_conv = st_conv1,
+	sg_conv = sg_conv1, cs_∂_rule = cs_∂_rule1,
+	∂_ad_cd_thms = ∂_ad_cd_thms1, ∂_ad_vs_thms  = ∂_ad_vs_thms1,
+	names = names1, theoryname = theoryname1,
+	a_valid_thm = a_valid_thm1, committed = committed1}:PROOF_CONTEXT
+)) : PROOF_CONTEXT = (
+	if test_committed andalso not committed
+	then fail caller 51017 [fn () => hd names]
+	else
+	{
+	rw_eqn_cxt = rw_eqn_cxt list_roverwrite rw_eqn_cxt1,
+	rw_canons = rw_canons list_roverwrite rw_canons1,
+	st_eqn_cxt = st_eqn_cxt list_roverwrite st_eqn_cxt1,
+	sg_eqn_cxt = sg_eqn_cxt list_roverwrite sg_eqn_cxt1,
+	cs_∂_rules = cs_∂_rules list_roverwrite cs_∂_rules1,
+	∂_cd_thms = thm_union ∂_cd_thms ∂_cd_thms1,
+	∂_vs_thms = union_bits ∂_vs_thms ∂_vs_thms1,
+	rw_net = rw_net1,
+	rw_canon = rw_canon1,
+	st_conv = st_conv1,
+	sg_conv = sg_conv1,
+	cs_∂_rule = cs_∂_rule1,
+	∂_ad_cd_thms = ∂_ad_cd_thms1,
+	∂_ad_vs_thms  = ∂_ad_vs_thms1,
+	names = names1,
+	theoryname = theoryname1,
+	a_valid_thm = a_valid_thm1,
+	committed = false}
+);
+end;
+=TEX
+=SML
+fun €merge_pc› (keys:string list) (key : string) : unit = (
+let	val pcs = map (get_pc "merge_pc") keys;
+in
+	change_pc "merge_pc" key 
+	(fn pc => fold (local_merge_pc "merge_pc" true) pcs pc)
+end);
+=TEX
+=SML
+local
+val valid_fields = ["rw_eqn_cxt","rw_canons","st_eqn_cxt",
+	"sg_eqn_cxt","cs_∂_rules","∂_cd_thms","∂_vs_thms"];
+in
+fun €prune_pc› (caller : string) (fields : string list) ({
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
+	rw_canon = rw_canon, st_conv = st_conv,
+	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names, theoryname = theoryname,
+	a_valid_thm = a_valid_thm, committed = committed}: PROOF_CONTEXT) 
+	: PROOF_CONTEXT = (
+	if not(fields subset valid_fields)
+	then fail caller 51019 [fn () => hd(fields diff valid_fields)]
+	else
+	{
+	rw_eqn_cxt = if "rw_eqn_cxt" mem fields then rw_eqn_cxt else [],
+	rw_canons = if "rw_canons" mem fields then rw_canons else [],
+	st_eqn_cxt = if "st_eqn_cxt" mem fields then st_eqn_cxt else [],
+	sg_eqn_cxt = if "sg_eqn_cxt" mem fields then sg_eqn_cxt else [],
+	cs_∂_rules = if "cs_∂_rules" mem fields then cs_∂_rules else [],
+	∂_cd_thms = if "∂_cd_thms" mem fields then ∂_cd_thms else [],
+	∂_vs_thms = if "∂_vs_thms" mem fields then ∂_vs_thms else [],
+	rw_net = rw_net,
+	rw_canon = rw_canon,
+	st_conv = st_conv,
+	sg_conv = sg_conv,
+	cs_∂_rule = cs_∂_rule,
+	∂_ad_cd_thms = ∂_ad_cd_thms,
+	∂_ad_vs_thms  = ∂_ad_vs_thms,
+	names = names,
+	theoryname = theoryname,
+	a_valid_thm = a_valid_thm,
+	committed = committed}
+);
+end; 
+=TEX
+=SML
+local
+	fun get_stuff {context:string,fields:string list}:PROOF_CONTEXT = (
+	let	val pc = get_pc "merge_pc_fields" context;
+	in
+		prune_pc "merge_pc_fields" fields pc
+	end);
+in
+fun €merge_pc_fields› (lst : {context:string,fields:string list}list) 
+	(key :string) : unit = (
+let	val pcs = map get_stuff lst;
+in
+	change_pc "merge_pc_fields" key 
+	(fn pc => fold (local_merge_pc "merge_pc_fields" true) pcs pc)
+end);
+end;
+=TEX
+=SML
+fun €push_pc› (key : string): unit = (
+let	val pc = get_pc "push_pc" key;
+	val epc = if #committed pc
+		then pc
+		else evaluate_proof_context pc;
+in
+	(push_pc_stack (get_current_pc());
+	set_current_pc epc)
+end);
+=TEX
+=SML
+fun €pop_pc› (): unit = (
+let	val pc = pop_pc_stack "pop_pc";
+in
+	set_current_pc pc
+end);
+=TEX
+=SML
+fun €set_pc› (key : string): unit = (
+let	val pc = get_pc "set_pc" key;
+	val epc = if #committed pc
+		then pc
+		else evaluate_proof_context pc;
+in
+	set_current_pc epc
+end);
+=TEX
+=SML
+fun €push_pcs› ([]: string list): unit = fail "push_pcs" 51020 []
+| push_pcs (keys) = (
+let	val pc = empty_pc false keys;
+	val fullpc = fold (local_merge_pc "push_pcs" false) (map (get_pc "push_pcs") keys) pc;
+	val epc = evaluate_proof_context fullpc;
+in
+	(push_pc_stack (get_current_pc());
+	set_current_pc epc)
+end);
+=TEX
+=SML
+fun €set_pcs› ([]: string list): unit = fail "set_pcs" 51020 []
+| set_pcs (keys) = (
+let	val pc = empty_pc false keys;
+	val fullpc = fold (local_merge_pc "set_pcs" false) (map (get_pc "set_pcs") keys) pc;
+	val epc = evaluate_proof_context fullpc;
+in
+	set_current_pc epc
 end);
 =TEX
 \section{END OF SIGNATURE}
 =SML
 end; (* of structure ProofContext *)
+open_theory lthy;
 open ProofContext;
 =TEX
 \twocolumn[\section{INDEX}]
 \small
 \printindex
 \end{document}
-=SML
-
-

@@ -58,7 +58,8 @@ Added existence prover parameterisation.
 \item[Issue 1.7, \FormatDate{92/01/20} ] Updated to use new fonts.
 \item [Issue 1.8]
 Removed duplicate labels.
-
+\item [Issue 1.9]
+Changed to reflect changes in issue 1.12 of \cite{DS/FMU/IED/DTD051}.
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -79,45 +80,101 @@ and is further influenced by the implementation, in  \cite{DS/FMU/IED/IMP051}.
 It requires the presence of theory ``$î$'',
 and the initial stripping context $initial\_strip\_epc$.
 \subsubsection{Deficiencies}
-
+\section{TEST CASES}
+All functions and all their error cases are tested, but
+the precise order and method of testing is not uniform,
+and in particular does not follow the order in \cite{DS/FMU/IED/DTD051}.
 \section{TEST HARNESS MATERIAL}
 =SML
 usefile "dtd013.sml";
 usefile "imp013.sml";
 init_mt_results ();
-open_theory "î";
+open_theory "misc";
 =TEX
 \section{TEST DATA}
 This section contains data used in the test, that
 in themselves are not part of the tests.
 However, they may fail if the functions tested are ill-formed.
 =SML
-val epc : EPROOF_CONTEXT = 
-	set_epc_name "epc"
-	(set_epc_rw_net (make_net [(¬x+y®,plus_conv)])
-	(set_epc_rw_canon (fn thm => [thm,thm])
-	(set_epc_sg_conv suc_conv
-	(set_epc_cs_¶_rule (fn tm => if tm = mk_t then t_thm else 
-		fail "cs_¶_rule" 0 [])
-	(set_epc_¶_vs_thm [("vs",([],t_thm))]
-	(set_epc_¶_cd_thm [([],[],BOOL,[],t_thm)]
-	(set_epc_st_conv simple_%beta%_conv initial_epc)))))));
-val pc : PROOF_CONTEXT = 
-	set_pc_name "pc"
-	(set_pc_rw_eqn_cxt [(¬x+y®,plus_conv),(¬5®,suc_conv),(¬6®,suc_conv)]
-	(set_pc_rw_canons [fn thm => [thm,thm]]
-	(set_pc_sg_eqn_cxt [(¬5®,suc_conv),(¬6®,suc_conv)]
-	(set_pc_cs_¶_rule (fn tm => if tm = mk_t then t_thm else 
-		fail "cs_¶_rule" 0 [])
-	(set_pc_¶_vs_thm [("vs",([],t_thm))]
-	(set_pc_¶_cd_thm [t_thm]
-	(set_pc_st_eqn_cxt [(¬3®,suc_conv)] initial_pc)))))));
 
-val beta_redex = ¬(Ì x · (x ´ F)) T®;
+val tm_a = mk_var("a",BOOL);
+val tm_³_b = mk_³(mk_var("b",BOOL));
+val tm_cc = mk_±(mk_var("c",BOOL),mk_var("c",BOOL));
+val conv1 = (fn tm => if tm = tm_a
+		then ¤_t_intro (asm_rule tm_a)
+		else fail_conv tm);
+val conv2 = (fn tm => if tm = tm_³_b
+		then ¤_t_intro (asm_rule tm_³_b)
+		else fail_conv tm);
+val conv3 = (fn tm => if tm = tm_cc
+		then ¤_t_intro (asm_rule tm_cc)
+		else fail_conv tm);
+val rule1 = (fn tm => if tm = mk_t then t_thm else fail "rule1" 0 []);
+val rule2 = (fn tm => if tm = mk_³ mk_f then f_thm else fail "rule2" 0 []);
+
 =TEX
 We wish to start with the initial proof context, so
 =SML
-repeat pop_proof_context;
+repeat pop_pc;
+mapfilter (delete_pc o fst) (show_pcs ());
+=TEX
+We wish to start with the original (flawed) evaluation functions:
+=SML
+icl'set_eval_ad_rw_net make_net;
+icl'set_eval_ad_rw_canon (fn cans => (hd cans
+	handle _ => (fn thm => [thm])) );
+icl'set_eval_ad_st_conv eqn_cxt_conv;
+icl'set_eval_ad_sg_conv eqn_cxt_conv;
+
+let
+	fun try_all [] tm = fail "current_ad_cs_¶_rule" 51015 []
+	| try_all (afun :: x) tm = (
+		afun tm
+		handle (Fail _) =>
+		try_all x tm
+	);
+in
+icl'set_eval_ad_cs_¶_rules try_all
+end;
+	
+icl'set_eval_ad_¶_cd_thms (fn _ => []);
+icl'set_eval_ad_¶_vs_thms  Combinators.I;
+=TEX
+We form new proof contexts:
+=SML
+new_pc "mdt051_test1";
+set_rw_eqn_cxt [(tm_a,conv1)] "mdt051_test1";
+set_rw_canons [(fn thm => [thm,thm])] "mdt051_test1";
+set_st_eqn_cxt [(tm_a,conv1)] "mdt051_test1";
+set_sg_eqn_cxt [(tm_a,conv1)] "mdt051_test1";
+set_cs_¶_rules [rule1] "mdt051_test1";
+set_¶_cd_thms [t_thm] "mdt051_test1";
+set_¶_vs_thms [("T",([mk_t],t_thm))] "mdt051_test1";
+commit_pc "mdt051_test1";
+=TEX
+=SML
+new_pc "mdt051_test2";
+set_rw_eqn_cxt [(tm_³_b,conv2)] "mdt051_test2";
+set_rw_canons [(fn thm => if dest_thm thm = dest_thm t_thm
+		then [] else [thm])] "mdt051_test2";
+set_st_eqn_cxt [(tm_³_b,conv2)] "mdt051_test2";
+set_sg_eqn_cxt [(tm_³_b,conv2)] "mdt051_test2";
+set_cs_¶_rules [rule2] "mdt051_test2";
+set_¶_cd_thms [f_thm] "mdt051_test2";
+set_¶_vs_thms [("F",([mk_f],f_thm))] "mdt051_test2";
+=TEX
+=SML
+new_pc "mdt051_test3";
+set_rw_eqn_cxt [(tm_³_b,conv2)] "mdt051_test3";
+set_rw_canons [(fn thm => if dest_thm thm = dest_thm t_thm
+		then [] else [thm])] "mdt051_test3";
+set_st_eqn_cxt [(tm_³_b,conv2)] "mdt051_test3";
+set_sg_eqn_cxt [(tm_³_b,conv2)] "mdt051_test3";
+set_cs_¶_rules [rule2] "mdt051_test3";
+set_¶_cd_thms [f_thm] "mdt051_test3";
+set_¶_vs_thms [("F",([mk_f],f_thm))] "mdt051_test3";
+commit_pc "mdt051_test3";
+
 =TEX
 \section{THE TESTS}
 \subsection{Equational Contexts}
@@ -150,120 +207,683 @@ store_mt_results mt_run_fail [("eqn_cxt_conv 51005",
 	gen_fail_msg "eqn_cxt_conv" 51005 ["¬y®"])];
 =TEX
 \subsection{Proof Contexts}
-
+\subsubsection{Set and Get User Data Functions}
 =SML
+open Combinators;
 store_mt_results mt_run [
-	("get_pc_rw_eqn_cxt",
-	length o get_pc_rw_eqn_cxt,
-	pc,
-	3)];
+	("get_rw_eqn_cxt",
+	dest_thm o (snd(hd(fst(hd (get_rw_eqn_cxt "mdt051_test1"))))),
+	tm_a,
+	dest_thm (conv1 tm_a))];
 store_mt_results mt_run [
-	("get_pc_st_eqn_cxt",
-	length o get_pc_st_eqn_cxt,
-	pc,
-	1)];
-store_mt_results mt_run [
-	("get_pc_sg_eqn_cxt",
-	length o get_pc_sg_eqn_cxt,
-	pc,
-	2)];
-store_mt_results mt_run [
-	("get_pc_rw_canons",
-	length o get_pc_rw_canons,
-	pc,
-	1)];
-store_mt_results mt_run [
-	("get_pc_name",
-	get_pc_name,
-	pc,
-	"pc")];
-store_mt_results mt_run [
-	("get_pc_cs_¶_rule",
-	dest_thm o get_pc_cs_¶_rule pc,
-	mk_t,
-	([],¬T®))];
-store_mt_results mt_run [
-	("get_pc_¶_vs_thm",
-	fst o hd o get_pc_¶_vs_thm,
-	pc,
-	"vs")];
-store_mt_results mt_run [
-	("get_epc_¶_vs_thm",
-	fst o hd o get_epc_¶_vs_thm,
-	epc,
-	"vs")];
-store_mt_results mt_run [
-	("get_pc_¶_cd_thm",
-	dest_thm o hd o get_pc_¶_cd_thm,
-	pc,
-	([],¬T®))];
-store_mt_results mt_run [
-	("get_epc_¶_cd_thm",
-	(fn (_,_,ty,_,_) => ty) o hd o get_epc_¶_cd_thm,
-	epc,
-	BOOL)];
-=TEX
-$push/pop/get\_proof\_context$ and $initial\_epc$ are implicitly tested by the following:
-=SML
-store_mt_results mt_run [
-	("?_proof_context 1",
-	dest_thm o TRY_C(get_epc_st_conv (get_proof_context())),
-	beta_redex,
-	dest_thm(id_conv beta_redex))];
-push_proof_context epc;
-store_mt_results mt_run [
-	("?_proof_context 2a",
-	dest_thm o get_epc_st_conv (get_proof_context()),
-	beta_redex,
-	dest_thm(simple_%beta%_conv beta_redex))];
-store_mt_results mt_run [
-	("?_proof_context 2b",
-	dest_thm o get_epc_sg_conv (get_proof_context()),
-	¬2®,
-	dest_thm(suc_conv ¬2®))];
-store_mt_results mt_run [
-	("?_proof_context 2c",
-	dest_thm o hd(net_lookup (get_epc_rw_net (get_proof_context()))¬2 + 3®),
-	¬2 + 3®,
-	dest_thm(plus_conv ¬2+3®))];
-store_mt_results mt_run [
-	("?_proof_context 2d",
-	length o get_epc_rw_canon (get_proof_context()),
+	("get_rw_canons",
+	map dest_thm o (hd(fst(hd (get_rw_canons "mdt051_test1")))),
 	t_thm,
-	2)];
+	map dest_thm [t_thm,t_thm])];
 store_mt_results mt_run [
-	("?_proof_context 2e",
-	get_epc_name,
-	get_proof_context(),
-	"epc")];
+	("get_st_eqn_cxt",
+	dest_thm o (snd(hd(fst(hd (get_st_eqn_cxt "mdt051_test1"))))),
+	tm_a,
+	dest_thm (conv1 tm_a))];
 store_mt_results mt_run [
-	("get_epc_cs_¶_rule",
-	dest_thm o get_epc_cs_¶_rule (get_proof_context()),
+	("get_sg_eqn_cxt",
+	dest_thm o (snd(hd(fst(hd (get_sg_eqn_cxt "mdt051_test1"))))),
+	tm_a,
+	dest_thm (conv1 tm_a))];
+store_mt_results mt_run [
+	("get_cs_¶_rules",
+	dest_thm o hd(fst(hd (get_cs_¶_rules "mdt051_test1"))),
 	mk_t,
-	([],¬T®))];
-val epc1 = pop_proof_context ();
+	dest_thm t_thm)];
 store_mt_results mt_run [
-	("?_proof_context 3",
-	dest_thm o TRY_C(get_epc_st_conv (get_proof_context())),
-	beta_redex,
-	dest_thm(id_conv beta_redex))];
-push_proof_context epc1;
+	("get_¶_cd_thms",
+	dest_thm,
+	hd(get_¶_cd_thms "mdt051_test1"),
+	dest_thm t_thm)];
 store_mt_results mt_run [
-	("?_proof_context 4",
-	dest_thm o get_epc_st_conv (get_proof_context()),
-	beta_redex,
-	dest_thm(simple_%beta%_conv beta_redex))];
-val epc2 = pop_proof_context ();
+	("get_¶_vs_thms",
+	(I ** (I ** dest_thm)),
+	hd(get_¶_vs_thms "mdt051_test1"),
+	("T",([mk_t],dest_thm t_thm)))];
+=TEX
+=SML
+store_mt_results mt_run_fail [(
+	"get_rw_eqn_cxt 51010",
+	get_rw_eqn_cxt,
+	"rubbish",
+	gen_fail_msg "get_rw_eqn_cxt" 51010 ["rubbish"])];
+store_mt_results mt_run_fail [(
+	"get_rw_canons 51010",
+	get_rw_canons,
+	"rubbish",
+	gen_fail_msg "get_rw_canons" 51010 ["rubbish"])];
+store_mt_results mt_run_fail [(
+	"get_st_eqn_cxt 51010",
+	get_st_eqn_cxt,
+	"rubbish",
+	gen_fail_msg "get_st_eqn_cxt" 51010 ["rubbish"])];
+store_mt_results mt_run_fail [(
+	"get_sg_eqn_cxt 51010",
+	get_sg_eqn_cxt,
+	"rubbish",
+	gen_fail_msg "get_sg_eqn_cxt" 51010 ["rubbish"])];
+store_mt_results mt_run_fail [(
+	"get_cs_¶_rules 51010",
+	get_cs_¶_rules,
+	"rubbish",
+	gen_fail_msg "get_cs_¶_rules" 51010 ["rubbish"])];
+store_mt_results mt_run_fail [(
+	"get_¶_cd_thms 51010",
+	get_¶_cd_thms,
+	"rubbish",
+	gen_fail_msg "get_¶_cd_thms" 51010 ["rubbish"])];
+store_mt_results mt_run_fail [(
+	"get_¶_vs_thms 51010",
+	get_¶_vs_thms,
+	"rubbish",
+	gen_fail_msg "get_¶_vs_thms" 51010 ["rubbish"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [(
+	"set_rw_eqn_cxt 51010",
+	set_rw_eqn_cxt [(tm_a,conv1)],
+	"rubbish",
+	gen_fail_msg "set_rw_eqn_cxt" 51010 ["rubbish"])];
+store_mt_results mt_run_fail [(
+	"set_rw_canons 51010",
+	set_rw_canons [(fn thm => [thm,thm])],
+	"rubbish",
+	gen_fail_msg "set_rw_canons" 51010 ["rubbish"])];
+store_mt_results mt_run_fail [(
+	"set_st_eqn_cxt 51010",
+	set_st_eqn_cxt [(tm_a,conv1)],
+	"rubbish",
+	gen_fail_msg "set_st_eqn_cxt" 51010 ["rubbish"])];
+store_mt_results mt_run_fail [(
+	"set_sg_eqn_cxt 51010",
+	set_sg_eqn_cxt [(tm_a,conv1)],
+	"rubbish",
+	gen_fail_msg "set_sg_eqn_cxt" 51010 ["rubbish"])];
+store_mt_results mt_run_fail [(
+	"set_cs_¶_rules 51010",
+	set_cs_¶_rules [rule1],
+	"rubbish",
+	gen_fail_msg "set_cs_¶_rules" 51010 ["rubbish"])];
+store_mt_results mt_run_fail [(
+	"set_¶_cd_thms 51010",
+	set_¶_cd_thms [t_thm],
+	"rubbish",
+	gen_fail_msg "set_¶_cd_thms" 51010 ["rubbish"])];
+store_mt_results mt_run_fail [(
+	"set_¶_vs_thms 51010",
+	set_¶_vs_thms [("T",([mk_t],t_thm))],
+	"rubbish",
+	gen_fail_msg "set_¶_vs_thms" 51010 ["rubbish"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [(
+	"set_rw_eqn_cxt 51016",
+	set_rw_eqn_cxt [(tm_a,conv1)],
+	"mdt051_test1",
+	gen_fail_msg "set_rw_eqn_cxt" 51016 ["mdt051_test1"])];
+store_mt_results mt_run_fail [(
+	"set_rw_canons 51016",
+	set_rw_canons [(fn thm => [thm,thm])],
+	"mdt051_test1",
+	gen_fail_msg "set_rw_canons" 51016 ["mdt051_test1"])];
+store_mt_results mt_run_fail [(
+	"set_st_eqn_cxt 51016",
+	set_st_eqn_cxt [(tm_a,conv1)],
+	"mdt051_test1",
+	gen_fail_msg "set_st_eqn_cxt" 51016 ["mdt051_test1"])];
+store_mt_results mt_run_fail [(
+	"set_sg_eqn_cxt 51016",
+	set_sg_eqn_cxt [(tm_a,conv1)],
+	"mdt051_test1",
+	gen_fail_msg "set_sg_eqn_cxt" 51016 ["mdt051_test1"])];
+store_mt_results mt_run_fail [(
+	"set_cs_¶_rules 51016",
+	set_cs_¶_rules [rule1],
+	"mdt051_test1",
+	gen_fail_msg "set_cs_¶_rules" 51016 ["mdt051_test1"])];
+store_mt_results mt_run_fail [(
+	"set_¶_cd_thms 51016",
+	set_¶_cd_thms [t_thm],
+	"mdt051_test1",
+	gen_fail_msg "set_¶_cd_thms" 51016 ["mdt051_test1"])];
+store_mt_results mt_run_fail [(
+	"set_¶_vs_thms 51016",
+	set_¶_vs_thms [("T",([mk_t],t_thm))],
+	"mdt051_test1",
+	gen_fail_msg "set_¶_vs_thms" 51016 ["mdt051_test1"])];
+=TEX
+Now test the scoping:
+=SML
+open_theory "hol";
+new_pc "pc out of scope";
+open_theory "misc";
+=TEX
+=SML
+store_mt_results mt_run_fail [(
+	"get_rw_eqn_cxt 51014",
+	get_rw_eqn_cxt,
+	"pc out of scope",
+	gen_fail_msg "get_rw_eqn_cxt" 51014 ["pc out of scope","hol"])];
+store_mt_results mt_run_fail [(
+	"get_rw_canons 51014",
+	get_rw_canons,
+	"pc out of scope",
+	gen_fail_msg "get_rw_canons" 51014 ["pc out of scope","hol"])];
+store_mt_results mt_run_fail [(
+	"get_st_eqn_cxt 51014",
+	get_st_eqn_cxt,
+	"pc out of scope",
+	gen_fail_msg "get_st_eqn_cxt" 51014 ["pc out of scope","hol"])];
+store_mt_results mt_run_fail [(
+	"get_sg_eqn_cxt 51014",
+	get_sg_eqn_cxt,
+	"pc out of scope",
+	gen_fail_msg "get_sg_eqn_cxt" 51014 ["pc out of scope","hol"])];
+store_mt_results mt_run_fail [(
+	"get_cs_¶_rules 51014",
+	get_cs_¶_rules,
+	"pc out of scope",
+	gen_fail_msg "get_cs_¶_rules" 51014 ["pc out of scope","hol"])];
+store_mt_results mt_run_fail [(
+	"get_¶_cd_thms 51014",
+	get_¶_cd_thms,
+	"pc out of scope",
+	gen_fail_msg "get_¶_cd_thms" 51014 ["pc out of scope","hol"])];
+store_mt_results mt_run_fail [(
+	"get_¶_vs_thms 51014",
+	get_¶_vs_thms,
+	"pc out of scope",
+	gen_fail_msg "get_¶_vs_thms" 51014 ["pc out of scope","hol"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [(
+	"set_rw_eqn_cxt 51014",
+	set_rw_eqn_cxt [(tm_a,conv1)],
+	"pc out of scope",
+	gen_fail_msg "set_rw_eqn_cxt" 51014 ["pc out of scope","hol"])];
+store_mt_results mt_run_fail [(
+	"set_rw_canons 51014",
+	set_rw_canons [(fn thm => [thm,thm])],
+	"pc out of scope",
+	gen_fail_msg "set_rw_canons" 51014 ["pc out of scope","hol"])];
+store_mt_results mt_run_fail [(
+	"set_st_eqn_cxt 51014",
+	set_st_eqn_cxt [(tm_a,conv1)],
+	"pc out of scope",
+	gen_fail_msg "set_st_eqn_cxt" 51014 ["pc out of scope","hol"])];
+store_mt_results mt_run_fail [(
+	"set_sg_eqn_cxt 51014",
+	set_sg_eqn_cxt [(tm_a,conv1)],
+	"pc out of scope",
+	gen_fail_msg "set_sg_eqn_cxt" 51014 ["pc out of scope","hol"])];
+store_mt_results mt_run_fail [(
+	"set_cs_¶_rules 51014",
+	set_cs_¶_rules [rule1],
+	"pc out of scope",
+	gen_fail_msg "set_cs_¶_rules" 51014 ["pc out of scope","hol"])];
+store_mt_results mt_run_fail [(
+	"set_¶_cd_thms 51014",
+	set_¶_cd_thms [t_thm],
+	"pc out of scope",
+	gen_fail_msg "set_¶_cd_thms" 51014 ["pc out of scope","hol"])];
+store_mt_results mt_run_fail [(
+	"set_¶_vs_thms 51014",
+	set_¶_vs_thms [("T",([mk_t],t_thm))],
+	"pc out of scope",
+	gen_fail_msg "set_¶_vs_thms" 51014 ["pc out of scope","hol"])];
+=TEX
+\subsubsection{Adding Functions}
+=SML
+add_rw_thms [±_thm] "mdt051_test2";
+add_st_thms [±_thm] "mdt051_test2";
+add_sg_thms [±_thm] "mdt051_test2";
+add_¶_cd_thms [±_thm] "mdt051_test2";
+val cc' = ¬c ± c ¤ (µ b· (c ´ c ´ b) ´ b)®;
+=TEX
+=SML
+store_mt_results mt_run [
+	("get_rw_eqn_cxt a",
+	concl o (snd(hd(fst(hd (get_rw_eqn_cxt "mdt051_test2"))))),
+	tm_cc,
+	cc')];
+store_mt_results mt_run [
+	("get_st_eqn_cxt a",
+	concl o (snd(hd(fst(hd (get_st_eqn_cxt "mdt051_test2"))))),
+	tm_cc,
+	cc')];
+store_mt_results mt_run [
+	("get_sg_eqn_cxt a",
+	concl o (snd(hd(fst(hd (get_sg_eqn_cxt "mdt051_test2"))))),
+	tm_cc,
+	cc')];
+store_mt_results mt_run [
+	("get_¶_cd_thms a",
+	dest_thm,
+	hd(get_¶_cd_thms "mdt051_test2"),
+	dest_thm ±_thm)];
+=TEX
+=SML
+store_mt_results mt_run_fail [(
+	"add_rw_thms 51010",
+	add_rw_thms [],
+	"rubbish1",
+	gen_fail_msg "add_rw_thms" 51010 ["rubbish1"]),
+	("add_rw_thms 51014",
+	add_rw_thms [],
+	"pc out of scope",
+	gen_fail_msg "add_rw_thms" 51014 ["pc out of scope","hol"])];
+store_mt_results mt_run_fail [(
+	"add_st_thms 51010",
+	add_st_thms [],
+	"rubbish1",
+	gen_fail_msg "add_st_thms" 51010 ["rubbish1"]),
+	("add_st_thms 51014",
+	add_st_thms [],
+	"pc out of scope",
+	gen_fail_msg "add_st_thms" 51014 ["pc out of scope","hol"])];
+store_mt_results mt_run_fail [(
+	"add_sg_thms 51010",
+	add_sg_thms [],
+	"rubbish1",
+	gen_fail_msg "add_sg_thms" 51010 ["rubbish1"]),
+	("add_sg_thms 51014",
+	add_sg_thms [],
+	"pc out of scope",
+	gen_fail_msg "add_sg_thms" 51014 ["pc out of scope","hol"])];
+store_mt_results mt_run_fail [(
+	"add_¶_cd_thms 51010",
+	add_¶_cd_thms [],
+	"rubbish1",
+	gen_fail_msg "add_¶_cd_thms" 51010 ["rubbish1"]),
+	("add_¶_cd_thms 51014",
+	add_¶_cd_thms [],
+	"pc out of scope",
+	gen_fail_msg "add_¶_cd_thms" 51014 ["pc out of scope","hol"])];
+=TEX
+\subsubsection{Current Values}
+``mdt051$\_$test1'' has been evaluated by commital, so:
+=SML
+push_pc "mdt051_test1";
+let
+val rw_net1 = current_ad_rw_net ();
+in
+store_mt_results mt_run [(
+	"current_ad_rw_net",
+	dest_thm o (hd(net_lookup rw_net1 tm_a)),
+	tm_a,
+	dest_thm (conv1 tm_a))]
+end;
+store_mt_results mt_run [(
+	"current_ad_rw_canon",
+	length,
+	(current_ad_rw_canon () t_thm),
+	2)];
+store_mt_results mt_run [(
+	"current_ad_st_conv",
+	dest_thm o current_ad_st_conv (),
+	tm_a,
+	dest_thm (conv1 tm_a))];
+store_mt_results mt_run [(
+	"current_ad_sg_conv",
+	dest_thm o current_ad_sg_conv (),
+	tm_a,
+	dest_thm (conv1 tm_a))];
+store_mt_results mt_run [(
+	"current_ad_cs_¶_rule",
+	dest_thm o current_ad_cs_¶_rule (),
+	mk_t,
+	dest_thm t_thm)];
+store_mt_results mt_run [
+	("current_ad_¶_cd_thms",
+	length,
+	current_ad_¶_cd_thms (),
+	0)];
+store_mt_results mt_run [
+	("current_ad_¶_vs_thms",
+	length,
+	current_ad_¶_vs_thms (),
+	1)];
+=TEX
+\subsubsection{Merging Proof Contexts}
+Notice the crude tests of duplicate removal.
+=SML
+new_pc "merge1 & 3";
+merge_pc ["mdt051_test1","mdt051_test1","mdt051_test3"] "merge1 & 3";
+store_mt_results mt_run [("merge_pc 1",
+	length,
+	get_rw_eqn_cxt "merge1 & 3",
+	2)];
+store_mt_results mt_run [("merge_pc 2",
+	length,
+	get_rw_canons "merge1 & 3",
+	2)];
+store_mt_results mt_run [("merge_pc 3",
+	length,
+	get_st_eqn_cxt "merge1 & 3",
+	2)];
+store_mt_results mt_run [("merge_pc 4",
+	length,
+	get_sg_eqn_cxt "merge1 & 3",
+	2)];
+store_mt_results mt_run [("merge_pc 5",
+	length,
+	get_cs_¶_rules "merge1 & 3",
+	2)];
+store_mt_results mt_run [("merge_pc 6",
+	length,
+	get_¶_cd_thms "merge1 & 3",
+	2)];
+store_mt_results mt_run [("merge_pc 7",
+	length,
+	get_¶_vs_thms "merge1 & 3",
+	2)];
+delete_pc "merge1 & 3";
+=TEX
+=SML
+new_pc "merge1 & 3";
+merge_pc_fields [{context = "mdt051_test1",
+	fields = ["rw_eqn_cxt","rw_canons","st_eqn_cxt"]},
+	{context = "mdt051_test1",
+	fields = ["rw_eqn_cxt","rw_canons","st_eqn_cxt"]},
+	{context = "mdt051_test3",
+	fields = ["sg_eqn_cxt","cs_¶_rules","¶_cd_thms","¶_vs_thms"]}] 
+	"merge1 & 3";
+store_mt_results mt_run [("merge_pc 1a",
+	length,
+	get_rw_eqn_cxt "merge1 & 3",
+	1)];
+store_mt_results mt_run [("merge_pc 2a",
+	length,
+	get_rw_canons "merge1 & 3",
+	1)];
+store_mt_results mt_run [("merge_pc 3a",
+	length,
+	get_st_eqn_cxt "merge1 & 3",
+	1)];
+store_mt_results mt_run [("merge_pc 4a",
+	length,
+	get_sg_eqn_cxt "merge1 & 3",
+	1)];
+store_mt_results mt_run [("merge_pc 5a",
+	length,
+	get_cs_¶_rules "merge1 & 3",
+	1)];
+store_mt_results mt_run [("merge_pc 6a",
+	length,
+	get_¶_cd_thms "merge1 & 3",
+	1)];
+store_mt_results mt_run [("merge_pc 7a",
+	length,
+	get_¶_vs_thms "merge1 & 3",
+	1)];
+delete_pc "merge1 & 3";
+new_pc "merge1 & 3";
 store_mt_results mt_run_fail [
-	("pop_proof_context 51001",
-	pop_proof_context,
-	(),
-	gen_fail_msg "pop_proof_context" 51001 [])
+	("merge_pc 51010 a",
+	merge_pc ["rubbish1"],
+	"mdt051_test2",
+	gen_fail_msg "merge_pc" 51010 ["rubbish1"]),
+	("merge_pc 51010 b",
+	merge_pc ["mdt051_test1"],
+	"rubbish1",
+	gen_fail_msg "merge_pc" 51010 ["rubbish1"]),
+	("merge_pc 51014 a",
+	merge_pc ["pc out of scope"],
+	"mdt051_test2",
+	gen_fail_msg "merge_pc" 51014 ["pc out of scope","hol"]),
+	("merge_pc 51014 b",
+	merge_pc ["mdt051_test1"],
+	"pc out of scope",
+	gen_fail_msg "merge_pc" 51014 ["pc out of scope","hol"]),
+	("merge_pc 51016",
+	merge_pc ["mdt051_test1"],
+	"mdt051_test1",
+	gen_fail_msg "merge_pc" 51016 ["mdt051_test1"]),
+	("merge_pc 51017",
+	merge_pc ["mdt051_test2"],
+	"mdt051_test2",
+	gen_fail_msg "merge_pc" 51017 ["mdt051_test2"])
 	];
+=TEX
+=SML
+store_mt_results mt_run_fail [
+	("merge_pc_fields 51010 a",
+	merge_pc_fields [{context = "rubbish1",fields = ["rw_eqn_cxt"]}],
+	"mdt051_test2",
+	gen_fail_msg "merge_pc_fields" 51010 ["rubbish1"]),
+	("merge_pc_fields 51010 b",
+	merge_pc_fields [{context = "mdt051_test1",fields = ["rw_eqn_cxt"]}],
+	"rubbish1",
+	gen_fail_msg "merge_pc_fields" 51010 ["rubbish1"]),
+	("merge_pc_fields 51014 a",
+	merge_pc_fields [{context = "pc out of scope",fields = ["rw_eqn_cxt"]}],
+	"mdt051_test2",
+	gen_fail_msg "merge_pc_fields" 51014 ["pc out of scope","hol"]),
+	("merge_pc_fields 51014 b",
+	merge_pc_fields [{context = "mdt051_test1",fields = ["rw_eqn_cxt"]}],
+	"pc out of scope",
+	gen_fail_msg "merge_pc_fields" 51014 ["pc out of scope","hol"]),
+	("merge_pc_fields 51016",
+	merge_pc_fields [{context = "mdt051_test1",fields = ["rw_eqn_cxt"]}],
+	"mdt051_test1",
+	gen_fail_msg "merge_pc_fields" 51016 ["mdt051_test1"]),
+	("merge_pc_fields 51017",
+	merge_pc_fields [{context = "mdt051_test2",fields = ["rw_eqn_cxt"]}],
+	"mdt051_test2",
+	gen_fail_msg "merge_pc_fields" 51017 ["mdt051_test2"]),
+	("merge_pc_fields 51019",
+	merge_pc_fields [{context = "mdt051_test1",fields = ["rubbish"]}],
+	"mdt051_test2",
+	gen_fail_msg "merge_pc_fields" 51019 ["rubbish"])
+	];
+=TEX
+\subsubsection{Proof Context Stack Errors}
+=SML
+store_mt_results mt_run_fail [
+	("new_pc 51011",
+	new_pc,
+	"mdt051_test1",
+	gen_fail_msg "new_pc" 51011 ["mdt051_test1"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [(
+	"push_pc 51010",
+	push_pc,
+	"rubbish1",
+	gen_fail_msg "push_pc" 51010 ["rubbish1"]),
+	("push_pc 51014",
+	push_pc,
+	"pc out of scope",
+	gen_fail_msg "push_pc" 51014 ["pc out of scope","hol"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [(
+	"set_pc 51010",
+	set_pc,
+	"rubbish1",
+	gen_fail_msg "set_pc" 51010 ["rubbish1"]),
+	("set_pc 51014",
+	set_pc,
+	"pc out of scope",
+	gen_fail_msg "set_pc" 51014 ["pc out of scope","hol"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [(
+	"push_pcs 51010",
+	push_pcs,
+	["rubbish1"],
+	gen_fail_msg "push_pcs" 51010 ["rubbish1"]),
+	("push_pcs 51014",
+	push_pcs,
+	["pc out of scope"],
+	gen_fail_msg "push_pcs" 51014 ["pc out of scope","hol"]),
+	("push_pcs 51020",
+	push_pcs,
+	[],
+	gen_fail_msg "push_pcs" 51020 [])];
+=TEX
+=SML
+store_mt_results mt_run_fail [(
+	"set_pcs 51010",
+	set_pcs,
+	["rubbish1"],
+	gen_fail_msg "set_pcs" 51010 ["rubbish1"]),
+	("set_pcs 51014",
+	set_pcs,
+	["pc out of scope"],
+	gen_fail_msg "set_pcs" 51014 ["pc out of scope","hol"]),
+	("set_pcs 51020",
+	set_pcs,
+	[],
+	gen_fail_msg "set_pcs" 51020 [])];
+=TEX
+\subsubsection{Showing the Status}
+=SML
+new_theory "test_mdt051";
+new_const("delete_me",BOOL);
+new_pc "rubbish2";
+set_pc "rubbish2";
+store_mt_results mt_run [("show_current_pc 1",
+	show_current_pc,
+	(),
+	(["rubbish2"],"test_mdt051"))];
+push_pcs ["mdt051_test1","mdt051_test2"];
+set_pcs ["mdt051_test1","mdt051_test2"];
+store_mt_results mt_run [("show_current_pc 2",
+	show_current_pc,
+	(),
+	(["mdt051_test1","mdt051_test2"],"test_mdt051"))];
+val was = set_flag("ignore_warnings",true);
+delete_const (mk_const("delete_me",BOOL));
+val was = set_flag("ignore_warnings",was);
+open_theory "misc";
+store_mt_results mt_run [("show_current_pc 3",
+	show_current_pc,
+	(),
+	(["mdt051_test1","mdt051_test2"],"test_mdt051 (out of scope/deleted/modified)"))];
+push_pc "mdt051_test1";
+=TEX
+=SML
+store_mt_results mt_run [("show_pcs",
+	show_pcs,
+	(),
+	[("rubbish2", "test_mdt051 (out of scope/deleted/modified)"),
+	("merge1 & 3", "misc"),
+	("pc out of scope", "hol (out of scope/deleted/modified)"),
+	("mdt051_test3", "misc"), ("mdt051_test2", "misc"),
+	("mdt051_test1", "misc"), ("initial", "min")])];
+=TEX
+=SML
+store_mt_results mt_run [("show_stack_pcs",
+	show_stack_pcs,
+	(),
+	[(["mdt051_test1", "mdt051_test2"],
+      "test_mdt051 (out of scope/deleted/modified)"),
+   (["rubbish2"], "test_mdt051 (out of scope/deleted/modified)"),
+   (["initial"], "min")])];
+=TEX
+=SML
+repeat pop_pc;
+store_mt_results mt_run_fail [
+	("pop_pc 51001",
+	pop_pc,
+	(),
+	gen_fail_msg "pop_pc" 51001 [])];
+
+push_pc "mdt051_test1";
+=TEX
+\subsubsection{Commiting Proof Contexts - Failures}
+=SML
+store_mt_results mt_run_fail [("commit_pc 51010",
+	commit_pc,
+	"rubbish1",
+	gen_fail_msg "commit_pc" 51010 ["rubbish1"]),
+	("commit_pc 51016",
+	commit_pc,
+	"mdt051_test1",
+	gen_fail_msg "commit_pc" 51016 ["mdt051_test1"])];
+=TEX
+\subsubsection{Deleting Proof Contexts}
+=SML
+store_mt_results mt_run_fail [(
+	"delete_pc",
+	add_¶_cd_thms [],
+	"rubbish",
+	gen_fail_msg "add_¶_cd_thms" 51010 ["rubbish"])];
+=TEX
+=SML
+store_mt_results mt_run_fail [(
+	"delete_pc 51010",
+	delete_pc,
+	"rubbish",
+	gen_fail_msg "delete_pc" 51010 ["rubbish"]),
+	("delete_pc 51012",
+	delete_pc,
+	"initial",
+	gen_fail_msg "delete_pc" 51012 [])];
+=TEX
+\subsubsection{Setting Evaluation Functions}
+Do these last!
+=SML
+icl'set_eval_ad_rw_net (fn _ => empty_net);
+icl'set_eval_ad_rw_canon (fn _ => fn _ => []);
+icl'set_eval_ad_st_conv (fn _ => fn _ => t_thm);
+icl'set_eval_ad_sg_conv (fn _ => fn _ => t_thm);
+icl'set_eval_ad_cs_¶_rules (fn _ => fn _ => t_thm);
+icl'set_eval_ad_¶_cd_thms (fn _ => [([],[],BOOL,[],t_thm)]);
+icl'set_eval_ad_¶_vs_thms (fn _ => []);
+push_pc "mdt051_test2";
+let
+val rw_net1 = current_ad_rw_net ();
+in
+store_mt_results mt_run [(
+	"current_ad_rw_net a",
+	is_nil,
+	(net_lookup rw_net1 tm_a),
+	true)]
+end;
+store_mt_results mt_run [(
+	"current_ad_rw_canon a",
+	length,
+	(current_ad_rw_canon () t_thm),
+	0)];
+store_mt_results mt_run [(
+	"current_ad_st_conv a",
+	dest_thm o current_ad_st_conv (),
+	tm_a,
+	dest_thm t_thm)];
+store_mt_results mt_run [(
+	"current_ad_sg_conv a",
+	dest_thm o current_ad_sg_conv (),
+	tm_a,
+	dest_thm t_thm)];
+store_mt_results mt_run [(
+	"current_ad_cs_¶_rule a",
+	dest_thm o current_ad_cs_¶_rule (),
+	mk_t,
+	dest_thm t_thm)];
+store_mt_results mt_run [
+	("current_ad_¶_cd_thms a",
+	length,
+	current_ad_¶_cd_thms (),
+	1)];
+store_mt_results mt_run [
+	("current_ad_¶_vs_thms a",
+	length,
+	current_ad_¶_vs_thms (),
+	0)];
+
 =TEX
 \subsection{End of Tests}
 =SML
 diag_string(summarize_mt_results ());
+open_theory "hol";
+delete_theory "test_mdt051";
 =TEX
 \end{document}
 
