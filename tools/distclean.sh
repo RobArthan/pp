@@ -10,7 +10,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: distclean.sh,v 1.2 2002/10/22 15:10:24 rda Exp rda $
+# $Id: distclean.sh,v 1.3 2002/10/22 15:35:20 rda Exp rda $
 #
 give_up(){
 	echo configure: $*
@@ -28,7 +28,7 @@ fi
 # Find the make files and start building the list of files to keep
 #
 MAKEFILES=
-TOKEEP="version install.mkf"
+TOKEEP="version install.mkf index.html.src"
 for f in pptex dev xpp hol zed daz
 do	if	[ -f $f.mkf ]
 	then	MAKEFILES="$MAKEFILES $f.mkf"
