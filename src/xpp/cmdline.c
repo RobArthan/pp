@@ -46,9 +46,9 @@ static CmdLineData cmd_line_data;
  * popup shell. It should be a text widget from which the translations
  * and font for the text widget can be borrowed.
  *
- * Because we want to borrow the translations from a multi-line text
- * widget, it seems that we cannot make the text area here a
- * text field or single-line text widget. However, we do want
+ * It seems that we cannot make the text area here a
+ * text field or single-line text widget, because these do not support the
+ * insert-string action (?). However, we do want
  * carriage return in the text area to cause the command to be
  * executed. The solution is: (a) to use a multi-line text widget
  * with XmNrows set to 1; (b) copy the translations from the
@@ -60,7 +60,6 @@ void add_cmd_line(Widget text_w)
 {
 	Widget shell, cmd_btn, cmd_form, cmd_text;
 
-	XtTranslations translations;
 	XmFontList fontlist;
 
 	static void
@@ -74,9 +73,9 @@ void add_cmd_line(Widget text_w)
 	};
 
 	shell = XtVaCreatePopupShell("xpp_Command_Line",
-		xmDialogShellWidgetClass, root,
+		transientShellWidgetClass,	root,
+		XmNdeleteResponse,		XmUNMAP,
 		NULL); 
-
 
 	cmd_form = XtVaCreateWidget("command_line_form",
 		xmFormWidgetClass, 		shell,
@@ -115,14 +114,10 @@ void add_cmd_line(Widget text_w)
 	cmd_line_data.manager_w = cmd_form;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * copy various aspects of argument text widget behaviour
+ * set up text widget translations and font
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	XtVaGetValues(text_w, XmNtranslations, &translations, NULL);
-	if(translations != NULL) {
-		XtUninstallTranslations(cmd_text);
-		XtVaSetValues(cmd_text, XmNtranslations, translations, NULL);
-	}
+	XtOverrideTranslations(cmd_text, text_translations);
 
 	XtVaGetValues(text_w, XmNfontList, &fontlist, NULL);
 	if(fontlist != NULL) {
