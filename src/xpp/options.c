@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$
+ * $Id: options.c,v 2.2 1999/04/19 15:52:10 rda Exp xpp $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -137,7 +137,7 @@ void init_options(Widget owner_w)
 		XmNlabelString,		lab,
 		NULL);
 
-	XtFree(lab);
+	XmStringFree(lab);
 
 if(!global_options.edit_only) {
 	app_frame = XtVaCreateManagedWidget("app-frame",
