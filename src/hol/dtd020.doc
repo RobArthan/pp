@@ -1,0 +1,457 @@
+=TEX
+% TQtemplate.tex
+\documentstyle[hol,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Detailed Design for ICL HOL Symbol Table}  %% Mandatory field
+\TPPref{DS/FMU/IED/DTD020}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+%\TPPdate{}  %% Mandatory field (with sensible default)
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.D.~Arthan & FST Team Leader}
+\TPPabstract{
+This document contains the detailed design for the
+symbol table module for ICL HOL.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	Library\\RDA\\AJH\\DJK}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history}  % to get section number `0.3'
+\begin{description}
+\item[Issue \SCCSversion (\FormatDate{$Date$%
+})]
+First draft for comment.
+\end{description}
+\subsection{Changes forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the detailed design for the symbol table module for ICL HOL.
+The high level design for this material is given in \cite{DS/FMU/IED/HLD008}.
+\subsection{Introduction}
+In order to give the parser, type inferrer and pretty printer a uniform
+interface to determine the properties of identifiers we have a symbol table
+module whose main purpose is to supply a function mapping identifiers onto
+records encoding the properties of interest. The symbol table module
+also contains the interfaces whereby the user sets certain properties of
+identifiers (namely the interfaces for fixity, terminator, binder and type
+abbreviation declarations).
+
+The following general principles are followed (and should be respected by
+maintainers and enhancers):
+
+\begin{enumerate}
+\item
+The symbol table reflects a current context determined by the current theory.
+All updates affect the current theory.
+\item
+All special properties of an identifier in one context can be suppressed
+in any descendant context. This sometimes requires the use of undeclaration
+records in the underlying theory $USER\_DATA$.
+\item
+The validity of identifiers is only checked when it is necessary to avoid
+the user tying himself in serious knots (e.g. by declaring space as a terminator).
+Such things as infixes, type abbreviations etc. are completely unrestricted,
+and since the lexis of \cite{DS/FMU/IED/DEF001} allows arbitrary strings
+to be used as identifiers this is a feature not a bug, since, e.g., it allows
+HOL parser to interface with any other language embedded in HOL.
+\item
+Operations with a side effect are curried, so that there is less risk
+of them being entered partially by the interactive user.
+\end{enumerate}
+\subsection{Purpose and Background}
+See \cite{DS/FMU/IED/HLD008}.
+\subsection{Dependencies}
+The symbol table module is dependent on the interface to the
+abstract data type $THM$, \cite{DS/FMU/IED/DTD012}
+and on the lexical analyser module, \cite{DS/FMU/IED/DTD015}.
+\subsection{Possible Enhancements}
+A function for finding the best possible abbreviation for a type (in some
+sense to be decided) could be provided and would support a nicer pretty printing
+option in a future release.
+\subsection{Deficiencies}
+None known.
+\section{DOMAIN OF SYMBOL TABLE}
+The symbol table serves the lexical analyser,
+parser, pretty printer and type inferrer
+by supplying a mapping from identifiers onto records containing information
+which they may need.
+Symbol table records are held for the following sorts of identifier:
+\begin{enumerate}
+\item
+identifiers of types and constants
+introduced with the interfaces defined in \cite{DS/FMU/IED/DTD012};
+\item
+identifiers which have been declared as type abbreviations (using
+$new\_type\_abbrev$ defined below);
+\item
+identifiers which have been declared as binders, postfixes, infixes or prefixes (using
+the interfaces defined below);
+\item
+identifiers which have been declared as terminators (using
+the interfaces defined below);
+\end{enumerate}
+
+In addition, the symbol table provides the lexical analyser with the
+list of terminators which apply in the current context.
+\section{PREAMBLE}
+=DOC
+signature SymbolTable = sig
+=DESCRIBE
+This is the signature for the structure which contains the symbol
+table and its access functions.
+=ENDDOC
+\section{DATA TYPES}\label{DATATYPES}
+In this section we give the Standard ML types used in the symbol table module.
+
+=DOC
+datatype FIXITY	=	Nonfix
+			|	Binder
+			|	Infix of int
+			|	Prefix of int
+			|	Postfix of int;
+=DESCRIBE
+This data type is used in the symbol table and elsewhere to give the
+syntactic status of a name. $Nonfix$ means no special status.
+The integer components are the precedences
+for infix, prefix or postfix status.
+=ENDDOC
+=DOC
+type âST_INFOá
+=DESCRIBE
+See DS/FMU/IED/DTD020
+=ENDDOC
+$ST\_INFO$ is a record type with fields as follows:
+
+{\center\begin{tabular}{|l|p{4in}|}\hline
+
+$ty\_info$	& {\bf Type:} $int * ((TYPE * (string list)) OPT)$ $OPT$ \\
+& {\bf Description:}
+this is $Nil$ for an identifier which is not a type constructor or a type
+abbreviation in the current context.
+Otherwise it gives the arity of the constructor or abbreviation and
+a field which is $Nil$ for a constructor and which otherwise
+gives the type for which this identifier is an abbreviation
+together with the names of its formal parameters.
+
+\\\hline
+$const\_info$	& {\bf Type:} $(TYPE * ((string * TYPE)list))) OPT$ \\
+ & {\bf Description:}
+this field is $Nil$ for an identifier which is not the name of a constant 
+or an alias in the current context. For a constant or an alias it
+has the form $Value(\tau, [(s_1, \tau_1), \ldots, (s_k, \tau_k)])$.
+Each $s_i$ gives the
+actual constant name to be associated with an occurrence of the identifier
+which has type an instance of $\tau_i$.
+$\tau$ is the antiunifier of the $\tau_i$. For a constant which is not an
+alias $k = 1$ and $\tau = \tau_1$. 
+\\\hline
+$language$	& {\bf Type:} $string$ \\
+ & {\bf Description:}
+this gives the language associated with the identifier. It has the value
+``$HOL$'' for all names supplied as part of the ICL HOL system.
+\\\hline
+$fixity$		& {\bf Type:} $FIXITY$ \\
+ & {\bf Description:}
+this gives the fixity associated with the identifier.
+\\\hline
+\end{tabular}}
+
+Note that a name may be both an alias and an actual constant name.
+For example in the supplied system the conjunction
+symbol `€' will have a symbol table
+entry something like:
+óExample
+	{	type_info	= Nil,
+		const_info	= Value(»:BOOL‹BOOL‹BOOL¼,
+					[("€", »:BOOL‹BOOL‹BOOL¼)]),
+		language	= "HOL",
+		fixity		= Infix 100	}
+æ
+The user might wish to overload `€', e.g., by making it an alias of
+the function `fand' defined by the following theorem:
+óExample
+	… ƒf g:'a->BOOLŽfand f g x = f x € g x
+æ
+
+The effect of the call
+óExample
+	new_alias("€", »fand:('a->BOOL)‹('a->BOOL)‹('a->BOOL)¼);
+æ
+
+is to make the symbol table entry for  `€' something like:
+
+óExample
+	{	type_info	= Nil,
+		const_info	= Value(»:'b‹'b‹'b¼,
+					[("fand", »:('a->BOOL)‹('a->BOOL)‹('a->BOOL)¼),
+					 ("€", »:BOOL‹BOOL‹BOOL¼)]),
+		language	= "HOL",
+		fixity		= Infix 100	}
+æ
+
+Thus to determine the actual type of a constant the correct procedure
+would be to access the second component of the $const\_info$ field, not the first.
+\section{ACCESS FUNCTIONS}
+\subsection{Terminators}
+% Errors in this subsection start with 201
+=DOC
+	val âget_terminatorsá : unit -> string list list;
+=DESCRIBE
+$get\_terminators()$ returns the list of identifiers which have been
+declared as terminators in the current context using $new\_terminator$. The 
+names are returned in exploded form, i.e. as a list of strings each containing
+one character.
+=ENDDOC
+=DOC
+	val âdeclare_terminatorá : string -> unit
+=DESCRIBE
+$declare\_terminator\,s$ checks that $s$ is a valid terminator, and if so declares
+that $s$ is to be used as a lexical terminator in the current context.
+=FAILURE
+20101	The identifier ?0 is not a valid terminator. Terminators must start
+	with a symbolic character, must not contain spaces,
+	and must not end with underscore, %up% or %down%
+=ENDDOC
+=DOC
+	val âundeclare_terminatorá : string -> unit
+=DESCRIBE
+$undeclare\_terminator\,s$ removes $s$
+from the list of identifiers which act as terminators for parsing purposes
+in the current context.
+=FAILURE
+20102	?0 is not in the list of terminators in the current context
+=ENDDOC
+\subsection{Fixity}
+% Errors in this subsection should start with 202
+=DOC
+	val âdeclare_binderá : string -> unit;
+=DESCRIBE
+$declare\_binder\,s$ declares $s$ to have the syntactic status of a binder
+in the current context.
+No checks are made on the form of $s$
+=ENDDOC
+
+=DOC
+	val âdeclare_infixá : string -> unit;
+=DESCRIBE
+$declare\_infixpre\,(s, p)$ declares $s$ to have the syntactic status of an
+infix operator with precedence $p$
+in the current context.
+No checks are made on the form of $s$
+=ENDDOC
+=ENDDOC
+
+=DOC
+	val âdeclare_prefixá : string -> unit;
+=DESCRIBE
+$declare\_prefix\,(s, p)$ declares $s$ to have the syntactic status of a
+prefix operator with precedence $p$ in the current context.
+No checks are made on the form of $s$
+=ENDDOC
+
+=DOC
+	val âdeclare_postfixá : string -> unit;
+=DESCRIBE
+$declare\_postfix\,(s, p)$ declares $s$ to have the syntactic status of a
+postfix operator with precedence $p$ in the current context.
+No checks are made on the form of $s$
+=ENDDOC
+
+=DOC
+	val âdeclare_nonfixá : string -> unit;
+=DESCRIBE
+$declare\_nonfix\,s$ declares $s$ to have no special
+syntactic status in the current context.
+No checks are made on the form of $s$
+=ENDDOC
+=DOC
+	val âget_fixityá : string -> FIXITY;
+=DESCRIBE
+$get\_fixity\,s$ returns the syntactic status of $s$ in the current context.
+=ENDDOC
+\subsection{Constants and Aliases}
+% Errors in this subsection start with 203
+=DOC
+	val âget_const_infoá : string -> (TYPE * (string * TYPE list)) OPT;
+=DESCRIBE
+$get\_alias\_info\,s$ returns the information associated with
+the name $s$ used as a constant name, if any, associated
+with $s$.
+See DS/FMU/IED/DTD020 for more information.
+=ENDDOC
+The format of the alias information is described as part of
+the description of $ST\_INFO$ ins section \ref{DATATYPES} above
+=DOC
+	val âdeclare_aliasá : (string * TERM) -> unit;
+=DESCRIBE
+$declare\_alias\,(s, c)$ declares $s$ as an alias for the constant $c$.
+=FAILURE
+20301	The term ?0 is not a constant.
+=ENDDOC
+=DOC
+	val âundeclare_aliasá : (string * TERM) -> unit;
+=DESCRIBE
+$undeclare\_alias\,(s, c)$ reverses the effect
+of a declaration of $s$ as an alias for the constant $c$ in the current context.
+=FAILURE
+20302	The term ?0 is not a constant.
+20303	The identifier ?0 is not declared as an alias for ?1
+=ENDDOC
+=DOC
+	val âresolve_aliasá : (string * TYPE) -> TERM;
+=DESCRIBE
+$resolve_alias(s, \tau)$ returns a term of the form $mk\_const(c, \tau)$ where
+$c$ is the ``best' resolution for the identifier $s$. This best resolution
+will be $s$ if $s$ has been introduced as a constant of type $\tau'$
+where $\tau'$ is an instance of $\tau$.
+If $s$ is an alias then $c$ is taken from the alias declaration for $s$
+in which the aliased constant has a type $\tau'$ which can be instantiated
+to $\tau$. If more than one such declaration is applicable the most recent
+one is used. 
+=FAILURE
+20304	The identifier ?0 is not a valid constant name (or alias) at the type ?1
+=ENDDOC
+
+\subsection{Types and Type Abbreviations}
+% Errors in this subsection start with 204
+=DOC
+	val âget_type_infoá : string -> (int * (string * TYPE list) OPT) OPT;
+=DESCRIBE
+$get\_type\_info\,s$ returns the type information, if any, associated
+with $s$.
+See DS/FMU/IED/DTD020 for more information.
+=ENDDOC
+The format of the alias information is described as part of
+the description of $ST\_INFO$ ins section \ref{DATATYPES} above
+=DOC
+	val âdeclare_type_abbrevá : (string * TYPE list * TYPE) -> FIXITY;
+=DESCRIBE
+$declare\_type\_abbrev\,(s, [\alpha_1, \ldots, \alpha_k], \tau)$
+declares $(\alpha_1, \ldots, \alpha_k)s$
+as a type abbreviation for the type $\tau$.
+The formal parameters $\alpha_1, \ldots, \alpha_k$ must all be type variables.
+=FAILURE
+20401	The formal parameter ?0 is not a type variable.
+=ENDDOC
+=DOC
+	val âundeclare_type_abbrevá : string -> FIXITY;
+=DESCRIBE
+$undeclare\_type\_abbrev\,(s, [\alpha_1, \ldots, \alpha_k], \tau)$
+reverses the effect of a declaration of $s$ as a type abbreviation.
+=FAILURE
+20402	The identifier ?0 is not declared as a type abbreviation
+=ENDDOC
+
+=DOC
+	val âis_type_abbrevá : string -> bool;
+=DESCRIBE
+$is\_type\_abbrev$ returns $true$ iff. $s$ is declared as a type abbreviation
+=ENDDOC
+
+=DOC
+	val âexpand_type_abbrevá : (string * TYPE list) -> TYPE;
+=DESCRIBE
+$expand\_type\_abbrev\,s,[\tau_1, \ldots, \tau_k]$ is the
+expansion of the type abbreviation $s$ with respect to the arguments
+$[\tau_1, \ldots, \tau_k]$. 
+=FAILURE
+20403	The identifier ?0 is not declared as a type abbreviation
+20404	The type abbreviation ?0 should have ?1 argument not ?2
+20405	The type abbreviation ?0 should have ?1 arguments not ?2
+=ENDDOC
+\subsection{Languages}
+The symbol table stores a language indicator in each theory.
+This determines the language in the symbol table records for the names
+in that theory. The language indicator for a new theory is initially taken
+from its (first) parent. The language indicator for the initial theory
+$MIN$ is set to ``$HOL$''.
+=DOC
+	val âget_current_languageá : unit -> string;
+=DESCRIBE
+$set\_current\_language()$ returns the language indicator associated with
+the current theory.
+=FAILURE
+20403	The identifier ?0 is not declared as a type abbreviation
+20404	The type abbreviation ?0 should have ?1 argument not ?2
+20405	The type abbreviation ?0 should have ?1 arguments not ?2
+=ENDDOC
+=DOC
+	val âget_languageá : string -> string;
+=DESCRIBE
+$set\_current\_language\,s$ returns the language associated with
+the name $s$ in the current context.
+=FAILURE
+20403	The identifier ?0 is not declared as a type abbreviation
+20404	The type abbreviation ?0 should have ?1 argument not ?2
+20405	The type abbreviation ?0 should have ?1 arguments not ?2
+=ENDDOC
+
+\subsection{General Access Functions}
+% Errors in this subsection start with 206
+=DOC
+	val âget_st_infoá : string -> string -> ST_INFO OPT;
+=DESCRIBE
+$get\_st\_info\,thy\,id$ returns the symbol table information associated
+with $id$ in theory $thy$.
+=ENDDOC
+=DOC
+	val âget_st_idsá : string -> string list;
+=DESCRIBE
+$get\_st\_ids\,thy$ returns the list of identifiers which have a symbol
+table record in the theory $thy$.
+=ENDDOC
+
+=SML
+end; (* of signature SymbolTable *)
+=TEX
+\section{TEST POLICY}
+The symbol table functions are to be tested according to the
+general criteria laid down in the quality plan, \cite{DS/FMU/IED/PLN008}.
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+
+\end{document}
