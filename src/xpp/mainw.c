@@ -1043,8 +1043,8 @@ Widget unused_w;
 XtPointer unused_p;
 {
 	NAT ct;
-	static	char buf[1001];
-	while(application_alive() &&
+	static	char buf[1001]; /* allow for null-termination in scroll_out */
+	if(application_alive() &&
 			(ct = read(control_fd, buf, 1000)) > 0) {
 		scroll_out(buf, ct, False);
 	};
@@ -1295,7 +1295,7 @@ static void handle_sigs()
 static void interrupt_application ()
 {
 	if(application_alive()) {
-		kill((pid_t)-child_pgrp, SIGINT);
+		kill((pid_t)(-child_pgrp), SIGINT);
 	}
 }
 
