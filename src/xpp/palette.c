@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.18 2003/07/23 14:02:14 rda Exp rda $ 
+ * $Id: palette.c,v 2.19 2003/07/24 13:09:22 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -43,24 +43,8 @@ static void focus_cb(CALLBACK_ARGS);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * static data:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static unsigned char prettychars[] = {
-0xb1, 0xb2, 0xb3, 0xb5, 0xb6, 0xb7, 0xb8, 0xbc, 
-0xbd, 0xbe, 0x8d, 0x8e, 0xa4, 0xb4, 0xad, 0x8f, 
-0x9e, 0x9f, 0xaa, 0xcf, 0xdf, 0xe0, 0xed, 0xef, 
-0xfe, 0xac, 0x94, 0x91, 0xf1, 0xae, 0xb9, 0xf7, 
-0xb0, 0xff, 0x88, 0x9d, 0xdc, 0xfc, 0x9c, 0xdb, 
-0xdd, 0xa7, 0xa2, 0xfb, 0xfd, 0xa8, 0xa9, 0x89, 
-0x9b, 0xe7, 0xe8, 0xea, 0xe6, 0xee, 0xf0, 0xfa, 
-0x80, 0x9a, 0xa0, 0xa1, 0xa5, 0xc0, 0xde, 0x81, 
-0x92, 0xe1, 0xf2, 0xeb, 0x8b, 0xf9, 0xab, 0x82, 
-0xf4, 0xbb, 0xba, 0xa6, 0xe2, 0xa3, 0x84, 0x86, 
-0x87, 0x8a, 0x8c, 0x90, 0x93, 0x95, 0x97, 0x98, 
-0x99, 0xc1, 0xc2, 0xc4, 0xc5, 0xc6, 0xc7, 0xc8, 
-0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xd0, 0xd1, 
-0xd2, 0xd3, 0xd4, 0xd5, 0xd7, 0xd8, 0xd9, 0xda, 
-0xc3, 0xe9, 0xaf, 0xe3, 0xe4, 0xe5, 0x83, 0x85,
-0x96, 0xbf, 0xd6, 0xec, 0xf3, 0xf5, 0xf6, 0xf8,
-0x00} ;
+
+#include "paletteconf.h"
 
 typedef struct {
 	Widget text_w, palette_w;
@@ -83,7 +67,7 @@ void popup_palette(Widget w)
 {
 	XmString lab;
 	char label_buf[2], name_buf[sizeof "charXX"];
-	NAT i, n_chars, x, y;
+	NAT i, j, x, y;
 	NAT cbdata;
 	Widget shell, outer_form, inner_form, button, dismiss_btn, help_btn;
 
@@ -93,8 +77,6 @@ void popup_palette(Widget w)
 		XtPopup(XtParent(outer_form), XtGrabNone);
 		return;
 	} /* else ... */
-
-	n_chars = strlen((char*)prettychars);
 
 	shell = XtVaCreatePopupShell("xpp-Palette",
 		xmDialogShellWidgetClass, w,
@@ -125,30 +107,31 @@ void popup_palette(Widget w)
 
 	label_buf[1] = '\0';
 
-	for(i = 0; i < n_chars; ++i) {
-
-		label_buf[0] = prettychars[i];
-		sprintf(name_buf, "char%02X", prettychars[i]);
-		lab = XmStringCreateSimple(label_buf);
-		x = 2 * (i % 8);
-		y = i / 8;
-		button = XtVaCreateManagedWidget(name_buf,
-			xmPushButtonGadgetClass, inner_form,
-			XmNlabelString, lab,
-			XmNleftAttachment,	XmATTACH_POSITION,
-			XmNleftPosition,	x,
-			XmNrightAttachment,	XmATTACH_POSITION,
-			XmNrightPosition,	x + 2,
-			XmNtopAttachment,	XmATTACH_POSITION,
-			XmNtopPosition,		y,
-			XmNbottomAttachment,	XmATTACH_POSITION,
-			XmNbottomPosition,	y + 1,
-			NULL);
-		copy_font_list(button, w);
-		XmStringFree(lab);
-		cbdata = prettychars[i];
-		XtAddCallback(button, XmNactivateCallback, type_char_cb,
-			(XtPointer) cbdata);
+	for(i = 0; i < PALETTE_NROWS; i += 1) {
+		for(j = 0; j < PALETTE_NCOLS; j += 1) {
+			label_buf[0] = prettychars[i][j];
+			sprintf(name_buf, "char%02X", prettychars[i][j]);
+			lab = XmStringCreateSimple(label_buf);
+			x = 2*j;
+			y = i;
+			button = XtVaCreateManagedWidget(name_buf,
+				xmPushButtonGadgetClass, inner_form,
+				XmNlabelString, lab,
+				XmNleftAttachment,	XmATTACH_POSITION,
+				XmNleftPosition,	x,
+				XmNrightAttachment,	XmATTACH_POSITION,
+				XmNrightPosition,	x + 2,
+				XmNtopAttachment,	XmATTACH_POSITION,
+				XmNtopPosition,		y,
+				XmNbottomAttachment,	XmATTACH_POSITION,
+				XmNbottomPosition,	y + 1,
+				NULL);
+			copy_font_list(button, w);
+			XmStringFree(lab);
+			cbdata = prettychars[i][j];
+			XtAddCallback(button, XmNactivateCallback, type_char_cb,
+				(XtPointer) cbdata);
+		}
 	}
 
 	lab = XmStringCreateSimple("Dismiss");
