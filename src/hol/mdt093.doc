@@ -1,0 +1,398 @@
+=TEX
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+\TPPtitle{Module Tests for the theory of integers in HOL}
+\TPPref{DS/FMU/IED/MDT093}  %% Mandatory field
+\def\SCCSversion{$Revision$
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$ %
+}}  %% Mandatory field
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{SML Literate Script}
+\TPPkeywords{}
+\TPPauthors{R.D.~Arthan & WIN01 \\ A.C.~Hayward & WIN01}
+\TPPauthorisation{R.D.Arthan & FST Team Leader}
+\TPPabstract{This document gives the module tests for the 
+theory of integers in HOL and their proof support.}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	    Project Library
+}}
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+\begin{document}
+\makeTPPfrontpage
+\vfill
+\begin{centering}
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+\end{centering}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1 (14th April 1993)]
+First version, derived from 086.
+\end{description}
+\subsection{Changes Forecast}
+None known.
+\section{GENERAL}
+\subsection{Scope}
+This document contains the module tests for the material
+whose detailed design is given in in \cite{DS/FMU/IED/DTD093}.
+\subsection{Introduction}
+This document contains the module tests for the material
+whose detailed design is given in in \cite{DS/FMU/IED/DTD093}.
+This consists of demonstrating at least the simpler uses of the 
+functions in question.
+\subsubsection{Dependencies}
+The tests depend upon \cite{DS/FMU/IED/IMP093} and \cite{DS/FMU/IED/IMP013}.
+In addition, testing by the subgoal package (section \ref{subgoalpackage})
+depends on \cite{DS/FMU/IED/IMP035}.
+\subsubsection{Deficiencies}
+Only doing theory testing at present.
+\section{TEST CASES}
+The functions are tested in their order of presentation in the detailed design.
+\section{PREAMBLE}
+=SML
+open_theory "ת";
+push_pc "hol";
+delete_theory "temp" handle _ => ();
+new_theory "temp";
+use_file "dtd013";
+use_file "imp013";
+init_mt_results();
+(* set_flag("subgoal_package_quiet",true); *)
+repeat drop_main_goal;
+=TEX
+
+\subsection{Utilities}
+=SML
+fun Ûlist_eqÝ (eq:'a * 'a -> bool) ((a :: x), (b :: y)) : bool = (
+	eq(a,b) andalso list_eq eq (x, y)
+) | list_eq eq ([], []) = true
+| list_eq _ _ = false;
+=TEX
+If two terms types are equal, break them apart until they differ.
+=SML
+fun Ûdiffer_whereÝ itm1 itm2 = (
+let	fun aux tm1 tm2 (App(f1,x1)) (App(f2,x2)) = (
+		Value(force_value(aux f1 f2 (dest_simple_term f1) (dest_simple_term f2)))
+		handle _ =>
+		aux x1 x2 (dest_simple_term x1) (dest_simple_term x2))
+	| aux tm1 tm2 (Const(nm1,ty1)) (Const(nm2,ty2)) = (
+		if nm1 = nm2 andalso ty1 =: ty2
+		then Nil
+		else Value(tm1,tm2))
+	| aux tm1 tm2 (Var(nm1,ty1)) (Var(nm2,ty2)) = (
+		if nm1 = nm2 andalso ty1 =: ty2
+		then Nil
+		else Value(tm1,tm2))
+	| aux tm1 tm2 (Simpleּ(x1,b1)) (Simpleּ(x2,b2)) = (
+		if x1 =$ x2 
+		then aux b1 b2 (dest_simple_term b1) (dest_simple_term b2)
+		else Value(tm1,tm2))
+	| aux tm1 tm2 _ _ = Value(tm1,tm2);
+in
+	aux itm1 itm2 (dest_simple_term itm1) (dest_simple_term itm2)
+end);
+=TEX
+\subsection{Testing Using Subgoal Package}
+\label{subgoalpackage}
+The following functions apply a tactic to a selected goal
+and returns the resulting top goal. 
+This of course doesn't fully test tactics that return multiple
+goals.
+The functions differ in that $tac\_res1$ inputs and outputs
+both assumptions and conclusion, while $tac\_res$
+just assumes an empty assumption list.
+=SML
+fun Ûtac_resÝ tac goal = (push_goal([],goal);
+		a tac;
+		let val (seqasms,gl) = top_goal()
+		in
+			(drop_main_goal();
+			gl)
+		end);
+fun Ûtac_resÝ tac goal = (push_goal([],goal);
+		a tac;
+		let val (seqasms,gl) = top_goal()
+		in
+			(drop_main_goal();
+			gl)
+		end);
+fun Ûtac_res1Ý tac (seqasms, goal) = (
+		push_goal(seqasms,goal);
+		a tac;
+		let val (rasms,gl) = top_goal()
+		in
+			(drop_main_goal();
+			(rasms,gl))
+		end);
+=TEX
+Now a function that returns the multiple goals for the case when a tactic causes multiple goals:
+=SML
+fun Ûtac_ressÝ tac n (seqasms, goal) = (
+		push_goal(seqasms,goal);
+		a tac;
+		let val gll = map (top_labelled_goal o string_of_int)
+			(interval 1 n)
+		in
+			(drop_main_goal();
+			gll)
+		end);
+=TEX
+This function tests that a tactic proves a goal:
+=SML
+fun Ûtac_solveÝ tac (seqasms, goal) = (
+	dest_thm (tac_proof ((seqasms,goal),tac))
+	=#
+	(seqasms, goal)
+);
+=TEX
+This function tests that a tactic fails on a goal:
+=SML
+fun Ûtac_failÝ tac (seqasms, goal) = (
+	push_goal(seqasms,goal);
+	a tac
+	handle complaint =>
+	(drop_main_goal();
+	reraise complaint (area_of complaint))
+);
+=TEX
+\section{TESTS}
+=TEX
+\section{CHECK THE THEORY DESIGN}
+=SML
+use_file "dtd093.tch";
+store_mt_results mt_run [("theory design of ת in HOL",
+	theory_check_success,
+	(),
+	true)];
+=TEX
+\section{CHECK THE TACTICS}
+=SML
+store_mt_results mt_run [
+	("ת_induction_tac.1",
+	tac_solve (ת_induction_tac ¬i:ת® THEN_LIST[
+	¶_tac ¬מת 1® THEN REPEAT strip_tac,
+	¶_tac ¬~a:ת® THEN asm_rewrite_tac[],
+	¶_tac ¬a+a':ת® THEN asm_rewrite_tac[]]),
+	([],¬¶a·a = (i:ת)®),
+	true)];
+=TEX
+\section{CHECK THE SYNTAX FUNCTIONS}
+=SML
+=TEX
+\section{CHECK THE CONVERSIONS}
+=SML
+fun gen_test_cases (id : string) (conv : CONV) (tms : TERM list) = (
+	let	fun test_conv_res tm = (
+			case dest_thm (conv tm) of
+				([], conc) =>
+				let val (l, r) = dest_eq conc;
+				in	l =$ tm andalso
+				(is_ת_signed_int r orelse is_t r orelse is_f r)
+				end
+			|	_ => false
+		);
+		fun gen1_case (i, tm) = (
+			(id ^ "." ^ string_of_int i, test_conv_res, tm, true)
+		);
+	in	map gen1_case (combine (interval 1 (length tms)) tms)
+	end			
+);
+=TEX
+=SML
+store_mt_results mt_run (gen_test_cases "ת_plus_conv" ת_plus_conv[
+	¬מת 7 + מת 4®, ¬מת 7 + ~(מת 4)®, ¬מת 4 + ~(מת 7)®, ¬~(מת 4) + מת 7®,
+	¬~(מת 7) + מת 4®, ¬~(מת 7) + ~(מת 4)®, ¬מת 7 + מת 0®, ¬מת 7 + ~(מת 0)®,
+	¬מת 0 + ~(מת 7)®, ¬~(מת 0) + מת 7®, ¬~(מת 7) + מת 0®,
+	¬~(מת 7) + ~(מת 0)®, ¬מת 0 + מת 4®, ¬מת 0 + ~(מת 4)®, ¬מת 4 + ~(מת 0)®,
+	¬~(מת 4) + מת 0®, ¬~(מת 0) + מת 4®, ¬~(מת 0) + ~(מת 4)®, ¬מת 0 + מת 0®,
+	¬מת 0 + ~(מת 0)®, ¬~(מת 0) + מת 0®, ¬~(מת 0) + ~(מת 0)®
+]);
+=TEX
+=SML
+store_mt_results mt_run (gen_test_cases "ת_מ_times_conv" ת_מ_times_conv [
+	¬מת 1 * מת 1®, ¬מת 1 * מת 0®, ¬מת 0 * מת 1®, ¬מת 0 * מת 0®,
+	¬מת 1 * מת 12®, ¬מת 12 * מת 0®, ¬מת 0 * מת 12®, ¬מת 12 * מת 1®,
+	¬מת 7 * מת 3®, ¬מת 99 * מת 1001®
+]);
+=TEX
+=SML
+store_mt_results mt_run
+(gen_test_cases "ת_times_conv" ת_times_conv [
+	¬מת 1 * מת 1®, ¬מת 1 * מת 0®, ¬מת 0 * מת 1®, ¬מת 0 * מת 0®,
+	¬מת 1 * מת 12®, ¬מת 12 * מת 0®, ¬מת 0 * מת 12®, ¬מת 12 * מת 1®,
+	¬מת 7 * מת 3®, ¬מת 99 * מת 1001®, ¬מת 1 * ~(מת 1)®, ¬מת 1 * ~(מת 0)®,
+	¬מת 0 * ~(מת 1)®, ¬מת 0 * ~(מת 0)®, ¬מת 1 * ~(מת 12)®,
+	¬מת 12 * ~(מת 0)®, ¬מת 0 * ~(מת 12)®, ¬מת 12 * ~(מת 1)®,
+	¬מת 7 * ~(מת 3)®, ¬מת 99 * ~(מת 1001)®, ¬~(מת 1) * מת 1®,
+	¬~(מת 1) * מת 0®, ¬~(מת 0) * מת 1®, ¬~(מת 0) * מת 0®, ¬~(מת 1) * מת 12®,
+	¬~(מת 12) * מת 0®, ¬~(מת 0) * מת 12®, ¬~(מת 12) * מת 1®,
+	¬~(מת 7) * מת 3®, ¬~(מת 99) * מת 1001®, ¬~(מת 1)* ~(מת 1)®,
+	¬~(מת 1)* ~(מת 0)®, ¬~(מת 0)* ~(מת 1)®, ¬~(מת 0)* ~(מת 0)®,
+	¬~(מת 1)* ~(מת 12)®, ¬~(מת 12) * ~(מת 0)®, ¬~(מת 0)* ~(מת 12)®,
+	¬~(מת 12) * ~(מת 1)®,	¬~(מת 7)* ~(מת 3)®, ¬~(מת 99) * ~(מת 1001)®
+]);
+=TEX
+=SML
+store_mt_results mt_run
+(gen_test_cases "ת_abs_conv" ת_abs_conv [ ¬Abs (מת 0)®, ¬Abs (~(מת 0))®,
+	¬Abs (מת 1)®, ¬Abs (~(מת 1))®, ¬Abs (מת 100)®, ¬Abs (~(מת 100))® ]);
+=TEX
+=SML
+store_mt_results mt_run
+(gen_test_cases "ת_¼_conv" ת_¼_conv [
+	¬מת 0 ¼ מת 0®, ¬מת 0 ¼ מת 1®, ¬מת 0 ¼ ~(מת 1)®, ¬מת 1 ¼ מת 0®,
+	¬~(מת 1) ¼ מת 0®, ¬מת 1 ¼ מת 1®, ¬מת 1 ¼ ~(מת 1)®, ¬~(מת 1) ¼ מת 1®,
+	¬~(מת 1) ¼ ~(מת 1)®, ¬מת 77 ¼ מת 77®, ¬מת 77 ¼ ~(מת 77)®,
+	¬~(מת 77) ¼ מת 77®, ¬~(מת 77) ¼ ~(מת 77)®, ¬מת 77 ¼ מת 99®,
+	¬מת 77 ¼ ~(מת 99)®, ¬~(מת 77) ¼ מת 99®, ¬~(מת 77) ¼ ~(מת 99)®,
+	¬מת 1001 ¼ מת 99®, ¬מת 1001 ¼ ~(מת 99)®, ¬~(מת 1001) ¼ מת 99®,
+	¬~(מת 1001) ¼ ~(מת 99)®]);
+=TEX
+=SML
+store_mt_results mt_run
+(gen_test_cases "ת_less_conv" ת_less_conv [
+	¬מת 0 < מת 0®, ¬מת 0 < מת 1®, ¬מת 0 < ~(מת 1)®, ¬מת 1 < מת 0®,
+	¬~(מת 1) < מת 0®, ¬מת 1 < מת 1®, ¬מת 1 < ~(מת 1)®, ¬~(מת 1) < מת 1®,
+	¬~(מת 1) < ~(מת 1)®, ¬מת 77 < מת 77®, ¬מת 77 < ~(מת 77)®,
+	¬~(מת 77) < מת 77®, ¬~(מת 77) < ~(מת 77)®, ¬מת 77 < מת 99®,
+	¬מת 77 < ~(מת 99)®, ¬~(מת 77) < מת 99®, ¬~(מת 77) < ~(מת 99)®,
+	¬מת 1001 < מת 99®, ¬מת 1001 < ~(מת 99)®, ¬~(מת 1001) < מת 99®,
+	¬~(מת 1001) < ~(מת 99)®]);
+=TEX
+=SML
+store_mt_results mt_run
+(gen_test_cases "ת_div_conv" ת_div_conv [
+	¬מת 1 Div מת 1®, ¬מת 1 Div ~(מת 1)®, ¬~(מת 1) Div מת 1®,
+	¬~(מת 1) Div ~(מת 1)®, ¬מת 0 Div מת 1®, ¬מת 0 Div ~(מת 1)®,
+	¬מת 30 Div מת 1®, ¬מת 30 Div ~(מת 1)®, ¬~(מת 30) Div מת 1®,
+	¬~(מת 30) Div ~(מת 1)®, ¬מת 30 Div מת 5®, ¬מת 30 Div ~(מת 5)®,
+	¬~(מת 30) Div מת 5®, ¬~(מת 30) Div ~(מת 5)®, ¬מת 37 Div מת 7®,
+	¬מת 37 Div ~(מת 7)®, ¬~(מת 37) Div מת 7®, ¬~(מת 37) Div ~(מת 7)®
+]);
+=TEX
+=SML
+store_mt_results mt_run
+(gen_test_cases "ת_mod_conv" ת_mod_conv [
+	¬מת 1 Mod מת 1®, ¬מת 1 Mod ~(מת 1)®, ¬~(מת 1) Mod מת 1®,
+	¬~(מת 1) Mod ~(מת 1)®, ¬מת 0 Mod מת 1®, ¬מת 0 Mod ~(מת 1)®,
+	¬מת 30 Mod מת 1®, ¬מת 30 Mod ~(מת 1)®, ¬(~(מת 30)) Mod מת 1®,
+	¬(~(מת 30)) Mod ~(מת 1)®, ¬מת 30 Mod מת 5®, ¬מת 30 Mod ~(מת 5)®,
+	¬(~(מת 30)) Mod מת 5®, ¬(~(מת 30)) Mod ~(מת 5)®, ¬מת 37 Mod מת 7®,
+	¬מת 37 Mod ~(מת 7)®, ¬~(מת 37) Mod מת 7®, ¬~(מת 37) Mod ~(מת 7)®
+]);
+=TEX
+=SML
+store_mt_results mt_run
+(gen_test_cases "ת_ת_eq_conv" ת_ת_eq_conv [
+	¬מת 1 = מת 1®, ¬מת 1 = ~(מת 1)®, ¬~(מת 1) = מת 1®, ¬~(מת 1) = ~(מת 1)®,
+	¬מת 0 = מת 0®, ¬מת 0 = ~(מת 0)®, ¬~(מת 0) = מת 0®, ¬~(מת 0) = ~(מת 0)®,
+	¬~(מת 0) = מת 1®, ¬מת 1 = ~(מת 0)®, ¬מת 30 = מת 7®, ¬מת 30 = ~(מת 7)®,
+	¬~(מת 30) = מת 7®, ¬~(מת 30) = ~(מת 7)®, ¬מת 42 = מת 42®,
+	¬~(מת 42) = ~(מת 42)®, ¬~(מת 42) = מת 42®, ¬מת 42 = ~(מת 42)®
+]);
+=TEX
+\section{CHECK THE PROOF CONTEXT}
+=SML
+set_merge_pcs["sets_ext",  "'ת_numbers"];
+=TEX
+=SML
+store_mt_results mt_run
+(gen_test_cases "'ת_numbers.1" (rewrite_conv[]) [
+	¬מת 1 + מת 2 = מת 3®, ¬~(מת 1) + מת 2 ¼ ~(מת 7 Div מת 2)®,
+	¬~(מת 1) + מת 2 ¾ ~(מת 7 Div מת 2)®,
+	¬~(מת 1) + מת 2 < ~((מת 7) Div (מת 2))®,
+	¬~(מת 1) + מת 2 > ~((מת 7) Div (מת 2))®,
+	¬מת 1 * מת 2 * מת 3 * מת 4  < מת 2 * מת 2 * מת 2 * מת 2®,
+	¬מת 13 Mod מת 3®, ¬מת 13 Mod (~(מת 3))®, ¬~(מת 13) Mod מת 3®,
+	¬~(מת 13) Mod (~(מת 3))®, ¬מת 13 Div מת 3®, ¬מת 13 Div (~(מת 3))®,
+	¬~(מת 13) Div מת 3®, ¬~(מת 13) Div (~(מת 3))®,
+	¬Abs (מת 999 - מת 457) ¼ Abs (מת 999) + Abs (מת 457)®,
+	¬מת 0 ¼ מת 999 - מת 457®, ¬³ מת 0 ¼ מת 457 - מת 999®
+]);
+=TEX
+=SML
+val th = prove_rule[ת_plus_assoc_thm]¬µ i j k : ת · (i + j) + k = i + j + k®;
+store_mt_results mt_run_fail [
+("'ת_numbers.2.1", (rewrite_conv[]),
+	¬(a +‰Z b) +‰Z (c +‰Z d) = (c +‰Z a) +‰Z b®,
+	gen_fail_msg "rewrite_conv" 26001 [])
+];
+store_mt_results mt_run [
+("'ת_numbers.2.2.1", tac_solve (prove_tac[th]),
+	([], ¬(a +‰Z b) +‰Z (c +‰Z d) = (a +‰Z c) +‰Z b ₪ d = מת 0 ®),
+	true),
+("'ת_numbers.2.2.2", tac_solve (prove_tac[th]),
+	([], ¬µ i j k : ת · i + k ¼ j + k ₪ i ¼ j ®),
+	true)
+];
+=TEX
+Check all proof contexts are there:
+=SML
+set_pc "'ת_numbers";
+pop_pc();
+=TEX
+\section{END OF TESTS}
+=SML
+(* set_flag("subgoal_package_quiet",false); *)
+diag_string(summarize_mt_results ());
+=TEX
+\end{document}
+=IGN
+***********COPY**************
+store_mt_results (mt_runf (op =$)) [("",
+	tac_res ,
+	¬®,
+	¬®)];
+store_mt_results (mt_runf (op =$)) [("",
+	snd o dest_eq o concl o  ,
+	¬®,
+	¬®)];
+store_mt_results mt_run_fail [("",
+	,
+	,
+	gen_fail_msg ""  [])];
+store_mt_results (mt_runf (op =#)) [("",
+	tac_res1 ,
+	([¬®],¬®),
+	([¬®],¬®))];
+store_mt_results (mt_runf (list_eq(op =#))) [("",
+	tac_ress  2,
+	([¬®],¬®),
+	[([¬®],¬®),([¬®],¬®)])];
+store_mt_results mt_runf [
+	("",
+	tac_solve ,
+	([],¬®),
+	true),
+];
+store_mt_results mt_run_fail [("",
+	tac_fail ,
+	([],¬®),
+	gen_fail_msg ""  [])];
+
+store_mt_results mt_run [("",
+	,
+	,
+	)];
+store_mt_results mt_run_fail [("",
+	,
+	,
+	gen_fail_msg ""  [])];
+
