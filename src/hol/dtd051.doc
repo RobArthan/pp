@@ -80,6 +80,8 @@ Typo fixed.
 Changes due to CR0017.
 \item [Issue 1.17 (15th April 1992)]
 Change to $show\_stack\_pcs$, added $delete\_pc\_fields$.
+\item [Issue 1.18 (7th May 1992)]
+Act on CR0009.
 \end{description}
 \subsection{Changes Forecast}
 The designer of this document needs to know which functions it may
@@ -161,6 +163,7 @@ pc(s) & proof context(s) \\
 rw & rewriting \\
 cs & constant specification \\
 $¶$ & existential theorem prover \\
+pr & $prove\_tac$ and related tools\\
 sg & goal stripping \\
 st & theorem stripping \\
 cd & clausal definition \\
@@ -297,12 +300,13 @@ committed contexts are evaluated at the point of commital
 by the evaluation functions current at the time of commital
 (saving the cost of multiple evaluations upon multiple pushes).
 \subsection{Summary of Tools Supported and Provided}
-Three tools have context-sensitive  behaviour supported
+Four sets of tools have context-sensitive  behaviour supported
 by proof contexts:
 =GFT
 rewrite_tac and its cousins
 strip_tac and its cousins
 prove_¶_conv and its users
+prove_tac, prove_conv, prove_rule 
 =TEX
 
 The user data tools are:
@@ -314,6 +318,8 @@ set_sg_eqn_cxt		get_sg_eqn_cxt		add_sg_thms
 set_cs_¶_convs		get_cs_¶_convs
 set_¶_cd_thms		get_¶_cd_thms		add_¶_cd_thms
 set_¶_vs_thms		get_¶_vs_thms
+set_pr_tac		get_pr_tac
+set_pr_conv		get_pr_conv
 =TEX
 In naming the interface functions we use the convention:
 =GFT
@@ -322,6 +328,7 @@ In naming the interface functions we use the convention:
 The proof tools in the above are: $rw$ for rewriting,
 $st$ for stripping theorems, $sg$ for stripping goals,
 $cs$ for constant specifications,
+$pr$ for $prove\_tac$ and cousins,
 and $¶$ for the existence prover $prove\-\_¶\-\_conv$.
 $set$ and $get$ functions overwrite or access the database respectively.
 $add$ functions add unprocessed theorems
@@ -336,6 +343,9 @@ icl'set_eval_ad_sg_conv		current_ad_sg_conv
 icl'set_eval_ad_cs_¶_conv		current_ad_cs_¶_conv
 icl'set_eval_ad_¶_cd_thms		current_ad_¶_cd_thms
 icl'set_eval_ad_¶_vs_thms		current_ad_¶_vs_thms
+icl'set_eval_ad_pr_tac		current_ad_pr_tac
+icl'set_eval_ad_pr_conv		current_ad_pr_conv
+
 =TEX
 In naming the applications data interface functions we use the convention:
 =GFT
@@ -347,7 +357,7 @@ $cs$ for constant specifications,
 and $¶$ for the existence prover $prove\-\_¶\-\_conv$.
 $icl'set\_eval$
 sets the method of evaluating the associated user data into application data,
-and $current$ gives the current proof context's application data.
+and $current$ gives the current proof context's application data, if it is in scope, and otherwise error 51021.
 
 Note that an application data field in an uncommitted proof context could be directly modified, to $v$ say,
 by setting its evaluation function to 
@@ -435,6 +445,8 @@ subfields with duplicate keys,
 and if a field is not divided into subfields, then the proof contexts fields are appended, discarding duplicates.
 The head of the list of proof contexts to merge into $tokey$
 will be merged in last.
+The $pr\_conv$ and $pr\_tac$ fields will take the value of the
+last of the list of proof contexts, rather than being a merge.
 
 Failure to extract any proof context for merging will result in the
 proof context $tokey$ being unchanged.
@@ -458,6 +470,8 @@ subfields with duplicate keys,
 and if a field is not divided into subfields, then the proof contexts fields are appended, discarding duplicates.
 The head of the list of proof contexts to merge into $tokey$
 will be merged in last.
+The $pr\_conv$ and $pr\_tac$ fields will take the value of the
+last of the list of proof contexts, rather than being a merge.
 
 Failure to extract any proof context for merging will result in the
 proof context $tokey$ being unchanged.
@@ -465,7 +479,7 @@ proof context $tokey$ being unchanged.
 Valid field names are:
 =GFT
 "rw_eqn_cxt","rw_canons","st_eqn_cxt","sg_eqn_cxt",
-"cs_¶_convs","¶_cd_thms","¶_vs_thms"
+"cs_¶_convs","¶_cd_thms","¶_vs_thms","pr_tac","pr_conv"
 =TEX
 =SEEALSO
 $delete\_pc\_fields$ and $merge\_pcs$, which used together in a particular order can give the same functionality as this function.
@@ -481,7 +495,8 @@ $delete\_pc\_fields$ and $merge\_pcs$, which used together in a particular order
 val Ûdelete_pc_fieldsÝ : string list -> string -> unit;
 =DESCRIBE
 $delete\_pc\_fields$ $fields$ $key$ 
-empties the named fields, $fields$ of the proof context with key $key$.
+empties 
+(sets to the value of proof context ``initial'') the named fields, $fields$ of the proof context with key $key$.
 If any field is divided into subfields, this deletion includes deleting the subfields of the field gained from
 merging in other proof contexts,
 as well as the proof context's ``own'' subfield.
@@ -489,7 +504,7 @@ as well as the proof context's ``own'' subfield.
 Valid field names are:
 =GFT
 "rw_eqn_cxt","rw_canons","st_eqn_cxt","sg_eqn_cxt",
-"cs_¶_convs","¶_cd_thms","¶_vs_thms"
+"cs_¶_convs","¶_cd_thms","¶_vs_thms","pr_tac","pr_conv"
 =TEX
 =FAILURE
 51010	There is no proof context with key ?0
@@ -529,6 +544,9 @@ The first sets the evaluator, the second extracts the field
 in the current proof context.
 =SEEALSO
 $set\_rw\_eqn\_cxt$ for the associated user data.
+=FAILURE
+51021	The current proof context was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
 =ENDDOC
 =DOC
 val Ûset_rw_canonsÝ : (THM -> THM list) list -> 
@@ -550,14 +568,18 @@ proof context names).
 =DOC
 val Ûicl'set_eval_ad_rw_canonÝ : ((THM -> THM list) list -> (THM -> THM list)) 
 	-> unit;
-val Ûcurrent_ad_rw_canonÝ : unit -> (THM -> THM list);
+val Ûcurrent_ad_rw_canonÝ : unit -> THM -> THM list;
 =DESCRIBE
 These functions provide the interface to the canonicalisation function applied to rewriting theorems (see e.g. $rewrite\_tac$)
 held in the application data of a proof context.
+The proof context is accessed after providing the theorem.
 The first sets the evaluator, the second extracts the field
 in the current proof context.
 =SEEALSO
 $set\_rw\_canons$ for the associated user data.
+=FAILURE
+51021	The current proof context was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
 =ENDDOC
 =DOC
 val Ûset_st_eqn_cxtÝ : EQN_CXT -> string -> unit;
@@ -585,10 +607,14 @@ val Ûcurrent_ad_st_convÝ : unit -> CONV;
 These functions provide the interface to the conversion for stripping theorems into the
 assumption list (see e.g. $strip\_tac$)
 held in the application data of a proof context.
+The proof context is accessed before provision of a term.
 The first sets the evaluator, the second extracts the field
 in the current proof context.
 =SEEALSO
 $set\_st\_conv$ for the associated user data.
+=FAILURE
+51021	The current proof context was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
 =ENDDOC
 =DOC
 val Ûset_sg_eqn_cxtÝ : EQN_CXT -> string -> unit;
@@ -614,6 +640,7 @@ val Ûcurrent_ad_sg_convÝ : unit -> CONV;
 =DESCRIBE
 These functions provide the interface to the conversion for stripping goal conclusions (see e.g. $strip\_tac$)
 held in the application data of a proof context.
+The proof context is accessed before provision of a term.
 The first sets the evaluator, the second extracts the field
 in the current proof context.
 =SEEALSO
@@ -658,12 +685,15 @@ val Ûcurrent_ad_cs_¶_convÝ : unit -> CONV;
 These functions provide the interface to the 
 existence prover for constant specifications (see $const\_spec$)
 held in the application data of a proof context.
+The proof context is accessed before provision of a term.
 The first sets the evaluator, the second extracts the field
 in the current proof context.
 =SEEALSO
 $set\_cs\_¶\_rule$ for the associated user data.
 =FAILURE
 51015	No automated existence prover in the current proof context succeeds
+51021	The current proof context was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
 =ENDDOC
 =DOC
 val Ûset_¶_cd_thmsÝ : THM list -> string -> unit;
@@ -702,6 +732,9 @@ The first sets the evaluator, the second extracts the field
 in the current proof context.
 =SEEALSO
 $set\_¶_cd_thms$ for the associated user data.
+=FAILURE
+51021	The current proof context was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
 =ENDDOC
 =DOC
 val Ûset_¶_vs_thmsÝ : (string * (TERM list * THM)) list
@@ -749,6 +782,91 @@ The first sets the evaluator, the second extracts the field
 in the current proof context.
 =SEEALSO
 $set\_¶\_vs\_thms$ for user data.
+=FAILURE
+51021	The current proof context was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+=ENDDOC
+=DOC
+val Ûset_pr_tacÝ : (THM list -> TACTIC) -> string -> unit;
+val Ûget_pr_tacÝ : string -> (THM list -> TACTIC);
+=DESCRIBE
+These functions provide the interface to the
+proof contexts for
+$prove\_tac$.
+Note that setting overwrites all previous data in this field,
+including from merged in proof contexts,
+and merged proof contexts will take their value for this field from the last proof context merged in.
+
+Note that when using these functions that the standard rewriting functions (obvious candidates for inclusion in
+automatic proof) access the current
+proof context at the point of being given their theorem list
+argument.
+=FAILURE
+51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+51016	Proof context ?0 has been committed
+=ENDDOC
+=DOC
+val Ûicl'set_eval_ad_pr_tacÝ : 
+	((THM list -> TACTIC) -> (THM list -> TACTIC)) -> unit;
+val Ûcurrent_ad_pr_tacÝ : unit -> THM list -> TACTIC;
+=DESCRIBE
+These functions provide the interface to the application data
+to the
+proof contexts for
+$prove\_tac$.
+The first sets the evaluator, the second extracts the field
+in the current proof context.
+The proof context is accessed after providing the list of theorems, but before provision of a goal.
+The evaluator is initially, and likely to remain, the
+identity function.
+=SEEALSO
+$set\_pr\_tac$ for user data.
+=FAILURE
+51021	The current proof context was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+=ENDDOC
+=DOC
+val Ûset_pr_convÝ : (THM list -> CONV) -> string -> unit;
+val Ûget_pr_convÝ : string -> (THM list -> CONV);
+=DESCRIBE
+These functions provide the interface to the
+proof contexts for
+$prove\_conv$.
+Note that setting overwrites all previous data in this field,
+including from merged in proof contexts,
+and merged proof contexts will take their value for this field from the last proof context merged in.
+
+Note that when using these functions that the standard rewriting functions (obvious candidates for inclusion in
+automatic proof) access the current
+proof context at the point of being given their theorem list
+argument.
+=FAILURE
+51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+51016	Proof context ?0 has been committed
+=ENDDOC
+=DOC
+val Ûicl'set_eval_ad_pr_convÝ : 
+	((THM list -> CONV) -> (THM list -> CONV)) -> unit;
+val Ûcurrent_ad_pr_convÝ : unit -> THM list -> CONV;
+=DESCRIBE
+These functions provide the interface to the application data
+to the
+proof contexts for
+$prove\_conv$.
+The first sets the evaluator, the second extracts the field
+in the current proof context.
+The proof context is accessed after providing the list of theorems, but before provision of a term.
+The evaluator is initially, and likely to remain, the
+identity function.
+=SEEALSO
+$set\_pr\_conv$ for user data.
+=FAILURE
+51021	The current proof context was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
 =ENDDOC
 =TEX
 \subsection{Proof Context Stack Functions}
@@ -824,6 +942,8 @@ and sets the proof context of the system to the merge of the proof
 contexts with the given keys.
 Merged proof contexts upon the stack will have $current\-\_ad\-\_names$ giving the list of names of the constituent proof contexts, singleton contexts will have singleton lists.
 The proof contexts used need not have been committed.
+Note that the $pr\_conv$ and $pr\_tac$ fields will take the value of the
+last of the list of proof contexts, rather than being a merge.
 
 The current proof context is accessed by the functions prefixed $current\_ad\_$, and by $show\-\_current\-\_pc$.
 =SEEALSO
@@ -852,6 +972,247 @@ This is the ``empty'' proof context, formed with empty lists.
 It thus has no default rewriting or stripping theorems,
 no default rewriting canonicalisation, and its automated existence
 prover fails on any input.
+=ENDDOC
+\section{USING THE PROOF CONTEXTS}
+=DOC
+val ÛPC_TÝ : string -> TACTIC -> TACTIC;
+=DESCRIBE
+=INLINEFT
+PC_T context tac
+=TEX
+will execute tactic $tac$ in the proof context with key $context$,
+setting the context at the point of applying the tactic to a goal.
+
+Note that when using this functions that the standard rewriting functions (obvious candidates for this function) access the current
+proof context at the point of being given their theorem list
+argument: see $PC\_T1$ for a method of avoiding this.
+=FAILURE
+51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+=FAILUREC
+and as the errors of the tactic.
+=ENDDOC
+=DOC
+val ÛPC_CÝ : string -> CONV -> CONV;
+=DESCRIBE
+=INLINEFT
+PC_C context conv
+=TEX
+will execute conversion $conv$ in the proof context with key $context$,
+setting the context at the point of applying the conversion to a term.
+
+Note that when using this functions that the standard rewriting functions (obvious candidates for this function) access the current
+proof context at the point of being given their theorem list
+argument: see $PC\_C1$ for a method of avoiding this.
+=FAILURE
+51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+=FAILUREC
+and as the errors of the conversion.
+=ENDDOC
+=DOC
+val Ûpc_ruleÝ : string -> ('a -> THM) -> ('a -> THM);
+=DESCRIBE
+=INLINEFT
+pc_rule context rule
+=TEX
+will execute rule $rule$ in the proof context with key $context$,
+setting the context at the point of applying the rule to argument.
+
+Note that when using this functions that the standard rewriting functions (obvious candidates for this function) access the current
+proof context at the point of being given their theorem list
+argument: see $pc\_rule1$ for a method of avoiding this.
+=FAILURE
+51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+=FAILUREC
+and as the errors of the rule.
+=ENDDOC
+=DOC
+val ÛPC_T1Ý : string -> (THM list -> TACTIC) -> THM list -> TACTIC;
+=DESCRIBE
+=INLINEFT
+PC_T1 context tac thms
+=TEX
+will apply tactic $tac$ $thms$ to a goal in the proof context with key $context$,
+setting the context at the point of applying the tactic to a goal.
+=SEEALSO
+$PC\_T$
+=FAILURE
+51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+=FAILUREC
+and as the errors of the tactic.
+=ENDDOC
+=DOC
+val ÛPC_C1Ý : string -> (THM list -> CONV) -> THM list -> CONV;
+=DESCRIBE
+=INLINEFT
+PC_C context conv thms
+=TEX
+will execute conversion $conv$ $thms$ in the proof context with key $context$,
+setting the context at the point of applying the conversion to a term.
+=SEEALSO
+$PC\_C$
+=FAILURE
+51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+=FAILUREC
+and as the errors of the conversion.
+=ENDDOC
+=DOC
+val Ûpc_rule1Ý : string -> (THM list -> 'a -> THM) -> THM list -> 'a -> THM;
+=DESCRIBE
+=INLINEFT
+pc_rule context rule thms
+=TEX
+will execute rule $rule$ $thms$ in the proof context with key $context$,
+setting the context at the point of applying the rule to argument.
+=SEEALSO
+$pc\_rule$
+=FAILURE
+51010	There is no proof context with key ?0
+51014	Proof context ?0 was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+=FAILUREC
+and as the errors of the rule.
+=ENDDOC
+=DOC
+val Ûprove_tacÝ : THM list -> TACTIC;
+=DESCRIBE
+At the point of applying this tactic to a goal it will
+access the current setting of proof context field $pr\_tac$,
+apply it to the theorem list, and then to the goal.
+=FRULE 2 Tactic
+prove_tac
+thms
+÷
+{ ‡ } t
+÷
+current_ad_pr_tac () thms ({ ‡ }, t)
+=TEX
+=FAILURE
+51021	The current proof context was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+=FAILUREC
+and as the proof context setting.
+=ENDDOC
+=DOC
+val Ûprove_convÝ : THM list -> CONV;
+=DESCRIBE
+At the point of applying this conversion to a term it will
+access the current setting of proof context field $pr\_conv$,
+apply it to the theorem list, and then to the term.
+
+The resulting theorem is not checked as having its L.H.S.
+being the input term.
+=FRULE 1 Conversion
+prove_conv
+thms ¬t®
+÷
+÷
+current_ad_pr_conv () thms ¬t®
+=TEX
+=FAILURE
+51021	The current proof context was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+=FAILUREC
+and as the proof context setting.
+=ENDDOC
+=DOC
+val Ûprove_ruleÝ : THM list -> TERM -> THM;
+=DESCRIBE
+At the point of applying this rule to a term $term$ it will
+access the current setting of proof context field $pr\_conv$,
+apply it to the theorem list, and then to the term,
+and then, if the resulting theorem is $`ô term'\ ¤\ T`$
+(with no assumptions) where $term$ is $Á$-convertible to $term'$, then
+apply $¤\_t\_elim$, and otherwise fail.
+=FRULE 1 Rule
+prove_rule
+thms ¬tm®
+÷
+÷
+ô tm
+=TEX
+=FAILURE
+51021	The current proof context was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+51022	Result of applying conversion to ?1, which was ?0, 
+	not of form: `ô ?1 ¤ T`
+=FAILUREC
+and as the proof context setting.
+=ENDDOC
+=DOC
+val Ûprove_¶_tacÝ : TACTIC;
+=DESCRIBE
+At the point of applying this tactic to a goal it will
+access the current setting of proof context field $prove\_¶$,
+apply it to the goal using $conv\_tac$.
+=FRULE 2 Tactic
+prove_¶_tac
+thms
+÷
+{ ‡ } t
+÷
+conv_tac (current_ad_cs_¶_conv ()) ({ ‡ }, t)
+=TEX
+=FAILURE
+51021	The current proof context was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+=FAILUREC
+and as the proof context setting.
+=ENDDOC
+=DOC
+val Ûprove_¶_convÝ : CONV;
+=DESCRIBE
+At the point of applying this conversion to a term it will
+access the current setting of proof context field $cs\_¶\_conv$,
+apply it to the theorem list, and then to the term.
+
+The resulting theorem is not checked as having its L.H.S.
+being the input term.
+=FRULE 1 Conversion
+prove_¶_conv
+¬t®
+÷
+÷
+current_ad_cs_¶_conv () ¬t®
+=TEX
+=FAILURE
+51021	The current proof context was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+=FAILUREC
+and as the proof context setting.
+=ENDDOC
+=DOC
+val Ûprove_¶_ruleÝ : TERM -> THM;
+=DESCRIBE
+At the point of applying this rule to a term $term$ it will
+access the current setting of proof context field $cs\_¶\_conv$,
+apply it to the term,
+and then, if the resulting theorem is $`ô term'\ ¤\ T`$
+(with no assumptions) where $term$ is $Á$-convertible to $term'$, then
+apply $¤\_t\_elim$, and otherwise fail.
+=FRULE 1 Rule
+prove_¶_rule
+¬tm®
+÷
+÷
+ô tm
+=TEX
+=FAILURE
+51021	The current proof context was created in theory ?1 at a 
+	point now either not in scope, deleted or modified
+51022	Result of applying conversion to ?0, which was ?1, 
+	not of form: `ô input ¤ T`
+=FAILUREC
+and as the proof context setting.
 =ENDDOC
 \section{END OF THE SIGNATURE}
 =SML
