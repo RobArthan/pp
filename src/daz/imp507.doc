@@ -60,8 +60,8 @@
 \subsection{Changes History}  % to get section number `0.3'
 \begin{description}
 
-\item[Issue \SCCSversion, \FormatDate{94/06/10%
-} ] Initial Draft.
+\item[Issues 1.1-1.55 ] Initial Drafts.
+\item[Issues 1.56] First cut with code for auxiliary variables in the environments.
 
 \end{description}
 \subsection{Changes Forecast}
@@ -1362,10 +1362,23 @@ This happens when declarations are translated for output to the Z document and w
 in the first case, the $CN\_ENV$ value required is taken from the running environment, in the second from the $In\_Scope$ part of the $Speclab$ which is the first part of the arguments to $vcs$.
 In either case, Z global variables are sought from the theory data base if there is no local declaration for them.
 
-\subsection{\ldots for declarations}
-$get\_tmark\_from\_inscope$ searches an $IN\_SCOPE$ value for the type mark associated with a variable or parameter name:
+=TEX
+We will need to be able to convert a type mark into an HOL type.
+This is done by looking in the theory database.
+The type there for a type $\tau$ will be $ð\tau$.
+We must strip off the ð.
 =SML
-fun Ûget_tmark_from_inscopeÝ (n : Z_ID) (inscope : IN_SCOPE) : TMARK OPT = (
+fun Ûtype_of_tmarkÝ (tmark : TMARK) : TYPE OPT = (
+	(case (get_const_type (z_id_of_id tmark)) of
+		Value ty => (Value (dest_z_power_type ty))
+	|	Nil => Nil)
+	handle Fail _ => Nil
+);
+=TEX
+$get\_tmark\_from\_inscope$ searches an $IN\_SCOPE$ value for the type mark associated with a variable or parameter name, or the type associated with an auxiliary variable:
+=SML
+fun Ûget_tmark_from_inscopeÝ (n : Z_ID) (inscope : IN_SCOPE)
+	: (TYPE OPT * ENV_INFO) OPT = (
 	let	fun do_vars [] = Nil
 		|   do_vars ({vars, tmark} :: more) = (
 			if	n mem vars
@@ -1378,35 +1391,36 @@ fun Ûget_tmark_from_inscopeÝ (n : Z_ID) (inscope : IN_SCOPE) : TMARK OPT = (
 			then	Value tmark
 			else	do_pars more
 		);
+		fun do_aux_vars [] = Nil
+		|  do_aux_vars (decl :: more) = (
+			case s_lookup n (map dest_var (frees decl)) of
+				Nil => do_aux_vars more
+			|	v as Value _ => v
+		);
 	in	case do_vars (#vc_vars inscope) of
-			Nil		=> do_pars (#vc_pars inscope)
-		|	value_tmark	=> value_tmark
+			Value tmk	=> Value(type_of_tmark tmk, EIEnvVar tmk)
+		|	Nil		=> (
+		case do_pars (#vc_pars inscope) of
+			Value tmk	=> Value(type_of_tmark tmk, EIEnvVar tmk)
+		|	Nil		=> (
+		case do_aux_vars (#vc_aux_vars inscope) of
+			Value ty	=> Value(Value ty, EIEnvAuxVar)
+		|	Nil		=> Nil
+		))
 	end
 );
 =TEX
 Now $get\_tmark\_from\_env$, which searches the running environment using the previous function to look for the required type mark.
 =SML
-fun Ûget_tmark_from_envÝ (_ : Z_ID) ([] : ENV) : TMARK OPT = (
+fun Ûget_tmark_from_envÝ (_ : Z_ID) ([] : ENV) : (TYPE OPT * ENV_INFO) OPT = (
 	Nil
-) | Ûget_tmark_from_envÝ (n : Z_ID) (block :: more) : TMARK OPT = (
+) | Ûget_tmark_from_envÝ n (block :: more) = (
 	case get_tmark_from_inscope n (#in_scope (#declab block)) of
 			Nil		=> get_tmark_from_env n more
-		|	value_tmark	=> value_tmark
+		|	v as Value _	=> v
 );
 =TEX
-Now, if we find a type mark, we need to convert it to an HOL type.
-This is done by looking in the theory database.
-The type there for a type $\tau$ will be $ð\tau$.
-We must strip off the ð.
-=SML
-fun Ûtype_of_tmarkÝ (tmark : TMARK) : TYPE OPT = (
-	(case (get_const_type (z_id_of_id tmark)) of
-		Value ty => (Value (dest_z_power_type ty))
-	|	Nil => Nil)
-	handle Fail _ => Nil
-);
-=TEX
-If we don't find a type mark, then the only possibility is that the name is that of a SPARK function, constant or type stored as a global variable in the theory database.
+If we don't find anything in the running environment, then the only remaining possibility is that the name is that of a SPARK function, constant or type stored as a global variable in the theory database.
 In this case the stored type is correct as it stands (no ð to take away).
 =SML
 fun Ûtype_of_g_varÝ (zn : Z_ID) : TYPE OPT = (
@@ -1423,8 +1437,6 @@ if it's not a function but is a type name, we dismantle the type: if its a set o
 if it's neither a function nor a type name, its an `other'.
 
 
-(TBS - Pending updates to the rest of the code, we forge the constructor
-for `other types').
 =SML
 fun Ûenv_info_of_g_varÝ (zn : ID) (ty : TYPE) = (
 	case get_par_names zn of
@@ -1439,13 +1451,12 @@ fun Ûenv_info_of_g_varÝ (zn : ID) (ty : TYPE) = (
 	)
 );
 =TEX
+The following treats the (anomalous?, impossible?) case where it has not been possible to convert the type mark for a name found in the environment into a type as if the name were not declared. 
 =SML
 fun Ûcurrent_cn_envÝ (n : ID) : (TYPE * ENV_INFO) OPT = (
 	case get_tmark_from_env n (!blocks) of
-		Value tmark => (
-			case type_of_tmark tmark of
-				Value ty => Value (ty, EIEnvVar tmark)
-			|	Nil => Nil
+		Value (Value ty, ei) => ( Value (ty, ei)
+	) |	Value (Nil, _) => (Nil
 	) | 	Nil => (
 			case type_of_g_var (z_id_of_id n) of
 				Value ty => Value(env_info_of_g_var n ty)
@@ -1453,17 +1464,13 @@ fun Ûcurrent_cn_envÝ (n : ID) : (TYPE * ENV_INFO) OPT = (
 	)
 );
 =TEX
-\subsection{\ldots for VC generation}
 =SML
 fun Ûcn_env_of_in_scopeÝ (in_scope : IN_SCOPE) (n : Z_ID)
 	: (TYPE * ENV_INFO) OPT = (
 	case get_tmark_from_inscope n in_scope of
-		Value tmark => (
-			case type_of_tmark tmark of
-				Value ty => Value (ty, EIEnvVar tmark)
-			|	Nil => Nil
-		)
-	|	Nil => (
+		Value (Value ty, ei) => ( Value (ty, ei)
+	) |	Value (Nil, _) => (Nil
+	) |	Nil => (
 			case type_of_g_var (z_id_of_id n) of
 				Value ty => Value(env_info_of_g_var n ty)
 			|	Nil => Nil
