@@ -1,0 +1,305 @@
+=TEX
+\documentstyle[hol,11pt,TQ]{article}
+\ftlinepenalty=9999
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+\TPPtitle{Release 1 ICL HOL: Implementation for Nets}  %% Mandatory field
+\def\TPPheadtitle{Release 1 ICL HOL \cr Implementation for Nets}
+\TPPref{DS/FMU/IED/DTD008}  %% Mandatory field
+\def\SCCSversion{$Revision$
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$ %
+}}  %% Mandatory field
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{SML Literate Script}
+\TPPkeywords{}
+\TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.D.Arthan & FST Team Leader}
+\TPPabstract{This document gives a detailed design for the net tools in ICL HOL.
+These allow the rapid selection of a subset of values, based
+on a term's form.}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	    Project Library
+}}
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+\begin{document}
+\makeTPPfrontpage
+\vfill
+\begin{centering}
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+\end{centering}
+\pagebreak
+\section{Document control}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history}
+\begin{description}
+\item [Issue 1.1]
+First version.
+\end{description}
+\subsection{Changes forecast}
+None.
+\section{GENERAL}
+\subsection{Scope}
+This document contains an implementation of nets.
+These are required to implement efficient rewriting, but may have
+other applications as well.
+The design is in \cite{DS/FMU/IED/DTD008}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains an implementation for the 
+net tools in Release 001 of ICL HOL.
+These tools are concerned with the rapid choice of 
+a subset of a set of values based on a terms structure.
+They will be used in implementing efficient rewriting utilities,
+by selecting various rewriting conversions, based on
+the term to which the conversion will be applied.
+They will also be applicable anywhere else that efficient choice of functions based on terms is useful.
+
+\subsubsection{Dependencies}
+Loading this document is dependent on those
+files indicated as preceding it in the ICL HOL release 001 makefile.
+\subsubsection{Algorithms}
+The tools have been derived from the
+Cambridge HOL code by reverse engineering. The reference
+given there for the algorithm is the book `Artificial Intelligence
+Programming' by Charniak, Riesbeck and McDermott.
+
+\subsubsection{Deficiencies}
+
+\subsubsection{Possible Enhancements}
+The entry in a $MkNet$'s list for $TCvar$ is always going to be looked for it the list is looked at at all.
+This suggests either a merged search, or a specific ``slot'' for
+its value, if present.
+
+The ordering of values given by $lookup$ has only one specified constraint, upon values with the same index term.
+Additional specified ordering could be gained by extra processing, should that be required.
+\section{THE NET TOOLS}
+=SML
+structure âNetToolsá : NetTools = struct
+=TEX
+The algorithms below exploit the permission to err by
+ignoring types and variable structure. If one
+does this a term corresponds to a rather simple tree
+in which all internal nodes have either one or two
+children (corresponding to abstractions and combinations
+respectively). We may think of these trees as having
+nodes labelled by values of the following type $TERM\_CLASS$.
+=SML
+datatype âTERM_CLASSá = âTCvará | âTCconstá of string | âTCcombá | âTCabsá;
+=TEX
+The function $classify$ gives the $TERM\_CLASS$
+corresponding to a destroyed term.
+=SML
+fun âclassifyá ((Comb _): DEST_TERM) : TERM_CLASS = TCcomb 
+| classify (Const (n,t)) = TCconst n
+| classify (Var _) = TCvar
+| classify (Abs _) = TCabs;
+=TEX
+Nets will have the following type.  A net is an $n$-ary
+tree with edges labelled by values of type
+$TERM\_CLASS$ and with leaves (tips) labelled with lists
+of values of type $'a$. We will arrange things so that
+for each internal node the labels on the edges leading
+from that node are pairwise distinct (i.e. thinking
+of this type as a disjoint union, the first summand
+can be thought of as a partial function from $TERM\_CLASS$
+to $'a\,NET$).
+=SML
+datatype 'a âNETá = âMkNetá of (TERM_CLASS * 'a NET) list | 
+	âMkTipá of ('a list);
+=TEX
+We take as the empty net the tree with an internal node
+and no edges (rather than the tree with one tip labelled
+with an empty list).
+=SML
+val âemptyá : 'a NET = MkNet [];
+=TEX
+Given an edge label and an internal node of a net
+$get\_edge$ returns the subtree hanging from the edge
+with that label. There will be at most one such edge
+given the above remarks on our use of the net data type.
+If there is no such edge the empty net is returned.
+The function should never be applied to a tip of a net.
+=SML
+fun âget_edgeá class (MkNet clnets) = (
+	case lassoc5 clnets class of
+		Value net => net
+	|	Nil => empty
+) | get_edge _ (MkTip _) = error "NetTools" 8001 [];
+=TEX
+Given a leaf, $get\_tips$ returns its label,
+given an internal node it returns empty.
+In the use of this function in $update$ below,
+the latter situation arises when the first entry
+with a particular index term is made, the former
+if subsequent entries with that same index (modulo
+types and variable structure) are made.  
+=SML
+fun âget_tipsá (MkTip tips) = tips
+|   get_tips (MkNet _) = [];
+=TEX
+Given a term and a net, the function
+$follow$ below returns a list
+of nets. The concatenation of the labels of the tips
+in this list is the list of entries in the net with
+index terms which match the given term.
+
+To understand the algorithm it may be helpful to
+invent some terminology. Let us say that the {\em primary
+list} of a term is the list of values of type
+$TERM\_CLASS$ we encounter by recursively applying
+$classify$ to the sub-terms of the term ignoring
+the operators of combinations. Let us say that the
+{\em secondary list} is the list of terms which we
+ignored when we constructed the primary list taken
+in the reverse of the order in which we encountered them.
+Thus, for example, ``$xŽf(g\,x)$'' has primary list
+$[TCabs$, $TCcomb$, $TCcomb$, $TCvar]$ and secondary list
+$[$``$g$'', ``$f$''].
+
+In essence,
+the idea is that $follow$ steers a path through
+the net guided by the primary list of the term and
+finds a new net at the end of this path.
+If the secondary list is empty, then the tips of
+the new net are the values we want.
+If not then the process is repeated, essentially
+using the first element of the secondary list and the
+new net as arguments for a recursive call of $follow$
+to produce another net to be used as an argument to
+another recursive call of $follow$  together with
+the second element of the secondary list, if any.
+
+The actual coding of $follow$ is more straightforward,
+or at least shorter,
+than the above description might suggest.
+Since we are looking for entries whose indexing terms
+match the argument up to variable instantiation,
+$follow$ actually returns a list of nets.
+We also use $dest\_TERM$ to directly classify terms and get the
+sub-components of interest, rather than using $classify$.
+
+By our positioning of $varnet$ we will return values matching structures befores values matching variables at any particular level.
+This is not noted in the specification of nets, as the precise rules for ordering are not simple, and it seems inappropriate to rely on them. 
+This way round pays a small extra cost over matching variables first, and then structures, and could be reversed.
+
+The following could be perhaps speeded up by merging the search for $TCvar$ and the actual term structure constructor.
+=SML
+fun âis_emptyá ((MkNet []):'a NET) : bool = true
+|   is_empty _ = false;
+=SML
+fun âfollowá (tm: TERM) (net: 'a NET) : ('a NET) list = (
+	let	val varnet = get_edge TCvar net;
+		val othernets = (
+		case (dest_TERM tm) of
+			Var _ => [varnet]
+		|	Const(n, _) => [get_edge (TCconst n) net, varnet]
+		|	Abs(_, body) => (
+			follow body (get_edge TCabs net) @ [varnet]
+		) |	Comb(rand, rator) => (
+			flat(map(follow rand)(follow rator (get_edge TCcomb net))) @ [varnet]
+			));
+	in	othernets drop is_empty
+	end
+);
+=TEX
+=IGN
+The following gives an alternative to the above, which gives 
+variable matches first:
+fun âfollowá (tm: TERM) (net: 'a NET) : ('a NET) list = (
+	let	val varnet = get_edge TCvar net;
+		val othernets = (
+		case (dest_TERM tm) of
+			Var _ => nil
+		|	Const(n, _) => [get_edge (TCconst n) net]
+		|	Abs(_, body) => follow body (get_edge TCabs net)
+		|	Comb(rand, rator) => flat(map(follow rand)(follow rator (get_edge TCcomb net)))
+			);
+	in	(varnet :: othernets) drop is_empty
+	end
+);
+=TEX
+The remaining problem is that of constructing nets in
+such a way that $follow$ will have the desired effect.
+The function $update$ is used to add an entry to a net.
+Its algorithm is perhaps best understood by considering
+the ideas of the primary and secondary lists of a term
+discussed above. The parameter $deferred$ of update
+is used to remember successive entries of the secondary
+list as combinations are encountered, during a process which
+can be thought of as setting up a net which can be used
+to map the primary list of a term to a net which can be
+used to map the secondary list of the term to the desired
+value ($elem:\ 'a$). The latter net is built by the recursive
+call of $update$ in $exec\_deferred$ made when the end of
+the primary list has been encountered.
+
+Note that given our representation for an empty net
+$update$ is never required to make an entry in a net
+of the form $MkTip\,X$.
+
+By the first clause of $exec\_deferred$ the value associated with last entered instance of a pattern will be returned first.
+This is according to specification.
+=SML
+fun âupdateá (elem:'a) (deferred: TERM list) (tm: TERM) 
+		((net as (MkNet clnets)):'a NET) : 'a NET= (
+	let
+		fun exec_deferred deferred net = (
+			case deferred of
+				[] => MkTip(elem :: get_tips net)
+			|	(h :: t) => (update elem t h net)
+		);
+	val dtm = dest_TERM tm;
+	val class = classify dtm;
+	val child = get_edge class net;
+	val newchild = (
+		case dtm of
+			Var _ => exec_deferred deferred child
+		|	Const _ => exec_deferred deferred child
+		|	Comb(rand, rator) => update elem (rand :: deferred) rator child
+		|	Abs (_, body) => update elem deferred body child)
+	in	MkNet(clnets overwrite (class, newchild))
+	end
+) | update _ _ _ (MkTip _) = error "NetTools" 8002 [];
+=TEX
+The remaining external interfaces to this structure are now
+easily defined in terms of $follow$ and $update$.
+
+$enter$ simply applies $update$ with the an empty second
+argument.
+=SML
+fun âenterá ((tm, elem): TERM * 'a) (net: 'a NET) : 'a NET = update elem [] tm net;
+=TEX
+$lookup$ applies $follow$ then concatenates the labels
+on any tips (got by $get\_tips$) which appear in the resulting list of nets. 
+=SML
+fun âlookupá (net: 'a NET) (tm: TERM) : 'a list = (
+	flat(map get_tips (follow tm net))
+);
+=TEX
+\section{END OF THE STRUCTURE}
+=SML
+end; (* structure of NetTools *)
+=TEX
+\section{TEST POLICY}
+The functions in this document should be tested as described in
+\cite{DS/FMU/IED/PLN008}.
+
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
