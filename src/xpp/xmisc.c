@@ -209,7 +209,7 @@ void number_verify_cb(
 	int i, j;
 	char *p = cbs->text->ptr; /* Not modified later */
 	for(i = 0; i < cbs->text->length; ++i) {
-		if(!isdigit(p[i])) {
+		if((p[i] & 0x80) || !isdigit(p[i] & 0x7f)) {
 			for(j = i; j < cbs->text->length; ++j) {
 				p[j] = p[j+1];
 				--cbs->text->length;
