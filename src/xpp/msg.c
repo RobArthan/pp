@@ -24,7 +24,7 @@
 
 #define MSG_LINE_LEN 40
 #define HELP_LINE_LEN 60
-#define HELP_SCREEN_HEIGHT 32
+#define HELP_SCREEN_HEIGHT 24
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Private functions:
@@ -351,7 +351,7 @@ char *file_dialog(Widget w, char *opn)
 {
 	static Widget dialog;
 	XmString ok, title;
-	void file_sel_cb();
+	void file_sel_cb(), file_help_cb();
 	static NAT reply;
 	/* 0 = not replied; */
 
@@ -363,6 +363,7 @@ char *file_dialog(Widget w, char *opn)
 				NULL, 0);
 		XtAddCallback(dialog, XmNokCallback, file_sel_cb, &reply);
 		XtAddCallback(dialog, XmNcancelCallback, file_sel_cb, &reply);
+		XtAddCallback(dialog, XmNhelpCallback, file_help_cb, NULL);
 
 		title = XmStringCreateSimple("Select A File");
 
@@ -424,3 +425,11 @@ void file_sel_cb(
 			break;
 	}
 }
+void file_help_cb(
+	Widget w,
+	XtPointer *cbd,
+	XmFileSelectionBoxCallbackStruct *cbs)
+{
+	help_dialog(w, Help_File_Selection_Box);
+}
+

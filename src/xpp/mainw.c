@@ -247,21 +247,27 @@ static MenuItem cmd_menu_items[] = {
     NULL,
 };
 
-#define	HELP_MENU_GENERAL		0
-#define	HELP_MENU_FILE_MENU		1
-#define	HELP_MENU_TOOLS_MENU		2
-#define	HELP_MENU_EDIT_MENU		3
-#define	HELP_MENU_COMMAND_MENU	4
+#define	HELP_MENU_ABOUT_XPP		0
+#define	HELP_MENU_USING_HELP		1
+#define	HELP_MENU_TUTORIAL		2
+#define	HELP_MENU_FILE_MENU		3
+#define	HELP_MENU_TOOLS_MENU		4
+#define	HELP_MENU_EDIT_MENU		5
+#define	HELP_MENU_COMMAND_MENU	6
 static MenuItem help_menu_items[] = {
-    { "General", &xmPushButtonGadgetClass, 'G', NULL, NULL,
-        help_menu_cb, (XtPointer)HELP_MENU_GENERAL, (MenuItem *)NULL, False },
-    { "File", &xmPushButtonGadgetClass, 'F', NULL, NULL,
+    { "About Xpp", &xmPushButtonGadgetClass, 'A', NULL, NULL,
+        help_menu_cb, (XtPointer)HELP_MENU_ABOUT_XPP, (MenuItem *)NULL, False },
+    { "Using Help", &xmPushButtonGadgetClass, 'H', NULL, NULL,
+        help_menu_cb, (XtPointer)HELP_MENU_USING_HELP, (MenuItem *)NULL, False },
+    { "Tutorial", &xmPushButtonGadgetClass, 'u', NULL, NULL,
+        help_menu_cb, (XtPointer)HELP_MENU_TUTORIAL, (MenuItem *)NULL, False },
+    { "File Menu", &xmPushButtonGadgetClass, 'F', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_FILE_MENU, (MenuItem *)NULL, False },
-    { "Tools", &xmPushButtonGadgetClass, 'T', NULL, NULL,
+    { "Tools Menu", &xmPushButtonGadgetClass, 'T', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_TOOLS_MENU, (MenuItem *)NULL, False },
-    { "Edit", &xmPushButtonGadgetClass, 'E', NULL, NULL,
+    { "Edit Menu", &xmPushButtonGadgetClass, 'E', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_EDIT_MENU, (MenuItem *)NULL, False },
-    { "Command", &xmPushButtonGadgetClass, 'C', NULL, NULL,
+    { "Command Menu", &xmPushButtonGadgetClass, 'C', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_COMMAND_MENU, (MenuItem *)NULL, False },
     NULL,
 };
@@ -814,8 +820,14 @@ NAT i;
 XmAnyCallbackStruct *cbs;
 {
 	switch(i) {
-	case HELP_MENU_GENERAL:
-		help_dialog(w, Help_General_Help);
+	case HELP_MENU_ABOUT_XPP:
+		help_dialog(w, Help_About_Xpp);
+		break;
+	case HELP_MENU_USING_HELP:
+		help_dialog(w, Help_Using_Help);
+		break;
+	case HELP_MENU_TUTORIAL:
+		help_dialog(w, Help_Tutorial);
 		break;
 	case HELP_MENU_FILE_MENU:
 		help_dialog(w, Help_File_Menu);
