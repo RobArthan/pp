@@ -429,6 +429,7 @@ The following reference variable keeps a note of the last unlabelled kslot or sp
 
 =SML
 val €unlabelled_stack› : string OPT ref = ref Nil;
+val €unlabelled_provisional› : string OPT ref = ref Nil;
 val €unlabelled_counter› : int ref = ref 1;
 =TEX
 =SML
@@ -436,18 +437,40 @@ fun €initialise_unlabelled_counter› (() : unit) : unit = (
 	unlabelled_counter := 1
 );
 =TEX
+When we encounter a k-slot or a specification statement whith no label on the rhs, we give it a provisional label. The check that there is no outstanding unlabelled k-slot or specification statement happens later, at which point if all is OK, the provisional label becomes the actual label for expansion.
 =SML
 fun €push_label› (() : unit) : string = (
-if !unlabelled_stack = Nil
+if !unlabelled_provisional = Nil
 then
 	let	val label = "(a"^string_of_int (!unlabelled_counter)^")";
-		val side1 = unlabelled_stack := Value label;
-		val side2 = unlabelled_counter := (!unlabelled_counter) + 1;
+		val side = unlabelled_counter := (!unlabelled_counter) + 1;
+		val side = unlabelled_provisional := Value label;
 	in
 		label
 	end
-else
-	parse_error 503001 "there is already an unlabelled, unexpanded k-slot or specification statement in the script"
+else	(
+	unlabelled_provisional := Nil;
+	parse_error 503001
+	"there is already an unlabelled, unexpanded k-slot or specification statement in the script"
+	)
+);
+=TEX
+The following function should be called when a refinement or replaced-by has been parsed. It updates the label stack with a newly generated label. This caters for a specification statement which is unlabelled, and is itself intended to be expanded with an unlabelled expansion.
+
+=SML
+fun €update_unlabelled_stack› (() : unit) : unit = (
+	if !unlabelled_stack <> Nil
+	then	if !unlabelled_provisional <> Nil
+		then	(
+			unlabelled_provisional := Nil;
+			parse_error 503001
+			"there is already an unlabelled, unexpanded slot in the script"
+		)
+		else	()
+	else	(
+		unlabelled_stack := !unlabelled_provisional;
+		unlabelled_provisional := Nil
+	)
 );
 =TEX
 =SML
@@ -475,43 +498,59 @@ fun red_accept (Parsed pp) = (pp
 =TEX
 =SML
 fun red_web_clause1 (Parsed (PPKSlotCUList cul)) = (
+	update_unlabelled_stack();
 	PPWebClause (WCCompilation cul)
 ) | red_web_clause1 _ = stack_error "red_web_clause1";
 
 fun red_web_clause2 (Token ((_, CNText lab), _)) _ (Parsed (PPKSlotCUList cul)) = (
-	PPWebClause (WCReplacedByCompilation {label= lab,comp=cul})
+	update_unlabelled_stack();
+	PPWebClause (WCReplacedByCompilation {label=lab,comp=cul})
 ) | red_web_clause2 _ _ _ = stack_error "red_web_clause2";
 
 fun red_web_clause3 (Token ((_,CNText lab), _)) _ (Parsed (PPDeclarations d)) = (
-	PPWebClause (WCReplacedByPrivatePart {label= lab, private=d})
+	update_unlabelled_stack();
+	PPWebClause (WCReplacedByPrivatePart {label=lab, private=d})
 ) | red_web_clause3 _ _ _ = stack_error "red_web_clause3";
 
 fun red_web_clause4 (Token ((_,CNText lab), _)) _ (Parsed (PPDeclarations d)) = (
-	PPWebClause (WCReplacedByVisiblePart {label= lab, visible=d})
+	update_unlabelled_stack();
+	PPWebClause (WCReplacedByVisiblePart {label=lab, visible=d})
 ) | red_web_clause4 _ _ _ = stack_error "red_web_clause4";
 
 fun red_web_clause5 (Token ((_,CNText lab), _)) _ (Parsed (PPDeclarations d)) = (
-	PPWebClause (WCReplacedByDecl {label= lab, decls=d})
+	update_unlabelled_stack();
+	PPWebClause (WCReplacedByDecl {label=lab, decls=d})
 ) | red_web_clause5 _ _ _ = stack_error "red_web_clause5";
 
 fun red_web_clause6 (Token ((_,CNText lab), _)) _ (Parsed (PPStatement s)) = (
-	PPWebClause (WCReplacedBy {label= lab, statement=s})
+	update_unlabelled_stack();
+	PPWebClause (WCReplacedBy {label=lab, statement=s})
 ) | red_web_clause6 _ _ _ = stack_error "red_web_clause6";
 
 fun red_web_clause7 (Token ((_,CNText lab), _)) _ (Parsed (PPStatement s)) = (
-	PPWebClause (WCRefinedBy {label= lab, statement=s})
+	update_unlabelled_stack();
+	PPWebClause (WCRefinedBy {label=lab, statement=s})
 ) | red_web_clause7 _ _ _ = stack_error "red_web_clause7";
 
 fun red_web_clause8 _ (Parsed (PPStatement s)) = (
-	PPWebClause (WCRefinedBy {label=pop_label(), statement=s})
+let	val lab = pop_label();
+	val side = update_unlabelled_stack();
+in
+	PPWebClause (WCRefinedBy {label=lab, statement=s})
+end
 ) | red_web_clause8 _ _ = stack_error "red_web_clause8";
 
 fun red_web_clause9 (Token ((_,CNText lab), _)) _ (Parsed (PPStatement s)) = (
-	PPWebClause (WCReplacedBy {label= lab, statement=s})
+	update_unlabelled_stack();
+	PPWebClause (WCReplacedBy {label=lab, statement=s})
 ) | red_web_clause9 _ _ _ = stack_error "red_web_clause9";
 
 fun red_web_clause10  _ (Parsed (PPStatement s)) = (
-	PPWebClause (WCReplacedBy {label=pop_label(), statement=s})
+let	val lab = pop_label();
+	val side = update_unlabelled_stack();
+in
+	PPWebClause (WCReplacedBy {label=lab, statement=s})
+end
 ) | red_web_clause10 _ _ = stack_error "red_web_clause10";
 =TEX
 =SML
