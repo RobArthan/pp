@@ -437,7 +437,7 @@ static void search_cb(
 			left,
 			left + len,
 			CurrentTime);
-		XmTextSetTopCharacter(
+		XmTextShowPosition(
 			search_data.text_w,
 			left);
 	} else if (!(*pattern)){
@@ -476,7 +476,7 @@ static void replace_cb(
 			left,
 			left + strlen(replacement),
 			CurrentTime);
-		XmTextSetTopCharacter(
+		XmTextShowPosition(
 			cbdata->text_w,
 			left);
 		XtFree(replacement);
@@ -526,7 +526,7 @@ static void replace_all_cb(
 			XmTextSetInsertionPosition(
 				cbdata->text_w,
 				start_point);
-			XmTextSetTopCharacter(
+			XmTextShowPosition(
 				cbdata->text_w,
 				start_point);
 			XtFree(replacement);
@@ -622,6 +622,8 @@ static void goto_line_no_cb(
 	static void line_no_to_offset();
 	long int left, right;
 	long int line_no = 0;
+	short nrows;
+	int scroll;
 	char *line_no_string;
 
 	line_no_string = XmTextGetString(cbdata->line_no_w);
@@ -643,6 +645,10 @@ static void goto_line_no_cb(
 		ok_dialog(cbdata->shell_w, buf);
 	} else {
 		XmTextSetTopCharacter(cbdata->text_w, left);
+		XtVaGetValues(cbdata->text_w, XmNrows, &nrows, NULL);
+		if(line_no > (scroll = nrows / 2)) {
+			XmTextScroll(cbdata->text_w, -scroll);
+		};		
 		XmTextSetSelection(cbdata->text_w,
 				left, right, CurrentTime);
 	}
