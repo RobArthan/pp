@@ -1,4 +1,4 @@
-% imp020.doc   %Z% $Date$ $Revision$ $RCSfile$
+% imp020.doc   %Z% $Date: 1992/08/20 15:26:45 $ $Revision: 1.22 $ $RCSfile: imp020.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation for ICL HOL Symbol Table}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP020}  %% Mandatory field
-\def\SCCSversion{$Revision$%
+\def\SCCSversion{$Revision: 1.22 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date$%
+\TPPdate{\FormatDate{$Date: 1992/08/20 15:26:45 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -93,10 +93,12 @@ Renamings from version 1.5 of DS/FMU/IED/WRK038.
 \item[Issue 1.20~(\FormatDate{92/07/07
 }) ]
 	Allow multiple languages per constant.
-\item[Issue \SCCSversion~(\FormatDate{$Date$%
+\item[Issue \SCCSversion~(\FormatDate{$Date: 1992/08/20 15:26:45 $%
 }) ]
 	Made languages of new theories be inherited from the parent.
 	Use error code 20501 in $declare_const_language$, was 20502.
+\item[Issue 1.21]
+Fixed {\it undeclare\_alias} and added {\it getz_alias\_info}
 
 \end{description}
 \subsection{Changes Forecast}
@@ -161,7 +163,7 @@ require extensions to dtd012.
 \section{PREAMBLE}
 =SML
 structure SymbolTable : SymbolTable = struct
-open Lex;
+open Lex Antiunify;
 =TEX
 \subsection{Utilities}
 $is\_same\_type\,ty1,\,ty2$ is true iff. $ty1$ and $ty2$ are the same
@@ -169,6 +171,17 @@ type modulo renaming of type variables.
 =SML
 fun Ûis_same_typeÝ (ty1:TYPE) (ty2:TYPE) : bool = (
 	is_type_instance ty1 ty2 andalso is_type_instance ty2 ty1
+);
+=TEX
+In the following, the branch for the empty list is just a placeholder.
+The function should not be called with an empty list argument.
+=SML
+fun Ûlist_antiunifyÝ (tyl: TYPE list) : TYPE = (
+	let	fun aux [] = mk_vartype "'0"
+		|   aux [ty] = ty
+		|   aux (ty::more) = antiunify(ty, aux more);
+	in	aux tyl
+	end
 );
 =TEX
 \section{TYPES}\label{TYPES}
@@ -445,10 +458,10 @@ val cache1 =
 	a
 	(case e_lookup a (!const_info_cache) of
 		Value((ty', alinfs), atys) => (
-			 ((Antiunify.antiunify(ty, ty'), (s, ty) :: alinfs), atys)
+			 ((antiunify(ty, ty'), (s, ty) :: alinfs), atys)
 	) |	Nil => (
 			case get_const_type a of
-				Value ty' => ((Antiunify.antiunify(ty, ty'), [(s, ty), (a, ty')]), [])
+				Value ty' => ((antiunify(ty, ty'), [(s, ty), (a, ty')]), [])
 			|	_ => ((ty, [(s, ty)]), [])
 	))
 	(!const_info_cache);
@@ -468,31 +481,30 @@ val cache2 =
 	end
 );
 =TEX
-The code for uncaching an alias relies on the reloading of alias
-information from the theory database for the name being uncached, as done
-by the call od $recache\_theory$ in $undeclare\_alias$.
-
-Note that the case marked $A$ below can happen (namely when the symbol
-table is tidied up when a constant is deleted).
 =SML
 fun Ûuncache_aliasÝ (thy : string) (a : string, (s:string, ty : TYPE)) : unit = (
 	let
+val cache0 = !const_info_cache;
 val cache1 =
-	case e_lookup a (!const_info_cache) of
-		Value(_, []) => e_delete a (!const_info_cache)
-	|	Value(_, atys) => (
-			case get_const_type a of
-				Value ty => e_enter a
-					((ty , []), atys) (!const_info_cache)
-(* A *)			|	Nil => e_delete a (!const_info_cache)
-	) |	Nil => ( !const_info_cache
+	case e_lookup a cache0 of
+		Value((_, alinfs), atys) => (
+			case alinfs drop
+				(fn(s', ty') => s = s'
+					andalso is_same_type ty ty') of
+				[] => ( e_delete a cache0
+			) |	ctys => (
+				let	val ty' = list_antiunify (map snd ctys);
+				in	e_enter a ((ty', ctys), atys) cache0
+				end
+			)
+	) |	Nil => ( cache0
 	);
 val cache2 =
 	case e_lookup s cache1 of
-		Value((ty', alinfs), atys) => (
+		Value(ty_alinfs, atys) => (
 			e_enter
 			s
-			((ty', alinfs), atys drop 
+			(ty_alinfs, atys drop 
 				(fn(a', ty') => a = a' andalso is_same_type ty ty'))
 			cache1
 	) |	Nil => ( cache1
@@ -597,7 +609,7 @@ fun Ûget_selected_declsÝ (thy : string) (sel : DECL -> bool) : DECL list = (
 	end
 );
 =TEX
-When a declaration is undone, we must adjust the appropriate caches to redo
+When a declaration is undone, we must often adjust the appropriate caches to redo
 any declarations in the context which the undone declaration may have
 overridden. The following function is used to do this, and is given a
 predicate on $DECL$s to filter the declarations which will be redone.
@@ -895,6 +907,14 @@ fun Ûget_const_infoÝ (c : string) : (TYPE * ((string * TYPE)list)) OPT = (
 	) |	Value (v, _) => Value v
 );
 =TEX
+\subsection{Constants and Aliases}
+=SML
+fun Ûget_alias_infoÝ (a : string) : (string * TYPE)list OPT = (
+	case e_lookup a (!const_info_cache) of
+		Nil => ( Nil
+	) |	Value (_, atys) => Value atys
+);
+=TEX
 
 =SML
 fun Ûdeclare_aliasÝ (s : string, tm : TERM) : unit = (
@@ -915,15 +935,14 @@ fun Ûdeclare_aliasÝ (s : string, tm : TERM) : unit = (
 		end
 );
 =TEX
+{\it uncache\_alias} gets the cache just right, so we don't have to recache the
+theory.
 =SML
 fun Ûundeclare_aliasÝ (s : string, tm : TERM) : unit = (
 	if not (is_const tm)
 	then term_fail "undeclare_alias" 20301 [tm]
 	else	let	val (c, ty) = dest_const tm;
-			fun sel (DeclAlias(s', _)) = s = s'
-			|   sel (UnDeclAlias(s', _)) = s = s'
-			|   sel _ = false;
-		in	(case get_const_info s of
+		in	case get_const_info s of
 				Nil => store_decl"undeclare_alias"(UnDeclAlias(s, (c, ty)))
 			|	Value (_, stys) => (
 					if not(any stys (fn (c', ty') => c = c' andalso 
@@ -931,8 +950,7 @@ fun Ûundeclare_aliasÝ (s : string, tm : TERM) : unit = (
 					then fail "undeclare_alias" 20303 [fn()=>s, fn()=>c]
 					else store_decl"undeclare_alias"
 						(UnDeclAlias(s, (c, ty)))
-			));
-			recache_theory (get_current_theory_name()) sel
+			)
 		end
 );
 =TEX
