@@ -90,7 +90,7 @@ Allowed for use of ordered efficient dictionaries in theory data type.
 \item[Issue 2.16] Copyright and banner updates for open source release.
 \item[Issue 2.17] PPHol-specific updates for open source release
 \item[Issue 2.18] Removed unnecessary level of indirection from the {\it USER\_DATA} data type.
-\item[Issue 2.19] Added checkpointing and rollbacks.
+\item[Issues 2.19, 2.20] Introduced checkpointing.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -632,8 +632,7 @@ as an argument.
 This will find out what is to be deleted, and do all the
 kernel and, if {\it do\_warn} is true, user notification required.
 If {\it do\_warn} is false, the kernel notifications are done, but there is
-no feedback to the user, moreover, the function will delete theorems even
-if the theory has children.
+no feedback to the user.
 
 =SML
 fun €delete_to_level› (do_warn : bool)
@@ -649,7 +648,7 @@ let	val dummy = case (get_current_theory_status()) of
 
 	val {children = children,...} = icl'get_theory_info "-";
 
-	val dummy = if children <> [] andalso do_warn
+	val dummy = if children <> []
 		then fail caller 6076 [fn () => get_current_theory_name()]
 		else ();
 
@@ -657,17 +656,15 @@ let	val dummy = case (get_current_theory_status()) of
 		axiom_dict = oe_axiom_dict, thm_dict = oe_thm_dict,
 		defn_dict = oe_defn_dict,...} = icl'get_theory "-";
 
-	fun thms_only x = if children = [] then x else [];
+	val con_env = oe_flatten oe_con_env;
 
-	val con_env =  (thms_only o oe_flatten) oe_con_env;
+	val ty_env = oe_flatten oe_ty_env;
 
-	val ty_env = (thms_only o oe_flatten) oe_ty_env;
-
-	val axiom_dict = (thms_only o oe_flatten) oe_axiom_dict;
+	val axiom_dict = oe_flatten oe_axiom_dict;
 
 	val thm_dict = oe_flatten oe_thm_dict;
 
-	val defn_dict = (thms_only o oe_flatten) oe_defn_dict;
+	val defn_dict = oe_flatten oe_defn_dict;
 
 	val (del_con,del_lev1) = split (map (fn (name,{ty = ty,level = lev,...}) => 
 			((name, ty),lev))
@@ -1293,30 +1290,48 @@ the theory name together with a dictionary mapping
 theory names to pairs each comprising a level number and the user data.
 We make it an abstype so that the compiler won't print the values.
 =SML
+type €CP_INFO› = {
+	name : string,
+	int_name : int,
+	level : int,
+	user_data : USER_DATA,
+	has_children : bool,
+	thms : string list
+};
+
 abstype €CHECKPOINT› =
-	Checkpoint of (string * (int * USER_DATA) S_DICT)
+	Checkpoint of string * CP_INFO list
 with
 	fun €mk_checkpoint›
-	(d : (string * (int * USER_DATA) S_DICT)) : CHECKPOINT = (
+	(d : string * CP_INFO list) : CHECKPOINT = (
 		Checkpoint d
 	);
 	fun €dest_checkpoint›
-	(Checkpoint d : CHECKPOINT) :  (string * (int * USER_DATA) S_DICT) = (
+	(Checkpoint d : CHECKPOINT) :  string * CP_INFO list = (
 		d
 	);
 end;
 =TEX
 =SML
-fun €checkpoint› (thy : string) : CHECKPOINT = (
-	let	val thys = get_descendants thy
+fun €checkpoint› (cp_thy : string) : CHECKPOINT = (
+	let	val thys = get_descendants cp_thy
 			handle ex => pass_on ex "get_descendants" "checkpoint";
-		fun aux t = (
-			let	val {contents = {
-					current_level = lev,
-					user_data = ref ud,
-					...}, ...} = icl'get_theory_info t;
-				val _ = icl'increment_level t;
-			in	(t, (lev, ud))
+		fun aux t : CP_INFO = (
+			let	val {	contents = {
+						name = int_name,
+						current_level = level,
+						user_data = ref user_data,
+						thm_dict = thm_dict,
+						...},
+					children = children, ...} = icl'get_theory_info t;
+				val has_children = children <> [];
+				val thms = if has_children then [] else map fst (oe_flatten thm_dict);
+			in {	name = t,
+				int_name = int_name,
+				level = level,
+				user_data = user_data,
+				has_children = has_children,
+				thms = thms }
 			end
 		);
 		fun check_status t = (
@@ -1328,7 +1343,8 @@ fun €checkpoint› (thy : string) : CHECKPOINT = (
 				fail "checkpoint"12019 [fn ()=>t]
 		);
 		val _ = map check_status thys;
-	in	mk_checkpoint (thy, map aux thys)
+		val real_name = if cp_thy = "-" then get_current_theory_name() else cp_thy;
+	in	mk_checkpoint (cp_thy, map aux thys)
 	end
 );
 =TEX
@@ -1337,7 +1353,15 @@ is for the {\it get\_descendants} call and is trapping the situation where
 the theory has already been deleted by an earlier call.
 =SML
 fun €rollback› (cp : CHECKPOINT) : unit = (
-	let	val (cp_thy, dict) = dest_checkpoint cp;
+	let	fun check_internal_name ({name, int_name, ...} : CP_INFO) = (
+			let	val  new_int_name =
+					#name(#contents(icl'get_theory_info name))
+					handle Fail _ => int_name;
+			in	if	int_name <>  new_int_name
+				then 	fail "rollback" 12020 [fn () => name]
+				else	()
+			end
+		);
 		fun rec_del thy = (
 			let	val _ = unlock_theory thy handle Fail _ => ();
 				val thys = get_descendants thy less thy;
@@ -1348,7 +1372,9 @@ fun €rollback› (cp : CHECKPOINT) : unit = (
 				[fn () => thy]
 			end	handle Fail _ => ()
 		);
-		val old_descs = map fst dict;
+		val (cp_thy, infos) = dest_checkpoint cp;
+		val _ = map check_internal_name infos;
+		val old_descs = map #name infos;
 		val new_descs = get_descendants cp_thy
 			handle Fail _ =>
 			(comment "rollback" 12016 [fn  () => cp_thy]; []);
@@ -1359,21 +1385,23 @@ fun €rollback› (cp : CHECKPOINT) : unit = (
 		val _ = open_theory cp_thy
 			handle ex => pass_on ex "open_theory" "rollback";
 		val _ = map rec_del to_delete;
-		fun restore (thy, (lev, ud)) = (
-			let	val _ = open_theory thy
-				handle  Fail _ =>
-				comment "rollback" 12016 [fn  () => thy];
-				val _ = unlock_theory thy handle Fail _ => ();
-				val {user_data,...} = icl'get_theory thy;
-			in	delete_to_level false "rollback" thy (lev+1);
-				user_data := ud
+		fun restore ({name, level, thms, has_children = false, user_data, ...} : CP_INFO ) = (
+			let	val _ = open_theory name;
+				val _ = unlock_theory name handle Fail _ => ();
+				val {user_data = ud,...} = icl'get_theory name;
+				val _ = delete_to_level false "rollback" name (level+1);
+				val new_thms = flat (map fst (get_thms name));
+				val thms_to_go = new_thms diff thms;
+				fun del_thm n = (delete_thm n; ()) handle Fail _ => ();
+			in	map del_thm thms_to_go;
+				ud := user_data
 			end	handle  Fail msg =>
 				comment "rollback" 12017 [
-					fn  () => thy,
+					fn  () => name,
 					fn () =>  get_message_text msg]
 
-		);
-	in	map restore dict;  ()
+		) | restore {has_children = true, ...} = ();
+	in	map restore infos;  ()
 	end
 	end
 );
