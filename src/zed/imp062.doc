@@ -122,7 +122,7 @@ SML
 structure ÛZTypeInferenceÝ : ZTypeInference = struct
 =TEX
 SML
-	open Unification ZLex;
+	open Unification ZLex ZUserInterfaceSupport;
 	open icl'ZTypesAndTerms;
 
 =TEX
@@ -143,69 +143,6 @@ val Ûzti_subsÝ = new_subs zarray_size;
 =TEX
 
 \section{CONVERTING STRINGS TO IDENTIFIERS ETC.}
-
-The following definitions are used to encode ellipsis and underscores which can
-occur in templates.
-
-The rest of the functions introduced in this section support for converting between
-strings and identifiers (represented as template, decoration pairs)
-.
-=SMLLITERAL
-val stubell = "è";
-val stubus = "›";
-=TEX
-
-=SML
-fun Ûstub_to_stringÝ (st : STUB) : string = (
-	case st of
-	StubEll => stubell
-	|StubUS => stubus
-);
-=TEX
-=SML
-fun Ûcore_to_stringÝ (core as (id, opt) : CORE) : string = (
-let	fun do_stid (st, id) = (stub_to_string st)^id;
-in
-	case opt of
-	Nil => id
-	|Value (stidl, stid) => id^
-		(format_list do_stid stidl "") ^(do_stid stid)
-end);
-
-=TEX
-=SML
-fun Ûident_to_stringÝ ((tmpl, d) : IDENT) : string = (
-	(case tmpl of
-	TmplNon core => core_to_string core
-	|TmplIn (stub1, core, stub2) =>
-		(stub_to_string stub1)^(core_to_string core)
-			^(stub_to_string stub2)
-	|TmplPre (core, stub) =>
-		(core_to_string core)^(stub_to_string stub)
-	|TmplPost (stub, core) =>
-		(stub_to_string stub)^(core_to_string core)
-	)^d
-);
-=TEX
-=SML
-datatype ÛSTUB_OR_IDÝ = ÛStubÝ of STUB | ÛIdÝ of ID | ÛNothingÝ;
-
-fun Ûget_idfragÝ ((s::rest) : string list) (acc : string) :
-			 (string list * STUB_OR_ID) = (
-	if (s mem [stubell, stubus]) then
-		if acc = "" then (s::rest, Nothing)
-		else (s::rest, Id acc)
-	else get_idfrag rest (acc^s)
-) | get_idfrag [] acc = 
-	if acc = "" then ([], Nothing)
-	else ([], Id acc);
-
-fun Ûget_stubÝ ((s::rest) : string list) : (string list * STUB_OR_ID) = (
-	if s = stubell then (rest, Stub StubEll)
-	else if s = stubus then (rest, Stub StubUS)
-	else ([], Nothing)
-) | get_stub [] = ([], Nothing);
-
 =TEX
 =SML
 fun Ûstring_to_identÝ (s : string) : IDENT = (
@@ -216,79 +153,10 @@ let	fun strip_decor (d::rest) decors = (
 	)
 	  | strip_decor [] decors = ([], decors);
 	val (xrs, d) = strip_decor ((rev o explode) s) [];
-	val xs = rev xrs;
-	fun get_all xs acc = (
-		case get_stub xs of
-		(_, Nothing) => (
-			case get_idfrag xs "" of 
-			(_, Nothing) => acc
-			|(res', tok') => get_all res' (tok'::acc)
-			)
-		|(res, tok) => (
-			case get_idfrag res "" of 
-			(_, Nothing) => get_all res (tok::acc)
-			|(res', tok') => get_all res' (tok'::tok::acc)
-			)
-	);
-
-	fun get_stid ((Stub stub)::(Id id)::rest) = (
-		Value (stub,id),rest
-	) | get_stid xs = (Nil, xs);
-
-	fun get_stids xs acc = (
-	let	val (ostid, rest) = get_stid xs;
-	in
-		case ostid of
-		Nil => (acc, rest)
-		|Value stid => get_stids rest (acc@[stid])
-	end);
-=TEX
-=SML
-	fun make_core (Id id::rest) = (
-	let	val (stids, rest') = get_stids rest [];
-	in
-		case stids of
-		[] => (Value (id, Nil), rest)
-		|[stid] => (Value (id, Value ([], stid)), rest')
-		|_ => (	let	val rstids = rev stids;
-			in
-				case rstids of
-				[] => error "string_to_ident" 62998 [fn()=>"impossible"]
-				|last::rest => (Value (id, Value (rev rest, last)),rest')
-			end)
-	end
-	) | make_core rest = (Nil, rest);
-
-	fun make_stub ((Stub stub)::rest) = (
-		(Value stub, rest)
-	) | make_stub rest = (Nil, rest);
-
-	val toks = rev (get_all xs []);
-in
-	((case make_core toks of
-	(Nil, _) => (
-		case make_stub toks of
-		(Nil, _) => fail "string_to_ident" 62950 []
-		|(Value stub, rest) => (
-			case make_core rest of
-			(Nil, _) => fail "string_to_ident" 62951 []
-			|(Value core, rest) => (
-				case make_stub rest of
-				(Nil, []) => TmplPost (stub, core)
-				|(Value stub', []) => TmplIn (stub, core, stub')
-				|_ => fail "string_to_ident" 62952 []
-				)
-			)
-		)
-	|(Value core, rest) => (
-		case make_stub rest of
-		(Nil, []) => TmplNon core
-		|(Value stub, []) => TmplPre (core, stub)
-		|_ => fail "string_to_ident" 62952 []
-		)
-	), implode d)
-end);
-
+	val xs = implode (rev xrs);
+in	(template_of_string xs, implode d)
+end
+);
 =TEX
 
 
@@ -327,18 +195,6 @@ fun Ûgen_hol_typeÝ (ty : EXTYPE) : TYPE = (
 =TEX
 
 
-=SML
-fun Ûformat_identÝ ((tmp, d) : IDENT) : string = (
-	(format_template tmp)^d
-);
-=TEX
-=SML
-fun Ûformat_ident_listÝ idl = (
-	case idl of
-	[] => ""
-	|_ => " ["^(format_list format_ident idl ", ")^"] "
-);
-=TEX
 =IGN
 local
 
@@ -443,189 +299,6 @@ end (* of local ... in *);
 =TEX
 =SML
 fun Ûformat_zextypeÝ (ty : EXTYPE) : string = format_ztype (gen_hol_type ty);
-=TEX
-
-=TEX
-=SML
-fun Ûformat_otyÝ oty = (
-	case oty of
-	Nil => ""
-	|Value ty => " : "^(format_zextype ty)
-);
-=TEX
-=SML
-fun Ûformat_zdecÝ (dec : Z_DEC) = (
-	case dec of
-		ZDec (idl, tm, _) => (format_list format_ident idl ", ")^" : "^(format_ztm tm)
-	|	ZSchemaDec (tm, _) => format_ztm tm
-)
-=TEX
-=SML
-and Ûformat_zdec_listÝ (decl : Z_DEC list) = (
-	case decl of
-	[] => ""
-	|_ => format_list format_zdec decl "; "
-)
-=TEX
-=SML
-and Ûformat_zschtextÝ (sch as (dl, Value tm, _) : Z_SCH_TEXT) = (
-	(format_list format_zdec dl "; ")^" | "^(format_ztm tm)
-) | format_zschtext (sch as (dl, Nil, _)) = (
-	format_list format_zdec dl "; "
-)
-=TEX
-=SML
-and Ûformat_eqdefÝ (eqdef as (id, tm)) = (format_ident id)^" ¦ "^(format_ztm tm)
-=TEX
-=SML
-and Ûformat_ztmÝ (tm : Z_TM) : string = (
-	case tm of
-		ZTm§¢ (_, tml) => "§"^(format_list format_ztm tml ",")^"¢"
-	|	ZTmSetd (_, tml) => "{"^(format_list format_ztm tml ",")^"}"
-	|	ZTmSeta1 sch => "{"^(format_zschtext sch)^"}"
-	|	ZTmSeta2 (sch,tm) => "{"^(format_zschtext sch)^"·"^(format_ztm tm)^"}"
-	|	ZTmð tm => "set "^(format_ztm tm)
-	|	ZTmTuple tml => "("^(format_list format_ztm tml ", ")^")"
-	|	ZTm¸ tml => (format_list format_ztm tml " ¸ ")
-	|	ZTmÊ (tm, d) => "Ê "^(format_ztm tm)^d
-	|	ZTmSel‰T (tm, i) => (format_ztm tm)^"."^(string_of_int i)
-	|	ZTmSel‰B (tm, id) => (format_ztm tm)^"."^(format_ident id)
-	|	ZTmApp (tm1, tm2) => (format_ztm tm1)^" "^(format_ztm tm2)
-	|	ZTmFancyApp ((n, d), ZTmTuple tml) => (
-			format_fancy_fix format_ztm n d tml)
-	|	ZTmFancyApp ((n, d), tm) => (format_ident (n,d))^" "^(format_ztm tm)
-	|	ZTmÌ (sch, tm) => "Ì "^(format_zschtext sch)^"· "^(format_ztm tm)
-	|	ZTmÍ1 sch => "Í "^(format_zschtext sch)
-	|	ZTmÍ2 (sch, tm) => "Í "^(format_zschtext sch)^"· "^(format_ztm tm)
-	|	ZTmTruth true => "true"
-	|	ZTmTruth false => "false"
-	|	ZTmLogInOp‰F (inop, tm1, tm2) => (format_ztm tm1)^(
-			case inop of
-			ZLogInOp± => " ± "
-			|ZLogInOp² => " ² "
-			|ZLogInOp´ => " ´ "
-			|ZLogInOp¤ => " ¤ "
-			|ZLogInOpSemi => ";"
-			)^(format_ztm tm2)
-	|	ZTmQuant‰F (q, sch, tm) => (
-			case q of
-			ZQuantµ => "µ"	|ZQuant¶ => "¶"	|ZQuant¶‰1 => "¶‰1"
-			)^(format_zschtext sch)^" · "^(format_ztm tm)
-	|	ZTm³‰F tm => "³ "^(format_ztm tm)
-	|	ZTmSchemaPred tm => format_ztm tm
-	|	ZTmHorizSchema sch => "["^(format_zschtext sch)^"]"
-	|	ZTmDecor (tm, d) => (format_ztm tm)^d
-	|	ZTmPre tm => "pre "^(format_ztm tm)
-	|	ZTm³‰S tm => "³ "^(format_ztm tm)
-=TEX
-=SML
-	|	ZTmLogInOp‰S (inop, tm1, tm2) => (format_ztm tm1)^(
-			case inop of
-			ZLogInOp± => " ± "
-			|ZLogInOp² => " ² "
-			|ZLogInOp´ => " ´ "
-			|ZLogInOp¤ => " ¤ "
-			|ZLogInOpSemi => "; "
-			)^(format_ztm tm2)
-	|	ZTmù (tm1, tm2) => (format_ztm tm1)^" ù "^(format_ztm tm2)
-	|	ZTmHide (tm, idl) => (format_ztm tm)^"\\ ("^
-			(format_list format_ident idl ", ")^")"
-	|	ZTmQuant‰S (q, sch, tm) => (
-			case q of
-			ZQuantµ => "µ "	|ZQuant¶ => "¶ "	|ZQuant¶‰1 => "¶‰1 "
-			)^(format_zschtext sch)^" · "^(format_ztm tm)
-
-	|	ZTm„ tm => "„ "^(format_ztm tm)
-	|	ZTm˜ tm => "˜ "^(format_ztm tm)
-	|	ZTmEq (tm1, tm2) => (format_ztm tm1)^" = "^(format_ztm tm2)
-	|	ZTm (tm1, tm2) => (format_ztm tm1)^"  "^(format_ztm tm2)
-	|	ZTm» (tm1, tm2) => (format_ztm tm1)^" » "^(format_ztm tm2)
-	|	ZTmPipe (tm1, tm2) => (format_ztm tm1)^" >> "^(format_ztm tm2)
-	|	ZTmú n => string_of_int n
-	|	ZTmString s => "\""^s^"\""
-	|	ZTmConstrained (tm1, tm2) => (format_ztm tm1)^" º "^(format_ztm tm2)
-	|	ZTmLVar (id, _, tml) => (format_ident id)^(
-			case tml of
-			[] => ""
-			|_ => "["^(format_list format_ztm tml ",")^"]"
-			)
-	|	ZTmGVar (id, _, tml) => (format_ident id)^(
-			case tml of
-			[] => ""
-			|_ => "["^(format_list format_ztm tml ",")^"]"
-			)
-=TEX
-=SML
-	|	ZTmLet (eqdefl, tm) => "let "^(format_list format_eqdef eqdefl ", ")^"· "
-							^(format_ztm tm)
-	|	ZTmRename (tm, ididl) => (format_ztm tm)^(
-			case ididl of
-			[] => ""
-			|_ => " ["^(format_list (fn (id1, id2) => (format_ident id1)^"/"^
-				(format_ident id2)) ididl ", ")^"]"
-			)
-	|	ZTmBracketed tm => "("^(format_ztm tm)^")"
-	|	ZTmQuotation holterm => (string_of_term holterm)
-);
-=TEX
-
-=SML
-fun Ûformat_zparafreetypeÝ (id : IDENT, idotml : (IDENT * EXTYPE OPT * Z_TM OPT) list) : string = (
-let	fun aux (id, oty, otm) =
-		(format_ident id)^(
-			case otm of
-			Nil => ""
-			|Value tm => " "^(format_ztm tm));
-in
-	(format_ident id)^" ::= "^(format_list aux idotml " | ")
-end);
-=TEX
-=SML
-fun Ûformat_zparaÝ (p : Z_PARA) : string = (
-=SMLLITERAL
-	case p of
-	ZParaAbbDef (id, idl, tm, oty) =>
-		(format_ident id)^(format_ident_list idl)
-			^" ¦ "^(format_ztm tm)^(format_oty oty)
-	|ZParaSchBox (id, idl, sch as (decl, otm, _), oty) =>
-		"ÿ"^(format_ident id)^(format_ident_list idl)^"ü"^
-		(format_zdec_list decl)^(
-			case otm of
-			Nil => "ˆ"
-			|Value tm => "÷"^(format_ztm tm)^"ˆ"
-		)
-	|ZParaAxDes (idl, sch as (decl, otm, _), _) =>
-		"@ZAX"^(format_ident_list idl)^
-		(format_zdec_list decl)^(
-			case otm of
-			Nil => "°"
-			|Value tm => "÷"^(format_ztm tm)^"°"
-		)
-	|ZParaFreeType ftl => (format_list format_zparafreetype ftl " & ")
-	|ZParaGivenSet (idl, oidltm) =>
-		(format_ident_list idl)^(
-			case oidltm of
-			Nil => ""
-			|Value (idl', tm) => (format_ident_list idl')^" & "^(format_ztm tm)
-		)
-	|ZParaConstraint (idl, tm) =>
-		(format_ident_list idl)^(format_ztm tm)
-	|ZParaConjecture (oid, idl, tm) =>
-		(case oid of
-		Nil => ""
-		|Value id => (format_ident id)^" "
-		)^(format_ident_list idl)^" ?ô "^(format_ztm tm)
-	|ZParaTerm (idl, tm, oty) =>
-		"ñ"^(format_ident_list idl)^(format_ztm tm)^(format_oty oty)^"®"
-	|ZParaFixity fix => (
-		case fix of
-		(ZClFun i, tmpl) => "fun "^(string_of_int i)^" "^
-			(format_list format_template tmpl ", ")
-		|(ZClRel, tmpl) => "rel "^(format_list format_template tmpl ", ")
-		|(ZClGen i, tmpl) => "gen "^(string_of_int i)^" "^
-			(format_list format_template tmpl ", ")
-		)
-);
 =TEX
 \section{SUPPORTING FUNCTIONS}
 
