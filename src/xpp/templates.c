@@ -154,6 +154,7 @@ Widget w;
 			XmNtopPosition,	y,
 			XmNbottomAttachment,	XmATTACH_POSITION,
 			XmNbottomPosition,	y + 2,
+			XmNtraversalOn,	False,
 			NULL);
 		template_callback_data[i].text_index = twi;
 		template_callback_data[i].expansion =

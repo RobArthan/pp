@@ -125,6 +125,7 @@ Widget w;
 			XmNtopPosition,		y,
 			XmNbottomAttachment,	XmATTACH_POSITION,
 			XmNbottomPosition,	y + 1,
+			XmNtraversalOn,	False,
 			NULL);
 		copy_font_list(button, w);
 		XmStringFree(lab);
