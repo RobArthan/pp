@@ -1,5 +1,5 @@
 #/* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.70 2003/07/29 16:42:57 rda Exp rda $
+ * $Id: mainw.c,v 2.71 2003/07/30 12:11:16 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -1107,14 +1107,15 @@ static void file_menu_cb(
 			if(fname == NULL) {
 /* No file name: get an empty file */
 				XmTextSetString(script, "");
+				flash_file_name(no_file_name);
 			} else if(!open_file(script, fname, fname, False,(FileOpenAction *) NULL)){
 /* Can't open it; */
 				XtFree(fname);
 				unpause_undo(undo_ptr);
 				if(fname) {XtFree(fname);}
 				break;
+				flash_file_name(fname);
 			}
-			flash_file_name(fname);
 			set_icon_name_and_title();
 			reinit_changed(False);
 		};
@@ -1555,6 +1556,7 @@ void check_quit_cb (
 		m3 = app_alive ? running_quit_message : "";
 		msg = XtMalloc(strlen(check_quit_message) + strlen(m1) + strlen(m2) + strlen(m3));
 		sprintf(msg, check_quit_message, m1, m2, m3);
+		XtFree(m2);
 		do_it = yes_no_dialog(root, msg);
 		XtFree(msg);
 	} else {
