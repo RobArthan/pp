@@ -1,4 +1,4 @@
-% %Z% $Date: 2000/06/20 12:50:47 $ $Revision: 1.64 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2000/06/21 11:23:43 $ $Revision: 1.65 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -95,6 +95,7 @@
 \item[Issue 1.60] Prototyping enhancement R3 --- Assignment to Record Components.
 \item[Issue 1.61-1.64] Prototyping enhancement R2: Multiple Logical Constant Definitions.
 \item[Issue 1.65] Check on initial variables in pre-conditions added.
+\item[Issue 1.65] CTLE II enhancement R1/2 --- ``others'' in case statements.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -514,41 +515,60 @@ end
 =SML
 fun Ûcase_baseÝ ({wp, a, wp_env as {env,...}} : WP_PARS) (e : EXP)
 			({choices, p} : STATEMENT CASE_ALTERNATIVE)
-			 : RESULT = (
+			 : RESULT * Z_EXP = (
 let	val {wp = wp1, side = side1} = wp (p, a, wp_env);
-	val wp' = z_elem (trans_exp env e, trans_case_choices env choices)
+	val zchoices = trans_case_choices env choices;
+	val wp' = z_elem (trans_exp env e, zchoices)
 			%Longrightarrow% wp1;
-in	{wp = wp', side = side1}
+in	({wp = wp', side = side1}, zchoices)
 end
 );
 =TEX
+{\it case\_step} expects to be called by {\it case\_others} and ignores
+the ``others'' part.
 =SML
 fun Ûcase_stepÝ (pars as {wp, a, wp_env as {env,...}} : WP_PARS)
-		({e, s, others as STImplicitNull} : STATEMENT CASE) : RESULT = (
+		({e, s, others} : STATEMENT CASE) : RESULT * Z_EXP list = (
 	case s of
 	[] =>
 		fail "case_step" 505030 []
 	| [alt] =>
-		case_base pars e alt
-	| ({choices, p} :: s') => (
+		let	val (res, ze) = case_base pars e alt;
+		in	(res, [ze])
+		end
+	| ({choices, p} :: s') =>
 		let	val {wp = wp1, side = side1} =
 				wp (p, a, wp_env);
-			val {wp = wp2, side = side2} =
+			val ({wp = wp2, side = side2}, rest) =
 				case_step pars {e=e, s=s', others=others};
+			val zchoices = trans_case_choices env choices;
 			val elm =
-				z_elem (trans_exp env e, trans_case_choices env choices)
-		in	{wp = (elm %Longrightarrow% wp1) @ wp2 , side = side1 @ side2}
-		end)
-) | case_step _ _ = (
-	fail "case_step" 505021 []
+				z_elem (trans_exp env e, zchoices)
+		in	({wp = (elm %Longrightarrow% wp1) @ wp2 , side = side1 @ side2},
+			 zchoices :: rest)
+		end
 );
 =TEX
-Note that $case\_step$ is recursive and does the full job. 
-But by analogy with the naming convention we chose to adopt for the
-two case of specification statement in section \ref{wp-specification-no-ivars},
-we define the following.
+Note that {\it case\_step} is recursive and does the full job for a case statement
+without an others part. 
+{\it case\_others} then acts as the main entry point for case statements,
+calling {\it case\_step} to do do the non-others alternatives and then
+handling the others part if present.
 =SML
-val Ûcase_eitherÝ : WP_PARS -> STATEMENT CASE -> RESULT = case_step;
+fun Ûcase_othersÝ (pars as {wp, a, wp_env as {env,...}} : WP_PARS)
+		(st as {e, others, ...} : STATEMENT CASE) : RESULT = (
+	let	val (res as {wp = wp1, side = side1}, zchoices) = case_step pars st;
+	in	case others of 
+		STImplicitNull => res
+	|	stmt =>
+		let	val {wp = wp2, side = side2} = wp(others, a, wp_env);
+			val wp = wp1 @ (z_notelem(trans_exp env e, z_many_union zchoices)
+					%Longrightarrow% wp2);
+			val side = side1 @ side2;
+		in	{wp = wp, side = side}
+		end
+	end
+);
 =TEX
 
 \subsection{Undecorated Loop}\label{wp-loop}
@@ -1067,7 +1087,7 @@ in	case adjust_statement wp_env st of
 	|	STIfThenElse {g, p, q, elsif} =>
 			if_then_else pars {g=adjust g, p=p, q=q, elsif=elsif}
 	|	STCase {e, s, others} =>
-			case_either pars {e=adjust e, s=s, others=others}
+			case_others pars {e=adjust e, s=s, others=others}
 	|	STLoop x => loop pars x
 	|	STNamedLoop x => named_loop pars x
 	|	STWhile {g, loop, name} =>
