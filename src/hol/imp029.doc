@@ -100,6 +100,8 @@ Corrected error handling for interrupts.
 Added $all\_$ variants of forward chaining tactics.
 \item [Issue 1.30 (30th November 1992)]
 Fixed bug (HAT 68) to do with renaming in induction tactics.
+\item [Issue 1.31 (1st February 1993)]
+Added variable elimination tactics.
 \end{description}
 \subsection{Changes Forecast}
 None known.
@@ -910,6 +912,347 @@ fun Ûgen_induction_tac1Ý (thm : THM) : TACTIC = (
 	end
 );
 =TEX
+\section{VARIABLE ELIMINATION}
+=SML
+local
+	val ord0 = ord "0";
+	val ord9 = ord "9";
+	fun is_digit a = (
+	let val orda = ord a
+	in
+			ord0 <= orda andalso orda <= ord9
+	end);
+	fun discard vs (a::x) = if is_digit a orelse a = vs
+		then discard vs x
+		else length (a::x)
+	| discard vs [] = 0;
+in
+	fun name_heuristic v1 v2 = (
+	let	val vs = get_variant_suffix();
+		val vs1 = discard vs (rev(explode(fst(dest_var v1))));
+		val vs2 = discard vs(rev(explode(fst(dest_var v2))));
+	in
+		not (vs2 < vs1)
+	end);
+end;
+=TEX
+=SML
+fun Ûsubst_rule1Ý thm var value  = (
+let	val bit1 = subst_rule [(thm,var)];
+in
+	(fn thm1 => bit1(concl thm1) thm1
+	)
+end);
+=TEX
+=SML
+fun Ûsubst_rule2Ý thm var value  = (
+let	val bit1 = subst_rule [(thm,var)];
+in
+	(fn thm1 => if is_free_in var (concl thm1)
+		then  bit1(concl thm1) thm1
+		else thm1
+	)
+end);
+=TEX
+=SML
+fun Ûsubst_tac1Ý thm var value = (
+conv_tac (fn cnc => 
+	if is_free_in var cnc
+	then (
+let	val all_vars = map mk_var (term_vars cnc);
+	val new_tvar = variant all_vars var;
+	val trans = [(new_tvar,var)];
+	val template' = subst trans cnc;
+	val new_template = mk_eq(cnc,template');
+	val s2 = refl_conv cnc;
+	val s3 = subst_rule [(thm, new_tvar)] new_template s2;
+	val s4 = eq_trans_rule s2 s3
+		handle complaint =>
+		pass_on complaint "eq_trans_rule" "subst_conv";
+in
+	s4
+end)
+	else refl_conv cnc
+)
+);
+=TEX
+=SML
+fun Ûsubst_tac2Ý thm  = (
+conv_tac (fn cnc => 
+let	val (var,value) = dest_eq(concl thm);
+in
+	if is_free_in var cnc
+	then (
+let	val all_vars = map mk_var (term_vars cnc);
+	val new_tvar = variant all_vars var;
+	val trans = [(new_tvar,var)];
+	val template' = subst trans cnc;
+	val new_template = mk_eq(cnc,template');
+	val s2 = refl_conv cnc;
+	val s3 = subst_rule [(thm, new_tvar)] new_template s2;
+	val s4 = eq_trans_rule s2 s3
+		handle complaint =>
+		pass_on complaint "eq_trans_rule" "subst_conv";
+in
+	s4
+end)
+	else refl_conv cnc
+end)
+);
+=TEX
+=SML
+fun Ûve_categoriseÝ lhs rhs tm = (
+	if is_var lhs
+	then (if is_var rhs
+		then (if lhs =$ rhs
+			then (lhs,rhs,0)
+			else (if name_heuristic lhs rhs
+				then (lhs,rhs,1)
+				else (rhs,lhs,2)))
+		else (if is_free_in lhs rhs
+			then (lhs,rhs,3)
+			else (lhs,rhs,1)))
+	else (if is_var rhs
+		then (if is_free_in rhs lhs
+			then (lhs,rhs,3)
+			else (rhs,lhs,2))
+		else (lhs,rhs,3))
+);
+=TEX
+=SML
+fun Ûve_categorise1Ý lhs rhs tm = (
+	if is_var lhs
+	then (if is_var rhs
+		then (if lhs =$ rhs
+			then (lhs,rhs,0)
+			else (if name_heuristic lhs rhs
+				then (lhs,rhs,1)
+				else (rhs,lhs,2)))
+		else (if not(is_const rhs)
+			then (lhs,rhs,3)
+			else (lhs,rhs,1)))
+	else (if is_var rhs
+		then (if not(is_const lhs)
+			then (lhs,rhs,3)
+			else (rhs,lhs,2))
+		else (lhs,rhs,3))
+);
+=TEX
+=SML
+fun ÛVAR_ELIM_ASM_TÝ (tm : TERM) (thm_tac : THM_TACTIC) : TACTIC = (fn gl => 
+let	val (lhs,rhs) = dest_eq tm
+		handle (Fail _) =>
+		term_fail "VAR_ELIM_ASM_T" 29027 [tm];
+	val (var,value,this_case) = ve_categorise lhs rhs tm;
+in
+((DROP_ASM_T tm (fn thm =>
+	case this_case of
+	0 => id_tac
+	| 1 => (let val sr = subst_rule1 thm var value ;
+			fun return_tac thm1 = if is_free_in var (concl thm1)
+				then thm_tac ( sr thm1)
+				else asm_tac  thm1;
+		in
+		DROP_ASMS_T (MAP_EVERY return_tac o rev)
+		THEN subst_tac1 thm var value
+		end
+	) | 2 => (let val thm' = eq_sym_rule thm;
+			val sr = subst_rule1 thm' var value;
+			fun return_tac thm1 = if is_free_in var (concl thm1)
+				then thm_tac ( sr thm1)
+				else asm_tac  thm1;
+
+		in
+		DROP_ASMS_T (MAP_EVERY return_tac o rev)
+		THEN subst_tac1 thm' var value
+		end
+	) | _ => term_fail "VAR_ELIM_ASM_T" 29027 [tm]
+	)
+	gl)
+	handle complaint =>
+	pass_on complaint "DROP_ASM_T" "VAR_ELIM_ASM_T"
+	)
+end);
+=TEX
+=SML
+fun Ûvar_elim_asm_tacÝ (tm:TERM): TACTIC = (fn (asms,cnc) =>
+	VAR_ELIM_ASM_T tm strip_asm_tac (asms,cnc)
+	handle complaint =>
+	pass_on complaint "VAR_ELIM_ASM_T" "var_elim_asm_tac"
+);
+=TEX
+=SML
+fun ÛVAR_ELIM_NTH_ASM_TÝ (n: int) (thm_tac:THM_TACTIC): TACTIC = (fn (asms,cnc) => (
+let	val tm = nth (n-1) asms
+		handle (Fail _) =>
+		fail "VAR_ELIM_NTH_ASM_T" 9303 [fn () => string_of_int n];
+	val (lhs,rhs) = dest_eq tm
+		handle (Fail _) =>
+		term_fail "VAR_ELIM_NTH_ASM_T" 29027 [tm];
+	val (var,value,this_case) = ve_categorise lhs rhs tm;
+in
+(DROP_NTH_ASM_T n (fn thm =>
+	case this_case of
+	0 => id_tac
+	| 1 => (let val sr = subst_rule1 thm var value 
+			fun return_tac thm1 = if is_free_in var (concl thm1)
+				then thm_tac ( sr thm1)
+				else asm_tac  thm1;
+		in
+		DROP_ASMS_T (MAP_EVERY return_tac o rev)
+		THEN subst_tac1 thm var value
+		end
+	) | 2 => (let val thm' = eq_sym_rule thm;
+			val sr = subst_rule1 thm' var value;
+			fun return_tac thm1 = if is_free_in var (concl thm1)
+				then thm_tac ( sr thm1)
+				else asm_tac  thm1;
+		in
+		DROP_ASMS_T (MAP_EVERY return_tac o rev)
+		THEN subst_tac1 thm' var value
+		end
+	) | _ => term_fail "VAR_ELIM_NTH_ASM_T" 29027 [tm]
+	))
+end)
+(asms,cnc));
+=TEX
+=SML
+fun Ûvar_elim_nth_asm_tacÝ (n:int): TACTIC = (fn (asms,cnc) =>
+	VAR_ELIM_NTH_ASM_T n strip_asm_tac (asms,cnc)
+	handle complaint =>
+	pass_on complaint "VAR_ELIM_NTH_ASM_T" "var_elim_nth_asm_tac"
+);
+=TEX
+
+=SML
+fun ave_process (flag1:bool) (thms : THM list) : (THM list * THM list)= (
+let	fun aux pool subs [] = (rev pool, rev subs)
+	| aux pool subs (a::x) = (
+		if is_eq (concl a)
+		then (
+		let	val tm = concl a;
+			val (lhs,rhs) = dest_eq tm;
+			val (var,value,this_case) = 
+				if flag1 
+				then ve_categorise1 lhs rhs tm
+				else ve_categorise lhs rhs tm;
+		in
+		case this_case of
+		0 => aux pool subs x
+		| 1 => (let val sr = subst_rule2 a var value;
+			in
+			aux (map sr pool) (a :: map sr subs) (map sr x)
+			end)
+		| 2 => (let val sr = subst_rule2 (eq_sym_rule a) var value;
+			in
+			aux (map sr pool) (eq_sym_rule a :: map sr subs) (map sr x)
+			end)
+		| _ => aux (a :: pool) subs x
+		end)
+		else aux (a :: pool) subs x
+	);
+in
+	aux [] [] thms
+end);
+
+=TEX
+
+=SML
+fun ÛLALL_VAR_ELIM_ASM_TÝ (flag1:bool) (caller:string) (thm_tac: THM_TACTIC): TACTIC = (
+DROP_ASMS_T (fn orig_thms =>
+let	val rorig_thms = rev orig_thms;
+	val (new_thms,subs) = ave_process flag1 rorig_thms;
+	val dummy = if length new_thms = length orig_thms
+		then fail caller 29028 []
+		else ();
+	val nt_tacs = map (fn thm => if present (op =|-) thm rorig_thms
+		then asm_tac thm
+		else thm_tac thm) new_thms;
+in
+	MAP_EVERY subst_tac2 subs THEN
+	EVERY nt_tacs
+end));
+=TEX
+=SML
+fun ÛALL_VAR_ELIM_ASM_TÝ (thm_tac: THM_TACTIC): TACTIC =
+	LALL_VAR_ELIM_ASM_T true "ALL_VAR_ELIM_ASM_T" thm_tac;
+=TEX
+=SML
+val Ûall_var_elim_asm_tacÝ : TACTIC = 
+	LALL_VAR_ELIM_ASM_T true 
+		"all_var_elim_asm_tac" 
+		strip_asm_tac;
+=TEX
+=SML
+fun ÛALL_VAR_ELIM_ASM_T1Ý (thm_tac: THM_TACTIC): TACTIC =
+	LALL_VAR_ELIM_ASM_T false "ALL_VAR_ELIM_ASM_T1" thm_tac;
+=TEX
+=SML
+val Ûall_var_elim_asm_tac1Ý : TACTIC = 
+	LALL_VAR_ELIM_ASM_T false 
+		"all_var_elim_asm_tac1" 
+		strip_asm_tac;
+=TEX
+=IGN
+set_goal([¬p ² q®, ¬v = 2 ± µ v · v = 3®,¬v=5®,¬f v = f 6®],¬h v = h 7®);
+a(var_elim_asm_tac ¬v = 5®);
+undo 1;
+a(var_elim_nth_asm_tac 3);
+undo 1;
+a(VAR_ELIM_ASM_T ¬v = 5® asm_tac);
+undo 1;
+a(VAR_ELIM_NTH_ASM_T 3 asm_tac);
+undo 1;
+a all_var_elim_asm_tac;
+undo 1;
+a all_var_elim_asm_tac1;
+undo 1;
+a (ALL_VAR_ELIM_ASM_T asm_tac);
+undo 1;
+a (ALL_VAR_ELIM_ASM_T1 asm_tac);
+set_goal([¬v = 2 ± µ v · v = 3®,¬5 = v®,¬f v = f 6®],¬h v = h 7®);
+a(var_elim_asm_tac ¬5 = v®);
+undo 1;
+a(var_elim_nth_asm_tac 2);
+undo 1;
+a all_var_elim_asm_tac;
+undo 1;
+a all_var_elim_asm_tac1;
+set_goal([¬v = 2 ± µ v · v = 3®,¬(v:î) = v®,¬f v = f 6®],¬h v = h 7®);
+a(var_elim_asm_tac ¬(v:î) = v®);
+undo 1;
+a(var_elim_nth_asm_tac 2);
+undo 1;
+a all_var_elim_asm_tac;
+undo 1;
+a all_var_elim_asm_tac1;
+set_goal([¬v = 2 ± µ v · v = 3®,¬(v:î) = j v®,¬f v = f 6®],¬h v = h 7®);
+a(var_elim_asm_tac ¬(v:î) = j v®); (* fail *)
+a(var_elim_nth_asm_tac 2); (* fail *)
+a all_var_elim_asm_tac; (* fail *)
+a all_var_elim_asm_tac1; (* fail *)
+set_goal([¬v = 2 ± µ v · v = 3®,¬(v:î) = i j®,¬f v = f 6®],¬h v = h 7®);
+a(var_elim_asm_tac ¬(v:î) = i j®);
+undo 1;
+a(var_elim_nth_asm_tac 2);
+undo 1;
+a all_var_elim_asm_tac; (* fail *)
+a all_var_elim_asm_tac1;
+drop_main_goal();
+set_goal([¬c = d®,¬a = b®,¬b = c®,¬e = f®,¬d = e®],¬f = a®);
+a all_var_elim_asm_tac;
+undo 1;
+a all_var_elim_asm_tac1;
+set_goal([¬c = d®,¬b = a®,¬b = c®,¬e = f®,¬d = e®],¬f = a®);
+a all_var_elim_asm_tac;
+undo 1;
+a all_var_elim_asm_tac1;
+set_goal([¬c h = (d:'a)®,¬a = b®,¬(b:'a) = c h®,¬e = f®,¬d = e®],¬f = a®);
+a all_var_elim_asm_tac;
+undo 1;
+a all_var_elim_asm_tac1;
+=TEX
+
 \section{TACTICALS}
 =SML
 fun ((tac1 : TACTIC) ÛTHEN_T1Ý (tac2 : TACTIC)) : TACTIC = (fn gl =>
