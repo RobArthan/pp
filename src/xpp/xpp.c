@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.31 2004/02/18 16:26:25 rda Exp rda $
+ * $Id: xpp.c,v 2.32 2004/02/18 17:20:42 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -19,10 +19,10 @@
 
 #define _xpp
 
-#define XtNtextTranslations		"textTranslations"
-#define XtCTextTranslations		"TextTranslations"
-#define XtNtemplates			"templates"
-#define XtCTemplates			"Templates"
+#define XtNtextTranslations	"textTranslations"
+#define XtCTextTranslations	"TextTranslations"
+#define XtNtemplates		"templates"
+#define XtCTemplates		"Templates"
 #define XtNinterruptPrompt		"interruptPrompt"
 #define XtCInterruptPrompt		"InterruptPrompt"
 #define XtNabandonReply		"abandonReply"
@@ -35,6 +35,8 @@
 #define XtCDefaultCommand		"DefaultCommand"
 #define XtNargumentChecker		"argumentChecker"
 #define XtCArgumentChecker		"ArgumentChecker"
+#define XtNOptionString		"optionString"
+#define XtCOptionString		"OptionString"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files: 
@@ -47,6 +49,12 @@
 #include <fcntl.h>
 #include <string.h>
 #include "xpp.h"
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * externs for getopt(3): 
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+extern int optind, opterr, optopt;
+extern char *optarg;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Static and global data
@@ -126,6 +134,7 @@ typedef struct {
 	int  add_new_line_mode;
 	char *default_command;
 	char *argument_checker;
+	char *option_string;
 } XppResources;
 
 XppResources xpp_resources;
@@ -202,6 +211,15 @@ static XtResource resources[] = {
 		XtOffsetOf(XppResources, argument_checker),
 		XtRString,
 		"pp -V"
+	},
+	{
+		XtNOptionString,
+		XtCOptionString,
+		XtRString,
+		sizeof(char *),
+		XtOffsetOf(XppResources, option_string),
+		XtRString,
+		"bchrf:d:i:F:nsv"
 	}
 };
 
@@ -214,7 +232,7 @@ static XtResource resources[] = {
 void usage (void)
 {
 	msg( "usage",
-"xpp [X Toolkit options] [Xpp Options | Command Options ...]");
+"xpp [X Toolkit options] [-f name | -rbh | -c command args | Command Options ...] ");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -413,9 +431,12 @@ static char *append_arg(char *cmd_line, char *arg)
 static char *get_command_line(int argc, char **argv, Boolean *use_default_command)
 {
 	char *res;
+	char opt_buf[3]; /* "-x" + null-terminator */
+	int option_ch;
 	int i;
 	Boolean have_non_xpp_arg = False;
-	Boolean just_collect = False;
+	Boolean have_minus_c = False;
+	char error_msg[100];
 
 	synchronous = False;
 	havefonts = False;
@@ -423,44 +444,65 @@ static char *get_command_line(int argc, char **argv, Boolean *use_default_comman
 	global_options.edit_only = False;
 	res = NULL;
 	*use_default_command = True;
+	opterr = 0;
 
-	for (i = 1; i < argc; i += 1) {
-		if(just_collect) {
-			res = append_arg(res, argv[i]);
-		} else if(check_option(argv[i], "b")) {
-			synchronous = True;
-		} else if(check_option(argv[i], "h")) {
-			havefonts = True;
-		} else if (check_option(argv[i], "r")) {
-			global_options.read_only = True;
-		} else if (check_option(argv[i], "f")) {
-			if(file_name != NULL) {
+	while( (optarg = 0, option_ch = getopt(argc, argv, xpp_resources.option_string)) != GETOPTDONE
+	&&	!have_minus_c ) {
+		switch(option_ch) {
+			case 'b':
+				synchronous = True;
+				break;
+			case 'h' :
+				havefonts = True;
+				break;
+			case 'r' :
+				global_options.read_only = True;
+				break;
+			case 'f' :
+				if(file_name != NULL) {
+					usage();
+					exit(53);
+				}
+				file_name = optarg;
+				break;
+			case 'c' :
+				if(have_non_xpp_arg) {
+					usage();
+					exit(55);
+				}
+				global_options.edit_only = False;
+				for(i = optind; i < argc; i += 1) {
+					res = append_arg(res, argv[i]);
+				}
+				have_minus_c = True;
+				*use_default_command = False;
+				break;
+			case '?' :
+				sprintf(error_msg, "illegal option: -%c", (char) optopt);
+				msg("command line syntax", error_msg);
 				usage();
-				exit(53);
-			}
-			if(i + 1 < argc) {
-				file_name = argv[i+1];
-				i += 1;
-			} else {
-				file_name = "";
-			}
-		} else if (check_option(argv[i], "c")) {
-			if(have_non_xpp_arg) {
-				usage();
-				exit(55);
-			}
-			global_options.edit_only = False;
-			just_collect = True;
-			*use_default_command = False;
-		} else if (check_option(argv[i], "--")) {
-			res = append_arg(res, argv[i]);			
-			just_collect = True;
-		} else if(!have_non_xpp_arg && argv[i][0] != '-') {
-			file_name = argv[i];
-		} else {
-			have_non_xpp_arg = True;
-			res = append_arg(res, argv[i]);
+				exit(57);
+				break;
+			default:
+				have_non_xpp_arg = True;
+				sprintf(opt_buf, "-%c", (char) option_ch);
+				res = append_arg(res, opt_buf);
+				if(optarg != 0) {
+					res = append_arg(res, optarg);
+				}
+		}	
+	}
+
+	if(!have_minus_c && have_non_xpp_arg) {
+		if( !strcmp(argv[optind-1], "--") ) {
+			res = append_arg(res, "--");
 		}
+		for(i = optind; i < argc; i += 1) {
+			res = append_arg(res, argv[i]);
+		}		
+	} else if (!have_minus_c && optind != argc) {
+		usage();
+		exit(56);
 	}
 	if(res == NULL){
 		res = XtMalloc(1);
