@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2004/07/06 20:08:43 $ $Revision: 2.37 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2004/07/11 11:53:40 $ $Revision: 2.38 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -621,6 +621,9 @@ char *file_dialog(Widget w, char *opn)
 	XmStringFree(dir_mask);
 
 	XmTextFieldSetString(dialog_text, file_name);
+
+	XmTextFieldShowPosition(dialog_text,
+			XmTextFieldGetLastPosition(dialog_text));
 
 	XtPopup(XtParent(dialog), XtGrabNone);
 
