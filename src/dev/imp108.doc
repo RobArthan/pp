@@ -1,0 +1,366 @@
+%  %Z% $Date$ $Revision$ $RCSfile$
+=TEX
+% TQtemplate.tex
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Portability Infrastructure Implementation}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP108}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}
+%\TPPstatus{Draft}
+\TPPstatus{Draft}
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.D.~Arthan & HAT Team Leader}
+\TPPabstract{This document implements the detailed design given in DTD108.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+      Project Library}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{daz,fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item [Issue 1.1]
+First version.
+\end{description}
+\subsection{Changes Forecast}
+As determined by experience during the porting process.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+Under contract CSM/927 with DERA Malvern, Lemma 1 Ltd. are undertaking a port of {\Product}
+onto New Jersey ML v1.10. The technical background and requirements for
+this work are discussed in the proposal \cite{LEMMA1/DAZ/PLN018}.
+
+This document describes the implementation of the infrastructure supporting the port whose
+design is given in \cite{DS/FMU/IED/DTD108}.
+
+
+\subsection{Introduction}
+
+See the design \cite{DS/FMU/IED/DTD108} for background and requirements.
+
+\subsection{Dependencies}
+
+\subsection{Possible Enhancements}
+
+\subsection{Deficiencies}
+
+
+\section{Portability Infrastructure}
+\subsection{Input/Output}
+=SML
+structure BasicIO : BasicIO = struct
+	type outstream = TextIO.outstream;
+	type instream = TextIO.instream;
+	val close_in : instream -> unit = TextIO.closeIn;
+	val end_of_stream : instream -> bool = TextIO.endOfStream;
+	val std_in : instream = TextIO.stdIn;
+	val std_out : outstream = TextIO.stdOut;
+	val open_out : string -> outstream = TextIO.openOut;
+	val input : (instream * int -> string) = TextIO.inputN;
+	val lookahead : instream -> string = (fn instrm =>
+		case TextIO.lookahead instrm of
+			SOME ch => str ch
+		|	NONE => ""
+	);
+	exception Io = IO.Io;
+	val close_out : outstream -> unit = TextIO.closeOut;
+	val open_in : string -> instream = TextIO.openIn;
+	val output : outstream * string -> unit = TextIO.output;
+end (* of structure BasicIO *);
+open BasicIO;
+=TEX
+=SML
+structure ExtendedIO : ExtendedIO = struct 
+	open BasicIO;
+	val flush_out : outstream -> unit = TextIO.flushOut;
+	val open_append : string -> outstream = TextIO.openAppend;
+	val input_line : instream -> string = TextIO.inputLine;
+	fun can_input (strm : instream, n : int) : bool = (
+		case TextIO.canInput(strm, n) of
+			NONE => false
+		|	SOME k => k >= n
+	);
+	fun is_term_in (instream : instream) = (
+		let 	val (rd as TextPrimIO.RD{ioDesc,...},buf) =
+			TextIO.StreamIO.getReader(TextIO.getInstream instream)
+		in	TextIO.setInstream
+			(instream, TextIO.StreamIO.mkInstream(rd, SOME buf));
+			case ioDesc of
+			NONE => false
+			|	SOME desc => (OS.IO.kind desc = OS.IO.Kind.tty)
+		end
+	);
+	fun is_term_out (outstream : outstream) = (
+		let 	val (wr as TextPrimIO.WR{ioDesc,...},buf) =
+			TextIO.StreamIO.getWriter(TextIO.getOutstream outstream)
+		in	TextIO.setOutstream
+			(outstream, TextIO.StreamIO.mkOutstream(wr, buf));
+			case ioDesc of
+			NONE => false
+			|	SOME desc => (OS.IO.kind desc = OS.IO.Kind.tty)
+		end
+	);
+	fun execute (cmd_args : string) : instream * outstream = (
+		Unix.streamsOf(Unix.execute("/bin/sh", ["-c", cmd_args]))
+	);
+end (* of structure ExtendedIO *);
+=TEX
+=IGN
+val (is, os) = ExtendedIO.execute "ls";
+val line = ref (ExtendedIO.input_line is);
+while !line <> "" do (line := ExtendedIO.input_line is; output(std_out, !line));
+=TEX
+\subsection{Compiler Reader Interface}
+=SML
+structure PPCompiler : PPCompiler = struct
+	type TEXT_SOURCE = unit -> string;
+	type TEXT_SINK = string -> unit;
+=TEX
+First some fairly low-level stuff to turn a $TEXT\_SOURCE$ into an
+input stream.
+To get the compiler's read-eval-print loop to work properly with input
+from a terminal, we need to copy the I/O descriptor out of the
+stream that is actually being read into the input stream we are going to
+create from the $TEXT\_SOURCE$ (the I/O descriptor and the name are the mysterious
+``attributes'' mentioned in the DTD).
+The following function gets the descriptor and name out for us.
+The $setInstream$ call is there because getting the Reader out of the
+file ``truncates'' it, i.e., in effect it really does ``get it out'' and
+we have to put it back again or the file will in effect be closed.
+=SML
+fun get_io_desc (instrm : TextIO.instream) : OS.IO.iodesc option * string = (
+	let	val (rdr, bfr) =
+		TextIO.StreamIO.getReader(TextIO.getInstream instrm);
+		val TextPrimIO.RD {ioDesc = iod, name = name, ... } = rdr;
+		val b = case bfr of "" => NONE | _ => SOME bfr;
+	in	TextIO.setInstream(instrm, TextIO.StreamIO.mkInstream(rdr, b));
+        	(iod, name)
+	end
+);
+=TEX
+The following function creates a primitive I/O reader from the information
+supplied by either of the two compiler functions. The $name$ parameter
+is ignored if the input stream parameter is supplied.
+=SML
+fun mk_text_reader(
+	f : TEXT_SOURCE,
+	name : string,
+	instrm : TextIO.instream option) : TextPrimIO.reader = (
+let	val buf : string ref = ref "";
+	fun read_vec i = (
+		if	size (!buf) >= i
+		then	let	val res = String.substring(!buf, 0, i);
+			in	buf := String.extract(!buf, i, NONE); res
+			end
+		else	let	fun get_buf acc = (
+					if	size acc >= i
+					then	(acc, true)
+					else	let	val str = f();
+						in	if	str = ""
+							then	(acc, false)
+							else	get_buf (acc ^ str)
+						end
+				);
+				val (newbuf, success) = get_buf (!buf);
+			in	if	success
+				then	let	val res = String.substring(newbuf, 0, i);
+					in	buf := String.extract(newbuf, i, NONE);
+						res
+					end
+				else	let	val res = newbuf;
+					in	buf := "";
+						res
+					end
+			end
+	);
+	val (iod, nm) = (
+		case instrm of
+			NONE => (NONE, name)
+		|	SOME is => get_io_desc is
+	);
+in	TextPrimIO.augmentReader
+	(TextPrimIO.RD{
+		name = nm,
+		avail = fn () => NONE,
+		block = NONE,
+		canInput = NONE,
+		chunkSize = 1,
+		close = fn() => (),
+		endPos = NONE,
+		getPos = NONE,
+		ioDesc = iod,
+		readArr = NONE,
+		readArrNB = NONE,
+		readVec = SOME read_vec,
+		readVecNB = NONE,
+		setPos = NONE,
+		verifyPos = NONE})
+end
+);
+=TEX
+GOT HERE!
+
+fun stream_of_string (s : string) : TextIO.instream = (
+let
+	val chs : char list ref = ref (explode s);
+	fun next _ = (
+		case !chs of
+			ch :: more => (chs := more; SOME ch)
+		|	[] => NONE
+	);
+	val reader = mk_text_reader("stream_of_string", next, NONE);
+	val strm = TextIO.mkInstream
+			(TextIO.StreamIO.mkInstream(reader, NONE));
+in
+	strm
+end
+);
+
+exception Fail of string;
+
+exception GiveUpReader;
+
+fun use_filter (
+	name : string,
+	f : char -> char option,
+	isopt : TextIO.instream option) = (
+	let	fun file_stream (SOME is) = (
+			case TextIO.input1 is of
+				NONE => NONE
+			|	SOME c => f c
+		) | file_stream NONE = NONE;
+		val reader = mk_text_reader("<test>", file_stream, isopt);
+		val strm = TextIO.mkInstream
+			(TextIO.StreamIO.mkInstream(reader, NONE));
+		fun go () = (
+			Compiler.Interact.useStream strm
+			handle ex => (
+				case ex of	
+					GiveUpReader => (
+						print "Ok, giving up\n"
+					) | Fail msg => (
+						print "Fail: ";
+						print (msg);
+						print "\n";
+						go()
+					) | _ => (
+						print "Exception: ";
+						print (exnName ex);
+						print " ";
+						print (exnMessage ex);
+						print "\n";
+						go()
+					)
+			)
+		);
+	in	go()
+	end
+);
+
+fun silly #"q" = SOME #"Q" | silly c = SOME c;
+
+use_filter ("<test>", silly, SOME TextIO.stdIn);
+
+
+fun flush () : unit = (
+	TextIO.flushOut TextIO.stdOut
+);
+fun say (s : string) : unit = (
+	TextIO.output(TextIO.stdOut,  s)
+);
+
+Compiler.Control.Print.out := {say = say, flush = flush};
+
+Compiler.Interact.useStream (stream_of_string 
+	"fun fact n = if n <= 1 then 1 else n * fact(n-1);");
+
+
+
+
+
+
+(* Pretty-printer: *)
+val print_depth : int -> unit = fn d => Compiler.Control.Print.printDepth := d;
+fun install_pp (path : string list)
+	(pp :	(string -> unit) *
+		(int * bool -> unit) *
+		(int * int -> unit) *
+		(unit -> unit) -> 'a -> unit) = (
+	let	open Compiler.PrettyPrint;
+		fun new_pp (pps : ppstream) = (
+			let	val adds = add_string pps;
+				fun beginb(i, false) = (
+					begin_block pps INCONSISTENT i
+				) |   beginb(i, true) = (
+					begin_block pps CONSISTENT i
+				);
+				val space = add_break pps;
+				fun endb() = end_block pps;
+				in	pp(adds, beginb, space, endb)
+			end
+		);
+	in	Compiler.PPTable.install_pp path new_pp
+	end			
+);
+
+
+\subsection{Compiler Writer Interface}
+
+
+\subsection{Saving Work Between Sessions}
+
+
+\subsection{Arithmetic}
+
+
+
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+
+\end{document}
+
+
