@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.179 $ $RCSfile: imp507.doc,v $ $Date: 2002/01/26 14:22:00 $
+% imp507.doc %Z% $Revision: 1.180 $ $RCSfile: imp507.doc,v $ $Date: 2002/01/29 17:06:12 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.179 $%
+\def\SCCSversion{$Revision: 1.180 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/01/26 14:22:00 $%
+\TPPdate{\FormatDate{$Date: 2002/01/29 17:06:12 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -134,7 +134,7 @@ statements in stubs.
 \item[Issue 1.174] R0021: domain condition generation.
 \item[Issue 1.175] Schema references now accepted in global dependencies of a function.
 \item[Issue 1.176] R0037: support for named numbers.
-\item[Issue 1.177-1.180] Further work on Autumn 2001 enhancements programme.
+\item[Issue 1.177-1.181] Further work on Autumn 2001 enhancements programme.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -6267,71 +6267,11 @@ fun Ûget_replacementÝ (lab : string) : REPLACEMENT OPT = (
 	s_lookup lab (!repl_env)
 );
 =TEX
-For various (good) reasons, the underlying {\Product} operations of adding new parent or saving a conjecture (e.g., a VC) do not increment the level counter.
-In order for the Z document generator to be able to output the necessary commands in the right place, we make and deletes a dummy type declaration on each web clause to force the level counter up.
-In order to avoid a potential infinite loop (e.g., if the current theory is not writable), the attempt to do this dummy declaration is abandoned after 10,000 goes (this protects the code against an extremely unlikely event!)
-=SML
-fun Ûcn_z_generatorÝ (w : WEB_CLAUSE) : unit = (
-	let	val save_zg_state = get_z_generator_state();
-		val save_ti_cxt = get_ti_context();
-	in	diag_vc_args := [];
-		diag_basic_decl_list := [];
-		diag_web_clause := w;
-		(do_web_clause w)
-		handle ex => (
-			diag_z_generator_state := get_z_generator_state();
-			set_z_generator_state save_zg_state;
-			set_ti_context save_ti_cxt;
-			raise ex
-		);
-		set_ti_context save_ti_cxt
-	end
-);
-=TEX
-=SML
-fun Ûrestart_cn_z_generatorÝ (():unit) : unit = (
-	set_z_generator_state{pack_env = pack_env0,
-		subunit_env = subunit_env0,
-		dec_env = dec_env0,
-		spec_env = spec_env0,
-		blocks = env0,
-		repl_env = repl_env0,
-		spark_prog = spark_prog0,
-		script_name = ""};
-	reset_cn_parser_state()
-);
-=TEX
-=SML
-fun Ûinit_cn_z_generatorÝ 
-	(continue : bool)
-	(script_name : string) : unit = (
-	set_z_generator_state
-	(if continue
-	then	let	val {repl_env, spark_prog, ...} = get_z_generator_state();
-		in	{	pack_env = !pack_env,
-				subunit_env = !subunit_env,
-				dec_env = dec_env0,
-				spec_env = spec_env0,
-				blocks = env0,
-				repl_env = repl_env,
-				spark_prog = spark_prog,
-				script_name = script_name}
-		end
-	else	{	pack_env = !pack_env,
-			subunit_env = !subunit_env,
-			dec_env = dec_env0,
-			spec_env = spec_env0,
-			blocks = env0,
-			repl_env = repl_env0,
-			spark_prog = spark_prog0,
-			script_name = script_name});
-	reset_cn_parser_state()
-);
-=TEX
 =SML
 abstype ÛCN_STATEÝ = CNState of Z_GENERATOR_STATE with
-
-	val Ûinitial_cn_stateÝ : CN_STATE = (
+=TEX
+=SML
+	val Ûinitial_cn_stateÝ as CNState init_z_generator_state : CN_STATE = (
 		CNState {pack_env = pack_env0,
 			subunit_env = subunit_env0,
 			dec_env = dec_env0,
@@ -6341,7 +6281,94 @@ abstype ÛCN_STATEÝ = CNState of Z_GENERATOR_STATE with
 			spark_prog = spark_prog0,
 			script_name = ""}
 	);
-local
+
+	val Ûstate_dbÝ : Z_GENERATOR_STATE E_DICT ref = 
+		ref (e_enter "" init_z_generator_state initial_e_dict);
+(*
+=TEX
+=SML
+*)
+	fun Ûsave_cn_stateÝ (() : unit) : unit = (
+		let	val zgs as {script_name, ...} = get_z_generator_state();
+		in	state_db := e_enter script_name zgs (!state_db)
+		end
+	);
+
+	fun Ûget_saved_cn_stateÝ (s : string) : CN_STATE = (
+		let	val s' = case s of "-" => get_current_theory_name() | _ => s;
+		in	case e_lookup s' (!state_db) of
+				Value st => CNState st
+			|	Nil => fail "get_saved_cn_state" 507070 [fn _ => s]
+		end
+	);
+(*
+=TEX
+It is tricky in the following to know whether or not to save the state
+if an exception is raised. The current approach is to save.
+=SML
+*)
+	fun Ûcn_z_generatorÝ (w : WEB_CLAUSE) : unit = (
+		let	val save_zg_state = get_z_generator_state();
+			val save_ti_cxt = get_ti_context();
+		in	diag_vc_args := [];
+			diag_basic_decl_list := [];
+			diag_web_clause := w;
+			(do_web_clause w)
+			handle ex => (
+				diag_z_generator_state := get_z_generator_state();
+				save_cn_state();
+				set_z_generator_state save_zg_state;
+				set_ti_context save_ti_cxt;
+				raise ex
+			);
+			save_cn_state();
+			set_ti_context save_ti_cxt
+		end
+	);
+(*
+=TEX
+=SML
+*)
+	fun Ûrestart_cn_z_generatorÝ (():unit) : unit = (
+		set_z_generator_state init_z_generator_state;
+		reset_cn_parser_state()
+	);
+(*
+=TEX
+=SML
+*)
+	fun Ûinit_cn_z_generatorÝ 
+		(continue : bool)
+		(script_name : string) : unit = (
+		set_z_generator_state
+		(if continue
+		then	let	val {repl_env, spark_prog, ...} = get_z_generator_state();
+			in	{	pack_env = !pack_env,
+					subunit_env = !subunit_env,
+					dec_env = dec_env0,
+					spec_env = spec_env0,
+					blocks = env0,
+					repl_env = repl_env,
+					spark_prog = spark_prog,
+					script_name = script_name}
+			end
+		else	{	pack_env = !pack_env,
+				subunit_env = !subunit_env,
+				dec_env = dec_env0,
+				spec_env = spec_env0,
+				blocks = env0,
+				repl_env = repl_env0,
+				spark_prog = spark_prog0,
+				script_name = script_name});
+		save_cn_state();
+		reset_cn_parser_state()
+	);
+(*
+=TEX
+{init\_cn\_z\_generator\_state} does the state-saving that one might have
+expected to see in the following.
+=SML
+*)
 	fun Ûdo_new_scriptÝ (continue : bool)
 		{	name : string,
 			state = CNState zg_state : CN_STATE} : unit = (
@@ -6361,7 +6388,12 @@ local
 			)
 		end		
 	);
-
+(*
+=TEX
+Again, {init\_cn\_z\_generator\_state} does the state-saving that one might have
+expected to see in the following.
+=SML
+*)
 	fun Ûdo_new_script1Ý (continue : bool)
 		{	name : string,
 			state = CNState zg_state : CN_STATE,
@@ -6389,7 +6421,10 @@ local
 			)
 		end		
 	);
-in
+(*
+=TEX
+=SML
+*)
 	val Ûnew_scriptÝ : {name : string, state : CN_STATE} -> unit
 		= do_new_script false;
 	val Ûnew_script1Ý :
@@ -6400,7 +6435,6 @@ in
 	val Ûnew_continuation_script1Ý :
 		{name : string, state : CN_STATE, library_theories : string list} -> unit
 		= do_new_script1 true;
-end;
 
 	fun Ûget_cn_stateÝ (() : unit) : CN_STATE = (
 		CNState (get_z_generator_state())
@@ -6408,10 +6442,14 @@ end;
 
 	fun Ûset_cn_stateÝ (CNState zg_state : CN_STATE) : unit = (
 		set_z_generator_state zg_state;
+		save_cn_state();
 		(open_theory o #script_name) zg_state
 			handle Fail _ => open_theory "cn"
 	);
-
+(*
+=TEX
+=SML
+*)
 end (* ... abstype *);
 =TEX
 \section{EPILOGUE}
