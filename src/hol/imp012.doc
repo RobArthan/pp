@@ -70,6 +70,10 @@ and also requires those files indicated as preceding it in the
 rel001 makefile.
 \subsubsection{Deficiencies}
 
+\subsubsection{Dependencies}
+We rely (in $delete\_to\_level$ on $list\_cup$ eliminating
+duplicates).
+
 \subsubsection{Possible Enhancements}
 
 =TEX
@@ -98,19 +102,9 @@ in
 	else reraise e efrom
 end);
 =TEX
-As a temporary measure, until the real thing:
-=SML 
-fun âwarningá (area : string) (id : int) 
-	(opts : (unit -> string) list) : bool = (
-	diag_string("WARNING: from " ^ area ^", " ^
-		get_error_message id 
-			(map (fn f => f ()) opts));
-	true
-);
-=TEX
 \subsection{Kernel State Change Material}
 As any operation that changes the kernel state must notify
-the list of functions managed by $on\_kernel\_state\_change$,
+the list of functions managed by the functions $on\_kernel\_state\_change$,
 we need to provide that material first.
 
 First the type itself:
@@ -129,7 +123,7 @@ datatype âKERNEL_STATE_CHANGEá
 		|	âDeleteTypeá of string
 		|	âDeleteAxiomá of string
 		|	âDeleteThmá of string
-		|	âNewAxiomá of string * TERM
+		|	âNewAxiomá of ((string * TERM)*THM)
 		|	âNewConstá of string * TYPE
 		|	âNewTypeá of string * int
 		|	âSimpleNewDefinitioná of (string * string * TERM) * THM
@@ -226,11 +220,13 @@ $dest\_thm$ passes through without problem.
 
 =SML
 fun âthm_theoryá (thm : THM) : string = (
-let val {theory = {name = iname,...},...} = icl'dest_thm thm
+let val {theory = {name = iname,...},...} = icl'dest_thm thm;
 in
 	icl'get_theory_name iname
-end
-handle complaint => pass_on complaint "icl'get_theory_name" "thm_theory");
+	handle complaint => 
+	divert complaint "icl'get_theory_name" "thm_theory" 12007 
+		[fn () => string_of_int iname]	
+end);
 =TEX
 =SML
 fun âsave_thmá (key : string, thm : THM) : THM = (
@@ -272,7 +268,7 @@ fun âdeleted_levelsá (level : int) : int list = (
 let val {del_levels = del_levels,current_level = current_level, ...} = icl'get_theory "-";
 
 	fun get_levels llevel ((lb,ub) :: lst) = (
-		if level < lb
+		if llevel < lb
 		then (interval llevel (lb -1) @
 			get_levels (ub+1) lst)
 		else (get_levels (ub+1) lst)
@@ -304,26 +300,30 @@ let	val dummy = case (get_current_theory_status()) of
 		axiom_dict = axiom_dict, theorem_dict = theorem_dict,
 		definition_dict = definition_dict,...} = icl'get_theory "-";
 
-	val del_con = map (fn (name,{ty = ty,...}) => (name, ty))
-		(con_env drop (fn (_,{level = lev,...}) => lev < level));
+	val (del_con,del_lev1) = split (map (fn (name,{ty = ty,level = lev,...}) => ((name, ty),lev))
+		(con_env drop (fn (_,{level = lev,...}) => lev < level)));
 
-	val del_type = map (fn (name,_) => name)
-		(ty_env drop (fn (_,{level = lev,...}) => lev < level));
+	val (del_type,del_lev2) = split(map (fn (name,{level = lev,...}) => (name,lev))
+		(ty_env drop (fn (_,{level = lev,...}) => lev < level)));
 
 	val del_thms = map (fn (key,_) => key)
 		(theorem_dict drop (fn (_,thm) => 
 			let val {level = lev,...} = icl'dest_thm thm
 			in lev < level end));
 
-	val del_axioms = map (fn (key,_) => key)
+	val (del_axioms, del_lev3) = split(map (fn (key,thm) => (key,
+			let val {level = lev,...} = icl'dest_thm thm
+			in lev end))
 		(axiom_dict drop (fn (_,thm) => 
 			let val {level = lev,...} = icl'dest_thm thm
-			in lev < level end));
+			in lev < level end)));
 
-	val del_defns = map (fn (key,_) => key)
+	val (del_defns, del_lev4) = split(map (fn (key,thm) => (key,
+			let val {level = lev,...} = icl'dest_thm thm
+			in lev end))
 		(definition_dict drop (fn (_,thm) => 
 			let val {level = lev,...} = icl'dest_thm thm
-			in lev < level end));
+			in lev < level end)));
 
 	val I = Combinators.I;
 
@@ -337,11 +337,11 @@ let	val dummy = case (get_current_theory_status()) of
 We now ask the interactive user whether he wishes everything
 necessary to be deleted.
 =SML
-	val dummy = warning caller 12012 [(fn () => target),(fn () => to_be_d)];
+	val dummy = warn caller 12012 [(fn () => target),(fn () => to_be_d)];
 =TEX
 We now have permission to proceed:
 =SML
-	val dl = deleted_levels level;
+	val dl = list_cup[del_lev1, del_lev2, del_lev3, del_lev4];
 
 	val dummy = map delete_thm del_thms;
 
@@ -402,14 +402,14 @@ let val {axiom_dict = axiom_dict,...} = icl'get_theory "-";
 
 	val {level = level,...} = icl'dest_thm ax;
 in
-	delete_to_level "delete_type" anm level
+	delete_to_level "delete_axiom" anm level
 end);
 =TEX
 =SML
 fun ânew_axiomá (key : string, tm : TERM) : THM = (
 let val saved = icl'new_axiom ([key], tm);
 in
-	notify_ksc (NewAxiom (key, tm));
+	notify_ksc (NewAxiom ((key, tm),saved));
 	saved
 end
 handle complaint => pass_on complaint "icl'new_axiom" "new_axiom");
@@ -444,6 +444,15 @@ handle complaint => pass_on complaint "icl'new_type" "new_type");
 =SML
 fun âset_user_datumá (key : string, ud : USER_DATUM) : unit = (
 let val {user_data = user_data,...} = icl'get_theory "-";
+
+	val dummy =  case (get_current_theory_status()) of
+		TSNormal => ()
+		| TSDeleted => error "set_user_datum" 6008 
+			[fn () => get_current_theory_name()]
+		| TSLocked => fail "set_user_datum" 6037
+			[fn () => get_current_theory_name()]
+		| TSAncestor => fail "set_user_datum" 6071
+			[fn () => get_current_theory_name()];
 
 	val dummy = (user_data := s_enter key (ref ud) (!user_data);
 		());
@@ -540,7 +549,7 @@ let val {axiom_dict = axiom_dict,...} = icl'get_theory thynm
 in
 	case res of
 	Value thm => thm
-	| _ => fail "get_axiom" 12004 [(fn () => thynm),(fn () => key)]
+	| _ => fail "get_axiom" 12005 [(fn () => thynm),(fn () => key)]
 end);
 =TEX
 =SML
@@ -559,7 +568,7 @@ let val {theorem_dict = theorem_dict,...} = icl'get_theory thynm
 in
 	case res of
 	Value thm => thm
-	| _ => fail "get_theorem" 12004 [(fn () => thynm),(fn () => key)]
+	| _ => fail "get_theorem" 12006 [(fn () => thynm),(fn () => key)]
 end);
 =TEX
 \subsubsection{Theory Names and Ancestry}
@@ -642,16 +651,16 @@ in
 end);
 =TEX
 \subsection{Accessing Theory Contents}
-We want something to comapct a dictionary of theorems:
+We want something to compact a dictionary of theorems:
 =SML
 fun âcompact_tsdá ([] : THM S_DICT) : (string list * THM) list = []
 | compact_tsd ((nm, thm) :: tsd_list) = (
-let fun compact (accnms: string list) (accthm: THM) (((nm,thm) :: rest): THM S_DICT) : 
+let fun compact (accnms: string list) (accthm: THM) (((nm1,thm1) :: rest): THM S_DICT) : 
 			(string list * THM) list = (
-		if dest_thm accthm = dest_thm thm
-		then compact (nm :: accnms) accthm rest
+		if dest_thm accthm = dest_thm thm1
+		then compact (nm1 :: accnms) accthm rest
 		else (((rev accnms), accthm) :: 
-			compact [nm] accthm rest)
+			compact [nm1] thm1 rest)
 	) | compact accnms accthm [] = [((rev accnms), accthm)];
 in
 	compact [nm] thm tsd_list
@@ -716,7 +725,7 @@ fun âget_theory_statusá (thynm : string) : THEORY_STATUS =
 (
 let val {status = status,...} = icl'get_theory_info thynm
 		handle complaint =>
-		pass_on complaint "icl'get_theory_info" "get_descendants";
+		pass_on complaint "icl'get_theory_info" "get_theory_status";
 in
 	status
 end);
