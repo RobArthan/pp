@@ -1,0 +1,543 @@
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * $Id$
+ *
+ * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
+ * Interface
+ *
+ * (c) ICL 1993, 1994
+ * 
+ * This implements the  pseudo-terminal in which the interactive program is
+ * run.
+ *
+ *
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * macros:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+#define _pterm
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * include files:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+#include <errno.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <stdio.h>
+#include <string.h>
+#include <stropts.h>
+#include <sys/filio.h>
+#include <sys/termio.h>
+#include <sys/termios.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+#include "xpp.h"
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * macro definitions:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+#define STDIN 0
+#define STDOUT 1
+#define STDERR 2
+
+/* For the following see "Data transfer to application" below */
+#define MAX_Q_LEN 40000		/* see "Data transfer to application" below */
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * global, static and external data:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+extern int errno;
+
+static int control_fd;
+
+static pid_t child_pid;
+
+static XtInputId app_ip_req;
+
+static Boolean listening;
+
+/* For the following three see "Data transfer to application" below */
+static char queue[MAX_Q_LEN];
+static NAT q_length = 0;
+static NAT q_head = 0;
+
+/* Messages for various purposes */
+
+static char *cmd_too_long_message = 
+"The command is too long (%d bytes supplied; max. %d bytes).";
+
+static char* signal_handled_message1 =
+"system error reported";
+
+static char* signal_handled_message2 =
+"attempting to save the editor text";
+
+static char* signal_handled_message3 =
+"apparently during X initialisation";
+
+static char* send_error_message = 
+"A system error occurred writing to the application.";
+
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Pseudo-terminal initialisation:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+
+void get_pty()
+{
+	char c;
+	int one = 1;
+	int slave_fd;
+	char *slavename;
+	char *ptsname();
+	static void get_from_application();
+	if ((control_fd = open("/dev/ptmx", O_RDWR)) < 0) {
+		msg("system error", "no pseudo-terminal devices available");
+		perror("xpp");
+		exit(1);
+	};
+	if(	grantpt(control_fd) < 0
+	||	unlockpt(control_fd) < 0
+	||	(slavename = ptsname(control_fd)) == NULL
+	||	(slave_fd = open(slavename, O_RDWR)) < 0 ) {
+		msg("system error", "cannot access pseudo-terminal slave device");
+		perror("xpp");
+		exit(2);
+	};
+
+	child_pid = fork();
+	if (child_pid < 0) { /* Cannot do */
+		msg("system error", "fork failed");
+		perror("xpp");
+		exit(5);
+	} else if (child_pid > 0) { /* Parent */
+		close(slave_fd);
+		if(fcntl(control_fd, F_SETFL, O_NDELAY) < 0) {
+			msg("system error", "fcntl on application would not permit non-blocking i/o");
+			perror("xpp");
+			exit(7);
+		};
+		if(ioctl(control_fd, FIONBIO, &one) < 0) {
+			msg("system error", "ioctl on control fd failed");
+			perror("xpp");
+			exit(8);
+		};
+		app_ip_req = XtAppAddInput(app,
+			control_fd, (XtPointer) XtInputReadMask,
+			get_from_application, NULL);
+		listening = True;
+		write(control_fd, " ", 1);	/* Tell child to exec */
+	} else { /* Child */
+		char	buf;
+		char **arglist;
+		struct termios tio;
+		close(control_fd);
+		dup2(slave_fd, STDIN);
+		dup2(slave_fd, STDOUT);
+		dup2(slave_fd, STDERR);
+		if (slave_fd > 2) {
+			close(slave_fd);
+		};
+		if(setsid() < 0) {
+			msg("system error", " setsid failed");
+			perror("xpp");
+			exit(9);
+		};
+
+		read(0, &buf, 1);		/* Wait until told */
+		if(	ioctl(0, I_PUSH, "ptem") < 0
+		||	ioctl(0, I_PUSH, "ldterm") < 0 
+		||	ioctl(0, I_PUSH, "ttcompat") < 0
+		||	ioctl(0, TCGETS, &tio) < 0 ) {
+			msg("system error", "ioctl on slave fd failed");
+			perror("xpp");
+			exit(10);
+		};
+
+		tio.c_lflag |= ISIG;
+		tio.c_lflag |= ICANON;
+		tio.c_lflag &= ~ECHO;
+		tio.c_lflag &= ~PENDIN;
+		tio.c_lflag &= ~NOFLSH;
+		tio.c_lflag &= ~TOSTOP;
+
+		tio.c_cc[VINTR] = CINTR;
+
+		if(ioctl(0, TCSETS, &tio) < 0 ) {
+			msg("system error", "ioctl on slave fd failed");
+			perror("xpp");
+			exit(11);
+		};
+
+
+		arglist = get_arg_list();
+		execvp(arglist[0], arglist);
+	/* **** error if reach here **** */
+		msg("system error", "could not exec");
+		exit(1);
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Test whether the application is alive.
+ * Also does some tidy-up:
+ *	1) non-blocking wait to reap child if it has died.
+ *	2) if child has died, and Xt is still listening for it
+ *	   then tell it to stop.
+ *	3) close the control and slave file descriptors.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+Boolean application_alive()
+{
+	if(child_pid) {
+		waitpid(child_pid, NULL, WNOHANG);
+		if(kill(child_pid, 0)) { /* != 0; it's died */
+			if(listening) {
+				XtRemoveInput(app_ip_req);
+				listening = False;
+			};
+			close(control_fd);
+			return False;
+		} else {
+			return True;
+		}
+	} else {
+		return False;
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Data transfer from application:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void get_from_application(
+	XtPointer	unused_p,
+	int		*unused_source,
+	XtInputId	*unused_id)
+{
+	NAT ct;
+	char buf[BUFSIZ + 1]; /* allow for null-termination in scroll_out */
+	static Boolean get_from_app_work_proc();
+	if((ct = read(control_fd, buf, BUFSIZ)) > 0) {
+		scroll_out(buf, ct, False);
+	}
+	if(ct == BUFSIZ) { /* Probably more to do */
+		XtRemoveInput(app_ip_req);
+		XtAppAddWorkProc(app, get_from_app_work_proc, (XtPointer) NULL);
+	}		
+}
+
+static Boolean get_from_app_work_proc(XtPointer unused_p)
+{
+	NAT ct;
+	char buf[BUFSIZ+1]; /* allow for null-termination in scroll_out */
+	if((ct = read(control_fd, buf, 1000)) > 0) {
+		scroll_out(buf, ct, False);
+	}
+	if(ct == BUFSIZ) { /* Probably more to do */
+		return False;	/* arrange to be called again */ 
+	} else	{
+		app_ip_req = XtAppAddInput(app,
+			control_fd, (XtPointer) XtInputReadMask,
+			get_from_application, NULL);
+		return True;
+	}
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Data transfer to application:
+ * To cope with executing long command line sequences, this
+ * is done using a (currently fixed size) queue.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * dequeue tries to write out the command line at the head of the
+ * queue. To simplify the coding and particularly the memory
+ * management, if the line to be written out cross the boundary
+ * at the end of the cyclic buffer containing the queue data,
+ * the line is taken to end at that boundary.
+ * It returns true iff. it reduced the size of the queue.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static Boolean dequeue()
+{
+	long int bytes_written, line_len, i, top;
+	Boolean sent_something = False;
+	Boolean sys_error = False;
+
+/* nothing to do if the queue is empty */
+	if(q_length == 0) {
+		return False;
+	};
+
+/* no way of emptying the queue if there's no application running: */
+
+	if(!application_alive()) {
+		return False;
+	};
+
+/* something to do; find the next command line:*/
+
+	top = ((i = q_head + q_length) > MAX_Q_LEN ? MAX_Q_LEN : i);
+
+	for(i = q_head; i < top && queue[i] != '\n'; ++i) {
+		continue;
+	};
+
+	line_len = (i < top ? i - q_head + 1 : i - q_head);
+
+/* try to send the command line: */
+	while(!sent_something && !sys_error && line_len) {
+		bytes_written = write(control_fd, queue + q_head, line_len);
+		sent_something = bytes_written > 0;
+
+		if(bytes_written < 0) {
+			if(errno = EWOULDBLOCK) {
+/* try to send a bit less */
+				--line_len;
+			} else {
+				perror("xpp");
+				sys_error = True;
+				ok_dialog(root, send_error_message);
+			}
+		}
+	};
+
+/* display what was sent, if anything: */
+
+	if(sent_something)  {
+		scroll_out(queue + q_head, bytes_written, True);
+		q_head = (q_head + bytes_written) % MAX_Q_LEN;
+		q_length -= bytes_written;
+	};
+
+	return sent_something;
+}
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * enqueue tries to add its argument text to the queue. First
+ * it attempts to dequeue things.
+ * It returns true if it got its argument onto the queue.
+ * **** **** **** **** **** ***. **** **** **** **** **** **** */
+static Boolean enqueue(buf, siz)
+char *buf;
+NAT siz;
+{
+	NAT buf_i, q_i;
+/* Make room, if we can: */
+
+	while(dequeue()) {
+		continue;
+	};
+/* If no room now, there's no hope: */
+
+	if(siz > MAX_Q_LEN - q_length) {
+		return False;
+	};
+
+	q_i = (q_head + q_length) % MAX_Q_LEN;
+
+/* Put data onto the queue: */
+
+	for(buf_i = 0; buf_i < siz && q_i < MAX_Q_LEN; ++buf_i) {
+		queue[q_i++] = buf[buf_i];
+	};
+
+	for(q_i = 0; buf_i < siz; ++q_i) {
+		queue[q_i] = buf[buf_i++];
+	};
+
+	q_length += siz;
+
+/* Have a go at flushing the queue: */
+
+	while(dequeue()) {
+		continue;
+	}
+
+	return True;
+}
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Time-out function for draining the queue when it can't
+ * be emptied immediately by enqueue
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void try_drain_queue(w)
+Widget w;
+{
+/* If there's something in the queue try to process it */
+	if(q_length) {
+		while(dequeue()) {
+			continue;
+		}
+	};
+
+/* If there's still something in the queue ask to be called again: */
+
+	if(q_length) {
+		XtAppAddTimeOut(app, 25,
+			(XtTimerCallbackProc)try_drain_queue, w);
+	};
+}
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * clear_queue clears out the queue by reinitialising q_length.
+ * **** **** **** **** **** ***. **** **** **** **** **** **** */
+static void clear_queue ()
+{
+	q_length = 0;
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Send commands to the application via the queue
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+void send_to_application (buf, siz)
+char *buf;
+NAT siz;
+{
+	NAT bytes_written;
+
+/* Check there's something listening: */
+	if(!application_alive()) {
+		return;
+	};
+
+/* Check if the command could never fit in the queue: */
+
+	if(siz > MAX_Q_LEN) {
+		char msg[256];
+		sprintf(msg, cmd_too_long_message, siz, MAX_Q_LEN);
+		ok_dialog(root, msg);
+		return;
+	};
+
+/* Send it off: */
+
+	enqueue(buf, siz);
+
+/* Call the timeout function to arrange to drain the queue if needed: */
+
+	try_drain_queue(root);
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Interrupt the applications (as with Cntl-C): 
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void interrupt_application ()
+{
+	clear_queue();
+	if(application_alive()) {
+		ioctl(control_fd, I_FLUSH, FLUSHW);
+		kill((pid_t)(-child_pid), SIGINT);
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Send new line to the application
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void send_nl ()
+{
+	char *buf = "\n";
+
+	send_to_application(buf, 1);
+
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Kill the application:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void kill_application ()
+{
+	clear_queue();
+	if(application_alive()) {
+		if(listening) {
+			XtRemoveInput(app_ip_req);
+			listening = False;
+		};
+		kill((pid_t)(-child_pid), SIGKILL);
+		kill(child_pid, SIGKILL);
+		waitpid(child_pid, NULL, WUNTRACED);
+		close(control_fd);
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Restart the application
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void restart_application () {
+	kill_application();
+	get_pty();
+}
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Ctrl-C Signal handling for the controller process.
+ * Following treats Ctrl-C similarly to window close
+ * or selection of quit from the command menu.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void sigint_handler(NAT sig)
+{
+	XtAppAddTimeOut(app, 0, (XtTimerCallbackProc) check_quit_cb, root);
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * panic_exit: 
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void panic_exit(char * m, NAT code)
+{
+	if(application_alive()) {
+		kill_application();
+	}
+	if(script) {
+		msg(m, signal_handled_message2);
+		panic_save(script);
+	} else {
+		msg(m, signal_handled_message3);
+	}
+	exit(code);
+}
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Other signal handling for the controller process.
+ * Try to save the editor text if the widget's there then bomb out.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void sigother_handler(NAT sig)
+{
+	panic_exit(signal_handled_message1, sig);
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * xt_error_handler
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void xt_error_handler(char * m)
+{
+	panic_exit(m, 2);
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * handle signals and Xt errors: the derivation of the following list
+ * of OS signals to handle not very scientific, but seems to catch
+ * the common problems.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void handle_sigs()
+{
+	sigset(SIGINT, sigint_handler);
+	sigset(SIGSEGV, sigother_handler);
+	sigset(SIGBUS, sigother_handler);
+	sigset(SIGFPE, sigother_handler);
+	sigset(SIGSYS, sigother_handler);
+	XtAppSetErrorHandler(app, xt_error_handler);
+}
+
+
