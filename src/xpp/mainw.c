@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.60 2003/06/24 15:36:43 rda Exp rda $
+ * $Id: mainw.c,v 2.61 2003/06/25 10:55:03 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -252,9 +252,9 @@ static MenuItem edit_menu_items[] = {
         edit_menu_cb, (XtPointer)EDIT_MENU_PASTE, (MenuItem *)NULL, False },
     { "Clear", &xmPushButtonGadgetClass, 'l', NULL, NULL,
         edit_menu_cb, (XtPointer)EDIT_MENU_CLEAR, (MenuItem *)NULL, False },
-    { "Undo", &xmPushButtonGadgetClass, 'U', "Ctrl<Key>z", "Ctrl-Z",
+    { "Undo", &xmPushButtonGadgetClass, 'U', NULL, NULL,
         edit_menu_cb, (XtPointer)EDIT_MENU_UNDO, (MenuItem *)NULL, False },
-    { "Redo", &xmPushButtonGadgetClass, 'R', "Ctrl<Key>r", "Ctrl-R",
+    { "Redo", &xmPushButtonGadgetClass, 'R', NULL, NULL,
         edit_menu_cb, (XtPointer)EDIT_MENU_REDO, (MenuItem *)NULL, False },
     {NULL}
 };
@@ -778,7 +778,7 @@ static Boolean setup_main_window(
 		NULL);
 
 	lnpopup = setup_menu(
-		linenumber, XmMENU_POPUP, "", ' ', False, ln_popup_menu_items);
+		linenumber, XmMENU_POPUP, "line-number-menu", ' ', False, ln_popup_menu_items);
 
 	XtAddEventHandler(linenumber, ButtonPressMask, False, post_ln_popup_menu, NULL);
 
@@ -809,7 +809,7 @@ static Boolean setup_main_window(
 	}
 
 	popupeditmenu = setup_menu(
-		script, XmMENU_POPUP, "", ' ', False, edit_menu_items);
+		script, XmMENU_POPUP, "popup-edit-menu", ' ', False, edit_menu_items);
 
 	wp = (Widget*) XtMalloc(3*(sizeof(Widget)));
 
