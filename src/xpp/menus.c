@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: menus.c,v 2.6 2002/10/17 17:09:34 rda Exp rda $
+ * $Id: menus.c,v 2.7 2002/12/03 15:05:06 rda Exp rda $
  *
  * menus.c -  creation of menus for the X/Motif ProofPower
  * Interface
@@ -34,6 +34,20 @@ static Widget setup_menu_aux(
 	Bool	tear_off_enabled,
 	MenuItem	*items);
 
+static char *sanitise(char *menu_title)
+{
+	char *res, *p, *q;
+	res = XtMalloc(strlen(menu_title) + 1);
+	for(p = res, q = menu_title; *q != 0; p += 1, q += 1) {
+		*p = isalnum(*q) ? *q : '-';
+	}
+	do {
+		*p = 0;
+		p -= 1;
+	} while (p > res && *p == '-');
+	return(res);
+}
+
 static void setup_menu_items(
 	Widget		menu,
 	int		type,
@@ -41,7 +55,7 @@ static void setup_menu_items(
 {
 	Widget w;
 	MenuItem	*item;
-	XmString	lab;
+	XmString	s;
 
 /*
  * Loop round the menu items
@@ -59,11 +73,16 @@ static void setup_menu_items(
 				item->pullright_tear_off_enabled,
 				item->pullright);
 		} else {
+			char *name = sanitise(item->label);
+			s = XmStringCreateSimple(item->label);
 			w = XtVaCreateManagedWidget(
-				item->label,
+				name,
 				*(item->class),
 				menu,
+				XmNlabelString,	s,
 				NULL);
+			XmStringFree(s);
+			XtFree(name);
 		}
 /*
  * Is there a mnemonic? (but not for popups)
@@ -79,13 +98,13 @@ static void setup_menu_items(
  * a pull-right submenu.
  */
 		if(!item->pullright && item->accelerator) {
-			lab = XmStringCreateSimple(item->accelerator_text);
+			s = XmStringCreateSimple(item->accelerator_text);
 			XtVaSetValues(
 				w,
 				XmNaccelerator,		item->accelerator,
-				XmNacceleratorText, 	lab,
+				XmNacceleratorText, 	s,
 				NULL);
-			XmStringFree(lab);
+			XmStringFree(s);
 		}
 /*
  * Is there a callback? Again not sensible for pull-right submenu
@@ -108,16 +127,18 @@ static Widget setup_menu_aux(
 {
 	Widget		menu, cascade;
 	XmString	lab;
+	char *menu_name;
+	menu_name = sanitise(menu_title);
 	if(type == XmMENU_POPUP) {
 /*
  * just create the popup menu:
  */
-		menu = XmCreatePopupMenu(parent, "menu", NULL, 0);
+		menu = XmCreatePopupMenu(parent, menu_name, NULL, 0);
 	} else {
 /*
  * Create the pulldown menu and its cascade button:
  */
-		menu = XmCreatePulldownMenu(parent, "menu", NULL, 0);
+		menu = XmCreatePulldownMenu(parent, menu_name, NULL, 0);
 		if(tear_off_enabled) {
 			XtVaSetValues(
 				menu,
@@ -126,7 +147,7 @@ static Widget setup_menu_aux(
 		}
 		lab = XmStringCreateSimple(menu_title);
 		cascade = XtVaCreateManagedWidget(
-			menu_title, xmCascadeButtonGadgetClass, parent,
+			menu_name, xmCascadeButtonGadgetClass, parent,
 			XmNsubMenuId,	menu,
 			XmNlabelString,	lab,
 			XmNmnemonic,	menu_mnemonic,
@@ -136,7 +157,10 @@ static Widget setup_menu_aux(
 
 	setup_menu_items(menu, type, items);
 
+	XtFree(menu_name);
+
 	return type == XmMENU_POPUP ? menu : cascade;
+
 }
 
 Widget setup_menu(

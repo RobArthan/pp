@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.58 2003/05/20 16:03:16 rda Exp rda $
+ * $Id: mainw.c,v 2.59 2003/05/21 10:54:16 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -199,7 +199,7 @@ static MenuItem file_menu_items[] = {
         file_menu_cb, (XtPointer)FILE_MENU_REVERT, (MenuItem *)NULL, False },
      { "Empty File",  &xmPushButtonGadgetClass, 'E', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_EMPTY_FILE, (MenuItem *)NULL, False },
-     { "Reopen ",  &xmPushButtonGadgetClass, 'p', NULL, NULL,
+     { "Reopen",  &xmPushButtonGadgetClass, 'p', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_REOPEN, reopen_menu_items, False },
    MENU_ITEM_SEPARATOR,
     { "Quit",  &xmPushButtonGadgetClass, 'Q', "Ctrl<Key>q", "Ctrl-Q",
@@ -252,17 +252,10 @@ static MenuItem edit_menu_items[] = {
         edit_menu_cb, (XtPointer)EDIT_MENU_PASTE, (MenuItem *)NULL, False },
     { "Clear", &xmPushButtonGadgetClass, 'l', NULL, NULL,
         edit_menu_cb, (XtPointer)EDIT_MENU_CLEAR, (MenuItem *)NULL, False },
-#ifdef SOLARIS
-    { "Undo", &xmPushButtonGadgetClass, 'U', "<Key>Undo", NULL,
-        edit_menu_cb, (XtPointer)EDIT_MENU_UNDO, (MenuItem *)NULL, False },
-    { "Redo", &xmPushButtonGadgetClass, 'R', "<Key>Redo", NULL,
-        edit_menu_cb, (XtPointer)EDIT_MENU_REDO, (MenuItem *)NULL, False },
-#else
     { "Undo", &xmPushButtonGadgetClass, 'U', "Ctrl<Key>z", "Ctrl-Z",
         edit_menu_cb, (XtPointer)EDIT_MENU_UNDO, (MenuItem *)NULL, False },
     { "Redo", &xmPushButtonGadgetClass, 'R', "Ctrl<Key>r", "Ctrl-R",
         edit_menu_cb, (XtPointer)EDIT_MENU_REDO, (MenuItem *)NULL, False },
-#endif
     {NULL}
 };
 
