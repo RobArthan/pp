@@ -97,7 +97,7 @@ Widget w;
 		xmDialogShellWidgetClass, w,
 		NULL); 
 
-	form = XtVaCreateManagedWidget("form",
+	form = XtVaCreateWidget("form",
 		xmFormWidgetClass, shell,
 		XmNfractionBase, 	16,
 		XmNautoUnmanage,	False,
@@ -132,6 +132,7 @@ Widget w;
 			cbdata);
 	};
 
+	XtManageChild(form);
 	XtPopup(shell, XtGrabNone);
 
 	return(True);
