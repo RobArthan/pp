@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.19 2003/07/24 13:09:22 rda Exp rda $ 
+ * $Id: palette.c,v 2.20 2004/08/04 16:35:53 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -94,7 +94,7 @@ void popup_palette(Widget w)
 
 	inner_form = XtVaCreateWidget("inner-form",
 		xmFormWidgetClass, outer_form,
-		XmNfractionBase, 	16,
+		XmNfractionBase, 	FRACTION_BASE,
 		XmNtopAttachment,	XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_FORM,
 		XmNrightAttachment,	XmATTACH_FORM,
@@ -107,24 +107,24 @@ void popup_palette(Widget w)
 
 	label_buf[1] = '\0';
 
-	for(i = 0; i < PALETTE_NROWS; i += 1) {
-		for(j = 0; j < PALETTE_NCOLS; j += 1) {
+	for(i = 0; i < NROWS; i += 1) {
+		for(j = 0; prettychars[i][j] != 0 && j < NCOLS; j += 1) {
 			label_buf[0] = prettychars[i][j];
 			sprintf(name_buf, "char%02X", prettychars[i][j]);
 			lab = XmStringCreateSimple(label_buf);
-			x = 2*j;
-			y = i;
+			x = XUNITS*j;
+			y = YUNITS*i;
 			button = XtVaCreateManagedWidget(name_buf,
 				xmPushButtonGadgetClass, inner_form,
 				XmNlabelString, lab,
 				XmNleftAttachment,	XmATTACH_POSITION,
 				XmNleftPosition,	x,
 				XmNrightAttachment,	XmATTACH_POSITION,
-				XmNrightPosition,	x + 2,
+				XmNrightPosition,	x + XUNITS,
 				XmNtopAttachment,	XmATTACH_POSITION,
 				XmNtopPosition,		y,
 				XmNbottomAttachment,	XmATTACH_POSITION,
-				XmNbottomPosition,	y + 1,
+				XmNbottomPosition,	y + YUNITS,
 				NULL);
 			copy_font_list(button, w);
 			XmStringFree(lab);
