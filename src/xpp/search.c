@@ -125,8 +125,6 @@ Bool add_search_tool(Widget text_w)
 
 	char	*pattern;
 
-	XtTranslations translations;
-
 	static void
 		search_backwards_cb(),
 		search_forwards_cb(),
@@ -146,7 +144,8 @@ Bool add_search_tool(Widget text_w)
 	};
 
 	shell = XtVaCreatePopupShell("xpp-Search-and-Replace",
-		xmDialogShellWidgetClass, text_w,
+		transientShellWidgetClass, text_w,
+		XmNdeleteResponse,		XmUNMAP,
 		NULL); 
 
 	rowcol = XtVaCreateWidget("rowcolumn",
@@ -401,14 +400,13 @@ Bool add_search_tool(Widget text_w)
 	line_no_set(&search_data);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * copy various aspects of argument text widget behaviour
+ *set up text widget translations and font
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-	XtVaGetValues(text_w, XmNtranslations, &translations, NULL);
-	if(translations != NULL) {
-		XtOverrideTranslations(search_text, translations);
-		XtOverrideTranslations(replace_text, translations);
-		XtOverrideTranslations(line_no_text, translations);
-	}
+
+	XtOverrideTranslations(search_text, text_translations);
+	XtOverrideTranslations(replace_text, text_translations);
+	XtOverrideTranslations(line_no_text, text_translations);
+
 	copy_font_list(search_text, text_w);
 	copy_font_list(replace_text, text_w);
 	copy_font_list(line_no_text, text_w);
