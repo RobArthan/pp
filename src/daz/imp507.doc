@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.272 $ $RCSfile: imp507.doc,v $ $Date: 2004/07/20 16:36:16 $
+% imp507.doc %Z% $Revision: 1.273 $ $RCSfile: imp507.doc,v $ $Date: 2004/08/10 14:58:46 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.272 $%
+\def\SCCSversion{$Revision: 1.273 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/07/20 16:36:16 $%
+\TPPdate{\FormatDate{$Date: 2004/08/10 14:58:46 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -210,6 +210,7 @@ by doing all the work of checking and generating the VC terms in {\it call\_vcs}
 \item[Issues 1.258-1.271] Reform of the Environments.
 \item[Issue 1.272] Private type declarations are now put through {\em basic\_declaration} to set up their enviroment  entries.
 \item[Issue 1.273] Fixed anomaly in use of replacement environment. 
+\item[Issue 1.274] Performance tweaks in type inference context handling to avoid list-based processing of the contexts.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -2354,13 +2355,24 @@ fun €set_package_ti_context› (package : PACKAGE) : unit = (
 );
 =TEX
 The following is used to add the typing context for a parameter list into the context temporarily. It returns the context which should be restored when the parameters are no longer needed.
+In order to reuse earler code for handling the parameter specifications, we need to process
+them using an IN\_SCOPE that contains all the type marks that may appear in them.
+However, we don't want to flatten out the resulting type inference context, but only to add the entries for the parameters into it (if this is done in a context where the Z types are out of scope, caller is doomed in any case).
+Hence we build a new efficient context for the parameters (and anything else that it's in the running environment) and then look the parameters up in it and add them to the new context that we are going to set up.
 =SML
 fun €add_params_ti_context› (pars : PARAM_SPEC list) : TYPE E_DICT = (
-	let	val old = e_get_ti_context();
-		val to_add = ti_context_of_in_scope (in_scope_vc_pars Nil
+	let	val old_cxt = e_get_ti_context();
+		val par_cxt = ti_context_of_in_scope (in_scope_vc_pars Nil
 				(#in_scope(#declab(block 1)), pars));
-	in	e_set_ti_context(list_e_enter old (e_flatten to_add));
-		old
+		val z_ids = map trans_id (flat (map (#vars o #var_decl) pars));
+		fun aux acc (z_id ::more) = (
+			case e_lookup z_id par_cxt of
+				Value ty => aux (e_enter z_id ty acc) more
+			|	Nil => aux acc more
+		)  |  aux acc [] = acc;
+		val new_cxt = aux old_cxt z_ids;
+		val _ = e_set_ti_context new_cxt;
+	in	old_cxt
 	end
 );
 =TEX
@@ -8673,11 +8685,11 @@ It is now important not to save the state if an exception is raised.
 	fun €common_z_generator› (sco : bool) (w : WEB_CLAUSE) : unit = (
 		let	val save_zg_state = get_z_generator_state();
 			val pp_state = checkpoint "cn";
-			val save_ti_cxt = get_ti_context();
+			val save_ti_cxt = e_get_ti_context();
 			fun reset () = (
 				diag_z_generator_state := get_z_generator_state();
 				set_z_generator_state save_zg_state;
-				set_ti_context save_ti_cxt;
+				e_set_ti_context save_ti_cxt;
 				exception_handled := false;
 				let	val thy = get_current_theory_name ();
 				in	rollback pp_state;
@@ -8697,7 +8709,7 @@ It is now important not to save the state if an exception is raised.
 			then	reset()
 			else	());
 			save_z_generator_state();
-			set_ti_context save_ti_cxt
+			e_set_ti_context save_ti_cxt
 		end
 	);
 

@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% %Z% $Date: 2004/07/12 16:53:51 $ $Revision: 1.129 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2004/07/18 11:36:54 $ $Revision: 1.130 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -26,7 +26,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation: Verification Condition Generator}  %% Mandatory field
 \def\TPPheadtitle{Verification Condition Generator}
 \TPPref{ISS/HAT/DAZ/IMP505}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.129 $%
+\def\SCCSversion{$Revision: 1.130 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 \TPPdate{\FormatDate{97/07/18%
@@ -153,6 +153,7 @@ More corrections to VC derivation code. Change names {\it Sequent\_Route} to
 \item[Issue 1.120] R0096: improved formatting of nothing statement form in web clauses
 \item[Issue 1.121] Fixed bug in error handling.
 \item[Issues 1.122-1.130] Reform of the Environments.
+\item[Issue 1.131] Performance improvements in {|em z\_preds\_in\_callee\_cxt} and {\em param\_tmp\_name}.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -1007,35 +1008,21 @@ fun Ûmaybe_param_tmp_nameÝ (n : Z_ID) : bool = (
 	end
 );
 fun Ûparam_tmp_nameÝ (ty : TYPE) : Z_ID = (
-	let	fun filter av = (
-			not (maybe_param_tmp_name av)
-		);
-		val ti_cxt_names = map ((fn (n, _, _) => n) o dest_z_lvar) (get_ti_context());
-		val avoid = ti_cxt_names drop filter;
+	let	val old_cxt = e_get_ti_context();
 		fun find_next i = (
 			let	val n = param_tmp_name_stem ^ string_of_int i;
-			in	if	n mem avoid
-				then	find_next (i+1)
-				else	n
+			in	case e_lookup n old_cxt of
+					Value _ => find_next (i+1)
+				|	Nil => n
 			end
 		);
 		val res = find_next 1;
-	in	set_ti_context(mk_var(res, ty)::get_ti_context());
-		res
+		val new_cxt = e_enter res ty old_cxt;
+		val _ = e_set_ti_context new_cxt;
+	in	res
 	end
 );
 =IGN
-param_tmp_name ”ú®;
-param_tmp_name ”ú®;
-set_ti_context (map (switch(curry mk_var) ”ú®) ["abc", "def", param_tmp_name”ú®]);
-param_tmp_name ”ú®;
-param_tmp_name ”ú®;
-param_tmp_name ”ú®;
-param_tmp_name ”ú®;
-set_ti_context (map (switch(curry mk_var) ”ú®) ["abc", "def", "tmp_3", "tmp_4"]);
-param_tmp_name ”ú®;
-get_ti_context();
-set_ti_context[];
 =TEX
 The work done for an individual parameter is sufficiently complicated to
 merit a separate function.
@@ -1120,14 +1107,13 @@ fun Ûz_preds_in_callee_cxtÝ
 	({name, formal_ids, ...} : FORMAL_PROC)
 	(ztms : Z_TM list)
 			: Z_PRED list = (
-	let	val old_cxt = get_ti_context();
+	let	val old_cxt = e_get_ti_context();
 		val extra_cxt = ti_context_of_formal_ids env formal_ids;
-		val extra_ns = map (fst o dest_var) extra_cxt;
-		val filt_old_cxt = old_cxt drop (fn t => fst(dest_var t) mem extra_ns);
-		val new_cxt =  extra_cxt @ filt_old_cxt;
-		val side1 = set_ti_context new_cxt;
+		val extra_ntys = map dest_var extra_cxt;
+		val new_cxt = list_e_enter old_cxt extra_ntys;
+		val side1 = e_set_ti_context new_cxt;
 		val zps = map (z_predexp_of_z_tm1 env) ztms;
-		val side2  = set_ti_context old_cxt;
+		val side2  = e_set_ti_context old_cxt;
 	in	zps
 	end
 );
