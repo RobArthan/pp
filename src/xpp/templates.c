@@ -93,7 +93,6 @@ Bool get_templates_data()
 Bool add_templates(w)
 Widget w;
 {
-	XmString lab;
 	NAT i, x, y, twi, fbase;
 	Widget shell, form, button;
 	void templates_cb();
@@ -136,12 +135,17 @@ Widget w;
 
 	for(i = 0; i < template_table_size; ++i) {
 
-		lab = XmStringCreateSimple(template_table[i].bitmap_file);
 		x = (fbase / 2) * (i % 2);
 		y = 2 * (i / 2);
+
 		button = XtVaCreateManagedWidget("button",
 			xmPushButtonGadgetClass, form,
-			XmNlabelString,	lab, 
+			XmNlabelPixmap,	XmGetPixmap(
+						   XtScreen(form),
+						   template_table[i].bitmap_file,
+						   (Pixel) 1,
+						   (Pixel) 0),
+			XmNlabelType,		XmPIXMAP,
 			XmNleftAttachment,	XmATTACH_POSITION,
 			XmNleftPosition,	x,
 			XmNrightAttachment,	XmATTACH_POSITION,
@@ -151,10 +155,9 @@ Widget w;
 			XmNbottomAttachment,	XmATTACH_POSITION,
 			XmNbottomPosition,	y + 2,
 			NULL);
-/*		copy_font_list(button, w); */
-		XmStringFree(lab);
 		template_callback_data[i].text_index = twi;
-		template_callback_data[i].expansion = template_table[i].expansion;
+		template_callback_data[i].expansion =
+						template_table[i].expansion;
 		XtAddCallback(button, XmNactivateCallback, templates_cb,
 			(XtPointer) &(template_callback_data[i]) );
 	};
