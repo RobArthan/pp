@@ -477,11 +477,13 @@ static void reset_cb(
 		XmTextSetString(journal_max_text, buf);
 	}
 
-	XtVaGetValues(add_new_line_radio_buttons,
-		XmNchildren,		&btns, NULL);
-
-	XmToggleButtonSetState(btns[orig_global_options.add_new_line_mode],
+	if(add_new_line_radio_buttons) {
+		XtVaGetValues(add_new_line_radio_buttons,
+			XmNchildren,		&btns, NULL);
+		XmToggleButtonSetState(
+			btns[orig_global_options.add_new_line_mode],
 			True, True);
+	}
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
