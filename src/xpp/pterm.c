@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.15 2002/08/09 10:15:43 rda Exp $
+ * $Id: pterm.c,v 2.16 2002/08/10 10:33:45 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -476,10 +476,11 @@ static Boolean dequeue(void)
 		sent_something = bytes_written > 0;
 
 		if(bytes_written < 0) {
-			if(errno = EWOULDBLOCK) {
-/* try to send a bit less */
+			if(errno == EWOULDBLOCK) { /* try to send a bit less: */
 				--line_len;
-			} else {
+			} else if (errno == EINTR) { /* have another go: */
+				continue;
+			} else { /* some other problem */
 				perror("xpp");
 				sys_error = True;
 				ok_dialog(root, send_error_message);
@@ -502,6 +503,8 @@ static Boolean dequeue(void)
  * enqueue tries to add its argument text to the queue. First
  * it attempts to dequeue things.
  * It returns true if it got its argument onto the queue.
+ * Caller is expected to call try_drain_queue after this
+ * to drain the queue and resize it as appropriate.
  * **** **** **** **** **** ***. **** **** **** **** **** **** */
 static Boolean enqueue(char *buf, NAT siz)
 {
@@ -537,7 +540,7 @@ static Boolean enqueue(char *buf, NAT siz)
 /* if still not enough room, realloc: */
 
 		if(q_tail + siz + 1 > q_size) {
-			queue = realloc(queue, q_tail + siz + 1);
+			queue = XtRealloc(queue, q_tail + siz + 1);
 			if(queue == 0) {
 				ok_dialog(root, queue_malloc_failed_message);
 				return False;
@@ -583,7 +586,7 @@ static void try_drain_queue(Widget w)
 
 /* If not, reclaim space if appropriate: */
 
-		queue = realloc(queue, INIT_Q_LEN); 
+		queue = XtRealloc(queue, INIT_Q_LEN); 
 		if(queue == 0)  {
 			ok_dialog(root, queue_malloc_failed_message);
 			return False;
