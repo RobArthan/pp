@@ -356,27 +356,31 @@ char *file_dialog(Widget w, char *opn)
 {
 	static Widget dialog;
 	XmString ok, title;
-	void file_sel_cb(), file_help_cb();
+	void file_cancel_cb(), file_ok_cb(), file_help_cb();
+	Atom WM_DELETE_WINDOW;
 	static NAT reply;
 	/* 0 = not replied; */
 
 	reply = 0;
 
-
 	if (!dialog) {
 		dialog = XmCreateFileSelectionDialog(w, "filesel",
 				NULL, 0);
-		XtAddCallback(dialog, XmNokCallback, file_sel_cb, &reply);
-		XtAddCallback(dialog, XmNcancelCallback, file_sel_cb, &reply);
+		XtAddCallback(dialog, XmNokCallback, file_ok_cb, &reply);
+		XtAddCallback(dialog, XmNcancelCallback, file_cancel_cb, &reply);
 		XtAddCallback(dialog, XmNhelpCallback, file_help_cb, NULL);
-
+		WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
+			"WM_DELETE_WINDOW",
+			False);
+		XmAddWMProtocolCallback(XtParent(dialog),
+			WM_DELETE_WINDOW,
+			file_cancel_cb,
+			&reply);
 		title = XmStringCreateSimple("Select A File");
-
 		XtVaSetValues(dialog,
 			XmNdialogStyle,		XmDIALOG_FULL_APPLICATION_MODAL,
 			XmNdialogTitle, 	title,
 			NULL);
-
 		XmStringFree(title);
 
 	};
@@ -396,6 +400,10 @@ char *file_dialog(Widget w, char *opn)
 
 	while (!reply) {
 		poll();
+		if(reply == YES && (!file_name || !*file_name)) {
+			XBell(XtDisplay(root), 50);
+			reply = 0;
+		}
 	};
 
 	XtPopdown(XtParent(dialog));
@@ -409,24 +417,23 @@ char *file_dialog(Widget w, char *opn)
 }
 
 
-void file_sel_cb(
+void file_ok_cb(
 	Widget w,
 	NAT *reply,
 	XmFileSelectionBoxCallbackStruct *cbs)
 {
-	switch (cbs->reason) {
-		case XmCR_OK:
-			(void) XmStringGetLtoR(cbs->value,
-					XmSTRING_DEFAULT_CHARSET,
-					&file_name);
-			*reply = YES;
-			break;
-		case XmCR_CANCEL:
-			*reply = NO;
-			break;
-		default:
-			break;
-	}
+	(void) XmStringGetLtoR(cbs->value,
+			XmSTRING_DEFAULT_CHARSET,
+			&file_name);
+	*reply = YES;
+}
+
+void file_cancel_cb(
+	Widget w,
+	NAT *reply,
+	XtPointer p)
+{
+	*reply = NO;
 }
 void file_help_cb(
 	Widget w,
