@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.30 2004/02/11 21:45:31 rda Exp rda $
+ * $Id: xmisc.c,v 2.31 2004/11/23 15:52:51 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -491,6 +491,30 @@ void common_dialog_setup(
 		cbd = (cancel_info*) 0;
 	}
 	XtAddCallback(shell, XmNpopupCallback, setup_popup_cb, cbd);
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * popdown_cb: this callback is often the right
+ * thing for handling  the osfCancel key or a dismiss button.
+ * The callback data is the dialogue shell to be popped down.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void popdown_cb(
+	Widget w,
+	XtPointer	shell,
+	XtPointer	cbs)
+{
+	XtPopdown((Widget)shell);
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * help_cb: this callback is often the right
+ * thing for handling a help button.
+ * The callback data is the string containing the help text.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void help_cb(
+	Widget w,
+	XtPointer	help_text,
+	XtPointer	cbs)
+{
+	help_dialog(root, (char*)help_text);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * text_show_position: like XmTextShowPosition but centres the

@@ -315,6 +315,8 @@ typedef enum {
 			Widget shell,
 			void cancel_cb(CALLBACK_ARGS),
 			XtPointer cancel_cbd);
+	extern	void popdown_cb(CALLBACK_ARGS);
+	extern	void help_cb(CALLBACK_ARGS);
 	extern	void set_input_focus(Widget w);
 	extern	void attach_edit_popup(Widget text_w, MenuItem *menu_items);
 	extern	void attach_rw_edit_popup(Widget text_w);
