@@ -3,8 +3,8 @@
 \ftlinepenalty=9999
 \makeindex
 \TPPproject{IED 1563}  %% Mandatory field
-\TPPtitle{Release 1  ICL HOL: Implementation for Types and Terms}  %% Mandatory field
-\def\TPPheadtitle{Release 1  ICL HOL \cr Implementation for Types and Terms}
+\TPPtitle{Implementation for Types and Terms}  %% Mandatory field
+\def\TPPheadtitle{Implementation for Types and Terms}
 \TPPref{DS/FMU/IED/IMP003}  %% Mandatory field
 \def\SCCSversion{$Revision$
 }
@@ -52,6 +52,9 @@ Minor corrections and prettifying of characters.
 Hid $TERM\_term$ from user.
 \item [Issue 1.3]
 Changes to mirror changes to version 1.5 of \cite{DS/FMU/IED/DTD003}.
+\item [Issue 1.4]
+Changes to mirror changes to version 1.8 of \cite{DS/FMU/IED/DTD003}
+($TYPE$ and $TERM$ made into equivalents of abstract data types).
 \end{description}
 \subsection{Changes forecast}
 \section{GENERAL}
@@ -76,68 +79,61 @@ rel001 makefile.
 =SML
 structure ‚icl'TypesAndTerms· : icl'TypesAndTerms = struct
 =TEX
+\newpage
 \subsection{Types}
+We implement types by using local definition to hide
+its data constructors, rather than declaring it as an abstract data type,
+to keep $TYPE$ an equality type.
 =SML
-datatype ‚TYPE· =
-		‚mk_vartype· of string |
-		‚mk_type·    of string * TYPE list;
+local 
+datatype ‚TYPE· = 
+	‚Vartype· of string |
+	‚Type·    of string * TYPE list |
+	‚Funtype· of (TYPE * TYPE)
+in
+type TYPE = TYPE;
+=TEX
+\subsection{Functions for Types}
+We force $mk\_type$ to produce function types when appropriate -
+this ensures a single form for equal types.
+=SML
+fun ‚mk_type· (("ã",[t1,t2]): string * TYPE list) : TYPE  = Funtype(t1,t2)
+| mk_type ctl = Type ctl;
 =TEX
 =SML
-fun ‚dest_type· ((mk_vartype s):TYPE) : string * TYPE list = (
-	fail "dest_type" 3001 [(fn(u:unit)=> s)]
-) | dest_type (mk_type(s, tl)) = (s, tl);
+val ‚mk_vartype· : string -> TYPE  = Vartype;
 =TEX
 =SML
-fun ‚dest_vartype· ((mk_vartype s):TYPE) : string = s
+val ‚mk_funtype· : (TYPE * TYPE) -> TYPE = Funtype;
+val ‚mk_fun· : (TYPE * TYPE) -> TYPE = Funtype;
+=TEX
+=SML
+fun ‚dest_type· (Type stl : TYPE): string * TYPE list = stl
+| dest_type (Funtype (t1, t2)) = ("ã", [t1, t2])
+| dest_type (Vartype s)  = fail "dest_type" 3001 [(fn(u:unit)=> s)];
+=TEX
+=SML
+fun ‚dest_vartype· ((Vartype s):TYPE) : string = s
  | dest_vartype _ = fail "dest_vartype" 3019 [];
 =TEX
 =SML
-fun ‚is_vartype· ((mk_vartype _):TYPE) : bool = true
-| is_vartype (mk_type _) = false;
-=SML
-fun ‚mk_fun· ((ty1, ty2) : TYPE * TYPE) : TYPE = (
-	mk_type("ã", [ty1, ty2])
-);
-=TEX
-$icl'inst\_type$ $alist$ $type$ recursively descends through $type$, replacing any type variables by whatever the association list $alist$ associates with them.
-If the association list does not contain a type variable found in $type$, then that type variable will not be changed.
-Replaced types are {\bf not} recursively processed by this function.
-=SML
-fun ‚icl'inst_type· (f : (TYPE * string) list) (mk_vartype s : TYPE) : TYPE = (
-	rassoc2 f mk_vartype s
-) | icl'inst_type (f : (TYPE * string) list) (mk_type (s, tl)) : TYPE = (
-	mk_type(s, map (icl'inst_type f) tl)
-);
-=TEX
-This function extracts the type constructors contained
-in a type.
-=SML
-fun ‚type_tycons· ((mk_vartype _): TYPE) : (string * int) list = []
-| type_tycons (mk_type(s, tl)) = list_cup (map type_tycons tl) grab (s, length tl);
-=TEX
-This function extracts the type variables contained
-in a type.
-=SML
-fun ‚type_tyvars· ((mk_vartype s): TYPE) : string list = [s]
-| type_tyvars (mk_type(_, tl)) = list_cup (map type_tyvars tl);
+fun ‚dest_funtype· (Funtype t1t2 : TYPE) : TYPE * TYPE = t1t2
+| dest_funtype _ = fail "dest_funtype" 3022 [];
 =TEX
 =SML
-fun ‚type_any· (p : TYPE -> bool) (ty : TYPE) : bool = (
-let 	fun aux (mk_vartype _) = false
-	| aux (mk_type(_,tyl)) = ( 
-	let
-		fun list_type_any (lty :: ltyl) = (
-		p lty orelse aux lty orelse list_type_any ltyl
-		) | list_type_any [] = false
-	in
-		list_type_any tyl
-	end)
-in
-	p ty orelse aux ty
-end);	
+fun ‚is_vartype· ((Vartype _):TYPE) : bool = true
+| is_vartype _ = false;
 =TEX
 =SML
-val ‚BOOL· : TYPE = mk_type("BOOL", []);
+fun ‚is_type· ((Vartype _):TYPE) : bool = false
+| is_type _ = true;
+=TEX
+Types formed by $Type$ are only formed by $mk\_type$,
+and therefore cannot be function types, as  $mk\_type$
+coerces these to being formed by $Funtype$.
+=SML
+fun ‚is_funtype· ((Funtype _):TYPE) : bool = true 
+| is_funtype _ = false;
 =TEX
 \subsection{Well-Formedness and the Type of Well-Formed Terms}
 Since we give the type of well-formed terms as an
@@ -164,6 +160,7 @@ of the argument).
 At the root of the tree we give the type unless the
 term is a combination, when the type information is
 available ``just underneath''.
+The local type $TERM\_term$ is introduced to allow this approach.
 
 Instead of the $\it has\_mk\_\ldots$ functions,
 we give a constructor function ($mk\_\ldots$),
@@ -171,17 +168,19 @@ a destructor function ($dest\_\ldots$) and
 a test function ($is\_\ldots$) for each syntactic
 class.
 
+We implement types by using local definition to hide
+its data constructors, rather than declaring it as an abstract data type,
+to keep $TYPE$ an equality type.
 =SML
 local
-	datatype ‚TERM_term· =
+datatype ‚icl'TERM·	 =
 	‚icl'Var· of string |
 	‚icl'Const· of string |
-	‚icl'Comb· of TERM_term * TERM_term * TYPE |
-	‚icl'Abs· of string * TERM_term
+	‚icl'Comb· of icl'TERM * icl'TERM * TYPE |
+	‚icl'Abs· of string * icl'TERM
+datatype TERM = typed of icl'TERM * TYPE
 in
-abstype ‚TERM· =
-	typed of TERM_term * TYPE
-with
+type ‚TERM· = TERM;
 =TEX
 The type of destroyed terms, and functions upon it:
 =SML
@@ -196,23 +195,23 @@ as their absence would indicate a design error, not a usage error.
 =SML
 fun ‚dest_TERM· ((typed (icl'Var s, ty)):TERM) : DEST_TERM = Var (s, ty)
 | dest_TERM (typed (icl'Const s, ty)) = Const (s,  ty)
-| dest_TERM (typed (icl'Comb(t1, t2, ty2),ty1ty2)) = (
-	Comb (typed(t1, mk_fun (ty2, ty1ty2)), typed(t2, ty2))
-) | dest_TERM (typed (icl'Abs(str, tm), mk_type("ã",[ty1, ty2]))) = (
+| dest_TERM (typed (icl'Comb(t1, t2, ty2),tyt1t2)) = (
+	Comb (typed(t1, Funtype (ty2, tyt1t2)), typed(t2, ty2))
+) | dest_TERM (typed (icl'Abs(str, tm), Funtype(ty1, ty2))) = (
 	Abs (typed(icl'Var str, ty1), typed(tm, ty2))
 ) | dest_TERM _ = error "dest_TERM" 3063 [];
 =TEX
 =SML
 fun  ‚mk_TERM· ((Var (s, ty)): DEST_TERM) : TERM = typed(icl'Var s, ty)
 | mk_TERM (Const (s, ty)) = typed(icl'Const s, ty)
-| mk_TERM (Comb (typed(tm1,mk_type("ã", [ty1, ty2])), typed(tm2,ty3))) = (
+| mk_TERM (Comb (typed(tm1, Funtype (ty1,ty2)), typed(tm2,ty3))) = (
 	if (ty1 = ty3)
 	then typed(icl'Comb(tm1, tm2, ty3), ty2)
 	else fail "mk_TERM" 3002 []
 ) | mk_TERM (Abs (typed(icl'Var s, ty1), typed(bdy, ty2))) = (
-	typed(icl'Abs(s, bdy), mk_fun(ty1, ty2))
+	typed(icl'Abs(s, bdy), Funtype(ty1, ty2))
 ) | mk_TERM (Comb _) = fail "mk_TERM" 3003 []
-  | mk_TERM (Abs _) = fail "mk_TERM" 3020 [];
+| mk_TERM (Abs _) = fail "mk_TERM" 3020 [];
 =TEX
 =SML
 fun ‚type_of· ((typed (_, ty)):TERM):TYPE = ty;
@@ -236,38 +235,32 @@ fun ‚is_const· ((typed (icl'Const _, _)): TERM):bool = true
 |   is_const _ = false;
 =TEX
 =SML
-fun ‚mk_comb·((typed(f, mk_type("ã", [ty1, ty2])), typed(atm, aty)): 
+fun ‚mk_comb·((typed(f, Funtype(ty1, ty2)), typed(atm, aty)): 
 		TERM * TERM) : TERM = (
 	if ty1 = aty
 	then typed(icl'Comb(f, atm, aty), ty2)
 
 	else fail "mk_comb" 3005 []
-) | mk_comb  _ = (
-	fail "mk_comb" 3006 []
-);
+) | mk_comb _ = fail "mk_comb" 3006 [];
 
-fun ‚dest_comb· ((typed(icl'Comb(ftm, atm, aty), faty)): TERM) : TERM * TERM =
-	(typed(ftm, mk_fun (aty, faty)), typed(atm, aty))
-|   dest_comb _ = fail "dest_comb" 3010 [];
+fun ‚dest_comb· ((typed(icl'Comb(ftm, atm, aty), faty)): TERM) : TERM * TERM = (
+	typed(ftm,  Funtype(aty, faty)), typed(atm, aty)
+) |   dest_comb _ = fail "dest_comb" 3010 [];
 
 fun ‚is_comb· (typed(icl'Comb _, _)) = true
 |   is_comb _ = false;
 =TEX
 =SML
 fun ‚mk_simple_abs· ((typed(icl'Var v, ty), typed(btm, bty)):TERM * TERM):TERM = (
-	typed(icl'Abs(v, btm), mk_fun (ty, bty))
+	typed(icl'Abs(v, btm), Funtype (ty, bty))
 ) | mk_simple_abs _ = fail "mk_simple_abs" 3007 [];
 
-fun ‚dest_simple_abs· ((typed(icl'Abs (s, b), mk_type(_, [ty1, ty2]))): TERM): TERM * TERM =
+fun ‚dest_simple_abs· ((typed(icl'Abs (s, b), Funtype(ty1,ty2))): TERM): TERM * TERM = (
 	(typed(icl'Var s, ty1), typed(b, ty2))
-|   dest_simple_abs _ = fail "dest_simple_abs" 3011 [];
+) |   dest_simple_abs _ = fail "dest_simple_abs" 3011 [];
 
 fun ‚is_simple_abs· (typed(icl'Abs _, _)) = true
 |   is_simple_abs _ = false;
-=TEX
-Equality upon terms is simple equality on their representations.
-=SML
-val op ‚TERM_eq· = op = : (TERM * TERM) -> bool;
 =TEX
 This is present in the abstract data type for speed reasons:
 it is frequently used in critical functions.
@@ -276,36 +269,99 @@ local
 	fun fvaux
 		(bvs : (string * TYPE) list)
 		(fvs : (string * TYPE) list)
-		(icl'Comb(tm1, tm2, ty2) : TERM_term) 
+		(icl'Comb(tm1, tm2, ty2) : icl'TERM) 
 		(ty1 : TYPE) : (string * TYPE) list = (
-		fvaux bvs (fvaux bvs fvs tm1 (mk_fun(ty2, ty1)))
+		fvaux bvs (fvaux bvs fvs tm1 (Funtype(ty2, ty1)))
 			tm2 ty2
 	) | fvaux bvs fvs (icl'Const _) _ = fvs
 	| fvaux bvs fvs (icl'Var s) ty = (
-		if (s,ty) mem bvs
+		if (s, ty) mem bvs
 		then fvs
 		else fvs grab (s,ty)
-	) | fvaux bvs fvs (icl'Abs (s, bdy)) (mk_type("ã",[ty1, ty2])) = (
+	) | fvaux bvs fvs (icl'Abs (s, bdy)) (Funtype(ty1, ty2)) = (
 		fvaux ((s, ty1) :: bvs) fvs bdy ty2
 	) | fvaux _ _ _ _ = error "icl'frees" 3064 [];
 in
-	fun ‚icl'frees· ((typed (tm, ty)):TERM) : (string * TYPE) list = (
+	fun ‚icl'frees· (( typed(tm, ty)):TERM) : (string * TYPE) list = (
 		fvaux [] [] tm ty
 	);
 end;
 =TEX
 =SML
-end; (* of abstype TERM *)
-end; (* of local *)
+end; (* of local defining TERM *)
+end; (* of local defining TYPE *)
 =TEX
-\subsection{Functions derived from Abstract Data Type $TERM$}
+\subsection{Functions derived from Abstract Data Type $TYPE$ Part}
+$icl'inst\_type$ $alist$ $type$ recursively descends through $type$, replacing any type variables by whatever the association list $alist$ associates with them.
+If the association list does not contain a type variable found in $type$, then that type variable will not be changed.
+Replaced types are {\bf not} recursively processed by this function.
 =SML
-fun ‚is_free_var_in· ((vs, vty) : string * TYPE) (tm : TERM) : bool = (
+fun ‚icl'inst_type· (f : (TYPE * string) list) (ty : TYPE) : TYPE = (
+	if is_vartype ty
+	then rassoc4 f ty (dest_vartype ty)
+	else (
+		let val (s,tyl) = dest_type ty
+		in
+		mk_type(s, map (icl'inst_type f) tyl)
+		end)
+);
+=TEX
+This function extracts the type constructors contained
+in a type.
+=SML
+fun ‚type_tycons· (ty : TYPE) : (string * int) list = (
+	if is_vartype ty
+	then []
+	else   (
+		let val (s,tyl) = dest_type ty
+		in
+		list_cup (map type_tycons tyl) grab (s, length tyl)
+		end)
+);
+=TEX
+This function extracts the type variables contained
+in a type.
+=SML
+fun ‚type_tyvars· (ty : TYPE) : string list = (
+	if is_vartype ty
+	then [dest_vartype ty]
+	else (
+		let val (_,tyl) = dest_type ty
+		in
+		list_cup (map type_tyvars tyl)
+		end)
+);
+=TEX
+=SML
+fun ‚type_any· (p : TYPE -> bool) (ty : TYPE) : bool = (
+let 	fun aux ty = (
+	let
+		fun list_type_any (lty :: ltyl) = (
+		p lty orelse aux lty orelse list_type_any ltyl
+		) | list_type_any [] = false
+	in
+	is_type ty andalso (
+		let val (_,tyl) = dest_type ty
+		in
+		list_type_any tyl
+		end)
+	end)
+in
+	p ty orelse aux ty
+end);	
+=TEX
+=SML
+val ‚BOOL· : TYPE = mk_type("BOOL", []);
+=TEX
+
+\subsection{Functions derived from Abstract Data Type $TERM$ Part}
+=SML
+fun ‚is_free_var_in· (vsvty as (vs, vty): string * TYPE) (tm : TERM) : bool = (
 let
 	fun ifvi (Comb (f, a)) = ifvi (dest_TERM f) orelse ifvi (dest_TERM a)
 	| ifvi (Const _) = false
-	| ifvi (Var (s,ty)) = (s = vs) andalso (vty = ty)
-	| ifvi  (Abs (av, bdy)) = (dest_var av <> (vs, vty)) andalso ifvi (dest_TERM bdy)
+	| ifvi (Var sty) = (sty = vsvty)
+	| ifvi  (Abs (av, bdy)) = (dest_var av = vsvty) andalso ifvi (dest_TERM bdy)
 in
 	ifvi (dest_TERM tm)
 end);
@@ -511,7 +567,7 @@ fun ‚aconv· (tm1 : TERM) (tm2 : TERM) : bool = (
 		aux (dest_TERM b1) (dest_TERM b2) (((dest_var v1), (dest_var v2)) :: map2to1)
 	) | aux _ _ _ = false
  	in
-		(tm1 TERM_eq tm2) orelse (aux (dest_TERM tm1) (dest_TERM tm2) [])
+		(tm1 = tm2) orelse (aux (dest_TERM tm1) (dest_TERM tm2) [])
 	end
 );
 =TEX
@@ -718,23 +774,30 @@ local
 $tyaux1$ is quite straightforward. It uses an auxiliary
 $tyaux0$ to handle lists of types:
 =SML
-	fun tyaux1 match t1 (mk_vartype s2) = (
-		if rassoc4 match t1 s2 = t1
+	fun tyaux1 match t1 t2 = (
+	if is_vartype t2
+	then (
+		let val s2 = dest_vartype t2
+		in
+		if (rassoc4 match t1 s2 = t1)
 		then match grab (t1, s2)
 		else fail "type_match" 3053 []
-	) | tyaux1 match (mk_type(s1, tl1)) (mk_type(s2, tl2)) = (
-		let	fun tyaux0 match [] [] = (
+		end
+	) else if is_type t1
+	then (let val (s1, tl1) = dest_type t1;
+		val (s2, tl2) = dest_type t2;
+		fun tyaux0 match [] [] = (
 				match
-			) | tyaux0 match (h1 :: t1) (h2 :: t2) = (
-				tyaux0 (tyaux1 match h1 h2) t1 t2
-			) | tyaux0 _ _ _ = fail
-			"type_match"  3053 [];
+		) | tyaux0 match (h1 :: t1) (h2 :: t2) = (
+			tyaux0 (tyaux1 match h1 h2) t1 t2
+		) | tyaux0 _ _ _ = fail "type_match"  3053 []
 		in
 			if s1 = s2
 			then tyaux0 match tl1 tl2
 			else fail "type_match"  3053 []
-		end
-	) | tyaux1 _ _ _ = fail "type_match"  3053 [];
+		end)
+
+	else fail "type_match"  3053 []);
 =TEX
 The treatment of terms is more complex than that of types
 because of bound variables.
@@ -769,7 +832,7 @@ type matching.
 	fun tmaux0  (tymatch, fvmatch) bvmatch tm1 (v2ty2 : string * TYPE) = (
 		case rassoc5 bvmatch v2ty2 of
 			Nil => (
-				if any (icl'frees tm1) (fn x => any bvmatch (fn (x1, _) => x = x1))
+				if any (icl'frees tm1) (fn x => any bvmatch (fn (x1, _) => (x = x1)))
 				then fail "term_match" 3054 []
 
 				else case rassoc5 fvmatch v2ty2 of
@@ -801,14 +864,14 @@ on to $tmaux0$.
 	fun tmaux1 (tymatch, fvmatch) (bvmatch : ((string * TYPE) * (string * TYPE)) list) 
 			tm1 v2ty2 = (
 		if is_var tm1
-		then	let val v1ty1 = dest_var tm1;
+		then	(let val v1ty1 = dest_var tm1;
 			in case lassoc5 bvmatch v1ty1 of
 				Value vty => (
 					if vty = v2ty2 andalso rassoc5 bvmatch v2ty2 = Value v1ty1
 					then (tymatch, fvmatch)
 					else fail "term_match" 3054 []
 			) |	Nil => tmaux0 (tymatch, fvmatch) bvmatch tm1 v2ty2
-			end
+			end)
 		else 	tmaux0 (tymatch, fvmatch) bvmatch tm1 v2ty2
 	);
 =TEX
@@ -835,7 +898,7 @@ Mismatched structures will result in an exception.
 			(dest_TERM a1) 
 			(dest_TERM a2)
 	) | tmaux2 (tymatch, fvmatch) bvmatch (Const(s1,ty1))(Const(s2,ty2)) = (
-		if s1 = s2
+		if (s1 = s2)
 		then (tyaux1 tymatch ty1 ty2, fvmatch)
 		else fail "term_match" 3054 []
 	) | tmaux2 (tymatch, fvmatch) bvmatch tm1 (Var v2) = (
@@ -868,7 +931,7 @@ removing trivial correspondences from the result.
 		let	val (tym, tmm) = tmaux2 ([], []) [] (dest_TERM tm1) (dest_TERM tm2);
 			val tym' = tym drop (fn (x, y) => x = mk_vartype y);
 			val tmm' = tmm drop
-		(fn (x, (s, ty)) => x TERM_eq mk_var(s, icl'inst_type tym' ty));
+		(fn (x, (s, ty)) => x = mk_var(s, icl'inst_type tym' ty));
 			val tmm'' = map (fn(x, (s,_)) => (x, (s, type_of x))) tmm';
 		in 	(map(Combinators.I ** mk_vartype)tym',
 			 map(Combinators.I ** mk_var)tmm'')
@@ -1059,22 +1122,21 @@ fun	 ‚inst·
 	(avoid : TERM list)
 	(tysubs : (TYPE * TYPE) list)
 	: TERM -> TERM = (
-	let	fun dest (mk_vartype s) = s
-		|   dest _ = fail "inst" 3062 [];
-		
-	in	icl'inst
-		(map dest_var avoid)
-		(map (Combinators.I ** dest) tysubs)
-	end
-	handle X => divert X "dest_var" "inst" 3061 []
+	icl'inst
+	((map dest_var avoid)
+	handle X => divert X "dest_var" "inst" 3061 [])
+	((map (Combinators.I ** dest_vartype) tysubs)
+	handle X => divert X "dest_vartype" "inst" 3062 [])
 );
 =TEX
 =SML
-end (* of structure icl'TypesAndTerms *);
-open icl'TypesAndTerms;
+end; (* of structure icl'TypesAndTerms *)
+=TEX
+We now open the structure for system creation, though the user will only see
+the items provided by the structure via the opening of structure
+$TypesAndTerms$, in \cite{DS/FMU/IED/IMP004}.
 =TEX
 \twocolumn[\section{INDEX}]
 \small
 \printindex
 \end{document}
-)

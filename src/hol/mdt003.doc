@@ -5,8 +5,8 @@
 \TPPproject{IED 1563}  %% Mandatory field
 %\TPPvolume{}
 %\TPPpart{}
-\TPPtitle{Release 1 ICL HOL: Module Tests for Types and Terms}  %% Mandatory field
-\def\TPPheadtitle{Release 1 ICL HOL \cr Module Tests for Types and Terms}
+\TPPtitle{Module Tests for Types and Terms}  %% Mandatory field
+\def\TPPheadtitle{Module Tests for Types and Terms}
 \TPPref{DS/FMU/IED/MDT003}  %% Mandatory field
 \def\SCCSversion{$Revision$ %
 }
@@ -44,6 +44,9 @@ the types of HOL terms and types, namely $TERM$ and $TYPE$. It then gives some u
 First draft version.
 \item [Issue 1.2]
 Modified in line with version 1.5 of \cite{DS/FMU/IED/DTD003}.
+\item [Issue 1.3]
+Modified in line with version 1.8 of \cite{DS/FMU/IED/DTD003}.
+Made all tests give ``printable results'', apart from assignment statements.
 \end{description}
 %\subsection{Changes forecast}
 \section{GENERAL}
@@ -72,23 +75,34 @@ fun flat_strings ss = implode(flat (map explode ss));
 A simple pair of printing routines for $TERM$ and $TYPE$.
 =SML
 local
-fun lprint_TYPE t = 
+fun lprint_TYPE t = (
 let
-	fun aux (mk_vartype s) = " " ^ s
-	| aux (mk_type ("‹",[t1,t2])) = (
-		"(" ^ aux t1 ^ " ‹" ^ aux t2 ^")"
-	) | aux (mk_type ("‰",[t1,t2])) = (
+	fun aux ty = (
+	if is_vartype ty then 
+		(" " ^ dest_vartype ty)
+	else if is_funtype ty then
+		(let val(t1,t2) = dest_funtype ty
+		in
+		( "(" ^ aux t1 ^ " ‹" ^ aux t2 ^")" )
+		end)
+	else (let 
+		fun aux1 ("‰",[t1,t2]) = (
 		"(" ^ aux t1 ^ " ‰" ^ aux t2 ^")"
-	) | aux (mk_type (ty,[])) = (
-		" " ^ ty
-	) | aux (mk_type (c,tl)) = "((" ^ flat_strings (map ((fn x => x ^", ") o aux) tl)^ ")" ^ c ^ ")"
+		) | aux1 ((s,[])) = (
+		" " ^ s
+		) | aux1 ((s,tyl)) = (
+		"((" ^ flat_strings (map ((fn x => x ^", ") o aux) tyl)^ ")" ^ s ^ ")")
+		in
+			aux1 (dest_type ty)
+		end)
+	)
 in
 	(":" ^ aux t)
-end;
+end);
 in
-val print_TYPE = diag_string o lprint_TYPE;
+val âprint_TYPEá = diag_string o lprint_TYPE;
 
-fun print_TERM (tm: TERM) =
+fun âprint_TERMá (tm: TERM) =
 let fun print_DEST_TERM (Comb(t1,t2)) = (
 	"Comb (" ^ print_DEST_TERM(dest_TERM t1) ^", " ^
 		print_DEST_TERM(dest_TERM t2) ^ ")"
@@ -105,8 +119,17 @@ end;
 end;
 =TEX
 \section{THE TESTS}
+When determining whether the output from these tests is
+the same as for some previous implementation,
+the differences in information relating to the value of declared variables
+may be ignored, as this reflects the internal implementation
+of the values.
+Differences in values printed by $print\_TERM$ and $print\_TYPE$,
+however, should not change without justification.
 \subsection{Tests on Types}
 =SML
+val I = Combinators.I;
+
 infix 6 cross;
 fun t1 cross t2 = mk_type("‰",[t1,t2]);
 val BB = BOOL cross BOOL;
@@ -114,19 +137,34 @@ print_TYPE BB;
 
 val BtoB = mk_fun(BOOL, BOOL);
 print_TYPE BtoB;
-dest_type BB;
-dest_type (mk_type("UNIT",[]));
+
+(I ** map print_TYPE) (dest_type BB);
+(I ** map print_TYPE) (dest_type (mk_type("UNIT",[])));
 mk_type(dest_type BB) = BB;
 dest_vartype BB; (* fails *)
 is_vartype BB; (* false *)
+dest_funtype BB; (* fails *)
+is_funtype BB; (* false *)
+
+(I ** map print_TYPE) (dest_type BtoB);
+mk_type(dest_type BtoB) = BtoB;
+(print_TYPE ** print_TYPE) (dest_funtype BtoB);
+mk_funtype(dest_funtype BtoB) = BtoB;
+dest_vartype BtoB; (* fails *)
+is_funtype BtoB;
+is_type BtoB; (* true *)
+is_vartype BtoB; (* false *)
 
 val tv1 = mk_vartype "'tv1";
 val tv2 = mk_vartype "'tv2";
 val tv3 = mk_vartype "'tv3";
 print_TYPE tv1;
 dest_type tv1; (* fails *)
+dest_funtype tv1; (* fails *)
 dest_vartype tv1;
 is_vartype tv1; (* true *)
+is_type tv1; (* false *)
+is_funtype tv1; (* false *)
 
 val ist = icl'inst_type [(BOOL, "'tv1"),(BB,"'tv3")];
 print_TYPE(ist tv1);
@@ -153,7 +191,6 @@ type_tyvars (ist (tv1 cross tv2));
 =SML
 print_TERM Comma;
 print_TYPE(type_of Comma);
-dest_TERM Comma;
 
 val vtv1 = mk_var("vtv1",tv1);
 val vtv2 = mk_var("vtv2",tv2);
@@ -165,13 +202,13 @@ val v3 = mk_var("v2",mk_type("triple",[tv3,BOOL,tv1]));
 val iv1 = mk_var(" a b c = F",tv1);
 val iv2 = mk_var(" a b c = T",BOOL);
 map print_TERM [iv1, iv2];
-dest_var iv1; 
-dest_var v1; 
+(I ** print_TYPE) (dest_var iv1); 
+(I ** print_TYPE) (dest_var v1); 
 dest_var (mk_const("c1",BOOL)); (* fails *)
 is_var iv1; 
 is_var v1; 
 is_var (mk_const("c1",BOOL)); 
-dest_TERM v1;
+dest_TERM v1 = Var("v1",BOOL);
 
 mk_TERM (Comb(mk_var("v",BtoB),vtv1)); (* fails *)
 mk_TERM (Comb(mk_var("v",BB),vtv1)); (* fails *)
@@ -186,11 +223,11 @@ val c6 = mk_const("c6",mk_fun(tv1,mk_fun(tv2,mk_fun(tv3,
 	mk_type("triple",[tv1,tv2,tv3])))));
 val c7 = mk_const(" starts with space",BOOL);
 map print_TERM [c1, c2, c3, c4, c5, c6, c7];
-dest_const c1; 
+(I ** print_TYPE) (dest_const c1); 
 dest_const v1; (* fails *)
 is_const c1; 
-is_const v1;
-dest_TERM c3;
+is_const v1; (* false *)
+dest_TERM c3 = Const("c3",mk_type("triple",[tv3,BOOL,tv1]));
 
 val cm1 = mk_comb(c6,vtv1);
 val cm2 = mk_comb(cm1,vtv2);
@@ -200,13 +237,14 @@ mk_comb(mk_var("v",BB),vtv1); (* fails *)
 mk_comb(mk_var("v",BtoB),vtv1); (* fails *)
 map print_TERM [cm1, cm2, cm3];
 dest_comb v1; (* fails *)
+(print_TERM ** print_TERM) (dest_comb cm1);
 is_comb cm1;
-is_comb c1;
-list_mk_comb (c6, [vtv1, vtv2, vtv3]) TERM_eq cm3;
-list_mk_comb (c6,[]) TERM_eq c6;
-strip_comb cm3;
-type_of cm3;
-(dest_TERM cm3);
+is_comb c1; (* false *)
+list_mk_comb (c6, [vtv1, vtv2, vtv3]) = cm3;
+list_mk_comb (c6,[]) = c6;
+(print_TERM ** map print_TERM) (strip_comb cm3);
+print_TYPE(type_of cm3);
+dest_TERM cm3 = Comb(cm2, vtv3);
 
 val a1 = mk_simple_abs(v1, cm3);
 val a2 = mk_simple_abs(v2,v2);
@@ -214,27 +252,30 @@ val a3 = mk_simple_abs(hd(mg_variables [tv1][]), c2);
 val a4 = mk_simple_abs(iv1, c2);
 map print_TERM [a1, a2, a3, a4];
 mk_simple_abs(c1, c1); (* fails *)
-dest_simple_abs a1; 
-dest_simple_abs a4; 
+(print_TERM ** print_TERM) (dest_simple_abs a1);
+(print_TERM ** print_TERM) (dest_simple_abs a4);
 dest_simple_abs v1; (* fails *)
 is_simple_abs a1;
 is_simple_abs v1;
 print_TERM (list_mk_simple_abs ([vtv1, vtv2, vtv3], c6));
-list_mk_simple_abs ([],c6) TERM_eq c6;
+list_mk_simple_abs ([],c6) = c6;
+print_TERM(mk_TERM(Abs (v1,c1)));
+mk_TERM(Abs (c1,c1)); (* fails *)
+dest_TERM a1 = Abs(v1, cm3);
 
-fun DEST_TERM_id x = ((mk_TERM (dest_TERM x)) TERM_eq x);
+fun DEST_TERM_id x = ((mk_TERM (dest_TERM x)) = x);
 
 map DEST_TERM_id [c1, c2, c3, c4, c5, c6, c7, v1, v2, v3,
 	cm1, cm2, cm3, a1, a2, a3, a4, iv1, iv2, a4]; (* all true *)
 
-map type_of [c1, c2, c3, c4, c5, c6, c7, v1, v2, v3,
+map (print_TYPE o type_of) [c1, c2, c3, c4, c5, c6, c7, v1, v2, v3,
 	cm1, cm2, cm3, a1, a2, a3, a4, iv1, iv2, a4];
 
 =TEX
 =SML
-icl'frees cm3;
-icl'frees (mk_simple_abs(vtv2, cm3));
-map (op TERM_eq) (combine (frees cm3) (map mk_var (icl'frees cm3)));
+map (I ** print_TYPE) (icl'frees cm3);
+map (I ** print_TYPE) (icl'frees (mk_simple_abs(vtv2, cm3)));
+map (op =) (combine (frees cm3) (map mk_var (icl'frees cm3)));
 
 is_free_var_in (dest_var vtv1) cm3; 
 is_free_var_in (dest_var vtv1)
@@ -244,9 +285,10 @@ We leave the testing of $mk\_bin\_op$, $equality$, $quantifier$ and their like t
 of the functions that use them in their implementation.
 =SML
 val eq1 = mk_eq(c1,c1); 
+print_TERM eq1;
 mk_eq(c1, c2); (* fails *)
 dest_eq c1; (* fails *)
-(dest_const ** dest_const)(dest_eq eq1);
+(print_TERM ** print_TERM)(dest_eq eq1);
 is_eq eq1;
 is_eq c1;
 
@@ -255,14 +297,13 @@ val F = mk_const("F",BOOL);
 val imp1 = (mk_Š (F,T));
 mk_Š(c2,c3); (* fails *)
 dest_Š c1;  (* fails *)
-dest_Š imp1;
+(print_TERM ** print_TERM)(dest_Š imp1);
 is_Š imp1;
 is_Š c1;
-(dest_const ** dest_const)(dest_Š imp1);
 
 list_mk_Š[]; (* fails *)
 list_mk_Š[vtv1, vtv2]; (* fails *)
-strip_Š(list_mk_Š[T,F,T,F]);
+map print_TERM (strip_Š(list_mk_Š[T,F,T,F]));
 
 print_TERM (mk_simple_ƒ(vtv1, c1));
 (print_TERM ** print_TERM) (dest_simple_ƒ(mk_simple_ƒ(vtv1, c1)));
@@ -280,12 +321,12 @@ is_simple_„(mk_simple_„(vtv1, c1));
 is_simple_„ c1;
 print_TERM(list_mk_simple_„([vtv1, vtv2], c1));
 
-aconv vtv1 c1;
+aconv vtv1 c1; (* false *)
 aconv vtv1 vtv1;
 aconv (mk_simple_abs(mk_var ("A",BOOL),c1)) 
 	(mk_simple_abs(mk_var ("B",BOOL),c1)); 
 aconv (mk_simple_abs(vtv1, vtv1) )
-	(mk_simple_abs(mk_var ("'ntv1",tv1),vtv1)); 
+	(mk_simple_abs(mk_var ("'ntv1",tv1),vtv1)); (* false *)
 =TEX
 =SML
 icl'variant [] (dest_var vtv1);
@@ -324,14 +365,22 @@ term_any (fn x => is_const x andalso fst(dest_const x) = "c6") cm3; (* true *)
 (term_tyvars cm3);
 term_type_constructors cm3;
 term_type_constructors vtv1;
-term_constants cm3;
-type_match BOOL tv1;
+map (Combinators.I ** print_TYPE) (term_constants cm3);
+map (print_TYPE ** print_TYPE) (type_match BOOL tv1);
 type_match BOOL BB; (* fails *)
-type_match (mk_fun(tv1,mk_fun(tv2,tv1))) (mk_fun(tv2,mk_fun(tv1,tv2)));
-type_match (mk_fun(tv2,mk_fun(tv2,tv2))) (mk_fun(tv1,mk_fun(tv2,tv1))) ;
+
+map (print_TYPE ** print_TYPE)
+	 (type_match (mk_fun(tv1,mk_fun(tv2,tv1))) (mk_fun(tv2,mk_fun(tv1,tv2))));
+
+map (print_TYPE ** print_TYPE)
+	(type_match (mk_fun(tv2,mk_fun(tv2,tv2))) (mk_fun(tv1,mk_fun(tv2,tv1))));
+
 type_match (mk_fun(BOOL,mk_fun(tv2,BB))) (mk_fun(tv1,mk_fun(tv2,tv1))) ; (* fails *)
+
 (map (print_TYPE ** print_TYPE) ** map (print_TERM ** print_TERM)) (term_match v1 v1);
+
 (map (print_TYPE ** print_TYPE) ** map (print_TERM ** print_TERM)) (term_match v2 vtv1);
+
 (map (print_TYPE ** print_TYPE) ** map (print_TERM ** print_TERM)) (term_match 
 	(list_mk_comb ((mk_const("trio",mk_fun(BOOL,mk_fun(tv2,
 	mk_fun(tv3, (BOOL cross tv2)))))),
@@ -339,6 +388,7 @@ type_match (mk_fun(BOOL,mk_fun(tv2,BB))) (mk_fun(tv1,mk_fun(tv2,tv1))) ; (* fail
 	(list_mk_comb ((mk_const("trio",mk_fun(tv1,mk_fun(tv2,mk_fun(tv3, 
 	(tv1 cross tv2)))))),
 	[vtv1, vtv2,vtv3])));
+
 (map (print_TYPE ** print_TYPE) ** map (print_TERM ** print_TERM)) (term_match 
 	(list_mk_comb ((mk_const("trio",mk_fun(BOOL,mk_fun(tv2,mk_fun(tv3, 
 	(BB cross tv2)))))),
@@ -347,8 +397,8 @@ type_match (mk_fun(BOOL,mk_fun(tv2,BB))) (mk_fun(tv1,mk_fun(tv2,tv1))) ; (* fail
 	(tv1 cross tv2)))))),
 	[vtv1, vtv2,vtv3]))); (* fails *)
 
-is_type_instance tv1 BOOL;
-is_type_instance BOOL tv1;
+is_type_instance tv1 BOOL; (* false *)
+is_type_instance BOOL tv1; (* true *)
 
 map print_TERM (mg_variables [BOOL, mk_fun(BOOL,tv1),tv1,BOOL] 
 	[mk_var("@_2",tv1), mk_var("@_1",mk_fun(tv1,BOOL)), 

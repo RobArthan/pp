@@ -3,8 +3,8 @@
 \ftlinepenalty=9999
 \makeindex
 \TPPproject{IED 1563}  %% Mandatory field
-\TPPtitle{Release 1 ICL HOL: Detailed Design for Types and Terms}  %% Mandatory field
-\def\TPPheadtitle{Release 1 ICL HOL \cr Detailed Design for Types and Terms}
+\TPPtitle{Detailed Design for Types and Terms}  %% Mandatory field
+\def\TPPheadtitle{Detailed Design for Types and Terms}
 \TPPref{DS/FMU/IED/DTD003}  %% Mandatory field
 \def\SCCSversion{$Revision$
 }
@@ -60,6 +60,10 @@ Acted upon section 7 of issue 1.3 of \cite{DS/FMU/IED/WRK015}.
 \item [Issue 1.7]
 Modified error messages to match current version of doc4errors.
 Added some minor descriptions, to get format correct.
+\item [Issue 1.8]
+Changed $TYPE$ to have hidden data constructors,
+removed need for $TERM\_eq$.
+Improved error messages.
 \end{description}
 \subsection{Changes forecast}
 \section{GENERAL}
@@ -81,9 +85,7 @@ These will be sufficient functions upon $TERM$ to define the type $THM$.
 
 =TEX
 \section{INFIX DIRECTIVES}
-=SML
-infix 4 TERM_eq;
-=TEX
+
 \section{TYPES AND TERMS}
 =DOC
 signature ‚icl'TypesAndTerms· = sig
@@ -93,18 +95,8 @@ utility functions upon them.
 A user should access all the elements of this signature through signature $DerivedTerms$ in \cite{DS/FMU/IED/DTD004}.
 =ENDDOC
 \subsection{The Type: $TYPE$}
-It may well be worth considering making the function type constructor
-a constructor of the datatype $TYPE$. The advantage would be that
-function types could then be recognised by a simpler pattern match (not
-involving a string equality test).
-We have not done this since it complicates some issues.
-
-By using the names $mk\_vartype$ and $mk\_type$ below we follow the convention for naming construction and destruction functions,
-rather than data constructors.
 =DOC
-datatype ‚TYPE· =
-		‚mk_vartype· of string |
-		‚mk_type·    of string * TYPE list;
+type ‚TYPE·;
 =DESCRIBE
 All ICL HOL terms will be ``typed'', by associating them with
 an object of type $TYPE$.
@@ -113,8 +105,18 @@ concrete syntax by $:'<name>$;
 or a type constructor, with a list of type arguments, indicated by
 $typename$, $arg\ typename$ or $(arg_1, \ldots, arg_n)\ typename$,
 for types with none, one or many arguments.
+One important type constructor is the function type
+constructor "ã".
+
+This is an equality type (i.e. $=$ may be used to test for equality).
 =ENDDOC
 \subsection{Functions Upon the Type $TYPE$}
+=DOC
+val ‚mk_type· : string * TYPE list -> TYPE;
+=DESCRIBE
+Create a HOL type from a type constructor and sufficient
+arguments.
+=ENDDOC
 =DOC
 val ‚dest_type· : TYPE -> string * TYPE list;
 =DESCRIBE
@@ -123,11 +125,22 @@ Extract the arguments to $mk\_type$ by function rather than pattern-matching.
 3001	?0 is not of form: `mk_type(<string>,<type list>)`
 =ENDDOC
 =DOC
+val ‚is_type· : TYPE -> bool;
+=DESCRIBE
+Is the type argument formed from a type constructor and
+sufficient arguments.
+=ENDDOC
+=DOC
+val ‚mk_vartype· : string -> TYPE;
+=DESCRIBE
+Create a HOL variable (or generic) type from a string.
+=ENDDOC
+=DOC
 val ‚dest_vartype· : TYPE -> string;
 =DESCRIBE
 Extract the name of a type variable.
 =FAILURE
-3019	Argument is not of form: `mk_vartype <string>`
+3019	Type is not of form: `mk_vartype <string>`
 =ENDDOC
 =DOC
 val ‚is_vartype· : TYPE -> bool;
@@ -135,9 +148,24 @@ val ‚is_vartype· : TYPE -> bool;
 Is the type a type variable. If it isn't then it must be a type construction.
 =ENDDOC
 =DOC
+val ‚mk_funtype· : (TYPE * TYPE) -> TYPE;
 val ‚mk_fun· : (TYPE * TYPE) -> TYPE;
 =DESCRIBE
-$mk\_fun$ $(ty1,\ ty2)$ is $":ty1 ã ty2"$.
+$mk\_fun\_type$ $(ty1,\ ty2)$ is $":ty1 ã ty2"$,
+i.e. a type formed from the type constructor $ã$ and two types.
+$mk\_fun$ is an alias for $mk\_fun\_type$.
+=ENDDOC
+=DOC
+val ‚dest_funtype· : TYPE -> (TYPE * TYPE);
+=DESCRIBE
+Given the type $ª:ty1 ã ty2º$, returns $($ty1$, $ty2$)$.
+=FAILURE
+3022	Type is not of form: ª:ty1 ã ty2º
+=ENDDOC
+=DOC
+val ‚is_funtype· : TYPE -> bool;
+=DESCRIBE
+Is the type formed by the type constructor $ã$ and two types?
 =ENDDOC
 =DOC
 val ‚icl'inst_type· : ((TYPE * string) list) -> TYPE -> TYPE;
@@ -177,6 +205,8 @@ type ‚TERM·;
 =DESCRIBE
 This is the type of well-formed ICL HOL terms.
 Objects of this type are manipulated by term constructor and destructor functions, such as $mk\_comb$, $dest\_abs$ and $is\_var$.
+
+This is an equality type (i.e. $=$ may be used to test for equality).
 =ENDDOC
 =DOC
 datatype ‚DEST_TERM· = ‚Var· of string * TYPE |
@@ -276,7 +306,7 @@ val ‚dest_comb·: TERM -> (TERM * TERM);
 =DESCRIBE
 Destroys a term with a function application structure.
 =FAILURE
-3010	Term is not of form ªt1 t2º 
+3010	Term is not of form: ªt1 t2º 
 =FAILUREC
 Further details of the errors will be given, before the above exceptions are raised.
 =ENDDOC
@@ -321,7 +351,8 @@ val ‚dest_simple_abs·: TERM -> (TERM * TERM);
 Destroys a term with an abstraction's structure.
 It cannot destroy paired abstractions, being a inverse of $mk\_simple\_abs$.
 =FAILURE
-3011	Argument is not of form: ªç var é tº 
+3011	Term is not of form: ªç var é tº 
+3064	DESIGN ERROR : applied to ill-formed term
 =FAILUREC
 Further details of the errors will be given, before the above exceptions are raised.
 =SEEALSO
@@ -347,11 +378,6 @@ This function will be implemented using $mk\_simple\_abs$, not $mk\_abs$.
 May give rise to the error message from $mk\_simple\_abs$.
 =SEEALSO
 $list\_mk\_abs$
-=ENDDOC
-=DOC
-val ‚TERM_eq· : (TERM * TERM) -> bool;
-=DESCRIBE
-The standard equality function upon terms.
 =ENDDOC
 =DOC
 val ‚icl'frees· : TERM -> (string * TYPE) list;
