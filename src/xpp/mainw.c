@@ -306,13 +306,22 @@ static MenuItem cmd_menu_items[] = {
     NULL,
 };
 
-#define	HELP_MENU_GENERAL	0
-#define	HELP_MENU_FILE_MENU	1
+#define	HELP_MENU_GENERAL		0
+#define	HELP_MENU_FILE_MENU		1
+#define	HELP_MENU_TOOLS_MENU		2
+#define	HELP_MENU_EDIT_MENU		3
+#define	HELP_MENU_COMMAND_MENU	4
 static MenuItem help_menu_items[] = {
     { "General", &xmPushButtonGadgetClass, 'G', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_GENERAL, (MenuItem *)NULL, False },
-    { "File Menu", &xmPushButtonGadgetClass, 'F', NULL, NULL,
+    { "File", &xmPushButtonGadgetClass, 'F', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_FILE_MENU, (MenuItem *)NULL, False },
+    { "Tools", &xmPushButtonGadgetClass, 'F', NULL, NULL,
+        help_menu_cb, (XtPointer)HELP_MENU_TOOLS_MENU, (MenuItem *)NULL, False },
+    { "Edit", &xmPushButtonGadgetClass, 'F', NULL, NULL,
+        help_menu_cb, (XtPointer)HELP_MENU_EDIT_MENU, (MenuItem *)NULL, False },
+    { "Command", &xmPushButtonGadgetClass, 'F', NULL, NULL,
+        help_menu_cb, (XtPointer)HELP_MENU_COMMAND_MENU, (MenuItem *)NULL, False },
     NULL,
 };
 
@@ -485,6 +494,9 @@ if( !global_options.edit_only ) {
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Help menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+if(global_options.edit_only) {
+	help_menu_items[HELP_MENU_COMMAND_MENU].label = NULL;
+}
 	helpmenu = setup_pulldown_menu(
 		menubar, "Help", 'H', False, help_menu_items);
 
@@ -856,10 +868,19 @@ XmAnyCallbackStruct *cbs;
 {
 	switch(i) {
 	case HELP_MENU_GENERAL:
-		help_dialog(w, help_menu_general);
+		help_dialog(w, Help_General_Help);
 		break;
 	case HELP_MENU_FILE_MENU:
-		help_dialog(w, help_menu_file_menu);
+		help_dialog(w, Help_File_Menu);
+		break;
+	case HELP_MENU_TOOLS_MENU:
+		help_dialog(w, Help_Tools_Menu);
+		break;
+	case HELP_MENU_EDIT_MENU:
+		help_dialog(w, Help_Edit_Menu);
+		break;
+	case HELP_MENU_COMMAND_MENU:
+		help_dialog(w, Help_Command_Menu);
 		break;
 	default:
 		break;

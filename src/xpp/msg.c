@@ -23,7 +23,7 @@
 
 #define MSG_LINE_LEN 40
 #define HELP_LINE_LEN 60
-#define HELP_SCREEN_HEIGHT 20
+#define HELP_SCREEN_HEIGHT 32
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Private functions:
@@ -85,62 +85,58 @@ static XmString format_msg(char *msg, NAT line_len)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void help_dialog(Widget w, char *str)
 {
-	Widget dialog_w, pane, help_text, form, widget;
+	Widget form, widget;
+	static Widget dialog_w, pane, help_text;
 	static void help_cb();
-	Arg args[9];
-	char *buf;
-	if( (buf = XtMalloc(strlen(str) + 1)) == NULL ) {
-		return;
-	};
-	c_format_msg(buf, str, HELP_LINE_LEN);
-	dialog_w = XtVaCreatePopupShell("Help",
-		xmDialogShellWidgetClass, get_top_shell(w),
-		XmNdeleteResponse, XmDESTROY,
-		NULL);
-	pane = XtVaCreateWidget("pane", xmPanedWindowWidgetClass, dialog_w,
-		XmNsashWidth,  1, /* PanedWindow won't let us set these to 0! */
-		XmNsashHeight, 1, /* Make small so user doesn't try to resize */
-		NULL);
-	XtSetArg(args[0], XmNscrollVertical,        True);
-	XtSetArg(args[1], XmNscrollHorizontal,      False);
-	XtSetArg(args[2], XmNeditMode,              XmMULTI_LINE_EDIT);
-	XtSetArg(args[3], XmNeditable,              False);
-	XtSetArg(args[4], XmNcursorPositionVisible, False);
-	XtSetArg(args[5], XmNwordWrap,              True);
-	XtSetArg(args[6], XmNvalue,                 buf);
-	XtSetArg(args[7], XmNrows,                  HELP_SCREEN_HEIGHT);
-	XtSetArg(args[8], XmNcolumns,               HELP_LINE_LEN);
-	help_text = XmCreateScrolledText(pane, "help_text", args, 9);
-	XtFree(buf);
-	XtManageChild(help_text);
-	form = XtVaCreateWidget("form", xmFormWidgetClass, pane,
-		XmNfractionBase,    3,
-		NULL);
-	widget = XtVaCreateManagedWidget("Ok",
-		xmPushButtonGadgetClass, form,
-		XmNtopAttachment,        XmATTACH_FORM,
-		XmNbottomAttachment,     XmATTACH_FORM,
-		XmNleftAttachment,       XmATTACH_POSITION,
-		XmNleftPosition,         1,
-		XmNrightAttachment,      XmATTACH_POSITION,
-		XmNrightPosition,        2,
-		XmNshowAsDefault,        True,
-		XmNdefaultButtonShadowThickness, 1,
-		NULL);
-	XtAddCallback(widget, XmNactivateCallback, help_cb, dialog_w);
-	XtManageChild(form);
-	{
-		Dimension h;
+	Atom WM_DELETE_WINDOW;
+	Dimension h;
+	Arg args[8];
+	if(!dialog_w) {
+		dialog_w = XtVaCreatePopupShell("Help",
+			xmDialogShellWidgetClass, get_top_shell(w),
+			XmNdeleteResponse, XmUNMAP,
+			NULL);
+		pane = XtVaCreateWidget("pane", xmPanedWindowWidgetClass, dialog_w,
+			XmNsashWidth,  1, /* PanedWindow won't let us set these to 0! */
+			XmNsashHeight, 1, /* Make small so user doesn't try to resize */
+			NULL);
+		XtSetArg(args[0], XmNscrollVertical,        True);
+		XtSetArg(args[1], XmNscrollHorizontal,      False);
+		XtSetArg(args[2], XmNeditMode,              XmMULTI_LINE_EDIT);
+		XtSetArg(args[3], XmNeditable,              False);
+		XtSetArg(args[4], XmNcursorPositionVisible, False);
+		XtSetArg(args[5], XmNwordWrap,              True);
+		XtSetArg(args[6], XmNrows,                  HELP_SCREEN_HEIGHT);
+		XtSetArg(args[7], XmNcolumns,               HELP_LINE_LEN);
+		help_text = XmCreateScrolledText(pane, "help_text", args, 8);
+		XtManageChild(help_text);
+		form = XtVaCreateWidget("form", xmFormWidgetClass, pane,
+			XmNfractionBase,    3,
+			NULL);
+		widget = XtVaCreateManagedWidget("Done",
+			xmPushButtonGadgetClass, form,
+			XmNtopAttachment,        XmATTACH_FORM,
+			XmNbottomAttachment,     XmATTACH_FORM,
+			XmNleftAttachment,       XmATTACH_POSITION,
+			XmNleftPosition,         1,
+			XmNrightAttachment,      XmATTACH_POSITION,
+			XmNrightPosition,        2,
+			XmNshowAsDefault,        True,
+			XmNdefaultButtonShadowThickness, 1,
+			NULL);
+		XtAddCallback(widget, XmNactivateCallback, help_cb, dialog_w);
+		XtManageChild(form);
 		XtVaGetValues(widget, XmNheight, &h, NULL);
 		XtVaSetValues(form, XmNpaneMaximum, h, XmNpaneMinimum, h, NULL);
 	}
+	XmTextSetString(help_text, str);
 	XtManageChild(pane);
 	XtPopup(dialog_w, XtGrabNone);
 }
 
 static void help_cb(Widget widget, Widget shell)
 {
-	XtDestroyWidget(shell);
+	XtPopdown(shell);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
