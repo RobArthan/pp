@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.215 $ $RCSfile: imp507.doc,v $ $Date: 2002/07/24 00:12:00 $
+% imp507.doc %Z% $Revision: 1.216 $ $RCSfile: imp507.doc,v $ $Date: 2002/07/24 14:10:23 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.215 $%
+\def\SCCSversion{$Revision: 1.216 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/07/24 00:12:00 $%
+\TPPdate{\FormatDate{$Date: 2002/07/24 14:10:23 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -162,6 +162,7 @@ a package specification when the subprogram
 being renamed is defined in the same package specification.
 \item[Issue 1.213, 1.214] More fixes after further testing of use clauses.
 \item[Issue 1.215, 1.216] R0079: assertions (allowed for new syntax and generation of VCs)
+\item[Issue 1.217] R0052: block statements (and now tolerates syntax for default parameters).
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -672,6 +673,45 @@ fun €speclab_dec_labels›  (
 			dec_labels	=	new_dec_labels
 		}
 
+	}
+);
+=TEX
+=SML
+fun €speclab_pre›  (
+	{spec as {w, w0, pre, post},
+	formal_body_flag,
+	fun_flag,
+	till_flag,
+	wp_env,
+	in_scope
+	} : SPECLAB,
+	new_pre : Z_TM) : SPECLAB = (
+	{spec 			=	{w = w, w0 = w0, pre = new_pre,
+						post = post},
+	formal_body_flag	=	formal_body_flag,
+	fun_flag		=	fun_flag,
+	till_flag		=	till_flag,
+	wp_env			=	wp_env,
+	in_scope		=	in_scope
+	}
+);
+=TEX
+=SML
+fun €speclab_in_scope›  (
+	{spec,
+	formal_body_flag,
+	fun_flag,
+	till_flag,
+	wp_env,
+	in_scope
+	} : SPECLAB,
+	new_in_scope : IN_SCOPE) : SPECLAB = (
+	{spec 			=	spec,
+	formal_body_flag	=	formal_body_flag,
+	fun_flag		=	fun_flag,
+	till_flag		=	till_flag,
+	wp_env			=	wp_env,
+	in_scope		=	new_in_scope
 	}
 );
 =TEX
@@ -1428,6 +1468,9 @@ val €init_z_generator_state› : Z_GENERATOR_STATE = (
 \subsection{$flatten\_env$}
 To implement $flatten\_env$, we first need a function to merge two $IN\_SCOPE$s.
 To restrict the scope of frame widening, the block names are also passed in and $dec\_labels$ are only taken from the first $IN\_SCOPE$ when the two block names are different.
+
+Passing empty strings for the block names will achieve the effect of the function of the
+same name in the specification.
 =SML
 fun €merge_in_scopes›
 	(block_name1 : ID)
@@ -3134,8 +3177,9 @@ generates VCs and can be chosen by caller in the call that just makes checks).
 The speclab is augmented by any variables brought into scope by a for-loop.
 
 =SML
-fun €vcs_speclabel_aux› (just_checking : bool) ({label, statement} : REFINED_BY) : SPEC = (
-	let	val block1 = block 1;
+fun €vcs_speclabel_aux› (just_checking : bool) ({label, statement = sob} : REFINED_BY) : SPEC = (
+	let	val statement = case sob of SOBStatement s => s | SOBBlock{statement =s,...} => s;
+		val block1 = block 1;
 		val spec_env_lab = force_value( s_lookup label (!spec_env) )
 			handle Fail _ => fail "vcs_speclabel" 507003
 				[fn () => label];
@@ -3295,7 +3339,7 @@ fun €spec_stmt› (specstmt as {spec : SPEC, label : LABEL}) : SPEC = (
 	(if	test_flag #speclabel_flag 1
 	then	spec_stmt_speclabel
 	else	spec_stmt_otherwise) specstmt;
-	vcs_speclabel_aux true {label = label, statement = STNull}
+	vcs_speclabel_aux true {label = label, statement = SOBStatement STNull}
 );
 =TEX
 \subsection{The SID function k\_slot\_stmt}
@@ -3434,6 +3478,44 @@ fun €till_pred› (t : Z_TM) : unit = (
 	in	blocks := block_till (block_till_flag(block1, true), till)
 		:: tl (!blocks)
 	end
+);
+=TEX
+\section{BLOCKS}
+=TEX
+\subsection{The SID function new\_block}
+=SML
+fun €new_block› ((): unit) : unit = (
+	let	val block1 = block 1;
+	in	blocks := block_body_flag (block1, true) :: tl(!blocks)
+	end
+);
+=TEX
+\subsection{The SID function update\_spec\_env\_block}
+=SML
+fun €update_spec_env_block› (():unit) : unit = (
+	let	val block1 = block 1;
+		val block2 = block 2;
+		val label = #spec_lab block1;
+		val speclab3 = force_value( s_lookup label (!spec_env) )
+			handle Fail _ => fail "update_spec_env_block" 507003
+				[fn () => label];
+		val vc_vars1 = #vc_vars(#in_scope(#declab block1));
+		val vc_inits1 = #var_inits(block1);
+		val w3 = #w(#spec speclab3);
+		val w_vcvars = list_cup (map (map trans_id o #vars) vc_vars1);
+		val w4 = w3 cup w_vcvars;
+		val in_scope1 = #in_scope(#declab block1);
+		val in_scope3 = #in_scope speclab3;
+		val in_scope4 = merge_in_scopes "" in_scope3 "" in_scope1;
+		val pre4 =  var_inits_pre
+				(Value (#pre(#spec speclab3)))
+				vc_inits1 
+				(cn_env_of_in_scope in_scope4)
+			handle exn => 
+			pass_on exn "var_inits_pre" "update_spec_env_block";
+		val speclab4 = speclab_in_scope(speclab_w(speclab_pre(speclab3, pre4), w4), in_scope4);
+	in	spec_env := s_enter label speclab4 (!spec_env)
+	end	
 );
 =TEX
 \section{SUBPROGRAM DECLARATIONS}\label{SUBPROGRAMDECLARATIONS}
@@ -4482,7 +4564,7 @@ fun €curr_real_name› (n : ID) : ID = (
 );
 =TEX
 =SML
-fun €mk_param_spec› ({idlist, mode, name} : PARAMETER_SPECIFICATION)
+fun €mk_param_spec› ({idlist, mode, name, default =_} : PARAMETER_SPECIFICATION)
 		: PARAM_SPEC = (
 	{mode = mode, var_decl = {vars = idlist, tmark = curr_real_name name}}
 );
@@ -5984,7 +6066,7 @@ let	val {declab = {block_name = block_name1, ...}, ...} =	block 1;
 	val fps = #formal_procs package2;
  	val oformal_proc3 = renames_proc_common fps sr;
 	fun un_mk_param_spec {var_decl = {vars, tmark}, mode} = (
-		{idlist = vars, name = tmark, mode = mode}
+		{idlist = vars, name = tmark, mode = mode, default = Nil}
 	);
 in
 	case oformal_proc3 of
@@ -6357,7 +6439,7 @@ fun €renames_pack› (old_name : ID , new_name : ID)  : unit = (
 		val _ = map (map do_renaming o (fn l => combine l l)) avls_to_do;
 		fun untrans_par  ({var_decl = {vars, tmark}, mode} : PARAM_SPEC)
 			 : PARAMETER_SPECIFICATION = (
-			{idlist = vars, mode = mode, name = tmark}
+			{idlist = vars, mode = mode, name = tmark, default = Nil}
 		);
 		fun untrans_ff ({
 				informal_fun = {name, formal_pars, return_type},
@@ -7197,6 +7279,20 @@ fun €do_kslot_compilation_unit›
 	(KCUPragma _ : KSLOT_COMPILATION_UNIT) = (
 );
 =TEX
+=SML
+fun €do_statement_or_block› (SOBStatement s : STATEMENT_OR_BLOCK) : STATEMENT_OR_BLOCK = (
+	SOBStatement(do_statement s)
+) | do_statement_or_block (SOBBlock {declarative_part = Nil, statement = s, name}) = (
+	SOBBlock{declarative_part = Nil, statement = do_statement s, name = name}
+) | do_statement_or_block (SOBBlock{declarative_part = dp as Value decs, statement = s, name}) = (
+	new_block();
+	map do_declaration decs;
+	let	val res = SOBBlock{declarative_part = dp, statement = do_statement s, name  = name};
+	in	update_spec_env_block();
+		res
+	end
+);
+=TEX
 The following reflects the SID functions for the production $web\_clause$.
 (Note that we set up the label on the bottom block for possible use in generating VC names except in the first two cases, where the processing of the constituent k-slots or compilations units will do this.)
 =SML
@@ -7273,9 +7369,10 @@ let	val {label=label,statement=statement} = x;
 in	open_label_theory label;
 	set_bottom_block_name label;
 	new_scope_speclabel label;
-	let	val expanded_statement = do_statement statement;
+	let	val expanded_statement = do_statement_or_block statement;
 		val expanded_x = {label = label, statement = expanded_statement};
 	in	update_replacement_env(label, RefineStat expanded_x);
+(* TBS update_spec_env_block if appropriate *)
 		vcs_speclabel expanded_x
 	end;
 	end_scope_speclabel();
@@ -7287,7 +7384,7 @@ let	val {label=label,statement=statement} = x;
 in	open_label_theory label;
 	set_bottom_block_name label;
 	new_scope_stmt_label label;
-	let	val expanded_statement = do_statement statement;
+	let	val expanded_statement = do_statement_or_block statement;
 		val expanded_x = {label = label, statement = expanded_statement};
 	in	update_replacement_env(label, RefineStat expanded_x)
 	end;
@@ -7437,6 +7534,16 @@ fun €sco_kslot_compilation_unit›
 );
 =TEX
 =SML
+fun €sco_statement_or_block› (SOBStatement s : STATEMENT_OR_BLOCK) : unit = (
+	sco_statement s
+) | sco_statement_or_block (SOBBlock {declarative_part = Nil, statement = s, name}) = (
+	sco_statement s
+) | sco_statement_or_block (SOBBlock{declarative_part = dp as Value decs, statement = s, name}) = (
+	map sco_declaration decs;
+	sco_statement s
+);
+=TEX
+=SML
 fun €sco_web_clause› (y as (WCCompilation x) : WEB_CLAUSE) : unit = (
 	update_spark_prog x;
 	map sco_kslot_compilation_unit x; ()
@@ -7473,12 +7580,12 @@ in	update_replacement_env(label, ReplaceDecl x);
 end
 ) | sco_web_clause (y as (WCRefinedBy x) : WEB_CLAUSE) = (
 let	val {label=label,statement=statement} = x;
-in	sco_statement statement;
+in	sco_statement_or_block statement;
 	update_replacement_env(label, RefineStat x)
 end
 ) | sco_web_clause (y as (WCReplacedBy x) : WEB_CLAUSE) = (
 let	val {label=label,statement=statement} = x;
-in	sco_statement statement;
+in	sco_statement_or_block statement;
 	update_replacement_env(label, RefineStat x)
 end
 ) | sco_web_clause (y as (WCReplacedByArbitraryAda x) : WEB_CLAUSE) = (
