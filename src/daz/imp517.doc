@@ -61,7 +61,7 @@ normalised form.}
 \subsection{Changes History}  % to get section number `0.3'
 \begin{description}
 
-\item[Issues 1.1] Initial Versions.
+\item[Issues 1.1 - 1.2] Initial Versions.
 
 \end{description}
 \subsection{Changes Forecast}
@@ -86,11 +86,31 @@ The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD517}.
 =IGN
 structure €CNTheoryProofSupport› : CNTheoryProofSupport = struct
 =TEX
+\subsection{Common Tools}
+=SML
+fun €override_save_thm› (nm : string, thm : THM) : THM = (
+	save_thm (nm, thm)
+	handle _ => (
+		let 
+			val old_thm = get_thm "-" nm;
+			val thy_nm = get_current_theory_name();
+		in
+			(warn "override_save_thm" 517001 [(fn _ => nm), (fn _ => thy_nm)];
+			delete_thm nm;
+			save_thm (nm, thm)
+			)
+		end
+		handle _ => fail "override_save_thm" 517002 [(fn _ => nm),
+				 	get_current_theory_name]
+	)
+);
+=TEX
+\subsection{Pure Tools}
 =SML
 
 local val tru = ÒtrueÆ
 in
-fun €cn_support_thm› (thm : THM) : string * THM = (
+fun €pure_cn_support_thm› (thm : THM) : string * THM = (
 	if is_eq (concl thm) andalso is_u(snd(dest_eq (concl thm)))
 	then (let val ZGVar (nm, ty, []) = dest_z_term(fst(dest_eq (concl thm))) ;
 		in ("cts_" ^ nm ^ "_thm", thm)
@@ -111,31 +131,364 @@ in
 		in
 			("cts_"  ^ nm ^ "_thm", ±_left_elim thm1)
 		end)
-		else thm_fail "cn_support_thm" 517003 [thm]
-	) | _ => thm_fail "cn_support_thm" 517003 [thm]
+		else thm_fail "pure_cn_support_thm" 517004 [thm]
+	) | _ => thm_fail "pure_cn_support_thm" 517004 [thm]
 end)
 handle _ => 
-	thm_fail "cn_support_thm" 517003 [thm];
+	thm_fail "pure_cn_support_thm" 517004 [thm];
 end;
 =TEX
 =SML
-fun €override_save_thm› (nm : string, thm : THM) : THM = (
-	save_thm (nm, thm)
-	handle _ => (
-		let 
-			val old_thm = get_thm "-" nm;
-			val thy_nm = get_current_theory_name();
-		in
-			(warn "override_save_thm" 517001 [(fn _ => nm), (fn _ => thy_nm)];
-			delete_thm nm;
-			save_thm (nm, thm)
-			)
-		end
-		handle _ => fail "override_save_thm" 517002 [(fn _ => nm),
-				 	get_current_theory_name]
-	)
-);
+fun €pure_cn_support_thms› (thms : THM list) (nm : string) : unit = (
+	use_string ("val " ^ nm ^ ": THM list = [];")
+		handle _ => fail "pure_cn_support_thms" 517003 [fn _ => nm];
+(let 	val thms1 = mapfilter pure_cn_support_thm thms;
+	val dummy1 = map override_save_thm thms1;
+	val dummy2 = map (fn (nm1,_) => use_string
+		("val "^nm1^ ":THM = get_thm \"-\" \""^nm1^"\";")) thms1;
+	val all_of1 = fold (fn (a,b) => a ^ ", " ^ b)
+		 (map (fn (nm1,_) => "get_thm \"-\" \""^nm1^"\"") thms1)
+		 "t_thm";
+	val all_of2 = "val "^nm^" = rev(tl(rev ["^all_of1^"]))";
+	val dummy3 = use_string all_of2;
+in
+	()
+end));
+
+
 =TEX
+=SML
+fun €pure_cn_support_theory› (nm : string) : unit = (
+let 	val thms = map snd (get_defns nm @ get_axioms nm)
+		handle exn => reraise exn "pure_cn_support_theory";
+	val thms1 = mapfilter pure_cn_support_thm thms;
+	val dummy1 = map override_save_thm thms1;
+	val dummy2 = map (fn (nm1,_) => use_string
+		("val "^nm1^ ":THM = get_thm \"-\" \""^nm1^"\";")) thms1;
+	val all_of1 = fold (fn (a,b) => a ^ ", " ^ b)
+		 (map (fn (nm1,_) => "get_thm \"-\" \""^nm1^"\"") thms1)
+		 "t_thm";
+	val all_of2 = "val cn_"^nm^"_thms = rev(tl(rev ["^all_of1^"]))";
+	val dummy3 = use_string all_of2;
+in
+	()
+end);
+=TEX
+We choose the following presentation to catch any unknown or out of scope theory 
+names before we do any saving.
+We use $cup$ to delete duplicates.
+=SML
+fun €list_pure_cn_support_theory› (in_nms : string list) : unit = (
+let 	val nms = in_nms cup [];
+	val thmsl = map (fn nm => 
+		map snd (get_defns nm @ get_axioms nm)
+		handle exn => reraise exn "list_pure_cn_support_theory") nms;
+	val thms1l = map (fn thms => mapfilter pure_cn_support_thm thms) thmsl;
+	val dummy1 = map (fn thms1 => map override_save_thm thms1) thms1l;
+	val dummy2 = map (fn thms1 => map 
+		(fn (nm1,_) => use_string
+		("val "^nm1^ ":THM = get_thm \"-\" \""^nm1^"\";")) thms1) thms1l;
+	val all_of1l = map (fn thms1 => 
+		 fold (fn (a,b) => a ^ ", " ^ b)
+		 (map (fn (nm1,_) => "get_thm \"-\" \""^nm1^"\"") thms1)
+		 "t_thm") thms1l;
+	val all_of2l = map (fn (nm,all_of1) => 
+		"val cts_"^nm^"_thms = rev(tl(rev ["^all_of1^"]))")
+		(combine nms all_of1l);
+	val dummy3 = map use_string all_of2l;
+in
+	()
+end);
+=TEX
+\subsection{Alternative Tools}
+First some theorems:
+=SML
+val local_id_thm = tac_proof(
+	([],  ¨µ X f ∑
+		Ò(f = id X ¥ (µ i : X ∑ f i = i))ÆÆ),
+	  PC_T "z_library"
+	  (REPEAT strip_tac THEN 
+	  asm_rewrite_tac[z_id_thm] THEN
+	  z_app_eq_tac THEN
+	  REPEAT strip_tac THEN
+	  all_var_elim_asm_tac THEN
+	  strip_tac));
+=TEX
+=SML
+val local_dot_dot_diff_thm = tac_proof(
+	([],  Òµi, j : ˙∑ (i .. j) \ {j} = i .. (j - 1)Æ),
+	MERGE_PCS_T1 ["'z_numbers", "z_sets_ext"] REPEAT strip_tac
+	THEN PC_T1 "z_lin_arith" asm_prove_tac []);
+=TEX
+=SML
+val local_id_rel_inv_thm = tac_proof(
+	([],  ¨µ X ∑ Ò (id X) Á~Í = id XÆÆ),
+	  PC_T "z_library_ext"
+	  (prove_tac[]));
+=TEX
+=IGN
+val local_ç_succ_thm =  (
+	set_goal([], ¨µ i j ∑
+	Ò(i, j) ç succ § (0 º i) ± (j = i + 1)ÆÆ);
+	push_pc "z_library";
+	a(strip_tac THEN strip_tac);
+	a(ante_tac (µ_elim Òi + 1Æ (µ_intro ÒzÆ (z_µ_elim Ò(f ¶ succ, x ¶ i)Æ 
+		(rewrite_rule[](z_µ_elim Ò(X ¶ Ó, Y ¶ Ó)Æ
+		 z_≠_app_eq_§_ç_rel_thm))))));
+	a(strip_asm_tac (z_get_spec ÒsuccÆ));
+	a(asm_rewrite_tac[]);
+	a(CASES_T Ò0 º iÆ asm_tac THEN asm_rewrite_tac[]);
+	(* *** Goal "1" *** *)
+	a(GET_NTH_ASM_T 2 ((PC_T1 "z_sets_alg" strip_asm_tac) o
+		 rewrite_rule[] o z_µ_elim ÒiÆ));
+	a(asm_rewrite_tac[]);
+	a(REPEAT strip_tac);
+(* *** Goal "1.1" *** *)
+	a(GET_NTH_ASM_T 6 (PC_T1 "z_fun_ext" strip_asm_tac));
+	a(GET_NTH_ASM_T 2 (ante_tac o z_µ_elim Ò(x ¶ i, y1 ¶ j, y2 ¶ i + 1)Æ));
+	a(asm_rewrite_tac[]);
+	a(GET_NTH_ASM_T 3 (fn t => fc_tac[t]));
+	a(PC_T1 "z_sets_alg" REPEAT strip_tac);
+(* *** Goal "1.2" *** *)
+	a(var_elim_asm_tac Òj = i + 1Æ);
+(* *** Goal "2" *** *)
+	a(GET_NTH_ASM_T 3 (PC_T1 "z_fun_ext" strip_asm_tac));
+	a(GET_NTH_ASM_T 3 (strip_asm_tac o z_µ_elim Ò(x1 ¶ i, x2 ¶ j)Æ));
+	pop_thm()
+	);
+=TEX
+=SML
+val local_Ú_succ_thm = tac_proof(
+	([],  ¨µ f j k ∑ Ò 0 º j ¥ 
+			(f = (j .. k) Ú succ) ¥ 
+			(µ i : j .. k ∑ f i = i + 1)ÆÆ),
+	  PC_T "z_library"
+	  (REPEAT strip_tac THEN
+	  DROP_NTH_ASM_T 3 rewrite_thm_tac THEN
+	  z_app_eq_tac THEN
+	  rewrite_tac[z_Ú_thm, local_ç_succ_thm] THEN
+	  REPEAT strip_tac THEN
+	  PC_T1 "z_lin_arith" asm_prove_tac[]
+	  ));
+=SML
+val local_Ú_succ_rel_inv_thm = tac_proof(
+	([],  ¨µ f j k ∑ Ò 0 º j ¥ 
+			(f = ((j .. k) Ú succ) Á~Í) ¥ 
+			(µ i : j + 1 .. k + 1∑ f i = i - 1)ÆÆ),
+	  PC_T "z_library"
+	  (REPEAT strip_tac THEN
+	  DROP_NTH_ASM_T 3 rewrite_thm_tac THEN
+	  z_app_eq_tac THEN
+	  rewrite_tac[z_rel_inv_thm, z_Ú_thm, local_ç_succ_thm] THEN
+	  rewrite_tac[z_plus_assoc_thm] THEN
+	  PC_T1 "z_lin_arith" asm_prove_tac[]
+	  ));
+=SML
+val local_set_abs_thm = (
+	  set_goal([],  ¨µ f master index X Y ∑ Ò
+			(f = {u : master | dom u = index}) ¥
+			(master ç  (X ﬂ Y)) ¥
+			f = (index ≠ Y) ° master
+			ÆÆ);
+		push_pc "z_library";
+		a(strip_tac THEN strip_tac THEN strip_tac THEN strip_tac THEN strip_tac); 
+		a(¥_T rewrite_thm_tac);
+		a(PC_T1 "z_fun_ext" rewrite_tac[]);
+		a(strip_tac THEN z_µ_tac THEN strip_tac);
+		a(POP_ASM_T (strip_asm_tac o z_µ_elim Òx1Æ));
+(* *** Goal "1" *** *)
+		a(asm_rewrite_tac[]);
+(* *** Goal "2" *** *)
+		a(cases_tac Òx1 ç masterÆ THEN asm_rewrite_tac[]);
+		a(DROP_NTH_ASM_T 1 discard_tac);
+		a(CASES_T (fst(dest_z_§(snd(top_goal()))))
+			(fn t => rewrite_tac[t] THEN asm_tac t));
+		a(REPEAT strip_tac);
+(* *** Goal "2.1" *** *)
+		a(asm_fc_tac[]);
+(* *** Goal "2.2" *** *)
+		a(asm_fc_tac[]);
+(* *** Goal "2.3" *** *)
+		a(z_spec_nth_asm_tac 7 Ò(x ¶ x, y1 ¶ y1, y2 ¶ y2)Æ);
+		a(z_spec_nth_asm_tac 9 Ò(x2 ¶ x, x3 ¶ y1)Æ);
+		pop_pc();
+		pop_thm()
+	  );
+=SML
+local
+=TEX
+We rely on the fact that users shouldn't introduce \Product\ variables with
+names prefixed by $icl'$, expecially as these are not valid Z names.
+If they do, then patterns won't match.
+=SML
+	val nat = ÒÓÆ;
+	val nat0 = Ò0Æ;
+	val pat1 = Òid ¨icl'nameÆÆ;
+	val pat2 = Ò¨icl'nameÆ Á~ÍÆ;
+	val pat3 = Ò ( ¨icl'nameÆ \ { ¨icl'lstÆ } ) Ú succÆ;
+	val pat4= Ò {u : ¨icl'masterÆ | dom u = ¨icl'indexÆ } Æ;
+	val pat5 = Ò¨icl'lhsÆ = ( ¨icl'firstÆ .. ¨icl'lstm1Æ  ) Ú succÆ;
+	val pat6 = Ò¨icl'lhsÆ = (( ¨icl'firstÆ .. ¨icl'lstm1Æ  ) Ú succ) Á~ÍÆ;
+	val pat7 = Ò¨icl'masterÆ ç  ( ¨icl'XÆ ﬂ ¨icl'YÆ)Æ;
+
+	val local_rw_rule = pure_rewrite_rule[z_plus_assoc_thm,
+		±_right_elim(z_get_spec Ò(_ - _)Æ), z_minus_clauses,
+		z_plus0_thm];
+	val local_rw_rule1 = pure_once_rewrite_rule[local_dot_dot_diff_thm];
+in
+=TEX
+=SML
+fun €cn_simplify_rule› (thm: THM) : THM = (
+let 	val cnc = concl thm;
+	val ZEq(lhs, rhs) = dest_z_term cnc;
+	val ZGVar (nm, ty, []) = dest_z_term lhs;
+in
+=TEX
+Match:
+=GFT
+Ù f = id name
+=TEX
+=SML
+	(let 	val (tys, [(name, _)]) = term_match rhs pat1;
+		val thm1 = list_µ_elim [name, lhs] local_id_thm;
+		val thm2 = ¥_elim thm1 thm;
+	in 
+		thm2
+	end) 
+	handle _ =>
+=TEX
+Match:
+=GFT
+Ù f = (name \ {last} ) Ú succ
+=TEX
+=SML
+	(let 	val (tys, [(last,_), (name, _)]) = term_match rhs pat3;
+		val nm1_spec = z_get_spec name;
+		val ZEq (nm1_lhs, nm1_rhs) = dest_z_term (concl nm1_spec);
+		val ZGVar (nm2, ty2, []) = dest_z_term nm1_lhs;
+		val thm1 = conv_rule (ONCE_MAP_C (eq_match_conv nm1_spec)) thm;
+		val last_spec = z_get_spec last;
+		val ZEq (last_lhs, last_rhs) = dest_z_term (concl last_spec);
+		val ZGVar (nm3, ty3, []) = dest_z_term last_lhs;
+		val thm2 = conv_rule (ONCE_MAP_C (eq_match_conv last_spec)) thm1;
+		val thm3 = local_rw_rule1 thm2;
+		val (_, [(_, _), (first, _), (_, _)] ) = term_match (concl thm3) pat5;
+		val first_spec = z_get_spec first;
+		val thm4 = conv_rule (ONCE_MAP_C 
+				(eq_match_conv first_spec)) 
+			thm3;
+		val (_, [(last2, _), (first2, _), (_, _)] ) = term_match (concl thm4) pat5;
+		val thm5 = §_t_elim (z_º_conv (mk_z_º (nat0, first2)));
+		val thm6 = list_µ_elim [lhs, first2, last2] local_Ú_succ_thm;
+		val thm7 = ¥_elim (¥_elim thm6 thm5) thm4 ;
+	in 
+		thm7
+	end) 
+	handle _ =>
+=TEX
+Match:
+=GFT
+Ù f = g Á~Í
+=TEX
+Two cases - matching $g$ being the two cases above.
+=SML
+	(let 	val (tys, [(name, _)]) = term_match rhs pat2;
+		val ZGVar (nm1, ty1, []) = dest_z_term name;
+		val nm1_spec = z_get_spec name;
+		val ZEq (nm1_lhs, nm1_rhs) = dest_z_term (concl nm1_spec);
+		val ZGVar (nm2, ty2, []) = dest_z_term nm1_lhs;
+		val thm1 = conv_rule (ONCE_MAP_C (eq_match_conv nm1_spec)) thm;
+	in
+		(let	val (tys2, [(name2,_)]) = term_match nm1_rhs pat1;
+			val thm2 = conv_rule (ONCE_MAP_C (eq_match_conv local_id_rel_inv_thm)) thm1;
+			val thm3 = list_µ_elim [name2, lhs] local_id_thm;
+			val thm4 = ¥_elim thm3 thm2;
+		in
+			thm4
+		end) 
+		handle _ =>
+		(let	val (tys, [(last,_),(nm2, _)]) = term_match nm1_rhs pat3;
+			val nm2_spec = z_get_spec nm2;
+			val ZEq (nm2_lhs, nm2_rhs) = dest_z_term (concl nm2_spec);
+			val ZGVar (nm3, ty3, []) = dest_z_term nm2_lhs;
+			val thm2 = conv_rule (ONCE_MAP_C (eq_match_conv nm2_spec)) thm1;
+			val last_spec = z_get_spec last;
+			val ZEq (last_lhs, last_rhs) = dest_z_term (concl last_spec);
+			val ZGVar (nm4, ty4, []) = dest_z_term last_lhs;
+			val thm3 = conv_rule (ONCE_MAP_C (eq_match_conv last_spec)) thm2;
+			val thm4 = local_rw_rule1 thm3;
+			val (_, [(_, _), (first, _), (_, _)] ) = term_match (concl thm4) pat6;
+			val first_spec = z_get_spec first;
+			val thm5 = conv_rule (ONCE_MAP_C 
+				(eq_match_conv first_spec)) 
+				thm4;
+			val (_, [(last2, _), (first2, _), (_, _)] ) = term_match (concl thm5) pat6;
+			val thm6 = §_t_elim (z_º_conv (mk_z_º (nat0, first2)));
+			val thm7 = list_µ_elim [lhs, first2, last2]
+				local_Ú_succ_rel_inv_thm;
+			val thm8 = ¥_elim (¥_elim thm7 thm6) thm5;
+			val thm9 = local_rw_rule (conv_rule 
+				(ONCE_MAP_C z_plus_conv) thm8);
+		in
+			thm9
+		end)
+	end) 
+=TEX
+Match:
+=GFT
+Ù f = {u : master | dom u = index}
+=TEX
+=SML
+	handle _ =>
+	(let 	val (tys, [(index,_), (master, _)]) = term_match rhs pat4;
+		val master_spec = ±_left_elim (z_get_spec master);
+		val (tys, [(Y, _), (X, _), (_, _)]) = 
+			term_match (concl master_spec) pat7;
+		val thm1 = list_µ_elim[lhs, master, index, X, Y]
+			 local_set_abs_thm;
+		val thm2 = ¥_elim (¥_elim thm1 thm) master_spec;
+	in 
+		thm2
+	end) 
+end)
+handle _ => thm;
+end;
+
+=TEX
+The following is the same as the pure equivalent, except for the call to
+$cn\_simplify\_rule$.
+=SML
+local val tru = ÒtrueÆ
+in
+fun €cn_support_thm› (thm : THM) : string * THM = (
+	if is_eq (concl thm) andalso is_u(snd(dest_eq (concl thm)))
+	then (let val ZGVar (nm, ty, []) = dest_z_term(fst(dest_eq (concl thm))) ;
+		in ("cts_" ^ nm ^ "_thm", thm)
+		end)
+	else
+let	val thm1 = conv_rule z_para_pred_conv thm;
+in
+	case (dest_z_term (concl thm1)) of
+	ZEq(lhs, rhs) => (
+		let val ZGVar (nm, ty, []) = dest_z_term lhs;
+		in
+			("cts_" ^ nm ^ "_thm", cn_simplify_rule thm1)
+		end
+	) | Z± (a, b) => (
+		if (b ~=$ tru) andalso is_z_ç a
+		then (let val ZGVar (nm, ty, []) = 
+				dest_z_term (fst (dest_z_ç a)) ;
+		in
+			("cts_"  ^ nm ^ "_thm", ±_left_elim thm1)
+		end)
+		else thm_fail "cn_support_thm" 517004 [thm]
+	) | _ => thm_fail "cn_support_thm" 517004 [thm]
+end)
+handle _ => 
+	thm_fail "cn_support_thm" 517004 [thm];
+end;
+=TEX
+The following are just the same as the pure tools but with a name change.
 =SML
 fun €cn_support_thms› (thms : THM list) (nm : string) : unit = (
 	use_string ("val " ^ nm ^ ": THM list = [];")
@@ -152,8 +505,6 @@ fun €cn_support_thms› (thms : THM list) (nm : string) : unit = (
 in
 	()
 end));
-
-
 =TEX
 =SML
 fun €cn_support_theory› (nm : string) : unit = (
@@ -211,11 +562,27 @@ open CNTheoryProofSupport;
 \twocolumn[\section{INDEX}]
 \printindex
 \end{document}
-
-πCN
+=IGN
+ πCN
 procedure P is
-   type FIX is delta 0.1 range 5.1 .. 10.0;
+   type DAY is (MON, TUE, WED, THU, FRI, SAT, SUN);
+   subtype WEEKDAY is DAY range MON..FRI;
+   type UNCON is array (DAY range <>) of DAY;
+   subtype SUB is UNCON(WEEKDAY);
 begin 
    null;
 end P;
-∞
+ ∞
+
+fun all_ancestors nm = list_cup ([[nm]] @ map all_ancestors (get_parents nm));
+val all_names = flat (map (fn nm => flat (map fst (get_defns nm)) @
+		flat (map fst (get_axioms nm)) @
+		flat (map fst (get_thms nm))) (all_ancestors "-"));
+all_different all_names;
+
+fun nasty [] = [] |
+	nasty (h :: t) = if (h mem t)
+		then (h :: nasty t)
+		else nasty t;
+nasty all_names;
+=TEX
