@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.43 2002/12/17 23:15:16 rda Exp rda $
+ * $Id: mainw.c,v 2.44 2003/01/17 17:09:03 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -1316,8 +1316,10 @@ static void help_menu_cb(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void show_modified(void)
 {
-	file_info.changed = True;
-	show_file_info();
+	if(!file_info.changed) {
+		file_info.changed = True;
+		show_file_info();
+	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Monitor line number
