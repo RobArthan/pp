@@ -111,16 +111,16 @@ void help_dialog(Widget w, char *str)
 		help_text = XmCreateScrolledText(pane, "help_text", args, 8);
 		XtManageChild(help_text);
 		form = XtVaCreateWidget("form", xmFormWidgetClass, pane,
-			XmNfractionBase,    3,
+			XmNfractionBase,    5,
 			NULL);
-		widget = XtVaCreateManagedWidget("Done",
+		widget = XtVaCreateManagedWidget("Dismiss",
 			xmPushButtonGadgetClass, form,
 			XmNtopAttachment,        XmATTACH_FORM,
 			XmNbottomAttachment,     XmATTACH_FORM,
 			XmNleftAttachment,       XmATTACH_POSITION,
-			XmNleftPosition,         1,
+			XmNleftPosition,         2,
 			XmNrightAttachment,      XmATTACH_POSITION,
-			XmNrightPosition,        2,
+			XmNrightPosition,        3,
 			XmNshowAsDefault,        True,
 			XmNdefaultButtonShadowThickness, 1,
 			NULL);
