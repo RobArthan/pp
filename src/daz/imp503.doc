@@ -103,8 +103,8 @@ $stack\_error$ is for use during context-free parsing when the parsing stack
 is corrupt.
 =SML
 fun Ûstack_errorİ (insert : string) : 'a = (
-	diag_string("Internal error in CN-Parser");
-	BasicError.error "CN-Parser"  19005 [fn() => insert]
+	diag_string(get_error_message 503202 []);
+	BasicError.error "CN-Parser"  503203 [fn() => insert]
 );
 =TEX
 To give error reports which are closely related to the actual input,
@@ -203,16 +203,18 @@ let	val schtoks = ZTLsqbrack::((rev o tl o rev) ztokens)@[ZTRsqbrack, ZTEos];
 			([c], ty) => (
 				(((fn (n,_,_) => n) o dest_z_lvar) c, ty)
 			) |_ => (
-				parse_error 0 "process_con_decl"
+				parse_error 503001 "only one logical constant can be introduced in a logical constant statement"
 			)
-		) |_ => parse_error 0 "process_con_decl"
-	) handle _ => parse_error 0 "process_con_decl";
+		) |_ => parse_error 503001 "only one logical constant can be introduced in a logical constant statement"
+	);
 in
 	dec
 end);
 =TEX
 =SML
-fun Ûprocess_frameİ (ztokens : ZLex.Z_TOKEN list) : ID list = (
+fun Ûprocess_frameİ ([] : ZLex.Z_TOKEN list) : ID list = []
+  | process_frame [ZTEos] = []
+  | process_frame ztokens = (
 let	val tuptoks = ZTLbrack::((rev o tl o rev) ztokens)@[ZTRbrack, ZTEos];
 	val zterm = z_term_of_z_tokens tuptoks;
 	val ids =
@@ -228,22 +230,22 @@ val Ûprocess_pre_conditionİ : ZLex.Z_TOKEN list -> TERM = z_term_of_z_tokens;
 =TEX
 =SML
 fun Ûprocess_pre_and_post_conditionsİ (ztokens : ZLex.Z_TOKEN list) : TERM OPT * TERM = (
-let	val tuptoks = ZTLbrack::((rev o tl o rev) ztokens)@[ZTRbrack, ZTEos];
-	val zpara = ZParserInternals.z_parser_pass_1 tuptoks;
+let	val genitoks = ZTLsqbrack::((rev o tl o rev) ztokens)@[ZTRsqbrack, ZTEos];
+	val zpara = ZParserInternals.z_parser_pass_1 genitoks;
 	fun apply_pi p = (
 		case p of
-		ParGeneralTerm (PredBracketed (pp, ""), Nil) => (
+		ParGeneralTerm (PredGenInst [pp], Nil) => (
 			(Nil, ParGeneralTerm (
 			PredFancyFix(TmplPre (("", Nil), StubUS), "", [[pp]]),
 			Nil))
-		) |ParGeneralTerm (PredTuple [p1,p2], Nil) => (
+		) |ParGeneralTerm (PredGenInst [p1,p2], Nil) => (
 			(Value (ParGeneralTerm (
 			PredFancyFix(TmplPre (("", Nil), StubUS), "", [[p1]]),
 			Nil)),
 			ParGeneralTerm (
 			PredFancyFix(TmplPre (("", Nil), StubUS), "", [[p2]]),
 			Nil))
-		) |_ => parse_error 0 "Too much stuff"
+		) |_ => parse_error 503001 "There is unexpected input after the post-condition"
 	);
 	val (pretm_opt, posttm) = apply_pi zpara;
 	val standard = get_flag "standard_z_terms";
@@ -501,7 +503,7 @@ fun red_integer_type_definition (Parsed(PPSRExpression sr)) = (
 	Value r =>
 		PPTypeDef(TDIntTypeDef r)
 	|Nil =>
-		parse_error 0 "A range is expected"
+		parse_error 503001 "a range is expected"
 ) | red_integer_type_definition _ = stack_error "red_integer_type_definition";
 
 val red_real_type_definition1 = red_accept; (* PPRealConstraint *)
@@ -515,7 +517,7 @@ fun red_floating_point_constraint2 (Parsed(PPExp e)) (Parsed(PPSRExpression sr))
 	Value r =>
 		PPRealConstraint(e, r)
 	|Nil =>
-		parse_error 0 "A range is expected"
+		parse_error 503001 "a range is expected"
 ) | red_floating_point_constraint2 _ _ = stack_error "red_floating_point_constraint2";
 
 
@@ -531,7 +533,7 @@ fun red_fixed_point_constraint2 (Parsed(PPExp e)) (Parsed(PPSRExpression sr)) = 
 	Value r =>
 		PPRealConstraint(e, r)
 	|Nil =>
-		parse_error 0 "A range is expected"
+		parse_error 503001 "a range is expected"
 ) | red_fixed_point_constraint2 _ _ = stack_error "red_fixed_point_constraint2";
 
 fun red_fixed_accuracy_definition _ (Parsed p) = (p
@@ -748,7 +750,7 @@ fun red_named_association1 (Parsed(PPAggregateChoices v)) _ (Parsed(PPExp e)) = 
 fun red_named_association2 (Parsed(PPAggregateChoices v)) _ (Parsed(PPExp e)) _ (Parsed(PPAgg {named_assocs=na,others=ot,...})) = (
 	case v of
 	Value c => PPAgg{tm=Nil,named_assocs={choice=c,comp=e}::na,others=ot}
-	|Nil => parse_error 0 "red_named_association2"
+	|Nil => stack_error "red_named_association2_a"
 ) | red_named_association2 _ _ _ _ _ = stack_error "red_named_association2";
 
 fun red_aggregate_choice_list1 (Token ((LCOthers,_), _)) = (
@@ -760,7 +762,7 @@ val red_aggregate_choice_list2 = red_accept;
 fun red_aggregate_choice_list3 (Parsed(PPAggregateChoices v)) _ (Parsed(PPAggregateChoices (Value acl))) = (
 	case v of
 	Value [ac] => PPAggregateChoices(Value(ac::acl))
-	|_ => parse_error 0 "red_aggregate_choice_list3"
+	|_ => stack_error "red_aggregate_choice_list3_a"
 ) | red_aggregate_choice_list3 _ _ _ = stack_error "red_aggregate_choice_list3";
 =TEX
 =SML
@@ -810,17 +812,17 @@ fun red_xor_relation2 _ x2 x3 =		(red_logrel2 BOSparkXor x2 x3);
 fun red_relation1 (Parsed(PPSRExpression (sr as (e, _)))) = (
 	case sr_expression_to_expression_opt sr of
 	Value e => PPExp e
-	|Nil => parse_error 0 "red_relation1"
+	|Nil => stack_error "red_relation1_a"
 ) | red_relation1 _ = stack_error "red_relation1";
 
 fun red_relation2 (Parsed(PPSRExpression sr1)) (Parsed(PPBinaryOp b)) (Parsed(PPSRExpression sr2)) = (
 let	val e1 = ( case sr_expression_to_expression_opt sr1 of
 			Value e1 => e1
-			|Nil => parse_error 0 "red_relation1"
+			|Nil => stack_error "red_relation1_a"
 		);
 	val e2 = ( case sr_expression_to_expression_opt sr2 of
 			Value e2 => e2
-			|Nil => parse_error 0 "red_relation1"
+			|Nil => stack_error "red_relation1_b"
 		);
 in
 	PPExp(EBinExp{left=e1,bop=b, right=e2})
@@ -930,7 +932,7 @@ fun red_qualified_expression (Parsed(PPExp n)) _ (Parsed(PPExp e)) = (
 			PPExp(EArrayAggNamedOthers{tmark=name_to_tmark n,agg_named=an,others=ot})
 		|EArrayAggPos{comps=es,...} =>
 			PPExp(EArrayAggPos{tmark=name_to_tmark n,comps=es})
-		|_ => parse_error 0 "red_qualified_expression"
+		|_ => stack_error "red_qualified_expression_a"
 ) | red_qualified_expression _ _ _ = stack_error "red_qualified_expression";
 =TEX
 TBS - null added in the following makes reproducability difficult.
@@ -946,9 +948,9 @@ fun red_sequence_of_statements2 (Parsed p) (Parsed(PPStatement(SStmt st))) = (
 	case p of
 	PPStmt s => PPStatement(SStmt(STSemicolon(s,st)))
 	|PPLogCon c => PPStatement(SLogCon(c, st))
-	|_ => parse_error 0 "red_sequence_of_statements2"
+	|_ => stack_error "red_sequence_of_statements2_a"
 ) | red_sequence_of_statements2 (Parsed p) (Parsed(PPStatement(SLogCon _))) = (
-	parse_error 0 "A Logical Constant must be the first statement"
+	parse_error 503001 "a logical constant must be the first statement"
 ) | red_sequence_of_statements2 _ _ = stack_error "red_sequence_of_statements2";
 
 fun red_statement1 (Parsed(PPKSlot k)) = (
@@ -1130,8 +1132,8 @@ let	val name = case ids of
 			|_ => Nil;
 	val s = (case st of
 			SStmt(STSpecNoIvars s) => s
-			| _ => parse_error 0
-				"A loop can only contain a specification statement"
+			| _ => parse_error 503001
+				"a loop can only contain a specification statement"
 		);
 in
 	case p of
@@ -1190,7 +1192,7 @@ fun red_loop_parameter_specification3 (Token ((_,CNText id), _)) _ (Parsed(PPExp
 	Value r =>
 		PPFor(id, name_to_tmark n, LDForwards, Value r)
 	|Nil =>
-		parse_error 0 "A Range is expected"
+		parse_error 503001 "a range is expected"
 ) | red_loop_parameter_specification3 _ _ _ _ _ = stack_error "red_loop_parameter_specification3";
 
 fun red_loop_parameter_specification4 (Token ((_,CNText id), _)) _ _ (Parsed(PPExp n)) _ (Parsed(PPSRExpression sr)) = (
@@ -1198,7 +1200,7 @@ fun red_loop_parameter_specification4 (Token ((_,CNText id), _)) _ _ (Parsed(PPE
 	Value r =>
 		PPFor(id, name_to_tmark n, LDReverse, Value r)
 	|Nil =>
-		parse_error 0 "A Range is expected"
+		parse_error 503001 "a range is expected"
 ) | red_loop_parameter_specification4 _ _ _ _ _ _ = stack_error "red_loop_parameter_specification4";
 
 val red_till_opt1 = PPExps [];
@@ -1599,7 +1601,7 @@ fun Ûcn_parserİ (ip : CN_LEX_ITEM list) : WEB_CLAUSE  = (
 		val se2 = (input_toks := []);
 	in	case res of
 		PPWebClause wc => wc
-		|_ => fail "cn_parser" 503001 []
+		|_ => fail "cn_parser" 503201 []
 	end
 );
 =TEX
