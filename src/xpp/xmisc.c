@@ -218,3 +218,25 @@ void number_verify_cb(
 		}
 	}
 }
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * text_show_position: like XmTextShowPosition but centres the
+ * position if it's not on the screen to start with. 
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void text_show_position(
+	Widget	text_w,
+	XmTextPosition pos)
+{
+	XmTextPosition old_top;
+	short nrows;
+	old_top = XmTextGetTopCharacter(text_w);
+	XmTextDisableRedisplay(text_w);
+	XmTextShowPosition(text_w, pos);
+	if(old_top != XmTextGetTopCharacter(text_w)) {
+		XmTextSetTopCharacter(text_w, pos);
+		XtVaGetValues(text_w, XmNrows, &nrows, NULL);
+		XmTextScroll(text_w, -(nrows / 2));
+	};
+	XmTextEnableRedisplay(text_w);
+}
+	
+

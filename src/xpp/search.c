@@ -473,14 +473,14 @@ static void search_either(
 	};
 	search_string(pattern, text_buf, start_point, &left, &len, dir);
 	if(left >= 0) {
+		text_show_position(
+			search_data.text_w,
+			left);
 		XmTextSetSelection(
 			search_data.text_w,
 			left,
 			left + len,
 			CurrentTime);
-		XmTextShowPosition(
-			search_data.text_w,
-			left);
 	} else if (!(*pattern)){
 		ok_dialog(search_data.shell_w, no_search_string);
 	} else {
@@ -507,6 +507,7 @@ static void replace_cb(
 		&& left != right ) {
 		replacement = XmTextGetString(
 				cbdata->replace_w);
+		text_show_position(cbdata->text_w, left);
 		XmTextReplace(
 			cbdata->text_w,
  			left,
@@ -517,9 +518,6 @@ static void replace_cb(
 			left,
 			left + strlen(replacement),
 			CurrentTime);
-		XmTextShowPosition(
-			cbdata->text_w,
-			left);
 		XtFree(replacement);
 	} else {
 		ok_dialog(cbdata->shell_w, no_selection_to_replace);
@@ -564,10 +562,11 @@ static void replace_all_cb(
 				XmTextGetLastPosition(
 					cbdata->text_w),
 				all_replaced);
-			XmTextSetInsertionPosition(
+			XmTextSetTopCharacter(cbdata->text_w, 0);
+			text_show_position(
 				cbdata->text_w,
 				start_point);
-			XmTextShowPosition(
+			XmTextSetInsertionPosition(
 				cbdata->text_w,
 				start_point);
 			XtFree(replacement);

@@ -259,6 +259,7 @@ void undo_cb(
 		};
 		fst = ub->first;
 		lst = ub->last;
+		text_show_position(ub->text_w, fst);
 		XmTextReplace(ub->text_w, fst, lst, str);
 		ub->undo_redo_index = 1 - ub->undo_redo_index;
 		set_menu_item_label(ub->menu_w, ub->menu_entry_offset,
@@ -268,7 +269,6 @@ void undo_cb(
 		} else {
 			XmTextSetInsertionPosition(ub->text_w, fst);
 		}
-		XmTextShowPosition(ub->text_w, fst);
 		XtFree(str);
 		ub->undoing = False;
 	}
