@@ -1,0 +1,1177 @@
+% imp020.doc   %Z% $Date$ $Revision$ $RCSfile$
+=TEX
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation for Z User Interface Support}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP079}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.B.~Jones & HAT Manager}
+\TPPabstract{
+This document contains the implementation for the
+Z User Interface Support module.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	Library\\RDA\\AJH\\DJK}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history}  % to get section number `0.3'
+\begin{description}
+\item [Issue \SCCSversion~(\FormatDate{$Date$%
+})]
+First draft.
+\end{description}
+\subsection{Changes forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the implementation for the User Interface Support module for HOL/Z.
+The detailed design for this material is given in \cite{DS/FMU/IED/DTD079}.
+\subsection{Introduction}
+\subsection{Dependencies}
+
+\section{PREAMBLE}
+=SML
+structure ZUserInterfaceSupport (* : ZUserInterfaceSupport *) = struct
+open Unification;
+=TEX
+\section{MISCELLANEA}
+=SML
+fun ÛwordsÝ (s : string) : string list = (
+	let	fun state1 acc (ch :: chs) = (
+			if ch = " " orelse ch = "\t" orelse ch = "\n"
+			then state1 acc chs
+			else state2 (ch :: acc) chs
+		) | state1 acc [] = acc
+		and state2 (acc as (h :: t)) (ch :: chs) = (
+			if ch = " " orelse ch = "\t" orelse ch = "\n"
+			then state1 acc chs
+			else state2 ((h ^ ch) :: t) chs
+		) | state2 [] chs = (state2 [""] chs
+		) | state2 acc [] = acc;
+	in	rev(state1 [] (explode s))
+	end
+);
+=TEX
+\section{TYPES}\label{TYPES}
+In this section we give the Standard ML types provided by this module.
+
+We require data types to be used in \cite{DS/FMU/IED/IMP061}
+to represent the result of a context-free parse
+using the grammar of \cite{DS/FMU/IED/DTD061}. The result is used to
+generate a value of type $Z\_TM$ as required by the type inferrer.
+
+The following types are used for identifiers and decoration:
+=SML
+type ÛIDÝ		= string;
+type ÛDECORÝ		= string;
+=TEX
+We represent precedences using 
+the integers:
+=SML
+type ÛPRECÝ		= int;
+=SML
+datatype ÛCLASSÝ	=	ÛZClFunÝ of int
+			|	ÛZClRelÝ
+			|	ÛZClGenÝ of int;
+=TEX
+=SML
+datatype ÛFANCYFIXÝ	=	ÛZFFBeginOpÝ
+			|	ÛZFFEndOpÝ
+			|	ÛZFFInOpÝ
+			|	ÛZFFPostBeginOpÝ
+			|	ÛZFFThenOpÝ
+			|	ÛZFFPostOpÝ
+			|	ÛZFFPreEndOpÝ
+			|	ÛZFFPreOpÝ;
+=TEX
+=SML
+type ÛZFIXITYÝ 	= FANCYFIX * CLASS;
+=TEX
+=TEX
+The following types are used for the templates which
+record information about fancy-fix operators:
+=SML
+datatype ÛSTUBÝ		= 	ÛStubUSÝ		(* _ *)
+			|	ÛStubEllÝ		(* ... *);
+
+type ÛCOREÝ		=	ID * ((STUB * ID) list * (STUB * ID)) OPT;
+
+datatype ÛTEMPLATEÝ	=	ÛTmplNonÝ of	CORE
+					(* id, {stub, id} *)
+			|	ÛTmplInÝ of	(STUB * CORE * STUB)
+					(* stub, id, {stub, id}, stub *)	
+			|	ÛTmplPreÝ of	(CORE * STUB)
+					(* id, {stub, id}, stub *)
+			|	ÛTmplPostÝ of	(STUB * CORE)
+					(* {stub, id}, stub, id *);
+=TEX
+Logical and schema operators are represented using the following
+data types:
+=SML
+datatype ÛZ_LOG_IN_OPÝ	= ZLogInOp±
+			| ZLogInOp²
+			| ZLogInOp´
+			| ZLogInOp¤
+			| ZLogInOpSemi;
+
+
+datatype ÛSCH_IN_OPÝ	= ÛPipeÝ | ÛFilterÝ | ÛCompÝ;
+
+datatype ÛSCH_PRE_OPÝ	= ÛPreÝ | ÛDeltaÝ | ÛXiÝ;
+
+datatype ÛZ_QUANTÝ	= ZQuantµ
+			| ZQuant¶
+			| ZQuant¶‰1;
+=TEX
+Most of the complexity of the parsing process arises in the treatment of
+predicates, schemas and expressions. These are all mapped onto the
+data type $PRED$. The type contains a constructor corresponding to
+each of the alternatives for $Pred$, $Pred1$, $Pred2$, $Pred3$,
+$Schema2$, $Schema3$, $Schema4$, $Expr0$, $Expr1$, $Expr2$, $Expr3$
+and $Expr4$, with the exceptions that (i) no constructor is required
+for alternatives comprising a single non-terminal, and (ii) in most cases
+where one alternative may be obtained from another by omitting part of it,
+the data type has a single constructor with optional components in its
+operand type.
+
+=SML
+datatype ÛPREDÝ		= ÛPredQuantifierÝ of Z_QUANT * DECL * (PRED OPT) * PRED
+			| ÛPredLetÝ of EQ_DEF list * PRED
+			| ÛPredLogInOpÝ of PRED * Z_LOG_IN_OP * PRED
+			| ÛPredNotÝ of PRED
+			| ÛPredSchInOpÝ of PRED * SCH_IN_OP * PRED
+			| ÛPredSchPreOpÝ of SCH_PRE_OP * PRED
+			| ÛPredSchemaHidingÝ of PRED * (PRED list)
+			| ÛPredMuÝ of DECL * (PRED OPT) * (PRED OPT)
+			| ÛPredLambdaÝ of DECL * (PRED OPT) * (PRED OPT)
+			| ÛPredFancyFixÝ of TEMPLATE * DECOR * ((PRED list) list)
+			| ÛPredCrossProductÝ of PRED list
+			| ÛPredPowÝ of PRED
+			| ÛPredApplicationÝ of PRED * PRED
+			| ÛPredThetaÝ of PRED
+			| ÛPredSelectionÝ of PRED * PRED
+			| ÛPredIdDecÝ of ID * DECOR
+			| ÛPredQuotationÝ of TERM
+			| ÛPredPlaceHolderÝ of STUB
+			| ÛPredNumberÝ of int
+			| ÛPredStringÝ of string
+			| ÛPredTupleÝ of PRED list
+			| ÛPredSetDisplayÝ of PRED list
+			| ÛPredSeqDisplayÝ of PRED list
+			| ÛPredSetCompÝ of DECL * (PRED OPT) * (PRED OPT)
+			| ÛPredHorizSchemaÝ of  DECL * (PRED OPT)
+			| ÛPredGenInstÝ of PRED list
+			| ÛPredRenameListÝ of (PRED * PRED) list
+			| ÛPredBracketedÝ of PRED * DECOR
+=TEX
+The above definition uses the following type abbreviations which correspond
+to the non-terminals $Decl$ and $EqDef$ in the grammar. Note that
+a declaration is much simpler here than in the grammar (which is
+complicated by a need to single out declarations consisting of a single
+schema expression as a special case).
+=SML
+withtype ÛDECLÝ		= (PRED list * PRED OPT) list
+and ÛEQ_DEFÝ		= PRED * PRED;
+=TEX
+The following type abbreviations and data types correspond to the
+various sorts of paragraph:
+=SML
+type ÛFIXITYÝ		= CLASS * (TEMPLATE list);
+
+type ÛGENERAL_TERMÝ	= PRED * (PRED OPT);
+
+datatype ÛABB_DEFÝ	= ÛADEqDefÝ of EQ_DEF
+			| ÛADSchemaBoxÝ of PRED * DECL * (PRED OPT);
+
+type ÛFREE_TYPE_DEFÝ	= (PRED * (PRED list)) list;
+
+type ÛAX_BOXÝ		= (PRED list) * DECL * (PRED OPT);
+
+type ÛCONJECTUREÝ		= (ID OPT) * PRED;
+=TEX
+The overall result of a context-free parse of a single Z paragraph
+is then represented by the following data type:
+=SML
+datatype ÛPARAGRAPHÝ	= ÛParFixityÝ of FIXITY
+			| ÛParGeneralTermÝ of GENERAL_TERM
+			| ÛParAbbDefÝ of ABB_DEF
+			| ÛParFreeTypeDefÝ of FREE_TYPE_DEF
+			| ÛParAxBoxÝ of AX_BOX
+			| ÛParConjectureÝ of CONJECTURE;
+=TEX
+The result of the parser of \cite{DS/FMU/IED/DTD062}
+for use by the paragraph processor and \cite{DS/FMU/IED/DTD062}
+the type inferrer \cite{DS/FMU/IED/DTD062}
+are given using the following datatypes:
+=TEX
+The following types are the ones used to communicate with
+the type inferrer as required by \cite{DS/FMU/IED/DTD061}.
+=SML
+type ÛIDENTÝ	=	TEMPLATE * DECOR;
+=TEX
+=SML
+datatype ÛZ_TMÝ	=	ZTm§¢ of EXTYPE OPT * Z_TM list
+		|	ZTmSetd of EXTYPE OPT * Z_TM list
+		|	ZTmSeta1 of Z_SCH_TEXT
+		|	ZTmSeta2 of Z_SCH_TEXT * Z_TM
+		|	ZTmð of Z_TM
+		|	ZTmTuple of Z_TM list
+		|	ZTm¸ of Z_TM list
+		|	ZTmÊ of Z_TM * DECOR
+		|	ZTmSel‰B of Z_TM * IDENT
+		|	ZTmSel‰T of Z_TM * int
+		|	ZTmApp of Z_TM * Z_TM
+		|	ZTmFancyApp of IDENT * Z_TM
+		|	ZTmÌ of Z_SCH_TEXT * Z_TM
+		|	ZTmÍ1 of Z_SCH_TEXT
+		|	ZTmÍ2 of Z_SCH_TEXT * Z_TM
+		|	ZTmTruth of bool
+		|	ZTm³‰F of Z_TM
+		|	ZTmLogInOp‰F of Z_LOG_IN_OP * Z_TM * Z_TM
+		|	ZTmSchemaPred of Z_TM
+		|	ZTmQuant‰F of Z_QUANT * Z_SCH_TEXT * Z_TM
+		|	ZTmHorizSchema of Z_SCH_TEXT
+		|	ZTmDecor of Z_TM * DECOR
+		|	ZTmPre of Z_TM
+		|	ZTm³‰S of Z_TM
+		|	ZTmLogInOp‰S of Z_LOG_IN_OP * Z_TM * Z_TM
+		|	ZTmù of Z_TM * Z_TM
+		|	ZTmHide of Z_TM * IDENT list
+		|	ZTmQuant‰S of Z_QUANT * Z_SCH_TEXT * Z_TM
+		|	ZTm„ of Z_TM
+		|	ZTm˜ of Z_TM
+		|	ZTmEq of Z_TM * Z_TM
+		|	ZTm of Z_TM * Z_TM
+		|	ZTm» of Z_TM * Z_TM
+		|	ZTmPipe of Z_TM * Z_TM
+		|	ZTmú of int
+		|	ZTmString of string
+		|	ZTmConstrained of Z_TM * Z_TM
+		|	ZTmLVar of IDENT * EXTYPE OPT * Z_TM list
+		|	ZTmGVar of IDENT * EXTYPE OPT * Z_TM list
+		|	ZTmLet of Z_EQ_DEF list * Z_TM
+		|	ZTmRename of Z_TM * ((IDENT * IDENT) list) 
+		|	ZTmBracketed of Z_TM
+		|	ZTmQuotation of TERM
+=TEX
+=SML
+and ÛZ_DECÝ	=	ZDec of IDENT list * Z_TM * EXTYPE OPT
+		|	ZSchemaDec of Z_TM * EXTYPE OPT
+=TEX
+=SML
+withtype ÛZ_SCH_TEXTÝ =	Z_DEC list * Z_TM OPT * EXTYPE OPT
+and	ÛZ_EQ_DEFÝ =	IDENT * Z_TM;
+
+=SML
+datatype ÛZ_PARAÝ =	ZParaFixity of FIXITY
+|	ZParaAbbDef of IDENT * IDENT list * Z_TM * EXTYPE OPT
+|	ZParaSchBox of IDENT * IDENT list * Z_SCH_TEXT * EXTYPE OPT
+|	ZParaAxDes of IDENT list * Z_SCH_TEXT * (((IDENT * EXTYPE) list) OPT)
+|	ZParaFreeType of (IDENT * (IDENT * EXTYPE OPT * Z_TM OPT) list) list
+|	ZParaGivenSet of IDENT list * ((IDENT list * Z_TM) OPT)
+|	ZParaConstraint of IDENT list * Z_TM
+|	ZParaConjecture of IDENT OPT * IDENT list * Z_TM
+|	ZParaTerm of IDENT list * Z_TM * EXTYPE OPT;
+=TEX
+\section{TEMPLATE FUNCTIONS}\label{TEMPLATEFUNCTIONS}
+We need various functions for operating on templates.
+These are collected together in this section.
+
+=TEX
+We maintain a dictionary mapping names onto templates and
+the $ZFIXITY$s.
+=TEX
+Given a template the following function returns its first identifier component.
+=SML
+fun Ûfirst_tmpl_idÝ  (tmpl : TEMPLATE) : ID = (
+	case tmpl of 
+		TmplNon(id, _) => id
+	|	TmplIn (_, (id, _), _) => id
+	|	TmplPre((id,_), _) => id
+	|	TmplPost(_, (id, _)) => id
+);
+=TEX
+=SML
+fun Ûlast_tmpl_idÝ  (tmpl : TEMPLATE) : ID = (
+	case tmpl of 
+		TmplNon(id, Nil) => id
+	|	TmplNon(_, Value(_, (_, id))) => id
+	|	TmplIn (_, (id, Nil), _) => id
+	|	TmplIn (_, (_, Value(_, (_, id))), _) => id
+	|	TmplPre((id, Nil), _) => id
+	|	TmplPre((_, Value(_, (_, id))), _) => id
+	|	TmplPost(_, (id, Nil)) => id
+	|	TmplPost(_, (_, Value(_, (_, id)))) => id
+);
+=TEX
+Given a template the following function returns
+the corresponding list of name-$ZFIXITY$ pairs. The list is in no
+particular order, however it will always be in the same order for
+two templates which differ only in the place-holder positions,
+so allowing its use in the $check\_template$ function in phase 2 of \cite{DS/FMU/IED/IMP061}.
+=SML
+fun Ûtmpl_idsÝ (tmpl : TEMPLATE) (cl : CLASS): (ID * ZFIXITY) list = (
+	let	val aux = map (fn (_, id) => (id, (ZFFThenOp, cl)));
+	in	case tmpl of
+			TmplNon (id, Nil) => (
+			[]
+		) |	TmplNon (id1, Value (stids, (_, id2))) =>(
+			(id1, (ZFFBeginOp, cl)) :: (id2, (ZFFEndOp, cl)) :: aux stids
+		) |	TmplIn (_, (id, Nil), _) => (
+			[(id, (ZFFInOp, cl))]
+		) |	TmplIn (_, (id1, Value (stids, (_, id2))), _) => (
+			(id1, (ZFFPostBeginOp, cl)) :: (id2, (ZFFPreEndOp, cl)) :: aux stids
+		) |	TmplPre ((id, Nil), _) => (
+			[(id, (ZFFPreOp, cl))]
+		) |	TmplPre ((id1, Value (stids, (_, id2))), _) => (
+			(id1, (ZFFBeginOp, cl)) :: (id2, (ZFFPreEndOp, cl)) :: aux stids
+		) |	TmplPost (_, (id, Nil)) =>(
+			[(id, (ZFFPostOp, cl))]
+		) |	TmplPost (_, (id1, Value (stids, (_, id2)))) => (
+			(id1, (ZFFPostBeginOp, cl)) :: (id2, (ZFFEndOp, cl)) :: aux stids
+		)
+	end
+);
+=TEX
+Given a template the following function returns
+the corresponding list of stubs. The list is in in the
+order of appearance in the template.
+=SML
+fun Ûtmpl_stubsÝ (tmpl : TEMPLATE) : STUB list = (
+	let	fun aux(_, Nil) = []
+		|   aux(_, (Value (stids, (stn, _)))) = (map fst stids) @ [stn];
+	in	case tmpl of
+			TmplNon c => (aux c
+		) |	TmplIn (st1, c, st2) => (st1 :: aux c @  [st2]
+		) |	TmplPre (c, st) => (aux c @ [st]
+		) |	TmplPost (st, c) => (st :: aux c
+		)
+	end
+);
+=TEX
+\section{FORMATTING FUNCTIONS}\label{FORMATTINGFUNCTIONS}
+If errors are detected during the transformation to $ZTM$, then values
+of type $PARAGRAPH$ etc. have to be printed in the diagnostic report.
+The following functions are used to do this:
+=TEX
+=SML
+fun Ûformat_stubÝ StubUS = " _ "
+|    format_stub StubEll = " ... ";
+=TEX
+=SML
+fun Ûformat_coreÝ ( (first, Value (middle, last)) : CORE ) : string = (
+	let	fun format_stub_id (stub, id) = (
+			format_stub stub ^ id
+		);
+	in		first
+		^	format_list format_stub_id middle ""
+		^	format_stub_id last
+	end
+) | format_core ( (first, Nil) ) = first;
+=TEX
+\ShowBoxes
+\let\crossbar=\BigTurnstile
+=SML
+fun Ûformat_templateÝ ((TmplNon core) : TEMPLATE) : string =
+	" " ^ format_core core ^ " "
+|   format_template (TmplIn (st1, core, st2)) =
+	format_stub st1 ^ format_core core ^ format_stub st2
+|   format_template (TmplPre (core, st)) =
+	format_core core ^ format_stub st
+|   format_template (TmplPost (st, core)) =
+	format_stub st ^ format_core core;
+=TEX
+=SML
+fun Ûformat_z_in_opÝ (ZLogInOp± : Z_LOG_IN_OP) : string = "±"
+|   format_z_in_op (ZLogInOp² : Z_LOG_IN_OP) = "²"
+|   format_z_in_op (ZLogInOp´ : Z_LOG_IN_OP) = "´"
+|   format_z_in_op (ZLogInOp¤ : Z_LOG_IN_OP) = "¤"
+|   format_z_in_op (ZLogInOpSemi : Z_LOG_IN_OP) = ";";
+=TEX
+=SML
+fun Ûformat_sch_in_opÝ (Pipe : SCH_IN_OP) = ">>"
+|   format_sch_in_op (Filter : SCH_IN_OP) = "ù"
+|   format_sch_in_op (Comp : SCH_IN_OP) = "»";
+=TEX
+=SML
+fun Ûformat_sch_pre_opÝ (Pre : SCH_PRE_OP) = "pre"
+|   format_sch_pre_op (Delta : SCH_PRE_OP) = "„"
+|   format_sch_pre_op (Xi : SCH_PRE_OP) = "˜";
+=TEX
+=SML
+fun Ûformat_quantÝ (ZQuantµ : Z_QUANT) = "µ"
+|   format_quant (ZQuant¶ : Z_QUANT) = "¶"
+|   format_quant (ZQuant¶‰1 : Z_QUANT) = "¶‰1";
+=TEX
+=SML
+fun Ûformat_fancy_fixÝ
+	(format_item : 'a -> string)
+	(tmpl : TEMPLATE)
+	(decor : DECOR)
+	(items : 'a list) = (
+	let	
+		val rids = rev (map fst (tmpl_ids tmpl ZClRel));
+		val ids = rev (hd rids ^ decor :: tl rids);
+		fun aux1 ns its = (
+			(format_list
+			Combinators.I
+			(map (fn (a,b) => a ^ " " ^ b)(combine ns (map format_item its)))
+			" ")
+		);
+		fun aux2 ns its = (
+			(format_list
+			Combinators.I
+			(map (fn (a,b) => a ^ " " ^ b)(combine (map format_item its) ns))
+			" ")
+		);
+	in	case tmpl of
+			TmplNon _ => (
+				hd ids ^ aux2 (tl ids) items
+		) |	TmplIn _ => (
+				format_item (hd items)  ^ aux1 ids (tl items)
+		) |	TmplPre _ => (
+				aux1 ids items
+		) |	TmplPost _ => (
+				aux2 ids items
+		)
+	end
+	handle (Fail _) => fail "format_fancy_fix" 79001 []
+);
+=TEX
+The following function formats a $PRED$. It marks the $Error$ alternative
+by prefixing the erroneous sub-term with `$<?>$' and postfixing it with
+a newline. Since none of the other alternatives can cause a newline to
+appear in the string, the output may safely be truncated after this
+newline if desired.
+=SML
+fun Ûformat_predÝ (pred : PRED) : string = (
+	case pred of
+			PredQuantifier (q, decl, Value pred1, pred2) =>
+			format_quant q ^ format_decl decl ^ " | "
+			^ format_pred pred1 ^ " · " ^ format_pred pred2
+	|	PredQuantifier (q, decl, Nil, pred2) =>
+			format_quant q ^ format_decl decl ^ " · " ^ format_pred pred2
+	|	PredLet (eqdefs, pred) =>
+			format_list format_eq_def eqdefs "," ^ format_pred pred
+	|	PredLogInOp (pred1, rator, pred2) =>
+			format_pred pred1 ^ format_z_in_op rator ^ format_pred pred2
+	|	PredNot pred => "³ " ^ format_pred pred
+	|	PredSchInOp (pred1, rator, pred2) =>
+			format_pred pred1 ^ format_sch_in_op rator ^ format_pred pred2
+	|	PredSchPreOp (rator, pred) =>
+			format_sch_pre_op rator ^ format_pred pred
+	|	PredSchemaHiding (pred, preds) =>
+			format_pred pred ^ "\\[" ^ format_list format_pred preds ", " ^ "]"
+	|	PredMu body => "Í " ^ format_decl_bar_pred_dot_pred body
+	|	PredLambda body => "Ì " ^ format_decl_bar_pred_dot_pred body
+	|	PredFancyFix (tmpl, decor, args) =>
+			format_fancy_fix
+			(fn ps => format_list format_pred ps ", ")
+			 tmpl decor args
+	|	PredCrossProduct preds => format_list format_pred preds " ¸ "
+	|	PredPow pred => "ð " ^ format_pred pred
+	|	PredApplication (pred1, pred2) => format_pred pred1 ^ " " ^ format_pred pred2
+	|	PredTheta pred => "Ê " ^ format_pred pred
+	|	PredSelection (pred1, pred2) =>  format_pred pred1 ^ "." ^ format_pred pred2
+	|	PredIdDec (id, decor) => id ^ " " ^ decor
+	|	PredQuotation _ => "<term-quotation>"
+	|	PredPlaceHolder st => format_stub st
+	|	PredNumber n => string_of_int n
+	|	PredString s => "\"" ^ s ^ "\""
+	|	PredTuple preds => "(" ^ format_list format_pred preds ", " ^ ")"
+	|	PredSetDisplay preds  => "{" ^ format_list format_pred preds ", " ^ "}"
+	|	PredSeqDisplay preds  => "§" ^ format_list format_pred preds ", " ^ "¢"
+	|	PredSetComp body => "{" ^ format_decl_bar_pred_dot_pred body ^ "}"
+	|	PredHorizSchema (decl, predopt) =>
+			"[" ^ format_decl_bar_pred_dot_pred(decl, predopt, Nil) ^ "]"
+	|	PredGenInst preds => "[" ^ format_list format_pred preds ", " ^ "]"
+	|	PredRenameList renames =>
+			"["
+		^	format_list
+			(fn (pred1, pred2) => format_pred pred1 ^ " / " ^ format_pred pred2)
+			renames
+			", "
+		^	"]"
+	|	PredBracketed (pred, decor) => "(" ^ format_pred pred ^ ")" ^ decor
+)
+and Ûformat_declÝ (decs : DECL) : string = (
+	let	fun format_dec (preds, Nil) =  format_list format_pred preds ", "
+		|   format_dec (preds, Value pred2) =
+			format_list format_pred preds ", "
+			 ^ " : " ^ format_pred pred2;
+	in	format_list format_dec decs "; "
+	end
+)
+=TEX
+=SML
+and Ûformat_eq_defÝ ((pred1, pred2) : EQ_DEF) : string = (
+	format_pred pred1 ^ " ¦ " ^ format_pred pred2
+)
+=TEX
+=SML
+and Ûformat_decl_bar_pred_dot_predÝ
+	(body : DECL * (PRED OPT) * (PRED OPT))
+	: string = (
+	case body of
+		(decl, Value pred1, Value pred2) =>
+			format_decl decl ^ " | " ^ format_pred pred1 ^ " · " ^ format_pred pred2
+	|	(decl, Nil, Value pred) =>
+			format_decl decl ^ " · " ^ format_pred pred
+	|	(decl, Value pred, Nil) =>
+			format_decl decl ^ " | " ^ format_pred pred
+	|	(decl, Nil, Nil) =>
+			format_decl decl
+);
+=TEX
+=SML
+fun Ûformat_classÝ ((ZClFun n) : CLASS) : string = "fun " ^ string_of_int n
+|   format_class  (ZClGen n) = "gen " ^ string_of_int n
+|   format_class  (ZClRel) = "rel";
+=TEX
+=SML
+fun Ûformat_fixityÝ ((cl, tmpls) : FIXITY) : string = (
+	format_class cl ^ " " ^ format_list format_template tmpls ", "
+);
+=TEX
+=SML
+fun Ûformat_general_termÝ ((pred1, Value pred2) : GENERAL_TERM) : string = (
+	format_pred pred1 ^ " & " ^ format_pred pred2
+) | format_general_term (pred1, Nil) = format_pred pred1;
+=TEX
+=SML
+fun Ûformat_abb_defÝ (ADEqDef eqdef : ABB_DEF) : string = format_eq_def eqdef
+=SMLLITERAL
+|   format_abb_def (ADSchemaBox (pred1, decl, Value pred2)) = (
+	"  " ^ format_pred pred1 ^ "ü" ^ format_decl decl ^ " ÷ " ^ format_pred pred2 ^ " ˆ"
+) | format_abb_def (ADSchemaBox (pred, decl, Nil)) = (
+	"ÿ " ^ format_pred pred ^ " ü " ^ format_decl decl ^ " ˆ"
+);
+=TEX
+=SML
+fun Ûformat_free_type_defÝ (ftd : FREE_TYPE_DEF) : string = (
+	let	fun aux (pred, preds) = (
+			format_pred pred ^ " ::= " ^
+			format_list format_pred preds " | "
+		);
+	in 	format_list aux ftd " & "
+	end
+);
+=TEX
+=SML
+fun Ûformat_ax_boxÝ ((preds as _::_, decl, Value pred) : AX_BOX) : string = (
+=SMLLITERAL
+	"[ " ^ format_list format_pred preds ", " ^ " ]œ " ^
+	format_decl decl ^ " ÷ " ^ format_pred pred ^ " ˆ"
+) | format_ax_box ([], decl, Value pred) = (
+	"¹ZAX"  ^ format_decl decl ^ " ÷ " ^ format_pred pred ^ " ˆ"
+) | format_ax_box ((preds as _::_, decl, Nil) : AX_BOX) = (
+	"[ " ^ format_list format_pred preds ", " ^ " ]œ " ^
+	format_decl decl ^ " ˆ"
+) |  format_ax_box ([], decl, Nil) = (
+	"¹ZAX"  ^ format_decl decl ^ " ˆ"
+);
+=TEX
+=SML
+fun Ûformat_conjectureÝ ((Value id, pred) : CONJECTURE) : string = (
+	id ^ " ô " ^ format_pred pred
+) | format_conjecture (Nil, pred) = (
+	"ô " ^ format_pred pred
+);
+
+=SML
+fun Ûformat_paragraphÝ (para : PARAGRAPH) : string = (
+	case para of
+		ParFixity f => format_fixity f
+	|	ParGeneralTerm gt => format_general_term gt
+	|	ParAbbDef ad => format_abb_def ad
+	|	ParFreeTypeDef ftd => format_free_type_def ftd
+	|	ParAxBox ab => format_ax_box ab
+	|	ParConjecture c => format_conjecture c
+);
+=TEX
+Formatting functions for $Z\_TM$ etc. follow:
+=SML
+fun Ûformat_identÝ ((tmp, d) : IDENT) : string = (
+	format_template tmp ^ d
+);
+=TEX
+=SML
+fun Ûformat_ident_listÝ idl = (
+	case idl of
+		[] => ""
+	|	_ => " [" ^ format_list format_ident idl ", " ^ "] "
+);
+=TEX
+=SML
+fun Ûformat_zdecÝ (dec : Z_DEC) = (
+	case dec of
+		ZDec (idl, tm, _) => (format_list format_ident idl ", ")^" : "^(format_ztm tm)
+	|	ZSchemaDec (tm, _) => format_ztm tm
+)
+=TEX
+=SML
+and Ûformat_zdec_listÝ (decl : Z_DEC list) = (
+	case decl of
+	[] => ""
+	|_ => format_list format_zdec decl "; "
+)
+=TEX
+=SML
+and Ûformat_zschtextÝ (sch as (dl, Value tm, _) : Z_SCH_TEXT) = (
+	(format_list format_zdec dl "; ")^" | "^(format_ztm tm)
+) | format_zschtext (sch as (dl, Nil, _)) = (
+	format_list format_zdec dl "; "
+)
+=TEX
+=SML
+and Ûformat_eqdefÝ (eqdef as (id, tm)) = (format_ident id)^" ¦ "^(format_ztm tm)
+=TEX
+=SML
+and Ûformat_ztmÝ (tm : Z_TM) : string = (
+	case tm of
+		ZTm§¢ (_, tml) => "§"^(format_list format_ztm tml ",")^"¢"
+	|	ZTmSetd (_, tml) => "{"^(format_list format_ztm tml ",")^"}"
+	|	ZTmSeta1 sch => "{"^(format_zschtext sch)^"}"
+	|	ZTmSeta2 (sch,tm) => "{"^(format_zschtext sch)^"·"^(format_ztm tm)^"}"
+	|	ZTmð tm => "set "^(format_ztm tm)
+	|	ZTmTuple tml => "("^(format_list format_ztm tml ", ")^")"
+	|	ZTm¸ tml => (format_list format_ztm tml " ¸ ")
+	|	ZTmÊ (tm, d) => "Ê "^(format_ztm tm)^d
+	|	ZTmSel‰T (tm, i) => (format_ztm tm)^"."^(string_of_int i)
+	|	ZTmSel‰B (tm, id) => (format_ztm tm)^"."^(format_ident id)
+	|	ZTmApp (tm1, tm2) => (format_ztm tm1)^" "^(format_ztm tm2)
+	|	ZTmFancyApp ((n, d), ZTmTuple tml) => (
+			format_fancy_fix format_ztm n d tml)
+	|	ZTmFancyApp ((n, d), tm) => (format_ident (n,d))^" "^(format_ztm tm)
+	|	ZTmÌ (sch, tm) => "Ì "^(format_zschtext sch)^"· "^(format_ztm tm)
+	|	ZTmÍ1 sch => "Í "^(format_zschtext sch)
+	|	ZTmÍ2 (sch, tm) => "Í "^(format_zschtext sch)^"· "^(format_ztm tm)
+	|	ZTmTruth true => "true"
+	|	ZTmTruth false => "false"
+	|	ZTmLogInOp‰F (inop, tm1, tm2) => (format_ztm tm1)^(
+			case inop of
+			ZLogInOp± => " ± "
+			|ZLogInOp² => " ² "
+			|ZLogInOp´ => " ´ "
+			|ZLogInOp¤ => " ¤ "
+			|ZLogInOpSemi => ";"
+			)^(format_ztm tm2)
+	|	ZTmQuant‰F (q, sch, tm) => (
+			case q of
+			ZQuantµ => "µ"	|ZQuant¶ => "¶"	|ZQuant¶‰1 => "¶‰1"
+			)^(format_zschtext sch)^" · "^(format_ztm tm)
+	|	ZTm³‰F tm => "³ "^(format_ztm tm)
+	|	ZTmSchemaPred tm => format_ztm tm
+	|	ZTmHorizSchema sch => "["^(format_zschtext sch)^"]"
+	|	ZTmDecor (tm, d) => (format_ztm tm)^d
+	|	ZTmPre tm => "pre "^(format_ztm tm)
+	|	ZTm³‰S tm => "³ "^(format_ztm tm)
+=TEX
+=SML
+	|	ZTmLogInOp‰S (inop, tm1, tm2) => (format_ztm tm1)^(
+			case inop of
+			ZLogInOp± => " ± "
+			|ZLogInOp² => " ² "
+			|ZLogInOp´ => " ´ "
+			|ZLogInOp¤ => " ¤ "
+			|ZLogInOpSemi => "; "
+			)^(format_ztm tm2)
+	|	ZTmù (tm1, tm2) => (format_ztm tm1)^" ù "^(format_ztm tm2)
+	|	ZTmHide (tm, idl) => (format_ztm tm)^"\\ ("^
+			(format_list format_ident idl ", ")^")"
+	|	ZTmQuant‰S (q, sch, tm) => (
+			case q of
+			ZQuantµ => "µ "	|ZQuant¶ => "¶ "	|ZQuant¶‰1 => "¶‰1 "
+			)^(format_zschtext sch)^" · "^(format_ztm tm)
+
+	|	ZTm„ tm => "„ "^(format_ztm tm)
+	|	ZTm˜ tm => "˜ "^(format_ztm tm)
+	|	ZTmEq (tm1, tm2) => (format_ztm tm1)^" = "^(format_ztm tm2)
+	|	ZTm (tm1, tm2) => (format_ztm tm1)^"  "^(format_ztm tm2)
+	|	ZTm» (tm1, tm2) => (format_ztm tm1)^" » "^(format_ztm tm2)
+	|	ZTmPipe (tm1, tm2) => (format_ztm tm1)^" >> "^(format_ztm tm2)
+	|	ZTmú n => string_of_int n
+	|	ZTmString s => "\""^s^"\""
+	|	ZTmConstrained (tm1, tm2) => (format_ztm tm1)^" º "^(format_ztm tm2)
+	|	ZTmLVar (id, _, tml) => (format_ident id)^(
+			case tml of
+			[] => ""
+			|_ => "["^(format_list format_ztm tml ",")^"]"
+			)
+	|	ZTmGVar (id, _, tml) => (format_ident id)^(
+			case tml of
+			[] => ""
+			|_ => "["^(format_list format_ztm tml ",")^"]"
+			)
+=TEX
+=SML
+	|	ZTmLet (eqdefl, tm) => "let "^(format_list format_eqdef eqdefl ", ")^"· "
+							^(format_ztm tm)
+	|	ZTmRename (tm, ididl) => (format_ztm tm)^(
+			case ididl of
+			[] => ""
+			|_ => " ["^(format_list (fn (id1, id2) => (format_ident id1)^"/"^
+				(format_ident id2)) ididl ", ")^"]"
+			)
+	|	ZTmBracketed tm => "("^(format_ztm tm)^")"
+	|	ZTmQuotation holterm => (string_of_term holterm)
+);
+=TEX
+=SML
+fun Ûformat_zparafreetypeÝ (id : IDENT, idotml : (IDENT * EXTYPE OPT * Z_TM OPT) list) : string = (
+let	fun aux (id, oty, otm) =
+		(format_ident id)^(
+			case otm of
+			Nil => ""
+			|Value tm => " "^(format_ztm tm));
+in
+	(format_ident id)^" ::= "^(format_list aux idotml " | ")
+end);
+=TEX
+=SML
+fun Ûformat_zparaÝ (p : Z_PARA) : string = (
+=SMLLITERAL
+	case p of
+	ZParaAbbDef (id, idl, tm, oty) =>
+		(format_ident id)^(format_ident_list idl)
+			^" ¦ "^(format_ztm tm)
+	|ZParaSchBox (id, idl, sch as (decl, otm, _), oty) =>
+		"ÿ"^(format_ident id)^(format_ident_list idl)^"ü"^
+		(format_zdec_list decl)^(
+			case otm of
+			Nil => "ˆ"
+			|Value tm => "÷"^(format_ztm tm)^"ˆ"
+		)
+	|ZParaAxDes (idl, sch as (decl, otm, _), _) =>
+		"@ZAX"^(format_ident_list idl)^
+		(format_zdec_list decl)^(
+			case otm of
+			Nil => "°"
+			|Value tm => "÷"^(format_ztm tm)^"°"
+		)
+	|ZParaFreeType ftl => (format_list format_zparafreetype ftl " & ")
+	|ZParaGivenSet (idl, oidltm) =>
+		(format_ident_list idl)^(
+			case oidltm of
+			Nil => ""
+			|Value (idl', tm) => (format_ident_list idl')^" & "^(format_ztm tm)
+		)
+	|ZParaConstraint (idl, tm) =>
+		(format_ident_list idl)^(format_ztm tm)
+	|ZParaConjecture (oid, idl, tm) =>
+		(case oid of
+		Nil => ""
+		|Value id => (format_ident id)^" "
+		)^(format_ident_list idl)^" ?ô "^(format_ztm tm)
+	|ZParaTerm (idl, tm, oty) =>
+		"ñ"^(format_ident_list idl)^(format_ztm tm)^"®"
+	|ZParaFixity fix => (
+		case fix of
+		(ZClFun i, tmpl) => "fun "^(string_of_int i)^" "^
+			(format_list format_template tmpl ", ")
+		|(ZClRel, tmpl) => "rel "^(format_list format_template tmpl ", ")
+		|(ZClGen i, tmpl) => "gen "^(string_of_int i)^" "^
+			(format_list format_template tmpl ", ")
+		)
+);
+=TEX
+\section{THE TEMPLATE CACHE}
+In this section we define the cache in which the Z fixity information
+is held. We also define the
+functions which read and write this cache.
+=TEX
+=SML
+val zfixity_info_cache : (ZFIXITY * (TEMPLATE list)) E_DICT ref = ref initial_e_dict;
+=TEX
+=SML
+fun Ûget_zfixity_infoÝ (id : ID) : (ZFIXITY * (TEMPLATE list)) OPT = (
+	e_lookup id (!zfixity_info_cache)
+);
+=TEX
+$template\_checks$ makes the checks on a template to be added to the
+cache.
+=SML
+fun Ûcache_zfixity_infoÝ (cltmpl as (cl, tmpl) : CLASS * TEMPLATE) :  unit  = (
+	let	fun mapper (id, zfix) = (
+			zfixity_info_cache
+			:=
+			e_enter
+			id
+			(case e_lookup id (!zfixity_info_cache) of
+				Nil => (zfix, [tmpl])
+			|	Value (zfix, tmpls) => (zfix, (tmpl :: tmpls)))
+			(!zfixity_info_cache)
+		);
+	in	map mapper (tmpl_ids tmpl cl); ()
+	end
+);
+=TEX
+=SML
+fun Ûuncache_zfixity_infoÝ (cltmpl as (cl, tmpl) : CLASS * TEMPLATE) :  unit  = (
+	let	fun mapper (id, zfix) = (
+			case e_lookup id (!zfixity_info_cache) of
+				Nil => ()
+			|	Value (zfix, [tmpl]) => (
+					zfixity_info_cache :=
+					e_delete id (!zfixity_info_cache)
+			) |	Value (zfix, tmpls) => (
+					zfixity_info_cache :=
+					e_enter id (zfix, tmpls less tmpl)(!zfixity_info_cache)
+			)
+		);
+	in	map mapper (tmpl_ids tmpl cl); ()
+	end
+);
+=TEX
+=SML
+fun Ûclear_cacheÝ (():unit) : unit = (
+	zfixity_info_cache := initial_e_dict
+);
+=TEX
+\section{THEORY DATABASE ACCESS FUNCTIONS}
+The symbol table module uses a single slot in the theory user data 
+under the key ``icl'z'' to hold the declarations which apply
+to the theory. The declarations are held as a fairly direct encoding
+of a list of $DECL$s.
+
+In this section we define the functions we use to fetch and store the
+lists of $USER\_DATUM$s belonging to the symbol table held in theories.
+=SML
+val ud_key = "icl'z";
+=TEX
+The following function is the only place at which we pass an unknown
+theory name to the kernel interface.
+=SML
+fun fetch_sym_tab_data (thy : string) : USER_DATUM list = (
+	if thy mem theory_names () orelse thy = "-"
+	then	case get_user_datum thy ud_key handle Fail _ => UD_Int(0, []) of
+			(UD_Int(0, uds)) => uds
+		|	_ => fail "fetch_sym_tab_data" 20001 [fn()=>thy]
+	else	fail "fetch_sym_tab_data" 79001 [fn()=>thy]
+);
+=TEX
+The theory name argument to $store\_sym\_tab\_datum$ and
+$delete\_sym\_tab\_datum$ are only used in error messages.
+=SML
+fun store_sym_tab_datum (ud : USER_DATUM) : unit = (
+	let	val uds = (
+			case get_user_datum "-" ud_key handle Fail _ => UD_Int(0, []) of
+				(UD_Int(0, uds)) => uds
+			|	_ => fail "fetch_sym_tab_data" 79001 [get_current_theory_name]);
+	in 	set_user_datum(ud_key, UD_Int(0, ud :: uds))
+	end
+);
+=TEX
+We sometimes need to delete entries. $delete\_sym\_tab\_datum$
+does this (and does nothing if the entry to be deleted is not there).
+=SML
+local
+
+fun list_eq eq (a :: x) (b :: y) = eq (a,b) andalso list_eq eq x y
+| list_eq eq [] [] = true
+| list_eq eq _ _ = false;
+
+fun ud_equals (UD_Term (tm,udl):USER_DATUM) : USER_DATUM -> bool = (fn ud2 =>
+	case ud2 of
+	UD_Term (tm1,udl1) => (tm =$ tm1) andalso list_eq (uncurry ud_equals) udl udl1
+	| _ => false
+) | ud_equals (UD_Type(ty,udl)) = (fn ud2 =>
+	case ud2 of
+	UD_Type (ty1,udl1) => (ty =: ty1) andalso list_eq (uncurry ud_equals) udl udl1
+	| _ => false
+) | ud_equals (UD_String(st,udl)) = (fn ud2 =>
+	case ud2 of
+	UD_String (st1,udl1) => (st = st1) andalso list_eq (uncurry ud_equals) udl udl1
+	| _ => false
+) | ud_equals (UD_Int(n,udl)) = (fn ud2 =>
+	case ud2 of
+	UD_Int (n1,udl1) => (n = n1) andalso list_eq (uncurry ud_equals) udl udl1
+	| _ => false
+);
+in
+fun delete_sym_tab_datum (ud : USER_DATUM) : unit = (
+	let	val uds = (
+			case get_user_datum "-" ud_key handle Fail _ => UD_Int(0, []) of
+				(UD_Int(0, uds)) => uds
+			|	_ => fail "fetch_sym_tab_data" 20001 [fn()=>"-"]);
+		val ud_equals_ud = ud_equals ud;
+	in 	set_user_datum(ud_key, UD_Int(0, uds drop ud_equals_ud))
+	end
+);
+end;
+=TEX
+\subsection{Encoding and Decoding Functions}
+First of all we give the encoding for templates.
+We encode the templates as strings using the template formatting routine
+but discarding the extra spaces that gives at the beginning and end
+and replacing the three dots by semicolons to save a little space.
+=SML
+fun Ûstring_of_templateÝ (tmpl : TEMPLATE) : string = (
+	let	val bits = words (format_template tmpl);
+		val bits' = map (fn "..." => ";" | x => x) bits;
+	in	format_list Combinators.I bits' " "
+	end
+);
+=TEX
+=SML
+fun Ûstub_of_stringÝ (s : string) : STUB = (
+	case s of
+		";" => StubEll
+	|	"_" => StubUS
+	|	_ => fail "stub_of_string" 79001 []
+);
+=TEX
+=SML
+fun Ûcore_of_stringsÝ ( (s :: ss) : string list) : CORE = (
+	let	fun aux (s1 :: s2 :: more) = (stub_of_string s1, s2) :: aux more
+		|   aux [s1] = fail "core_of_strings"  79001 []
+		|   aux [] = [];
+	in	(	s,
+			case rev(aux ss) of
+				[] => Nil
+			|	stid::stids => Value (rev stids, stid))
+	end
+) | core_of_strings [] = fail "core_of_strings"  79001 [];
+=TEX
+
+=SML
+fun Ûtemplate_of_stringÝ ( s : string) : TEMPLATE = (
+	let	val (h, r) = (
+			case words s of
+				";" :: more => (";", more)
+			|	"_" :: more => ("_", more)
+			|	other => ("", other));
+		val (l, c) = (
+			case rev r of
+					";" :: more => (";", rev more)
+			|	"_" :: more => ("_", rev more)
+			|	other => ("", r));
+		val core = core_of_strings c;
+	in	case (h, l) of
+			("", "") => TmplNon core
+		|	(_, "") => TmplPost(stub_of_string h, core)
+		|	("", _) => TmplPre(core, stub_of_string l)
+		|	(_, _) => TmplIn (stub_of_string h, core, stub_of_string l)
+	end
+);
+=TEX
+=SML
+fun Ûint_of_classÝ (ZClFun i : CLASS) : int = 3 * i
+|   int_of_class (ZClGen i : CLASS) : int = 3 * i + 1
+|   int_of_class (ZClRel : CLASS) : int = 2;
+=TEX
+=SML
+fun Ûclass_of_intÝ (i : int) : CLASS = (
+	case i mod 3 of
+		0 => ZClFun (i div 3)
+	|	1 => ZClGen (i div 3)
+	|	_ => ZClRel
+);
+=TEX
+=SML
+fun Ûencode_zfixity_infoÝ ((cl, tmpl): CLASS * TEMPLATE) : USER_DATUM = (
+	UD_Int(int_of_class cl, [UD_String(string_of_template tmpl, [])])
+);
+=TEX
+=SML
+fun Ûdecode_zfixity_infoÝ (thy : string) (ud : USER_DATUM)
+		: CLASS * TEMPLATE = (
+	(case ud of
+		UD_Int(c, [UD_String(t, [])]) => (class_of_int c, template_of_string t)
+	|	_ => fail "decode_decl" 79001 [fn()=> thy])
+	handle Fail _ => fail "decode_decl" 79001 [fn()=> thy]
+);
+=TEX
+\subsection{Theory Access Functions}
+The following function is used to extract fixity records from
+a theory. 
+=SML
+fun Ûget_zfixity_infosÝ (thy : string) : (CLASS * TEMPLATE) list = (
+	map (decode_zfixity_info thy) (fetch_sym_tab_data thy)
+);
+=TEX
+The following function is used to add fixity records to
+the current theory. 
+=SML
+fun Ûstore_zfixity_infoÝ (cltmpl : CLASS * TEMPLATE) : unit = (
+	store_sym_tab_datum (encode_zfixity_info cltmpl)
+);
+=TEX
+The following function is used to remove a fixity record from
+the current theory. 
+=SML
+fun Ûunstore_zfixity_infoÝ (cltmpl : CLASS * TEMPLATE) : unit = (
+	delete_sym_tab_datum (encode_zfixity_info cltmpl)
+);
+=TEX
+=SML
+
+=TEX
+\subsection{Update Functions}
+When a fixity paragraph is encountered
+by the paragraph processor \cite{DS/FMU/IED/DTD049}, the function
+$set\_zfixity\_info$ is used to enter the fixity information in the
+cache and the theory database. It is necessary to make the checks
+on the uniqueness of the template identifiers
+from \cite{DS/FMU/IED/DEF007} at this point.
+These checks amount to saying that
+
+\begin{enumerate}
+\item
+the new fixity entry must not
+change the $ZFIXITY$ value for any identifier
+\item
+if there is
+already a fixity entry for an identifier with
+$ZFIXITY$ other than $ZFFThenOP$, then the existing fixity entry must
+be identical with the new one.
+\item
+the first and last identifiers in the template must be distinct and
+must each be different from every other identifier in the template.
+\end{enumerate}
+
+If the template is invalid the function raises an exception, otherwise
+it returns true iff. the entry is already present.
+
+(Note that the local function check checks $f$ and $c$ rather more often
+than is strictly necessary, however this considerably simplifies the code,
+which is highly unlikely to be critical for performance.)
+=SML
+fun template_check ((cl, tmpl) : CLASS * TEMPLATE) : bool = (
+	let	val idfixes = tmpl_ids tmpl cl;
+		val ids = map fst idfixes;
+		val ids_entries = combine idfixes (map get_zfixity_info ids);
+		fun moan t = (
+			fail "cache_zfixity_info" 79010
+			[fn()=>format_template tmpl, fn()=>format_template t]
+		);
+		fun check ((id, (fx, cl)), Value ((f, c), ts)) = (
+			let	fun aux t = (
+					if fx <> f orelse cl <> c orelse
+						(fx <> ZFFThenOp andalso t <> tmpl)
+					then	fail "set_zfixity_info" 79012
+						[fn()=>id,
+						 fn()=>format_template tmpl,
+						 fn()=>format_template t]
+					else fx <> ZFFThenOp
+				);
+			in	any ts aux
+			end
+		) | check _ = false;
+	in	any  ids_entries check
+	end
+);
+=TEX
+=SML
+fun Ûset_zfixity_infoÝ ((cl, tmpls) : CLASS * (TEMPLATE list)) : unit = (
+	let	val cltmpls_todo = (map (fn tmpl => (cl, tmpl)) tmpls)
+			drop template_check;
+	in	map cache_zfixity_info cltmpls_todo;
+		map store_zfixity_info cltmpls_todo; ()
+	end
+);
+=TEX
+=SML
+fun Ûdelete_zfixity_infoÝ (cltmpl as (cl, tmpl) : CLASS * TEMPLATE) : unit = (
+	if cltmpl mem (get_zfixity_infos "-")
+	then	(
+		uncache_zfixity_info cltmpl;
+		unstore_zfixity_info cltmpl
+	) else	fail "delete_zfixity_info" 79013
+		[fn()=>format_template tmpl, fn()=>format_class cl]
+);
+=TEX
+\section{HANDLING CONTEXT CHANGES}
+When a theory is opened, we rebuild the cache from scratch, this being
+by far the most straightforward scheme.
+=TEX
+$cache\_theory$ loads the symbol table information
+contained in a theory and all its ancestors into the caches:
+=SML
+fun Ûcache_theoryÝ (current : string) : unit = (
+	let	fun aux1 thy (cltmpl :: more) = (
+			(if (template_check cltmpl)
+				handle Fail msg =>
+					(diag_line (get_error_message 79002 [thy]);
+					 diag_line (get_message msg); true)
+			then ()
+			else cache_zfixity_info cltmpl);
+			aux1 thy more
+		) | aux1 _ [] = ();
+		fun aux2 thy = aux1 thy (get_zfixity_infos thy);
+	in	clear_cache();
+		map aux2 (get_ancestors current);
+		()
+	end
+);
+=TEX
+Of the various classes of kernel state change, identified in
+\cite{DS/FMU/IED/DTD012}, only $open\_theory$, $new\_parent$ and the
+operations which introduce or
+delete types or constants are currently of relevance
+to the symbol table module.
+We declare our interest in kernel state changes using
+the interface defined in \cite{DS/FMU/IED/DTD012}:
+=SML
+val _ = on_kernel_state_change
+	(fn	OpenTheory (current, (_, _)) => cache_theory current
+	|	NewParent _ => cache_theory(get_current_theory_name())
+	|	_ => ()
+);
+=TEX
+\section{EPILOGUE}
+=SML
+end; (* of structure ZUserInterfaceSupport *)
+=TEX
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+
+\end{document}
+
+
