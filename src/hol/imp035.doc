@@ -65,6 +65,8 @@ Removed uses of $PolyML.makestring$.
 Added $tc\_thms\_only$ flag.
 \item [Issue 1.10 (7th July 1992)]
 Various minor changes.
+\item [Issue 1.11 (14th September 1992)]
+Correcting $req\_consistency\_thm$.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -679,18 +681,57 @@ fun €list_req_thm› (([],seq) : string list * SEQ) : unit = (
 	()
 );
 =TEX
+The following implementation requires detailed knowledge of the
+implementation of $get\_spec$ from \cite{DS/FMU/IED/IMP046}.
+=SML
+local
+fun €lintersect› (a :: x) lst = (
+	if a mem lst
+	then a :: lintersect x lst
+	else lintersect x lst
+) | lintersect [] _ = [];
+in
+=TEX
 =SML
 fun €req_consistency_thm› (tm : TERM) : unit = (
-	let	val (nm, _) = (dest_const tm)
+let	val (nm, _) = (dest_const tm)
 		handle Fail _ => term_fail "req_consistency_thm" 35102 [tm];
-		val (asms, _) = dest_thm(get_spec tm);
-	in	case asms of
-			[asm] => req_thm (nm ^ "_consistent", ([], asm))
-		|	[] => term_fail "req_consistency_thm" 35103 [tm]
-		|	_ => error "req_consistency_thm" 35104
-				[fn _ => string_of_term tm]
-	end
-);
+	val x_cons = nm ^ "_consistent";
+in
+	case (!req_flag) of
+	Declare => req_thm(x_cons,([],mk_t))
+	| Check => (
+let
+	val thy = get_const_theory nm
+		handle (Fail _) =>
+		term_fail "req_consistency_thm" 35102 [tm];
+	val defn = get_defn thy nm
+		handle (Fail _) =>
+		(get_axiom thy nm
+			handle (Fail _) =>
+			term_fail "req_consistency_thm" 35103 [tm]);
+	val (pred,c) = dest_bin_op "req_consistency_thm" 35103 "ConstSpec" (concl defn)
+			handle (Fail _) =>
+			term_fail "req_consistency_thm" 35103 [tm];
+	val poss_thys = (thy :: (lintersect (get_ancestors "-") 
+		(get_descendants thy)))
+		less (get_current_theory_name()) ;
+	val find_cons = mapfilter 
+		(fn lthy => get_thm lthy x_cons
+			handle (Fail _) => 
+			get_axiom lthy x_cons)
+		poss_thys;
+	val dummy = if is_nil find_cons
+		then ()
+		else fail "req_consistency_thm" 35104 [
+			fn () => string_of_term tm,
+			fn () => thm_theory(hd find_cons)];
+in
+	req_thm(x_cons,([],mk_app(mk_const("Consistent",
+		mk_≠_type(type_of pred, BOOL)), pred)))
+end)
+end);
+end;
 =TEX
 =SML
 fun €req_binder› (nm : string) : unit = (
