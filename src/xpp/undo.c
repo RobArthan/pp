@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.14 2002/10/28 15:58:48 rda Exp rda $
+ * $Id: undo.c,v 2.15 2002/12/03 23:39:50 rda Exp rda $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -898,6 +898,7 @@ void undo_modify_cb(
 	XtPointer	xtp_cbs)
 {
 	UndoBuffer *ub = cbd;
+	XmTextVerifyCallbackStruct *cbs = xtp_cbs;
 	Boolean noMemoryAnswer = False;
 	if(!ub->enabled) {
 		return;
@@ -906,10 +907,11 @@ void undo_modify_cb(
 		if(yes_no_dialog(text_w, read_only_warning) ) {
 			set_read_only(False);
 		} else {
-			((XmTextVerifyCallbackStruct *)xtp_cbs)-> doit = False;
+			cbs-> doit = False;
 			return;
 		}
 	}
+	text_verify_cb(text_w, cbd, xtp_cbs);
 	show_modified();
 	if(!undoModifyCB(text_w, ub, xtp_cbs, &noMemoryAnswer)) {
 	}
