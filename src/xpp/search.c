@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.52 2004/07/13 16:28:59 rda Exp rda $ 
+ * $Id: search.c,v 2.53 2004/07/19 15:12:59 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -386,6 +386,7 @@ Boolean add_search_tool(Widget text_w)
 		XmNrightPosition,		12,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
+		XmNalignment,			XmALIGNMENT_BEGINNING,
 		NULL);
 
 	XmStringFree(s);
@@ -400,6 +401,7 @@ Boolean add_search_tool(Widget text_w)
 		XmNleftPosition,		12,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
+		XmNalignment,			XmALIGNMENT_BEGINNING,
 		NULL);
 
 	XmStringFree(s);
