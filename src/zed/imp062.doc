@@ -134,7 +134,7 @@ Enhanced representation of the environment.
 \item[Issue 1.58] The Z universal set is now called ƒ.
 \item[Issues 1.59, 1.60] Fixed bug in treatment of decorated free variables.
 \item[Issue 1.61] Adapted to exploit new efficient type inference contexts.
-\item[Issue 1.62] Added interface for term generation performance enhancements.
+\item[Issues 1.62, 1.63] Added interface for term generation performance enhancements.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -937,7 +937,12 @@ fun Ûdec_boundvarsÝ (env : Z_ENV) (idtyl : (IDENT * EXTYPE) list) : Z_ENV = (
 =TEX
 
 
-\section{SUPPORT FOR SCHEMAS}
+\section{SUPPORT FOR SCHEMA TYPES AND TUPLE TYPES}
+The type inferrer may insert binding types or tuple types in a term that have not been declared.
+A record of the types inserted is kept so that the term generator can ensure that all the required
+type constructors are in scope.
+=SML
+val Ûtypes_to_defineÝ : EXTYPE E_DICT ref = ref initial_e_dict;
 =SML
 datatype ÛMANIFEST_EXTYPEÝ =
 		NotManifest
@@ -960,8 +965,10 @@ end);
 
 fun 	Ûbind_extypeÝ (itym :(IDENT * EXTYPE) list) :EXTYPE = (
 let	val itym' = map (fn (id, ty) => (string_of_ident id, ty)) itym;
-in
-		ExType (bind_exname(fst(split itym)), iextymfunseq itym')
+	val tycon = bind_exname(fst(split itym));
+	val ety = ExType (tycon, iextymfunseq itym');
+in	types_to_define := e_enter tycon ety (!types_to_define);
+	ety
 end);
 
 =TEX
@@ -988,7 +995,12 @@ The following makes use of the Z mapping \cite{DS/FMU/IED/ZED003}
 and \cite{DS/FMU/IED/ZED002}.
 =SML
 fun	Ûtuple_exnameÝ (tyl: EXTYPE list) :string = "Z'T[" ^ string_of_int(length tyl) ^ "]";
-fun	Ûtuple_extypeÝ (tyl: EXTYPE list) :EXTYPE = ExType(tuple_exname tyl,tyl);
+fun	Ûtuple_extypeÝ (tyl: EXTYPE list) :EXTYPE = (
+let	val tycon = tuple_exname tyl;
+	val ety = ExType (tycon, tyl);
+in	types_to_define := e_enter tycon ety (!types_to_define);
+	ety
+end);
 =TEX
 
 =SML
@@ -2424,31 +2436,18 @@ end
 =SML
 fun Ûtype_check_z_paraÝ {standard : bool, allow_frees : bool}
 	(p:Z_PARA) : Z_INFERRED = (
-let	val side = init_subs zti_subs;
-	val side = (zti_standard_z := standard);
-	val side = (zti_allow_frees := allow_frees);
-	val side = reset_freetype_names();
+let	val _ = init_subs zti_subs;
+	val _ = (zti_standard_z := standard);
+	val _ = (zti_allow_frees := allow_frees);
+	val _ = reset_freetype_names();
+	val _ = types_to_define := initial_e_dict;
 	val res = ti_z_para p handle ZExn info => ZTypeError(info);
-	(* val side = init_subs zti_subs *)
 in	res
 end);
 =TEX
 =SML
 fun Ûget_types_to_defineÝ (():unit) : EXTYPE list = (
-	let	open DynamicArray;
-		val u = uindex zti_subs;
-		fun aux acc i = (
-			if	i >= u
-			then	acc
-			else	case sub_opt(zti_subs, i) of
-					Value ety => (
-					aux (ety::acc) (i + 1)
-				) |	Nil => (
-					aux acc (i+1)
-				)
-		);
-	in	aux [] 0
-	end
+	map snd (e_flatten(!types_to_define))
 );
 =TEX
 \section{EPILOGUE}
