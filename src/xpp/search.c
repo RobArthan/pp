@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.39 2003/07/18 13:25:25 rda Exp rda $ 
+ * $Id: search.c,v 2.40 2003/07/23 14:02:14 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -324,8 +324,10 @@ Boolean add_search_tool(Widget text_w)
 	search_text = XtVaCreateManagedWidget("search-text",
 		xmTextWidgetClass,		paned,
 		XmNeditMode,			XmMULTI_LINE_EDIT,
+/*
 		XmNrows,			2,
 		XmNcolumns,			40,
+*/
 		NULL);
 
 	XtAddCallback(search_text, XmNmodifyVerifyCallback, text_verify_cb, NULL);
@@ -440,8 +442,10 @@ Boolean add_search_tool(Widget text_w)
 	replace_text = XtVaCreateManagedWidget("replace",
 		xmTextWidgetClass,		paned,
 		XmNeditMode,			XmMULTI_LINE_EDIT,
+/*
 		XmNrows,			2,
 		XmNcolumns,			40,
+*/
 		NULL);
 
 	XtAddCallback(replace_text, XmNmodifyVerifyCallback, text_verify_cb, NULL);
