@@ -14,13 +14,13 @@
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
 \TPPkeywords{}
-%\TPPauthor{G.~Prout & WIN01}  %% Mandatory field
-\TPPauthors{G.~Prout & WIN01\\K.~Blackburn & WIN01}
+\TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
+%\TPPauthors{G.~Prout & WIN01\\K.~Blackburn & WIN01}
 \TPPauthorisation{R.D.Arthan & FST Team Leader}
 \TPPabstract{This document contains the detailed design for the 
 derived rules of inference, conversions and tactics for the Z Proof Support System predicate calculus.}
 \TPPdistribution{\parbox[t]{4.0in}{%
-	    R.B.~Jones
+	    FST Library
 }}
 %\TPPclass{CLASSIFICATION}
 %\def\TPPheadlhs{}
@@ -53,12 +53,14 @@ Removed $Z\_STRIP\_GOAL\_T$, $Z\_STRIP\_THM\_THEN$, $Z\_strip\_tac$, \newline $Z
 Tidied up theorems and conversion about $U$ into a single conversion $Z\_U\_true\_conv$ (for use in stripping and rewriting).
 \item [Issue 1.3 (9th July 1992)]
 Taken over by KB, and reworked, new fonts.
+\item [Issue 1.4 (14th July 1992)]
+Significant changes after RBJ, RDA comments.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
 \subsection{Scope}
 This document contains a detailed design for the 
-derived rules of inference and conversions and tactics for
+derived rules of inference, conversions and tactics for
 the Z Proof Support System (see \cite{DS/FMU/IED/HLD015}) predicate calculus.
 This is called for in \cite{DS/FMU/IED/HLD016}.
 The design is
@@ -74,7 +76,7 @@ the Z Library \cite{DS/FMU/IED/DTD078} and Z Term generator
 \subsubsection{Deficiencies}
 The coverage in initial releases of ProofPower Z is aimed at the basic reasoning
 tools, rather than a full coverage.
-Thus we only cover:
+Thus we aim only to cover:
 \begin{itemize}
 \item
 Rewriting
@@ -85,7 +87,7 @@ $µ$ elimination as inference rule
 \item
 Contradiction tactic
 \item
-$∂\_$tac
+$∂\_tac$
 \end{itemize}
 plus some of the auxiliary functions necessary for implementing these.
 \section{OVERLAP WITH ProofPower HOL}
@@ -93,42 +95,132 @@ Some functions operating on Z have the same purpose
 as an equivalent for ProofPower HOL,
 but perhaps different functionality.
 
-Where this happens, in order of desirability, highest first, we:
+Where this happens we will
 \begin{itemize}
 \item
-Use the HOL function, with, if necessary, parameterisation
+By preference use the HOL function, with, if necessary, parameterisation
 changes provided by proof contexts (or, more rarely,
 if at all, by other parameterisation).
 In particular, if the functionality is the same, use the 
 same function (e.g. $±\_tac$).
 \item
-Override the HOL function with a new one that tries
-Z specific approaches, and if that fails, reverts
-to a HOL mode of behaviour.
-Where this is used it will be necessary to provide a
-method of returning to purely HOL mode, and then, later,
-restoring the Z mode.
-This mode swap will probably be done by ML structure opening.
-For example, see treatment of $strip\_tac$ below.
-\item
-Provide a separately named function for Z work.
-The Z name will usually be formed by prefixing appropriate
-atoms of the name by Z to indicate the object of
-concern in the Z variant of the object (e.g. we use
-the atom $Z\_µ$ in referring to functions about a Z language universal quantifier).
+Otherwise we will provide a separately named function for Z work.
+The Z name will usually be formed by prefixing by
+``$z\_$'', ``$Z\_$'' or ``Z'' (according to naming convention case and atom composition rules
+followed by the object's name)
+to indicate the object of
+concern in the Z variant of the object.
 \end{itemize}
+Later releases might provide structures whose sole purpose is to
+override HOL (i.e. primary language) objects by
+their Z equivalents, and to undo this step.
+There are both benefits and problems with this, and the final
+approach is yet to be decided.
+\section{LANGUAGE OVERLAP BETWEEN Z AND HOL}\label{ZCAVEAT}
+Many of the functions below that generate results involving terms
+are stated to ``remain within the Z language''
+(indicated by their results being in $Ò...Æ$ or
+left without any such brackets at all - this document assumes
+Z as the default language, HOL terms are explicitly quoted).
+This should be taken to mean that in so far as the original
+input was within the Z language (i.e. the range of the Z mapping)
+the results will also be.
+
+One liberty that is taken here is that, legitimately, we use HOL universal quantification
+is used to represent generic formals.
+However we will also allow arbitrary outer universally quantified terms to be considered ``within the Z language'' 
+where this is convenient - the most notable example of this
+is in $strip\_tac$ when a Z universal quantification is broken into a sequence of HOL universal quantifications.
 \section{Z PREDICATE CALCULUS}
 =DOC
 signature€ZPredicateCalculus› = sig
 =DESCRIBE
 This provides a set of rules of inference, conversions and tactics sufficient for reasoning about the Z predicate calculus in ProofPower.
-=FAILURE
 =ENDDOC
 
 \subsection{Subsidiary Functions}
+\subsubsection{What is Z}
+=DOC
+val €check_z_language› : TERM -> bool;
+=DESCRIBE
+If the term given is in the range of the Z mapping
+then this function will return true.
+Otherwise it will fail with the given error message.
+Note that a term is a subterm of itself for these purposes.
+=FAILURE
+	?0 is not within the Z language due to subterm ?1
+=ENDDOC
+=DOC
+val €not_z_subterms› : TERM -> TERM list;
+=DESCRIBE
+This function will return a list (perhaps empty)
+of all the subterms that prevent a term being within the
+Z language.
+The subterms given will be maximal in the sense that subterms of those given will not be included in the list.
+=ENDDOC
+
+\subsubsection{Realignment after ¡-conversion}
+If a substitution via $var\_subst$ is made upon a term in Z (that may be
+part of a theorem or subgoal) by the 
+many important functions that call $var\_subst$
+(e.g. rewriting and $µ$ elimination),
+and if this substitution causes bound variable renaming, the
+resulting term may no longer be in the Z language.
+This may be because either the types of bindings may no longer match the variable names bound,
+or because the variables in the binding have ceased being in a canonical order.
+Either of these two problems can be ``fixed'' by post-processing.
+The problems may be removed by ``realignment'', using
+Z renaming constructs, returning the term to being within
+the Z language.
+
+The following two functions fulfill this need:
+=DOC
+val €realign_renamed_z_term› : TERM -> TERM;
+=DESCRIBE
+This function will realign all sub-terms that fail to be 
+Z because either:
+\begin{itemize}
+\item
+The subterm is a binding, and the type of the binding
+does not match the names of the free variables bound.
+This is realigned using the Z renaming construct.
+\item
+The subterm is a binding whose bound variables are not
+in the canonical ordering that would result from the Z mapping.
+This is realigned by reorganising the order of abstractions and arguments.
+\end{itemize}
+Subterms that are not covered by these two cases will be traversed, regardless of their language.
+=SEEALSO
+$realign\_renamed\_z\_conv$
+=FAILURE
+	No realignment took place
+=ENDDOC
+=DOC
+val €realign_renamed_z_conv› : CONV;
+=DESCRIBE
+This function will return the equality theorem between a term
+and one that realigns all sub-terms that fail to be 
+Z because either:
+\begin{itemize}
+\item
+The subterm is a binding, and the type of the binding
+does not match the names of the free variables bound.
+This is realigned using the Z renaming construct.
+\item
+The subterm is a binding whose bound variables are not
+in the canonical ordering that would result from the Z mapping.
+This is realigned by reorganising the order of abstractions and arguments.
+\end{itemize}
+Subterms that are not covered by these two cases will be traversed, regardless of their language.
+=SEEALSO
+$realign\_renamed\_z\_term$
+=FAILURE
+	No realignment took place
+=ENDDOC
+
 \subsubsection{Concerning The Universe, U} \label{U}
 
-In \cite{DS/FMU/IED/DTD078} the following `transparent type' definition is given.
+In \cite{DS/FMU/IED/DTD078} the following definition is given.
  
 πù U[X]ú
 ‹ U :  X
@@ -138,23 +230,9 @@ In \cite{DS/FMU/IED/DTD078} the following `transparent type' definition is given
 
 This definition is supplied purely for convenience. If a set is not specified, the Z type inferrer inserts $Ò...: UÆ$. This leads to terms which are polymorphic, rather than truly set generic. The following material about $U$ is provided to facilitate discharging the proof obligation of implicit predicates in Z declarations.
 =DOC
-val €u_clauses› : THM;
-=DESCRIBE
-A theorem concerning the simplification of $U$.
-=FRULE 1 Theorem
-u_clauses
-˜
-˜
- U = U ±
-(U ∏ U) = U ±
-(U ™ U) = U ±
-¨µ x∑ x ç UÆ
-=TEX
-=ENDDOC
-=DOC
 val €u_conv› : CONV;
 =DESCRIBE
-Simplify to $U$ a structure made from $U$, $∏$, $™$ and $$. 
+Simplify a structure made from solely from $U$, and one of: arbitrary sized cartesian products, labelled products, $™$, and $$. 
 =FRULE 1 Conversion
 u_conv
 ÒStructure[U]Æ
@@ -162,17 +240,25 @@ u_conv
 ˜
 Ù Structure[U] = U
 =TEX
-based on recursively using
+by one application of one of the following:
 =GFT
 Ù  U = U
-Ù (U ∏ U) = U
+Ù (U ∏ U ∏ ...) = U
+Ù {lab1 : U; lab2 : U; lab3,lab4 : U; ... } = U
 Ù (U ™ U) = U
 =TEX
+=USES
+In the rewriting section of a proof context,
+and to simplify declarations as predicates, while preserving
+their declaration as predicate form.
 =SEEALSO
 $ç\_u\_conv$
 =FAILURE
 	?0 cannot be proven equal to ÒUÆ
 =ENDDOC
+Later releases may react to introduced generic type abbreviations
+that collapse to Universe, and to introduced given sets
+(which are defined to be equal to Universe).
 =DOC
 val €ç_u_conv› : CONV;
 =DESCRIBE
@@ -181,7 +267,7 @@ Simplifies to $true$ a term of the form
 Òx ç S[U]Æ
 =TEX
 {}, where
-$S[U]$ is a structure made from $U$, $∏$, $™$ and $$.
+$S[U]$ is a structure made solely from $U$, arbitrary sized cartesian products, labelled products, $™$ and $$.
 =FRULE 1 Conversion
 ç_u_conv
 Òx ç S[U]Æ
@@ -192,124 +278,113 @@ $S[U]$ is a structure made from $U$, $∏$, $™$ and $$.
 based on recursively using
 =GFT
 Ù  U = U
-Ù (U ∏ U) = U
+Ù (U ∏ U ∏ ...) = U
+Ù {lab1 : U; lab2 : U; lab3,lab4 : U; ... } = U
 Ù (U ™ U) = U
 Ù µ x∑ x ç U
+Ù µ x∑ x Ä U
 =TEX
+=USES
+In stripping proof contexts, and in eliminating redundant declarations that have been
+converted to predicates.
+=SEEALSO
+$u\_conv$
 =FAILURE
 	?0 cannot be proven equal to ÒUÆ
 	?0 is not of the form: Òx ç S[U]Æ
 =ENDDOC
+Later releases may react to introduced generic type abbreviations
+that collapse to Universe, and to introduced given sets
+(which are defined to be equal to Universe).
 
 \subsubsection{Concerning Generic Formals}
-
-=DOC
-val €gen_formal_elim› : (TERM * TERM) -> THM -> THM;
-val €list_gen_formal_elim› : (TERM * TERM) list -> THM -> THM;
-=DESCRIBE
-$gen\_formal\_elim$ is a rule that specialises one outer generic formal to a chosen set.
-=FRULE 1 Rule
-gen_formal_elim
-(ÒXâiÆ, ÒSÆ)
-˜
-á Ù [...,Xâi,...] P[Xâi]
-˜
-á Ù [...,...] P'[S]
-=TEX
-where $P'$ is a type instantiated $P$, if necessary, to allow
-the specialisation.
-
-$list\_gen\_formal\_elim$ simultaneously specialises with all its arguments.
-=FAILURE
-	?0 is not a generic variable of ?1
-6006	Trying to instantiate type variable ?0, which occurs in assumption list
-=ENDDOC
-
-=DOC
-val €all_gen_formal_elim› : THM -> THM;
-=DESCRIBE
-A rule that specialises all generic variables of a Z predicate to $U$ (of the right type).
-=FRULE 1 Rule
-all_gen_formal_elim
-˜
-á Ù [Xâ1,...] P[Xâ1,...]
-˜
-á Ù P[U, ...]
-=TEX
-=ENDDOC
+These are represented by HOL universals and may thus
+be manipulated by $µ\_elim$, etc.
 \subsection{Concerning Z Universal Quantification}
 =DOC
-val €Z_µ_elim› : TERM -> THM -> THM;
+val €z_µ_elim› : TERM -> THM -> THM;
 =DESCRIBE
 Specialise all Z universally quantified variables to given values of the right type in a binding.
 =FRULE 1 Rule
-Z_µ_elim
-(mk_z_binding[("xâ1", Òtâ1Æ),...])
+z_µ_elim
+Ò(xâ1 ¶ tâ1, ... )Æ
 ˜
-á Ù µxâ1:Xâ1;... | Pâ1[xâ1,...]∑ Pâ2[xâ1,...]
+á Ù µ D[xâ1,...] | Pâ1[xâ1,...]∑ Pâ2[xâ1,...]
 ˜
-á Ù (tâ1 ç Xâ1 ± ... )
-    ± Pâ1[tâ1,...] ¥ Pâ2[tâ1,...]
+á Ù "D[xâ1,...] as predicate"
+    ± Pâ1'[tâ1,...] ¥ Pâ2'[tâ1,...]
 =TEX
-The supplied binding may instead be 
-anything else that can be type instantiated to the appropriate binding type.
-In such cases projection functions will be used:
-=FRULE 2 Tactic
-Z_µ_elim
-ÒtÆ
-˜
-á Ù µ xâ1:Xâ1;... | Pâ1[xâ1,...]∑ Pâ2[xâ1,...]
-˜
-á Ù (t'.xâ1 ç Xâ1 ± ..) ± 
-	Pâ1[t'.xâ1,...] ¥ Pâ2[t'.xâ1,...]
+where $D$ is a declaration that binds the $xâi$,
+that is converted to a predicate form, by 
+=INLINEFT
+DECL_C dec_pred_conv
 =TEX
-where $t'$ is an appropriately type instantiated
-form of the $t$.
+. 
+The theorem may be type instantiated to allow the 
+specialisation to be valid, thus the primed $Pâi$.
+The result may also require realignment to restore it to being within the Z language (see $realign\-\_renamed\-\_z\-\_conv$).
 
-Finally, if the theorem's conclusion has a single universally quantified variable, and the supplied argument can be type instantiated to match that, then it will be used as a witness.
-=FRULE 2 Tactic
-Z_µ_elim
+If both the supplied binding and the declaration are
+recognisably ``empty'' then the universal quantification will be eliminated.
+
+If instead the theorem's conclusion has a single universally quantified variable and the theorem can be type instantiated to match the supplied argument, then that supplied argument will be used directly.
+=FRULE 1 Rule
+z_µ_elim
 ÒtÆ
 ˜
 á Ù µ x:X | Pâ1[x]∑ Pâ2[x]
 ˜
-á Ù t' ç X ± Pâ1[t'] ¥ Pâ2[t']
+á Ù t ç X' ± Pâ1'[t] ¥ Pâ2'[t]
 =TEX
-where $t'$ is an appropriately type instantiated
-form of the $t$.
+
+If neither of the above apply then the supplied binding may instead be 
+anything else that can be taken to be to an appropriate binding type.
+In such cases projection functions will be used:
+=FRULE 2 Tactic
+z_µ_elim
+ÒtÆ
+˜
+á Ù µ D[xâ1,...] | Pâ1[xâ1,...]∑ Pâ2[xâ1,...]
+˜
+á Ù "D[t.xâ1,...] as predicate" ± 
+	Pâ1'[t.xâ1,...] ¥ Pâ2'[t.xâ1,...]
+=TEX
 
 =FAILURE
 	Supplied binding ?0 does not match conclusions binding ?1
 	?0 cannot be interpreted as an appropriate binding
 =ENDDOC
-What happens with an empty binding?
 
-Where:
-=GFT
-fun mk_z_binding[("xâ1", Òtâ1Æ),...] = (
-	ÒS_[xâ1,...] tâ1 ...Æ
-);
-=TEX
 =DOC
-val €Z_µ_intro› :  THM -> THM;
+val €z_µ_intro› :  THM -> THM;
 =DESCRIBE
 A rule to introduce a Z universal quantification. The variables to be quantified over must not occur free in the assumptions, and are determined from the form of the input theorem.
 =FRULE 1 Rule
-Z_µ_intro
+z_µ_intro
 ˜
-á Ù (xâ1 ç Xâ1 ± ...) ± Pâ1 ¥ Pâ2
+á Ù "D as predicate" ± Pâ1 ¥ Pâ2
 ˜
-á Ù µxâ1:Xâ1;... | Pâ1∑ Pâ2
+á Ù µ D | Pâ1∑ Pâ2
 =TEX
-As an edge condition:
+where D is converted to a declaration by
+=INLINEFT
+DECL_INTRO_C pred_dec_conv
+=TEX
+.
+As a special case:
 =FRULE 1 Rule
-Z_µ_intro
+z_µ_intro
 ˜
-á Ù (xâ1 ç Xâ1 ± ...) ¥ P
+á Ù "D as predicate" ¥ P
 ˜
-á Ù µxâ1:Xâ1; ... | true∑ P
+á Ù µ D | true∑ P
 =TEX
 
+An arbitrary conjunctive structure is allowed in $D$,
+including repeated bindings of single variables: the
+order of the resulting binding is canonical, rather than dependent on the conjunctive structure.
+
+This rule will not introduce empty bindings.
 =SEEALSO
 $Z\_µ\_intro1$ for implicit $xâi\ ç\ U$ conjuncts.
 =FAILURE
@@ -317,28 +392,30 @@ $Z\_µ\_intro1$ for implicit $xâi\ ç\ U$ conjuncts.
 	?0 cannot be made into a binding
 	?0 appears free in the assumptions
 =ENDDOC
-What happens with an empty binding?
-Should an implicit $true$ be inserted for $Pâ1$, if necessary?
-
 This rule, and the following are included in the initial release from a belief that they are likely to be necessary at some point,
-rather than any more rigourous requirement.
+rather than any more rigorous requirement.
 =DOC
-val €Z_µ_intro1› :  TERM list -> THM -> THM;
+val €z_µ_intro1› :  TERM list -> THM -> THM;
 =DESCRIBE
 A rule to introduce a Z universal quantification. The variables to be quantified over must not occur free in the assumptions,
 and are determined from the form of the input theorem,
 with additional variables from the supplied list.
 =FRULE 1 Rule
-Z_µ_intro1
+z_µ_intro1
 [ÒxâiÆ,...]
 ˜
-á Ù (xâ1 ç Xâ1 ± ...) ± Pâ1 ¥ Pâ2
+á Ù "D as predicate" ± Pâ1 ¥ Pâ2
 ˜
-á Ù µxâ1:Xâ1;...;xâi:U;... | Pâ1∑ Pâ2
+á Ù µ D;xâi:U;... | Pâ1∑ Pâ2
 =TEX
-and as edge conditions:
+where D is converted to a declaration by
+=INLINEFT
+DECL_INTRO_C pred_dec_conv
+=TEX
+.
+As special cases:
 =FRULE 1 Rule
-Z_µ_intro1
+z_µ_intro1
 [ÒxâiÆ,...]
 ˜
 á Ù Pâ1 ¥ Pâ2
@@ -346,7 +423,7 @@ Z_µ_intro1
 á Ù µxâi:U;... | Pâ1∑ Pâ2
 =TEX
 =FRULE 1 Rule
-Z_µ_intro1
+z_µ_intro1
 [ÒxâiÆ,...]
 ˜
 á Ù P
@@ -354,13 +431,19 @@ Z_µ_intro1
 á Ù µxâi:U;... | true∑ Pâ2
 =TEX
 =FRULE 1 Rule
-Z_µ_intro1
+z_µ_intro1
 [ÒxâiÆ,...]
 ˜
 á Ù (xâ1 ç Xâ1 ± ...) ¥ P
 ˜
 á Ù µxâ1:Xâ1; ... xâi:U;... | true∑ P
 =TEX
+An arbitrary conjunctive structure is allowed,
+including repeated bindings of single variables: the
+order of the resulting binding is canonical, rather than dependent on the conjunctive structure.
+
+This rule will not introduce empty bindings.
+
 =SEEALSO
 $Z\_µ\_intro$ for use without additional $xâi\ ç\ U$.
 =FAILURE
@@ -370,146 +453,268 @@ $Z\_µ\_intro$ for use without additional $xâi\ ç\ U$.
 	?0 is not a variable
 =ENDDOC
 =DOC
-val €Z_µ_conv› : CONV;
-val €Z_µ_conv1› : CONV;
+val €z_µ_elim_conv› : CONV;
+val €z_µ_intro_conv› : CONV;
 =DESCRIBE
 Turn a Z universally quantified term into
 a ProofPower HOL universally quantified term.
 =FRULE 1 Conversion
-Z_µ_conv
-Òµxâ1:Xâ1;... | Pâ1∑ Pâ2Æ
+z_µ_elim_conv
+Òµ D[xâi,...] | Pâ1∑ Pâ2Æ
 ˜
 ˜
-Ù (µxâ1:Xâ1;... | Pâ1∑ Pâ2) §
+Ù (µ D[xâi,...] | Pâ1∑ Pâ2) §
 	¨µ xâ1 ...∑
-	Ò(xâ1 ç Xâ1 ± ...) ± Pâ1 ¥ Pâ2ÆÆ
+	ÒD[xâi,...]Æ ± ÒPâ1Æ ¥ ÒPâ2ÆÆ
 =TEX
 
-$Z\_µ\_conv1$ undoes this process
+$Z\_µ\_intro\_conv$ undoes this process
 =FRULE 1 Conversion
-Z_µ_conv1
+z_µ_intro_conv
 ¨µ xâ1 ...∑
-Ò(xâ1 ç Xâ1 ± ...) ± Pâ1 ¥ Pâ2ÆÆ
+ÒD[xâi,...] ± Pâ1 ¥ Pâ2ÆÆ
 ˜
 ˜
 Ù ¨µ xâ1 ...∑
-	Ò(xâ1 ç Xâ1 ± ...) ± Pâ1 ¥ Pâ2Æ §
-  Ò(µxâ1:Xâ1;... | Pâ1∑ Pâ2)Æ	
+	D[xâi,...] ± Pâ1 ¥ Pâ2Æ §
+  Ò(µ D[xâi,...] | Pâ1∑ Pâ2)Æ	
 =TEX
 =USES
 Used in the Z form of $strip\_tac$,
 and handling negations with quantifiers.
+=SEEALSO
+$z\_µ\_elim\_conv1$
 =FAILURE
-	?0 is not of the form: Òµxâ1:Xâ1;... | Pâ1∑ Pâ2Æ
+	?0 is not of the form: Òµ D | Pâ1∑ Pâ2Æ
 	?0 is not of the form: ¨µ xâ1 ...∑
-	Ò(xâ1 ç Xâ1 ± ...) ± Pâ1 ¥ Pâ2ÆÆ
+	D ± Pâ1 ¥ Pâ2Æ
 =ENDDOC
 =DOC
-val €Z_µ_true_conv› : CONV;
+val €z_µ_elim_conv1› : CONV;
 =DESCRIBE
-Simplifies a Z universal quantification whose body is $true$ to $true$. 
+Turn a Z universally quantified term into
+a ProofPower HOL universally quantified term,
+eliminating the declaration part of the original quantification using $ç\_u\_conv$.
+The function fails if the declaration cannot be eliminated.
 =FRULE 1 Conversion
-Z_µ_true_conv
-Òµxâ1:Xâ1;... | P∑ trueÆ
+z_µ_elim_conv1
+Òµ D[xâi,...] | Pâ1∑ Pâ2Æ
 ˜
 ˜
-Ù (µxâ1:Xâ1;... | P∑ true) § true
+Ù (µ D[xâi,...] | Pâ1∑ Pâ2) §
+	¨µ xâ1 ...∑ ÒPâ1 ¥ Pâ2ÆÆ
 =TEX
-Note that the analogue with $false$ rather than $true$ 
-is not always valid,
-e.g., consider the case where $P$ is also $false$.
-=SEEALSO
-$Z\_∂\_false\_conv$
+Simplifications based on $Pâi$ being $true$ or $false$
+will also be applied.
+=USES
+For stripping proof contexts.
+=FAILURE
+	?0 is not of the form: Òµ D | Pâ1∑ Pâ2Æ
+	?0 is of the form: Òµ D | Pâ1∑ Pâ2Æ but D non-trivial
 =ENDDOC
+=DOC
+val €z_µ_inv_conv› : CONV;
+=DESCRIBE
+Simplifies a Z universal quantification whose predicate or
+constraint has no free variables bound by the declaration. 
+=FRULE 1 Conversion
+z_µ_inv_conv
+Òµ D | Pâ1∑ Pâ2Æ
+˜
+˜
+Ù µ D | Pâ1∑ Pâ2 § 
+	(µ D | Pâ1∑ false) ≤ Pâ2
+=TEX
+if $Pâ2$ is free in the term, and
+=FRULE 1 Conversion
+z_µ_inv_conv
+Òµ D | Pâ1∑ Pâ2Æ
+˜
+˜
+Ù µ D | Pâ1∑ Pâ2 § 
+	Pâ1 ¥ (µ D | true∑ Pâ2)
+=TEX
+if $Pâ1$ is free in the term, and
+=FRULE 1 Conversion
+z_µ_inv_conv
+Òµ D | Pâ1∑ Pâ2Æ
+˜
+˜
+Ù µ D | Pâ1∑ Pâ2 § 
+	Pâ1 ¥ (µ D | true∑ false) ≤ Pâ2
+=TEX
+if both are free.
+=SEEALSO
+$Z\_∂\_inv\_conv$
+=FAILURE
+	?0 is not of the form Òµ D | Pâ1∑ Pâ2Æ where at least
+	one of Pâ1 or Pâ2 are unbound by D
+=ENDDOC
+=DOC
+val €z_intro_µ_tac› : TERM -> TACTIC;
+=DESCRIBE
+Introduce a Z universal with reference to a binding.
+=FRULE 2 Tactic
+z_intro_µ_tac
+Ò(xâ1 ¶ tâ1, ...)Æ
+˜
+{ á } t
+˜
+{ á } µ xâ1:U; ... | true∑ t[xâ1/tâ1,...]
+=TEX
+The result may require realignment to restore it to being within the Z language (see $realign\-\_renamed\-\_z\-\_conv$).
 
+If the supplied term is a schema object then:
+=FRULE 2 Tactic
+z_intro_µ_tac
+ÒSÆ
+˜
+{ á } t
+˜
+{ á } µ S∑ t[xâ1/S.xâ1,...]
+=TEX
+where the $S.xâi$ substituted for are the actual values 
+bound by the schema, or the expression $¨S.xâiÆ$.
+=FAILURE
+	?0 cannot be interpreted to be of the form: Ò(xâ1 ¶ tâ1, ...)Æ
+=ENDDOC
+I'm not certain the schema object form makes sense!
+
+=DOC
+val €z_spec_asm_tac› TERM -> TERM -> TACTIC;
+val €z_spec_nth_asm_tac› int -> TERM -> TACTIC;
+=DESCRIBE
+These are two methods of specialising a Z universally quantified assumption.
+both leave the old assumption in place, and place the
+ instantiated asssumption onto the assumption list using $strip\_asm\_tac$.
+If the desired behaviour differs from any of those supplied
+then use $GET\_ASM\_T$ and its cousins to create the desired functionality.
+=FRULE 2 Tactic
+z_spec_asm_tac
+Òµ D[xâ1,...] | Pâ1∑ Pâ2Æ
+Ò(xâ1 ¶ tâ1, ...)Æ
+˜
+{ á, Òµ D[xâ1,...] | Pâ1∑ Pâ2Æ } t
+˜
+{strip ¨ÒD'[tâ1,...]Æ ± ÒPâ1'Æ ¥ ÒPâ2'ÆÆ, 
+á, Òµ D | Pâ1∑ Pâ2Æ} t1
+=TEX
+where $D'$, $Pâ1'$ and $Pâ2'$ are specialised appropriately,
+and perhaps realigned to the Z language
+by $realign\-\_renamed\-\_z\-\_conv$.
+
+$z\_spec\_nth\_asm\_tac$ uses an assumption number rather than an explicit statement of the assumption to be specialised.
+=FAILUREC
+\paragraph{Errors}
+As the constituents of the implementing functions
+(e.g. $GET\_ASM\_T$ and $z\_µ\_elim$).
+=ENDDOC
 \subsection{Concerning Z Existential Quantification}
 =DOC
-val €Z_∂_conv› : CONV;
-val €Z_∂_conv1› : CONV;
+val €z_∂_elim_conv› : CONV;
+val €z_∂_intro_conv› : CONV;
 =DESCRIBE
 Turn a Z existentially quantified term into
 a ProofPower HOL existentially quantified term.
 =FRULE 1 Conversion
-Z_∂_conv
-Ò∂xâ1:Xâ1;... | Pâ1∑ Pâ2Æ
+z_∂_elim_conv
+Ò∂ D[xâi,...] | Pâ1∑ Pâ2Æ
 ˜
 ˜
-Ù (∂xâ1:Xâ1;... | Pâ1∑ Pâ2) §
-	¨ xâ1 ...∑
-	Ò(xâ1 ç Xâ1 ± ...) ± Pâ1 ¥ Pâ2ÆÆ
+Ù (∂ D[xâ1,...] | Pâ1∑ Pâ2) §
+	¨∂ xâ1 ...∑
+	ÒD[xâ1,...]Æ ± ÒPâ1Æ ± ÒPâ2ÆÆ
 =TEX
 
-$Z\_∂\_conv1$ undoes this process
+$Z\_∂\_intro\_conv$ undoes this process
 =FRULE 1 Conversion
-Z_∂_conv1
+z_∂_intro_conv
 ¨∂ xâ1 ...∑
-	Ò(xâ1 ç Xâ1 ± ...) ± Pâ1 ¥ Pâ2ÆÆ
+	D[xâi,...] ± Pâ1 ± Pâ2Æ
 ˜
 ˜
 Ù ¨∂ xâ1 ...∑
-	Ò(xâ1 ç Xâ1 ± ...) ± Pâ1 ¥ Pâ2ÆÆ §
-  (∂xâ1:Xâ1;... | Pâ1∑ Pâ2)
+	D[xâi,...] ± Pâ1 ± Pâ2Æ §
+  (∂ D[xâi,...] | Pâ1∑ Pâ2)
 =TEX
 =USES
 Used in the Z form of $strip\_tac$,
 and handling negations with quantifiers.
+=SEEALSO
+$z\_∂\_elim\_conv1$
 =FAILURE
-	?0 is not of the form: Òµxâ1:Xâ1;... | Pâ1∑ Pâ2Æ
+	?0 is not of the form: Ò∂ D | Pâ1∑ Pâ2Æ
+	?0 is not of the form: ¨∂ xâ1 ...∑ D[xâi,...] ± Pâ1 ± Pâ2Æ
+=ENDDOC
+=DOC
+val €z_∂_elim_conv1› : CONV;
+=DESCRIBE
+Turn a Z existentially quantified term into
+a ProofPower HOL universally quantified term,
+eliminating the declaration part of the original quantification using $ç\_u\_conv$.
+The function fails if the declaration cannot be eliminated.
+=FRULE 1 Conversion
+z_∂_elim_conv1
+Ò∂ D[xâi,...] | Pâ1∑ Pâ2Æ
+˜
+˜
+Ù (∂ D[xâi,...] | Pâ1∑ Pâ2) §
+	¨∂ xâ1 ...∑ ÒPâ1 ¥ Pâ2ÆÆ
+=TEX
+Simplifications based on $Pâi$ being $true$ or $false$
+will also be applied.
+=USES
+For stripping proof contexts.
+=FAILURE
+	?0 is not of the form: Ò∂ D | Pâ1∑ Pâ2Æ
+	?0 is of the form: Ò∂ D | Pâ1∑ Pâ2Æ, but D non-trivial
 =ENDDOC
 
 =DOC
-val €Z_∂â1_conv› : CONV;
+val €z_∂â1_conv› : CONV;
 =DESCRIBE
 Converts a Z unique existential quantification to a Z existential quantification. 
 =FRULE 1 Conversion
-Z_∂_conv 
-Ò∂â1 xâ1:Xâ1; ... | Pâ1[xâ1,...]∑ Pâ2[xâ1,...]Æ
+z_∂_conv 
+Ò∂â1 D[xâ1,...] | Pâ1[xâ1,...]∑ Pâ2[xâ1,...]Æ
 ˜
 ˜
-Ù (∂â1 xâ1:Xâ1; ... | Pâ1[xâ1,...]∑ Pâ2[xâ1,...]) § 
-(∂ xâ1:Xâ1; ... | Pâ1[xâ1,...]∑ Pâ2[xâ1,...] ±
-(µ yâ1:Xâ1; ... | Pâ1[yâ1,...] ± Pâ2[yâ1,...]∑ 
+Ù (∂â1 D[xâ1, ... ] | Pâ1[xâ1,...]∑ Pâ2[xâ1,...]) 
+§ 
+(∂ D[xâ1, ... ] | Pâ1[xâ1,...]∑ Pâ2[xâ1,...] ±
+(µ D[xâ1, ... ][yâ1/xâ1,...] | Pâ1[yâ1,...] ± 
+	Pâ2[yâ1,...]∑ 
 	xâ1 = yâ1 ± ...))
 =TEX
+where the $yâi$ are variants of the $xâi$, not occurring
+in the term being processed.
 =FAILURE
 	?0 is not of the form: Ò∂â1D | Pâ1∑ Pâ2Æ
 =ENDDOC
 =DOC
-val €Z_∂_tac› : TERM -> TACTIC ;
+val €z_∂_tac› : TERM -> TACTIC ;
 =DESCRIBE
 Given a binding of identifiers to witnesses,
 accept this as a ``group witness'' for a Z existentially
 quantified goal.
 =FRULE 2 Tactic
-Z_∂_tac
-(mk_z_binding[("xâ1",Òtâ1Æ),...])
+z_∂_tac
+Ò(xâ1 ¶ tâ1,...) Æ
 ˜
-{ á } ∂ xâ1:Xâ1;... | Pâ1[xâ1,...]∑ Pâ2[xâ1,...]
+{ á } ∂ D[xâ1,...] | Pâ1[xâ1,...]∑ Pâ2[xâ1,...]
 ˜
-{ á } (tâ1' ç Xâ1 ± ..) ± 
+{ á } "D[tâ1',...] as predicate" ± 
 	Pâ1[tâ1',...] ± Pâ2[tâ1',...]
 =TEX
 where the $tâi'$ are appropriately type instantiated
 forms of the $tâi$.
+See $dec\_pred\_conv$ for the conversion of a declaration to a predicate.
+The result may require realignment to restore it to being within the Z language (see $realign\-\_renamed\-\_z\-\_conv$).
+An empty declaration may be given an empty binding.
 
-The supplied binding may instead be 
-anything else that can be type instantiated to the appropriate binding type.
-In such cases projection functions will be used:
+If the goal's conclusion has a single Z existentially bound variable, and the supplied argument can be type instantiated to match that, then it will be used as a witness.
 =FRULE 2 Tactic
-Z_∂_tac
-ÒtÆ
-˜
-{ á } ∂ xâ1:Xâ1;... | Pâ1[xâ1,...]∑ Pâ2[xâ1,...]
-˜
-{ á } (t'.xâ1 ç Xâ1 ± ..) ± 
-	Pâ1[t'.xâ1,...] ± Pâ2[t'.xâ1,...]
-=TEX
-where $t'$ is an appropriately type instantiated
-form of the $t$.
-
-Finally, if the goal's conclusion has a single Z existentially bound variable, and the supplied argument can be type instantiated to match that, then it will be used as a witness.
-=FRULE 2 Tactic
-Z_∂_tac
+z_∂_tac
 ÒtÆ
 ˜
 { á } ∂ x:X | Pâ1[xâ1]∑ Pâ2[xâ1]
@@ -518,39 +723,74 @@ Z_∂_tac
 =TEX
 where $t'$ is an appropriately type instantiated
 form of the $t$.
+
+Finally, if none of the above apply, the supplied binding may instead be 
+anything else that can be type instantiated to the appropriate binding type.
+In such cases projection functions will be used:
+=FRULE 2 Tactic
+z_∂_tac
+ÒtÆ
+˜
+{ á } ∂ D[xâ1,...] | Pâ1[xâ1,...]∑ Pâ2[xâ1,...]
+˜
+{ á } "D[t.xâ1',...] as predicate" ± 
+	Pâ1[t'.xâ1,...] ± Pâ2[t'.xâ1,...]
+=TEX
+where $t'$ is an appropriately type instantiated
+form of the $t$.
 =FAILURE
 	Subgoal is not of the form: `{ á } ∂ D | Pâ1∑ Pâ2`
 	Supplied binding ?0 does not match conclusions binding ?1
 	?0 cannot be interpreted as an appropriate binding
 =ENDDOC
-What about an empty binding?
 =DOC
-val €Z_∂_false_conv› : CONV;
+val €z_∂_inv_conv› : CONV;
 =DESCRIBE
-Simplifies a Z existential quantification whose body is $false$ to $false$. 
+Simplifies a Z existential quantification whose predicate or
+constraint has no free variables bound by the declaration. 
 =FRULE 1 Conversion
-Z_∂_false_conv
-Ò∂xâ1:Xâ1;... | P∑ falseÆ
+z_∂_inv_conv
+Ò∂ D | Pâ1∑ Pâ2Æ
 ˜
 ˜
-Ù (∂xâ1:Xâ1;... | P∑ false) § false
+Ù ∂ D | Pâ1∑ Pâ2 §
+	 (∂ D | Pâ1∑ true) ± Pâ2
 =TEX
-Note that the analogue with $true$ rather than $false$ 
-is not always valid,
-e.g., consider the case where $P$ is $false$.
+if $Pâ2$ is free in the term, and
+=FRULE 1 Conversion
+z_∂_inv_conv
+Ò∂ D | Pâ1∑ Pâ2Æ
+˜
+˜
+Ù ∂ D | Pâ1∑ Pâ2 § 
+	Pâ1 ± (∂ D | true∑ Pâ2)
+=TEX
+if $Pâ1$ is free in the term, and
+=FRULE 1 Conversion
+z_∂_inv_conv
+Ò∂ D | Pâ1∑ Pâ2Æ
+˜
+˜
+Ù ∂ D | Pâ1∑ Pâ2 § 
+	Pâ1 ± (∂ D | true∑ true) ± Pâ2
+=TEX
+if both are free.
 =SEEALSO
-$Z\_µ\_true\_conv$
+$Z\_µ\_inv\_conv$
+=FAILURE
+	?0 is not of the form Ò∂ D | Pâ1∑ Pâ2Æ where at least
+	one of Pâ1 or Pâ2 are unbound by D
 =ENDDOC
 
 \subsection{Conversions between Z Universal and Existential Quantifications}
 
 =DOC
-val €≥_Z_µ_conv› : CONV;
-val €≥_Z_∂_conv› : CONV;
+val €z_≥_µ_conv› : CONV;
+val €z_≥_∂_conv› : CONV;
 =DESCRIBE
 $≥\_Z\_µ\_conv$ converts a negated Z universal quantification to a Z existential quantification.
 =FRULE 1 Conversion
-≥_Z_µ_conv 
+z_≥_µ_conv 
 Ò≥(µ D | Pâ1∑ Pâ2)Æ
 ˜
 ˜
@@ -559,7 +799,7 @@ $≥\_Z\_µ\_conv$ converts a negated Z universal quantification to a Z existential
 =TEX
 The dual is $Z\_≥\_∂\_conv$:
 =FRULE 1 Conversion
-≥_Z_∂_conv 
+z_≥_∂_conv 
 Ò≥(∂ D | Pâ1∑ Pâ2)Æ
 ˜
 ˜
@@ -576,11 +816,11 @@ out $≥$.
 
 \subsection{Conversions betweens Declarations and Predicates}
 =DOC
-val €dec_elim_conv› : CONV;
+val €dec_pred_conv› : CONV;
 =DESCRIBE
-A conversion which rewrites a $dec$ type of declaration  to set membership. A $decsexp$ type of declaration remains unchanged (since $decsexp$ and $predsexp$ are, in fact, the same thing). 
+A conversion which rewrites a $dec$ type of declaration to a predicate. A $decsexp$ type of declaration remains unchanged (since $decsexp$ and $predsexp$ are, in fact, the same thing). 
 =FRULE 1 Conversion
-dec_elim_conv 
+dec_pred_conv 
 Òx : XÆ
 ˜
 ˜
@@ -588,45 +828,70 @@ dec_elim_conv
 =TEX
 and
 =FRULE 1 Conversion
-dec_elim_conv 
+dec_pred_conv 
+Òxâ1, ... : XÆ
+˜
+˜
+Ù (xâ1, ... : X) § {xâ1,...} Ä X
+=TEX
+and
+=FRULE 1 Conversion
+dec_pred_conv 
 ÒSÆ 
 ˜
 ˜
 Ù S = S
 =TEX
 where S is a schema (here promoted to a predicate).
+=SEEALSO
+$pred\_dec\_conv$
+=FAILURE
+	?0 is not a declaration
 =ENDDOC
 
 =DOC
-val €DEC_C› : CONV -> CONV;
+val €DECL_C› : CONV -> CONV;
 =DESCRIBE
-$DEC\_C$ applies the supplied conversion to each member of a declaration and returns the conjunction of the results. 
+$DEC\_C$ applies the supplied conversion to each member of a declaration and returns the conjunction of the results.
+=USES
+	?0 is not a conjunctive structure of declarations
 =ENDDOC
 
 =DOC
-val €dec_intro_conv› : CONV;
+val €pred_dec_conv› : CONV;
 =DESCRIBE
-A conversion which rewrites to declarations the three cases : set membership, schema promoted to predicate and $ $ term.
+A conversion which rewrites to declarations the four cases: set membership, subsetting, schema promoted to predicate and $ $ term.
 =FRULE 1 Conversion
-dec_intro_conv Òx ç XÆ
+pred_dec_conv Òx ç XÆ
 ˜
 ˜
 Ù x ç X § (x : X)
 =TEX
+where the $x$ must be variable,
 and
 =FRULE 1 Conversion
-dec_intro_conv ÒS ∫ boolÆ 
+pred_dec_conv Ò{xâ1,...} Ä XÆ
+˜
+˜
+Ù {xâ1,...} Ä X § (xâ1,... : X)
+=TEX
+where the $xâi$ must be variables,
+and
+=FRULE 1 Conversion
+pred_dec_conv ÒS ∫ boolÆ 
 ˜
 ˜
 Ù S = S
 =TEX
 and
 =FRULE 1 Conversion
-dec_intro_conv Ò S ç SÆ 
+pred_dec_conv Ò S ç SÆ 
 ˜
 ˜
 Ù ( S ç S) § S
 =TEX
+=SEEALSO
+$dec\_pred\_conv$
 =FAILURE
 	?0 cannot be rewritten to a declaration
 =ENDDOC
@@ -634,37 +899,35 @@ dec_intro_conv Ò S ç SÆ
 =DOC
 val €DEC_INTRO_C› : CONV -> CONV;
 =DESCRIBE
-$DEC\_INTRO\_C$ reduces a predicate to conjunctive normal form, then applies the supplied conversion to each conjunct.
-If this is successful, it produces a declaration from the results.
+$DEC\_INTRO\_C$ applies the supplied conversion to each conjunct of a predicate, flattening the conjunctive structure.
+If this is successful, it attempts to produce a declaration from the results.
 =FAILURE
-	?0 not of appropriate form
+	?0 not of the form: Ò câ1 ± ...Æ where all the câi
+	may have the supplied conversion applied
+	?0 when converted to ?1 cannot be viewed as a declaration
 =ENDDOC
 
 \section{Z REWRITING}
 \subsection{Canonicalisation}
 =DOC
-val €Z_µ_rewrite_canon› : CANON;
+val €z_µ_rewrite_canon› : CANON;
 =DESCRIBE
 Take a Z universally quantified theorem and
 make it into, as far as possible, a ProofPower HOL universally quantified
 theorem usable for rewriting.
 Simplifications due to $U$ and $true$ will be carried out.
 =FRULE 1 Canon
-Z_µ_rewrite_canon
+z_µ_rewrite_canon
 ˜
-á Ù Ò(µ xâ1 : Xâ1; ... | Pâ1∑ Pâ2)Æ
+á Ù Ò(µ D[xâ1,...] | Pâ1∑ Pâ2)Æ
 ˜
 [á Ù ¨µ xâ1 ...∑ 
-	Ò(x ç Xâ1 ± ...) ± Pâ1 ¥ Pâ2ÆÆ]
+	Ò"D[xâ1,...] as predicate"
+	± Pâ1 ¥ Pâ2ÆÆ]
 =TEX
-Where if any 
-=INLINEFT
-Òx ç Xâ1Æ
-=TEX
-or $Pâ1$ can be simplified to $true$ this will be
-done and the $true$ then simplified away.
+where if any portion of the body of the result can be simplified away due to $U$, $true$ or $false$ it will be.
 =FAILURE
-	?0 is not of the form: Ò(µ xâ1 : Xâ1; ... | Pâ1∑ Pâ2)Æ
+	?0 is not of the form: Ò(µ D | Pâ1∑ Pâ2)Æ
 =ENDDOC
 \subsection{Conditional Rewriting}
 This is a yet to be implemented part of the ProofPower HOL system,
@@ -682,26 +945,21 @@ A component proof context for handling the additional requirements of Z predicat
 
 Rewriting:
 =GFT
-u_clauses,
-Z_µ_true_conv, Z_∂_false_conv
+u_conv, z_µ_true_conv, z_∂_false_conv
 =TEX
 Stripping theorems:
 =GFT
-Z_∂_conv, Z_∂â1_conv,
-≥_Z_µ_conv, ≥_Z_∂_conv,
-RAND_C Z_∂â1_conv THEN ≥_Z_∂_conv,
-ç_u_conv, Z_µ_true_conv, Z_∂_false_conv
+z_∂_elim_conv, z_∂â1_conv,z_µ_elim_conv1, z_≥_µ_conv, z_≥_∂_conv,
+RAND_C z_∂â1_conv THEN ≥_z_∂_conv,ç_u_conv, z_µ_inv_conv, z_∂_inv_conv
 =TEX
 Stripping conclusions:
 =GFT
-Z_µ_conv, Z_∂â1_conv,
-≥_Z_µ_conv, ≥_Z_∂_conv,
-RAND_C Z_∂â1_conv THEN ≥_Z_∂_conv,
-ç_u_conv, Z_µ_true_conv, Z_∂_false_conv
+z_µ_elim_conv, z_∂â1_conv,z_∂_elim_conv1, z_≥_µ_conv, z_≥_∂_conv,
+RAND_C z_∂â1_conv THEN z_≥_∂_conv,ç_u_conv, z_µ_inv_conv, z_∂_inv_conv
 =TEX
 Rewriting canonicalisation:
 =GFT
-Z_µ_rewrite_canon
+z_µ_rewrite_canon
 =TEX
 Automatic proof procedures are respectively $basic\-\_prove\-\_tac$,
 $basic\-\_prove\-\_conv$ and no existence prover.
@@ -710,42 +968,21 @@ $basic\-\_prove\-\_conv$ and no existence prover.
 To be used with proof contexts ``$'$paired$\-\_$abstractions'' and ``$'$propositions''. It requires
 theory $z\-\_language$.
 =ENDDOC
-=DOC
-val €strip_tac› : TACTIC;
-=DESCRIBE
-This is a tactic that normally has the behaviour of $strip\_tac$ of signature $Tactics2$, but overrides it exactly
-in the case of a Z universally quantified conclusion.
 
-For Z universal quantifications it acts, independent of the current proof context, as:
-=FRULE 2 Tactic
-strip_tac
-˜
-á Ù Òµ xâ1 : Xâ1; ... | Pâ1∑ Pâ2Æ
-˜
-á Ù Ò(x ç Xâ1 ± ...) ± Pâ1 ¥ Pâ2Æ
-=TEX
-Otherwise:
-=FRULE 2 Tactic
-strip_tac
-˜
-á Ù t
-˜
-Tactics2.strip_tac  {á Ù t}
-=TEX
-=ENDDOC
-As a documentation box to be read in isolation this leaves
-something to be desired.
+This proof context, used with appropriate other ones
+will allow $strip\_tac$ to remain within the Z language
+on each of its steps, though with the caveat noted in \ref{ZCAVEAT}.
 
-$step\_strip\_tac$ will be left untouched, and is thus able to
+$step\_strip\_tac$ is able to
 leave the Z language, which it does for 
-stripping Z universally quantified conclusion or
+stripping
 a Z existentially quantified antecedent to an implication.
 However, 
 =INLINEFT
 REPEAT step_strip_tac
 =TEX
-will remain within the Z language if its argument starts there.
-\subsection{contradiction Tactics}
+ will remain within the Z language if its argument starts there.
+\subsection{Contradiction Tactics}
 The tactics supplied for ProofPower HOL extend to Z without
 change.
 \section{END OF THE SIGNATURE}
