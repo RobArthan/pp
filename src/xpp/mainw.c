@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * mainw.c 1.59 94/04/28
+ * $Id$
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -245,16 +245,19 @@ static MenuItem file_menu_items[] = {
  */
 #define TOOLS_MENU_SEARCH_REPLACE		0
 #define TOOLS_MENU_PALETTE			1
-#define TOOLS_MENU_CONTROLS			2
-#define TOOLS_MENU_SCRIPT_VIEWER		3
-#define TOOLS_MENU_JOURNAL_VIEWER		4
-#define TOOLS_MENU_CMD_LINE			5
+#define TOOLS_MENU_TEMPLATES			2
+#define TOOLS_MENU_CONTROLS			3
+#define TOOLS_MENU_SCRIPT_VIEWER		4
+#define TOOLS_MENU_JOURNAL_VIEWER		5
+#define TOOLS_MENU_CMD_LINE			6
 
 static MenuItem tools_menu_items[] = {
     { "Search and Replace", &xmPushButtonGadgetClass, 'S', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_SEARCH_REPLACE, (MenuItem *)NULL, False },
     { "Palette", &xmPushButtonGadgetClass, 'P', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_PALETTE, (MenuItem *)NULL, False },
+    { "Templates", &xmPushButtonGadgetClass, 'T', NULL, NULL,
+        tools_menu_cb, (XtPointer)TOOLS_MENU_TEMPLATES, (MenuItem *)NULL, False },
     { "Options", &xmPushButtonGadgetClass, 'O', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_CONTROLS, (MenuItem *)NULL, False },
     { "Viewer", &xmPushButtonGadgetClass, 'V', NULL, NULL,
@@ -745,6 +748,9 @@ XmAnyCallbackStruct *cbs;
 	switch(i) {
 	case TOOLS_MENU_PALETTE:
 		add_palette(script);
+		break;
+	case TOOLS_MENU_TEMPLATES:
+		add_templates(script);
 		break;
 	case TOOLS_MENU_SEARCH_REPLACE:
 		add_search_tool(script);
