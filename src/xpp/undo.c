@@ -27,7 +27,7 @@
 
 typedef struct undo_details {
 	Widget text_w;
-	Widget menu_w;
+	Widget *menu_ws;
 	NAT menu_entry_offset;
 	Boolean can_undo;			/* true iff. can do an undo */
 	Boolean moved_away;			/* true if the change is complete */
@@ -52,6 +52,7 @@ static char *undo_redo[2] = {"Undo", "Redo"};
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void clear_undo(UndoBuffer *ub)
 {
+	Widget *wp;
 	ub->can_undo = False;
 	ub->moved_away = True;
 	ub->in_business = False;
@@ -63,11 +64,13 @@ void clear_undo(UndoBuffer *ub)
 		XtFree(ub->oldtext);
 		ub->oldtext = NULL;
 	}
-	if(ub->menu_w) {
-		set_menu_item_sensitivity(ub->menu_w,
-				ub->menu_entry_offset, False);
-		set_menu_item_label(ub->menu_w,
-			ub->menu_entry_offset, undo_redo[0]);
+	if(ub->menu_ws) {
+		for(wp = ub->menu_ws; *wp; ++wp) {
+			set_menu_item_sensitivity(*wp,
+					ub->menu_entry_offset, False);
+			set_menu_item_label(*wp,
+				ub->menu_entry_offset, undo_redo[0]);
+		}
 	}
 }
 
@@ -76,7 +79,7 @@ void clear_undo(UndoBuffer *ub)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 XtPointer add_undo(
 		Widget	text_w,
-		Widget menu_w,
+		Widget *menu_ws,
 		NAT menu_entry_offset)
 {
 	UndoBuffer *ub;
@@ -84,7 +87,7 @@ XtPointer add_undo(
 		return NULL;
 	}
 	ub->text_w = text_w;
-	ub->menu_w = menu_w;
+	ub->menu_ws = menu_ws;
 	ub->menu_entry_offset = menu_entry_offset;
 	ub->oldtext = NULL;
 	clear_undo(ub);	/* rest of initialisation etc. */
@@ -148,6 +151,7 @@ void undo_modify_cb(
 	NAT len;
 	char *cut_chars;
 	static char *prefix(), *affix();
+	Widget *wp;
 
 	if(	!cbs->text->length &&
 		!ub->undoing &&
@@ -212,15 +216,19 @@ void undo_modify_cb(
 					/* just carried on typing */
 		ub->last += cbs->text->length;
 	}
-	if(ub->menu_w) {
-		set_menu_item_sensitivity(ub->menu_w,
-			ub->menu_entry_offset, ub->can_undo);
+	if(ub->menu_ws) {
+		for(wp = ub->menu_ws; *wp; ++wp) {
+			set_menu_item_sensitivity(*wp,
+				ub->menu_entry_offset, ub->can_undo);
+		}
 /* If this isn't the call invoked by the XmReplace in undo_cb */
 /* The menu label should revert to "Undo": */
 		if(!ub->undoing) {
 			ub->undo_redo_index = 0;
-			set_menu_item_label(ub->menu_w,
-				ub->menu_entry_offset, undo_redo[0]);
+			for(wp = ub->menu_ws; *wp; ++wp) {
+				set_menu_item_label(*wp,
+					ub->menu_entry_offset, undo_redo[0]);
+			}
 		}
 	}
 }
@@ -245,6 +253,7 @@ void undo_cb(
 	XmTextPosition fst, lst;
 	NAT len;
 	char *str;
+	Widget *wp;
 	if(ub->can_undo) {
 		ub->undoing = True;
 		ub->moved_away = True;
@@ -262,8 +271,13 @@ void undo_cb(
 		text_show_position(ub->text_w, fst);
 		XmTextReplace(ub->text_w, fst, lst, str);
 		ub->undo_redo_index = 1 - ub->undo_redo_index;
-		set_menu_item_label(ub->menu_w, ub->menu_entry_offset,
-				undo_redo[ub->undo_redo_index]);
+		if(ub->menu_ws) {
+			for(wp = ub->menu_ws; *wp; ++wp){
+				set_menu_item_label(
+					*wp, ub->menu_entry_offset,
+					undo_redo[ub->undo_redo_index]);
+			}
+		}
 		if(len) {
 			XmTextSetSelection(ub->text_w, fst, fst+len, CurrentTime);
 		} else {

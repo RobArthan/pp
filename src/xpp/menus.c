@@ -21,8 +21,9 @@
 #include "xpp.h"
 
 
-static Widget setup_pulldown_menu_aux(
+static Widget setup_menu_aux(
 	Widget	parent,
+	int	type,
 	char	*menu_title,
 	char	menu_mnemonic,
 	Bool	tear_off_enabled,
@@ -31,24 +32,31 @@ static Widget setup_pulldown_menu_aux(
 	Widget		menu, cascade, w;
 	MenuItem	*item;
 	XmString	lab;
+	if(type == XmMENU_POPUP) {
 /*
- * Create the menu and its cascade button:
+ * just create the popup menu:
  */
-	lab = XmStringCreateSimple(menu_title);
-	menu = XmCreatePulldownMenu(parent, "menu", NULL, 0);
-	if(tear_off_enabled) {
-		XtVaSetValues(
-			menu,
-			XmNtearOffModel,	XmTEAR_OFF_ENABLED,
+		menu = XmCreatePopupMenu(parent, "menu", NULL, 0);
+	} else {
+/*
+ * Create the pulldown menu and its cascade button:
+ */
+		if(tear_off_enabled) {
+			XtVaSetValues(
+				menu,
+				XmNtearOffModel,	XmTEAR_OFF_ENABLED,
+				NULL);
+		}
+		menu = XmCreatePulldownMenu(parent, "menu", NULL, 0);
+		lab = XmStringCreateSimple(menu_title);
+		cascade = XtVaCreateManagedWidget(
+			menu_title, xmCascadeButtonGadgetClass, parent,
+			XmNsubMenuId,	menu,
+			XmNlabelString,	lab,
+			XmNmnemonic,	menu_mnemonic,
 			NULL);
+		XmStringFree(lab);
 	}
-	cascade = XtVaCreateManagedWidget(
-		menu_title, xmCascadeButtonGadgetClass, parent,
-		XmNsubMenuId,	menu,
-		XmNlabelString,	lab,
-		XmNmnemonic,	menu_mnemonic,
-		NULL);
-	XmStringFree(lab);
 /*
  * Loop round the menu items
  */
@@ -57,8 +65,9 @@ static Widget setup_pulldown_menu_aux(
  * Is this a pull-right submenu?
  */
 		if(item->pullright) {
-			w = setup_pulldown_menu_aux(
+			w = setup_menu_aux(
 				menu,
+				XmMENU_PULLDOWN,
 				item->label,
 				item->mnemonic,
 				item->pullright_tear_off_enabled,
@@ -71,9 +80,9 @@ static Widget setup_pulldown_menu_aux(
 				NULL);
 		}
 /*
- * Is there a mnemonic?
+ * Is there a mnemonic? (but not for popups)
  */
-		if(item->mnemonic) {
+		if(type == XmMENU_PULLDOWN && item->mnemonic) {
 			XtVaSetValues(
 				w,
 				XmNmnemonic,	item->mnemonic,
@@ -100,22 +109,33 @@ static Widget setup_pulldown_menu_aux(
 				item->callback, item->callback_data);
 		}
 	}
-	return cascade;
+	return type == XmMENU_POPUP ? menu : cascade;
 }
 
-Widget setup_pulldown_menu(
-	Widget	parent,
-	char	*menu_title,
-	char	menu_mnemonic,
-	Bool	tear_off_enabled,
-	MenuItem	*items)
+Widget setup_menu(
+	Widget  parent,
+	int	type,
+	char    *menu_title,
+	char    menu_mnemonic,
+	Bool    tear_off_enabled,
+	MenuItem        *items)
 {
-	Widget	cascade, menu;
-	cascade = setup_pulldown_menu_aux(
-			parent, menu_title, menu_mnemonic, tear_off_enabled, items);
-	XtVaGetValues(
-			cascade,
-			XmNsubMenuId,	&menu,
-			NULL);
-	return menu;
+	Widget  cascade, menu;
+	if(type == XmMENU_POPUP) {
+		return 
+			setup_menu_aux(
+				parent, type, menu_title,
+				menu_mnemonic, tear_off_enabled, items);
+	} else {
+		Widget cascade, menu;
+		cascade = setup_menu_aux(
+				parent, type, menu_title,
+				menu_mnemonic, tear_off_enabled, items);
+		XtVaGetValues(
+				cascade,
+				XmNsubMenuId,   &menu,
+				NULL);
+		return menu;
+	}
 }
+

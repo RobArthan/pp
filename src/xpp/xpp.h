@@ -130,8 +130,9 @@ typedef struct menu_item {
 	extern void scroll_out(char *buf, NAT ct, Boolean ignored);
 #endif
 #ifndef _menus
-	extern	Widget setup_pulldown_menu(
+	extern	Widget setup_menu(
 		Widget	parent,
+		int	type,
 		char	*menu_title,
 		char	menu_mnemonic,
 		Bool	tear_off_enabled,
@@ -197,7 +198,7 @@ typedef struct menu_item {
 		XtPointer undo_ptr);
 	extern XtPointer add_undo(
 		Widget	text_w,
-		Widget	menu_w,
+		Widget	*menu_w,
 		NAT	menu_entry_offset);
 	extern void undo_motion_cb();
 	extern void undo_modify_cb();

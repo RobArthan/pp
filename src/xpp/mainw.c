@@ -102,6 +102,7 @@ XtAppContext app; /* global because needed in msg.c */
  * filemenu	menubar	  the file menu
  * toolsmenu	menubar	  the tools menu
  * editmenu	menubar	  the edit menu
+ * popupeditmenu menubar  the popup edit menu
  * cmdmenu	menubar	  the command menu
  * helpmenu	menubar	  the help menu
  *
@@ -117,7 +118,7 @@ Widget  script,
 static Widget
 	frame, work, infobar, filename, filelabel, modified,
 	namestring, logo,
-	menubar, filemenu, toolsmenu, editmenu, cmdmenu, helpmenu;
+	menubar, filemenu, toolsmenu, popupeditmenu, editmenu, cmdmenu, helpmenu;
 
 XtPointer undo_ptr;
 
@@ -398,6 +399,8 @@ static setup_main_window(
 	XmString s1, s2, s3, s4, s5, s6, s7, s8;
 	Atom WM_DELETE_WINDOW;
 	void check_quit_cb();
+	void post_popupeditmenu();
+	Widget *wp;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Main window setup:  (root is created in main in xpp.c)
@@ -437,31 +440,31 @@ static setup_main_window(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * File menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-	filemenu = setup_pulldown_menu(
-		menubar, "File", 'F', False, file_menu_items);
+	filemenu = setup_menu(
+		menubar, XmMENU_PULLDOWN, "File", 'F', False, file_menu_items);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Tools menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 if(global_options.edit_only) {
 	tools_menu_items[TOOLS_MENU_CMD_LINE].label = NULL;
 }
-	toolsmenu = setup_pulldown_menu(
-		menubar, "Tools", 'T', False, tools_menu_items);
+	toolsmenu = setup_menu(
+		menubar, XmMENU_PULLDOWN, "Tools", 'T', False, tools_menu_items);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Edit menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	editmenu = setup_pulldown_menu(
-		menubar, "Edit", 'E', False, edit_menu_items);
+	editmenu = setup_menu(
+		menubar, XmMENU_PULLDOWN, "Edit", 'E', False, edit_menu_items);
 	set_menu_item_sensitivity(editmenu, EDIT_MENU_UNDO, False);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Command menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 if( !global_options.edit_only ) {
-	cmdmenu = setup_pulldown_menu(
-		menubar, "Command", 'C', False, cmd_menu_items);
+	cmdmenu = setup_menu(
+		menubar, XmMENU_PULLDOWN, "Command", 'C', False, cmd_menu_items);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Help menu:
@@ -469,8 +472,8 @@ if( !global_options.edit_only ) {
 if(global_options.edit_only) {
 	help_menu_items[HELP_MENU_COMMAND_MENU].label = NULL;
 }
-	helpmenu = setup_pulldown_menu(
-		menubar, "Help", 'H', False, help_menu_items);
+	helpmenu = setup_menu(
+		menubar, XmMENU_PULLDOWN, "Help", 'H', False, help_menu_items);
 
 
 	{
@@ -543,7 +546,16 @@ if(global_options.edit_only) {
 
 	XtOverrideTranslations(script, text_translations);
 
-	undo_ptr = add_undo(script, editmenu, EDIT_MENU_UNDO);
+	popupeditmenu = setup_menu(
+		script, XmMENU_POPUP, "", ' ', False, edit_menu_items);
+
+	wp = (Widget*) XtMalloc(3*(sizeof(Widget)));
+
+	wp[0] = editmenu;
+	wp[1] = popupeditmenu;
+	wp[2] = (Widget) NULL;
+
+	undo_ptr = add_undo(script, wp, EDIT_MENU_UNDO);
 
 	XtAddCallback(script,
 		XmNmodifyVerifyCallback, undo_modify_cb, undo_ptr);
@@ -553,6 +565,8 @@ if(global_options.edit_only) {
 
 	XtAddCallback(script,
 		XmNmotionVerifyCallback, undo_motion_cb, undo_ptr);
+
+	XtAddEventHandler(script, ButtonPressMask, False, post_popupeditmenu, NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Journal window:
@@ -614,6 +628,17 @@ if( !global_options.edit_only ) {
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * MENU PROCESSING
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+void post_popupeditmenu(w, x, event)
+Widget w;
+XtPointer x;
+XButtonPressedEvent *event;
+{
+	if (event->button == 3) {
+		XmMenuPosition(popupeditmenu, event);
+		XtManageChild(popupeditmenu);
+	}
+}
 
 void file_menu_cb(w, i, cbs)
 Widget w;
