@@ -17,22 +17,22 @@
 
 Commands to process this document in various ways.
 
-doc4errors imp024
+docsml imp024
 use_file "imp024.sml";
 
 make -f rel001.mkf imp024.dvi
-doc4tex imp024
-tex4dvi imp024
+doctex imp024
+texdvi imp024
 bibtex imp024
-doc4tex imp024 ; tex4dvi imp024 ; bibtex imp024
-doc4tex imp024 ; tex4dvi imp024
+doctex imp024 ; texdvi imp024 ; bibtex imp024
+doctex imp024 ; texdvi imp024
 dvipage imp024 &
 
 
-doc4errors imp024
+docsml imp024
 use_file "imp024.sml";
 
-lasp -s -u imp024.OKwords imp024.doc > zz1
+lasp -s -U imp024.doc > zz1
 
 =TEX
 %\TPPstatus{Approved}
@@ -96,8 +96,14 @@ lasp -s -u imp024.OKwords imp024.doc > zz1
 
 \item[Issue 2.2, \FormatDate{92/01/20} ] Updated to use new fonts.
 
-\item [Issue 2.3 (13th April 1992)]
-Changes due to CR0017.
+\item [Issue 2.3 13 April 1992 ] Changes due to CR0017.
+
+\item[Issue \SCCSissue, \FormatDate{$Date$%
+} ]
+	Change the way that spaces are counted for setting indentation
+	points --- these changes make this routine closer to that of
+	PolyML but make some differences compared to the algorithm in
+	Oppen's paper~\cite{Oppen80}.
 
 %\item[\FormatDate{$Date$%
 %}, issue \SCCSissue ]
@@ -214,8 +220,8 @@ to space tokens and so it also contains pointers to them.
 The features of the `efficient but less simple algorithm'
 of~\cite{Oppen80} are relevant here.  The lengths attached to space and
 begin tokens only need to be correct for sequences that might fit onto
-a line.  For sequences that cannot fit is is sufficient to know that
-they are too big and give them a large value.  This allows the tokens
+a line.  For sequences that cannot fit it is sufficient to know that
+they are too big and then give them a large value.  This allows the tokens
 to be removed from the left hand end of the buffer for printing since
 it is known how to print them, i.e., what sort of spacing to use.
 In~\cite{Oppen80} this technique means that values need to be popped
@@ -497,6 +503,13 @@ Space left in the current line is recorded.
 val Ûspace_leftÝ : int ref = ref margin;
 =TEX
 
+The indentation and space counts are recorded separately for setting
+the indentation margins.
+
+=SML
+val Ûindent_space_leftÝ : int ref = ref margin;
+=TEX
+
 %--------------------------------------------------------------------
 
 \subsubsection{Printing}
@@ -505,23 +518,21 @@ To prevent text running wildly off the right hand end of the available
 line width when an excessive number of blocks are open a simple scheme
 is used where the margin is forced back to the left hand margin.
 
-One difference to Oppen's algorithm in~\cite{Oppen80} is that the
-indentation margin set here corresponds to the sum of the indentations
-in the open blocks rather than being the current position in the output
-line.
-
 Print out a token.
 
 =SML
 fun	ÛprintÝ((t_addstring str):TOKEN) : unit = (
 		space_left := (!space_left) - (size str);
+		(* indent_space_left: unchanged *)
 		emit_string str
 	)
 |	print(t_beginb(indent, cons, len)) = (
 		if len > (!space_left)
 		then
 			let
-				val new =		ps_top_posn() - indent;
+				val n1 = 		!indent_space_left;
+				val n2 = 		ps_top_posn();
+				val new =		(if n1 < n2 then n1 else n2) - indent;
 				val protected_new =	if new < margin_protect
 							then margin
 							else new;
@@ -540,18 +551,25 @@ fun	ÛprintÝ((t_addstring str):TOKEN) : unit = (
 |	print(t_space(norm_sp, extra_sp, len)) = (
 		case ps_top()
 		of b_fits => (			space_left := (!space_left) - norm_sp;
+						indent_space_left := (!indent_space_left)
+							- norm_sp;
 						emit_spaces norm_sp
 			)
 		| b_consistent offset => (	space_left := offset - extra_sp;
+						indent_space_left := offset - extra_sp;
+					     (*	indent_space_left := (!indent_space_left)
+							- extra_sp; *)
 						emit_nl_spaces(margin - (!space_left))
 					)
 		| b_inconsistent offset =>
 			if len > (!space_left)
 			then (
 				space_left := offset - extra_sp;
+				indent_space_left := offset - extra_sp;
 				emit_nl_spaces(margin - (!space_left))
 			) else (
 				space_left := (!space_left) - norm_sp;
+				indent_space_left := (!indent_space_left) - norm_sp;
 				emit_spaces norm_sp
 			)
 	)
@@ -654,7 +672,8 @@ let
 	| aux k ((t_endb, toks, false) :: rest) =
 		(t_endb, toks, true) :: (aux (k+1) rest)
 	| aux k ((t_space(n, e, len), toks, false) :: rest) =
-		(t_space(n, e, len + (!right_total)), toks, true) :: (if k > 0 then aux k rest else rest)
+		(t_space(n, e, len + (!right_total)), toks, true)
+			:: (if k > 0 then aux k rest else rest)
 	| aux k ((opener, toks, false) :: rest) =
 		(opener, toks, true) :: (aux k rest)
 	;
@@ -729,6 +748,8 @@ let
 	| op_tok(t as t_addstring str) = (print t; left_total := (!left_total) + (size str))
 	| op_tok t= print t
 	;
+
+	val print = 0; (* Protect against some some coding faults! *)
 
 	fun op_tok_list nil = ()
 	| op_tok_list (h::t) = (op_tok_list t ; op_tok h);
