@@ -813,7 +813,7 @@ XmAnyCallbackStruct *cbs;
 /* !!! */	if(cut_paste_buf != NULL) {
 /* !!! */		XmTextPosition left, right;
 /* !!! */		if(XmTextGetSelectionPosition(script,
-/* !!! */				&left, &right)) {
+/* !!! */				&left, &right) && left != right) {
 /* !!! */			XmTextReplace(script,
 /* !!! */				left, right, cut_paste_buf);
 /* !!! */		} else {
