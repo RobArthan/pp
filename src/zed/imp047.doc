@@ -54,7 +54,9 @@ First draft version.
 	pretty printer.  This is done by adding function
 	$basic\_dest\_ZTERM$ to do the actual destruction or production
 	of error message arguments, this function is used by
-	$dest\_ZTERM$ and by the pretty printer.
+	$dest\_ZTERM$ and by the pretty printer. Changed handling for naming of
+	projection functions (including a change to the interface of
+	dest\_Z\_name).
 
 \end{description}
 %\subsection{Changes Forecast}
@@ -113,13 +115,76 @@ is split into the following pieces
 		["jk", "lm"],
 		["no"],
 		["p", "r", "s"]
-	])
+	], Nil)
 =TEX
+
+Projections are of the form
+=GFT
+	"abc[de,fg,hi]jk"
+=TEX
+
+which is split into the following:
+
+=GFT
+	("abc",
+	[	["de", "fg", "hi"]
+	], Value "jk")
+=TEX
+
 
 Function $dest\_Z\_name$ splits up well formed names by interpreting the
 square brackets and commas, it complains about mal-formed names.
 
 =SML
+fun	Ûdest_Z_nameÝ (s:string) :string * string list list * string OPT = (
+let
+	exception bad_name;
+
+	fun	addnam (nil:string list) (cl:string list)
+			: string list = cl
+	|	addnam n cl = (implode(rev n)) :: cl
+	;
+
+	fun	aux(nil, Value _, _) = raise bad_name
+	|	aux(nil, Nil, pl) = (rev pl, Nil)
+
+	|	aux("["::t (*=]=*), Value _, _) = raise bad_name
+	|	aux("["::t (*=]=*), Nil, pl) = aux(t, Value(nil, nil), pl)
+
+	|	aux(","::t, Nil, _) = raise bad_name
+	|	aux(","::t, Value(cn, cl), pl) = aux(t, Value(nil, addnam cn cl), pl)
+
+	|	aux((*=[=*) "]"::t, Nil, _) = raise bad_name
+	|	aux((*=[=*) "]"::t, Value(cn, cl), pl) = aux(t, Nil, (rev(addnam cn cl)) :: pl)
+
+	|	aux(l as(ch::t), Nil, pl) = (
+			case get_id(l, nil)
+			of (nil, nam) => (rev pl, Value(implode(rev nam)))
+			| _ => raise bad_name
+		)
+	|	aux(ch::t, Value(cn, cl), pl) = aux(t, Value(ch::cn, cl), pl)
+	
+
+	and	get_id(nil, prev) = (nil, prev)
+	|	get_id(l as ("["::_ (*=]=*)), prev) = (l, prev)
+	|	get_id(","::t, _) = raise bad_name
+	|	get_id((*=[=*) "]"::t, _) = raise bad_name
+	|	get_id(ch::t, prev) = get_id(t, ch :: prev)
+	;
+in
+	let
+		val (tail, front) = get_id(explode s, nil);
+		val (boxed_lists, projector) = aux(tail, Nil, nil);
+	in
+		(implode(rev front), boxed_lists, projector)
+	end
+	handle Fail _ => fail "dest_Z_name" 47000 [fn () => s]
+	| bad_name => fail "dest_Z_name" 47000 [fn () => s]
+end
+);
+=TEX
+
+=IGN
 fun	Ûdest_Z_nameÝ (s:string) :string * string list list = (
 let
 	exception bad_name;
@@ -190,11 +255,11 @@ fun	Ûdest_ZTYPEÝ (ty:TYPE) :ZTYPE =
 	|	Ctype("SET",[ty1]) => ZpowerT ty1
 	|	Ctype(s,tyl) => (
 			case (dest_Z_name s,tyl) of
-				(("Z'T",[[n]]),tyl) => 
+				(("Z'T",[[n]], Nil),tyl) => 
 					if string_of_int(length tyl) = n
 					then ZtupleT tyl
 					else fail "" 0 []
-			|	(("Z'S",[cl]),tyl) => 
+			|	(("Z'S",[cl], Nil),tyl) => 
 					ZschemaT(combine cl tyl)
 			|	(_,[]) => ZgivenT s
 			|	_ => fail "" 0 []
@@ -452,7 +517,7 @@ fun Ûdest_val_tupleÝ(name:string, ty: TYPE, constr:string * TYPE * TERM list -> 
 		val (arg_name, arg_ty) = dest_const arg_fn;
 	in
 		case dest_Z_name arg_name
-		of ("Z'T", [_]) =>
+		of ("Z'Mk_T", [_], Nil) =>
 			bdz_ok(constr(name, snd(dest_­_type ty), args))
 		| _ =>
 			bdz_fail{bdz_f_code=e,
@@ -466,6 +531,18 @@ fun Ûdest_val_tupleÝ(name:string, ty: TYPE, constr:string * TYPE * TERM list -> 
 =SML
 fun	Ûdest_abstractionÝ (t:TERM) :TERM list =
 		snd(strip_app(snd(strip_Ì t)))
+	handle Fail _ => term_fail "dest_ZTERM" 47901 [t];
+=TEX
+
+=SML
+fun	Ûdest_¶bodyÝ (t:TERM) :TERM list =
+		snd(strip_app(snd(strip_¶ t)))
+	handle Fail _ => term_fail "dest_ZTERM" 47901 [t];
+=TEX
+
+=SML
+fun	Ûdest_µbodyÝ (t:TERM) :TERM list =
+		snd(strip_app(snd(strip_µ t)))
 	handle Fail _ => term_fail "dest_ZTERM" 47901 [t];
 =TEX
 
@@ -495,10 +572,19 @@ fun Ûbasic_dest_ZTERMÝ (hdterm:TERM, args:TERM list) : BDZ = (
 	)
 	| Const (name, ty) => (
 		let
-			val (identifier, comp_list) = dest_Z_name name;
+			val (identifier, comp_list, projector) = dest_Z_name name;
 		in
-			case identifier
+			case (identifier, projector) of
+			("Z'S", Value s) => (
+				case args of
+				[x] => bdz_ok(Zsel(x,s))
+				| _ => bdz_fail{bdz_f_code=47180, bdz_f_compc=2,
+								bdz_f_argc=1}
+				)
+			| (x, Nil) => (
+				case identifier
 =TEX
+
 
 The $case$ clause started on the line above opens up the Z~term based
 on the names of the constant.  The various options are catered for in
@@ -594,8 +680,8 @@ types of their operands.  Equivalence has both arguments of type $BOOL$.
 =SML
 | "Z'¶" => (
 	case (comp_list, args)
-	of ([_],[x]) => (
-		case dest_abstraction x
+	of ([],[x]) => (
+		case dest_¶body x
 		of	[d,p,v] => bdz_ok(Z¶(d,p,v))
 		|	_ => fail "" 0 []
 		handle Fail _ => bdz_not_Z 47920
@@ -618,8 +704,8 @@ types of their operands.  Equivalence has both arguments of type $BOOL$.
 =SML
 | "Z'µ" => (
 	case (comp_list, args)
-	of ([_],[x]) => (
-		case dest_abstraction x of
+	of ([],[x]) => (
+		case dest_µbody x of
 			[d,p,v] => bdz_ok(Zµ(d,p,v))
 		|	_ => fail "" 0 []
 		handle Fail _ => bdz_not_Z 47922
@@ -699,7 +785,7 @@ constant part.
 =TEX
 =SML
 | "Z'ð"	=> zdest_0_1	(comp_list, args, 47140, Zð)
-| "Z'T"	=> zdest_1_gt0	(comp_list, args, 47150, Ztuple)
+| "Z'Mk_T"	=> zdest_1_gt0	(comp_list, args, 47150, Ztuple)
 | "Z'¸"	=> zdest_1_gt0	(comp_list, args, 47160, Z¸)
 =TEX
 =SML
@@ -721,10 +807,8 @@ constant part.
 )
 =TEX
 =SML
-| "Z'S" => (
-	case (comp_list, args)
-	of ([_,[s]],[x]) => bdz_ok(Zsel(x,s))
-	| _ => bdz_fail{bdz_f_code=47180, bdz_f_compc=2, bdz_f_argc=1}
+| "Z'Mk_S" => (
+	bdz_fail{bdz_f_code=47180, bdz_f_compc=2, bdz_f_argc=1}
 )
 
 =TEX
@@ -862,10 +946,12 @@ constant part.
 \label{EndOfFunctionBDZ}
 
 =SML
+		)
+		| (_, Value _) => bdz_not_Z 47100
 		end (* of let in case Const *)
 	) (* end of case Const (name, ty) => ... *)
 	(* end of case dest_simple_term hdterm ... *)
-	handle X => pass_on X "dest_ZTERM" "dest_ZTERM" 
+	handle _ => bdz_not_Z 47100 
 ) (* end of function basic_dest_ZTERM *);
 =TEX
 
