@@ -30,6 +30,7 @@
 #define CALLBACK_ARGS Widget,XtPointer,XtPointer
 #define EVENT_HANDLER_ARGS Widget,XtPointer,XEvent*,Boolean*
 #define INPUT_CALLBACK_ARGS XtPointer,int*,XtInputId*
+#define ACTION_PROC_ARGS Widget,XEvent*,String*,Cardinal*
 
 /* See the typedef for MenuItem for the following */
 
@@ -100,6 +101,8 @@ typedef struct menu_item {
 /* Module: cmdline */
 	extern void add_cmd_line(
 		Widget	text_w);
+	extern void command_history_up(ACTION_PROC_ARGS);
+	extern void command_history_down(ACTION_PROC_ARGS);
 /* Module: diag */
 	extern void msg(
 		char	*s1,	/* title: ... */
@@ -234,6 +237,7 @@ typedef struct menu_item {
 	extern void undo_cb(CALLBACK_ARGS);
 	extern void redo_cb(CALLBACK_ARGS);
 /* Module: xmisc */
+	extern void beep(void);
 	extern int get_map_state(Widget w); /* From XGetWindowAttributes */
 	extern void set_menu_item_sensitivity(
 		Widget	w,	/* menu widget */
