@@ -126,7 +126,6 @@ Bool add_search_tool(Widget text_w)
 	char	*pattern;
 
 	XtTranslations translations;
-	XmFontList fontlist;
 
 	static void
 		search_backwards_cb(),
@@ -177,7 +176,7 @@ Bool add_search_tool(Widget text_w)
 		XmNalignment,			XmALIGNMENT_BEGINNING,
 		NULL);
 
-	search_text = XtVaCreateManagedWidget("pp_text",
+	search_text = XtVaCreateManagedWidget("search",
 		xmTextWidgetClass,		search_form,
 		XmNtraversalOn,			True,
 		XmNeditMode,			XmMULTI_LINE_EDIT,
@@ -220,7 +219,7 @@ Bool add_search_tool(Widget text_w)
 		XmNalignment,			XmALIGNMENT_BEGINNING,
 		NULL);
 
-	replace_text = XtVaCreateManagedWidget("pp_text",
+	replace_text = XtVaCreateManagedWidget("replace",
 		xmTextWidgetClass,		replace_form,
 		XmNeditMode,			XmMULTI_LINE_EDIT,
 		XmNrows,			2,
@@ -263,7 +262,7 @@ Bool add_search_tool(Widget text_w)
 		XmNalignment,			XmALIGNMENT_BEGINNING,
 		NULL);
 
-	line_no_text = XtVaCreateManagedWidget("pp_text",
+	line_no_text = XtVaCreateManagedWidget("line-number",
 		xmTextWidgetClass,		line_no_form,
 		XmNtraversalOn,			True,
 		XmNleftAttachment,		XmATTACH_POSITION,
@@ -412,12 +411,9 @@ Bool add_search_tool(Widget text_w)
 		XtOverrideTranslations(replace_text, translations);
 		XtOverrideTranslations(line_no_text, translations);
 	}
-	XtVaGetValues(text_w, XmNfontList, &fontlist, NULL);
-	if(fontlist != NULL) {
-		XtVaSetValues(search_text, XmNfontList, fontlist, NULL);
-		XtVaSetValues(replace_text, XmNfontList, fontlist, NULL);
-		XtVaSetValues(line_no_text, XmNfontList, fontlist, NULL);
-	}
+	copy_font_list(search_text, text_w);
+	copy_font_list(replace_text, text_w);
+	copy_font_list(line_no_text, text_w);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Manage everything:
