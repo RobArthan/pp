@@ -91,9 +91,9 @@ Contact: Rob Arthan < rda@lemma-one.com >
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.8 $%
+\def\Version{$Revision: 1.9 $%
 }
-\def\Date{\FormatDate{$Date: 2003/03/11 23:17:46 $%
+\def\Date{\FormatDate{$Date: 2003/03/12 15:29:22 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -1143,8 +1143,10 @@ the lexical value and lexical class of the lookahead token, $stack$ is the parse
 describes the possible reduction by giving the nonterminal name, the index of the
 alternative (0-based indexing) and the state to be entered.
 Most applications do not need all this information, but there are situations where it is useful.
-As we shall see shortly, the API provides a function to make one common approach easier.
+As we shall see shortly, the API provides a function to make one common approach (based on
+operator precedence) a little easier.
 
+\subsubsection{If-then-else}
 For a first example, consider the example in figure~\ref{lr0.state.table}
 which shows extracts from the listing of the state table for the grammar for
 C given in~\cite{LEMMA1/DEV/WRK063} together with the description of the conflict that grammar
@@ -1159,6 +1161,7 @@ could hardle be simpler:
 fun Ûc_resolverÝ _ = DoShift;
 =TEX
 
+\subsubsection{Operator Precedence}
 Our next example shows a widely used technique. The grammar in figure~\ref{usr032f.grm.txt}
 actually specifies the same language of arithmetic expressions as the grammar of
 figure~\ref{usr032a.grm.txt} considered in section~\ref{STARTING} above. However,
@@ -1168,70 +1171,111 @@ the precedence rules for the arithmetic operators wired into it and so it allows
 
 \begin{Fig}[ht]{A Grammar Requiring Operator Precedence Rules}{usr032f.grm.txt}
 =DUMP usr032f.grm.txt
-Expr =		Expr, InOp, Expr
-		|	PreOp, Expr
-		|	literal
+Expression = 	Binary;
+
+Atom =		literal
 		|	identifier
-		|	identifier, `(`, Expr, `)`
-		|	`(`, Expr, `)`;
+		|	`(`, Expression, `)`;
 
-InOp	= `+` |  `-` | `*` | `/`;
+Application =	Atom
+		|	`-`, Application
+		|	`+`, Application
+		|	identifier, `(`, Expression, `)`;
 
-PreOp	= `+`, `-`;
+Binary =		Binary, `+`, Binary
+		|	Binary, `-`, Binary
+		|	Binary, `*`, Binary
+		|	Binary, `/`, Binary
+		|	Application;
 =TEX
 \end{Fig}
 
 Figure~\ref{usr032f.grm.log} shows an extract from the {\SLRP} listing for the grammar.
-The remaining 6 conflicts are just like the ones shown but with `*', `+'  and
-`-' in place of `/'. From the state table, we can see that the conflict occurs when the
-parser has just got to the end of something that could be an {\it Expr} and the lookahead
-token is one of the {\it InOp} tokens. From the conflcts listing, we see that the possible reduction of this
-{\it Expr} is either as {\it Expr, InOp, Expr}, or as {\it PreOp, Expr}. This means that the
-conflict can be resolved by comparing the topmost terminal symbol on the stack with the lookahead
-token.
+The 16 conflicts arise from the sixteen different pairs of the infix operators,
+`+', `-', `*' and `/'.  The conflicts arise in four different states, all of which contain exactly
+the same set of items (the ones shown in the extract).
+From the state table, we can see that the conflict occurs when the
+parser has just got to the end of something that could be a {\it Binary} and the lookahead
+token is one of the infix operators. From the conflcts listing, we see that the possible reduction is
+via one of the alternatives
+{\it Binary, `+', Binary}. {\it Binary,  `-', Binary} etc.
+This means that the conflict can be resolved by comparing the topmost terminal symbol on the stack with
+the lookahead token: for example, if the topmost terminal symbol is `*' and the
+lookahead token is `+', then we having something of the form $a * b + c$, and we should shift
+so that the multiplication takes precedence over the addition.
 
 \begin{Fig}{Operator Precedence --- Extracts from the Listing}{usr032f.grm.log}
 =GFT
 +++ State Table +++
 ...
-11:	Expr = Expr., InOp, Expr
-	Expr = Expr, InOp, Expr.
-	InOp = .`+`
-	InOp = .`-`
-	InOp = .`*`
-	InOp = .`/`
-12:	Expr = Expr., InOp, Expr
-	Expr = PreOp, Expr.
-	InOp = .`+`
-	InOp = .`-`
-	InOp = .`*`
-	InOp = .`/`
+12:	Binary = Binary., `+`, Binary
+	Binary = Binary, `+`, Binary.
+	Binary = Binary., `-`, Binary
+	Binary = Binary., `*`, Binary
+	Binary = Binary., `/`, Binary
 ...
 +++ Conflicts +++
 
 ...
-8 conflicts detected (8 shift/reduce, 0 reduce/reduce)
+16 conflicts detected (16 shift/reduce, 0 reduce/reduce)
 
-State 11 on symbol `/`
-	Reduce by Expr = Expr, InOp, Expr | ...
-	Shift to 6
 ...
-State 12 on symbol `/`
-	Reduce by Expr = ... | PreOp, Expr | ...
-	Shift to 6
+State 12 on symbol `*`
+	Reduce by Binary = Binary, `+`, Binary | ...
+	Shift to 20
 ...
 =TEX
 \end{Fig}
 
-\begin{Fig}[ht]{An Inherently Ambiguous Grammar}{usr032g.grm.txt}
+The API provides the function {\it simple\_resolver} to simplify the coding of a RESOLVER
+based on operator precedence, you provide a function to compare the two tokens
+and return the appropriate resolution and it constructs the RESOLVER for you.
+Your function is passed a pair $(stk\_tok, la\_tok)$ where $stk\_tok$ represents the
+topmost terminal symbol on the stack and $la\_tok$ represents the lookahead token.
+The RESOLVER that results will return {\it DoError} if there is no
+unreduced terminal symbol on the stack.
+
+=GFT
+val Ûsimple_resolverÝ:
+	(('tok * 'lc) * ('tok * 'lc) -> RESOLUTION) -> ('tok, 'lc, 'pp) RESOLVER;
+=TEX
+
+Figure~\ref{operator.precedence.parser} shows this function in use to implement our
+example grammar. If you compile this and execute the following, you can check whether
+it is building the right parse trees.
+=GFT
+let	val p = ae_parser4 "2*3 + 4; 2 - 3*4; 1 + 2 + 3";
+in	print_tree(p());
+	print_tree(p());
+	print_tree(p())
+end;
+=TEX
+\subsubsection{An Inherently Ambiguous Language}
+A language is called {\em inherently ambiguous} if there is no unambiguous context-free grammar
+that describes it. Such languages exist, but are not very common in practical applications.
+An example is given by the language defined by the ambiguous grammar in figure~\ref{usr032g.grm.txt}.
+The language comprises strings comprising some `a's followed by soime `b's followed by some `c's
+subject to the constraint that there should either be the same number of `a's and
+`b's or the same number of `b's and `c's or possibly both.
+
+\begin{Fig}[ht]{An Inherently Ambiguous Language}{usr032g.grm.txt}
 =DUMP usr032g.grm.txt
 	S	= AB, C | A, BC;
-	AB	= | a, AB, b;
-	C	= | C, c;
-	A	= | A, a;
-	BC	= b, BC, c;
+	AB	= | `a`, AB, `b`;
+	C	= | C, `c`;
+	A	= | A, `a`;
+	BC	= `b`, BC, `c`;
 =TEX
 \end{Fig}
+
+If you are faced with an inherently ambiguous language, or, and much more likely, a language
+defined by a grammar that is difficult to transform into an unambiguous one, then your
+only option is to try to specify a wider language and supply code in the reduction functions
+or subsequent processing to detect invalid language constructs. This is demonstrated
+for our inherently ambiguous example in figure~\ref{usr032h.grm.txt} where the grammar
+accepts any string comprising some `a's followed by some `b's followed by some `c's 
+and the reduction functions impose the desired checks on the numbers of `a's, `b's and
+`c's.
 
 \begin{Fig}[ht]{Resolving Ambiguities By Widening the Language}{usr032h.grm.txt}
 =DUMP usr032h.grm.txt
@@ -1241,13 +1285,14 @@ State 12 on symbol `/`
 			then	raise SYNTAX_ERROR
 			else	0) x1 x2 x3);
 	A	= 		( 0 )
-		|   A, a		((fn Parsed m => m + 1) x1);
+		|   A, `a`		((fn Parsed m => m + 1) x1);
 	B	=		( 0 )
-		|   B, b		((fn Parsed n => n + 1) x1);
+		|   B, `b`		((fn Parsed n => n + 1) x1);
 	C	=		( 0 )
-		|   C, c		((fn Parsed p => p + 1) x1);
+		|   C, `c`		((fn Parsed p => p + 1) x1);
 =TEX
 \end{Fig}
+\subsubsection{Transforming a non-LALR(1) Grammar into an LALR(1) one}
 
 \begin{Fig}[p]{A non-LALR(1) Grammar}{usr032i.grm.txt}
 =DUMP usr032i.grm.txt
@@ -1312,7 +1357,7 @@ NonIdExpression =		`(`, Expression, `)`
 \end{Fig}
 
 
-
+\clearpage
 =TEX
 \section{ERROR HANDLING}\label{ERRORS}
 
@@ -1612,6 +1657,47 @@ fun ae_parser3
 
 
 \clearpage
+\subsection{OperatorPrecedenceCode}\label{OperatorPrecedenceCode}
+
+\begin{Fig}{The Operator Precedence Parser}{operator.precedence.parser}
+=SML
+use"usr032f.grm.sml";
+fun	precedence (((_, (stk_val, _)), _) , ((_, (la_val, _)), _))  = (
+	let	fun num_prec "*" = 2
+		|   num_prec "/" = 2
+		|   num_prec _ = 1;
+		val stk_prec = num_prec stk_val;
+		val la_prec = num_prec  la_val;
+	in	if	stk_prec <  la_prec
+		then	DoShift
+		else	DoReduce
+	end
+);
+
+
+fun ae_parser4
+	(text : string)  : unit -> LEX_CLASS GEN_PARSE_TREE = (
+	let	val strm as {close, ...} = in_char_stream_of_string text;
+		val do_parse =
+			slrp'gen_parser
+			(simple_resolver precedence)
+			classifier
+			(default_error string_of_lex_value)
+			(reader strm);
+		val _ = reader_state := ([], true);
+	in	fn () => do_parse (!reader_state)
+		handle ex => (
+			close();
+			raise ex
+		)
+	end	
+);
+=TEX
+\end{Fig}
+=TEX
+\clearpage
+
+
 \section{COMMAND LINE INTERFACE}\label{COMMAND}
 TBS
 
