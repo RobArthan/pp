@@ -61,53 +61,89 @@ Library
 \bibliography{fmu}
 \subsection{Changes History}
 \begin{description}
-\item[Issue \SCCSversion (18 February 1992)] First Draft.
+\item[Issue \SCCSversion (27 February 1992)] First Draft.
 \end{description}
 \subsection{Changes Forecast}
 None Known.
 \pagebreak
 \section{GENERAL}
 \subsection{Scope}
-This is the design for a type inferrer for HOL/Z as required by
-\cite{DS/FMU/IED/HLD018}. It is produced in accordance with
-the quality plan \cite{DS/FMU/IED/PLN008}. The
-implementation of the type inferrer is in \cite{DS/FMU/IED/IMP062}.
-\subsection{Introduction}
-\subsubsection{Purpose and Background}
-The Z type inferrer comprises a selection of functions
-which are intended to be called directly by the parser during
-the process of parsing Z paragraphs and Z terms.
+This is the detailed design for a type inferrer for HOL/Z,
+responding to the high level design for the Z user
+interface \cite{DS/FMU/IED/HLD018}.
+The
+implementation of this design is contained in
+\cite{DS/FMU/IED/IMP062}.
 
-Each of the functions returns a data structure comprising
-a type inferred term and its type,
-or else error information. If a term fails to type check
-correctly, the parser is responsible for reporting the error
-to the user.
+\subsection{Introduction}
+This document is organised as follows. The signature
+declaration for the Z type inference module is introduced
+at the beginning of the document, and constituents of the
+signature are introduced at the appropriate points in the
+discussion of type inference.
+Next the data structure for representing Z terms
+is described. This is used to communicate between the
+Z parser, the Z type inferrer and the Z term generator
+(when not using HOL/Z in {\bf Type Check Only Mode}).
+An approach for error handling is then described in
+section \ref{ErrorHandling}.
+
+In section \ref{InferenceRules}, the inference rules
+are introduced and each is desribed in a fixed format:
+\begin{description}
+\item[Signature]
+The signature describes the type of the function
+which applies the inference rule. It comprises part
+of the Standard ML literal script produced when processing
+the document with the command $docsml$ (see \cite{DS/FMU/IED/USR001}).
+\item[Inference Rule(s)]
+The type inference rules for each construct are expressed
+in conventional notation.
+\item[Description]
+A description of the rules is provided, and any
+issues relating to implementation are documented.
+\item[Error Messages]
+Example error messages which might be generated if application
+of a particular rule fails are shown, as guidance to the
+implementor.
+\item[Error Codes]
+The error codes, which correspond to parameterized
+fragments of example error messages, are provided (They
+are located deliberately in close proximity to their
+respective examples to increase maintainability). This
+subsection comprises another part of the
+Standard ML literal script.
+\end{description}
+
+\subsubsection{Purpose and Background}
+
+The type inferrer's job is to ensure that each of
+these rules are obeyed in the process
+of type checking a Z specification comprising
+Z paragraphs interspersed with Z text.
+A Correctly typed Z paragraph results
+in either an indication of success (in {\bf Type Check
+Only Mode}), or a helpful error message, returned
+to the caller with the intention of the caller
+reporting the error to the user.
+
 \subsubsection{Dependencies}
 The type inferrer makes use of the unification algorithm
 described in \cite{DS/FMU/IED/DTD014}.
 \subsubsection{Interface}
 The interface to the Z type inferrer is intended to be
-used only by the Z parser.
-\subsubsection{Algorithms}
-The heuristics for determining error messages are described
-in \ref{ErrorHandling}.
-The unification algorithm \cite{DS/FMU/IED/DTD014} is used
-in type inference.
+used only by the Z parser, and is defined in the
+signature $ZTypeInference$ introduced in section
+\ref{Signature}. 
 \subsubsection{Possible Enhancements}
 None Known.
 \subsubsection{Deficiencies}
 None.
 
-\section{PREAMBLE}
+\section{THE SIGNATURE}\label{Signature}
 
 The signature for Z type inference is dispersed through
-this document. In the documentation box, only the
-signature header is provided, and two error messages.
-The first error message appears in the last line of
-an type checking
-error message. The second appears in the first line of
-an error message.
+this document.
 
 Since the user is not intended to use
 the functions provided in Z type inference directly, the
@@ -121,10 +157,109 @@ signature ÛZTypeInferenceÝ = sig
 =DESCRIBE
 The type inference rules are for use by the Z parser only.
 See document reference DS/FMU/IED/DTD062 for further information.
+=ENDDOC
+
+\section{DESIGN ISSUES}
+
+\subsection{Standard Versus Extended Z}
+
+Facilities for checking a specification against the
+standard Z language \cite{DS/FMU/IED/DEF007} and
+against extended Z are required.
+
+The formal contents of a Z specification is
+divided into two distinct categories for type
+checking purposes.
+
+Firstly, there is the Z which describes the specification
+using Z paragraphs. The user is most likely to want to
+check this against the standard Z language.
+
+Secondly, there are fragments of Z which constitute
+terms for use in proof scripts (e.g., goals, specializations), which are enclosed between the symbols `ñ' and `®'.
+It is less likely that the user will want to check
+this against the standard Z language, but will want
+to check it against extended Z.
+
+Two flags are introduced to implement these
+envisaged requirements:
+
+\begin{description}
+
+\item[check\_paras\_with\_extended\_z]
+for specifying that paragraphs should be checked with
+extended Z (i.e., all Z constructs which are not
+delimited by the symbols `ñ' and `®').
+
+\item[check\_terms\_with\_extended\_z]
+for specifying that Z terms should be checked with
+extended Z (i.e., those Z constructs which are
+delimited by the symbols `ñ' and `®').
+
+\end{description}
+
+=DOC
+(* Ûcheck_paras_with_extended_zÝ  - boolean flag declared by new_flag, default: false *)
+=DESCRIBE
+If this flag is set, all Z paragraphs will be
+type checked
+against extended Z. Otherwise, they will be type
+checked against standard Z. The default setting is false.
+=ENDDOC
+
+=DOC
+(* Ûcheck_terms_with_extended_zÝ  - boolean flag declared by new_flag, default: true *)
+=DESCRIBE
+If this flag is set,  all terms enclosed
+between `ñ' and `®' will be type checked against extended Z.
+Otherwise, they will be type checked against standard Z.
+The default setting is true.
+=ENDDOC
+
+\subsection{Error Message Handling}
+
+When application of a typing rule fails, then
+error information is returned. The details of this
+information depend upon the particular inference rule.
+A data type representing this information is
+provided. This type is equated (in the implementation)
+with an actual data structure which is private to the
+implementation of the type inferrer.
+
+=DOC
+type ÛERROR_INFOÝ;
+
+fun Ûhandle_ztierrorÝ : ERROR_INFO -> unit;
+=DESCRIBE
+Th data type $ERROR\_INFO$ is used to communicate error information
+raised during type inference to the Z parser, so that the
+latter may print diagnostics to the user.
+The function $handle\_ztierror$ is intended to be called
+by the Z parser to print type checking diagnostics.
+The function raises the exception ``Fail''.
 =FAILURE
 62000	Type error
 62001	Type error in ñ?0®
 =ENDDOC
+
+\subsubsection{Format of Error Messages}
+
+It is desirable that type checking error messages
+are consistent regarding style and format. Therefore all
+error messages generated comprise the following components:
+
+\begin{enumerate}
+\item
+the term being constructed when the error was detected
+\item
+a summary of the inference rule which was being applied
+\item
+the types of the manipulana which were being used in applying
+the rule
+\end{enumerate}
+
+See section ({\bf Error Messages} of \ref{FirstRule}) for
+an example of an error message following this format.
 
 \section{DATA STRUCTURES FOR Z PARAGRAPHS AND TERMS}
 
@@ -133,6 +268,8 @@ presented in this section. The form of the
 data structure is determined largely by the grammar of
 Z defined in \cite{DS/FMU/IED/DEF007}.
 
+The following is an interim stub to permit type checking
+of the rest of the signature (adapted from the prototype).
 =SML
 type ÛDECORÝ;
 type ÛIDENTÝ;
@@ -143,45 +280,27 @@ type ÛZDECÝ;
 type ÛZTMÝ;
 =TEX
 
-\section{ERROR HANDLING}\label{ErrorHandling}
+\section{TYPE INFERENCE RULES}\label{InferenceRules}
 
-The error handling environment is a mechanism by which
-the type inferrer can communicate to the parser details
-of an incorrectly typed term. The type of the environment
-is declared as follows:
-
-=SML
-type ÛZTI_ERRORÝ;
-=TEX
-
-The details of this environment depend upon more
-detailed knowledge of the errors which can be generated. This
-will become available when the implementation document has
-been written.
-
-\section{TYPE INFERENCE RULES}
-
-The data structure which the type inferrer returns is
+The data structure which the functions provided
+by the type inferrer return is
 as follows:
 =SML
-datatype ÛZTI_RESULTÝ = ÛZInferredÝ of (ZEXPR * Unification.EXTYPE) OPT
-		|	ÛZTypeErrorÝ of ZTI_ERROR;
+datatype ÛINFERREDÝ = ÛInferredÝ of (ZEXPR * Unification.EXTYPE) OPT
+		|	ÛTypeErrorÝ of ERROR_INFO;
 =TEX
 
 For a correctly typed term, the term is returned with its
-extended type. For an incorrectly typed term, an
-error environment is returned.
+extended type. For an incorrectly typed term, error
+information is returned.
 
-In sections \ref{SeqDisplay} to \ref{LastSection}, the
+In sections \ref{FirstRule} to \ref{LastRule}, the
 typing rules are defined. However, since
 the type inferrer is only intended to be used by the parser,
 and not by the user directly, documentation boxes are
-not provided for each of the interfaces. They are
-collected together and the signature for them
-is provided at the end of the document.
+not provided for each of the interfaces.
 
-
-\subsection{Sequence Display}\label{SeqDisplay}
+\subsection{Sequence Display}\label{FirstRule}
 
 =SMLLABELLED Signature
 val Ûzti_seqÝ : ZEXPR -> ZTI_RESULT
@@ -245,7 +364,7 @@ Type ñú¸ú® inferred for the following element:
 62011	Each element in a sequence must have the same type
 
 62012	Type ñ?0® inferred for the following element?1:
-6201	   ñ?0®
+62013	   ñ?0®
 =TEX
 
 \subsection{Set Display}
@@ -389,6 +508,7 @@ The type inferred was:
    ñ1:ú®
 =TEX
 \paragraph{Error Codes}~
+=FAILURE
 62071	The operand of a Ê-term must be a schema
 62072	The type inferred was:
 62073	   ñ?0:?1®
@@ -462,14 +582,6 @@ E ô t1 t2 :: bool
 There are two rules for this construct. The first one
 corresponds to ordinary application and is attempted first.
 
-\TempNote{We need a note here about binary relations and unary functions being indistinguishable sometimes.}
-\TempNote{%
-Dave: don't forget to do the $apply\_SUBS$ in this
-rule and in any other cases where the result
-type has been involved in
-unification. Otherwise you don't pass enough
-information back up. Cf. $ti\_comb$ in the HOL type inferrer.}
-
 If the unification for the first rule fails, then the
 application may be the application of a predicate to
 its argument (the second rule).
@@ -504,7 +616,7 @@ The types infered were:
 =FAILURE
 62091	The operator must have type Ó ­ Ô
 62092	The operator and the operand have incompatible types
-62092	The operands of ñ$=® must have the same type
+62093	The operands of ñ$=® must have the same type
 62095	Cannot apply ñ?0:?1®
 62096	          to ñ?0:?1®
 =TEX
@@ -764,7 +876,7 @@ E ô t1  t2 :: bool
 =TEX
 =DESCRIBE
 
-\subsection{Type Constraints}\label{LastSection}
+\subsection{Type Constraints}\label{LastRule}
 =SMLLABELLED Signature
 val Ûzti_constrainedÝ : (ZEXPR * ZEXPR) -> ZTI_RESULT
 =TEX
