@@ -1,0 +1,589 @@
+% imp063.doc   %Z% $Date$ $Revision$ $RCSfile$
+=TEX
+% TQtemplate.tex
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation of the Z Term Generator}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP063}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.D.~Arthan & FST Team Leader}
+\TPPabstract{This document contains the implementation of
+the term generator for HOL/Z.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+      Library}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+
+\item[Issue 1.1, \FormatDate{92/03/19} ] Initial Draft.
+
+
+\end{description}
+\subsection{Changes Forecast}
+None.
+\section{GENERAL}
+\subsection{Scope}
+This document contains the implementation
+of the term generator for HOL/Z meeting the detailed design
+given in \cite{DS/FMU/IED/DTD063}.
+\subsection{Introduction}
+\subsection{Purpose and Background}
+See \cite{DS/FMU/IED/DTD063}.
+\subsection{Dependencies}
+\subsection{Interface}
+The structure $ZTermGenerator$ is constrained by the signature
+$ZTermGenerator$ defined in \cite{DS/FMU/IED/DTD063}.
+\subsection{Algorithms}
+\subsection{Possible Enhancements}
+None.
+\subsection{Deficiencies}
+None known.
+
+\section{PREAMBLE}
+=SML
+structure ZTermGenerator = struct
+=TEX
+
+\section{Generation of HOL Terms for Z Semantic Tree}
+
+=SML
+fun Ûextype_to_type1İ (phi : SUBS) (f : int -> string) ty = (
+let	fun aux (ExVartype(Known x)) = (
+		mk_vartype x
+	) | aux (ExVartype(Unknown x)) = (
+		case SparseArray.sub_opt (phi, x) of
+			Nil => (mk_vartype (f x))
+			| Value y => aux y
+	) | aux (ExType(s, l)) = (
+		mk_ctype(s, map aux l)
+	);
+in
+	aux ty
+end);
+
+fun Ûmk_freetype_nameİ (i : int) : string =
+	if i >= 0 andalso i < 26
+	then "'"^(chr (i+ord "a"))
+	else "'"^(string_of_int i);
+
+fun Ûgen_hol_typeİ (phi : SUBS) (ty : EXTYPE) : TYPE = (
+	extype_to_type zti_subs mk_freetype_name ty
+);
+=TEX
+=SML
+fun Ûgen_zdecİ (phi : SUBS) (dec : Z_DEC) : TERM = (
+	case dec of
+	ZDec (idl, tm, Value ty) =>
+		let	val set = gen_hol_term phi tm;
+			val vars = map (fn id =>
+				mk_Zlvar (ident_to_string id, gen_hol_type phi ty, [])) idl;
+		in
+			mk_Zdec (vars, set)
+		end
+	|ZDec (_, _, Nil) =>
+		fail "gen_zdec" 63000 []
+	|ZSchemaDec (tm, _) =>
+		mk_Zdecsexp (gen_hol_term phi tm, "")
+)
+=TEX
+=SML
+and Ûlist_gen_zdecİ (phi : SUBS) (decl : Z_DEC list) : TERM = (
+	mk_Zdecl (map (fn zd => gen_zdec phi zd) decl)
+)
+=TEX
+=SML
+and Ûgen_zschtextİ (phi : SUBS) (sch as (dec, Value tm, Value ty) : Z_SCH_TEXT) : (TERM * TERM OPT) = (
+	(list_gen_zdec phi dec, Value (
+		case (manifest ty, tm) of
+		(SchemaType _, ZTmDecor (tm', d)) =>
+			mk_Zpredsexp (gen_hol_term phi tm', d)
+		|(SchemaType _, _) =>
+			mk_Zpredsexp (gen_hol_term phi tm, "")
+		| _ =>
+			gen_hol_term phi tm
+		)
+	)
+)
+  | gen_zschtext _ (_, _, _) = (
+		fail "gen_zschtext" 63000 []
+) 
+=TEX
+=SML
+and Ûgen_hol_termİ (phi : SUBS) (term : Z_TM) : TERM = (
+let	fun aux (term as ZTm§¢ (Value ty, tml)) = (
+		mk_Z§¢ (gen_hol_type phi ty, list_gen_hol_term phi tml)
+	) | aux (ZTm§¢ (Nil, _)) = (
+			fail "gen_hol_term" 63000 []
+	) | aux (term as ZTmSetd (Value ty, tml)) = (
+		mk_Zsetd (gen_hol_type phi ty, list_gen_hol_term phi tml)
+	) | aux (ZTmSetd (Nil, _)) = (
+			fail "gen_hol_term" 63000 []
+	) | aux (term as ZTmSeta1 sch) = (
+		let	val (tm', ty') = make_chartuple sch;
+			val (dec, opred) = gen_zschtext phi sch;
+			val pred = case opred of
+				Nil => mk_Ztrue
+				|Value zp => zp;
+			val t = aux tm';
+		in
+			mk_Zseta (dec, pred, t)
+		end
+	) | aux (term as ZTmSeta2 (sch, tm)) = (
+		let	val (dec, opred) = gen_zschtext phi sch;
+			val pred = case opred of
+				Nil => mk_Ztrue
+				|Value zp => zp;
+			val t = aux tm;
+		in
+			mk_Zseta (dec, pred, t)
+		end
+	) | aux (term as ZTmğ tm) = (
+		mk_Zğ (aux tm)
+	) | aux (term as ZTmTuple tml) = (
+		mk_Ztuple (list_gen_hol_term phi tml)
+	) | aux (term as ZTm¸ tml) = (
+		mk_Z¸ (list_gen_hol_term phi tml)
+	) | aux (term as ZTmÊ (tm, d)) = (
+		mk_ZÊ (aux tm, d)
+	) | aux (term as ZTmSel‰T (tm, i)) = (
+		fail "gen_hol_term" 62901 [fn()=>"mk_Zsel‰T not yet implemented"]
+	) | aux (term as ZTmSel‰B (tm, id)) = (
+		mk_Zsel (aux tm, ident_to_string id)
+	) | aux (term as ZTmApp (tm1, tm2)) = (
+		mk_Zapp (aux tm1, aux tm2)
+	) | aux (term as ZTmFancyApp (id, tm)) = (
+		fail "gen_hol_term" 62901 [fn()=>"mk_Zfancyapp not yet implemented"]
+=TEX
+=SML
+	) | aux (term as ZTmÌ (sch, tm)) = (
+		let	val (dec, opred) = gen_zschtext phi sch;
+			val pred = case opred of
+				Nil => mk_Ztrue
+				|Value zp =>  zp;
+			val t = aux tm;
+		in
+			mk_ZÌ (dec, pred, t)
+		end
+	) | aux (term as ZTmÍ1 sch) = (
+		let	val (tm', ty') = make_chartuple sch;
+			val (dec, opred) = gen_zschtext phi sch;
+			val pred = case opred of
+				Nil => mk_Ztrue
+				|Value zp => zp;
+			val t = aux tm';
+		in
+			mk_ZÍ (dec, pred, t)
+		end
+	) | aux (term as ZTmÍ2 (sch, tm)) = (
+		let	val (dec, opred) = gen_zschtext phi sch;
+			val pred = case opred of
+				Nil => mk_Ztrue
+				|Value zp => zp;
+			val t = aux tm;
+		in
+			mk_ZÍ (dec, pred, t)
+		end
+	) | aux (term as ZTmTruth true) = (
+		mk_Ztrue
+	) | aux (term as ZTmTruth false) = (
+		mk_Zfalse
+	) | aux (term as ZTm³‰F tm) = (
+		mk_Z³ (aux tm)
+	) | aux (term as ZTmLogInOp‰F (inop, tm1, tm2)) = (
+		let	val htm1 = aux tm1;
+			val htm2 = aux tm2;
+		in
+			case inop of
+			ZLogInOp± => mk_Z± (htm1, htm2)
+			|ZLogInOp² => mk_Z² (htm1, htm2)
+			|ZLogInOp´ => mk_Z´ (htm1, htm2)
+			|ZLogInOp¤ => mk_Z¤ (htm1, htm2)
+			|ZLogInOpSemi =>
+				fail "gen_hol_term" 62901 [fn()=>"mk_Zsemi not yet implemented"]
+		end
+	) | aux (term as ZTmQuant‰F (quant, sch, tm)) = (
+		let	val (dec, opred) = gen_zschtext phi sch;
+			val pred = case opred of
+				Nil => mk_Ztrue
+				|Value zp => zp;
+			val t = aux tm;
+		in
+			case quant of
+			ZQuantµ => mk_Zµ (dec, pred, t)
+			|ZQuant¶ => mk_Z¶ (dec, pred, t)
+			|ZQuant¶‰1 => mk_Z¶‰1 (dec, pred, t)
+		end
+=TEX
+=SML
+	) | aux (term as ZTmSchemaPred tm) = (
+		mk_Zpredsexp (aux tm, "")
+	) | aux (term as ZTmHorizSchema sch) = (
+		let	val (dec, opred) = gen_zschtext phi sch;
+			val pred = case opred of
+				Nil => mk_Ztrue
+				|Value zp => zp;
+		in
+			mk_Z‰s (dec, pred)
+		end
+	) | aux (term as ZTmDecor (tm, d)) = (
+		mk_Zdec‰s (aux tm, d)
+	) | aux (term as ZTmPre tm) = (
+		mk_Zpre‰s (aux tm)
+	) | aux (term as ZTm³‰S tm) = (
+		mk_Z³‰s (aux tm)
+	) | aux (term as ZTmLogInOp‰S (inop, tm1, tm2)) = (
+		let	val htm1 = aux tm1;
+			val htm2 = aux tm2;
+		in
+			case inop of
+			ZLogInOp± => mk_Z±‰s (htm1, htm2)
+			|ZLogInOp² => mk_Z²‰s (htm1, htm2)
+			|ZLogInOp´ => mk_Z´‰s (htm1, htm2)
+			|ZLogInOp¤ => mk_Z¤‰s (htm1, htm2)
+			|ZLogInOpSemi =>
+				fail "gen_hol_term" 62901 [fn()=>"mk_Zsemi not yet implemented"]
+		end
+	) | aux (term as ZTmù (tm1, tm2)) = (
+		mk_Zù‰s (aux tm1, aux tm2)
+	) | aux (term as ZTmHide (tm, idl)) = (
+		mk_Zhide‰s (aux tm, map ident_to_string idl)
+	) | aux (term as ZTmQuant‰S (quant, sch, tm)) = (
+		let	val (dec, opred) = gen_zschtext phi sch;
+			val pred = case opred of
+				Nil => mk_Ztrue
+				|Value zp => zp;
+			val t = aux tm;
+		in
+			case quant of
+			ZQuantµ => mk_Zµ‰s (dec, pred, t)
+			|ZQuant¶ => mk_Z¶‰s (dec, pred, t)
+			|ZQuant¶‰1 => mk_Z¶‰1‰s (dec, pred, t)
+		end
+=TEX
+=SML
+	) | aux (term as ZTm„ tm) = (
+		mk_Z„‰s (aux tm)
+	) | aux (term as ZTm˜ tm) = (
+		mk_Z˜‰s (aux tm)
+	) | aux (term as ZTmEq (tm1, tm2)) = (
+		mk_Zeq (aux tm1, aux tm2)
+	) | aux (term as ZTm (tm1, tm2)) = (
+		mk_Z (aux tm1, aux tm2)
+	) | aux (term as ZTm» (tm1, tm2)) = (
+		mk_Z»‰s (aux tm1, aux tm2)
+	) | aux (term as ZTmPipe (tm1, tm2)) = (
+		fail "gen_hol_term" 62901 [fn()=>"mk_Zpipe not yet implemented"]
+	) | aux (term as ZTmú i) = (
+		mk_Zint (string_of_int i)
+	) | aux (term as ZTmString s) = (
+		fail "gen_hol_term" 62901 [fn()=>"mk_Zstring not yet implemented"]
+	) | aux (term as ZTmConstrained (tm1, tm2)) = (
+		aux tm1
+	) | aux (term as ZTmLVar (id, Value ty, tml)) = (
+		mk_Zlvar (ident_to_string id, gen_hol_type phi ty, list_gen_hol_term phi tml)
+	) | aux (ZTmLVar (_, Nil, _)) = (
+			fail "gen_hol_term" 63000 []
+	) | aux (term as ZTmGVar (id, Value ty, tml)) = (
+		mk_Zgvar (ident_to_string id, gen_hol_type phi ty, list_gen_hol_term phi tml)
+	) | aux (ZTmGVar (_, Nil, _)) = (
+		fail "gen_hol_term" 63000 []
+	) | aux (term as ZTmLet _) = (
+		fail "gen_hol_term" 62901 [fn()=>"mk_Zlet not yet implemented"]
+	) | aux (term as ZTmRename _) = (
+		fail "gen_hol_term" 62901 [fn()=>"mk_Zrename not yet implemented"]
+	) | aux (term as ZTmBracketed tm) = (
+		aux tm
+	) | aux (term as ZTmQuotation htm) = (
+		htm
+	);
+in
+	aux term
+end)
+=TEX
+=SML
+and Ûlist_gen_hol_termİ (phi : SUBS) ((tm::tml) : Z_TM list) : TERM list = (
+	(gen_hol_term phi tm)::(list_gen_hol_term phi tml)
+)
+  | list_gen_hol_term _ [] = [];
+=TEX
+=SML
+fun Ûterms_in_zinferredİ (Inferred (para, phi) : ZINFERRED) : TERM = (
+let	fun aux (ZParaAbbDef (_, _, pred, _)) = (
+		gen_hol_term phi pred
+	) | aux (ZParaSchBox (_, _,  sch as (dec, Value pred, _), _)) = (
+		gen_hol_term phi pred
+	) | aux (ZParaSchBox (_, _,  (_, Nil, _), _)) = (
+		fail "terms_in_zinferred" 63001 []
+	) | aux (ZParaAxDes (_, sch as (dec, Value pred, _), _)) = (
+		gen_hol_term phi pred
+	) | aux (ZParaAxDes (_, (_, Nil, _), _)) = (
+		fail "terms_in_zinferred" 63002 []
+	) | aux (ZParaFreeType _) = (
+		fail "terms_in_zinferred" 63003 []
+	) | aux (ZParaGivenSet (_, Value (_, tm))) = (
+		gen_hol_term phi tm
+	) | aux (ZParaGivenSet (_,Nil)) = (
+		fail "terms_in_zinferred" 63004 []
+	) | aux (ZParaConstraint (_, tm)) = (
+		gen_hol_term phi tm
+	) | aux (ZParaConjecture (_, _, tm)) = (
+		gen_hol_term phi tm
+	) | aux (ZParaTerm (_, tm, _)) = (
+		gen_hol_term phi tm
+	) | aux (ZParaFixity _) = (
+		fail "terms_in_zinferred" 63005 []
+	);
+in
+	aux para
+end
+) | terms_in_zinferred (TypeError info) =
+	print_zerror info;
+
+=TEX
+
+=SML
+end (* of structure ZTermGenerator *)
+=TEX
+\section{Entry of Types and Constants into Theory}
+
+
+=IGN
+fun Ûtype_of_formalİ (id : IDENT) : TYPE = (
+	mk_vartype ("'"^(ident_to_string id))
+);
+=TEX
+=IGN
+fun Ûconsts_in_zinferredİ (Inferred (p, phi) : ZINFERRED) : (string * TYPE) list = (
+	case p of
+	ZParaAbbDef (id, [], _, Value ty) =>
+		[(ident_to_string id, gen_hol_type phi ty)]
+	|ZParaAbbDef (id, formals, _, Value ty) => 
+	let	val fty = mk_ZtupleT (map mk_ZpowerT (map type_of_formal formals));
+		val aty = gen_hol_type phi ty;
+		val ty' = mk_­_type (fty, aty);
+	in
+		[(ident_to_string id, ty')]
+	end
+	|ZParaAbbDef (_, _, _, Nil) =>
+		fail "consts_in_zinferred" 62998 [fn()=>"Insufficient type info"]
+
+	|ZParaSchBox (id, [], _, Value ty) =>
+		[(ident_to_string id, gen_hol_type phi ty)]
+	|ZParaSchBox (id, formals, _, Value ty) => 
+	let	val fty = mk_ZtupleT (map mk_ZpowerT (map type_of_formal formals));
+		val aty = gen_hol_type phi ty;
+		val ty' = mk_­_type (fty, aty);
+	in
+		[(ident_to_string id, ty')]
+	end
+	|ZParaSchBox (_, _, _, Nil) =>
+		fail "consts_in_zinferred" 62998 [fn()=>"Insufficient type info"]
+
+	|ZParaAxDes ([], _, Value idtyl) => 
+		(map (fn (id, ty) => (ident_to_string id, gen_hol_type phi ty)) idtyl)
+	|ZParaAxDes (formals, _, Value idtyl) => 
+	let	val fty = mk_ZtupleT (map mk_ZpowerT (map type_of_formal formals));
+		val idtyl' = map (fn (id, ty) => (ident_to_string id,
+			mk_­_type (fty, (gen_hol_type phi ty)))) idtyl;
+	in
+		idtyl'
+	end
+	|ZParaAxDes (_, _, Nil) =>
+		fail "consts_in_zinferred" 62998 [fn()=>"Insufficient type info"]
+
+	|ZParaGivenSet (idl, _) =>
+	let	val sl = map ident_to_string idl;
+	in
+		map (fn s => (s, mk_ctype ("ğ", [mk_ctype (s,[])]))) sl
+	end
+
+	|ZParaFreeType ftl =>
+	let	fun do_branch aty (id, Value fty, _) =
+		let	val fty' = case fty of
+					ExType ("ğ", [fty']) => fty'
+					| _ => fail "consts_in_zinferred" 62901 [];
+			val ty' = ex_ğ (tuple_extype [fty', aty]);
+		in
+			(ident_to_string id, gen_hol_type phi ty')
+		end
+		  | do_branch aty (id, Nil, _) =
+			(ident_to_string id, gen_hol_type phi aty)
+		fun do_prod (id, branches) =
+		let	val s = ident_to_string id;
+			val aty = ExType (s, []);
+			val idty = (s, mk_ZpowerT (gen_hol_type phi aty));
+		in
+			idty::(map (do_branch aty) branches)
+		end
+		fun do_ftd (prod::rest) =
+			do_prod prod@do_ftd rest
+		  | do_ftd [] = [];
+	in
+		do_ftd ftl
+	end
+	|ZParaConstraint _ => []
+	|ZParaConjecture _ => []
+	|ZParaTerm _ => []
+	|ZParaFixity _ => []
+)
+  | consts_in_zinferred (TypeError info) = print_zerror info;
+
+=TEX
+=IGN
+fun new_type_clashes (tyname, arity) = (
+	case get_type_arity tyname of
+	Nil => []
+	|Value arity' => if (arity = arity')
+			then	[]
+			else	[(tyname, arity)]
+);
+
+fun new_type_nofail (tyname, arity) = (
+	case get_type_arity tyname of
+	Nil => (new_type (tyname, arity);())
+	|Value arity' =>
+		if arity = arity'
+		then ()
+		else fail "new_type_nofail" 62998 []
+);
+
+fun new_const_clashes (cname, ty) = (
+	case get_const_info cname of
+	Nil => []
+	|Value (ty', _) => if (ty =: ty')
+			then	[]
+			else	[(cname, ty)]
+);
+
+fun new_const_nofail (cname, ty) = (
+	case get_const_info cname of
+	Nil => (new_const (cname, ty);())
+	|Value (ty', _) =>
+		if ty =: ty'
+		then ()
+		else fail "new_const_nofail" 62998 []
+);
+
+=TEX
+=IGN
+fun Ûdeclare_template_nofailİ (cl, tmp) = (
+	case get_const_info (ident_to_string (tmp, "")) of
+	Nil =>
+		declare_template (cl, tmp)
+	|Value _ =>
+		let	val (_, cl') = get_zfixity (first_tmpl_id tmp);
+		in
+			if cl = cl'
+			then
+				()
+			else
+				fail "declare_template" 62901 [fn()=>"Declared with different attributes"]
+		end
+);
+=TEX
+=IGN
+fun Ûupdate_theory_dbİ (Inferred (ZParaFixity (cl, tmpls), _) : ZINFERRED) : unit = (
+	map (fn tmpl => declare_template_nofail(cl, tmpl)) tmpls; ()
+) | update_theory_db inferred =
+let	val consts = consts_in_zinferred inferred;
+	val tys = list_cup (map (fn (s, ty) => type_tycons ty) consts);
+	val side =
+		case list_cup (map (fn ty => new_type_clashes ty) tys) of
+		[] => map new_type_nofail tys
+		|failures => fail "update_theory_db" 62998 [fn ()=>makestring failures];
+	val side =
+		case flat (map (fn const => new_const_clashes const) consts) of
+		[] => map new_const_nofail consts
+		|failures => fail "update_theory_db" 62998 [fn ()=>makestring failures];
+
+in
+	()
+end;
+=TEX
+
+\section{INITIALIZING THE THEORY Z}
+=IGN
+fun set_consts s = 
+let	val tokens = zlex [Lex.Text s];
+	val parsed = ZParser.zparser {is_quot = true, standard = false} tokens;
+	val consts = map get_const_info 
+in
+	case parsed of
+	ZParaFixity (cl, tmpls) =>
+			map (fn tmpl => declare_template(cl, tmpl)) tmpls
+	|_ => []
+end;
+=TEX
+=IGN
+open_theory"basic_z" handle Fail _ => ();
+delete_theory "z_toolkit" handle Fail _ => ();
+delete_theory "ft" handle Fail _ => ();
+open_theory"z";
+delete_theory"basic_z" handle Fail _ => ();
+new_theory"basic_z";
+tmpl_ref:=[];
+set_consts "rel _ = _, _  _";
+new_type ("ğ",1);
+new_type ("Z'T[1]",1);
+new_const ("Totality", ”'a ğ®);
+new_const ("U", ”'a $"Z'T[1]" ­ 'a®);
+=TEX
+
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+
+=IGN
+
+val c = consts_in_zinferred;
+
+
