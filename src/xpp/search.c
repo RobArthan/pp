@@ -407,12 +407,12 @@ Bool add_search_tool(Widget text_w)
 	XtManageChild(action_form);
 	XtManageChild(paned);
 
-	fix_pane_height(search_form, search_backwards_btn);
-	fix_pane_height(replace_form, replace_btn);
-	fix_pane_height(line_no_form, line_no_text);
-	fix_pane_height(action_form, dismiss_btn);
-
 	XtPopup(shell, XtGrabNone);
+
+	fix_pane_height(search_form, search_form);
+	fix_pane_height(replace_form, replace_form);
+	fix_pane_height(line_no_form, line_no_form);
+	fix_pane_height(action_form, action_form);
 
 	return True;
 }
