@@ -952,11 +952,12 @@ fun Ûget_par_namesÝ (fun_name : Z_ID) : ID list OPT = (
 	handle Fail _ => Nil
 );
 fun Ûset_par_namesÝ (fun_name : ID) (pars : ID list) : unit = (
-	let	val old = (snd o dest_ud_string o get_user_datum "-") cn_ud_key
+	let	val fname = CaseIndependence.to_upper fun_name;
+		val old = (snd o dest_ud_string o get_user_datum "-") cn_ud_key
 			handle Fail _ => [];
 		val new = 
-			UD_String(fun_name, map (fn p => UD_String(p, [])) pars)
-			:: (old drop wanted fun_name);
+			UD_String(fname, map (fn p => UD_String(p, [])) pars)
+			:: (old drop wanted fname);
 	in	set_user_datum(cn_ud_key, UD_String("", new))
 	end
 );
@@ -979,8 +980,11 @@ get_par_names "fruit";
 =TEX
 \subsection{Constructing $CN\_ENV$s}
 The code here must pass type information into the functions defined in \cite{ISS/HAT/DAZ/DTD505,ISS/HAT/DAZ/DTD508} using the data type $CN\_ENV$ defined in \cite{ISS/HAT/DAZ/DTD508}.
-The following functions are used to do this.
+This happens when declarations are translated for output to the Z document and when VCs are generated;
+in the first case, the $CN\_ENV$ value required is taken from the running environment, in the second from the $In\_Scope$ part of the $Speclab$ which is the first part of the arguments to $vcs$.
+In either case, Z global variables are sought from the theory data base if there is no local declaration for them.
 
+\subsection{\ldots for declarations}
 =SML
 fun Ûz_id_of_idÝ (n : ID) : Z_ID = (
 	(fst o dest_const o mk_z_gvar)(n, BOOL, [])
@@ -991,13 +995,13 @@ $get\_tmark\_from\_inscope$ searches an $IN\_SCOPE$ value for the type mark asso
 fun Ûget_tmark_from_inscopeÝ (n : Z_ID) (inscope : IN_SCOPE) : TMARK OPT = (
 	let	fun do_vars [] = Nil
 		|   do_vars ({vars, tmark} :: more) = (
-			if	n mem vars
+			if	n mem (map CaseIndependence.to_upper) vars
 			then	Value tmark
 			else	do_vars more
 		);
 		fun do_pars [] = Nil
 		|   do_pars ({var_decl as {vars, tmark}, mode} :: more) = (
-			if	n mem vars
+			if	n mem (map CaseIndependence.to_upper) vars
 			then	Value tmark
 			else	do_pars more
 		);
@@ -1023,7 +1027,7 @@ The type there for a type $\tau$ will be $ð\tau$.
 We must strip off the ð.
 =SML
 fun Ûtype_of_tmarkÝ (tmark : TMARK) : TYPE OPT = (
-	(case (get_const_type (z_id_of_id(tmark))) of
+	(case (get_const_type (z_id_of_id(CaseIndependence.to_upper tmark))) of
 		Value ty => (Value (dest_z_power_type ty))
 	|	Nil => Nil)
 	handle Fail _ => Nil
@@ -1055,7 +1059,7 @@ fun Ûenv_info_of_g_varÝ (zn : Z_ID) (ty : TYPE) = (
 );
 =TEX
 =SML
-fun Ûcurrent_cn_envÝ (n : ID) : (TYPE * ENV_INFO) OPT = (
+fun Ûcurrent_cn_envÝ (n : Z_ID) : (TYPE * ENV_INFO) OPT = (
 	case get_tmark_from_env n (!blocks) of
 		Value tmark => (
 			case type_of_tmark tmark of
@@ -1066,6 +1070,65 @@ fun Ûcurrent_cn_envÝ (n : ID) : (TYPE * ENV_INFO) OPT = (
 				Value ty => Value(env_info_of_g_var n ty)
 			|	Nil => Nil
 	)
+);
+=TEX
+\subsection{\ldots for VC generation}
+=SML
+fun Ûcn_env_of_in_scopeÝ (in_scope : IN_SCOPE) (n : Z_ID)
+	: (TYPE * ENV_INFO) OPT = (
+	case get_tmark_from_inscope n in_scope of
+		Value tmark => (
+			case type_of_tmark tmark of
+				Value ty => Value (ty, EIEnvVar tmark)
+			|	Nil => Nil
+		)
+	|	Nil => (
+			case type_of_g_var (z_id_of_id n) of
+				Value ty => Value(env_info_of_g_var n ty)
+			|	Nil => Nil
+	)
+);
+=TEX
+\subsection{ProofPower Type Inference Context}
+=TEX
+=SML
+fun Ûti_context_of_in_scopeÝ (inscope : IN_SCOPE) : TERM list = (
+	let	fun v_v0 (in_mode : bool) (ty : TYPE) (v : ID) : TERM list = (
+			let	val V = CaseIndependence.to_upper v;
+			in	if	in_mode
+				then	[mk_var(V, ty)]
+				else	[mk_var(V ^ "‰0", ty), mk_var(V, ty)]
+			end
+		);
+		fun do_vars [] = []
+		|   do_vars ({vars, tmark} :: more) = (
+			case type_of_tmark tmark of
+				Nil => do_vars more
+			|	Value ty => (
+				flat
+				(do_vars more :: map (v_v0 true ty) vars)
+			)
+		);
+		fun do_pars [] = []
+		|   do_pars ({var_decl as {vars, tmark}, mode} :: more) = (
+			case type_of_tmark tmark of
+				Nil => do_pars more
+			|	Value ty => (
+				flat
+				(do_pars more :: map (v_v0 false ty) vars)
+			)
+		);
+		fun do_log_cons (log_cons : Z_DECL list) = (
+			(flat o map (fst o dest_z_dec)) log_cons
+		);
+		val {vc_log_cons, vc_pars, vc_vars, ...} = inscope;
+	in	do_log_cons vc_log_cons @ do_pars vc_pars @ do_vars vc_vars
+	end
+);
+=TEX
+=SML
+fun Ûcurrent_ti_contextÝ (() : unit) : TERM list = (
+	flat (map (ti_context_of_in_scope o #in_scope o #declab) (!blocks))
 );
 =TEX
 \subsection{Updating the Z Theory Database}
@@ -1094,8 +1157,8 @@ fun Ûstore_vcsÝ (vcs: VC list) : unit = (
 	()
 );
 =TEX
-\section{Creating ProofPower Theories}
-The material in this section uses the following, which is also required for the DRA specs.
+\subsection{Creating ProofPower Theories}
+The material in this section uses the following function, which is also required for the DRA specs.
 =SML
 infix dot;
 fun (x : ID) ÛdotÝ (y : ID) = x ^ "." ^ y;
@@ -1171,6 +1234,43 @@ fun Ûopen_subunit_theoryÝ (unit_name : string, x : PROPER_BODY) : unit = (
 	end
 );
 =TEX
+\subsection{Diagnostic Aids}
+=SML
+val Ûdiag_cn_stateÝ : CN_STATE ref = ref (get_cn_state());
+val Ûdiag_web_clauseÝ : WEB_CLAUSE ref = ref (WCCompilation []);
+val Ûdiag_vc_argsÝ : (SPECLAB * STATEMENT) list ref = ref [];
+=TEX
+\subsection{Interface to VC Generator}
+=TEX
+=SML
+fun Ûadd_init_vars_specÝ ({w, pre, post, label, w0} : SPEC) : SPEC = (
+	{w = w,
+	pre = pre,
+	post = post,
+	label = label,
+	w0 = map (fn s => s ^ "‰0") w} 
+);
+=TEX
+=SML
+fun Ûadd_init_vars_speclabÝ ({spec, wp_env, fun_flag, in_scope,
+	till_flag, formal_body_flag} : SPECLAB) : SPECLAB = (
+	{spec = add_init_vars_spec spec,
+	wp_env = wp_env,
+	fun_flag = fun_flag,
+	in_scope = in_scope,
+	till_flag = till_flag,
+	formal_body_flag = formal_body_flag}
+);
+=SML
+fun Ûcall_vcsÝ ((sl, st) : SPECLAB * STATEMENT) : VC list = (
+	let	val sl1_st = (add_init_vars_speclab sl, st);
+	in	diag_vc_args := sl1_st :: !diag_vc_args;
+		TypeInference.set_ti_context
+			(ti_context_of_in_scope (#in_scope sl));
+		vcs sl1_st
+	end
+);
+=TEX
 \section{BASIC DECLARATIONS}\label{BASICDECLARATIONS}
 \subsection{The SID Function basic\_declaration}
 The decision about which function to call is made in $basic\_declaration$ itself.
@@ -1191,7 +1291,8 @@ fun Ûbasic_decl_pack_specÝ (basic_decl : BASIC_DECL) : unit = (
 =TEX
 =SML
 fun Ûbasic_decl_otherwiseÝ (basic_decl : BASIC_DECL) : unit = (
-	let	val para_infos = trans_basic_decl current_cn_env basic_decl;
+	let	val side = TypeInference.set_ti_context (current_ti_context ());
+		val para_infos = trans_basic_decl current_cn_env basic_decl;
 	in	map update_theory_db_with_parainfo para_infos; ()
 	end
 );
@@ -1357,19 +1458,19 @@ fun Ûspec_stmt_speclabelÝ (spec : SPEC) : unit = (
 		val vc_pars = vc_pars2 @ env_pars;
 		val vc_log_cons1 = #vc_log_cons(#in_scope(#declab block1));
 		val vc_log_cons = vc_log_cons2 @ vc_log_cons1;
-		val wp_env1 :WP_ENV = {
-			env = current_cn_env,
-			till = till,
-			return = return,
-			fun_header = fun_header,
-			formal_procs = formal_procs2
-		};
 		val in_scope1 : IN_SCOPE = {
 			dec_labels = dec_labels2,
 			formal_procs = formal_procs2,
 			vc_log_cons = vc_log_cons,
 			vc_vars = vc_vars,
 			vc_pars = vc_pars			
+		};
+		val wp_env1 :WP_ENV = {
+			env = cn_env_of_in_scope in_scope1,
+			till = till,
+			return = return,
+			fun_header = fun_header,
+			formal_procs = formal_procs2
 		};
 		val speclab : SPECLAB = {
 			spec = spec,
@@ -1378,7 +1479,9 @@ fun Ûspec_stmt_speclabelÝ (spec : SPEC) : unit = (
 			till_flag = till_flag,
 			wp_env = wp_env1,
 			in_scope = in_scope1			
-		}; 
+		};
+		val side = TypeInference.set_ti_context
+					(ti_context_of_in_scope in_scope1);
 	in	spec_env := s_extend label speclab (!spec_env)
 		handle Fail _ =>
 		fail "spec_stmt_speclabel" 507015 [fn ()=> label]
@@ -1396,16 +1499,16 @@ fun Ûspec_stmt_otherwiseÝ (spec : SPEC) : unit = (
 			till,
 			current_formal_fun = formal_fun1 as
 					{informal_fun = fun_header,
-					spec as {post = return, ...}},
+					spec = spec1 as {post = return, ...}},
 			...} = block1;
+		val in_scope1 : IN_SCOPE = flatten_env(!blocks);
 		val wp_env1 :WP_ENV = {
-			env = current_cn_env,
+			env = cn_env_of_in_scope in_scope1,
 			till = till,
 			return = z_predexp_of_z_tm return,
 			fun_header = fun_header,
 			formal_procs = []
 		};
-		val in_scope1 : IN_SCOPE = flatten_env(!blocks);
 		val speclab : SPECLAB = {
 			spec = spec,
 			formal_body_flag = formal_body_flag,
@@ -1708,20 +1811,20 @@ fun Ûform_proc_pack_bodyÝ (form_proc: FORMAL_PROC) : unit = (
 		val vc_vars2 = #vc_vars(#in_scope(#declab block2));
 		val vc_vars4 = #vc_vars(package4);
 		val vc_pars1 = #vc_pars (#in_scope (#declab block1));
-		val wp_env5 :WP_ENV = {
-			env = current_cn_env,
-			till = mk_z_true,
-			return = mk_z_true,
-			fun_header = dummy_informal_fun,
-			formal_procs = []
-		};
 		val in_scope5 = {
 			dec_labels = [],
 			formal_procs = [],
 			vc_log_cons = [],
 			vc_vars = vc_vars4 @ vc_vars2,
 			vc_pars = vc_pars1			
-		}
+		};
+		val wp_env5 :WP_ENV = {
+			env = cn_env_of_in_scope in_scope5,
+			till = mk_z_true,
+			return = mk_z_true,
+			fun_header = dummy_informal_fun,
+			formal_procs = []
+		};
 		val speclab5 : SPECLAB = {
 			spec = #spec formal_proc3,
 			formal_body_flag = false,
@@ -1730,7 +1833,7 @@ fun Ûform_proc_pack_bodyÝ (form_proc: FORMAL_PROC) : unit = (
 			wp_env = wp_env5,
 			in_scope = in_scope5
 		};
-	in	store_vcs (vcs(speclab5, st))
+	in	store_vcs (call_vcs(speclab5, st))
 	end
 		else	()
 	end
@@ -1753,13 +1856,6 @@ fun Ûform_proc_subunitÝ (form_proc: FORMAL_PROC) : unit = (
 		val st = SStmt(STSpecNoIvars(#spec form_proc));
 		val vc_vars3 = #vc_vars(#in_scope(subunit3));
 		val vc_pars1 = #vc_pars (#in_scope (#declab block1));
-		val wp_env4 :WP_ENV = {
-			env = current_cn_env,
-			till = mk_z_true,
-			return = mk_z_true,
-			fun_header = dummy_informal_fun,
-			formal_procs = []
-		};
 		val in_scope4 = {
 			dec_labels = [],
 			formal_procs = [],
@@ -1767,6 +1863,13 @@ fun Ûform_proc_subunitÝ (form_proc: FORMAL_PROC) : unit = (
 			vc_vars = vc_vars3,
 			vc_pars = vc_pars1			
 		}
+		val wp_env4 :WP_ENV = {
+			env = cn_env_of_in_scope in_scope4,
+			till = mk_z_true,
+			return = mk_z_true,
+			fun_header = dummy_informal_fun,
+			formal_procs = []
+		};
 		val speclab4 : SPECLAB = {
 			spec = #specif subunit3,
 			formal_body_flag = false,
@@ -1775,7 +1878,7 @@ fun Ûform_proc_subunitÝ (form_proc: FORMAL_PROC) : unit = (
 			wp_env = wp_env4,
 			in_scope = in_scope4
 		};
-	in	store_vcs (vcs(speclab4, st))
+	in	store_vcs (call_vcs(speclab4, st))
 	end
 		else	()
 	end
@@ -1988,13 +2091,6 @@ fun Ûform_fun_pack_bodyÝ (form_fun: FORMAL_FUN) : unit = (
 			(fn f => #name(#informal_fun f) = block_name2);
 		val st = SStmt(STSpecNoIvars(#spec form_fun));
 		val vc_pars1 = #vc_pars (#in_scope (#declab block1));
-		val wp_env5 :WP_ENV = {
-			env = current_cn_env,
-			till = mk_z_true,
-			return = mk_z_true,
-			fun_header = #informal_fun form_fun,
-			formal_procs = []
-		};
 		val in_scope5 = {
 			dec_labels = [],
 			formal_procs = [],
@@ -2002,6 +2098,13 @@ fun Ûform_fun_pack_bodyÝ (form_fun: FORMAL_FUN) : unit = (
 			vc_vars = [],
 			vc_pars = vc_pars1			
 		}
+		val wp_env5 :WP_ENV = {
+			env = cn_env_of_in_scope in_scope5,
+			till = mk_z_true,
+			return = mk_z_true,
+			fun_header = #informal_fun form_fun,
+			formal_procs = []
+		};
 		val speclab5 : SPECLAB = {
 			spec = #spec formal_fun3,
 			formal_body_flag = false,
@@ -2010,7 +2113,7 @@ fun Ûform_fun_pack_bodyÝ (form_fun: FORMAL_FUN) : unit = (
 			wp_env = wp_env5,
 			in_scope = in_scope5
 		};
-	in	store_vcs (vcs(speclab5, st))
+	in	store_vcs (call_vcs(speclab5, st))
 	end
 		else	()
 	end
@@ -2032,20 +2135,20 @@ fun Ûform_fun_subunitÝ (form_fun: FORMAL_FUN) : unit = (
 		then	
 	let
 		val st = SStmt(STSpecNoIvars(#spec form_fun));
-		val wp_env4 :WP_ENV = {
-			env = current_cn_env,
-			till = mk_z_true,
-			return = mk_z_true,
-			fun_header = #informal_fun form_fun,
-			formal_procs = []
-		};
 		val in_scope4 = {
 			dec_labels = [],
 			formal_procs = [],
 			vc_log_cons = [],
 			vc_vars = [],
 			vc_pars = []			
-		}
+		};
+		val wp_env4 :WP_ENV = {
+			env = cn_env_of_in_scope in_scope4,
+			till = mk_z_true,
+			return = mk_z_true,
+			fun_header = #informal_fun form_fun,
+			formal_procs = []
+		};
 		val speclab4 : SPECLAB = {
 			spec = #specif subunit3,
 			formal_body_flag = false,
@@ -2054,7 +2157,7 @@ fun Ûform_fun_subunitÝ (form_fun: FORMAL_FUN) : unit = (
 			wp_env = wp_env4,
 			in_scope = in_scope4
 		};
-	in	store_vcs (vcs(speclab4, st))
+	in	store_vcs (call_vcs(speclab4, st))
 	end
 		else	()
 	end
@@ -2211,7 +2314,7 @@ fun Ûvcs_body_procÝ (st : STATEMENT) : unit = (
 		val in_scope = flatten_env (!blocks);
 		val formal_procs = #formal_procs in_scope;
 		val wp_env :WP_ENV = {
-			env = current_cn_env,
+			env = cn_env_of_in_scope in_scope,
 			till = mk_z_true,
 			return = mk_z_true,
 			fun_header = dummy_informal_fun,
@@ -2232,7 +2335,7 @@ fun Ûvcs_body_procÝ (st : STATEMENT) : unit = (
 			wp_env = wp_env,
 			in_scope = in_scope
 		};
-	in	store_vcs(vcs(speclab, st))
+	in	store_vcs(call_vcs(speclab, st))
 	end	
 );
 =TEX
@@ -2248,7 +2351,7 @@ fun Ûvcs_body_funÝ (st : STATEMENT) : unit = (
 		val in_scope = flatten_env (!blocks);
 		val formal_procs = #formal_procs in_scope;
 		val wp_env :WP_ENV = {
-			env = current_cn_env,
+			env = cn_env_of_in_scope in_scope,
 			till = mk_z_true,
 			return = z_predexp_of_z_tm post1,
 			fun_header = #informal_fun current_formal_fun1,
@@ -2269,7 +2372,7 @@ fun Ûvcs_body_funÝ (st : STATEMENT) : unit = (
 			wp_env = wp_env,
 			in_scope = in_scope
 		};
-	in	store_vcs(vcs(speclab, st))
+	in	store_vcs(call_vcs(speclab, st))
 	end	
 );
 =TEX
@@ -2528,7 +2631,25 @@ fun Ûvcs_speclabelÝ ({label = unused, statement} :REFINED_BY) : unit = (
 		val spec_env_lab = force_value( s_lookup label (!spec_env) )
 			handle Fail _ => fail "vcs_speclabel" 507003
 				[fn () => label];
-	in	store_vcs (vcs (spec_env_lab, statement))
+		val {wp_env as {env, till, return, fun_header, formal_procs},
+			spec, in_scope, formal_body_flag, fun_flag, till_flag}
+			= spec_env_lab;
+		val wp_env1 :WP_ENV = {
+			env = cn_env_of_in_scope in_scope,
+			till = till,
+			return = return,
+			fun_header = fun_header,
+			formal_procs = formal_procs
+		};
+		val speclab : SPECLAB = {
+			spec = spec,
+			formal_body_flag = formal_body_flag,
+			fun_flag = fun_flag,
+			till_flag = till_flag,
+			wp_env = wp_env1,
+			in_scope = in_scope
+		};
+	in	store_vcs (call_vcs (speclab, statement))
 	end
 );
 =TEX
@@ -2962,7 +3083,51 @@ fun Ûget_replacementÝ (lab : string) : REPLACEMENT OPT = (
 =TEX
 =SML
 fun cn_z_generator (w : WEB_CLAUSE) : unit = (
-		do_web_clause w
+	let	val save_cn_state = get_cn_state();
+		val save_ti_cxt = TypeInference.get_ti_context();
+	in	diag_vc_args := [];
+		diag_web_clause := w;
+		(do_web_clause w)
+		handle ex => (
+			diag_cn_state := get_cn_state();
+			set_cn_state save_cn_state;
+			TypeInference.set_ti_context save_ti_cxt;
+			raise ex
+		);
+		TypeInference.set_ti_context save_ti_cxt
+	end
+);
+=TEX
+=SML
+fun restart_cn_z_generator (():unit) : unit = (
+	set_cn_state{pack_env = pack_env0,
+		subunit_env = subunit_env0,
+		dec_env = dec_env0,
+		spec_env = spec_env0,
+		blocks = env0,
+		repl_env = repl_env0,
+		spark_prog = spark_prog0,
+		script_name = ""}
+
+);
+=TEX
+=SML
+fun init_cn_z_generator (script_name : string) : unit = (
+	set_cn_state{pack_env = !pack_env,
+		subunit_env = !subunit_env,
+		dec_env = dec_env0,
+		spec_env = spec_env0,
+		blocks = env0,
+		repl_env = repl_env0,
+		spark_prog = spark_prog0,
+		script_name = script_name}
+);
+=TEX
+=SML
+fun new_cn_script (script_name : string) : unit = (
+	open_theory "daz_toolkit_extensions";
+	new_theory script_name;
+	init_cn_z_generator script_name
 );
 =TEX
 =IGN
