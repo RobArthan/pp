@@ -1,6 +1,6 @@
 ######################################################################
 #
-#	dev.mkf from $Header: /home/rda/dev/RCS/dev.mkf,v 1.11 2002/04/02 14:57:01 rda Exp rda $
+#	dev.mkf from $Header: /home/rda/dev/RCS/dev.mkf,v 1.12 2002/04/02 14:57:49 rda Exp rda $
 #
 #	makefile for the for the ProofPower development tools
 #
@@ -11,13 +11,22 @@
 .SUFFIXES: .db .doc .ldd0 .ldd .log .lot .sh .doc .tex .tch
 
 # default make target.  displays a list of more useful targets
-PRODNAME=PPDev
 default:
 	@echo "The following are some of the more useful make commands:"
 	@echo " "
-	@echo "make -f dev.mkf src                   - makes the source files"
-	@echo "make -f dev.mkf bin                   - makes the binaries"
-	@echo "make -f dev.mkf doc                   - makes the documentation"
+	@echo "make -f dev.mkf inst        - builds and installs the dev files"
+	@echo "make -f dev.mkf srcrel      - makes the dev source release"
+	@echo "make -f dev.mkf src         - makes the source files"
+	@echo "make -f dev.mkf bin         - makes the binaries"
+	@echo "make -f dev.mkf doc         - makes the documentation"
+	@echo " "
+	@echo "Various environment variables influence the behaviour:"
+	@echo " "
+	@echo "    PPCOMPILER  - compiler to use (POLYML or SMLNJ)"
+	@echo "    PPTARGETDIR - target installation directory"
+	@echo "                  (creates a clean directory called release if not set)"
+	@echo "    PPVER       - product version"
+	@echo "                  (taken from file version if not set)"
 
 ######################################################################
 #
@@ -25,9 +34,13 @@ default:
 #
 ######################################################################
 
+PRODNAME=PPDev
+SHORTNAME=dev
+VERSION=$(shell echo $${PPVER:-`cat version  2>/dev/null || echo XXX.YYY.ZZZ`})
+RELDIR=$(shell echo $${PPTARGETDIR:-release})
 PRODUCT=$(PRODNAME)-$(PPVER)
 CWD=$(shell pwd)
-COPYRIGHT="Copyright Lemma 1 Ltd. 2000"
+HAVERCS=$(shell (test -d RCS && echo y ) || echo n)
 
 # Compiler specifics:
 ifeq ($(PPCOMPILER), POLYML)
@@ -123,6 +136,9 @@ PACKINGLIST+= dtd108.doc
 PACKINGLIST+= imp108.doc
 PACKINGLIST+= hol.svf
 
+# packing list for user source release (they get the computed README file not the master)
+DISTPACKINGLIST=$(subst README.$(SHORTNAME).src,README.$(SHORTNAME), $(PACKINGLIST))
+
 ######################################################################
 #
 # Dependencies - determining the order of compilation
@@ -174,11 +190,13 @@ slrp: imp017.sml
 #
 ######################################################################
 
+ifeq ($(HAVERCS), y)
 README.dev: README.dev.src
-#	sed -e '/$$PPVER/s/$$PPVER/'"$$PPVER/g" \
+#	sed -e '/$$PPVER/s/$$PPVER/'"$(VERSION)/g" \
 #			< README.dev.src > README.dev
-	sed -e '/$$PPDEVVER/s/$$PPDEVVER/'"$$PPVER/g" \
+	sed -e '/$$PPDEVVER/s/$$PPDEVVER/'"$(VERSION)/g" \
 		< README.dev.src > README.dev
+endif
 
 
 ######################################################################
@@ -202,57 +220,73 @@ slrp_test:	$(TESTTTDS) $(SLRPDB)
 packinglist:
 	@echo $(PACKINGLIST)
 
+inst:	binrel docrel
+
 reldir:
-	rm -rf release
-	mkdir release
+	if [ "$${PPTARGETDIR:-\"\"}" = "" ]; \
+	then \
+		rm -rf $(RELDIR); \
+	fi
+	-mkdir $(RELDIR)
 
 bindir:	reldir
-	mkdir release/bin
+	-mkdir $(RELDIR)/bin
 
 docdir: reldir
-	mkdir release/doc
+	-mkdir $(RELDIR)/doc
 
 srcdir:	reldir README.dev
-	mkdir release/src
-	mkdir release/src/RCS
-	cp README.dev release/src
-	@for f in $(PACKINGLIST); \
-	do \
-		cp RCS/$$f,v release/src/RCS/$$f,v; \
-	done
-	chmod -R a-w release
-	chmod -R g-w release
-	chmod -R u+w release
+	-mkdir $(RELDIR)/src
 
 binrel: bindir $(SLRPDB) $(SHELLSCRIPTS) README.dev
-	cp $(SLRPDB) release/bin
-	cp $(SHELLSCRIPTS) release/bin
-	cp arch-os release/bin
-	cp README.dev release
-	chmod -R a-w release
-	chmod -R g-w release
-	chmod -R u+w release
+	cp $(SLRPDB) $(RELDIR)/bin
+	cp $(SHELLSCRIPTS) $(RELDIR)/bin
+	cp arch-os $(RELDIR)/bin
+	cp README.dev $(RELDIR)
+	chmod -R a-w $(RELDIR)
+	chmod -R g-w $(RELDIR)
+	chmod -R u+w $(RELDIR)
 
 docrel: docdir $(RELEASEDOCFILES) README.dev
-	cp $(RELEASEDOCFILES) release/doc
-	cp README.dev release
-	chmod -R a-w release
-	chmod -R g-w release
-	chmod -R u+w release
+	cp $(RELEASEDOCFILES) $(RELDIR)/doc
+	cp README.dev $(RELDIR)
+	chmod -R a-w $(RELDIR)
+	chmod -R g-w $(RELDIR)
+	chmod -R u+w $(RELDIR)
 
-srcrel:  srcdir
+rcsrel:  srcdir
+	-mkdir $(RELDIR)/src/RCS
+	cp README.dev $(RELDIR)/src
+	@for f in $(PACKINGLIST); \
+	do \
+		cp RCS/$$f,v $(RELDIR)/src/RCS/$$f,v; \
+	done
+	chmod -R a-w $(RELDIR)
+	chmod -R g-w $(RELDIR)
+	chmod -R u+w $(RELDIR)
 
 bin:	binrel
-	cd release && tar cvf $(CWD)/$(PRODUCT).bin.tar ./*
+	cd $(RELDIR) && tar cvf $(CWD)/$(PRODUCT).bin.tar ./*
 	cd $(CWD) && gzip $(PRODUCT).bin.tar && mv $(PRODUCT).bin.tar.gz $(PRODUCT).bin.tgz
 
 doc:	docrel
-	cd release && tar cvf $(CWD)/$(PRODUCT).doc.tar ./*
+	cd $(RELDIR) && tar cvf $(CWD)/$(PRODUCT).doc.tar ./*
 	cd $(CWD) && gzip $(PRODUCT).doc.tar && mv $(PRODUCT).doc.tar.gz $(PRODUCT).doc.tgz
 
-src:	srcrel
-	cd release && tar cvf $(CWD)/$(PRODUCT).src.tar ./*
+src:	rcsrel
+	cd $(RELDIR) && tar cvf $(CWD)/$(PRODUCT).src.tar ./*
 	cd $(CWD) && gzip $(PRODUCT).src.tar && mv $(PRODUCT).src.tar.gz $(PRODUCT).src.tgz
+
+srcrel: srcdir $(DISTPACKINGLIST)
+	echo $(DISTPACKINGLIST)
+	@for f in $(DISTPACKINGLIST); \
+	do \
+		cp $$f $(RELDIR)/src/$$f; \
+	done
+	echo $(VERSION) > $(RELDIR)/src/version
+	chmod -R a-w $(RELDIR)
+	chmod -R g-w $(RELDIR)
+	chmod -R u+w $(RELDIR)
 
 ######################################################################
 #

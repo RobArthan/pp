@@ -1,6 +1,6 @@
 ######################################################################
 #
-#	%Z% $Revision: 1.45 $ $RCSfile: daz.mkf,v $ $Date: 2002/07/18 10:16:33 $
+#	%Z% $Revision: 1.46 $ $RCSfile: daz.mkf,v $ $Date: 2002/10/14 16:46:33 $
 #
 #	makefile for the DAZ Project
 #
@@ -10,10 +10,12 @@
 .SUFFIXES: .bmp .doc .dvi .ldd .log .lot .sh .sml .src .tex .tch .ML
 
 # default make target.  displays a list of more useful targets
-PRODNAME=PPDaz
+
 default:
 	@echo "The following are some of the more useful make commands:"
 	@echo " "
+	@echo "make -f hol.mkf inst            - builds and installs the hol files"
+	@echo "make -f hol.mkf srcrel          - makes the hol source release"
 	@echo "make -f daz.mkf src             - makes the daz source files"
 	@echo "make -f daz.mkf bin             - makes binaries plus what is needed to use them"
 	@echo "make -f daz.mkf doc             - makes daz user documents"
@@ -29,8 +31,13 @@ default:
 #
 ######################################################################
 
+PRODNAME=PPDaz
+SHORTNAME=daz
+VERSION=$(shell echo $${PPVER:-`cat version  2>/dev/null || echo XXX.YYY.ZZZ`})
+RELDIR=$(shell echo $${PPTARGETDIR:-release})
 PRODUCT=$(PRODNAME)-$(PPVER)
 CWD=$(shell pwd)
+HAVERCS=$(shell (test -d RCS && echo y ) || echo n)
 
 # Compiler specifics:
 ifeq ($(PPCOMPILER), POLYML)
@@ -82,7 +89,7 @@ DESIGNDOCDIR=	./dazdocs
 APPDEFSDIR=	$(RELEASEDIR)/app-defaults
 BITMAPSDIR=	$(RELEASEDIR)/bitmaps
 
-# packing list for the source release (target src).
+# packing list for the developer source release (target src).
 PACKINGLIST=
 PACKINGLIST+= README.daz.src
 PACKINGLIST+= dazXpp
@@ -203,6 +210,9 @@ PACKINGLIST+= spc503.src # daz specification vol. III
 PACKINGLIST+= wrk523.doc # tools to build the three volumes of specification docs
 PACKINGLIST+= wrk524.doc # tools to type-check the three volumes
 
+
+# packing list for user source release (they get the computed README file not the master)
+DISTPACKINGLIST=$(subst README.$(SHORTNAME).src,README.$(SHORTNAME), $(PACKINGLIST))
 
 # High Level Design
 DAZHLDS=	hld501.doc hld502.doc hld503.doc
@@ -805,9 +815,11 @@ sholisvcs.dvi: sholisvcs.doc
 #
 ######################################################################
 
+ifeq ($(HAVERCS), y)
 README.daz: README.daz.src
 	sed -e '/$$PPVER/s/$$PPVER/'"$$PPVER/g" \
 			< README.daz.src > README.daz
+endif
 
 ######################################################################
 #
@@ -816,65 +828,81 @@ README.daz: README.daz.src
 ######################################################################
 
 reldir:
-	rm -rf release
-	mkdir release
+	if [ "$${PPTARGETDIR:-\"\"}" = "" ]; \
+	then \
+		rm -rf $(RELDIR); \
+	fi
+	-mkdir $(RELDIR)
 	
 bindir:	reldir
-	mkdir release/bin
-	mkdir release/app-defaults
-	mkdir release/bitmaps
+	-mkdir $(RELDIR)/bin
+	-mkdir $(RELDIR)/app-defaults
+	-mkdir $(RELDIR)/bitmaps
 
 docdir:	reldir
-	mkdir release/doc
+	-mkdir $(RELDIR)/doc
 
 srcdir:	reldir
-	mkdir release/src
-	mkdir release/src/RCS
+	-mkdir $(RELDIR)/src
 
 binrel:	bindir dazbuilt.ldd README.daz \
 	$(SIEVEVIEW) $(APPDEFFILES) $(BITMAPFILES)
-	cp daz.$(HEAP_SUFFIX) release/bin
-	cp README.daz release
-	cp $(SIEVEVIEW) release/bin/sieveview
-	cp $(APPDEFFILES) release/app-defaults
-	cp $(BITMAPFILES) release/bitmaps
-	chmod -R a-w release
-	chmod -R g-w release
-	chmod -R u+w release
+	cp daz.$(HEAP_SUFFIX) $(RELDIR)/bin
+	cp README.daz $(RELDIR)
+	cp $(SIEVEVIEW) $(RELDIR)/bin/sieveview
+	cp $(APPDEFFILES) $(RELDIR)/app-defaults
+	cp $(BITMAPFILES) $(RELDIR)/bitmaps
+	chmod -R a-w $(RELDIR)
+	chmod -R g-w $(RELDIR)
+	chmod -R u+w $(RELDIR)
 
 docrel:	docdir $(RELEASEDOCCONTENTS) README.daz
-	cp $(RELEASEDOCCONTENTS) release/doc
-	chmod -R a-w release
-	chmod -R g-w release
-	chmod -R u+w release
+	cp $(RELEASEDOCCONTENTS) $(RELDIR)/doc
+	chmod -R a-w $(RELDIR)
+	chmod -R g-w $(RELDIR)
+	chmod -R u+w $(RELDIR)
 
 # useful target to print out the names of all the files in the source release
 packinglist:
 	@echo $(PACKINGLIST)
 
-srcrel:	srcdir
+rcsrel:	srcdir
+	-mkdir $(RELDIR)/src/RCS
 	@for f in $(PACKINGLIST); \
 	do \
-		cp RCS/$$f,v release/src/RCS/$$f,v; \
+		cp RCS/$$f,v $(RELDIR)/src/RCS/$$f,v; \
 	done
-	chmod -R a-w release
-	chmod -R g-w release
-	chmod -R u+w release
+	chmod -R a-w $(RELDIR)
+	chmod -R g-w $(RELDIR)
+	chmod -R u+w $(RELDIR)
+
+inst:	binrel docrel
 
 bin:	binrel
-	cd release && tar cvf $(CWD)/$(PRODUCT).bin.tar ./*
+	cd $(RELDIR) && tar cvf $(CWD)/$(PRODUCT).bin.tar ./*
 	cd $(CWD) && gzip $(PRODUCT).bin.tar && \
 	mv $(PRODUCT).bin.tar.gz $(PRODUCT).$(BINTAG).bin.tgz
 
 doc:	docrel
-	cd release && tar cvf $(CWD)/$(PRODUCT).doc.tar ./*
+	cd $(RELDIR) && tar cvf $(CWD)/$(PRODUCT).doc.tar ./*
 	cd $(CWD) && gzip $(PRODUCT).doc.tar && \
 	mv $(PRODUCT).doc.tar.gz $(PRODUCT).doc.tgz
 
-src:	srcrel
-	cd release && tar cvf $(CWD)/$(PRODUCT).src.tar ./*
+src:	rcsrel
+	cd $(RELDIR) && tar cvf $(CWD)/$(PRODUCT).src.tar ./*
 	cd $(CWD) && gzip $(PRODUCT).src.tar && \
 	mv $(PRODUCT).src.tar.gz $(PRODUCT).src.tgz
+
+srcrel: srcdir $(DISTPACKINGLIST)
+	echo $(DISTPACKINGLIST)
+	@for f in $(DISTPACKINGLIST); \
+	do \
+		cp $$f $(RELDIR)/src/$$f; \
+	done
+	echo $(VERSION) > $(RELDIR)/src/version
+	chmod -R a-w $(RELDIR)
+	chmod -R g-w $(RELDIR)
+	chmod -R u+w $(RELDIR)
 
 ######################################################################
 #
