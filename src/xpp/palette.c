@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.21 2004/08/04 20:32:22 rda Exp rda $ 
+ * $Id: palette.c,v 2.22 2004/08/06 15:20:36 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -98,8 +98,6 @@ void popup_palette(Widget w)
 		XmNtopAttachment,	XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_FORM,
 		XmNrightAttachment,	XmATTACH_FORM,
-		XmNbottomAttachment,	XmATTACH_POSITION,
-		XmNbottomPosition,	16,
 		XmNautoUnmanage,	False,
 		NULL);
 
@@ -141,8 +139,8 @@ void popup_palette(Widget w)
 	dismiss_btn = XtVaCreateManagedWidget("dismiss",
 		xmPushButtonWidgetClass,	outer_form,
 		XmNlabelString,		lab,
-		XmNtopAttachment,		XmATTACH_POSITION,
-		XmNtopPosition,		16,
+		XmNtopAttachment,		XmATTACH_WIDGET,
+		XmNtopWidget,		inner_form,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNleftPosition,		2,
@@ -160,8 +158,8 @@ void popup_palette(Widget w)
 	help_btn = XtVaCreateManagedWidget("help",
 		xmPushButtonWidgetClass,	outer_form,
 		XmNlabelString,		lab,
-		XmNtopAttachment,		XmATTACH_POSITION,
-		XmNtopPosition,		16,
+		XmNtopAttachment,		XmATTACH_WIDGET,
+		XmNtopWidget,		inner_form,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNleftPosition,		11,
