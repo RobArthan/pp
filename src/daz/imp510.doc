@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% $Header: /home/rda/daz/RCS/imp510.doc,v 1.128 2003/05/27 16:14:24 rda Exp rda $
+% $Header: /home/rda/daz/RCS/imp510.doc,v 1.129 2003/06/18 16:33:50 rda Exp rda $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: SPARK Output Function}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP510}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.128 $%
+\def\SCCSversion{$Revision: 1.129 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2003/05/27 16:14:24 $%
+\TPPdate{\FormatDate{$Date: 2003/06/18 16:33:50 $%
 }}
 \TPPstatus{Draft}	    %% Mandatory field
 \TPPtype{Specification}
@@ -208,6 +208,8 @@ syntax without doing any output.
 \item[Issue 1.127] R0092: improved generality of the pretty-printing API.
 \item[Issue 1.128] Fixed changes history.
 \item[Issue 1.129] R0096: improved formatting of nothing statement form in web clauses
+\item[Issue 1.130] When formatting web clauses, Compliance Notation reserved words
+used as identifiers are now escaped with a dollar sign (as required if they are to be reparsed).
 \end{description}
 
 \subsection{Changes Forecast}
@@ -234,7 +236,7 @@ The functions in this signature depend on the data types introduced in the struc
 =SML
 structure ÛCNSparkOutputÝ : CNSparkOutput = struct
 =SML
-    open    CNTypes CNTypes1 CNZGenerator;
+    open    CNTypes CNTypes1 CNZGenerator CNLex;
 =TEX
 
 \subsection{Version Differences}
@@ -478,23 +480,32 @@ fun Ûfmt_warningsÝ ({outf, ...}: PP_FMT_INFO) : unit = (
 );
 =TEX
 \subsection{The String from Identifiers}
-We need this for both bracket tests and actual output, so
+We need a function to convert an identifier into its external
+form for both bracket tests and actual output, so
 it is given here, in isolation.
+The plus in the name refers to the third argument, $s$, which is either empty or a punctuation
+symbol like a comma that we want to ensure is printed on the same line as the identifier.
 =SML
-fun Ûsfmt_id_plusÝ  ({outf,...} : PP_FMT_INFO) (n : ID) (s : string): string  = (
-	let	fun break_up acc (lhs, "o"::rest) = (
+fun Ûsfmt_id_plusÝ  ({outf, fmt_repl} : PP_FMT_INFO) (n : ID) (s : string): string  = (
+	let	val externalise = case fmt_repl of
+			Value _ =>  CaseIndependence.get_external_name
+		|	Nil => (fn str =>
+				if	str mem cn_reserved_words
+				then	"$" ^ CaseIndependence.get_external_name str
+				else	CaseIndependence.get_external_name str);
+		fun break_up acc (lhs, "o"::rest) = (
 			break_up ((implode o rev) lhs::acc) ([], rest)
 		) | break_up acc (lhs, (c::rest)) = (
 			break_up acc (c::lhs, rest)
 		) | break_up acc (lhs, []) = (
 			(implode o rev) lhs::acc, ([], [])
 		);
-		val comps = (	map CaseIndependence.get_external_name o rev
+		val comps = (	map externalise o rev
 				o fst o (break_up [])) ([], explode n);
 		fun fmt_aux (a::b::rest) = (
 			a^"."^fmt_aux (b::rest)
-		) | fmt_aux (a::rest) = a ^ CaseIndependence.get_external_name s
-		| fmt_aux [] = CaseIndependence.get_external_name s;
+		) | fmt_aux (a::rest) = a ^ s
+		| fmt_aux [] = s;
 	in
 		fmt_aux comps
 	end
@@ -796,9 +807,19 @@ in
 	else (map (fn s => (outf("\n"); outf(s))) (tl strs);
 		())
 end);
-
-fun Ûfmt_labelÝ ({outf,...} : PP_FMT_INFO) (label : LABEL) = 
-	outf (translate_for_output("("^label^")"));
+=TEX
+Internally generated labels begin with an underscore. We arrange to comment these
+out. This may need a newline to be added depending on the context.
+=SML
+fun Ûfmt_labelÝ ({outf,...} : PP_FMT_INFO) (eoln : bool) (label : LABEL) = (
+	if	case explode label of
+			"_" :: _ => true
+		|	x :: more => "0" <= x andalso x <= "9" andalso any more (fn c => c = "_")
+	then	if	eoln
+		then	outf (translate_for_output("-- ("^label^")\n"))
+		else	outf (translate_for_output("-- ("^label^")"))
+	else	outf (translate_for_output("("^label^")"))
+);
 
 fun Ûfmt_unary_opÝ ({outf,...} : PP_FMT_INFO) (UOSparkUnaryAdd : UNARY_OP) = outf "+"
   | fmt_unary_op ({outf,...} : PP_FMT_INFO) (UOSparkUnaryMinus : UNARY_OP) = outf "-"
@@ -1263,11 +1284,10 @@ fun Ûfmt_specÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
 		|   out_frame (zn::zns) = (out_frame [zn]; outf ","; out_frame zns);
 	in	outf (translate_for_output (if is_assertion then "‡" else "„"));
 		out_frame w;
-		outf "[";
+		outf(if is_assertion then "{" else "[");
 		(fmt_z_tm fmtinfo pre);
-		outf ",";
-		(fmt_z_tm fmtinfo post);
-		outf "]"
+		if is_assertion then () else (outf ","; fmt_z_tm fmtinfo post);
+		outf (if is_assertion then "}" else "]")
 	end
 );
 
@@ -1311,9 +1331,8 @@ in strings print correctly.
 =SML
 fun Ûfmt_replaced_by_arbitrary_adaÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({label, replacement} : REPLACED_BY_ARBITRARY_ADA ) = (
-	(fmt_label fmtinfo label);
-	outf (translate_for_output "!é");
-	outf replacement;
+	(fmt_label fmtinfo true label);
+	outf (translate_for_output "!é" ^ replacement);
 	outf "\n"
 );
 =TEX
@@ -1327,7 +1346,7 @@ fun Ûfmt_annÝ (fmtinfo as {outf,fmt_repl} : PP_FMT_INFO)
     case fmt_repl of
     Value f => (f outf label; ())
     | Nil => (outf (translate_for_output ("§ " ^ content^" ¢    "));
-	(fmt_label fmtinfo label);
+	(fmt_label fmtinfo false label);
 	outf "\n"
     )
 ) |   fmt_ann (fmtinfo as {outf,fmt_repl} : PP_FMT_INFO) (ANString ann) = (
@@ -1339,27 +1358,19 @@ fun Ûfmt_annÝ (fmtinfo as {outf,fmt_repl} : PP_FMT_INFO)
 fun Ûfmt_annotationÝ (fmtinfo : PP_FMT_INFO) (anns: ANNOTATION) = (
 	(map (fmt_ann fmtinfo) anns; ())
 );
-=TEX
-=SML
-fun Ûfmt_expansionÝ (fmtinfo as {fmt_repl, outf} : PP_FMT_INFO)
-	(label : LABEL) : unit = (
-	case fmt_repl of
-		Nil => ()
-	|	Value f => (f outf label; ())
-);
 =IGN
 =TEX
 =SML
 fun Ûfmt_spec_no_ivarsÝ (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO) (s as
 		{spec, label, is_assertion} : SPEC_NO_IVARS) = (
 	if	(case fmt_repl of
-			Value f => (f outf label) orelse is_assertion
+			Value f =>  is_assertion orelse (f outf label)
 		|	Nil => false)
 	then	()
 	else	(
 		fmt_spec fmtinfo (is_assertion, spec);
 		outf "    ";
-		(fmt_label fmtinfo label);
+		(fmt_label fmtinfo false label);
 		outf "\n"
 	)
 );
@@ -1422,7 +1433,7 @@ fun Ûfmt_k_slotÝ (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO) ({content, label} :
 	outf "§";
 	outf (translate_for_output content);
 	outf " ¢   ";
-	(fmt_label fmtinfo label);
+	(fmt_label fmtinfo false label);
 	outf "\n"
 	)
 );
@@ -1752,7 +1763,7 @@ fun Ûfmt_log_conÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
 		outdefs defs;
 		outf "·";
 		(fmt_spec fmtinfo (false, s));
-		outf "    ";(fmt_label fmtinfo label);
+		outf "    ";(fmt_label fmtinfo false label);
 		outf "\n"
 	   end
 	)
@@ -2026,7 +2037,7 @@ fun Ûfmt_si_const_declÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
 fun Ûfmt_deferred_const_declÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({consts=c, tmark=t} : DEFERRED_CONST_DECL) = (
 	map check_decl c;
-	(fmt_id_list fmtinfo c); outf (kw": CONSTANT");
+	(fmt_id_list fmtinfo c); outf (": "^ kw"CONSTANT");
 	(fmt_tmark fmtinfo t); outf ";"; outf "\n"
 );
 =TEX
@@ -2916,7 +2927,7 @@ fun Ûfmt_statementÝ (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO) (STNull snt : ST
 		SNNull => (
 		outf (kw"NULL"^";"); outf "\n";
 		fmt_warnings fmtinfo
-	) |	SNImplicitNull => (
+	) |	SNImplicit => (
 		()
 	) |	SNNothing => (
 		case fmt_repl of
@@ -3145,35 +3156,35 @@ fun Ûfmt_kslot_compilation_unit_listÝ (fmtinfo : PP_FMT_INFO)
 =SML
 fun Ûfmt_replaced_by_compÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({label=l, comp=c} : REPLACED_BY_COMP) =
-    (fmt_label fmtinfo l; outf (translate_for_output "é"); outf "\n";
+    (fmt_label fmtinfo true l; outf (translate_for_output "é"); outf "\n";
     inc_tabs();  
 	fmt_kslot_compilation_unit_list fmtinfo c;
     dec_tabs());
 fun Ûfmt_replaced_by_private_partÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({label=l, private=p} : REPLACED_BY_PRIVATE_PART) =
-    (fmt_label fmtinfo l; outf (translate_for_output "é"); outf "\n";
+    (fmt_label fmtinfo true l; outf (translate_for_output "é"); outf "\n";
 	inc_tabs();
 		fmt_declaration_list fmtinfo p;
 	dec_tabs());
 fun Ûfmt_replaced_by_visible_partÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({label=l, visible=v} : REPLACED_BY_VISIBLE_PART) =
-    (fmt_label fmtinfo l; outf (translate_for_output "é"); outf "\n";
+    (fmt_label fmtinfo true l; outf (translate_for_output "é"); outf "\n";
 	inc_tabs(); fmt_declaration_list fmtinfo v; dec_tabs());
 fun Ûfmt_replaced_by_declÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({label=l, decls=d} : REPLACED_BY_DECL) =
-    (fmt_label fmtinfo l; outf (translate_for_output "é"); outf "\n";
+    (fmt_label fmtinfo true l; outf (translate_for_output "é"); outf "\n";
 	inc_tabs(); fmt_declaration_list  fmtinfo d; dec_tabs());
 fun Ûfmt_refined_byÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({label=l, statement=s} : REFINED_BY) =
-	(fmt_label fmtinfo l; outf (translate_for_output "Ã");
+	(fmt_label fmtinfo true l; outf (translate_for_output "Ã");
 	outf "\n"; inc_tabs();fmt_statement fmtinfo s; dec_tabs());
 fun Ûfmt_replaced_byÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({label=l, statement=s} : REFINED_BY) =
-    (fmt_label fmtinfo l; outf (translate_for_output "!Ã"); outf "\n";
+    (fmt_label fmtinfo true l; outf (translate_for_output "!Ã"); outf "\n";
 	inc_tabs();fmt_statement fmtinfo s; dec_tabs());
 fun Ûfmt_replaced_by_annotationÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({label=l, replacement=a} : REPLACED_BY_ANNOTATION) =
-    (fmt_label fmtinfo l; outf (translate_for_output "é"); outf "\n";
+    (fmt_label fmtinfo true l; outf (translate_for_output "é"); outf "\n";
 	inc_tabs(); fmt_annotation fmtinfo a; dec_tabs());
 =TEX
 
@@ -3349,7 +3360,7 @@ in
 		outf "\n"; false
 	)
     ) |    Nil =>    (
-		outf ("-- Unrecognised label: " ^
+		outf ("-- unrecognised label: " ^
 			 translate_for_output label);
 		outf "\n"; false
 	)  
