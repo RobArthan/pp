@@ -33,7 +33,7 @@ lasp -s -u imp032.OKwords imp032.doc > zz1
 
 =TEX
 \TPPstatus{Draft}			%% Mandatory field
-\TPPtype{Standard}
+\TPPtype{SML Literate Script}
 \TPPkeywords{HOL}
 \TPPauthor{A.J. Hammon & WIN01}  %% Mandatory field
 \TPPauthorisation{R.D.~Arthan & FST Team Leader}
@@ -106,6 +106,12 @@ lasp -s -u imp032.OKwords imp032.doc > zz1
 	Renaming of objects from~\cite{DS/FMU/IED/DTD031}.
 	Extra arguments for some functions to give better handling of
 		aliases, constants and variables.
+	Properly handle constants and variables as arguments to functions.
+
+\item[\FormatDate{91/09/11}, issue 1.10 ]
+	Change $HOL_do_app$ to properly handle constants and variables
+	as arguments to functions.
+	Changes for ID0054.
 
 %\item[\FormatDate{$Date$%
 %}, issue \SCCSissue~]
@@ -151,6 +157,7 @@ section~\ref{PrintingIdentifiers}.
 
 This document contains the HOL pretty printing routines
 for Release~1 of the ICL HOL system.
+These routines are specified in the detailed design~\cite{DS/FMU/IED/DTD032}.
 
 %********************************************************************
 
@@ -212,7 +219,7 @@ The HOL printing functions are contained in a structure.  All of the
 definitions of the main pretty printer are made available.
 
 =SML
-structure HOLPrettyPrinter : HOLPrettyPrinter = struct
+structure âHOLPrettyPrinterá : HOLPrettyPrinter = struct
 
 open PrettyPrinterSupport;
 infix gt_prec;
@@ -227,13 +234,13 @@ the numeric values based $PcNormal$ and $PcVeryLow$ to make the
 allocation of HOL precedences easier to understand.
 
 =SML
-val âpc_h_post_typeá			= PcNormal(60, 0, false);
-val âpc_h_apply_firstá			= PcNormal(50, 0, false);
-val âpc_h_apply_laterá		= PcNormal(50, 0, true);
-fun âpc_h_operá(op_prec, assoc)	= PcNormal(40, op_prec, assoc);
-val âpc_h_if_let_bindá			= PcNormal(30, 0, false);
-val âpc_h_if_let_bind_lastá		= PcNormal(20, 0, false);
-val âpc_h_typingá			= PcNormal(10, 0, false);
+val âpc_h_post_typeá			: PREC_CONTEXT = PcNormal(60, 0, false);
+val âpc_h_apply_firstá			: PREC_CONTEXT = PcNormal(50, 0, false);
+val âpc_h_apply_laterá		: PREC_CONTEXT = PcNormal(50, 0, true);
+fun âpc_h_operá(op_prec, assoc)	: PREC_CONTEXT = PcNormal(40, op_prec, assoc);
+val âpc_h_if_let_bindá			: PREC_CONTEXT = PcNormal(30, 0, false);
+val âpc_h_if_let_bind_lastá		: PREC_CONTEXT = PcNormal(20, 0, false);
+val âpc_h_typingá			: PREC_CONTEXT = PcNormal(10, 0, false);
 =TEX
 
 %********************************************************************
@@ -349,7 +356,7 @@ end
 \subsection{Variables and Constants}
 
 =SML
-fun âdo_var_constá (cur_env:PP_ENV) (name:string) (ty:TYPE) = (
+fun âdo_var_constá (cur_env:PP_ENV) (name:string) (ty:TYPE) : unit = (
 let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
@@ -371,7 +378,7 @@ end
 =TEX
 
 =SML
-fun âHOL_do_vará (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE) =
+fun âHOL_do_vará (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE) : unit =
 	do_var_const cur_env name ty;
 =TEX
 
@@ -379,7 +386,7 @@ HOL constants representing strings and character literals include
 the leading quote character.
 
 =SML
-fun âHOL_do_constá (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE) = (
+fun âHOL_do_constá (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE) : unit = (
 let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
@@ -404,7 +411,7 @@ end
 \newpage
 \subsection{Applications}
 
-These applications of the function $head_fn$ to a list
+These are applications of the function $head_fn$ to a list
 of arguments in $args$ which may be empty.  Function application is
 left associative, thus the brackets may be omitted in the HOL fragment
 ``$((f\;\;a)\;\;b)\;\;c$''.  {} Value $pc_h_apply_first$ is already set
@@ -426,7 +433,7 @@ to be output for each argument before outputting any of the arguments
 and one closing bracket after each argument.
 
 =SML
-fun âHOL_do_appá (cur_env:PP_ENV) (head_fn:TERM) (args:TERM list) = (
+fun âHOL_do_appá (cur_env:PP_ENV) (head_fn:TERM) (args:TERM list) : unit = (
 let
 	val PpEnv{pe_prec=prec, pe_lang=cur_lang, pe_addstring=addstring,
 		pe_space=space, pe_beginb=beginb, pe_endb=endb, pe_const=do_const,
@@ -434,26 +441,29 @@ let
 
 	val br = prec gt_prec pc_h_apply_later;
 
-	fun print_it p tm = (
-	let
-		val new_env = set_prec p cur_env;
-	in
+	val head_env = set_prec pc_h_apply_first cur_env;
+
+	fun print_head tm = (
 		case  dest_simple_term tm
-		of	Var(str, ty) =>	do_var new_env tm str ty
-		|	Const(str, ty) =>	do_const new_env tm str ty
-		|	_  =>			main_term_pp new_env tm
-	end
+		of	Var(str, ty) =>	do_var head_env tm str ty
+		|	Const(str, ty) =>	do_const head_env tm str ty
+		|	_  =>			main_term_pp head_env tm
 	);
 in
 	case args
-	of nil =>	print_it pc_h_apply_first head_fn
-	| _ => (		beginb(0, false);
-			if br then (addstring "("; (*=)=*) beginb(2, true)) else ();
-			print_it pc_h_apply_first head_fn;
-			map (fn t => (space(1, 0); print_it pc_h_apply_later t)) args;
-			if br then (endb(); (*=(=*) addstring ")") else ();
-			endb()
-		)
+	of nil =>	print_head head_fn
+	| _ => 		let
+				val arg_env = set_prec pc_h_apply_later cur_env;
+
+				fun print_arg tm = main_term_pp arg_env tm;
+			in
+				beginb(0, false);
+				if br then (addstring "("; (*=)=*) beginb(2, true)) else ();
+				print_head head_fn;
+				map (fn t => (space(1, 0); print_arg t)) args;
+				if br then (endb(); (*=(=*) addstring ")") else ();
+				endb()
+			end
 end
 );
 =TEX
@@ -497,7 +507,7 @@ Function $group_declarations$ takes a list of declarations and finds
 the groups of declarations that have the same type.
 
 =SML
-fun group_declarations (nil:TERM list) : (TERM list * TYPE) list = nil
+fun âgroup_declarationsá (nil:TERM list) : (TERM list * TYPE) list = nil
 | group_declarations (head::rest) = (
 let
 	val head_ty = type_of head;
@@ -563,7 +573,7 @@ end
 =TEX
 
 =SML
-fun âHOL_do_á (cur_env:PP_ENV) tm1 tm2 = (
+fun âHOL_do_á (cur_env:PP_ENV) (tm1:TERM) (tm2:TERM) : unit = (
 let
 	val (l_decls, l_body) = strip_(mk_(tm1, tm2));
 in
@@ -647,7 +657,8 @@ Lists are self bracketing, they never need enclosing in round brackets,
 so there is no test of precedences.
 
 =SML
-fun âprint_list_or_setá (cur_env:PP_ENV) (opener:string) (body:TERM list) (closer:string) = (
+fun âprint_list_or_setá (cur_env:PP_ENV) (opener:string) (body:TERM list)
+			(closer:string) : PFUN_ANS = (
 let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
@@ -841,7 +852,7 @@ end
 =TEX
 
 =SML
-fun âprint_definerá (cur_env:PP_ENV) let_clause = (
+fun âprint_definerá (cur_env:PP_ENV) (let_clause : TERM list) : unit = (
 let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
@@ -864,7 +875,7 @@ end
 =TEX
 
 =SML
-fun âprint_list_of_letsá (cur_env:PP_ENV) (let_clauses, tm) = (
+fun âprint_list_of_letsá (cur_env:PP_ENV) (let_clauses : TERM list list, tm : TERM) : unit = (
 	case let_clauses
 	of nil => main_term_pp (set_prec pc_h_if_let_bind_last cur_env) tm
 	| first::rest => (
