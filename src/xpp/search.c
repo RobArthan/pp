@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.18 2003/02/07 17:07:22 rda Exp rda $ 
+ * $Id: search.c,v 2.19 2003/02/08 18:12:27 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -52,6 +52,16 @@ typedef struct {
 	long int	offset;
 	long int	length;
 } Substring;
+/*
+ * The following type represents the results of "compiling" a search pattern
+ * for use in the Boyer-Moore string search algorithm used when regular
+ * expression matching is turned off.
+ */
+typedef struct {
+	long int	index[256];
+	long int	length; /* of the search pattern */
+	char	pattern[0];
+} bm_search_t;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * messages
@@ -971,54 +981,102 @@ static void goto_line_no_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * actually doing the work:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+/*
+ * Pre-processing for the Boyer-Moore search algorithm.
+ * The memory allocation here is relying on long int being
+ * at least as aligned as char.
+ */
 
+static bm_search_t *bm_search_comp(char *pattern)
+{
+	long int len = strlen(pattern);
+	int i;
+	bm_search_t *bm;
+	bm = (bm_search_t *) XtMalloc(sizeof(bm_search_t) + len + 1);
+	if(bm == 0) { /* malloc failed */
+		return bm;
+	}
+	for(i = 0; i < 256; ++i) {
+		(bm->index)[i] = -1;
+	}
+	for(i = len - 1; i >= 0; --i) {
+		if( (bm->index)[pattern[i]] == -1 ) {
+			(bm->index)[pattern[i]] = i;
+		}
+	}
+	bm->length = len;
+	strcpy(&(bm->pattern)[0], pattern);
+	if(global_options.ignore_case) {
+		for(i = 0; i < len; ++i) {
+			(bm->pattern)[i]= toupper((bm->pattern)[i]);
+		}
+	}
+	return bm;
+}
+/*
+ * The Boyer-Moore search algorithm:
+ */
+static Substring bm_search(bm_search_t *bm, char *text)
+{
+	int cursor, i, next;
+	Substring result;
+	result.offset = -1; /* assume no match until we get one */
+	if(bm->length == 0) {
+		return result;
+	}
+	cursor = 0;
+	i = bm->length - 1;
+	while(i >= 0 && text[cursor]) {
+		char ch = global_options.ignore_case ? toupper(text[cursor+i]) : text[cursor+i];
+		if(ch == (bm->pattern)[i]) { /* possible match at cursor */
+			i -= 1;
+		} else { /* no match at cursor; slide up according to index value: */
+			next = cursor + i - (bm->index)[text[cursor+i]];
+			cursor += 1;
+			while(text[cursor] && cursor < next) {
+				cursor += 1;
+			}
+			i = bm->length - 1;
+		}
+	}
+	if(i < 0) { /* match at cursor */
+		result.offset = cursor;
+		result.length = bm->length;
+	}
+	return result;
+}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * search_forwards: search a substring matching a pattern
  * in a string. If pattern is 0, then use the pattern
  * from the previous call, if any.  If the text to be
  * searched is 0, just set up static data for future use.
- * If both are 0, it will reset static data.
+ * If both are 0, it will reset static data and free any malloced space.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static Substring search_forwards(
 	char		*pattern,
-	char		*to_search)
+	char		*text)
 {
-	long int len;
-	static char *last_pattern = 0;
-	char *s;
+	static bm_search_t  *last_bm = 0;
+	bm_search_t * bm;
 	Substring result;
 	if(pattern == 0) {
-		pattern = last_pattern;
+		bm = last_bm;
 	} else {
-		last_pattern = pattern;
-	}
-	if(pattern == 0 || to_search == 0) {
-		result.offset = -1;
-		return result;
-	}
-	len = strlen(pattern);
-	for(s = to_search; *s; ++s) {
-		if(global_options.ignore_case) {
-			char *p = pattern;
-			char *t = s;
-			while (*p && *t && toupper(*p) == toupper(*t)) {
-				p += 1;
-				t += 1;
-			}
-			if(*p == '\0') {
-				result.offset = s - to_search;
-				result.length = len;
-				return result;
-			}				
-		} else {
-			if(strncmp(pattern, s, len) == 0) {
-				result.offset = s - to_search;
-				result.length = len;
-				return result;
-			}
+		if(last_bm != 0) {
+ 			XtFree((char*)last_bm);
 		}
+		last_bm = bm = bm_search_comp(pattern);
 	}
-	result.offset = -1;
+	if(pattern == 0 && text == 0) {
+		if(last_bm != 0) {
+			XtFree((char*)last_bm);
+		}
+		last_bm = 0;
+	} else if (text == 0 || bm == 0) {
+		result.offset = -1;
+	} else {
+		result = bm_search(bm, text);
+	}
 	return result;
 }
 
@@ -1032,7 +1090,7 @@ static Substring search_string(
 	long int 	start_point,
 	NAT		direction)
 {
-	Substring ss;;
+	Substring ss;
 	if(direction == FORWARDS) {
 		ss = search_forwards(pattern, text_buf + start_point);
 		if(ss.offset < 0) {
@@ -1040,30 +1098,29 @@ static Substring search_string(
 		} else {
 			ss.offset += start_point;
 		}
-		return ss;
 	} else { /* Do binary chop to search backwards: */
 		int upb, i;
 		Substring t;
 		ss = search_forwards(pattern, text_buf);
-		if(ss.offset < 0) {
-			return ss;
-		}
-		if(ss.offset < start_point) {
-			upb = start_point;
-		} else {
-			upb = strlen(text_buf);
-		}
-		for(i = (upb - ss.offset) / 2; i > 0; i = (upb - ss.offset) / 2) {
-			t = search_forwards(0, text_buf + ss.offset + i);
-			if(t.offset >= 0 && t.offset + ss.offset + i <  upb) {
-				ss.offset = t.offset + ss.offset + i;
-				ss.length = t.length;
+		if(ss.offset >=  0) {
+			if(ss.offset < start_point) {
+				upb = start_point;
 			} else {
-				upb = ss.offset + i;
+				upb = strlen(text_buf);
+			}
+			for(i = (upb - ss.offset) / 2; i > 0; i = (upb - ss.offset) / 2) {
+				t = search_forwards(0, text_buf + ss.offset + i);
+				if(t.offset >= 0 && t.offset + ss.offset + i <  upb) {
+					ss.offset = t.offset + ss.offset + i;
+					ss.length = t.length;
+				} else {
+					upb = ss.offset + i;
+				}
 			}
 		}
-		return ss;
 	}
+	search_forwards(0, 0);
+	return ss;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1097,6 +1154,7 @@ static void replace_all(
 		}
 	}
 	if((*result = XtMalloc(text_buf_len + extra + 1)) == NULL) {
+		search_forwards(0, 0);
 		return;
 	}
 	p = text_buf;
@@ -1123,6 +1181,7 @@ static void replace_all(
 	}
 	*q = '\0'; /* in case last match reached to end of text_buf */
 	*start_point = sp - *result;
+	search_forwards(0, 0);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
