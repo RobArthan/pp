@@ -165,10 +165,15 @@ lasp -s -u imp005.OKwords imp005.doc > zz1
 \item[Issue 2.16]
 	Remedied omission of `infty'.
 
-\item[Issue \SCCSissue]
+\item[Issue 2.18]
 	Fixed bug which meant that specific readers were only recognised
 	if the extended character rather than the keyword was used.
 
+\item[Issue 2.19]
+	Changed to cope with version 3.0.1 of PolyML. Particular changes are:
+	that Ctrl-D is no longer appropriate as an end of file marker - reading
+	the empty string is the proper marker;
+	that extended characters may not be sent to PolyML.compiler.
 \end{description}
 
 %********************************************************************
@@ -931,14 +936,15 @@ The routines are placed in a record which is passed through the various
 routines of the lexical analyser.  The record, with the Standard~ML
 type name $READER_ENV$, is declared in section~\ref{DeclareReaderEnv}.
 
-Associated with the reader functions is the exception $EndOfInput$
+Associated with the reader functions is the exception $TooManyReadEmpties$
 which is raised when the parser has read the end of the file and
-has passed the end of file character at least once to the \Compiler.
-Raising this exception signifies that nothing more can usefully be
-done with the current input stream.
+has passed the end of file character at least 100 times to the \Compiler.
+Raising this exception signifies that the PolyML.conmpiler function has failed 
+to stop reading on being given an empty string (it may try more than once),
+and probably a Design Error.
 
 =SMLPLAIN SML
-exception €EndOfInput›;
+exception €TooManyReadEmpties›;
 =TEX
 
 %--------------------------------------------------------------------
@@ -973,7 +979,7 @@ let
 					then	()
 					else	aux false (depth-1))
 				else	aux false depth
-		|  "\^D" =>	fail "skip_comment" 5001 nil
+		|  "" =>	fail "skip_comment" 5001 nil
 		|  _   =>	aux true depth
 	)
 in
@@ -1085,6 +1091,7 @@ datatype €SYMBOL›
 						* bool (* true => has closing percent *)
 	|	€SymUnknownChar›	of	string
 	|	€SymDoublePercent›
+	|	€SymEndOfInput›
 	;
 =TEX
 
@@ -1112,7 +1119,8 @@ The meanings of the constructors of this type are as follows.
 \ITEM{SymDoublePercent} Two adjacent percent signs were found.
 
 \ITEM{SymCharacter} A single character that is not covered by the above
-	was found.  The character value is less than decimal~128.
+	was found.  The character value is less than decimal~128. 
+\ITEM{SymEndOfInput} End of Input seen.
 
 \end{description}
 
@@ -1141,8 +1149,9 @@ in
 			)
 	else	if is_white next
 		then	formatters next
-		else
-			let
+		else if next =""
+		     then SymEndOfInput
+		     else let
 				val ch = #advance R ();
 				val ord_ch = ord ch
 			in
@@ -1161,12 +1170,13 @@ The textual form of a symbol is wanted for some purposes.
 =SMLPLAIN SML
 fun	€expand_symbol›((SymCharacter ch):SYMBOL) : string	= ch
 |	expand_symbol(SymWhite wh)				= implode(rev wh)
-|	expand_symbol(SymKnown(sym, true, info))			= "%" ^ sym ^ "%"
-|	expand_symbol(SymKnown(sym, false, info))			= sym
-|	expand_symbol(SymUnknownKw(sym, true))			= "%" ^ sym ^ "%"
+|	expand_symbol(SymKnown(sym, true, info))		= "%" ^ sym ^ "%"
+|	expand_symbol(SymKnown(sym, false, info))		= sym
+|	expand_symbol(SymUnknownKw(sym, true))		= "%" ^ sym ^ "%"
 |	expand_symbol(SymUnknownKw(sym, false))		= "%" ^ sym
 |	expand_symbol(SymUnknownChar ch)			= ch
-|	expand_symbol(SymDoublePercent)				= "%%"
+|	expand_symbol(SymDoublePercent)			= "%%"
+|	expand_symbol(SymEndOfInput)				= ""
 ;
 =TEX
 
@@ -1222,7 +1232,7 @@ let
 	fun skip_format_chars (prev:string) : string = (
 		case #skip_and_look_at_next R ()
 		of "\\"		=> (#advance R (); prev)
-		|  "\^D"	=> prev
+		|  ""		=> prev
 		|  s		=> skip_format_chars (
 			if is_white s
 			then	prev
@@ -1281,12 +1291,12 @@ fun €string_body› (ML_string:bool) (R:READER_ENV) (prev:string list, preverrs:in
 		| "`" =>	if ML_string
 				then	string_body ML_string R ("`"::prev, preverrs)
 				else	("\"" (*="=*) :: prev, preverrs)
-		|  "\^D" =>	fail "string_body" 5002 nil
 		|  "\\"	=>	string_body ML_string R
 					((handle_escape ML_string R) :: prev, preverrs)
 		|  "Q" =>	string_body ML_string R ("QQQQ"::prev, preverrs)
 		|  _ =>		string_body ML_string R (ch::prev, preverrs)
 		)
+	| SymEndOfInput => fail "string_body" 5002 nil
 	| SymDoublePercent => string_body ML_string R ("%" :: prev, preverrs)
 	| SymWhite wh => (	if contains wh "\n"
 				then
@@ -1402,15 +1412,15 @@ let
 				in
 					if next = term
 					then	(#advance R ()) :: prev2
-					else if next = "\^D"
-					then	"\^D" :: prev2
+					else if next = ""
+					then	prev2
 					else (	local_error "get_braces" 5008 [
 							fn () => next, fn () => first];
 						(if contains ["]", "}", ")"] next
 						then [#advance R ()]
 						else nil) @ (add_error_code(5008, prev2)))
 				end
-		| ["\^D"] =>	(#advance R ()) :: prev2
+		| [""] =>	(#advance R ()) :: prev2
 		| new =>	more(new @ prev2)
 	)
 in
@@ -1463,7 +1473,7 @@ in
 	of (*=(=*)	")"	=>	prev
 	|  (*=[=*)	"]"	=>	prev
 	|  (*={=*)	"}"	=>	prev
-	|  		"\^D"	=>	prev
+	|  		""	=>	prev
 	| 		_ => (
 		case read_symbol R
 		of	SymCharacter ch => (
@@ -1485,6 +1495,7 @@ in
 				|  "Q"	=>	get_ML_any R ("QQQQ" :: prev)
 				| _ =>		get_ML_any R (ch :: prev)
 			)
+		|	SymEndOfInput => prev (* shouldn't see this??? *)
 		|	SymWhite _ => get_ML_any R (" " :: prev)
 		|	SymDoublePercent => get_ML_any R ("%%" :: prev)
 		|	SymKnown(sym, is_keyword, info) =>
@@ -1898,10 +1909,9 @@ let
 	fun read (depth:int) (prev_errs:int list) : int list = (
 		case read_symbol R
 		of	SymCharacter ch => (
-				case ch
-				of "\^D" => fail "ReaderWriter" 5030 []
-				| ch => read depth prev_errs
+				 read depth prev_errs
 			)
+		|	SymEndOfInput => fail "ReaderWriter" 5030 []
 		|	SymWhite _ => read depth prev_errs
 		|	SymKnown(_, _, (_, _, info)) => (
 				case info
@@ -2089,11 +2099,8 @@ let
 	fun get_name (prev:string list) : string list = (
 		case read_symbol R
 		of	SymWhite _ => prev
-		|	SymCharacter ch => (
-				case ch
-				of "\^D" => fail  "ReaderWriter" 5031 []
-				| _ => get_name (ch :: prev)
-			)
+		|	SymCharacter ch => get_name (ch :: prev)
+		|	SymEndOfInput => fail  "ReaderWriter" 5031 []
 		|	sym as SymKnown(_, _, (_, _, Starting _)) =>
 				(#push_back R (expand_symbol sym); prev)
 		|	sym as SymKnown(_, _, (_, _, Ending _)) =>
@@ -2226,11 +2233,8 @@ let
 	fun get_name (prev:string list) : string list = (
 		case read_symbol R
 		of	SymWhite _ => (skip_junk(); prev)
-		|	SymCharacter ch => (
-				case ch
-				of "\^D" => fail  "ReaderWriter" 5031 []
-				| _ => get_name (ch :: prev)
-			)
+		|	SymCharacter ch => get_name (ch :: prev)
+		|	SymEndOfInput => fail  "ReaderWriter" 5031 []
 		|	sym as SymKnown(_, _, (_, _, Starting _)) => (done sym; prev)
 		|	sym as SymKnown(_, _, (_, _, Ending _)) => (done sym; prev)
 		|	sym as SymKnown(_, _, (_, _, Middle _)) => (done sym; prev)
@@ -2373,14 +2377,14 @@ let
 	fun read prevC = (
 		case get_ML_any R nil
 		of nil => (	case read_symbol R
-				of	SymCharacter "\^D" =>
+				of	SymEndOfInput =>
 						fail "SML_reader" 5032 nil
 				|	SymKnown(sym, _, (_, _, Ending str)) =>
 						(*=[((=*)	"\"))" :: sym :: ", \"" :: str :: prevC
 				|	SymWhite _ => read (" " :: prevC)
 				|	sym => read ((expand_symbol sym) :: prevC)
 			)
-		| "\^D"::nil =>	fail "SML_reader" 5032 nil
+		| ""::nil =>	fail "SML_reader" 5032 nil
 		| x =>		read (x @ prevC)
 	);
 in
@@ -2502,7 +2506,7 @@ fun €logit› (flag:bool ref) (proc:string) (str:string) : string = (
 	then
 		(output(std_out, proc ^ "   " ^ (string_of_int(size str)) ^ "  <" ^
 			(	case str of "\n" => "\\n"
-				| "\^D" => "\\^D"
+				| "" => "<\"\">"
 				| x => x) ^ ">\n");
 		str)
 	else
@@ -2541,26 +2545,45 @@ and thus have been read past.
 Text that parsed successfully here must be converted in the correct
 order into a single string.
 
+We arbitarily decide that if more than 100 empty strings have been sent then 
+something is badly wrong.
+
+PolyML.compiler cannot take extended characters, and certain parts of the 
+Reader Writer leave them present (in particular brackets for grammars).
+Thus we apply $to\_ML\_string$ to the results of $get\_ML\_outermost$.
 =SMLPLAIN SML
 local (* for get_ML_outermost *)
 
 val €sent_eof› = ref false;
+val €empty_lines_sent› = ref 0;
 
 fun €get_ML› (R:READER_ENV) = (
 	case get_ML_any R nil
 	of nil =>	(
 		case read_symbol R
-		of	SymCharacter "\^D" =>
+		of	SymEndOfInput =>
 				if !sent_eof
-				then nil
-				else (sent_eof := true; ["\^D"])
+				then (empty_lines_sent := !empty_lines_sent + 1;
+					if !empty_lines_sent > 100
+					then raise TooManyReadEmpties
+					else nil)
+				else (sent_eof := true; 
+					empty_lines_sent := 0; 
+					[""])
 		|	sym => (sent_eof := false; [expand_symbol sym])
 		)
-	| "\^D"::nil =>	if !sent_eof
-				then	nil
-				else	(sent_eof := true; [#advance R ()])
+	| ""::nil =>	if !sent_eof
+				then	(empty_lines_sent := !empty_lines_sent + 1;
+					if !empty_lines_sent > 100
+					then raise TooManyReadEmpties
+					else nil)
+				else	(sent_eof := true; 
+					empty_lines_sent := 0;
+					[#advance R ()])
 	| x =>			(sent_eof := false; rev x)
 );
+	val ord_nl = ord "\n" and ord_tab = ord "\t"
+	and ord_ff = ord "\^L";
 =TEX
 
 =SMLPLAIN SML
@@ -2568,17 +2591,12 @@ in (* local for get_ML_outermost *)
 
 fun €get_ML_outermost› (R:READER_ENV) () : string = (
 	let
-		val ord_nl = ord "\n" and ord_tab = ord "\t"
-		and ord_ff = ord "\^L" and ord_eof = ord "\^D";
-
 		val text_read_list = get_ML R;
-		val text_read = implode text_read_list
+		val text_read = to_ML_string (implode text_read_list);
 	in
 		logit_list	RWphrases_read	"get_ML_outermost" text_read_list;
 		logit		RWtext_read		"get_ML_outermost" text_read;
-		if text_read = ""
-		then	raise EndOfInput
-		else	text_read
+		text_read (* for this to be "" get_ML should have set sent_eof *) 
 	end
 )
 
@@ -2601,7 +2619,7 @@ efficiently than this routine could remove them.
 
 %********************************************************************
 
-\subsection{PolyML Interface} \label{PolyML.compiler.example}
+\subsection{PolyML Interface} 
 
 The routine $PolyML.compiler$ is the interface to the
 read-evaluate-print loop of the PolyML system, it is a \Compiler{}
@@ -2654,52 +2672,12 @@ out of the loop, but first it should cause the parsing of any text just
 read, this allows the \Compiler{} to produce error messages for files
 which have incomplete {\em topdec\/}s, e.g., a file that ends with
 `{\tt let val x}' or a string without a closing double quote.
+get_ML_outermost reader
 
-As an example, a simple file inclusion facility could be written
-as follows.
-
-=GFT SML
-fun use_file (file:string) : unit = (
-let
-	val cur_in = open_in file;
-	val eof_char_sent = ref false;
-	exception E_eof;
-
-	fun reader () : string = (
-	let
-		val ch = input(cur_in, 1)
-	in
-		if ch = ""
-		then	if	!eof_char_sent
-			then	raise E_eof
-			else	(eof_char_sent := true; "\^D")
-		else	ch
-	end);
-
-	fun writer (s : string) : unit = output(std_out, s);
-
-	fun use_file_loop () = (
-		if (PolyML.compiler (reader, writer) (); true)
-					handle E_eof => false
-		then	use_file_loop ()
-		else	()
-	)
-in
-	use_file_loop ()
-		handle E => (
-			output(std_out,
-				"Exception, abandoning file "
-				^ file ^ "\n");
-			close_in cur_in;
-			raise E)
-	;
-	(* Only reach here after reading end-of-file *)
-	close_in cur_in
-end);
-=TEX
+An example followed here, but is now hopelessly out of date.
 
 The interface to ICL HOL provided by this document uses the
-$PolyML.compiler$ interface in a style based on the example above, the
+$PolyML.compiler$ interface the
 capabilities for handling pretty characters and producing prompts for
 interactive input are provided by using more complex $reader$ and
 $writer$ functions.
@@ -2774,14 +2752,17 @@ local}-clauses all provoke an error message.  This behaviour should be
 followed by the routines presented in this document.
 
 The three routines named above ($use\-\_terminal$, $use\-\_file$ and $use\-\_string$)
-will be written much as in the example in
-section~\ref{PolyML.compiler.example}, but with different reader and
+will be written in a similar style, but with different reader and
 writer functions.  Each function will set up its input stream, and then
 invoke $PolyML.compiler$ naming the appropriate reader and writer.  All
 of the reader functions will call $get_ML_outermost$ to read some text,
 this text will be returned to the \Compiler.  The reader functions must
 set up the input streams so that the various routines in structure $R$
 above are provided.
+To check whether the input stream is exhausted each of the loops calls its reader function once. If the result is an empty string then the stream is exhausted,
+and the loop should end.
+If not, the string is pushed back, and $PolyML.compiler$ called (which may call the reader many times).
+
 
 There are three areas that add complexity to the reading functions.
 First, keeping track of line and character numbers within the source
@@ -3005,8 +2986,7 @@ wrongly interpreted as end of input.
 =SMLPLAIN SML
 fun €screen_for_push_back› (chars:string) (prev:string list) : string list = (
 let
-	fun aux ("\^D"::t) prevA = aux t prevA
-	| aux (""::t) prevA = aux t prevA
+	fun aux (""::t) prevA = aux t prevA
 	| aux (h::t) prevA = aux t (h::prevA)
 	| aux nil prevA = prevA
 in
@@ -3060,9 +3040,9 @@ let
 	fun €f_advance› () : string = (
 		case read_char()
 		of "" =>	if !copies_of_char_sent > max_copies_of_char_sent
-				then	raise Read_too_often "\\^D"
+				then	raise Read_too_often "<\"\">"
 				else	(copies_of_char_sent := (!copies_of_char_sent + 1);
-					logit RWchars_read "f_advance              " "\^D")
+					logit RWchars_read "f_advance              " "")
 		|  "\n" => (	copies_of_char_sent := 0;
 				line_number := !line_number + 1 ;
 				logit RWchars_read "f_advance              " "\n")
@@ -3073,9 +3053,9 @@ let
 	fun €f_look_at_next› () = (
 		case look_ahead_char()
 		of "" =>	if !copies_of_char_sent > max_copies_of_char_sent
-				then	raise Read_too_often "\\^D"
+				then	raise Read_too_often "<\"\">"
 				else	(copies_of_char_sent := (!copies_of_char_sent + 1);
-					logit RWchars_read "f_look_at_next         " "\^D")
+					logit RWchars_read "f_look_at_next         " "")
 		|  ch =>	if !copies_of_char_sent > max_copies_of_char_sent
 				then	raise Read_too_often ch
 				else	(copies_of_char_sent := (!copies_of_char_sent + 1);
@@ -3091,9 +3071,9 @@ let
 	fun €f_skip_and_look_at_next› () = (
 		case read_char()
 		of "" =>	if !copies_of_char_sent > max_copies_of_char_sent
-				then	raise Read_too_often "\\^D"
+				then	raise Read_too_often "<\"\">"
 				else	(copies_of_char_sent := (!copies_of_char_sent + 1);
-					"\^D")
+					"")
 		|  "\n" => (	copies_of_char_sent := 0;
 				line_number := !line_number + 1 ;
 				"\n")
@@ -3102,7 +3082,7 @@ let
 
 		logit RWchars_read "f_skip_and_look_at_next"
 			(case look_ahead_char()
-			of "" =>	"\^D"
+			of "" =>	""
 			|  ch =>	ch)
 	);
 
@@ -3111,12 +3091,13 @@ let
 			push_back = f_push_back,
 			skip_and_look_at_next = f_skip_and_look_at_next} : READER_ENV;
 
-	fun €use_file_loop› () = (
-		if (PolyML.compiler (get_ML_outermost reader, writer) (); true)
-					handle EndOfInput => false
-		then	use_file_loop ()
-		else	()
-	)
+	fun €use_file_loop› () : unit = (
+		if look_ahead_char() <> ""
+		then (PolyML.compiler (get_ML_outermost reader, writer) (); 
+			use_file_loop()
+			)
+		else (PolyML.compiler ((fn _ => ""), writer) ())
+	);
 in
 	while (
 	 (use_file_loop (); false)
@@ -3160,9 +3141,9 @@ let
 	fun €s_advance› () : string = (
 		case !cur_str
 		of nil =>	if !copies_of_char_sent > max_copies_of_char_sent
-				then	raise Read_too_often "\\^D"
+				then	raise Read_too_often "<\"\">"
 				else	(copies_of_char_sent := (!copies_of_char_sent + 1);
-					logit RWchars_read "s_advance              " "\^D")
+					logit RWchars_read "s_advance              " "")
 		|  ch::t =>	(copies_of_char_sent := 0;
 				char_number := !char_number + 1;
 				cur_str := t;
@@ -3172,9 +3153,9 @@ let
 	fun €s_look_at_next› () = (
 		case !cur_str
 		of nil =>	if !copies_of_char_sent > max_copies_of_char_sent
-				then	raise Read_too_often "\\^D"
+				then	raise Read_too_often "<\"\">"
 				else	(copies_of_char_sent := (!copies_of_char_sent + 1);
-					logit RWchars_read "s_look_at_next         " "\^D")
+					logit RWchars_read "s_look_at_next         " "")
 		|  ch::_ =>	if !copies_of_char_sent > max_copies_of_char_sent
 				then	raise Read_too_often ch
 				else	(copies_of_char_sent := (!copies_of_char_sent + 1);
@@ -3190,9 +3171,9 @@ let
 	fun €s_skip_and_look_at_next› () = (
 		case !cur_str
 		of nil =>	if !copies_of_char_sent > max_copies_of_char_sent
-				then	raise Read_too_often "\\^D"
+				then	raise Read_too_often "<\"\">"
 				else	(copies_of_char_sent := (!copies_of_char_sent + 1);
-					"\^D")
+					"")
 		|  ch::t =>	(copies_of_char_sent := 0;
 				char_number := !char_number + 1;
 				cur_str := t;
@@ -3200,7 +3181,7 @@ let
 
 		logit RWchars_read "s_skip_and_look_at_next"
 			(case !cur_str
-			of nil =>	"\^D"
+			of nil =>	""
 			|  ch::_ =>	ch)
 	);
 
@@ -3209,12 +3190,13 @@ let
 			push_back = s_push_back,
 			skip_and_look_at_next = s_skip_and_look_at_next} : READER_ENV;
 
-	fun €use_string_loop› () = (
-		if (PolyML.compiler (get_ML_outermost reader, writer) (); true)
-					handle EndOfInput => false
-		then	use_string_loop ()
-		else	()
-	)
+	fun €use_string_loop› () : unit = (
+		if !cur_str <> nil
+		then (PolyML.compiler (get_ML_outermost reader, writer) (); 
+			use_string_loop()
+		)
+		else	(PolyML.compiler ((fn _ => ""), writer) ())
+	);
 in
 	use_string_loop ()
 		handle Read_too_often ch => (
@@ -3352,7 +3334,7 @@ local
 
 		let
 			val last = 	case input(std_in, 1)
-					of "" => "\^D"
+					of "" => ""
 					|  ch => ch
 		in
 			console_last := last;
@@ -3418,10 +3400,10 @@ to force a way past the offending character.
 		logit RWchars_read "t_skip_and_look_at_next"
 			(case look_ahead_char()
 			of "" =>	if !copies_of_char_sent > max_copies_of_char_sent
-					then	raise Read_too_often "\\^D"
+					then	raise Read_too_often "<\"\">"
 					else	(copies_of_char_sent :=
 							(!copies_of_char_sent + 1);
-						"\^D")
+						"")
 			|  ch => (	copies_of_char_sent := 0;
 					ch)
 			)
@@ -3434,7 +3416,7 @@ to force a way past the offending character.
 =TEX
 
 Most exceptions should be handled by the \Compiler{} loop which reports
-them and then continues.  Exception $EndOfInput$ is
+them and then continues.  Exception $TooManyReadEmpties$ is
 raised in response to end-of-file (control-D) characters being passed
 to the parsing functions, the response is\footnote{Should probably also
 	do a $PolyML.commit$ here to follow the practice of PolyML
@@ -3447,7 +3429,7 @@ to call $PolyML.quit$.  Exception $Read_too_often$ denotes
 a coding fault in the processing of the users input.  Exception
 $AbandonReaderWriter$ indicates the users desire to abandon this reader
 writer package.  All other exceptions are just reported.  Note that in
-many cases $PolyML.compiler$ will catch the exception, report it, and
+many, perhaps all, cases $PolyML.compiler$ will catch the exception, report it, and
 raise an exception whose name is not available (presumably it is
 declared local to the PolyML system).  This means that there needs to be
 a check for abandoning in the ``others'' clause of the match for
@@ -3459,28 +3441,34 @@ in (* local for use_terminal and ask_at_terminal *)
 
 fun €use_terminal› () : unit = (
 let
-	fun €use_term_loop› () = (
-		if (PolyML.compiler (get_ML_outermost reader, writer) (); true)
-			handle EndOfInput => (raw_diag_string(get_error_message 5523 nil);
+	fun €use_term_loop› () : unit = (
+		if
+		      (if look_ahead_char() <> ""
+			then ((PolyML.compiler (get_ML_outermost reader, writer) ();
+				 true)
+			  handle TooManyReadEmpties => (raw_diag_string(get_error_message 5523 nil);
 				PolyML.quit(); false)
-			| Fail x => (raw_diag_string(get_error_message 5522
+			  | Fail x => (raw_diag_string(get_error_message 5522
 					["Fail", PolyML.makestring x]);
 				true)
-			| Error x => (raw_diag_string(get_error_message 5522
+			  | Error x => (raw_diag_string(get_error_message 5522
 					["Error", PolyML.makestring x]);
 				true)
-			| AbandonReaderWriter => (
+			  | AbandonReaderWriter => (
 				raw_diag_string(get_error_message 5525 nil);
 				false)
-			| Read_too_often ch => (
+			  | Read_too_often ch => (
 				raw_diag_string(get_error_message 5524 [ch]);
 				true)
-			| E =>	if !abandoning
+			  | E =>	if !abandoning
 				then (	raw_diag_string(get_error_message 5525 nil);
 					false)
-				else (true)
+				else (true))
+		else (raw_diag_string(get_error_message 5523 nil);
+			PolyML.quit(); false)
+		) (* end of if expression *)
 		then	(cur_prompt := !prompt1; use_term_loop ())
-		else	()
+		else	() (* i.e. return to prompt that called use_terminal *)
 	)
 in
 	if !use_terminal_is_active
@@ -3664,11 +3652,11 @@ in
 							get_HOL_any R ( "(" ::  prevA))
 			|  "\""	=>	do_string true (*="=*)
 			|  "`"	=>	do_string false
-			|  "\^D" =>	prevA
 			|  "Q"	=>	get_HOL_any R ("QQQQ" :: prevA)
 			|  "\\"	=>	get_HOL_any R ("\\\\" :: prevA)
 			|  _ => 	get_HOL_any R (ch :: prevA)
 		)
+	|	SymEndOfInput => prevA
 	|	SymWhite _ => get_HOL_any R (" " :: prevA)
 	|	SymKnown(sym, is_keyword, info) => do_keyword (sym, is_keyword) info prevA
 	|	SymDoublePercent => get_HOL_any R ("%%" :: prevA)
@@ -3751,11 +3739,8 @@ let
 
 	fun get_name prevN = (
 		case read_symbol R
-		of SymCharacter ch => (
-			case ch
-			of "\^D" =>	fail "HOL_lab_prod_reader" 5002 nil
-			|  _ =>		get_name (ch::prevN)
-			)
+		of SymCharacter ch => get_name (ch::prevN)
+		| SymEndOfInput => fail "HOL_lab_prod_reader" 5002 nil
 		| SymDoublePercent => get_name ("%" :: prevN)
 		| SymWhite wh =>	if contains wh "\n"
 					then
