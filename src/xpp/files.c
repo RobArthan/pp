@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.29 2004/07/19 14:41:47 rda Exp rda $
+ * $Id: files.c,v 2.30 2004/11/19 15:57:48 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -153,8 +153,10 @@ static char *old_file_deleted_message =
 	 "opened or saved.";
 
 static char *contains_binary_message =
-	" The file \"%s\" contains binary data."
-	" Uneditable characters have been replaced by question marks and the read-only option has been set.";
+	"The file \"%s\" contains binary data."
+	" If you open it, uneditable characters will be replaced by question"
+	" marks and the read-only option will be set."
+	" Do you wish to open it?";
 
 static char *mixed_file_type_message =
 	 "The file \"%s\"  contains a mixture of Unix, MS-DOS or Macintosh line terminators."
@@ -266,6 +268,8 @@ static Boolean file_yes_no_dialog(
  * The seventh parameter, binary, is set true if the file contained binary data and
  * false otherwise (supply NULL if not interested).
  *
+ * The eighth parameter returns the file type (supply NULL if not interested)
+ *
  * NULL is returned if anything goes wrong (and if NULL is
  * returned, the user will have been presented with an error
  * message dialogue).
@@ -281,16 +285,17 @@ static char *get_file_contents(
 	Boolean		including,
 	FileOpenAction 	*foAction,
 	struct stat 	*stat_buf,
-	Boolean		*binary)
+	Boolean		*binary,
+	FileType	*file_type_return)
 {
 	struct stat status;
 	NAT siz;
 	FILE *fp;
 	char *buf, *p;
 	int whatgot;
+	FileType file_type;
 	enum {FT_ANY, FT_UNIX, FT_DOS_OR_MAC, FT_DOS,  FT_MAC,
 		FT_MIXED,  FT_DOS_CR, FT_MAC_CR, FT_MIXED_CR, FT_BINARY} ft_state;
-	FileType file_type;
 	if(stat(name, &status) != 0) {
 		if (cmdLine) {
 			if (file_quit_new_dialog(w, cant_stat_message2, name)) {
@@ -346,10 +351,7 @@ static char *get_file_contents(
 		whatgot = getc(fp);
 		if(whatgot != EOF && control_chars[whatgot & 0xff]) {
 			if(!including) {
-				if(ft_state != FT_BINARY) {
-					file_error_dialog(w, contains_binary_message, name);
-				}
-		 /* recover by mapping to question mark */
+		 /* binary data: recover by mapping to question mark */
 				whatgot = '?';
 			} else {
 		/* recover by mapping to backspace, leaving text_verify_cb to recover that and report */
@@ -541,8 +543,8 @@ static char *get_file_contents(
 			}
 			break;
 	}
-	if(!including) {
-		set_file_type(file_type);
+	if(file_type_return) {
+		*file_type_return = file_type;
 	}
 	fclose(fp);
 	*p = '\0';
@@ -931,6 +933,7 @@ Boolean open_file(
 	struct stat new_status;
 	Boolean binary;
 	char *read_only_message;
+	FileType file_type;
 	if(!(name && *name)) { /* NULL or empty */
 		XmTextSetString(text, "");
 		if (foAction != (FileOpenAction *) NULL) {
@@ -938,7 +941,9 @@ Boolean open_file(
 		}
 		return True;
 	}
-	if((buf = get_file_contents(text, name, cmdLine, False, foAction, &new_status, &binary)) != NULL) {
+	if((buf = get_file_contents(text, name, cmdLine,
+			False, foAction, &new_status, &binary, &file_type))
+				!= NULL) {
 		read_only_message = read_only_access_message(name, &new_status);
 		if(read_only_message != NULL) {
 			if(	(	orig_global_options.read_only
@@ -950,7 +955,13 @@ Boolean open_file(
 				return False;
 			}
 		} else if (binary) {
-			set_read_only(True);
+			if (file_yes_no_dialog(text,
+					contains_binary_message, name, NULL)) {
+				set_read_only(True);
+			} else {
+				XtFree(buf);
+				return False;
+			}
 		} else if (!orig_global_options.read_only) {
 			set_read_only(False);
 		} /* else leave the user's setting of the read-only option */
@@ -965,6 +976,7 @@ Boolean open_file(
 		XmTextEnableRedisplay(text);
 		status = new_status;
 		current_file_status = &status;
+		set_file_type(file_type);
 		return True;
 	} else {
 		return False;
@@ -983,10 +995,8 @@ Boolean include_file(
 {
 	char *buf;
 	XmTextPosition pos;
-	if((buf = get_file_contents(text,
-	                            name,
-	                            False, True,
-	                           NULL, NULL, NULL)) != NULL) {
+	if((buf = get_file_contents(text, name, False, True,
+			NULL, NULL, NULL, NULL)) != NULL) {
 		XmTextDisableRedisplay(text);
 		pos = XmTextGetInsertionPosition(text);
 		XmTextClearSelection(text, CurrentTime);
