@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.34 2004/02/19 20:44:51 rda Exp $
+ * $Id: xpp.c,v 2.35 2004/06/29 16:20:01 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -37,6 +37,8 @@
 #define XtCArgumentChecker		"ArgumentChecker"
 #define XtNOptionString		"optionString"
 #define XtCOptionString		"OptionString"
+#define XtNpalette			"palette"
+#define XtCPalette			"Palette"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files: 
@@ -128,6 +130,7 @@ static XrmOptionDescRec options [] = {
 typedef struct {
 	XtTranslations text_translations;
 	char *templates;
+	char *palette;
 	char *interrupt_prompt;
 	char *abandon_reply;
 	char *command_line_list;
@@ -157,6 +160,23 @@ static XtResource resources[] = {
 		XtOffsetOf(XppResources, templates),
 		XtRString,
 		""
+	},
+	{
+		XtNpalette,
+		XtCPalette,
+		XtRString,
+		sizeof(char *),
+		XtOffsetOf(XppResources, palette),
+		XtRString,
+		"\261\262\263\264\244\265\266\267\343\012\215\216\232\200\240\241"
+		"\300\245\336\345\344\012\252\270\355\362\222\341\201\273\250\251"
+		"\253\012\337\255\376\340\317\357\217\237\236\012\247\242\353\213"
+		"\371\373\375\202\012\274\276\275\246\272\364\342\243\012\301\302"
+		"\307\304\305\332\310\312\311\313\314\315\012\316\330\056\320\322"
+		"\323\324\325\306\321\331\327\012\207\204\212\214\230\220\223\225"
+		"\206\231\227\012\346\356\360\257\203\372\012\271\377\235\334\367"
+		"\210\374\234\260\303\351\012\254\224\221\361\256\012\333\335\211"
+		"\233\347\350\352\012\277\326\354\363\365\366\370\134\156\012"
 	},
 	{
 		XtNinterruptPrompt,
@@ -625,6 +645,7 @@ int main(int argc, char **argv)
 
 	text_translations = xpp_resources.text_translations;
 	templates = xpp_resources.templates;
+	palette = xpp_resources.palette;
 
 	cmd_line = get_command_line(argc, argv, &use_default_command);
 	

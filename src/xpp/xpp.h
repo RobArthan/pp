@@ -344,6 +344,7 @@ typedef enum {
 	GlobalOptions		global_options;
 	extern XtTranslations text_translations;
 	extern char *templates;
+	extern char *palette;
 	extern char *command_line_list;
 	extern char *title;
 	extern char *argv0;
