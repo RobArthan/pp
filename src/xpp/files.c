@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$
+ * $Id: files.c,v 2.1 1994/08/30 12:07:25 djk Rel rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -34,11 +34,17 @@ static char *cant_write_message =
 
 static char *cant_write_backup_message =
 	"An error has occurred while taking a backup. "
-	"Do you want the file \"%s\" to be overwritten anyway?";
+	"Do you want to overwrite the file \"%s\" without a backup?";
 
 static char *cant_open_file_to_backup_message =
 	"Cannot read the file \"%s\" to take a backup. "
-	"Do you want it to be overwritten anyway?";
+	"Do you want to overwrite your file without a backup?";
+
+static char *backup_file_same_as_file_message =
+	"Cannot take a backup of the file. "
+	"It is probably on an MS-DOS or similar file system that will "
+	"not support a file named \"%s.xpp.backup\". "
+	"Do you want to overwrite your file without a backup?";
 
 static char *cant_open_backup_message =
 	"Cannot open a backup file. "
@@ -203,7 +209,7 @@ static Boolean backup_file(
 	char	*name,
 	char	**backup_name)
 {
-	struct stat status;
+	struct stat status, bu_status;
 	NAT siz;
 	FILE *fp, *backup_fp;
 	const char *suffix = ".xpp.backup";
@@ -226,6 +232,19 @@ static Boolean backup_file(
 	};
 	strcpy(*backup_name, name);
 	strcpy(*backup_name + siz, suffix);
+	if(	(backup_fp = fopen(*backup_name, "r")) != NULL ) {
+		if(	fstat(fileno(backup_fp), &bu_status) == 0 &&
+			bu_status.st_dev == status.st_dev &&
+			bu_status.st_ino == status.st_ino) {
+				/* backup file and file same */
+			XtFree(*backup_name);
+			*backup_name = NULL;
+			fclose(backup_fp);
+			return file_yes_no_dialog(w,
+					backup_file_same_as_file_message, name);
+		}
+		fclose(backup_fp);
+	}
 	if((backup_fp = fopen(*backup_name, "w")) == NULL) {
 		fclose(fp);
 		XtFree(*backup_name);
