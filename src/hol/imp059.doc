@@ -73,6 +73,9 @@ Changed names in
 =TEX
 \item [Issue 1.17 (14th May 1992)]
 Tidying up proof contexts.
+\item [Issue 1.18 (20th May 1992)]
+Improved checks of theory caching,
+changed $±$ structure in results.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -291,6 +294,12 @@ val Ûpair_eq_thmÝ = tac_proof(([],
 val Û¶_Ì_x_t_thmÝ = tac_proof(([],¬¶ f:'a · (Ì x · T) f®),
 	rewrite_tac[]);
 =TEX
+The rule is a bit crude given that we know in more detail the
+form of the theorem being rewritten.
+=SML
+val Û±_assoc_thmÝ = taut_rule ¬µ a b c · ((a ± b) ± c) ¤ (a ± b ± c)®;
+val Ûrw_±_assoc_thm_ruleÝ = pure_rewrite_rule [rw_±_assoc_thm];
+=TEX
 Each theorem in the below is associated with a ``matching''
 conversion.
 =SML
@@ -493,10 +502,51 @@ We currently assume it is the current theory.
 local
 	val cache_theories: string list ref = ref [];
 in
-fun Ûset_cache_theoriesÝ (slst: string list) : unit = (
-	cache_theories := slst
-);
+fun Ûset_cache_theoriesÝ (slst: string list) : string list = (
+let	val old = (!cache_theories);
+in
+	(cache_theories := slst;
+	old)
+end);
 fun Ûget_cache_theoriesÝ (():unit) : string list = (!cache_theories);
+end;
+=TEX
+Now the derived cache theory functions:
+=SML
+local
+	open icl'Kernel;
+
+	fun aux [] = fail "current_cache_theory" 59002 []
+	| aux (a :: x) = ((
+	let	val {status = status, inscope = inscope, ...} = icl'get_theory_info a;
+	in
+		if status = TSNormal andalso inscope
+		then (let val pt = icl'get_pervasive_theory_name();
+			in
+				if (pt = a) orelse not(a mem (get_ancestors pt))
+				then a
+				else aux x
+			end)
+		else aux x
+	end)
+	handle (Fail _) => aux x);
+
+	fun aux1 [] = []
+	| aux1 (a :: x) = ((
+	let	val {inscope = inscope, ...} = icl'get_theory_info a;
+	in
+		if inscope
+		then a :: aux1 x
+		else aux1 x
+	end)
+	handle (Fail _) => aux1 x);
+in	
+fun Ûcurrent_cache_theoryÝ () = (
+	aux(get_cache_theories ())
+);
+fun Ûcurrent_cache_theoriesÝ () = (
+	aux1(get_cache_theories ())
+);
 end;
 =TEX
 \subsection{Defining n-tuples}
@@ -556,16 +606,16 @@ let	val key = clp_key n;
 	| aux (thy :: rest) = (Value(get_thm thy key)
 		handle (Fail _) => aux rest);
 in
-		aux (get_cache_theories())
+		aux (current_cache_theories())
 end);
 =TEX
 The following declares a new n-tuple type, knowing that the type isn't
 in scope.
 =SML
 fun Ûdeclare_n_tupleÝ (n:int) :THM = (
-let	val cache_thy = (hd(get_cache_theories()))
+let	val cache_thy = current_cache_theory()
 		handle complaint =>
-		divert complaint "hd" "cached_labelled_product_rule" 59006 [];
+		pass_on complaint "current_cache_theory" "cached_labelled_product_rule";
 	val sideeffect = if is_theory_ancestor cache_thy was_thy
 		then ()
 		else fail "cached_labelled_product_rule" 59002 
@@ -680,16 +730,16 @@ let	val key = cup_key n;
 	| aux (thy :: rest) = (Value(get_thm thy key)
 		handle (Fail _) => aux rest);
 in
-		aux (get_cache_theories())
+		aux (current_cache_theories())
 end);
 =TEX
 The following declares a new n-tuple type, knowing that the type isn't
 in scope.
 =SML
 fun Ûdeclare_n_tupleÝ (n:int) :THM = (
-let	val cache_thy = (hd(get_cache_theories()))
+let	val cache_thy = current_cache_theory()
 		handle complaint =>
-		divert complaint "hd" "cached_unlabelled_product_rule" 59006 [];
+		pass_on complaint "current_cache_theory" "cached_unlabelled_product_rule";
 	val sideeffect = if is_theory_ancestor cache_thy was_thy
 		then ()
 		else fail "cached_unlabelled_product_rule" 59002 
@@ -900,8 +950,9 @@ Now the definition itself, which will flush out any writability problems that co
 		map (fn lab => mk_app(lab,t)) labs),
 		t)]))));
 	val s3 = conv_rule (Á_conv thm_concl) s2;
+	val s4 = rw_±_assoc_thm_rule s3;
 in
-	(new_spec(constkeys,1+nlabels,s3)
+	(new_spec(constkeys,1+nlabels,s4)
 		handle complaint =>
 		pass_on complaint "new_spec" 
 			"labelled_product_spec")
@@ -1046,8 +1097,9 @@ Now the definition itself, which will flush out any writability problems that co
 	val s2 = ´_elim tuple_thm' s1;
 	val s3 = conv_rule(RAND_C (simple_Á_conv conname))
 		s2;
+	val s4 = rw_±_assoc_thm_rule s3;
 in
-	(new_spec(conkeys,1,s3)
+	(new_spec(conkeys,1,s4)
 		handle complaint =>
 		pass_on complaint "new_spec" "unlabelled_product_spec")
 end
