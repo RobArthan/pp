@@ -1,4 +1,4 @@
-% imp048.doc %Z% $Date$ $Revision$ $RCSfile$
+% imp048.doc %Z% $Date: 2002/06/04 20:00:57 $ $Revision: 1.30 $ $RCSfile: imp048.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -9,10 +9,10 @@
 \TPPtitle{Implementation of Support for Z Types and Terms}  %% Mandatory field
 \def\TPPheadtitle{Implementation of Support for Z Types and Terms}
 \TPPref{DS/FMU/IED/IMP048}  %% Mandatory field
-\def\SCCSversion{$Revision$%
+\def\SCCSversion{$Revision: 1.30 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date$%
+\TPPdate{\FormatDate{$Date: 2002/06/04 20:00:57 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -65,6 +65,8 @@ Global rename from wrk038.doc issue 1.9.
 Code optimization(?).
 \item[Issue 1.28,1.29]
 Bug fix (signature variable ordering).
+\item[Issue 1.30]
+Performance tweak to {\it unpack\_ident} and {\it flatpack}.
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -130,19 +132,29 @@ The following functions therefore survive.
 fun	€pack_ident› ((w,d) :string * string) :string = (w ^ d);
 =TEX
 =SML
-fun	€unpack_ident› (s :string) :string * string =
-	let 	fun 	f _ [] = ([],[])
-		|	f _ ("'"::t) = ([],("'"::(snd(f true t))))
-		|	f _ ("?"::t) = ([],("?"::(snd(f true t))))
-		|	f _ ("!"::t) = ([],("!"::(snd(f true t))))
-		|	f false (h::t) = 
-				let	val (a,b) = f false t
-				in	((h::a),b)
-				end
-		|	f _ _ = fail "unpack_ident" 48001 [fn() => s]
-	in
-		(implode ** implode)(f false (explode s)) 
-	end;
+fun	€unpack_ident› (s :string) :string * string = (
+	let	val sz = size s;
+		fun is_dec_char #"'" = true
+		|   is_dec_char #"?" = true
+		|   is_dec_char #"!" = true
+		|   is_dec_char _ = false;
+		fun check_decs i = (
+			i = sz
+			orelse 
+			(is_dec_char(String.sub(s, i)) andalso check_decs (i+1))
+		);
+		fun find_dec i = (
+			if	i = sz
+				orelse
+				is_dec_char(String.sub(s, i))
+			then	i
+			else	find_dec (i+1)
+		);
+		val index = find_dec 0;
+		val _ = if check_decs index then () else fail "unpack_ident" 48001 [fn() => s];
+	in	(String.substring(s, 0, index), String.substring(s, index, sz - index))
+	end
+);
 =TEX
 =SML
 fun z_sig_order (s1 : string) (s2 : string) : int = (
@@ -165,9 +177,9 @@ fun z_sig_order (s1 : string) (s2 : string) : int = (
 =TEX
 =SML
 fun	€idsetseq› (sl:string list) : string list = Sort.sort z_sig_order sl;
-fun	€flatpack› ([]:string list) : string 	= ""
-|	flatpack (s::[])			= s
-|	flatpack (s::ss) 			= s ^ "," ^ (flatpack ss);
+fun	€flatpack› (sl:string list) : string 	= (
+	format_list Combinators.I sl ","
+);
 =TEX
 
 
