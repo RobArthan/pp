@@ -22,7 +22,7 @@ Don't worry about this!
 %\TPPpart{}
 \TPPtitle{SLR Parser Generator}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP017}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.46 $%
+\def\SCCSversion{$Revision: 1.47 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 %\TPPdate{}  %% Mandatory field (with sensible default)
@@ -134,7 +134,7 @@ of the printing code.
 \item[Issue 1.43] Tidied up error-handling and the treatment of MS-DOS and Macintosh format text files.
 \item[Issue 1.44] Made the follow and first functions work with arrays rather than lists.
 \item[Issue 1.45] Fixed bug in print-out of LR(0) automaton.
-\item[Issues 1.46, 1.47] It can now write the reduction functions for you!
+\item[Issues 1.46--1.48] Added generic parser output facility --- it can now write the reduction functions for you!
 See HISTORICAL NOTES below for details.
 \end{description}
 \subsection{Changes Forecast}
@@ -326,6 +326,17 @@ val _ = if contains (map fst (get_string_controls()))
 	else	new_string_control{name="gen_red_suffix",
 			control=gen_red_suffix,
 			default=(fn x => "_"),
+			check=fun_true
+	};
+=TEX
+=SML
+val €proofpower_ml› : bool ref = ref true;
+val _ = if contains (map fst (get_flags()))
+			"ProofPower-ML"
+	then	()
+	else	new_flag{name="ProofPower-ML",
+			control=proofpower_ml,
+			default=(fn x => true),
 			check=fun_true
 	};
 =TEX
@@ -921,10 +932,11 @@ fun €print_lr0_automaton_graph›
 	end
 );
 =TEX
-The following function is used for formatting quoted terminal symbols in the ML output and in lexical
-analysis error messages.
+The following function is used for formatting quoted terminal symbols in the
+ML output and in lexical analysis error messages.
+There is a hack which sanitises per-cent signs for {\ProductML}.
 =SML
-fun €ml_escapify›  (x : string) : string = (
+fun €ml_escapify› (x : string) : string = (
 	let	val chars = explode x;
 		fun digits n = (
 			let	val ds = string_of_int n;
@@ -942,6 +954,7 @@ fun €ml_escapify›  (x : string) : string = (
 			then	aux (ch::"\\"::acc) chs
 			else if	ord ch < ord " "
 			orelse	ord ch > 126
+			orelse	(!proofpower_ml andalso ord ch = 37)
 			then	aux (digits (ord ch)::"\\"::acc) chs
 			else	aux (ch::acc) chs
 		);
@@ -2439,8 +2452,8 @@ fun €do_sym_class› (generic : bool) (qco : string OPT) (nco : string OPT)
 		|   wrap true (Value c) _ = wrap true Nil c
 		|   wrap false Nil _ = (fn x => x)
 		|   wrap false (Value c) _ = wrap true Nil c;
-		val wrap_punc = wrap generic qco "LCQuoted";
-		val wrap_var = wrap generic nco "LCVariable";
+		val wrap_punc = wrap generic qco "LCString";
+		val wrap_var = wrap generic nco "LCIdentifier";
 	in	fn
 		EosClass e => e
 	|	PuncClass x => wrap_punc x
@@ -2557,9 +2570,9 @@ let	fun do_alt _ _ (j, (Value act, syms)) = (Value act)
 				else	!gen_red_prefix ^ a ^ !gen_red_suffix ^ user_j;
 			val xs = format_list (fn i => "x"^string_of_int i) (interval 1 n) ",";
 			val fun_def =
-			"fun " ^ f ^" (alt, i) (" ^ xs ^ ") stk = (\n" ^ 
+			"fun " ^ f ^" (nt, i) (" ^ xs ^ ") stk = (\n" ^ 
 			"\t(* " ^ a ^ " = " ^ format_list (format_symbol p) syms ", " ^ " *)\n" ^
-				"\tgeneric_reducer (alt, i) [" ^ xs ^ "] stk\n);" 
+				"\tgeneric_reducer (nt, i) [" ^ xs ^ "] stk\n);" 
 			val fun_call = "(" ^ f ^ "(\"" ^ a ^ "\", " ^ user_j ^
 				")(" ^ xs ^")stk)";
 		in	put_line fun_def;
@@ -2757,7 +2770,7 @@ end; (* of structure Slrp *)
 \subsection{Shell Interface}
 =DUMP slrp
 #!/bin/sh
-# slrp From: $Id: imp017.doc,v 1.46 2003/02/25 22:32:19 rda Exp rda $
+# slrp From: $Id: imp017.doc,v 1.47 2003/02/26 11:29:48 rda Exp rda $
 # Shell script to run the SLRP Parser Generator
 if test -z "$PROGNAME"
 then
@@ -2765,7 +2778,7 @@ then
 	USAGE="$PROGNAME [-l log_level] -e eos -f grammar_file"
 fi
 LOGLEVEL=2
-EOS=
+EOS=LCEos
 INFILE=
 QUOTECONSUPPLIED=n
 NAMECONSUPPLIED=n
@@ -2786,7 +2799,7 @@ do
 	esac
 done
 shift `expr $OPTIND - 1`
-if	test -n "$*" -o -z "$EOS" -o -z "$INFILE"
+if	test -n "$*" -o -z "$INFILE"
 then
 	echo "$PROGNAME: usage: $USAGE"
 	exit 1
