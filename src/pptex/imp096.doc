@@ -7,15 +7,15 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 *******************************************************************************/
-/* $Id: imp096.doc,v 1.19 2004/01/23 12:38:21 robarthan Exp rda $
+/* $Id: imp096.doc,v 1.21 2004/01/23 16:00:39 rda Exp rda $
 
 =TEX
-% $Id: imp096.doc,v 1.19 2004/01/23 12:38:21 robarthan Exp rda $
+% $Id: imp096.doc,v 1.21 2004/01/23 16:00:39 rda Exp rda $
 \documentstyle[11pt,TQ,hol1]{article}
 
 \TPPtitle{Sieve and Findfile Utilities}
 \TPPref{DS/FMU/IED/IMP096}
-\def\SCCSissue{$Revision: 1.19 $
+\def\SCCSissue{$Revision: 1.21 $
 }
 
 =IGNORE
@@ -420,7 +420,7 @@ contains all of the introductory material in this document.
 =SIEVE_PROG
 */
 char *program_name = "sieve";
-char *coprlemma1 = "$Id: imp096.doc,v 1.19 2004/01/23 12:38:21 robarthan Exp rda $" " Copyright Lemma 1 Ltd. 2003";
+char *coprlemma1 = "$Id: imp096.doc,v 1.21 2004/01/23 16:00:39 rda Exp rda $" " Copyright Lemma 1 Ltd. 2003";
 /*
 =TEX
 
@@ -5070,7 +5070,7 @@ First some useful general declarations.
 =FIND_FILE_FUN
 */
 #ifndef SIEVE_PROG
-char *coprlemma1 = "$Id: imp096.doc,v 1.19 2004/01/23 12:38:21 robarthan Exp rda $" " Copyright Lemma 1 Ltd. 2003";
+char *coprlemma1 = "$Id: imp096.doc,v 1.21 2004/01/23 16:00:39 rda Exp rda $" " Copyright Lemma 1 Ltd. 2003";
 #endif
 #include <pwd.h>
 #include <stdio.h>
@@ -5269,6 +5269,24 @@ is_sym_link(char *name)
 }
 /*
 =TEX
+
+\HOLindexEntry{is_dir}
+{\tt is_dir} : Returns 0 if the file name does not refer to a directory or if
+name is a {\tt NULL} pointer, 1 otherwise.
+
+=FINDFILE_PROG
+*/
+int
+is_dir(char *name)
+{
+	struct stat st;
+	if(name == NULL || lstat(name, &st)) {
+		return 0;
+	}
+	return S_ISDIR(st.st_mode);
+}
+/*
+=TEX
 \HOLindexEntry{split_file_name}
 {\tt split_file_name} : split a file name into directory name and base name.
 =FINDFILE_PROG
@@ -5352,6 +5370,19 @@ get_real_name (char * name)
 	cur_name = (char*) malloc(strlen(name) + 1);
 	strcpy(cur_name, name);
 	for(loops = 0; loops < MAX_LINKS; loops += 1) {
+		if(is_dir(cur_name)) {
+			dir = cur_name;
+			base  = (char*) malloc(1);
+			*base = 0;
+			if(chdir(dir)) {
+				fchdir(orig_cwd);
+				close(orig_cwd);
+				free(dir);
+				free(base);
+				return NULL;
+			}
+			break;
+		}
 		split_file_name(cur_name, &dir, &base);
 		free(cur_name);
 		cur_name = NULL;
@@ -5382,7 +5413,8 @@ get_real_name (char * name)
 	if(cur_name != NULL) {
 		free(cur_name);
 	}
-	if(loops == MAX_LINKS) {
+	if(	loops == MAX_LINKS
+	||	getcwd(buf, MAX_FILE_NAME_LEN) == NULL) {
 		if(dir) {
 			free(dir);
 		}
@@ -5393,14 +5425,9 @@ get_real_name (char * name)
 		close(orig_cwd);
 		return NULL;
 	}
-	if(getcwd(buf, MAX_FILE_NAME_LEN) == NULL) {
-		fchdir(orig_cwd);
-		close(orig_cwd);
-		return NULL;
-	}
 	res = (char*) malloc(strlen(buf) + strlen(base) + 2);
 	strcpy(res, buf);
-	if(strcmp(buf, "/")) {
+	if(strcmp(buf, "/") && *base) {
 		strcat(res, "/");
 	}
 	strcat(res, base);
@@ -5416,22 +5443,23 @@ There are two usages for two somewhat separate functions:
 With no options, the first command line argument is taken as the name of a file to be sought in the list
 of search options given by the remaining arguments (of which there must be at least one),
 the file name is printed on standard output (or just the original argument if not found) and
-the result code is set to 0 if the resulting file exists and the user has enough access to
-call {\tt stat} on it and 1 otherwise.
+the result code is set to 0 if the resulting file exists. 
 
 With the ``{\tt -r}'' option, the remaining arguments are a list of file names and the output
 is a list of lines each containing the result of recursively expanding any symbolic links in each file name.
-If one of the resulting file names does not exist or the user doesn't have enough access to
+If one of the resulting file names does not exist to
 call {\tt stat} on it, then the unexpanded name is printed out and the program stops with result code set to 1.
 
 A ``{\tt --}'' option may be supplied to indicate that the next argument (typically, ``{\tt -r}'') is to
 be interpreted as a name not an option.
 
+In the above, a file is taken to exist if it exists and the user has enough access
+to read its file attributes and it is not a broken symbolic link.
 =FINDFILE_PROG
 */
 
 
-char *coprlemma1_ff = "$Id: imp096.doc,v 1.19 2004/01/23 12:38:21 robarthan Exp rda $" " Copyright Lemma 1 Ltd. 2003";
+char *coprlemma1_ff = "$Id: imp096.doc,v 1.21 2004/01/23 16:00:39 rda Exp rda $" " Copyright Lemma 1 Ltd. 2003";
 extern char *find_file(char *name, char *dirs);
 #ifndef NO_FINDFILE_MAIN
 #include<stdio.h>
@@ -5458,17 +5486,19 @@ main(int argc, char **argv)
 		for(ind = 2; ind < argc; ++ind) {
 			name = tilde_expand(*(argv+ind));
 			real_name = get_real_name(name);
-			free(name);
 			if(real_name) {
-				(void)printf("%s\n", real_name);
-				if(!file_exists(real_name)) {
+				if(file_exists(real_name)) {
+					(void)printf("%s\n", real_name);
+				} else {
+					(void)printf("%s\n", name);
 					exit(1);
 				}
-				free(real_name);
 			} else {
 				(void)printf("%s\n", name);
 				exit(1);
 			}
+			free(real_name);
+			free(name);
 		}
 		exit(0);
 	}
