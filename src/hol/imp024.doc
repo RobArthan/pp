@@ -1,0 +1,322 @@
+% imp024.doc   %Z% $Date$ $Revision$ $RCSfile$
+
+=TEX
+% imp024.doc   %Z% $Date$ $Revision$ $RCSfile$
+\documentstyle[hol,11pt,TQ]{article}
+
+\TPPtitle{Implementation of `Oppen' Formatting Routines}
+\TPPref{DS/FMU/IED/IMP024}
+\TPPissue{$Revision$%
+}
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPproject{FST PROJECT}
+
+=IGN
+
+Commands to process this document in various ways.
+
+doc4errors imp024
+usefile "imp024.sml";
+
+make -f rel001.mkf imp024.dvi
+doc4tex imp024
+tex4dvi imp024
+bibtex imp024
+doc4tex imp024 ; tex4dvi imp024
+dvipage imp024 &
+
+
+doc4errors imp024
+usefile "imp024.sml";
+
+lasp -s -u imp024.OKwords imp024.doc > zz1
+
+=TEX
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Standard}
+\TPPkeywords{HOL}
+\TPPauthor{A.J. Hammon & WIN01}  %% Mandatory field
+\TPPauthorisation{R.B.~Jones & FMU Manager}
+\TPPabstract{This document contains Oppen-style formatting routines for
+	Release~1 of ICL~HOL.}
+\TPPabstractB{This version of the document is a placeholder for the
+	real formatting routines.  The routine here are designed
+	to do a very simple formatting job.  They fill the
+	output lines with the text to be output rather than laying
+	it out according to its structure.}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	Library
+}}
+
+\ftlinepenalty=9999
+\makeindex
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\catcode`\_=\active
+\def\_{\kern.06em\vbox{\hrule height.1ex width.3em}\hskip0.1em\relax}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+\makeTPPfrontpage
+
+\vfill
+\begin{center}
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+\end{center}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{DOCUMENT CONTROL}
+
+%********************************************************************
+
+\subsection{Contents List}
+\tableofcontents
+% \listoftables
+
+%********************************************************************
+
+\subsection{Document Cross References}
+
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+%********************************************************************
+
+\subsection{Changes History}
+
+\begin{description}
+
+\item[31 May 1991, issue 1.1 ] This issue is an authors draft, it
+	contains a first draft of the Oppen-style formatting routines.
+	In this case the implementation of the routines simply formats
+	the argument text without attempting to lay it out neatly.
+
+\end{description}
+
+%********************************************************************
+
+\subsection{Changes Forecast} \label{ChangesForecast}
+
+Implement the Oppen-style formatting algorithms given in~\cite{Oppen80}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+\section{GENERAL}
+
+%********************************************************************
+
+\subsection{Scope}
+
+This document contains the Oppen-style formatting routines for Release~1 of
+the ICL HOL system.
+
+%********************************************************************
+
+\subsection{Introduction}
+
+A suite of routines for Oppen style printing into a string.  The
+general idea is that the function $oppen_format$ is parameterised much
+like $PolyML.install_pp$, but it has an additional argument which is
+the value to be printed.
+
+Our first version of the Oppen style formatter is very simplistic,
+basically it outputs any text it is given as soon as possible.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{PRELUDE}
+
+=SML
+structure âOppenFormattingá = struct
+=TEX
+
+=SML
+type âoppen_funsá =
+			(string -> unit)		(* addstring *)
+		*	(int * bool -> unit)		(* beginb *)
+		*	(int * int -> unit)		(* space *)
+		*	(unit -> unit)			(* endb *);
+=TEX
+
+%********************************************************************
+
+=IGN
+val pp_mark : bool ref = ref false;
+val _ =
+new_flag {name = "âpp_marká",  control=pp_mark, default=fn () => false};
+=TEX
+
+=IGN
+set_flag("pp_mark", true);
+set_flag("pp_mark", false);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{OPPEN STRING PRINTING}
+
+=SML
+fun âoppen_format_as_stringá
+		(get_width : unit -> int)
+		(printer : oppen_funs -> 'a -> unit)
+		(value : 'a)
+		: string list = (
+let
+	val width = get_width();
+
+	val depth = ref 0;
+
+	val depth : int ref = ref 0;
+
+	type line_record = {			free	: int,
+						cur	: string list,
+						prev	: string list
+	};
+
+	val lines : line_record ref = ref {	free	= width,
+						cur	= [],
+						prev	= []
+	};
+
+	fun add_to_line str : unit = (
+	let
+		val str_width = size str;
+		val {free=p_free, cur=p_cur, prev=p_prev} = !lines;
+	in
+		lines := (	if p_free > str_width
+				then
+					{	free	= p_free - str_width,
+						cur	= str :: p_cur,
+						prev	= p_prev
+					}
+				else
+					{	free	= width - str_width,
+						cur	= str :: nil,
+						prev	= (implode(rev p_cur)) :: p_prev
+					})
+	end);
+
+	fun addstring(s : string)	: unit = add_to_line s;
+	fun space(_: int, _: int)		: unit = add_to_line " ";
+	fun beginb(_: int, _:bool)	: unit = add_to_line " ";
+	fun endb()			: unit = add_to_line " ";
+
+	val o_funs = (addstring, beginb, space, endb) : oppen_funs
+in
+	(printer o_funs value;
+	let
+		val {free=p_free, cur=p_cur, prev=p_prev} = !lines;
+	in
+		rev((implode(rev p_cur)) :: p_prev)
+	end)
+end);
+=TEX
+
+=IGN
+	fun mark_begin_end ch = (
+		if !pp_mark
+		then  " ." ^ ch ^ (string_of_int(!depth)) ^ ". "
+		else " ")
+
+	fun beginb(_: int, _:bool)	: unit = (
+		depth := (!depth) + 1;
+		add_to_line(mark_begin_end "b")
+	);
+	fun endb()			: unit = (
+		add_to_line(mark_begin_end "e");
+		depth := (!depth) - 1
+	);
+=TEX
+
+=SML
+fun âoppen_printá
+		(get_width : unit -> int)
+		(printer : oppen_funs -> 'a -> unit)
+		(value : 'a)
+		: unit = (
+let
+	val width = get_width();
+
+	val depth = ref 0;
+
+	type line_record = {			free	: int,
+						cur	: string list
+	};
+
+	val lines : line_record ref = ref {	free	= width,
+						cur	= []
+	};
+
+	fun add_to_line str : unit = (
+	let
+		val str_width = size str;
+		val {free=p_free, cur=p_cur} = !lines;
+	in
+		lines := (	if p_free > str_width
+				then
+					{	free	= p_free - str_width,
+						cur	= str :: p_cur
+					}
+				else
+					{	free	= width - str_width,
+						cur	= (
+							output(std_out, implode(rev p_cur));
+							str :: nil)
+					})
+	end);
+
+	fun addstring(s : string)	: unit = add_to_line s;
+	fun space(_: int, _: int)		: unit = add_to_line " ";
+	fun beginb(_: int, _:bool)	: unit = add_to_line " ";
+	fun endb()			: unit = add_to_line " ";
+
+	val o_funs = (addstring, beginb, space, endb) : oppen_funs
+in
+	(printer o_funs value;
+	let
+		val {free=p_free, cur=p_cur} = !lines;
+	in
+		output(std_out, implode(rev p_cur))
+	end)
+end);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{FINALE}
+
+=SML
+end (* of structure OppenFormatting *);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%********************************************************************
+%--------------------------------------------------------------------
+
+\end{document}
+
+\newpage
+
+\makeatletter
+\def\refstepcounter#1{\stepcounter{#1}\global\edef\@currentlabel{\csname
+	p@#1\endcsname\csname the#1\endcsname}}
+\makeatother
+
+\twocolumn[\section{INDEX}] \label{Index}
+
+\footnotesize
+\printindex
+
+\onecolumn
+
+\end{document}
