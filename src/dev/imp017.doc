@@ -91,6 +91,12 @@ actions description in the input grammar under the name
 $stk$, together with the existing names $x1$, $x2$ etc.
 \item [Issue 1.22 (13th April 1992)]
 Changes due to CR0017.
+\item [Issue 1.23 (27th April 1992)]
+The goto and reducer tables produced are now structured like the actions tables of
+version 1.16 and following of this document;
+i.e., each table entry is assigned to a Standard ML
+variable name, and the table is constructed by conjoining
+the table entries.
 \end{description}
 \subsection{Changes Forecast}
 The SLRP code is to be re-structured at some time in
@@ -149,6 +155,25 @@ The following exception is raised in the event of, e.g., i/o errors.
 It is caught in $slrp$ and so is never visible to the user.
 =SML
 exception ÛSLRP_ERRORÝ of string;
+=TEX
+The action, goto and reduction tables produced are constructed out of lists.
+The length of those lists is configuable by changing the value of the reference
+variable $slrp\_break$ defined below. Changing its value has a significant
+effect on the speed of compilation of these tables (apparent when building a parser).
+The best performance has been found to be when $slrp\_break$ is $1$.
+=SML
+val Ûslrp_breakÝ = ref 1;
+val _ = if contains (map fst (get_int_controls()))
+			"slrp_break"
+	then	()
+	else	new_int_control{name="slrp_break",
+			control=slrp_break,
+			default=(fn x => 1),
+			check=(fn x =>
+				if x > 0 then true
+				else raise SLRP_ERROR
+				  "slrp_break must be a positive number")
+	};
 =TEX
 \section{UTILITIES}\label{UTILITIES}
 \subsection{Miscellany}
@@ -230,6 +255,20 @@ in	map aux stl
 end
 );
 =TEX
+=SML
+fun ÛlistsoflistÝ xs listsize = (
+let	fun aux (xs, res) = (
+	let	val left = xs to listsize-1;
+		val right = xs from listsize;
+	in
+		case left of
+		[]	=> res
+		|left'	=> aux (right, res@[left])
+	end);
+in
+	fold aux [xs] []
+end);
+=TEX
 \subsection{I/O and Formatting Utilities}
 =SML
 fun Ûso_manyÝ (true:bool) (0 : int) (thing : string) : string = "No " ^ thing ^ "s"
@@ -277,6 +316,11 @@ fun Ûopen_logfileÝ (file : string) : unit = (
 	else raise SLRP_ERROR "an empty filename is not allowed for the log file")
 	handle Io msg =>
 	raise SLRP_ERROR("i/o failure on log file: " ^ file ^ " (" ^ msg ^ ")")
+);
+=TEX
+=SML
+fun Ûflush_logfileÝ () : unit = (
+	ExtendedIO.flush_out (!log_file)
 );
 =TEX
 =SML
@@ -339,7 +383,7 @@ type ''_a ÛFPRODUCTIONÝ = NONTERMINAL * (''_a FSYM Array.array Array.array);
 type ''_a ÛFGRAMMARÝ = ''_a FPRODUCTION Array.array;
 =IGN
 
-!!!FOLLOWING IS NOT USED AT THE MOMENT BUT WILL BE USEFUL
+!!!FOLLOWING IS NOT USED AT THE MOMENT BUT MAY BE USEFUL
 IN A FUTURE RE-ORGANISED VERSION OF SLRP!!!
 
 fun f_give_terms (g : ''_a FGRAMMAR) = (
@@ -1604,23 +1648,12 @@ fun Ûoutput_action_entry_listÝ(p : ''lc -> string) (entries : (''lc * ACTION) li
 );
 =TEX
 =SML
-val Ûslrp_breakÝ = ref 1;
-val _ = new_int_control{name="slrp_break",
-	control=slrp_break,
-	default=(fn x => 1),
-	check=(fn x =>
-		if x > 0 then true
-		else raise SLRP_ERROR
-		  "slrp_break must be a positive number")
-	};
-=TEX
-=SML
 fun Ûoutput_action_tableÝ (p : ''lc -> string) (actions : (''lc)ACTION_TABLE) : unit = (
 let	val tabs = listsofarray actions (get_int_control"slrp_break");
 	fun aux (x :: []) = output_action_entry_list p x
 	  | aux (x :: more) = (output_action_entry_list p x; put_string ","; aux more)
 	  | aux [] = ();
-	fun aux1 i = "slrp'i"^(string_of_int i);
+	fun aux1 i = "slrp'a"^(string_of_int i);
 	fun aux2 (i, tab) = (
 		put_string ("val "^(aux1 i)^"=[");
 		aux tab;
@@ -1661,16 +1694,29 @@ fun Ûoutput_goto_entry_listÝ ( entries : (string * STATE) list) : unit = (
 =TEX
 =SML
 fun Ûoutput_goto_tableÝ (gotos : GOTO_TABLE) : unit = (
-	let	val tab = listofarray gotos;
-		fun aux (x :: []) = output_goto_entry_list x
-		| aux (x :: more) = (output_goto_entry_list x; put_string ","; aux more)
-		| aux [] = ();
-	in	put_line "val slrp'gotos = Array.arrayoflist[";
+let	val tabs = listsofarray gotos (get_int_control"slrp_break");
+	fun aux (x :: []) = output_goto_entry_list x
+	  | aux (x :: more) = (output_goto_entry_list x; put_string ","; aux more)
+	  | aux [] = ();
+	fun aux1 i = "slrp'g"^(string_of_int i);
+	fun aux2 (i, tab) = (
+		put_string ("val "^(aux1 i)^"=[");
 		aux tab;
 		put_line "];"
-	end
+	);
+	val nentries = length tabs;
+	val tabs' = combine (interval 0 (nentries-1)) tabs;
+	fun aux3 (x :: []) = put_line (aux1 x)
+	  | aux3 (x :: more) = (put_line((aux1 x)^"@");aux3 more)
+	  | aux3 [] = ();
+	fun aux4() = (
+		put_line "val slrp'gotos = Array.arrayoflist (";
+		aux3 (interval 0 (nentries-1));
+		put_line ");"
+	);
+in	map aux2 tabs';aux4()
+end
 );
-=TEX
 =TEST
 output_goto_table gotos3;
 =TEX
@@ -1693,31 +1739,46 @@ fun Ûformat_reducerÝ (body : string) (n : int) : string = (
 fun Ûoutput_reduction_tableÝ
 	(g: (''lc) GRAMMAR)
 	(tab : string GEN_REDUCTION_TABLE) : unit = (
-	let	fun aux1 nt i (act :: more) = (
-			let	val n = length(my_nth(expand g nt) i);
-				val func = format_reducer act n;
-			in	if is_nil more
-				then put_string func
-				else (put_string(func ^ ","); aux1 nt (i+1) more)
-			end
-		) | aux1 _ _ [] = ();
-		fun aux2 last (nt, acts) = (
-			put_string("(\"" ^ nt ^ "\",[");
-			aux1 nt 0 acts;
-			put_string(if last then "])" else "]),")
-		);
-		fun aux3 (row :: more) = (
-			if is_nil more
-			then aux2 true row
-			else(aux2 false row; aux3 more)
-		) | aux3 [] = ();
-	in	put_string 
-		 "val slrp'reducers = list_e_merge initial_e_dict";
-		put_line "["; aux3 (e_flatten tab); put_line "];"
-	end
+let	val tabs = listsoflist (e_flatten tab) (get_int_control"slrp_break");
+	fun aux nt i (act :: more) = (
+	let	val n = length(my_nth(expand g nt) i);
+		val func = format_reducer act n;
+	in	if is_nil more
+		then put_string func
+		else (put_string(func ^ ","); aux nt (i+1) more)
+		end
+	) | aux _ _ [] = ();
+	fun aux1 i = "slrp'r"^(string_of_int i);
+
+	fun aux2 (nt, acts) = (
+		put_string("(\"" ^ nt ^ "\",[");
+		aux nt 0 acts;
+		put_string "])"
+	);
+	fun aux3 (row :: more) = (
+		aux2 row; aux3 more
+	) | aux3 [] = ();
+
+	fun aux4 (i, tab) = (
+		put_string ("val "^(aux1 i)^"=[");
+		aux3 tab;
+		put_line "];"
+	);
+	val nentries = length tabs;
+	val tabs' = combine (interval 0 (nentries-1)) tabs;
+
+
+	fun aux5 (x :: []) = put_line (aux1 x)
+	  | aux5 (x :: more) = (put_line((aux1 x)^"@");aux5 more)
+	  | aux5 [] = ();
+	fun aux6() = (
+		put_line "val slrp'reducers = list_e_merge initial_e_dict (";
+		aux5 (interval 0 (nentries-1));
+		put_line ");"
+	);
+in	map aux4 tabs';aux6()
+end
 );
-=TEST
-output_reduction_table test_grm3 test_rt3;
 =TEX
 \subsection{Driver Function}
 =SML
@@ -1767,7 +1828,6 @@ $\geq 3$ & As 2 together with a listing of the full action table before resoluti
 \end{tabular}
 \end{centering}
 =SML
-=SML
 fun ÛslrpÝ {infile : string, outfile : string, logfile : string, eos:string, loglevel:int} : unit = (
 	let	fun my_log msg = (if loglevel > 0 then log msg else ());
 	in let	val se1 = chat(burst banner);
@@ -1775,13 +1835,16 @@ fun ÛslrpÝ {infile : string, outfile : string, logfile : string, eos:string, log
 			if loglevel > 0 then open_logfile logfile else ());
 		val se3 = my_log (burst banner);
 		val (grm, reducers) = BNF_parse infile;
-		val (actions, gotos, Ijs, eff_grammar, init) = slr_tables grm (PuncClass eos) sentence_symbol;
-		val se4 = (if loglevel >= 2
+		val se3a = (if loglevel >= 2
 			then (	log "\n"; log(burst "Grammar"); log"\n";
 				print_grammar format_sym_class grm;
 				log "\n"; log(burst "Terminal Symbols"); log"\n";
 				print_terms format_sym_class grm;
-				log "\n"; log(burst "State Table"); log"\n";
+				flush_logfile() )
+			else ());
+		val (actions, gotos, Ijs, eff_grammar, init) = slr_tables grm (PuncClass eos) sentence_symbol;
+		val se4 = (if loglevel >= 2
+			then (	log "\n"; log(burst "State Table"); log"\n";
 				print_states (grm, format_sym_class) Ijs eff_grammar)
 			else ());
 		val confs = conflicts actions;
