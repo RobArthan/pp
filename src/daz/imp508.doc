@@ -1,4 +1,4 @@
-% imp508.doc   %Z% $Date: 2001/12/15 22:21:37 $ $Revision: 1.81 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2001/12/17 12:45:11 $ $Revision: 1.82 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.81 $%
+\def\SCCSversion{$Revision: 1.82 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2001/12/15 22:21:37 $%
+\TPPdate{\FormatDate{$Date: 2001/12/17 12:45:11 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -104,6 +104,7 @@ Adjusted $ENV\_INFO$ and allowed for type conversions.
 \item[Issue 1.79] R0021: domain condition generation.
 \item[Issue 1.80] R0037: support for named numbers.
 \item[Issue 1.81] Fixed {\LaTeX} error.
+\item[Issue 1.82] Added code for R0006: free use of subtype indications and ranges.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1703,6 +1704,7 @@ and Ûtrans_expÝ (env : CN_ENV) ((EId id) : EXP) : Z_EXP = exp_id env id
   | trans_exp env (EBracketed e) = trans_exp env e
   | trans_exp env (ECharacterLiteral c) = exp_char_lit c
   | trans_exp env (EStringLiteral s) = exp_string_lit s
+  | trans_exp env (EDiscreteRange _) = fail "trans_exp" 508057 []
 and Ûexp_array_aggÝ (env : CN_ENV) (e : EXP) : Z_EXP = (
 	let	val tname = (
 			case e of
@@ -2026,6 +2028,8 @@ and Ûadjust_expÝ (env : CN_ENV) (exp as (EId id : EXP)) = (
 	exp
 ) | adjust_exp env (exp as (ECharacterLiteral _)) = (
 	exp
+) | adjust_exp env (EDiscreteRange _) = (
+	fail "adjust_exp" 508057 []
 );
 =TEX
 The following variant of $adjust\_exp$ returns an optional Z expression. If the SPARK expression can only be handled informally then a comment message is printed out and $Nil$ is returned.
@@ -2928,6 +2932,195 @@ dcñt « {x í 1 intmod 2, y í 2 rem 3}®;
 dcñx greater 0 and_then y intmod x eq 0®;
 dcñx less_eq 0 or_else y intmod x eq 0®;
 dcñ1 e 0 /‰R x real_less_eq 0 e 0 or_else y /‰R x real_greater 10 e 0®;
+=TEX
+\section{ADJUSTING DECLARATIONS}
+\subsection{Basic Declarations}
+=SML
+val Ûuniversal_discrete_typeÝ : TMARK = "universal_discrete";
+=SML
+val Ûgen_id_countersÝ : int S_DICT ref = ref initial_s_dict;
+val Ûreset_gen_id_countersÝ : unit -> unit = (fn () => gen_id_counters := initial_s_dict);
+
+val Ûgenerate_id_from_tmarkÝ : TMARK -> TMARK = (
+	fn	tmark =>
+	let	fun aux i = (
+			let	val name = tmark ^ "s" ^ string_of_int i;
+			in let	val (zname, _, _) = dest_z_gvar(mk_z_gvar(name, BOOL, []));
+			in	get_const_theory zname;
+				aux (i+1)
+			end	handle Fail _ => (i, name)
+			end
+		);
+		val start = (
+			case s_lookup tmark (!gen_id_counters) of
+				Value j => j + 1
+			|	Nil => 1);
+		val (newi, res) = aux start;
+	in	gen_id_counters := s_enter tmark newi (!gen_id_counters);
+		res
+	end
+);
+=TEX
+=SML
+val Ûgenerate_idÝ : CONSTRAINT SUB_IND -> TMARK = generate_id_from_tmark o #tmark;
+val Ûsi_generate_idÝ : SI_SUB_IND -> TMARK = generate_id_from_tmark o #tmark;
+=TEX
+=SML
+fun Ûadjust_subtypeÝ (si as {tmark, con} : CONSTRAINT SUB_IND) : BASIC_DECL list * TMARK = (
+	case con of
+		CNoCon => ([], tmark)
+	|	_ => (
+		let	val name = generate_id si;
+		in	([BDSubtypeDecl {
+				name = name,
+				sub_ind = si}], name)
+		end
+	)
+);
+=TEX
+=SML
+fun Ûadjust_discrete_rangeÝ (s : SI_DISCRETE_RANGE) : BASIC_DECL list * TMARK = (
+	case s of
+		SIDiscreteRangeSubInd si => adjust_subtype si
+	|	SIDiscreteRangeRange r =>
+		adjust_subtype {
+			tmark = universal_discrete_type,
+			con = CRange r
+		}
+);
+=TEX
+=SML
+fun Ûadjust_constraintÝ (si_con : SI_CONSTRAINT) : BASIC_DECL list * CONSTRAINT = (
+	case si_con of
+		SIIndexCon sdr => (
+			let	val (nds, nts) = split(map adjust_discrete_range sdr);
+				val newexps = map EId nts;
+				val newdecl = flat nds;
+			in	(newdecl, CIndex newexps)
+			end
+		)
+	|	SIRangeCon c => ([], CRange c)
+	|	SIFixedCon c => ([], CFixed c)
+	|	SIFloatingCon c => ([], CFloating c)
+	|	SINoCon => ([], CNoCon)
+);
+=TEX
+Here and in the remaining adjusters, we must be careful to work
+from left to right (with respect to the Ada concrete syntax), since that should
+give a more intuitive sequence of generated names in the Z document.
+=SML
+fun Ûadjust_general_subtypeÝ (si as {tmark, con} : SI_SUB_IND) : BASIC_DECL list * TMARK = (
+	case con of
+		SINoCon => ([], tmark)
+	|	_ => (
+		let	val (newdecl', con') = adjust_constraint con;
+			val si' = {tmark = tmark, con = con'};
+			val name = generate_id si';
+		in	(newdecl' @ [BDSubtypeDecl{name = name, sub_ind = si'}], name)
+		end
+	)
+);
+=TEX
+=SML
+fun Ûadjust_const_declÝ ({consts, t, expr} : SI_CONST_DECL) : BASIC_DECL list = (
+	case t of
+		Nil => [BDConstDecl {consts = consts, tm = Nil, expr = expr}]
+	|	Value si => (
+		let	val (newdecl', name) = adjust_general_subtype si;
+		in	newdecl' @ [BDConstDecl {consts = consts, tm = Value name, expr = expr}]
+		end
+	)
+);
+=TEX
+The functions {\it adjust\_elementary\_type} and
+{\it adjust\_elementary\_type\_decl} of the specification are implemented
+implicitly in {\it adjust\_basic\_decl}.
+=SML
+fun Ûadjust_uncon_array_type_declÝ (name : ID, {index, comp} : SI_ARRAY_DEF) : BASIC_DECL list = (
+	let	fun get_type_mark (dr : SI_DISCRETE_RANGE) : TMARK = (
+			case dr of
+				SIDiscreteRangeSubInd{tmark, con} => tmark
+			|	_ => fail "adjust_uncon_array_type_decl" 508080 []
+		);
+		val (newdecl', name') = adjust_general_subtype comp;
+		val def' = TDUnconArrayDef{index = map get_type_mark index, comp = name'};
+	in	newdecl' @ [BDTypeDecl {name = name, type_def = def'}]
+	end
+);
+=TEX
+=SML
+fun Ûadjust_con_array_type_declÝ (name : ID, {index, comp} : SI_ARRAY_DEF) : BASIC_DECL list = (
+	let	val (bds, index') = split(map adjust_discrete_range index);
+		val (newdecl', name') = adjust_general_subtype comp;
+		val def' = TDConArrayDef{index = index', comp = name'};
+	in	flat bds @ [BDTypeDecl {name = name, type_def = def'}]
+	end
+);
+=TEX
+=SML
+fun Ûadjust_record_type_declÝ (name : ID, {decl} : SI_RECORD_TYPE_DEF) : BASIC_DECL list = (
+	let	fun do_var_decl ({vars, t} : SI_VAR_DECL) : BASIC_DECL list * VAR_DECL = (
+			let	val (ds, name) = adjust_general_subtype t;
+			in	(ds, {vars = vars, tmark = name})
+			end
+		);
+		val (bds, decl') = split(map do_var_decl decl);
+		val def' = TDRecordTypeDef{decl = decl'};
+	in	flat bds @ [BDTypeDecl {name = name, type_def = def'}]
+	end
+);
+=TEX
+=SML
+fun Ûadjust_subtype_declÝ (name : ID, {tmark, con} : SI_SUB_IND) : BASIC_DECL list = (
+	let	val (newdecl', con') = adjust_constraint con;
+		val si' = {tmark = tmark, con = con'};
+	in	newdecl' @ [BDSubtypeDecl {name = name, sub_ind = si'}]
+	end
+);
+=TEX
+=SML
+fun Ûadjust_basic_declÝ (bd : SI_BASIC_DECL) : BASIC_DECL list = (
+	case bd of
+		SIConstDecl x =>
+			adjust_const_decl x
+	|	SIDeferredConstDecl x =>
+			[BDDeferredConstDecl x]
+	|	SITypeDecl {name, type_def = SIUnconArrayDef x} =>
+			adjust_uncon_array_type_decl (name, x)
+	|	SITypeDecl {name, type_def = SIConArrayDef x} =>
+			adjust_con_array_type_decl (name, x)
+	|	SITypeDecl {name, type_def = SIRecordTypeDef x} =>
+			adjust_record_type_decl (name, x)
+	|	SITypeDecl {name, type_def = SIEnumTypeDef x} =>
+			[BDTypeDecl {name = name, type_def = TDEnumTypeDef x}]
+	|	SITypeDecl {name, type_def = SIIntTypeDef x} =>
+			[BDTypeDecl {name = name, type_def = TDIntTypeDef x}]
+	|	SITypeDecl {name, type_def = SIFixedTypeDef x} =>
+			[BDTypeDecl {name = name, type_def = TDFixedTypeDef x}]
+	|	SITypeDecl {name, type_def = SIFloatingTypeDef x} =>
+			[BDTypeDecl {name = name, type_def = TDFloatingTypeDef x}]
+	|	SIVarDecl _ => []
+	|	SIVarDeclInit _ => []
+	|	SISubtypeDecl {name, type_def} => adjust_subtype_decl (name, type_def)
+	|	SIPrivateTypeDecl _ => []
+	|	SIPragma _ => []
+	|	SIAnnotation _ => []
+);
+=TEX
+\subsection{Variable Declarations}
+The three schemas of the specification (two cases plus a schema to combine them) all
+merge into one here:
+=SML
+fun Ûadjust_var_declÝ ({vars, t as {tmark, con}} : SI_VAR_DECL) : SI_BASIC_DECL OPT * VAR_DECL = (
+	case con of
+		SINoCon => (Nil, {vars = vars, tmark = tmark})
+	|	_ => (
+		let	val name = si_generate_id t;
+			val basic_decl = SISubtypeDecl{name = name, type_def = t};
+		in	(Value basic_decl, {vars = vars, tmark = name})
+		end
+	)
+);
 =TEX
 \section{EPILOGUE}
 
