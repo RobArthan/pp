@@ -725,7 +725,7 @@ XmAnyCallbackStruct *cbs;
 		if(!changed || yes_no_dialog(root, revert_message)) {
 			XmTextFieldSetString(namestring, no_file_message);
 			XmTextSetString(script, "");
-			flash_file_name(fname);
+			flash_file_name(no_file_message);
 			reinit_changed();
 			set_menu_item_sensitivity(filemenu,
 				FILE_MENU_SAVE, False);
