@@ -1,4 +1,4 @@
-% %Z% $Date: 2001/12/13 13:23:39 $ $Revision: 1.86 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2002/01/29 14:55:07 $ $Revision: 1.88 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -111,6 +111,7 @@
 \item[Issue 1.84] R0040: bug in treatment of type inference context in procedure calls.
 \item[Issues 1.85,1.86] Accommodated use of signature inclusion.
 \item[Issue 1.87] Fixed bug in treatment of expressions in for loops.
+\item[Issue 1.88] Further fixes and R0044: checks on array ranges.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -332,13 +333,14 @@ let	val name' = prefix;
 			(trans_exp env prefix, z_set
 			   [z_maplet (z_tuple(map (trans_exp env) comps), ze)]));
 in
-	assign {wp = wp, a = a, wp_env = wp_env} (name', e')
+	assign_rec {wp = wp, a = a, wp_env = wp_env} (name', e')
 end
 ) | array_assign _ _ _ = (
 	fail "array_assign" 508056 []
 )
 (*
 =TEX
+tmark_of_prefix;
 =SML
 *)
 and  Ûrecord_assignİ	({wp, a, wp_env as {env, ...}} : WP_PARS)
@@ -351,20 +353,33 @@ let	val zprefix = trans_exp env prefix;
 			handle Fail _ => fail "record_assign" 505028 [];
 	val ze' = z_record_update(tmark, selector, zprefix, ze); 
 in
-	assign {wp = wp, a = a, wp_env = wp_env} (name', ze')
+	assign_rec {wp = wp, a = a, wp_env = wp_env} (name', ze')
 end
 )
 (*
 =TEX
 =SML
 *)
-and Ûassignİ (wp_pars as {wp_env as {env, ...}, ...} : WP_PARS) ((name, ze) : EXP * Z_EXP)
+and Ûassign_recİ (wp_pars as {wp_env as {env, ...}, ...} : WP_PARS) ((name, ze) : EXP * Z_EXP)
 			: RESULT = (
 	case name of
 	EId id => simple_assign wp_pars id ze
 	|EIndexedComp ic => array_assign wp_pars ic ze
 	|ESelectedComp sc => record_assign wp_pars sc ze
 	|_ => fail "assign" 505029 []
+);
+=TEX
+=SML
+fun Ûassignİ (wp_pars as {wp_env as {env, ...}, ...} : WP_PARS) ((name, ze) : EXP * Z_EXP)
+			: RESULT = (
+let	val {wp = wp1, side = side1} = assign_rec wp_pars (name, ze);
+	val tmark = tmark_of_prefix env(trans_exp env name);
+	val side2 = (
+		case con_array_range_from_tmark (zid env tmark) of
+			Nil => []
+		|	Value r => [[] ô z_eq(z_dom ze, r)]);
+in	{wp = wp1, side = side1 @ side2}
+end
 );
 =TEX
 \subsection{Specification Statement (No initial variables)}\label{wp-specification-no-ivars}
@@ -762,33 +777,51 @@ It also returns, if necessary, a list of predicates giving
 the domain conditions for the actual parameter (TBD) and,
 if this is a record or array component actual parameter being
 exported, the membership constraint giving the declaration for
-the new Z variable that represents the parameter and the
+the new Z variable that represents the parameter.
+
+The optional predicate is the VC that may be needed if an exported parameter
+is being passed to a formal whose type is a constrained array subtype
+and which therefore may be subject to sliding.
+The control logic relies on the fact that a slided expression is not a variable
+and so we will always end up in the exception handler in the case where a VC may be necessary.
+In this case, if the parameter is an {\tt in} we can just use the (possibly) slided expression.
+We therefore only have to test whether sliding has occurred in the handler in the
+case of an exported parameter.
+
+The final part of the return value is the optional
 assignment statement that gives the update to the actual parameter
 to be considered as executed after the call.
 =SML
 fun Ûproc_call_paramİ (env : CN_ENV)
 	(actual : EXP, formal : ID, tmark : TMARK, mode : MODE)
 
-	: (Z_ID * Z_EXP) list * (Z_ID * Z_EXP) list * Z_PRED list * STATEMENT OPT = (
+	: (Z_ID * Z_EXP) list * (Z_ID * Z_EXP) list * Z_PRED list * Z_PRED OPT * STATEMENT OPT = (
 let	val	ntm as (n, tm) = (trans_id formal, trans_exp env actual);
+	val	sl_tm = slide_to_tmark env (tm, tmark);
 	val	dcs = [] (* domain_conds tm *);
 in	let	val (v, ty) = dest_var tm;
-	in	([ntm], [ntm, (init_var n, mk_var(init_var v, ty))], dcs, Nil)
+	in	([ntm], [ntm, (init_var n, mk_var(init_var v, ty))], dcs, Nil, Nil)
 	end	handle Fail _ => (
 			case mode of
-				MSparkIn => ([ntm], [ntm], dcs, Nil)
+				MSparkIn => ([(n, sl_tm)], [(n, sl_tm)], dcs, Nil, Nil)
 			|	_ =>
 				let	val ty = type_of tm;
 					val nv = param_tmp_name (type_of tm);
 					val cnstrnt = zid env (trans_id tmark);
 					val nvtm = mk_z_lvar(nv, ty, []);
 					val pred = z_mem(nvtm, cnstrnt);
+					val vc_opt = (
+						case con_array_range_from_tmark cnstrnt of
+							Nil => Nil
+						|	Value r => Value (z_eq(z_dom tm, r))
+					);
 					val stmt = Value (STAssign {
 						name = actual,
 						e = EAuxiliaryExp(z_quote(nvtm, Nil))});
 				in	([ntm],
 					 [(init_var n, tm), (n, nvtm)],
 					 pred::dcs,
+					 vc_opt,
 					 stmt)
 				end
 		)
@@ -803,7 +836,7 @@ the weakest pre-condition calculation.
 fun Ûproc_call_specİ (env : CN_ENV)
 		({actuals, ...} : (AGG_CHOICE,EXP) PROC_CALL)
 		({name, formal_ids, spec={w, w0, pre, post}, ...} : FORMAL_PROC)
-			: Z_PRED * Z_PRED * STATEMENT * Z_PRED list = (
+			: Z_PRED * Z_PRED * STATEMENT * Z_PRED list * Z_PRED list = (
 let	val old_cxt = get_ti_context();
 	val extra_cxt = ti_context_of_formal_ids env formal_ids;
 	val extra_ns = map (fst o dest_var) extra_cxt;
@@ -820,14 +853,16 @@ let	val old_cxt = get_ti_context();
 			APositional exps => map (adjust_exp env) exps
 			|ANamed nas => map (adjust_exp env)
 					(named_assocs_to_exps names nas);
-	fun do_params (acc as (presub, postsub, preds, st))
+	fun do_params (acc as (presub, postsub, dc_preds, vc_preds, st))
 		(acts as (act::more_acts) : EXP list)
 		({var_decl = {vars = frm::more_frms, tmark}, mode}::more_pss : PARAM_SPEC list)
-	: (Z_ID * Z_EXP) list * (Z_ID * Z_EXP) list * Z_PRED list * STATEMENT = (
-		let	val (prs, psts, prds, st_opt) =
+	: (Z_ID * Z_EXP) list * (Z_ID * Z_EXP) list * Z_PRED list * Z_PRED list * STATEMENT = (
+		let	val (prs, psts, prds, prd_opt, st_opt) =
 			proc_call_param env (act, frm, tmark, mode);
 		in	do_params
-			(prs@presub, psts@postsub, prds term_union preds,
+			(prs@presub, psts@postsub, prds term_union dc_preds,
+			(case prd_opt of Nil => vc_preds
+			| Value prd => vc_preds @ [prd]),
 			(case st_opt of Nil => st
 			 | Value asgn => STSemicolon(asgn, st)))
 			more_acts
@@ -841,29 +876,12 @@ let	val old_cxt = get_ti_context();
 	) | do_params _ _ _ = (
 		fail "proc_call_spec" 505026 [fn () => name]
 	);
-	val (presubs, postsubs, preds, st) =
-		do_params ([], [], [], STNull) adj_actuals formal_ids;
+	val (presubs, postsubs, dc_preds, vc_preds, st) =
+		do_params ([], [], [], [], STNull) adj_actuals formal_ids;
 in
-	(list_sub(pre1, presubs), list_sub(post1, postsubs), st, preds)
+	(list_sub(pre1, presubs), list_sub(post1, postsubs), st, dc_preds, vc_preds)
 end
 );
-=TEX
-=IGN
-
-val {formal_ids, spec as {w, w0, pre, post, label}, ...}=fp;
-val pre1 = z_predexp_of_z_tm pre;
-val post1 = z_predexp_of_z_tm post;
-val var_decls = map (fn {var_decl, ...} => var_decl) formal_ids;
-val names = flat (map (fn {vars, ...} => vars) var_decls);
-val exps = case actuals of
-			APositional exps => map (adjust_exp env) exps
-			|ANamed nas => map (adjust_exp env) (named_assocs_to_exps names nas);
-fun subs (actual : EXP,	name : ID)
-			: (Z_ID * Z_EXP) = (name, trans_exp env actual);
-val exp_names = combine exps names
-		handle _ => fail "proc_call_spec" 505026 [fn()=>name];
-val subs_list = map subs exp_names;
-
 =TEX
 In the following, we call $spec\_no\_ivars\_either$ directly rather than call $wp$ because the pre- and post-conditions have already been converted to $Z\_PRED$s. 
 =SML
@@ -875,14 +893,15 @@ let	fun is_it ({name = n, ...} : FORMAL_PROC) : bool = (name = n);
 	val fp as {spec = {w, ...}, ...} = find formal_procs is_it
 		handle Fail _ =>
 		fail "proc_call_no_ivars" 505031 [fn()=>name];
-	val (pre, post, asgns, preds) = proc_call_spec env pc fp;
+	val (pre, post, asgns, dc_preds, vc_preds) = proc_call_spec env pc fp;
 	val xform = STSemicolon(
 			STSpecNoIvars{spec = {w = [], w0=[],
 					pre=z_quote(pre, Nil),
 					post=z_quote(post, Nil)},
 				label = ""}, asgns);
 	val {wp = wp1, side = side1} = wp (xform, a, wp_env);
-in	{wp = add_hyps(preds, wp1), side = add_hyps(preds, side1)}
+	val side2 = map (fn p => [] ô p) vc_preds;
+in	{wp = add_hyps(dc_preds, wp1), side = add_hyps(dc_preds, side1@side2)}
 end
 );
 =TEX
@@ -1011,14 +1030,15 @@ let	fun is_it ({name = n, ...} : FORMAL_PROC) : bool = (name = n);
 	val fp = find formal_procs is_it
 		handle Fail _ =>
 		fail "proc_call_ivars" 505031 [fn()=>name];
-	val (pre, post, asgns, preds) = proc_call_spec env pc fp;
+	val (pre, post, asgns, dc_preds, vc_preds) = proc_call_spec env pc fp;
 	val xform = STSemicolon(
 			SSpecIvars{spec = {w = [], w0=[],
 					pre=z_quote(pre, Nil),
 					post=z_quote(post, Nil)},
 				label = ""}, asgns);
 	val {wp = wp1, side = side1} = wp (xform, a, wp_env);
-in	{wp = add_hyps(preds, wp1), side = add_hyps(preds, side1)}
+	val side2 = map (fn p => [] ô p) vc_preds;
+in	{wp = add_hyps(dc_preds, wp1), side = add_hyps(dc_preds, side1@side2)}
 end
 );
 =TEX
@@ -1041,9 +1061,10 @@ fun Ûany_initial_variables_z_tmİ (z_tm : Z_TM) : bool = (
 );
 =TEX
 =SML
-fun Ûis_static_for_loopİ (wp : WP_ENV) (fs : STATEMENT FOR_STATIC) : bool = (
-let	fun no_vars_in_exp exp = (
-		case (term_vars o (trans_exp (#env wp))) exp of
+fun Ûis_static_for_loopİ (wp as {env, ...}: WP_ENV) (fs : STATEMENT FOR_STATIC) : bool = (
+let	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
+	fun no_vars_in_exp exp = (
+		case (term_vars o adjust_and_trans) exp of
 			[] =>	true
 		|	_ =>	false
 	);

@@ -1,4 +1,4 @@
-% imp508.doc   %Z% $Date: 2002/01/27 15:31:00 $ $Revision: 1.85 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2002/01/27 19:46:50 $ $Revision: 1.86 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.85 $%
+\def\SCCSversion{$Revision: 1.86 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/01/27 15:31:00 $%
+\TPPdate{\FormatDate{$Date: 2002/01/27 19:46:50 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -104,9 +104,10 @@ Adjusted $ENV\_INFO$ and allowed for type conversions.
 \item[Issue 1.79] R0021: domain condition generation.
 \item[Issue 1.80] R0037: support for named numbers.
 \item[Issue 1.81] Fixed {\LaTeX} error.
-\item[Issue 1.82--1.84] Added code for R0006: free use of subtype indications and ranges.
-\item[Issue 1.85] R0021: domain condition generation --- revised specification does not
+\item[Issue 1.82--1.85] Added code for R0006: free use of subtype indications and ranges.
+\item[Issue 1.86] R0021: domain condition generation --- revised specification does not
 generate a domain condition for a $\Xi$ argument to a function.
+\item[Issue 1.87] R0044: array range sliding.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -135,23 +136,6 @@ structure €CNBasicDeclsAndExprs› : CNBasicDeclsAndExprs = struct
 	open CNParser CNTypes ZGeneratedConstants ZParagraphs;
 	open ZUserInterfaceSupport ZTypesAndTermsSupport;
 =TEX
-\section{CUSTOMIZED ENVIRONMENT HANDLING}
-
-=SML
-datatype €ENV_INFO› =
-			€EIEnvFunction› of Z_ID list * ID list * TMARK
-		|	€EIEnvVar› of TMARK
-		|	€EIEnvAuxVar› of Z_EXP
-		|	€EIEnvRecordType› of ID list
-		|	€EIEnvOtherType›
-		|	€EIEnvConstant› of TMARK
-		|	€EIEnvRetry› of Z_ID
-		|	€EIEnvOther›;
-=TEX
-=SML
-type €CN_ENV› = Z_ID -> (TYPE * ENV_INFO) OPT;
-=TEX
-
 \section{SUPPORTING FUNCTIONS}
 \subsection{Miscellaneous}
 As discussed with DRA during the (first) enhancements programme, the treatment
@@ -357,8 +341,13 @@ in
 	subst namemap tm_inst
 end);
 =TEX
-
-
+=TEX
+=SML
+val €z_slide_term› : TERM = Òslide(f, r)Æ;
+fun €z_slide› (exp1 : Z_EXP, exp2 : Z_EXP) : Z_EXP = (
+	cn_subst [(exp1, "f"), (exp2, "r")] z_slide_term
+);
+=TEX
 =SML
 val €zsucc› : Z_EXP = ÒsuccÆ;
 =TEX
@@ -818,6 +807,8 @@ fun €indexed_type› (base : Z_EXP) (sels : SEL list) : Z_EXP = (
 		end
 	)
 );
+=IGN
+val env = (#env o #wp_env o fst o hd o !)CNZGenerator.diag_vc_args;
 =TEX
 Using {\it indexed\_type} we can now define {\it tmark\_of\_prefix}
 as required by the formal specification.
@@ -1269,6 +1260,46 @@ fun €strip_attr_prefix› (pfx : EXP) : EXP * ATTRIB list = (
 	end			
 );
 =TEX
+\subsection{Array Sliding}
+For array sliding, we first of all need a function to find the range type
+of a constrained array subtype.
+This is parameterised by a Z expression which is the Z translation of a type mark
+and fails if the range type cannot be calculated.
+=SML
+val €z_dom_f_eq› : Z_EXP = Òdom array = XÆ;
+
+fun €con_array_range_from_tmarkf› (tmark : Z_EXP) : Z_EXP = (
+	let	fun do_array_con_def tm = (
+			let	val t1 = (snd o dest_eq o snd o dest_thm o z_get_spec) tm;
+				val (_, pred, _) = dest_z_seta t1;
+			in	term_match pred z_dom_f_eq;
+				snd(dest_eq pred)
+			end
+		);
+		fun do_abbrev_def tm = (
+			(snd o dest_eq o snd o dest_thm o z_get_spec) tm
+		);
+		fun go tm = (
+			do_array_con_def tm
+			handle Fail _ => (
+				go (do_abbrev_def tm)
+			)
+		);
+	in	go tmark
+	end
+);
+=TEX
+Now the external interfaces.
+=SML
+fun €slide› (arr_exp : Z_EXP, tmark_exp : Z_EXP) : Z_EXP = (
+	z_slide(arr_exp, tmark_exp)
+	handle Fail _ => term_fail "slide" 508090 [arr_exp]
+);
+fun €con_array_range_from_tmark› (tmark : Z_EXP) : Z_EXP OPT = (
+	Value(con_array_range_from_tmarkf tmark)
+	handle Fail _ => Nil
+);
+=TEX
 \section{TRANSLATING SPARK EXPRESSIONS}
 
 \subsection{Translating Identifiers}
@@ -1635,8 +1666,15 @@ and €trans_fun_name› (env : CN_ENV) (n : ID) : Z_EXP = (
 and €exp_fun_call› (env : CN_ENV) ({fun_name, args} : EXP FUN_CALL) : Z_EXP = (
 	case args of
 		[] => trans_fun_name env fun_name
-	|	_ => 
-	z_fun_call (trans_fun_name env fun_name, map (trans_exp env) args)
+	|	_ => (
+		let	val args_tmarks = (combine (map (trans_exp env) args) (map snd(
+				case env fun_name of
+					Value(_, EIEnvFunction (_, psts, _)) => psts
+				| 	_ => fail "exp_fun_call" 508081 [fn _ => fun_name])))
+				handle Fail _ =>  fail "exp_fun_call" 508081 [fn _ => fun_name];
+		in	z_fun_call (trans_fun_name env fun_name, map (slide_to_tmark env) args_tmarks)
+		end
+	)
 )
 =TEX
 \subsection{Translating Qualified Expressions}
@@ -1721,6 +1759,14 @@ and €exp_array_agg› (env : CN_ENV) (e : EXP) : Z_EXP = (
 	in	mk_array_agg
 		(max, trans_array_agg_exp env {tname = tname, this = this, max = max} e)
 	end
+)
+=TEX
+\subsection{Sliding}
+=SML
+and €slide_to_tmark› (env : CN_ENV) (ze : Z_EXP, tm : TMARK) : Z_EXP = (
+	case con_array_range_from_tmark (trans_exp env (EId tm)) of
+		Nil => ze
+	|	Value r => slide(ze, r)
 );
 =TEX
 The following variant of $trans\_exp$ returns an optional Z expression. If the SPARK expression can only be handled informally then a comment message is printed out and $Nil$ is returned.
@@ -1906,8 +1952,9 @@ Is it a function call?
 		if	(fst(dest_ctype ty) <> informal_function)
 		then	EFunCall{fun_name=prename, args=map (adjust_exp env) comps}
 		else	fail "adjust_id" 508049 [fn()=>prename]
-	) |(Value (ty, EIEnvFunction (_, names, _)), EArrayAggNamed{named_assocs, ...}) => (
-	let	val args = named_assocs_to_exps names named_assocs;
+	) |(Value (ty, EIEnvFunction (_, names_tmarks, _)), EArrayAggNamed{named_assocs, ...}) => (
+	let	val names = map fst names_tmarks;
+		val args = named_assocs_to_exps names named_assocs;
 	in	if	(fst(dest_ctype ty) <> informal_function)
 		then	EFunCall
 			{fun_name=prename, args=map (adjust_exp env) args}
@@ -2518,30 +2565,6 @@ val €basic_decl_subtype_fixed_con› : CN_ENV -> ID
 val €basic_decl_subtype_floating_con› : CN_ENV -> ID
 	-> EXP FLOATING_POINT_CONSTRAINT -> PARAINFO list
 	= basic_decl_floating_type;
-=SML
-=TEX
-The following function is used to check whether a subtype has base type
-{\it STRING} and, if so, to check the lower index bound.
-=SML
-local
-val z_one = Ò1Æ;
-in
-fun €string_bound_check› (env : CN_ENV) (name : ID) ([ix] : TMARK list) (ztmark : Z_EXP)
-		 : PARAINFO list = (
-	case base_type ztmark of
-	Value "STRING" =>
-		let	val zbnd = zid env (trans_id ix ^^ zfst);
-			val zval = (snd o dest_eq o concl o TRY_C(cn_eval_conv[])) zbnd;
-		in	if	is_z_signed_int zval
-			then	if	zval =$ z_one
-				then	[]
-				else	fail "string_bound_check" 508075 [fn _ => name]
-			else	(comment "string_bound_check" 508076 [fn _ => name];
-				[ConjectureInfo(Value name, [], mk_z_eq(zbnd, z_one))])
-		end
-	| _ => []
-) | string_bound_check _ _ _ _ = [];
-end;
 =TEX
 =SML
 fun €basic_decl_subtype_index_con› (env : CN_ENV) (name : ID) (tmark : TMARK)
@@ -2558,11 +2581,9 @@ let	val zname = trans_id name;
 	val zp = z_eq (z_dom (zid env' var), z_many_cross(map (zid env) zindex));
 	val set_comp = z_set_comp (trans_decl env' {vars=[var],tmark=tmark}, zp)
 	val abb_def = z_eq_eq (zname, set_comp);
-in	abb_def :: array_attrib env (zname, zindex) @
-	string_bound_check env name index zexp
+in	abb_def :: array_attrib env (zname, zindex)
 end
 );
-
 =SML
 fun €basic_decl_subtype_no_con› (env : CN_ENV) (name : ID) (tmark : TMARK)
 		: PARAINFO list = (
