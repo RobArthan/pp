@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.212 $ $RCSfile: imp507.doc,v $ $Date: 2002/07/14 17:18:18 $
+% imp507.doc %Z% $Revision: 1.213 $ $RCSfile: imp507.doc,v $ $Date: 2002/07/15 12:24:07 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.212 $%
+\def\SCCSversion{$Revision: 1.213 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/07/14 17:18:18 $%
+\TPPdate{\FormatDate{$Date: 2002/07/15 12:24:07 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -160,7 +160,7 @@ in the same package.
 \item[Issue 1.212] Got {\it renames\_fun} and {renames\_proc} to work in
 a package specification when the subprogram
 being renamed is defined in the same package specification.
-\item[Issue 1.212] Completed treatment of use clauses.
+\item[Issue 1.213, 1.214] More fixes after further testing of use clauses.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -3698,6 +3698,41 @@ in	spec
 end);
 =TEX
 =SML
+fun Ûsubs_formals_specİ (
+	pars : PARAM_SPEC list,
+	spec as {
+		w,
+		w0,
+		pre = ZTmQuotation(z_pre, tyo1),
+		post = ZTmQuotation(z_post, tyo2)} : SPEC,
+	ys : ID list) : PARAM_SPEC list * SPEC = (
+	let	val xs = flat (map (#vars o #var_decl) pars);
+	in	if	xs =  ys
+		then	(pars, spec)
+		else	let	val xs = flat (map (#vars o #var_decl) pars);
+				val xs0 = xs @ map init_var xs;
+				val ys0 = ys @ map init_var ys;
+				val xs0_ys0 = combine xs0 ys0;
+				fun subs_id n = lassoc1 xs0_ys0 n;
+				fun do_param_spec {var_decl = {vars, tmark}, mode} = (
+					{var_decl = {vars = map subs_id vars, tmark = tmark},
+					 mode = mode}	
+				);
+				val new_pars = map do_param_spec pars;
+				val new_w = map subs_id w;
+				val new_w0 = map subs_id w0;
+				val new_pre = z_quote(subs_pred (z_pre, xs0, ys0), tyo1);
+				val new_post = z_quote(subs_pred (z_post, xs0, ys0), tyo2);
+			in	(new_pars,
+				{w = new_w,
+				w0 = new_w0,
+				pre = new_pre,
+				post = new_post})
+			end
+	end
+) | subs_formals_spec _ = fail "subs_formals_spec" 507076 [];
+=TEX
+=SML
 fun Ûform_proc_pack_specİ (form_proc as {
 		name,
 		formal_ids,
@@ -3711,10 +3746,11 @@ fun Ûform_proc_pack_specİ (form_proc as {
 			(force_value(s_lookup block_name2 (!pack_env)))
 			handle Fail _ =>
 			error "form_proc_pack_spec" 507012 [fn()=>block_name2];
-		val spec1 = check_formal_proc form_proc;
+		val (formal_ids1, spec1) =
+			subs_formals_spec(formal_ids, check_formal_proc form_proc, par_names);
 		val form_proc1 = {
 			name = name,
-			formal_ids = formal_ids,
+			formal_ids = formal_ids1,
 			par_names = par_names,
 			globals = globals,
 			spec = spec1};
@@ -5868,7 +5904,7 @@ fun Ûrenames_proc_commonİ
 				val oldthy = get_current_theory_name();
 				val changethy = open_theory spec_script_name;
 				val old_fp as {name=pname, formal_ids=pformal_ids, globals=g,
-					par_names=_, spec=pspec} = (
+					par_names=old_par_names, spec=pspec} = (
 					prefix_formal_proc
 						pack
 						tysubs
@@ -5890,9 +5926,9 @@ fun Ûrenames_proc_commonİ
 					Value( get_proc_spec "renames_proc_common"
 						current_cn_env fps new)
 					handle Fail _ =>  Nil;
-			in	case new_fp of
-					Nil => Value formal_proc3
-				|	Value fp => (
+			in	case (new_fp, length par_names = length old_par_names) of
+					(Nil, true) => Value formal_proc3
+				|	_ => (
 					fail "renames_proc_common" 507059
 					[fn _ => old, fn _ => new]
 				)
@@ -5911,7 +5947,7 @@ fun Ûrenames_proc_commonİ
 	({subprogram_specification = ss, name1 = Nil, name2=old}) = (
 	let	val fps = #formal_procs (flatten_env(!blocks));
 		val (new, par_names) = get_name_and_par_names ss;
-		val old_fp  as {formal_ids, globals, spec, par_names = _, ...} =
+		val old_fp  as {formal_ids, globals, spec, par_names = old_par_names, ...} =
 			get_proc_spec "renames_proc_common" current_cn_env  fps old
 			handle Fail _ => (
 				get_proc_spec "renames_proc_common" current_cn_env  pack_fps old
@@ -5921,14 +5957,14 @@ fun Ûrenames_proc_commonİ
 		val new_fp  =
 			Value( get_proc_spec "renames_proc_common" current_cn_env fps new )
 			handle Fail _ =>  Nil;
-	in	case new_fp of
-				Nil  => (
+	in	case (new_fp, length par_names = length old_par_names) of
+				(Nil, true)  => (
 					Value{	name = new,
 						par_names = par_names,
 						formal_ids = formal_ids,
 						globals = globals,
 						spec = spec}
-		) |	Value fp =>  (
+		) |	_ =>  (
 				fail "renames_proc_common" 507059
 				[fn _ => old, fn _ => new]
 		)
@@ -5946,15 +5982,18 @@ let	val {declab = {block_name = block_name1, ...}, ...} =	block 1;
 		handle _ => fail "renames_proc_pack_spec" 507012 [fn ()=> block_name1];
 	val fps = #formal_procs package2;
  	val oformal_proc3 = renames_proc_common fps sr;
+	fun un_mk_param_spec {var_decl = {vars, tmark}, mode} = (
+		{idlist = vars, name = tmark, mode = mode}
+	);
 in
 	case oformal_proc3 of
 	Nil => ()
-	| Value formal_proc3 =>  (
-		pack_env :=
-		s_enter
-		block_name1
-		(package_formal_procs(package2, fps @ [formal_proc3]))
-		(!pack_env)
+	| Value (formal_proc3 as {name, formal_ids, ...}) => (
+		new_scope_proc_form name;
+		curr_form_proc formal_proc3;
+		fformal_part (map un_mk_param_spec formal_ids);
+		form_proc_pack_spec formal_proc3;
+		end_scope()
 	)
 end
 );
@@ -6029,7 +6068,7 @@ fun Ûrenames_fun_pack_specİ
 	let	val {declab = {block_name = block_name1, ...}, ...} =	block 1;
 		val package2 = force_value(
 			s_lookup block_name1 (!pack_env))
-			handle _ => fail "renames_proc_pack_spec" 507012 [fn ()=> block_name1];
+			handle _ => fail "renames_fun_pack_spec" 507012 [fn ()=> block_name1];
 		val ffs = #formal_funs package2;
 		val old_name = (case opack of  Value pack => pack dot old | Nil => old);
 		val old_zname =  trans_id old_name;
