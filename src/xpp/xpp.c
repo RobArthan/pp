@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.16 2004/01/24 17:32:55 rda Exp rda $
+ * $Id: xpp.c,v 2.17 2004/01/25 11:09:57 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -65,6 +65,7 @@ static char *file_name;
 #define XUSERFILESEARCHPATH "XUSERFILESEARCHPATH"
 #define XAPPLRESDIR "XAPPLRESDIR"
 #define HOME "HOME"
+#define BIN "bin"
 
 /*
 * In the following, the first two %s are set to $HOME and the third to $PPHOME
@@ -267,12 +268,15 @@ void set_pp_home(void)
  * That way you can use one version of xpp to run several different versions of ProofPower,
  * by giving full path names for the ProofPower command on  the xpp command line.
  */
-		env_entry = (char*) XtMalloc(strlen(PATH) + strlen(pp_home) + strlen(unix_path) + 3);
+		env_entry = (char*) XtMalloc(strlen(PATH) + strlen(pp_home) + strlen(BIN)
+			+ strlen(unix_path) + 4);
 /*
  * Do set up the path. Otherwise out-of-the-box running won't be so easy.
  */		strcpy(env_entry, PATH);
 		strcat(env_entry, "=");
 		strcat(env_entry, pp_home);
+		strcat(env_entry, "/");
+		strcat(env_entry, BIN);
 		strcat(env_entry, ":");
 		strcat(env_entry, unix_path);
 /*
