@@ -72,8 +72,6 @@ Widget w;
 	Widget shell, form, button;
 	void type_char_cb();
 
-	TRACE("add_palette");
-
 	for(	twi= 0;
 		twi< MAX_PALETTES &&
 		palette_info[twi].text_w != w &&
@@ -84,13 +82,13 @@ Widget w;
 
 	if(twi>= MAX_PALETTES) {
 		msg("palette creation", "no more space for palettes");
-		RETURN("add_palette", False);
+		return False;
 	};
 
 	if((form = palette_info[twi].palette_w) != NULL) {
 		XtManageChild(form);
 		XtPopup(XtParent(form), XtGrabNone);
-		RETURN("add_palette", True);
+		return True;
 	};
 
 	n_chars = strlen(prettychars);
@@ -137,7 +135,7 @@ Widget w;
 	XtManageChild(form);
 	XtPopup(shell, XtGrabNone);
 
-	RETURN("add_palette", True);
+	return True;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -154,14 +152,12 @@ XmPushButtonCallbackStruct *cbs;
 	XmTextPosition start, end;
 	Widget text_w;
 
-	TRACE("type_char_cb");
-
 	if(text_index >= MAX_PALETTES ||
 		!(text_w = palette_info[text_index].text_w)) {
 		char *m = "unexpected argument 0xXXXXXXXX";
 		sprintf(m, "unexpected argument 0x%x", cbdata);
 		msg("palette handler", m);
-		LEAVE("type_char_cb");
+		return;
 	};
 
 	buf[0] = cbdata & 0xff;
@@ -177,8 +173,6 @@ XmPushButtonCallbackStruct *cbs;
 
 	XmTextSetInsertionPosition(text_w, start + 1);
 	XmTextShowPosition(text_w, start);
-
-	LEAVE("type_char_cb");
 }
 
 

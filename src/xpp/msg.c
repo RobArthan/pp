@@ -56,8 +56,6 @@ char *str;
 	Arg args[9];
 	char buf[BUFSIZ];
 
-	TRACE("help_dialog");
-
 	dialog_w = XtVaCreatePopupShell("Help",
 		xmDialogShellWidgetClass, get_top_shell(w),
 		XmNdeleteResponse, XmDESTROY,
@@ -108,18 +106,12 @@ char *str;
 	XtManageChild(pane);
 
 	XtPopup(dialog_w, XtGrabNone);
-
-	LEAVE("help_dialog");
 }
 
 void ok_reply(widget, shell)
 Widget widget, shell;
 {
-	TRACE("ok_reply");
-
 	XtDestroyWidget(shell);
-
-	LEAVE("ok_reply");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -134,8 +126,6 @@ char *question;
 	static NAT reply;
 	/* 0 = not replied; otherwise YES/NO */
 	extern void yes_no_cb();
-
-	TRACE("yes_no_dialog");
 
 	reply = 0;
 
@@ -172,7 +162,7 @@ char *question;
 
 	XtPopdown(XtParent(dialog));
 
-	RETURN("yes_no_dialog", reply == YES);
+	return reply == YES;
 }
 
 void yes_no_cb(w, reply, cbs)
@@ -180,8 +170,6 @@ Widget w;
 NAT *reply;
 XmAnyCallbackStruct *cbs;
 {
-	TRACE("yes_no_cb");
-
 	switch (cbs->reason) {
 		case XmCR_OK:
 			*reply = YES;
@@ -192,7 +180,6 @@ XmAnyCallbackStruct *cbs;
 		default:
 			break;
 	}
-	LEAVE("yes_no_cb");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -206,7 +193,6 @@ char *msg;
 	XmString text, ok, error;
 	static NAT reply;
 	/* 0 = not replied; */
-	TRACE("ok_dialog");
 
 	reply = 0;
 
@@ -241,7 +227,6 @@ char *msg;
 		}
 	};
 	XtPopdown(XtParent(dialog));
-	LEAVE("ok_dialog");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -261,7 +246,6 @@ char *opn;
 	static NAT reply;
 	/* 0 = not replied; */
 
-	TRACE("file_dialog");
 	reply = 0;
 
 
@@ -303,9 +287,9 @@ char *opn;
 	XtPopdown(XtParent(dialog));
 
 	if(reply == YES) {
-		RETURN("file_dialog", file_name);
+		return file_name;
 	} else {
-		RETURN("file_dialog", NULL);
+		return NULL;
 	};
 
 }
@@ -316,8 +300,6 @@ Widget w;
 NAT *reply;
 XmFileSelectionBoxCallbackStruct *cbs;
 {
-	TRACE("file_sel_cb");
-
 	switch (cbs->reason) {
 		case XmCR_OK:
 			(void) XmStringGetLtoR(cbs->value,
@@ -331,6 +313,4 @@ XmFileSelectionBoxCallbackStruct *cbs;
 		default:
 			break;
 	}
-
-	LEAVE("file_sel_sb");
 }

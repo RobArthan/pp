@@ -151,8 +151,6 @@ void main(argc, argv)
 int argc;
 char **argv;
 {
-	debug = DEBUG;
-
 	root = XtVaAppInitialize(&app,
 		"Xpp",
 		options,
@@ -161,14 +159,6 @@ char **argv;
 		argv, NULL, NULL);
 
 	set_up_arglist(argc, argv);
-
-	if(debug & MESSAGE) {
-		int i;
-		for(i = 0; i < MAX_ARGS && arglist[i]; ++i) {
-			fprintf(stderr,
-			"arglist[%d] = \"%s\"\n", i, arglist[i]);
-		}
-	}
 
 	cmdwin(edit_only);
 	exit(0);

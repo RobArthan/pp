@@ -22,17 +22,6 @@
 #define STDOUT 1
 #define STDERR 2
 
-/*
- * bit masks for diagnostic functions:
- */
-
-#define MESSAGE 1
-#define TRACING 2
-
-#define TRACE(X) {gen_diag(TRACING, "ENTERED", X);}
-#define	RETURN(X,V) {gen_diag(TRACING, "LEAVING", X); return(V);}
-#define LEAVE(X) {gen_diag(TRACING, "LEAVING", X); return;}
-
 #include <X11/Intrinsic.h>
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * TYPE DEFS
@@ -72,14 +61,6 @@ typedef struct menu_item {
 		NAT	siz);
 #endif
 #ifndef _diag
-	extern void gen_diag(
-		NAT	mask,
-		char	*s1,	/* title: ... */
-		char	*s2	/* ...: message */);
-	extern void diag(
-		char	*s1,	/* title: ... */
-		char	*s2	/* ...: message */);
-	extern NAT debug;
 	extern void msg(
 		char	*s1,	/* title: ... */
 		char	*s2	/* ...: message */);

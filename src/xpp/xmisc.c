@@ -41,15 +41,12 @@ NAT i;
 	Widget *btns;
 	NAT num_btns;
 	Bool sens;
-	TRACE("toggle_menu_item_sensitivity");
 
 	XtVaGetValues(w, XmNchildren, &btns,
 		XmNnumChildren, &num_btns, NULL);
 	if (0 <= i && i < num_btns) {
 		XtSetSensitive(btns[i], !XtIsSensitive(btns[i]));
 	};
-
-	LEAVE("toggle_menu_item_sensitivity");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -64,15 +61,12 @@ Bool b;
 	Widget *btns;
 	NAT num_btns;
 	Bool sens;
-	TRACE("set_menu_item_sensitivity");
 
 	XtVaGetValues(w, XmNchildren, &btns,
 		XmNnumChildren, &num_btns, NULL);
 	if (0 <= i && i < num_btns) {
 		XtSetSensitive(btns[i], b);
 	};
-
-	LEAVE("set_menu_item_sensitivity");
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set_menu_item_label: given a menu w change the
@@ -87,7 +81,6 @@ char *lab;
 	NAT num_btns;
 	XmString str;
 	Bool sens;
-	TRACE("set_menu_item_label");
 
 	XtVaGetValues(w, XmNchildren, &btns,
 		XmNnumChildren, &num_btns, NULL);
@@ -99,7 +92,6 @@ char *lab;
 		XmStringFree(str);
 	};
 
-	LEAVE("set_menu_item_label");
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * check_text_window_limit: helps to manage the text windows
@@ -121,16 +113,14 @@ NAT max;
 	"**** Text lost when buffer exceeded %ld bytes ****\n";
 	char msg[80]; /* enough for fmt with %ld expanded */
 
-	TRACE("check_text_window_limit");
-
 	if(max < 1000) {
-		LEAVE("check_text_window_limit");
+		return;
 	};
 
 	siz = XmTextGetLastPosition(w);
 
 	if(siz <= max) {
-		LEAVE("check_text_window_limit");
+		return;
 	};
 
 	bytes_to_go = siz / 20;
@@ -150,6 +140,4 @@ NAT max;
 	sprintf(msg, fmt, max);
 
 	XmTextReplace(w, 0, bytes_to_go, msg);
-
-	LEAVE("check_text_window_limit");
 }
