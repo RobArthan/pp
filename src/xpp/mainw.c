@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.49 2003/02/12 16:34:01 rda Exp rda $
+ * $Id: mainw.c,v 2.50 2003/02/13 13:16:22 rda Exp robarthan $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -28,9 +28,6 @@
 
 #include <stdio.h>
 #include <string.h>
-#ifndef LINUX
-#include <stropts.h>
-#endif
 
 #include "xpp.h"
 
@@ -338,7 +335,7 @@ static MenuItem ln_popup_menu_items[] = {
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * scroll_out: given a buffer, buf, containing ct characters
+ * scroll_out: given a text buffer, buf, containing ct characters
  * of interest, write them to the journal window, journal.
  * If the insertion position is visible, then the window is scrolled,
  * otherwise the new characters are written out of sight and
@@ -351,6 +348,13 @@ static MenuItem ln_popup_menu_items[] = {
  * problem, using XmTextShowPosition was just as bad. The reason for
  * the earlier complexity was that XmTextShowPosition didn't work
  * properly on some ancient implementations of Motif).
+ *
+ * Note that the first parameter of scroll_out is not a const char *.
+ * and has to be big enough for scroll_out to temporarily null-terminate
+ * the string. It restores the overwritten character when the text has been written
+ * to the journal window. Moreover, it will overwrite the text itself if
+ * it contains control characters or carriage returns - these overwrites are not
+ * restored.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static Boolean scroll_pending = False;
@@ -368,31 +372,50 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 	Position dontcare;
 	char overwritten;
 	Boolean visible;
+	int i, j;
 	static Boolean scroll_scheduled = False;
-
+	static Boolean last_was_cr = False;
 	ins_pos = XmTextGetLastPosition(journal);
-
 	visible = XmTextPosToXY(journal, (ins_pos ? ins_pos - 1 : 0),
 			&dontcare, &dontcare);
-
-/* temporarily null-terminate the buffer: */
-
-	overwritten = buf[ct];
-	buf[ct] = '\0';
-
+/* scan the buffer for oddities and convert them to UNIX text: */
+	for(i = 0, j = 0; j < ct; ++i, ++j) {
+		if(buf[j] == '\r') {
+			last_was_cr = True;
+			buf[i] = '\n';
+		} else  if(last_was_cr && buf[i] == '\n') {
+			last_was_cr = False;
+			j += 1;
+			if(j < ct) {
+				buf[i] = buf[j];
+			} else {
+				break;
+			}
+		} else if(control_chars[buf[j] & 0xff]) {
+			last_was_cr = False;
+			buf[i] = '?';
+		} else {
+			last_was_cr = False;
+			buf[i] = buf[j];
+		}	
+	}
+/* temporarily null-terminate: */
+	overwritten = buf[i];
+	buf[i] = '\0';
+/* write it to the journal */
 	XmTextInsert(journal, ins_pos, buf);
-
-	buf[ct] = overwritten;
-
+/* undo null-termination */
+	buf[i] = overwritten;
+/* see where we are: */
 	last_pos = XmTextGetLastPosition(journal);
-
+/* set up time-out to scroll if insertion position was visible and not already set-up */
 	if(visible && !scroll_pending) {
 		XtAppAddTimeOut(app, 20, scroll_out_timeout_proc, NULL);
 		scroll_pending = True;
 	}
-
+/* make sure we're positioned right for the next insertion: */
 	XmTextSetInsertionPosition(journal, last_pos);
-
+/* check size of contents & done: */
 	check_text_window_limit(journal,  global_options.journal_max);
 
 }
