@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.30 2004/02/18 16:23:57 rda Exp rda $
+ * $Id: xpp.c,v 2.31 2004/02/18 16:26:25 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -183,7 +183,7 @@ static XtResource resources[] = {
 		sizeof(int),
 		XtOffsetOf(XppResources, add_new_line_mode),
 		XtRImmediate,
-		(XtPointer) 1
+		(XtPointer) 0
 	},
 	{
 		XtNdefaultCommand,
@@ -192,7 +192,7 @@ static XtResource resources[] = {
 		sizeof(char *),
 		XtOffsetOf(XppResources, default_command),
 		XtRString,
-		""
+		"pp"
 	},
 	{
 		XtNargumentChecker,
@@ -201,7 +201,7 @@ static XtResource resources[] = {
 		sizeof(char *),
 		XtOffsetOf(XppResources, argument_checker),
 		XtRString,
-		""
+		"pp -V"
 	}
 };
 
