@@ -43,9 +43,9 @@
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.5 $%
+\def\Version{$Revision: 1.6 $%
 }
-\def\Date{\FormatDate{$Date: 2003/03/05 22:53:54 $%
+\def\Date{\FormatDate{$Date: 2003/03/06 14:41:15 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -79,6 +79,7 @@
 \item[Issues 1.1 -- 1.3] First drafts.
 \item[ Issue 1.4 ] Corrections after (semi-automatic) testing against all of the {\tt xpp} code.
 \item[ Issues 1.5, 1.6 ] Updates for new representation of {\it LEX\_VALUE}s.
+\item[ Issue 1.7 ] Added tests for (and corrected) lexis of floating constants etc.
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -1082,39 +1083,59 @@ fun Ûis_floating_exp_charÝ "e" = true
 =TEX
 =SML
 fun Ûget_floatingÝ [] = Nil
-| get_floating (chs as (ch :: _)) = (
-	let	fun aux1 acc [] = Value(implode(rev acc), [])
-		|    aux1 acc (c::more) = (
+| get_floating chs = (
+	let	fun do_type_char acc [] = Value(rev acc, [])
+		|    do_type_char acc (c::more) = (
 			if	is_floating_type_char c
-			then	aux1 (c::acc) more
-			else	Value(implode(rev acc), c::more)
+			then	Value(rev(c::acc),  more)
+			else	Value(rev acc, c::more)
 		);
-		fun aux2 got_digit got_exp acc [] = Value(implode(rev acc), [])
-		|   aux2 got_digit got_exp acc (c::more) = (
+		fun do_exp_rest acc [] = Value (rev acc, [])
+		|   do_exp_rest acc (chs as (c::more)) = (
 			if	is_digit c
-			then	aux2 true got_exp (c::acc) more
-			else if	not got_digit
-			then	Nil
-			else if	is_floating_exp_char c
-			then	if	got_exp
-				then	Value(implode(rev acc), c::more)
-				else	aux2 got_digit true (c::acc) more
-			else if	is_floating_type_char c
-			then	aux1 (c::acc) more
-			else	Value(implode(rev acc), c::more)
+			then	do_exp_rest (c::acc) more
+			else	do_type_char acc chs
 		);
-		fun aux3 got_digit acc ("." :: more) = aux2 got_digit false ("."::acc) more
-		|   aux3 _ _ _ = Nil;
-		fun aux4 _ _ [] =Nil
-		|   aux4 got_digit acc (c::more) = (
+		fun do_exp e_char acc (chs as ("-"::(more as (ch::_)))) = (
+			if	is_digit ch
+			then	do_exp_rest ("-"::e_char::acc) more
+			else	Value(rev acc, e_char :: chs)
+		) | do_exp e_char acc (chs as (ch::more)) = (
+			if	is_digit ch
+			then	do_exp_rest (ch::e_char::acc) more
+			else	Value(rev acc, e_char :: chs)
+		) | do_exp e_char acc [] = Value(rev acc, [e_char]);
+		fun do_frac_part got_digit acc [] = (
+			if	got_digit
+			then	Value(rev acc, [])
+			else	Nil
+		) | do_frac_part got_digit acc (c::more) = (
 			if	is_digit c
-			then	aux4 true (c::acc) more
-			else	aux3 got_digit acc (c::more)
+			then	do_frac_part true (c::acc) more
+			else if	got_digit
+			then	if	is_floating_exp_char c
+				then	do_exp c acc more
+				else if	is_floating_type_char c
+				then	do_type_char (c::acc) more
+				else	Value(rev acc, c::more)
+			else	Nil
 		);
-
-	in	if	is_digit ch orelse ch = "."
-		then	aux4 false [] chs
-		else	Nil
+		fun do_point got_digit acc ("." :: more) = (
+			do_frac_part got_digit ("."::acc) more
+		) | do_point got_digit acc chs = do_frac_part got_digit acc chs;
+		fun do_int_part _ _ [] =Nil
+		|   do_int_part got_digit acc (c::more) = (
+			if	is_digit c
+			then	do_int_part true (c::acc) more
+			else	do_point got_digit acc (c::more)
+		);
+	in	case do_int_part false [] chs of
+			Value (chs, more) => (
+				if	"." mem chs
+				orelse	any chs is_floating_exp_char
+				then	Value(implode chs, more)
+				else	Nil
+		) |	Nil => Nil
 	end
 );
 =TEX
@@ -1240,8 +1261,8 @@ fun Ûc_parse_fileÝ name = (
 	([], true)
 );
 =TEX
-\subsection{A Simple Test}
-=DUMP wrk063.c
+\subsection{Some Simple Tests}
+=DUMP wrk063.1.c
 #define MSG "Hello World!\n"
 #define LEN_MSG (sizeof MSG - 1)
 #define STDOUT 1
@@ -1251,9 +1272,27 @@ int main(int argc, char **argv)
 }
 =TEX
 =SH
-cc -E wrk063.c >wrk063.i
+cc -E wrk063.1.c >wrk063.1.i
 =SML
-print_tree (curry output std_out) (c_parse_file"wrk063.i");
+print_tree (curry output std_out) (c_parse_file"wrk063.1.i");
+=TEX
+=DUMP wrk063.2.c
+long int ________ = 99;
+float a_ = 100E45f;
+long double _x = 1.2e-9l;
+double _ = .1;
+float t = .1e3, y = .99999E-7;
+static long unsigned int zz____z;
+int yyy = 1234567;
+char c = 'x';
+char d = '\'';
+char e = '\\';
+char *p1 = "", *p2 = "a", *p3 = "a"/* comment */"b" "c",
+	*p4 = "\\\"";
+=SH
+cc -E wrk063.2.c >wrk063.2.i
+=SML
+print_tree (curry output std_out) (c_parse_file"wrk063.2.i");
 =TEX
 \newpage
 \section{INDEX}
