@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.33 2002/11/28 14:32:26 rda Exp $
+ * $Id: mainw.c,v 2.35 2002/12/02 22:51:50 rda Exp $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -148,6 +148,7 @@ static void setup_reopen_menu(char *filename);
 static void post_popupeditmenu(EVENT_HANDLER_ARGS);
 static void post_ln_popup_menu(EVENT_HANDLER_ARGS);
 static void defer_resize (EVENT_HANDLER_ARGS);
+static void journal_resize_handler (EVENT_HANDLER_ARGS);
 static Bool execute_command(void);
 static void execute_action(
     Widget 		/* widget */,
@@ -394,6 +395,38 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 
 }
 
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * journal_resize_hanlder: work-around for Motif's treatment
+ * of resizing the journal window using the sash. What we want to
+ * do is keep the insertion position visible after the resize if
+ * it was visible before.
+ * The complexity arises because by the time the journal window receives its
+ * StructureNotify event, the insertion position will have moved.
+ * We therefore handle ButtonPress events on the sash as well as
+ * StructureNotify events on the journals window and test for visibility i
+ * on the ButtonPress events.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void journal_resize_handler(
+	Widget		w,
+	XtPointer	x,
+	XEvent		*evp,
+	Boolean		*continue_dispatch)
+{
+	XmTextPosition last_pos;
+	static Boolean visible = True;
+	Position dontcare;
+	if(evp->type == ButtonPress) { /* user pressed the sash button */
+		last_pos = XmTextGetLastPosition(journal);
+		visible = XmTextPosToXY(journal, (last_pos ? last_pos - 1 : 0),
+			&dontcare, &dontcare);
+	} else if(visible) { /* StructureNotify in the journal window */
+		XmTextShowPosition(journal, XmTextGetLastPosition(journal));
+	}
+}
+
+
+/* temporarily null-terminate the buffer: */
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set_icon_name_and_title: get the file name out of the script editor's
  * namestring label; strip away any directory names and use
@@ -736,6 +769,9 @@ static Boolean setup_main_window(
  * Journal window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	if( !global_options.edit_only ) {
+		Widget *children;
+		NAT num_children;
+
 		i = 0;
 		XtSetArg(args[i], XmNeditable, 			False); ++i;
 		XtSetArg(args[i], XmNeditMode,	 		XmMULTI_LINE_EDIT); ++i;
@@ -746,6 +782,28 @@ static Boolean setup_main_window(
 		attach_ro_edit_popup(journal);
 		register_selection_source(journal);
 		copy_font_list(journal, script);
+
+		XtVaGetValues(mainpanes, XmNchildren, &children,
+			XmNnumChildren, &num_children, NULL);
+
+		for(i = 0; i < num_children; ++i) {
+			if(!strcmp(XtName(children[i]), "Sash")) {
+				XtInsertEventHandler(children[i],
+					ButtonPressMask,
+					False,
+					journal_resize_handler,
+					NULL,
+					XtListHead);
+			}
+		}
+
+		XtInsertEventHandler(journal,
+			StructureNotifyMask,
+			False,
+			journal_resize_handler,
+			NULL,
+			XtListHead);
+
 	}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
