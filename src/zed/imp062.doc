@@ -1,4 +1,4 @@
-%  %Z% $Revision: 1.52 $ $RCSfile: imp062.doc,v $ $Date: 2001/07/18 16:18:26 $
+%  %Z% $Revision: 1.53 $ $RCSfile: imp062.doc,v $ $Date: 2001/07/18 17:02:55 $
 =TEX
 % TQtemplatetex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -11,10 +11,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation of Z Type Inferrer}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP062}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.52 $%
+\def\SCCSversion{$Revision: 1.53 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2001/07/18 16:18:26 $%
+\TPPdate{\FormatDate{$Date: 2001/07/18 17:02:55 $%
 }}
 \TPPstatus{Draft}                    %% Mandatory field
 \TPPtype{SML Literate Script}
@@ -117,6 +117,8 @@ Fixed bug in type inference for $\theta$-terms.
 Restored lost SCCS keywords.
 \item[Issues 1.51,1.52,1.53]
 Substitutions in the Unification structure are now dynamic arrays.
+\item[Issues 1.54]
+Enhanced representation of the environment.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -333,18 +335,24 @@ fun Ûformat_z_extypeÝ (ty : EXTYPE) : string = (
 	format_z_type (type_of_extype zti_subs mk_freetype_name ty)
 );
 =TEX
-\section{ERROR HANDLING AND REPORTING}
+\section{ENVIRONMENT DATA TYPES}
+(These have to be declared here since the are used in the error-handling
+data types of the next section.)
 
+The environment maps identifiers to the following type which represents
+the three different possibilities for a variable:
 =SML
 datatype Z_VAR_TYPE =
 		GlobalVar of EXTYPE
 	|	BoundVar of EXTYPE
 	|	FreeVar of EXTYPE OPT;
 =TEX
-
+The environment is then a dictionary as follows (which allows for the outside possibility
+that turning an identifier into a string might not be a one-to-one function):
 =SML
-type ÛZ_ENVÝ = IDENT -> Z_VAR_TYPE;
+type ÛZ_ENVÝ = (IDENT * Z_VAR_TYPE) list E_DICT;
 =TEX
+\section{ERROR HANDLING AND REPORTING}
 
 =SML
 datatype ÛZ_DETAILSÝ	=
@@ -796,23 +804,51 @@ fun Ûprint_z_errorÝ ((FailedZTm (term, env, details)) : Z_ERROR_INFO) = (
 =TEX
 
 \subsection{The Environment}
-
+Free variables are recorded in an assignable table as they are encountered (assuming
+free variables are allowed by the options passed in by the caller).
+Generic formal parameters are also held in this table.
 =SML
-val table:(IDENT * Z_VAR_TYPE) list ref = ref [];
-=TEX
-=SML
-fun Ûsub_tyÝ (env:Z_ENV) : Z_ENV = (
-	fn id =>
-		case env id of
-		GlobalVar ty => GlobalVar (sub_type zti_subs ty)
-		|BoundVar ty => BoundVar (sub_type zti_subs ty)
-		|FreeVar (Value ty) => FreeVar  (Value (sub_type zti_subs ty))
-		|FreeVar Nil => FreeVar Nil
-);
+val Ûfreevar_envÝ : Z_ENV ref = ref initial_e_dict;
 =TEX
 =SML
 fun Ûget_zconst_typeÝ ("Totality" : string) : TYPE OPT = get_const_type "Totality"
   | get_zconst_type s = get_const_type (bind_gvar_name s);
+=TEX
+=SML
+fun Ûenv_lookupÝ (env : Z_ENV) (id : IDENT) : Z_VAR_TYPE = (
+	let	val key = string_of_ident id;
+		val thats_it = fn (i, _) => i = id;
+		fun aux e = (
+			snd(find(force_value(e_lookup key e)) thats_it)
+		);
+	in	(aux env	handle Fail _ => aux (!freevar_env))
+		handle Fail _ => (
+			case get_zconst_type (string_of_ident id) of
+				Value ty => GlobalVar (replaced ty)
+			|	Nil => FreeVar Nil
+		)
+	end
+);
+=TEX
+=SML
+fun Ûenv_enterÝ (env : Z_ENV) (id : IDENT) (ty : Z_VAR_TYPE): Z_ENV = (
+	let	val key = string_of_ident id;
+		val thats_it = fn (i, _) => i = id;
+		val new_entry = 
+			case e_lookup key env of
+				Nil => [(id, ty)]
+			|	Value some => (id, ty) :: (some drop thats_it);
+	in	e_enter key new_entry env
+	end
+);
+=TEX
+=SML
+fun Ûlist_env_enterÝ (env : Z_ENV) (idtys : (IDENT * Z_VAR_TYPE) list) : Z_ENV = (
+	let	fun aux e [] = e
+		|   aux e ((id, ty)::more) = aux (env_enter e id ty) more;
+	in	aux env idtys
+	end
+);
 =TEX
 =SML
 local
@@ -830,39 +866,28 @@ let	val dummy = start_again();
 			:: z_ti_context more
 		end	handle Fail _ => z_ti_context more
 	);
-	val side = table :=
+	val entries =
 		(if ftdef
 		then	(map freety genformals)
 		else	(map formal genformals))
 		@ z_ti_context (TypeInference.get_ti_context());
-in
-	fn id => (
-		case lassoc5 (!table) id of
-		Value vty => vty
-		|Nil => (
-			case get_zconst_type (string_of_ident id) of
-			Value ty =>
-				GlobalVar (replaced ty)
-			|Nil =>
-				FreeVar Nil
-		)
-	)
+	val _ = freevar_env := list_env_enter initial_e_dict entries;
+in	initial_e_dict
 end
 );
 end (* of local ... in *);
 =TEX
 =SML
-fun Ûupdate_zenvÝ (env : Z_ENV) (id : IDENT) : Z_ENV = (
-	case env id of
-	FreeVar Nil =>
-		if not (!zti_allow_frees)
-		then	raise ZExn (FailedZFreeVar id)
-		else	let	val side = table := (id, FreeVar (Value (ExVartype
-				(Unknown (next_name()))))):: !table;
-			in
-				env
-			end
-	|_ => env
+fun Ûupdate_fv_envÝ (env : Z_ENV) (id : IDENT) : unit = (
+	case env_lookup env id of
+		FreeVar Nil =>
+			if not (!zti_allow_frees)
+			then	raise ZExn (FailedZFreeVar id)
+			else	let	val ty = FreeVar
+					(Value (ExVartype(Unknown (next_name()))));
+				in	freevar_env := env_enter (!freevar_env) id ty
+				end
+	|	_ => ()
 );
 =TEX
 =SML
@@ -872,39 +897,31 @@ let	fun bz_unify id (ty1, ty2) = (
 		unify zti_subs (ty1, ty2)
 			handle Fail _ =>
 			raise ZExn (FailedZTm (term, env, FailedEnv (tm, id, ty1, ty2)))
-		);
+	);
 	fun aux (id, ty) = (
-		case env id of
-		FreeVar Nil => (
-			if not (!zti_allow_frees)
-			then	raise ZExn (FailedZFreeVar id)
-			else	table := (id, FreeVar (Value ty)):: !table
+		case env_lookup env id of
+			FreeVar Nil => (
+				if not (!zti_allow_frees)
+				then	raise ZExn (FailedZFreeVar id)
+				else	freevar_env :=
+					env_enter (!freevar_env) id (FreeVar (Value ty))
 		)
-		|FreeVar (Value ty') => bz_unify id (ty, ty')
-		|BoundVar ty' => bz_unify id (ty, ty')
-		|GlobalVar ty' => (
+		|	FreeVar (Value ty') => (bz_unify id (ty, ty'); ())
+		|	BoundVar ty' => (bz_unify id (ty, ty'); ())
+		|	GlobalVar ty' => (
 			case ty' of
 				ExType("­", [_,t]) => bz_unify id (ty, t)
-			|	_ => bz_unify id (ty, ty')
+			|	_ => (bz_unify id (ty, ty'); ())
 		)
 	);
-in
-	map aux idtyl; env
+	val _ = map aux idtyl;
+in	env
 end
 );
 =TEX
 =SML
 fun Ûdec_boundvarsÝ (env : Z_ENV) (idtyl : (IDENT * EXTYPE) list) : Z_ENV = (
-	fn id => (
-		case lassoc5 idtyl id of
-		Nil => env id
-		|Value ty => BoundVar ty
-		)
-);
-=TEX
-=SML
-fun Ûshow_envÝ () : (IDENT * Z_VAR_TYPE) list = (
-	!table
+	list_env_enter env (map (fn (id, ty) => (id, BoundVar ty)) idtyl)
 );
 =TEX
 
@@ -1141,22 +1158,6 @@ in
 end
 ) | tlu1 tm = tm;
 =TEX
-=SML
-fun Ûtlu2Ý term env (args : (Z_TM * EXTYPE * EXTYPE) list) : unit = (
-let	fun aux ((tm, ty, ty')::rest) = (
-	let	val side = unify zti_subs (ty, ty')
-			handle Fail _ =>
-			raise ZExn (FailedZTm (term, env,
-				FailedEq(tm,tm,ty,ty')));
-		val side = tlu2 term env rest;
-	in
-		()
-	end
-	) | aux _ = ();
-in
-	aux args
-end);
-=TEX
 
 \section{INFERRING TYPES IN Z DECLARATIONS}
 
@@ -1224,7 +1225,7 @@ let	val pass1  = map (ti_dec_pass_1 env) z_decl;
 	val pass2 = map (ti_z_dec_pass_2 env') pass1;
 	val idtyl' = map (fn (id,ty) => (id, sub_type zti_subs ty)) idtyl;
 in
-	(map fst pass2, sub_ty env', idtyl')
+	(map fst pass2, env', idtyl')
 end)
 =TEX
 \section{INFERRING TYPES IN Z SCHEMAS}
@@ -1308,7 +1309,7 @@ let	val ctm = chartuple schtext;
 	val (schtext', env', _) = ti_z_schtext env schtext
 		handle ZExn (FailedZSchText (_, env, tm', ty')) =>
 		raise ZExn (FailedZTm (term, env, FailedSeta(tm',ty',62031)));
-	val (_, ty') = ti_z_tm (sub_ty env') ctm;
+	val (_, ty') = ti_z_tm env' ctm;
 in
 	(ZTmSeta1 schtext', ex_set ty')
 end)
@@ -1318,7 +1319,7 @@ end)
 let	val (schtext', env', _) = ti_z_schtext env schtext
 		handle ZExn (FailedZSchText (_, env, tm', ty')) =>
 		raise ZExn (FailedZTm (term, env, FailedSeta(tm',ty',62032)));
-	val (tm', ty') = ti_z_tm (sub_ty env') tm;
+	val (tm', ty') = ti_z_tm env' tm;
 in
 	(ZTmSeta2(schtext', tm'), ex_set ty')
 end)
@@ -1465,7 +1466,7 @@ end)
 =SML
   | ti_z_tm env (term as ZTmApp (tmf, tma)) = (
 let	val (tmf', tyf) = ti_z_tm env tmf;
-	val (tma', tya) = ti_z_tm (sub_ty env) tma;
+	val (tma', tya) = ti_z_tm env tma;
 	val tvn = next_name();
 	val tyr = ExVartype(Unknown tvn);
 	val side = unify zti_subs (tyf, ex_set (tuple_extype([tya,tyr])))
@@ -1535,7 +1536,7 @@ end
 		val tma' = case tma of
 			ZTmTuple [tma'] => tma'
 			| _ => tma;
-		val (tma'', tya') = ti_z_tm (sub_ty env) tma';
+		val (tma'', tya') = ti_z_tm env tma';
 		val tvn = next_name();
 		val tyr = ExVartype(Unknown tvn);
 		val side = unify zti_subs (tyf, ex_set (tuple_extype([tya',tyr])))
@@ -1568,7 +1569,7 @@ end
 		val tma' = case tma of
 			ZTmTuple [tma'] => tma'
 			| _ => tma;
-		val (tma'', tya') = ti_z_tm (sub_ty env) tma';
+		val (tma'', tya') = ti_z_tm env tma';
 		val tvn = next_name();
 		val tyr = ExVartype(Unknown tvn);
 		val side = unify zti_subs (tyf, ex_set (tuple_extype([tya',tyr])))
@@ -1585,10 +1586,8 @@ end
  | ti_z_tm env (term as ZTmÌ (sch, tm)) = (
 let	val ctm = chartuple sch;
 	val (sch', env', _) = ti_z_schtext env sch;
-	val env2 = sub_ty env';
-	val (tm', ty') = ti_z_tm env2 tm;
-	val env3 = sub_ty env2;
-	val (tm2, ty2) = ti_z_tm (sub_ty env3) ctm;
+	val (tm', ty') = ti_z_tm env' tm;
+	val (tm2, ty2) = ti_z_tm env' ctm;
 	val ty = ex_set (tuple_extype [ty2, ty']);
 in
 	(ZTmÌ (sch', tm'), ty)
@@ -1600,7 +1599,7 @@ end)
  | ti_z_tm env (ZTmÍ1 sch) = (
 let	val ctm = chartuple sch;
 	val (sch',env', _) = ti_z_schtext env sch;
-	val (_, ty') = ti_z_tm (sub_ty env') ctm;
+	val (_, ty') = ti_z_tm env' ctm;
 in
 	(ZTmÍ1 sch', ty')
 end)
@@ -1608,7 +1607,7 @@ end)
 =SML
  | ti_z_tm env (ZTmÍ2 (sch, tm)) = (
 let	val (sch',env', _) = ti_z_schtext env sch;
-	val (tm', ty') = ti_z_tm (sub_ty env') tm;
+	val (tm', ty') = ti_z_tm env' tm;
 in
 	(ZTmÍ2 (sch', tm'), ty')
 end)
@@ -1656,7 +1655,7 @@ let	val (tm1', ty1') = ti_z_tm env tm1;
 			(ZTmSchemaPred tm1', ex_bool))
 		|_ => (tm1', ty1')
 		);
-	val (tm2', ty2') = ti_z_tm (sub_ty env) tm2;
+	val (tm2', ty2') = ti_z_tm env tm2;
 	val (tm2'', ty2'') = (
 		case manifest ty2' of
 		SchemaType idtyl => (
@@ -1680,7 +1679,7 @@ end
 =SML
   | ti_z_tm env (term as ZTmQuant‰F (quant, sch, tm)) = (
 let	val (sch', env', _) = ti_z_schtext env sch;
-	val (tm', ty') = ti_z_tm (sub_ty env') tm;
+	val (tm', ty') = ti_z_tm env' tm;
 	val (tm'', ty'') = (
 		case manifest ty' of
 		SchemaType idtyl =>	(
@@ -1773,7 +1772,7 @@ end)
 =SML
  | ti_z_tm env (term as ZTmLogInOp‰S (inop, tm1, tm2)) = (
 let	val (tm1', ty1') = ti_z_tm env tm1;
-	val (tm2', ty2') = ti_z_tm (sub_ty env) tm2;
+	val (tm2', ty2') = ti_z_tm env tm2;
 in
 	case (manifest ty1', manifest ty2') of
 	(SchemaType idtyl1, SchemaType idtyl2) => (
@@ -1799,7 +1798,7 @@ end
 =SML
   | ti_z_tm env (term as ZTmù (tm1, tm2)) = (
 let	val (tm1', ty1') = ti_z_tm env tm1;
-	val (tm2', ty2') = ti_z_tm (sub_ty env) tm2;
+	val (tm2', ty2') = ti_z_tm env tm2;
 in
 	case (manifest ty1', manifest ty2') of
 	(SchemaType idtyl1, SchemaType idtyl2) => (
@@ -1899,7 +1898,7 @@ end)
 =SML
   | ti_z_tm env (term as ZTmEq (tm1, tm2)) = (
 let	val (tm1', ty1') = ti_z_tm env tm1;
-	val (tm2', ty2') = ti_z_tm (sub_ty env) tm2;
+	val (tm2', ty2') = ti_z_tm env tm2;
 	val side = unify zti_subs (ty1', ty2')
 		handle Fail _ =>
 			raise ZExn (FailedZTm (term, env, FailedEq (tm1, tm2, ty1', ty2')));
@@ -1910,7 +1909,7 @@ end)
 =SML
   | ti_z_tm env (term as ZTm (tm1, tm2)) = (
 let	val (tm1', ty1') = ti_z_tm env tm1;
-	val (tm2', ty2') = ti_z_tm (sub_ty env) tm2;
+	val (tm2', ty2') = ti_z_tm env tm2;
 	val unk = ExVartype (Unknown (next_name()));
 	val side = unify zti_subs (ex_set unk, ty2')
 		handle Fail _ =>
@@ -1943,7 +1942,7 @@ let	fun add_prime (id as (n, d)) =
 			| Nil => f tym1 t
 		end);
 	val (tm1', ty1') = ti_z_tm env tm1;
-	val (tm2', ty2') = ti_z_tm (sub_ty env) tm2;
+	val (tm2', ty2') = ti_z_tm env tm2;
 =TEX
 =SML
 in
@@ -1995,7 +1994,7 @@ let	fun change_q (id as (n, d)) = (
 			| Nil => f tym1 t
 		end);
 	val (tm1', ty1') = ti_z_tm env tm1;
-	val (tm2', ty2') = ti_z_tm (sub_ty env) tm2;
+	val (tm2', ty2') = ti_z_tm env tm2;
 =TEX
 =SML
 in
@@ -2054,16 +2053,17 @@ let	fun find_in_scope (ident as (n, d)) = (
 		fun aux (decor as d0::rest) res =
 		let	val sd = (implode o rev) decor;
 		in
-			case env (n, sd) of
-			GlobalVar ty => ((n, sd), GlobalVar ty, res)
-			|BoundVar ty => ((n, sd), BoundVar ty, res)
+			case env_lookup env (n, sd) of
+			GlobalVar ty => ((n, sd), GlobalVar (sub_type zti_subs ty), res)
+			|BoundVar ty => ((n, sd), BoundVar (sub_type zti_subs ty), res)
 			|_ => aux rest (d0::res)
 		end
 		  | aux [] res = (
-			case env (n, "") of
-			GlobalVar ty => ((n, ""), GlobalVar ty, res)
-			|BoundVar ty => ((n, ""), BoundVar ty, res)
-			|other => ((n, ""), other, res)
+			case env_lookup env (n, "") of
+			GlobalVar ty => ((n, ""), GlobalVar (sub_type zti_subs ty), res)
+			|BoundVar ty => ((n, ""), BoundVar (sub_type zti_subs ty), res)
+			|FreeVar (Value ty) => ((n, ""), FreeVar (Value (sub_type zti_subs ty)), res)
+			|free_var_nil => ((n, ""), free_var_nil, res)
 			);
 	in
 		case aux exd [] of
@@ -2082,13 +2082,12 @@ let	fun find_in_scope (ident as (n, d)) = (
 		)
 	);
 	fun setup_new_var id = (
-	let	val newenv = update_zenv env id
+	let	val _ = update_fv_env env id
 			handle ZExn (FailedZFreeVar id) =>
 			raise ZExn (FailedZTm (term, env, FailedFreeVar id));
-	in
-		case newenv id of
-		FreeVar (Value ty) => ty
-		|_ =>  scream "Bound or global variable went undetected"
+	in	case env_lookup env id of
+			FreeVar (Value ty) => ty
+		|	_ =>  scream "Bound or global variable went undetected"
 	end);
 =TEX
 =SML
@@ -2104,8 +2103,7 @@ in
 			ti_z_tm env (ZTmDecor (ZTmGVar (id', Nil, tml), d'))
 		) |_ =>
 			let	val ty'' = setup_new_var id;
-			in
-				local_variable id ty''
+			in	local_variable id ty''
 			end
 	)|(id', BoundVar ty', d') => (
 		case manifest ((fn (ExType ("­", [_,t])) => t | t => t) ty') of
@@ -2113,8 +2111,7 @@ in
 			ti_z_tm env (ZTmDecor (ZTmLVar (id', Nil, tml), d'))
 		) |_ =>
 			let	val ty'' = setup_new_var id;
-			in
-				local_variable id ty''
+			in	local_variable id ty''
 			end
 
 
@@ -2134,7 +2131,7 @@ end
 
 =SML
  | ti_z_tm env (term as ZTmGVar (id as (n, d), _, tml)) = (
-	case (env id, tml, id) of 
+	case (env_lookup env id, tml, id) of 
 	(GlobalVar (ExType ("­",[domty, _])), [], (TmplNon ("U", Nil),"")) => 
 		let	val gentyl = untuple_extype domty
 				handle Fail _ => [domty];
@@ -2188,16 +2185,9 @@ let	val (abbl, defl) = split eqdefl;
 	val (defl', tyl') = split (list_ti_z_tm env defl);
 	val abbtyl' = combine abbl tyl';
 	val eqdefl' = combine abbl defl';
-	val env' = (fn id =>
-		case lassoc5 abbtyl' id of
-		Nil => (update_zenv env id
-			handle ZExn (FailedZFreeVar id) =>
-			raise ZExn (FailedZTm (term, env, FailedFreeVar id)); env id)
-		|Value ty => BoundVar ty
-		);
+	val env' = dec_boundvars env abbtyl';
 	val (tm', ty') = ti_z_tm env' tm;
-in
-	(ZTmLet (eqdefl', tm'), ty')
+in	(ZTmLet (eqdefl', tm'), ty')
 end
 )
 =TEX
@@ -2286,10 +2276,8 @@ and
 	let	fun list_ti_aux env nil = nil
 		  | list_ti_aux env (tm::rest) = (
 		let	val (titerm as (tm, ty)) = ti_z_tm env tm;
-			val newenv = sub_ty env;
-			val next = list_ti_aux newenv rest;
-		in
-			(titerm::next)
+			val next = list_ti_aux env rest;
+		in	(titerm::next)
 		end);
 	in
 		list_ti_aux env tml
@@ -2446,14 +2434,6 @@ end (* of structure ZTypeInference *);
 
 
 =IGN
-local
-	val side = open_theory"z_library";
-	open ZUserInterfaceSupport;
-in
-	val _ = delete_zfixity_info (ZClRel, TmplIn (StubUS, ("º", Nil), StubUS));
-end;
+val xid = fst(hd(snd(hd(e_flatten (!freevar_env)))));
 
- ¹Z
-fun 7 _ º _
- °
-
+env_lookup initial_e_dict xid;
