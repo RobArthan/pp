@@ -1,3 +1,11 @@
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * $Id$
+ *
+ * xpp.c -  main for the X/Motif ProofPower
+ *
+ * (c) ICL 1993, 1994
+ *
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macro definitions: 
@@ -20,7 +28,11 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Static and global data
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-
+#ifdef BUILDVERSION
+static char *title = "  XPP    v" BUILDVERSION "    Copyright  (C)  ICL 1994  ";
+#else
+static char *title = "XPP";
+#endif
 char *file_name;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -163,6 +175,10 @@ char **argv;
 		XtNumber(options),
 		&argc,
 		argv, NULL, NULL);
+
+	XtVaSetValues(root,
+		XmNtitle, title,
+		NULL);
 
 	global_options.command_line = get_command_line(argc, argv);
 
