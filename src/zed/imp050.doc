@@ -1,4 +1,4 @@
-% imp050.doc %Z% $Date$ $Revision$ $RCSfile$
+% imp050.doc %Z% $Date: 1999/02/16 19:03:37 $ $Revision: 1.41 $ $RCSfile: imp050.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -9,10 +9,10 @@
 \TPPtitle{Implementation of Z Constant Generation}  %% Mandatory field
 \def\TPPheadtitle{Implementation of Z Constant Generation}
 \TPPref{DS/FMU/IED/IMP050}  %% Mandatory field
-\def\SCCSversion{$Revision$ %
+\def\SCCSversion{$Revision: 1.41 $ %
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date$ %
+\TPPdate{\FormatDate{$Date: 1999/02/16 19:03:37 $ %
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -41,7 +41,7 @@ Z Term generator in the Z Proof Support System.}
 
 \subsection{Changes History} 
 \begin{description}
-\item [Issue 1.1] (\TPPdate{\FormatDate{$Date$
+\item [Issue 1.1] (\TPPdate{\FormatDate{$Date: 1999/02/16 19:03:37 $
 }})
 First draft version.
 
@@ -94,6 +94,8 @@ On doing a forced get of cached theories, now always recheck to see if desired
 theorem has come into scope.
 \item[Issue 1.41]
 Update for SML'97.
+\item[Issue 1.42]
+Performance improvements.
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -279,15 +281,21 @@ end;
 =TEX
 \subsection{Storing Z Constants}
 \subsubsection{Retrieving from Some Cache theory}
+The following defends itself against the possibility that the
+symbol table function {\it get\_const\_theory} may under rare
+circumstances not be in step.
 =SML
 fun Ûget_cached_defnÝ (nm:string):THM = (
-let	val cs = get_valid_cache_theories();
-	fun aux (a :: x) = (get_defn a nm
-		handle (Fail _) => aux x)
-	| aux [] = fail "get_cached_defn" 0 [];
-in
-	aux cs
-end);
+	let	val thy = get_const_theory nm;
+	in	get_defn thy nm
+	end	handle Fail _ =>
+	let	val cs = get_valid_cache_theories();
+		fun aux (a :: x) = (get_defn a nm
+			handle (Fail _) => aux x)
+		| aux [] = fail "get_cached_defn" 0 [];
+	in	aux cs
+	end
+);
 =TEX
 \subsection{Local Constant Specification Wrappers}
 =SML
@@ -424,21 +432,21 @@ end;
 =TEX
 =SML
 fun Ûgen_z_semantic_typesÝ (ty : TYPE) : TYPE = (
-let	fun aux ty = (
-	let	val side = ((binding_type_spec ty; ())
-				handle Fail _ => (
-				(tuple_type_spec ty; ())
-				handle Fail _ => ()));
-		val subtys = (snd o dest_ctype) ty
-					handle Fail _ => [];
-		val side2 = map aux subtys;
-	in
-		()
-	end);
-	val side = aux ty;
-in
-	ty
-end
+	let	fun aux (Ctype(tycon, argtys)) = (
+			let	val side = (
+					(get_type_arity tycon; ())
+					handle Fail _ =>
+					(binding_type_spec ty; ())
+					handle Fail _ => (
+					(tuple_type_spec ty; ())
+					handle Fail _ => ()));
+				val side2 = map (aux o dest_simple_type) argtys;
+			in	()
+			end
+		) | aux (Vartype _) = ();
+		val side = aux (dest_simple_type ty);
+	in	ty
+	end
 );
 =TEX
 
@@ -466,7 +474,7 @@ fun Ûseta_gen_semantic_constÝ (tm : TERM) : THM = (
 let	val nam = fst (dest_const (fst (strip_app tm)));
 in
 	case dest_z_name nam of
-	("Z'Seta", [[sn]], Nil) => (get_cached_defn (nam^"_def")
+	("Z'Seta", [[sn]], Nil) => (get_cached_defn nam
 		handle Fail _ => (
 		let	val tyvl = string_to_styl sn
 				handle (Fail _) =>
@@ -508,7 +516,7 @@ fun	ÛÌ_gen_semantic_constÝ (tm : TERM) : THM = (
 let	val nam = fst(dest_const (fst (strip_app tm)));
 in
 	case dest_z_name nam of
-	("Z'Ì",[[sn]], Nil) => (get_cached_defn (nam ^ "_def")
+	("Z'Ì",[[sn]], Nil) => (get_cached_defn nam
 		handle Fail _ => (
 		let	val tyvl = string_to_styl sn
 				handle (Fail _) =>
@@ -557,7 +565,7 @@ fun ÛÍ_gen_semantic_constÝ (tm:TERM) : THM = (
 let	val nam = fst(dest_const(fst(strip_app tm)));
 in
 	case dest_z_name nam of
-	("Z'Í",[[sn]], Nil) => (get_cached_defn (nam ^ "_def")
+	("Z'Í",[[sn]], Nil) => (get_cached_defn nam
 		handle (Fail _) => (
 		let	val tyvl = string_to_styl sn
 				handle (Fail _) =>
@@ -604,7 +612,7 @@ fun Û¸_gen_semantic_constÝ (tm:TERM) : THM = (
 let	val nam = fst(dest_const(fst(strip_app tm)));
 in
 	case dest_z_name nam of
-	("Z'¸",[[sn]], Nil) => (get_cached_defn (nam ^ "_def")
+	("Z'¸",[[sn]], Nil) => (get_cached_defn nam
 		handle Fail _ => (
 		let	val aty = dest_z_power_type(type_of tm)
 				handle (Fail _) =>
@@ -659,7 +667,7 @@ fun Û¶‰1_gen_semantic_constÝ (tm:TERM) : THM = (
 let	val nam = fst(dest_const(fst(strip_app tm)));
 in
 	case dest_z_name nam of
-	("Z'¶‰1",[[sn]], Nil) => (get_cached_defn (nam ^ "_def")
+	("Z'¶‰1",[[sn]], Nil) => (get_cached_defn nam
 	handle Fail _ => (
 	let	val tyvl = string_to_styl sn
 				handle (Fail _) =>
@@ -703,7 +711,7 @@ fun Ûschema_gen_semantic_constÝ (tm:TERM) : THM = (
 let	val nam = (fst(dest_const (fst (strip_app tm))));
 in
 	case dest_z_name nam of
-	("Z'‰s",[cpl], Nil) => (get_cached_defn (nam ^ "_def")
+	("Z'‰s",[cpl], Nil) => (get_cached_defn nam
 	handle (Fail _) => (
 	let	val ty = dest_z_power_type(type_of tm)
 			handle (Fail _) =>
@@ -744,7 +752,7 @@ let	val tm' = fst (strip_app tm);
 	val nam = (fst(dest_const tm'));
 in
 	case dest_z_name nam of
-	("Z'Dec‰s",[cpl,decor], Nil) => (get_cached_defn (nam ^ "_def")
+	("Z'Dec‰s",[cpl,decor], Nil) => (get_cached_defn nam
 	handle Fail _ => (
 	let	val (rargty,rresty) = (
 			case strip_­_type(type_of tm') of [ty1,ty2] =>
@@ -797,7 +805,7 @@ let	val tm' = fst (strip_app tm);
 	val nam = fst(dest_const tm');
 in
 	case dest_z_name nam of
-	("Z'Pre‰s",[cpl], Nil) => (get_cached_defn (nam ^ "_def")
+	("Z'Pre‰s",[cpl], Nil) => (get_cached_defn nam
 	handle Fail _ => (
 	let	val (rargty,rresty) = (
 		case strip_­_type(type_of tm') of
@@ -843,7 +851,7 @@ let	val tm' = fst (strip_app tm);
 
 in
 	case dest_z_name nam of
-	("Z'Hide‰s",[cpl1,cpl2], Nil) => (get_cached_defn (nam ^ "_def")
+	("Z'Hide‰s",[cpl1,cpl2], Nil) => (get_cached_defn nam
 	handle Fail _ => (
 	let	val (rargty,rresty) = (
 		case (strip_­_type(type_of tm')) of
@@ -892,7 +900,7 @@ let	val tm'= fst (strip_app tm);
 	val nam = fst(dest_const tm');
 in
 	case dest_z_name nam of
-	(oper,[cpl1,cpl2], Nil) => (get_cached_defn (nam ^ "_def")
+	(oper,[cpl1,cpl2], Nil) => (get_cached_defn nam
 	handle Fail _ => (
 	let	val (ra1ty,ra2ty,rresty) = (
 			case strip_­_type(type_of tm') of 
@@ -968,7 +976,7 @@ let	val tm'= fst (strip_app tm);
 	val nam = fst(dest_const tm');
 in
 	case dest_z_name nam of
-	("Z'ù‰s",[cpl1,cpl2], Nil) => (get_cached_defn (nam ^ "_def")
+	("Z'ù‰s",[cpl1,cpl2], Nil) => (get_cached_defn nam
 	handle Fail _ => (
 	let	val (rargty1,rargty2,rresty) = (
 		case (strip_­_type(type_of tm')) of
@@ -1016,7 +1024,7 @@ let	val tm'= fst (strip_app tm);
 	val nam = fst(dest_const tm');
 in
 	case dest_z_name nam of
-	("Z'„‰s",[cpl], Nil) => (get_cached_defn (nam ^ "_def")
+	("Z'„‰s",[cpl], Nil) => (get_cached_defn nam
 	handle (Fail _) => (
 	let	val (rargty,rresty) = (
 			case strip_­_type(type_of tm') of
@@ -1060,7 +1068,7 @@ let	val tm'= fst (strip_app tm);
 	val nam = fst(dest_const tm');
 in
 	case dest_z_name nam of
-	("Z'˜‰s",[cpl], Nil) => (get_cached_defn (nam ^ "_def")
+	("Z'˜‰s",[cpl], Nil) => (get_cached_defn nam
 	handle (Fail _) => (
 	let	val (rargty,rresty) = (
 			case strip_­_type(type_of tm') of
@@ -1114,7 +1122,7 @@ let	val tm'= fst (strip_app tm);
 	val nam = fst(dest_const tm');
 in
 	case dest_z_name nam of
-	(oper,[cpl1,cpl2], Nil) => (get_cached_defn (nam ^ "_def")
+	(oper,[cpl1,cpl2], Nil) => (get_cached_defn nam
 	handle (Fail _) => (
 	let	val (rargty1,rargty2,rresty) = (
 			case (strip_­_type(type_of tm')) of
@@ -1209,7 +1217,7 @@ let	val tm'= fst (strip_app tm);
 	val nam = fst(dest_const tm');
 in
 	case dest_z_name nam of
-	("Z'»‰s",[cpl1,cpl2], Nil) => (get_cached_defn (nam ^ "_def")
+	("Z'»‰s",[cpl1,cpl2], Nil) => (get_cached_defn nam
 	handle (Fail _) => (
 	let	val (rargty1,rargty2,rresty) = (
 			case strip_­_type(type_of tm') of
@@ -1288,7 +1296,7 @@ let	val (s,rnl) = dest_z_rename‰s tm
 			50001 [fn () => string_of_term tm];
 	val nam = fst(dest_const (fst (dest_app tm)));
 in
-	get_cached_defn (nam ^ "_def")
+	get_cached_defn nam
 	handle Fail _ => (
 let
 	val tyfrom = dest_z_power_type(type_of s);
