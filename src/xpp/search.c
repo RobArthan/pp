@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.34 2003/06/26 13:45:00 rda Exp rda $ 
+ * $Id: search.c,v 2.35 2003/07/15 11:20:52 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -34,6 +34,9 @@ enum {FORWARDS, BACKWARDS};
 
 #ifdef SLOWREGEXEC
 #define INITCHUNK 1000
+#define REGEXEC fast_regexec
+#else
+#define REGEXEC regexec
 #endif
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1280,16 +1283,51 @@ static regex_t *re_search_comp(char *pattern)
 		return 0;
 	}
 }
-
+#ifdef SLOWREGEXEC
 /*
- * The regular expression search algorithm.
- * The while loop is looking for a non-empty match.
  * Some implementations of regexec call strlen on the text: if the
  * text has length N, say, this introduces an O(N) overhead that can
  * make replace-all operations into an N^2*K operation (where K is some
  * factor dependent on the average length of the matches and on the
  * complexity of the regular expression. To workaround this, we use
  * a "double-and-conquer" approach that makes the cost N*K.
+ */
+int fast_regexec(
+	const regex_t *preg,
+	char *string,
+	size_t nmatch,
+	regmatch_t pmatch[],
+	int eflags)
+{
+	char *q, overwritten;
+	int curr_chunk, error_code;
+	Boolean matched;
+	q = string;
+	overwritten = *q;
+	matched = False;
+	for(	curr_chunk = INITCHUNK;
+		!matched && overwritten != '\0';
+		curr_chunk *= 2) {
+		*q = overwritten;
+		while(*q && q - string < curr_chunk) {
+			q += 1;
+		}
+		overwritten = *q;
+		*q = '\0';
+		error_code = regexec(preg, string, 1, pmatch, eflags);
+		if(error_code == 0) {
+			matched = pmatch[0].rm_eo < q - string;
+		} else {
+			matched = False;
+		}
+	}
+	*q = overwritten;
+	return error_code;
+}
+#endif
+/*
+ * The regular expression search algorithm.
+ * The while loop is looking for a non-empty match.
  */
 static Substring re_search_exec(regex_t *preg, char *text, Boolean bol)
 {
@@ -1301,33 +1339,7 @@ static Substring re_search_exec(regex_t *preg, char *text, Boolean bol)
 	result.offset = -1; /* assume no match until we get one */
 	p = text;
 	while(*p) {
-#ifndef SLOWREGEXEC
-		error_code = regexec(preg, p, 1, pmatch, eflags);
-#else
-		char *q, overwritten;
-		int curr_chunk;
-		Boolean matched;
-		q = p;
-		overwritten = *q;
-		matched = False;
-		for(	curr_chunk = INITCHUNK;
-			!matched && overwritten != '\0';
-			curr_chunk *= 2) {
-			*q = overwritten;
-			while(*q && q - p < curr_chunk) {
-				q += 1;
-			}
-			overwritten = *q;
-			*q = '\0';
-			error_code = regexec(preg, p, 1, pmatch, eflags);
-			if(error_code == 0) {
-				matched = pmatch[0].rm_eo < q - p;
-			} else {
-				matched = False;
-			}
-		}
-		*q = overwritten;
-#endif
+		error_code = REGEXEC(preg, p, 1, pmatch, eflags);
 		if(error_code == 0) {
 			result.length = pmatch[0].rm_eo - pmatch[0].rm_so;
 			if(result.length != 0) {
