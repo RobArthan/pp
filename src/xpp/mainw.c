@@ -419,6 +419,7 @@ static setup_main_window(
 
 	XtVaSetValues(root,
 		XmNdeleteResponse,	XmDO_NOTHING,
+		XmNiconPixmap,		get_pp_pixmap(),
 		NULL);
 
 	WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
