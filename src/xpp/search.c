@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.15 2003/01/17 17:09:30 rda Exp rda $ 
+ * $Id: search.c,v 2.16 2003/01/30 17:57:06 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -104,6 +104,7 @@ static void	search_backwards_cb(CALLBACK_ARGS),
 		line_no_set_cb(CALLBACK_ARGS),
 		goto_line_no_cb(CALLBACK_ARGS),
 		dismiss_cb(CALLBACK_ARGS),
+		options_cb(CALLBACK_ARGS),
 		help_cb(CALLBACK_ARGS);
 
 static void line_no_set(SearchData*);
@@ -121,7 +122,7 @@ static void line_no_set(SearchData*);
  * |   <text to replace with >                   |
  * | Go to line:  | <line number> | := Cursor    |
  * -----------------------
- * | Dismiss    |  Help  |
+ * | Dismiss    |  Options | Help  |
  *
  * Each `<...>' here is a text field
  * The `:= ...' push-buttons can be used to
@@ -129,6 +130,7 @@ static void line_no_set(SearchData*);
  * replacement strings or to put the line number corresponding
  * to the insertion point in the line number string.
  * The other push-buttons actually initiate searches etc.
+ * The options button pops up the options tool.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 Boolean add_search_tool(Widget text_w)
@@ -153,8 +155,9 @@ Boolean add_search_tool(Widget text_w)
 		goto_line_no_btn,
 		line_no_text,
 		line_no_set_btn,
-		help_btn,
-		dismiss_btn;
+		dismiss_btn,
+		options_btn,
+		help_btn;
 
 	char	*pattern;
 
@@ -395,7 +398,7 @@ Boolean add_search_tool(Widget text_w)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Part 5:
  * -----------------------
- * | Dismiss    |  Help  |
+ * | Dismiss    |  Options | Help  |
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	action_form = XtVaCreateWidget("search-replace-action-form",
@@ -409,8 +412,18 @@ Boolean add_search_tool(Widget text_w)
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNleftPosition,		5,
-		XmNrightPosition,		11,
+		XmNleftPosition,		1,
+		XmNrightPosition,		7,
+		NULL);
+
+	options_btn = XtVaCreateManagedWidget("Options",
+		xmPushButtonWidgetClass,	action_form,
+		XmNtopAttachment,		XmATTACH_FORM,
+		XmNbottomAttachment,		XmATTACH_FORM,
+		XmNleftAttachment,		XmATTACH_POSITION,
+		XmNrightAttachment,		XmATTACH_POSITION,
+		XmNleftPosition,		9,
+		XmNrightPosition,		15,
 		NULL);
 
 
@@ -420,8 +433,8 @@ Boolean add_search_tool(Widget text_w)
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNleftPosition,		13,
-		XmNrightPosition,		19,
+		XmNleftPosition,		17,
+		XmNrightPosition,		23,
 		NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -505,6 +518,9 @@ Boolean add_search_tool(Widget text_w)
 	XtAddCallback(dismiss_btn, XmNactivateCallback,
 		dismiss_cb, (XtPointer)(&search_data));
 
+	XtAddCallback(options_btn, XmNactivateCallback,
+		options_cb, (XtPointer)(&search_data));
+
 	XtAddCallback(help_btn, XmNactivateCallback,
 		help_cb, (XtPointer)NULL);
 
@@ -575,6 +591,17 @@ static void dismiss_cb(
 {
 	SearchData *cbdata = cbd;
 	XtPopdown(cbdata->shell_w);
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * options callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void options_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
+{
+	add_options_tool();
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -938,13 +965,35 @@ static void goto_line_no_cb(
  * if substring, 0 otherwise.
  * (brought out separately for future enhancement,
  *  e.g. to add regular expression matching).
+ *  If pattern is supplied as NULL, the last non-NULL value
+ *  passed is used.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static long int substr(
 	char		*pattern,
 	char		*to_search)
 {
-	long int len = strlen(pattern);
-	return (strncmp(pattern, to_search, len) ? 0 : len);
+	static long int len;
+	static char *last_pattern = NULL;
+	if(pattern == 0) {
+		len = strlen(pattern);
+		pattern = last_pattern;
+	} else {
+		len = strlen(pattern);
+	}
+	if(pattern == 0) {
+		return 0;
+	}
+	if(global_options.ignore_case) {
+		char *p = pattern;
+		char *t = to_search;
+		while (*p && *t && toupper(*p) == toupper(*t)) {
+			p += 1;
+			t += 1;
+		}
+		return (*p != '\0' ? 0 : len);
+	} else {
+		return (strncmp(pattern, to_search, len) ? 0 : len);
+	}
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****

@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.45 2003/01/20 14:07:32 rda Exp rda $
+ * $Id: mainw.c,v 2.46 2003/01/29 16:31:43 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -220,7 +220,7 @@ static MenuItem file_menu_items[] = {
 #define TOOLS_MENU_SEARCH_REPLACE  0
 #define TOOLS_MENU_PALETTE         1
 #define TOOLS_MENU_TEMPLATES       2
-#define TOOLS_MENU_CONTROLS        3
+#define TOOLS_MENU_OPTIONS         3
 #define TOOLS_MENU_CMD_LINE        4
 
 static MenuItem tools_menu_items[] = {
@@ -231,7 +231,7 @@ static MenuItem tools_menu_items[] = {
     { "Templates", &xmPushButtonGadgetClass, 'T', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_TEMPLATES, (MenuItem *)NULL, False },
     { "Options", &xmPushButtonGadgetClass, 'O', NULL, NULL,
-        tools_menu_cb, (XtPointer)TOOLS_MENU_CONTROLS, (MenuItem *)NULL, False },
+        tools_menu_cb, (XtPointer)TOOLS_MENU_OPTIONS, (MenuItem *)NULL, False },
     { "Command Line", &xmPushButtonGadgetClass, 'C', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_CMD_LINE, (MenuItem *)NULL, False },
     {NULL}
@@ -1185,8 +1185,8 @@ static void tools_menu_cb(
 	case TOOLS_MENU_CMD_LINE:
 		add_cmd_line(script);
 		break;
-	case TOOLS_MENU_CONTROLS:
-		add_option_tool();
+	case TOOLS_MENU_OPTIONS:
+		add_options_tool();
 		break;
 	default:
 		break;

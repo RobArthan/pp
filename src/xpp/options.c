@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.13 2002/12/12 14:06:50 rda Exp rda $
+ * $Id: options.c,v 2.14 2003/01/29 16:31:43 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -82,6 +82,9 @@ static Widget
 		file_type_frame,
 			file_type_menu,
 				*file_type_buttons,
+		search_replace_frame,
+			search_replace_row_col,
+				ignore_case_toggle,
 		app_frame,
 			app_row_col,
 				command_form,
@@ -94,7 +97,8 @@ static Widget
 			button_form,
 				apply_btn, current_btn, original_btn, dismiss_btn, help_btn;
 
-static char add_new_line_mode; /* mirrors value of the radio buttons */
+static char add_new_line_mode_mirror; /* mirrors value of the radio buttons */
+static char file_type_mirror; /* mirrors value of the file type menu  */
 
 /*
  * Call-backs:
@@ -119,7 +123,7 @@ void init_options(Widget owner_w)
  * Else ... have to create a new one 
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	shell = XtVaCreatePopupShell("xpp-Controls",
+	shell = XtVaCreatePopupShell("xpp-Options",
 		xmDialogShellWidgetClass, owner_w,
 		NULL); 
 #ifdef EDITRES
@@ -190,6 +194,24 @@ void init_options(Widget owner_w)
 	if(global_options.read_only) {
 		XmToggleButtonSetState(read_only_toggle,True, False);
 	}
+
+	search_replace_frame = XtVaCreateManagedWidget("search-replace-frame",
+		xmFrameWidgetClass,	shell_row_col,
+		NULL);
+
+	search_replace_row_col = XtVaCreateManagedWidget("search-replace-row-col",
+		xmRowColumnWidgetClass,	search_replace_frame,
+		XmNorientation,		XmVERTICAL,
+		NULL);
+
+	lab = XmStringCreateSimple("Ignore case in searches");
+
+	ignore_case_toggle = XtVaCreateManagedWidget("ignore-case",
+		xmToggleButtonWidgetClass,	search_replace_row_col,
+		XmNlabelString,			lab,
+		NULL);
+
+	XmStringFree(lab);
 
 if(!global_options.edit_only) {
 	app_frame = XtVaCreateManagedWidget("app-frame",
@@ -379,6 +401,9 @@ if(!global_options.edit_only) {
 	global_options.read_only =
 		XmToggleButtonGetState(read_only_toggle);
 
+	global_options.ignore_case =
+		XmToggleButtonGetState(ignore_case_toggle);
+
 	if(journal_max_text) {
 		char	*journal_max_buf;
 		long unsigned m;
@@ -471,7 +496,7 @@ char **get_arg_list(void) {
 	argv[argc] = NULL;
 	return argv;
 }
-void add_option_tool(void)
+void add_options_tool(void)
 {
 	if(shell) {
 		XtManageChild(button_form);
@@ -485,6 +510,8 @@ void add_option_tool(void)
 		}
 		XtManageChild(edit_row_col);
 		XtManageChild(edit_frame);
+		XtManageChild(search_replace_row_col);
+		XtManageChild(search_replace_frame);
 		XtManageChild(shell_row_col);
 		XtPopup(shell, XtGrabNone);
 	}
@@ -522,7 +549,12 @@ static void apply_cb(
 	global_options.read_only =
 		XmToggleButtonGetState(read_only_toggle);
 
-	global_options.add_new_line_mode = add_new_line_mode;
+	global_options.file_type = file_type_mirror;
+
+	global_options.ignore_case =
+		XmToggleButtonGetState(ignore_case_toggle);
+
+	global_options.add_new_line_mode = add_new_line_mode_mirror;
 
 	if(journal_max_text) {
 		char	*journal_max_buf;
@@ -566,6 +598,11 @@ static void reset_cb(
 	XmToggleButtonSetState(read_only_toggle,
 		options->read_only, False);
 
+	XtVaSetValues(file_type_menu, XmNmenuHistory, file_type_buttons[options->file_type], NULL);
+
+	XmToggleButtonSetState(ignore_case_toggle,
+		options->ignore_case, False);
+
 	if(command_text) {
 		XmTextSetString(command_text,
 			options->command_line);
@@ -606,7 +643,7 @@ static void add_new_line_cb(
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
-	add_new_line_mode = (int) cbd;
+	add_new_line_mode_mirror = (int) cbd;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -628,5 +665,5 @@ void file_type_cb (
 		XtPointer	cbd,
 		XtPointer	cbs)
 {
-	global_options.file_type = (int)cbd;
+	file_type_mirror = (int)cbd;
 }

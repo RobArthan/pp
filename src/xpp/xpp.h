@@ -43,13 +43,19 @@
 /* Note the following are used as indices into the array file_type_names */
 typedef enum {UNIX = 0, MSDOS = 1, MACINTOSH = 2} FileType;
 typedef struct {
+/* session type: */
 	Boolean			edit_only;
+/* file save options: */
 	Boolean			backup_before_save;
 	Boolean			delete_backup_after_save;
 	Boolean			read_only;
 	FileType		file_type;
-	char			add_new_line_mode;
+/* search-replace options: */
+	Boolean			ignore_case;
+/* journal option: */
 	NAT			journal_max;
+/* command menu options: */
+	char			add_new_line_mode;
 	String			command_line;
 	String			interrupt_prompt;
 	String			abandon_reply;}
@@ -81,16 +87,6 @@ typedef struct menu_item {
 	Boolean		pullright_tear_off_enabled;}
 					/* Ignored if not submenu */
 		MenuItem;
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * GLOBAL DATA: for no particular reason, the source file
- * options.c which constructs the tool for setting the controls
- * is chosen to define the global data (other files get it as
- * external data).
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-#ifndef _options
-	extern
-#endif
-	GlobalOptions		global_options;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * EXTERNS
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -189,7 +185,7 @@ typedef struct menu_item {
 /* Module: options */
 	extern void init_options(
 		Widget	owner_w);
-	extern void add_option_tool(void);
+	extern void add_options_tool(void);
 	extern char **get_arg_list(void);
 	extern void set_read_only(Boolean read_only);
 	extern void set_file_type(FileType file_type);
@@ -272,9 +268,14 @@ typedef struct menu_item {
 	extern	void add_edit_res_handler(Widget shell);
 #endif
 /* Module: xpp */
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * GLOBAL DATA: the source file xpp.c which contains main is
+ * chosen to define the global data. It does not export any functions.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
 #ifdef _xpp
 #define	extern
 #endif
+	GlobalOptions		global_options;
 	extern XtTranslations text_translations;
 	extern char *templates;
 	extern char *command_line_list;
@@ -326,3 +327,6 @@ typedef struct menu_item {
 #ifdef _xpp
 #undef extern
 #endif
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+* end of xpp.h
+**** **** **** **** **** **** **** **** **** **** **** **** */
