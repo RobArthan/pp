@@ -9,21 +9,30 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.10 2002/10/23 16:28:45 rda Exp rda $
+# $Id: configure.sh,v 1.11 2002/10/24 11:40:29 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
 # PPCOMPILER       - if set must be one of POLYML or SMLNJ
-#                    (default: if Poly/ML is available use it, else SML/NJ)
-# PPMOTIFLINKING   - if set must be one of static or dynamic
-#                    (default: dynamic)
+#                    (default: if Poly/ML is available use it, else SML/NJ).
+#
+# PPDOCFORMAT      - if set must be one of PDF or PS and causes dvipdfm
+#                    (resp. dvips) to be used to generate PDF or PostScript
+#                    versions of the DVI files in the doc directory
+#                    (default: you just get the DVI files).
+#
 # PPINSTALLDIR     - if set must give the absolute path name of
 #                    a directory the user can create or write to
 #                    (default: first of /usr/share/pp, /usr/local/pp,
-#                    /opt/pp, $HOME/pp that looks like it will work)
-# PPTARGETDIR      - as PPINSTALLDIR, overrides PPINSTALLDIR if set and non-empty
+#                    /opt/pp, $HOME/pp that looks like it will work).
+#
+# PPMOTIFLINKING   - if set must be one of static or dynamic
+#                    (default: dynamic).
+#
+# PPTARGETDIR      - as PPINSTALLDIR, overrides PPINSTALLDIR if set and non-empty.
+#
 # PPTARGETS        - a space separated list of packages to include
-#                   (default: whichever of pptex hol zed daz xpp are there)
+#                   (default: whichever of pptex hol zed daz xpp are there).
 #
 # PPPOLYDBASE      - name of file containing the initial Poly/ML database
 #                   (default: /usr/lib/poly/ML_dbase)
@@ -60,10 +69,10 @@ then	case "$PPCOMPILER" in
 		*)	give_up "PPCOMPILER must be one of POLYML or SMLNJ";;
 	esac
 	echo "Using $T as specified"
-elif	which poly
+elif	which poly >/dev/null 2>&1
 then	echo "Using Poly/ML"
 	PPCOMPILER=POLYML
-elif	which sml
+elif	which sml >/dev/null 2>&1
 then	echo "Using Standard ML of New Jersey"
 	PPCOMPILER=SMLNJ
 else	give_up "cannot find a Standard ML compiler"
@@ -79,7 +88,7 @@ then	case "$PPMOTIFLINKING" in
 	esac
 	echo "Using $PPMOTIFLINKING linking for Motif as specified"
 else	PPMOTIFLINKING=dynamic
-	echo "Using $PPMOTIFLINKING linking"
+	echo "Using $PPMOTIFLINKING linking for Motif"
 fi
 #
 # Find a target directory
@@ -127,6 +136,26 @@ else	for f in $PPTARGETS
 		esac
 	done
 	USERDEFINEDTARGETS=y
+fi
+#
+# Check for document format requirements:
+#
+case "${PPDOCFORMAT:-}" in
+	"")	DOPDF=n; DOPS=n;;
+	PDF)	DOPDF=y; DOPS=n;;
+	PS)	DOPDF=n; DOPS=y;;
+	*)	give_up "unsupported document format \"$PPDOCFORMAT\" (not on of PDF or PS)"
+esac
+if	[ "$DOPDF" = y ]
+then	if	which dvipdfm >/dev/null 2>&1
+	then	echo "Generating code to produce PDF versions of the documents"
+	else	give_up "dvipdfm does not seem to be available and is needed if you specify PPDOCFORMAT=PDF"
+	fi
+elif	[ "$DOPS" = y ]
+then	if	which dvips >/dev/null 2>&1
+	then	echo "Generating code to produce PostScript versions of the documents"
+	else	give_up "dvips does not seem to be available and is needed if you specify PPDOCFORMAT=PS"
+	fi
 fi
 #
 # Look for packages to be installed:
@@ -208,7 +237,7 @@ out "fi"
 # databases, en passant, or explicitly for daz which doesn't have
 # demo scripts at the moment).
 #
-if	[ "$hol" = y -o "$zed" = y -o "$daz" = y ]
+if	[ "$hol" = y -o "$zed" = y -o "$daz" = y -o "$DOPDF" = y -o "$DOPS" = y ]
 then
 	out "echo \"Moving to installation directory $PPTARGETDIR\" ..."
 	out "echo \"See $PPTARGETDIR/<package>.log for messages\""
@@ -226,6 +255,20 @@ then
 	if	[ "$daz" = y -a $PPCOMPILER=POLYML ]
 	then	out "echo Freezing daz database"
 		out '( pp_make_database -f -p daz junk$$; rm junk$$.polydb ) >daz.log 2>&1 || give_up $PPTARGETDIR/daz.log'
+	fi
+	if	[ "$DOPDF" = y -o "$DOPS" = y ]
+	then	out "echo \"Moving to documentation directory $PPTARGETDIR/doc\" ..."
+		out "cd $PPTARGETDIR/doc"
+	fi
+	if	[ "$DOPDF" = y ]
+	then	out 'for f in *.dvi'
+		out 'do	dvipdfm $f'
+		out "done"
+	fi
+	if	[ "$DOPS" = y ]
+	then	out 'for f in *.dvi'
+		out 'do	dvips -o "" $f'
+		out "done"
 	fi
 fi
 out "echo Installation complete"
