@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.25 2003/08/01 16:25:46 rda Exp rda $
+# $Id: configure.sh,v 1.26 2004/01/25 10:16:34 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -21,7 +21,7 @@
 #                    versions of the DVI files in the doc directory
 #                    (default: you just get the DVI files).
 #
-# PPHOME     - if set must give the absolute path name of
+# PPHOME           - if set must give the absolute path name of
 #                    a directory the user can create or write to
 #                    (default: first of /usr/share/pp, /usr/local/pp,
 #                    /opt/pp, $HOME/pp that looks like it will work).
@@ -241,6 +241,8 @@ export_it PPMOTIFLINKING
 export_it PPTARGETDIR
 out 'PPHOME=$PPTARGETDIR'
 out "export PPHOME"
+out 'PPDATABASEPATH=.:$PPTARGETDIR/db'
+out "export PPDATABASEPATH"
 if	[ "$PPCOMPILER" = POLYML ]
 then	export_it PPPOLYDBASE
 fi
