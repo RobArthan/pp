@@ -35,7 +35,7 @@ typedef struct {
 	Boolean			delete_backup_after_save;
 	NAT			journal_max;
 	String			command_line;}
-		GlobalControls;	
+		GlobalOptions;	
 /*
  * The following is based on the ideas in Heller's
  * `Motif Programming Manual'. See menus.c for the implementation.
@@ -56,14 +56,14 @@ typedef struct menu_item {
 		MenuItem;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * GLOBAL DATA: for no particular reason, the source file
- * controls.c which constructs the tool for setting the controls
+ * options.c which constructs the tool for setting the controls
  * is chosen to define the global data (other files get it as
  * external data).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-#ifndef _controls
+#ifndef _options
 	extern
 #endif
-	GlobalControls		global_controls;
+	GlobalOptions		global_options;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * EXTERNS
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -173,9 +173,9 @@ void number_verify_cb(
 	extern void add_cmd_line(
 		Widget	text_w);
 #endif
-#ifndef _controls
-	extern void init_controls(
+#ifndef __options
+	extern void init_options(
 		Widget	owner_w);
-	extern void add_control_tool();
+	extern void add_option_tool();
 	extern char **get_arg_list();
 #endif

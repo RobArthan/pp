@@ -82,12 +82,12 @@ char **argv;
 	int l, acc;
 	if(argc == 1) {
 		file_name = NULL;
-		global_controls.edit_only = True;
+		global_options.edit_only = True;
 		return argc;
 	};
 	if(argc == 2) {
 		file_name = argv[1];
-		global_controls.edit_only = True;
+		global_options.edit_only = True;
 		return argc;
 	};
 	if(	(l = strlen(argv[1])) <= strlen("-file")
@@ -107,7 +107,7 @@ char **argv;
 	&&	!strncmp(argv[acc + 1], "-command", l) ) {
 		return acc + 2;
 	} else {
-		global_controls.edit_only = (argc == acc + 1);
+		global_options.edit_only = (argc == acc + 1);
 		return acc + 1;
 	}
 }
@@ -164,7 +164,7 @@ char **argv;
 		&argc,
 		argv, NULL, NULL);
 
-	global_controls.command_line = get_command_line(argc, argv);
+	global_options.command_line = get_command_line(argc, argv);
 
 	main_window_go(file_name);
 	exit(0);

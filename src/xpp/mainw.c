@@ -255,7 +255,7 @@ static MenuItem tools_menu_items[] = {
         tools_menu_cb, (XtPointer)TOOLS_MENU_SEARCH_REPLACE, (MenuItem *)NULL, False },
     { "Palette", &xmPushButtonGadgetClass, 'P', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_PALETTE, (MenuItem *)NULL, False },
-    { "Controls", &xmPushButtonGadgetClass, 'N', NULL, NULL,
+    { "Options", &xmPushButtonGadgetClass, 'O', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_CONTROLS, (MenuItem *)NULL, False },
     { "Viewer", &xmPushButtonGadgetClass, 'V', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_SCRIPT_VIEWER, (MenuItem *)NULL, False },
@@ -359,7 +359,7 @@ Boolean ignored;
 
 	XmTextSetInsertionPosition(journal, last_pos);
 
-	check_text_window_limit(journal,  global_controls.journal_max);
+	check_text_window_limit(journal,  global_options.journal_max);
 
 
 }
@@ -493,7 +493,7 @@ static setup_main_window(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Journal window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-if( !global_controls.edit_only ) {
+if( !global_options.edit_only ) {
 	i = 0;
 	XtSetArg(args[i], XmNeditable, 			False); ++i;
 	XtSetArg(args[i], XmNeditMode,	 		XmMULTI_LINE_EDIT); ++i;
@@ -516,7 +516,7 @@ if( !global_controls.edit_only ) {
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Tools menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-if(global_controls.edit_only) {
+if(global_options.edit_only) {
 	tools_menu_items[TOOLS_MENU_JOURNAL_VIEWER].label = NULL;
 }
 	toolsmenu = setup_pulldown_menu(
@@ -532,7 +532,7 @@ if(global_controls.edit_only) {
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Command menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-if( !global_controls.edit_only ) {
+if( !global_options.edit_only ) {
 	cmdmenu = setup_pulldown_menu(
 		menubar, "Command", 'C', False, cmd_menu_items);
 }
@@ -593,16 +593,16 @@ if( !global_controls.edit_only ) {
 /* !!! */		XtParseTranslationTable(trans_tab));
 /* !!! */};
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Initialise controls package
+ * Initialise options package
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-	init_controls(script);
+	init_options(script);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Management and Realisation:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	XtManageChild(filename);
 	XtManageChild(menubar);
 	XtManageChild(script);
-if( !global_controls.edit_only ) {
+if( !global_options.edit_only ) {
 	XtManageChild(journal);
 }
 	XtManageChild(work);
@@ -753,7 +753,7 @@ XmAnyCallbackStruct *cbs;
 		add_cmd_line(script);
 		break;
 	case TOOLS_MENU_CONTROLS:
-		add_control_tool();
+		add_option_tool();
 		break;
 	default:
 		break;
@@ -1475,7 +1475,7 @@ void main_window_go(
 	char	*file_name)
 {
 	setup_main_window(file_name);
-if( !global_controls.edit_only ) {
+if( !global_options.edit_only ) {
 	get_pty();
 }
 	handle_sigs();

@@ -275,7 +275,7 @@ static Boolean store_file_contents(
 	char *backup_name = NULL;
 
 	siz = strlen(buf);
-	if(global_controls.backup_before_save) {
+	if(global_options.backup_before_save) {
 		if(!backup_file(w, name, &backup_name)) {
 			return False;
 		};
@@ -293,7 +293,7 @@ static Boolean store_file_contents(
 	};
 	fclose(fp);
 	if(backup_name) {
-		if(global_controls.delete_backup_after_save) {
+		if(global_options.delete_backup_after_save) {
 			unlink(backup_name);
 		}
 		XtFree(backup_name);
