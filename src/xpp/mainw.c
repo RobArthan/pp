@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.86 2004/09/23 15:12:19 rda Exp $
+ * $Id: mainw.c,v 2.87 2005/01/27 17:09:26 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -184,6 +184,7 @@ static void file_menu_op(int op);
 
 static void abandon_action(ACTION_PROC_ARGS);
 static void execute_action(ACTION_PROC_ARGS);
+static void command_line_action(ACTION_PROC_ARGS);
 static void goto_line_action(ACTION_PROC_ARGS);
 static void interrupt_action(ACTION_PROC_ARGS);
 static void quit_action(ACTION_PROC_ARGS);
@@ -376,6 +377,7 @@ static XtActionsRec actions[] = {
 	{ "abandon", abandon_action },
 	{ "command-history-up", command_history_up },
 	{ "command-history-down", command_history_down},
+	{ "command-line", command_line_action},
 	{ "execute", execute_action },
 	{ "goto-line", goto_line_action },
 	{ "interrupt", interrupt_action },
@@ -910,6 +912,8 @@ static Boolean setup_main_window(
  * syntax to say we care about Ctrl but not Lock modifiers. We have therefore
  * provided an execute action function. With no parameters this is like
  * Execute Selection; with parameters, it executes the parameters.
+ * Subsequently, we have adopted a similar approach for all the Menu items
+ * for which accelerators are useful.
  */
 	XtAppAddActions(app, actions, XtNumber(actions));
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1339,7 +1343,7 @@ static void popup_command_line_tool_cb(
 		XtPointer	cbd,
 		XtPointer	cbs)
 {
-		add_command_line_tool(script);
+	add_command_line_tool(script);
 }
 static void popup_options_tool_cb(
 		Widget		w,
@@ -1690,6 +1694,20 @@ static void abandon_action(
 		interrupt_and_abandon();
 	}
 }
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * command-line action function; pop-up goto-line tool.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void command_line_action(
+    Widget 	unused_widget,
+    XEvent*	unused_event,
+    String*	unused_params,
+    Cardinal*	unused_num_params)
+{
+	if(!global_options.edit_only) {
+		add_command_line_tool(script);
+	}
+}
 			
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * execute action function; if no params does execute_command
@@ -1717,12 +1735,12 @@ static void execute_action(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void goto_line_action(
-    Widget 		unused_widget,
+    Widget 	unused_widget,
     XEvent*	unused_event,
-    String*		unused_params,
+    String*	unused_params,
     Cardinal*	unused_num_params)
 {
-		add_line_no_tool(script);
+	add_line_no_tool(script);
 }
 			
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1730,9 +1748,9 @@ static void goto_line_action(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void interrupt_action(
-    Widget 		unused_widget,
+    Widget 	unused_widget,
     XEvent*	unused_event,
-    String*		unused_params,
+    String*	unused_params,
     Cardinal*	unused_num_params)
 {
 	interrupt_application();
@@ -1743,9 +1761,9 @@ static void interrupt_action(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void quit_action(
-    Widget 		unused_widget,
+    Widget 	unused_widget,
     XEvent*	unused_event,
-    String*		unused_params,
+    String*	unused_params,
     Cardinal*	unused_num_params)
 {
 	file_menu_op(FILE_MENU_QUIT);
@@ -1756,9 +1774,9 @@ static void quit_action(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void script_open_action(
-    Widget 		unused_widget,
+    Widget 	unused_widget,
     XEvent*	unused_event,
-    String*		unused_params,
+    String*	unused_params,
     Cardinal*	unused_num_params)
 {
 	file_menu_op(FILE_MENU_OPEN);
@@ -1769,9 +1787,9 @@ static void script_open_action(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void script_redo_action(
-    Widget 		unused_widget,
+    Widget 	unused_widget,
     XEvent*	unused_event,
-    String*		unused_params,
+    String*	unused_params,
     Cardinal*	unused_num_params)
 {
 	redo(undo_ptr);
@@ -1782,9 +1800,9 @@ static void script_redo_action(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void script_save_action(
-    Widget 		unused_widget,
+    Widget 	unused_widget,
     XEvent*	unused_event,
-    String*		unused_params,
+    String*	unused_params,
     Cardinal*	unused_num_params)
 {
 	file_menu_op(FILE_MENU_SAVE);
@@ -1796,9 +1814,9 @@ static void script_save_action(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void script_undo_action(
-    Widget 		unused_widget,
+    Widget 	unused_widget,
     XEvent*	unused_event,
-    String*		unused_params,
+    String*	unused_params,
     Cardinal*	unused_num_params)
 {
 	undo(undo_ptr);
@@ -1809,9 +1827,9 @@ static void script_undo_action(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void search_action(
-    Widget 		unused_widget,
+    Widget 	unused_widget,
     XEvent*	unused_event,
-    String*		unused_params,
+    String*	unused_params,
     Cardinal*	unused_num_params)
 {
 	add_search_tool(script);
