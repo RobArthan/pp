@@ -8,7 +8,7 @@
 \TPPproject{FST PROJECT}  %% Mandatory field
 %\TPPvolume{}
 %\TPPpart{}
-\TPPtitle{Formal Design of the Abstract Data Type $THM$}  %% Mandatory field
+\TPPtitle{Formal Design of the Logical Kernel}  %% Mandatory field
 \TPPref{DS/FMU/IED/SPC005}  %% Mandatory field
 \def\SCCSversion{$Revision$
 }
@@ -21,7 +21,7 @@
 \TPPauthorisation{R.D.~Arthan & FST Team Leader}
 \TPPabstract{This document contains a formal specification,
 in HOL, of the design of the
-abstract data type used to represent theorems in the ICL HOL system.}
+logical kernel of the ICL HOL system.}
 %\TPPabstractB{}
 %\TPPabstractC{}
 %\TPPabstractD{}
@@ -88,9 +88,12 @@ integrity and the route to high assurance stated in \cite{DS/FMU/IED/DEF004}.
 \subsection{Introduction}
 \subsubsection{Background and Requirements}
 The high level design document, \cite{DS/FMU/IED/HLD007},
-discusses informally the abstract data type used to represent theorems.
+discusses informally the abstract data type used to represent theorems,
+which it refers to as the {\em Logical Kernel} of the ICL HOL
+proof development system.
+
 This document gives a formal model of the main data structures
-used in the abstract data type and of the operations on them.
+used in the logical kernel and of the operations on them.
 We stress that the definitions are intended to describe a simplified model of 
 the actual system, and, for reasons of efficiency or practicality,
 the actual details of the internal datatypes will be implementation dependent.
@@ -119,6 +122,84 @@ As things stand, such a feature must be implemented in non-critical
 code.
 
 \section{DISCUSSION}
+\subsection{Basic Concepts}
+
+The design of the logical kernel is a development of the LCF paradigm
+which has been used in earlier implementations of the HOL logic, most
+notably the Cambridge implementation described in \cite{SRI89a}.
+The original reference for LCF is \cite{Gordon79}.
+The ideas depend upon the use of a strongly typed metalanguage supporting
+the  abstract data type facility, whereby a data type may be declared
+together with one or more so-called constructor, in such a way
+that the type discipline ensures that all values of the data type are
+created using the constructors. For
+ICL HOL the metalanguage is Standard ML, see \cite{Milner90},
+in which the {\tt abstype} construct provides the necessary feature.
+
+In crude outline, integrity is ensured in an LCF-style proof development
+system by representing theorems as elements of an abstract data type,
+which we will call $THM$. The representation type for $THM$ is
+the set of sentences of the logic --- sequents in the case of HOL as
+formulated in \cite{DS/FMU/IED/SPC001}.
+The constructors of the abstract data type are the axioms and inference
+rules of the logic, so that values of type $THM$ arise from conmputations
+which directly represent formal proofs. The great merit of this approach
+is that it ensures that what purport to be theorems are indeed theorems
+without incurring the performance overheads of marking every theorem with
+a concrete representation of its proof.
+
+This elegant paradigm has, however, to be adapted to meet practical
+requirements. The following paragraphs
+summarise the key issues and solutions for ICL HOL:
+
+\begin{enumerate}
+\item
+We must allow the user to make definitions and other extensions,
+both conservative and axiomatic. Thus proofs (i.e. computations of
+theorems) are carried out with respect to a context determined by
+a callection of such extensions, i.e. a {\em theory} in the sense
+of \cite{DS/FMU/IED/SPC001}. Since we wish to let the user navigate
+at will around the various theories which have been constructed, we
+must mark each theorem with an indicator (actually a store address)
+which uniquely identifies the theory to which the theorem belongs.
+The inference rules use these indicators to ensure that a theorem is
+valid in the context in which it is being used.
+
+\item
+We wish to store the collection of theories belonging to one or more users
+in a reasonably efficient fashion. Two measures facilitate this.
+Firstly, we make the concrete representation of a theory hold
+only those extensions which are specific to it. The theories are organised
+as a directed acyclic graph given by a parenthood relation defined by the user.
+The context (or abstract theory) determined by such a concrete theory
+comprises the union of the extensions contained in it and its ancestors with
+respect to this relation and is represented
+by a set of theory addresses. Secondly, we organise the theories themselves
+into a tree of theory hierarchies. A theory hierarchy is intended to
+represent the set of theories constructed by a particular user.
+A theory hierarchy may conveniently be implemented
+as a physical store or {\em database} in which we hold a set of theories
+together with a pointer to a parent theory hierarchy. This parenthood
+relation on theory hierarchies allows a collection of theories to be
+shared amongst many users without undue replication in the physical store.
+A theory hierarchy determines a set of theory addresses from which the
+user may construct contexts in which to carry out proof.
+
+\item
+We wish to allow the user to edit the contents of a theory by deleting
+extensions, and then, perhaps, making new extensions which are logically
+incompatible with the ones which have been deleted.
+This implies that a theorem must be marked with an indicator identifying
+the set of extensions on which it may depend. For reasons of efficiency,
+this indicator comprises a so-called {\em level number}. Each extension
+to a theory or deletion of an extension from a theory causes the level
+number to be incremented. When an extension is deleted, the corresponding
+level number is added to a set of invalid levels maintained in the data
+structure representing the theory. The inference rules both check
+that any theorem presented to them has a valid level number and also
+generate theorems which have a level number corresponding to the
+most recent extension to the context.
+\end{enumerate}
 
 \subsection{Overview of Model}
 In the sequel we define a model of a proof development system for HOL.
@@ -435,12 +516,11 @@ was proved (or $0$ if the theorem belongs to an ancestor of the current theory).
 $user\_data$ & This contains the user-defined data stored in the theory
 \\ \hline
 $current\_level$ & This is the current level number. It is
-0 when a theory is first created. It is incremente, for example, whenever
-a definition or an axiom is introduced.
+0 when a theory is first created. It is incremented whenever
+an extension to the theory is introduced or deleted.
 \\ \hline
 $deleted\_levels$ & This is the set of level numbers
-corresponding to definitions, axioms etc. which have been
-deleted.
+corresponding to  extensions which have been deleted.
 \\ \hline
 \end{tabular}
 
@@ -1464,7 +1544,7 @@ we calculate the most recent level number, $dlev$ say, of any
 object stored in the theory;
 \item
 we remove all definitions and axioms with level number equal to $dlev$ from
-the definition and theorem dictionaries and similarly
+the definition and axiom dictionaries and similarly
 for the type and constant environments; we increment the current level
 and add $dlev$ to the set of deleted levels;
 \item
@@ -1502,12 +1582,11 @@ The following utility is used to assist in step 2:
 		in let dlev = álvéis_latest_level state lv
 		in let def_d' = block_delete (ç(_1, lv)élv = dlev) def_d
 		in let ax_d' = block_delete (ç(_1, lv)élv = dlev) ax_d	
-		in let thm_d' = block_delete (ç(_1, lv)élv = dlev) thm_d
 		in let t_e' = block_delete (ç(_1, lv)élv = dlev) t_e
 		in let c_e' = block_delete (ç(_1, lv)élv = dlev) c_e
 		in let lev' = lev+1
 		in let tc' = ABS_THEORY_CONTENTS
-		(nm, t_e', c_e', pars, ax_d', def_d', thm_d', lev', x_levs ° singleton_set dlev, ud)
+		(nm, t_e', c_e', pars, ax_d', def_d', thm_d, lev', x_levs ° singleton_set dlev, ud)
 		in let thy_st' = ásté(cur_thy <- tc') thy_st st
 		in ABS_PDS_STATE(cur_thy, cur_hier, thy_st', hier_st, thm_st))
 À
