@@ -5,8 +5,8 @@
 \TPPproject{IED 1563}  %% Mandatory field
 %\TPPvolume{}
 %\TPPpart{}
-\TPPtitle{Release 1 ICL HOL: Implementation of Standard ML Utilities}  %% Mandatory field
-\def\TPPheadtitle{Release 1 ICL HOL \cr Implementation of Standard ML Utilities}
+\TPPtitle{Implementation of Standard ML Utilities}  %% Mandatory field
+\def\TPPheadtitle{Implementation of Standard ML Utilities}
 \TPPref{DS/FMU/IED/imp001}  %% Mandatory field
 \def\SCCSversion{$Revision$
 }
@@ -49,11 +49,16 @@ Renamed some error messages.
 Modified "is\_all\_graphical" to be true of characters with ascii codes 33-126, 128+".
 \item [Issue 1.5]
 $give\_stats$ renamed as $get\_stats$.
-item [Issue 1.6]
+\item [Issue 1.6]
 Corrected $is\_all\_graphical$.
 Added ``Release 1 ICL HOL:'' to document's title.
 Description of $union$ now matches its function.
 Removed $dump\_string$.
+\item [Issue 1.7]
+Modified ordering for $grab$, $union$, $s\_enter$.
+Removed $rel$ and $grel$.
+Added $initial\_s\_dict$, and renamed $initial\_E\_DICT$ to $initial\_e\_dict$.
+
 \end{description}
 %\subsection{Changes forecast}
 \section{GENERAL}
@@ -111,14 +116,6 @@ A test for $Nil$:
 fun âis_Nilá (Nil:'a OPT) : bool = true
 |   is_Nil _ = false;
 =TEX
-We will often use the following types to represent binary
-relations. The associative look-up functions and
-overwrite etc., which are defined below, are often convenient
-to use with these types.
-=SML
-type (''a, 'b) âgrelá = (''a * ('b list)) list;
-type ''a ârelá = (''a * (''a list)) list;
-=TEX
 \subsection{List Processing Functions}
 \subsubsection{A Miscellany}
 Many of the following functions are supplied as standard with
@@ -147,7 +144,7 @@ $f(x_k,\ldots f(x_2,(f(x_1, b)))\ldots)$
 fun ârevfoldá (f : ('a*'b -> 'b)) (h :: t : 'a list) (b : 'b) : 'b = revfold f t (f(h, b))
 |   revfold (f : ('a*'b -> 'b)) ([] : 'a list) (b : 'b) = b;
 =TEX
-$length$ returns the length of a list:
+$length$ returns the length of a list (this version written to avoid garbage generation).
 =SML
 local
 	fun l n (_ :: t) = l (n+1) t
@@ -161,6 +158,47 @@ $drop$,  $less$ and $grab$ are infix operators with priority 4 (lower than
 `::' and higher than `=').
 $drop$ and $less$ are essentially the set difference operation.
 $grab$ is union with a singleton set.
+
+$contains$ searches for a member of
+a list equal to a given value and returns true iff. it finds one.
+=SML
+fun âcontainsá ((x' :: xs)  : ''a list) (x: ''a) : bool = (
+	(x = x') orelse contains xs x
+) | contains ([]  : ''a list) (_ : ''a) = false;
+=TEX
+$mem$ is an infix form of $contains$.
+=SML
+fun (x: ''a) âmemá ((x' :: xs)  : ''a list) : bool = (
+	(x = x') orelse x mem xs
+) | (_ : ''a) mem ([]  : ''a list) = false;
+=TEX
+$present$ is an equality-parameterised membership test.
+We use an auxiliary function to save passing two parameters,
+and allow some minor partial evaluation.
+=SML
+fun âpresentá (eq : ('a * 'a) -> bool) (x: 'a) : 'a list -> bool = (
+	let fun test (h :: t) = eq(x,h) orelse test t
+	| test [] = false
+	in
+		test
+	end
+);
+=TEX
+$any$ returns true iff. some element of a list satisfies a given
+condition.
+=SML
+fun âanyá ((x :: xs) : 'a list) (cond : 'a -> bool) : bool = (
+	cond x orelse any xs cond
+) | any ([] : 'a list) (_ : 'a -> bool) : bool = false;
+=TEX
+$all$ returns true iff. all elements of a list satisfy a given
+property.
+=SML
+fun âallá ((x :: xs) : 'a list) (cond : 'a -> bool) : bool = (
+	cond x andalso all xs cond
+)
+|   all ([] : 'a list) (_ : 'a -> bool) : bool = true;
+=TEX
 
 $list\,drop\,cond$ is the list obtained by deleting all members
 of $list$ for which the boolean function $cond$ returns true.
@@ -182,13 +220,13 @@ fun ((x :: xs) : ''a list) âlessá (what : ''a) : ''a list = (
 ) | ([] : ''a list) less (_ : ''a) : ''a list = [];
 =TEX
 $list\, grab\,what$ is the list obtained by inserting $what$
-at the end of $list$ if it is not a member of it already.
+at the head of $list$ if it is not a member of it already.
 =SML
-fun (x :: xs : ''a list) âgrabá (what : ''a) = (
-	if x = what
-	then x :: xs
-	else x :: (xs grab what)
-) | ([] : ''a list) grab (what : ''a) = [what];
+fun (lst : ''a list) âgrabá (what : ''a) = (
+	if what mem lst
+	then lst
+	else (what :: lst)
+);
 =TEX
 $union$ is essentially a binary union operation for lists.
 Since we need it for types such as $TERM$ (see below) which are
@@ -207,14 +245,13 @@ Could rewrite $insert$ with auxiliary function.
 =SML
 fun âunioná (eq : ('a*'a) -> bool) (list1 : 'a list)(list2 : 'a list) : 'a list = (
 	let
-		fun insert (what, lst as (x :: xs)) = (
-			if eq(what, x)
+		fun insert (what, lst) = (
+			if present eq what lst
 			then lst
-			else x :: insert(what, xs)
-		)
-		| insert (what, []) = [what];
+			else (what :: lst)
+		);
 	in
-		revfold insert list2 list1
+		fold insert list1 list2
 	end
 );
 =TEX
@@ -224,7 +261,7 @@ when the equality function is ordinary SML equality.
 This is the following infix function $cup$:
 =SML
 fun (list1 : ''a list) âcupá (list2 : ''a list) : ''a list = (
-	revfold (fn(x, xs) => xs grab x) list2 list1
+	fold (fn(x, xs) => xs grab x) list1 list2
 );
 =TEX
 $list\_union$ is essentially a distributed union operation for lists.
@@ -253,35 +290,6 @@ fun âfindá ((x :: xs)  : 'a list) (cond: 'a -> bool) : 'a = (
 	else find xs cond
 ) | find ([]  : 'a list) (_ : 'a -> bool) = 
 	fail "find" 1004 [];
-=TEX
-$contains$ searches for a member of
-a list equal to a given value and returns true iff. it finds one.
-=SML
-fun âcontainsá ((x' :: xs)  : ''a list) (x: ''a) : bool = (
-	(x = x') orelse contains xs x
-) | contains ([]  : ''a list) (_ : ''a) = false;
-=TEX
-$mem$ is an infix form of $contains$.
-=SML
-
-fun (x: ''a) âmemá ((x' :: xs)  : ''a list) : bool = (
-	(x = x') orelse x mem xs
-) | (_ : ''a) mem ([]  : ''a list) = false;
-=TEX
-$any$ returns true iff. some element of a list satisfies a given
-condition.
-=SML
-fun âanyá ((x :: xs) : 'a list) (cond : 'a -> bool) : bool = (
-	cond x orelse any xs cond
-) | any ([] : 'a list) (_ : 'a -> bool) : bool = false;
-=TEX
-$all$ returns true iff. all elements of a list satisfy a given
-property.
-=SML
-fun âallá ((x :: xs) : 'a list) (cond : 'a -> bool) : bool = (
-	cond x andalso all xs cond
-)
-|   all ([] : 'a list) (_ : 'a -> bool) : bool = true;
 =TEX
 $l1\,subset\,l2$ is true iff. all the elements of $l1$
 are  also elements of $l2$
@@ -348,7 +356,7 @@ fun ârassoc2á
 ) | rassoc2 [] default what = default what;
 =TEX
 The third variation treats the list as defining a partial
-function. An error is signalled if the list does not
+function. An error is signaled if the list does not
 contain an appropriate pair.  
 =SML
 fun âlassoc3á ((x, y) :: rest : (''a * 'b) list) (what : ''a) : 'b = (
@@ -497,7 +505,7 @@ repeated entries using a given function to test for
 equality.
 =SML
 fun âall_distinctá (eq : ('a * 'a) -> bool) (x :: xs : 'a list) : bool = (
-	not (any xs (fn x' => eq(x, x'))) andalso all_distinct eq xs
+	not (present eq x xs) andalso all_distinct eq xs
 ) | all_distinct eq [] = true;
 =TEX
 The infix functions $from$ and $to$ take
@@ -905,7 +913,7 @@ in the domain of the dictionary:
 fun âs_extendá (s : string) (a : 'a) (dict : 'a S_DICT) : 'a S_DICT = (
 	case lassoc5 dict s of
 	Value _ => fail "s_extend" 1014 [fn (u:unit) => s]
-	| Nil => dict overwrite (s, a)
+	| Nil => (s,a) :: dict
 );
 =TEX
 $s\_delete$ deletes an element of the domain of a dictionary.
@@ -921,8 +929,12 @@ An exception will be raised if the domains of the
 two dictionaries have elements in common.
 =SML
 fun âs_mergeá (dict1 : 'a S_DICT) (dict2 : 'a S_DICT) : 'a S_DICT = (
-	fold (uncurry(uncurry s_extend)) dict2 dict1
+	fold (uncurry(uncurry s_extend)) dict1 dict2
 );
+=TEX
+The initial value of the dictionary is just the empty list.
+=SML
+val âinitial_s_dictá : 'a S_DICT = [];
 =TEX
 =SML
 end (* of SimpleDictionary *);
@@ -1118,7 +1130,7 @@ The final item declared in the abstract data type for
 efficient dictionaries is an empty dictionary, which
 gives a starting point for the use of the above functions.
 
-Arguably, $initial\_E\_DICT$ should be given as a tree
+Arguably, $initial\_e\_dict$ should be given as a tree
 containing all the possible hash keys each with an empty
 simple dictionary. This can easily be done so that
 the tree is balanced. The hashing function we have used
@@ -1126,7 +1138,7 @@ gives rise to reasonably well-balanced trees on all the
 sample data sets I have tried, so this speed-for-space
 optimisation has not been made.
 =SML
-	val âinitial_E_DICTá = Leaf;
+	val âinitial_e_dictá = Leaf;
 
 end (* of local ... in ... end *)
 end; (* of abstype E_DICT *)
@@ -1142,7 +1154,7 @@ functions have been called.
 structure âProfilingá : Profiling = struct
 local
 	open EfficientDictionary;
-	val stats : int E_DICT ref = ref initial_E_DICT;
+	val stats : int E_DICT ref = ref initial_e_dict;
 	val profiling : bool ref = ref true;
 	val _= new_flag{name="âprofilingá",
 		control = profiling,
@@ -1274,7 +1286,7 @@ fun âsortá (order : 'a -> 'a -> int) (what : 'a list) : 'a list = (
 			end
 		);
 		fun flatten SLeaf = []
-		|   flatten (SNode(x, l, r)) = flatten l @ [x] @ flatten r;
+		|   flatten (SNode(x, l, r)) = flatten l @ (x :: flatten r);
 
 	in	flatten (fold enter what SLeaf)
 	end
