@@ -1,0 +1,453 @@
+=TEX
+% TQtemplate.tex
+\documentstyle[hol,11pt,TQ]{article}
+\ftlinepenalty=10000
+\def\Slrp{{\bf SLRP}}
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Module Test for SLR Parser Generator}  %% Mandatory field
+\TPPref{DS/FMU/IED/MDT017}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+%\TPPdate{}  %% Mandatory field (with sensible default)
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.D.~Arthan & FST Team Leader}
+\TPPabstract{
+The module tests for simple SLR parser generator.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+      Library}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history}  % to get section number `0.3'
+\begin{description}
+\item[Issue \SCCSversion (\FormatDate{$Date$%
+})]
+First draft for comment.
+\end{description}
+\subsection{Changes forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document gives the module test script for the SLR parser generator,
+called \Slrp, defined in \cite{DS/FMU/IED/DTD017}.
+
+\subsection{Introduction}
+Since the parser generator is not included as part of the release 1 system,
+but rather is used to build parts of it, the test coverage deliberately
+aims only to check out the basic sanity of \Slrp\ on the simple examples
+given in \cite{DS/FMU/IED/DTD017}. The parser for ICL HOL which is constructed
+by the program is to be comprehensively tested.
+
+\subsection{Purpose and Background}
+See \cite{DS/FMU/IED/DTD017}.
+\section{TEST CASES}
+We consider just four test cases:
+
+\begin{description}
+\item[SLRP.1]
+The most trivial grammar, with one production having an empty list of
+alternatives, which generates the empty language;
+\item[SLRP.2]
+the first pocket calculator example from \cite{DS/FMU/IED/DTD017}
+\item[SLRP.3]
+the second pocket calculator example from \cite{DS/FMU/IED/DTD017}
+(exhibiting dynamic shift/reduce conflict resolution)
+\item[SLRP.4]
+a trivial example displaying the treatment of reduce/reduce conflicts
+\end{description}
+
+\section{TEST DATA AND TEST CODE}
+First of all we compile the set up the environment required in all cases:
+=SML
+open SlrpDriver;
+open EfficientDictionary;
+=TEX
+\subsection{CASE SLRP.1}
+=DUMP
+mdt017a.grm.txt
+(* Grammar for empty language *)
+	E	=	;
+=TEX
+=SML
+datatype SLRP_1_CLASS = Something | Eos;
+=TEX
+Now we invoke SLRP:
+=SH
+poly `arch`slrp.db >mdt017a.grm.run <<!
+Slrp.slrp{infile="mdt017a.grm.txt", outfile="mdt017a.grm.sml",
+		logfile="mdt017a.grm.log",  eos="Eos", loglevel=2};
+PolyML.quit();
+!
+cat mdt017a.grm.sml
+=TEX
+The parser is essentially a recogniser for empty lists.
+So we take type $unit$ as the type of lexical classes and $'a$
+as the type of input tokens.
+=SML
+val slrp_1_error = default_error (fn s => s);
+val slrp_1_classify = (fn _ => ());
+fun slrp_1_reader (x :: more) = (x, more)
+|   slrp_1_reader [] = (Eos, []);
+=TEX
+=SML
+val slrp_1_parser = slrp'gen_parser default_resolver
+			slrp_1_classify slrp_1_error slrp_1_reader;
+=TEX
+\subsection{CASE SLRP.2}
+=TEX
+Now we define the actions:
+=SML
+fun add (Parsed (x:int)) (Parsed (y:int)) = x + y
+|   add _ _ = raise PARSER_ERROR "corrupt stack";
+fun mul (Parsed (x:int)) (Parsed (y:int)) = x * y
+|   mul _ _ = raise PARSER_ERROR "corrupt stack";
+fun fetch (Parsed (x:int)) = x
+|   fetch _= raise PARSER_ERROR "corrupt stack";
+fun conv (Token (n:string, _)) = nat_of_string n
+|   conv _ = raise PARSER_ERROR "corrupt stack";
+=TEX
+=SML
+=DUMP
+mdt017b.grm.txt
+(* Grammar for a Pocket Calculator *)
+	E	=	E, `Plus`, T			(add x1 x3)
+		|	T 				(fetch x1);
+
+	T	=	T, `Times`, F			(mul x1 x3)
+		|	F				(fetch x1);
+
+	F	=	`Lbrack`, E, `Rbrack`		(fetch x2)
+		|	Num				(conv x1);
+=TEX
+We use the following datatype for the lexical classes here:
+=SML
+datatype SLRP_2_CLASS = Plus | Times | Lbrack | Rbrack | Num | Eos | Wrong;
+=TEX
+Now we invoke SLRP:
+=SH
+poly `arch`slrp.db >mdt017b.grm.run <<!
+Slrp.slrp{infile="mdt017b.grm.txt", outfile="mdt017b.grm.sml",
+		logfile="mdt017b.grm.log",  eos="Eos", loglevel=2};
+PolyML.quit();
+!
+cat mdt017b.grm.sml
+=TEX
+
+=SML
+fun slrp_2_classify "*" = Times
+|   slrp_2_classify "+" = Plus
+|   slrp_2_classify "(" = Lbrack
+|   slrp_2_classify ")" = Rbrack
+|   slrp_2c_classify "<end-of-input>" = Eos
+|   slrp_2_classify Other = if is_all_decimal Other then Num else Wrong;
+=SML
+val slrp_2_error = default_error (fn s => s);
+=TEX
+=SML
+fun pc_reader (ip : string list) : string * string list = (
+	case ip of
+		(h :: more) => (h, more)
+	|	[] => ("<end-of-input>", [])
+);
+=TEX
+=SML
+val slrp_2_parser = slrp'gen_parser default_resolver
+			slrp_2_classify slrp_2_error slrp_2_reader;
+=TEX
+
+=SML
+fun slrp_2_lex (s : string) : string list = (
+	let	val chars = explode s;
+		fun get_num acc (x :: more) = (
+			if is_all_decimal x
+			then get_num (acc ^ x) more
+			else (acc, x :: more)
+		)  | get_num acc [] = (acc, []);
+		fun get_tok (x :: more) = (
+			if is_all_decimal x
+			then let val (num, rest) = get_num x more
+			in	num :: get_tok rest
+			end else if x = " "
+			then get_tok more
+			else x :: get_tok more
+		) | get_tok [] = []
+	in	get_tok chars
+	end
+);
+=TEX
+=SML
+val slrp_2: string -> int = pc_parser o pc_lex;
+=TEX
+óExample SML Session
+:> slrp_2"1001+42";
+val it = 1043 : int   
+:> slrp_2"1001 * 42";
+val it = 42042 : int   
+:> slrp_2"(1001)";
+val it = 1001 : int   
+:> slrp_2"1001";
+val it = 1001 : int   
+:> slrp_2"(1*(2*(3*(4*(5*(6*(7*8)))))))";
+val it = 40320 : int   
+æ
+\subsection{SLRP.3}
+
+
+E	=	 E, Op, E			(apply x2 x1 x3)
+	|	 `Lbrack`, E, `Rbrack`		(fetch x2)
+	|	 Num 				(conv x1);                        
+æ
+
+=SML
+datatype PC_CLASS = Op | Lbrack | Rbrack | Num | Eos | Wrong;
+fun apply (Token("+", _)) (Parsed (x:int)) (Parsed (y:int)) = x + y
+|   apply (Token("*", _)) (Parsed (x:int)) (Parsed (y:int)) = x * y
+|   apply (Token(s, _)) _ _ = raise PARSER_ERROR ("operator " ^ s  ^ " not recognised")
+|   apply _ _ _ = raise PARSER_ERROR "corrupt stack";
+=TEX
+=SML
+fun pc_classify "*" = Op
+|   pc_classify "+" = Op
+|   pc_classify "(" = Lbrack
+|   pc_classify ")" = Rbrack
+|   pc_classify "<end-of-input>" = Eos
+|   pc_classify Other = if is_all_decimal Other then Num else Wrong;
+=TEX
+
+If we test the behaviour of the generated parser, we find that all
+goes well until we supply a term which exhibits the ambiguity
+in the grammar:
+óExample SML Session
+:> pc"1001";
+val it = 1001 : int   
+:> pc"1001 * 42";
+val it = 42042 : int   
+:> pc"1001 * (3 + 5)";
+val it = 8008 : int   
+:> pc"1001 * 3 + 5";
+Exception- PARSER_ERROR "shift/reduce conflict" raised
+Exception++ failure handled by useterminal
+æ
+
+=SML
+fun pc_compare ((s1, _), (s2, _)) = (
+	case (s1, s2) of
+		("+", "+") => DoReduce
+	|	("+", "*") => DoShift
+	|	("*", "+") => DoReduce
+	|	("*", "*") => DoReduce
+	|	_ => raise PARSER_ERROR "unrecognised operator"
+);
+=TEX
+
+=SML
+val pc_parser = slrp'gen_parser (simple_resolver pc_compare) pc_classify pc_error pc_reader;
+=TEX
+
+Definining $pc$ as before, we see that the case which used to fail now
+works as we would expect:
+óExample SML Session
+:> pc"1001 * 3 + 5";
+val it = 3008 : int   
+æ
+
+\subsection{SLRP.4}
+Reduce/reduce conflicts occur much less often in practically useful
+grammars than shift/reduce conflicts.
+An example connected with an equation-typesetting preprocessor may be
+found in \cite{Aho77}. \Slrp\ does not cater for dynamic resolution of
+Reduce/reduce conflicts but instead adopts a simular rule for
+resolving them to that adopted by the program YACC discussed in\cite{Aho77},
+namely, that a reduce/reduce conflict for two distinct non-terminals
+is resolved in favour of the production which appears first
+in the grammar\footnote{%
+This rule is slightly complicated since,
+\Slrp\ allows several alternatives to be given for one non-terminal
+and also allows alternatives to be given in separate productions for the same non-terminal.
+Internally \Slrp\ brings all the alternatives for a given non-terminal
+together as soon as it encounters the first production for that non-terminal.
+The reduce/reduce resolution is done using the ordering of alternatives within
+this internal representation for the grammar.%
+}.
+
+\end{document}
+=TEST
+fun dump_string file string = (
+	let	val os = open_out file;
+	in	(output(os, string); close_out os)
+	end
+);
+(* First Pocket Calculator Example: *)
+dump_string "slr.tst"(
+"E	= E, `Plus`, T (add x1 x3)			\n" ^
+"	| T (fetch x1);			\n" ^
+"T	= T, `Times`, F (mul x1 x3)		\n	" ^
+"	| F (fetch x1);\n" ^
+"F	= `Lbrack`, E, `Rbrack` (fetch x2)	\n		" ^
+"	| Num (conv x1);			\n");
+
+
+open SlrpDriver;
+datatype PC_CLASS = Plus | Times | Lbrack | Rbrack | Num | Eos | Wrong;
+
+fun add (Parsed (x:int)) (Parsed (y:int)) = x + y
+|   add _ _ = raise PARSER_ERROR "corrupt stack";
+fun mul (Parsed (x:int)) (Parsed (y:int)) = x * y
+|   mul _ _ = raise PARSER_ERROR "corrupt stack";
+fun fetch (Parsed (x:int)) = x
+|   fetch _= raise PARSER_ERROR "corrupt stack";
+fun conv (Token (n:string, _)) = nat_of_string n
+|   conv _ = raise PARSER_ERROR "corrupt stack";
+
+fun pc_classify "*" = Times
+|   pc_classify "+" = Plus
+|   pc_classify "(" = Lbrack
+|   pc_classify ")" = Rbrack
+|   pc_classify "<end-of-input>" = Eos
+|   pc_classify Other = if is_all_decimal Other then Num else Wrong;
+
+val pc_error = default_error (fn s => s);
+fun pc_reader (ip : string list) : string * string list = (
+	case ip of
+		(h :: more) => (h, more)
+	|	[] => ("<end-of-input>", [])
+);
+Slrp.slrp {infile="slr.tst", outfile="slr.sml", logfile ="slr.log", eos ="Eos", loglevel=2};
+open EfficientDictionary;
+PolyML.use"slr.sml";
+val pc_parser = slrp'gen_parser default_resolver pc_classify pc_error pc_reader;
+fun pc_lex (s : string) : string list = (
+	let	val chars = explode s;
+		fun get_num acc (x :: more) = (
+			if is_all_decimal x
+			then get_num (acc ^ x) more
+			else (acc, x :: more)
+		)  | get_num acc [] = (acc, []);
+		fun get_tok (x :: more) = (
+			if is_all_decimal x
+			then let val (num, rest) = get_num x more
+			in	num :: get_tok rest
+			end else if x = " "
+			then get_tok more
+			else x :: get_tok more
+		) | get_tok [] = []
+	in	get_tok chars
+	end
+);
+val pc : string -> int = pc_parser o pc_lex;
+
+pc"1001+42";
+pc"1001 * 42";
+pc"(1001)";
+pc"1001";
+pc"(1*(2*(3*(4*(5*(6*(7*8)))))))";
+pc"(((((((1+2)+3)+4)+5)+6)+7)+8)";
+pc"((((((1+2)+3)+4)+5)+6)+7)+8)" (* error case *);
+pc"((((((((((1+2)+3)+4)+5)+6)+7)+8)" (* error case *);
+
+
+(* Second pocket calculator example *)
+
+
+dump_string "slr.tst"(
+"E	= E, Op, E (apply x2 x1 x3)			\n" ^
+"	| `Lbrack`, E, `Rbrack` (fetch x2)	\n		" ^
+"	| Num (conv x1);			\n");
+
+Slrp.slrp {infile="slr.tst", outfile="slr.sml", logfile ="slr.log", eos ="Eos", loglevel=2};
+
+datatype PC_CLASS = Op | Lbrack | Rbrack | Num | Eos | Wrong;
+
+fun apply (Token("+", _)) (Parsed (x:int)) (Parsed (y:int)) = x + y
+|   apply (Token("*", _)) (Parsed (x:int)) (Parsed (y:int)) = x * y
+|   apply (Token(s, _)) _ _ = raise PARSER_ERROR ("operator " ^ s  ^ " not recognised")
+|   apply _ _ _ = raise PARSER_ERROR "corrupt stack";
+
+
+fun pc_classify "*" = Op
+|   pc_classify "+" = Op
+|   pc_classify "(" = Lbrack
+|   pc_classify ")" = Rbrack
+|   pc_classify "<end-of-input>" = Eos
+|   pc_classify Other = if is_all_decimal Other then Num else Wrong;
+
+open EfficientDictionary;
+PolyML.use"slr.sml";
+val pc_parser = slrp'gen_parser default_resolver pc_classify pc_error pc_reader;
+fun pc_lex (s : string) : string list = (
+	let	val chars = explode s;
+		fun get_num acc (x :: more) = (
+			if is_all_decimal x
+			then get_num (acc ^ x) more
+			else (acc, x :: more)
+		)  | get_num acc [] = (acc, []);
+		fun get_tok (x :: more) = (
+			if is_all_decimal x
+			then let val (num, rest) = get_num x more
+			in	num :: get_tok rest
+			end else if x = " "
+			then get_tok more
+			else x :: get_tok more
+		) | get_tok [] = []
+	in	get_tok chars
+	end
+);
+val pc : string -> int = pc_parser o pc_lex;
+
+pc"1001";
+pc"1001 * 42";
+pc"1001 * (3 + 5)";
+pc"1001 * 3 + 5";
+
+
+fun pc_compare ((s1, _), (s2, _)) = (
+	case (s1, s2) of
+		("+", "+") => DoReduce
+	|	("+", "*") => DoShift
+	|	("*", "+") => DoReduce
+	|	("*", "*") => DoReduce
+	|	_ => raise PARSER_ERROR "unrecognised operator"
+);
+val pc_parser = slrp'gen_parser (simple_resolver pc_compare) pc_classify pc_error pc_reader;
+
+val pc : string -> int = pc_parser o pc_lex;
