@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.43 2004/02/09 16:41:37 rda Exp rda $ 
+ * $Id: search.c,v 2.44 2004/02/09 16:43:33 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -54,7 +54,6 @@ typedef struct {
 		manager_w,
 		search_w,
 		replace_w,
-		line_no_w,
 		default_focus_w;
 } SearchData;
 /*
@@ -81,17 +80,6 @@ typedef struct {
  * messages
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static char *cant_get_line_no = 
-	"Running out of memory! "
-	"Not enough memory is left to calculate the line number";
-
-static char *cant_goto_line_no = 
-	"Running out of memory! "
-	"Not enough memory is left to move to the line number";
-
-static char *no_line_no = 
-	"Line number to go to is missing or zero.";
-
 static char *no_room_for_search_op = 
 	"Running out of memory! "
 	"Not enough memory is left to perform this search operation.";
@@ -116,12 +104,6 @@ static char *not_found =
 static char *re_error = 
 	"Error in regular expression \"%s\": %s";
 
-static char *line_no_too_big1 =
-	"There is only 1 line in the file.";
-
-static char *line_no_too_big =
-	"There are only %ld lines in the file.";
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * static data
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -142,8 +124,6 @@ static void	search_backwards_cb(CALLBACK_ARGS),
 		replace_set_cb(CALLBACK_ARGS),
 		replace_search_backwards_cb(CALLBACK_ARGS),
 		replace_search_forwards_cb(CALLBACK_ARGS),
-		line_no_set_cb(CALLBACK_ARGS),
-		goto_line_no_cb(CALLBACK_ARGS),
 		dismiss_cb(CALLBACK_ARGS),
 		options_cb(CALLBACK_ARGS),
 		help_cb(CALLBACK_ARGS);
@@ -185,21 +165,6 @@ static MenuItem replace_text_edit_menu_items[] = {
     {NULL}
 };
 
-#define LINE_NO_SPECIAL_OPS 1
-
-static MenuItem line_no_edit_menu_items[] = {
-    { "Cut", &xmPushButtonGadgetClass, '\0', NULL, NULL,
-        edit_cut_cb, NULL, (MenuItem *)NULL, False },
-    { "Copy", &xmPushButtonGadgetClass, '\0', NULL, NULL,
-        edit_copy_cb, NULL, (MenuItem *)NULL, False },
-    { "Paste", &xmPushButtonGadgetClass, '\0', NULL, NULL,
-        edit_paste_cb, NULL, (MenuItem *)NULL, False },
-    MENU_ITEM_SEPARATOR,
-    { ":= Cursor", &xmPushButtonGadgetClass, '\0', NULL, NULL,
-        line_no_set_cb, NULL, (MenuItem *)NULL, False },
-    {NULL}
-};
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * add_search_tool: attach a search & replace tool to a text widget
  * This is long but only because it is repetitive.
@@ -211,15 +176,13 @@ static MenuItem line_no_edit_menu_items[] = {
  * | Replace      |  Replace & <= | := Selection |
  * | Replace All  | Replace & =>  | Clear        |
  * |   <text to replace with >                   |
- * | Go to line:  | <line number> | := Cursor    |
  * -----------------------
  * | Dismiss    |  Options | Help  |
  *
  * Each `<...>' here is a text field
  * The `:= ...' push-buttons can be used to
  * include the selection from the text widget in the search and
- * replacement strings or to put the line number corresponding
- * to the insertion point in the line number string.
+ * replacement strings .
  * The other push-buttons actually initiate searches etc.
  * The options button pops up the options tool.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -227,7 +190,7 @@ static MenuItem line_no_edit_menu_items[] = {
 Boolean add_search_tool(Widget text_w)
 {
 	NAT cbdata;
-	Widget shell, paned, search_form, replace_form, line_no_form,
+	Widget shell, paned, search_form, replace_form,
 		action_form,
 		search_backwards_btn,
 		search_forwards_btn,
@@ -243,9 +206,6 @@ Boolean add_search_tool(Widget text_w)
 		replace_search_forwards_btn,
 		replace_clear_btn,
 		replace_text,
-		goto_line_no_btn,
-		line_no_text,
-		line_no_set_btn,
 		dismiss_btn,
 		options_btn,
 		help_btn;
@@ -488,54 +448,6 @@ Boolean add_search_tool(Widget text_w)
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Part 4:
- * | Go to line:  | <line number> | := Cursor    |
- *
- * Do the line number first so that the buttons can be lined up with it.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-	line_no_form = XtVaCreateWidget("line-number-form",
-		xmFormWidgetClass, 		paned,
-		XmNfractionBase,		24,
-		NULL);
-
-	line_no_text = XtVaCreateManagedWidget("line-number",
-		xmTextWidgetClass,		line_no_form,
-		XmNtopAttachment,		XmATTACH_FORM,
-		XmNleftAttachment,		XmATTACH_POSITION,
-		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNbottomAttachment,		XmATTACH_FORM,
-		XmNleftPosition,		8,
-		XmNrightPosition,		16,
-		NULL);
-
-	s = XmStringCreateSimple("Go to line:");
-	goto_line_no_btn = XtVaCreateManagedWidget("go-to-line",
-		xmPushButtonWidgetClass,	line_no_form,
-		XmNlabelString,		s,
-		XmNtopAttachment,		XmATTACH_FORM,
-		XmNleftAttachment,		XmATTACH_FORM,
-		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNbottomAttachment,		XmATTACH_OPPOSITE_WIDGET,
-		XmNbottomWidget,		line_no_text,
-		XmNrightPosition,		8,
-		NULL);
-	XmStringFree(s);
-
-	s = XmStringCreateSimple(":= Cursor");
-	line_no_set_btn = XtVaCreateManagedWidget("becomes-cursor",
-		xmPushButtonWidgetClass,	line_no_form,
-		XmNlabelString,		s,
-		XmNtopAttachment,		XmATTACH_FORM,
-		XmNleftAttachment,		XmATTACH_POSITION,
-		XmNrightAttachment,		XmATTACH_FORM,
-		XmNbottomAttachment,		XmATTACH_OPPOSITE_WIDGET,
-		XmNbottomWidget,		line_no_text,
-		XmNleftPosition,		16,
-		NULL);
-	XmStringFree(s);
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Part 5:
  * -----------------------
  * | Dismiss    |  Options | Help  |
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -594,7 +506,6 @@ Boolean add_search_tool(Widget text_w)
 	search_data.manager_w = paned;
 	search_data.search_w = search_text;
 	search_data.replace_w = replace_text;
-	search_data.line_no_w = line_no_text;
 	search_data.default_focus_w = search_forwards_btn;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -609,8 +520,6 @@ Boolean add_search_tool(Widget text_w)
 	register_palette_client(search_text);
 	register_selection_source(replace_text);
 	register_palette_client(replace_text);
-	register_selection_source(line_no_text);
-	register_palette_client(line_no_text);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * add callbacks
@@ -656,18 +565,6 @@ Boolean add_search_tool(Widget text_w)
 	XtAddCallback(replace_clear_btn, XmNactivateCallback,
 		empty_replace_cb, (XtPointer)(&search_data));
 
-	XtAddCallback(goto_line_no_btn, XmNactivateCallback,
-		goto_line_no_cb, (XtPointer)(&search_data));
-
-	XtAddCallback(line_no_text, XmNmodifyVerifyCallback,
-		(XtCallbackProc)number_verify_cb, (XtPointer)NULL);
-
-	XtAddCallback(line_no_text, XmNactivateCallback,
-		goto_line_no_cb, (XtPointer)(&search_data));
-
-	XtAddCallback(line_no_set_btn, XmNactivateCallback,
-		line_no_set_cb, (XtPointer)(&search_data));
-
 	XtAddCallback(dismiss_btn, XmNactivateCallback,
 		dismiss_cb, (XtPointer)(&search_data));
 
@@ -694,16 +591,9 @@ Boolean add_search_tool(Widget text_w)
 		replace_text_edit_menu_items[i+j].callback_data = (XtPointer)(&search_data);
 	}
 	attach_edit_popup(replace_text, replace_text_edit_menu_items);
-	for(i = 0; i < TEXT_EDIT_OPS; i += 1) {
-		line_no_edit_menu_items[i].callback_data =(XtPointer) line_no_text;
-	}
-	for(j = 0; j < TEXT_SPECIAL_OPS; j += 1) {
-		line_no_edit_menu_items[i+j].callback_data = (XtPointer)(&search_data);
-	}
-	attach_edit_popup(line_no_text, line_no_edit_menu_items);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Initialise search string and line number:
+ * Initialise search string:
  * Don't use callback for search string, since there
  * may not be a selection and don't want error message.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -714,22 +604,12 @@ Boolean add_search_tool(Widget text_w)
 		XtFree(pattern);
 	}
 
-	line_no_set(&search_data);
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  *set up text widget translations
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	XtOverrideTranslations(search_text, text_translations);
 	XtOverrideTranslations(replace_text, text_translations);
-	XtOverrideTranslations(line_no_text, text_translations);
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Make return in the line number text widget activate it
- **** **** **** **** **** **** **** **** **** **** **** **** */
-
-	XtOverrideTranslations(line_no_text,
-		XtParseTranslationTable("<Key>Return: activate()"));
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Manage everything:
@@ -737,7 +617,6 @@ Boolean add_search_tool(Widget text_w)
 
 	XtManageChild(search_form);
 	XtManageChild(replace_form);
-	XtManageChild(line_no_form);
 	XtManageChild(action_form);
 	XtManageChild(paned);
 
@@ -745,7 +624,6 @@ Boolean add_search_tool(Widget text_w)
 
 	fix_pane_height(search_form, search_form);
 	fix_pane_height(replace_form, replace_form);
-	fix_pane_height(line_no_form, line_no_form);
 	fix_pane_height(action_form, action_form);
 /*
  * Now remove any sashes introduced while or since the replacement text pane
@@ -1175,71 +1053,6 @@ static void empty_replace_cb(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * line number setting callback.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void line_no_set_cb(
-	Widget		w,
-	XtPointer	cbd,
-	XtPointer	cbs)
-{
-	SearchData *cbdata = cbd;
-	cbdata->default_focus_w = w;
-	line_no_set(cbdata);
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * go to line number callback.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void line_no_to_offset(Widget,NAT,long int*,long int*);
-static void goto_line_no_cb(
-	Widget		w,
-	XtPointer	cbd,
-	XtPointer	cbs)
-{
-	SearchData *cbdata = cbd;
-	long int left, right;
-	long int line_no = 0;
-	short nrows;
-	int scroll;
-	char *line_no_string;
-	cbdata->default_focus_w = w;
-	CHECK_MAP_STATE(cbdata)
-
-	line_no_string = XmTextGetString(cbdata->line_no_w);
-
-	sscanf(line_no_string, "%ld", &line_no);
-
-	if(line_no <= 0) {
-		ok_dialog(cbdata->shell_w, no_line_no);
-		XtFree(line_no_string);
-		return;
-	}
-
-	line_no_to_offset(cbdata->text_w, line_no, &left, &right);
-	if(left == NO_MEMORY) {
-		ok_dialog(cbdata->shell_w, cant_goto_line_no);
-	} else if (left < 0) {
-		long int lines = -left -1;
-		if(lines != 1) {
-			char buf[200];
-			sprintf(buf, line_no_too_big, lines);
-			ok_dialog(cbdata->shell_w, buf);
-		} else {
-			ok_dialog(cbdata->shell_w, line_no_too_big1);
-		}
-	} else {
-		XmTextSetTopCharacter(cbdata->text_w, left);
-		XtVaGetValues(cbdata->text_w, XmNrows, &nrows, NULL);
-		if(line_no > (scroll = nrows / 2)) {
-			XmTextScroll(cbdata->text_w, -scroll);
-		}
-		XmTextSetSelection(cbdata->text_w,
-				left, right, CurrentTime);
-	}
-	XtFree(line_no_string);
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
  * actually doing the work:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 /*
@@ -1654,85 +1467,3 @@ static void replace_all(
 	*start_point = sp - *result;
 	search_forwards(0, 0, 0);
 }
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * get_line_no returns the line number of the insertion position
- * in the text widget passed as an argument. It returns -1
- * if something went wrong (e.g., because we're in a multi-byte locale).
-. * **** **** **** **** **** **** **** **** **** **** **** **** */
-long int get_line_no(Widget text_w)
-{
-	XmTextPosition ins_pos, cur_pos;
-	char data[BUFSIZ+1], *p;
-	long int line_ct;
-	ins_pos = XmTextGetInsertionPosition(text_w);
-	for(cur_pos = 0, line_ct = 1; cur_pos <= ins_pos; cur_pos += BUFSIZ) {
-		if(XmTextGetSubstring(text_w, cur_pos, BUFSIZ, BUFSIZ + 1, data)
-				== XmCOPY_FAILED ) {
-			return -1;
-		}
-		for(p = data; p - data + cur_pos < ins_pos && *p; ++p) {
-			if(*p == '\n') {
-				++line_ct;
-			}
-		}
-	}
-	return line_ct;
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * line_no_to_offset returns the character offset of the 
- * first and last characters of a given line in a text widget.
- * first is set to  -(nlines + 1), where nlines is the total number
- * of line in the file if number out of range.
- * first is set to NO_MEMORY if not enough memory to do the job.
- * last is unchanged in these two error cases.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void line_no_to_offset(
-	Widget		text_w,
-	NAT		line_no,
-	long int	*first,
-	long int	*last)
-{
-	char *data, *p;
-	long int line_ct;
-
-	if((data = XmTextGetString(text_w)) == NULL) {
-		*first = NO_MEMORY;
-		return;
-	}
-	for(p = data, line_ct = line_no - 1; *p && line_ct; ++p) {
-		if(*p == '\n' && *(p + 1)) {
-			--line_ct;
-		}
-	}
-	if(line_ct == 0) {
-		*first = p - data;
-		*last = *first;
-		while(*p && *p != '\n') {
-			++*last;
-			++p;
-		}
-	} else {
-		*first = -(line_no - line_ct + 1);
-	}
-	XtFree(data);
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Support for line number setting callback.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-static void line_no_set(SearchData *cbdata)
-{
-	char line_no_string[16];
-	long int line_no;
-	if((line_no = get_line_no(cbdata->text_w)) <= 0) {
-		ok_dialog(cbdata->shell_w, cant_get_line_no);
-		return;
-	}
-	sprintf(line_no_string, "%ld", get_line_no(cbdata->text_w));
-	XmTextSetString(cbdata->line_no_w, line_no_string);
-}
-
-

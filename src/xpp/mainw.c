@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.78 2004/02/09 16:41:37 rda Exp rda $
+ * $Id: mainw.c,v 2.79 2004/02/10 22:43:47 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -165,6 +165,7 @@ static void
 	ln_popup_cb(CALLBACK_ARGS),
 	journal_modify_cb(CALLBACK_ARGS),
 	popup_search_tool_cb(CALLBACK_ARGS),
+	popup_line_no_tool_cb(CALLBACK_ARGS),
 	popup_palette_cb(CALLBACK_ARGS),
 	popup_templates_tool_cb(CALLBACK_ARGS),
 	popup_command_line_tool_cb(CALLBACK_ARGS),
@@ -272,6 +273,8 @@ static MenuItem edit_menu_items[] = {
     MENU_ITEM_SEPARATOR,
     { "Search and Replace ...", &xmPushButtonGadgetClass, 'S', NULL, NULL,
         popup_search_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
+    { "Goto Line ...", &xmPushButtonGadgetClass, 'G', NULL, NULL,
+        popup_line_no_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
     {NULL}
 };
 /*
@@ -337,16 +340,16 @@ static MenuItem help_menu_items[] = {
         help_menu_cb, (XtPointer)HELP_MENU_USING_HELP, (MenuItem *)NULL, False },
     { "Tutorial", &xmPushButtonGadgetClass, 'u', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_TUTORIAL, (MenuItem *)NULL, False },
-    { "File Name Bar", &xmPushButtonGadgetClass, 'N', NULL, NULL,
-        help_menu_cb, (XtPointer)HELP_MENU_FILE_NAME_BAR, (MenuItem *)NULL, False },
     { "File Menu", &xmPushButtonGadgetClass, 'F', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_FILE_MENU, (MenuItem *)NULL, False },
-    { "Tools Menu", &xmPushButtonGadgetClass, 'T', NULL, NULL,
-        help_menu_cb, (XtPointer)HELP_MENU_TOOLS_MENU, (MenuItem *)NULL, False },
     { "Edit Menu", &xmPushButtonGadgetClass, 'E', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_EDIT_MENU, (MenuItem *)NULL, False },
+    { "Tools Menu", &xmPushButtonGadgetClass, 'T', NULL, NULL,
+        help_menu_cb, (XtPointer)HELP_MENU_TOOLS_MENU, (MenuItem *)NULL, False },
     { "Command Menu", &xmPushButtonGadgetClass, 'C', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_COMMAND_MENU, (MenuItem *)NULL, False },
+    { "File Name Bar", &xmPushButtonGadgetClass, 'N', NULL, NULL,
+        help_menu_cb, (XtPointer)HELP_MENU_FILE_NAME_BAR, (MenuItem *)NULL, False },
     {NULL}
 };
 
@@ -1275,12 +1278,21 @@ static void reopen_cb(
 	}
 	if(oldfname) {XtFree(oldfname);}
 }
+
 static void popup_search_tool_cb(
 		Widget		w,
 		XtPointer	cbd,
 		XtPointer	cbs)
 {
 		add_search_tool(script);
+}
+
+static void popup_line_no_tool_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+		add_line_no_tool(script);
 }
 
 static void popup_palette_cb(
