@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.19 2003/01/31 12:54:23 rda Exp rda $
+ * $Id: files.c,v 2.20 2003/05/08 15:42:15 rda Exp $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -134,6 +134,14 @@ static char *file_created_message =
 static char *file_deleted_message =
 	 "The file \"%s\" appears to have been deleted since it was last "
 	 "opened or saved. Do you want to create it?";
+
+static char *open_file_changed_message =
+	 "The file \"%s\" you are currently editing appears to have been modified since it was last "
+	 "opened or saved. Do you want to open %s?";
+
+static char *open_file_created_message =
+	 "The file \"%s\" appears to have been created since this "
+	 "xpp session was started. Do you want to open %s?";
 
 static char *contains_binary_message =
 	" The file \"%s\" contains binary data."
@@ -684,6 +692,36 @@ static Boolean store_file_contents(
  * Implements `save' as opposed to `save as' in a file menu
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+file_status check_file_status(char *name)
+{
+	char *buf;
+	struct stat new_status;
+	if(current_file_status != NULL) {
+		if(stat(name, &new_status) == 0) { /* file still exists */
+			if(	new_status.st_mtime != current_file_status->st_mtime
+			||	new_status.st_ctime != current_file_status->st_ctime
+			||	new_status.st_size != current_file_status->st_size) {
+				return FS_CHANGED;
+			}
+		} else { /* it's presumably been deleted */
+			return FS_DELETED;
+		}
+	} else {
+		if(stat(name, &new_status) == 0) { /* file now exists */
+			return FS_CREATED;
+		}
+	}
+	return FS_OK;
+}
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * save_file: store contents of a text widget into a named file
+ * which will presumably already exist and may be overwritten
+ * without confirmation.
+ * Implements `save' as opposed to `save as' in a file menu
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
 Boolean save_file(
 	Widget	text,
 	char	*name)
@@ -692,6 +730,7 @@ Boolean save_file(
 	Boolean success;
 	static struct stat status;
 	struct stat new_status;
+	char *msg;
 	if(global_options.read_only) {
 		if(!file_yes_no_dialog(text,
 					save_read_only_message,
@@ -700,27 +739,15 @@ Boolean save_file(
 		}
 		set_read_only(False);
 	}
-	if(current_file_status != NULL) {
-		if(stat(name, &new_status) == 0) { /* file still exists */
-			if(	new_status.st_mtime != current_file_status->st_mtime
-			||	new_status.st_ctime != current_file_status->st_ctime
-			||	new_status.st_size != current_file_status->st_size) {
-				if(!file_yes_no_dialog(text,
-							file_changed_message,
-							name)) {
-						return False;
-				}
-			}
-		} else { /* it's presumably been deleted */
-			if(!file_yes_no_dialog(text, file_deleted_message, name)) {
-					return False;
-			}
-		}
-	} else {
-		if(stat(name, &new_status) == 0) { /* file now exists */
-			if(!file_yes_no_dialog(text, file_created_message, name)) {
-					return False;
-			}
+	switch(check_file_status(name)) {
+		case FS_CHANGED: msg = file_changed_message; break;
+		case FS_DELETED: msg = file_deleted_message; break;
+		case FS_CREATED: msg = file_created_message; break;
+		case FS_OK: msg = NULL; break;
+	}
+	if(msg != NULL) {
+		if(!file_yes_no_dialog(text, msg, name)) {
+			return False;
 		}
 	}
 	buf = XmTextGetString(text);
@@ -836,13 +863,34 @@ char * read_only_access_message(
 Boolean open_file(
 		Widget	text,
 		char	*name,
-        Boolean cmdLine,
-        FileOpenAction *foAction)
+		char	*oldname,
+		Boolean cmdLine,
+ 		FileOpenAction *foAction)
 {
 	char *buf;
 	static struct stat status;
 	Boolean binary;
 	char *read_only_message;
+	char *fmt;
+	switch(oldname != NULL ? check_file_status(oldname) : FS_OK) {
+		case FS_CHANGED: fmt = open_file_changed_message; break;
+		case FS_DELETED: fmt = NULL; break;
+		case FS_CREATED: fmt = open_file_created_message; break;
+		case FS_OK: fmt = NULL; break;
+	}
+	if(fmt != NULL) {
+		Boolean reply;
+		char *qname = XtMalloc(strlen(name == NULL ? "an empty file" : name) + 2);
+		char *msg = XtMalloc(strlen(fmt) + strlen(oldname) + strlen(qname));
+		sprintf(qname, name == NULL ? "%s" : "\"%s\"", name == NULL ? "an empty file"  : name);
+		sprintf(msg, fmt, oldname, qname);
+		reply = yes_no_dialog(text, msg);
+		XtFree(qname);
+		XtFree(msg);
+		if(reply == False) {
+			return False;
+		}
+	}
 	if(!(name && *name)) { /* NULL or empty */
 		XmTextSetString(text, "");
 		if (foAction != (FileOpenAction *) NULL) {

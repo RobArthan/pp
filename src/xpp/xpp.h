@@ -95,6 +95,21 @@ typedef struct menu_item {
 	Boolean		pullright_tear_off_enabled;}
 					/* Ignored if not submenu */
 		MenuItem;
+/* action being taken in sync_file */
+typedef enum {
+	FS_OK,
+	FS_CHANGED,
+	FS_DELETED,
+	FS_CREATED}
+	file_status;
+/* what to do in open_file if the file's not there, or has funny permisions */
+typedef enum {
+	NoAction,
+	QuitNow,
+	NewFile,
+	EmptyFile
+} FileOpenAction;
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * EXTERNS
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -115,18 +130,14 @@ typedef struct menu_item {
 		char	*s1,	/* title: ... */
 		char	*s2	/* ...: message */);
 /* Module: files */
-	/* what to do if the file's not there, or has funny permisions */
-	typedef enum {
-		NoAction,
-		QuitNow,
-		NewFile,
-		EmptyFile
-	} FileOpenAction;
 	extern Boolean open_file(
 		Widget	text,
 		char	*name,
+		char	*oldname,
 		Boolean cmdLine,
 		FileOpenAction *foAction);
+	extern file_status check_status(
+		char	*name);
 	extern Boolean save_file(
 		Widget	text,
 		char	*name);

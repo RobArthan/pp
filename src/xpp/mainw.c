@@ -1,5 +1,5 @@
 #/* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.68 2003/07/24 11:32:54 rda Exp rda $
+ * $Id: mainw.c,v 2.69 2003/07/24 16:18:01 rda Exp $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -924,7 +924,7 @@ static Boolean setup_main_window(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	pause_undo(undo_ptr);
 
-	if(open_file(script, file_name, True, &foAction)) {
+	if(open_file(script, file_name, NULL, True, &foAction)) {
 		XmTextFieldSetString(namestring, file_name);
 		XmTextFieldShowPosition(namestring, strlen(file_name));
 		set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
@@ -1054,7 +1054,7 @@ static void file_menu_cb(
 /* No file name: just do nothing */
 			} else {
 				pause_undo(undo_ptr);
-				if(open_file(script, fname, False, (FileOpenAction *) NULL)) {
+				if(open_file(script, fname, oldfname, False, (FileOpenAction *) NULL)) {
 					if(oldfname &&
 					   *oldfname &&
 					   *oldfname != '*' &&
@@ -1083,16 +1083,22 @@ static void file_menu_cb(
 		if(fname != NULL) {XtFree(fname);};
 		break;
 	case FILE_MENU_REVERT:
+		oldfname = XmTextGetString(namestring);
+		if(!oldfname || !*oldfname || *oldfname == '*') {
+			if(oldfname) {XtFree(oldfname);}
+			oldfname = NULL;
+		}
 		if(!file_info.changed || yes_no_dialog(root, changed_message)) {
 			fname = XmTextGetString(namestring);
 			pause_undo(undo_ptr);
 			if(!fname || !*fname || *fname == '*') {
 /* No file name: get an empty file */
 				XmTextSetString(script, "");
-			} else if(!open_file(script, fname, False,(FileOpenAction *) NULL)){
+			} else if(!open_file(script, fname, oldfname, False,(FileOpenAction *) NULL)){
 /* Can't open it; */
 				XtFree(fname);
 				unpause_undo(undo_ptr);
+				if(oldfname) {XtFree(oldfname);}
 				break;
 			}
 			flash_file_name(fname);
@@ -1100,13 +1106,22 @@ static void file_menu_cb(
 			reinit_changed(False);
 			XtFree(fname);
 		};
+		if(oldfname) {XtFree(oldfname);}
 		break;
 	case FILE_MENU_EMPTY_FILE:
 		oldfname = XmTextGetString(namestring);
+		if(!oldfname || !*oldfname || *oldfname == '*') {
+			if(oldfname) {XtFree(oldfname);}
+			oldfname = NULL;
+		}
 		if(!file_info.changed || yes_no_dialog(root, revert_message)) {
 			pause_undo(undo_ptr);
+			if(!open_file(script, NULL, oldfname, False, (FileOpenAction*)NULL)) {
+				if(oldfname) {XtFree(oldfname);}
+				unpause_undo(undo_ptr);
+				break;
+			}
 			XmTextFieldSetString(namestring, no_file_message);
-			XmTextSetString(script, "");
 			if(oldfname && *oldfname && *oldfname != '*') {
 				setup_reopen_menu(oldfname);
 			}
@@ -1198,11 +1213,15 @@ static void reopen_cb(
 	char *oldfname, *fname;
 	NAT i = (NAT) cbd;
 	oldfname = XmTextGetString(namestring);
+	if(!oldfname || !*oldfname || *oldfname == '*') {
+		if(oldfname) {XtFree(oldfname);}
+		oldfname = NULL;
+	}
 	fname = reopen_menu_items[i].label;
 	strcpy(fname,reopen_menu_items[i].label);
 	if(!file_info.changed || yes_no_dialog(root, changed_message)) {
 		pause_undo(undo_ptr);
-		if(open_file(script, fname, False, (FileOpenAction *) NULL)) {
+		if(open_file(script, fname, oldfname, False, (FileOpenAction *) NULL)) {
 			flash_file_name(fname); /* last use */
 			if(oldfname && *oldfname && *oldfname != '*') {
 				setup_reopen_menu(oldfname); /* may junk fname */
