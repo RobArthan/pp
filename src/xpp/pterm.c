@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.45 2004/02/10 21:47:07 rda Exp rda $
+ * $Id: pterm.c,v 2.46 2004/02/10 22:43:47 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -623,7 +623,8 @@ void get_pty(void)
 		arglist = get_arg_list(global_options.command_line);
 		execvp(arglist[0], arglist);
 	/* **** error if reach here **** */
-		msg("system error", "could not exec");
+		fprintf(stderr, "xpp: could not exec: \"%s\"\n", global_options.command_line);
+		perror("xpp");
 		exit(12);
 	}
 }
