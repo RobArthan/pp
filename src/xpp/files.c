@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.5 2002/10/17 17:09:34 rda Exp rda $
+ * $Id: files.c,v 2.6 2002/10/28 16:47:44 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -27,11 +27,15 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <limits.h>
 
 #include <stdio.h>
 
 #include "xpp.h"
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * messages:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static char *cant_read_message =
 	 "The file \"%s\" cannot be opened for reading: "
@@ -102,6 +106,21 @@ static char *save_not_reg_message =
 
 static char *write_error_message =
 	 "Error writing the file \"%s\"";
+
+static char *file_changed_message =
+	 "The file \"%s\" appears to have been modified since it was last "
+	 "opened or saved. Do you want to overwrite it?";
+
+static char *file_deleted_message =
+	 "The file \"%s\" appears to have been deleted since it was last "
+	 "opened or saved. Do you want to create it?";
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Static data:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static struct stat *current_file_status = NULL;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Private functions:
@@ -176,6 +195,13 @@ static Boolean file_yes_no_dialog(
  * NULL is returned if anything goes wrong (and if NULL is
  * returned, the user will have been presented with an error
  * message dialogue).
+ * The third parameter should be set true iff. this is the call
+ * to open the file named on the command line (for which it is not
+ * an error if the file does not exist).
+ * The fourth parameter tells caller more about what happened (supply
+ * NULL if not interested).
+ * The fifth parameter is a buffer to contain the stat of the file
+ * if it already existed (supply NULL if not interested).
  * If all is well the return value is a pointer to a buffer
  * containing the contents of the file as a null-terminated
  * character array.
@@ -184,10 +210,11 @@ static Boolean file_yes_no_dialog(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static char *get_file_contents(
-	Widget	w,
-	char	*name,
-	Boolean cmdLine,
-	FileOpenAction *foAction)
+	Widget		w,
+	char		*name,
+	Boolean 	cmdLine,
+	FileOpenAction 	*foAction,
+	struct stat 	*stat_buf)
 {
 	struct stat status;
 	NAT siz;
@@ -248,6 +275,9 @@ static char *get_file_contents(
 		file_error_dialog(w, contains_nulls_message, name);
 		XtFree(buf);
 		return NULL;
+	}
+	if(stat_buf != NULL) {
+		*stat_buf = status;
 	}
 	return buf;
 }
@@ -395,8 +425,35 @@ Boolean save_file(
 {
 	char *buf;
 	Boolean success;
+	static struct stat status;
+	struct stat new_status;
+	if(current_file_status != NULL) {
+		if(stat(name, &new_status) == 0) { /* file still exists */
+			if(	new_status.st_mtime != current_file_status->st_mtime
+			||	new_status.st_ctime != current_file_status->st_ctime) {
+				char msg_buf[PATH_MAX + 200];
+				sprintf(msg_buf, file_changed_message, name);
+				if(!yes_no_dialog(text, msg_buf)) {
+						return False;
+				}
+			}
+		} else { /* it's presumably been deleted */
+			char msg_buf[PATH_MAX + 200];
+			sprintf(msg_buf, file_deleted_message, name);
+			if(!yes_no_dialog(text, msg_buf)) {
+					return False;
+			}
+		}
+	}
 	buf = XmTextGetString(text);
 	success = store_file_contents(text, name, buf);
+	if(success) {
+		if(stat(name, &status) == 0) { /* strange if this fails */
+			current_file_status = &status;
+		} else { /* give up on status checks if it failed */
+			current_file_status = NULL;
+		}
+	}
 	XtFree(buf);
 	return success;
 }
@@ -413,10 +470,10 @@ Boolean save_file_as(
 {
 	char *buf;
 	Boolean success;
-	struct stat status;
+	static struct stat status;
 
 	if(stat(name, &status) == 0) { /* file exists */
-		char msg_buf[200];
+		char msg_buf[PATH_MAX + 200];
 		if(!S_ISREG(status.st_mode)) {
 			file_error_dialog(text, save_not_reg_message, name);
 			return False;
@@ -429,13 +486,18 @@ Boolean save_file_as(
 	buf = XmTextGetString(text);
 	success = store_file_contents(text, name, buf);
 	XtFree(buf);
+	if(success && stat(name, &status) == 0) {
+		current_file_status = &status;
+	} else { /* give up on file status checks for now */
+		current_file_status = NULL;
+	}
 	return success;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * save_string_as: store string given as argument into a named file.
  * Asks for confirmation if the file already exists.
- * E.g., used to mplement `save selection as' in a file menu
+ * E.g., used to implement `save selection as' in a file menu
  * Treats NULL data same as "" (just a frill).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
@@ -448,7 +510,7 @@ Boolean save_string_as(
 	struct stat status;
 
 	if(stat(name, &status) == 0) { /* file exists */
-		char msg_buf[200];
+		char msg_buf[PATH_MAX + 200];
 		if(!S_ISREG(status.st_mode)) {
 			file_error_dialog(w, save_not_reg_message, name);
 			return False;
@@ -479,6 +541,7 @@ Boolean open_file(
         FileOpenAction *foAction)
 {
 	char *buf;
+	static struct stat status;
 
 	if(!(name && *name)) { /* NULL or empty */
 		XmTextSetString(text, "");
@@ -487,13 +550,15 @@ Boolean open_file(
 		}
 		return False;
 	};
-	if((buf = get_file_contents(text, name, cmdLine, foAction)) != NULL) {
+	if((buf = get_file_contents(text, name, cmdLine, foAction, &status)) != NULL) {
 		XmTextDisableRedisplay(text);
 		XmTextSetString(text, buf);
 		XtFree(buf);
 		XmTextEnableRedisplay(text);
+		current_file_status = &status;
 		return True;
 	} else {
+		current_file_status = NULL;
 		return False;
 	}
 }
@@ -501,7 +566,7 @@ Boolean open_file(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include_file: open a file and include it into a text widget given the
  * widget and the file name 
- * Implements `open' in a file menu.
+ * Implements `include' in the file menu.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 Boolean include_file(
@@ -514,7 +579,8 @@ Boolean include_file(
 	if((buf = get_file_contents(text,
 	                            name,
 	                            False,
-	                            (FileOpenAction *) NULL)) != NULL) {
+	                            (FileOpenAction *) NULL,
+				    NULL)) != NULL) {
 		XmTextDisableRedisplay(text);
 		pos = XmTextGetInsertionPosition(text);
 		XmTextClearSelection(text, CurrentTime);
