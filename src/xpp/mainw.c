@@ -1,5 +1,5 @@
 #/* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.67 2003/07/24 11:13:32 rda Exp rda $
+ * $Id: mainw.c,v 2.68 2003/07/24 11:32:54 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -854,7 +854,9 @@ static Boolean setup_main_window(
 
 		XtVaGetValues(journal, XmNeditable, &editable, NULL);
 		XtVaSetValues(journal, XmNtraversalOn, editable, NULL);
-
+		if(editable) {
+			XtOverrideTranslations(script, text_translations);
+		}
 		XtVaGetValues(mainpanes, XmNchildren, &children,
 			XmNnumChildren, &num_children, NULL);
 
