@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.20 2003/02/09 15:32:52 rda Exp rda $ 
+ * $Id: search.c,v 2.21 2003/02/09 17:43:37 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -1132,12 +1132,20 @@ static Substring re_search_exec(regex_t *preg, char *text, Boolean bol)
 	regmatch_t pmatch[1];
 	int eflags = bol ? 0 : REG_NOTBOL;
 	int error_code;
-	error_code = regexec(preg, text, 1, pmatch, eflags);
-	if(error_code == 0) {
-		result.offset = pmatch[0].rm_so;
-		result.length = pmatch[0].rm_eo - pmatch[0].rm_so;
-	} else {
-		result.offset = -1;
+	char *p;
+	result.offset = -1; /* assume no match until we get one */
+	for(p = text; *p; ++p) {
+		error_code = regexec(preg, p, 1, pmatch, eflags);
+		if(error_code == 0) {
+			result.length = pmatch[0].rm_eo - pmatch[0].rm_so;
+			if(result.length != 0) {
+				result.offset = pmatch[0].rm_so + (p - text);
+				break;
+			}
+		} else {
+			result.offset = -1;
+			break;
+		} /* found only 0-length match, go round again: */
 	}
 	return result;
 }
@@ -1321,7 +1329,7 @@ static void replace_all(
 	char	**result,
 	NAT	*start_point)
 {
-	long int text_buf_len, rep_pattern_len, rep_len, rep_len_max, extra;
+	long int text_buf_len, rep_pattern_len, rep_len, extra;
 	Substring ss;
 	char	*p, *q, *next_p, *sp;
 	text_buf_len = strlen(text_buf);
@@ -1329,7 +1337,6 @@ static void replace_all(
 
 	p = text_buf;
 	extra = 0;
-	rep_len_max = rep_pattern_len;
 	(void) search_forwards(pattern, 0, 0);
 	while(*p) {
 		ss = search_forwards(0, text_buf, p - text_buf);
@@ -1337,9 +1344,6 @@ static void replace_all(
 			if(global_options.use_reg_exps) {
 				rep_len = re_replacement_text(rep_pattern, p, &ss, 0);
 				extra += rep_len - ss.length;
-				if(rep_len > rep_len_max) {
-					rep_len_max = rep_len;
-				}
 			} else {
 				extra += rep_pattern_len - ss.length;
 			}
