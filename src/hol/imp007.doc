@@ -142,6 +142,8 @@ being run with empty lists.
 Renamings from version 1.5 of DS/FMU/IED/WRK038.
 \item [Issue 1.37 (3rd July 1992)]
 Replaced a $subst$ with a $var\_subst$.
+\item[Issue \SCCSversion\ (\FormatDate{$Date$%
+})] $match\_mp\_rule1$s now don't specialise free variables.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -2676,56 +2678,16 @@ handle (Fail _) => fail caller 7044 [fn () => string_of_term match_against,
 );
 end;
 =TEX
-The function $apply\_matches\_rule1$ encodes the matching attempt, should
-a simple use of the rule fail, but unlike the above does not attempt
-to modify the assumptions.
-It is given a term to match against,
-a method of extracting the part to match,and the theorem
-that is to be instantiated.
-The theorem it is passed is stripped
-of all outer universal quantifers.
-It instantiates types to the minimum required,
-instantiates free variables to the minimum required
-(notice that we must not instantiate the universally quantified variables of $thm$ that occur free in the assumptions:
-thus $tmm'$).
-
-The order of arguments to $@$ in $subs\_for$ is closely
-tied to whether we do $inst\-\_term\-\_rule$
-or $list\-\_simple\-\_µ\-\_elim$ first.
-
-Note that $term\_match$ is not infallible.
+The following associative look-up is used in the variant versions
+of the matching rules which do not specialise free variables.
 =SML
-fun Ûapply_matches_rule1Ý (caller : string) 
-	(match_against : TERM)
-	(extract : TERM -> TERM)
-	(thm : THM) : THM = (
-let	val cnc = concl thm;
-	val cfrees = frees cnc;
-	val afrees = list_union (op =$) (map frees (asms thm));
-	val just_c_frees = cfrees drop (fn x => present (op =$) x afrees);
-	val qvs = fst(strip_µ cnc);
-	val subs_for = just_c_frees @ qvs;
-	val subs_with = list_variant afrees subs_for;
-	val length_just_c_frees = length just_c_frees;
-	val qvs' = subs_with from length_just_c_frees;
-	val just_c_frees' = subs_with to (length_just_c_frees-1);
-	val s1 = list_simple_µ_elim qvs' thm;
-	val s3 = inst_term_rule(combine just_c_frees' just_c_frees) s1;
-	val t1 = extract (concl s3);
-	val (tym,tmm) = term_match match_against t1;
-	val s4 = case tym of
-		[] => s3
-		| _ => inst_type_rule tym s3;
-	val s5 = inst_term_rule tmm s4;
-in
-	s5
-end
-handle (Fail _) => fail caller 7044 [
-		fn () => string_of_term match_against, 
-		fn () => string_of_thm thm]
-);
+fun lrassoc1 ((x, y) :: rest : (TERM * TERM) list) (what : TERM) : TERM = (
+	if y =$ what
+	then x
+	else lrassoc1 rest what
+) | lrassoc1 [] what = what;
 =TEX
-Now we use the above two in the various forms of matching.
+Now we use the above in the various forms of matching.
 =SML
 local
 fun aux (thm1 : THM) (thm2 : THM) : THM = (
@@ -2751,28 +2713,35 @@ end
 end;
 =TEX
 =SML
-local
-fun aux (thm1 : THM) (thm2 : THM) : THM = (
-let	val s1 = apply_matches_rule1 "simple_´_match_mp_rule1" 
-		(concl thm2) (fst o dest_´) thm1;
-	val s2 = ´_elim s1 thm2;
+fun Ûsimple_´_match_mp_rule1Ý (thm1 : THM) : THM -> THM = (
+let	val (qvs,body) = strip_µ (concl thm1);
+	val (t1,_) = dest_´ body;
 in
-	s2
+(fn (thm2 : THM) =>
+let	val tm = concl thm2;
+in let	val (tym,tmm) = term_match tm t1;
+	val s2 = case tym of
+		[] => thm1
+		| _ => inst_type_rule tym thm1;
+	fun aux1 (qv :: rest) : TERM list = (
+	let	val qv' = inst [] tym qv;
+	in
+		(lrassoc1 tmm qv') :: aux1 rest 
+	end
+	) | aux1 [] = [];
+
+	val s3 = list_simple_µ_elim (aux1 qvs) s2;
+	val s4 = ´_elim s3 thm2;
+in
+	s4
+end
+handle (Fail _) => term_fail "simple_´_match_mp_rule1" 7044 [tm, t1]
+end)
 end
 handle complaint =>
-list_divert complaint "simple_´_match_mp_rule1" [
-	("´_elim", 7044, [fn () => string_of_thm thm1, fn () => string_of_thm thm2])]
+divert complaint "dest_´" "simple_´_match_mp_rule1" 7045 
+	[fn () => string_of_thm thm1]
 );
-in
-fun Ûsimple_´_match_mp_rule1Ý (thm1 : THM) (thm2 : THM) : THM = (	
-let	val s1 = ´_elim thm1 thm2;
-in
-	s1
-end
-	handle complaint =>
-	aux thm1 thm2
-);
-end;
 =TEX
 =SML
 local
@@ -2797,28 +2766,37 @@ end
 	aux thm1 thm2
 );
 end;
-local
-fun aux (thm1 : THM) (thm2 : THM) : THM = (
-let	val s1 = apply_matches_rule1 "simple_¤_match_mp_rule1" 
-		(concl thm2) (fst o dest_¤) thm1;
-	val s2 = ¤_mp_rule s1 thm2;
+=TEX
+=SML
+fun Ûsimple_¤_match_mp_rule1Ý (thm1 : THM) : THM -> THM = (
+let	val (qvs,body) = strip_µ (concl thm1);
+	val (t1,_) = dest_¤ body;
 in
-	s2
+(fn (thm2 : THM) =>
+let	val tm = concl thm2;
+in let	val (tym,tmm) = term_match tm t1;
+	val s2 = case tym of
+		[] => thm1
+		| _ => inst_type_rule tym thm1;
+	fun aux1 (qv :: rest) : TERM list = (
+	let	val qv' = inst [] tym qv;
+	in
+		(lrassoc1 tmm qv') :: aux1 rest 
+	end
+	) | aux1 [] = [];
+
+	val s3 = list_simple_µ_elim (aux1 qvs) s2;
+	val s4 = ¤_mp_rule s3 thm2;
+in
+	s4
+end
+handle (Fail _) => term_fail "simple_¤_match_mp_rule1" 7044 [tm, t1]
+end)
 end
 handle complaint =>
-list_divert complaint "simple_¤_match_mp_rule1" [
-	("¤_mp_rule", 7044, [fn () => string_of_thm thm1, fn () => string_of_thm thm2])]
+divert complaint "dest_¤" "simple_¤_match_mp_rule1" 7046 
+	[fn () => string_of_thm thm1]
 );
-in
-fun Ûsimple_¤_match_mp_rule1Ý (thm1 : THM) (thm2 : THM) : THM = (
-let	val s1 = ¤_mp_rule thm1 thm2;
-in
-	s1
-end
-	handle complaint =>
-	aux thm1 thm2
-);
-end;
 =TEX
 =SML
 local
@@ -2849,14 +2827,6 @@ onto 7076, without working out whether the error is
 an ``expected'' one.
 This is because we want this function to fail fast as well are succeed fast.
 =SML
-local
-fun lrassoc1 ((x, y) :: rest : (TERM * TERM) list) (what : TERM) : TERM = (
-	if y =$ what
-	then x
-	else lrassoc1 rest what
-) | lrassoc1 [] what = what;
-
-in
 fun Ûsimple_eq_match_conv1Ý (thm : THM) : CONV = (
 let	val (qvs,body) = strip_µ (concl thm);
 	val (t1,_) = dest_eq body;
@@ -2886,7 +2856,6 @@ handle complaint =>
 divert complaint "dest_eq" "simple_eq_match_conv1" 7095 
 	[fn () => string_of_thm thm]
 );
-end;
 =TEX
 \subsection{Concerning Ì}
 =SML
