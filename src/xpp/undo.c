@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.15 2002/12/03 23:39:50 rda Exp rda $
+ * $Id: undo.c,v 2.16 2003/01/30 17:51:46 rda Exp $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -904,15 +904,17 @@ void undo_modify_cb(
 		return;
 	}
 	if(global_options.read_only){
-		if(yes_no_dialog(text_w, read_only_warning) ) {
+		if(yes_no_dialog(text_w, read_only_warning, "Confirm") ) {
 			set_read_only(False);
+			show_modified(True);
 		} else {
 			cbs-> doit = False;
 			return;
 		}
+	} else {
+		show_modified(False);
 	}
 	text_verify_cb(text_w, cbd, xtp_cbs);
-	show_modified();
 	if(!undoModifyCB(text_w, ub, xtp_cbs, &noMemoryAnswer)) {
 	}
 }
@@ -942,7 +944,7 @@ static Boolean undoRedo(
 	if(canUnRedo(ub)) {
 		if(changes_saved(ub) &&
 		   amUndoing &&
-		   !yes_no_dialog(text_w, changes_saved_warning)) {
+		   !yes_no_dialog(text_w, changes_saved_warning, "Confirm Undo")) {
 			return False;
 		}
 		ub->undoing = True;

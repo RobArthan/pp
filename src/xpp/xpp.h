@@ -134,7 +134,8 @@ typedef enum {
 		Widget	text,
 		char	*oldname,
 		char	*extra_message,
-		char	*continue_message);
+		char	*continue_message,
+		char	*title);
 	extern Boolean open_file(
 		Widget	text,
 		char	*name,
@@ -168,7 +169,7 @@ typedef enum {
 	extern Widget journal;
 	extern void check_quit_cb(CALLBACK_ARGS);
 	extern void scroll_out(char *buf, NAT ct, Boolean ignored);
-	extern void show_modified(void);
+	extern void show_modified(Boolean force);
 	extern void show_file_info(void);
 /* Module: menus */
 	extern	Widget setup_menu(
@@ -191,7 +192,8 @@ typedef enum {
 		char	*msg);
 	extern Boolean yes_no_dialog(
 		Widget	w,
-		char	*question);
+		char	*question,
+		char	*title);
 	extern int yes_no_cancel_dialog(
 		Widget	w,
 		char	*question);

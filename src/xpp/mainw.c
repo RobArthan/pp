@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.72 2003/07/30 12:21:05 rda Exp $
+ * $Id: mainw.c,v 2.73 2003/07/31 11:03:29 rda Exp $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -50,20 +50,27 @@ static struct {
 
 static char *changed_message =
 "The text has been modified.";
-/*
- * The following four are kept separate to allow them easily to be worded differently, if ever requried.
- */
-static char *want_to_open_message =
+
+static char *want_to_continue =
 "Do you want to continue?";
 
-static char *want_to_save_as_message =
-"Do you want to continue?";
+static char *confirm_save = "Confirm Save";
 
-static char *want_to_empty_message =
-"Do you want to continue?";
+static char *confirm_save_as = "Confirm Save As";
 
-static char *want_to_revert_message =
-"Do you want to continue?";
+static char *confirm_open = "Confirm Open";
+
+static char *confirm_revert = "Confirm Revert";
+
+static char *confirm_reopen = "Confirm Reopen";
+
+static char *confirm_empty_file = "Confirm Empty File";
+
+static char *confirm_quit = "Confirm Quit";
+
+static char *confirm_kill = "Confirm Kill";
+
+static char *confirm_restart = "Confirm Restart";
 
 static char *running_quit_message =
 "The application in the journal window is still running.";
@@ -77,7 +84,7 @@ static char *file_created_quit_message =
 static char *file_deleted_quit_message =
 "The file \"%s\" appears to have been deleted since it was last opened or saved.";
 
-static char * check_quit_message =
+static char *want_to_quit =
 "Do you really want to quit?";
 
 static char *no_selection_message =
@@ -1048,7 +1055,8 @@ static void file_menu_cb(
 			script,
 			oldfname,
 			NULL,
-			want_to_save_as_message)) {
+			want_to_continue,
+			confirm_save_as)) {
 			fname = file_dialog(frame, "Save");
 			if(!fname || !*fname || !strcmp(fname, no_file_name)) {
 /* No file name: just do nothing */
@@ -1087,7 +1095,8 @@ static void file_menu_cb(
 			script,
 			oldfname,
 			file_info.changed ? changed_message : NULL,
-			want_to_open_message)) {
+			want_to_continue,
+			confirm_open)) {
 			fname = file_dialog(frame, "Open");
 			if(!fname || !*fname || !strcmp(fname, no_file_name)) {
 /* No file name: just do nothing */
@@ -1124,7 +1133,8 @@ static void file_menu_cb(
 			script,
 			fname,
 			file_info.changed ? changed_message : NULL,
-			want_to_revert_message)) {
+			want_to_continue,
+			confirm_revert)) {
 			pause_undo(undo_ptr);
 			if(fname == NULL) {
 /* No file name: get an empty file */
@@ -1146,7 +1156,8 @@ static void file_menu_cb(
 			script,
 			oldfname,
 			file_info.changed ? changed_message : NULL,
-			want_to_empty_message)) {
+			want_to_continue,
+			confirm_empty_file)) {
 			pause_undo(undo_ptr);
 			if(open_file(script, NULL, False, (FileOpenAction*)NULL)) {
 				XmTextFieldSetString(namestring, no_file_name);
@@ -1250,7 +1261,8 @@ static void reopen_cb(
 		script,
 		oldfname,
 		file_info.changed ? changed_message : NULL,
-		want_to_open_message)) {
+		want_to_continue,
+		confirm_reopen)) {
 		pause_undo(undo_ptr);
 		if(open_file(script, fname, False, (FileOpenAction *) NULL)) {
 			flash_file_name(fname);
@@ -1379,13 +1391,13 @@ static void cmd_menu_cb(
 		interrupt_application();
 		break;
 	case CMD_MENU_KILL:
-		if(yes_no_dialog(root, kill_message)) {
+		if(yes_no_dialog(root, kill_message, confirm_kill)) {
 			kill_application();
 		};
 		break;
 	case CMD_MENU_RESTART:
 		if(!application_alive()
-			|| yes_no_dialog(root, restart_message)) {
+			|| yes_no_dialog(root, restart_message, confirm_restart)) {
 			restart_application();
 		};
 		break;
@@ -1432,9 +1444,9 @@ static void help_menu_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Tell user the file has been modified
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void show_modified(void)
+void show_modified(Boolean force)
 {
-	if(!file_info.changed) {
+	if(force || !file_info.changed) {
 		file_info.changed = True;
 		show_file_info();
 	}
@@ -1566,41 +1578,29 @@ void check_quit_cb (
 {
 	Boolean changed = file_info.changed;
 	Boolean app_alive = application_alive();
-	Boolean do_it;
 	char *fname = get_file_name();
-	file_status status = check_file_status(fname);
-	if(changed || app_alive || status != FS_OK) {
-		char *msg = XtMalloc(200);
+ 	char *msg;
+	if(changed || app_alive) {
+		msg = XtMalloc(200);
 		*msg = '\0';
 		if(changed) {
 			msg = XtRealloc(msg, strlen(changed_message) + 1);
 			strcpy(msg, changed_message);
 		}
-		if(status != FS_OK && fname != NULL) {
-			char *f =	status == FS_CHANGED ? file_changed_quit_message
-			:	status == FS_DELETED ? file_deleted_quit_message
-			:	file_created_quit_message;
-			char *m = XtMalloc(strlen(f) + strlen(fname) + 1);
-			sprintf(m, f, fname);
-			msg = XtRealloc(msg, strlen(msg) + strlen(m) + 2);
-			if(*msg) {strcat(msg, "\n");}
-			strcat(msg, m);
-			XtFree(m);
-		}
 		if(app_alive) {
 			msg = XtRealloc(msg, strlen(msg) + strlen(running_quit_message) + 2);
 			if(*msg) {strcat(msg, "\n");}
 			strcat(msg, running_quit_message);
-		}
-		msg = XtRealloc(msg, strlen(msg) + strlen(check_quit_message) + 2);
-		strcat(msg, "\n");
-		strcat(msg, check_quit_message);
-		do_it = yes_no_dialog(root, msg);
-		XtFree(msg);
+		}	
 	} else {
-		do_it = True;
+		msg = NULL;
 	}
-	if(do_it) {
+	if(old_file_checks(
+			script,
+			fname,
+			msg,
+			want_to_quit,
+			confirm_quit)) {
 		kill_application();
 #ifdef LISTWIDGETS
 		list_widget_hierarchy();
