@@ -43,9 +43,9 @@
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.2 $%
+\def\Version{$Revision: 1.3 $%
 }
-\def\Date{\FormatDate{$Date: 2003/03/04 18:05:19 $%
+\def\Date{\FormatDate{$Date: 2003/03/05 14:09:24 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -77,6 +77,7 @@
 \subsection{Changes History}
 \begin{description}
 \item[Issues 1.1 -- 1.3] First drafts.
+\item[ Issue 1.4 ] Corrections after (semi-automatic) testing against all of the {\tt xpp} code.
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -706,7 +707,7 @@ The following changes let the parser flag when it is in a {\tt typedef} declarat
 =DUMPMORE c1.grm.txt
 Ûstruct_or_union_specifierÝ
 	= struct_or_union, begin_members, struct_declaration_list, end_members
-	| struct_or_union, identifier, begin_members, struct_declaration_list, `}`
+	| struct_or_union, identifier, begin_members, struct_declaration_list, end_members
 	| struct_or_union, identifier
 	;
 =TEX
@@ -733,8 +734,19 @@ as a new {\tt typedef} name, if that is what it is.
 	| direct_declarator, `[`, `]`
 	| direct_declarator, `[`, constant_expression, `]`
 	| direct_declarator, `(`, `)`
-	| direct_declarator, `(`, parameter_type_list, `)`
+	| direct_declarator, begin_formal_params, parameter_type_list, end_formal_params
 	| direct_declarator, `(`, identifier_list, `)`
+	;
+=DUMPMORE c1.grm.txt
+Ûbegin_formal_paramsÝ =
+	`(`
+	(red_begin_formal_params ("begin_formal_params", 1) x1 stk)
+	;
+=TEX
+=DUMPMORE c1.grm.txt
+Ûend_formal_paramsÝ =
+	`)`
+	(red_end_formal_params ("end_formal_params", 1) x1 stk)
 	;
 =TEX
 The following changes let the parser detect the beginning and end of a compound
@@ -805,42 +817,37 @@ copy the dictionary from the outer frame into it).
 val Ûtype_envÝ : unit E_DICT list ref = ref [initial_e_dict];
 =TEX
 We also need to keep track of when we are in a type definition and when we are
-inside the declarator-list that declares the members of a struct or union (and these
+inside the declarator-list that declares the members of a struct or union or in a formal
+parameter list in a declarator (and these
 can be nested, so we have a counter giving the nesting depth).
 =SML
 val Ûin_type_defÝ : bool ref = ref false;
-val Ûstrunion_nestingÝ : int ref = ref 0;
+val Ûstr_un_fpar_nestingÝ : int ref = ref 0;
 =TEX
 =SML
 fun Ûreset_stateÝ () = (
 	type_env := [initial_e_dict];
 	in_type_def := false;
-	strunion_nesting := 0
+	str_un_fpar_nesting := 0
 );
 =TEX
 \subsection{Classifier Function}
+The approach we are taking here relies on the names of the terminal symbols, {\it CharacterConstant},
+{\it FloatingConstant}, {\it IntegerConstant} and {\it String} being neither C keywords nor C
+operators  (as indeed is the case).
 =SML
 fun Ûc_classifierÝ (LVIdentifier (s, _) : LEX_VALUE) : LEX_CLASS = (
 	case e_lookup s (hd(!type_env)) of
 		Value () => LCIdentifier "TypeDefName"
 	|	Nil => LCIdentifier "Identifier"
-) | c_classifier (LVString (s, _)) = LCString s
-|   c_classifier (LVEos _) = LCEos;
-=IGN
-(* Poly/ML specific version for debugging *)
-local
-fun debug_classifier (lv : LEX_VALUE) : LEX_CLASS = (
-	let	val lc = c_classifier lv;
-	in	output(std_out, PolyML.makestring lv);
-		output(std_out, ": ");
-		output(std_out, PolyML.makestring lc);
-		output(std_out, "\n");
-		lc
-	end
-);
-in
-val c_classifier = debug_classifier
-end;
+) | c_classifier (LVString (s, _)) = (
+	case s of
+		"CharacterConstant" => LCIdentifier s
+	|	"FloatingConstant" => LCIdentifier s
+	|	"IntegerConstant" => LCIdentifier s
+	|	"String" => LCIdentifier s
+	|	_ => LCString s
+) |  c_classifier (LVEos _) = LCEos;
 =TEX
 \subsection{Reduction Actions}
 =TEX
@@ -850,42 +857,61 @@ generated action is a call on the function {\it generic\_reducer}. Our custom re
 functions simply update the parser state as necessary and then make the same
 call on {\it generic\_reducer} as the automatically generated code would make:
 
+=TEX
 =SML
 fun Ûred_declarationÝ (nt, i) (x1,x2) stk = (
 	(* declaration = unterminated_declaration, `;` *)
 	in_type_def := false;
 	generic_reducer (nt, i) [x1,x2] stk
 );
+=TEX
+=SML
 fun Ûred_storage_class_specifier_5Ý (nt, i) (x1) stk = (
 	(* storage_class_specifier = `typedef` *)
 	in_type_def := true;
 	generic_reducer (nt, i) [x1] stk
 );
+=TEX
+=SML
 fun Ûred_begin_membersÝ (nt, i) (x1) stk = (
 	(* begin_members = `{` *)
-	strunion_nesting := !strunion_nesting + 1;
+	str_un_fpar_nesting := !str_un_fpar_nesting + 1;
 	generic_reducer (nt, i) [x1] stk
 );
+=TEX
+=SML
 fun Ûred_end_membersÝ (nt, i) (x1) stk = (
 	(* end_members = `}` *)
-	strunion_nesting := !strunion_nesting - 1;
+	str_un_fpar_nesting := !str_un_fpar_nesting - 1;
 	generic_reducer (nt, i) [x1] stk
 );
+=TEX
+=SML
+val Ûred_begin_formal_paramsÝ = red_begin_members;
+=TEX
+=SML
+val Ûred_end_formal_paramsÝ = red_end_members;
+=TEX
+=SML
 fun Ûred_begin_blockÝ (nt, i) (x1) stk = (
 	(* begin_block = `{` *)
 	type_env := hd(!type_env) :: !type_env;
 	generic_reducer (nt, i) [x1] stk
 );
+=TEX
+=SML
 fun Ûred_end_blockÝ (nt, i) (x1) stk = (
 	(* end_block = `}` *)
 	type_env := tl (!type_env);
 	generic_reducer (nt, i) [x1] stk
 );
+=TEX
+=SML
 fun Ûred_direct_declarator_1Ý (nt, i) (x1) stk = (
 	(* direct_declarator = identifier *)
 	(case x1 of
 		Parsed(Node(_, [Leaf(LVIdentifier (s, _), _)])) => (
-			if	!in_type_def andalso !strunion_nesting = 0
+			if	!in_type_def andalso !str_un_fpar_nesting = 0
 			then	type_env := e_enter s () (hd(!type_env)) :: tl (!type_env)
 			else	()
 		) | _ => ()
@@ -903,9 +929,11 @@ fun Ûskip_to_end_of_commentÝ ("*" :: "/"::more) = Value more
 |   skip_to_end_of_comment [] = Nil;
 =TEX
 Since they are otherwise lexically illegal, we recognise C++-style single line comments as well
-as the standard ANSI ones:
+as the standard ANSI ones. Similarly, we treat preprocessor directives as comments (to
+skip over the ``\verb!#line!'' directives that {\tt cc -E} typically generates).
 =SML
-fun Ûrec_commentÝ ((chs, status as (Continuation (_, InComment))) : LEX_STATE) : LEX_STATE = (
+fun Ûrec_commentÝ ((chs, status as (Continuation (_, InComment))) : LEX_STATE)
+	: LEX_STATE = (
 	case skip_to_end_of_comment chs of
 		Value rest => (rest, Comment)
 	|	Nil => ([], status)
@@ -916,11 +944,13 @@ fun Ûrec_commentÝ ((chs, status as (Continuation (_, InComment))) : LEX_STATE) :
 		Value rest => (rest, Comment)
 	|	Nil => ([], Continuation(get_line_number(), InComment))
 ) | rec_comment ("/" :: "/"  :: chs, status) = (([], Comment)
+) | rec_comment ("#" :: chs, status) = (([], Comment)
 ) | rec_comment (chs, _) = (chs, Unknown);
 =TEX
 \subsection{Keywords and Identifiers}
 =SML
-val keyword_dict : string E_DICT = list_e_merge initial_e_dict (map (fn s => (s, s)) [
+val Ûkeyword_dictÝ : string E_DICT =
+	list_e_merge initial_e_dict (map (fn s => (s, s)) [
 	"auto", "break", "case", "char", "const", "continue", "default", "double",
 	"do", "else", "enum", "extern", "float", "for", "goto", "if",
 	"int", "long", "register", "return", "short", "signed", "sizeof", "static",
@@ -1018,7 +1048,7 @@ fun Ûrec_integerÝ ((chs, status) : LEX_STATE) : LEX_STATE = (
 	case get_integer chs of
 		Value(n, more) => (
 			 (more,
-			 Known (LVIdentifier ("IntegerConstant", get_line_number())))
+			 Known (LVString ("IntegerConstant", get_line_number())))
 	) |	Nil => (chs, Unknown)
 );
 =TEX
@@ -1031,12 +1061,14 @@ character to a later stage of processing (not implemented here).
 fun Ûget_char_constÝ acc ("'"::more) = (implode(rev ("'"::acc)), more)
 |   get_char_const acc ("\\"::ch::more) = get_char_const (ch::"\\"::acc) more
 |   get_char_const acc (ch::more) = get_char_const (ch::acc) more
-|   get_char_const acc [] = raise LexFail (get_line_number(), "unmatched character quotation symbol");
+|   get_char_const acc [] = (
+	raise LexFail (get_line_number(), "unmatched character quotation symbol")
+);
 =TEX
 =SML
 fun Ûrec_char_constÝ (("'"::chs, status) : LEX_STATE) : LEX_STATE = (
 	let	val (this, rest) = get_char_const ["'"] chs
-	in	(rest, Known(LVIdentifier ("CharacterConstant", get_line_number())))
+	in	(rest, Known(LVString ("CharacterConstant", get_line_number())))
 	end
 ) | rec_char_const (chs, _) = (chs, Unknown);
 =TEX
@@ -1096,30 +1128,33 @@ fun Ûrec_floatingÝ ((chs, status) : LEX_STATE) : LEX_STATE = (
 	case get_floating chs of
 		Value(n, more) => (
 			 (more,
-			 Known (LVIdentifier ("FloatingConstant", get_line_number())))
+			 Known (LVString ("FloatingConstant", get_line_number())))
 	) |	Nil => (chs, Unknown)
 );
 =TEX
 \subsection{String Constants}
 The grammar takes care of the treatment of adjacent string literals.
 =SML
-fun Ûget_string_litÝ acc ("\""::more) = (implode(rev ("'"::acc)), more)
+fun Ûget_string_litÝ acc ("\""::more) = (implode(rev ("\""::acc)), more)
 |   get_string_lit acc ("\\"::ch::more) = get_string_lit (ch::"\\"::acc) more
 |   get_string_lit acc (ch::more) = get_string_lit (ch::acc) more
-|   get_string_lit acc [] = raise LexFail (get_line_number(), "unmatched string quotation symbol");
+|   get_string_lit acc [] = (
+	raise LexFail (get_line_number(), "unmatched string quotation symbol")
+);
 =TEX
 =SML
 fun Ûrec_string_litÝ (("\""::chs, status) : LEX_STATE) : LEX_STATE = (
-	let	val (this, rest) = get_string_lit ["'"] chs
-	in	(rest, Known(LVIdentifier ("CharacterConstant", get_line_number())))
+	let	val (this, rest) = get_string_lit ["\""] chs
+	in	(rest, Known(LVString ("String", get_line_number())))
 	end
 ) | rec_string_lit (chs, _) = (chs, Unknown);
 =TEX
 =TEX
 \subsection{Operators}
 =SML
-val Ûoperator_dictÝ : string E_DICT = list_e_merge initial_e_dict (map (fn s => (s, s)) [
-	"!=", "!", "\037=", "037", "&&", "&=", "&", "(",
+val Ûoperator_dictÝ : string E_DICT =
+	list_e_merge initial_e_dict (map (fn s => (s, s)) [
+	"!=", "!", "\037=", "\037", "&&", "&=", "&", "(",
 	")", "*=", "*", "++", "+=", "+", ",", "--",
 	"-=", "->", "-", "...", ".", "/=", "/", ":",
 	";", "<<=", "<<", "<=", "<", "==", "=", ">=",
@@ -1161,7 +1196,7 @@ val Ûrec_anyÝ = rec_first[
 	rec_char_const];
 =TEX
 \subsection{Resolver Function}
-Thre is one shift/reduce conflict a shown in the following extract from the {\Slrp} listing:
+There is one shift/reduce conflict as shown in the following outline extract from the {\Slrp} listing:
 =GFT SLRP Output
 +++ State Table +++
 ...
@@ -1212,13 +1247,18 @@ fun Ûc_parse_fileÝ name = (
 =TEX
 \subsection{A Simple Test}
 =DUMP wrk063.c
+#define MSG "Hello World!\n"
+#define LEN_MSG (sizeof MSG - 1)
+#define STDOUT 1
 int main(int argc, char **argv)
 {
-	return (write(1, "Hello World!\n") != sizeof "Hello World!\n" - 1);
+	return (write(STDOUT, MSG, LEN_MSG) != LEN_MSG);
 }
+=TEX
+=SH
+cc -E wrk063.c >wrk063.i
 =SML
-print_tree (curry output std_out) (c_parse_file"wrk063.c");
-
+print_tree (curry output std_out) (c_parse_file"wrk063.i");
 =TEX
 \newpage
 \section{INDEX}
@@ -1227,8 +1267,69 @@ print_tree (curry output std_out) (c_parse_file"wrk063.c");
 \end{document}
 
 
+=IGN
+rm -rf t
+mkdir t
+cd t
+ln -s ~/tmp/daz/RCS  .
+co `make -f xpp.mkf`packinglist`
+make -f xpp.mkf help.c
+for f in *.c
+do
+	b=`basename $f .c`
+	cc -E -DLINUX $b.c |
+		sed -e '/__extension__/s/__extension__/ /g' \
+			-e '/__const/s/__const/ /g' \
+			-e '/__restrict/s/__restrict/ /g' \
+			-e '/__inline__/s/__inline__/ /g' \
+			-e '/__attribute__.*;/s/__attribute__.*;/;/g' \
+		 > $b.i
+done
 
+fun f (Leaf _) = 1
+|   f (Node(_, children)) = (
+	1 + fold (op +) (map f children) 0
+);
+f (c_parse_file "t/cmdline.i");
+f (c_parse_file "t/diag.i");
+f (c_parse_file "t/files.i");
+f (c_parse_file "t/help.i");
+f (c_parse_file "t/mainw.i");
+f (c_parse_file "t/menus.i");
+f (c_parse_file "t/msg.i");
+f (c_parse_file "t/options.i");
+f (c_parse_file "t/palette.i");
+f (c_parse_file "t/pixmaps.i");
+f (c_parse_file "t/pterm.i");
+f (c_parse_file "t/search.i");
+f (c_parse_file "t/templates.i");
+f (c_parse_file "t/undo.i");
+f (c_parse_file "t/xmisc.i");
+f (c_parse_file "t/xpp.i");
 
+print_tree (curry output std_out) (c_parse_file "t/foo.i");
 
+e_flatten(hd(!type_env));
 
-
+(* Poly/ML specific version for debugging *)
+val old_c_classifier = c_classifier;
+local
+fun debug_classifier (lv : LEX_VALUE) : LEX_CLASS = (
+	let	val lc = c_classifier lv;
+	in	output(std_out, PolyML.makestring lv);
+		output(std_out, ": ");
+		output(std_out, PolyML.makestring lc);
+		output(std_out, "\n");
+		lc
+	end
+);
+in
+val c_classifier = debug_classifier;
+end;
+fun c_parse_file name = (
+	reset_state();
+	slrp'gen_parser c_resolver c_classifier
+	(default_error string_of_lex_value)
+	(gen_reader rec_any (in_char_stream_of_file name))
+	([], true)
+);
