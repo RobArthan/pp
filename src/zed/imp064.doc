@@ -497,7 +497,7 @@ is compatible with the various symbol table information and so the
 parser can read back the text to generate the same term.
 
 =SML
-fun Ûget_template_infoÝ(name:string) : (TEMPLATE * CLASS * STUBS) OPT = (
+fun Ûget_template_infoÝ(name:string) : (TEMPLATE * CLASS * STUB list) OPT = (
 let
 	val tmpl = template_of_string name;
 	val fst_tmpl_name = first_tmpl_id tmpl;
@@ -510,7 +510,7 @@ in
 		of Value((_, class), [tmpl2]) =>
 			if tmpl = tmpl2
 			then
-				Value(templ, class, tmpl_stubs templ)
+				Value(tmpl, class, tmpl_stubs tmpl)
 			else
 				Nil
 		| _ => Nil
@@ -564,7 +564,8 @@ in
 end
 );
 =TEX
-
+The spacing below is just wrong (you will get irrelvant space before
+and after beginops and endops
 =SML
 fun Ûprint_piecesÝ (cur_env:PP_ENV) (pieces:Z_PIECE list) : PFUN_ANS = (
 let
@@ -576,8 +577,9 @@ let
 in
 	bracket(cur_env, tm_prec, false,
 		fn e => (map(	fn zp_term(t, p) => main_term_pp (set_prec p e) t
-				| zp_string(s, _) => addstring s)
-				pieces1
+				| zp_string(s, _) => (
+					space(1,2); addstring s; space(1,2)
+				)) pieces1
 			; ()
 			)
 	)
@@ -591,7 +593,7 @@ end
 fun Ûget_fancy_fixÝ(name:string, (* ty:TYPE, hd_term:TERM, *) arg_tm:TERM) : Z_PIECE list OPT = (
 	case get_template_info name
 	of Nil => Nil
-	| Value(templ, class, stubs) => (
+	| Value(tmpl, class, stubs) => (
 		if length stubs = 1
 		then
 			format_fancy_fix class tmpl [arg_tm]
@@ -641,7 +643,7 @@ fun Ûdo_genericÝ (cur_env:PP_ENV) (name:string, _:TYPE, tms:TERM list) : PFUN_AN
 	case 
 		case get_template_info name
 		of Nil => Nil
-		| Value(templ, class, stubs) => (
+		| Value(tmpl, class, stubs) => (
 			if length tms = length stubs
 			then
 				format_fancy_fix class tmpl tms
@@ -651,28 +653,41 @@ fun Ûdo_genericÝ (cur_env:PP_ENV) (name:string, _:TYPE, tms:TERM list) : PFUN_AN
 	of Value pieces => print_pieces cur_env pieces
 	| Nil => bracket(cur_env, pc_expr3_gvar, false,
 		fn e => (
-			addstring name;
-			do_wrapped_list("[", ",", "]", tms) e
-		)
+			let val PpEnv {pe_addstring = addstring, ...} = cur_env;
+			in	addstring name;
+				do_wrapped_list("[", ",", "]", tms) e
+			end
+		))
 );
 =TEX
 
 \subsection{Dealing with Relations}
-
+The following is wrong. You should only use the fancy-fix form when
+the generic parameters of $r$ may be defaulted. I.e. $do\_name$ should
+have a look at the generic parameters if any to see whether they
+look like $U[totality]$ as inserted by the type inferrer.
 =SML
-fun Ûdo_relationÝ (cur_env:PP_ENV, name:string, tms as (l:TERM, r:TERM)) : PFUN_ANS = (
-	case
-		case get_template_info name
-		of Nil => Nil
-		| Value(templ, class, stubs) => (
-			if length stubs = 2 (* l + r ==> 2 *)
-			then
-				format_fancy_fix class tmpl args
-			else
-				Nil
-		)
+fun Ûdo_relationÝ (cur_env:PP_ENV, (l:TERM, r:TERM)) : PFUN_ANS = (
+	let	fun do_name name = (
+			case get_template_info name of
+				Value(tmpl, class, stubs) => (
+				case dest_z_term l of
+					Ztuple ts =>  (
+						if length ts = length stubs
+						then	format_fancy_fix
+							class tmpl ts
+						else	Nil
+				) |	_ => Nil
+				) |	Nil => Nil
+		);
+	in
+	case	(case dest_z_term r of
+			Zgvar (name, _, _) => do_name name
+		|	Zlvar (name, _, _) => do_name name
+		|	_ => Nil)
 	of Value pieces => print_pieces cur_env pieces
-	| Nil => bracket(cur_env, pc_pred2_, false, do_infix(name, tms))
+	| Nil => bracket(cur_env, pc_pred2_, false, do_infix("", (l, r)))
+	end
 );
 =TEX
 
@@ -748,7 +763,7 @@ of Zdec(tms, dec_ty) => (
 
 =SML
 | Zeq tms => bracket(cur_env, pc_pred2_eq, false, do_infix("=", tms))
-| Z tms => do_relation(cur_env, "", tms)
+| Z lr => do_relation(cur_env, lr)
 | Ztrue => (addstring "true"; PfOk)
 | Zfalse => (addstring "false"; PfOk)
 | Z³ tm => bracket(cur_env, pc_pred2_³, false, do_prefix("³", tm))
