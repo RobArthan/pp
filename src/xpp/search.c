@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.53 2004/07/19 15:12:59 rda Exp rda $ 
+ * $Id: search.c,v 2.54 2004/07/26 16:14:00 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -99,10 +99,10 @@ static char *no_selection_to_replace =
 	"There is no selection in the text window to be replaced.";
 
 static char *not_found = 
-	"Search pattern \"%s\" not found.";
+	"Search pattern not found.";
 
 static char *re_error = 
-	"Error in regular expression \"%s\": %s";
+	"Error in search pattern: %s";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * static data
@@ -662,7 +662,7 @@ static void search_backwards_cb(
  * Support for search callbacks.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static Substring search_string(char*,char*,long int,NAT);
-static Boolean report_re_error(Widget, char*);
+static Boolean report_re_error(Widget);
 static Boolean search_either(
 	Widget				w,
 	SearchData			*cbdata,
@@ -698,12 +698,8 @@ static Boolean search_either(
 	} else if (!(*pattern)){
 		ok_dialog(search_data.shell_w, no_search_string);
 		result = False;
-	} else if(!report_re_error(search_data.shell_w, pattern)) {
-		char *msg_buf = XtMalloc(strlen(pattern) +
-					strlen(not_found) + 1);
-		sprintf(msg_buf, not_found, pattern);
-		ok_dialog(search_data.shell_w, msg_buf);
-		XtFree(msg_buf);
+	} else if(!report_re_error(search_data.shell_w)) {
+		ok_dialog(search_data.shell_w, not_found);
 		result = False;
 	}
 	XtFree(pattern);
@@ -852,12 +848,8 @@ static void replace_all_cb(
 		}
 	} else if (!(*pattern)){
 		ok_dialog(cbdata->shell_w, no_search_string);
-	} else if (!report_re_error(search_data.shell_w, pattern)) {
-		char *msg_buf = XtMalloc(strlen(pattern) +
-					strlen(not_found) + 1);
-		sprintf(msg_buf, not_found, pattern);
-		ok_dialog(cbdata->shell_w, msg_buf);
-		XtFree(msg_buf);
+	} else if (!report_re_error(search_data.shell_w)) {
+		ok_dialog(cbdata->shell_w, not_found);
 	}
 	XtFree(pattern);
 	XtFree(text_buf);
@@ -1141,15 +1133,14 @@ static Substring re_search_exec(regex_t *preg, char *text, Boolean bol)
 /*
  * Error reporting for regular expression searching:
  */
-static Boolean report_re_error(Widget shell_w, char *pattern)
+static Boolean report_re_error(Widget shell_w)
 {
 	if(re_error_text == 0) {
 		return False;
 	} else {
 		char *msg_buf = XtMalloc(strlen(re_error) +
-					strlen(pattern) +
 					strlen(re_error_text) + 1);
-		sprintf(msg_buf, re_error, pattern, re_error_text);
+		sprintf(msg_buf, re_error, re_error_text);
 		ok_dialog(shell_w, msg_buf);
 		XtFree(msg_buf);
 		XtFree(re_error_text);
