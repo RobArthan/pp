@@ -90,22 +90,21 @@ lasp -s -u imp064.OKwords imp064.doc > zz1
 \item[Issues 1.1 to 1.12 ]
 	Initial drafts.
 
-\item[\FormatDate{92/08/24
-}, issue 1.14]
+\item[\FormatDate{92/08/24}, issue 1.14]
 	Bring precedences into line with~\cite{DS/FMU/IED/DEF007}.
 	Omit references to $Totality$ and $U[Totality]$ as generic arguments.
 	Omit the `$|true$' in schema texts.
 	Output correct Z term quotation symbol.
 
-\item[\FormatDate{92/10/30
-}, issue 1.16]
+\item[\FormatDate{92/10/30}, issue 1.16]
 	Reissue after basic testing.
-\item[\FormatDate{92/11/02
-}, issue 1.17]
+\item[\FormatDate{92/11/02}, issue 1.17]
 	Corrected treatment of fancyfix forms.
+\item[\FormatDate{92/11/30}, issue 1.18]
+	Corrected bracketing of cartesian products.
 \item[\FormatDate{$Date$%
 }, issue \SCCSversion]
-	Corrected bracketing of cartesian products.
+	First attempt at handling of generic predicates.
 
 \end{description}
 
@@ -330,8 +329,70 @@ in
 		aux2 lr;
 end
 =TEX
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{OUTPUT SUPPORT FUNCTIONS}
+
+=SML
+fun Ûdecl_ofÝ (tm : TERM) = (
+	(fst (dest_z_‰s tm)) handle ex => reraise ex "decl_of"
+);
+=TEX
+=SML
+fun Ûdec_ofÝ (tm : TERM) = (
+	case dest_z_decl (decl_of tm) handle ex => reraise ex "dec_of" of
+		[] => term_fail "dec_of" 64001 [tm]
+	|	(h :: _) => h
+);
+=TEX
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+=TEX
+\subsection{GENERIC PREDICATES}
+Generic predicates are represented as HOL universals. There are two
+problems associated with them: {\em(i)} not all HOL universals
+represent a generic predicate (in fact, a HOL universal is only
+a generic predicate if it only binds simple variables (not varstructs)
+and if each variable, $X$, has type, $'X\,SET$; {\em(ii)} the generic
+parameter list which begins a generic predicate is only allowed immediately
+after a start of quotation symbol.
+We solve these problems by
+applying a higher-order function to $main\_term\_pp$ which ensures that
+the nested calls will revert to HOL where necessary and will in
+any case be enclosed in the appropriate Quine corners.
+
+THe approach chosen is seems to be the best which can be done without
+some form of modification to the pretty printer support structure
+of \cite{DS/FMU/IED/DTD031}. The main disadvantage is that at the outermost
+level of quotation, a HOL universal which is not a generic predicate
+will get printed as $ñ¬...®®$, because the Z pretty printer is unable to
+prevent $main\_term\_pp$ from inserting the Z corners once it has decided
+that $µ$ is in the Z language.
+=SML
+fun Ûis_gen_parÝ (v : TERM) : bool = (
+	let	val (n, ty) = dest_var v;
+		val tyvn = dest_vartype (dest_z_power_t ty);
+	in	"'" ^ n = tyvn
+	end	handle Fail _ => false
+);
+=TEX
+=SML
+fun Ûrecur_ppÝ (env : PP_ENV) (tm : TERM) = (
+	let	val (v, _) = dest_simple_µ tm;
+	in	if is_gen_par (fst (dest_simple_µ tm))
+		then (
+			start_new_language env "Z";
+			main_term_pp env tm;
+			conclude_new_language env "Z"
+		) else
+			let	val  new_env = set_env_for_language "HOL" env;
+			in	start_new_language new_env "HOL";
+				main_term_pp new_env tm;
+				conclude_new_language new_env "HOL"
+			end
+	end	handle Fail _ => main_term_pp env tm
+);
+=TEX
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+=TEX
 
 \section{BRACKET GENERATION}
 
@@ -421,7 +482,7 @@ in
 	addstring oper;
 	space(1, 0);
 	beginb(2, true);
-	main_term_pp cur_env tm;
+	recur_pp cur_env tm;
 	endb()
 end
 );
@@ -447,11 +508,11 @@ in
 	if br then addstring "(" (*=)=*) else ();
 	if bl then beginb(2, true) else ();
 
-	main_term_pp (set_prec pc_op_prec_left cur_env) l;
+	recur_pp (set_prec pc_op_prec_left cur_env) l;
 	space(1, 0);
 	addstring oper;
 	addstring " ";
-	main_term_pp (set_prec pc_op_prec_right cur_env) r;
+	recur_pp (set_prec pc_op_prec_right cur_env) r;
 
 	if bl then endb() else ();
 	if br then (*=(=*) addstring ")" else ();
@@ -474,9 +535,9 @@ let
 	val PpEnv{pe_addstring=addstring, pe_space=space, ...} = cur_env;
 
 	fun aux [] = ()
-	| aux (t1::[]) = main_term_pp cur_env t1
+	| aux (t1::[]) = recur_pp cur_env t1
 	| aux (t1::more) = (
-		main_term_pp cur_env t1;
+		recur_pp cur_env t1;
 		if after then () else space(1, 0);
 		addstring sep;
 		if after then space(1, 0) else ();
@@ -505,6 +566,9 @@ end
 An oddity about decoration is that you must put brackets around a decorated
 expression which is itself decorated, and you must not put unnecessary
 brackets around it when it appears as a declaration.
+Moreover, the operand must be bracketed unless it is just a variable,
+or (as coded below) if it is also decorated so that the recursive call
+will add the brackets.
 Since this needs to be done in
 several different contexts we common up the code to do it.
 The precedence should be set to $PcLowest$ on entry in declaration
@@ -513,15 +577,26 @@ the outermost decoration is not bracketed.
 =SML
 fun Ûdo_decorÝ (tm : TERM, d : string) (cur_env:PP_ENV) : PFUN_ANS = (
 	let	val PpEnv{pe_addstring=addstring, pe_prec, ...} = cur_env;
+		val need_brackets = (
+			case dest_z_term tm of
+				ZLVar _ => false
+			|	ZGVar _ => false
+			|	ZDecor‰s _ => false
+			|	_ => true
+		);
 		val new_env = (
 			if pe_prec = PcLowest
 			then cur_env
 			else set_prec pc_decor_op cur_env
 		);
+		fun new_e e = if need_brackets then set_prec PcLowest e else e;
 	in	bracket(new_env, pc_decor, false,
-			(fn e =>
-				(main_term_pp e tm;
-				addstring d)))
+			(fn e => (
+				if need_brackets then addstring "(" else ();
+					recur_pp (new_e e) tm;
+				if need_brackets then addstring ")" else ();
+					addstring d
+			)))
 	end
 );
 
@@ -593,7 +668,7 @@ fun Ûdo_declÝ (decl : A_DEC list)
 			aux more
 		);
 		fun print_a_dec (Schema (s, "")) = (
-			main_term_pp (set_prec pc_decor_op cur_env) s; ()
+			recur_pp (set_prec pc_decor_op cur_env) s; ()
 		) | print_a_dec (Schema sd) = (
 			do_decor sd cur_env; ()
 		) | print_a_dec (Colon (ts, t)) = (
@@ -603,7 +678,7 @@ fun Ûdo_declÝ (decl : A_DEC list)
 			endb();
 			space(1, 2);
 			addstring ": ";
-			main_term_pp cur_env t;
+			recur_pp cur_env t;
 			endb()
 		);
 		fun print_a_dec_list [] = ()
@@ -673,11 +748,11 @@ in	addstring oper;
 	then	()
 	else	(space(1, 0);
 		addstring "| ";
-		main_term_pp new_env t2
+		recur_pp new_env t2
 	);
 	space(1, 0);
 	addstring "· ";
-	main_term_pp new_env t3
+	recur_pp new_env t3
 end
 );
 in
@@ -941,7 +1016,7 @@ let
 				pe_beginb=beginb, pe_space=space,
 				pe_endb=endb, ...} = env;
 		in	case tok of
-			PtTerm t => main_term_pp (set_prec prec env) t
+			PtTerm t => recur_pp (set_prec prec env) t
 		|	PtTerms ts => do_list (true, ",", ts) (set_prec prec env)
 		|	PtString s => addstring s
 		|	PtSpace ss => space ss
@@ -1024,9 +1099,9 @@ in
 	case get_fancy_fix1(hd_term, arg_tm, fun_true)
 	of Nil => bracket(cur_env, pc_expr3, true,
 			fn e => (
-				main_term_pp (set_prec pc_expr3_lhs e) hd_term;
+				recur_pp (set_prec pc_expr3_lhs e) hd_term;
 				space(1, 2);
-				main_term_pp (set_prec pc_expr3_rhs e) arg_tm
+				recur_pp (set_prec pc_expr3_rhs e) arg_tm
 			)
 		)
 	| Value pieces => print_pieces cur_env pieces
@@ -1084,7 +1159,66 @@ in
 end
 );
 =TEX
-
+\subsection{Dealing with Generic Predicates}
+=SML
+fun Ûtry_do_gen_predÝ (cur_env:PP_ENV) (tm : TERM) : PFUN_ANS = (
+let	fun aux t = (
+		let	val (v, b) = dest_simple_µ t;
+		in	if is_gen_par v
+			then	let	val (vs, b') = aux b;
+				in	(v :: vs, b')
+				end
+			else	([], t)
+		end	handle Fail _ => ([], t)
+	);
+in	case	aux tm
+	of ([], _) => PfNotPossible
+	| (vs, b) => (
+		do_wrapped_list("[", ",", "]", vs) cur_env;
+		recur_pp (set_prec pc_expr3_rhs cur_env) b;
+		PfOk
+	)
+end
+);
+=TEX
+\subsection{Dealing with Horizontal Schemas}
+=SML
+fun Ûtry_do_schemaÝ (cur_env:PP_ENV) (tm1 : TERM) (tm2 : TERM) : PFUN_ANS = (
+	let	val new_env = set_prec PcLowest cur_env;
+		val PpEnv{pe_addstring=addstring, pe_space = space, ...} = new_env;
+	in	case make_a_dec_list tm1 of
+		Value ds => (
+			addstring "[";
+			do_decl ds new_env;
+			if is_z_true tm2
+			then ()
+			else(
+				space(1, 2);
+				addstring "| ";
+				recur_pp new_env tm2
+			);
+			addstring "]";
+			PfOk
+		) |	Nil => PfNotPossible
+	end
+);
+=TEX
+=TEX
+\subsection{Dealing with Isolated Declarations}
+=SML
+fun Ûdo_isol_declÝ (cur_env:PP_ENV) (func : string) (tms : TERM list) : PFUN_ANS = (
+	let	val new_env = set_prec PcLowest cur_env;
+		val PpEnv{pe_addstring=addstring, pe_space = space, ...} = new_env;
+	in	addstring "‘";
+			addstring func;
+			addstring "ñ";
+				try_do_schema new_env (mk_z_decl tms) mk_z_true;
+			addstring "®";
+		addstring "®";
+		PfOk
+	end
+);
+=TEX
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \section{APPLICATION OF CONSTANT OR VARIABLE}
@@ -1103,13 +1237,13 @@ let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring,
 		pe_beginb=beginb, pe_space=space, pe_endb=endb, ...} = cur_env;
 
-	fun tm_p p = main_term_pp (set_prec p cur_env);
 in
 	case basic_dest_z_term(orig_tm, args)
-	of BdzNotZ _ => PfNotPossible
+	of BdzNotZ _ => 
+		(try_do_gen_pred cur_env (list_mk_app(orig_tm, args)))
 	| BdzFail{BdzFArgc=c, ...}  => PfFewer c
 	| BdzOk dzt => (
-		case dzt
+		case dzt of 
 =TEX
 
 The next part of this function is a big case clause with one branch for each
@@ -1118,17 +1252,15 @@ Standard~ML code, the function finishes in section~\ref{EndZFunApp}
 on page~\pageref{EndZFunApp}.
 
 \subsection{Declarations}
-
-In theory the three constructors $ZDec$, $ZSchemaDec$ and $ZDecl$ occur
-only in related groups where the (destroyed) terms of the $ZDecl$ can
-only be $ZDec$ or $ZSchemaDec$. {} Correspondingly, the only place where
-a ($mk_z_TERM$ applied to a) $ZDec$ or a $ZSchemaDec$ occurs is is a
-$ZDecl$.
-
+=SML
+  ZDec(vs, t) => do_isol_decl cur_env "dec_of" [mk_z_dec (vs, t)]
+| ZSchemaDec(t, d) => do_isol_decl cur_env "dec_of" [mk_z_decsexp (t, d)]
+| ZDecl ts => do_isol_decl cur_env "decl_of" ts
+=TEX
 \subsection{Predicates}
 
 =SML
-of ZEq tms => do_infix(cur_env, "=", tms, pc_pred4_eq)
+| ZEq tms => do_infix(cur_env, "=", tms, pc_pred4_eq)
 | Z lr => do_relation(cur_env, lr)
 | ZTrue => (addstring "true"; PfOk)
 | ZFalse => (addstring "false"; PfOk)
@@ -1147,12 +1279,12 @@ Constructor $ZSchemaPred$ is for a schema used as a predicate.
 =SML
 | ZSchemaPred(decl, "") => bracket(cur_env, pc_expr4_schref, false,
 	fn e => (
-		main_term_pp e decl
+		recur_pp e decl
 	)
 )
 | ZSchemaPred(decl, decor) => bracket(cur_env, pc_force_brackets, false,
 	fn e => (
-		main_term_pp e decl;
+		recur_pp e decl;
 		addstring decor
 	)
 )
@@ -1221,13 +1353,13 @@ not easy.
 			then ()
 			else (	space(1, 2);
 				addstring "| ";
-				main_term_pp new_env t2
+				recur_pp new_env t2
 			);
 			if	is_chartuple t3 ds
 			then	()
 			else	(space(1, 2);
 				addstring "· ";
-				main_term_pp new_env t3);
+				recur_pp new_env t3);
 			addstring "}";
 			PfOk
 	) |	Nil => PfNotPossible
@@ -1245,22 +1377,27 @@ not easy.
 =TEX
 
 =SML
-| ZÊ(td as (tm, decor)) => bracket(cur_env, pc_expr3_Ê, true,
+| ZÊ(td as (tm, "")) => bracket(cur_env, pc_expr3_Ê, true,
 	fn e => (
 		addstring "Ê";
-		main_term_pp (set_prec pc_decor_op e) tm;
-		addstring decor
+		recur_pp e tm
+	)
+)
+| ZÊ td => bracket(cur_env, pc_expr3_Ê, true,
+	fn e => (
+		addstring "Ê";
+		do_decor td (set_prec PcLowest e); ()
 	)
 )
 | ZSel‰s(tm, sel) => bracket(cur_env, pc_expr4_sel, true,
 	fn e => (
-		main_term_pp e tm;
+		recur_pp e tm;
 		addstring ".";  (* full stop "." for selection *)
 		addstring sel
 	)
 )| ZSel‰t(tm, i) => bracket(cur_env, pc_expr4_sel, true,
 	fn e => (
-		main_term_pp e tm;
+		recur_pp e tm;
 		addstring ".";  (* full stop "." for selection *)
 		addstring (string_of_int i)
 	)
@@ -1281,23 +1418,7 @@ operator invocations.
 Horizontal schemas.
 
 =SML
-| Z‰s(tm1, tm2) => (
-	let	val new_env = set_prec PcLowest cur_env;
-	in	case make_a_dec_list tm1 of
-		Value ds => (
-			addstring "[";
-			do_decl ds new_env;
-			if is_z_true tm2
-			then ()
-			else(
-				space(1, 2);
-				addstring "| ";
-				main_term_pp new_env tm2
-			);
-			addstring "]";
-			PfOk
-		) |	Nil => PfNotPossible
-	end
+| Z‰s(tm1, tm2) => (try_do_schema cur_env tm1 tm2
 )
 =TEX
 Decoration without decoration is not Z:
@@ -1326,7 +1447,7 @@ Decoration without decoration is not Z:
 =SML
 | ZHide‰s(tm, strs) => bracket(cur_env, pc_sch4_hide, true,
 	fn e => (
-		main_term_pp e tm;
+		recur_pp e tm;
 		space(1, 2);
 		addstring "\\‰s (";
 		show_comma_list_of_strings addstring space strs;
@@ -1360,7 +1481,7 @@ precedence.
 	in
 		bracket(cur_env, pc_sch4_ref, true,
 			fn e => (
-				main_term_pp e tm;
+				recur_pp e tm;
 				space(1, 2);
 				addstring "[";
 				case ididl
@@ -1386,7 +1507,7 @@ precedence.
 			do_dec_var_name(new_env, s, pc_dec_var_name);
 			addstring " ¦";
 			space(1, 2);
-			main_term_pp new_env t;
+			recur_pp new_env t;
 			endb()
 		);
 
@@ -1416,8 +1537,6 @@ precedence.
 \subsection{End of Function} \label{EndZFunApp}
 
 =SML
-| _	=> PfNotPossible
-		(* end of case dzt *)
 	)
 	(* end of case basic_dest_z_term ... *)
 end (* of let in fun Z_fun_app *)
@@ -1490,6 +1609,7 @@ val side_effect =
 
 =SML
 end (* of structure ZPrettyPrinter *);
+open ZPrettyPrinter;
 =TEX
 
 
