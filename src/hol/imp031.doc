@@ -100,9 +100,20 @@ lasp -s -u imp031.OKwords imp031.doc > zz1
 	Changed names of syntax functions.
 \item[\FormatDate{91/08/07}, issue 1.6 ]
 
-\item[\FormatDate{$Date$%
-}, issue \SCCSissue ]
-        Renamings of functions containing the name atom $simple$, and renaming of $aconv$.
+\item[\FormatDate{91/08/15}, issue 1.7 ]
+	Renamings of functions containing the name
+	atom $simple$, and renaming of $aconv$.
+
+\item[\FormatDate{91/08/20}, issue 1.8 ]
+	Rename datatypes and constructors as required by deskcheck
+	ID0023 of detailed design~\cite{DS/FMU/IED/DTD031}.
+	Rename $ge_prec$ to $gt_prec$. {}
+	Extra $TERM$ argument to some functions in type $PP_ENV$ to
+		improve handling of aliases, constants and variables.
+	Add error 31002.
+
+%\item[\FormatDate{$Date$%
+%}, issue \SCCSissue~]
 
 \end{description}
 
@@ -397,9 +408,9 @@ only those brackets that are necessary.
 
 \subsection{Data Type for Precedence Levels}
 
-Precedence levels are identified by the constructors of $Prec_Context$,
-they are ordered by the comparison function $ge_prec$ which are
-declared below.  Values of type $Prec_Context$ form a series of partial
+Precedence levels are identified by the constructors of $PREC_CONTEXT$,
+they are ordered by the comparison function $gt_prec$ which are
+declared below.  Values of type $PREC_CONTEXT$ form a series of partial
 orderings, one for each collection of concrete syntax productions.
 There are three for HOL, for terms, for types and for varstructs.
 Other languages will have their own partial orderings.  In HOL the
@@ -409,11 +420,11 @@ $Block$ and $Vars_Ty$) are handled outside of the precedence
 structure.
 
 =SML
-datatype âPrec_Contextá
-	=	âpc_highestá
-	|	âpc_normalá		of int * int * bool
-	|	âpc_lowestá
-	|	âpc_very_lowá		of int * int * bool
+datatype âPREC_CONTEXTá
+	=	âPc_Highestá
+	|	âPc_Normalá			of int * int * bool
+	|	âPc_Lowestá
+	|	âPc_Very_Lowá		of int * int * bool
 	;
 =TEX
 
@@ -437,27 +448,27 @@ set_flag("pp_add_brackets", true);
 set_flag("pp_add_brackets", false);
 =TEX
 
-The constructors of type $Prec_Context$ are ranked by converting them
+The constructors of type $PREC_CONTEXT$ are ranked by converting them
 (with local function $pc_ord$) to integers.  This coding style was
 chosen because it is easier to understand than the full pattern match
 between all precedence pairs.
 
 =SML
 local
-	fun	âpc_ordá	pc_highest		= (4, 0, 0, false)
-	|	pc_ord		(pc_normal(a, b, c))	= (3, a, b, c)
-	|	pc_ord		pc_lowest		= (2, 0, 0, false)
-	|	pc_ord		(pc_very_low(a, b, c))	= (1, a, b, c)
+	fun	âpc_ordá	Pc_Highest			= (4, 0, 0, false)
+	|	pc_ord		(Pc_Normal(a, b, c))		= (3, a, b, c)
+	|	pc_ord		Pc_Lowest			= (2, 0, 0, false)
+	|	pc_ord		(Pc_Very_Low(a, b, c))	= (1, a, b, c)
 	;
 in
-	infix ge_prec;
+	infix gt_prec;
 
-	fun	(outer:Prec_Context) âge_precá (inner:Prec_Context) = (
+	fun	(outer:PREC_CONTEXT) âgt_precá (inner:PREC_CONTEXT) = (
 		if !pp_add_brackets
 		then
 			case (outer, inner)
-			of (_, pc_very_low _) => true
-			| (pc_lowest, _) => false
+			of (_, Pc_Very_Low _) => true
+			| (Pc_Lowest, _) => false
 			| _ => true
 		else
 			let
@@ -482,10 +493,11 @@ it up into one of a small number of patterns.
 
 =SML
 datatype âPATTERNá
-	=	âp_fun_constá	of string * TYPE * (TERM list)
-	|	âp_fun_vará	of string * TYPE * (TERM list)
-	|	âp_appá	of TERM * (TERM list)
-	|	âp_vará		of string * TYPE
+	=	âp_fun_constá	of TERM * string * TYPE * (TERM list)
+	|	âp_fun_vará	of TERM * string * TYPE * (TERM list)
+	|	âp_appá		of TERM * (TERM list)
+(*	|	âp_vará		of TERM * string * TYPE
+*)
 	|	âp_absá		of TERM * TERM
 	;
 =TEX
@@ -513,23 +525,26 @@ pattern type.
 \bigskip
 
 Function $open_up$ returns the pattern corresponding to a term.
+Note that the value returned with constructors $p_fun_const$ and
+$p_fun_var$ is the head term of the application which is the term
+passed to the $aux$ function.
 
 =SML
 fun âopen_upá (tm:TERM) : PATTERN = (
 let
 	fun aux tm1 rest = (
 		case dest_simple_term tm1
-		of	Const(str, ty) =>	p_fun_const(str, ty, rest)
-		|	Var(str, ty) =>	p_fun_var(str, ty, rest)
+		of	Const(str, ty) =>	p_fun_const(tm1, str, ty, rest)
+		|	Var(str, ty) =>	p_fun_var(tm1, str, ty, rest)
 		|	App(t1, t2) =>	aux t1 (t2::rest)
 		|	_ =>			p_app(tm1, rest)
 	);
 in
 	case dest_simple_term tm
-	of	Var(str, ty) =>		p_fun_var(str, ty, nil)
-	|	Const(str, ty) =>	p_fun_const(str, ty, nil)
+	of	Var(str, ty) =>		p_fun_var(tm, str, ty, nil)
+	|	Const(str, ty) =>		p_fun_const(tm, str, ty, nil)
 	|	Simple t1_t2 =>		p_abs t1_t2
-	|	App(t1, t2) =>	aux t1 [t2]
+	|	App(t1, t2) =>		aux t1 [t2]
 end);
 =TEX
 
@@ -539,7 +554,7 @@ return its name.
 =SML
 fun âget_first_constá (tm:TERM) : string OPT = (
 	case open_up tm
-	of p_fun_const(const, _, _) => Value const
+	of p_fun_const(_, const, _, _) => Value const
 	| _ => Nil
 );
 =TEX
@@ -555,26 +570,26 @@ following type.
 
 =SML
 datatype âPFUN_ANSá
-	=	âpf_fewerá		of int
-	|	âpf_not_possibleá
-	|	âpf_oká
+	=	âPf_Fewerá		of int
+	|	âPf_Not_Possibleá
+	|	âPf_Oká
 	;
 =TEX
 
 If these functions cannot handle the quantity of arguments given in the
 list, but they could handle a smaller list, then they do nothing apart
-from returning $pf_fewer$ with their preferred number of arguments.  A
+from returning $Pf_Fewer$ with their preferred number of arguments.  A
 function that can handle various number of arguments, but not the
 number given, must select the number it would prefer to print.  If they
-cannot handle the arguments at all then $pf_not_possible$ is returned.
+cannot handle the arguments at all then $Pf_Not_Possible$ is returned.
 If they handled all of the arguments successfully and printed out the
-term then $pf_ok$ is returned.
+term then $Pf_Ok$ is returned.
 
 The calling sequence of these functions is to call them with all of the
-available arguments, if the result is $pf_fewer$ they are split into
+available arguments, if the result is $Pf_Fewer$ they are split into
 two portions, one of the required size, the other the remainder.  The
 function is called again, but not immediately, the second time it may
-only return $pf_ok$ (view the first call as setting a contract: the
+only return $Pf_Ok$ (view the first call as setting a contract: the
 function says it cannot handle the initial set of arguments, but it
 contracts to handle a specified number of arguments if it is called
 again).  Patterns $p_fun_\ldots$ after splitting become a use of pattern
@@ -583,12 +598,12 @@ arguments, and the list holds the remainder.  The delay in making the
 second call stems from outputting the $p_app$ that combines the two
 portions of the original call chain.
 
-If any function returns $pf_not_possible$ then its arguments are
+If any function returns $Pf_Not_Possible$ then its arguments are
 reformatted and printed using the more primitive formatting routines
 for the current language.
 
 Looping where the called function keeps returning different values with
-$pf_fewer$ should always terminate because the repackaging of the
+$Pf_Fewer$ should always terminate because the repackaging of the
 argument list (in function $handle_fun_const$) always makes the list
 smaller.
 
@@ -599,8 +614,8 @@ smaller.
 \paragraph{HOL conditional} These expect three arguments:  condition,
 consequence and alternative.  The HOL printing function is entered, it
 recognises the constant name for a conditional.  If more than three
-arguments are given it returns $pf_fewer\;\;3$, if it is given less
-than three arguments it returns $pf_not_possible$, for exactly three
+arguments are given it returns $Pf_Fewer\;\;3$, if it is given less
+than three arguments it returns $Pf_Not_Possible$, for exactly three
 arguments it does the following steps.
 
 \begin{itemize}
@@ -611,12 +626,12 @@ arguments it does the following steps.
 \item Print an `{\tt if}'.
 
 \item Call the main printer recursively with the condition argument and
-	precedence of $pc_lowest$.
+	precedence of $Pc_Lowest$.
 
 \item Print a `{\tt then}'.
 
 \item Call the main printer recursively with the consequence argument
-	and precedence of $pc_lowest$.
+	and precedence of $Pc_Lowest$.
 
 \item Print an `{\tt else}'.
 
@@ -638,7 +653,7 @@ arguments, the head element and the rest.  It will recursively examine
 the second argument until it does not find a $Cons$, if a $Nil$ is
 found then it has a list that can be printed using the HOL syntax for
 lists.  If anything else is found then the function returns
-$pf_not_possible$ and the $p_fun_\ldots$ is printed in a more primitive
+$Pf_Not_Possible$ and the $p_fun_\ldots$ is printed in a more primitive
 form.
 
 A valid list is printed by a sequence of calls to output fixed strings,
@@ -665,52 +680,31 @@ $PRIM_PRS$ combines these types to hold the functions for `abs',
 alphabetical order.
 
 =SML
-datatype âPP_ENVá = pp_env of {
-	âpe_precá		: Prec_Context,
+datatype âPP_ENVá = Pp_Env of {
+	âpe_precá		: PREC_CONTEXT,
 	âpe_langá		: string,
 	âpe_fun_constá		: FUN_APP_PR,
 	âpe_fun_vará		: FUN_APP_PR,
 	âpe_appá		: APP_PR,
 	âpe_constá		: VAR_CONST_PR,
 	âpe_vará		: VAR_CONST_PR,
-	âpe_á		: _PR,
+	âpe_á			: _PR,
 	âpe_addstringá		: string -> unit,
 	âpe_beginbá		: (int * bool) -> unit,
 	âpe_endbá		: unit -> unit,
 	âpe_spaceá		: (int * int) -> unit
 }
 
-withtype âFUN_APP_PRá	= PP_ENV -> string -> TYPE -> TERM list -> PFUN_ANS
+withtype âFUN_APP_PRá	= PP_ENV -> TERM -> string -> TYPE
+					-> TERM list -> PFUN_ANS
 
 and â_PRá			= PP_ENV -> TERM -> TERM -> unit
-and âAPP_PRá		= PP_ENV -> TERM -> TERM list -> unit
-and âVAR_CONST_PRá	= PP_ENV -> string -> TYPE -> unit;
+and âAPP_PRá			= PP_ENV -> TERM -> TERM list -> unit
+and âVAR_CONST_PRá	= PP_ENV -> TERM -> string -> TYPE -> unit;
 
 type âPRIM_PRSá		= (_PR * APP_PR * VAR_CONST_PR
 					* FUN_APP_PR * FUN_APP_PR * VAR_CONST_PR);
 =TEX
-
-Where:
-
-\begin{description}
-\def\ITEM#1{\item[$#1$ ] }
-
-\ITEM{pe_prec} The enclosing precedence context provided by the calling
-	printing function.
-
-\ITEM{pe_lang} The `current language'.
-
-\ITEM{pe_fun_const, pe_fun_var} The functions for printing function
-	applications of constants and variables
-	in the current language.
-
-\ITEM{pe_const, pe_app, pe_var, pe_} The four functions for
-	printing the basic HOL term types in the current language.
-
-\ITEM{pe_addstring, pe_beginb, pe_endb, pe_space} The Oppen printing
-	functions to be used, see~\cite{DS/FMU/IED/IMP024}.
-
-\end{description}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %\newpage
@@ -731,7 +725,8 @@ val âdatabaseá : PRIM_PRS S_DICT ref = ref initial_s_dict;
 in
 
 fun âset_printersá (lang:string, functions : PRIM_PRS) : unit = (
-	database := s_enter lang functions (!database)
+	(database := s_extend lang functions (!database))
+	handle E => divert E "s_extend" "set_printers" 31002 [fn () => lang]
 );
 
 fun âget_printersá (lang:string) : PRIM_PRS OPT = (
@@ -750,7 +745,7 @@ A small number of functions are useful for altering $PP_ENV$ records.
 =SML
 fun âset_env_for_languageá (lang:string) (cur_env:PP_ENV) = (
 let
-	val pp_env{pe_lang = cur_lang, pe_addstring = cur_addstring, pe_beginb = cur_beginb,
+	val Pp_Env{pe_lang = cur_lang, pe_addstring = cur_addstring, pe_beginb = cur_beginb,
 		pe_endb = cur_endb, pe_space = cur_space, pe_app = app,
 		pe_const = const, pe_var = var, pe_ = abs, ...} = cur_env;
 
@@ -759,15 +754,15 @@ let
 		of Value printers => printers
 		| Nil => (	case get_printers "HOL"
 				of Value printers => printers
-				| Nil => fail "pretty_printer" 25003 nil
+				| Nil => fail "pretty_printer" 31001 [fn () => lang]
 			)
 	);
 in
-	pp_env{	pe_lang	= lang,
-			pe_prec		= pc_lowest,
+	Pp_Env{	pe_lang	= lang,
+			pe_prec		= Pc_Lowest,
 			pe_fun_const	= new_fun_const,
 			pe_fun_var	= new_fun_var,
-			pe_app	= new_app,
+			pe_app		= new_app,
 			pe_const	= new_const,
 			pe_var		= new_var,
 			pe_		= new_abs,
@@ -784,18 +779,18 @@ An initial environment is required, it does not do anything useful.
 
 =SML
 local
-	fun (dummy_fun_cv : FUN_APP_PR) _ _ _ _ = pf_ok;
+	fun (dummy_fun_cv : FUN_APP_PR) _ _ _ _ _ = Pf_Ok;
 	fun (dummy_abs : _PR) _ _ _ = ();
 	fun (dummy_app : APP_PR) _ _ _ = ();
-	fun (dummy_var_const : VAR_CONST_PR) _ _ _ = ();
+	fun (dummy_var_const : VAR_CONST_PR) _ _ _ _ = ();
 in
 	fun initial_env (lang:string) ((addstring, beginb, space, endb):OPPEN_FUNS) = (
 		set_env_for_language lang
-			(pp_env	{	pe_lang	= " -- none -- ",
-						pe_prec		= pc_lowest,
+			(Pp_Env	{	pe_lang	= " -- none -- ",
+						pe_prec		= Pc_Lowest,
 						pe_fun_const	= dummy_fun_cv,
 						pe_fun_var	= dummy_fun_cv,
-						pe_app	= dummy_app,
+						pe_app		= dummy_app,
 						pe_var		= dummy_var_const,
 						pe_const	= dummy_var_const,
 						pe_		= dummy_abs,
@@ -809,14 +804,14 @@ end;
 =TEX
 
 =SML
-fun âset_precá (new_prec:Prec_Context) (cur_env:PP_ENV) = (
+fun âset_precá (new_prec:PREC_CONTEXT) (cur_env:PP_ENV) = (
 let
-	val pp_env{pe_lang = cur_lang, pe_fun_const = cur_fun_const, pe_fun_var = cur_fun_var,
+	val Pp_Env{pe_lang = cur_lang, pe_fun_const = cur_fun_const, pe_fun_var = cur_fun_var,
 		pe_const = cur_const, pe_var = cur_var, pe_ = cur_abs, pe_app = cur_app,
 		pe_addstring = cur_addstring, pe_beginb = cur_beginb, pe_endb = cur_endb,
 		pe_space = cur_space, ...} = cur_env;
 in
-	pp_env{	pe_lang	= cur_lang,
+	Pp_Env{	pe_lang	= cur_lang,
 			pe_prec		= new_prec,
 			pe_fun_const	= cur_fun_const,
 			pe_fun_var	= cur_fun_var,
@@ -841,14 +836,14 @@ These routines are used to output the language quotation symbols around
 any text to be output.
 
 =SML
-fun âstart_new_languageá (pp_env{pe_addstring=addstring, ...}:PP_ENV) new = (
+fun âstart_new_languageá (Pp_Env{pe_addstring=addstring, ...}:PP_ENV) new = (
 	addstring (	case new
 			of "HOL"	=> "»"
 			| "HOL:"	=> "»:"
 			| _		=> "»%%down%%" ^ new ^ " ")
 );
 
-fun âconclude_new_languageá (pp_env{pe_addstring=addstring, ...}:PP_ENV) new = (
+fun âconclude_new_languageá (Pp_Env{pe_addstring=addstring, ...}:PP_ENV) new = (
 	addstring "¼"
 );
 =TEX
@@ -883,36 +878,47 @@ time it will have the correct number of arguments.
 
 The test of `$length\;\;args <= num$' is, strictly, unnecessary given
 the specification of how the functions should operate and the meaning
-of $pf_fewer$, however it is an easy check to make and may avoid some
+of $Pf_Fewer$, however it is an easy check to make and may avoid some
 problems when writing or testing printing functions.
 
+Alias processing is optional, controlled by a boolean flag;
+
 =SML
-fun âhandle_fun_constá (cur_env:PP_ENV) (const:string) (const_ty:TYPE)
+val pp_use_alias : bool ref = ref true;
+val _ =
+new_flag {name = "âpp_use_aliasá",  control=pp_use_alias,
+		check=fun_true, default=fun_true};
+=TEX
+
+=SML
+fun âhandle_fun_constá (cur_env:PP_ENV) (orig:TERM) (const:string) (const_ty:TYPE)
 		(args:TERM list) : unit = (
 let
-	val pp_env{pe_fun_const = do_fun_const, pe_app=do_app,
+	val Pp_Env{pe_fun_const = do_fun_const, pe_app=do_app,
 		pe_const=do_const, ...} = cur_env;
 
-	val alias = SymbolTable.get_alias(const, const_ty);
+	val alias = 	if !pp_use_alias
+			then	SymbolTable.get_alias(const, const_ty)
+			else	const;
 in
-	case do_fun_const cur_env alias const_ty args
-	of pf_not_possible => (
+	case do_fun_const cur_env orig alias const_ty args
+	of Pf_Not_Possible => (
 		if length args = 0
 		then
-			do_const cur_env alias const_ty
+			do_const cur_env orig alias const_ty
 		else
-			do_app cur_env (mk_const(alias, const_ty)) args
+			do_app cur_env orig args
 		)
-	| pf_ok => ()
-	| pf_fewer num => (
+	| Pf_Ok => ()
+	| Pf_Fewer num => (
 		if length args <= num
 		then
-			do_app cur_env (mk_const(alias, const_ty)) args
+			do_app cur_env orig args
 		else
 			do_app cur_env
 				(revfold	(fn(el, prev) => mk_app(prev, el))
 						(args to (num-1))
-						(mk_const(alias, const_ty))
+						orig
 				)
 				(args from num)
 		)
@@ -920,31 +926,33 @@ end
 );
 =TEX
 
+Note that aliases are not allowed for variables.
+
 =SML
-fun âhandle_fun_vará (cur_env:PP_ENV) (var:string) (var_ty:TYPE)
+fun âhandle_fun_vará (cur_env:PP_ENV) (orig:TERM) (var:string) (var_ty:TYPE)
 		(args:TERM list) : unit = (
 let
-	val pp_env{pe_fun_var = do_fun_var, pe_app=do_app,
+	val Pp_Env{pe_fun_var = do_fun_var, pe_app=do_app,
 		pe_var=do_var, ...} = cur_env;
 in
-	case do_fun_var cur_env var var_ty args
-	of pf_not_possible => (
+	case do_fun_var cur_env orig var var_ty args
+	of Pf_Not_Possible => (
 		if length args = 0
 		then
-			do_var cur_env var var_ty
+			do_var cur_env orig var var_ty
 		else
-			do_app cur_env (mk_var(var, var_ty)) args
+			do_app cur_env orig args
 		)
-	| pf_ok => ()
-	| pf_fewer num => (
+	| Pf_Ok => ()
+	| Pf_Fewer num => (
 		if length args <= num
 		then
-			do_app cur_env (mk_var(var, var_ty)) args
+			do_app cur_env orig args
 		else
 			do_app cur_env
 				(revfold	(fn(el, prev) => mk_app(prev, el))
 						(args to (num-1))
-						(mk_var(var, var_ty))
+						orig
 				)
 				(args from num)
 		)
@@ -962,27 +970,29 @@ term printing functions when they have a sub term to be printed.
 =SML
 fun âmain_term_ppá (cur_env:PP_ENV) (tm:TERM) : unit = (
 let
-	val pp_env{pe_app=do_app, pe_var=do_var, pe_=do_abs,
+	val Pp_Env{pe_app=do_app, pe_var=do_var, pe_=do_abs,
 		pe_lang=cur_lang, pe_beginb=beginb, pe_endb=endb, ...} = cur_env;
 in
 	case open_up tm
-	of p_fun_const(const, const_ty, args) =>
+	of p_fun_const(orig, const, const_ty, args) =>
 		let
 			val lang = get_const_language const;
 		in
 			if cur_lang = lang
 			then
-				handle_fun_const cur_env const const_ty args
+				handle_fun_const cur_env orig const const_ty args
 			else (
 				start_new_language cur_env lang;
 				handle_fun_const (set_env_for_language lang cur_env)
-					const const_ty args;
+					orig const const_ty args;
 				conclude_new_language cur_env lang
 			)
 		end
-	| p_fun_var(const, const_ty, args) =>	handle_fun_var cur_env const const_ty args
+	| p_fun_var(orig, const, const_ty, args) =>
+		handle_fun_var cur_env orig const const_ty args
 	| p_app(head_fn, args)	=> do_app	cur_env head_fn args
-	| p_var(name, ty)		=> do_var	cur_env name ty
+(*	| p_var(orig, name, ty)		=> do_var	orig cur_env name ty
+*)
 	| p_abs(tm1, tm2)		=> do_abs	cur_env tm1 tm2
 end
 );
