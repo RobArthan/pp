@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.12 2000/07/09 13:32:54 rda Rel rda $
+ * $Id: mainw.c,v 2.13 2001/08/06 12:28:36 rda Exp $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -88,25 +88,26 @@ static char *no_file_message =
 XtAppContext app; /* global because needed in msg.c */
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Widget	Parent	 Purpose
- * root		-	  the top level of the hierarchy
- * frame	root	  main window
- * work		frame	  work area
- * journal	work	  displays application output
- * infobar	work	  manager for filename and logo
- * filename   infobar  rowcol for the next three:
- * filelabel  filename label for name of file being edited
- * namestring filename displays name of file being edited
- * modified	filename label indicating that the file has changed
- * logo		infobar	  ProofPower logo
- * script	work	  the script being edited
- * menubar	frame	  the menu bar at the top of the main window
- * filemenu	menubar	  the file menu
- * toolsmenu	menubar	  the tools menu
- * editmenu	menubar	  the edit menu
+ * Widget       Parent   Purpose
+ * root         -         the top level of the hierarchy
+ * frame        root      main window
+ * work         frame     work area
+ * infobar      work      manager for filename and logo
+ * filename     infobar   rowcol for the next three:
+ * filelabel    filename  label for name of file being edited
+ * namestring   filename  displays name of file being edited
+ * modified     filename  label indicating that the file has changed
+ * logo         infobar   ProofPower logo
+ * mainpanes    work      paned window for the script and journal window
+ * script       mainpanes the script being edited
+ * journal      mainpanes displays application output
+ * menubar      frame     the menu bar at the top of the main window
+ * filemenu     menubar   the file menu
+ * toolsmenu    menubar   the tools menu
+ * editmenu     menubar   the edit menu
  * popupeditmenu menubar  the popup edit menu
- * cmdmenu	menubar	  the command menu
- * helpmenu	menubar	  the help menu
+ * cmdmenu      menubar   the command menu
+ * helpmenu     menubar   the help menu
  *
  * All widgets have the same name in the widget hierarchy
  * as their C name.
@@ -120,6 +121,7 @@ Widget  script,
 static Widget
 	frame, work, infobar, filename, filelabel, modified,
 	namestring, logo,
+	mainpanes,
 	menubar, filemenu, toolsmenu, popupeditmenu, editmenu, cmdmenu, helpmenu;
 
 XtPointer undo_ptr;
@@ -581,6 +583,15 @@ if(global_options.edit_only) {
 		XmNrightAttachment,	XmATTACH_FORM,
 		NULL);
 
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * User resizables paned window for the script and journal windows
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+	mainpanes = XtVaCreateWidget("mainpanes",
+		xmPanedWindowWidgetClass,
+		work, NULL);
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Script window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -591,7 +602,7 @@ if(global_options.edit_only) {
 	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
 	XtSetArg(args[i], XmNselectionArrayCount, 		3); ++i;
 
-	script = XmCreateScrolledText(work, "script", args, i);
+	script = XmCreateScrolledText(mainpanes, "script", args, i);
 
 	XtOverrideTranslations(script, text_translations);
 
@@ -627,7 +638,7 @@ if( !global_options.edit_only ) {
 	XtSetArg(args[i], XmNautoShowCursorPosition, 	False); ++i;
 	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
 
-	journal = XmCreateScrolledText(work, "journal", args, i);
+	journal = XmCreateScrolledText(mainpanes, "journal", args, i);
 	copy_font_list(journal, script);
 }
 
@@ -665,6 +676,7 @@ if( !global_options.edit_only ) {
 if( !global_options.edit_only ) {
 	XtManageChild(journal);
 }
+	XtManageChild(mainpanes);
 	XtManageChild(work);
 	XtManageChild(frame);
 
