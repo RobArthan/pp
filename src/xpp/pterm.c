@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.35 2003/07/03 11:22:26 rda Exp rda $
+ * $Id: pterm.c,v 2.36 2003/07/03 12:11:36 rda Exp $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -419,7 +419,7 @@ static sig_info	sig_infos []  = {
 	{"bad system call",		SIGSYS,		H_FATAL, },
 #endif
 #ifdef SIGTRAP
-	{"trace trap",		SIGTRAP,		H_FATAL, },
+	{"trace trap",		SIGTRAP,		H_IGNORE, },
 #endif
 #ifdef SIGURG
 	{"urgent i/o condition",	SIGURG,		H_DEFAULT, },
