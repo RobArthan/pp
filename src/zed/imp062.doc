@@ -118,12 +118,12 @@ with the type of the defined constant.
 \section{PREAMBLE}
 First we introduce the structure for Z type inference.
 
-SML
+=SML
 structure ÛZTypeInferenceÝ : ZTypeInference = struct
 =TEX
-SML
+=SML
 	open Unification ZLex ZUserInterfaceSupport;
-	open icl'ZTypesAndTerms;
+	open ZTypesAndTermsSupport;
 
 =TEX
 
@@ -145,7 +145,12 @@ val Ûzti_subsÝ = new_subs zarray_size;
 \section{CONVERTING STRINGS TO IDENTIFIERS ETC.}
 =TEX
 =SML
-fun Ûstring_to_identÝ (s : string) : IDENT = (
+fun Ûstring_of_identÝ ((t, d) : IDENT) : string = (
+	string_of_template t ^ d
+);
+=TEX
+=SML
+fun Ûident_of_stringÝ (s : string) : IDENT = (
 let	fun strip_decor (d::rest) decors = (
 		if (d mem ["?", "!", "'"])
 		then	strip_decor rest (d::decors)
@@ -170,7 +175,7 @@ doubt prove useful to applications programmers and testers.
 First a few of auxiliary functions which will be useful.
 
 =SML
-fun Ûextype_to_type1Ý (phi : SUBS) (f : int -> string) ty = (
+fun Ûtype_of_extypeÝ (phi : SUBS) (f : int -> string) ty = (
 let	fun aux (ExVartype(Known x)) = (
 		mk_vartype x
 	) | aux (ExVartype(Unknown x)) = (
@@ -190,46 +195,8 @@ fun Ûmk_freetype_nameÝ (i : int) : string =
 	else "'"^(string_of_int i);
 
 fun Ûgen_hol_typeÝ (ty : EXTYPE) : TYPE = (
-	extype_to_type1 zti_subs mk_freetype_name ty
+	type_of_extype zti_subs mk_freetype_name ty
 );
-=TEX
-
-
-=IGN
-local
-
-fun aux_fmt_extype (ExVartype ty : EXTYPE) : string = (
-	case ty of
-	Known name => name
-	|Unknown tvn => "'"^(string_of_int tvn)
-) | aux_fmt_extype (ExType ("SET", [ExType ("¸", [ty1, ty2])])) = (
-	(aux_fmt_extype ty1)^"ª"^(aux_fmt_extype ty2)
-) | aux_fmt_extype (ExType ("SET", [tyl])) = (
-	"set("^(aux_fmt_extype tyl)^")"
-) | aux_fmt_extype (ExType ("¸", tyl)) = (
-	let	fun aux (ty1::ty2::rest) = (
-		(aux_fmt_extype ty1)^"¸"^(aux_fmt_extype ty2)
-		^(aux rest)
-		) | aux [ty] = aux_fmt_extype ty
-		  | aux [] = "";
-	in
-		aux tyl
-	end
-) | aux_fmt_extype (ExType (name, tyl)) = (
-	let	fun brkt (s : string) : string = (
-		if size s = 0
-		then s
-		else "(" ^ s ^ ")");
-	in
-		brkt (format_list aux_fmt_extype tyl ", ")^name
-	end
-);
-in
-
-fun Ûformat_extypeÝ (ty : EXTYPE) : string = (
-	aux_fmt_extype (sub_type zti_subs ty)
-);
-end (* local ... in *);
 =TEX
 =SML
 local
@@ -241,11 +208,17 @@ fun	f_ztype (ty : TYPE) : string =
 	else
 	if is_ZvarT ty
 	then
-		"*" ^ (dest_ZvarT ty)
+		"'" ^ (dest_ZvarT ty)
 	else
 	if is_ZpowerT ty
 	then
-		"ð " ^ (f_ztype(dest_ZpowerT ty))
+	let	val tyt = dest_ZpowerT ty;
+		fun	f [ty1, ty2] = (f_ztype ty1) ^ " ª " ^ (f_ztype ty2)
+		|	f _ = "ð " ^ (f_ztype tyt);
+	in
+		f (dest_ZtupleT tyt)
+			handle _ => f []	
+	end
 	else
 	if is_ZtupleT ty
 	then
@@ -703,11 +676,13 @@ fun Ûsub_tyÝ (env:Z_ENV) : Z_ENV = (
 		|FreeVar Nil => FreeVar Nil
 );
 =TEX
-
+=SML
+fun Ûget_zconst_typeÝ (s : string) : TYPE OPT = get_const_type (bind_gvar_name s);
+=TEX
 =SML
 local
-	fun freety id = (id, BoundVar (ex_set (ExType (ident_to_string id, []))));
-	fun formal id = (id, BoundVar (ex_set (ExVartype(Known("'"^(ident_to_string id))))));
+	fun freety id = (id, BoundVar (ex_set (ExType (string_of_ident id, []))));
+	fun formal id = (id, BoundVar (ex_set (ExVartype(Known("'"^(string_of_ident id))))));
 in
 fun Ûinit_zenvÝ (ftdef : bool) (genformals : IDENT list) : Z_ENV = (
 let	val dummy = start_again();
@@ -721,8 +696,8 @@ in
 		case lassoc5 (!table) id of
 		Value vty => vty
 		|Nil => (
-			case get_const_info (ident_to_string id) of
-			Value (ty, _) =>
+			case get_zconst_type (string_of_ident id) of
+			Value ty =>
 				GlobalVar (replaced ty)
 			|Nil =>
 				FreeVar Nil
@@ -815,13 +790,13 @@ fun	 ÛiextymfunseqÝ (itym:(string * EXTYPE)list) :EXTYPE list =
 
 =SML
 fun	Ûbind_exnameÝ (fid :IDENT list) :string = (
-let	val sl = map ident_to_string fid;
+let	val sl = map string_of_ident fid;
 in	
 	"Z'S" ^ (val_setIDENT sl)
 end);
 
 fun 	Ûbind_extypeÝ (itym :(IDENT * EXTYPE) list) :EXTYPE = (
-let	val itym' = map (fn (id, ty) => (ident_to_string id, ty)) itym;
+let	val itym' = map (fn (id, ty) => (string_of_ident id, ty)) itym;
 in
 		ExType (bind_exname(fst(split itym)), iextymfunseq itym')
 end);
@@ -836,7 +811,7 @@ fun Ûunbind_extypeÝ (ty : EXTYPE) : (IDENT * EXTYPE) list = (
 			case mani of
 			"Z'S" => (
 				case sll of
-				[sl] => combine (map string_to_ident sl) tyl
+				[sl] => combine (map ident_of_string sl) tyl
 				|_ => fail "unbind_extype" 62953 []
 				)
 			| _ => fail "unbind_extype" 62954 []
@@ -902,49 +877,6 @@ in
 			|tms => ZTmTuple tms)
 	|decls => ZTmTuple(flat (map f decls)
 	)
-end);
-=TEX
-
-=SML
-fun Ûmake_chartupleÝ ((decls, _, _) : Z_SCH_TEXT) : Z_TM * EXTYPE = (
-let	fun f (ZDec(ids, tm, Value ty)) = (
-	let	val ty' = case sub_type zti_subs ty of
-				ExType ("SET", [ty'']) => ty''
-				| _ => error "make_chartuple.1" 62999 [];
-	in
-		(map (fn id => ZTmLVar(id, Nil, [])) ids, ty')
-	end
-
-	) | f (ZSchemaDec (ZTmDecor (tm, d), Value ty)) = (
-	let	val ty' = case sub_type zti_subs ty of
-				ExType ("SET", [ty'']) => ty''
-				| _ => error "make_chartuple.2" 62999 [];
-	in
-		([ZTmÊ(tm, d)], ty')
-	end
-		
-	) | f (ZSchemaDec (tm, Value ty)) = (
-	let	val ty' = case sub_type zti_subs ty of
-				ExType ("SET", [ty'']) => ty''
-				| _ => error "make_chartuple.3" 62999 [];
-	in
-		([ZTmÊ(tm, "")], ty')
-	end
-	) | f _ = error "make_chartuple" 62999 [];
-in
-	case decls of
-	[] => error "make_chartuple" 62998 [fn()=>"empty declaration"]
-	|[decl] =>
-		(case f decl of
-			([tm], ty) => (tm, ty)
-			|(tms, ty) => (ZTmTuple tms, ty)
-		)
-	|decls =>
-		let	val (tml, tyl) = split (map f decls)
-			val rty = tuple_extype tyl;
-		in
-			(ZTmTuple(flat tml), rty)
-		end
 end);
 =TEX
 
@@ -1041,7 +973,7 @@ let	val (tm', ty') = ti_ztm env tm;
 	val side = map (curry (unify zti_subs) ty'') (map snd idtyl)
 		handle Fail _ => fail "ti_zdec_pass_2" 62901 [];
 in
-	(ZDec (ids, tm', Value (sub_type zti_subs ty')), idtyl)
+	(ZDec (ids, tm', Value (sub_type zti_subs ty'')), idtyl)
 end)
 =TEX
 
@@ -1357,13 +1289,13 @@ end)
 =TEX
 =SML
   | ti_ztm env (term as ZTmFancyApp (id as (n, d), tma)) = (
-	case get_zfixity (first_tmpl_id n) of
-	(_, ZClGen _) => (
+	case get_zfixity_info (first_tmpl_id n) of
+	Value((_, ZClGen _),_) => (
 		case tma of
 		ZTmTuple tml => ti_ztm env (ZTmLVar (id, Nil, tml))
 		| _ => fail "ti_ztm" 62901 [fn()=>"(gen) Bad Generic argument"]
 		)
-	|(_, ZClRel) => (
+	|Value((_, ZClRel),_) => (
 		case tma of
 		ZTmTuple [tma'] =>
 			ti_ztm env (ZTmFancyApp ((TmplIn (StubUS, ("", Nil), StubUS), ""),
@@ -1373,7 +1305,7 @@ end)
 				ZTmTuple [tma, (ZTmLVar (id, Nil, []))]))
 		| _ => fail "ti_ztm" 62901 [fn()=>"(rel) Bad Generic argument"]
 		)
-	|(_, ZClFun _) =>
+	|Value((_, ZClFun _),_) =>
 	let	val (tmf', tyf) = ti_ztm env (ZTmLVar (id, Nil, []));
 		val (tma', tya) = ti_ztm (sub_ty env) tma;
 		val tya' = case manifest tya of
@@ -1386,8 +1318,9 @@ end)
 				raise ZExn (FailedZTm (term, env,
 					FailedFancyApp (id, tma', tyf, tya')));
 	in
-		(ZTmFancyApp(id, tma'), sub_type zti_subs tyr)
-	end)
+		(ZTmApp(tmf', tma'), sub_type zti_subs tyr)
+	end
+	| Nil => error "ti_ztm" 62998 [fn()=> "(ZTmFancyApp)"])
 =TEX
 
 \subsection{Ì-abstraction}
@@ -1953,7 +1886,8 @@ end
 				(ZTmGVar(id, Value vty, tml'), vty)
 			end
 	| (GlobalVar ty, [], _) =>	(ZTmGVar(id, Value ty, []), ty)
-	|_ => error "ti_ztm" 62998 [fn()=>"ZTmGVar (The environment has no knowledge of this constant"]
+	|_ => error "ti_ztm" 62998 [fn()=>"ZTmGVar (The environment has no knowledge of this constant: "^
+		PolyML.makestring (env id)]
 )
 =TEX
 
@@ -2181,7 +2115,7 @@ end);
 =TEX
 
 \section{EPILOGUE}
-SML
+=SML
 end (* of structure ZTypeInference *);
 =TEX
 
@@ -2204,31 +2138,17 @@ ZITEM ::= ZNumber ú | ZSet (set î)
 
 val para = ñ1 ½ 0®;
 val env = init_zenv false [];
+val (ZParaTerm (_, term, _)) = para;
+ti_ztm env term;
 
-val term = ZTmGVar ((TmplNon ("ZNumber", Nil), ""), Nil, []);
-val tml = [];
-val id = (TmplNon ("ZNumber", Nil), "");
-val (GlobalVar (ExType ("­",[domty, _])), [], (TmplNon ("U", Nil),"")) = (env id, tml, id);
-val (GlobalVar (ExType ("­",[domty, _])),[],_) = (env id, tml, id); (* case 2 *)
-	(* gives val domty = ExType ("ú", []) *)
-val gentyl = untuple_extype domty handle Fail _ => [domty];
-val ztml' = map (fn x => ZTmGVar((TmplNon("U",Nil), ""),Nil, [])) gentyl;
+val (ZTmFancyApp (id, tma)) = term;
+ti_ztm env (ZTmFancyApp ((TmplIn (StubUS, ("", Nil), StubUS), ""),
+				ZTmTuple [tma, (ZTmLVar (id, Nil, []))]));
 
-val term' = ZTmGVar(id, Nil, ztml');
-val tml = ztml';
-val (GlobalVar (ExType ("­",[domty, _])), [], (TmplNon ("U", Nil),"")) = (env id, tml, id);
-val (GlobalVar (ExType ("­",[domty, _])),[],_) = (env id, tml, id); (* case 2 *)
-val (GlobalVar (ty as ExType("­",[domty,ranty])), _, _) = (env id, tml, id); (* case 3 *)
-val (tml', tyl') = split (list_ti_ztm env tml);
-val argty = case tyl' of [ty] => ty | _ => tuple_extype tyl';
-val resty = ExVartype(Unknown (next_name()));
-val side = unify zti_subs (ExType ("­",[domty, ranty]), ExType ("­", [argty, resty]));
+ti_ztm env (ZTmTuple [tma,  (ZTmLVar (id, Nil, []))]);
+ti_ztm env (ZTmLVar (id, Nil, []));
+val term = (ZTmGVar (id, Nil, []));
 
 
 
-
-
-
-
-
-
+°
