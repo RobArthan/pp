@@ -160,6 +160,7 @@ XtAppContext app; /* global because needed in msg.c */
  * journal	work	 displays application output
  * filename     work     rowcol for the next two:
  * filelabel    filename label for name of file being edited
+ * modified	filename	label indicating that the file has changed
  * namestring   filename displays name of file being edited
  * script	work	 the script being edited
  * menubar	frame	 the menu bar at the top of the main window
@@ -177,7 +178,7 @@ XtAppContext app; /* global because needed in msg.c */
 Widget root;	/* global because needed in xpp.c */
 
 static Widget
-	frame, work, journal, filename, filelabel, namestring, script,
+	frame, work, journal, filename, filelabel, modified, namestring, script,
 	menubar, filemenu, toolsmenu, editmenu, cmdmenu, helpmenu;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -413,6 +414,7 @@ static void reinit_changed()
 		undo_buffer.oldtext = NULL;
 	}
 	set_menu_item_sensitivity(editmenu, EDIT_MENU_UNDO, False);
+	XtUnmanageChild(modified);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -480,6 +482,14 @@ static setup_main_window(
 		XmNeditable,			False,
 		XmNcursorPositionVisible,	False,
 		NULL);
+
+	s1 = XmStringCreateSimple("(Modified)");
+	modified = XtVaCreateManagedWidget("filelabel",
+		xmLabelWidgetClass, filename,
+		XmNlabelString,	s1,
+		NULL);
+	XmStringFree(s1);
+
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Script window:
@@ -609,6 +619,7 @@ if( !global_options.edit_only ) {
  * Management and Realisation:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	XtManageChild(filename);
+	XtUnmanageChild(modified);
 	XtManageChild(menubar);
 	XtManageChild(script);
 if( !global_options.edit_only ) {
@@ -971,6 +982,9 @@ XmTextVerifyCallbackStruct *cbs;
 	NAT len;
 	char *cut_chars;
 
+	if(!changed) {	/* Only do this when change from !changed to changed */
+		XtManageChild(modified);
+	}
 	changed = True;
 
 /* XmGetSelection doesn't seem to work as one might like in a 
