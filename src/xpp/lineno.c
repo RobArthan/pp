@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: lineno.c,v 1.5 2004/11/19 15:59:00 rda Exp rda $ 
+ * $Id: lineno.c,v 1.6 2004/11/20 12:11:32 rda Exp rda $ 
  *
  * lineno.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -137,10 +137,12 @@ Boolean add_line_no_tool(Widget text_w)
 	if((line_no_data.shell_w) != NULL) {
 		XtManageChild(line_no_data.manager_w);
 		XtPopup(line_no_data.shell_w, XtGrabNone);
-		XmProcessTraversal(line_no_data.line_no_w, XmTRAVERSE_CURRENT);
-		last_pos = XmTextGetLastPosition(line_no_data.line_no_w);
-		XmTextSetInsertionPosition(line_no_data.line_no_w, last_pos);
-		XmTextShowPosition(line_no_data.line_no_w, last_pos);
+		line_no_text = line_no_data.line_no_w;
+		XmProcessTraversal(line_no_text, XmTRAVERSE_CURRENT);
+		last_pos = XmTextGetLastPosition(line_no_text);
+		XmTextSetInsertionPosition(line_no_text, last_pos);
+		XmTextShowPosition(line_no_text, last_pos);
+		XmTextSetSelection(line_no_text, 0, last_pos, CurrentTime);
 		return True;
 	}
 
