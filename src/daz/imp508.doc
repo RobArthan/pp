@@ -119,17 +119,10 @@ type ÛCN_ENVÝ = Z_ID -> (TYPE * ENV_INFO) OPT;
 
 \section{MISCELLANEOUS SUPPORTING FUNCTIONS}
 
-When a construct is found for which is not supported formally, we choose to continue processing informally rather that halt the processing of the literate script. The local exception $Informal$ is raised if this condition is detected. This is caught by $trans\_exp1$ which returns an optional value and is $Nil$ if continuing to process informally. 
-=SML
-exception ÛInformalÝ;
-
-fun Ûgo_informalÝ
-		(s : string)
-		(i : int)
-		(fns : (unit -> string) list) : 'a = (
-	comment s i fns;
-	raise Informal
-);
+As discussed with DRA during the enhancements programme, the treatment
+of constructs which cannot be handled formally has changed between releases 0.5 and 0.6.
+Now that the user can bypass the formal processing of such a construct (as an arbitrary ada insertion), there is no need to attempt to continue processing when such a construct appears here, except in cases where failure to translate a construct is used to redirect the flow of control.
+In order to encourage better messages, the exception $Informal$ and associated functions have been removed and the usual {\Product} error mechanisms are used instead.
 =TEX
 =SML
 fun zid1 Û^^Ý zid2 = (
@@ -139,7 +132,7 @@ fun zid1 Û^^Ý zid2 = (
 =SML
 fun Ûtrans_rangeÝ ((RRange range) : EXP RANGE) : EXP RANGELOHI = (
 	range
-) | trans_range _ = go_informal "trans_range" 508020 [];
+) | trans_range _ = fail "trans_range" 508020 [];
 =TEX
 =SML
 val ÛheadÝ = hd
@@ -278,7 +271,7 @@ fun Ûz_set_minusÝ (exp1 : Z_EXP, exp2 : Z_EXP) : Z_EXP = (
 fun Ûz_set_compÝ (zdecl : Z_DECL, p : Z_EXP) : Z_EXP = (
 let	val dec = (fst o dest_z_dec) zdecl
 			handle _ =>
-			  fail "z_set_comp" 508023 [fn()=>string_of_term zdecl];
+			  error "z_set_comp" 508023 [fn()=>string_of_term zdecl];
 	val zdexp = case dec of
 		[dec] => dec
 		|_ => mk_z_tuple dec;
@@ -335,7 +328,7 @@ let	fun non_empty (e::rest) = (
 	fun aux (exps as e1::e2::rest) = (
 		cn_subst [(e1, "a"), (aux (e2::rest), "b")] z_union_term
 	) | aux [e] = e
-	  | aux _ = fail "z_many_union" 508024 [];
+	  | aux _ = error "z_many_union" 508024 [];
 in
 	(aux o non_empty) exps
 end
@@ -413,7 +406,7 @@ val Ûz_andÝ : (Z_PRED * Z_PRED) -> Z_PRED = mk_z_±;
 fun Ûz_many_andÝ ((exps as e1::e2::rest) : Z_PRED list) : Z_PRED = (
 	mk_z_± (e1, z_many_and (e2::rest))
 ) | z_many_and [e] = e
-  | z_many_and _ = fail "z_many_and" 508024 [];
+  | z_many_and _ = error "z_many_and" 508024 [];
 =TEX
 =SML
 val Ûz_elemÝ : (Z_EXP * Z_EXP) -> Z_EXP = mk_z_;
@@ -778,11 +771,11 @@ let	fun aux_range (ch::rest) = (
 		ACAggChoiceRange (DRRange(RRange{lo,hi})) =>
 			z_rng(trans_exp env lo, trans_exp env hi)::aux_range rest
 		|ACAggChoiceRange (DRRange _) =>
-			go_informal "trans_named_assoc" 508020 []
+			fail "trans_named_assoc" 508020 []
 		|ACAggChoiceRange (DRConstrained{range=RRange{lo,hi},...}) =>
 			z_rng(trans_exp env lo, trans_exp env hi)::aux_range rest
 		|ACAggChoiceRange (DRConstrained _) =>
-			go_informal "trans_named_assoc" 508020 []
+			fail "trans_named_assoc" 508020 []
 		|_ => aux_range rest
 	) | aux_range _ = [];
 	fun aux_singles (ch::rest) = (
@@ -822,7 +815,7 @@ let	val record_components = (
 		|	_ => fail "exp_rec_agg_pos_z" 508026 [fn()=>tmark]
 	);
 	val zbinds = combine record_components comps
-		handle _ => fail "exp_rec_agg_pos" 508027 [fn()=>tmark];
+		handle Fail _ => fail "exp_rec_agg_pos" 508027 [fn()=>tmark];
 in
 	z_binding zbinds
 end
@@ -838,7 +831,7 @@ let	fun named_assoc_to_ids_exp {choice, comp} = (
 			ACAggChoiceSingle exp => (
 					(name_to_tmark exp, 
 					 trans_exp env comp)::aux rest comp
-			) |_ => go_informal "exp_rec_agg_named" 508020 []
+			) |_ => fail "exp_rec_agg_named" 508020 []
 		) | aux _ _ = [];
 	in
 		aux choice comp 
@@ -856,7 +849,7 @@ and Ûtrans_unary_opÝ (uop : UNARY_OP) = (
 	UOSparkUnaryMinus => z_unary_minus
 	|UOSparkNot => z_bool_not
 	|UOSparkAbs => z_abs
-	|USSparkUnaryAdd => fail "trans_unary_op" 508028 []
+	|USSparkUnaryAdd => error "trans_unary_op" 508028 []
 )
 =TEX
 =SML
@@ -891,7 +884,7 @@ and Ûtrans_bin_opÝ (bop : BIN_OP) = (
 	|BOSparkExpon => z_expon
 	|BOSparkMem => z_bool_mem
 	|BOSparkNotMem => z_bool_notmem
-	|BOSparkConcat => go_informal "trans_bin_op" 508031 []
+	|BOSparkConcat => fail "trans_bin_op" 508031 []
 )
 =TEX
 =SML
@@ -986,18 +979,21 @@ and Ûtrans_expÝ (env : CN_ENV) ((EId id) : EXP) : Z_EXP = exp_id env id
   | trans_exp env (ESelectedComp sc) = exp_selected_comp env sc
   | trans_exp env (EFunCall fc) = exp_fun_call env fc
   | trans_exp env (EAuxiliaryExp ae) = exp_auxiliary_exp ae
-  | trans_exp env (EQualifiedExp qe) = fail "trans_exp" 508032 []
+  | trans_exp env (EQualifiedExp qe) = error "trans_exp" 508032 []
   | trans_exp env (ETypeConversion tc) = fail "trans_exp" 508036 []
   | trans_exp env (EBracketed e) = trans_exp env e
-  | trans_exp env (EStringLiteral c) = go_informal "trans_exp" 508033 []
-  | trans_exp env (ECharacterLiteral c) = go_informal "trans_exp" 508034 []
+  | trans_exp env (EStringLiteral c) = fail "trans_exp" 508033 []
+  | trans_exp env (ECharacterLiteral c) = fail "trans_exp" 508034 []
 ;
 =TEX
-The following variant of $trans\_exp$ returns an optional Z expression. If the SPARK expression can only be handled informally then a warning message is printed out and $Nil$ is returned.
+The following variant of $trans\_exp$ returns an optional Z expression. If the SPARK expression can only be handled informally then a comment message is printed out and $Nil$ is returned.
 =SML
 fun Ûtrans_exp1Ý (env : CN_ENV) (exp : EXP) : Z_EXP OPT = (
 	Value (trans_exp env exp)
-	handle Informal => Nil
+	handle Fail msg  => (
+		comment "trans_exp1" 508050 [fn _ => get_message msg];
+		Nil
+	)
 );
 =TEX
 
@@ -1161,7 +1157,7 @@ No... It must be an indexed component for real. So check for errors...
 					index = adjust_exp env comp}
 
 	) |(_, EArrayAggPos _) => (
-		go_informal "adjust_indexed_comp" 508035 []
+		fail "adjust_indexed_comp" 508035 []
 
 	) |(_, EArrayAggNamed _) => (
 		fail "adjust_indexed_comp" 508047 [fn()=>name_to_tmark p]
@@ -1206,7 +1202,7 @@ and Ûadjust_qualified_expressionÝ
 	)| EArrayAggNamedOthers {agg_named, others,...} => (
 		adjust_agg_named_others env 
 			{agg_named=agg_named, others=others, tmark=t}
-	)|_ => fail "adjust_qualified_exp" 508042 []
+	)|_ => error "adjust_qualified_exp" 508042 []
 )
 =TEX
 In the following, both named and positional record aggregates and function calls
@@ -1260,11 +1256,14 @@ and Ûadjust_expÝ (env : CN_ENV) (exp as (EId id : EXP)) = (
 	exp
 );
 =TEX
-The following variant of $adjust\_exp$ returns an optional Z expression. If the SPARK expression can only be handled informally then a warning message is printed out and $Nil$ is returned.
+The following variant of $adjust\_exp$ returns an optional Z expression. If the SPARK expression can only be handled informally then a comment message is printed out and $Nil$ is returned.
 =SML
 fun Ûadjust_exp1Ý (env : CN_ENV) (exp : EXP) : EXP OPT = (
 	Value (adjust_exp env exp)
-	handle Informal => Nil
+	handle Fail msg  => (
+		comment "adjust_exp1" 508050 [fn _ => get_message msg];
+		Nil
+	)
 );
 =TEX
 
@@ -1484,7 +1483,7 @@ fun Ûbasic_decl_subtype_range_conÝ (env : CN_ENV) (name : ID) (tmark : TMARK)
 	let	val (lo, hi) =
 			case range of
 			RRange{lo,hi} => (lo, hi)
-			|_ => go_informal "basic_decl_subtype_range_con" 508020 [];
+			|_ => fail "basic_decl_subtype_range_con" 508020 [];
 		val zname = trans_id name;
 		val ztmark = trans_id tmark;
 	in
@@ -1501,7 +1500,7 @@ let	val zname = trans_id name;
 	val index = map name_to_tmark ci;
 	val ind = case index of
 			[ind] => ind
-			|_ => go_informal "basic_decl_subtype_index_con" 508035 []
+			|_ => fail "basic_decl_subtype_index_con" 508035 []
 	val zindex = trans_id ind;
 	val zexp = zid env (trans_id tmark);
 	val var =  "UNC";
@@ -1536,19 +1535,19 @@ fun Ûtrans_basic_declÝ (env : CN_ENV) ((BDConstDecl {consts,tm,expr}) : BASIC_DE
 ) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CIndex ci},...}) = (
 	basic_decl_subtype_index_con env name tmark ci
 ) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CFloating _},...}) = (
-	go_informal "trans_basic_decl" 508037 []
+	fail "trans_basic_decl" 508037 []
 ) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CFixed _},...}) = (
-	go_informal "trans_basic_decl" 508038 []
+	fail "trans_basic_decl" 508038 []
 ) | trans_basic_decl env (BDTypeDecl {name, type_def as TDFloatingTypeDef _}) = (
 	basic_decl_real_type name
 ) | trans_basic_decl env (BDTypeDecl {name, type_def as TDFixedTypeDef _}) = (
 	basic_decl_real_type name
 ) | trans_basic_decl env (BDDeferredConstDecl _) = (
-	go_informal "trans_basic_decl" 508039 []
+	fail "trans_basic_decl" 508039 []
 ) | trans_basic_decl env (BDVarDecl _) = (
-	go_informal "trans_basic_decl" 508040 []
+	fail "trans_basic_decl" 508040 []
 ) | trans_basic_decl env (BDPrivateTypeDecl _) = (
-	go_informal "trans_basic_decl" 508041 []
+	fail "trans_basic_decl" 508041 []
 ) | trans_basic_decl env (BDPragma _) = (
 	[]
 ) | trans_basic_decl env (BDAnnotation _) = (
@@ -1559,7 +1558,10 @@ fun Ûtrans_basic_declÝ (env : CN_ENV) ((BDConstDecl {consts,tm,expr}) : BASIC_DE
 fun Ûtrans_basic_decl1Ý (env : CN_ENV) (bd : BASIC_DECL)
 			: PARAINFO list OPT = (
 	Value (trans_basic_decl env bd)
-	handle Informal => Nil
+	handle Fail msg  => (
+		comment "trans_basic_decl1" 508050 [fn _ => get_message msg];
+		Nil
+	)
 );
 =TEX
 
