@@ -791,7 +791,6 @@ save_pop_thm "ZP1";
 
 \subsection{Reasoning using Schema Definitions}
 
-
 % context setting point 10
 
 =SML
@@ -801,6 +800,7 @@ set_pc "z_library";
 set_flags [("z_type_check_only", false), ("z_use_axioms", false)];
 =TEX
 
+\subsubsection{Simple Pre-conditions and Refinement}
 
 Before beginning the proofs we extract the specifications for the relevant constants and bind them to an ML name:
 
@@ -858,6 +858,312 @@ save_thm ("ZP3", (prove_rule specs
 val it = ô ((pre OP) ´ (pre OP2)) ± ((pre OP) ± OP2 ´ OP) : THM   
 =TEX
 
+\subsubsection{The Vending Machine}
+
+=SML
+repeat drop_main_goal;
+open_theory "z_exercises_3";
+set_pc "z_library";
+set_flags [("z_type_check_only", false), ("z_use_axioms", true)];
+=TEX
+
+¹ZAX
+Ü	price :î
+°
+ÿVMSTATEüüüüüüüüüüüüüüüü
+Ü	stock, takings :î
+ˆüüüüüüüüüüüüüüüüüüüü
+ÿVM_operationüüüüüüüüüüüüü
+Ü	„VMSTATE;
+Ü	cash_tendered?, cash_refunded! :î;
+Ü	bars_delivered! :î
+ˆüüüüüüüüüüüüüüüüüüüüü
+ÿexact_cashüüüüüüüüüüüüüüüüüüü
+Ü	cash_tendered? :î
+÷üüüüüüüüüü
+Ü	cash_tendered? = price
+ˆüüüüüüüüüüüüüüüüüüüüüüüüü
+ÿinsufficient_cashüüüüüüüüüüüüüü
+Ü	cash_tendered? :î
+÷üüüüüüüüüü
+Ü	cash_tendered? < price
+ˆüüüüüüüüüüüüüüüüüüüüüüüüü
+ÿsome_stocküüüüüüüüüüüüüüüüüüü
+Ü	stock :î
+÷üüüüüüüüüü
+Ü	stock > 0
+ˆüüüüüüüüüüüüüüüüüüüüüüüüü
+ÿVM_saleüüüüüüüüüüüüüüüüüüüüü
+Ü	VM_operation
+÷üüüüüüüüüü
+Ü	stock' = stock - 1;
+Ü	bars_delivered! = 1;
+Ü	cash_refunded! = cash_tendered? - price;
+Ü	takings' = takings + price
+ˆüüüüüüüüüüüüüüüüüüüüüüüüüü
+ÿVM_nosaleüüüüüüüüüüüüüüüüü
+Ü	VM_operation
+÷üüüüüüüüüü
+Ü	stock' = stock;
+Ü	bars_delivered! = 0;
+Ü	cash_refunded! = cash_tendered?;
+Ü	takings' = takings
+ˆüüüüüüüüüüüüüüüüüüüüüüü
+
+¹Z
+Ü	VM1 ¦ exact_cash ± some_stock ± VM_sale
+°
+
+¹Z
+Ü	VM2 ¦ insufficient_cash ± VM_nosale
+°
+
+¹Z
+Ü	VM3 ¦ VM1 ² VM2
+°
+
+Now for convenience we bind the various specifications to ML variables:
+=SML
+val [price, VMSTATE, VM_operation, exact_cash,
+    insufficient_cash, some_stock, VM_sale,
+    VM_nosale, VM1, VM2, VM3]
+ = map z_get_spec [ñprice®,ñVMSTATE®,ñVM_operation®,ñexact_cash®,
+    ñinsufficient_cash®,ñsome_stock®,ñVM_sale®,
+    ñVM_nosale®,ñVM1®,ñVM2®,ñVM3®];
+=TEX
+We prove various preconditions (though these are not needed for the following correctness proofs).
+First the pre-condition of $VM1$.
+=SML
+set_goal([],ñpre VM1 ¤ 
+	(0 < stock
+	± cash_tendered? = price
+	± 0 ¼ takings)®);
+a (rewrite_tac [VM1, VM_sale, some_stock,
+ VM_operation, VMSTATE, exact_cash]);
+a (pure_rewrite_tac [z_get_spec ñ(_ ¼ _)®]);
+a (rewrite_tac[]);
+a (REPEAT z_strip_tac);
+a (z_¶_tac ñ(
+	bars_delivered! ¦ 1,
+	cash_refunded! ¦ cash_tendered? + ~ price,
+	stock' ¦ stock + ~ 1,
+	takings' ¦ takings + price)®
+   THEN rewrite_tac[]);
+a (PC_T1 "z_library_ext" asm_rewrite_tac
+   [rewrite_rule [] price]);
+a (LEMMA_T ñstock + ~ 1 ¼ stock® asm_tac THEN1 rewrite_tac[]);
+a (all_fc_tac [z_¼_trans_thm]);
+a (asm_rewrite_tac []);
+a (strip_asm_tac (z_get_spec ñprice®));
+a (all_fc_tac [z_î_plus_thm]);
+val pre_VM1_thm = save_pop_thm "pre_VM1_thm";
+=TEX
+Now we establish the precondition of VM2.
+=SML
+set_goal([], ñpre VM2 ¤ 
+	cash_tendered? < price
+	± cash_tendered? ¾ 0
+	± stock ¾ 0
+	± takings ¾ 0®);
+a (rewrite_tac [VM2, VM_nosale, VM_operation, VMSTATE, insufficient_cash]);
+a (REPEAT z_strip_tac);
+a (z_¶_tac ñ(
+	bars_delivered! ¦ 0,
+	cash_refunded! ¦ cash_tendered?,
+	stock' ¦ stock,
+	takings' ¦ takings)®
+   THEN PC_T1 "z_library_ext" asm_rewrite_tac[]);
+val pre_VM2_thm = save_pop_thm "pre_VM2_thm";
+=TEX
+We next establish the precondition of VM3.
+The proof is simplified if the following result is established first:
+=SML
+set_goal([], ñpre (VM1 ² VM2) ¤ pre VM1 ² pre VM2®);
+a (prove_tac[]);
+val VM1VM2_lemma = pop_thm();
+=TEX
+
+=SML
+set_goal([],ñpre VM3 ¤
+	 0 < stock ± cash_tendered? = price ± 0 ¼ takings
+             ² cash_tendered? < price
+               ± 0 ¼ cash_tendered?
+               ± 0 ¼ stock
+               ± 0 ¼ takings®);
+a (pure_rewrite_tac [VM3, VM1VM2_lemma, pre_VM1_thm, pre_VM2_thm]);
+a (z_strip_tac
+	THEN z_strip_tac
+	THEN z_strip_tac
+	THEN strip_asm_tac price
+	THEN asm_rewrite_tac[]);
+val pre_VM3_thm = save_pop_thm "pre_VM3_thm";
+=TEX
+Now we prove that VM3 is a correct refinement of VM1.
+
+The results about preconditions are not particularly helpful here, since the top level structure of the specification suffices to obtain the result without detailed knowledge of the preconditions.
+=SML
+set_goal([], ñ³ (insufficient_cash ± exact_cash)®);
+a (rewrite_tac [insufficient_cash, exact_cash]);
+=GFT ProofPower output
+...
+(* ?ô *)  ñ³
+           ((0 ¼ cash_tendered?
+               ± cash_tendered? < price)
+               ± 0 ¼ cash_tendered?
+               ± cash_tendered? = price)®
+...
+=TEX
+We eliminate the $<$ relation by rewriting with its specification.
+However, the specification of $<$ contains other facts whose inverses are in the current proof context, so a simple rewrite with the specification loops.
+$pure_rewrite_tac$ is therefore used.
+=SML
+a (pure_rewrite_tac [z_get_spec ñ(_<_)®]);
+=GFT ProofPower output
+(* ?ô *)  ñ³
+           ((0 ¼ cash_tendered?
+               ± 0 ¼ price + ~ (cash_tendered? + 1))
+               ± 0 ¼ cash_tendered?
+               ± cash_tendered? = price)®
+=TEX
+The remaineder of the proof is a routine arithmetic manipulation.
+=SML
+a (rewrite_tac [z_minus_thm, z_plus_assoc_thm1]);
+a (REPEAT_N 3 z_strip_tac THEN asm_rewrite_tac[]);
+val cash_lemma = save_pop_thm "cash_lemma";
+=TEX
+Proving the correctness of the refinement is now straightforward.
+=SML
+set_goal([], ñ (pre VM1 ´ pre VM3) ± (pre VM1 ± VM3 ´ VM1)®);
+a (rewrite_tac [VM1, VM2, VM3]);
+=GFT ProofPower output
+(* ?ô *)  ñ((¶ bars_delivered! : U;
+                   cash_refunded! : U;
+                   stock' : U;
+                   takings' : U
+                 · exact_cash ± some_stock ± VM_sale)
+               ´ (¶ bars_delivered! : U;
+                   cash_refunded! : U;
+                   stock' : U;
+                   takings' : U
+                 · exact_cash ± some_stock ± VM_sale
+                   ² insufficient_cash ± VM_nosale))
+             ± ((¶ bars_delivered! : U;
+                     cash_refunded! : U;
+                     stock' : U;
+                     takings' : U
+                   · exact_cash ± some_stock ± VM_sale)
+                 ± (exact_cash ± some_stock ± VM_sale
+                   ² insufficient_cash ± VM_nosale)
+               ´ exact_cash ± some_stock ± VM_sale)®
+=SML
+a (strip_asm_tac cash_lemma THEN asm_rewrite_tac[]);
+=GFT ProofPower output
+(*  1 *)  ñ³ insufficient_cash®
+
+(* ?ô *)  ñ(¶ bars_delivered! : U;
+                   cash_refunded! : U;
+                   stock' : U;
+                   takings' : U
+                 · exact_cash ± some_stock ± VM_sale)
+               ± exact_cash
+               ± some_stock
+               ± VM_sale
+             ´ exact_cash ± some_stock ± VM_sale®
+=TEX
+a (REPEAT z_strip_tac);
+val VM3_refines_VM1 = save_pop_thm "VM3_refines_VM1";
+=TEX
+
+Next we express the requirement that a vending machine does not undercharge:
+
+¹ZAX
+Ü	VM_ok : ğ ğ VM_operation
+÷üüüüüüüüüüüüüüüü
+Ü	µ vm : ğ VM_operation·
+Ü	vm  VM_ok ¤
+Ü		(µ VM_operation · vm ´
+Ü		takings' - takings ¾ price * (stock - stock'))
+°
+
+Before using this definition we convert it into an unconditional rewrite.
+=SML
+val VM_ok = z_defn_simp_rule (z_get_spec ñVM_ok®);
+=TEX
+We now prove that VM3 is a VM_ok.
+=SML
+set_goal([], ñVM3  VM_ok®);
+a (rewrite_tac [VM1,VM2,VM3,VM_ok,VM_sale,VM_nosale]);
+=GFT ProofPower output
+...
+(* ?ô *)  ñ(exact_cash
+                   ± some_stock
+                   ± [VM_operation
+                     | stock' = stock + ~ 1
+                       ± bars_delivered! = 1
+                       ± cash_refunded! = cash_tendered? + ~ price
+                       ± takings' = takings + price]
+                 ² insufficient_cash
+                   ± [VM_operation
+                     | stock' = stock
+                       ± bars_delivered! = 0
+                       ± cash_refunded! = cash_tendered?
+                       ± takings' = takings])
+                 € VM_operation
+             ± (µ VM_operation
+               · exact_cash
+                     ± some_stock
+                     ± VM_operation
+                     ± stock' = stock + ~ 1
+                     ± bars_delivered! = 1
+                     ± cash_refunded! = cash_tendered? + ~ price
+                     ± takings' = takings + price
+                   ² insufficient_cash
+                     ± VM_operation
+                     ± stock' = stock
+                     ± bars_delivered! = 0
+                     ± cash_refunded! = cash_tendered?
+                     ± takings' = takings
+                 ´ price * (stock + ~ stock') ¼ takings' + ~ takings)®
+...
+=TEX
+There are a lot of propositional logic (or related schema calculus) operators here which can be simplified by stripping.
+The subset sign will need to be treated extensionally, so proof context $z_library_ext$ is probably appropriate.
+It is also clear that several equations will arise in the assumptions, and therefore likely that rewriting with the assumptions will be a good idea, so:
+=SML
+a (PC_T "z_library_ext" (REPEAT z_strip_tac) THEN asm_rewrite_tac[]);
+=TEX
+Which considerably simplified the problem:
+=GFT ProofPower output
+...
+(*  7 *)  ñVM_operation®
+(*  6 *)  ñexact_cash®
+(*  5 *)  ñsome_stock®
+(*  4 *)  ñstock' = stock + ~ 1®
+(*  3 *)  ñbars_delivered! = 1®
+(*  2 *)  ñcash_refunded! = cash_tendered? + ~ price®
+(*  1 *)  ñtakings' = takings + price®
+
+(* ?ô *)  ñprice * (stock + ~ (stock + ~ 1)) ¼ (takings + price) + ~ takings®
+...
+=TEX
+To solve this little arithmetic problem we move
+=INLINEFT
+ñ~ takings®
+=TEX
+\ left to place it next to $takings$:
+=SML
+a (rewrite_tac [z_µ_elim ñ~ takings® z_plus_order_thm]);
+=GFT ProofPower output
+...
+(* ?ô *)  ñprice * (stock + ~ (stock + ~ 1)) ¼ ~ takings + takings + price®
+...
+=TEX
+Pushing in the minus sign and associating the additions to the left will result in the goal being proved using the cancellation results built into our current proof context.
+=SML
+a (rewrite_tac [z_minus_thm, z_plus_assoc_thm1]);
+val VM3_ok_thm = save_pop_thm "VM3_ok_thm";
+=TEX
+
 \section{The Z ToolKit}
 
 \subsection{Sets}
@@ -876,8 +1182,117 @@ set_pc "z_sets_ext";
 
 \subsubsection{Results Provable by Stripping}
 
-%We display one case in full:
+We display one case partly expanded out:
+=GFT SML
+set_goal([],ña ¡ (b \ c) = a ¡ b \ c®);
+a z_strip_tac;
+=GFT ProofPower output
+(* ?ô *)  ñµ x1 : U · x1  a ¡ (b \ c) ¤ x1  a ¡ b \ c®
+=GFT SML
+a z_strip_tac;
+=GFT ProofPower output
+(* ?ô *)  ñx1  U ± true ´ (x1  a ¡ (b \ c) ¤ x1  a ¡ b \ c)®
+=TEX
+continuing only using $z_strip_tac$ (but omitting the display of this) as follows:
+=GFT ProofPower output
+(* ?ô *)  ñx1  a ¡ (b \ c) ¤ x1  a ¡ b \ c®
+=TEX
+=GFT ProofPower output
+(* ?ô *)  ñ(x1  a ¡ (b \ c) ´ x1  a ¡ b \ c)
+             ± (x1  a ¡ b \ c ´ x1  a ¡ (b \ c))®
+=TEX
+=GFT ProofPower output
+(* *** Goal "2" *** *)
+(* ?ô *)  ñx1  a ¡ b \ c ´ x1  a ¡ (b \ c)®
 
+(* *** Goal "1" *** *)
+(* ?ô *)  ñx1  a ¡ (b \ c) ´ x1  a ¡ b \ c®
+=TEX
+=GFT ProofPower output
+(* *** Goal "1" *** *)
+(*  3 *)  ñx1  a®
+(*  2 *)  ñx1  b®
+(*  1 *)  ñ³ x1  c®
+
+(* ?ô *)  ñx1  a ¡ b \ c®
+=TEX
+=GFT ProofPower output
+...
+(* ?ô *)  ñx1  a ¡ b ± x1  c®
+=TEX
+=GFT ProofPower output
+(* *** Goal "1.2" *** *)
+(*  3 *)  ñx1  a®
+(*  2 *)  ñx1  b®
+(*  1 *)  ñ³ x1  c®
+
+(* ?ô *)  ñx1  c®
+
+(* *** Goal "1.1" *** *)
+(*  3 *)  ñx1  a®
+(*  2 *)  ñx1  b®
+(*  1 *)  ñ³ x1  c®
+
+(* ?ô *)  ñx1  a ¡ b®
+=TEX
+=GFT ProofPower output
+(* *** Goal "1.1" *** *)
+(*  3 *)  ñx1  a®
+(*  2 *)  ñx1  b®
+(*  1 *)  ñ³ x1  c®
+
+(* ?ô *)  ñx1  a ± x1  b®
+=TEX
+=GFT ProofPower output
+(* *** Goal "1.1.2" *** *)
+(*  3 *)  ñx1  a®
+(*  2 *)  ñx1  b®
+(*  1 *)  ñ³ x1  c®
+
+(* ?ô *)  ñx1  b®
+
+(* *** Goal "1.1.1" *** *)
+(*  3 *)  ñx1  a®
+(*  2 *)  ñx1  b®
+(*  1 *)  ñ³ x1  c®
+
+(* ?ô *)  ñx1  a®
+=TEX
+=GFT ProofPower output
+Tactic produced 0 subgoals:
+Current goal achieved, next goal is:
+
+(* *** Goal "1.1.2" *** *)
+...
+=TEX
+=GFT ProofPower output
+Tactic produced 0 subgoals:
+Current goal achieved, next goal is:
+
+(* *** Goal "1.2" *** *)
+...
+=TEX
+=GFT ProofPower output
+...
+(* ?ô *)  ñ³ x1  c®
+=TEX
+=GFT ProofPower output
+Tactic produced 0 subgoals:
+Current goal achieved, next goal is:
+
+(* *** Goal "2" *** *)
+
+(* ?ô *)  ñx1  a ¡ b \ c ´ x1  a ¡ (b \ c)®
+...
+=TEX
+Goal 2 being similar to goal 1 we complete its proof in one step:
+=GFT SML
+a (REPEAT z_strip_tac);
+=GFT ProofPower output
+Tactic produced 0 subgoals:
+Current and main goal achieved
+=TEX
+The following groups of exercises are provable in exactly the same manner.
 =SML
 map prove_and_store Z1;
 map prove_and_store Z2;
@@ -895,7 +1310,48 @@ repeat drop_main_goal;
 open_theory "z_exercises_4";
 set_pc "z_rel_ext";
 =TEX
+The following simple example shows how stripping followed by forward chaining often suffices for proofs in this theory.
+=SML
+set_goal([], ñP » Q » R = (P » Q) » R®);
+a contr_tac;
+=GFT ProofPower output
+(* *** Goal "2" *** *)
 
+(*  4 *)  ñ(x1, y')  P®
+(*  3 *)  ñ(y', y)  Q®
+(*  2 *)  ñ(y, x2)  R®
+(*  1 *)  ñµ y : U · ³ ((x1, y)  P ± (y, x2)  Q » R)®
+
+(* ?ô *)  ñfalse®
+
+
+(* *** Goal "1" *** *)
+
+(*  4 *)  ñ(x1, y)  P®
+(*  3 *)  ñ(y, y')  Q®
+(*  2 *)  ñ(y', x2)  R®
+(*  1 *)  ñµ y : U · ³ ((x1, y)  P » Q ± (y, x2)  R)®
+
+(* ?ô *)  ñfalse®
+=TEX
+The ``implications'' in the assumptions of these subgoals are well buried, but are nevertheless uncovered by the forward chaining facilities.
+=SML
+a (all_asm_fc_tac[]);
+=GFT ProofPower output
+Tactic produced 0 subgoals:
+Current goal achieved, next goal is:
+...
+=SML
+a (all_asm_fc_tac[]);
+pop_thm();
+=GFT ProofPower output
+Tactic produced 0 subgoals:
+Current and main goal achieved
+...
+val it = ô P » Q » R = (P » Q) » R : THM   
+...
+=TEX
+Many of the exercises are therefore proven automatically as follows.
 =SML
 map prove_and_store Z4;
 map prove_and_store Z5;
