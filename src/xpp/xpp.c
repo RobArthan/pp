@@ -107,7 +107,7 @@ char **argv;
 	skip = check_sep(argc, argv);
 
 	if(argc - skip > MAX_ARGS) {
-		char *buf[256];
+		char buf[256];
 		sprintf(buf,
 		"too many command-line arguments (max %d)", MAX_ARGS);
 		msg("xpp", buf);

@@ -117,10 +117,9 @@ NAT max;
 	NAT bytes_to_go;
 
 	char *text, *p;
-	char *fmt =
+	const char *fmt =
 	"**** Text lost when buffer exceeded %ld bytes ****\n";
-	char *msg =
-	"**** Text lost when buffer exceeded dddddddddddd bytes ****\n";
+	char msg[80]; /* enough for fmt with %ld expanded */
 
 	TRACE("check_text_window_limit");
 

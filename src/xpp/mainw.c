@@ -67,23 +67,23 @@ extern char *environ[];
 
 /* For the following three see "Data transfer to application" below */
 static char queue[MAX_Q_LEN];
-static long q_length = 0;
-static int q_head = 0;
+static NAT q_length = 0;
+static NAT q_head = 0;
 
 /* The following is used to implement undo in the edit menu */
 
 struct undo_details {
 	BOOL can_undo;		/* true iff. can do an undo */
 	BOOL moved_away;	/* true if the change is complete */
-	long first, last;
-	char *oldtext
-} undo_buffer = {FALSE, TRUE, 0, NULL};
+	NAT first, last;
+	char *oldtext;
+} undo_buffer = {FALSE, TRUE, 0, 0, NULL};
 
 /* Messages for various purposes */
 
 static char *undo_redo[2] = {"Undo", "Redo"};
 
-static long undo_redo_index;
+static NAT undo_redo_index;
 
 static BOOL undoing;
 
@@ -142,15 +142,15 @@ static Widget
  * limits on text window sizes in the main window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static long display_max = 2000;
+static NAT display_max = 2000;
 
-static long command_max = 2000;
+static NAT command_max = 2000;
 
 static int control_fd;
 
-static int child_pid;
+static pid_t child_pid;
 
-static int child_pgrp;
+static pid_t child_pgrp;
 
 static XtInputId app_ip_req;
 
@@ -170,13 +170,16 @@ static BOOL listening;
 
 static void scroll_out(buf, ct, ignored)
 char *buf;
-int ct;
+NAT ct;
 BOOL ignored;
 {
+
 	XmTextPosition ins_pos, last_pos;
 	Position dontcare;
 	char *p;
 	char overwritten;
+
+	TRACE("scroll_out");
 
 	ins_pos = XmTextGetLastPosition(display);
 
@@ -199,6 +202,9 @@ BOOL ignored;
 	};
 
 	check_text_window_limit(display,  display_max);
+
+	LEAVE("scroll_out");
+
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -209,10 +215,11 @@ BOOL ignored;
 setup_cmdwin()
 {
 	Arg args[12];
-	int i;
+	NAT i;
 	XmString s1, s2, s3, s4, s5, s6, s7, s8;
 	Atom WM_DELETE_WINDOW;
-	void 	tools_menu_cb(),
+	static void
+		tools_menu_cb(),
 		edit_menu_cb(),
 		cmd_menu_cb(),
 		help_menu_cb(),
@@ -223,6 +230,8 @@ setup_cmdwin()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Main window setup:  (root is created in main in xpp.c)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+	TRACE("setup_cmdwin");
 
 	XtVaSetValues(root,
 		XmNdeleteResponse,	XmDO_NOTHING,
@@ -392,7 +401,7 @@ setup_cmdwin()
 
 	{
 		Widget *btns;
-		int num_btns;
+		NAT num_btns;
 		XtVaGetValues(menubar,
 			XmNchildren, &btns,
 			XmNnumChildren, &num_btns, NULL);
@@ -410,6 +419,9 @@ setup_cmdwin()
 	XtManageChild(frame);
 
 	XtRealizeWidget(root);
+
+	LEAVE("setup_cmdwin");
+
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -417,9 +429,11 @@ setup_cmdwin()
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void tools_menu_cb(w, i, cbs)
 Widget w;
-int i;
+NAT i;
 XmAnyCallbackStruct *cbs;
 {
+
+	TRACE("tools_menu_cb");
 
 	switch(i) {
 	case 0:
@@ -429,16 +443,19 @@ XmAnyCallbackStruct *cbs;
 	default:
 		break;
 	}
+	LEAVE("tools_menu_cb");
 }
 
 static void edit_menu_cb(w, i, cbs)
 Widget w;
-int i;
+NAT i;
 XmAnyCallbackStruct *cbs;
 {
-	void do_undo();
+	static void do_undo();
 
 	Boolean result = True;
+
+	TRACE("edit_menu_cb");
 
 	switch(i) {
 	case 0:
@@ -464,22 +481,26 @@ XmAnyCallbackStruct *cbs;
 	};
 /* Could also test for result in cases where there is no
    selection to cut, copy or paste. */
+	LEAVE("edit_menu_cb");
 }
 
 static void cmd_menu_cb(w, i, cbs)
 Widget w;
-int i;
+NAT i;
 XmAnyCallbackStruct *cbs;
 {
 	char *cmd;
 	Bool execute_command();
 	BOOL application_alive();
-	void kill_application();
-	void send_nl();
-	void restart_application();
-	void interrupt_application();
-	void close_down_cb();
-	void post_mortem_tidy_up();
+	static void 
+		kill_application(),
+		send_nl(),
+		restart_application(),
+		interrupt_application(),
+		close_down_cb(),
+		post_mortem_tidy_up();
+
+	TRACE("cmd_menu_cb");
 
 	post_mortem_tidy_up();
 
@@ -510,13 +531,18 @@ XmAnyCallbackStruct *cbs;
 	default:
 		break;
 	}
+
+	LEAVE("cmd_menu_cb");
+
 }
 
 static void help_menu_cb(w, i, cbs)
 Widget w;
-int i;
+NAT i;
 XmAnyCallbackStruct *cbs;
 {
+	TRACE("help_menu_cb");
+
 	switch(i) {
 	case 0:
 		toggle_menu_item_sensitivity(helpmenu, 1);
@@ -525,6 +551,8 @@ XmAnyCallbackStruct *cbs;
 	default:
 		break;
 	}
+
+	LEAVE("help_menu_cb");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -539,7 +567,11 @@ Widget w;
 XtPointer d;
 XmTextVerifyCallbackStruct *cbs;
 {
+	TRACE("command_motion_cb");
+
 	undo_buffer.moved_away = TRUE;
+
+	LEAVE("command_motion_cb");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -551,6 +583,8 @@ static void reinit_undo_buffer (cbs, cu)
 XmTextVerifyCallbackStruct *cbs;
 BOOL cu;
 {
+	TRACE("reinit_undo_buffer");
+
 	undo_buffer.can_undo = cu;
 	undo_buffer.moved_away = FALSE;
 	undo_buffer.first = cbs->startPos;
@@ -559,6 +593,8 @@ BOOL cu;
 		XtFree(undo_buffer.oldtext);
 		undo_buffer.oldtext = NULL;
 	}
+
+	LEAVE("reinit_undo_buffer");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -570,14 +606,16 @@ XtPointer d;
 XmTextVerifyCallbackStruct *cbs;
 {
 	BOOL restart = undo_buffer.moved_away;
-	long len;
+	NAT len;
 	char *text, *cut_chars;
+	TRACE("command_modify_cb");
 
 /* XmGetSelection doesn't seem to work as one would like in a 
  * callback like this. Therefore, if a block delete is being done,
  * we have to get the entire contents of the text window to find out
  * what's being deleted */
 
+	TRACE("command_modify_cb");
 	if(cbs->startPos < cbs->endPos) {
 		text = XmTextGetString(w);
 		len = cbs->endPos - cbs->startPos;
@@ -601,12 +639,13 @@ XmTextVerifyCallbackStruct *cbs;
 		undo_buffer.last += cbs->text->length;
 	}
 	set_menu_item_sensitivity(editmenu, 4, undo_buffer.can_undo);
-/* If this isn't the call invoked byt he XmReplace in do_undo */
+/* If this isn't the call invoked by the XmReplace in do_undo */
 /* The menu label should revert to "Undo": */
 	if(!undoing) {
 		undo_redo_index = 0;
 		set_menu_item_label(editmenu, 4, undo_redo[0]);
 	}
+	LEAVE("command_modify_cb");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -625,14 +664,16 @@ static void do_undo(w)
 Widget w;
 {
 	XmTextPosition fst, lst;
-	long len;
+	NAT len;
 	char *str;
+	TRACE("do_undo");
 	if(undo_buffer.can_undo) {
 		undoing = TRUE;
 		undo_buffer.moved_away = TRUE;
 		if(undo_buffer.oldtext == NULL) {
 			len = 0;
-			str = "";
+			str = XtMalloc(len + 1);
+			strcpy(str, "");
 		} else {
 			len = strlen(undo_buffer.oldtext);
 			str = XtMalloc(len + 1);
@@ -653,6 +694,7 @@ Widget w;
 		XtFree(str);
 		undoing = FALSE;
 	}
+	LEAVE("do_undo");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -668,10 +710,10 @@ static void get_pty()
 {
 	int slave_fd, tty_fd;
 	char c;
-	int i;
+	NAT i;
 	char line[20];
-	void get_from_application();
-
+	static void get_from_application();
+	TRACE("get_pty");
 	for (c = 'p'; c <= 's'; c++) {
 		for(i = 0; i < 16; i++) {
 			sprintf(line, "/dev/pty%c%x", c, i);
@@ -700,7 +742,7 @@ gotpty:
 		exit(5);
 	} else if (child_pid > 0) { /* Parent */
 		close(slave_fd);
-		if(fcntl(control_fd, F_SETFL, FNDELAY) < 0) {
+		if(fcntl(control_fd, F_SETFL, O_NDELAY) < 0) {
 			msg("system error", "fcntl on application would not permit non-blocking i/o");
 			perror("xpp");
 			exit(7);
@@ -712,12 +754,13 @@ gotpty:
 			exit(8);
 		};
 		child_pgrp = child_pid;
-		if(setpgrp(child_pid, child_pid) != 0) {
-			msg("system error", " setpgrp failed");
+		if(setpgid(child_pid, child_pid) != 0) {
+			msg("system error", " setpgid failed");
 			perror("xpp");
 			exit(9);
 		};
-		app_ip_req = XtAppAddInput(app, control_fd, XtInputReadMask,
+		app_ip_req = XtAppAddInput(app,
+			control_fd, (XtPointer) XtInputReadMask,
 			get_from_application, NULL);
 		listening = TRUE;
 	} else { /* Child */
@@ -736,6 +779,7 @@ gotpty:
 		msg("system error", "could not exec");
 		exit(1);
 	}
+	LEAVE("get_pty");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -744,7 +788,8 @@ gotpty:
 
 BOOL application_alive()
 {
-	return(!kill(child_pid, 0));
+	TRACE("application_alive");
+	RETURN("application_alive", !kill(child_pid, 0));
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -754,11 +799,13 @@ static void get_from_application(unused_w, unused_p)
 Widget unused_w;
 XtPointer unused_p;
 {
-	int ct;
+	NAT ct;
 	static	char buf[1001];
+	TRACE("get_from_application");
 	while((ct = read(control_fd, buf, 1000)) > 0) {
 		scroll_out(buf, ct, FALSE);
 	};
+	LEAVE("get_from_application");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -777,20 +824,20 @@ XtPointer unused_p;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static BOOL dequeue()
 {
-	long bytes_written, line_len, i, top;
+	NAT bytes_written, line_len, i, top;
 	BOOL sent_something = FALSE;
 	BOOL sys_error = FALSE;
 
 /* nothing to do if the queue is empty */
-
+	TRACE("dequeue");
 	if(q_length == 0) {
-		return(FALSE);
+		RETURN("dequeue", FALSE);
 	};
 
 /* no way of emptying the queue if there's no application running: */
 
 	if(!application_alive()) {
-		return(FALSE);
+		RETURN("dequeue", FALSE);
 	};
 
 /* something to do; find the next command line:*/
@@ -828,23 +875,21 @@ static BOOL dequeue()
 		q_length -= bytes_written;
 	};
 
-	return(sent_something);
+	RETURN("dequeue", sent_something);
 }
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * enqueue tries to add its argument text to the queue. First
- * it attempts to dequeue things. If it succeeds in making room here
- * the text to the queue it attempts, here and now, to dequeue as
- * much as it can.
+ * it attempts to dequeue things.
  * It returns true if it got its argument onto the queue.
  * **** **** **** **** **** ***. **** **** **** **** **** **** */
 static BOOL enqueue(buf, siz)
 char *buf;
-int siz;
+NAT siz;
 {
-	int buf_i, q_i;
-
+	NAT buf_i, q_i;
+	TRACE("enqueue");
 /* Make room, if we can: */
 
 	while(dequeue()) {
@@ -853,7 +898,7 @@ int siz;
 /* If no room now, there's no hope: */
 
 	if(siz > MAX_Q_LEN - q_length) {
-		return(FALSE);
+		RETURN("enqueue", FALSE);
 	};
 
 	q_i = (q_head + q_length) % MAX_Q_LEN;
@@ -876,7 +921,7 @@ int siz;
 		continue;
 	}
 
-	return(TRUE);
+	RETURN("enqueue", TRUE);
 }
 
 
@@ -889,6 +934,7 @@ static void try_drain_queue(w)
 Widget w;
 {
 /* If there's something in the queue try to process it */
+	TRACE("try_drain_queue");
 	if(q_length) {
 		while(dequeue()) {
 			continue;
@@ -900,6 +946,7 @@ Widget w;
 	if(q_length) {
 		XtAppAddTimeOut(app, 25, try_drain_queue, w);
 	};
+	LEAVE("try_drain_queue");
 }
 
 
@@ -908,9 +955,11 @@ Widget w;
  * **** **** **** **** **** ***. **** **** **** **** **** **** */
 static void clear_queue ()
 {
+	TRACE("clear_queue");
 	if(q_length) {
 		q_length = 0;
 	}
+	LEAVE("clear_queue");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -919,14 +968,14 @@ static void clear_queue ()
 
 void send_to_application (buf, siz)
 char *buf;
-int siz;
+NAT siz;
 {
-	int bytes_written;
+	NAT bytes_written;
 
 /* Check there's something listening: */
-
+	TRACE("send_to_application");
 	if(!application_alive()) {
-		return;
+		LEAVE("send_to_application");
 	};
 
 /* Check if the command could never fit in the queue: */
@@ -935,7 +984,7 @@ int siz;
 		char msg[256];
 		sprintf(msg, cmd_too_long_message, siz, MAX_Q_LEN);
 		ok_dialog(root, msg);
-		return;
+		LEAVE("send_to_application");
 	};
 
 /* Send it off: */
@@ -946,6 +995,7 @@ int siz;
 
 	try_drain_queue(root);
 
+	LEAVE("send_to_application");
 }
 
 
@@ -955,19 +1005,23 @@ int siz;
  * if it's running.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void sig_handler(sig, code, scp, addr)
-int sig, code;
+NAT sig, code;
 struct sigcontext *scp;
 char *addr;
 {
+	TRACE("sig_handler");
 	if(application_alive()) {
 		clear_queue();
-		killpg(child_pgrp, sig);
+		kill((pid_t)-child_pgrp, sig);
 	}
+	LEAVE("sig_handler");
 }
 
 static void handle_sigs()
 {
+	TRACE("handle_sigs");
 	signal(SIGINT, sig_handler);
+	LEAVE("handle_sigs");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -975,9 +1029,11 @@ static void handle_sigs()
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void interrupt_application ()
 {
+	TRACE("interrupt_application");
 	if(application_alive()) {
-		killpg(child_pgrp, SIGINT);
+		kill((pid_t)-child_pgrp, SIGINT);
 	}
+	LEAVE("interrupt_application");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -987,7 +1043,9 @@ static void send_nl ()
 {
 	char *buf = "\n";
 
+	TRACE("send_nl");
 	send_to_application(buf, 1);
+	LEAVE("send_nl");
 
 }
 
@@ -996,10 +1054,12 @@ static void send_nl ()
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void post_mortem_tidy_up ()
 {
+	TRACE("post_mortem_tidy_up");
 	if(listening && !application_alive()) {
 		XtRemoveInput(app_ip_req);
 		listening = FALSE;
 	}
+	LEAVE("post_mortem_tidy_up");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1007,6 +1067,7 @@ static void post_mortem_tidy_up ()
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void kill_application ()
 {
+	TRACE("kill_application");
 	if(application_alive()) {
 		if(listening) {
 			XtRemoveInput(app_ip_req);
@@ -1016,14 +1077,17 @@ static void kill_application ()
 		waitpid(child_pid, NULL, WNOHANG);
 		close(control_fd);
 	}
+	LEAVE("kill_application");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Restart the application
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void restart_application () {
+	TRACE("restart_application");
 	kill_application();
 	get_pty();
+	LEAVE("restart_application");
 }
 
 
@@ -1035,10 +1099,12 @@ Widget w;
 XtPointer cd;
 XmAnyCallbackStruct cbs;
 {
+	TRACE("close_down_cb");
 	if(yes_no_dialog(root, quit_message)) {
 		kill_application();
 		exit(0);
 	};
+	LEAVE("close_down_cb");
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Executing text from the selection in a text window:
@@ -1047,9 +1113,10 @@ XmAnyCallbackStruct cbs;
 Bool execute_command()
 {
 	char *cmd;
-	long len;
+	NAT len;
 	XmTextPosition dontcare;
 	Widget w = command;
+	TRACE("execute_command");
 /*
 	if(XmTextGetSelectionPosition(w, &dontcare, &dontcare)) {
 		w = display;
@@ -1060,9 +1127,9 @@ Bool execute_command()
 		len = strlen(cmd);
 		send_to_application(cmd, len);
 		XtFree(cmd);
-		return(True);
+		RETURN("execute_command", True);
 	} else {
-		return(False);
+		RETURN("execute_command", False);
 	}
 }
 		
@@ -1071,9 +1138,11 @@ Bool execute_command()
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void cmdwin()
 {
+	TRACE("cmdwin");
 	setup_cmdwin();
 	get_pty();
 	handle_sigs();
 	XtRealizeWidget(root);
 	XtAppMainLoop(app);
+	LEAVE("cmdwin");
 }
