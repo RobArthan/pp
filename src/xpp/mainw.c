@@ -99,6 +99,9 @@ static char *undo_redo[2] = {"Undo", "Redo"};
 static char* changed_message =
 "The text has been edited. Do you want to throw away the changes?";
 
+static char* changed_quit_message =
+"The text has been edited. Do you want to quit without saving the changes?";
+
 static char* help_message =
 "The help system is not yet implemented. Sorry!";
 
@@ -1360,7 +1363,8 @@ Widget w;
 XtPointer cd;
 XmAnyCallbackStruct cbs;
 {
-	if(yes_no_dialog(root, quit_message)) {
+	if(yes_no_dialog(root,
+		(changed ? changed_quit_message : quit_message))) {
 		kill_application();
 		exit(0);
 	};
