@@ -94,7 +94,7 @@ The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD510}.  The modu
 =SML
 structure CNPrettyPrinterSupport : CNPrettyPrinterSupport = struct
 local
-	open	CNTypes;
+	open	CNTypes CNTypes1;
 	open	ZUserInterfaceSupport;
 in
 =TEX
@@ -105,8 +105,11 @@ These functions deal with the low-level output of characters.
 =SML
 
 val PPTabSize : int ref = ref 2;
-type PP_FMT_INFO =
-    {tabs : int, line_length : int, fmtfn : LABEL -> WEB_CLAUSE OPT};
+type PP_FMT_INFO = {
+	tabs : int,
+	line_length : int,
+	fmtfn : (LABEL -> REPLACEMENT OPT) OPT
+	};
 fun set_PPTab_size (x : int) = (PPTabSize := x);
 fun get_PPTab_size ( () : unit) : int = !PPTabSize;
 fun fmt_spaces (i : int) : string =
@@ -120,7 +123,13 @@ fun fmt_info_string_list([] : (PP_FMT_INFO * string) list) = ""
 fun inc_tabs ({tabs=t, line_length=ll, fmtfn=f} : PP_FMT_INFO) =
     ({tabs=(t+1), line_length=ll, fmtfn=f} : PP_FMT_INFO);
 
-
+=TEX
+=SML
+fun is_expansion_selected (FmtInfo : PP_FMT_INFO) : bool = (
+	case #fmtfn FmtInfo of
+		Value _ => 	true
+	|	Nil =>		false
+);
 =TEX
 
 Leaf functions, these don't call any other functions.
@@ -315,35 +324,65 @@ A couple of minor functions before we do statements.
 
 =SML
 
-fun fmt_spec ({w=w, w0=w0, pre=pre, post=post, label=l} : SPEC) =
-    "„ "^(fmt_id_list w)^" ["^(format_z_tm pre)^", "^
-    (format_z_tm post)^"]"^(fmt_label l);
+fun fmt_spec ({w=w, w0=w0, pre=pre, post=post, label} : SPEC) =
+	"„ "^(fmt_id_list w)^" ["^(format_z_tm pre)^", "^
+			    (format_z_tm post)^"]"^(fmt_label label);
+
 fun fmt_proc_call ({name=n, actuals=e} : (AGG_CHOICE, EXP) PROC_CALL) =
     (fmt_id n)^(fmt_actuals e);
+
+=TEX
+=SML
+fun Ûfmt_expansionÝ (FmtInfo : PP_FMT_INFO) (label : LABEL) :
+		(PP_FMT_INFO * string) list OPT = (
+let	val f = case (#fmtfn FmtInfo) of
+			Value f =>	f
+			| Nil =>	fn _ => Nil;
+in
+
+	case f label of
+	Value repl => Value (
+		case repl of
+			ReplaceComp {comp, ...} =>		fmt_kslot_compilation_unit_list FmtInfo comp
+		|	ReplacePPart {private, ...} =>	fmt_declaration_list FmtInfo private
+		|	ReplaceVPart {visible, ...} =>	fmt_declaration_list FmtInfo visible
+		|	ReplaceDecl {decls, ...} =>		fmt_declaration_list FmtInfo decls
+		|	ReplaceStat {statement, ...}	=>	fmt_statement FmtInfo statement
+		|	UnReplaced (repl_sort, s) =>		[(FmtInfo, s)]
+		)
+	|	Nil =>	Nil
+end)
+
+and fmt_spec_no_ivars FmtInfo (s as {w=w, w0=w0, pre=pre, post=post, label} : SPEC) =
+	case fmt_expansion FmtInfo label of
+	Value expansion =>	expansion
+	|Nil =>		[(FmtInfo, fmt_spec s)]
 
 =TEX
 
 Statements.
 
 =SML
+and fmt_assign (FmtInfo : PP_FMT_INFO) ({name=n, e=e} : ASSIGN) =
+    [(FmtInfo, (fmt_exp n)^" := "^(fmt_exp e)^";")]
 
-fun fmt_k_slot (FmtInfo : PP_FMT_INFO) ({content=c, label=l} : K_SLOT) =
-    [case l
-        of LImplicit => (FmtInfo, c)
-         | LExplicit _ => (FmtInfo, c^"    "^(fmt_label l))
-    ];
-fun fmt_assign (FmtInfo : PP_FMT_INFO) ({name=n, e=e} : ASSIGN) =
-    [(FmtInfo, (fmt_exp n)^" := "^(fmt_exp e)^";")];
-fun fmt_spec_no_ivars (FmtInfo : PP_FMT_INFO) (s : SPEC_NO_IVARS) =
-    [(FmtInfo, (fmt_spec s))];
-fun fmt_exit_when (FmtInfo : PP_FMT_INFO) ({g=g} : EXIT_WHEN) =
-    [(FmtInfo, "EXIT WHEN "^(fmt_cond g)^";")];
-fun fmt_return (FmtInfo : PP_FMT_INFO) ({e=e} : RETURN) =
-    [(FmtInfo, "RETURN "^(fmt_exp e)^";")];
-fun fmt_proc_call_no_ivars (FmtInfo : PP_FMT_INFO)
+and fmt_exit_when (FmtInfo : PP_FMT_INFO) ({g=g} : EXIT_WHEN) =
+    [(FmtInfo, "EXIT WHEN "^(fmt_cond g)^";")]
+and fmt_return (FmtInfo : PP_FMT_INFO) ({e=e} : RETURN) =
+    [(FmtInfo, "RETURN "^(fmt_exp e)^";")]
+and fmt_proc_call_no_ivars (FmtInfo : PP_FMT_INFO)
         (x : (AGG_CHOICE, EXP) PROC_CALL_NO_IVARS) =
-    [(FmtInfo, (fmt_proc_call x)^";")];
-fun fmt_elsif (FmtInfo : PP_FMT_INFO)
+    [(FmtInfo, (fmt_proc_call x)^";")]
+
+
+
+and Ûfmt_k_slotÝ (FmtInfo : PP_FMT_INFO) ({content, label} : K_SLOT) = (
+	case fmt_expansion FmtInfo label of
+	Value expansion =>	expansion
+	|Nil =>		[(FmtInfo, content^"    "^(fmt_label label))]
+)
+
+and fmt_elsif (FmtInfo : PP_FMT_INFO)
         (stmt as (STIfThenElse {g=g, p=p, q=q, elsif=true}) : STMT) =
     [(FmtInfo, "ELSIF "^(fmt_cond g))]@
     [(FmtInfo, "THEN")]@
@@ -501,7 +540,7 @@ and fmt_stmt (FmtInfo : PP_FMT_INFO) (STNull : STMT) = [(FmtInfo, "NULL;")]
   | fmt_stmt (FmtInfo : PP_FMT_INFO) (STProcNoIvars x : STMT) =
         (fmt_proc_call_no_ivars FmtInfo x)
   | fmt_stmt (FmtInfo : PP_FMT_INFO) (STKSlot x : STMT) =
-        (fmt_k_slot FmtInfo x);
+        (fmt_k_slot FmtInfo x)
 
 =TEX
 
@@ -510,10 +549,13 @@ Logical constructs.
 =SML
 
 (* we don't print out pre1 since it doesn't come from the user *)
-fun fmt_log_con (FmtInfo : PP_FMT_INFO)
+and fmt_log_con (FmtInfo : PP_FMT_INFO)
         ({x=x, t=t, spec=s, ...} : LOG_CON, stmt :STMT) =
-    [(FmtInfo, "CON "^(fmt_z_id x)^" : "^(format_z_tm t)^" · "^(fmt_spec s))]@
-    (fmt_stmt FmtInfo stmt);
+	if is_expansion_selected FmtInfo
+	then	[] (* want to expand - so don't print log_cons *)
+	else	[(FmtInfo, "CON "^(fmt_z_id x)^" : "^
+			(format_z_tm t)^" · "^(fmt_spec s))]@
+			    (fmt_stmt FmtInfo stmt)
 
 =TEX
 
@@ -521,14 +563,14 @@ Top level statements.
 
 =SML
 
-fun fmt_statement (FmtInfo : PP_FMT_INFO) (SStmt x) = (fmt_stmt FmtInfo x)
+and fmt_statement (FmtInfo : PP_FMT_INFO) (SStmt x) = (fmt_stmt FmtInfo x)
   | fmt_statement (FmtInfo : PP_FMT_INFO) (SSpecIvars x) =
     [(FmtInfo, "SSpecIvars : this error shouldn't be raised")]
   | fmt_statement (FmtInfo : PP_FMT_INFO) (SForNonStatic x) = 
     [(FmtInfo, "SForNonStatic : this error shouldn't be raised")]
   | fmt_statement (FmtInfo : PP_FMT_INFO) (SLogCon x) = (fmt_log_con FmtInfo x)
   | fmt_statement (FmtInfo : PP_FMT_INFO) (SProcIvars x) =
-    [(FmtInfo, "SProcIvars : this error shouldn't be raised")];
+    [(FmtInfo, "SProcIvars : this error shouldn't be raised")]
 
 =TEX
 
@@ -538,11 +580,11 @@ Variable declarations.
 
 =SML
 
-fun fmt_var_decl (FmtInfo : PP_FMT_INFO) ({vars=v, tmark=t} : VAR_DECL) =
-    [(FmtInfo, (fmt_id_list v)^" : "^(fmt_tmark t)^";")];
-fun fmt_var_decl_list (FmtInfo : PP_FMT_INFO) ([] : VAR_DECL list) = []
+and fmt_var_decl (FmtInfo : PP_FMT_INFO) ({vars=v, tmark=t} : VAR_DECL) =
+    [(FmtInfo, (fmt_id_list v)^" : "^(fmt_tmark t)^";")]
+and fmt_var_decl_list (FmtInfo : PP_FMT_INFO) ([] : VAR_DECL list) = []
   | fmt_var_decl_list (FmtInfo : PP_FMT_INFO) (x::xs : VAR_DECL list) =
-    (fmt_var_decl FmtInfo x)@(fmt_var_decl_list FmtInfo xs);
+    (fmt_var_decl FmtInfo x)@(fmt_var_decl_list FmtInfo xs)
 
 =TEX
 
@@ -550,13 +592,13 @@ Constant and deferred constant declarations.
 
 =SML
 
-fun fmt_const_decl (FmtInfo : PP_FMT_INFO)
+and fmt_const_decl (FmtInfo : PP_FMT_INFO)
         ({consts=c, tm=t, expr=e} : EXP CONST_DECL) =
     [(FmtInfo, (fmt_id_list c)^" : CONSTANT "^
-        (fmt_tmark t)^" := "^(fmt_exp e)^";")];
-fun fmt_deferred_const_decl (FmtInfo : PP_FMT_INFO)
+        (fmt_tmark t)^" := "^(fmt_exp e)^";")]
+and fmt_deferred_const_decl (FmtInfo : PP_FMT_INFO)
         ({consts=c, tmark=t} : DEFERRED_CONST_DECL) =
-    [(FmtInfo, (fmt_id_list c)^" : CONSTANT "^(fmt_tmark t)^";")];
+    [(FmtInfo, (fmt_id_list c)^" : CONSTANT "^(fmt_tmark t)^";")]
 
 =TEX
 
@@ -564,11 +606,11 @@ Minor functions before type definitions.
 
 =SML
 
-fun fmt_variant_alt_list ([] : ID list) = ""
+and fmt_variant_alt_list ([] : ID list) = ""
   | fmt_variant_alt_list ([x] : ID list) = fmt_id x
   | fmt_variant_alt_list (x::xs : ID list) =
-    (fmt_id x)^"|"^(fmt_variant_alt_list xs);
-fun fmt_variant (FmtInfo : PP_FMT_INFO) ({ids=i, comp=c} : COMPONENT VARIANT) =
+    (fmt_id x)^"|"^(fmt_variant_alt_list xs)
+and fmt_variant (FmtInfo : PP_FMT_INFO) ({ids=i, comp=c} : COMPONENT VARIANT) =
     [(FmtInfo, "WHEN "^(fmt_variant_alt_list i)^" =>")]@
     (fmt_component_list (inc_tabs FmtInfo) c)
 and fmt_variant_list (FmtInfo : PP_FMT_INFO) ([] : COMPONENT VARIANT list) = []
@@ -592,7 +634,7 @@ and fmt_component (FmtInfo : PP_FMT_INFO) (CDeclaration x : COMPONENT) =
     [(FmtInfo, "NULL")]
 and fmt_component_list (FmtInfo : PP_FMT_INFO) ([] : COMPONENT list) = []
   | fmt_component_list (FmtInfo : PP_FMT_INFO) (x::xs : COMPONENT list) =
-    (fmt_component FmtInfo x)@(fmt_component_list FmtInfo xs);
+    (fmt_component FmtInfo x)@(fmt_component_list FmtInfo xs)
 
 =TEX
 
@@ -600,9 +642,9 @@ Discriminant part.
 
 =SML
 
-fun fmt_discr_part (Value {vars=v, tmark=t} : DISCR_PART) =
+and fmt_discr_part (Value {vars=v, tmark=t} : DISCR_PART) =
     " "^(fmt_id_list v)^" : "^(fmt_tmark t)
-  | fmt_discr_part (Nil : DISCR_PART) = "";
+  | fmt_discr_part (Nil : DISCR_PART) = ""
 
 =TEX
 
@@ -610,10 +652,10 @@ Enumerated types.
 
 =SML
 
-fun fmt_enum_type_def (FmtInfo : PP_FMT_INFO)
+and fmt_enum_type_def (FmtInfo : PP_FMT_INFO)
         (name, discr, {vals=v} : ENUM_TYPE_DEF) = 
     [(FmtInfo, "TYPE "^(fmt_id name)^(fmt_discr_part discr)^
-        " IS ("^(fmt_id_list v)^");")];
+        " IS ("^(fmt_id_list v)^");")]
 
 =TEX
 
@@ -621,9 +663,9 @@ Integer types.
 
 =SML
 
-fun fmt_int_type_def (FmtInfo : PP_FMT_INFO) (name, discr, r : EXP RANGE) =
+and fmt_int_type_def (FmtInfo : PP_FMT_INFO) (name, discr, r : EXP RANGE) =
     [(FmtInfo, "TYPE "^(fmt_id name)^(fmt_discr_part discr)^
-        " IS RANGE "^(fmt_range r)^";")];
+        " IS RANGE "^(fmt_range r)^";")]
 
 =TEX
 
@@ -631,16 +673,16 @@ Floating point types.
 
 =SML
 
-fun fmt_floating_point_constraint ({exp=e, range=Value r} :
+and fmt_floating_point_constraint ({exp=e, range=Value r} :
         EXP FLOATING_POINT_CONSTRAINT) =
     " DIGITS "^(fmt_exp e)^" RANGE "^(fmt_range r)
   | fmt_floating_point_constraint ({exp=e, range=Nil} :
         EXP FLOATING_POINT_CONSTRAINT) =
-    " DIGITS "^(fmt_exp e);
-fun fmt_floating_type_def (FmtInfo : PP_FMT_INFO)
+    " DIGITS "^(fmt_exp e)
+and fmt_floating_type_def (FmtInfo : PP_FMT_INFO)
         (name, discr, x : EXP FLOATING_TYPE_DEF) =
     [(FmtInfo, "TYPE "^(fmt_id name)^(fmt_discr_part discr)^
-        " IS"^(fmt_floating_point_constraint x)^";")];
+        " IS"^(fmt_floating_point_constraint x)^";")]
 
 =TEX
 
@@ -648,16 +690,16 @@ Fixed point types.
 
 =SML
 
-fun fmt_fixed_point_constraint ({exp=e, range=Value r} :
+and fmt_fixed_point_constraint ({exp=e, range=Value r} :
         EXP FIXED_POINT_CONSTRAINT) =
     " DELTA "^(fmt_exp e)^" RANGE "^(fmt_range r)
   | fmt_fixed_point_constraint ({exp=e, range=Nil} :
         EXP FIXED_POINT_CONSTRAINT) =
-    " DELTA "^(fmt_exp e);
-fun fmt_fixed_type_def (FmtInfo : PP_FMT_INFO)
+    " DELTA "^(fmt_exp e)
+and fmt_fixed_type_def (FmtInfo : PP_FMT_INFO)
         (name, discr, x : EXP FIXED_TYPE_DEF) =
     [(FmtInfo, "TYPE "^(fmt_id name)^(fmt_discr_part discr)^
-        " IS"^(fmt_fixed_point_constraint x)^";")];
+        " IS"^(fmt_fixed_point_constraint x)^";")]
 
 =TEX
 
@@ -665,18 +707,18 @@ Array types.
 
 =SML
 
-fun fmt_array_def (FmtInfo : PP_FMT_INFO)
+and fmt_array_def (FmtInfo : PP_FMT_INFO)
         (name, discr, {index=i, comp=c} : ARRAY_DEF) =
     [(FmtInfo, "TYPE "^(fmt_id name)^(fmt_discr_part discr)^
-        " IS ARRAY ("^(fmt_tmark_list i)^") OF "^(fmt_tmark c)^";")];
-fun fmt_uncon_tmark_list ([] : TMARK list) = ""
+        " IS ARRAY ("^(fmt_tmark_list i)^") OF "^(fmt_tmark c)^";")]
+and fmt_uncon_tmark_list ([] : TMARK list) = ""
   | fmt_uncon_tmark_list ([x] : TMARK list) = (fmt_tmark x)^" RANGE <>"
   | fmt_uncon_tmark_list (x::xs : TMARK list) =
-    (fmt_uncon_tmark_list [x])^", "^(fmt_uncon_tmark_list xs);
-fun fmt_uncon_array_def (FmtInfo : PP_FMT_INFO)
+    (fmt_uncon_tmark_list [x])^", "^(fmt_uncon_tmark_list xs)
+and fmt_uncon_array_def (FmtInfo : PP_FMT_INFO)
         (name, discr, {index=i, comp=c} : ARRAY_DEF) =
     [(FmtInfo, "TYPE "^(fmt_id name)^(fmt_discr_part discr)^
-        " IS ARRAY ("^(fmt_uncon_tmark_list i)^") OF "^(fmt_tmark c)^";")];
+        " IS ARRAY ("^(fmt_uncon_tmark_list i)^") OF "^(fmt_tmark c)^";")]
 
 =TEX
 
@@ -684,12 +726,12 @@ Record types.
 
 =SML
 
-fun fmt_record_type_def (FmtInfo : PP_FMT_INFO)
+and fmt_record_type_def (FmtInfo : PP_FMT_INFO)
         (name, discr, {comps=c} : COMPONENT RECORD_TYPE_DEF) =
     [(FmtInfo, "TYPE "^(fmt_id name)^(fmt_discr_part discr)^" IS")]@
     [(FmtInfo, "RECORD")]@
     (fmt_component_list (inc_tabs FmtInfo) c)@
-    [(FmtInfo, "END RECORD;")];
+    [(FmtInfo, "END RECORD;")]
 
 =TEX
 
@@ -697,7 +739,7 @@ Type declarations.
 
 =SML
 
-fun fmt_type_def (FmtInfo : PP_FMT_INFO)
+and fmt_type_def (FmtInfo : PP_FMT_INFO)
         (name, discr, (TDEnumTypeDef x) : TYPE_DEF) =
     (fmt_enum_type_def FmtInfo (name, discr, x))
   | fmt_type_def (FmtInfo : PP_FMT_INFO)
@@ -717,10 +759,10 @@ fun fmt_type_def (FmtInfo : PP_FMT_INFO)
     (fmt_array_def FmtInfo (name, discr, x))
   | fmt_type_def (FmtInfo : PP_FMT_INFO) 
         (name, discr, (TDRecordTypeDef x) : TYPE_DEF) =
-    (fmt_record_type_def FmtInfo (name, discr, x));
-fun fmt_type_decl (FmtInfo : PP_FMT_INFO)
+    (fmt_record_type_def FmtInfo (name, discr, x))
+and fmt_type_decl (FmtInfo : PP_FMT_INFO)
         ({name=n, discr=d, type_def=t} : TYPE_DEF TYPE_DECL) =
-    (fmt_type_def (inc_tabs FmtInfo) (n, d, t));
+    (fmt_type_def (inc_tabs FmtInfo) (n, d, t))
 
 =TEX
 
@@ -728,17 +770,17 @@ Subtype declarations.
 
 =SML
 
-fun fmt_constraint (CRange x : CONSTRAINT) = "RANGE "^fmt_range x
+and fmt_constraint (CRange x : CONSTRAINT) = "RANGE "^fmt_range x
   | fmt_constraint (CIndex x : CONSTRAINT) = (fmt_exp_list x)
   | fmt_constraint (CFloating x : CONSTRAINT) =
     (fmt_floating_point_constraint x)
   | fmt_constraint (CFixed x : CONSTRAINT) =
-    (fmt_fixed_point_constraint x);
-fun fmt_sub_ind ({tmark=t, con=c} : CONSTRAINT SUB_IND) =
-    (fmt_tmark t)^" "^(fmt_constraint c);
-fun fmt_subtype_decl (FmtInfo : PP_FMT_INFO)
+    (fmt_fixed_point_constraint x)
+and fmt_sub_ind ({tmark=t, con=c} : CONSTRAINT SUB_IND) =
+    (fmt_tmark t)^" "^(fmt_constraint c)
+and fmt_subtype_decl (FmtInfo : PP_FMT_INFO)
         ({name=n, sub_ind=s} : CONSTRAINT SUBTYPE_DECL) =
-    [(FmtInfo, "SUBTYPE "^(fmt_id n)^" IS "^(fmt_sub_ind s)^";")];
+    [(FmtInfo, "SUBTYPE "^(fmt_id n)^" IS "^(fmt_sub_ind s)^";")]
 
 =TEX
 
@@ -746,10 +788,10 @@ Private type declarations.
 
 =SML
 
-fun fmt_private_type_decl (FmtInfo : PP_FMT_INFO)
+and fmt_private_type_decl (FmtInfo : PP_FMT_INFO)
         ({id=i, limited=l} : PRIVATE_TYPE_DECL) =
     [(FmtInfo, "TYPE "^(fmt_id i)^" IS"^
-        (if l=true then " LIMITED" else "")^" PRIVATE;")];
+        (if l=true then " LIMITED" else "")^" PRIVATE;")]
 
 =TEX
 
@@ -757,7 +799,7 @@ Basic declarations.
 
 =SML
 
-fun fmt_basic_decl (FmtInfo : PP_FMT_INFO) (BDConstDecl x : BASIC_DECL) =
+and fmt_basic_decl (FmtInfo : PP_FMT_INFO) (BDConstDecl x : BASIC_DECL) =
     (fmt_const_decl FmtInfo x)
   | fmt_basic_decl (FmtInfo : PP_FMT_INFO)
         (BDDeferredConstDecl x : BASIC_DECL) =
@@ -769,7 +811,7 @@ fun fmt_basic_decl (FmtInfo : PP_FMT_INFO) (BDConstDecl x : BASIC_DECL) =
   | fmt_basic_decl (FmtInfo : PP_FMT_INFO) (BDSubtypeDecl x : BASIC_DECL) =
     (fmt_subtype_decl FmtInfo x)
   | fmt_basic_decl (FmtInfo : PP_FMT_INFO) (BDPrivateTypeDecl x : BASIC_DECL ) =
-    (fmt_private_type_decl FmtInfo x);
+    (fmt_private_type_decl FmtInfo x)
 
 =TEX
 
@@ -779,17 +821,17 @@ Procedure and Function parameter specifications.
 
 =SML
 
-fun fmt_parameter_specification ({idlist=i, mode=m, name=n} :
+and fmt_parameter_specification ({idlist=i, mode=m, name=n} :
         PARAMETER_SPECIFICATION) =
-    (fmt_id_list i)^" :"^(fmt_mode m)^(fmt_tmark n);
-fun fmt_parameter_specification_list1 ([] : PARAMETER_SPECIFICATION list) = ""
+    (fmt_id_list i)^" :"^(fmt_mode m)^(fmt_tmark n)
+and fmt_parameter_specification_list1 ([] : PARAMETER_SPECIFICATION list) = ""
   | fmt_parameter_specification_list1 ([x] : PARAMETER_SPECIFICATION list) =
     (fmt_parameter_specification x)
   | fmt_parameter_specification_list1 (x::xs : PARAMETER_SPECIFICATION list) =
-    (fmt_parameter_specification x)^"; "^(fmt_parameter_specification_list1 xs);
-fun fmt_parameter_specification_list ([] : PARAMETER_SPECIFICATION list) = ""
+    (fmt_parameter_specification x)^"; "^(fmt_parameter_specification_list1 xs)
+and fmt_parameter_specification_list ([] : PARAMETER_SPECIFICATION list) = ""
   | fmt_parameter_specification_list (xs : PARAMETER_SPECIFICATION list) =
-    " ("^(fmt_parameter_specification_list1 xs)^")";
+    " ("^(fmt_parameter_specification_list1 xs)^")"
 
 =TEX
 
@@ -797,24 +839,36 @@ Procedure and Function specifications.
 
 =SML
 
-fun fmt_procedure_specification (FmtInfo : PP_FMT_INFO)
+and fmt_procedure_specification (FmtInfo : PP_FMT_INFO)
         ({name=n, formal_part=f, spec=Value s} : PROCEDURE_SPECIFICATION) =
-    [(FmtInfo, "PROCEDURE "^(fmt_id n)^(fmt_parameter_specification_list f))]@
-    [((inc_tabs FmtInfo), (fmt_spec s))]
+	if is_expansion_selected FmtInfo
+	then
+	    [(FmtInfo, "PROCEDURE "^
+			(fmt_id n)^(fmt_parameter_specification_list f))]
+	else
+		[(FmtInfo, "PROCEDURE "^
+			(fmt_id n)^(fmt_parameter_specification_list f))]@
+		    [((inc_tabs FmtInfo), (fmt_spec s))]
+
   | fmt_procedure_specification (FmtInfo : PP_FMT_INFO)
         ({name=n, formal_part=f, spec=Nil} : PROCEDURE_SPECIFICATION) =
-    [(FmtInfo, "PROCEDURE "^(fmt_id n)^(fmt_parameter_specification_list f))];
-fun fmt_function_specification (FmtInfo : PP_FMT_INFO)
+    [(FmtInfo, "PROCEDURE "^(fmt_id n)^(fmt_parameter_specification_list f))]
+and fmt_function_specification (FmtInfo : PP_FMT_INFO)
         ({designator=d, return=r, formal_part=f, spec=Value s} :
         FUNCTION_SPECIFICATION) =
-    [(FmtInfo, "FUNCTION "^(fmt_id d)^
-        (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r))]@
-    [((inc_tabs FmtInfo), (fmt_spec s))]
+	if is_expansion_selected FmtInfo
+	then
+	    [(FmtInfo, "FUNCTION "^(fmt_id d)^
+	        (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r))]
+	else
+	    [(FmtInfo, "FUNCTION "^(fmt_id d)^
+	        (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r))]@
+		    [((inc_tabs FmtInfo), (fmt_spec s))]
   | fmt_function_specification  (FmtInfo : PP_FMT_INFO)
         ({designator=d, return=r, formal_part=f, spec=Nil} :
         FUNCTION_SPECIFICATION) =
     [(FmtInfo, "FUNCTION "^(fmt_id d)^
-        (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r))];
+        (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r))]
 
 =TEX
 
@@ -822,12 +876,12 @@ Subprograms.
 
 =SML
 
-fun fmt_subprogram_specification (FmtInfo : PP_FMT_INFO)
+and fmt_subprogram_specification (FmtInfo : PP_FMT_INFO)
         (SSProcedure x : SUBPROGRAM_SPECIFICATION) =
     (fmt_procedure_specification FmtInfo x)
   | fmt_subprogram_specification (FmtInfo : PP_FMT_INFO)
         (SSFunction x : SUBPROGRAM_SPECIFICATION) =
-    (fmt_function_specification FmtInfo x);
+    (fmt_function_specification FmtInfo x)
 
 =TEX
 
@@ -835,23 +889,23 @@ Renaming declarations.
 
 =SML
 
-fun fmt_function_renaming (FmtInfo : PP_FMT_INFO)
+and fmt_function_renaming (FmtInfo : PP_FMT_INFO)
         ({opsym1=o1, formal_part=f, tmark=t, name=n, opsym2=o2} :
         FUNCTION_RENAMING) =
     [(FmtInfo, "FUNCTION \""^(fmt_operator_symbol o1)^"\""^
         (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark t)^
-        " RENAMES "^(fmt_id n)^".\""^(fmt_operator_symbol o2)^"\";")];
-fun fmt_subprogram_renaming (FmtInfo : PP_FMT_INFO)
+        " RENAMES "^(fmt_id n)^".\""^(fmt_operator_symbol o2)^"\";")]
+and fmt_subprogram_renaming (FmtInfo : PP_FMT_INFO)
         ({subprogram_specification=s, name1=n1, name2=n2} :
         SUBPROGRAM_RENAMING) =
     (fmt_subprogram_specification FmtInfo s)@
-    [((inc_tabs FmtInfo), " RENAMES "^(fmt_id n1)^"."^(fmt_id n2)^";")];
-fun fmt_renaming_declaration (FmtInfo : PP_FMT_INFO)
+    [((inc_tabs FmtInfo), " RENAMES "^(fmt_id n1)^"."^(fmt_id n2)^";")]
+and fmt_renaming_declaration (FmtInfo : PP_FMT_INFO)
         (RDFunction x : RENAMING_DECLARATION) =
     (fmt_function_renaming FmtInfo x)
   | fmt_renaming_declaration (FmtInfo : PP_FMT_INFO)
         (RDSubprogram x : RENAMING_DECLARATION) =
-    (fmt_subprogram_renaming FmtInfo x);
+    (fmt_subprogram_renaming FmtInfo x)
 
 =TEX
 
@@ -859,21 +913,21 @@ Representation clauses.
 
 =SML
 
-fun fmt_component_clause (FmtInfo : PP_FMT_INFO)
+and fmt_component_clause (FmtInfo : PP_FMT_INFO)
         ({name=n, exp=e, range=r} : COMPONENT_CLAUSE) =
-    [(FmtInfo, (fmt_exp n)^" AT "^(fmt_exp e)^" RANGE "^(fmt_range r)^";")];
-fun fmt_component_clause_list (FmtInfo : PP_FMT_INFO)
+    [(FmtInfo, (fmt_exp n)^" AT "^(fmt_exp e)^" RANGE "^(fmt_range r)^";")]
+and fmt_component_clause_list (FmtInfo : PP_FMT_INFO)
         ([] : COMPONENT_CLAUSE list) = []
   | fmt_component_clause_list (FmtInfo : PP_FMT_INFO)
         (x::xs : COMPONENT_CLAUSE list) =
-    (fmt_component_clause FmtInfo x)@(fmt_component_clause_list FmtInfo xs);
-fun fmt_length_clause (FmtInfo : PP_FMT_INFO)
+    (fmt_component_clause FmtInfo x)@(fmt_component_clause_list FmtInfo xs)
+and fmt_length_clause (FmtInfo : PP_FMT_INFO)
         ({attribute=a, exp=e} : LENGTH_CLAUSE) =
-    [(FmtInfo, "FOR "^(fmt_exp a)^" USE "^(fmt_exp e)^";")];
-fun fmt_enumeration_representation_clause (FmtInfo : PP_FMT_INFO)
+    [(FmtInfo, "FOR "^(fmt_exp a)^" USE "^(fmt_exp e)^";")]
+and fmt_enumeration_representation_clause (FmtInfo : PP_FMT_INFO)
        ({name=n, exp=e} : ENUMERATION_REPRESENTATION_CLAUSE) =
-    [(FmtInfo, "FOR "^(fmt_id n)^" USE ("^(fmt_exp e)^");")];
-fun fmt_record_representation_clause (FmtInfo : PP_FMT_INFO)
+    [(FmtInfo, "FOR "^(fmt_id n)^" USE ("^(fmt_exp e)^");")]
+and fmt_record_representation_clause (FmtInfo : PP_FMT_INFO)
         ({name=n, alignment_opt=Value a,  component_pack=c} :
         RECORD_REPRESENTATION_CLAUSE) =
     [(FmtInfo, "FOR "^(fmt_id n)^" USE")]@
@@ -886,11 +940,11 @@ fun fmt_record_representation_clause (FmtInfo : PP_FMT_INFO)
     [(FmtInfo, "FOR "^(fmt_id n)^" USE")]@
     [((inc_tabs FmtInfo), "RECORD")]@
     (fmt_component_clause_list (inc_tabs FmtInfo) c)@
-    [((inc_tabs FmtInfo), "END RECORD;")];
-fun fmt_address_clause (FmtInfo : PP_FMT_INFO)
+    [((inc_tabs FmtInfo), "END RECORD;")]
+and fmt_address_clause (FmtInfo : PP_FMT_INFO)
         ({name=n, exp=e} : ADDRESS_CLAUSE) =
-    [(FmtInfo, "FOR "^(fmt_id n)^" USE AT "^(fmt_exp e)^";")];
-fun fmt_representation_clause (FmtInfo : PP_FMT_INFO)
+    [(FmtInfo, "FOR "^(fmt_id n)^" USE AT "^(fmt_exp e)^";")]
+and fmt_representation_clause (FmtInfo : PP_FMT_INFO)
         (RCLength x : REPRESENTATION_CLAUSE) =
     (fmt_length_clause FmtInfo x)
   | fmt_representation_clause (FmtInfo : PP_FMT_INFO)
@@ -901,7 +955,7 @@ fun fmt_representation_clause (FmtInfo : PP_FMT_INFO)
     (fmt_record_representation_clause FmtInfo x)
   | fmt_representation_clause (FmtInfo : PP_FMT_INFO)
         (RCAddress x : REPRESENTATION_CLAUSE) =
-    (fmt_address_clause FmtInfo x);
+    (fmt_address_clause FmtInfo x)
 
 =TEX
 
@@ -909,21 +963,21 @@ Declarations, these are defined simultaneously since they can be recursive.
 
 =SML
 
-fun fmt_procedure_declaration (FmtInfo : PP_FMT_INFO)
+and fmt_procedure_declaration (FmtInfo : PP_FMT_INFO)
        (x : PROCEDURE_DECLARATION) =
-    [(FmtInfo, "PROCEDURE "^(fmt_id (#name x))^";")];
-fun fmt_function_declaration (FmtInfo : PP_FMT_INFO)
+    [(FmtInfo, "PROCEDURE "^(fmt_id (#name x))^";")]
+and fmt_function_declaration (FmtInfo : PP_FMT_INFO)
         (x : FUNCTION_DECLARATION) =
     [(FmtInfo, "FUNCTION "^(fmt_id (#designator x))^
-        " RETURN "^(fmt_tmark (#return x))^";")];
-fun fmt_procedure_stub (FmtInfo : PP_FMT_INFO) (x : PROCEDURE_DECLARATION) =
-    [(FmtInfo, "PROCEDURE "^(fmt_id (#name x))^" IS SEPARATE;")];
-fun fmt_function_stub (FmtInfo : PP_FMT_INFO) (x : FUNCTION_DECLARATION) =
+        " RETURN "^(fmt_tmark (#return x))^";")]
+and fmt_procedure_stub (FmtInfo : PP_FMT_INFO) (x : PROCEDURE_DECLARATION) =
+    [(FmtInfo, "PROCEDURE "^(fmt_id (#name x))^" IS SEPARATE;")]
+and fmt_function_stub (FmtInfo : PP_FMT_INFO) (x : FUNCTION_DECLARATION) =
     [(FmtInfo, "FUNCTION "^(fmt_id (#designator x))^" RETURN "^
-      (fmt_tmark (#return x))^" IS SEPARATE;")];
-fun fmt_package_stub (FmtInfo : PP_FMT_INFO) (n : ID) =
-    [(FmtInfo, "PACKAGE BODY "^(fmt_id n)^" IS SEPARATE;")];
-fun fmt_package_declaration (FmtInfo : PP_FMT_INFO)
+      (fmt_tmark (#return x))^" IS SEPARATE;")]
+and fmt_package_stub (FmtInfo : PP_FMT_INFO) (n : ID) =
+    [(FmtInfo, "PACKAGE BODY "^(fmt_id n)^" IS SEPARATE;")]
+and fmt_package_declaration (FmtInfo : PP_FMT_INFO)
         ({name=n, visible_decs=v, private_decs=p} :
     DECLARATION PACKAGE_DECLARATION) =
     [(FmtInfo, "PACKAGE "^(fmt_id n)^" IS")]@
@@ -1002,7 +1056,7 @@ and fmt_proper_body (FmtInfo : PP_FMT_INFO) (PBProcedure x : PROPER_BODY) =
   | fmt_proper_body (FmtInfo : PP_FMT_INFO) (PBFunction x : PROPER_BODY) =
     (fmt_function_body FmtInfo x)
   | fmt_proper_body (FmtInfo : PP_FMT_INFO) (PBPackage x : PROPER_BODY) =
-    (fmt_package_body FmtInfo x);
+    (fmt_package_body FmtInfo x)
 
 =TEX
 
@@ -1010,9 +1064,9 @@ Compilation subunits.
 
 =SML
 
-fun fmt_compilation_subunit (FmtInfo : PP_FMT_INFO)
-        ({name=n, proper_body=p} : SUBUNIT) =
-    [(FmtInfo, "SEPARATE ("^(fmt_exp n)^")")]@(fmt_proper_body (inc_tabs FmtInfo) p);
+and fmt_compilation_subunit (FmtInfo : PP_FMT_INFO)
+        ({name=n, proper_body=p} : CNTypes.SUBUNIT) =
+    [(FmtInfo, "SEPARATE ("^(fmt_exp n)^")")]@(fmt_proper_body (inc_tabs FmtInfo) p)
 
 =TEX
 
@@ -1020,10 +1074,10 @@ Compilation units.
 
 =SML
 
-fun fmt_context_clause (FmtInfo : PP_FMT_INFO) ([] : ID list) = []
+and fmt_context_clause (FmtInfo : PP_FMT_INFO) ([] : ID list) = []
   | fmt_context_clause (FmtInfo : PP_FMT_INFO) (x : ID list) =
-    [(FmtInfo, "WITH "^(fmt_id_list x)^";")];
-fun fmt_compilation_unit (FmtInfo : PP_FMT_INFO)
+    [(FmtInfo, "WITH "^(fmt_id_list x)^";")]
+and fmt_compilation_unit (FmtInfo : PP_FMT_INFO)
         (CUPackageDeclaration x : COMPILATION_UNIT) =
     (fmt_package_declaration FmtInfo x)
   | fmt_compilation_unit (FmtInfo : PP_FMT_INFO)
@@ -1031,46 +1085,46 @@ fun fmt_compilation_unit (FmtInfo : PP_FMT_INFO)
     (fmt_proper_body FmtInfo x)
   | fmt_compilation_unit (FmtInfo : PP_FMT_INFO)
         (CUSubUnit x : COMPILATION_UNIT) =
-    (fmt_compilation_subunit FmtInfo x);
-fun fmt_context_compilation_unit (FmtInfo : PP_FMT_INFO)
+    (fmt_compilation_subunit FmtInfo x)
+and fmt_context_compilation_unit (FmtInfo : PP_FMT_INFO)
         ({context=i, comp_unit=c} : CONTEXT_COMPILATION_UNIT) =
-    (fmt_context_clause FmtInfo i)@(fmt_compilation_unit FmtInfo c);
-fun fmt_kslot_compilation_unit (FmtInfo : PP_FMT_INFO)
+    (fmt_context_clause FmtInfo i)@(fmt_compilation_unit FmtInfo c)
+and fmt_kslot_compilation_unit (FmtInfo : PP_FMT_INFO)
         (KCUKSlot x : KSLOT_COMPILATION_UNIT) =
     (fmt_k_slot FmtInfo x)
   | fmt_kslot_compilation_unit (FmtInfo : PP_FMT_INFO)
         (KCUUnit x : KSLOT_COMPILATION_UNIT) =
-    (fmt_context_compilation_unit FmtInfo x);
-fun fmt_kslot_compilation_unit_list (FmtInfo : PP_FMT_INFO)
+    (fmt_context_compilation_unit FmtInfo x)
+and fmt_kslot_compilation_unit_list (FmtInfo : PP_FMT_INFO)
     ([] : KSLOT_COMPILATION_UNIT list) = []
   | fmt_kslot_compilation_unit_list (FmtInfo : PP_FMT_INFO)
     (x::xs : KSLOT_COMPILATION_UNIT list) =
     (fmt_kslot_compilation_unit FmtInfo x)@
-    (fmt_kslot_compilation_unit_list FmtInfo xs);
+    (fmt_kslot_compilation_unit_list FmtInfo xs)
 
 =TEX
 
 =SML
 
-fun fmt_replaced_by_comp (FmtInfo : PP_FMT_INFO)
+and fmt_replaced_by_comp (FmtInfo : PP_FMT_INFO)
         ({label=l, comp=c} : REPLACED_BY_COMP) =
     [(FmtInfo, (fmt_label l)^"é")]@
-    (fmt_kslot_compilation_unit_list (inc_tabs FmtInfo) c);
-fun fmt_replaced_by_private_part (FmtInfo : PP_FMT_INFO)
+    (fmt_kslot_compilation_unit_list (inc_tabs FmtInfo) c)
+and fmt_replaced_by_private_part (FmtInfo : PP_FMT_INFO)
         ({label=l, private=p} : REPLACED_BY_PRIVATE_PART) =
-    [(FmtInfo, (fmt_label l)^"é")]@(fmt_declaration_list (inc_tabs FmtInfo) p);
-fun fmt_replaced_by_visible_part (FmtInfo : PP_FMT_INFO)
+    [(FmtInfo, (fmt_label l)^"é")]@(fmt_declaration_list (inc_tabs FmtInfo) p)
+and fmt_replaced_by_visible_part (FmtInfo : PP_FMT_INFO)
         ({label=l, visible=v} : REPLACED_BY_VISIBLE_PART) =
-    [(FmtInfo, (fmt_label l)^"é")]@(fmt_declaration_list (inc_tabs FmtInfo) v);
-fun fmt_replaced_by_decl (FmtInfo : PP_FMT_INFO)
+    [(FmtInfo, (fmt_label l)^"é")]@(fmt_declaration_list (inc_tabs FmtInfo) v)
+and fmt_replaced_by_decl (FmtInfo : PP_FMT_INFO)
         ({label=l, decls=d} : REPLACED_BY_DECL) =
-    [(FmtInfo, (fmt_label l)^"é")]@(fmt_declaration_list (inc_tabs FmtInfo) d);
-fun fmt_refined_by (FmtInfo : PP_FMT_INFO)
+    [(FmtInfo, (fmt_label l)^"é")]@(fmt_declaration_list (inc_tabs FmtInfo) d)
+and fmt_refined_by (FmtInfo : PP_FMT_INFO)
         ({label=l, statement=s} : REFINED_BY) =
-    [(FmtInfo, (fmt_label l)^"Ã")]@(fmt_statement (inc_tabs FmtInfo) s);
-fun fmt_replaced_by (FmtInfo : PP_FMT_INFO)
+    [(FmtInfo, (fmt_label l)^"Ã")]@(fmt_statement (inc_tabs FmtInfo) s)
+and fmt_replaced_by (FmtInfo : PP_FMT_INFO)
         ({label=l, statement=s} : REFINED_BY) =
-    [(FmtInfo, (fmt_label l)^"é")]@(fmt_statement (inc_tabs FmtInfo) s);
+    [(FmtInfo, (fmt_label l)^"é")]@(fmt_statement (inc_tabs FmtInfo) s)
 
 =TEX
 
@@ -1078,7 +1132,7 @@ Web Clauses.
 
 =SML
 
-fun fmt_web_clause (FmtInfo : PP_FMT_INFO)
+and fmt_web_clause (FmtInfo : PP_FMT_INFO)
         (WCCompilation x : WEB_CLAUSE) =
     (fmt_kslot_compilation_unit_list FmtInfo x)
   | fmt_web_clause (FmtInfo : PP_FMT_INFO)
@@ -1116,7 +1170,7 @@ end (* of structure CNPrettyPrinterSupport *);
 
 structure ÛSPARKOutputÝ : SPARKOutput = struct
 local
-	open CNTypes CNPrettyPrinterSupport;
+	open CNTypes CNPrettyPrinterSupport CNZGenerator;
 in
 =TEX
 =SML
@@ -1131,7 +1185,15 @@ fun Ûformat_web_clauseÝ (FmtInfo : PP_FMT_INFO) (x : WEB_CLAUSE) : unit =
 
 val Ûprint_web_clauseÝ : WEB_CLAUSE -> unit = (
 	format_web_clause
-	{tabs=1,line_length=get_line_length(),fmtfn=fn _ => Nil}
+	{tabs=1,line_length=get_line_length(),fmtfn=Nil}
+);
+
+val Ûprint_sparkÝ : WEB_CLAUSE -> unit = (
+	format_web_clause
+	{	tabs=1,
+		line_length=get_line_length(),
+		fmtfn=Value (get_replacement o string_of_label)
+	}
 );
 
 =TEX
@@ -1155,9 +1217,30 @@ open SPARKOutput;
 \end{document}
 
 =IGN
+¹CN
+package pack is
+procedure proc (x : integer)
+	„ [true, true] (3);
+end pack;
+°
+open CNPrettyPrinterSupport;
 
+¹CN
+procedure proc (x : integer) is begin 
+	„ [true, true] (3) 
+	null; end proc;
+°
+
+cn_of_string"procedure proc (x : integer) is begin \
+\	„ [true, true] (3) \
+\	null; end proc;";
+
+print_web_clause it;
+
+
+open CNZGenerator;
 signature tmp = sig
-
+get_replacement "3";
 type CN_FMT_INFO (* = {tabs : int, line_len : int, f : LABEL -> WEB_CLAUSE OPT}; *)
 
 val format_web_clause : (WEB_CLAUSE * CN_FMT_INFO) -> string list;
