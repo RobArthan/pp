@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.20 2002/12/20 15:55:44 rda Exp rda $
+# $Id: configure.sh,v 1.21 2003/04/03 11:11:40 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -76,6 +76,12 @@ elif	which sml >/dev/null 2>&1
 then	echo "Using Standard ML of New Jersey"
 	PPCOMPILER=SMLNJ
 else	give_up "cannot find a Standard ML compiler"
+fi
+if	[ "$PPCOMPILER" = SMLNJ ] && which .arch-n-opsys >/dev/null 2>&1
+then	true
+else	echo "The installation bin directory for Standard ML of New Jersey"
+	echo "needs to be on your path"
+	give_up "Cannot find .arch-n-opsys"
 fi
 #
 # Find Poly/ML database if appropriate:
