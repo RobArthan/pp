@@ -73,6 +73,8 @@ Corrected a typo preventing loading.
 Tests for new treatment of type inference context and nested quotations.
 \item[Issues 1.10 (29th October 1992)]
 Changes to match Z theory reorganisation.
+\item[Issues 1.11 (2nd December 1992)]
+Changes to match new treatment of standard-ness etc.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -137,7 +139,15 @@ init_mt_results ();
 open_theory"z_bags";
 TypeInference.set_ti_context[];
 =TEX
-
+The following is a hack which will be unnecessary, but harmless when
+ is properly in place:
+=SML
+case get_zfixity_info "" of
+	Value _ => ()
+|	Nil =>
+¹Z
+fun  _
+°
 \section{SUPPORTING TEST FUNCTIONS}
 
 The functions introduced in this section are using in testing the Z type
@@ -154,19 +164,19 @@ The function $type\_infer$ is a general interface to the type inferrer, taking
 a Z term in string form and producing an inferred Z paragraph.
 
 =SML
-fun Ûtype_inferÝ {quot : bool, standard : bool} (s : string) : Z_INFERRED = (
-let	val parsed = ZParser.z_parser {is_quot=quot, standard=standard}
+fun Ûtype_inferÝ {quot : bool, standard : bool, allow_frees : bool} (s : string) : Z_INFERRED = (
+let	val parsed = ZParser.z_parser {is_quot=quot}
 			(ZLex.z_lex [Lex.Text s]);
 in
-	type_check_z_para {standard = standard} parsed
+	type_check_z_para {standard = standard, allow_frees = allow_frees} parsed
 end);
 =TEX
 The function $formatted\_type\_infer$ produces a formatted form of a type inferred
 Z paragraph. The formatted form should be equivalent to the input for paragraphs
 which are terms.
 =SML
-fun Ûformatted_type_inferÝ {quot : bool, standard : bool} (s : string) : string = (
-	case type_infer {quot=quot, standard = standard} s of
+fun Ûformatted_type_inferÝ {quot : bool, standard : bool, allow_frees : bool} (s : string) : string = (
+	case type_infer {quot=quot, standard = standard, allow_frees = allow_frees} s of
 	ZInferred p => (
 		case p of
 		ZParaTerm ptm => format_z_para_term ptm
@@ -183,17 +193,18 @@ fun Ûelim_spacesÝ (s : string) : string =
 	implode ((explode s) drop (fn c => c mem [" ","	"]));
 
 
-fun Ûtc1Ý (s: string) : string = formatted_type_infer {quot=true, standard=true} s;
-fun Ûtc2Ý (s: string) : string = formatted_type_infer {quot=false, standard=true} s;
+fun Ûtc1Ý (s: string) : string = formatted_type_infer {quot=true, standard=true, allow_frees = false} s;
+fun Ûtc2Ý (s: string) : string = formatted_type_infer {quot=false, standard=true, allow_frees = false} s;
 
 fun Ûtq1Ý s = (elim_spaces s) = (elim_spaces (tc1 s));
 fun Ûtq2Ý s = (elim_spaces s) = (elim_spaces (tc2 s));
 
-fun Ûxc1Ý (s: string) : string = formatted_type_infer {quot=true, standard=false} s;
-fun Ûxc2Ý (s: string) : string = formatted_type_infer {quot=false, standard=false} s;
+fun Ûxc1Ý (s: string) : string = formatted_type_infer {quot=true, standard=false, allow_frees = true} s;
+fun Ûxc2Ý (s: string) : string = formatted_type_infer {quot=false, standard=true, allow_frees = true} s;
 
 fun Ûxq1Ý s = (elim_spaces s) = (elim_spaces (xc1 s));
 fun Ûxq2Ý s = (elim_spaces s) = (elim_spaces (xc2 s));
+fun Ûxq3Ý s1 s2 = (elim_spaces s1) = (elim_spaces (xc1 s2));
 
 =TEX
 =SML
@@ -461,7 +472,7 @@ store_mt_results mt_run_fail' [
 \subsubsection{Schemas as Predicates}
 =SML
 store_mt_results mt_run_ok [
-("mdt062.1801", xq1, "{x:ú · true ± [y:ú] }"),
+("mdt062.1801", xq1, "{x:ú | true ± [y:ú] }"),
 ("mdt062.1802", xq1, "µ x : ú · ([a,b,c:ú])")
 ];
 =TEX
@@ -507,15 +518,6 @@ store_mt_results mt_run_fail' [
 store_mt_results mt_run_ok [
 ("mdt062.2201", xq1, "[(³ [x:ú])]"),
 ("mdt062.2202", xq1, "[(³ ³ ([x:ú]))]")
-];
-=TEX
-The error cases use extended mode for z terms. They all fail because the
-negation is understood to be a predicate negation of a schema as a predicate.
-=SML
-store_mt_results mt_run_fail' [
-("mdt062.2201f", xc1, "[x:ú] = (³ [x:ú])"),
-("mdt062.2202f", xc1, "(³ [x:ú]) = [x:ú]"),
-("mdt062.2203f", xc1, "(³ ³ [x:ú]) = [x:ú]")
 ];
 =TEX
 \subsubsection{Logical Infix Operators for Schemas}
@@ -641,9 +643,18 @@ store_mt_results mt_run_ok [
 ("mdt062.3102", xq1, "99999999")
 ];
 =TEX
-\subsubsection{Type Constraints}
+\subsubsection{Casts}
 The constructor for type constraints is not used, and the ``fat colon''
 is now defined as a global variable in the Z library.
+=SML
+store_mt_results mt_run_ok [
+("mdt062.3201", xq3 "var", "var º X"),
+("mdt062.3202", xq3 "bool", " bool")
+];
+store_mt_results mt_run_fail' [
+("mdt062.3201f", xc2, "1 º ú"),
+("mdt062.3202f", xc2, "(bool)")
+];
 =TEX
 \subsubsection{Local Variables}
 =SML
@@ -703,10 +714,10 @@ We can however test the error cases:
 =SML
 fun Ûtq_formatted_type_inferÝ 
 	(s1 : string) (tm : TERM) (s2 : string) : string = (
-let	val parsed = ZParser.z_parser {is_quot=true, standard=false}
+let	val parsed = ZParser.z_parser {is_quot=true}
 			(ZLex.z_lex [Lex.Text s1, Lex.Term tm, Lex.Text s2]);
 in
-	case type_check_z_para {standard = false} parsed of
+	case type_check_z_para {standard = false, allow_frees = true} parsed of
 			ZInferred p => (
 		case p of
 		ZParaTerm ptm => format_z_para_term ptm
@@ -754,11 +765,11 @@ store_mt_results mt_run_fail' [
 \subsection{Testing the function $make\_chartuple$}
 
 =SML
-val ZInferred p1 = type_infer {quot = true, standard = false} "[x,y:ú]";
+val ZInferred p1 = type_infer {quot = true, standard = false, allow_frees = true} "[x,y:ú]";
 val ZParaTerm (_,ZTmHorizSchema sch1, _) = p1;
-val ZInferred p2 = type_infer {quot = true, standard = false} "[x:ú; y:X]";
+val ZInferred p2 = type_infer {quot = true, standard = false, allow_frees = true} "[x:ú; y:X]";
 val ZParaTerm (_,ZTmHorizSchema sch2, _) = p2;
-val ZInferred p3 = type_infer {quot = true, standard = false} "[x, y : ú; a:X]";
+val ZInferred p3 = type_infer {quot = true, standard = false, allow_frees = true} "[x, y : ú; a:X]";
 val ZParaTerm (_,ZTmHorizSchema sch3, _) = p3;
 
 val do_600i = format_z_tm o fst o make_chartuple;
@@ -781,11 +792,11 @@ store_mt_results (mt_runf ( (op =:))) [
 =TEX
 \subsection{Testing Integration with Type Context Mechanism}
 =SML
-val ZInferred (ZParaTerm(_,_, Value ty7_1)) = type_infer {quot = true, standard = false} "x";
+val ZInferred (ZParaTerm(_,_, Value ty7_1)) = type_infer {quot = true, standard = false, allow_frees = true} "x";
 TypeInference.set_ti_context[¬x:î®, ¬y':î ¸ î®, ¬$"x?":BOOL®];
-val ZInferred (ZParaTerm(_,_, Value ty7_2)) = type_infer {quot = true, standard = false} "x";
-val ZInferred (ZParaTerm(_,_, Value ty7_3)) = type_infer {quot = true, standard = false} "y'";
-val ZInferred (ZParaTerm(_,_, Value ty7_4)) = type_infer {quot = true, standard = false} "x?";
+val ZInferred (ZParaTerm(_,_, Value ty7_2)) = type_infer {quot = true, standard = false, allow_frees = true} "x";
+val ZInferred (ZParaTerm(_,_, Value ty7_3)) = type_infer {quot = true, standard = false, allow_frees = true} "y'";
+val ZInferred (ZParaTerm(_,_, Value ty7_4)) = type_infer {quot = true, standard = false, allow_frees = true} "x?";
 
 =SML
 store_mt_results (mt_runf ( (op =:))) [
