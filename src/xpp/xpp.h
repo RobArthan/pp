@@ -116,6 +116,9 @@ typedef struct menu_item {
 	extern void check_text_window_limit(
 		Widget	w,
 		NAT	max);
+	extern void copy_font_list(
+		Widget	to_text_w,
+		Widget	from_text_w);
 #endif
 #ifndef _xpp
 	extern char *cmd_buf;
