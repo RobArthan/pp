@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.9 2003/05/07 16:32:20 rda Exp rda $
+ * $Id: xpp.c,v 2.10 2003/05/08 11:23:45 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -57,6 +57,8 @@ char *title = BUILDTITLE;
 char *title = "xpp (test version)";
 #endif
 static char *file_name;
+
+static Boolean synchronous;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Following option table reserves single lower-case letter
@@ -174,64 +176,68 @@ void usage (void)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Check whether a command line option matches a given keyword
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+Boolean check_option(char *option,  char*keyword)
+{
+	int l = strlen(option);
+	return	l > 1
+	&&	*option == '-'
+	&&	!strncmp(option + 1, keyword, l - 1);
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * Check whether the -command or -file command-line option is there
  * And set up static data accordingly.
  * Returns number of argv items to skip
  * Error message and exit if no command line at all.
- * Note can omit -command if there are no X options 
- * THIS AREA IS NOT VERY GOOD YET AND NEEDS A BIT MORE DESIGN THOUGHT
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 int check_sep(int argc, char **argv)
 {
-	int l, acc, ro;
-	if(	argc > 1
-	&&	(l = strlen(argv[1])) <= strlen("-readonly")
-	&&	l > 1
-	&&	!strncmp(argv[1], "-readonly", l) ) {
-		global_options.read_only = True;
-		--argc;
-		++argv;
-		ro = 1;
-	} else {
-		ro = 0;
+	int i;
+	Boolean have_file_name = False;
+	synchronous = False;
+	file_name = NULL;
+	for (i = 1; i < argc; i += 1) {
+		if(check_option(argv[i], "blocking")) {
+			synchronous = True;
+		} else if (check_option(argv[i], "readonly")) {
+			global_options.read_only = True;
+		} else if (!have_file_name && check_option(argv[i], "filename")) {
+			if(i + 1 < argc) {
+				file_name = argv[i+1];
+				have_file_name = True;
+				i += 2;
+				break;
+			} else {
+				file_name = "";
+				have_file_name = True;
+			}
+		} else if (check_option(argv[i], "command")) {
+			if(i + 1 < argc) {
+				i += 1;
+				break;
+			} else {
+				usage();
+				exit(1);
+			}
+		} else if (!have_file_name) {
+			file_name = argv[i];
+			have_file_name = True;
+			i += 1;
+			break;
+		} else {
+			i += 1;
+			break;
+		}
 	}
-	if(argc == 1) {
-		file_name = NULL;
-		global_options.edit_only = True;
-		return argc;
-	};
-	if(argc == 2) {
-		file_name = argv[1];
-		global_options.edit_only = True;
-		return argc + ro;
-	};
-	if(	(l = strlen(argv[1])) <= strlen("-file")
-	&&	l > 1
-	&&	!strncmp(argv[1], "-file", l) ) {
-		file_name = argv[2];
-		acc = 2;
-	} else if ( (l = strlen(argv[1])) <= strlen("-command")
-	&&	l > 1
-	&&	!strncmp(argv[1], "-command", l) ) {
-		file_name = NULL;
-		acc = 1;
-	} else {
-		file_name = argv[1];
-		acc = 1;
-	}
-	if(	argc > acc + 1
-	&&	(l = strlen(argv[acc + 1])) <= strlen("-command")
-	&&	!strncmp(argv[acc + 1], "-command", l)
-	&&	l > 1 ) {
-		return acc + ro + 2;
-	} else {
-		global_options.edit_only = (argc == acc + 1);
-		return acc + ro + 1;
-	}
+	global_options.edit_only = i == argc;
+	return i;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Set up non-X arguments
+ * Process non-X options and set up the command line
+ * Note this needs to be an XtMalloced string for various other
+ * parts of the code to work, even in an edit-only session.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static char *get_command_line(int argc, char **argv)
@@ -313,6 +319,14 @@ int main(int argc, char **argv)
 	:	xpp_resources.add_new_line_mode;
 
 	command_line_list = xpp_resources.command_line_list;
+	
+	(void) fcntl(ConnectionNumber(XtDisplay(root)), F_SETFD, 0);
+
+	if(!synchronous) {
+		run_in_background();
+	}
+
+	(void) fcntl(ConnectionNumber(XtDisplay(root)), F_SETFD, 1);
 
 	main_window_go(file_name);
 	return 0;
