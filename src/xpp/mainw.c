@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.20 2002/01/25 00:34:39 rda Exp phil $
+ * $Id: mainw.c,v 2.21 2002/03/18 19:14:49 phil Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -1163,12 +1163,20 @@ static Bool execute_command(void)
 				== EXECUTE_IGNORE_NEW_LINES) {
 			send_to_application(cmd, len);
 		} else if (global_options.add_new_line_mode
-					== EXECUTE_PROMPT_NEW_LINES &&
-			yes_no_cancel_dialog(root, add_new_line_message)) {
-			send_to_application(cmd, len);
-			send_to_application("\n", 1);
+					== EXECUTE_PROMPT_NEW_LINES) {
+			switch(yes_no_cancel_dialog(root,
+					add_new_line_message)) {
+				case 1: /* yes */
+					send_to_application(cmd, len);
+					send_to_application("\n", 1);
+					break;
+				case 0: /* no */
+					send_to_application(cmd, len);
+					break;
+				case -1: /* cancel */
+					break;
+			}
 		}
-				
 		XtFree(cmd);
 		return True;
 	} else {
