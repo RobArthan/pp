@@ -1,4 +1,4 @@
-% imp507.doc  %Z% $Date$ $Revision$ $RCSfile$ 
+% imp507.doc %Z% $Date$ $Revision$ $RCSfile$
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -80,7 +80,9 @@
 \item[Issues 1.108] fix to $form\_proc\_pack\_body\_common$.
 \item[Issue 1.109] made it include auxiliary variables in the type inference context.
 \item[Issues 1.110-1.114] fixing context handling in $form\_proc$ $till\_pred$ etc.
-\item[Issues 1.115] bug 6 (V0.6).
+\item[Issue 1.115] bug 6 (V0.6).
+\item[Issue 1.116] Fixed omitted prefixing of parameter specifications (revealed by fixing bug 4 (V0.6) and running the integration tests (INT508).
+Also implemented remedies for issues 1 and 4 (V0.6).
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1391,14 +1393,16 @@ fun Ûadd_script_theoryÝ (thy : string) : unit = (
 =TEX
 
 The next function adds a new parent to the current theory, and makes an entry of this fact in the current theory's user data.
-The function will not raise $Fail$: if the attempt to add the parent fails then the exception is caught and the error message is output as part of a comment.
+If $allow\_fail$ is true, the function will not raise $Fail$: if the attempt to add the parent fails then the exception is caught and the error message is output as part of a comment.
 =SML
-fun Ûnew_parent_auxÝ (thy : string) : unit = (
+fun Ûnew_parent_auxÝ (allow_fail : bool) (thy : string) : unit = (
 	if	not (thy mem get_parents "-")
 	then	(	new_parent thy;
 			update_user_datum cn_new_parent_ud_key
 				(UD_String(thy, [UD_Int (current_level(),[])])) )
-		handle Fail msg => (
+		handle ex as (Fail msg) =>
+		if allow_fail
+		then	 (
 			if	thy mem get_descendants "min"
 			then	comment "new_parent_aux" 507034
 					[fn () => thy,
@@ -1406,7 +1410,7 @@ fun Ûnew_parent_auxÝ (thy : string) : unit = (
 					fn () => get_message msg]
 			else	comment "new_parent_aux" 507035
 					[fn () => thy, get_current_theory_name]
-		)
+		) else	reraise ex "new_parent_aux"
 	else	()
 );
 =TEX
@@ -1419,10 +1423,10 @@ fun Ûnew_theory_auxÝ (parents : string list) (thy : string) : unit = (
 	(case get_cache_theories () of
 		cthy :: _ => (
 			if	not(cthy mem get_ancestors thy)
-			then	new_parent_aux cthy
+			then	new_parent_aux true cthy
 			else	()
 	) | 	_ => ());
-	map new_parent_aux parents;
+	map (new_parent_aux true) parents;
 	()
 );
 =TEX
@@ -1953,7 +1957,7 @@ fun Ûnew_parent_subunit_theoryÝ (unit_name : string, x : PROPER_BODY) : unit = (
 		));
 		val su_name = unit_name dot subunit_name;
 		val thy = trans_id (su_name ^ "stub");
-	in	new_parent_aux thy;
+	in	new_parent_aux false thy;
 		()
 	end
 );
@@ -3580,6 +3584,15 @@ fun Ûprefix_vardeclÝ (ident : ID) (newids : ID list)
 	}
 );
 =TEX
+=SML
+fun Ûprefix_param_specÝ (ident : ID)
+		(newids : ID list)
+		({mode, var_decl as {vars, tmark}} : PARAM_SPEC)
+			: PARAM_SPEC = (
+	{mode = mode,
+	var_decl = {vars = vars, tmark = prefix_tmark ident newids tmark}}
+);
+=TEX
 When the following is called it is important that the temporary body theory for the package be the current theory and that it be populated with all its types and constants.
 =SML
 fun Ûprefix_spec_stmtÝ (ident : ID)
@@ -3609,7 +3622,10 @@ fun Ûprefix_formal_procÝ (ident : ID)
 	let	val old_cxt = add_params_ti_context formal_ids;
 		val result = {	
 			name = prefix_id ident name,
-			formal_ids = formal_ids,
+			formal_ids =
+				map
+				(prefix_param_spec ident newids)
+				formal_ids,
 			spec = prefix_spec_stmt ident tysubs newids spec};
 	in	set_ti_context old_cxt;
 		result
@@ -3876,7 +3892,7 @@ fun Ûnew_scope_withÝ (ident : ID) : unit = (
 			val block = block_vc_vars(block, vc_vars1);
 			val block = block_vc_aux_vars(block, vc_aux_vars1);
 			val block = block_formal_procs(block, formal_procs1);
-		in	new_parent_aux (pack_spec_name ident);
+		in	new_parent_aux true (pack_spec_name ident);
 			blocks := block :: !blocks
 		end
 	)
@@ -4590,10 +4606,15 @@ The following reflects the SID functions for $package\_specification$:
 *)
 and Ûdo_package_specÝ ({name, visible_decs, private_decs, ...}
 			: DECLARATION PACKAGE_DECLARATION) = (
-	new_scope_pack_spec name;
-	map do_declaration visible_decs;
-	map do_declaration private_decs;
-	end_scope()
+	let	val thy_name = pack_spec_name name;
+	in	if	not (thy_name mem get_theory_names())
+		then (	new_scope_pack_spec name;
+			map do_declaration visible_decs;
+			map do_declaration private_decs;
+			end_scope() )
+		else	fail "do_package_name" 507040
+			[(fn()=>name), (fn()=>thy_name)]
+	end
 )
 (*
 =TEX
