@@ -1,0 +1,863 @@
+% %Z% $Id$
+=TEX
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Detailed Design of the Proof Contexts}  %% Mandatory field
+\TPPref{DS/FMU/IED/DTD076}  %% Mandatory field
+\def\SCCSversion{$Revision$ %
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$ %
+}}
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{SML Literate Script}
+\TPPkeywords{}
+\TPPauthor{K.Blackburn & WIN01}
+\TPPauthorisation{R.D. Arthan & FST Team Leader}
+\TPPabstract{This document contains the detailed design
+of the proof contexts supplied for theories up to theory ``hol''.}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	    Library
+}}
+\begin{document}
+\makeTPPfrontpage
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History} 
+\begin{description}
+\item[Issue 1.1] 
+First version.
+\end{description}
+\subsection{Changes Forecast}
+As experience with proof contexts improves.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+Various proof contexts are called for in Appendix A
+of \cite{DS/FMU/IED/HLD011}.
+This document provides a detailed design for these tools,
+using much the same words.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+The mechanism of proof contexts is discussed in \cite{DS/FMU/IED/HLD009}, and is implemented in \cite{DS/FMU/IED/DTD051}.
+There are however many proof contexts provided within 
+the HOL PDS, implemented in various subsystems.
+The sum of these should provide a coherent set,
+with some proof contexts being appropriate
+to be pushed onto the proof context stack in their
+own right, and others allowing detail in creating
+proof contexts based in part on existing context material.
+
+This document describes these proof contexts.
+\subsubsection{Dependencies}
+This documents proof contexts require
+theories $hol$ and $sets$ (thus \cite{DS/FMU/IED/IMP044})
+and structures $Resolution$ and $ExistenceProofs$
+(thus \cite{DS/FMU/IED/IMP058} and \cite{DS/FMU/IED/IMP067}).
+\subsubsection{Deficiencies}
+None known.
+\subsubsection{Possible Enhancements}
+None known.
+
+\section{DESIGN ISSUES}
+A proof context is made visible to the user for one of
+two reasons:
+\begin{enumerate}
+\item
+It is a useful proof context to push on the proof context in its own right - a ``complete proof context''.
+It provides appropriate material for a particular ``place of work'' within the theory hierarchy.
+For instance, the initially set proof context, ``hol'',
+falls into this category.
+
+A naive user will be first exposed to this kind of proof context.
+\item
+The proof context contains appropriate material for one subject
+(characteristically a theory, and a way of reasoning within that theory), and is used in creating
+custom proof contexts from the merge of pre-existing
+ones  (and perhaps new material).
+This is called a ``component proof context''.
+\end{enumerate}
+A supplied complete proof context will be primarily the merge of some component proof contexts,
+with perhaps some additional material reflecting the completeness.
+This additional material will be kept to a minimum in
+supplied complete proof contexts.
+
+There will not be a complete proof context for each possible ``place of work'',
+but just sufficient to cover the ``places of work'' recommended to the naive user.
+
+One distinction that can be drawn between proof contexts is their level of ``aggression'': they may be referred to as ``mild'' or ``aggressive''.
+A ``mild'' proof context is designed to only do things
+that are considered to be ``always'' wanted - e.g. standard
+rewriting simplification for the subject of the proof context.
+An aggressive proof context will be written with the aim of 
+``prove if possible'', and will not ``care'' about 
+the results upon items that cannot be proven by proof context alone.
+This includes aggressive use of extensionality of functions and sets.
+
+Roughly, the relationship in supplied proof contexts between stripping material and rewriting
+material is that the stripping is a subset
+of rewriting material that deals with boolean valued terms.
+Other differences arise when precise forms of conclusion
+are required to aid further stripping - this
+is most apparent in proof context ``predicates''.
+\section{THE SUPPLIED PROOF CONTEXTS}
+In the following the initial paragraph indicates whether
+the proof context is complete or a component,
+and its ``place of work'' or subject;
+the ``Contents'' paragraph indicates the contents, perhaps
+with reference to previous component proof contexts;
+and the ``Usage'' paragraph indicates the minimum theories
+required in scope, and interactions with other proof contexts.
+In stating the contents of fields entered into discrimination
+nets the index into the net will be,
+unless otherwise stated, the least general index
+that matches all applications of the item.
+
+=DOC
+val €supplied_prove_tac› : THM list -> TACTIC;
+=DESCRIBE
+This is the tactic used for the automated proof tactic (the $pr\_tac$ field) of most
+supplied proof contexts,
+and is a reasonable general-purpose automatic proof tactic.
+
+In summary it should:
+\begin{enumerate}
+\item
+Extract the assumption list, rewrite each extracted assumption with the current
+default rewrite rules and supplied theorems, and strip the results back into the assumption list.
+\item
+Attempt to rewrite the resulting goal's conclusion with the current
+default rewrite rules and supplied theorems.
+\item
+Repeatedly apply $strip\_tac$ to the conclusions of the resulting goals.
+\item
+Attempt to prove each of the resulting goals with resolution for up to 3 resolution steps, with goal's negated conclusion
+as a resolvant that must be used, and the assumptions as possible
+other resolvants.
+This has no effect on any resulting goal if it is unsolved.
+\item
+Attempt to prove each of the resulting goals with resolution for up to 3 resolution steps amongst
+just the assumptions.
+This has no effect on any resulting goal if it is unsolved.
+\end{enumerate}
+
+Note that either stripping step may result in more than one subgoal, and thus the plural ``resulting goals''.
+
+Under the current interface to
+resolution this is
+=GFT
+fun supplied_prove_tac thms =
+DROP_ASMS_T (MAP_EVERY (strip_asm_tac o rewrite_rule thms)) THEN
+(TRY_T (rewrite_tac thms)) THEN
+REPEAT strip_tac THEN_TRY
+(basic_res_tac2 3 [] ORELSE_T basic_res_tac4 3 [])
+=TEX
+=ENDDOC
+=DOC
+val €supplied_prove_conv› : THM list -> CONV;
+=DESCRIBE
+This is the conversion used for the automatic proof conversion ($pr\_tac$ field) of most
+supplied proof contexts,
+and is a reasonable general-purpose automatic proof conversion.
+It will either prove the theorem with the given conclusion, or fail.
+
+In summary it should:
+\begin{enumerate}
+\item
+Set the term as the goal of the subgoal package.
+\item
+Attempt to rewrite the term with the current
+default rewrite rules and supplied theorems.
+\item
+Repeatedly apply $strip\_tac$ to the goal.
+\item
+Attempt to prove the resulting goals with resolution for up to 3 resolution steps, with goal's negated conclusion
+as a resolvant that must be used, and the assumptions as possible
+other resolvants.
+This has no effect on any resulting goal if it is unsolved.
+\item
+Attempt to prove the resulting goals with resolution for up to 3 resolution steps amongst
+just the assumptions.
+This has no effect on any resulting goal if it is unsolved.
+\item
+If the proof is successful, return 
+=INLINEFT
+Ù term § T
+=TEX
+{} and otherwise fail.
+\end{enumerate}
+
+Note that in the stripping step may result in more than one subgoal, and thus the plural ``resulting goals''.
+
+Under the current interface to
+resolution this is
+=GFT
+fun supplied_prove_conv thms tm =
+§_t_intro (
+tac_proof(([],tm),
+	TRY_T (rewrite_tac thms)  THEN 
+	REPEAT strip_tac THEN_TRY
+	(basic_res_tac2 3 [] ORELSE_T basic_res_tac4 3 []))
+)
+=TEX
+=FAILUREC
+76001	Could not prove theorem with conclusion ?0
+=ENDDOC
+=DOC
+(* Proof Context: €simple_abstractions› *)
+=DESCRIBE
+A component proof context for handling only simple abstractions in stripping and canonicalisation.
+\paragraph{Contents}
+
+Rewriting:
+=GFT
+=TEX
+Stripping theorems:
+=GFT
+simple_≥_in_conv
+=TEX
+Stripping conclusions:
+=GFT
+simple_≥_in_conv
+=TEX
+Rewriting canonicalisation:
+=GFT
+simple_µ_rewrite_canon, simple_≥_rewrite_canon
+=TEX
+Automatic proof procedures are respectively $supplied\-\_prove\-\_tac$,
+$supplied\-\_prove\-\_conv$ and $basic\-\_prove\-\_∂\-\_conv$.
+
+\paragraph{Usage Notes}
+Not to be used with ``paired$\_$abstractions'' as ``domains'' overlap, requires
+theory $basic\_hol$.
+=ENDDOC
+
+=DOC
+(* Proof Context: €paired_abstractions› *)
+=DESCRIBE
+A component proof context for handling simple and paired abstractions in stripping and canonicalisation.
+\paragraph{Contents}
+
+Rewriting:
+=GFT
+¬_conv
+=TEX
+Stripping theorems:
+=GFT
+≥_in_conv, ∂â1_conv, 
+µ_uncurry_conv, ∂_uncurry_conv
+=TEX
+Stripping conclusions:
+=GFT
+≥_in_conv, µ_uncurry_conv
+=TEX
+Rewriting canonicalisation:
+=GFT
+µ_rewrite_canon, ≥_rewrite_canon
+=TEX
+Automatic proof procedures are respectively $supplied\-\_prove\-\_tac$,
+$supplied\-\_prove\-\_conv$ and $basic\-\_prove\-\_∂\-\_conv$.
+
+\paragraph{Usage Notes}
+Not to be used with ``simple\-$\_$abstractions'', requires
+theory $basic\_hol$.
+=ENDDOC
+
+=DOC
+(* Proof Context: €propositions› *)
+=DESCRIBE
+A component proof context for reasoning about propositions.
+\paragraph{Contents}
+
+Rewriting:
+=GFT
+eq_rewrite_thm, §_rewrite_thm, ≥_rewrite_thm,
+±_rewrite_thm, ≤_rewrite_thm, ¥_rewrite_thm,
+if_rewrite_thm, µ_rewrite_thm, ∂_rewrite_thm,
+¬_rewrite_thm, simple_¬_conv, eta_axiom
+=TEX
+Stripping theorems:
+=GFT
+¥_thm, §_thm, simple_∂â1_conv,
+`Ù µ x ∑ ((x = x) § T) ± (≥(x = x) § F)`,
+`Ù µ a t1 t2∑ (if a then t1 else t2) § (a ¥ t1) ± (≥ a ¥ t2)`
+=TEX
+Note these are intended to be used with $(simple\_)$ $≥\_\-in\_conv$
+from ``paired$\-\_$abstractions''
+or ``simple$\-\_$abstractions'',
+which covers the cases of an outermost $≥$ for each operator.
+
+Stripping conclusions:
+=GFT
+§_thm,
+`Ù µ x ∑ ((x = x) § T) ± (≥(x = x) § F)`,
+`Ù µa b∑(a ≤ ≥b) § (b ¥ a)`
+`Ù µ a b∑ ≥ a ≤ b § a ¥ b`
+`Ù µ a b∑ a ≤ b § ≥ a ¥ b`
+`Ù µ a t1 t2∑ (if a then t1 else t2) § (a ¥ t1) ± (≥ a ¥ t2)`
+=TEX
+Note that the above are intended to be used in combination with $(simple\_)$ $≥\_\-in\-\_conv$
+from ``paired$\-\_$abstractions''
+or ``simple$\-\_$abstractions'',
+which covers the cases of an outermost $≥$ for each operator.
+
+Rewriting canonicalisation:
+=GFT
+±_rewrite_canon, f_rewrite_canon
+=TEX
+Automatic proof procedures are respectively $taut\-\_tac$,
+$taut\-\_conv$ and
+$prove\-\_∂\-\_conv$.
+\paragraph{Usage Notes}
+Usually used in conjunction with ``paired$\-\_$abs\-tractions''
+or ``simple$\-\_$abs\-tractions'', requires theory $basic\_hol$.
+
+=IGN
+Perhaps also a new conversion embedding $type\_lemmas\_thm$
+and then rewriting with representation function definition
+could be embedded in the theorem stripper, to handle type definitions.
+=TEX
+=ENDDOC
+
+=DOC
+(* Proof Context: €fun_ext› *)
+=DESCRIBE
+An component proof context for adding reasoning using
+functional extensionality.
+\paragraph{Contents}
+
+Rewriting:
+=GFT
+ext_thm
+=TEX
+Stripping theorems:
+=GFT
+ext_thm
+=TEX
+Stripping conclusions:
+=GFT
+ext_thm
+=TEX
+Rewriting canonicalisation:
+=GFT
+=TEX
+Automatic proof procedures are respectively $taut\-\_tac$,
+$taut\-\_conv$ and
+$prove\-\_∂\-\_conv$.
+\paragraph{Usage Notes}
+Normally used in conjunction with ``propositions'', requires theory $basic\_hol$.
+=ENDDOC
+
+=DOC
+(* Proof Context: €predicates› *)
+=DESCRIBE
+A ``mild'' complete proof context for reasoning about the predicate
+calculus, including paired abstractions.
+\paragraph{Contents}
+Proof contexts ``paired$\_$abstractions'' and ``propositions''.
+Automatic proof procedures are respectively $supplied\-\_prove\-\_tac$,
+$supplied\-\_prove\-\_conv$ and $basic\-\_prove\-\_∂\-\_conv$.
+
+\paragraph{Usage Notes}
+Requires theory $basic\_hol$.
+=ENDDOC
+
+=DOC
+(* Proof Context: €predicates1› *)
+=DESCRIBE
+An complete proof context for reasoning about the predicate
+calculus, including paired abstractions and functional extensionality.
+\paragraph{Contents}
+Proof contexts ``paired$\_$abstractions'', ``propositions'' and ``fun\_ext''.
+
+Automatic proof procedures are respectively $supplied\-\_prove\-\_tac$,
+$supplied\-\_prove\-\_conv$ and $basic\-\_prove\-\_∂\-\_conv$.
+\paragraph{Usage Notes}
+Requires theory $basic\_hol$.
+=ENDDOC
+
+=DOC
+(* Proof Context: €pair› *)
+=DESCRIBE
+A mild component proof context for theory $pair$.
+\paragraph{Contents}
+
+Rewriting(selected from $pair\_clauses$):
+=GFT
+`Ù µ x y a b p fu fc
+    ∑ Fst (x, y) = x
+      ± Snd (x, y) = y
+      ± ((a, b) = (x, y) § a = x ± b = y)
+      ± (Fst p, Snd p) = p
+      ± Curry fc x y = fc (x, y)
+      ± Uncurry fu (x, y) = fu x y
+      ± Uncurry fu p = fu (Fst p) (Snd p)`
+=TEX
+Stripping theorems:
+=GFT
+`Ù µ a b x y ∑ ((a, b) = (x, y) § a = x ± b = y)`
+=TEX
+Stripping conclusions:
+=GFT
+`Ù µ a b x y ∑ ((a, b) = (x, y) § a = x ± b = y)`
+=TEX
+Existential variable structures:
+=GFT
+`Ù µ x y p ∑
+	Fst (x, y) = x ±
+	Snd (x, y) = y ±
+	(Fst p, Snd p) = p`
+=TEX
+Automatic proof procedures are respectively $supplied\-\_prove\-\_tac$,
+$supplied\-\_prove\-\_conv$ and $basic\-\_prove\-\_∂\-\_conv$.
+
+\paragraph{Usage Notes}
+Requires theory $basic\_hol$.
+=ENDDOC
+
+=DOC
+(* Proof Context: €pair1› *)
+=DESCRIBE
+An aggressive component proof context for theory $pair$.
+\paragraph{Contents}
+
+Rewriting:
+=GFT
+`Ù µ a b p
+    ∑ ((a, b) = p § a = Fst p ± b = Snd p)
+      ± (p = (a, b) § Fst p = a ± Snd p = b)`
+=TEX
+Stripping theorems (selected from $pair\_clauses$):
+=GFT
+`Ù µ a b p
+    ∑ ((a, b) = p § a = Fst p ± b = Snd p)
+      ± (p = (a, b) § Fst p = a ± Snd p = b)`
+=TEX
+Stripping conclusions:
+=GFT
+`Ù µ a b p
+    ∑ ((a, b) = p § a = Fst p ± b = Snd p)
+      ± (p = (a, b) § Fst p = a ± Snd p = b)`
+=TEX
+Existential variable structures:
+=GFT
+=TEX
+Automatic proof procedures are respectively $supplied\-\_prove\-\_tac$,
+$supplied\-\_prove\-\_conv$ and $basic\-\_prove\-\_∂\-\_conv$.
+
+\paragraph{Usage Notes}
+Requires theory $basic\_hol$, expected to be used in combination
+with ``pair''.
+=ENDDOC
+
+=DOC
+(* Proof Context: €Ó› *)
+=DESCRIBE
+A ``mild'' component proof context for theory $Ó$.
+\paragraph{Contents}
+
+Rewriting:
+=GFT
+æ_def, greater_def, plus_clauses, times_clauses,
+º_clauses, less_clauses, minus_clauses
+=TEX
+Stripping theorems:
+=GFT
+æ_def, greater_def, plus_clauses, times_clauses,
+º_clauses, less_clauses, minus_clauses
+=TEX
+Stripping conclusions:
+=GFT
+æ_def, greater_def, plus_clauses, times_clauses,
+º_clauses, less_clauses, minus_clauses
+=TEX
+Existential clausal definition theorems:
+=GFT
+prim_rec_thm
+=TEX
+Automatic proof procedures are respectively $supplied\-\_prove\-\_tac$,
+$supplied\-\_prove\-\_conv$ and $basic\-\_prove\-\_∂\-\_conv$.
+
+\paragraph{Usage Notes}
+Requires theory $basic\_hol$.
+=ENDDOC
+
+=DOC
+(* Proof Context: €Ó_lit› *)
+=DESCRIBE
+A component proof context for theory $Ó$,
+that will, e.g., evaluate any arithmetic expression
+involving only literals.
+\paragraph{Contents}
+
+Rewriting:
+=GFT
+plus_conv, times_conv, minus_conv, div_conv, 
+mod_conv, º_conv, less_conv, greater_conv, 
+æ_conv, Ó_eq_conv
+=TEX
+Stripping theorems:
+=GFT
+º_conv, less_conv, greater_conv, 
+æ_conv, Ó_eq_conv
+=TEX
+Stripping conclusions:
+=GFT
+º_conv, less_conv, greater_conv, 
+æ_conv, Ó_eq_conv
+=TEX
+Existential clausal definition theorems:
+=GFT
+=TEX
+Automatic proof procedures are respectively $supplied\-\_prove\-\_tac$,
+$supplied\-\_prove\-\_conv$ and $basic\-\_prove\-\_∂\-\_conv$.
+
+\paragraph{Usage Notes}
+Requires theory $basic\_hol$, expected to be used with proof context ``$Ó$''.
+It is separated from it as spotting the application of the conversions
+is time consuming, and may be known to be irrelevant.
+=ENDDOC
+
+=DOC
+(* Proof Context: €list› *)
+=DESCRIBE
+A component proof context for the theory $list$
+\paragraph{Contents}
+
+Rewriting:
+=GFT
+list_clauses
+=TEX
+
+Stripping theorems:
+=GFT
+` Ù µ x1 x2 list1 list2
+    ∑ ≥ Cons x1 list1 = []
+      ± ≥ [] = Cons x1 list1
+      ± (Cons x1 list1 = Cons x2 list2 § x1 = x2 ± list1 = list2)`
+=TEX
+Stripping conclusions:
+=GFT
+` Ù µ x1 x2 list1 list2
+    ∑ ≥ Cons x1 list1 = []
+      ± ≥ [] = Cons x1 list1
+      ± (Cons x1 list1 = Cons x2 list2 § x1 = x2 ± list1 = list2)`
+=TEX
+Existential clausal definition theorems:
+=GFT
+list_prim_rec_thm
+=TEX
+Automatic proof procedures are respectively $supplied\-\_prove\-\_tac$,
+$supplied\-\_prove\-\_conv$ and $basic\-\_prove\-\_∂\-\_conv$.
+
+\paragraph{Usage Notes}
+Requires theory $list$.
+=ENDDOC
+
+=DOC
+(* Proof Context: €char› *)
+=DESCRIBE
+A component proof context for theory $char$
+\paragraph{Contents}
+
+Rewriting:
+=GFT
+char_eq_conv, string_eq_conv
+=TEX
+Stripping theorems:
+=GFT
+char_eq_conv, string_eq_conv
+=TEX
+Stripping conclusions:
+=GFT
+char_eq_conv, string_eq_conv
+=TEX
+
+\paragraph{Usage Notes}
+Requires theory $basic\_hol$.
+=ENDDOC
+
+=DOC
+(* Proof Context: €basic_hol› *)
+=DESCRIBE
+A ``mild'' complete proof context for the ancestors of theory $basic\_hol$.
+\paragraph{Contents}
+Proof contexts ``predicates'', ``pair, ``$Ó$'', ``list'', and ``char''.
+Automatic proof procedures are respectively $supplied\-\_prove\-\_tac$,
+$supplied\-\_prove\-\_conv$ and $basic\-\_prove\-\_∂\-\_conv$.
+\paragraph{Usage Notes}
+Requires theory $basic\_hol$.
+=ENDDOC
+
+=DOC
+(* Proof Context: €basic_hol1› *)
+=DESCRIBE
+An ``aggressive'' complete proof context for the ancestors of theory $basic\_hol$.
+\paragraph{Contents}
+Proof contexts ``predicates1'', ``pair'', ``pair1'', ``$Ó$'', ``$Ó\_$lit'', ``list'', and ``char''.
+Automatic proof procedures are respectively $supplied\-\_prove\-\_tac$,
+$supplied\-\_prove\-\_conv$ and $basic\-\_prove\-\_∂\-\_conv$.
+\paragraph{Usage Notes}
+Requires theory $basic\_hol$.
+=ENDDOC
+
+=DOC
+(* Proof Context: €sum› *)
+=DESCRIBE
+A component proof context for theory $sum$
+\paragraph{Contents}
+
+Rewriting:
+=GFT
+` Ù µ x1 x2 y1 y2 z
+    ∑ (InL x1 = InL x2 § x1 = x2)
+      ± (InR y1 = InR y2 § y1 = y2)
+      ± ≥ InL x1 = InR y1
+      ± ≥ InR y1 = InL x1
+      ± OutL (InL x1) = x1
+      ± OutR (InR y1) = y1`
+=TEX
+Stripping theorems:
+=GFT
+` Ù µ x1 x2 y1 y2 z
+    ∑ (InL x1 = InL x2 § x1 = x2)
+      ± (InR y1 = InR y2 § y1 = y2)
+      ± ≥ InL x1 = InR y1
+      ± ≥ InR y1 = InL x1`
+=TEX
+Stripping conclusions:
+=GFT
+` Ù µ x1 x2 y1 y2 z
+    ∑ (InL x1 = InL x2 § x1 = x2)
+      ± (InR y1 = InR y2 § y1 = y2)
+      ± ≥ InL x1 = InR y1
+      ± ≥ InR y1 = InL x1`
+=TEX
+Existential clausal definition theorems:
+=GFT
+`Ù µ f g∑ ∂â1 h∑ (µ x∑ h (InL x) = f x) ± (µ x∑ h (InR x) = g x)`
+=TEX
+Automatic proof procedures are respectively $supplied\-\_prove\-\_tac$,
+$supplied\-\_prove\-\_conv$ and $basic\-\_prove\-\_∂\-\_conv$.
+
+\paragraph{Usage Notes}
+Requires theory $sum$.
+=ENDDOC
+
+=DOC
+(* Proof Context: €one› *)
+=DESCRIBE
+A component proof context for  theory $one$
+\paragraph{Contents}
+
+Rewriting (these both have the problem that their discrimination
+net entry will match anything):
+=GFT
+one_def, one_fns_thm
+=TEX
+Stripping theorems:
+=GFT
+` Ù µ x y : ONE ∑ (x = y) § T`
+` Ù µ x y : 'a ≠ ONE ∑ (x = y) § T`
+=TEX
+Stripping conclusions:
+=GFT
+` Ù µ x y : ONE ∑ (x = y) § T`
+` Ù µ x y : 'a ≠ ONE ∑ (x = y) § T`
+=TEX
+Automatic proof procedures are respectively $supplied\-\_prove\-\_tac$,
+$supplied\-\_prove\-\_conv$ and $basic\-\_prove\-\_∂\-\_conv$.
+
+\paragraph{Usage Notes}
+Requires theory $one$.
+=ENDDOC
+
+=DOC
+(* Proof Context: €combin› *)
+=DESCRIBE
+A component proof context for theory $combin$
+\paragraph{Contents}
+
+Rewriting:
+=GFT
+comb_i_def, comb_k_def, o_def, o_i_thm
+=TEX
+
+Stripping theorems:
+=GFT
+=TEX
+Stripping conclusions:
+=GFT
+=TEX
+Automatic proof procedures are respectively $supplied\-\_prove\-\_tac$,
+$supplied\-\_prove\-\_conv$ and $basic\-\_prove\-\_∂\-\_conv$.
+
+\paragraph{Usage Notes}
+Requires theory $combin$.
+=ENDDOC
+In the above $comb\_s\_def$ seems less appropriate as an ``always rewriter'', as the number of symbols after rewriting, even if the arguments to $CombS$
+are variables, only remains the same.
+
+=DOC
+(* Proof Context: €sets_alg› *)
+=DESCRIBE
+A mild component proof context for theory $set$.
+\paragraph{Contents}
+
+Rewriting:
+=GFT
+ç_comp_conv, ç_enum_set_conv, complement_clauses, 
+¿_clauses, °_clauses, set_dif_clauses,
+Ä_clauses, †_clauses, ﬁ_clauses, 
+•_clauses, _clauses
+` Ù µ x y
+	∑ ≥ x ç {}
+        ± x ç Universe
+        ± (x ç {y} § x = y)`
+=TEX
+Last one is new.
+
+Stripping theorems:
+=GFT
+ç_comp_conv, ç_enum_set_conv, ç_in_clauses
+Ä_clauses, †_clauses
+`Ù µ x ∑ x ç Universe`
+plus these all pushed in through ≥
+=TEX
+Last three are new.
+
+Stripping conclusions:
+=GFT
+ç_comp_conv, ç_enum_set_conv, ç_in_clauses
+Ä_clauses, †_clauses
+`Ù µ x ∑ x ç Universe`
+plus these all pushed in through ≥
+=TEX
+Last three are new.
+
+$ö\_clauses$ is covered by the other
+$\_clauses$ material anyway is not currently complete.
+$sets\_clauses$ sees some overlap with other theorems.
+
+Automatic proof procedures are respectively $supplied\-\_prove\-\_tac$,
+$supplied\-\_prove\-\_conv$ and $basic\-\_prove\-\_∂\-\_conv$.
+\paragraph{Usage Notes}
+Should not be used with proof context ``sets$\_$ext'', requires theory $sets$.
+=ENDDOC
+
+=DOC
+(* Proof Context: €sets_ext› *)
+=DESCRIBE
+A component proof context for theory $set$, aggressively using
+the extensionality of sets.
+\paragraph{Contents}
+
+Rewriting:
+=GFT
+ç_comp_conv, ç_enum_set_conv, ç_in_clauses, sets_ext_clauses
+`Ù µ x ∑ x ç Universe`
+=TEX
+Stripping theorems:
+=GFT
+ç_comp_conv, ç_enum_set_conv, ç_in_clauses, sets_ext_clauses
+`Ù µ x ∑ x ç Universe`
+plus these all pushed in through ≥
+=TEX
+Stripping conclusions:
+=GFT
+ç_comp_conv, ç_enum_set_conv, ç_in_clauses sets_ext_clauses
+`Ù µ x ∑ x ç Universe`
+plus these all pushed in through ≥
+=TEX
+Automatic proof procedures are respectively $supplied\-\_prove\-\_tac$,
+$supplied\-\_prove\-\_conv$ and $basic\-\_prove\-\_∂\-\_conv$.
+
+\paragraph{Usage Notes}
+Should not be used with proof context ``sets$\_$alg'', requires theory $sets$.
+=ENDDOC
+
+=DOC
+(* Proof Context: €hol› *)
+=DESCRIBE
+A ``mild'' complete proof context for the ancestors of theory $hol$
+\paragraph{Contents}
+Proof contexts ``basic$\_$hol'', ``sum'', ``combin'', and ``sets$\_$alg''.
+
+Automatic proof procedures are respectively $supplied\-\_prove\-\_tac$,
+$supplied\-\_prove\-\_conv$ and $basic\-\_prove\-\_∂\-\_conv$.
+
+\paragraph{Usage Notes}
+Requires theory $hol$.
+=ENDDOC
+
+=DOC
+(* Proof Context: €hol1› *)
+=DESCRIBE
+An ``aggressive'' complete proof context for the ancestors of theory $hol$
+\paragraph{Contents}
+Proof contexts ``basic$\_$hol1'', ``one'', ``sum'', ``combin'', and ``sets$\_$ext''.
+
+Automatic proof procedures are respectively $supplied\-\_prove\-\_tac$,
+$supplied\-\_prove\-\_conv$ and $basic\-\_prove\-\_∂\-\_conv$.
+\paragraph{Usage Notes}
+Requires theory $hol$.
+=ENDDOC
+
+=IGN
+SPARE COPY SPARE COPY SPARE COPY SPARE COPY SPARE COPY 
+
+ =DOC
+(* Proof Context: €› *)
+ =DESCRIBE
+A component proof context for 
+\paragraph{Contents}
+
+Rewriting:
+ =GFT
+ =TEX
+Stripping theorems:
+ =GFT
+ =TEX
+Stripping conclusions:
+ =GFT
+ =TEX
+
+\paragraph{Usage Notes}
+Requires theory $$.
+ =ENDDOC
+=TEX
+
+\section{EPILOGUE}
+=SML
+end; (* of signature  *)
+=TEX
+\subsection{TEST POLICY}
+The integration tests for this subsystem are to follow the general
+guidelines laid down in \cite{DS/FMU/IED/PLN008}.
+
+Testing of proof contexts is done primarily to
+demonstrate presence, rather than correct functioning.
+This is because the proof contexts will be built from toolsand theorems
+that are better tested directly.
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+
