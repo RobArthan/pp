@@ -174,6 +174,10 @@ void get_pty()
 		tio.c_lflag &= ~NOFLSH;
 		tio.c_lflag &= ~TOSTOP;
 
+		tio.c_oflag &= ~OLCUC;
+		tio.c_oflag &= ~ONLCR;
+		tio.c_oflag |= OCRNL;
+
 		tio.c_cc[VINTR] = CINTR;
 
 		if(ioctl(0, TCSETS, &tio) < 0 ) {
