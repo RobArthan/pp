@@ -62,7 +62,7 @@ Library
 \bibliography{fmu}
 \subsection{Changes History}
 \begin{description}
-\item[Issue \SCCSversion (27 February 1992)] First Draft.
+\item[Issue 1.19 (22 July 1992)] First draft since production of module tests.
 \end{description}
 \subsection{Changes Forecast}
 None Known.
@@ -82,7 +82,7 @@ declaration for the Z type inference module is introduced
 at the end of the document.
 
 In section \ref{InfRules}, the inference rules
-are introduced and each is desribed in a fixed format:
+are introduced and each is described in a fixed format:
 \begin{description}
 \item[Value Constructor]
 The name and type of the value constructor describes the part of the
@@ -113,16 +113,18 @@ The type inferrer's job is to ensure that each of
 these rules are obeyed in the process
 of type checking a Z specification comprising
 Z paragraphs interspersed with Z text.
-A Correctly typed Z paragraph results
-in either an indication of success (in {\bf Type Check
-Only Mode}), or a helpful error message, returned
-to the caller with the intention of the caller
-reporting the error to the user.
+A Correctly typed Z paragraph yields a paragraph decorated in the appropriate
+places with types, and transformed according to the transformation rules described
+in section \ref{transformations}.
+An incorrectly typed Z paragraph yields error information in a datatype private
+to the type inferrer. This can be displayed to the user in a formatted manner using
+the interface $print\_z\_error$ provided by this module.
 
 \subsubsection{Dependencies}
-The signature for the Z type inferrer requires
-the signature for unification
-described in \cite{DS/FMU/IED/DTD014}.
+The signature for the Z type inferrer, $ZTypeInference$ requires
+the signature $Unification$ and the modules which support the Z user
+interface, $ZUserInterfaceSupport$
+described in \cite{DS/FMU/IED/DTD014} and \cite{DS/FMU/IED/DTD079} respectively.
 
 \subsubsection{Interface}
 The interface to the Z type inferrer is intended to be
@@ -130,27 +132,25 @@ called only by the Z paragraph handling
 routines, and is defined in the
 signature $ZTypeInference$ introduced in section \ref{Signature}. 
 
-\subsubsection{Possible Enhancements}
-None known.
 \subsubsection{Deficiencies}
-None.
+There is no type variable representation of schemas, so that when a schema type is
+inferred for some variable, other occurrences of that variable
+do not acquire that type correctly since the information is not recorded in
+the substitution function. For example, in the predicate, $p ± p = [x:ú]$, the type
+of the first occurrence of $p$ is $'a$ and not $(ú) Z'S[x]$.
+
+The type inference of sequences of binary relations as described
+in section \ref{seqbinrel} has not yet been implemented.
+
+\subsubsection{Possible Enhancements}
+Unification for binding types could be supported. This would be a costly to achieve
+which is why this version of the type inferrer does not do it.
 
 \section{DESIGN ISSUES}
 
 \subsection{Interfaces Provided}
 
-A function is required which takes a Z paragraph, type
-checks the paragraph and returns error information
-if type checking error was detected, or a type-checked
-Z paragraph together with a substitution function, mapping
-type unknowns to actual extended types. The substitution
-function is intended for use by the term generator.
-
-There is an additional requirement for type checking
-a limited variety of Z paragraphs connected by the ``\&''
-symbol. This necessitates that the environment containing
-the types of variables inferred be available to
-the inferrer when checking the next paragraph.
+See section \ref{Signature}
 
 \subsection{Error Handling}\label{ErrorHandling}
 
@@ -175,8 +175,6 @@ provided. This type is equated (in the implementation)
 with an actual data structure which is private to the
 implementation of the type inferrer.
 
-\subsubsection{Format of Error Messages}
-
 It is desirable that type checking error messages
 are consistent regarding style and format. Therefore all
 error messages generated comprise the following components:
@@ -187,11 +185,10 @@ the term being constructed when the error was detected
 \item
 a summary of the inference rule which was being applied
 \item
-the types of the manipulana which were being used in applying
-the rule
+the types of the sub-terms which comprise the erroneous term
 \end{enumerate}
 
-See section ({\bf Error Messages} of \ref{FirstRule}) for
+See section (\ref{FirstRule} ``Error Messages'') for
 an example of an error message following this format.
 
 \subsection{Standard Versus Extended Z}
@@ -214,42 +211,111 @@ It is less likely that the user will want to check
 this against the standard Z language, but will want
 to check it against extended Z.
 
+
+\section{TRANSFORMATIONS APPLIED IN TYPE INFERENCE}\label{transformations}
+
+\subsection{Variables}
+
+All variables in terms and expressions which are received by the type inferrer
+default to local, since the parser is unable to distinguish between local and
+global variables.
+During type inference, type inferrer builds up and environment which records
+the names and types of variables and wgether they are locally bound variables,
+global variables, or free variables. Those which are global, determined by their
+presence in the current theory (or in its ancestry), are converted to global variables
+in the abstract syntax tree ($ZTmGVar$). Free and locally bound variables are represented
+in as local variables in the tree ($ZTmLVar$). 
+
+
+\subsection{True and False}
+
+True and false are communicated to the type inferrer by the parser as
+local variables which the type inferrer recognises and converts them to the
+abstract syntax construct, $ZTmTruth true$ and $ZTmTruth false$ as appropriate.
+
+\subsection{Membership and Equality}
+
+The parser generates membership and equality constructs as functional application.
+The type inferrer recognizes these as special cases of application and a term using
+the membership or equality constructors ($ZTm$ or $ZTmEq$) as appropriate.
+
+\subsection{Schemas as Predicates}
+
+In places where schemas can appear as predicates, they default to being interpreted
+(in the abstract syntax) as predicates. The constructor $ZTmSchemaPred$ is
+inserted by the type inferrer to represent the coercion of a schema as a predicate.
+This is done for example in implementation of the inference rule for predicate
+negation and for logical infix operators for predicates.
+
+
+\subsection{Relations}
+
+A relation when applied to some argument or arguments is transformed into a statement
+of membership of those arguments to the relation by the type inferrer.
+For example, $R\  x‰1$ is transformed into $x‰1  (R\  \_)$; similarly
+$x‰1\  R\  x‰2$ is transformed into $(x‰1, x‰2)\  \  (\_\  R\  \_)$.
+
+\subsection{Sequences of Binary Relations}\label{seqbinrel}
+
+An expression of the form $x‰1 R\  x‰2\  ±\  x‰2 R\  x‰3 ± ... ± sèn-1ê\  R\  x‰n$
+where $R$ is a binary relation
+can be written in the shorthand form $x‰1\   R\   x‰2\  R\  x‰3 ... R x‰n$
+\cite{DS/FMU/IED/DEF007}.
+
+The type inferrer infers the types of each $x$ from left to right remembering
+the substitution as as it goes. It also transforms an abbreviated binary relation
+to the conjuntion of all the individual relational expressions.
+
+\subsection{Free Type Definition Arguments}
+
+See section \ref{freetypedef}.
+
 \section{ERROR MESSAGES}
 
+The following error messages are general error messages which can result from
+several kinds of typing error. They are grouped here for convenience.
+
 =FAILURE
-62000	Type error
 62001	Type error in ñ?0®
 62002	Type error in Z paragraph
-62900	   ñ?0:?1®
-62901	   ñ?0®
-62902	Type ñ?0® inferred for the following element?1:
-62903	The following type was inferred:
-62904	The following types were inferred:
-62910	The following sub-term is not a set
-62911	The following sub-term is not a sequence
-62912	The following sub-term is not a predicate
-62913	The following sub-term is not a schema
-62914	The following sub-term is not a binding
-62915	The following sub-term is not a tuple
-62916	The following identifier appears more than once
-62917	The following identifiers appear more than once
-62920	Encountered schemas which are incompatible
-62921	The incompatibilities are as follows:
-62922	In ñ?0®,
-62923	Attempt to quantify over components not present in the schema
-62924	In the declaration,
-62925	In the current scope,
-62950	The argument must have length greater than zero
-62951	Unexpected stub or end of string found
-62952	Unexpected trailing characters found
-62953	Strange value returned from dest_z_name
-62954	Type is not a binding type
-62955	Type is not a tuple
-62980	Free variables are not permitted in Standard Z specifications
-62981	The following variable is free:
+62003	   ñ?0:?1®
+62004	   ñ?0®
+62005	Type ñ?0® inferred for the following element?1:
+62006	The following type was inferred:
+62007	The following types were inferred:
+=TEX
+
+=FAILURE
+62700	The following sub-term is not a set
+62701	The following sub-term is not a sequence
+62702	The following sub-term is not a predicate
+62703	The following sub-term is not a schema
+62704	The following sub-term is not a binding
+62705	The following sub-term is not a tuple
+62706	The following sub-term is not a generic global variable
+=TEX
+
+=FAILURE
+62601	In ñ?0®,
+62602	In the declaration,
+62603	In the current scope,
+62611	The following identifier appears more than once
+62612	The following identifiers appear more than once
+62621	Encountered schemas which are incompatible
+62622	The incompatibilities are as follows:
+62623	Attempt to quantify over components not present in the schema
+62631	Free variables are not permitted in Standard Z specifications
+62632	The following variable is free:
+=TEX
+=FAILURE
+62901	Type inferrer internal error: ?0
 =TEX
 
 \section{INFERRING TYPES IN Z DECLARATIONS}
+=GFTSHOW Value Constructor
+ZDec of IDENT list * Z_TM * EXTYPE OPT
+ZSchemaDec of Z_TM * EXTYPE OPT
+=TEX
 
 The algorithm for type inferring Z declarations is as follows:
 
@@ -267,7 +333,7 @@ the extended environment.
 The following inference rule applies to typed declarations.
 =FRULE 1 Rule
 ÷
-E « {x‰1 í ?1, ..., x‰n í ?n} ô Ó :: ð Ó
+E « {x‰1 í Ô‰1, ..., x‰n í Ô‰n} ô Ó :: ð Ó
 ÷
 E ô x‰1, ..., x‰n : ð Ó
 =TEX
@@ -280,7 +346,7 @@ are in scope. This ensures conformance with the Z mapping described in
 
 
 
-The following rule applies to schemes as declarations.
+The following rule applies to schemas as declarations.
 
 =FRULE 1 Rule
 ÷
@@ -292,28 +358,60 @@ E ô S : ð [x1; ... ; xn]
 ñ([x : 1])®;
 Type error in ñ([x : 1])®
 In a declaration of the form ña : X®, ñX® must be a set
+The following sub-term is not a set
+   ñ1:ú®
 =TEX
 =EXAMPLE
 ñ([A])®;
 Type error in ñ([A])®
 In a declaration of the form ñX®, ñX® must be a schema
+The following sub-term is not a schema
+   ñA:'a®
+=TEX
+\paragraph{Error Codes}~
+
+=FAILURE
+62501	In a declaration of the form ña : X®, ñX® must be a set
+62502	In a declaration of the form ñX®, ñX® must be a schema
+62503	In a schema as a predicate ñS®, the components of S must be
+62504	   compatible with the corresponding variables in scope
+62505	In a declaration of a variable ñx®, all occurrences of ñx®
+62506	   must be compatible
+=TEX
+
+\section{INFERRING TYPES IN Z SCHEMA TEXTS}\label{tischematext}
+=GFTSHOW Type Definition
+type Z_SCH_TEXT = Z_DEC list * Z_TM OPT * EXTYPE OPT
+=TEX
+
+=FRULE 1 Rule
+x‰is are the vars. introduced in D
+÷
+E « {x‰1 í Ô‰1, ..., x‰n í Ô‰n} ô P :: bool
+÷
+E ô D | P
+=TEX
+
+=DESCRIBE
+A schema text has no type as such; however, the part of the schema after
+the bar must be a predicate in an environment extended
+by all the variables introduced
+by the declaration.
+
+\paragraph{Error Messages}~
+
+=EXAMPLE
+ñ[x:ú|0]®;
+Type error in ñx : ú | 0®
+In a schema of the form ñ[D | P]®, P must be a predicate
+The following sub-term is not a predicate
+   ñ0:ú®
 =TEX
 
 \paragraph{Error Codes}~
 
 =FAILURE
-62501	In a declaration of the form ña : X®, ñX® must be a set
-62503	In a declaration of the form ñX®, ñX® must be a schema
-62504	In a schema as a predicate ñS®, the components of S must be
-62505	   compatible with the corresponding variables in scope
-62506	In a declaration of a variable ñx®, all occurrences of ñx®
-62507	   must be compatible
-=TEX
-
-\section{INFERRING TYPES IN Z SCHEMAS}\label{tischematext}
-
-=FAILURE
-62502	In a schema of the form ñ[D | P]®, P must be a predicate
+62510	In a schema of the form ñ[D | P]®, P must be a predicate
 =TEX
 
 
@@ -391,7 +489,7 @@ Type ñú¸ú® inferred for the following element:
 \subsection{Set Display}
 
 =GFTSHOW Value Constructor
-|ZTmSetd of EXTYPE OPT * Z_TM list
+ZTmSetd of EXTYPE OPT * Z_TM list
 =TEX
 =FRULE 1 Rule
 unifiable[Ó‰1, ..., Ó‰n]
@@ -439,8 +537,8 @@ Type ñú¸ú® inferred for the following element:
 \subsection{Set Abstraction}
 
 =GFTSHOW Value Constructor
-|ZTmSeta1 of Z_SCH_TEXT
-|ZTmSeta2 of Z_SCH_TEXT * Z_TM
+ZTmSeta1 of Z_SCH_TEXT
+ZTmSeta2 of Z_SCH_TEXT * Z_TM
 =TEX
 
 =FRULE 1 Rule
@@ -472,10 +570,10 @@ declarations in $D$ are in scope.
 
 \paragraph{Error Messages}~
 =EXAMPLE
-ñ{x | 0}®;
-Type error in ñ{x | 0}®
+ñ{x:X | 0}®;
+Type error in ñ{x : X | 0}®
 In a term of the form  ñ{D | P}®, P must be a predicate
-The following sub-term is not a predicate:
+The following sub-term is not a predicate
    ñ0:ú®
 =TEX
 \paragraph{Error Codes}~
@@ -489,7 +587,7 @@ The following sub-term is not a predicate:
 \subsection{Powerset}
 
 =GFTSHOW Value Constructor
-|ZTmð of Z_TM
+ZTmð of Z_TM
 =TEX
 =FRULE 1 Rule
 ÷
@@ -520,7 +618,7 @@ The following sub-term is not a set:
 \subsection{Tuple Display}
 
 =GFTSHOW Value Constructor
-|ZTmTuple of Z_TM list
+ZTmTuple of Z_TM list
 =TEX
 =FRULE 1 Rule
 ÷
@@ -540,14 +638,15 @@ There are no error conditions associated with this construct.
 \subsection{Binding Display}
 
 =GFTSHOW Value Constructor
-|ZTmBinding of Z_TM list
+ZTmBinding of Z_EQ_DEF list
 =TEX
 =FRULE 1 Rule
-the x‰i are pairwise distinct
+the x‰is are pairwise distinct
 ÷
 E ô t‰1 :: Ó‰1; ...; E ô t‰n :: Ó‰n
 ÷
-E ô (x‰1 ¦ t‰1, ..., x‰1 ¦ t‰n) :: binding [x‰1 : Ó‰1; ...; x‰n : Ó‰n]
+E ô (x‰1 ¦ t‰1, ..., x‰n ¦ t‰n)
+	:: binding [x‰1 : Ó‰1; ...; x‰n : Ó‰n]
 =TEX
 =DESCRIBE
 The type of a binding display is
@@ -560,7 +659,7 @@ expression in the binding display.
 =EXAMPLE
 ñ(a¦1, b¦2, a¦2)®;
 Type error in ñ(a¦1, b¦2, a¦2)®
-In a binding display ñ(x‰1 ¦ t‰1, ..., x‰1 ¦ t‰n)®
+In a binding display ñ(x‰1 ¦ t‰1, ..., x‰n ¦ t‰n)®
    no ñx‰i® may appear more than once
 The following identifier appears more than once
    ña®
@@ -569,7 +668,7 @@ The following identifier appears more than once
 \paragraph{Error Codes}~
 
 =FAILURE
-62051	In a binding display ñ(x‰1 ¦ t‰1, ..., x‰1 ¦ t‰n)®
+62051	In a binding display ñ(x‰1 ¦ t‰1, ..., x‰n ¦ t‰n)®
 62052	   no ñx‰i® may appear more than once
 =TEX
 
@@ -577,7 +676,7 @@ The following identifier appears more than once
 \subsection{Product}
 
 =GFTSHOW Value Constructor
-|ZTm¸ of Z_TM list
+ZTm¸ of Z_TM list
 =TEX
 =FRULE 1 Rule
 ÷
@@ -601,7 +700,7 @@ Type ñú® inferred for the following elements:
 =TEX
 \paragraph{Error Codes}~
 =FAILURE
-62061	In ñS‰1 ¸ ... ¸ S‰n®, S‰1 to S‰n must be sets
+62071	In ñS‰1 ¸ ... ¸ S‰n®, S‰1 to S‰n must be sets
 =TEX
 
 
@@ -609,14 +708,22 @@ Type ñú® inferred for the following elements:
 \subsection{Theta}
 
 =GFTSHOW Value Constructor
-|ZTmÊ of Z_TM * DECOR
+ZTmÊ of Z_TM * DECOR
 =TEX
 
 =FRULE 1 Rule
 ÷
-E ô x :: [x‰1 : Ó‰1; ...; x‰n : Ó‰n]
+E ô x :: ð [x‰1 : Ó‰1; ...; x‰n : Ó‰n]
 ÷
-E ô Ê x :: binding [x‰1 : Ó‰1; ...; x‰n : Ó‰n]
+E ô Ê x :: [x‰1 : Ó‰1; ...; x‰n : Ó‰n]
+=TEX
+
+=FRULE 1 Rule
+d is in {', ?, !} or a combination thereof
+÷
+E ô x :: ð [x‰1 : Ó‰1; ...; x‰n : Ó‰n]
+÷
+E ô Ê x d :: [x‰1 : Ó‰1; ...; x‰n : Ó‰n]
 =TEX
 
 =DESCRIBE
@@ -636,20 +743,20 @@ The following sub-term is not a schema:
 \paragraph{Error Codes}~
 
 =FAILURE
-62071	In a term of the form ñÊ S®, S must be a schema
+62081	In a term of the form ñÊ S®, S must be a schema
 =TEX
 
 
 \subsection{Tuple Selection}
 
 =GFTSHOW Value Constructor
-|ZTmSel‰T of Z_TM * int
+ZTmSel‰T of Z_TM * int
 =TEX
 =FRULE 1 Rule
 ÷
-E ô x‰1 :: Ó‰1; ...; E ô x‰n :: Ó‰n
+E ô t :: Ó‰1 ¸ ... ¸ Ó‰n; E ô i :: (1 .. n)
 ÷
-E ô (x‰1, ..., x‰n).i :: Ó‰i
+E ô t.i :: Ó‰i
 =TEX
 =DESCRIBE
 In a tuple selection where the $i'th$ element of the
@@ -661,7 +768,7 @@ If an out-of-range element is selected, then an
 error is reported.
 
 =EXAMPLE
-ñ(20,30,40).4®
+ñ(20,30,40).4®;
 Type error in ñ(20,30,40).4®
 In ñ(x‰1, ..., x‰n).i®, ñi® must be in the range ñ1 .. n®
 The selector ñ4® is not in the range ñ1 .. 3®
@@ -675,9 +782,9 @@ The following sub-term is not a tuple:
 
 \paragraph{Error Codes}~
 =FAILURE
-62086	In ñ(x‰1, ..., x‰n).i®, ñi® must be in the range ñ1 .. n®
-62087	The selector ñ?0® is not in the range ñ1 .. ?0®
-62088	In a term of the form ñT.number®, T must be a tuple
+62096	In ñ(x‰1, ..., x‰n).i®, ñi® must be in the range ñ1 .. n®
+62097	The selector ñ?0® is not in the range ñ1 .. ?1®
+62098	In a term of the form ñT.number®, T must be a tuple
 =TEX
 
 
@@ -685,11 +792,11 @@ The following sub-term is not a tuple:
 \subsection{Binding Selection}
 
 =GFTSHOW Value Constructor
-|ZTmSel‰B of Z_TM * IDENT
+ZTmSel‰B of Z_TM * IDENT
 =TEX
 =FRULE 1 Rule
 ÷
-E ô t ::  binding [x‰1 : Ó‰1; ...; x‰n : Ó‰n ]
+E ô t :: [x‰1 : Ó‰1; ...; x‰n : Ó‰n]
 ÷
 E ô t.x‰i :: Ó‰i
 =TEX
@@ -705,10 +812,10 @@ component.
 
 =EXAMPLE
 ñ(Ê [x : X]).c®;
-Type error in ñ(Ê S).c®
+Type error in ñ(Ê [x:X]).c®
 The selected component must be present in the binding
     The component ñc®
-is not present in ñ(Ê S)®
+is not present in ñ(Ê [x:X])®
 =TEX
 =EXAMPLE
 ñ1.c®;
@@ -720,18 +827,18 @@ The following sub-term is not a binding:
 \paragraph{Error Codes}~
 
 =FAILURE
-62081	The selected component must be present in the binding
-62082	    The component ñ?0®
-62083	is not present in ñ?0®
-62084	In a term of the form ñB.c®, B must be a binding
+62101	The selected component must be present in the binding
+62102	    The component ñ?0®
+62103	is not present in ñ?0®
+62104	In a term of the form ñB.c®, B must be a binding
 =TEX
 
 
 \subsection{Application}
 
 =GFTSHOW Value Constructor
-|ZTmApp of Z_TM * Z_TM
-|ZTmFancyApp of IDENT * Z_TM
+ZTmApp of Z_TM * Z_TM
+ZTmFancyApp of IDENT * Z_TM
 =TEX
 
 =FRULE 1 Rule
@@ -742,26 +849,15 @@ E ô x‰1 :: Ó‰1; E ô x‰2 :: Ó‰2
 E ô x‰1 x‰2 :: Ó‰?
 =TEX
 
-=FRULE 1 Rule
-÷
-E ô x‰1 :: ð Ó; E ô x‰2 :: Ó
-÷
-E ô x‰1 x‰2 :: bool
-=TEX
-
 =DESCRIBE
 The typing rules for application and for fancy-fix application are almost
 the same. In fancy-fix application where the first argument is an identifier, the
 type inferrer has to look up in the environment the type of the identifier.
 Type inference then proceeds as for normal function application.
 
-There are two typing rules for application, as shown above. The first
+The typing rule
 requires the argument to be in the domain of the operator. The resulting
 type is unknown and will be resolved by the context of the application.
-
-The second rule is a functional way of writing set membership. The set
-followed by an argument yields true if the argument is present in the set. Otherwise
-it yields false.
 
 \paragraph{Error Messages}~
 =EXAMPLE
@@ -773,9 +869,9 @@ Cannot apply ñ1:ú®
 =TEX
 \paragraph{Error Codes}~
 =FAILURE
-62091	In ñf a® where ña:X®, ñf® must have type ñð(X ¸ ?)®
-62092	Cannot apply ñ?0:?1®
-62093	          to ñ?0:?1®
+62111	In ñf a® where ña:X®, ñf® must have type ñð(X ¸ ?)®
+62112	Cannot apply ñ?0:?1®
+62113	          to ñ?0:?1®
 =TEX
 
 
@@ -783,11 +879,12 @@ Cannot apply ñ1:ú®
 \subsection{Ì-abstraction}\label{tilambda}
 
 =GFTSHOW Value Constructor
-|ZTmÌ of Z_SCH_TEXT * Z_TM
+ZTmÌ of Z_SCH_TEXT * Z_TM
 =TEX
 =FRULE 1 Rule
 ÷
-E « env(D | P) ô chartuple(D | P) :: Ó‰1; E « env(D | P) ô x :: Ó‰2;
+E « env(D | P) ô chartuple(D | P) :: Ó‰1;
+E « env(D | P) ô x :: Ó‰2;
 ÷
 E ô Ì D | P · x :: ð(Ó‰1 ¸ Ó‰2)
 =DESCRIBE
@@ -805,7 +902,7 @@ See section \ref{tischematext}.
 \subsection{Definite Description}
 
 =GFTSHOW Value Constructor
-|ZTmÍ1 of Z_SCH_TEXT
+ZTmÍ1 of Z_SCH_TEXT
 =TEX
 =FRULE 1 Rule
 ÷
@@ -815,7 +912,7 @@ E ô Í D | P :: Ó
 =TEX
 
 =GFTSHOW Value Constructor
-|ZTmÍ2 of Z_SCH_TEXT * Z_TM
+ZTmÍ2 of Z_SCH_TEXT * Z_TM
 
 =FRULE 1 Rule
 ÷
@@ -832,7 +929,7 @@ See section \ref{tischematext}.
 \subsection{Truth}
 
 =GFTSHOW Value Constructor
-|ZTmTruth of bool
+ZTmTruth of bool
 =DESCRIBE
 The parser should not generate terms constructed with the constructor
 $ZTmTruth$ since truth and falsity are communicated as local variables, whic
@@ -842,7 +939,7 @@ appropriate.
 \subsection{Predicate Negation}
 
 =GFTSHOW Value Constructor
-|ZTm³‰F of Z_TM
+ZTm³‰F of Z_TM
 =TEX
 =FRULE 1 Rule
 ÷
@@ -857,8 +954,10 @@ E ô x :: bool
 E ô ³  x :: bool
 =TEX
 =DESCRIBE
-The argument must be a predicate (represented by having a type of BOOL),
-and its negation is also a predicate.
+If the operand is a schema, then it is
+coerced to be a predicate (using the constructor
+$ZTmSchemaPred$). The arguments are then boolean, and the resulting
+types is boolean.
 
 \paragraph{Error Messages}~
 =EXAMPLE
@@ -879,7 +978,7 @@ The following sub-term is not a predicate:
 
 
 =GFTSHOW Value Constructor
-|ZTmLogInOp‰F of Z_IN_OP * Z_TM * Z_TM
+ZTmLogInOp‰F of Z_LOG_IN_OP * Z_TM * Z_TM
 =TEX
 
 =FRULE 1 Rule
@@ -894,22 +993,27 @@ E ô x‰1 — x‰2 :: bool
 E ô x‰1 :: ð [ y‰1 : Ó‰1; ...; y‰n : Ó‰n ]
 E « {y‰1 í Ó‰1, ..., y‰n í Ó‰n} ô x‰2 :: bool
 ÷
-E « {y‰1 í Ó‰1, ..., y‰n í Ó‰n} ô x‰1 — x‰2 :: bool
+E « {y‰1 í Ó‰1, ..., y‰n í Ó‰n}
+	ô x‰1 — x‰2 :: bool
 =TEX
 
 =FRULE 1 Rule
 ÷
 E ô x‰1 :: ð [y‰1 : Ó‰1; ...; y‰m : Ó‰m]
-E « {y‰1 í Ó‰1, ..., y‰n í Ó‰n} ô x‰2 :: ð [z‰1 : Ô‰1; ...; z‰n : Ô‰n]
+E « {y‰1 í Ó‰1, ..., y‰n í Ó‰n}
+	ô x‰2:: ð [z‰1 : Ô‰1; ...; z‰n : Ô‰n]
 ÷
-E « {y‰1 í Ó‰1, ..., y‰n í Ó‰n, z‰1 í Ô‰1, ..., z‰n í Ô‰n} ô x‰1 — x‰2 :: bool
+E « {y‰1 í Ó‰1, ..., y‰n í Ó‰n,
+	z‰1 í Ô‰1, ..., z‰n í Ô‰n}
+	ô x‰1 — x‰2 :: bool
 =TEX
 =FRULE 1 Rule
 ÷
 E ô x‰1 :: bool
 E ô x‰2 :: ð [ y‰1 : Ó‰1; ...; y‰n : Ó‰n ]
 ÷
-E « {y‰1 í Ó‰1, ..., y‰n í Ó‰n} ô x‰1 — x‰2 :: bool
+E « {y‰1 í Ó‰1, ..., y‰n í Ó‰n}
+	ô x‰1 — x‰2 :: bool
 =TEX
 =DESCRIBE
 The rules for conjunction, disjunction, bi-equivalence
@@ -919,7 +1023,7 @@ $—$ is one of `±', `²', `¤', `´' or ";".
 If either or both of the operands are schemas, then the appropriate
 operand(s) are coerced to be predicates (using the constructor
 $ZTmSchemaPred$). The arguments are then both boolean, and the resulting
-typs is boolean.
+types is boolean.
 
 If either of the operands are neither schemas nor predicates, then an
 error is raised.
@@ -945,11 +1049,12 @@ Logical Infix Operators for Schemas (Section \ref{loginopschemas}).
 \subsection{Predicate Quantification}
 
 =GFTSHOW Value Constructor
-|ZTmQuant‰F of Z_QUANT * Z_SCH_TEXT * Z_TM
+ZTmQuant‰F of Z_QUANT * Z_SCH_TEXT * Z_TM
 =TEX
 =FRULE 1 Rule
 ÷
-E « env (D | P) ô x :: ð [y‰1 : Ó‰1; ...; y‰n : Ó‰n]
+E « env (D | P)
+	ô x :: ð [y‰1 : Ó‰1; ...; y‰n : Ó‰n]
 ÷
 E ô Q D | P · x :: bool
 =TEX
@@ -972,7 +1077,7 @@ and the rule is similar to that for schemas.
 \paragraph{Error Messages}~
 
 =EXAMPLE
-ñµ x : X | true · x®;
+ñ[X](µ x : X | true · x)®;
 Type error in ñµ x : X | true · x®
 In an expression of the form ñ?0 D | P · x®, ñx® must be a predicate
 The following sub-term is not a predicate:
@@ -980,7 +1085,7 @@ The following sub-term is not a predicate:
 =TEX
 
 =FAILURE
-62162	In an expression of the form ñ?0 D | P · x®, ñx® must be a predicate
+62171	In an expression of the form ñ?0 D | P · x®, ñx® must be a predicate
 =TEX
 
 
@@ -988,34 +1093,40 @@ The following sub-term is not a predicate:
 \subsection{Schemas as Predicates}
 
 =GFTSHOW Value Constructor
-|ZTmSchemaPred of Z_TM
+ZTmSchemaPred of Z_TM
 =TEX
+=DESCRIBE
 Schemas as predicates constructed with the above value constructor
 are rejected by the type inferrer. Such things are only created
 by the type inferrer.
-=DESCRIBE
+
 \paragraph{Error Messages}~
 None.
 
 \subsection{Horizontal Schemas}
 
 =GFTSHOW Value Constructor
-|ZTmHorizSchema of Z_SCH_TEXT
+ZTmHorizSchema of Z_SCH_TEXT
 =TEX
 =FRULE 1 Rule
 ÷
 E ô x‰1 :: Ó‰1; ...; E  ô x‰n :: Ó‰n
 ÷
-E ô [x‰1 : Ó‰1; ...; x‰n : Ó‰n] :: ð [x‰1 : Ó‰1; ...; x‰n : Ó‰n]
+E ô [x‰1 : Ó‰1; ...; x‰n : Ó‰n]
+	:: ð [x‰1 : Ó‰1; ...; x‰n : Ó‰n]
 =TEX
 =FRULE 1 Rule
 ÷
 E ô x‰1 :: Ó‰1; ... E  ô x‰n :: Ó‰n
 E ô y : bool
 ÷
-E ô [x‰1 : Ó‰1; ... x‰n : Ó‰n | y] :: ð [x‰1 : Ó‰1; ...; x‰n : Ó‰n]
+E ô [x‰1 : Ó‰1; ... x‰n : Ó‰n | y]
+	:: ð [x‰1 : Ó‰1; ...; x‰n : Ó‰n]
 =TEX
 =DESCRIBE
+If the schema text which comprises the horizontal schema type-infers
+correctly, then the type of the schema is a powerset of bindings
+containin the components of the schema.
 \paragraph{Error Messages}~
 See section \ref{tischematext}
 
@@ -1023,45 +1134,56 @@ See section \ref{tischematext}
 \subsection{Decoration}
 
 =GFTSHOW Value Constructor
-|ZTmDecor of Z_TM * DECOR
+ZTmDecor of Z_TM * DECOR
 =TEX
 =FRULE 1 Rule
+d is in {', ?, !} or a combination thereof
 ÷
 E ô x :: ð [y‰1 : Ó‰1; ...; y‰n : Ó‰n]
 ÷
-E ô x' :: ð [y‰1' : Ó‰1; ...; y‰n' : Ó‰n]
+E ô x d :: ð [y‰1 d : Ó‰1; ...; y‰n d : Ó‰n]
 =TEX
 =DESCRIBE
+The type of a decorated schema is the set of bindings whose components
+are each decorated with the decoration applied to the schema.
+
+Note that a variable which ends in one of the decoration characters
+is treated as an identifier if the identifier stripped of its decoration
+systematically, is not found to be a schema (see the rules for decoration
+in \cite{DS/FMU/IED/DEF007}.
+
 \paragraph{Error Messages}~
 =EXAMPLE
-ñ1'®;
-Type error in ñ1'®
+ñ(a=b)'®;
+Type error in ñ(a=b)'®
 Only schemas may be decorated
 The following sub-term is not a schema:
-   ñ1:ú®
+   ñ(a=b):ú®
 =TEX
 \paragraph{Error Codes}~
 
 =FAILURE
-62131	Only schemas may be decorated
+62201	Only schemas may be decorated
 =TEX
-
-
 
 \subsection{Precondition}
 
 =GFTSHOW Value Constructor
-|ZTmPre of Z_TM
+ZTmPre of Z_TM
 =TEX
 =FRULE 1 Rule
+no Ó‰i = Ô‰j or Ó‰i = Õ‰j
 ÷
-E ô w :: ð [x‰1' : Ó‰1; ...; x‰i' : Ó‰i; y‰1! : Ô‰1; ...; y‰j! : Ô‰j;
-		z‰1 : Õ‰1; ...; z‰k : Õ‰k]
+E ô w :: ð [x‰1' : Ó‰1; ...; x‰m' : Ó‰m;
+	y‰1! : Ô‰1; ...; y‰n! : Ô‰n;
+	z‰1 : Õ‰1; ...; z‰k : Õ‰k]
 		
 ÷
 E ô pre w :: ð [z‰1 : Õ‰1; ...; z‰k : Õ‰k]
 =TEX
 =DESCRIBE
+A type of a precondition of a schema is the set of bindings which
+result in removing components decorated with $!$ and $'$.
 =TEX
 \paragraph{Error Messages}~
 =EXAMPLE
@@ -1074,14 +1196,14 @@ The following sub-term is not a schema:
 \paragraph{Error Codes}~
 
 =FAILURE
-62141	In a schema expression of the form ñpre S®, ñS® must be a schema
+62211	In a schema expression of the form ñpre S®, ñS® must be a schema
 =TEX
 
 
 
 \subsection{Schema Negation}
 =GFTSHOW Value Constructor
-|ZTm³‰S of Z_TM
+ZTm³‰S of Z_TM
 =TEX
 =FRULE 1 Rule
 ÷
@@ -1090,10 +1212,16 @@ E ô x :: ð [y‰1 : Ó‰1; ...; y‰n : Ó‰n]
 E ô ³ x :: ð [y‰1 : Ó‰1; ...; y‰n : Ó‰n]
 =TEX
 =DESCRIBE
+Negation is interpreted as schema negation only in those
+contexts where the negated schema must also be a schema (and
+not a schema as a predicate).
+In a schema negation of the form ñ³ S®, the type of the expression
+is the same as the type of ñS®.
+
 \paragraph{Error Messages}~
 
 =EXAMPLE
-ñ³ 1®;
+ñ[(³ 1)]®;
 Type error in ñ³ 1®
 In a schema expression of the form ñ³ S®, S must be a schema
 The following sub-term is not a schema:
@@ -1102,7 +1230,7 @@ The following sub-term is not a schema:
 \paragraph{Error Codes}~
 =TEX
 =FAILURE
-62142	In a schema expression of the form ñ³ S®, S must be a schema
+62221	In a schema expression of the form ñ³ S®, S must be a schema
 =TEX
 
 
@@ -1110,81 +1238,92 @@ The following sub-term is not a schema:
 \subsection{Logical Infix Operators for Schemas}\label{loginopschemas}
 
 =GFTSHOW Value Constructor
-|ZTmLogInOp‰S of Z_IN_OP * Z_TM * Z_TM
+ZTmLogInOp‰S of Z_LOG_IN_OP * Z_TM * Z_TM
 =FRULE 1 Rule
 no Ó‰i = Ô‰j or Ó‰i = Õ‰j
 ÷
-E ô w‰1 :: ð [x‰1 : Ó‰1; ...; x‰k : Ó‰k; y‰1 : Ô‰1; ...; y‰m : Ô‰m]
+E ô w‰1 :: ð [x‰1 : Ó‰1; ...; x‰k : Ó‰k;
+	y‰1 : Ô‰1; ...; y‰m : Ô‰m]
 
-E ô w‰2 :: ð [x‰1 : Ó‰1; ...; x‰k : Ó‰k; z‰1 : Õ‰1; ...; z‰n : Õ‰n]
+E ô w‰2 :: ð [x‰1 : Ó‰1; ...; x‰k : Ó‰k;
+	z‰1 : Õ‰1; ...; z‰n : Õ‰n]
 ÷
-E ô w‰1 — x‰2 :: ð [x‰1 : Ó‰1; ...; x‰i : Ó‰i; y‰1 : Ô‰1; ...; y‰m : Ô‰m;
-			z‰1 : Õ‰1; ...; z‰n : Õ‰n]
+E ô w‰1 — x‰2 :: ð [x‰1 : Ó‰1; ...; x‰i : Ó‰i;
+	y‰1 : Ô‰1; ...; y‰m : Ô‰m;
+	z‰1 : Õ‰1; ...; z‰n : Õ‰n]
 =TEX
 
-The rules for conjunction, disjunction, bi-equivalence
-and implication are the same.
-$dy$ is one of `±', `²', `¤' or `´', and
-$compatible$ is supposed to represent a test that
-its two operands are compatible binding types.
+=DESCRIBE
+$—$ is one of `±', `²', `¤', `´' or `;'.
 
-To implement these rules we first type infer the operands.
-If they both have manifest schema types we can perform
-the compatibility test (unifying types of common components
-as we go) and things are straightforward.
-If they both have manifest boolean types all is well.
-If one type is a manifest schema type and the other
-is a manifest boolean type we enclose the schema operand
-in a schema-as-term construct ($ZTmschema$) if it is not
-already enclosed in one (because in this case it must
-really be a schema-as-predicate).
-If the types do not fit any of these cases we flag an error.
+Logical infix operators for
+schemas are interpreted as schema operators only in those
+contexts where the result must also be a schema (and
+not a schema as a predicate).
+
+The rules for conjunction, disjunction, bi-equivalence
+and implication are the same. The operands must be compatible.
+
 =TEX
 \paragraph{Error Messages}~
 =EXAMPLE
-ña ± 1®;
-Type error in ña ± 1®
-In a term of the form ñP ± Q®, P and Q must be predicates
-The following sub-term is not a predicate:
+ñ[[x:X] ± 1]®;
+Type error in ñ[x:X] ± 1®
+In a term of the form ñS ± T®, S and T must be schemas
+The following sub-term is not a schema:
    ñ1:ú®
+=TEX
+=EXAMPLE
+ñ[[x:X] ± [x: (X ¸ X)]]®;
+Type error in ñ[x : X] ± [x : (X ¸ X)]®
+In an expression of the form ñS ± T®, S and T must be compatible schemas
+The incompatibilities are as follows:
+In ñ[x : X]®,
+   ñx:'a®
+In ñ[x : (X ¸ X)]®,
+   ñx:('a ¸ 'a)®
 =TEX
 \paragraph{Error Codes}~
 
 =FAILURE
-62167	In an expression of the form ñS ?0 T®, S and T must be schemas
-62168	In an expression of the form ñS ?0 T®, S and T must be compatible schemas
+62231	In an expression of the form ñS ?0 T®, S and T must be schemas
+62232	In an expression of the form ñS ?0 T®, S and T must be compatible schemas
 =TEX
 
 
 \subsection{Schema Projection}
 
 =GFTSHOW Value Constructor
-|ZTmù of Z_TM * Z_TM
+ZTmù of Z_TM * Z_TM
 =TEX
 =FRULE 1 Rule
 no Ó‰i = Ô‰j or Ó‰i = Õ‰j
 ÷
-E ô w‰1 :: ð [x‰1 : Ó‰1; ...; x‰k : Ó‰k; y‰1 : Ô‰1; ...; y‰m : Ô‰m]
-E ô w‰2 :: ð [x‰1 : Ó‰1; ...; x‰k : Ó‰k; z‰1 : Õ‰1; ...; z‰n : Õ‰n]
+E ô w‰1 :: ð [x‰1 : Ó‰1; ...; x‰k : Ó‰k;
+	y‰1 : Ô‰1; ...; y‰m : Ô‰m]
+E ô w‰2 :: ð [x‰1 : Ó‰1; ...; x‰k : Ó‰k;
+	z‰1 : Õ‰1; ...; z‰n : Õ‰n]
 ÷
-E ô w‰1 ù w‰2 :: ð [x‰1 : Ó‰1; ...; x‰k : Ó‰k; z‰1 : Õ‰1; ...; z‰n : Õ‰n]
+E ô w‰1 ù‰s w‰2 :: ð [x‰1 : Ó‰1; ...; x‰k : Ó‰k;
+	z‰1 : Õ‰1; ...; z‰n : Õ‰n]
 =TEX
 =DESCRIBE
-We insist that the types of the sub-terms be manifest
-schema types.
+Both the operands of the schema projection must be compatible schemas.
+The type of the result is a schema.
+
 =TEX
 \paragraph{Error Messages}~
 =EXAMPLE
-ñ[x : X] ù 1®;
-Type error in ñ[x : X] ù 1®
-In a term of the form ñS ù T®, S and T must be schemas
+ñ[x : X] ù‰s 1®;
+Type error in ñ[x : X] ù‰s 1®
+In a term of the form ñS ù‰s T®, S and T must be schemas
 The following sub-term is not a schema:
    ñ1:ú®
 =TEX
 =EXAMPLE
-ñ[x, y : X] ù [x : Y]®;
-Type error in ñ[x, y : X] ù [x : Y]®
-In a term of the form ñS ù T®, S and T must be compatible schemas
+ñ[X,Y] [x, y : X] ù‰s [x : Y]®;
+Type error in ñ[x, y : X] ù‰s [x : Y]®
+In a term of the form ñS ù‰s T®, S and T must be compatible schemas
 The incompatibilities are as follows:
 In ñ[x, y : X]®:
    ñx:X®
@@ -1195,69 +1334,96 @@ In ñ[x : Y]®:
 \paragraph{Error Codes}~
 
 =FAILURE
-62171	In a term of the form ñS ù T®, S and T must be schemas
-62172	In a term of the form ñS ù T®, S and T must be compatible schemas
+62241	In a term of the form ñS ù‰s T®, S and T must be schemas
+62242	In a term of the form ñS ù‰s T®, S and T must be compatible schemas
 =TEX
 
 \subsection{Schema Hiding}
 
 =GFTSHOW Value Constructor
-|ZTmHide of (Z_TM * IDENT list)
+ZTmHide of Z_TM * IDENT list
 =TEX
 =FRULE 1 Rule
 no Ó‰i = Ô‰j
 ÷
-E ô w :: ð [x‰1 : Ó‰1; ...; x‰k : Ó‰k; y‰1 : Ô‰1; ...; y‰m : Ô‰m]
+E ô w :: ð [x‰1 : Ó‰1; ...; x‰k : Ó‰k;
+	y‰1 : Ô‰1; ...; y‰m : Ô‰m]
 ÷
-E ô w \ (x‰1, x‰k) :: ð [y‰1 : Ô‰1; ...; y‰m : Ô‰m]
+E ô w \‰s (x‰1, x‰k)
+	:: ð [y‰1 : Ô‰1; ...; y‰m : Ô‰m]
 =TEX
 =DESCRIBE
+Both the operands of the schema hiding operator must be compatible schemas.
+The type of the result is a schema.
+
 \paragraph{Error Messages}~
-¹IZ
-S = [a, b : ú | a > b]
-°
 =EXAMPLE
-ñ1\(x,y)®;
-Type error in ñ1\(x,y)®
-In the schema expression ñS \ (x‰1,...,x‰n)®, ñS® must be a schema
+ñ1\‰s(x,y)®;
+Type error in ñ1\‰s(x,y)®
+In the schema expression ñS \‰s (x‰1,...,x‰n)®, ñS® must be a schema
 The following sub-term is not a schema:
    ñ1:ú®
 =TEX
 \paragraph{Error Codes}~
 =FAILURE
-62181	In the schema expression ñS \ (x‰1, ..., x‰n)®, ñS® must be a schema
+62251	In the schema expression ñS \‰s (x‰1, ..., x‰n)®, ñS® must be a schema
 =TEX
-
-
 
 \subsection{Schema Quantification}
 
 =GFTSHOW Value Constructor
-|ZTmQuant‰S of Z_QUANT * Z_SCH_TEXT * Z_TM
+ZTmQuant‰S of Z_QUANT * Z_SCH_TEXT * Z_TM
 =FRULE 1 Rule
 no Ó‰i = Ô‰j
 ÷
 E ô [D | P] :: ð [y‰1 : Ó‰1; ...; y‰m : Ó‰m]
-E ô x :: ð [y‰1 : Ó‰1; ...; y‰m : Ó‰m; z‰1 : Ô‰1; ...; z‰n : Ô‰n]
+E ô x :: ð [y‰1 : Ó‰1; ...; y‰m : Ó‰m;
+	z‰1 : Ô‰1; ...; z‰n : Ô‰n]
 ÷
 E ô Q D | P · t :: ð [z‰1 : Ô‰1; ...; z‰n : Ô‰n]
 =TEX
 =DESCRIBE
-We have two rules here corresponding to schema quantification
-and to predicate quantification.
-Here $Q$ is one of `$µ$', `$¶$' or `$¶‰1$'. $includes$ is intended
-to be a function which checks that one manifest binding type includes
-all the components of another unifying component
-types as it goes.
+Where $Q$ is one of `$µ$', `$¶$' or `$¶‰1$'.
+
+A quantification defaults to a predicate quantification unless
+the quantification occurs in a context which requires a schema or
+is otherwise constrained by a type constraint.
 =TEX
 \paragraph{Error Messages}~
+=EXAMPLE
+ñ[(¶ x:X · true)]®;
+Type error in ñ¶ x : X · true®
+In a schema expression of the form ñ¶ D | P · S®, ñS® must be a schema
+The following sub-term is not a schema
+   ñtrue:BOOL®
+=TEX
+=EXAMPLE
+ñ[X] [(µ x:X | true · [x : seq X])]®;
+Type error in ñµ x : X | true · [x : seq X]®
+In a schema expression of the form ñµ D | P · S®,
+   the charateristic tuple of ñD | P® must be compatible with ñS®
+The incompatibilities are as follows:
+In the declaration,
+   ñx:'X®
+In ñ[x : seq _[X]]®,
+   ñx:ú ª 'X®
+=TEX
+=EXAMPLE
+ñ[X] [(¶‰1 x:X | true · [y : seq X])]®;
+Type error in ñ¶‰1 x : X | true · [y : seq X]®
+In a schema expression of the form ñ¶‰1 D | P · S®,
+   the quantification must be over the components of ñS® 
+The following are not components of ñ[y : seq _[X]]®:
+   ñx®
+=TEX
+\paragraph{Error Codes}~
 
 =FAILURE
-62191	In a schema expression of the form ñ?0 D | P · S®, ñS® must be a schema
-62192	In a schema expression of the form ñ?0 D | P · S®,
-62193	   the charateristic tuple of ñD | P® must be compatible with ñS®
-62195	   the quantification must be over the components of ñS® 
-62196	The following are not components of ñ?0®:
+62261	In a schema expression of the form ñ?0 D | P · S®, ñS® must be a schema
+62262	In a schema expression of the form ñ?0 D | P · S®,
+62263	   the charateristic tuple of ñD | P® must be compatible with ñS®
+62265	   the quantification must be over the components of ñS® 
+62266	The following are not components of ñ?0®:
 =TEX
 
 
@@ -1265,22 +1431,28 @@ types as it goes.
 \subsection{„ and ˜}
 
 =GFTSHOW Value Constructor
-|ZTm„ of Z_TM
-|ZTm˜ of Z_TM
+ZTm„ of Z_TM
+ZTm˜ of Z_TM
 =TEX
 =FRULE 1 Rule
 ÷
 E ô x :: ð [ y‰1 : Ó‰1; ...; y‰n : Ó‰n ]
 ÷
-E ô „ x :: ð [ y‰1 : Ó‰1; ...; y‰n : Ó‰n; y‰1' : Ó‰1; ...; y‰n' : Ó‰n ]
+E ô „ x :: ð [ y‰1 : Ó‰1; ...; y‰n : Ó‰n;
+	y‰1' : Ó‰1; ...; y‰n' : Ó‰n ]
 =TEX
 =FRULE 1 Rule
 ÷
 E ô x :: ð [ y‰1 : Ó‰1; ...; y‰n : Ó‰n ]
 ÷
-E ô ˜ x :: ð [ y‰1 : Ó‰1; ...; y‰n : Ó‰n; y‰1' : Ó‰1; ...; y‰n' : Ó‰n ]
+E ô ˜ x :: ð [ y‰1 : Ó‰1; ...; y‰n : Ó‰n;
+	y‰1' : Ó‰1; ...; y‰n' : Ó‰n ]
 =TEX
 =DESCRIBE
+The type of the delta or a xi expression is the type of a set of
+bindings with all the components present and the same components
+decorated with $'$.
+
 =TEX
 \paragraph{Error Messages}~
 =EXAMPLE
@@ -1303,14 +1475,14 @@ The following sub-term is not a schema:
 
 
 =FAILURE
-62200	In ñ„ S®, ñS® must be a schema
-62201	In ñ˜ S®, ñS® must be a schema
+62270	In ñ„ S®, ñS® must be a schema
+62271	In ñ˜ S®, ñS® must be a schema
 =TEX
 
 \subsection{Set Membership and Equality}
 =GFTSHOW Value Constructor
-|ZTmEq of Z_TM * Z_TM
-|ZTm of Z_TM * Z_TM
+ZTmEq of Z_TM * Z_TM
+ZTm of Z_TM * Z_TM
 =TEX
 =FRULE 1 Rule
 ÷
@@ -1325,6 +1497,8 @@ E ô x‰1 :: Ó; E ô x‰2 :: ð Ó
 E ô x‰1  x‰2 :: bool
 =TEX
 =DESCRIBE
+Set membership and equality both yield predicates. The typing
+rules are simple and straightforward.
 \paragraph{Error Messages}~
 =EXAMPLE
 ñ1  1®;
@@ -1335,57 +1509,64 @@ The following sub-term is not a set:
 =TEX
 =EXAMPLE
 ñ§1,2,3¢  {1, 2, 3}®;
-Type error in ñ§1,2,3¢  {1, 2, 3}®
-In a term of the form ña  X®, the type of X must be ð(a)
-The type inferred was:
-   ñ§1,2,3¢:seq ú®
+Type error in ñ§1, 2, 3¢  {1, 2, 3}®
+In a term of the form ña  X® where ña:Ó®, ñX® must have type ñð Ó®
+The following type was inferred:
+   ñ{1, 2, 3}:ð ú®
 =TEX
 
 =EXAMPLE
 ñ§1,2,3¢ = 1®;
-Type error in ñ§1,2,3¢ = 1®
+Type error in ñ§1, 2, 3¢ = 1®
 The operands of ñ$=® must have the same type
-The types inferred were:
-   ñ§1,2,3¢:seq ú®
+The following types were inferred:
+   ñ§1, 2, 3¢:ú ª ú®
    ñ1:ú®
 =TEX
 
 \paragraph{Error Codes}~
 
 =FAILURE
-62251	The operands of ñ$=® must have the same type
-62252	In a term of the form ña  X®, X must be a set
-62253	In a term of the form ña  X® where ña:Ó®, ñX® must subsume ñÓ®
+62281	The operands of ñ$=® must have the same type
+62282	In a term of the form ña  X®, X must be a set
+62283	In a term of the form ña  X® where ña:Ó®, ñX® must have type ñð Ó®
 =TEX
 
 \subsection{Schema Composition}
 
 =GFTSHOW Value Constructor
-|ZTm» of Z_TM * Z_TM
+ZTm» of Z_TM * Z_TM
 =TEX
 =FRULE 1 Rule
 no Ó‰i = Ô‰j, Ó‰i = Õ‰j or Ó‰i = Ø‰j
 ÷
-E ô t‰1 :: ð [w‰1' : Ó‰1; ...; w‰j' : Ó‰j; x‰1 : Ô‰1; ...; x‰k : Ô‰k;
-		y‰1 : Õ‰1; ...; y‰m : Õ‰m]
-E ô t‰2 :: ð [w‰1 : Ó‰1; ...; w‰j : Ó‰j;  x‰1 : Ô‰1; ...; x‰k : Ô‰k;
-		z‰1 : Ø‰1; ...; z‰n : Ø‰n]
+E ô t‰1 :: ð [w‰1' : Ó‰1; ...; w‰l' : Ó‰l;
+	x‰1 : Ô‰1; ...; x‰k : Ô‰k;
+	y‰1 : Õ‰1; ...; y‰m : Õ‰m]
+E ô t‰2 :: ð [w‰1 : Ó‰1; ...; w‰l : Ó‰l;
+	x‰1 : Ô‰1; ...; x‰k : Ô‰k;
+	z‰1 : Ø‰1; ...; z‰n : Ø‰n]
 ÷
-E ô t‰1 » t‰2 :: ð [x‰1 : Ô‰1; ...; x‰k : Ô‰k; y‰1 : Õ‰1; ...; y‰m : Õ‰m;
-		 z‰1 : Ø‰1; ...; z‰n : Ø‰n]
+E ô t‰1 »‰s t‰2 :: ð [x‰1 : Ô‰1; ...; x‰k : Ô‰k;
+	y‰1 : Õ‰1; ...; y‰m : Õ‰m;
+	z‰1 : Ø‰1; ...; z‰n : Ø‰n]
 =TEX
 
-The type rule for these monsters is discussed in
-\cite{DS/FMU/IED/ZED002}. Clearly both terms must
-have manifest schema types.
-
-The embedded function $f$ checks that the primed components of the first schema and the unprimed ones of the second correspond and are unifiable.  It returns a list of these components and the substitution resulting from the unifications. 
+=DESCRIBE
+In a schema composition, those components of the first schema,
+decorated with $'$
+are matched with the corresponding undecorated components
+of the second schema. The resulting schema has only those
+components for which no post-states of the first schema (decorated
+with $'$) match
+pre-states (undecorated) of the second.
+All other components must be compatible.
 =TEX
 \paragraph{Error Messages}~
 =EXAMPLE
-ñ[X, Y] [x' : Y] » [x : X]®;
-Type error in ñ[X] [x' : Y] » [x : X]®
-In a schema expression ñS » T®, the primed components of ñS®
+ñ[X, Y] [x' : Y] »‰s [x : X]®;
+Type error in ñ[X] [x' : Y] »‰s [x : X]®
+In a schema expression ñS »‰s T®, the primed components of ñS®
    must be compatible with the corresponding components of ñT®
 The other components of ñS® and ñT® must be compatible
 The incompatibilities are as follows:
@@ -1396,52 +1577,62 @@ In ñ[x : X]®,
 =TEX
 
 =EXAMPLE
-ñ[X] 1 » [x : X]®;
-Type error in ñ[X] 1 » [x : X]®
-In a schema expression ñS » T®, ñS® and ñT® must be schemas
+ñ[X] 1 »‰s [x : X]®;
+Type error in ñ[X] 1 »‰s [x : X]®
+In a schema expression ñS »‰s T®, ñS® and ñT® must be schemas
 The following sub-term is not a schema:
    ñ1:ú®
 =TEX
 \paragraph{Error Codes}~
 =FAILURE
-62280	In a schema expression ñS » T®, ñS® and ñT® must be schemas
-62281	In a schema expression ñS » T®, the primed components of ñS®
-62282	   must be compatible with the corresponding components of ñT®
-62283	The other components of ñS® and ñT® must be compatible
+62290	In a schema expression ñS »‰s T®, ñS® and ñT® must be schemas
+62291	In a schema expression ñS »‰s T®, the primed components of ñS®
+62292	   must be compatible with the corresponding components of ñT®
+62293	The other components of ñS® and ñT® must be compatible
 =TEX
 
 
 \subsection{Schema Piping}
 
+=GFTSHOW Value Constructor
+ZTmPipe of Z_TM * Z_TM
+=TEX
+
 =FRULE 1 Rule
 no Ó‰i = Ô‰j, Ó‰i = Õ‰j or Ó‰i = Ø‰j
 ÷
-E ô t‰1 :: ð [w‰1! : Ó‰1; ...; w‰j! : Ó‰j; x‰1 : Ô‰1; ...; x‰k : Ô‰k;
-		y‰1 : Õ‰1; ...; y‰m : Õ‰m]
-E ô t‰2 :: ð [w‰1? : Ó‰1; ...; w‰j? : Ó‰j;  x‰1 : Ô‰1; ...; x‰k : Ô‰k;
-		z‰1 : Ø‰1; ...; z‰n : Ø‰n]
+E ô t‰1 :: ð [w‰1! : Ó‰1; ...; w‰l! : Ó‰l;
+	x‰1 : Ô‰1; ...; x‰k : Ô‰k;
+	y‰1 : Õ‰1; ...; y‰m : Õ‰m]
+E ô t‰2 :: ð [w‰1? : Ó‰1; ...; w‰l? : Ó‰l;
+	x‰1 : Ô‰1; ...; x‰k : Ô‰k;
+	z‰1 : Ø‰1; ...; z‰n : Ø‰n]
 ÷
-E ô t‰1 >> t‰2 :: ð [x‰1 : Ô‰1; ...; x‰k : Ô‰k; y‰1 : Õ‰1; ...; y‰m : Õ‰m;
-		 z‰1 : Ø‰1; ...; z‰n : Ø‰n]
+E ô t‰1 >> t‰2 :: ð [x‰1 : Ô‰1; ...; x‰k : Ô‰k;
+	y‰1 : Õ‰1; ...; y‰m : Õ‰m;
+	z‰1 : Ø‰1; ...; z‰n : Ø‰n]
 =TEX
+=DESCRIBE
+In schema piping, the output components of the first schema,
+are matched with the corresponding input components
+of the second schema. The resulting schema has only those
+components for which no outputs of the first schema (decorated
+with $!$) match
+the inputs (decorated with $?$) of the second schema.
+All other components must be compatible.
 
-
-
-=GFTSHOW Value Constructor
-|ZTmPipe of Z_TM * Z_TM
-=TEX
 \paragraph{Error Messages}~
 =EXAMPLE
-ñ[X] [x!  : X] >> [x? : Y]®;
+ñ[X,Y] [x!  : X] >> [x? : Y]®;
 Type error in ñ[X] [x!  : X] >> [x? : Y]®
 In a schema expression ñS >> T®, the output components of ñS®
    must be compatible with the input components of ñT®
 The other components of ñS® and ñT® must be compatible
 The incompatibilities are as follows:
-In ñ[x! : Y]®,
-   ñx!:Y®
-In ñ[x? : X]®,
-   ñx?:X®
+In ñ[x! : X]®,
+   ñx!:'X®
+In ñ[x? : Y]®,
+   ñx?:'Y®
 =TEX
 
 =EXAMPLE
@@ -1453,18 +1644,18 @@ The following sub-term is not a schema:
 =TEX
 \paragraph{Error Codes}~
 =FAILURE
-62290	In a schema expression ñS >> T®, ñS® and ñT® must be schemas
-62291	In a schema expression ñS >> T®, the output components of ñS®
-62292	   must be compatible with the input components of ñT®
-62293	The other components of ñS® and ñT® must be compatible
+62300	In a schema expression ñS >> T®, ñS® and ñT® must be schemas
+62301	In a schema expression ñS >> T®, the output components of ñS®
+62302	   must be compatible with the input components of ñT®
+62303	The other components of ñS® and ñT® must be compatible
 =TEX
 
 
 \subsection{Integers and String Quotation}
 
 =GFTSHOW Value Constructor
-|ZTmú of int
-|ZTmString of string
+ZTmú of int
+ZTmString of string
 =FRULE 1 Rule
 ÷
 ÷
@@ -1485,47 +1676,19 @@ None.
 
 \subsection{Type Constraints}
 
-=GFTSHOW Value Constructor
-|ZTmConstrained of Z_TM * Z_TM
-=TEX
-=FRULE 1 Rule
-unifiable(ð ty1, ty2)
-÷
-E ô x‰1 :: Ó; E ô x‰2 :: ð Ó
-÷
-E ô x‰1 º x‰2 :: ð Ó
-=TEX
-=DESCRIBE
-This is used when the term must belong to some set (the term on the right of the º):
-Moreover when the term returned when a typed term is encountered
-should comprise the left hand operand.
-
-\paragraph{Error Messages}~
-=EXAMPLE
-ñ§1,2¢ º ú®;
-Type error in ñ§1,2¢ º ú®
-In ñtºÓ®, Ó must be an instance of the type of ñt®
-Cannot constrain ñ§1,2¢:seq ú®
-              to ñú®
-=TEX
-
-\paragraph{Error Codes}~
-
-=FAILURE
-62261	In ñt:Ó®, Ó must be an instance of the type of ñt®
-62262	Cannot constrain ñ?0:?1®
-62263	              to ñ?0®
-=TEX
-
-
+This section is rendered obsolete due to the implementation of type
+constraint as an binary relation (equal to set membership) in the Z library
+\cite{DS/FMU/IED/DTD078}.
 
 \subsection{Local Variables}
 
 =GFTSHOW Value Constructor
-|ZTmLVar of IDENT * Z_TM list
-=FRULE 1 Rule
-=TEX
+ZTmLVar of IDENT * EXTYPE OPT * Z_TM list
 =DESCRIBE
+The parser passes all variables whether local or global as if they
+were local variables. The type inferrer uses the context to determine
+whether the variables are really local. Free variables may only occur
+in extended Z and no local variables may have generic actual parameters.
 =TEX
 
 
@@ -1533,18 +1696,40 @@ Cannot constrain ñ§1,2¢:seq ú®
 \subsection{Global Variables}
 
 =GFTSHOW Value Constructor
-|ZTmGVar of (IDENT * Z_TM list)
-=FRULE 1 Rule
-=TEX
+ZTmGVar of (IDENT * EXTYPE OPT * Z_TM list)
 =DESCRIBE
+Global variables may have generic actual parameters if the variables
+are declared with generic formal parameters. The number of
+generic actuals must match the number of generic formals. The
+actuals can be omitted in which case the actuals default to
+the set of all things (the Universe set, $U$).
+
+\paragraph{Error Messages}~
+=EXAMPLE
+ñú [X]®;
+Type error in ñú [X]®;
+Only generic global variables can be instantiated
+The following sub-term is not a generic global variable
+   ñú®
 =TEX
-
-
+=EXAMPLE
+ñš [X, Y]®;
+Type error in ñš [X, Y]®;
+The number of generic actual parameters supplied must match
+   the number of generic formal parameters of the global variable
+The global variable, ñš® requires 1 generic actual parameter
+=TEX
+=FAILURE
+62341	Only generic global variables can be instantiated
+62342	The number of generic actual parameters supplied must match
+62343	   the number of generic formal parameters of the global variable
+62344	The global variable, ñ?0® requires ?1 generic actual parameter?2
+=TEX
 
 \subsection{Let Expressions}
 
 =GFTSHOW Value Constructor
-|ZTmLet of Z_EQ_DEF list * Z_TM
+ZTmLet of Z_EQ_DEF list * Z_TM
 =TEX
 =FRULE 1 Rule
 ÷
@@ -1554,31 +1739,39 @@ E « {x‰1 í Ó‰1, ..., x‰n í Ó‰n} ô z :: Ô
 E ô let x‰1 ¦ y‰1, ..., x‰n ¦ y‰n · z :: Ô
 =TEX
 =DESCRIBE
-=SML
-; (* end of datatype Z_TM definition *)
-=TEX
+The let expression has the type of the $in$ clause inferred in the
+context in which the variables defined in the $let$ clauses are
+in scope.
+\paragraph{Error Messages}~
+None.
 
 
 
 \subsection{Renaming}
 
 =GFTSHOW Value Constructor
-|ZTmRename of ZTM * ((IDENT * IDENT) list)
+ZTmRename of ZTM * ((IDENT * IDENT) list)
 =FRULE 1 Rule
 no Ó‰i is in Ô‰i
 ÷
-E ô w [x‰1 : Ó‰1; ...; x‰m : Ó‰m; y‰1 : Ô‰1; ...; y‰n : Ô‰n]
+E ô w :: ð [x‰1 : Ó‰1; ...; x‰m : Ó‰m;
+	y‰1 : Ô‰1; ...; y‰n : Ô‰n]
 ÷
-E ô w [z‰1/x‰1, ..., z‰m/x‰m] :: ð [z‰1 : Ó‰1; ...; z‰m : Ó‰m;
-				y‰1 :: Ô‰1, ... y‰n :: Ô‰n]
+E ô w [z‰1/x‰1, ..., z‰m/x‰m]
+	:: ð [z‰1 : Ó‰1; ...; z‰m : Ó‰m;
+		y‰1 : Ô‰1, ... y‰n : Ô‰n]
 =TEX
 =DESCRIBE
+Each $x$ component mentioned a rename list $[x‰1/y‰1, ..., x‰n/y‰n]$
+must be unique with respect to all the $x‰is$; likewise for a
+$y$ component and all the $y‰is$.
+The error examples below illustrate this.
 =TEX
 \paragraph{Error Messages}~
 =EXAMPLE
 ñ1 [a/b, c/d]®;
 Type error in ñ1 [a/b, c/d]®
-In the expression ñS [x‰1/y‰1, ..., x‰n/y‰n®, ñS® must be a schema
+In the expression ñS [x‰1/y‰1, ..., x‰n/y‰n]®, ñS® must be a schema
 The following sub-term is not a schema:
    ñ1:ú®
 =TEX
@@ -1586,7 +1779,16 @@ The following sub-term is not a schema:
 =EXAMPLE
 ñ[a : X] [a/a, b/a]®;
 Type error in ñ[a : X] [a/a, b/a]®
-In a schema expression ñS [x‰1/y‰1, ..., x‰n/y‰n®
+In a schema expression ñS [x‰1/y‰1, ..., x‰n/y‰n]®
+   no ñy‰i® may appear more than once
+The following identifier appears more than once
+   ña®
+=TEX
+
+=EXAMPLE
+ñ[a : X] [a/a, a/b]®;
+Type error in ñ[a : X] [a/a, a/b]®
+In a schema expression ñS [x‰1/y‰1, ..., x‰n/y‰n]®,
    no ñx‰i® may appear more than once
 The following identifier appears more than once
    ña®
@@ -1595,9 +1797,10 @@ The following identifier appears more than once
 \paragraph{Error Codes}~
 
 =FAILURE
-62271	In an expression ñS [x‰1/y‰1, ..., x‰n/y‰n®, ñS® must be a schema
-62272	In a schema expression ñS [x‰1/y‰1, ..., x‰n/y‰n]®,
-62273	   no ñx‰i® may appear more than once
+62361	In an expression ñS [x‰1/y‰1, ..., x‰n/y‰n®, ñS® must be a schema
+62362	In a schema expression ñS [x‰1/y‰1, ..., x‰n/y‰n]®,
+62363	   no ñx‰i® may appear more than once
+62364	   no ñy‰i® may appear more than once
 =TEX
 
 
@@ -1605,7 +1808,7 @@ The following identifier appears more than once
 \subsection{Bracketed Terms}
 
 =GFTSHOW Value Constructor
-|ZTmBracketed of ZTM
+ZTmBracketed of ZTM
 =FRULE 1 Rule
 ÷
 E ô x :: Ó
@@ -1613,16 +1816,26 @@ E ô x :: Ó
 E ô (x) :: Ó
 =TEX
 =DESCRIBE
+The type of a bracketed expression is the same as the type
+of the expression without the brackets.
 
-\subsection{Term Quotation}
+\paragraph{Error Messages}~
+None.
+
+
+
+\subsection{Term Quotation}\label{LastRule}
 
 =GFTSHOW Value Constructor
-|ZTmQuotation of TERM
+ZTmQuotation of TERM
 =FRULE 1 Rule
 ÷
 ÷
 E ô htm :: type_of (htm)
 =DESCRIBE
+The Standard ML function, $type\_of$ yields the type
+of a HOL term. A term quotation simply has the type of the 
+term as its type.
 =TEX
 \paragraph{Error Messages}~
 None.
@@ -1636,39 +1849,55 @@ None.
 |ZParaAbbDef of IDENT * IDENT list * Z_TM * EXTYPE OPT
 |ZParaSchBox of IDENT * IDENT list * Z_SCH_TEXT * EXTYPE OPT
 =FRULE 1 Rule
+define {v :: Ó}
 ÷
 E « {x‰1 í ð x‰1, ... x‰n í ð x‰n} ô w :: Ó
 ÷
 E ô v [x‰1, ... x‰n] ¦ w :: Ó
-define {v :: Ó}
 =TEX
 =DESCRIBE
-Note also schbox is described by this rule.
+The right hand side of an abbreviation is type-inferred in an
+environment in which the generic formal parameters are in
+scope. Its type is adopted by the abbreviation for entry
+(by the paragraph processor described in \cite{DS/FMU/IED/DTD049})
+into the theory database. 
 
+Note also schbox is described by this rule.
+=TEX
 
 \subsection{Axiomatic Descriptions}
 =GFTSHOW Value Constructor
 |ZParaAxDes of IDENT list * Z_SCH_TEXT * (((IDENT * EXTYPE) list) OPT)
 =FRULE 1 Rule
+define {y‰1 : Ó‰1; ...; y‰n : Ó‰n}
 ÷
-E « {x‰1 í ð x‰1, ... x‰m í P x‰m} ô [y‰1 : Ó‰1; ...; y‰n : Ó‰n | p] :: bool
+E « {x‰1 í ð x‰1, ... x‰m í P x‰m}
+	ô [y‰1 : Ó‰1; ...; y‰n : Ó‰n | p] :: bool
 ÷
-E ô [x‰1, ... x‰m] [y‰1 : Ó‰1; ...; y‰n : Ó‰n | p] :: bool
-define {y‰1 :: Ó‰1; ...; y‰n :: Ó‰n}
+E ô [x‰1, ... x‰m]
+	[y‰1 : Ó‰1; ...; y‰n : Ó‰n | p] :: bool
 =TEX
 =DESCRIBE
+The schema text comprising the
+axiomatic description is type-inferred in an
+environment in which the generic formal parameters are in
+scope. The identifiers and types of introduced by the axiomatic
+description are returned by the type inferrer in the identifier-type
+list part of the $ZParaAxDes$ contructor function.
+=TEX
 
-\subsection{Free Type Definitions}
+\subsection{Free Type Definitions}\label{freetypedef}
 =GFTSHOW Value Constructor
 |ZParaFreeType of (IDENT * (IDENT * Z_TM OPT) list) list
 =FRULE 1 Rule
+define {w : ð w}
+define {x‰1 : w, ..., x‰m :: w}
+define {y‰1 : Ó‰1 í w, ..., y‰n : Ó‰n í w}
 ÷
-E ô z‰1 :: Ó‰1; ...; z‰n :: Ó‰n
+E ô t‰1 :: ð Ó‰1; ...; t‰n :: ð Ó‰n
 ÷
-E ô w ::= x‰1 | ... | x‰m | y‰1 §§z‰1¢¢ | ... | y‰n §§z‰n¢¢
-define {w :: ð w}
-define {x‰1 :: w, ..., x‰m :: w}
-define {y‰1 :: Ó‰1 í w, ..., y‰n :: Ó‰n í w}
+E ô w ::= x‰1 | ... | x‰m
+	| y‰1 §§t‰1¢¢ | ... | y‰n §§t‰n¢¢
 =TEX
 =DESCRIBE
 If the arguments of type constructors (i.e. $z‰1$ to $z‰n$) are
@@ -1689,9 +1918,9 @@ rel	_ Cons _
 FTY	::=	TY Cons TY
 °
 $TY Cons TY$ as a function application is the same as writing
-$(_ Cons _) (TY,TY)$. In a free type definition,
-the type inferrer transforms this into $(_ Cons _) (TY ¸ TY)$, whose
-type is $ð (TY ¸ TY)$. In the above example, the constant $_ Cons _$ is given
+$(\_\  Cons\  \_) (TY,TY)$. In a free type definition,
+the type inferrer transforms this into $(\_\  Cons\  \_) (TY ¸ TY)$, whose
+type is $ð (TY ¸ TY)$. In the above example, the constant $(\_\  Cons\  \_)$ is given
 the type $(TY ¸ TY) ­ FTY$.
 
  $(TY ¸ TY) ­ FTY$
@@ -1700,19 +1929,23 @@ the type $(TY ¸ TY) ­ FTY$.
 =GFTSHOW Value Constructor
 |ZParaGivenSet of IDENT list * ((IDENT list * Z_TM) OPT)
 =FRULE 1 Rule
+define {x‰1 :: ð x‰1, ..., x‰n :: ð x‰n}
 ÷
 ÷
 [x‰1, ..., x‰n]
-define {x‰1 :: ð x‰1, ..., x‰n :: ð x‰n}
 =TEX
 =FRULE 1 Rule
+define {x‰1 : ð x‰1, ... x‰n : ð x‰n}
 ÷
-E « {x‰1 í ð x‰1, ..., x‰n í P x‰n} ô w :: bool
+E « {x‰1 í ð x‰1, ..., x‰n í P x‰n}
+	ô w :: bool
 ÷
 E ô [x‰1, ..., x‰n] & w :: Ó
-define {x‰1 :: ð x‰1, ... x‰n :: ð x‰n}
 =TEX
 =DESCRIBE
+The rule for given sets is that if a predicate part is present, it
+must be unifiable with bool.
+
 \paragraph{Error Codes}~
 =FAILURE
 62801	In a given set paragraph of the form ¹Z [S‰1, ..., S‰n] & P °,
@@ -1724,11 +1957,13 @@ define {x‰1 :: ð x‰1, ... x‰n :: ð x‰n}
 |ZParaConstraint of IDENT list * Z_TM
 =FRULE 1 Rule
 ÷
-E « {x‰1 í ð x‰1, ..., x‰n í ð x‰n} ô w :: bool
+E « {x‰1 í ð x‰1, ..., x‰n í ð x‰n}
+	ô w :: bool
 ÷
 E ô [x‰1, ..., x‰n] w :: bool
 =TEX
 =DESCRIBE
+The constraint must be a predicate (unifiable with bool).
 =FAILURE
 62803	In a constraint paragraph ¹Z P °, ñP® must be a predicate
 =TEX
@@ -1740,11 +1975,13 @@ E ô [x‰1, ..., x‰n] w :: bool
 [X‰1, ... X‰k] & a :: ty
 unifiable (ty, bool)
 ÷
-E « {x‰1 í ð x‰1, ..., x‰n í ð x‰n} ô w :: bool
+E « {x‰1 í ð x‰1, ..., x‰n í ð x‰n}
+	ô w :: bool
 ÷
 E ô [x‰1, ..., x‰n] ?ô w :: bool
 =TEX
 =DESCRIBE
+The conjecture must be a predicate (unifiable with bool).
 =FAILURE
 62804	In a conjecture paragraph ¹Z ?ô P °, ñP® must be a predicate
 =TEX
@@ -1755,19 +1992,27 @@ E ô [x‰1, ..., x‰n] ?ô w :: bool
 |ZParaTerm of IDENT list * Z_TM * EXTYPE OPT;
 =FRULE 1 Rule
 ÷
-E « {x‰1 í ð x‰1, ..., x‰n í ð x‰n} ô w :: Ó
+E « {x‰1 í ð x‰1, ..., x‰n í ð x‰n}
+	ô w :: Ó
 ÷
 E ô [x‰1, ..., x‰n] w :: Ó
 =TEX
+=DESCRIBE
+The term is type-inferred in a context where the generic formal parameters
+are in scope. The type of the inferred term is returned in the third
+position of the $ZParaTerm$ contructor.
 
 \subsection{Fixity Paragraphs}
 =GFTSHOW Value Constructor
 |ZParaFixity of FIXITY
 =TEX
+=DESCRIBE
+The type inferrer is transparent with regard to fixity paragraphs.
+=TEX
 
 
 
-\section{SIGNATURE FOR Z TYPE INFERENCE}
+\section{SIGNATURE FOR Z TYPE INFERENCE}\label{Signature}
 
 
 =DOC
@@ -1775,34 +2020,86 @@ signature ÛZTypeInferenceÝ = sig
 local
 	open Unification ZUserInterfaceSupport;
 in
+=DESCRIBE
+This is the signature for the type inferrer for HOL/Z.
+=ENDDOC
+
+=DOC
 	type ÛZ_ERROR_INFOÝ;
 	datatype ÛZ_INFERREDÝ =
 			ÛZInferredÝ of Z_PARA
 		|	ÛZTypeErrorÝ of Z_ERROR_INFO;
 	val Ûtype_check_z_paraÝ : {standard : bool} -> Z_PARA -> Z_INFERRED;
 	val Ûprint_z_errorÝ : Z_ERROR_INFO -> 'a;
-	val Ûtype_of_z_extypeÝ : EXTYPE -> TYPE;
-	val Ûmake_chartupleÝ : Z_SCH_TEXT -> (Z_TM * EXTYPE);
-end (* of local ... in *);
-end (* signature ZTypeInference *);
 =DESCRIBE
 
 The data type $ERROR\_INFO$ is used to communicate error information
 raised during type inference to the Z paragraph processor so that the
-latter may print diagnostics to the user.
+latter may print diagnostics to the user using the
+function $print\_z\_error$.
+
+The function $type\_check\_z\_para$ performs type inference
+on a paragraph. The result is constructed with $ZInferred$ if
+the paragraph is well-typed; otherwise it is constructed with
+$ZTypeError$.
+
+The argument ${standard : bool}$ indicates to the type inferrer
+whether to type infer according to standard Z or extended Z.
+For the type inferrer, the difference is largely whether
+free variables are permitted (not permitted in standard Z).
 
 The function $print\_z\_error$ is intended to be called
 via the Z paragraph processor to print type checking diagnostics.
-The function raises the exception ``Fail'' with the error
+The function always raises the exception ``Fail'' with the error
 code 62000.
-
-=SEEALSO
 =FAILURE
-62998	DESIGN ERROR IN Z TYPE INFERRER (?0)
-62999	DESIGN ERROR IN Z TYPE INFERRER
+62000	Type error
 =ENDDOC
 
+=DOC
+	val Ûmake_chartupleÝ : Z_SCH_TEXT -> (Z_TM * EXTYPE);
+=DESCRIBE
+This function makes a characteristic tuple from a Z schema
+text. The types of the schema text must already have been inferred. 
+=USES
+The function $make\_chartuple$ is intended to be called
+by the term generator subsequent to the types in a Z paragraph having
+been inferred.
+=FAILURE
+62902	Cannot make a characteristic tuple of an empty declaration
+62903	The type of the schematext provided is not a schema type
+62904	The types of the schematext must have already been inferred
+=ENDDOC
 
+=DOC
+	val Ûtype_of_z_extypeÝ : EXTYPE -> TYPE;
+=DESCRIBE
+The function $type\_of\_z\_extype$ converts
+extended types (with which the
+type inferrer decorates type-inferred paragraphs) to HOL types,
+similar to $extype\_to\_type$ function in the $Unification$ module.
+The difference is that here, the
+free variable name map is not required as an argument.
+
+The type inferrer has knowledge of type variable names which
+are permitted (unique with respect to type variables occuring in
+HOL quotations) and this knowledge is not public. $type\_of\_z\_extype$
+uses this information to establish names of type variables
+when type inferring paragraphs with free variables (permitted
+in extended Z only).
+
+This is why the interface is in the type inferrer module and not the
+term generator module.
+=USES
+The function $type\_of\_z\_extype$ is intended to be called
+by the term generator subsequent to the types in a Z paragraph having
+been inferred.
+=ENDDOC
+
+=SML
+end (* of local ... in *);
+end (* signature ZTypeInference *);
+=TEX
 
 \pagebreak
 
