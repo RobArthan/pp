@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.194 $ $RCSfile: imp507.doc,v $ $Date: 2002/05/09 00:25:35 $
+% imp507.doc %Z% $Revision: 1.195 $ $RCSfile: imp507.doc,v $ $Date: 2002/05/10 12:59:36 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.194 $%
+\def\SCCSversion{$Revision: 1.195 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/05/09 00:25:35 $%
+\TPPdate{\FormatDate{$Date: 2002/05/10 12:59:36 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -142,7 +142,7 @@ statements in stubs.
 \item[Issue 1.190] Spring 2002 enhancements: return and exit statements.
 \item[Issue 1.191] Spring 2002 enhancements: subprogram renaming.
 \item[Issue 1.192] Spring 2002 enhancements: object renaming.
-\item[Issues 1.193, 1.194] Spring 2002 enhancements: package renaming and use clauses.
+\item[Issues 1.193-1.197] Spring 2002 enhancements: package renaming and use clauses.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1991,6 +1991,8 @@ fun €get_tmark_from_inscope› (recur : Z_ID -> (TYPE OPT * ENV_INFO) OPT)
 					case recur old of
 						Value (ty, EIEnvVar(tmk, _)) => (
 						Value(ty, EIEnvVar(tmk, Value old))
+					) |	Value (ty, EIEnvAuxVar(tm, _)) => (
+						Value(ty, EIEnvAuxVar(tm, Value old))
 					) |	_ => (
 						error "get_tmark_from_inscope" 507069
 						[fn _ => old, fn _ => new]
@@ -2005,7 +2007,7 @@ fun €get_tmark_from_inscope› (recur : Z_ID -> (TYPE OPT * ENV_INFO) OPT)
 			Value tmk	=> Value(type_of_tmark tmk, EIEnvVar (tmk, Nil))
 		|	Nil		=> (
 		case do_aux_vars (#vc_aux_vars inscope) of
-			Value (ty, tm)	=> Value(Value ty, EIEnvAuxVar tm)
+			Value (ty, tm)	=> Value(Value ty, EIEnvAuxVar (tm, Nil))
 		|	Nil		=> do_renamings (#renamings inscope) 
 		))
 	end
@@ -5367,6 +5369,13 @@ fun €new_scope_with› (ident : ID) : unit = (
 	)
 );
 =TEX
+=SML
+fun €package_ids› (ident : ID) : ID list = (
+	case s_lookup ident (!pack_env) of
+	Nil =>  []
+	|Value package =>  new_ids package
+);
+=TEX
 \subsection{The SID function update\_envs\_pack\_spec}
 
 In {\it update\_envs\_pack\_spec}, we need to proceed much as in {\it new\_scope\_with},
@@ -5776,7 +5785,7 @@ fun €renames_fun›
 		val parainfo = AbbDefInfo(new_zname, [], tm);
 	in	store_para parainfo
 	end	handle Fail msg =>
-			comment "renames_proc" 507059
+			comment "renames_fun" 507064
 			[fn _ => old_name, fn _ => new]
 	end
 );
@@ -5796,7 +5805,7 @@ fun €renames_opsym›
 		val parainfo = AbbDefInfo(new_zname, [], tm);
 	in	store_para parainfo
 	end	handle Fail msg =>
-			comment "renames_proc" 507059
+			comment "renames_opsym" 507064
 			[fn _ => name2, fn _ => new]
 	end
 ) | renames_opsym _ = ();
@@ -5816,6 +5825,8 @@ fun €renames_object_common›
 			case current_cn_env old_zname of 
 				Value(_, EIEnvVar(_,  Nil)) =>  (new_zname, old_zname)
 			|	Value(_, EIEnvVar(_, Value orig)) => (new_zname, orig)
+			|	Value(_, EIEnvAuxVar (_,  Nil)) => (new_zname, old_zname)
+			|	Value(_, EIEnvAuxVar (_, Value orig)) => (new_zname, orig)
 			|	_ => fail "" 0 [] (* caught immediately *);
 			val block1 = block 1
 			handle Fail _ => error "add_var_env" 507006 [];
@@ -5835,7 +5846,7 @@ fun €renames_object_common›
 		end
 	)
 	end	handle Fail _ => (
-		comment "renames_proc" 507059
+		comment "renames_object_common" 507064
 		[fn _ =>old_name, fn _ => new_name];
 		Nil
 	)
@@ -6513,23 +6524,26 @@ fun €do_declaration› (y as (DDeclarationKSlot (
 )
 (*
 =TEX
-The following reflects the SID functions for $procedure\_specification$:
+The following reflects the SID functions for $procedure\_specification$.
+Primarily to improve error behaviour in the presence of renamings or use clauses
+whcih clash with parameters, we make sture to call {\it fformal\_part}
+before expanding the frame.
 =SML
 *)
 and €do_procedure_spec› (
 	proc_spec as {name, formal_part, globals, spec as Value sp, annotation}
 		: PROCEDURE_SPECIFICATION) = (
+	subunit_form name;
+	new_scope_proc_form name;
+	do_annotation annotation;
+	stub();
+	fformal_part formal_part;
 	let	val esp = expand_frame sp;
 		val eg = #w esp @ expand_names globals @ flat (map #idlist formal_part);
 		val formal_proc : FORMAL_PROC =
 		{name=name, spec=esp, globals = eg, formal_ids = map mk_param_spec formal_part,
 			par_names = snd(get_name_and_par_names(SSProcedure proc_spec))};
-	in	subunit_form name;
-		new_scope_proc_form name;
-		do_annotation annotation;
-		stub();
-		fformal_part formal_part;
-		check_19 current_cn_env esp;
+	in	check_19 current_cn_env esp;
 		curr_form_proc formal_proc;
 		form_proc formal_proc;
 		stub_spec_proc formal_proc;
@@ -6545,13 +6559,19 @@ and €do_procedure_spec› (
 )
 (*
 =TEX
-The following reflects the SID functions for $function\_specification$:
+The following reflects the SID functions for $function\_specification$.
+As for procedures, we make sure to call {\it fformal\_part} before expanding the frame.
 =SML
 *)
 and €do_function_spec› (
 	{designator, return, formal_part,
 		spec as Value sp, annotation, globals, ...}
 			: FUNCTION_SPECIFICATION) = (
+	subunit_form designator;
+	new_scope_fun_form designator;
+	do_annotation annotation;
+	stub();
+	fformal_part formal_part;
 	let	val informal_fun : INFORMAL_FUN =
 		{name=designator,
 		formal_pars = map mk_param_spec formal_part,
@@ -6559,12 +6579,7 @@ and €do_function_spec› (
 		val eg = expand_names globals;
 		val formal_fun : FORMAL_FUN =
 		{spec = expand_frame sp, informal_fun = informal_fun, globals = eg};
-	in	subunit_form designator;
-		new_scope_fun_form designator;
-		do_annotation annotation;
-		stub();
-		fformal_part formal_part;
-		curr_form_fun formal_fun;
+	in	curr_form_fun formal_fun;
 		stub_spec_fun formal_fun;
 		form_fun formal_fun
 	end
