@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.21 2003/07/24 10:46:50 rda Exp rda $
+ * $Id: cmdline.c,v 2.22 2003/07/24 13:09:22 rda Exp $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -229,13 +229,7 @@ void add_command_line_tool(Widget text_w)
 
 	XtOverrideTranslations(cmd_text, text_translations);
 
-	XtVaGetValues(text_w, XmNfontList, &fontlist, NULL);
-
-
-	if(fontlist != NULL) {
-		XtVaSetValues(cmd_text, XmNfontList, fontlist, NULL);
-		XtVaSetValues(list_w, XmNfontList, fontlist, NULL);
-	}
+	copy_font_list(list_w, cmd_text);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Make return in the text widget activate it

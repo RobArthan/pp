@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.76 2004/02/08 14:23:49 rda Exp rda $
+ * $Id: mainw.c,v 2.77 2004/02/08 14:44:53 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -790,7 +790,6 @@ static Boolean setup_main_window(
 		attach_ro_edit_popup(journal);
 		register_selection_source(journal);
 		register_palette_client(journal);
-		copy_font_list(journal, script);
 
 		XtVaGetValues(journal, XmNeditable, &editable, NULL);
 		XtVaSetValues(journal, XmNtraversalOn, editable, NULL);

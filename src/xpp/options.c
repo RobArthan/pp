@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.22 2003/07/18 13:25:58 rda Exp rda $
+ * $Id: options.c,v 2.23 2003/07/23 14:02:14 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -295,9 +295,6 @@ if(!global_options.edit_only) {
 	attach_rw_edit_popup(journal_max_text);
 	register_selection_source(journal_max_text);
 	register_palette_client(journal_max_text);
-
-	copy_font_list(command_text, owner_w);
-	copy_font_list(journal_max_text, owner_w);
 
 	add_new_line_frame = XtVaCreateManagedWidget(
 		"add-new-line-frame",
