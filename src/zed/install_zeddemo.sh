@@ -1,9 +1,9 @@
 #! /bin/sh
 #
 # File: install_zeddemo
-# Derived from: $Header: /home/rda/zed/RCS/install_zeddemo.sh,v 1.2 2000/09/11 14:01:19 rda Rel rda $
+# Derived from: $Header: /home/rda/zed/RCS/install_zeddemo.sh,v 1.4 2004/02/02 16:38:32 rda Exp $
 #
-# Running this script sets up example database in the directory ./bin
+# Running this script sets up example database in the directory ./db
 #
 # exit immediately on none zero code
 set -e
@@ -11,7 +11,7 @@ set -e
 dir=`pwd`
 PPINSTALLDIR=$dir
 doc=$dir/doc
-bin=$dir/bin
+db=$dir/db
 tmp_build=$dir/tmp_build
 deletebuilddir="y"
 export PPINSTALLDIR
@@ -33,7 +33,7 @@ sieve sml < wrk051.doc
 make -f wrk051.mkf all_zed
 
 
-mv example_zed.* $bin
+mv example_zed.* $db
 
 # Tidy up neatly, deleting all unnecessary files
 if test "x$deletebuilddir" = "xy"
