@@ -83,80 +83,27 @@ The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD508}.
 =SML
 structure €CNBasicDeclsAndExprs› (* : CNBasicDeclsAndExprs *) = struct
 local
-	open CaseIndependence CNTypes ZProofMode;
+	open CaseIndependence CNEnvironmentTypes CNParser CNTypes ZProofMode;
 in
 =TEX
 
 \section{MISCELLANEOUS SUPPORTING FUNCTIONS}
-
-=SML
-datatype €ENV_INFO› =
-			€EIEnvFunction› of ID list
-		|	€EIEnvVar› of TMARK
-		|	€EIEnvRecordAgg›
-		|	€EIEnvOther›;
-
-type €CN_ENV› = Z_ID -> (TYPE * ENV_INFO) OPT;
-=TEX
-
-=SML
-fun €name_to_tmark› (e : EXP) : TMARK = (
-	case e of
-	EId id =>
-		id
-	|EInt n =>
-		n
-	|ESelectedComp {prefix=p, selector=s} =>
-		(name_to_tmark p)^"."^s
-	|EIndexedComp {prefix=p, index=i} =>
-		(name_to_tmark p)^"("^(name_to_tmark i)^")"
-	|EAttribute {prefix=p, attribute_desig=ad} =>
-		(name_to_tmark p)^"'"^
-		(
-			case ad of
-			ADAttrib a => a
-			|ADAttribArg (a, e) => a^"("^(name_to_tmark e)^")"
-		)
-	|_ => "__unknown"
-);
-=TEX
-
-
 =SML
 infix 3 ^^;
 fun zid1 €^^› zid2 = (
 	zid1^"v"^zid2
 );
 =TEX
-TBS - The next function is extra.
-=SML
-fun €join_tmarks› ((s1::s2::rest) : string list) : string = (
-	s1^"y"^join_tmarks (s2::rest)
-) | join_tmarks (s::_) = s
-  | join_tmarks _ = "";
-=TEX
 =SML
 fun €trans_range› ((RRange range) : EXP RANGE) : EXP RANGELOHI = (
 	range
-) | trans_range _ = fail "trans_range" 508001 [fn()=>"not supported"];
-=TEX
-=SML
-fun €basic_decl_error› (s : string) : 'a = (
-	fail s 0 []
-);
+) | trans_range _ = fail "trans_range" 508001 [fn()=>"Cannot formally reason about range attributes"];
 =TEX
 =SML
 val €head› = hd
 and €last› = hd o rev;
 =TEX
 \section{ABSTRACT SYNTAX OF Z}
-
-\subsection{Z Declarations}
-
-=SML
-type €Z_DECL› = {zvar : Z_ID, zexp : Z_EXP};
-type €Z_MODULE› = string;
-=TEX
 
 \subsection{Z Unary Expressions}
 =SML
@@ -345,7 +292,7 @@ let	val ty = case env id of
 	val dexp = mk_z_gvar(id, ty, []);
 	val decl = mk_z_decl[mk_z_schema_dec (dexp, "")];
 in
-	mk_z_Õ (decl, p, dexp)
+	mk_z_Õ (decl, p, mk_z_  (dexp, ""))
 end
 );
 =TEX
@@ -379,13 +326,69 @@ fun €other_z_exp› (exp : Z_EXP) : Z_EXP = exp;
 
 \subsection{Z Predicates}
 =SML
-val €z_eq› : (Z_EXP * Z_EXP) -> Z_EXP = mk_z_eq;
+val €z_eq› : (Z_EXP * Z_EXP) -> Z_PRED = mk_z_eq;
 =TEX
 =SML
-fun €z_many_and› ((exps as e1::e2::rest) : Z_EXP list) : Z_EXP = (
+val €z_and› : (Z_PRED * Z_PRED) -> Z_PRED = mk_z_±;
+=TEX
+=SML
+fun €z_many_and› ((exps as e1::e2::rest) : Z_PRED list) : Z_PRED = (
 	mk_z_± (e1, z_many_and (e2::rest))
 ) | z_many_and [e] = e
   | z_many_and _ = fail "z_many_and" 508001 [fn()=>"weird error"];
+=TEX
+=SML
+val €z_elem› : (Z_EXP * Z_EXP) -> Z_EXP = mk_z_ç;
+=TEX
+
+=SML
+val €z_noteq_term› : TERM = Òa Ω bÆ;
+fun €z_noteq› (exp1 : Z_EXP, exp2 : Z_EXP) : Z_PRED = (
+	cn_subst [(exp1, "a"), (exp2, "b")] z_noteq_term
+);
+=TEX
+
+=SML
+val €z_less_eq_term› : TERM = Òa º bÆ;
+fun €z_less_eq› (exp1 : Z_EXP, exp2 : Z_EXP) : Z_PRED = (
+	cn_subst [(exp1, "a"), (exp2, "b")] z_less_eq_term
+);
+=TEX
+
+=SML
+val €z_greater_term› : TERM = Òa > bÆ;
+fun €z_greater› (exp1 : Z_EXP, exp2 : Z_EXP) : Z_PRED = (
+	cn_subst [(exp1, "a"), (exp2, "b")] z_greater_term
+);
+=TEX
+
+=SML
+val €z_true› = ÒtrueÆ;
+
+fun €z_decls_to_exp› (zdecls : Z_DECL list) : Z_EXP = (
+let	fun dec {zvar=d, zexp=e} = (
+		mk_z_dec ([mk_z_lvar(d, (dest_z_power_type o type_of) e,
+				[])],e)
+	);
+in
+	mk_z_decl(map dec zdecls)
+end
+);
+=TEX
+
+=SML
+fun €z_forall› (zdecls : Z_DECL list, zp : Z_PRED) : Z_PRED = (
+	mk_z_µ (z_decls_to_exp zdecls, z_true, zp)
+);
+=TEX
+
+
+=SML
+val €z_imp› : (Z_PRED * Z_PRED) -> Z_PRED = mk_z_¥;
+=TEX
+
+=SML
+fun €other_z_pred› (z_pred : Z_PRED) : Z_PRED = z_pred;
 =TEX
 
 \subsection{Z Paragraphs}
@@ -397,21 +400,9 @@ fun €z_eq_eq› (id : Z_ID, exp : Z_EXP) : PARAINFO = (
 
 =SML
 
-local
-	val z_true = ÒtrueÆ;
-	fun z_decls_to_exp (zdecls : Z_DECL list) : Z_EXP = (
-	let	fun dec {zvar=d, zexp=e} = (
-			mk_z_dec ([mk_z_lvar(d, (dest_z_power_type o type_of) e,
-					[])],e)
-		);
-	in
-		mk_z_decl(map dec zdecls)
-	end	);
-in
 fun €z_schema› (name : Z_ID, decls : Z_DECL list) : PARAINFO = (
 	AbbDefInfo (name, [], mk_z_h_schema(z_decls_to_exp decls, z_true))
 );
-end (* local ... in *);
 =TEX
 
 \section{INTEGER LITERALS}\label{INTEGERLITERALS}
@@ -719,14 +710,15 @@ and €exp_array_agg_named_others› (env : CN_ENV) ({tmark,agg_named,others} : (AGG
 )
 =TEX
 \subsection{Translating Aggregates (Positional Record)}
-TBS - Proper code required for the following which is a stub.
 =SML
 and €retrieve_record_components› (env : CN_ENV) (tmark : TMARK) : (TMARK * TYPE) list = (
-	(dest_z_schema_type o dest_z_power_type o type_of o (zid env) o trans_id)
+	(dest_z_schema_type o dest_z_power_type o type_of o (zid env))
 	tmark
 	handle _ => fail "retrieve_record_components" 508001
 				[fn()=>tmark^" is not a record type"]
 )
+=TEX
+TBS - Proper code required for the following which is a stub.
 =IGN
 fun €retrieve_type_def› (env : CN_ENV) (tmark : TMARK) = (
 	TDRecordTypeDef{comps=CNone}
@@ -1002,8 +994,12 @@ fun €array_attrib› (env : CN_ENV) (zidâ1 : Z_ID, zidâ2 : Z_ID) : PARAINFO list =
 =SML
 fun €basic_decl_con_array› (env : CN_ENV) (name : ID) (td : ARRAY_DEF) = (
 let	val {index=index, comp=comp} = td;
+	val ind = case index of
+			[ind] => ind
+			|_ => fail "basic_decl_con_array" 505001
+				[fn()=>"multi-dimensional arrays not yet formalised"];
 	val zname = trans_id name;
-	val zindex = join_tmarks (map trans_id index);
+	val zindex = trans_id ind;
 	val zcomp = trans_id comp;
 in
 	[z_eq_eq(zname, z_tfun(zid env zindex, zid env zcomp))] @
@@ -1013,8 +1009,12 @@ end);
 =SML
 fun €basic_decl_uncon_array› (env : CN_ENV) (name : ID) (td : ARRAY_DEF) = (
 let	val {index=index, comp=comp} = td;
+	val ind = case index of
+			[ind] => ind
+			|_ => fail "basic_decl_uncon_array" 505001
+				[fn()=>"multi-dimensional arrays not yet formalised"];
 	val zname = trans_id name;
-	val zindex = join_tmarks (map trans_id index);
+	val zindex = trans_id ind;
 	val zcomp = trans_id comp;
 in
 	[z_eq_eq(zname, z_pfun(zid env zindex, zid env zcomp))]
@@ -1023,15 +1023,15 @@ end);
 
 \subsection{Translating Record Types}
 =SML
+fun €conv_var_decl› ({vars=vs, tmark=t} : VAR_DECL)
+		: {var : ID, tmark : TMARK} list = (
+	 map (fn id => {var=id, tmark=t}) vs
+);
 =TEX
 =SML
 fun €var_decls_in_rec_type_def› ({comps} : COMPONENT RECORD_TYPE_DEF)
 	: {var : ID, tmark : TMARK} list  = (
-let	fun conv_var_decl ({vars=vs, tmark=t} : VAR_DECL)
-		: {var : ID, tmark : TMARK} list = (
-	 map (fn id => {var=id, tmark=t}) vs
-	);
-	fun aux component = (
+let		fun aux component = (
 		case component of
 		CDeclaration vardecls => (
 			map conv_var_decl vardecls
@@ -1059,22 +1059,23 @@ end);
 =TEX
 \subsection{Translating Integer Types}
 =SML
-fun €int_type_attrib› (env : CN_ENV) (zidâ1, RRange{lo=lo, hi=hi}) = (
+fun €int_type_attrib› (env : CN_ENV) (zidâ1, range) = (
+let	val {lo, hi} = trans_range range;
+in
 	[z_eq_eq(zidâ1 ^^ zfst, trans_exp env lo),
 	z_eq_eq(zidâ1 ^^ zlst, trans_exp env hi)]
-) | int_type_attrib _ _ = basic_decl_error "int_type_attrib";
+end
+);
 =TEX
 =SML
 fun €basic_decl_int_type› (env : CN_ENV) (name : ID) (range : EXP RANGE) = (
-let	val (lo, hi) =
-		case range of
-		RRange{lo,hi} => (lo, hi)
-		|_ => basic_decl_error "basic_decl_int_type";
+let	val {lo, hi} = trans_range range;
 	val zname = trans_id name;
 in
 	[z_eq_eq(zname, z_rng(trans_exp env lo, trans_exp env hi))] @
 		int_type_attrib env (zname, RRange{lo=lo,hi=hi})
-end);
+end
+);
 =TEX
 
 \subsection{Translating Subtypes}
@@ -1108,7 +1109,11 @@ end
 fun €basic_decl_subtype_index_con› (env : CN_ENV) (name : ID) (tmark : TMARK) (ci : EXP list) = (
 let	val zname = trans_id name;
 	val index = map name_to_tmark ci;
-	val zindex = join_tmarks (map trans_id index);
+	val ind = case index of
+			[ind] => ind
+			|_ => fail "basic_decl_subtype_index_con" 505001
+				[fn()=>"multi-dimensional arrays not yet formalised"];
+	val zindex = trans_id ind;
 	val zexp = zid env (trans_id tmark);
 	val zvar =  "UNC"
 	val zvar_ty = dest_z_power_type(type_of zexp);
@@ -1304,7 +1309,7 @@ in
 end
 )
 and €adjust_selected_comp› env ({prefix=p, selector=s} : EXP SELECTED_COMP) = (
-	ESelectedComp{prefix=adjust_exp (env : CN_ENV) p, selector=s}
+	ESelectedComp{prefix=adjust_exp (env : CN_ENV) p, selector=to_upper s}
 )
 and €adjust_qualified_expression› (env : CN_ENV) ({tmark=t, exp=e} : EXP QUALIFIED_EXPRESSION) = (
 	case e of
@@ -1329,7 +1334,7 @@ If they occur in the input then it adjust\_exp will already have been called
 and need not be called again.
 =SML
 and €adjust_exp› (env : CN_ENV) (exp as (EId id : EXP)) = (
-	exp
+	EId (to_upper id)
 ) | adjust_exp env (exp as (EInt _)) = (
 	exp
 ) | adjust_exp env (exp as (EArrayAggPos x)) = (
