@@ -17,6 +17,7 @@
 
 Commands to process this document in various ways.
 
+make -f rel001.mkf imp005.dvi
 doc4tex imp005
 tex4dvi imp005
 bibtex imp005
@@ -28,10 +29,10 @@ dviselect 16:30 imp005.dvi | pstex -
 dviselect  1:15 imp005.dvi | pstex -
 
 
-doc4sml imp005
+doc4errors imp005
 sed -e '/structure ReaderWriter/d' imp005.sml > imp005.smlA
 egrep 'structure ReaderWriter' imp005.sml
-doc4sml imp005 ; sed -e '/structure ReaderWriter/d' imp005.sml > imp005.smlA
+doc4errors imp005 ; sed -e '/structure ReaderWriter/d' imp005.sml > imp005.smlA
 PolyML.use "imp005.sml";
 PolyML.use "imp005.smlA";
 
@@ -118,11 +119,16 @@ lasp -s -u imp005.OKwords imp005.doc > zz1
 
 \begin{description}
 
-\item[1st February 1991, issue 1.1 ] This issue is an authors draft.
+\item[1 February 1991, issue 1.1 ] This issue is an authors draft.
 
-\item[4th February 1991, issue 1.2]
-$useterminal$ is invoked by loading this file,
-and $usefile$ is used in subsequent Install's in buiding  hol.db.
+\item[4 February 1991, issue 1.2 ] $useterminal$ is invoked by loading
+	this file, and $usefile$ is set to be used in subsequent
+	Install's used in building {\tt hol.db}.
+
+\item[21 February 1991, issue 1.3 ] Change the control-D handling in
+	$useterminal$.  Add a proper writer function that converts
+	ASCII strings into pretty characters.
+
 \end{description}
 
 %********************************************************************
@@ -162,8 +168,10 @@ and $usefile$ is used in subsequent Install's in buiding  hol.db.
 	also have special translations of some other characters
 	(particularly the big turnstile).
 
-\item Produce a writing function to convert ASCII characters into their
-	pretty forms.
+\item Properly install $useterminal$ as the outermost reader writer of
+	the system.  This will include producing proper handling of the
+	routines $PolyML.quit$ and $PolyML.commit$ together with the
+	implicit calling of $PolyML.commit$ at end of input.
 
 \end{enumerate}
 
@@ -204,17 +212,16 @@ that lexically analyses, parses, evaluates and formats for output
 Standard~ML text.  The routine $PolyML.compiler$ is an example of a
 `\Compiler'.
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%********************************************************************
 
-\newpage
-\section{DEVIATIONS FROM DEFINITION DOCUMENT \protect{\cite{DS/FMU/IED/DEF002}}}
+\subsection{Deviations From Definition Document \protect{\cite{DS/FMU/IED/DEF002}}}
 
 Some changes are necessary to the ideas proposed
 in~\cite[issue~1.1]{DS/FMU/IED/DEF002}.
 
 %********************************************************************
 
-\subsubsection{Pretty Characters in ML Identifiers}
+%\subsubsection{Pretty Characters in ML Identifiers}
 
 %\subsubsection{In ML Text} \label{PrettyChInML}
 
@@ -288,9 +295,6 @@ for the proper release.  Calling this function from within $usefile$ or
 $usestring$ is allowed, the exception will be propagated out as far as
 possible.
 
-When this structure is given a proper signature the exception will be
-hidden within the structure, and the function will be public.
-
 =SML
 exception AbandonReaderWriter;
 val abandoning = ref false;
@@ -312,7 +316,8 @@ fun abandon_reader_writer () : unit = (
 
 Several control flags are provided in this structure for debugging
 purposes.  These flags are used throughout the rest of the structure.
-This section defines all of the flags used by this structure.
+This section defines all of the debugging flags used by the reader
+writer.
 
 =SML
 val RWchars_read = ref false;
@@ -332,11 +337,29 @@ val _ =
 new_flag {name = "âRWtext_readá",  control=RWtext_read, default=fn () => false};
 =TEX
 
+=IGN
+
+%--------------------------------------------------------------------
+
+It is useful to have the commands to set and clear these flags easily available.
+
+set_flag("RWchars_read", true);
+set_flag("RWchars_written", true);
+set_flag("RWphrases_read", true);
+set_flag("RWtext_read", true);
+
+set_flag("RWchars_read", false);
+set_flag("RWchars_written", false);
+set_flag("RWphrases_read", false);
+set_flag("RWtext_read", false);
+
+%--------------------------------------------------------------------
+
 =SML
 fun âlogitá flag proc str = (
 	if !flag
 	then
-		(output(std_out, proc ^ "  <" ^
+		(output(std_out, proc ^ "   " ^ (PolyML.makestring(size str)) ^ "  <" ^
 			(	case str of "\n" => "\\n"
 				| "\004" => "\\004"
 				| x => x) ^ ">\n");
@@ -758,7 +781,8 @@ concatenation is thought to be inefficient.
 \subsubsection{Failure Handling}
 
 Details of error messages.  When the appropriate level of design
-document is produced\footnote{To be done.} these error messages will
+document is produced\footnote{To be done, at which time this section
+will be removed.} these error messages will
 need to be moved there and reformatted to use the conventions of {\tt
 screen} and {\tt screenfile.}  For the short term the invocations of
 $new_error_message$ are written out here.
@@ -771,7 +795,8 @@ val âerrorsá = fold (fn ((i, t), _) => new_error_message {id=i, text=t}) [
 	(5004, "Unknown pretty character `?0' (decimal ?1)"),
 	(5005, "Unexpected ?0 not after an opening ?1"),
 	(5006, "Function not yet written"),
-	(5007, "End of file found in string")
+	(5007, "End of file found in string"),
+	(5008, "Improper keyword found in: ?1")
 ] ();
 =TEX
 
@@ -1424,6 +1449,10 @@ To present these interfaces three main routines are identified.
 
 \end{description}
 
+%********************************************************************
+
+\subsection{Introduction To Reader Functions}
+
 From experimentation with PolyML it seems that text in an included file
 must be complete, i.e., capable of interpretation as a top level item.
 Unclosed bracketing forms cause error messages.  For example,
@@ -1464,6 +1493,99 @@ been identified.
 =SML
 val max_copies_of_char_sent = 30;
 =TEX
+
+%********************************************************************
+
+\subsection{Writer Function}
+
+A common writer function is used by all three reader writers, its most
+complex tasks are to recognise ASCII keywords and convert them to their
+equivalent pretty characters and to recognise the numeric values of
+pretty characters in strings and print the correct character.  The
+conversions are as follows.  A double ``{\tt Q}'' is followed by the
+characters of a keyword.  If a decoding is available then replace the
+whole keyword with the corresponding pretty character.  If no pretty
+character is available then replace the leading ``{\tt QQ}'' with a
+single ``{\tt\%}'' character.  To preserve ``{\tt Q}''s in the original
+text the string ``{\tt QQQ}'' is considered to be the keyword whose
+representation is a single ``{\tt Q}''.
+
+On occasions no conversions should be performed by the writer so a
+control flag is provided.
+
+=SML
+val writer_convert = ref true;
+val _ =
+new_flag {name = "âwriter_convertá",  control=writer_convert, default=fn () => true};
+=TEX
+
+From observation of $PolyML.compiler$ it seems that no identifier or
+string is split over two or more calls of the writer function,
+therefore no memory is required\footnote{This may need to be
+reconsidered after further experience of the use of $PolyML.compiler$
+is obtained.} between invocations of the writer to deal with partial
+identifiers or partial strings.  Additional work will be
+needed\footnote{To be done.} to support HOL text output via the
+writer.
+
+{\ftlinepenalty=9999
+=SML
+fun âwriterá (s : string) : unit = (
+let
+	fun get_kw (prev, nil) = (prev, nil)
+	|   get_kw (prev, t as "Q"::"Q"::_) = (prev, t)
+	|   get_kw (prev, h::t) = (
+		if	(h >= "A" andalso h <= "Z")
+		orelse	(h >= "a" andalso h <= "z")
+		orelse	(h >= "0" andalso h <= "9")
+		then
+			get_kw(prev ^ h, t)
+		else
+			(prev, h::t));
+
+	fun aux nil = []
+	|   aux ("Q"::"Q"::"Q"::t) = "Q"::(aux t)
+	|   aux ("Q"::"Q"::rest) = (
+		case	get_kw ("", rest)
+		of ("", t)	=> fail "writer" 5008 [fn () => implode("Q"::"Q"::rest)]
+		|  (kw, t)	=>
+			(	case	PrettyNames.find_name kw
+				of Value(_, Value ch, _)	=> ch
+				| _				=> "%" ^ kw
+			) :: (aux t))
+	|   aux ((h as "\"")::t) = h::(aux_str t)  (*"*)
+	|   aux (h::t) = h::(aux t)
+
+	and aux_str nil = []
+	|   aux_str ("\""::t) = "\""::(aux t)
+	|   aux_str ("\\"::d1::d2::d3::t) = (
+		if	(d1 >= "0" andalso d1 <= "9")
+		andalso	(d2 >= "0" andalso d2 <= "9")
+		andalso	(d3 >= "0" andalso d3 <= "9")
+		then
+			let
+				val ord_0 = ord "0";
+				val dd1 = ord d1 - ord_0;
+				val dd2 = ord d2 - ord_0;
+				val dd3 = ord d3 - ord_0;
+				val ch = (dd1 * 10 + dd2) * 10 + dd3
+			in
+				if ch > 127
+				then	(chr ch) :: (aux_str t)
+				else	"\\"::d1::(aux_str(d2::d3::t))
+			end
+		else
+			"\\"::d1::(aux_str(d2::d3::t)))
+	|   aux_str(h::t) = h::(aux_str t);
+
+	val chars = logit RWchars_written "writer" s
+in
+	output(std_out,	if	!writer_convert
+			then	implode(aux(explode chars))
+			else	chars)
+end);
+=TEX
+}
 
 %********************************************************************
 
@@ -1514,8 +1636,6 @@ let
 	val reader = {	advance = f_advance,
 			look_at_next = f_look_at_next,
 			skip_and_look_at_next = f_skip_and_look_at_next} : Reader;
-
-	fun writer (s : string) : unit = output(std_out, logit RWchars_written "writer" s);
 
 	fun âuse_file_loopá () = (
 		if (PolyML.compiler (get_ML_outermost reader, writer) (); true)
@@ -1596,8 +1716,6 @@ let
 			look_at_next = s_look_at_next,
 			skip_and_look_at_next = s_skip_and_look_at_next} : Reader;
 
-	fun writer (s : string) : unit = output(std_out, logit RWchars_written "writer" s);
-
 	fun âuse_string_loopá () = (
 		if (PolyML.compiler (get_ML_outermost reader, writer) (); true)
 					handle EndOfInput => false
@@ -1631,8 +1749,8 @@ fun âuseterminalá () : unit = (
 let
 =TEX
 
-Whilst reading from a terminal several points must be dealt with above
-those needed for the other two readers.
+Whilst reading from a terminal several points must be dealt with in
+addition to those needed for the other two readers.
 
 \begin{itemize}
 
@@ -1651,7 +1769,7 @@ those needed for the other two readers.
 	val cur_prompt = ref prompt1;
 =TEX
 
-\item The control-D character is taken to mean break as soon as
+\item The control-X character is taken to mean break as soon as
 	possible to the main prompt of this reader, ignoring any text
 	typed and processed already.
 
@@ -1674,7 +1792,7 @@ those needed for the other two readers.
 
 \end{itemize}
 
-All the read of characters is handled by one routine which deals with
+All the reading of characters is handled by one routine which deals with
 prompting as required.  Prompts are only needed when the previously
 read character was a newline.
 
@@ -1689,10 +1807,12 @@ local
 		else	();
 
 		let
-			val last = input(std_in, 1)
+			val last = case input(std_in, 1)
+				of "" => "\004"
+				|  ch => ch
 		in
 			console_last := last;
-			if last = "" orelse last = "\004"
+			if last = "\024"
 			then
 				raise	QuitTopDec
 			else last
@@ -1701,7 +1821,7 @@ local
 =TEX
 
 Character lookahead is simulated here by actually reading a character,
-and remembering it until it is actually read.  Routines to read and
+and remembering it until it is read by the parser.  Routines to read and
 lookahead must then examine this remembered value.  The lookahead just
 returns the value whereas a read empties it.
 
@@ -1710,8 +1830,7 @@ returns the value whereas a read empties it.
 in
 	fun read_char () : string = (
 		case !ahead_char
-		of Nil =>	let	val ch = read_next_character()
-				in	(ahead_char := Value ch; ch) end
+		of Nil =>	read_next_character()
 		| Value ch =>	(ahead_char := Nil; ch)
 	);
 
@@ -1760,8 +1879,6 @@ needed.
 	val reader = {	advance = t_advance,
 			look_at_next = t_look_at_next,
 			skip_and_look_at_next = t_skip_and_look_at_next} : Reader;
-
-	fun writer (s : string) : unit = output(std_out, logit RWchars_written "writer" s);
 =TEX
 
 The \Compiler{} loop must handle most exceptions, reporting them and
@@ -1782,12 +1899,12 @@ exceptions below.
 =SML
 	fun âuse_term_loopá () = (
 		if (PolyML.compiler (get_ML_outermost reader, writer) (); true)
-			handle EndOfInput => false
+			handle EndOfInput => raise EndOfInput
 			| AbandonReaderWriter => (output(std_out,
 					"Abandoning reader writer\n");
 				false)
 			| QuitTopDec => (output(std_out,
-					"Control-D read, return to outer level of useterminal\n");
+					"Control-X read, return to outer level of useterminal\n");
 				true)
 			| Read_too_often ch => (
 				output(std_out,
@@ -1800,6 +1917,8 @@ exceptions below.
 					false)
 				else (	output(std_out,
 						"Exception handled by useterminal\n");
+					output(std_out,
+						"  Exception is " ^ (PolyML.makestring E) ^ "\n");
 					true)
 		then	(cur_prompt := prompt1; use_term_loop ())
 		else	()
@@ -1809,39 +1928,60 @@ in
 	abandoning := false;
 
 	use_term_loop ()
+		handle EndOfInput => (
+			output(std_out, "End of input to useterminal.  Quit.\n");
+=IGN
+
+			output(std_out, "End of input to useterminal.  Commit and quit.\n");
+			PolyML.commit();
+
+=TEX
+
+Should probably also do a $PolyML.commit$ here to follow the practice
+of PolyML itself.  Unfortunately if we did then the first action on
+starting with such a datadase is to resume this function after the
+commit, which means that the quit is performed.  This leads to a PolyML
+database which quits immediately after it is started.  Some more
+investigation\footnote{To be done.} is required in this area.
+
+=SML
+			PolyML.quit())
 end);
 =TEX
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%\newpage
+\newpage
 \section{FINALE}
-
-This is the place where the function $useterminal$ would be set
-up\footnote{But the work is not yet done.} as the main reader-writer of
-the whole system.  Setting it up here requires that all of the
-remaining parts of the system are compatible with what this structure
-provides.  As a side effect, a large portion of this structure is
-tested during the creation of the rest of the system.
 
 That ends the structure:
 
 =SML
 end (* of structure ReaderWriter *);
 =TEX
-\section{USING THESE FACILITIES}
-We wish to use $usefile$ as the file loading facility when building subsequent files into the hol.db.
-$Install\_file\_loader$ is the function that is used to 
-by the build script for hol.db to load a file to compile.
+
+We wish to use $usefile$ as the file loading facility when building
+subsequent files into the {\tt hol.db}.  $Install_file_loader$ is the
+function that is used by the build script for {\tt hol.db} to load a
+file to compile.  As a side effect, a large portion of this structure
+is tested during the creation of the rest of the system.
+
 =SML
 open ReaderWriter;
 Install_file_loader := (fn x => (diag_string ("usefile "^ x); usefile x));
 =TEX
-We will wish to use $useterminal$ from now onwards, unless
-explicitly aborted by the user.
+
+We will wish to use $useterminal$ from now onwards, unless explicitly
+aborted by the user.
+
 =SML
 useterminal();
 =TEX
+
+Any Standard~ML text from here to the end of the file will be ignored
+because the call of $useterminal$ has replaced the PolyML reading
+function with the code within $useterminal$.
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %********************************************************************
