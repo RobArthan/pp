@@ -1,4 +1,4 @@
-% $Header: /home/rda/bld/daz/src/RCS/imp510.doc,v 1.106 2002/05/31 17:10:32 rda Exp rda $
+% $Header: /home/rda/bld/daz/src/RCS/imp510.doc,v 1.107 2002/07/24 00:12:48 rda Exp $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: SPARK Output Function}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP510}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.106 $%
+\def\SCCSversion{$Revision: 1.107 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/05/31 17:10:32 $%
+\TPPdate{\FormatDate{$Date: 2002/07/24 00:12:48 $%
 }}
 \TPPstatus{Draft}	    %% Mandatory field
 \TPPtype{Specification}
@@ -179,6 +179,7 @@ are now handled by printing a comment and then the specification statement.
 an unexpanded statement label. Tidied up handling of controls.
 \item[Issue 1.106] Fixed bug in printing of object renamings and relaxed rules on clashing
 names arising from use clauses.
+\item[Issue 1.107] R0051/R0052: default parameters and block statements.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -1909,11 +1910,13 @@ Procedure and Function parameter specifications come here allowing the code
 to be re-used for discriminant parts.
 
 =SML
-
 fun Ûfmt_parameter_specificationİ (fmtinfo as {outf,...} : PP_FMT_INFO)
-	({idlist=i, mode=m, name=n} : PARAMETER_SPECIFICATION) = (
+	({idlist=i, mode=m, name=n, default = d} : PARAMETER_SPECIFICATION) = (
    map  check_decl i;
-    (fmt_id_list fmtinfo i); outf ":"; (fmt_mode fmtinfo m); (fmt_tmark fmtinfo n)
+   (fmt_id_list fmtinfo i); outf ":"; (fmt_mode fmtinfo m); (fmt_tmark fmtinfo n);
+   (case d of
+	Nil => ()
+   |	Value e => (outf ":="; fmt_exp fmtinfo e))
 );
 fun Ûfmt_parameter_specification_list1İ (fmtinfo : PP_FMT_INFO)
 	([] : PARAMETER_SPECIFICATION list) = ()
@@ -1952,7 +1955,7 @@ fun Ûfmt_discriminant_partİ
 	(fmtinfo : PP_FMT_INFO)
 	(disc : DISCRIMINANT_SPECIFICATION list) = (
 	let	fun aux {vars, tmark} =
-			{mode = MSparkIn false, idlist =  vars, name = tmark};
+			{mode = MSparkIn false, idlist =  vars, name = tmark, default = Nil};
 	in	fmt_parameter_specification_list fmtinfo (map aux disc)
 	end
 );
@@ -2766,9 +2769,36 @@ fun Ûfmt_kslot_compilation_unit_listİ (fmtinfo : PP_FMT_INFO)
     (fmt_kslot_compilation_unit fmtinfo x;
     outf "\n"; outf "\n";
     fmt_kslot_compilation_unit_list fmtinfo xs);
-
 =TEX
-
+=SML
+fun Ûfmt_block_statementİ (fmtinfo as {outf,...} : PP_FMT_INFO)
+	({name, declarative_part, statement} : BLOCK_STATEMENT) : unit = (
+	(case name of Nil => () | Value n => (outf n; outf ":"));
+	(case declarative_part of
+		Nil => ()
+	|	Value decs => (
+		outf (kw"DECLARE"); outf "\n";
+		inc_tabs();
+			map (fmt_declaration fmtinfo) decs;
+		dec_tabs()
+	));
+	outf (kw"BEGIN"); outf "\n";
+	inc_tabs();
+		fmt_statement fmtinfo statement;
+	dec_tabs();
+	outf (kw"END");
+	(case name of Nil => () | Value n => outf n);
+	outf ";"; outf"\n"
+);
+=TEX
+=SML
+fun Ûfmt_statement_or_blockİ (fmtinfo : PP_FMT_INFO)
+	(SOBStatement s : STATEMENT_OR_BLOCK) : unit = (
+	fmt_statement fmtinfo s
+) | fmt_statement_or_block fmtinfo (SOBBlock b) = (
+	fmt_block_statement fmtinfo b
+);
+=TEX
 =SML
 
 fun Ûfmt_replaced_by_compİ (fmtinfo as {outf,...} : PP_FMT_INFO)
@@ -2794,11 +2824,11 @@ fun Ûfmt_replaced_by_declİ (fmtinfo as {outf,...} : PP_FMT_INFO)
 fun Ûfmt_refined_byİ (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({label=l, statement=s} : REFINED_BY) =
 	(fmt_label fmtinfo l; outf (translate_for_output "Ã");
-	outf "\n"; inc_tabs();fmt_statement fmtinfo s; dec_tabs());
+	outf "\n"; inc_tabs();fmt_statement_or_block fmtinfo s; dec_tabs());
 fun Ûfmt_replaced_byİ (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({label=l, statement=s} : REFINED_BY) =
     (fmt_label fmtinfo l; outf (translate_for_output "!Ã"); outf "\n";
-	inc_tabs();fmt_statement fmtinfo s; dec_tabs());
+	inc_tabs();fmt_statement_or_block fmtinfo s; dec_tabs());
 fun Ûfmt_replaced_by_annotationİ (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({label=l, replacement=a} : REPLACED_BY_ANNOTATION) =
     (fmt_label fmtinfo l; outf (translate_for_output "é"); outf "\n";
@@ -2934,9 +2964,9 @@ in
 	) |    ReplaceDecl {decls, ...} => (
 		fmt_declaration_list fmtinfo decls; true
 	) |    RefineStat {statement, ...}    => (
-		fmt_statement fmtinfo statement; true
+		fmt_statement_or_block fmtinfo statement; true
 	) |    ReplaceStat {statement, ...}    => (
-		fmt_statement fmtinfo statement; true
+		fmt_statement_or_block fmtinfo statement; true
 	) |    ReplaceArbitrary {replacement, ...} => (
 		(let val tabs = get_tabs();
 		in
