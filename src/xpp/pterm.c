@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.19 2002/10/17 17:09:34 rda Exp rda $
+ * $Id: pterm.c,v 2.20 2002/10/30 10:47:16 rda Exp $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -160,6 +160,7 @@ Boolean listening_state(int req)
 		case DEAD:
 			if(listening) {
 	/* Set up work proc to see if there is any final output from app */
+				XtRemoveInput(app_ip_req);
 				XtAppAddWorkProc(app,
 						get_from_app_work_proc,
 						(XtPointer) STOP_LISTENING);
