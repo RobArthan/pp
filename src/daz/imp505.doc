@@ -1,4 +1,4 @@
-% %Z% $Date: 2001/05/28 13:28:32 $ $Revision: 1.75 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2001/07/06 14:22:27 $ $Revision: 1.76 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -104,6 +104,8 @@
 \item[Issue 1.73] Fixes to CTLE II R1/5 and R1/6.
 \item[Issue 1.74] Investigating performance problem.
 \item[Issue 1.75] Perfomance enhancement for type-checking of specification statements.
+\item[Issue 1.76] Added option to compactify pre- and post-conditions.
+\item[Issue 1.77] Enhancement R0003 --- record and array components as exported parameters.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -182,8 +184,13 @@ val Ûz_quoteÝ : TERM * Unification.EXTYPE OPT -> Z_TM = (fn (tm, ty_opt) =>
 fun (h : Z_PRED list) ô (c : Z_PRED) : SEQUENT = (h, c);
 
 fun (h : Z_PRED) %Longrightarrow% (s : SEQUENT list) : SEQUENT list = (
-	map (fn (h', c) => (h :: h', c)) s
+	map (fn (h', c) => (h' term_grab h, c)) s
 );
+
+=TEX
+=SML
+fun Ûadd_hypsÝ ([] : Z_PRED list, s : SEQUENT list) : SEQUENT list = s
+|    add_hyps (h::more, s) = h %Longrightarrow% add_hyps (more, s);
 =TEX
 \pagebreak
 \section{Substitutions}
@@ -660,37 +667,159 @@ end
 );
 =TEX
 \subsection{Procedure Call (No Initial Variables in Spec)}\label{wp-proc-call-no-ivars}
+We need a mechanism for generating the names for the new Z variables
+that stand for record or array components as exported actual parameters.
+The function {\it param\_tmp\_name} does this.
+The function constructs a list of names to be avoided from the type inference context.
+This relies on the function {\it call\_vcs} in \cite{ISS/HAT/DAZ/IMP507} which
+always puts all variables (including auxiliary variables and logical constants)
+that are in scope in the VCs being calculated into the type inference
+context.
+The new variables are themselves added to the type inference context to handle
+the situation where several new variables are needed in one sequence of statements
+(to enable the new variables to be added to the type inference context, the
+appropriate type must be passed in).
+
+To confirm this approach, note that: {\it store\_vcs} in \cite{ISS/HAT/DAZ/IMP507}
+fails if any VC contains free variables; moreover {\it call\_vcs} sets up the
+type inference context using the same {\it SPECLAB} that it passes to the
+function {\it vcs} below, which in turn uses that {\it SPECLAB} to derive
+the local declarations to be added when the universal closure of each VC
+is formed; so every variable that can appear
+in a VC and so might clash with a new variable name generated here
+must be in the type inference context; also 
+\cite{ISS/HAT/DAZ/IMP507} arranges to type-check every post-condition
+and this will ensuer that the new variable name cannot appear free in the
+original sequent whose weakest pre-condition we are calculating.
+
+=SML
+val Ûparam_tmp_name_stemÝ : Z_ID = "tmp_";
+fun Ûmaybe_param_tmp_nameÝ (n : Z_ID) : bool = (
+	let	val tmp_size = size param_tmp_name_stem;
+	in	substring(n, 0, tmp_size) = param_tmp_name_stem handle _ => false
+	end
+);
+fun Ûparam_tmp_nameÝ (ty : TYPE) : Z_ID = (
+	let	fun filter av = (
+			not (maybe_param_tmp_name av)
+		);
+		val ti_cxt_names = map ((fn (n, _, _) => n) o dest_z_lvar) (get_ti_context());
+		val avoid = ti_cxt_names drop filter;
+		fun find_next i = (
+			let	val n = param_tmp_name_stem ^ string_of_int i;
+			in	if	n mem avoid
+				then	find_next (i+1)
+				else	n
+			end
+		);
+		val res = find_next 1;
+	in	set_ti_context(mk_var(res, ty)::get_ti_context());
+		res
+	end
+);
+=IGN
+param_tmp_name ”ú®;
+param_tmp_name ”ú®;
+set_ti_context (map (switch(curry mk_var) ”ú®) ["abc", "def", param_tmp_name”ú®]);
+param_tmp_name ”ú®;
+param_tmp_name ”ú®;
+param_tmp_name ”ú®;
+param_tmp_name ”ú®;
+set_ti_context (map (switch(curry mk_var) ”ú®) ["abc", "def", "tmp_3", "tmp_4"]);
+param_tmp_name ”ú®;
+get_ti_context();
+set_ti_context[];
+=TEX
+The work done for an individual parameter is sufficiently complicated to
+merit a separate function.
+This is passed the actual parameter expression together with the
+all the information from the formal parameter specification for this parameter.
+It returns two substitution lists: one to be applied to the pre-condition
+and one to be applied to the post-condition.
+It also returns, if necessary, a list of predicates giving
+the domain conditions for the actual parameter (TBD) and,
+if this is a record or array component actual parameter being
+exported, the membership constraint giving the declaration for
+the new Z variable that represents the parameter and the
+assignment statement that gives the update to the actual parameter
+to be considered as executed after the call.
+=SML
+fun Ûproc_call_paramÝ (env : CN_ENV)
+	(actual : EXP, formal : ID, tmark : TMARK, mode : MODE)
+
+	: (Z_ID * Z_EXP) list * (Z_ID * Z_EXP) list * Z_PRED list * STATEMENT OPT = (
+let	val	ntm as (n, tm) = (trans_id formal, trans_exp env actual);
+	val	dcs = [] (* domain_conds tm *);
+in	let	val (v, ty) = dest_var tm;
+	in	([ntm], [ntm, (init_var n, mk_var(init_var v, ty))], dcs, Nil)
+	end	handle Fail _ => (
+			case mode of
+				MSparkIn => ([ntm], [ntm], dcs, Nil)
+			|	_ =>
+				let	val ty = type_of tm;
+					val nv = param_tmp_name (type_of tm);
+					val cnstrnt = zid env (trans_id tmark);
+					val nvtm = mk_z_lvar(nv, ty, []);
+					val pred = z_mem(nvtm, cnstrnt);
+					val stmt = Value (STAssign {
+						name = actual,
+						e = EAuxiliaryExp(z_quote(nvtm, Nil))});
+				in	([ntm],
+					 [(init_var n, tm), (n, nvtm)],
+					 pred::dcs,
+					 stmt)
+				end
+		)
+	end
+);
+=TEX
+In the following, the {\it Spec} of the specification is just given by the
+pre- and post-condition as Z predicates. The frames are irrelevant to
+the weakest pre-condition calculation.
+
 =SML
 fun Ûproc_call_specÝ (env : CN_ENV)
 		({actuals, ...} : (AGG_CHOICE,EXP) PROC_CALL)
 		({name, formal_ids, spec={w, w0, pre, post}, ...} : FORMAL_PROC)
-			: (Z_EXP * Z_EXP) = (
+			: Z_PRED * Z_PRED * STATEMENT * Z_PRED list = (
 let	val old_cxt = get_ti_context();
 	val new_cxt = ti_context_of_formal_ids env formal_ids @ old_cxt;
 	val side1 = set_ti_context new_cxt;
 	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
 	val side2  = set_ti_context old_cxt;
-	val var_decls = map (fn {var_decl, ...} => var_decl) formal_ids;
+	val var_decls = map #var_decl formal_ids;
 	val names = ((map trans_id) o flat
-				o (map (fn {vars, ...} => vars))) var_decls;
-	val exps = case actuals of
+				o (map #vars)) var_decls;
+	val adj_actuals = case actuals of
 			APositional exps => map (adjust_exp env) exps
 			|ANamed nas => map (adjust_exp env)
 					(named_assocs_to_exps names nas);
-	fun subs (actual : EXP,	name : ID)
-			: (Z_ID * Z_EXP) list = (
-		let 	val ntm as (n, tm) = (name, trans_exp env actual);
-		in let	val (v, ty) = dest_var tm;
-		in	[ntm, (init_var n, mk_var(init_var v, ty))]
-		end	handle Fail _ => [ntm]
+	fun do_params (acc as (presub, postsub, preds, st))
+		(acts as (act::more_acts) : EXP list)
+		({var_decl = {vars = frm::more_frms, tmark}, mode}::more_pss : PARAM_SPEC list)
+	: (Z_ID * Z_EXP) list * (Z_ID * Z_EXP) list * Z_PRED list * STATEMENT = (
+		let	val (prs, psts, prds, st_opt) =
+			proc_call_param env (act, frm, tmark, mode);
+		in	do_params
+			(prs@presub, psts@postsub, prds term_union preds,
+			(case st_opt of Nil => st
+			 | Value asgn => STSemicolon(asgn, st)))
+			more_acts
+			({var_decl = {vars = more_frms, tmark = tmark},
+			  mode = mode}::more_pss)
 		end
+	) | do_params acc acts ({var_decl = {vars = [], ...}, ...}::more_pss) = (
+		do_params acc acts more_pss
+	) | do_params acc [] [] = (
+		acc
+	) | do_params _ _ _ = (
+		fail "proc_call_spec" 505026 [fn () => name]
 	);
-	val exp_names = combine exps names
-		handle _ => fail "proc_call_spec" 505026 [fn()=>name];
-	val subs_list = flat(map subs exp_names);
+	val (presubs, postsubs, preds, st) =
+		do_params ([], [], [], STNull) adj_actuals formal_ids;
 in
-	(list_sub(pre1, subs_list),list_sub(post1, subs_list))
+	(list_sub(pre1, presubs), list_sub(post1, postsubs), st, preds)
 end
 );
 =TEX
@@ -721,9 +850,14 @@ let	fun is_it ({name = n, ...} : FORMAL_PROC) : bool = (name = n);
 	val fp as {spec = {w, ...}, ...} = find formal_procs is_it
 		handle Fail _ =>
 		fail "proc_call_no_ivars" 505031 [fn()=>name];
-in
-	spec_no_ivars_either {wp = wp, a = a, wp_env = wp_env}
-		w (proc_call_spec env pc fp)
+	val (pre, post, asgns, preds) = proc_call_spec env pc fp;
+	val xform = STSemicolon(
+			STSpecNoIvars{spec = {w = [], w0=[],
+					pre=z_quote(pre, Nil),
+					post=z_quote(post, Nil)},
+				label = ""}, asgns);
+	val {wp = wp1, side = side1} = wp (xform, a, wp_env);
+in	{wp = add_hyps(preds, wp1), side = add_hyps(preds, side1)}
 end
 );
 =TEX
@@ -824,10 +958,6 @@ fun Ûz_log_con_defÝ ((u, v): Z_ID list * Z_ID list) ({x, t=_, e} : LOG_CON_DEF) 
 );
 =TEX
 =SML
-fun Ûadd_hypsÝ ([] : Z_PRED list, s : SEQUENT list) : SEQUENT list = s
-|    add_hyps (h::more, s) = h %Longrightarrow% add_hyps (more, s);
-=TEX
-=SML
 fun Ûlog_conÝ ({wp, a, wp_env as {env, ...}} : WP_PARS)
 	({defs, spec as {w, w0, pre, post}, ...} : LOG_CON)
 		: RESULT = (
@@ -853,9 +983,14 @@ let	fun is_it ({name = n, ...} : FORMAL_PROC) : bool = (name = n);
 	val fp = find formal_procs is_it
 		handle Fail _ =>
 		fail "proc_call_ivars" 505031 [fn()=>name];
-in
-	spec_ivars {wp = wp, a = a, wp_env = wp_env}
-			(proc_call_spec env pc fp)
+	val (pre, post, asgns, preds) = proc_call_spec env pc fp;
+	val xform = STSemicolon(
+			SSpecIvars{spec = {w = [], w0=[],
+					pre=z_quote(pre, Nil),
+					post=z_quote(post, Nil)},
+				label = ""}, asgns);
+	val {wp = wp1, side = side1} = wp (xform, a, wp_env);
+in	{wp = add_hyps(preds, wp1), side = add_hyps(preds, side1)}
 end
 );
 =TEX
@@ -1117,15 +1252,21 @@ fun Ûfree_vars_zpredÝ (zp : Z_PRED) : Z_ID list = (
 );
 =TEX
 =SML
-fun Ûname_to_entire_variable_nameÝ (e : EXP) : Z_ID = (
+fun Ûentire_var_expÝ (e : EXP) : ID = (
 	case e of
 		EId id => (
-			trans_id id
+			id
 	) |	ESelectedComp {prefix, selector} => (
-			name_to_entire_variable_name prefix
+			entire_var_exp prefix
 	) |	EIndexedComp{prefix, index} => (
-			name_to_entire_variable_name prefix
-	) |	_ => error "name_to_entire_variable_name" 505080 []
+			entire_var_exp prefix
+	) |	_ => fail "entire_var_exp" 505080 []
+);
+=TEX
+=SML
+fun Ûname_to_entire_variable_nameÝ (e : EXP) : Z_ID = (
+	trans_id (entire_var_exp e)
+	handle exn => reraise exn "name_to_entire_variable_name"
 );
 =TEX
 =SML
@@ -1135,6 +1276,47 @@ fun Ûfind_formal_procÝ (speclab : SPECLAB) (name : ID) : FORMAL_PROC = (
 		(fn p => #name p = name)
 		handle Fail _ => checking_error "find_formal_proc" 505067
 						[fn () => name]
+);
+=TEX
+=SML
+fun Ûfree_var_namesÝ (fv::rest : TERM list) : ID list = (
+		if is_z_lvar fv
+		then
+			((fn (n,_, _) => n) o dest_z_lvar) fv::free_var_names rest
+		else
+			free_var_names rest
+) | free_var_names _ = [];
+=TEX
+The following is slightly different from the specification.
+We exploit the fact that {\it other\_vars\_exp} is only used
+in anti-aliasing check 3 and there it is only applied to an expression
+that must be formed from a variable by some combination of
+indexed component and selected component constructs.
+We can therefore happily let {\it other\_vars\_exp} fail on
+expressions that are not of this form.
+=SML
+fun Ûother_vars_expÝ (cn_env : CN_ENV) (e : EXP) : ID list = (
+	let	fun get_index_exps acc e = (
+			case e of
+				EId id => (
+					acc
+			) |	ESelectedComp {prefix, selector} => (
+					get_index_exps acc prefix
+			) |	EIndexedComp{prefix, index} => (
+					get_index_exps (index::acc) prefix
+			) |	_ => fail "other_vars_exp" 505080 []
+		);
+		val tm = mk_z_tuple(map (trans_exp cn_env) (get_index_exps [] e));
+	in	(free_var_names o frees) tm
+	end
+);
+=TEX
+The above trickery with {\it other\_vars\_exp} means that we have to code
+{\it vars\_exp} directly rather than the way the
+specification describes it, but that's easier and faster in any case.
+=SML
+fun Ûvars_expÝ (cn_env : CN_ENV) (exp : EXP) : ID list = (
+	(free_var_names o frees o trans_exp cn_env) exp
 );
 =TEX	
 In the following, we rely on the fact that {\it zid} does not
@@ -1187,29 +1369,10 @@ fun Ûanti_aliasing_actuals_modesÝ (env : CN_ENV) (formal_proc : FORMAL_PROC)
 );
 =TEX
 =SML
-fun Ûanti_aliasing_check_1Ý (proc : (AGG_CHOICE,EXP)PROC_CALL)
-				(actuals_modes : (EXP * MODE) list) : unit = (
-	let	val set = map fst (actuals_modes drop
-				(fn am => not (snd am = MSparkInOut orelse
-						 snd am = MSparkOut)));
-	in
-		if any set (fn EId x => false | _ => true)
-		then
-		let	val exprs = set drop (fn EId x => true | _ => false);
-			val plural = if length exprs > 1 then "s" else "";
-		in
-			checking_error "anti_aliasing_check_1" 505069
-				[fn() => fmt_id (#name proc)]
-		end
-		else (* OK *) ()
-	end
-);
-=TEX
-=SML
 
 =TEX
 =SML
-fun Ûanti_aliasing_check_2Ý (formal_proc : FORMAL_PROC)
+fun Ûanti_aliasing_check_1Ý (formal_proc : FORMAL_PROC)
 				(proc : (AGG_CHOICE,EXP)PROC_CALL)
 				(actuals_modes : (EXP * MODE) list) : unit = (
 	let	val name = #name proc;
@@ -1218,38 +1381,24 @@ fun Ûanti_aliasing_check_2Ý (formal_proc : FORMAL_PROC)
 				(fn am => not (	snd am = MSparkInOut orelse
 							snd am = MSparkOut)));
 		val trans_set = map (fn
-				EId id => trans_id id
-				|_	=> fail "anti_aliasing_check_2" 505070
-						[fn()=>name]) set;
+				e => entire_var_exp e
+				handle Fail _ =>
+				fail "anti_aliasing_check_1" 505070
+				[fn()=>name]) set;
 		val inter_set = trans_set cap (trans_globals diff formals);
-		val plural = if length inter_set > 1 then "s" else "";
+		fun plural () = if length inter_set > 1 then "s" else "";
 	in
 		if inter_set = []
 		then (* OK *) ()
-		else	checking_error "anti_aliasing_check_2" 505071
-				[	fn()=> plural,
+		else	checking_error "anti_aliasing_check_1" 505071
+				[	plural,
 					fn()=> fmt_id name,
 					fn()=> fmt_id_list inter_set]
 	end
 );
 =TEX
 =SML
-local
-	fun aux (fv::rest) = (
-		if is_z_lvar fv
-		then
-			((fn (n,_, _) => n) o dest_z_lvar) fv::aux rest
-		else
-			aux rest
-	) | aux _ = [];
-in
-fun Ûvars_expÝ (cn_env : CN_ENV) (exp : EXP) : ID list = (
-	(aux o frees o trans_exp cn_env) exp
-);
-end (* local ... in *);
-=TEX
-=SML
-fun Ûanti_aliasing_check_3Ý (speclab : SPECLAB)
+fun Ûanti_aliasing_check_2Ý (speclab : SPECLAB)
 				(formal_proc : FORMAL_PROC)
 				(proc : (AGG_CHOICE,EXP)PROC_CALL)
 				(actuals_modes : (EXP * MODE) list) : unit = (
@@ -1264,7 +1413,7 @@ fun Ûanti_aliasing_check_3Ý (speclab : SPECLAB)
 		val plural = if length inter_set > 1 then "s" else "";
 	in	if inter_set = []
 		then (* OK *) ()
-		else checking_error "anti_aliasing_check_3" 505072
+		else checking_error "anti_aliasing_check_2" 505072
 				[	fn()=> plural,
 					fn()=> fmt_id name,
 					fn()=> fmt_id_list inter_set]
@@ -1272,38 +1421,34 @@ fun Ûanti_aliasing_check_3Ý (speclab : SPECLAB)
 );
 =TEX
 =SML
-fun Ûanti_aliasing_check_4Ý (speclab : SPECLAB)
+fun Ûanti_aliasing_check_3Ý (speclab : SPECLAB)
 				(formal_proc : FORMAL_PROC)
 				(proc : (AGG_CHOICE,EXP)PROC_CALL)
 				(actuals_modes : (EXP * MODE) list) : unit = (
 	let	val name = #name proc;
 		val cn_env = (#env o #wp_env) speclab;
-		fun pair_wise (a_m_1::a_m_2::rest) = (
-		let	val (actual1, mode1) = a_m_1;
-			val (actual2, mode2) = a_m_2;
-			val ve1 = vars_exp cn_env actual1;
-			val ve2 = vars_exp cn_env actual2;
-			val inter_set = ve1 cap ve2;
-		in
-			if not (inter_set = [])
-			then	if mode1 = MSparkIn andalso mode2 = MSparkIn
-				then (* OK *) ()
-				else let val plural = if length inter_set > 1
-							then "s" else "";
-				     in
-					checking_error "anti_aliasing_check_4"
-					505073 [	fn()=> plural,
-							fn()=> fmt_id name,
-							fn()=> fmt_id_list inter_set]
-				     end
-			else	(* OK *) ()
-		end
-		) | pair_wise _ = ();
-	in	 pair_wise actuals_modes
+		val var_sets = map (vars_exp cn_env o fst) actuals_modes;
+		val acts_modes_vars = combine actuals_modes var_sets;
+		fun do_check bef (((act, MSparkIn), vars)::aft) = (
+			do_check (vars::bef) aft
+		) | do_check bef (((act, _), vars)::aft) = (
+				let	val ent_var = entire_var_exp act;
+				val other_vars = other_vars_exp cn_env act;
+			in	if	not (ent_var mem other_vars)
+				andalso	not (any bef (fn vs => ent_var mem vs))
+				andalso	not (any aft (fn (_, vs) => ent_var mem vs))
+				then	do_check (vars::bef) aft
+				else	checking_error "anti_aliasing_check_3"
+					505073 [	fn()=> fmt_id ent_var,
+						fn()=> fmt_id name]
+			end
+		) | do_check _ [] = ();
+	in	 do_check [] acts_modes_vars
 	end
 );
 =TEX
-The following function computes the effective frame of a procedure call --- the frame that obtained by substituting actual parameters for formals in the original frame.
+The following function computes the effective frame of a procedure call --- the frame that is obtained by substituting the entire variables of the actual parameters
+for the formals in the original frame.  
 =SML
 fun Ûproc_frameÝ (env : CN_ENV)
 			({formal_ids, spec={w, ...}, ...} : FORMAL_PROC )
@@ -1316,7 +1461,7 @@ fun Ûproc_frameÝ (env : CN_ENV)
 			(case lassoc5 table v of
 				Nil => v
 			|	Value e =>
-				name_to_entire_variable_name	(adjust_exp env e))
+				name_to_entire_variable_name (adjust_exp env e))
 			:: aux vs
 		) | aux [] = [];
 	in	aux w
@@ -1332,10 +1477,9 @@ fun Ûanti_aliasing_checkÝ (env : CN_ENV) (speclab : SPECLAB,
 			handle Fail _ =>
 			fail "anti_aliasing_check" 505068 [fn()=> #name proc];
 	in
-		anti_aliasing_check_1 proc actuals_modes;
-		anti_aliasing_check_2 formal_proc proc actuals_modes;
+		anti_aliasing_check_1 formal_proc proc actuals_modes;
+		anti_aliasing_check_2 speclab formal_proc proc actuals_modes;
 		anti_aliasing_check_3 speclab formal_proc proc actuals_modes;
-		anti_aliasing_check_4 speclab formal_proc proc actuals_modes;
 		check_1_a(proc_frame env formal_proc actuals_modes, speclab)
 	end
 );
@@ -1675,7 +1819,7 @@ Every variable in $vc\_vars$ and its corresponding initial variable is introduce
 		trans_decl env {vars = (flat o (map do_vars)) vars, tmark=tmark};
 (*
 =TEX
-The following function implements the check for input parameters specified in \cite[section 5.5]{DRA/CIS/CSE3/TR/94/27/3.0}.
+The following function implements the special case for input parameters specified in \cite[Volume 2, section 5.1.5]{DRA/CIS/CSE3/TR/94/27/3.0}.
 =SML
 *)
 	fun param_spec_decls {var_decl, mode} = (
@@ -1723,7 +1867,7 @@ Add the auxiliary variables (with initial versions).
 				end
 			else	(decls, Combinators.I);
 
-	val seqs1 = map (fn (d,c) => (d, subs_fn c)) seqs;
+	val seqs1 = map (fn (h, c) => (map subs_fn h, subs_fn c)) seqs;
 (*
 =TEX
 
@@ -1748,9 +1892,32 @@ Remove any declarations which are not needed by the sequent.
 		(flat ddecs, seq)
 	end
 	);
-	val res = map (add_decls decls) seqs1;
-in
-	res
+
+	val vcs1  = map (add_decls decls) seqs1;
+(*
+=TEX
+Add declarations for any new Z variables introduced in processing
+procedure calls with record or array components as exported parameter
+and remove the corresponding hypotheses from the sequent.
+=SML
+*)
+	fun add_tmp_decls (decs, seq as (h, c)) = (
+	let	fun strip_tmp_decs acc [] = acc
+		|   strip_tmp_decs (acc as (new_ds, h)) (hyp::hyps) = (
+			let	val (v, tm) = dest_z_ hyp;
+				val (n, _, _) = dest_z_lvar v;
+			in	if	maybe_param_tmp_name n
+				andalso	not (any decs (is_free_in v))
+				then	strip_tmp_decs 
+						(mk_z_dec([v], tm)::new_ds, h) hyps
+				else	term_fail "" 0 []
+			end	handle Fail _ => strip_tmp_decs (new_ds, hyp::h) hyps
+		);
+		val (new_ds, new_h) = (rev ** rev)(strip_tmp_decs ([], []) h);
+	in	(decs @ new_ds, (new_h, c))
+	end);
+	val vcs2 = map add_tmp_decls vcs1;
+in	vcs2
 end
 );
 =TEX
