@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.184 $ $RCSfile: imp507.doc,v $ $Date: 2002/03/02 15:19:29 $
+% imp507.doc %Z% $Revision: 1.185 $ $RCSfile: imp507.doc,v $ $Date: 2002/03/13 12:50:50 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.184 $%
+\def\SCCSversion{$Revision: 1.185 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/03/02 15:19:29 $%
+\TPPdate{\FormatDate{$Date: 2002/03/13 12:50:50 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -1437,12 +1437,17 @@ val Ûcn_compilation_unit_ud_keyÝ = "CN'compilation_unit";
 val Ûcn_body_name_ud_keyÝ = "CN'body_name";
 =TEX
 
-The following function is used in several places;
-its clients must handle the exception it can raise.
+The following functions to open out theory user data
+are used in several places;
+callers must handle the exception they can raise.
 
 =SML
 fun Ûdest_ud_stringÝ (UD_String (n, uds)) = (n, uds)
 |   dest_ud_string _ = fail "" 0 [] (* Caller MUST catch this *);
+=TEX
+=SML
+fun Ûdest_ud_intÝ (UD_Int (n, uds)) = (n, uds)
+|   dest_ud_int _ = fail "" 0 [] (* Caller MUST catch this *);
 =TEX
 
 The following function updates the user data for the current theory.  Given a user data key and an item of data it retrieves any data currently stored under that key, adds the new data to it and then stores the result under the key.
@@ -1692,16 +1697,18 @@ For record types, we also need to record the order of the component names.
 To do this a list of type names and associated component names from the SPARK type declarations is maintained in the theory.
 A global variable will not be a type unless it has an entry in this list.
 =TEX
+=IGN
 =SML
-fun Ûadd_spark_type_infoÝ (tyn : ID, compns : ID list) : unit = (
-	let	val	enc_compns = map (fn n => UD_String(n, [])) compns;
-	in	update_user_datum cn_types_ud_key (UD_String(tyn, enc_compns))
+fun Ûadd_spark_type_infoÝ (tyn : ID, (compns : ID list, ndiscs : int)) : unit = (
+	let	val enc = UD_Int(ndiscs, [])::map (fn n => UD_String(n, [])) compns;
+	in	update_user_datum cn_types_ud_key (UD_String(tyn, enc))
 	end
 );
-fun Ûget_spark_type_infoÝ (n : ID) : ID list OPT = (
+fun Ûget_spark_type_infoÝ (n : ID) : (ID list * int) OPT = (
 	let	fun aux (UD_String (tyn, cmps)::more) = (
 			if	tyn = n
-			then	Value (map (fst o dest_ud_string) cmps)
+			then	Value (map (fst o dest_ud_string) (tl cmps),
+					(fst o dest_ud_int o hd) cmps)
 			else	aux more
 		) | aux (_::more) = (aux more
 		) | aux [] = Nil;
@@ -1732,11 +1739,19 @@ fun Ûget_spark_constant_infoÝ (n : ID) : ID OPT = (
 	end	handle Fail _ => Nil
 );
 =TEX
-To help with processing record types the following function takes a type definition and returns a list giving the components names (if any, i.e., the list is empty except when a record type definition is processed):
+To help with processing record types the following function takes a type definition and returns a list giving the component names in order and the number of discriminants
+for a record type (if any, i.e., the list is empty and the number is 0
+except when a record type definition is processed --- this works because a
+record must have at least one component).
+In accordance with the Ada rules, the discriminants are included, in order, as
+the leading sublist of the components.
 =SML
-fun comp_names(TDRecordTypeDef {decl} : TYPE_DEF) = (
-	flat (map #vars decl)
-) | comp_names _ = [];
+fun comp_names(TDRecordTypeDef {decl, disc} : TYPE_DEF) : ID list * int = (
+	let	val discs = flat (map #vars disc);
+		val others = flat (map #vars decl);
+	in	(discs @ others, length discs)
+	end
+) | comp_names _ = ([], 0);
 =TEX
 In the following, named number declarations are just ignored.
 This is acceptable because in \cite{ISS/HAT/DAZ/DTD508}
@@ -1747,8 +1762,8 @@ fun Ûset_basic_decl_infoÝ (pfx : ID -> ID) (bd : BASIC_DECL) : unit = (
 	case bd of
 		BDTypeDecl {name, type_def} => (
 			add_spark_type_info (pfx (name), comp_names type_def)
-	) |	BDSubtypeDecl std => add_spark_type_info (pfx (#name std), [])
-	|	BDPrivateTypeDecl ptd => add_spark_type_info (pfx (#id ptd), [])
+	) |	BDSubtypeDecl std => add_spark_type_info (pfx (#name std), ([], 0))
+	|	BDPrivateTypeDecl ptd => add_spark_type_info (pfx (#id ptd), ([], 0))
 	|	BDConstDecl {consts = cs, tm = Value tmark, ...} => (map (fn c =>
 				add_spark_constant_info (pfx c, tmark)
 			) cs; ())
@@ -1842,7 +1857,7 @@ fun Ûenv_info_of_g_varÝ (zn : ID) (ty : TYPE) : (TYPE * ENV_INFO) = (
 	|	Nil => (
 			ty,
 			case get_spark_type_info zn of
-				Value (ns as _::_) => EIEnvRecordType ns
+				Value (info as (_::_, _)) => EIEnvRecordType info
 			|	Value _ => EIEnvOtherType
 			|	Nil => (
 				case get_spark_constant_info zn of
@@ -5272,7 +5287,7 @@ fun Ûvcs_aux_initialÝ (st : STATEMENT) : SPEC = (
 \subsection{The SID function renames\_proc}
 =SML
 fun Ûrenames_proc_commonÝ
-	({subprogram_specification = ss, name1 = pack, name2=old}
+	({subprogram_specification = ss, name1 = Value pack, name2=old}
 		: SUBPROGRAM_RENAMING)
 	 : FORMAL_PROC OPT = (
 	case ss of
@@ -5319,11 +5334,14 @@ fun Ûrenames_proc_commonÝ
 		) |	Nil => (comment "renames_proc" 507038 [fn()=>pack];
 				Nil)
 	) |	_ => Nil
+) | renames_proc_common
+	({subprogram_specification = ss, name1 = Nil, name2=old}) = (
+	fail "renames_proc_common" 505001 [fn _ => "Renaming local procedures is TBS"]
 );
 =TEX
 =SML
 fun Ûrenames_proc_pack_specÝ
-	(sr as {subprogram_specification = ss, name1 = pack, name2=old}
+	(sr as {subprogram_specification = ss, name1 = Value pack, name2=old}
 		: SUBPROGRAM_RENAMING)
 	: unit = (
 let 	val oformal_proc3 = renames_proc_common sr;
@@ -5359,11 +5377,14 @@ in
 				() (* done in common *)
 		) |	Nil => () (* done in common *)
 	) |	_ => ()
-end);
+end) | renames_proc_pack_spec
+	({subprogram_specification = ss, name1 = Nil, name2=old}) = (
+	fail "renames_proc_pack_spec" 505001 [fn _ => "Renaming local procedures is TBS"]
+);
 =TEX
 =SML
 fun Ûrenames_proc_otherwiseÝ
-	(sr as {subprogram_specification = ss, name1 = pack, name2=old}
+	(sr as {subprogram_specification = ss, name1 = Value pack, name2=old}
 		: SUBPROGRAM_RENAMING)
 	: unit = (
 let	val oformal_proc3 = renames_proc_common sr;
@@ -5379,7 +5400,10 @@ in	blocks :=
 		(block_formal_procs (block1, formal_proc3::formal_procs) 
 		:: tl (!blocks))
 end)
-end);
+end) | renames_proc_otherwise
+	({subprogram_specification = ss, name1 = Nil, name2=old}) = (
+	fail "renames_proc_otherwise" 505001 [fn _ => "Renaming local procedures is TBS"]
+);
 =TEX
 =SML
 fun Ûrenames_procÝ (sr : SUBPROGRAM_RENAMING)
@@ -5392,7 +5416,7 @@ fun Ûrenames_procÝ (sr : SUBPROGRAM_RENAMING)
 \subsection{The SID function renames\_fun}
 =SML
 fun Ûrenames_funÝ
-	({subprogram_specification = ss, name1 = pack, name2=old}
+	({subprogram_specification = ss, name1 = Value pack, name2=old}
 		: SUBPROGRAM_RENAMING)
 	: unit = (
 	case ss of
@@ -5406,6 +5430,9 @@ fun Ûrenames_funÝ
 					[fn () => get_message msg]
 
 	) | 	_ => ()
+) | renames_fun
+	({subprogram_specification = ss, name1 = Nil, name2=old}) = (
+	fail "renames_fun" 505001 [fn _ => "Renaming local procedures is TBS"]
 );
 =TEX
 \section{STUBS AND SUBUNITS}\label{STUBSANDSUBUNITS}
@@ -5767,7 +5794,7 @@ and Ûdo_statementÝ (y as STNull : STATEMENT) : STATEMENT = (y
 			loop= {stmt=expanded_stmt, t = t}}
 	end
 ) | do_statement (y as (STExitWhen x) : STATEMENT) = (y
-) | do_statement (y as STExit : STATEMENT) = (y
+) | do_statement (y as (STExit x): STATEMENT) = (y
 ) | do_statement (y as (STRet x) : STATEMENT)  = (y
 ) | do_statement (y as (STProcNoIvars x) : STATEMENT) = (y
 ) | do_statement (y as (STKSlot {label, content}) : STATEMENT) = (
@@ -5832,7 +5859,7 @@ fun Ûextract_vardeclsÝ ((bd::more) : BASIC_DECL list) : VAR_DECL list = (
 =SML
 fun Ûadjust_using_decÝ ({aux, basic_decls, invariant} : SI_USING_DEC)
 	: USING_DEC = (
-	let	val basic_decls' = adjust_basic_decls basic_decls;
+	let	val basic_decls' = adjust_basic_decls current_cn_env basic_decls;
 	in	{aux = aux,
 		 concrete_vars = extract_vardecls basic_decls',
 		 basic_decls = basic_decls',
@@ -5861,14 +5888,20 @@ fun Ûdo_declarationÝ (y as (DDeclarationKSlot (
 ) | do_declaration (y as (DRenamingDeclaration x) : DECLARATION) = (
 	case x of
 		RDSubprogram
-		(y as {subprogram_specification = SSProcedure _, ...}) =>
+		(y as {subprogram_specification = SSProcedure _, ...}) => (
 				renames_proc y
-	|	RDSubprogram
-		(y as {subprogram_specification = SSFunction _, ...}) =>
+	) |	RDSubprogram
+		(y as {subprogram_specification = SSFunction _, ...}) => (
 				renames_fun y
-	|	RDFunction _ => ()
+	) |	RDOpsym _ => (
+		comment "do_declaration" 505001 [fn _=>"Operator symbol renaming TBS"]
+	) |	RDObject _ => (
+		comment "do_declaration" 505001 [fn _=>"Object renaming TBS"]
+	) |	RDPackage _ => (
+		comment "do_declaration" 505001 [fn _=>"Package renaming TBS"]
+	)
 ) | do_declaration (y as (DBasicDecl x) : DECLARATION) = (
-	map do_basic_declaration (adjust_basic_decls [x]); ()
+	map do_basic_declaration (adjust_basic_decls current_cn_env [x]); ()
 ) | do_declaration (y as (DRepresentationClause x) : DECLARATION) = (
 	comment "do_declaration" 507017 []
 ) | do_declaration (y as (DProperBody x) : DECLARATION) = (

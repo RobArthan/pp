@@ -95,6 +95,7 @@ This removes the need for various special cases and type conversion functions.
 \item[Issue 1.99--1.102] R0006: free use of subtype indications and ranges.
 \item[Issue 1.103] R0056: default parameter modes supported properly.
 \item[Issue 1.104] Fixing bug when terms have to be type-checked without a cache theory.
+\item[Issue 1.105] Spring 2002 enhancements: syntax changes for interim release.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -455,7 +456,8 @@ structure ÛCNParserÝ (* stage 2 *) = struct
 =TEX
 
 =SML
-open CaseIndependence CNParser;
+open CNParser;
+open CaseIndependence;
 =TEX
 
 We give the reduction functions in the order of their appearance
@@ -653,14 +655,22 @@ fun Ûmk_sub_indÝ ((e, con) : EXP * SI_CONSTRAINT) : SI_SUB_IND =(
 	let	val (tmark, constr) = (
 		case e of
 			EIndexedComp{prefix=prefix,index=index} => (
-				case (index, con) of
-					(EArrayAggPos{comps=comps,...}, SINoCon) =>
-					(mk_type_mark prefix, (SIIndexCon
-						(map exp_to_discrete_range comps)))
+				case con of
+					SINoCon =>
+					(mk_type_mark prefix, SIDiscriminantCon[index])
 				| _ => (mk_type_mark e, con)
 		) |  _ => (mk_type_mark e, con));
 	in	{tmark = tmark, con = constr}
 	end
+);
+=TEX
+=SML
+fun Ûpar_spec_to_disc_specÝ ({idlist, mode, name} : PARAMETER_SPECIFICATION)
+	: DISCRIMINANT_SPECIFICATION = (
+	case mode of
+		MSparkIn false => {vars = idlist, tmark = name}
+	|	_ => parse_error 503001
+			"a parameter mode is not allowed in a discriminant specification"
 );
 =TEX
 \subsection{Support for Unlabelled KSlots and Specification Statements}
@@ -946,12 +956,27 @@ val Ûred_type_declaration2Ý = red_accept;
 =TEX
 
 =SML
-fun Ûred_full_type_declarationÝ
+fun Ûred_full_type_declaration1Ý
         _ (Token ((_,CNText id), _)) _ (Parsed(PPTypeDef td)) _ = (
     PPBasicDecls[SITypeDecl{name=id, type_def=td}])
-|   red_full_type_declaration _ _ _ _ _ =
-        stack_error "red_full_type_declaration";
+|   red_full_type_declaration1 _ _ _ _ _ =
+        stack_error "red_full_type_declaration1";
+=TEX
 
+=SML
+fun Ûred_full_type_declaration2Ý
+        _ (Token ((_,CNText id), _)) (Parsed (PPFormals fps)) _ (Parsed(PPTypeDef td)) _ = (
+	case td of 
+		SIRecordTypeDef {decl, ...} => (
+    			PPBasicDecls[SITypeDecl{
+				name=id,
+				type_def = SIRecordTypeDef {
+					decl = decl,
+					disc = map par_spec_to_disc_spec fps}}])
+	|	_ => parse_error 503001
+	"A discriminant part is only allowed in a private or record type declaration"
+) | red_full_type_declaration2 _ _ _ _ _ _ =
+        stack_error "red_full_type_declaration2";
 =TEX
 
 =SML
@@ -1125,7 +1150,7 @@ fun Ûred_discrete_range1Ý
 val Ûred_discrete_range2Ý = red_accept;
 
 fun Ûred_record_type_definitionÝ _ (Parsed(PPVarDecls vs)) _ _ = (
-    PPTypeDef(SIRecordTypeDef{decl=vs}))
+    PPTypeDef(SIRecordTypeDef{decl=vs, disc = []}))
 |   red_record_type_definition _ _ _ _ =
         stack_error "red_record_type_definition";
 =TEX
@@ -1775,17 +1800,6 @@ fun Ûred_case_choice_list2Ý (Parsed(PPCaseChoices [ac])) _
 |   red_case_choice_list2 _ _ _ =
         stack_error "red_acase_choice_list2";
 =TEX
-fun Ûexp_to_si_infoÝ (EDiscreteRange (DRConstrained{tmark, range}) : EXP)
-	: ID OPT * (EXP * EXP OPT) = (
-	SIDiscreteRangeSubInd{tmark = tmark, con = CRange range}
-) | exp_to_si_info (EDiscreteRange (DRRange range)) = (
-	SIDiscreteRangeRange range
-) | exp_to_si_info e = (
-	if	is_range_attribute e
-	then	(Nil, (RRangeAttr e, Nil))
-  	else	(Nil, (Value (mk_type_mark e), Nil)
-);
-
 =SML
 fun Ûred_case_choiceÝ (Parsed(PPExp e)) = (
     case e of 
@@ -1860,19 +1874,19 @@ fun Ûred_loop_bodyÝ _ (Parsed(pst as PPStatement _)) _ _ = pst
 |   red_loop_body _ _ _ _  = stack_error "red_loop_body";
 =TEX
 =SML
-val Ûred_name_opt11Ý = PPIds[];
+val Ûred_name_colon_opt1Ý = PPIds[];
 
-fun Ûred_name_opt12Ý (Token ((_,CNText id), _)) _ = (
+fun Ûred_name_colon_opt2Ý (Token ((_,CNText id), _)) _ = (
     PPIds [id])
-|   red_name_opt12 _ _ =
-        stack_error "red_name_opt12";
+|   red_name_colon_opt2 _ _ =
+        stack_error "red_name_colon_opt2";
 
-val Ûred_name_opt21Ý = PPIds [];
+val Ûred_name_opt1Ý = PPIds [];
 
-fun Ûred_name_opt22Ý (Token ((_,CNText id), _)) = (
+fun Ûred_name_opt2Ý (Token ((_,CNText id), _)) = (
     PPIds [id])
-|   red_name_opt22 _ =
-        stack_error "red_name_opt22";
+|   red_name_opt2 _ =
+        stack_error "red_name_opt2";
 
 val Ûred_iteration_scheme_opt1Ý = PPId "__no_scheme";
 
@@ -1917,18 +1931,29 @@ fun Ûred_auxiliary_expressionÝ _ (Token ((LCZ,CNZ z), _)) _ = (
 |   red_auxiliary_expression _ _ _ =
         stack_error "red_auxiliary_expression";
 
-fun Ûred_exit_statement1Ý _ _ = (
-    PPStatement STExit
-    );
-fun Ûred_exit_statement2Ý _ _ (Parsed(PPExp exp)) _ = (
-    PPStatement(STExitWhen{g=exp}))
-|   red_exit_statement2 _ _ _ _ =
-        stack_error "red_exit_statement2";
+fun Ûred_exit_statement1Ý _ (Parsed(PPIds [])) _ = (
+    PPStatement (STExit { n = Nil })
+) | red_exit_statement1 _ (Parsed(PPIds [id])) _ = (
+    PPStatement (STExit { n = Value id })
+) | red_exit_statement1 _ _ _ = 
+    stack_error "red_exit_statement1";
 
-fun Ûred_return_statementÝ _ (Parsed(PPExp exp)) _ = (
-    PPStatement (STRet{e=exp}))
-|   red_return_statement _ _ _ =
-        stack_error "red_return_statement";
+fun Ûred_exit_statement2Ý _ (Parsed(PPIds [])) _ (Parsed(PPExp exp)) _ = (
+    PPStatement(STExitWhen{ g = exp, n = Nil })
+) | red_exit_statement2 _ (Parsed(PPIds [id])) _ (Parsed(PPExp exp)) _ = (
+    PPStatement(STExitWhen{ g = exp, n = Nil })
+) | red_exit_statement2 _ _ _ _ _ =
+        stack_error "red_exit_statement2";
+=TEX
+=SML
+fun Ûred_return_statement1Ý _ _ = (
+    PPStatement (STRet{ e = Nil })
+);
+
+fun Ûred_return_statement2Ý _ (Parsed(PPExp exp)) _ = (
+    PPStatement (STRet{ e = Value exp }))
+|   red_return_statement2 _ _ _ =
+        stack_error "red_return_statement2";
 =TEX
 
 =SML
@@ -2199,7 +2224,8 @@ fun Ûred_positional_parameter_association2Ý (Parsed(PPExp e)) _
 =SML
 fun red_actual_parameter (Parsed(PPSubtypeIndication si)) = (
 	PPExp (si_to_discrete_range si)
-);
+) | red_actual_parameter  _ =
+        stack_error "red_actual_parameter";
 =TEX
 
 SPARK manual 7.1:
@@ -2382,48 +2408,107 @@ fun Ûred_declarative_part_1_2Ý (Parsed (PPDeclarations d1)) (Parsed (PPDeclarati
 SPARK manual 7.4:
 =SML
 fun Ûred_private_type_declaration1Ý _ (Token ((_,CNText id), _)) _ _ _ = (
-    PPBasicDecls[SIPrivateTypeDecl{id=id,limited=false}])
+    PPBasicDecls[SIPrivateTypeDecl{id=id, disc=[], limited=false}])
 |   red_private_type_declaration1 _ _ _ _ _ =
         stack_error "red_private_type_declaration1";
 
-fun Ûred_private_type_declaration2Ý _ (Token ((_,CNText id), _)) _ _ _ _ = (
-    PPBasicDecls[SIPrivateTypeDecl{id=id,limited=true}])
+fun Ûred_private_type_declaration2Ý _ (Token ((_,CNText id), _))
+	(Parsed (PPFormals fps)) _ _ _ = (
+    PPBasicDecls[SIPrivateTypeDecl{
+		id=id,
+		disc=map par_spec_to_disc_spec fps,
+		limited=false}])
 |   red_private_type_declaration2 _ _ _ _ _ _ =
         stack_error "red_private_type_declaration2";
 
+fun Ûred_private_type_declaration3Ý _ (Token ((_,CNText id), _)) _ _ _ _ = (
+    PPBasicDecls[SIPrivateTypeDecl{id=id, disc=[], limited=true}])
+|   red_private_type_declaration3 _ _ _ _ _ _ =
+        stack_error "red_private_type_declaration3";
+
+fun Ûred_private_type_declaration4Ý _ (Token ((_,CNText id), _))
+	(Parsed (PPFormals fps)) _ _ _ _ = (
+    PPBasicDecls[SIPrivateTypeDecl{
+		id=id,
+		disc=map par_spec_to_disc_spec fps,
+		limited=true}])
+|   red_private_type_declaration4 _ _ _ _ _ _ _ =
+        stack_error "red_private_type_declaration4";
+=TEX
+
+=SML
 fun Ûred_deferred_constant_declarationÝ (Parsed(PPIds ids)) _ _
     (Parsed(PPSubtypeIndication n)) _ = (
     PPBasicDecls[SIDeferredConstDecl{consts=ids,tmark=si_to_tmark n}])
 |   red_deferred_constant_declaration p _ _ q _ =
         stack_error "red_deferred_constant_declaration";
+=TEX
+=SML
+fun Ûred_renaming_declaration1Ý
+	(Parsed (PPIds [id])) _ (Parsed (PPExp tm))
+	_ (Parsed (PPExp n)) _ = (
+	PPDeclarations[DRenamingDeclaration(RDObject
+	{new_name = id, tmark = mk_type_mark tm, old_name = mk_type_mark n})]
+) | red_renaming_declaration1 (Parsed (PPIds _)) _ _ _ _ _ = (
+        parse_error 503001
+       "A renaming declaration may declare only one new identifier"
+) | red_renaming_declaration1 _ _ _ _ _ _ =
+	stack_error "red_renaming_declaration1";
+	
+fun Ûred_renaming_declaration2Ý
+	_ (Token ((_,CNText id), _)) _ 
+	_ (Parsed (PPExp n)) _ = (
+	PPDeclarations[DRenamingDeclaration(RDPackage
+	{new_name = id, old_name = mk_type_mark n})]
+) | red_renaming_declaration2 _ _ _ _ _ _ =
+	stack_error "red_renaming_declaration2";
+	
 
-fun Ûred_renaming_declaration1Ý _ (Parsed (PPId opsym1))
-    (Parsed(PPFormals f)) _ (Parsed(PPExp n)) _
-    (Token ((_,CNText id), _)) _ (Parsed (PPId opsym2)) _ = (
+fun Ûred_renaming_declaration3Ý _ (Parsed (PPId opsym1))
+    (Parsed(PPFormals f)) _ (Parsed(PPExp n1)) _
+    (Parsed(PPExp n2)) _ (Parsed (PPId opsym2)) _ = (
     if opsym1 = opsym2
     then
-        PPDeclarations[DRenamingDeclaration(RDFunction
-        {opsym1=opsym1,formal_part=f,tmark=mk_type_mark n,
-           name=id,opsym2=opsym2})]
+        PPDeclarations[DRenamingDeclaration(RDOpsym
+        {new_name=Nil,formal_part=f,tmark=mk_type_mark n1,
+           name1=mk_type_mark n2, name2=opsym2})]
     else
         parse_error 503001
        "The two operator symbols in a renaming declaration must be the same")
-|   red_renaming_declaration1 _ _ _ _ _ _ _ _ _ _ =
-        stack_error "red_renaming_declaration1";
+|   red_renaming_declaration3 _ _ _ _ _ _ _ _ _ _ =
+        stack_error "red_renaming_declaration3";
 
-fun Ûred_renaming_declaration2Ý (Parsed (PPSubprogramSpec ss)) _
-    (Token ((_,CNText id1), _)) _ (Token ((_,CNText id2), _)) _ = (
-   let val res = 
-       PPDeclarations[DRenamingDeclaration(RDSubprogram
-          {subprogram_specification=ss,name1=id1,name2=id2})];
+fun Ûred_renaming_declaration4Ý (Parsed (PPSubprogramSpec ss)) _
+    (Parsed(PPExp n)) _ = (
+   let val (id1, id2) = case n of 
+		ESelectedComp {prefix, selector} => (Value (mk_type_mark prefix), selector)
+	|	_ => (Nil, mk_type_mark n);
+	val res = PPDeclarations[DRenamingDeclaration(RDSubprogram
+          		{subprogram_specification=ss,name1=id1,name2=id2})];
    in  case ss of
           SSProcedure {spec = Nil, ...} => res
        |  SSFunction {spec = Nil, ...} => res
        |  _ => parse_error 503001
          "A specification statement is not allowed in a renaming declaration"
    end)
-|   red_renaming_declaration2 _ _ _ _ _ _ =
-        stack_error "red_renaming_declaration21";
+|   red_renaming_declaration4 _ _ _ _  =
+        stack_error "red_renaming_declaration4";
+
+
+fun Ûred_renaming_declaration5Ý (Parsed (PPSubprogramSpec (SSFunction
+	{designator=id,formal_part=f, return=tm, spec=Nil, ...})))
+    _ (Parsed(PPExp n2)) _ (Parsed (PPId opsym2)) _ = (
+        PPDeclarations[DRenamingDeclaration(RDOpsym
+        {new_name=Value id,formal_part=f,tmark=tm,
+           name1=mk_type_mark n2, name2=opsym2})])
+|   red_renaming_declaration5 (Parsed (PPSubprogramSpec (SSFunction _))) _ _ _ _ _ =
+	parse_error 503001
+         "A specification statement is not allowed in a renaming declaration"
+|   red_renaming_declaration5 (Parsed (PPSubprogramSpec (SSProcedure _))) _ _ _ _ _ =
+	parse_error 503001
+         "A return type is required in an operator symbol renaming declaration"
+|   red_renaming_declaration5 _ _ _ _ _ _ =
+        stack_error "red_renaming_declaration5";
 
 =TEX
 

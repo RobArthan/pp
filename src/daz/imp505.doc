@@ -1,4 +1,4 @@
-% %Z% $Date: 2002/03/19 16:37:17 $ $Revision: 1.95 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2002/03/21 13:32:07 $ $Revision: 1.96 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -16,7 +16,7 @@
 \TPPtitle{Implementation: Verification Condition Generator}  %% Mandatory field
 \def\TPPheadtitle{Verification Condition Generator}
 \TPPref{ISS/HAT/DAZ/IMP505}  %% Mandatory field
-\def\SCCSversion{1.52%
+\def\SCCSversion{$Revision:$%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 \TPPdate{\FormatDate{97/07/18%
@@ -118,6 +118,7 @@
 \item[Issue 1.95] Fixing bug in type-checking during preprocessing of
 procedure calls.
 \item[Issue 1.96] Fixing bug in check on case statement with omitted others part.
+\item[Issue 1.97] Spring 2002 enhancements: adjustments for syntax for interim release.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -669,7 +670,7 @@ end
 \subsection{Exit Statement (with Condition)}\label{wp-exit-with-cond}
 =SML
 fun Ûexit_whenÝ ({a, wp_env={till, env, ...}, ...} : WP_PARS)
-		({g} : EXIT_WHEN)
+		({g, n = Nil} : EXIT_WHEN)
 			 : RESULT = (
 let	val ze = trans_exp env g;
 	val wp = add_domain_conds env ([ze],
@@ -677,12 +678,17 @@ let	val ze = trans_exp env g;
 		(z_eq(ze, zid env "FALSE") %Longrightarrow% a));
 in	{wp = wp, side = []}
 end
+) | exit_when ({a, wp_env={till, env, ...}, ...})
+	({g, n = Value name} : EXIT_WHEN) = (
+	fail "exit_when" 505001 [fn _ => "VC generation for exit to named loop is TBS"]
 );
 =TEX
 \subsection{Exit}\label{wp-exit}
 =SML
-fun Ûcn_exitÝ ({wp_env={till, ...},...} : WP_PARS) : RESULT = (
+fun Ûcn_exitÝ ({wp_env={till, ...},...} : WP_PARS) ({n = Nil} : EXIT): RESULT = (
 	{wp = [[] ô till], side = []}
+) | cn_exit ({wp_env={till, ...},...} : WP_PARS) ({n = Value name} : EXIT) = (
+	fail "cn_exit" 505001 [fn _ => "VC generation for exit to named loop is TBS"]
 );
 =TEX
 \subsection{Return}\label{wp-return}
@@ -692,18 +698,21 @@ $conv\_var\_decl$ is implemented in \cite{ISS/HAT/DAZ/IMP508}.
 fun Ûcn_returnÝ ({wp, a, wp_env= {env,
 		fun_header={name, formal_pars, return_type},
 			return, ...}} : WP_PARS)
-		({e} : RETURN) : RESULT = (
+		({e = Value exp} : RETURN) : RESULT = (
 let	val zfun = trans_fun_name env name;
 	val var_decls = map (fn {var_decl, ...} => var_decl) formal_pars;
 	val ids = flat (map (fn {vars, ...} => vars) var_decls);
 	val zargs = map (fn id => zid env (trans_id id)) ids;
-	val ze = slide_to_tmark env (trans_exp env e, return_type);
+	val ze = slide_to_tmark env (trans_exp env exp, return_type);
 	val wp = add_domain_conds env ([ze],
 		 [[z_eq(z_fun_call(zfun, zargs), ze)] ô return]);
 	val side = [];
 in
 	{wp = wp, side = side}
 end
+) | cn_return ({wp, a, wp_env= {env, ...}})
+		({e = Nil} : RETURN) : RESULT = (
+	fail "cn_return" 505001 [fn _ => "VC generation for exit to named loop is TBS"]
 );
 =TEX
 \subsection{Procedure Call (No Initial Variables in Spec)}\label{wp-proc-call-no-ivars}
@@ -1239,9 +1248,10 @@ in	case adjust_statement wp_env st of
 			cn_while pars {g=adjust g, loop=loop, name=name}
 	|	STForStatic x => for_static pars x
 	|	STForTmark x => for_tmark pars x
-	|	STExitWhen {g} => exit_when pars {g=adjust g}
-	|	STExit => cn_exit pars
-	|	STRet {e} => cn_return pars {e=adjust e}
+	|	STExitWhen {g, n} => exit_when pars {g=adjust g, n = n}
+	|	STExit x => cn_exit pars x
+	|	STRet {e = Value exp} => cn_return pars {e=Value (adjust exp)}
+	|	STRet x => cn_return pars x
 	|	STProcNoIvars x => proc_call_no_ivars pars x
 	|	STKSlot x => fail "wp" 505040 []
 	|	STPragma _ => null pars
@@ -1598,11 +1608,11 @@ let	fun pass_over_statement (st : STATEMENT) = (
 				pass_over_statement (#stmt loop)
 		)|	STForTmark {name,i,tmark,dir,loop} => (
 				pass_over_statement (#stmt loop)
-		)|	STExitWhen {g} => (
+		)|	STExitWhen _ => (
 				check_1_c speclab
-		)|	STExit => (
+		)|	STExit _ => (
 				check_1_c speclab
-		)|	STRet {e} => (
+		)|	STRet _ => (
 				check_1_b speclab
 		)|	STProcNoIvars (proc as {name,actuals}) => (
 				check_1_d (name, speclab);
@@ -1665,7 +1675,7 @@ fun Ûcheck_3aÝ	 (state : CHECK_STATE, st : STATEMENT) = (
 fun Ûcheck_3bÝ	 (state : CHECK_STATE, st : STATEMENT) = (
 
 	case  st of
-		STExit => (
+		STExit _ => (
 			if state = CSOKToExit
 			then ()
 			else checking_error "check_3b" 505066 []
@@ -1755,13 +1765,13 @@ let	val local_resolver = resolver repl_function;
 		)|	STForTmark {name,i,tmark,dir,loop} => (
 				check_over_statement CSInLoop (#stmt loop);
 				EndsInOther
-		)|	STExitWhen {g} => (
+		)|	STExitWhen _ => (
 				check_3a (state, st);
 				EndsInOther
-		)|	STExit => (
+		)|	STExit _ => (
 				check_3b (state, st);
 				EndsInOther
-		)|	STRet {e} => (
+		)|	STRet _ => (
 				check_4a is_function_subprogram;
 				EndsInReturn
 		)|	STProcNoIvars (proc as {name,actuals}) => (
