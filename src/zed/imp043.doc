@@ -1,0 +1,732 @@
+=TEX
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation of the Z Schema Calculus}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP043}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{SML Literate Script}
+\TPPkeywords{}
+\TPPauthor{K.Blackburn & WIN01}
+\TPPauthorisation{R.D.Arthan & FST Team Leader}
+\TPPabstract{This document contains the implementation
+of the derived rules of inference, conversions and tactics for the ProofPower Z schema calculus.}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	    Library
+}}
+\begin{document}
+\makeTPPfrontpage
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History} 
+\begin{description}
+\item [Issue 1.1] 
+First version.
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains a implementation for the 
+derived rules of inference, conversions and tactics for
+the ProofPower Z (see \cite{DS/FMU/IED/HLD015}) schema calculus.
+This is called for in \cite{DS/FMU/IED/HLD016}.
+The design is
+given in \cite{DS/FMU/IED/DTD043}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains an implementation for the 
+initial set of rules, conversions and tactics for the schema calculus of the ProofPower Z.
+\subsubsection{Dependencies}
+This document takes its signature from \cite{DS/FMU/IED/DTD043}.
+\subsubsection{Deficiencies}
+There is something wrong with
+=INLINEFT
+full_dest_z_term ÒS'Æ;
+=TEX
+{}.
+\subsubsection{Possible Enhancements}
+None known.
+
+\section{PREAMBLE}
+=IGN
+structure €ZSchemaCalculus› : ZSchemaCalculus = struct
+=TEX
+=SML
+open ZGeneratedConstants;
+val lthy = get_current_theory_name();
+val _ = open_theory €"z_set_theory"›;
+val _ = set_pc "z_predicates";
+val _ = set_flag("z_type_check_only",false);
+=TEX
+
+\section{THE CODE}
+\subsection{Utilities}
+=SML
+fun €list_eq› (eq : 'a * 'a -> bool) (a :: x) (b :: y) = 
+	eq(a,b) andalso list_eq eq x y
+| list_eq _ [] [] = true
+| list_eq _ _ _ = false;
+=TEX
+Some universes:
+=SML
+val €Ua› = ÒUÆ; (* type = 'a SET *)
+val €Ub› = inst [] [(î'bÆ,î'aÆ)] Ua;
+val €Uc› = inst [] [(î'cÆ,î'aÆ)] Ua;
+=TEX
+\subsubsection{Conversionals}
+Apply through all $Ã$'s.
+=SML
+fun (€ALL_SIMPLE_Ã_C› (cnv:CONV) : CONV) tm = 
+	(SIMPLE_Ã_C (ALL_SIMPLE_Ã_C cnv)
+	ORELSE_C cnv) tm;
+=TEX
+Apply to the last $µ$ in a sequence.
+=SML
+fun €LAST_SIMPLE_µ_C› (conv:CONV): CONV = (fn tm =>
+	if is_simple_µ (snd(dest_simple_µ tm))
+	then (SIMPLE_BINDER_C (LAST_SIMPLE_µ_C conv)) tm
+	else conv tm
+);
+=TEX
+Diagnostic Conversional:
+=SML
+fun €DIAG_C› (caller:string) (conv:CONV):CONV = (fn tm =>
+	(diag_string(caller ^ " " ^ string_of_term tm);
+	conv tm)
+);
+=TEX
+Apply a conversion to all conjuncts:
+=SML
+fun €±_C› (cnv:CONV) :CONV = (fn tm =>
+	if is_± tm
+	then APP_C(RAND_C(±_C cnv),±_C cnv) tm
+	else cnv tm
+);
+=TEX
+Apply a list of conversions, on to each argument of a nested
+sequence of operators:
+=FRULE 1 Conversional
+LIST_OP_C
+[cnv1,cnv2,cnv3,...]
+¨op a1 (op a2 (op a3 ...))Æ
+˜
+˜
+Ù (op a1 (op a2 (op a3 ...))) =
+   op a1' (op a2' (op a3' ...))
+=TEX
+where
+=GFT
+cnv1 a1 = Ù a1 = a1'
+cnv2 a2 = Ù a2 = a2'
+cnv3 a3 = Ù a3 = a3'
+ ...
+=TEX
+=SML
+fun €LIST_OP_C› [cnv] = cnv
+| LIST_OP_C ((cnv:: cnvl):CONV list) :CONV = 
+	APP_C(RAND_C cnv, LIST_OP_C cnvl)
+| LIST_OP_C [] = fail "LIST_±_C" 0 [];
+=TEX
+Rename a sequence of quantified variables:
+=SML
+local
+	fun simple_¡_conv1 nm :CONV= (fn tm =>
+		(simple_¡_conv nm
+		ORELSE_C
+		simple_¡_conv1 (nm ^ get_variant_suffix())) tm);
+in
+fun €seq_binder_simple_¡_conv› [a]:CONV  = (
+let	val nm = fst(dest_var a);
+in
+	RAND_C (simple_¡_conv1 nm)
+end
+) | seq_binder_simple_¡_conv (a::x) = (
+let	val nm = fst(dest_var a);
+in
+	(RAND_C (simple_¡_conv1 nm)) THEN_C BINDER_C (seq_binder_simple_¡_conv x)
+end
+) | seq_binder_simple_¡_conv [] = id_conv;
+end;
+=TEX
+=SML
+fun (€seq_simple_¬_conv›:CONV) (tm:TERM) = (
+	(simple_¬_conv
+	ORELSE_C 
+	(RATOR_C seq_simple_¬_conv THEN_C simple_¬_conv)
+	ORELSE_C
+	(fn tm1 => term_fail "seq_simple_¬_conv" 27008 [tm1]))
+	tm
+);
+=TEX
+
+\subsubsection{Projection Conversions}
+=SML
+val €dpvt_proj_thm›:THM = all_µ_intro(list_±_intro
+	(strip_±_rule (all_µ_elim (get_spec ¨$"Z'S[d,p,t,v]v"Æ))
+		to 3));
+local
+	val cnjs = strip_±_rule(all_µ_elim dpvt_proj_thm);
+in
+	val (€d_dptv_proj_conv›,€p_dptv_proj_conv›,
+		€t_dptv_proj_conv›, €v_dptv_proj_conv›) = 
+		case (map (fn t => simple_eq_match_conv
+			(all_µ_intro t)) cnjs) of
+		[a,b,c,d] => (a,b,c,d)
+		| _ => fail "" 0 [];
+end;
+=TEX
+=SML
+val €dpv_proj_thm›:THM = all_µ_intro(list_±_intro
+	(strip_±_rule (all_µ_elim (get_spec ¨$"Z'S[d,p,v]v"Æ))
+		to 2));
+local
+	val cnjs = strip_±_rule(all_µ_elim dpv_proj_thm);
+in
+	val €d_dpv_proj_conv› = simple_eq_match_conv1 
+		(all_µ_intro (hd cnjs));
+	val €p_dpv_proj_conv› = simple_eq_match_conv1
+		(all_µ_intro (hd (tl cnjs)));
+	val €v_dpv_proj_conv› = simple_eq_match_conv1
+		(all_µ_intro (hd (tl (tl cnjs))));
+end;
+=TEX
+=SML
+val €dp_proj_thm›:THM = all_µ_intro(list_±_intro
+	(strip_±_rule (all_µ_elim (get_spec ¨$"Z'S[d,p]d"Æ))
+		to 1));
+local
+	val cnjs = strip_±_rule(all_µ_elim dp_proj_thm);
+in
+	val €d_dp_proj_conv› = simple_eq_match_conv1 
+		(all_µ_intro (hd cnjs));
+	val €p_dp_proj_conv› = simple_eq_match_conv1
+		(all_µ_intro (hd (tl cnjs)));
+end;
+=TEX
+=SML
+local
+	val cnjs = strip_±_rule(all_µ_elim (get_specÒ(x,y).1Æ));
+in
+val €tuple2_1_proj_conv› = simple_eq_match_conv1 (all_µ_intro (hd cnjs));
+val €tuple2_2_proj_conv› = simple_eq_match_conv1 (all_µ_intro (hd (tl cnjs)));
+;
+end;
+=TEX
+\section{THE IMPLEMENTATION}
+=SML
+=SML
+local
+val cnv1 = simple_eq_match_conv1 z' _def;
+val cnv2 = simple_eq_match_conv1 (get_spec¨$"Z'SchemaDec"Æ);
+val cnv3 = simple_eq_match_conv1 (prove_rule[]¨µ x:'a ∑ (x = x) § TÆ);
+in
+val €z_ _ç_schema_conv› : CONV = (fn tm => (
+let	val ( s,s) = dest_z_ç tm;
+	val (s',decor) = dest_z_   s;
+	val dummy = if s' =$ s andalso decor = ""
+		then ()
+		else term_fail "z_ _ç_schema_conv" 43002 [tm];
+	val decs = mk_z_decsexp(s',"");
+	val res_tm = mk_eq(tm,decs);
+in
+	check_is_z_conv_result "z_ _ç_schema_conv"
+	(§_t_elim((APP_C(RAND_C(LEFT_C cnv1),
+			RATOR_C(RATOR_C cnv2)) THEN_C
+		cnv3) res_tm))
+end)
+handle complaint =>
+list_divert complaint "z_ _ç_schema_conv" 
+	[("dest_z_ç", 43002, [fn () => string_of_term tm]),
+	("dest_z_ ", 43002, [fn () => string_of_term tm]),
+	("simple_eq_match_conv1", 43002, [fn () => string_of_term tm])])
+;
+end;
+=TEX
+=SML
+val €z_binding_eq_conv› : CONV = (fn tm => (
+let	val (b1,b2) = dest_z_eq tm;
+	val spec = binding_gen_semantic_const b1;
+	val (bcons,bproj) = get_binding_info (type_of b1);
+	val ty_insts = type_match (type_of b1) (type_of(fst(dest_µ(concl spec))));
+	val bcons' = map (inst[] ty_insts) bproj;
+	val s1 = asm_rule tm;
+	val s1s = map (fn x => app_fun_rule  x s1) bcons';
+	val s2 = list_±_intro s1s;
+	val s3s = strip_±_rule(asm_rule(list_mk_± (map concl s1s)));
+	val s4 = fold (fn (x,y) =>  mk_app_rule y x) (rev s3s)
+		(refl_conv (inst [] ty_insts bcons));
+	val s5 = all_µ_intro(hd(rev(strip_±_rule(all_µ_elim spec))));
+	val s6 = conv_rule(LEFT_C (simple_eq_match_conv1 s5)
+		THEN_C RIGHT_C (simple_eq_match_conv1 s5)) s4;
+	val s7 = §_intro (all_¥_intro s2) (all_¥_intro s6);
+in
+	check_is_z_conv_result "z_binding_eq_conv" 
+	(eq_trans_rule (refl_conv tm) s7)
+end)
+handle complaint =>
+list_divert complaint "z_binding_eq_conv"
+	[("dest_z_eq", 43005, [fn () => string_of_term tm]),
+	("binding_gen_semantic_const", 43005, [fn () => string_of_term tm])])
+;
+=TEX
+=SML
+val €z_binding_eq_conv1› : CONV = (fn tm => (
+let	val (b1,b2) = dest_z_eq tm;
+	val spec = binding_gen_semantic_const b1;
+	val (bcons,bproj) = get_binding_info (type_of b1);
+	val ty_insts = type_match (type_of b1) (type_of(fst(dest_µ(concl spec))));
+	val bcons' = map (inst[] ty_insts) bproj;
+	val s1 = asm_rule tm;
+	val s1s = map (fn x => app_fun_rule  x s1) bcons';
+	val s2 = list_±_intro s1s;
+	val s3s = strip_±_rule(asm_rule(list_mk_± (map concl s1s)));
+	val s4 = fold (fn (x,y) =>  mk_app_rule y x) (rev s3s)
+		(refl_conv (inst [] ty_insts bcons));
+	val s5 = all_µ_intro(hd(rev(strip_±_rule(all_µ_elim spec))));
+	val s6 = conv_rule(LEFT_C (simple_eq_match_conv1 s5)
+		THEN_C RIGHT_C (simple_eq_match_conv1 s5)) s4;
+	val s7 = §_intro (all_¥_intro s2) (all_¥_intro s6);
+in
+(check_is_z_conv_result "z_binding_eq_conv1" 
+(case (is_z_binding b1, is_z_binding b2) of
+(false, false) => (eq_trans_rule (refl_conv tm) s7)
+| (true, false) => (
+let	val b1args = map snd(dest_z_binding b1);
+	val proj_thms = rev(tl(rev
+		(strip_±_rule(list_µ_elim (b1 :: b1args)(inst_type_rule ty_insts spec)))));
+	val s8 = conv_rule (RIGHT_C(LIST_OP_C
+		(map (fn thm => LEFT_C (fn _ => thm)) proj_thms))) s7;
+in
+	(eq_trans_rule (refl_conv tm) s8)
+end)
+| (false, true) => (
+let	val b2args = map snd(dest_z_binding b2);
+	val proj_thms = rev(tl(rev
+		(strip_±_rule(list_µ_elim (b2 :: b2args)(inst_type_rule ty_insts spec)))));
+	val s8 = conv_rule (RIGHT_C(LIST_OP_C
+		(map (fn thm => RIGHT_C (fn _ => thm)) proj_thms))) s7;
+in
+	(eq_trans_rule (refl_conv tm) s8)
+end)
+| (true, true) => (
+let	val b1args = map snd(dest_z_binding b1);
+	val proj_thms1 = rev(tl(rev
+		(strip_±_rule(list_µ_elim (b1 :: b1args)(inst_type_rule ty_insts spec)))));
+	val b2args = map snd(dest_z_binding b2);
+	val proj_thms2 = rev(tl(rev
+		(strip_±_rule(list_µ_elim (b2 :: b2args)(inst_type_rule ty_insts spec)))));
+	val s8 = conv_rule (RIGHT_C(LIST_OP_C
+		(map (fn (thm1,thm2) => 
+		LEFT_C (fn _ => thm1) THEN_C
+		RIGHT_C (fn _ => thm2)) 
+		(combine proj_thms1 proj_thms2)))) s7;
+in
+	(eq_trans_rule (refl_conv tm) s8)
+end)
+))
+end
+)
+handle complaint =>
+list_divert complaint "z_binding_eq_conv1"
+	[("dest_z_eq", 43005, [fn () => string_of_term tm]),
+	("binding_gen_semantic_const", 43005, [fn () => string_of_term tm])])
+;
+=TEX
+A local version, that just processes the LHS binding,
+which had better be present.
+=SML
+val €z_binding_eq_conv2› : CONV = (fn tm => (
+let	val (b1,b2) = dest_z_eq tm;
+	val spec = binding_gen_semantic_const b1;
+	val (bcons,bproj) = get_binding_info (type_of b1);
+	val ty_insts = type_match (type_of b1) (type_of(fst(dest_µ(concl spec))));
+	val bcons' = map (inst[] ty_insts) bproj;
+	val s1 = asm_rule tm;
+	val s1s = map (fn x => app_fun_rule  x s1) bcons';
+	val s2 = list_±_intro s1s;
+	val s3s = strip_±_rule(asm_rule(list_mk_± (map concl s1s)));
+	val s4 = fold (fn (x,y) =>  mk_app_rule y x) (rev s3s)
+		(refl_conv (inst [] ty_insts bcons));
+	val s5 = all_µ_intro(hd(rev(strip_±_rule(all_µ_elim spec))));
+	val s6 = conv_rule(LEFT_C (simple_eq_match_conv1 s5)
+		THEN_C RIGHT_C (simple_eq_match_conv1 s5)) s4;
+	val s7 = §_intro (all_¥_intro s2) (all_¥_intro s6);
+	val b1args = map snd(dest_z_binding b1);
+	val proj_thms = rev(tl(rev
+		(strip_±_rule(list_µ_elim (b1 :: b1args)(inst_type_rule ty_insts spec)))));
+	val s8 = conv_rule (RIGHT_C(LIST_OP_C
+		(map (fn thm => LEFT_C (fn _ => thm)) proj_thms))) s7;
+in
+	(eq_trans_rule (refl_conv tm) s8)
+end
+)
+handle complaint =>
+list_divert complaint "z_binding_eq_conv2"
+	[("dest_z_eq", 43005, [fn () => string_of_term tm]),
+	("binding_gen_semantic_const", 43005, [fn () => string_of_term tm])])
+;
+=TEX
+=SML
+val  €z_binding_proj_conv› : CONV = (fn tm => (
+let	val (b,s) = dest_z_selâs tm;
+	val bits = dest_z_binding b;
+	val spec = binding_gen_semantic_const b;
+	val spec' = list_µ_elim (b :: map snd bits) spec;
+	val ss = strip_±_rule spec';
+in
+	check_is_z_conv_result "z_binding_proj_conv"
+	(eq_trans_rule (refl_conv tm)
+	(find ss (fn thm => (snd(dest_z_selâs(fst(dest_eq(concl thm)))) = s))))
+end
+)
+handle complaint =>
+list_divert complaint "z_binding_proj_conv"
+	[("dest_z_selâs", 43006, [fn () => string_of_term tm]),
+	("dest_z_binding", 43006, [fn () => string_of_term tm]),
+	("binding_gen_semantic_const", 43006, [fn () => string_of_term tm])])
+;
+=TEX
+=SML
+local
+	val c1 = simple_eq_match_conv1 (prove_rule []¨µ x ∑ (x = x) § TÆ);
+	val c2 = simple_eq_match_conv1 (prove_rule []¨µ x ∑ T ± x § xÆ);
+	val ¥_thm = tac_proof(([],¨µ x ∑ x ¥ xÆ),REPEAT strip_tac);
+	fun local_rule thm gl = (
+	let 	val (a,b) = dest_¥ gl;
+		val (x,bdy) = dest_eq(concl thm);
+		val ithm = simple_µ_elim b ¥_thm;
+	in
+		subst_rule[(eq_sym_rule thm,x)] gl ithm
+	end);
+	val rw_tac2_thm = tac_proof(([],
+		¨µ t∑ ≥ (F ± t) ± ≥ (t ± F) ±
+		((∂ x ∑ F) § F) ± ≥(µ x ∑ F) ±
+		(µ x∑ x = x § T) ± (F ¥ t) ±
+		(≥ T § F) ± (≥ F § T)Æ),
+		PC_T1 "hol1" rewrite_tac[]);
+	val rw_tac2 = (prim_rewrite_tac	
+		(make_net(flat(map (cthm_eqn_cxt initial_rw_canon)
+			[rw_tac2_thm])))
+		initial_rw_canon 
+		TOP_MAP_C
+		[]);
+in
+fun €local_prove_∂_conv› (wit : TERM) : CONV = (fn tm =>
+let	val (x,bdy) = dest_simple_∂ tm;
+	val res = var_subst [(wit,x)] bdy;
+	val s1 = ALL_SIMPLE_∂_C (RIGHT_C(RIGHT_C (c1 ORELSE_C (LEFT_C c1 THEN_C c2)))) res;
+	val new_term = snd(dest_eq(concl s1));
+	val s2 = tac_proof(([],mk_eq(tm, new_term)),
+		§_T2
+		(fn thm =>
+		t_tac ORELSE
+		conv_tac(fn ag => eq_sym_rule s1)
+		THEN
+		SIMPLE_∂_THEN ante_tac thm
+		THEN (
+			let val x' = variant (frees(concl thm) @ frees (concl s1)) x;
+			in
+			CASES_T2 (mk_eq(x',wit))
+			(fn thm1 => fn (seqasms,gl) =>
+			accept_tac (local_rule thm1 gl)(seqasms,gl))
+			(fn thm1 => rw_tac2[
+				thm1])
+			end)			
+		)
+		(fn thm =>
+		simple_∂_tac wit THEN accept_tac 
+			(§_mp_rule (eq_sym_rule s1) thm)
+		));
+in
+	s2
+end);
+end;
+
+		
+=TEX
+=SML
+local
+	val c1 = simple_eq_match_conv1 z' _def;
+	val c2 = simple_eq_match_conv1(taut_rule
+		¨µ x ∑ x ± T § xÆ);
+in
+val €z_ç_schema_conv› : CONV = (fn tm => (
+let	val (x,s) = dest_z_ç tm;
+	val (d,p) = dest_z_âs s;
+	val spec = get_spec s;
+	val s1 = (RAND_C(simple_eq_match_conv spec)
+		THEN_C ç_comp_conv) tm;
+	val s2 = conv_rule(RAND_C(fn itm =>
+		(let	val ¬red = snd(dest_app(fst(dest_± itm)));
+			val ¬red_thm = seq_simple_¬_conv ¬red
+		in
+			LEFT_C(RAND_C (fn _ => ¬red_thm)
+			THEN_C d_dp_proj_conv) THEN_C
+			RIGHT_C(RAND_C (fn _ => ¬red_thm)
+			THEN_C p_dp_proj_conv)
+		end) itm )) s1;
+	val res = mk_z_∂(d, p,mk_z_eq(mk_z_ (mk_z_âs(d,mk_t),""),x));
+	val s3 = (z_∂_elim_conv THEN_C ALL_SIMPLE_∂_C
+		(RIGHT_C(RIGHT_C (LEFT_C c1 THEN_C 
+			z_binding_eq_conv2)))) res;
+	val wits = map (snd o dest_eq)
+		(strip_±(snd(dest_app(snd(dest_app(
+		snd(strip_∂ (snd(dest_eq (concl s3))))))))));
+	val s4 = conv_rule (RIGHT_C(EVERY_C (map local_prove_∂_conv wits)
+			)) s3;
+	val s5 = conv_rule (RIGHT_C (RIGHT_C c2)) s4;
+	val s6 = eq_trans_rule s2 (eq_sym_rule s5);
+in
+	check_is_z_conv_result "z_ç_schema_conv" s6
+end
+)
+handle complaint =>
+list_divert complaint "z_ç_schema_conv" 
+	[("dest_z_ç", 43003, [fn () => string_of_term tm]),
+	("dest_z_âs", 43003, [fn () => string_of_term tm]),
+	("simple_eq_match_conv1", 43003, [fn () => string_of_term tm])])
+;
+end;
+=IGN
+ πZ
+rel	px _,py _, pz _
+ ∞
+ ù[X]
+px _ :  X;
+py _ :  X;
+pz _ :  X
+ à
+
+ ˇS[X]¸
+x:X
+ ˜
+px x
+ à
+=IGN
+val tm = Òy ç [z:X; S; S'| x = z]Æ;
+
+z_ç_schema_conv tm;
+=TEX
+=SML
+local
+	val c1 = simple_eq_match_conv1 z' _def;
+	val c2 = simple_eq_match_conv1(taut_rule
+		¨µ x ∑ x ± T § xÆ);
+	val c3 = simple_eq_match_conv1 (get_spec ¨Z'SchemaPredÆ);
+in
+val €z_ç_schema_conv1› : CONV = (fn tm => (
+let	val (x,s) = dest_z_ç tm;
+	val (d,p) = dest_z_âs s;
+	val spec = get_spec s;
+	val s1 = (RAND_C(simple_eq_match_conv spec)
+		THEN_C ç_comp_conv) tm;
+	val s2 = conv_rule(RAND_C(fn itm =>
+		(let	val ¬red = snd(dest_app(fst(dest_± itm)));
+			val ¬red_thm = seq_simple_¬_conv ¬red
+		in
+			LEFT_C(RAND_C (fn _ => ¬red_thm)
+			THEN_C d_dp_proj_conv) THEN_C
+			RIGHT_C(RAND_C (fn _ => ¬red_thm)
+			THEN_C p_dp_proj_conv)
+		end) itm )) s1;
+	val s3 = conv_rule(RAND_C(LEFT_C(DECL_C 
+		(dec_pred_conv THEN_TRY_C (RATOR_C(RATOR_C c3)))))) s2; 
+in
+	check_is_z_conv_result "z_ç_schema_conv1" s3
+end
+)
+handle complaint =>
+list_divert complaint "z_ç_schema_conv1" 
+	[("dest_z_ç", 43003, [fn () => string_of_term tm]),
+	("dest_z_âs", 43003, [fn () => string_of_term tm]),
+	("simple_eq_match_conv1", 43003, [fn () => string_of_term tm])])
+;
+end;
+=TEX
+=SML
+local
+	val c1 = simple_eq_match_conv1 z_sets_ext_thm;
+	val c2 = simple_eq_match_conv1 (pc_rule1 "hol1" prove_rule []
+		¨µ x ∑ (x = x) § TÆ);
+	val c3 = simple_eq_match_conv1 
+		(prove_rule[] Ò(µ z:U ∑ true) § trueÆ);
+in
+val €z_schema_conv› : CONV = (fn tm => (
+let	val (d,p) = dest_z_âs tm;
+	val res = mk_z_seta(d, p,mk_z_ (mk_z_âs(d,mk_t),""));
+	val s1 = c1 (mk_eq (tm, res));
+	val s2 = conv_rule(RAND_C(RAND_C(BINDER_C(RAND_C(
+		LEFT_C z_ç_schema_conv THEN_C
+		RIGHT_C z_ç_seta_conv
+		THEN_C c2)))
+		THEN_C c3)) s1;
+	val s3 = §_t_elim s2;
+in
+	check_is_z_conv_result "z_schema_conv" 
+	(eq_trans_rule (refl_conv tm) s3)
+end
+)
+handle complaint =>
+list_divert complaint "z_schema_conv" 
+	[("dest_z_âs", 43004, [fn () => string_of_term tm]),
+	("simple_eq_match_conv1", 43004, [fn () => string_of_term tm]),
+	("eq_trans_rule", 43004, [fn () => string_of_term tm])])
+;
+end;
+=TEX
+=SML
+local
+	fun mk_u_dec v = mk_z_dec([v],
+		inst [] [(type_of v, tva)] Ua);
+	val c1 = pure_rewrite_conv[taut_rule
+		¨µ x ∑ ((x ± T) § x) ± ((T ± x) § x)Æ];
+	val c2 = pure_rewrite_conv[taut_rule
+		¨µ x ∑ ((T ± x) § x)Æ];
+in
+val €z_norm_schema_conv› : CONV = (fn tm => (
+let	val (d,p) = dest_z_âs tm;
+	val spec = get_spec tm;
+	val s1 = simple_eq_match_conv spec tm;
+	val dvars = fst(strip_Ã(fst(strip_app(snd(dest_app
+		(fst(dest_±(snd(dest_set_comp (snd(dest_eq (concl s1))))))))))));
+	val res_decl = mk_z_decl (map mk_u_dec dvars);
+	val s2 = conv_rule(RAND_C(BINDER_C(fn itm =>
+		(let	val ¬red = snd(dest_app(fst(dest_± itm)));
+			val ¬red_thm = seq_simple_¬_conv ¬red
+		in
+			LEFT_C(RAND_C (fn _ => ¬red_thm)
+			THEN_C d_dp_proj_conv THEN_C
+			DECL_C (dec_pred_conv
+				THEN_TRY_C ç_u_conv) THEN_TRY_C
+			c1
+			) THEN_C
+			RIGHT_C(RAND_C (fn _ => ¬red_thm)
+			THEN_C p_dp_proj_conv)
+		end) itm ))) s1;
+	val x_set_abs = fst(dest_set_comp (snd(dest_eq (concl s1))));
+	val x_sels = map (fn y => mk_z_selâs(x_set_abs,fst(dest_var y)))
+		dvars;
+	val res_pred = subst(combine dvars x_sels) (snd(dest_set_comp (snd(dest_eq (concl s2)))));
+	val res = mk_z_âs(res_decl, res_pred);
+	val s3 = simple_eq_match_conv spec res;
+	val s4 = conv_rule(RAND_C(BINDER_C(fn itm =>
+		(let	val ¬red = snd(dest_app(fst(dest_± itm)));
+			val ¬red_thm = seq_simple_¬_conv ¬red
+		in
+			LEFT_C(RAND_C (fn _ => ¬red_thm)
+			THEN_C d_dp_proj_conv THEN_C
+			DECL_C (dec_pred_conv
+				THEN_C ç_u_conv) THEN_TRY_C
+			c1
+			) THEN_C c2
+			THEN_C (RAND_C (fn _ => ¬red_thm)
+			THEN_C p_dp_proj_conv)
+		end) itm ))) s3;
+	val s5 = eq_trans_rule s2 (eq_sym_rule s4);
+in
+	check_is_z_conv_result "z_norm_schema_conv" 
+	(eq_trans_rule (refl_conv tm) s5)
+
+end)
+handle complaint =>
+list_divert complaint "z_norm_schema_conv" 
+	[("dest_z_âs", 43004, [fn () => string_of_term tm]),
+	("simple_eq_match_conv1", 43004, [fn () => string_of_term tm]),
+	("eq_trans_rule", 43004, [fn () => string_of_term tm])])
+;
+end;
+=IGN
+z_norm_schema_conv Ò[x,y1:X; z: Y; p,q : U; r : U; S; S' | x1 = x]Æ;
+=TEX
+In the below we first(?) encounter the situation where,
+because a schema definition may well have a (consistency) assumption,
+we must use $simple\-\_eq\-\_match\-\_conv$.
+=SML
+local
+	val c1 = RATOR_C(RATOR_C(simple_eq_match_conv1 (get_spec ¨Z'SchemaPredÆ)));
+in
+val €z_schema_ref_conv› : CONV = (fn tm => (
+let	val (s,dec) = dest_z_predsexp tm;
+	val s1 = c1 tm;
+	val res_thm =
+	(if is_z_decâs s
+	then (
+let	val s2 = conv_rule (RAND_C(RIGHT_C(simple_eq_match_conv1
+		(get_spec s)) THEN_C
+		ç_comp_conv)) s1;
+	val spec = conv_rule(TRY_C z_defn_conv)
+		(get_spec (#1(dest_z_decâs s)));
+	val s3 = conv_rule(RAND_C (BINDER_C(
+		LEFT_C(RIGHT_C(simple_eq_match_conv spec) THEN_C
+			z_ç_schema_conv1)
+		THEN_C (RIGHT_C z_binding_eq_conv1)))) s2;
+	val s4 = conv_rule (RIGHT_C z_∂_intro_conv1) s3
+in
+	s4
+end)
+else (
+let	val spec = conv_rule(TRY_C z_defn_conv) (get_spec s);
+	val s2 = conv_rule(RAND_C(RIGHT_C (simple_eq_match_conv spec) THEN_C
+			z_ç_schema_conv1 THEN_TRY_C
+			ONCE_MAP_C z_binding_proj_conv)) s1;
+in
+	s2
+end))
+in
+	check_is_z_conv_result "z_schema_ref_conv" 
+	(eq_trans_rule (refl_conv tm) res_thm)
+end
+)
+handle complaint =>
+list_divert complaint "z_schema_ref_conv" 
+	[("dest_z_predsexp", 4301, [fn () => string_of_term tm]),
+	("simple_eq_match_conv1", 43004, [fn () => string_of_term tm]),
+	("simple_eq_match_conv1", 43004, [fn () => string_of_term tm]),
+	("eq_trans_rule", 43004, [fn () => string_of_term tm])])
+;
+end;
+
+=TEX
+\section{EPILOGUE}
+=IGN
+end; (* of structure ZSchemaCalculus *)
+open ZSchemaCalculus;
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+=IGN
+local
+	val spec = rewrite_rule[]
+		(list_µ_elim[Ua]
+		(rewrite_rule[]
+		(get_spec ¨$"z'"Æ)));
+in
+val €z__thm› = save_thm("z__thm",
+	conv_rule z_µ_elim_conv1
+	(nth  (strip_±_rule spec)));
+end;
+
