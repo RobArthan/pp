@@ -83,14 +83,188 @@ to the design of Z paragraphs in \cite{DS/FMU/IED/DTD049}.
 \subsubsection{Possible Enhancements}
 \subsubsection{Deficiencies}
 
+
+\section{Z READER WRITER}
+
+=SMLPLAIN SML
+structure ÛZReaderWriterİ  = struct
+local
+open ReaderWriterSupport HOLReaderWriter;
+in
+=TEX
+%********************************************************************
+
+\subsection{Warning Messages}
+
+Faults detected in the embedded text are reported via $local_error$ as
+they occur, they are also noted in the generated output using these
+two functions.
+
+=SMLPLAIN SML
+fun Ûlex_error_codeİ (id : int, prev:string list) : string list = (
+	", Lex.Text\"" :: (*="=*)
+	"Lex.Error " ^ (string_of_int id) ::
+	"\", " :: (*="=*)
+	prev
+);
+
+fun	Ûlex_error_codesİ (nil : int list, prev:string list) : string list =
+		prev
+|	lex_error_codes (errnos, prev) =
+		fold lex_error_code errnos prev
+;
+=TEX
+
+%********************************************************************
+
+
+\subsection{Recursive Z Parser}
+
+Brackets within Z text need only be examined to see if they relate to
+comments, all the other forms of bracket can simple be passed on for
+the Z lexical analyser and parser to deal with.
+
+{\ftlinepenalty=9999
+=SMLPLAIN SML
+fun Ûget_Z_anyİ (R:READER_ENV) (prevA:string list) (sep_symbol : string)
+			: string list= (
+let
+	open PrettyNames;
+
+	fun	do_keyword _ (_,Value ch,Simple) p =
+			get_Z_any R ((to_ML_string ch) :: p) sep_symbol
+	|	do_keyword _ (names,Nil,Simple) p =
+			get_Z_any R ("%" ^ (hd names) ^ "%" :: p) sep_symbol
+	|	do_keyword k (info as (_,_, (Starting(proc, str)))) p =
+			get_Z_any R (proc R k str false p) sep_symbol
+	|	do_keyword _ (_,_,Middle str) p =
+			get_Z_any R (str :: p) sep_symbol
+	|	do_keyword (k, _) (_,ch_opt,Ending str) p =
+			((*=[(("=*)	"\"))" :: k :: "\"], \"" :: str :: p)
+	|	do_keyword _ (_,_,Ignore) p =
+			get_Z_any R p sep_symbol
+	|	do_keyword (k, is_keyword) (names,_,Invalid) p = (
+			local_error "get_Z_any" 5007
+				[fn () => if is_keyword then "%" ^ k ^ "%" else k];
+			get_Z_any R (lex_error_code(5007, p)) sep_symbol);
+
+	fun do_string ML_string = (
+		let	val (read_string, ol_name) =
+				if ML_string
+				then	(get_ML_string, "Lex.String")
+				else	(get_primed_string, "Lex.Char");
+			val (str, errnos) = read_string R (ol_name :: "\", " :: prevA); (*="=*)
+			val text_so_far = ", Lex.Text\"" (*="=*) :: str;
+		in
+			get_Z_any R (lex_error_codes(errnos, text_so_far)) sep_symbol
+		end
+	);
+
+	val next = #look_at_next R ()
+in
+	case read_symbol R
+	of	SymCharacter ch => (
+			case ch
+			of "("	=>	(	if #look_at_next R () = "*"
+						then
+							(skip_comment R;
+							get_Z_any R (" " :: prevA) sep_symbol)
+						else
+							get_Z_any R ( "(" ::  prevA) sep_symbol)
+			|  "\""	=>	do_string true (*="=*)
+			|  "`"	=>	do_string false
+			|  "\^D" =>	prevA
+			|  "Q"	=>	get_Z_any R ("QQQQ" :: prevA) sep_symbol
+			|  "\\"	=>	get_Z_any R ("\\\\" :: prevA) sep_symbol
+			|  _ => 	get_Z_any R (ch :: prevA) sep_symbol
+		)
+	|	SymWhite xs =>
+			if contains xs "\n"
+			then	sep_symbol :: prevA
+			else	get_Z_any R (" " :: prevA) sep_symbol
+	|	SymKnown(sym, is_keyword, info) => do_keyword (sym, is_keyword) info prevA
+	|	SymDoublePercent => get_Z_any R ("%%" :: prevA) sep_symbol
+	|	SymUnknownKw(sym, is_closed) => (
+			local_error "get_Z_any" 5003 [fn () => sym, fn () =>
+							implode(rev(" ... " :: (prevA to 20)))];
+			get_Z_any R (lex_error_code(5003, prevA)) sep_symbol
+		)
+	|	SymUnknownChar ch => (
+			local_error "get_Z_any" 5005
+						[fn () => ch,
+						fn () => string_of_int(ord ch),
+						fn () => implode(" ... " :: (rev(prevA to 20)))];
+				get_Z_any R (lex_error_code(5005, prevA)) sep_symbol
+		)
+end);
+=TEX
+}
+
+%********************************************************************
+
+\subsection{Outer Level of the Z Reader}
+
+Z text is to be read, the opening symbol and language name are
+given.  Produce Standard~ML text as follows to add onto the left
+hand context.
+
+=GFT SML
+( recogniser ( "starting symbol", "language name", quoted_text, "closing symbol" ))
+=TEX
+
+When the $add_semi$ argument is true then add, additionaly, a semi-colon
+to indicate the end of an outermost Standard~ML expression.
+
+Where the $quoted_text$ is a list of values of type $Lex.INPUT$, see
+section\ref{DatatypeForParserInterface}.  Function $Z_reader$ is
+responsible for building the opening part of the Standard~ML text,
+function $get_Z_any$ reads and assembles the quoted text (i.e., the
+body of the quotation) and the closing text.
+
+=SMLPLAIN SML
+fun ÛZ_readerİ (recogniser:string) (add_semi:bool) (sep_symbol : string)
+		(R:READER_ENV) (start:string, is_keyword:bool)
+		(lang:string) (opening:string) (prevA:string list) : string list = (
+let
+	val prevB =
+		opening ::
+		"\", [Lex.Text\"" ::
+		lang ::
+		"\", \"" ::
+		start ::
+		"(\"" (*=")=*) ::
+		recogniser ::
+		"(" ::
+		prevA;
+
+	val read_text = get_HOL_any R (get_Z_any R prevB sep_symbol);
+in
+	if add_semi
+	then
+		";" :: read_text
+	else
+		read_text
+end
+);
+=TEX
+
+
+=SMLPLAIN SML
+end (* local ... in *);
+end (* of structure ZReaderWriter *);
+=TEX
+
+
 \section{EXTENSIONS TO READER/WRITER}
 
+
 =SML
-structure ÛZParagraphsİ : ZParagraphs = struct
+structure ÛZParagraphsİ = struct
 =TEX
 =SML
 local
 	open Lex SymbolTable ReaderWriterSupport;
+	open ZReaderWriter;
 	open HOLReaderWriter;
 	open PrettyNames;
 	open ZLex;
@@ -103,21 +277,27 @@ val sd = add_new_symbols [
 	([	"StartZSchema"],	Value "ÿ", Starting(specific_quotation, "")),
 	([	"EndZBox"],		Value "ˆ", Ending ""),
 	([	"StartZTerm"],	Value "ñ", Starting(specific_quotation, ""))
-];
+] handle _ => ();
 =TEX
 =SML
 val Ûz_axbox_readerİ = HOL_reader "z_axbox_recogniser" true;
-val Ûz_genbox_readerİ = HOL_reader "z_genbox_recogniser" true;
-val Ûz_schbox_readerİ = HOL_reader "z_schbox_recogniser" true;
+val Ûz_genbox_readerİ = Z_reader "z_genbox_recogniser" true "œ";
+val Ûz_schbox_readerİ = Z_reader "z_schbox_recogniser" true "ü";
 val Ûz_term_readerİ = HOL_reader "z_term_recogniser" false;
 val Ûz_other_readerİ = HOL_reader "z_other_recogniser" true;
 =TEX
 =SMLLITERAL
-val sd = add_named_reader("¹", "ZAX", "Lex.Term", z_axbox_reader);
-val sd = add_specific_reader("", "Lex.Term", z_genbox_reader);
-val sd = add_specific_reader("ÿ", "Lex.Term", z_schbox_reader);
-val sd = add_specific_reader("ñ", "Lex.Term", z_term_reader);
-val sd = add_named_reader("¹", "Z", "Lex.Term", z_other_reader);
+val sd = map add_named_reader [
+	("¹", "ZAX", "Lex.Term", z_axbox_reader),
+	("¹", "Z", "Lex.Term", z_other_reader)
+	] handle _ => [];
+
+val sd = map add_specific_reader [
+	("", "Lex.Term", z_genbox_reader),
+	("ÿ", "Lex.Term", z_schbox_reader),
+	("ñ", "Lex.Term", z_term_reader)
+	] handle _ => [];
+
 =TEX
 
 \section{RECOGNIZING Z PARAGRAPHS}
@@ -136,13 +316,10 @@ let	val side_effect =
 				fn () => lang,
 				fn () => finish]
 	val tokens = ZTAx::(zlex value);
-	val parsed = zparser {is_quot = false, standard = true} tokens;
-(*	val type_checked = (
-		case type_check_zparagraph parsed of
-		Inferred _ => (print "OK";())
-		|TypeError e => print_ztierror e
-		);*)
-in	parsed
+	val parsed = ZParser.zparser {is_quot = false, standard = true} tokens;
+	val type_checked = type_check_zpara {standard=true} parsed;
+	val side = update_theory_db type_checked;
+in	format_zinferred type_checked
 end);
 
 =TEX
@@ -160,13 +337,10 @@ let	val side_effect =
 				fn () => lang,
 				fn () => finish]
 	val tokens = ZTAx::(zlex value);
-	val parsed = zparser {is_quot = false, standard = true} tokens;
-(*	val type_checked = (
-		case type_check_zparagraph parsed of
-		Inferred _ => (print "OK";())
-		|TypeError e => print_ztierror e
-		);*)
-in	parsed
+	val parsed = ZParser.zparser {is_quot = false, standard = true} tokens;
+	val type_checked = type_check_zpara {standard=true} parsed;
+	val side = update_theory_db type_checked;
+in	format_zinferred type_checked
 end);
 
 =TEX
@@ -184,13 +358,10 @@ let	val side_effect =
 				fn () => lang,
 				fn () => finish]
 	val tokens = ZTSch::(zlex value);
-	val parsed = zparser {is_quot = false, standard = true} tokens;
-(*	val type_checked = (
-		case type_check_zparagraph parsed of
-		Inferred _ => (print "OK";())
-		|TypeError e => print_ztierror e
-		);*)
-in	parsed
+	val parsed = ZParser.zparser {is_quot = false, standard = true} tokens;
+	val type_checked = type_check_zpara {standard=true} parsed;
+	val side = update_theory_db type_checked;
+in	format_zinferred type_checked
 end);
 =TEX
 \subsection{Z General Text Recogniser}
@@ -207,13 +378,10 @@ let	val side_effect =
 				fn () => lang,
 				fn () => finish]
 	val tokens = zlex value;
-	val parsed = zparser {is_quot = false, standard = true} tokens;
-(*	val type_checked = (
-		case type_check_zparagraph parsed of
-		Inferred _ => (print "OK";())
-		|TypeError e => print_ztierror e
-		);*)
-in	parsed
+	val parsed = ZParser.zparser {is_quot = false, standard = true} tokens;
+	val type_checked = type_check_zpara {standard=true} parsed;
+	val side = update_theory_db type_checked;
+in	format_zinferred type_checked
 end);
 =TEX
 \section{RECOGNIZING Z TERMS}
@@ -231,13 +399,12 @@ let	val side_effect =
 				fn () => lang,
 				fn () => finish];
 	val tokens = zlex value;
-	val parsed = zparser {is_quot = true, standard = true} tokens;
-(*	val type_checked = (
-		case type_check_zparagraph "standard" parsed of
-		Inferred x => (diag_line "OK!";x)
-		|TypeError e => print_zerror e
-		); *)
-in	parsed
+	val parsed = ZParser.zparser {is_quot = true, standard = false} tokens;
+	val side = case parsed of
+		ZParaTerm _ => ()
+		|_ => fail "z_term_recogniser" 49001 [];
+	val type_checked = type_check_zpara {standard=false} parsed;
+in	format_zinferred type_checked
 end);
 
 end (* local ... in *);
@@ -262,23 +429,22 @@ open ZParagraphs;
       c   {0..5}
    °
 
-   ÿMYSCHEMA[STATE,MSG] ü
-      s : STATE
+   ÿMYSCHEMA[STATE,MSG]ü
+      s : STATE;
       t : ğ STATE
    ÷üüüüüü
       s  t
    ˆüüüüüü
 
 
-   [X, Y]œœœœ
-      s : X
+   [X]œœœœ
+      s : X;
       t : ğ X
    ÷üüüüüü
       s  t
    ˆüüüüüü
 
    ¹ZAX
-   [X,Y]
       s : X
       t : ğ X
    ÷
