@@ -40,6 +40,7 @@
 	extern void help_dialog();
 	extern BOOL yes_no_dialog();
 	extern void ok_dialog();
+	extern char *file_dialog();
 #endif
 #ifndef _palette
 	extern BOOL add_palette();

@@ -23,11 +23,13 @@
 #include <Xm/MainW.h>
 #include <Xm/RowColumn.h>
 #include <Xm/Text.h>
+#include <Xm/TextF.h>
 #include <Xm/PushBG.h>
 #include <Xm/Form.h>
 #include <Xm/LabelG.h>
 #include <Xm/MessageB.h>
 #include <Xm/PanedW.h>
+#include <Xm/FileSB.h>
 
 
 #include "xpp.h"
@@ -223,4 +225,90 @@ char *msg;
 		}
 	};
 	XtPopdown(XtParent(dialog));
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * file_dialog: dialog to get a file name, via a FileSelectionDialog.
+ * `opn' is the label to us on the ``OK'' button (i.e. it's
+ * ``Save'' or ``Open'' or whatever.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static char *file_name;
+
+char *file_dialog(w, opn)
+Widget w;
+char *opn;
+{
+	static Widget dialog;
+	XmString ok, title;
+	void file_sel_cb();
+	static int reply;
+	/* 0 = not replied; */
+
+	reply = 0;
+
+	if (!dialog) {
+		dialog = XmCreateFileSelectionDialog(w, "filesel",
+				NULL, 0);
+		XtAddCallback(dialog, XmNokCallback, file_sel_cb, &reply);
+		XtAddCallback(dialog, XmNcancelCallback, file_sel_cb, &reply);
+
+		title = XmStringCreateSimple("Select A File");
+
+		XtVaSetValues(dialog,
+			XmNdialogStyle,		XmDIALOG_FULL_APPLICATION_MODAL,
+			XmNokLabelString,	ok,
+			XmNdialogTitle, 	title,
+			NULL);
+
+		XmStringFree(title);
+
+	};
+
+	ok = XmStringCreateSimple(opn);
+
+	XtVaSetValues(dialog,
+		XmNokLabelString,	ok,
+		NULL);
+
+	XmStringFree(ok);
+
+	XtManageChild(dialog);
+
+	XtPopup(XtParent(dialog), XtGrabNone);
+
+	while (!reply) {
+		if(XtAppPending(app)) {
+			XtAppProcessEvent(app, XtIMAll);
+		}
+	};
+
+	XtPopdown(XtParent(dialog));
+
+	if(reply == YES) {
+		return(file_name);
+	} else {
+		return(NULL);
+	};
+
+}
+
+
+void file_sel_cb(w, reply, cbs)
+Widget w;
+int *reply;
+XmFileSelectionBoxCallbackStruct *cbs;
+{
+	switch (cbs->reason) {
+		case XmCR_OK:
+			(void) XmStringGetLtoR(cbs->value,
+					XmSTRING_DEFAULT_CHARSET,
+					&file_name);
+			*reply = YES;
+			break;
+		case XmCR_CANCEL:
+			*reply = NO;
+			break;
+		default:
+			return;
+	}
 }
