@@ -334,7 +334,14 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \section{PRINTING AUXILIARY FUNCTIONS}
-
+\subsection{Names}
+=SML
+fun Ûmake_z_nameÝ (name : string) : string = (
+	case explode name of
+		"z" :: "'" :: (more as(_ :: _)) => implode more
+	|	_ => name
+);
+=TEX
 \subsection{Simple Infix, Prefix and Postfix Operators}
 
 Function $Z_fun_app$ deals with the functionale application of
@@ -496,10 +503,12 @@ several consistency checks, these aim to ensure that the text printed
 is compatible with the various symbol table information and so the
 parser can read back the text to generate the same term.
 
+(Following is wrong. It should chop decoration off the end of the name.)
 =SML
-fun Ûget_template_infoÝ(name:string) : (TEMPLATE * CLASS * STUB list) OPT = (
+fun Ûget_template_infoÝ(holname:string) : (TEMPLATE * CLASS * STUB list) OPT = (
 let
-	val tmpl = template_of_string name;
+	val name = make_z_name holname;
+	val tmpl = template_of_string name handle Fail _ => TmplNon(name, Nil);
 	val fst_tmpl_name = first_tmpl_id tmpl;
 in
 	if name = fst_tmpl_name
@@ -564,7 +573,7 @@ in
 end
 );
 =TEX
-The spacing below is just wrong (you will get irrelvant space before
+The spacing below is just wrong (you will get irrelevant space before
 and after beginops and endops
 =SML
 fun Ûprint_piecesÝ (cur_env:PP_ENV) (pieces:Z_PIECE list) : PFUN_ANS = (
@@ -610,20 +619,31 @@ fun Ûget_fancy_fixÝ(name:string, (* ty:TYPE, hd_term:TERM, *) arg_tm:TERM) : Z_P
 	)
 );
 =TEX
+=SML
+local
+val ÛuÝ = mk_z_gvar("U", ”'1 SET®, [mk_const("z'Totality", ”'1 SET®)]);
+in
+fun Ûis_uÝ tm = (term_match tm u; true) handle Fail _ => false;
+end;
 
+fun Ûget_fancy_fix1Ý(tm:TERM, arg_tm:TERM) : Z_PIECE list OPT = (
+	case dest_z_term tm of
+		Zgvar (name, _, args) => (
+			if	all args is_u
+			then	get_fancy_fix (name, arg_tm)
+			else	Nil
+	) |	Zlvar (name, _, args) => (
+			if	all args is_u
+			then	get_fancy_fix (name, arg_tm)
+			else	Nil
+	) |	_ => Nil
+);
 =SML
 fun Ûdo_Z_appÝ (cur_env:PP_ENV) (hd_term:TERM, arg_tm:TERM) : PFUN_ANS = (
 let
 	val PpEnv{pe_space=space, ...} = cur_env;
 in
-	case
-		case
-			case dest_simple_term hd_term
-			of Const(name, ty) => get_fancy_fix(name, (* ty, hd_term, *) arg_tm)
-			| Var(name, ty) => get_fancy_fix(name, (* ty, hd_term, *) arg_tm)
-			| _  => Nil
-		of Value nil => Nil
-		| x => x
+	case get_fancy_fix1(hd_term, arg_tm)
 	of Nil => bracket(cur_env, pc_expr2, false,
 			fn e => (
 				main_term_pp (set_prec pc_expr2_lhs e) hd_term;
@@ -645,6 +665,7 @@ fun Ûdo_genericÝ (cur_env:PP_ENV) (name:string, _:TYPE, tms:TERM list) : PFUN_AN
 		of Nil => Nil
 		| Value(tmpl, class, stubs) => (
 			if length tms = length stubs
+			andalso all tms is_u
 			then
 				format_fancy_fix class tmpl tms
 			else
@@ -662,32 +683,11 @@ fun Ûdo_genericÝ (cur_env:PP_ENV) (name:string, _:TYPE, tms:TERM list) : PFUN_AN
 =TEX
 
 \subsection{Dealing with Relations}
-The following is wrong. You should only use the fancy-fix form when
-the generic parameters of $r$ may be defaulted. I.e. $do\_name$ should
-have a look at the generic parameters if any to see whether they
-look like $U[totality]$ as inserted by the type inferrer.
 =SML
 fun Ûdo_relationÝ (cur_env:PP_ENV, (l:TERM, r:TERM)) : PFUN_ANS = (
-	let	fun do_name name = (
-			case get_template_info name of
-				Value(tmpl, class, stubs) => (
-				case dest_z_term l of
-					Ztuple ts =>  (
-						if length ts = length stubs
-						then	format_fancy_fix
-							class tmpl ts
-						else	Nil
-				) |	_ => Nil
-				) |	Nil => Nil
-		);
-	in
-	case	(case dest_z_term r of
-			Zgvar (name, _, _) => do_name name
-		|	Zlvar (name, _, _) => do_name name
-		|	_ => Nil)
+	case	get_fancy_fix1 (r, l)
 	of Value pieces => print_pieces cur_env pieces
 	| Nil => bracket(cur_env, pc_pred2_, false, do_infix("", (l, r)))
-	end
 );
 =TEX
 
@@ -808,7 +808,7 @@ Global variables, $Zgvar$, have their generic parameters in the list
 
 =SML
 | Zgvar(name, var_ty, nil) => (
-	addstring name;
+	addstring (make_z_name name);
 	PfOk
 )
 | Zgvar name_args => do_generic cur_env name_args
