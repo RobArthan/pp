@@ -64,8 +64,9 @@ system responsible for system initialisation.}
 \item[Issue 1.1]
 First draft for comment.
 
-\item[Issue \SCCSversion, \FormatDate{92/01/20} ] Updated to use new fonts.
-
+\item[Issue 1.3, \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 1.4]
+Changes to reflect needs of \cite{DS/FMU/IED/DTD069}.
 \end{description}
 \subsection{Changes forecast}
 \pagebreak
@@ -101,7 +102,8 @@ None known.
 signature ÛHOLSystemÝ = sig
 =DESCRIBE
 This is the signature of the structure $HOLSystem$ which contains
-functions used to end a HOL session and to save the results of a HOL session.
+functions used to end a HOL session and to save the results of a HOL session,
+as well as two access routes to the UNIX environment to the Poly/ML session.
 =ENDDOC
 =DOC
 val	Ûhol_quitÝ : unit -> unit
@@ -118,10 +120,37 @@ the changes being saved.
 36001	Not all changes to the theory database have been saved (using hol_save) in this session
 =TEX
 =DOC
-val	Ûhol_saveÝ : unit -> unit
+val	Ûhol_saveÝ : unit -> unit;
 =DESCRIBE
 $hol\_save()$ is used to update the filestore copy of the theory database
 to reflect any changes made in the current session.
+=ENDDOC
+=DOC
+val	Ûget_shell_varÝ : string -> string;
+=DESCRIBE
+$get\_env$ $shvar$ will extract the value (as a string), if any, bound to
+shell variable $shvar$.
+If the variable is not set the empty string will be returned.
+=ENDDOC
+=DOC
+val	Ûget_terminal_line_lengthÝ : unit -> int;
+=DESCRIBE
+This function returns the terminal's line length,
+found by invoking {\tt stty\ size}.
+This is a useful value to pass to $set\_line\_length$ (q.v.).
+=ENDDOC
+=DOC
+val Ûicl'write_to_initialisation_error_fileÝ : string list -> unit;
+=DESCRIBE
+This function outputs (not appends) its list of strings to a temporary file named in shell variable 
+=INLINEFT
+hol_initialisation_error_file
+TEX
+{} that,
+if not empty, is executed before quitting {\tt hol}, {\tt hol\_list} and {\tt hol\_make\_makedatabase} with exit status of 1.
+It is intended to pass error text to the UNIX interface programs,
+and is only intended for creators of such programs,
+or initialisation scripts for $new\_init\_fun$.
 =ENDDOC
 =SML
 end; (* of signature HOLSystem *)
@@ -136,7 +165,7 @@ These functions are for use by those extending the system.
 =ENDDOC
 =DOC
 
-val	Ûnew_init_funÝ : (unit -> unit) -> unit
+val	Ûnew_init_funÝ : (unit -> unit) -> unit;
 =DESCRIBE
 $new\_init\_fun$ adds a new entry to a table of functions which are invoked
 at the start of each session. At the beginning of each session, these functions
@@ -153,21 +182,10 @@ in extending the system (e.g. to add extra messages to the start of
 session message).
 =ENDDOC
 
-In the supplied system for PolyML, the table needs to contain function which
-do the following:
-
-\begin{enumerate}
-\item output the start of session banner message (see below);
-\item initialise any modules which have an associated start of session initialisation function;
-\item extract the name of the desired current hierarchy  (as given on
-the command line which invoked the HOL system) from the
-environment variable $HOLHIERARCHY$, and load that hierarchy. (This is the
-interface to the shell scripts used to invoke HOL described in
-\cite{DS/FMU/IED/HLD005}).
-\end{enumerate}
+In the supplied system for PolyML, the table needs to contain the functions described in \section ref{Startup}.
 
 =DOC
-val	ÛinitÝ : unit -> unit
+val	ÛinitÝ : unit -> unit;
 =DESCRIBE
 $init$ causes the initialisation functions in the table maintained
 by $new\_init\_fun$ to be executed, as they would be at the start of
@@ -182,7 +200,63 @@ begins. The ``$?0$'' is to be set to the value of the variable
 $system\_version$ which is set up in \cite{DS/FMU/IED/IMP021}
 to give a version number for the system build.
 =FAILURE
-36000	=== ICL HOL Version (1.?0) Copyright (C) ICL 1991 ===
+36000	=== ICL HOL Version (1.?0) Copyright (C) ICL 1991,1992 ===
+=TEX
+=DOC
+val Ûicl'database_infoÝ : {
+	theory_hierarchy : icl'Kernel.icl'HIERARCHY OPT,
+	cache_theory : string,
+	caches : string list
+};
+=DESCRIBE
+Private ICL HOL database information, that niether contains
+information useful to the user, nor should be overwritten by the user.
+=ENDDOC
+\subsection{Standard Initialisation Functions}
+\label{Startup}
+We can now describe the initialisation functions
+added using $new\_init\_fun$, which are, in order of execution:
+\begin{enumerate}
+\item
+Set a flag to indicate that the state is as yet unchanged.
+\item
+Set the line length to two less than the terminal (to give 
+a little leeway for any above average size extended ML characters.
+=GFTSHOW
+fn () => (set_line_length (get_terminal_line_length () - 2)
+	handle _ => ());
+=TEX
+\item
+Load the database's hierarchy, if any,
+via $icl'database\_info$.
+\item
+Load the theory name stored in shell variable  
+$hol\-\_current\-\_theory$, via $get\-\_shell\-\_var$,
+or if that is unset or the empty string then attempt to load the database's cache theory
+via $icl'database\_info$
+and failing that leave the current theory unchanged.
+If $hol\-\_current\-\_theory$ is a non-empty string that is
+not a theory that can be opened then the hol session will be
+quitted, and a shell script output to the file
+with name given by $hol\_initialisation\_error\_file$
+for program {\tt hol}, et al.
+\item
+Attempt to load (by $use\_file$) each of the comma-separated list of initialisation
+scripts stored in shell variable $hol\-\_initialisation\-\_scripts$.
+Failure on any particular load will not cause subsequent loading attempts to cease.
+\item 
+Initialise any modules which have an associated start of session initialisation function - just the theory cache
+mechanism $set\_theory\_caches$ at the moment ($pp\_init$,
+$error\_init$ don't seem necessary).
+\item
+Output the start of session banner message.
+\end{enumerate}
+Messages used in system initialisation:
+=FAILURE
+36002	echo "$PROGNAME: cannot open theory ?0 set in environment"
+36003	.
+36004	There is no hol_initialisation_error_file set
+36005	Unable to load initialisation file ?0: continuing without it
 =TEX
 \section{EPILOGUE}
 =SML
@@ -192,7 +266,8 @@ end; (* of signature Initialisation *)
 =TEX
 \section{TEST POLICY}
 The functions in this document should be tested as described in
-\cite{DS/FMU/IED/PLN008}. However,  only the function $init$ may
+\cite{DS/FMU/IED/PLN008}. However,  only the functions $init$,
+$get\_shell\_var$ and $get\-\_terminal\-\_line\-\_length$ may
 be tested in any useful way via the usual module test mechanism,
 since assessing the operation of the other functions requires the
 HOL session to be ended and restarted. Thus these functions will

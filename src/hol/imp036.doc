@@ -69,8 +69,9 @@ Added setting of $profiling$ to $false$.
 \item [Issue 1.3]
 Added $reset\_flag$ $"subgoal\_package\_quiet"$.
 
-\item[Issue \SCCSversion, \FormatDate{92/01/20} ] Updated to use new fonts.
-
+\item[Issue 1.4, \FormatDate{92/01/20} ] Updated to use new fonts.
+\item [Issue 1.5]
+Changes to reflect needs of \cite{DS/FMU/IED/DTD069}.
 \end{description}
 \subsection{Changes forecast}
 \pagebreak
@@ -89,12 +90,7 @@ The detailed design for this material is given in \cite{DS/FMU/IED/DTD036}.
 structure €Initialisation› : Initialisation = struct
 =TEX
 =SML
-fun €banner› (():unit) : unit = (
-	diag_line (get_error_message 36000 [system_version])
-);
-=TEX
-=SML
-val €init_funs› : (unit -> unit) list ref = ref [banner];
+val €init_funs› : (unit -> unit) list ref = ref [];
 =TEX
 =SML
 fun €new_init_fun› (f : unit -> unit) : unit = (
@@ -108,7 +104,20 @@ fun €init› (() : unit) : unit = (
 );
 =TEX
 =SML
+val €icl'database_info› : {
+	theory_hierarchy : icl'Kernel.icl'HIERARCHY OPT,
+	cache_theory : string,
+	caches : string list} = {
+	theory_hierarchy = Nil,
+	cache_theory = "hol",
+	caches = ["hol","basic_hol"]};
+=TEX
+=SML
 end; (* of structure Initialisation *)
+=TEX
+We now wish to expose $icl'database_info$:
+=SML
+val icl'database_info = Initialisation.icl'database_info;
 =TEX
 \section{USER INTERFACES}
 =SML
@@ -118,13 +127,7 @@ structure €HOLSystem› : HOLSystem = struct
 val €state_changed› : bool ref = ref true;
 =TEX
 =SML
-fun €local_init› (():unit) = (state_changed := false);
-=TEX
-=SML
 fun €state_change› (_ : KERNEL_STATE_CHANGE) : unit = (state_changed := true);
-=TEX
-=SML
-val side_effect1 = Initialisation.new_init_fun local_init;
 =TEX
 =SML
 val side_effect2 = on_kernel_state_change state_change;
@@ -161,6 +164,159 @@ fun €hol_quit› (():unit) : unit = (
 	else ());
 	PolyML.quit()
 );
+=TEX
+Noting that $ExtendedIO.execute$ will return its first
+string will ``$\backslash n$'' at the end,
+extract the value of an UNIX shell variable:
+=SML
+fun €get_shell_var› (var : string) : string = (
+let	val (is,os) = ExtendedIO.execute("/bin/echo $"^var);
+	val aline = ExtendedIO.input_line is;
+	val ealine = explode aline;
+	val ealine' =  rev(tl(rev ealine));
+in
+	implode ealine'
+end);
+=TEX
+Noting that {\tt /bin/stty size} returns output of the form
+=GFTSHOW
+<number of rows> <some space characters> <number of columns>
+=TEX
+extract the terminal's line length:
+=SML
+local
+	fun aux1 (" " :: rest) = aux1 rest
+	| aux1 x = x;
+
+	fun aux (" " :: rest) = aux1 rest
+	| aux (a :: rest) = aux rest
+	| aux [] = [];
+in
+fun €get_terminal_line_length› () : int = (
+let	val (is,os) = ExtendedIO.execute("/bin/stty size");
+	val aline = ExtendedIO.input_line is;
+	val ealine = explode aline;
+	val ealine' = rev(tl(rev (aux ealine)));
+in
+	nat_of_string(implode ealine')
+end);
+end;
+=TEX
+\subsection{Initialisation Steps}
+Numbered as in the detailed design:
+\subsubsection{State As Yet Unchanged}
+=SML
+fun €local_init› () : unit = (state_changed := false);
+=TEX
+=SML
+val initial1 = Initialisation.new_init_fun local_init;
+=TEX
+\subsubsection{Line Length}
+=SML
+fun €init_line_length› () : unit = (
+let	val ll = get_terminal_line_length () - 2;
+in
+	((if ll < 20
+	then set_line_length 20
+	else set_line_length ll);())
+end);
+
+val initial2 = Initialisation.new_init_fun init_line_length;
+=TEX
+\subsubsection{Theory Hierarchy}
+=SML
+fun €init_theory_hierarchy› () : unit = (
+	use_string(
+	"case (#theory_hierarchy icl'database_info) of " ^
+	"Value th => icl'Kernel.icl'load_hierarchy th " ^
+	"| Nil => ();")
+	handle _ => ()
+);
+
+val initial3 = Initialisation.new_init_fun init_theory_hierarchy;
+=TEX
+\subsubsection{Current Theory}
+First a function to write a list of strings to
+the initialisation error file:
+=SML
+fun €icl'write_to_initialisation_error_file› (sl : string list) : unit = (
+	case (get_shell_var "hol_initialisation_error_file") of
+	"" => diag_line (get_error_message 36004 [])
+	| nm => (let val oo = open_out nm;
+		in
+		(map (fn s => (output(oo,s);output(oo,"\n"))) sl;
+		get_error_message 36003 [];
+		close_out oo;
+		())
+		end)
+);
+=TEX
+Then the function proper:
+=SML
+fun €init_current_theory› () : unit = (
+	case get_shell_var "hol_current_theory" of
+	"" => (use_string(
+		"open_theory (#cache_theory icl'database_info);")
+		handle _ => ()
+	) | hct => (
+		open_theory hct
+		handle (Fail msg) =>
+		(diag_line(get_message msg);
+		icl'write_to_initialisation_error_file [
+		get_error_message 36002 [hct]];
+		PolyML.quit())
+	)
+);
+
+val initial4 = Initialisation.new_init_fun init_current_theory;
+=TEX
+\subsubsection{Initialisation Scripts}
+=SML
+local
+	fun aux acc [] = (if is_nil acc
+		then []
+		else [implode (rev acc)]
+	) | aux acc ("," :: rest) = (
+		if is_nil acc
+		then aux [] rest
+		else (implode(rev acc) :: aux [] rest)
+	) | aux acc (a :: rest) = aux (a::acc) rest;
+	fun aux1 [] = ()
+	| aux1 (a :: x) = (
+		(use_file a handle _ => 
+			diag_line(get_error_message 36005 [a]));
+		aux1 x);
+in		
+fun €load_initisation_scripts› () : unit = (
+let	val source = get_shell_var "hol_initialisation_scripts";
+	val scripts = aux [] (explode source);
+in
+	(aux1 scripts)
+end)
+end;
+
+val initial5 = Initialisation.new_init_fun load_initisation_scripts;
+=TEX
+\subsubsection{Module Initialisation}
+=SML
+fun €init_cache_theories› () : unit = (
+	(use_string(
+	"set_cache_theories (#caches icl'database_info);")
+	handle _ => ())
+);
+
+val initial6 = Initialisation.new_init_fun init_cache_theories;
+=TEX
+
+\subsubsection{System Banner}
+=SML
+fun €banner› () : unit = (
+	diag_line (get_error_message 36000 [system_version])
+);
+val initial7 = Initialisation.new_init_fun banner;
+=TEX
+
+=SML
 end; (* of structure HOLSystem *)
 open HOLSystem;
 =TEX
@@ -171,8 +327,3 @@ open HOLSystem;
 \printindex
 
 \end{document}
-
-=IGN
-val side_effect1 = Initialisation.new_init_fun local_init;
-
-
