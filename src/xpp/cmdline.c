@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.12 2003/04/11 10:55:34 rda Exp rda $
+ * $Id: cmdline.c,v 2.13 2003/04/11 13:25:04 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -136,7 +136,7 @@ void add_cmd_line(Widget text_w)
 
 	get_initial_command_line_list(list_w);
 
-	cmd_text = XtVaCreateManagedWidget("cmd_text",
+	cmd_text = XtVaCreateManagedWidget("command-text",
 		xmTextWidgetClass,		paned,
 		XmNeditMode,			XmMULTI_LINE_EDIT,
 		XmNrows,			1,
