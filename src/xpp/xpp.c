@@ -29,9 +29,9 @@
  * Static and global data
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #ifdef BUILDVERSION
-static char *title = "  XPP    v" BUILDVERSION "    Copyright  (C)  ICL 1994  ";
+static char *title = "  xpp    v" BUILDVERSION "  ";
 #else
-static char *title = "XPP";
+static char *title = "xpp (test version)";
 #endif
 char *file_name;
 
@@ -76,7 +76,7 @@ static XrmOptionDescRec options [] = {
 void usage ()
 {
 	msg( "xpp",
-"usage: xpp [standard X Toolkit options -command] command-line");
+"usage: xpp [standard X Toolkit options] [-file fname] [-commmand command-line]");
 };
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
