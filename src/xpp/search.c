@@ -13,10 +13,6 @@
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #define _search
 
-#define DO_SEARCH		0
-#define DO_REPLACE	1
-#define DO_REPLACE_ALL	2
-
 #define NO_MEMORY	-1
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -121,9 +117,12 @@ Bool add_search_tool(Widget text_w)
 	char	*pattern;
 
 	XtTranslations translations;
+	XmFontList fontlist;
 
 	static void
 		search_cb(),
+		replace_cb(),
+		replace_all_cb(),
 		search_set_cb(),
 		replace_set_cb(),
 		line_no_modify_cb(),
@@ -357,13 +356,13 @@ Bool add_search_tool(Widget text_w)
 		line_no_set_cb, (XtPointer)(&search_data));
 
 	XtAddCallback(search_btn, XmNactivateCallback,
-		search_cb, (XtPointer)DO_SEARCH);
+		search_cb, NULL);
 
 	XtAddCallback(replace_btn, XmNactivateCallback,
-		search_cb, (XtPointer)DO_REPLACE);
+		replace_cb, NULL);
 
 	XtAddCallback(replace_all_btn, XmNactivateCallback,
-		search_cb, (XtPointer)DO_REPLACE_ALL);
+		replace_all_cb, NULL);
 
 	XtAddCallback(goto_line_no_btn, XmNactivateCallback,
 		goto_line_no_cb, (XtPointer)(&search_data));
@@ -390,6 +389,12 @@ Bool add_search_tool(Widget text_w)
 		XtOverrideTranslations(search_text, translations);
 		XtOverrideTranslations(replace_text, translations);
 		XtOverrideTranslations(line_no_text, translations);
+	}
+	XtVaGetValues(text_w, XmNfontList, &fontlist, NULL);
+	if(translations != NULL) {
+		XtVaSetValues(search_text, XmNfontList, fontlist, NULL);
+		XtVaSetValues(replace_text, XmNfontList, fontlist, NULL);
+		XtVaSetValues(line_no_text, XmNfontList, fontlist, NULL);
 	}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -418,6 +423,43 @@ static void search_cb(
 	long int left, len;
 	NAT start_point;
 	static long int search_string();
+	char *pattern, *text_buf;
+	pattern = XmTextGetString(search_data.search_w);
+	text_buf = XmTextGetString(search_data.text_w);
+	start_point = XmTextGetInsertionPosition(search_data.text_w);
+	search_string(pattern, text_buf, start_point, &left, &len);
+	if(left >= 0) {
+		XmTextSetSelection(
+			search_data.text_w,
+			left,
+			left + len,
+			CurrentTime);
+		XmTextShowPosition(
+			search_data.text_w,
+			left);
+	} else if (!(*pattern)){
+		ok_dialog(search_data.shell_w, no_search_string);
+	} else {
+		char *msg_buf = XtMalloc(strlen(pattern) +
+					strlen(not_found));
+		sprintf(msg_buf, not_found, pattern);
+		ok_dialog(search_data.shell_w, msg_buf);
+	}
+	XtFree(pattern);
+	XtFree(text_buf);
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * replace callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void replace_cb(
+	Widget				w,
+	NAT				cbdata,
+	XmPushButtonCallbackStruct	cbs)
+{
+	long int left, len;
+	NAT start_point;
+	static long int search_string();
 	static void replace_all();
 	char *pattern, *text_buf, *replacement, *all_replaced;
 	pattern = XmTextGetString(search_data.search_w);
@@ -425,68 +467,80 @@ static void search_cb(
 	start_point = XmTextGetInsertionPosition(search_data.text_w);
 	search_string(pattern, text_buf, start_point, &left, &len);
 	if(left >= 0) {
-		switch(cbdata) {
-			case DO_SEARCH:
-				XmTextSetSelection(
-					search_data.text_w,
-					left,
-					left + len,
-					CurrentTime);
-				XmTextShowPosition(
-					search_data.text_w,
-					left);
-				break;
-			case DO_REPLACE:
-				replacement = XmTextGetString(
-						search_data.replace_w);
-				XmTextReplace(
-					search_data.text_w,
- 					left,
-					left + strlen(pattern),
-					replacement);
-				XmTextSetSelection(
-					search_data.text_w,
-					left,
-					left + strlen(replacement),
-					CurrentTime);
-				XmTextShowPosition(
-					search_data.text_w,
-					left);
-				XtFree(replacement);
-				break;
-			case DO_REPLACE_ALL:
-				replacement = XmTextGetString(
-						search_data.replace_w);
-				replace_all(
-					pattern,
-					text_buf,
-					replacement,
-					&all_replaced,
-					&start_point);
-				if(all_replaced == NULL) {
-					ok_dialog(
-						search_data.shell_w,
-						no_room_for_global);
-					XtFree(replacement);
-					break;
-				}
-				XmTextReplace(
-					search_data.text_w,
-					0,
-					XmTextGetLastPosition(
-						search_data.text_w),
-					all_replaced);
-				XmTextSetInsertionPosition(
-					search_data.text_w,
-					start_point);
-				XmTextShowPosition(
-					search_data.text_w,
-					start_point);
-				XtFree(replacement);
-				XtFree(all_replaced);
-				break;
-			default:
-				break;
+		replacement = XmTextGetString(
+				search_data.replace_w);
+		XmTextReplace(
+			search_data.text_w,
+ 			left,
+			left + strlen(pattern),
+			replacement);
+		XmTextSetSelection(
+			search_data.text_w,
+			left,
+			left + strlen(replacement),
+			CurrentTime);
+		XmTextShowPosition(
+			search_data.text_w,
+			left);
+		XtFree(replacement);
+	} else if (!(*pattern)){
+		ok_dialog(search_data.shell_w, no_search_string);
+	} else {
+		char *msg_buf = XtMalloc(strlen(pattern) +
+					strlen(not_found));
+		sprintf(msg_buf, not_found, pattern);
+		ok_dialog(search_data.shell_w, msg_buf);
+	}
+	XtFree(pattern);
+	XtFree(text_buf);
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * replace all callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void replace_all_cb(
+	Widget				w,
+	NAT				cbdata,
+	XmPushButtonCallbackStruct	cbs)
+{
+	long int left, len;
+	NAT start_point;
+	static long int search_string();
+	static void replace_all();
+	char *pattern, *text_buf, *replacement, *all_replaced;
+	pattern = XmTextGetString(search_data.search_w);
+	text_buf = XmTextGetString(search_data.text_w);
+	start_point = XmTextGetInsertionPosition(search_data.text_w);
+	search_string(pattern, text_buf, start_point, &left, &len);
+	if(left >= 0) {
+		replacement = XmTextGetString(
+				search_data.replace_w);
+		replace_all(
+			pattern,
+			text_buf,
+			replacement,
+			&all_replaced,
+			&start_point);
+		if(all_replaced == NULL) {
+			ok_dialog(
+				search_data.shell_w,
+				no_room_for_global);
+			XtFree(replacement);
+		} else {
+			XmTextReplace(
+				search_data.text_w,
+				0,
+				XmTextGetLastPosition(
+					search_data.text_w),
+				all_replaced);
+			XmTextSetInsertionPosition(
+				search_data.text_w,
+				start_point);
+			XmTextShowPosition(
+				search_data.text_w,
+				start_point);
+			XtFree(replacement);
+			XtFree(all_replaced);
 		}
 	} else if (!(*pattern)){
 		ok_dialog(search_data.shell_w, no_search_string);
@@ -498,7 +552,6 @@ static void search_cb(
 	}
 	XtFree(pattern);
 	XtFree(text_buf);
-
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
