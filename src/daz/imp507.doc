@@ -88,8 +88,9 @@ Also implemented remedies for issues 1 and 4 (V0.6).
 \item[Issue 1.118] Fixed bug 2 (V0.7).
 \item[Issue 1.119] Correcting IUCT project WP8, bug 1.
 \item[Issue 1.120-1.121] Added $new\_script1$ for IUCT project WP 1.
-\item[Issue 1.22] Fixing Bug 4.3 of INT502.
-\item[Issue 1.23] Fixing bug 6.1 of INT502.
+\item[Issue 1.122] Fixing Bug 4.3 of INT502.
+\item[Issue 1.123] Fixing bug 6.1 of INT502.
+\item[Issue 1.123] Fixing $is\_id\_in\_package$.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -3515,10 +3516,70 @@ lower case, and must not be the empty string, ($BBB$ may well be an
 empty string), and $AAA$ is in $names$.
 \end{enumerate}
 
+The following is based on material taken from the Ada Reference Manual.
+It is based on all Ada attributes, not just those mentioned in the list in
+Volume 3, section 3.13 of the specification of the Compliance Notation.
+The attribute ``BASE'' returns the base type, and may have further attributes
+taken from it - thus we just any attribute starting ``BASEv'' is 
+tested to be some sort of derivative attribute.
+=SML
+local
+val €attribute_list› = [
+	"ADDRESS",
+	"AFT",
+	"BASE",
+	"CALLABLE",
+	"CONSTRAINED",
+	"DELTA",
+	"DIGITS",
+	"EMAX",
+	"EPSILON",
+	"FIRST",
+	"FORE",
+	"IMAGE",
+	"LARGE",
+	"LAST",
+	"LENGTH",
+	"MACHINE_OVERFLOWS",
+	"MACHINE_ROUNDS",
+	"MANTISSA",
+	"POS",
+	"PRED",
+	"RANGE",
+	"SAFE_EMAX",
+	"SAFE_LARGE",
+	"SAFE_SMALL",
+	"SIZE",
+	"SMALL",
+	"STORAGE_SIZE",
+	"SUCC",
+	"TERMINATED",
+	"VAL",
+	"VALUE",
+	"WIDTH"
+	]
+in
+fun €is_an_attribute› (id : string) = (
+	case (explode	id) of
+	("B":: "A":: "S":: "E":: "v":: rest) =>
+		 is_an_attribute (implode rest)
+	| ("F":: "I":: "R":: "S":: "T":: "(" :: rest) =>
+		 true (* really should check for digits and a closing brace *)
+	| ("L":: "A":: "S":: "T":: "(":: rest) =>
+		 true (* really should check for digits and a closing brace *)
+	| ("R":: "A":: "N":: "G" :: "E" :: "(":: rest) =>
+		 true (* really should check for digits and a closing brace *)
+	| ("L":: "E":: "N":: "G" :: "T" :: "H" :: "(":: rest) =>
+		 true (* really should check for digits and a closing brace *)
+	| _ => id mem attribute_list
+);
+end;
+=TEX
 Note that the function will not give the desired result if
 $ident$ is an auxiliary variable
-of the form $AAAvBBB$ or $AAAâ0BBB$, where $AAA$ and $BBB$ contains no lower case
-letters (and may be empty for $â0$), and $AAA$ is in $names$, but $ident$ is not.
+of the form $AAAvBBB$ or $AAAâ0$, where $AAA$ and $BBB$ contains no lower case
+letters (and is an attribute), and $AAA$ is in $names$, but $ident$ is not.
+
 =SMLPLAIN
 local
 	val orda = ord("a");
@@ -3526,30 +3587,58 @@ local
 	fun is_lcase (c:string) : bool = (
 		ord c <= ordz andalso orda <= ord c
 	);
+
+	fun split_at_v (ls : string list, [] : string list) = (
+			((rev ls), [])
+	) | split_at_v (ls, ("v" :: rest)) = (
+			((rev ls), rest)
+	) | split_at_v (ls, (c :: rest)) = (
+			split_at_v ((c :: ls), rest)
+	);
+
+	fun base_name (lid : string) : string = (
+(* base name is name with â0 stripped from end of other
+   characters, or is of the form TYPEvATTRIBUTE where type is in uppercase
+   and ATTRIBUTE comes from a fixed list, or otherwise is id.
+   A name cannot both have â0 and an attribute, or a â0 with characters both
+   sides. Nor can something with "â0" or an vATTRIBUTE be a valid base
+   name in a package.
+*)
+		let 	val ide = explode lid;
+			val ride = rev ide;
+		in
+			case ride of
+			("0" :: "â" :: c :: rest) =>
+				implode (rev (c :: rest))
+			| _ => (
+		let	val (lhs, rhs) = split_at_v ([], ide);
+		in
+			if (any lhs is_lcase) orelse
+				(is_nil rhs) orelse (is_nil lhs)
+			then lid
+			else if is_an_attribute (implode rhs)
+			then implode lhs
+			else lid
+		end)
+		end
+	);
 in		
 fun €is_id_in_package› (newids : ID list) (id : ID) = (
-	let	fun remove_tail (lhs, "â"::"0"::rest) = (
-			(* if rest is non-empty it is probably "v<ATTRIBUTE>" *)
-			if (is_nil lhs orelse any rest is_lcase)
-			then [id]
-			else [(implode o rev) lhs, id]
-		) | remove_tail (lhs, "v"::rest) = (
-			if (is_nil lhs orelse is_nil rest 
-				orelse any rest is_lcase)
-			then [id]
-			else [(implode o rev) lhs, id]
-		) | remove_tail (lhs, c::rest) = (
-			if is_lcase c
-			then [id]
-			else remove_tail (c::lhs, rest)
-		) | remove_tail (lhs, []) = (
-			[id]
-		);
-	in
-		any (remove_tail ([], explode id)) (fn anid => anid mem newids)
+	let		in
+		any [base_name id] (fn anid => anid mem newids)
 	end
 );
 end;
+=TEX
+
+=IGN
+is_id_in_package ["cwg"] "cwgâ0";
+is_id_in_package ["cwg1"] "cwgâ0";
+is_id_in_package ["T"] "TvFIRST";
+is_id_in_package ["T"] "TvNEVER";
+is_id_in_package ["T"] "TvFirst";
+is_id_in_package ["TwO"] "TwOvFIRST";
+is_id_in_package ["TW"] "TvFIRST";
 =TEX
 The following function extracts from the temporary theory the types (corresponding to given sets) and the constants (corresponding to global variables) together with their definitions if any.
 =SML
