@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.35 2003/07/15 11:20:52 rda Exp rda $ 
+ * $Id: search.c,v 2.36 2003/07/15 11:37:48 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -1235,7 +1235,7 @@ static Substring bm_search_exec(bm_search_t *bm, char *text)
 		if(ch == (bm->pattern)[i]) { /* possible match at cursor */
 			i -= 1;
 		} else { /* no match at cursor; slide up according to index value: */
-			next = cursor + i - (bm->index)[text[cursor+i]];
+			next = cursor + i - (bm->index)[ch];
 			cursor += 1;
 			while(text[cursor] && cursor < next) {
 				cursor += 1;
