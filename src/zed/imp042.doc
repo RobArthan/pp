@@ -93,6 +93,8 @@ z_sel‰s_conv
 \ (in response to bug 116).
 \item[Issue 1.32 (17th December 1993)]
 Fixed bug in z\_§¢\_conv.  It now doesn't fail if the operand is empty.
+\item[Issue 1.33 ]
+Fixed bug 184 and related problems.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -123,7 +125,12 @@ structure ÛZExpressionsÝ : ZExpressions = struct
 =SML
 open ZGeneratedConstants;
 val lthy = get_current_theory_name();
+val _ = force_delete_theory"imp042" handle Fail _ => ();
 val _ = open_theory Û"z_language_ps"Ý;
+val _ =
+	if	get_current_theory_status() <> TSNormal
+	then	new_theory "imp042"
+	else	();
 val _ = set_pc "z_predicates";
 val _ = set_flag("z_type_check_only",false);
 =TEX
@@ -446,7 +453,7 @@ let	val (d,p,v) = dest_z_Í tm
 	val var_x1 = hd vars;
 	val var_y = hd (tl(tl vars));
 	val spec = conv_rule (BINDER_C(RIGHT_C(RAND_C(RAND_C
-		(prot_Á_conv var_x))))) (get_spec tm);
+		(prot_Á_conv var_x))))) (Í_gen_semantic_const tm);
 	val s1 = simple_eq_match_conv1 spec tm;
 	val s2 = conv_rule (RIGHT_C(RAND_C(BINDER_C
 		(ALL_SIMPLE_¶_C(fn tm =>
@@ -652,7 +659,7 @@ let	val (d,p,v) = dest_z_Ì tm
 		handle complaint =>
 		pass_on complaint "dest_z_Ì" "z_Ì_conv";
 	val was_sig = fst(strip_Ì(snd(dest_app tm)));
-	val s1 = get_spec tm;
+	val s1 = Ì_gen_semantic_const tm;
 	val s2 = simple_eq_match_conv1 s1 tm;
 	val s3 = conv_rule (RIGHT_C z'Ì_conv1) s2;
 	val s4 = conv_rule (RIGHT_C(BINDER_C 
@@ -724,7 +731,7 @@ let	val (lam,arg) = dest_z_app tm
 			[fn () => string_of_term tm];
 	val was_sig = fst(strip_Ì(snd(dest_app lam)));
 	val s1 = (local_z_app_rule tm);
-	val s2 = get_spec lam;
+	val s2 = Ì_gen_semantic_const lam;
 	val cnv1 = RIGHT_C (simple_eq_match_conv1 s2) THEN_C
 		simple__comp_conv THEN_C 
 		seq_binder_simple_Á_conv was_sig THEN_C
@@ -1099,7 +1106,7 @@ let	val (lhs,rhs) = dest_z_eq tm
 	val dummy = if is_z_tuple lhs andalso is_z_tuple rhs
 		then ()
 		else term_fail "z_tuple_lang_eq_conv" 42003 [tm];
-	val spec = get_spec lhs;
+	val spec = tuple_gen_semantic_const lhs;
 	val proj_thms = map all_µ_intro
 		(rev(tl(rev(strip_±_rule(all_µ_elim spec)))));
 	val (tcons,tproj) = get_tuple_info (type_of lhs);
@@ -1135,7 +1142,10 @@ val Ûz_sel‰t_lang_convÝ : CONV = (fn tm =>
 let	val (bdy,n) = dest_z_sel‰t tm
 		handle complaint =>
 		pass_on complaint "dest_z_sel‰t" "z_sel‰t_lang_conv";
-	val spec = get_spec tm;
+	val eg_tm = (mk_z_tuple o map (curry mk_var "x") o
+			dest_z_tuple_type o type_of) bdy
+		handle Fail _ => term_fail "z_sel‰t_lang_conv" 42006 [tm];
+	val spec = tuple_gen_semantic_const eg_tm;
 	val s0 = (if is_z_tuple bdy
 		then refl_conv tm
 		else term_fail "z_sel‰t_lang_conv" 42006 [tm]);
@@ -1163,7 +1173,7 @@ let	val s0 = if is_z_tuple tm
 	val tuple= fst(dest_z_sel‰t(hd xi))
 		handle (Fail _) =>
 		term_fail "z_tuple_lang_intro_conv" 42005 [tm];
-	val spec = all_µ_elim (µ_elim tuple (get_spec tm'))
+	val spec = all_µ_elim (µ_elim tuple (tuple_gen_semantic_const tm'))
 		handle (Fail _) =>
 		term_fail "z_tuple_lang_intro_conv" 42005 [tm];
 	val cthm = hd(rev(strip_±_rule spec));
@@ -1179,10 +1189,11 @@ end);
 z_tuple_lang_intro_conv ñ((1,2,3).1,(1,2,3).2,(1,2,3).3)®;
 =SML
 val Ûz_sel‰t_intro_convÝ : CONV = (fn tm =>
-let	val (tcons,tprojs) = get_tuple_info (type_of tm)
+let	val eg_tm = (mk_z_tuple o map (curry mk_var "x") o
+			dest_z_tuple_type o type_of) tm
 		handle (Fail _) =>
 		term_fail "z_sel‰t_intro_conv" 42004 [tm];
-	val spec = all_µ_elim (µ_elim tm (get_spec tcons));
+	val spec = all_µ_elim (µ_elim tm (tuple_gen_semantic_const eg_tm));
 	val cthm = eq_sym_rule(hd(rev(strip_±_rule spec)));
 in
 		check_is_z_conv_result "z_sel‰t_intro_conv"
@@ -1218,7 +1229,7 @@ val Ûz_¸_convÝ : CONV = (fn tm =>
 let	val si = dest_z_¸ tm
 		handle complaint =>
 		pass_on complaint "dest_z_¸" "z_¸_conv";
-	val spec = list_µ_elim si (get_spec tm);
+	val spec = list_µ_elim si (¸_gen_semantic_const tm);
 	val tis = aux 1 (length si) (map fst(term_vars tm));
 	val elem_tys = map (fn x => hd(snd(dest_ctype(type_of x)))) si;
 	val ti = map mk_var (combine tis elem_tys);
@@ -1227,7 +1238,6 @@ let	val si = dest_z_¸ tm
 		mk_t,
 		mk_z_tuple ti);
 	val dummy = seta_gen_semantic_const res;
-	val (tcons,tprojs) = get_tuple_info(hd(snd(dest_ctype(type_of tm))));
 =TEX
 =SML
 	val dummy = set_flag("check_is_z",false);
@@ -1269,7 +1279,7 @@ let	val (t,ct) = dest_z_ tm
 	val si = dest_z_¸ ct
 		handle (Fail _) =>
 		term_fail  "z__¸_conv" 42007 [tm];
-	val spec = list_µ_elim si (get_spec ct);
+	val spec = list_µ_elim si (¸_gen_semantic_const ct);
 	val s1 = (RIGHT_C(fn _ => spec) THEN_C _comp_conv) tm;
 	val s2 = conv_rule(RIGHT_C (±_C 
 		(TRY_C(LEFT_C z_sel‰t_lang_conv)))) s1;
@@ -1286,10 +1296,9 @@ The following is necessary for $z\_sets\_ext\_conv$,
 but is out of its proper section.
 =SML
 val Ûz_bindingd_intro_convÝ : CONV = (fn tm =>
-let	val (bcons,bprojs) = get_binding_info (type_of tm)
+let	val spec = all_µ_elim (µ_elim tm (binding_gen_semantic_const tm))
 		handle (Fail _) =>
 		term_fail "z_bindingd_intro_conv" 42017 [tm];
-	val spec = all_µ_elim (µ_elim tm (get_spec bcons));
 	val cthm = eq_sym_rule(hd(rev(strip_±_rule spec)));
 in
 		check_is_z_conv_result "z_bindingd_intro_conv"
