@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.12 2003/06/24 16:16:38 rda Exp rda $ 
+ * $Id: palette.c,v 2.13 2003/06/25 10:55:03 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -134,10 +134,6 @@ void popup_palette(Widget w)
 		XtAddCallback(button, XmNactivateCallback, type_char_cb,
 			(XtPointer) cbdata);
 	}
-
-#ifdef LISTWIDGETS
-	list_widget_hierarchy(shell);
-#endif
 
 	XtManageChild(form);
 	XtPopup(shell, XtGrabNone);

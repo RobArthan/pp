@@ -40,6 +40,10 @@
 	{ "", &xmSeparatorGadgetClass, \
 		'\0', NULL, NULL, NULL, NULL, NULL, False}
 
+#ifdef LISTWIDGETS
+#define EDITRES
+#endif
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * TYPE DEFS
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -283,7 +287,8 @@ typedef struct menu_item {
 	extern	void add_edit_res_handler(Widget shell);
 #endif
 #ifdef LISTWIDGETS
-	extern	void list_widget_hierarchy(Widget w);
+	extern	void register_shell(Widget w);
+	extern	void list_widget_hierarchy(void);
 #endif
 /* Module: xpp */
 /* **** **** **** **** **** **** **** **** **** **** **** ****

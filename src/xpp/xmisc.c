@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.17 2003/06/25 15:22:49 rda Exp rda $
+ * $Id: xmisc.c,v 2.18 2003/06/26 11:40:03 rda Exp $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -32,6 +32,8 @@
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 
+#include "xpp.h"
+
 #include <stdio.h>
 #include <ctype.h>
 #include <X11/Xatom.h>
@@ -43,8 +45,6 @@
 #endif
 
 #include<Xm/Text.h>
-
-#include "xpp.h"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * messages
@@ -557,24 +557,11 @@ static char *get_remote_selection(Boolean *timed_out)
 	return sel_req_info.data;
 }
 
-#ifdef EDITRES
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * add_edit_res_handler: add support for editres to a shell widget
- * **** **** **** **** **** **** **** **** **** **** **** ****/
-void add_edit_res_handler(Widget shell)
-{
-	XtAddEventHandler(shell,
-			(EventMask) 0,
-			True,
-			_XEditResCheckMessages,
-			NULL);
-}
-#endif
 
 #ifdef LISTWIDGETS
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * register_shell: register the shell ancestor of a widget for inclusion in the hierarchy listing
  * list_widget_hierarchy: output listing of widget hierarchy to standard error.
- * Uses recursion creating linked lists on the stack to simplify (?) memory management.
  * **** **** **** **** **** **** **** **** **** **** **** ****/
 #include <X11/IntrinsicP.h> /* to let us look at widget class names */
 typedef struct _path
@@ -598,6 +585,7 @@ static void list_widget_and_descendants(Widget w, path p)
 {
 	char *class_name;
 	path_cell cell;
+	Widget menu;
 	cell.w = w;
 	cell.link = p;
 	fprintf(stderr, "%s ", (XtClass(w))->core_class.class_name);
@@ -639,8 +627,53 @@ static void get_ancestors_and_list(Widget w, Widget anc, path p)
 		list_widget_and_descendants(w, ancs);
 	}
 }
-void list_widget_hierarchy(Widget w)
+#define MAX_SHELLS 100
+static Widget shells[MAX_SHELLS];
+static int num_shells = 0;
+void register_shell(Widget w)
 {
-	get_ancestors_and_list(w, w, 0);
+	Widget sh, parent;
+	int i;
+	parent = w;
+	do {
+		sh = parent;
+		parent = XtParent(sh);
+	} while(!XtIsShell(sh));
+	for(i = 0; i < num_shells; i += 1) {
+		if(shells[i] == sh) {
+			return;
+		}
+	}
+	shells[num_shells++] = sh;
 }
- #endif
+#define REGISTER_SHELL(sh)   {register_shell(sh);}
+void list_widget_hierarchy(void)
+{
+	int i;
+	for(i = 0; i < num_shells; ++i) {
+		get_ancestors_and_list(shells[i], shells[i], 0);
+	}
+}
+#else
+#define REGISTER_SHELL(sh)
+#endif
+#ifdef EDITRES
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * add_edit_res_handler: add support for editres to a shell widget
+ * **** **** **** **** **** **** **** **** **** **** **** ****/
+void add_edit_res_handler(Widget w)
+{
+	Widget sh, parent;
+	parent = w;
+	do {
+		sh = parent;
+		parent = XtParent(sh);
+	} while(!XtIsShell(sh));
+	REGISTER_SHELL(sh)
+	XtAddEventHandler(sh,
+			(EventMask) 0,
+			True,
+			_XEditResCheckMessages,
+			NULL);
+}
+#endif

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.14 2003/04/11 10:58:21 rda Exp rda $ 
+ * $Id: templates.c,v 2.15 2003/06/25 10:55:03 rda Exp rda $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -322,10 +322,6 @@ Boolean init_templates_tool(Widget w)
 
 	XtAddCallback(dismiss_btn, XmNactivateCallback,
 		dismiss_cb, shell);
-
-#ifdef LISTWIDGETS
-	list_widget_hierarchy(shell);
-#endif
 
 	return True;
 }

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.18 2003/06/25 15:23:51 rda Exp rda $
+ * $Id: options.c,v 2.19 2003/06/26 12:17:16 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -454,9 +454,6 @@ if(!global_options.edit_only) {
 
 	set_file_type(UNIX);
 
-#ifdef LISTWIDGETS
-	list_widget_hierarchy(shell);
-#endif
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****

@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.62 2003/06/25 15:22:25 rda Exp rda $
+ * $Id: mainw.c,v 2.63 2003/06/26 11:40:03 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -707,10 +707,6 @@ static Boolean setup_main_window(
 			XmNmenuHelpWidget, btns[num_btns-1], NULL);
 	}
 
-#ifdef LISTWIDGETS
-	list_widget_hierarchy(XtParent(helpmenu));
-#endif
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Paned window for info bar and script window
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -944,10 +940,6 @@ static Boolean setup_main_window(
 
 	set_menu_item_sensitivity(filemenu,
 		FILE_MENU_REVERT, !file_info.new);
-
-#ifdef LISTWIDGETS
-	list_widget_hierarchy(root);
-#endif
 
 	return True;
 
@@ -1506,6 +1498,9 @@ void check_quit_cb (
 			?	changed_quit_message
 			:	running_quit_message))) {
 		kill_application();
+#ifdef LISTWIDGETS
+		list_widget_hierarchy();
+#endif
 		exit(0);
 	};
 }

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.15 2003/05/08 12:10:05 rda Exp rda $
+ * $Id: cmdline.c,v 2.16 2003/06/25 10:55:03 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -279,9 +279,6 @@ void add_cmd_line(Widget text_w)
 	fix_pane_height(btn_form, btn_form);
 	XmProcessTraversal(cmd_text, XmTRAVERSE_CURRENT);
 
-#ifdef LISTWIDGETS
-	list_widget_hierarchy(shell);
-#endif
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
