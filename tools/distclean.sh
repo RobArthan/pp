@@ -10,7 +10,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: distclean.sh,v 1.4 2002/10/30 11:27:22 rda Exp rda $
+# $Id: distclean.sh,v 1.5 2002/10/30 12:48:15 rda Exp rda $
 #
 give_up(){
 	echo configure: $*
@@ -42,7 +42,7 @@ fi
 # Calculate files to be retained
 #
 for f in $MAKEFILES
-do	TOKEEP="$TOKEEP `make -f $f packinglist`"
+do	TOKEEP="$TOKEEP `make -f $f distpackinglist`"
 done
 #
 # Calculate files to delete (the list may contain a few files that aren't present)
