@@ -1,7 +1,7 @@
 #! /bin/sh
 #
 # File: install_holdemo
-# Derived from: $Header: /home/rda/hol/RCS/install_holdemo.sh,v 1.1 2000/08/09 12:04:02 gill Exp rda $
+# Derived from: $Header: /home/rda/hol/RCS/install_holdemo.sh,v 1.2 2000/09/11 14:00:01 rda Rel rda $
 #
 # Running this script sets up example database in the directory ./bin
 #
@@ -34,9 +34,7 @@ mv hol_course_work.doc $doc
 sieve sml < wrk051.doc
 make -f wrk051.mkf all_hol
 
-eval `.arch-n-opsys`
-
-mv *.$HEAP_SUFFIX $bin
+mv example_hol.* $bin
 
 # Tidy up neatly, deleting all unnecessary files
 if test "x$deletebuilddir" = "xy"
