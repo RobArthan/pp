@@ -406,7 +406,7 @@ fun Ûhc_diagÝ (msg : string OPT) (pass : int) (thms : THM list) : unit = (
 =SML
 local
 exception GotIt of THM;
-fun Ûhc_auxÝ (diag : bool)
+fun Ûhc_auxÝ (diag : bool) (sel : TERM list -> TERM)
 	(hyps : TERM list)
 	(hyp_tyvars : TYPE list)
 	(hyp_tmvars : TERM list)
@@ -415,7 +415,7 @@ fun Ûhc_auxÝ (diag : bool)
 	(limit : int)
 	(pass : int)
 	(queries : MARKED_THM list) : THM = (
-	let	val recur = hc_aux diag hyps hyp_tyvars hyp_tmvars
+	let	val recur = hc_aux diag sel hyps hyp_tyvars hyp_tmvars
 					fact_rules fact_thms limit (pass+1);
 		fun	chk (mthm as {thm, fvs, fts}:MARKED_THM) : MARKED_THM = (
 			let	val thm' = prove_asm_rule t_thm thm
@@ -427,14 +427,16 @@ fun Ûhc_auxÝ (diag : bool)
 		);
 		fun do_rules_facts (q : MARKED_THM): MARKED_THM list = (
 			(case asms (#thm q) term_diff hyps of
-			t::_ => (
-					flat
+			ts as _::_ => (
+			let	val t = sel ts;
+			in		flat
 				(map_fail
 				(map chk o rule_resolve hyp_tyvars hyp_tmvars q t)
 				fact_rules) @
 				map_fail
 				(chk o thm_resolve hyp_tyvars hyp_tmvars q t)
 					fact_thms
+			end
 			) | 	[] => [])
 			drop (fn mthm => (mk_f term_mem asms (#thm mthm)))
 		);
@@ -467,7 +469,8 @@ fun Ûhc_auxÝ (diag : bool)
 	end
 );
 in
-fun Ûhc_ruleÝ (diag : bool) (limit : int) (hyps : TERM list)
+fun Ûhc_ruleÝ (diag : bool) (limit : int) (sel : TERM list -> TERM)
+	(hyps : TERM list)
 	(fact_rules : (TERM -> THM list) list)
 	(facts : THM list)
 	(query : TERM) : THM = (
@@ -479,20 +482,20 @@ fun Ûhc_ruleÝ (diag : bool) (limit : int) (hyps : TERM list)
 		(if diag then hc_diag (Value "query:") 0 (map #thm q) else());
 		(if diag then hc_diag (Value "facts:") 0 (map #thm fs) else());
 		(if diag then hc_diag (Value "hypotheses:") 0 (map asm_rule hyps) else());
-		hc_aux diag hyps hyp_tyvars hyp_vars fact_rules fs limit 1 q
+		hc_aux diag sel hyps hyp_tyvars hyp_vars fact_rules fs limit 1 q
 	end	handle GotIt thm => thm
 );
 end;
 =TEX
 =SML
 fun Ûbasic_hc_tacÝ
-	(diag : bool) (limit : int) 
+	(diag : bool) (limit : int)  (sel : TERM list -> TERM)
 	(can : THM -> THM list)
 	(rules : (TERM -> THM list) list)
 	(thms : THM list)
 	: TACTIC = (fn gl as (asms, cnc) =>
 	let	val asmthms = map asm_rule asms;
-	in	accept_tac(hc_rule diag limit asms
+	in	accept_tac(hc_rule diag limit sel asms
 			rules (flat(map can (asmthms @ thms))) cnc) gl
 	end
 );
@@ -541,14 +544,9 @@ fun HC_CAN (can : THM -> THM list) (thm : THM) : THM list = (
 =SML
 val Ûhc_canonÝ = HC_CAN fc_canon1;
 val Ûhc_tacÝ : THM list -> TACTIC = (fn ths =>
-	basic_hc_tac false 100 hc_canon
+	basic_hc_tac false 100 hd hc_canon
 		[hc_rule_of_conv (current_ad_st_conv()),
 			hc_±_rule, hc_²_rule, hc_¶_rule]
-		ths
-);
-val Ûhc_tac1Ý : THM list -> TACTIC = (fn ths =>
-	basic_hc_tac true 100 hc_canon
-		[hc_rule_of_conv (current_ad_st_conv()), hc_±_rule, hc_²_rule]
 		ths
 );
 =TEX
