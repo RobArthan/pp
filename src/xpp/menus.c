@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: menus.c,v 2.3 2000/06/15 17:10:42 rda Exp rda $
+ * $Id: menus.c,v 2.4 2000/06/16 10:12:42 rda Rel rda $
  *
  * menus.c -  creation of menus for the X/Motif ProofPower
  * Interface
@@ -20,6 +20,13 @@
 
 #include "xpp.h"
 
+static Widget setup_menu_aux(
+	Widget	parent,
+	int	type,
+	char	*menu_title,
+	char	menu_mnemonic,
+	Bool	tear_off_enabled,
+	MenuItem	*items);
 
 static void setup_menu_items(
 	Widget		menu,
@@ -29,13 +36,7 @@ static void setup_menu_items(
 	Widget w;
 	MenuItem	*item;
 	XmString	lab;
-	static Widget setup_menu_aux(
-		Widget	parent,
-		int	type,
-		char	*menu_title,
-		char	menu_mnemonic,
-		Bool	tear_off_enabled,
-		MenuItem	*items);
+
 /*
  * Loop round the menu items
  */
@@ -110,13 +111,13 @@ static Widget setup_menu_aux(
 /*
  * Create the pulldown menu and its cascade button:
  */
+		menu = XmCreatePulldownMenu(parent, "menu", NULL, 0);
 		if(tear_off_enabled) {
 			XtVaSetValues(
 				menu,
 				XmNtearOffModel,	XmTEAR_OFF_ENABLED,
 				NULL);
 		}
-		menu = XmCreatePulldownMenu(parent, "menu", NULL, 0);
 		lab = XmStringCreateSimple(menu_title);
 		cascade = XtVaCreateManagedWidget(
 			menu_title, xmCascadeButtonGadgetClass, parent,
@@ -137,7 +138,7 @@ Widget setup_menu(
 	int	type,
 	char    *menu_title,
 	char    menu_mnemonic,
-	Bool    tear_off_enabled,
+	Boolean tear_off_enabled,
 	MenuItem        *items)
 {
 	Widget  cascade, menu;

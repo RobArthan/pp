@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.13 2001/08/06 12:28:36 rda Exp $
+ * $Id: mainw.c,v 2.14 2001/09/24 15:04:43 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -74,9 +74,6 @@ static char* restart_message =
 static char* revert_message =
 "The text has been edited. Do you want to throw away the changes?";
 
-static char *send_error_message = 
-"A system error occurred writing to the application.";
-
 static char *add_new_line_message = 
 "The selection to be executed does not end in a new-line character."
 "Do you want a new-line to be added to it?";
@@ -131,16 +128,16 @@ XtPointer undo_ptr;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void
-	cmd_menu_cb(),
-	edit_menu_cb(),
-	file_menu_cb(),
-	help_menu_cb(),
-	reopen_cb(),
-	script_modify_cb(),
-	tools_menu_cb();
+	cmd_menu_cb(CALLBACK_ARGS),
+	edit_menu_cb(CALLBACK_ARGS),
+	file_menu_cb(CALLBACK_ARGS),
+	help_menu_cb(CALLBACK_ARGS),
+	reopen_cb(CALLBACK_ARGS),
+	script_modify_cb(CALLBACK_ARGS),
+	tools_menu_cb(CALLBACK_ARGS);
 
 static void setup_reopen_menu(char *filename);
-static void post_popupeditmenu();
+static void post_popupeditmenu(EVENT_HANDLER_ARGS);
 static Bool execute_command(void);
 static void execute_action(
     Widget 		/* widget */,
@@ -175,7 +172,7 @@ static void execute_action(
 #define MAX_REOPEN_MENU_ITEMS		16
 
 static MenuItem reopen_menu_items[MAX_REOPEN_MENU_ITEMS+1] = {
-	NULL
+	{NULL}
 };
 
 static MenuItem file_menu_items[] = {
@@ -199,7 +196,7 @@ static MenuItem file_menu_items[] = {
    MENU_ITEM_SEPARATOR,
     { "Quit",  &xmPushButtonGadgetClass, 'Q', "Ctrl<Key>q", "Ctrl-Q",
         file_menu_cb, (XtPointer)FILE_MENU_QUIT, (MenuItem *)NULL, False },
-    NULL
+    {NULL}
 };
 /*
  * In the following, entries after and including
@@ -222,7 +219,7 @@ static MenuItem tools_menu_items[] = {
         tools_menu_cb, (XtPointer)TOOLS_MENU_CONTROLS, (MenuItem *)NULL, False },
     { "Command Line", &xmPushButtonGadgetClass, 'C', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_CMD_LINE, (MenuItem *)NULL, False },
-    NULL,
+    {NULL}
 };
 
 #define EDIT_MENU_CUT			0
@@ -247,7 +244,7 @@ static MenuItem edit_menu_items[] = {
     { "Undo", &xmPushButtonGadgetClass, 'U', "Ctrl<Key>z", NULL,
         edit_menu_cb, (XtPointer)EDIT_MENU_UNDO, (MenuItem *)NULL, False },
 #endif
-    NULL,
+    {NULL}
 };
 
 #define CMD_MENU_EXECUTE		0
@@ -277,7 +274,7 @@ static MenuItem cmd_menu_items[] = {
         cmd_menu_cb, (XtPointer)CMD_MENU_KILL, (MenuItem *)NULL, False },
     { "Restart", &xmPushButtonGadgetClass, 'R', NULL, NULL,
         cmd_menu_cb, (XtPointer)CMD_MENU_RESTART, (MenuItem *)NULL, False },
-    NULL,
+    {NULL}
 };
 
 #define	HELP_MENU_ABOUT_XPP		0
@@ -302,7 +299,7 @@ static MenuItem help_menu_items[] = {
         help_menu_cb, (XtPointer)HELP_MENU_EDIT_MENU, (MenuItem *)NULL, False },
     { "Command Menu", &xmPushButtonGadgetClass, 'C', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_COMMAND_MENU, (MenuItem *)NULL, False },
-    NULL,
+    {NULL}
 };
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -323,7 +320,6 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 
 	XmTextPosition ins_pos, last_pos;
 	Position dontcare;
-	char *p;
 	char overwritten;
 	Boolean visible;
 
@@ -376,7 +372,7 @@ static void set_icon_name(void)
 /* no file name; shouldn't happen; do nothing */
 	} else {
 		p = fname + strlen(fname) - 1;
-		while (*p && p > fname & *p != '/') {
+		while (*p && p > fname && *p != '/') {
 			--p;
 		}
 		if(p > fname) {
@@ -426,14 +422,14 @@ static void reinit_changed(void)
  * X initialisation:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static setup_main_window(
+static void setup_main_window(
 	char	*file_name)
 {
 	Arg args[12];
 	NAT i;
-	XmString s1, s2, s3, s4, s5, s6, s7, s8;
+	XmString s1;
 	Atom WM_DELETE_WINDOW;
-	void check_quit_cb();
+	void check_quit_cb(CALLBACK_ARGS);
 	Widget *wp;
 	XtActionsRec action;
 
@@ -690,19 +686,28 @@ if( !global_options.edit_only ) {
  * MENU PROCESSING
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static void post_popupeditmenu(Widget w, XtPointer x, XButtonPressedEvent *event)
+static void post_popupeditmenu(
+	Widget		w,
+	XtPointer	x,
+	XEvent		*ev,
+	Boolean		*unused)
 {
+	XButtonPressedEvent *event = &(ev->xbutton);
 	if (event->button == 3) {
 		XmMenuPosition(popupeditmenu, event);
 		XtManageChild(popupeditmenu);
 	}
 }
 
-static void file_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
+static void file_menu_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
 {
 	char *fname, *oldfname;
 	char *buf;
-	void check_quit_cb();
+	NAT i = (NAT) cbd;
+	void check_quit_cb(CALLBACK_ARGS);
 
 	switch(i) {
 	case FILE_MENU_SAVE:
@@ -859,7 +864,7 @@ static void setup_reopen_menu(char *filename)
 	XtVaGetValues(filemenu, XmNchildren, &btns, NULL);
 	XtVaGetValues(btns[FILE_MENU_REOPEN],
 		XmNsubMenuId, &pull_right_menu, NULL);
-	for(	p = filename, i = 0;
+	for(	p = filename, i = 0, t = NULL;
 		i < MAX_REOPEN_MENU_ITEMS-1 && p != NULL;
 		i += 1 ) {
 		t = reopen_menu_items[i].label;
@@ -877,9 +882,13 @@ static void setup_reopen_menu(char *filename)
 	set_menu_item_sensitivity(filemenu, FILE_MENU_REOPEN, True);
 }
 
-static void reopen_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
+static void reopen_cb(
+		Widget		w,
+		XtPointer 	cbd,
+		XtPointer	cbs)
 {
 	char *oldfname, *fname;
+	NAT i = (NAT) cbd;
 	oldfname = XmTextGetString(namestring);
 	fname = reopen_menu_items[i].label;
 	if(!changed || yes_no_dialog(root, changed_message)) {
@@ -898,9 +907,12 @@ static void reopen_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
 	}
 }
 
-static void tools_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
+static void tools_menu_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
 {
-
+	NAT i = (NAT) cbd;
 	switch(i) {
 	case TOOLS_MENU_PALETTE:
 		add_palette(script);
@@ -923,14 +935,13 @@ static void tools_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
 /* Perhaps should test for success and make menu items insensitive */
 }
 
-static void edit_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
+static void edit_menu_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
 {
-	static void do_undo();
-
+	NAT i = (NAT) cbd;
 	Boolean result = True;
-
-
-	char *p;
 
 	switch(i) {
 	case EDIT_MENU_CUT:
@@ -969,10 +980,13 @@ static void edit_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
    selection to cut, copy or paste. */
 }
 
-static void cmd_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
+static void cmd_menu_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
 {
-	char *cmd;
-	Boolean application_alive();
+	NAT i = (NAT) cbd;
+	Boolean application_alive(void);
 	
 	if(!application_alive() && i != CMD_MENU_RESTART) {
 		ok_dialog(root, not_running_message);
@@ -1011,8 +1025,12 @@ static void cmd_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
 	}
 }
 
-static void help_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
+static void help_menu_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
 {
+	NAT i = (NAT)cbd;
 	switch(i) {
 	case HELP_MENU_ABOUT_XPP:
 		help_dialog(root, Help_About_Xpp);
@@ -1042,7 +1060,10 @@ static void help_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Monitor typed input:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void script_modify_cb(Widget w, XtPointer d, XmTextVerifyCallbackStruct *cbs)
+static void script_modify_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
 {
 	if(!changed) {	/* Only do this when change from !changed to changed */
 		XtManageChild(modified);
@@ -1053,7 +1074,10 @@ static void script_modify_cb(Widget w, XtPointer d, XmTextVerifyCallbackStruct *
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * See if the user really wants to quit, and if so do so:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void check_quit_cb (Widget w, XtPointer cd, XmAnyCallbackStruct cbs)
+void check_quit_cb (
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
 {
 	if((!changed && !application_alive())
 	||	yes_no_dialog(root,
@@ -1076,7 +1100,6 @@ static Bool execute_command(void)
 	NAT len;
 	XmTextPosition dontcare;
 	int add_nl;
-	Widget w = script;
 
 	if(	XmTextGetSelectionPosition(script, &dontcare, &dontcare)
 	&&	(cmd = XmTextGetSelection(script))) {

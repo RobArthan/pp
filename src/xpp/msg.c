@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date$ $Revision$ $RCSfile$
+ * %Z% $Date: 1998/03/16 10:46:16 $ $Revision: 2.5 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -85,11 +85,11 @@ XmString format_msg(char *msg, NAT line_len)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * help_dialog: put up an information window without grabbing control
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void help_cb(CALLBACK_ARGS);
 void help_dialog(Widget w, char *str)
 {
 	Widget form, widget;
 	static Widget dialog_w, pane, help_text;
-	static void help_cb();
 	Atom WM_DELETE_WINDOW;
 	Dimension h;
 	Arg args[8];
@@ -136,16 +136,19 @@ void help_dialog(Widget w, char *str)
 	XtPopup(dialog_w, XtGrabNone);
 }
 
-static void help_cb(Widget widget, Widget shell)
+static void help_cb(
+		Widget		widget,
+		XtPointer	shell,
+		XtPointer	cbs)
 {
-	XtPopdown(shell);
+	XtPopdown((Widget)shell);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * poll: poll for and process an event; used for modal dialogs
  * in functions that are expected to return a result.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void poll(){
+static void poll(void){
 	XEvent xev;
 	XtAppNextEvent(app, &xev);
 	XtDispatchEvent(&xev);
@@ -154,6 +157,7 @@ static void poll(){
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * yes_no_dialog: ask a question with a mandatory yes/no answer
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void yes_no_cb(CALLBACK_ARGS), yes_no_destroy_cb(CALLBACK_ARGS);
 Boolean yes_no_dialog(Widget w, char *question)
 {
 	static Widget dialog;
@@ -161,7 +165,6 @@ Boolean yes_no_dialog(Widget w, char *question)
 	Atom WM_DELETE_WINDOW;
 	static int reply;
 	/* 0 = not replied; otherwise YES/NO */
-	static void yes_no_cb(), yes_no_destroy_cb();
 	reply = 0;
 	if (!dialog) {
 		dialog = XmCreateQuestionDialog(w, "yes_no", NULL, 0);
@@ -210,6 +213,7 @@ Boolean yes_no_dialog(Widget w, char *question)
  * By abuse of the Motif intentions, this uses the help button for cancel.
  * Return is 1 for yes; 0 for no; and -1 for cancel.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void yes_no_cb(CALLBACK_ARGS), cancel_cb(CALLBACK_ARGS);
 int yes_no_cancel_dialog(Widget w, char *question)
 {
 	static Widget dialog;
@@ -217,7 +221,6 @@ int yes_no_cancel_dialog(Widget w, char *question)
 	Atom WM_DELETE_WINDOW;
 	static int reply;
 	/* 0 = not replied; otherwise YES/NO/CANCEL */
-	static void yes_no_cb(), cancel_cb();
 	reply = 0;
 	if (!dialog) {
 		dialog = XmCreateQuestionDialog(w, "yes_no", NULL, 0);
@@ -264,9 +267,14 @@ int yes_no_cancel_dialog(Widget w, char *question)
 /*
  * Call-backs for the above two.
  */
-static void yes_no_cb(Widget w, NAT *reply, XmAnyCallbackStruct *cbs)
+static void yes_no_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
-	switch (cbs->reason) {
+	NAT *reply = cbd;
+	XmAnyCallbackStruct *acbs = cbs;
+	switch (acbs->reason) {
 		case XmCR_OK:
 			*reply = YES;
 			break;
@@ -277,13 +285,21 @@ static void yes_no_cb(Widget w, NAT *reply, XmAnyCallbackStruct *cbs)
 			break;
 	}
 }
-static void yes_no_destroy_cb(Widget w, NAT *reply, XmAnyCallbackStruct *cbs)
+static void yes_no_destroy_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	NAT *reply = cbd;
 	*reply = NO;
 }
 
-static void cancel_cb(Widget w, NAT *reply, XmAnyCallbackStruct *cbs)
+static void cancel_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	NAT *reply = cbd;
 	*reply = CANCEL;
 }
 
@@ -291,13 +307,13 @@ static void cancel_cb(Widget w, NAT *reply, XmAnyCallbackStruct *cbs)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * ok_dialog: error message which the user must confirm
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void ok_cb(CALLBACK_ARGS);
 void ok_dialog(Widget w, char *msg)
 {
 	static Widget dialog;
 	XmString text, ok, error;
 	Atom WM_DELETE_WINDOW;
 	static Bool confirmed;
-	static void ok_cb();
 	confirmed = False;
 	if (!dialog) {
 		dialog = XmCreateQuestionDialog(w, "ok", NULL, 0);
@@ -340,8 +356,12 @@ void ok_dialog(Widget w, char *msg)
 	XtPopdown(XtParent(dialog));
 }
 
-static void ok_cb(Widget w, Bool *confirmed, XmAnyCallbackStruct *cbs)
+static void ok_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	NAT *confirmed = cbd;
 	*confirmed = True;
 }
 
@@ -351,12 +371,14 @@ static void ok_cb(Widget w, Bool *confirmed, XmAnyCallbackStruct *cbs)
  * ``Save'' or ``Open'' or whatever.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static char *file_name;
+static void	file_cancel_cb(CALLBACK_ARGS),
+		file_ok_cb(CALLBACK_ARGS),
+		file_help_cb(CALLBACK_ARGS);
 
 char *file_dialog(Widget w, char *opn)
 {
 	static Widget dialog;
 	XmString ok, title;
-	void file_cancel_cb(), file_ok_cb(), file_help_cb();
 	Atom WM_DELETE_WINDOW;
 	static NAT reply;
 	/* 0 = not replied; */
@@ -417,28 +439,31 @@ char *file_dialog(Widget w, char *opn)
 }
 
 
-void file_ok_cb(
-	Widget w,
-	NAT *reply,
-	XmFileSelectionBoxCallbackStruct *cbs)
+static void file_ok_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
-	(void) XmStringGetLtoR(cbs->value,
+	NAT *reply = cbd;
+	XmFileSelectionBoxCallbackStruct *fsbcbs = cbs;
+	(void) XmStringGetLtoR(fsbcbs->value,
 			XmSTRING_DEFAULT_CHARSET,
 			&file_name);
 	*reply = YES;
 }
 
-void file_cancel_cb(
-	Widget w,
-	NAT *reply,
-	XtPointer p)
+static void file_cancel_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	NAT *reply = cbd;
 	*reply = NO;
 }
-void file_help_cb(
-	Widget w,
-	XtPointer *cbd,
-	XmFileSelectionBoxCallbackStruct *cbs)
+static void file_help_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
 	help_dialog(root, Help_File_Selection_Box);
 }
