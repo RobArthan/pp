@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2003/02/10 13:16:33 $ $Revision: 2.16 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2003/04/11 10:58:21 $ $Revision: 2.17 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -566,17 +566,18 @@ static void ok_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * file_dialog: dialog to get a file name, via a FileSelectionDialog.
  * `opn' is the label to us on the ``OK'' button (i.e. it's
- * ``Save'' or ``Open'' or whatever.
+ * ``Save'' or ``Open'' or whatever. `cancel` is the label
+ * for the ``Cancel`` button.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static char *file_name;
 static void	file_cancel_cb(CALLBACK_ARGS),
 		file_ok_cb(CALLBACK_ARGS),
 		file_help_cb(CALLBACK_ARGS);
 
-char *file_dialog(Widget w, char *opn)
+char *file_dialog(Widget w, char *opn, char * cancel)
 {
 	static Widget dialog;
-	XmString ok, title;
+	XmString s, title;
 	Atom WM_DELETE_WINDOW;
 	static int reply;
 	/* 0 = not replied; */
@@ -608,13 +609,21 @@ char *file_dialog(Widget w, char *opn)
 
 	};
 
-	ok = XmStringCreateSimple(opn);
+	s = XmStringCreateSimple(opn);
 
 	XtVaSetValues(dialog,
-		XmNokLabelString,	ok,
+		XmNokLabelString,	s,
 		NULL);
 
-	XmStringFree(ok);
+	XmStringFree(s);
+
+	s = XmStringCreateSimple(cancel);
+
+	XtVaSetValues(dialog,
+		XmNcancelLabelString,	s,
+		NULL);
+
+	XmStringFree(s);
 
 	XtManageChild(dialog);
 

@@ -178,7 +178,8 @@ typedef struct menu_item {
 		char	*msg);
 	extern char *file_dialog(
 		Widget	w,
-		char	*opn    /* Save/Open/... */);
+		char	*opn,    /* Save/Open/... */
+		char	*cancel /* "Cancel/Empty File */);
 	extern void memory_warning_dialog(
 		Widget  w,
 		Boolean show);     /* Used when memory's very low */
@@ -211,6 +212,7 @@ typedef struct menu_item {
 	extern void send_to_application(
 		char	*buf,
 		NAT	siz);
+	extern void new_editor(void);
 /* Module: search */
 	extern Boolean add_search_tool(
 		Widget	w);
@@ -286,6 +288,7 @@ typedef struct menu_item {
 	extern char *templates;
 	extern char *command_line_list;
 	extern char *title;
+	extern char *argv0;
 	extern const char *const file_type_names[]
 #ifdef _xpp
 	= {"Unix", "MS-DOS", "Macintosh" };

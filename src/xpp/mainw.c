@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.53 2003/04/10 22:47:18 rda Exp rda $
+ * $Id: mainw.c,v 2.54 2003/04/11 10:55:34 rda Exp $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -161,17 +161,21 @@ static void line_number_cb(CALLBACK_ARGS);
  * in the middle of a menu, macros for later entries should
  * be incremented accordingly.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-#define FILE_MENU_SAVE            0
-#define FILE_MENU_SAVE_AS         1
-#define FILE_MENU_SAVE_SELECTION  2
-/* Item 3 is a separator */
-#define FILE_MENU_OPEN            4
-#define FILE_MENU_INCLUDE         5
-#define FILE_MENU_REVERT          6
-#define FILE_MENU_EMPTY_FILE      7
-#define FILE_MENU_REOPEN          8
-/* Item 9 is a separator */
-#define FILE_MENU_QUIT           10
+#define FILE_MENU_NEW_EDITOR          0
+/* Item 1 is a separator */
+#define FILE_MENU_SAVE            2
+#define FILE_MENU_SAVE_AS         3
+#define FILE_MENU_SAVE_SELECTION  4
+/* Item 5 is a separator */
+#define FILE_MENU_OPEN            6
+#define FILE_MENU_INCLUDE         7
+#define FILE_MENU_REVERT          8
+#define FILE_MENU_EMPTY_FILE      9
+#define FILE_MENU_REOPEN          10
+/* Item 11 is a separator */
+#define FILE_MENU_QUIT           12
+/* The next one is for the direct call of the callback from code, not from a menu button */
+#define FILE_MENU_INIT_OPEN          13
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * The items for the pull-right menu attached to Reopen in the
@@ -184,6 +188,10 @@ static MenuItem reopen_menu_items[MAX_REOPEN_MENU_ITEMS+1] = {
 };
 
 static MenuItem file_menu_items[] = {
+   /* The next one looks to the user like a ..., even though the parent carries on */
+     { "New Editor ...",  &xmPushButtonGadgetClass, 'N', NULL, NULL,
+        file_menu_cb, (XtPointer)FILE_MENU_NEW_EDITOR, (MenuItem *)NULL, False },
+   MENU_ITEM_SEPARATOR,
     { "Save", &xmPushButtonGadgetClass, 'S', "Ctrl<Key>s", "Ctrl-S",
         file_menu_cb, (XtPointer)FILE_MENU_SAVE, (MenuItem *)NULL, False },
     { "Save as ...",  &xmPushButtonGadgetClass, 'a', NULL, NULL,
@@ -201,7 +209,7 @@ static MenuItem file_menu_items[] = {
         file_menu_cb, (XtPointer)FILE_MENU_EMPTY_FILE, (MenuItem *)NULL, False },
      { "Reopen ",  &xmPushButtonGadgetClass, 'p', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_REOPEN, reopen_menu_items, False },
-   MENU_ITEM_SEPARATOR,
+   MENU_ITEM_SEPARATOR, 
     { "Quit",  &xmPushButtonGadgetClass, 'Q', "Ctrl<Key>q", "Ctrl-Q",
         file_menu_cb, (XtPointer)FILE_MENU_QUIT, (MenuItem *)NULL, False },
     {NULL}
@@ -886,7 +894,10 @@ static Boolean setup_main_window(
  * Open file if file_name not NULL
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	pause_undo(undo_ptr);
-	if(open_file(script, file_name, True, &foAction)) {
+
+	if(file_name && !*file_name) { /* explicit empty string; put up file open dialogue */
+		file_menu_cb(root, (XtPointer)(FILE_MENU_INIT_OPEN), NULL);
+	} else if(open_file(script, file_name, True, &foAction)) {
 		XmTextFieldSetString(namestring, file_name);
 		XmTextFieldShowPosition(namestring, strlen(file_name));
 		set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
@@ -980,6 +991,9 @@ static void file_menu_cb(
 	void check_quit_cb(CALLBACK_ARGS);
 
 	switch(i) {
+	case FILE_MENU_NEW_EDITOR:
+		new_editor();
+		break; /* actually it's not reached unless the fork-exec inside new_editor failed */
 	case FILE_MENU_SAVE:
 		fname = XmTextGetString(namestring);
 		if(!fname || !*fname || *fname == '*') {
@@ -997,7 +1011,7 @@ static void file_menu_cb(
 		break;
 	case FILE_MENU_SAVE_AS:
 		oldfname = XmTextGetString(namestring);
-		fname = file_dialog(frame, "Save");
+		fname = file_dialog(frame, "Save", "Cancel");
 		if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 		} else if(save_file_as(script, fname)) {
@@ -1018,7 +1032,7 @@ static void file_menu_cb(
 	case FILE_MENU_SAVE_SELECTION:
 		if((buf = get_selection(script, no_selection_message))
 			!= NULL) {
-			fname = file_dialog(frame, "Save Selection");
+			fname = file_dialog(frame, "Save Selection", "Cancel");
 			if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 			} else {
@@ -1029,9 +1043,11 @@ static void file_menu_cb(
 		};
 		break;
 	case FILE_MENU_OPEN:
+	case FILE_MENU_INIT_OPEN:
 		oldfname = XmTextGetString(namestring);
 		if(!file_info.changed || yes_no_dialog(root, changed_message)) {
-			fname = file_dialog(frame, "Open");
+			char * cancel = i == FILE_MENU_OPEN ? "Cancel" : "Empty File";
+			fname = file_dialog(frame, "Open", cancel);
 			if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 			} else {
@@ -1056,7 +1072,7 @@ static void file_menu_cb(
 		if(oldfname) {XtFree(oldfname);}
 		break;
 	case FILE_MENU_INCLUDE:
-		fname = file_dialog(frame, "Include");
+		fname = file_dialog(frame, "Include", "Cancel");
 		if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 			break;

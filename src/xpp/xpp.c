@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.7 2002/10/17 17:09:34 rda Exp rda $
+ * $Id: xpp.c,v 2.8 2002/12/03 23:39:50 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -38,6 +38,8 @@
 
 #include <X11/StringDefs.h>
 #include <stdio.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <string.h>
 #include "xpp.h"
 
@@ -269,12 +271,16 @@ static char *get_command_line(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
+	argv0 = argv[0];
+
 	root = XtVaAppInitialize(&app,
 		"Xpp",
 		options,
 		XtNumber(options),
 		&argc,
 		argv, NULL, NULL);
+	
+	(void) fcntl(ConnectionNumber(XtDisplay(root)), F_SETFD, 1);
 
 	XtVaSetValues(root,
 		XmNtitle, title,

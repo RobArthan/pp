@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.23 2003/03/18 14:09:53 robarthan Exp rda $
+ * $Id: pterm.c,v 2.24 2003/03/18 17:11:48 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -38,6 +38,8 @@ Data transfer from xpp to application: send_to_application, send_nl
 Control of the application: application_alive (test), interrupt_and_abandon, 
 interrupt_application, restart_application.
 
+Starting a new editor session: new_editor fork and exec a  new xpp edit-only session.
+
 The initialisation step (also used to re-initialise in restart_application) has several
 OS-dependent aspects. Data transfer from and to the application as coded here
 is not OS-dependent, but it care has had to be taken to ensure that it doesn't
@@ -45,6 +47,9 @@ deadlock and to ensure that it doesn't swamp interaction with the user. The
 control functions are less problematic but they do interact with data transfer. Both
 data transfer and the control functions have to be careful about the possibility
 of signals.
+
+Starting a new editor is straightforward,  it is done here to localise a possible
+platform-dependency.
 
 INITIALISATION
 
@@ -451,7 +456,7 @@ void get_pty(void)
 			msg("system error", "setsid failed");
 			perror("xpp");
 			exit(9);
-		};
+		}
 
 		if((tty_fd = open("/dev/tty", O_RDWR)) >= 0){
 		    ioctl(tty_fd, TIOCNOTTY, 0);
@@ -1056,4 +1061,43 @@ static void default_sigs(void)
 	sigaction(SIGFPE, &acts, 0);
 }
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * new_editor: fork and exec another edit-only xpp session.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+
+void new_editor(void)
+{
+	pid_t new_pid;
+	new_pid = fork();
+
+	if (new_pid < 0) { /* Cannot fork */
+		msg("system error", "fork failed");
+		perror("xpp");
+	} else if (new_pid == 0) { 
+		new_pid = fork();
+		if (new_pid < 0) { /* Cannot fork */
+			msg("system error", "fork failed");
+			perror("xpp");
+		} else if (new_pid == 0) { 
+			 /* Grandchild - become session leader exec the new edit-only sessio. */
+			if(setsid() < 0) {
+				msg("system error", "setsid failed");
+				perror("xpp");
+				exit(9);
+			}
+			close(ConnectionNumber(XtDisplay(root)));
+			execlp(argv0, argv0, "-file", "", NULL);
+			/* **** error if reach here **** */
+			msg("system error", "could not exec");
+			perror("xpp");
+		} else {
+			/* Child - exit */
+			exit(0);
+		}
+	} else {
+		/* Parent - wait for the child */
+		wait(0);
+	}
+}
 
