@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.28 2004/02/08 14:44:53 rda Exp rda $
+ * $Id: xmisc.c,v 2.29 2004/02/08 17:14:36 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -574,7 +574,7 @@ void attach_edit_popup(Widget text_w, MenuItem *menu_items)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * attach_rw_edit_popup: attach a popup edit menu to a read-write
  * (i.e., editable) text widget. Supported functions are
- * Cut, Copy, Paste & Clear:
+ * Cut, Copy, Paste:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static MenuItem rw_edit_menu_items[] = {
     { "Cut", &xmPushButtonGadgetClass, '\0', NULL, NULL,
@@ -583,8 +583,6 @@ static MenuItem rw_edit_menu_items[] = {
         edit_copy_cb, NULL, (MenuItem *)NULL, False },
     { "Paste", &xmPushButtonGadgetClass, '\0', NULL, NULL,
         edit_paste_cb, NULL, (MenuItem *)NULL, False },
-    { "Clear", &xmPushButtonGadgetClass, '\0', NULL, NULL,
-        edit_clear_cb, NULL, (MenuItem *)NULL, False },
     {NULL}
 };
 void attach_rw_edit_popup(Widget text_w)
@@ -603,8 +601,6 @@ void attach_rw_edit_popup(Widget text_w)
 static MenuItem ro_edit_menu_items[] = {
     { "Copy", &xmPushButtonGadgetClass, '\0', NULL, NULL,
         edit_copy_cb, NULL, (MenuItem *)NULL, False },
-    { "Clear", &xmPushButtonGadgetClass, '\0', NULL, NULL,
-        edit_clear_cb, NULL, (MenuItem *)NULL, False },
     {NULL}
 };
 void attach_ro_edit_popup(Widget text_w)
@@ -642,14 +638,6 @@ void edit_paste_cb(
 {
 	Widget text_w = (Widget) cbd;
 	(void) XmTextPaste(text_w);
-}
-void edit_clear_cb(
-		Widget		w,
-		XtPointer	cbd,
-		XtPointer	cbs)
-{
-	Widget text_w = (Widget) cbd;
-	(void) XmTextClearSelection(text_w, CurrentTime);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Event handler for posting a popup menu

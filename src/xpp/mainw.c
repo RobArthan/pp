@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.79 2004/02/10 22:43:47 rda Exp rda $
+ * $Id: mainw.c,v 2.80 2004/02/11 21:00:03 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -253,8 +253,8 @@ static MenuItem file_menu_items[] = {
  * undo and redo entries. (Used to set the sensitivity).
  */
 
-#define EDIT_MENU_UNDO  5
-#define EDIT_MENU_REDO  6
+#define EDIT_MENU_UNDO  4
+#define EDIT_MENU_REDO  5
 
 static MenuItem edit_menu_items[] = {
     { "Cut", &xmPushButtonGadgetClass, 'C', NULL, NULL,
@@ -263,8 +263,6 @@ static MenuItem edit_menu_items[] = {
         edit_copy_cb, (XtPointer)0, (MenuItem *)NULL, False },
     { "Paste", &xmPushButtonGadgetClass, 'P', NULL, NULL,
         edit_paste_cb, (XtPointer)0, (MenuItem *)NULL, False },
-    { "Clear", &xmPushButtonGadgetClass, 'l', NULL, NULL,
-        edit_clear_cb, (XtPointer)0, (MenuItem *)NULL, False },
     MENU_ITEM_SEPARATOR,
     { "Undo", &xmPushButtonGadgetClass, 'U', NULL, NULL,
         script_undo_cb, (XtPointer)0, (MenuItem *)NULL, False },

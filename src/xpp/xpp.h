@@ -324,7 +324,6 @@ typedef enum {
 	void	edit_cut_cb(CALLBACK_ARGS);
 	void	edit_copy_cb(CALLBACK_ARGS);
 	void	edit_paste_cb(CALLBACK_ARGS);
-	void	edit_clear_cb(CALLBACK_ARGS);
 	extern	void register_selection_source(
 		Widget w);
 	void	attach_popup_menu(Widget work_w, Widget menu_w);
