@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.34 2003/06/17 22:10:32 robarthan Exp rda $
+ * $Id: pterm.c,v 2.35 2003/07/03 11:22:26 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -454,6 +454,35 @@ static sig_info	sig_infos []  = {
 static void default_sigs(void);
 static Boolean listening_state(int req);
 
+static void set_pty_attrs(int fd)
+{
+	struct termios tio;
+	if(	PUSH_MODULES(fd)
+	||	GET_ATTRS(fd, &tio)) {
+		msg("system error", "I/O control operation on pseudo-terminal failed (GET in parent)");
+		perror("xpp");
+		exit(4);
+	}
+
+	tio.c_lflag |= ISIG;
+	tio.c_lflag &= ~ICANON;
+	tio.c_lflag &= ~ECHO;
+	tio.c_lflag &= ~PENDIN;
+	tio.c_lflag &= ~NOFLSH;
+	tio.c_lflag &= ~TOSTOP;
+	tio.c_oflag &= ~OLCUC;
+	tio.c_oflag &= ~ONLCR;
+	tio.c_oflag &= ~XTABS;
+	tio.c_oflag |= OCRNL;
+	tio.c_cc[VINTR] = CINTR;
+
+	if(SET_ATTRS(fd, &tio)) {
+		msg("system error", "I/O control operation on pseudo-terminal failed (SET in parent)");
+		perror("xpp");
+		exit(5);
+	}
+}
+
 void get_pty(void)
 {
 	char c;
@@ -462,10 +491,9 @@ void get_pty(void)
 	char *slavename;
 	char *ptsname(int);
 	int i;
-	struct termios tio;
 	short line_length;
-#ifdef USE_GRANT_PT
-/* On non-Linux (i.e., SVR4) we use the grantpt/lockpt interfaces */
+#ifdef USE_GRANTPT
+/* When available, e.g., on SVR4, we use the grantpt/lockpt interfaces */
 	child_pid = 0; 
 	if ((control_fd = open("/dev/ptmx", O_RDWR)) < 0) {
 		msg("system error", "no pseudo-terminal devices available");
@@ -506,31 +534,9 @@ void get_pty(void)
 		perror("xpp");
 		exit(3);
 	}
-
-	if(	PUSH_MODULES(slave_fd)
-	||	GET_ATTRS(slave_fd, &tio)) {
-		msg("system error", "I/O control operation on slave fd failed (GET in parent)");
-		perror("xpp");
-		exit(4);
-	}
-
-	tio.c_lflag |= ISIG;
-	tio.c_lflag &= ~ICANON;
-	tio.c_lflag &= ~ECHO;
-	tio.c_lflag &= ~PENDIN;
-	tio.c_lflag &= ~NOFLSH;
-	tio.c_lflag &= ~TOSTOP;
-	tio.c_oflag &= ~OLCUC;
-	tio.c_oflag &= ~ONLCR;
-	tio.c_oflag &= ~XTABS;
-	tio.c_oflag |= OCRNL;
-	tio.c_cc[VINTR] = CINTR;
-
-	if(SET_ATTRS(slave_fd, &tio)) {
-		msg("system error", "I/O control operation on slave fd failed (SET in parent)");
-		perror("xpp");
-		exit(5);
-	}
+#endif
+#ifdef SET_ATTRS_IN_PARENT
+	set_pty_attrs(slave_fd);
 #endif
 
 /*
@@ -608,28 +614,7 @@ void get_pty(void)
 		}
 
 #ifndef SET_ATTRS_IN_PARENT
-		if(	PUSH_MODULES(STDIN)
-		||	GET_ATTRS(STDIN, &tio) ) {
-			msg("system error", "I/O control operation on slave fd failed (GET in child)");
-			perror("xpp");
-			exit(10);
-		}
-		tio.c_lflag |= ISIG;
-		tio.c_lflag |= ICANON;
-		tio.c_lflag &= ~ECHO;
-		tio.c_lflag &= ~PENDIN;
-		tio.c_lflag &= ~NOFLSH;
-		tio.c_lflag &= ~TOSTOP;
-		tio.c_oflag &= ~OLCUC;
-		tio.c_oflag &= ~ONLCR;
-		tio.c_oflag &= ~XTABS;
-		tio.c_oflag |= OCRNL;
-		tio.c_cc[VINTR] = CINTR;
-		if(SET_ATTRS(STDIN, &tio) ) {
-			msg("system error", "I/O control operation on slave fd failed (SET in child)");
-			perror("xpp");
-			exit(11);
-		}
+		set_pty_attrs(STDIN);
 #endif
 
 /*
