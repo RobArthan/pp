@@ -354,7 +354,7 @@ datatype ÛZ_DETAILSÝ	=
 	|	Failed˜ of Z_TM * EXTYPE
 	|	FailedEq of Z_TM * Z_TM * EXTYPE * EXTYPE
 	|	Failed1 of Z_TM * EXTYPE
-	|	Failed2 of Z_TM * EXTYPE
+	|	Failed2 of Z_TM * EXTYPE * Z_TM * EXTYPE
 	|	Failed»1 of Z_TM * Z_TM * (IDENT * EXTYPE) list
 			* (IDENT * EXTYPE) list
 	|	Failed»2 of Z_TM * EXTYPE
@@ -371,6 +371,8 @@ datatype ÛZ_DETAILSÝ	=
 	|	FailedFreeVar of IDENT
 	|	FailedActual of IDENT * int
 	|	FailedConstrained of Z_TM * EXTYPE * Z_TM
+	|	FailedTmQuotation1 of (TERM*string*EXTYPE*EXTYPE)
+	|	FailedTmQuotation2 of (TERM*(string*TYPE) list)
 	|	FailedEnv of Z_TM * IDENT * EXTYPE * EXTYPE;
 
 =TEX
@@ -523,6 +525,23 @@ fun Ûincompatible_compsÝ (idtyl1 : (IDENT * EXTYPE) list)
 );
 =TEX
 =SML
+fun Ûdup_vars_in_quotationÝ (tm : TERM) (fvs : (string * TYPE) list) : unit = (
+	let	fun order (s1, ty1) (s2, ty2) = (
+			case Sort.string_order s1 s2 of
+				0 => ~1
+			|	other => other
+		);
+		val newfvs = Sort.sort order fvs;
+		fun do1_fv (s, ty) = (
+			report 62896 [s, format_z_extype (type_to_extype ty)]
+		);
+	in	report 62894 [];
+		report 62895 [string_of_term tm];
+		map do1_fv newfvs; ()
+	end
+);
+=TEX
+=SML
 fun Ûprint_z_errorÝ ((FailedZTm (term, env, details)) : Z_ERROR_INFO) = (
 	report 62001 [format_z_tm term];
 	(case details of
@@ -627,10 +646,11 @@ fun Ûprint_z_errorÝ ((FailedZTm (term, env, details)) : Z_ERROR_INFO) = (
 		not_a_schema tm ty
 	) | Failed1 (tm, ty) => (
 		report 62282 []; not_a_set tm ty
-	) | Failed2 (tm, ty) => (
+	) | Failed2 (ltm, lty, rtm, rty) => (
 		report 62283 [];
-		report 62006 [];
-		report 62003 [format_z_tm tm, format_z_extype ty]
+		report 62007 [];
+		report 62003 [format_z_tm ltm, format_z_extype lty];
+		report 62003 [format_z_tm rtm, format_z_extype rty]
 	) | FailedRename1 (tm, ty) => (
 		report 62361 []; not_a_schema tm ty
 	) | FailedRename2 idl => (
@@ -669,6 +689,13 @@ fun Ûprint_z_errorÝ ((FailedZTm (term, env, details)) : Z_ERROR_INFO) = (
 		report 62321 [];
 		report 62322 [format_z_tm tm1, format_z_extype ty];
 		report 62323 [format_z_tm tm2]
+	) | FailedTmQuotation1 (tm, s, ty1, ty2) => (
+		report 62890 [];
+		report 62891 [string_of_term tm];
+		report 62892 [s, format_z_extype ty1];
+		report 62893 [format_z_extype ty2]
+	) | FailedTmQuotation2 (tm, fvs) => (
+		dup_vars_in_quotation tm fvs
 	) | FailedEnv (tm, id, ty1, ty2) => (
 		report 62503 []; report 62504 [];
 		report 62601 [format_z_tm tm];
@@ -1826,7 +1853,7 @@ let	val (tm1', ty1') = ti_z_tm env tm1;
 			raise ZExn (FailedZTm (term, env, Failed1(tm2', ty2')));
 	val side = unify zti_subs (ty1', sub_type zti_subs unk)
 		handle Fail _ =>
-			raise ZExn (FailedZTm (term, env, Failed2(tm2', ty2')));
+			raise ZExn (FailedZTm (term, env, Failed2(tm1', ty1', tm2', ty2')));
 in
 	(ZTm (tm1', tm2'), ex_bool)
 end)
@@ -2142,14 +2169,41 @@ end
 
 \subsection{Term Quotation}
 =SML
-  | ti_z_tm env (ZTmQuotation holtm) = (
-let val side = (known_term_tyvars := term_tyvars holtm cup (!known_term_tyvars));
-in
-	(ZTmQuotation holtm, (type_to_extype o type_of) holtm)
-end)
+  | ti_z_tm env (term as ZTmQuotation (tm, _)) = (
+	let	val side = (known_term_tyvars :=
+			term_tyvars tm cup (!known_term_tyvars));
+		val nltyl = map dest_var (frees tm);
+		val (nl, tyl) = split (map dest_var (frees tm));
+		val ty = mk_ctype("", type_of tm :: tyl);
+		val chk = (
+			if	all_different  nl
+			then	()
+			else	raise ZExn
+				(FailedZTm (term, env, FailedTmQuotation2(tm, combine nl tyl))));
+		val exty = replaced ty;
+		val (tmty, netyl) = (
+			case exty of
+				ExType(_, t::tl) => (t, combine nl tl)
+			|	_	=> scream
+						"Unexpected result from replaced"
+		);
+		fun do1_var (n, vty) = (
+			case (ti_z_tm env (ZTmLVar((TmplNon(n,Nil), ""), Nil, [])))
+				handle ZExn _ => scream
+					"Unexpected error from call to ti_ztm"
+			of
+				(ZTmGVar _, _) => ()
+			|	(_, ety) => (
+				(unify zti_subs (ety, vty))
+				handle Fail msg =>
+				raise ZExn
+				(FailedZTm (term, env, FailedTmQuotation1(tm, n, vty, ety)))
+			)
+		);
+		val sd = (map do1_var netyl);
+	in	(ZTmQuotation (tm, Value exty), tmty)
+	end)
 =TEX
-
-
 \subsection{Type Inferring Lists of Z Terms}
 =SML
 and
