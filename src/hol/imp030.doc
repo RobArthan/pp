@@ -79,6 +79,9 @@ Fixed bug concerning $undo\_buffer\_length$.
 Function $format_term$ has new argument.
 \item[Issue 1.13]
 Reacting to issue 1.12 of \cite{DS/FMU/IED/DTD030}.
+\item[Issue 1.14]
+Improved failure messages, corrected $print\_goal$'s use 
+of $format\_term$.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -100,28 +103,27 @@ certain coding techniques may cause problems.
 \section{THE SUBGOAL PACKAGE}
 =SML
 structure âSubgoalPackageá : SubgoalPackage = struct
+val _ = open_theory "misc";
 =TEX
 \subsection{Quietening the Package}
 =SML
-local
-	val subgoal_package_quiet : bool ref = ref false;
-	val side_effect = new_flag {
-		name="subgoal_package_quiet",
-		control=subgoal_package_quiet,
-		default=(fn () => false),
-		check= (fn x => true)};
-in
-	fun âqdiag_stringá  (s : string) : unit = (
-		if (!subgoal_package_quiet)
-		then ()
-		else diag_string s
-	);
-	fun âqdiag_lineá (s : string) : unit = (
-		if (!subgoal_package_quiet)
-		then ()
-		else diag_line s
-	);
-end;
+val subgoal_package_quiet : bool ref = ref false;
+val _ = new_flag {
+	name="subgoal_package_quiet",
+	control=subgoal_package_quiet,
+	default=(fn () => false),
+	check= (fn x => true)};
+
+fun âqdiag_stringá  (s : string) : unit = (
+	if (!subgoal_package_quiet)
+	then ()
+	else diag_string s
+);
+fun âqdiag_lineá (s : string) : unit = (
+	if (!subgoal_package_quiet)
+	then ()
+	else diag_line s
+);
 =TEX
 \subsection{Labels}
 A label of a goal within the subgoal package state is a list of integers,
@@ -332,10 +334,13 @@ end);
 First introduce $icl'TS$:
 =SML
 local
+(*
 val exists_icl'ts = tac_proof(([],»„ icl'TS Ž ƒ x Ž icl'TS x ‚ x¼),
 	(simple_„_tac » y : BOOL Ž y¼) THEN
 	simple_ƒ_tac THEN
 	rewrite_tac[]);
+*)
+val exists_icl'ts = t_thm;
 in
 val âicl'ts_defá = new_specification(["icl'TS"],1,exists_icl'ts);
 end;
@@ -504,6 +509,9 @@ local
 	end);
 in
 fun âprint_goalá ((asms, conc): GOAL) : unit = (
+	if (!subgoal_package_quiet)
+	then ()
+	else
 let	val orig_line_length = get_line_length();
 	val lasms = length asms;
 	val nasms = combine (interval 1 lasms) asms;
@@ -518,6 +526,7 @@ let	val orig_line_length = get_line_length();
 	val str_length = if max_asm_length > init_ts_length
 		then max_asm_length
 		else init_ts_length;
+	val lline_length = orig_line_length - str_length;
 	val pad_asms_by = str_length - (min_asm_length+1);
 
 	val padding = map (fn _=>" ") (interval 1 str_length);
@@ -529,7 +538,9 @@ let	val orig_line_length = get_line_length();
 			implode(padding to (str_length - (init_ts_length+1)))];
 
 	fun print_asm (n,asm) = (
-	let 	val asml = (PrettyPrinter.format_term true) asm;
+	let 	val asml = map translate_for_output 
+			((PrettyPrinter.format_term1 
+			true lline_length) asm);
 		val nstr = string_of_int n;
 		val pad = implode(padding to (pad_asms_by - size nstr));
 		val hstring = get_error_message 30053 [pad ^ nstr];
@@ -537,15 +548,14 @@ let	val orig_line_length = get_line_length();
 		(qdiag_line (hstring ^ hd asml);
 		map (fn x => qdiag_line (tpadding ^ x)) (tl asml))
 	end);
-	val sideeffect = set_line_length(orig_line_length - str_length);
-
-	val form_conc = PrettyPrinter.format_term true conc;
+	val form_conc =  map translate_for_output 
+		(PrettyPrinter.format_term1 true 
+		 lline_length conc);
 in
 	(map print_asm (rev nasms);
 	qdiag_line (ts ^(hd form_conc));
 	map(fn x =>  qdiag_line(tpadding ^ x)) (tl form_conc);
 	qdiag_line "";
-	set_line_length orig_line_length;
 	())
 end);
 end;
@@ -721,11 +731,13 @@ let	val {main_goal_stack = main_goal_stack, ...} = !current;
 	val hys = hyps goal_state_thm;
 	val side_effect = map (fn x => mk_goal_from_term x
 			handle complaint =>
-			divert complaint "mk_goal_from_term" "push_goal_state_thm" 30005 [])
+			divert complaint "mk_goal_from_term" "push_goal_state_thm" 30005 
+			[fn () => string_of_thm goal_state_thm])
 		hys;
 	val new_main_goal = mk_goal_from_term (concl goal_state_thm)
 		handle complaint =>
-		divert complaint "mk_goal_from_term" "push_goal_state_thm" 30005 [];
+		divert complaint "mk_goal_from_term" "push_goal_state_thm" 30005
+			[fn () => string_of_thm goal_state_thm];
 	val side_effect = two_same_name "push_goal_state_thm" new_main_goal;
 	val (cg,lg) = case hys of
 		[] => (Nil,([],[]))
@@ -1010,7 +1022,7 @@ let	val {main_goal_stack = main_goal_stack,
 	val super_conc = concl proof_thm';
 	val sideeffect = (if %alpha%_eq super_conc cg_term
 		then ()
-		else fail "apply_tactic" 30008 []);
+		else thm_fail "apply_tactic" 30008 [proof_thm]);
 	val new_gst = prove_asm_rule proof_thm' goal_state_thm;
 	val generated_sgs = hyps proof_thm';
 	val old_sgs = hyps goal_state_thm;
@@ -1169,9 +1181,9 @@ in
 end
 handle complaint =>
 list_divert complaint "simplify_goal_state_thm" [
-	("mk_goal_from_term",30005,[]),
-	("dest_app",30005,[]),
-	("‚_mp_rule",30005,[])]
+	("mk_goal_from_term",30005,[fn () => string_of_thm thm]),
+	("dest_app",30005,[fn () => string_of_thm thm]),
+	("‚_mp_rule",30005,[fn () => string_of_thm thm])]
 );
 end;
 =TEX
