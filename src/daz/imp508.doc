@@ -1,4 +1,4 @@
-% imp508.doc   %Z% $Date: 2000/06/16 15:53:22 $ $Revision: 1.59 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2000/06/17 14:46:15 $ $Revision: 1.60 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.59 $%
+\def\SCCSversion{$Revision: 1.60 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2000/06/16 15:53:22 $%
+\TPPdate{\FormatDate{$Date: 2000/06/17 14:46:15 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -88,7 +88,7 @@ Adjusted $ENV\_INFO$ and allowed for type conversions.
 \item[Issue 1.55] Updates for new INTEGER type.
 \item[Issue 1.56] Enhancement R3.
 \item[Issue 1.57] Enhancement R2.
-\item[Issues 1.58-1.60] Enhancement R1.
+\item[Issues 1.58-1.61] Enhancement R1.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -115,7 +115,7 @@ infix 3 ^^;
 =SML
 structure €CNBasicDeclsAndExprs› : CNBasicDeclsAndExprs = struct
 	open CNParser CNTypes ZGeneratedConstants ZParagraphs;
-	open ZUserInterfaceSupport;
+	open ZUserInterfaceSupport ZTypesAndTermsSupport;
 =TEX
 \section{CUSTOMIZED ENVIRONMENT HANDLING}
 
@@ -868,36 +868,90 @@ fun €exp_id› (env : CN_ENV) (ident : ID) : Z_EXP = (
 =TEX
 \subsection{Translating Aggregates (Positional Array)}
 =SML
-fun €exp_array_agg_pos› (env : CN_ENV)
-	({tmark as Value tm, comps} : EXP AGG_POS) : Z_EXP = (
+type €ARRAY_AGG_ENV› = {tname : TMARK, this : int, max : int};
+=TEX
+=SML
+fun €array_dim› (env : CN_ENV) (tmark : TMARK) : int = (
+	let	val ztmark = trans_id tmark;
+		val ztype = type_of(zid env ztmark);
+	in	(length o dest_z_tuple_type o hd o dest_z_tuple_type o
+			dest_z_power_type o dest_z_power_type) ztype
+	end	handle Fail _ => 1
+);
+=TEX
+=SML
+fun €array_first› (env : CN_ENV) ({this, max, tname} : ARRAY_AGG_ENV) : Z_EXP = (
+	if	max = 1
+	then	zid env (trans_id tname ^^ zfst)
+	else	zid env (dimen(trans_id tname ^^ zfst, this))
+);
+=TEX
+=SML
+fun €array_range› (env : CN_ENV) ({this, max, tname} : ARRAY_AGG_ENV) : Z_EXP = (
+	if	max = 1
+	then	zid env (trans_id tname ^^ zrange)
+	else	zid env (dimen(trans_id tname ^^ zrange, this))
+);
+=TEX
+=SML
+fun €z_array_agg› (num : int) : Z_ID = (
+	"array_agg" ^ (string_of_int num)
+);
+=TEX
+=SML
+fun €mk_array_agg›  (num : int, zex : Z_EXP) : Z_EXP = (
+	if	num = 1
+	then	zex
+	else	let	val fun_name = z_array_agg num;
+			val ty = force_value(get_const_type (bind_gvar_name fun_name));
+			val (gty, rty) = dest_≠_type ty;
+			val us = map mk_u (dest_z_tuple_type gty);
+			val fun_exp = mk_z_gvar(fun_name, rty, us);
+			val (arg_ty, res_ty) = case dest_z_tuple_type
+						(dest_z_power_type (type_of fun_exp)) of
+					[ty1, ty2] => (ty1, ty2)
+				|	_ => fail "" 0 [] (* caught immediately *);
+			val ty_map = type_match (type_of zex) arg_ty;
+		in	mk_z_app(inst [] ty_map fun_exp, zex)
+		end	handle Fail _ => term_fail "mk_array_agg" 508058 [zex]
+);
+=TEX
+=SML
+fun €exp_array_agg_pos› (env : CN_ENV) (aa_env as {this, max, tname} : ARRAY_AGG_ENV)
+	({tmark as _, comps} : EXP AGG_POS) : Z_EXP = (
 let	val zop = z_minus;
 	val zleft = z_num one;
-	val zright = zid env (trans_id tm ^^ zfst);
-	val zseq = map (trans_exp env) comps;
+	val zright = array_first env aa_env;
+	val aa_env' = {this = this + 1, max = max, tname = tname};
+	val zseq = map (trans_array_agg_exp env aa_env') comps;
 in
 	z_rel_comp(z_power(zsucc, z_bin_exp(zleft,zop, zright)), z_seq zseq)
 end
-) | exp_array_agg_pos _ _ = fail "trans_exp" 508054 []
+)
 =TEX
 \subsection{Translating Aggregates (Positional Array with Others)}
 =SML
-and €exp_array_agg_pos_others› (env : CN_ENV)
+and €exp_array_agg_pos_others› (env : CN_ENV) (aa_env as {this, max, tname} : ARRAY_AGG_ENV)
 	({agg_pos as {tmark, comps},
 		others} : EXP AGG_POS_OTHERS) : Z_EXP = (
-	z_override(trans_exp env (EArrayAggOthers {tmark=tmark,others=others}),
-		trans_exp env (EArrayAggPos agg_pos))
+	z_override(
+		trans_array_agg_exp env aa_env (EArrayAggOthers {tmark=tmark,others=others}),
+		trans_array_agg_exp env aa_env (EArrayAggPos agg_pos))
 )
 =TEX
 \subsection{Translating Aggregates (Positional Array with Just Others)}
 =SML
-and €exp_array_agg_others› (env : CN_ENV) ({tmark as Value tm,
-		others={others=ot}} : EXP AGG_OTHERS) : Z_EXP = (
-	z_cross(zid env (trans_id tm ^^ zrange), z_set [trans_exp env ot])
-) | exp_array_agg_others _ _ = fail "trans_exp" 508054 []
+and €exp_array_agg_others› (env : CN_ENV) (aa_env as {this, max, tname} : ARRAY_AGG_ENV)
+	({tmark as _, others={others=ot}} : EXP AGG_OTHERS) : Z_EXP = (
+let	val aa_env' = {this = this + 1, max = max, tname = tname};
+in
+	z_cross(array_range env aa_env, z_set [trans_array_agg_exp env aa_env' ot])
+end
+)
 =TEX
 \subsection{Translating Aggregates (Named Array)}
 =SML
-and €trans_named_assoc›	(env : CN_ENV)
+and €trans_named_assoc›	(env : CN_ENV) (aa_env as {this, max, tname} : ARRAY_AGG_ENV)
 				({choice,comp} : (AGG_CHOICE,EXP) NAMED_ASSOC)
 					: Z_EXP = (
 let	fun aux_range (ch::rest) = (
@@ -920,24 +974,25 @@ let	fun aux_range (ch::rest) = (
 	) | aux_singles _ = [];
 	val zranges = aux_range choice;
 	val zsingles = z_set (aux_singles choice);
+	val aa_env' = {this = this + 1, max = max, tname = tname};
 in
-	z_cross (z_many_union(zranges @ [zsingles]), z_set [trans_exp env comp])
+	z_cross (z_many_union(zranges @ [zsingles]), z_set[trans_array_agg_exp env aa_env' comp])
 end
 )
 =TEX
 =SML
-and €exp_array_agg_named› (env : CN_ENV) ({tmark as Value _, named_assocs}
-		: (AGG_CHOICE,EXP) AGG_NAMED) : Z_EXP = (
-	z_many_union (map (trans_named_assoc env) named_assocs)
-) | exp_array_agg_named _ _ = fail "trans_exp" 508054 []
+and €exp_array_agg_named› (env : CN_ENV) (aa_env as {this, max, tname} : ARRAY_AGG_ENV)
+	({tmark as _, named_assocs} : (AGG_CHOICE,EXP) AGG_NAMED) : Z_EXP = (
+	z_many_union (map (trans_named_assoc env aa_env) named_assocs)
+)
 =TEX
 \subsection{Translating Aggregates (Named Array with Others)}
 =SML
-and €exp_array_agg_named_others› (env : CN_ENV)
+and €exp_array_agg_named_others› (env : CN_ENV) (aa_env : ARRAY_AGG_ENV)
 		({agg_named as {tmark, ...}, others}
 		: (AGG_CHOICE,EXP) AGG_NAMED_OTHERS) : Z_EXP = (
-	z_override(trans_exp env (EArrayAggOthers {tmark=tmark, others=others}),
-		trans_exp env (EArrayAggNamed agg_named))
+	z_override(trans_array_agg_exp env aa_env (EArrayAggOthers {tmark=tmark, others=others}),
+		trans_array_agg_exp env aa_env (EArrayAggNamed agg_named))
 )
 =TEX
 \subsection{Translating Aggregates (Positional Record)}
@@ -977,7 +1032,25 @@ in	z_binding zbinds
 end
 ) | exp_rec_agg_named _ _ = fail "trans_exp" 508054 []
 =TEX
-
+\subsection{Translating Aggregates (Generally)}
+Note that the failure case below will never happen, since caller must always
+have looked inside the expression to get the type mark out.
+The test using less-than rather than not-equals defends the code from
+non-termination if something weird goes wrong in {\it array\_dim}.
+=SML
+and €trans_array_agg_exp› (env : CN_ENV)
+	(aa_env as {this, max, ...} : ARRAY_AGG_ENV) (e : EXP) : Z_EXP = (
+	if	this < max + 1
+	then	case e of
+		EArrayAggPos ap => exp_array_agg_pos env aa_env ap
+	|	EArrayAggPosOthers apo =>  exp_array_agg_pos_others env aa_env apo
+	|	EArrayAggOthers ao =>  exp_array_agg_others env aa_env ao
+	|	EArrayAggNamed an =>  exp_array_agg_named env aa_env an
+	|	EArrayAggNamedOthers ano => exp_array_agg_named_others env aa_env ano
+	|	_ => fail "trans_array_agg_exp" 508054 []
+	else	trans_exp env e
+)
+=TEX
 \subsection{Translating Unary Expressions}
 =SML
 and €trans_unary_op› (uop : UNARY_OP) = (
@@ -1152,11 +1225,11 @@ and €exp_auxiliary_exp› (ae : Z_TM) : Z_EXP = (
 =SML
 and €trans_exp› (env : CN_ENV) ((EId id) : EXP) : Z_EXP = exp_id env id
   | trans_exp env (EInt n) = exp_int_lit n
-  | trans_exp env (EArrayAggPos ap) = exp_array_agg_pos env ap
-  | trans_exp env (EArrayAggPosOthers ap) = exp_array_agg_pos_others env ap
-  | trans_exp env (EArrayAggOthers ao) = exp_array_agg_others env ao
-  | trans_exp env (EArrayAggNamed an) = exp_array_agg_named env an
-  | trans_exp env (EArrayAggNamedOthers an) = exp_array_agg_named_others env an
+  | trans_exp env (e as EArrayAggPos _) = exp_array_agg env e
+  | trans_exp env (e as EArrayAggPosOthers _) = exp_array_agg env e
+  | trans_exp env (e as EArrayAggOthers _) = exp_array_agg env e
+  | trans_exp env (e as EArrayAggNamed _) = exp_array_agg env e
+  | trans_exp env (e as EArrayAggNamedOthers _) = exp_array_agg env e
   | trans_exp env (ERecAggPos {tmark, comps}) =
 		exp_rec_agg_pos_z env (tmark, map (trans_exp env) comps)
   | trans_exp env (ERecAggNamed an) = exp_rec_agg_named env an
@@ -1173,7 +1246,21 @@ and €trans_exp› (env : CN_ENV) ((EId id) : EXP) : Z_EXP = exp_id env id
   | trans_exp env (EBracketed e) = trans_exp env e
   | trans_exp env (EStringLiteral c) = fail "trans_exp" 508033 []
   | trans_exp env (ECharacterLiteral c) = fail "trans_exp" 508034 []
-;
+and €exp_array_agg› (env : CN_ENV) (e : EXP) : Z_EXP = (
+	let	val tname = (
+			case e of
+			EArrayAggPos {tmark as Value tmk, ...} => tmk
+		|	EArrayAggPosOthers {agg_pos as {tmark as Value tmk, ...}, ...} => tmk
+		|	EArrayAggOthers {tmark as Value tmk, ...} => tmk
+		|	EArrayAggNamed {tmark as Value tmk, ...} => tmk
+		|	EArrayAggNamedOthers {agg_named as {tmark as Value tmk, ...}, ...} => tmk
+		|	_ => fail "exp_array_agg" 508054 []);
+		val this = 1;
+		val max = array_dim env tname;
+	in	mk_array_agg
+		(max, trans_array_agg_exp env {tname = tname, this = this, max = max} e)
+	end
+);
 =TEX
 The following variant of $trans\_exp$ returns an optional Z expression. If the SPARK expression can only be handled informally then a comment message is printed out and $Nil$ is returned.
 =SML
@@ -1270,7 +1357,10 @@ and €adjust_agg_pos› (env : CN_ENV)
         ) |_ => (
 			EArrayAggPos {tmark=tmark, comps=map (adjust_exp env) c}
 	)
-) | adjust_agg_pos _ _ = fail "adjust_exp" 508054 []
+) | adjust_agg_pos  (env : CN_ENV)
+		({tmark=Nil, comps=c} : EXP AGG_POS) = (
+	EArrayAggPos {tmark=Nil, comps=map (adjust_exp env) c}
+)
 and €adjust_agg_pos_others› (env : CN_ENV) ({agg_pos = {tmark=t, comps=c} :
 		EXP AGG_POS, others = oth} : EXP AGG_POS_OTHERS) = (
 	EArrayAggPosOthers {	agg_pos={	tmark=t,
@@ -1297,7 +1387,14 @@ in
 			EArrayAggNamed {tmark=tmark, named_assocs=n'}
 	)
 end
-) | adjust_agg_named1 _ _ = fail "adjust_exp" 508054 []
+) | adjust_agg_named1 (env : CN_ENV)
+		({tmark= Nil, named_assocs=n}
+		: (AGG_CHOICE, EXP) AGG_NAMED) = (
+let	val n' = map (adjust_named_assoc env) n;
+in
+	EArrayAggNamed {tmark=Nil, named_assocs=n'}
+end
+)
 and €adjust_agg_named_others› (env : CN_ENV) ({agg_named=a, others=oth} :
 		(AGG_CHOICE, EXP) AGG_NAMED_OTHERS) = (
 let	val adjagg = case adjust_agg_named1 env a of
@@ -1919,13 +2016,13 @@ val €ada_attributes_list› : ID list = [
 =TEX
 =SML
 fun €type_attrs› (t : ID) = (
-let	val tthy = get_const_theory ("z'" ^ t);
+let	val tthy = get_const_theory (bind_gvar_name t);
 	val tthyconsts = get_consts tthy;
 	val tthyconsts_names = map (fst o dest_const) tthyconsts;
 	val transt = trans_id t;
 in
 	ada_attributes_list drop 
-		(fn attr => not(("z'" ^ transt ^^ attr) mem tthyconsts_names))
+		(fn attr => not((bind_gvar_name transt ^^ attr) mem tthyconsts_names))
 end
 handle (Fail _) => [] (* presumably from get_const_theory *)
 );
@@ -2005,6 +2102,12 @@ fun €trans_basic_decl1› (env : CN_ENV) (bd : BASIC_DECL)
 \section{Support for Multidimensional Arrays}
 =SML
 fun €array_agg_def› (num : int) : unit = (
+if	num >= 2
+then
+let	val fun_name = z_array_agg num;
+in	case get_const_type (bind_gvar_name fun_name) of
+		Value _ => ()
+	|	Nil =>
 	let	fun mk_gvar name = (
 			let val ty = mk_z_power_type(mk_z_var_type name);
 			in	mk_z_lvar(name, ty, [])
@@ -2020,7 +2123,7 @@ fun €array_agg_def› (num : int) : unit = (
 		val curried_tm = mk_curried_tm g_ns;
 		val sig_tm = z_tfun(curried_tm, uncurried_tm);
 		val sig_ty = dest_z_power_type (type_of sig_tm);
-		val fun_var = mk_z_lvar("array_agg" ^ (string_of_int num), sig_ty, []);
+		val fun_var = mk_z_lvar(fun_name, sig_ty, []);
 		val sig_decl = mk_z_decl[mk_z_dec([fun_var], sig_tm)];
 		val f = mk_z_lvar("f", dest_z_power_type(type_of curried_tm), []);
 		fun mk_x_n (v, n) = (
@@ -2040,6 +2143,8 @@ fun €array_agg_def› (num : int) : unit = (
 	in	update_theory_db_with_parainfo
 		(AxDesInfo(map (fst o dest_var) (g_ns @ [g]), sig_decl, Value pred, idtys))
 	end
+end
+else fail "array_agg_def" 508059 []
 );
 =TEX
 \section{EPILOGUE}
