@@ -338,10 +338,15 @@ package declarations can only be handled formally when they are used as library 
 
 constant_declaration	=	identifier_list ":" "constant" type_mark ":=" expression ";"
 
-variable_declaration	=	identifier_list ":" "type_mark ";"
+variable_declaration	=	identifier_list ":" type_mark ";"
+			|	identifier_list ":" type_mark ":=" expression ";"
 =TEX
 
 Named number declarations and declarations involving anonymous types are not supported.
+
+Note that initialisation of variables at declaration is a new feature
+of the SPARK Ada Kernel v3.2, and applies both for simple declarations,
+and within using declarations.
 
 \subsection{Types and Subtypes}\label{3.3}
 \subsubsection{Type Declarations}\label{3.3.1}
@@ -361,7 +366,7 @@ Named number declarations and declarations involving anonymous types are not sup
 =GFT
 €subtype_declaration› ::=	"subtype" identifier "is" subtype_indication ";"
 
-€subtype_indication› ::=	type_mark constraint
+€subtype_indication› ::=	type_mark [constraint]
 
 €constraint› ::=	range_constraint
 		|	floating_point_constraint
@@ -369,7 +374,8 @@ Named number declarations and declarations involving anonymous types are not sup
 		|	index_constraint
 =TEX
 
-A subtype indication must include a constraint.
+Note that a subtype indication need not include a constraint
+(which is a new feature of the SPARK Ada Kernel v3.2).
 Discriminant constraints are not supported.
 \subsubsection{Classification of Operations}
 Use of the base type attribute $T'BASE$ cannot be handled formally.
@@ -1047,15 +1053,22 @@ No overloading of operator symbols is supported except for the limited form of o
 	"package" identifier "is"
 		visible_part
     [	"private"
-		basic_declarative_item, { basic_declarative_item } ]
+		private_part basic_declarative_item, { basic_declarative_item } ]
 	"end" simple_name
 
-€visible_part› ::= visible_part_declaration { visible_part_declaration}
+€visible_part› ::= visible_part_declaration { visible_part_declaration }
 
 €visible_part_declaration› ::=
    {	basic_declarative_item
     |	subprogram_declaration
-    |	auxiliary_declaration }
+    |	auxiliary_declaration 
+    |  renaming_declaration }
+
+€private_part› ::= private_part_declaration { private_part_declaration }
+
+€private_part_declaration› ::=
+   {	basic_declarative_item
+    |  renaming_declaration }
 
 €auxiliary_declaration› ::= "auxiliary" z_declaration ";"
 =TEX
@@ -1120,7 +1133,7 @@ If a subprogram has a specification statement both in the package specification 
 If a subprogram has a specification statement in the package body, then it is this specification statement which is used in the generation of VCs for calls of the subprogram inside the package body.
 The subprogram will be treated as an informal procedure if it is used before its implementation within the package body.
 
-When a package body is introduced, Z global variables are automatically introduced representing the types and constants, {\em but not the functions} in the package.
+When a package body is introduced, Z global variables are automatically bought into scope representing the types and constants, {\em but not the functions} in the package (as stated in the package specification).
 The names of these global variables are {\em not} prefixed with the package name.
 Global variables for any functions in the package are introduced as the function implementations are processed.
  
@@ -1431,14 +1444,14 @@ The examples used depend on the following definitions:
    subtype €INDEX› is INTEGER range 2 .. 5;
    type €ARR› is array (INDEX) of DAY;
    type €REC› is record  START : DAY; FINISH : DAY; end record; 	 
-   function €MAX› (x,y: DAY) return DAY;
+   function €MAX› (x, y: DAY) return DAY;
    ArrVar : €ARR›;
    RecVar : €REC›;
 =TEX
 
 Sections \ref{Literals} to \ref{Type} below discuss the translation of the various forms of SPARK expression.
 Many of these translations depend on the some extensions to the Z library which support predefined types and their operators and attributes.
-These extensions are described in chapter\ref{cn}.
+These extensions are described in chapter \ref{cn}.
 
 \subsection{Literals}\label{Literals}
 Character, null, real and string literals cannot be handled formally and do not have a translation.
@@ -1802,7 +1815,9 @@ is translated as:
 For a multi-dimensional array, the domain in the first abbreviation definition is given by an appropriate cartesian product and the attributes are not introduced.
 
 \subsubsection{Other Subtypes}
-Subtypes of forms other than those discussed in section \ref{IST} and \ref{AST} above are represented as given sets in a similar way to real types as described in section \ref{RT}.
+Unconstrained subtypes have type attributes introduced for each
+of the type attributes of the base type of the subtype.
+Otherwise, subtypes of forms other than those discussed in section \ref{IST} and \ref{AST} above are represented as given sets in a similar way to real types as described in section \ref{RT}.
 
 
 \section{VC Generation}\label{VCG}
@@ -2584,10 +2599,13 @@ A refinement of the logical constant statement into a sequence of statements is 
 \HOLindexOn
 \section{Program Structure}\label{PS}
 The Z paragraphs in a Z document produced by processing a Compliance Notation script are put in {\Product} theories so as to manage the namespace in a way which represents some aspects of the Ada program structure.
+In particular, there may be no more than one Ada compilation unit stored
+in each theory (and in particular, in each script theory). 
 
-A theory, referred to as the {\em script theory} is created before the script is processed to hold any Z paragraphs in the script.
+A theory, referred to as the {\em script theory} is created before the script is processed to hold any Z paragraphs in the script,
+and certain kinds of the Z material produced by processing the Ada in the script.
 Processing of the various forms of library unit or secondary unit may then cause other theories to be created as shown in table \ref{UoT}.
-In this table, {\em PACKAGE} (resp. {\em UNIT}, {\em SUBUNIT}) stand for the name of the package (resp. {\em UNIT}, {\em SUBUNIT}) in question; {\em SCRIPT} stands for the name  of the script theory (determined by the function $new\_script$ called by convention at the beginning of each script, see \CNUSERGUIDE). 
+In this table, {\em PACKAGE} (resp. {\em UNIT}, {\em SUBUNIT}) stand for the name of the package (resp. {\em UNIT}, {\em SUBUNIT}) in question; {\em SCRIPT} stands for the name  of the script theory (determined by the function $new\_script$ or $new\_script1$ called by convention at the beginning of each script, see \CNUSERGUIDE). 
 
 With one exception, all VCs generated during processing of a script are placed in the script theory.
 The exception is the VC generated when it cannot be determined whether or not a range in a type declaration in a package declaration is non-empty.
@@ -2605,9 +2623,19 @@ Construct & Theory Name & Discussion \\\hline\hline
 This holds the Z theory for the package and contains the types, constants and functions introduced by the package (each prefixed by the package name). This theory becomes a parent theory of any theory corresponding to a script containing a context clause referring to the package and is created when the first such with clause is encountered.
 \\\hline
 
+\Stack{Internal\\package\\declaration} & \Stack{{\em SCRIPT}} &
+This holds the internal form of the Z theory for the package and contains the types, constants and functions introduced by the package (unprefixed). 
+This theory is used to type check the package specification at
+its declaration.
+It also becomes a parent theory of the theory used to hold the 
+Z material for the associated package body.
+\\\hline
+
 \Stack{Subprogram\\body/\\Package \\body} & \Stack{\em SCRIPT} &
 The Z for the subprogram or package body is placed in the script theory.
 For each context clause in the compilation unit, the corresponding package specification theories becomes parents of the script theory.
+The internal package declaration script theory will be made a parent 
+of the matching backage body script theory.
 \\\hline
 
 \Stack{Body\\stub} & \Stack{{\em UNIT}{\tt o}{\em SUBUNIT}{\tt stub}} &
