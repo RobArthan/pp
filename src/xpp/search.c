@@ -319,6 +319,8 @@ Bool add_search_tool(Widget text_w)
 		XmNrightPosition,		19,
 		NULL);
 
+	fix_pane_height(action, dismiss_btn);
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set up static data to contain necessary widget handles:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
