@@ -61,6 +61,9 @@ This document contains the implementation for the Compliance Notation Parser to 
 \begin{description}
 
 \item[Issue 1.1-1.55] Initial Drafts.
+\item[Issue 1.1-1.55] Initial Drafts.
+\item[Issue 1.55-1.59] Bug fixes.
+\item[Issue 1.60-1.64] Enhancements 1, 6 and 20.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -278,14 +281,48 @@ The following functions support the external interface $z\_predexp\_of\_z\_tm$.
 fun €z_para_of_zinferred› ((ZInferred p) : Z_INFERRED) : Z_PARA = (p)
 |   z_para_of_zinferred (ZTypeError inf) = (print_z_error inf);
 =TEX
-
+The following is used to give diagnostics, which may sometimes be helpful.
+=SML
+val €cn_show_typing_context› : bool ref = ref false;
+val _ = new_flag{
+	name="cn_show_typing_context",
+	check=fun_true,
+	control=cn_show_typing_context,
+	default=fun_false} ;
+=TEX
+set_flag("cn_show_typing_context", true);
+show_typing_context();
+=SML
+fun €show_typing_context› (t : TERM) = (
+	if	!cn_show_typing_context
+	then	let	val cur_thy = get_current_theory_name();
+			val zlib = (get_ancestors "z_library" less "z_library")
+						handle Fail _ => [];
+			val ancs = Sort.sort Sort.string_order
+					(get_ancestors cur_thy less cur_thy)
+					diff zlib;
+			val tic = map dest_var (TypeInference.get_ti_context());
+			fun do1tici (n, ty) = "  " ^ n ^ ": " ^ string_of_type ty;
+		in	diag_line ("Current theory: " ^ cur_thy);
+			diag_line
+			(case zlib of [] => "Ancestors:"
+			| _ => "Ancestors (up to z_library):");
+			map (diag_line o (curry (op^) "  ")) ancs;
+			diag_line
+			(case tic of [] => "No type inference context."
+			| _ => "Type inference context:");
+			map (diag_line o do1tici) tic;
+			diag_line ("Type-checked term: " ^ string_of_term t);
+			()
+		end
+	else	()
+);
 =SML
 fun €term_of_z_para› ((ZParaTerm (gpars, tm, _)) : Z_PARA) : TERM = (
     let val vns = map string_of_ident gpars;
         val vs = map (fn vn =>
             mk_var(vn, mk_z_power_type(mk_vartype ("'" ^ vn)))) vns;
-    in
-        list_mk_µ(vs, (do_in_theory
+    in	list_mk_µ(vs, (do_in_theory
             (force_get_cache_theory()) term_of_z_tm tm))
     end)
 |   term_of_z_para _ = (fail "z_term_recogniser" 49001 []);
@@ -299,7 +336,9 @@ fun €z_predexp_of_z_tm› (z_tm : Z_TM) : Z_EXP = (
         val type_checked = type_check_z_para
                 {standard = standard, allow_frees = true} z_para;
         val para = z_para_of_zinferred type_checked;
-    in term_of_z_para para
+	 val tm = term_of_z_para para;
+    in  show_typing_context tm;
+        tm
     end);
 =TEX
 
