@@ -1,4 +1,4 @@
-% imp508.doc   %Z% $Date$ $Revision$ $RCSfile$
+% imp508.doc   %Z% $Date: 1999/03/07 15:57:08 $ $Revision: 1.56 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision$%
+\def\SCCSversion{$Revision: 1.56 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date$%
+\TPPdate{\FormatDate{$Date: 1999/03/07 15:57:08 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -86,6 +86,7 @@ Adjusted $ENV\_INFO$ and allowed for type conversions.
 \item[Issue 1.54] Updated references.
 \item[Issue 1.54] Updates for SML97.
 \item[Issue 1.55] Updates for new INTEGER type.
+\item[Issue 1.56] Enhancement R3.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1606,23 +1607,101 @@ fun €conv_var_decl› ({vars=vs, tmark=t} : VAR_DECL)
 );
 =TEX
 =SML
-fun €trans_decl› (env : CN_ENV) ({vars, tmark} : VAR_DECL) : Z_DECL = (
+fun €trans_decl_aux› (env : CN_ENV) ({vars, tmark} : VAR_DECL) : Z_DECL * (Z_ID list) = (
 let	val zvs = map trans_id vars;
 	val zexp = zid env (trans_id tmark);
 	val zvars = map (fn zv => mk_z_lvar (zv,
 						(dest_z_power_type o type_of) zexp,
 						[])) zvs;
 in
-	mk_z_dec (zvars, zexp)
+	(mk_z_dec (zvars, zexp), zvs)
 end);
+fun €trans_decl› (env : CN_ENV) : VAR_DECL -> Z_DECL = fst o trans_decl_aux env;
+=TEX
+=SML
+local
+fun €mk_update_defs› (tyname : Z_ID) (comps : Z_ID list list) : PARAINFO = (
+	let	val n_comps = length comps;
+		val gen_formals = map (fn i => "g" ^ string_of_int i) (interval 1 n_comps);
+		fun do_sch_decs [] _ = []
+		|   do_sch_decs comps gen_formals = (
+			let	val c = hd comps;
+				val n = hd gen_formals;
+				val ty = mk_z_var_type n;
+				fun mk_v v = mk_z_lvar(v, ty, []);
+			in	(map mk_v c, mk_z_lvar(n, mk_z_power_type ty, []))
+			end	:: do_sch_decs (tl comps) (tl gen_formals)
+		);
+		val sch_decs = do_sch_decs comps gen_formals;
+		val decl = mk_z_decl(map mk_z_dec sch_decs);
+		val h_schema = mk_z_h_schema (decl, mk_t);
+		val _ = schema_gen_semantic_const h_schema;
+		fun upd_name c = tyname ^ "u" ^ c;
+		fun do_sig_decs [] _ = []
+		|   do_sig_decs comps decs = (
+			let	val c = hd comps;
+				val (_, x) = hd decs;
+				val set = z_tfun(mk_z_∏[h_schema, x], h_schema);
+				val ty = dest_z_power_type (type_of set);
+				fun mk_v v = mk_z_lvar(upd_name v, ty, []);
+			in	(map mk_v c, set)
+			end	:: do_sig_decs (tl comps) (tl decs)
+		);
+		val sig_decs = do_sig_decs comps sch_decs;
+		val sig_decl = mk_z_decl(map mk_z_dec sig_decs);
+		fun do_µ_decs _ [] = []
+		|   do_µ_decs n ((_, x)::more) = (
+			let	val ty = dest_z_power_type (type_of x);
+				val v = mk_z_lvar("x" ^ string_of_int n, ty, []);
+			in	([v], x)
+			end	:: do_µ_decs (n+1) more
+		);
+		val r = mk_z_lvar("r", dest_z_power_type(type_of h_schema), []);
+		val r_dec = ([r],	h_schema);
+		val var_decs = do_µ_decs 1 sch_decs;
+		val µ_decl = mk_z_decl(map mk_z_dec (r_dec :: var_decs));
+		fun bind_one sel var comp = (
+			if	sel = comp
+			then	(comp, var)
+			else	(comp, mk_z_selâs(r, comp))
+		);
+		fun do_binding _ _  [] = []
+		|   do_binding var sel cmps = (
+			let	val cmpl = hd cmps;
+			in	map (bind_one sel var) cmpl
+			end	@ do_binding var sel (tl cmps)
+		);
+		fun do_eq var arg (f, c) = (
+			mk_z_eq(mk_z_app(f, arg), z_binding(do_binding var c comps))
+		); 
+		fun do_eqs [] _ _ = []
+		|   do_eqs sigdecs vardecs cmps = (
+			let	val (fs, _) = hd sigdecs;
+				val cs = hd cmps;
+				val var = hd(fst(hd vardecs));
+				val arg = mk_z_tuple[r, var];
+			in	map (do_eq var arg) (combine fs cs)
+			end	@ do_eqs (tl sigdecs) (tl vardecs) (tl cmps)
+		);
+		val eqs = list_mk_±(do_eqs sig_decs var_decs comps);
+		val pred = mk_z_µ(µ_decl, mk_t, eqs);
+		val idtys = map dest_var (flat (map fst sig_decs));
+	in	AxDesInfo(gen_formals, sig_decl, Value pred, idtys)
+	end
+);
+in
+fun €record_update_defs› (zname : Z_ID, zcomps : Z_ID list list) : PARAINFO = (
+	mk_update_defs zname zcomps
+);
+end;
 =TEX
 =SML
 fun €basic_decl_record› (env : CN_ENV) (name : ID)
 		({decl} : RECORD_TYPE_DEF) : PARAINFO list = (
 let	val z_sname = trans_id name;
-	val z_decls = map (trans_decl env) decl;
+	val (z_decls, zcomps) = split(map (trans_decl_aux env) decl);
 in
-	[z_schema(z_sname, z_decls)]
+	[z_schema(z_sname, z_decls), record_update_defs(z_sname, zcomps)]
 end);
 =TEX
 \subsection{Translating Integer Types}
