@@ -150,8 +150,6 @@ Bool add_search_tool(Widget text_w)
 
 	paned = XtVaCreateWidget("search-replace-paned",
 		xmPanedWindowWidgetClass, 	shell,
-		XmNsashWidth,			1,
-		XmNsashHeight,			1,
 		NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
