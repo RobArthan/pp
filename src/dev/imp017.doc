@@ -1,6 +1,6 @@
 =TEX
 % TQtemplate.tex
-\documentstyle[hol,11pt,TQ]{article}
+\documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
 \def\Hide#1{}
 \def\Bool{``$\it{:}bool\,$''}
@@ -9,7 +9,7 @@
 %\TPPvolume{}
 %\TPPpart{}
 \TPPtitle{SLR Parser Generator}  %% Mandatory field
-\TPPref{DS/FMU/IED/??}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP017}  %% Mandatory field
 \def\SCCSversion{$Revision$%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
@@ -17,8 +17,8 @@
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
 \TPPkeywords{HOL}
-\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
-%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%\TPPauthor{}  %% Mandatory field
+\TPPauthors{R.D.~Arthan & WIN01\\D.J.King&WIN01}
 \TPPauthorisation{R.D.~Arthan & FST Team Leader}
 \TPPabstract{
 A simple SLR parser generator is implemented.}
@@ -59,11 +59,25 @@ A simple SLR parser generator is implemented.}
 
 \subsection{Changes history}  % to get section number `0.3'
 \begin{description}
-\item[Issue \SCCSversion (\FormatDate{$Date$%
-})]
-First draft for comment.
+\item[Issue 1.1-1.14] Initial Versions
+
+\item[Issue 1.15 (21 January 1992)]
+Performance improvements made. Introduced an
+efficient representation of the grammar, and support
+for sets and sets of set as ordered lists. This
+gives a ten-fold improvement in performance.
+
+\item[Issue 1.16 (22 January 1992)]
+Textual content brought into line with changes to
+the code. Also, modification made to the
+code which generates the action table. The table
+now compiles about 5 times faster than before.
+
 \end{description}
-\subsection{Changes forecast}
+\subsection{Changes Forecast}
+The SLRP code is to be re-structured at some time in
+the future.
+
 \pagebreak
 \section{GENERAL}
 \subsection{Scope}
@@ -179,6 +193,25 @@ fun €listofarray› Xs = (
 	end
 );
 =TEX
+=SML
+fun €listsofarray› Xs listsize = (
+let	open Array;
+	val len = length Xs;
+	fun aux start = (
+	let	val last = start + listsize;
+		val ext' = if last >= len
+			then len
+			else last;
+	in
+		map (fn i => sub (Xs, i)) (interval start (ext'-1))
+	end);
+	val nlists = (len-1) div listsize;
+	val stl  = fold (fn (i, acc) => i*listsize::acc)
+		(interval 0 nlists) [];
+in	map aux stl
+end
+);
+=TEX
 \subsection{I/O and Formatting Utilities}
 =SML
 fun €so_many› (true:bool) (0 : int) (thing : string) : string = "No " ^ thing ^ "s"
@@ -250,7 +283,6 @@ datatype ''a €SYMBOL› = €Terminal› of ''a | €NonTerminal› of NONTERMINAL;
 type ''a €PRODUCTION› = string * (''a SYMBOL list list);
 type ''a €GRAMMAR› = ''a PRODUCTION list;
 datatype €SYM_CLASS› = €VarClass› of string | €PuncClass› of string;
-
 =TEX
 =SML
 fun €expand› (g : ''a GRAMMAR) (name : NONTERMINAL) : ''a SYMBOL list list = (
@@ -271,9 +303,6 @@ fun €give_terms› (g : ''a GRAMMAR) : ''a list = (
 We represent an item by giving the name of the associated non-terminal
 the index of the alternative for that non-terminal and the index within
 that alternative:
-
-$follower\,g\,x$ returns the symbol immediately after the dot in the item $x$
-for the grammar $g$
 =SML
 fun €show_item› (g : ''a GRAMMAR) (sym, alt, dot) = (
 	let	val x = my_nth (expand g sym) alt;
@@ -281,15 +310,228 @@ fun €show_item› (g : ''a GRAMMAR) (sym, alt, dot) = (
 	end
 );
 =TEX
+We now introduce an efficient representation of the
+grammar denoted by the type $FGRAMMAR$.
+=SML
+type €FNONTERM› = int;
+datatype ''a €FSYM› = €FTerm› of ''a
+	| €FNonTerm› of FNONTERM;
+type €ITEM› = (FNONTERM * int * int);
+type ''_a €FPRODUCTION› = NONTERMINAL * (''_a FSYM Array.array Array.array);
+type ''_a €FGRAMMAR› = ''_a FPRODUCTION Array.array;
+=IGN
+
+!!!FOLLOWING IS NOT USED AT THE MOMENT BUT WILL BE USEFUL
+IN A FUTURE RE-ORGANISED VERSION OF SLRP!!!
+
+fun f_give_terms (g : ''_a FGRAMMAR) = (
+let	fun aux symarr (i, acc) = (
+		case Array.sub (symarr, i) of
+			FNonTerm _ => 	acc
+			|FTerm x =>		acc grab x
+	);
+	fun aux1 symarr = fold (aux symarr) (interval 0 (Array.length symarr - 1)) [];
+	fun aux2 altarr (i, acc) =
+	let	val alt = Array.sub (altarr, i);
+	in
+		aux1 alt
+	end;
+	fun aux3 altarr = fold (aux2 altarr) (interval 0 (Array.length altarr - 1)) [];
+	fun aux4 prodarr (i, acc) =
+	let	val prod = (snd o Array.sub) (prodarr, i);
+	in
+		aux3 prod
+	end;
+	fun aux5 prodarr = fold (aux4 prodarr) (interval 0 (Array.length prodarr - 1)) [];
+in
+	aux5 g
+end);
+!!!!!!
+=TEX
+
+\subsection{Sets of Items as Ordered Lists}
+
+=SML
+fun €item_order› (((nt1, aux1, opt1), (nt2, aux2, opt2)):ITEM*ITEM) : int = (
+	if nt1 = nt2
+	then
+		if aux1 = aux2
+		then
+			if opt1 = opt2
+			then
+				0
+			else	if opt1 < opt2
+				then	~1
+				else	1
+		else	if aux1 < aux2
+			then	~1
+			else	1
+	else	if nt1 < nt2
+		then	~1
+		else	1
+);
+
+fun €item_list_order› ((list1, list2):ITEM list*ITEM list) : int = (
+let	val l1 = length list1;
+	val l2 = length list2;
+	fun aux (x1::rest1) (x2::rest2) = (
+		case item_order (x1, x2) of
+		0 =>	aux rest1 rest2
+		|Other => Other)
+	  | aux _ _ = 0;
+in
+	if l1 = l2
+	then
+		aux list1 list2
+	else	if l1 < l2
+		then	~1
+		else	1
+end);
+
+fun €merge› (order:(''a*''a)->int) (xx:''a list) (yy:''a list) : ''a list = (
+let	fun aux (x::xs) (y::ys) = (
+		case order (x,y) of 
+		0 =>	x::(aux xs ys)
+		| ~1 =>	x::(aux xs (y::ys))
+		|_ =>	y::(aux (x::xs) ys)
+	) | aux xx nil = xx
+	  | aux nil (yy) = yy;
+in
+	aux xx yy
+end);
+
+infix 4 rcup';
+fun xx €rcup'› yy = merge item_order xx yy;
+
+
+infix 4 rcup'';
+fun xx €rcup''› yy = merge item_list_order xx yy;
+
+fun €maprcup'› f (x::rest) = [(f x)] rcup'' (maprcup' f rest)
+  | maprcup' _ _ = [nil];
+
+infix 4 rgrab';
+fun xx €rgrab'› y = xx rcup' [y];
+
+fun €gen_eq› (eqfn:(''a*''a)->int) (xx:''a list) (yy:''a list) : bool = (
+let	fun aux (x::xs) (y::ys) = (
+		case eqfn (x,y) of 
+		0 =>	aux xs ys
+		|_ =>	false
+	) | aux nil nil = true
+	  | aux _ _ = false;
+in length xx = length yy
+	andalso aux xx yy
+end);
+
+nonfix set_eq';
+val €set_eq'› = gen_eq item_order;
+=TEX
+\subsection{Converting the Grammar to an Efficient Representation}
+=SML
+type NTDICT = FNONTERM E_DICT;
+
+val €nt_dict› : NTDICT ref = ref initial_e_dict;
+
+=SML
+fun €nt_name› (g : ''_a FGRAMMAR) (nt : FNONTERM) : NONTERMINAL = (
+	fst (Array.sub(g, nt))
+);
+=TEX
+=SML
+fun €make_grammar› (g : ''_a GRAMMAR) : ''_a FGRAMMAR =
+let	val sd = (nt_dict := initial_e_dict);
+	val mapping = combine (map fst g) (interval 0 (bound g)) ;
+	fun aux1 (s,i) = (nt_dict := e_extend s i (!nt_dict));
+	val sd = map aux1 mapping;
+	fun aux2 (Terminal x) = FTerm x
+	  | aux2 (NonTerminal name) =
+		FNonTerm (
+			case e_lookup name (!nt_dict) of
+			Value nt =>	nt
+			| _ =>		raise SLRP_ERROR "make_grammar")
+	fun aux3 rhs = map (map aux2) rhs;
+	fun aux4 (nt, rhs) =
+		(nt,  Array.arrayoflist
+			(map Array.arrayoflist (aux3 rhs)));
+
+in
+	Array.arrayoflist (map aux4 g)
+end;
+=TEX
+$f\_expand$ is a version of the function $expand$ which
+works on the efficient representation of the grammar.
+=SML
+fun €f_expand› (g : ''_a FGRAMMAR) (name : FNONTERM) : ''_a FSYM Array.array Array.array = (
+
+	snd (Array.sub (g, name))
+);
+=TEX
+$f\_follower\,g\,x$ returns the symbol immediately after the dot in the item $x$
+for the grammar $g$
+=SML
+fun €f_follower› (g : ''_a FGRAMMAR) ((sym, alt, dot) : ITEM) : ''_a FSYM = (
+	Array.sub(Array.sub(f_expand g sym, alt), dot)
+);
+=TEX
 \subsection{CLOSURE Function}
 The function $closure$ is just as in \cite{Aho77}.
+=SML
+fun €f_closure› (g : ''_a FGRAMMAR) (items : ITEM list) : ITEM list = (
+let	fun aux1 res (FNonTerm nt) = (
+	let	val newitems = map (fn i => (nt, i, 0))
+		  (interval 0 (Array.length (f_expand g nt) - 1));
+	in
+		res rcup' newitems
+	end) | aux1 res _ = res;
+	fun aux2 res (item::more) = (
+		(aux2 (aux1 res (f_follower g item)) more)
+		handle _ => aux2 res more
+	) | aux2 res _ = res;
+	val res = aux2 items items;
+in	if length res > length items
+	then f_closure g res
+	else res
+end);
+=TEX
 \subsection{GOTO Function}
 The function $goto$ is just as in \cite{Aho77}.
+=SML
+fun €f_goto› (g: ''_a FGRAMMAR) (items : ITEM list) (sym : ''_a FSYM) : ITEM list = (
+let	fun aux ((item  as (name, alt, dot)):: more) = (
+		(if sym = f_follower g item
+		then
+			(name, alt, dot+1) :: aux more
+		else aux more)
+		handle Any => aux more
+	) | aux [] = [];
+in	f_closure g (aux items)
+end
+);
+=TEX
 \subsection{ITEMS Function}
 =TEX
-Again $items$ is as in \cite{Aho77}. We assume the grammar is already
+Again $make\_items$ is as in \cite{Aho77} (under $items$). We assume the grammar is already
 augmented. The sentence symbol is supplied as an additional parameter.
 =SML
+fun €make_items› (g : ''_a FGRAMMAR) (sen : FNONTERM) : ITEM list list = (
+let	fun aux1 (item :: more) = (
+		((f_follower g item) :: aux1 more) handle _ => aux1 more
+	) | aux1 [] = [];
+	fun aux2 res (items' :: more) = (
+		case aux1 items' of
+			[] => aux2 res more
+		|	xs => aux2 (res rcup (maprcup' (f_goto g items') xs)) more
+	) | aux2 res [] = res;
+	fun aux3 items' = (
+		let	val newitems = aux2 items' items'
+		in	if length newitems > length items'
+			then aux3 newitems
+			else items'
+		end
+	);
+in	aux3 [f_closure g [(sen, 0, 0)]]
+end);
 =TEX
 \section{SLR TABLE COMPUTATION}\label{SLRTABLECOMPUTATION}
 \subsection{FIRST and FOLLOW}
@@ -382,210 +624,15 @@ fun €follow› (g : ''lc GRAMMAR) (sen : string) (eos : ''lc): (string * (''lc lis
 );
 
 =TEX
+
 \subsection{The Table Construction}
 
 =SML
-type €NONTERMINAL'› = int;
-datatype ''a €SYMBOL'› = €Terminal'› of ''a
-	| €NonTerminal'› of NONTERMINAL';
-type €ITEM'› = (NONTERMINAL' * int * int);
-type ''_a €PRODUCTION'› = NONTERMINAL * (''_a SYMBOL' Array.array Array.array);
-type ''_a €GRAMMAR'› = ''_a PRODUCTION' Array.array;
-
-fun €eff_give_terms› (g : ''_a GRAMMAR') = (
-let	fun aux symarr (i, acc) = (
-		case Array.sub (symarr, i) of
-			NonTerminal' _ => 	acc
-			|Terminal' x =>		acc grab x
-	);
-	fun aux1 symarr = fold (aux symarr) (interval 0 (Array.length symarr - 1)) [];
-	fun aux2 altarr (i, acc) =
-	let	val alt = Array.sub (altarr, i);
-	in
-		aux1 alt
-	end;
-	fun aux3 altarr = fold (aux2 altarr) (interval 0 (Array.length altarr - 1)) [];
-	fun aux4 prodarr (i, acc) =
-	let	val prod = (snd o Array.sub) (prodarr, i);
-	in
-		aux3 prod
-	end;
-	fun aux5 prodarr = fold (aux4 prodarr) (interval 0 (Array.length prodarr - 1)) [];
-in
-	aux5 g
-end);
-
-
-fun €item_order› (((nt1, aux1, opt1), (nt2, aux2, opt2)):ITEM'*ITEM') : int = (
-	if nt1 = nt2
-	then
-		if aux1 = aux2
-		then
-			if opt1 = opt2
-			then
-				0
-			else	if opt1 < opt2
-				then	~1
-				else	1
-		else	if aux1 < aux2
-			then	~1
-			else	1
-	else	if nt1 < nt2
-		then	~1
-		else	1
-);
-
-fun €item_list_order› ((list1, list2):ITEM' list*ITEM' list) : int = (
-let	val l1 = length list1;
-	val l2 = length list2;
-	fun aux (x1::rest1) (x2::rest2) = (
-		case item_order (x1, x2) of
-		0 =>	aux rest1 rest2
-		|Other => Other)
-	  | aux _ _ = 0;
-in
-	if l1 = l2
-	then
-		aux list1 list2
-	else	if l1 < l2
-		then	~1
-		else	1
-end);
-
-fun €merge› (order:(''a*''a)->int) (xx:''a list) (yy:''a list) : ''a list = (
-let	fun aux (x::xs) (y::ys) = (
-		case order (x,y) of 
-		0 =>	x::(aux xs ys)
-		| ~1 =>	x::(aux xs (y::ys))
-		|_ =>	y::(aux (x::xs) ys)
-	) | aux xx nil = xx
-	  | aux nil (yy) = yy;
-in
-	aux xx yy
-end);
-
-infix 4 rcup';
-fun xx €rcup'› yy = merge item_order xx yy;
-
-
-infix 4 rcup'';
-fun xx €rcup''› yy = merge item_list_order xx yy;
-
-
-
-infix 4 rgrab';
-fun xx €rgrab'› y = xx rcup' [y];
-
-
-fun €gen_eq› (eqfn:(''a*''a)->int) (xx:''a list) (yy:''a list) : bool = (
-let	fun aux (x::xs) (y::ys) = (
-		case eqfn (x,y) of 
-		0 =>	aux xs ys
-		|_ =>	false
-	) | aux nil nil = true
-	  | aux _ _ = false;
-in length xx = length yy
-	andalso aux xx yy
-end);
-
-nonfix set_eq';
-val €set_eq'› = gen_eq item_order;
-
-
-type NTDICT = NONTERMINAL' E_DICT;
-
-val €ntdict› : NTDICT ref = ref initial_e_dict;
-
-fun €make_grammar› (g : ''_a GRAMMAR) : ''_a GRAMMAR' =
-let	val sd = (ntdict := initial_e_dict);
-	val mapping = combine (map fst g) (interval 0 (bound g)) ;
-	fun aux1 (s,i) = (ntdict := e_extend s i (!ntdict));
-	val sd = map aux1 mapping;
-	fun aux2 (Terminal x) = Terminal' x
-	  | aux2 (NonTerminal name) =
-		NonTerminal' (
-			case e_lookup name (!ntdict) of
-			Value nt =>	nt
-			| _ =>		raise SLRP_ERROR "make_grammar")
-	fun aux3 rhs = map (map aux2) rhs;
-	fun aux4 (nt, rhs) =
-		(nt,  Array.arrayoflist
-			(map Array.arrayoflist (aux3 rhs)));
-
-in
-	Array.arrayoflist (map aux4 g)
-end;
-
-fun €eff_expand› (g : ''_a GRAMMAR') (name : NONTERMINAL') : ''_a SYMBOL' Array.array Array.array = (
-
-	snd (Array.sub (g, name))
-);
-
-fun €eff_follower› (g : ''_a GRAMMAR') ((sym, alt, dot) : ITEM') : ''_a SYMBOL' = (
-	Array.sub(Array.sub(eff_expand g sym, alt), dot)
-);
-
-fun €eff_closure› (g : ''_a GRAMMAR') (items : ITEM' list) : ITEM' list = (
-let	fun aux1 res (NonTerminal' nt) = (
-	let	val newitems = map (fn i => (nt, i, 0))
-		  (interval 0 (Array.length (eff_expand g nt) - 1));
-	in
-		res rcup' newitems
-	end) | aux1 res _ = res;
-	fun aux2 res (item::more) = (
-		(aux2 (aux1 res (eff_follower g item)) more)
-		handle _ => aux2 res more
-	) | aux2 res _ = res;
-	val res = aux2 items items;
-in	if length res > length items
-	then eff_closure g res
-	else res
-end);
-
-fun €eff_goto› (g: ''_a GRAMMAR') (items : ITEM' list) (sym : ''_a SYMBOL') : ITEM' list = (
-let	fun aux ((item  as (name, alt, dot)):: more) = (
-		(if sym = eff_follower g item
-		then
-			(name, alt, dot+1) :: aux more
-		else aux more)
-		handle Any => aux more
-	) | aux [] = [];
-in	eff_closure g (aux items)
-end
-);
-
-fun €maprcup'› f (x::rest) = [(f x)] rcup'' (maprcup' f rest)
-  | maprcup' _ _ = [nil];
-
-fun €make_items› (g : ''_a GRAMMAR') (sen : NONTERMINAL') : ITEM' list list = (
-let	fun aux1 (item :: more) = (
-		((eff_follower g item) :: aux1 more) handle _ => aux1 more
-	) | aux1 [] = [];
-	fun aux2 res (items' :: more) = (
-		case aux1 items' of
-			[] => aux2 res more
-		|	xs => aux2 (res rcup (maprcup' (eff_goto g items') xs)) more
-	) | aux2 res [] = res;
-	fun aux3 items' = (
-		let	val newitems = aux2 items' items'
-		in	if length newitems > length items'
-			then aux3 newitems
-			else items'
-		end
-	);
-in	aux3 [eff_closure g [(sen, 0, 0)]]
-end);
-
-fun €nt_name› (g : ''_a GRAMMAR') (nt : NONTERMINAL') : NONTERMINAL = (
-	fst (Array.sub(g, nt))
-);
-=TEX
-=SML
 fun €slr_tables› (g : ''_lc GRAMMAR) (eos : ''_lc) (sen : string) 
-	: (''_lc)ACTION_TABLE * GOTO_TABLE * (ITEM' list * int) list * ''_lc GRAMMAR' * STATE = (
+	: (''_lc)ACTION_TABLE * GOTO_TABLE * (ITEM list * int) list * ''_lc FGRAMMAR * STATE = (
 	let	open Array;
 		val g' = make_grammar g;
-		val sent = (case e_lookup sen (!ntdict) of 
+		val sent = (case e_lookup sen (!nt_dict) of 
 			Nil => raise SLRP_ERROR "SLR_TABLES"
 			|Value x => x);
 		val C = make_items g' sent;
@@ -596,16 +643,16 @@ fun €slr_tables› (g : ''_lc GRAMMAR) (eos : ''_lc) (sen : string)
 		val gotos = array (n+1, []: (string * STATE)list);
 		val follow_tab = follow g sen eos;
 		fun my_follower item = (
-			(Value (eff_follower g' item)) handle _ => Nil
+			(Value (f_follower g' item)) handle _ => Nil
 		);
 		fun item_index items = (
 			snd(find Ijs (fn (items', _) => set_eq' items items'))
 		);
 		fun make_actions items ((item as (nt, alt, dot)) :: more) = (
 			case my_follower item of
-				Value(a as (Terminal' lc)) => (
+				Value(a as (FTerm lc)) => (
 					make_actions items more rgrab
-					(lc, Shift(item_index(eff_goto g' items a)))
+					(lc, Shift(item_index(f_goto g' items a)))
 			) |	Value _ => (make_actions items more
 			) |	Nil => (
 					if nt <> sent
@@ -618,7 +665,7 @@ fun €slr_tables› (g : ''_lc GRAMMAR) (eos : ''_lc) (sen : string)
 		val non_terms = interval 0 (Array.length g' - 1);
 		fun make_gotos items = (
 			let	fun aux (nt :: more) = (
-					case eff_goto g' items (NonTerminal' nt) of
+					case f_goto g' items (FNonTerm nt) of
 						[] => aux more
 					|	items' => (nt_name g' nt, item_index items') :: aux more
 				) | aux [] = [];
@@ -680,7 +727,7 @@ fun €format_alt› (g: ''lc GRAMMAR, p : ''lc -> string) (alt : string, i : int) :
 );
 =TEX
 =SML
-fun €format_item› (g : ''_lc GRAMMAR, p : ''_lc -> string) ((nt, alt, dot) : ITEM') (eff_grammar : ''_lc GRAMMAR') = (
+fun €format_item› (g : ''_lc GRAMMAR, p : ''_lc -> string) ((nt, alt, dot) : ITEM) (eff_grammar : ''_lc FGRAMMAR) = (
 let	val sym = nt_name eff_grammar nt;
 in
 	if all g (fn (s,_) => s <> sym)
@@ -702,7 +749,7 @@ in
 end);
 =SML
 fun €format_state›(gp : ''_lc GRAMMAR * (''_lc -> string))
-		((items, i) : ITEM' list * int) (eff_grammar : ''_lc GRAMMAR') : string list = (
+		((items, i) : ITEM list * int) (eff_grammar : ''_lc FGRAMMAR) : string list = (
 	case items of
 		[] => [string_of_int i ^ ":"]
 	|	[item] => [string_of_int i ^ ":\t" ^ format_item gp item eff_grammar]
@@ -741,7 +788,7 @@ fun €print_terms› (p : ''_lc -> string)(g : ''_lc GRAMMAR) : unit = (
 =TEX
 =SML
 fun €print_states› (gp : ''_lc GRAMMAR * (''_lc -> string))
-		(states : (ITEM' list * int) list) (eff_grammar : ''_lc GRAMMAR') : unit = (
+		(states : (ITEM list * int) list) (eff_grammar : ''_lc FGRAMMAR) : unit = (
 	let	fun do1 state = map (fn s => (log s; log"\n")) (format_state gp state eff_grammar);
 	in	map do1 states; ()
 	end 
@@ -1527,15 +1574,40 @@ fun €output_action_entry_list›(p : ''lc -> string) (entries : (''lc * ACTION) li
 );
 =TEX
 =SML
+val €slrp_break› = ref 1;
+val _ = new_int_control{name="slrp_break",
+	control=slrp_break,
+	default=(fn x => 1),
+	check=(fn x =>
+		if x > 0 then true
+		else raise SLRP_ERROR
+		  "slrp_break must be a positive number")
+	};
+=TEX
+=SML
 fun €output_action_table› (p : ''lc -> string) (actions : (''lc)ACTION_TABLE) : unit = (
-	let	val tab = listofarray actions;
-		fun aux (x :: []) = output_action_entry_list p x
-		| aux (x :: more) = (output_action_entry_list p x; put_string ","; aux more)
-		| aux [] = ();
-	in	put_line "val slrp'actions = Array.arrayoflist[";
+let	val tabs = listsofarray actions (get_int_control"slrp_break");
+	fun aux (x :: []) = output_action_entry_list p x
+	  | aux (x :: more) = (output_action_entry_list p x; put_string ","; aux more)
+	  | aux [] = ();
+	fun aux1 i = "slrp'i"^(string_of_int i);
+	fun aux2 (i, tab) = (
+		put_string ("val "^(aux1 i)^"=[");
 		aux tab;
 		put_line "];"
-	end
+	);
+	val nentries = length tabs;
+	val tabs' = combine (interval 0 (nentries-1)) tabs;
+	fun aux3 (x :: []) = put_line (aux1 x)
+	  | aux3 (x :: more) = (put_line((aux1 x)^"@");aux3 more)
+	  | aux3 [] = ();
+	fun aux4() = (
+		put_line "val slrp'actions = Array.arrayoflist (";
+		aux3 (interval 0 (nentries-1));
+		put_line ");"
+	);
+in	map aux2 tabs';aux4()
+end
 );
 =TEX
 =SML
