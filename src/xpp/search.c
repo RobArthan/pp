@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.27 2003/04/11 10:58:21 rda Exp rda $ 
+ * $Id: search.c,v 2.28 2003/05/08 12:10:05 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -128,7 +128,8 @@ static void	search_backwards_cb(CALLBACK_ARGS),
 		search_set_cb(CALLBACK_ARGS),
 		search_backwards_replace_cb(CALLBACK_ARGS),
 		search_forwards_replace_cb(CALLBACK_ARGS),
-		clear_cb(CALLBACK_ARGS),
+		clear_search_cb(CALLBACK_ARGS),
+		clear_replace_cb(CALLBACK_ARGS),
 		replace_cb(CALLBACK_ARGS),
 		replace_all_cb(CALLBACK_ARGS),
 		replace_set_cb(CALLBACK_ARGS),
@@ -517,7 +518,7 @@ Boolean add_search_tool(Widget text_w)
 		search_forwards_replace_cb, (XtPointer)(&search_data));
 
 	XtAddCallback(search_clear_btn, XmNactivateCallback,
-		clear_cb, (XtPointer)(search_text));
+		clear_search_cb, (XtPointer)(&search_data));
 
 	XtAddCallback(replace_btn, XmNactivateCallback,
 		replace_cb, (XtPointer)(&search_data));
@@ -535,7 +536,7 @@ Boolean add_search_tool(Widget text_w)
 		replace_search_forwards_cb, (XtPointer)(&search_data));
 
 	XtAddCallback(replace_clear_btn, XmNactivateCallback,
-		clear_cb, (XtPointer)(replace_text));
+		clear_replace_cb, (XtPointer)(&search_data));
 
 	XtAddCallback(goto_line_no_btn, XmNactivateCallback,
 		goto_line_no_cb, (XtPointer)(&search_data));
@@ -662,6 +663,7 @@ static void search_forwards_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
+	cbdata->default_focus_w = w;
 	CHECK_MAP_STATE(cbdata)
 	(void) search_either(w, cbdata, FORWARDS);
 }
@@ -674,6 +676,7 @@ static void search_backwards_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
+	cbdata->default_focus_w = w;
 	CHECK_MAP_STATE(cbdata)
 	(void) search_either(w, cbdata, BACKWARDS);
 }
@@ -741,6 +744,7 @@ static void replace_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
+	cbdata->default_focus_w = w;
 	CHECK_MAP_STATE(cbdata)
 	(void) replace_selection(w, cbdata);
 }
@@ -828,6 +832,7 @@ static void replace_all_cb(
 	Substring ss;
 	NAT start_point;
 	char *pattern, *text_buf, *replacement, *all_replaced;
+	cbdata->default_focus_w = w;
 	CHECK_MAP_STATE(cbdata)
 	pattern = XmTextGetString(cbdata->search_w);
 	text_buf = XmTextGetString(cbdata->text_w);
@@ -890,6 +895,7 @@ static void search_backwards_replace_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
+	cbdata->default_focus_w = w;
 	CHECK_MAP_STATE(cbdata)
 	if(search_either(w, cbdata, BACKWARDS)) {
 		(void) replace_selection(w, cbdata);
@@ -905,6 +911,7 @@ static void search_forwards_replace_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
+	cbdata->default_focus_w = w;
 	CHECK_MAP_STATE(cbdata)
 	if(search_either(w, cbdata, FORWARDS)) {
 		(void) replace_selection(w, cbdata);
@@ -920,6 +927,7 @@ static void replace_search_backwards_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
+	cbdata->default_focus_w = w;
 	CHECK_MAP_STATE(cbdata)
 	if(replace_selection(w, cbdata)) {
 		(void) search_either(w, cbdata, BACKWARDS);
@@ -935,6 +943,7 @@ static void replace_search_forwards_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
+	cbdata->default_focus_w = w;
 	CHECK_MAP_STATE(cbdata)
 	if(replace_selection(w, cbdata)) {
 		(void) search_either(w, cbdata, FORWARDS);
@@ -951,6 +960,7 @@ static void search_set_cb(
 {
 	SearchData *cbdata = cbd;
 	char *sel;
+	cbdata->default_focus_w = w;
 	if ((sel = get_selection(cbdata->shell_w, no_selection_search)) == NULL) {
 		return;
 	}
@@ -968,6 +978,7 @@ static void replace_set_cb(
 {
 	SearchData *cbdata = cbd;
 	char *sel;
+	cbdata->default_focus_w = w;
 	if ((sel = get_selection(cbdata->shell_w, no_selection_replace)) == NULL) {
 		return;
 	}
@@ -976,15 +987,29 @@ static void replace_set_cb(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * text field clear callback.
+ * search field clear callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void clear_cb(
+static void clear_search_cb(
 	Widget		w,
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
-	Widget text_w = cbd;
-	XmTextSetString(text_w, "");
+	SearchData *cbdata = cbd;
+	cbdata->default_focus_w = w;
+	XmTextSetString(cbdata->search_w, "");
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * search field clear callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void clear_replace_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
+{
+	SearchData *cbdata = cbd;
+	cbdata->default_focus_w = w;
+	XmTextSetString(cbdata->replace_w, "");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -996,6 +1021,7 @@ static void line_no_set_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
+	cbdata->default_focus_w = w;
 	line_no_set(cbdata);
 }
 
@@ -1014,6 +1040,7 @@ static void goto_line_no_cb(
 	short nrows;
 	int scroll;
 	char *line_no_string;
+	cbdata->default_focus_w = w;
 	CHECK_MAP_STATE(cbdata)
 
 	line_no_string = XmTextGetString(cbdata->line_no_w);
