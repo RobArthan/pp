@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp514.doc   %Z% $Date: 2004/07/15 13:51:43 $ $Revision: 1.16 $ $RCSfile: imp514.doc,v $
+% imp514.doc   %Z% $Date: 2004/07/18 13:06:40 $ $Revision: 1.17 $ $RCSfile: imp514.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Compliance Notation (Volume II) Types}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP514}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.16 $%
+\def\SCCSversion{$Revision: 1.17 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/07/15 13:51:43 $%
+\TPPdate{\FormatDate{$Date: 2004/07/18 13:06:40 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -78,6 +78,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \item[Issue 1.7] DAZ-specific updates to banner for open source release
 \item[Issue 1.8] DAZ-specific updates to banner for open source release
 \item[Issues 1.9-1.17] Reform of the Environments.
+\item[Issue 1.18] Support for multiple use clauses for the same package.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -118,7 +119,8 @@ datatype €ENV_DICT› = EnvDict of {
 		vc_pars : Z_ID list,
 		vc_aux_vars : Z_ID list,
 		vc_log_cons : Z_ID list},
-	cn_scope : unit E_DICT OPT};
+	cn_scope : unit E_DICT OPT,
+	used_packages : ID list};
 (*
 =TEX
 =SML
@@ -153,14 +155,15 @@ val €initial_env_dict› : ENV_DICT = EnvDict {
 		vc_pars = [],
 		vc_aux_vars = [],
 		vc_log_cons = []},
-	cn_scope = Nil
+	cn_scope = Nil,
+	used_packages = []
 };
 (*
 =TEX
 =SML
 *)
 fun €add_to_env_dict›
-	(EnvDict{infos, ti_cxt, local_vars, cn_scope} : ENV_DICT)
+	(EnvDict{infos, ti_cxt, local_vars, cn_scope, used_packages} : ENV_DICT)
 	(new :ENV_INFO S_DICT) :  ENV_DICT = (
 	let	val infos' = list_e_enter infos new;
 		fun mk_ti_cxt acc [] = acc
@@ -221,7 +224,8 @@ fun €add_to_env_dict›
 			infos = infos',
 			ti_cxt = ti_cxt', 
 			local_vars = local_vars',
-			cn_scope = cn_scope'}
+			cn_scope = cn_scope',
+			used_packages = used_packages}
 	end
 );
 (*
@@ -235,7 +239,8 @@ fun €delete_from_env_dict›
 			infos,
 			ti_cxt,
 			local_vars = {vc_vars, vc_pars, vc_aux_vars, vc_log_cons},
-			cn_scope}) = (
+			cn_scope,
+			used_packages}) = (
 			{infos = e_delete zn infos,
 			ti_cxt = e_delete zn ti_cxt,
 			local_vars = {
@@ -243,9 +248,10 @@ fun €delete_from_env_dict›
 				vc_pars = vc_pars less zn,
 				vc_aux_vars = vc_aux_vars less zn,
 				vc_log_cons = vc_log_cons less zn},
-			cn_scope = case cn_scope of
+			cn_scope = (case cn_scope of
 					Value d => Value(e_delete zn d)
-				|	Nil => Nil}
+				|	Nil => Nil),
+			used_packages = used_packages}
 		);
 	in	EnvDict (fold aux zns ed)
 	end
@@ -265,13 +271,14 @@ fun €set_cn_scope›
 			handle Fail _ =>  fail "set_cn_scope" 514002 [fn () => zn]
 		);
 		val new_local_infos = map aux zns;
-		val EnvDict{infos, ti_cxt, local_vars, cn_scope = _} = 
+		val EnvDict{infos, ti_cxt, local_vars, cn_scope = _, used_packages} = 
 			add_to_env_dict dict new_local_infos;
 	in	EnvDict {
 			infos = infos,
 			ti_cxt = ti_cxt, 
 			local_vars = local_vars,
-			cn_scope = cn_scope'}
+			cn_scope = cn_scope',
+			used_packages = used_packages}
 	end
 );
 (*
@@ -279,7 +286,8 @@ fun €set_cn_scope›
 =SML
 *)
 fun €get_cn_scope›
-	(EnvDict{infos = _, ti_cxt = _, local_vars = _, cn_scope = Value g} : ENV_DICT)
+	(EnvDict{infos = _, ti_cxt = _, local_vars = _,
+		cn_scope = Value g, used_packages = _} : ENV_DICT)
 	: Z_ID list OPT = (
 	Value(map fst (e_flatten g))
 ) | get_cn_scope _ = Nil;
@@ -290,7 +298,8 @@ If the name we're looking for isn't in the {\em infos} dictionary,
 =SML
 *)
 fun €env_of_env_dict›
-	(EnvDict{infos = infos, ti_cxt = _, local_vars = _,cn_scope = cn_scope} : ENV_DICT)
+	(EnvDict{infos = infos, ti_cxt = _, local_vars = _,
+		cn_scope = cn_scope, used_packages = _} : ENV_DICT)
 	 : CN_ENV = (
 let	fun aux (Value g)  zn = (
 		case e_lookup zn infos of
@@ -342,7 +351,8 @@ end);
 =SML
 *)
 fun €flatten_env_dict›
-	(EnvDict{infos = infos, ti_cxt = _, local_vars = _, cn_scope = _} : ENV_DICT)
+	(EnvDict{infos = infos, ti_cxt = _, local_vars = _,
+		cn_scope = _, used_packages = _} : ENV_DICT)
 	: ENV_INFO S_DICT = (
 	e_flatten infos
 );
@@ -351,7 +361,8 @@ fun €flatten_env_dict›
 =SML
 *)
 fun €ti_context_of_env_dict›
-	(EnvDict{infos = _, ti_cxt = ti_cxt, local_vars = _,cn_scope = _} : ENV_DICT)
+	(EnvDict{infos = _, ti_cxt = ti_cxt, local_vars = _,
+		cn_scope = _, used_packages =_} : ENV_DICT)
 	: TYPE E_DICT = (
 	ti_cxt
 );
@@ -360,7 +371,7 @@ fun €ti_context_of_env_dict›
 =SML
 *)
 fun €new_scope_env_dict› 
-	(EnvDict{infos, ti_cxt, local_vars = _, cn_scope} : ENV_DICT)
+	(EnvDict{infos, ti_cxt, local_vars = _, cn_scope, used_packages} : ENV_DICT)
 	: ENV_DICT = (
 	EnvDict{
 		infos = infos,
@@ -370,19 +381,46 @@ fun €new_scope_env_dict›
 			vc_pars = [],
 			vc_aux_vars = [],
 			vc_log_cons = []},
-		cn_scope = cn_scope}
+		cn_scope = cn_scope,
+		used_packages = used_packages}
 );
 (*
 =TEX
 =SML
 *)
 fun €get_local_vars› 
-	(EnvDict{infos = _, ti_cxt = _, local_vars = local_vars, cn_scope = _} : ENV_DICT)
+	(EnvDict{infos = _, ti_cxt = _, local_vars = local_vars,
+		cn_scope = _, used_packages = _} : ENV_DICT)
 	:	{vc_vars : Z_ID list,
 		vc_pars : Z_ID list,
 		vc_aux_vars : Z_ID list,
 		vc_log_cons : Z_ID list} = (
 	local_vars
+);
+(*
+=TEX
+=SML
+*)
+fun €get_used_packages› 
+	(EnvDict{infos = _, ti_cxt = _, local_vars =_,
+		cn_scope = _, used_packages = used_packages} : ENV_DICT)
+	:	ID list = (
+	used_packages
+);
+(*
+=TEX
+=SML
+*)
+fun €add_used_package› 
+	(EnvDict{infos, ti_cxt, local_vars, cn_scope, used_packages} : ENV_DICT)
+	(pack_id : ID)
+	:	ENV_DICT = (
+	EnvDict {
+		infos = infos,
+		ti_cxt = ti_cxt,
+		local_vars = local_vars,
+		cn_scope = cn_scope,
+		used_packages = used_packages grab pack_id}
 );
 =TEX
 =INCLUDE

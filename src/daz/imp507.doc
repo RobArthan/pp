@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.275 $ $RCSfile: imp507.doc,v $ $Date: 2004/08/29 11:37:35 $
+% imp507.doc %Z% $Revision: 1.276 $ $RCSfile: imp507.doc,v $ $Date: 2004/08/31 16:25:08 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.275 $%
+\def\SCCSversion{$Revision: 1.276 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/08/29 11:37:35 $%
+\TPPdate{\FormatDate{$Date: 2004/08/31 16:25:08 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -213,6 +213,7 @@ by doing all the work of checking and generating the VC terms in {\it call\_vcs}
 \item[Issue 1.274] Performance tweaks in type inference context handling to avoid list-based processing of the contexts.
 \item[Issue 1.275] Implemented distinction between empty private part and omitted private part.
 \item[Issue 1.276] Renamings and use clauses now propagate into subunit, dec and spec environments.
+\item[Issue 1.277] Multiple use clauses for the same package now allowed in full generality.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -4057,7 +4058,10 @@ fun €new_scope_common› (blk1 :: (more as (blk2 :: _)) : BLOCK list) : BLOCK list
 		val dict2 = #dict(#in_scope(#declab blk2));
 		val dict2' = new_scope_env_dict dict2;
 		val dict1' = add_to_env_dict dict2' (flatten_env_dict dict1);
-	in	block_dict(blk1, dict1')::more
+		fun aux d [] = d
+		|   aux d (n::ns) = aux (add_used_package d n) ns;
+		val dict1'' = aux dict1' (get_used_packages dict1);
+	in	block_dict(blk1, dict1'')::more
 	end
 ) | new_scope_common other = other;
 =SML
@@ -7564,6 +7568,78 @@ fun €renames_pack› (old_name : ID , new_name : ID)  : unit = (
 );
 =TEX
 \subsection{The SID function use\_pack}
+=TEX
+=SML
+fun €update_subunit_env_used_package› (name : ID) : unit = (
+	let	val dec_lab1 = #dec_lab (block 1);
+		fun do1_subunit
+			(id1_id2_s as
+				(id1_id2,
+				s as {in_scope as {dec_labels, ...}, ...})
+					: string * SUBUNIT) = (
+			if	dec_lab1 mem dec_labels
+			then	let	val dict' = add_used_package (#dict in_scope) name;
+					val in_scope' = in_scope_dict(in_scope, dict');
+				in	(id1_id2,
+						subunit_in_scope (s,  in_scope'))
+				end
+			else	id1_id2_s
+		);
+	in	subunit_env := map do1_subunit (!subunit_env)
+	end
+);
+=TEX
+=SML
+fun €update_dec_env_used_package› (name : ID)  : unit = (
+	let	val dec_lab1 = #dec_lab (block 1);
+		fun do1_dec_label
+			(dec_label_s as
+				(dec_label,
+				s as {in_scope as {dec_labels, ...}, ...})
+					: string * DECLAB) = (
+			if	dec_lab1 mem dec_labels
+			then	let	val dict' = add_used_package (#dict in_scope) name;
+					val in_scope' = in_scope_dict(in_scope, dict');
+				in	(dec_label,
+						declab_in_scope (s,  in_scope'))
+				end
+			else	dec_label_s
+		);
+	in	dec_env := map do1_dec_label (!dec_env)
+	end
+);
+=TEX
+=SML
+fun €update_spec_env_used_package› (name : ID) : unit = (
+	let	val dec_lab1 = #dec_lab (block 1);
+
+		fun do1_spec_label
+			(spec_label_s as
+				(spec_label,
+				s as {spec as {w, ...},
+					in_scope as {dec_labels, ...}, ...})
+					: string * SPECLAB) = (
+			if	dec_lab1 mem dec_labels
+			then	let	val dict' = add_used_package (#dict in_scope) name;
+					val in_scope' = in_scope_dict(in_scope, dict');
+				in	(spec_label,
+						speclab_in_scope (s,  in_scope'))
+				end
+			else	spec_label_s
+		);
+	in	spec_env := map do1_spec_label (!spec_env)
+	end
+);
+=TEX
+=SML
+fun €update_envs_used_package› (name : ID)  : unit = (
+	if	test_flag #declabel_flag 1
+	then	(update_subunit_env_used_package name;
+		update_dec_env_used_package name;	
+		update_spec_env_used_package name)
+	else	()
+);
+=TEX
 {\it use\_pack} processes adds an entry $(unex, ex)$ into
 the running environment for every type, object and subprogram in the package, where
 $unex$ is the unexpanded name for the entity and $ex$ is the expanded name.
@@ -7571,7 +7647,9 @@ These entries are also propagated into the subunit, dec and spec environments if
 use clause appears in the expansion of a declaration label.
 =SML
 fun €use_pack› (name : ID)  : unit = (
-	let	val pack = 
+	if	name mem get_used_packages (#dict(#in_scope(#declab(block 1))))
+	then	()
+	else let	val pack = 
 			case s_lookup name (!pack_env) of
 				Value p  =>  p
 			|	Nil  => fail "use_pack" 507063 [fn _ => name];
@@ -7589,24 +7667,21 @@ fun €use_pack› (name : ID)  : unit = (
 			handle Fail _ => [];
 		val av_names = flat (map z_names_of_z_dec avs);
 		val zids_in_scope = (current_cn_env, av_names);
+		val block1' = block_renamings(block1, new_subs);
+		val dict1' = #dict(#in_scope(#declab(block1')));
+		val dict1'' = add_used_package dict1'  name;
+		val block1'' = block_dict(block1', dict1'');
 	in	map (check_new_z_id zids_in_scope) newids;
 		check_new_spark_ids current_cn_env newids;
-		blocks :=
-			block_renamings(block1, new_subs):: tl (!blocks);
-		update_envs_renamings new_subs
+		blocks := block1'':: tl (!blocks);
+		update_envs_renamings new_subs;
+		update_envs_used_package name
 	end
 );
 =TEX
 =SML
 fun €use_clause› (UCUse names : USE_CLAUSE) : unit = (
-	let	fun aux acc [] = rev acc
-		|   aux acc (name :: more) = (
-			if	name mem acc
-			then	aux acc more
-			else	aux (name::acc) more
-		);
-	in	map use_pack (aux [] names); ()
-	end
+	map use_pack names; ()
 ) | use_clause _ = ();
 =TEX
 \section{STUBS AND SUBUNITS}\label{STUBSANDSUBUNITS}
