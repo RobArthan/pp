@@ -1,4 +1,4 @@
-% $Header: /home/rda/daz/RCS/imp510.doc,v 1.92 2002/03/14 11:47:03 rda Exp rda $
+% $Header: /home/rda/daz/RCS/imp510.doc,v 1.93 2002/03/14 12:49:43 rda Exp $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: SPARK Output Function}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP510}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.92 $%
+\def\SCCSversion{$Revision: 1.93 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{{$Date: 2002/03/14 11:47:03 $%
+\TPPdate{\FormatDate{{$Date: 2002/03/14 12:49:43 $%
 }}
 \TPPstatus{Draft}	    %% Mandatory field
 \TPPtype{Specification}
@@ -160,6 +160,8 @@ which were producing newlines inconsistently.
 \item[Issue 1.93] Improved commentary for unexpanded labels; moved {\it
 translate\_for\_output} calls to the points where Z-like fragments are being
 processed so that per-cent signs in strings etc. will work properly.
+\item[Issue 1.92] Soundness check failures now reported after the
+program has been printed.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -208,28 +210,29 @@ The bool flag is only set true in the call from the functions which print or out
 The flag is used to ensure that diagnostic routines etc. using the lower-level formatting routines directly will not indefinitely consume resources.
 N.b. some functions use the stack variable directly for special effects, so they must do so in a way which won't consume resources if the flag is false.
 =SML
-val €clash_checking› : bool ref = ref false;
+val €error_checking› : bool ref = ref false;
 type €SCOPE› = {block : ID, names : ID list};
 val €stack› : SCOPE list ref = ref [];
 fun €push_scope› (block : ID) : unit = (
-	if	!clash_checking
+	if	!error_checking
 	then	stack := {block=block, names=[]} :: !stack
 	else	()
 );
 fun €pop_scope› () : unit = (
-	if	!clash_checking
+	if	!error_checking
 	then	case !stack of
 			[] => ()
 		|	_ :: more => (stack := more)
 	else	()
 );
 =TEX
-The following data structures and functions are used to accumulate a list of name-clash errors.
+The following data structures and functions are used to accumulate a list of name-clash and other
+errors.
 =SML
 type €CLASH_INFO› = {name1 : ID list, name2 : ID list};
 val €clashes› : CLASH_INFO list ref = ref [];
 fun €check_decl› (name : ID) : unit = (
-if	!clash_checking
+if	!error_checking
 then	let	fun full_name (st : SCOPE list) (n : ID) : ID list = (
 			rev(n :: (map #block st less ""))
 		);
@@ -253,6 +256,13 @@ then	let	fun full_name (st : SCOPE list) (n : ID) : ID list = (
 	end
 else	()
 );
+val €soundness_check_results› : string list ref = ref [];
+fun €log_soundness_check_result› (msg : MESSAGE) = (
+	if	!error_checking
+	then	soundness_check_results :=
+		get_message_text msg :: !soundness_check_results
+	else	()
+);
 =TEX
 In many cases the following gives a convenient idiom:
 =SML
@@ -266,33 +276,52 @@ fun €in_new_scope› (check_n : bool) (n : ID) (what : unit -> 'b) : 'b = (
 );
 =TEX
 =SML
-fun €with_clash_checks› (what : unit -> 'a) : 'a = (
+fun €with_error_checks› (what : unit -> 'a) : 'a = (
 	clashes := [];
+	soundness_check_results := [];
 	stack := [];
-	clash_checking := true;
+	error_checking := true;
 	let	fun show_name n = format_list Combinators.I n ".";
 		fun report_clash {name1, name2} = (
 			diag_line
 				(get_error_message 510002
 					[show_name name1, show_name name2])
 		);
-		fun report_results cls = (
+		fun report_clashes cls = (
 			case cls of
 			[]	=> ()
 		|	_ => (
 				diag_line (get_error_message 510001 []);
 				map report_clash cls;
-				fail "clash_checks" 510003 []
+				fail "error_checks" 510003 []
+			)
+		);
+		fun report_soundness_check_results scrs = (
+			case scrs of
+			[]	=> ()
+		|	_ => (
+				map diag_line scrs;
+				fail "error_checks" 510005 []
 			)
 		);
 		val res = what();
 		val cls = !clashes;
-	in	clash_checking := false;
+		val scrs = !soundness_check_results;
+	in	error_checking := false;
 		clashes := [];
-		report_results cls;
+		soundness_check_results := [];
+		stack := [];
+		report_soundness_check_results scrs;
+		report_clashes cls;
 		res
 	end
-)	handle ex => (clash_checking := false; clashes := []; raise ex);
+)	handle ex => (
+		error_checking := false;
+		clashes := [];
+		soundness_check_results := [];
+		stack := [];
+		raise ex
+);
 =TEX
 \subsection{Low level functions}
 
@@ -579,6 +608,7 @@ and €nb_exp› (fmtinfo: PP_FMT_INFO) (EId x : EXP) = (nb_id fmtinfo x)
   | nb_exp (fmtinfo  : PP_FMT_INFO) (EBracketed e : EXP) = false
   | nb_exp ({outf,...}: PP_FMT_INFO) (EStringLiteral s : EXP) = true
   | nb_exp ({outf,...}: PP_FMT_INFO) (ECharacterLiteral c : EXP) = true
+  | nb_exp ({outf,...}: PP_FMT_INFO) (EDiscreteRange _: EXP) = true
 and €nb_exp_list› (fmtinfo: PP_FMT_INFO) ([] : EXP list) = false
   | nb_exp_list (fmtinfo: PP_FMT_INFO) ([x] : EXP list) = (nb_exp fmtinfo x)
   | nb_exp_list (fmtinfo : PP_FMT_INFO) (x::xs : EXP list) = true;
@@ -956,6 +986,7 @@ and €fmt_exp› (fmtinfo: PP_FMT_INFO) (EId x : EXP) = (fmt_id fmtinfo x)
   | fmt_exp ({outf,...}: PP_FMT_INFO) (EStringLiteral s : EXP) = 
 	(outf ("\""^s^"\""))
   | fmt_exp ({outf,...}: PP_FMT_INFO) (ECharacterLiteral c : EXP) = outf ("'"^c^"'")
+  | fmt_exp ({outf,...}: PP_FMT_INFO) (EDiscreteRange _: EXP) = outf ("<invalid-expression>")
 and €fmt_exp_list› (fmtinfo: PP_FMT_INFO) ([] : EXP list) = ()
   | fmt_exp_list (fmtinfo: PP_FMT_INFO) ([x] : EXP list) = (fmt_exp fmtinfo x)
   | fmt_exp_list (fmtinfo as {outf,...} : PP_FMT_INFO) (x::xs : EXP list) = 
@@ -2406,7 +2437,8 @@ fun €fmt_procedure_body›
 	(fmtinfo as {outf,...} : PP_FMT_INFO)
 	({procedure_spec=p, declarative_part=d, statement=s} :
 	DECLARATION PROCEDURE_BODY) = (
-    do_soundness_checks2 get_replacement false s;
+    do_soundness_checks2 get_replacement false s
+    handle Fail msg => log_soundness_check_result msg;
 	let val res = (fmt_procedure_specification fmtinfo p;
 			outf (kw"IS"); outf "\n";
 			(inc_tabs();
@@ -2427,7 +2459,8 @@ fun €fmt_function_body›
 	(fmtinfo as {outf,...} : PP_FMT_INFO)
 	({function_spec=f, declarative_part=d, statement=s} :
 	DECLARATION FUNCTION_BODY) = (
-    do_soundness_checks2 get_replacement true s;
+    do_soundness_checks2 get_replacement true s
+    handle Fail msg => log_soundness_check_result msg;
 	let val res = (fmt_function_specification fmtinfo f;
 			outf (kw"IS"); outf "\n";
 			(inc_tabs(); 
@@ -2446,7 +2479,8 @@ fun €fmt_package_body›
 	({name=n, decls=d, statement=s, annotation=ann}
 		: DECLARATION PACKAGE_BODY) = (
     in_new_scope true n (fn () => (
-    do_soundness_checks2 get_replacement false s;
+    do_soundness_checks2 get_replacement false s
+    handle Fail msg => log_soundness_check_result msg;
     outf (kw2"PACKAGE""BODY"); fmt_id fmtinfo n; outf "\n";
     fmt_annotation fmtinfo ann;
     (outf (kw"IS"); outf "\n");
@@ -2830,12 +2864,12 @@ val €print_web_clause› : WEB_CLAUSE -> unit = (
     format_web_clause Nil
 );
 
-fun €print_spark_program› (() : unit) : unit = with_clash_checks (fn () =>
+fun €print_spark_program› (() : unit) : unit = with_error_checks (fn () =>
    ( format_web_clause (Value get_replacement)
     (WCCompilation (#spark_prog (get_z_generator_state()))))
 );
 
-fun €output_spark_program› ({out_file : string}) = with_clash_checks (fn () =>
+fun €output_spark_program› ({out_file : string}) = with_error_checks (fn () =>
 let	val stream = open_out out_file;
 	val outf = make_output_fun stream;
 	val fmt_info = mk_fmt_info outf (Value get_replacement)
