@@ -108,6 +108,8 @@ and renaming of $aconv$.
 Corrected $icl'new\_parent$, to ensure it checks for clashes in children of current theory.
 \item [Issue 1.26,1.27]
 Tidying up prior to a desk check.
+\item [Issue 1.28]
+Correcting problems to do with saving and getting hierarchies.
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
@@ -136,6 +138,12 @@ but that any sequence of commands may be.
 We need to maintain consistency between certain parts of state,
 and thus we have some protected functions,
 see section \ref{Inconsistent}.
+
+When handling hierarchies it should be borne in mind that
+the only function that may change the address of the current
+hierarchy is $icl'load\_hierarchy$.
+This is so that the addresses in $icl'new\_hierarchy$
+remain current until the next $icl'load\_hierarchy$. 
 \subsubsection{Dependencies}
 This document takes its signature from \cite{DS/FMU/IED/DTD006},
 and also requires those files indicated as preceding it in the 
@@ -151,15 +159,15 @@ None known.
 \label{Inconsistent}
 There are three activities we sometimes wish to do in uninterruptable combinations.
 Interrupts might be, for instance, due to the user pressing Control-C, or the program running out of machine resources.
-\begin{enumerate}
-\item
+\begin{description}
+\item[1]
 ``In place'' modification of $icl'THEORY\_INFO$s within the hierarchy, using the fact that the hierarchy is an (imperative-style) array and using array assignment.
-\item
+\item[2]
 Changes to the current state, other than ``in place''. 
 In particular, modifications to the type and constructor environments $ty\_env$ and $con\_env$.
-\item
+\item[3]
 Assignments to the current theory address, to update the theory rather than change the theory that is current.
-\end{enumerate}
+\end{description}
 If combinations of these were interrupted they might lead to some of the following:
 \begin{itemize}
 \item
@@ -185,17 +193,20 @@ If the $inscope$ fields are inconsistent with the type and constant environments
 then this will give rise to the same problems as if those are
 inconsistent with the theory's contents.
 \end{itemize}
-These problems could occur in the following functions:
+These problems could occur in the following functions,
+the numbers in brackets refer to the kind of changes made: 1, 2, or 3.
 
 \begin{tabular}{| l | p{4.7in}|}\hline
 Function & Combination \\ \hline
-$icl'open\_theory$ & Multiple ``in place'' modifications to the hierarchy and environments, and a change of address for the current theory: but all made safe by using a copy of the current hierarchy(1,2). \\
+$icl'open\_theory$ & Multiple ``in place'' modifications to the hierarchy and environments, and a change of address for the current theory(1,2). \\
 $icl'delete\_theory$ & Multiple ``in place'' modifications to the hierarchy: the deleted theory, and its parents. Can also leave
-some garbage if interrupted(1,2). \\
+some garbage if interrupted(1). \\
 $icl'new\_theory$ & Two ``in place'' modifications to the hierarchy
-(new theory and parent), and a change to the state (the value of $top\_theory$)(1,2). \\
+(new theory and parent)(1). \\
 $icl'duplicate\_theory$ & Multiple ``in place'' modifications to the hierarchy
-(new theory and its parents), and a change to the state (the value of $top\_theory$)(1,2). \\
+(new theory and its parents)(1). \\
+$icl'freeze\_hierarchy$ & Multiple ``in place'' modifications to the hierarchy
+(all theories)(1). \\
 $delete\_extension$ & Deletions from environments and an assignment to current theory address(2,3). \\
 $icl'new\_const$ & Addition to constant environment and an assignment to current theory address(2,3). \\
 $icl'new\_type$ & Addition to type environment and an assignment to current theory address(2,3). \\
@@ -236,6 +247,11 @@ This is indicated by the error message:
 structure ‚icl'Kernel· : icl'Kernel = struct
 =TEX
 \subsection{Utilities}
+=SML
+fun ‚max· (a:int) (b:int) : int = if a > b
+	then a
+	else b;
+=TEX
 The following is a function to give the maximum of a list of numbers.
 The maximum of n empty list is $0$ (could be made a fail).
 =SML
@@ -323,6 +339,7 @@ signature ‚InfiniteArray· = sig
 	val ‚create_ia· : unit -> '_a INFINITE_ARRAY;
 	val ‚update_ia· : ('_a INFINITE_ARRAY * int * '_a) -> unit;
 	val ‚sub_ia· : ('_a INFINITE_ARRAY * int) -> '_a;
+	val ‚length_ia· : '_a INFINITE_ARRAY -> int;
 end;
 Ê
 =TEX
@@ -332,6 +349,7 @@ structure ‚InfiniteArray· : sig
 	val create_ia : unit -> '_a INFINITE_ARRAY;
 	val update_ia : ('_a INFINITE_ARRAY * int * '_a) -> unit;
 	val sub_ia : ('_a INFINITE_ARRAY * int) -> '_a;
+	val length_ia : '_a INFINITE_ARRAY -> int;
 	end = struct
 =TEX
 Introduce the array package:
@@ -342,7 +360,7 @@ Infinite arrays are made of size $sz$ lists - an index picks from the list by in
 and then takes the $index\ div\ sz$'th member of the list
 (0 being the first element of the list).
 =SML
-type '_a ‚INFINITE_ARRAY· = ('_a list) array;
+type '_a ‚INFINITE_ARRAY· = ('_a list) array * int ref;
 =TEX
 Give a single, hidden, source of the size of the array that holds the lists:
 =SML
@@ -351,22 +369,16 @@ val sz = 100;
 Create a new array, using a dummy argument to force the type:
 =SML
 fun ‚create_ia· (():unit): '_a INFINITE_ARRAY = (
-	array (sz, ([] : '_a list))
+	array (sz, ([] : '_a list)),ref 0
 );
 =TEX
 The following is a function to place the value at index given in array.
-The function can ignore some ``gaps'' in the array, but not
-others. 
-We don't expect our use of the package to produce any gaps,
-but it is easier to allow gaps to exist than detect this fact.
-The final $else$ of $aux$ could be modified to
-pad with $vl$ to allow all gaps to be ignored
-at the cost of some spurious values within the array.
-This is in excess to our needs.
+The index can only be to something already in the array,
+or 1 past its end.
 =SML
-fun ‚update_ia· ((arr : '_a INFINITE_ARRAY), 
+fun ‚update_ia· (((arr,len) : '_a INFINITE_ARRAY), 
 		(index: int), 
-		(vl : '_a)) = (
+		(vl : '_a)): unit = (
 let	fun aux (n:int) ([]: '_a list) : '_a list = (
 	if n = 0
 	then [vl]
@@ -376,10 +388,11 @@ let	fun aux (n:int) ([]: '_a list) : '_a list = (
 	then (vl :: x)
 	else (a :: aux (n-1) x));
 in
-	if index < 0
+	if (index < 0) orelse (index > (!len))
 	then error "update_ia" 6070 []
 	else let val imsize = index mod sz;
-		val sublist = (sub(arr, imsize))
+		val sublist = (sub(arr, imsize));
+		val sideeffect = (len := max (1+index) (!len));
 	in
 		update(arr, imsize, (aux (index div sz) sublist))
 	end
@@ -388,8 +401,8 @@ end);
 Subscript the infinite array, giving a failure if the 
 entry does not exist:
 =SML
-fun ‚sub_ia· ((arr : '_a INFINITE_ARRAY), index : int) = ((
-	if index < 0
+fun ‚sub_ia· (((arr, len) : '_a INFINITE_ARRAY), index : int):'_a = ((
+	if index < 0 orelse (index >= (!len))
 	then error "sub_ia" 6070 []
 	else (nth (index div sz) (sub(arr, index mod sz))))
 	handle complaint =>
@@ -397,6 +410,9 @@ fun ‚sub_ia· ((arr : '_a INFINITE_ARRAY), index : int) = ((
 		then error "sub_ia" 6070 []
 		else reraise complaint (area_of complaint)
 );
+=TEX
+=SML
+fun ‚length_ia· ((arr, len) : '_a INFINITE_ARRAY) : int = (!len);
 =TEX
 =SML
 end; (* of structure InfiniteArray *)
@@ -450,11 +466,9 @@ and
 		name : string}
 and
 =TEX
-In a hierarchy there will be theories with internal names $0$ to $top\_theory$, though some may have the status ``deleted''.
+In a hierarchy there will be theories with internal names $0$ to length of array, though some may have the status ``deleted''.
 =SML
-	‚icl'HIERARCHY· = ‚hier· of {
-		lookup : icl'THEORY_INFO INFINITE_ARRAY,
-		top_theory : int}
+	‚icl'HIERARCHY· = ‚hier· of icl'THEORY_INFO INFINITE_ARRAY
 =TEX
 There now follows the body of the $abstype$:
 =SML
@@ -557,7 +571,7 @@ local
 	val dummy = update_ia(init_hier_ia, 0, min_ti);
 
 	val init_hier : icl'HIERARCHY = 
-		(hier {lookup = init_hier_ia, top_theory = 0});
+		(hier init_hier_ia);
 in
 	val ‚current· : STATE ref = ref {
 		hierarchy = init_hier,
@@ -753,14 +767,14 @@ as this is not required by the specification.
 =SML
 fun ‚check_thm· (caller: string)
 	(thm as Thm {level = level, theory=theory, ...} : THM) : unit = (
-let	val {hierarchy = hier{lookup=lookup, top_theory=top_theory},
+let	val {hierarchy = hier lookup,
 		inconsistent=inconsistent,...} = !current;
 
 	val Thy{name = iname, del_levels = del_levels, ...} = !theory;
 	
 	val dummy = if inconsistent
 		then error caller 6083 []
-		else if (0 <= iname) andalso (iname <= top_theory)
+		else if (0 <= iname) andalso (iname < length_ia lookup)
 		then ()
 		else error caller 6072 [fn () => string_of_thm thm,
 			fn () => "Internal "^string_of_int iname];
@@ -806,12 +820,12 @@ in
 	name
 end);
 =TEX
-Check that an internal name falls within the range 0 to $top\_theory$, failing if not, with area being the $caller$ parameter:
+Check that an internal name falls within the range 0 to length of array, failing if not, with area being the $caller$ parameter:
 =SML
 fun ‚check_internal_theory_name· (nm : int) (caller : string) : unit = (
-let	val hier{top_theory=top_theory,...} = current_hierarchy();
+let	val hier lookup = current_hierarchy();
 in
-	if (0 <= nm) andalso (nm <= top_theory)
+	if (0 <= nm) andalso (nm < length_ia lookup)
 	then ()
 	else fail caller 6043 [fn () => string_of_int nm]
 end);
@@ -821,8 +835,7 @@ The error raised is stated to be from the calling function, denoted by $caller$.
 A deleted theory's name cannot be found by these means.
 =SML
 fun ‚internal_theory_name· (nm : string) (caller : string): int = (
-let	val hier{lookup=lookup, top_theory=top_theory} = 
-		current_hierarchy();
+let	val hier lookup = current_hierarchy();
 	fun aux ~1 = fail caller 6035 [fn () => nm]
 	| aux n = (let val (ThyInfo{name=sname,contents=contents,status=status,...}) 
 			= sub_ia(lookup, n);
@@ -837,7 +850,7 @@ let	val hier{lookup=lookup, top_theory=top_theory} =
 in
 	if nm = "-"
 	then icl'get_current_theory_name ()
-	else aux top_theory
+	else aux (length_ia lookup - 1)
 end);
 =TEX
 The following is a test of whether the given theory name present at all.
@@ -845,8 +858,7 @@ A deleted theory will not be noted by this function.
 There is always a current theory, ``-''.
 =SML
 fun ‚is_theory_name· (nm : string) : bool = (
-let	val hier{lookup=lookup, top_theory=top_theory} = 
-		current_hierarchy();
+let	val hier lookup = current_hierarchy();
 	fun aux ~1 = false
 	| aux n = (let val (ThyInfo{name=sname,status=status,...}) = sub_ia(lookup, n);
 		in
@@ -855,13 +867,13 @@ let	val hier{lookup=lookup, top_theory=top_theory} =
 		end)
 in
 	(nm = "-")
-	orelse aux top_theory
+	orelse aux (length_ia lookup - 1)
 end);
 =TEX
 Return the theory contents:
 =SML
 fun ‚get_theory_contents· (n : int) : icl'THEORY = (
-let	val hier{lookup=lookup, ...} = current_hierarchy();
+let	val hier lookup = current_hierarchy();
 	val (ThyInfo{contents=contents,...}) = sub_ia(lookup, n);
 in
 	!contents
@@ -870,7 +882,7 @@ end);
 Return the current theory name as a string:
 =SML
 fun ‚get_current_theory_name· (():unit):string = (
-let	val hier{lookup=lookup, ...} = current_hierarchy();
+let	val hier lookup = current_hierarchy();
 	val Thy{name = iname,...} = current_theory();
 	val (ThyInfo{name=ename,...}) = sub_ia(lookup, iname);
 in
@@ -882,7 +894,7 @@ We give a check that the current theory status allows writing, with various fail
 Note that the current theory should never have status $TSDeleted$.
 =SML
 fun ‚check_c_writable· (caller : string) : unit = (
-let	val {hierarchy = hier{lookup=lookup, ...},
+let	val {hierarchy = hier lookup,
 		theory = theory, inconsistent=inconsistent,...} = !current;
 
 	val Thy{name = iname,...} = !theory;
@@ -904,7 +916,7 @@ A function to return all of a theory's ancestors
 (including itself):
 =SML
 fun ‚theory_ancestors· (nm : int) : int list = (
-let	val hier{lookup=lookup, ...} = current_hierarchy();
+let	val hier lookup = current_hierarchy();
 
 	fun lparents (n : int) = (
 		let	val ThyInfo{contents=contents,...} = sub_ia(lookup,n);
@@ -927,7 +939,7 @@ A function to return all of a theory's descendants
 (but not including itself):
 =SML
 fun ‚theory_descendants· (nm : int) : int list = (
-let	val hier{lookup=lookup, ...} = current_hierarchy();
+let	val hier lookup = current_hierarchy();
 
 	fun lchildren (n : int) = (
 		let val ThyInfo{children=children,...} = sub_ia(lookup,n);
@@ -955,7 +967,7 @@ current theory?
 fun ‚const_in_anc_or_des· (nm : string) : THEORY_SCOPE = (
 let	val iname =icl'get_current_theory_name();
 	
-	val hier{lookup=lookup, ...} = current_hierarchy();
+	val hier lookup = current_hierarchy();
 
 	fun const_in_thy (nm : string) (thry : int) : bool = (
 	let val ThyInfo{contents = contents,...} = sub_ia(lookup, thry);
@@ -978,7 +990,7 @@ current theory?
 fun ‚type_in_anc_or_des· (nm : string) : THEORY_SCOPE = (
 let	val iname = icl'get_current_theory_name();
 	
-	val hier{lookup=lookup, ...} = current_hierarchy();
+	val hier lookup = current_hierarchy();
 
 	fun type_in_thy (nm : string) (thry : int) : bool = (
 	let	val ThyInfo{contents = contents,...} = sub_ia(lookup, thry);
@@ -999,7 +1011,7 @@ end);
 local
 	fun ‚modify_child· (parents: int list) 
 		(modify : int list -> int list) : unit = (
-	let	val hier{lookup=lookup, ...} = current_hierarchy();
+	let	val hier lookup = current_hierarchy();
 		fun aux (a :: x) = (
 		let val ThyInfo{status = status,
 			inscope = inscope,
@@ -1045,10 +1057,9 @@ As it is working through references it is misleading to
 return any value.
 =SML
 fun ‚map_hierarchy· (f: (int * icl'THEORY_INFO) -> icl'THEORY_INFO) 
-	(hir : icl'HIERARCHY) : unit = (
-let	val hier{lookup=lookup, top_theory=top_theory} = 
-		hir;
-	fun aux	n = (if n <= top_theory
+	(hier lookup : icl'HIERARCHY) : unit = (
+let	val leng = length_ia lookup;
+	fun aux	n = (if n < leng
 		then (
 		let val old_ti = sub_ia(lookup, n)
 		in
@@ -1063,10 +1074,9 @@ end);
 Now a function to copy a hierarchy into a new one:
 Note that when creating new hierarchies by copying we must copy from theory information 0 first, and then copy up to the number of hierarchies.
 =SML
-fun ‚copy_hierarchy· (old : icl'HIERARCHY) : icl'HIERARCHY = (
-let	val hier{lookup=old_lookup, top_theory=top_theory} = 
-		old;
-	val new_lookup = create_ia (); 
+fun ‚copy_hierarchy· (hier old_lookup : icl'HIERARCHY) : icl'HIERARCHY = (
+let	val new_lookup = create_ia (); 
+	val top_theory = length_ia old_lookup - 1;
 	fun aux	n = (if n <= top_theory
 		then (
 		let	val old_ti = sub_ia(old_lookup, n);
@@ -1077,7 +1087,7 @@ let	val hier{lookup=old_lookup, top_theory=top_theory} =
 		else ());
 in
 	(aux 0;
-	hier{lookup=new_lookup, top_theory=top_theory})
+	hier new_lookup)
 end);
 =TEX
 We need a test to see if $hir1$ hierarchy is an ``ancestor'' of $hir2$.
@@ -1087,15 +1097,9 @@ except that the children theories field may be different.
 As new theories are always added to the ``tail'' of the theory hierarchy array we need only test up to the top theory of the ``ancestor''
 hierarchy.
 =SML
-fun ‚is_hierarchy_ancestor· (hir1 : icl'HIERARCHY)
-	(hir2 : icl'HIERARCHY) : bool = (
-let	val hier{lookup=lookup1, top_theory=top_theory1} = 
-		hir1;
-
-	val hier{lookup=lookup2, top_theory=top_theory2} = 
-		hir2;
-
-	fun aux ~1 = true
+fun ‚is_hierarchy_ancestor· (hier lookup1 : icl'HIERARCHY)
+	(hier lookup2 : icl'HIERARCHY) : bool = (
+let	fun aux ~1 = true
 	| aux n = (
 	let	val (ThyInfo{status = status1,
 			inscope = inscope1,
@@ -1117,8 +1121,8 @@ let	val hier{lookup=lookup1, top_theory=top_theory1} =
 		aux (n-1)
 	end)
 in
-	(top_theory1 <= top_theory2) andalso
-	aux top_theory1
+	(length_ia lookup1 <= length_ia lookup2) andalso
+	aux (length_ia lookup1 - 1)
 end);
 =TEX
 \section{THEORY AND HIERARCHY FUNCTIONS OF ADT THM}
@@ -1146,12 +1150,13 @@ let	val {hierarchy=hierarchy, theory=theory, ty_env=ty_env,
 				children = children,
 				name = name});
 
-	val hcopy = copy_hierarchy hierarchy;
-
-	val dummy = map_hierarchy make_anc hcopy; (* spec. step 1 *)
-
 in
-	current := {hierarchy = hcopy, theory=theory, ty_env=ty_env, 
+	current := {hierarchy = hierarchy, theory=theory, ty_env=ty_env, 
+		con_env=con_env, inconsistent=true, sealed=sealed};
+
+	map_hierarchy make_anc hierarchy; (* spec. step 1 *)
+
+	current := {hierarchy = hierarchy, theory=theory, ty_env=ty_env, 
 		con_env=con_env, inconsistent=inconsistent, sealed=sealed};
 		(* spec. step 2 *)
 	() 
@@ -1208,8 +1213,7 @@ end
 Give an interface presentation of the current hierarchy:
 =SML
 fun ‚icl'get_hierarchy· (():unit) : HIERARCHY = (
-let	val hier{lookup=lookup, top_theory=top_theory} = 
-		current_hierarchy();
+let	val hier lookup = current_hierarchy();
 	fun aux ~1 = [] 
 	| aux n = (let	val (ThyInfo{status = status,
 				inscope = inscope,
@@ -1226,7 +1230,7 @@ let	val hier{lookup=lookup, top_theory=top_theory} =
 			:: aux (n-1)
 		end)
 in
-	aux top_theory
+	aux (length_ia lookup -1)
 end);
 =TEX
 The bulk of the following is taken up with ensuring
@@ -1236,7 +1240,8 @@ fun ‚icl'seal_hierarchy· (() : unit) : unit = (
 let	val {hierarchy=hierarchy, theory=theory, ty_env=ty_env, 
 		con_env=con_env, inconsistent=inconsistent,sealed=sealed} = !current;
 
-	val hier{lookup=lookup, top_theory=top_theory} = hierarchy;
+	val hier lookup = hierarchy;
+	val top_theory = length_ia lookup - 1;
 
 	val cthynm = icl'get_current_theory_name ();
 
@@ -1274,7 +1279,7 @@ but the function was useful in defining utilities needed before this point.
 Return an interface presentation of a theory, based on a string:
 =SML
 fun ‚icl'get_theory_info· (nm : string) : THEORY_INFO = (
-let	val hier{lookup=lookup, ...} = current_hierarchy();
+let	val hier lookup = current_hierarchy();
 
 	val iname = internal_theory_name nm "icl'get_theory_info";
 
@@ -1296,7 +1301,7 @@ end);
 Given a theory name as an integer, return it as a string:
 =SML
 fun icl'get_theory_name (nm : int) : string = (
-let	val hier{lookup=lookup, ...} = current_hierarchy();
+let	val hier lookup = current_hierarchy();
 in
 	check_internal_theory_name nm "icl'get_theory_name";
 	(let val (ThyInfo{name=name,status=status,...}) = sub_ia(lookup, nm)
@@ -1314,10 +1319,10 @@ We give a function to make some theory the current theory.
 Interrupting the body of the main $let$ statement may leave the state with the $inconsistent$ flag set.
 =SML
 fun ‚icl'open_theory· (nm : string) : (int list * int list) = (
-let	val {hierarchy = hierarchy as hier{lookup=lookup, top_theory=top_theory},
+let	val {hierarchy = hierarchy as hier lookup,
 		theory=theory, ty_env=ty_env, con_env=con_env, 
 		inconsistent=inconsistent,sealed=sealed} = !current;
-
+	val top_theory = length_ia lookup - 1;
 	val thyn = internal_theory_name nm "icl'open_theory"; (* spec step 1 *)
 
 	val allp = theory_ancestors thyn;
@@ -1333,13 +1338,6 @@ let	val {hierarchy = hierarchy as hier{lookup=lookup, top_theory=top_theory},
 		children = children,
 		name = name} = sub_ia(lookup,thyn);
 =TEX
-For specification step 2 we take a copy of the current hierarchy to modify, and this will
-be put back in place.
-This may create more garbage than modifiing the current hierarchy in place,
-but does help to ensure consistency by using a single assignment.
-=SML
-	val chierarchy as hier{lookup=clookup, ...} = copy_hierarchy hierarchy;
-=TEX
 The following auxiliary function takes everything necessary out of scope, sets all the inscope fields to
 their correct value.
 =SML
@@ -1349,11 +1347,11 @@ their correct value.
 			inscope = inscope1,
 			contents = contents1,
 			children = children1,
-			name = name1} = sub_ia(clookup,n)
+			name = name1} = sub_ia(lookup,n)
 		in
 		(if (n mem allp) orelse (not inscope1)
 		then (aux_out (n - 1) out_of_scope tece)
-		else (update_ia(clookup,n,
+		else (update_ia(lookup,n,
 			ThyInfo{status = status1,
 				inscope = false,
 				contents = contents1,
@@ -1372,10 +1370,10 @@ their correct value.
 			inscope = inscope1,
 			contents = contents1,
 			children = children1,
-			name = name1} = sub_ia(clookup,n)
+			name = name1} = sub_ia(lookup,n)
 		in
 		(if (n mem allp) andalso (not inscope1)
-		then (update_ia(clookup,n,
+		then (update_ia(lookup,n,
 			ThyInfo{status = status1,
 				inscope = true,
 				contents = contents1,
@@ -1386,20 +1384,27 @@ their correct value.
 		else (aux_in (n - 1) into_scope tece))
 		end);
 =TEX
+We now need to protect the changes to the hierarchy:
+=SML
+in
+	(current := {hierarchy=hierarchy, theory=theory, ty_env=ty_env,
+		con_env=con_env, inconsistent=true,sealed=sealed};
+=TEX	
 Now use these auxiliary functions to gain the theories moved in and out of scope and the
 new type and constructor environments, after the opening.
 Notice we must take everything necessary out of scope before we put anything into scope.
 =SML
+	let
 	val (outs, tece) = aux_out top_theory [] (ty_env, con_env);
 	val (ins, (te,ce)) = aux_in top_theory [] tece;
 =TEX
-Then we can do a single assignment modification of the state:
 =SML
-in	
-	current := {hierarchy=chierarchy, theory=contents, ty_env=te, 
+	in
+	(current := {hierarchy=hierarchy, theory=contents, ty_env=te, 
 		con_env=ce, inconsistent=inconsistent,sealed=sealed};
 		(* spec step 3, 4 *)
-	(ins, outs)
+	(ins, outs))
+	end)
 end);
 =TEX
 The following is a function to delete theories.
@@ -1407,7 +1412,7 @@ We modify the current hierarchy ``in place'' rather than taking a copy.
 If it is interrupted then the state may be left with the $inconsistent$ flag set.
 =SML
 fun ‚icl'delete_theory· (nm : string) : unit = (
-let	val {hierarchy = hierarchy as hier{lookup=lookup, ...},
+let	val {hierarchy = hierarchy as hier lookup,
 		theory=theory, ty_env=ty_env, con_env=con_env, 
 		inconsistent=inconsistent,sealed=sealed} = !current;
 
@@ -1455,17 +1460,16 @@ Interrupting the body of the main $let$ statement may leave the state with the $
 fun ‚icl'new_theory· (nm : string) : int = (
 	if (is_theory_name nm)	(* spec. step 1 *)
 	then fail "icl'new_theory" 6040 [fn () => nm]
-	else let val {hierarchy = hierarchy as hier{lookup=lookup, top_theory=top_theory}, 
+	else let val {hierarchy = hierarchy as hier lookup, 
 		theory=theory, ty_env=ty_env, con_env=con_env, 
 		inconsistent=inconsistent,sealed=sealed} = !current;
-
 	val dummy = if inconsistent
 		then error "icl'delete_theory" 6083 []
 		else ();
 
 	val cthy = icl'get_current_theory_name();
 
-	val ntop_theory = top_theory+1;
+	val ntop_theory = length_ia lookup;
 
 	val nthy = ref (empty_theory ntop_theory [cthy]); (* spec. step 2 *)
 
@@ -1480,7 +1484,7 @@ in
 		con_env=con_env, inconsistent=true,sealed=sealed};
 	update_ia(lookup,ntop_theory,nti); (* spec step 3 *)
 	add_child ntop_theory [cthy];
-	current := {hierarchy = hier{lookup=lookup, top_theory=ntop_theory},
+	current := {hierarchy = hierarchy,
 		theory=theory, ty_env=ty_env, con_env=con_env, 
 		inconsistent=inconsistent,sealed=sealed}; (* spec. step 4 *)
 	ntop_theory
@@ -1498,7 +1502,7 @@ let	val dummy = (check_c_writable "icl'new_parent";
 
 	val pthy = internal_theory_name nm "icl'new_parent";
 
-	val {hierarchy=hierarchy as hier{lookup=lookup, ...}, 
+	val {hierarchy=hierarchy as hier lookup, 
 		theory=theory, ty_env=cty_env,
 		con_env=ccon_env, inconsistent=inconsistent,sealed=sealed}
 		 = !current;
@@ -1608,7 +1612,7 @@ We work by modifying the current hierarchy ``in place''.
 fun ‚icl'lock_theory· (nm : string): unit = (
 let	val thyn = internal_theory_name nm "icl'lock_theory"; (* spec. step 1 *)
 
-	val hier{lookup=lookup, ...} = current_hierarchy();
+	val hier lookup = current_hierarchy();
 	
 	val ThyInfo{status = status,
 		inscope = inscope,
@@ -1635,7 +1639,7 @@ We work by modifying the current hierarchy ``in place''.
 fun ‚icl'unlock_theory· (nm : string): unit = (
 let	val thyn = internal_theory_name nm "icl'unlock_theory"; (* spec. step 1 *)
 
-	val hier{lookup=lookup, ...} = current_hierarchy();
+	val hier lookup = current_hierarchy();
 	
 	val ThyInfo{status = status,
 		inscope = inscope,
@@ -1660,10 +1664,9 @@ The following is a function to create a duplicate theory, except it has no child
 Interrupting the body of the main $let$ statement may leave the state with the $inconsistent$ flag set.
 =SML
 fun ‚icl'duplicate_theory· (fromnm : string) (tonm : string) : int = (
-let	val {hierarchy = hierarchy as hier{lookup=lookup, top_theory=top_theory},
+let	val {hierarchy = hierarchy as hier lookup,
 		theory=theory, ty_env=cty_env, con_env=ccon_env, 
 		inconsistent=inconsistent,sealed=sealed} = !current;
-
 	val dummy = if inconsistent
 		then error "icl'duplicate_theory" 6083 []
 		else if (is_theory_name tonm)
@@ -1678,7 +1681,7 @@ let	val {hierarchy = hierarchy as hier{lookup=lookup, top_theory=top_theory},
 		then ()
 		else fail "icl'duplicate_theory" 6042 [fn () => fromnm];
 
-	val ntop_theory = top_theory+1;
+	val ntop_theory = length_ia lookup;
 
 	val ThyInfo{status = status1,
 		inscope = inscope1,
@@ -1723,7 +1726,7 @@ in
 		con_env=ccon_env, inconsistent=true,sealed=sealed};
 	update_ia(lookup,ntop_theory,toti);
 	add_child ntop_theory parents;
-	current := {hierarchy = hier{lookup=lookup, top_theory=ntop_theory},
+	current := {hierarchy = hierarchy,
 		theory=theory, ty_env=cty_env, con_env=ccon_env, 
 		inconsistent=inconsistent,sealed=sealed};
 	ntop_theory
@@ -1746,7 +1749,7 @@ end);
 Get the current theory's status:
 =SML
 fun ‚get_current_theory_status· (() : unit) : THEORY_STATUS = (
-let	val {hierarchy = hier{lookup=lookup,...}, theory = theory, ...} = !current;
+let	val {hierarchy = hier lookup, theory = theory, ...} = !current;
 
 	val Thy{name = iname,...} = !theory;
 
@@ -1834,7 +1837,7 @@ The following is a function to delete the last extension to the current theory.
 Interrupting the body of the main $let$ statement may leave the state with the $inconsistent$ flag set.
 =SML
 fun ‚icl'delete_extension· (():unit) : int = (
-let	val {hierarchy = hierarchy as hier{lookup=lookup, ...}, 
+let	val {hierarchy = hierarchy as hier lookup, 
 		theory=theory, ty_env=cty_env, con_env=ccon_env, 
 		inconsistent=inconsistent,sealed=sealed} = !current;
 
