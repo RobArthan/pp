@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.55 2004/08/09 16:11:20 rda Exp rda $ 
+ * $Id: search.c,v 2.56 2004/08/17 15:04:07 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -53,8 +53,7 @@ typedef struct {
 		shell_w,
 		manager_w,
 		search_w,
-		replace_w,
-		default_focus_w;
+		replace_w;
 } SearchData;
 /*
  * The following represents a substring of a C string, e.g.,
@@ -228,6 +227,9 @@ Boolean add_search_tool(Widget text_w)
 	if((search_data.shell_w) != NULL) {
 		XtManageChild(search_data.manager_w);
 		XtPopup(search_data.shell_w, XtGrabNone);
+		XmProcessTraversal(search_data.search_w, XmTRAVERSE_CURRENT);
+		XmTextSetInsertionPosition(search_data.search_w,
+				XmTextGetLastPosition(search_data.search_w));
 		return True;
 	}
 
@@ -446,7 +448,6 @@ Boolean add_search_tool(Widget text_w)
 	search_data.manager_w = paned;
 	search_data.search_w = search_text;
 	search_data.replace_w = replace_text;
-	search_data.default_focus_w = search_forwards_btn;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set up the text windows in the search dialog as selection sources
@@ -527,18 +528,6 @@ Boolean add_search_tool(Widget text_w)
 	attach_edit_popup(replace_text, replace_text_edit_menu_items);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Initialise search string:
- * Don't use callback for search string, since there
- * may not be a selection and don't want error message.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-	if(pattern = XmTextGetSelection(text_w)) {
-		XmTextSetString(search_text, pattern);
-		XmTextShowPosition(search_text, strlen(pattern));
-		XtFree(pattern);
-	}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
  *set up text widget translations
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
@@ -589,7 +578,7 @@ Boolean add_search_tool(Widget text_w)
 	}
 	XtFree((char*)children_before);
 
-	XmProcessTraversal(search_forwards_btn, XmTRAVERSE_CURRENT);
+	XmProcessTraversal(search_text, XmTRAVERSE_CURRENT);
 
 	return True;
 }
@@ -615,7 +604,6 @@ static void dismiss_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
-	XmProcessTraversal(cbdata->default_focus_w, XmTRAVERSE_CURRENT);
 	XtPopdown(cbdata->shell_w);
 }
 
@@ -640,7 +628,6 @@ static void search_forwards_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
-	cbdata->default_focus_w = w;
 	CHECK_MAP_STATE(cbdata)
 	(void) search_either(w, cbdata, FORWARDS);
 }
@@ -653,7 +640,6 @@ static void search_backwards_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
-	cbdata->default_focus_w = w;
 	CHECK_MAP_STATE(cbdata)
 	(void) search_either(w, cbdata, BACKWARDS);
 }
@@ -717,7 +703,6 @@ static void replace_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
-	cbdata->default_focus_w = w;
 	CHECK_MAP_STATE(cbdata)
 	(void) replace_selection(w, cbdata);
 }
@@ -805,7 +790,6 @@ static void replace_all_cb(
 	Substring ss;
 	NAT start_point;
 	char *pattern, *text_buf, *replacement, *all_replaced;
-	cbdata->default_focus_w = w;
 	CHECK_MAP_STATE(cbdata)
 	pattern = XmTextGetString(cbdata->search_w);
 	text_buf = XmTextGetString(cbdata->text_w);
@@ -864,7 +848,6 @@ static void replace_search_backwards_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
-	cbdata->default_focus_w = w;
 	CHECK_MAP_STATE(cbdata)
 	if(replace_selection(w, cbdata)) {
 		(void) search_either(w, cbdata, BACKWARDS);
@@ -880,7 +863,6 @@ static void replace_search_forwards_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
-	cbdata->default_focus_w = w;
 	CHECK_MAP_STATE(cbdata)
 	if(replace_selection(w, cbdata)) {
 		(void) search_either(w, cbdata, FORWARDS);
@@ -897,7 +879,6 @@ static void search_set_cb(
 {
 	SearchData *cbdata = cbd;
 	char *sel;
-	cbdata->default_focus_w = w;
 	if ((sel = get_selection(cbdata->shell_w, no_selection_search)) == NULL) {
 		return;
 	}
@@ -915,7 +896,6 @@ static void replace_set_cb(
 {
 	SearchData *cbdata = cbd;
 	char *sel;
-	cbdata->default_focus_w = w;
 	if ((sel = get_selection(cbdata->shell_w, no_selection_replace)) == NULL) {
 		return;
 	}
@@ -932,7 +912,6 @@ static void empty_search_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
-	cbdata->default_focus_w = w;
 	XmTextSetString(cbdata->search_w, "");
 }
 
@@ -945,7 +924,6 @@ static void empty_replace_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
-	cbdata->default_focus_w = w;
 	XmTextSetString(cbdata->replace_w, "");
 }
 
