@@ -95,7 +95,7 @@ val Ûcurrent_levelÝ : unit -> int =
 The following functions are used to identify names for web clauses and are used in the naming of VCs.
 
 =SML
-fun Ûk_slot_nameÝ ({content, label} : K_SLOT) : string = label;
+fun Ûk_slot_nameÝ ({content, label} : K_SLOT) : string = "kslot"^label;
 fun Ûpackage_declaration_nameÝ
 	({name, visible_decs, private_decs} : DECLARATION PACKAGE_DECLARATION)
 	: string = (
@@ -1231,7 +1231,7 @@ val Ûscript_nameÝ : string ref = ref script_name0;
 =TEX
 The global state may be set from a given value of type $CN\_STATE$ using the following function:
 =SML
-fun Ûset_cn_stateÝ ({
+fun Ûset_z_generator_stateÝ ({
 		pack_env = new_pack_env,
 		subunit_env = new_subunit_env,
 		dec_env = new_dec_env,
@@ -1240,7 +1240,7 @@ fun Ûset_cn_stateÝ ({
 		repl_env = new_repl_env,
 		spark_prog = new_spark_prog,
 		script_name = new_script_name
-	} : CN_STATE) : unit = (
+	} : Z_GENERATOR_STATE) : unit = (
 		pack_env := new_pack_env;
 		subunit_env := new_subunit_env;
 		dec_env := new_dec_env;
@@ -1252,7 +1252,7 @@ fun Ûset_cn_stateÝ ({
 );
 =TEX
 =SML
-fun Ûget_cn_stateÝ (() : unit) : CN_STATE = (
+fun Ûget_z_generator_stateÝ (() : unit) : Z_GENERATOR_STATE = (
 		{pack_env = !pack_env,
 		subunit_env = !subunit_env,
 		dec_env = !dec_env,
@@ -1781,7 +1781,9 @@ fun Ûnew_parent_subunit_theoryÝ (unit_name : string, x : PROPER_BODY) : unit = (
 =TEX
 \subsection{Diagnostic Aids}
 =SML
-val Ûdiag_cn_stateÝ : CN_STATE ref = ref (get_cn_state());
+val Ûdiag_z_generator_stateÝ : Z_GENERATOR_STATE ref = (
+	ref (get_z_generator_state())
+);
 val Ûdiag_web_clauseÝ : WEB_CLAUSE ref = ref (WCCompilation []);
 val Ûdiag_vc_argsÝ : (SPECLAB * STATEMENT) list ref = ref [];
 =TEX
@@ -4383,14 +4385,14 @@ fun Ûget_replacementÝ (lab : string) : REPLACEMENT OPT = (
 =TEX
 =SML
 fun Ûcn_z_generatorÝ (w : WEB_CLAUSE) : unit = (
-	let	val save_cn_state = get_cn_state();
+	let	val save_zg_state = get_z_generator_state();
 		val save_ti_cxt = TypeInference.get_ti_context();
 	in	diag_vc_args := [];
 		diag_web_clause := w;
 		(do_web_clause w)
 		handle ex => (
-			diag_cn_state := get_cn_state();
-			set_cn_state save_cn_state;
+			diag_z_generator_state := get_z_generator_state();
+			set_z_generator_state save_zg_state;
 			TypeInference.set_ti_context save_ti_cxt;
 			raise ex
 		);
@@ -4400,7 +4402,7 @@ fun Ûcn_z_generatorÝ (w : WEB_CLAUSE) : unit = (
 =TEX
 =SML
 fun Ûrestart_cn_z_generatorÝ (():unit) : unit = (
-	set_cn_state{pack_env = pack_env0,
+	set_z_generator_state{pack_env = pack_env0,
 		subunit_env = subunit_env0,
 		dec_env = dec_env0,
 		spec_env = spec_env0,
@@ -4413,7 +4415,7 @@ fun Ûrestart_cn_z_generatorÝ (():unit) : unit = (
 =TEX
 =SML
 fun Ûinit_cn_z_generatorÝ (script_name : string) : unit = (
-	set_cn_state{pack_env = !pack_env,
+	set_z_generator_state{pack_env = !pack_env,
 		subunit_env = !subunit_env,
 		dec_env = dec_env0,
 		spec_env = spec_env0,
@@ -4425,12 +4427,48 @@ fun Ûinit_cn_z_generatorÝ (script_name : string) : unit = (
 );
 =TEX
 =SML
-fun Ûnew_scriptÝ (script_name : string) : unit = (
-	open_theory "cn";
-	new_theory script_name;
-	CaseIndependence.reset_names ();
-	init_cn_z_generator script_name
-);
+abstype ÛCN_STATEÝ = CNState of Z_GENERATOR_STATE with
+
+	val Ûinitial_cn_stateÝ : CN_STATE = (
+		CNState {pack_env = pack_env0,
+			subunit_env = subunit_env0,
+			dec_env = dec_env0,
+			spec_env = spec_env0,
+			blocks = env0,
+			repl_env = repl_env0,
+			spark_prog = spark_prog0,
+			script_name = ""}
+	);
+
+	fun Ûnew_scriptÝ {	name : string,
+			state = CNState zg_state : CN_STATE} : unit = (
+		let	val old_state = get_z_generator_state ();
+			val thy = get_current_theory_name();
+		in
+		(	set_z_generator_state zg_state;
+			open_theory "cn";
+			new_theory name;
+			CaseIndependence.reset_names ();
+			init_cn_z_generator name
+		) handle ex => (
+			set_z_generator_state old_state;
+			open_theory thy;
+			reraise ex "new_script"
+			)
+		end		
+	);
+
+	fun Ûget_cn_stateÝ (() : unit) : CN_STATE = (
+		CNState (get_z_generator_state())
+	);
+
+	fun Ûset_cn_stateÝ (CNState zg_state : CN_STATE) : unit = (
+		set_z_generator_state zg_state;
+		(open_theory o #script_name) zg_state
+			handle Fail _ => open_theory "cn"
+	);
+
+end (* ... abstype *);
 =TEX
 \section{EPILOGUE}
 =SML
