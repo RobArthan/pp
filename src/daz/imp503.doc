@@ -99,9 +99,11 @@ This removes the need for various special cases and type conversion functions.
 \item[Issue1.107] Some functions moved elsewhere for better modularity and ease of system build.
 \item[Issue 1.108] fixed bug in reduction function for exit when statements.
 \item[Issue 1.109] fixed bug in reduction function for use type clauses.
+\item[Issue 1.110] R0079: assertions (added new reduction functions and accommodated changed data types).
 \end{description}
 \subsection{Changes Forecast}
 None.
+
 \pagebreak
 \section{GENERAL}
 \subsection{Scope}
@@ -1486,34 +1488,38 @@ fun €red_statement1› (Parsed(PPKSlot k)) = (
 |   red_statement1 _ =
         stack_error "red_statement1";
 
-fun €red_statement2› (Parsed(PPStatement(STSpecNoIvars{spec=spec, ...}))) = (
-    PPStatement(STSpecNoIvars{spec=spec, label=push_label()}))
+fun €red_statement2› (Parsed(PPStatement(STSpecNoIvars{spec=spec, is_assertion, ...}))) = (
+    PPStatement(STSpecNoIvars{spec=spec, label=push_label(), is_assertion = is_assertion}))
 |   red_statement2 _ = stack_error "red_statement2";
 
-fun €red_statement3› (Parsed(PPStatement(STSpecNoIvars{spec=spec, ...})))
+fun €red_statement3› (Parsed(PPStatement(STSpecNoIvars{spec=spec, is_assertion, ...})))
 			(Parsed(PPId label)) = (
     last_label := label;
-    PPStatement(STSpecNoIvars{spec=spec, label=label}))
+    PPStatement(STSpecNoIvars{spec=spec, label=label, is_assertion = is_assertion}))
 |   red_statement3 _ _ = stack_error "red_statement3";
 
 fun €red_statement4› _ (Token ((LCZ,CNZ z1), _)) _
-    (Parsed(PPStatement(STSpecNoIvars {spec=s, ...}))) = (
+    (Parsed(PPStatement(STSpecNoIvars {spec=s, is_assertion, ...}))) = (
 let	val ns_ts = process_con_z_decl z1;
 	fun mk_log_con_def (n, t) = {x = n, t = t, e = mk_z_true};
 in
-	PPStatement(SLogCon{defs = map mk_log_con_def ns_ts, spec=s,
+    if is_assertion
+   then parse_error 503001 "an assertion is not allowed in a logical constant statement"
+   else  PPStatement(SLogCon{defs = map mk_log_con_def ns_ts, spec=s,
 		pre1 = mk_z_true, label=push_label()})
 end)
 |   red_statement4 _ _ _ _ =
         stack_error "red_statement4";
 
 fun €red_statement5› _ (Token ((LCZ,CNZ z1), _)) _
-		(Parsed(PPStatement(STSpecNoIvars {spec=s, ...})))
+		(Parsed(PPStatement(STSpecNoIvars {spec=s, is_assertion, ...})))
 		(Parsed(PPId label)) = (
 let	val ns_ts = process_con_z_decl z1;
 	fun mk_log_con_def (n, t) = {x = n, t = t, e = mk_z_true};
 in
-	(last_label := label;
+    if is_assertion
+   then parse_error 503001 "an assertion is not allowed in a logical constant statement"
+   else	(last_label := label;
 	PPStatement(SLogCon{defs = map mk_log_con_def ns_ts, spec=s,
 		pre1 = mk_z_true, label=label}))
 end)
@@ -1542,7 +1548,7 @@ fun €red_specification_statement1› _ (Token ((LCZ,CNZ z1), _)) _
         val w=process_frame z1;
 in
     PPStatement(STSpecNoIvars{spec={w=w, w0=[], pre=pre, post=post},
-			label=""})
+			label="", is_assertion = false})
 end)
 |   red_specification_statement1 _ _ _ _ _ =
         stack_error "red_specification_statement1";
@@ -1554,7 +1560,7 @@ let val (pre, post) =
     val w=process_frame z1;
 in
     PPStatement(STSpecNoIvars{spec={w=w, w0=[], pre=pre,post=post},
-			label=""})
+			label="", is_assertion = false})
 end)
 |   red_specification_statement2 _ _ _ _ _ =
         stack_error "red_specification_statement2";
@@ -1567,7 +1573,7 @@ fun €red_specification_statement3› _ _ (Token ((LCZ,CNZ z1), _)) _ = (
             |  (Nil, post') => (z_tm_true, post');
 in
     PPStatement(STSpecNoIvars{spec={w=[], w0=[], pre=pre, post=post},
-			label=""})
+			label="", is_assertion = false})
 end)
 |   red_specification_statement3 _ _ _ _ =
         stack_error "red_specification_statement3";
@@ -1577,10 +1583,20 @@ let val (pre, post) =
     (process_predicate z1, z_tm_true);
 in
     PPStatement(STSpecNoIvars{spec={w=[], w0=[], pre=pre,post=post},
-			label=""})
+			label="", is_assertion = false})
 end)
 |   red_specification_statement4 _ _ _ _ =
         stack_error "red_specification_statement4";
+
+fun €red_specification_statement5› _ _ (Token ((LCZ,CNZ z1), _)) _ = (
+let val (pre, post) = 
+    (z_tm_true, process_predicate z1);
+in
+    PPStatement(STSpecNoIvars{spec={w=[], w0=[], pre=pre,post=post},
+			label="", is_assertion = true})
+end)
+|   red_specification_statement5 _ _ _ _ =
+        stack_error "red_specification_statement5";
 =TEX
 =SML
 fun €red_label1› _ (Token ((LCNumericLiteral,CNText n), _)) _ = (
@@ -1878,8 +1894,10 @@ fun €red_procedure_specification_1_1› _ (Token ((_,CNText id), _)) = (
         stack_error "red_procedure_specification_1_1";
 
 fun €red_procedure_specification_1_2› _ (Token ((_,CNText id), _))
-    (Parsed(PPProcedureSpecificationStatement(deps, STSpecNoIvars {spec=s, ...}))) = (
-    PPProcedureSpecification{name=id,formal_part=[],spec=Value s, annotation = [], globals = deps})
+    (Parsed(PPProcedureSpecificationStatement(deps, STSpecNoIvars {spec=s, is_assertion, ...}))) = (
+    if is_assertion
+   then parse_error 503001 "an assertion is not allowed as a subprogram specification statement"
+   else  PPProcedureSpecification{name=id,formal_part=[],spec=Value s, annotation = [], globals = deps})
 |   red_procedure_specification_1_2 _ _ _ =
         stack_error "red_procedure_specification_1_2";
 
@@ -1891,8 +1909,10 @@ fun €red_procedure_specification_1_3› _ (Token ((_,CNText id), _))
 
 fun €red_procedure_specification_1_4› _ (Token ((_,CNText id), _))
     (Parsed (PPFormals f))
-	(Parsed(PPProcedureSpecificationStatement(deps, STSpecNoIvars {spec=s, ...}))) = (
-    PPProcedureSpecification{name=id,formal_part=f,spec=Value s, annotation = [], globals = deps})
+	(Parsed(PPProcedureSpecificationStatement(deps, STSpecNoIvars {spec=s, is_assertion, ...}))) = (
+    if is_assertion
+   then parse_error 503001 "an assertion is not allowed as a subprogram specification statement"
+   else  PPProcedureSpecification{name=id,formal_part=f,spec=Value s, annotation = [], globals = deps})
 |   red_procedure_specification_1_4 _ _ _ _=
         stack_error "red_procedure_specification_1_4";
 
@@ -1906,11 +1926,13 @@ fun €red_procedure_specification
 =SML
 fun €red_procedure_specification_statement1› _ (Token ((LCZ,CNZ z1), _)) 
 	(Parsed(PPStatement(STSpecNoIvars{spec={w=deps, w0=_, pre=pre, post=post},
-			label=""}))) = (
+			label="", is_assertion}))) = (
     let         val w=process_frame z1;
 in
-    PPProcedureSpecificationStatement
-	(deps, STSpecNoIvars{spec={w=w, w0=[], pre=pre, post=post}, label=""})
+    if is_assertion
+   then parse_error 503001 "an assertion is not allowed as a subprogram specification statement"
+   else  PPProcedureSpecificationStatement
+	(deps, STSpecNoIvars{spec={w=w, w0=[], pre=pre, post=post}, label="", is_assertion = false})
 end)
 |   red_procedure_specification_statement1 _ _ _ =
         stack_error "red_procedure_specification_statement1";
@@ -1918,9 +1940,11 @@ end)
 =SML
 fun €red_procedure_specification_statement2› _ 
 	(Parsed(PPStatement(STSpecNoIvars{spec={w=deps, w0=_, pre=pre, post=post},
-			label=""}))) = (
-    PPProcedureSpecificationStatement
-	(deps, STSpecNoIvars{spec={w=[], w0=[], pre=pre, post=post}, label=""})
+			label="", is_assertion}))) = (
+    if is_assertion
+   then parse_error 503001 "an assertion is not allowed as a subprogram specification statement"
+   else   PPProcedureSpecificationStatement
+	(deps, STSpecNoIvars{spec={w=[], w0=[], pre=pre, post=post}, label="", is_assertion = false})
 ) |   red_procedure_specification_statement2 _ _ =
         stack_error "red_procedure_specification_statement2";
 =TEX
@@ -1949,8 +1973,10 @@ fun €red_function_specification_1_1› _ (Token((_,CNText des), _)) _
 
 fun €red_function_specification_1_2› _ (Token((_,CNText des), _)) _
     (Parsed(PPExp n))
-	(Parsed(PPStatement(STSpecNoIvars {spec={w, w0, pre, post}, ...}))) = (
-    PPFunctionSpecification{designator=des,
+	(Parsed(PPStatement(STSpecNoIvars {spec={w, w0, pre, post}, is_assertion, ...}))) = (
+   if is_assertion
+   then parse_error 503001 "an assertion is not allowed as a subprogram specification statement"
+   else  PPFunctionSpecification{designator=des,
 	return=mk_type_mark n,
 	formal_part=[],spec=Value {w=[], w0=[], pre=pre, post=post},
 	globals=w,annotation=[]})
@@ -1967,15 +1993,17 @@ fun €red_function_specification_1_3› _ (Token((_,CNText des), _))
 
 fun €red_function_specification_1_4› _ (Token((_,CNText des), _))
     (Parsed(PPFormals f)) _ (Parsed(PPExp n))
-    (Parsed(PPStatement(STSpecNoIvars {spec={w, w0, pre, post}, ...}))) = (
-    PPFunctionSpecification{designator=des,
+    (Parsed(PPStatement(STSpecNoIvars {spec={w, w0, pre, post}, is_assertion, ...}))) = (
+    if is_assertion
+   then parse_error 503001 "an assertion is not allowed as a subprogram specification statement"
+   else  PPFunctionSpecification{designator=des,
         return=mk_type_mark n,
 	formal_part=f,spec=Value {w=[], w0=[], pre=pre, post=post},
 	globals=w,annotation=[]})
 |   red_function_specification_1_4 _ _ _ _ _ _ =
         stack_error "red_function_specification_1_4";
 
-fun €red_function_specification
+fun €red_function_specification›
     (Parsed(PPFunctionSpecification{designator=des,return=tm,
 			formal_part=f,spec=s,globals=g, ...}))
     (Parsed (PPAnnotation ann)) = (

@@ -1,4 +1,4 @@
-% %Z% $Date: 2002/07/13 11:12:32 $ $Revision: 1.107 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2002/07/15 15:14:35 $ $Revision: 1.108 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -16,7 +16,7 @@
 \TPPtitle{Implementation: Verification Condition Generator}  %% Mandatory field
 \def\TPPheadtitle{Verification Condition Generator}
 \TPPref{ISS/HAT/DAZ/IMP505}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.107 $%
+\def\SCCSversion{$Revision: 1.108 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 \TPPdate{\FormatDate{97/07/18%
@@ -129,6 +129,7 @@ procedure calls.
 some expressions which is not appropriate in general).
 \item[Issue 1.107] R0054: reworked treatment of use clauses.
 \item[Issue 1.108] Moved {\it init\_var} to DTD508.
+\item[Issue 1.109] R0079: assertions (allowed for new syntax and introduced check that assertions don't contain initial variables).
 \end{description}
 
 \subsection{Changes Forecast}
@@ -1128,7 +1129,7 @@ let	val fp as {spec = {w, ...}, ...} = get_proc_spec "proc_call_no_ivars" env fo
 			STSpecNoIvars{spec = {w = [], w0=[],
 					pre=z_quote(pre, Nil),
 					post=z_quote(post, Nil)},
-				label = ""}, asgns);
+				label = "", is_assertion = false}, asgns);
          val a_in = cons_srs ñ(SR_proc_call_end _)® a;
 	val {wp = wp1, side = side1} = wp (xform, a_in, wp_env);
 	val side2 = map (fn p => init_sr ñSR_proc_rng_intro® ([] ô p)) vc_preds;
@@ -1322,8 +1323,9 @@ in the function {\it vcs}.
 The Z Generator (\cite{ISS/HAT/DAZ/IMP507}) makes dummy calls
 to {\it vcs} as necessary to ensure that the check is then made on all specification
 statements in the script. 
+
+In the following, an assertion will have a pre-condition and a default, vacuo
 =SML
-local
 fun Ûadj_stmt_auxÝ (wp as {env, ...} : WP_ENV)
 			(is_first : bool)
 				(s : STATEMENT)
@@ -1332,12 +1334,14 @@ let	val check_inner = adj_stmt_aux wp false;
 	val adj_first = adj_stmt_aux wp is_first;
 in
 	case s of
-		STSpecNoIvars sni =>
-			if	any_initial_variables_z_tm (#pre (#spec sni))
+		STSpecNoIvars {spec, label, is_assertion}  =>
+			if	any_initial_variables_z_tm (#pre spec)
 			then	fail "adjust_statement" 505095 []
-			else if	any_initial_variables_z_tm (#post (#spec sni))
-			then	if	is_first
-				then	SSpecIvars sni
+			else if	any_initial_variables_z_tm (#post spec)
+			then	if	is_assertion
+				then	fail "adjust_statement" 505096 []
+				else if	is_first
+				then	SSpecIvars {spec = spec, label = label}
 				else	fail "adjust_statement" 505091 []
 			else	s
 	|	SLogCon lc =>
@@ -1404,11 +1408,9 @@ in
 	) |	_ => s
 end
 );
-in
 fun Ûadjust_statementÝ (wp : WP_ENV) (st : STATEMENT) : STATEMENT = (
 			adj_stmt_aux wp true st
 );
-end
 =TEX
 =IGN
 val fp= #formal_procs(#in_scope((fst (hd(!CNZGenerator.diag_vc_args)))));
@@ -1778,7 +1780,7 @@ let	fun pass_over_statement (st : STATEMENT) = (
 				check_1_a
 				([name_to_entire_variable_name env name],
 					speclab)
-		)|	STSpecNoIvars {spec as {w,w0,pre,post},label} => (
+		)|	STSpecNoIvars {spec as {w,w0,pre,post},label, is_assertion} => (
 				check_1_a (w, speclab);
 				check_19 env spec
 		)|	STSemicolon (s1,s2) => (
