@@ -1,6 +1,6 @@
 ######################################################################
 #
-#	%Z% $Revision: 1.21 $ $RCSfile: daz.mkf,v $ $Date: 2001/11/07 17:24:00 $
+#	%Z% $Revision: 1.22 $ $RCSfile: daz.mkf,v $ $Date: 2001/11/12 13:32:40 $
 #
 #	makefile for the DAZ Project
 #
@@ -17,7 +17,7 @@ default:
 	@echo "make -f daz.mkf src             - makes the daz source files"
 	@echo "make -f daz.mkf bin             - makes binaries plus what is needed to use them"
 	@echo "make -f daz.mkf doc             - makes daz documents"
-	@echo "make -f daz.mkf daz_test        - runs the tests"
+	@echo "make -f daz.mkf test            - runs the tests"
 	@echo "make -f daz.mkf daz_design_docs - makes ./dazdocs for DERA"
 	@echo "make -f daz.mkf typecheck       - typechecks the Z in the designs"
 
@@ -30,10 +30,32 @@ default:
 PRODUCT=$(PRODNAME)-$(PPVER)
 CWD=$(shell pwd)
 
+# Compiler specifics:
+ifeq ($(PPCOMPILER), POLYML)
+# Architecture type (used as a file-name suffix for images)
+HEAP_SUFFIX=		"polydb"
+# Command to run ML
+RUNML="poly"
+MLDBPFX=""
+# Command to garbage-collect the database
+DBGC="poly"
+DBGCARG="-d"
+else
+ifeq ($(PPCOMPILER), SMLNJ)
+# Architecture type (used as a file-name suffix for images by NJML)
+HEAP_SUFFIX=		$(shell eval `.arch-n-opsys`; echo $$HEAP_SUFFIX)
+# Command to run ML
+RUNML="sml"
+MLDBPFX="@SMLload="
+# Command to garbage-collect the database
+DBGC="echo"
+DBGCARG="database garbage collection not needed with SML/NJ"
+endif
+endif
+
 # Command to run cpp with results on standard output
 CPP=		gcc -E
-# Architecture type
-HEAP_SUFFIX=            $(shell eval `.arch-n-opsys`; echo $$HEAP_SUFFIX)
+
 USER=`/usr/ucb/whoami`
 
 # Directory and file macros
@@ -521,7 +543,7 @@ dazbuilt.ldd: $(DAZLDDFILES)
 
 daz dazbuild: dazbuilt.ldd
 
-daz_test:	$(DAZTTDFILES) $(DAZDBLDD) 
+test:	$(DAZTTDFILES) $(DAZDBLDD) 
 	@-grep 'module' $(DAZTTDFILES)
 	@-grep 'abandoning file' $(DAZTTDFILES)
 	@-grep 'TODO' $(DAZTTDFILES)
@@ -529,10 +551,12 @@ daz_test:	$(DAZTTDFILES) $(DAZDBLDD)
 
 dazbannercmd:
 	echo $(DAZBANNERCMD) | pp -d ./daz
+	$(DBGC) $(DBGCARG) -c $(DAZDB)
 
 $(DAZDBLDD): $(SIEVEVIEW)
 	cat `findfile $(ZEDDB) $(PATH)` >$(DAZDB)
 	echo "PPBuild.pp'save_name := \"daz\"; save_and_quit();" | pp -d ./$(DAZDB)
+	$(DBGC) $(DBGCARG) -c $(DAZDB)
 	@touch $(DAZDBLDD)
 
 # sieving dtd503 produces two things: dtd503.sml
@@ -811,13 +835,13 @@ veryclean: clean
 %.ldd: %.sml
 	@rm -f $@ $*.err 2>/dev/null
 	@echo "Compiling (code)" $<
-#	@if test `ls -s $(DAZDB) | awk '{print $$1}'` -ge 50000;\
-#	then discgarb -c $(DAZDB) >$*.discgarb.ldd;\
-#	fi
+	@if test `ls -s $(DAZDB) | awk '{print $$1}'` -ge 50000;\
+	then $(DBGC) $(DBGCARG) -c $(DAZDB) >$*.discgarb.ldd;\
+	fi
 	@pp -d ./daz -f $< -- $(MLFLAGS) >$*.err
 	@mv $*.err $@
 
-%.ttd: %.sml $(DAZDB) $(TESTTOOLS)
+%.ttd: %.sml $(TESTTOOLS)
 	@rm -f $@ $.err 2>/dev/null
 	@echo "Compiling (test)" $<
 	- pp -d ./$(DAZDB) -f $< -n -- $(MLFLAGS) >$*.err
