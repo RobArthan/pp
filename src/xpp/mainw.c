@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.74 2003/08/01 11:13:13 rda Exp rda $
+ * $Id: mainw.c,v 2.75 2004/02/08 14:09:11 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -166,8 +166,6 @@ static void
 	journal_modify_cb(CALLBACK_ARGS);
 
 static void setup_reopen_menu(char *filename);
-static void post_popupeditmenu(EVENT_HANDLER_ARGS);
-static void post_ln_popup_menu(EVENT_HANDLER_ARGS);
 static void defer_resize (EVENT_HANDLER_ARGS);
 static void journal_resize_handler (EVENT_HANDLER_ARGS);
 static Bool execute_command(void);
@@ -820,7 +818,7 @@ static Boolean setup_main_window(
 	lnpopup = setup_menu(
 		linenumber, XmMENU_POPUP, "line-number-menu", ' ', False, ln_popup_menu_items);
 
-	XtAddEventHandler(linenumber, ButtonPressMask, False, post_ln_popup_menu, NULL);
+	attach_popup_menu(linenumber, lnpopup);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Script window:
@@ -865,7 +863,7 @@ static Boolean setup_main_window(
 	XtAddCallback(script,
 		XmNmotionVerifyCallback, line_number_cb, NULL);
 
-	XtAddEventHandler(script, ButtonPressMask, False, post_popupeditmenu, NULL);
+	attach_popup_menu(script, popupeditmenu);
 
 	register_selection_source(script);
 	register_palette_client(script);
@@ -996,33 +994,6 @@ static Boolean setup_main_window(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * MENU PROCESSING
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-static void post_popupeditmenu(
-	Widget		w,
-	XtPointer	x,
-	XEvent		*ev,
-	Boolean		*unused)
-{
-	XButtonPressedEvent *event = &(ev->xbutton);
-	if (event->button == 3) {
-		XmMenuPosition(popupeditmenu, event);
-		XtManageChild(popupeditmenu);
-	}
-}
-
-
-static void post_ln_popup_menu(
-	Widget		w,
-	XtPointer	x,
-	XEvent		*ev,
-	Boolean		*unused)
-{
-	XButtonPressedEvent *event = &(ev->xbutton);
-	if (event->button == 3) {
-		XmMenuPosition(lnpopup, event);
-		XtManageChild(lnpopup);
-	}
-}
 
 static void file_menu_cb(
 		Widget		w,

@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.25 2003/07/24 11:13:32 rda Exp rda $
+ * $Id: xmisc.c,v 2.26 2003/07/24 13:09:22 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -555,7 +555,16 @@ void set_input_focus(Widget w)
  * with menu items given as parameter:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void post_popupeditmenu(EVENT_HANDLER_ARGS);
-static void attach_edit_popup(Widget text_w, MenuItem *menu_items)
+void attach_popup_menu(Widget work_w, Widget menu_w)
+{
+	XtAddEventHandler(work_w, ButtonPressMask, False,
+		post_popupeditmenu, menu_w);
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * attach_edit_popup: attach a popup edit menu to a text widget
+ * with menu items given as parameter:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void attach_edit_popup(Widget text_w, MenuItem *menu_items)
 {
 	MenuItem *mip = menu_items;
 	Widget menu_w;
@@ -564,8 +573,7 @@ static void attach_edit_popup(Widget text_w, MenuItem *menu_items)
 	}
 	menu_w = setup_menu(
 		text_w, XmMENU_POPUP, "popup-edit-menu", ' ', False, menu_items);
-	XtAddEventHandler(text_w, ButtonPressMask, False,
-		post_popupeditmenu, menu_w);
+	attach_popup_menu(text_w, menu_w);	
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * attach_rw_edit_popup: attach a popup edit menu to a read-write

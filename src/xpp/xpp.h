@@ -318,10 +318,12 @@ typedef enum {
 			void cancel_cb(CALLBACK_ARGS),
 			XtPointer cancel_cbd);
 	extern	void set_input_focus(Widget w);
+	extern	void attach_edit_popup(Widget text_w, MenuItem *menu_items);
 	extern	void attach_rw_edit_popup(Widget text_w);
 	extern	void attach_ro_edit_popup(Widget text_w);
 	extern	void register_selection_source(
 		Widget w);
+	void	attach_popup_menu(Widget work_w, Widget menu_w);
 	extern	char *get_selection(Widget w, char *err_msg);
 #ifdef EDITRES
 	extern	void add_edit_res_handler(Widget shell);
