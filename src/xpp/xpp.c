@@ -13,10 +13,16 @@
 
 #define _xpp
 
-#define XtNtextTranslations	"textTranslations"
-#define XtCTextTranslations	"TextTranslations"
-#define XtNtemplates		"templates"
-#define XtCTemplates		"Templates"
+#define XtNtextTranslations		"textTranslations"
+#define XtCTextTranslations		"TextTranslations"
+#define XtNtemplates			"templates"
+#define XtCTemplates			"Templates"
+#define XtNinterruptPrompt		"interruptPrompt"
+#define XtCInterruptPrompt		"InterruptPrompt"
+#define XtNabandonReply		"abandonReply"
+#define XtCAbandonReply		"AbandonReply"
+#define XtNaddNewlineMode		"addNewlineMode"
+#define XtCAddNewlineMode		"AddNewlineMode"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files: 
@@ -78,7 +84,10 @@ static XrmOptionDescRec options [] = {
 
 typedef struct {
 	XtTranslations text_translations;
-	char * templates;
+	char *templates;
+	char *interrupt_prompt;
+	char *abandon_reply;
+	int  add_new_line_mode;
 } XppResources;
 
 XppResources xpp_resources;
@@ -101,6 +110,33 @@ static XtResource resources[] = {
 		XtOffsetOf(XppResources, templates),
 		XtRString,
 		""
+	},
+	{
+		XtNinterruptPrompt,
+		XtCInterruptPrompt,
+		XtRString,
+		sizeof(char *),
+		XtOffsetOf(XppResources, interrupt_prompt),
+		XtRString,
+		""
+	},
+	{
+		XtNabandonReply,
+		XtCAbandonReply,
+		XtRString,
+		sizeof(char *),
+		XtOffsetOf(XppResources, abandon_reply),
+		XtRString,
+		""
+	},
+	{
+		XtNaddNewlineMode,
+		XtCAddNewlineMode,
+		XtRInt,
+		sizeof(int),
+		XtOffsetOf(XppResources, add_new_line_mode),
+		XtRInt,
+		(XtPointer) 1
 	}
 };
 
@@ -227,6 +263,17 @@ char **argv;
 	templates = xpp_resources.templates;
 
 	global_options.command_line = get_command_line(argc, argv);
+
+	global_options.interrupt_prompt = xpp_resources.interrupt_prompt;
+
+	global_options.abandon_reply = xpp_resources.abandon_reply;
+
+	global_options.add_new_line_mode = 
+		xpp_resources.add_new_line_mode > EXECUTE_IGNORE_NEW_LINES
+	?	EXECUTE_IGNORE_NEW_LINES
+	:	xpp_resources.add_new_line_mode < EXECUTE_ADD_NEW_LINES
+	?	EXECUTE_ADD_NEW_LINES
+	:	xpp_resources.add_new_line_mode;
 
 	main_window_go(file_name);
 	exit(0);
