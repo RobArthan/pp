@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.28 2004/02/19 16:06:29 rda Exp rda $
+ * $Id: files.c,v 2.29 2004/07/19 14:41:47 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -928,6 +928,7 @@ Boolean open_file(
 {
 	char *buf;
 	static struct stat status;
+	struct stat new_status;
 	Boolean binary;
 	char *read_only_message;
 	if(!(name && *name)) { /* NULL or empty */
@@ -937,8 +938,8 @@ Boolean open_file(
 		}
 		return True;
 	}
-	if((buf = get_file_contents(text, name, cmdLine, False, foAction, &status, &binary)) != NULL) {
-		read_only_message = read_only_access_message(name, &status);
+	if((buf = get_file_contents(text, name, cmdLine, False, foAction, &new_status, &binary)) != NULL) {
+		read_only_message = read_only_access_message(name, &new_status);
 		if(read_only_message != NULL) {
 			if(	(	orig_global_options.read_only
 				&&	global_options.read_only)
@@ -962,6 +963,7 @@ Boolean open_file(
  */
 		XmTextSetInsertionPosition(text, 0);
 		XmTextEnableRedisplay(text);
+		status = new_status;
 		current_file_status = &status;
 		return True;
 	} else {
