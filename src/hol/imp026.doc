@@ -87,8 +87,10 @@ Changed to use proof context material of issue 1.13 of \cite{DS/FMU/IED/DTD051}.
 \item [Issue 1.21 (31st March 1992)]
 Removed filtered rewrites, added understanding of double negation
 to $simple\-\_³\-\_rewrite\-\_canon$.
-\item [Issue  (2nd April 1992)]
+\item [Issue 1.22 (2nd April 1992)]
 Changes required by CR0016.
+\item [Issue 1.23 (13th April 1992)]
+Changes due to CR0017.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -182,9 +184,9 @@ fun Ûsimple_³_rewrite_canonÝ (thm : THM) : THM list = (
 	pass_on complaint "dest_³" "simple_³_rewrite_canon";
 	[conv_rule (FIRST_C[
 		simple_eq_match_conv ³_²_thm,
-		simple_³_¶_conv,
+		³_simple_¶_conv,
 		³_³_conv,
-		simple_eq_match_conv ³_1_thm])thm]
+		simple_eq_match_conv ³_thm1])thm]
 );
 =TEX
 =SML
@@ -203,15 +205,15 @@ fun Ûsimple_µ_rewrite_canonÝ (thm : THM) : THM list = (
 =TEX
 =SML
 fun Ûthm_freesÝ (thm: THM) : TERM list = (
-	let	val (asms, conc) = dest_thm thm;
-	in	list_union (op =$)(frees conc :: (map frees asms))
+	let	val (seqasms, conc) = dest_thm thm;
+	in	list_union (op =$)(frees conc :: (map frees seqasms))
 	end
 );
 =TEX
 =SML
 fun Ûrewrite_gen_canonÝ (fvs : TERM list) (thm : THM) : THM list = (
-let	val (asms, conc) = dest_thm thm;
-	val avoid = list_union (op =$) (fvs :: map frees asms);
+let	val (seqasms, conc) = dest_thm thm;
+	val avoid = list_union (op =$) (fvs :: map frees seqasms);
 in
 	[list_simple_µ_intro ((frees conc) drop (fn v => (present (op =$) v avoid))) thm]
 end);
@@ -381,7 +383,7 @@ let	fun aux (Var _) = raise an_error
 		handle (Fail _) =>
 		(let val thm2 = cnv x
 		in
-			(ap_fun_rule f thm2
+			(app_fun_rule f thm2
 			handle (Fail _) =>
 			(illformed := true;
 			raise an_error))
@@ -404,10 +406,10 @@ in
 =SML
 fun ÛREWRITE_MAP_CÝ (caller : string) (cnv : CONV) : CONV = (	fn (tm: TERM) => 
 let	val illformed = ref false;
-	fun aux (tm : TERM) = ((REPEAT1_C cnv) EITHER_C 
+	fun aux (tm : TERM) = ((REPEAT1_C cnv) AND_OR_C 
 	((CHANGED_C (RW_SUB_C illformed aux))
-		FURTHER_C
-		(cnv FURTHER_C aux))) tm;
+		THEN_TRY_C
+		(cnv THEN_TRY_C aux))) tm;
 	val res = aux tm handle (Fail _) =>
 		(if (!illformed)
 		then fail caller 26003 []
@@ -420,7 +422,7 @@ in
 end);
 =TEX
 =SML
-fun ÛONCE_REWRITE_MAP_CÝ (caller : string) (cnv : CONV) : CONV = (
+fun ÛONCE_MAP_WARN_CÝ (caller : string) (cnv : CONV) : CONV = (
 fn (tm: TERM) => 
 let	val illformed = ref false;
 	fun aux (tm : TERM) = (cnv ORELSE_C (RW_SUB_C illformed aux)) tm;
@@ -461,7 +463,7 @@ end);
 fun Ûonce_rewrite_ruleÝ (thms : THM list) : THM -> THM = (
 let	val r1 = prim_rewrite_rule (current_ad_rw_net ())
 		(current_ad_rw_canon ()) 
-		(ONCE_REWRITE_MAP_C "once_rewrite_rule") [] thms;
+		(ONCE_MAP_WARN_C "once_rewrite_rule") [] thms;
 in
 	(fn (thm : THM) => r1 thm)
 end);
@@ -469,7 +471,7 @@ end);
 fun Ûpure_once_rewrite_ruleÝ (thms : THM list) : THM -> THM = (
 let	val rw_canon = current_ad_rw_canon();
 	val r1 = prim_rewrite_rule empty_net rw_canon 
-		(ONCE_REWRITE_MAP_C "pure_once_rewrite_rule") [] thms;
+		(ONCE_MAP_WARN_C "pure_once_rewrite_rule") [] thms;
 in
 	(fn (thm : THM) => r1 thm)
 end);
@@ -483,7 +485,7 @@ let	val rw_canon = current_ad_rw_canon ();
 		(REWRITE_MAP_C "asm_rewrite_rule")
 		(flat(map (cthm_eqn_cxt rw_canon) thms));
 in
-	(fn (thm : THM) => r1 (map asm_rule (hyps thm)) thm)
+	(fn (thm : THM) => r1 (map asm_rule (asms thm)) thm)
 end);
 
 fun Ûpure_asm_rewrite_ruleÝ (thms : THM list) : THM -> THM = (
@@ -492,26 +494,26 @@ let	val rw_canon = current_ad_rw_canon ();
 		(REWRITE_MAP_C "pure_asm_rewrite_rule")
 		(flat(map (cthm_eqn_cxt rw_canon) thms));
 in
-	(fn (thm : THM) => r1 (map asm_rule (hyps thm)) thm)
+	(fn (thm : THM) => r1 (map asm_rule (asms thm)) thm)
 end);
 
 fun Ûonce_asm_rewrite_ruleÝ (thms : THM list) : THM -> THM = (
 let	val rw_canon = current_ad_rw_canon ();
 	val rw_net = current_ad_rw_net();
 	val r1 = prim_rewrite_rule rw_net rw_canon 
-		(ONCE_REWRITE_MAP_C "once_asm_rewrite_rule")
+		(ONCE_MAP_WARN_C "once_asm_rewrite_rule")
 		(flat(map (cthm_eqn_cxt rw_canon) thms));
 in
-	(fn (thm : THM) => r1 (map asm_rule (hyps thm)) thm)
+	(fn (thm : THM) => r1 (map asm_rule (asms thm)) thm)
 end);
 
 fun Ûpure_once_asm_rewrite_ruleÝ (thms : THM list) : THM -> THM = (
 let	val rw_canon = current_ad_rw_canon ();
 	val r1 = prim_rewrite_rule empty_net rw_canon 
-		(ONCE_REWRITE_MAP_C "pure_once_asm_rewrite_rule")
+		(ONCE_MAP_WARN_C "pure_once_asm_rewrite_rule")
 		(flat(map (cthm_eqn_cxt rw_canon) thms));
 in
-	(fn (thm : THM) => r1 (map asm_rule (hyps thm)) thm)
+	(fn (thm : THM) => r1 (map asm_rule (asms thm)) thm)
 end);
 =TEX
 
@@ -539,7 +541,7 @@ fun Ûonce_rewrite_convÝ (thms : THM list) : CONV = (
 let	val rw_canon = current_ad_rw_canon ();
 	val rw_net = current_ad_rw_net();
 	val r1 = prim_rewrite_conv rw_net rw_canon 
-		(ONCE_REWRITE_MAP_C "once_rewrite_conv") [] thms;
+		(ONCE_MAP_WARN_C "once_rewrite_conv") [] thms;
 in
 	r1
 end);
@@ -547,7 +549,7 @@ end);
 fun Ûpure_once_rewrite_convÝ (thms : THM list) : CONV = (
 let	val rw_canon = current_ad_rw_canon ();
 	val r1 = prim_rewrite_conv empty_net rw_canon 
-		(ONCE_REWRITE_MAP_C "pure_once_rewrite_conv") [] thms;
+		(ONCE_MAP_WARN_C "pure_once_rewrite_conv") [] thms;
 in
 	r1
 end);
@@ -575,7 +577,7 @@ fun Ûonce_rewrite_tacÝ (thms : THM list) : TACTIC = (
 let	val rw_canon = current_ad_rw_canon ();
 	val rw_net = current_ad_rw_net();
 	val r1 = prim_rewrite_tac rw_net rw_canon 
-		(ONCE_REWRITE_MAP_C "once_rewrite_tac") [] thms;
+		(ONCE_MAP_WARN_C "once_rewrite_tac") [] thms;
 in
 	r1
 end);
@@ -583,7 +585,7 @@ end);
 fun Ûpure_once_rewrite_tacÝ (thms : THM list) : TACTIC = (
 let	val rw_canon = current_ad_rw_canon ();
 	val r1 = prim_rewrite_tac empty_net rw_canon 
-		(ONCE_REWRITE_MAP_C "pure_once_rewrite_tac") [] thms;
+		(ONCE_MAP_WARN_C "pure_once_rewrite_tac") [] thms;
 in
 	r1
 end);
@@ -597,7 +599,7 @@ let	val rw_canon = current_ad_rw_canon ();
 		(REWRITE_MAP_C "asm_rewrite_tac")
 		(flat(map (cthm_eqn_cxt rw_canon) thms));
 in
-	(fn ((asms,conc):GOAL) => r1 (map asm_rule asms) (asms,conc))
+	(fn ((seqasms,conc):GOAL) => r1 (map asm_rule seqasms) (seqasms,conc))
 end);
 
 fun Ûpure_asm_rewrite_tacÝ (thms : THM list) : TACTIC = (
@@ -606,26 +608,26 @@ let	val rw_canon = current_ad_rw_canon ();
 		(REWRITE_MAP_C "pure_asm_rewrite_tac")
 		(flat(map (cthm_eqn_cxt rw_canon) thms));
 in
-	(fn ((asms,conc):GOAL) => r1 (map asm_rule asms) (asms,conc))
+	(fn ((seqasms,conc):GOAL) => r1 (map asm_rule seqasms) (seqasms,conc))
 end);
 
 fun Ûonce_asm_rewrite_tacÝ (thms : THM list) : TACTIC = (
 let	val rw_canon = current_ad_rw_canon ();
 	val rw_net = current_ad_rw_net();
 	val r1 = prim_rewrite_tac rw_net rw_canon 
-		(ONCE_REWRITE_MAP_C "once_asm_rewrite_tac")
+		(ONCE_MAP_WARN_C "once_asm_rewrite_tac")
 		(flat(map (cthm_eqn_cxt rw_canon) thms));
 in
-	(fn ((asms,conc):GOAL) => r1 (map asm_rule asms) (asms,conc))
+	(fn ((seqasms,conc):GOAL) => r1 (map asm_rule seqasms) (seqasms,conc))
 end);
 
 fun Ûpure_once_asm_rewrite_tacÝ (thms : THM list) : TACTIC = (
 let	val rw_canon = current_ad_rw_canon ();
 	val r1 = prim_rewrite_tac empty_net rw_canon 
-		(ONCE_REWRITE_MAP_C "pure_once_asm_rewrite_tac")
+		(ONCE_MAP_WARN_C "pure_once_asm_rewrite_tac")
 		(flat(map (cthm_eqn_cxt rw_canon) thms));
 in
-	(fn ((asms,conc):GOAL) => r1 (map asm_rule asms) (asms,conc))
+	(fn ((seqasms,conc):GOAL) => r1 (map asm_rule seqasms) (seqasms,conc))
 end);
 =TEX
 
@@ -673,7 +675,7 @@ val Û´_rewrite_thmÝ = save_thm("´_rewrite_thm", tac_proof(([],
 	REPEAT strip_tac));
 val Ûif_rewrite_thmÝ = save_thm("if_rewrite_thm", tac_proof(([],
 	¬µ t1 t2·((if T then t1 else t2) = t1) ± (if F then t1 else t2) = t2®),
-	REPEAT strip_tac THEN conv_tac (eq_sym_conv THEN_C fun_if_conv)
+	REPEAT strip_tac THEN conv_tac (eq_sym_conv THEN_C app_if_conv)
 	THEN REPEAT strip_tac THEN_LIST [
 		accept_tac(refl_conv¬t1®), 
 		accept_tac(refl_conv¬t2®)]));
@@ -683,7 +685,7 @@ val Ûµ_rewrite_thmÝ = save_thm("µ_rewrite_thm", tac_proof(([],
 	REPEAT strip_tac THEN POP_ASM_T (accept_tac o all_simple_µ_elim)));
 val Û¶_rewrite_thmÝ = save_thm("¶_rewrite_thm", tac_proof(([],
 		¬µ t·(¶ x·t) = t®),
-	REPEAT strip_tac THEN simple_¶_tac ¬x® THEN goal_in_asms_tac));
+	REPEAT strip_tac THEN simple_¶_tac ¬x® THEN concl_in_asms_tac));
 val ÛÂ_rewrite_thmÝ = save_thm("Â_rewrite_thm", tac_proof(([],
 		¬µ t1:'a; t2:'b·((Ì x·t1)t2) = t1®),
 	REPEAT strip_tac THEN accept_tac(simple_Â_conv ¬(Ì x:'b·t1:'a)t2®)));
