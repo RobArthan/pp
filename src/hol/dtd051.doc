@@ -52,11 +52,13 @@ First version.
 Try again.
 \item [Issue 1.3]
 And again.
+\item [Issue 1.4]
+Tidying up after doing implementation.
 \end{description}
 \subsection{Changes Forecast}
 This document needs to know which functions it may
-configure, and the type of the proof context details.
-Thus if a new configurable tool is added to the system then this document will need
+give context for, and the type of the proof context details.
+Thus if a new tool using context is added to the system then this document will need
 modification.
 
 In particular, the expected resolution tool will be parameterised in some manner yet to be decided,
@@ -71,10 +73,10 @@ The design is implemented in \cite{DS/FMU/IED/IMP051}.
 
 \subsection{Introduction}
 \subsubsection{Purpose and Background}
-A proof context is a setting of various configurable
+A proof context is a setting of various
 parameters of proof tools to support a particular mode of proof.
 For instance, both $rewrite\_tac$ and $strip\_tac$ 
-are configurable proof tools.
+are proof tools that may be parameterised.
 In particular, proof contexts will be later made available,
 through the tools supplied here,
 that supply a good environment to reason about Z,
@@ -83,30 +85,29 @@ and alter the default environment.
 
 An alternative approach to the one chosen is to take a 
 proof context to be a labeled list of functions of type $:unit\ ->\ unit$.
-A proof context would then be set by applying each function in the proof context to $()$.
-This has the advantage that new configurable tools could be
-introduced within a system rebuild.
+A proof context would then be ``set'' by applying each function in the proof context to $()$.
+This has the advantage that new context-sensitive tools could be
+introduced without a system rebuild.
 However, one loses the ability to display even parts
 of the context, or access to the data to which
-an individual configurable function could be configured.
+an individual function could be set.
 \subsubsection{Dependencies}
 This document is dependent on \cite{DS/FMU/IED/IMP008}.
-It also depends on knowledge of what configurable tools it 
+It also depends on knowledge of what context-sensitive tools it
 needs to cover.
 It further depends on being able to create at least dummy
-configuration values for these functions.
+values for the parameters of these functions.
 \subsubsection{Deficiencies}
-None known.
-\subsubsection{Possible Enhancements}
-Proof contexts are often associated with theories,
-so it might be nice if the theory lister tells you the names
-of those objects associated with the theory listed.
-
-We fail to give the developer of a configurable tool the means to modify all relevant pre-existing proof contexts to understand the
+We fail to give the developer of a context-sensitive proof tool the means to modify all relevant pre-existing proof contexts to understand the
 new tool.
 They will have to modify this document and its implementation, and all existing contexts, and then rebuild the system
 (an approach only available to someone supplied with the means to do a system build), or provide their own proof context
 tools, perhaps ``piggy backing'' upon the ones supplied here.
+
+\subsubsection{Possible Enhancements}
+Proof contexts are often associated with theories,
+so it might be nice if the theory lister tells you the names
+of those contexts associated with the theory listed.
 \section{THE DESIGN}
 =DOC
 signature âProofContextá = sig
@@ -118,23 +119,23 @@ The goal of the following functions is:
 \item
 To give a naive user a simple command to change
 the proof context.
-This will change the configuration of all configurable proof tools,
+This will change the individual context of all context-sensitive proof tools,
 to provide the best context available for the style of work they are to then carry out.
 \item
 To give the developer of, say, a new theory the means
-to create a proof context to provide a context suitable for reasoning in that theory.
+to create a proof context suitable for reasoning in that theory.
 \item
-To allow a piece of proof automation to change the context,
+To allow a piece of proof automation to change the proof context,
 do some work, and then revert to the previous context.
 \item
-To provide a single place where all configurable tools look
-for their configuration data.
+To provide a single place where all context-sensitive tools look
+for their contexts.
 \end{enumerate}
 We then first have the user presentation of a proof context:
 =DOC
 type âPROOF_CONTEXTá;
 =DESCRIBE
-This is the type of a proof context, which holds the data used to configure certain proof tools.
+This is the type of a proof context, which holds the data used to provide context for selected proof tools.
 ó
 type PROOF_CONTEXT = {
 	rw_eqn_cxt: (TERM * CONV)list,	(* EQN_CXT *)
@@ -154,12 +155,12 @@ assumption list (see e.g. $strip\_tac$);
 \item
 And an equational context for stripping goals (see e.g. $strip\_tac$).
 \end{itemize}
-A proof context is set to such a configuration by first evaluating something of
+A proof context is set by first evaluating something of
 this type, using $evaluate\_proof\_context$ (q.v.),
 and then setting the result using $push\_proof\_context$ (q.v.)
 =ENDDOC
 It is intended that a designer of, say, a theory would 
-work out a few (maybe only one) proof contexts
+work out a few (often only one) proof contexts
 for working with the theory.
 They would bind these to ML variables, and would
 likewise bind the evaluated forms (see below).
@@ -176,8 +177,8 @@ This evaluated proof context is of type:
 =DOC
 type âEPROOF_CONTEXTá;
 =DESCRIBE
-This is the type of an evaluated proof context, which holds the data used to configure certain proof tools
-in a form where configuration only requires assignment to variables.
+This is the type of an evaluated proof context, which holds the data used to provide individual contexts for certain proof tools,
+in a form where setting context only requires an assignment to a variable.
 Objects of this type are created by $evaluate\_proof\_context$ (q.v.),
 or ``by hand'',
 and may be set by $push\_proof\_context$
@@ -193,38 +194,39 @@ type EPROOF_CONTEXT = {
 
 Pre-evaluation will be done by combining functions supplied
 by individual tools into the single function.
-This implies that all configurable proof tools will be
-supplied with: a single individual pre-evaluation function
- which takes as argument all the tool's configuration parameters bundled into one value;
-and with a way of configuring the tool to the result of this pre-evaluation function.
+This implies that all context-sensitive proof tools will be
+supplied with pre-evaluation functions
+(perhaps of more general use than for the individual function);
+and will get their individual context by accessing the current proof context
+via $get\_proof\_context$.
 
-Thus this function, $evaluate\_proof\_context$ cannot be defined until after all the configured tools are implemented.
+Thus the function, $evaluate\_proof\_context$ cannot be defined until after all the context-sensitive tools are implemented.
 =IGN
  =DOC
 val âevaluate_proof_contextá : PROOF_CONTEXT -> EPROOF_CONTEXT;
  =DESCRIBE
 This function does all possible pre-evaluation
 of the material stored in an object of type $PROOF\_CONTEXT$,
-leaving the result in a form where configuration only requires assignment to variables.
-Such a configuration is then set by $push\_proof\_context$
+leaving the result in a form where setting the context only requires assignment to variables.
+Such a context is then set by $push\_proof\_context$
 (q.v.).
  =FAILUREC
 \paragraph{Errors}
 Any error messages given by the constituent pre-evaluation
 functions will be transparently passed through this function.
  =ENDDOC
-Our current proof context, to which all configurable tools look
-to find their configuration data, is accessed by:
+Our current proof context, to which all context-sensitive tools look
+to find their contextual data, is accessed by:
 =DOC
 val âget_proof_contextá : unit -> EPROOF_CONTEXT;
 =DESCRIBE
-This function gets the current proof context, to which all configurable tools look
-to find their configuration data.
+This function gets the current proof context, to which all context-sensitive tools look
+to find their contextual data.
 =SEEALSO
 $push\_proof\_context$, $pop\_proof\_context$
 =ENDDOC
 =TEX
-We use a stack of (temporaily) superceded proof contexts to simplify the task 
+We use a stack of (temporarily) superseded proof contexts to simplify the task 
 of ``change the context,
 do some work, and then revert to the previous context'',
 for this is the obvious approach.
@@ -232,7 +234,7 @@ for this is the obvious approach.
 val âpush_proof_contextá : EPROOF_CONTEXT -> unit;
 =DESCRIBE
 This function stacks the previous proof context, and
-and configures the system according to the new proof 
+and sets the proof context of the system to the new proof 
 context.
 =SEEALSO
 $pop\_proof\_context$, $get\_proof\_context$
@@ -241,7 +243,7 @@ $pop\_proof\_context$, $get\_proof\_context$
 val âpop_proof_contextá : unit -> EPROOF_CONTEXT;
 =DESCRIBE
 This function unstacks the top of the proof context stack,
-configures the system to it, and returns the previous current proof context.
+sets the proof context of the system to it, and returns the previous current proof context.
 =SEEALSO
 $push\_proof\_context$, $get\_proof\_context$
 =FAILURE
