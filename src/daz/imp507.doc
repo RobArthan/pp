@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.160 $ $RCSfile: imp507.doc,v $ $Date: 2000/06/16 11:47:10 $
+% imp507.doc %Z% $Revision: 1.161 $ $RCSfile: imp507.doc,v $ $Date: 2000/06/21 11:22:09 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.160 $%
+\def\SCCSversion{$Revision: 1.161 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2000/06/16 11:47:10 $%
+\TPPdate{\FormatDate{$Date: 2000/06/21 11:22:09 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -119,6 +119,10 @@ of $pack\_spec\_with\_modules$ for WP 3).
 calls on the VC generator are made whenever a specification statement is processed
 in a context where VC generation is not carried out immediately. This makes sure
 that the checks on free variables etc. are made.
+\item[Issue 1.162] Fixed {\it is\_id\_in\_package} and many other related fixes
+including a major rewrite of {\it store\_prefix\_const\_thms} to remove a flaw
+in its treatment of generics. Improved approach to early checking of specification
+statements in stubs.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -3295,23 +3299,17 @@ fun €form_proc_pack_body_aux›
 	end
 );
 =TEX
-To make sure that all checks on the specification statement in a formal procedure
-stub ({\it ... is separate) are made at the point of declaration, {\it form\_proc\_subunit\_aux}
-is called just for the checks it makes immediately after the call to {\it stub\_spec\_proc}.
-For this purpose, its {\it just\_cheking} parameter is set true to prevent it having
-any side-effects apart from any error reporting done by the VC generator.
 =SML
-fun €form_proc_subunit_aux› (just_checking : bool) (form_proc: FORMAL_PROC) : unit = (
+fun €form_proc_subunit› (form_proc: FORMAL_PROC) : unit = (
 	let	val block1 = block 1;
 		val block2 = block 2;
 		val block_name1 = #block_name(#declab block1);
 		val block_name2 = #block_name(#declab block2);
 		val tbn1_bn2 = subunit_env_index block_name2 block_name1
 		val subunit3 = (force_value(s_lookup tbn1_bn2 (!subunit_env)))
-			handle Fail _ =>
-			fail "form_proc_subunit" 507011
+			handle Fail _ => fail "form_proc_subunit" 507011
 					[fn()=>block_name2, fn()=>block_name1];
-	in	(if just_checking then () else subunit_env := s_delete tbn1_bn2 (!subunit_env));
+	in	subunit_env := s_delete tbn1_bn2 (!subunit_env);
 		if	#specif_flag subunit3
 		then	
 	let
@@ -3344,21 +3342,33 @@ fun €form_proc_subunit_aux› (just_checking : bool) (form_proc: FORMAL_PROC) : un
 			in_scope = in_scope4
 		};
 		val resulting_vcs = call_vcs (speclab4, st)
-	in	if just_checking then () else store_vcs (block_name1, resulting_vcs)
+	in	store_vcs (block_name1, resulting_vcs)
 	end
 		else	()
 	end
 );
 =TEX
 =SML
-fun €form_proc_subunit› (form_proc: FORMAL_PROC) : unit = (
-	form_proc_subunit_aux false form_proc
-);
-=TEX
-=SML
 fun €check_stub_spec_proc› (form_proc: FORMAL_PROC) : unit = (
 	if	test_flag #stub_flag 2
-	then	form_proc_subunit_aux true form_proc
+	then	let	val in_scope = flatten_env(!blocks)
+			val wp_env :WP_ENV = {
+				env = cn_env_of_in_scope in_scope,
+				till = mk_z_true,
+				return = mk_z_true,
+				fun_header = dummy_informal_fun,
+				formal_procs = []
+			};
+			val speclab : SPECLAB = {
+				spec = #spec form_proc,
+				formal_body_flag = false,
+				fun_flag = false,
+				till_flag = false,
+				wp_env = wp_env,
+				in_scope = in_scope
+			};
+		in	 call_vcs(speclab, STNull); ()
+		end
 	else	()
 );
 =TEX
@@ -3982,96 +3992,88 @@ fun €new_ids› (p : PACKAGE) : ID list = (
 	end
 );
 =TEX
-The following function returns true if $id$ or any of its attributes are in the set of $newids$, or any of its initial variables.
+The following function, {\itt is\_id\_in\_package}, returns true if $id$ or any of its attributes are in the set of $newids$, or any of its initial variables.
 
-$is\_id\_in\_package$ $names$ $ident$ will return true if either:
+{\itt is\_id\_in\_package names ident} first discards any trailing zero-subscript
+from {\it ident}; if the result is a member of the list {\it names},
+it returns true, otherwise it splits it up into a sequence of
+elements separated by the characters `v' or `u'.
+Suppose the resulting sequence is equal to $N_0, N_1, ldots Nk$.
+The function will then return true iff. each $N_i$ contains no
+lower case letters and also one of the following holds:
+
 \begin{enumerate}
 \item
-$ident$, regardless of content is a member of $names$;
+$k = 0$ and $N_0$ is in names --- this is just a name defined in the package.
 \item
-$ident$ is of the form $AAAvBBB$, where the case of $AAA$ must contain no
-case, and must not be the empty string, and $AAA$ is in $names$.
+$k = 1$, $N_0$ is in names and the separator between $N_0$ and $N_1$ was `u' --- this
+is taken to be a record update function for the type with type mark $N_0$.
 \item
-$ident$ is of the form $AAAâ0BBB$, where the case of $AAA$ must contain no
-lower case, and must not be the empty string, ($BBB$ may well be an
-empty string), and $AAA$ is in $names$.
+$k \ge 1$, $N_0$ is in names, each $N_i$, for $1 \le i \le k $, is an attribute identifier
+and the separators were all `v' --- this is taken to be the translation of an attribute.
+\item
+$k \ge 2$, $N_0$ is in names, each $N_i$, for $1 \le i < k$, is an attribute identifier,
+the separators were all `v' and $N_k$ is a decimal number ---
+this is taken to be the translation of an attribute with a numeric argument.
 \end{enumerate}
-
-=SML
-fun €is_an_attribute› (id : string) = (
-	case (explode	id) of
-	("B":: "A":: "S":: "E":: "v":: rest) =>
-		 is_an_attribute (implode rest)
-	| ("F":: "I":: "R":: "S":: "T":: "(" :: rest) =>
-		 true (* really should check for digits and a closing brace *)
-	| ("L":: "A":: "S":: "T":: "(":: rest) =>
-		 true (* really should check for digits and a closing brace *)
-	| ("R":: "A":: "N":: "G" :: "E" :: "(":: rest) =>
-		 true (* really should check for digits and a closing brace *)
-	| ("L":: "E":: "N":: "G" :: "T" :: "H" :: "(":: rest) =>
-		 true (* really should check for digits and a closing brace *)
-	| _ => id mem ada_attributes_list
-);
-=TEX
-Note that the function will not give the desired result if
-$ident$ is an auxiliary variable
-of the form $AAAvBBB$ or $AAAâ0$, where $AAA$ and $BBB$ contains no lower case
-letters (and is an attribute), and $AAA$ is in $names$, but $ident$ is not.
-
-The attribute ``BASE'' returns the base type, and may have further attributes
-taken from it - thus we just any attribute starting ``BASEv'' is 
-tested to be some sort of derivative attribute.
 
 =SMLPLAIN
 local
-	val orda = ord("a");
-	val ordz = ord("z");
-	fun is_lcase (c:string) : bool = (
-		ord c <= ordz andalso orda <= ord c
-	);
-
-	fun split_at_v (ls : string list, [] : string list) = (
-			((rev ls), [])
-	) | split_at_v (ls, ("v" :: rest)) = (
-			((rev ls), rest)
-	) | split_at_v (ls, (c :: rest)) = (
-			split_at_v ((c :: ls), rest)
-	);
-
-	fun base_name (lid : string) : string = (
-(* base name is name with â0 stripped from end of other
-   characters, or is of the form TYPEvATTRIBUTE where type is in uppercase
-   and ATTRIBUTE comes from a fixed list, or otherwise is id.
-   A name cannot both have â0 and an attribute, or a â0 with characters both
-   sides. Nor can something with "â0" or an vATTRIBUTE be a valid base
-   name in a package.
-*)
-		let 	val ide = explode lid;
-			val ride = rev ide;
-		in
-			case ride of
-			("0" :: "â" :: c :: rest) =>
-				implode (rev (c :: rest))
-			| _ => (
-		let	val (lhs, rhs) = split_at_v ([], ide);
-		in
-			if (any lhs is_lcase) orelse
-				(is_nil rhs) orelse (is_nil lhs)
-			then lid
-			else if is_an_attribute (implode rhs)
-			then implode lhs
-			else lid
-		end)
+	val ord0 = ord("0");
+	val ord9 = ord("9");
+	fun is_digit (c:string) : bool = (
+		let	val ordc = ord c;
+		in	ord0 <= ordc andalso ordc <= ord9
 		end
 	);
+	fun split_up
+		(separators : string list)
+		((ns, seps) : string list list * string list)
+		(name : string list) : string list list * string list = (
+			case name of
+				[] => (ns, seps)
+			|	ch::more => (
+					if	ch mem separators
+					then	split_up separators
+						([]::ns, ch::seps) more
+					else	split_up separators
+						((ch::hd ns)::tl ns, seps) more
+			)							
+	);
+	fun loseâ0 ("0"::"â"::rest) = rest
+	|   loseâ0 other = other;
 in		
 fun €is_id_in_package› (newids : ID list) (id : ID) : bool = (
-	(base_name id) mem newids
+		id mem newids orelse
+	let	val base = loseâ0 (rev (explode id));
+	in	implode (rev base) mem newids orelse
+	let	val (ns, seps) = split_up ["v", "u"] ([[]], []) base;
+		fun is_an_attr ns = implode ns mem ada_attributes_list;
+	in	case (ns, seps) of
+			([], _) => false
+		|	([n0], []) => implode n0 mem newids
+		|	([n0, n1], ["u"]) => implode n0 mem newids
+		|	([n0, n1], ["v"]) => implode n0 mem newids andalso is_an_attr n1
+		|	(n0::more, uvs) => (
+				case rev more of
+					[] => false (* can't happen *)
+				|	(nk :: attrs) => (
+					(is_an_attr nk orelse all nk is_digit) andalso
+					implode n0 mem newids andalso
+					all attrs is_an_attr andalso
+					all uvs (fn uv => uv = "v")
+				)
+		)
+	end end
 );
 end;
 =TEX
 
 =IGN
+split_up ["u", "v"] ([[]], []) (explode "RECuDAY");
+split_up ["u", "v"] ([[]], []) (explode "TYPEvLENGTHv1");
+split_up ["u", "v"] ([[]], []) (explode "TYPE");
+
 is_id_in_package ["cwg"] "cwgâ0";
 is_id_in_package ["cwg1"] "cwgâ0";
 is_id_in_package ["T"] "TvFIRST";
@@ -4079,8 +4081,12 @@ is_id_in_package ["T"] "TvNEVER";
 is_id_in_package ["T"] "TvFirst";
 is_id_in_package ["TwO"] "TwOvFIRST";
 is_id_in_package ["TW"] "TvFIRST";
-is_id_in_package ["T"] "TvBASEvFIRST";
-is_id_in_package ["T"] "TvBASEvFirst";
+is_id_in_package ["T"] "TvBASEvFIRSTv1";
+is_id_in_package ["T"] "TvBASEvLASTv100";
+is_id_in_package ["T"] "TvBASEvLASTvvFIRST100";
+is_id_in_package ["T"] "TuFIRST100";
+is_id_in_package ["T"] "TuFIRSTv100";
+is_id_in_package ["T"] "TuFIRSTu100";
 =TEX
 The following function extracts from the internal specification theory the types (corresponding to given sets) and the constants (corresponding to global variables) together with their definitions if any.
 =SML
@@ -4394,7 +4400,32 @@ fun €prefix_given_sets›  (ident : ID) (newids : ID list) (names : ID list)
 );
 
 =TEX
-The following function does the prefixing and storing of the paragraphs defining global variables other than given sets and returns a list representing the prefixed paragraphs.
+The following functions is given a list of pairs each comprising a constant and
+its defining theorem (if any). It collects together adjacent constants that have
+the same defining theorem.
+This is used to collect together the constants that must be defined in the same
+axiomatic description.
+=SML
+fun collect_const_defs (consts : TERM list)
+		(othm : THM OPT) ([] : (TERM * THM OPT) list) : (TERM list * THM OPT) list = (
+	if is_nil consts
+	then []
+	else [(rev consts, othm)]
+	) | collect_const_defs consts Nil ((const, othm) :: more) = (
+	if is_nil consts
+		then collect_const_defs [const] othm more
+		else (rev consts, Nil) :: collect_const_defs [const] othm more
+	) | collect_const_defs consts othm ((const, Nil) :: more) = (
+		if is_nil consts
+		then collect_const_defs [const] Nil more
+		else (rev consts, othm) :: collect_const_defs [const] Nil more
+	) | collect_const_defs consts (Value thm) ((const, (Value thm1)) :: more) = (
+		if (thm =|- thm1)
+		then collect_const_defs (const :: consts) (Value thm) more
+		else (rev consts, (Value thm)) :: collect_const_defs [const] (Value thm1) more
+);
+=TEX
+The following function does the prefixing and storing of the paragraphs defining global variables other than given sets.
 =SML
 fun €store_prefix_const_thms› (ident : ID)
 		(tysubs : (string * string) list)
@@ -4403,25 +4434,7 @@ fun €store_prefix_const_thms› (ident : ID)
 		: unit = (
 let	val ty_ty = (fn ty => (type_subst_type tysubs ty 
 		handle (Fail _) => ty));
-	fun collapse (consts : TERM list)
-			(othm : THM OPT) ([] : (TERM * THM OPT) list) = (
-		if is_nil consts
-		then []
-		else [(rev consts, othm)]
-	) | collapse consts Nil ((const, othm) :: more) = (
-		if is_nil consts
-		then collapse [const] othm more
-		else (rev consts, Nil) :: collapse [const] othm more
-	) | collapse consts othm ((const, Nil) :: more) = (
-		if is_nil consts
-		then collapse [const] Nil more
-		else (rev consts, othm) :: collapse [const] Nil more
-	) | collapse consts (Value thm) ((const, (Value thm1)) :: more) = (
-		if (thm =|- thm1)
-		then collapse (const :: consts) (Value thm) more
-		else (rev consts, (Value thm)) :: collapse [const] (Value thm1) more
-	);
-	fun aux ((consts, Nil) :: more) = (map (fn const =>
+	fun aux (consts, Nil) = (map (fn const =>
 		let	val (name, ty, _) = dest_z_gvar const;
 		in
 			new_const
@@ -4436,11 +4449,40 @@ let	val ty_ty = (fn ty => (type_subst_type tysubs ty
 			((prefix_package_id ident newids)
 				name,
 				ty_ty ty)
-		end) consts;
-		aux more
-	) | aux ((consts, Value thm) :: more) = (
-	let	val (pty, tm1) = (dest_app o snd o dest_thm) thm;
-		val lvars = map (mk_z_lvar o dest_z_gvar) consts;
+		end) consts; ()
+	) | aux (consts, Value thm) = (
+	let	val (constr, tm1) = (dest_app o snd o dest_thm) thm;
+	in	case (fst o dest_const) constr handle Fail _ => "" of
+		"Z'AxDes" => (
+		let 	val (formals, _) = strip_µ tm1;
+			val fnames = map ((fn (n,_,_) => n) o dest_z_lvar)
+				 formals;
+			val mk_subs = case formals of
+				[] => (fn gv => (mk_z_lvar(dest_z_gvar gv), gv))
+			|	_ => (
+				let	val tup = mk_z_tuple formals;
+					val tupty = type_of tup;
+				in	fn gv =>
+					let	val opty = fst (dest_≠_type(type_of gv));
+						val ts = type_match tupty opty;
+						val gv' = inst[] ts gv;
+						val app = mk_app(gv', tup);
+						val (n, _, _) = dest_z_gvar gv;
+					in	(mk_var(n, type_of app), app)
+					end
+				end
+			);
+			val subs = map mk_subs consts;
+			val tm = (prefix_term ident tysubs newids' o subst subs) tm1;
+			val (_, body) = strip_µ tm; 
+			val pntys = map (dest_var o prefix_term ident tysubs newids o fst) subs;
+			val (decl, vp) =
+			((Combinators.I ** Value) o dest_±) body
+				handle Fail _ => (body', Nil);
+		in	store_para(AxDesInfo (fnames, decl, vp, pntys))
+		end
+		) | other_constr => (
+	let	val lvars = map (mk_z_lvar o dest_z_gvar) consts;
 		val plvars = map (prefix_term ident tysubs newids) lvars;
 		val tm = (prefix_term ident tysubs newids o 
 				subst (combine lvars consts)) tm1;
@@ -4449,39 +4491,22 @@ let	val ty_ty = (fn ty => (type_subst_type tysubs ty
 						(pn, pty)
 					end))
 				plvars;
-		val name_strings = format_list string_of_term consts ", ";
-	in
-		case (fst o dest_const) pty handle Fail _ => "" of
-		"Z'AxDes" => (
-			(let 	val (formals, body) = strip_µ tm;
-				val fnames = map ((fn (n,_,_) => n) o dest_z_lvar)
-					 formals;
-				val (decl, vp) =
-				((Combinators.I ** Value) o dest_±) body
-					handle Fail _ => (body, Nil);
-			in
-				if is_nil (fnames)
-				then store_para(AxDesInfo ([], decl, vp, pntys))
-				(* below is cowardice , but sorta correct *)
-				else store_para(AxDesInfo ([], tm, Nil, pntys))
-			end);
-			aux more
-		) |"Z'AbbDef" => (
+		fun name_strings () = format_list string_of_term consts ", ";
+	in	case other_constr of
+		"Z'AbbDef" => (
 			(let val (formals, body) = strip_µ tm;
 				val fnames =  map ((fn (n,_,_) => n) o dest_z_lvar) formals;
 			in	
 			store_para(AbbDefInfo (fst(hd pntys), fnames, (snd o dest_eq) body))
 			end handle (Fail _) =>
-			comment "z_prefix" 507057 [fn () => name_strings]);
-				 aux more
+			comment "z_prefix" 507057 [name_strings])
 		) |"Z'SchBox" => (
 			(let val (formals, body) = strip_µ tm;
 				val fnames =  map ((fn (n,_,_) => n) o dest_z_lvar) formals;
 			in	
 			store_para(SchBoxInfo (fst(hd pntys), fnames , (snd o dest_eq) body))
 			end handle (Fail _) =>
-			comment "z_prefix" 507057 [fn () => name_strings]);
-				 aux more
+			comment "z_prefix" 507057 [name_strings])
 		) | _ => (if (length consts = 1)
 			then ((let val (lhs, rhs) = dest_eq (concl thm);
 			 in
@@ -4491,17 +4516,15 @@ let	val ty_ty = (fn ty => (type_subst_type tysubs ty
 					(prefix_term ident tysubs newids rhs));
 					())
 				else comment "z_prefix" 507057 
-					[fn () => name_strings]
+					[name_strings]
 			 end)
 			 handle (Fail _) => comment "z_prefix" 507057 
-				[fn () => name_strings])
+				[name_strings])
 			else comment "z_prefix" 507057 
-				[fn () => name_strings];
-			aux more
+				[name_strings]
 		)
-	end
-	) | aux [] = ();
-in	aux (collapse [] Nil const_thms)
+	end)end);
+in	map aux (collect_const_defs [] Nil const_thms); ()
 end);
 =TEX 
 
