@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.281 $ $RCSfile: imp507.doc,v $ $Date: 2004/10/07 16:40:00 $
+% imp507.doc %Z% $Revision: 1.282 $ $RCSfile: imp507.doc,v $ $Date: 2004/10/09 14:02:33 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.281 $%
+\def\SCCSversion{$Revision: 1.282 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/10/07 16:40:00 $%
+\TPPdate{\FormatDate{$Date: 2004/10/09 14:02:33 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -219,6 +219,7 @@ by doing all the work of checking and generating the VC terms in {\it call\_vcs}
 \item[Issue 1.279] Data refinement for global dependencies of procedures now supported.
 \item[Issue 1.280] Fixed error in propagation of formal functions into the environments.
 \item[Issue 1.281] Using clauses now allowed anywhere in package body.
+\item[Issue 1.282] Performance improvements to handling of {\em new\_ids} when creating the package spec theory.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -5867,53 +5868,133 @@ the separators were all `v' and $N_k$ is a decimal number ---
 this is taken to be the translation of an attribute with a numeric argument.
 \end{enumerate}
 
-=SMLPLAIN
+=SML
 local
-	val ord0 = ord("0");
-	val ord9 = ord("9");
-	fun is_digit (c:string) : bool = (
-		let	val ordc = ord c;
-		in	ord0 <= ordc andalso ordc <= ord9
+	datatype €NEW_IDS› = MkNewIds of unit E_DICT;
+	fun mem_new_ids (id : string)  (MkNewIds dict : NEW_IDS) =(
+		case e_lookup id dict of
+			Value _ => true
+		|	Nil => false
+	);
+(*
+=SMLPLAIN
+*)
+	fun lose_sub_0 (s : string) : string = (
+		let	val size_s = size s;
+		in	if	size_s < 2
+			then	s
+			else	if	String.extract(s, size_s - 2, NONE) = "â0"
+				then	String.extract(s, 0, SOME(size_s - 2))
+				else	s
 		end
 	);
-	fun split_up
-		(separators : string list)
-		((ns, seps) : string list list * string list)
-		(name : string list) : string list list * string list = (
-			case name of
-				[] => (ns, seps)
-			|	ch::more => (
-					if	ch mem separators
-					then	split_up separators
-						([]::ns, ch::seps) more
-					else	split_up separators
-						((ch::hd ns)::tl ns, seps) more
-			)							
+(*
+=TEX
+=SML
+*)
+	fun all_chars (test : char -> bool) (s : string) = (
+		let	val size_s = size s;
+			fun aux i = (
+				if	i = size_s
+				then	true
+				else if	test (String.sub(s, i))
+				then	aux (i+1)
+				else	false
+			);
+		in	aux 0
+		end
 	);
-	fun loseâ0 ("0"::"â"::rest) = rest
-	|   loseâ0 other = other;
-in		
-fun €is_id_in_package› (newids : ID list) (id : ID) : bool = (
-		id mem newids orelse
-	let	val base = loseâ0 (rev (explode id));
-	in	implode (rev base) mem newids orelse
-	let	val (ns, seps) = split_up ["v", "u"] ([[]], []) base;
-		fun is_an_attr ns = implode ns mem ada_attributes_list;
-	in	case (ns, seps) of
-			([], _) => false
-		|	([n0], []) => implode n0 mem newids
-		|	([n0, n1], ["u"]) => implode n0 mem newids
-		|	([n0, n1], ["v"]) => implode n0 mem newids andalso is_an_attr n1
-		|	(n0::more, uvs) => (
+	fun not_lower_case (ch : char) : bool = (
+		not(#"a" <= ch andalso ch <= #"z")
+	);
+	fun is_digit_char (c : char) : bool = (
+		#"0" <= c andalso c <= #"9"
+	);
+	fun check_name_part (s : string) : bool = all_chars not_lower_case s;
+	fun all_digits (s : string) = all_chars is_digit_char s;
+	fun split_at_u (s : string) : (string * string) OPT = (
+		let	val size_s = size s;
+			fun aux i = (
+				if	i = size_s
+				then	Nil
+				else if	String.sub(s, i) <> #"u"
+				then	aux(i+1)
+				else	Value(
+						String.extract(s, 0, SOME i),
+						String.extract(s, i + 1, NONE))
+			);
+		in	case aux 0 of
+				x as (Value (s1, s2)) => (
+					if	check_name_part s1
+					andalso	check_name_part s2
+					then	x
+					else	Nil
+			) |	Nil => Nil
+		end
+	);
+	fun split_at_vs (s : string) : (string list) OPT = (
+		let	val size_s = size s;
+			fun aux1 acc i j = (
+				if	j = size_s
+				then	rev ((i, j - 1)::acc)
+				else if	String.sub(s, j) <> #"v"
+				then	aux1 acc i (j + 1)
+				else	aux1 ((i, j - 1) :: acc) (j + 1) (j + 1)
+			);
+			fun aux2 (i, j) = (
+				String.extract(s, i, SOME(j - i + 1))
+			);
+		in	case map aux2 (aux1 [] 0 0) of
+				parts as (_::_::_) => (
+					if	all parts check_name_part
+					then	Value parts
+					else	Nil
+			) |	not_enough => Nil
+		end
+	);
+=IGN
+split_at_u "ABCuD";
+split_at_u "uD";
+split_at_u "Au";
+split_at_u "ABCuX";
+split_at_u "ABCX";
+split_at_u "ABCuXx";
+split_at_vs "ABCuXx";
+split_at_vs "ABCvXY";
+split_at_vs "ABCvXY";
+split_at_vs "ABCvXYvZ";
+split_at_vs "ABCvXYvZ1v4";
+split_at_vs "";
+split_at_vs "vv";
+=SML
+in
+type €NEW_IDS› = NEW_IDS;
+fun €mk_new_ids›  (ids : ID list) : NEW_IDS = (
+	let	fun acc (id, dict) = (
+			e_enter id () dict
+		);
+	in	MkNewIds(fold acc ids initial_e_dict)
+	end
+);
+fun €is_id_in_package› (newids : NEW_IDS) (id : ID) : bool = (
+		mem_new_ids id newids orelse
+	let	val base = lose_sub_0 id;
+	in	mem_new_ids base newids orelse 
+	let	fun is_an_attr s =s mem ada_attributes_list;
+	in	case split_at_u base of
+			Value(n0, n1) =>  mem_new_ids n0 newids
+		|	Nil =>  (
+		case split_at_vs base of
+			Value [n0, n1] => mem_new_ids n0 newids andalso is_an_attr n1
+		|	Value (n0 :: more) =>  (
 				case rev more of
 					[] => false (* can't happen *)
-				|	(nk :: attrs) => (
-					(is_an_attr nk orelse all nk is_digit) andalso
-					implode n0 mem newids andalso
-					all attrs is_an_attr andalso
-					all uvs (fn uv => uv = "v")
+				|	(nk :: attrs) =>  (
+					(is_an_attr nk orelse all_digits nk) andalso
+					mem_new_ids n0 newids andalso
+					all attrs is_an_attr
 				)
-		)
+		) |	_ => false (* can't actually happen *))
 	end end
 );
 end;
@@ -6058,7 +6139,7 @@ fun €prefix_id› (ident : ID) (n : string) : ID = (
 );
 =TEX
 =SML
-fun €prefix_package_id› (ident : ID) (newids : ID list) (n : string) : ID = (
+fun €prefix_package_id› (ident : ID) (newids : NEW_IDS) (n : string) : ID = (
 	if (is_id_in_package newids n)
 	then prefix_id ident n
 	else n
@@ -6069,7 +6150,7 @@ it is given as parameters the name of the package, the list of names defined in 
 =SML
 fun €prefix_term› (ident : ID)
 		(tysubs : (string * string) list)
-		(newids : ID list)
+		(newids : NEW_IDS)
 		(tm : TERM) : TERM = (
 	let	fun var_subs acc [] = (acc
 		) | var_subs acc (v::vs) = (
@@ -6103,20 +6184,20 @@ fun €prefix_term› (ident : ID)
 =SML
 fun €prefix_aux_vars› (ident : ID)
 		(tysubs : (string * string) list)
-		(newids : ID list)
+		(newids : NEW_IDS)
 		(av : Z_DECL) : Z_DECL = (
 	prefix_term ident tysubs newids av
 );
 =TEX
 =SML
-fun €prefix_tmark› (ident : ID) (newids : ID list) (tmark : TMARK) : TMARK = (
+fun €prefix_tmark› (ident : ID) (newids : NEW_IDS) (tmark : TMARK) : TMARK = (
 	prefix_package_id ident newids tmark
 );
 =TEX
 The following happens only to be used when the $vars$ list
 are all members of the package, but just in case we are careful.
 =SML
-fun €prefix_vardecl› (ident : ID) (newids : ID list)
+fun €prefix_vardecl› (ident : ID) (newids : NEW_IDS)
 				({vars, tmark} : VAR_DECL) : VAR_DECL = (
 	{	vars = 		map (prefix_package_id ident newids) vars,
 		tmark=		prefix_tmark ident newids tmark
@@ -6125,7 +6206,7 @@ fun €prefix_vardecl› (ident : ID) (newids : ID list)
 =TEX
 =SML
 fun €prefix_param_spec› (ident : ID)
-		(newids : ID list)
+		(newids : NEW_IDS)
 		({mode, var_decl as {vars, tmark}} : PARAM_SPEC)
 			: PARAM_SPEC = (
 	map (fn v => if (is_id_in_package newids v)
@@ -6144,7 +6225,7 @@ is affected by the typing of other variables, e.g. function or procedure paramet
 =SML
 fun €prefix_spec_stmt› (ident : ID)
 	(tysubs : (string * string) list)
-	(newids : ID list)
+	(newids : NEW_IDS)
 	(spec : SPEC) : SPEC = (
 	let
 (* DESIGN ERROR checking code - could delete *)
@@ -6179,7 +6260,7 @@ populated with all its types and constants.
 =SML
 fun €prefix_formal_proc› (ident : ID)
 		(tysubs : (string * string) list)
-		(newids : ID list)
+		(newids : NEW_IDS)
 		({name, formal_ids, par_names_defs, spec, globals} : FORMAL_PROC)
 			: FORMAL_PROC = (
 	let	val old_cxt = add_params_ti_context formal_ids;
@@ -6202,7 +6283,7 @@ fun €prefix_formal_proc› (ident : ID)
 );
 =TEX
 =SML
-fun €prefix_informal_fun› (ident : ID)  (tysubs : (string * string) list) (newids : ID list)
+fun €prefix_informal_fun› (ident : ID)  (tysubs : (string * string) list) (newids : NEW_IDS)
 		({name, formal_pars, par_names_defs, return_type} : INFORMAL_FUN)
 			: INFORMAL_FUN = (
 	let	fun do_name_def (n, Nil) = (n, Nil)
@@ -6218,7 +6299,7 @@ fun €prefix_informal_fun› (ident : ID)  (tysubs : (string * string) list) (newid
 Note how we set up, and later restore, the typing context:
 =SML
 fun €prefix_formal_fun› (ident : ID) (tysubs : (string * string) list)
-	(newids : ID list)
+	(newids : NEW_IDS)
 	(form_fun as {
 		spec : SPEC, 
 		informal_fun  as {formal_pars, ...} : INFORMAL_FUN, 
@@ -6243,7 +6324,7 @@ theory for the package be the current theory and that it be populated
 with all its types and constants.
 =SML
 fun €prefix_formal_procs› (ident : ID)
-		(tysubs : (string * string) list) (newids : ID list)
+		(tysubs : (string * string) list) (newids : NEW_IDS)
 		(fps : FORMAL_PROC list) : FORMAL_PROC list  = (
 	map (prefix_formal_proc ident tysubs newids) fps
 );
@@ -6253,7 +6334,7 @@ theory for the package be the current theory and that it be populated
 with all its types and constants.
 =SML
 fun €prefix_var_renamings› (ident : ID)
-		(newids : ID list)
+		(newids : NEW_IDS)
 		(var_renamings : (Z_ID * Z_ID) list) : (Z_ID * Z_ID) list  = (
 	let	fun pfx zn = (
 			trans_id (prefix_package_id  ident newids
@@ -6266,7 +6347,7 @@ fun €prefix_var_renamings› (ident : ID)
 The following function does the prefixing of the given set paragraphs and returns a list of paragraph infos representing the prefixed paragraphs, together with a substitution list for use in prefixing appearances of type names in terms.
 It does not touch defining axioms for these given sets.
 =SML
-fun €prefix_given_sets›  (ident : ID) (newids : ID list) (names : ID list)
+fun €prefix_given_sets›  (ident : ID) (newids : NEW_IDS) (names : ID list)
 	: (string * string) list * PARAINFO list = (
 	let	val pfxd_names = map (prefix_package_id ident newids) names;
 		fun do_gset n = GivenSetInfo([n], Nil);
@@ -6304,7 +6385,7 @@ The following function does the prefixing and storing of the paragraphs defining
 =SML
 fun €store_prefix_const_thms› (ident : ID)
 		(tysubs : (string * string) list)
-		(newids : ID list)
+		(newids : NEW_IDS)
 		(const_thms : (TERM * THM OPT) list)
 		: unit = (
 let	val ty_ty = (fn ty => (type_subst_type tysubs ty 
@@ -6403,12 +6484,12 @@ in	map aux (collect_const_defs [] Nil const_thms); ()
 end);
 =TEX 
 =SML
-fun €is_const_in_package› (newids : ID list) (c : TERM) : bool = (
+fun €is_const_in_package› (newids : NEW_IDS) (c : TERM) : bool = (
 	let	val (n, _, _) = dest_z_gvar c;
 	in	is_id_in_package newids n
 	end	handle Fail _ => false
 );
-fun €is_type_in_package› (newids : ID list) (ty : TYPE) : bool = (
+fun €is_type_in_package› (newids : NEW_IDS) (ty : TYPE) : bool = (
 	let	val (n, _) = dest_ctype ty;
 	in	is_id_in_package newids n
 	end	handle Fail _ => false
@@ -6424,7 +6505,7 @@ The specification script theory is the source for the copying.
 fun €store_prefix_types_and_consts›	
 		(nested_package : bool)
 		(ident : ID)
-		(newids : ID list)
+		(newids : NEW_IDS)
 		(spec_script_thy : string) 
 		(target_thy : string) : (string * string) list * ENV_INFO S_DICT = (
 let	val old_thy = get_current_theory_name();
@@ -6513,7 +6594,7 @@ The following function does the prefixing of the conjectures and returns a list 
 =SML
 fun €prefix_conjectures› (ident : ID)
 		(tysubs : (string * string) list)
-		(newids : ID list)
+		(newids : NEW_IDS)
 		(conjectures : (string list * (int * TERM)) list)
 		: PARAINFO list = (
 	let	fun aux ((sl, (_, tm)) :: more) = (
@@ -6578,7 +6659,7 @@ fun €create_prefixed_spec›
 			if	nested_package
 			then	[]
 			else	get_conjectures spec_script_name;
-		val newids = new_ids package;
+		val newids = mk_new_ids(new_ids package);
 		val block1 = block_vc_vars (Value(#local_dict package))
 				(empty_block, #vc_vars package);
 		val block2 = block_vc_aux_vars Nil (block1, #aux_vars package);
@@ -6650,7 +6731,7 @@ It returns a triple comprising: the list of type substitutions which need to be 
 
 The script theory becomes current after successful or unsuccessful execution.
 =SML
-fun €z_prefix› (ident : ID) (newids : ID list) (package : PACKAGE)
+fun €z_prefix› (ident : ID) (newids : NEW_IDS) (package : PACKAGE)
 		: (string * string) list * FORMAL_PROC list * Z_DECL list * (Z_ID * Z_ID) list * ENV_DICT = (
 	let	val package = force_value(s_lookup ident (!pack_env))
 				handle Fail _ =>
@@ -6702,7 +6783,7 @@ fun €new_scope_with› (ident : ID) : unit = (
 		
 		let
 			val flags = false_flags;
-			val newids = new_ids package;
+			val newids = mk_new_ids(new_ids package);
 			val (tysubs, formal_procs1, aux_vars1, var_renamings, dict) = 
 				z_prefix ident newids package;
 			val dummy1 = new_parent_aux false (pack_spec_name ident);
@@ -6737,7 +6818,7 @@ specifications nested inside package or subprogram bodies.
 The following analogue of {\it z\_prefix} does this.
 
 =SML
-fun €z_prefix_nested› (ident : ID) (newids : ID list) (package : PACKAGE)
+fun €z_prefix_nested› (ident : ID) (newids : NEW_IDS) (package : PACKAGE)
 		: (string * string) list * FORMAL_PROC list * Z_DECL list * (Z_ID * Z_ID) list *ENV_DICT = (
 	let	val package = force_value(s_lookup ident (!pack_env))
 				handle Fail _ =>
@@ -6759,7 +6840,7 @@ if	test_flag #body_flag 1
 then	case s_lookup ident (!pack_env) of
 		Nil => fail "update_envs_pack_spec" 507060 [fn _ => ident]
 	|Value package => (
-		let	val newids = new_ids package;
+		let	val newids = mk_new_ids (new_ids package);
 			val (_, formal_procs2, aux_vars2, var_renamings2, dict) = 
 				z_prefix_nested ident newids package;
 			val vc_vars2 = map (prefix_vardecl ident newids)
@@ -7498,7 +7579,7 @@ fun €renames_pack› (old_name : ID , new_name : ID)  : unit = (
 		val _ = check_pack_complete pack;
 		val {vc_vars, consts_types, formal_procs, informal_funs, formal_funs, var_renamings,
 			aux_vars, zmod, decl, local_dict =_, with_dict = _} = pack;
-		val newids = new_ids pack;
+		val newids = mk_new_ids (new_ids pack);
 		fun const_def id = (
 			BDConstDecl{
 				consts= [prefix_id new_name id],
@@ -7526,7 +7607,6 @@ fun €renames_pack› (old_name : ID , new_name : ID)  : unit = (
 		);
 		val bds_to_do = get_consts_types [] consts_types;
 		val _ = map basic_declaration bds_to_do;
-		val newids = new_ids pack;
 		fun do_renaming (new, old)   = (
 			renames_object
 			{new_name = prefix_id new_name new, 
@@ -7671,9 +7751,9 @@ fun €use_pack› (name : ID)  : unit = (
 		val _ = check_pack_complete pack;
 		val {vc_vars, consts_types, formal_procs, informal_funs, formal_funs, var_renamings,
 			aux_vars, zmod, decl, local_dict = _, with_dict = _} = pack;
-		val newids = new_ids pack;
+		val newidl = new_ids pack;
 		fun do_id id = (trans_id id, prefix_id name id);
-		val new_subs = map do_id newids;
+		val new_subs = map do_id newidl;
 		val block1 = block 1
 			handle Fail _ => error "add_var_env" 507006 [];
 		val block_name1 = #block_name(#declab block1);
@@ -7686,8 +7766,8 @@ fun €use_pack› (name : ID)  : unit = (
 		val dict1' = #dict(#in_scope(#declab(block1')));
 		val dict1'' = add_used_package dict1'  name;
 		val block1'' = block_dict(block1', dict1'');
-	in	map (check_new_z_id zids_in_scope) newids;
-		check_new_spark_ids current_cn_env newids;
+	in	map (check_new_z_id zids_in_scope) newidl;
+		check_new_spark_ids current_cn_env newidl;
 		blocks := block1'':: tl (!blocks);
 		update_envs_renamings new_subs;
 		update_envs_used_package name
