@@ -1,4 +1,4 @@
-% $Header: /home/rda/daz/RCS/imp510.doc,v 1.104 2002/05/10 16:14:35 rda Exp rda $
+% $Header: /home/rda/bld/daz/src/RCS/imp510.doc,v 1.105 2002/05/21 14:41:17 rda Exp rda $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: SPARK Output Function}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP510}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.104 $%
+\def\SCCSversion{$Revision: 1.105 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/05/10 16:14:35 $%
+\TPPdate{\FormatDate{$Date: 2002/05/21 14:41:17 $%
 }}
 \TPPstatus{Draft}	    %% Mandatory field
 \TPPtype{Specification}
@@ -177,6 +177,8 @@ are now handled by printing a comment and then the specification statement.
 \item[Issue 1.104] Spring 2002 enhancements: checking use clauses.
 \item[Issue 1.105] No longer want a null statement when outputting
 an unexpanded statement label. Tidied up handling of controls.
+\item[Issue 1.106] Fixed bug in printing of object renamings and relaxed rules on clashing
+names arising from use clauses.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -220,13 +222,17 @@ The following ML data structures and access functions are used to record informa
 The bool flag is only set true in the call from the functions which print or output the entire SPARK program.
 The flag is used to ensure that diagnostic routines etc. using the lower-level formatting routines directly will not indefinitely consume resources.
 N.b. some functions use the stack variable directly for special effects, so they must do so in a way which won't consume resources if the flag is false.
+
+Names introduced in use clauses need special treatment. The Z Generator imposes rules on use clauses
+that imply that we do not need to check names introduced in use clauses against other names introduced
+in the same way.
 =SML
 val €error_checking› : bool ref = ref false;
-type €SCOPE› = {block : ID, names : ID list};
+type €SCOPE› = {block : ID, names : ID list, use_clause_names : ID list};
 val €stack› : SCOPE list ref = ref [];
 fun €push_scope› (block : ID) : unit = (
 	if	!error_checking
-	then	stack := {block=block, names=[]} :: !stack
+	then	stack := {block=block, names=[], use_clause_names = []} :: !stack
 	else	()
 );
 fun €pop_scope› () : unit = (
@@ -248,7 +254,35 @@ then	let	fun full_name (st : SCOPE list) (n : ID) : ID list = (
 			rev(n :: (map #block st less ""))
 		);
 		fun scan [] = ()
-		|   scan (st as ({block, names} :: more)) = (
+		|   scan (st as ({block, names, use_clause_names} :: more)) = (
+			if	name mem names orelse name mem use_clause_names
+			then	(clashes := !clashes grab
+					{name1 = full_name st name,
+					name2 = full_name (!stack) name};
+				scan more)
+			else	scan more
+		);
+	in	scan (!stack);
+		case !stack of
+			[] => (
+				stack := [{block="", names =[name], use_clause_names = []}]
+		) |	{block, names, use_clause_names} :: more => (
+				stack :=
+				{block=block,names=names grab name,
+					use_clause_names = use_clause_names}::more
+		)
+	end
+else	()
+);
+=TEX
+=SML
+fun €check_use_clause_name› (name : ID) : unit = (
+if	!error_checking
+then	let	fun full_name (st : SCOPE list) (n : ID) : ID list = (
+			rev(n :: (map #block st less ""))
+		);
+		fun scan [] = ()
+		|   scan (st as ({block, names, use_clause_names} :: more)) = (
 			if	name mem names
 			then	(clashes := !clashes grab
 					{name1 = full_name st name,
@@ -259,10 +293,11 @@ then	let	fun full_name (st : SCOPE list) (n : ID) : ID list = (
 	in	scan (!stack);
 		case !stack of
 			[] => (
-				stack := [{block="", names =[name]}]
-		) |	{block, names} :: more => (
+				stack := [{block="", names =[name], use_clause_names = []}]
+		) |	{block, names, use_clause_names} :: more => (
 				stack :=
-				{block=block,names=names grab name}::more
+				{block=block,names=names,
+					use_clause_names = use_clause_names grab name}::more
 		)
 	end
 else	()
@@ -2215,6 +2250,7 @@ fun €fmt_object_renaming› (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({new_name, tmark, old_name} : OBJECT_RENAMING) = (
 	in_new_scope false new_name (fn () => (
 	fmt_id fmtinfo new_name;
+	outf ":";
 	(fmt_tmark fmtinfo tmark);
 	outf (kw"RENAMES");
 	fmt_id fmtinfo old_name; 
@@ -2361,7 +2397,7 @@ Use clauses.
 
 =SML
 fun €fmt_use_clause› (fmtinfo as {outf, ...} : PP_FMT_INFO) (UCUse ids : USE_CLAUSE) = (
-	map (map check_decl) (map package_ids ids);
+	map (map check_use_clause_name) (map package_ids ids);
 	outf (kw"USE"); fmt_id_list fmtinfo ids; outf ";"; outf "\n"
 ) | fmt_use_clause (fmtinfo as {outf, ...}) (UCUseType ids : USE_CLAUSE) = (
 	outf (kw2"USE""TYPE"); fmt_id_list fmtinfo ids; outf ";"; outf "\n"
