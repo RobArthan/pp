@@ -1,3 +1,4 @@
+% imp015.doc   %Z% $Date$ $Revision$ $RCSfile$
 =TEX
 % TQtemplate.tex
 \documentstyle[hol,11pt,TQ]{article}
@@ -13,7 +14,8 @@
 \def\SCCSversion{$Revision$%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-%\TPPdate{}  %% Mandatory field (with sensible default)
+\TPPdate{\FormatDate{$Date$%
+}}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
 \TPPkeywords{HOL}
@@ -58,9 +60,12 @@
 
 \subsection{Changes history}  % to get section number `0.3'
 \begin{description}
+
+\item[Issue 1.4 (3 June 1991)] First draft for comment.
+
 \item[Issue \SCCSversion (\FormatDate{$Date$%
 })]
-First draft for comment.
+	Add declaration of $FIXITY$ and use it in $lex$ for token classification.
 \end{description}
 \subsection{Changes forecast}
 \pagebreak
@@ -95,6 +100,13 @@ datatype ‚INPUT·	= ‚Text·	of string
 			| ‚Error·	of int;
 =TEX
 \subsection{Interface with Parser}
+=SML
+datatype ‚FIXITY·	=	‚Nonfix·
+			|	‚Binder·
+			|	‚Infix· of int
+			|	‚Prefix· of int
+			|	‚Postfix· of int;
+=TEX
 =SML
 datatype ‚HOL_TOKEN·	=	‚HTAqTm·	of TERM
 			|	‚HTAqTy· of TYPE
@@ -209,7 +221,7 @@ fun ‚is_space· c = c <= " ";
 fun ‚is_macro· (c : string) = c = "%%";
 =TEX
 =SML
-fun is_symbolic (c : string) = (
+fun ‚is_symbolic· (c : string) = (
 		not(is_space c)
 	andalso not(is_punctuation c)
 	andalso not(is_alnum c)
@@ -221,20 +233,19 @@ $next$ is used to apply a classifier function such as $is\_digit$
 to the first character in the input part of a state. It returns false
 if the input part is empty.
 =SML
-fun next (test : string -> bool) ((c :: _, _) : LEX_STATE) = test c
+fun ‚next· (test : string -> bool) ((c :: _, _) : LEX_STATE) = test c
 |   next _ ([], _) = false;
 =TEX
 When a lexeme 
 has been recognised, the following function is used to classify the result.
 =SML
-fun classify (cl : string -> HOL_TOKEN) (what : string) : HOL_TOKEN = (
+fun ‚classify· (cl : string -> FIXITY) (what : string) : HOL_TOKEN = (
 	case cl what of
-		x as HTName _ => x
-	|	x as HTInOp _ => x
-	|	x as HTPostOp _ => x
-	|	x as HTPreOp _ => x
-	|	x as HTBinder _ => x
-	|	other =>
+		Infix p => HTInOp{name=what, prec=p, is_term_op=true, is_type_op=true}
+	|	Postfix p => HTPostOp{name=what, prec=p}
+	|	Prefix p => HTPreOp{name=what, prec=p}
+	|	Binder => HTBinder what
+	|	Nonfix =>
 	case what of
 		"and" => HTAnd
 	|	"é" => HTBlob
@@ -349,14 +360,14 @@ To recognise identifiers we first need auxiliaries to recognise the
 atomic pieces of identifiers (viz. alphanumeric sequences, symbolic
 sequences and terminators)
 =SML
-fun rec_atom (terms : string list list) (st : LEX_STATE) : LEX_STATE = (
+fun ‚rec_atom· (terms : string list list) (st : LEX_STATE) : LEX_STATE = (
 	((rec_terminator terms st)
 		handle Unrecognised =>	(rec_alnum st))
 			handle Unrecognised =>	(rec_symbolic terms st)
 );
 =TEX
 =SML
-fun rec_identifier (terms : string list list) (st : LEX_STATE) : LEX_STATE = (
+fun ‚rec_identifier· (terms : string list list) (st : LEX_STATE) : LEX_STATE = (
 	let	val (st', flag1) = (rec_atom terms st, true)
 			handle Unrecognised => (st, false);
 		val (st'', flag2) = (rec_copula st', true)
@@ -375,7 +386,7 @@ Function $rec_ns_lexeme$ picks off the next non-space lexeme from the input
 using the other recognisers.
 It raises $Unrecognised$ if the input is exhausted.
 =SML
-fun rec_ns_lexeme (terms : string list list) (st : LEX_STATE) : LEX_STATE = (
+fun ‚rec_ns_lexeme· (terms : string list list) (st : LEX_STATE) : LEX_STATE = (
 	let	val st' = skip_space st;
 	in	(rec_punctuation st)
 			handle Unrecognised => (rec_identifier terms st)
@@ -384,7 +395,7 @@ fun rec_ns_lexeme (terms : string list list) (st : LEX_STATE) : LEX_STATE = (
 =TEX
 \subsection{Lexical Analyser for Strings}
 =SML
-fun rec_any (terms : string list list) (st : LEX_STATE) : LEX_STATE = (
+fun ‚rec_any· (terms : string list list) (st : LEX_STATE) : LEX_STATE = (
 	(rec_punctuation (skip_space st))
 		handle Unrecognised => rec_ns_lexeme terms st
 );
@@ -393,7 +404,8 @@ $lex\_string$ converts an input string into a list of tokens. It also
 returns a flag which is true iff. the last lexeme in the input string
 was an (unescaped) `\verb"$"'.
 =SML
-fun lex_string (terms : string list list) (cl : string -> HOL_TOKEN) (ip : string list) : HOL_TOKEN list * bool = (
+fun ‚lex_string· (terms : string list list) (cl : string -> FIXITY)
+		(ip : string list) : HOL_TOKEN list * bool = (
 	let	val st = skip_space (ip, Unknown);
 		fun   recur tk more = (
 			let	val (tks, flag) = lex_string terms cl more;
@@ -421,7 +433,7 @@ fun lex_string (terms : string list list) (cl : string -> HOL_TOKEN) (ip : strin
 );
 =TEX
 =SML
-fun lex (terms : string list list) (cl : string -> HOL_TOKEN)
+fun ‚lex· (terms : string list list) (cl : string -> FIXITY)
 	(ip : INPUT list) : HOL_TOKEN list = (
 	case ip of
 		Text s1 :: Text s2 :: more => (
@@ -433,8 +445,10 @@ fun lex (terms : string list list) (cl : string -> HOL_TOKEN)
 			case lex_string terms cl (explode s) of
 				(toks, true) => (
 					case more of
-						String s :: more' => toks @ (HTName s :: lex terms cl more')
-					|	Char s :: more' => toks @ (HTName s :: lex terms cl more')
+						String s :: more' => toks @
+							(HTName s :: lex terms cl more')
+					|	Char s :: more' => toks @
+							(HTName s :: lex terms cl more')
 					|	[] => fail "lexical analyser" 15002 []
 					|	_ => fail "lexical analyser" 15001 []
 			) |	(toks, false) => toks @ lex terms cl more
