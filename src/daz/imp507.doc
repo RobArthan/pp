@@ -73,6 +73,7 @@
 \item[Issue 1.93-1.94] Fixed bug 4 (batch 2) and made $new\_parent\_aux$ less plaintive.
 \item[Issue 1.95] Fixed bugs 10 and 11 (batch 2).
 \item[Issue 1.96] Fixed bug 18 (batch 2).
+\item[Issue 1.97] Enhancement 13.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1349,7 +1350,7 @@ fun €dest_ud_string› (UD_String (n, uds)) = (n, uds)
 |   dest_ud_string _ = fail "" 0 [] (* Caller MUST catch this *);
 =TEX
 
-The following function updates the user data for the current theory.  Given a user data key and an item of data it retrieves any data currently stored under that key, append the new data to it and then replaces it.
+The following function updates the user data for the current theory.  Given a user data key and an item of data it retrieves any data currently stored under that key, adds the new data to it and then stores the result under the key.
 
 =SML
 fun €update_user_datum› (key : string) (xs : USER_DATUM) =
@@ -1461,27 +1462,43 @@ end;
 When a basic declaration causes a Z global variable to be defined,
 we may later need to know whether the Z global variable corresponds to
 a SPARK type or a SPARK constant.
-To do this a list of the names from the SPARK type declaration is maintained in the theory.
+For record types, we also need to record the order of the component names.
+To do this a list of type names and associated component names from the SPARK type declarations is maintained in the theory.
 =TEX
 =SML
-fun €get_type_names› (thy : string) : ID list = (
-	((map (fst o dest_ud_string) o snd o dest_ud_string o get_user_datum thy)
-	cn_types_ud_key)
-	handle Fail _ => []
+fun €add_type_info› (tyn : ID, compns : ID list) : unit = (
+	let	val	enc_compns = map (fn n => UD_String(n, [])) compns;
+	in	update_user_datum cn_types_ud_key (UD_String(tyn, enc_compns))
+	end
 );
-fun €add_type_name› (tyn : ID) : unit = (
-	update_user_datum cn_types_ud_key (UD_String(tyn, []));
-	()
+fun €get_type_info› (n : ID) : ID list OPT = (
+	let	fun aux (UD_String (tyn, cmps)::more) = (
+			if	tyn = n
+			then	Value (map (fst o dest_ud_string) cmps)
+			else	aux more
+		) | aux (_::more) = (aux more
+		) | aux [] = Nil;
+		val thy = get_const_theory (z_id_of_id n)
+		val infos = ((snd o dest_ud_string o get_user_datum thy)
+					cn_types_ud_key)
+				handle Fail _ => [];
+	in	aux infos
+	end	handle Fail _ => Nil
 );
-fun €is_type_name› (n : ID) : bool = (
-	(n mem get_type_names (get_const_theory (z_id_of_id n)))
-	handle Fail _ => false
-);
-fun €set_basic_decl_info› (bd : BASIC_DECL) : unit = (
+=TEX
+To help with processing record types the following function takes a type definition and returns a list giving the components names (if any, i.e., the list is empty except when a record type definition is processed):
+=SML
+fun comp_names(TDRecordTypeDef {decl} : TYPE_DEF) = (
+	flat (map #vars decl)
+) | comp_names _ = [];
+=TEX
+=SML
+fun €set_basic_decl_info› (pfx : ID -> ID) (bd : BASIC_DECL) : unit = (
 	case bd of
-		BDTypeDecl td => add_type_name (#name td)
-	|	BDSubtypeDecl std => add_type_name (#name std)
-	|	BDPrivateTypeDecl ptd => add_type_name (#id ptd)
+		BDTypeDecl {name, type_def} => (
+			add_type_info (pfx (name), comp_names type_def)
+	) |	BDSubtypeDecl std => add_type_info (pfx (#name std), [])
+	|	BDPrivateTypeDecl ptd => add_type_info (pfx (#id ptd), [])
 	|	_ => ()
 );
 =TEX
@@ -1565,18 +1582,16 @@ if so, then it's a function and we have the parameter names to hand;
 if it's not a function but is a type name, we dismantle the type: if its a set of bindings, then this is a record type mark; otherwise it's an `other type';
 if it's neither a function nor a type name, its an `other'.
 
-
 =SML
-fun €env_info_of_g_var› (zn : ID) (ty : TYPE) = (
+fun €env_info_of_g_var› (zn : ID) (ty : TYPE) : (TYPE * ENV_INFO) = (
 	case get_par_names zn of
 		Value pars => (ty, EIEnvFunction pars)
 	|	Nil => (
 			ty,
-			if is_type_name zn
-			then	(dest_z_schema_type (dest_z_power_type ty);
-				EIEnvRecordType)
-				handle Fail _ => EIEnvOtherType
-			else	EIEnvOther
+			case get_type_info zn of
+				Value (ns as _::_) => EIEnvRecordType ns
+			|	Value _ => EIEnvOtherType
+			|	Nil => EIEnvOther
 	)
 );
 =TEX
@@ -1956,7 +1971,7 @@ fun €basic_decl_otherwise› (basic_decl : BASIC_DECL) : unit = (
 		case para_info_opt of
 			Value para_infos => (
 				map update_theory_db_with_parainfo para_infos;
-				set_basic_decl_info basic_decl
+				set_basic_decl_info Combinators.I basic_decl
 		)|	Nil =>	fail "basic_decl_otherwise" 507041 []
 	end
 );
@@ -3449,15 +3464,12 @@ fun €prefix_formal_procs› (ident : ID) (newids : ID list)
 );
 =TEX
 =SML
-fun €tmpbody_types_and_const_thms› (ident : ID) = (
+fun €tmpbody_types_and_const_thms› (ident : ID) : (TERM * THM OPT) list = (
 	let	val consts = (get_consts o pack_tmpbody_name) ident;
 
 		val const_thms = rev (map (fn x => (x, (Value (get_spec x)
 						handle Fail _=> Nil))) consts);
-		
-		val type_names = get_type_names "-";
-	in
-		(type_names, const_thms)
+	in	const_thms
 	end
 );
 =TEX
@@ -3519,7 +3531,7 @@ fun €create_spec_from_tmpbody_theory›
 				error "create_spec_from_tmpbody_theory" 507029 
 					[fn() => ident];
 
-		val (type_names,const_thms) = tmpbody_types_and_const_thms ident;
+		val const_thms = tmpbody_types_and_const_thms ident;
 
 		val newids = new_ids package;
 		val pfx_funs = map (prefix_informal_fun ident newids)
@@ -3532,7 +3544,8 @@ fun €create_spec_from_tmpbody_theory›
 		map update_theory_db_with_parainfo
 				(do_const_thms ident const_thms);
 		map set_par_names pfx_funs;
-		map add_type_name (map (prefix_id ident) type_names);
+		map	(set_basic_decl_info(prefix_id ident))
+			(#consts_types package);
 		open_theory thy;
 		()
 	   ) handle ex => (
@@ -3559,7 +3572,7 @@ fun €populate_theory_with_functions› (ident : ID) : unit = (
 		map update_theory_db_with_parainfo formal_fun_paras;
 		map set_par_names informal_funs;
 		map (set_par_names o #informal_fun) formal_funs;
-		map set_basic_decl_info consts_types;
+		map (set_basic_decl_info Combinators.I) consts_types;
 		()
 	end
 );

@@ -22,7 +22,7 @@
 %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
 \TPPauthorisation{R.D.~Arthan & HAT Team}
 \TPPabstract{
-This document contains the implementation for the Basic Declaration and Expression Genertor for processing Compliance Notation.}
+This document contains the implementation for the Basic Declaration and Expression Generator for processing Compliance Notation.}
 %\TPPabstractB{}
 %\TPPabstractC{}
 %\TPPabstractD{}
@@ -70,7 +70,8 @@ Adjusted $ENV\_INFO$ and allowed for type conversions.
 \item[Issue 1.33] Accomodated changes to toolkit extensions agreed at the 4th critical review (see \cite{ISS/HAT/DAZ/min005}: $mod$ becomes $intmod$, $Abs$ becomes $abs$).
 \item[Issue 1.34] Fixed bug 6 (batch 2).
 \item[Issue 1.35] Accomodated changes to data types required for enhancements.
-\item[Issue 1.36] Enhancment 11 (and bug 9 (batch 2)).
+\item[Issue 1.36] Enhancement 11 (and bug 9 (batch 2)).
+\item[Issue 1.37] Enhancements 13 and 14.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -107,7 +108,7 @@ datatype ÛENV_INFOÝ =
 			ÛEIEnvFunctionÝ of ID list
 		|	ÛEIEnvVarÝ of TMARK
 		|	ÛEIEnvAuxVarÝ
-		|	ÛEIEnvRecordTypeÝ
+		|	ÛEIEnvRecordTypeÝ of ID list
 		|	ÛEIEnvOtherTypeÝ
 		|	ÛEIEnvOtherÝ;
 =TEX
@@ -349,6 +350,11 @@ let	val ty = case env id of
 in
 	tm
 end
+);
+=TEX
+=SML
+fun Ûz_bindingÝ (cmpvals : (string * Z_EXP) list) : Z_EXP = (
+         mk_z_binding cmpvals
 );
 =TEX
 =SML
@@ -786,71 +792,37 @@ and Ûexp_array_agg_named_othersÝ (env : CN_ENV) ({tmark,agg_named,others}
 =TEX
 \subsection{Translating Aggregates (Positional Record)}
 =SML
-and Ûretrieve_record_componentsÝ (env : CN_ENV) (tmark : TMARK) :
-		(TMARK * TYPE) list = (
-	(dest_z_schema_type o dest_z_power_type o type_of o (zid env))
-	tmark
-	handle _ => fail "retrieve_record_components" 508026 [fn()=>tmark]
-)
-=TEX
-=SML
 and Ûexp_rec_agg_pos_zÝ (env : CN_ENV) ((tmark, comps) : TMARK * Z_EXP list)
 		: Z_EXP = (
-let	val record_components = retrieve_record_components env tmark;
-	fun env' id = (
-		case lassoc5 record_components id of
-		Value ty => Value (ty, EIEnvVar tmark)
-		|Nil => env id
+let	val record_components = (
+		case env tmark of
+			Value (_, EIEnvRecordType (cmps as _::_)) => cmps
+		|	_ => fail "exp_rec_agg_pos_z" 508026 [fn()=>tmark]
 	);
-	val ap_components = combine ((map fst) record_components) comps
+	val zbinds = combine record_components comps
 		handle _ => fail "exp_rec_agg_pos" 508027 [fn()=>tmark];
-	val zp = z_many_and (
-		map
-		(fn (decl_i_var, comps_i) =>
-		   z_eq(zid env' (trans_id decl_i_var), comps_i))
-			ap_components
-	);
-
 in
-	z_mu env' (trans_id tmark, zp)
+	z_binding zbinds
 end
 )
 =TEX
 \subsection{Translating Aggregates (Named Record)}
 =SML
-and Ûid_exs_of_named_assocsÝ (nas : (AGG_CHOICE,EXP) NAMED_ASSOC list)
-		: (TMARK * EXP) list = (
-let	fun named_assoc_to_id_exs {choice, comp} = (
+and Ûexp_rec_agg_namedÝ (env : CN_ENV) ({tmark, named_assocs}
+		: (AGG_CHOICE,EXP) REC_AGG_NAMED) : Z_EXP = (
+let	fun named_assoc_to_ids_exp {choice, comp} = (
 	let	fun aux (ch::rest) comp = (
 			case ch of
 			ACAggChoiceSingle exp => (
-					(name_to_tmark exp, comp)::aux rest comp
+					(name_to_tmark exp, 
+					 trans_exp env comp)::aux rest comp
 			) |_ => go_informal "exp_rec_agg_named" 508020 []
 		) | aux _ _ = [];
 	in
 		aux choice comp 
 	end);
-in
-	flat (map named_assoc_to_id_exs nas)
-end
-)
-=TEX
-=SML
-and Ûexp_rec_agg_namedÝ (env : CN_ENV) ({tmark, named_assocs}
-		: (AGG_CHOICE,EXP) REC_AGG_NAMED) : Z_EXP = (
-let	val record_components = retrieve_record_components env tmark;
-	fun env' id = (
-		case lassoc5 record_components id of
-		Value ty => Value (ty, EIEnvVar tmark)
-		|Nil => env id
-	);
-	val zp = z_many_and (
-		map
-		(fn (ident, ex) => z_eq(zid env' (trans_id ident), trans_exp env' ex))
-		(id_exs_of_named_assocs named_assocs)
-	);
-in
-	z_mu env' (trans_id tmark, zp)
+	val zbinds = flat (map named_assoc_to_ids_exp named_assocs);
+in	z_binding zbinds
 end
 )
 =TEX
@@ -1078,7 +1050,7 @@ and Ûadjust_othersÝ (env : CN_ENV) ({others=oth} : EXP OTHERS) = (
 )
 and Ûadjust_agg_posÝ (env : CN_ENV) ({tmark=t, comps=c} : EXP AGG_POS) = (
 	case env t of
-	Value (ty, EIEnvRecordType) => (
+	Value (ty, EIEnvRecordType _) => (
 			ERecAggPos {tmark=t, comps=map (adjust_exp env) c}
         ) |_ => (
 			EArrayAggPos {tmark=t, comps=map (adjust_exp env) c}
@@ -1103,7 +1075,7 @@ and Ûadjust_agg_named1Ý (env : CN_ENV) (t : TMARK) ({named_assocs=n}
 let	val n' = map (adjust_named_assoc env) n;
 in
 	case env t of
-	Value (ty, EIEnvRecordType) => (
+	Value (ty, EIEnvRecordType _) => (
 			ERecAggNamed {tmark=t, named_assocs=n'}
         ) |_ => (
 			EArrayAggNamed {named_assocs=n'}
@@ -1157,7 +1129,7 @@ Is it a function call?
 =TEX
 Is it a type conversion?
 =SML
-	) |(Value (_, EIEnvRecordType), EArrayAggPos{comps=[comp],...}) => (
+	) |(Value (_, EIEnvRecordType _), EArrayAggPos{comps=[comp],...}) => (
 		ETypeConversion{tmark=prename, exp= (adjust_exp env) comp}
 	) |(Value (_, EIEnvOtherType), EArrayAggPos{comps=[comp],...}) => (
 		ETypeConversion{tmark=prename, exp= (adjust_exp env) comp}
