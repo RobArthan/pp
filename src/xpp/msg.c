@@ -142,6 +142,16 @@ static void help_cb(Widget widget, Widget shell)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * poll: poll for and process an event; used for modal dialogs
+ * in functions that are expected to return a result.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void poll(){
+	XEvent xev;
+	XtAppNextEvent(app, &xev);
+	XtDispatchEvent(&xev);
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * yes_no_dialog: ask a question with a mandatory yes/no answer
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 Boolean yes_no_dialog(Widget w, char *question)
@@ -188,9 +198,7 @@ Boolean yes_no_dialog(Widget w, char *question)
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 	XBell(XtDisplay(root), 50);
 	while (!reply) {
-		if(XtAppPending(app)) {
-			XtAppProcessEvent(app, XtIMAll);
-		}
+		poll();
 	};
 	XtPopdown(XtParent(dialog));
 	return reply == YES;
@@ -248,9 +256,7 @@ int yes_no_cancel_dialog(Widget w, char *question)
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 	XBell(XtDisplay(root), 50);
 	while (!reply) {
-		if(XtAppPending(app)) {
-			XtAppProcessEvent(app, XtIMAll);
-		}
+		poll();
 	};
 	XtPopdown(XtParent(dialog));
 	return (reply >= 0 ? reply == YES : -1);
@@ -329,9 +335,7 @@ void ok_dialog(Widget w, char *msg)
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 	XBell(XtDisplay(root), 50);
 	while (!confirmed) {
-		if(XtAppPending(app)) {
-			XtAppProcessEvent(app, XtIMAll);
-		}
+		poll();
 	};
 	XtPopdown(XtParent(dialog));
 }
@@ -391,9 +395,7 @@ char *file_dialog(Widget w, char *opn)
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 
 	while (!reply) {
-		if(XtAppPending(app)) {
-			XtAppProcessEvent(app, XtIMAll);
-		}
+		poll();
 	};
 
 	XtPopdown(XtParent(dialog));
