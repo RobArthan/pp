@@ -265,11 +265,30 @@ fun âGET_ASM_Tá (tm : TERM) (thmtac : (THM -> TACTIC))
 	else term_fail "GET_ASM_T" 9301 [tm]
 );
 =TEX
+The following tactical supports the tacticals which use and remove assumptions.
+=SML
+fun REMOVED_ASMS_T (asms : TERM list) (tac : TACTIC) : TACTIC = (fn gl =>
+	let	val (sgs, pf) = tac gl;
+		fun aux ((sg as (_, conc)):: more) = (
+			let	val (more', f) = aux more
+			in	if conc asm_mem asms
+				then	let	val thm = asm_rule conc;
+					in	(more', (fn ths => thm :: f ths))
+					end
+				else	(sg :: more',
+					 fn thm :: thms => thm :: f thms
+					| [] => [])
+			end
+		) | aux  _ = ([], Combinators.I);
+		val (sgs', f) = aux sgs
+	in	(sgs', pf o f)
+	end
+);
 =SML
 fun âDROP_ASM_Tá (tm : TERM) (thmtac : (THM -> TACTIC))
 						: TACTIC = (fn (asms, conc) =>
 	if tm asm_mem asms
-	then thmtac (asm_rule tm) (asms asm_less tm, conc)
+	then REMOVED_ASMS_T [tm] (thmtac (asm_rule tm))(asms asm_less tm, conc)
 	else term_fail "DROP_ASM_T" 9301 [tm]
 );
 =TEX
@@ -283,7 +302,7 @@ fun âTOP_ASM_Tá (thmtac : (THM -> TACTIC)) : TACTIC = (fn gl as (asms, _) =>
 =SML
 fun âPOP_ASM_Tá (thmtac : (THM -> TACTIC)) : TACTIC = (fn (asms, conc) =>
 	case asms of
-		asm :: more => thmtac (asm_rule asm) (more, conc)
+		asm :: more => REMOVED_ASMS_T [asm](thmtac (asm_rule asm))(more, conc)
 	|	_ =>  fail "POP_ASM_T" 9303 []
 );
 =TEX
@@ -294,7 +313,7 @@ fun âGET_ASMS_Tá (thmstac : (THM list -> TACTIC)) : TACTIC = (fn gl as (asms, _)
 =TEX
 =SML
 fun âDROP_ASMS_Tá (thmstac : (THM list -> TACTIC)) : TACTIC = (fn (asms, conc) =>
-	thmstac (map asm_rule asms) ([], conc)
+	REMOVED_ASMS_T asms (thmstac (map asm_rule asms))([], conc)
 );
 =TEX
 \subsection{Utility Tacticals}
@@ -326,6 +345,7 @@ fun âLEMMA_Tá (newsg : TERM) (thmtac : THM -> TACTIC) : TACTIC = (fn gl as (asms
 	end
 );
 =TEX
+$LIST\_CHECK\_THM\_T$
 =SML
 fun âLIST_CHECK_THM_Tá (thms : THM list) (tac : TACTIC)
 					: TACTIC = (fn gl as (asms, _) =>
@@ -338,13 +358,17 @@ fun âLIST_CHECK_THM_Tá (thms : THM list) (tac : TACTIC)
 			aux2 (aux1 acc (hyps thm)) more
 		) | aux2 acc [] = acc;
 		val extras = aux2 [] thms;
-		fun asm_tac thm = (fn (asms, conc) =>
-			([(concl thm :: asms, conc)],
-			(fn [thm1] => prove_asm_rule thm thm1
-			 | _ => bad_proof "LIST_CHECK_THM_T"))
+		fun my_asm_tac thm = (fn gl as (asms, conc) =>
+			let val tm = concl thm;
+			in	if tm asm_mem asms
+				then	([(concl thm :: asms, conc)],
+					(fn [thm1] => prove_asm_rule thm thm1
+					 | _ => bad_proof "LIST_CHECK_THM_T"))
+				else	 always_tac gl
+			end
 		);
 		fun aux3 (tm :: more) = (
-			LEMMA_T tm asm_tac THEN_L [always_tac, aux3 more]
+			LEMMA_T tm my_asm_tac THEN_L [always_tac, aux3 more]
 		) | aux3 [] = tac;
 	in	(ROTATE_T (length extras) (aux3 extras)) gl
 	end
@@ -367,16 +391,6 @@ fun âCHANGED_Tá (tac : TACTIC) : TACTIC = (fn gl =>
 );
 =TEX
 \section{BASIC TACTICS 2}
-=IGN
-fun  âlemma_tacá (lemma : TERM) : TACTIC = (
-	let	fun ttac thm (asms, conc) = (
-			([(concl thm :: asms, conc)],
-			(fn [thm1] => prove_asm_rule thm thm1 | _ => bad_proof "lemma_tac"))
-		);
-	in	LEMMA_T lemma ttac
-	end
-);
-=TEX
 =SML
 local
 fun âaux_accept_tacá (thm : THM) : TACTIC = (fn (asms, conc) =>
@@ -386,6 +400,16 @@ fun âaux_accept_tacá (thm : THM) : TACTIC = (fn (asms, conc) =>
 );
 in
 fun âaccept_tacá (thm : THM) : TACTIC = CHECK_THM_T thm (aux_accept_tac thm);
+end;
+=TEX
+=SML
+local
+fun  âaux_asm_tacá (thm : THM) : TACTIC = (fn (asms, conc) =>
+	([((concl thm) :: asms, conc)],
+	(fn [thm1] => prove_asm_rule thm thm1 | _ => bad_proof "asm_tac"))
+);
+in
+fun âasm_tacá (thm : THM) : TACTIC = CHECK_THM_T thm (aux_asm_tac thm);
 end;
 =TEX
 \section{USING TACTICS}
