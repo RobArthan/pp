@@ -85,7 +85,7 @@ Because the implementations of the component update functions are rather long-wi
 =SML
 structure €CNZGenerator› (* : CNZGenerator *) = struct
 open CNTypes CNTypes1 CNTypes2 CNBasicDeclsAndExprs ZParagraphs
-	CNVCGenerator;
+	CNVCGenerator CNParser;
 =TEX
 \subsection{TBS}
 The following gets around the use of a separate data type for labels.
@@ -721,6 +721,30 @@ fun €block_spec_lab›  (
 	}
 );
 =TEX
+=SML
+fun €block_block_name›  (
+	{
+	declab as {block_name,
+		flags,
+		in_scope},
+	current_formal_proc,
+	current_formal_fun,
+	dec_lab,
+	spec_lab,
+	till
+	} : BLOCK,
+	new_block_name : ID) : BLOCK = (
+	{declab		=	{block_name = new_block_name,
+				flags = flags,
+				in_scope = in_scope},
+	current_formal_proc = current_formal_proc,
+	current_formal_fun = current_formal_fun,
+	dec_lab = dec_lab,
+	spec_lab = spec_lab,
+	till = till
+	}
+);
+=TEX
 \subsection{Initial Values}
 
 =TEX
@@ -876,6 +900,16 @@ fun €get_cn_state› (() : unit) : CN_STATE = (
 		script_name = !script_name}
 );
 =TEX
+\subsection{Reading the Flags}
+The following function is convenient for accessing the flags in the running environment.
+The first parameter is the functions to extract the flag value: it will always be one of the ML built-in selection functions, $\#pack\_spec\_flag$ etc.
+The second parameter gives the block to get the flag from: with $1$ identifying the topmost block.
+=SML
+fun €test_flag› (selector : FLAGS -> bool) (index : int) : bool = (
+	(selector o #flags o #declab o nth (index - 1)) (!blocks)
+	handle Fail _ => error "test_flag" 507006 []
+);
+=TEX
 \subsection{Function Parameter Lists}
 When the global variable representing a SPARK function is stored in a theory, a user data entry giving its formal parameter list is also stored.
 This is later accessed via the $CN\_ENV$ when function calls using named parameter associations are translated into Z.
@@ -1026,11 +1060,11 @@ fun €store_vc_term› (tm : TERM) : unit = (
 	end
 );
 =TEX
+=SML
 fun €term_of_vc› (vc as (decs, (asms, conc)) : VC) : TERM = (
 	mk_z_µ(mk_z_decl decs, list_mk_± asms, conc)
 );
-=SML
-fun 
+=TEX
 =SML
 fun €store_vcs› (vcs: VC list) : unit = (
 	map (store_vc_term o term_of_vc) vcs;
@@ -1038,7 +1072,7 @@ fun €store_vcs› (vcs: VC list) : unit = (
 );
 =TEX
 \section{BASIC DECLARATIONS}\label{BASICDECLARATIONS}
-\subsection{The SID Function $basic\_declaration$}
+\subsection{The SID Function basic\_declaration}
 The decision about which function to call is made in $basic\_declaration$ itself.
 =SML
 fun €basic_decl_pack_spec› (basic_decl : BASIC_DECL) : unit = (
@@ -1064,27 +1098,31 @@ fun €basic_decl_otherwise› (basic_decl : BASIC_DECL) : unit = (
 =TEX	
 =SML
 fun €basic_declaration› (basic_decl : BASIC_DECL) : unit = (
-	if	#pack_spec_flag(#flags(#declab (hd (!blocks))))
+	if	test_flag #pack_spec_flag 1
 	then	basic_decl_pack_spec basic_decl
 	else	basic_decl_otherwise basic_decl
 );
 =TEX
 =SML
 fun €var_pack_spec› (var_decl : VAR_DECL) : unit = (
-	let	val block_name1 = #block_name(#declab (hd (!blocks)));
-		val package = case (s_lookup block_name1 (!pack_env)) of
-			Value p => p
-		|	Nil => error "var_pack_spec" 507001 [];
-	in	pack_env :=
-		s_extend
-		block_name1
-		(package_vc_vars(package,
-				#vc_vars package @ [var_decl]))
-		(!pack_env)
-	end
+	if	test_flag #pack_spec_flag 1
+	then	let	val block_name1 = #block_name(#declab (hd (!blocks)));
+			val package = case (s_lookup block_name1 (!pack_env)) of
+				Value p => p
+			|	Nil => error "var_pack_spec" 507001 [];
+		in	pack_env :=
+			s_extend
+			block_name1
+			(package_vc_vars(package,
+					#vc_vars package @ [var_decl]))
+			(!pack_env)
+		end
+	else	()
 );
 =TEX
-\subsection{The SID Function $update\_envs\_var$}
+\subsection{The SID Function update\_envs\_var}
+The decision making as to whether to call the three support functions is done in $update\_envs\_var$ itself (since it is the same test in each case).
+
 In the following, the local function, $do1\_subunit$ does the work specified in the Z spec for one unit-name-subunit-name pair.
 =SML
 fun €update_subunit_env_var› (var_decl : VAR_DECL) : unit = (
@@ -1147,9 +1185,11 @@ fun €update_spec_env_var› (var_decl : VAR_DECL) : unit = (
 The schema conjunction from the specification is implemented as sequential composition.
 =SML
 fun €update_envs_var› (var_decl : VAR_DECL) : unit = (
-	update_subunit_env_var var_decl;
-	update_dec_env_var var_decl;	
-	update_spec_env_var var_decl
+	if	test_flag #declabel_flag 1
+	then	(update_subunit_env_var var_decl;
+		update_dec_env_var var_decl;	
+		update_spec_env_var var_decl)
+	else	()
 );
 =TEX
 =IGN
@@ -1159,10 +1199,45 @@ val d3 = cn_basic_decl_of_string "type zed is range 0 .. 20;";
 val d4 = cn_basic_decl_of_string "y : Integer;";
 val d5 = cn_basic_decl_of_string "type why is private;";
 trans_basic_decl env d5;
-
-
+=TEX
+\subsection{The SID Function add\_var\_env}
+=SML
+fun €add_var_env› (var_decl : VAR_DECL) : unit = (
+	let	val blocks1 = hd(!blocks)
+			handle Fail _ => error "add_var_env" 507006 [];
+		val vc_vars1 = #vc_vars(#in_scope(#declab blocks1));
+	in	blocks :=
+		block_vc_vars(blocks1, vc_vars1 grab var_decl):: tl (!blocks)
+	end
+);
 =TEX
 \section{DECLARATIONS}\label{DECLARATIONS}
+=SML
+infix dot;
+fun (x : ID) €dot› (y : ID) = x ^ "." ^ y;
+=TEX
+In the following, $block2$ is bound first to catch possible errors with a corrupt environment.
+=SML
+fun €k_slot_dec› (label : LABEL) : unit = (
+	let	val lab = string_of_label label;
+		val block2 = hd (tl (!blocks))
+			handle Fail _ => error "k_slot_dec" 507006 [];
+		val block1 = hd (!blocks);
+		val subunit_flag2 = test_flag #subunit_flag 2;
+		val block_name1 = #block_name(#declab block1);
+		val block_name2 = #block_name(#declab block2);
+		val declab = {
+			block_name 	=	if	subunit_flag2
+						then	block_name2 dot block_name1
+						else	block_name1,
+			flags		=	#flags(#declab block1),
+			in_scope	= 	flatten_env (!blocks)			
+		};
+	in	dec_env := s_extend lab declab (!dec_env)
+		handle Fail _ => fail "k_slot_dec" 507010 [fn () => lab]
+	end
+);
+=TEX
 \section{STATEMENTS}\label{STATEMENTS}
 \section{LOOPS}\label{LOOPS}
 \subsection{The SID function end\_scope}
@@ -1173,12 +1248,352 @@ fun €end_scope› (():unit) : unit = (
 );
 =TEX
 \section{SUBPROGRAM DECLARATIONS}\label{SUBPROGRAMDECLARATIONS}
+=TEX
 \section{PROCEDURES}\label{PROCEDURES}
 \section{FUNCTIONS}\label{FUNCTIONS}
+\subsection{The SID function new\_scope\_fun\_inf}
+\subsection{The SID function new\_scope\_fun\_form}
+\subsection{The SID function stub\_spec\_fun}
+\subsection{The SID function inf\_fun}
+=SML
+fun €cart_prod› (par_specs : PARAM_SPEC list) : Z_EXP = (
+	let	fun aux (par_spec : PARAM_SPEC) = (
+			(zid current_cn_env o trans_id o #tmark o #var_decl)
+			par_spec
+		);
+	in	case par_specs of
+			[]	=>	error "cart_prod" 507009 []
+		|	[ps]	=>	aux ps
+		|	several =>	mk_z_∏ (map aux par_specs)
+	end
+);
+=TEX
+=SML
+fun €fun_decl› ({name, formal_pars, return_type} : INFORMAL_FUN) : Z_DECL = (
+	let	val zn = trans_id name;
+		val z_ret_ty = zid current_cn_env (trans_id return_type);
+		val zexp = (
+			case formal_pars of
+				[] => z_ret_ty
+			|	non_empty => z_tfun(cart_prod formal_pars,
+						 z_ret_ty));
+		val zvar = mk_z_lvar(zn, (dest_z_power_type o type_of) zexp, []);
+	in	mk_z_dec([zvar], zexp)
+	end
+);
+=TEX
+=SML
+fun €trans_informal_fun› (f: INFORMAL_FUN) : PARAINFO = (
+	let	val dec = fun_decl f;
+		val ntys = (map dest_var o fst o dest_z_dec) dec;
+	in	AxDesInfo([], mk_z_decl[dec], Nil, ntys)
+	end
+);
+=TEX
+\subsection{The SID function form\_fun}
+=SML
+fun €z_decls› (par_specs : PARAM_SPEC list) : Z_DECL list = (
+	let	fun aux1 ({vars, tmark} : VAR_DECL) : Z_DECL = (
+			let	val e = (zid current_cn_env o trans_id) tmark;
+				val ty = (dest_z_power_type o type_of) e;
+				fun v var = mk_z_lvar(var, ty, []);
+			in	mk_z_dec(map v vars, e)
+			end
+		);
+	in	map (aux1 o #var_decl) par_specs
+	end
+);
+=TEX
+=SML
+fun €trans_formal_fun› ({spec as {pre, post, ...},
+			informal_fun as {formal_pars, ...}} : FORMAL_FUN)
+				: PARAINFO = (
+	let	val dec = fun_decl informal_fun;
+		val ntys = (map dest_var o fst o dest_z_dec) dec;
+		val imp = z_imp(z_predexp_of_z_tm pre, z_predexp_of_z_tm post);
+		val pred = (
+			case formal_pars of
+				[] => imp
+			|	non_empty => z_forall(z_decls formal_pars, imp));
+	in	AxDesInfo([], mk_z_decl[dec], Value pred, ntys)
+	end
+);
+=TEX
+=TEX
+\subsection{The SID function curr\_form\_fun}
 \section{FORMAL PARAMETERS}\label{FORMALPARAMETERS}
 \section{SUBPROGRAM BODIES}\label{SUBPROGRAMBODIES}
+\subsection{The SID function update\_envs\_proc}
+The decision whether to call the three auxiliary functions is made in $update\_envs\_proc$ itself (since the test is the same in each case).
+
+In the following, the local function, $do1\_subunit$ does the work specified in the Z spec for one unit-name-subunit-name pair.
+=SML
+fun €update_subunit_env_proc› (() : unit) : unit = (
+	let	val dec_lab2 = #dec_lab (hd (tl (!blocks)));
+		val current_formal_proc1 = #current_formal_proc(hd(!blocks));
+		fun do1_subunit
+			(id1_id2_s as
+				(id1_id2,
+				s as {in_scope as {dec_labels, formal_procs, ...}, ...})
+					: string * SUBUNIT) = (
+			if	dec_lab2 mem dec_labels
+			then	(id1_id2,
+				subunit_formal_procs(s,
+					current_formal_proc1 :: formal_procs))
+			else	id1_id2_s
+		);
+	in	subunit_env := map do1_subunit (!subunit_env)
+	end
+);
+=TEX
+In the following, the local function, $do1\_dec\_label$ does the work specified in the Z spec for one dec label.
+=SML
+fun €update_dec_env_proc› (() : unit) : unit = (
+	let	val dec_lab2 = #dec_lab (hd (tl (!blocks)));
+		val current_formal_proc1 = #current_formal_proc(hd(!blocks));
+		fun do1_dec_label
+			(dec_label_d as
+				(dec_label,
+				d as {in_scope as {dec_labels, formal_procs, ...}, ...})
+					: string * DECLAB) = (
+			if	dec_lab2 mem dec_labels
+			then	(dec_label,
+				declab_formal_procs(d, 
+					current_formal_proc1 :: formal_procs))
+			else	dec_label_d
+		);
+	in	dec_env := map do1_dec_label (!dec_env)
+	end
+);
+=TEX
+In the following, the local function, $do1\_spec\_label$ does the work specified in the Z spec for one spec label.
+The identifiers in the variable declaration are translated first.
+=SML
+fun €update_spec_env_proc› (() : unit) : unit = (
+	let	val dec_lab2 = #dec_lab (hd (tl (!blocks)));
+		val current_formal_proc1 = #current_formal_proc(hd(!blocks));
+		fun do1_spec_label
+			(spec_label_s as
+				(spec_label,
+				s as {spec as {w, ...},
+					in_scope as {dec_labels, formal_procs, ...}, ...})
+					: string * SPECLAB) = (
+			if	dec_lab2 mem dec_labels
+			then	(spec_label,
+				speclab_formal_procs(s, 
+					current_formal_proc1 :: formal_procs))
+			else	spec_label_s
+		);
+	in	spec_env := map do1_spec_label (!spec_env)
+	end
+);
+=TEX
+The schema conjunction from the specification is implemented as sequential composition.
+=SML
+fun €update_envs_var› (() : unit) : unit = (
+	if	test_flag #declabel_flag 2 andalso test_flag #formal_body_flag 1
+	then	(update_subunit_env_proc ();
+		update_dec_env_proc ();	
+		update_spec_env_proc ())
+	else	()
+);
+=TEX
+\subsection{The SID function add\_proc\_env}
+=SML
+fun €add_proc_env› (() : unit) : unit = (
+	if	test_flag #formal_body_flag 1
+	then	let	val block1 = hd(!blocks);
+			val current_formal_proc1 =
+					#current_formal_proc(hd(!blocks));
+			val block2 = hd(tl(!blocks));
+			val formal_procs2 =
+					#formal_procs(#in_scope(#declab block2));
+			val block2' = block_formal_procs(block2,
+					current_formal_proc1 :: formal_procs2);
+		in	blocks := block1 :: block2' :: tl(tl(!blocks))
+		end
+	else	()
+);
+=TEX
+\subsection{The SID function vcs\_body}
+The decision about which support function to call (if any) is made in $vcs\_body$ itself.
+
+=SML
+fun €vcs_body_proc› (st : STATEMENT) : unit = (
+	let	val block1 = hd(!blocks);
+		val current_formal_proc1 = #current_formal_proc block1;
+		val vc_vars1 = #vc_vars(#in_scope(#declab block1));
+		val pre1 = #pre(#spec current_formal_proc1);
+		val post1 = #post(#spec current_formal_proc1);
+		val w1 = #w(#spec current_formal_proc1);
+		val w = flat (map (map trans_id o #vars) vc_vars1);
+		val in_scope = flatten_env (!blocks);
+		val formal_procs = #formal_procs in_scope;
+		val wp_env :WP_ENV = {
+			env = current_cn_env,
+			till = mk_z_true,
+			return = mk_z_true,
+			fun_header = dummy_informal_fun,
+			formal_procs = formal_procs
+		};
+		val spec : SPEC = {
+			w = w,
+			w0 = map (fn n => n ^ "â0") w,
+			pre = pre1,
+			post = post1,
+			label = #spec_lab block1
+		};
+		val speclab : SPECLAB = {
+			spec = spec,
+			formal_body_flag = false,
+			fun_flag = false,
+			till_flag = false,
+			wp_env = wp_env,
+			in_scope = in_scope
+		};
+	in	store_vcs(vcs(speclab, st))
+	end	
+);
+=TEX
+=SML
+fun €vcs_body_fun› (st : STATEMENT) : unit = (
+	let	val block1 = hd(!blocks);
+		val current_formal_fun1 = #current_formal_fun block1;
+		val vc_vars1 = #vc_vars(#in_scope(#declab block1));
+		val pre1 = #pre(#spec current_formal_fun1);
+		val post1 = #post(#spec current_formal_fun1);
+		val w1 = #w(#spec current_formal_fun1);
+		val w = flat (map (map trans_id o #vars) vc_vars1);
+		val in_scope = flatten_env (!blocks);
+		val formal_procs = #formal_procs in_scope;
+		val wp_env :WP_ENV = {
+			env = current_cn_env,
+			till = mk_z_true,
+			return = z_predexp_of_z_tm post1,
+			fun_header = #informal_fun current_formal_fun1,
+			formal_procs = formal_procs
+		};
+		val spec : SPEC = {
+			w = w,
+			w0 = map (fn n => n ^ "â0") w,
+			pre = pre1,
+			post = post1,
+			label = #spec_lab block1
+		};
+		val speclab : SPECLAB = {
+			spec = spec,
+			formal_body_flag = true,
+			fun_flag = true,
+			till_flag = false,
+			wp_env = wp_env,
+			in_scope = in_scope
+		};
+	in	store_vcs(vcs(speclab, st))
+	end	
+);
+=TEX
+=SML
+fun €vcs_body› (st : STATEMENT) : unit = (
+	if	test_flag #formal_body_flag 1
+	then	if	test_flag #fun_flag 1
+		then	vcs_body_fun st
+		else	vcs_body_proc st
+	else	()
+);
+=TEX
 \section{PACKAGES}\label{PACKAGES}
+\subsection{The SID function new\_scope\_pack\_spec}
+=SML
+val €empty_package› : PACKAGE = 
+	{	vc_vars		=	[],
+		consts_types	=	[],
+		formal_procs	=	[],
+		informal_funs	=	[],
+		formal_funs	=	[]	};
+=TEX
+=SML
+fun €new_scope_pack_spec› (ident : ID) : unit = (
+	let	val flags = {
+			pack_spec_flag = true,
+			pack_body_flag = false,
+			stub_flag = false,
+			subunit_flag = false,
+			formal_body_flag = false,
+			fun_flag = false,
+			declabel_flag = false,
+			speclabel_flag = false,
+			till_flag = false
+		};
+		val block = block_block_name(
+				block_flags(empty_block, flags), ident);
+	in	blocks := block :: !blocks;
+		pack_env := s_extend ident empty_package (!pack_env) 
+	end	handle Fail _ => fail "new_scope_pack_spec" 507007 [fn () => ident]
+		
+);
+=TEX
+\subsection{The SID function new\_scope\_pack\_spec}
+=SML
+fun €new_scope_pack_body› (ident : ID) : unit = (
+	let	val package1 = force_value(s_lookup ident (!pack_env));
+		val flags = {
+			pack_spec_flag = true,
+			pack_body_flag = false,
+			stub_flag = false,
+			subunit_flag = false,
+			formal_body_flag = false,
+			fun_flag = false,
+			declabel_flag = false,
+			speclabel_flag = false,
+			till_flag = false
+		};
+		val vc_vars1 = #vc_vars package1;
+		val block = block_vc_vars(empty_block, vc_vars1);
+		val consts_types = #consts_types package1;
+		val side_effect = (blocks := block :: !blocks);
+		val para_infos = flat (map (trans_basic_decl current_cn_env) consts_types);
+	in	map update_theory_db_with_parainfo para_infos; ()
+	end	handle Fail _ => fail "new_scope_pack_body" 507008 [fn () => ident]	
+);
+=TEX
+
 \section{STUBS AND SUBUNITS}\label{STUBSANDSUBUNITS}
+\subsection{The SID function begin\_stub}
+=SML
+fun €begin_stub› (():unit) : unit = (
+	let	val blocks1 = hd(!blocks);
+	in	blocks :=  block_stub_flag (blocks1, true) :: tl (!blocks)
+	end	handle Fail _ => error "begin_stub" 507006 []
+);
+=TEX
+\subsection{The SID function end\_stub}
+=SML
+fun €end_stub› (():unit) : unit = (
+	let	val blocks1 = hd(!blocks);
+	in	blocks :=  block_stub_flag (blocks1, false) :: tl (!blocks)
+	end	handle Fail _ => error "begin_stub" 507006 []
+);
+=TEX
+\subsection{The SID function new\_scope\_subunit}
+=SML
+fun €new_scope_subunit› (ident : ID) : unit = (
+	let	val flags = {
+			pack_spec_flag = false,
+			pack_body_flag = false,
+			stub_flag = true,
+			subunit_flag = false,
+			formal_body_flag = false,
+			fun_flag = false,
+			declabel_flag = false,
+			speclabel_flag = false,
+			till_flag = false
+		};
+		val block = block_block_name(
+				block_flags(empty_block, flags), ident);
+	in	blocks := block :: !blocks
+	end
+);
+=TEX
 \section{WEB CLAUSES}\label{WEBCLAUSES}
 =TEX
 \subsection{THE SID function new\_scope\_dec\_replace}
@@ -1268,7 +1683,7 @@ fun €new_scope_speclabel› (label : LABEL) : unit = (
 			pack_body_flag = false,
 			stub_flag = false,
 			subunit_flag = false,
-+			formal_body_flag = false,
+			formal_body_flag = false,
 			fun_flag = false,
 			declabel_flag = false,
 			speclabel_flag = true,
@@ -1311,16 +1726,18 @@ TBS - the error reporting here could usefully be made more sophisticated.
 =SML
 fun €update_replacement_env› ((label, repl) : LABEL * REPLACEMENT) : unit = (
 	let	val lab = string_of_label label;
-		val msg_no = case s_lookup lab (!repl_env) of
-			Value(UnReplaced _) => 0
-		|	Value _ => 507004
-		|	Nil => 507003;
+		val (msg_no, theory_name) =
+			case s_lookup lab (!repl_env) of
+				Value(UnReplaced (_, name)) => (0, name)
+			|	Value _ => (507004, "")
+			|	Nil => (507003, "");
 		val side_effect =
 				if	msg_no <> 0
 				then	warn "update_replacement_env" 507003
 					[fn () => lab]
 				else	();
-	in	repl_env := s_enter lab repl (!repl_env)
+	in	repl_env := s_enter lab repl (!repl_env);
+		open_theory theory_name
 	end
 );
 =TEX
@@ -1436,44 +1853,53 @@ fun €do_web_clause› (y as (WCCompilation x) : WEB_CLAUSE) : unit = (
 	()
 ) | do_web_clause (y as (WCReplacedByCompilation x) : WEB_CLAUSE) = (
 let	val {label=label, comp=comp} = x;
+	val current_theory = get_current_theory_name ();
 in	update_replacement_env(label, ReplaceComp x);
 	map do_kslot_compilation_unit (#comp x);
-	()
+	open_theory current_theory
 end
 ) | do_web_clause (y as (WCReplacedByPrivatePart x) : WEB_CLAUSE) = (
 let	val {label=label, private=private} = x;
+	val current_theory = get_current_theory_name ();
 in	update_replacement_env(label, ReplacePPart x);
 	map do_declaration (#private x);
-	()
+	open_theory current_theory
 end
 ) | do_web_clause (y as (WCReplacedByVisiblePart x) : WEB_CLAUSE) = (
 let	val {label=label,visible=visible} = x;
+	val current_theory = get_current_theory_name ();
 in	update_replacement_env(label, ReplaceVPart x);
 	map do_declaration (#visible x);
-	()
+	open_theory current_theory
 end
 ) | do_web_clause (y as (WCReplacedByDecl x) : WEB_CLAUSE) = (
 let	val {label=label,decls=decls} = x;
+	val current_theory = get_current_theory_name ();
 in	update_replacement_env(label, ReplaceDecl x);
 	new_scope_dec_replace x;
 	map do_declaration decls;
 	update_envs_remove_declabel x;
-	end_scope()
+	end_scope();
+	open_theory current_theory
 end
 ) | do_web_clause (y as (WCRefinedBy x) : WEB_CLAUSE) = (
 let	val {label=label,statement=statement} = x;
+	val current_theory = get_current_theory_name ();
 in	update_replacement_env(label, ReplaceStat x);
 	new_scope_speclabel label;
 	do_statement statement;
 	vcs_speclabel x;
-	end_scope_speclabel()
+	end_scope_speclabel();
+	open_theory current_theory
 end
 ) | do_web_clause (y as (WCReplacedBy x) : WEB_CLAUSE) = (
 let	val {label=label,statement=statement} = x;
+	val current_theory = get_current_theory_name ();
 in	update_replacement_env(label, ReplaceStat x);
 	new_scope_speclabel label;
 	do_statement statement;
-	end_scope_speclabel()
+	end_scope_speclabel();
+	open_theory current_theory
 end
 );
 =TEX
