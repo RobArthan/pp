@@ -41,8 +41,8 @@ of the resolution facilities in ICL HOL.}
 
 \subsection{Changes History} 
 \begin{description}
-\item[Issue 1.1] 
-First version.
+\item[Issue 1.1,1.2] 
+First versions.
 \end{description}
 \subsection{Changes Forecast}
 None known.
@@ -168,7 +168,7 @@ to have various methods of adding items into the set of support,
 and always use this paradigm.
 
 Further possibilities for search strategies include ``weighting'' assumptions for interest, e.g. preferring those that contain particular symbols,
-or choosing by number of disjuncts.
+or choosing by number of disjuncts (in particular, one disjunct).
 This will not be attempted in the first attempt at the primitive tool.
 
 Even when a general search strategy has been determined, the precise algorithm will still need to be fixed (e.g. which of two members of the set of support are chosen first).
@@ -275,36 +275,65 @@ signature ÛResolutionÝ  = sig
 This is the signature of a structure providing Resolution
 facilities to ICL HOL.
 =ENDDOC
-\section{THE PRIMITIVE RULE}
+\section{UNIFICATION OF TERMS}
+The following provides a way of unifying two subterms in the context of
+limitations on both type instantiation and term specialisation.
+=DOC
+val Ûterm_unifyÝ : (TYPE list) -> (TERM list) ->
+	(TERM * TERM list * TYPE list) * 
+	(TERM * TERM list * TYPE list) -> 
+	((TYPE * TYPE) list * (TERM * TERM) list) *
+	((TYPE * TYPE) list * (TERM * TERM) list);
+=DESCRIBE
+The initial type list is a list of type variables to avoid in generating new names,
+and the term list a list of term variables to likewise avoid.
+The other two input arguments are each a tuple of:
+a term to unify,
+a list of variables in the term that may be specialised,
+and a list of types for which instantiation is allowed.
+If the two terms can be unified then it returns two
+tuples, referring to each of the two input tuples.
+The tuple is a list of type instantiations and a list of
+term specialisations (after type instantiation).
+=FAILURE
+67005	Cannot unify ?0 and ?1
+67006	Cannot unify ?0 and ?1 as cannot specialise ?2
+67007	Cannot unify ?0 and ?1 as cannot instantiate ?2
+67012	Cannot unify ?0 and ?1 as ?0 occurs in expansion of ?1
+=ENDDOC
+As a design error:
+=FAILURE
+67013	DESIGN ERROR: Encountered mapping to self of ?0
+=TEX
+\section{FORWARD RESOLUTION}
+\subsection{A Primitive Resolution Rule}
 =DOC
 val Ûprim_resolution_ruleÝ : 
-	(THM list -> THM list -> ('a list * 'b)) ->
-		(* preprocessor *)
-	('a -> 'a -> THM list) ->
-		(* the resolver function *)
+	(THM list -> THM list -> (int * ('a list * 'b))) -> (* preprocessor *)
+	('a -> 'a -> THM list) -> (* the resolver function *)
 	((THM list * ('a list * 'b) * int * int) -> 
-		(('a list * 'b) * int * int * bool)) ->
-		(* postprocessor *)
+		(('a list * 'b) * int * int * bool)) -> (* postprocessor *)
 	('a list * 'b -> THM list) -> (* extract results *)
 	int -> (* maximum number of new theorems *)
-	(THM list) -> (* input set of support theorems *)
-	(THM list) -> (* input other theorems *)
-	(THM list);   (* final outcome *)
+	THM list -> (* input set of support theorems *)
+	THM list -> (* input other theorems *)
+	THM list;   (* final outcome *)
 =DESCRIBE
 $prim\_resolution\_rule$ $prep$ $reso$ $postp$ $extract$ $limit$
 $sos$ $rest$ works as follows:
 \begin{itemize}
 \item
-Evaluate $prep$ $sos$ $rest$, and set $(dblist,$ $dbdata)$ to this.
+Evaluate $prep$ $sos$ $rest$, and set $(hwm,$ $(dblist,$ $dbdata))$ to this.
 \item
-Attempt resolutions, based on a high water mark, $hwm$.
+Attempt resolutions, chosing fragments based on a high water mark, $hwm$.
 The function
 matches members of the $dblist$ indexed by $ind$, running from 1 to $hwm$ to that indexed by $hwm$ itself, and then incrementing $hwm$ when it is reached by $ind$, and starting with $ind$ of 1 again.
-$hwm$ is also initially $1$.
-The high water mark item will be the first argument, allowing some partial evaluation.
+$hwm$ should initially be the index of the first fragment from the set of support, if the preprocessor has done its job,
+and this fragments should follow all the non-set of support fragments.
+The high water mark item will be the first argument to the resolver.
 \item
-When a resolution attempt returns a non-nil list of theorems, $res$,
-(resolution failures and results $[]$ are treated alike),
+When a resolution attempt returns a list of theorems, $res$,
+(resolution failures should not occur, just $[]$),
 then evaluate $postp$ $(res,$ $(dblist,$ $dbdata)$ $ind,$ $hwm)$ to 
 extract the $(dblist,$ $dbdata)$, $ind$, $hwm$ and $halt$.
 In addition, add the length of $res$ to the sum of new theorems
@@ -316,6 +345,10 @@ or the high water mark and index are both the length of $dblist$, then return as
 \item
 If $limit$ is not exceeded, then continue with the new $(dblist,$ $dbdata)$, $ind$ and $hwm$.
 \end{itemize}
+=FAILURE
+67003	The limit, ?0, must be a positive integer
+67004	No resolution occurred
+67010	Postprocessor corrupted processing
 =ENDDOC
 Notice the following about $prim\_resolution\_rule$:
 \begin{itemize}
@@ -323,7 +356,8 @@ Notice the following about $prim\_resolution\_rule$:
 The genericity $:'a list * 'b$ allows, e.g., the preprocessing to make one entry
 per subterm of the theorem, and keep a list of actual theorems as well.
 \item
-It is up to the preprocessor to indicate membership of the set of support in its result, and up to the resolver to immediately fail if neither argument in set of support.
+From the initialisation of the $hwm$ the set of support strategy will always be followed
+(though in only its simplest form).
 \item
 The limit includes new theorems which are discarded by the postprocessor
 (this is a problem with the generic nature of the primitive
@@ -336,31 +370,56 @@ If the resolver is not symmetric
 (the resulting lists has the same members, but perhaps different ordering for either way round of argument) then some valid resolution attempts won't
 be scheduled.
 \end{itemize} 
-\section{A BASIC RESOLUTION TOOL KIT}
+
+\subsection{A Basic Resolution Tool Kit}
 The following provides one way of filling in the arguments
 to the above function.
 It lacks sophistication in some areas: e.g. in deferring
 inference.
 =DOC
-type ÛBASIC_RES_TYPEÝ 	(* bool * TERM * TERM list * TYPE list * THM *);
+type ÛBASIC_RES_TYPEÝ 	(* TERM * bool * TERM list * TYPE list * THM 
+	* TERM list * TYPE list *);
 =DESCRIBE
 This is a type abbreviation for the basic resolution tool
 based on $prim\-\_resolution\-\_rule$.
-The $bool$ is true if the theorem is in the set of support,
-the term is a subterm of the theorem argument, reached through outer universal quantifications and
-all propositional connectives,
-except a single $³$ if the subterm occurs ``negatively'' in the conclusion of the theorem.
+The arguments are:
+\begin{enumerate}
+\item
+The term is a subterm of the theorem argument(5), 
+reached through outer universal quantifications and
+all propositional connectives.
+\item
+The bool is false if and only if the subterm occurs ``negatively'' in the conclusion of the theorem.
+\item
 The term list is the specialisable variables of the subterm.
+\item
 The type list is the instantiable type variables of the subterm.
+\item
+The theorem is the source of the fragment.
+\item
+The next term list is the term variables that may not be used
+in unifying the fragment
+\item
+The next type list is the type variables that may not be used
+in unifying the fragment
+\end{enumerate}
 =ENDDOC
 =DOC
-val Ûfragment_termÝ : TERM -> TERM list;
+val Ûfragment_termÝ : TERM -> (TERM * bool * TERM list) list * TERM list;
 =DESCRIBE
 This function fragments a term into subterms with no propositional
-connections, except a single negative if it occurs ``negatively'' in the original term.
+connections, with the boolean indicating a positive position within the original term if true,
+negative otherwise,
+and any varibales that are bound in the position of the subterm (except for outer universals).
+It will also return any propositional fragments that are within inner bindings, but have no bound variables,
+in addition to the binding term itself.
+The second list is of the outer universal quanitified variables (which may be paired in the original term).
 =EXAMPLE
-fragment_term ¬a ± ³ b ´ c ± f d® =
-	[¬³ a®, ¬b®, ¬c®, ¬f d®]
+fragment_term ¬µ a · a ± ³ b ´ (µ e · e ± c) ± f d® =
+	([(¬a®,false,[]), (¬b®,true,[]), 
+	(¬µ e · e ± c®,true,[]), 
+	 (¬c®,true,[¬e®]), (¬f d®, true,[])],
+	[¬a®])
 =TEX
 =USES
 In implementing $basic\_res\_pre$ and $basic\_res\_post$
@@ -381,52 +440,56 @@ basic mechanisms are in place,
 as it is rather weak.
 In particular noticing that one conclusion is the succedent or disjunct of
 another would be helpful.
+Another test would be for simple reorderign of quantifiers.
 The resolution process generating the newly inserted theorem could give hints here.
 =DOC
-val Ûbasic_res_preÝ : THM list -> THM list -> BASIC_RES_TYPE list * THM list;
+val Ûbasic_res_preÝ : THM list -> THM list -> (int * (BASIC_RES_TYPE list * THM list));
 =DESCRIBE
 This is the preprocessor for the basic resolution tool
 based on $prim\-\_resolution\-\_rule$.
 The first argument is the set of support theorems,
 the second argument is the rest of the input theorems.
-Each theorem will be checked against those already
-added with $basic\-\_res\-\_subsumption$, and if OK stripped of universal quantifiers, and then fragmented (by $fragment\_term$), and for each fragment
+Each theorem will be stripped of universal quantifiers, and then fragmented (by $fragment\_term$), and for each fragment
 the appropriate item added to the resulting list
-(i.e. whether it came from the set of support,
+(i.e. 
 the fragment, the list of specialisable variables of the fragment, the list of instantiable type variables and the originating theorem).
-The second part of the result is just the appending of the first list of theorems to the second.
+The theorem list part of the result is just the appending of the first list of theorems to the second.
+The integer is the index of the first set of support fragment in the list.
 =ENDDOC
+We could do, e.g., $basic\_res\_subsumption$ on each pair of theorems before adding any.
 =DOC
-val Ûterm_unifyÝ : (TERM * TERM list * TYPE list) * 
-	(TERM * TERM list * TYPE list) -> 
-	((TYPE * TYPE) list * (TERM * TERM) list) *
-	((TYPE * TYPE) list * (TERM * TERM) list);
+val Ûbasic_resolve_ruleÝ: TERM -> THM -> THM -> THM;
 =DESCRIBE
-The two input arguments are each a tuple of:
-a term to unify,
-a list of variables in the term that may be specialised,
-and a list of types for which instantiation is allowed.
-If the two terms can be unified then it returns two
-tuples, referring to each of the two input tuples.
-The tuple is a list of type instantiations and a list of
-term specialisations.
+$basic\_resolve\_rule$ $subterm$ $pos$ $neg$
+attempts to resolve two theorems
+that have a common subterm, $subterm$, occurring ``positively'' in $pos$
+and ``negatively'' in $neg$.
+=FRULE 1 Rule
+basic_resolve_rule
+subterm
+÷
+‡ ô P [subterm]
+„ ô N [subterm]
+÷
+simplify (‡, „ ô P[F] ² N[T])
+=TEX
+Where $simplify$ carries out the simplifications in the predicate calculus where an argument is the constant $¬T®$ or $¬F®$,
+plus a few others.
 =FAILURE
-67005	Cannot unify ?0 and ?1
-67006	Cannot unify ?0 and ?1 as cannot specialise ?2
-67007	Cannot unify ?0 and ?1 as cannot instantiate ?2
+3031	?0 is not of type ¬:BOOL®
+67009	?0 is not a subterm of ?1
 =ENDDOC
+This is implemented via $²\_elim$.
 =DOC
 val Ûbasic_res_resolverÝ : BASIC_RES_TYPE -> BASIC_RES_TYPE -> THM list;
 =DESCRIBE
 This is the resolver for the basic resolution tool
 based on $prim\-\_resolution\-\_rule$.
-It will fail if neither argument is in the set of support.
-It will also fail if resolution doesn't work!
 Resolution seeks to find sufficient term specialisation
 and type instantiation on both terms to make one of the two term fragments the negation of the other,
 using $term\_unify$.
 If this can be done then the two original theorems are 
-specialised and instantiated in the same manner and the term fragment cancelled,
+specialised and instantiated in the same manner and the term fragment cancelled by $basic\-\_resolve\-\_rule$,
 and the result returned as a singleton list.
 Prior to being returned, any allowed universal quantification
 will be added back in.
@@ -439,6 +502,8 @@ In the basic resolution tool the generality of a list of theorems is unnecessary
 Message is a variant on 67002, included for diagnostic purposes.
 It will be removed in a more stable product.
 =ENDDOC
+The returned theorem could also be re-universally quantified,
+either just by $all\_µ\_intro$, or more intelligently.
 =DOC
 val Ûbasic_res_postÝ : 
 	(THM -> THM -> int) ->
@@ -447,6 +512,9 @@ val Ûbasic_res_postÝ :
 =DESCRIBE
 This is the post processor for the basic resolution tool
 based on $prim\-\_resolution\-\_rule$.
+The results will be split into their respective conjuncts
+(if any).
+Then
 $basic\_res\_post$ $subsum$ $(res,$ $frags,$ $before,$ $hwm,$ $ind)$
 will test each member of $res$, checking for the conclusion $T$ or $F$, and then against each member of $before$.
 In checking one theorem against another 
@@ -466,6 +534,7 @@ It does no more than return the second argument.
 =ENDDOC
 Some one-off subsumption checks could be placed in this rule,
 rather than $basic\_res\_post$.
+\subsection{Derived Resolution Tools}
 =DOC
 val Ûbasic_resolution_ruleÝ : int -> THM list -> THM list ->
 	THM list;
@@ -515,8 +584,8 @@ the pre-existing assumptions and the input $thms$ will be
 These theorems will be resolved against each other until $limit$ new theorems have been 
 derived, or until $...ô\ F$ is derived, or until no
 further resolution can be done.
-In any resolution attempt at least one of the two theorems will belong to the set of support, or be derived from
-an earlier resolution in the evaluation.
+In any resolution attempt at least one of the two theorems will be assumed fragemnts from the stripped goal, or be derived from
+an earlier resolution in upon those fragments.
 Duplicates and pure specialisations will be discarded.
 
 Resolution will be attempted on subterms reached through 
@@ -547,11 +616,11 @@ val Ûbasic_resolution_tac1Ý : int -> THM list ->
 	TACTIC;
 =DESCRIBE
 $basic\_resolution\_tac1$ $limit$ $thms$ $(asms, conc)$
-will take the assumptions gained by $asm\_rule$ to be the set of support, and $thms$ to be the rest of the theorems.
+will take the theorems gained by $asm\_rule$'ing the assumptions and $thms$ as inputs.
 These theorems will be resolved against each other until $limit$ new theorems have been 
 derived, or until $...ô\ F$ is derived, or until no
 further resolution can be done.
-In any resolution attempt at least one of the two theorems will belong to the set of support, or be derived from
+In any resolution attempt at least one of the two theorems will be from the original goals assumptions, or be derived from
 an earlier resolution in the evaluation.
 Duplicates and pure specialisations will be discarded.
 
@@ -576,6 +645,200 @@ of the input theorems.
 67004	No resolution occurred
 =ENDDOC
 This is $basic\_resolution\_rule$ with some pre- and postprocessing.
+
+\section{BACKWARDS RESOLUTION}
+\subsection{A Primitve Resolution Tactic}
+=DOC
+val Ûprim_resolution_tacÝ :
+	(THM -> THM -> 'init) -> (* initialisation for resolver *) 
+	('init -> (((TYPE * TYPE)list * (TERM * TERM) list) *
+		((TYPE * TYPE)list * (TERM * TERM) list) * 'init)) -> (* resolver *)
+	(THM -> TACTIC) -> (* postprocessor *)
+	int -> (* maximum number of assumptions *)
+	THM list -> THM list -> (* input set of support and other theorems *)
+	(TERM -> bool) -> (* test for assumptions that are in the set of support *)
+	TACTIC;   (* final outcome *)
+=DESCRIBE
+$prim\_resolution\_tac$ $init$ $reso$ $postp$ $limit$
+$sos$ $rest$ $sosasms$ works as follows:
+
+Initialise a database, $db$, which maps theorems onto a list of type instantiations  paired with term specialisations,
+into having the input theorems and $asm\_rule$'d assumptions
+all mapping into empty lists.
+This list will be ordered into having first the non-set of support assumptions (those that fail $sosasms$), then the non-set of support theorems,
+then the set of support assumptions,
+and finally the set of support theorems.
+Set high water mark, $hwm$ to the index of the first 
+set of support theorem in $db$, and index $ind$ to 1.
+
+The theorems indexed $ind$ and $hwm$ are 
+compared, looking for subterms that can be unified,
+using $reso$,
+given the initialisation data supplied by $init$ applied
+to the two theorems.
+
+If a unification is found then the required instantiatiation
+and specialisation are applied to any of the two theorems that have not been so modified before (found by checking $db$),
+and the results applied to the current goal by $postp$,
+which might solve the current (sub)goal.
+Then unless the count of assumptions exceeds
+the preset limit, $limit$,
+the process is then continued, using the modified initialisation returned by $reso$, but upon the new subgoals,
+under the assumption that the previous assumptions will remain, any new assumptions will be added
+at the head of the list and also processed
+into $db$.
+
+If no further unification is found within
+a pair of theorems then $ind$ is incremented.
+If this exceeds $hwm$ then $ind$ is reset to $1$ and $hwm$
+incremented. 
+If $hwm$ is past the end of $db$ then halt the process
+as we have run out of possible resolutions.
+Otherwise the process is restarted on the newly indexed theorems, given new initialisation via $init$.
+
+If the process halts on any particular subgoal then
+it is continued on the remaining subgoals suitably backing up $db$,
+until none are left untried.
+=FAILURE
+67003	The limit, ?0, must be a positive integer
+67004	No resolution occurred
+67010	Postprocessor corrupted processing
+=ENDDOC
+Notice the following about $prim\_resolution\_tac$:
+that if the resolver is not symmetric
+(the resulting lists has the same members, but perhaps different ordering for either way round of argument) then some valid resolution attempts won't
+be scheduled.
+
+If a theorem is entered as only a single specialised
+theorem into the assumption list then a cleverer
+avoidance of duplicated effort would ensure that anything
+done to the ``child'' theorem was recorded as done to the parent,
+with appropropriate additions to reflect the ``birthing'' process.
+
+Notice how the emphasis changes in the primitive inference rule version to the above.
+In the tactic form we avoid duplication of effort by 
+recording what we have done to theorems in a database,
+and rely on the postprocessor to cause the eventual interraction between two
+modified theorems,
+by their individual application to the current goal
+by the postprocessing tactic:
+they are not directly compared in the post-processing.
+In the primitive inference rule form we pre-calculate all the subterms
+of our theorems, assuming that the postprocessor will give different results for resolving different fragments of the
+same theorem,
+and we do allow the postprocessor to look for immediate interractions
+between the modified theorems.
+\subsection{A Basic Resolution Tool Kit}
+The following list of functionsd provides one way of filling in the arguments
+to the above function.
+It lacks sophistication in some areas: e.g. in deferring
+inference.
+=DOC
+val Ûbasic_rest_initÝ : THM -> THM -> (int * int);
+=DESCRIBE
+This is the initialisation data for the basic resolution tool
+based on $prim\-\_resolution\-\_tac$.
+It is no more than
+=INLINEFT
+(fn _ => fn _ => (0,1))
+=TEX
+=ENDDOC
+=DOC
+val Ûbasic_rest_resolverÝ
+ : ((THM * THM * int * int) -> (
+		((TYPE * TYPE)list * (TERM * TERM) list) *
+		((TYPE * TYPE)list * (TERM * TERM) list) * 
+		(THM * THM * int * int)));
+=DESCRIBE
+This is the resolver for the basic resolution tool
+based on $prim\-\_resolution\-\_tac$.
+$basic\_rest\_resolver$ $(thm_1,$ $thm_2,$ $ind_1,$ $ind_2)$
+will start looking at the $ind_1 + 1$'th subterm of $thm_1$
+and the $ind_2$'th subterm of $thm_2$,
+incrementing the first index until it goes past the end of
+its theorem's conclusion, then reseting it to $1$ and incrementing the second index.
+Resolution seeks to find sufficient term specialisation
+and type instantiation on both subterms to make one of the two term fragments the negation of the other,
+using $term\_unify$.
+In the result the first type instantiation and term specialisation are to be applied to the first theorem, the second ones to the second theorem,
+and the returned initialisation data is just the original theorems and the indices
+of the successfully unified subterms.
+=FAILURE
+67011	No more resolutions for ?0 and ?1
+=ENDDOC
+
+=DOC
+val Ûbasic_rest_postÝ : 
+	THM -> TACTIC;
+=DESCRIBE
+This is the post processor for the basic resolution tool
+based on $prim\-\_resolution\-\_tac$.
+It is no more than $strip\_asm\_tac$.
+=ENDDOC
+\subsection{Derived Resolution Tactics}
+=DOC
+val Ûbasic_resolution_tac2Ý  : int -> THM list ->
+	TACTIC;
+=DESCRIBE
+$basic\_resolution\_tac2$ $limit$ $thms$ $(asms, conc)$
+will first strip the negated goal into the assumption list.
+The assumptions derived from this will become the set of support,
+the pre-existing assumptions and the input $thms$ will be
+ the rest of the theorems.
+These theorems and assumptions will be resolved against each other, perhaps in multiple subgoals, until the limit of $limit$ assumptions has been exceeded, or until the assumption $¬F®$ is derived, or until no
+further resolution can be done.
+In any resolution attempt at least one of the two arguments
+will either be from the stripped original goal, or derived
+from the resolution of such assumptions.
+
+Resolution will be attempted on subterms reached through 
+outer universal quantification, and propositional
+connectives, by specialising the outer quantifications,
+and by type instantiation on the input theorems $thms$ where necessary and possible.
+=USES
+On its own, or in combination with some canonicalisation
+of the input theorems.
+=FAILURE
+67003	The limit, ?0, must be a positive integer
+67004	No resolution occurred
+=ENDDOC
+This is $basic\_resolution\_tac$ with
+$basic\-\_rest\-\_init$ as the initialiser,
+$basic\-\_rest\-\_resolver$ as the resolver argument,
+and $basic\-\_rest\-\_post$  as the 
+postprocessor argument, with
+some further pre- and postprocessing.
+=DOC
+val Ûbasic_resolution_tac3Ý : int -> THM list ->
+	TACTIC;
+=DESCRIBE
+$basic\_resolution\_tac3$ $limit$ $thms$ $(asms, conc)$
+will take the goal's assumptions and $thms$ as inputs.
+These will be resolved against each other,
+either proving the goal,
+or perhaps producing multiple subgoals, until either $limit$ of assumptions is exceeded, or no further resolution is possible in each remaining subgoal.
+In any resolution attempt at least one of the two resolvents will be from the original goals assumptions, or be derived from
+an earlier resolution in the evaluation.
+
+Resolution will be attempted on subterms reached through 
+outer universal quantification, and propositional
+connectives, by specialising the outer quantifications,
+and by type instantiation on the input theorems $thms$ where necessary and possible.
+
+=USES
+On its own, or in combination with some canonicalisation
+of the input theorems.
+=FAILURE
+67003	The limit, ?0, must be a positive integer
+67004	No resolution occurred
+=ENDDOC
+This is $basic\_resolution\_tac$ with
+$basic\-\_rest\-\_init$ as the initialiser,
+$basic\-\_rest\-\_resolver$ as the resolver argument,
+and $basic\-\_rest\-\_post$  as the 
+postprocessor argument, with
+some further pre- and postprocessing.
+
 \section{EPILOGUE}
 =SML
 end; (* of signature Resolution *)
