@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.7 2001/12/15 19:17:00 rda Exp rda $ 
+ * $Id: search.c,v 2.8 2002/01/21 22:42:47 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -17,12 +17,6 @@
 #define FORWARDS		1
 #define BACKWARDS		2
 
-/*
- * The following gives the bound of the static array that
- * contains text widgets in which the ":= Selection" callbacks
- * look for selections to copy into the search or replace windows.
- */
-#define MAX_SELECTION_SOURCES 10
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files: 
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -54,18 +48,15 @@ static char *no_search_string =
 	"There is nothing in the search field";
 
 static char *no_selection_replace = 
-	"There is no selection in any text window "
+	"No text is selected in this xpp session "
 	"to be copied into the replacement field";
 
 static char *no_selection_search = 
-	"There is no selection in any text window "
+	"No text is selected in this xpp session "
 	"to be copied into the search field";
 
 static char *no_selection_to_replace = 
 	"There is no selection in the text window to be replaced";
-
-static char *too_many_selection_sources = 
-	"DESIGN ERROR: too many attempts to register a text selection source";
 
 static char *not_found = 
 	"Search pattern \"%s\" not found";
@@ -90,8 +81,6 @@ typedef struct {
 } SearchData;
 	
 static SearchData search_data;
-static int num_selection_sources;
-static Widget selection_sources[MAX_SELECTION_SOURCES];
 /*
  * Forward declarations for callbacks etc.
  */
@@ -113,37 +102,6 @@ static void	search_backwards_cb(CALLBACK_ARGS),
 
 static void line_no_set(SearchData*);
 
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * register_selection_source: add an entry to the list of
- * text selection sources
- * **** **** **** **** **** **** **** **** **** **** **** ****/
-void register_selection_source(Widget w)
-{
-	if (num_selection_sources == MAX_SELECTION_SOURCES) {
-		ok_dialog(root, too_many_selection_sources);
-		return;
-	} /* else */
-	selection_sources[num_selection_sources++] = w;
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * get_selection: find a selection using the list of
- * text selection sources
- * **** **** **** **** **** **** **** **** **** **** **** ****/
-static char *get_selection(Widget text_w, char *err_msg)
-{
-	char *sel;
-	int i;
-	for(	i = 0, sel = NULL;
-		sel == NULL && i < num_selection_sources;
-		i += 1) {
-		sel = XmTextGetSelection(selection_sources[i]);
-	}
-	if(sel == NULL) {
-		ok_dialog(text_w, err_msg);
-	}
-	return sel;
-}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * add_search_tool: attach a search & replace tool to a text widget
  * This is long but only because it is repetitive.

@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.2 2001/11/16 17:20:38 rda Exp rda $
+ * $Id: xmisc.c,v 2.3 2001/12/15 19:17:28 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -14,6 +14,13 @@
  * macros:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #define _xmisc
+/*
+ * The following gives the bound of the static array that
+ * contains text widgets in which the ":= Selection" callbacks
+ * and certain other operations on selections
+ * look for selections to copy into the search or replace windows.
+ */
+#define MAX_SELECTION_SOURCES 10
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -30,6 +37,20 @@
 #include<varargs.h>
 
 #include "xpp.h"
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * messages
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static char *too_many_selection_sources = 
+	"DESIGN ERROR: too many attempts to register a text selection source";
+static char *no_selection_message =
+	 "No text is selected in this xpp session";
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * static data
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static int num_selection_sources;
+static Widget selection_sources[MAX_SELECTION_SOURCES];
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * toggle_menu_item_sensitivity: given a menu w toggle the
@@ -322,7 +343,7 @@ static void edit_copy_cb(
 		XtPointer	cbs)
 {
 	Widget text_w = (Widget) cbd;
-	(void) XmTextCopy(text_w, CurrentTime);
+	XmTextCopy(text_w, CurrentTime);	
 }
 static void edit_paste_cb(
 		Widget		w,
@@ -352,4 +373,35 @@ static void post_popupeditmenu(
 		XmMenuPosition(menu_w, event);
 		XtManageChild(menu_w);
 	}
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * register_selection_source: add an entry to the list of
+ * text selection sources
+ * **** **** **** **** **** **** **** **** **** **** **** ****/
+void register_selection_source(Widget w)
+{
+	if (num_selection_sources == MAX_SELECTION_SOURCES) {
+		ok_dialog(root, too_many_selection_sources);
+		return;
+	} /* else */
+	selection_sources[num_selection_sources++] = w;
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * get_selection: find a selection using the list of
+ * text selection sources
+ * **** **** **** **** **** **** **** **** **** **** **** ****/
+char *get_selection(Widget w, char *err_msg)
+{
+	char *sel;
+	int i;
+	for(	i = 0, sel = NULL;
+		sel == NULL && i < num_selection_sources;
+		i += 1) {
+		sel = XmTextGetSelection(selection_sources[i]);
+	}
+	if(sel == NULL) {
+		ok_dialog(w, err_msg);
+	}
+	return sel;
 }

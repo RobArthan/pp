@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.18 2002/01/21 21:49:13 rda Exp rda $
+ * $Id: mainw.c,v 2.19 2002/01/21 22:42:47 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -55,7 +55,7 @@ static char* changed_running_quit_message =
 "window is still running. Do you really want to quit?";
 
 static char *no_selection_message =
-	 "No text has been selected";
+	 "No text is selected in this xpp session";
 
 static char* running_quit_message =
 "The application in the journal window is still running. "
@@ -755,9 +755,8 @@ static void file_menu_cb(
 		if(fname != NULL) {XtFree(fname);};
 		break;
 	case FILE_MENU_SAVE_SELECTION:
-		if((buf = XmTextGetSelection(script)) == NULL) {
-			ok_dialog(script, no_selection_message);
-		} else {
+		if((buf = get_selection(script, no_selection_message))
+			!= NULL) {
 			fname = file_dialog(frame, "Save Selection");
 			if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
@@ -963,7 +962,7 @@ static void edit_menu_cb(
 
 	case EDIT_MENU_COPY:
 
-		XmTextCopy(script, CurrentTime);
+		XmTextCopy(script, CurrentTime);	
 		break;
 
 	case EDIT_MENU_PASTE:

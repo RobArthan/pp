@@ -181,8 +181,6 @@ typedef struct menu_item {
 /* Module: search */
 	extern Boolean add_search_tool(
 		Widget	w);
-	extern void register_selection_source(
-		Widget w);
 /* Module: templates */
 	extern Boolean init_templates_tool(
 		Widget	w);
@@ -232,6 +230,9 @@ typedef struct menu_item {
 		XmTextVerifyCallbackStruct	*cbs);
 	extern	void attach_rw_edit_popup(Widget text_w);
 	extern	void attach_ro_edit_popup(Widget text_w);
+	extern	void register_selection_source(
+		Widget w);
+	extern	char *get_selection(Widget w, char *err_msg);
 /* Module: xpp */
 #ifndef _xpp
 	extern
