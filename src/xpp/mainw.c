@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.75 2004/02/08 14:09:11 rda Exp rda $
+ * $Id: mainw.c,v 2.76 2004/02/08 14:23:49 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -157,7 +157,8 @@ XtPointer undo_ptr;
 
 static void
 	cmd_menu_cb(CALLBACK_ARGS),
-	edit_menu_cb(CALLBACK_ARGS),
+	script_undo_cb(CALLBACK_ARGS),
+	script_redo_cb(CALLBACK_ARGS),
 	file_menu_cb(CALLBACK_ARGS),
 	help_menu_cb(CALLBACK_ARGS),
 	reopen_cb(CALLBACK_ARGS),
@@ -256,26 +257,27 @@ static MenuItem tools_menu_items[] = {
     {NULL}
 };
 
-#define EDIT_MENU_CUT   0
-#define EDIT_MENU_COPY  1
-#define EDIT_MENU_PASTE 2
-#define EDIT_MENU_CLEAR 3
+/*
+ * The following two macro must be the offsets in the edit menu of the
+ * undo and redo entries. (Used to set the sensitivity).
+ */
+
 #define EDIT_MENU_UNDO  4
 #define EDIT_MENU_REDO  5
 
 static MenuItem edit_menu_items[] = {
     { "Cut", &xmPushButtonGadgetClass, 'C', NULL, NULL,
-        edit_menu_cb, (XtPointer)EDIT_MENU_CUT, (MenuItem *)NULL, False },
+        edit_cut_cb, (XtPointer)0, (MenuItem *)NULL, False },
     { "Copy", &xmPushButtonGadgetClass, 'o', NULL, NULL,
-        edit_menu_cb, (XtPointer)EDIT_MENU_COPY, (MenuItem *)NULL, False },
+        edit_copy_cb, (XtPointer)0, (MenuItem *)NULL, False },
     { "Paste", &xmPushButtonGadgetClass, 'P', NULL, NULL,
-        edit_menu_cb, (XtPointer)EDIT_MENU_PASTE, (MenuItem *)NULL, False },
+        edit_paste_cb, (XtPointer)0, (MenuItem *)NULL, False },
     { "Clear", &xmPushButtonGadgetClass, 'l', NULL, NULL,
-        edit_menu_cb, (XtPointer)EDIT_MENU_CLEAR, (MenuItem *)NULL, False },
+        edit_clear_cb, (XtPointer)0, (MenuItem *)NULL, False },
     { "Undo", &xmPushButtonGadgetClass, 'U', NULL, NULL,
-        edit_menu_cb, (XtPointer)EDIT_MENU_UNDO, (MenuItem *)NULL, False },
+        script_undo_cb, (XtPointer)0, (MenuItem *)NULL, False },
     { "Redo", &xmPushButtonGadgetClass, 'R', NULL, NULL,
-        edit_menu_cb, (XtPointer)EDIT_MENU_REDO, (MenuItem *)NULL, False },
+        script_redo_cb, (XtPointer)0, (MenuItem *)NULL, False },
     {NULL}
 };
 
@@ -676,74 +678,9 @@ static Boolean setup_main_window(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	menubar = XmVaCreateSimpleMenuBar(frame, "menubar", NULL);
 
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * File menu:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-	filemenu = setup_menu(
-		menubar, XmMENU_PULLDOWN, "File", 'F', False, file_menu_items);
-	setup_reopen_menu(NULL);
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Edit menu:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-
 /*
- * edit_menu_items gets changed later on so be careful if moving this
- * code
+ * The menus are put on the menu bar after the script text widget has been created.
  */
-	editmenu = setup_menu(
-		menubar, XmMENU_PULLDOWN, "Edit", 'E', False, edit_menu_items);
-	set_menu_item_sensitivity(editmenu, EDIT_MENU_UNDO, False);
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Tools menu:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-	if(global_options.edit_only) {
-		tools_menu_items[TOOLS_MENU_CMD_LINE].label = NULL;
-	}
-	toolsmenu = setup_menu(
-		menubar, XmMENU_PULLDOWN, "Tools", 'T', False, tools_menu_items);
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Command menu:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-	if( !global_options.edit_only ) {
-		cmdmenu = setup_menu(
-			menubar, XmMENU_PULLDOWN, "Command", 'C', False, cmd_menu_items);
-		if(!global_options.interrupt_prompt ||
-		   !*global_options.interrupt_prompt) {
-			/* no interrupt prompt; disable abandon menu item */
-			set_menu_item_sensitivity(cmdmenu, CMD_MENU_ABANDON, False);
-		}
-	}
-/*
- * Users have complained that the "Execute Selection" item in the command menu
- * does not work when the caps lock modifier is present; however, Motif
- * pushbuttons don't support multiple accelerators and there is no
- * syntax to say we care about Ctrl but not Lock modifiers. We have therefore
- * provided an execute action function. With no parameters this is like
- * Execute Selection; with parameters, it executes the parameters.
- */
-	XtAppAddActions(app, actions, XtNumber(actions));
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Help menu:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-	if(global_options.edit_only) {
-		help_menu_items[HELP_MENU_COMMAND_MENU].label = NULL;
-	}
-	helpmenu = setup_menu(
-		menubar, XmMENU_PULLDOWN, "Help", 'H', False, help_menu_items);
-
-
-	{
-		Widget *btns;
-		NAT num_btns;
-		XtVaGetValues(menubar,
-			XmNchildren, &btns,
-			XmNnumChildren, &num_btns, NULL);
-		XtVaSetValues(menubar,
-			XmNmenuHelpWidget, btns[num_btns-1], NULL);
-	}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Paned window for info bar and script window
@@ -836,38 +773,6 @@ static Boolean setup_main_window(
 
 	line_number_cb(script, NULL, NULL);
 
-/*
- * The pop-up edit menu looks a bit neater if we get rid of the accelerator
- * reminder in the pull-down one.
- */
-	for(	i = 0;
-		i < sizeof(edit_menu_items)/sizeof(edit_menu_items[0]); 
-		i += 1 ) {
-		edit_menu_items[i].accelerator = NULL;
-	}
-
-	popupeditmenu = setup_menu(
-		script, XmMENU_POPUP, "popup-edit-menu", ' ', False, edit_menu_items);
-
-	wp = (Widget*) XtMalloc(3*(sizeof(Widget)));
-
-	wp[0] = editmenu;
-	wp[1] = popupeditmenu;
-	wp[2] = (Widget) NULL;
-
-	undo_ptr = add_undo(script, wp, EDIT_MENU_UNDO, EDIT_MENU_REDO);
-
-	XtAddCallback(script,
-		XmNmodifyVerifyCallback, undo_modify_cb, undo_ptr);
-
-	XtAddCallback(script,
-		XmNmotionVerifyCallback, line_number_cb, NULL);
-
-	attach_popup_menu(script, popupeditmenu);
-
-	register_selection_source(script);
-	register_palette_client(script);
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Journal window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -917,6 +822,118 @@ static Boolean setup_main_window(
 		XtAddCallback(journal, XmNmodifyVerifyCallback, journal_modify_cb, 0);
 
 	}
+
+/*
+ * Now we have the script text widget, we can put up the menus
+ */
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * File menu:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+	filemenu = setup_menu(
+		menubar, XmMENU_PULLDOWN, "File", 'F', False, file_menu_items);
+	setup_reopen_menu(NULL);
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Edit menu:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+/*
+ * edit_menu_items gets changed here and later on so be careful if moving this
+ * code
+ */
+	for(	i = 0;
+		i < sizeof(edit_menu_items)/sizeof(edit_menu_items[0]); 
+		i += 1 ) {
+		edit_menu_items[i].callback_data = script;
+	}
+
+	editmenu = setup_menu(
+		menubar, XmMENU_PULLDOWN, "Edit", 'E', False, edit_menu_items);
+	set_menu_item_sensitivity(editmenu, EDIT_MENU_UNDO, False);
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Tools menu:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+	if(global_options.edit_only) {
+		tools_menu_items[TOOLS_MENU_CMD_LINE].label = NULL;
+	}
+	toolsmenu = setup_menu(
+		menubar, XmMENU_PULLDOWN, "Tools", 'T', False, tools_menu_items);
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Command menu:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+	if( !global_options.edit_only ) {
+		cmdmenu = setup_menu(
+			menubar, XmMENU_PULLDOWN, "Command", 'C', False, cmd_menu_items);
+		if(!global_options.interrupt_prompt ||
+		   !*global_options.interrupt_prompt) {
+			/* no interrupt prompt; disable abandon menu item */
+			set_menu_item_sensitivity(cmdmenu, CMD_MENU_ABANDON, False);
+		}
+	}
+/*
+ * Users have complained that the "Execute Selection" item in the command menu
+ * does not work when the caps lock modifier is present; however, Motif
+ * pushbuttons don't support multiple accelerators and there is no
+ * syntax to say we care about Ctrl but not Lock modifiers. We have therefore
+ * provided an execute action function. With no parameters this is like
+ * Execute Selection; with parameters, it executes the parameters.
+ */
+	XtAppAddActions(app, actions, XtNumber(actions));
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Help menu:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+	if(global_options.edit_only) {
+		help_menu_items[HELP_MENU_COMMAND_MENU].label = NULL;
+	}
+	helpmenu = setup_menu(
+		menubar, XmMENU_PULLDOWN, "Help", 'H', False, help_menu_items);
+
+
+	{
+		Widget *btns;
+		NAT num_btns;
+		XtVaGetValues(menubar,
+			XmNchildren, &btns,
+			XmNnumChildren, &num_btns, NULL);
+		XtVaSetValues(menubar,
+			XmNmenuHelpWidget, btns[num_btns-1], NULL);
+	}
+
+/*
+ * The pop-up edit menu looks a bit neater if we get rid of the accelerator
+ * reminder in the pull-down one.
+ */
+	for(	i = 0;
+		i < sizeof(edit_menu_items)/sizeof(edit_menu_items[0]); 
+		i += 1 ) {
+		edit_menu_items[i].accelerator = NULL;
+	}
+
+	popupeditmenu = setup_menu(
+		script, XmMENU_POPUP, "popup-edit-menu", ' ', False, edit_menu_items);
+
+	wp = (Widget*) XtMalloc(3*(sizeof(Widget)));
+
+	wp[0] = editmenu;
+	wp[1] = popupeditmenu;
+	wp[2] = (Widget) NULL;
+
+	undo_ptr = add_undo(script, wp, EDIT_MENU_UNDO, EDIT_MENU_REDO);
+
+	XtAddCallback(script,
+		XmNmodifyVerifyCallback, undo_modify_cb, undo_ptr);
+
+	XtAddCallback(script,
+		XmNmotionVerifyCallback, line_number_cb, NULL);
+
+	attach_popup_menu(script, popupeditmenu);
+
+	register_selection_source(script);
+	register_palette_client(script);
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Initialise options and templates packages
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -1286,51 +1303,20 @@ static void tools_menu_cb(
 /* Perhaps should test for success and make menu items insensitive */
 }
 
-static void edit_menu_cb(
+static void script_undo_cb(
 		Widget		w,
 		XtPointer	cbd,
 		XtPointer	cbs)
 {
-	NAT i = (NAT) cbd;
-	Boolean result = True;
+	undo_cb(script, undo_ptr, cbs);
+}
 
-	switch(i) {
-	case EDIT_MENU_CUT:
-
-		result = XmTextCut(script, CurrentTime);
-		break;
-
-	case EDIT_MENU_COPY:
-
-		XmTextCopy(script, CurrentTime);	
-		break;
-
-	case EDIT_MENU_PASTE:
-
-		result = XmTextPaste(script);
-		break;
-
-	case EDIT_MENU_CLEAR:
-
-		XmTextClearSelection(script, CurrentTime);
-		break;
-
-	case EDIT_MENU_UNDO:
-
-		undo_cb(script, undo_ptr, cbs);
-		break;
-
-	case EDIT_MENU_REDO:
-
-		redo_cb(script, undo_ptr, cbs);
-		break;
-
-	default:
-
-		break;
-	};
-/* Could also test for result in cases where there is no
-   selection to cut, copy or paste. */
+static void script_redo_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	redo_cb(script, undo_ptr, cbs);
 }
 
 static void cmd_menu_cb(

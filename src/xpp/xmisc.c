@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.26 2003/07/24 13:09:22 rda Exp rda $
+ * $Id: xmisc.c,v 2.27 2004/02/08 14:23:49 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -580,11 +580,6 @@ void attach_edit_popup(Widget text_w, MenuItem *menu_items)
  * (i.e., editable) text widget. Supported functions are
  * Cut, Copy, Paste & Clear:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void
-	edit_cut_cb(CALLBACK_ARGS),
-	edit_copy_cb(CALLBACK_ARGS),
-	edit_paste_cb(CALLBACK_ARGS),
-	edit_clear_cb(CALLBACK_ARGS);
 static MenuItem rw_edit_menu_items[] = {
     { "Cut", &xmPushButtonGadgetClass, '\0', NULL, NULL,
         edit_cut_cb, NULL, (MenuItem *)NULL, False },
@@ -618,9 +613,9 @@ void attach_ro_edit_popup(Widget text_w)
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Callback routines for the popup edit menus:
+ * Callback routines for the edit menus:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void edit_cut_cb(
+void edit_cut_cb(
 		Widget		w,
 		XtPointer	cbd,
 		XtPointer	cbs)
@@ -628,7 +623,7 @@ static void edit_cut_cb(
 	Widget text_w = (Widget) cbd;
 	(void) XmTextCut(text_w, CurrentTime);
 }
-static void edit_copy_cb(
+void edit_copy_cb(
 		Widget		w,
 		XtPointer	cbd,
 		XtPointer	cbs)
@@ -636,7 +631,7 @@ static void edit_copy_cb(
 	Widget text_w = (Widget) cbd;
 	XmTextCopy(text_w, CurrentTime);	
 }
-static void edit_paste_cb(
+void edit_paste_cb(
 		Widget		w,
 		XtPointer	cbd,
 		XtPointer	cbs)
@@ -644,7 +639,7 @@ static void edit_paste_cb(
 	Widget text_w = (Widget) cbd;
 	(void) XmTextPaste(text_w);
 }
-static void edit_clear_cb(
+void edit_clear_cb(
 		Widget		w,
 		XtPointer	cbd,
 		XtPointer	cbs)
@@ -652,6 +647,9 @@ static void edit_clear_cb(
 	Widget text_w = (Widget) cbd;
 	(void) XmTextClearSelection(text_w, CurrentTime);
 }
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Event handler for posting a popup menu
+ * **** **** **** **** **** **** **** **** **** **** **** ****/
 static void post_popupeditmenu(
 	Widget		w,
 	XtPointer	cd,

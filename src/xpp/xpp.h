@@ -321,6 +321,10 @@ typedef enum {
 	extern	void attach_edit_popup(Widget text_w, MenuItem *menu_items);
 	extern	void attach_rw_edit_popup(Widget text_w);
 	extern	void attach_ro_edit_popup(Widget text_w);
+	void	edit_cut_cb(CALLBACK_ARGS);
+	void	edit_copy_cb(CALLBACK_ARGS);
+	void	edit_paste_cb(CALLBACK_ARGS);
+	void	edit_clear_cb(CALLBACK_ARGS);
 	extern	void register_selection_source(
 		Widget w);
 	void	attach_popup_menu(Widget work_w, Widget menu_w);
