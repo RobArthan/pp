@@ -95,7 +95,7 @@ Changed as result of changes caused by IR0016.
 \item [Issue 1.19,1.20]
 Changes to match issue 1.17 of \cite{DS/FMU/IED/DTD006}.
 \item [Issue 1.21]
-Elimated message 6009.
+Eliminated message 6009.
 Catch $mk\_const$ errors.
 \item [Issue 1.22]
 Fixed the use of message 6061.
@@ -113,8 +113,10 @@ Correcting problems to do with saving and getting hierarchies.
 \item [Issue 1.29,1.30]
 Added $icl'plus\_conv$, removed $icl'div2\_conv$ and $icl'mod2\_conv$,
 following change request CR007.
-
-\item[Issue \SCCSversion, \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 31, \FormatDate{92/01/20} ] Updated to use new fonts.
+\item [Issue 1.32]
+Changes to using sparse arrays from \cite{DS/FMU/IED/DTD001},
+rather than local structure.
 
 \end{description}
 % \subsection{Changes Forecast}
@@ -332,97 +334,11 @@ extend_range (4,4) p;
 extend_range (5,5) p;
 extend_range (11,15) p;
 extend_range (11,11) p;
-=TEX
-\subsubsection{Infinite Arrays}
-We implement Infinite arrays as finite arrays of lists of values.
-We expect that the lists will be short (generally only length 0 to 2, even in ``large'' applications, and we optimize for that).
-We use the following signature, but as we are within a structure
-we can only use the $sig \ldots end$ part.
-=GFT
-signature €InfiniteArray› = sig
-	type 'a €INFINITE_ARRAY›;
-	val €create_ia› : unit -> '_a INFINITE_ARRAY;
-	val €update_ia› : ('_a INFINITE_ARRAY * int * '_a) -> unit;
-	val €sub_ia› : ('_a INFINITE_ARRAY * int) -> '_a;
-	val €length_ia› : '_a INFINITE_ARRAY -> int;
-end;
-=TEX
-=TEX
-=SML
-structure €InfiniteArray› : sig
-	type 'a INFINITE_ARRAY;
-	val create_ia : unit -> '_a INFINITE_ARRAY;
-	val update_ia : ('_a INFINITE_ARRAY * int * '_a) -> unit;
-	val sub_ia : ('_a INFINITE_ARRAY * int) -> '_a;
-	val length_ia : '_a INFINITE_ARRAY -> int;
-	end = struct
-=TEX
-Introduce the array package:
-=SML
-open Array;
-=TEX
-Infinite arrays are made of size $sz$ lists - an index picks from the list by indexing the array by $index\ mod\ sz$,
-and then takes the $index\ div\ sz$'th member of the list
-(0 being the first element of the list).
-=SML
-type '_a €INFINITE_ARRAY› = ('_a list) array * int ref;
-=TEX
-Give a single, hidden, source of the size of the array that holds the lists:
-=SML
-val sz = 100;
-=TEX
-Create a new array, using a dummy argument to force the type:
-=SML
-fun €create_ia› (():unit): '_a INFINITE_ARRAY = (
-	array (sz, ([] : '_a list)),ref 0
-);
-=TEX
-The following is a function to place the value at index given in array.
-The index can only be to something already in the array,
-or 1 past its end.
-=SML
-fun €update_ia› (((arr,len) : '_a INFINITE_ARRAY), 
-		(index: int), 
-		(vl : '_a)): unit = (
-let	fun aux (n:int) ([]: '_a list) : '_a list = (
-	if n = 0
-	then [vl]
-	else error "update_ia" 6070 []
-) | aux n (a :: x) = (
-	if n = 0
-	then (vl :: x)
-	else (a :: aux (n-1) x));
-in
-	if (index < 0) orelse (index > (!len))
-	then error "update_ia" 6070 []
-	else let val imsize = index mod sz;
-		val sublist = (sub(arr, imsize));
-		val sideeffect = (len := max (1+index) (!len));
-	in
-		update(arr, imsize, (aux (index div sz) sublist))
-	end
-end);
-=TEX
-Subscript the infinite array, giving a failure if the 
-entry does not exist:
-=SML
-fun €sub_ia› (((arr, len) : '_a INFINITE_ARRAY), index : int):'_a = ((
-	if index < 0 orelse (index >= (!len))
-	then error "sub_ia" 6070 []
-	else (nth (index div sz) (sub(arr, index mod sz))))
-	handle complaint =>
-		if area_of complaint = "nth"
-		then error "sub_ia" 6070 []
-		else reraise complaint (area_of complaint)
-);
-=TEX
-=SML
-fun €length_ia› ((arr, len) : '_a INFINITE_ARRAY) : int = (!len);
-=TEX
-=SML
-end; (* of structure InfiniteArray *)
 
-open InfiniteArray;
+=TEX
+We will use the sparse array material of \cite{DS/FMU/IED/DTD001}
+=SML
+open SparseArray;
 =TEX
 \subsection{Types of the ADT $THM$}
 A fragment of some user data, and a collection of such
@@ -473,7 +389,7 @@ and
 =TEX
 In a hierarchy there will be theories with internal names $0$ to length of array, though some may have the status ``deleted''.
 =SML
-	€icl'HIERARCHY› = €hier› of icl'THEORY_INFO INFINITE_ARRAY
+	€icl'HIERARCHY› = €hier› of icl'THEORY_INFO SPARSE_ARRAY
 =TEX
 There now follows the body of the $abstype$:
 =SML
@@ -558,7 +474,7 @@ fun €empty_theory› (nm: int) (pnts : int list) : icl'THEORY = (
 );
 =TEX
 The following is initialises the ``current state'', which is a $ref$ variable called $current$.
-Initially it contains the empty theory "min", alone, as the current theory, which is also the sealed theory, with empty environments
+Initially it contains the empty theory "min" (with index 0), alone, as the current theory, which is also the sealed theory, with empty environments
 (except that the constant environment always contains the numeric, string and character literal constants).
 
 =SML
@@ -571,9 +487,9 @@ local
 		children = [],
 		name = "€min›"};
 
-	val init_hier_ia : icl'THEORY_INFO INFINITE_ARRAY = create_ia ();
+	val init_hier_ia : icl'THEORY_INFO SPARSE_ARRAY = array 100;
 
-	val dummy = update_ia(init_hier_ia, 0, min_ti);
+	val dummy = update(init_hier_ia, 0, min_ti);
 
 	val init_hier : icl'HIERARCHY = 
 		(hier init_hier_ia);
@@ -779,7 +695,7 @@ let	val {hierarchy = hier lookup,
 	
 	val dummy = if inconsistent
 		then error caller 6083 []
-		else if (0 <= iname) andalso (iname < length_ia lookup)
+		else if (0 <= iname) andalso (iname <= uindex lookup)
 		then ()
 		else error caller 6072 [fn () => string_of_thm thm,
 			fn () => "Internal "^string_of_int iname];
@@ -789,7 +705,7 @@ let	val {hierarchy = hier lookup,
 		contents = contents,
 		children = children,
 		name = ename}
-		= sub_ia(lookup,iname);
+		= sub(lookup,iname);
 in
 	if status = TSDeleted
 	then error caller 6036 [fn () => string_of_thm thm,
@@ -830,7 +746,7 @@ Check that an internal name falls within the range 0 to length of array, failing
 fun €check_internal_theory_name› (nm : int) (caller : string) : unit = (
 let	val hier lookup = current_hierarchy();
 in
-	if (0 <= nm) andalso (nm < length_ia lookup)
+	if (0 <= nm) andalso (nm <= uindex lookup)
 	then ()
 	else fail caller 6043 [fn () => string_of_int nm]
 end);
@@ -843,7 +759,7 @@ fun €internal_theory_name› (nm : string) (caller : string): int = (
 let	val hier lookup = current_hierarchy();
 	fun aux ~1 = fail caller 6035 [fn () => nm]
 	| aux n = (let val (ThyInfo{name=sname,contents=contents,status=status,...}) 
-			= sub_ia(lookup, n);
+			= sub(lookup, n);
 		in
 			if ((sname = nm) andalso (status <> TSDeleted))
 			then (let val(Thy{name=iname,...}) = !contents
@@ -855,7 +771,7 @@ let	val hier lookup = current_hierarchy();
 in
 	if nm = "-"
 	then icl'get_current_theory_name ()
-	else aux (length_ia lookup - 1)
+	else aux (uindex lookup)
 end);
 =TEX
 The following is a test of whether the given theory name present at all.
@@ -865,21 +781,21 @@ There is always a current theory, ``-''.
 fun €is_theory_name› (nm : string) : bool = (
 let	val hier lookup = current_hierarchy();
 	fun aux ~1 = false
-	| aux n = (let val (ThyInfo{name=sname,status=status,...}) = sub_ia(lookup, n);
+	| aux n = (let val (ThyInfo{name=sname,status=status,...}) = sub(lookup, n);
 		in
 			((sname = nm) andalso (status <> TSDeleted))
 			orelse aux (n-1)
 		end)
 in
 	(nm = "-")
-	orelse aux (length_ia lookup - 1)
+	orelse aux (uindex lookup)
 end);
 =TEX
 Return the theory contents:
 =SML
 fun €get_theory_contents› (n : int) : icl'THEORY = (
 let	val hier lookup = current_hierarchy();
-	val (ThyInfo{contents=contents,...}) = sub_ia(lookup, n);
+	val (ThyInfo{contents=contents,...}) = sub(lookup, n);
 in
 	!contents
 end);
@@ -889,7 +805,7 @@ Return the current theory name as a string:
 fun €get_current_theory_name› (():unit):string = (
 let	val hier lookup = current_hierarchy();
 	val Thy{name = iname,...} = current_theory();
-	val (ThyInfo{name=ename,...}) = sub_ia(lookup, iname);
+	val (ThyInfo{name=ename,...}) = sub(lookup, iname);
 in
 	ename
 end);
@@ -904,7 +820,7 @@ let	val {hierarchy = hier lookup,
 
 	val Thy{name = iname,...} = !theory;
 
-	val ThyInfo{status = status, name = ename,...} = sub_ia(lookup,iname);
+	val ThyInfo{status = status, name = ename,...} = sub(lookup,iname);
 
 in
 	if inconsistent
@@ -924,7 +840,7 @@ fun €theory_ancestors› (nm : int) : int list = (
 let	val hier lookup = current_hierarchy();
 
 	fun lparents (n : int) = (
-		let	val ThyInfo{contents=contents,...} = sub_ia(lookup,n);
+		let	val ThyInfo{contents=contents,...} = sub(lookup,n);
 			val Thy{parents=parents,...} = !contents
 		in
 			parents
@@ -947,7 +863,7 @@ fun €theory_descendants› (nm : int) : int list = (
 let	val hier lookup = current_hierarchy();
 
 	fun lchildren (n : int) = (
-		let val ThyInfo{children=children,...} = sub_ia(lookup,n);
+		let val ThyInfo{children=children,...} = sub(lookup,n);
 		in
 			children
 		end);
@@ -975,7 +891,7 @@ let	val iname =icl'get_current_theory_name();
 	val hier lookup = current_hierarchy();
 
 	fun const_in_thy (nm : string) (thry : int) : bool = (
-	let val ThyInfo{contents = contents,...} = sub_ia(lookup, thry);
+	let val ThyInfo{contents = contents,...} = sub(lookup, thry);
 		val Thy{con_env=con_env,...} = !contents;
 	in
 		not(is_Nil(s_lookup nm con_env))
@@ -998,7 +914,7 @@ let	val iname = icl'get_current_theory_name();
 	val hier lookup = current_hierarchy();
 
 	fun type_in_thy (nm : string) (thry : int) : bool = (
-	let	val ThyInfo{contents = contents,...} = sub_ia(lookup, thry);
+	let	val ThyInfo{contents = contents,...} = sub(lookup, thry);
 		val Thy{ty_env=ty_env,...} = !contents;
 	in
 		not(is_Nil(s_lookup nm ty_env))
@@ -1022,9 +938,9 @@ local
 			inscope = inscope,
 			contents = contents,
 			children = children,
-			name = name} = sub_ia(lookup,a)
+			name = name} = sub(lookup,a)
 		in
-		update_ia(lookup,a,
+		update(lookup,a,
 			ThyInfo{status = status,
 			inscope = inscope,
 			contents = contents,
@@ -1063,12 +979,12 @@ return any value.
 =SML
 fun €map_hierarchy› (f: (int * icl'THEORY_INFO) -> icl'THEORY_INFO) 
 	(hier lookup : icl'HIERARCHY) : unit = (
-let	val leng = length_ia lookup;
-	fun aux	n = (if n < leng
+let	val leng = uindex lookup;
+	fun aux	n = (if n <= leng
 		then (
-		let val old_ti = sub_ia(lookup, n)
+		let val old_ti = sub(lookup, n)
 		in
-			update_ia(lookup,n,f (n,old_ti));
+			update(lookup,n,f (n,old_ti));
 			aux (n+1)
 		end) 
 		else ());
@@ -1080,13 +996,13 @@ Now a function to copy a hierarchy into a new one:
 Note that when creating new hierarchies by copying we must copy from theory information 0 first, and then copy up to the number of hierarchies.
 =SML
 fun €copy_hierarchy› (hier old_lookup : icl'HIERARCHY) : icl'HIERARCHY = (
-let	val new_lookup = create_ia (); 
-	val top_theory = length_ia old_lookup - 1;
+let	val new_lookup = array 100; 
+	val top_theory = uindex old_lookup;
 	fun aux	n = (if n <= top_theory
 		then (
-		let	val old_ti = sub_ia(old_lookup, n);
+		let	val old_ti = sub(old_lookup, n);
 		in
-			update_ia(new_lookup,n,old_ti);
+			update(new_lookup,n,old_ti);
 			aux (n+1)
 		end) 
 		else ());
@@ -1111,14 +1027,14 @@ let	fun aux ~1 = true
 			contents = contents1,
 			children = children1,
 			name = name1})
-		= sub_ia(lookup1,n);
+		= sub(lookup1,n);
 
 		val (ThyInfo{status = status2,
 			inscope = inscope2,
 			contents = contents2,
 			children = children2,
 			name = name2})
-		= sub_ia(lookup2,n) 
+		= sub(lookup2,n) 
 	in
 		(status1 = status2) andalso
 		(contents1 = contents2) andalso
@@ -1126,8 +1042,8 @@ let	fun aux ~1 = true
 		aux (n-1)
 	end)
 in
-	(length_ia lookup1 <= length_ia lookup2) andalso
-	aux (length_ia lookup1 - 1)
+	(uindex lookup1 <= uindex lookup2) andalso
+	aux (uindex lookup1)
 end);
 =TEX
 \section{THEORY AND HIERARCHY FUNCTIONS OF ADT THM}
@@ -1224,7 +1140,7 @@ let	val hier lookup = current_hierarchy();
 				inscope = inscope,
 				contents = contents,
 				children = children,
-				name = name}) = sub_ia(lookup,n);
+				name = name}) = sub(lookup,n);
 			val Thy athy = !contents;
 		in
 			(name, {status = status,
@@ -1235,7 +1151,7 @@ let	val hier lookup = current_hierarchy();
 			:: aux (n-1)
 		end)
 in
-	aux (length_ia lookup -1)
+	aux (uindex lookup)
 end);
 =TEX
 The bulk of the following is taken up with ensuring
@@ -1246,7 +1162,7 @@ let	val {hierarchy=hierarchy, theory=theory, ty_env=ty_env,
 		con_env=con_env, inconsistent=inconsistent,sealed=sealed} = !current;
 
 	val hier lookup = hierarchy;
-	val top_theory = length_ia lookup - 1;
+	val top_theory = uindex lookup;
 
 	val cthynm = icl'get_current_theory_name ();
 
@@ -1261,7 +1177,7 @@ let	val {hierarchy=hierarchy, theory=theory, ty_env=ty_env,
 			inscope = inscope,
 			contents = contents,
 			children = children,
-			name = name}) = sub_ia(lookup,n);
+			name = name}) = sub(lookup,n);
 		in
 			if status <> TSDeleted
 			then fail "icl'seal_hierarchy" 6004 [fn () => name]
@@ -1292,7 +1208,7 @@ let	val hier lookup = current_hierarchy();
 			inscope = inscope,
 			contents = contents,
 			children = children,
-			name = name}) = sub_ia(lookup,iname);
+			name = name}) = sub(lookup,iname);
 
 	val Thy athy = !contents;
 in
@@ -1309,7 +1225,7 @@ fun icl'get_theory_name (nm : int) : string = (
 let	val hier lookup = current_hierarchy();
 in
 	check_internal_theory_name nm "icl'get_theory_name";
-	(let val (ThyInfo{name=name,status=status,...}) = sub_ia(lookup, nm)
+	(let val (ThyInfo{name=name,status=status,...}) = sub(lookup, nm)
 		in
 			if status <> TSDeleted
 			then name
@@ -1327,7 +1243,7 @@ fun €icl'open_theory› (nm : string) : (int list * int list) = (
 let	val {hierarchy = hierarchy as hier lookup,
 		theory=theory, ty_env=ty_env, con_env=con_env, 
 		inconsistent=inconsistent,sealed=sealed} = !current;
-	val top_theory = length_ia lookup - 1;
+	val top_theory = uindex lookup;
 	val thyn = internal_theory_name nm "icl'open_theory"; (* spec step 1 *)
 
 	val allp = theory_ancestors thyn;
@@ -1341,7 +1257,7 @@ let	val {hierarchy = hierarchy as hier lookup,
 		inscope = inscope,
 		contents = contents,
 		children = children,
-		name = name} = sub_ia(lookup,thyn);
+		name = name} = sub(lookup,thyn);
 =TEX
 The following auxiliary function takes everything necessary out of scope, sets all the inscope fields to
 their correct value.
@@ -1352,11 +1268,11 @@ their correct value.
 			inscope = inscope1,
 			contents = contents1,
 			children = children1,
-			name = name1} = sub_ia(lookup,n)
+			name = name1} = sub(lookup,n)
 		in
 		(if (n mem allp) orelse (not inscope1)
 		then (aux_out (n - 1) out_of_scope tece)
-		else (update_ia(lookup,n,
+		else (update(lookup,n,
 			ThyInfo{status = status1,
 				inscope = false,
 				contents = contents1,
@@ -1375,10 +1291,10 @@ their correct value.
 			inscope = inscope1,
 			contents = contents1,
 			children = children1,
-			name = name1} = sub_ia(lookup,n)
+			name = name1} = sub(lookup,n)
 		in
 		(if (n mem allp) andalso (not inscope1)
-		then (update_ia(lookup,n,
+		then (update(lookup,n,
 			ThyInfo{status = status1,
 				inscope = true,
 				contents = contents1,
@@ -1427,7 +1343,7 @@ let	val {hierarchy = hierarchy as hier lookup,
 		inscope = inscope,
 		contents = contents,
 		children = children,
-		name = name} = sub_ia(lookup,thyn);
+		name = name} = sub(lookup,thyn);
 
 	val dummy = case status of
 		TSDeleted => error "icl'delete_theory" 6041 [fn () => nm]
@@ -1450,7 +1366,7 @@ in
 		con_env=con_env, inconsistent=true,sealed=sealed};
 	remove_child thyn parents;
 	contents := ethy; (* spec step 3 *)
-	update_ia(lookup,thyn,ThyInfo{status = TSDeleted,
+	update(lookup,thyn,ThyInfo{status = TSDeleted,
 		inscope = false,
 		contents = contents,
 		children = [],
@@ -1474,7 +1390,7 @@ fun €icl'new_theory› (nm : string) : int = (
 
 	val cthy = icl'get_current_theory_name();
 
-	val ntop_theory = length_ia lookup;
+	val ntop_theory = uindex lookup + 1;
 
 	val nthy = ref (empty_theory ntop_theory [cthy]); (* spec. step 2 *)
 
@@ -1487,7 +1403,7 @@ fun €icl'new_theory› (nm : string) : int = (
 in
 	current := {hierarchy=hierarchy, theory=theory, ty_env=ty_env,
 		con_env=con_env, inconsistent=true,sealed=sealed};
-	update_ia(lookup,ntop_theory,nti); (* spec step 3 *)
+	update(lookup,ntop_theory,nti); (* spec step 3 *)
 	add_child ntop_theory [cthy];
 	current := {hierarchy = hierarchy,
 		theory=theory, ty_env=ty_env, con_env=con_env, 
@@ -1517,7 +1433,7 @@ let	val dummy = (check_c_writable "icl'new_parent";
 		contents = fcontents,
 		children = fchildren,
 		name = fname}
-		= sub_ia(lookup, pthy);
+		= sub(lookup, pthy);
 
 	val cthy = icl'get_current_theory_name();
 
@@ -1592,9 +1508,9 @@ Put the new ancestor theories in scope:
 		inscope = ainscope,
 		contents = acontents,
 		children = achildren,
-		name = aname} = sub_ia(lookup,n)
+		name = aname} = sub(lookup,n)
 	in
-		update_ia(lookup,n,ThyInfo{status = astatus, 
+		update(lookup,n,ThyInfo{status = astatus, 
 			inscope = true,
 			contents = acontents,
 			children = achildren,
@@ -1623,7 +1539,7 @@ let	val thyn = internal_theory_name nm "icl'lock_theory"; (* spec. step 1 *)
 		inscope = inscope,
 		contents = contents,
 		children = children,
-		name = name} = sub_ia(lookup,thyn);
+		name = name} = sub(lookup,thyn);
 
 	val dummy = case status of
 		TSDeleted => error "icl'lock_theory" 6041 []
@@ -1631,7 +1547,7 @@ let	val thyn = internal_theory_name nm "icl'lock_theory"; (* spec. step 1 *)
 		| TSLocked => fail "icl'lock_theory" 6037 [fn () => nm]
 		| TSNormal => ();
 in
-	update_ia(lookup,thyn,ThyInfo{status = TSLocked,
+	update(lookup,thyn,ThyInfo{status = TSLocked,
 		inscope = inscope,
 		contents = contents,
 		children = children,
@@ -1650,7 +1566,7 @@ let	val thyn = internal_theory_name nm "icl'unlock_theory"; (* spec. step 1 *)
 		inscope = inscope,
 		contents = contents,
 		children = children,
-		name = name} = sub_ia(lookup,thyn);
+		name = name} = sub(lookup,thyn);
 
 	val dummy = case status of
 		TSDeleted => error "icl'unlock_theory" 6041 []
@@ -1658,7 +1574,7 @@ let	val thyn = internal_theory_name nm "icl'unlock_theory"; (* spec. step 1 *)
 		| TSNormal => fail "icl'unlock_theory" 6068 [fn () => nm]
 		| TSLocked => ();
 in
-	update_ia(lookup,thyn,ThyInfo{status = TSNormal,
+	update(lookup,thyn,ThyInfo{status = TSNormal,
 		inscope = inscope,
 		contents = contents,
 		children = children,
@@ -1686,14 +1602,14 @@ let	val {hierarchy = hierarchy as hier lookup,
 		then ()
 		else fail "icl'duplicate_theory" 6042 [fn () => fromnm];
 
-	val ntop_theory = length_ia lookup;
+	val ntop_theory = uindex lookup + 1;
 
 	val ThyInfo{status = status1,
 		inscope = inscope1,
 		contents = contents1,
 		children = children1,
 		name = name1}
-		= sub_ia(lookup,fromn);
+		= sub(lookup,fromn);
 
 	val Thy{name = frname,
 		ty_env = ty_env,
@@ -1729,7 +1645,7 @@ let	val {hierarchy = hierarchy as hier lookup,
 in
 	current := {hierarchy=hierarchy, theory=theory, ty_env=cty_env, 
 		con_env=ccon_env, inconsistent=true,sealed=sealed};
-	update_ia(lookup,ntop_theory,toti);
+	update(lookup,ntop_theory,toti);
 	add_child ntop_theory parents;
 	current := {hierarchy = hierarchy,
 		theory=theory, ty_env=cty_env, con_env=ccon_env, 
@@ -1758,7 +1674,7 @@ let	val {hierarchy = hier lookup, theory = theory, ...} = !current;
 
 	val Thy{name = iname,...} = !theory;
 
-	val (ThyInfo{status = status,...}) = sub_ia(lookup, iname);
+	val (ThyInfo{status = status,...}) = sub(lookup, iname);
 in
 	status
 end);
@@ -1857,7 +1773,7 @@ let	val {hierarchy = hierarchy as hier lookup,
 		current_level = current_level,
 		user_data = user_data} = !theory;
 
-	val ThyInfo{children = children, name = ename,...} = sub_ia(lookup,iname);
+	val ThyInfo{children = children, name = ename,...} = sub(lookup,iname);
 
 	val dummy = (check_c_writable "icl'delete_extension"; (* spec. step 1 *)
 		if children <> []
@@ -2284,11 +2200,13 @@ Do the checks required (other than on keys):
 		else if not(is_nil (frees concl))
 		then fail "icl'new_type_defn" 6056 
 			[fn () => string_of_thm defthm,
-			 fn () => format_list (fst o dest_var) (frees concl) ", "]
+			 fn () => format_list (fst o dest_var) 
+			  (frees concl) ", "]
 		else if not(is_nil((term_tyvars concl) diff typars))
 		then fail "icl'new_type_defn" 6057
 			[fn () => string_of_thm defthm,
-			 fn () => format_list (Combinators.I) ((term_tyvars concl) diff typars) ", "] 
+			 fn () => format_list (Combinators.I) 
+			  ((term_tyvars concl) diff typars) ", "] 
 		else if not(all_different typars)
 		then fail "icl'new_type_defn" 6079 
 			[fn () => two_the_same typars]
@@ -2591,7 +2509,7 @@ We optimize for the special case of an empty $thm\_var\_list$, which is just ret
 		(fn (ithm as Thm{sequent = (hyps,concl),...}) =>
 		let val dummy = check_thm "icl'subst_rule" ithm;
 		in
-			if %alpha%_eq concl template
+			if ¡_eq concl template
 			then mk_current_thm(hyps, template)
 			else term_fail "icl'subst_rule" 6001 [template, concl]
 		end))
@@ -2616,7 +2534,7 @@ return the theorem that the $rhs$ term is true.
 		let val dummy = (check_thm "icl'subst_rule" ithm;
 			map (check_thm "icl'subst_rule" o fst) thm_var_list);
 		in
-			if %alpha%_eq concl template_as_lhs
+			if ¡_eq concl template_as_lhs
 			then mk_current_thm(hyps term_union new_hyps, template_as_rhs)
 			else term_fail "icl'subst_rule" 6001 [template_as_lhs, concl]
 		end
@@ -2733,7 +2651,7 @@ let	val dummy = (check_thm "icl'¥_elim" thrm1;
 		"dest_¥" => thm_fail "icl'¥_elim" 6010 [thrm1]
 		| _ => reraise complaint (area_of complaint));
 in
-	if %alpha%_eq hconcl1 concl2
+	if ¡_eq hconcl1 concl2
 	then mk_current_thm(hyps1 term_union hyps2, cconcl1)
 	else thm_fail "icl'¥_elim" 6011 [thrm1, thrm2]
 end);
@@ -2776,7 +2694,7 @@ val €icl'refl_conv› : CONV = (fn (tm : TERM) =>
 =TEX
 \subsection{icl'simple\_$\beta$\_conv}
 =FRULE 1 Conversion
-icl'simple_%beta%_conv
+icl'simple_¬_conv
 ¨(Ã x ∑ t1[x]) t2Æ
 ˜
 ˜
@@ -2784,19 +2702,19 @@ icl'simple_%beta%_conv
 =TEX
 Or, if the term is of type $BOOL$:
 =FRULE 1 Conversion
-icl'simple_%beta%_conv
+icl'simple_¬_conv
 ¨(Ã x ∑ t1[x]) t2Æ
 ˜
 ˜
 Ù (Ã x ∑ t1[x]) t2 § t1[t2]
 =TEX
 =SML
-val €icl'simple_%beta%_conv› : CONV = (fn (tm : TERM) =>
+val €icl'simple_¬_conv› : CONV = (fn (tm : TERM) =>
 let	val ((vr, t1), t2) = ((dest_simple_Ã ** Combinators.I)(dest_app tm)
 		handle complaint =>
 		case (area_of complaint) of
-		"dest_simple_Ã" => term_fail "icl'simple_%beta%_conv" 6012 [tm]
-		| "dest_app" => term_fail "icl'simple_%beta%_conv" 6012 [tm]
+		"dest_simple_Ã" => term_fail "icl'simple_¬_conv" 6012 [tm]
+		| "dest_app" => term_fail "icl'simple_¬_conv" 6012 [tm]
 		| _ => reraise complaint (area_of complaint));
 	val rhs = var_subst [(t2,vr)] t1;
 in
@@ -3008,7 +2926,7 @@ let	val dummy = (check_thm "icl'eq_trans_rule" thrm1;
 
 	val (hyps2,(lhs_concl2,rhs_concl2)) = dest_thm_eq "icl'eq_trans_rule" 6020 thrm2;
 
-	val dummy = if %alpha%_eq rhs_concl1 lhs_concl2
+	val dummy = if ¡_eq rhs_concl1 lhs_concl2
 		then ()
 		else thm_fail "icl'eq_trans_rule" 6022 [thrm1, thrm2];
 
@@ -3064,7 +2982,7 @@ let	val dummy = (check_thm "icl'§_mp_rule" thrm1;
 		then thm_fail "icl'§_mp_rule" 6030 [thrm1]
 		else ();
 
-	val new_concl = if %alpha%_eq lhs_concl1 concl2
+	val new_concl = if ¡_eq lhs_concl1 concl2
 		then rhs_concl1
 		else thm_fail "icl'§_mp_rule" 6024 [thrm1, thrm2];
 in
