@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.8 2002/03/26 15:54:46 phil Exp phil $
+ * $Id: undo.c,v 2.9 2002/03/26 16:26:30 phil Exp phil $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -8,7 +8,7 @@
  *
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char rcsid[] = "$Id: undo.c,v 2.8 2002/03/26 15:54:46 phil Exp phil $";
+static char rcsid[] = "$Id: undo.c,v 2.9 2002/03/26 16:26:30 phil Exp phil $";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:
@@ -22,12 +22,14 @@ static char rcsid[] = "$Id: undo.c,v 2.8 2002/03/26 15:54:46 phil Exp phil $";
 #include <stdio.h>
 #include "xpp.h"
 
+/* Enabling this will send a bunch of debugging output to stderr */
+/*#define PG_DEBUG*/
+
 
 /* Messages for various purposes: */
-
-static char* changes_saved_warning =
-"The file has been saved since you last changed it. "
-"Do you really want to undo the last change?";
+static char* changes_saved_warning = "The file has been saved since "
+                                     "you last changed it.  Do you "
+                                     "really want to undo the last change?";
 
 
 /* The following is used to implement undo/redo in the edit menu */
@@ -40,6 +42,7 @@ typedef struct undo_node {
 	NAT first,              /* position in text of chars to */
 	    last;               /* be replaced by an undo */
 	char *oldtext;          /* deleted characters to put in */
+	NAT   oldtextSize;      /* current amount of space in the oldtext buffer */
     Boolean was_null;
 	struct undo_node *next,
 	                 *prev;
@@ -55,11 +58,145 @@ typedef struct undo_details {
 	Boolean can_redo;               /* true iff. can do a redo */
 	Boolean undoing;                /* true while undo in progress */
 	Boolean noMemory;               /* very serious when true! */
+	Boolean enabled;                /* false when a file load's happening */
 	UndoNode *root;
 	UndoNode *active;
 } UndoBuffer;
 
+/* Pre-reserved, emergency, space */
+#define RESERVEDSPACE 1000000
 
+#ifdef PG_DEBUG
+# undef RESERVEDSPACE
+# define RESERVEDSPACE 1000
+/**************************************************
+ * Ultra dodgy memory allocation debugging code
+ **************************************************/
+# ifdef XtMalloc
+#  undef XtMalloc
+# endif
+# ifdef XtRealloc
+#  undef XtRealloc
+# endif
+# ifdef XtFree
+#  undef XtFree
+# endif
+/* These functions keep track of how much memory's in use by this module */
+/* The way this is done is to allocate an extra sizeof(unsigned long)    */
+/* bytes into which the size allocated is stored.  The pointer returned  */
+/* is to sizeof(unsigned long) byond the space got back from XtMalloc or */
+/* XtRealloc.                                                            */
+static amount_malloced = 0;
+#define EXPLODE_AT (RESERVEDSPACE+1000)
+static char *my_XtMalloc(size_t size)
+{
+	char *ptr;
+	/* to test malloc failing */
+	if(EXPLODE_AT > 0 && amount_malloced + size > EXPLODE_AT) {
+		return (char *) NULL;
+	}
+	ptr = XtMalloc(size + sizeof(unsigned long));
+	fprintf(stderr,
+	        "Heap: malloc  %7d           + %7d ",
+	        amount_malloced,
+	        size);
+	if(ptr) {
+		unsigned long sz = size;
+		int i;
+		amount_malloced += size;
+		for (i = 0; i < sizeof(unsigned long); i++) {
+			*ptr++ = (char) sz & 0xff;
+			sz /= 256;
+		}
+		fprintf(stderr, "=> %7d ptr %d\n", amount_malloced, (unsigned) ptr);
+	} else {
+		fprintf(stderr, "failed\n");
+	}
+	return ptr;
+}
+
+static void my_XtFree(char *ptr)
+{
+	char *orig = ptr;
+	unsigned char sz;
+	unsigned long size = 0;
+	int i;
+	if(!ptr) {
+		fprintf(stderr, "Heap: nothing to free\n");
+		return;
+	}
+	for (i = 0; i < sizeof(unsigned long); i++) {
+		sz = *--orig;
+		size *= 256;
+		size += sz;
+	}
+	fprintf(stderr,
+	        "Heap: free:   %7d           - %7d => ",
+	        amount_malloced,
+	        size);
+	amount_malloced -= size;
+	fprintf(stderr, "%7d ptr %d\n", amount_malloced, (unsigned) ptr);
+	XtFree(orig);
+}
+
+static char *my_XtRealloc(char *ptr, size_t size)
+{
+	char *orig = ptr;
+	unsigned char csz;
+	unsigned long osize = 0;
+	int i;
+
+	if(size < 1) {
+		my_XtFree(ptr);
+		return (char *) NULL;
+	}
+	if(ptr == (char *) NULL) {
+		return my_XtMalloc(size);
+	}
+
+	for (i = 0; i < sizeof(unsigned long); i++) {
+		csz = *--orig;
+		osize *= 256;
+		osize += csz;
+	}
+
+	/* to test malloc failing */
+	if(EXPLODE_AT > 0 && amount_malloced + size - osize > EXPLODE_AT) {
+		return (char *) NULL;
+	}
+
+	orig = XtRealloc(orig, size + sizeof(unsigned long));
+	fprintf(stderr,
+	        "Heap: realloc %7d - %7d + %7d ",
+	        amount_malloced,
+	        osize,
+	        size);
+	if(orig) {
+		unsigned long sz = size;
+		amount_malloced += size - osize;
+		fprintf(stderr, "=> %7d ptr %d", amount_malloced, (unsigned) ptr);
+		for (i = 0; i < sizeof(unsigned long); i++) {
+			*orig++ = (char) sz & 0xff;
+			sz /= 256;
+		}
+		if(ptr != orig) {
+			fprintf(stderr, " => %d", (unsigned) orig);
+		}
+		fprintf(stderr, "\n");
+	} else {
+		fprintf(stderr, "failed\n");
+	}
+	return orig;
+}
+# define XtMalloc  my_XtMalloc
+# define XtRealloc my_XtRealloc
+# define XtFree    my_XtFree
+#endif /* PG_DEBUG */
+/**************************************************
+ * Ultra dodgy debugging code ends
+ **************************************************/
+
+#ifdef PG_DEBUG
 /* Debug functions */
 #define DBGMAX 47
 static char *debugFormatText(char *in)
@@ -82,14 +219,17 @@ static char *debugFormatText(char *in)
 		case '\n':
 			*optr++ = '\\';
 			*optr   = 'n';
+			cnt++;
 			break;
 		case '\t':
 			*optr++ = '\\';
 			*optr   = 't';
+			cnt++;
 			break;
 		case '\r':
 			*optr++ = '\\';
 			*optr   = 'r';
+			cnt++;
 			break;
 		default:
 			*optr = *iptr;
@@ -140,31 +280,220 @@ static void dumpUndoStack(UndoBuffer *ub, char *where)
 		}
 	}
 }
+#endif /* PG_DEBUG */
 
+
+/* Slightly safer memory allocation.                  *
+ * If a malloc or realloc fails then free off the     *
+ * emergency space and try again (this can only be    *
+ * done once).  The emergency space is allocated when *
+ * the master UndoBuffer is allocated.                */
+
+
+static Boolean noMemory(UndoBuffer *ub);
+static void lowMemoryWarning(UndoBuffer *ub);
+
+static memSize = 0;
+static char *emergencySpace = (char *) NULL;
+
+static char *lXtMalloc(size_t size, UndoBuffer *ub, Boolean *answer)
+{
+	char *retVal;
+	retVal = XtMalloc(size);
+	if (!retVal && emergencySpace) {
+		XtFree(emergencySpace);
+		emergencySpace = (char *) NULL;
+		retVal = XtMalloc(size);
+		if (retVal) {
+			lowMemoryWarning(ub);
+		}
+	}
+	if (!retVal) {
+		*answer = noMemory(ub);
+	}
+	return retVal;
+}
+
+static void lXtFree(char *ptr)
+{
+	/* This function isn't really needed, but is *
+	 * here to leave a consistant naming scheme  */
+	XtFree(ptr);
+}
+
+static char *lXtRealloc(char *ptr, size_t size, UndoBuffer *ub, Boolean *answer)
+{
+	char *retVal;
+	retVal = XtRealloc(ptr, size);
+	if (!retVal && emergencySpace) {
+		XtFree(emergencySpace);
+		emergencySpace = (char *) NULL;
+		retVal = XtRealloc(ptr, size);
+		if (retVal) {
+			lowMemoryWarning(ub);
+		}
+	}
+	if (!retVal) {
+		*answer = noMemory(ub);
+	}
+	return retVal;
+}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Accessor functions
+ * Accessor functions to the undo structures
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static char *oldtext(UndoBuffer *ub)
 {
+	static char emptyString[] = "";
 	if(ub->active == (UndoNode *) NULL) {
-		return (char *) NULL;
+		return emptyString;
+	}
+	if(ub->active->oldtext == (char *) NULL) {
+		return emptyString;
 	}
 	return ub->active->oldtext;
 }
+
 static void setOldtext(UndoBuffer *ub, char *value)
+{
+	/* NB the space for value is not allocated here */
+	if(ub->active == (UndoNode *) NULL) {
+		return;
+	}
+	if(ub->active->oldtext != (char *) NULL) {
+		lXtFree(ub->active->oldtext);
+		memSize -= ub->active->oldtextSize;
+	}
+	ub->active->oldtext     = value;
+	ub->active->oldtextSize = strlen(value) + 1;
+}
+static void clearOldtext(UndoBuffer *ub)
+
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return;
 	}
-	ub->active->oldtext = value;
-}
-static void clearOldtext(UndoBuffer *ub)
-{
-	if(ub->active == (UndoNode *) NULL) {
+	if(ub->active->oldtext == (char *) NULL) {
 		return;
 	}
 	sprintf(ub->active->oldtext, "");
+	/* Don't free anything now, it's possible the next thing done will *
+	 * be a realloc.  If it isn't the old value will be freed then.    */
+}
+
+#define MIN_OT_SIZE 128
+#define OT_GROWTH_FACTOR 0.25
+static Boolean growOldtext(UndoBuffer *ub, Boolean *answer)
+{
+	NAT len,
+	    newSize;
+	char *ptr;
+
+	/* There's a fair chance that the next thing that will happen *
+	 * after causing the oldText string to grow is that it will   *
+	 * grow again.  So reallocs are done in bigger chunks.        */
+
+	if(ub->active == (UndoNode *) NULL) {
+		return False;
+	}
+
+	len = 0;
+	if(ub->active->oldtextSize != 0 && ub->active->oldtext != (char *) NULL) {
+		len = strlen(ub->active->oldtext);
+	}
+	if(len+1 < ub->active->oldtextSize) {
+		/* There's already enough space */
+		return True;
+	}
+	
+	if(len+1 < MIN_OT_SIZE) {
+		newSize = MIN_OT_SIZE;
+	} else {
+		newSize  = ub->active->oldtextSize;
+		newSize += newSize * OT_GROWTH_FACTOR;
+		if(newSize == ub->active->oldtextSize) {
+			newSize =+ MIN_OT_SIZE;
+		}
+	}
+	if(ub->active->oldtextSize == 0 || ub->active->oldtext == (char *) NULL) {
+		ptr = lXtMalloc(newSize, ub, answer);
+		if(!ptr) {
+			/* we're in real trouble, but try to be helpful */
+			newSize = len+2;
+			ptr = lXtMalloc(newSize, ub, answer);
+			if(ptr) {
+				lowMemoryWarning(ub);
+			}
+		}
+		if(ptr) {
+			memSize += newSize;
+		}
+	} else {
+		ptr = ub->active->oldtext;
+		ptr = lXtRealloc(ptr, newSize, ub, answer);
+		if(!ptr) {
+			/* as above, we're really in trouble, but try to be helpful */
+			newSize = len+2;
+			ptr = ub->active->oldtext;
+			ptr = lXtRealloc(ptr, newSize, ub, answer);
+			if(ptr) {
+				lowMemoryWarning(ub);
+			}
+		}
+		if(ptr) {
+			memSize -= ub->active->oldtextSize;
+			memSize += newSize;
+		}
+	}
+	if(!ptr) {
+		return False;
+	}
+	ub->active->oldtext     = ptr;
+	ub->active->oldtextSize = newSize;
+
+	return True;
+}
+static Boolean prefixOldtext(UndoBuffer *ub, char ch, Boolean *answer)
+{
+	char *p,
+	     this,
+	     prev;
+
+	if(ub->active == (UndoNode *) NULL) {
+		return False;
+	}
+	if(!growOldtext(ub, answer)) {
+		return False;
+	}
+
+	for(p = ub->active->oldtext, prev = ch; prev; ++p) {
+		this = *p;
+		*p = prev;
+		prev = this;
+	}
+	*p = '\0';
+
+	return True;
+}
+static Boolean affixOldtext(UndoBuffer *ub, char ch, Boolean *answer)
+{
+	char *p;
+
+	if(ub->active == (UndoNode *) NULL) {
+		return False;
+	}
+	if(!growOldtext(ub, answer)) {
+		return False;
+	}
+
+	p = ub->active->oldtext;
+	while (*p != '\0') {
+		p++;
+	}
+	*p++ = ch;
+	*p   = '\0';
+
+	return True;
 }
 
 static Boolean was_null(UndoBuffer *ub)
@@ -223,8 +552,8 @@ static void setChanges_saved(UndoBuffer *ub, Boolean value)
 {
 	UndoNode *ptr;
 
-	/* It only makes sense for one node to have a changes_saved = True,
-     * so we may need to walk the NodeBuffer list forwards ... */
+	/* It only makes sense for one node to have a changes_saved = True, *
+     * so we may need to walk the NodeBuffer list forwards ...          */
 
 	if(ub->active == (UndoNode *) NULL) {
 		if(ub->root != (UndoNode *) NULL) {
@@ -285,47 +614,113 @@ static void setLast(UndoBuffer *ub, NAT value)
 }
 
 
-/* memory handling */
+/*
+ * (more) memory handling functions
+ */
+
+/* Called if we appear to be low on memory (actually *
+ * detecting this is a bit hit and miss, though)     */
+static void lowMemoryWarning(UndoBuffer *ub) {
+	memory_warning_dialog(ub->text_w, True);
+}
+
+static void setUndo(UndoBuffer *ub, Boolean state);
+static void setRedo(UndoBuffer *ub, Boolean state);
 /* Called if we've run out of memory (i.e. it's serious) */
-static void noMemory(UndoBuffer *ub) {
+static Boolean noMemory(UndoBuffer *ub) {
 	if(ub->noMemory) {
-		return;	/* we already know */
+		return False;	/* we already know */
 	}
 	ub->noMemory = True;
-	/* should display a dialogue box here */
-	fprintf(stderr,
-	        "Danger, have run out of memory\n"
-	        "You are strongly urged to save all work, exit and restart\n");
+
+#	ifdef HANDLE_NO_MEMORY
+		/* display the undoing nomemory dialogue */
+		if(ub->undoing) {
+			if(ok_cancel_dialog1(ub->text_w, True)) {
+#				ifdef PG_DEBUG
+					fprintf(stderr, "noMemory(undoing): Cancel chosen\n");
+#				endif
+				return True;
+			}
+#			ifdef PG_DEBUG
+				fprintf(stderr, "noMemory(undoing): continue chosen\n");
+#			endif
+			setUndo(ub, False);
+			setRedo(ub, False);
+			return False;
+		}
+
+		/* display the not undoing nomemory dialogue */
+		if(ok_cancel_dialog(ub->text_w, True)) {
+#			ifdef PG_DEBUG
+				fprintf(stderr, "noMemory(not undoing): Cancel chosen\n");
+#			endif
+			return True;
+		}
+#		ifdef PG_DEBUG
+			fprintf(stderr, "noMemory(not undoing): continue chosen\n");
+#		endif
+		setUndo(ub, False);
+		setRedo(ub, False);
+		return False;
+#	else
+		/* simpler version for use when running out of memory isn't handled */
+#		ifdef PG_DEBUG
+			fprintf(stderr, "no more memory!\n");
+#		endif
+#		ifdef HANDLE_NO_MEMORY_DISABLE
+			setUndo(ub, False);
+			setRedo(ub, False);
+#		endif
+		nomemory_dialog(ub->text_w, True);
+		return False;
+#	endif
 }
 
 
 /* a (sort of) destructor */
-static void freeUndoNodes(UndoBuffer *ub, UndoNode *nd)
+static Boolean freeUndoNodesInner(UndoBuffer *ub, UndoNode *nd)
 {
 	if(nd == (UndoNode *) NULL) {
-		return;
+		return False;
 	}
-	freeUndoNodes(ub, nd->next);
+	(void) freeUndoNodesInner(ub, nd->next);
 	nd->next = (UndoNode *) NULL;
 	nd->prev = (UndoNode *) NULL;
 	if(nd->oldtext != (char *) NULL) {
-		XtFree(nd->oldtext);
-		nd->oldtext = (char *) NULL;
+		lXtFree(nd->oldtext);
+		memSize -= nd->oldtextSize;
+		nd->oldtext     = (char *) NULL;
+		nd->oldtextSize = 0;
 	}
-	XtFree((char *) nd);
+	lXtFree((char *) nd);
+	memSize -= sizeof(UndoNode);
+	return True;
+}
+static void freeUndoNodes(UndoBuffer *ub, UndoNode *nd)
+{
+	if (!freeUndoNodesInner(ub, nd)) {
+		/* nothing got freed */
+		return;
+	}
 	ub->noMemory = False;
+	if (! emergencySpace) {
+		/* In case we've used the reserve, try to get it back */
+		emergencySpace = XtMalloc(RESERVEDSPACE);
+	}
 }
 
 
 /* a (sort of) constructor */
-static Boolean newUndoNode(UndoBuffer *ub)
+static Boolean newUndoNode(UndoBuffer *ub, Boolean *answer)
 {
 	UndoNode *new;
-	new = (UndoNode *) XtMalloc(sizeof(UndoNode));
+	*answer = False;
+	new = (UndoNode *) lXtMalloc(sizeof(UndoNode), ub, answer);
 	if(!new) {
-		noMemory(ub);
 		return False;
 	}
+	memSize += sizeof(UndoNode);
 	new->debug_no      = ++next_debug_no;
 	new->moved_away    = True;
 	new->first         = 0;
@@ -333,7 +728,8 @@ static Boolean newUndoNode(UndoBuffer *ub)
 	new->in_business   = False;
 	new->changes_saved = False;
 	new->oldtext       = (char *) NULL;
-    new->was_null      = False;
+	new->oldtextSize   = 0;
+	new->was_null      = False;
 	new->next          = (UndoNode *) NULL;
 	new->prev          = (UndoNode *) NULL;
 
@@ -365,6 +761,7 @@ static Boolean newUndoNode(UndoBuffer *ub)
 	return True;
 }
 
+/* move the active node forwards ... */
 static void backtrack(UndoBuffer *ub)
 {
 	if(ub->active == (UndoNode *) NULL) {
@@ -373,6 +770,7 @@ static void backtrack(UndoBuffer *ub)
 	ub->active = ub->active->prev;
 }
 
+/* ... and backwards */
 static void retrack(UndoBuffer *ub)
 {
 	if(ub->active == (UndoNode *) NULL) {
@@ -392,6 +790,9 @@ static void setUndo(UndoBuffer *ub, Boolean state)
 	if(ub->can_undo != state) {
 		ub->can_undo = state;
 		if(ub->menu_ws) {
+#			ifdef PG_DEBUG
+				fprintf(stderr, "Undo %sabled\n", state ? "en" : "dis");
+#			endif
 			for(wp = ub->menu_ws; *wp; ++wp) {
 				set_menu_item_sensitivity(*wp,
 				                          ub->undo_menu_entry_offset,
@@ -408,6 +809,9 @@ static void setRedo(UndoBuffer *ub, Boolean state)
 	if(ub->can_redo != state) {
 		ub->can_redo = state;
 		if(ub->menu_ws) {
+#			ifdef PG_DEBUG
+				fprintf(stderr, "Redo %sabled\n", state ? "en" : "dis");
+#			endif
 			for(wp = ub->menu_ws; *wp; ++wp) {
 				set_menu_item_sensitivity(*wp,
 				                          ub->redo_menu_entry_offset,
@@ -442,15 +846,18 @@ static Boolean canUnRedo(UndoBuffer *ub)
 }
 
 
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * clear_undo: put the undo buffer back in a pristine state.
- * e.g., used when a file is loaded.
+/* **** **** **** **** **** **** **** **** **** **** **** **** *
+ * clear_undo: put the undo buffer back in a pristine state.   *
+ * e.g., used when a file is loaded.                           *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void clear_undo(XtPointer xtp)
 {
 	UndoBuffer *ub = xtp;
 	Widget *wp;
 
+#	ifdef PG_DEBUG
+		fprintf(stderr, "clear_undo called\n");
+#	endif
 	/* force undo/redo to be False */
 	ub->can_undo = True;
 	ub->can_redo = True;
@@ -462,6 +869,7 @@ void clear_undo(XtPointer xtp)
 	ub->active = (UndoNode *) NULL;
 
 	ub->undoing = False;
+	ub->enabled = True;
 
 	if(ub->menu_ws) {
 		for(wp = ub->menu_ws; *wp; ++wp) {
@@ -473,6 +881,33 @@ void clear_undo(XtPointer xtp)
 			                    "Redo");
 		}
 	}
+}
+
+/* Called just before doing an open, revert or empty file.  All undoing *
+ * will be disabled (in order to stop any memory being allocated        *
+ * unnecessarily).  This is safe as the first thing to be done after    *
+ * the file load or clear has been completed will be to call clear_undo *
+ * (which will discard any undo structure, so it's pointless allocating *
+ * any for the file load.   clear_undo resets this state to normal.     */
+void pause_undo(XtPointer xtp)
+{
+	UndoBuffer *ub = xtp;
+	ub->enabled = False;
+	setUndo(ub, False);
+	setRedo(ub, False);
+#	ifdef PG_DEBUG
+		fprintf(stderr, "pause_undo called\n");
+#	endif
+}
+
+/* Only needed if an open failed, otherwise clear_undo gets called */
+void unpause_undo(XtPointer xtp)
+{
+	UndoBuffer *ub = xtp;
+	ub->enabled = True;
+#	ifdef PG_DEBUG
+		fprintf(stderr, "unpause_undo called\n");
+#	endif
 }
 
 
@@ -490,9 +925,9 @@ void notify_save(XtPointer xtp)
 }
 
 
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * add_undo: attach an undo capability to a text window.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
+/* **** **** **** **** **** **** **** **** **** **** **** **** **** **** *
+ * add_undo: attach an undo capability to a text window (called once).   *
+ * **** **** **** **** **** **** **** **** **** **** **** **** **** **** */
 XtPointer add_undo(
 		Widget	text_w,
 		Widget *menu_ws,
@@ -500,11 +935,25 @@ XtPointer add_undo(
 		NAT redo_menu_entry_offset)
 {
 	UndoBuffer *ub;
-	if(!(ub = (UndoBuffer *)XtMalloc(sizeof(UndoBuffer)))) {
+	/* NB this Malloc must not use the local one and ... */
+	emergencySpace = XtMalloc(RESERVEDSPACE);
+	/* don't need to handle errors */
+
+	/* ... this Malloc can't use the local one (which needs ub) */
+	if(!(ub = (UndoBuffer *) XtMalloc(sizeof(UndoBuffer)))) {
 		fprintf(stderr, "A serious problem has happened, "
 		                "unable to allocate space for the undo root\n");
 		return NULL;
 	}
+
+#	ifdef HANDLE_NO_MEMORY
+		(void) ok_cancel_dialog(text_w,  False);
+		(void) ok_cancel_dialog1(text_w, False);
+#	else
+		nomemory_dialog(text_w, False);
+#	endif
+	memory_warning_dialog(text_w, False);
+
 	ub->text_w                 = text_w;
 	ub->menu_ws                = menu_ws;
 	ub->undo_menu_entry_offset = undo_menu_entry_offset;
@@ -515,12 +964,13 @@ XtPointer add_undo(
 	ub->noMemory               = False;
 	clear_undo(ub);	/* rest of initialisation etc. */
 	return (XtPointer) ub;
+	ub->enabled = False;
 }
 
 
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * MONITORING CHANGES FOR THE UNDO COMMAND
- * **** **** **** **** **** **** **** **** **** **** **** **** */
+/* **** **** **** **** **** **** **** **** **** *
+ * MONITORING CHANGES FOR THE UNDO COMMAND      *
+ * **** **** **** **** **** **** **** **** **** */
 /*
  * What follows implements a very simple undo/redo facility.
  * Undoable actions are:
@@ -532,27 +982,32 @@ XtPointer add_undo(
  *
  * Only the last action is undoable
  */
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Monitor cursor motions:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
+/* **** **** **** **** **** *
+ * Monitor cursor motions:  *
+ * **** **** **** **** **** */
 void undo_motion_cb(
 	Widget		text_w,
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
+	UndoBuffer *ub = cbd;
+	if(!ub->enabled) {
+		return;
+	}
 	/* setMoved_away(ub, True); */
 }
 
 
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Reinitialise the undo buffer. N.b. initialisation of the `last'
- * component almost always has to be reassigned. Following gives
- * an undo which would not change the text.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
+/* **** **** **** **** **** **** **** **** **** **** **** **** **** *
+ * Reinitialise the undo buffer.  NB initialisation of the `last'   *
+ * component almost always has to be reassigned.  Following gives   *
+ * an undo which would not change the text.                         *
+ * **** **** **** **** **** **** **** **** **** **** **** **** **** */
 static Boolean reinit_undo_buffer (
 	UndoBuffer	*ub,
 	XmTextVerifyCallbackStruct *cbs,
-	Boolean cu)
+	Boolean cu,
+	Boolean *answer)
 {
 	if(!ub->undoing) {
 		setUndo(ub, cu);
@@ -560,7 +1015,7 @@ static Boolean reinit_undo_buffer (
 	}
 
 	if(!ub->undoing || ub->active == (UndoNode *) NULL) {
-		if(!newUndoNode(ub)) {
+		if(!newUndoNode(ub, answer)) {
 			return False;
 		}
 	}
@@ -572,28 +1027,19 @@ static Boolean reinit_undo_buffer (
 }
 
 
-/* forward declarations */
-static char *prefix(UndoBuffer *ub, char ch, char *str),
-            *affix (UndoBuffer *ub, char ch, char *str);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Monitor typed input:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void undo_modify_cb(
+static Boolean undoModifyCB(
 	Widget		text_w,
-	XtPointer	cbd,
-	XtPointer	xtp_cbs)
+	UndoBuffer *ub,
+	XtPointer	xtp_cbs,
+	Boolean    *noMA)
 {
-	UndoBuffer *ub = cbd;
 	XmTextVerifyCallbackStruct *cbs = xtp_cbs;
 	NAT len;
 	char *cut_chars;
 	Widget *wp;
-
-	if(ub->noMemory) {
-		setUndo(ub, False);
-		setRedo(ub, False);
-		return;
-	}
 
 	if(!cbs->text->length &&
 	   !ub->undoing &&
@@ -602,71 +1048,214 @@ void undo_modify_cb(
 	   in_business(ub)) {
 		/* deleting single character at end of current typing thread */
 		if(cbs->endPos == last(ub)) {
-				/* deleting last char of current thread */
 			if(last(ub) > first(ub)) {
+				/* deleting last char of current thread */
 				setLast(ub, last(ub) - 1);
 			} else {
 				/* deleting char before start of current thread */
 				char buf[2];
-				if(XmTextGetSubstring(ub->text_w, cbs->startPos, 1, 2, buf)
-					!= XmCOPY_SUCCEEDED) {
-						if(!reinit_undo_buffer(ub, cbs, False)) {
-							return;
-						}
+				if(XmTextGetSubstring(ub->text_w,
+				                      cbs->startPos,
+				                      1,
+				                      2,
+				                      buf) != XmCOPY_SUCCEEDED) {
+					/* I havn't figured out why this code is here as *
+					 * we're only to get to this point if the above  *
+					 * call couldn't copy the text buffer, so we're  *
+					 * not going to be able to undo it since we      *
+					 * don't know what to undo it to.  PG 2002 05 13 */
+					if(!reinit_undo_buffer(ub, cbs, False, noMA)) {
+#						ifdef HANDLE_NO_MEMORY
+							if(*noMA) {
+								cbs->doit = False;
+								ub->noMemory = False;
+								return False;
+							}
+#						else
+							return False;
+#						endif
+					}
 				} else {
+					char *newptr;
 					setUndo(ub, True);
 					setMoved_away(ub, False);
 					setFirst(ub,      cbs->startPos);
-					setLast(ub,       cbs->startPos);	
-					setOldtext(ub,    prefix(ub, buf[0], oldtext(ub)));
+					setLast(ub,       cbs->startPos);
+					if(!prefixOldtext(ub, buf[0], noMA)) {
+#						ifdef HANDLE_NO_MEMORY
+							if(*noMA) {
+								cbs->doit = False;
+								ub->noMemory = False;
+								return False;
+							}
+#						else
+							return False;
+#						endif
+					}
 				}
 			}
 		} else {	/* deleting char after start of current thread */
 			char buf[2];
 			if(XmTextGetSubstring(ub->text_w,
-					cbs->startPos, 1, 2, buf)
-				!= XmCOPY_SUCCEEDED) {
-					if(!reinit_undo_buffer(ub, cbs, False)) {
-						return;
-					}
+			                      cbs->startPos,
+			                      1,
+			                      2,
+			                      buf) != XmCOPY_SUCCEEDED) {
+				/* See the comment below the call to  *
+				 * XmTextGetSubstring before this one */
+				if(!reinit_undo_buffer(ub, cbs, False, noMA)) {
+#					ifdef HANDLE_NO_MEMORY
+						if(*noMA) {
+							cbs->doit = False;
+							ub->noMemory = False;
+							return False;
+						}
+#					else
+						return False;
+#					endif
+				}
 			} else {
+				char *newptr;
 				setUndo(ub, True);
 				setMoved_away(ub, False);
-				setLast(ub,       cbs->startPos);	
-				setOldtext(ub,    affix(ub, buf[0], oldtext(ub)));
+				setLast(ub,       cbs->startPos);
+				if(!affixOldtext(ub, buf[0], noMA)) {
+#					ifdef HANDLE_NO_MEMORY
+						if(*noMA) {
+							cbs->doit = False;
+							ub->noMemory = False;
+							return False;
+						}
+#					else
+						return False;
+#					endif
+				}
 			}
 		}
 	} else if(cbs->startPos < cbs->endPos) {
-				/* deleted something else */
+#ifdef PG_DEBUG
+if(ub->undoing) {
+ fprintf(stderr,
+         "case 1, startPos %d < endPos %d\n",
+         cbs->startPos,
+         cbs->endPos);
+}
+#endif
+		/* deleted something else */
 		len = cbs->endPos - cbs->startPos;
-		cut_chars = XtMalloc(len + 1);
+		cut_chars = lXtMalloc(len+1, ub, noMA);
 		if(!cut_chars) {
-			noMemory(ub);
-			return;
+#			ifdef HANDLE_NO_MEMORY
+				if(*noMA) {
+#ifdef PG_DEBUG
+  fprintf(stderr, "Need to do a sort of undo here (couldn't get cut_chars)\n");
+  fprintf(stderr, "  start pos: %d\n", cbs->startPos);
+  fprintf(stderr, "    end pos: %d\n", cbs->endPos);
+  fprintf(stderr, "        len: %d\n", len);
+  fprintf(stderr, "       text: %s\n", debugFormatText(cbs->text->ptr));
+  fprintf(stderr, "     length: %d\n", cbs->text->length);
+  fprintf(stderr, "       doit: %s\n", cbs->doit ? "True" : "False");
+#endif
+					cbs->doit = False;
+					ub->noMemory = False;
+					return False;
+				}
+#			else
+				return False;
+#			endif
 		}
-		if(XmTextGetSubstring(ub->text_w, cbs->startPos, len, len+1, cut_chars)
-			!= XmCOPY_SUCCEEDED) {
-			if(!reinit_undo_buffer(ub, cbs, False)) {
-				return;
+		memSize += len+1;
+		if(XmTextGetSubstring(ub->text_w,
+                              cbs->startPos,
+                              len,
+                              len+1,
+                              cut_chars) != XmCOPY_SUCCEEDED) {
+			if(!reinit_undo_buffer(ub, cbs, False, noMA)) {
+#				ifdef HANDLE_NO_MEMORY
+					if(*noMA) {
+#ifdef PG_DEBUG
+  fprintf(stderr, "Need to do a sort of undo here (copy fail)\n");
+  fprintf(stderr, "  start pos: %d\n", cbs->startPos);
+  fprintf(stderr, "    end pos: %d\n", cbs->endPos);
+  fprintf(stderr, "        len: %d\n", len);
+  fprintf(stderr, "  cut_chars: %s\n", debugFormatText(cut_chars));
+  fprintf(stderr, "       doit: %s\n", cbs->doit ? "True" : "False");
+#endif
+						cbs->doit = False;
+						lXtFree(cut_chars);
+						memSize -= len+1;
+						ub->noMemory = False;
+						return False;
+					}
+#				else
+					return False;
+#				endif
 			}
+			lXtFree(cut_chars);
+			memSize -= len+1;
+			ub->noMemory = False;
 		} else {
 			cut_chars[len] = '\0';
-			if(!reinit_undo_buffer(ub, cbs, True)) { /* for the XtFree */
-				return;
+			if(!reinit_undo_buffer(ub, cbs, True, noMA)) { /* for the XtFree */
+#				ifdef HANDLE_NO_MEMORY
+					if(*noMA) {
+#ifdef PG_DEBUG
+  fprintf(stderr, "Need to do a sort of undo here\n");
+  fprintf(stderr, "  start pos: %d\n", cbs->startPos);
+  fprintf(stderr, "    end pos: %d\n", cbs->endPos);
+  fprintf(stderr, "        len: %d\n", len);
+  fprintf(stderr, "  cut_chars: %s\n", debugFormatText(cut_chars));
+  fprintf(stderr, "       text: %s\n", debugFormatText(cbs->text->ptr));
+  fprintf(stderr, "     length: %d\n", cbs->text->length);
+  fprintf(stderr, "       doit: %s\n", cbs->doit ? "True" : "False");
+#endif
+						cbs->doit = False;
+						lXtFree(cut_chars);
+						memSize -= len+1;
+						ub->noMemory = False;
+						return False;
+					}
+#				else
+					return False;
+#				endif
 			}
 			setMoved_away(ub, False);
 			setFirst(ub,      cbs->startPos);
 			setLast(ub,       cbs->startPos + cbs->text->length);	
 			setOldtext(ub,    cut_chars);
 		}
+	} else if(ub->undoing && cbs->startPos == cbs->endPos) {
+		/* undoing a delete */
+		if(!reinit_undo_buffer(ub, cbs, False, noMA)) {
+#			ifdef HANDLE_NO_MEMORY
+				if(*noMA) {
+					cbs->doit = False;
+					return False;
+				}
+#			else
+				return False;
+#			endif
+		}
+		setMoved_away(ub, False);
+		setFirst(ub,      cbs->startPos);
+		setLast(ub,       cbs->startPos + cbs->text->length);	
+		clearOldtext(ub);
 	} else if(moved_away(ub) || last(ub) != cbs->startPos) {
-					/* started typing somewhere new */
-		if(!reinit_undo_buffer(ub, cbs, True)) {
-			return;
+		/* started typing somewhere new */
+		if(!reinit_undo_buffer(ub, cbs, True, noMA)) {
+#			ifdef HANDLE_NO_MEMORY
+				if(*noMA) {
+					cbs->doit = False;
+					ub->noMemory = False;
+					return False;
+				}
+#			else
+				return False;
+#			endif
 		}
 		setLast(ub, cbs->startPos + cbs->text->length);
 	} else {
-					/* just carried on typing */
+		/* just carried on typing */
 		setLast(ub, last(ub) + cbs->text->length);
 	}
 
@@ -677,6 +1266,40 @@ void undo_modify_cb(
 		setRedo(ub, False);
 	}
 
+	return True;
+}
+
+void undo_modify_cb(
+	Widget		text_w,
+	XtPointer	cbd,
+	XtPointer	xtp_cbs)
+{
+	UndoBuffer *ub = cbd;
+	Boolean noMemoryAnswer = False;
+	if(!ub->enabled) {
+		return;
+	}
+
+	if(!undoModifyCB(text_w, ub, xtp_cbs, &noMemoryAnswer)) {
+#ifdef HANDLE_NO_MEMORY
+# ifdef PG_DEBUG
+		fprintf(stderr, "Ran out of memory");
+		if(ub->undoing) {
+			fprintf(stderr, ", while undoing");
+		}
+		if(noMemoryAnswer) {
+			fprintf(stderr, " cancel chosen\n");
+			if(!ub->undoing) {
+				/* force an undo here ? */
+				fprintf(stderr, "");
+				dumpUndoStack(ub, "Cancel chosen");
+			}
+		} else {
+			fprintf(stderr, " continue chosen\n");
+		}
+# endif
+#endif
+	}
 }
 
 
@@ -700,43 +1323,23 @@ static Boolean undoRedo(
 {
 	XmTextPosition fst, lst;
 	NAT len;
-	char *str;
 
 	if(canUnRedo(ub)) {
 		if(changes_saved(ub) &&
 		   amUndoing &&
-           !yes_no_dialog(text_w, changes_saved_warning)) {
+		   !yes_no_dialog(text_w, changes_saved_warning)) {
 			return False;
 		}
-		ub->undoing    = True;
+		ub->undoing = True;
 		setMoved_away(ub, True);
-		if(oldtext(ub) == NULL) {
-			len = 0;
-			str = XtMalloc(len + 1);
-			if(!str) {
-				noMemory(ub);
-				return False;
-			}
-			strcpy(str, "");
-			if(amUndoing) {
-				setWas_null(ub, True);
-			}
-		} else {
-			len = strlen(oldtext(ub));
-			if(amUndoing) {
-				setWas_null(ub, len == 0);
-			}
-			str = XtMalloc(len + 1);
-			if(!str) {
-				noMemory(ub);
-				return False;
-			}
-			strcpy(str, oldtext(ub));
-		};
+		len = strlen(oldtext(ub));
+		if(amUndoing) {
+			setWas_null(ub, len == 0);
+		}
 		fst = first(ub);
 		lst = last(ub);
 		text_show_position(ub->text_w, fst);
-		XmTextReplace(ub->text_w, fst, lst, str);
+		XmTextReplace(ub->text_w, fst, lst, oldtext(ub));
 
 		if(len) {
 			XmTextSetSelection(ub->text_w, fst, fst+len, CurrentTime);
@@ -744,9 +1347,8 @@ static Boolean undoRedo(
 			XmTextSetInsertionPosition(ub->text_w, fst);
 		}
 
-		XtFree(str);
 		ub->undoing = False;
-		if(!amUndoing && was_null(ub) && oldtext(ub) != (char *) NULL) {
+		if(!amUndoing && was_null(ub)) {
 			clearOldtext(ub);
 		}
 	}
@@ -757,29 +1359,32 @@ static Boolean undoRedo(
 void undo_cb(Widget text_w, XtPointer cbd, XtPointer cbs)
 {
 	UndoBuffer *ub = cbd;
-
-	if(ub->noMemory) {
-		setUndo(ub, False);
-		setRedo(ub, False);
+	if(!ub->enabled) {
 		return;
 	}
+#	ifdef PG_DEBUG
+		dumpUndoStack(ub, "At start of undo");
+#	endif
 
 	if(undoRedo(text_w, ub, cbs, True)) {
     	backtrack(ub);
 		setUndoRedo(ub);
 	}
+#	ifdef PG_DEBUG
+		dumpUndoStack(ub, "At end of undo");
+#	endif
 }
 
 
 void redo_cb(Widget text_w, XtPointer cbd, XtPointer cbs)
 {
 	UndoBuffer *ub = cbd;
-
-	if(ub->noMemory) {
-		setUndo(ub, False);
-		setRedo(ub, False);
+	if(!ub->enabled) {
 		return;
 	}
+#	ifdef PG_DEBUG
+		dumpUndoStack(ub, "At start of redo");
+#	endif
 
 	retrack(ub);
 	if(undoRedo(text_w, ub, cbs, False)) {
@@ -787,62 +1392,7 @@ void redo_cb(Widget text_w, XtPointer cbd, XtPointer cbs)
 	} else {
 		backtrack(ub);
 	}
-}
-
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * string manipulating utilities:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char *prefix(UndoBuffer *ub, char ch, char *str)
-{
-	if(str) {
-		char *p;
-		char this, prev;
-		str = XtRealloc(str, strlen(str) + 2);
-		if(!str) {
-			noMemory(ub);
-			return (char *) NULL;
-		}
-		for(p = str, prev = ch; prev; ++p) {
-			this = *p;
-			*p = prev;
-			prev = this;
-		}
-		*p = '\0';
-	} else {
-		str = XtMalloc(2);
-		if(!str) {
-			noMemory(ub);
-			return (char *) NULL;
-		}
-		str[0] = ch;
-		str[1] = '\0';
-	}
-	return str;
-}
-
-
-static char *affix(UndoBuffer *ub, char ch, char *str)
-{
-	if(str) {
-		char *p;
-		NAT len;
-		len = strlen(str);
-		str = XtRealloc(str, len + 2);
-		if(!str) {
-			noMemory(ub);
-			return (char *) NULL;
-		}
-		str[len] = ch;
-		str[len+1] = '\0';
-	} else {
-		str = XtMalloc(2);
-		if(!str) {
-			noMemory(ub);
-			return (char *) NULL;
-		}
-		str[0] = ch;
-		str[1] = '\0';
-	}
-	return str;
+#	ifdef PG_DEBUG
+		dumpUndoStack(ub, "At end of redo");
+#	endif
 }

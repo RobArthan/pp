@@ -1,7 +1,5 @@
-
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.21 2002/03/18 19:14:49 phil Exp rda $
+ * $Id: mainw.c,v 2.22 2002/05/13 11:18:26 rda Exp phil $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -13,6 +11,7 @@
  * the user interface for interacting with the interactive program.
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static char rcsid[] = "$Id: $";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:
@@ -154,23 +153,23 @@ static void execute_action(
  * in the middle of a menu, macros for later entries should
  * be incremented accordingly.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-#define FILE_MENU_SAVE			0
-#define FILE_MENU_SAVE_AS		1
-#define FILE_MENU_SAVE_SELECTION	2
+#define FILE_MENU_SAVE            0
+#define FILE_MENU_SAVE_AS         1
+#define FILE_MENU_SAVE_SELECTION  2
 /* Item 3 is a separator */
-#define FILE_MENU_OPEN			4
-#define FILE_MENU_INCLUDE		5
-#define FILE_MENU_REVERT		6
-#define FILE_MENU_EMPTY_FILE		7
-#define FILE_MENU_REOPEN		8
+#define FILE_MENU_OPEN            4
+#define FILE_MENU_INCLUDE         5
+#define FILE_MENU_REVERT          6
+#define FILE_MENU_EMPTY_FILE      7
+#define FILE_MENU_REOPEN          8
 /* Item 9 is a separator */
-#define FILE_MENU_QUIT			10
+#define FILE_MENU_QUIT           10
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * The items for the pull-right menu attached to Reopen in the
  * file menu are set up dynamically;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-#define MAX_REOPEN_MENU_ITEMS		16
+#define MAX_REOPEN_MENU_ITEMS    16
 
 static MenuItem reopen_menu_items[MAX_REOPEN_MENU_ITEMS+1] = {
 	{NULL}
@@ -203,11 +202,11 @@ static MenuItem file_menu_items[] = {
  * In the following, entries after and including
  * TOOLS_MENU_CMD_LINE are zero-ed out in an edit-only session.
  */
-#define TOOLS_MENU_SEARCH_REPLACE		0
-#define TOOLS_MENU_PALETTE			1
-#define TOOLS_MENU_TEMPLATES			2
-#define TOOLS_MENU_CONTROLS			3
-#define TOOLS_MENU_CMD_LINE			4
+#define TOOLS_MENU_SEARCH_REPLACE  0
+#define TOOLS_MENU_PALETTE         1
+#define TOOLS_MENU_TEMPLATES       2
+#define TOOLS_MENU_CONTROLS        3
+#define TOOLS_MENU_CMD_LINE        4
 
 static MenuItem tools_menu_items[] = {
     { "Search and Replace", &xmPushButtonGadgetClass, 'S', NULL, NULL,
@@ -223,11 +222,12 @@ static MenuItem tools_menu_items[] = {
     {NULL}
 };
 
-#define EDIT_MENU_CUT			0
-#define EDIT_MENU_COPY		1
-#define EDIT_MENU_PASTE		2
-#define EDIT_MENU_CLEAR		3
-#define EDIT_MENU_UNDO		4
+#define EDIT_MENU_CUT   0
+#define EDIT_MENU_COPY  1
+#define EDIT_MENU_PASTE 2
+#define EDIT_MENU_CLEAR 3
+#define EDIT_MENU_UNDO  4
+#define EDIT_MENU_REDO  5
 
 static MenuItem edit_menu_items[] = {
     { "Cut", &xmPushButtonGadgetClass, 'C', NULL, NULL,
@@ -241,22 +241,26 @@ static MenuItem edit_menu_items[] = {
 #ifdef SOLARIS
     { "Undo", &xmPushButtonGadgetClass, 'U', "<Key>Undo", NULL,
         edit_menu_cb, (XtPointer)EDIT_MENU_UNDO, (MenuItem *)NULL, False },
+    { "Redo", &xmPushButtonGadgetClass, 'R', "<Key>Redo", NULL,
+        edit_menu_cb, (XtPointer)EDIT_MENU_REDO, (MenuItem *)NULL, False },
 #else
     { "Undo", &xmPushButtonGadgetClass, 'U', "Ctrl<Key>z", NULL,
         edit_menu_cb, (XtPointer)EDIT_MENU_UNDO, (MenuItem *)NULL, False },
+    { "Redo", &xmPushButtonGadgetClass, 'R', "Ctrl<Key>r", NULL,
+        edit_menu_cb, (XtPointer)EDIT_MENU_REDO, (MenuItem *)NULL, False },
 #endif
     {NULL}
 };
 
-#define CMD_MENU_EXECUTE		0
-#define CMD_MENU_RETURN		1
-#define CMD_MENU_SEMICOLON		2
+#define CMD_MENU_EXECUTE    0
+#define CMD_MENU_RETURN     1
+#define CMD_MENU_SEMICOLON  2
 /* Item 3 is a separator */
-#define CMD_MENU_ABANDON		4
-#define CMD_MENU_INTERRUPT		5
+#define CMD_MENU_ABANDON    4
+#define CMD_MENU_INTERRUPT  5
 /* Item 6 is a separator */
-#define CMD_MENU_KILL			7
-#define CMD_MENU_RESTART		8
+#define CMD_MENU_KILL       7
+#define CMD_MENU_RESTART    8
 
 static MenuItem cmd_menu_items[] = {
     { "Execute Selection", &xmPushButtonGadgetClass, 'x', "Ctrl<Key>x", "Ctrl-X",
@@ -278,13 +282,13 @@ static MenuItem cmd_menu_items[] = {
     {NULL}
 };
 
-#define	HELP_MENU_ABOUT_XPP		0
-#define	HELP_MENU_USING_HELP		1
-#define	HELP_MENU_TUTORIAL		2
-#define	HELP_MENU_FILE_MENU		3
-#define	HELP_MENU_TOOLS_MENU		4
-#define	HELP_MENU_EDIT_MENU		5
-#define	HELP_MENU_COMMAND_MENU	6
+#define	HELP_MENU_ABOUT_XPP     0
+#define	HELP_MENU_USING_HELP    1
+#define	HELP_MENU_TUTORIAL      2
+#define	HELP_MENU_FILE_MENU     3
+#define	HELP_MENU_TOOLS_MENU    4
+#define	HELP_MENU_EDIT_MENU     5
+#define	HELP_MENU_COMMAND_MENU  6
 static MenuItem help_menu_items[] = {
     { "About Xpp", &xmPushButtonGadgetClass, 'A', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_ABOUT_XPP, (MenuItem *)NULL, False },
@@ -408,6 +412,8 @@ static void flash_file_name(char *fname)
 			XmHIGHLIGHT_NORMAL);
 	}
 }
+
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * reinit_changed: unset changed flag and clear the modified label;
  * Also either clear the undo buffer or notify the undo packaged
@@ -423,6 +429,7 @@ static void reinit_changed(Boolean saving)
 		clear_undo(undo_ptr);
 	}
 }
+
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * X initialisation:
@@ -630,7 +637,7 @@ static Boolean setup_main_window(
 	wp[1] = popupeditmenu;
 	wp[2] = (Widget) NULL;
 
-	undo_ptr = add_undo(script, wp, EDIT_MENU_UNDO);
+	undo_ptr = add_undo(script, wp, EDIT_MENU_UNDO, EDIT_MENU_REDO);
 
 	XtAddCallback(script,
 		XmNmodifyVerifyCallback, undo_modify_cb, undo_ptr);
@@ -664,6 +671,7 @@ static Boolean setup_main_window(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Open file if file_name not NULL
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+	pause_undo(undo_ptr);
 	if(open_file(script, file_name, True, &foAction)) {
 		XmTextFieldSetString(namestring, file_name);
 		XmTextFieldShowPosition(namestring, strlen(file_name));
@@ -695,7 +703,7 @@ static Boolean setup_main_window(
 			isNewFile = True;
 		}
 */
-	};
+	}
 	reinit_changed(False);
 	set_icon_name();
 
@@ -812,22 +820,26 @@ static void file_menu_cb(
 			fname = file_dialog(frame, "Open");
 			if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
-			} else if(open_file(script, fname, False, (FileOpenAction *) NULL)){
-				if(!oldfname ||
-				   !*oldfname ||
-				   *oldfname == '*' ||
-				   !strcmp(fname, oldfname)) {
-					if(oldfname) {XtFree(oldfname);}
+			} else {
+				pause_undo(undo_ptr);
+				if(open_file(script, fname, False, (FileOpenAction *) NULL)) {
+					if(!oldfname ||
+					   !*oldfname ||
+					   *oldfname == '*' ||
+					   !strcmp(fname, oldfname)) {
+						if(oldfname) {XtFree(oldfname);}
+					} else {
+						setup_reopen_menu(oldfname);
+					}
+					flash_file_name(fname);
+					set_icon_name();
+					reinit_changed(False);
+					set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
 				} else {
-					setup_reopen_menu(oldfname);
+					unpause_undo(undo_ptr);
 				}
-				flash_file_name(fname);
-				set_icon_name();
-				reinit_changed(False);
-				set_menu_item_sensitivity(filemenu,
-					FILE_MENU_SAVE, True);
-			};
-			if(fname != NULL) {XtFree(fname);};
+			}
+			if(fname != NULL) {XtFree(fname);}
 		}
 		break;
 	case FILE_MENU_INCLUDE:
@@ -842,14 +854,16 @@ static void file_menu_cb(
 	case FILE_MENU_REVERT:
 		if(!changed || yes_no_dialog(root, changed_message)) {
 			fname = XmTextGetString(namestring);
+			pause_undo(undo_ptr);
 			if(!fname || !*fname || *fname == '*') {
 /* No file name: get an empty file */
 				XmTextSetString(script, "");
 			} else if(!open_file(script, fname, False,(FileOpenAction *) NULL)){
 /* Can't open it; */
 				XtFree(fname);
+				unpause_undo(undo_ptr);
 				break;
-			};
+			}
 			flash_file_name(fname);
 			set_icon_name();
 			reinit_changed(False);
@@ -859,6 +873,7 @@ static void file_menu_cb(
 	case FILE_MENU_EMPTY_FILE:
 		oldfname = XmTextGetString(namestring);
 		if(!changed || yes_no_dialog(root, revert_message)) {
+			pause_undo(undo_ptr);
 			XmTextFieldSetString(namestring, no_file_message);
 			XmTextSetString(script, "");
 			if(!oldfname || !*oldfname || *oldfname == '*') {
@@ -942,6 +957,7 @@ static void reopen_cb(
 	oldfname = XmTextGetString(namestring);
 	fname = reopen_menu_items[i].label;
 	if(!changed || yes_no_dialog(root, changed_message)) {
+		pause_undo(undo_ptr);
 		if(open_file(script, fname, False, (FileOpenAction *) NULL)) {
 			if(!oldfname || !*oldfname || *oldfname == '*') {
 				if(oldfname) {XtFree(oldfname);}
@@ -953,7 +969,9 @@ static void reopen_cb(
 			reinit_changed(False);
 			set_menu_item_sensitivity(filemenu,
 				FILE_MENU_SAVE, True);
-		};
+		} else {
+			unpause_undo(undo_ptr);
+		}
 	}
 }
 
@@ -1017,6 +1035,11 @@ static void edit_menu_cb(
 	case EDIT_MENU_UNDO:
 
 		undo_cb(script, undo_ptr, cbs);
+		break;
+
+	case EDIT_MENU_REDO:
+
+		redo_cb(script, undo_ptr, cbs);
 		break;
 
 	default:

@@ -8,8 +8,20 @@
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #ifdef _xpp
-static char rcsid_h[] = "$Id: xpp.h,v 2.21 2002/03/18 19:14:49 phil Exp phil $";
+static char rcsid_h[] = "$Id: xpp.h,v 2.11 2002/03/21 16:36:43 phil Exp phil $";
 #endif
+
+
+/* Build switches */
+
+/* If defined this will enable a more advanced *
+ * way to deal with a lack of memory.          */
+/*#define HANDLE_NO_MEMORY*/
+
+/* If HANDLE_NO_MEMORY isn't defined defining  this *
+ * will disable undo/redo if memory does run out.   */
+#define HANDLE_NO_MEMORY_DISABLE
+
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * MACROS
@@ -168,7 +180,23 @@ typedef struct menu_item {
 		char	*msg);
 	extern char *file_dialog(
 		Widget	w,
-		char	*opn	/* Save/Open/... */);
+		char	*opn    /* Save/Open/... */);
+	extern void memory_warning_dialog(
+		Widget  w,
+		Boolean show);     /* Used when memory's very low */
+#	ifdef HANDLE_NO_MEMORY
+		extern Boolean ok_cancel_dialog(
+			Widget	w,
+			Boolean show);     /* Used when memory's run out */
+		extern Boolean ok_cancel_dialog1(
+			Widget	w,
+			Boolean show);     /*              "             */
+#	else
+		extern void nomemory_dialog(
+			Widget  w,
+			Boolean show);     /* Also for lack of memory, but nothing's *
+			                    * going to be done about it              */
+#	endif
 /* Module: options */
 	extern void init_options(
 		Widget	owner_w);
@@ -200,6 +228,10 @@ typedef struct menu_item {
 	extern void add_templates_tool(Widget w);
 /* Module: undo */
 	extern void clear_undo(
+		XtPointer undo_ptr);
+	extern void pause_undo(
+		XtPointer undo_ptr);
+	extern void unpause_undo(
 		XtPointer undo_ptr);
 	extern void notify_save(XtPointer xtp);
 	extern XtPointer add_undo(
