@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.256 $ $RCSfile: imp507.doc,v $ $Date: 2004/02/21 15:43:09 $
+% imp507.doc %Z% $Revision: 1.257 $ $RCSfile: imp507.doc,v $ $Date: 2004/02/21 16:07:17 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.256 $%
+\def\SCCSversion{$Revision: 1.257 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/02/21 15:43:09 $%
+\TPPdate{\FormatDate{$Date: 2004/02/21 16:07:17 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -207,6 +207,7 @@ by doing all the work of checking and generating the VC terms in {\it call\_vcs}
 \item[Issue 1.255] Fixed bug in {\it combine\_param\_specs}.
 \item[Issue 1.256] Fixed bug in {\it renames\_object\_common}.
 \item[Issue 1.257] Now allows duplicates in a use clause.
+\item[Issue 1.258] Reform of the Environments (in progress).
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -309,6 +310,8 @@ fun €z_pred_of_z_tm› (env : CN_ENV)  (zt : Z_TM) : Z_PRED = (
 );
 =TEX
 \subsection{Component Update Functions}
+We give various update functions that are not mentioned in the
+specification, as well as the ones called for.
 =SML
 fun €package_vc_vars› (
 	{vc_vars, consts_types, formal_procs, informal_funs ,
@@ -453,30 +456,175 @@ fun €package_decl› (
 	}	
 );
 =TEX
+We will need to be able to convert a type mark into an HOL type.
 =SML
-fun €in_scope_vc_vars› ({vc_vars = vc_vars,
-		vc_pars = vc_pars,
-		vc_log_cons = vc_log_cons,
-		vc_aux_vars = vc_aux_vars,
-		var_renamings = var_renamings,
-		use_clause_subs = use_clause_subs,
-		formal_procs = formal_procs,
-		dec_labels = dec_labels} : IN_SCOPE, 
-	new_vc_vars : VAR_DECL list) : IN_SCOPE = (
-		{vc_vars = new_vc_vars,
-		vc_pars = vc_pars,
-		vc_log_cons = vc_log_cons,
-		vc_aux_vars = vc_aux_vars,
-		var_renamings = var_renamings,
-		use_clause_subs = use_clause_subs,
-		formal_procs = formal_procs,
-		dec_labels = dec_labels}
+fun €type_of_tmark› (dict : ENV_DICT) (tmark : TMARK) : TYPE = (
+	let	val set_ty =
+			case env_of_env_dict dict (trans_id tmark) of
+				Value {tipe, info = EIEnvRecordType _, ...} => tipe
+			|	Value {tipe, info = EIEnvOtherType, ...} => tipe
+			|	_ => fail "type_of_tmark" 507127 [fn _ => tmark];
+	in	dest_z_power_type set_ty
+	end	handle Fail _ => fail "type_of_tmark" 507128 [fn _ => tmark]
 );
 =TEX
-
+The following refines the specification by providing the ability to extend the existing dictionary rather than just replacing it.
+If the optional first argument is non-nil, its value with the list of new variables entered into it replaces the dictionary.
+If the optional first argument is nil, the new variables are entered into the existing dictionary.
 =SML
-fun €subunit_vc_vars›  (
-	{	zmod,
+fun €in_scope_vc_vars›
+	(Nil : ENV_DICT OPT)
+	({
+		dict = dict,
+		dec_labels = dec_labels} : IN_SCOPE, 
+	new_vc_vars : VAR_DECL list) : IN_SCOPE = (
+		let	fun mk_var_info zn tmark = (
+				{tipe = type_of_tmark dict tmark,
+				canon_name = zn,
+				info = EIEnvVar{kind = Var, tmark = tmark}}
+			);
+			fun aux1 {vars, tmark} = map (fn v => (trans_id v, tmark)) vars;
+			val vars_tmarks = flat (map aux1 new_vc_vars);
+			fun aux2 (v, tmk) = (v, mk_var_info v tmk);
+			val vars_infos = map aux2 vars_tmarks;
+			val new_dict = add_to_env_dict dict vars_infos
+		in	{dict = new_dict,
+			dec_labels = dec_labels}
+		end
+) | in_scope_vc_vars (Value dict) ({dict = _, dec_labels} , new_vc_vars)= (
+	in_scope_vc_vars Nil ({dict = dict, dec_labels = dec_labels}, new_vc_vars)
+);
+=TEX
+The following two can handle declarations containing more than one auxiliary variable or logical constant, but this feature is not currently used.
+=SML
+fun €in_scope_vc_aux_vars›
+	(Nil : ENV_DICT OPT)
+	({
+		dict = dict,
+		dec_labels = dec_labels} : IN_SCOPE, 
+	new_vc_aux_vars : TERM list) : IN_SCOPE = (
+		let	fun mk_aux_var_info ((zn, ty), zset) = (
+				(zn,
+				{tipe = ty,
+				canon_name = zn,
+				info = EIEnvAuxVar{
+					in_scope = true,
+					decl = mk_z_dec([mk_var(zn, ty)], zset)}})
+			);
+			val compound_decs = map dest_z_dec new_vc_aux_vars;
+			fun aux1 (zvs, zset) = map (fn zv => (dest_var zv, zset)) zvs;
+			val simple_decs = flat (map aux1 compound_decs);
+			val aux_vars_infos = map mk_aux_var_info simple_decs;
+			val new_dict = add_to_env_dict dict aux_vars_infos
+		in	{dict = new_dict,
+			dec_labels = dec_labels}
+		end
+) | in_scope_vc_aux_vars (Value dict) ({dict = _, dec_labels} , new_vc_aux_vars)= (
+	in_scope_vc_aux_vars Nil ({dict = dict, dec_labels = dec_labels}, new_vc_aux_vars)
+);
+=TEX
+=SML
+fun €in_scope_vc_log_cons›
+	(Nil : ENV_DICT OPT)
+	({
+		dict = dict,
+		dec_labels = dec_labels} : IN_SCOPE, 
+	new_vc_log_cons : TERM list) : IN_SCOPE = (
+		let	fun mk_aux_var_info ((zn, ty), zset) = (
+				(zn,
+				{tipe = ty,
+				canon_name = zn,
+				info = EIEnvLogCon{
+					in_scope = true,
+					decl = mk_z_dec([mk_var(zn, ty)], zset)}})
+			);
+			val compound_decs = map dest_z_dec new_vc_log_cons;
+			fun aux1 (zvs, zset) = map (fn zv => (dest_var zv, zset)) zvs;
+			val simple_decs = flat (map aux1 compound_decs);
+			val log_cons_infos = map mk_aux_var_info simple_decs;
+			val new_dict = add_to_env_dict dict log_cons_infos
+		in	{dict = new_dict,
+			dec_labels = dec_labels}
+		end
+) | in_scope_vc_log_cons (Value dict) ({dict = _, dec_labels} , new_vc_log_cons)= (
+	in_scope_vc_log_cons Nil ({dict = dict, dec_labels = dec_labels}, new_vc_log_cons)
+);
+=TEX
+=SML
+fun €in_scope_vc_pars›
+	(Nil : ENV_DICT OPT)
+	({
+		dict = dict,
+		dec_labels = dec_labels} : IN_SCOPE, 
+	new_vc_pars : PARAM_SPEC list) : IN_SCOPE = (
+		let	fun mk_par_info zn tmark mode = (
+				{tipe = type_of_tmark dict tmark,
+				canon_name = zn,
+				info = EIEnvVar{kind = Par mode, tmark = tmark}}
+			);
+			fun aux1 {var_decl = {vars, tmark}, mode = mode} = (
+				map (fn v => ((trans_id v, tmark), mode)) vars
+			);
+			val pars_tmarks_modes = flat (map aux1 new_vc_pars);
+			fun aux2 ((v, tmk), mode) = (v, mk_par_info v tmk mode);
+			val pars_infos = map aux2 pars_tmarks_modes;
+			val new_dict = add_to_env_dict dict pars_infos
+		in	{dict = new_dict,
+			dec_labels = dec_labels}
+		end
+) | in_scope_vc_pars (Value dict) ({dict = _, dec_labels} , new_vc_pars)= (
+	in_scope_vc_pars Nil ({dict = dict, dec_labels = dec_labels}, new_vc_pars)
+);
+=TEX
+The additional optional environment dictionary does not make sense for the following update function:
+=SML
+fun €in_scope_renamings›
+	({
+		dict = dict,
+		dec_labels = dec_labels} : IN_SCOPE, 
+	renamings : (Z_ID * Z_ID) list) : IN_SCOPE = (
+		let	fun mk_renamed_info (new, orig) = (
+				(new,
+				case env_of_env_dict dict orig of
+					Value info => info
+				|	Nil => fail "in_scope_renamings" 507129
+					[fn _ => orig])				
+			);
+			val names_infos = map mk_renamed_info renamings;
+			val new_dict = add_to_env_dict dict names_infos
+		in	{dict = new_dict,
+			dec_labels = dec_labels}
+		end
+);
+=TEX
+=SML
+fun €in_scope_formal_procs›
+	(Nil : ENV_DICT OPT)
+	({
+		dict = dict,
+		dec_labels = dec_labels} : IN_SCOPE, 
+	new_formal_procs : FORMAL_PROC list) : IN_SCOPE = (
+		let	fun mk_proc_info (fp as {name, ...}) = (
+				(name,
+				{tipe = BOOL,
+				canon_name = name,
+				info = EIEnvProcedure{
+					formal = true,
+					formal_proc = fp}})
+			);
+			val procs_infos = map mk_proc_info new_formal_procs;
+			val new_dict = add_to_env_dict dict procs_infos
+		in	{dict = new_dict,
+			dec_labels = dec_labels}
+		end
+) | in_scope_formal_procs (Value dict) ({dict = _, dec_labels} , new_formal_procs)= (
+	in_scope_formal_procs Nil ({dict = dict, dec_labels = dec_labels}, new_formal_procs)
+);
+=TEX
+=SML
+fun €subunit_vc_vars›
+	(dicto : ENV_DICT OPT)
+	 ({	zmod,
 		specif_flag,
 		specif,
 		in_scope,
@@ -486,36 +634,25 @@ fun €subunit_vc_vars›  (
 	{	zmod		=	zmod,
 		specif_flag	=	specif_flag,
 		specif		=	specif,
-		in_scope	=	in_scope_vc_vars(in_scope, new_vc_vars),
+		in_scope	=	in_scope_vc_vars dicto (in_scope, new_vc_vars),
 		globs		=	globs
 	}
 );
 =TEX
 =SML
-fun €subunit_formal_procs›  (
-	{	zmod,
+fun €subunit_formal_procs› 
+	(dicto : ENV_DICT OPT)
+	({	zmod,
 		specif_flag,
 		specif,
-		in_scope as
-			{vc_vars, vc_pars, vc_log_cons,
-					vc_aux_vars, var_renamings,
-					use_clause_subs, formal_procs, dec_labels},
+		in_scope,
 		globs
 	} : SUBUNIT,
 	new_formal_procs : FORMAL_PROC list) : SUBUNIT = (
 	{	zmod		=	zmod,
 		specif_flag	=	specif_flag,
 		specif		=	specif,
-		in_scope		= {
-			vc_vars		=	vc_vars,
-			vc_pars		=	vc_pars,
-			vc_log_cons	=	vc_log_cons,
-			vc_aux_vars	=	vc_aux_vars,
-			var_renamings	=	var_renamings,
-			use_clause_subs	=	use_clause_subs,
-			formal_procs	=	new_formal_procs,
-			dec_labels	=	dec_labels
-		},
+		in_scope		= 	in_scope_formal_procs dicto (in_scope, new_formal_procs),
 		globs		=	globs
 	}
 );
@@ -525,10 +662,7 @@ fun €subunit_dec_labels›  (
 	{	zmod,
 		specif_flag,
 		specif,
-		in_scope as
-			{vc_vars, vc_pars, vc_log_cons,
-					vc_aux_vars, var_renamings,
-					use_clause_subs, formal_procs, dec_labels},
+		in_scope as {dict, dec_labels},
 		globs
 	} : SUBUNIT,
 	new_dec_labels : LABEL list) : SUBUNIT = (
@@ -536,13 +670,7 @@ fun €subunit_dec_labels›  (
 		specif_flag	=	specif_flag,
 		specif		=	specif,
 		in_scope		= {
-			vc_vars		=	vc_vars,
-			vc_pars		=	vc_pars,
-			vc_log_cons	=	vc_log_cons,
-			vc_aux_vars	=	vc_aux_vars,
-			var_renamings	=	var_renamings,
-			use_clause_subs	=	use_clause_subs,
-			formal_procs	=	formal_procs,
+			dict	=	dict,
 			dec_labels	=	new_dec_labels
 		},
 		globs		=	globs
@@ -577,40 +705,30 @@ fun €declab_declabel_flag›  (
 );
 =TEX
 =SML
-fun €declab_vc_vars›  (
-	{	block_name,
+fun €declab_vc_vars›
+	(dicto : ENV_DICT OPT)
+	({	block_name,
 		flags,
 		in_scope
 	} : DECLAB,
 	new_vc_vars : VAR_DECL list) : DECLAB = (
 	{	block_name	=	block_name,
 		flags		=	flags,
-		in_scope	= in_scope_vc_vars(in_scope, new_vc_vars)
+		in_scope	= in_scope_vc_vars dicto (in_scope, new_vc_vars)
 	}
 );
 =TEX
 =SML
-fun €declab_formal_procs›  (
-	{	block_name,
+fun €declab_formal_procs› 
+	(dicto : ENV_DICT OPT)
+	({	block_name,
 		flags,
-		in_scope as
-			{vc_vars, vc_pars, vc_log_cons,
-					vc_aux_vars, var_renamings,
-					use_clause_subs, formal_procs, dec_labels}
+		in_scope
 	} : DECLAB,
 	new_formal_procs : FORMAL_PROC list) : DECLAB = (
 	{	block_name	=	block_name,
 		flags		=	flags,
-		in_scope		= {
-			vc_vars			=	vc_vars,
-			vc_pars			=	vc_pars,
-			vc_log_cons		=	vc_log_cons,
-			vc_aux_vars		=	vc_aux_vars,
-			var_renamings		=	var_renamings,
-			use_clause_subs		=	use_clause_subs,
-			formal_procs		=	new_formal_procs,
-			dec_labels		=	dec_labels
-		}
+		in_scope		= in_scope_formal_procs dicto (in_scope, new_formal_procs)
 	}
 );
 =TEX
@@ -618,22 +736,13 @@ fun €declab_formal_procs›  (
 fun €declab_dec_labels›  (
 	{	block_name,
 		flags,
-		in_scope as
-			{vc_vars, vc_pars, vc_log_cons,
-					vc_aux_vars, var_renamings,
-					use_clause_subs, formal_procs, dec_labels}
+		in_scope as {dict, dec_labels}
 	} : DECLAB,
 	new_dec_labels : LABEL list) : DECLAB = (
 	{	block_name	=	block_name,
 		flags		=	flags,
 		in_scope		= {
-			vc_vars			=	vc_vars,
-			vc_pars			=	vc_pars,
-			vc_log_cons		=	vc_log_cons,
-			vc_aux_vars		=	vc_aux_vars,
-			var_renamings		=	var_renamings,
-			use_clause_subs		=	use_clause_subs,
-			formal_procs		=	formal_procs,
+			dict			=	dict,
 			dec_labels		=	new_dec_labels
 		}
 	}
@@ -660,8 +769,9 @@ fun €speclab_w›  (
 );
 =TEX
 =SML
-fun €speclab_vc_vars›  (
-	{spec,
+fun €speclab_vc_vars› 
+	(dicto : ENV_DICT OPT)
+	({spec,
 	formal_body_flag,
 	fun_flag,
 	till_flag,
@@ -674,21 +784,19 @@ fun €speclab_vc_vars›  (
 	fun_flag		=	fun_flag,
 	till_flag		=	till_flag,
 	wp_env			=	wp_env,
-	in_scope		=	in_scope_vc_vars(in_scope, new_vc_vars)
+	in_scope		=	in_scope_vc_vars dicto (in_scope, new_vc_vars)
 	}
 );
 =TEX
 =SML
-fun €speclab_formal_procs›  (
-	{spec,
+fun €speclab_formal_procs› 
+	(dicto : ENV_DICT OPT)
+	({spec,
 	formal_body_flag,
 	fun_flag,
 	till_flag,
 	wp_env,
-	in_scope as
-			{vc_vars, vc_pars, vc_log_cons,
-					vc_aux_vars, var_renamings,
-					use_clause_subs, formal_procs, dec_labels}
+	in_scope
 	} : SPECLAB,
 	new_formal_procs : FORMAL_PROC list) : SPECLAB = (
 	{spec 			=	spec,
@@ -696,17 +804,7 @@ fun €speclab_formal_procs›  (
 	fun_flag		=	fun_flag,
 	till_flag		=	till_flag,
 	wp_env			=	wp_env,
-	in_scope		=	{
-			vc_vars		=	vc_vars,
-			vc_pars		=	vc_pars,
-			vc_log_cons	=	vc_log_cons,
-			vc_aux_vars	=	vc_aux_vars,
-			var_renamings	=	var_renamings,
-			use_clause_subs	=	use_clause_subs,
-			formal_procs	=	new_formal_procs,
-			dec_labels	=	dec_labels
-		}
-
+	in_scope		=	in_scope_formal_procs dicto (in_scope, new_formal_procs)
 	}
 );
 =TEX
@@ -717,10 +815,7 @@ fun €speclab_dec_labels›  (
 	fun_flag,
 	till_flag,
 	wp_env,
-	in_scope as
-			{vc_vars, vc_pars, vc_log_cons,
-					vc_aux_vars, var_renamings,
-					use_clause_subs, formal_procs, dec_labels}
+	in_scope as {dict, dec_labels}
 	} : SPECLAB,
 	new_dec_labels : LABEL list) : SPECLAB = (
 	{spec 			=	spec,
@@ -729,13 +824,7 @@ fun €speclab_dec_labels›  (
 	till_flag		=	till_flag,
 	wp_env			=	wp_env,
 	in_scope		=	{
-			vc_vars		=	vc_vars,
-			vc_pars		=	vc_pars,
-			vc_log_cons	=	vc_log_cons,
-			vc_aux_vars	=	vc_aux_vars,
-			var_renamings	=	var_renamings,
-			use_clause_subs	=	use_clause_subs,
-			formal_procs	=	formal_procs,
+			dict		=	dict,
 			dec_labels	=	new_dec_labels
 		}
 
@@ -781,28 +870,6 @@ fun €speclab_in_scope›  (
 	}
 );
 =TEX
-=SML
-fun €in_scope_vc_aux_vars› ({vc_vars = vc_vars,
-		vc_pars = vc_pars,
-		vc_log_cons = vc_log_cons,
-		vc_aux_vars = vc_aux_vars,
-		var_renamings = var_renamings,
-		use_clause_subs = use_clause_subs,
-		formal_procs = formal_procs,
-		dec_labels = dec_labels} : IN_SCOPE, 
-	new_vc_aux_vars : TERM list) : IN_SCOPE = (
-		{vc_vars = vc_vars,
-		vc_pars = vc_pars,
-		vc_log_cons = vc_log_cons,
-		vc_aux_vars = new_vc_aux_vars,
-		var_renamings = var_renamings,
-		use_clause_subs = use_clause_subs,
-		formal_procs = formal_procs,
-		dec_labels = dec_labels}
-);
-=TEX
-We give various update functions that are not mentioned in the
-specification, as well as the ones called for.
 =SML
 fun €block_declab›  (
 	{
@@ -928,189 +995,64 @@ fun €block_till_flag›  (blk as
 );
 =TEX
 =SML
-fun €block_vc_vars›  (blk as 
-	{
-	declab,
-	...
-	} : BLOCK,
-	new_vc_vars : VAR_DECL list) : BLOCK = (
-	block_declab (blk, declab_vc_vars (declab, new_vc_vars))
+fun €block_vc_vars›
+	 (dicto : ENV_DICT OPT)
+	(blk as {declab, ...} : BLOCK, new_vc_vars : VAR_DECL list) : BLOCK = (
+	block_declab (blk, declab_vc_vars dicto (declab, new_vc_vars))
 );
 =TEX
 =SML
-fun €block_vc_pars›  (blk as 
-	{
-	declab as {block_name,
-		flags,
-		in_scope as
-			{vc_vars, vc_pars, vc_log_cons,
-				vc_aux_vars, var_renamings,
-				use_clause_subs, formal_procs, dec_labels}},
-	...
-	} : BLOCK,
-	new_vc_pars : PARAM_SPEC list) : BLOCK = (
+fun €block_vc_pars›
+	 (dicto : ENV_DICT OPT)
+	 (blk as {declab as {block_name, flags, in_scope, ...}, ...} : BLOCK,
+		new_vc_pars : PARAM_SPEC list) : BLOCK = (
 	block_declab(blk, 
 		{block_name = block_name,
 				flags = flags,
-				in_scope = {
-			vc_vars		=	vc_vars,
-			vc_pars		=	new_vc_pars,
-			vc_log_cons	=	vc_log_cons,
-			vc_aux_vars	=	vc_aux_vars,
-			var_renamings	= 	var_renamings,
-			use_clause_subs	=	use_clause_subs,
-			formal_procs	=	formal_procs,
-			dec_labels	=	dec_labels
-				}})
+				in_scope = in_scope_vc_pars dicto (in_scope, new_vc_pars)})
 );
 =TEX
 =SML
-fun €block_vc_log_cons›  (blk as
-	{
-	declab as {block_name,
-		flags,
-		in_scope as
-			{vc_vars, vc_pars, vc_log_cons,
-				vc_aux_vars, var_renamings,
-				use_clause_subs, formal_procs, dec_labels}},
-	...
-	} : BLOCK,
-	new_vc_log_cons : Z_DECL list) : BLOCK = (
+fun €block_vc_aux_vars›
+	 (dicto : ENV_DICT OPT)
+	 (blk as {declab as {block_name, flags, in_scope }, ...} : BLOCK,
+		new_vc_aux_vars : TERM list) : BLOCK = (
 	block_declab(blk, 
 		{block_name = block_name,
 				flags = flags,
-				in_scope = {
-			vc_vars		=	vc_vars,
-			vc_pars		=	vc_pars,
-			vc_log_cons	=	new_vc_log_cons,
-			vc_aux_vars	=	vc_aux_vars,
-			var_renamings	=	var_renamings,
-			use_clause_subs	=	use_clause_subs,
-			formal_procs	=	formal_procs,
-			dec_labels	=	dec_labels
-				}})
+				in_scope = in_scope_vc_aux_vars dicto (in_scope, new_vc_aux_vars)})
 );
 =TEX
 =SML
-fun €block_vc_aux_vars›  (blk as
-	{
-	declab as {block_name,
-		flags,
-		in_scope as
-			{vc_vars, vc_pars, vc_log_cons,
-				vc_aux_vars, var_renamings,
-				use_clause_subs, formal_procs, dec_labels}},
-	...
-	} : BLOCK,
-	new_vc_aux_vars : Z_DECL list) : BLOCK = (
+fun €block_vc_log_cons›
+	 (dicto : ENV_DICT OPT)
+	 (blk as {declab as {block_name, flags, in_scope }, ...} : BLOCK,
+		new_vc_log_cons : TERM list) : BLOCK = (
 	block_declab(blk, 
 		{block_name = block_name,
 				flags = flags,
-				in_scope = {
-			vc_vars		=	vc_vars,
-			vc_pars		=	vc_pars,
-			vc_log_cons	=	vc_log_cons,
-			vc_aux_vars	=	new_vc_aux_vars,
-			var_renamings	=	var_renamings,
-			use_clause_subs	=	use_clause_subs,
-			formal_procs	=	formal_procs,
-			dec_labels	=	dec_labels
-				}})
+				in_scope = in_scope_vc_log_cons dicto (in_scope, new_vc_log_cons)})
 );
 =TEX
 =SML
-fun €block_var_renamings›  (blk as
-	{
-	declab as {block_name,
-		flags,
-		in_scope as
-			{vc_vars, vc_pars, vc_log_cons,
-				vc_aux_vars, var_renamings,
-				use_clause_subs, formal_procs, dec_labels}},
-	...
-	} : BLOCK,
-	new_var_renamings : (Z_ID *Z_ID) list) : BLOCK = (
+fun €block_renamings› 
+	 (blk as {declab as {block_name, flags, in_scope }, ...} : BLOCK,
+		new_renamings : (Z_ID *Z_ID) list) : BLOCK = (
 	block_declab(blk, 
 		{block_name = block_name,
 				flags = flags,
-				in_scope = {
-			vc_vars		=	vc_vars,
-			vc_pars		=	vc_pars,
-			vc_log_cons	=	vc_log_cons,
-			vc_aux_vars	=	vc_aux_vars,
-			var_renamings	=	new_var_renamings,
-			use_clause_subs	=	use_clause_subs,
-			formal_procs	=	formal_procs,
-			dec_labels	=	dec_labels
-				}})
+				in_scope = in_scope_renamings(in_scope, new_renamings)})
 );
 =TEX
 =SML
-fun €block_use_clause_subs›  (blk as
-	{
-	declab as {block_name,
-		flags,
-		in_scope as
-			{vc_vars, vc_pars, vc_log_cons,
-				vc_aux_vars, var_renamings,
-				use_clause_subs, formal_procs, dec_labels}},
-	...
-	} : BLOCK,
-	new_use_clause_subs : (Z_ID * Z_ID) list) : BLOCK = (
+fun €block_vc_aux_vars›
+	 (dicto : ENV_DICT OPT)
+	 (blk as {declab as {block_name, flags, in_scope }, ...} : BLOCK,
+		new_formal_procs : FORMAL_PROC list) : BLOCK = (
 	block_declab(blk, 
 		{block_name = block_name,
 				flags = flags,
-				in_scope = {
-			vc_vars		=	vc_vars,
-			vc_pars		=	vc_pars,
-			vc_log_cons	=	vc_log_cons,
-			vc_aux_vars	=	vc_aux_vars,
-			var_renamings	=	var_renamings,
-			use_clause_subs	=	new_use_clause_subs,
-			formal_procs	=	formal_procs,
-			dec_labels	=	dec_labels
-				}})
-);
-=TEX
-=SML
-fun €block_in_scope›  (blk as
-	{
-	declab as {block_name,
-		flags,
-		in_scope = _},
-	...
-	} : BLOCK,
-	new_in_scope : IN_SCOPE) : BLOCK = (
-	block_declab(blk, 
-		{	block_name = block_name,
-			flags = flags,
-			in_scope = new_in_scope})
-);
-=TEX
-=SML
-fun €block_formal_procs›  (blk as
-	{
-	declab as {block_name,
-		flags,
-		in_scope as
-			{vc_vars, vc_pars, vc_log_cons,
-				vc_aux_vars, var_renamings,
-				use_clause_subs, formal_procs, dec_labels}},
-	...
-	} : BLOCK,
-	new_formal_procs : FORMAL_PROC list) : BLOCK = (
-	block_declab(blk, {block_name = block_name,
-				flags = flags,
-				in_scope = {
-			vc_vars		=	vc_vars,
-			vc_pars		=	vc_pars,
-			vc_log_cons	=	vc_log_cons,
-			vc_aux_vars	=	vc_aux_vars,
-			var_renamings	= 	var_renamings,
-			use_clause_subs	=	use_clause_subs,
-			formal_procs	=	new_formal_procs,
-			dec_labels	=	dec_labels
-				}})
+				in_scope = in_scope_formal_procs dicto (in_scope, new_formal_procs)})
 );
 =TEX
 =SML
@@ -1318,10 +1260,7 @@ fun €block_dec_labels›  (blk as
 	{
 	declab as {block_name,
 		flags,
-		in_scope as
-			{vc_vars, vc_pars, vc_log_cons,
-				vc_aux_vars, var_renamings,
-				use_clause_subs, formal_procs, dec_labels}},
+		in_scope as {dict, dec_labels}},
 	...
 	} : BLOCK,
 	new_dec_labels : LABEL list) : BLOCK = (
@@ -1329,13 +1268,7 @@ fun €block_dec_labels›  (blk as
 		{block_name = block_name,
 				flags = flags,
 				in_scope = {
-			vc_vars		=	vc_vars,
-			vc_pars		=	vc_pars,
-			vc_log_cons	=	vc_log_cons,
-			vc_aux_vars	=	vc_aux_vars,
-			var_renamings	=	var_renamings,
-			use_clause_subs	=	use_clause_subs,
-			formal_procs	=	formal_procs,
+			dict		=	dict,
 			dec_labels	=	new_dec_labels
 				}})
 );
@@ -1466,13 +1399,7 @@ val €dummy_formal_proc› : FORMAL_PROC = {
 		spec		=	dummy_spec,
 		globals		=	[]};
 val €empty_in_scope› : IN_SCOPE = {
-		vc_vars		=	[],
-		vc_pars		=	[],
-		vc_log_cons	=	[],
-		vc_aux_vars	=	[],
-		var_renamings		=	[],
-		use_clause_subs		=	[],
-		formal_procs	=	[],
+		dict		=	initial_env_dict,
 		dec_labels	=	[]};
 val €false_flags› : FLAGS = {
 		pack_spec_flag		=	false,
@@ -1535,39 +1462,22 @@ val €init_z_generator_state› : Z_GENERATOR_STATE = (
 );
 =TEX
 \subsection{$flatten\_env$}
-To implement $flatten\_env$, we first need a function to merge two $IN\_SCOPE$s.
-To restrict the scope of frame widening, the block names are also passed in and $dec\_labels$ are only taken from the first $IN\_SCOPE$ when the two block names are different.
+To implement $flatten\_env$, we first need the function to merge two $IN\_SCOPE$s.
+SInce the environment dictionaries in the top-most block of the running environment includes the information from all lower blocks, we have only to collect together the declaration labels: the dictionary is just taken from the second block, which is expected to be the upper one.
+
+To restrict the scope of frame widening, the block names are also passed in and $dec\_labels$ are only taken from the second $IN\_SCOPE$ when the two block names are different.
 
 Passing empty strings for the block names will achieve the effect of the function of the
-same name in the specification.
+same name in the specification subject to the condition that the second block parameter contains a dictionary that already includes the dictionary from the first block parameter.
 =SML
 fun €merge_in_scopes›
 	(block_name1 : ID)
-	({	vc_vars = vc_vars1,
-		vc_pars = vc_pars1,
-		vc_log_cons = vc_log_cons1,
-		vc_aux_vars = vc_aux_vars1,
-		var_renamings = var_renamings1,
-		use_clause_subs = use_clause_subs1,
-		formal_procs = formal_procs1,
+	({	dict=_,
 		dec_labels = dec_labels1} : IN_SCOPE)
 	(block_name2 : ID)
-	({	vc_vars = vc_vars2,
-		vc_pars = vc_pars2,
-		vc_log_cons = vc_log_cons2,
-		vc_aux_vars = vc_aux_vars2,
-		var_renamings = var_renamings2,
-		use_clause_subs = use_clause_subs2,
-		formal_procs = formal_procs2,
+	({	dict = dict2,
 		dec_labels = dec_labels2} : IN_SCOPE) : IN_SCOPE = (
-	{	vc_vars = vc_vars1 cup vc_vars2,
-		vc_pars = vc_pars1 cup vc_pars2,
-		vc_log_cons = union (op =$) vc_log_cons1 vc_log_cons2,
-		vc_aux_vars = union (op =$) vc_aux_vars1 vc_aux_vars2,
-		var_renamings = var_renamings1 @ var_renamings2,
-		use_clause_subs =use_clause_subs1 @ use_clause_subs2,
-		formal_procs = formal_procs1 @ formal_procs2,
-		(* an equality test for formal procedure lists is non-trival *)
+	{	dict = dict2,
 		dec_labels =
 		if block_name1 = block_name2
 		then dec_labels1 cup dec_labels2
@@ -1597,10 +1507,10 @@ fun €flatten_env› ([] : ENV) : IN_SCOPE = (
 	#in_scope(#declab blk)
 ) |  flatten_env (blk1 :: (blks as (blk2 :: _))) = (
 	merge_in_scopes
-	(#block_name (#declab blk1))
-	(#in_scope (#declab blk1))
 	(#block_name  (#declab blk2))
 	(flatten_env blks)
+	(#block_name (#declab blk1))
+	(#in_scope (#declab blk1))
 );
 =TEX
 The following function is used here and elsewhere to find the HOL name corresponding to a Z one.
@@ -1634,55 +1544,25 @@ fun €subprog_flatten_env› ([] : ENV) : IN_SCOPE = (
 		else	let	val (name, globals1) = subprog_info block1;
 				val blocks2 = blocks drop
 					(fn b => #block_name (#declab b) <> name);
+				val in_scope4 = flatten_env blocks2;
+				val outer_blocks =  blocks drop
+					(fn b => #block_name (#declab b) = name);
+				val outer_in_scope = flatten_env outer_blocks;
 				val globals = expand_schema_sigs globals1;
-				fun filter_vars ([] : VAR_DECL list) = []
-				|   filter_vars (vardec :: vardecs) = (
-					case #vars vardec drop
-						(fn n => not(trans_id n mem globals))
-					of [] => filter_vars vardecs
-					| vars => {vars=vars, tmark= #tmark vardec}
-						:: filter_vars vardecs
-				);
-				fun filter_pars ([] : PARAM_SPEC list) = []
-				|   filter_pars ({mode,var_decl ={vars, tmark}}
-					 :: parspecs) = (
-					case vars drop
-						(fn n => not(trans_id n mem globals))
-					of [] => filter_pars parspecs
-					| vars =>
-						{mode= mode,
-						 var_decl={ vars=vars, tmark= tmark}}
-						:: filter_pars parspecs
-				);
-				fun filter_aux_vars ([] : Z_DECL list) = []
-				|   filter_aux_vars (auxvar :: auxvars) = (
-					let	val (vs, t) = dest_z_dec auxvar;
-					in	case vs drop
-					(fn v => not(fst(dest_var v) mem globals))
-					of [] => filter_aux_vars auxvars
-					| vars => mk_z_dec (vars, t)
-						:: filter_aux_vars auxvars
-					end
-				);
-				fun filter_env ([] : ENV) : IN_SCOPE = (
-					empty_in_scope
-				) | filter_env (blk :: blks) = (
-					let	val in_scope = #in_scope(#declab blk);
-					in	merge_in_scopes ""{
-		vc_vars = filter_vars(#vc_vars in_scope),
-		vc_pars = filter_pars(#vc_pars in_scope),
-		vc_log_cons = #vc_log_cons in_scope,
-		vc_aux_vars = filter_aux_vars(#vc_aux_vars in_scope),
-		var_renamings = #var_renamings in_scope,
-		use_clause_subs = #use_clause_subs in_scope,
-		formal_procs = #formal_procs in_scope,
-		dec_labels = []	} 
-						"" (filter_env blks)
-					end
-				);
-			in	merge_in_scopes
-				"" (flatten_env blocks2)
-				"" (filter_env blocks)
+fun vars_pars_log_cons_aux_vars (in_scope : IN_SCOPE) : Z_ID list = (
+	let	fun is_not_v_p_lc_or_av  (_, {info as EIEnvVar _, ...}) = false
+		|    is_not_v_p_lc_or_av  (_, {info as EIEnvAuxVar _, ...}) = false
+		|    is_not_v_p_lc_or_av (_, {info as EIEnvLogCon _, ...}) = false
+		|    is_not_v_p_lc_or_av _ = true;
+	in	map fst (flatten_env_dict (#dict in_scope) drop is_not_v_p_lc_or_av)
+	end
+);
+				val cn_scope = globals cup 
+					(vars_pars_log_cons_aux_vars in_scope4 diff
+					vars_pars_log_cons_aux_vars outer_in_scope);
+				val in_scope3 = flatten_env blocks;
+			in	{dict = set_cn_scope (#dict in_scope4) cn_scope,
+				dec_labels = #dec_labels in_scope4}
 			end
 	end
 );
@@ -2265,20 +2145,6 @@ This happens when declarations are translated for output to the Z document and w
 in the first case, the $CN\_ENV$ value required is taken from the running environment, in the second from the $In\_Scope$ part of the $Speclab$ which is the first part of the arguments to $vcs$.
 In either case, Z global variables are sought from the theory data base if there is no local declaration for them.
 
-We will need to be able to convert a type mark into an HOL type.
-This is done by looking in the theory database.
-The type there for a type $\tau$ will be $\tau$.
-We must strip off the .
-
-N.b.: it is callers responsibility to supply the actual type mark and not an alias introduced by
-means of a use clause.
-=SML
-fun €type_of_tmark› (tmark : TMARK) : TYPE OPT = (
-	(case (get_const_type (z_id_of_id tmark)) of
-		Value ty => (Value (dest_z_power_type ty))
-	|	Nil => Nil)
-	handle Fail _ => Nil
-);
 =TEX
 $get\_tmark\_from\_inscope$ searches an $IN\_SCOPE$ value for the type mark associated with a variable or parameter name, or the type associated with an auxiliary variable.
 The recur parameter is needed to handle variable renamings, for which we sometimes have to look
@@ -6747,7 +6613,7 @@ fun €new_scope_with› (ident : ID) : unit = (
 			val block = block_vc_vars(block, vc_vars1);
 			val block = block_vc_aux_vars(block, aux_vars1);
 			val block = block_formal_procs(block, formal_procs1);
-			val block = block_var_renamings(block, var_renamings);
+			val block = block_renamings(block, var_renamings);
 		in	new_parent_aux true (pack_spec_name ident);
 			blocks := block :: !blocks
 		end
@@ -6805,7 +6671,7 @@ then	case s_lookup ident (!pack_env) of
 			val block = block_vc_vars(block1, vc_vars1 cup vc_vars2);
 			val block = block_vc_aux_vars(block, vc_aux_vars1 @ aux_vars2);
 			val block = block_formal_procs(block, formal_procs1 @ formal_procs2);
-			val block = block_var_renamings(block, var_renamings1 @ var_renamings2);
+			val block = block_renamings(block, var_renamings1 @ var_renamings2);
 		in	blocks := block :: tl(!blocks)
 		end
 	)
@@ -7391,7 +7257,7 @@ fun €renames_object_common›
 		in	map (check_new_z_id zids_in_scope) [new_zname];
 			check_new_spark_ids current_cn_env [new_zname];
 			blocks :=
-			block_var_renamings(block1, var_renamings1 @ [renaming]):: tl (!blocks);
+			block_renamings(block1, var_renamings1 @ [renaming]):: tl (!blocks);
 			Value renaming
 		end
 		end
@@ -7597,7 +7463,7 @@ fun €use_pack› (name : ID)  : unit = (
 	in	map (check_new_z_id zids_in_scope) newids;
 		check_new_spark_ids current_cn_env newids;
 		blocks :=
-			block_use_clause_subs(block1, new_subs @ use_clause_subs1):: tl (!blocks)
+			block_renamings(block1, new_subs @ use_clause_subs1):: tl (!blocks)
 	end
 );
 =TEX
