@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.46 2004/02/21 13:44:04 rda Exp rda $ 
+ * $Id: search.c,v 2.47 2004/03/31 20:16:25 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -1099,7 +1099,11 @@ static Substring bm_search_exec(bm_search_t *bm, char *text)
 		return result;
 	}
 	cursor = 0;
-	i = bm->length - 1;
+	for(i = 0; i < bm->length - 1; i += 1) {
+		if(text[i] == 0) {
+			return result; /* text is shorter than pattern */
+		}
+	}
 	while(i >= 0 && text[cursor]) {
 		char ch = global_options.ignore_case ? toupper(text[cursor+i]) : text[cursor+i];
 		if(ch == (bm->pattern)[i]) { /* possible match at cursor */
