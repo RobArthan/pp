@@ -186,6 +186,7 @@ typedef struct menu_item {
 /* Module: undo */
 	extern void clear_undo(
 		XtPointer undo_ptr);
+	extern void notify_save(XtPointer xtp);
 	extern XtPointer add_undo(
 		Widget	text_w,
 		Widget	*menu_w,

@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.14 2001/09/24 15:04:43 rda Exp rda $
+ * $Id: mainw.c,v 2.15 2001/11/16 17:19:15 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -408,14 +408,19 @@ static void flash_file_name(char *fname)
 	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * reinit_changed: unset changed flag and do other re-initialisations
- * when a file is saved, loaded or whatever
+ * reinit_changed: unset changed flag and clear the modified label;
+ * Also either clear the undo buffer or notify the undo packaged
+ * that the file has been saved.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void reinit_changed(void)
+static void reinit_changed(Boolean saving)
 {
 	changed = False;
-	clear_undo(undo_ptr);
 	XtUnmanageChild(modified);
+	if(saving) {
+		notify_save(undo_ptr);
+	} else {
+		clear_undo(undo_ptr);
+	}
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -649,7 +654,7 @@ if( !global_options.edit_only ) {
 		XmTextFieldSetString(namestring, no_file_message);
 		set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, False);
 	};
-	reinit_changed();
+	reinit_changed(False);
 	set_icon_name();
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -718,7 +723,7 @@ static void file_menu_cb(
 			if(save_file(script, fname)) {
 				flash_file_name(fname);
 				set_icon_name();
-				reinit_changed();
+				reinit_changed(True);
 			}
 		}
 		if(fname != NULL) {XtFree(fname);};
@@ -736,7 +741,7 @@ static void file_menu_cb(
 			}
 			flash_file_name(fname);
 			set_icon_name();
-			reinit_changed();
+			reinit_changed(True);
 			set_menu_item_sensitivity(filemenu,
 				FILE_MENU_SAVE, True);
 		};
@@ -773,7 +778,7 @@ static void file_menu_cb(
 				}
 				flash_file_name(fname);
 				set_icon_name();
-				reinit_changed();
+				reinit_changed(False);
 				set_menu_item_sensitivity(filemenu,
 					FILE_MENU_SAVE, True);
 			};
@@ -802,7 +807,7 @@ static void file_menu_cb(
 			};
 			flash_file_name(fname);
 			set_icon_name();
-			reinit_changed();
+			reinit_changed(False);
 			XtFree(fname);
 		};
 		break;
@@ -818,7 +823,7 @@ static void file_menu_cb(
 			}
 			flash_file_name(no_file_message);
 			set_icon_name();
-			reinit_changed();
+			reinit_changed(False);
 			set_menu_item_sensitivity(filemenu,
 				FILE_MENU_SAVE, False);
 		}
@@ -900,7 +905,7 @@ static void reopen_cb(
 			}
 			flash_file_name(fname);
 			set_icon_name();
-			reinit_changed();
+			reinit_changed(False);
 			set_menu_item_sensitivity(filemenu,
 				FILE_MENU_SAVE, True);
 		};

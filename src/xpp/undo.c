@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.2 1998/03/13 17:04:02 rda Rel rda $
+ * $Id: undo.c,v 2.3 2001/11/16 17:20:38 rda Exp rda $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -23,6 +23,11 @@
 #include <stdio.h>
 #include "xpp.h"
 
+/* Messages for various purposes: */
+
+static char* changes_saved_warning =
+"The file has been saved. Do you really want to undo?";
+
 /* The following is used to implement undo in the edit menu */
 
 typedef struct undo_details {
@@ -33,22 +38,18 @@ typedef struct undo_details {
 	Boolean moved_away;			/* true if the change is complete */
 	Boolean undoing;			/* true while undo in progress */
 	Boolean in_business;			/* true if first & last are valid */
+	Boolean changes_saved;			/* true if changes have been saved */
 	unsigned char undo_redo_index; 	/* 0 means undo ; 1 means redo */
 	NAT first, last;			/* position in text of chars to */
 						/* be replaced by an undo */
 	char *oldtext;				/* deleted characters to put in */
 } UndoBuffer;
 
-
-
-
-static Boolean changed = False;
-
 static char *undo_redo[2] = {"Undo", "Redo"};
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * clear_undo: unset changed flag and do other re-initialisations
- * when a file is saved, loaded or whatever
+ * clear_undo: put the undo buffer back in a pristine state.
+ * e.g., used when a file is loaded.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void clear_undo(XtPointer xtp)
 {
@@ -57,6 +58,7 @@ void clear_undo(XtPointer xtp)
 	ub->can_undo = False;
 	ub->moved_away = True;
 	ub->in_business = False;
+	ub->changes_saved = False;
 	ub->first = 0;
 	ub->last = 0;
 	ub->undoing = False;
@@ -74,7 +76,17 @@ void clear_undo(XtPointer xtp)
 		}
 	}
 }
-
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * notify_save: set the changes_saved flag to provoke a warning
+ * if the user asks to undo; also set the moved_away to tell
+ * undo_modify_cb to stop accumulating changes.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void notify_save(XtPointer xtp)
+{
+	UndoBuffer *ub = xtp;
+	ub->changes_saved = True;
+	ub->moved_away = True;
+}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * add_undo: attach an undo capability to a text window.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -135,6 +147,7 @@ static void reinit_undo_buffer (
 	ub->first = cbs->startPos;
 	ub->last = cbs->startPos;
 	ub->in_business = True;
+	ub->changes_saved = False;
 	if(ub->oldtext != NULL) {
 		XtFree(ub->oldtext);
 		ub->oldtext = NULL;
@@ -241,8 +254,8 @@ void undo_modify_cb(
  * the modify/verify call back undo_modify_cb to be invoked
  * so that the next undo will undo the undo (i.e. undo + undo = redo).
  * Since this will change the undo buffer we must copy the relevant
- * fields. We must set the moved_away field to indicate that we're
- * script_modify_cb is to stop accumulating changes.
+ * fields. We must set the moved_away field to indicate that
+ * undo_modify_cb is to stop accumulating changes.
  * Any text inserted by the undo is selected and the insertion
  * position is set to the end of the undo point. The beginning
  * of the new selection (or the insertion point if no text was
@@ -259,6 +272,10 @@ void undo_cb(
 	char *str;
 	Widget *wp;
 	if(ub->can_undo) {
+		if(	ub->changes_saved
+		&&	!yes_no_dialog(text_w, changes_saved_warning)) {
+			return;
+		}
 		ub->undoing = True;
 		ub->moved_away = True;
 		if(ub->oldtext == NULL) {
