@@ -338,7 +338,7 @@ datatype ÛPPARSEDÝ =
         |  PPCompilationUnit of COMPILATION_UNIT
         |  PPComponentClauses of COMPONENT_CLAUSE list
         |  PPConstraint of CONSTRAINT
-        |  PPContextClause of ID list * EXP PRAGMA list
+        |  PPContextClause of ID list * (AGG_CHOICE, EXP) PRAGMA list
         |  PPContextCompilationUnit of CONTEXT_COMPILATION_UNIT
         |  PPDeclarations of DECLARATION list
         |  PPDiscrete of (ID OPT * (EXP * EXP OPT))
@@ -356,8 +356,9 @@ datatype ÛPPARSEDÝ =
         |  PPLogCon of LOG_CON
         |  PPMode of MODE
         |  PPPackageSpecification of DECLARATION PACKAGE_DECLARATION
-        |  PPPragma of EXP PRAGMA
-        |  PPPragmaList of EXP PRAGMA list
+        |  PPPragma of (AGG_CHOICE, EXP) PRAGMA
+	 |  PPPragmaArgs of (AGG_CHOICE OPT * EXP) list
+        |  PPPragmaList of (AGG_CHOICE, EXP) PRAGMA list
         |  PPPrimedIdentifier of (ID * ID)
         |  PPProcedureSpecification of PROCEDURE_SPECIFICATION
         |  PPProperBody of PROPER_BODY
@@ -658,7 +659,7 @@ val red_basic_declaration2 = red_accept;
 val red_basic_declaration3 = red_accept;
 val red_basic_declaration4 = red_accept;
 
-fun red_basic_declaration5 (Parsed (PPExp e)) = 
+fun red_basic_declaration5 (Parsed (PPPragma e)) = 
 	PPBasicDecls[BDPragma e]
 |   red_basic_declaration5 _ = stack_error "red_basic_declaration5";
 
@@ -1040,7 +1041,7 @@ fun red_named_association1 (Parsed(PPAggregateChoices v)) _ (Parsed(PPExp e)) = 
     case v 
     of ([],true) => PPAgg{tm=Nil, named_assocs=[], others=Value e}
     |(c, false) => PPAgg{tm=Nil, named_assocs =[{choice=c, comp=e}],others=Nil}
-    |_ => parse_error 503001 "OTHERS cannot be in a choice list")
+    |_ => parse_error 503001 "OTHERS is not allowed here")
 |   red_named_association1 _ _ _ =
         stack_error "red_named_association1";
 
@@ -1049,7 +1050,7 @@ fun red_named_association2 (Parsed(PPAggregateChoices v)) _
     case v 
     of (c as _::_, false) =>
         PPAgg{tm=Nil,named_assocs={choice=c,comp=e}::na,others=ot}
-    |_ => parse_error 503001 "OTHERS must occur last in the choice list")
+    |_ => parse_error 503001 "OTHERS is not allowed here")
 |   red_named_association2 _ _ _ _ _ =
         stack_error "red_named_association2";
 
@@ -1062,12 +1063,12 @@ val red_aggregate_choice_list2 = red_accept;
 
 fun red_aggregate_choice_list3 (Parsed(PPAggregateChoices v)) _
     (Parsed(PPAggregateChoices (acl, true))) = (
-    parse_error 503001 "OTHERS cannot be in a choice list")
+    parse_error 503001 "OTHERS is not allowed here")
 |   red_aggregate_choice_list3 (Parsed(PPAggregateChoices v)) _
     (Parsed(PPAggregateChoices (acl, false))) = (
     case v 
     of ([ac], false) => PPAggregateChoices((ac::acl), false)
-    |_ => parse_error 503001 "OTHERS cannot be in a choice list")
+    |_ => parse_error 503001 "OTHERS is not allowed here")
 |   red_aggregate_choice_list3 _ _ _ =
         stack_error "red_aggregate_choice_list3";
 =TEX
@@ -1362,7 +1363,7 @@ fun red_statement5 _ (Token ((LCZ,CNZ z1), _)) _
 
 val red_statement6 = red_accept;
 val red_statement7 = red_accept;
-fun red_statement8 (Parsed (PPExp e)) = 
+fun red_statement8 (Parsed (PPPragma e)) = 
 	PPStmt(STPragma e)
 |   red_statement8 _ = stack_error "red_statement8";
 
@@ -1730,12 +1731,12 @@ fun red_procedure_specification_1_4 _ (Token ((_,CNText id), _))
         stack_error "red_procedure_specification_1_4";
 
 fun red_procedure_specification
-    (Parsed(PPProcedureSpecification{name=id,formal_part=f,spec=Value s, ...}))
+    (Parsed(PPProcedureSpecification{name=id,formal_part=f,spec=s, ...}))
     (Parsed (PPAnnotation ann)) = (
 	if ann = ""
-	then PPProcedureSpecification{name=id,formal_part=f,spec=Value s,
+	then PPProcedureSpecification{name=id,formal_part=f,spec=s,
 				annotation = Nil}
-	else PPProcedureSpecification{name=id,formal_part=f,spec=Value s,
+	else PPProcedureSpecification{name=id,formal_part=f,spec=s,
 				annotation = Value ann}
 ) |   red_procedure_specification _ _ =
         stack_error "red_procedure_specification";
@@ -1771,13 +1772,13 @@ fun red_function_specification_1_4 _ (Token((_,CNText des), _))
 
 fun red_function_specification
     (Parsed(PPFunctionSpecification{designator=des,return=tm,
-			formal_part=f,spec=Value s, ...}))
+			formal_part=f,spec=s, ...}))
     (Parsed (PPAnnotation ann)) = (
 	if ann = ""
 	then PPFunctionSpecification{designator=des,return=tm,
-			formal_part=f,spec=Value s, annotation = Nil}
+			formal_part=f,spec=s, annotation = Nil}
 	else PPFunctionSpecification{designator=des,return=tm,
-			formal_part=f,spec=Value s, annotation = Value ann}
+			formal_part=f,spec=s, annotation = Value ann}
 ) |   red_function_specification _ _ =
         stack_error "red_function_specification";
 =TEX
@@ -2196,15 +2197,45 @@ fun red_context_clause2 (Parsed(PPIds ids)) (Parsed(PPPragmaList ps)) =
 		PPContextClause (ids, ps)
 |   red_context_clause2 _ _ = stack_error "red_context_clause2";
 
+=TEX
+=SML
 val red_pragma_list1 = PPPragmaList [];
 
 fun red_pragma_list2 (Parsed (PPPragma p)) (Parsed(PPPragmaList ps)) = 
 	PPPragmaList (p :: ps)
 |   red_pragma_list2 _ _ = stack_error "red_pragma_list2";
 
-fun red_pragma _ (Parsed (PPExp e)) _ = PPPragma e
-|   red_pragma _ _ _ = stack_error "red_pragma";
+fun red_pragma1 _ (Token ((_,CNText id), _)) _ = (
+	PPPragma {id = id, args = []}
+) | red_pragma1 _ _ _ = stack_error "red_pragma1";
 
+fun red_pragma2 _ (Token ((_,CNText id), _)) _ (Parsed(PPPragmaArgs args)) _ _ = (
+	PPPragma {id = id, args = args}
+) | red_pragma2 _ _ _ _ _ _ = stack_error "red_pragma2";
+
+val red_arg_ass_list1 = red_accept;
+
+fun red_arg_ass_list2 (Parsed(PPPragmaArgs [arg])) _ (Parsed(PPPragmaArgs args)) = (
+	PPPragmaArgs (arg::args)
+) | red_arg_ass_list2 _ _ _ = stack_error "red_arg_ass_list2";
+
+fun red_argument_association1 (Parsed(PPAggregateChoices (acl, true)))
+      _ _ = (
+    parse_error 503001 "OTHERS cannot be used in a pragma argument list"
+) | red_argument_association1 (Parsed(PPAggregateChoices (_::_::_, _)))
+      _ _ = (
+    parse_error 503001 "`|' cannot be used in a pragma argument list"
+) | red_argument_association1 (Parsed(PPAggregateChoices ([ac], _)))
+      _ (Parsed (PPExp e)) = (
+    PPPragmaArgs [(Value ac, e)]
+) | red_argument_association1 _ _ _ = stack_error "red_argument_association1";
+
+fun red_argument_association2 (Parsed(PPExp e)) = (
+    PPPragmaArgs [(Nil, e)]
+) | red_argument_association2 _ = stack_error "red_argument_association2";
+
+=TEX
+=SML
 fun red_with_clause _ (Parsed (PPIds ids)) _ = (PPIds ids)
 |   red_with_clause _ _ _ = stack_error "red_with_clause";
 =TEX
@@ -2221,7 +2252,7 @@ fun red_body_stub2 (Parsed (PPFunctionSpecification fs)) _ _ _ = (
         stack_error "red_body_stub2";
 
 fun red_body_stub3 _ _ (Token ((_,CNText id), _))
-	(Token ((LCAnnotation,CNText ann), _)) _ _ _ = (
+	(Parsed (PPAnnotation ann)) _ _ _ = (
 	if	ann = ""
 	then	PPDeclarations [DPackageStub (id, Nil)]
 	else	PPDeclarations [DPackageStub (id, Value ann)])
