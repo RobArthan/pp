@@ -14,7 +14,7 @@
 # 
 rm -f help.c
 rm -f help.h
-ex -s <<\!
+ex >/dev/null 2>&1 -s <<\!
 r ! nroff -ms help.txt 
 1,/^\*/-1d
 g/^$/j|s/./\
