@@ -21,7 +21,7 @@
 #include <ctype.h>
 #include "xpp.h"
 
-#define MSG_LINE_LEN 50
+#define MSG_LINE_LEN 40
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Private functions:
@@ -73,21 +73,17 @@ static XmString format_msg(char *msg)
 void help_dialog(Widget w, char *str)
 {
 	Widget dialog_w, pane, help_text, form, widget;
-	extern void ok_reply();
+	static void help_cb();
 	Arg args[9];
 	char buf[BUFSIZ];
-
 	dialog_w = XtVaCreatePopupShell("Help",
 		xmDialogShellWidgetClass, get_top_shell(w),
 		XmNdeleteResponse, XmDESTROY,
 		NULL);
-
 	pane = XtVaCreateWidget("pane", xmPanedWindowWidgetClass, dialog_w,
-		/* XmNsashWidth,  1, /* PanedWindow won't let us set these to 0! */
-		/* XmNsashHeight, 1, /* Make small so user doesn't try to resize */
+		XmNsashWidth,  1, /* PanedWindow won't let us set these to 0! */
+		XmNsashHeight, 1, /* Make small so user doesn't try to resize */
 		NULL);
-
-
 	XtSetArg(args[0], XmNscrollVertical,        True);
 	XtSetArg(args[1], XmNscrollHorizontal,      False);
 	XtSetArg(args[2], XmNeditMode,              XmMULTI_LINE_EDIT);
@@ -97,13 +93,10 @@ void help_dialog(Widget w, char *str)
 	XtSetArg(args[6], XmNvalue,                 str);
 	XtSetArg(args[7], XmNrows,                  5);
 	help_text = XmCreateScrolledText(pane, "help_text", args, 8);
-
 	XtManageChild(help_text);
-
 	form = XtVaCreateWidget("form", xmFormWidgetClass, pane,
 		XmNfractionBase,    3,
 		NULL);
-
 	widget = XtVaCreateManagedWidget("Ok",
 		xmPushButtonGadgetClass, form,
 		XmNtopAttachment,        XmATTACH_FORM,
@@ -115,21 +108,18 @@ void help_dialog(Widget w, char *str)
 		XmNshowAsDefault,        True,
 		XmNdefaultButtonShadowThickness, 1,
 		NULL);
-	XtAddCallback(widget, XmNactivateCallback, ok_reply, dialog_w);
-
+	XtAddCallback(widget, XmNactivateCallback, help_cb, dialog_w);
 	XtManageChild(form);
 	{
 		Dimension h;
 		XtVaGetValues(widget, XmNheight, &h, NULL);
 		XtVaSetValues(form, XmNpaneMaximum, h, XmNpaneMinimum, h, NULL);
 	}
-
 	XtManageChild(pane);
-
 	XtPopup(dialog_w, XtGrabNone);
 }
 
-void ok_reply(Widget widget, Widget shell)
+static void help_cb(Widget widget, Widget shell)
 {
 	XtDestroyWidget(shell);
 }
@@ -141,12 +131,11 @@ Boolean yes_no_dialog(Widget w, char *question)
 {
 	static Widget dialog;
 	XmString text, yes, no, confirm;
+	Atom WM_DELETE_WINDOW;
 	static NAT reply;
 	/* 0 = not replied; otherwise YES/NO */
-	extern void yes_no_cb();
-
+	static void yes_no_cb(), yes_no_destroy_cb();
 	reply = 0;
-
 	if (!dialog) {
 		dialog = XmCreateQuestionDialog(w, "yes_no", NULL, 0);
 		yes = XmStringCreateSimple("Yes");
@@ -157,11 +146,19 @@ Boolean yes_no_dialog(Widget w, char *question)
 			XmNokLabelString,	yes,
 			XmNcancelLabelString,	no,
 			XmNdialogTitle, 	confirm,
+			XmNdialogType,		XmDIALOG_QUESTION,
 			NULL);
-		XtSetSensitive(
-			XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON), False);
+		XtDestroyWidget(
+			XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON));
 		XtAddCallback(dialog, XmNokCallback, yes_no_cb, &reply);
 		XtAddCallback(dialog, XmNcancelCallback, yes_no_cb, &reply);
+		WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
+			"WM_DELETE_WINDOW",
+			False);
+		XmAddWMProtocolCallback(XtParent(dialog),
+			WM_DELETE_WINDOW,
+			yes_no_destroy_cb,
+			&reply);
 		XmStringFree(yes);
 		XmStringFree(no);
 		XmStringFree(confirm);
@@ -171,22 +168,17 @@ Boolean yes_no_dialog(Widget w, char *question)
 	XmStringFree(text);
 	XtManageChild(dialog);
 	XtPopup(XtParent(dialog), XtGrabNone);
-
+	XBell(XtDisplay(root), 50);
 	while (!reply) {
 		if(XtAppPending(app)) {
 			XtAppProcessEvent(app, XtIMAll);
 		}
 	};
-
 	XtPopdown(XtParent(dialog));
-
 	return reply == YES;
 }
 
-void yes_no_cb(w, reply, cbs)
-Widget w;
-NAT *reply;
-XmAnyCallbackStruct *cbs;
+static void yes_no_cb(Widget w, NAT *reply, XmAnyCallbackStruct *cbs)
 {
 	switch (cbs->reason) {
 		case XmCR_OK:
@@ -199,6 +191,10 @@ XmAnyCallbackStruct *cbs;
 			break;
 	}
 }
+static void yes_no_destroy_cb(Widget w, NAT *reply, XmAnyCallbackStruct *cbs)
+{
+	*reply = NO;
+}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * ok_dialog: error message which the user must confirm
@@ -207,11 +203,10 @@ void ok_dialog(Widget w, char *msg)
 {
 	static Widget dialog;
 	XmString text, ok, error;
-	static NAT reply;
-	/* 0 = not replied; */
-
-	reply = 0;
-
+	Atom WM_DELETE_WINDOW;
+	static Bool confirmed;
+	static void ok_cb();
+	confirmed = False;
 	if (!dialog) {
 		dialog = XmCreateQuestionDialog(w, "ok", NULL, 0);
 		ok = XmStringCreateSimple("OK");
@@ -220,12 +215,23 @@ void ok_dialog(Widget w, char *msg)
 			XmNdialogStyle,		XmDIALOG_FULL_APPLICATION_MODAL,
 			XmNokLabelString,	ok,
 			XmNdialogTitle, 	error,
+			XmNdialogType,		XmDIALOG_ERROR,
 			NULL);
-		XtSetSensitive(
-			XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON), False);
-		XtSetSensitive(
-			XmMessageBoxGetChild(dialog, XmDIALOG_CANCEL_BUTTON), False);
-		XtAddCallback(dialog, XmNokCallback, yes_no_cb, &reply);
+		XtVaSetValues(XtParent(dialog),
+			XmNdeleteResponse,	XmDO_NOTHING,
+			NULL);
+		XtDestroyWidget(
+			XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON));
+		XtDestroyWidget(
+			XmMessageBoxGetChild(dialog, XmDIALOG_CANCEL_BUTTON));
+		XtAddCallback(dialog, XmNokCallback, ok_cb, &confirmed);
+		WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
+			"WM_DELETE_WINDOW",
+			False);
+		XmAddWMProtocolCallback(XtParent(dialog),
+			WM_DELETE_WINDOW,
+			ok_cb,
+			&confirmed);
 		XmStringFree(ok);
 		XmStringFree(error);
 	}
@@ -234,15 +240,18 @@ void ok_dialog(Widget w, char *msg)
 	XmStringFree(text);
 	XtManageChild(dialog);
 	XtPopup(XtParent(dialog), XtGrabNone);
-
-	XBell(XtDisplay(w), 50);
-
-	while (!reply) {
+	XBell(XtDisplay(root), 50);
+	while (!confirmed) {
 		if(XtAppPending(app)) {
 			XtAppProcessEvent(app, XtIMAll);
 		}
 	};
 	XtPopdown(XtParent(dialog));
+}
+
+static void ok_cb(Widget w, Bool *confirmed, XmAnyCallbackStruct *cbs)
+{
+	*confirmed = True;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
