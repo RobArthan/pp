@@ -139,7 +139,9 @@ of integer control.
 \item[Issue 1.75] Fixed bug in printing of ELSIF.
 \item[Issue 1.76] Prototyping enhancement R5 --- Initial Variables in Conditionals.
 Also fixed bug in printing of keyword ``CONSTANT''.
-\item[Issue 1.76] Prototyping enhancement R2 --- Multiple Logical Constant Statements.
+\item[Issue 1.77] Prototyping enhancement R2 --- Multiple Logical Constant Statements.
+\item[Issue 1.78] Fixed bugs in treatment of case
+for keyword ``CONSTANT'' and attribute designators.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -344,8 +346,8 @@ fun €sfmt_id_plus›  ({outf,...} : PP_FMT_INFO) (n : ID) (s : string): string  = 
 				o fst o (break_up [])) ([], explode n);
 		fun fmt_aux (a::b::rest) = (
 			a^"."^fmt_aux (b::rest)
-		) | fmt_aux (a::rest) = a ^ s
-		| fmt_aux [] = s;
+		) | fmt_aux (a::rest) = a ^ CaseIndependence.get_external_name s
+		| fmt_aux [] = CaseIndependence.get_external_name s;
 	in
 		fmt_aux comps
 	end
@@ -362,11 +364,12 @@ fun €check› ("as input" : string) : bool = true
 	fail "check_case_of_spark_keywords" 510004 [fn _ => x]
 );
 val €case_of_spark_keywords› : string ref = ref (default());
-val _ = new_string_control{
+fun aux (dec : string) : unit = new_string_control{
 		check = check,
 		control = case_of_spark_keywords,
 		default = default,
-		name = 	"case_of_spark_keywords"};
+		name = 	"case_of_spark_keywords"^dec} handle Fail _ => aux (dec^"'");
+val _ = aux "";
 in
 	fun €kw› (s : string) : string = (
 		(case !case_of_spark_keywords of
@@ -716,7 +719,16 @@ fun €fmt_z_pred› (fmtinfo : PP_FMT_INFO) (z : Z_PRED) = fmt_term fmtinfo z;
 fun €fmt_z_exp› (fmtinfo : PP_FMT_INFO) (z : Z_EXP) =  fmt_term fmtinfo z;
 fun €sfmt_z_id› ({outf, ...} : PP_FMT_INFO) (z : Z_ID) = z;
 fun €fmt_z_id› ({outf, ...} : PP_FMT_INFO) (z : Z_ID) = outf z;
-fun €fmt_attrib› (fmtinfo : PP_FMT_INFO) (x : ATTRIB) = fmt_id fmtinfo x;
+=TEX
+The lexical analyser treats attribute identifiers as including the prime character.
+We need to work round that to get the case right.
+=SML
+fun €fmt_attrib› (fmtinfo : PP_FMT_INFO) (x : ATTRIB) = (
+	fmt_id fmtinfo (
+		case explode (kw ("'"^x)) of
+			"'"::more => implode more
+		|	weird => implode weird)
+);
 fun €fmt_int_lit› (fmtinfo : PP_FMT_INFO) (x : INT_LIT) = fmt_id fmtinfo x;
 
 =TEX
@@ -850,11 +862,9 @@ and €fmt_attrib_desig› (fmtinfo : PP_FMT_INFO) (ADAttrib x : ATTRIB_DESIG) =
 and €fmt_mem_range› (fmtinfo as {outf,...}: PP_FMT_INFO) 
 	({left=e, mop=m, range=r} : EXP MEM_RANGE) = 
     (fmt_exp fmtinfo e; fmt_binary_op fmtinfo m; fmt_range fmtinfo r)
-
-    (* following doesn't look right *)
 and €fmt_attribute› (fmtinfo as {outf,...}: PP_FMT_INFO)
 	({prefix=p, attribute_desig=a} : (EXP, ATTRIB_DESIG) ATTRIBUTE) =
-    (fmt_exp fmtinfo p; outf "'"; (fmt_attrib_desig fmtinfo a))
+    (fmt_exp fmtinfo p; outf"'"; (fmt_attrib_desig fmtinfo a))
 
 and €fmt_indexed_comp› (fmtinfo as {outf,...}: PP_FMT_INFO) 
 	({prefix=p, index=i} : EXP INDEXED_COMP) = (
@@ -1505,7 +1515,7 @@ Constant and deferred constant declarations.
 and €fmt_const_decl› (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({consts=c, tm=t, expr=e} : EXP CONST_DECL) = (
     map check_decl c;
-    (fmt_id_list fmtinfo c); outf (kw": CONSTANT");
+    (fmt_id_list fmtinfo c); outf (": " ^ kw"CONSTANT");
     (fmt_tmark fmtinfo t); outf ":=";
     (fmt_exp fmtinfo e); outf ";"; outf "\n"
 ) and €fmt_deferred_const_decl› (fmtinfo as {outf,...} : PP_FMT_INFO)
