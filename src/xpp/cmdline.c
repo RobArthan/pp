@@ -380,6 +380,6 @@ static void help_cb(
 	CmdLineData			*cbdata,
 	XmPushButtonCallbackStruct	cbs)
 {
-	help_dialog(cbdata->shell_w, Help_Command_Line_Tool);
+	help_dialog(root, Help_Command_Line_Tool);
 }
 

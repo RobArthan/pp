@@ -471,7 +471,7 @@ Bool add_search_tool(Widget text_w)
 		dismiss_cb, (XtPointer)(&search_data));
 
 	XtAddCallback(help_btn, XmNactivateCallback,
-		help_cb, (XtPointer)(&search_data));
+		help_cb, (XtPointer)NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Initialise search string and line number:
@@ -546,10 +546,10 @@ static void dismiss_cb(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void help_cb(
 	Widget				w,
-	SearchData			*cbdata,
+	XtPointer			*p,
 	XmPushButtonCallbackStruct	cbs)
 {
-	help_dialog(cbdata->shell_w, Help_Search_Tool);
+	help_dialog(root, Help_Search_Tool);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****

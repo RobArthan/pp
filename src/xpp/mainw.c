@@ -855,25 +855,25 @@ XmAnyCallbackStruct *cbs;
 {
 	switch(i) {
 	case HELP_MENU_ABOUT_XPP:
-		help_dialog(w, Help_About_Xpp);
+		help_dialog(root, Help_About_Xpp);
 		break;
 	case HELP_MENU_USING_HELP:
-		help_dialog(w, Help_Using_Help);
+		help_dialog(root, Help_Using_Help);
 		break;
 	case HELP_MENU_TUTORIAL:
-		help_dialog(w, Help_Tutorial);
+		help_dialog(root, Help_Tutorial);
 		break;
 	case HELP_MENU_FILE_MENU:
-		help_dialog(w, Help_File_Menu);
+		help_dialog(root, Help_File_Menu);
 		break;
 	case HELP_MENU_TOOLS_MENU:
-		help_dialog(w, Help_Tools_Menu);
+		help_dialog(root, Help_Tools_Menu);
 		break;
 	case HELP_MENU_EDIT_MENU:
-		help_dialog(w, Help_Edit_Menu);
+		help_dialog(root, Help_Edit_Menu);
 		break;
 	case HELP_MENU_COMMAND_MENU:
-		help_dialog(w, Help_Command_Menu);
+		help_dialog(root, Help_Command_Menu);
 		break;
 	default:
 		break;

@@ -431,6 +431,6 @@ void file_help_cb(
 	XtPointer *cbd,
 	XmFileSelectionBoxCallbackStruct *cbs)
 {
-	help_dialog(w, Help_File_Selection_Box);
+	help_dialog(root, Help_File_Selection_Box);
 }
 
