@@ -22,7 +22,7 @@ Don't worry about this!
 %\TPPpart{}
 \TPPtitle{SLR Parser Generator}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP017}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.37 $%
+\def\SCCSversion{$Revision: 1.38 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 %\TPPdate{}  %% Mandatory field (with sensible default)
@@ -125,7 +125,8 @@ Port to Poly/ML.
 \item[Issue 1.34] Improved {\it LaTeX} layout.
 \item[Issues 1.35, 1.36] Tidy-up in preparation for implementing calculation of LALR(1) lookahead sets.
 \item[Issue 1.37] Now calculates LALR(1) lookahead sets when the SLR(1) algorithm results in conflicts.
-\item[Issue 1.38] Added option to print out the LR(0) automaton.
+\item[Issues 1.38, 1.39] Added option to print out the LR(0) automaton and tidied up some
+of the printing code.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -738,66 +739,6 @@ fun €print_states› (gp : ''lc GRAMMAR * (''lc -> string))
 	end 
 );
 =TEX
-We lift some material here that was originally in the lexical analyser (and is still used there).
-=TEX
-=SML
-    val €ord0›	= ord "0";
-    val €ord9›	= ord "9";
-    val €orda›	= ord "a";
-    val €ordA›	= ord "A";
-    val €ordz›	= ord "z";
-    val €ordZ›	= ord "Z";
-=SML
-    fun €next_is_digit› ((ch :: _): string list) : bool = (
-        let
-            val code = ord ch
-        in
-            (code >= ord0) andalso (code <= ord9)
-        end
-    ) | next_is_digit nil = false;
-=TEX
-We allow underscores and primes in names by treating them as letters:
-=SML
-    fun €next_is_alpha› ((ch :: _): string list) : bool = (
-        let
-            val code = ord ch
-        in
-            ((code >= orda) andalso (code <= ordz)) orelse
-            ((code >= ordA) andalso (code <= ordZ)) orelse
-            (ch = "_") orelse (ch = "'")
-        end
-    ) | next_is_alpha nil = false;
-=TEX
-Quotes in our concrete syntax for BNF are introduced by the backquote character, \verb"`"
-and backslashes serve as escapes.
-=SML
-    val €quoter› : string = "`";
-    val €escape› : string = "\\";
-=TEX
-=SML
-fun €all_is_x› (next_is_x : string list -> bool) (chs as (_ :: more) : string list) : bool = (
-	next_is_x chs andalso all_is_x next_is_x more
-) | all_is_x _ [] = true;
-=TEX
-The following function is used for including terminal symbols in some of the listings.
-Anything that is not an alphanumeric identifier is put in quotes with escapes as per
-the concrete syntax for BNF.
-=SML
-fun €in_quotes› (p : 'a -> string)  (x : 'a) : string = (
-	let	val chars = explode( p x);
-		fun escapify acc [] = rev acc
-		|   escapify acc (ch :: chs) = (
-			if	ch = quoter orelse ch = escape
-			then	escapify (ch::escape::acc) chs
-			else	escapify (ch::acc) chs
-		);
-	in	if	next_is_alpha chars andalso
-			all_is_x (next_is_alpha fun_or next_is_digit) (tl chars)
-		then	implode chars
-		else	quoter ^ implode (escapify [] chars) ^ quoter
-	end
-);
-=TEX
 The following function presents an LR(0) automaton given by an action table
 and a goto table as a labelled directed graph.
 =SML
@@ -848,13 +789,26 @@ fun €print_lr0_automaton_graph›
 	(init_state : STATE)
 	(p : ''lc -> string) : unit = (
 	let	val graph = get_lr0_automaton_graph actions gotos init_state;
-		fun fmt_state_opt (Value p) = (string_of_int p)
-		|   fmt_state_opt Nil = "-1";
+		fun int_of_sso (Value p1) = p1
+		|   int_of_sso Nil = ~1;
+		fun fmt_state_opt sso = (string_of_int(int_of_sso sso));
 		fun fmt_sym_state_opt (sym, po) =
-			format_symbol p sym ^ " -> " ^ fmt_state_opt po;
+			 format_symbol p sym ^ " -> " ^ fmt_state_opt po;
+		fun int_of_sso (Value p1) = p1
+		|   int_of_sso Nil = ~1;
+		fun sso_sort ssos = (
+			let	val marked = combine ssos (interval 1 (length ssos));
+				fun order ((_, p1), i1) ((_, p2), i2) = (
+					if	p1 <> p2
+					then	int_of_sso p1 - int_of_sso p2
+					else	i1 - i2
+				);
+			in	map fst (Sort.sort order marked)
+			end
+		);
 		fun print1 (s, sso) = (
 			log (string_of_int s); log ":\t";
-			log (format_list fmt_sym_state_opt sso "\n\t");
+			log (format_list fmt_sym_state_opt (sso_sort sso) "\n\t");
 			log "\n"
 		);
 	in	log "\n"; log (burst "LR(0) automaton"); log "\n";
@@ -1211,8 +1165,8 @@ fun €make_transition_grammar›
 fun €fmt_stg_terminal›
 	(p : ''lc -> string)
 	 (s0 : STATE, lc : ''lc, Value s1 : STATE OPT)  : string = (
-	"[" ^ string_of_int s0 ^ ":" ^ in_quotes p lc ^ ":" ^ string_of_int s1 ^"]"
-) | fmt_stg_terminal p (s0, lc, Nil) = "[" ^ string_of_int s0 ^ ":" ^ in_quotes  p lc ^ ":]";
+	"[" ^ string_of_int s0 ^ ":" ^ p lc ^ ":" ^ string_of_int s1 ^"]"
+) | fmt_stg_terminal p (s0, lc, Nil) = "[" ^ string_of_int s0 ^ ":" ^  p lc ^ ":]";
 =TEX
 The next step is the computation of the LALR(1) look-ahead (assuming the follow table
 for the state transition grammar has already been calculated). It is caller's responsibiliity to provide an alternative
@@ -1292,7 +1246,7 @@ fun €log_lookahead_set›
 	(p : ''lc -> string)
 	(((s, (nt, i)), lcs) :  (STATE * (NONTERMINAL * int)) * ''lc list) : unit = (
 	log nt; log "."; log (string_of_int i); log ", "; log (string_of_int s);
-	log": "; log (format_list (in_quotes p) lcs ", ");  log "\n"
+	log": "; log (format_list p lcs ", ");  log "\n"
 );
 =TEX
 =SML
@@ -1616,6 +1570,13 @@ fun €make_grammar_and_reduction_table›
 The lexical analyser is very much a one-off.
 It is called by the parser \cite{DS/FMU/IED/SML005}.
 =TEX
+Quotes in our concrete syntax for BNF are introduced by the backquote character, \verb"`"
+and backslashes serve as escapes. These are needed later on so they are defined here
+outside the local block containing the bulk of the lexical analyser.
+=SML
+    val €quoter› : string = "`";
+    val €escape› : string = "\\";
+=TEX
 \subsection{Local Definitions}
 Most of the lexical analyser is declared within this local block.
 =SML
@@ -1648,6 +1609,36 @@ The terminator characters for BNF are the following:
 =SML
     val €terminators› : (string * BNF_lex_class) list =
 	[(";", BNF_semi), ("=", BNF_eq), ("|", BNF_vert), (",", BNF_comma)];
+=TEX
+We lift some material here that was originally in the lexical analyser (and is still used there).
+=TEX
+=SML
+    val €ord0›	= ord "0";
+    val €ord9›	= ord "9";
+    val €orda›	= ord "a";
+    val €ordA›	= ord "A";
+    val €ordz›	= ord "z";
+    val €ordZ›	= ord "Z";
+=SML
+    fun €next_is_digit› ((ch :: _): string list) : bool = (
+        let
+            val code = ord ch
+        in
+            (code >= ord0) andalso (code <= ord9)
+        end
+    ) | next_is_digit nil = false;
+=TEX
+We allow underscores and primes in names by treating them as letters:
+=SML
+    fun €next_is_alpha› ((ch :: _): string list) : bool = (
+        let
+            val code = ord ch
+        in
+            ((code >= orda) andalso (code <= ordz)) orelse
+            ((code >= ordA) andalso (code <= ordZ)) orelse
+            (ch = "_") orelse (ch = "'")
+        end
+    ) | next_is_alpha nil = false;
 =TEX
 =SML
     fun €next_is_term› (ch :: _) = any terminators (fn (c,_) => c = ch)
@@ -1908,10 +1899,24 @@ fun €BNF_parse›
 		BNF_classify BNF_error  BNF_reader
 		(BNF_lex_string(read_file file)));
 =TEX
+The following function is used for formatting quoted terminal symbols.
+=SML
+fun €escapify›  (x : string) : string = (
+	let	val chars = explode x;
+		fun aux acc [] = implode(rev acc)
+		|   aux acc (ch :: chs) = (
+			if	ch = quoter orelse ch = escape
+			then	aux (ch::escape::acc) chs
+			else	aux (ch::acc) chs
+		);
+	in	aux [] chars
+	end
+);
+=TEX
 The formatter for $sym\_class$ values is the following:
 =SML
 fun €format_sym_class› (VarClass V) = V
-|   format_sym_class (PuncClass P) = "`" ^ P ^ "`";
+|   format_sym_class (PuncClass P) = "`" ^ escapify P ^ "`";
 =TEST
 fun dump_string file string = (
 	let	val os = open_out file;
@@ -2460,7 +2465,7 @@ end; (* of structure Slrp *)
 \subsection{Shell Interface}
 =DUMP slrp
 #!/bin/sh
-# slrp From: $Id: imp017.doc,v 1.37 2003/02/22 17:03:44 rda Exp rda $
+# slrp From: $Id: imp017.doc,v 1.38 2003/02/22 22:12:50 rda Exp rda $
 # Shell script to run the SLRP Parser Generator
 if test -z "$PROGNAME"
 then
