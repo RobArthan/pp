@@ -69,7 +69,9 @@ parser.}
 \item[Issue 1.39] Corrected subtle problem with space skipping in $read\_until$ and friends.
 \item[Issue 1.40] Fixing bug 1(V0.6).
 \item[Issue 1.42] IUCT WP 3 changes.
-
+\item[Issue 1.43] Fixed bug in line-counting (rationalisation
+of identifier recognition to make it fit for purpose and minor
+rework of delimiter identification).
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -510,37 +512,31 @@ fun  Ûrec_delimiterÝ ( (cs, _) : LEX_STATE ) : LEX_STATE = (
 );
 =TEX
 \subsection{Recognition of Identifiers}
-The following hack ensures that a fragment such as ``{\tt CHARARR'('a', 'b')}'' is lexically analysed correctly.
-If an identifier is immediately followed by the offending pattern beginning with a prime, a space is forced in after the prime, which if the input is legal Ada will ensure that the first prime will not be taken as introducing a character quotation.
-Note that input like ``{\tt CHARARR ''}'' will be ``incorrectly'' analysed as an idenfifier followed by single space character quotation, but that will provoke a parser error anyway.
+The following simply picks up the next identifier:
 =SML
-fun Ûrec_identifier_auxÝ (st : LEX_STATE) : LEX_STATE = (
+fun Ûrec_simple_identifierÝ (st : LEX_STATE) : LEX_STATE = (
 	let	fun aux st = (
 			if next is_alnum st orelse next is_us st
 			then aux (collect st)
 			else st
 		);
-	in	if next is_alnum st orelse next is_us st
-		then	let	val (cs, suc) = skip_space(aux(collect st));
-			in	case cs of
-					("'":: (t as (_::"'"::_::"'"::_))) => 
-						(" "::"'"::" " :: t, suc)
-					| _ =>	(" " :: cs, suc)
-			end
+	in	if next is_alpha st
+		then	aux(collect st)
 		else raise Unrecognised
 	end
 );
 =TEX
+The following hack ensures that a fragment such as ``{\tt CHARARR'('a', 'b')}'' is lexically analysed correctly.
+If an identifier is immediately followed by the offending pattern beginning with a prime, a space is forced in after the prime, which if the input is legal Ada will ensure that the first prime will not be taken as introducing a character quotation.
+Note that input like ``{\tt CHARARR ''}'' will be ``incorrectly'' analysed as an identifier followed by single space character quotation, but that will provoke a parser error anyway.
 =SML
 fun Ûrec_identifierÝ (st : LEX_STATE) : LEX_STATE = (
-	if next is_alpha st
-	then	let	val (st', flag) = (rec_identifier_aux st, true)
-				handle Unrecognised => (st, false);
-		in	if flag
-			then st'
-			else raise Unrecognised
-		end
-	else raise Unrecognised
+	let	val st1 = rec_simple_identifier st;
+		val (cs, suc) = skip_space st1;
+	in	case cs of
+		("'":: (t as (_::"'"::_::"'"::_))) => (" "::"'"::" " :: t, suc)
+		| _ =>	(" " :: cs, suc)
+	end
 );
 =TEX
 \subsection{Recognition of Numbers}
@@ -817,35 +813,28 @@ fun Ûfind_in_textÝ (terml : CN_LEX_CLASS list)
 		: INPUT_HANDLE)
 		: (bool * INPUT_HANDLE) = (
 	let	fun aux (brk, sold, snew as (c::srest)) = (
-		let	val side =	if is_newline c
-					then inc_line_count()
-					else ();
-			val (c', srest') =
-				(case rec_identifier (snew, Unknown) of
-					(srest'', Known c'') =>
-						(c'', srest'')
+		if is_newline c
+		then inc_line_count()
+		else ();
+		if is_space c
+		then 	aux (brk, sold@[c], srest)
+		else let
+			val (next, rest) =
+				(case rec_simple_identifier (snew, Unknown) of
+					(srest'', Known id) =>
+						(id, srest'')
 				|	(_, _) => (c, srest)
-				)
-				handle Unrecognised =>
-						(c, srest);
-			val terminate_now = (fst o (classify false)) c' mem terml
+				) handle Unrecognised => (c, srest);
+			val terminate_now = (fst o (classify false)) next mem terml
 							andalso brk = 0;
-			val (id, rest) =
-				if terminate_now
-				then	(c', srest')
-				else	(c, srest);
 		in
 				if terminate_now
-				then
-					(true, brk, sold, (explode id)@rest)
-				else if id mem z_open_brackets
-				then
-					aux (brk + 1, sold@[id], rest)
-				else if id mem z_close_brackets
-				then
-					aux (brk - 1, sold@[id], rest)
-				else
-					aux (brk, sold@[id], rest)
+				then (true, brk, sold, (explode next)@rest)
+				else if next mem z_open_brackets
+				then aux (brk + 1, sold@[next], rest)
+				else if next mem z_close_brackets
+				then aux (brk - 1, sold@[next], rest)
+				else aux (brk, sold@[next], rest)
 		end
 		) | aux (brk, sold, []) = (false, brk, sold, []);
 		val (flg, brk, sold, snew) =
