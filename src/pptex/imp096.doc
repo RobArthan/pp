@@ -7,15 +7,15 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 *******************************************************************************/
-/* $Id: imp096.doc,v 1.24 2004/01/24 14:11:39 rda Exp rda $
+/* $Id: imp096.doc,v 1.25 2004/01/25 09:35:32 rda Exp rda $
 
 =TEX
-% $Id: imp096.doc,v 1.24 2004/01/24 14:11:39 rda Exp rda $
+% $Id: imp096.doc,v 1.25 2004/01/25 09:35:32 rda Exp rda $
 \documentstyle[11pt,TQ,hol1]{article}
 
 \TPPtitle{Sieve and Findfile Utilities}
 \TPPref{DS/FMU/IED/IMP096}
-\def\SCCSissue{$Revision: 1.24 $
+\def\SCCSissue{$Revision: 1.25 $
 }
 
 =IGNORE
@@ -134,7 +134,7 @@ equals sign followed by a space.
 \item[Issues 1.19--1.23] Implemented the -r option to findfile for out-of-the-box running. 
 \item[Issue 1.24] Tidy-up for use in xpp. Rationalised use of static in function definitions, although
 it would be nicer, later, to make more use of it rather than less.
-\item[Issue 1.25] Now uses PPETCPATH rather than PATH as the environment variable to find steering files.
+\item[Issues 1.25, 1.26] Now uses PPETCPATH rather than PATH as the environment variable to find steering files.
 \end{description}
 
 %********************************************************************
@@ -424,7 +424,7 @@ contains all of the introductory material in this document.
 =SIEVE_PROG
 */
 char *program_name = "sieve";
-char *coprlemma1 = "$Id: imp096.doc,v 1.24 2004/01/24 14:11:39 rda Exp rda $" " Copyright Lemma 1 Ltd. 2003";
+char *coprlemma1 = "$Id: imp096.doc,v 1.25 2004/01/25 09:35:32 rda Exp rda $" " Copyright Lemma 1 Ltd. 2003";
 /*
 =TEX
 
@@ -465,8 +465,10 @@ char *coprlemma1 = "$Id: imp096.doc,v 1.24 2004/01/24 14:11:39 rda Exp rda $" " 
 #define STEER_FILE "sieveview"
 #define KEYWORD_FILE "sievekeyword"
 
+#define PPHOME "PPHOME"
 #define PPETCPATH "PPETCPATH"
 #define PPENVDEBUG "PPENVDEBUG"
+#define SLASH_ETC "/etc"
 
 /*
 =TEX
@@ -3183,6 +3185,46 @@ get_tex_arg(char *macro, regex_t **tex_arg, char *tex_arg_sense)
 /*
 =TEX
 
+\HOLindexEntry{find_steering_file}
+{\tt find_steering_file} : Resolve the name of one of the steering files by looking in the defined places.
+
+=SIEVE_PROG
+*/
+char *
+find_steering_file(char *name, char *file_type)
+{
+	char *result, *pp_env_debug;
+	char *pp_home, *pp_home_etc;
+
+	if(file_exists(name) || *name == '/') {
+		result = name;
+	} else if(file_exists(result = find_file(name, getenv(PPETCPATH)))) {
+		; 
+	} else {
+		pp_home = getenv(PPHOME);
+		if(pp_home == NULL) {
+			error("cannot find file '%s'", name);
+			EXIT(26);							/* EXIT */
+		}
+		pp_home_etc = (char*)malloc(strlen(pp_home) + strlen(SLASH_ETC) + 1);
+		strcpy(pp_home_etc, pp_home);
+		strcat(pp_home_etc, SLASH_ETC);
+		if(!file_exists(result = find_file(name, pp_home_etc))) {
+			error("cannot find file '%s'", name);
+			EXIT(26);							/* EXIT */
+		}
+		free((void*)pp_home_etc);		
+	}
+
+	if( (pp_env_debug = getenv (PPENVDEBUG)) && pp_env_debug[0] != 0) {
+		fprintf(stderr, "sieve: using %s %s\n", file_type, result);
+	}
+
+	return result;
+}
+/*
+=TEX
+
 \HOLindexEntry{read_keyword_file}
 {\tt read_keyword_file} : Read the body of the keyword file.
 
@@ -3193,18 +3235,8 @@ read_keyword_file(char *name)
 {
 	char line[MAX_LINE_LEN+1];
 	char * actname;
-	char *pp_env_debug;
 
-	if(file_exists(name) || *name == '/') {
-		actname = name;
-	} else if(!file_exists(actname = find_file(name, getenv(PPETCPATH)))) {
-		error("cannot find keyword file '%s'", name);
-		EXIT(26);							/* EXIT */
-	}
-
-	if( (pp_env_debug = getenv (PPENVDEBUG)) && pp_env_debug[0] != 0) {
-		fprintf(stderr, "sieve: using keyword file %s\n", actname);
-	}
+	actname = find_steering_file(name, "keyword file");
 
 	if( (keyword_F.fp = fopen(actname, "r")) == NULL ) {
 		unix_error("cannot open keyword file '%s'", actname);
@@ -4776,19 +4808,11 @@ read_view_file(char *name)
 	char view[MAX_LINE_LEN+1];
 	int using_view = 0;
 	char filt[MAX_LINE_LEN+1];
-	char *p, *q, *actname, *pp_env_debug;
+	char *p, *q, *actname;
 
 	initialize_table();
-	if(file_exists(name) || *name == '/') {
-		actname = name;
-	} else if(!file_exists(actname = find_file(name, getenv(PPETCPATH)))) {
-		error("cannot find steering file '%s'", name);
-		EXIT(30);							/* EXIT */
-	}
 
-	if( (pp_env_debug = getenv (PPENVDEBUG)) && pp_env_debug[0] != 0) {
-		fprintf(stderr, "sieve: using view file %s\n", actname);
-	}
+	actname = find_steering_file(name, "keyword file");
 
 	if( (view_F.fp = fopen(actname, "r")) == NULL ) {
 		unix_error("cannot open steering file '%s'", actname);
@@ -5090,7 +5114,7 @@ First some useful general declarations.
 =FIND_FILE_FUN
 */
 #ifndef SIEVE_PROG
-char *coprlemma1 = "$Id: imp096.doc,v 1.24 2004/01/24 14:11:39 rda Exp rda $" " Copyright Lemma 1 Ltd. 2003";
+char *coprlemma1 = "$Id: imp096.doc,v 1.25 2004/01/25 09:35:32 rda Exp rda $" " Copyright Lemma 1 Ltd. 2003";
 #endif
 #include <pwd.h>
 #include <stdio.h>
@@ -5490,7 +5514,7 @@ to read its file attributes and it is not a broken symbolic link.
 
 
 #ifndef NO_FINDFILE_MAIN
-char *coprlemma1_ff = "$Id: imp096.doc,v 1.24 2004/01/24 14:11:39 rda Exp rda $" " Copyright Lemma 1 Ltd. 2003";
+char *coprlemma1_ff = "$Id: imp096.doc,v 1.25 2004/01/25 09:35:32 rda Exp rda $" " Copyright Lemma 1 Ltd. 2003";
 extern char *find_file(char *name, char *dirs);
 #include<stdio.h>
 void	exit(int status);
