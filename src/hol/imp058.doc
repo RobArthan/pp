@@ -60,6 +60,8 @@ Changed to use proof context material of issue 1.13 of \cite{DS/FMU/IED/DTD051}.
 Split up $prove\_∂$.
 \item [Issue 1.12 (3rd April 1992)]
 Changes required by CR0016.
+\item [Issue 1.13 (13th April 1992)]
+Changes due to CR0017.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -200,11 +202,11 @@ in
 fun	€var_order› (v1:TERM) (v2:TERM) : int = (
 let	val (v1n,v1t) = dest_var v1;
 	val (v2n,v2t) = dest_var v2;
-	val no = stringorder v1n v2n
+	val no = string_order v1n v2n
 in
 	if no <> 0
 	then no
-	else stringorder (string_of_type v1t) (string_of_type v2t)
+	else string_order (string_of_type v1t) (string_of_type v2t)
 end);
 end;
 =TEX
@@ -216,13 +218,13 @@ equals the old in name and type).
 =SML
 fun €NR_SIMPLE_∂_THEN› (ttac : THM -> TACTIC) = (fn thm =>
 	let	val (x, b) = dest_simple_∂(concl thm);
-	in	(fn (asms, conc) =>
+	in	(fn (seqasms, conc) =>
 			let	val sideffect = if present (op =$) x
 					(flat(map frees
-					(conc :: hyps thm @ asms)))	
+					(conc :: asms thm @ seqasms)))	
 				then term_fail "NR_SIMPLE_∂_THEN" 0 [x]
 				else ();
-				val (sgs, pf) = ttac (asm_rule b) (asms, conc);
+				val (sgs, pf) = ttac (asm_rule b) (seqasms, conc);
 			in	(sgs, (simple_∂_elim x thm) o pf)
 			end)
 	end
@@ -238,7 +240,8 @@ The following are a collection of conversionals used to this end within this doc
 Apply a conversions within the body of $n$ simple binders:
 =SML
 fun €N_SIMPLE_BINDER_C› (0:int) (conv : CONV) :CONV = conv
-| N_SIMPLE_BINDER_C n conv = BINDER_C(N_SIMPLE_BINDER_C(n-1) conv);
+| N_SIMPLE_BINDER_C n conv = SIMPLE_BINDER_C
+	(N_SIMPLE_BINDER_C(n-1) conv);
 =TEX
 Notice the assumption that when called $n$ will be a suitable number.
 
@@ -247,7 +250,7 @@ quantifiers:
 =SML
 fun €LAST_SIMPLE_∂_C› (conv:CONV): CONV = (fn tm =>
 	if is_simple_∂ (snd(dest_simple_∂ tm))
-	then (BINDER_C (LAST_SIMPLE_∂_C conv)) tm
+	then (SIMPLE_BINDER_C (LAST_SIMPLE_∂_C conv)) tm
 	else conv tm
 );
 =TEX
@@ -313,7 +316,7 @@ redundant_simple_∂_conv
 where $\{y1...ym\}\ †\ \{x1 ... xn\}$.
 =SML
 local
-	val tc = simple_eq_match_1_conv ∂_not_binding_thm;
+	val tc = simple_eq_match_conv1 ∂_not_binding_thm;
 in
 val rec €redundant_simple_∂_conv›: CONV = (fn tm =>
 let	val (exs,bdy) = strip_simple_∂ tm;
@@ -326,8 +329,8 @@ let	val (exs,bdy) = strip_simple_∂ tm;
 	fun aux1 [] tm = fail "redundant_simple_∂_conv" 0 []
 	| aux1 (x :: rest) tm = (
 		if (present (op =$) x rest) orelse not(present (op =$) x bdy_frees)
-		then (tc FURTHER_C (aux1 rest)) tm
-		else BINDER_C (aux1 rest) tm
+		then (tc THEN_TRY_C (aux1 rest)) tm
+		else SIMPLE_BINDER_C (aux1 rest) tm
 	);
 in
 	if aux exs
@@ -351,7 +354,7 @@ redundant_simple_µ_conv
 where $\{y1...ym\}\ †\ \{x1 ... xn\}$.
 =SML
 local
-	val tc = simple_eq_match_1_conv µ_not_binding_thm;
+	val tc = simple_eq_match_conv1 µ_not_binding_thm;
 in
 val rec €redundant_simple_µ_conv›: CONV = (fn tm =>
 let	val (exs,bdy) = strip_simple_µ tm;
@@ -364,8 +367,8 @@ let	val (exs,bdy) = strip_simple_µ tm;
 	fun aux1 [] tm = fail "redundant_simple_µ_conv" 0 []
 	| aux1 (x :: rest) tm = (
 		if (present (op =$) x rest) orelse not(present (op =$) x bdy_frees)
-		then (tc FURTHER_C (aux1 rest)) tm
-		else BINDER_C (aux1 rest) tm
+		then (tc THEN_TRY_C (aux1 rest)) tm
+		else SIMPLE_BINDER_C (aux1 rest) tm
 	);
 in
 	if aux exs
@@ -415,7 +418,8 @@ let	val (vs,bdy) = strip_∂ tm;
 		else ();
 	val tm_frees = frees tm;
 	val disjs = map mark (full_strip_≤ bdy);
-	val disj_frees = map (fn x => rev(frees x drop (fn xx => present (op =$) xx tm_frees))) disjs;
+	val disj_frees = map (fn x => rev(frees x drop 
+		(fn xx => present (op =$) xx tm_frees))) disjs;
 	val new_term = list_mk_≤(map list_mk_simple_∂ (combine disj_frees disjs));
 in
 	conv_rule(RAND_C (ONCE_MAP_C check_unmark_conv))
@@ -423,15 +427,16 @@ in
 		§_T2
 		(fn thm1 => ((REPEAT_TTCL NR_SIMPLE_∂_THEN THEN_TTCL
 			REPEAT_TTCL ≤_THEN) asm_tac) thm1 THEN
-		 (fn (asms,gl) => let val asm = hd asms;
-			val asm_frees = rev(frees asm drop (fn xx => present (op =$) xx tm_frees));
+		 (fn (seqasms,gl) => let val asm = hd seqasms;
+			val asm_frees = rev(frees asm drop 
+				(fn xx => present (op =$) xx tm_frees));
 		in
 			(LEMMA_T (list_mk_∂(asm_frees,mark asm))
 			(fn thm => rw_tac[§_t_intro thm])
 			THEN MAP_EVERY_T simple_∂_tac asm_frees
 			THEN conv_tac unmark_conv
-			THEN goal_in_asms_tac)
-			(asms,gl)
+			THEN concl_in_asms_tac)
+			(seqasms,gl)
 		end))
 		(fn thm2 => ((REPEAT_TTCL ≤_THEN THEN_TTCL
 			REPEAT_TTCL NR_SIMPLE_∂_THEN THEN_TTCL
@@ -525,23 +530,23 @@ in
 			THEN
 		SOLVED_T(REPEAT_T
 			(FIRST_T[
-			(fn (asms,gl) => let val (v,b) = dest_simple_∂ gl;
-				in simple_∂_tac v(asms,gl)
+			(fn (seqasms,gl) => let val (v,b) = dest_simple_∂ gl;
+				in simple_∂_tac v(seqasms,gl)
 				end),
 			±_tac,
 			(conv_tac check_unmark_conv THEN
-			 goal_in_asms_tac)])))
+			 concl_in_asms_tac)])))
 		(fn thm2 => ((REPEAT_TTCL(NR_SIMPLE_∂_THEN
 				ORELSE_TTCL ±_THEN) 
 			THEN_TTCL (CONV_THEN unmark_conv))asm_tac) thm2
 		THEN
-		REPEAT_T (fn (asms,gl) => let val (v,b) = dest_simple_∂ gl;
-				in simple_∂_tac v(asms,gl)
+		REPEAT_T (fn (seqasms,gl) => let val (v,b) = dest_simple_∂ gl;
+				in simple_∂_tac v(seqasms,gl)
 				end)
 		THEN
 		REPEAT_T ±_tac
 		THEN
-		goal_in_asms_tac)))
+		concl_in_asms_tac)))
 end
 handle complaint =>
 divert complaint "tac_proof" "simple_∂_±_conv" 58015 
@@ -608,7 +613,8 @@ in
 		else (
 let	val tm_frees = frees tm;
 	val conjs = map mark (full_strip_± bdy);
-	val conj_frees = map (fn x => rev(frees x drop (fn xx => present (op =$) xx tm_frees))) conjs;
+	val conj_frees = map (fn x => rev(frees x drop 
+		(fn xx => present (op =$) xx tm_frees))) conjs;
 	val new_term = list_mk_±(map list_mk_µ (combine conj_frees conjs));
 in
 	conv_rule(RAND_C (ONCE_MAP_C check_unmark_conv))
@@ -706,8 +712,8 @@ end; (* local open Sort *)
 Do as many calls of $all\_simple\_∂\_µ_conv1$ as will work.
 =SML
 val rec €all_simple_∂_µ_conv1› :CONV = (fn tm =>
-	(simple_∂_µ_conv1 FURTHER_C
-	(BINDER_C all_simple_∂_µ_conv1)) tm
+	(simple_∂_µ_conv1 THEN_TRY_C
+	(SIMPLE_BINDER_C all_simple_∂_µ_conv1)) tm
 );
 =TEX
 \subsection{Context of Existentially Quantified Variables}
@@ -813,7 +819,8 @@ local
 		[±_rewrite_thm, ∂_rewrite_thm,
 		µ_rewrite_thm, eq_rewrite_thm, ¥_rewrite_thm, ≥_rewrite_thm];
 	val rw_tac1 = (prim_rewrite_tac	
-		(make_net(flat(map (cthm_eqn_cxt initial_rw_canon) [¥_rewrite_thm])))
+		(make_net(flat(map (cthm_eqn_cxt initial_rw_canon) 
+			[¥_rewrite_thm])))
 		initial_rw_canon 
 		TOP_MAP_C
 		[]);
@@ -925,8 +932,8 @@ we know what the introduced variable is by the following means
 			let val x' = variant (frees(concl thm) @ frees new_term) x;
 			in
 			CASES_T2 (mk_eq(x',witness))
-			(fn thm1 => fn (asms,gl) =>
-			accept_tac (local_rule thm1 gl)(asms,gl))
+			(fn thm1 => fn (seqasms,gl) =>
+			accept_tac (local_rule thm1 gl)(seqasms,gl))
 			(fn thm1 => rw_tac2[
 				thm1,
 				((rw_rule thm1) handle _ => t_thm),
@@ -1059,7 +1066,7 @@ in
 		§_t_tac THEN
 		simple_∂_tac witness THEN
 		(rw_tac ORELSE_T t_tac))))
-	FURTHER_C
+	THEN_TRY_C
 	(pure_rewrite_conv [∂_rewrite_thm]))
 	mtm
 end);
@@ -1305,7 +1312,7 @@ fun €local_rearrange_conv› (f:TERM) (new_term:TERM) : CONV = (fn tm =>
 			(REPEAT ±_tac THEN REPEAT simple_µ_tac )
 			(id_tac)
 		THEN_LIST_T
-		(map (fn thm => fn (asms,gl) =>
+		(map (fn thm => fn (seqasms,gl) =>
 		let 	val conc = concl thm;
 			val thm_fuse = case(an_f f conc conc) of
 				Value tm => tm
@@ -1321,7 +1328,7 @@ fun €local_rearrange_conv› (f:TERM) (new_term:TERM) : CONV = (fn tm =>
 				handle (Fail _) => thm');
 		in
 			(TRY_T prwt THEN
-			accept_tac thm'') (asms,gl)
+			accept_tac thm'') (seqasms,gl)
 		end) 
 		thm1s)
 		end)
@@ -1334,7 +1341,7 @@ fun €local_rearrange_conv› (f:TERM) (new_term:TERM) : CONV = (fn tm =>
 		in
 			REPEAT ±_tac THEN
 			REPEAT simple_µ_tac THEN_LIST_T
-		(map (fn thm => fn (asms,gl) =>
+		(map (fn thm => fn (seqasms,gl) =>
 		let 	val conc = concl thm;
 			val thm_fuse = case(an_f f conc conc) of
 				Value tm => tm
@@ -1348,7 +1355,7 @@ fun €local_rearrange_conv› (f:TERM) (new_term:TERM) : CONV = (fn tm =>
 				handle (Fail _) => thm');
 		in
 			(TRY_T  prwt
-			THEN accept_tac thm'') (asms, gl)
+			THEN accept_tac thm'') (seqasms, gl)
 		end) 
 		thm2s)	
 		end)
@@ -1424,7 +1431,7 @@ the existential quantifiers:
 	val s2 = conv_rule(RAND_C(ALL_SIMPLE_∂_C 
 		(local_rearrange_conv f new_term))) s1;
 	val s3 = conv_rule(RAND_C(LAST_SIMPLE_∂_C 
-		(all_simple_∂_µ_conv1 FURTHER_C redundant_simple_µ_conv))) s2;
+		(all_simple_∂_µ_conv1 THEN_TRY_C redundant_simple_µ_conv))) s2;
 in
 	s3
 end)
@@ -1538,7 +1545,7 @@ let	val (new_fns,ue) = strip_µ (concl thm);
 	let	val gvs_args = gen_vars(map type_of args)[pred];
 	in
 		list_mk_simple_Ã(tl gvs_args,
-		mk_Õ(hd gvs_args,
+		mk_≈(hd gvs_args,
 		list_mk_app(pred,gvs_args)))
 	end);
 	val thm_specs = map (fn bdr =>
@@ -1547,17 +1554,17 @@ let	val (new_fns,ue) = strip_µ (concl thm);
 =TEX
 Now prove the theorem whose conclusion we have just generated:
 =SML
-	val cd_thm = tac_proof((hyps thm,tm5),
+	val cd_thm = tac_proof((asms thm,tm5),
 		pure_rewrite_tac[aux_thm] THEN
 		REPEAT µ_tac THEN
 		¥_T(fn athm => MAP_EVERY_T asm_tac (strip_±_rule athm)) THEN
 		strip_asm_tac (list_simple_µ_elim thm_specs thm) THEN
 		simple_∂_tac f THEN asm_rewrite_tac[] THEN
 		REPEAT (±_tac ORELSE_T simple_µ_tac) THEN
-		(fn (asms,gl) =>
+		(fn (seqasms,gl) =>
 		(let val (pred,args) = strip_app gl;
 		in
-		DROP_ASM_T (find asms (fn asm =>
+		DROP_ASM_T (find seqasms (fn asm =>
 			let val (_,bdy) = strip_µ asm;
 				val (_,bdy') = dest_simple_∂ bdy;
 				val (pred',_) = strip_app bdy'
@@ -1565,9 +1572,9 @@ Now prove the theorem whose conclusion we have just generated:
 				pred =$ pred'
 			end
 			handle _ => false))
-			(rewrite_thm_tac o ∂_Õ_rule o
+			(rewrite_thm_tac o ∂_≈_rule o
 			list_simple_µ_elim(tl args))
-		end) (asms,gl)));
+		end) (seqasms,gl)));
 	val recogs = map (fn (x,_,_) => x) proc_conjs;
 	val nfrees_recogs = map (length o frees) recogs;
 	val gen_f = type_of f;
@@ -1833,9 +1840,9 @@ let	val (x,bdy) = dest_simple_∂ mtm;
 in
 	((COND_C (fn _ => present (op =$) x usages) (fail_conv) 
 		(simple_∂_varstruct_arg_conv usages)) 
-	EITHER_C
+	AND_OR_C
 	(simple_∂_rec_arg_conv usages)
-	EITHER_C
+	AND_OR_C
 	(fn _ => term_fail "simple_∂_arg_conv" 0 [mtm]))
 	mtm
 end
@@ -1877,11 +1884,11 @@ let	fun move_in_conv ltm = (case (dest_term ltm) of
 		| Dµ (vs,_) => (
 			(COND_C (fn _ => is_pair vs) 
 			 all_µ_uncurry_conv fail_conv)
-			EITHER_C
-			(µ_±_conv FURTHER_C move_in_conv)
+			AND_OR_C
+			(µ_±_conv THEN_TRY_C move_in_conv)
 			ORELSE_C
 			(ALL_SIMPLE_µ_C move_in_conv 
-			FURTHER_C redundant_simple_µ_conv)) ltm
+			THEN_TRY_C redundant_simple_µ_conv)) ltm
 		| D± _ => ALL_±_C move_in_conv ltm
 		| D≤ _ => ALL_≤_C move_in_conv ltm
 		| _ => fail_with_conv "aux-pass through" ltm);
@@ -1890,22 +1897,22 @@ in
 	(if is_∂ tm
 	then
 	(all_∂_uncurry_conv
-	EITHER_C
+	AND_OR_C
 	(redundant_simple_∂_conv
-	EITHER_C
-	(simple_∂_≤_conv FURTHER_C move_in_conv)
+	AND_OR_C
+	(simple_∂_≤_conv THEN_TRY_C move_in_conv)
 	ORELSE_C
 	((REPEAT1_C simple_∂_equation_conv)
-	EITHER_C
+	AND_OR_C
 	(simple_∂_equation_conv1
 	ORELSE_C
 	(ALL_SIMPLE_∂_C µ_±_conv
-	EITHER_C
-	((simple_∂_arg_conv FURTHER_C move_in_conv)
+	AND_OR_C
+	((simple_∂_arg_conv THEN_TRY_C move_in_conv)
 	ORELSE_C
-	((simple_∂_±_conv FURTHER_C move_in_conv)
+	((simple_∂_±_conv THEN_TRY_C move_in_conv)
 	ORELSE_C
-	((BINDER_C move_in_conv FURTHER_C aux)
+	((SIMPLE_BINDER_C move_in_conv THEN_TRY_C aux)
 	ORELSE_C (fn _ => term_fail "prove_∂_conv" 58002 [tm]))))))))) 
 		(* we know its an ∂ *)
 	else term_fail "prove_∂_conv" 58001 [tm])
@@ -1913,7 +1920,7 @@ in
 )
 end);
 in
-	(aux FURTHER_C pure_rewrite_conv[comb_i_def]) tm
+	(aux THEN_TRY_C pure_rewrite_conv[comb_i_def]) tm
 end);
 
 =TEX
@@ -1931,7 +1938,7 @@ in
 end);
 =TEX
 =SML
-val €prove_∂_tac› :TACTIC = (fn (asms, gl) =>
+val €prove_∂_tac› :TACTIC = (fn (seqasms, gl) =>
 let	val s1 = prove_∂_conv gl
 		handle complaint =>
 		if is_∂ gl
@@ -1939,7 +1946,7 @@ let	val s1 = prove_∂_conv gl
 		else fail "prove_∂_tac" 58004 [];
 in
 	if snd(dest_§(concl s1)) =$ mk_t
-	then accept_tac (§_t_elim s1) (asms,gl)
+	then accept_tac (§_t_elim s1) (seqasms,gl)
 	else fail "prove_∂_tac" 58006 []
 end);
 =TEX
