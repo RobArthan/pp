@@ -1040,6 +1040,7 @@ internal nodes contain integer keys and simple dictionaries.
 =SML
 abstype 'a €E_DICT›	=	€Leaf›
 			|	€Node› of int * ('a S_DICT) * ('a E_DICT) * ('a E_DICT)
+and €E_KEY›		=	€Key› of int * string
 with
 =TEX
 The hashing function, $hash$ is local to the abstract
@@ -1167,19 +1168,16 @@ local
 in
 =TEX
 The various operations on the dictionaries are straightforward
-to code.
-In each case we precompute the hash key of the string
-argument then apply an auxiliary function to perform
-the desired operation.
-
-Like $s\_lookup$, $e\_lookup$ implements application.
-The test for an empty tree is made first to avoid having to compute the hash
-key in a case where it is not needed.
+to code. We do the hash-key versions first then the string versions using them
 =SML
-	fun €e_lookup› (_ : string) (Leaf : 'a E_DICT) : 'a OPT = Nil
-	|   e_lookup s dict = (
-		let	val k = hash s;
-			fun aux Leaf = Nil
+	fun €e_get_key› (s: string)  : E_KEY = (
+		Key(hash s, s)
+	);
+=TEX
+Like $s\_lookup$, $e\_key\_lookup$ implements application.
+=SML
+	fun €e_key_lookup› (Key(k, s) : E_KEY)  (dict : 'a E_DICT) : 'a OPT = (
+		let	fun aux Leaf = Nil
 			| aux (Node(k', pairs, l, r)) = (
 				if k < k'
 				then aux l
@@ -1192,11 +1190,10 @@ key in a case where it is not needed.
 	);
 =TEX
 Like $s\_enter$,
-$e\_enter$ implements overwriting by a singleton function:
+$e\_key\_enter$ implements overwriting by a singleton function:
 =SML
-	fun €e_enter› (s : string) (a : 'a) (dict : 'a E_DICT) : 'a E_DICT = (
-		let	val k = hash s;
-			fun aux Leaf = Node (k, [(s, a)], Leaf, Leaf)
+	fun €e_key_enter› (Key(k, s) : E_KEY) (a : 'a) (dict : 'a E_DICT) : 'a E_DICT = (
+		let	fun aux Leaf = Node (k, [(s, a)], Leaf, Leaf)
 			| aux (Node(k', pairs, l, r)) = (
 				if k < k'
 				then Node(k', pairs, aux l, r)
@@ -1209,11 +1206,10 @@ $e\_enter$ implements overwriting by a singleton function:
 	);
 =TEX
 Like $s\_extend$,
-$e\_extend$ implements extension by a singleton function:
+$e\_key\_extend$ implements extension by a singleton function:
 =SML
-	fun €e_extend› (s : string) (a : 'a) (dict : 'a E_DICT) : 'a E_DICT = (
-		let	val k = hash s;
-			fun aux Leaf = Node (k, [(s, a)], Leaf, Leaf)
+	fun €e_key_extend› (Key(k, s) : E_KEY) (a : 'a) (dict : 'a E_DICT) : 'a E_DICT = (
+		let	fun aux Leaf = Node (k, [(s, a)], Leaf, Leaf)
 			| aux (Node(k', pairs, l, r)) = (
 				if k < k'
 				then Node(k', pairs, aux l, r)
@@ -1237,9 +1233,8 @@ This is done by lifting up the left-most leaf of the right hand subtree
 to fill in for a node that is to be deleted from the tree.
 The resulting tree is at most no deeper than the original.
 =SML
-	fun €e_delete› (s : string) (dict : 'a E_DICT) : 'a E_DICT = (
-		let	val k = hash s;
-			fun del_left_most (Node (k', pairs, l, r)) = (
+	fun €e_key_delete› (Key(k, s) : E_KEY) (dict : 'a E_DICT) : 'a E_DICT = (
+		let	fun del_left_most (Node (k', pairs, l, r)) = (
 				case l of
 					Node(_, _, Node _, _) => (
 					let	val (l', kpairs) = del_left_most l;
@@ -1267,6 +1262,31 @@ The resulting tree is at most no deeper than the original.
 			);
 		in	aux dict
 		end
+	);
+=TEX
+Now we give the string versions of the access functions.
+
+For {\it e\_lookup} we make the tiny optimisation of avoiding calculating the key if the
+dictionary is empty.
+=SML
+	fun €e_lookup› (_ : string) (Leaf : 'a E_DICT) : 'a OPT = Nil
+	|   e_lookup s dict = (
+		e_key_lookup (e_get_key s) dict
+	);
+=TEX
+=SML
+	fun €e_enter› (s : string) (a : 'a) (dict : 'a E_DICT) : 'a E_DICT = (
+		e_key_enter (e_get_key s) a dict
+	);
+=TEX
+=SML
+	fun €e_extend› (s : string) (a : 'a) (dict : 'a E_DICT) : 'a E_DICT = (
+		e_key_extend (e_get_key s) a dict
+	);
+=TEX
+=SML
+	fun €e_delete› (s : string) (dict : 'a E_DICT) : 'a E_DICT = (
+		e_key_delete (e_get_key s) dict
 	);
 =TEX
 Before defining $e\_merge$ we first define operations
@@ -1431,6 +1451,24 @@ fun €time_app› (units : TIMER_UNITS) : ('a -> 'b) -> 'a -> 'b TIMED = (
 		in	{result = result, time = time, units = units}
 		end	
 	end
+);
+=TEX
+=SML
+val €stopwatch› : Time.time ref = ref (Time.fromSeconds 0);
+=TEX
+=SML
+fun €reset_stopwatch› (():unit) : unit = (
+	stopwatch := Time.now()
+);
+=TEX
+=SML
+fun €read_stopwatch› (units : TIMER_UNITS) : int = (
+	(TimeInt.toInt o 
+	(case units of
+		Microseconds => Time.toMicroseconds
+	|	Milliseconds => Time.toMilliseconds
+	|	Seconds => Time.toSeconds))
+	(Time.-(Time.now(), !stopwatch))
 );
 =SML
 end(* of Timing structure *);
