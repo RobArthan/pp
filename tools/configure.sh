@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.32 2004/09/01 13:58:40 rda Exp rda $
+# $Id: configure.sh,v 1.33 2004/12/18 13:15:54 rda Exp $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -290,9 +290,9 @@ out 'PPHOME=$PPTARGETDIR'
 out "export PPHOME"
 out "PATH=$CWD/src:"'$PATH'
 out "export PATH"
-out 'PPDATABASEPATH=$CWD/src'
+out "PPDATABASEPATH=$CWD/src"
 out "export PPDATABASEPATH"
-out 'PPETCPATH=$CWD/src'
+out "PPETCPATH=$CWD/src"
 out "export PPETCPATH"
 if	[ "$PPCOMPILER" = POLYML ]
 then	export_it PPPOLYDBASE
@@ -338,8 +338,8 @@ then
 	out "echo \"See $PPTARGETDIR/<package>.log for messages\""
 	out "cd $PPTARGETDIR"
 	out "PATH=$PPTARGETDIR/bin:"'$PATH'
-	out 'PPDATABASEPATH=$PPTARGETDIR/db:$CWD/src'
-	out 'PPETCPATH=$PPTARGETDIR/db:$CWD/src'
+	out "PPDATABASEPATH=$PPTARGETDIR/db:$CWD/src"
+	out "PPETCPATH=$PPTARGETDIR/db:$CWD/src"
 	if	[ "$hol" = y ]
 	then	out "echo Installing hol demo database"
 		out './install_holdemo >hol.log 2>&1 || give_up $PPTARGETDIR/hol.log'
