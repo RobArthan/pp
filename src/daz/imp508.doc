@@ -1,4 +1,4 @@
-% imp508.doc   %Z% $Date: 2000/06/20 12:53:18 $ $Revision: 1.61 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2000/10/17 11:28:39 $ $Revision: 1.62 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.61 $%
+\def\SCCSversion{$Revision: 1.62 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2000/06/20 12:53:18 $%
+\TPPdate{\FormatDate{$Date: 2000/10/17 11:28:39 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -90,6 +90,7 @@ Adjusted $ENV\_INFO$ and allowed for type conversions.
 \item[Issue 1.57] Enhancement R2 --- multiple logical constant definitions.
 \item[Issues 1.58-1.61] Enhancement R1 --- multi-dimensional arrays.
 \item[Issues 1.62] Enhancement CTLE R1/2 --- ``Others'' in case statements.
+\item[Issues 1.63] Enhancement CTLE R1/4 --- logical operators on arrays of booleans, including all the basics of overload resolution.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -259,14 +260,34 @@ val 		€z_bool_and› =		Ò(_ and _)Æ
 	and	€z_mod› =		Ò(_ intmod _)Æ
 	and	€z_rem› =		Ò(_ rem _)Æ
 	and	€z_expon› =		Ò(_ ** _)Æ
-	and	€z_bool_mem› =	
-				Ò(_ mem _)Æ
-	and	€z_bool_notmem› =
-				Ò(_ notmem _)Æ;
+	and	€z_bool_mem› =		Ò(_ mem _)Æ
+	and	€z_bool_notmem› =		Ò(_ notmem _)Æ
+	and	€z_array_not› =		Ò(array_not _)Æ
+	and	€z_array_and› =		Ò(_ array_and _)Æ
+	and	€z_array_or› =		Ò(_ array_or _)Æ
+	and	€z_array_xor› =		Ò(_ array_xor _)Æ;
 =TEX
 
 \subsection{Z Expressions}
 The following function allows many of the Z constructor functions to be presented in a way which is visually appealing.
+The {\it ts} argument represents a substitution, e.g., 
+=INLINEFT
+[(Ò1Æ, "a"), (Ò6Æ, "b")]
+=TEX
+; the second argument represents a template term containing an instance
+of the Z term we want to construct using the variables from the substitution
+as operands, e.g.,
+=INLINEFT
+Òa .. bÆ
+=TEX
+; the result is the desired term, e.g.,
+=INLINEFT
+Ò1 .. 6Æ
+=TEX
+.
+The types of the template operator are instantiated as necessary
+to match the type of the required actual operands.
+
 =SML
 fun €cn_subst› (ts : (TERM * string) list) (tm : TERM) : TERM = (
 let	val freevars = frees tm;
@@ -454,6 +475,10 @@ fun €z_tuple› ([exp] : Z_EXP list) : Z_EXP = (
 	end
 );
 =TEX
+The following function constructions a Z application given a function
+and its argument (which will be a pair if we are constructing an application
+of a binary operator).
+If necesary, the type of the function is instantiated to match that of the argument.
 =SML
 fun mk_and_chk_z_app (fx as (f: Z_EXP, x : Z_EXP)) : Z_EXP = (
 	mk_z_app fx handle Fail _ => (
@@ -833,6 +858,89 @@ fun €trans_int› (i : INT_LIT) : INTEGER = (
 end (* of local ... in *);
 =TEX
 =TEX
+\section{SUPPORT FOR TRANSLATION OF EXPRESSIONS}
+It is convenient to part of the work for translation of
+expressions out of line here rather than in the main  mutual recursion
+for {\it trans\_exp}. 
+\subsection{Unary Operators}
+The empty list for unary addition means that no operator is required.
+=SML
+fun €unary_ops› (uop : UNARY_OP) : Z_EXP list = (
+	case uop of
+	UOSparkUnaryMinus => [z_unary_minus]
+	|UOSparkNot => [z_bool_not, z_array_not]
+	|UOSparkAbs => [z_abs]
+	|USSparkUnaryAdd => []
+);
+=TEX
+The following implements overload resolution for unary operators.
+Note that we let {\it z\_unary\_exp} report the error if
+none of the alternatives is well-typed (the case of an empty operand
+to {\it try\_it} is for the special case of unary addition).
+
+Also note that the expression returned is the actual translation of
+the whole unary operator application, not just the operator.
+
+=SML
+fun €trans_unary_op› (uop : UNARY_OP, zright : Z_EXP) : Z_EXP = (
+	let	val ops = unary_ops uop;
+		fun try_it [] = zright
+		|   try_it [rator] = (
+			z_unary_exp(rator, zright)
+		) | try_it (rator::more) = (
+			z_unary_exp(rator, zright)
+			handle Fail _ => try_it more
+		);
+	in	try_it ops
+	end
+);
+=TEX
+
+\subsection{Binary Operators}
+=SML
+fun €bin_ops› (bop : BIN_OP) : Z_EXP list = (
+	case bop of
+	BOSparkAnd => [z_bool_and, z_array_and]
+	|BOSparkAndThen => [z_bool_and]
+	|BOSparkOr => [z_bool_or, z_array_or]
+	|BOSparkOrElse => [z_bool_or]
+	|BOSparkXor => [z_bool_xor, z_array_xor]
+	|BOSparkEq => [z_bool_eq]
+	|BOSparkNotEq => [z_bool_noteq]
+	|BOSparkLess => [z_bool_less]
+	|BOSparkLessEq => [z_bool_less_eq]
+	|BOSparkGreater => [z_bool_greater]
+	|BOSparkGreaterEq => [z_bool_greater_eq]
+	|BOSparkAdd => [z_add]
+	|BOSparkMinus => [z_minus]
+	|BOSparkTimes => [z_times]
+	|BOSparkIntdiv => [z_intdiv]
+	|BOSparkMod => [z_mod]
+	|BOSparkRem => [z_rem]
+	|BOSparkExpon => [z_expon]
+	|BOSparkMem => [z_bool_mem]
+	|BOSparkNotMem => [z_bool_notmem]
+	|BOSparkConcat => []
+);
+=TEX
+The following implements overload resolution for binary operators.
+
+As for unary operators, the expression returned is the actual translation of
+the whole binary operator application, not just the operator.
+=SML
+fun €trans_bin_op› (bop : BIN_OP, zleft : Z_EXP, zright : Z_EXP) : Z_EXP = (
+	let	val ops = bin_ops bop;
+		fun try_it [] = fail "trans_bin_op" 508031 []
+		|   try_it [rator] = (
+			z_bin_exp(zleft, rator, zright)
+		) | try_it (rator::more) = (
+			z_bin_exp(zleft, rator, zright)
+			handle Fail _ => try_it more
+		);
+	in	try_it ops
+	end
+);
+=TEX
 
 \section{TRANSLATING SPARK EXPRESSIONS}
 
@@ -1058,52 +1166,15 @@ and €trans_array_agg_exp› (env : CN_ENV)
 =TEX
 \subsection{Translating Unary Expressions}
 =SML
-and €trans_unary_op› (uop : UNARY_OP) = (
-	case uop of
-	UOSparkUnaryMinus => z_unary_minus
-	|UOSparkNot => z_bool_not
-	|UOSparkAbs => z_abs
-	|USSparkUnaryAdd => error "trans_unary_op" 508028 []
-)
-=TEX
-=SML
 and €exp_unary_exp› (env : CN_ENV) ({uop, right} : EXP UNARY_EXP) : Z_EXP = (
-	case uop of
-	UOSparkUnaryAdd => trans_exp env right
-	|_ => 	z_unary_exp (trans_unary_op uop, trans_exp env right)
+	trans_unary_op(uop, trans_exp env right)
 )
 =TEX
 
 \subsection{Translating Binary Expressions}
 =SML
-and €trans_bin_op› (bop : BIN_OP) = (
-	case bop of
-	BOSparkAnd => z_bool_and
-	|BOSparkAndThen => z_bool_and
-	|BOSparkOr => z_bool_or
-	|BOSparkOrElse => z_bool_or
-	|BOSparkXor => z_bool_xor
-	|BOSparkEq => z_bool_eq
-	|BOSparkNotEq => z_bool_noteq
-	|BOSparkLess => z_bool_less
-	|BOSparkLessEq => z_bool_less_eq
-	|BOSparkGreater => z_bool_greater
-	|BOSparkGreaterEq => z_bool_greater_eq
-	|BOSparkAdd => z_add
-	|BOSparkMinus => z_minus
-	|BOSparkTimes => z_times
-	|BOSparkIntdiv => z_intdiv
-	|BOSparkMod => z_mod
-	|BOSparkRem => z_rem
-	|BOSparkExpon => z_expon
-	|BOSparkMem => z_bool_mem
-	|BOSparkNotMem => z_bool_notmem
-	|BOSparkConcat => fail "trans_bin_op" 508031 []
-)
-=TEX
-=SML
 and €exp_bin_exp› (env : CN_ENV) ({left, bop, right} : EXP BIN_EXP) : Z_EXP = (
-	z_bin_exp (trans_exp env left, trans_bin_op bop, trans_exp env right)
+	 trans_bin_op(bop, trans_exp env left, trans_exp env right)
 )
 =TEX
 \subsection{Translating Membership of a Range}
@@ -1113,7 +1184,7 @@ and €exp_mem_range› (env : CN_ENV) ({left, mop, range} : EXP MEM_RANGE)
 let	val {lo=lo, hi=hi} = dest_range range;
 	val zright = z_rng(trans_exp env lo, trans_exp env hi);
 in
-	z_bin_exp (trans_exp env left, trans_bin_op mop, zright)
+	trans_bin_op(mop, trans_exp env left, zright)
 end
 )
 =TEX
