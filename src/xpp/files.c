@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.22 2003/07/30 12:11:16 rda Exp $
+ * $Id: files.c,v 2.23 2003/07/31 11:03:29 rda Exp $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -216,7 +216,8 @@ static Boolean file_quit_new_dialog(
 static Boolean file_yes_no_dialog(
 	Widget	w,
 	char	*fmt,
-	char	*fname)
+	char	*fname,
+	char	*title)
 {
 	char *msg;
 	Boolean reply;
@@ -226,7 +227,7 @@ static Boolean file_yes_no_dialog(
 		return False;
 	}
 	sprintf(msg, fmt, fname);
-	reply = yes_no_dialog(w, msg);
+	reply = yes_no_dialog(w, msg, title);
 	XtFree(msg);
 	return reply;
 }
@@ -577,8 +578,7 @@ static Boolean backup_file(
 	if(stat(name, &status) == 0) { /* file exists */
 		if((fp = fopen(name, "r")) == NULL) {
 			return file_yes_no_dialog(w,
-			                          cant_open_file_to_backup_message,
-			                          name);
+				cant_open_file_to_backup_message, name, NULL);
 		};
 	} else { /* else file doesn't exist so no backup needed */
 		return True;
@@ -600,7 +600,7 @@ static Boolean backup_file(
 			*backup_name = NULL;
 			fclose(backup_fp);
 			return file_yes_no_dialog(w,
-					backup_file_same_as_file_message, name);
+					backup_file_same_as_file_message, name, NULL);
 		}
 		fclose(backup_fp);
 	}
@@ -609,7 +609,7 @@ static Boolean backup_file(
 		XtFree(*backup_name);
 		*backup_name = NULL;
 		return file_yes_no_dialog(w,
-				cant_open_backup_message, name);
+				cant_open_backup_message, name, NULL);
 	} else {
 		char buf[BUFSIZ];
 		size_t bytes_read;
@@ -618,7 +618,7 @@ static Boolean backup_file(
 					!= bytes_read) {
 				Boolean reply;
 				reply = file_yes_no_dialog(w,
-					cant_write_backup_message, name);
+					cant_write_backup_message, name, NULL);
 				fclose(backup_fp);
 				fclose(fp);
 				unlink(*backup_name);
@@ -744,9 +744,7 @@ Boolean save_file(
 	struct stat new_status;
 	char *msg;
 	if(global_options.read_only) {
-		if(!file_yes_no_dialog(text,
-					save_read_only_message,
-					name)) {
+		if(!file_yes_no_dialog(text, save_read_only_message, name, "Confirm Save")) {
 			return False;
 		}
 		set_read_only(False);
@@ -758,7 +756,7 @@ Boolean save_file(
 		case FS_OK: msg = NULL; break;
 	}
 	if(msg != NULL) {
-		if(!file_yes_no_dialog(text, msg, name)) {
+		if(!file_yes_no_dialog(text, msg, name, "Confirm Save")) {
 			return False;
 		}
 	}
@@ -794,7 +792,7 @@ Boolean save_file_as(
 			file_error_dialog(text, save_not_reg_message, name);
 			return False;
 		};
-		if(!file_yes_no_dialog(text, overwrite_message, name)) {
+		if(!file_yes_no_dialog(text, overwrite_message, name, "Confirm Save As")) {
 			return False;
 		}
 	}; /* else file doesn't exist so no checks needed */
@@ -832,7 +830,7 @@ Boolean save_string_as(
 			file_error_dialog(w, save_not_reg_message, name);
 			return False;
 		};
-		if(!file_yes_no_dialog(w, overwrite_message, name)) {
+		if(!file_yes_no_dialog(w, overwrite_message, name, "Confirm Save Selection")) {
 			return False;
 		}
 	}; /* else file doesn't exist so no checks needed */
@@ -868,7 +866,8 @@ Boolean old_file_checks(
 		Widget	text,
 		char	*oldname,
 		char	*extra_message,
-		char	*continue_message)
+		char	*continue_message,
+		char	*title)
 {
 	char *msg_text;
 	switch(oldname != NULL ? check_file_status(oldname) : FS_OK) {
@@ -896,7 +895,7 @@ Boolean old_file_checks(
 		msg = XtRealloc(msg, strlen(msg) + strlen(continue_message) + 2);
 		strcat(msg, "\n");
 		strcat(msg, continue_message);
-		reply = yes_no_dialog(text, msg);
+		reply = yes_no_dialog(text, msg, title);
 		XtFree(msg);
 		return reply;
 	} else {
@@ -938,7 +937,7 @@ Boolean open_file(
 		if(read_only_message != NULL) {
 			if(	(	orig_global_options.read_only
 				&&	global_options.read_only)
-			||	file_yes_no_dialog(text, read_only_message, name)) {
+			||	file_yes_no_dialog(text, read_only_message, name, NULL)) {
 				set_read_only(True);
 			} else {
 				XtFree(buf);

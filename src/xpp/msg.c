@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2003/07/18 15:52:52 $ $Revision: 2.34 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2003/07/23 14:02:14 $ $Revision: 2.35 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -177,7 +177,7 @@ static void poll(int *done){
  * yes_no_dialog: ask a question with a mandatory yes/no answer
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void yes_no_cb(CALLBACK_ARGS), yes_no_destroy_cb(CALLBACK_ARGS);
-Boolean yes_no_dialog(Widget w, char *question)
+Boolean yes_no_dialog(Widget w, char *question, char *title)
 {
 	static Widget dialog;
 	XmString text, yes, no, confirm;
@@ -192,12 +192,10 @@ Boolean yes_no_dialog(Widget w, char *question)
 #endif
 		yes = XmStringCreateSimple("   Yes   ");
 		no = XmStringCreateSimple("   No   ");
-		confirm = XmStringCreateSimple("Confirm");
 		XtVaSetValues(dialog,
 			XmNdialogStyle,		XmDIALOG_FULL_APPLICATION_MODAL,
 			XmNokLabelString,	yes,
 			XmNcancelLabelString,	no,
-			XmNdialogTitle, 	confirm,
 			XmNdialogType,		XmDIALOG_QUESTION,
 			NULL);
 		XtUnmanageChild(
@@ -213,8 +211,12 @@ Boolean yes_no_dialog(Widget w, char *question)
 			&reply);
 		XmStringFree(yes);
 		XmStringFree(no);
-		XmStringFree(confirm);
 	}
+	confirm = XmStringCreateSimple(title != NULL ? title : "Confirm");
+		XtVaSetValues(dialog,
+			XmNdialogTitle, 	confirm,
+			NULL);
+	XmStringFree(confirm);
 	text = format_msg(question, MSG_LINE_LEN);
 	XtVaSetValues(dialog, XmNmessageString, text, NULL);
 	XmStringFree(text);

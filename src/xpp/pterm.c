@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.41 2003/07/08 14:21:07 rda Exp rda $
+ * $Id: pterm.c,v 2.42 2003/07/24 13:09:52 rda Exp $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -1076,7 +1076,7 @@ static Boolean wait_for_prompt(void)
 			break;
 		}
 		if(++tries >= delay) {
-			if(!yes_no_dialog(root, carry_on_waiting_message)) {
+			if(!yes_no_dialog(root, carry_on_waiting_message, NULL)) {
 				result = False;
 				break;
 			}
