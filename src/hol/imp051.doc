@@ -53,7 +53,7 @@ Reacted to $NetTools$ being open.
 \item [Issue 1.3]
 Moved to using abstract data types.
 \item [Issue 1.4]
-Added $cs\_∂\_rule$ material.
+Added $cs\_∂\_conv$ material.
 \item [Issue 1.5]
 Added existence prover parameterisation.
 
@@ -97,6 +97,28 @@ structure €ProofContext› : ProofContext = struct
 =SML
 val €thm_union› : THM list -> THM list -> THM list = 
 	union (fn (a,b) => dest_thm a = dest_thm b);
+=TEX
+As $roverwrite$ but prefix, and putting new entries at the head:
+=SML
+fun €roverwrite1› lst (a,b) = (
+let fun aux [] = fail "" 0 []
+| aux ((x,y) :: rest) = (
+	if b = y
+	then ((a,b) :: rest)
+	else ((x,y) :: aux rest)
+);
+in
+	aux lst
+	handle complaint =>
+	((a,b) :: lst)
+end);
+=TEX
+=SML
+fun €list_roverwrite1› (abs : ('a * ''b) list) (xys : ('a * ''b) list) : ('a * ''b) list = (
+	fold (fn (l1, l2) => roverwrite1 l2 l1) abs xys
+);
+=IGN
+list_roverwrite1 [(1,"1"),(3,"3"),(4,"3"),(5,"5")] [(2,"2"),(0,"5"),(4,"4")];
 =TEX
 \section{EQUATIONAL CONTEXTS}
 An equational context is a list of conversions,
@@ -145,7 +167,7 @@ type €PROOF_CONTEXT› = {
 				(* CANON list * ... *)
 	st_eqn_cxt: (EQN_CXT * string) list,
 	sg_eqn_cxt: (EQN_CXT * string) list,
-	cs_∂_rules: ((TERM -> THM)list * string) list,
+	cs_∂_convs: (CONV list * string) list,
 	∂_cd_thms: THM list,
 	∂_vs_thms: (string * (TERM list * THM)) list,
 =TEX
@@ -155,7 +177,7 @@ Now the evaluated parts:
 	rw_canon: THM -> THM list,	(* CANON *)
 	st_conv: CONV,
 	sg_conv: CONV,
-	cs_∂_rule: TERM -> THM,
+	cs_∂_conv: TERM -> THM,
 	∂_ad_cd_thms:  (TERM list * int list * TYPE * (TERM list)list * THM) list,
 	∂_ad_vs_thms:  (string * (TERM list * THM)) list,
 =TEX
@@ -177,7 +199,7 @@ fun €empty_pc› (committed : bool)(names : string list): PROOF_CONTEXT = {
 	rw_canons = [],
 	st_eqn_cxt = [],
 	sg_eqn_cxt = [],
-	cs_∂_rules = [],
+	cs_∂_convs = [],
 	∂_cd_thms = [],
 	∂_vs_thms = [],
 =TEX
@@ -187,7 +209,7 @@ Now the evaluated parts:
 	rw_canon = (fn thm => [thm]),	(* CANON *)
 	st_conv = fail_conv,
 	sg_conv = fail_conv,
-	cs_∂_rule = (fn _ => fail "icl'set_eval_ad_cs_∂_rules" 51015 []),
+	cs_∂_conv = (fn _ => fail "icl'set_eval_ad_cs_∂_convs" 51015 []),
 	∂_ad_cd_thms = [],
 	∂_ad_vs_thms = [],
 =TEX
@@ -312,7 +334,7 @@ local
 	val ad_rw_canon = ref (#rw_canon initial_pc);
 	val ad_st_conv = ref (#st_conv initial_pc);
 	val ad_sg_conv = ref (#sg_conv initial_pc);
-	val ad_cs_∂_rules = ref (#cs_∂_rule initial_pc);
+	val ad_cs_∂_convs = ref (#cs_∂_conv initial_pc);
 	val ad_∂_ad_cd_thms = ref (#∂_ad_cd_thms initial_pc);
 	val ad_∂_ad_vs_thms = ref (#∂_ad_vs_thms initial_pc);
 in
@@ -325,7 +347,7 @@ fun set_current_pc pc = (
 	ad_rw_canon := (#rw_canon pc);
 	ad_st_conv := (#st_conv pc);
 	ad_sg_conv := (#sg_conv pc);
-	ad_cs_∂_rules := (#cs_∂_rule pc);
+	ad_cs_∂_convs := (#cs_∂_conv pc);
 	ad_∂_ad_cd_thms := (#∂_ad_cd_thms pc);
 	ad_∂_ad_vs_thms := (#∂_ad_vs_thms pc);
 	()
@@ -337,7 +359,7 @@ fun €current_ad_rw_net› ():CONV NET = (!ad_rw_net);
 fun €current_ad_rw_canon› ():THM -> THM list = (!ad_rw_canon);
 fun €current_ad_st_conv› ():CONV = (!ad_st_conv);
 fun €current_ad_sg_conv› ():CONV = (!ad_sg_conv);
-fun €current_ad_cs_∂_rule› ():TERM -> THM = (!ad_cs_∂_rules);
+fun €current_ad_cs_∂_conv› ():TERM -> THM = (!ad_cs_∂_convs);
 fun €current_ad_∂_cd_thms› ()
 	: (TERM list * int list * TYPE * (TERM list)list * THM) list
 	= (!ad_∂_ad_cd_thms);
@@ -367,14 +389,11 @@ val eval_ad_st_conv : (EQN_CXT -> CONV) ref = ref eqn_cxt_conv;
 val eval_ad_sg_conv : (EQN_CXT -> CONV) ref = ref eqn_cxt_conv;
 
 local
-	fun try_all [] tm = fail "current_ad_cs_∂_rule" 51015 []
-	| try_all (afun :: x) tm = (
-		afun tm
-		handle (Fail _) =>
-		try_all x tm
-	);
+	fun try_all [] = (fn tm => fail "current_ad_cs_∂_conv" 51015 [])
+	| try_all (afun :: []) = afun
+	| try_all (afun :: rest) = afun EITHER_C (try_all rest);
 in
-val eval_ad_cs_∂_rules : ((TERM -> THM) list -> (TERM -> THM)) ref = ref try_all;
+val eval_ad_cs_∂_convs : (CONV list -> CONV) ref = ref try_all;
 end;
 	
 val eval_ad_∂_ad_cd_thms : (THM list -> 
@@ -392,8 +411,8 @@ fun €icl'set_eval_ad_st_conv› (f:(EQN_CXT -> CONV)) : unit =
 	(eval_ad_st_conv := f; ());
 fun €icl'set_eval_ad_sg_conv› (f:(EQN_CXT -> CONV)) : unit =
 	(eval_ad_sg_conv := f; ());
-fun €icl'set_eval_ad_cs_∂_rules› (f:((TERM -> THM)list -> (TERM -> THM))) =
-	(eval_ad_cs_∂_rules := f; ());
+fun €icl'set_eval_ad_cs_∂_convs› (f:(CONV list -> CONV)) =
+	(eval_ad_cs_∂_convs := f; ());
 fun €icl'set_eval_ad_∂_cd_thms› (f:(THM list -> 
 	(TERM list * int list * TYPE * (TERM list)list * THM) list)) =
 	(eval_ad_∂_ad_cd_thms := f; ());
@@ -407,10 +426,10 @@ fun €evaluate_proof_context› (
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
@@ -420,14 +439,14 @@ fun €evaluate_proof_context› (
 	rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt,
 	sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules,
+	cs_∂_convs = cs_∂_convs,
 	∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms,
 	rw_net = (!eval_ad_rw_net) (flat(map fst rw_eqn_cxt)),
 	rw_canon = (!eval_ad_rw_canon) (flat(map fst rw_canons)),
 	st_conv = (!eval_ad_st_conv) (flat(map fst st_eqn_cxt)),
 	sg_conv = (!eval_ad_sg_conv) (flat(map fst sg_eqn_cxt)),
-	cs_∂_rule = (!eval_ad_cs_∂_rules) (flat(map fst cs_∂_rules)),
+	cs_∂_conv = (!eval_ad_cs_∂_convs) (flat(map fst cs_∂_convs)),
 	∂_ad_cd_thms = (!eval_ad_∂_ad_cd_thms) ∂_cd_thms,
 	∂_ad_vs_thms  = (!eval_ad_∂_ad_vs_thms) ∂_vs_thms,
 	names = names,
@@ -449,21 +468,21 @@ change_pc "set_rw_eqn_cxt" key
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
  =>
 	{
-	rw_eqn_cxt = rw_eqn_cxt roverwrite (ec,key), rw_canons = rw_canons,
+	rw_eqn_cxt = roverwrite1 rw_eqn_cxt (ec,key), rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed})
@@ -481,10 +500,10 @@ change_pc "add_rw_thms" key
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}:PROOF_CONTEXT
@@ -493,14 +512,14 @@ change_pc "add_rw_thms" key
 	in
 	{
 	rw_eqn_cxt = (case rassoc5 rw_eqn_cxt key of
-		Value x => rw_eqn_cxt roverwrite ((cthms @ x),key)
+		Value x => roverwrite1 rw_eqn_cxt ((cthms @ x),key)
 		| Nil =>  ((cthms, key) :: rw_eqn_cxt)), 
 	rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
@@ -517,21 +536,21 @@ change_pc "set_rw_canons" key
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
  =>
 	{
-	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons roverwrite (can,key),
+	rw_eqn_cxt = rw_eqn_cxt, rw_canons = roverwrite1 rw_canons (can,key),
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed})
@@ -548,21 +567,21 @@ change_pc "set_st_eqn_cxt" key
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
  =>
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
-	st_eqn_cxt = st_eqn_cxt roverwrite (ec,key), sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	st_eqn_cxt = roverwrite1 st_eqn_cxt (ec,key), sg_eqn_cxt = sg_eqn_cxt,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed})
@@ -580,10 +599,10 @@ change_pc "add_st_thms" key
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}:PROOF_CONTEXT
@@ -594,13 +613,13 @@ change_pc "add_st_thms" key
 	rw_eqn_cxt = rw_eqn_cxt, 
 	rw_canons = rw_canons,
 	st_eqn_cxt = (case rassoc5 st_eqn_cxt key of
-		Value x => st_eqn_cxt roverwrite ((cthms @ x),key)
+		Value x => roverwrite1 st_eqn_cxt ((cthms @ x),key)
 		| Nil =>  ((cthms, key) :: st_eqn_cxt)), 
 	sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
@@ -617,21 +636,21 @@ change_pc "set_sg_eqn_cxt" key
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
  =>
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
-	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt roverwrite (ec,key),
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = roverwrite1 sg_eqn_cxt (ec,key),
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed})
@@ -647,10 +666,10 @@ change_pc "add_sg_thms" key
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}:PROOF_CONTEXT
@@ -662,12 +681,12 @@ change_pc "add_sg_thms" key
 	rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, 
 	sg_eqn_cxt = (case rassoc5 sg_eqn_cxt key of
-		Value x => sg_eqn_cxt roverwrite ((cthms @ x),key)
+		Value x => roverwrite1 sg_eqn_cxt ((cthms @ x),key)
 		| Nil =>  ((cthms, key) :: sg_eqn_cxt)),
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
@@ -679,16 +698,16 @@ evaluate_proof_context)
 
 \subsubsection{Automated Existence Provers}
 =SML
-fun €set_cs_∂_rules› (rls : (TERM -> THM) list) (key:string) : unit =  (
-change_pc "set_cs_∂_rules" key 
+fun €set_cs_∂_convs› (rls : CONV list) (key:string) : unit =  (
+change_pc "set_cs_∂_convs" key 
 (fn 
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
@@ -696,16 +715,16 @@ change_pc "set_cs_∂_rules" key
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules roverwrite (rls,key), ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = roverwrite1 cs_∂_convs (rls,key), ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed})
 );
-fun €get_cs_∂_rules› (key:string) : ((TERM -> THM) list * string) list = (
-	#cs_∂_rules (get_pc "get_cs_∂_rules" key)
+fun €get_cs_∂_convs› (key:string) : (CONV list * string) list = (
+	#cs_∂_convs (get_pc "get_cs_∂_convs" key)
 );
 =TEX
 \subsubsection{Clausal Definition Theorems}
@@ -716,10 +735,10 @@ change_pc "set_∂_cd_thms" key
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
@@ -727,10 +746,10 @@ change_pc "set_∂_cd_thms" key
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = cd,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = cd,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed})
@@ -746,10 +765,10 @@ change_pc "add_∂_cd_thms" key
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}:PROOF_CONTEXT
@@ -759,11 +778,11 @@ change_pc "add_∂_cd_thms" key
 	rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, 
 	sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, 
+	cs_∂_convs = cs_∂_convs, 
 	∂_cd_thms = thm_union thms ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
@@ -782,10 +801,10 @@ change_pc "set_∂_vs_thms" key
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
@@ -793,10 +812,10 @@ change_pc "set_∂_vs_thms" key
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = union_bits ∂_vs_thms vs, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed})
@@ -807,7 +826,7 @@ fun €get_∂_vs_thms› (key:string) : (string * (TERM list * THM))  list = (
 );
 =TEX
 
-\subQsection{Functions upon Proof Contexts}
+\subsection{Functions upon Proof Contexts}
 =SML
 fun €commit_pc› (key:string) : unit =  (
 change_pc "commit_pc" key 
@@ -815,10 +834,10 @@ change_pc "commit_pc" key
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
@@ -826,10 +845,10 @@ change_pc "commit_pc" key
 	{
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = true})
@@ -845,20 +864,20 @@ in
 fun €local_merge_pc› (caller:string) (test_committed:bool) (({
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}:PROOF_CONTEXT),
 	({
 	rw_eqn_cxt = rw_eqn_cxt1, rw_canons = rw_canons1,
 	st_eqn_cxt = st_eqn_cxt1, sg_eqn_cxt = sg_eqn_cxt1,
-	cs_∂_rules = cs_∂_rules1, ∂_cd_thms = ∂_cd_thms1,
+	cs_∂_convs = cs_∂_convs1, ∂_cd_thms = ∂_cd_thms1,
 	∂_vs_thms = ∂_vs_thms1, rw_net = rw_net1,
 	rw_canon = rw_canon1, st_conv = st_conv1,
-	sg_conv = sg_conv1, cs_∂_rule = cs_∂_rule1,
+	sg_conv = sg_conv1, cs_∂_conv = cs_∂_conv1,
 	∂_ad_cd_thms = ∂_ad_cd_thms1, ∂_ad_vs_thms  = ∂_ad_vs_thms1,
 	names = names1, theoryname = theoryname1,
 	a_valid_thm = a_valid_thm1, committed = committed1}:PROOF_CONTEXT
@@ -867,18 +886,18 @@ fun €local_merge_pc› (caller:string) (test_committed:bool) (({
 	then fail caller 51017 [fn () => hd names]
 	else
 	{
-	rw_eqn_cxt = rw_eqn_cxt list_roverwrite rw_eqn_cxt1,
-	rw_canons = rw_canons list_roverwrite rw_canons1,
-	st_eqn_cxt = st_eqn_cxt list_roverwrite st_eqn_cxt1,
-	sg_eqn_cxt = sg_eqn_cxt list_roverwrite sg_eqn_cxt1,
-	cs_∂_rules = cs_∂_rules list_roverwrite cs_∂_rules1,
+	rw_eqn_cxt = list_roverwrite1 rw_eqn_cxt rw_eqn_cxt1,
+	rw_canons = list_roverwrite1 rw_canons rw_canons1,
+	st_eqn_cxt = list_roverwrite1 st_eqn_cxt st_eqn_cxt1,
+	sg_eqn_cxt = list_roverwrite1 sg_eqn_cxt sg_eqn_cxt1,
+	cs_∂_convs = list_roverwrite1 cs_∂_convs cs_∂_convs1,
 	∂_cd_thms = thm_union ∂_cd_thms ∂_cd_thms1,
 	∂_vs_thms = union_bits ∂_vs_thms ∂_vs_thms1,
 	rw_net = rw_net1,
 	rw_canon = rw_canon1,
 	st_conv = st_conv1,
 	sg_conv = sg_conv1,
-	cs_∂_rule = cs_∂_rule1,
+	cs_∂_conv = cs_∂_conv1,
 	∂_ad_cd_thms = ∂_ad_cd_thms1,
 	∂_ad_vs_thms  = ∂_ad_vs_thms1,
 	names = names1,
@@ -889,25 +908,25 @@ fun €local_merge_pc› (caller:string) (test_committed:bool) (({
 end;
 =TEX
 =SML
-fun €merge_pc› (keys:string list) (key : string) : unit = (
-let	val pcs = map (get_pc "merge_pc") keys;
+fun €merge_pcs› (keys:string list) (key : string) : unit = (
+let	val pcs = map (get_pc "merge_pcs") keys;
 in
-	change_pc "merge_pc" key 
-	(fn pc => fold (local_merge_pc "merge_pc" true) pcs pc)
+	change_pc "merge_pcs" key 
+	(fn pc => fold (local_merge_pc "merge_pcs" true) pcs pc)
 end);
 =TEX
 =SML
 local
 val valid_fields = ["rw_eqn_cxt","rw_canons","st_eqn_cxt",
-	"sg_eqn_cxt","cs_∂_rules","∂_cd_thms","∂_vs_thms"];
+	"sg_eqn_cxt","cs_∂_convs","∂_cd_thms","∂_vs_thms"];
 in
 fun €prune_pc› (caller : string) (fields : string list) ({
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sg_eqn_cxt = sg_eqn_cxt,
-	cs_∂_rules = cs_∂_rules, ∂_cd_thms = ∂_cd_thms,
+	cs_∂_convs = cs_∂_convs, ∂_cd_thms = ∂_cd_thms,
 	∂_vs_thms = ∂_vs_thms, rw_net = rw_net,
 	rw_canon = rw_canon, st_conv = st_conv,
-	sg_conv = sg_conv, cs_∂_rule = cs_∂_rule,
+	sg_conv = sg_conv, cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms, ∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}: PROOF_CONTEXT) 
@@ -920,14 +939,14 @@ fun €prune_pc› (caller : string) (fields : string list) ({
 	rw_canons = if "rw_canons" mem fields then rw_canons else [],
 	st_eqn_cxt = if "st_eqn_cxt" mem fields then st_eqn_cxt else [],
 	sg_eqn_cxt = if "sg_eqn_cxt" mem fields then sg_eqn_cxt else [],
-	cs_∂_rules = if "cs_∂_rules" mem fields then cs_∂_rules else [],
+	cs_∂_convs = if "cs_∂_convs" mem fields then cs_∂_convs else [],
 	∂_cd_thms = if "∂_cd_thms" mem fields then ∂_cd_thms else [],
 	∂_vs_thms = if "∂_vs_thms" mem fields then ∂_vs_thms else [],
 	rw_net = rw_net,
 	rw_canon = rw_canon,
 	st_conv = st_conv,
 	sg_conv = sg_conv,
-	cs_∂_rule = cs_∂_rule,
+	cs_∂_conv = cs_∂_conv,
 	∂_ad_cd_thms = ∂_ad_cd_thms,
 	∂_ad_vs_thms  = ∂_ad_vs_thms,
 	names = names,
@@ -983,10 +1002,11 @@ in
 end);
 =TEX
 =SML
-fun €push_pcs› ([]: string list): unit = fail "push_pcs" 51020 []
-| push_pcs (keys) = (
+fun €push_merge_pcs› ([]: string list): unit = fail "push_merge_pcs" 51020 []
+| push_merge_pcs (keys) = (
 let	val pc = empty_pc false keys;
-	val fullpc = fold (local_merge_pc "push_pcs" false) (map (get_pc "push_pcs") keys) pc;
+	val fullpc = fold (local_merge_pc "push_merge_pcs" false) 
+		(map (get_pc "push_merge_pcs") keys) pc;
 	val epc = evaluate_proof_context fullpc;
 in
 	(push_pc_stack (get_current_pc());
@@ -994,10 +1014,11 @@ in
 end);
 =TEX
 =SML
-fun €set_pcs› ([]: string list): unit = fail "set_pcs" 51020 []
-| set_pcs (keys) = (
+fun €set_merge_pcs› ([]: string list): unit = fail "set_merge_pcs" 51020 []
+| set_merge_pcs (keys) = (
 let	val pc = empty_pc false keys;
-	val fullpc = fold (local_merge_pc "set_pcs" false) (map (get_pc "set_pcs") keys) pc;
+	val fullpc = fold (local_merge_pc "set_merge_pcs" false) 
+		(map (get_pc "set_merge_pcs") keys) pc;
 	val epc = evaluate_proof_context fullpc;
 in
 	set_current_pc epc
