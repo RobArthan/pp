@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.12 2002/12/10 16:15:53 rda Exp rda $
+ * $Id: options.c,v 2.13 2002/12/12 14:06:50 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -48,12 +48,13 @@ GlobalOptions	orig_global_options;
  * The tool is a popup shell containing pushbuttons, toggle
  * buttons and text fields for the command line and numeric options.
  * Since there are fewer options in an edit-only session
- * the tool window has two framed off sections one for editing
+ * the tool window has two parts sections one for editing
  * options, the other for options concerned with running an
  * application. The application options do not appear in an
- * edit-only session.
+ * edit-only session. Frames are used to group controls of similar types.
  *
  * Editor Controls
+ * File type: Unix/MS-DOS/Macintosh
  *	 [] Take backup before writing file 
  *	 [] Delete backup after successful write
  *	 [] Read only
@@ -78,6 +79,9 @@ static Widget
 				backup_toggle,
 				delete_backup_toggle,
 				read_only_toggle,
+		file_type_frame,
+			file_type_menu,
+				*file_type_buttons,
 		app_frame,
 			app_row_col,
 				command_form,
@@ -99,14 +103,13 @@ static void	apply_cb(CALLBACK_ARGS),
 		reset_cb(CALLBACK_ARGS),
 		dismiss_cb(CALLBACK_ARGS),
 		add_new_line_cb(CALLBACK_ARGS),
-		help_cb(CALLBACK_ARGS);
+		help_cb(CALLBACK_ARGS),
+		file_type_cb(CALLBACK_ARGS);
 
 void init_options(Widget owner_w)
 {
-	XmString lab;
-
-
-	XmString s1, s2, s3;
+	XmString lab, s1, s2, s3;
+	Widget w;
 
 	if(shell) { /* defend against being called twice */
 		return;
@@ -162,6 +165,27 @@ void init_options(Widget owner_w)
 		NULL);
 
 	XmStringFree(lab);
+
+	file_type_frame = XtVaCreateManagedWidget("edit-frame",
+		xmFrameWidgetClass,		shell_row_col,
+		NULL);
+
+	lab = XmStringCreateSimple("File type:");
+	s1 = XmStringCreateSimple((char*)file_type_names[0]);
+	s2 = XmStringCreateSimple((char*)file_type_names[1]);
+	s3 = XmStringCreateSimple((char*)file_type_names[2]);
+	file_type_menu = XmVaCreateSimpleOptionMenu(file_type_frame, "menu", lab, 'T', 0, file_type_cb,
+		XmVaPUSHBUTTON, s1, NULL, NULL, NULL,
+		XmVaPUSHBUTTON, s2, NULL, NULL, NULL,
+		XmVaPUSHBUTTON, s3, NULL, NULL, NULL,
+		NULL);
+	XtManageChild(file_type_menu);
+	XmStringFree(lab);
+	XmStringFree(s1);
+	XmStringFree(s2);
+	XmStringFree(s3);
+	XtVaGetValues(file_type_menu, XmNsubMenuId, &w, NULL);
+	XtVaGetValues(w,  XmNchildren, &file_type_buttons, NULL ) ;
 
 	if(global_options.read_only) {
 		XmToggleButtonSetState(read_only_toggle,True, False);
@@ -246,7 +270,7 @@ if(!global_options.edit_only) {
 	s3 = XmStringCreateSimple("`Execute' ignores missing new-lines");
 
 	add_new_line_radio_buttons = XmVaCreateSimpleRadioBox(
-		shell_row_col,
+		add_new_line_frame,
 		"add-new-line-radio-buttons",
 		global_options.add_new_line_mode,
 		add_new_line_cb,
@@ -377,12 +401,14 @@ if(!global_options.edit_only) {
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * use callbacks  as a handy way to store the values in the widgets
- * and initialize add_new_line_mode.
+ * and initialize add_new_line_mode and file type
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	reset_cb(NULL, (XtPointer)&orig_global_options, NULL);
 
 	add_new_line_cb(NULL, NULL, NULL);
+
+	set_file_type(UNIX);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -464,12 +490,20 @@ void add_option_tool(void)
 	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * unset the read-only flag:
+ * set the read-only flag:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void set_read_only(Boolean read_only)
 {
 	global_options.read_only = read_only;
 	XmToggleButtonSetState(read_only_toggle, read_only, False);
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * set the file type:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void set_file_type(FileType file_type)
+{
+	global_options.file_type = file_type;
+	XtVaSetValues(file_type_menu, XmNmenuHistory, file_type_buttons[file_type], NULL);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * apply callback.
@@ -586,3 +620,13 @@ static void help_cb(
 	help_dialog(root, Help_Options_Tool);
 }
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * File type callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void file_type_cb (
+		Widget	w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	global_options.file_type = (int)cbd;
+}

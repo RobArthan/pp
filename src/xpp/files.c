@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.10 2002/12/04 00:34:40 rda Exp rda $
+ * $Id: files.c,v 2.11 2002/12/04 14:16:56 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -93,10 +93,10 @@ static char *panic_file_cant_be_opened =
 	"xpp: sorry! cannot open a file to save the editor text\n";
 
 static char *panic_file_error =
-	"xpp: saving editor text to file \"%s\": not all the text was saved\n";
+	"xpp: saving editor text using file type Unix to file \"%s\": not all the text was saved\n";
 
 static char *panic_file_written =
-	"xpp: editor text saved to file \"%s\"\n";
+	"xpp: editor text saved using file type Unix to file \"%s\"\n";
 
 static char *read_error_message =
 	 "Error reading the file \"%s\"";
@@ -127,6 +127,10 @@ static char *file_created_message =
 static char *file_deleted_message =
 	 "The file \"%s\" appears to have been deleted since it was last "
 	 "opened or saved. Do you want to create it?";
+
+static char *mixed_file_type_message =
+	 "The file \"%s\"  contains a mixture of Unix, MS-DOS or Macintosh line terminators."
+	"The file type will be set to Unix. You may use the Options Tool to change the file type.";
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -230,15 +234,19 @@ static Boolean file_yes_no_dialog(
 static char *get_file_contents(
 	Widget		w,
 	char		*name,
-	Boolean 	cmdLine,
+	Boolean	 	cmdLine,
+	Boolean		including,
 	FileOpenAction 	*foAction,
 	struct stat 	*stat_buf)
 {
 	struct stat status;
 	NAT siz;
 	FILE *fp;
-	char *buf;
-
+	char *buf, *p;
+	int whatgot;
+	enum {FT_ANY, FT_UNIX, FT_DOS_OR_MAC, FT_DOS,  FT_MAC,
+		FT_MIXED,  FT_DOS_CR, FT_MIXED_CR} ft_state;
+	FileType file_type;
 	if(stat(name, &status) != 0) {
 		if (cmdLine) {
 			if (file_quit_new_dialog(w, cant_stat_message2, name)) {
@@ -263,7 +271,7 @@ static char *get_file_contents(
 		return NULL;
 	};
 	siz = status.st_size;
-	if(!(buf = XtMalloc(siz + 1))) {
+	if(!(buf = XtMalloc(siz + 1))) { /* note some space will be unused if its an MS-DOS file */
 		file_error_dialog(w, no_space_message, name);
 		return NULL;
 	};
@@ -281,19 +289,151 @@ static char *get_file_contents(
 		XtFree(buf);
 		return NULL;
 	};
-	if(fread(buf, sizeof(char), siz, fp) != siz) {
+	p = buf;
+	ft_state = FT_ANY;
+	while( (whatgot = getc(fp)) != EOF ) {
+		if(whatgot >= 0 && whatgot < ' '
+		&& whatgot != '\t' && whatgot != '\n' && whatgot != '\r') {
+			file_error_dialog(w, contains_nulls_message, name);
+			XtFree(buf);
+			return NULL;
+
+		}
+		switch(ft_state) {
+			case FT_ANY:
+				switch(whatgot) {
+					case '\r':
+						ft_state = FT_DOS_OR_MAC;
+						break;
+					case '\n':
+						ft_state = FT_UNIX; /* No break! */
+					default:
+						*p++ = whatgot;
+						break;
+				}
+				break;
+			case FT_UNIX:
+				switch(whatgot) {
+					case '\r':
+						ft_state = FT_MIXED;
+						*p++ = '\n';
+						break;
+					default:
+						*p++ = whatgot;
+						break;
+				}
+				break;
+			case FT_DOS_OR_MAC:
+				switch(whatgot) {
+					case '\r':
+						ft_state = FT_MAC;
+						*p++ = '\n';
+						*p++ = '\n'; /* consecutive CRs in Mac file */
+						break;
+					case '\n':
+						ft_state = FT_DOS; /* No break! */
+					default:
+						*p++ = whatgot;
+						break;
+				}
+				break;
+			case FT_DOS:
+				switch(whatgot) {
+					case '\r':
+						ft_state = FT_DOS_CR;
+						break;
+					case '\n':
+						ft_state = FT_MIXED; /* No break! */
+					default:
+						*p++ = whatgot;
+						break;
+				}
+				break;
+			case FT_MAC:
+				switch(whatgot) {
+					case '\r':
+						*p++ = '\n';
+						break;
+					case '\n':
+						ft_state = FT_MIXED; /* No break! */
+					default:
+						*p++ = whatgot;
+						break;
+				}
+				break;
+			case FT_MIXED:
+				switch(whatgot) {
+					case '\r':
+						ft_state = FT_MIXED_CR;
+						break;
+					default:
+						*p++ = whatgot;
+						break;
+				}
+				break;
+			case FT_DOS_CR:
+				switch(whatgot) {
+					case '\r':
+						ft_state = FT_MIXED;
+						*p++ = '\n'; /* consecutive CRs */
+						*p++ = '\n';
+						break;
+					case '\n': /* CR/LF */
+						ft_state = FT_DOS; /* No break! */
+						*p++ = '\n';
+						break;
+					default:
+						ft_state = FT_MIXED;
+						*p++ = '\n';
+						*p++ = whatgot;
+						break;
+				}
+				break;
+			case FT_MIXED_CR:
+				ft_state = FT_MIXED;
+				switch(whatgot) {
+					case '\r':
+						*p++ = '\n'; /* consecutive CRs */
+						*p++ = '\n';
+						break;
+					case '\n': /* CR/LF */
+						*p++ = '\n';
+						break;
+					default:
+						*p++ = '\n';
+						*p++ = whatgot;
+						break;
+				}
+				break;
+		}
+	}
+	if(ferror(fp)) {
 		file_error_dialog(w, read_error_message, name);
 		XtFree(buf);
 		fclose(fp);
 		return NULL;
 	};
-	fclose(fp);
-	buf[siz] = '\0';
-	if(strlen(buf) != siz) { /* use strlen to check for null chars */
-		file_error_dialog(w, contains_nulls_message, name);
-		XtFree(buf);
-		return NULL;
+	switch(ft_state) {
+		case FT_MIXED:
+		case FT_MIXED_CR:
+		case FT_DOS_CR:
+			file_error_dialog(w, mixed_file_type_message, name);
+			/* No break - recover by treating as UNIX */
+		case FT_UNIX:
+		case FT_ANY:
+			file_type = UNIX;
+			break;
+		case FT_MAC:
+		case FT_DOS_OR_MAC: /* one line Mac file */
+			file_type = MACINTOSH;
+			break;
+		case FT_DOS:
+			file_type = MSDOS;
+			break;
 	}
+	set_file_type(file_type);
+	fclose(fp);
+	*p = '\0';
 	if(stat_buf != NULL) {
 		*stat_buf = status;
 	}
@@ -399,11 +539,10 @@ static Boolean store_file_contents(
 	char	*name,
 	char	*buf)
 {
-	NAT siz;
 	FILE *fp;
+	char *p, *eoln;
 	char *backup_name = NULL;
 
-	siz = strlen(buf);
 	if(global_options.backup_before_save) {
 		if(!backup_file(w, name, &backup_name)) {
 			return False;
@@ -414,7 +553,21 @@ static Boolean store_file_contents(
 		if(backup_name) {XtFree(backup_name);}
 		return False;
 	};
-	if(fwrite(buf, sizeof(char), siz, fp) != siz) {
+	switch(global_options.file_type) {
+		case UNIX: eoln = "\n"; break;
+		case MSDOS: eoln = "\r\n"; break;
+		case MACINTOSH: eoln = "\r"; break;
+	}
+	p = buf;
+	while(*p && !ferror(fp)) {
+		if(*p == '\n') {
+			fprintf(fp, eoln);
+		} else {
+			putc(*p, fp);
+		}
+		p += 1;
+	}
+	if(ferror(fp)) {
 		file_error_dialog(w, write_error_message, name);
 		fclose(fp);
 		if(backup_name) {XtFree(backup_name);}
@@ -582,8 +735,8 @@ Boolean open_file(
 			*foAction = EmptyFile;
 		}
 		return False;
-	};
-	if((buf = get_file_contents(text, name, cmdLine, foAction, &status)) != NULL) {
+	}
+	if((buf = get_file_contents(text, name, cmdLine, False, foAction, &status)) != NULL) {
 		if(access(name, W_OK) != 0) { /* read-only (or worse?) */
 			if(	(	orig_global_options.read_only
 				&&	global_options.read_only)
@@ -619,10 +772,9 @@ Boolean include_file(
 {
 	char *buf;
 	XmTextPosition pos;
-
 	if((buf = get_file_contents(text,
 	                            name,
-	                            False,
+	                            False, True,
 	                            (FileOpenAction *) NULL,
 				    NULL)) != NULL) {
 		XmTextDisableRedisplay(text);
@@ -646,6 +798,8 @@ Boolean include_file(
  * enough left to call this function and save the file. More
  * importantly, the text is read out of the text widget with
  * XmTextGetSubstring which shouldn't need to call malloc.
+ * To minimise the messing around, this ignores the file type
+ * and just dumps the data (i.e., Unix file type).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 void panic_save(

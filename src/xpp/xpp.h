@@ -40,11 +40,14 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * TYPE DEFS
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+/* Note the following are used as indices into the array file_type_names */
+typedef enum {UNIX = 0, MSDOS = 1, MACINTOSH = 2} FileType;
 typedef struct {
 	Boolean			edit_only;
 	Boolean			backup_before_save;
 	Boolean			delete_backup_after_save;
 	Boolean			read_only;
+	FileType		file_type;
 	char			add_new_line_mode;
 	NAT			journal_max;
 	String			command_line;
@@ -192,6 +195,7 @@ typedef struct menu_item {
 	extern void add_option_tool(void);
 	extern char **get_arg_list(void);
 	extern void set_read_only(Boolean read_only);
+	extern void set_file_type(FileType file_type);
 	extern GlobalOptions orig_global_options;
 /* Module: palette */
 	extern void popup_palette(Widget w);
@@ -292,3 +296,12 @@ typedef struct menu_item {
 	extern
 #endif
 	char *title;
+#ifndef _xpp
+	extern
+#endif
+	const char *const file_type_names[]
+#ifdef _xpp
+	= {"Unix", "MS-DOS", "Macintosh" };
+#else
+	;
+#endif

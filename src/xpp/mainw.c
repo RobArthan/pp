@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.44 2003/01/17 17:09:03 rda Exp rda $
+ * $Id: mainw.c,v 2.45 2003/01/20 14:07:32 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -496,14 +496,24 @@ static void flash_file_name(char *fname)
 
 void show_file_info(void)
 {
-	char info[sizeof "(New, Modified, Read only)"];
+	char info[sizeof "{Macintosh, New, Modified, Read only}"];
 	XmString s;
 	Boolean started = False;
 	strcpy(info, "");
-	if(file_info.new || file_info.changed || global_options.read_only) {
+	if(file_info.new
+	|| file_info.changed
+	|| global_options.read_only
+	|| global_options.file_type != UNIX) {
 		strcat(info, "{");
 		if(file_info.new) {
 			strcat(info, "New");
+			started = True;
+		}
+		if(global_options.file_type != UNIX) {
+			if(started) { /* they changed the file type before putting anything in the new file */
+				strcat(info, ", ");
+			}
+			strcat(info, file_type_names[global_options.file_type]);
 			started = True;
 		}
 		if(file_info.changed) {
