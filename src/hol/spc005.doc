@@ -63,9 +63,17 @@ abstract data type used to represent theorems in the ICL HOL system.}
 \begin{description}
 \item[Issue \SCCSversion (\FormatDate{$Date$%
 })]
-First draft.
+First draft for initial comment on approach.
 \end{description}
 \subsection{Changes forecast}
+Numerous. The discussion section in \ref{SYSTEMSTATE} should be
+moved to a separate section at the beginning and expanded to discuss
+the overall approach.
+Some words on what does and does not constitute an implementation
+of the design here should be added. The state well-formedness
+predicate and the system interpretation function are TBA at the moment
+and need filling in.
+
 \pagebreak
 \section{GENERAL}
 \subsection{Scope}
@@ -92,22 +100,32 @@ done by giving Standard ML type definitions.
 We stress that the
 definitions are intended to describe a simplified model of 
 the actual system, and the actual details of the internal
-databypes may be implementation dependent.
+datatypes may be implementation dependent.
 
 
 \subsection{Dependencies}
 This document depends on the suite of documents formalising
 HOL, overviewed in \cite{DS/FMU/IED/SPC001}.
 
+\subsection{Notation}
+In addition to the specification facilities mentioned in 
+\cite{DS/FMU/IED/SPC001}, we use the Z-like schema boxes to
+introduce labelled record types.
+
 \section{PREAMBLE}
+The theory ``$spc005$'' which is defined in this document is introduced
+as follows. Its parent is the theory ``spc004'' which defines the critical
+properties of an abstract model of a HOL proof development system.
+
 Â
 close_theory();
 load_theory"spc004";
 new_theory"spc005";
 Ê
-\section{PRELIMINARIES}
+
+\section{PRELIMINARIES}\label{PRELIMINARIES}
 \subsection{Utilities}
-Should go in SML027.
+Could go in SML027.
 »
 	‚distinct· : (*)list ã bool
 …
@@ -121,10 +139,14 @@ We refer to such tables as dictionaries.
 
 We model dictionaries as sets of pairs representing
 partial functions in the usual set-theoretic manner.
-In the implementation these will actually be finite
+In the implementation these will typically be finite
 partial functions represented by a concrete data structure
-such as a list of pairs, but the finiteness is not
-relevant here.
+such as a list of pairs. However, the implementation
+will also contains some definition or theorem schemata
+(e.g. the rules which define numbers or strings), these
+may be thought of as (parts of) infinite dictionaries in the 
+appropriate theories.
+
 Â
 TypeInference.new_type_abbrev "‚DICT·" ª:(string â *X) ã boolº;
 Ê
@@ -154,12 +176,27 @@ We look things up in a dictionary using $lookup$:
 		lookup key dict item Ç (key, item) ù dict
 À
 
-We may also delete things from a dictionary using $delete$:
+We may delete things by key from a dictionary using $delete$:
 »
 	‚delete· : string ã (*X)DICT ã (*X)DICT
 …
 	Ékey dict k ié
 		(k, i) ù delete key dict Ç (k, i) ù dict Ä k à key
+À
+We may delete entries having a given property from a dictionary using
+$block\_delete$:
+»
+	‚block_delete· : (*X ã bool) ã (*X)DICT ã (*X)DICT
+…
+	Éprop dict k ié
+		(k, i) ù block_delete prop dict Ç (k, i) ù dict Ä i ì prop
+À
+
+$keys$ gives the set of key values in use in a dictionary:
+»
+	‚$keys· : (*X)DICT ã string ã bool
+…
+	Édict ké k ù keys dict Ç Ñié(k, i) ù dict
 À
 
 \subsection{Stores}
@@ -168,22 +205,33 @@ held in assignable metalanguage variables of various types.
 To model these we use a polymorphic notion of a store.
 
 The addresses for our stores come from the following
-countably infinite type, $ADDR$:
+countably infinite type, $ADDR$. It is gives a useful
+cross-check on the present specification
+for this type to have a parameter which identifies the
+type of object addressed. To achieve this we
+represent a $({*}X)ADDR$ as a pair $((áx:*XéT), n)$
+where $n$ is a natural number. The result is a polymorphic
+type all of whose instances are isomorphic to the
+natural numbers.
+
 Â
-val ‚ADDR_DEF· = new_type_definition "ADDR_DEF" "‚ADDR·" []
-	(TAC_PROOF(([], ªÑn:Üé(çxéT) nº), REWRITE_TAC[])) NORMAL;
+val ‚ADDR_DEF· = new_type_definition "ADDR_DEF" "‚ADDR·" ["*X"]
+	(TAC_PROOF(([], ªÑa:*X â Üé(çxéFST x = áx:*XéT) aº),
+		EXISTS_TACª((áx:*XéT), (n:Ü))º THEN
+		BETA_TAC THEN REWRITE_TAC[FST])) NORMAL;
 Ê
 A store is a partial function from addresses to values,
 represented as a set of pairs:
 Â
-TypeInference.new_type_abbrev "‚STORE·" ª:(ADDR â *X) ã boolº;
+TypeInference.new_type_abbrev "‚STORE·" ª:((*X)ADDR â *X) ã boolº;
 Ê
+
 The operations on stores are assignment, dereferencing
 and allocation.
 
 $<-$ is the assignment operation:
 Á
-	‚<-· : ADDR ã *X ã (*X)STORE ã (*X)STORE ã bool
+	‚<-· : (*X)ADDR ã *X ã (*X)STORE ã (*X)STORE ã bool
 …
 	É addr value st1 st2é
 		$<- addr value st1 st2 Ç
@@ -193,14 +241,14 @@ $<-$ is the assignment operation:
 
 $fetch$ is the dereferencing operation:
 »
-	‚fetch· : ADDR ã (*X)STORE ã *X ã bool
+	‚fetch· : (*X)ADDR ã (*X)STORE ã *X ã bool
 …
 	É addr st valueé fetch addr st value Ç (addr, value) ù st
 À
 
 $new$ is the allocation operation:
 »
-	‚new· : *X ã (*X)STORE ã ((*X)STORE â ADDR) ã bool
+	‚new· : *X ã (*X)STORE ã ((*X)STORE â (*X)ADDR) ã bool
 …
 	É value st1 st2 addré
 		new value st1 (st2, addr) Ç
@@ -208,7 +256,7 @@ $new$ is the allocation operation:
 		Ä	(Éa vé(a,v) ù st2 Ç (a = addr => v = value | (a, v) ù st1))
 À
 
-Stores are constructed using $new$ from an intial empty
+Stores are constructed using $new$ from an initial empty
 store:
 »
 	‚initial_store· : (*X)STORE
@@ -216,10 +264,10 @@ store:
 	initial_store = §
 À
 
-\section{THE SYSTEM STATE}
+\section{THE SYSTEM STATE}\label{SYSTEMSTATE}
 \subsection{Discussion}
 In the sequel we define a model of a proof development system for HOL.
-This is a more implementation-oriented model than the abstract one used
+This is a more concrete model than the abstract one used
 in \cite{DS/FMU/IED/SPC004}. Where confusion might otherwise arise we
 use the terms {\em concrete} and {\em abstract} to distinguish notions
 in the present model from related notions in the more abstract treatment.
@@ -233,10 +281,19 @@ the representation of the theory hierarchy within
 the store of a machine;
 \item
 the mechanisms whereby use of a theorem is restricted to contexts
-which include the context in which it was proved
+which include the context in which it was proved;
 \item
 the commands which manipulate the theory hierarchy or modify the
-context in which proof is carried out
+context in which proof is carried out;
+\item
+a reversible facility for the user to prevent a theory from further
+modification\footnote{%
+This locking and unlocking facility is offered as a more
+general substitute for the ability, in earlier implementations
+of HOL, to load a theory for read-only access (or the ability to use
+operating system facilities to prevent a filestore representation
+of a theory from being modified).%
+}.
 \end{enumerate}
 
 However, the model is still quite abstract in a number of ways.
@@ -257,7 +314,16 @@ and may be used for similar purposes for other languages.
 The presence of this field is not critical to the
 integrity of the system. Our model will be polymorphic
 over the type of this information, for which we will
-systematically use the type variable ${*}USER\_DATA$.
+systematically use the type variable ${*}UD$.
+
+\subsection{System Inputs}
+We will systematically use the type variable ${*}IP$ for the
+components of the input to the system which we do not wish to specify
+in detail here. The actual inputs to the abstract data type would
+be represented in the model by instantiating ${*}IP$ to some disjoint
+union type allowing for the various possibilities (e.g. the template
+term which is a parameter to the rule of substitution defined
+in \cite{DS/FMU/IED/SPC003}).
 
 \subsection{Concrete Theories}
 It is useful to have
@@ -275,7 +341,7 @@ use, e.g by the theory lister).
 	theorem_dict		: (SEQ â Ü) DICT,
 	current_level		: Ü,
 	deleted_levels		: Ü ã bool,
-	user_data		: *USER_DATA
+	user_data		: *UD
 …
 	T
  
@@ -325,32 +391,32 @@ the theory.
 
 
 \subsection{Concrete Theory Hierarchies} \label{TheoryHierarchies}
-A theory hierarchy is essentially a set of records each comprising
+A theory hierarchy is essentially a finite set of records each comprising
 a theory contents together
 with information about the theory which is local to the hierarchy
 (or to the proof context).
 
-The local information comprises a status indicator (which indicates
-a fairly permanent property of the theory) and a scope flag which is
+The local information comprises a status attribute (which indicates
+a fairly permanent property of the theory) and a scope attribute which is
 set true when the theory in question is the current theory or one
 of its ancestors.
-The scope flag is discussed in more detail
-in section \ref{SystemState} below.
+The scope attribute is discussed in more detail
+in section \ref{open_theory} below.
 
-We take the status indicator as a number, although in
+We take the status attribute as a number, although in
 an implementation it would more likely have an enumeration
 type. For present purposes, we recognise the following values
-for the status indicator. An implementation might well
+for the status attribute. An implementation might well
 recognise more values (as a somewhat bizarre example,
 a theory might be password protected).
 
 »
-	‚TSNormal·	: Ü,
-	‚TSLocked·	: Ü,
-	‚TSInAncestor·	: Ü,
-	‚TSDeleted·	: Ü
+	‚TSNormal·		: Ü,
+	‚TSLocked·		: Ü,
+	‚TSAncestor·		: Ü,
+	‚TSDeleted·		: Ü
 …
-	distinct [TSNormal, TSLocked, TSInAncestor, TSDeleted]
+	distinct [TSNormal, TSLocked, TSAncestor, TSDeleted]
 À
 
 The significance of the theory status values is as follows:
@@ -358,17 +424,17 @@ The significance of the theory status values is as follows:
 \begin{tabular}{|l|p{4in}|} \hline
 Value & Description \\ \hline
 $TSNormal$ &
-A theory which can be modified while this theory hierarchy is current
+A theory which can be modified while this theory hierarchy is current;
 \\ \hline
 $TSLocked$ &
 A theory which cannot be modified while this theory hierarchy
-is current because the user has asked for it to be locked.
-(The user may however unlock it in order to modify it).
+is current because the user has asked for it to be locked
+(see section \ref{lock_theory} for more information);
 \\ \hline
-$TSInAncestor$ &
+$TSAncestor$ &
 A theory which cannot be modified while this theory hierarchy is
-current since it belongs to an ancestor of the corresponding
-database.
+current since it belongs to an ancestor of some hierarchy
+(see section \ref{Well-Formedness} below for more information);
 \\ \hline
 $TSDeleted$ &
 A theory which has been deleted.
@@ -382,24 +448,24 @@ then has the following type:
 «"‚THEORY_INFO·" "ti"ﬂ
 	status		: Ü,
 	inscope		: bool,
-	contents	: ADDR
+	contents	: ((*UD)THEORY_CONTENTS)ADDR
 …
 	T
  
-Here the address
-will reference a $THEORY\_INFO$ held in a store of same.
 
-A theory hierarchy will then comprise a list of
+Here the address will reference a store of theory contents held in the state.
+
+A theory hierarchy will comprise a list of
 $THEORY\_INFO$s:
 Â
-TypeInference.new_type_abbrev "‚HIERARCHY·" ª:(THEORY_INFO)listº;
+TypeInference.new_type_abbrev "‚HIERARCHY·" ª:((*UD)THEORY_INFO)listº;
 Ê
 
 \subsection{Concrete Theorems} \label{Theorems}
 A theorem is represented by the following data type:
 
 «"‚PDS_THM·" "pt"ﬂ
-	theory		: ADDR,
+	theory		: ((*UD)THEORY_CONTENTS)ADDR,
 	level		: Ü,
 	sequent		: SEQ
 …
@@ -412,27 +478,41 @@ The level number is that which was current when the
 theorem was proved.
 
 \subsection{The System State} \label{SystemState}
+\subsubsection{Definition and Initialisation}
 The state of our model of the proof development
 system has the following type:
 
 «"‚PDS_STATE·" "ps"ﬂ
-	current_theory		: ADDR,
-	current_hierarchy	: ADDR,
-	theory_store		: ((*USER_DATA) THEORY_CONTENTS)STORE,
-	hierarchy_store		: (HIERARCHY) STORE,
-	theorems_proved		: (PDS_THM) ã bool
+	current_theory		: ((*UD)THEORY_CONTENTS)ADDR,
+	current_hierarchy	: ((*UD)HIERARCHY)ADDR,
+	theory_store		: ((*UD)THEORY_CONTENTS)STORE,
+	hierarchy_store	: ((*UD)HIERARCHY) STORE,
+	theorem_store	: ((*UD)PDS_THM) STORE
 …
 	T
  
-The initial state of the system is given
-by the following values, which are parameterised by
-the initial user-defined data.
 
+Here the current theory (resp. hierarchy) is the theory (resp. hierarchy)
+in which modifications to the state of the system are currently
+being made, these modifications often constituting updates to the
+three stores.
+
+The theorem store component is different in intention from the other
+two stores in that it will not, in practice, correspond to
+a metalanguage variable inside the abstract data type. It represents
+the locations in which theorems computed by the abstract data type
+have been stored.
+
+The initial state of the system is parameterised by
+the initial user-defined data. To define it we first
+define the initial theory (we apologise for the fact
+that the initial theory is $MIN$ not $INIT$)
 The initial theory information comes supplied with a store
 containing the contents of a suitable initial theory:
 »
-	‚initial_theory·		: *USER_DATA ã
-		(((*USER_DATA)THEORY_CONTENTS)STORE) â THEORY_INFO
+	‚initial_theory·	: *UD ã
+				(	((*UD)THEORY_CONTENTS)STORE)
+				â	(*UD)THEORY_INFO
 …
 	Éudéinitial_theory ud =
 		let contents = ABS_THEORY_CONTENTS (
@@ -448,27 +528,26 @@ containing the contents of a suitable initial theory:
 The initial state is then as follows:
 
 »
-	‚initial_state·	: *USER_DATA ã (*USER_DATA)PDS_STATE
+	‚initial_state·	: *UD ã (*UD)PDS_STATE
 …
 	Éudéinitial_state ud = 
-		let (thy_st, thy_info) = initial_theory ud
-		in let (hier_st, hier_addr) = á(st, addr)énew [thy_info] initial_store (st, addr)
-		in ABS_PDS_STATE(ti_contents thy_info, hier_addr, thy_st, hier_st, §)
-			
-
+	let (thy_st, thy_info) = initial_theory ud
+	in let (hier_st, hier_addr) = á(st, addr)énew [thy_info] initial_store (st, addr)
+	in ABS_PDS_STATE(ti_contents thy_info, hier_addr, thy_st, hier_st, initial_store)
 À
-\subsection{Interpretation Mapping for the State}
+\subsubsection{Interpretation Mapping}\label{StateInterpretation}
 In this section we define an interpretation function
 from $PDS\_STATE$s to the more abstract notion of a
 theory hierarchy defined in \cite{DS/FMU/IED/SPC004}.
 To do this requires a number of auxiliary definitions:
 
-$get\_contents$ returns the theory contents associated
-with a theory name in a state.
+$theory\_contents$ returns the theory contents associated
+with a theory name in a state. It is a partial function
+which we represent as a relation.
 
 »
-	‚theory_contents·	: (*USER_DATA)PDS_STATE ã string ã
-					(*USER_DATA)THEORY_CONTENTS ã bool
+	‚theory_contents·	: (*UD)PDS_STATE ã string ã
+					(*UD)THEORY_CONTENTS ã bool
 …
 	Éstate name thy_cétheory_contents state name thy_c Ç 
 		let thy_st = ps_theory_store state
@@ -483,7 +562,7 @@ The following function returns the names of the theories
 in a state:
 
 »
-	‚theory_names· : (*USER_DATA)PDS_STATE ã string ã bool
+	‚theory_names· : (*UD)PDS_STATE ã string ã bool
 …
 	Éstate nameéname ù theory_names state Ç
 		Ñthy_cétheory_contents state name thy_c
@@ -493,7 +572,7 @@ $theory\_ancestors$ returns the names of the ancestors
 of a given theory (which we take to include the theory
 itself, if it is in the state):
 »
-	‚theory_ancestors· : (*USER_DATA)PDS_STATE ã string ã string ã bool
+	‚theory_ancestors· : (*UD)PDS_STATE ã string ã string ã bool
 …
 	Éstate nameétheory_ancestors state name = ¢(çP:stringã boolé
 		(name ù theory_names state ä name ù P)
@@ -502,13 +581,13 @@ itself, if it is in the state):
 		ä	anc2 ù P))
 À
 
-Given a set of theory contents, $interpret_theory_contents$ constructs
-a $THEORY$ in the sense of \cite{DS/FMU/IED/SPC001}, together with the definitional axiom and saved theorem
-sets which are used in the definition of the abstract notion of  theory hierarchy in
+Given a set of theory contents, $interpret\_theory\_contents$ constructs
+a $THEORY$ in the sense of \cite{DS/FMU/IED/SPC001}, together with the sets definitional axioms and saved theorems
+which are used in the definition of the abstract notion of  theory hierarchy in
 \cite{DS/FMU/IED/SPC004}:
 
 »
-	‚interpret_theory_contents· : ((*USER_DATA)THEORY_CONTENTS  ã bool) ã
+	‚interpret_theory_contents· : ((*UD)THEORY_CONTENTS  ã bool) ã
 					(THEORY â (SEQ ã bool) â (SEQ ã bool))
 …
 	Éthy_cséinterpret_theory_contents thy_cs = (ABS_THEORY(
@@ -525,30 +604,1161 @@ sets which are used in the definition of the abstract notion of  theory hierarch
 À
 
 Our interpretation mapping for a state is now easy to define (note that the definition
-results in abstract theory hierarchies in which undefined theory names are sent to
+results in abstract theory hierarchies which map undefined theory names to
 the theory all of whose components are empty).
 
 »
-	‚interpret_state· : (*USER_DATA)PDS_STATE ã THEORY_HIERARCHY
+	‚interpret_state· : (*UD)PDS_STATE ã THEORY_HIERARCHY
 …
-	Éstateéinterpret_state state = ABS_THEORY_HIERARCHY(
-		interpret_theory_contents o theory_contents state)
+	Éstateéinterpret_state state = ABS_THEORY_HIERARCHY(çthyné
+		interpret_theory_contents (çtcéÑancé
+				anc ù theory_ancestors state thyn
+			Ä	theory_contents state anc tc))
 À
 
-\section{OPERATIONS}
+(Note that the interpretation of a state does not depend on the theorem
+store. This is because the theorem store will in general contain theorems
+which were proved in theories which have been deleted or which depend
+on definitions or axioms which have been deleted.)
+
+\subsubsection{Well-Formedness}\label{Well-Formedness}
+As is apparent from the construction of the interpretation
+mapping, we require the state to satisfy an invariant
+which ensures that:
+
+\begin{enumerate}
+\item
+No hierarchy in the hierarchy store
+contains two distinct $THEORY\_INFO$s whose contents field address theory
+contents with the same name. Thus a theory name uniquely identifies the address
+of the corresponding theory within a hierarchy;
+\item
+there are no dangling addresses; more accurately
+the current theory (resp. hierarchy) should be
+a valid address for the theory (resp. hierarchy) store
+and the list of addresses addressed by the current
+hierarchy should all be valid addresses for the theory
+store;
+\item
+the ancestral of the parenthood relation is
+a rooted DAG (with root the theory $MIN$);
+\item
+the set of type names defined in a theory is
+disjoint from the type names in its ancestors (and
+similarly for constant names).
+\end{enumerate}
+
+Note that condition 3 above implies that that the type
+(or constant) names in a theory must be disjoint from
+those in its descendants. This implies that we must
+not introduce new type or constant names into a hierarchy
+which is the ancestor of some hierarchy. This is the significance of
+the $TSAncestor$ status value.
+
+We formalise these conditions as follows:
+
+TBA
+
+\section{OPERATIONS}\label{OPERATIONS}
 \subsection{Discussion}
 We can now define the operations on states which are of concern to us.
-\subsection{$new\_hierarchy$}
-\subsection{$open\_theory$}
-\subsection{$close\_theory$}
-\subsection{$delete\_theory$}
-\subsection{$lock\_theory$}
-\subsection{$unlock\_theory$}
-\subsection{$save\_thm$}
-\subsection{$delete\_definition$}
-\subsection{$delete\_type\_definition$}
-\subsection{Definitional Mechanisms}
-\subsection{Inference}
+We consider the operations under four headings:
+
+\begin{description}
+\item[Operations on Hierarchies]
+These are the operations for creating and loading
+theory hierarchies;
+\item[Operations on Theory Attributes]
+These are the operations which affect the status
+and scope attributes for a theory;
+\item[Operations on Theory Contents]
+These are the operations which affect the
+contents of a theory;
+\item[Inference Rules]
+These are the inference rules (viewed as functions
+on states returning theorems).
+\end{description}
+
+The operations are described in the following sections
+under the above headings. Except for the Inference Rules,
+the operations are (functions returning)
+functions from states to states, and, we are essentially
+doing imperative programming in HOL.
+It will be an implicit precondition of all of these
+operations that the stores in the state are not full.
+Since each operation only allocates a finite number
+of new addresses in the stores, this precondition will
+always be met by states constructed by finite iteration
+of these operations starting from the initial state.
+We specify the operations so that they always succeed
+if there is room enough in the stores (by making them
+do the identity state change, if what might otherwise
+be a precondition does not hold).
+
+\subsection{Operations on Hierarchies}
+\subsection{Utility Functions}
+It is convenient to be have a single function
+giving the components of a state (the only inconvenience
+is having to write out its signature!):
+»
+	‚dest_state· : (*UD)PDS_STATE ã
+		(	(*UD)THEORY_CONTENTS ADDR
+		â 	(*UD)HIERARCHY ADDR
+		â	(*UD) THEORY_CONTENTS STORE
+		â	(*UD)HIERARCHY STORE
+		â	(*UD)PDS_THM STORE	)
+…
+	Éstateédest_state state = (
+		ps_current_theory state,
+		ps_current_hierarchy state,
+		ps_theory_store state,
+		ps_hierarchy_store state,
+		ps_theorem_store state)
+À
+Similarly the following destructor function for theory contents
+is useful
+»
+	‚dest_theory_contents· : (*UD)THEORY_CONTENTS ã
+		(	string
+		â 	Ü DICT
+		â	TYPE DICT
+		â	string list
+		â	(SEQ â Ü) DICT
+		â	(SEQ â Ü) DICT
+		â	(SEQ â Ü) DICT
+		â	Ü
+		â	(Ü ã bool)
+		â	*UD	)
+…
+	Étcédest_theory_contents tc = (
+		tc_name tc,
+		tc_ty_env tc,
+		tc_con_env tc,
+		tc_parents tc,
+		tc_axiom_dict tc,
+		tc_definition_dict tc,
+		tc_theorem_dict tc,
+		tc_current_level tc,
+		tc_deleted_levels tc,
+		tc_user_data tc)
+À
+
+$current\_theory\_contents$ returns the contents of
+the current theory, (here and elsewhere we use variable
+names of the form $\_1$, $\_2$ etc. for variables which
+are required by the syntax but whose value we are not
+concerned with).
+
+»
+	‚current_theory_contents· :	(*UD)PDS_STATE ã
+					(*UD)THEORY_CONTENTS
+…
+	Éstateécurrent_theory_contents state =
+	let (cur_thy, _1, thy_st, _2, _3) = dest_state state
+	in	(átcéfetch cur_thy thy_st tc)
+À
+
+$current\_theory\_name$ returns the name of
+the current theory.
+
+»
+	‚current_theory_name· : (*UD)PDS_STATE ã string
+…
+	Éstateécurrent_theory_name state =
+		tc_name(current_theory_contents state)
+À
+$current\_abstract\_theory$ returns the abstract theory corresponding
+to the current theory. This function may be used later to abbreviate the
+specification of various conditions.
+»
+	‚current_abstract_theory· : (*UD)PDS_STATE ã THEORY
+…
+	Éstateécurrent_abstract_theory state = FST(interpret_theory_contents(çtcéÑancé
+				anc ù theory_ancestors state (current_theory_name state)
+			Ä	theory_contents state anc tc))
+À
+
+$theory\_info$ returns the $THEORY\_INFO$ associated with
+a given theory name in the current state (and returns rubbish if the name
+does not identify a theory in the state).
+»
+	‚theory_info· : (*UD)PDS_STATE ã string ã (*UD) THEORY_INFO
+…
+	Éstate nameétheory_info state name =
+	let (cur_thy, cur_hier, thy_st, hier_st, _1) = dest_state state
+	in let hier = áhéfetch cur_hier hier_st h
+	in átiétc_name(átcéfetch (ti_contents ti) thy_st tc) = name
+À
+
+$current\_theory\_status$ returns the status value associated with
+the current theory. This will be one of $TSNormal$ or $TSLocked$ in
+the states arising from the operations we will define.
+»
+	‚current_theory_status· : (*UD)PDS_STATE ã Ü
+…
+	Éstateécurrent_theory_status state =
+	ti_status (theory_info state (current_theory_name state))
+À
+
+
+Several of the operations we wish
+to define involve the important notion of checking whether a theorem is
+in scope. The check is carried out as follows.
+
+\begin{enumerate}
+\item
+we fetch the theory contents addressed by the theory component
+of the theorem;
+\item
+we fetch the $THEORY\_INFO$ associated with the name in the theory
+contents computed in step 1;
+\item
+We return true iff. the following
+three conditions hold:
+(a) the address in the $THEORY\_INFO$ is the same as that in the theorem;
+(b) the scope flag in the $THEORY\_INFO$ is true;
+(c) the level number in the theorem is not one of the deleted levels in the theory contents.
+\end{enumerate}
+
+»
+	‚check_thm· : (*UD)PDS_STATE ã (*UD)PDS_THM ã bool
+…
+	Éstate thmécheck_thm state thm Ç
+	let (cur_thy, cur_hier, thy_st, hier_st, _1) = dest_state state
+	in let tc = átcéfetch (pt_theory thm) thy_st tc
+	in let ti = theory_info state (tc_name tc)
+	in (	pt_theory thm = ti_contents ti
+	Ä	ti_inscope ti
+	Ä	pt_level thm ì tc_deleted_levels tc )
+À
+$check\_thm\_address$ determines whether an address identifies a theorem
+in the theorem store which is in scope:
+
+»
+	‚check_thm_address· : (*UD)PDS_STATE ã (*UD)PDS_THM ADDR ã bool
+…
+	Éstate thm_adécheck_thm_address state thm_ad Ç
+	let (_1, _2, _3, _4, thm_st) = dest_state state
+	in Ñthméfetch thm_ad thm_st thm Ä check_thm state thm
+À
+
+$fetch\_thms$ fetches a list of theorems from the theorem store given
+a list of addresses. It is the responsibility of a function using
+$fetch\_thms$ to check the validity of the addresses:
+»
+	‚fetch_thms· : (*UD)PDS_STATE ã (*UD)PDS_THM ADDR list ã (*UD)PDS_THM list
+…
+	Éstate thm_adséfetch_thms state thm_ads =
+	let (_1, _2, _3, _4, thm_st) = dest_state state
+	in map (çaéáthméfetch a thm_st thm) thm_ads
+À
+
+We may sometimes need to know whether one theory hierarchy is an ancestor
+of another. This is essentially inclusion of lists viewed as
+sets. If the hierarchies in question are given by their addresses relative
+to a state, the following function gives the relation.
+Note that it returns false if either of the addresses is not
+valid for the hierarchy store in the state.
+
+»
+	‚hierarchy_ancestor· :	(*UD)PDS_STATE ã
+				((*UD)HIERARCHY)ADDR ã
+				((*UD)HIERARCHY)ADDR ã bool
+…
+	Éstate hier_ad1 hier_ad2 éhierarchy_ancestor state hier_ad1 hier_ad2 =
+	let (_1, cur_hier, _2, hier_st, _3) = dest_state state
+	in Éh1 h2é
+		(fetch hier_ad1 hier_st h1 Ä fetch hier_ad2 hier_st h2)
+	ä	elems h1 • elems h2
+À
+
+$mk\_thm$ makes a theorem from a given sequent with $theory$ and $level$
+values taken from the current theory of a state. It makes no checks whatsoever.
+It is the responsibility of a function using $mk\_thm$ to store the
+resulting theorem in the theorem store.
+
+»
+	‚mk_thm· : (*UD)PDS_STATE ã SEQ ã (*UD)PDS_THM
+…
+	Éstate seqémk_thm state seq =
+	let cur_thy = ps_current_theory state
+	in let lev = tc_current_level (current_theory_contents state)
+	in ABS_PDS_THM(cur_thy, lev, seq)
+À
+
+\subsubsection{$new\_hierarchy$}
+$new\_hierarchy$ creates a new hierarchy. 
+It performs the following steps:
+
+\begin{enumerate}
+\item
+compute a modified theory hierarchy from the one held in the
+current hierarchy by setting the status of all undeleted theories to be $TSAncestor$;
+\item
+assign the result of step 1 to the current hierarchy;
+\item
+allocate a new current hierarchy initially equal
+to the result of step 1.
+\end{enumerate}
+
+»
+	‚new_hierarchy· : (*UD)PDS_STATE ã (*UD)PDS_STATE
+…
+	Éstateénew_hierarchy state =
+	let (cur_thy, cur_hier, thy_st, hier_st, thm_st) = dest_state state
+	in let f1 = çnén à TSDeleted => TSAncestor | n
+	in let f2 = çtiéABS_THEORY_INFO(f1(ti_status ti), ti_inscope ti, ti_contents ti)
+	in let hier' =  map f2 (áhéfetch cur_hier hier_st h)
+	in let hier_st' = ásté(cur_hier <- hier') hier_st st
+	in let (hier_st'', cur_hier') = á(st, a)énew hier' hier_st' (st, a)
+	in ABS_PDS_STATE(cur_thy, cur_hier', thy_st, hier_st'', thm_st)
+À
+
+\subsubsection{$load\_hierarchy$}
+This operation typically corresponds to loading a theory into
+the system from filestore.
+Not all implementations will require it, since in
+a persistent object store approach it may be possible
+to arrange for the state of the system to persist from
+session to session\footnote{%
+It will be required with a persistent object store
+mechanism such as the PolyML one, since the state variables
+inside the abstract datatype will be held in the HOL
+system database not the user's database and so there
+values will not be permanently updated by the
+theory management operations.%
+}.
+
+The parameter to $load\_hierarchy$ is the address
+of the hierarchy to load. This might in practice be
+a metalanguage variable or a file name.
+
+The algorithm is as follows:
+
+\begin{enumerate}
+\item
+if the address of the hierarchy to be loaded is not
+valid for the hierararchy store the leave the state alone;
+\item
+otherwise, if the hierarchy we wish to
+load is not a descendant of the current hierarchy
+then leave the state alone;
+\item
+otherwise, the return a state in which the current hierarchy is the
+address of the new hierarchy and all other fields are as in the old state.
+\end{enumerate}
+
+Note that the current theory is unchanged by this operation. The resulting
+state is nonetheless well-formed, since the
+new current hierarchy is a descendant of the old one.
+
+»
+	‚load_hierarchy· :	((*UD)HIERARCHY)ADDR ã
+				(*UD)PDS_STATE ã (*UD)PDS_STATE
+…
+	Éhier stateéload_hierarchy hier state =
+	let (cur_thy, cur_hier, thy_st, hier_st, thm_st) = dest_state state
+	in 
+	(	å(hierarchy_ancestor state cur_hier hier)
+	=>	state
+	|  ABS_PDS_STATE(cur_thy, hier, thy_st, hier_st, thm_st))
+À
+
+\subsection{Operations on Theory Attributes}
+
+\subsubsection{$open\_theory$}\label{open_theory}
+$open\_theory$ takes one argument which is the name of
+the theory to be opened (i.e. made the current theory).
+
+
+\begin{enumerate}
+\item
+if the name is not the name of any theory or it is the
+name of a theory which has been deleted, then we leave the state alone;
+\item
+otherwise, we compute a modified theory hierarchy
+in which the $inscope$ flags are true for the new current
+theory and its ancestors only;
+\item
+we assign the result of step 2 to the current hierarchy;
+\item
+set the current theory to the address of the theory contents identified
+by name (as found in the corresponding $THEORY\_INFO$).
+\end{enumerate}
+
+»
+	‚open_theory· : string ã (*UD)PDS_STATE ã (*UD)PDS_STATE
+…
+	Éthyn stateéopen_theory thyn state =
+	(thyn ì theory_names state Å ti_status(theory_info state thyn) = TSDeleted
+	=>	state
+	|	let (cur_thy, cur_hier, thy_st, hier_st, thm_st) = dest_state state
+		in let f1 = çtiétc_name(átcéfetch (ti_contents ti) thy_st tc)
+		in let f2 = çtiétheory_ancestors state thyn (f1 ti)
+		in let f3 = çtiéABS_THEORY_INFO(ti_status ti, f2 ti, ti_contents ti)
+		in let hier' =  map f3 (áhéfetch cur_hier hier_st h)
+		in let hier_st' = ásté(cur_hier <- hier') hier_st st
+		in let cur_thy' = ti_contents (theory_info state thyn)
+		in ABS_PDS_STATE(cur_thy', cur_hier, thy_st, hier_st', thm_st))
+À
+
+\subsubsection{$delete\_theory$}
+$delete\_theory$ takes one argument which is the name of the theory to be
+deleted. The algorithm is as follows:
+
+\begin{enumerate}
+\item
+if the name is not the name of any theory, or if the theory it names does
+not have status $TSNormal$ or has children or if it is in scope
+we leave the state alone;
+\item
+otherwise, we compute a modified theory hierarchy
+in which the theory to be deleted has its status attribute set to
+$TSDeleted$;
+\item
+We assign to the theory contents for this theory
+an arbitrary theory of the same name; 
+\item
+we assign the result of step 2 to the current hierarchy
+\end{enumerate}
+
+
+Before we define $delete\_theory$, we specify (loosely) a function to compute
+the arbitrary theory required in step 2.
+
+»
+	‚arbitrary_theory· : string ã (*UD) THEORY_CONTENTS
+…
+	Éthynétc_name(arbitrary_theory thyn) = thyn
+À
+»
+	‚delete_theory· : string ã (*UD)PDS_STATE ã (*UD)PDS_STATE
+…
+	Éthyn stateédelete_theory thyn state =
+	((	thyn ì theory_names state
+	Å	ti_status(theory_info state thyn) à TSNormal
+	Å	ti_inscope(theory_info state thyn)
+	Å	Ñchildname tcétheory_contents state childname tc
+		Ä	thyn ≈ tc_parents tc)
+	=>	state
+	|	let (cur_thy, cur_hier, thy_st, hier_st, thm_st) = dest_state state
+		in let ti = theory_info state thyn
+		in let f = çti'éti' = ti => ABS_THEORY_INFO(TSDeleted, F, ti_contents ti) | ti
+		in let hier' =  map f (áhéfetch cur_hier hier_st h)
+		in let hier_st' = ásté(cur_hier <- hier') hier_st st
+		in let thy_st' = ásté(ti_contents ti <- arbitrary_theory thyn) thy_st st
+		in ABS_PDS_STATE(cur_thy, cur_hier, thy_st', hier_st', thm_st))
+À
+\subsubsection{$new\_theory$}\label{new_theory}
+$new\_theory$ takes two arguments, the first of which is the name of
+the theory to be created. The new theory has the current theory as parent.
+The current theory is not changed\footnote{%
+The user interface to this function may open the new theory
+after performing the primitive operation described here.%
+}.
+The second argument to $new\_theory$ gives an inital user-defined data value
+for the new theory.
+
+
+\begin{enumerate}
+\item
+if the name is the name of an existing theory, then
+we leave the state alone;
+\item
+otherwise, we allocate space in the theory store for the new theory
+initialised to an empty theory with the given name and user-defined data,
+and with the current theory as its parent;
+\item
+we compute a new theory hierarchy by pushing a $THEORY\_INFO$ for the new theory
+onto the current one;
+\item
+we assign the result of step 3 to the current hierarchy
+\end{enumerate}
+
+
+The following function is used to create the empty theories needed in step 2:
+
+»
+	‚empty_theory· :	string ã string ã *UD ã
+			(*UD) THEORY_CONTENTS
+…
+	Éthyn parn udéempty_theory thyn parn ud =
+		 ABS_THEORY_CONTENTS (
+			thyn,
+			initial_dict,	initial_dict,
+			[parn],
+			initial_dict,	initial_dict,	initial_dict,
+			0,		§,
+			ud)
+
+À
+
+»
+	‚new_theory· :	string ã *UD ã (*UD)PDS_STATE ã
+			(*UD)PDS_STATE
+…
+	Éthyn ud stateénew_theory thyn ud state=
+	(thyn ù theory_names state
+	=>	state
+	|	let (cur_thy, cur_hier, thy_st, hier_st, thm_st) = dest_state state
+		in let (thy_st', addr) = á(st, a)é
+			new(empty_theory thyn (current_theory_name state) ud) thy_st (st, a)
+		in let ti = ABS_THEORY_INFO(TSNormal, F, addr)
+		in let hier' =  CONS ti (áhéfetch cur_hier hier_st h)
+		in let hier_st' = ásté(cur_hier <- hier') hier_st st
+		in ABS_PDS_STATE(cur_thy, cur_hier, thy_st', hier_st', thm_st))
+À
+
+
+\subsubsection{$lock\_theory$}\label{lock_theory}
+$lock\_theory$ takes a single parameter which is the name of the theory
+to lock. A locked theory may not be deleted or have its contents changed.
+\begin{enumerate}
+\item
+if the name is not the name of any theory, or if the
+theory it names does not have status $TSNormal$, then we leave the state alone;
+\item
+otherwise, we compute a modified theory hierarchy in which the theory
+to be locked has status attribute set to $TSLocked$.
+\item
+we assign the result of step 2 to the current hierarchy
+\end{enumerate}
+
+»
+	‚lock_theory· : string ã (*UD)PDS_STATE ã (*UD)PDS_STATE
+…
+	Éthyn stateélock_theory thyn state =
+	((	thyn ì theory_names state
+	Å	ti_status(theory_info state thyn) à TSNormal)
+	=>	state
+	|	let (cur_thy, cur_hier, thy_st, hier_st, thm_st) = dest_state state
+		in let ti = theory_info state thyn
+		in let f = çti'é	
+			ti' = ti =>
+			ABS_THEORY_INFO(TSLocked, ti_inscope ti, ti_contents ti) |
+			ti
+		in let hier' =  map f (áhéfetch cur_hier hier_st h)
+		in let hier_st' = ásté(cur_hier <- hier') hier_st st
+		in ABS_PDS_STATE(cur_thy, cur_hier, thy_st, hier_st', thm_st))
+À
+
+\subsubsection{$unlock\_theory$}
+$unlock\_theory$ takes a single parameter which is the name of the theory
+to unlock. 
+\begin{enumerate}
+\item
+if the name is not the name of any theory, or if the
+theory it names does not have status $TSLocked$, then we leave the state alone;
+\item
+otherwise, we compute a modified theory hierarchy in which the theory
+to be locked has status attribute set to $TSNormal$.
+\item
+we assign the result of step 2 to the current hierarchy
+\end{enumerate}
+
+»
+	‚unlock_theory· : string ã (*UD)PDS_STATE ã (*UD)PDS_STATE
+…
+	Éthyn stateéunlock_theory thyn state =
+	((	thyn ì theory_names state
+	Å	ti_status(theory_info state thyn) à TSLocked)
+	=>	state
+	|	let (cur_thy, cur_hier, thy_st, hier_st, thm_st) = dest_state state
+		in let ti = theory_info state thyn
+		in let f = çti'é
+			ti' = ti =>
+			ABS_THEORY_INFO(TSNormal, ti_inscope ti, ti_contents ti) |
+			ti
+		in let hier' =  map f (áhéfetch cur_hier hier_st h)
+		in let hier_st' = ásté(cur_hier <- hier') hier_st st
+		in ABS_PDS_STATE(cur_thy, cur_hier, thy_st, hier_st', thm_st))
+À
+
+
+\subsection{Operations on Theory Contents}
+
+\subsubsection{$save\_thm$}
+$save\_thm$ takes two parameters.
+The first parameter is the key under which the theorem is to be saved.
+The second parameter is the theorem. The theorem is saved in the current
+theory.
+
+\begin{enumerate}
+\item
+we fetch the contents of the current theory;
+\item
+if the key is already in use as a key into the theorem dictionary of
+the theory fetched in step , or if the current theory does not have
+status $TSNormal$ (e.g. because it is locked),
+or if the theorem is
+not in scope (see below), then we leave the state alone.
+\item
+we compute a new theory contents by entering the theorem into the
+theorem dictionary (which was computed along the way in step 2) under
+the given key.
+\item
+we assign the new theory contents to the current theory.
+\end{enumerate}
+
+Note that we take the level number associated with the stored theorem from the
+theorem if the theorem
+belongs to the current theory. We take it as 0 if the theorem does not belong
+to the current theory (since if it belongs to an ancestor it depends
+on no definitions in the current theory). Thus, we allow further definitions
+to be made after a theorem has been inferred but before it is saved, without
+requiring it to be deleted if some of the subsequent definitions are deleted. 
+There is no particular requirement for this feature, but it is as easy to
+provide as any other formulation.
+
+Note also that we do not update the theorems proved field, since if the
+model is correct the theorem must already be in it.
+
+»
+	‚save_thm· : string ã (*UD)PDS_THM ã
+		(*UD)PDS_STATE ã (*UD)PDS_STATE
+…
+	Ékey thm stateésave_thm key thm state =
+	let tc = current_theory_contents state
+	in
+	(	(key ù keys (tc_theorem_dict tc)
+	Å	(current_theory_status state à TSNormal)
+	Å	å(check_thm state thm))
+	=>	state
+	|	let (cur_thy, cur_hier, thy_st, hier_st, thm_st) = dest_state state
+		in let level = (pt_theory thm = cur_thy => pt_level thm | 0)
+		in let thm_d' = enter key (pt_sequent thm, level) (tc_theorem_dict tc)
+		in let (nm, t_e, c_e, pars, ax_d, def_d, thm_d, lev, x_levs, ud) =
+			dest_theory_contents tc
+		in let tc' = ABS_THEORY_CONTENTS
+			(nm, t_e, c_e, pars, ax_d, def_d, thm_d', lev, x_levs, ud)
+		in let thy_st' = ásté(cur_thy <- tc') thy_st st
+		in ABS_PDS_STATE(cur_thy, cur_hier, thy_st', hier_st, thm_st))
+À
+
+\subsubsection{$delete\_definition$}
+$delete\_definition$ allows a definition to be deleted from the
+current theory provided that the current theory has no children and provided
+that the definition in question is the latest (undeleted) definition or
+axiom which has been introduced in the theory\footnote{%
+In practice, the user interface to this facility will be capable of recursively
+deleting definitions and axioms until the desired definition or axiom has been
+deleted.%
+}.
+It takes a single parameter which is a key for the definition to be deleted.
+The algorithm is as follows:
+
+\begin{enumerate}
+\item
+if the key is not valid for the definition dictionary for the current
+theory, or if the current theory has children or does not
+have status $TSNormal$, we leave the state alone;
+\item
+we look up the level number, $dlev$ say, for the definition to be
+deleted;
+\item
+if it is not the case that all level numbers greater than $dlev$ and less than
+the current level number have been deleted, we leave the state alone;
+\item
+we remove all definitions and theorems with level number equal to $dlev$ from
+the definition and theorem dictionaries
+and add $dlev$ to the set of deleted levels;
+\item
+we assign the theory contents computed in the previous step to the current
+theory.
+\end{enumerate}
+
+Note that the current level number will always be at least one greater than
+the level number of the last definition or axiom on the theory.
+»
+	‚delete_definition· : string ã 
+		(*UD)PDS_STATE ã (*UD)PDS_STATE
+…
+	Ékey stateédelete_definition key state =
+	let tc = current_theory_contents state
+	in
+	(	(key ì keys (tc_definition_dict tc)
+	Å	(Ñchildname tcétheory_contents state childname tc
+		Ä	current_theory_name state ≈ tc_parents tc)
+	Å	current_theory_status state à TSNormal)
+	=>	state
+	|	let (cur_thy, cur_hier, thy_st, hier_st, thm_st) = dest_state state
+		in let (nm, t_e, c_e, pars, ax_d, def_d, thm_d, lev, x_levs, ud) =
+					dest_theory_contents tc
+		in let (_1, dlev) = áseqlevélookup key def_d seqlev
+		in	(	(Ñlvé(dlev û lv Ä lv < lev) ä lv ù x_levs)
+			=>	state
+			|	let def_d' = block_delete (ç(_1, lv)élv = dlev) def_d
+				in let thm_d' = block_delete (ç(_1, lv)élv = dlev) thm_d
+				in let tc' = ABS_THEORY_CONTENTS
+		(nm, t_e, c_e, pars, ax_d, def_d', thm_d', lev, x_levs ° singleton_set dlev, ud)
+				in let thy_st' = ásté(cur_thy <- tc') thy_st st
+				in ABS_PDS_STATE(cur_thy, cur_hier, thy_st', hier_st, thm_st)))
+À
+
+\subsubsection{$delete\_axiom$}
+$delete\_axiom$ allows an axiom to be deleted from the
+current theory provided that the current theory has no children and provided
+that the axiom in question is the latest (undeleted) definition or
+axiom which has been introduced in the theory\footnote{%
+As with $delete\_definition$, the user interface to this facility will be capable of recursively
+deleting definitions and axioms until the desired definition or axiom has been
+deleted.%
+}.
+It takes a single parameter which is a key for the definition to be deleted.
+The algorithm is very similar to that for $delete\_definition$ and
+is as follows:
+
+\begin{enumerate}
+\item
+if the key is not valid for the axiom dictionary for the current
+theory, or if the current theory has children or does not have
+status $TSNormal$, we leave the state alone;
+\item
+we look up the level number, $alev$ say, for the definition to be
+deleted;
+\item
+if it is not the case that all level numbers greater than $alev$ and less than
+the current level number have been deleted, we leave the state alone;
+\item
+we remove all axioms and theorems with level number equal to $dlev$ from
+the axiom and theorem dictionaries and add $dlev$ to the set of deleted levels;
+\item
+we assign the theory contents computed in the previous step to the current
+theory.
+\end{enumerate}
+
+Note that the current level number will always be at least one greater than
+the level number of the last definition or axiom on the theory.
+»
+	‚delete_axiom· : string ã 
+		(*UD)PDS_STATE ã (*UD)PDS_STATE
+…
+	Ékey stateédelete_axiom key state =
+	let tc = current_theory_contents state
+	in
+	(	(key ì keys (tc_axiom_dict tc)
+	Å	(Ñchildname tcétheory_contents state childname tc
+		Ä	current_theory_name state ≈ tc_parents tc)
+	Å	current_theory_status state à TSNormal)
+	=>	state
+	|	let (cur_thy, cur_hier, thy_st, hier_st, thm_st) = dest_state state
+		in let (nm, t_e, c_e, pars, ax_d, def_d, thm_d, lev, x_levs, ud) =
+					dest_theory_contents tc
+		in let (_1, alev) = áseqlevélookup key def_d seqlev
+		in	(	(Ñlvé(alev û lv Ä lv < lev) ä lv ù x_levs)
+			=>	state
+			|	let ax_d' = block_delete (ç(_1, lv)élv = alev) ax_d
+				in let thm_d' = block_delete (ç(_1, lv)élv = alev) thm_d
+				in let tc' = ABS_THEORY_CONTENTS
+		(nm, t_e, c_e, pars, ax_d', def_d, thm_d', lev, x_levs ° singleton_set alev, ud)
+				in let thy_st' = ásté(cur_thy <- tc') thy_st st
+				in ABS_PDS_STATE(cur_thy, cur_hier, thy_st', hier_st, thm_st)))
+À
+
+\subsubsection{$delete\_thm$}
+$delete\_thm$ deletes a theorem from the current theory.
+The algorithm is very simple:
+\begin{enumerate}
+\item
+if the key is not valid for the theorem dictionary for the current
+theory, or if the current theory does not have status $TSNormal$,
+we leave the state alone;
+\item
+otherwise,
+we assign to the current theory a new theory contents in which the indicated
+theorem has been removed from the theorem dictionary.
+\end{enumerate}
+
+»
+	‚delete_thm· : string ã 
+		(*UD)PDS_STATE ã (*UD)PDS_STATE
+…
+	Ékey stateédelete_thm key state =
+	let tc = current_theory_contents state
+	in
+	(	(key ì keys (tc_theorem_dict tc)
+	Å	current_theory_status state à TSNormal)
+	=>	state
+	|	let (cur_thy, cur_hier, thy_st, hier_st, thm_st) = dest_state state
+		in let (nm, t_e, c_e, pars, ax_d, def_d, thm_d, lev, x_levs, ud) =
+					dest_theory_contents tc
+		in let thm_d' = delete key thm_d
+		in let tc' = ABS_THEORY_CONTENTS
+			(nm, t_e, c_e, pars, ax_d, def_d, thm_d', lev, x_levs, ud)
+		in let thy_st' = ásté(cur_thy <- tc') thy_st st
+		in ABS_PDS_STATE(cur_thy, cur_hier, thy_st', hier_st, thm_st))
+À
+
+\subsubsection{$pds\_new\_axiom$}
+$pds\_new\_axiom$ adds a new axiom to a theory. It has two parameters,
+the first of which is the term giving the new axiom and the second of
+which gives the key under which the axiom is to be stored.
+The new axiom is a sequent with no assumptions and with conclusion the
+given term.
+The algorithm is:
+
+\begin{enumerate}
+\item
+if the key is already in use for an axiom in the current theory,
+or if the new axiom is not a well-formed sequent with respect to the
+current theory, then we leave the state alone
+\item
+otherwise, let $lev$ be the current level number for the current
+theory;
+\item
+we assign to the current theory a new theory contents in which the new
+axiom has been entered in the axiom dictionary at level $lev$
+and the new current level is $lev+1$;
+\item
+we return a result state with the theory store modified by the assignment
+of step 3 and with the new axiom added to the set of theorems proved.
+\end{enumerate}
+
+
+»
+	‚pds_new_axiom· : TERM ã string ã
+		(*UD)PDS_STATE ã (*UD)PDS_STATE
+…
+	Étm key stateépds_new_axiom tm key state =
+	let tc = current_theory_contents state
+	in let seq = (§, tm)
+	in
+	(	(key ù keys (tc_axiom_dict tc)
+	Å	seq ì sequents (current_abstract_theory state)
+	Å	current_theory_status state à TSNormal)
+	=>	state
+	|	let (cur_thy, cur_hier, thy_st, hier_st, thm_st) = dest_state state
+		in let (nm, t_e, c_e, pars, ax_d, def_d, thm_d, lev, x_levs, ud) =
+					dest_theory_contents tc
+		in let ax_d' = enter key (seq, lev) ax_d
+		in let tc' = ABS_THEORY_CONTENTS
+			(nm, t_e, c_e, pars, ax_d', def_d, thm_d, lev+1, x_levs, ud)
+		in let thy_st' = ásté(cur_thy <- tc') thy_st st
+		in let (thm_st', _1) = ásaénew(mk_thm state seq)thm_st sa
+		in ABS_PDS_STATE(cur_thy, cur_hier, thy_st', hier_st, thm_st'))
+À
+
+\subsubsection{Definitional Mechanisms}
+The definitional mechanisms to be supplied will be closely
+based on the ones identified in \cite{DS/FMU/IED/SPC002}. We wish
+to defer the formal specification of these mechanisms, while still specifying
+something about their role in our model of the system. To do
+this we supply a ``generic'' definitional mechanism,
+the function $make\_definition$ below, which is parameterised by
+a function (called a $DEFINER$)
+which represents an implementation of the definitional
+mechanisms.
+The input to the $DEFINER$ has the following type (which is also used
+in section \ref{Inference} below:
+
+Â
+TypeInference.new_type_abbrev"SUBSYS_INPUT"
+		ª:*IP â (*UD)PDS_THM listº;
+Ê
+The input to the system which is used to derive the input to the $DEFINER$
+has the type:
+Â
+TypeInference.new_type_abbrev"PDS_INPUT"
+		ª:*IP â (*UD)PDS_THM ADDR listº;
+Ê
+The addresses in a $PDS\_INPUT$ are intendeded to be addresses for the
+theorem store in the state.
+
+The parameter then has the type:
+
+Â
+TypeInference.new_type_abbrev"DEFINER"
+	ª:((*IP, *UD)SUBSYS_INPUT â (*UD)PDS_STATE) ã
+	(SEQ â ((string â Ü) list) â ((string â TYPE) list) â (string list))
+	ã boolº;
+Ê
+
+Thus, a $DEFINER$ is a partial function, represented as a relation, which
+computes a 4-tuple comprising:
+
+\begin{itemize}
+\item
+a sequent which is to be the defitional axiom resulting from the
+definition;
+\item
+a list of type names and arities for any new types introduced by the
+definition;
+\item
+a list of constant names and types for any new constants introduced by
+the definition;
+\item
+a list of keys under which the definitional axiom is to be saved on the theory.
+\end{itemize}
+
+The algorithm for $make\_definition$ is as follows:
+
+\begin{enumerate}
+\item
+if the input and state are not in the domain of the $DEFINER$, or
+if the theorems in the input are not all valid in the current theory
+then leave the state alone;
+\item
+otherwise, apply the $DEFINER$ to the input-state pair;
+\item
+let $lev$ be the current level number;
+\item
+using the result of step 1 and the key parameter,
+compute a modified theory contents from the current theory contents by
+adding a new definition (with level number $lev$)
+and new type and constant dictionary entries;
+\item
+assign the result of step 3 to the current theory;
+\item
+return a state with the theory store modified as in step 4 and with
+the new definitional axiom added to the set of theorems proved.
+\end{enumerate}
+
+»
+	‚make_definition· :	(*IP, *UD)DEFINER ã
+				((*IP, *UD)PDS_INPUT â (*UD)PDS_STATE) ã
+				(*UD)PDS_STATE
+…
+	Édefiner pars thm_ads stateé
+	make_definition definer ((pars, thm_ads), state) = (
+	(	(Ñthm_adéthm_ad ≈ thm_ads Ä å(check_thm_address state thm_ad)))
+	=>	state
+	|	let thms = fetch_thms state thm_ads
+		in
+	(	((pars, thms), state) ì domain definer
+	=>	state
+	|	let (seq, tys, cons, ks) = áresédefiner ((pars, thms), state) res
+		in let (cur_thy, cur_hier, thy_st, hier_st, thm_st) = dest_state state
+		in let tc = current_theory_contents state
+		in let (nm, t_e, c_e, pars, ax_d, def_d, thm_d, lev, x_levs, ud) =
+						dest_theory_contents tc
+		in let def_d' = fold (çkéenter k (seq, lev)) ks def_d
+		in let t_e' = fold (UNCURRY enter) tys t_e
+		in let c_e' = fold (UNCURRY enter) cons c_e
+		in let tc' = ABS_THEORY_CONTENTS
+			(nm, t_e', c_e', pars, ax_d, def_d', thm_d, lev+1, x_levs, ud)
+		in let thy_st' = ásté(cur_thy <- tc') thy_st st
+		in let (thm_st', _1) = ásaénew(mk_thm state seq)thm_st sa
+		in ABS_PDS_STATE(cur_thy, cur_hier, thy_st', hier_st, thm_st')))
+À
+
+
+\subsection{Inference}\label{Inference}
+The inference rules to be supplied will typically comprise primitive rules
+implementing the rules specified in \cite{DS/FMU/IED/SPC001} together
+with rules which define string and other literals and rules which, while
+they could be derived from the primitive rules, are built-in for reasons
+of efficiency. As a very special case, we consider the
+inference rules to include the functions which given
+a theory name and a key return the axiom (or definition or theorem) stored
+under that key in the indicated theory.
+
+As with the definitional mechanisms, we wish to defer
+specification of the rules, and so we complete the present specification
+by defining a ``generic'' inference function, $make\_inference$,
+parameterised by
+a function which represents an implementation of such a set of rules.
+
+Â
+TypeInference.new_type_abbrev"INFERRER"
+		ª:(*IP, *UD)SUBSYS_INPUT â (*UD)PDS_STATE ã SEQ ã boolº;
+Ê 
+
+An $INFERRER$ is a partial function, represented as a relation,
+which, returns a sequent.
+
+The algorithm for $make\_inference$ is as follows:
+
+\begin{enumerate}
+\item
+if the input and state are not in the domain of the $INFERRER$, or
+if the theorems in the input are not all valid in the current theory
+then leave the state alone;
+\item
+otherwise, apply the $INFERRER$ to the input-state pair;
+\item
+compute a theorem, with the current theory as its theory field,
+the current level number as its level field, and with the result
+of step 2 as its sequent field;
+\item
+return a state with the result of step 3 added to the theorems proved field.
+\end{enumerate}
+
+»
+	‚make_inference· :	(*IP, *UD)INFERRER ã
+				((*IP, *UD)PDS_INPUT â (*UD)PDS_STATE) ã	
+				(*UD)PDS_STATE
+…
+	Éinferrer pars thm_ads stateé
+	make_inference inferrer ((pars, thm_ads), state) = (
+	(	(Ñthm_adéthm_ad ≈ thm_ads Ä å(check_thm_address state thm_ad)))
+	=>	state
+	|	let thms = fetch_thms state thm_ads
+		in
+	(	(((pars, thms), state) ì domain inferrer
+	Å	current_theory_status state à TSNormal)
+	=>	state
+	|	let seq = áreséinferrer ((pars, thms), state) res
+		in let (cur_thy, cur_hier, thy_st, hier_st, thm_st) = dest_state state
+		in let (thm_st', _1) = ásaénew(mk_thm state seq)thm_st sa
+		in ABS_PDS_STATE(cur_thy, cur_hier, thy_st, hier_st, thm_st')))
+À
+\section{SYSTEM CONSTRUCTION}
+We have defined the operations on the state in terms of two subsystems:
+the definitional mechanisms and the inference rules.
+We now wish to say how the operations and two such subsystems
+are to be combined to produce a system.
+
+\subsection{Auxiliary Definitions}
+We will say that a state-to-state transition function is $allowed$,
+if it is one of the operations on states
+defined in section \ref{OPERATIONS} above. Since some of these operations
+are parameterised by the definitional mechanism or inference rules, so
+is this property:
+»
+	‚allowed· :	(*IP, *UD)DEFINER ã
+			(*IP, *UD)INFERRER ã
+			( (*UD)PDS_STATE ã (*UD)PDS_STATE ) ã bool
+…
+	Édefiner inferrer transé
+	allowed definer inferrer trans Ç (
+		(trans = new_hierarchy)
+	Å	(Ñaddrétrans = load_hierarchy addr)
+	Å	(Ñthynétrans = open_theory thyn)
+	Å	(Ñthynétrans = delete_theory thyn)
+	Å	(Ñthyn udétrans = new_theory thyn ud)
+	Å	(Ñthynétrans = lock_theory thyn)
+	Å	(Ñthynétrans = unlock_theory thyn)
+	Å	(Ñkey thmétrans = save_thm key thm)
+	Å	(Ñkeyétrans = delete_definition key)
+	Å	(Ñkeyétrans = delete_axiom key)
+	Å	(Ñkeyétrans = delete_thm key)
+	Å	(Ñtm keyétrans = pds_new_axiom tm key)
+	Å	(Ñpars thm_adsétrans = CURRY(make_definition definer)(pars, thm_ads))
+	Å	(Ñpars thm_adsétrans = CURRY(make_inference inferrer)(pars, thm_ads)))
+À
+\subsection{The System Construction}
+The construction of the system also involves a third
+subsystem: a ``command interpreter'', which, given a $DEFINER$ and
+an $INFERRER$ maps inputs onto transition
+functions.  Thus it has the following type: 
+Â
+TypeInference.new_type_abbrev "INTERPRETER"
+	ª:(*IP, *UD)DEFINER ã (*IP, *UD)INFERRER ã
+		(*IP,*UD)PDS_INPUT ã
+		(*UD)PDS_STATE ã (*UD)PDS_STATEº;
+Ê
+
+The loosely specified function $pds\_rep$ constructs a system
+from a $DEFINER$, an $INFERRER$ and an $INTERPRETER$. After expanding
+the type abbreviations, the systems
+it constructs may be seen to have the following type:
+
+ÛDiscussion
+	:	((*IP â (*UD)PDS_THM list) â (*UD)PDS_STATE)
+	ã	((*UD)PDS_STATE â ((*UD)PDS_THM STORE))
+Ê
+
+Thus inputs to the system are composed of unspecified
+``parameters'', together with lists of theorems. Its outputs is taken
+to be the theorem store (which, in practice, certainly includes an theorem
+returned by one of the constructors of the abstract datatype).
+
+
+»
+	‚pds· : (*IP, *UD)DEFINER ã
+		(*IP, *UD)INFERRER ã
+		(*IP, *UD)INTERPRETER ã
+		((*IP,*UD)PDS_INPUT â (*UD)PDS_STATE) ã
+		((*UD)PDS_STATE â ((*UD)PDS_THM STORE))
+…
+	Édefiner inferrer interpreter pars thm_ads stateé
+	pds definer inferrer interpreter((pars, thm_ads), state) = 
+	let state' = interpreter definer inferrer (pars, thm_ads) state
+	in (state', ps_theorem_store state')
+À
+
+We actually wish for systems which satisfy instances of the critical
+properties identified in \cite{DS/FMU/IED/SPC004} (up to interpretation).
+Unfortunately systems as constructed by $pds\_rep$ allow too many inputs.
+As in the actual implementations of HOL we wish to restrict attention
+to a type of theorems constructed from an initial
+state by iterating the primitive operations.
+To define this type we must first specify the critical properties of
+the three subsystems.
+
+\subsection{Subsystem Critical Properties}
+We will use the term {\em good} of subsystems which satisfy their critical
+properties.
+
+A $DEFINER$ is good if the extension of abstract theories induced
+by its intended effect on concrete theories is definitional:
+»
+	‚good_definer· : (*IP, *UD)DEFINER ã bool
+…
+	Édefinerégood_definer definer Ç
+	Épars thms stateé
+		((pars, thms), state) ù domain definer
+	ä	let thy = current_abstract_theory state
+		in let (tyenv, conenv, axs) = REP_THEORY thy
+		in let (seq, tys, cons, _1) = áresédefiner((pars, thms), state)res
+		in let tyenv' = fold (çtnéçteéçt néte t n Å (t, n) = tn) tys tyenv
+		in let conenv' = fold (çstéçceéçs téce s t Å (s, t) = st) cons conenv
+		in let axs' = çsqésq ù axs Å sq = seq
+		in let thy' = ABS_THEORY(tyenv', conenv', axs')
+		in definitional_extension thy' thy
+À
+
+An $INFERRER$ is good if the sequent it computes is always (a) derivable
+from the union of the axioms of the current abstract theory and the
+theorems it is given as part of its parameter and (b) is well-formed
+with respect to the current abstract theory.
+»
+	‚good_inferrer· : (*IP, *UD)INFERRER ã bool
+…
+	Éinferrerégood_inferrer inferrer Ç
+	Épars thms stateé
+		((pars, thms), state) ù domain inferrer
+	ä	let thy = current_abstract_theory state
+		in let seqs = axioms thy ° elems(map pt_sequent thms)
+		in let seq = áreséinferrer((pars, thms), state)res
+		in (	derivable_from seq seqs
+		Ä	seq ù sequents thy)
+À
+
+An $INTERPRETER$ is good if it always returns allowable state transitions.
+
+»
+	‚good_interpreter· : (*IP, *UD)INTERPRETER ã bool
+…
+	Éinterpreterégood_interpreter interpreter Ç
+	Édefiner inferrer pars thm_adsé
+		allowed definer inferrer(interpreter definer inferrer(pars, thm_ads))
+À
+
+\subsection{Interpretation Mapping}\label{SystemInterpretation}
+In section \ref{StateInterpretation} we defined the interpretation of
+a state as an abstract theory hierarchy. We now define the
+interpretation of the system we are modelling
+as an abstract proof development system.
+
+With the present definition of $HOL\_SYSTEM$ we need some trickery to
+do this. It would be better, perhaps, if $HOL\_SYSTEM$ were defined
+as a state transition function together with a mapping from the states
+to $THEORY\_HIERARCHY$s. As things are we need to use the concrete
+system to define an abstract one using a choice of concrete state
+to represent a given abstract state, then executing a concrete transition
+then interpreting the resulting concrete state as an abstract one:
+
+»
+	‚interpret_pds· :
+	(((*IP â (*UD)PDS_THM list) â
+	(*UD)PDS_STATE) ã ((*UD)PDS_STATE â (PDS_THM ã bool)))
+				ã
+	((*IP â (*UD)PDS_THM list), (*UD)PDS_THM STORE)HOL_SYSTEM
+…
+	Épdséinterpret_pds pds = TBA
+À
+
 
 \pagebreak
 \section{THEORY LISTING}
@@ -559,6 +1769,7 @@ We can now define the operations on states which are of concern to us.
 \def\Xref#1#2{\hbox to \hsize{$#1$\leaders\hbox to1em{\hss.\hss}\hfill $#2$}}
 
 \input{\jobname.thp}}
+TBA
 
 \twocolumn[\section{INDEX}] \label{Index}
 \printindex
