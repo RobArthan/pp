@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.27 2004/02/02 16:47:00 rda Exp rda $
+ * $Id: xpp.c,v 2.28 2004/02/10 21:47:07 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -485,10 +485,11 @@ char *default_command_line(char *cmd_line)
 {
 	char *tmp;
 	if(xpp_resources.argument_checker && *xpp_resources.argument_checker) {
+		int ret_code;
 		tmp = XtMalloc(strlen(xpp_resources.argument_checker) + 1);
 		strcpy(tmp, xpp_resources.argument_checker);
 		tmp = append_arg(tmp, cmd_line);
-		int  ret_code = new_session(get_arg_list(tmp), False);
+		ret_code = new_session(get_arg_list(tmp), False);
 		if(ret_code != 0) {
 			exit(ret_code);
 		}
