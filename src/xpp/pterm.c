@@ -249,7 +249,7 @@ static Boolean get_from_app_work_proc(XtPointer unused_p)
 {
 	int ct;
 	char buf[BUFSIZ+1]; /* allow for null-termination in scroll_out */
-	if((ct = read(control_fd, buf, 1000)) > 0) {
+	if((ct = read(control_fd, buf, BUFSIZ)) > 0) {
 		scroll_out(buf, ct, False);
 	}
 	if(ct == BUFSIZ) { /* Probably more to do */
