@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.11 2002/10/17 17:09:34 rda Exp rda $ 
+ * $Id: search.c,v 2.12 2002/12/03 15:25:38 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -1036,28 +1036,26 @@ static void replace_all(
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * get_line_no returns the line number of the insertion position
- * in the text widget passed as an argument. It returns NO_MEMORY
- * if it could not allocate enough memory to do the calculation.
+ * in the text widget passed as an argument. It returns -1
+ * if something went wrong (e.g., because we're in a multi-byte locale).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 long int get_line_no(Widget text_w)
 {
-	XmTextPosition ins_pos;
-	char *data, *p;
+	XmTextPosition ins_pos, cur_pos;
+	char data[BUFSIZ+1], *p;
 	long int line_ct;
 	ins_pos = XmTextGetInsertionPosition(text_w);
-	if((data = XtMalloc(ins_pos + 1)) == NULL) {
-		return 0;
-	};
-	if(XmTextGetSubstring(text_w, 0, ins_pos, ins_pos + 1, data)
-			!= XmCOPY_SUCCEEDED ) {
-		return NO_MEMORY;
-	};
-	for(p = data, line_ct = 1; *p; ++p) {
-		if(*p == '\n') {
-			++line_ct;
+	for(cur_pos = 0, line_ct = 1; cur_pos <= ins_pos; cur_pos += BUFSIZ) {
+		if(XmTextGetSubstring(text_w, cur_pos, BUFSIZ, BUFSIZ + 1, data)
+				== XmCOPY_FAILED ) {
+			return -1;
 		}
-	};
-	XtFree(data);
+		for(p = data; p - data + cur_pos <= ins_pos && *p; ++p) {
+			if(*p == '\n') {
+				++line_ct;
+			}
+		}
+	}
 	return line_ct;
 }
 
