@@ -63,6 +63,8 @@ constrained with signature again.
 Global rename from wrk038.doc issue 1.9.
 \item[Issue 1.27 (14th January 1993)]
 Code optimization(?).
+\item[Issue 1.28]
+Bug fix (signature variable ordering).
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -126,23 +128,42 @@ we will frequently need to manipulate them as if they were in the more strongly 
 The following functions therefore survive.
 =SML
 fun	€pack_ident› ((w,d) :string * string) :string = (w ^ d);
-fun	€unpack_ident› (s :string) :string * string =
-	let 	fun 	f _ [] = ([],[])
-		|	f _ ("'"::t) = ([],("'"::(snd(f true t))))
-		|	f _ ("?"::t) = ([],("?"::(snd(f true t))))
-		|	f _ ("!"::t) = ([],("!"::(snd(f true t))))
-		|	f false (h::t) = 
-				let	val (a,b) = f false t
-				in	((h::a),b)
-				end
-		|	f _ _ = fail "unpack_ident" 48001 [fn() => s]
-	in
-		(implode ** implode)(f false (explode s)) 
-	end;
 =TEX
-
 =SML
-fun	€idsetseq› (sl:string list) : string list = Sort.sort Sort.string_order sl;
+fun	€unpack_ident› (s :string) :string * string =
+	let 	fun 	f [] = ([],[])
+		|	f (d as ("'"::t)) = ([],d)
+		|	f (d as ("?"::t)) = ([],d)
+		|	f (d as ("!"::t)) = ([],d)
+		|	f (h::t) = 
+				let	val (a,b) = f t
+				in	((h::a),b)
+				end;
+	in
+		(implode ** implode)(f (explode s)) 
+	end;
+=TREX
+=SML
+fun z_sig_order (s1 : string) (s2 : string) : int = (
+	let	val (n1, d1) = unpack_ident s1;
+		val (n2, d2) = unpack_ident s2;
+	in	if	n1 > n2
+		then	1
+		else if	 n1 < n2
+		then	~1
+		else 	case size d1 - size d2 of
+			0 =>  (
+				if	d1 < d2
+				then	~1
+				else if d1 = d2
+				then	0
+				else	1
+			) |	x => x
+	end
+);
+=TEX
+=SML
+fun	€idsetseq› (sl:string list) : string list = Sort.sort z_sig_order sl;
 fun	€flatpack› ([]:string list) : string 	= ""
 |	flatpack (s::[])			= s
 |	flatpack (s::ss) 			= s ^ "," ^ (flatpack ss);
@@ -178,7 +199,7 @@ fun 	€bind_type› (itym :(string * TYPE) list) :TYPE =
 =SML
 fun 	€bind_type› (itym :(string * TYPE) list) :TYPE = (
 let	val components = (map fst itym);
-	val sorted_components = (Sort.sort Sort.string_order components);
+	val sorted_components = (Sort.sort z_sig_order components);
 	val packed_components = "[" ^ flatpack sorted_components ^ "]";
 	val tname = "Z'S" ^ packed_components;
 	val targs = map (lassoc3 itym) sorted_components;
@@ -223,7 +244,7 @@ Implementation:
 =SML
 fun 	€bind_cterm› (itym :(string * TYPE) list) :TERM = (
 let	val components = map fst itym;
-	val sort_components = Sort.sort Sort.string_order components;
+	val sort_components = Sort.sort z_sig_order components;
 	val vsi_components = "[" ^ flatpack sort_components ^ "]";
 	val bind_cname_res = "Z'Mk_S" ^ vsi_components;
 	val sort_itym = map (lassoc3 itym) sort_components;
