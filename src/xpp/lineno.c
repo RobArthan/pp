@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: lineno.c,v 2.44 2004/02/09 16:43:33 rda Exp rda $ 
+ * $Id: lineno.c,v 1.1 2004/02/11 21:25:54 rda Exp rda $ 
  *
  * lineno.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -107,7 +107,7 @@ static MenuItem line_no_edit_menu_items[] = {
  * This is long but only because it is repetitive.
  * The aim is a popup shell looking something like:
  *
- * | Go to line:  | <line number> | := Cursor    |
+ * | Go to line:  | <line number>  |
  * -----------------------
  * | Dismiss    |   | Help  |
  *
@@ -123,7 +123,6 @@ Boolean add_line_no_tool(Widget text_w)
 		line_no_form,
 		goto_line_no_btn,
 		line_no_text,
-		line_no_set_btn,
 		dismiss_btn,
 		help_btn;
 
@@ -154,7 +153,7 @@ Boolean add_line_no_tool(Widget text_w)
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Part 4:
- * | Go to line:  | <line number> | := Cursor    |
+ * | Go to line:  | <line number>  |
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
@@ -166,7 +165,7 @@ Boolean add_line_no_tool(Widget text_w)
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,	XmATTACH_FORM,
 		XmNrightAttachment,	XmATTACH_POSITION,
-		XmNrightPosition,		8,
+		XmNrightPosition,		12,
 		XmNbottomAttachment,	XmATTACH_POSITION,
 		XmNbottomPosition,	12,
 		NULL);
@@ -176,30 +175,16 @@ Boolean add_line_no_tool(Widget text_w)
 		xmTextWidgetClass,	line_no_form,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,	XmATTACH_POSITION,
-		XmNleftPosition,		8,
-		XmNrightAttachment,	XmATTACH_POSITION,
-		XmNrightPosition,		16,
-		XmNbottomAttachment,	XmATTACH_POSITION,
-		XmNbottomPosition,	12,
-		NULL);
-
-	s = XmStringCreateSimple(":= Cursor");
-	line_no_set_btn = XtVaCreateManagedWidget("becomes-cursor",
-		xmPushButtonWidgetClass,	line_no_form,
-		XmNlabelString,		s,
-		XmNtopAttachment,		XmATTACH_FORM,
-		XmNleftAttachment,	XmATTACH_POSITION,
-		XmNleftPosition,		16,
+		XmNleftPosition,		12,
 		XmNrightAttachment,	XmATTACH_FORM,
 		XmNbottomAttachment,	XmATTACH_POSITION,
 		XmNbottomPosition,	12,
 		NULL);
-	XmStringFree(s);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Part 2:
  * -----------------------
- * | Dismiss    |  Options | Help  |
+ * | Dismiss    | Help  |
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	s = XmStringCreateSimple("Dismiss");
@@ -212,7 +197,7 @@ Boolean add_line_no_tool(Widget text_w)
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
 		XmNleftPosition,		1,
-		XmNrightPosition,		7,
+		XmNrightPosition,		11,
 		NULL);
 	XmStringFree(s);
 
@@ -226,7 +211,7 @@ Boolean add_line_no_tool(Widget text_w)
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNleftPosition,		17,
+		XmNleftPosition,		13,
 		XmNrightPosition,		23,
 		NULL);
 	XmStringFree(s);
@@ -264,9 +249,6 @@ Boolean add_line_no_tool(Widget text_w)
 
 	XtAddCallback(line_no_text, XmNactivateCallback,
 		goto_line_no_cb, (XtPointer)(&line_no_data));
-
-	XtAddCallback(line_no_set_btn, XmNactivateCallback,
-		line_no_set_cb, (XtPointer)(&line_no_data));
 
 	XtAddCallback(dismiss_btn, XmNactivateCallback,
 		dismiss_cb, (XtPointer)(&line_no_data));
