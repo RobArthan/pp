@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: menus.c,v 2.10 2003/06/25 12:23:20 rda Exp rda $
+ * $Id: menus.c,v 2.11 2003/06/26 11:40:03 rda Exp rda $
  *
  * menus.c -  creation of menus for the X/Motif ProofPower
  * Interface
@@ -156,6 +156,11 @@ static Widget setup_menu_aux(
 	}
 
 	setup_menu_items(menu, type, items);
+#ifdef LISTWIDGETS
+	if(type == XmMENU_POPUP) {
+		list_widget_hierarchy(XtParent(menu));
+	}
+#endif
 
 	XtFree(menu_name);
 
