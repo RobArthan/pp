@@ -141,3 +141,20 @@ NAT max;
 
 	XmTextReplace(w, 0, bytes_to_go, msg);
 }
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * copy_font_list: copy the font list resource from one text
+ * widget to another.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void copy_font_list (
+	Widget	to_text_w,
+	Widget from_text_w)
+{
+	XmFontList fontlist;
+
+	XtVaGetValues(from_text_w, XmNfontList, &fontlist, NULL);
+	if(fontlist != NULL) {
+		XtVaSetValues(to_text_w,
+		XmNfontList, fontlist, NULL);
+	}
+}
+
