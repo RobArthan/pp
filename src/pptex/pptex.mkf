@@ -1,0 +1,163 @@
+######################################################################
+#
+#	pptex.mkf $Header:$
+#
+#	makefile for the PPTEX directory for ProofPower
+#
+######################################################################
+
+# suffixes known
+.SUFFIXES: .db .doc .ldd1 .ldd2 .log .lot .sh .doc .tex .tch
+
+# default make target.  displays a list of more useful targets
+PRODNAME=PPTex
+default:
+	@echo "The following are some of the more useful make commands:"
+	@echo " "
+	@echo "make -f $(PRODNAME).mkf $(PRODNAME)         - makes $(PRODNAME)"
+	@echo "make -f $(PRODNAME).mkf rel                   - makes the release directory"
+	@echo "make -f $(PRODNAME).mkf tgz                   - makes the distribution"
+
+######################################################################
+#
+#	Makefile Definitions
+#
+######################################################################
+
+PRODUCT=$(PRODNAME)$(PPVER)
+CWD=$(shell pwd)
+
+# Makefiles
+PPTEXMKF = pptex.mkf
+
+# contents of the pptex release
+PPTEXBINRELEASE =  conv_ascii
+PPTEXBINRELEASE += conv_extended
+PPTEXBINRELEASE += docdvi
+PPTEXBINRELEASE += doctex
+PPTEXBINRELEASE += docpr
+PPTEXBINRELEASE += docsml
+PPTEXBINRELEASE += texdvi
+PPTEXBINRELEASE += sieveview
+PPTEXBINRELEASE += sievekeyword
+PPTEXBINRELEASE += sieve
+PPTEXBINRELEASE += findfile
+
+PPTEXTEXRELEASE =  TQ.sty
+PPTEXTEXRELEASE += TQa4.sty
+PPTEXTEXRELEASE += hol1.sty
+PPTEXTEXRELEASE += ProofPower.sty
+PPTEXTEXRELEASE += fmu.bst
+PPTEXTEXRELEASE += fmu.bib
+PPTEXTEXRELEASE += hyperbasics.sty
+
+PPTEXDOCRELEASE = usr001.dvi
+
+######################################################################
+#
+#	Building pptex
+#
+######################################################################
+
+pptex: sieve $(PPTEXBINRELEASE) $(PPTEXTEXRELEASE) 
+
+conv_ascii conv_extended: imp100.doc
+	sieve sml < imp100.doc
+
+docdvi doctex docpr docsml texdvi: imp100.doc
+	sieve sml < imp100.doc
+
+imp096.c: imp096.doc
+	rm -f imp096.c
+	ln -s imp096.doc imp096.c
+
+imp096.tex: imp096.doc imp096.sieveview
+	sieve -f imp096.sieveview -K tex < imp096.doc > imp096.tex
+
+imp096.sieveview: imp096.doc
+	sed -e '/^# imp096.sieveview/,/^# end of imp096.sieveview/!d' \
+		-e 's/^	//' imp096.doc > imp096.sieveview
+
+findfile.c: imp096.doc imp096.sieveview
+	sieve -f imp096.sieveview -K findfile_prog < imp096.doc > findfile.c
+
+findfile: findfile.c
+	gcc -o findfile -static findfile.c
+
+sieve: imp096.doc imp096.c
+	gcc -o sieve -static imp096.c
+
+hol1.sty: imp054.doc imp054.sml
+	@sed -e 's/[    ]%.*$$//' \
+	-e 's/^[        ][      ]*//' \
+	-e 's/[         ][      ]*$$//' imp054.sml > hol1.sty
+
+release/ICLLOGO_FONTS: dirs ICLLOGO_FONTS.tar
+	cd release && tar xvf $(CWD)/ICLLOGO_FONTS.tar
+
+usr001.dvi: hol1.sty USR.sty usr001A.tex usr001.doc usr024_data.tex 
+	doctex usr001
+	texdvi usr001 > usr001.dvi.ldd1 </dev/null
+	- bibtex usr001
+	texdvi usr001 > usr001.dvi.ldd2 </dev/null
+	texdvi usr001
+
+usr001A.tex: usr001A.doc
+	doctex usr001A
+
+usr024_data.tex: docs.mkf
+	echo \\def\\release{$(PRODUCT)} >usr024_data.tex
+	echo \\def\\uniqueid{$(PRODUCT) `date +"%X %d/%m/%Y"`} >>usr024_data.tex
+
+USR.sty: usr024.doc usr024.sml usr024_data.tex
+	@sed -e 's/[ 	]%.*$$//' \
+	-e 's/^[ 	][ 	]*//' \
+	-e 's/[ 	][ 	]*$$//' usr024.sml > USR.sty
+
+
+######################################################################
+#
+#	Constructing release directories
+#
+######################################################################
+
+dirs:
+	rm -rf release
+	mkdir release
+	mkdir release/bin
+	mkdir release/tex
+	mkdir release/docs
+
+rel: dirs  $(PPTEXBINRELEASE) $(PPTEXTEXRELEASE) \
+		$(PPTEXDOCRELEASE) release/ICLLOGO_FONTS
+	cp $(PPTEXBINRELEASE) release/bin
+	cp $(PPTEXTEXRELEASE) release/tex
+	cp $(PPTEXDOCRELEASE) release/docs
+
+$(PRODUCT).tgz: rel
+	cd release && tar cvf $(CWD)/$(PRODUCT).tar .
+	cd $(CWD) && gzip $(PRODUCT).tar && mv $(PRODUCT).tar.gz $(PRODUCT).tgz
+
+tgz: $(PRODUCT).tgz
+
+######################################################################
+#
+#	Tidying Up
+#
+######################################################################
+
+clean:
+	@rm -rf $(PPTEXBINRELEASE) $(PPTEXTEXRELEASE) $(PPTEXDIRRELEASE)
+	@rm -f conv* doc* tex* palette imp* *.c *.tar
+	@rm -f imp102.doc extension_schedules.mkf
+
+veryclean: clean
+
+######################################################################
+#
+#	Generic Rules
+#
+######################################################################
+
+%.sml: %.doc
+	docsml $*
