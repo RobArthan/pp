@@ -1,0 +1,415 @@
+% dtd031.doc   %Z% $Date$ $Revision$ $RCSfile$
+
+=TEX
+% dtd031.doc   %Z% $Date$ $Revision$ $RCSfile$
+\documentstyle[hol,11pt,TQ]{article}
+
+\TPPtitle{Detailed Design of Pretty Printer Support Structure}
+\TPPref{DS/FMU/IED/DTD031}
+\def\SCCSissue{$Revision$%
+}
+\TPPissue{\SCCSissue}
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPproject{FST PROJECT}
+
+=IGN
+
+Commands to process this document in various ways.
+
+make -f rel001.mkf dtd031.dvi
+doc4tex dtd031
+tex4dvi dtd031
+bibtex dtd031
+doc4tex dtd031 ; tex4dvi dtd031
+doc4tex dtd031 ; tex4dvi dtd031 ; bibtex dtd031
+dvipage dtd031 &
+
+
+doc4errors dtd031
+usefile "dtd031.sml";
+
+lasp -s dtd031.doc > zz1
+lasp -s -u dtd031.OKwords dtd031.doc > zz1
+
+=TEX
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Standard}
+\TPPkeywords{HOL}
+\TPPauthor{A.J. Hammon & WIN01}  %% Mandatory field
+\TPPauthorisation{R.B.~Jones & FMU Manager}
+\TPPabstract{This document contains declarations for the supporting the
+	ICL~HOL pretty printer.  They form a framework for pretty
+	printing terms and are used to declare and install printing
+	functions for the concrete syntaxes of the languages supported
+	by or added into ICL~HOL.}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	Library
+}}
+
+%\ftlinepenalty=9999
+\makeindex
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\catcode`\_=\active
+\def\_{\kern.06em\vbox{\hrule height.1ex width.3em}\hskip0.1em\relax}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+\makeTPPfrontpage
+
+\vfill
+\begin{center}
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+\end{center}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{DOCUMENT CONTROL}
+
+%********************************************************************
+
+\subsection{Contents List}
+\tableofcontents
+% \listoftables
+
+%********************************************************************
+
+\subsection{Document Cross References}
+
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+%********************************************************************
+
+\subsection{Changes History}
+
+\begin{description}
+
+\item[\FormatDate{%e%%
+}, issue \SCCSissue~] First issue.
+
+\end{description}
+
+%********************************************************************
+
+\subsection{Changes Forecast} \label{ChangesForecast}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{GENERAL}
+
+%********************************************************************
+
+\subsection{Scope}
+
+This document contains the pretty printer support structure for the ICL
+HOL system.  The high-level design for this document
+in~\cite{DS/FMU/IED/HLD008}.
+
+%********************************************************************
+
+\subsection{Introduction}
+
+%--------------------------------------------------------------------
+
+\subsection{Purpose and Background}
+
+The desired attributes of the pretty printer subsystem are defined in
+\cite{DS/FMU/IED/HLD002} and further elaborated in
+\cite{DS/FMU/IED/HLD008}.  This part of the pretty printer subsystem
+hols the basic pretty printing routines.
+
+%--------------------------------------------------------------------
+
+%\subsection{Dependencies}
+%\subsection{Interface}
+\subsection{Algorithms}
+
+The basic pretty printing algorithm is a recursive descent through the
+data structures holding the HOL term.  At each stage the outermost
+structure of the term is destroyed and a suitable printing function
+chosen.  The called function prints out various fixed strings and
+spacing interleaved with the the subterms it is given.  These subterms
+are printed by calling the outermost printing function.
+
+Suitable printing functions are chosen based on the ``current
+language'' or the language of the HOL constant being applied at the
+outermost level of each recursive call.  A database of languages and
+printing functions is held, and routines are provided in this structure
+to access the database.
+
+%--------------------------------------------------------------------
+
+%\subsection{Possible Enhancements}
+%\subsection{Deficiencies}
+%\subsection{Terminology}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+\section{SIGNATURE} \label{StartSignature}
+
+=DOC
+signature âPrettyPrinterSupportá = sig
+=ENDDOC
+
+\section{LANGUAGE EMBEDDING INTERFACE}
+
+Some extra interfaces are provided for adding printing functions
+for embedded languages.
+
+%--------------------------------------------------------------------
+=DOC
+datatype âPrec_Contextá
+	=	âpc_highestá
+	|	âpc_normalá		of int * int * bool
+	|	âpc_lowestá
+	|	âpc_very_lowá		of int * int * bool
+	;
+=DESCRIBE
+Precedence levels used to help decide when brackets are necessary in
+the generated text.  The levels are used as follows.
+
+\begin{description}
+\def\ITEM#1{\item[$#1$ ] }
+
+\ITEM{pc_highest} Items which are self bracketing (e.g., HOL set
+	displays which are enclosed by curly braces) bind most tightly,
+	they have this high precedence, they do not need to be enclosed in
+	round brackets.
+
+\ITEM{pc_normal} Most of the precedences used are given with this
+	constructor.
+
+\ITEM{pc_lowest} The normal lowest precedence binds weakly, it is
+	mostly used as an enclosing precedence (e.g., within round
+	brackets or between the words `{\tt if}' and `{\tt then}' of a
+	HOL conditional), it shows that any other language construct
+	may be enclosed without the need for brackets.
+
+\ITEM{pc_very_low} In some cases brackets must be added around a term,
+	but multiple set of brackets are not wanted.  Having an extra
+	precedence below $pc_lowest$ allows the general bracket
+	elimination mechanism to be used to insert only those brackets
+	that are necessary.  For generality the same arguments are
+	provided as with $pc_normal$, they have the same
+	interpretation.
+
+\end{description}
+=SEEALSO
+Function $ge_prec$ for details of comparing these values.
+=ENDDOC
+%--------------------------------------------------------------------
+
+%--------------------------------------------------------------------
+=DOC
+val âge_precá : Prec_Context * Prec_Context -> bool;
+(* infix ge_prec; *)
+=DESCRIBE
+Compares two precedences returning $true$ when the first (left hand)
+argument is greater than or equal to the second.  Values of
+$pc_highest$ are greater than $pc_normal$ which are greater than
+$pc_lowest$ which are greater than $pc_very_low$.
+
+With two values of $pc_normal$ the second integer is only used when the
+first integers are the same.  The boolean is only used when the first
+integers and the second integers are the same.  Normal integer
+comparisons are used.  A suggested use of this three stage comparison
+is to distinguish: (first integer) the area of the syntax; (second
+integer) the precedence of an infix, prefix or postfix operator with
+the syntax area for operators; and, (boolean) the associativity of the
+operator.
+
+Associativity comparisons are as follows: (assuming both pairs of
+integers compared equal) if either of the booleans are $false$ then
+brackets are not required, if both are $true$ then brackets are
+required.
+
+Two values of $pc_very_low$ are compared in the same way as
+values of $pc_normal$.
+
+For values where only the syntax area is of interest, the second
+integer and the boolean should be set to zero and $false$.
+=ENDDOC
+%--------------------------------------------------------------------
+
+%--------------------------------------------------------------------
+=DOC
+(* Flag âpp_add_bracketsá : boolean control, default false *)
+=DESCRIBE
+Controls the bracket elimination conventions in the pretty printer by
+changing the way that function $ge_prec$ works.  When set to $true$
+many brackets are included in the output, this is achieved by making
+$ge_prec$ return $true$ more often.  The default (namely $false$) is to
+eliminate most of the unnecessary brackets.  Note, the bracket
+elimination conventions intentionally leave in some brackets where,
+strictly, they are not needed.  The intention is to leave those
+brackets that help in understanding the structure of the term or type.
+
+When the flag is $true$ function $ge_prec$ returns $true$ whenever
+its first argument is not $pc_lowest$, it returns $false$ otherwise.
+=ENDDOC
+%--------------------------------------------------------------------
+
+%--------------------------------------------------------------------
+=DOC
+datatype âPFUN_ANSá
+	=	âpf_fewerá		of int
+	|	âpf_not_possibleá
+	|	âpf_oká
+	;
+=DESCRIBE
+The result type of functions used to print out a function application
+of a constant to a list of arguments, this is component $pe_fun_app$ of
+datatype $PP_ENV$ below.  Value $pf_ok$ means that the application has
+been output.  Value $pf_not_possible$ means that the application cannot
+be printed by this function.  Value $pf_fewer$ means the function can
+print out the application, but not with the given number of arguments,
+the integer indicates how many arguments it could print.
+=ENDDOC
+%--------------------------------------------------------------------
+
+%--------------------------------------------------------------------
+=DOC
+datatype âPP_ENVá = pp_env of {
+	âpe_precá	: Prec_Context,
+	âpe_langá	: string,
+	âpe_fun_appá	: PP_ENV -> string -> TYPE -> TERM list -> PFUN_ANS,
+	âpe_combá	: PP_ENV -> TERM -> TERM list -> unit,
+	âpe_constá	: PP_ENV -> string -> TYPE -> unit,
+	âpe_vará	: PP_ENV -> string -> TYPE -> unit,
+	âpe_absá	: PP_ENV -> TERM -> TERM -> unit,
+	âpe_addstringá	: string -> unit,
+	âpe_beginbá	: (int * bool) -> unit,
+	âpe_endbá	: unit -> unit,
+	âpe_spaceá	: (int * int) -> unit
+};
+=DESCRIBE
+An environment value passed between the printing functions.
+
+Elements $pe_abs$, $pe_comb$, $pe_const$, $pe_fun_app$ and $pe_var$ are
+the printing routines for the current language which is given by
+$pe_lang$.
+
+Elements $pe_addstring$, $pe_beginb$, $pe_endb$ and $pe_space$ are the
+Oppen style printing routines to be used,
+see~\cite{DS/FMU/IED/IMP024}.
+=ENDDOC
+%--------------------------------------------------------------------
+
+%--------------------------------------------------------------------
+=DOC
+val âset_printersá :
+	(string *
+		( (PP_ENV -> TERM -> TERM -> unit)			(* abs *)
+		* (PP_ENV -> TERM -> TERM list -> unit)		(* comb *)
+		* (PP_ENV -> string -> TYPE -> unit)			(* const *)
+		* (PP_ENV -> string -> TYPE -> TERM list
+				-> PFUN_ANS)				(* fun app *)
+		* (PP_ENV -> string -> TYPE -> unit)			(* var *)
+	))  -> unit;
+=DESCRIBE
+Sets the printing functions to be used for the language named
+in the string argument.
+=FAILURE
+25004	language name is not all graphical characters
+=ENDDOC
+%--------------------------------------------------------------------
+
+%--------------------------------------------------------------------
+=DOC
+val initial_env : string -> OppenFormatting.OPPEN_FUNS -> PP_ENV;
+=DESCRIBE
+Creates an initial environment value to contain the printing functions
+for the named language and the given Oppen printing functions.  If there
+are no function available for the named language then functions for
+HOL are tried, if these are not available then error 25003 is issued.
+=FAILURE
+25003	Printing functions not installed for the given language
+=ENDDOC
+%--------------------------------------------------------------------
+
+%--------------------------------------------------------------------
+=DOC
+val set_env_for_language : string -> PP_ENV -> PP_ENV;
+=DESCRIBE
+Updates an environment value to contain printing functions for
+the named language.  If the language is not known then the HOL
+printing functions are selected.
+=FAILURE
+25003	Printing functions not installed for the given language
+=ENDDOC
+%--------------------------------------------------------------------
+
+%--------------------------------------------------------------------
+=DOC
+val set_prec : Prec_Context -> PP_ENV -> PP_ENV;
+=DESCRIBE
+Updates an environment value to contain the given precedence value.
+=ENDDOC
+%--------------------------------------------------------------------
+
+%--------------------------------------------------------------------
+=DOC
+val âstart_new_languageá : PP_ENV -> string -> unit;
+val âconclude_new_languageá : PP_ENV -> string -> unit;
+=DESCRIBE
+These functions output the appropriate start and end of quotation
+characters for the indicated language.
+=ENDDOC
+%--------------------------------------------------------------------
+
+%--------------------------------------------------------------------
+=DOC
+val âmain_term_ppá : PP_ENV -> TERM -> unit;
+=DESCRIBE
+Entry point to the recursive part of the pretty printer.  All of the
+printing functions call this function to print the sub terms of the
+term they were given.
+=ENDDOC
+%--------------------------------------------------------------------
+
+%--------------------------------------------------------------------
+=DOC
+val âget_first_constá : TERM -> string OPT;
+=DESCRIBE
+If the given term is a constant applied to a list of arguments then
+return its name. 
+=ENDDOC
+%--------------------------------------------------------------------
+
+=DOC
+end (* of signature PrettyPrinterSupport *);
+=ENDDOC
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{TEST POLICY}
+
+See the pretty printer detailed design document~\cite{DS/FMU/IED/DTD025}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%********************************************************************
+%--------------------------------------------------------------------
+
+\makeatletter
+\def\refstepcounter#1{\stepcounter{#1}\global\edef\@currentlabel{\csname
+	p@#1\endcsname\csname the#1\endcsname}}
+\makeatother
+
+\twocolumn[\section{INDEX}] \label{Index}
+
+\footnotesize
+\printindex
+
+\onecolumn
+
+\end{document}
