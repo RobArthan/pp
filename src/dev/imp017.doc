@@ -22,7 +22,7 @@ Don't worry about this!
 %\TPPpart{}
 \TPPtitle{SLR Parser Generator}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP017}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.48 $%
+\def\SCCSversion{$Revision: 1.49 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 %\TPPdate{}  %% Mandatory field (with sensible default)
@@ -136,6 +136,7 @@ of the printing code.
 \item[Issue 1.45] Fixed bug in print-out of LR(0) automaton.
 \item[Issues 1.46--1.48] Added generic parser output facility --- it can now write the reduction functions for you!
 \item[Issue 1.49] Fixed bug in FOLLOW.
+\item[Issue 1.50] Fixed obscure problem with accept/reduce conflicts.
 \end{description}
 
 See also HISTORICAL NOTES below.
@@ -2129,6 +2130,19 @@ fun Ûformat_sym_classÝ (VarClass v) = v
 To resolve a reduce/reduce conflict we need to choose an alternative in
 the list of possible alternatives by which to reduce. We choose
 the one which appears earliest in the grammar.
+
+There is also a possibility of an accept/reduce conflict, which we treat as a kind of
+reduce/reduce conflict.  This occurs e.g., for the grammar containing the single
+production $S = S;$. Accept/shift conflicts are not possible, since {\em(a)} an accept
+is only every generated for the end-of-sentence terminal, and {\em(b)} a shift on a terminal
+$t$ is only generated when there is some item $\alpha.t\beta$ in the actual grammar
+(not the augmented grammar) so that $t$ cannot be the end-of-sentence terminal.
+To give the right (non-terminating) semantics to a parser for grammars such
+as $S = S;$, accept should also lose in an accept/reduce conflict.
+
+The following function which resolves reduce/reduce and accept/reduce conflicts
+assumes there are actually some conflicts to resolve (and would raise an acception if the
+supplied actions did not contain any reduce conflicts).
 =SML
 fun Ûresolve_reduce_reduceÝ (g : ('lc)GRAMMAR) (acts : ACTION list) : ACTION list = (
 	let	fun folder
@@ -2149,7 +2163,7 @@ fun Ûresolve_reduce_reduceÝ (g : ('lc)GRAMMAR) (acts : ACTION list) : ACTION lis
 			end
 		) | folder (x1, _) = x1;
 		val winner = fold folder acts (find acts (fn Reduce _ => true | _ => false));
-	in	acts drop (fn (x as (Reduce _)) => x <> winner | _ => false)
+	in	acts less Accept drop (fn (x as (Reduce _)) => x <> winner | _ => false)
 	end	handle Fail _  => acts
 );
 =TEX
@@ -2219,10 +2233,13 @@ fun Ûprint_dynamic_actionsÝ (put : string -> unit)
 	end
 );
 =TEX
+Recall that we treat an accept/reduce conflict as a kind of reduce/reduce conflict.
 =SML
 fun Ûhas_rrÝ (Reduce _ :: more : ACTION list) : bool = (
-	any more (fn Reduce _ => true |_ =>  false)
-) | has_rr (_ :: more ) = has_rr more
+	any more (fn Reduce _ => true | Accept => true | _ =>  false)
+) | has_rr (Accept :: more ) = (
+	any more (fn Reduce _ => true | Accept => true | _ =>  false) orelse has_rr more
+) | has_rr (_ :: more) = has_rr more
 |   has_rr [] = false;
 =TEX
 =SML
@@ -2772,7 +2789,7 @@ end; (* of structure Slrp *)
 \subsection{Shell Interface}
 =DUMP slrp
 #!/bin/sh
-# slrp From: $Id: imp017.doc,v 1.48 2003/02/26 17:30:25 rda Exp rda $
+# slrp From: $Id: imp017.doc,v 1.49 2003/02/28 10:52:59 rda Exp $
 # Shell script to run the SLRP Parser Generator
 if test -z "$PROGNAME"
 then
