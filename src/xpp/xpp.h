@@ -244,7 +244,6 @@ typedef struct menu_item {
 		Widget	*menu_w,
 		NAT	undo_menu_entry_offset,
 		NAT	redo_menu_entry_offset);
-	extern void undo_motion_cb(CALLBACK_ARGS);
 	extern void undo_modify_cb(CALLBACK_ARGS);
 	extern void undo_cb(CALLBACK_ARGS);
 	extern void redo_cb(CALLBACK_ARGS);

@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.30 2002/10/17 17:09:34 rda Exp rda $
+ * $Id: mainw.c,v 2.31 2002/10/24 13:38:40 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -707,9 +707,6 @@ static Boolean setup_main_window(
 
 	XtAddCallback(script,
 		XmNmodifyVerifyCallback, script_modify_cb, undo_ptr);
-
-	XtAddCallback(script,
-		XmNmotionVerifyCallback, undo_motion_cb, undo_ptr);
 
 	XtAddCallback(script,
 		XmNmotionVerifyCallback, line_number_cb, NULL);
