@@ -145,8 +145,9 @@ Fixed bug 167.
 Update for SML'97.
 \item[Issue 1.47] Use of new INTEGER type.
 \item[Issue 1.48] Performance improvement in {\it icl'inst\_term\_rule}.
-\item[Issue 1.49] Performance improvement when checking new constant and type names: removed
-redundant linear search of current theory.
+\item[Issues 1.49, 1.50] Performance improvement when checking additions to the the theory: removed
+redundant linear search of current theory for constant names and type names and introduced
+efficient dictionaries for axiom, definiition and theorem keys.
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
@@ -467,6 +468,9 @@ type ÛSTATEÝ = {hierarchy : icl'HIERARCHY,
 	theory : icl'THEORY ref,
 	ty_env : {arity:int, level:int} E_DICT,
 	con_env : {ty:TYPE, level:int} E_DICT,
+	defn_dict : THM E_DICT,
+	axiom_dict : THM E_DICT,
+	thm_dict : THM E_DICT,
 	sealed : int};
 =TEX
 \subsection{Interface Types}
@@ -598,6 +602,9 @@ in
 		theory = min,
 		ty_env = initial_e_dict,
 		con_env = initial_e_dict,
+		defn_dict = initial_e_dict,
+		axiom_dict = initial_e_dict,
+		thm_dict = initial_e_dict,
 		sealed = 0};
 end;
 =TEX
@@ -1156,7 +1163,7 @@ status TSancestor.
 =SML
 fun Ûicl'freeze_hierarchyÝ () : unit = (
 let	val {hierarchy=hierarchy as hier(inconsistent,lookup), theory=theory, ty_env=ty_env, 
-		con_env=con_env, sealed=sealed} = !current;
+		con_env=con_env, sealed=sealed, ...} = !current;
 	val dummy = if !inconsistent
 		then error "icl'freeze_hierarchy" 6083 []
 		else ();
@@ -1194,7 +1201,7 @@ one, as well as returning this value.
 =SML
 fun Ûicl'new_hierarchyÝ () : icl'HIERARCHY = (
 let	val {hierarchy=hierarchy as hier(inconsistent,lookup), theory=theory, ty_env=ty_env, 
-		con_env=con_env, sealed=sealed} = !current;
+		con_env=con_env, sealed=sealed, ... } = !current;
 	val dummy = if !inconsistent
 		then error "icl'new_hierarchy" 6083 []
 		else ();
@@ -1218,7 +1225,7 @@ end);
 =TEX
 Now we give a ``load hierarchy'' function, as demanded by the specification.
 As the current theory address doesn't change, and its contents and its ancestors are
-equal, $ty\_env$ and $con\_env$ do not change.
+equal, $ty\_env$ and $con\_env$ and the theorem, definition and axiom dictionaries do not change.
 The specification step 1 is irrelevant to our style of
 implementation.
 
@@ -1259,7 +1266,8 @@ in
 fun Ûicl'load_hierarchyÝ (hir as (hier(inconsistent,lookup): icl'HIERARCHY)) : unit = (
 let	val {hierarchy=hierarchy as hier(inconsistent1, old_lookup),
 		theory=theory, ty_env=ty_env, 
-		con_env=con_env, sealed=sealed} = !current;
+		con_env=con_env, defn_dict = defn_dict, thm_dict = thm_dict,
+		axiom_dict  = axiom_dict, sealed=sealed} = !current;
 	val dummy = if !inconsistent
 		then error "icl'load_hierarchy" 6092 []
 		else ();
@@ -1272,7 +1280,8 @@ in
 	val dummy = map_hierarchy (match_scope hierarchy) hir;
 	in
 	current := {hierarchy = hir, theory=theory, ty_env=ty_env, 
-		con_env=con_env, sealed=sealed}
+		con_env=con_env, defn_dict = defn_dict, thm_dict = thm_dict,
+		axiom_dict  = axiom_dict, sealed=sealed}
 		(* spec step 3 *)
 	end)
 	else fail "icl'load_hierarchy" 6033 []
@@ -1322,7 +1331,8 @@ that there will be no unopennable theories.
 fun Ûicl'seal_hierarchyÝ () : unit = (
 let	val {hierarchy=hierarchy as hier (inconsistent,lookup), 
 		theory=theory, ty_env=ty_env, 
-		con_env=con_env, sealed=sealed} = !current;
+		con_env=con_env, defn_dict = defn_dict, thm_dict = thm_dict,
+		axiom_dict  = axiom_dict, sealed=sealed} = !current;
 	val dummy = if !inconsistent
 		then error "icl'seal_hierarchy" 6083 []
 		else ();
@@ -1353,6 +1363,8 @@ let	val {hierarchy=hierarchy as hier (inconsistent,lookup),
 in
 	current := {hierarchy = hierarchy, theory=theory, ty_env=ty_env, 
 		con_env=con_env, 
+		defn_dict = defn_dict, thm_dict = thm_dict,
+		axiom_dict  = axiom_dict,
 		sealed=icl'get_current_theory_name ()}
 end
 );
@@ -1415,8 +1427,8 @@ Interrupting the body of the main $let$ statement may leave the state with the $
 =SML
 fun Ûicl'open_theoryÝ (nm : string) : (int list * int list) = (
 let	val {hierarchy = hierarchy as hier (inconsistent,lookup),
-		theory=theory, ty_env=ty_env, con_env=con_env
-		,sealed=sealed} = !current;
+		theory=theory, ty_env=ty_env, con_env=con_env,
+		sealed=sealed, ...} = !current;
 	val top_theory = uindex lookup;
 	val thyn = internal_theory_name nm "icl'open_theory"; (* spec step 1 *)
 
@@ -1429,9 +1441,17 @@ let	val {hierarchy = hierarchy as hier (inconsistent,lookup),
 
 	val ThyInfo{status = status,
 		inscope = inscope,
-		contents = contents,
+		contents = contents as ref (Thy
+			{defn_dict = def_sd, axiom_dict = ax_sd, thm_dict = thm_sd, ...}),
 		children = children,
 		name = name} = sub(lookup,thyn);
+
+	val ax_ed = list_e_merge initial_e_dict ax_sd;
+
+	val def_ed = list_e_merge initial_e_dict def_sd;
+
+	val thm_ed = list_e_merge initial_e_dict thm_sd;
+	
 =TEX
 The following auxiliary function takes everything necessary out of scope, sets all the inscope fields to
 their correct value.
@@ -1496,7 +1516,8 @@ Notice we must take everything necessary out of scope before we put anything int
 =SML
 	in
 	(current := {hierarchy=hierarchy, theory=contents, ty_env=te, 
-		con_env=ce, sealed=sealed};
+		con_env=ce, defn_dict = def_ed, thm_dict = thm_ed,
+		axiom_dict  = ax_ed, sealed=sealed};
 	inconsistent := was_inconsistent;
 		(* spec step 3, 4 *)
 	(ins, outs))
@@ -1510,7 +1531,7 @@ If it is interrupted then the state may be left with the $inconsistent$ flag set
 fun Ûicl'delete_theoryÝ (nm : string) : unit = (
 let	val {hierarchy = hierarchy as hier (inconsistent,lookup),
 		theory=theory, ty_env=ty_env, con_env=con_env, 
-		sealed=sealed} = !current;
+		sealed=sealed, ...} = !current;
 
 	val thyn = internal_theory_name nm "icl'delete_theory"; (* spec. step 1 *)
 	
@@ -1557,7 +1578,7 @@ fun Ûicl'new_theoryÝ (nm : string) : int = (
 	then fail "icl'new_theory" 6040 [fn () => nm]
 	else let val {hierarchy = hierarchy as hier (inconsistent,lookup), 
 		theory=theory, ty_env=ty_env, con_env=con_env, 
-		sealed=sealed} = !current;
+		sealed=sealed, ...} = !current;
 	val dummy = if !inconsistent
 		then error "icl'new_theory" 6083 []
 		else ();
@@ -1597,7 +1618,9 @@ let	val dummy = (check_c_writable "icl'new_parent";
 
 	val {hierarchy=hierarchy as hier (inconsistent,lookup), 
 		theory=theory, ty_env=cty_env,
-		con_env=ccon_env,sealed=sealed}
+		con_env=ccon_env,
+		defn_dict = def_ed, axiom_dict = ax_ed, thm_dict = thm_ed,
+		sealed=sealed}
 		 = !current;
 
 	val ThyInfo{status = fstatus, 
@@ -1696,7 +1719,9 @@ in
 	add_child cthy [pthy];
 	theory := new_thy;
 	current := {hierarchy=hierarchy, theory=theory, ty_env = new_ty_env, 
-		con_env=new_con_env,sealed=sealed};
+		con_env=new_con_env,
+		defn_dict = def_ed, axiom_dict = ax_ed, thm_dict = thm_ed,
+		sealed=sealed};
 	inconsistent:= was_inconsistent;
 	new_thys_in_scope
 end);
@@ -1767,6 +1792,7 @@ Interrupting the body of the main $let$ statement may leave the state with the $
 fun Ûicl'duplicate_theoryÝ (fromnm : string) (tonm : string) : int = (
 let	val {hierarchy = hierarchy as hier (inconsistent,lookup),
 		theory=theory, ty_env=cty_env, con_env=ccon_env, 
+		defn_dict = def_ed, axiom_dict = ax_ed, thm_dict = thm_ed,
 		sealed=sealed} = !current;
 	val dummy = if !inconsistent
 		then error "icl'duplicate_theory" 6083 []
@@ -1838,6 +1864,7 @@ in
 	add_child ntop_theory parents;
 	current := {hierarchy = hierarchy,
 		theory=theory, ty_env=cty_env, con_env=ccon_env, 
+		defn_dict = def_ed, axiom_dict = ax_ed, thm_dict = thm_ed,
 		sealed=sealed};
 	inconsistent:=was_inconsistent;
 	ntop_theory
@@ -1893,7 +1920,12 @@ let	val dummy = (check_thm "icl'list_save_thm" thm;
 		then fail "icl'list_save_thm" 6031 []
 		else check_c_writable "icl'list_save_thm"); (* part of spec. step 2 *)
 
-	val {theory = ctheory,...} = !current;
+	val {hierarchy=hierarchy as hier (inconsistent,lookup), 
+		theory=ctheory, ty_env=cty_env,
+		con_env=ccon_env,
+		defn_dict = def_ed, axiom_dict = ax_ed, thm_dict = thm_ed,
+		sealed=sealed}
+		 = !current;
 
 	val Thy{name = iname,
 		ty_env = ty_env,
@@ -1916,16 +1948,24 @@ an ancestor theory, as described in the specification.
 		sequent = sequent};
 =TEX
 We test that all the keys are new (part of spec. step 2) at the same time as 
-adding new entries to the dictionary, by using $s\_extend$
+adding new entries to the cached dictionary, by using $e\_extend$
 (spec. step 3).
+We can then just extend the dictionary in the theory by cons-ing with no further check.
 =SML
-	val new_thm_dict = (fold (fn (x,y) => x y)
+
+	val new_thm_ed = (fold (fn (x,y) => x y)
 		(map (fn key => fn dct =>
-			s_extend key new_thm dct
+			e_extend key new_thm dct
 			handle complaint =>
-			divert complaint "s_extend" "icl'list_save_thm" 6039
+			divert complaint "e_extend" "icl'list_save_thm" 6039
 		 [(fn () => key),
 		  (fn () => get_current_theory_name())])
+		keys)
+		thm_ed);
+
+	val new_thm_dict = (fold (fn (x,y) => x y)
+		(map (fn key => fn dct =>
+			(key, new_thm) :: dct)
 		keys)
 		thm_dict);
 
@@ -1939,8 +1979,15 @@ adding new entries to the dictionary, by using $s\_extend$
 		thm_dict = new_thm_dict,
 		current_level = current_level,
 		user_data = user_data}
+	val was_inconsistent = !inconsistent;
 in
+	inconsistent:=true;
 	ctheory := new_thy; (* spec. step 4 *)
+	current :=  {hierarchy=hierarchy, theory=ctheory, ty_env = cty_env, 
+		con_env = ccon_env,
+		defn_dict = def_ed, axiom_dict = ax_ed, thm_dict = new_thm_ed,
+		sealed=sealed};
+	inconsistent:= was_inconsistent;
 	new_thm
 end);
 =TEX
@@ -1950,7 +1997,7 @@ Interrupting the body of the main $let$ statement may leave the state with the $
 fun Ûicl'delete_extensionÝ (():unit) : int = (
 let	val {hierarchy = hierarchy as hier (inconsistent,lookup), 
 		theory=theory, ty_env=cty_env, con_env=ccon_env, 
-		sealed=sealed} = !current;
+		sealed=sealed, thm_dict = thm_ed, ...} = !current;
 
 	val Thy{name = iname,
 		ty_env = ty_env,
@@ -2031,6 +2078,10 @@ but we are very cautious).
 	val new_defn_dict = defn_dict drop 
 		(fn (_,Thm{level=ll,...}) => ll >= last_level);
 
+	val ax_ed = list_e_merge initial_e_dict new_axiom_dict;
+
+	val def_ed = list_e_merge initial_e_dict new_defn_dict;
+
 	val new_thy = Thy{name = iname,
 		ty_env = new_ty_env,
 		con_env = new_con_env,
@@ -2050,6 +2101,7 @@ Note that the current theory address doesn't change, only the contents of the lo
 	theory := new_thy; (* spec. step 4 *)
 	current := {hierarchy=hierarchy, theory=theory,
 		ty_env=new_cty_env, con_env=new_ccon_env,
+		defn_dict = def_ed, axiom_dict = ax_ed, thm_dict = thm_ed,
 		sealed=sealed};
 	inconsistent:=was_inconsistent;
 	last_level
@@ -2058,7 +2110,12 @@ end);
 Delete a named theorem from the current theory:
 =SML
 fun Ûicl'delete_thmÝ (key : string) : THM = (
-let	val {theory=theory, ...} = !current;
+let	val {hierarchy=hierarchy as hier (inconsistent,lookup), 
+		theory=theory, ty_env=cty_env,
+		con_env=ccon_env,
+		defn_dict = def_ed, axiom_dict = ax_ed, thm_dict = thm_ed,
+		sealed=sealed}
+		 = !current;
 
 	val Thy{name = iname,
 		ty_env = ty_env,
@@ -2081,6 +2138,8 @@ let	val {theory=theory, ...} = !current;
 
 	val new_thm_dict = s_delete key thm_dict; (* spec step 2 *)
 
+	val new_thm_ed = e_delete key thm_ed;
+
 	val new_thy = Thy{name = iname,
 		ty_env = ty_env,
 		con_env = con_env,
@@ -2091,15 +2150,28 @@ let	val {theory=theory, ...} = !current;
 		thm_dict = new_thm_dict,
 		current_level = current_level,
 		user_data = user_data}
+
+	val was_inconsistent = !inconsistent;
 in
+	inconsistent := true;
+	current := {hierarchy=hierarchy, theory=theory,
+		ty_env=cty_env, con_env=ccon_env,
+		defn_dict = def_ed, axiom_dict = ax_ed, thm_dict = new_thm_ed,
+		sealed=sealed};
 	theory := new_thy;
+	inconsistent:=was_inconsistent;
 	dthm
 end);
 =TEX
 Add an axiom to the current theorem:
 =SML
 fun Ûicl'new_axiomÝ (keys : string list, tm : TERM) : THM = (
-let	val {theory=theory,...} = !current;
+let	val {hierarchy=hierarchy as hier (inconsistent,lookup), 
+		theory=theory, ty_env=cty_env,
+		con_env=ccon_env,
+		defn_dict = def_ed, axiom_dict = ax_ed, thm_dict = thm_ed,
+		sealed=sealed}
+		 = !current;
 
 	val Thy{name = iname,
 		ty_env = ty_env,
@@ -2125,15 +2197,23 @@ let	val {theory=theory,...} = !current;
 		theory=theory, 
 		sequent = ([], tm)}; (* spec step 2,3 *)
 =TEX
-We both check for an unused key (part of specification step 1 *), and insert a new entry in the dictionary by using $s\_extend$.
+We test that all the keys are new (part of spec. step 1) at the same time as 
+adding new entries to the cached dictionary, by using $e\_extend$.
+We can then just extend the dictionary in the theory by cons-ing with no further check.
 =SML
-	val new_axiom_dict = (fold (fn (x,y) => x y)
+	val new_ax_ed = (fold (fn (x,y) => x y)
 		(map (fn key => fn dct =>
-			s_extend key new_axiom dct
+			e_extend key new_axiom dct
 			handle complaint =>
-			divert complaint "s_extend" "icl'new_axiom" 6047 
+			divert complaint "e_extend" "icl'new_axiom" 6047 
 			[(fn () => key), 
 			 (fn () => get_current_theory_name ())])
+		keys)
+		ax_ed);
+
+	val new_axiom_dict = (fold (fn (x,y) => x y)
+		(map (fn key => fn dct =>
+			(key, new_axiom) :: dct)
 		keys)
 		axiom_dict);
 
@@ -2146,9 +2226,17 @@ We both check for an unused key (part of specification step 1 *), and insert a n
 		defn_dict = defn_dict,
 		thm_dict = thm_dict,
 		current_level = current_level+1,
-		user_data = user_data}
+		user_data = user_data};
+
+	val was_inconsistent = !inconsistent;
 in
-	theory := new_thy; (* spec step 4 *)
+	inconsistent:=true;
+	theory := new_thy; (* spec. step 4 *)
+	current := {hierarchy=hierarchy, theory=theory,
+		ty_env= cty_env, con_env=ccon_env,
+		defn_dict = def_ed, axiom_dict = new_ax_ed, thm_dict = thm_ed,
+		sealed=sealed};
+	inconsistent:=was_inconsistent;
 	new_axiom
 end);
 =TEX
@@ -2162,7 +2250,9 @@ Interrupting the body of the main $let$ statement may leave the state with the $
 =SML
 fun Ûicl'new_constÝ (nm : string, ty : TYPE) : TERM = (
 let	val {hierarchy=hierarchy as hier(inconsistent,lookup), theory=theory, ty_env=cty_env, 
-		con_env=ccon_env,sealed=sealed} = !current;
+		con_env=ccon_env,
+		defn_dict = def_ed, axiom_dict = ax_ed, thm_dict = thm_ed,
+		sealed=sealed} = !current;
 
 	val Thy{name = iname,
 		ty_env = ty_env,
@@ -2188,7 +2278,7 @@ let	val {hierarchy=hierarchy as hier(inconsistent,lookup), theory=theory, ty_env
 
 	val con_decl = {ty=ty,level=current_level+1};
 
-	val new_con_env = s_extend nm con_decl con_env;
+	val new_con_env = (nm, con_decl) :: con_env;
 
 	val new_thy = Thy{name = iname,
 		ty_env = ty_env,
@@ -2207,7 +2297,9 @@ in
 	inconsistent:=true;
 	theory := new_thy;
 	current := {hierarchy=hierarchy, theory=theory, ty_env=cty_env, 
-		con_env=new_ccon_env,sealed=sealed};
+		con_env=new_ccon_env,
+		defn_dict = def_ed, axiom_dict = ax_ed, thm_dict = thm_ed,
+		sealed=sealed};
 	inconsistent:=was_inconsistent;
 	new_const
 end);
@@ -2218,7 +2310,9 @@ Interrupting the body of the main $let$ statement may leave the state with the $
 fun Ûicl'new_typeÝ (nm : string, arity : int) : TYPE = (
 let	val {hierarchy=hierarchy as hier(inconsistent,lookup), 
 		theory=theory, ty_env=cty_env, 
-		con_env=ccon_env,sealed=sealed} = !current;
+		con_env=ccon_env,
+		defn_dict = def_ed, axiom_dict = ax_ed, thm_dict = thm_ed,
+		sealed=sealed} = !current;
 
 	val Thy{name = iname,
 		ty_env = ty_env,
@@ -2244,7 +2338,7 @@ let	val {hierarchy=hierarchy as hier(inconsistent,lookup),
 
 	val type_decl = {arity=arity,level=current_level+1};
 
-	val new_ty_env = s_extend nm type_decl ty_env;
+	val new_ty_env = (nm, type_decl) :: ty_env;
 
 	val new_thy = Thy{name = iname,
 		ty_env = new_ty_env,
@@ -2263,7 +2357,9 @@ in
 	inconsistent:=true;
 	theory := new_thy;
 	current := {hierarchy=hierarchy, theory=theory, ty_env = new_cty_env, 
-		con_env=ccon_env,sealed=sealed};
+		con_env=ccon_env,
+		defn_dict = def_ed, axiom_dict = ax_ed, thm_dict = thm_ed,
+		sealed=sealed};
 	inconsistent:=was_inconsistent;
 	new_type
 end);
@@ -2275,7 +2371,9 @@ Note that the function assumes the presence of $=$ as a valid constant.
 fun Ûicl'new_defnÝ (keys : string list, cnm : string, vl : TERM) : THM = (
 let	val {hierarchy=hierarchy as hier(inconsistent,lookup), 
 		 theory=theory, ty_env=cty_env,
-		 con_env=ccon_env,sealed=sealed} = !current;
+		 con_env=ccon_env,
+		defn_dict = def_ed, axiom_dict = ax_ed, thm_dict = thm_ed,
+		sealed=sealed} = !current;
 
 	val Thy{name = iname,
 		ty_env = ty_env,
@@ -2320,7 +2418,7 @@ Now build up the new material:
 
 	val con_decl = {ty=ctype,level=current_level+1};
 
-	val new_con_env = s_extend cnm con_decl con_env;
+	val new_con_env = (cnm, con_decl) :: con_env;
 
 	val new_ccon_env = add_con_env [ (cnm,con_decl)] ccon_env;
 
@@ -2328,13 +2426,19 @@ Now build up the new material:
 		theory=theory, 
 		sequent = ([], mk_eq(new_const, vl))};
 
-	val new_defn_dict = (fold (fn (x,y) => x y)
+	val new_def_ed = (fold (fn (x,y) => x y)
 		(map (fn key => fn dct =>
-			s_extend key new_defn dct
+			e_extend key new_defn dct
 			handle complaint =>
-			divert complaint "s_extend" "icl'new_defn" 6051 
+			divert complaint "e_extend" "icl'new_defn" 6051 
 			[(fn () => key), 
 			 (fn () => get_current_theory_name())])
+		keys)
+		def_ed);
+
+	val new_defn_dict = (fold (fn (x,y) => x y)
+		(map (fn key => fn dct =>
+			(key, new_defn) :: dct)
 		keys)
 		defn_dict);
 
@@ -2353,7 +2457,9 @@ in
 	inconsistent:=true;
 	theory := new_thy;
 	current := {hierarchy=hierarchy, theory=theory, ty_env=cty_env, 
-		con_env=new_ccon_env,sealed=sealed};
+		con_env=new_ccon_env,
+		defn_dict = new_def_ed, axiom_dict = ax_ed, thm_dict = thm_ed,
+		sealed=sealed};
 	inconsistent:=was_inconsistent;
 	new_defn
 end);
@@ -2367,7 +2473,9 @@ fun Ûicl'new_type_defnÝ (keys : string list, tnm : string,
 		defthm : THM as Thm{sequent = (asms, concl),...}) : THM = (
 let	val {hierarchy=hierarchy as hier(inconsistent,lookup),
 		 theory=theory, ty_env=cty_env, 
-		con_env=ccon_env,sealed=sealed} = !current;
+		con_env=ccon_env,
+		defn_dict = def_ed, axiom_dict = ax_ed, thm_dict = thm_ed,
+		sealed=sealed} = !current;
 
 	val Thy{name = iname,
 		ty_env = ty_env,
@@ -2447,18 +2555,24 @@ Now build up the new material:
 
 	val ty_decl = {arity = arity,level=current_level+1};
 
-	val new_ty_env = s_extend tnm ty_decl ty_env;
+	val new_ty_env = (tnm, ty_decl) :: ty_env;
 
 	val new_cty_env = add_ty_env [ (tnm,ty_decl)] cty_env;
 
-	val new_defn_dict = (fold (fn (x,y) => x y)
+	val new_def_ed = (fold (fn (x,y) => x y)
 		(map (fn key => fn dct =>
-			s_extend key new_type_defn dct
+			e_extend key new_type_defn dct
 			handle complaint =>
-			divert complaint "s_extend" 
+			divert complaint "e_extend" 
 				"icl'new_type_defn" 6051
 				 [(fn () => key),
 				 (fn () => get_current_theory_name())])
+		keys)
+		def_ed);
+
+	val new_defn_dict = (fold (fn (x,y) => x y)
+		(map (fn key => fn dct =>
+			(key, new_type_defn) :: dct)
 		keys)
 		defn_dict);
 
@@ -2477,7 +2591,9 @@ in
 	inconsistent:=true;
 	theory := new_thy;
 	current := {hierarchy=hierarchy, theory=theory, ty_env=new_cty_env, 
-		con_env=ccon_env,sealed=sealed};
+		con_env=ccon_env,
+		defn_dict = new_def_ed, axiom_dict = ax_ed, thm_dict = thm_ed,
+		sealed=sealed};
 	inconsistent:=was_inconsistent;
 	new_type_defn
 end);
@@ -2491,7 +2607,9 @@ fun Ûicl'new_specÝ (keys : string list, ndef : int,
 	defthm : THM as Thm{sequent = (asms, concl),...}) : THM = (
 let	val {hierarchy=hierarchy as hier(inconsistent,lookup),
 		 theory=theory, ty_env=cty_env, 
-		con_env=ccon_env,sealed=sealed} = !current;
+		con_env=ccon_env,
+		defn_dict = def_ed, axiom_dict = ax_ed, thm_dict = thm_ed,
+		sealed=sealed} = !current;
 
 	val Thy{name = iname,
 		ty_env = ty_env,
@@ -2588,7 +2706,7 @@ Check the results of picking apart the theorem:
 		xlist;
 
 	val new_con_env = fold 
-		(fn ((cnm,entry),edict) => s_extend cnm entry edict)
+		(fn (cnm_entry, dict) => cnm_entry ::  dict)
 		 con_decl con_env;
 
 	val new_ccon_env = add_con_env con_decl ccon_env;
@@ -2601,13 +2719,20 @@ Now put everything in the correct place:
 		theory=theory, 
 		sequent = ([], new_concl)};
 
-	val new_defn_dict = (fold (fn (x,y) => x y)
+	val new_def_ed = (fold (fn (x,y) => x y)
 		(map (fn key => fn dct =>
-			s_extend key new_defn dct
+			e_extend key new_defn dct
 			handle complaint =>
-			divert complaint "s_extend" "icl'new_spec" 6051 
+			divert complaint "e_extend" "icl'new_spec" 6051 
 				[(fn () => key),
 				(fn () => get_current_theory_name())])
+
+		keys)
+		def_ed);
+
+	val new_defn_dict = (fold (fn (x,y) => x y)
+		(map (fn key => fn dct =>
+			(key, new_defn) ::  dct)
 
 		keys)
 		defn_dict);
@@ -2627,7 +2752,9 @@ in
 	inconsistent:=true;
 	theory := new_thy;
 	current := {hierarchy=hierarchy, theory=theory, ty_env=cty_env, 
-		con_env=new_ccon_env,sealed=sealed};
+		con_env=new_ccon_env,
+		defn_dict = new_def_ed, axiom_dict = ax_ed, thm_dict = thm_ed,
+		sealed=sealed};
 	inconsistent := was_inconsistent;
 	new_defn
 end);
