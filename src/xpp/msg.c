@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2002/12/03 15:25:38 $ $Revision: 2.12 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2002/12/10 22:06:10 $ $Revision: 2.13 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -166,16 +166,14 @@ static void help_cb(
 static void poll_timeout_proc(XtPointer p, XtIntervalId *unused)
 {
 	Boolean *flag = p;
-	fprintf(stderr, "In timeout proc\n");
 	*flag = True;
 }
 static void poll(int *done){
 	XEvent xev;
 	Boolean listening = False;
-	XtAppAddTimeOut(app, 100, poll_timeout_proc, &listening);
+	XtAppAddTimeOut(app, 250, poll_timeout_proc, &listening);
 	while(!*done) {
 		XtAppNextEvent(app, &xev);
-		fprintf(stderr, "In poll, xev.type = %d\n", xev.type);
 		if(	listening ||
 			(xev.type != KeyPress && xev.type != KeyRelease) ) {
 			XtDispatchEvent(&xev);
