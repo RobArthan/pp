@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.6 2002/10/28 16:47:44 rda Exp rda $
+ * $Id: files.c,v 2.7 2002/12/02 23:41:45 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -111,6 +111,10 @@ static char *file_changed_message =
 	 "The file \"%s\" appears to have been modified since it was last "
 	 "opened or saved. Do you want to overwrite it?";
 
+static char *file_created_message =
+	 "The file \"%s\" appears to have been created since this "
+	 "xpp session was started. Do you want to overwrite it?";
+
 static char *file_deleted_message =
 	 "The file \"%s\" appears to have been deleted since it was last "
 	 "opened or saved. Do you want to create it?";
@@ -189,22 +193,27 @@ static Boolean file_yes_no_dialog(
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * get_file_contents: read the contents of a file into a buffer.
- * The first parameter is the name of a widget to own any error
+ * The first parameter, w,  is the name of a widget to own any error
  * message dialogues.
- * The second parameter is a pointer to the file name.
- * NULL is returned if anything goes wrong (and if NULL is
- * returned, the user will have been presented with an error
- * message dialogue).
- * The third parameter should be set true iff. this is the call
+ *
+ * The second parameter, name, is a pointer to the file name.
+ *
+ * The third parameter, cmdLine, should be set true iff. this is the call
  * to open the file named on the command line (for which it is not
  * an error if the file does not exist).
- * The fourth parameter tells caller more about what happened (supply
+ *
+ * The fourth parameter, foAction, tells caller more about what happened (supply
  * NULL if not interested).
- * The fifth parameter is a buffer to contain the stat of the file
+ *
+ * The fifth parameter, stat_buf, is a buffer to contain the stat of the file
  * if it already existed (supply NULL if not interested).
  * If all is well the return value is a pointer to a buffer
  * containing the contents of the file as a null-terminated
  * character array.
+ *
+ * NULL is returned if anything goes wrong (and if NULL is
+ * returned, the user will have been presented with an error
+ * message dialogue).
  * The buffer should be XtFree'd when caller is done with it
  * (if it is not NULL).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -430,7 +439,8 @@ Boolean save_file(
 	if(current_file_status != NULL) {
 		if(stat(name, &new_status) == 0) { /* file still exists */
 			if(	new_status.st_mtime != current_file_status->st_mtime
-			||	new_status.st_ctime != current_file_status->st_ctime) {
+			||	new_status.st_ctime != current_file_status->st_ctime
+			||	new_status.st_size != current_file_status->st_size) {
 				char msg_buf[PATH_MAX + 200];
 				sprintf(msg_buf, file_changed_message, name);
 				if(!yes_no_dialog(text, msg_buf)) {
@@ -440,6 +450,14 @@ Boolean save_file(
 		} else { /* it's presumably been deleted */
 			char msg_buf[PATH_MAX + 200];
 			sprintf(msg_buf, file_deleted_message, name);
+			if(!yes_no_dialog(text, msg_buf)) {
+					return False;
+			}
+		}
+	} else {
+		if(stat(name, &new_status) == 0) { /* file now exists */
+			char msg_buf[PATH_MAX + 200];
+			sprintf(msg_buf, file_created_message, name);
 			if(!yes_no_dialog(text, msg_buf)) {
 					return False;
 			}
