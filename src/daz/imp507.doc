@@ -1262,6 +1262,13 @@ fun Ûtest_flagİ (selector : FLAGS -> bool) (index : int) : bool = (
 \subsection{Function Parameter Lists}
 When the global variable representing a SPARK function is stored in a theory, a user data entry giving its formal parameter list is also stored.
 This is later accessed via the $CN\_ENV$ when function calls using named parameter associations are translated into Z.
+
+The following function is used here and elsewhere to find the HOL name corresponding to a Z one.
+=SML
+fun Ûz_id_of_idİ (n : ID) : Z_ID = (
+	(fst o dest_const o mk_z_gvar)(n, BOOL, [])
+);
+=TEX
 =SML
 local
 val Ûcn_ud_keyİ = "CN'formal_pars";
@@ -1269,16 +1276,21 @@ fun Ûdest_ud_stringİ (UD_String (n, uds)) = (n, uds)
 |   dest_ud_string _ = fail "" 0 [] (* always caught below *);
 fun Ûwantedİ (fun_name : ID) (UD_String (i, _)) = (i = fun_name)
 |   wanted _ _ = false;
+fun Ûfun_name_par_namesİ ({name, formal_pars, ...} : INFORMAL_FUN)
+	: ID * ID list= (
+	(name, (flat o map (#vars o #var_decl)) formal_pars)
+);
 in
 fun Ûget_par_namesİ (fun_name : Z_ID) : ID list OPT = (
 	((Value o map (fst o dest_ud_string) o snd o dest_ud_string o
 		switch find (wanted fun_name) o snd o dest_ud_string o
-		get_user_datum (get_const_theory fun_name))
+		get_user_datum (get_const_theory (z_id_of_id fun_name)))
 	cn_ud_key)
 	handle Fail _ => Nil
 );
-fun Ûset_par_namesİ (fun_name : ID) (pars : ID list) : unit = (
-	let	val old = (snd o dest_ud_string o get_user_datum "-") cn_ud_key
+fun Ûset_par_namesİ (inf_fun : INFORMAL_FUN) : unit = (
+	let	val (fun_name, pars) = fun_name_par_names inf_fun;
+		val old = (snd o dest_ud_string o get_user_datum "-") cn_ud_key
 			handle Fail _ => [];
 		val new = 
 			UD_String(fun_name, map (fn p => UD_String(p, [])) pars)
@@ -1288,20 +1300,6 @@ fun Ûset_par_namesİ (fun_name : ID) (pars : ID list) : unit = (
 );
 end;
 =TEX
-=IGN
-new_const("fruit", BOOL);
-get_par_names "fruit";
-set_par_names "fruit" ["apple", "banana", "cherry"];
-get_par_names "fruit";
-set_par_names "fruit" ["apple", "banana", "cherry", "date"];
-get_par_names "fruit";
-new_const("veg", BOOL);
-get_par_names "veg";
-set_par_names "veg" ["artichoke", "bean", "carrot"];
-get_par_names "veg";
-set_par_names "veg" ["leek", "marrow"];
-get_par_names "veg";
-get_par_names "fruit";
 =TEX
 \subsection{Constructing $CN\_ENV$s}
 The code here must pass type information into the functions defined in \cite{ISS/HAT/DAZ/DTD505,ISS/HAT/DAZ/DTD508} using the data type $CN\_ENV$ defined in \cite{ISS/HAT/DAZ/DTD508}.
@@ -1310,11 +1308,6 @@ in the first case, the $CN\_ENV$ value required is taken from the running enviro
 In either case, Z global variables are sought from the theory data base if there is no local declaration for them.
 
 \subsection{\ldots for declarations}
-=SML
-fun Ûz_id_of_idİ (n : ID) : Z_ID = (
-	(fst o dest_const o mk_z_gvar)(n, BOOL, [])
-);
-=TEX
 $get\_tmark\_from\_inscope$ searches an $IN\_SCOPE$ value for the type mark associated with a variable or parameter name:
 =SML
 fun Ûget_tmark_from_inscopeİ (n : Z_ID) (inscope : IN_SCOPE) : TMARK OPT = (
@@ -2539,7 +2532,8 @@ fun Ûtrans_informal_funİ (f: INFORMAL_FUN) : PARAINFO = (
 =TEX
 =SML
 fun Ûinf_fun_otherwiseİ (inf_fun: INFORMAL_FUN) : unit = (
-	update_theory_db_with_parainfo(trans_informal_fun inf_fun)
+	update_theory_db_with_parainfo(trans_informal_fun inf_fun);
+	set_par_names inf_fun
 );
 =TEX
 =SML
@@ -2616,6 +2610,7 @@ fun Ûform_fun_pack_bodyİ (form_fun: FORMAL_FUN) : unit = (
 			error "form_fun_pack_body" 507012 [fn()=>block_name2];
 		val formal_funs4 = #formal_funs package4;
 	in	update_theory_db_with_parainfo(trans_formal_fun form_fun);
+		set_par_names (#informal_fun form_fun);
 		if	any
 			formal_funs4
 			(fn f => #name(#informal_fun f) = block_name1)
@@ -2667,6 +2662,7 @@ fun Ûform_fun_subunitİ (form_fun: FORMAL_FUN) : unit = (
 			handle Fail _ =>
 			error "form_fun_subunit" 507011 [fn()=>bn1_bn2];
 	in	update_theory_db_with_parainfo(trans_formal_fun form_fun);
+		set_par_names (#informal_fun form_fun);
 		subunit_env := s_delete bn1_bn2 (!subunit_env);
 		if	#specif_flag subunit3
 		then	
@@ -2704,7 +2700,8 @@ fun Ûform_fun_subunitİ (form_fun: FORMAL_FUN) : unit = (
 =TEX
 =SML
 fun Ûform_fun_otherwiseİ (form_fun: FORMAL_FUN) : unit = (
-	update_theory_db_with_parainfo(trans_formal_fun form_fun)
+	update_theory_db_with_parainfo(trans_formal_fun form_fun);
+	set_par_names (#informal_fun form_fun)
 );
 =TEX
 =SML
@@ -3014,6 +3011,8 @@ fun Ûpopulate_theory_with_functionsİ (ident : ID) : unit = (
 	in
 		map update_theory_db_with_parainfo informal_fun_paras;
 		map update_theory_db_with_parainfo formal_fun_paras;
+		map set_par_names informal_funs;
+		map (set_par_names o #informal_fun) formal_funs;
 		()
 	end
 );
@@ -3063,7 +3062,7 @@ fun Ûgenerate_spec_theoryİ (ident : ID) = (
 
 		val const_thms = rev (map (fn x => (x, (Value (get_spec x)
 						handle Fail _=> Nil))) consts);
-
+		
 		val side = open_package_spec_theory ident;
 		fun do_const_thms subs ((const, Nil) :: more) = (
 			let	val (name, ty, _) = dest_z_gvar const;
@@ -3099,9 +3098,26 @@ fun Ûgenerate_spec_theoryİ (ident : ID) = (
 		) | do_const_thms _ [] = [];
 
 		val paras = do_const_thms [] const_thms;
+
+		val package = force_value(s_lookup ident (!pack_env))
+				handle Fail _ =>
+				error "generate_spec_theory" 507029 
+					[fn() => ident];
+
+		fun prefix_informal_fun {name, formal_pars, return_type} = (
+			{name = prefix name,
+			formal_pars = formal_pars,
+			return_type = return_type}
+		);
+
+		val inf_funs = map prefix_informal_fun(
+				#informal_funs package @
+				map #informal_fun (#formal_funs package));
 		
 	in
-		map update_theory_db_with_parainfo paras; ()
+		map update_theory_db_with_parainfo paras;
+		map set_par_names inf_funs;
+		()
 	end handle Fail _ =>
 		fail "generate_spec_theory" 507029 [fn()=>ident]
 );
