@@ -118,9 +118,12 @@ None Known.
 This document depends on the error handling system described
 in document \cite{DS/FMU/IED/DTD002}.
 
-\section{DESIGN ISSUES}
+\newpage
+\section{THE TYPE INFERENCE MECHANISM}
 
-The type inferer's jobs is to establish the types
+\subsection{Overview}
+
+The type inferer's job is to establish the types
 of all the free variables in a term, whilst rejecting
 terms which contain contraditions in typing.
 
@@ -131,35 +134,166 @@ according to the types provided explicitly by the
 textual term, or by constant definitions whose types are
 stored in the symbol table.
 
-\subsection{Features of the Type Inferer}
+The type inferer has the job of establishing the types of all the
+sub-terms within a term. Because the type inferer is located functionally
+between the parser and the tools which manage HOL terms, it is
+additionally responsible for converting the output of the parser into
+HOL terms.
 
-The type inferer has three principle components.
+The input to the type inferer is a structure whose type is TY TM.
+This is an elaborate representation of a term, which the type inferer
+must simplify to produce a term of type TERM, which is a type
+with a much simpler structure. However, in the process of type
+inference, the types of sub-terms must be unified. The rules governing
+the nature of the unifications are presented in this document
+and dictate the requirements on types within a term. Before unification
+of terms and sub-terms can take place, the types of each term and sub-term
+must be extended in a way which allows unification to fill in the unknowns.
+A description of unification and type extension can be found
+in \cite{DS/FMU/IED/DTD014} and \cite{PeytonJones86}.
 
-\begin{description}
+The unification algorithm is invoked when a structure of a term has
+been identified, and broken down into its sub-elements. The inference
+rules then indicate how the types of the subelements are related.
+At this point, the subelements are unified. If this is successful, then
+a new substitution function is returned and is retained and
+overridden subsequently. There eventually comes a point where
+the term has been unified and we have three things:
 
-\item[Type Extension and Unification]
+\begin{enumerate}
 
-The type of each element in the term is extended to be of type
-EXTYPE rather than TY, hence creating a term of type
-EXTYPE TM. The types in the term can then be type infered
-according to the inference rules (see section \ref{INFRULES}).
+\item
+A term which has the structure of the input term, but all the
+types have been replaced with extended types.
 
-\item[Translation to Terms]
+\item
+A extended type of the overall term
 
-The term of type EXTYPE TM after having its types unified is
-then converted into a term of type TERM. The TERM is constructed
-using the programmer's interface functions (eg. mk\_let, mk\_abs)
-from the information present in the EXTYPE TM. 
+\item
+A substitution function which is produced by the unifications of
+the sub-terms of the tree.
 
-\item[Alias Resolution]
+\end{enumerate}
 
-Type aliases are resolved by calling a symbol table routine
-which performs the resolution. This is carried out at the point
-at which the TERM is produced.
+What now remains is to produce a HOL term from this information.
+The types the sub-terms are known as this information is inherent
+in the substitution function. This information needs to be used
+to type the sub-terms correctly, and to translate the input term
+structure to the simpler HOL term structure.
 
-\end{description}
+The translation is made easy because the programming interfaces
+for constructing HOL terms are available to us. The partially
+inferred term needs to be broken up and re-constructed using the
+programmer's interface utilities to generate a correctly typed HOL
+term.
 
-\subsection{Unknown Types}
+A Constant in the input term may be an alias for a term. The resolution
+of the alias need not take place until the production of the HOL term.
+If the alias were to be resolved at an earlier point during
+type inference, an additional overhead of processing the consequence
+would result, but with no apparent benefit. It is easy for the
+type checker to resolve aliases since an interface is already available
+from \cite{DS/FMU/IED/DTD020} which is ideally suited for the
+context in which we want to resolve aliases.
+
+
+In summary, the key functions of the type inference mechanism are:
+
+\begin{enumerate}
+
+\item
+Type extension and unification
+
+\item
+Translation of an input term to a HOL term
+
+\item
+Resolution of aliases
+
+\end{enumerate}
+
+\subsection{Environment Management}
+
+In practice, as variables and constants are put into scope, an environment
+is constructed. This is a symbol table which maps a name onto
+information about the object to which the name refers, the
+nature of information depending on the type of object (eg. constant or
+variable). An initial environment is set up by the type
+inferer as a preliminary action. This comprises constants from the
+HOL symbol table (accessible by the functions described
+in \cite{DS/FMU/IED/DTD020}) and all the free variables in the
+term to be type-inferred. When a new variable is brought into scope
+then the environment is grown. If the environment is viewed as
+a function, then growing the environment would correspond to
+functional override.
+
+\subsection{Identifying Free Variables}
+
+It is necessary for the type inference mechanism to be able to identify
+the free variables of a term. This can be achieved easily by
+traversing the term and noting the variables/constants in the term.
+A variable and a constant are differentiated by their absence or
+otherwise in the HOL symbol table.
+
+A similar requirement is to locate free variables in an term whose
+types have been extended. Such variables need to be associated
+with names such that subsequent display of a HOL term with free
+types would contain type variable names starting at ``\'\ a''
+counting upwards. The naming convention for type variables is
+described in section \ref{FVNAMES}.
+
+\subsection{Handling and Displaying Errors}
+
+Errors will be handled by the generic error handler described
+in \cite{DS/FMU/IED/DTD002}. It is highly desirable that the
+error messages produced by the type inference mechanism and
+the lexical analyser/parser be uniform in their presentation
+of diagnostic information. The error
+message formats have been adapted from \cite{DS/FMU/IED/DTD019}.
+
+Errors found during type inference can be either due to there being
+a problem with the input, these are known as {\bf failures}; and errors
+due to an unforseen design fault, known from hereon as {\bf errors}.
+
+When a failure occurs, then the sub-term which contains the error
+is printed out. If the failure is caused by a failure to unify two types,
+then some indication of the types causing the failure
+should be printed.
+
+It is debatable how much context information should be printed
+out to aid the user in locating the source of the failure. If two
+much of the term is printed, then it may be ambiguous as to which
+occurrence of a sub-term caused the failure. Likewise, the same problem
+may arise if too little of the term is printed.
+
+Further changes in this area are envisaged when the ICL HOL pretty
+printer is available which will permit terms to be displayed upto
+a configurable depth.
+
+\subsection{Production of a Term with Extended Types}
+
+The mapping from types of type TY to
+extended types of type EXTYPE is well-defined. Therefore the
+conversions of types to extended types within a term can be
+done by traversing the term carrying out the replacement where
+appropriate. Clearly, there is a performance issue here, and
+it is desirable to economize on the number of traversals. This
+conversion can be done at the same time as the conversion of a
+term into its corresponding HOL equivalent - the last stage
+of type inference.
+
+\subsection{Convertion of a Term to a HOL Term}
+
+The conversion of a term to a HOL term is done when all the types
+have been inferred, and a substitution tree has been produced.
+The availability of the interfaces for making HOL terms means that
+a single traversal of the term (containing extended types) is
+sufficient to convert sub-terms to sub-terms of a HOL term.
+Unknown type variables found at this stage are converted into
+HOL type variables which are identified as described in section
+\ref{FVNAMES}
+
+\subsubsection{Unknown Types} \label{FVNAMES}
 
 Terms which contain types which are not known are assigned type
 variables. These are identified by the names 'a, 'b etc. upto
@@ -171,6 +305,14 @@ used for a to z (although never appearing as such).
 This notation for unknown types is similar to Standard ML and
 is a break from the convention in HOL of using a ``*''
 prefix.
+
+\subsection{The Type Inference Mechanism Glue}
+
+The type inference mechanism glue is a
+functional composition of the components of the mechanism described
+in this document. The mechanism is in fact a function which maps
+a term of type TY TM onto a HOL term of type TERM. The function
+is called $make\_term$ and is described in section \ref{SIGNATURE}.
 
 \section{RULES OF INFERENCE} \label{INFRULES}
 \begin{FruleLeftJustify}
@@ -243,7 +385,7 @@ ENV … TyAq þ ‹ þ
 
 The inference rules for terms are now introduced. Each
 rule corresponds to a BNF production rule in the grammar
-describing a term produced by the parser (of type ``\'a TM).
+describing a term produced by the parser (of type ``\'\ a'' TM).
 
 \subsubsection{Binders}
 
@@ -542,6 +684,7 @@ parser.
 end
 end; (* of signature TypeInference *)
 =TEX
+
 \section{TEST POLICY}
 The tests should follow the standards and guidelines
 laid down in \cite{DS/FMU/IED/PLN008}.
