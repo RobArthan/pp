@@ -373,6 +373,15 @@ fun sr_expression_to_expression_opt ((e,v) : (EXP * EXP OPT)) : EXP OPT = (
 );
 =TEX
 =SML
+fun Ûstatement_to_stmtÝ (st : STATEMENT) : STMT = (
+	case st of
+	SStmt s => s
+	|SLogCon _ => parse_error 503001
+		"a logical constant cannot appear here"
+	|_ => stack_error "statement_to_stmt"
+);
+=TEX
+=SML
 fun red_accept (Parsed pp) = (pp
 ) | red_accept (Token ((l,CNText t),_)) = (
 	stack_error ("red_accept [Token("
@@ -887,14 +896,12 @@ fun red_primary1 (Token ((LCNumericLiteral,CNText n), _)) = (
 	PPExp (EInt n)
 ) | red_primary1 _ = stack_error "red_primary1";
 
-(* TBS character literal missing in AS *)
-fun red_primary2 (Token ((LCCharacterLiteral,CNText n), _)) = (
-	PPExp (EId n)
+fun red_primary2 (Token ((LCCharacterLiteral,CNText c), _)) = (
+	PPExp (ECharacterLiteral c)
 ) | red_primary2 _ = stack_error "red_primary2";
 
-(* TBS string literal missing in AS *)
-fun red_primary3 (Token ((LCStringLiteral,CNText n), _)) = (
-	PPExp (EId n)
+fun red_primary3 (Token ((LCStringLiteral,CNText s), _)) = (
+	PPExp (EStringLiteral s)
 ) | red_primary3 _ = stack_error "red_primary3";
 
 val red_primary4 = red_accept;
@@ -908,16 +915,15 @@ val red_primary7 = red_accept;
 =SML
 fun red_relational_operator1 _ = PPBinaryOp BOSparkEq;
 fun red_relational_operator2 _ = PPBinaryOp BOSparkNotEq;
-fun red_relational_operator3 x1 = PPBinaryOp BOSparkLess;
-fun red_relational_operator4 x1 = PPBinaryOp BOSparkLessEq;
-fun red_relational_operator5 x1 = PPBinaryOp BOSparkGreater;
-fun red_relational_operator6 x1 = PPBinaryOp BOSparkGreaterEq;
-fun red_binary_adding_operator1 x1 = PPBinaryOp BOSparkAdd;
-fun red_binary_adding_operator2 x1 = PPBinaryOp BOSparkMinus;
+fun red_relational_operator3 _ = PPBinaryOp BOSparkLess;
+fun red_relational_operator4 _ = PPBinaryOp BOSparkLessEq;
+fun red_relational_operator5 _ = PPBinaryOp BOSparkGreater;
+fun red_relational_operator6 _ = PPBinaryOp BOSparkGreaterEq;
+fun red_binary_adding_operator1 _ = PPBinaryOp BOSparkAdd;
+fun red_binary_adding_operator2 _ = PPBinaryOp BOSparkMinus;
+fun red_binary_adding_operator3 _ = PPBinaryOp BOSparkConcat;
 =TEX
-TBS - ampersand missing from AS
 =SML
-fun red_binary_adding_operator3 x1 = PPBinaryOp BOSparkAdd;
 fun red_unary_adding_operator1 x1 = PPUnaryOp UOSparkUnaryAdd;
 fun red_unary_adding_operator2 x1 = PPUnaryOp UOSparkUnaryMinus;
 fun red_multiplying_operator1 x1 = PPBinaryOp BOSparkTimes;
@@ -935,12 +941,11 @@ fun red_qualified_expression (Parsed(PPExp n)) _ (Parsed(PPExp e)) = (
 		|_ => stack_error "red_qualified_expression_a"
 ) | red_qualified_expression _ _ _ = stack_error "red_qualified_expression";
 =TEX
-TBS - null added in the following makes reproducability difficult.
 =SML
 fun red_sequence_of_statements1 (Parsed p) = (
 	case p of
 	PPStmt s => PPStatement(SStmt s)
-	|PPLogCon c => PPStatement(SLogCon (c, STNull))
+	|PPLogCon c => PPStatement(SLogCon (c, STImplicitNull))
 	|_ => stack_error "red_sequence_of_statements1"
 ) | red_sequence_of_statements1 _ = stack_error "red_sequence_of_statements1";
 
@@ -1061,52 +1066,59 @@ fun red_assignment_statement (Parsed(PPExp n)) _ (Parsed(PPExp e)) _ = (
 ) | red_assignment_statement _ _ _ _ = stack_error "red_assignment_statement";
 =TEX
 =SML
-fun red_if_statement _ (Parsed(PPExp exp)) _ (Parsed(PPStmt s)) (Parsed(PPElsIf ei)) (Parsed(PPStmt el)) _ _ _ = (
-let	val css = (exp,s)::ei;
-	fun aux ((c,s)::(rest as (_::_))) el = (
-		(STIfThenElse{g=c,p=s,q=aux rest el})
-	) | aux [(c,s)] el = (
-		(STIfThenElse{g=c,p=s,q=el})
-	) | aux _ _ = STNull;
+fun red_if_statement _ (Parsed(PPExp exp)) _ (Parsed(PPStatement st)) (Parsed(PPElsIf ei)) (Parsed(PPStmt el)) _ _ _ = (
+let	val css = (exp, statement_to_stmt st)::ei;
+	fun aux ((c,s)::(rest as (_::_))) = (
+		(STIfThenElse{g=c,p=s,q=aux rest,elsif=true})
+	) | aux [(c,s)] = (
+		(STIfThenElse{g=c,p=s,q=el,elsif=false})
+	) | aux _ = STImplicitNull;
 in
-	PPStmt (aux css el)
+	PPStmt (aux css)
 end
 ) | red_if_statement _ _ _ _ _ _ _ _ _ = stack_error "red_if_statement";
 =TEX
 =SML
 val red_elsif_part1 = PPElsIf [];
-fun red_elsif_part2 _ (Parsed (PPExp exp)) _ (Parsed(PPStmt s)) (Parsed(PPElsIf ei)) = (
-	PPElsIf ((exp, s)::ei)
+fun red_elsif_part2 _ (Parsed (PPExp exp)) _ (Parsed(PPStatement st))
+	(Parsed(PPElsIf ei)) = (
+	PPElsIf ((exp, statement_to_stmt st)::ei)
 ) | red_elsif_part2 _ _ _ _ _ = stack_error "red_elsif_part2";
 =TEX
 =SML
-val red_else_part1 = PPStmt STNull;
+val red_else_part1 = PPStmt STImplicitNull;
 
-fun red_else_part2 _ (Parsed(PPStmt s)) = (
-	PPStmt s
+fun red_else_part2 _ (Parsed(PPStatement st)) = (
+	PPStmt (statement_to_stmt st)
 ) | red_else_part2 _ _ = stack_error "red_else_part2";
 
 val red_condition = red_accept;
 =TEX
 =SML
-fun red_case_statement _ (Parsed(PPExp e)) _ (Parsed(PPCaseAlternatives cs)) others _ _ _ = (
+fun red_case_statement _ (Parsed(PPExp e)) _ (Parsed(PPCaseAlternatives cs))
+	others _ _ _ = (
 	PPStmt(STCase{e=e, s=cs})
 ) | red_case_statement _ _ _ _ _ _ _ _ = stack_error "red_case_statement";
 
 val red_case_statement_alternative_list1 = red_accept;
 
-fun red_case_statement_alternative_list2 (Parsed(PPCaseAlternatives [c])) (Parsed(PPCaseAlternatives cs)) = (
+fun red_case_statement_alternative_list2 (Parsed(PPCaseAlternatives [c]))
+	(Parsed(PPCaseAlternatives cs)) = (
 	PPCaseAlternatives (c::cs)
-) | red_case_statement_alternative_list2 _ _ = stack_error "red_case_statement_alternative_list2";
+) | red_case_statement_alternative_list2 _ _ =
+	stack_error "red_case_statement_alternative_list2";
 
-fun red_case_statement_alternative _ (Parsed(PPCaseChoices c)) _ (Parsed(PPStmt s)) = (
+fun red_case_statement_alternative _ (Parsed(PPCaseChoices c)) _
+	(Parsed(PPStmt s)) = (
 	PPCaseAlternatives[{choices=c, p=s}]
-) | red_case_statement_alternative _ _ _ _ = stack_error "red_case_statement_alternative";
+) | red_case_statement_alternative _ _ _ _ =
+	stack_error "red_case_statement_alternative";
 =TEX
 =SML
 val red_case_choice_list1 = red_accept;
 
-fun red_case_choice_list2 (Parsed(PPCaseChoices [ac])) _ (Parsed(PPCaseChoices acl)) = (
+fun red_case_choice_list2 (Parsed(PPCaseChoices [ac])) _
+	(Parsed(PPCaseChoices acl)) = (
 	PPCaseChoices(ac::acl)
 ) | red_case_choice_list2 _ _ _ = stack_error "red_acase_choice_list2";
 
@@ -1116,42 +1128,41 @@ fun red_case_choice (Parsed(PPSRExpression (e,v))) = (
 	|Nil => PPCaseChoices[CCCaseExp e]
 ) | red_case_choice _ = stack_error "red_case_choice";
 
-val red_others_part1 = PPStmt STNull;
+val red_others_part1 = PPStmt STImplicitNull;
 fun red_others_part2 _ _ (Parsed(PPStmt s)) = (
 	PPStmt s
 ) | red_others_part2 _ _ _ = stack_error "red_others_part2";
 =TEX
 SPARK manual 5.5:
 =SML
-fun red_loop_statement (Parsed(PPIds ids)) (Parsed p) (Parsed(PPExps es)) _ (Parsed(PPStatement st)) _ _ _ _ = (
+fun red_loop_statement (Parsed(PPIds ids)) (Parsed p) (Parsed(PPExps es))
+	_ (Parsed(PPStatement st)) _ _ _ _ = (
 let	val name = case ids of
 			[id] => Value id
 			|_ => Nil;
 	val till = case es of
 			[EAuxiliaryExp tm] => Value tm
 			|_ => Nil;
-	val s = (case st of
-			SStmt(STSpecNoIvars s) => s
-			| _ => parse_error 503001
-				"a loop can only contain a specification statement"
-		);
+	val s = statement_to_stmt st;
 in
 	case p of
 	PPExp c => (
-			PPStmt(STWhile{name=name, g=c, loop={t=till, spec=s}})
+			PPStmt(STWhile{name=name, g=c, loop={t=till, stmt=s}})
 	) |PPFor(id, tm, dir, opr) => (
 		case opr of
 		Value {lo=lo,hi=hi} => (
-			PPStmt(STForStatic{name=name, tmark=tm, i=id, lo=lo, hi=hi, dir=dir,loop={t=till, spec=s}})
+			PPStmt(STForStatic{name=name, tmark=tm, i=id, lo=lo,
+			hi=hi, dir=dir,loop={t=till, stmt=s}})
 		) |Nil => (
-			PPStmt(STForTmark{name=name,i=id, tmark=tm, dir=dir, loop={t=till, spec=s}})
+			PPStmt(STForTmark{name=name,i=id, tmark=tm, dir=dir,
+			loop={t=till, stmt=s}})
 		)
 	) | PPId "__no_scheme" => (
 		case name of
 		Value n => (
-			PPStmt(STNamedLoop{name=n,t=till, spec=s})
+			PPStmt(STNamedLoop{name=n,t=till, stmt=s})
 		) |Nil => (
-			PPStmt(STLoop{t=till, spec=s})
+			PPStmt(STLoop{t=till, stmt=s})
 		)
 	) | _ => stack_error"red_loop_statement_a"
 end
@@ -1179,21 +1190,27 @@ fun red_iteration_scheme1 _ (Parsed p) = (p
 fun red_iteration_scheme2 _ (Parsed p) = (p
 ) | red_iteration_scheme2 _ _ = stack_error "red_iteration_scheme2";
 
-fun red_loop_parameter_specification1 (Token ((_,CNText id), _)) _ (Parsed(PPExp n)) = (
+fun red_loop_parameter_specification1 (Token ((_,CNText id), _)) _
+	(Parsed(PPExp n)) = (
 	PPFor(id,name_to_tmark n, LDForwards, Nil)
-) | red_loop_parameter_specification1 _ _ _ = stack_error "red_loop_parameter_specification1";
+) | red_loop_parameter_specification1 _ _ _ =
+	stack_error "red_loop_parameter_specification1";
 
-fun red_loop_parameter_specification2 (Token ((_,CNText id), _)) _ _ (Parsed(PPExp n)) = (
+fun red_loop_parameter_specification2 (Token ((_,CNText id), _)) _ _
+	(Parsed(PPExp n)) = (
 	PPFor(id,name_to_tmark n, LDReverse, Nil)
-) | red_loop_parameter_specification2 _ _ _ _ = stack_error "red_loop_parameter_specification2";
+) | red_loop_parameter_specification2 _ _ _ _ = 
+	 stack_error "red_loop_parameter_specification2";
 
-fun red_loop_parameter_specification3 (Token ((_,CNText id), _)) _ (Parsed(PPExp n)) _ (Parsed(PPSRExpression sr)) = (
+fun red_loop_parameter_specification3 (Token ((_,CNText id), _)) _
+	(Parsed(PPExp n)) _ (Parsed(PPSRExpression sr)) = (
 	case sr_expression_to_range_opt {no_r_attr=false} sr of
 	Value r =>
 		PPFor(id, name_to_tmark n, LDForwards, Value r)
 	|Nil =>
 		parse_error 503001 "a range is expected"
-) | red_loop_parameter_specification3 _ _ _ _ _ = stack_error "red_loop_parameter_specification3";
+) | red_loop_parameter_specification3 _ _ _ _ _ =
+	stack_error "red_loop_parameter_specification3";
 
 fun red_loop_parameter_specification4 (Token ((_,CNText id), _)) _ _ (Parsed(PPExp n)) _ (Parsed(PPSRExpression sr)) = (
 	case sr_expression_to_range_opt {no_r_attr=false} sr of
@@ -1201,7 +1218,8 @@ fun red_loop_parameter_specification4 (Token ((_,CNText id), _)) _ _ (Parsed(PPE
 		PPFor(id, name_to_tmark n, LDReverse, Value r)
 	|Nil =>
 		parse_error 503001 "a range is expected"
-) | red_loop_parameter_specification4 _ _ _ _ _ _ = stack_error "red_loop_parameter_specification4";
+) | red_loop_parameter_specification4 _ _ _ _ _ _ =
+	stack_error "red_loop_parameter_specification4";
 
 val red_till_opt1 = PPExps [];
 fun red_till_opt2 _ (Parsed(PPExp(EAuxiliaryExp z))) = (
@@ -1391,7 +1409,7 @@ fun red_package_body _ _ (Token ((_,CNText id), _)) _ (Parsed(PPSubprogram (d,s)
 ) | red_package_body _ _ _ _ _ _ _ _ = stack_error "red_package_body";
 
 fun red_package_implementation1 (Parsed (PPDeclarations d)) = (
-	PPSubprogram (d, SStmt STNull)
+	PPSubprogram (d, SStmt STImplicitNull)
 ) | red_package_implementation1 _ = stack_error "red_package_implementation1";
 
 fun red_package_implementation2 (Parsed (PPDeclarations d)) _ (Parsed(PPStatement s)) = (
