@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.49 2004/06/30 16:42:46 rda Exp rda $ 
+ * $Id: search.c,v 2.50 2004/07/02 16:08:17 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -195,20 +195,24 @@ static MenuItem replace_text_edit_menu_items[] = {
 Boolean add_search_tool(Widget text_w)
 {
 	NAT cbdata;
-	Widget shell, paned, search_form, replace_form,
-		action_form,
-		search_backwards_btn,
-		search_forwards_btn,
+	Widget shell,
+		paned,
+		search_form,
+			search_backwards_btn,
+			search_forwards_btn,
 		search_text,
-		replace_btn,
-		replace_all_btn,
-		replace_search_backwards_btn,
-		replace_search_forwards_btn,
+		replace_form,
+			replace_btn,
+			replace_all_btn,
+			replace_search_backwards_btn,
+			replace_search_forwards_btn,
 		replace_text,
-		ignore_case_toggle,
-		use_wildcards_toggle,
-		dismiss_btn,
-		help_btn;
+		toggle_form,
+			ignore_case_toggle,
+			use_wildcards_toggle,
+		action_form,
+			dismiss_btn,
+			help_btn;
 
 	char	*pattern;
 
@@ -366,23 +370,22 @@ Boolean add_search_tool(Widget text_w)
 * | * Ignore case * Use wildcards |
  * | Dismiss    |  Help  |
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-	action_form = XtVaCreateWidget("search-replace-action-form",
+	toggle_form = XtVaCreateWidget("search-replace-toggle-form",
 		xmFormWidgetClass, 		paned,
 		XmNfractionBase,		24,
 		NULL);
 
+
 	s = XmStringCreateSimple("Ignore case");
 
 	ignore_case_toggle = XtVaCreateManagedWidget("ignore-case",
-		xmToggleButtonWidgetClass,	action_form,
+		xmToggleButtonWidgetClass,	toggle_form,
 		XmNlabelString,			s,
 		XmNleftAttachment,		XmATTACH_FORM,
 		XmNrightAttachment,		XmATTACH_POSITION,
 		XmNrightPosition,		12,
 		XmNtopAttachment,		XmATTACH_FORM,
-		XmNbottomAttachment,		XmATTACH_POSITION,
-		XmNbottomPosition,	12,
+		XmNbottomAttachment,		XmATTACH_FORM,
 		NULL);
 
 	XmStringFree(s);
@@ -390,24 +393,27 @@ Boolean add_search_tool(Widget text_w)
 	s = XmStringCreateSimple("Use wildcards");
 
 	use_wildcards_toggle = XtVaCreateManagedWidget("use-wildcards",
-		xmToggleButtonWidgetClass,		action_form,
+		xmToggleButtonWidgetClass,		toggle_form,
 		XmNlabelString,		s,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_FORM,
 		XmNleftPosition,		12,
 		XmNtopAttachment,		XmATTACH_FORM,
-		XmNbottomAttachment,		XmATTACH_POSITION,
-		XmNbottomPosition,	12,
+		XmNbottomAttachment,		XmATTACH_FORM,
 		NULL);
 
 	XmStringFree(s);
+
+	action_form = XtVaCreateWidget("search-replace-action-form",
+		xmFormWidgetClass, 		paned,
+		XmNfractionBase,		24,
+		NULL);
 
 	s = XmStringCreateSimple("Dismiss");
 	dismiss_btn = XtVaCreateManagedWidget("dismiss",
 		xmPushButtonWidgetClass,	action_form,
 		XmNlabelString,		s,
-		XmNtopAttachment,		XmATTACH_POSITION,
-		XmNtopPosition,		12,
+		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
@@ -420,8 +426,7 @@ Boolean add_search_tool(Widget text_w)
 	help_btn = XtVaCreateManagedWidget("help",
 		xmPushButtonWidgetClass,	action_form,
 		XmNlabelString,		s,
-		XmNtopAttachment,		XmATTACH_POSITION,
-		XmNtopPosition,		12,
+		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
@@ -544,6 +549,7 @@ Boolean add_search_tool(Widget text_w)
 
 	XtManageChild(search_form);
 	XtManageChild(replace_form);
+	XtManageChild(toggle_form);
 	XtManageChild(action_form);
 	XtManageChild(paned);
 
