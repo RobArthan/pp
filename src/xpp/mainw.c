@@ -100,7 +100,15 @@ static char* changed_message =
 "The text has been edited. Do you want to throw away the changes?";
 
 static char* changed_quit_message =
-"The text has been edited. Do you want to quit without saving the changes?";
+"The text has been edited. "
+"Do you really want to quit?";
+
+static char* changed_running_quit_message =
+"The text has been edited and the application in the journal "
+"window is still running. Do you really want to quit?";
+
+static char *cmd_too_long_message = 
+"The command is too long (%d bytes supplied; max. %d bytes).";
 
 static char* help_message =
 "The help system is not yet implemented. Sorry!";
@@ -108,7 +116,8 @@ static char* help_message =
 static char *no_selection_message =
 	 "No text has been selected";
 
-static char* quit_message =
+static char* running_quit_message =
+"The application in the journal window is still running. "
 "Do you really want to quit?";
 
 static char* kill_message =
@@ -121,8 +130,9 @@ static char* restart_message =
 "The application is running. "
 "Do you want to kill it and then restart it?";
 
-static char *cmd_too_long_message = 
-"The command is too long (%d bytes supplied; max. %d bytes).";
+static char* revert_message =
+"The text has been edited. Do you want to throw away the changes?";
+
 
 static char *send_error_message = 
 "A system error occurred writing to the application.";
@@ -150,12 +160,8 @@ XtAppContext app; /* global because needed in msg.c */
  * cmdmenu	menubar	 the command menu
  * helpmenu	menubar	 the help menu
  *
- * All widgets except script have the same name in the
- * widget hierarchy as their C name above except:
- * 	script is called "pp_text" in the Widget hierarchy
- * 	to allow keyboard translation resources to be set up
- * 	for all text input windows at one go.
- *	all menus are called "menu" for similar reasons
+ * All widgets have the same name in the widget hierarchy
+ * as their C name.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 
@@ -211,9 +217,10 @@ static void
 /* Item 3 is a separator */
 #define FILE_MENU_OPEN			4
 #define FILE_MENU_INCLUDE		5
-#define FILE_MENU_EMPTY_FILE		6
-/* Item 7 is a separator */
-#define FILE_MENU_QUIT			8
+#define FILE_MENU_REVERT		6
+#define FILE_MENU_EMPTY_FILE		7
+/* Item 8 is a separator */
+#define FILE_MENU_QUIT			9
 
 static MenuItem file_menu_items[] = {
     { "Save", &xmPushButtonGadgetClass, 'S', NULL, NULL,
@@ -227,9 +234,11 @@ static MenuItem file_menu_items[] = {
         file_menu_cb, (XtPointer)FILE_MENU_OPEN, (MenuItem *)NULL, False },
     { "Include ...",  &xmPushButtonGadgetClass, 'I', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_INCLUDE, (MenuItem *)NULL, False },
-    { "Empty File",  &xmPushButtonGadgetClass, 'N', NULL, NULL,
+    { "Revert",  &xmPushButtonGadgetClass, 'N', NULL, NULL,
+        file_menu_cb, (XtPointer)FILE_MENU_REVERT, (MenuItem *)NULL, False },
+     { "Empty File",  &xmPushButtonGadgetClass, 'N', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_EMPTY_FILE, (MenuItem *)NULL, False },
-    MENU_ITEM_SEPARATOR,
+   MENU_ITEM_SEPARATOR,
     { "Quit",  &xmPushButtonGadgetClass, 'Q', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_QUIT, (MenuItem *)NULL, False },
     NULL,
@@ -472,7 +481,7 @@ static setup_main_window(
 	XtSetArg(args[i], XmNautoShowCursorPosition, 	True); ++i;
 	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
 
-	script = XmCreateScrolledText(work, "pp_text", args, i);
+	script = XmCreateScrolledText(work, "script", args, i);
 
 	XtAddCallback(script,
 		XmNmodifyVerifyCallback, script_modify_cb, NULL);
@@ -481,18 +490,17 @@ static setup_main_window(
 		XmNmotionVerifyCallback, script_motion_cb, NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Display window:
+ * Journal window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 if( !edit_only ) {
 	i = 0;
-	XtSetArg(args[i], XmNrows,	 		24); ++i;
-	XtSetArg(args[i], XmNcolumns, 			80); ++i;
 	XtSetArg(args[i], XmNeditable, 			False); ++i;
 	XtSetArg(args[i], XmNeditMode,	 		XmMULTI_LINE_EDIT); ++i;
 	XtSetArg(args[i], XmNautoShowCursorPosition, 	False); ++i;
 	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
 
 	journal = XmCreateScrolledText(work, "journal", args, i);
+	copy_font_list(journal, script);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu bar:
@@ -683,8 +691,23 @@ XmAnyCallbackStruct *cbs;
 		include_file(script, fname);
 		if(fname != NULL) {XtFree(fname);};
 		break;
-	case FILE_MENU_EMPTY_FILE:
+	case FILE_MENU_REVERT:
 		if(!changed || yes_no_dialog(root, changed_message)) {
+			fname = XmTextGetString(namestring);
+			if(!fname || !*fname || *fname == '*') {
+/* No file name: get an empty file */
+				XmTextSetString(script, "");
+			} else if(!open_file(script, fname)) {
+/* Can't open it; */
+				break;
+			};
+			flash_file_name(fname);
+			reinit_changed();
+			XtFree(fname);
+		};
+		break;
+	case FILE_MENU_EMPTY_FILE:
+		if(!changed || yes_no_dialog(root, revert_message)) {
 			XmTextFieldSetString(namestring, no_file_message);
 			XmTextSetString(script, "");
 			reinit_changed();
@@ -1396,8 +1419,13 @@ Widget w;
 XtPointer cd;
 XmAnyCallbackStruct cbs;
 {
-	if(yes_no_dialog(root,
-		(changed ? changed_quit_message : quit_message))) {
+	if((!changed && !application_alive())
+	||	yes_no_dialog(root,
+			(	changed && application_alive()
+			?	changed_running_quit_message
+			:	changed
+			?	changed_quit_message
+			:	running_quit_message))) {
 		kill_application();
 		exit(0);
 	};
