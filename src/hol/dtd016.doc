@@ -22,7 +22,7 @@
 %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
 \TPPauthorisation{R.D.~Arthan & FST Team Leader}
 \TPPabstract{This document gives the detailed design
-of the type inference mechanism.
+of the type inference mechanism for ICL HOL.
 }
 %\TPPabstractB{}
 %\TPPabstractC{}
@@ -65,20 +65,49 @@ of the type inference mechanism.
 \begin{description}
 \item[Issue 1.1]
 Initial version.
+
+\item[Issue 1.2]
+Added much more description of the design
+.
 \end{description}
 \subsection{Changes forecast}
+None.
+
 \pagebreak
 \section{GENERAL}
 
 \subsection{Scope}
 
+This document describes the detailed design of the type inference
+mechanism for ICL HOL.
+
 \subsection{Introduction}
 
 \subsubsection{Background and Purpose}
 
+The type inference mechanism is an implementation of the
+type inference rules described in this document. The concrete syntax
+is parsed by the ICL HOL parser \cite{DS/FMU/IED/DTD019} which
+produces a parse tree. The output of the parser is significantly
+more complex than that of the prototype HOL parser. This is
+because there is a richer set of types represented in its output
+with a view to increasing efficiency. As a consequence, the
+type inferer is correspondingly more complex. Many of the ideas for
+designing the type inferer come from the excellent book
+\cite{PeytonJones86}, and to some extent from the design and code
+for the HOL prototype \cite{DS/FMU/IED/SML007}. The inferer makes
+use of the general type unification package \cite{DS/FMU/IED/DTD014},
+which itself is almost identical to the HOL prototype.
+It has been noted that much of the time of type inference is
+spent in unification, and although the implementation of
+unification has been coded efficiently, further improvements to
+the performance of type inference is likely to be most effective in
+the area of unification.
+
 \subsubsection{Interface}
 
-This document defines a signature $TypeInference$.
+This document defines a signature $TypeInference$ and is described in
+section \ref{SIGNATURE} of this document.
 
 \subsubsection{Deficiencies}
 
@@ -102,26 +131,57 @@ according to the types provided explicitly by the
 textual term, or by constant definitions whose types are
 stored in the symbol table.
 
+\subsection{Features of the Type Inferer}
+
 The type inferer has three principle components.
 
 \begin{description}
 
 \item[Type Extension and Unification]
 
+The type of each element in the term is extended to be of type
+EXTYPE rather than TY, hence creating a term of type
+EXTYPE TM. The types in the term can then be type infered
+according to the inference rules (see section \ref{INFRULES}).
+
 \item[Translation to Terms]
+
+The term of type EXTYPE TM after having its types unified is
+then converted into a term of type TERM. The TERM is constructed
+using the programmer's interface functions (eg. mk\_let, mk\_abs)
+from the information present in the EXTYPE TM. 
 
 \item[Alias Resolution]
 
+Type aliases are resolved by calling a symbol table routine
+which performs the resolution. This is carried out at the point
+at which the TERM is produced.
+
 \end{description}
 
-\section{RULES OF INFERENCE}
+\subsection{Unknown Types}
+
+Terms which contain types which are not known are assigned type
+variables. These are identified by the names 'a, 'b etc. upto
+'z. Further names are produced if necessary of the
+following form: '27, '28 ... and so on. The numbering
+starts at 27 giving the impression that the numbers 1 to 26 were
+used for a to z (although never appearing as such).
+
+This notation for unknown types is similar to Standard ML and
+is a break from the convention in HOL of using a ``*''
+prefix.
+
+\section{RULES OF INFERENCE} \label{INFRULES}
 \begin{FruleLeftJustify}
+The rules of inference are divided into those concerned with
+types and those concerned with terms. These are further subdivided
+into rules which correspond to each production rule of the grammar
+defining TY and TM.
 
 \subsection{Types}
 
-The inference rules for types are introduced first. Each
-rule corresponds to a BNF production rule in the grammar
-describing a term produced by the parser (of type ``\'a TM).
+The inference rules for types are introduced first.
 
 \subsubsection{Atomic Types}
 
@@ -153,7 +213,7 @@ and a fixity. The fixity of the type is irrelevant to
 the process of type inference and can be ignored.
 Given that there is a mapping from the type list to a
 list of actual types, the inference rule for compound
-types is straightforward. An actual type os constructed
+types is straightforward. An actual type is constructed
 with the identifier given as part of the compound type, and
 the type list as given by the mapping for type lists.
 In the actual implementation, this will comprise a recursive
@@ -187,10 +247,19 @@ describing a term produced by the parser (of type ``\'a TM).
 
 \subsubsection{Binders}
 
+Ultimately, all binding constructors are represented as
+lambda abstractions. This case is therefore much simpler, and
+we introduce this rule first.
+
+The bound variables and
+the body assume corresponding types to those given in the
+input TM by some uniform mapping. The bound variables are brought into the scope of the body of the
+construction by extending the environment. 
+
 =RULE
 binding constructor is ""
 É
-ENV … t° ‹ T°:þ°; ENV … t¬ ‹ T¬:þ¬;
+ENV … t° ‹ T°:þ°;
 
 ENV •
 {n — VarInfo þ' | mk_var(n, þ')  frees T°}
@@ -200,10 +269,14 @@ ENV … Binder ("", t°, t¬)
 	‹ mk_abs(T°:þ°, T¬:þ¬)
 =TEX
 
+For general binding constructions, the type of each element in
+the input is uniformely mapped to a TYPE. The binder is itself typed
+with free types, and subsequently unified.  The type of the
+bound variables are put in the scope of the body.
 =RULE
 binding constructor is  NOT ""
 É
-ENV … t° ‹ T°:þ°; ENV … t¬ ‹ T¬:þ¬;
+ENV … t° ‹ T°:þ°;
 
 ENV … TmAtom (Id s)
 	‹ mk_const (s, (þ° ‹ þ¬) ‹ þ®);
@@ -212,13 +285,17 @@ ENV •
 {n — VarInfo þ' | mk_var(n, þ')  frees T°}
 	… t¬ ‹ T¬:þ¬
 É
-ENV … Binder (s, t°, t¬)
+ENV … Binder (TmAtom (Id s), t°, t¬)
   ‹ (mk_comb(mk_const (s, (þ° ‹ þ¬) ‹ þ®),
     mk_abs(T°:þ°,T¬:þ¬))):þ®
 =TEX
 
 \subsubsection{Let}
 
+The variable structures of the LHS of each clause in the
+let statement are put in the scope of the body of the let
+statement. The type of the overall term is the type of the
+body of the term.
 =RULE
 É
 ENV … v° ‹ V°:þ°; ENV … v¬ ‹ V¬:þ¬; ...
@@ -230,13 +307,16 @@ ENV … t° ‹ T°:þ°; ENV … t¬ ‹ T¬:þ¬; ...
 ENV • { n — VarInfo þ' | mk_var(n, þ')
    {frees V¸ | 1 ž c ž s}} … tm ‹ TM:þ;
 É
-Let ([(v°, t°), (v¬, t¬), ..., (vÕ, tÕ)], tm)
+ENV … Let ([(v°, t°), (v¬, t¬), ..., (vÕ, tÕ)], tm)
   ‹ (mk_let ([(V°:þ°, T°:þ°),
 	(V¬:þ¬, T¬:þ¬), ...
 	    ... ,(VÕ:þÕ,TÕ:þÕ)],TM:þ)):þ
 =TEX
 
 \subsubsection{Conditional Terms}
+
+The condition must unify to a bool, and the consequences and the
+type of the overall term must all unify to the same type.
 
 =RULE
 É
@@ -250,6 +330,10 @@ ENV … Cond (c, t°, t¬)
 
 \subsubsection{Function Application}
 
+The type of the function applied must have a domain type equal to
+that to which the function is applied. The type of the overall
+term is the type of object which the function yeilds.
+
 =RULE
 É
 ENV … t° ‹ T°:(þ° ‹ þ¬);
@@ -260,6 +344,10 @@ ENV … App (t°, t¬, _)
 =TEX
 
 \subsubsection{TmTyped}
+
+This rule constraints the explicit typing of a term to be unified
+with the term.
+
 =RULE
 É
 ENV … t° ‹ T°:þ;
@@ -269,6 +357,10 @@ ENV … TmTyped (t°, ty) ‹ T°:þ
 =TEX
 
 \subsubsection{TmAq}
+
+The type of an antiquoted term is assumed to be that of the term.
+No explicit checking is done.
+
 =RULE
 É
 É
@@ -277,6 +369,9 @@ ENV … TmAq term:þ ‹ term:þ
 
 \subsubsection{SetDisplay}
 
+Each element in the set must have the same type $þ$. The overall set
+has the type $þSET$
+.
 =RULE
 É
 ENV … t° ‹ T°:þ; ENV … t¬ ‹ T¬:þ; ...
@@ -288,15 +383,26 @@ ENV … SetDisplay ([t°, t¬, ..., tÕ])
 
 \subsubsection{SetComprehension}
 
+The bound variable in a set comprehension is brought into the
+scope of the body of the comprehension. The type of the overall
+expression is that of the bound variables
+
 =RULE
 É
-ENV … t° ‹ T°:þ; ENV … t¬ ‹ T¬:BOOL
+ENV … t° ‹ T°:þ;
+
+ENV •
+{n — VarInfo þ' | mk_var(n, þ')  frees T°}
+	… t¬ ‹ T¬:þ¬
 É
 ENV … SetComprehension (t°, t¬)
 	‹ (mk_set (T°:þ, T¬:BOOL)):þSET
 =TEX
 
 \subsubsection{ListDisplay}
+
+Each element in the list must have the same type $þ$. The overall list
+has the type $þLIST$
 
 =RULE
 É
@@ -309,6 +415,9 @@ ENV … ListDisplay ([t°, t¬, ..., tÕ])
 
 \subsubsection{Identifiers}
 
+An identifier whose symbol is present in the symbol table will assume
+the type corresponding to the symbol table entry.
+
 =RULE
 þ is an instance of þ'
 É
@@ -317,12 +426,18 @@ ENV • {s — ConstInfo þ'}
 	… Id s ‹ (mk_const(s, þ)):þ
 =TEX
 
+An identifier whose symbol is recognised in the environment denotes a
+variable in scope. The type of the variable is given by the environment.
+
 =RULE
 É
 É
 ENV • {s — VarInfo þ}
 	… Id s ‹ (mk_var(s, þ)):þ
 =TEX
+
+An identifier whose symbol is not in the symbol table denotes a
+variable, and is given a free type.
 
 =RULE
 þ is any type
@@ -333,6 +448,12 @@ ENV • {s — VarInfo þ}
 
 
 \subsubsection{Literals}
+
+Characters, strings and numbers are represented in HOL in distinct
+ways. The inference rules for converting literals for these types
+are straightforward. A character literal is mapped onto a character
+constant, a string literal to a string constant and a numeric literal
+to a numeric constant as follows:
 
 =RULE
 É
@@ -357,28 +478,54 @@ ENV … NumLit i
 
 
 \end{FruleLeftJustify}
-\section{THE EXTENDED TERM}
 
+\section{THE SIGNATURE $TypeInference$} \label{SIGNATURE}
 
-\section{THE STRUCTURE $TypeInference$}
+The signature $TypeInference$ is the interface to the type inference
+mechanism, and it provides the outside world with three interfaces.
+\begin{description}
+
+\item[is\_varstruct]
+This determines whether a term is a variable structure. A variable
+structure is either a single variable or a tuple. This sort of thing
+is useful to know, and cannot be determined from the grammar of
+a parsed term alone.
+
+\item[ty\_to\_type]
+This converts a type as produced by the parser into a HOL type.
+
+\item[make\_term]
+This interface invokes the type inference mechanism and produces
+a type-checked and infered HOL term from term delivered from the
+parser.
+
+\end{description}
 
 =DOC
 signature âTypeInferenceá = sig
-	local
-		open Parser Unification;
-	in
-		val is_varstruct : 'a TM -> bool
-		val fv_set : 'a TM -> string list
-		val ty_to_type : TY -> TYPE
-		val start_tyvar_name : unit -> unit
-		val next_tyvar_name : unit -> string
-		val get_tyvar_info : SUBS -> EXTYPE TM -> (int * string) list
-		val make_term : TY TM -> TERM
-	end
-
-end; (* of signature TypeInference *)
+local
+	open Parser;
+in
 =DESCRIBE
 This is the signature for the structure TypeInference.
+=ENDDOC
+=DOC
+val âis_varstructá : 'a TM -> bool
+=DESCRIBE
+is\_varstruct determines whether or not a term (of type TM)
+is a variable structure.
+=ENDDOC
+=DOC
+val âty_to_typeá : TY -> TYPE
+=DESCRIBE
+This converts a type (of type TY) into a HOL type of type TYPE.
+=ENDDOC
+=DOC
+val âmake_termá : TY TM -> TERM
+=DESCRIBE
+This interface invokes the type inference mechanism and produces
+a type-checked and infered HOL term from term delivered from the
+parser.
 =FAILURE
 16000	type checking error in quotation
 16001	**** TYPE CHECKING ERROR  ****
@@ -391,6 +538,10 @@ This is the signature for the structure TypeInference.
 16101	DESIGN ERROR (?0)
 =ENDDOC
 
+=SML
+end
+end; (* of signature TypeInference *)
+=TEX
 \section{TEST POLICY}
 The tests should follow the standards and guidelines
 laid down in \cite{DS/FMU/IED/PLN008}.
