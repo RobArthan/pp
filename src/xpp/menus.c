@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: menus.c,v 2.7 2002/12/03 15:05:06 rda Exp rda $
+ * $Id: menus.c,v 2.8 2003/06/24 15:36:43 rda Exp rda $
  *
  * menus.c -  creation of menus for the X/Motif ProofPower
  * Interface
@@ -39,7 +39,7 @@ static char *sanitise(char *menu_title)
 	char *res, *p, *q;
 	res = XtMalloc(strlen(menu_title) + 1);
 	for(p = res, q = menu_title; *q != 0; p += 1, q += 1) {
-		*p = isalnum(*q) ? *q : '-';
+		*p = isalnum(*q) ? tolower(*q) : '-';
 	}
 	do {
 		*p = 0;
