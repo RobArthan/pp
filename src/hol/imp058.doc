@@ -48,7 +48,8 @@ First version.
 Removed an implementation of $list\_mk\_­\_type$.
 \item[Issue 1.4,1.5(13th February 1992)]
 Moving material from 058 to 027.
-
+\item [Issue 1.6 (27th February 1992)]
+Trying to speed things up.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -73,7 +74,7 @@ None known.
 None known.
 
 \section{PREAMBLE}
-=IGN
+=SML
 structure ÛExistenceProofsÝ : ExistenceProofs = struct
 =TEX
 =SML
@@ -324,14 +325,21 @@ in
 val rec Ûredundant_simple_¶_convÝ: CONV = (fn tm =>
 let	val (exs,bdy) = strip_simple_¶ tm;
 	val bdy_frees = frees bdy;
-	fun aux [] tm = fail "redundant_simple_¶_conv" 0 []
-	| aux (x :: rest) tm = (
+	fun aux [] = false
+	| aux (x :: rest) = (
+		(x mem rest) orelse not(x mem bdy_frees)
+		orelse aux rest
+	);
+	fun aux1 [] tm = fail "redundant_simple_¶_conv" 0 []
+	| aux1 (x :: rest) tm = (
 		if (x mem rest) orelse not(x mem bdy_frees)
-		then (tc FURTHER_C (aux rest)) tm
-		else BINDER_C (aux rest) tm
+		then (tc FURTHER_C (aux1 rest)) tm
+		else BINDER_C (aux1 rest) tm
 	);
 in
-	aux exs tm
+	if aux exs
+	then aux1 exs tm
+	else fail "redundant_simple_¶_conv" 0 []
 end);
 end;
 =TEX
@@ -355,14 +363,21 @@ in
 val rec Ûredundant_simple_µ_convÝ: CONV = (fn tm =>
 let	val (exs,bdy) = strip_simple_µ tm;
 	val bdy_frees = frees bdy;
-	fun aux [] tm = fail "redundant_simple_µ_conv" 0 []
-	| aux (x :: rest) tm = (
+	fun aux [] = false
+	| aux (x :: rest) = (
+		(x mem rest) orelse not(x mem bdy_frees)
+		orelse (aux rest)
+	);
+	fun aux1 [] tm = fail "redundant_simple_µ_conv" 0 []
+	| aux1 (x :: rest) tm = (
 		if (x mem rest) orelse not(x mem bdy_frees)
-		then (tc FURTHER_C (aux rest)) tm
-		else BINDER_C (aux rest) tm
+		then (tc FURTHER_C (aux1 rest)) tm
+		else BINDER_C (aux1 rest) tm
 	);
 in
-	aux exs tm
+	if aux exs
+	then aux1 exs tm
+	else fail "redundant_simple_µ_conv" 0 []
 end);
 end;
 =TEX
@@ -773,7 +788,19 @@ which is not equal to (but only implied by):
 
 µ p x · p x (Ì y · T)
 =TEX
-
+=SML
+local
+	val ´_thm = tac_proof(([],¬µ x · x ´ x®),REPEAT strip_tac);
+in
+fun local_rule thm gl = (
+let 	val (a,b) = dest_´ gl;
+	val (x,bdy) = dest_eq(concl thm);
+	val ithm = simple_µ_elim b ´_thm;
+in
+	subst_rule[(eq_sym_rule thm,x)] gl ithm
+end);
+end;
+=TEX
 =SML
 local
 	val ³_¤_thm = tac_proof(([],¬µ x · 
@@ -786,23 +813,25 @@ local
 		[]
 		[±_rewrite_thm, ¶_rewrite_thm,
 		µ_rewrite_thm, eq_rewrite_thm, ´_rewrite_thm, ³_rewrite_thm];
-	val rw_rule = prim_rewrite_rule empty_net
-		initial_rw_canon
-		TOP_MAP_C
-		[]
-		[±_rewrite_thm, ¶_rewrite_thm,
-		³_¤_thm,
-		µ_rewrite_thm, eq_rewrite_thm, ´_rewrite_thm, ³_rewrite_thm];
 	val rw_tac1 = (prim_rewrite_tac	
 		(make_net(flat(map (cthm_eqn_cxt initial_rw_canon) [´_rewrite_thm])))
 		initial_rw_canon 
 		TOP_MAP_C
 		[]);
+	val rw_tac2_thm = tac_proof(([],
+		¬µ t· ³ (F ± t) ± ³ (t ± F) ±
+		³(¶ x · F) ± ³(µ x · F) ±
+		(µ x· x = x ¤ T) ± (F ´ t) ±
+		(³ T ¤ F) ± (³ F ¤ T)®),
+		rewrite_tac[]);
+	val rw_rule = prim_rewrite_rule empty_net
+		initial_rw_canon
+		TOP_MAP_C
+		[]
+		[rw_tac2_thm, ³_¤_thm];
 	val rw_tac2 = (prim_rewrite_tac	
 		(make_net(flat(map (cthm_eqn_cxt initial_rw_canon)
-			[±_rewrite_thm, ¶_rewrite_thm,
-			µ_rewrite_thm, eq_rewrite_thm,
-			´_rewrite_thm, ³_rewrite_thm])))
+			[rw_tac2_thm])))
 		initial_rw_canon 
 		TOP_MAP_C
 		[]);
@@ -885,6 +914,7 @@ let	val work_on_bdy = list_mk_simple_¶(keep_in, bdy');
 	val new_term' = snd(dest_eq(concl new_term_rw));
 	val thm = tac_proof(([],mk_¤(work_on_tm,new_term')),
 		¤_T2 (fn thm =>
+		t_tac ORELSE
 		conv_tac(fn ag => eq_sym_rule new_term_rw)
 		THEN
 		SIMPLE_¶_THEN ante_tac thm
@@ -896,7 +926,8 @@ we know what the introduced variable is by the following means
 			let val x' = variant (frees(concl thm) @ frees new_term) x;
 			in
 			CASES_T2 (mk_eq(x',witness))
-			(fn thm1 => rw_tac1[thm1])
+			(fn thm1 => fn (asms,gl) =>
+			accept_tac (local_rule thm1 gl)(asms,gl))
 			(fn thm1 => rw_tac2[
 				thm1,
 				((rw_rule thm1) handle _ => t_thm),
@@ -929,9 +960,11 @@ simple_¶_equation_conv ¬¶ f · f = a®;
 simple_¶_equation_conv ¬¶ f · (a = f) ± f g®;
 simple_¶_equation_conv ¬¶ f · µ z · (z h ± (a = f) ± z f) ± f g®;
 simple_¶_equation_conv ¬¶ f · µ z x · (z h ± (a = f) ± z (f x)) ± (µ g · f g) ®;
-simple_¶_equation_conv ¬¶ f g h · (f = g x) ± h x®;
-simple_¶_equation_conv ¬¶ f h g · (f = g x) ± h x®;
-simple_¶_equation_conv ¬¶ f · (f x = g) ± h x®;
+simple_¶_equation_conv ¬¶ f g h · (f = g x) ± h x®; (* fail *)
+simple_¶_equation_conv ¬¶ f h g · (f = g x) ± h x®; (* fail *)
+simple_¶_equation_conv ¬¶ f · (f x = g) ± h x®; (* fail *)
+simple_¶_equation_conv ¬¶ f · f ± p x®;
+simple_¶_equation_conv ¬¶ f · ³ f ± p x®;
 =TEX
 \subsubsection{Special Cases of Equations}
 $¶\_equation\_conv$ does not handle the special cases of, e.g., $¬¶\ f·\ f\ x\ ¤\ T®$, where $x$ is a redundant argument, because more
@@ -1248,7 +1281,9 @@ to match a new term.
 It handles certain forms of changing in paired structure of quantifiers.
 =SML
 fun Ûlocal_rearrange_convÝ (f:TERM) (new_term:TERM) : CONV = (fn tm =>
-	tac_proof(([],mk_¤(tm,new_term)),
+	if Á_eq tm new_term
+	then Á_conv new_term tm
+	else tac_proof(([],mk_¤(tm,new_term)),
 		let val ldc_simps = dc_simps ();
 			val prwr = pure_rewrite_rule ldc_simps;
 			val prwt = pure_rewrite_tac ldc_simps;
@@ -2068,7 +2103,7 @@ push_proof_context new_prove_¶_epc;
 val _ = open_theory lthy;
 val _ = pop_proof_context();
 =TEX
-=IGN
+=SML
 end; (* of structure ExistenceProofs *)
 open ExistenceProofs;
 =TEX
