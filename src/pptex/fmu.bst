@@ -742,19 +742,7 @@ FUNCTION {sort.format.title}
 
 FUNCTION {presort}
 {
-  author missing$
-    { editor missing$
-	{ key field.or.null sortify }
-	{ editor sort.format.names }
-      if$
-    }
-    { author sort.format.names }
-  if$
-  "    "
-  *
-  title field.or.null
-  sort.format.title
-  *
+  key field.or.null sortify
   #1 entry.string.max substring$
   'sort.key$ swap$ :=
 }
