@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp514.doc   %Z% $Date: 2002/10/17 16:04:45 $ $Revision: 1.8 $ $RCSfile: imp514.doc,v $
+% imp514.doc   %Z% $Date: 2004/06/20 14:13:52 $ $Revision: 1.9 $ $RCSfile: imp514.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Compliance Notation (Volume II) Types}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP514}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.8 $%
+\def\SCCSversion{$Revision: 1.9 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 16:04:45 $%
+\TPPdate{\FormatDate{$Date: 2004/06/20 14:13:52 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -77,7 +77,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \item[Issue 1.6] Copyright and banner updates for open source release.
 \item[Issue 1.7] DAZ-specific updates to banner for open source release
 \item[Issue 1.8] DAZ-specific updates to banner for open source release
-\item[Issue 1.9] Reform of the Environments.
+\item[Issues 1.9-1.10] Reform of the Environments.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -110,11 +110,15 @@ structure CNTypes2 : CNTypes2 = struct
 open    CNBasicDeclsAndExprs;
 =TEX
 =SML
-abstype €ENV_DICT› = EnvDict of {
+datatype €ENV_DICT› = EnvDict of {
 	infos : ENV_INFO E_DICT,
 	ti_cxt : TYPE E_DICT,
-	cn_scope : unit E_DICT OPT}
-with
+	local_vars : {
+		vc_vars : Z_ID list,
+		vc_pars : Z_ID list,
+		vc_aux_vars : Z_ID list,
+		vc_log_cons : Z_ID list},
+	cn_scope : unit E_DICT OPT};
 (*
 =TEX
 =SML
@@ -122,6 +126,11 @@ with
 val €initial_env_dict› : ENV_DICT = EnvDict {
 	infos = initial_e_dict,
 	ti_cxt = initial_e_dict,
+	local_vars = {
+		vc_vars = [],
+		vc_pars = [],
+		vc_aux_vars = [],
+		vc_log_cons = []},
 	cn_scope = Nil
 };
 (*
@@ -129,19 +138,60 @@ val €initial_env_dict› : ENV_DICT = EnvDict {
 =SML
 *)
 fun €add_to_env_dict›
-	(EnvDict{infos, ti_cxt, cn_scope} : ENV_DICT)
+	(EnvDict{infos, ti_cxt, local_vars, cn_scope} : ENV_DICT)
 	(new :ENV_INFO S_DICT) :  ENV_DICT = (
 	let	val infos' = list_e_enter infos new;
 		fun mk_ti_cxt acc [] = acc
 		|    mk_ti_cxt acc ((n, {tipe, info as EIEnvVar _, canon_name}):: more) = (
-			mk_ti_cxt (e_enter n tipe acc) more
+			mk_ti_cxt (e_enter n (force_value tipe) acc) more
+			handle Fail _ => fail "add_to_env_dict" 514001 [fn _ => n]
 		) |  mk_ti_cxt acc ((n, {tipe, info as EIEnvAuxVar _, canon_name}):: more) = (
-			mk_ti_cxt (e_enter n tipe acc) more
+			mk_ti_cxt (e_enter n (force_value tipe) acc) more
+			handle Fail _ => fail "add_to_env_dict" 514001 [fn _ => n]
+		) |  mk_ti_cxt acc ((n, {tipe, info as EIEnvLogCon _, canon_name}):: more) = (
+			mk_ti_cxt (e_enter n (force_value tipe) acc) more
+			handle Fail _ => fail "add_to_env_dict" 514001 [fn _ => n]
 		) |  mk_ti_cxt acc ((n, {tipe, info as EIEnvOtherVar, canon_name}):: more) = (
-			mk_ti_cxt (e_enter n tipe acc) more
+			mk_ti_cxt (e_enter n (force_value tipe) acc) more
+			handle Fail _ => fail "add_to_env_dict" 514001 [fn _ => n]
 		) | mk_ti_cxt acc (_:: more) = mk_ti_cxt acc more;
+		fun add_local_vars acc ([] : ENV_INFO S_DICT) = acc
+		|     add_local_vars {vc_vars, vc_pars, vc_aux_vars, vc_log_cons}
+				((n, {info as EIEnvVar {kind = Par _, ...}, ...}):: more) = (
+			add_local_vars {
+				vc_vars = vc_vars,
+				vc_pars = n :: vc_pars,
+				vc_aux_vars = vc_aux_vars,
+				vc_log_cons = vc_log_cons} more
+		) |  add_local_vars {vc_vars, vc_pars, vc_aux_vars, vc_log_cons}
+				((n, {info as EIEnvVar _, ...}):: more) = (
+			add_local_vars {
+				vc_vars = n :: vc_vars,
+				vc_pars = vc_pars,
+				vc_aux_vars = vc_aux_vars,
+				vc_log_cons = vc_log_cons} more
+		) |   add_local_vars {vc_vars, vc_pars, vc_aux_vars, vc_log_cons}
+				((n, {info as EIEnvAuxVar _, ...}):: more) = (
+			add_local_vars {
+				vc_vars = vc_vars,
+				vc_pars =vc_pars,
+				vc_aux_vars = n :: vc_aux_vars,
+				vc_log_cons = vc_log_cons} more
+		) |  add_local_vars {vc_vars, vc_pars, vc_aux_vars, vc_log_cons}
+				((n, {info as EIEnvLogCon _, ...}):: more) = (
+			add_local_vars {
+				vc_vars = vc_vars,
+				vc_pars =vc_pars,
+				vc_aux_vars = vc_aux_vars,
+				vc_log_cons = n :: vc_log_cons} more
+		) | add_local_vars acc (_::more) = add_local_vars acc more;
 		val ti_cxt' = mk_ti_cxt ti_cxt new;
-	in	EnvDict {infos = infos', ti_cxt = ti_cxt',  cn_scope = cn_scope}
+		val local_vars' = add_local_vars local_vars new;
+	in	EnvDict {
+			infos = infos',
+			ti_cxt = ti_cxt', 
+			local_vars = local_vars',
+			cn_scope = cn_scope}
 	end
 );
 (*
@@ -149,10 +199,14 @@ fun €add_to_env_dict›
 =SML
 *)
 fun €set_cn_scope›
-	(EnvDict{infos, ti_cxt, cn_scope = _} : ENV_DICT)
+	(EnvDict{infos, ti_cxt, local_vars, cn_scope = _} : ENV_DICT)
 	(zns : Z_ID list) : ENV_DICT = (
 	let	val cn_scope' = Value(list_e_enter initial_e_dict (map (fn zn => (zn, ())) zns));
-	in	EnvDict {infos = infos, ti_cxt = ti_cxt,  cn_scope = cn_scope'}
+	in	EnvDict {
+			infos = infos,
+			ti_cxt = ti_cxt, 
+			local_vars = local_vars,
+			cn_scope = cn_scope'}
 	end
 );
 (*
@@ -160,7 +214,8 @@ fun €set_cn_scope›
 =SML
 *)
 fun €get_cn_scope›
-	(EnvDict{infos = _, ti_cxt = _, cn_scope = Value g} : ENV_DICT) : Z_ID list OPT = (
+	(EnvDict{infos = _, ti_cxt = _, local_vars = _, cn_scope = Value g} : ENV_DICT)
+	: Z_ID list OPT = (
 	Value(map fst (e_flatten g))
 ) | get_cn_scope _ = Nil;
 (*
@@ -168,7 +223,8 @@ fun €get_cn_scope›
 =SML
 *)
 fun €env_of_env_dict›
-	(EnvDict{infos = infos, ti_cxt = _, cn_scope = cn_scope} : ENV_DICT) : CN_ENV = (
+	(EnvDict{infos = infos, ti_cxt = _, local_vars = _,cn_scope = cn_scope} : ENV_DICT)
+	 : CN_ENV = (
 let	fun aux (Value g)  zn = (
 		case e_lookup zn infos of
 			res as (Value {canon_name, info as EIEnvVar {tmark, ...}, tipe}) => (
@@ -195,10 +251,18 @@ let	fun aux (Value g)  zn = (
 	) | aux Nil zn = e_lookup zn infos;
 in	fn zn =>
 	case aux cn_scope zn of
-		res as (Value _) => res
-	|	Nil => (
+		res as (Value {tipe = Value _, ...}) => res
+	|	res as (Value {tipe = Nil, canon_name, info}) => (
+			Value{
+				tipe = get_const_type zn,
+				canon_name = canon_name,
+				info = info}		
+	) |	Nil => (
 		case get_const_type zn of
-			Value ty => Value {tipe = ty, canon_name = zn, info = EIEnvOther}
+			Value ty => Value {
+					tipe = Value ty,
+					canon_name = zn,
+					info = EIEnvOther}
 		|	Nil => Nil
 	)
 end);
@@ -207,7 +271,8 @@ end);
 =SML
 *)
 fun €flatten_env_dict›
-	(EnvDict{infos = infos, ti_cxt = _, cn_scope = _} : ENV_DICT) : ENV_INFO S_DICT = (
+	(EnvDict{infos = infos, ti_cxt = _, local_vars = _, cn_scope = _} : ENV_DICT)
+	: ENV_INFO S_DICT = (
 	e_flatten infos
 );
 (*
@@ -215,10 +280,39 @@ fun €flatten_env_dict›
 =SML
 *)
 fun €ti_context_of_env_dict›
-	(EnvDict{infos = _, ti_cxt = ti_cxt, cn_scope = _} : ENV_DICT) : TYPE E_DICT = (
+	(EnvDict{infos = _, ti_cxt = ti_cxt, local_vars = _,cn_scope = _} : ENV_DICT)
+	: TYPE E_DICT = (
 	ti_cxt
 );
-end (* of absttype ENV_DICT *);
+(*
+=TEX
+=SML
+*)
+fun €new_scope_env_dict› 
+	(EnvDict{infos, ti_cxt, local_vars = _, cn_scope} : ENV_DICT)
+	: ENV_DICT = (
+	EnvDict{
+		infos = infos,
+		ti_cxt = ti_cxt,
+		local_vars = {
+			vc_vars = [],
+			vc_pars = [],
+			vc_aux_vars = [],
+			vc_log_cons = []},
+		cn_scope = cn_scope}
+);
+(*
+=TEX
+=SML
+*)
+fun €get_local_vars› 
+	(EnvDict{infos = _, ti_cxt = _, local_vars = local_vars, cn_scope = _} : ENV_DICT)
+	:	{vc_vars : Z_ID list,
+		vc_pars : Z_ID list,
+		vc_aux_vars : Z_ID list,
+		vc_log_cons : Z_ID list} = (
+	local_vars
+);
 =TEX
 =INCLUDE
 imp514.inc

@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp508.doc   %Z% $Date: 2004/03/05 15:25:05 $ $Revision: 1.117 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2004/06/20 14:13:52 $ $Revision: 1.118 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.117 $%
+\def\SCCSversion{$Revision: 1.118 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/03/05 15:25:05 $%
+\TPPdate{\FormatDate{$Date: 2004/06/20 14:13:52 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -145,7 +145,7 @@ are now automatically used to qualify the initial expression.
 the cache theory before calling {\it term\_of\_z\_tm}.
 \item[Issue 1.116] Fixed bug with use clauses and aggregates.
 \item[Issue 1.117] Fixed bug with use clauses and selected components.
-\item[Issue 1.118] Reform of the Environments.
+\item[Issues 1.118-1.119] Reform of the Environments.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -405,21 +405,23 @@ fun €zid› (env : CN_ENV) (id : Z_ID) : Z_EXP = (
 			|	Nil => (
 				case e_lookup id (TypeInference.e_get_ti_context()) of
 					Value ty =>
-						{tipe = ty,
+						{tipe = Value ty,
 						canon_name = id,
 						info = EIEnvOtherVar}
 				|	Nil => fail "zid" 508021 [fn()=>id]
 			)
 		);
 	in	case info of
-			EIEnvVar {kind = OutOfScope, ...}  =>  fail "zid" 5080771 [fn()=>id]
-		|	EIEnvVar _ =>  mk_z_lvar(canon_name, tipe, [])
-		|	EIEnvAuxVar {in_scope = false, ...} =>    fail "zid" 5080771 [fn()=>id]
-		|	EIEnvAuxVar _ =>  mk_z_lvar(canon_name, tipe, [])
-		|	EIEnvLogCon _ =>  mk_z_lvar(canon_name, tipe, [])
-		|	EIEnvOtherVar => mk_z_lvar(canon_name, tipe, [])
-		|	_ => mk_z_gvar(canon_name, tipe, [])
-	end
+			EIEnvVar {kind = OutOfScope, ...}  =>  fail "zid" 508077 [fn()=>id]
+		|	EIEnvVar _ =>  mk_z_lvar(canon_name, force_value tipe, [])
+		|	EIEnvAuxVar {in_scope = false, ...} =>    fail "zid" 508077 [fn()=>id]
+		|	EIEnvAuxVar _ =>  mk_z_lvar(canon_name, force_value tipe, [])
+		|	EIEnvLogCon _ =>  mk_z_lvar(canon_name, force_value tipe, [])
+		|	EIEnvOtherVar => mk_z_lvar(canon_name, force_value tipe, [])
+		|	_ => mk_z_gvar(canon_name, force_value tipe, [])
+	end	handle ex as (Fail _) => (
+		divert ex "force_value" "zid" 508078 [fn _ => id]
+	)
 );
 =TEX
 =SML
@@ -2173,10 +2175,13 @@ fun €adjust_id› (env : CN_ENV) (id : ID)  = (
 			canon_name = cn} => 
 			let	val names_defs = map (fn{id,  default, ...} => (id, default)) names_tmarks_defs; 
 				val args = positional_assocs_to_exps names_defs [];
-			in	if	(fst(dest_ctype ty) <> informal_function)
+			in	if	(fst(dest_ctype (force_value ty)) <> informal_function)
 				then	EFunCall{fun_name=cn, args=args}
 				else	fail "adjust_id" 508049 [fn()=>id]
-			end
+			end	handle ex as (Fail _) => (
+				divert ex "force_value" "adjust_id" 508078 [fn _ => trans_id id]
+			)
+
 	| _ => EId id
 );
 fun €adjust_rangelohi› (env : CN_ENV) ({lo=l, hi=h} : EXP RANGELOHI) = (
@@ -2314,21 +2319,25 @@ Is it a function call?
 		EArrayAggPos{comps,...}) => (
 	let	val names_defs = map (fn {id, default, ...} => (id, default)) names_tmarks_defs; 
 		val args = positional_assocs_to_exps names_defs comps;
-	in	if	(fst(dest_ctype ty) <> informal_function)
+	in	if	(fst(dest_ctype (force_value ty)) <> informal_function)
 		then	EFunCall{fun_name=prename, args=map (adjust_exp env)  args}
 		else	fail "adjust_id" 508049 [fn()=>prename]
-	end
+	end	handle ex as (Fail _) => (
+		divert ex "force_value" "adjust_indexed_comp" 508078 [fn _ => prename]
+	)
 	) |(Value {
 		tipe = ty,
 		info = EIEnvFunction {pars = names_tmarks_defs, ...}, ...},
 		EArrayAggNamed{named_assocs, ...}) => (
 	let	val names_defs = map (fn {id, default, ...} => (id, default)) names_tmarks_defs;
 		val args = named_assocs_to_exps names_defs named_assocs;
-	in	if	(fst(dest_ctype ty) <> informal_function)
+	in	if	(fst(dest_ctype (force_value ty)) <> informal_function)
 		then	EFunCall
 			{fun_name=prename, args=map (adjust_exp env) args}
 		else	fail "adjust_id" 508049 [fn()=>prename]
-	end
+	end	handle ex as (Fail _) => (
+		divert ex "force_value" "adjust_indexed_comp" 508078 [fn _ => prename]
+	)
 =TEX
 Is it a type conversion?
 =SML
@@ -2364,7 +2373,7 @@ and €adjust_selected_comp› env ({prefix=p, selector=s} : EXP SELECTED_COMP) = (
 		let	val cid = canonical_id env id;
 		in	case env cid of
 			Value {tipe = ty, ...} => (
-				(	(dest_z_schema_type ty);
+				(	(dest_z_schema_type (force_value ty));
 					ESelectedComp{prefix=adjust_exp (env : CN_ENV) (EId cid),
 								selector=s}	)
 				handle Fail _ => adjust_exp env (EId (cid^"."^s))
@@ -2560,12 +2569,12 @@ fun €enum_attrib› (env : CN_ENV) (zidâ1 : Z_ID, zidâ2 : Z_ID, zidâ3 : Z_ID) = (
 let	fun env' id = 
 		if id = (zidâ1 ^^ zlst)
 		then	Value {
-			tipe = z_int_type,
+			tipe = Value z_int_type,
 			info = EIEnvOther,
 			canon_name = id}
 		else if id mem [zidâ1 ^^ zsuc, zidâ1 ^^ zpos]
 		then	Value {
-			tipe = z_int_int_rel_type,
+			tipe =Value  z_int_int_rel_type,
 			info = EIEnvOther,
 			canon_name = id}
 		else	env id;
@@ -2589,13 +2598,13 @@ let	val {vals} = td;
 		if id mem zvals
 		then
 			Value {
-				tipe = z_int_type,
+				tipe = Value z_int_type,
 				info = EIEnvOther,
 				canon_name = id}
 		else if id = zname
 		then
 			Value {
-				tipe = z_int_set_type,
+				tipe = Value z_int_set_type,
 				info = EIEnvOther,
 				canon_name = id}
 		else
@@ -2766,7 +2775,7 @@ fun €index_con_set_comp› (env : CN_ENV) (tmark : TMARK) (domain : Z_EXP) : Z_EXP
 		val var =  "array";
 		fun env' id = (
 			if	id = "array"
-			then	Value {tipe = zvar_ty,
+			then	Value {tipe = Value zvar_ty,
 					info = EIEnvVar {tmark = tmark, kind = Var},
 					canon_name = id}
 			else	env id
@@ -2791,7 +2800,7 @@ fun €trans_comp_decl› (env : CN_ENV) (disc : VAR_DECL list)
 		) | env_aux ({vars = ds, tmark = tm}::more) d = (
 			if	d mem (map trans_id ds)
 			then	Value{
-				tipe = (dest_z_power_type o type_of o zid env o trans_id) tm,
+				tipe = Value ((dest_z_power_type o type_of o zid env o trans_id) tm),
 				info = EIEnvVar {tmark = tm, kind = Var}, 
 				canon_name = d}
 			else	env_aux more d
