@@ -1,0 +1,260 @@
+%  imp103.doc  %Z% $Date$ $Revision$ $RCSfile$
+=TEX
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Detailed Design for Conjecture Databse}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP103}  %% Mandatory field
+\def\SCCSversion{$Revision$%%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPstatus{Draft}
+%\TPPstatus{Approved}
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.B.~Jones & HAT Manager}
+\TPPabstract{
+This document contains the implementation for the
+facilities for managing conjectures.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	Library}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issue 1.1]
+First draft.
+\end{description}
+\subsection{Changes Forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the implementation for the Conjectures Database module for ICL HOL.
+The detailed design for this material is given in \cite{DS/FMU/IED/DTD103}.
+
+\subsection{Introduction}
+See \cite{DS/FMU/IED/DTD103}.
+
+\subsection{Purpose and Background}
+See \cite{DS/FMU/IED/DTD103}.
+\subsection{Dependencies}
+See \cite{DS/FMU/IED/DTD103}.
+\subsection{Possible Enhancements}
+See \cite{DS/FMU/IED/DTD103}.
+\subsection{Deficiencies}
+None known.
+\section{DISCUSSION}
+The implementation is very straightforward.
+It is not expected that the conjectures database will be used in places where performance is critical.
+Simple algorithms have therefore been used throughout.
+
+\section{CONJECTURE FUNCTIONS}
+
+\label{Conjectures}
+=SML
+structure ÛConjecturesÝ : Conjectures = struct
+=TEX
+=SML
+fun Ûencode_conjectureÝ (keys : string list, t : TERM) : USER_DATUM = (
+	let	fun aux [] = UD_Term (t, [])
+		|   aux (k :: ks) = UD_String(k, [aux ks]);
+	in	aux keys
+	end
+);
+fun Ûdecode_conjectureÝ (caller : string) (thyn : string) (ud : USER_DATUM) : string list * TERM = (
+	case ud of
+		UD_Term (t, _) => ([], t)
+	|	UD_String (k, [ud']) => (
+			let	val (ks, t) = decode_conjecture caller thyn ud'
+			in	(k :: ks, t)
+			end
+	) |	_ => fail caller 20803 [fn () => thyn]
+);
+fun Ûconjecture_key_checkÝ (key : string) (ud : USER_DATUM) : bool = (
+	case ud of
+		UD_Term (t, _) => false
+	|	UD_String (k, [ud']) => (
+			k = key orelse conjecture_key_check key ud'
+	) |	_ => false
+);
+=SML
+val conjecture_ud_key = "icl'cnj";
+=TEX
+=SML
+fun Ûget_conjecture_udsÝ (caller : string)
+		( thy : string ) : USER_DATUM list = (
+	if thy mem theory_names () orelse thy = "-"
+	then	(case get_user_datum thy conjecture_ud_key of
+		UD_Int (0, uds) => uds
+	|	_ => fail caller 20803 [fn () => thy])
+		handle Fail _ => []
+	else	fail caller 20601 [fn()=>thy]
+);
+=TEX
+=SML
+fun Ûset_conjecture_udsÝ (caller : string) (uds : USER_DATUM list) : unit = (
+	set_user_datum (conjecture_ud_key, UD_Int(0, uds))
+	handle ex => reraise ex caller
+);
+=TEX
+=SML
+fun Ûnew_conjectureÝ ([] : string list, tm : TERM) : unit = (
+	fail "new_conjecture" 6031 []
+) | Ûnew_conjectureÝ (keys : string list, tm : TERM) : unit = (
+	let	val side_effect = (
+			if	not(type_of tm =: BOOL)
+			then	term_fail "new_conjecture" 3031 [tm]
+			else	()
+		);
+		val uds = get_conjecture_uds "new_conjecture" "-";
+		fun chk [] = ()
+		|   chk (k :: ks) = (
+			if	any uds (conjecture_key_check k)
+			then	fail "new_conjecture" 20801 [fn () => k]
+			else	chk ks
+		);	
+		val side_effect = chk keys;
+		val new_uds = encode_conjecture (keys, tm) :: uds
+	in	set_conjecture_uds "new_conjecture" new_uds
+	end
+);
+=TEX
+=SML
+fun Ûget_conjectureÝ (thy : string) (key : string) : TERM = (
+	let	val uds = get_conjecture_uds "get_conjecture" thy;
+		val ud = find uds (conjecture_key_check key)
+			handle Fail _ =>
+			fail "get_conjecture" 20802 [fn()=>key, fn()=>thy]
+	in	snd(decode_conjecture "get_conjecture" thy ud)
+	end
+);
+=TEX
+=SML
+fun Ûget_conjecturesÝ (thy : string) : (string list * TERM) list = (
+	let	val uds = get_conjecture_uds "get_conjecture" thy;
+	in	map (decode_conjecture "get_conjectures" thy) uds
+	end
+);
+=TEX
+=SML
+fun Ûdelete_conjectureÝ (key : string) : TERM = (
+	let	val uds = get_conjecture_uds "delete_conjecture" "-";
+		fun prune [] = (
+			fail "get_conjecture" 20802
+			[fn()=>key, get_current_theory_name]
+		) | prune (ud :: more) = (
+			if	conjecture_key_check key ud
+			then	(ud, more)
+			else	let	val (xx, pruned) = prune more;
+				in	(xx, ud :: pruned)
+				end
+		);
+		val (ud, pruned) = prune uds;
+	in	set_conjecture_uds "delete_conjecture" pruned;
+		snd
+		(decode_conjecture "delete_conjecture"
+				(get_current_theory_name()) ud)
+	end
+);
+=TEX
+=SML
+fun Ûdelete_all_conjecturesÝ (() : unit) : unit = (
+	set_conjecture_uds "delete_all_conjectures" []
+);
+=TEX
+=SML
+fun Ûcull_conjecturesÝ (what : string) (p : TERM -> bool) : unit = (
+	let	val uds = get_conjecture_uds "cull_conjectures" "-";
+		fun prune [] = ([], [])
+		  | prune (ud :: more) = (
+			let	val (keys, tm) =
+					decode_conjecture "delete_conjecture"
+						(get_current_theory_name()) ud;
+				val (togo, tostay) = prune more;
+			in	if	p tm
+				then	(keys @ togo, tostay)
+				else	(togo, ud :: tostay)
+			end
+		);
+		val (togo, tostay) = prune uds;
+	in	case prune uds of
+		 	([], _) => ()
+		|	(togo, tostay) => (
+			comment "cull_conjectures" 20804 
+			[(fn () => what),
+			(fn () => case togo of [_] => "" | _ => "s"),
+			(fn ()=> format_list(Combinators.I) togo ", ")];
+			set_conjecture_uds "cull_conjectures" tostay
+		)
+	end
+);
+=TEX
+=SML
+fun Ûconjecture_kernel_state_change_trapÝ
+	(ksc : KERNEL_STATE_CHANGE) : unit = (
+	case ksc of
+		DeleteConst c => (
+			let	val n = fst (dest_const c);
+				fun p t = n mem (map fst (term_consts t));
+			in	cull_conjectures "constant" p
+			end
+	) |	DeleteType n => (
+			let	fun p t = n mem (map fst (term_tycons t));
+			in	cull_conjectures "type" p
+			end
+	) |	_ => ()
+);
+val side_effect = on_kernel_state_change conjecture_kernel_state_change_trap;
+=TEX
+=SML
+end	(* of structure Conjectures *);
+open Conjectures;
+=IGN
+
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+
+\end{document}
+
+
