@@ -122,6 +122,7 @@ Fixed bug in printing of unreplaced compilation unit k-slot.
 \item[Issue 1.58 - 1.63] Major rewrite as called for as WP 6 of \cite{ISS/HAT/DAZ/HLD505}.
 \item[Issue 1.64] Made file reloadable, by gracefully accepting pre-existence
 of integer control.
+\item[Issue 1.65] Corrected checking of variable redeclaration rules in subprogram specifications. (bug 6 (v0.7.1)).
 \end{description}
 
 \subsection{Changes Forecast}
@@ -220,6 +221,7 @@ fun Ûin_new_scopeÝ (check_n : bool) (n : ID) (what : unit -> 'b) : 'b = (
 =SML
 fun Ûwith_clash_checksÝ (what : unit -> 'a) : 'a = (
 	clashes := [];
+	stack := [];
 	clash_checking := true;
 	let	fun show_name n = format_list Combinators.I n ".";
 		fun report_clash {name1, name2} = (
@@ -1660,27 +1662,28 @@ This is needed because the name of the procedure or function is visible at this 
 and Ûfmt_procedure_specificationÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({name=n, formal_part=f, spec=Value s, annotation=ann} 
 		: PROCEDURE_SPECIFICATION) = (
-    push_scope n;
-    (if is_expansion_selected fmtinfo
-    then (
-	outf "PROCEDURE";
-	(fmt_id fmtinfo n);
-	(fmt_parameter_specification_list fmtinfo f);
-	outf "\n";
-	inc_tabs(); outf "-- Spec ..."; dec_tabs(); outf "\n"
-    ) else (
-	outf "PROCEDURE";
-	(fmt_id fmtinfo n);
-	(fmt_parameter_specification_list fmtinfo f);
-	outf "\n";
-	inc_tabs(); (fmt_spec fmtinfo s); dec_tabs(); outf "\n"
-    );
-    fmt_annotation fmtinfo ann
-    )
+	check_decl n;
+	push_scope n;
+	(if is_expansion_selected fmtinfo
+		then (
+		outf "PROCEDURE";
+		(fmt_id fmtinfo n);
+		(fmt_parameter_specification_list fmtinfo f);
+		outf "\n";
+		inc_tabs(); outf "-- Spec ..."; dec_tabs(); outf "\n"
+	) else (
+		outf "PROCEDURE";
+		(fmt_id fmtinfo n);
+		(fmt_parameter_specification_list fmtinfo f);
+		outf "\n";
+		inc_tabs(); (fmt_spec fmtinfo s); dec_tabs(); outf "\n"
+   	);
+  	fmt_annotation fmtinfo ann)
 )  | fmt_procedure_specification (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({name=n, formal_part=f, spec=Nil, annotation=ann}
 		: PROCEDURE_SPECIFICATION) = (
-    push_scope n;
+	check_decl n;
+	push_scope n;
 	outf "PROCEDURE";
 	(fmt_id fmtinfo n);
 	(fmt_parameter_specification_list fmtinfo f);
@@ -1690,26 +1693,28 @@ and Ûfmt_procedure_specificationÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
  and Ûfmt_function_specificationÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({designator=d, return=r, formal_part=f, spec=Value s, annotation=ann}
 			: FUNCTION_SPECIFICATION) = (
-    push_scope d;
-    (if is_expansion_selected fmtinfo
-    then (
-	outf "FUNCTION";(fmt_id fmtinfo d);
-	(fmt_parameter_specification_list fmtinfo f); 
-	outf "RETURN"; (fmt_tmark fmtinfo r);
-	outf "\n";
-	inc_tabs(); outf "-- Spec ..."; dec_tabs(); outf "\n"
-    ) else (
-	outf "FUNCTION";(fmt_id fmtinfo d);
-	(fmt_parameter_specification_list fmtinfo f); 
-	outf "RETURN"; (fmt_tmark fmtinfo r); outf "\n";
-	inc_tabs(); (fmt_spec fmtinfo s); dec_tabs(); outf "\n"
-    );
-    fmt_annotation fmtinfo ann
-    )
+	check_decl d;
+	push_scope d;
+	(if is_expansion_selected fmtinfo
+	then (
+		outf "FUNCTION";(fmt_id fmtinfo d);
+		(fmt_parameter_specification_list fmtinfo f); 
+		outf "RETURN"; (fmt_tmark fmtinfo r);
+		outf "\n";
+		inc_tabs(); outf "-- Spec ..."; dec_tabs(); outf "\n"
+	) else (
+		outf "FUNCTION";(fmt_id fmtinfo d);
+		(fmt_parameter_specification_list fmtinfo f); 
+		outf "RETURN"; (fmt_tmark fmtinfo r); outf "\n";
+		inc_tabs(); (fmt_spec fmtinfo s); dec_tabs(); outf "\n"
+	);
+	fmt_annotation fmtinfo ann
+	)
 )
   | fmt_function_specification (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({designator=d, return=r, formal_part=f, spec=Nil, annotation=ann}
 		: FUNCTION_SPECIFICATION) = (
+	check_decl d;
 	push_scope d;
 	outf "FUNCTION";(fmt_id fmtinfo d);
 	(fmt_parameter_specification_list fmtinfo f); outf "RETURN"; 
@@ -2337,10 +2342,8 @@ val Ûprint_web_clauseÝ : WEB_CLAUSE -> unit = (
 );
 
 fun Ûprint_spark_programÝ (() : unit) : unit = with_clash_checks (fn () =>
-   (clash_checking := true;
-    format_web_clause (Value get_replacement)
+   ( format_web_clause (Value get_replacement)
     (WCCompilation (#spark_prog (get_z_generator_state()))))
-    handle ex => (clash_checking := false; raise ex)
 );
 
 fun Ûoutput_spark_programÝ ({out_file : string}) = with_clash_checks (fn () =>
