@@ -86,29 +86,23 @@ to the design of Z paragraphs in \cite{DS/FMU/IED/DTD049}.
 \section{EXTENSIONS TO READER/WRITER}
 
 =SML
-structure ÛZParagraphsÝ : ZParagraphs = struct
+(*structure ÛZParagraphsÝ : ZParagraphs = struct*)
 =TEX
 =SML
-local
-open Lex SymbolTable ReaderWriterSupport HOLReaderWriter;
-open PrettyNames;
-in
+(*local*)
+	open Lex SymbolTable ReaderWriterSupport;
+	open HOLReaderWriter;
+	open PrettyNames;
+	open ZLex;
+(*in*)
 =TEX
 =SMLLITERAL
 
-type ZPARAGRAPH = Z_TOKEN list;
-
-
-val sd = let open PrettyNames in add_new_symbols [
+val sd = add_new_symbols [
 	([	"StartZGeneric"],	Value "", Starting(specific_quotation, "")),
 	([	"StartZSchema"],	Value "ÿ", Starting(specific_quotation, "")),
 	([	"EndZBox"],		Value "ˆ", Ending ""),
 	([	"StartZTerm"],	Value "ñ", Starting(specific_quotation, ""))
-] end;
-=TEX
-=IGN
-add_new_symbols [
-	([	"TEST"],	Nil, Middle "\", Lex.Error 42, Lex.Text\"")
 ];
 =TEX
 =SML
@@ -127,69 +121,184 @@ val sd = add_named_reader("¹", "Z", "Lex.Term", z_other_reader);
 =TEX
 
 \section{RECOGNIZING Z PARAGRAPHS}
+=IGN
+exception EndOfInput;
+
+type ZTOKEN_STREAM = ZTOKEN list * ZTOKEN list;
+
+fun make_tok_stream (tl : ZTOKEN list) : ZTOKEN_STREAM = (
+	case (rev tl) of
+	eos::rest => ([], rev rest)
+	|[] => ([], tl)
+);
+
+fun collect_tok ((a, curr::rest) : ZTOKEN_STREAM) : ZTOKEN_STREAM = (a@[curr], rest)
+  | collect_tok (a, []) = raise EndOfInput;
+
+fun drop_tok ((a, curr::rest) : ZTOKEN_STREAM) : ZTOKEN_STREAM = (a, rest)
+  | drop_tok (a, []) = raise EndOfInput;
+
+fun add_tok ((a, b) : ZTOKEN_STREAM) (t : ZTOKEN) : ZTOKEN_STREAM = (a@[t], b);
+
+fun next_tok ((_, curr::rest) : ZTOKEN_STREAM) : ZTOKEN = curr
+  | next_tok (_, []) = raise EndOfInput;
+
+fun eos_tok ((_, []) : ZTOKEN_STREAM) : bool = true
+  | eos_tok _ = false;
+
+fun collect_until (ts : ZTOKEN_STREAM) (t : ZTOKEN) : ZTOKEN_STREAM = (
+	if next_tok ts = t
+	then
+		ts
+	else
+		collect_until (collect_tok ts) t
+);
+fun collect_incl ts t = collect_tok(collect_until ts t);
+fun collect_all ((a, b) : ZTOKEN_STREAM) : ZTOKEN list = a @ b;
+
+fun make_axbox_tokens (toks) = (
+let	val ts = make_tok_stream toks;
+	val ts = collect_until ts ZTSt;
+	val core = 
+		if eos_tok (collect_tok ts)
+		then collect_all (drop_tok ts)
+		else collect_all ts;
+in
+	(ZTAx::core)@[ZTEnd]@[ZTEos]
+end);
+fun make_schbox_tokens (toks) = (
+let	val ts = make_tok_stream toks;
+	val ts = collect_until ts ZTSt;
+	val core = 
+		if eos_tok (collect_tok ts)
+		then collect_all (drop_tok ts)
+		else collect_all ts;
+in
+	(ZTSch::core)@[ZTEnd]@[ZTEos]
+end);
+=TEX
 \subsection{Z Axiomatic Box Recogniser}
 =SML
 fun Ûz_axbox_recogniserÝ (start:string, lang:string, value:INPUT list, finish:string) = (
-	if	is_same_symbol(start, "¹")
-	andalso	is_same_symbol(finish, "°")
-	andalso	(lang = "ZAX")
-	then
-		parse_zparagraph(ZAX::
-			(zlex value))
-	else
-		fail "z_axbox_recogniser" 22010 [fn () => start, fn () => lang, fn () => finish]
-);
+let	val side_effect =
+		if	is_same_symbol(start, "¹")
+			andalso	is_same_symbol(finish, "°")
+			andalso	(lang = "ZAX")
+		then	()
+		else
+			fail "z_axbox_recogniser" 49001 [
+				fn () => start,
+				fn () => lang,
+				fn () => finish]
+	val tokens = ZTAx::(zlex value);
+(*	val parsed = zparser tokens;
+	val type_checked = (
+		case type_check_zparagraph parsed of
+		Inferred _ => (print "OK";())
+		|TypeError e => print_ztierror e
+		);*)
+in	tokens
+end);
+
 =TEX
 \subsection{Z Generic Box Recogniser}
 =SML
 fun Ûz_genbox_recogniserÝ (start:string, lang:string, value:INPUT list, finish:string) = (
-	if	is_same_symbol(start, "StartZGeneric")
-	andalso	is_same_symbol(finish, "EndZBox")
-	andalso	(lang = "")
-	then
-		parse_zparagraph (ZAX::(zlex value))
-	else
-		fail "z_genbox_recogniser" 22010 [fn () => start, fn () => lang, fn () => finish]
-);
+let	val side_effect =
+		if	is_same_symbol(start, "StartZGeneric")
+			andalso	is_same_symbol(finish, "EndZBox")
+			andalso	(lang = "")
+		then	()
+		else
+			fail "z_genbox_recogniser" 49002 [
+				fn () => start,
+				fn () => lang,
+				fn () => finish]
+	val tokens = ZTAx::(zlex value);
+(*	val parsed = zparser tokens;
+	val type_checked = (
+		case type_check_zparagraph parsed of
+		Inferred _ => (print "OK";())
+		|TypeError e => print_ztierror e
+		);*)
+in	tokens
+end);
+
 =TEX
 \subsection{Z Schema Box Recogniser}
 =SML
 fun Ûz_schbox_recogniserÝ (start:string, lang:string, value:INPUT list, finish:string) = (
-	if	is_same_symbol(start, "StartZSchema")
-	andalso	is_same_symbol(finish, "EndZBox")
-	andalso	(lang = "")
-	then
-		parse_zparagraph (ZSCH::(zlex value))
-	else
-		fail "z_schbox_recogniser" 22010 [fn () => start, fn () => lang, fn () => finish]
-);
-=TEX
-\subsection{Z Term Recogniser}
-=SML
-fun Ûz_term_recogniserÝ (start:string, lang:string, value:INPUT list, finish:string) = (
-	if (is_same_symbol(start, "StartZTerm")
-		andalso	is_same_symbol(finish, ">")
-		andalso	(lang = ""))
-	then
-		parse_zparagraph (zlex value)
-	else
-		fail "z_term_recogniser" 22010 [fn () => start, fn () => lang, fn () => finish]
-);
+let	val side_effect =
+		if	is_same_symbol(start, "StartZSchema")
+			andalso	is_same_symbol(finish, "EndZBox")
+			andalso	(lang = "")
+		then	()
+		else
+			fail "z_schbox_recogniser" 49003 [
+				fn () => start,
+				fn () => lang,
+				fn () => finish]
+	val tokens = ZTSch::(zlex value);
+(*	val parsed = zparser tokens;
+	val type_checked = (
+		case type_check_zparagraph parsed of
+		Inferred _ => (print "OK";())
+		|TypeError e => print_ztierror e
+		);*)
+in	tokens
+end);
 =TEX
 \subsection{Z General Text Recogniser}
 =SML
 fun Ûz_other_recogniserÝ (start:string, lang:string, value:INPUT list, finish:string) = (
-	if (is_same_symbol(start, "¹") andalso is_same_symbol(finish, "°")
-		andalso	(lang = "Z"))
-	then
-		parse_zparagraph (zlex value)
-	else fail "z_other_recogniser" 22010
-		[fn () => start, fn () => lang, fn () => finish]
-);
+let	val side_effect =
+		if	is_same_symbol(start, "¹")
+			andalso	is_same_symbol(finish, "°")
+			andalso	(lang = "Z")
+		then	()
+		else
+			fail "z_other_recogniser" 49004 [
+				fn () => start,
+				fn () => lang,
+				fn () => finish]
+	val tokens = zlex value;
+(*	val parsed = zparser tokens;
+	val type_checked = (
+		case type_check_zparagraph parsed of
+		Inferred _ => (print "OK";())
+		|TypeError e => print_ztierror e
+		);*)
+in	tokens
+end);
+=TEX
+\section{RECOGNIZING Z TERMS}
+
+=SML
+fun Ûz_term_recogniserÝ (start:string, lang:string, value:INPUT list, finish:string) = (
+let	val side_effect =
+		if	is_same_symbol(start, "StartZTerm")
+			andalso	is_same_symbol(finish, ">")
+			andalso	(lang = "")
+		then	()
+		else
+			fail "z_term_recogniser" 49010 [
+				fn () => start,
+				fn () => lang,
+				fn () => finish];
+	val tokens = zlex value;
+(*	val parsed = zparser tokens;
+	val type_checked = (
+		case type_check_zparagraph parsed of
+		Inferred _ => (print "OK";())
+		|TypeError e => print_ztierror e
+		);*)
+in	tokens
+end);
 
 end (* local ... in *);
 
 =TEX
+
 \section{EPILOGUE}
 =SML
 end (* of structure ZParagraphs *);
