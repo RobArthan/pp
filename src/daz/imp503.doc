@@ -169,13 +169,23 @@ in the grammar of 'cite{ISS/HAT/DAZ/DTD503}'. When several reduction
 functions would be the same, we use $val$ bindings for the various
 instances.
 
+=IGN
+datatype ÛPAGÝ =	(expr,expr,.... )
+			(x|C|C==>expr, .. , [OTHERS => expr)
+datatype [NAMEÝ =	(
+			id [list of aggr] [selector]
 =SML
+type AGG = {tm : TMARK OPT, named_assocs : (AGG_CHOICE,EXP) NAMED_ASSOC list, others : EXP OPT};
+	
 datatype ÛPPARSEDÝ =
-			PPBinaryOp of BIN_OP
+			PPAgg of AGG
+		|	PPAggregateChoices of AGG_CHOICE list OPT
+		|	PPBinaryOp of BIN_OP
+		|	PPBinOpTail of (BIN_OP * EXP) list
 		|	PPCompilationUnit of (ID list * COMPILATION_UNIT)
 		|	PPComponentClauses of COMPONENT_CLAUSE list
 		|	PPDeclarations of DECLARATION list
-		|	PPElsIf of (EXP * STATEMENT) list
+		|	PPElsIf of (EXP * STMT) list
 		|	PPExp of EXP
 		|	PPExps of EXP list
 		|	PPFormals of PARAMETER_SPECIFICATION list
@@ -186,20 +196,48 @@ datatype ÛPPARSEDÝ =
 		|	PPKSlot of K_SLOT
 		|	PPKSlotCUList of KSLOT_COMPILATION_UNIT list
 		|	PPMode of MODE
+		|	PPOthers
 		|	PPPackageSpecification of PACKAGE_DECLARATION
 		|	PPPrimedIdentifier of (ID * ID)
 		|	PPProcedureSpecification of PROCEDURE_SPECIFICATION
 		|	PPProperBody of PROPER_BODY
-		|	PPRange of EXP RANGE
 		|	PPReltail of (BIN_OP * EXP)
 		|	PPRepresentationClause of REPRESENTATION_CLAUSE
 		|	PPSpecNoIvars of SPEC_NO_IVARS
+		|	PPSRExpression of (EXP * EXP OPT)
 		|	PPStatement of STATEMENT
+		|	PPStmt of STMT
 		|	PPSubprogram of (DECLARATION list * STATEMENT)
 		|	PPUnaryOp of UNARY_OP
 		|	PPWebClause of WEB_CLAUSE
 		|	PPZ of Z_EXP
 		|	PPtbs;
+=TEX
+=SML
+fun check_exp_is_name (e : EXP) : bool = (
+	true
+);
+
+fun range_attribute_to_range (e :EXP) : EXP RANGE OPT = (
+	(* Temporary fix *)
+	Value {lo=e, hi=e}
+);
+
+fun sr_expression_to_range_opt {no_r_attr : bool} ((e,v) : (EXP * EXP OPT)) : EXP RANGE OPT = (
+	case v of
+	Value e2 => Value {lo=e, hi=e2}
+	|Nil => if no_r_attr
+		then
+			Nil
+		else
+			range_attribute_to_range e
+);
+
+fun sr_expression_to_expression_opt ((e,v) : (EXP * EXP OPT)) : EXP OPT = (
+	case sr_expression_to_range_opt {no_r_attr=true} (e,v) of
+	Value _ => Nil
+	|Nil => Value e
+);
 =TEX
 =SML
 fun red_accept (Parsed pp) = (pp
@@ -297,7 +335,9 @@ val red_constraint2 = red_accept;
 val red_constraint3 = red_accept;
 =TEX
 =SML
-fun red_range_constraint x1 x2 = PPtbs;
+fun red_range_constraint _ (Parsed sr) = (
+	sr
+) | red_range_constraint _ _ = stack_error "red_range_constraint";
 fun red_enumeration_type_definition x1 x2 x3 = PPtbs;
 =TEX
 =SML
@@ -326,16 +366,44 @@ fun red_unconstrained_array_definition x1 x2 x3 x4 x5 x6 = PPtbs;
 fun red_constrained_array_definition x1 x2 x3 x4 = PPtbs;
 =TEX
 =SML
-val red_index_subtype_definition_list1 = red_accept;
+fun red_index_subtype_definition_list1 (Parsed(PPExp n)) = (
+	PPExps [n]
+) | red_index_subtype_definition_list1 _ = stack_error "red_index_subtype_definition_list1";
 =TEX
 =SML
-fun red_index_subtype_definition_list2 x1 x2 x3 = PPtbs;
-fun red_index_subtype_definition x1 x2 x3 = PPtbs;
-fun red_index_constraint x1 x2 x3 = PPtbs;
-fun red_name_list1 x1 = PPtbs;
-fun red_name_list2 x1 x2 x3 = PPtbs;
-fun red_discrete_range1 x1 x2 = PPtbs;
-fun red_discrete_range2 x1 = PPtbs;
+fun red_index_subtype_definition_list2 (Parsed(PPExp n)) _ (Parsed(PPExps nl)) = (
+	PPExps (n::nl)
+) | red_index_subtype_definition_list2 _ _ _ = stack_error "red_index_subtype_definition_list2";
+
+fun red_index_subtype_definition (Parsed p) _ _ = (
+	p
+) | red_index_subtype_definition _ _ _ = stack_error "red_index_subtype_definition";
+fun red_index_constraint _ (Parsed p) _ = (
+	p
+) | red_index_constraint _ _ _ = stack_error "red_index_constraint";
+
+fun red_name_list1 (Parsed(PPExp n)) = (
+	PPExps [n]
+) | red_name_list1 _ = stack_error "red_name_list1";
+
+fun red_name_list2 (Parsed(PPExp n)) _ (Parsed(PPExps nl)) = (
+	PPExps (n::nl)
+) | red_name_list2 _ _ _ = stack_error "red_name_list2";
+=TEX
+tbs -- Discrete Range is frigged at the moment......
+=SML
+fun red_discrete_range1 (Parsed(PPExp e)) (Parsed p) = (
+	if check_exp_is_name e
+	then
+		p
+	else
+		parse_error 0 "red_discrete_range1"
+) | red_discrete_range1 _ _ = stack_error "red_discrete_range1";
+
+fun red_discrete_range2 (Parsed p) = (
+	p
+) | red_discrete_range2 _ = stack_error "red_discrete_range2";
+
 fun red_record_type_definition x1 x2 x3 x4 = PPtbs;
 =TEX
 =SML
@@ -399,17 +467,24 @@ val red_name2 = red_accept;
 val red_name3 = red_accept;
 val red_name4 = red_accept;
 =TEX
+SPARK manual 4.1.1:
 =SML
-fun red_indexed_component x1 x2 = PPtbs;
+fun red_indexed_component (Parsed(PPExp n)) (Parsed(PPExp index)) = (
+	PPExp(IndexedComp{prefix=n, index=index})
+) | red_indexed_component _ _ = stack_error "red_indexed_component";
 =TEX
 SPARK manual 4.1.3:
 =SML
-fun red_selected_component x1 x2 x3 = PPtbs;
+fun red_selected_component (Parsed(PPExp n)) _ (Parsed(PPId id)) = (
+	PPExp(SelectedComp{prefix=n, selector=id})
+) | red_selected_component _ _ _ = stack_error "red_selected_component";
 
 fun red_selector (Token ((_,CNText id), _)) = (
 	PPId id
 ) | red_selector _ = stack_error "red_selector";
-
+=TEX
+SPARK manual 4.1/4.1.1:
+=SML
 fun red_expression_list1 (Parsed(PPExp e)) = (
 	PPExps [e]
 ) | red_expression_list1 _ = stack_error "red_expression_list1";
@@ -426,21 +501,46 @@ fun red_attribute2 (Token ((CharacterLiteral,CNText id), _)) (Token ((_,CNText p
 ) | red_attribute2 _ _ = stack_error "red_attribute2";
 
 
-fun red_aggregate x1 x2 x3 = PPtbs;
+fun red_aggregate _ (Parsed p) _ = (
+	p
+) | red_aggregate _ _ _ = stack_error "red_aggregate";
 =TEX
 =SML
 val red_component_association1 = red_accept;
 val red_component_association2 = red_accept;
 =TEX
 =SML
-fun red_named_association1 x1 x2 x3 = PPtbs;
-fun red_named_association2 x1 x2 x3 x4 x5 = PPtbs;
-fun red_aggregate_choice_list1 x1 = PPtbs;
-fun red_aggregate_choice_list2 x1 = PPtbs;
-fun red_aggregate_choice_list3 x1 x2 x3 = PPtbs;
+fun red_named_association1 (Parsed(PPAggregateChoices v)) _ (Parsed(PPExp e)) = (
+	case v of
+	Value c => PPAgg{tm=Nil, named_assocs =[{choice=c, comp=e}],others=Nil}
+	|Nil => PPAgg{tm=Nil, named_assocs=[], others=Value e}
+) | red_named_association1 _ _ _ = stack_error "red_named_association1";
+
+fun red_named_association2 (Parsed(PPAggregateChoices v)) _ (Parsed(PPExp e)) _ (Parsed(PPAgg {named_assocs=na,others=ot,...})) = (
+	case v of
+	Value c => PPAgg{tm=Nil,named_assocs={choice=c,comp=e}::na,others=ot}
+	|Nil => parse_error 0 "red_named_association2"
+) | red_named_association2 _ _ _ _ _ = stack_error "red_named_association2";
+
+fun red_aggregate_choice_list1 (Token ((LCOthers,_), _)) = (
+	PPAggregateChoices Nil
+) | red_aggregate_choice_list1 _ = stack_error "red_aggregate_choice_list1";
+
+val red_aggregate_choice_list2 = red_accept;
+
+fun red_aggregate_choice_list3 (Parsed(PPAggregateChoices v)) _ (Parsed(PPAggregateChoices (Value acl))) = (
+	case v of
+	Value [ac] => PPAggregateChoices(Value(ac::acl))
+	|_ => parse_error 0 "red_aggregate_choice_list3"
+) | red_aggregate_choice_list3 _ _ _ = stack_error "red_aggregate_choice_list3";
 =TEX
 =SML
-val red_aggregate_choice = red_accept;
+fun red_aggregate_choice (Parsed(PPSRExpression (e,v))) = (
+	case v of
+	Value e2 => PPAggregateChoices(Value[AggChoiceRange{lo=e,hi=e2}])
+	|Nil => PPAggregateChoices(Value[AggChoiceSingle e])
+) | red_aggregate_choice _ = stack_error "red_aggregate_choice";
+
 val red_positional_association = red_accept;
 =TEX
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -478,21 +578,80 @@ fun red_xor_relation1 _ x2 =		(red_logrel1 SparkXor x2);
 fun red_xor_relation2 _ x2 x3 =		(red_logrel2 SparkXor x2 x3);
 =TEX
 =SML
-fun red_relation1 x1 = PPtbs;
-fun red_relation2 x1 x2 x3 = PPtbs;
-fun red_relation3 x1 x2 x3 = PPtbs;
-fun red_relation4 x1 x2 x3 x4 = PPtbs;
-fun red_sr_expression1 x1 = PPtbs;
-fun red_sr_expression2 x1 x2 x3 = PPtbs;
-fun red_simple_expression1 x1 x2 = PPtbs;
-fun red_simple_expression2 x1 x2 x3 = PPtbs;
-val red_binoptail1 = PPtbs;
-fun red_binoptail2 x1 x2 x3 = PPtbs;
-fun red_term1 x1 = PPtbs;
-fun red_term2 x1 x2 x3 = PPtbs;
-fun red_factor1 x1 = PPtbs;
-fun red_factor2 x1 x2 x3 = PPtbs;
-fun red_factor3 x1 x2 = PPtbs;
+fun red_relation1 (Parsed(PPSRExpression (sr as (e, _)))) = (
+	case sr_expression_to_expression_opt sr of
+	Value e => PPExp e
+	|Nil => parse_error 0 "red_relation1"
+) | red_relation1 _ = stack_error "red_relation1";
+
+fun red_relation2 (Parsed(PPSRExpression sr1)) (Parsed(PPBinaryOp b)) (Parsed(PPSRExpression sr2)) = (
+let	val e1 = ( case sr_expression_to_expression_opt sr1 of
+			Value e1 => e1
+			|Nil => parse_error 0 "red_relation1"
+		);
+	val e2 = ( case sr_expression_to_expression_opt sr2 of
+			Value e2 => e2
+			|Nil => parse_error 0 "red_relation1"
+		);
+in
+	PPExp(BinExp{left=e1,Op=b, right=e2})
+end
+) | red_relation2 _ _ _ = stack_error "red_relation2";
+
+val red_relation3  = red_relation2;
+fun red_relation4 p1 _ _ p2 = red_relation2 p1 (Parsed(PPBinaryOp SparkNotmem)) p2;
+=TEX
+=SML
+fun red_sr_expression1 (Parsed(PPExp e)) = (
+	PPSRExpression (e, Nil)
+) | red_sr_expression1 _ = stack_error "red_sr_expression1";
+
+fun red_sr_expression2 (Parsed(PPExp e1)) _ (Parsed(PPExp e2)) = (
+	PPSRExpression (e1, Value e2)
+) | red_sr_expression2 _ _ _ = stack_error "red_sr_expression2";
+=TEX
+=SML
+fun red_simple_expression1 (Parsed(PPExp e)) x2 = PPExp e;
+
+fun red_simple_expression2 (Parsed(PPUnaryOp uop)) (Parsed(PPExp e)) (Parsed(PPBinOpTail tl)) = (
+let	val uexp = UnaryExp{Op=uop,right=e};
+	fun aux left ((b,right)::(rest as (_::_))) = (
+		BinExp{left=left, Op=b, right=aux right rest}
+	) | aux left [(b,right)] = (
+		BinExp{left=left, Op=b, right=right}
+	) | aux _ _ = parse_error 0 "red_simple_expression2";
+
+in
+	PPExp (aux uexp tl)
+end
+) | red_simple_expression2 _ _ _ = stack_error "red_simple_expression2";
+
+val red_binoptail1 = PPBinOpTail [];
+
+fun red_binoptail2 (Parsed(PPBinaryOp b)) (Parsed(PPExp e)) (Parsed(PPBinOpTail tl)) = (
+	PPBinOpTail((b,e)::tl)
+) | red_binoptail2 _ _ _ = stack_error "red_binoptail2";
+
+val red_term1 = red_accept;
+
+fun red_term2 (Parsed(PPExp e1)) (Parsed(PPBinaryOp m)) (Parsed(PPExp e2)) = (
+	PPExp(BinExp{left=e1,Op=m,right=e2})
+) | red_term2 _ _ _ = stack_error "red_term2";
+=TEX
+=SML
+val red_factor1 = red_accept;
+fun red_factor2 (Parsed(PPExp e1)) _ (Parsed(PPExp e2)) = (
+	PPExp(BinExp{left=e1,Op=SparkExpon,right=e2})
+) | red_factor2 _ _ _ = stack_error "red_factor2";
+
+fun red_factor3 _ (Parsed(PPExp e)) = (
+	PPExp(UnaryExp{Op=SparkAbs, right=e})
+) | red_factor3 _ _ = stack_error "red_factor3";
+
+fun red_factor4 _ (Parsed(PPExp e)) = (
+	PPExp(UnaryExp{Op=SparkNot, right=e})
+) | red_factor4 _ _ = stack_error "red_factor4";
+
 fun red_factor4 x1 x2 = PPtbs;
 =TEX
 =SML
@@ -510,9 +669,12 @@ fun red_primary3 (Token ((LCStringLiteral,CNText n), _)) = (
 	PPExp (Id n)
 ) | red_primary3 _ = stack_error "red_primary3";
 
-fun red_primary4 x1 = PPtbs;
+val red_primary4 = red_accept;
 fun red_primary5 x1 = PPtbs;
-fun red_primary6 x1 x2 x3 = PPtbs;
+fun red_primary6 _ (Parsed p) _ = (
+	p
+) | red_primary6 _ _ _ = stack_error "red_primary6";
+
 fun red_primary7 (Parsed(PPZ z)) = (
 	PPExp (AuxiliaryExp ¬true®)
 ) | red_primary7 _ = stack_error "red_primary7";
@@ -539,7 +701,12 @@ fun red_multiplying_operator4 x1 = PPBinaryOp SparkRem;
 =TEX
 tbs - AS has abs, but mem, nonmem and starstar can't be produced from the concrete syntax
 =SML
-fun red_qualified_expression x1 x2 x3 = PPtbs;
+fun red_qualified_expression (Parsed(PPExp n)) _ (Parsed(PPAgg{named_assocs=na,others=ot,...})) = (
+	case ot of
+	Value oe => PPExp (ArrayAggNamedOthers{tmark="STUB",agg_named={named_assocs=na},others={others=oe}})
+) | red_qualified_expression _ _ _ = stack_error "red_qualified_expression";
+
+( = PPExp (Id "<Qualified Expression");
 fun red_sequence_of_statements1 _ = PPStatement (Stmt Null);
 fun red_sequence_of_statements2 _ _ = PPStatement (Stmt Null);
 fun red_statement1 x1 = PPtbs;
@@ -589,13 +756,12 @@ val red_compound_statement3 = red_accept;
 =TEX
 =SML
 fun red_null_statement _ _ = (
-	PPStatement (Stmt Null)
+	PPStmt Null
 ); 
 fun red_assignment_statement x1 x2 x3 x4 = PPtbs;
-fun red_if_statement _ _ _ _ _ _ _ _ _ = PPtbs;
-
-=IGN
-fun red_if_statement _ (Parsed(PPExp exp)) _ (Parsed(PPStatement s)) (Parsed(PPElsIf ei)) (Parsed(PPStatement el)) _ _ _ = (
+=TEX
+=SML
+fun red_if_statement _ (Parsed(PPExp exp)) _ (Parsed(PPStmt s)) (Parsed(PPElsIf ei)) (Parsed(PPStmt el)) _ _ _ = (
 let	val css = (exp,s)::ei;
 	fun aux ((c,s)::(rest as (_::_))) el = (
 		(IfThenElse{G=c,P=s,Q=aux rest el})
@@ -603,21 +769,21 @@ let	val css = (exp,s)::ei;
 		(IfThenElse{G=c,P=s,Q=el})
 	) | aux _ _ = Null;
 in
-	PPStatement (Stmt (aux css el))
+	PPStmt (aux css el)
 end
 ) | red_if_statement _ _ _ _ _ _ _ _ _ = stack_error "red_if_statement";
 =TEX
 =SML
 val red_elsif_part1 = PPElsIf [];
-fun red_elsif_part2 _ (Parsed (PPExp exp)) _ (Parsed(PPStatement s)) (Parsed(PPElsIf ei)) = (
+fun red_elsif_part2 _ (Parsed (PPExp exp)) _ (Parsed(PPStmt s)) (Parsed(PPElsIf ei)) = (
 	PPElsIf ((exp, s)::ei)
 ) | red_elsif_part2 _ _ _ _ _ = stack_error "red_elsif_part2";
 =TEX
 =SML
-val red_else_part1 = PPStatement (Stmt Null);
+val red_else_part1 = PPStmt Null;
 
-fun red_else_part2 _ (Parsed(PPStatement s)) = (
-	PPStatement s
+fun red_else_part2 _ (Parsed(PPStmt s)) = (
+	PPStmt s
 ) | red_else_part2 _ _ = stack_error "red_else_part2";
 
 fun red_condition (Parsed (PPExp exp)) = (
@@ -632,8 +798,13 @@ fun red_case_statement_alternative x1 x2 x3 x4 = PPtbs;
 fun red_case_choice_list1 x1 = PPtbs;
 fun red_case_choice_list2 x1 x2 x3 = PPtbs;
 fun red_case_choice x1 = PPtbs;
-val red_others_part1 = PPtbs;
-fun red_others_part2 x1 x2 x3 = PPtbs;
+val red_others_part1 = PPStmt Null;
+fun red_others_part2 _ _ (Parsed(PPStmt s)) = (
+	PPStmt s
+) | red_others_part2 _ _ _ = stack_error "red_others_part2";
+=TEX
+SPARK manual 5.5:
+=SML
 fun red_loop_statement x1 x2 x3 x4 x5 x6 x7 x8 x9 = PPtbs;
 val red_name_opt11 = PPtbs;
 fun red_name_opt12 x1 x2 = PPtbs;
@@ -656,16 +827,15 @@ fun red_abstract_expression _ (Token ((LCZ,CNZ z), _)) _ = (
 	PPZ ¬true®
 ) | red_abstract_expression _ _ _ = stack_error "red_abstract_expression";
 ;
-(*HERE*)
 fun red_exit_statement1 _ _ = (
-	PPStatement (Stmt Exit)
+	PPStmt Exit
 );
 fun red_exit_statement2 _ _ (Parsed(PPExp exp)) _ = (
-	PPStatement (Stmt(ExitWhen{G=exp}))
+	PPStmt(ExitWhen{G=exp})
 ) | red_exit_statement2 _ _ _ _ = stack_error "red_exit_statement2";
 
 fun red_return_statement _ (Parsed(PPExp exp)) _ = (
-	PPStatement (Stmt (Ret{E=exp}))
+	PPStmt (Ret{E=exp})
 ) | red_return_statement _ _ _ = stack_error "red_return_statement";
 =TEX
 =SML
@@ -753,9 +923,15 @@ fun red_subprogram_implementation (Parsed(PPDeclarations d)) _ (Parsed(PPStateme
 ) | red_subprogram_implementation _ _ _ _ _ _ = stack_error "red_subprogram_implementation";
 =TEX
 =SML
-fun red_procedure_call_statement x1 x2 = PPtbs;
-fun red_actual_parameter_part _ x2 _ = PPtbs;
-fun red_parameter_association1 x1 = PPtbs;
+fun red_procedure_call_statement (Parsed p) _ = (
+	p
+) | red_procedure_call_statement _ _ = stack_error "red_procedure_call_statement";
+
+fun red_actual_parameter_part _ (Parsed p) _ = (
+	p
+) | red_actual_parameter_part _ _ _ = stack_error "red_actual_parameter_part";
+
+val red_parameter_association1 = red_accept;
 
 val red_parameter_association2 = red_accept;
 
@@ -766,7 +942,8 @@ fun red_positional_parameter_association1 (Parsed(PPExp a)) = (
 fun red_positional_parameter_association2 (Parsed(PPExp a)) _ (Parsed(PPExps es)) = (
 	PPExps (a::es)
 ) | red_positional_parameter_association2  _ _ _ = stack_error "red_positional_parameter_association2";
-
+=TEX
+=SML
 val red_actual_parameter = red_accept;
 =TEX
 SPARK manual 7.1:
@@ -942,8 +1119,10 @@ fun red_component_pack2 (Parsed(PPComponentClauses [c])) (Parsed(PPComponentClau
 =TEX
 SPARK manual 13.4:
 =SML
-fun red_component_clause (Token ((_,CNText id), _)) _ (Parsed(PPExp e)) _ (Parsed(PPRange r)) _ = (
-	PPComponentClauses[{exp=e, range=r}]
+fun red_component_clause (Parsed(PPExp n)) _ (Parsed(PPExp e)) _ (Parsed(PPSRExpression (e1,v))) _ = (
+	case v of
+	Value e2 => PPComponentClauses[{exp=e, range=AggChoiceRange {lo=e1,hi=e2}}]
+	|Nil => PPComponentClauses[{exp=e, range=AggChoiceSingle e1}]
 ) | red_component_clause _ _ _ _ _ _ = stack_error "red_component_clause";
 =TEX
 tbs - the name construction in the following
