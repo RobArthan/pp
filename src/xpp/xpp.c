@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.29 2004/02/12 17:31:49 rda Exp rda $
+ * $Id: xpp.c,v 2.30 2004/02/18 16:23:57 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -455,7 +455,7 @@ static char *get_command_line(int argc, char **argv, Boolean *use_default_comman
 		} else if (check_option(argv[i], "--")) {
 			res = append_arg(res, argv[i]);			
 			just_collect = True;
-		} else if(i == 1 && argv[i][0] != '-') {
+		} else if(!have_non_xpp_arg && argv[i][0] != '-') {
 			file_name = argv[i];
 		} else {
 			have_non_xpp_arg = True;
