@@ -26,17 +26,17 @@
 static Pixmap pp_pixmap = 0;
 
 Pixmap get_pp_pixmap(){
-	return
-		pp_pixmap
-	?	pp_pixmap
-	:	XCreatePixmapFromBitmapData(
+	if(!pp_pixmap) {
+		pp_pixmap = XCreatePixmapFromBitmapData(
 			XtDisplay(root),
 			RootWindowOfScreen(XtScreen(root)),
 			pp_bitmap_bits,
 			pp_bitmap_width,
 			pp_bitmap_height,
-			1, /* foreground pixel */
-			0, /* background pixel */
-			1 /* depth */);
+			BlackPixelOfScreen(XtScreen(root)), /* foreground pixel */
+			WhitePixelOfScreen(XtScreen(root)), /* background pixel */
+			DefaultDepthOfScreen(XtScreen(root)) /* depth */);
+	}
+	return pp_pixmap;
 }
 

@@ -111,7 +111,9 @@ static void get_templates_data()
 
 static Pixmap get_pixmap (Widget w, char *name)
 {	Pixmap result;
-	result = XmGetPixmap(XtScreen(w), name, (Pixel) 1, (Pixel) 0);
+	result = XmGetPixmap(XtScreen(w), name,
+		BlackPixelOfScreen(XtScreen(root)),
+		WhitePixelOfScreen(XtScreen(root)));
 	if(result == XmUNSPECIFIED_PIXMAP) {
 		char *msg;
 		msg = XtMalloc(strlen(name) + strlen(bad_pixmap_msg) + 1);
