@@ -87,6 +87,7 @@ Also implemented remedies for issues 1 and 4 (V0.6).
 \item[Issue 1.117] Syntax changes.
 \item[Issue 1.118] Fixed bug 2 (V0.7).
 \item[Issue 1.119] Correcting IUCT project WP8, bug 1.
+\item[Issue 1.120] Added $new\_script1$ for IUCT project WP 1.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -101,6 +102,7 @@ See \cite{ISS/HAT/DAZ/DTD507}.
 \section{PREAMBLE AND AUXILIARIES}\label{PREAMBLE}
 =SML
 structure ÛCNZGeneratorİ : CNZGenerator = struct
+=SML
 open CNTypes CNTypes1 CNTypes2 CNBasicDeclsAndExprs ZParagraphs
 	CNVCGenerator CNParser ZUserInterfaceSupport TypeInference ;
 =TEX
@@ -1355,6 +1357,7 @@ val Ûcn_theories_ud_keyİ = "CN'theories";
 val Ûcn_spec_ud_keyİ = "CN'createspec";
 val Ûcn_subunit_ud_keyİ = "CN'createsubunit";
 val Ûcn_new_parent_ud_keyİ = "CN'newparent";
+val Ûcn_script_library_theories_ud_keyİ = "CN'script_library_theories";
 =TEX
 
 The following function is used in several places;
@@ -1392,6 +1395,26 @@ fun Ûadd_script_theoryİ (thy : string) : unit = (
 		val side = open_theory (!script_name);
 	in	
 		update_user_datum cn_theories_ud_key (UD_String(thy, []));
+		open_theory old;
+		()
+	end
+);
+=TEX
+The following functions are used to maintain the list of library theories ``belonging'' to the current literate script.
+=SML
+fun Ûget_library_theoriesİ (thy : string) : string list = (
+	(map (fst o dest_ud_string) o snd o dest_ud_string o get_user_datum thy)
+	cn_script_library_theories_ud_key
+	handle Fail _ => []
+);
+=TEX
+=SML
+fun Ûadd_library_theoryİ (thy : string) : unit = (
+	let	val old = get_current_theory_name();
+		val side = open_theory (!script_name);
+	in	
+		update_user_datum cn_script_library_theories_ud_key
+			(UD_String(thy, []));
 		open_theory old;
 		()
 	end
@@ -1888,7 +1911,8 @@ The new theory becomes the current theory (unless an exception is raised in whic
 =SML
 fun Ûnew_package_spec_theoryİ (context : ID list) (name : string) : unit = (
 	let	val thy = pack_spec_name name;
-		val pars = map pack_spec_name context;
+		val pars = (map pack_spec_name context) @ 
+				get_library_theories (!script_name);
 	in	(	open_theory(get_parent_name());
 			new_theory_aux pars thy;
 			add_script_theory thy;
@@ -1910,7 +1934,8 @@ In the following the new theory becomes the current theory (unless the exception
 =SML
 fun Ûnew_package_tmpbody_theoryİ (context : ID list) (name : string) : unit = (
 	let	val thy = pack_tmpbody_name name;
-		val pars = map pack_spec_name context;
+		val pars = (map pack_spec_name context) @ 
+				get_library_theories (!script_name);
 	in	(	open_theory(get_parent_name());
 			new_theory_aux pars thy )
 		handle Fail _ => (
@@ -4974,6 +4999,31 @@ abstype ÛCN_STATEİ = CNState of Z_GENERATOR_STATE with
 			set_z_generator_state old_state;
 			open_theory thy;
 			reraise ex "new_script"
+			)
+		end		
+	);
+
+	fun Ûnew_script1İ {	name : string,
+			state = CNState zg_state : CN_STATE,
+			library_theories : string list} : unit = (
+		let	val old_state = get_z_generator_state ();
+			val thy = get_current_theory_name();
+		in
+		(	set_z_generator_state zg_state;
+			open_theory "cn";
+			new_theory_aux [] name;
+			CaseIndependence.reset_names ();
+			init_cn_z_generator name;
+			(map (fn t => new_parent_aux false t
+				handle (Fail m) =>
+				fail "new_script1" 50742 [fn ()=> t, fn () => get_message_text m])
+				 library_theories);
+			map add_library_theory library_theories;
+			()
+		) handle ex => (
+			set_z_generator_state old_state;
+			open_theory thy;
+			reraise ex "new_script1"
 			)
 		end		
 	);
