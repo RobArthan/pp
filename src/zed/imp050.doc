@@ -72,9 +72,6 @@ The functions in this document are dependent on the Release 1 HOL System.
 \section{STRUCTURE FOR GENERATED CONSTANTS SUPPORT}
 =SML
 structure ÛZGeneratedConstantsSupportÝ : ZGeneratedConstantsSupport = struct
-local
-	open	Unification;
-in
 =TEX
 \subsection{Auxiliary Functions}
 
@@ -141,21 +138,9 @@ is an instance of $\tau$ and, if so, it returns
 $(f:\tau_0­\sigma_0)(a:\tau_0)$, where $\sigma_0$  is the
 corresponding instance of $\sigma$.
 =SML
-
-fun Ûmatch_mk_appÝ (f : TERM, a : TERM) : TERM = (
-let  val ty = type_of f
-in
-	if is_­_type ty
-	then	
-		let 	val(ty1,_) = dest_­_type ty;
-			val tym = type_match (type_of a) ty1;
-		in
-			mk_app(
-		inst [] tym f,
-		a)
-		end
-	else fail "match_mk_app" 0 []
-end);
+fun Ûlist_match_mk_appÝ (f : TERM, (a::rest) : TERM list) : TERM = (
+	list_match_mk_app ((match_mk_app (f, a)), rest)
+)  | list_match_mk_app (f, []) = f;
 
 =TEX
 A function which takes a binding type and returns a pair consisting
@@ -196,20 +181,12 @@ end;
 \subsection{Storing Z Constants}
 =SML
 fun Ûlocal_const_specÝ (caller:string) ((nam, var, defn) : string * TERM * TERM) : THM = (
-let	val curr_theory = get_current_theory_name();
-in
-	let	val side = open_theory (current_cache_theory());
-		val thm = get_defn  "-" nam
-			handle  Fail _ =>
-			pc_rule "hol" const_spec ([nam], [var], defn)
-				handle ex => (open_theory curr_theory;
-					reraise ex caller);
-		val side = open_theory curr_theory;
-	in
-		thm
-	end
-	handle ex => (open_theory curr_theory; reraise ex caller)
-end);
+	get_defn  "-" nam
+		handle  Fail _ =>
+		pc_rule "hol" const_spec ([nam], [var], defn)
+			handle ex =>
+				reraise ex caller
+);
 =TEX
 $pc\_rule$ could be replaced by $pending\_push\_pc$ plus wrapping
 for more safety.
@@ -218,26 +195,17 @@ The signature for the next function is the same as that for $labelled\_product\_
 =SML
 fun Ûlocal_labelled_product_specÝ (caller : string) {tykey: string, labels: (string * TYPE) list, tyname: string,
   tyvars: TYPE list OPT, conname: string, constkeys: string list} : THM = (
-let	val curr_theory = get_current_theory_name();
-in
-	let	val side = open_theory (current_cache_theory());
-		val thm = get_defn  "-" tyname
-			handle  Fail _ =>
-				(labelled_product_spec{
-						tykey = tykey,
-						labels = labels,
-						tyname= tyname,
-						tyvars = tyvars,
-						conname = conname,
-						constkeys = constkeys}
-					handle ex => (open_theory curr_theory;
-						reraise ex caller));
-		val side = open_theory curr_theory;
-	in
-		thm
-	end
-	handle ex => (open_theory curr_theory; reraise ex caller)
-end);
+	get_defn  "-" tyname
+		handle  Fail _ =>
+			(labelled_product_spec{
+				tykey = tykey,
+				labels = labels,
+				tyname= tyname,
+				tyvars = tyvars,
+				conname = conname,
+				constkeys = constkeys}
+			handle ex => reraise ex caller)
+);
 
 =TEX
 
@@ -334,7 +302,6 @@ in
 end);
 =TEX
 \subsubsection{Specific Cases}
-These don't work - $µ\_±\_conv$ requires theory $combin$ as parent.
 =SML
 fun Ûget_constructor_defnÝ (ty : TYPE) : THM =
 let 	val (cnam,_) = 
@@ -350,8 +317,6 @@ let 	val (cnam,_) =
 in
 	hd(strip_±_rule((conv_rule µ_±_conv)thm))
 end;
-=TEX
-=SML
 fun Ûget_projections_defnÝ(ty : TYPE) : THM list =
 let 	val (cnam,_) = 
 			if is_z_schema_t ty
@@ -369,7 +334,13 @@ end;
 =TEX
 
 =SML
-end (* of local ... in ... *);
+fun Ûadd_polymorphismÝ (ty : TYPE) : TYPE = (
+let	val (nam, tyl) = dest_ctype ty;
+in
+	mk_ctype (nam, int_to_tyvl (length tyl))
+end);
+=TEX
+=SML
 end (* of structure ZGeneratedConstantsSupport *);
 =TEX
 
@@ -378,7 +349,7 @@ end (* of structure ZGeneratedConstantsSupport *);
 =SML
 structure ÛZGeneratedConstantsÝ : ZGeneratedConstants = struct
 local
-	open Unification ZGeneratedConstantsSupport;
+	open ZGeneratedConstantsSupport;
 in
 =TEX
 \subsection{Introducing Semantic Constants without Definitions}
@@ -405,7 +376,8 @@ fun	Ûtypes_in_zcon_specÝ (ty : TYPE) : unit =
 fun Ûgeneral_gen_constÝ (tm : TERM) : unit = (
 let	val (name, ty) = (dest_const o fst o strip_app) tm;
 	val side = types_in_zcon_spec ty;
-	val side = (new_const (name, ty); ()) handle Fail _ => ();
+	val side = (new_const (name, add_polymorphism ty); ())
+			handle Fail _ => ();
 in
 	()
 end);
@@ -418,8 +390,7 @@ in
 	case dest_z_name nam of
 	("Z'Seta", [[sn]], Nil) => (get_cached_defn (nam^"_def")
 		handle Fail _ => (
-		let	val tyvl = map (fn x => mk_vartype ("'"^string_of_int (next_name())))
-				(interval 1 (nat_of_string sn));
+		let	val tyvl = string_to_styl sn;
 			val tyv = mk_z_var_t "v";
 			val dpvty = mk_z_schema_t [("d", BOOL),("p", BOOL),("v", tyv)];
 			val side = binding_type_spec dpvty;
@@ -453,8 +424,7 @@ in
 	case dest_z_name nam of
 	("Z'Ì",[[sn]], Nil) => (get_cached_defn (nam ^ "_def")
 		handle Fail _ => (
-		let	val tyvl = map (fn x => mk_vartype ("'"^string_of_int (next_name())))
-				(interval 1 (nat_of_string sn));
+		let	val tyvl = string_to_styl sn;
 			val tyv = mk_z_var_t "v";
 			val tyt = mk_z_var_t "t";
 			val dptvty = mk_z_schema_t[("d",BOOL),("p",BOOL),("t",tyt),("v",tyv)];
@@ -487,31 +457,41 @@ in
 		end))
 	| _ => error "Ì_gen_semantic_const" 50100 []
 end);
-=IGN
+=TEX
+val tm = ñú ¸ ú®;
+val nam = fst(dest_const(fst(dest_app (fst (dest_app tm)))));
+val ("Z'¸",[[sn]], Nil) = dest_z_name nam;
+
+\subsection{Cartesian Products}
+
+=SML
 fun Û¸_gen_semantic_constÝ (tm:TERM) : THM = (
-let	val nam = fst(dest_const(fst(dest_app (fst (dest_app tm)))));
+let	val nam = fst(dest_const(fst(strip_app tm)));
 in
 	case dest_z_name nam of
 	("Z'¸",[[sn]], Nil) => (get_cached_defn (nam ^ "_def")
 		handle Fail _ => (
-		let	val aty = hd(snd(dest_ctype(type_of tm)));
-			val tyvl = dest_z_tuple_t aty;
-			val argty = mk_z_tuple_t(map mk_z_power_t tyvl);
+		let	val aty = dest_z_power_t(type_of tm);
+			val bty = add_polymorphism aty;
+			val tyvl = dest_z_tuple_t bty;
 			val side = tuple_type_spec(mk_z_tuple_t tyvl);
 			val (con,projs) = get_tuple_info (mk_z_tuple_t tyvl);
-			val resty = mk_z_power_t aty;
-			val cvar = mk_var(nam, mk_­_type (argty,resty));
-			val arg = mk_var("A",argty);
-			val t = mk_var("t",aty);
-			val conjl = map	(fn proj => mk_z_(
-				match_mk_app(proj,t),
-				match_mk_app(proj,arg)))
-				projs;
+			val resty = mk_z_power_t bty;
+			val argty = list_mk_­_type ((map mk_z_power_t tyvl)@[resty]);
+			val cvar = mk_var(nam, argty);
+			val args = map (fn (id,ty) => mk_var("X"^id, mk_z_power_t ty))
+				(string_to_itym sn);
+
+			val t = mk_var("t",bty);
+			val comps = combine projs args; 
+			val conjl = map	(fn (p,a) => mk_z_(
+				match_mk_app(p,t), a))
+				comps;
 			val conj = list_mk_± conjl;
 			val setcomp = mk_set_comp (t, conj);
-			val lhs = mk_app(cvar, arg);
+			val lhs = list_mk_app(cvar, args);
 			val body = mk_eq(lhs, setcomp);
-			val defn = mk_µ (arg, body);
+			val defn = list_mk_µ (args, body);
 		in
 			local_const_spec "¸_gen_semantic_const" (nam, cvar, defn)
 		end))
@@ -525,6 +505,44 @@ fun Ûbinding_gen_semantic_constÝ (tm : TERM) : THM = (
 	o type_of o fst o strip_app) tm)
 	handle Fail _ => fail "binding_gen_semantic_const" 50111 []
 );
+=TEX
+\subsection{Schema Constructor}
+val tm = ñ[x,y,z:X]®;
+val nam = (fst(dest_const (fst (strip_app tm))));
+val ("Z'‰s",[cpl], Nil) = dest_z_name nam;
+
+=SML
+fun Ûschema_gen_semantic_constÝ (tm:TERM) : THM = (
+let	val nam = (fst(dest_const (fst (strip_app tm))));
+in
+	case dest_z_name nam of
+	("Z'‰s",[cpl], Nil) => (get_cached_defn (nam ^ "_def")
+	handle (Fail _) => (
+	let	val ty = hd(snd(dest_ctype(type_of tm)));
+		val tyvl = map mk_z_var_t cpl;
+		val (tynam, tyl) = dest_ctype ty;
+		val bty = mk_ctype (tynam, tyvl);
+		val dpty = mk_z_schema_t[("d",BOOL),("p",BOOL)];
+		val side = binding_type_spec dpty;
+		val (dpcon,dpprojs) = get_binding_info dpty;
+		val side = binding_type_spec ty;
+		val (con,projs) = get_binding_info ty;
+		val argty = list_mk_­_type(tyvl@[dpty]);
+		val resty = mk_z_power_t bty;
+		val cvar = mk_var(nam,mk_­_type(argty,resty));
+		val x = mk_var("x",bty);
+		val p = mk_var("p",argty);
+		val t = list_match_mk_app(p,map (fn pr => match_mk_app(pr,x)) projs);
+		val conj = list_mk_±(map (fn pr => match_mk_app(pr,t)) dpprojs);
+		val setcomp = mk_set_comp (x, conj);
+		val lhs = mk_app(cvar, p);
+		val body = mk_eq(lhs, setcomp);
+		val defn = mk_µ (p, body);
+		in
+			local_const_spec "schema_gen_semantic_const" (nam, cvar, defn)
+		end))
+	| _ => error "schema_gen_semantic_const" 50100 []
+end);
 =TEX
 \subsection{Renaming Z Schemas}
 =SML
