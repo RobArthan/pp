@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.205 $ $RCSfile: imp507.doc,v $ $Date: 2002/05/29 20:38:02 $
+% imp507.doc %Z% $Revision: 1.206 $ $RCSfile: imp507.doc,v $ $Date: 2002/05/31 14:58:08 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.205 $%
+\def\SCCSversion{$Revision: 1.206 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/05/29 20:38:02 $%
+\TPPdate{\FormatDate{$Date: 2002/05/31 14:58:08 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -153,7 +153,7 @@ in the same package.
 \item[Issue 1.203] Changed signature of vcs for sequent origins necessitates changed use.
 \item[Issue 1.204] Support for full syntax-check-only mode.
 \item[Issue 1.205] Now storing the {\it consts\_types} component of a package in reverse order.
-\item[Issue 1.206] Liberalising treatment of use clauses.
+\item[Issue 1.206, 1.207] Liberalising treatment of use clauses.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -2704,18 +2704,27 @@ If this fails, and if the paragraph is a (non-generic) abbreviation definition t
 with an existing one, then the failure is suppressed. It returns true if a paragraph was stored.
 =SML
 fun Ûbd_store_paraÝ (info : PARAINFO) : bool = (
-	(store_para info; true)
-	handle ex as (Fail _)  => (
-		case info of
-			AbbDefInfo(lhs, [], rhs) => (
-			let	val t = mk_z_gvar(lhs, type_of rhs, []);
-				val def = concl(z_get_spec t);
-			in	if	mk_eq(t, rhs) =$ def
-				then	false
-				else	raise ex
-			end
-		) |	_ => raise ex
-	)
+	let	fun  check_orig_def act_rhs rhs = (
+			act_rhs =$ rhs orelse
+			let	val rhs' = snd(dest_eq(concl(z_get_spec rhs)));
+			in	check_orig_def act_rhs rhs'
+			end	handle Fail _ => false
+		);
+	in	(store_para info; true)
+		handle ex as (Fail _)  => (
+			case info of
+				AbbDefInfo(lhs, [], rhs) => (
+				let	val t = mk_z_gvar(lhs, type_of rhs, []);
+					val act_rhs =  snd(dest_eq(concl(z_get_spec t)))
+						handle Fail _ => t;
+				in	if	check_orig_def act_rhs rhs
+					then	false
+					else	term_fail "bd_store_para" 507075
+						[t, rhs]
+				end
+			) |	_ => raise ex
+		)
+	end
 );
 =TEX
 The decision about which function to call is made in $basic\_declaration$ itself.
@@ -5853,7 +5862,7 @@ fun Ûrenames_opsymÝ
 		val _ = add_globs_pars_return [] new new_pars_tmarks res_tmark;
 		val new_zname = trans_id new;
 		val parainfo = AbbDefInfo(new_zname, [], tm);
-	in	store_para parainfo
+	in	bd_store_para parainfo; ()
 	end	handle Fail msg =>
 			fail "renames_opsym" 507064
 			[fn _ => name2, fn _ => new]
@@ -5877,7 +5886,7 @@ fun Ûrenames_object_commonÝ
 		val new_zname = trans_id new_name;
 	in let	val tm = zid current_cn_env old_zname;
 		val parainfo = AbbDefInfo(new_zname, [], tm);
-	in	store_para parainfo; Nil
+	in	bd_store_para parainfo; Nil
 	end	handle Fail msg => (
 		let	val renaming as (new_zname, orig)  =
 			case current_cn_env old_zname of 
