@@ -1,4 +1,4 @@
-% %Z% $Date: 2000/05/24 18:52:32 $ $Revision: 1.59 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2000/06/02 10:40:37 $ $Revision: 1.60 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -93,6 +93,7 @@
 \item[Issue 1.58] Update for new INTEGER type.
 \item[Issue 1.59] Prototyping enhancement R5 --- Initial Variables in Conditionals.
 \item[Issue 1.60] Prototyping enhancement R3 --- Assignment to Record Components.
+\item[Issue 1.61] Prototyping enhancement R2: Multiple Logical Constant Definitions.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -829,42 +830,66 @@ end
 );
 =TEX
 \subsection{Logical Constant}\label{wp-log-con}
+{\it analyse\_log\_con} picks apart the precondition to set up the actual
+list of {\it log\_con\_def}s required for the weakest precondition calculation.
+It is essentially the implementation of the predicate of the schema {\it Log\_Con}
+in volume 2 of the specifications.
 =SML
-fun Ûanalyse_log_conÝ (x : ID) (pre : Z_PRED) : (Z_EXP * Z_PRED) = (
-let	val (eqtm, pre1) = dest_z_± pre handle Fail _ => (pre, mk_z_true);
-	val (c, e) = dest_z_eq eqtm;
-	val dummy = if (not (fst(dest_var c)  = x))
-		then fail "analyse_log_con" 505024 [fn _ => x, 
-			fn _ => string_of_term pre]
-		else ();
-	val dummy1 = if (c term_mem (frees e))
-		then fail "analyse_log_con" 505024 [fn _ => x, 
-			fn _ => string_of_term pre]
-		else ();
+fun Ûanalyse_log_conÝ (defs : LOG_CON_DEF list) (pre : Z_PRED) : (LOG_CON_DEF list * Z_PRED) = (
+let	fun moan () = term_fail "analyse_log_con" 505024 [pre];
+	fun get_def eq_x eq_e acc ((def as {x, t, e=_})::more) = (
+		if	x = eq_x
+		then	(acc@more, {x = x, t = t, e = eq_e})
+		else	get_def eq_x eq_e (def::acc) more
+	) | get_def _ _ _ [] = moan();
+	fun check xv {x=_, t=_, e=e} = (
+		if	xv term_mem frees e
+		then	term_fail "analyse_log_con" 505025 [xv, e]
+		else	()
+	);
+	fun do_defs acc p [] = (rev acc, p)
+	|   do_defs acc p defs = (
+		let	val (eqtm, p') = (dest_z_± p) handle Fail _ => moan();
+			val (eq_xv, eq_e) = (dest_z_eq eqtm) handle Fail _ => moan();
+			val (defs', new_def) = get_def (fst(dest_var eq_xv)) eq_e [] defs;
+			val acc' = (new_def::acc);
+			val _ = map (check eq_xv) acc';
+		in	do_defs acc' p' defs'
+		end
+	);
 in
-	(e, pre1)
-end
-handle (Fail _) => 
-  fail "analyse_log_con" 505024 [fn _ => x, fn _ => string_of_term pre]
+	do_defs [] pre defs
+end);
+=TEX
+=SML
+fun Ûz_log_con_defÝ ((u, v): Z_ID list * Z_ID list) ({x, t=_, e} : LOG_CON_DEF) : Z_PRED = (
+	let	val env' = fn id =>	if id = x
+					then Value (type_of e, EIEnvVar "__none")
+					else Nil;
+	in	z_eq(zid env' x, subs_exp(e, u, v))
+	end
 );
 =TEX
 =SML
+fun Ûadd_hypsÝ ([] : Z_PRED list, s : SEQUENT list) : SEQUENT list = s
+|    add_hyps (h::more, s) = h %Longrightarrow% add_hyps (more, s);
+=TEX
+=SML
 fun Ûlog_conÝ ({wp, a, wp_env as {env, ...}} : WP_PARS)
-	({x, t, spec as {w, w0, pre, post}, ...} : LOG_CON)
+	({defs, spec as {w, w0, pre, post}, ...} : LOG_CON)
 		: RESULT = (
 
-let	val (e, pre1) = analyse_log_con x (z_predexp_of_z_tm pre);
-	val wp = [[] ô sub(pre1, x, e)];
-	val zvar_ty = (dest_z_power_type o type_of o z_predexp_of_z_tm) t;
-	val env' = fn id =>	if id = x
-				then Value (zvar_ty, EIEnvVar "__none")
-				else env id;
-	val side = (z_eq(zid env' x, subs_exp (e,w,w0)) %Longrightarrow%
-		((z_predexp_of_z_tm post) %Longrightarrow% a));
+let	val (defs, pre1) = analyse_log_con defs (z_predexp_of_z_tm pre);
+	val hyps = map (z_log_con_def ([], [])) defs;
+	fun aux acc ((hyp, {x, t, e})::more) = (
+		(acc ô z_mem(e, z_predexp_of_z_tm t)) :: aux (hyp::acc) more
+	) | aux _ [] = [];
+	val wp = [hyps ô pre1] @ aux [] (combine hyps defs);
+	val side = add_hyps (map (z_log_con_def(w, w0)) defs,
+		z_predexp_of_z_tm post %Longrightarrow% a);
 in
 	{wp = wp, side = side}
-end
-);
+end);
 =TEX
 \subsection{Procedure Call (Initial Variables in Spec)}\label{wp-proc-call-ivars}
 =SML

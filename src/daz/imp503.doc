@@ -84,6 +84,7 @@ This document contains the implementation for the Compliance Notation Parser to 
 The main change is that the {\it Stmt} and {\it Statement} data types are merged.
 This removes the need for various special cases and type conversion functions.
 \item[Issue 1.85] Prototyping enhancement R4: Frame Abbreviations.
+\item[Issue 1.86] Prototyping R2: Multiple Logical Constants.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -240,19 +241,24 @@ fun Ûz_tm_of_z_tokensÝ (tokens : Z_TOKEN list) : Z_TM =
 =TEX
 
 =SML
-fun Ûprocess_con_z_declÝ (ztokens : ZLex.Z_TOKEN list) : (Z_ID * Z_TM) = 
+fun Ûprocess_con_z_declÝ (ztokens : ZLex.Z_TOKEN list) : (Z_ID * Z_TM) list = 
 =FULLVERSION
 (
-    let val schtoks =
-        ZTLsqbrack::((rev o tl o rev) ztokens)@[ZTRsqbrack, ZTEos];
-    in
-        case z_tm_of_z_tokens schtoks 
-        of ZTmHorizSchema([ZDDec ([tmpl],ty, _)],_, _) =>
-            (string_of_ident tmpl, ty)
-        |  _ => parse_error 503001 "badly formed logical constant"
-    end);
+let	val schtoks =
+		ZTLsqbrack::((rev o tl o rev) ztokens)@[ZTRsqbrack, ZTEos];
+	fun do1 (ZDDec (vs, tm, _)) = (
+		map (fn v => (string_of_ident v, tm)) vs
+	) | do1 _ = (
+		 parse_error 503001
+		"a schema-as-declaration is not allowed in a logical constant statement"
+	);
+in
+	case z_tm_of_z_tokens schtoks of
+		ZTmHorizSchema(decs,_, _) => flat (map do1 decs)
+        |  _ => parse_error 503001 "badly formed declarations in logical constant statement"
+end);
 =CUTDOWNVERSION
-  ("", dummy_z_tm);
+  ("", [dummy_z_tm]);
 =TEX
 
 
@@ -1459,25 +1465,25 @@ fun red_statement3 (Parsed(PPStatement(STSpecNoIvars{spec=spec, ...})))
 
 fun red_statement4 _ (Token ((LCZ,CNZ z1), _)) _
     (Parsed(PPStatement(STSpecNoIvars {spec=s, ...}))) = (
-    let		val (n, ty) = 
-                              process_con_z_decl z1;
-    in
-        PPStatement(SLogCon{x=n, t=ty, e=mk_z_true, spec=s,
-			pre1 = mk_z_true, label=push_label()})
-    end)
+let	val ns_ts = process_con_z_decl z1;
+	fun mk_log_con_def (n, t) = {x = n, t = t, e = mk_z_true};
+in
+	PPStatement(SLogCon{defs = map mk_log_con_def ns_ts, spec=s,
+		pre1 = mk_z_true, label=push_label()})
+end)
 |   red_statement4 _ _ _ _ =
         stack_error "red_statement4";
 
 fun red_statement5 _ (Token ((LCZ,CNZ z1), _)) _
 		(Parsed(PPStatement(STSpecNoIvars {spec=s, ...})))
 		(Parsed(PPId label)) = (
-    let		val (n, ty) =
-                              process_con_z_decl z1;
-    in
-        (last_label := label;
-        PPStatement(SLogCon{x=n, t=ty, e=mk_z_true, spec=s,
-			pre1 = mk_z_true, label=label}))
-    end)
+let	val ns_ts = process_con_z_decl z1;
+	fun mk_log_con_def (n, t) = {x = n, t = t, e = mk_z_true};
+in
+	(last_label := label;
+	PPStatement(SLogCon{defs = map mk_log_con_def ns_ts, spec=s,
+		pre1 = mk_z_true, label=label}))
+end)
 |   red_statement5 _ _ _ _ _ =
         stack_error "red_statement5";
 
