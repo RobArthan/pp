@@ -55,6 +55,18 @@ This document provides an implementations for them.
 \subsubsection{Purpose and Background}
 This document contains an implementation for the
 tools introducing HOL product types.
+
+$labelled\_product\_spec$ and $unlabelled\_product\_spec$
+both are implemented in terms of $tuple\_spec$,
+and, should they require a new invocation of that function,
+$tuple\-\_spec$ about half the total executiontime of the first function, and will take the bulk of the total execution time of the second (unlabelled).
+With the current implementation (January 1992) the timings for $tuple\-\_spec$ are:
+
+\begin{tabular} {l | l l l l l l l l l }
+n = & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 \\ \hline
+Time(secs) & 3.9 & 8.4 & 16.0 & 30.7 & 54.0 & 90.9 & 143.0 & 222.5 & 323.5 \\
+\end{tabular}
+
 \subsubsection{Dependencies}
 This document takes its signature from \cite{DS/FMU/IED/DTD059}.
 \subsubsection{Deficiencies}
@@ -64,7 +76,7 @@ None known.
 
 \section{Preamble}
 =SML
-(* structure âProductTypesá : ProductTypes = struct *)
+structure âProductTypesá : ProductTypes = struct
 =TEX
 \section{THE THEORY}
 =SML
@@ -114,6 +126,77 @@ in
 	mk_app(mk_const("Snd", mk_‹_type(ttm,tb)), tm)
 end);
 =TEX
+\subsection{Timing}
+The following value allows timing to be invoked as on one off
+(false invokes timing).
+A reference variable is inappropriate.
+=SML
+val ânotimingá = true;
+=TEX
+Time the application of a tactic to a goal, and its resulting proof to its
+arguments.
+=SML
+fun âTIME_Tá (name:string) (tac : TACTIC) : TACTIC = (
+	if notiming 
+	then tac
+	else (fn (asms_gl) =>
+let	val t1 = System.processtime ();
+	val (sgs,prf) = tac asms_gl;
+	val sideeffect = diag_string("Tactic setting for "^
+		name^" took:"^
+		string_of_int(System.processtime ()-t1));
+in
+	(sgs,(fn x => 
+	let	val t2 = System.processtime ();
+		val res = prf x;
+		val sideeffect = diag_string("Tactic proof for "^
+			name^" took:"^
+			string_of_int(System.processtime ()-t2));
+	in
+		res
+	end))
+end));
+=TEX
+Time the application of a rule to a theorem.
+=SML
+fun âtime_ruleá (name:string) (rule : THM -> THM) : THM -> THM = (
+	if notiming
+	then rule
+	else (fn (thm : THM) =>
+let	val t1 = System.processtime ();
+	val s1 = rule thm;
+	val sideeffect = diag_string("Rule "^
+			name^" took:"^
+			string_of_int(System.processtime ()-t1));
+in
+	s1
+end));
+=TEX
+Time the application of a theorem tactical:
+=SML
+fun âTIME_TTCLá (name:string) ttcl (ttac:THM -> TACTIC)(thm : THM) : TACTIC = (
+	if notiming
+	then ttcl ttac thm
+	else
+	(fn (asms_gl) =>
+let	val t1 = System.processtime ();
+	val (sgs,prf) = ttcl ttac thm asms_gl;
+	val sideeffect = diag_string("Ttcl setting for "^
+		name^" took:"^
+		string_of_int(System.processtime ()-t1));
+in
+	(sgs,(fn x => 
+	let	val t2 = System.processtime ();
+		val res = prf x;
+		val sideeffect = diag_string("Ttcl proof for "^
+			name^" took:"^
+			string_of_int(System.processtime ()-t2));
+	in
+		res
+	end))
+end));
+=TEX
+
 \subsection{Conversions}
 The following will do all the noted $\beta$ conversion in 
 a term of the form:
@@ -142,6 +225,7 @@ fun âtailored_beta_conv1á tm = (
 );
 =TEX
 \subsection{Conversionals}
+Distribute an always successful conversion over an equality:
 =SML
 fun âEQ_Cá conv tm = (
 let	val (eqt1,t2) = dest_app tm;
@@ -150,6 +234,7 @@ in
 	mk_app_rule(ap_fun_rule eq (conv t1))(conv t2)
 end);
 =TEX
+Distribute two always successful conversions over a conjunction:
 =SML
 fun â€_C2á conv1 conv2 tm = (
 let	val (cnjt1,t2) = dest_app tm;
@@ -158,6 +243,7 @@ in
 	mk_app_rule(ap_fun_rule cnj (conv1 t1))(conv2 t2)
 end);
 =TEX
+Distribute two always successful conversions over a pair:
 =SML
 fun âPAIR_C2á conv1 conv2 tm = (
 let	val (pairt1,t2) = dest_app tm;
@@ -205,58 +291,8 @@ in
 end);
 =TEX
 \subsection{Tactics}
-=SML
-fun âTIME_Tá (name:string) (tac : TACTIC) (asms_gl) = (
-let	val t1 = System.processtime ();
-	val (sgs,prf) = tac asms_gl;
-	val sideeffect = diag_string("Tactic setting for "^
-		name^" took:"^
-		string_of_int(System.processtime ()-t1));
-in
-	(sgs,(fn x => 
-	let	val t2 = System.processtime ();
-		val res = prf x;
-		val sideeffect = diag_string("Tactic proof for "^
-			name^" took:"^
-			string_of_int(System.processtime ()-t2));
-	in
-		res
-	end))
-end);
-=TEX
-=SML
-fun âtime_ruleá (name:string) (rule : THM -> THM) (thm : THM) : THM = (
-let	val t1 = System.processtime ();
-	val s1 = rule thm;
-	val sideeffect = diag_string("Rule "^
-			name^" took:"^
-			string_of_int(System.processtime ()-t1));
-in
-	s1
-end);
-=TEX
-=SML
-fun âTIME_TTCLá (name:string) ttcl (ttac:THM -> TACTIC)(thm : THM)
-	(asms_gl) = (
-let	val t1 = System.processtime ();
-	val (sgs,prf) = ttcl ttac thm asms_gl;
-	val sideeffect = diag_string("Ttcl setting for "^
-		name^" took:"^
-		string_of_int(System.processtime ()-t1));
-in
-	(sgs,(fn x => 
-	let	val t2 = System.processtime ();
-		val res = prf x;
-		val sideeffect = diag_string("Ttcl proof for "^
-			name^" took:"^
-			string_of_int(System.processtime ()-t2));
-	in
-		res
-	end))
-end);
-=TEX
 The following strips a conjunctive goal, and should complete
-the proof of each conjunct by the tactic given.
+the proof of each conjunct by the separate tactic given for it.
 =SML
 fun âREPEAT_€_COMPLETE_WITHá (tacs : TACTIC list) : TACTIC = (fn (asms, conc) =>
 let	val conjs = strip_€ conc;
@@ -271,15 +307,15 @@ in
 	([],(fn _ => list_€_intro thms))
 end);
 =TEX
-The following is no more than a rewritten:
+The following is no more than a rewritten form of:
 ó
 fun list_simple_„_tac wits = MAP_EVERY simple_„_tac wits;
 æ
 Its execution is quite a time consuming process,
 taking the bulk of the time in handling the first conjunct
-in $tuple\_spec$ (maybe a third of the total execution time).
+in $tuple\_spec$ (and much of the total execution time).
 An efficient $list\_simple\_„\_intro$ would help.
-This timing information is gathered by the functions wrapping.
+This timing information was gathered by the function's wrapping.
 =SML
 fun âlist_simple_„_tacá (wits : TERM list) : TACTIC = (fn(asms,gl) =>
 let	fun aux [] bdy =([(asms,bdy)],(fn x => x))
@@ -523,7 +559,7 @@ perhaps causing a cascade of proof.
 	val sideeffect = diag_string ("Defining type :"^key);
 	val n_tuple_def = new_type_defn (key,key,map dest_vartype tyvars, „_thm)
 		handle complaint =>
-		pass_on complaint "new_type_defn" "labelled_product_spec";
+		pass_on complaint "new_type_defn" "tuple_spec";
 	val done_defn_time = System.processtime();
 =TEX
 We now have the new type defined (by $n\_tuple\_def$), so let us create the form of the theorem
@@ -656,7 +692,7 @@ tactics, etc.
 	(REPEAT_€_COMPLETE_WITH	
 =TEX
 The proof is now split into handling three conjuncts,
-the first and the third taking the bulk of the execution time.
+the first taking the bulk of the execution time.
 The first conjunct proves the existence of projection
 functions $Labn\_m$, and spends much of its time in $list\_simple\_„\_tac$.
 =SML
@@ -700,12 +736,7 @@ abstraction function.
 			(fst(dest_eq gl))) (asms,gl))))
 		),
 =TEX
-The third conjunction shows that the abstraction function ``covers'' the new type.
-It is not clear way proving this conjunct takes 
-approaching one half of the total execution time
-for $tuple\_spec$.
-It isn't spent in $list\_simple\_„\_tac$, unlike the first
-conjunct.
+The third conjunct shows that the abstraction function ``covers'' the new type.
 =SML
 	(TIME_T "Conjunct 3"
 	(simple_ƒ_tac THEN list_simple_„_tac x_wits THEN 
@@ -719,11 +750,6 @@ conjunct.
 	])
 	end))));
 	val done_proof_time = System.processtime();
-	val sideeffect = diag_string (
-		"Done defn at:" ^ string_of_int(done_defn_time - start_time) ^
-		". Got thm concl at:"^string_of_int(start_proof_time - start_time) ^
-		". Done proof at:"^string_of_int(done_proof_time - start_time)
-	);
 	val res = save_thm(key,res_thm);
 	val sideeffect = open_theory was_thy;
 in
@@ -774,6 +800,11 @@ val inp7 = {tyname = "HOLD7",tykey = "HOLD7",conname = "Hold7",
 	constkeys= ["Hold7","First7","Second7","Third7","Fourth7","Fifth7","Sixth7","Seventh"],
 	labels = [("First7",†),("Second7",»:'1¼),("Third7",»:'2¼),("Fourth7",»:'1 ‰ '2¼),("Fifth7",»:'3¼),("Sixth7",»:'1¼),
 	("Seventh7",»:'1 ‰ '3¼)],
+	tyvars = Value[»:'1¼,»:'2¼,»:'3¼]};
+val inp8 = {tyname = "HOLD8",tykey = "HOLD8",conname = "Hold8",
+	constkeys= ["Hold8","First8","Second8","Third8","Fourth8","Fifth8","Sixth8","Seventh8","Eighth8"],
+	labels = [("First8",†),("Second8",»:'1¼),("Third8",»:'2¼),("Fourth8",»:'1 ‰ '2¼),("Fifth8",»:'3¼),("Sixth8",»:'1¼),
+	("Seventh8",»:'1 ‰ '3¼),("Eighth8",»:'3 ‰ '2¼)],
 	tyvars = Value[»:'1¼,»:'2¼,»:'3¼]};
 =SML
 local
@@ -947,6 +978,9 @@ val ulp6 = {tyname="ULP6", tykey="ULP6", conname="Ulp6",
 val ulp7 = {tyname="ULP7", tykey="ULP7", conname="Ulp7", 
 	conkeys=["Ulp7"], tyi=[»:'d ‰ BOOL¼,»:'a ‰ 'b¼,»:'a ‰ 'b¼,»:†¼,»:'c ‰ 'a¼,BOOL,»:'1¼], 
 	tyvars = Nil};
+val ulp8 = {tyname="ULP8", tykey="ULP8", conname="Ulp8", 
+	conkeys=["Ulp8"], tyi=[»:'d ‰ BOOL¼,»:'a ‰ 'b¼,»:'a ‰ 'b¼,»:†¼,»:'c ‰ 'a¼,BOOL,»:'1¼,»:'4¼], 
+	tyvars = Nil};
 =SML
 local
 val rwc1 = pure_rewrite_conv[„_rewrite_thm];
@@ -1088,7 +1122,7 @@ end); (* of unlabelled_product_spec *)
 end; (* of local *)
 =TEX
 \section{EPILOGUE}
-=IGN
+=SML
 val _ = open_theory lthy;
 val _ = pop_proof_context();
 val lsubgoal_package_quiet = set_flag("subgoal_package_quiet",
@@ -1164,128 +1198,3 @@ in
 fun stat_sort (nm1,x1) (nm2,x2) = if x1 = x2
 	then stringorder nm1 nm2
 	else x1 - x2;
-
-val simple_„_intro_thm = … ƒ P x P x Š $„ P
-
-val simple_„_intro_thm = (let 
-	val tva = mk_vartype "'a";
-	val tvb = mk_vartype "'b";
-	val P = mk_var("P",mk_‹_type(tva,BOOL));
-	val x = mk_var("x",tva);
-	val Px = mk_app(P, x);
-	val s1 = asm_rule Px;
-	val s2 = ‡_intro_rule s1;
-	val abs = mk_simple_(x,Px);
-	val s3 = ap_arg_rule P „_def;
-	val s4 = simple_%beta%_conv (snd(dest_eq(concl s3)));
-	val s5 = eq_trans_rule s3 s4;
-	val s6 = eq_sym_rule s5;
-	val s7 = ‚_mp_rule s6 s2;
-	val s8 = Š_intro Px s7;
-	val s9 = simple_ƒ_intro x s8;
-	val s10 = simple_ƒ_intro P s9;
-in
-	s10
-end);
-
-local
-	val tva = mk_vartype "'a";
-in
-fun simple_„_intro (tm : TERM) (thm : THM) : THM = (
-let	val (x, t1x) = dest_simple_„ tm
-		handle complaint =>
-		pass_on complaint "dest_simple_„" "simple_„_intro";
-	val abs = snd(dest_app tm);
-	val t2 = (case term_match (concl thm) t1x of
-		(_, [(ltm, _)]) => ltm
-		|(_, []) => x
-		|Other => fail "simple_„_intro" 7047 [
-			fn () => string_of_term tm,
-			fn () => string_of_thm thm])
-		handle complaint =>
-		divert complaint "term_match" "simple_„_intro" 7047 [
-			fn () => string_of_term tm,
-			fn () => string_of_thm thm];
-	val s1 = inst_type_rule[(type_of x, tva)]simple_„_intro_thm;
-	val s2 = list_simple_ƒ_elim[abs,t2]s1;
-	val abst2 = fst(dest_Š(concl s2));
-	val s3 = simple_%beta%_conv abst2;
-	val s4 = eq_sym_rule s3;
-	val s5 = ‚_mp_rule s4 thm;
-	val s6 = Š_elim s2 s5;
-in
-	(prof "simple_„_intro";
-	s6)
-end);
-end;
-val simple_„_elim_thm = (let 
-	val tva = mk_vartype "'a";
-	val tvb = mk_vartype "'b";
-	val t1 = mk_var("t1",mk_‹_type(tva,BOOL));
-	val t2 = mk_var("t2",BOOL);
-	val y = mk_var("y",tva);
-	val ƒt1y = mk_simple_ƒ(y,mk_Š(mk_app(t1,y),t2));
-	
-	val „t1 = mk_app(mk_const("„",mk_‹_type(mk_‹_type(tva,BOOL),BOOL)),t1);
-	
-	val s1 = asm_rule „t1;
-	val s2 = ap_arg_rule t1 „_def;
-	val s3 = ‚_mp_rule s2 s1;
-	val s4 = simple_%beta%_conv (concl s3);
-	val s5 = ‚_mp_rule s4 s3;
-	val s6 = asm_rule ƒt1y;
-	val s7 = simple_ƒ_elim (snd(dest_app(concl s5))) s6;
-	val s8 = Š_elim s7 s5;
-	val s9 = Š_intro ƒt1y s8;
-	val s10 = Š_intro „t1 s9;
-	val s11 = simple_ƒ_intro t2 s10;
-	val s12 = simple_ƒ_intro t1 s11;
-in
-	s12
-end);
-local
-	val tva = mk_vartype "'a";
-in
-fun simple_„_elim (v : TERM) (thm1 : THM) (thm2 : THM) : THM = (
-let	val sideeffect = if is_var v
-		then ()
-		else term_fail "simple_„_elim" 3007 [v];
-	val cthm1 = concl thm1;
-	val (x, tx) = dest_simple_„ cthm1;
-	val t1 = snd(dest_app cthm1);
-	val t1v = mk_app (t1, v);
-	val t2 = concl thm2;
-	val sideeffect = if is_free_in v t2
-		then fail "simple_„_elim" 7120 [
-			fn () => string_of_term v,
-			fn () => string_of_thm thm2]
-		else ();
-	val s1 = inst_type_rule [(type_of x,tva)] simple_„_elim_thm;
-	val s2 = list_simple_ƒ_elim[t1,t2] s1;
-	val s3 = Š_elim s2 thm1;
-	val s4 = simple_%beta%_conv t1v;
-	val t1y = snd(dest_eq(concl s4));
-	val s5 = asm_rule t1v; (* fst(‚_elim...) *)
-	val s6 = ‚_mp_rule s4 s5;
-	val s8 = Š_intro t1y thm2;
-	val s9 = Š_elim s8 s6;
-	val s10 = Š_intro t1v s9;
-	val s11 = simple_ƒ_intro v s10
-		handle complaint =>
-		divert complaint "simple_ƒ_intro" "simple_„_elim" 7121 [
-			fn () => string_of_term v,
-			fn () => string_of_thm thm2,
-			fn () => string_of_term t1y];
-	val s12 = Š_elim s3 s11;
-in
-	(prof "simple_„_elim";
-	s12)
-end
-handle complaint =>
-list_divert complaint "simple_„_elim" [
-	("dest_simple_„",7109,[fn () => string_of_thm thm1]),
-	("mk_app",7014,[fn () => string_of_term v])
-	]
-);
-end;
-
