@@ -64,12 +64,17 @@ error reporting subsystem for the ICL HOL system.}
 \begin{description}
 \item[Issue 1.1]
 First draft containing initial test set.
+\item[Issue \SCCSversion (\FormatDate($Date$%
+)}] Rework as dictated by ID0019 changes to the design and to use
+module test harness.
 \end{description}
 \subsection{Changes forecast}
+None.
 \section{GENERAL}
 \subsection{Scope}
-This document contains module tests for parts of
-the ICL HOL system.
+This document contains module tests for the $BasicError$ and
+$SystemControl$ components of the ICL HOL system as called for
+in \cite{DS/FMU/IED/DTD002}.
 
 \subsection{Introduction}
 \subsection{Purpose and Background}
@@ -77,97 +82,367 @@ This document defines module tests for the material
 specified in \cite{DS/FMU/IED/DTD002} and
 implemented in \cite{DS/FMU/IED/IMP002}.
 \subsection{Dependencies}
-None.
+This document depends on \cite{DS/FMU/IED/DTD013} and \cite{DS/FMU/IED/IMP013}.
 \subsection{Deficiencies}
-The coverage of the system control structure is sketchy.
+None known.
+\section{TEST CASES}
+\subsection{$BasicError$}
 
+The test cases  for $BasicError$ are grouped as follows:
+
+\begin{description}
+\item[Group BE.1]
+This test the error message database access functions.
+Various message texts are loaded into the database using
+$new\_error\_message$ and $icl'change\_error\_message$ and the
+results are checked using $get\_error\_message$ and
+$get\_error\_messages$.
+\item[Group BE.2]
+This group tests $fail$, $divert$ and $list\_divert$
+with particular regard to the deferred evaluation
+of the insertion functions
+\item[Group BE.3]
+This group test the text form of the exceptions raised by
+$fail$ and $error$.
+\item[Group BE.4]
+This group tests $area\_of$, $reraise$ and $pass\_on$.
+\end{description}
+\subsection{$SystemControl$}
+\begin{description}
+\item[Group SC.1]
+This group tests the functions which allocate controls, by allocating
+a control of each of the free types and then using the $get\_\ldots$
+functions to check the stored values.
+\item[Group SC.2]
+This function tests the operation of the functions
+which set controls when presented with values within the range of
+the associated check functions.
+\item[Group SC.3]
+This function tests the operation of the functions
+which set controls when presented with values outside the range of
+the associated check functions.
+\item[Group SC.4]
+This function test the functions which return the names and values of
+the families of controls.
+\item[Group SC.5]
+This function tests the error case of trying to redeclare a control.
+\end{description}
+
+\section{PREAMBLE}
+=SML
+usefile"dtd013.sml";
+usefile"imp013.sml";
+init_mt_results();
+=TEX
 \section{THE TESTS}
-The tests are to be run in the standard way.
-No special utilities are set up.
-\subsection{Minimal Error Reporting}
-=SML
-new_error_message {id=100, text="?0 not expected here"};
-fail "foo" 100 [];
-fail "foo" 200 [];
-fail "foo" 100 [fn()=>(output(std_out, "Boo!\n"); "BLAH")];
-new_error_message {id=101, text="?0 not expected after ?1?. ??"};
-fail "foo" 101 [(fn()=>"BLAH"), (fn ()=>"BAH")];
-error "foo" 101 [(fn()=>"B"), (fn ()=>"BAH")];
+\subsection{$BasicError$}
+\subsubsection{Group BE.1}
 =TEX
-It is important that the following text agrees with the error message
-2002, since the test will usually be run in an environment in which
-this message has already been allocated
 =SML
-new_error_message {id=2002, text="The error number ?0 does not identify an entry in the error message database"};
-
-fail "foo" 2002 [fn()=>"42"];
-
+val old_msgs = get_error_messages();
+new_error_message{id=99991, text="test message 1"};
+new_error_message{id=99992, text="test message 2 ?0"};
+new_error_message{id=99993, text="?0?1?2?3?4?5?6?7?8?9??"};
 =TEX
-The next three look at the treatment of the type $MESSAGE$
 =SML
-val msg1 = (fail "foo" 2002 [fn()=>"99"]) handle Fail x => x;
-val msg2 = (fail "foo" 999 []) handle Fail x => x;
-get_message msg1;
+store_mt_results_show mt_run
+[("mdt002.BE.1.1", get_error_message 99991, [], "test message 1"),
+ ("mdt002.BE.1.2", get_error_message 99992, [], "test message 2 ?0"),
+ ("mdt002.BE.1.3", get_error_message 99992, [""], "test message 2 "),
+ ("mdt002.BE.1.4", get_error_message 99992, ["BOO"], "test message 2 BOO"),
+ ("mdt002.BE.1.5", get_error_message 99992, ["BOO", "COO"], "test message 2 BOO"),
+ ("mdt002.BE.1.6", get_error_message 99993,
+	["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"],
+	"0123456789?")
+];
 =TEX
-Thee next block look at the facility for changing the messages:
+Since the ordering of the messages returned by $get\_error\_messages$ is
+not defined we sort the results to get a well-defined order.
 =SML
-get_error_message 12 []; (* Not there; should raise an exception *)
-get_error_message 2002 ["ABC"];
-get_error_message 2002 [];
-get_error_message 2002 ["ABC", "DEF", "GHI"];
-val old_messages = get_error_messages ();
-icl'change_error_message {id=2002, text = "Test message ?0 ?1"};
-get_error_message 2002 ["ABC", "DEF", "GHI"];
-icl'change_error_message {id=2002, text="The error number ?0 does not identify an entry in the error message database"};
-old_messages = get_error_messages(); (* Should return true *)
+val new_msgs = Sort.sort (fn {id=id1, ...} => fn {id=id2, ...} => id1 - id2)
+	(get_error_messages () diff old_msgs); 
+store_mt_results_show mt_run
+[("mdt002.BE.1.10", fn()=>new_msgs, (), 
+	[{id=99991, text="test message 1"},
+	{id=99992, text="test message 2 ?0"},
+	{id=99993, text="?0?1?2?3?4?5?6?7?8?9??"}])
+];
 =TEX
-The following checks the deferred evaluation of inserter arguments.
 =SML
+icl'change_error_message{id=99993, text="new text"};
+store_mt_results_show mt_run
+[("mdt002.BE.1.20", get_error_message 99993, [], "new text")
+];
+=TEX
+\subsubsection{Group BE.2}
+=SML
+val ok : bool ref = ref true;
+=TEX
+The following functions set $ok$ $false$ in the insertion function
+which should not be evaluated:
+=SML
+fun test2_1 () = (
 (
-    fail "foo" 100 [fn () => (output(std_out, "this test has failed\n"); "BLAH")]
-)   handle X => divert X "foo" "goo" 2002 [fn () => (output(std_out, "this test may have worked\n"); "BLAH")];
-
+    fail "foo" 100 [fn () => (ok := false; "BLAH")]
+)   handle X => divert X "foo" "goo" 2002
+	[fn () => ("BLAH")]
+);
+=SML
+fun test2_2() = (
 (
-    fail "foo" 100 [fn () => (output(std_out, "this test has failed\n"); "BLAH")]
+    fail "foo" 100 [fn () => (ok := false; "BLAH")]
 )   handle X => list_divert X "goo" 
         [("foo", 100, [fn () => (output(std_out, "this test may have worked\n"); "BLAH")]),
-        ("foo", 200, [fn () => (output(std_out, "this test has failed\n"); "BLAH")]),
-        ("koo", 100, [fn () => (output(std_out, "this test has failed\n"); "BLAH")])];
-
-(
-    fail "foo" 100 [fn () => (output(std_out, "this test may have worked\n"); "BLAH")]
-)   handle X => list_divert X "goo" [];
-
-
+        ("foo", 200, [fn () => (ok := false; "BLAH")]),
+        ("koo", 100, [fn () => (ok := false; "BLAH")])]
+);
 =TEX
 =SML
-(
-    fail "foo" 100 [fn () => (output(std_out, "this test has failed\n"); "BLAH")]
-)   handle X => area_of X;
-
-(
-    fail "foo" 100 [fn () => "BLAH"]
-)   handle X => (output(std_out, "about to reraise exception \n"); reraise X "goo");
-
-(
-    error "foo" 100 [fn () => "BLAH"]
-)   handle X => (output(std_out, "about to reraise exception \n"); reraise X "goo");
-
+fun run2 f = (
+	(f() handle _ => !ok);
+	!ok
+);
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.BE.2.1", run2, test2_1, true),
+ ("mdt002.BE.2.1", run2, test2_2, true)
+];
+=TEX
+\subsubsection{Group BE.3}
+=SML
+fun string_error (area : string) (id : int) (inserts : (unit -> string)list)
+	: string = (
+	(error area id inserts)
+	handle Error msg => get_message msg
+);
+fun string_fail (area : string) (id : int) (inserts : (unit -> string)list)
+	: string = (
+	(fail area id inserts)
+	handle Fail msg => get_message msg
+);
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.BE.3.1", string_error "foo" 99991, [], "ERROR 99991 raised by foo: test message 1"),
+ ("mdt002.BE.3.2", string_fail "foo" 99991, [], "ERROR 99991 raised by foo: test message 1"),
+ ("mdt002.BE.3.3", string_error "foo" 99992, [fn()=>"BOO"], "ERROR 99992 raised by foo: test message 2 BOO"),
+ ("mdt002.BE.3.4", string_fail "foo" 99992, [fn()=>"BOO"], "ERROR 99992 raised by foo: test message 2 BOO")
+];
+=TEX
+\subsubsection{Group BE.4}
+=SML
+val ex1 = (fail "area" 99991 []) handle ex => ex;
+val ex2 = (error "area" 99991 []) handle ex => ex;
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.BE.4.1",  area_of, ex1, "area")];
+=TEX
+=SML
+fun check2 (f: 'a -> 'b) ( a : 'a): bool = (
+	(f a; false)
+	handle Error msg =>
+		get_message_text msg = get_error_message 99991 []
+	|	_ => false
+);
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.BE.4.2",  check2 area_of, ex2, true)];
+=TEX
+=SML
+fun checkrr1 (():unit) : string = (
+	((fail "checkrr1" 99991 [])
+	handle ex => reraise ex "OK")
+	handle ex => if area_of ex = "OK" then "OK" else "Wrong"
+);
+=TEX
+=SML
+fun checkrr2 (():unit) : string = (
+	((raise Div)
+	handle ex => reraise ex "OK")
+	handle Div => "OK"
+	|	_ => "Wrong"
+);
+=TEX
+=SML
+fun checkrr3 (():unit) : string = (
+	((error "checkrr1" 99991 [])
+	handle ex => reraise ex "OK")
+	handle Error _ => "OK"
+	|	_ => "Wrong"
+);
+=TEX
+=SML
+fun checkpo1 (():unit) : string = (
+	((fail "checkpo1" 99991 [])
+	handle ex => pass_on ex "checkpo1" "OK")
+	handle ex => if area_of ex = "OK" then "OK" else "Wrong"
+);
+=TEX
+=SML
+fun checkpo2 (():unit) : string = (
+	((fail "checkpo2" 99991 [])
+	handle ex => pass_on ex "checkpo1" "Wrong")
+	handle ex => if area_of ex = "checkpo2" then "OK" else "Wrong"
+);
+=TEX
+=SML
+fun checkpo3 (():unit) : string = (
+	((raise Div)
+	handle ex => pass_on ex "checkpo3" "Wrong")
+	handle Div => "OK"
+	|	_ => "Wrong"
+);
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.BE.4.10",  checkrr1, (), "OK"),
+ ("mdt002.BE.4.11",  checkrr2, (), "OK"),
+ ("mdt002.BE.4.12",  checkrr3, (), "OK"),
+ ("mdt002.BE.4.13",  checkpo1, (), "OK"),
+ ("mdt002.BE.4.14",  checkpo2, (), "OK"),
+ ("mdt002.BE.4.15",  checkpo3, (), "OK")
+];
 =TEX
 \subsection{System Control}
+Before we embark on these tests we save the original state of the controls
+for reference in group SC.4:
 =SML
-var testing : int ref = ref 40;
+val old_flags = get_flags();
+val old_int_controls = get_int_controls();
+val old_string_controls = get_string_controls();
+=TEX
+\subsubsection{Group SC.1}
+=SML
+val testflag : bool ref = ref true;
 
-new_int_control{name="testing",
-	control=testing,
+new_flag{name="testflag",
+	control=testflag,
+	default=(fn()=>true),
+	check=(fn _ => true)};
+=TEX
+=SML
+val testint : int ref = ref 40;
+
+new_int_control{name="testint",
+	control=testint,
 	default=(fn()=>80),
 	check=(fn n=> n >= 20)};
+=TEX
+=SML
+val teststring : string ref = ref "boo";
 
-get_int_control"testing";
-set_int_control("testing", 19); (* Out of range *)
-set_int_control("testing", 0); (* Out of range *)
-set_int_control("testing", 20); (* OK *)
-set_int_control("testing", 80); (* OK *)
+new_string_control{name="teststring",
+	control=teststring,
+	default=(fn()=>""),
+	check=(fn s=> size s <= 5)};
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.SC.1.1",  PolyML.makestring o get_flag, "testflag", "true"),
+ ("mdt002.SC.1.2",  PolyML.makestring o get_int_control, "testint", "40"),
+ ("mdt002.SC.1.3",  get_string_control, "teststring", "boo")
+];
+=TEX
+\subsubsection{Group SC.2}
+=SML
+val s1 = PolyML.makestring(set_flag("testflag", false));
+val s2 = PolyML.makestring(set_int_control("testint", 20));
+val s3 = (set_string_control("teststring", "abcde"));
 
+store_mt_results_show mt_run
+[("mdt002.SC.2.1",  Combinators.I, s1, "true"),
+ ("mdt002.SC.2.2",  Combinators.I, s2, "40"),
+ ("mdt002.SC.2.3",  Combinators.I, s3, "boo")
+];
+
+store_mt_results_show mt_run
+[("mdt002.SC.2.4",  PolyML.makestring o get_flag, "testflag", "false"),
+ ("mdt002.SC.2.5",  PolyML.makestring o get_int_control, "testint", "20"),
+ ("mdt002.SC.2.6",  get_string_control, "teststring", "abcde")
+];
+=TEX
+\subsubsection{Group SC.3}
+=SML
+val testflag2 : bool ref = ref true;
+
+new_flag{name="testflag2",
+	control=testflag2,
+	default=(fn()=>true),
+	check=(fn tv => tv)};
+=TEX
+=SML
+store_mt_results_show mt_run_fail
+[("mdt002.SC.3.1",  set_flag, ("testflag2", false), gen_fail_msg "set_flag" 2012 ["testflag2"])];
+=TEX
+=SML
+store_mt_results_show mt_run_fail
+[("mdt002.SC.3.2",  set_int_control, ("testint", 1), gen_fail_msg "set_int_control" 2012 ["testint"])];
+=TEX
+=SML
+store_mt_results_show mt_run_fail
+[("mdt002.SC.3.3",  set_string_control, ("teststring", "abcdef"), gen_fail_msg "set_string_control" 2012 ["teststring"])];
+=TEX
+\subsubsection{Group SC.4}
+Since the order of the controls is not specified, we sort them into
+a known order before comparison:
+=SML
+val csort = Sort.sort (fn x => fn y => Sort.stringorder (fst x) (fst y));
+val new_flags = csort(get_flags() diff old_flags);
+val new_int_controls = csort(get_int_controls() diff old_int_controls);
+val new_string_controls = csort(get_string_controls() diff old_string_controls);
+val all_controls = (
+	let	val (fs, is, ss) = get_controls();
+	in	(csort fs, csort is, csort ss)
+	end);
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.SC.4.1", Combinators.I, new_flags,
+	[("testflag", false), ("testflag2", true)])];
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.SC.4.2", Combinators.I, new_int_controls,
+	[("testint", 20)])];
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.SC.4.3", Combinators.I, new_string_controls,
+	[("teststring", "abcde")])];
+=TEX
+=SML
+store_mt_results_show mt_run
+[("mdt002.SC.4.4", Combinators.I, all_controls,
+	(new_flags, new_int_controls, new_string_controls))];
+=TEX
+\subsubsection{Group SC.5}
+=SML
+=SML
+store_mt_results_show mt_run_fail
+[("mdt002.SC.5.1",  new_flag, {name="testflag",
+	control=testflag,
+	default=(fn()=>true),
+	check=(fn _ => true)}, gen_fail_msg "new_flag" 2010 ["testflag"])];
+=TEX
+=SML
+store_mt_results_show mt_run_fail
+[("mdt002.SC.5.2",  new_int_control, {name="testint",
+	control=testint,
+	default=(fn()=>80),
+	check=(fn n=> n >= 20)}, gen_fail_msg "new_int_control" 2010 ["testint"])];
+=TEX
+=SML
+store_mt_results_show mt_run_fail
+[("mdt002.SC.5.3",  new_string_control, {name="teststring",
+	control=teststring,
+	default=(fn()=>""),
+	check=(fn s=> size s <= 5)}, gen_fail_msg "new_string_control" 2010 ["teststring"])];
+=TEX
+\section{EPILOGUE}
+=SML
+diag_string(summarize_mt_results());
 =TEX
 \end{document}
