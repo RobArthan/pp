@@ -57,6 +57,11 @@
 
 extern char *environ[];
 
+static char* help_message =
+"\
+ This is a test help message which should presently be\
+ replaced by a message amongst many introduced by\
+ a more general mechanism";
 
 static XtAppContext app;
 
@@ -85,7 +90,7 @@ static char *arglist[10];
 static int control_fd;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * scroll_output: given a buffer, buf, containing ct characters
+ * scroll_out: given a buffer, buf, containing ct characters
  * of interest, write them to the (scrolled text) window w.
  * If the insertion position of w is visible, then w is scrolled,
  * otherwise the new characters are written out of sight and
@@ -133,7 +138,6 @@ char **argv;
 	Arg args[12];
 	int i;
 	XmString s1, s2, s3, s4, s5, s6;
-	void monitor_typing();
 	void file_menu_cb(), edit_menu_cb(), cmd_menu_cb(), help_menu_cb();
 
 	diag("cmdwin", "X initialisation");
@@ -191,9 +195,6 @@ char **argv;
 
 
 	command = XmCreateScrolledText(work, "command", args, i);
-
-	XtAddCallback(command, XmNmodifyVerifyCallback,
-		monitor_typing, NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu bar:
@@ -283,7 +284,15 @@ char **argv;
 	XmStringFree(s1);
 	XmStringFree(s2);
 
-	XtVaSetValues(menubar, XmNmenuHelpWidget, helpmenu, NULL);
+	{
+		Widget *btns;
+		int num_btns;
+		XtVaGetValues(menubar,
+			XmNchildren, &btns,
+			XmNnumChildren, &num_btns, NULL);
+		XtVaSetValues(menubar,
+			XmNmenuHelpWidget, btns[num_btns-1], NULL);
+	}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Management and Realisation:
@@ -356,52 +365,12 @@ int i;
 XmAnyCallbackStruct *cbs;
 {
 	dummy_menu_cb(w, i, cbs, "help menu item");
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Keyboard input processing:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-void monitor_typing(w, unused, cbs)
-Widget w;
-XtPointer unused;
-XmTextVerifyCallbackStruct *cbs;
-{
-	static int boln_offset = 0;
-	static int cursor = 0;
-	static char buff[BUFSIZ];
-	static char temp[BUFSIZ];
-	int i, j;
-	void send_to_application();
-	if(cbs->startPos < boln_offset) {
-		msg("user error", "attempt to insert before boln");
-		cbs->doit = False;
-		return;
-	};
-/*
-
-fprintf(stderr,
-"startPos %d; endPos %d; len %d\n",
-cbs->startPos, cbs->endPos, cbs->text->length);
-fprintf(stderr,
-"cursor %d; boln_offset %d\n",
-cursor, boln_offset);
-*/
-
-	for(i = 0; i < cbs->text->length; ++i) {
-		temp[i] = cbs->text->ptr[i]; /* could overflow temp */
-	};
-	for(j = cbs->endPos - boln_offset; j < cursor; ++j) {
-		temp[i++] = buff[j];  /* could overflow temp */
-	};
-	cursor = cbs->startPos - boln_offset;
-	for(j = 0; j < i; ++j) {
-		buff[cursor++] = temp[j]; /* could overflow buff */
-		if(temp[j] == '\n') {
-			send_to_application(buff, cursor);
-			boln_offset += cursor;
-			cursor = 0;
-		}
+	switch(i) {
+	case 0:
+		msg_dialog(w, help_message);
+		break;
+	default:
+		break;
 	}
 }
 
