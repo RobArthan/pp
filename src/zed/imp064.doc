@@ -276,9 +276,9 @@ val pc_expr4_sel : PREC_CONTEXT = PcNormal(230, 30, false);
 
 =SML
 val pc_schema_name : PREC_CONTEXT = PcNormal(300, 10, false);
-val pc_var_name : PREC_CONTEXT = PcNormal(300, 20, false);
+val pc_dec_name : PREC_CONTEXT = PcNormal(300, 20, false);
 val pc_dec_var_name : PREC_CONTEXT = PcNormal(300, 30, false);
-val pc_dec_name : PREC_CONTEXT = PcNormal(300, 40, false);
+val pc_var_name : PREC_CONTEXT = PcNormal(300, 40, false);
 =TEX
 
 =SML
@@ -390,7 +390,7 @@ end;
 =TEX
 
 =SML
-fun €do_dec_var_name› (cur_env:PP_ENV, name:string) : PFUN_ANS = (
+fun €do_dec_var_name› (cur_env:PP_ENV, name:string, enclosed_prec:PREC_CONTEXT) : PFUN_ANS = (
 	let
 		val PpEnv{pe_addstring=addstring, ...} = cur_env;
 
@@ -402,7 +402,7 @@ fun €do_dec_var_name› (cur_env:PP_ENV, name:string) : PFUN_ANS = (
 			addstring n_dec;
 			PfOk
 		)else
-			bracket(cur_env, pc_dec_var_name, false, fn e => addstring n_dec)
+			bracket(cur_env, enclosed_prec, false, fn e => addstring n_dec)
 	end
 );
 =TEX
@@ -813,13 +813,15 @@ end
 \subsection{Dealing with Functional Applications}
 
 =SML
-fun €get_fancy_fix›(fullname:string, arg_tm:TERM) : Z_PIECE list OPT = (
+fun €get_fancy_fix›(fullname:string, arg_tm:TERM, ch_class:CLASS -> bool) : Z_PIECE list OPT = (
 let
 	val (name, decor) = chop_z_name fullname;
 in
 	case get_template_info name
 	of Nil => Nil
 	| Value(tmpl, class, stubs) => (
+		if ch_class class
+		then
 		if length stubs = 1
 		then
 			format_fancy_fix class tmpl decor [arg_tm]
@@ -833,6 +835,8 @@ in
 				else
 					Nil
 			end handle Fail _ => Nil
+		else
+			Nil
 	)
 end
 );
@@ -844,26 +848,27 @@ in
 fun €is_u› tm = (term_match tm u; true) handle Fail _ => false;
 end;
 
-fun €get_fancy_fix1›(tm:TERM, arg_tm:TERM) : Z_PIECE list OPT = (
+fun €get_fancy_fix1›(tm:TERM, arg_tm:TERM, ch_class:CLASS -> bool) : Z_PIECE list OPT = (
 	(
 	case dest_z_term tm of
 		ZGVar (name, _, args) => (
 			if	all args is_u
-			then	get_fancy_fix (name, arg_tm)
+			then	get_fancy_fix (name, arg_tm, ch_class)
 			else	Nil
 	) |	ZLVar (name, _, args) => (
 			if	all args is_u
-			then	get_fancy_fix (name, arg_tm)
+			then	get_fancy_fix (name, arg_tm, ch_class)
 			else	Nil
 	) |	_ => Nil
 	) handle Fail _ => Nil
 );
+=TEX
 =SML
 fun €do_Z_app› (cur_env:PP_ENV) (hd_term:TERM, arg_tm:TERM) : PFUN_ANS = (
 let
 	val PpEnv{pe_space=space, ...} = cur_env;
 in
-	case get_fancy_fix1(hd_term, arg_tm)
+	case get_fancy_fix1(hd_term, arg_tm, fun_true)
 	of Nil => bracket(cur_env, pc_expr3, true,
 			fn e => (
 				main_term_pp (set_prec pc_expr3_lhs e) hd_term;
@@ -900,7 +905,7 @@ in
 	of Value pieces => print_pieces cur_env pieces
 	| Nil => bracket(cur_env, pc_expr4_gvar, true,
 		fn e => (
-			do_dec_var_name(set_prec pc_var_name cur_env, name);
+			do_dec_var_name(set_prec pc_var_name cur_env, name, pc_dec_var_name);
 			do_wrapped_list("[", ",", "]", tms) e
 		))
 end
@@ -912,9 +917,13 @@ end
 \subsection{Dealing with Relations}
 =SML
 fun €do_relation› (cur_env:PP_ENV, lr as (l:TERM, r:TERM)) : PFUN_ANS = (
-	case	get_fancy_fix1 (r, l)
+let
+	fun is_rel_class ZClRel = true | is_rel_class _ = false;
+in
+	case	get_fancy_fix1 (r, l, is_rel_class)
 	of Value pieces => print_pieces cur_env pieces
 	| Nil => do_infix(cur_env, "ç", lr, true, pc_pred4_ç)
+end
 );
 =TEX
 
@@ -972,8 +981,14 @@ of ZDec(tms, dec_ty) => (
 )
 =TEX
 =SML
-| ZSchemaDec(decl, decor) => (
+| ZSchemaDec(decl, "") => (
 	main_term_pp cur_env decl;
+	PfOk
+)
+| ZSchemaDec(decl, decor) => (
+	bracket(cur_env, pc_force_brackets, true,
+		fn e => (main_term_pp e decl)
+	);
 	addstring decor;
 	PfOk
 )
@@ -1039,10 +1054,10 @@ we get something then try and print something.
 
 =SML
 | ZLVar(name, var_ty, nil) => (
-	do_dec_var_name(cur_env, name)
+	do_dec_var_name(cur_env, name, pc_dec_var_name)
 )
 | ZLVar(name, var_ty, tms) => (
-	do_dec_var_name(cur_env, name);
+	do_dec_var_name(cur_env, name, pc_dec_var_name);
 	do_wrapped_list("?[?", ",", "?]?", tms);
 	PfOk
 )
@@ -1056,7 +1071,7 @@ generic parameter is suppressed.
 | ZGVar (name_args as (name, var_ty, args)) => (
 	if is_nil args orelse ((is_u(mk_z_gvar name_args)) handle Fail _ => false)
 	then
-		do_dec_var_name(cur_env, name)
+		do_dec_var_name(cur_env, name, pc_dec_var_name)
 	else
 		do_generic cur_env name_args
 )
@@ -1226,9 +1241,9 @@ precedance.
 		val new_env = set_prec pc_dec_name cur_env;
 
 		fun pr_2ids(i1, i2) = (
-			do_dec_var_name(new_env, i1);
+			do_dec_var_name(new_env, i1, pc_dec_var_name);
 			addstring "/";
-			do_dec_var_name(new_env, i2);
+			do_dec_var_name(new_env, i2, pc_dec_var_name);
 			()
 		);
 
@@ -1259,7 +1274,7 @@ precedance.
 
 		fun aux1(s, t) = (
 			beginb(2, true);
-			do_dec_var_name(new_env, s);
+			do_dec_var_name(new_env, s, pc_dec_var_name);
 			addstring " ¶";
 			space(1, 2);
 			main_term_pp new_env t;
@@ -1298,6 +1313,19 @@ precedance.
 end (* of let in fun Z_fun_app *)
 ) (* of fun Z_fun_app *);
 =TEX
+
+Functional application of constants and variables are treated the same
+here in the Z printer.  However, they functions pased the pretty
+printer support~\cite{DS/FMU/IED/DTD031} must have different
+signatures.
+
+=SML
+fun €Z_var_app› (cur_env:PP_ENV) (orig_tm:TERM) (orig_name:string) (alias:string)
+		(ty:TYPE) (args:TERM list) : PFUN_ANS = (
+	Z_fun_app cur_env orig_tm alias ty args
+);
+=TEX
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -1338,7 +1366,7 @@ fun €Z_do_app› (_:PP_ENV) (_:TERM) (_:TERM list) : PFUN_ANS = PfNotPossible;
 =SML
 val side_effect =
 set_printers("Z",
-	(Z_do_Ã, Z_do_app, Z_do_const_var, Z_fun_app,
+	(Z_do_Ã, Z_do_app, Z_do_const_var, Z_var_app,
 		Z_fun_app, Z_do_const_var));
 
 val side_effect =
