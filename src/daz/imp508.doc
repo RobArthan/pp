@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp508.doc   %Z% $Date: 2004/02/16 21:59:01 $ $Revision: 1.116 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2004/03/05 15:25:05 $ $Revision: 1.117 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.116 $%
+\def\SCCSversion{$Revision: 1.117 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/02/16 21:59:01 $%
+\TPPdate{\FormatDate{$Date: 2004/03/05 15:25:05 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -145,6 +145,7 @@ are now automatically used to qualify the initial expression.
 the cache theory before calling {\it term\_of\_z\_tm}.
 \item[Issue 1.116] Fixed bug with use clauses and aggregates.
 \item[Issue 1.117] Fixed bug with use clauses and selected components.
+\item[Issue 1.118] Reform of the Environments.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -398,23 +399,26 @@ Only one level of retry is supported (since the SPARK rules don't allow nesting
 of package names in this context).
 =SML
 fun ÛzidÝ (env : CN_ENV) (id : Z_ID) : Z_EXP = (
-	let	fun aux retry id1 = (
-			case env id1 of
-				Value (ty, EIEnvRetry id2) => 
-					if retry
-					then aux false id2
-					else fail "zid" 508021 [fn()=>id]
-			|	Value (ty, EIEnvVar (_, Nil)) => mk_z_lvar(id1, ty, [])
-			|	Value (ty, EIEnvAuxVar (_, Nil)) => mk_z_lvar(id1, ty, [])
-			|	Value (ty, EIEnvVar (_, Value id2)) => mk_z_lvar(id2, ty, [])
-			|	Value (ty, EIEnvAuxVar (_, Value id2)) => mk_z_lvar(id2, ty, [])
-			|	Value (ty, _) => mk_z_gvar(id1, ty, [])
+	let	val {tipe, canon_name, info} = (
+			case env id of
+				Value tci => tci
 			|	Nil => (
-				find (TypeInference.get_ti_context ()) (fn t => fst(dest_var t) = id)
-				handle Fail _ =>  fail "zid" 508021 [fn()=>id]
+				case e_lookup id (TypeInference.e_get_ti_context()) of
+					Value ty =>
+						{tipe = ty,
+						canon_name = id,
+						info = EIEnvOtherVar}
+				|	Nil => fail "zid" 508021 [fn()=>id]
 			)
 		);
-	in	aux true id
+	in	case info of
+			EIEnvVar {kind = OutOfScope, ...}  =>  fail "zid" 5080771 [fn()=>id]
+		|	EIEnvVar _ =>  mk_z_lvar(canon_name, tipe, [])
+		|	EIEnvAuxVar {in_scope = false, ...} =>    fail "zid" 5080771 [fn()=>id]
+		|	EIEnvAuxVar _ =>  mk_z_lvar(canon_name, tipe, [])
+		|	EIEnvLogCon _ =>  mk_z_lvar(canon_name, tipe, [])
+		|	EIEnvOtherVar => mk_z_lvar(canon_name, tipe, [])
+		|	_ => mk_z_gvar(canon_name, tipe, [])
 	end
 );
 =TEX
@@ -834,17 +838,12 @@ fun Ûz_predexp_of_z_tm1Ý (env : CN_ENV)  (z_tm : Z_TM) : Z_PRED = (
 				|    aux acc ((vn, ty)::more) = (
 					let	val n = base_var_name vn;
 					in	case env n of
-						Value (_, EIEnvVar(_, Value n')) => (
-						aux (lvar_subs_pair n n' ty @ acc) more
-					) | 	Value(_, EIEnvRetry n') => (
-						case env n' of
-							Value(ty, EIEnvVar _) => (
-							aux(lvar_subs_pair n n' ty @ acc) more
-						) |	Value(ty, EIEnvAuxVar _) => (
-							aux(lvar_subs_pair n n' ty @ acc) more
-						) |	Value(ty, _) => (
-							aux(gvar_subs_pair n n' ty :: acc) more
-						) |	_ => aux acc more
+						Value {canon_name = n', ...} => (
+						if	n = n'
+						then	aux acc more
+						else	aux
+							(lvar_subs_pair n n' ty @ acc)
+							more
 					) | 	_ => aux acc more
 					end
 				);
@@ -855,7 +854,6 @@ fun Ûz_predexp_of_z_tm1Ý (env : CN_ENV)  (z_tm : Z_TM) : Z_PRED = (
 	in	z_predexp_of_z_tm rename z_tm
 	end
 );
-
 =TEX
 =SML
 fun Ûname_to_tmarkÝ (e : EXP) : TMARK = (
@@ -1040,9 +1038,9 @@ fun Ûtmark_of_prefixÝ (env : CN_ENV) (zpfx : Z_EXP) : Z_ID = (
 		);
 		val (var, sels) = strip_prefix [] zpfx;
 		val (base_tmark, sels') = case env var of
-			Value(_, EIEnvVar (x, _)) => (x, sels)
-		|	Value(_, EIEnvConstant x) => (x, sels)
-		|	Value(_, EIEnvFunction (_, _, x)) => (
+			Value{info = EIEnvVar {tmark = x, ...}, ...} => (x, sels)
+		|	Value{info = EIEnvConstant {tmark = x}, ...} => (x, sels)
+		|	Value{info = EIEnvFunction {return_tmark = x, ...}, ...} => (
 				(x, tl sels)
 				handle Fail _ => fail "tmark_of_prefix" 508028 []
 		) |	_ => fail "tmark_of_prefix" 508028 [];
@@ -1558,7 +1556,7 @@ in a string that can be used as an ID.
 =SML
 fun Ûcanonical_idÝ (env : CN_ENV) (n : ID) : ID = (
 	case env (trans_id n) of
-		Value (_, EIEnvRetry ex) => ex
+		Value {canon_name = n', ...} =>  n'
 	|	_ => n
 );
 =TEX
@@ -1725,7 +1723,7 @@ and Ûexp_rec_agg_pos_zÝ
 		: Z_EXP = (
 let	val record_components = (
 		case env tm of
-			Value (_, EIEnvRecordType (cmps as _::_, _)) => cmps
+			Value {info = EIEnvRecordType {comp_names = cmps, ...}, ...} => cmps
 		|	_ => fail "exp_rec_agg_pos_z" 508026 [fn()=>tm]
 	);
 	val comp_name_z_exps = combine record_components comps
@@ -1905,7 +1903,7 @@ and Ûexp_selected_compÝ (env : CN_ENV) ({prefix, selector} : EXP SELECTED_COMP)
 =SML
 and Ûfun_globalsÝ (env : CN_ENV) (zn : Z_ID) : Z_EXP list = (
 	case env zn of
-		Value(_, EIEnvFunction (gs, _, _)) => map (global_dep_par env) gs
+		Value{info = EIEnvFunction {deps = gs, ...}, ...} => map (global_dep_par env) gs
 	| _=>	fail "fun_globals" 508081 [fn()=>zn]
 )
 =TEX
@@ -1924,9 +1922,9 @@ and Ûexp_fun_callÝ (env : CN_ENV) ({fun_name, args} : EXP FUN_CALL) : Z_EXP = (
 	case args of
 		[] => trans_fun_name env fun_name
 	|	_ => (
-		let	val args_tmarks = (combine (map (trans_exp env) args) (map (fst o snd)(
+		let	val args_tmarks = (combine (map (trans_exp env) args) (map #tmark(
 				case env fun_name of
-					Value(_, EIEnvFunction (_, psts, _)) => psts
+					Value{info = EIEnvFunction {pars = psts, ...}, ...} => psts
 				| 	_ => fail "exp_fun_call" 508081 [fn _ => fun_name])))
 				handle Fail _ =>  fail "exp_fun_call" 508081 [fn _ => fun_name];
 		in	z_fun_call (trans_fun_name env fun_name, map (slide_to_tmark env) args_tmarks)
@@ -2170,14 +2168,15 @@ end);
 val Ûinformal_functionÝ : Z_ID = "Informal_Function";
 fun Ûadjust_idÝ (env : CN_ENV) (id : ID)  = (
 	case (env (trans_id id)) of
-		Value (ty, EIEnvFunction (_, names_tmarks_defs, _)) => 
-			let	val names_defs = map (fn (n, (_, eo)) => (n, eo)) names_tmarks_defs; 
+		Value {	tipe = ty,
+			info = EIEnvFunction { pars = names_tmarks_defs, ...},
+			canon_name = cn} => 
+			let	val names_defs = map (fn{id,  default, ...} => (id, default)) names_tmarks_defs; 
 				val args = positional_assocs_to_exps names_defs [];
 			in	if	(fst(dest_ctype ty) <> informal_function)
-				then	EFunCall{fun_name=id, args=args}
+				then	EFunCall{fun_name=cn, args=args}
 				else	fail "adjust_id" 508049 [fn()=>id]
 			end
-	|	Value(_, EIEnvRetry ex) => adjust_id env ex
 	| _ => EId id
 );
 fun Ûadjust_rangelohiÝ (env : CN_ENV) ({lo=l, hi=h} : EXP RANGELOHI) = (
@@ -2203,7 +2202,7 @@ and Ûadjust_agg_choiceÝ (env : CN_ENV) (ACAggChoiceRange x : AGG_CHOICE) = (
 	let	val n = name_to_tmark x;
 	in
 		case env n of
-		Value (_, EIEnvOtherType) => (
+		Value {info = EIEnvOtherType, ...} => (
 			ACAggChoiceRange(DRConstrained{range=RRange {
 				lo=EAttribute {attribute_desig=ADAttrib "FIRST",prefix=x},
 				hi=EAttribute {attribute_desig=ADAttrib "LAST", prefix=x}},
@@ -2221,8 +2220,10 @@ and Ûadjust_othersÝ (env : CN_ENV) ({others=oth} : EXP OTHERS) = (
 and Ûadjust_agg_posÝ (env : CN_ENV)
 		({tmark=tmark as Value t, comps=c} : EXP AGG_POS) = (
 	case env t of
-	Value (ty, EIEnvRecordType _) => (
-			ERecAggPos {tmark=tmark, comps=map (adjust_exp env) c}
+	Value {info = EIEnvRecordType _, canon_name, ...} => (
+			ERecAggPos {tmark=Value canon_name, comps=map (adjust_exp env) c}
+        ) |	Value {canon_name, ...} => (
+			EArrayAggPos {tmark=Value canon_name, comps=map (adjust_exp env) c}
         ) |_ => (
 			EArrayAggPos {tmark=tmark, comps=map (adjust_exp env) c}
 	)
@@ -2250,11 +2251,9 @@ and Ûadjust_agg_named1Ý (env : CN_ENV)
 let	val n' = map (adjust_named_assoc env) n;
 in
 	case env t of
-	Value (ty, EIEnvRecordType _) => (
-			ERecAggNamed {tmark=tmark, named_assocs=n'}
-        ) | 	Value(_, EIEnvRetry ex)  => (
-			adjust_agg_named1 env {tmark = Value ex, named_assocs = n}
-        ) |_ => (
+	Value {info = EIEnvRecordType _, canon_name, ...} => (
+			ERecAggNamed {tmark=Value canon_name, named_assocs=n'}
+        ) | _ => (
 			EArrayAggNamed {tmark=tmark, named_assocs=n'}
 	)
 end
@@ -2300,22 +2299,30 @@ and Ûadjust_indexed_compÝ	(env : CN_ENV)
 let	val n = name_to_tmark p;
 	val (prename, env_prename) = 
 		case env n of
-			Value (_, EIEnvRetry ex) => (ex, env ex)
-		|	other => (n, other);
+			res as (Value {canon_name, ...}) =>
+				if	canon_name <> n
+				then	(canon_name, env canon_name)
+				else	(n, res)
+		|	Nil => (n, Nil);
 in
 	case (env_prename, i) of
 =TEX
 Is it a function call?
 =SML
-	(Value (ty, EIEnvFunction (_, names_tmarks_defs, _)), EArrayAggPos{comps,...}) => (
-	let	val names_defs = map (fn (n, (_, eo)) => (n, eo)) names_tmarks_defs; 
+	(Value {	tipe = ty,
+		info = EIEnvFunction {pars = names_tmarks_defs, ...}, ...},
+		EArrayAggPos{comps,...}) => (
+	let	val names_defs = map (fn {id, default, ...} => (id, default)) names_tmarks_defs; 
 		val args = positional_assocs_to_exps names_defs comps;
 	in	if	(fst(dest_ctype ty) <> informal_function)
 		then	EFunCall{fun_name=prename, args=map (adjust_exp env)  args}
 		else	fail "adjust_id" 508049 [fn()=>prename]
 	end
-	) |(Value (ty, EIEnvFunction (_, names_tmarks_defs, _)), EArrayAggNamed{named_assocs, ...}) => (
-	let	val names_defs = map (fn (n, (_, eo)) => (n, eo)) names_tmarks_defs;
+	) |(Value {
+		tipe = ty,
+		info = EIEnvFunction {pars = names_tmarks_defs, ...}, ...},
+		EArrayAggNamed{named_assocs, ...}) => (
+	let	val names_defs = map (fn {id, default, ...} => (id, default)) names_tmarks_defs;
 		val args = named_assocs_to_exps names_defs named_assocs;
 	in	if	(fst(dest_ctype ty) <> informal_function)
 		then	EFunCall
@@ -2325,9 +2332,9 @@ Is it a function call?
 =TEX
 Is it a type conversion?
 =SML
-	) |(Value (_, EIEnvRecordType _), EArrayAggPos{comps=[comp],...}) => (
+	) |(Value {info = EIEnvRecordType _, ...}, EArrayAggPos{comps=[comp],...}) => (
 		ETypeConversion{tmark=prename, exp= (adjust_exp env) comp}
-	) |(Value (_, EIEnvOtherType), EArrayAggPos{comps=[comp],...}) => (
+	) |(Value {info = EIEnvOtherType, ...}, EArrayAggPos{comps=[comp],...}) => (
 		ETypeConversion{tmark=prename, exp= (adjust_exp env) comp}
 =TEX
 No... It must be an indexed component for real. So check for errors...
@@ -2356,7 +2363,7 @@ and Ûadjust_selected_compÝ env ({prefix=p, selector=s} : EXP SELECTED_COMP) = (
 	EId id => (
 		let	val cid = canonical_id env id;
 		in	case env cid of
-			Value (ty, _) => (
+			Value {tipe = ty, ...} => (
 				(	(dest_z_schema_type ty);
 					ESelectedComp{prefix=adjust_exp (env : CN_ENV) (EId cid),
 								selector=s}	)
@@ -2552,9 +2559,15 @@ fun Ûbasic_decl_constÝ
 fun Ûenum_attribÝ (env : CN_ENV) (zid‰1 : Z_ID, zid‰2 : Z_ID, zid‰3 : Z_ID) = (
 let	fun env' id = 
 		if id = (zid‰1 ^^ zlst)
-		then	Value (z_int_type, EIEnvOther)
+		then	Value {
+			tipe = z_int_type,
+			info = EIEnvOther,
+			canon_name = id}
 		else if id mem [zid‰1 ^^ zsuc, zid‰1 ^^ zpos]
-		then	Value (z_int_int_rel_type,EIEnvOther)
+		then	Value {
+			tipe = z_int_int_rel_type,
+			info = EIEnvOther,
+			canon_name = id}
 		else	env id;
 	val zexp = z_set_minus (zid env' zid‰1, z_set [zid env' (zid‰1 ^^ zlst)]);
 in
@@ -2575,10 +2588,16 @@ let	val {vals} = td;
 	fun env' id = (
 		if id mem zvals
 		then
-			Value (z_int_type, EIEnvOther)
+			Value {
+				tipe = z_int_type,
+				info = EIEnvOther,
+				canon_name = id}
 		else if id = zname
 		then
-			Value (z_int_set_type, EIEnvOther)
+			Value {
+				tipe = z_int_set_type,
+				info = EIEnvOther,
+				canon_name = id}
 		else
 			env id
 	);
@@ -2747,7 +2766,9 @@ fun Ûindex_con_set_compÝ (env : CN_ENV) (tmark : TMARK) (domain : Z_EXP) : Z_EXP
 		val var =  "array";
 		fun env' id = (
 			if	id = "array"
-			then	Value (zvar_ty, EIEnvVar (tmark, Nil))
+			then	Value {tipe = zvar_ty,
+					info = EIEnvVar {tmark = tmark, kind = Var},
+					canon_name = id}
 			else	env id
 		); 
 		val zp = z_eq (z_dom (zid env' var), domain);
@@ -2765,13 +2786,14 @@ The returned value is a list of predicates.
 =SML
 fun Ûtrans_comp_declÝ (env : CN_ENV) (disc : VAR_DECL list)
 	( (comps as {vars, tmark}, con) : EXP COMP_DECL ) : Z_PRED list = (
-	let	fun env_aux ([] : VAR_DECL list) (d : Z_ID) : (TYPE * ENV_INFO) OPT = (
+	let	fun env_aux ([] : VAR_DECL list) (d : Z_ID) : ENV_INFO OPT = (
 			env d
 		) | env_aux ({vars = ds, tmark = tm}::more) d = (
 			if	d mem (map trans_id ds)
-			then	Value(
-			(dest_z_power_type o type_of o zid env o trans_id) tm,
-			 EIEnvVar (tm, Nil))
+			then	Value{
+				tipe = (dest_z_power_type o type_of o zid env o trans_id) tm,
+				info = EIEnvVar {tmark = tm, kind = Var}, 
+				canon_name = d}
 			else	env_aux more d
 		);
 		val env' = env_aux disc;
@@ -2810,7 +2832,8 @@ fun Ûtrans_comp_declÝ (env : CN_ENV) (disc : VAR_DECL list)
 			end
 		) |	CCDiscCon exps => (
 			case env tmark of
-				Value(_, EIEnvRecordType (all_sels, i)) => (
+				Value{info = EIEnvRecordType {
+					comp_names = all_sels, num_discs = i}, ...} => (
 			if	length exps <> i
 			then	fail "trans_comp_decl" 508104
 				[fn _ => hd vars, fn _ => string_of_int(length exps),
@@ -3058,7 +3081,7 @@ fun Ûbasic_decl_subtype_disc_conÝ (env : CN_ENV) (name : ID) (tmark : TMARK)
 	(disc : EXP list)
 		: PARAINFO list = (
 	case env tmark of
-		Value(_, EIEnvRecordType (comps, i)) => (
+		Value{info = EIEnvRecordType {comp_names = comps, num_discs = i}, ...} => (
 		if	length disc <> i
 		then	fail "basic_decl_subtype_disc_con" 508101
 			[fn _ => name, fn _ => string_of_int(length disc),
@@ -3232,11 +3255,6 @@ fun Ûdomain_conds_auxÝ
 		fun list_recur zes = (
 			list_term_union (map recur zes)
 		);
-		fun env_aux n = (
-			case env n of
-				Value (_, EIEnvRetry n') => env n'
-			|	other => other
-		);
 		fun dom_aux has_xi acc ze = (
 			let	val (f, x) = dest_z_app ze;
 				val dcs = 
@@ -3247,8 +3265,8 @@ fun Ûdomain_conds_auxÝ
 			end	handle Fail _ => acc
 		);
 		fun is_type tn = (
-			case env_aux tn of
-				Value(_, EIEnvOtherType) => true
+			case env tn of
+				Value{info = EIEnvOtherType, ...} => true
 			|	_ => false
 		);
 		fun is_succ_pred n = (
@@ -3274,9 +3292,9 @@ fun Ûdomain_conds_auxÝ
 					handle Fail _ =>
 					term_fail "domain_conds" 508070 [ze]
 				) |	Nil => (
-					case snd(force_value (env_aux n)) of
-						EIEnvFunction ([], _, _) => dom_aux false [] ze
-					|	EIEnvFunction (_, _, _) => dom_aux true [] ze
+					case #info(force_value (env n)) of
+						EIEnvFunction {deps = [],...} => dom_aux false [] ze
+					|	EIEnvFunction _ => dom_aux true [] ze
 					|	EIEnvVar _ => dom_aux false [] ze
 					|	EIEnvConstant _ => dom_aux false [] ze
 					|	EIEnvOther => (
@@ -3287,7 +3305,7 @@ fun Ûdomain_conds_auxÝ
 				)
 			end	handle Fail _ =>
 			let	val (n, _, _) = dest_z_lvar f;
-			in	case snd(force_value (env_aux n)) of
+			in	case #info(force_value (env n)) of
 					EIEnvVar _ => dom_aux false [] ze
 				|	_ => []
 			end
@@ -3468,7 +3486,7 @@ val Ûreset_gen_id_countersÝ : unit -> unit = (fn () => gen_id_counters := initia
 fun Ûreal_nameÝ (env : CN_ENV) (tm : TMARK) : TMARK = (
 	let	val ztm = trans_id tm;
 	in	case env ztm of
-			Value(_, EIEnvRetry ex) => ex
+			Value{canon_name, ...} => canon_name
 		|	_ => ztm
 	end
 );
@@ -3560,12 +3578,12 @@ with more than one range.
 fun Ûresolve_constraintÝ (env : CN_ENV) (tmark : TMARK)
 	(c as SIDiscriminantCon[e] : SI_CONSTRAINT) : SI_CONSTRAINT = (
 	case env (real_name env tmark) of
-		Value(_, EIEnvRecordType (comp_names, ndiscs)) => (
+		Value{info = EIEnvRecordType {comp_names, num_discs}, ...}=> (
 			case e of
 				EArrayAggPos{comps,...} => (
 					SIDiscriminantCon comps
 			) |	EArrayAggNamed{named_assocs, ...} => (
-				let	val names = comp_names to (ndiscs-1);
+				let	val names = comp_names to (num_discs-1);
 					val discs = named_assocs_to_exps
 							(map (fn n => (n, Nil)) names)
 							 named_assocs;

@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% %Z% $Date: 2003/07/18 11:46:18 $ $Revision: 1.121 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2004/02/04 15:59:58 $ $Revision: 1.122 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -26,7 +26,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation: Verification Condition Generator}  %% Mandatory field
 \def\TPPheadtitle{Verification Condition Generator}
 \TPPref{ISS/HAT/DAZ/IMP505}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.121 $%
+\def\SCCSversion{$Revision: 1.122 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 \TPPdate{\FormatDate{97/07/18%
@@ -152,6 +152,7 @@ More corrections to VC derivation code. Change names {\it Sequent\_Route} to
 \item[Issues 1.118, 1.119] Schema references in function $\Xi$-lists.
 \item[Issue 1.120] R0096: improved formatting of nothing statement form in web clauses
 \item[Issue 1.121] Fixed bug in error handling.
+\item[Issue 1.122] Reform of the Environments.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -509,8 +510,7 @@ fun €simple_assign› ({wp_env={env,...}, a, ...} : WP_PARS)
 		(x : ID) (ze : Z_EXP) : RESULT = (
 	let	val zx = trans_id x;
 		val orig = case env zx of
-			Value(_, EIEnvVar(_, Value orig)) => orig
-		|	Value(_, EIEnvRetry ex) => ex
+			Value{canon_name, ...} => canon_name
 		|	_ => zx;
 	in	{wp = add_domain_conds env ([ze], subseq(a, orig, ze)), side = []}
 	end
@@ -652,7 +652,7 @@ fun €adjust_choices› (env : CN_ENV) (choices : CASE_CHOICE list) : CASE_CHOICE l
 			let	val n = name_to_tmark exp;
 			in
 				case env n of
-					Value (_, EIEnvOtherType) => (
+					Value {info = EIEnvOtherType, ...} => (
 			CCCaseRange(DRConstrained{range=RRange {
 				lo=EAttribute {attribute_desig=ADAttrib "FIRST",prefix=exp},
 				hi=EAttribute {attribute_desig=ADAttrib "LAST", prefix=exp}},
@@ -1192,23 +1192,17 @@ of a procedure taking into account the possibility that its name may be the unex
 of a procedure in a used package.
 =SML
 fun €get_proc_spec› (caller : string)  (env : CN_ENV)
-	(fps : FORMAL_PROC list) (name : ID)  : FORMAL_PROC= (
-let	val	zname = 
-		case env name of
-			Value (_, EIEnvRetry n') =>  n'
-		|	_ => trans_id name;
-	fun is_it ({name = n, ...} : FORMAL_PROC) : bool = (zname = trans_id n);
-in	find fps is_it
-	handle Fail _ =>
-	fail caller 505031 [fn()=>name]
-end
+	 (name : ID)  : FORMAL_PROC= (
+	case env (trans_id name) of
+		Value {info = EIEnvProcedure{formal_proc, ...}, ...} => formal_proc
+	|	_ => fail caller 505031 [fn()=>name]
 );
 =TEX
 =SML
-fun €proc_call_no_ivars› ({wp, a, wp_env as {formal_procs, env, ...}} : WP_PARS)
+fun €proc_call_no_ivars› ({wp, a, wp_env as {env, ...}} : WP_PARS)
 		(pc as {name, actuals} : (AGG_CHOICE,EXP) PROC_CALL)
 			: RESULT = (
-let	val fp as {spec = {w, ...}, ...} = get_proc_spec "proc_call_no_ivars" env formal_procs name;
+let	val fp as {spec = {w, ...}, ...} = get_proc_spec "proc_call_no_ivars" env name;
 	val (spec, asgns, dc_preds, vc_preds) = proc_call_spec env pc fp;
 	val xform = STSemicolon(
 			STSpecNoIvars{spec = spec,
@@ -1313,9 +1307,13 @@ end);
 =TEX
 =SML
 fun €z_log_con_def› ((u, v): Z_ID list * Z_ID list) ({x, t=_, e} : LOG_CON_DEF) : Z_PRED = (
-	let	val env' = fn id =>	if id = x
-					then Value (type_of e, EIEnvVar ("__none", Nil))
-					else Nil;
+	let	val env' = fn id =>
+			if id = x
+			then Value {
+				tipe = type_of e,
+				info = EIEnvVar {tmark = "__none", kind = Var},
+				canon_name = id}
+			else Nil;
 	in	z_eq(zid env' x, subs_exp(e, u, v))
 	end
 );
@@ -1341,10 +1339,10 @@ end);
 =TEX
 \subsection{Procedure Call (Initial Variables in Spec)}\label{wp-proc-call-ivars}
 =SML
-fun €proc_call_ivars› ({wp, a, wp_env as {formal_procs, env, ...}} : WP_PARS)
+fun €proc_call_ivars› ({wp, a, wp_env as {env, ...}} : WP_PARS)
 	(pc as {name, actuals} : (AGG_CHOICE, EXP) PROC_CALL)
 					: RESULT = (
-let	val fp as {spec = {w, ...}, ...} = get_proc_spec "proc_call_ivars" env formal_procs name;
+let	val fp as {spec = {w, ...}, ...} = get_proc_spec "proc_call_ivars" env name;
 	val (spec, asgns, dc_preds, vc_preds) = proc_call_spec env pc fp;
 	val xform = STSemicolon(
 			SSpecIvars{spec = spec,
@@ -1443,12 +1441,12 @@ in
 						}
 				else	fail "adjust_statement" 505092 []
 	) |	STProcNoIvars piv =>
-		let	fun find_formal_proc id fps= (
-				Value(get_proc_spec "adj_stmt_aux" env fps id)
+		let	fun find_formal_proc id = (
+				Value(get_proc_spec "adj_stmt_aux" env id)
 				handle Fail _ => Nil
 			);
 		in
-			case find_formal_proc (#name piv) (#formal_procs wp) of
+			case find_formal_proc (#name piv) of
 			Value fp => (
 				if	any_initial_variables_z_pred
 					(hd(z_preds_in_callee_cxt env fp [#post(#spec fp)]))
@@ -1589,19 +1587,17 @@ fun €check_1_c› (speclab : SPECLAB) = (
 );
 =TEX
 =SML
-fun €check_1_d› (p : ID, speclab as {wp_env = {env, ...}, in_scope ={formal_procs, ...}, ...}: SPECLAB) = (
-	(get_proc_spec "check_1_d" env formal_procs p; ())
+fun €check_1_d› (p : ID, speclab as {wp_env = {env, ...}, ...}: SPECLAB) = (
+	(get_proc_spec "check_1_d" env p; ())
 	handle Fail _ => checking_error "check_1_d" 505063 [fn () => p]
 );
 =TEX
-The following check, we also check 
 =SML
 fun €check_19› (env : CN_ENV) (globs_opt : Z_ID list OPT) ({w, ...} : SPEC) : unit = (
 let	fun aux number (v::more) = (
 		case env v of
-			Value (_, EIEnvVar _) => aux number more
-		|	Value (_, EIEnvAuxVar _) =>  aux number more
-		|	Value (_, EIEnvRetry v') => aux number (v'::more)
+			Value {info = EIEnvVar _, ...} => aux number more
+		|	Value {info = EIEnvAuxVar _, ...}  =>  aux number more
 		|	Value _ => fail "check_19" (number+1) [fn()=> v]
 		|	Nil => fail "check_19" number [fn()=> v]
 	) | aux _ [] = ();
@@ -1632,8 +1628,7 @@ fun €entire_var_exp› (cn_env : CN_ENV) (e : EXP) : ID = (
 fun €name_to_entire_variable_name› (cn_env : CN_ENV) (e : EXP) : Z_ID = (
 	let	val zx = trans_id (entire_var_exp cn_env e);
 		val orig = case cn_env zx of
-			Value(_, EIEnvVar(_, Value orig)) => orig
-		|	Value(_, EIEnvRetry ex) => ex
+			Value {canon_name, ...} => canon_name
 		|	_ => zx;
 	in	orig
 	end	handle exn => reraise exn "name_to_entire_variable_name"
@@ -1833,9 +1828,9 @@ fun €proc_frame› (env : CN_ENV)
 );
 =TEX
 =SML
-fun €anti_aliasing_check› (speclab as {wp_env as {formal_procs, env, ...}, ...}: SPECLAB,
+fun €anti_aliasing_check› (speclab as {wp_env as {env, ...}, ...}: SPECLAB,
 				proc as {name, ...}: (AGG_CHOICE,EXP)PROC_CALL) = (
-	let	val formal_proc = get_proc_spec "anti_aliasing_check" env formal_procs name;
+	let	val formal_proc = get_proc_spec "anti_aliasing_check" env name;
 		val actuals_modes =
 			anti_aliasing_actuals_modes env formal_proc proc
 			handle Fail _ =>
@@ -1918,22 +1913,16 @@ let	fun pass_over_statement (st : STATEMENT) = (
 The following function is called from $add\_var\_env$ in \cite{ISS/HAT/DAZ/IMP507}.
 
 =SML
-fun €check_new_spark_ids› (cn_env : CN_ENV) (ids : ID list) = (
-	let	fun aux recur (id::rest) = (
+fun €check_new_spark_ids› (cn_env : CN_ENV) (ids : ID list) : unit= (
+	let	fun aux id = (
 			case cn_env id of
-				Value (_, EIEnvRetry id2) => 
-					if	recur
-					then	aux false (id2::ids)
-					else	fail "check_new_spark_ids" 505074 [fn()=>id]
+				Value _ => fail "check_new_spark_ids" 505074 [fn()=>id]
 			|	Value _ => fail "check_new_spark_ids" 505074 [fn()=>id]
-			|	Nil => aux true rest
-		) | aux _ [] = ();
-	in
-		if all_different ids
-		then
-			aux true ids
-		else
-			fail "check_new_spark_ids" 505075 []
+			|	Nil => ()
+		);
+	in	if	all_different ids
+		then	(map aux ids; ())
+		else	fail "check_new_spark_ids" 505075 []
 	end
 );
 =TEX
@@ -1971,10 +1960,8 @@ fun €par_tmark› (env : CN_ENV)
 =SML
 fun €var_sig› (env : CN_ENV) (zn : Z_ID) : Z_EXP = (
 	case env zn of
-		Value (_, EIEnvVar (tmark, _)) => zid env(trans_id tmark)
-	|	Value (_, EIEnvAuxVar (ztm, _)) => ztm
-	|	Value (_, EIEnvRetry zn') => var_sig env zn'
-	|	Value _ => zid env zn
+		Value {info = EIEnvVar {tmark, ...}, ...} => zid env(trans_id tmark)
+	|	Value {info = EIEnvAuxVar {decl, ...}, ...} => snd(dest_z_dec decl)
 	|	_ => fail "var_sig" 505041 [fn()=>zn]
 );
 =TEX
@@ -2009,103 +1996,92 @@ fun €fun_decl›
 	end
 );
 =TEX
+The following originally followed he algorithm as suggested by the specification which would have us calculate the set of all variables and parameters that are in scope, add a few things to them and then remove unnecessary ones, i.e. the ones that don't appear free in the sequent.
 =SML
-fun €vc_local_decls› (seqs : SEQUENT list,
-	{formal_body_flag, fun_flag,
-		in_scope as {vc_vars, vc_pars, vc_log_cons, vc_aux_vars, ...},
+fun €vc_local_decls1› 
+	({formal_body_flag, fun_flag,
+		in_scope,
 		wp_env = {fun_header, env, ...}, ...} : SPECLAB)
-		: VC list = (
+	(seq : SEQUENT)
+		: VC = (
 let
 (*
 =TEX
-Every variable in $vc\_vars$ and its corresponding initial variable is introduced.
-=SML
-*)
-	fun do_vars var = (
-	let	val t_v = trans_id var;
-	in
-		[t_v, init_var t_v]
-	end);
-	fun var_decl_decls {vars, tmark} =
-		trans_decl env {vars = (flat o (map do_vars)) vars, tmark=tmark};
-(*
-=TEX
-The following function implements the special case for input parameters specified in \cite[Volume 2, section 5.1.5]{DRA/CIS/CSE3/TR/94/27/3.0}.
-=SML
-*)
-	fun param_spec_decls {var_decl, mode} = (
-		case mode of
-		MSparkIn _ => trans_decl env var_decl
-		|	_ => var_decl_decls var_decl
-	);
-(*
-=TEX
-=SML
-*)
-	val decls = map var_decl_decls vc_vars @ map param_spec_decls vc_pars;
-
-(*
-=TEX
-Add the logical constants (no initial versions).
-=SML
-*)
-	val decls = vc_log_cons @ decls;
-(*
-=TEX
-Add the auxiliary variables (with initial versions).
-=SML
-*)
-	val vc_aux_vars_0 = (
-			  map mk_z_dec
-			o map (fn (ds, t) =>
-					(map (	  mk_z_lvar
-						o (fn (n,t,a) => (init_var n,t,a))
-						o dest_z_lvar
-					    ) ds, t))
-			o map dest_z_dec)
-		vc_aux_vars;
-	val decls = vc_aux_vars @ vc_aux_vars_0 @ decls;
-(*
-=TEX
-\raggedright{If $formal\_body\_flag$ and $fun\_flag$ are $true$, add a declaration of the function (obtained from $fun\_header$).}
+\raggedright{If $formal\_body\_flag$ and $fun\_flag$ are $true$ substitute the local variable version of the function name for the global variable version  (obtained from $fun\_header$).}
 =SML
 *)
 	fun opt_dest_  t = fst (dest_z_  t) handle Fail _ => t;
-	val (decls, subs_fn) =
+	val (fun_dec, subs_fn) =
 		if	formal_body_flag andalso fun_flag
 			then	let 	val (d, l, g) = fun_decl_aux
 		(env,fun_header, map opt_dest_  (fun_globals env (#name fun_header)));
-				in	(d :: decls, subst [(l, g)])
+				in	([d], subst [(l, g)])
 				end
-			else	(decls, Combinators.I);
+			else	([], Combinators.I);
 
-	val seqs1 = map (fn (h, c) => (map subs_fn h, subs_fn c)) seqs;
+	val seq1 = (fn (h, c) => (map subs_fn h, subs_fn c)) seq;
+
 (*
 =TEX
-
-Remove any declarations which are not needed by the sequent.
+Calculate the free variables of the resulting sequent.
 =SML
 *)
-	fun drop_vars vns vardecl = (
-	let	val (vars, ty) = dest_z_dec vardecl;
-		val vartys = map dest_var vars;
-		val dvartys = vartys drop (fn (v,ty) => not (v mem vns));
-	in
-		case dvartys of
-			[] =>	[]
-		|	_ =>	[mk_z_dec (map mk_var dvartys, ty)]
-	end);
 	fun frees_in_seq (seq as (h, c)) = (
 		map (fst o dest_var) (flat(frees c :: map frees h))
 	);
-	fun add_decls decs seq = (
-	let	val ddecs = map ((drop_vars o frees_in_seq) seq) decs;
-	in
-		(flat ddecs, seq)
-	end
+
+	val free_vs = frees_in_seq seq1;
+(*
+=TEX
+For each free variable corresponding to a program variable, a parameter, an auxiliary variable or a logical constant add the (potentially) necessary declarations.
+As specified in \cite[Volume 2, section 5.1.5]{DRA/CIS/CSE3/TR/94/27/3.0} program variables and parameters of mode other than `in'  need the initial version as well as the plain name if the iniitial version appears free in the sequent.
+=SML
+*)
+	fun add_iv zid = (
+		let	val iv = init_var zid;
+		in	if	iv mem free_vs
+			then	[zid, iv]
+			else	[zid]
+		end
 	);
 
-	val vcs1  = map (add_decls decls) seqs1;
+	fun add_iav zid decl = (
+		let	val iv = init_var zid;
+		in	if	iv mem free_vs
+			then	let	val set = snd(dest_z_dec decl);
+					val el_ty = dest_z_power_type (type_of set);
+					val av = mk_z_lvar(zid, el_ty, []);
+					val iav = mk_z_lvar(iv, el_ty, []);
+				in	mk_z_dec([av, iav], set)
+				end
+			else	decl
+		end
+	);
+	fun pass1 acc [] = acc
+	|   pass1 acc (zid :: more) = (
+		pass1 
+		(case env zid of
+			Value {info = EIEnvVar {tmark, kind = Var}, ...} => (
+				trans_decl env{vars = add_iv zid,  tmark = tmark}::acc
+		) |	Value {info = EIEnvVar {tmark, kind = Par (MSparkIn _)}, ...} => (
+				trans_decl env {vars = [zid], tmark = tmark}::acc
+		) |	Value {info = EIEnvVar {tmark, kind = Par _}, ...} => (
+				trans_decl env{vars = add_iv zid,  tmark = tmark}::acc
+		) |	Value {info = EIEnvAuxVar {decl, ...}, ...} => (
+				add_iav zid decl :: acc
+		) |	Value {info = EIEnvLogCon {decl, ...}, ...} => (
+				decl::acc
+		) | _ => [])
+		more
+	);
+	val decls1 = pass1 (if #name fun_header mem free_vs then fun_dec else []) free_vs;
+(*
+=TEX
+Add the declarations accrued so far to form a VC (which we will adjust shortly).
+=SML
+*)
+
+	val vc1  = (decls1, seq1);
 (*
 =TEX
 Add declarations for any new Z variables introduced in processing
@@ -2128,9 +2104,15 @@ and remove the corresponding hypotheses from the sequent.
 		val (new_ds, new_h) = (rev ** rev)(strip_tmp_decs ([], []) h);
 	in	(decs @ new_ds, (new_h, c))
 	end);
-	val vcs2 = map add_tmp_decls vcs1;
-in	vcs2
+	val vc2 = add_tmp_decls vc1;
+in	vc2
 end
+);
+
+=TEX
+=SML
+fun €vc_local_decls› (seqs : SEQUENT list, speclab: SPECLAB) : VC list = (
+	map (vc_local_decls1 speclab) seqs
 );
 =TEX
 Initial variables may not appear in the pre-conditions of specifications

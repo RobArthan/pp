@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%  dtd502.doc %Z% $Date: 2003/07/14 13:12:01 $ $Revision: 1.135 $ $RCSfile: dtd502.doc,v $
+%  dtd502.doc %Z% $Date: 2004/02/07 15:10:59 $ $Revision: 1.136 $ $RCSfile: dtd502.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -22,10 +22,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \def\TPPheadtitle{Compliance Notation Lexis and Abstract Syntax}  %% Mandatory field
 \TPPtitle{Compliance Notation Lexis and Abstract Syntax}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/DTD502}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.135 $%
+\def\SCCSversion{$Revision: 1.136 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2003/07/14 13:12:01 $%
+\TPPdate{\FormatDate{$Date: 2004/02/07 15:10:59 $%
 }}
 %\TPPstatus{Approved}
 \TPPstatus{Draft}
@@ -150,6 +150,7 @@ of booleans, including overloading, and some parts of R1/1 (reals) and R1/8 (cha
 \item[Issue 1.135] Added lexical class for undeclared labels (for use in lexer and parser to
 improve error messagaes).
 \item[Issue 1.136] The name at the end of a proper body or a package declaration is now optional.
+\item[Issue 1.137] Reform of the Environments.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -2849,44 +2850,146 @@ datatype ÛWEB_CLAUSEÝ =
 =ENDDOC
 =TEX
 \section{CUSTOMIZED ENVIRONMENT HANDLING}
-The following data type is not part of the syntax {\it per se}. However,
-it is needed in the implementation of \cite[Volume 3]{DRA/CIS/CSE3/TR/94/27/3.0}
-and it is a convenience in building the system to define it here rather
-than in \cite{ISS/HAT/DAZ/DTD508}.
-=DOC
-datatype ÛENV_INFOÝ =
-			ÛEIEnvFunctionÝ of Z_ID list * (ID * (TMARK * Z_EXP OPT)) list * TMARK
-		|	ÛEIEnvVarÝ of TMARK * Z_ID OPT
-		|	ÛEIEnvAuxVarÝ of Z_EXP * Z_ID OPT
-		|	ÛEIEnvRecordTypeÝ of ID list * int
-		|	ÛEIEnvOtherTypeÝ
-		|	ÛEIEnvConstantÝ of TMARK
-		|	ÛEIEnvRetryÝ of Z_ID
-		|	ÛEIEnvOtherÝ;
 
+The {\em IN\_SCOPE} data type that features in the various environments in the specification is represented using a data refinement
+Instead of having separate tables for different kinds of entity (variables, parameters etc.), there is a single table which maps identifiers to a data type representing the different types of entity and including both the information defined in the specification and any additional information needed by the implementation.
+This approach also gives a convenient and uniform way of storing useful information about names in general.
+This section defines the types that make up this representation.
+
+
+The types in this section are not part of the syntax {\it per se}. However,
+they are needed in the implementation of \cite[Volume 3]{DRA/CIS/CSE3/TR/94/27/3.0}
+and it is a convenience in building the system to define them here rather
+than in \cite{ISS/HAT/DAZ/DTD508}.
+
+=DOC
+type ÛPAR_INFOÝ
+=TYPESTRUCT
+	= {
+		id : ID,
+		tmark : TMARK,
+		default : Z_EXP OPT};
+=SML
+type ÛFUNCTION_INFOÝ
+=TYPESTRUCT
+	= {
+		formal : bool,
+		deps : Z_ID list,
+		pars : PAR_INFO list,
+		return_tmark : TMARK};
+=DESCRIBE
+The information for functioins is what is needed {\em(a)} to translate a call of the function into Z, {\em(b)} to set up a type inference context appropriate for the body of the function and {\em(c)} to process renaming declarations for the function.
+The information for a function includes a flag indicating whether this is a formal function the list of global dependencies, the list of formal
+parameter names and corresponding type marks and defaults and the type mark for the return value of the
+function.
+=ENDDOC
+
+=DOC
+
+=SML
+type ÛPARAM_SPECÝ
+=TYPESTRUCT
+      = {
+	var_decl : VAR_DECL,
+	mode : MODE
+	};
+=SML
+type ÛFORMAL_PROCÝ
+=TYPESTRUCT
+      = {
+	name : ID,
+	formal_ids : PARAM_SPEC list,
+	par_names_defs : (ID * Z_EXP OPT) list,
+	globals : Z_ID list,
+	spec : SPEC
+	};
+=SML
+type ÛPROCEDURE_INFOÝ
+=TYPESTRUCT
+	= {
+		formal : bool,
+		formal_proc : FORMAL_PROC};
+=DESCRIBE
+The type {\em FORMAL\_PROC} is defined here rather than in \cite{ISS/HAT/DAZ/DTD514}.
+
+For a procedure, we have a flag indicating whether this is a formal procedure or not and
+the {\em FORMAL\_PROC} of the procedure (or a dummy if this is not a formal procedure).
+=ENDDOC
+=DOC
+datatype ÛVAR_KINDÝ = Var | Par of MODE | OutOfScope
+type ÛVAR_INFOÝ
+=TYPESTRUCT
+	= {
+		kind : VAR_KIND,
+		tmark : TMARK};
+=DESCRIBE
+For a variable or formal parameter we have the type mark plus a marker distinguishing between variables proper, parameters (for which we also have the mode), and variables which are in scope in the Ada sense but not in scope in the Compliance Notation sense.
+This is intended to allow improved error messages (the user can be told that the variable is not in scope as far as the Compliance Notation is concerned because it hasn't been cited in a frame or a global dependency list).
+=ENDDOC
+=DOC
+type ÛAUX_VAR_INFOÝ
+=TYPESTRUCT
+	= {
+		in_scope : bool,
+		decl : Z_EXP};
+=SML
+type ÛLOG_CON_INFOÝ
+=TYPESTRUCT
+	= AUX_VAR_INFO;
+=DESCRIBE
+For an auxiliary variable or a logical constant we have the theZ declaration plus a flag indicating whether this variable is in scope in fhe Compliance Notation sense (just as for program variables, see above).
+=ENDDOC
+=DOC
+type RECORD_TYPE_INFO
+=TYPESTRUCT
+	= {
+		comp_names :  ID list,
+		num_discs : int};
+=DESCRIBE
+For a record type we have the component names in their Ada order and the number of components that are discriminants of the type.
+=ENDDOC
+=DOC
+type ÛCONSTANT_INFOÝ
+=TYPESTRUCT
+	= {tmark : TMARK};
+=DESCRIBE
+For a constant we just need the Ada type mark.
+=ENDDOC
+=DOC
+datatype ÛENTITY_INFOÝ =
+			ÛEIEnvFunctionÝ of FUNCTION_INFO
+		|	ÛEIEnvProcedureÝ of PROCEDURE_INFO
+		|	ÛEIEnvVarÝ of VAR_INFO
+		|	ÛEIEnvAuxVarÝ of AUX_VAR_INFO
+		|	ÛEIEnvLogConÝ of LOG_CON_INFO
+		|	ÛEIEnvRecordTypeÝ of RECORD_TYPE_INFO
+		|	ÛEIEnvOtherTypeÝ
+		|	ÛEIEnvConstantÝ of CONSTANT_INFO
+		|	ÛEIEnvOtherVarÝ
+		|	ÛEIEnvOtherÝ;
+type ENV_INFO
+=TYPESTRUCT
+	 = {
+	tipe : TYPE,
+	canon_name : Z_ID,
+	info : ENTITY_INFO};
+=DESCRIBE
+The data type collects together the different types of information held in the implementation of an {\em IN\_SCOPE}.
+The ``other type'' alternative is for names corresponding to Ada types that are not record types.
+The ``other variable'' alternative is for Z local variables set up in the type inference context (this is for testing).
+The ``other'' allternative is for Z global variables that do not represent Ada entities, e.g., user-defined schemas.
+
+Putting this all together, we get the new {\em ENV\_INFO} record type giving the information associated with a name, namely its HOL type (or a dummy type for a procedure), its canonical name (as happens as a result of renamings, use clauses and nested packages) and the entity info as above.
+This will be what is stored in the dictionaries and returned by the {\em CN\_ENV} function.
+=ENDDOC
+=DOC
 type ÛCN_ENVÝ
 =TYPESTRUCT
-	= Z_ID -> (TYPE * ENV_INFO) OPT;
+	= Z_ID ->  ENV_INFO OPT;
 =DESCRIBE
 $CN\_ENV$ is the type of a function which maps an identifier onto its type and yields contextual information about the identifier.
 Such functions returns $Nil$ if the identifier is not in scope at the point at which the function is called.
 
-The information for a function is the list of global dependencies, the list of formal
-parameter names and corresponding type marks and the type mark for the return value of the
-function. For a variable or a constant we give the type mark from the declaration; in addition,
-for a variable that is defined in a renaming declaration we give the name of the variable
-as given in its original declaration.
-For an auxiliary variable we give the set constraint from the Z declaration.
-For a record type, we have the names of the components in the order
-given in the type declaration together with an number giving the number
-of formal discriminants of the record type (which will comprise a leading
-substring of the component names). For other SPARK types, it is sufficient just to know
-that the identifier is a SPARK type.
-
-The {\it EIEnvRetry} alternative is used to support names of the form `{\it Id1.Id2}' where
-`{\it Id1}' is the name of an enclosing package or subprogram body. In this case, the function
-returns {\it EIEnvRetry Id2}, on the expectation that the caller will then try again
-using {\it Id2} as the translation of this form of identifier.
 =USES
 A function of type $CN\_ENV$ is passed recursively into the generator for basic declarations and expressions so that the contextual information about an identifier is available at the point it is needed.
 =ENDDOC
