@@ -97,6 +97,8 @@ Elimated message 6009.
 Catch $mk\_const$ errors.
 \item [Issue 1.22]
 Fixed the use of message 6061.
+\item [Issue 1.23]
+Changes in response to ID0021.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -130,8 +132,9 @@ This document takes its signature from \cite{DS/FMU/IED/DTD006},
 and also requires those files indicated as preceding it in the 
 rel001 makefile.
 \subsubsection{Deficiencies}
-$error\_format\_thm$ and $error\_format\_term$ are stop gaps.
+None known.
 \subsubsection{Possible Enhancements}
+None known.
 
 =TEX
 \newpage
@@ -224,6 +227,11 @@ This is indicated by the error message:
 structure âicl'Kernelá : icl'Kernel = struct
 =TEX
 \subsection{Utilities}
+Temporary additions:
+=SML
+fun string_of_type (ty : TYPE) = PolyML.makestring ty;
+fun string_of_term (tm :TERM) = PolyML.makestring tm;
+=TEX
 The following is a function to give the maximum of a list of numbers.
 The maximum of n empty list is $0$ (could be made a fail).
 =SML
@@ -488,19 +496,12 @@ type âHIERARCHYá = (string * THEORY_INFO) list;
 =SML
 type âCONVá = TERM -> THM;
 =TEX
-\subsection{Theorem Failures}
-We provide local functions for formatting theorems and terms for
-error messages, so that there is a single point of change
-should the available formatting facilities improve.
+\subsection{Formatting Theorems and Theorem Failures}
 =SML
-fun âerror_format_thmá (thm : THM) : unit -> string = (
-	fn () => PolyML.makestring thm
-);
-fun âerror_format_termá (tm : TERM) : unit -> string = (
-	fn () => PolyML.makestring tm
-);
+fun âstring_of_thmá (thm : THM) : string = PolyML.makestring thm;
+
 fun âthm_failá (area : string) (msg : int) (thml : THM list) : 'a = (
-	fail area msg (map error_format_thm thml)
+	fail area msg (map (fn x => fn () => string_of_thm x) thml)
 );
 =TEX
 We often wish to destroy a theorem equation into its assumptions, LHS and RHS,
@@ -683,56 +684,61 @@ fun âdel_thy_envá (Thy{ty_env=ty_env, con_env=con_env,...})
 =TEX
 \subsection{Utilities Depending on ADT State and Types}
 \subsubsection{Well-formedness}
-The following are functions to check whether a type, term or sequent is well-formed within the current scope.
+The following are functions to check whether a type, term or theorem is well-formed within the current scope:
+they give rise to an appropriate error message if not.
 
 We choose to make a set of all types and constants to be checked,
 and then check each set member, rather than check all generated
 items, as this is judged superior in speed.
 =SML
 local
-	fun auxty [] = true
-	| auxty ((tnm,arit) :: x) = (
+	fun auxty (caller:string) fw [] = ()
+	| auxty caller fw ((tnm,arit) :: x) = (
 		let val res = get_ty_env tnm
 		in
 		case res of
-		Value{arity=arity,...} => (arit=arity)
-			andalso auxty x
-		| Nil => false
+		Value{arity=arity,...} => (
+			if (arit=arity)
+			then auxty caller fw x
+			else fail caller 6014 [fw,fn () => tnm]
+		) | Nil => fail caller 6013 [fw,fn () => tnm]
 		end);
 
-	fun auxcon [] = true
-	| auxcon ((cnm,typ) :: x) = (
+	fun auxcon  (caller:string) fw [] = ()
+	| auxcon caller fw ((cnm,typ) :: x) = (
 		let val res = get_con_env cnm
 		in
 		case res of
 		Value{ty=ty1,...} => (
-			(is_type_instance typ ty1)
-			andalso auxcon x)
-		| Nil => false
+			if (is_type_instance typ ty1)
+			then auxcon caller fw x
+			else fail caller 6038 [fw,fn () => cnm]
+		) | Nil => fail caller 6015 [fw,fn () => cnm]
 		end);
 in
-	fun âwf_typeá (ty : TYPE) : bool =
-	let val tyv = type_tycons ty;
-
+	fun âwf_typeá (caller : string) (ty : TYPE) : unit =
+	let	val tyv = type_tycons ty;
+		val fw = (fn () => string_of_type ty);
 	in
-		auxty tyv
+		auxty caller fw tyv
 	end;
 
-	fun âwf_termá (tm : TERM) : bool =
-	let val tyv = term_tycons tm;
+	fun âwf_termá (caller : string) (tm : TERM) : unit =
+	let	val tyv = term_tycons tm;
 		val con = term_consts tm;
-
+		val fw = (fn () => string_of_term tm);
 	in
-		auxty tyv andalso auxcon con
+		(auxty caller fw tyv; auxcon caller fw con)
 	end;
 
-	fun âwf_seqá ((tml , tm) : SEQ) : bool =
-	let val tyv = list_cup (term_tycons tm ::
+	fun âwf_thmá (caller : string) (thm : THM as Thm{sequent = (tml,tm),...}) : unit =
+	let 	val tyv = list_cup (term_tycons tm ::
 			map term_tycons tml);
 		val con = list_cup (term_consts tm ::
 			map term_consts tml);
+		val fw = (fn () => string_of_thm thm);
 	in
-		auxty tyv andalso auxcon con
+		(auxty caller fw tyv; auxcon caller fw con)
 	end;
 end; (* of local fun auxty... *)
 =TEX
@@ -751,7 +757,7 @@ let 	val {hierarchy = hier{lookup=lookup, top_theory=top_theory},
 		then error caller 6083 []
 		else if (0 <= iname) andalso (iname <= top_theory)
 		then ()
-		else error caller 6072 [error_format_thm thm,
+		else error caller 6072 [fn () => string_of_thm thm,
 			fn () => "Internal "^string_of_int iname];
 
 	val ThyInfo{status = status,
@@ -762,16 +768,16 @@ let 	val {hierarchy = hier{lookup=lookup, top_theory=top_theory},
 		= sub_ia(lookup,iname);
 in
 	if status = TSDeleted
-	then error caller 6036 [error_format_thm thm,
+	then error caller 6036 [fn () => string_of_thm thm,
 		(fn () => ename),
 		(fn () => string_of_int iname)]
 	else if theory <> contents
 	then error caller 6072 [fn () => "Internal "^string_of_int iname]
 	else if not inscope
-	then error caller 6066 [error_format_thm thm,
+	then error caller 6066 [fn () => string_of_thm thm,
 		fn () => ename]
 	else if range_mem(level, del_levels)
-	then error caller 6065 [error_format_thm thm,
+	then error caller 6065 [fn () => string_of_thm thm,
 		fn () => ename]
 	else ()
 end);
@@ -1753,9 +1759,8 @@ Save a theorem under a list of keys:
 fun âicl'list_save_thmá (keys : string list, 
 	thm : THM as Thm {level = level, theory=theory, sequent = sequent}) : THM = (
 let 	val dummy = (check_thm "icl'list_save_thm" thm;
-		if not (wf_seq sequent)
-		then thm_fail "icl'list_save_thm" 6038 [thm]
-		else if keys = []
+		wf_thm "icl'list_save_thm" thm;
+		if keys = []
 		then fail "icl'list_save_thm" 6031 []
 		else check_c_writable "icl'list_save_thm"); (* part of spec. step 2 *)
 
@@ -1979,13 +1984,12 @@ let 	val {theory=theory,...} = !current;
 		user_data = user_data} = !theory;
 	
 	val dummy = (check_c_writable "icl'new_axiom" ;
+		wf_term "icl'new_axiom" tm;
 		if keys = []
 		then fail "icl'new_axiom" 6031 []
 		else if type_of tm <> BOOL
 		then term_fail "icl'new_axiom" 3031 [tm]
-		else if wf_term tm
-		then ()
-		else term_fail "icl'new_axiom" 6038 [tm]); 
+		else ()); 
 			(* spec step 1 *)
 
 	val new_axiom = Thm{level = current_level+1, 
@@ -2043,9 +2047,8 @@ let 	val {hierarchy=hierarchy, theory=theory, ty_env=cty_env,
 		user_data = user_data} = !theory;
 	
 	val dummy = (check_c_writable "icl'new_const";
-		if not(wf_type ty)
-		then type_fail "icl'new_const" 6038 [ty]
-		else (case const_in_anc_or_des nm of
+		wf_type "icl'new_const" ty;
+		(case const_in_anc_or_des nm of
 		InScope => fail "icl'new_const" 6049 [fn () => nm]
 		| InDescendant => fail "icl'new_const" 6063 [fn () => nm]
 		| NotPresent => ())); 
@@ -2161,16 +2164,15 @@ Do the checks required (other than on keys):
 		InScope => fail "icl'new_defn" 6049 [fn () => cnm]
 		| InDescendant => fail "icl'new_defn" 6063 [fn () => cnm]
 		| NotPresent => ());
+		wf_term "icl'new_defn" vl;
 		if keys = []
 		then fail "icl'new_defn" 6031 []
-		else if not (wf_term vl)
-		then term_fail "icl'new_defn" 6038 [vl]
 		else if not(is_nil (frees vl))
-		then fail "icl'new_defn" 6059 [error_format_term vl,
+		then fail "icl'new_defn" 6059 [fn () => string_of_term vl,
 			fn () => format_list (fst o dest_var) (frees vl) ", "]
 		else if not(is_nil((term_tyvars vl) diff (type_tyvars ctype)))
 		then fail "icl'new_defn" 6058 
-			[error_format_term vl,
+			[fn () => string_of_term vl,
 			 fn () => format_list (Combinators.I) 
 			 ((term_tyvars vl) diff (type_tyvars ctype)) ", "]
 
@@ -2251,19 +2253,18 @@ Do the checks required (other than on keys):
 		| InDescendant => fail "icl'new_type_defn" 6034 [fn () => tnm]
 		| NotPresent => ());
 		check_thm "icl'new_type_defn" defthm;
-		if not(wf_seq (hyps, concl))
-		then thm_fail "icl'new_type_defn" 6038 [defthm]
-		else if keys = []
+		wf_thm "icl'new_type_defn" defthm;
+		if keys = []
 		then fail "icl'new_type_defn" 6031 []
 		else if hyps <> []
 		then thm_fail "icl'new_type_defn" 6053 [defthm]
 		else if not(is_nil (frees concl))
 		then fail "icl'new_type_defn" 6056 
-			[error_format_thm defthm,
+			[fn () => string_of_thm defthm,
 			 fn () => format_list (fst o dest_var) (frees concl) ", "]
 		else if not(is_nil((term_tyvars concl) diff typars))
 		then fail "icl'new_type_defn" 6057
-			[error_format_thm defthm,
+			[fn () => string_of_thm defthm,
 			 fn () => format_list (Combinators.I) ((term_tyvars concl) diff typars) ", "] 
 		else if not(all_different typars)
 		then fail "icl'new_type_defn" 6079 
@@ -2361,13 +2362,12 @@ Do the checks required (other than on keys, and theorem form):
 =SML
 	val dummy = (check_c_writable "icl'new_specification";
 		check_thm "icl'new_specification" defthm;
-		if not(wf_seq (hyps, concl))
-		then thm_fail "icl'new_specification" 6038 [defthm]
-		else if keys = []
+		wf_thm "icl'new_specification" defthm;
+		if keys = []
 		then fail "icl'new_specification" 6031 []
 		else if not(is_nil (frees concl))
 		then fail "icl'new_specification" 6056
-			[error_format_thm defthm,
+			[fn () => string_of_thm defthm,
 			 fn () => format_list (fst o dest_var) (frees concl) ", "]	
 		else if ndef < 1
 		then fail "icl'new_specification" 6044 []
@@ -2384,7 +2384,7 @@ Now build up the new material:
 		else (let val (x,bdy) = simple_dest_„ tm
 			handle complaint =>
 			divert complaint "simple_dest_„" "icl'new_specification" 
-			6060 [error_format_thm defthm,
+			6060 [fn () => string_of_thm defthm,
 				fn () => string_of_int ndef]
 		in
 			nexists (n-1) bdy (res @ [x])
@@ -2402,13 +2402,13 @@ Check the results of picking apart the theorem:
 			find (tl xlist) (fn x => not((term_tyvars x) set_eq xtyvars))]
 		else if ((term_tyvars bdt) diff xtyvars) <> []
 		then fail "icl'new_specification" 6061
-			[error_format_thm defthm,
+			[fn () => string_of_thm defthm,
 			 fn () => format_list (Combinators.I) 
 			 ((term_tyvars concl) diff xtyvars) ", "]
 		else if not(all_different xlist)
 		then fail "icl'new_specification" 6016 
 			[fn () => fst(dest_var(two_the_same xlist)),
-			 error_format_thm defthm]
+			 fn () => string_of_thm defthm]
 		else ();
 		map (fn x =>
 			let val (cnm,ty) = dest_var x
@@ -2546,8 +2546,8 @@ local
 		if not(is_var vari)
 		then term_fail "icl'subst_rule" 3007 [vari]
 		else if type_of lhsi <> type_of vari
-		then fail "icl'subst_rule" 6029 [error_format_thm thmi, 
-			error_format_term vari]
+		then fail "icl'subst_rule" 6029 [fn () => string_of_thm thmi, 
+			fn () => string_of_term vari]
 		else (two_subst_lists ((lhsi, vari) :: lhslst)
 			((rhsi, vari) :: rhslst)
 			(nhyps term_union new_hyps)
@@ -2946,7 +2946,7 @@ let 	val dummy = check_thm "icl'simple_list_ƒ_elim" thrm;
 		handle complaint =>
 		case (area_of complaint) of
 		"simple_dest_ƒ" => fail "icl'simple_list_ƒ_elim" 6018 
-			[error_format_thm thrm,
+			[fn () => string_of_thm thrm,
 			fn () => string_of_int ninsts]
 		| _ => reraise complaint (area_of complaint));
 
