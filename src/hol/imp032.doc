@@ -102,6 +102,8 @@ lasp -s -u imp032.OKwords imp032.doc > zz1
 	Fix non-terminating loop in printing non-standard let clauses.
 	Changes forecast moved into~\cite{DS/FMU/IED/DTD032}.
 	Add support for $pe_depth$ field of the $PP_ENV$ type.
+	Make $HOL_do_app$ pass the precedance on when there are no arguments.
+	Enclose types with a single argument in a block.
 
 %\item[\FormatDate{$Date$%
 %}, issue \SCCSissue~]
@@ -431,13 +433,21 @@ let
 
 	fun print_list name t rest = (
 		beginb(0, false);
-		addstring "("; (*=)=*)
-		beginb(2, true);
-		ty_p PcLowest t;
-		pr_list_with_env print_list_aux rest
-			(set_prec PcLowest (decrement_depth new_env));
-		endb();
-		(*=(=*) addstring ")";
+		case rest
+		of nil => (
+			beginb(2, true);
+			ty_p pc_h_post_type t;
+			endb()
+		) | _ => (
+			addstring "("; (*=)=*)
+			beginb(2, true);
+			ty_p PcLowest t;
+			pr_list_with_env print_list_aux rest
+				(set_prec PcLowest (decrement_depth new_env));
+			endb();
+			(*=(=*) addstring ")"
+		);
+
 		space(1,0);
 		name_p name;
 		endb()
@@ -451,9 +461,7 @@ in
 	else
 		case dest_ctype ty
 		of (name, nil) => 		name_p name
-		| (name, t1 :: nil) => (		ty_p pc_h_post_type t1;
-						space(1,0);
-						name_p name)
+		| (name, t1 :: nil) =>		print_list name t1 nil
 		| (name, t1 :: t2 :: nil) => (
 			if is_simple_name name
 			then
@@ -539,7 +547,7 @@ in
 	then (
 		space(1, 2);
 		addstring ": ";
-		main_type_pp cur_env ty;
+		main_type_pp (set_prec PcLowest cur_env) ty;
 		if br then (endb(); (*=(=*) addstring ")") else ()
 	) else ()
 end
@@ -660,14 +668,13 @@ let
 
 	val br = prec gt_prec pc_h_apply_later;
 
-	val head_env = set_prec pc_h_apply_first cur_env;
 	val arg_env = set_prec pc_h_apply_later cur_env;
 
-	fun print_head tm = (
+	fun print_head p tm = (
 		case  dest_simple_term tm
-		of	Var(str, ty) =>	do_var head_env tm str ty
-		|	Const(str, ty) =>	do_const head_env tm str ty
-		|	_  =>			main_term_pp head_env tm
+		of	Var(str, ty) =>	do_var (set_prec p cur_env) tm str ty
+		|	Const(str, ty) =>	do_const (set_prec p cur_env) tm str ty
+		|	_  =>			main_term_pp (set_prec p cur_env) tm
 	);
 
 	fun print_args(tm, env) = (
@@ -678,11 +685,11 @@ let
 	);
 in
 	case args
-	of nil =>	print_head head_fn
+	of nil =>	print_head prec head_fn
 	| _ => 		(	if br then addstring "(" (*=)=*) else ();
 				beginb(2, true);
 				beginb(0, true);
-				print_head head_fn;
+				print_head pc_h_apply_first head_fn;
 				pr_list_with_env print_args args arg_env;
 				endb();
 				endb();
@@ -764,7 +771,7 @@ let
 	fun vs_printer(vs:TERM, env:PP_ENV) : unit = (
 		space(1, 0);
 		beginb(2, true);
-		main_term_pp (set_prec PcLowest env) vs;
+		main_term_pp (set_prec pc_h_post_type env) vs;
 		endb()
 	);
 
