@@ -22,7 +22,7 @@ Don't worry about this!
 %\TPPpart{}
 \TPPtitle{SLR Parser Generator}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP017}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.50 $%
+\def\SCCSversion{$Revision: 1.51 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 %\TPPdate{}  %% Mandatory field (with sensible default)
@@ -140,6 +140,7 @@ of the printing code.
 \item[Issue 1.51] Stopped {\it make\_grammar\_and\_reduction\_table} deleting duplicated alternatives
 (which prevents detection of a quite likely error); added check for non-terminals that generate
 an empty language.
+\item[Issue 1.52] Reduction table entries are now arrays.
 \end{description}
 
 See also HISTORICAL NOTES below.
@@ -392,7 +393,9 @@ Coerce an array into a list:
 fun ÛlistofarrayÝ (Xs : 'a PPArray.array) : 'a list = (
 	let	open PPArray;
 		val len = length Xs;
-	in	map (fn i => PPArray.sub (Xs, i)) (interval 0 (len-1))
+		fun aux acc ~1 = acc
+		|   aux acc i = aux (PPArray.sub(Xs, i)::acc) (i-1);
+	in	aux [] (len-1)
 	end
 );
 =TEX
@@ -1590,12 +1593,14 @@ fun Ûstrip_actionÝ (x : ('lc, 'act) ACTION_GRAMMAR) :  ('lc) GRAMMAR =
 =TEX
 We derive a $'act$-valued reduction table from an action grammar as follows:
 =SML
-type ('act) ÛREDUCTION_DICTÝ = ('act) list E_DICT;
+type ('act) ÛREDUCTION_DICTÝ = ('act) PPArray.array E_DICT;
 =TEX
 =SML
 fun Ûmake_reduction_tableÝ (ag:('lc, 'act) ACTION_GRAMMAR)
 					: ('act) REDUCTION_DICT = (
-	list_e_merge initial_e_dict (map (Combinators.I ** map snd) ag)
+	let	fun aux (nt, alts_acts) = (nt, PPArray.arrayoflist (map snd alts_acts));
+	in	list_e_merge initial_e_dict (map aux ag)
+	end
 );
 =TEX
 \subsection{Implementing Action Grammars}
@@ -2572,18 +2577,25 @@ fun output_reduction_table
 	(g: (''lc) GRAMMAR)
 	(tab : string OPT REDUCTION_DICT) : unit = (
 let	val tabs = listsoflist (e_flatten tab) (get_int_control"slrp_break");
-	fun aux nt i (act :: more) = (
-	let	val n = length(kth(expand g nt) i);
-		val func = format_reducer act n;
-	in	if is_nil more
-		then put_string func
-		else (put_string(func ^ ","); aux nt (i+1) more)
-		end
-	) | aux _ _ [] = ();
+	fun aux nt i acts = (
+		if	i = PPArray.length acts
+		then	()
+		else (	let	val act = PPArray.sub(acts, i);
+				val n = length(kth(expand g nt) i);
+				val func = format_reducer act n;
+				val next_i = i + 1;
+			in	if	next_i = PPArray.length acts
+				then	put_string func
+				else (	put_string(func ^ ",");
+					aux nt next_i acts
+				)
+			end
+		)
+	);
 	fun aux1 i = "slrp'r"^(string_of_int i);
 
 	fun aux2 (nt, acts) = (
-		put_string("(\"" ^ nt ^ "\",[");
+		put_string("(\"" ^ nt ^ "\",PPArray.arrayoflist[");
 		aux nt 0 acts;
 		put_string "])"
 	);
@@ -2647,11 +2659,11 @@ let	fun do_alt _ _ (j, (Value act, syms)) = (Value act)
 		end
 	);
 	fun do_prod tab (a, alts) = (
-		let	val acts =force_value (e_lookup a  tab);
+		let	val acts = listofarray(force_value (e_lookup a  tab));
 			val act_alts = combine acts alts;
 			val j_act_alts = combine(interval 0 (length acts - 1)) act_alts;
 			val acts' = map (do_alt a (length alts)) j_act_alts;
-		in	e_enter a acts' tab
+		in	e_enter a (PPArray.arrayoflist acts') tab
 		end	handle Fail _ => raise PARSER_ERROR
 			"invalid entry in the reduction table"
 	);
@@ -2848,7 +2860,7 @@ end; (* of structure Slrp *)
 \subsection{Shell Interface}
 =DUMP slrp
 #!/bin/sh
-# slrp From: $Id: imp017.doc,v 1.50 2003/03/03 17:52:17 rda Exp rda $
+# slrp From: $Id: imp017.doc,v 1.51 2003/03/05 15:27:08 rda Exp rda $
 # Shell script to run the SLRP Parser Generator
 if test -z "$PROGNAME"
 then
