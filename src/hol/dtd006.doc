@@ -105,6 +105,8 @@ Changes in response to ID0021.
 \item [Issue 1.22]
 Renamings of functions containing the name atom $simple$,
 and renaming of $aconv$.
+\item [Issue 1.23]
+Further changes in response to ID0021.
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
@@ -130,7 +132,7 @@ None of the material, other than certain types, is for other than ICL use, and t
 This is indicated by using the $icl'$ prefix in the names.
 
 The functions provided in this document allow the implementation
-of an theory tools interface document \cite{DS/FMU/IED/DTD012},
+of a theory tools interface document \cite{DS/FMU/IED/DTD012},
 and a derived inference rule document \cite{DS/FMU/IED/DTD007}.
 Those two documents contain only non-critical code,
 and should be the only direct use made of the material given a design
@@ -219,17 +221,17 @@ Specification & Design \\ \hline
 Dictionary material & auxiliary \\
 Store material & auxiliary \\
 $*UD$ & $USER\_DATA$, a dictionary of datatype $USER\-\_DATUM$ \\
+$*IP$ & This corresponds to a user executing the functions provided. \\
 $THEORY\_CONTENTS$ & $THEORY$, a labelled record type \\
 $TSNormal$, $TSLocked$, & $THEORY\-\_STATUS$ and its constructors \\
 $TSAncestor$, $TSDeleted$ &  \\
 $THEORY\_INFO$ & $THEORY\_INFO$, a labelled record type \\
 $HIERARCHY$ & $icl'HIERARCHY$, an abstract data type \\
-$SEQ$ & $SEQ$, a pair \\
 $PDS\_THM$ & $THM$, an abstract data type \\
-$pt\_sequent$ & $dest\_thm$ \\
 $pt\_theory$ & extract contents (not address) of theory of the theorem via $icl'dest\-\_thm$ \\
 $pt\_level$ & extract level of theorem via $icl'dest\-\_thm$ \\
-$PDS\_STATE$ & Components are directly accessed with no intervening type \\
+$pt\_sequent$ & $dest\_thm$ \\
+$PDS\_STATE$ & components are directly accessed with no intervening type \\
 $current\_theory$ & $icl'get\-\_current\-\_theory\-\_name$ used with $icl'get\-\_theory$ \\
 $current\_hierarchy$ & $icl'new\_hierarchy$ and $icl'get\-\_hierarchy$\\
 $theory\_store$ & $icl'get\_theory$ \\
@@ -245,8 +247,8 @@ $theory\_ancestors$ & extract via $icl'get\_hierarchy$ \\
 $interpret\_?$ & only formal constructs of the specification
 \\
 $dest\_state$ & auxiliary \\
-$dest\_theory\_contents$ & type $THEORY$ is a labelled record type and therefore already open \\
-$current\_theory\_contents$ & use $icl'get\-\_current\-\_theory\-\_name$ in combination with $icl'get\-\_theory$: the result of $icl'get\-\_theory$ is a labelled record type and therefore already open \\
+$dest\_theory\_contents$ & type $THEORY$ is a labelled record type, and therefore its contents already may be accessed by Standard ML pattern-matching \\
+$current\_theory\_contents$ & use $icl'get\-\_current\-\_theory\-\_name$ in combination with $icl'get\-\_theory$ \\
 $current\_theory\_name$ & $icl'get\_current\_theory\_name$ \\
 $current\_abstract\_theory$ & only a formal construct of the specification \\
 $theory\_info$ & $icl'get\_theory\_info$ \\
@@ -278,13 +280,16 @@ $is\_latest\_level$ & auxiliary \\
 $delete\_extension$ & $icl'delete\_extension$ \\
 $delete\_thm$ & $icl'delete\_thm$ \\
 $pds\_new\_axiom$ & $icl'new\_axiom$ \\
+$SUBSYS\_INPUT$ & auxiliary \\
+$PDS\_INPUT$ & auxiliary \\
+$DEFINER$ & auxiliary \\
 $make\_definition$ & three instantiations:
 $icl'new\-\_defn$, $icl'new\-\_type\-\_defn$, $icl'new\-\_specification$ \\
 $pds\_new\_type$ & $icl'new\_type$ \\
 $pds\_new\_constant$ & $icl'new\_const$ \\
 $make\_inference$ & instantiations to those primitive inference rules
 of \cite{DS/FMU/IED/SPC004} and further built-in rules \\
-System Construction & this material is only formal constructs of the specification \\
+System Construction & this material corresponds to compiling the HOL implementation \\
 $SUBST$ & $icl'subst\_rule$ \\
 $ABS$ & $icl'\_eq\_rule$ \\
 $INST\_TYPE$ & $icl'inst\_type\_rule$ \\
@@ -302,9 +307,11 @@ but have no corresponding specification.
 A summary of the reason for their inclusion is given in each case:
 ``built-in'' items are given justifications in their
 individual sections in this document.
+A set of built-in inference rules are called for by \cite{DS/FMU/IED/HLD007}: the ones below were chosen by being demonstrated helpful by experiment.
 
 \begin{tabular}{p{2.1in} | p{4.1in}} \hline
 Item & Reason \\ \hline
+$SEQ$ & a type abbreviation, introduced in \cite{DS/FMU/IED/SPC001}, but this design uses a list of assumptions, instead of that document's function \\
 $CONV$ & just a type abbreviation \\
 $icl'suc\_conv$ & a built-in definitional schemata \\
 $icl'string\_conv$ & a built-in definitional schemata \\
@@ -326,6 +333,8 @@ that could be extracted by $icl'get\-\_hierarchy$ \\
 $get\_type\_arity$ & a fast route of getting something
 that could be extracted by $icl'get\-\_hierarchy$ \\
 $thm\_fail$ & a fast route of getting something that could be extracted by $dest\-\_thm$ \\
+$string\_of\_thm$ & a fast route of getting something
+that could be extracted by $dest\_thm$ \\
 \end{tabular}
 
 That we implement the types of theorem, theory, etc., internally as a single
@@ -376,7 +385,7 @@ type âCONVá;
 This is the type name conventionally used for conversions, that is, inference rules
 whose last argument is a term, and whose result is an equation
 whose LHS is precisely that term (no $\alpha$-conversion).
-Though it might type check, we conventionally do not use this type name for other functions of type $\ldots\ ->\ TERM\ ->\ THM$.
+Though it would be type correct, we conventionally do not use this type name for other functions of type $\ldots\ ->\ TERM\ ->\ THM$.
 óDefinition
 type CONV = TERM -> THM;
 æ
@@ -390,7 +399,7 @@ datatype âUSER_DATUMá =
 |	âUD_Stringá of string * (USER_DATUM list)
 |	âUD_Intá of int * (USER_DATUM list);
 =DESCRIBE
-This provides a monomorphic type of trees whose nodes may be labelled by terms, types,
+This provides a monomorphic type of trees whose nodes are labelled by terms, types,
 strings or integers.
 =USES
 This type is used in the type $USER\_DATA$, and may be used elsewhere, as a means of storing data that may be represented in a ``reasonably general'' structure for ICL HOL related purposes, which also is
@@ -480,7 +489,7 @@ Objects of this datatype indicate the status of a theory within a hierarchy, bei
 Constructor & Description \\ \hline
 TSNormal & Theory is present and may be written to. \\
 TSLocked & Theory is present, and cannot be written to as it is locked. \\
-TSAncestor & Theory is present, and cannot be written to as it is an ancestor for some hierarchy. \\
+TSAncestor & Theory is present, and cannot be written to as it is in an ancestor for some hierarchy. \\
 TSDeleted & Theory has been deleted: the theory name may be reused for a new theory. \\ \hline
 \end{tabular}
 
@@ -700,7 +709,7 @@ on the assumption that its domain is finite.
 val âicl'Š_introá : TERM -> THM -> THM;
 æ
 =DESCRIBE
-Prove an implicative theorem, removing, if $\alpha$-convertibly present, the hypothesis of the implication from the assumption list.
+Prove an implicative theorem, removing, if $\alpha$-convertibly present, the antecedent of the implication from the assumption list.
 =RULE
 icl'Š_intro
 »t1¼
@@ -899,7 +908,7 @@ the $icl'$ prefix from the above names.
 =ENDDOC
 
 \subsection{Built-In Rules of Inference}
-Each of the following inference rules may be justified in terms of the primitive inference rules
+Each of the following inference rules is justified in terms of the primitive inference rules
 and definitional schemata, or derived rules declared and justified prior to the new declaration.
 We will give an informal proof 
 in each case, following the documentation of the rule.
@@ -940,7 +949,7 @@ It is proven by
 óInformal Proof
 1.	… T ‚ (( xŽ x) = ( xŽ x))			definition of T
 2.	… ( xŽ x) = ( xŽ x)				icl'refl_conv
-3.	… (( xŽ x) = ( xŽ x)) Š (( xŽ x) = ( xŽ x))	icl'Š_intro
+3.	… (( xŽ x) = ( xŽ x)) Š (( xŽ x) = ( xŽ x))	icl'Š_intro 2
 4.	… (( xŽ x) = ( xŽ x)) ‚ T			icl'eq_sym_rule 1.
 5.	… (( xŽ x) = ( xŽ x)) Š T			icl'subst_rule 1,4
 6.	… T						icl'Š_elim 
@@ -1104,7 +1113,7 @@ where the context must contain the theorem:
 val âicl'‚_mp_ruleá : THM -> THM -> THM;
 æ
 =DESCRIBE
-This is an inference rule reminiscent of Modus Ponens, but upon bi-implicative theorems.
+This is an inference rule reminiscent of Modus Ponens, but using a bi-implicative theorem rather than an implicative one.
 =RULE
 icl'‚_mp_rule
 É
@@ -2005,7 +2014,7 @@ val string_of_thm : THM -> string;
 These theorem access functions are for ICL use only.
 $icl'get\_theory$ and $icl'get\_current\_theory\_name$ are used to implement the functions named by dropping
 the $icl'$ prefix from the above names.
-The rest are made visible through the signature $KernelInterface$, are are documented with that signature.
+The rest are made visible through the signature $KernelInterface$, are documented with that signature.
 =ENDDOC
 =SML
 end(* signature of icl'Kernel *);
