@@ -102,6 +102,7 @@ imp018.sml
 
 =SML
     open CNTypes SlrpDriver ZTermGenerator ZTypeInference
+    open ZLex ZParser;
     open ZUserInterfaceSupport
 =TEX
 
@@ -188,10 +189,6 @@ fun Ûparse_errorÝ (msg : int) (insert : string) : 'a = (
 =TEX
 
 \subsection{Support for Processing Z Fragments}
-=SML
-local
-    open ZLex ZParser ZUserInterfaceSupport;
-=TEX
 
 =SML
 fun Ûz_tm_of_z_paraÝ (zp : Z_PARA) : Z_TM = (
@@ -200,19 +197,13 @@ fun Ûz_tm_of_z_paraÝ (zp : Z_PARA) : Z_TM = (
     |  _ => weird_error "weird error in z_tm_of_z_para"
     );
 =TEX
-
 =SML
 fun Ûz_tm_of_z_tokensÝ (tokens : Z_TOKEN list) : Z_TM = (
     (z_tm_of_z_para o (z_parser {is_quot = true})) tokens
     );
 =TEX
-
 =SML
-in
-=TEX
-
-=SML
-fun Ûprocess_con_declÝ (ztokens : ZLex.Z_TOKEN list) : (Z_ID * Z_TM) = (
+fun Ûprocess_con_z_declÝ (ztokens : ZLex.Z_TOKEN list) : (Z_ID * Z_TM) = (
     let val schtoks =
         ZTLsqbrack::((rev o tl o rev) ztokens)@[ZTRsqbrack, ZTEos];
     in
@@ -222,12 +213,6 @@ fun Ûprocess_con_declÝ (ztokens : ZLex.Z_TOKEN list) : (Z_ID * Z_TM) = (
         |  _ => parse_error 503001 "ill-formed logical constant"
     end);
 =TEX
-
-=IGN
-open ZLex ZUserInterfaceSupport;
-val ztokens = [ZTId "x",ZTEos];
-val ztokens = [ZTId "true",ZTComma, ZTId "true",ZTEos];
-
 =SML
 fun Ûprocess_frameÝ ([] : ZLex.Z_TOKEN list) : Z_ID list = []
 |   process_frame [ZTEos] = []
@@ -242,10 +227,6 @@ fun Ûprocess_frameÝ ([] : ZLex.Z_TOKEN list) : Z_ID list = []
             |  ZTmTuple tml => map get_name tml
             |  _ => parse_error 503001 "badly formed frame"
     end);
-=TEX
-
-=SML
-val Ûprocess_pre_conditionÝ : ZLex.Z_TOKEN list -> Z_TM = z_tm_of_z_tokens;
 =TEX
 
 =SML
@@ -278,8 +259,6 @@ fun Ûprocess_pre_and_post_conditionsÝ
         of Value pre => (Value (aux pre), aux posttm)
         |Nil => (Nil, aux posttm)
     end);
-
-val Ûprocess_aux_expÝ : ZLex.Z_TOKEN list -> Z_TM = z_tm_of_z_tokens;
 =TEX
 
 The following functions support the external interface $z\_predexp\_of\_z\_tm$.
@@ -310,10 +289,6 @@ fun Ûz_predexp_of_z_tmÝ (z_tm : Z_TM) : Z_EXP = (
         val para = z_para_of_zinferred type_checked;
     in term_of_z_para para
     end);
-=TEX
-
-=SML
-end (* local...in *);
 =TEX
 
 =SML
@@ -1378,7 +1353,7 @@ fun red_statement3 (Parsed(PPStmt(STSpecNoIvars{spec=spec, ...})))
 
 fun red_statement4 _ (Token ((LCZ,CNZ z1), _)) _
     (Parsed(PPStmt(STSpecNoIvars {spec=s, label=label}))) = (
-    let		val (n, ty) = process_con_decl z1;
+    let		val (n, ty) = process_con_z_decl z1;
 		val label' = if label = "" then push_label() else label;
     in
         PPLogCon{x=n, t=ty, e=mk_z_true, spec=s,
@@ -1408,7 +1383,7 @@ end)
 
 fun red_specification_statement2 _ (Token ((LCZ,CNZ z1), _)) _
     (Token ((LCZ,CNZ z2), _)) _ = (
-let val (pre, post) = (process_pre_condition z2, z_tm_true);
+let val (pre, post) = (z_tm_of_z_tokens z2, z_tm_true);
     val w=process_frame z1;
 in
     PPStmt(STSpecNoIvars{spec={w=w, w0=mk_w0 w, pre=pre,post=post},
@@ -1657,7 +1632,7 @@ fun red_till_opt2 _ (Parsed(PPExp(EAuxiliaryExp z))) = (
 
 =SML
 fun red_auxiliary_expression _ (Token ((LCZ,CNZ z), _)) _ = (
-    PPExp(EAuxiliaryExp (process_aux_exp z)))
+    PPExp(EAuxiliaryExp (z_tm_of_z_tokens z)))
 |   red_auxiliary_expression _ _ _ =
         stack_error "red_auxiliary_expression";
 
@@ -1922,6 +1897,13 @@ val red_visdec2 = red_accept;
 
 val red_visdec3 = red_accept;
 
+fun red_visdec4 _ (Token ((LCZ,CNZ z1), _)) _ = (
+let	val (n, ty) = process_con_z_decl z1;
+in
+    PPDeclarations [DAuxiliary{aux=n, t=ty}]
+end)
+|   red_visdec4 _ _ _ = stack_error "red_visdec4";
+
 val red_private_part1 = red_accept;
 
 fun red_private_part2 (Parsed (PPDeclarations d1))
@@ -1961,9 +1943,79 @@ fun red_package_implementation2 (Parsed (PPDeclarations d)) _
 |   red_package_implementation2 _ _ _ =
         stack_error "red_package_implementation2";
 
+fun red_package_implementation3 (Parsed (PPDeclarations using))
+		(Parsed (PPDeclarations d)) _ (Parsed(PPStatement s)) = (
+    PPSubprogram (using@d, s, ""))
+|   red_package_implementation3 _ _ _ _ =
+        stack_error "red_package_implementation3";
+
 val red_package_initialization = red_accept;
 =TEX
+=SML
+fun Ûcheck_basic_dec_listÝ ((bd::more) : BASIC_DECL list) : bool = (
+	case bd of
+		BDDeferredConstDecl _ => false
+	|	BDPrivateTypeDecl _ => false
+	|	_ => check_basic_dec_list more
+) | check_basic_dec_list _ = true;
+=TEX
+=SML
+fun Ûextract_vardeclsÝ ((bd::more) : BASIC_DECL list) : VAR_DECL list = (
+	case bd of
+		BDVarDecl vd => vd::extract_vardecls more
+	|	_ => extract_vardecls more
+) | extract_vardecls _ = [];
+=TEX
+=SML
+fun red_using_list1 (Parsed(PPDeclarations ds)) = (
+	PPDeclarations ds)
+|   red_using_list1 _ = stack_error "red_using_list1";
 
+fun red_using_list2 (Parsed(PPDeclarations d1)) (Parsed(PPDeclarations d2)) = (
+    PPDeclarations (d1@d2))
+|   red_using_list2 _ _ = stack_error "red_using_list2";
+
+fun red_using_dec _ (Parsed(PPBasicDecls bds)) _
+	(Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ zpred), _)) _ = (
+    if check_basic_dec_list bds
+    then
+	let	val (n, ty) = process_con_z_decl z1;
+	in
+		PPDeclarations[DUsing{aux=n,
+				t=ty,
+				concrete_vars=extract_vardecls bds,
+				basic_decls=bds,
+				invariant=z_tm_of_z_tokens zpred}]
+	end
+    else
+	parse_error 503001 "Invalid declarative part of USING declaration")
+|   red_using_dec _ _ _ _ _ _ _ =
+        stack_error "red_using_dec";
+
+=TEX
+=SML
+fun red_basic_dec_list1 (Parsed(PPBasicDecls bds)) = (
+    PPBasicDecls bds)
+|   red_basic_dec_list1 _ =
+        stack_error "red_basic_dec_list1";
+
+fun red_basic_dec_list2 (Parsed(PPBasicDecls bds1))
+		(Parsed(PPBasicDecls bds2)) = (
+    PPBasicDecls(bds1@bds2))
+|   red_basic_dec_list2 _ _ =
+        stack_error "red_basic_dec_list2";
+
+
+fun red_declarative_part_1_1 (Parsed (PPDeclarations d1)) = (
+    PPDeclarations d1)
+|   red_declarative_part_1_1 _ =
+        stack_error "red_declarative_part_1_1";
+
+fun red_declarative_part_1_2 (Parsed (PPDeclarations d1)) (Parsed (PPDeclarations d2)) = (
+    PPDeclarations (d1@d2))
+|   red_declarative_part_1_2 _ _ =
+        stack_error "red_declarative_part_1_2";
+=TEX
 SPARK manual 7.4:
 =SML
 fun red_private_type_declaration1 _ (Token ((_,CNText id), _)) _ _ _ = (
