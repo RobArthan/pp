@@ -1576,20 +1576,47 @@ fun €ti_context_of_in_scope› (inscope : IN_SCOPE) : TERM list = (
 				Nil => do_pars more
 			|	Value ty => (
 				flat
-				(do_pars more :: map (v_v0 false ty) vars)
+				(do_pars more ::
+					map (v_v0
+					(case mode of MSparkIn => true | _ => false)
+						 ty) vars)
 			)
 		);
 		fun do_log_cons (log_cons : Z_DECL list) = (
 			(flat o map (fst o dest_z_dec)) log_cons
 		);
-		val {vc_log_cons, vc_pars, vc_vars, ...} = inscope;
-	in	do_log_cons vc_log_cons @ do_pars vc_pars @ do_vars vc_vars
+		fun do_aux_vars (aux_vars : Z_DECL list) = (
+			(flat o map (fst o dest_z_dec)) aux_vars
+		);
+		val {vc_vars, vc_pars, vc_log_cons, vc_aux_vars, ...} = inscope;
+	in	do_log_cons vc_log_cons @ do_aux_vars vc_aux_vars
+			@ do_pars vc_pars @ do_vars vc_vars
 	end
 );
 =TEX
 =SML
+fun €ti_context_of_subunit› (subunit : SUBUNIT) : TERM list = (
+	ti_context_of_in_scope (#in_scope subunit)
+);
+=TEX
+=SML
+fun €ti_context_of_declab› (declab : DECLAB) : TERM list = (
+	ti_context_of_in_scope (#in_scope declab)
+);
+=TEX
+=SML
+fun €ti_context_of_speclab› (speclab : SPECLAB) : TERM list = (
+	ti_context_of_in_scope (#in_scope speclab)
+);
+=TEX
+=SML
+fun €ti_context_of_block› (block : BLOCK) : TERM list = (
+	ti_context_of_declab (#declab block)
+);
+=TEX
+=SML
 fun €current_ti_context› (() : unit) : TERM list = (
-	flat (map (ti_context_of_in_scope o #in_scope o #declab) (!blocks))
+	flat (map (ti_context_of_block) (!blocks))
 );
 =TEX
 =SML
@@ -1598,8 +1625,9 @@ fun €set_current_ti_context› (ts : TERM list) : unit = (
 );
 =TEX
 =SML
-fun €set_in_scope_ti_context› (in_scope : IN_SCOPE) : unit = (
-	TypeInference.set_ti_context(ti_context_of_in_scope in_scope)
+fun €set_in_scope_ti_context› (in_scope : IN_SCOPE) : TERM list = (
+	TypeInference.set_ti_context(ti_context_of_in_scope in_scope);
+	TypeInference.get_ti_context()
 );
 =TEX
 \subsection{Updating the Z Theory Database}
@@ -1987,16 +2015,21 @@ fun €spec_stmt_speclabel› ({spec : SPEC, label : LABEL}) : unit = (
 				vc_aux_vars = vc_aux_vars2,
 				dec_labels = dec_labels2,
 				formal_procs = formal_procs2}, ...} = speclab2;
+		val ti_cxt = set_in_scope_ti_context in_scope;
 		val till = #till block1;
 		val till_flag = #till_flag (#flags (#declab block1));
 		val env_pars = #vc_pars (flatten_env(!blocks));
 		val vc_pars = vc_pars2 @ env_pars;
 		val vc_log_cons1 = #vc_log_cons(#in_scope(#declab block1));
-		val vc_log_cons = vc_log_cons2 @ vc_log_cons1;
+		val vc_log_con_ids = (map (fn (x,_,_) => x) o map dest_z_lvar
+				o flat o map (fst o dest_z_dec)) vc_log_cons1
+			handle _ => error "spec_stmt_speclabel" 507033 [];
+		val side = map (check_new_z_id ti_cxt) vc_log_con_ids;
+		val vc_log_cons2_1 = vc_log_cons2 @ vc_log_cons1;
 		val in_scope1 : IN_SCOPE = {
 			dec_labels = dec_labels2,
 			formal_procs = formal_procs2,
-			vc_log_cons = vc_log_cons,
+			vc_log_cons = vc_log_cons2_1,
 			vc_aux_vars = vc_aux_vars2,
 			vc_vars = vc_vars2,
 			vc_pars = vc_pars			
@@ -2082,7 +2115,9 @@ fun €add_log_con_env› (logical_con as {x, t, ...}: LOG_CON) : unit = (
 		val zvar = mk_z_lvar(x, (dest_z_power_type o type_of) zt, []);
 		val zdecl = mk_z_dec([zvar], zt);
 		val current_log_cons1 = #current_log_cons block1;
+
 	in	check_new_z_id (current_ti_context()) x;
+		check_new_spark_ids current_cn_env [x];
 		blocks := block_current_log_cons (
 					block_vc_log_cons(block1, [zdecl]),
 					zdecl :: current_log_cons1)
@@ -3085,7 +3120,7 @@ fun €vcs_body_fun› (st : STATEMENT) : unit = (
 			dec_labels = #dec_labels in_scope
 		};
 		val side = set_in_scope_ti_context in_scope1;
-		val wp_env :WP_ENV = {
+		val wp_env : WP_ENV = {
 			env = cn_env_of_in_scope in_scope1,
 			till = mk_z_true,
 			return = z_pred_of_z_tm post1,
