@@ -1271,7 +1271,7 @@ fun Ûz_id_of_idİ (n : ID) : Z_ID = (
 =TEX
 =SML
 local
-val Ûcn_ud_keyİ = "CN'formal_pars";
+val Ûcn_pars_ud_keyİ = "CN'formal_pars";
 fun Ûdest_ud_stringİ (UD_String (n, uds)) = (n, uds)
 |   dest_ud_string _ = fail "" 0 [] (* always caught below *);
 fun Ûwantedİ (fun_name : ID) (UD_String (i, _)) = (i = fun_name)
@@ -1285,21 +1285,58 @@ fun Ûget_par_namesİ (fun_name : Z_ID) : ID list OPT = (
 	((Value o map (fst o dest_ud_string) o snd o dest_ud_string o
 		switch find (wanted fun_name) o snd o dest_ud_string o
 		get_user_datum (get_const_theory (z_id_of_id fun_name)))
-	cn_ud_key)
+	cn_pars_ud_key)
 	handle Fail _ => Nil
 );
 fun Ûset_par_namesİ (inf_fun : INFORMAL_FUN) : unit = (
 	let	val (fun_name, pars) = fun_name_par_names inf_fun;
-		val old = (snd o dest_ud_string o get_user_datum "-") cn_ud_key
+		val old = (snd o dest_ud_string o get_user_datum "-") cn_pars_ud_key
 			handle Fail _ => [];
 		val new = 
 			UD_String(fun_name, map (fn p => UD_String(p, [])) pars)
 			:: (old drop wanted fun_name);
-	in	set_user_datum(cn_ud_key, UD_String("", new))
+	in	set_user_datum(cn_pars_ud_key, UD_String("", new))
 	end
 );
 end;
 =TEX
+\subsection{Classifying Type Marks}
+When a basic declaration causes a Z global variable to be defined,
+we may later need to know whether the Z global variable corresponds to
+a SPARK type or a SPARK constant.
+To do this a list of the names from the SPARK type declaration is maintained in the theory.
+=TEX
+=SML
+local
+val Ûcn_types_ud_keyİ = "CN'types";
+fun Ûdest_ud_stringİ (UD_String (n, uds)) = (n, uds)
+|   dest_ud_string _ = fail "" 0 [] (* always caught below *);
+in
+fun Ûget_type_namesİ (thy : string) : ID list = (
+	((map (fst o dest_ud_string) o snd o dest_ud_string o get_user_datum thy)
+	cn_types_ud_key)
+	handle Fail _ => []
+);
+fun Ûadd_type_nameİ (tyn : ID) : unit = (
+	let	val old = (snd o dest_ud_string o get_user_datum "-")
+				 cn_types_ud_key
+			handle Fail _ => [];
+		val new = UD_String(tyn, []) :: old;
+	in	set_user_datum(cn_types_ud_key, UD_String("", new))
+	end
+);
+fun Ûis_type_nameİ (n : ID) : bool = (
+	(n mem get_type_names (get_const_theory (z_id_of_id n)))
+	handle Fail _ => false
+);
+fun Ûset_basic_decl_infoİ (bd : BASIC_DECL) : unit = (
+	case bd of
+		BDTypeDecl td => add_type_name (#name td)
+	|	BDSubtypeDecl std => add_type_name (#name std)
+	|	BDPrivateTypeDecl ptd => add_type_name (#id ptd)
+	|	_ => ()
+);
+end;
 =TEX
 \subsection{Constructing $CN\_ENV$s}
 The code here must pass type information into the functions defined in \cite{ISS/HAT/DAZ/DTD505,ISS/HAT/DAZ/DTD508} using the data type $CN\_ENV$ defined in \cite{ISS/HAT/DAZ/DTD508}.
@@ -1644,7 +1681,8 @@ fun Ûbasic_decl_otherwiseİ (basic_decl : BASIC_DECL) : unit = (
 	in
 		case para_info_opt of
 			Value para_infos => (
-				map update_theory_db_with_parainfo para_infos; ()
+				map update_theory_db_with_parainfo para_infos;
+				set_basic_decl_info basic_decl
 		)|	Nil =>	fail "basic_decl_otherwise" 507041 []
 	end
 );
@@ -3008,11 +3046,13 @@ fun Ûpopulate_theory_with_functionsİ (ident : ID) : unit = (
 		val informal_fun_paras = map trans_informal_fun informal_funs;
 		val formal_funs = #formal_funs package1;
 		val formal_fun_paras = map trans_formal_fun formal_funs;
+		val consts_types = #consts_types package1;
 	in
 		map update_theory_db_with_parainfo informal_fun_paras;
 		map update_theory_db_with_parainfo formal_fun_paras;
 		map set_par_names informal_funs;
 		map (set_par_names o #informal_fun) formal_funs;
+		map set_basic_decl_info consts_types;
 		()
 	end
 );
@@ -3063,6 +3103,8 @@ fun Ûgenerate_spec_theoryİ (ident : ID) = (
 		val const_thms = rev (map (fn x => (x, (Value (get_spec x)
 						handle Fail _=> Nil))) consts);
 		
+		val type_names = get_type_names "-";
+
 		val side = open_package_spec_theory ident;
 		fun do_const_thms subs ((const, Nil) :: more) = (
 			let	val (name, ty, _) = dest_z_gvar const;
@@ -3113,10 +3155,12 @@ fun Ûgenerate_spec_theoryİ (ident : ID) = (
 		val inf_funs = map prefix_informal_fun(
 				#informal_funs package @
 				map #informal_fun (#formal_funs package));
-		
+
+		val new_type_names = map prefix type_names;
 	in
 		map update_theory_db_with_parainfo paras;
 		map set_par_names inf_funs;
+		map add_type_name new_type_names;
 		()
 	end handle Fail _ =>
 		fail "generate_spec_theory" 507029 [fn()=>ident]
