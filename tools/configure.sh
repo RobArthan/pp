@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.27 2004/01/25 15:43:42 rda Exp rda $
+# $Id: configure.sh,v 1.28 2004/02/09 18:14:57 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -23,11 +23,14 @@
 #
 # PPHOME           - if set must give the absolute path name of
 #                    a directory the user can create or write to
-#                    (default: first of /usr/share/pp, /usr/local/pp,
-#                    /opt/pp, $HOME/pp that looks like it will work).
+#                    (default: first of /usr/local/pp, /usr/share/pp,
+#                    /opt/pp, /sw/pp, $HOME/pp that looks like it will work).
 #
 # PPMOTIFLINKING   - if set must be one of static or dynamic
 #                    (default: dynamic).
+#
+# PPMOTIFHOME      - directory containing the include and lib directories
+#                    for Motif (default: as for X11 on your OS)
 #
 # PPTARGETDIR      - as PPHOME, overrides PPHOME if set and non-empty.
 #
@@ -42,6 +45,10 @@
 #                    needed for Z schema types with up to
 #                    $PPCACHESIZE components are predefined.
 #                    (default: 50)
+#
+# PPUSERCFLAGS     - additional flags for "gcc -c" calls building xpp
+#
+# PPUSERCLIBS      - additional flags for "gcc -o" calls building xpp
 #
 #
 # If any of these is an empty string, it is treated as if it were unset.
@@ -67,64 +74,13 @@ give_up(){
 	exit 1
 }
 #
-# Find an ML Compiler
-#
-if	[ "${PPCOMPILER:-}" != "" ]
-then	case "$PPCOMPILER" in
-		POLYML) T="Poly/ML";;
-		SMLNJ)  T="Standard ML of New Jersey";;
-		*)	give_up "PPCOMPILER must be one of POLYML or SMLNJ";;
-	esac
-	echo "Using $T as specified"
-elif	which poly >/dev/null 2>&1
-then	echo "Using Poly/ML"
-	PPCOMPILER=POLYML
-elif	which sml >/dev/null 2>&1
-then	echo "Using Standard ML of New Jersey"
-	PPCOMPILER=SMLNJ
-else	give_up "cannot find a Standard ML compiler"
-fi
-if	[ "$PPCOMPILER" = SMLNJ ]
-then	if	which .arch-n-opsys >/dev/null 2>&1
-	then	true
-	else	echo "The installation bin directory for Standard ML of New Jersey needs to be on your path"
-		give_up "cannot find .arch-n-opsys"
-	fi
-fi
-#
-# Find Poly/ML database if appropriate:
-#
-if	[ "$PPCOMPILER" = POLYML ]
-then	if	[ "${PPPOLYDBASE:-}" = "" ]
-	then	PPPOLYDBASE=/usr/lib/poly/ML_dbase
-	fi
-	if	[ ! -f $PPPOLYDBASE ]
-	then	give_up "The file $PPPOLYDBASE does not exist"
-	fi
-	echo "Using $PPPOLYDBASE for the Poly/ML compiler database"
-else	PPPOLYDBASE=
-fi
-#
-# Find out how to link Motif
-#
-if	[ "${PPMOTIFLINKING:-}" != "" ]
-then	case "$PPMOTIFLINKING" in
-		dynamic) true;;
-		static)  true;;
-		*)	give_up "PPCOMPILER must be one of POLYML or SMLNJ";;
-	esac
-	echo "Using $PPMOTIFLINKING linking for Motif as specified"
-else	PPMOTIFLINKING=dynamic
-	echo "Using $PPMOTIFLINKING linking for Motif"
-fi
-#
 # Find a target directory
 #
 if	[ "${PPTARGETDIR:-}" = "" ]
 then	PPTARGETDIR=$PPHOME
 fi
 if	[ "${PPTARGETDIR:-}" = "" ]
-then	for parent in /usr/share /usr/local /opt $HOME
+then	for parent in /usr/local /usr/share /opt /sw $HOME
 	do
 		if	[ -d $parent ]
 		then	if	[ -d $parent/pp -a -w $parent/pp ]
@@ -199,7 +155,71 @@ do
 	then	ACTTARGETS="$ACTTARGETS $f"
 	fi
 done
-echo "Generating code to install the following packages: $ACTTARGETS"
+#
+# Find an ML Compiler
+#
+if	[ "$hol" = y -o "$zed" = y -o "$daz" = y ]
+then	if	[ "${PPCOMPILER:-}" != "" ]
+	then	case "$PPCOMPILER" in
+			POLYML) T="Poly/ML";;
+			SMLNJ)  T="Standard ML of New Jersey";;
+			*)	give_up "PPCOMPILER must be one of POLYML or SMLNJ";;
+		esac
+		echo "Using $T as specified"
+	elif	which poly >/dev/null 2>&1
+	then	echo "Using Poly/ML"
+		PPCOMPILER=POLYML
+	elif	which sml >/dev/null 2>&1
+	then	echo "Using Standard ML of New Jersey"
+		PPCOMPILER=SMLNJ
+	else	give_up "cannot find a Standard ML compiler"
+	fi
+	if	[ "$PPCOMPILER" = SMLNJ ]
+	then	if	which .arch-n-opsys >/dev/null 2>&1
+		then	true
+		else	echo "The installation bin directory for Standard ML of New Jersey needs to be on your path"
+			give_up "cannot find .arch-n-opsys"
+		fi
+	fi
+	#
+	# Find Poly/ML database if appropriate:
+	#
+	if	[ "$PPCOMPILER" = POLYML ]
+	then	if	[ "${PPPOLYDBASE:-}" = "" ]
+		then	PPPOLYDBASE=/usr/lib/poly/ML_dbase
+		fi
+		if	[ ! -f $PPPOLYDBASE ]
+		then	give_up "The file $PPPOLYDBASE does not exist"
+		fi
+		echo "Using $PPPOLYDBASE for the Poly/ML compiler database"
+	else	PPPOLYDBASE=
+	fi
+fi
+#
+# Find out how to link Motif
+#
+if	[ "$xpp" = y ]
+then	if	[ "${PPMOTIFLINKING:-}" != "" ]
+	then	case "$PPMOTIFLINKING" in
+			dynamic) true;;
+			static)  true;;
+			*)	give_up "PPCOMPILER must be one of POLYML or SMLNJ";;
+		esac
+		echo "Using $PPMOTIFLINKING linking for Motif as specified"
+	else	PPMOTIFLINKING=dynamic
+		echo "Using $PPMOTIFLINKING linking for Motif"
+	fi
+	#
+	# Check out PPMOTIFHOME
+	#
+	USERCFLAGS=${PPUSERCFLAGS:-}
+	USERCLIBS=${PPUSERCLIBS:-}
+	if	[ "${PPMOTIFHOME:-}" != "" ]
+	then	echo "Using $PPMOTIFHOME for Motif include files and binaries"
+		USERCFLAGS="-I$PPMOTIFHOME/include $USERCFLAGS"
+		USERCLIBS="-L$PPMOTIFHOME/lib $USERCLIBS"
+	fi
+fi
 #
 # Check for document format requirements:
 #
@@ -228,9 +248,14 @@ if	[ `expr  \( "$PPCACHESIZE" : '.*' \) = \
 then
 	give_up "PPCACHESIZE must be a number"
 fi
+if	[ "$zed" = y -o "$daz" = y ]
+then
+	echo "Using $PPCACHESIZE for the size of the labelled product cache"
+fi
 #
 # Build the script
 #
+echo "Generating code to install the following packages: $ACTTARGETS"
 TAB=
 out(){
 	echo "$TAB$*" >>install
@@ -238,7 +263,7 @@ out(){
 export_it(){
 	VAR=$1
 	VAL=`eval echo '$'$1`
-	out "$VAR=$VAL"
+	out "$VAR="'"'"$VAL"'"'
 	out "export $VAR"
 }
 if	[ -w . ]
@@ -254,6 +279,8 @@ export_it PPCOMPILER
 export_it PPMOTIFLINKING
 export_it PPTARGETDIR
 export_it PPCACHESIZE
+export_it USERCFLAGS
+export_it USERCLIBS
 out 'PPHOME=$PPTARGETDIR'
 out "export PPHOME"
 out 'PPDATABASEPATH=.:$PPTARGETDIR/db'
