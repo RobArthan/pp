@@ -320,12 +320,22 @@ fun Ûfmt_var_listİ ([] : TERM list) = ""
 |   fmt_var_list ([x] : TERM list) = (fmt_var ((dest_z_term x),x))
 |   fmt_var_list (x::xs : TERM list) =
         (fmt_var ((dest_z_term x),x))^", "^(fmt_var_list xs);
-fun Ûfmt_decİ ((v, t) : TERM list * TERM) =
-    [(fmt_var_list v)^" : "^(concat_string_list (format_term false t))];
+
+fun Ûfmt_decİ (dec : TERM) = (
+	[let	val (v, t) = dest_z_dec dec;
+	in (fmt_var_list v)^" : "^(concat_string_list (format_term false t))
+	end	handle Fail _ => (
+		let	val (s, d) = dest_z_schema_dec dec
+				handle Fail _ => (snd(dest_app dec), "");
+		in	concat_string_list (format_term false s) ^ d
+		end		
+	)]
+);
+
 fun Ûfmt_dec_listİ ([] : TERM list) = []
-|   fmt_dec_list ([x] : TERM list) = (fmt_dec (dest_z_dec x))
+|   fmt_dec_list ([x] : TERM list) = (fmt_dec x)
 |   fmt_dec_list (x::xs : TERM list) =
-    (fmt_semi_colon (fmt_dec (dest_z_dec x)))@(fmt_dec_list xs);
+    (fmt_semi_colon (fmt_dec x))@(fmt_dec_list xs);
 =TEX
 
 Formatting functions for Predicates.
@@ -347,7 +357,7 @@ fun Ûfmt_schbox_nameİ (t : TERM) =
     end;
 fun Ûfmt_schboxİ (defn : THM) =
     let val (_,schema) = dest_thm (z_thm_rule defn);
-        val (name,body) = dest_eq schema;
+        val (name,body) = dest_eq (snd (strip_µ schema));
         val (decl, pred) = dest_z_h_schema body;
     in
         (fmt_schbox_name name)@
@@ -390,34 +400,55 @@ in
                     fmt_abbdef_aux2 (varstr,expstr)
         end;
 end;
+=SML
+    fun fmt_gset (gset : TERM) = (
+        ["¹Z", "[" ^ fmt_var(dest_z_term gset, gset) ^ "]" , "°"]
+	);
 =TEX
 
-Formatting functions for Definations
+Formatting functions for Definitions
 =SML
-fun Ûfmt_defnsİ (defn : THM) =
-    let val (_,p) = (dest_thm defn);
-        val (q,_) = (dest_app p);
-        val (r,_) = (dest_const q);
-    in
-        if r = "Z'AbbDef"
-        then
-            fmt_abbdef (defn)
-        else
-            if r = "Z'SchBox"
-            then
-                fmt_schbox (defn)
-            else
-                fail "fmt_defns" 511002 [fn () => r]
-    end;
+fun Ûfmt_defnsİ (defn : THM) = (
+	let	val (_,p) = (dest_thm defn);
+		val (q,_) = (dest_app p);
+	in let    val (r,_) = (dest_const q);
+	in	if r = "Z'AbbDef"
+		then	fmt_abbdef (defn)
+		else if	 r = "Z'SchBox"
+		then	fmt_schbox (defn)
+		else	thm_fail "fmt_defns" 511002 [defn]
+	end	handle Fail _ => 
+		let	val (gset, u) = dest_eq p;
+		in	if	is_u u
+			then	fmt_gset gset
+			else	thm_fail "fmt_defns" 511002 [defn]
+		end
+	end	handle Fail _ => thm_fail "fmt_defns" 511002 [defn]
+);
 =TEX
 
 Formatting functions for Axioms
 =SML
+fun get_declared_consts (decl : TERM) : TERM list = (
+	let	fun do_decs acc [] = acc
+		|   do_decs acc (dec :: decs) = (
+			(do_decs (fst (dest_z_dec dec) @ acc) decs)
+			handle Fail _ =>
+			let 	val bdg = (hd o snd o strip_app) dec;
+			in	do_decs (map snd (dest_z_binding bdg) @ acc) decs
+			end
+		);
+	in	do_decs [] (dest_z_decl decl)
+	end
+);
+=SML
 fun Ûfmt_axiomsİ (axiom : THM) =
     let val (_,axm) = dest_thm axiom;
-        val (_,body) = dest_app axm;
+        val (_,gbody) = dest_app axm;
+	 val (gpars, body) = strip_µ gbody;
         val (decl,pred) = dest_± body;
-    in
+    in	case gpars of
+		[] => (
 =SMLLITERAL
         ["¹ZAX"]@
 =SML
@@ -429,7 +460,27 @@ fun Ûfmt_axiomsİ (axiom : THM) =
 =SMLLITERAL
         ["°"]
 =SML
-    end;
+	) | _ :: _ => (
+		let	val subs1 = map (fn t => (mk_u(type_of t), t)) gpars;
+			val consts = get_declared_consts decl;
+			val subs2 = map (fn c => (subst subs1 c, c)) consts;
+			val decl' = subst subs2 decl;
+			val pred' = subst subs2 pred;
+		in
+=SMLLITERAL
+        ["[" ^ fmt_var_list gpars ^ "]œœœœœœœœ"]@
+=SML
+        (fmt_body (fmt_dec_list (dest_z_decl decl')))@
+=SMLLITERAL
+        ["÷üüüüüüüüüüüüüüüüü"]@
+=SML
+        (fmt_body (fmt_pred_list (dest_z_many_± pred')))@
+=SMLLITERAL
+        ["ˆüüüüüüüüüüüüüüüüü"]
+		end
+=SML
+)
+   end;
 =TEX
 
 Formatting functions for VCs.
