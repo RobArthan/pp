@@ -102,6 +102,8 @@ Changes in response to ID0021.
 \item [Issue 1.24]
 Renamings of functions containing the name atom $simple$,
 and renaming of $aconv$.
+\item [Issue 1.25]
+Corrected $icl'new\_parent$, to ensure it checks for clashes in children of current theory.
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
@@ -1494,7 +1496,7 @@ let 	val dummy = (check_c_writable "icl'new_parent";
 	then fail "icl'new_parent" 6035 [fn () => nm]
 	else  ());
 
-	val fthy = internal_theory_name nm "icl'new_parent";
+	val pthy = internal_theory_name nm "icl'new_parent";
 
 	val {hierarchy=hierarchy as hier{lookup=lookup, ...}, 
 		theory=theory, ty_env=cty_env,
@@ -1506,7 +1508,7 @@ let 	val dummy = (check_c_writable "icl'new_parent";
 		contents = fcontents,
 		children = fchildren,
 		name = fname}
-		= sub_ia(lookup, fthy);
+		= sub_ia(lookup, pthy);
 
 	val cthy = icl'get_current_theory_name();
 
@@ -1523,14 +1525,14 @@ let 	val dummy = (check_c_writable "icl'new_parent";
 =TEX
 The ancestors of the current and parent theories:
 =SML
-	val fthy_anc = theory_ancestors fthy;
+	val pthy_anc = theory_ancestors pthy;
 	val cthy_anc = theory_ancestors cthy;
 =TEX
 A theory is an ancestor of the current one if and only if it is in scope.
 =SML
-	val dummy = if fthy mem parents
+	val dummy = if pthy mem parents
 		then fail "icl'new_parent" 6082 [fn () => fname]
-		else if cthy mem fthy_anc
+		else if cthy mem pthy_anc
 		then fail "icl'new_parent" 6084 [fn () => fname]
 		else ();
 
@@ -1540,14 +1542,23 @@ A theory is an ancestor of the current one if and only if it is in scope.
 		children = (cthy :: fchildren),
 		name = fname});
 
-	val new_thys_in_scope = fthy_anc diff cthy_anc ;
+	val new_thys_in_scope = pthy_anc diff cthy_anc ;
 =TEX
-The following detects clashes, as well as discovering the new scopes.
+The following detects clashes with things in scope, as well as discovering the new scopes.
 =SML
-	val (new_ty_env,new_con_env) = ((fold 
+	val ntece as (new_ty_env,new_con_env) = ((fold 
 		(fn (athy,tece) => add_thy_env (get_theory_contents athy) tece)
 		new_thys_in_scope
 		(cty_env, ccon_env))
+		handle complaint =>
+		list_divert complaint "icl'new_parent" [
+			("add_ty_env",6067,[fn () => fname]),
+			("add_con_env",6067,[fn () => fname])]);
+=TEX
+The following detects clashes with things in the children of the current theory.
+=SML
+	val dummy = ((map (fn athy => (add_thy_env (get_theory_contents athy) ntece;()))
+		(theory_descendants cthy))
 		handle complaint =>
 		list_divert complaint "icl'new_parent" [
 			("add_ty_env",6067,[fn () => fname]),
@@ -1556,7 +1567,7 @@ The following detects clashes, as well as discovering the new scopes.
 	val new_thy = Thy{name = iname,
 		ty_env = ty_env,
 		con_env = con_env,
-		parents = (fthy :: parents),
+		parents = (pthy :: parents),
 		del_levels = del_levels,
 		axiom_dict = axiom_dict,
 		defn_dict = defn_dict,
@@ -1584,7 +1595,7 @@ in
 	current := {hierarchy=hierarchy, theory=theory, ty_env=cty_env, 
 			con_env=ccon_env, inconsistent=true,sealed=sealed};
 	put_in_scope new_thys_in_scope;
-	add_child cthy [fthy];
+	add_child cthy [pthy];
 	theory := new_thy;
 	current := {hierarchy=hierarchy, theory=theory, ty_env = new_ty_env, 
 		con_env=new_con_env, inconsistent=inconsistent,sealed=sealed};
