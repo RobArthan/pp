@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.7 2003/01/30 17:51:31 rda Exp rda $
+ * $Id: xmisc.c,v 2.8 2003/01/31 12:54:23 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -265,7 +265,7 @@ void text_verify_cb(
 	for(i = 0; i < cbs->text->length; ++i) {
 		if(p[i] == '\r') {
 			has_crs = True;
-		} else if(control_chars[p[i]]) {
+		} else if(control_chars[p[i] & 0xff]) {
 			has_controls = True;
 			p[i] = '?';
 		}
