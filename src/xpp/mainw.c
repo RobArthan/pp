@@ -501,6 +501,7 @@ if( !edit_only ) {
 	if(open_file(script, file_name)) {
 		XmTextFieldSetString(namestring, file_name);
 		XmTextFieldShowPosition(namestring, strlen(file_name));
+		reinit_changed();
 	} else {
 		XmTextFieldSetString(namestring, no_file_message);
 	};
@@ -752,7 +753,7 @@ XmTextVerifyCallbackStruct *cbs;
 	Boolean restart = undo_buffer.moved_away;
 	NAT len;
 	char *cut_chars;
-fprintf(stderr, "script_modify_cb\n"); fflush(stderr);
+
 	changed = True;
 
 /* XmGetSelection doesn't seem to work as one might like in a 
