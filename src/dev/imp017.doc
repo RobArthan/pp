@@ -22,7 +22,7 @@ Don't worry about this!
 %\TPPpart{}
 \TPPtitle{SLR Parser Generator}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP017}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.33 $%
+\def\SCCSversion{$Revision: 1.34 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 %\TPPdate{}  %% Mandatory field (with sensible default)
@@ -102,7 +102,7 @@ $stk$, together with the existing names $x1$, $x2$ etc.
 \item [Issue 1.22 (13th April 1992)]
 Changes due to CR0017.
 \item [Issue 1.23 (27th April 1992)]
-The goto and reducer tables produced are now structured like the actions tables of
+The goto and reducer tables produced are now structured like the action tables of
 version 1.16 and following of this document;
 i.e., each table entry is assigned to a Standard ML
 variable name, and the table is constructed by conjoining
@@ -123,9 +123,10 @@ Port to Poly/ML.
 \item[Issue 1.32] PPDev-specific updates for open source release
 \item[Issue 1.33] Removed misplaced comment in the shell script.
 \item[Issue 1.34] Improved {\it LaTeX} layout.
+\item[Issue 1.35] Tidy-up in preparation for implementing calculation of LALR(1) lookahead sets.
 \end{description}
 \subsection{Changes Forecast}
-None --- although a move to LALR(1) (a la {\tt yacc}) might be worthwhile one day.
+The implementation of LALR(1) lookahead sets is in sight.
 
 \pagebreak
 \section{GENERAL}
@@ -137,6 +138,8 @@ the detailed design of which is given in \cite{DS/FMU/IED/DTD017}.
 generator. The implementation given here attempts to follow the treatment
 in \cite{Aho77} fairly closely and the reader of this document is assumed
 to be familiar with sections 6.1, 6.2 and 6.3 of that book. 
+The calculation of LALR(1) lookahead sets is based on the excellent treatment
+of \cite{bermudez89}.
 
 After beginning the definition of the structure $Slrp$ in section
 \ref{PREAMBLE},
@@ -183,10 +186,11 @@ It is caught in {\it slrp} and so is never visible to the user.
 exception €SlrpError› of string;
 =TEX
 The action, goto and reduction tables produced are constructed out of lists.
-The length of those lists is configuable by changing the value of the reference
-variable $slrp\_break$ defined below. Changing its value has a significant
+The length of those lists is configurable by changing the value of the reference
+variable $slrp\_break$ defined below. Changing its value can have a significant
 effect on the speed of compilation of these tables (apparent when building a parser).
-The best performance has been found to be when $slrp\_break$ is $1$.
+This effect is compiler-dependent (and SML/NJ is more troublesome than Poly/ML).
+The best compromise with the current compilers has been found to be when $slrp\_break$ is $1$.
 =SML
 val €slrp_break› = ref 1;
 val _ = if contains (map fst (get_int_controls()))
@@ -203,18 +207,17 @@ val _ = if contains (map fst (get_int_controls()))
 =TEX
 \section{UTILITIES}\label{UTILITIES}
 \subsection{Miscellany}
-In order, (a) to make the output from the program more easily understood,
-and (b) to make some as yet unidentified algorithm operate correctly,
+In order to make the output from the program more easily understood
 it is helpful to have (i) a version of $grab$ which adds the new element
 at the end of the list, and (ii) a version of $cup$ which accumulates its
 second operand into its first:
 =SML
 infix 4 rgrab;
-fun (x :: xs : ''a list) €rgrab› (what : ''a) = (
-	if x = what
-	then x :: xs
-	else x :: (xs rgrab what)
-) | ([] : ''a list) rgrab (what : ''a) = [what];
+fun (xs : ''a list) €rgrab› (what : ''a) = (
+	if	what mem xs
+	then	xs
+	else	xs @ [what]
+);
 =TEX
 =SML
 infix 4 rcup;
@@ -224,25 +227,16 @@ fun (list1 : ''a list) €rcup› (list2 : ''a list) : ''a list = (
 =TEX
 The following formulation of $nth$ is more natural here:
 =SML
-fun €my_nth› (xs : 'a list) : int -> 'a = switch nth xs;
+fun €kth› (xs : 'a list) : int -> 'a = switch nth xs;
 =TEX
 =SML
 val €alpha_sort› = Sort.sort Sort.string_order;
 =TEX
+Given a list return the index of its last element (or ~1 for an empty list):
 =SML
-fun €bound› list = length list - 1;
+fun €bound› (list : 'a list)  : int = length list - 1;
 =TEX
-=SML
-fun €indices› (list : ''a list) (what : ''a) = (
-	let	fun aux n (a :: more) = (
-			if a = what
-			then n :: aux (n+1) more
-			else aux (n+1) more
-		) | aux _ _ = [];
-	in	aux 0 list
-	end
-);
-=TEX
+Count the elements of a list with a given property:
 =SML
 fun €count› (list : 'a list) (prop : 'a -> bool): int = (
 	let	fun aux n (a :: more) = (
@@ -254,16 +248,19 @@ fun €count› (list : 'a list) (prop : 'a -> bool): int = (
 	end
 );
 =TEX
+Coerce an array into a list:
 =SML
-fun €listofarray› Xs = (
+fun €listofarray› (Xs : 'a PPArray.array) : 'a list = (
 	let	open PPArray;
 		val len = length Xs;
 	in	map (fn i => PPArray.sub (Xs, i)) (interval 0 (len-1))
 	end
 );
 =TEX
+The following function chops an array up into lists of a given length (or at most the given length
+in the case of the last list).
 =SML
-fun €listsofarray› Xs listsize = (
+fun €listsofarray› (Xs : 'a PPArray.array) (listsize : int) : 'a list list = (
 let	open PPArray;
 	val len = length Xs;
 	fun aux start = (
@@ -281,6 +278,8 @@ in	map aux stl
 end
 );
 =TEX
+The following function does the same job as {\it listsofarray} but with the input given as
+a list rather than an array.
 =SML
 fun €listsoflist› xs listsize = (
 let	fun aux (xs, res) = (
@@ -368,18 +367,18 @@ end; (* of local ... in ... end *)
 The following types are used to represent grammars etc.:
 =SML
 type €NONTERMINAL› = string;
-datatype ''a €SYMBOL› = €Terminal› of ''a | €NonTerminal› of NONTERMINAL;
-type ''a €PRODUCTION› = string * (''a SYMBOL list list);
-type ''a €GRAMMAR› = ''a PRODUCTION list;
+datatype ''lc €SYMBOL› = €Terminal› of ''lc | €NonTerminal› of NONTERMINAL;
+type ''lc €PRODUCTION› = NONTERMINAL * (''lc SYMBOL list list);
+type ''lc €GRAMMAR› = ''lc PRODUCTION list;
 datatype €SYM_CLASS› = €VarClass› of string | €PuncClass› of string;
 =TEX
 =SML
-fun €expand› (g : ''a GRAMMAR) (name : NONTERMINAL) : ''a SYMBOL list list = (
+fun €expand› (g : ''lc GRAMMAR) (name : NONTERMINAL) : ''lc SYMBOL list list = (
 	lassoc2 g (fn _ => nil) name
 );
 =TEX
 =SML
-fun €give_terms› (g : ''a GRAMMAR) : ''a list = (
+fun €give_terms› (g : ''lc GRAMMAR) : ''lc list = (
 	let	fun f(Terminal a :: rest) = a :: f rest
 		|   f (_ :: rest) = f rest
 		|   f nil = nil;
@@ -391,29 +390,25 @@ fun €give_terms› (g : ''a GRAMMAR) : ''a list = (
 \subsection{Types and Operations on Sets for Items}
 We represent an item by giving the name of the associated non-terminal
 the index of the alternative for that non-terminal and the index within
-that alternative:
+that alternative. In the efficient representation of grammars that we are about
+to define, names of non-terminals have become integer indexes into an array:
 =SML
-fun €show_item› (g : ''a GRAMMAR) (sym, alt, dot) = (
-	let	val x = my_nth (expand g sym) alt;
-	in	(x to (dot-1), "DOT", x from dot)
-	end
-);
+type €FNONTERM› = int;
+type €ITEM› = (FNONTERM * int * int);
 =TEX
 We now introduce an efficient representation of the
 grammar denoted by the type $FGRAMMAR$.
 =SML
-type €FNONTERM› = int;
 datatype ''a €FSYM› = €FTerm› of ''a
 	| €FNonTerm› of FNONTERM;
-type €ITEM› = (FNONTERM * int * int);
-type ''_a €FPRODUCTION› = NONTERMINAL * (''_a FSYM array array);
-type ''_a €FGRAMMAR› = ''_a FPRODUCTION array;
+type ''a €FPRODUCTION› = NONTERMINAL * (''a FSYM array array);
+type ''a €FGRAMMAR› = ''a FPRODUCTION array;
 =IGN
 
 !!!FOLLOWING IS NOT USED AT THE MOMENT BUT MAY BE USEFUL
 IN A FUTURE RE-ORGANISED VERSION OF SLRP!!!
 
-fun f_give_terms (g : ''_a FGRAMMAR) = (
+fun f_give_terms (g : ''a FGRAMMAR) = (
 let	fun aux symarr (i, acc) = (
 		case PPArray.sub (symarr, i) of
 			FNonTerm _ => 	acc
@@ -522,13 +517,13 @@ type NTDICT = FNONTERM E_DICT;
 val €nt_dict› : NTDICT ref = ref initial_e_dict;
 
 =SML
-fun €nt_name› (g : ''_a FGRAMMAR) (nt : FNONTERM) 
+fun €nt_name› (g : ''a FGRAMMAR) (nt : FNONTERM) 
 		: NONTERMINAL = (
 	fst (PPArray.sub(g, nt))
 );
 =TEX
 =SML
-fun €make_grammar› (g : ''_a GRAMMAR) : ''_a FGRAMMAR =
+fun €make_grammar› (g : ''a GRAMMAR) : ''a FGRAMMAR =
 let	val sd = (nt_dict := initial_e_dict);
 	val mapping = combine (map fst g) (interval 0 (bound g)) ;
 	fun aux1 (s,i) = (nt_dict := e_extend s i (!nt_dict));
@@ -551,7 +546,7 @@ end;
 $f\_expand$ is a version of the function $expand$ which
 works on the efficient representation of the grammar.
 =SML
-fun €f_expand› (g : ''_a FGRAMMAR) (name : FNONTERM) : ''_a FSYM array array = (
+fun €f_expand› (g : ''a FGRAMMAR) (name : FNONTERM) : ''a FSYM array array = (
 
 	snd (PPArray.sub (g, name))
 );
@@ -559,14 +554,14 @@ fun €f_expand› (g : ''_a FGRAMMAR) (name : FNONTERM) : ''_a FSYM array array = (
 $f\_follower\,g\,x$ returns the symbol immediately after the dot in the item $x$
 for the grammar $g$
 =SML
-fun €f_follower› (g : ''_a FGRAMMAR) ((sym, alt, dot) : ITEM) : ''_a FSYM = (
+fun €f_follower› (g : ''a FGRAMMAR) ((sym, alt, dot) : ITEM) : ''a FSYM = (
 	PPArray.sub(PPArray.sub(f_expand g sym, alt), dot)
 );
 =TEX
 \subsection{CLOSURE Function}
 The function $closure$ is just as in \cite{Aho77}.
 =SML
-fun €f_closure› (g : ''_a FGRAMMAR) (items : ITEM list) : ITEM list = (
+fun €f_closure› (g : ''a FGRAMMAR) (items : ITEM list) : ITEM list = (
 let	fun aux1 res (FNonTerm nt) = (
 	let	val newitems = map (fn i => (nt, i, 0))
 		  (interval 0 (PPArray.length (f_expand g nt) - 1));
@@ -586,7 +581,7 @@ end);
 \subsection{GOTO Function}
 The function $goto$ is just as in \cite{Aho77}.
 =SML
-fun €f_goto› (g: ''_a FGRAMMAR) (items : ITEM list) (sym : ''_a FSYM) : ITEM list = (
+fun €f_goto› (g: ''a FGRAMMAR) (items : ITEM list) (sym : ''a FSYM) : ITEM list = (
 let	fun aux ((item  as (name, alt, dot)):: more) = (
 		(if sym = f_follower g item
 		then
@@ -603,7 +598,7 @@ end
 Again $make\_items$ is as in \cite{Aho77} (under $items$). We assume the grammar is already
 augmented. The sentence symbol is supplied as an additional parameter.
 =SML
-fun €make_items› (g : ''_a FGRAMMAR) (sen : FNONTERM) : ITEM list list = (
+fun €make_items› (g : ''a FGRAMMAR) (sen : FNONTERM) : ITEM list list = (
 let	fun aux1 (item :: more) = (
 		((f_follower g item) :: aux1 more) handle _ => aux1 more
 	) | aux1 [] = [];
@@ -721,9 +716,9 @@ fun €follow› (g : ''lc GRAMMAR) (sen : string) (eos : ''lc): (string * (''lc lis
 \subsection{The Table Construction}
 
 =SML
-fun €slr_tables› (g : ''_lc GRAMMAR) (eos : ''_lc) (sen : string) 
-	: (''_lc)ACTION_TABLE * GOTO_TABLE * (ITEM list * int) list *
-			 ''_lc FGRAMMAR * STATE = (
+fun €slr_tables› (g : ''lc GRAMMAR) (eos : ''lc) (sen : string) 
+	: (''lc)ACTION_TABLE * GOTO_TABLE * (ITEM list * int) list *
+			 ''lc FGRAMMAR * STATE = (
 	let	open PPArray;
 		val g' = make_grammar g;
 		val sent = (case e_lookup sen (!nt_dict) of 
@@ -733,7 +728,7 @@ fun €slr_tables› (g : ''_lc GRAMMAR) (eos : ''_lc) (sen : string)
 		val n = bound C;
 		val js = interval 0 n;
 		val Ijs = combine C js;
-		val actions = array (n+1, []:(''_lc * ACTION)list);
+		val actions = array (n+1, []:(''lc * ACTION)list);
 		val gotos = array (n+1, []: (string * STATE)list);
 		val follow_tab = follow g sen eos;
 		fun my_follower item = (
@@ -786,8 +781,8 @@ fun €slr_tables› (g : ''_lc GRAMMAR) (eos : ''_lc) (sen : string)
 \subsection{Conflict Detection}
 The following function calculates whether there are any conflicts in an action table.
 =SML
-fun €conflicts›  (actions : (''_lc) ACTION_TABLE) : 
-		(''_lc * STATE * (ACTION list)) list = (
+fun €conflicts›  (actions : (''lc) ACTION_TABLE) : 
+		(''lc * STATE * (ACTION list)) list = (
 	let	open PPArray;
 		fun aux i ((lc, act) :: more) = (
 			if any more (fn (lc', _) => lc' = lc)
@@ -823,15 +818,15 @@ fun €format_alt› (g: ''lc GRAMMAR, p : ''lc -> string) (alt : string, i : int) :
 		in	if i < 0 orelse i >= len
 			then "*** INTERNAL ERROR: invalid index ***"
 			else	alt ^ " = " ^ dots1
-			^	format_list (format_symbol p)(my_nth alts i) ", " ^ dots2
+			^	format_list (format_symbol p)(kth alts i) ", " ^ dots2
 		end
 );
 =TEX
 =SML
 fun €format_item›
-	(g : ''_lc GRAMMAR, p : ''_lc -> string)
+	(g : ''lc GRAMMAR, p : ''lc -> string)
 	((nt, alt, dot) : ITEM)
-	(eff_grammar : ''_lc FGRAMMAR) = (
+	(eff_grammar : ''lc FGRAMMAR) = (
 let	val sym = nt_name eff_grammar nt;
 in
 	if all g (fn (s,_) => s <> sym)
@@ -840,7 +835,7 @@ in
 			val len = length alts;
 		in	if alt < 0 orelse alt >= len
 			then "*** INTERNAL ERROR: invalid item ***"
-			else let	val syms = my_nth alts alt;
+			else let	val syms = kth alts alt;
 					val slen = length syms;
 			in	if dot < 0 orelse dot > slen
 				then "*** INTERNAL ERROR: invalid index in item ***"
@@ -853,9 +848,9 @@ in
 		end
 end);
 =SML
-fun €format_state›(gp : ''_lc GRAMMAR * (''_lc -> string))
+fun €format_state›(gp : ''lc GRAMMAR * (''lc -> string))
 		((items, i) : ITEM list * int)
-		(eff_grammar : ''_lc FGRAMMAR) : string list = (
+		(eff_grammar : ''lc FGRAMMAR) : string list = (
 	case items of
 		[] => [string_of_int i ^ ":"]
 	|	[item] => [string_of_int i ^ ":\t" ^ format_item gp item eff_grammar]
@@ -864,7 +859,7 @@ fun €format_state›(gp : ''_lc GRAMMAR * (''_lc -> string))
 );
 =TEX
 =SML
-fun €print_grammar› (p : ''_lc -> string)(g : ''_lc GRAMMAR) : unit = (
+fun €print_grammar› (p : ''lc -> string)(g : ''lc GRAMMAR) : unit = (
 	let	fun fmt_alt alt = (
 			format_list (format_symbol p) alt ", "
 		);
@@ -886,15 +881,15 @@ fun €print_grammar› (p : ''_lc -> string)(g : ''_lc GRAMMAR) : unit = (
 	end 
 );
 =SML
-fun €print_terms› (p : ''_lc -> string)(g : ''_lc GRAMMAR) : unit = (
+fun €print_terms› (p : ''lc -> string)(g : ''lc GRAMMAR) : unit = (
 	let	val names = Sort.sort Sort.string_order (map p(give_terms g));
 	in	map (fn n =>(log n; log "\n")) names; ()
 	end 
 );
 =TEX
 =SML
-fun €print_states› (gp : ''_lc GRAMMAR * (''_lc -> string))
-		(states : (ITEM list * int) list) (eff_grammar : ''_lc FGRAMMAR) : unit = (
+fun €print_states› (gp : ''lc GRAMMAR * (''lc -> string))
+		(states : (ITEM list * int) list) (eff_grammar : ''lc FGRAMMAR) : unit = (
 	let	fun do1 state = (
 			map (fn s => (log s; log"\n")) (format_state gp state eff_grammar)
 		);
@@ -1605,7 +1600,7 @@ fun €resolve_either›(g : ('lc)GRAMMAR) (acts : ACTION list) : ACTION = (
 );
 =TEX
 =SML
-fun €resolve_conflicts› (g : (''_lc)GRAMMAR) (actions : (''_lc)ACTION_TABLE) : unit = (
+fun €resolve_conflicts› (g : (''lc)GRAMMAR) (actions : (''lc)ACTION_TABLE) : unit = (
 	let	fun aux(lc, s, acts) = (
 			let	val old = PPArray.sub(actions, s);
 				val act = resolve_either g acts;
@@ -1824,7 +1819,7 @@ fun output_reduction_table
 	(tab : string GEN_REDUCTION_TABLE) : unit = (
 let	val tabs = listsoflist (e_flatten tab) (get_int_control"slrp_break");
 	fun aux nt i (act :: more) = (
-	let	val n = length(my_nth(expand g nt) i);
+	let	val n = length(kth(expand g nt) i);
 		val func = format_reducer act n;
 	in	if is_nil more
 		then put_string func
@@ -1969,7 +1964,7 @@ end; (* of structure Slrp *)
 \subsection{Shell Interface}
 =DUMP slrp
 #!/bin/sh
-# slrp From: $Id: imp017.doc,v 1.33 2002/11/01 12:31:27 rda Exp rda $
+# slrp From: $Id: imp017.doc,v 1.34 2003/02/17 13:14:19 rda Exp rda $
 # Shell script to run the SLRP Parser Generator
 if test -z "$PROGNAME"
 then
