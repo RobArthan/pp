@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.5 2002/10/20 21:10:08 rda Exp rda $
+# $Id: configure.sh,v 1.6 2002/10/21 13:37:24 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -36,11 +36,7 @@
 # The package names in PPTARGETS if used must be taken from the list:
 # pptex dev hol zed daz xpp. This is mostly useful if you want to
 # install the development kit (possibly separately from the other packages).
-# The default is not to install it. It's the user's responsibility to ensure
-# that the source directory or a directory on the search path already
-# contains the compiled code for any packages that are needed by the specified
-# packages (hol, zed and daz need dev and pptex, dev needs pptex). The packages
-# are compiled in the order specified by the user.
+# The default is not to install it.
 #
 # PPPOLYDBASE is not relevant if PPCOMPILER is SMLNJ. The default is
 # appropriate for Poly/ML installed on Linux from the RPM.
@@ -140,10 +136,12 @@ if	[ ! -d src ]
 then	give_up "the directory $CWD/src does not exist"
 fi
 SOMETODO=n
+ACTTARGETS=
 for f in $PPTARGETS
 do	if	[ -f src/$f.mkf ]
 	then	eval $f=y
 		SOMETODO=y
+		ACTTARGETS="$ACTTARGETS $f"
 	elif	[ "$USERDEFINEDTARGETS" = y ]
 	then	give_up "the make file $f.mkf is missing from the source directory"
 	else	eval $f=n
@@ -152,7 +150,7 @@ done
 if	[ $SOMETODO = n ]
 then	give_up "cannot find any packages to build in $CWD/src"
 fi
-echo "Generating code to install the following packages: $PPTARGETS"
+echo "Generating code to install the following packages: $ACTTARGETS"
 #
 # Build the script
 #
@@ -188,24 +186,17 @@ out 'OLD_PATH=$PATH'
 out "PATH=.:"'$PATH'
 out "export PATH"
 #
-# Build pptex and also slrp if slrp's needed and not going to be installed
+# Clean up the src directory
 #
-if	[ "$dev" != y -a \( "$hol" = y -o "$zed" = y -o "$daz" = y \) ]
-then	out "make -f pptex.mkf build"
-	out "make -f dev.mkf build"
-fi
+./distclean
+# 
+# Output the make command to build the packages
 #
-# Loop round the packages outputting the commands to compile them
-# (inst = binaries + documentation). The touch is a work-around for
-# problems with temporary tex files that are created when the reference
-# manuals are built and have the same names, but different contents and
-# so need to be rebuilt.
-for f in $PPTARGETS
-do	if	[ "`eval echo '$'$f`" = y ]
-	then	out 'touch dtd*.doc'
-		out "make -f $f.mkf inst"
-	fi
-done
+out "make -f install.mkf $ACTTARGETS"
+#
+# Now go to the target directory, build the demos (and freeze the
+# databases, en passant).
+#
 out "cd $PPTARGETDIR"
 out "PATH=$PPTARGETDIR/bin:"'$OLD_PATH'
 out "export PATH"
