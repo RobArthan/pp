@@ -9,6 +9,10 @@
 PASS_STRING="All module tests passed"
 #
 TTDS="$*"
+if	[ "$TTDS" = "" ]
+then	echo Error: no test files to report on
+	exit 1
+fi
 NUM_TTDS=`echo $TTDS | wc -w`
 PASSES=`egrep -l "$PASS_STRING" $TTDS`
 NUM_PASSES=`echo $PASSES | wc -w`
