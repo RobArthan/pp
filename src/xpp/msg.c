@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2002/10/28 14:35:20 $ $Revision: 2.11 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2002/12/03 15:25:38 $ $Revision: 2.12 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -156,13 +156,31 @@ static void help_cb(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * poll: poll for and process an event; used for modal dialogs
- * in functions that are expected to return a result.
+ * poll: poll for and process events; used for modal dialogs
+ * in functions that are expected to return a result. We arrange
+ * to delay processing keyboard events until a time-out period
+ * has expired. This is to stop a repeated key-stroke causing
+ * the dialog to be popped up and then dismissed by the second
+ * key-stroke before the user has time to look at it.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void poll(void){
+static void poll_timeout_proc(XtPointer p, XtIntervalId *unused)
+{
+	Boolean *flag = p;
+	fprintf(stderr, "In timeout proc\n");
+	*flag = True;
+}
+static void poll(int *done){
 	XEvent xev;
-	XtAppNextEvent(app, &xev);
-	XtDispatchEvent(&xev);
+	Boolean listening = False;
+	XtAppAddTimeOut(app, 100, poll_timeout_proc, &listening);
+	while(!*done) {
+		XtAppNextEvent(app, &xev);
+		fprintf(stderr, "In poll, xev.type = %d\n", xev.type);
+		if(	listening ||
+			(xev.type != KeyPress && xev.type != KeyRelease) ) {
+			XtDispatchEvent(&xev);
+		}
+	}
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -214,9 +232,7 @@ Boolean yes_no_dialog(Widget w, char *question)
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 	XBell(XtDisplay(root), 50);
-	while (!reply) {
-		poll();
-	};
+	poll(&reply);
 	XtPopdown(XtParent(dialog));
 	return reply == YES;
 }
@@ -270,9 +286,7 @@ Boolean quit_new_dialog(Widget w, char *question)
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 	XBell(XtDisplay(root), 50);
-	while (!reply) {
-		poll();
-	};
+	poll(&reply);
 	XtPopdown(XtParent(dialog));
 	return reply == YES;
 }
@@ -331,9 +345,7 @@ int yes_no_cancel_dialog(Widget w, char *question)
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 	XBell(XtDisplay(root), 50);
-	while (!reply) {
-		poll();
-	};
+	poll(&reply);
 	XtPopdown(XtParent(dialog));
 	return (reply >= 0 ? reply == YES : -1);
 }
@@ -388,7 +400,7 @@ void ok_dialog(Widget w, char *msg)
 	static Widget dialog;
 	XmString text, ok, error;
 	Atom WM_DELETE_WINDOW;
-	static Bool confirmed;
+	static int confirmed;
 	confirmed = False;
 	if (!dialog) {
 		dialog = XmCreateQuestionDialog(w, "ok", NULL, 0);
@@ -428,9 +440,7 @@ void ok_dialog(Widget w, char *msg)
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 	XBell(XtDisplay(root), 50);
-	while (!confirmed) {
-		poll();
-	};
+	poll(&confirmed);
 	XtPopdown(XtParent(dialog));
 }
 
@@ -443,7 +453,7 @@ void memory_warning_dialog(Widget w, Boolean show)
 	             "advised to save your work and restart.";
 	XmString text, ok, error;
 	Atom WM_DELETE_WINDOW;
-	static Bool confirmed;
+	static int confirmed;
 	confirmed = False;
 	if (!dialog) {
 		dialog = XmCreateQuestionDialog(w, "ok", NULL, 0);
@@ -486,9 +496,7 @@ void memory_warning_dialog(Widget w, Boolean show)
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 	XBell(XtDisplay(root), 50);
-	while (!confirmed) {
-		poll();
-	};
+	poll(&confirmed);
 	XtPopdown(XtParent(dialog));
 }
 
@@ -499,7 +507,7 @@ void nomemory_dialog(Widget w, Boolean show)
 	             "advised to try to save your work and to restart.";
 	XmString text, ok, error;
 	Atom WM_DELETE_WINDOW;
-	static Bool confirmed;
+	static int confirmed;
 	confirmed = False;
 	if (!dialog) {
 		dialog = XmCreateQuestionDialog(w, "ok", NULL, 0);
@@ -542,9 +550,7 @@ void nomemory_dialog(Widget w, Boolean show)
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 	XBell(XtDisplay(root), 50);
-	while (!confirmed) {
-		poll();
-	};
+	poll(&confirmed);
 	XtPopdown(XtParent(dialog));
 }
 
@@ -554,7 +560,7 @@ static void ok_cb(
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
-	NAT *confirmed = cbd;
+	int *confirmed = cbd;
 	*confirmed = True;
 }
 
@@ -573,7 +579,7 @@ char *file_dialog(Widget w, char *opn)
 	static Widget dialog;
 	XmString ok, title;
 	Atom WM_DELETE_WINDOW;
-	static NAT reply;
+	static int reply;
 	/* 0 = not replied; */
 
 	reply = 0;
@@ -617,7 +623,7 @@ char *file_dialog(Widget w, char *opn)
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 
 	while (!reply) {
-		poll();
+		poll(&reply);
 		if(reply == YES && (!file_name || !*file_name)) {
 			XBell(XtDisplay(root), 50);
 			reply = 0;
