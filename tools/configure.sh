@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.15 2002/10/30 11:29:34 rda Exp rda $
+# $Id: configure.sh,v 1.16 2002/10/30 12:30:42 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -76,6 +76,19 @@ elif	which sml >/dev/null 2>&1
 then	echo "Using Standard ML of New Jersey"
 	PPCOMPILER=SMLNJ
 else	give_up "cannot find a Standard ML compiler"
+fi
+#
+# Find Poly/ML database if appropriate:
+#
+if	[ "$PPCOMPILER" = POLYML ]
+then	if	[ "${PPPOLYDBASE:-}" = "" ]
+	then	PPPOLYDBASE=/usr/lib/poly/ML_dbase
+	fi
+	if	[ ! -f $PPPOLYDBASE ]
+	then	give_up "The file $PPPOLYDBASE does not exist"
+	fi
+	echo "Using $PPPOLYDBASE for the Poly/ML compiler database"
+else	PPPOLYDBASE=
 fi
 #
 # Find out how to link Motif
@@ -205,11 +218,8 @@ out "# Edit it at your own risk!"
 export_it PPCOMPILER
 export_it PPMOTIFLINKING
 export_it PPTARGETDIR
-if	[ "${PPPOLYDBASE:-}" != "" ]
-then	if	[ ! -f $PPPOLYDBASE ]
-	then	give_up "The file $PPPOLYDBASE does not exist"
-	fi
-	export_it PPPOLYDBASE
+if	[ "$PPCOMPILER" = POLYML ]
+then	export_it PPPOLYDBASE
 fi
 out 'give_up(){'
 out '	echo "install: installation failed; see $1 for more details"'
