@@ -57,6 +57,12 @@ Added some conversions paralleling the functionality of some of the rules given 
 Put in designs for primitive and built-in rules,
 derived from \cite{DS/FMU/IED/DTD006}.
 Some tidying up.
+\item [Issue 1.6]
+Changed $suc\_conv$ to fail if given $0$, as in proto-type.
+Various changes to error messages, introduced a few new
+conversionals.
+Primitive and built-in inference rules, and conversionals
+all module tested to these designs.
 \end{description}
 \subsection{Changes forecast}
 Most of the text outside the documentation boxes is a discussion
@@ -106,6 +112,8 @@ Thus we give the commands here for those functions declared in the following sig
 =SML
 infix 4 THEN_C;
 infix 4 ORELSE_C;
+infix 4 FURTHER_C;
+infix 4 EITHER_C;
 =TEX
 (The priorities given are probably not appropriate)
 \section{THE DERIVED RULES OF REASONING}
@@ -117,6 +125,11 @@ Though other rules of inference may be introduced, this
 document's signature should provide a core set, at least covering the common rules
 of natural deduction.
 It subsumes the inference rules of the abstract data type $THM$.
+=FAILURE
+6036	Theorem is from deleted theory ?0 (internally theory ?1)
+6065	Theorem not valid as it may depend on a deleted axiom or definition of theory ?0
+6066	Theorem was created in the context of theory ?0 which is not in scope
+6072	Theorems theory, ?0, not properly in current hierarchy	
 =ENDDOC
 \subsection{Concerning Instantiation}
 =DOC
@@ -532,7 +545,7 @@ val âŠ_mp_ruleá : THM -> THM -> THM;
 =DESCRIBE
 Modus Ponens upon an implication
 (which is why we introduce the alias $Š\_mp\_rule$,
-though $Š\_elim$ is shorter, and the preferred name).
+though $Š\_elim$ is shorter, conventional, and the preferred name).
 =RULE
 Š_elim
 É
@@ -1648,7 +1661,7 @@ list_ƒ_intro
 =SEEALSO
 $ƒ\_intro$
 =FAILUREC
-\paragraph{Failure}
+\paragraph{Errors}
 Same messages as $ƒ\_intro$.
 =ENDDOC
 ($GENL$ in Cambridge HOL)
@@ -1667,7 +1680,7 @@ t[t1, ..., tn]
 =SEEALSO
 $ƒ\_elim$
 =FAILUREC
-\paragraph{Failure}
+\paragraph{Errors}
 Same messages as $ƒ\_elim$.
 =ENDDOC
 ($SPECL$ in Cambridge HOL)
@@ -2345,16 +2358,13 @@ suc_conv
 É
 … ^(mk_†(m+1)) = Suc ^(mk_† m)
 =TEX
-=RULE
-suc_conv
-(mk_† 0)
-É
-É
-… 0 = 0
-=TEX
-A primitve inference rule(axiom schemata).
+The conversion fails if given $0$.
+
+A primitve inference rule(axiom schemata), except that it
+fails on $0$.
 =FAILURE
 6013	Term is not a literal numeric constant
+7100	Term must be literal numeric constant > 0
 =SEEALSO
 $mk\_†$
 =ENDDOC
@@ -2468,24 +2478,45 @@ argument.
 =DOC
 val âTHEN_Cá : (CONV * CONV) -> CONV;
 =DESCRIBE
-Combine the effect of two conversions.
+Combine the effect of two successful conversions.
 =RULE
 (c1: CONV) THEN_C (c2: CONV)
 »t¼
 É
 É
-ö … t = t''
+ö … t = t'''
 =TEX
-where $c1\ t$ returns `$ö1 … t = t'$`, and $c2\ t'$ returns
-`$ö2 … t' = t''$` and
+where $c1\ t$ returns `$ö1 … t = t'$`, $c2\ t'$ returns
+`$ö2 … t'' = t'''$`, $t'$ and $t''$ are $\alpha$-convertible and
 $ö$ equals $ö1 ¡ ö2$.
 =SEEALSO
-$LIST\_THEN\_C$
+$LIST\_THEN\_C$, $FURTHER\_C$, $EITHER\_C$, $ORELSE\_C$
+=FAILURE
+7101	Result of first conversion not an equality
+7102	LHS (if any) of result of second conversion not 
+	%alpha%-convertible to RHS of first
 =FAILUREC
-\paragraph{Failure}
+\paragraph{Errors}
 If any, as the failures of $c1$ and $c2$ applied to $t$ and $t'$ respectively.
 =ENDDOC
 ($THENC$ in Cambridge HOL)
+=DOC
+val âFURTHER_Cá : (CONV * CONV) -> CONV;
+=DESCRIBE
+Combine the effect of two conversions, ignoring the failure
+of the second if necessary.
+That is, if the first conversion results in an equation
+whose RHS can have the second conversion applied,
+and the two resulting theorems composed,
+then that composition;
+otherwise the result of the first conversion alone is returned.
+=SEEALSO
+$THEN\_C$, $EITHER\_C$, $ORELSE\_C$
+=FAILUREC
+\paragraph{Errors}
+As the failure of $c1$.
+=ENDDOC
+
 =DOC
 val âORELSE_Cá : (CONV * CONV) -> CONV;
 =DESCRIBE
@@ -2501,12 +2532,27 @@ where $c1\ t$ returns $ö … t = t'$, or $c1$ fails, and
 $c2\ t$ returns
 $ö … t = t'$.
 =SEEALSO
-$LIST\_ORELSE\_C$
+$LIST\_ORELSE\_C$, $THEN\_C$, $EITHER\_C$, $FURTHER\_C$
 =FAILUREC
-\paragraph{Failure}
+\paragraph{Errors}
 As the failure of second conversion, should both conversions fail.
 =ENDDOC
 ($ORELSEC$ in Cambridge HOL)
+=DOC
+val âEITHER_Cá : (CONV * CONV) -> CONV;
+=DESCRIBE
+$c1\ EITHER\_C\ c2$ will succeed if it can apply
+one or both of $c1$ or $c2$.
+If it cannot compose the results of applying both
+conversions successfully (indicating an ill-formed conversion result)
+it will return the result of the first conversion application.
+=SEEALSO
+$FURTHER\_C$, $ORELSE\_C$, $THEN\_C$
+=FAILUREC
+\paragraph{Errors}
+As the failure message of the second conversion
+(implying neither conversion succeeded).
+=ENDDOC
 =DOC
 val âREPEAT_Cá : CONV -> CONV;
 =DESCRIBE
@@ -2516,17 +2562,35 @@ To be more precise, the functionality will be equivalent that of the following d
 fun REPEAT_C (c:CONV) = 
 	(c THEN_C (REPEAT_C c)) ORELSE_C refl_conv
 æ
+=SEEALSO
+$REPEAT1\_C$
 =ENDDOC
 ($REPEATC$ in Cambridge HOL)
+=DOC
+val âREPEAT1_Cá : CONV -> CONV;
+=DESCRIBE
+Repeatedly apply a conversion to a term,
+failing if not successfully applied at least once.
+To be more precise, the functionality will be equivalent that of the following definition:
+ó
+fun REPEAT1_C (c:CONV) = (c FURTHER_C REPEAT1_C c)
+æ
+=FAILUREC
+\paragraph{Errors}
+As the error of the conversion if it cannot be applied at
+least once.
+=ENDDOC
 =DOC
 val âLIST_THEN_Cá : CONV list -> CONV;
 =DESCRIBE
 Apply each conversion in the list, in the sequence given.
 =SEEALSO
 $THEN\_C$
+=FAILURE
+7103	List may not be empty
 =FAILUREC
-\paragraph{Failure}
-As the failure of any constituent conversion.
+or as the failure of any constituent conversion,
+or as $THEN\_C$.
 =ENDDOC
 ($EVERYC$ in Cambridge HOL)
 =DOC
@@ -2535,21 +2599,24 @@ val âLIST_ORELSE_Cá : CONV list -> CONV;
 Attempt to apply each conversion in the list, in the sequence given, until one succeeds, or all fail.
 =SEEALSO
 $ORELSE\_C$
+=FAILURE
+7103	List may not be empty
 =FAILUREC
-\paragraph{Failure}
-As the failure of the last conversion.
+or as the failure of the last conversion.
 =ENDDOC
 ($FIRSTC$ in Cambridge HOL)
 =DOC
 val âCHANGED_Cá : CONV -> CONV;
 =DESCRIBE
 Applies a conversion, and fails if either the conversion fails,
+has ill-formed results in certain ways,
 or it causes no change.
 Even $\alpha$-convertible changes count as a change for this purpose.
 =FAILURE
 7032	Conversion failed to cause a change
+7104	Result of conversion ill-formed
 =FAILUREC
-It may also failed with the error message of the conversion argument.
+It may also fail with the error message of the conversion argument.
 =ENDDOC
 ($CHANGED\_CONV$ in Cambridge HOL)
 =DOC
@@ -2579,6 +2646,9 @@ RAND_C
 where $c\ a$ gives $… a = a'$.
 =FAILURE
 7045	Term is not of the form: »f a¼
+7104	Result of conversion ill-formed
+=FAILUREC
+Also as the failure of the conversion.
 =ENDDOC
 ($RAND\_CONV$ in Cambridge HOL)
 =DOC
@@ -2596,6 +2666,9 @@ RATOR_C
 where $c\ f$ gives $`… f = f'`$.
 =FAILURE
 7045	Term is not of the form: »f a¼
+7104	Result of conversion ill-formed
+=FAILUREC
+Also as the failure of the conversion.
 =ENDDOC
 ($RAND\_CONV$ in Cambridge HOL)
 =DOC
@@ -2615,6 +2688,9 @@ where $c\ p[x]$ gives $`… p[x] = p'[x]`$.
 $BINDER\_C$
 =FAILURE
 7030	Term is not of the form: » x Ž t[x]¼
+7104	Result of conversion ill-formed
+=FAILUREC
+Also as the failure of the conversion.
 =ENDDOC
 ($ABS\_CONV$ in Cambridge HOL)
 =DOC
@@ -2633,6 +2709,9 @@ where $c\ p[x]$ gives $`… p[x] = p'[x]`$,
 and $B$ is a binder.
 =FAILURE
 7059	Term is not of the form: »B x Ž p[x]¼ where »B¼ is a binder
+7104	Result of conversion ill-formed
+=FAILUREC
+Also as the failure of the conversion.
 =ENDDOC
 ($BINDER\_CONV$ in Cambridge HOL)
 =DOC
@@ -2643,9 +2722,9 @@ however that term might be constructed,
 and recombine the results.
 Thus:
 ó
-SUB_C cnv var = cnv var
+SUB_C cnv var = refl_conv var
 
-SUB_C cnv const = cnv const
+SUB_C cnv const = refl_conv const
 
 SUB_C cnv (f x) = ö … f x = f' x' 
 	where cnv f = ö1 … f = f'
@@ -2655,12 +2734,46 @@ SUB_C cnv (f x) = ö … f x = f' x'
 SUB_C cnv ( x Ž t) = ö … ( x Ž t) = ( x Ž t')
 	where cnv t = ö … t = t'
 æ
+=SEEALSO
+$SUB1_C$
 =ENDDOC
 ($SUB\_CONV$ in Cambridge HOL)
+=DOC
+val âSUB1_Cá : CONV -> CONV;
+=DESCRIBE
+Apply a conversion to each of the constituents of a term,
+failing if the term cannot be broken up, or the
+conversion fails on all constituents
+(if only one of the two constituents of a $mk\_comb$ have failures,
+then the offending term will be $refl\_conv$ed instead).
+Thus:
+ó
+SUB1_C cnv var = fail_conv var
+
+SUB1_C cnv const = fail_conv const
+
+SUB1_C cnv (f x) = ö … f x = f' x' 
+	where cnv f = ö1 … f = f'
+	and   cnv x = ö2 … x = x'
+	and ö = ö1 ¡ ö2
+
+SUB1_C cnv ( x Ž t) = ö … ( x Ž t) = ( x Ž t')
+	where cnv t = ö … t = t'
+æ
+=FAILURE
+7104	Result of conversion ill-formed
+7105	Term has no constituents
+=FAILUREC
+There may be failure messages from the conversions.
+=ENDDOC
 
 The following traversal schemes are those provided by Cambridge HOL,
 and are by no means a complete set of ``reasonable'' traversal schemes.
-Indeed, $RE\_TRAVERSE\_C$ is unlikely to ever be an efficient traversal scheme merely complete.
+Indeed, $REPEAT\_TRAVERSE\_C$ is unlikely to ever be an efficient traversal scheme, but merely complete.
+
+When they fail, the resulting error message is somewhat ``non-deterministic'', it may 
+come from a function implementing the traversal scheme used,
+or from the conversion traversed through the term.
 =DOC
 val âONCE_TRAVERSE_Cá : CONV -> CONV;
 =DESCRIBE
@@ -2669,9 +2782,11 @@ attempting to apply its conversion argument.
 If it successfully applies the conversion to any subterm
 then it will not further traverse that subterm,
 but will still continue on other branches.
-If it fails to apply its conversion to a leaf, it then applies $refl\_conv$.
+If it fails to apply its conversion to a leaf, its functionality is equivalent to then applying $refl\_conv$.
 It traverses from left to right, though this should only matter for
 conversions that work by side-effect.
+It will fail if the conversion succeeds nowhere in the tree,
+or if the results of certain conversion applications are ill-formed.
 =ENDDOC
 ($ONCE\_DEPTH\_CONV$ in Cambridge HOL)
 =DOC
@@ -2683,19 +2798,24 @@ on each subterm encountered en route.
 At each node the conversion is applied to the sub-term that results from the application of the preceding traversal, not the original.
 It traverses from left to right, though this should only matter for
 conversions that work by side-effect.
+It fails if the conversion applies nowhere within the tree.
 =ENDDOC
 ($DEPTH\_CONV$ in Cambridge HOL)
 =DOC
 val âREPEAT_TRAVERSE_Cá : CONV -> CONV;
 =DESCRIBE
 This traverses a term from its leaves to its root node.
-It will repeat the application of its conversion argument, until failure,
+It will attempt the application of its conversion argument
 on each subterm encountered en route.
-At each node the conversion is applied to the sub-term that results from the application of the preceding traversal, not the original.
-At any subterm the conversion is successfully applied, the resulting
-subterm will be completely re-traversed once more.
+If the conversion is successfully applied 
+to a given sub-term,
+then the resulting sub-term from the conversion
+is re-traversed by the function.
 It traverses from left to right, though this should only matter for
 conversions that work by side-effect.
+It fails if the conversion is not applicable anywhere within
+the term, or if certain applications of the conversion
+have ill-formed results.
 =ENDDOC
 ($REDEPTH\_CONV$ in Cambridge HOL)
 =DOC
@@ -2707,6 +2827,7 @@ on each subterm encountered en route.
 It descends through the sub-term that results from the application of the preceding traversal, not the original.
 It traverses from left to right, though this should only matter for
 conversions that work by side-effect.
+It fails if the conversion is applied nowhere within the term.
 =ENDDOC
 ($TOP\_DEPTH\_CONV$ in Cambridge HOL)
 \subsubsection{Conversions as Rules}
@@ -2723,6 +2844,11 @@ conv_rule
 ö1 ¡ ö2 … t'
 =TEX
 where $c\ t$ gives $ö2 … t ‚ t'$.
+=FAILURE
+7104	Result of conversion ill-formed
+=FAILUREC
+Also as the failure of the conversion upon the conclusion of the
+theorem.
 =ENDDOC
 ($CONV\_RULE$ in Cambridge HOL)
 \subsection{Canonicalisation for Rewriting}
