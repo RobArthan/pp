@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.231 $ $RCSfile: imp507.doc,v $ $Date: 2002/11/15 16:26:02 $
+% imp507.doc %Z% $Revision: 1.232 $ $RCSfile: imp507.doc,v $ $Date: 2002/11/18 17:43:56 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.231 $%
+\def\SCCSversion{$Revision: 1.232 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/11/15 16:26:02 $%
+\TPPdate{\FormatDate{$Date: 2002/11/18 17:43:56 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -183,7 +183,7 @@ being renamed is defined in the same package specification.
 \item[Issues 1.226--1.228] Uniform treatment of block statements.
 \item[Issue 1.229] Fixed wrong sequencing in {\it do\_refinement\_rhs}.
 \item[Issue 1.230] Fixing problem with subtypes of record types with discriminants.
-\item[Issues 1.230, 1.231] Script deletion.
+\item[Issues 1.231--1.233] Script deletion.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -8701,12 +8701,16 @@ ones to be deleted.
 =SML
 fun Ûdelete_theoriesÝ (thys : string list) : unit= (
 	let	fun check thy = (
-			(case get_theory_status thy of
+			case get_theory_status thy of
 				TSNormal => (
-					map check (get_descendants thy less thy); ()
-			) |	_ => (
+					if	thy mem get_ancestors "-"
+					then	fail "delete_script" 507093 [fn _ => thy]
+					else	(map check (get_descendants thy less thy); ())
+			) |	TSLocked => (
 				fail "delete_script" 507090 [fn _ => thy]
-			)) handle Fail _ => ()
+			) |	_ => (
+				fail "delete_script" 507094 [fn _ => thy]
+			)
 		);
 		fun delete thy = (
 			map delete (get_descendants thy less thy) handle Fail _ => [];
@@ -8719,7 +8723,8 @@ fun Ûdelete_theoriesÝ (thys : string list) : unit= (
 =TEX
 =SML
 fun Ûdelete_scriptÝ (scr : string) : unit = (
-	let	val (thys, sus, packs) = delete_script_aux scr;
+	let	val saved_zg_state = get_z_generator_state();
+	in let	val (thys, sus, packs) = delete_script_aux scr;
 		fun restore_subunit_entry (k, x) = (
 			subunit_env := s_enter k x (!subunit_env)
 		);
@@ -8731,8 +8736,8 @@ fun Ûdelete_scriptÝ (scr : string) : unit = (
 			) |	Nil => ());
 			restore_subunit_env more
 		);
-		fun fmt_strs [] = "\n" ^ "(none)"  ^ "\n"
-		|   fmt_strs ss = "\n" ^ format_list Combinators.I ss ", " ^ "\n";
+		fun fmt_strs [] = "\n    " ^ "(none)"  ^ "\n"
+		|   fmt_strs ss = "\n    " ^ format_list Combinators.I ss ", " ^ "\n";
 		val scrs = Sort.sort Sort.string_order (thys drop
 			(fn t => case e_lookup t (!state_db) of Value _ => false | _ => true));
 		val other_thys = Sort.sort Sort.string_order (thys diff scrs);
@@ -8755,6 +8760,10 @@ fun Ûdelete_scriptÝ (scr : string) : unit = (
 		delete_theories thys;
 		comment "delete_script" 507091 [fn _ => scr];
 		diag_line (get_error_message 507092 (map fmt_strs [scrs, other_thys, sus, packs]))
+	end	handle ex => (
+			set_z_generator_state saved_zg_state;
+			reraise ex "delete_script"
+		)
 	end
 );
 =TEX
