@@ -20,7 +20,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \usepackage{Lemma1}
 \usepackage{ProofPower}
 \usepackage{epsf}
-\def\SLRP{{\bf SLRP}}
+\def\SLRP{{\sf SLRP}}
 \def\Slrp{{\tt slrp}}
 
 \def\FigRef#1{\ref{#1} on page \pageref{#1}}
@@ -30,7 +30,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 
 \newenvironment{Fig}[3][htp]{%
 \begin{figure}[#1]
-\label{#3}
+\def\Label{\label{#3}}
 \def\Caption{\caption{#2}}
 \begin{center}
 \begin{tabular}{|c|}\hline
@@ -39,7 +39,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \end{minipage}\\\hline
 \end{tabular}
 \end{center}
-\Caption
+\Caption\Label
 \end{figure}}
 
 %%%%% YOU WILL USUALLY WANT TO CHANGE THE FOLLOWING TO SUIT YOU AND YOUR DOCUMENT:
@@ -74,9 +74,9 @@ Contact: Rob Arthan < rda@lemma-one.com >
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.1 $%
+\def\Version{$Revision: 1.2 $%
 }
-\def\Date{\FormatDate{$Date: 2003/03/07 17:27:55 $%
+\def\Date{\FormatDate{$Date: 2003/03/09 16:53:24 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -191,6 +191,7 @@ Figure~\ref{usr032a.grm.txt} shows an example file containing a grammar for a la
 Expression =	Sum;
 
 Atom =		literal
+		|	identifier
 		|	`(`, Expression, `)`;
 
 Application =	Atom
@@ -235,14 +236,16 @@ enclosed in back-quote characters, e.g.,
 
 Once you have prepared your grammar file, you can run {\SLRP} to analyse the grammar
 and generate the parser code. You use the shell script {\Slrp} to do this specifying the
-name of your file using the {\it -f} option.. If you want to generate the generic parser, you specify
+name of your file using the {\it -f} option. In this case, the name is
+{\tt usr032a.grm.txt}. If you want to generate the generic parser, you specify
 {\it -g}. While you are developing your grammar, it is generally also useful to specify the
 listing option {-l 2}. For our example, the command would be as follows:
 
 =SH
-slrp -g -l 2 -f  usr032a.grm.txt >usr032a.grm.run 2>&1
+	slrp -g -l 2 -f  usr032a.grm.txt >usr032a.grm.run 2>&1
 =TEX
-This will result in some messages on standard output.
+This will result in some messages on standard output (which we have redirected
+to the file {\tt usr032a.grm.run}.
 It will also produce two output files:
 
 \begin{description}
@@ -314,7 +317,7 @@ mutating the generic parser to meet your needs.
 
 \newpage
 
-\begin{Fig}[h]{An Example Parse Tree}{usr032a.grm.out}
+\begin{Fig}[th]{An Example Parse Tree}{usr032a.grm.out}
 =GFT
 1.1.1.1.1.1.1: Atom = literal(1);
 1.1.1.1.1.1: Application = Atom;
@@ -350,15 +353,11 @@ mutating the generic parser to meet your needs.
 =TEX
 \newpage
 \section{ADDING A LEXICAL ANALYSER}\label{LEXAN}
-In this section we show how to construct a real lexical analyser
-for the arithmetic expression language defined by the grammar 
-shown in figure~\FigRef{usr032a.grm.txt}. 
-
 The structure {\it GenericSlrpParser} containing the generic parser support code
 provides several tools to help you construct a real lexical analyser.
-In this section we show how these may be used to construct a lexical analyser appropriate
-for the anguage of arithmetic expressions defined by the grammar shown in figure~\FigRef{usr032a.grm.txt}. 
-The tools will help you with things such as reading an input stream and keeping track of line numbers
+In this section we show how you might use them to implement a lexical analyser
+for the language of arithmetic expressions of the previous section.
+The tools help you with things such as reading an input stream and keeping track of line numbers
 leaving you to focus on the lexical matters that are specific to your language.
 
 The structure {\it GenericSlrpParser}  defines a polymorphic type
@@ -395,7 +394,8 @@ identifier,  literal, `(`, `)`, `*`, `+`, `-`, `/`
 .
 Identifiers will be formed from  letters, numbers and underscores and will start with a letter or an underscore.
 Literals will be decimal integers.
-The punctuation symbols will be as given together with semicolon and the hash symbol
+The punctuation symbols will be as given together with semicolon, the hash symbol
+and the equals symbol (for later use)
 and our lexical analyser will warn about and skip
 over other characters. We will take the input stream to comprise a sequence of
 arithmetic expressions separated by semicolons (as might be appropriate in an interactive
@@ -404,6 +404,7 @@ Comments will be allowed and comprise any sequence of characters beginning
 with a hash character and terminated by an end-of-line character.
 The ML definitions given
 in figure~\ref{lex.values} reflect  some of these design decisions.
+
 
 \begin{Fig}{Constructing Lexical Values}{lex.values}
 =SML
@@ -415,24 +416,23 @@ fun lv_identifier (s : string) : AE_LEX_VALUE = (
 fun lv_literal (s : string) : AE_LEX_VALUE = (
 	(LCIdentifier "literal", (s, get_line_number()))
 );
-local
-	fun lv_punctuation c = (LCString c, (c, get_line_number()));
-in
+fun lv_punctuation c = (LCString c, (c, get_line_number()));
 val lv_left_bracket : AE_LEX_VALUE = lv_punctuation "(";
 val lv_right_bracket : LEX_CLASS LEX_VALUE = lv_punctuation ")";
 val lv_times : AE_LEX_VALUE = lv_punctuation "*";
 val lv_plus : AE_LEX_VALUE = lv_punctuation "+";
 val lv_minus : AE_LEX_VALUE = lv_punctuation "-";
 val lv_over : AE_LEX_VALUE = lv_punctuation "/";
-end;
+val lv_equals : AE_LEX_VALUE = lv_punctuation "=";
 val lv_semicolon : AE_LEX_VALUE = (LCEos, (";", get_line_number()));
 val lv_end_of_input : AE_LEX_VALUE =
 	(LCEos, ("<end-of-input>", get_line_number()));
 =TEX
 \end{Fig}
 
-The tools in the structure {\it GenericSlrpParser} provide us a framework in which our lexical
-analyser is defined. In this framework you write what we call recogniser functions for the various
+The tools in the structure {\it GenericSlrpParser} provide a framework in which you
+can conveniently define useful lexical
+analyser. In this framework you write what we call recogniser functions for the various
 lexical classes.  These are defined in terms of the following data types, a recognisr
 function being a function from
 =INLINEFT
@@ -491,6 +491,8 @@ fun rec_punctuation (("(" :: more, _)  : AE_LEX_STATE)
 	(more, Known lv_over)
 |   rec_punctuation ( ";" :: more, _ ) = 
 	(more, Known lv_semicolon)
+|   rec_punctuation ( "=" :: more, _ ) = 
+	(more, Known lv_equals)
 |   rec_punctuation ( "#" :: _, _ ) = 
 	([], Comment)
 |   rec_punctuation (chs, _) = (chs, Unknown);
@@ -594,24 +596,42 @@ fun parse_string
 );
 =TEX
 \end{Fig}
-
+To test the parser, we can execute the following code which will print out the parse trees for
+the two expressions in the string.
+=SML
+let	val p = parse_string "1 + 2; 3 * 4";
+in	print_tree(p());
+	print_tree(p())
+end;
 =TEX
 
 \newpage
 \section{CUSTOMISING THE PARSER ACTIONS}\label{ACTIONS}
 In this section, we will complete work on our running example by adding
 parser action functions to the grammar of our language of arithmetic
-expressions. The action functions will actually compute the value of
-an expression, so that our parser becomes a simple calculator.
+expressions, which we now extend to allow the definition of
+named numbers. The action functions will actually compute the value of
+expression, so that our parser becomes a simple calculator.
 
-TBS --- description of action grammars.
+
+The grammar for the extended language is given in figujre~\ref{usr032b.grm.txt}.
+The grammar has been extended in two ways: first, the sentence symbol
+is now {\it Command}, which is either an expression as before, or a definition
+of a named number, comprising an identifier and an expression giving
+its value; second, we have added what are called {\it actions}, i.e., Standard ML
+expressions in brackets at the end of the alternatives defining an action
+to be taken when the alternative is used in parsing a sentence.
 
 \begin{Fig}[ht]{An Action Grammar for Arithmetic Expressions}{usr032b.grm.txt}
 =DUMP usr032b.grm.txt
+Command =	Expression				(red_command1 x1)
+		|	identifier, `=`, Expression	(red_command2 x1 x3);
+
 Expression =	Sum					(red_expression x1);
 
 Atom =		literal				(red_atom1 x1)
-		|	`(`, Expression, `)`		(red_atom2 x2);
+		|	identifier			(red_atom2 x1)
+		|	`(`, Expression, `)`		(red_atom3 x2);
 
 Application =	Atom				(red_application1 x1)
 		|	`-`, Application		(red_application2 x2)
@@ -631,12 +651,36 @@ Sum =		Product			(red_sum1 x1)
 =SH
 slrp -g -l 2 -f  usr032b.grm.txt >usr032b.grm.run 2>&1
 =TEX
-\begin{Fig}{The Action  Functions}{actions.functions}
+\begin{Fig}{The Reduction Functions for Commands}{actions.commands}
+=SML
+val named_numbers : int S_DICT ref = ref [];
+fun red_command1 (Parsed i) = (
+	named_numbers := s_enter "it" i (!named_numbers);
+	output(std_out, "it = ");
+	i
+);
+fun red_command2 (Token ((_, (s, _)), _)) (Parsed i) = (
+	named_numbers := s_enter s i (!named_numbers);
+	output(std_out, s ^ " = ");
+	i
+);
+=TEX
+\end{Fig}
+
+\begin{Fig}{The Reduction Functions for Expressions}{actions.expressions}
 =SML
 fun red_accept (Parsed i) = i;
 val red_expression = red_accept;
 fun red_atom1 (Token ((_, (s, _)), _)) = nat_of_string s; 
-val red_atom2 = red_accept;
+fun red_atom2 (Token ((_, (s, _)), _)) = (
+	case s_lookup s (!named_numbers) of
+		Value i => i
+	|	Nil => (
+		output(std_out, "Undefined name \"" ^ s ^ "\"\n");
+		raise SYNTAX_ERROR
+	)
+);		
+val red_atom3 = red_accept;
 val red_application1 = red_accept;
 fun red_application2 (Parsed i) =  ~i;
 val red_application3 = red_accept;
@@ -673,26 +717,51 @@ fun parse_stream
 			(default_error string_of_lex_value)
 			(reader(in_char_stream_of_instream s));
 		val _ = reader_state := ([], true);
-	in	while true do
+	in	while snd (!reader_state) do
 			let	val res = do_parse (!reader_state);
-			in	output(std_out, "Result = " ^ 
-					string_of_int res  ^"\n")
+			in	output(std_out, string_of_int res  ^"\n")
 			end	handle SYNTAX_ERROR =>  ()
 	end
 );
-=IGN
-parse_stream std_in;
-
 =TEX
 \end{Fig}
 
+If you compile the above code and run the following ML command, you will
+begin an interactive session with our simple calculator program.
+=GFT
+parse_stream std_in;
+=TEX
+If you put a semicolon-separated list of commands in a file and 
+\Hide{
+=DUMP usr032b.grm.tst
+# One of everything for the calculator program:
+1;
+ten = 10;
+eleven = ten + 1;
+twelve = (2  + 2) * 5 - (4 + 4);
+one = +1;
+neg = -one;
+zero = sgn(one) + sgn(neg);
+two = abs(one) + abs(one);
+three = two + - sgn(neg);
+four = twelve/three
+=TEX
+} %\Hide
+If you put a semicolon-separated list of commands in a file say {\tt usr032b.grm.tst},
+then the following command will execute the commands. Note that the calculator
+will not allow the file to end with a semicolon. We suggest as an exercise redesigning
+the calculator to treat semicolons as terminators rather than separators --- there
+are many ways of going about it. One way is discussed in section~\ref{CHECKS} below.
+=SML
+parse_stream (open_in "usr032b.grm.tst");
+=TEX
 \newpage
 \section{HOW THE PARSERS WORK}\label{HOWITWORKS}
 \begin{Fig}[ht]{LR(0) Automaton}{lr0.automaton}
 \epsffile{usr032a.eps}
 \end{Fig}
 
-\begin{Fig}[ht]{Example Grammar}{EG2}
+\begin{Fig}[ht]{Example Grammar}{usr032d.grm.txt}
 =GFT
 Decl		= UninitDecl, `;`
 		|  InitDecl, `;`;
@@ -705,6 +774,167 @@ InitDecl	= var, `:`, type, `:=`, expr;
 
 \section{DEALING WITH PARSING CONFLICTS}\label{CONFLICTS}
 
+\begin{Fig}[ht]{An Inherently Ambiguous Grammar}{usr032e.grm.txt}
+=DUMP usr032e.grm.txt
+	S	= AB, C | A, BC;
+	AB	= | a, AB, b;
+	C	= | C, c;
+	A	= | A, a;
+	BC	= b, BC, c;
+=TEX
+\end{Fig}
+
+\begin{Fig}[ht]{Resolving Ambiguities By Widening the Language}{usr032f.grm.txt}
+=DUMP usr032f.grm.txt
+	S	= A, B, C	
+			((fn Parsed  m => fn Parsed n => fn Parsed p =>
+			if	m <> n andalso n <> p
+			then	raise SYNTAX_ERROR
+			else	0) x1 x2 x3);
+	A	= 		( 0 )
+		|   A, a		((fn Parsed m => m + 1) x1);
+	B	=		( 0 )
+		|   B, b		((fn Parsed n => n + 1) x1);
+	C	=		( 0 )
+		|   C, c		((fn Parsed p => p + 1) x1);
+=TEX
+\end{Fig}
+
+\begin{Fig}[ht]{A non-LALR(1) Grammar}{usr032g.grm.txt}
+=DUMP usr032g.grm.txt
+Command =		Expression
+		|	identifier, `(`, FormalParams, `)`, `=`,  Expression;
+
+Expression = Sum;
+
+FormalParams =	identifier
+		|	FormalParams, `,`, identifier;
+
+Atom =		literal
+		|	identifier
+		|	`(`, Expression, `)`;
+
+Application =	Atom
+		|	`-`, Application
+		|	`+`, Application
+		|	identifier, `(`, ExpressionList, `)`;
+
+ExpressionList =	Expression
+		|	ExpressionList, `,`,  Expression;
+
+Product =		Application
+		|	Product, `*`, Application
+		|	Product, `/`, Application;
+
+Sum =		Product
+		|	Sum, `+`, Product
+		|	Sum, `-`, Product;
+=TEX
+\end{Fig}
+=SH
+sed -e '/^ExpressionList/,/;/d' \
+	-e '/^Application/,/;/d' \
+	< usr032g.grm.txt > usr032h.grm.txt
+=TEX
+\begin{Fig}[ht]{Making a Grammar LALR(1)}{usr032h.grm.txt}
+=DUMPMORE usr032h.grm.txt
+Application =	Atom
+		|	`-`, Application
+		|	`+`, Application
+		|	identifier, `(`, NonIdExpressionList, `)`
+		|	identifier, `(`, FormalParams, `)`;
+
+NonIdExpressionList =	NonIdExpression
+		|	FormalParams, `,`, NonIdExpression
+		|	NonIdExpressionList, `,`, Expression;
+
+NonIdExpression =		`(`, Expression, `)`
+		|	`-`, Application
+		|	`+`, Application
+		|	identifier, `(`, NonIdExpressionList, `)`
+		|	identifier, `(`, FormalParams, `)`
+		|	Product, `*`, Application
+		|	Product, `/`, Application
+		|	Sum, `+`, Product
+		|	Sum, `-`, Product;
+=TEX
+\end{Fig}
+
+
+\section{OTHER CHECKS MADE BY \SLRP}\label{CHECKS}
+=DUMP usr032i.grm.txt
+CommandStream =		GotCommand, `;`, CommandStream	(0);
+
+GotCommand =		Command		(red_got_command x1);
+=TEX
+=SH
+cat usr032b.grm.txt >>usr032i.grm.txt
+=TEX
+\begin{Fig}{Recognising Punctuation Symbols for the Stream Parser}{stream.punctuation}
+=SML
+val lv_semicolon : AE_LEX_VALUE = lv_punctuation ";";
+fun rec_punctuation (("(" :: more, _)  : AE_LEX_STATE)
+	: AE_LEX_STATE
+	= (more, Known  lv_left_bracket)
+|   rec_punctuation ( ")" :: more, _ ) =
+	(more, Known lv_right_bracket)
+|   rec_punctuation ( "*" :: more, _ ) =
+	(more, Known lv_times)
+|   rec_punctuation ( "+" :: more, _ ) =
+	(more, Known lv_plus)
+|   rec_punctuation ( "-" :: more, _ ) =
+	(more, Known lv_minus)
+|   rec_punctuation ( "/" :: more, _ ) =
+	(more, Known lv_over)
+|   rec_punctuation ( "=" :: more, _ ) = 
+	(more, Known lv_equals)
+|   rec_punctuation ( ";" :: more, _ ) = 
+	(more, Known lv_semicolon)
+|   rec_punctuation ( "#" :: _, _ ) = 
+	([], Comment)
+|   rec_punctuation (chs, _) = (chs, Unknown);
+=TEX
+\end{Fig}
+\begin{Fig}{Constructing the Stream Parser}{stream.parser}
+=SML
+val rec_token : AE_LEX_STATE -> AE_LEX_STATE =
+	rec_first[rec_punctuation, rec_identifier, rec_literal, rec_unknown];
+fun reader (strm : IN_CHAR_STREAM) 
+	: (AE_LEX_VALUE, string list * bool) READER = (
+	let	val do_read = gen_reader LCEos rec_token strm
+	in	fn state =>
+		let	val (tok, state') = do_read state;
+		in	reader_state := state';
+			(tok, state')
+		end
+	end
+);
+fun red_got_command (Parsed i) = (
+	output(std_out, string_of_int i ^ "\n");
+	i
+);
+use"usr032i.grm.sml";
+fun stream_parse_stream
+	(s : instream)  : unit = (
+	let	val do_parse =
+			slrp'gen_parser
+			default_resolver
+			classifier
+			(default_error string_of_lex_value)
+			(reader(in_char_stream_of_instream s));
+	in	(do_parse ([], true); ()) handle SYNTAX_ERROR => ()
+	end
+);
+=TEX
+\end{Fig}
+TBS - add an error handle to the above to exit cleanly on end of input.
+=IGN
+stream_parse_stream std_in;
+1+2;
+x = 99;
+y = x;
+stream_parse_stream (open_in "usr032b.grm.tst");
+=TEX
 \section{ERROR HANDLING}\label{ERRORS}
 
 \appendix
@@ -716,6 +946,15 @@ InitDecl	= var, `:`, type, `:=`, expr;
 \section{STANDARD ML  LIBRARY}\label{LIBRARY}
 
 \section{PARSER DRIVER INTERFACE}\label{DRIVERINTERFACE}
+
+\Hide{
+=SH
+for c in d e f g h i
+do
+	slrp -g -l 2 -f  usr032$c.grm.txt >usr032$c.grm.run 2>&1
+done
+=TEX
+} %\Hide
 
 \end{document}
 
