@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.13 2002/12/10 20:39:47 rda Exp rda $ 
+ * $Id: search.c,v 2.14 2002/12/12 14:06:50 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -1057,7 +1057,7 @@ long int get_line_no(Widget text_w)
 				== XmCOPY_FAILED ) {
 			return -1;
 		}
-		for(p = data; p - data + cur_pos <= ins_pos && *p; ++p) {
+		for(p = data; p - data + cur_pos < ins_pos && *p; ++p) {
 			if(*p == '\n') {
 				++line_ct;
 			}
