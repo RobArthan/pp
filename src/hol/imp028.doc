@@ -8,7 +8,7 @@
 \def\SCCSversion{$Revision$
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{91/03/11 %
+\TPPdate{\FormatDate{$Date$ %
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -37,7 +37,7 @@ first group of tactics and tacticals in ICL HOL.}
 
 \end{centering}
 \pagebreak
-\section{Document Control}
+\section{DOCUMENT CONTROL}
 \subsection{Contents List}
 \tableofcontents
 \subsection{Document Cross References}
@@ -65,6 +65,8 @@ Made $eqn\_cxt\_conv$ ignore ``no change'' conversions.
 Changes during testing.
 \item [Issue 1.15 (18th November 1991)]
 Corrected $C\_CONTR\_T$.
+\item [Issue 1.16 (18th November 1991)]
+Reacting to issue 1.5/6 of \cite{DS/FMU/IED/DTD051}.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -88,42 +90,9 @@ None known.
 =SML
 structure ‚Tactics2· : Tactics2 = struct
 =TEX
-\section{EQUATIONAL CONTEXTS}
-An equational context is a list of conversions,
-each paired with term index. It represents a statement of
-how to
-rewrite a term to result in an equational theorem,
-guided by the outermost form of the term to be rewritten,
-which is matched against the term index of each conversion.
 =SML
-type ‚EQN_CXT· = (TERM * CONV) list;
-=TEX
-In the following, if $simple\_eq\_match\_1\_conv$
-is successfully applied, then the term destruction
-but be successful.
-=SML
-fun ‚thm_for_eqn_cxt· (thm : THM) : (TERM * CONV) = (
-let	val cnv =  simple_eq_match_1_conv thm
-		handle complaint =>
-		pass_on complaint "simple_eq_match_1_conv" "thm_for_eqn_cxt";
-	val lhs = fst(dest_eq(snd(strip_É (concl thm))));
-in
-	(lhs, cnv)
-end);
-=TEX
-=SML
-local
-	fun FIRST_CHANGED_C (cv :: rest) tm =
-		(CHANGED_C cv ORELSE_C FIRST_CHANGED_C rest) tm
-	| FIRST_CHANGED_C [] tm = term_fail "eqn_cxt_conv" 28142 [tm];
-in
-fun ‚eqn_cxt_conv· (ec : EQN_CXT) : CONV = (
-let	val net = make_net ec;
-in
-	(fn tm => FIRST_CHANGED_C(net_lookup net tm)tm
-	)
-end);
-end;
+val ‚was_theory· = get_current_theory_name ();
+val _ = open_theory "misc";
 =TEX
 \section{TACTICALS FOR THE PREDICATE CALCULUS}
 The following contain only those parts used in implementing
@@ -330,10 +299,14 @@ When we undischarge more than one assumption we need to be careful not
 to fail if the list of assumptions we are discharging contains repeats
 which is allowed with the convention that the repeats are ignored.
 =SML
-val ‚list_undisch_tac· : TERM list ->  TACTIC = MAP_EVERY (TRY_T o undisch_tac) o rev;
+val ‚list_undisch_tac· : TERM list ->  TACTIC = (
+	MAP_EVERY (TRY_T o undisch_tac) o rev
+);
 =TEX
 =SML
-val ‚all_undisch_tac· :  TACTIC = GET_ASMS_T (MAP_EVERY((TRY_T o undisch_tac) o concl));
+val ‚all_undisch_tac· :  TACTIC = (
+	GET_ASMS_T (MAP_EVERY((TRY_T o undisch_tac) o concl))
+);
 =TEX
 =SML
 fun ‚ante_tac· (thm : THM) : TACTIC = (fn (asms, conc) =>
@@ -425,7 +398,7 @@ val ‚STRIP_THM_THEN· : THM_TACTICAL = (fn ttac:THM_TACTIC =>
 	(FIRST_TTCL[Ä_THEN, 
 		Å_THEN, 
 		SIMPLE_Ñ_THEN,
-		CONV_THEN (#sa_conv (get_proof_context()))]
+		CONV_THEN (get_epc_st_conv (get_proof_context()))]
 	ORELSE_TTCL
 		FAIL_WITH_THEN "STRIP_THM_THEN" 28003 
 			[fn () => string_of_thm thm])
@@ -443,7 +416,7 @@ fun ‚STRIP_GOAL_T· (ttac : THM_TACTIC) : TACTIC = (fn gl =>
 		Ä_tac,
 		ä_T ttac,
 		t_tac,
-		conv_tac(#sg_conv (get_proof_context())),
+		conv_tac(get_epc_sg_conv (get_proof_context())),
 		goal_in_asms_tac]
 	ORELSE_T
 		fail_with_tac "STRIP_GOAL_T" 28003 
@@ -465,22 +438,23 @@ val  ‚strip_tac· : TACTIC = (fn gl =>
 We now give a local context using $Ç\_thm$:
 =SML
 val ‚local_strip_thm_thens· : EQN_CXT =
-	[ (thm_for_eqn_cxt Ç_thm) ];
+	[ (thm_eqn_cxt Ç_thm) ];
 =TEX
 =SML
 val ‚local_strip_goal_ts· : EQN_CXT =
-	[ (thm_for_eqn_cxt Ç_thm) ];
+	[ (thm_eqn_cxt Ç_thm) ];
 
-val ‚elocal_strip_proof_context· : EPROOF_CONTEXT = {
-	sa_conv = eqn_cxt_conv local_strip_thm_thens,
-	sg_conv = eqn_cxt_conv local_strip_goal_ts,
-	rw_canon = (fn thm => [thm]),
-	rw_net = empty_net};
+val ‚local_strip_epc· : EPROOF_CONTEXT =  (
+	set_epc_name "local_strip_epc"
+	(set_epc_st_conv (eqn_cxt_conv local_strip_thm_thens)
+	(set_epc_sg_conv (eqn_cxt_conv local_strip_goal_ts)
+	initial_epc))
+);
 =TEX
 Now remove the local proof context, and put the fuller one 
 on the stack.
 =SML
-val _ = push_proof_context elocal_strip_proof_context;
+val _ = push_proof_context local_strip_epc;
 =TEX
 We now have some machinery in place with which we can prove the tautologies
 need for the tacticals which support $strip\_tac$:
@@ -594,7 +568,7 @@ val ‚simple_å_Ñ%down%1_conv· : CONV = (fn tm =>
 This requires proper testing against a ``try along list until fail''.
 =SML
 local
-	val c = eqn_cxt_conv ((map thm_for_eqn_cxt
+	val c = eqn_cxt_conv ((map thm_eqn_cxt
 		[å_å_thm, å_Ä_thm, å_Å_thm, å_ä_thm,
 		 å_Ç_thm, å_if_thm, å_t_thm, å_f_thm]) @
 		[(ªå(É x é y)º, simple_å_É_conv),
@@ -715,37 +689,39 @@ end;
 We could usefully expand out the call to $simple\_å\_in\_conv$.
 =SML
 val ‚initial_strip_thm_thens· : EQN_CXT =
-	[	(thm_for_eqn_cxt ä_thm),
-		(thm_for_eqn_cxt Ç_thm),
-		(thm_for_eqn_cxt local_if_thm),
+	[	(thm_eqn_cxt ä_thm),
+		(thm_eqn_cxt Ç_thm),
+		(thm_eqn_cxt local_if_thm),
 		(ªå xº, simple_å_in_conv),
 		(ªÑ%down%1 x é pº, simple_Ñ%down%1_conv)];
 =TEX
 =SML
 val ‚initial_strip_goal_ts· : EQN_CXT =
-	[	(thm_for_eqn_cxt Ç_thm),
+	[	(thm_eqn_cxt Ç_thm),
 		(ªå xº, simple_å_in_conv),
-		(thm_for_eqn_cxt a_Å_åb_thm),
-		(thm_for_eqn_cxt åa_Å_b_thm),
-		(thm_for_eqn_cxt a_Å_b_thm),
-		(thm_for_eqn_cxt local_if_thm)];
+		(thm_eqn_cxt a_Å_åb_thm),
+		(thm_eqn_cxt åa_Å_b_thm),
+		(thm_eqn_cxt a_Å_b_thm),
+		(thm_eqn_cxt local_if_thm)];
 =TEX
 Now we can declare and set the proof contexts:
 =SML
-val ‚initial_strip_proof_context· : PROOF_CONTEXT = {
-	sa_eqn_cxt = initial_strip_thm_thens,
-	sg_eqn_cxt = initial_strip_goal_ts,
-	rw_canon = (fn thm => [thm]),
-	rw_eqn_cxt = []};
-val ‚einitial_strip_proof_context· : EPROOF_CONTEXT = {
-	sa_conv = eqn_cxt_conv initial_strip_thm_thens,
-	sg_conv = eqn_cxt_conv initial_strip_goal_ts,
-	rw_canon = (fn thm => [thm]),
-	rw_net = empty_net};
+val ‚initial_strip_pc· : PROOF_CONTEXT = (
+	set_pc_name "initial_strip_pc"
+	(set_pc_st_eqn_cxt initial_strip_thm_thens
+	(set_pc_sg_eqn_cxt initial_strip_goal_ts
+	initial_pc))
+);
+val ‚initial_strip_epc· : EPROOF_CONTEXT =  (
+	set_epc_name "initial_strip_epc"
+	(set_epc_st_conv (eqn_cxt_conv initial_strip_thm_thens)
+	(set_epc_sg_conv (eqn_cxt_conv initial_strip_goal_ts)
+	initial_epc))
+);
 val _ = pop_proof_context ();
-val _ = push_proof_context einitial_strip_proof_context;
+val _ = push_proof_context initial_strip_epc;
 =TEX
-\subsection{Concerning $if \ldots then \ldots else \ldots$}
+\subsection{Concerning $if ... then ... else ...$}
 =SML
 val ‚if_thm· = save_thm("if_thm",
 	tac_proof( ([],
@@ -760,7 +736,7 @@ The following could perhaps be speeded up by further use of nets.
 local
 val ‚taut_strip_thm_conv· : CONV = (
 	eqn_cxt_conv(
-	map thm_for_eqn_cxt
+	map thm_eqn_cxt
 	[å_å_thm, å_Ä_thm, å_Å_thm, å_ä_thm,
 	 å_Ç_thm, å_t_thm, å_f_thm,
 	ä_thm, Ç_thm, local_if_thm
@@ -768,7 +744,7 @@ val ‚taut_strip_thm_conv· : CONV = (
 
 val ‚taut_strip_goal_conv· : CONV = (
 	eqn_cxt_conv(
-	map thm_for_eqn_cxt
+	map thm_eqn_cxt
 	[å_å_thm, å_Ä_thm, å_Å_thm, å_ä_thm,
 	 å_Ç_thm, å_t_thm, å_f_thm,
 	Ç_thm, local_if_thm,
@@ -875,7 +851,7 @@ val ‚c_contr_tac· : TACTIC = (fn gl =>
 	handle ex => pass_on ex "C_CONTR_T" "c_contr_tac"
 );
 =TEX
-\subsection{Concerning $å$}
+\subsection{Concerning å}
 =SML
 fun  ‚å_elim_tac· (tm : TERM) : TACTIC = (
 	if type_of tm <> BOOL
@@ -899,7 +875,8 @@ fun  ‚å_T2· (t1 : TERM)
 		val (sgs2, pf2) = (thmtac2 (asm_rule t2)) (asms, å_t1);
 		fun rule [thm1, thm2] = å_intro t2 thm1 thm2
 		|   rule _ = bad_proof "å_T2";
-	in	(sgs1 @ sgs2, rule o mapshape[(pf1, length sgs1), (pf2, length sgs2)])
+	in	(sgs1 @ sgs2, rule o mapshape[(pf1, length sgs1), 
+			(pf2, length sgs2)])
 	end	
 );
 =TEX
@@ -917,7 +894,8 @@ fun ‚å_tac· (t : TERM) : TACTIC = (fn gl =>
 =TEX
 \subsection{Concerning Å}
 =SML
-val ‚Å_comm_thm· : THM = tac_proof(([], ªÉa béa Å b Ç b Å aº), REPEAT strip_tac);
+val ‚Å_comm_thm· : THM = tac_proof(([], ªÉa béa Å b Ç b Å aº), 
+	REPEAT strip_tac);
 =TEX
 =SML
 val ‚swap_Å_tac· : TACTIC = (fn gl =>
@@ -999,7 +977,8 @@ fun ‚IF_THEN· (ttac : THM -> TACTIC) : THM -> TACTIC = (fn thm =>
 );
 =TEX
 =SML
-fun ‚IF_T2· (ttac1 : THM -> TACTIC) (ttac2 : THM -> TACTIC) : TACTIC = (fn (asms, conc) =>
+fun ‚IF_T2· (ttac1 : THM -> TACTIC) (ttac2 : THM -> TACTIC) 
+		: TACTIC = (fn (asms, conc) =>
 	let	val (a, tt, et) = dest_if conc;
 		val (tsgs, tpf) = ttac1 (asm_rule a) (asms, tt);
 		val (esgs, epf) = ttac2 (asm_rule (mk_å a)) (asms, et);
@@ -1042,7 +1021,8 @@ fun ‚simple_Ñ%down%1_tac· (tm : TERM) : TACTIC = (fn (asms, conc) =>
 =SML
 fun ‚SIMPLE_Ñ%down%1_THEN· (ttac : THM -> TACTIC) = (fn thm =>
 	(SIMPLE_Ñ_THEN ttac (simple_Ñ%down%1_elim thm))
-	handle ex => divert ex "simple_Ñ%down%1_elim" "SIMPLE_Ñ%down%1_THEN" 28102 
+	handle ex => divert ex "simple_Ñ%down%1_elim" 
+		"SIMPLE_Ñ%down%1_THEN" 28102 
 		[fn () => string_of_thm thm]
 );
 =TEX
@@ -1053,7 +1033,11 @@ fun ‚lemma_tac· (sg : TERM) : TACTIC = (fn gl =>
 	handle ex => pass_on ex "LEMMA_T" "lemma_tac"
 );
 =TEX
-
+\subsection{End of Structure}
+Restore the previous theory:
+=SML
+val _ = open_theory was_theory;
+=TEX
 =SML
 end; (* of structure Tactics2 *)
 open Tactics2;

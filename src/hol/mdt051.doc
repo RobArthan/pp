@@ -44,6 +44,8 @@ proof context functions.}
 First draft version.
 \item [Issue 1.2]
 Reacted to $NetTools$ being open.
+\item [Issue 1.3]
+Proof context becomes an ADT.
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -61,6 +63,7 @@ following the test policy given in that document and the general policy given in
 \subsubsection{Dependencies}
 This document is derived from the detailed design in \cite{DS/FMU/IED/DTD051},
 and is further influenced by the implementation, in  \cite{DS/FMU/IED/IMP051}.
+It requires the presence of theory ``$†$''.
 \subsubsection{Deficiencies}
 
 \section{TEST HARNESS MATERIAL}
@@ -68,17 +71,25 @@ and is further influenced by the implementation, in  \cite{DS/FMU/IED/IMP051}.
 usefile "dtd013.sml";
 usefile "imp013.sml";
 init_mt_results ();
+open_theory "†";
 =TEX
 \section{TEST DATA}
 This section contains data used in the test, that
 in themselves are not part of the tests.
 However, they may fail if the functions tested are ill-formed.
 =SML
-val epc : EPROOF_CONTEXT = {
-		rw_net = empty_net,
-		rw_canon = (fn thm => [thm]),
-		sa_conv = simple_%beta%_conv,
-		sg_conv = id_conv};
+val epc : EPROOF_CONTEXT = 
+	set_epc_name "epc"
+	(set_epc_rw_net (make_net [(»x+y¼,plus_conv)])
+	(set_epc_rw_canon (fn thm => [thm,thm])
+	(set_epc_sg_conv suc_conv
+	(set_epc_st_conv simple_%beta%_conv initial_epc))));
+val pc : PROOF_CONTEXT = 
+	set_pc_name "pc"
+	(set_pc_rw_eqn_cxt [(»x+y¼,plus_conv),(»5¼,suc_conv),(»6¼,suc_conv)]
+	(set_pc_rw_canons [fn thm => [thm,thm]]
+	(set_pc_sg_eqn_cxt [(»5¼,suc_conv),(»6¼,suc_conv)]
+	(set_pc_st_eqn_cxt [(»3¼,suc_conv)] initial_pc))));
 
 val beta_redex = »( x Ž (x Š F)) T¼;
 =TEX
@@ -87,29 +98,105 @@ We wish to start with the initial proof context, so
 repeat pop_proof_context;
 =TEX
 \section{THE TESTS}
-$push/pop/get\_proof\_context$ is implicitly tested by the following functions.
+\subsection{Equational Contexts}
+=SML
+store_mt_results mt_run [("thm_eqn_cxt",
+	(Combinators.I ** (fn f => snd(dest_thm (f »y¼))))
+		o thm_eqn_cxt,
+	all_ƒ_intro (refl_conv »x¼),
+	(»x¼,»y = y¼))];
+store_mt_results mt_run_fail [("thm_eqn_cxt 7095",
+	thm_eqn_cxt,
+	t_thm,
+	gen_fail_msg "thm_eqn_cxt" 7095 ["… T"])];
+=TEX
+=SML
+let
+	val thm = tac_proof(([],»ƒ x Ž (x € x) = x¼),
+		REPEAT strip_tac);
+in
+store_mt_results mt_run [("eqn_cxt_conv",
+	dest_thm o eqn_cxt_conv [thm_eqn_cxt thm],
+	»y € y¼,
+	([],»y € y ‚ y¼))]
+end;
+store_mt_results mt_run_fail [("eqn_cxt_conv 51005",
+	eqn_cxt_conv [],
+	»y¼,
+	gen_fail_msg "eqn_cxt_conv" 51005 ["»y¼"])];
+=TEX
+\subsection{Proof Contexts}
+
+=SML
+store_mt_results mt_run [
+	("get_pc_rw_eqn_cxt",
+	length o get_pc_rw_eqn_cxt,
+	pc,
+	3)];
+store_mt_results mt_run [
+	("get_pc_st_eqn_cxt",
+	length o get_pc_st_eqn_cxt,
+	pc,
+	1)];
+store_mt_results mt_run [
+	("get_pc_sg_eqn_cxt",
+	length o get_pc_sg_eqn_cxt,
+	pc,
+	2)];
+store_mt_results mt_run [
+	("get_pc_sg_eqn_cxt",
+	length o get_pc_rw_canons,
+	pc,
+	1)];
+store_mt_results mt_run [
+	("get_pc_name",
+	get_pc_name,
+	pc,
+	"pc")];
+=TEX
+$push/pop/get\_proof\_context$ and $initial\_epc$ are implicitly tested by the following:
 =SML
 store_mt_results mt_run [
 	("?_proof_context 1",
-	dest_thm o TRY_C(#sa_conv (get_proof_context())),
+	dest_thm o TRY_C(get_epc_st_conv (get_proof_context())),
 	beta_redex,
 	dest_thm(id_conv beta_redex))];
 push_proof_context epc;
 store_mt_results mt_run [
-	("?_proof_context 2",
-	dest_thm o #sa_conv (get_proof_context()),
+	("?_proof_context 2a",
+	dest_thm o get_epc_st_conv (get_proof_context()),
 	beta_redex,
 	dest_thm(simple_%beta%_conv beta_redex))];
+store_mt_results mt_run [
+	("?_proof_context 2b",
+	dest_thm o get_epc_sg_conv (get_proof_context()),
+	»2¼,
+	dest_thm(suc_conv »2¼))];
+store_mt_results mt_run [
+	("?_proof_context 2c",
+	dest_thm o hd(net_lookup (get_epc_rw_net (get_proof_context()))»2 + 3¼),
+	»2 + 3¼,
+	dest_thm(plus_conv »2+3¼))];
+store_mt_results mt_run [
+	("?_proof_context 2d",
+	length o get_epc_rw_canon (get_proof_context()),
+	t_thm,
+	2)];
+store_mt_results mt_run [
+	("?_proof_context 2e",
+	get_epc_name,
+	get_proof_context(),
+	"epc")];
 val epc1 = pop_proof_context ();
 store_mt_results mt_run [
 	("?_proof_context 3",
-	dest_thm o TRY_C(#sa_conv (get_proof_context())),
+	dest_thm o TRY_C(get_epc_st_conv (get_proof_context())),
 	beta_redex,
 	dest_thm(id_conv beta_redex))];
 push_proof_context epc1;
 store_mt_results mt_run [
 	("?_proof_context 4",
-	dest_thm o #sa_conv (get_proof_context()),
+	dest_thm o get_epc_st_conv (get_proof_context()),
 	beta_redex,
 	dest_thm(simple_%beta%_conv beta_redex))];
 val epc2 = pop_proof_context ();
