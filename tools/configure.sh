@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.28 2004/02/09 18:14:57 rda Exp rda $
+# $Id: configure.sh,v 1.29 2004/03/08 21:33:58 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -158,7 +158,7 @@ done
 #
 # Find an ML Compiler
 #
-if	[ "$hol" = y -o "$zed" = y -o "$daz" = y ]
+if	[ "$dev" = y -o "$hol" = y -o "$zed" = y -o "$daz" = y ]
 then	if	[ "${PPCOMPILER:-}" != "" ]
 	then	case "$PPCOMPILER" in
 			POLYML) T="Poly/ML";;
