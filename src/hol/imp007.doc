@@ -75,6 +75,7 @@ Added author's names.
 Bought $TOP\_TRAVERSE\_C$ into line with prototype's 
 $TOP\_DEPTH\_CONV$.
 $prove\_asm\_rule$ doesn't worry about missing assumptions.
+Corrected $\_match$ functions.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -2213,18 +2214,16 @@ term_tyvars (concl t2);
 \subsection{Concerning Matching Functions}
 The function $apply\_matches\_rule$ encodes the matching attempt, should
 a simple use of the rule fail.
+It presumes that the theorem it is passed is stripped
+of all outer universal quanitifers.
 It brings up to the conclusion all the hypotheses.
 It instantiates types to the minimum required,
 instantiates free variables to the minimum required
 (notice that we must not instantiate the universally quantified variables of $thm$ that occur free in the assumptions:
 thus $tmm'$)
 and then returns are the hypotheses to the assumption list.
-It then eliminates the universal quantifications either
-to the requirement of the match, or the bound variable
-if none.
 
-Notice that the prototype used $GSPEC$ and $INST$
-to do the same as $aux1$ - I suspect our mixed approach is faster.
+Note that $term\_match$ is not infallible.
 =SML
 fun ‚apply_matches_rule· (caller : string) 
 	(tym : (TYPE * TYPE)list)
@@ -2236,23 +2235,11 @@ let
 	val s1 = all_ä_intro thm;
 	val nhyps1 = length(strip_ä (concl s1));
 	val s2 = inst_type_rule tym s1;
-	val bvs = fst(strip_É (hd(rev(strip_ä (concl s2)))));
-	val tmm' = tmm drop (fn (_,x) => x mem bvs);
-	val s3 = inst_term_rule tmm' s2;
+	val s3 = inst_term_rule tmm s2;
 	val s4 = fold (fn (_,x) => undisch_rule x)
 		(interval 1 (nhyps1 - nhyps)) s3;
-
-	fun aux1 (athm : THM) : THM = (
-	let
-		val (qv,b) = simple_dest_É(concl athm);
-	in
-		aux1 (simple_É_elim (rassoc1 tmm qv) athm)
-	end
-	handle (Fail _) => athm);
-
-	val s5 = aux1 s4;
 in
-	s5
+	s4
 end
 handle (Fail _) => fail caller 7044 []
 );
@@ -2262,18 +2249,20 @@ Now we use the above in the various forms of matching.
 local
 fun aux (thm1 : THM) (thm2 : THM) : THM = (
 let
-	val (t1,_) = dest_ä (snd(strip_É (concl thm1)));
+	val s1 = all_simple_É_elim thm1;
+	val (t1,_) = dest_ä (snd(concl s1));
 	val (tym,tmm) = term_match (concl thm2) t1;
-	val s1 = apply_matches_rule "simple_ä_match_mp_rule" tym tmm thm1;
-	val s2 = ä_elim s1 thm2;
+	val s2 = apply_matches_rule "simple_ä_match_mp_rule" tym tmm s1;
+	val s3 = ä_elim s2 thm2;
 in
 	(prof "simple_ä_match_mp_rule";
-	s2)
+	s3)
 end
 handle complaint =>
 list_divert complaint "simple_ä_match_mp_rule" [
 	("dest_ä", 7042, []),
-	("term_match", 7044, [])]
+	("term_match", 7044, []),
+	("ä_elim", 7044, [])]
 );
 in
 fun ‚simple_ä_match_mp_rule· (thm1 : THM) (thm2 : THM) : THM = (	
@@ -2298,18 +2287,20 @@ simple_ä_match_mp_rule thm1 thm2;
 local
 fun aux (thm1 : THM) (thm2 : THM) : THM = (
 let
-	val (t1,_) = dest_Ç (snd(strip_É (concl thm1)));
+	val s1 = all_simple_É_elim thm1;
+	val (t1,_) = dest_Ç (snd(concl s1));
 	val (tym,tmm) = term_match (concl thm2) t1;
-	val s1 = apply_matches_rule "simple_Ç_match_mp_rule" tym tmm thm1;
-	val s2 = Ç_mp_rule s1 thm2;
+	val s2 = apply_matches_rule "simple_Ç_match_mp_rule" tym tmm s1;
+	val s3 = Ç_mp_rule s2 thm2;
 in
 	(prof "simple_Ç_match_mp_rule";
-	s2)
+	s3)
 end
 handle complaint =>
 list_divert complaint "simple_Ç_match_mp_rule" [
 	("dest_Ç", 7099, []),
-	("term_match", 7044, [])]
+	("term_match", 7044, []),
+	("Ç_mp_rule", 7044, [])]
 );
 in
 fun ‚simple_Ç_match_mp_rule· (thm1 : THM) (thm2 : THM) : THM = (
@@ -2326,24 +2317,27 @@ end;
 val thm1 = simple_É_elim ªx : 'aº (asm_rule ªÉ x y é f x y Ç bº);
 val thm2 = asm_rule ªf 1 2 : BOOLº;
 simple_Ç_match_mp_rule thm1 thm2;
+simple_Ç_match_mp_rule thm1 (asm_rule ªf 1 (y:'b) : BOOLº);
 simple_Ç_match_mp_rule t_def t_thm;
 =TEX
 =SML
 local
 fun aux (thm : THM) : CONV = (fn (tm :TERM) =>
 let
-	val (t1,_) = dest_eq (snd(strip_É (concl thm)));
+	val s1 = all_simple_É_elim thm;
+	val (t1,_) = dest_eq (snd(concl s1));
 	val (tym,tmm) = term_match tm t1;
-	val s1 = apply_matches_rule "simple_Ç_match_mp_rule" tym tmm thm;
-	val s2 = eq_trans_rule (refl_conv tm) s1;
+	val s2 = apply_matches_rule "simple_Ç_match_mp_rule" tym tmm s1;
+	val s3 = eq_trans_rule (refl_conv tm) s2;
 in
 	(prof "simple_eq_match_conv";
-	s2)
+	s3)
 end
 handle complaint =>
 list_divert complaint "simple_eq_match_conv" [
 	("dest_eq", 7095, []),
-	("term_match", 7076, [])]
+	("term_match", 7076, []),
+	("eq_trans_rule", 7076, [])]
 );
 in
 fun ‚simple_eq_match_conv· (thm : THM) : CONV = (fn (tm :TERM) =>
@@ -2360,6 +2354,8 @@ end;
 
 val thm = simple_É_elim ªx : 'aº (asm_rule ªÉ x y é f x y Ç bº);
 simple_eq_match_conv thm ªf 1 2 : BOOLº;
+simple_eq_match_conv thm ªf 1 (y:Ü) : BOOLº;
+simple_eq_match_conv thm ªf 1 (y:'b) : BOOLº;
 =TEX
 In the following we just map all failures bar $dest\_eq$
 onto 7076, without working out whether the error is 
@@ -2368,22 +2364,22 @@ This is because we want this function to fail fast as well are succeed fast.
 =SML
 fun ‚simple_eq_match_1_conv· (thm : THM) : CONV = (
 let
-	val (t1,_) = dest_eq (snd(strip_É (concl thm)));
-
+	val (qvs,body) = strip_É (concl thm);
+	val (t1,_) = dest_eq body;
 in
 (fn (tm :TERM) =>
 let	val (tym,tmm) = term_match tm t1;
-	val s2 = inst_type_rule tym thm;	
+	val s2 = inst_type_rule tym thm;
 
-	fun aux1 (athm : THM) : THM = (
+	fun aux1 (qv :: rest) : TERM list = (
 	let
-		val (qv,b) = simple_dest_É(concl athm);
+		val qv' = inst [] tym qv;
 	in
-		aux1 (simple_É_elim (rassoc1 tmm qv) athm)
+		(rassoc1 tmm qv') :: aux1 rest 
 	end
-	handle (Fail _) => athm);
+	) | aux1 [] = [];
 
-	val s3 = aux1 s2;
+	val s3 = simple_list_É_elim (aux1 qvs) s2;
 	val s4 = eq_trans_rule (refl_conv tm) s3;
 in
 	(prof "simple_eq_match_1_conv";
@@ -2402,6 +2398,9 @@ val thm2 = (asm_rule ªÉ x y :Ü é f x y Ç bº);
 val thm3 = (asm_rule ªÉ x y :Ü é ((ç f éf)f) x y Ç bº);
 simple_eq_match_1_conv thm ªf 1 2 : BOOLº; (* fails *)
 simple_eq_match_1_conv thm1 ªf 1 2 : BOOLº; (* fails *)
+simple_eq_match_1_conv thm1 ªf (x:Ü) 2 : BOOLº;
+simple_eq_match_1_conv thm2 ªf (x:Ü) 2 : BOOLº;
+simple_eq_match_1_conv thm1 ªf (x:Ü) (y : Ü) : BOOLº;
 simple_eq_match_1_conv thm2 ªf 1 2 : BOOLº;
 simple_eq_match_1_conv thm3 ª(ç g ég)f 1 2 : BOOLº;
 =TEX
