@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.42 2002/12/13 13:23:56 rda Exp rda $
+ * $Id: mainw.c,v 2.43 2002/12/17 23:15:16 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -1342,7 +1342,7 @@ static void line_number_timeout_proc(
 	line_num = get_line_no((Widget) cbd);
 
 	if(line_num != last_line_num) {
-		sprintf(buf, "Line: %6ld", line_num);
+		sprintf(buf, "Line: %ld", line_num);
 		s = XmStringCreateSimple(buf);
 		XtVaSetValues(linenumber, XmNlabelString, s, NULL);
 		XmStringFree(s);
