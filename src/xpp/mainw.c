@@ -86,8 +86,6 @@ static Widget
 	root, frame, work, display, command,
 	menubar, filemenu, editmenu, cmdmenu, helpmenu;
 
-static int display_cursor = 0;
-
 static char *arglist[10];
 
 static int control_fd;
@@ -100,38 +98,29 @@ static int control_fd;
  * the display in w is left where it is.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-void scroll_out(buf, ct, w, highlight)
+void scroll_out(buf, ct, w, ignored)
 char *buf;
 int ct;
 Widget w;
-BOOL highlight;
+BOOL ignored;
 {
-	XmTextPosition ins_pos;
+	XmTextPosition ins_pos, last_pos;
 	Position dontcare;
 	char *p;
 	buf[ct] = '\0';
 
-	ins_pos = XmTextGetInsertionPosition(w);
+	ins_pos = XmTextGetLastPosition(w);
+
+	XmTextInsert(w, ins_pos, buf);
+
+	last_pos = XmTextGetLastPosition(w);
 
 	if(XmTextPosToXY(w, ins_pos, &dontcare, &dontcare)) {
 		/* insertion position is visible: scroll */
-		XmTextInsert(w, display_cursor, buf);
-		ins_pos = XmTextGetInsertionPosition(w);
-		while(!XmTextPosToXY(w, ins_pos, &dontcare, &dontcare)) {
+		while(!XmTextPosToXY(w, last_pos, &dontcare, &dontcare)) {
 			XmTextScroll(w, 1);
-			ins_pos = XmTextGetInsertionPosition(w);
 		};
-		XtVaSetValues(w, XmNcursorPosition, display_cursor, NULL);
-		XmTextScroll(w, 1);
-	} else {
-		XmTextInsert(w, display_cursor, buf);
-	}
-	if(highlight && ct) {
-		XmTextSetHighlight(w, display_cursor,
-			display_cursor+ct-1,
-			XmHIGHLIGHT_SELECTED);
 	};
-	display_cursor += ct;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -182,7 +171,7 @@ char **argv;
 	XtSetArg(args[i], XmNscrollHorizontal,		False); ++i;
 	XtSetArg(args[i], XmNscrollVertical, 		True); ++i;
 	XtSetArg(args[i], XmNautoShowCursorPosition, 	False); ++i;
-	XtSetArg(args[i], XmNcursorPositionVisible, 	False); ++i;
+	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
 
 	display = XmCreateScrolledText(work, "display", args, i);
 
@@ -253,10 +242,10 @@ char **argv;
 
 	editmenu = XmVaCreateSimplePulldownMenu(
 		menubar, "edit_menu", 1, edit_menu_cb,
-		XmVaPUSHBUTTON, s1, 'u', NULL, NULL,
+		XmVaPUSHBUTTON, s1, 'C', NULL, NULL,
 		XmVaPUSHBUTTON, s2, 'o', NULL, NULL,
-		XmVaPUSHBUTTON, s3, 'l', NULL, NULL,
-		XmVaPUSHBUTTON, s4, 'a', NULL, NULL,
+		XmVaPUSHBUTTON, s3, 'P', NULL, NULL,
+		XmVaPUSHBUTTON, s4, 'l', NULL, NULL,
 		XmVaPUSHBUTTON, s5, 'p', NULL, NULL,
 		NULL);
 
@@ -351,15 +340,31 @@ Widget w;
 int i;
 XmAnyCallbackStruct *cbs;
 {
+	Boolean result = True;
+
 	dummy_menu_cb(w, i, cbs, "edit menu item");
 	switch(i) {
+	case 0:
+		result = XmTextCut(command, CurrentTime);
+		break;
+	case 1:
+		result = XmTextCopy(command, CurrentTime);
+		break;
+	case 2:
+		result = XmTextPaste(command);
+		break;
+	case 3:
+		XmTextClearSelection(command, CurrentTime);
+		break;
 	case 4:
 		add_palette(command);
 /* Should test for success and make this menu item insensitive */
 		break;
 	default:
 		break;
-	}
+	};
+/* Could also test for result in cases where there is no
+   selection to cut, copy or paste. */
 }
 
 void cmd_menu_cb(w, i, cbs)
@@ -506,9 +511,9 @@ void send_to_application (buf, siz)
 char *buf;
 int siz;
 {
-
+/*
 	scroll_out(buf, siz, display, TRUE);
-
+*/
 	if(write(control_fd, buf, siz) != siz) {
 		diag("system error", "write to application failed");
 		perror("xpp");
