@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.35 2005/02/27 15:12:12 rda Exp rda $
+# $Id: configure.sh,v 1.36 2005/02/27 15:18:41 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -86,7 +86,8 @@ check_bin(){
 #
 # Set locale to C (i.e., turn off all localisations so that things text-processing is 8-bit clean
 #
-export LC_ALL=C
+LC_ALL=C
+export LC_ALL
 #
 # Find a target directory
 #
