@@ -184,7 +184,7 @@ typedef struct menu_item {
 	extern char *file_dialog(
 		Widget	w,
 		char	*opn,    /* Save/Open/... */
-		char	*cancel /* "Cancel/Empty File */);
+		Boolean	start_up);
 	extern void memory_warning_dialog(
 		Widget  w,
 		Boolean show);     /* Used when memory's very low */

@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.56 2003/05/08 11:23:29 rda Exp rda $
+ * $Id: mainw.c,v 2.57 2003/05/20 15:16:13 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -1023,7 +1023,7 @@ static void file_menu_cb(
 		break;
 	case FILE_MENU_SAVE_AS:
 		oldfname = XmTextGetString(namestring);
-		fname = file_dialog(frame, "Save", "Cancel");
+		fname = file_dialog(frame, "Save", False);
 		if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 		} else if(save_file_as(script, fname)) {
@@ -1044,7 +1044,7 @@ static void file_menu_cb(
 	case FILE_MENU_SAVE_SELECTION:
 		if((buf = get_selection(script, no_selection_message))
 			!= NULL) {
-			fname = file_dialog(frame, "Save Selection", "Cancel");
+			fname = file_dialog(frame, "Save Selection", False);
 			if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 			} else {
@@ -1058,8 +1058,7 @@ static void file_menu_cb(
 	case FILE_MENU_INIT_OPEN:
 		oldfname = XmTextGetString(namestring);
 		if(!file_info.changed || yes_no_dialog(root, changed_message)) {
-			char * cancel = i == FILE_MENU_OPEN ? "Cancel" : "Empty File";
-			fname = file_dialog(frame, "Open", cancel);
+			fname = file_dialog(frame, "Open", i == FILE_MENU_INIT_OPEN);
 			if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 			} else {
@@ -1084,7 +1083,7 @@ static void file_menu_cb(
 		if(oldfname) {XtFree(oldfname);}
 		break;
 	case FILE_MENU_INCLUDE:
-		fname = file_dialog(frame, "Include", "Cancel");
+		fname = file_dialog(frame, "Include", False);
 		if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 			break;

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2003/05/07 16:32:20 $ $Revision: 2.18 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2003/05/20 15:16:13 $ $Revision: 2.19 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -649,15 +649,18 @@ static void ok_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * file_dialog: dialog to get a file name, via a FileSelectionDialog.
  * `opn' is the label to us on the ``OK'' button (i.e. it's
- * ``Save'' or ``Open'' or whatever. `cancel` is the label
- * for the ``Cancel`` button.
+ * ``Save'' or ``Open'' or whatever. 
+ * if start_up is true, the dialog is the one for use on start-up. For
+ * thjis one, cancel is labelled quit and their is an extra Empty File
+ * button.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static char *file_name;
 static void	file_cancel_cb(CALLBACK_ARGS),
 		file_ok_cb(CALLBACK_ARGS),
+		file_quit_cb(CALLBACK_ARGS),
 		file_help_cb(CALLBACK_ARGS);
 
-char *file_dialog(Widget w, char *opn, char * cancel)
+char *file_dialog(Widget w, char *opn,Boolean start_up)
 {
 	static Widget dialog;
 	XmString s, title;
@@ -674,14 +677,15 @@ char *file_dialog(Widget w, char *opn, char * cancel)
 		add_edit_res_handler(dialog);
 #endif
 		XtAddCallback(dialog, XmNokCallback, file_ok_cb, &reply);
-		XtAddCallback(dialog, XmNcancelCallback, file_cancel_cb, &reply);
+		XtAddCallback(dialog, XmNcancelCallback,
+			start_up ? file_quit_cb : file_cancel_cb, &reply);
 		XtAddCallback(dialog, XmNhelpCallback, file_help_cb, NULL);
 		WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
 			"WM_DELETE_WINDOW",
 			False);
 		XmAddWMProtocolCallback(XtParent(dialog),
 			WM_DELETE_WINDOW,
-			file_cancel_cb,
+			start_up ? file_quit_cb : file_cancel_cb,
 			&reply);
 		title = XmStringCreateSimple("Select A File");
 		XtVaSetValues(dialog,
@@ -700,14 +704,23 @@ char *file_dialog(Widget w, char *opn, char * cancel)
 
 	XmStringFree(s);
 
-	s = XmStringCreateSimple(cancel);
-
-	XtVaSetValues(dialog,
-		XmNcancelLabelString,	s,
-		NULL);
-
-	XmStringFree(s);
-
+	if(start_up) {
+		Widget empty_file, dummy;
+		s = XmStringCreateSimple("Quit");
+		XtVaSetValues(dialog,
+			XmNcancelLabelString,	s,
+			NULL);
+		XmStringFree(s);
+		dummy = XtVaCreateWidget("dummy",
+			xmPushButtonWidgetClass,
+			dialog,
+			NULL);
+		empty_file = XtVaCreateManagedWidget("Empty File",
+			xmPushButtonWidgetClass,
+			dialog,
+			NULL);
+		XtAddCallback(empty_file, XmNactivateCallback, file_cancel_cb, &reply);
+	}
 	XtManageChild(dialog);
 
 	XtPopup(XtParent(dialog), XtGrabNone);
@@ -723,11 +736,16 @@ char *file_dialog(Widget w, char *opn, char * cancel)
 
 	XtPopdown(XtParent(dialog));
 
+	if(start_up) {
+		XtDestroyWidget(dialog);
+		dialog = 0;
+	}
+
 	if(reply == YES) {
 		return file_name;
 	} else {
 		return NULL;
-	};
+	}
 
 }
 
@@ -761,3 +779,10 @@ static void file_help_cb(
 	help_dialog(root, Help_File_Selection_Box);
 }
 
+static void file_quit_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
+{
+	exit(0);
+}
