@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.200 $ $RCSfile: imp507.doc,v $ $Date: 2002/05/14 16:03:20 $
+% imp507.doc %Z% $Revision: 1.201 $ $RCSfile: imp507.doc,v $ $Date: 2002/05/17 11:31:42 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.200 $%
+\def\SCCSversion{$Revision: 1.201 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/05/14 16:03:20 $%
+\TPPdate{\FormatDate{$Date: 2002/05/17 11:31:42 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -146,7 +146,9 @@ statements in stubs.
 \item[Issue 1.198] Spring 2002 enhancements: more on named loops.
 \item[Issue 1.199] Duplicate renamings and use clauses are now errors.
 \item[Issue 1.200] {\it renamings} is now called {\it var\_renamings} in the specs.
-\item[Issue 1.201] Fixed {\it renames\_proc\_pack\_spec} which can now rename a procedure
+\item[Issue 1.201] Fixed {\it renames\_proc\_pack\_spec} which can now rename a procedure in the same package.
+\item[Issue 1.202] Fixed {\it renames\_pack} which was botching functions altogether and
+added the state database into the CN state.
 in the same package.
 \end{description}
 \subsection{Changes Forecast}
@@ -5897,7 +5899,7 @@ fun Ûcheck_pack_completeİ ({decl = Nil, ...}: PACKAGE) : unit = ()
 			if	zmod = !script_name
 			then	!repl_env
 			else	#repl_env (get_saved_z_generator_state zmod)
-				handle Fail _ => fail "check_pack_complete" 505072
+				handle Fail _ => fail "check_pack_complete" 507072
 				[fn _ => #name pack_decl, fn _ => zmod];
 		fun check_decls acc [] = rev acc
 		|     check_decls acc (DDeclarationKSlot ({label, ...}, _) ::more) = (
@@ -5967,9 +5969,6 @@ fun Ûrenames_packİ (old_name : ID , pack : PACKAGE)  : unit = (
 		);
 		val bds_to_do = get_consts_types [] consts_types;
 		val _ = map basic_declaration bds_to_do;
-		val funs_to_do = map (const_def  o #name) 
-			(informal_funs @ map #informal_fun formal_funs);
-		val _ = map basic_declaration funs_to_do;
 		val newids = new_ids pack;
 		fun do_renaming (new, old)   = (
 			renames_object
@@ -5987,10 +5986,26 @@ fun Ûrenames_packİ (old_name : ID , pack : PACKAGE)  : unit = (
 			 : PARAMETER_SPECIFICATION = (
 			{idlist = vars, mode = mode, name = tmark}
 		);
-		fun untrans_fp ({name, formal_ids, par_names, globals, spec} : FORMAL_PROC) 
+		fun untrans_ff ({
+				informal_fun = {name, formal_pars, return_type},
+				globals, ...} : FORMAL_FUN) 
+			: SUBPROGRAM_SPECIFICATION = (SSFunction
+				{designator = name, formal_part = map untrans_par formal_pars,
+				 return = return_type,
+				 spec = Nil, annotation = [], globals = globals}
+		);
+		fun do_formal_fun (ff as {informal_fun = {name, ...}, ...}) = (
+			let	 val ss = untrans_ff ff;
+			in	renames_fun{subprogram_specification = ss,
+					name1 = Value old_name,
+					name2 = name}
+			end
+		);
+		val _ = map do_formal_fun formal_funs;
+		fun untrans_fp ({name, formal_ids, par_names, globals, ...} : FORMAL_PROC) 
 			: SUBPROGRAM_SPECIFICATION = (SSProcedure
 				{name = name, formal_part = map untrans_par formal_ids,
-				 spec = Value spec, annotation = [], globals = globals}
+				 spec = Nil, annotation = [], globals = globals}
 		);
 		fun do_formal_proc (fp as {name, ...}) = (
 			let	 val ss = untrans_fp fp;
@@ -6925,12 +6940,13 @@ fun Ûget_replacementİ (lab : string) : REPLACEMENT OPT = (
 );
 =TEX
 =SML
-abstype ÛCN_STATEİ = CNState of Z_GENERATOR_STATE with
+abstype ÛCN_STATEİ = CNState of Z_GENERATOR_STATE * Z_GENERATOR_STATE E_DICT
+with
 (*
 =TEX
 =SML
 *)
-	val Ûinitial_cn_stateİ : CN_STATE = CNState init_z_generator_state;
+	val Ûinitial_cn_stateİ : CN_STATE = CNState (init_z_generator_state, initial_e_dict);
 (*
 =TEX
 It is tricky in the following to know whether or not to save the state
@@ -7001,11 +7017,13 @@ expected to see in the following.
 *)
 	fun Ûdo_new_scriptİ (continue : bool)
 		{	name : string,
-			state = CNState zg_state : CN_STATE} : unit = (
+			state = CNState (zg_state, st_db) : CN_STATE} : unit = (
 		let	val old_state = get_z_generator_state ();
+			val old_state_db = !state_db;
 			val thy = get_current_theory_name();
 		in
 		(	set_z_generator_state zg_state;
+			state_db := st_db;
 			open_theory "cn";
 			new_theory_aux [] name;
 			set_cn_created();
@@ -7013,6 +7031,7 @@ expected to see in the following.
 			init_cn_z_generator continue name
 		) handle ex => (
 			set_z_generator_state old_state;
+			state_db := old_state_db;
 			open_theory thy;
 			reraise ex "new_script"
 			)
@@ -7026,12 +7045,14 @@ expected to see in the following.
 *)
 	fun Ûdo_new_script1İ (continue : bool)
 		{	name : string,
-			state = CNState zg_state : CN_STATE,
+			state = CNState (zg_state, st_db) : CN_STATE,
 			library_theories : string list} : unit = (
 		let	val old_state = get_z_generator_state ();
+			val old_state_db = !state_db;
 			val thy = get_current_theory_name();
 		in
 		(	set_z_generator_state zg_state;
+			state_db := st_db;
 			open_theory "cn";
 			new_theory_aux [] name;
 			set_cn_created();
@@ -7046,6 +7067,7 @@ expected to see in the following.
 			()
 		) handle ex => (
 			set_z_generator_state old_state;
+			state_db := old_state_db;
 			open_theory thy;
 			reraise ex "new_script1"
 			)
@@ -7067,18 +7089,19 @@ expected to see in the following.
 		= do_new_script1 true;
 
 	fun Ûget_cn_stateİ (() : unit) : CN_STATE = (
-		CNState (get_z_generator_state())
+		CNState (get_z_generator_state(), !state_db)
 	);
 
-	fun Ûset_cn_stateİ (CNState zg_state : CN_STATE) : unit = (
+	fun Ûset_cn_stateİ (CNState (zg_state, st_db) : CN_STATE) : unit = (
 		set_z_generator_state zg_state;
+		state_db := st_db;
 		save_z_generator_state();
 		(open_theory o #script_name) zg_state
 			handle Fail _ => open_theory "cn"
 	);
 
 	fun Ûget_saved_cn_stateİ (script : string) : CN_STATE = (
-		CNState (get_saved_z_generator_state script)
+		CNState (get_saved_z_generator_state script, !state_db)
 		handle ex => reraise ex "get_saved_cn_state"
 	);
 (*
