@@ -1,4 +1,4 @@
-%  imp003.doc  %Z% $Date: 1999/03/06 14:28:00 $ $Revision: 2.16 $ $RCSfile: imp003.doc,v $
+%  imp003.doc  %Z% $Date: 2001/07/24 20:22:55 $ $Revision: 2.17 $ $RCSfile: imp003.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -7,10 +7,10 @@
 \TPPtitle{Implementation for Types and Terms}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Types and Terms}
 \TPPref{DS/FMU/IED/IMP003}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.16 $
+\def\SCCSversion{$Revision: 2.17 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 1999/03/06 14:28:00 $%
+\TPPdate{\FormatDate{$Date: 2001/07/24 20:22:55 $%
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -76,6 +76,7 @@ Updates for SML'97.
 \item [Issue 2.17] Optimised instantiation and substitution operations in cases where
 the instantiation or substitution lists are effectively empty (as happens surprisingly
 often, e.g., in the conversions that move negation through quantifiers).
+\item [Issue 2.18] Fixed performance problem in {\it icl'subst}.
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
@@ -468,13 +469,59 @@ In $aux$, $R$ is the local substitution, which is the original
 overriden by bound variables being sent to the ``same'' (perhaps renamed) variables.
 The first of each pair is both the term required,
 and the free variable names in that term.
+
+Earlier versions of this coce called {\it blackbox} which in turn called
+{\it icl'frees} whenever a $\lambda$-abstraction was encountered.
+This is very inefficient on large terms containing many nested binders.
+To improve this situation, the current code uses the following data
+type to allow the necessary information to be computed in one extra
+pass over each outermost $\lambda$-abstraction.
+=SML
+datatype ﾛFV_MAPﾝ =
+		ﾛLeafﾝ
+	|	ﾛAppNodeﾝ of FV_MAP * FV_MAP
+	|	ﾛ君odeﾝ of (string * TYPE) list * FV_MAP;
+=TEX
+=SML
+local
+	fun	mk_app_node (Leaf, Leaf) = Leaf
+	|	mk_app_node (fvm1, fvm2) = AppNode(fvm1, fvm2);
+	fun fvmaux
+		(icl'App(tm1, tm2, ty2) : icl'TERM) 
+		(ty1 : TYPE) : (string * TYPE) list * FV_MAP = (
+		case tm1 of
+			icl'Const _ => (
+			let	val (fvs1, fvm1) = fvmaux tm2 ty2;
+			in	(fvs1, mk_app_node(Leaf, fvm1))
+			end
+		) | _ => (
+			let	val (fvs1, fvm1) = fvmaux tm1 (LｭType(ty2, ty1));
+				val (fvs2, fvm2) = fvmaux tm2 ty2;
+			in	(fvs1 cup fvs2, mk_app_node(fvm1, fvm2))
+			end
+		)
+	) | fvmaux (icl'Const _) _ = ([], Leaf)
+	| fvmaux (icl'Var s) ty = (
+		([(s,ty)], Leaf)
+	) | fvmaux (icl'Simpleﾌ (s, bdy)) (LｭType(ty1, ty2)) = (
+		let	val (fvs1, fvm1) = fvmaux bdy ty2;
+		in	(fvs1 less (s, ty1), 君ode(fvs1, fvm1))
+		end
+	) | fvmaux _ _ = error "subst" 3064 [];
+in
+	fun ﾛmk_fv_mapﾝ (( typed(tm, ty)):TERM) : FV_MAP = (
+		let	val (fvs, fvm) = fvmaux tm ty;
+		in	君ode(fvs, fvm)
+		end
+	);
+end;
 =SML
 fun flat_map f (a :: x) = f a @ flat_map f x
 | flat_map f [] = [];
 =TEX
 =SML
 local
-	fun blackbox RF b s_ty = (
+	fun blackbox RF fvs s_ty = (
 	let fun bbaux (a :: x) = (
 		if a = s_ty
 		then bbaux x
@@ -483,57 +530,64 @@ local
 			| _ => (fst a :: bbaux x)
 	) | bbaux _ = [];
 	in
-		bbaux (icl'frees b)
+		bbaux fvs
 	end);
 in
 fun ﾛicl'substﾝ ([] : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = tm
 | icl'subst (R : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = (
 let
-	fun aux RF (App(f, a)) = (
-		let	val f' = aux RF (dest_simple_term f);
-		in
-			mk_app(f',
-				(aux RF (dest_simple_term a)
-				handle (Fail _) =>
-				a))
+	fun dest_app_node (AppNode (fvm1, fvm2)) = (fvm1, fvm2)
+	|   dest_app_node _ = (Leaf, Leaf);
+
+	fun aux RF (App(f, a), fvm) = (
+		let	val (fvm1, fvm2) = dest_app_node fvm;
+		in	let	val f' = aux RF (dest_simple_term f, fvm1);
+			in
+				mk_app(f',
+					(aux RF (dest_simple_term a, fvm2)
+					handle (Fail _) =>
+					a))
+			end
+			handle (Fail _) =>
+			mk_app(f, aux RF(dest_simple_term a, fvm2))
 		end
-		handle (Fail _) =>
-		mk_app(f, aux RF(dest_simple_term a)))
-	| aux _ (Const _) = raise just_fail
-	| aux RF (Var v) = fst(rassoc3 RF v)
-	| aux RF (Simpleﾌ(vty, b)) = (
+	) | aux _ (Const _, _) = raise just_fail
+	| aux RF (Var v, _) = fst(rassoc3 RF v)
+	| aux RF (tm as Simpleﾌ (_, b), Leaf) = (
+		aux RF (tm, mk_fv_map b)
+	) |aux RF (Simpleﾌ(vty, b), 君ode(fvs, fvm1)) = (
 		let	val (s_ty as (s, ty)) = dest_var vty;
-			val new_frees = blackbox RF b s_ty;
+			val new_frees = blackbox RF fvs s_ty;
 			val s' = string_variant new_frees s;
 		in 
 			if s' = s
 			then (let val RRF = RF drop (fn (_,av) => av = s_ty);
-				val b' = aux RRF (dest_simple_term b);
+				val b' = aux RRF (dest_simple_term b, fvm1);
 			in
 				mk_simple_ﾌ(vty, b')
 			end)
 			else(let val vty' = mk_var (s', ty);
 				val RRF = (((vty',[s']), s_ty) :: RF);
 			in
-			(let	val b' = aux RRF (dest_simple_term b);
+			(let	val b' = aux RRF (dest_simple_term b, fvm1);
 			in mk_simple_ﾌ(vty', b')
 			end)
 			handle (Fail _) =>
 			mk_simple_ﾌ(vty', b)
 			end)
+		end
+	) | aux _ _ = error "subst" 3064 [];
 =TEX
-This last case would occur for:
+The very last (non-error) case would occur for:
 =INLINEFT
 ｬﾌ s : 'a ｷ f [s : 'b]ｮ
 =TEX
-where the current substituitions leave 
+where the current substitutions leave 
 =INLINEFT
 ｬf [s : 'b]ｮ
 =TEX
 unchanged.
 =SML
-		end
-	);
 	val init_RF = (map 
 		(fn (tm,x as (_,ty)) => 
 			if type_of tm = ty
@@ -541,7 +595,7 @@ unchanged.
 			else term_fail "icl'subst" 3012 [tm,mk_var x]) 
 		R);
 in
-	(aux init_RF (dest_simple_term tm)
+	(aux init_RF (dest_simple_term tm, Leaf)
 	 handle (Fail _) => tm
 	)
 end);
