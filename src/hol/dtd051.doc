@@ -48,11 +48,13 @@
 \begin{description}
 \item [Issue 1.1]
 First version.
+\item [Issue 1.2]
+Try again.
 \end{description}
 \subsection{Changes Forecast}
-This document needs to know ``now'' which functions it may
+This document needs to know which functions it may
 configure, and the type of the proof context details.
-Thus if a new configurable tool is added then this document will need
+Thus if a new configurable tool is added to the system then this document will need
 modification.
 
 In particular, the expected resolution tool will be parameterised in some manner yet to be decided,
@@ -68,22 +70,23 @@ The design is implemented in \cite{DS/FMU/IED/IMP051}.
 \subsection{Introduction}
 \subsubsection{Purpose and Background}
 A proof context is a setting of various configurable
-parameters to support a particular mode of proof.
+parameters of proof tools to support a particular mode of proof.
+For instance, both $rewrite\_tac$ and $strip\_tac$ 
+are configurable proof tools.
 In particular, proof contexts will be later made available,
 through the tools supplied here,
-that supply an good environment to reason about Z,
+that supply a good environment to reason about Z,
 or within a particular theory (e.g. set theory),
 and alter the default environment.
-Proof contexts may be set merely by knowing their name.
-We may expect the equational contexts of striping and rewriting
-to be part of a proof context.
 
-All functions require all their arguments to begin evaluation,
-unless otherwise noted.
-
-Note also that the order of declaration given in this document will
-not necessarily reflect the order of implementation in
-\cite{DS/FMU/IED/IMP051}.
+An alternative approach to the one chosen is to take a 
+proof context to be a labeled list of functions of type $:unit\ ->\ unit$.
+A proof context would then be set by applying each function in the proof context to $()$.
+This has the advantage that new configurable tools could be
+introduced within a system rebuild.
+However, one loses the ability to display even parts
+of the context, or access to the data to which
+an individual configurable function could be configured.
 \subsubsection{Dependencies}
 This document is dependent on \cite{DS/FMU/IED/IMP026}
 and \cite{DS/FMU/IED/IMP028}.
@@ -94,45 +97,37 @@ None known.
 Proof contexts are often associated with theories,
 so it might be nice if the theory lister tells you the names
 of those objects associated with the theory listed.
-\section{DISCUSSION}
-The goal of the following functions is to be able:
-\begin{enumerate}
-\item
-To give a naive user a simple command to change
-the proof context of all proof tools and the environment
-to provide the best context available for the style of work they are to then carry out.
-\item
-To give the developer of, say, a new theory the means
-to create a proof context to provide a context suitable for reasoning in that theory.
-\end{enumerate}
-We go about this by first having a dictionary of proof contexts.
-A proof context is then no more than a labelled record of proof context data.
 
 We fail to give the developer of a configurable tool the means to modify all relevant pre-existing proof contexts to understand the
 new tool.
-They will have to modify this document and its implementation, and then rebuild the system
+They will have to modify this document and its implementation, and all existing contexts, and then rebuild the system
 (an approach only available to someone supplied with the means to do a system build), or provide their own proof context
 tools, perhaps ``piggy backing'' upon the ones supplied here.
-
-An alternative approach to the one chosen is to take a 
-proof context to be a labeled list of functions of type $:unit\ ->\ unit$.
-A proof context would then be set by applying each function in the proof context to $()$.
-This has the advantage that new configurable tools could be
-introduced within a system rebuild.
-However, one loses the ability to display even parts
-of the context, or access to the data to which
-an individual configurable function could be configured.
 \section{THE DESIGN}
 =DOC
 signature âProofContextá = sig
 =DESCRIBE
 This provides the basic tools for handling proof contexts.
 =ENDDOC
+The goal of the following functions is:
+\begin{enumerate}
+\item
+To give a naive user a simple command to change
+the proof context.
+This will change the configuration of all configurable proof tools,
+to provide the best context available for the style of work they are to then carry out.
+\item
+To give the developer of, say, a new theory the means
+to create a proof context to provide a context suitable for reasoning in that theory.
+\item
+To allow a piece of proof automation to change the context,
+do some work, and then revert to the previous context.
+\end{enumerate}
+We then first have the user presentation of a proof context:
 =DOC
-type PROOF_CONTEXT;
+type âPROOF_CONTEXTá;
 =DESCRIBE
-This is the type of a proof context, which holds the data used to configure
-certain proof tools.
+This is the type of a proof context, which holds the data used to configure certain proof tools.
 ó
 type PROOF_CONTEXT = {
 	rw_eqn_cxt: EQN_CXT,
@@ -143,76 +138,95 @@ type PROOF_CONTEXT = {
 These are, in sequence:
 \begin{itemize}
 \item
-An equational context for rewriting;
+An equational context for rewriting (see e.g. $rewrite\_tac$);
 \item
-A canonicalisation function for rewriting;
+A canonicalisation function for rewriting (see e.g. $rewrite\_tac$);
 \item
 An equational context for stripping theorems into the
-assumption list;
+assumption list (see e.g. $strip\_tac$);
 \item
-And an equational context for stripping goals.
+And an equational context for stripping goals (see e.g. $strip\_tac$).
 \end{itemize}
-=SEEALSO
-$set\_proof\_context$, $create\_proof\_context$
+A proof context is set to such a configuration by first evaluating something of
+this type, using $evaluate\_proof\_context$ (q.v.),
+and then setting the result using $push\_proof\_context$ (q.v.)
 =ENDDOC
-=DOC
-val âset_proof_contextá : string -> unit;
-=DESCRIBE
-The system holds a dictionary of known proof contexts.
-This command selects one of those proof contexts,
-and configures the system accordingly.
+It is intended that a designer of, say, a theory would 
+work out a few (maybe only one) proof contexts
+for working with the theory.
+They would bind these to ML variables, and would
+likewise bind the evaluated forms (see below).
+If a user then wanted, say, the standard rewriting equational context
+for that theory they would extract it from the ML variable bound to the appropriate unevaluated proof context,
+rather than expecting to find it
+separately stored.
 
-The proof context named ``empty'' removes
-any special behaviour from the system caused by proof contexts,
-the one named ``initial'' restores the proof context
-to that initially supplied.
+We wish to be able to set such a proof context
+with no more evaluation cost than a few assignments.
+This implies that we must to do any pre-evaluation
+at the point of creation of a context, rather than the setting of the context.
+This evaluated proof context is of type:
+=DOC
+type âEPROOF_CONTEXTá;
+=DESCRIBE
+This is the type of an evaluated proof context, which holds the data used to configure certain proof tools
+in a form where configuration only requires assignment to variables.
+Objects of this type are created by $evaluate\_proof\_context$ (q.v.),
+and may be set by $push\_proof\_context$
+(q.v.).
+=ENDDOC
+Pre-evaluation will be done by combining functions supplied
+by individual tools into the single function.
+This implies that all configurable proof tools will be
+supplied with: a single individual pre-evaluation function
+ which takes as argument all the tool's configuration parameters bundled into one value;
+and with a way of configuring the tool to the result of this pre-evaluation function.
+=DOC
+val âevaluate_proof_contextá : PROOF_CONTEXT -> EPROOF_CONTEXT;
+=DESCRIBE
+This function does all possible pre-evaluation
+of the material stored in an object of type $PROOF\_CONTEXT$,
+leaving the result in a form where configuration only requires assignment to variables.
+Such a configuration is then set by $push\_proof\_context$
+(q.v.).
+=FAILUREC
+\paragraph{Errors}
+Any error messages given by the constituent pre-evaluation
+functions will be transparently passed through this function.
+=ENDDOC
+We use a stack of (temporaily) superceded proof contexts to simplify the task 
+of ``change the context,
+do some work, and then revert to the previous context'',
+for this is the obvious approach.
+=DOC
+val âpush_proof_contextá : EPROOF_CONTEXT -> unit;
+=DESCRIBE
+This function stacks the previous proof context, and
+and configures the system according to the new proof 
+context.
 =SEEALSO
-$list\_proof\_contexts$
+$pop\_proof\_context$, $get\_proof\_context$
+=ENDDOC
+Note that the only useful thing that can be done with an
+evaluated proof context is to push it once more.
+In particular one could not extract the sort of things that
+could be removed from an object of type $PROOF\_CONTEXT$.
+=DOC
+val âpop_proof_contextá : unit -> EPROOF_CONTEXT;
+=DESCRIBE
+This function unstacks the top of the proof context stack,
+configures the system to it, and returns the previous current proof context.
+=SEEALSO
+$push\_proof\_context$, $get\_proof\_context$
 =FAILURE
-51006	A proof context with name ?0 does not exist
-=ENDDOC
-$set\_proof\_context$ does not return the previous proof context (though similar functions in ICL HOL do) because this function is
-aimed at the naive user: use $get\_proof\_context$ instead.
-
-We may well need to accommodate tools who are built
-after, e.g., theories for which we wish to provide a proof context.
-In this case we will provide a method of assigning new 
-functionality to a function variable called by
-$set\_proof\_context$.
-
-Note the implicit requirement in the design of $set\_proof\_context$(q.v.) on the writer of any new
-proof context areas to update at least the proof contexts ``empty'' and
-``initial''.
-=DOC
-val âlist_proof_contextsá : unit -> string list;
-=DESCRIBE
-The system holds a dictionary of known proof contexts.
-This command lists the names of these known proof contexts.
-=SEEALSO
-$set\_proof\_context$
-=FAILURE
-51006	A proof context with name ?0 does not exist
+51001	The proof context stack is empty
 =ENDDOC
 =DOC
-val âcreate_proof_contextá : string -> PROOF_CONTEXT -> unit;
+val âget_proof_contextá : unit -> EPROOF_CONTEXT;
 =DESCRIBE
-This function creates a proof context, which can then be 
-set by $set\_proof\_context$ (q.v).
-
-Any previous proof context with the same name will be overwritten by the new proof context.
+This function gets the current proof context.
 =SEEALSO
-$get\_proof\_context$
-=ENDDOC
-=DOC
-val âget_proof_contextá : string -> PROOF_CONTEXT;
-=DESCRIBE
-This returns a proof context created by $create\_proof\_context$.
-Its contents can be accessed by pattern matching on the
-object.
-=SEEALSO
-$set\_proof\_context$, $create\_proof\_context$
-=FAILURE
-51006	A proof context with name ?0 does not exist
+$push\_proof\_context$, $pop\_proof\_context$
 =ENDDOC
 \section{END OF THE SIGNATURE}
 =SML
