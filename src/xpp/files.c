@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.8 2002/12/03 00:30:26 rda Exp rda $
+ * $Id: files.c,v 2.9 2002/12/03 23:39:50 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -445,24 +445,20 @@ Boolean save_file(
 			if(	new_status.st_mtime != current_file_status->st_mtime
 			||	new_status.st_ctime != current_file_status->st_ctime
 			||	new_status.st_size != current_file_status->st_size) {
-				char msg_buf[PATH_MAX + 200];
-				sprintf(msg_buf, file_changed_message, name);
-				if(!yes_no_dialog(text, msg_buf)) {
+				if(!file_yes_no_dialog(text,
+							file_changed_message,
+							name)) {
 						return False;
 				}
 			}
 		} else { /* it's presumably been deleted */
-			char msg_buf[PATH_MAX + 200];
-			sprintf(msg_buf, file_deleted_message, name);
-			if(!yes_no_dialog(text, msg_buf)) {
+			if(!file_yes_no_dialog(text, file_deleted_message, name)) {
 					return False;
 			}
 		}
 	} else {
 		if(stat(name, &new_status) == 0) { /* file now exists */
-			char msg_buf[PATH_MAX + 200];
-			sprintf(msg_buf, file_created_message, name);
-			if(!yes_no_dialog(text, msg_buf)) {
+			if(!file_yes_no_dialog(text, file_created_message, name)) {
 					return False;
 			}
 		}
@@ -495,13 +491,11 @@ Boolean save_file_as(
 	static struct stat status;
 
 	if(stat(name, &status) == 0) { /* file exists */
-		char msg_buf[PATH_MAX + 200];
 		if(!S_ISREG(status.st_mode)) {
 			file_error_dialog(text, save_not_reg_message, name);
 			return False;
 		};
-		sprintf(msg_buf, overwrite_message, name);
-		if(!yes_no_dialog(text, msg_buf)) {
+		if(!file_yes_no_dialog(text, overwrite_message, name)) {
 			return False;
 		}
 	}; /* else file doesn't exist so no checks needed */
@@ -532,13 +526,11 @@ Boolean save_string_as(
 	struct stat status;
 
 	if(stat(name, &status) == 0) { /* file exists */
-		char msg_buf[PATH_MAX + 200];
 		if(!S_ISREG(status.st_mode)) {
 			file_error_dialog(w, save_not_reg_message, name);
 			return False;
 		};
-		sprintf(msg_buf, overwrite_message, name);
-		if(!yes_no_dialog(w, msg_buf)) {
+		if(!file_yes_no_dialog(w, overwrite_message, name)) {
 			return False;
 		}
 	}; /* else file doesn't exist so no checks needed */
@@ -577,13 +569,12 @@ Boolean open_file(
 	};
 	if((buf = get_file_contents(text, name, cmdLine, foAction, &status)) != NULL) {
 		if(access(name, W_OK) != 0) { /* read-only (or worse?) */
-			char msg_buf[PATH_MAX + 200];
-			sprintf(msg_buf, read_only_message, name);
 			if(	(	orig_global_options.read_only
 				&&	global_options.read_only)
-			||	yes_no_dialog(text, msg_buf)) {
+			||	file_yes_no_dialog(text, read_only_message, name)) {
 				set_read_only(True);
 			} else {
+				XtFree(buf);
 				return False;
 			}
 		} else if (!orig_global_options.read_only) {
