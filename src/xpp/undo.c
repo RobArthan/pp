@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.18 2004/08/27 15:54:39 rda Exp $
+ * $Id: undo.c,v 2.19 2004/10/06 14:49:29 rda Exp rda $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -860,8 +860,9 @@ static Boolean undoModifyCB(
 		setFirst(ub,      cbs->startPos);
 		setLast(ub,       cbs->startPos + cbs->text->length);	
 		clearOldtext(ub);
-	} else if(moved_away(ub) || last(ub) != cbs->startPos) {
-		/* started typing somewhere new */
+	} else if(	moved_away(ub)	/* save or undo since last typing */
+	||	last(ub) != cbs->startPos /* started typing somewhere new */
+	||	cbs->text->length > 1) { /* multi-character insert: i.e., paste */
 		if(!reinit_undo_buffer(ub, cbs, True, noMA)) {
 			return False;
 		}
