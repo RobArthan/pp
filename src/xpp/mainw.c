@@ -120,6 +120,15 @@ static char* running_quit_message =
 "The application in the journal window is still running. "
 "Do you really want to quit?";
 
+static char* signal_handled_message1 =
+"system error reported";
+
+static char* signal_handled_message2 =
+"attempting to save the editor text";
+
+static char* signal_handled_message3 =
+"apparently during X initialisation";
+
 static char* kill_message =
 "Do you really want to kill the application?";
 
@@ -1356,25 +1365,59 @@ NAT siz;
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Signal handling for the controller process.
- * Following treats signals similarly to window close
+ * Ctrl-C Signal handling for the controller process.
+ * Following treats Ctrl-C similarly to window close
  * or selection of quit from the command menu.
- *
- * Previously tried making it so that SIGINT (Cntl-C)
- * on the controller process causes SIGINT to the application
- * if it's running.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void sig_handler(sig, code, scp, addr)
-NAT sig, code;
-struct sigcontext *scp;
-char *addr;
+static void sigint_handler(NAT sig)
 {
 	XtAppAddTimeOut(app, 0, close_down_cb, root);
 }
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * panic_exit: 
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void panic_exit(char * m, NAT code)
+{
+	if(script) {
+		msg(m, signal_handled_message2);
+		panic_save(script);
+	} else {
+		msg(m, signal_handled_message3);
+	}
+	exit(code);
+}
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Other signal handling for the controller process.
+ * Try to save the editor text if the widget's there then bomb out.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void sigother_handler(NAT sig)
+{
+	panic_exit(signal_handled_message1, sig);
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * xt_error_handler
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void xt_error_handler(char * m)
+{
+	panic_exit(m, 2);
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * handle signals and Xt errors: the derivation of the following list
+ * of OS signals to handle not very scientific, but seems to catch
+ * the common problems.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void handle_sigs()
 {
-	sigset(SIGINT, sig_handler);
+	sigset(SIGINT, sigint_handler);
+	sigset(SIGSEGV, sigother_handler);
+	sigset(SIGBUS, sigother_handler);
+	sigset(SIGFPE, sigother_handler);
+	sigset(SIGSYS, sigother_handler);
+	XtAppSetErrorHandler(app, xt_error_handler);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****

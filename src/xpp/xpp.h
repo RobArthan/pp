@@ -168,6 +168,7 @@ void number_verify_cb(
 	extern Boolean *include_file(
 		Widget	text,
 		char	*name);
+	extern void panic_save(Widget text);
 #endif
 #ifndef _cmdline
 	extern void add_cmd_line(

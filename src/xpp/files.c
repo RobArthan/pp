@@ -22,14 +22,6 @@
 #include <sys/stat.h>
 
 #include <stdio.h>
-#include <X11/Xatom.h>
-#include <X11/Intrinsic.h>
-#include <X11/Shell.h>
-#include <Xm/Protocols.h>
-#include <Xm/Xm.h>
-
-#include <stdio.h>
-#include<varargs.h>
 
 #include "xpp.h"
 
@@ -75,6 +67,15 @@ static char *no_message_space_message =
 
 static char *overwrite_message =
 	 "The file \"%s\" exists. Do you want to overwrite it?";
+
+static char *panic_file_cant_be_opened =
+	"xpp: sorry! cannot open a file to save the editor text\n";
+
+static char *panic_file_error =
+	"xpp: saving editor text to file \"%s\": not all the text was saved\n";
+
+static char *panic_file_written =
+	"xpp: editor text saved to file \"%s\"\n";
 
 static char *read_error_message =
 	 "Error reading the file \"%s\"";
@@ -441,3 +442,54 @@ Boolean include_file(
 	}
 }
 
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * panic_save: attempt to save the contents of a text widget, e.g.,
+ * in the event of an Xt error. Reports success or failure
+ * on standard error.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+void panic_save(
+		Widget	text)
+
+{
+	extern char *mktemp(char *);
+	static char buf[BUFSIZ+1];
+	const char *nameXXX = "xpp.panic.XXXXXX";
+	const char *tmp = "/tmp/";
+	static char name_buf[30];
+	static char *name;
+	static FILE *fp;
+	static NAT bytes_written, success, i;
+	strcpy(name_buf, nameXXX);
+	if(!*(name = mktemp(name_buf)) ||
+			!(fp = fopen(name, "w"))) {
+		strcpy(name_buf, tmp);
+		strcat(name_buf, nameXXX);
+		if(!*(name = mktemp(name_buf)) ||
+				!(fp = fopen(name, "w"))) {
+			fprintf(stderr, panic_file_cant_be_opened);
+			return;
+		}
+	}
+	i = 0;
+	while((success = XmTextGetSubstring(text, i,
+						BUFSIZ, BUFSIZ + 1, buf))
+			== XmCOPY_SUCCEEDED
+		&&
+		(bytes_written = fwrite(buf, sizeof(char), BUFSIZ, fp))
+			== BUFSIZ) {
+		i += BUFSIZ;
+	}
+	if(success == XmCOPY_TRUNCATED) {
+		i = strlen(buf);
+		if( fwrite(buf, sizeof(char), i, fp) == i) {
+			fprintf(stderr, panic_file_written, name);
+		} else {
+			fprintf(stderr, panic_file_error, name);
+		}
+	} else {
+		fprintf(stderr, panic_file_error, name);
+	}
+	fclose(fp);
+};
