@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.12 2001/07/27 14:21:40 rda Exp rda $
+ * $Id: pterm.c,v 2.13 2001/11/16 17:19:56 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -41,6 +41,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 #include "X11/cursorfont.h"
 #include "xpp.h"
@@ -59,6 +60,11 @@
 
 /* For the following see "Data transfer to application" below */
 #define MAX_Q_LEN 40000
+
+/* The following is the name of an environment variable used */
+/* in the ProofPower system initialisation. */
+
+#define PPLINELENGTH "PPLINELENGTH"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * global, static and external data:
@@ -155,6 +161,7 @@ void get_pty(void)
 	char *ptsname(int);
 	int i;
 	struct termios tio;
+	short line_length;
 #ifndef LINUX
 /* On non-Linux (i.e., SVR4) we use the grantpt/lockpt interfaces */
 /* and do the termio set-up in the child process */
@@ -223,7 +230,23 @@ void get_pty(void)
 	}
 #endif
 
+/*
+ * Get the width of the journal window if PPLINELENGTH is not
+ * already set in the environment.
+ * Do this before fork to avoid any problems with concurrent X calls.
+ */
+	if(getenv(PPLINELENGTH) == 0) {
+		XtVaGetValues(journal,
+			XmNcolumns, &line_length,
+			NULL);
+	} else {
+		line_length = 0;
+	}
+/*
+ * We are now ready to fork:
+ */
 	child_pid = fork();
+
 	if (child_pid < 0) { /* Cannot do */
 		msg("system error", "fork failed");
 		perror("xpp");
@@ -298,6 +321,20 @@ void get_pty(void)
 		}
 #endif
 
+/*
+ * The 16 below allows for shorts of up to 32 bits.
+ * We use the horrid putenv, because Solaris doesn't have setenv.
+ * The memory allocation issues for putenv are irrelevant as we're
+ * about to do an exec.
+ */
+		if(line_length != 0) {
+			char txt[sizeof PPLINELENGTH + 16];
+			sprintf(txt, PPLINELENGTH "=%d", (int) line_length);
+			putenv(txt);
+		}
+/*
+ * Now get the command line options for the command and exec it:
+ */
 		arglist = get_arg_list();
 		execvp(arglist[0], arglist);
 	/* **** error if reach here **** */
