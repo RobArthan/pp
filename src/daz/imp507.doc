@@ -1290,6 +1290,43 @@ fun €get_bottom_block_name› (() : unit) : ID = (
 	end
 );
 =TEX
+\subsection{Theory User Data}
+The so-called user data part of a ProofPower theory is used to hold various information about the literate scripts which have been or are being processed.
+We collect together here those parts of the code concerned with this which do not depend on later material.
+
+The following are the user data key reserved for the Compliance Tool.
+=SML
+val €cn_pars_ud_key› = "CN'formal_pars";
+val €cn_types_ud_key› = "CN'types";
+val €cn_theories_ud_key› = "CN'theories";
+=TEX
+The following function is used in several places;
+its clients must handle the ecception it can raise.
+=SML
+fun €dest_ud_string› (UD_String (n, uds)) = (n, uds)
+|   dest_ud_string _ = fail "" 0 [] (* Caller MUST catch this *);
+=TEX
+The following functions are used to maintain the list of theories ``belonging'' to the current literate script.
+=SML
+fun €get_script_theories› (thy : string) : string list = (
+	(map (fst o dest_ud_string) o snd o dest_ud_string o get_user_datum thy)
+	cn_theories_ud_key
+	handle Fail _ => []
+);
+=TEX
+=SML
+fun €add_script_theory› (thy : string) : unit = (
+	let	val old = get_current_theory_name();
+		val side = open_theory (!script_name);
+		val uds = (snd o dest_ud_string o get_user_datum "-")
+					cn_theories_ud_key
+					handle Fail _ => [];
+	in	set_user_datum(cn_theories_ud_key,
+				UD_String("", UD_String(thy, []) :: uds));
+		open_theory old
+	end
+);
+=TEX
 \subsection{Function Parameter Lists}
 When the global variable representing a SPARK function is stored in a theory, a user data entry giving its formal parameter list is also stored.
 This is later accessed via the $CN\_ENV$ when function calls using named parameter associations are translated into Z.
@@ -1302,9 +1339,6 @@ fun €z_id_of_id› (n : ID) : Z_ID = (
 =TEX
 =SML
 local
-val €cn_pars_ud_key› = "CN'formal_pars";
-fun €dest_ud_string› (UD_String (n, uds)) = (n, uds)
-|   dest_ud_string _ = fail "" 0 [] (* always caught below *);
 fun €wanted› (fun_name : ID) (UD_String (i, _)) = (i = fun_name)
 |   wanted _ _ = false;
 fun €fun_name_par_names› ({name, formal_pars, ...} : INFORMAL_FUN)
@@ -1338,11 +1372,6 @@ a SPARK type or a SPARK constant.
 To do this a list of the names from the SPARK type declaration is maintained in the theory.
 =TEX
 =SML
-local
-val €cn_types_ud_key› = "CN'types";
-fun €dest_ud_string› (UD_String (n, uds)) = (n, uds)
-|   dest_ud_string _ = fail "" 0 [] (* always caught below *);
-in
 fun €get_type_names› (thy : string) : ID list = (
 	((map (fst o dest_ud_string) o snd o dest_ud_string o get_user_datum thy)
 	cn_types_ud_key)
@@ -1367,7 +1396,6 @@ fun €set_basic_decl_info› (bd : BASIC_DECL) : unit = (
 	|	BDPrivateTypeDecl ptd => add_type_name (#id ptd)
 	|	_ => ()
 );
-end;
 =TEX
 \subsection{Constructing $CN\_ENV$s}
 The code here must pass type information into the functions defined in \cite{ISS/HAT/DAZ/DTD505,ISS/HAT/DAZ/DTD508} using the data type $CN\_ENV$ defined in \cite{ISS/HAT/DAZ/DTD508}.
@@ -1542,11 +1570,21 @@ fun €set_in_scope_ti_context› (in_scope : IN_SCOPE) : unit = (
 =TEX
 \subsection{Updating the Z Theory Database}
 =SML
+fun make_label_prefix (wcn : string) : string = (
+	"vc" ^
+	(case explode wcn of
+		"(" :: more => (implode o rev o tl o rev) more ^ "u"
+	|	"$" :: more => implode more ^ "s"
+	|	_ => wcn ^ "u")
+);
+=TEX
+=SML
 fun €store_vc_term› (label : LABEL) (tm : TERM) : unit = (
 	let	val bbn = get_bottom_block_name ();
-		val vc_lab =	if 	bbn = "" orelse bbn = label
-				then	"VC_" ^ label ^ "__"
-				else	"VC_" ^ bbn ^ "__" ^ label ^ "_";
+		val vc_lab =	make_label_prefix
+				(if 	bbn = "" orelse bbn = label
+				then	label
+				else	bbn);
 		fun aux i = (
 			let val vc_name = vc_lab ^ string_of_int i;
 			in	if (get_conjecture "-" vc_name; false)
@@ -1588,7 +1626,6 @@ fun €new_script_theory› (name : string) : unit = (
 	end
 );
 =TEX
-The following needs no error handling --- it is only called when the theory is known to exist already.
 =SML
 fun €pack_spec_name› (name : string) : string = (
 	(trans_id name) ^ "__SPEC"
@@ -1602,7 +1639,10 @@ fun €pack_tmpbody_name› (name : string) : string = (
 =SML
 fun €new_package_spec_theory› (name : string) : unit = (
 	let	val thy = pack_spec_name name;
-	in	new_theory thy
+		val old_thy = get_current_theory_name();
+	in	(	new_theory thy;
+			add_script_theory thy;
+			open_theory thy )
 		handle Fail _ =>
 		fail "new_package_spec_theory" 507023 [fn()=>thy, fn()=>name]
 	end
@@ -1634,17 +1674,25 @@ fun €open_package_tmpbody_theory› (name : string) : unit = (
 );
 =TEX
 =SML
-fun €new_body_stub_theory› (unit_name : string, subunit_name : string) : unit = (
+fun €new_subunit_theory› (unit_name : string, subunit_name : string) : unit = (
 	let	val su_name = unit_name dot subunit_name;
 		val thy = trans_id (su_name ^ "__STUB");
-	in	duplicate_theory ("-", thy)
+		fun delete_vc n = ((delete_conjecture n; ())
+						handle Fail _ => ());
+		val old_thy = get_current_theory_name () ;
+	in	(	duplicate_theory ("-", thy);
+			add_script_theory thy;
+			open_theory thy;
+			(map delete_vc o flat o map fst o get_conjectures) thy;
+			open_theory old_thy;
+			() )
 		handle Fail _ =>
-		fail "new_body_stub_theory" 507026 [fn()=>thy, fn()=>su_name]
+		fail "new_subunit_theory" 507026 [fn()=>thy, fn()=>su_name]
 	end
 );
 =TEX
 =SML
-fun €open_subunit_theory› (unit_name : string, x : PROPER_BODY) : unit = (
+fun €new_parent_subunit_theory› (unit_name : string, x : PROPER_BODY) : unit = (
 	let	val subunit_name =(case x of
 			PBProcedure {procedure_spec as {name, ...}, ...} => (
 				name
@@ -1655,9 +1703,7 @@ fun €open_subunit_theory› (unit_name : string, x : PROPER_BODY) : unit = (
 		));
 		val su_name = unit_name dot subunit_name;
 		val thy = trans_id (su_name ^ "__STUB");
-	in	open_theory thy
-		handle Fail _ => 
-		fail "open_subunit_theory" 507027 [fn()=>thy, fn()=>su_name]
+	in	new_parent thy handle Fail _ => ()
 	end
 );
 =TEX
@@ -2207,7 +2253,7 @@ fun €stub› (() : unit) : unit = (
 				specif_flag	=	false,			
 				zmod		=	id1_id2
 			};
-		in	new_body_stub_theory(id1, id2)
+		in	new_subunit_theory(id1, id2)
 			handle Fail _ => fail "stub" 507013 [fn() => id1_id2];
 			subunit_env := s_enter id1_id2 subunit (!subunit_env)
 		end
@@ -3930,7 +3976,7 @@ fun €do_compilation_unit› (with_context : ID list)
 ) | do_compilation_unit with_context (y as (CUProperBody x)) = (
 	do_declaration with_context (DProperBody x)
 ) | do_compilation_unit with_context (y as (CUSubUnit {name, proper_body})) = (
-	open_subunit_theory (name, proper_body);
+	new_parent_subunit_theory (name, proper_body);
 	new_scope_subunit name;
 	do_declaration with_context (DProperBody proper_body);
 	end_scope()
