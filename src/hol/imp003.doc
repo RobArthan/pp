@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%  imp003.doc  %Z% $Date: 2002/10/17 15:10:58 $ $Revision: 2.23 $ $RCSfile: imp003.doc,v $
+%  imp003.doc  %Z% $Date: 2002/10/17 16:20:01 $ $Revision: 2.24 $ $RCSfile: imp003.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -17,10 +17,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for Types and Terms}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Types and Terms}
 \TPPref{DS/FMU/IED/IMP003}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.23 $
+\def\SCCSversion{$Revision: 2.24 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 15:10:58 $%
+\TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $%
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -94,6 +94,7 @@ substitution functions.
 initialisation module can hide that from the user.
 \item[Issue 2.23] Copyright and banner updates for open source release.
 \item[Issue 2.24] PPHol-specific updates for open source release
+\item[Issue 2.25] Fixed error in {\em inst}.
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
@@ -839,31 +840,39 @@ end);
 =TEX
 =SML
 local
+	exception Invalid of string * TYPE;
 	fun	Ûinst_loc1Ý 
 		(tysubs : (TYPE * string) list)
 		(tm as typed(icl'App _, _) : TERM)
 		(vars : string list)
 		(varmap : ((string * TYPE) * (string * TYPE)) list)
+		(bvarmap : ((string * TYPE) * (string * TYPE)) list)
 		: TERM = (
 		let	val (f, a) = dest_app tm;
-		in let	val fi = inst_loc1 tysubs f vars varmap;
+		in let	val fi = inst_loc1 tysubs f vars varmap bvarmap;
 		in
 			unchecked_mk_app(fi,
-				(inst_loc1 tysubs a vars varmap
+				(inst_loc1 tysubs a vars varmap bvarmap
 				handle (Fail _) => a))
 		end
 		handle (Fail _) =>
-		let	val ai = inst_loc1 tysubs a vars varmap;
+		let	val ai = inst_loc1 tysubs a vars varmap bvarmap;
 		in
 			unchecked_mk_app(f,ai)
 		end
 		end
-	) | inst_loc1 tysubs (typed(icl'Const s,ty)) vars varmap = (
+	) | inst_loc1 tysubs (typed(icl'Const s,ty)) vars varmap _ = (
 		typed(icl'Const s, icl'inst_type tysubs ty)
-	) | inst_loc1 tysubs (tm as typed(icl'Var s, ty)) vars varmap = (
-		mk_var(lassoc3 varmap (s, ty))
-	) | inst_loc1 tysubs (tm as typed(icl'SimpleÌ(s, b), L­Type(ty, bty))) vars varmap = (
-		let	val s' = string_variant vars s;
+	) | inst_loc1 tysubs (tm as typed(icl'Var s, ty)) vars varmap bvarmap = (
+		let	val sty' = lassoc3 varmap (s, ty);
+		in	let	val orig_bv =  rassoc3 bvarmap sty';
+			in	if	(s, ty) = orig_bv
+				then	mk_var sty'
+				else	raise Invalid orig_bv
+			end	handle Fail _ => mk_var sty'
+		end
+	) | inst_loc1 tysubs (tm as typed(icl'SimpleÌ(s, b), L­Type(ty, bty))) vars varmap bvarmap = (
+		(let	val s' = string_variant vars s;
 		in
 		let	val ty' = icl'inst_type tysubs ty;
 			val typed (b', bty') = inst_loc1
@@ -871,6 +880,7 @@ local
 				(typed(b, bty))
 				(s' :: vars)
 				(((s, ty), (s', ty')) :: varmap)
+				(((s, ty), (s', ty')) :: bvarmap)
 				handle Fail _ => typed(b, bty);
 		in	typed(icl'SimpleÌ (s', b'), L­Type(ty', bty'))
 		end 
@@ -880,7 +890,8 @@ local
 					tysubs
 					(typed(b, bty))
 					(s :: vars)
-					varmap;
+					varmap
+					(((s, ty), (s, ty)) :: bvarmap);
 			in	 typed(icl'SimpleÌ(s, b'), L­Type(ty, bty'))
 			end
 		else	let	val typed (b', bty') = inst_loc1
@@ -888,11 +899,17 @@ local
 					(typed(b, bty))
 					(s' :: vars)
 					(((s, ty), (s',ty)) :: varmap)
+					(((s, ty), (s',ty)) :: bvarmap)
 					handle Fail _ => typed(b, bty);
 			in	 typed(icl'SimpleÌ(s', b'), L­Type(ty, bty'))
 			end
-		end
-	) | inst_loc1 _ _ _ _ = error "icl'inst" 3064 [];
+		end)
+		handle Invalid sty => (
+			if	sty = (s, ty)
+			then	inst_loc1 tysubs tm (s::vars) varmap bvarmap
+			else	raise Invalid sty
+		)
+	) | inst_loc1 _ _ _ _ _ = error "icl'inst" 3064 [];
 =TEX
 The following could perhaps be improved by using an accumulating argument and
 perhaps by more precomputation.
@@ -935,6 +952,8 @@ in
 		tm
 		[]
 		(inst_loc2 avoid tysubs (icl'frees tm))
+		[]
+		handle Invalid (s, _) => error "icl'inst" 3020 [fn () => s]
 	);
 end; (* of local ... in ... end *)
 =TEX
