@@ -78,52 +78,63 @@ The detailed design for this material is in \cite{DS/FMU/IED/DTD061}.
 \subsection{Purpose and Background}
 See \cite{DS/FMU/IED/DTD061}.
 
+\subsection{Algorithms}
+
+The parser operates in two phases. Phase 1 does a context free parse
+according to the grammar of \cite{DS/FMU/IED/DTD061} to produce
+an intermediate of type $PP$ (which type is private to this module).
+Phase 2 converts appropriate values of type $PP$ into the data type
+$Z\_PARA$ as needed for input to the type inferrer.
+
+Phase 1 is a reasonably straightforward, if lengthy, application of
+the SLRP parser generator (see \cite{DS/FMU/IED/DTD019}).
+
+Phase 2 involves a traversal of the data structure produced in phase 1
+essentially to reconcile the grammar of \cite{DS/FMU/IED/DTD061} with
+that of \cite{DS/FMU/IED/DEF007}. This involves both additional checks
+and a certain amount of re-organisation of the data structure to make
+up for the deficiencies in the precedences implicit
+in the grammar of \cite{DS/FMU/IED/DTD061} (arising from the need to have
+an SLR(1) grammar).
 \subsection{Dependencies}
 The parser is dependent on the Z lexical analyser, \cite{DS/FMU/IED/DTD060}, 
 and on the HOL symbol table, \cite{DS/FMU/IED/DTD020}.
-\subsection{Possible Enhancements}
-The error messages could be improved by using a hand-coded function to
-print out the parsing stack.
-\subsection{Deficiencies}
-The parser accepts a slightly larger language than that specified in
-\cite{DS/FMU/IED/DEF007} in that it allows infix, prefix and
-postfix syntax and type constraints in local function definitions.
-It also allows antiquotation in local definitions and bound variable
-declarations.
 
-The error report for errors in varstructs and local definitions
-does not indicate the position of the error as accurately as one might
-like. The error marker appears immediately after the $let$-term or
-abstraction (or similar) containing the error. To fix this would require
-quite a lot of work (one would probably have to label the $TM$s with
-token numbers so that the code which makes the checks when the
-entire containing phrase has been recognised
-could calculate where the error in the input arose from).
-As the second line of the error report does print out the rogue construct
-in full, the situation as is is not intolerable.
 \subsection{Known Deficencies}
+\begin{enumerate}
+\item
 The relative precedence of renaming is not right yet. This
 would seem to be most easily fixed by an extra pass in phase 1
 to float the renamings out around ð etc. (such a pass need only be
 executed if there are any renamings in the input).
 
-The option for selecting an element from a tuple by number is not
-yet implemented in phase 2 (because the type inferrer does not yet support it).
-Likewise for (anti-)quotation.
-
+\item
 The phase 2 error message in the case when a placeholder ($\_$ or $...$) appears
 alone is not likely to be very helpful (it just says ``$\_$'' or ``$...$'' is
-``not a valid expression'').
+``not a valid expression''). A simple fudge to cope with this would be
+to have an error handler on the surrounding call of $x\_pred$ to catch
+an exception dedicated to this purpose.
 
-$get\_gpars$ which extracts a initial list of generic formals from
+\item
+$get\_gpars$, which extracts a initial list of generic formals from
 a parsed $PRED$ should probably handle the case when the $PRED$ begins
 with something of the form $[S]$ where $S$ is not a variable more neatly.
 
+\item
+The handling of Ê in phase 2 is not right yet. The decoration only floats
+out properly if the operand is an $Expr4$. This just requires a little
+pre-pass to go and hunt for trailing decorations in the operand.
+
+\item
+The special rule in \cite{DS/FMU/IED/DTD061} for the operand of `º' in extended Z
+is not yet implemented.
+
+\end{enumerate}
 \subsection{Possible Enhancements}
 By including some form of unique tag in each alternative of the
 data type $PRED$, it would be possible for the phase 2 functions to print
 the left context of an invalid sub-term in the diagnostic output.
-\section{PREAMBLE}
+\section{PREAMBLE}\label{PREAMBLE}
 SML
 structure ÛZParserÝ : ZParser = struct
 =TEX
@@ -137,11 +148,11 @@ imp018.sml
 open SlrpDriver;
 open Unification;
 =TEX
-\section{FLAGS}
+\section{FLAGS}\label{FLAGS}
 =SML
 val Ûstandard_zÝ : bool ref = ref true;
 =TEX
-\section{DATA TYPES}
+\section{PHASE 1 DATA TYPES}\label{PHASE1DATATYPES}
 We require data types to represent the result of a context-free parse
 using the grammar of \cite{DS/FMU/IED/DTD061}. The result is used to
 generate a value of type $ZTM$ as required by the type inferrer.
@@ -285,75 +296,7 @@ datatype ÛPPÝ		= PPParagraph of PARAGRAPH
 			| PPSomeExprs of PRED list
 			| PPIdDec of (ID * DECOR);
 =TEX
-The end results of phase 2, for use by the paragraph processor and
-the type inferrer are given using the following datatypes:
-=TEX
-The following types are the ones used to communicate with
-the type inferrer as required by \cite{DS/FMU/IED/DTD061}.
-=SML
-type ÛIDENTÝ	=	TEMPLATE * DECOR;
-=TEX
-=SML
-datatype ÛZ_TMÝ	=	ZTm§¢ of EXTYPE OPT * Z_TM list
-		|	ZTmSetd of EXTYPE OPT * Z_TM list
-		|	ZTmSeta1 of Z_SCH_TEXT
-		|	ZTmSeta2 of Z_SCH_TEXT * Z_TM
-		|	ZTmð of Z_TM
-		|	ZTmTuple of Z_TM list
-		|	ZTm¸ of Z_TM list
-		|	ZTmÊ of Z_TM * DECOR
-		|	ZTmSel of Z_TM * IDENT
-		|	ZTmApp of Z_TM * Z_TM
-		|	ZTmFancyApp of IDENT * Z_TM
-		|	ZTmÌ of Z_SCH_TEXT * Z_TM
-		|	ZTmÍ1 of Z_SCH_TEXT
-		|	ZTmÍ2 of Z_SCH_TEXT * Z_TM
-		|	ZTmSchema of Z_SCH_TEXT
-		|	ZTmDec of Z_TM * DECOR
-		|	ZTmPre of Z_TM
-		|	ZTm³ of Z_TM
-		|	ZTmInOp of Z_IN_OP * Z_TM * Z_TM
-		|	ZTm³‰s of Z_TM
-		|	ZTmSchInOp of Z_IN_OP * Z_TM * Z_TM
-		|	ZTmù of Z_TM * Z_TM
-		|	ZTmHide of Z_TM * IDENT list
-		|	ZTmQuant of Z_QUANT * Z_SCH_TEXT * Z_TM
-		|	ZTmSchQuant of Z_QUANT * Z_SCH_TEXT * Z_TM
-		|	ZTm„ of Z_TM
-		|	ZTm˜ of Z_TM
-		|	ZTmTruth of bool
-		|	ZTmEq of Z_TM * Z_TM
-		|	ZTm of Z_TM * Z_TM
-		|	ZTm» of Z_TM * Z_TM
-		|	ZTmPipe of Z_TM * Z_TM
-		|	ZTmú of int
-		|	ZTmConstrained of Z_TM * Z_TM
-		|	ZTmLVar of IDENT*Z_TM list
-		|	ZTmGVar of IDENT*Z_TM list
-		|	ZTmLet of Z_EQ_DEF list * Z_TM
-		|	ZTmRename of Z_TM * ((IDENT * IDENT) list) 
-		|	ZTmBracketed of Z_TM
-=TEX
-=SML
-and ÛZ_DECÝ	=	ZDec of IDENT list * Z_TM
-		|	ZDecSExp of Z_TM * DECOR
-=TEX
-=SML
-withtype ÛZ_SCH_TEXTÝ =	Z_DEC list * (Z_TM OPT)
-and	ÛZ_EQ_DEFÝ =	IDENT * Z_TM;
-
-=SML
-datatype ÛZ_PARAÝ =	ZParaFixity of FIXITY
-|	ZParaAbbDef of IDENT * IDENT list * Z_TM * EXTYPE OPT
-|	ZParaSchBox of IDENT * IDENT list * Z_SCH_TEXT * EXTYPE OPT
-|	ZParaAxDes of IDENT list * Z_SCH_TEXT * (((IDENT * EXTYPE) list) OPT)
-|	ZParaFreeType of (IDENT * (IDENT * (Z_TM OPT)) list) list
-|	ZParaGivenSet of IDENT list * ((IDENT list * Z_TM) OPT)
-|	ZParaConstraint of IDENT list * Z_TM
-|	ZParaConjecture of IDENT OPT * IDENT list * Z_TM
-|	ZParaTerm of IDENT list * Z_TM * EXTYPE OPT;
-=TEX
-\section{TEMPLATE FUNCTIONS}
+\section{TEMPLATE FUNCTIONS}\label{TEMPLATEFUNCTIONS}
 We need various functions for operating on templates.
 These are collected together in this section.
 
@@ -452,7 +395,7 @@ fun Ûget_stored_tmplÝ (tmpl : TEMPLATE) : TEMPLATE = (
 	|	_ => raise PARSER_ERROR "template database corrupt"
 );
 =TEX
-\section{DIAGNOSTICS}
+\section{FORMATTING FUNCTIONS}\label{FORMATTINGFUNCTIONS}
 If errors are detected during the transformation to $ZTM$, then values
 of type $PARAGRAPH$ etc. have to be printed in the diagnostic report.
 The following functions are used to do this:
@@ -716,7 +659,7 @@ fun Ûformat_ppÝ (pp : PP) : string = (
 	|	PPIdDec (id, dec) => id ^ dec
 );
 =TEX
-\section{LEXICAL CLASSES}
+\section{LEXICAL CLASSES}\label{LEXICALCLASSES}
 The following data type represents the lexical classes which are the
 terminals of the grammar:
 =SML
@@ -862,7 +805,7 @@ fun ÛunfancifyÝ  (tok : ZTOKEN) : ZTOKEN = (
 	|	other 			=>	other
 );
 =TEX
-\section{ERROR HANDLING}
+\section{PHASE 1 ERROR HANDLING}\label{PHASE1ERRORHANDLING}
 =SML
 fun Ûformat_z_tokenÝ  (tok : ZTOKEN) : string = (
 =SML
@@ -970,7 +913,19 @@ fun Ûstack_errorÝ (insert : string)
 	error "Z-Parser"  19005 [fn() => insert]
 );
 =TEX
-\section{REDUCTION FUNCTIONS}
+The following function produces the error reports for the unexpected
+token type of error:
+=SML
+val Ûphase_1_errorÝ : (ZTOKEN, Z_LEX_CLASS, PP, 'd) ERROR_ROUTINE =
+			(fn (tok, stk, _, _) => (
+	diag_string (get_error_message 61001 [format_parse_stack stk,
+				format_z_token tok]);
+	diag_string (get_error_message 61003 [format_z_token tok,
+				format_stack format_z_token stk]);
+	raise SYNTAX_ERROR
+));
+=TEX
+\section{REDUCTION FUNCTIONS}\label{REDUCTIONFUNCTIONS}
 As with the HOL parser, adding type constraints to the reductions functions
 would be both unhelpful and very time-consuming and so in this section
 we deliberately suspend that aspect of the coding standards of
@@ -1015,7 +970,7 @@ fun Ûred_prec_templatesÝ (Token (tk, c1)) (Token (ZTNumber p, c2))
 	|	ZTRel =>
 			red_error
 			((Token (tk, c1)) :: stk) [Token (ZTNumber p, c2)]
-			61010 []
+			61011 []
 	|	other => raise PARSER_ERROR "red_prec_templates")
 ) | red_prec_templates x1 x2 x3 stk =
 		stack_error "red_prec_templates(2)" (x1::x2::x3::stk);
@@ -1736,13 +1691,13 @@ fun Ûred_id_decÝ (Token (ZTId i, _)) (Token (ZTDecor d, _)) _ = (
 ) | red_id_dec x1 x2 stk =
 		stack_error "red_id_dec" (x1::x2::stk);
 =TEX
-\section{THE GENERATED PARSER}
+\section{THE GENERATED PARSER}\label{THEGENERATEDPARSER}
 We can now load the code generated by SLRP from the grammar
 of \cite{DS/FMU/IED/DTD061}.
 =SML
 use_file"dtd061.grm.sml";
 =TEX
-\section{CONFLICT RESOLUTION}
+\section{CONFLICT RESOLUTION}\label{CONFLICTRESOLUTION}
 The simple conflict resolution technique is adequate, i.e. just
 using $siple\_resolver$ from \cite{DS/FMU/IED/DTD017}. To do this
 we just need to define a function to compare the precedence of
@@ -1829,7 +1784,7 @@ fun Ûz_resolverÝ
 	end
 );
 =TEX
-\section{READER FUNCTION}
+\section{READER FUNCTION}\label{READERFUNCTION}
 The following function is used to ``read'' a token off a list of same:
 =SML
 fun ÛzreaderÝ (ip : ZTOKEN list) : ZTOKEN * (ZTOKEN list) = (
@@ -1838,19 +1793,7 @@ fun ÛzreaderÝ (ip : ZTOKEN list) : ZTOKEN * (ZTOKEN list) = (
 	|	[] => (ZTEos, [])
 );
 =TEX
-\section{SYNTAX ERROR HANDLING}
-The following function produces t
-=SML
-val Ûphase_1_errorÝ : (ZTOKEN, Z_LEX_CLASS, PP, 'd) ERROR_ROUTINE =
-			(fn (tok, stk, _, _) => (
-	diag_string (get_error_message 61001 [format_parse_stack stk,
-				format_z_token tok]);
-	diag_string (get_error_message 61003 [format_z_token tok,
-				format_stack format_z_token stk]);
-	raise SYNTAX_ERROR
-));
-=TEX
-\section{PHASE 1}
+\section{PHASE 1 INTERFACE}\label{PHASE1INTERFACE}
 =SML
 fun Ûphase_1Ý (tokens : ZTOKEN list) : PP = (
 	let	val tokens' = (
@@ -1874,7 +1817,80 @@ fun Ûphase_1Ý (tokens : ZTOKEN list) : PP = (
 );
 =TEX
 \newpage
-\section{PHASE 2 ERROR REPORTING}
+=TEX
+\section{PHASE 2 DATA TYPES}\label{PHASE2DATATYPES}
+The end results of phase 2, for use by the paragraph processor and
+the type inferrer are given using the following datatypes:
+=TEX
+The following types are the ones used to communicate with
+the type inferrer as required by \cite{DS/FMU/IED/DTD061}.
+=SML
+type ÛIDENTÝ	=	TEMPLATE * DECOR;
+=TEX
+=SML
+datatype ÛZ_TMÝ	=	ZTm§¢ of EXTYPE OPT * Z_TM list
+		|	ZTmSetd of EXTYPE OPT * Z_TM list
+		|	ZTmSeta1 of Z_SCH_TEXT
+		|	ZTmSeta2 of Z_SCH_TEXT * Z_TM
+		|	ZTmð of Z_TM
+		|	ZTmTuple of Z_TM list
+		|	ZTm¸ of Z_TM list
+		|	ZTmÊ of Z_TM * DECOR
+		|	ZTmSel of Z_TM * IDENT
+		|	ZTmTupleSel of Z_TM * int
+		|	ZTmApp of Z_TM * Z_TM
+		|	ZTmFancyApp of IDENT * Z_TM
+		|	ZTmÌ of Z_SCH_TEXT * Z_TM
+		|	ZTmÍ1 of Z_SCH_TEXT
+		|	ZTmÍ2 of Z_SCH_TEXT * Z_TM
+		|	ZTmSchema of Z_SCH_TEXT
+		|	ZTmDec of Z_TM * DECOR
+		|	ZTmPre of Z_TM
+		|	ZTm³ of Z_TM
+		|	ZTmInOp of Z_IN_OP * Z_TM * Z_TM
+		|	ZTm³‰s of Z_TM
+		|	ZTmSchInOp of Z_IN_OP * Z_TM * Z_TM
+		|	ZTmù of Z_TM * Z_TM
+		|	ZTmHide of Z_TM * IDENT list
+		|	ZTmQuant of Z_QUANT * Z_SCH_TEXT * Z_TM
+		|	ZTmSchQuant of Z_QUANT * Z_SCH_TEXT * Z_TM
+		|	ZTm„ of Z_TM
+		|	ZTm˜ of Z_TM
+		|	ZTmTruth of bool
+		|	ZTmEq of Z_TM * Z_TM
+		|	ZTm of Z_TM * Z_TM
+		|	ZTm» of Z_TM * Z_TM
+		|	ZTmPipe of Z_TM * Z_TM
+		|	ZTmú of int
+		|	ZTmString of string
+		|	ZTmQuotation of TERM
+		|	ZTmConstrained of Z_TM * Z_TM
+		|	ZTmLVar of IDENT*Z_TM list
+		|	ZTmGVar of IDENT*Z_TM list
+		|	ZTmLet of Z_EQ_DEF list * Z_TM
+		|	ZTmRename of Z_TM * ((IDENT * IDENT) list) 
+		|	ZTmBracketed of Z_TM
+=TEX
+=SML
+and ÛZ_DECÝ	=	ZDec of IDENT list * Z_TM
+		|	ZDecSExp of Z_TM * DECOR
+=TEX
+=SML
+withtype ÛZ_SCH_TEXTÝ =	Z_DEC list * (Z_TM OPT)
+and	ÛZ_EQ_DEFÝ =	IDENT * Z_TM;
+
+=SML
+datatype ÛZ_PARAÝ =	ZParaFixity of FIXITY
+|	ZParaAbbDef of IDENT * IDENT list * Z_TM * EXTYPE OPT
+|	ZParaSchBox of IDENT * IDENT list * Z_SCH_TEXT * EXTYPE OPT
+|	ZParaAxDes of IDENT list * Z_SCH_TEXT * (((IDENT * EXTYPE) list) OPT)
+|	ZParaFreeType of (IDENT * (IDENT * (Z_TM OPT)) list) list
+|	ZParaGivenSet of IDENT list * ((IDENT list * Z_TM) OPT)
+|	ZParaConstraint of IDENT list * Z_TM
+|	ZParaConjecture of IDENT OPT * IDENT list * Z_TM
+|	ZParaTerm of IDENT list * Z_TM * EXTYPE OPT;
+=TEX
+\section{PHASE 2 ERROR REPORTING}\label{PHASE2ERRORREPORTING}
 The following function is used to report a phase 2 error:
 =TEX
 =SML
@@ -1885,7 +1901,7 @@ fun  Ûphase_2_errorÝ (msg_no : int) (inserts : string list) : 'a = (
 	end
 );
 =TEX
-\section{PHASE 2 TRANSFORMATION FUNCTIONS}
+\section{PHASE 2 TRANSFORMATION FUNCTIONS}\label{PHASE2TRANSFORMATIONFUNCTIONS}
 =SML
 fun Ûis_dec_nameÝ (p : PRED) : bool = (
 	case p of
@@ -1901,13 +1917,6 @@ fun Ûis_var_nameÝ (p : PRED) : bool = (
 		PredBracketed(PredFancyFix (tmpl, decor, args), "") => (
 			all args (fn [PredPlaceHolder _] => true | _ => false)
 	) |	PredIdDec (id, decor) => true
-	|	_ => false
-);
-=TEX
-=SML
-fun Ûis_numberÝ (p : PRED) : bool = (
-	case p of
-		PredNumber _=> true
 	|	_ => false
 );
 =TEX
@@ -1956,7 +1965,7 @@ fun Ûx_var_dec_nameÝ
 			PredIdDec iddec => (x_id_dec iddec
 		) |	_ => (
 			phase_2_error
-			61004
+			61012
 			[format_pred act_p, get_error_message msg_no []]
 		)
 );
@@ -1973,7 +1982,7 @@ fun Ûx_var_nameÝ (act_p as (PredBracketed (p, "")) : PRED) : TEMPLATE * DECOR = 
 	x_var_dec_name 61104 p p
 ) | x_var_name p  = (
 	phase_2_error
-	61004
+	61012
 	[format_pred p, get_error_message 61104 []]
 );
 =TEX
@@ -2033,7 +2042,6 @@ fun Ûx_pred_gen_instÝ
 fun Ûx_sch_in_opÝ (Pipe : SCH_IN_OP) : (Z_TM * Z_TM) -> Z_TM = ZTmPipe
 |   x_sch_in_op Filter = ZTmù
 |   x_sch_in_op Comp = ZTm»;
-);
 =TEX
 =SML
 fun Ûcheck_for_semisÝ (true : bool)
@@ -2101,7 +2109,7 @@ fun Ûx_predÝ (expr : bool) (p : PRED) : Z_TM = (
 			x_fancyfix_args (x_pred (!standard_z)) tmpl decor args
 	|	PredCrossProduct ps => 
 			ZTm¸(map (x_pred (!standard_z)) ps)
-	|	PredPow p => raise PARSER_ERROR "unimplemented case"
+	|	PredPow p => ZTmð (x_pred (!standard_z) p)
 	|	PredApplication (p, PredGenInst ps) =>
 			x_pred_gen_inst x_pred p ps
 	|	PredApplication (p, PredRenameList pps) =>
@@ -2120,18 +2128,18 @@ fun Ûx_predÝ (expr : bool) (p : PRED) : Z_TM = (
 	|	PredSelection (p1, p2) =>
 			if is_var_name p2
 			then	ZTmSel(x_pred true p1, x_var_name p2)
-			else if is_number p2
-			then	raise PARSER_ERROR "not ready for this yet!!"
-			else	phase_2_error
-				61007
-				[format_pred p2]			
+			else (case p2 of
+				PredNumber n => ZTmTupleSel(x_pred true p1, n)
+			| 	_ => phase_2_error 61007 [format_pred p2]
+			)		
 	|	PredIdDec _ => ZTmLVar(x_var_name p, [])
-	|	PredQuotation _ => raise PARSER_ERROR "not ready for this yet!!"
+	|	PredQuotation tm => ZTmQuotation tm
 	|	PredPlaceHolder _ =>
 			phase_2_error 61008 [format_pred p]
 	|	PredNumber n =>
 			ZTmú n
-	|	PredString s => raise PARSER_ERROR "not ready for this yet!!"
+	|	PredString s =>
+			ZTmString s
 	|	PredTuple ps =>
 			ZTmTuple (map (x_pred (!standard_z)) ps)
 	|	PredSetDisplay ps  =>
@@ -2150,15 +2158,19 @@ fun Ûx_predÝ (expr : bool) (p : PRED) : Z_TM = (
 			ZTmSchema(x_decl decl, x_pred_opt false popt) 
 	|	PredGenInst ps =>
 			x_gen_inst_as_schema x_pred ps
-	|	PredRenameList renames => raise PARSER_ERROR "unimplemented case"
-	|	PredBracketed (p, "") =>
+	|	PredRenameList renames =>
+			phase_2_error 61010
+			[format_pred p,
+			get_error_message 61109[],
+			get_error_message 61110 []]
+	|	PredBracketed (p1, "") =>
 			if is_var_name p
-			then ZTmBracketed(ZTmLVar(x_var_name p, []))
-			else ZTmBracketed(x_pred expr p)
-	|	PredBracketed (p, decor) =>
+			then ZTmLVar(x_var_name p, [])
+			else ZTmBracketed(x_pred expr p1)
+	|	PredBracketed (p1, decor) =>
 			if is_var_name p
-			then ZTmDec(ZTmBracketed(ZTmLVar(x_var_name p, [])), decor)
-			else ZTmDec(ZTmBracketed(x_pred expr p), decor)
+			then ZTmDec(ZTmLVar(x_var_name p, []), decor)
+			else ZTmDec(ZTmBracketed(x_pred expr p1), decor)
 )
 and Ûx_pred_optÝ (expr : bool)(Value p : PRED OPT) = Value (x_pred expr p)
 |    x_pred_opt _ Nil = Nil
@@ -2174,7 +2186,7 @@ and Ûx_declÝ (decl : DECL) : (Z_DEC list) = (
 				[p] => ZDecSExp(x_pred (!standard_z) p, "")
 			|	_ => (
 				phase_2_error
-				61004
+				61012
 				[format_list format_pred ps ", ",
 				get_error_message 61104 []]
 			)
@@ -2200,7 +2212,6 @@ fun Ûget_gparsÝ (p : PRED) : (IDENT list * PRED) = (
 			let val (pars, p1') = get_gpars p1
 			in	(pars, PredSchInOp (p1', rator, p2))
 			end
-	|	PredSchPreOp (rator, p) => ([], p)
 	|	PredSchemaHiding (p, ps) =>
 			let val (pars, p') = get_gpars p
 			in	(pars, PredSchemaHiding (p', ps))
@@ -2246,15 +2257,15 @@ fun Ûx_def_lhsÝ (p : PRED) : IDENT * IDENT list = (
 						if	all preds check_par
 						then	(id,  do_pars preds)
 						else
-		phase_2_error 61004
+		phase_2_error 61012
 		[format_pred p, get_error_message 61107[]]
 				|	_ => 
-					phase_2_error 61004
+					phase_2_error 61012
 					[format_pred p, get_error_message 61107[]]
 			end
 	) |	_ =>	if is_dec_name p
 			then	(x_dec_name p, [])
-			else	phase_2_error 61004
+			else	phase_2_error 61012
 				[format_pred p, get_error_message 61107[]]
 );
 =TEX
@@ -2280,11 +2291,11 @@ fun Ûx_branchÝ (p : PRED) : (IDENT * (Z_TM OPT))  = (
 				ZTmFancyApp(id, t) =>
 					(id,  Value t)
 			|	_ => 
-				phase_2_error 61004
+				phase_2_error 61012
 				[format_pred p, get_error_message 61108[]]
 	) |	_ =>	if is_dec_name p
 			then	(x_dec_name p, Nil)
-			else	phase_2_error 61004
+			else	phase_2_error 61012
 				[format_pred p, get_error_message 61108[]]
 );
 =TEX
@@ -2303,7 +2314,9 @@ fun Ûx_general_termÝ (is_quot : bool) (gt : GENERAL_TERM) : Z_PARA = (
 			phase_2_error
 			61009 [format_pred p, get_error_message 61106 []]
 	|	(PredGenInst [p], Nil) => 
-			if is_dec_name p
+			if is_quot
+			then ZParaTerm([], x_gen_inst_as_schema x_pred [p], Nil)
+			else if is_dec_name p
 			then ZParaGivenSet([x_dec_name p], Nil)
 			else ZParaConstraint([], x_gen_inst_as_schema x_pred [p])
 	|	(PredGenInst ps, Nil) =>
@@ -2349,6 +2362,7 @@ fun Ûx_conjectureÝ ((idopt, p) : CONJECTURE) : Z_PARA = (
 	end
 );
 =TEX
+\section{PHASE 2 INTERFACE}\label{PHASE2INTERFACE}
 =SML
 fun Ûx_paraÝ (is_quot : bool) (para : PARAGRAPH) : Z_PARA = (
 	case para of
@@ -2360,6 +2374,20 @@ fun Ûx_paraÝ (is_quot : bool) (para : PARAGRAPH) : Z_PARA = (
 	|	ParConjecture c => x_conjecture c
 );
 =TEX
+\section{MAIN INTERFACE}\label{MAININTERFACE}
+=SML
+fun ÛzparserÝ  {is_quot : bool, standard : bool} (tokens : ZTOKEN list) = (
+	standard_z := standard;
+	(case phase_1 tokens of
+		PPParagraph para => x_para is_quot para
+	|	_ => raise PARSER_ERROR "weird result from phase 1")
+	handle	SYNTAX_ERROR => (fail "Z Parser" 61000 [])
+	|	PARSER_ERROR msg => (
+			diag_string(get_error_message 61201 [msg]);
+			fail "Z Parser" 61000 []
+	)
+);
+=TEX
 \section{EPILOGUE}
 SML
 end (* of structure Parser *);
@@ -2369,46 +2397,18 @@ end (* of structure Parser *);
 \printindex
 \end{document}
 =IGN
-fun ÛzparserÝ (is_quot : bool) (tokens : ZTOKEN list) = (
-	case phase_1 tokens of
-		PPParagraph para => x_para is_quot para
-	|	_ => raise PARSER_ERROR "weird result from phase 1"
-);
-=IGN
-fun pp (PPParagraph(ParGeneralTerm(p, _))) = p
-| pp _ = raise PARSER_ERROR "funny test data";
+val new_error_message =  icl'change_error_message;
 
-gg ña b c®;
-gg ñ[a, b, c] b c®;
+val phase_1_in : ZTOKEN list ref = ref [];
+
+val phase_2_in : PP ref = ref (PPIdDec ("Dummy IdDec", ""));
 
 =IGN
-	case p of
-		PredQuantifier (q, decl, p1opt, p2) => p
-	|	PredLet (eqdefs, p) => p
-	|	PredLogInOp (p1, rator, p2) => p
-	|	PredNot p => p
-	|	PredSchInOp (p1, rator, p2) => p
-	|	PredSchPreOp (rator, p) => p
-	|	PredSchemaHiding (p, ps) => p
-	|	PredMu body => p
-	|	PredLambda body => p
-	|	PredFancyFix (tmpl, decor, args) => p
-	|	PredCrossProduct ps => p
-	|	PredPow p => p
-	|	PredApplication (p1, p2) => p
-	|	PredTheta p => p
-	|	PredSelection (p1, p2) => p
-	|	PredIdDec (id, decor) => p
-	|	PredQuotation _ => p
-	|	PredPlaceHolder st => p
-	|	PredNumber n => p
-	|	PredString s => p
-	|	PredTuple ps => p
-	|	PredSetDisplay ps  => p
-	|	PredSeqDisplay ps  => p
-	|	PredSetComp body => p
-	|	PredHorizSchema (decl, popt) => p
-	|	PredGenInst ps => p
-	|	PredRenameList renames => p
-	|	PredBracketed (p, decor) => p
-	|	PredTransformed (p, _) => p
+var_zparser := real_zparser;
+
+=IGN
+val var_zparser : (bool -> ZTOKEN list -> Z_PARA) ref = ref real_zparser;
+
+fun zparser is_quot tokens = !var_zparser is_quot tokens;
+
+
