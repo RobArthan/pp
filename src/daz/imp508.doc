@@ -56,7 +56,7 @@ This document contains the implementation for the CN paragraph processor.}
 \tableofcontents
 \subsection{Document Cross References}
 \bibliographystyle{fmu}
-\bibliography{fmu}
+\bibliography{fmu,daz}
 
 \subsection{Changes History}  % to get section number `0.3'
 \begin{description}
@@ -69,7 +69,7 @@ This document contains the implementation for the CN paragraph processor.}
 \pagebreak
 \section{GENERAL}
 \subsection{Scope}
-The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD504}.
+The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD508}.
 \subsection{Introduction}
 \subsection{Purpose and Background}
 \subsection{Algorithms}
@@ -91,11 +91,12 @@ in
 
 =SML
 datatype €ENV_INFO› =
-			€EIEnvFunction›
-		|	€EIEnvRecordAgg›
+			€EIEnvFunction› of ID list
 		|	€EIEnvVar›
+		|	€EIEnvRecordAgg›
 		|	€EIEnvOther›;
-type CN_ENV = Z_ID -> TYPE * ENV_INFO;
+
+type €CN_ENV› = Z_ID -> (TYPE * ENV_INFO) OPT;
 =TEX
 
 =SML
@@ -156,15 +157,6 @@ and €last› = hd o rev;
 type €Z_DECL› = Z_ID * Z_EXP;
 type €Z_MODULE› = string;
 =TEX
-TBS - following is extra.
-=SML
-fun €z_decls_to_exp› (zdecls : Z_DECL list) : Z_EXP = (
-let	fun dec (d,e) = mk_z_dec ([mk_z_lvar(d, type_of e, [])],e);
-in
-	mk_z_decl(map dec zdecls)
-end
-);
-=TEX
 
 \subsection{Z Unary Expressions}
 =SML
@@ -203,7 +195,7 @@ let	val freevars = frees tm;
 	val newtys = map (fn (tm,c) => (c, type_of tm)) ts;
 	val tymap = map (fn (n, ty) => (ty,lassoc3 fvs n)) newtys;
 	val tymap' = (fn (t1,t2) => type_match
-		(mk_ctype ("abc",t1)) (mk_ctype("abc",t2))) (split tymap);
+		(mk_ctype ("TYPE",t1)) (mk_ctype("TYPE",t2))) (split tymap);
 	val tm_inst = inst [] tymap' tm;
 	val namemap = map (fn (tm, s) => (tm, mk_var(s, lassoc3 newtys s))) ts;
 in
@@ -216,10 +208,11 @@ end);
 val €zsucc› : Z_EXP = ÒsuccÆ;
 =TEX
 =SML
-fun €zid› (env : CN_ENV) (id :Z_ID) : Z_EXP = (
+fun €zid› (env : CN_ENV) (id : Z_ID) : Z_EXP = (
 	case env id of
-	(ty, EIEnvVar) => mk_z_lvar(id, ty, [])
-	|(ty, _) => mk_z_gvar(id, ty, [])
+	Value (ty, EIEnvVar) => mk_z_lvar(id, ty, [])
+	|Value (ty, _) => mk_z_gvar(id, ty, [])
+	|Nil => fail "zid" 508001 [fn()=>("undeclared variable: "^id)]
 );
 =TEX
 =SML
@@ -326,17 +319,29 @@ fun €z_override› (exp1 : Z_EXP, exp2 : Z_EXP) : Z_EXP = (
 =TEX
 =SML
 val €z_union_term› : TERM = Òa ¿ bÆ;
-fun €z_many_union› ((exps as e1::e2::rest) : Z_EXP list) : Z_EXP = (
-	cn_subst [(e1, "a"), (z_many_union (e2::rest), "b")] z_union_term
-) | z_many_union [e] = e
-  | z_many_union _ = fail "z_many_union" 508001 [fn()=>"weird error"];
+fun €z_many_union› (exps : Z_EXP list) : Z_EXP = (
+let	fun non_empty (e::rest) = (
+		if (((length o snd o dest_z_setd) e) = 0 handle _ => false)
+		then
+			non_empty rest
+		else
+			e::non_empty rest
+	) | non_empty _ = [];
+	fun aux (exps as e1::e2::rest) = (
+		cn_subst [(e1, "a"), (aux (e2::rest), "b")] z_union_term
+	) | aux [e] = e
+	  | aux _ = fail "z_many_union" 508001 [fn()=>"weird error"];
+in
+	(aux o non_empty) exps
+end
+);
 =TEX
 =SML
-fun €z_mu› (id : Z_ID, p : Z_PRED) : Z_EXP = (
-let	val name = (fst o dest_const)(mk_z_gvar(id, mk_vartype "'a", []));
-	val ty = case get_const_type name of
-		Value ty => ty
-		|Nil => fail "z_mu" 508001 [];
+fun €z_mu› (env : CN_ENV) (id : Z_ID, p : Z_PRED) : Z_EXP = (
+let	val ty = case env id of
+		Value (ty, _) => ty
+		|Nil =>	fail "z_mu" 508001 [fn()=>("undeclared variable: "^id)];
+
 	val dexp = mk_z_gvar(id, ty, []);
 	val decl = mk_z_decl[mk_z_schema_dec (dexp, "")];
 in
@@ -354,7 +359,9 @@ fun €z_bin_exp› (left : Z_EXP, bop : Z_EXP, right : Z_EXP) : Z_EXP = (
 =TEX
 =SML
 fun €z_fun_call› (exp :Z_EXP, exps : Z_EXP list) : Z_EXP = (
-	mk_z_app (exp, mk_z_tuple exps)
+	case exps of
+	[e] =>	mk_z_app (exp, e)
+	|_ =>	mk_z_app (exp, mk_z_tuple exps)
 );
 =TEX
 =SML
@@ -389,11 +396,22 @@ fun €z_eq_eq› (id : Z_ID, exp : Z_EXP) : PARAINFO = (
 =TEX
 
 =SML
-val €z_true› = ÒtrueÆ;
 
+local
+	val z_true = ÒtrueÆ;
+	fun z_decls_to_exp (zdecls : Z_DECL list) : Z_EXP = (
+	let	fun dec (d,e) = (
+			mk_z_dec ([mk_z_lvar(d, (dest_z_power_type o type_of) e,
+					[])],e)
+		);
+	in
+		mk_z_decl(map dec zdecls)
+	end	);
+in
 fun €z_schema› (name : Z_ID, decls : Z_DECL list) : PARAINFO = (
 	AbbDefInfo (name, [], mk_z_h_schema(z_decls_to_exp decls, z_true))
 );
+end (* local ... in *);
 =TEX
 
 \section{INTEGER LITERALS}\label{INTEGERLITERALS}
@@ -682,9 +700,9 @@ let	fun aux_range (ch::rest) = (
 		|_ => aux_singles rest
 	) | aux_singles _ = [];
 	val zranges = aux_range choice;
-	val zsingles = aux_singles choice;
+	val zsingles = z_set (aux_singles choice);
 in
-	z_cross (z_many_union(zranges @ [z_set zsingles]), z_set [trans_exp env comp])
+	z_cross (z_many_union(zranges @ [zsingles]), z_set [trans_exp env comp])
 end
 )
 =TEX
@@ -703,64 +721,74 @@ and €exp_array_agg_named_others› (env : CN_ENV) ({tmark,agg_named,others} : (AGG
 \subsection{Translating Aggregates (Positional Record)}
 TBS - Proper code required for the following which is a stub.
 =SML
-and €retrieve_type_def› (tmark : TMARK) : TYPE_DEF = (
-	TDRecordTypeDef{comps=[CNone]}
+and €retrieve_record_components› (env : CN_ENV) (tmark : TMARK) : (TMARK * TYPE) list = (
+	(dest_z_schema_type o dest_z_power_type	o type_of o (zid env) o trans_id)
+	tmark
+	handle _ => fail "retrieve_record_components" 508001
+				[fn()=>tmark^" is not a record type"]
 )
+=IGN
+fun €retrieve_type_def› (env : CN_ENV) (tmark : TMARK) = (
+	TDRecordTypeDef{comps=CNone}
+);
 =TEX
 =SML
 and €exp_rec_agg_pos› (env : CN_ENV) ({tmark, comps} : EXP AGG_POS) : Z_EXP = (
-let	val rcomps = case retrieve_type_def tmark of
-			TDRecordTypeDef {comps} => comps
-			|_ => fail "exp_rec_agg_pos" 508001
-				[fn()=>"not a record type"];
-	fun get_decls (comp::rest) = (
-		case comp of
-		CDeclaration vdl => (
-			let	val vars = flat(map (fn {vars,tmark} => vars) vdl);
-			in
-				vars@get_decls rest
-			end)
-		|_ => fail "exp_rec_agg_pos" 508001
-				[fn()=>"variant records not supported"]
-	) | get_decls _ = [];
-	val zeqs = map (fn (d,c) =>
-			z_eq(zid env (trans_id d), trans_exp env c))
-			(combine (get_decls rcomps) comps);
-	val zp = z_many_and zeqs;
+let	val record_components = retrieve_record_components env tmark;
+	fun env' id = (
+		case lassoc5 record_components id of
+		Value ty => Value (ty, EIEnvVar)
+		|Nil => env id
+	);
+	val ap_components = combine ((map fst) record_components) comps
+		handle _ => fail "exp_rec_agg_pos" 508001 [fn()=>"too few/too many components for record: "^tmark];
+	val zp = z_many_and (
+		map
+		(fn (decl_i_var, comps_i) =>
+		   z_eq(zid env' (trans_id decl_i_var), trans_exp env' comps_i))
+			ap_components
+	);
+
 in
-	z_mu (trans_id tmark, zp)
+	z_mu env' (trans_id tmark, zp)
 end
 )
 =TEX
 \subsection{Translating Aggregates (Named Record)}
-TBS - explain the following...
 =SML
-and €do_assocs› (env : CN_ENV) ((assoc::rest) : (AGG_CHOICE,EXP) NAMED_ASSOC list) : Z_EXP list = (
-let	fun expand_assocs comp (ch::rest) = (
-		case ch of
-		ACAggChoiceSingle exp => (name_to_tmark exp, comp)
-						::expand_assocs comp rest
-		|_ => fail "exp_rec_agg_pos" 508001
-				[fn()=>"range attributes not supported"]
-	) | expand_assocs _ _ = [];
-
-	fun one_assoc {choice, comp} = (
-	let	val chcplist = expand_assocs comp choice;
+and €id_exs_of_named_assocs› (nas : (AGG_CHOICE,EXP) NAMED_ASSOC list)
+		: (TMARK * EXP) list = (
+let	fun named_assoc_to_id_exs {choice, comp} = (
+	let	fun aux (ch::rest) comp = (
+			case ch of
+			ACAggChoiceSingle exp => (
+					(name_to_tmark exp, comp)::aux rest comp
+			) |_ => fail "id_exs_of_named_assocs" 508001
+					[fn()=>"range attributes not supported"]
+		) | aux _ _ = [];
 	in
-		map (fn (ch, comp) =>
-			z_eq(zid env (trans_id ch), trans_exp env comp)) chcplist
+		aux choice comp 
 	end);
 in
-	one_assoc assoc@do_assocs env rest
+	flat (map named_assoc_to_id_exs nas)
 end
-) | do_assocs _ _ = []
+)
 =TEX
 =SML
 and €exp_rec_agg_named› (env : CN_ENV) ({tmark, named_assocs} : (AGG_CHOICE,EXP) REC_AGG_NAMED) : Z_EXP = (
-let	val zeqs = do_assocs env named_assocs;
-	val zp = z_many_and zeqs;
+let	val record_components = retrieve_record_components env tmark;
+	fun env' id = (
+		case lassoc5 record_components id of
+		Value ty => Value (ty, EIEnvVar)
+		|Nil => env id
+	);
+	val zp = z_many_and (
+		map
+		(fn (ident, ex) => z_eq(zid env' (trans_id ident), trans_exp env' ex))
+		(id_exs_of_named_assocs named_assocs)
+	);
 in
-	z_mu (trans_id tmark, zp)
+	z_mu env' (trans_id tmark, zp)
 end
 )
 =TEX
@@ -846,10 +874,11 @@ end
 \subsection{Translating Indexed Components}
 =SML
 and €exp_indexed_comp› (env : CN_ENV) ({prefix, index} : EXP INDEXED_COMP) : Z_EXP = (
-	case index of
-	EArrayAggPos {comps,...} =>
-		z_fun_call (trans_exp env prefix, map (trans_exp env) comps)
-	|_ => fail "exp_indexed_comp" 508001 [fn()=>"badly formed indexed component"]
+let	val zfun = trans_exp env prefix;
+	val zargs = [trans_exp env index];
+in
+	z_fun_call (zfun, zargs)
+end
 )
 =TEX
 \subsection{Translating Selected Components}
@@ -925,11 +954,11 @@ val €˙˙_ty› = type_of Ò˙ ∏ ˙Æ;
 fun €enum_attrib› (env : CN_ENV) (zidâ1, zidâ2, zidâ3) = (
 let	fun env' id = 
 		if id = (zidâ1 ^^ zlst)
-		then	(˙_ty, EIEnvOther)
+		then	Value (˙_ty, EIEnvOther)
 		else if id mem [zidâ1 ^^ zsuc, zidâ1 ^^ zpos]
-		then	(˙˙_ty,EIEnvOther)
+		then	Value (˙˙_ty,EIEnvOther)
 		else	env id;
-	val zexp = z_set_minus (zid env' zidâ1, z_set[zid env' (zidâ1^^zlst)]);
+	val zexp = z_set_minus (zid env' zidâ1, z_set [zid env' (zidâ1 ^^ zlst)]);
 in
 	[z_eq_eq (zidâ1 ^^ zfst, zid env' zidâ2),
 	z_eq_eq (zidâ1 ^^ zlst, zid env' zidâ3),
@@ -948,10 +977,10 @@ let	val {vals} = td;
 	fun env' id = (
 		if id mem zvals
 		then
-			(˙_ty, EIEnvOther)
+			Value (˙_ty, EIEnvOther)
 		else if id = zname
 		then
-			(˙_ty, EIEnvOther)
+			Value (˙_ty, EIEnvOther)
 		else
 			env id
 	);
@@ -993,29 +1022,37 @@ end);
 =TEX
 
 \subsection{Translating Record Types}
-TBS - explanation of the following...
 =SML
-fun €trans_decls› (env : CN_ENV) ({vars, tmark} : VAR_DECL) : Z_DECL list = (
-let	val zexp = zid env (trans_id tmark);
+=TEX
+=SML
+fun €var_decls_in_rec_type_def› ({comps} : COMPONENT RECORD_TYPE_DEF)
+	: {var : ID, tmark : TMARK} list  = (
+let	fun conv_var_decl ({vars=vs, tmark=t} : VAR_DECL)
+		: {var : ID, tmark : TMARK} list = (
+	 map (fn id => {var=id, tmark=t}) vs
+	);
+	fun aux component = (
+		case component of
+		CDeclaration vardecls => (
+			map conv_var_decl vardecls
+		) |_ => fail "rec_vars" 508001 [fn()=>"variant records not supported"]
+	);
 in
-	map (fn d => (trans_id d, zexp)) vars
+	(flat o flat o (map aux)) comps
 end);
 =TEX
 =SML
-fun €rec_vars› ({comps} : COMPONENT RECORD_TYPE_DEF) : VAR_DECL list  = (
-let	fun aux component = (
-		case component of
-		CDeclaration vardecls => vardecls
-		|_ => fail "rec_vars" 508001 [fn()=>"variant records not supported"]
-	);
+fun €trans_decl› (env : CN_ENV) {var : ID, tmark : TMARK} : Z_DECL = (
+let	val zvar = trans_id var;
+	val zexp = zid env (trans_id tmark);
 in
-	flat(map aux comps)
+	(trans_id zvar, zexp)
 end);
 =TEX
 =SML
 fun €basic_decl_record› (env : CN_ENV) (name : ID) (td : COMPONENT RECORD_TYPE_DEF) = (
 let	val z_sname = trans_id name;
-	val z_decls = flat(map (trans_decls env) (rec_vars td));
+	val z_decls = map (trans_decl env) (var_decls_in_rec_type_def td);
 in
 	[z_schema(z_sname, z_decls)]
 end);
@@ -1073,9 +1110,11 @@ let	val zname = trans_id name;
 	val index = map name_to_tmark ci;
 	val zindex = join_tmarks (map trans_id index);
 	val zexp = zid env (trans_id tmark);
-	val zvar =  "u"
+	val zvar =  "UNC"
 	val zdecl = (zvar, zexp);
-	val zp = z_eq (z_dom (zid env zvar), zid env zindex);
+	val zvar_ty = dest_z_power_type(type_of zexp);
+	val env' = fn id => if id = "UNC" then Value (zvar_ty, EIEnvVar)					else env id; 
+	val zp = z_eq (z_dom (zid env' zvar), zid env zindex);
 in
 	[z_eq_eq (zname, z_set_comp (zdecl, zp))] @
 	array_attrib env (zname, zindex)
@@ -1121,6 +1160,40 @@ fun €trans_basic_decl› (env : CN_ENV) ((BDConstDecl cd) : BASIC_DECL) : PARAINFO
 \section{ADJUSTMENT OF ABSTRACT SYNTAX FOR EXPRESSIONS}
 
 =SML
+fun €named_assocs_to_exps› (names : ID list) (ns : (AGG_CHOICE,EXP) NAMED_ASSOC list) : EXP list = (
+let	val lns = length ns;
+	val table =	if lns = length names
+			then	combine names (interval 0 (length ns - 1))
+			else	fail "named_assocs_to_exps" 508001 [fn()=>"missing or duplicate entries"];
+	fun aux1 ((ACAggChoiceSingle exp)::rest) = (
+		(	lassoc3 table (name_to_tmark exp)
+				handle _ => fail "named_assocs_to_exps" 508001
+				[fn()=>"entry not present in declartion: "^name_to_tmark exp]
+		)::aux1 rest
+	) | aux1 ((ACAggChoiceRange _)::_) = (
+		fail "named_assocs_to_exps" 508001 [fn()=>"range not allowed here"]
+	) | aux1 _ = [];
+	fun aux2 ({choice=cs,comp}::rest) = (
+	let	val chmap = map (fn choice => (choice, comp))(aux1 cs);
+	in
+		chmap::(aux2 rest)
+	end) | aux2 _ = [];
+	val s = flat (aux2 ns);
+	fun order (a:int,_) (b,_) = a-b;
+	val nssorted = Sort.sort order s;
+	fun aux3 count ((i, exp)::rest) = (
+		if count=i
+		then
+			exp::aux3 (count+1) rest
+		else
+			fail "named_assocs_to_exps" 508001 [fn()=>"missing or duplicate entries"]
+	) | aux3 _ _ = [];
+in
+	aux3 0 nssorted
+end);
+=TEX
+
+=SML
 fun €adjust_rangelohi› (env : CN_ENV) ({lo=l, hi=h} : EXP RANGELOHI) = (
 	{lo=adjust_exp env l, hi=adjust_exp env h}
 )
@@ -1151,7 +1224,7 @@ and €adjust_others› (env : CN_ENV) ({others=oth} : EXP OTHERS) = (
 )
 and €adjust_agg_pos› (env : CN_ENV) ({tmark=t, comps=c} : EXP AGG_POS) = (
 	case env t of
-	(ty, EIEnvRecordAgg) => (
+	Value (ty, EIEnvRecordAgg) => (
 			ERecAggPos {tmark=t, comps=map (adjust_exp env) c}
         ) |_ => (
 			EArrayAggPos {tmark=t, comps=map (adjust_exp env) c}
@@ -1165,11 +1238,14 @@ and €adjust_agg_others› (env : CN_ENV) ({tmark=t, others=oth} : EXP AGG_OTHERS) 
          EArrayAggOthers{tmark=t, others=adjust_others env oth}
 )
 and €adjust_agg_named› (env : CN_ENV) ({named_assocs=n} : (AGG_CHOICE, EXP) AGG_NAMED) = (
+	EArrayAggNamed {named_assocs=map (adjust_named_assoc env) n}
+)
+and €adjust_agg_named1› (env : CN_ENV) (t : TMARK) ({named_assocs=n} : (AGG_CHOICE, EXP) AGG_NAMED) = (
 let	val n' = map (adjust_named_assoc env) n;
 in
-	case env (name_to_tmark(#comp (hd n))) of
-	(ty, EIEnvRecordAgg) => (
-			ERecAggNamed {tmark="TBS", named_assocs=n'}
+	case env t of
+	Value (ty, EIEnvRecordAgg) => (
+			ERecAggNamed {tmark=t, named_assocs=n'}
         ) |_ => (
 			EArrayAggNamed {named_assocs=n'}
 	)
@@ -1177,14 +1253,15 @@ end
 )
 and €adjust_agg_named_others› (env : CN_ENV) ({tmark=t, agg_named=a, others=oth} :
 		(AGG_CHOICE, EXP) AGG_NAMED_OTHERS) = (
-let	val adjagg = case adjust_agg_named env a of
+let	val adjagg = case adjust_agg_named1 env t a of
 		EArrayAggNamed ag => (
 			ag
-		) | _ => fail "adjust_agg_named_others" 508001 [fn()=>"weird error"]
+		) | _ => fail "adjust_agg_named_others" 508001 [fn()=>"others part not allowed in a record aggregate"]
 in
 	EArrayAggNamedOthers{tmark=t, agg_named=adjagg,others=adjust_others env oth}
 end
-)and €adjust_unary_exp› (env : CN_ENV) ({uop=u, right=r} : EXP UNARY_EXP) = (
+)
+and €adjust_unary_exp› (env : CN_ENV) ({uop=u, right=r} : EXP UNARY_EXP) = (
 	EUnaryExp{uop=u, right=adjust_exp env r}
 )
 and €adjust_bin_exp› (env : CN_ENV) ({bop=b, left=l, right=r} : EXP BIN_EXP) = (
@@ -1195,23 +1272,35 @@ and €adjust_attrib_desig› (env : CN_ENV) (ADAttrib x : ATTRIB_DESIG) = (
 ) | adjust_attrib_desig env (ADAttribArg (a,e) : ATTRIB_DESIG) = (
 	ADAttribArg (a, adjust_exp env e)
 )
+and €adjust_mem_range› (env : CN_ENV) ({mop=m, left=l, range=r} : EXP MEM_RANGE) = (
+	EMemRange{left=adjust_exp env l, mop=m, range=adjust_range env r}
+)
 and €adjust_attribute› (env : CN_ENV) ({prefix=p, attribute_desig=a} :
 		(EXP, ATTRIB_DESIG) ATTRIBUTE) = (
 	EAttribute{prefix=adjust_exp env p, attribute_desig=adjust_attrib_desig env a}
 )
 and €adjust_indexed_comp› (env : CN_ENV) ({prefix=p, index=i} : EXP INDEXED_COMP) = (
-let	val prename = name_to_tmark p;
+let	val prename = trans_id(name_to_tmark p);
 in
 	case (env prename, i) of
-	((_, EIEnvFunction), EArrayAggPos{comps,...}) => (
+	(Value (_, EIEnvFunction _), EArrayAggPos{comps,...}) => (
 		EFunCall{fun_name=prename, args=map (adjust_exp env) comps}
-	) |((_, EIEnvFunction), EArrayAggNamed{named_assocs}) => (
-		EFunCall{fun_name=prename, args=map (adjust_exp env) [EId "TBS"]}
-	) |((_, _), EArrayAggNamed _) => (
+	) |(Value (_, EIEnvFunction names), EArrayAggNamed{named_assocs}) => (
+	let	val args = named_assocs_to_exps names named_assocs;
+	in
+		EFunCall{fun_name=prename, args=map (adjust_exp env) args}
+	end
+
+	) |(_, EArrayAggNamed _) => (
 		fail "adjust_indexed_comp" 508001
 			[fn()=>"can't index using a named association"]
+	) |(Value (_, _), EArrayAggPos{comps=[comp],...}) => (
+		EIndexedComp{prefix=adjust_exp env p, index = adjust_exp env comp}
+	) |(Value (_, _), EArrayAggPos _) => (
+		fail "adjust_indexed_comp" 508001 [fn()=>"can't do multi-dimensional arrays yet"]
 	) |_ => (
-		EIndexedComp{prefix=adjust_exp env p, index = adjust_exp env i}
+		fail "adjust_indexed_comp" 508001 [fn()=>"undeclared variable: "^prename]
+
 	)
 end
 )
@@ -1228,50 +1317,50 @@ and €adjust_qualified_expression› (env : CN_ENV) ({tmark=t, exp=e} : EXP QUALIFI
 	)| EArrayAggOthers{others,...} => (
 		adjust_agg_others env {others=others,tmark=t}
 	)| EArrayAggNamed an => (
-		 adjust_agg_named env an
+		 adjust_agg_named1 env t an
 	)| EArrayAggNamedOthers {agg_named, others,...} => (
 		adjust_agg_named_others env 
 			{agg_named=agg_named, others=others, tmark=t}
 	)|_ => fail "adjust_qualified_exp" 508001 [fn()=>"badly formed qualified expression"]
 )
-and €adjust_exp› (env : CN_ENV) (exp as (EId _ : EXP)) = (
+and €adjust_exp› (env : CN_ENV) (exp as (EId id : EXP)) = (
 	exp
 ) | adjust_exp env (exp as (EInt _)) = (
 	exp
 ) | adjust_exp env (exp as (EArrayAggPos x)) = (
 	adjust_agg_pos env x
 ) | adjust_exp env (exp as (EArrayAggPosOthers x)) = (
-	 (adjust_agg_pos_others env x)
+	adjust_agg_pos_others env x
 ) | adjust_exp env (exp as (EArrayAggOthers x)) = (
-	 (adjust_agg_others env x)
+	adjust_agg_others env x
 ) | adjust_exp env (exp as (EArrayAggNamed x)) = (
 	adjust_agg_named env x
 ) | adjust_exp env (exp as (EArrayAggNamedOthers x)) = (
-	 (adjust_agg_named_others  env x)
+	adjust_agg_named_others  env x
 ) | adjust_exp env (exp as (ERecAggPos x)) = (
 	fail "ERecAggPos : this error shouldn't be raised" 508001 []
 ) | adjust_exp env (exp as (ERecAggNamed x)) = (
 	fail "ERecAggNamed : this error shouldn't be raised" 508001 []
 ) | adjust_exp env (exp as (EUnaryExp x)) = (
-	 (adjust_unary_exp env x)
+	adjust_unary_exp env x
 ) | adjust_exp env (exp as (EBinExp x)) = (
-	 (adjust_bin_exp env x)
+	adjust_bin_exp env x
 ) | adjust_exp env (exp as (EMemRange x)) = (
-	fail "EMemRange : this error shouldn't be raised" 508001 []
+	adjust_mem_range env x
 ) | adjust_exp env (exp as (EAttribute x)) = (
-	 (adjust_attribute env x)
+	adjust_attribute env x
 ) | adjust_exp env (exp as (EIndexedComp x)) = (
 	adjust_indexed_comp env x
 ) | adjust_exp env (exp as (ESelectedComp x)) = (
-	 (adjust_selected_comp env x)
+	adjust_selected_comp env x
 ) | adjust_exp env (exp as (EFunCall _)) = (
 	fail "EFunCall : this error shouldn't be raised" 508001 []
 ) | adjust_exp env (exp as (EAuxiliaryExp _)) = (
 	exp
 ) | adjust_exp env (exp as (EQualifiedExp x)) = (
-	 (adjust_qualified_expression env x)
+	adjust_qualified_expression env x
 ) | adjust_exp env (exp as (EBracketed x)) = (
-	EBracketed (adjust_exp env x)
+	adjust_exp env x
 ) | adjust_exp env (exp as (EStringLiteral _)) = (
 	exp
 ) | adjust_exp env (exp as (ECharacterLiteral _)) = (
@@ -1279,7 +1368,7 @@ and €adjust_exp› (env : CN_ENV) (exp as (EId _ : EXP)) = (
 );
 =TEX
 
-\subsection{Epilogue}
+\section{EPILOGUE}
 
 =SML
 end (* of local...in *);
