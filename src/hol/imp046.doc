@@ -55,6 +55,9 @@ Corrected $HOL\_constant\_recogniser$.
 Re-worked $HOL\_constant\_recogniser$ to construct
 an existence assertion rather than a variable list -- predicate
 pair.
+\item [Issue 1.9 (7 February 1992)]
+$HOL\_constant\_recogniser$ modified to correctly
+handle predicates which begin with any binder.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -264,21 +267,46 @@ const_spec (["c1","c2","c3"],[¬c1:BOOL®,¬(c2:BOOL,c3:BOOL)®],
 	¬c1 ± c2 ± c3®);
 const_spec (["c4"],[¬c4:BOOL®],¬c4 = T®);
 =TEX
-=SMLLITERAL
+=SML
 local
 	open Lex Parser ReaderWriterSupport SymbolTable TypeInference;
 	open PrettyNames;
+	fun Ûstrip_varbinderÝ (op_name : string) (tm : TERM) : TERM list * TERM = (
+	let	fun aux (tm1:TERM) : (TERM list * TERM) = (
+		let	val (binder, abs) = dest_app tm1;
+			val (var, body) = dest_Ì abs;
+		in	if fst (dest_var binder) = op_name
+			then (let val (vs,bd) = aux body;
+				in
+					((var :: vs) , bd)
+				end)
+		else ([],tm1)
+		end
+		handle (Fail _) => ([],tm1)
+		);
+	in
+		aux tm
+	end);
+
+	fun unique_bname s = (
+		case get_fixity s of
+		Lex.Binder => unique_bname (s^" ")
+		|_ => s);
 in
+=TEX
+=SML
 fun ÛHOL_constant_recogniserÝ
 	(x:string, y:string,
 		toks:Lex.INPUT list, z:string:string) : THM = (
+=TEX
+=SMLLITERAL
 	let	val sideeffect = if is_same_symbol(x, "¹")
 			andalso	is_same_symbol(z, "°")
 			andalso	(y = "HOLCONST")
 			then ()
 			else fail "HOL_constant_recogniser" 46000 [];
 		fun aux res (Separator"÷":: more) = (
-			 res@[Separator ")·"]@more
+			 res@[Separator "·"]@more
 		) | aux res (Text t::more) = (
 			if contains (explode t) "·"
 			then fail "HOL_constant_recogniser" 46000 []
@@ -287,37 +315,41 @@ fun ÛHOL_constant_recogniserÝ
 		) | aux res [] = fail "HOL_constant_recogniser" 46000 [];
 		val toks' =  aux [] toks;
 		val tm = (lex (get_current_terminators()) get_fixity) toks';
-		val tm1 = HTBinder "¶"::HTLbrack::tm;
+		val binder_name = unique_bname "¹HOLCONST";
+		val tm1 = HTBinder binder_name::tm;
 		val tm2 = (make_term o HOL_parser) tm1;
-		val (var, def) = dest_¶ tm2;
-		val nms = map (fst o dest_var)(frees var);
+		val (vars, def) = strip_varbinder binder_name tm2;
+		val fv = list_cup(map frees vars);
+		val nms = map (fst o dest_var)fv;
 	in	
-		const_spec (nms,[var],def)
+		const_spec (nms,vars,def)
 	end
 	handle complaint =>
 	divert complaint "HOL parser" "HOL_constant_recogniser" 46000 []
 );
 end (* local ... in *);
-=IGN
-=IGN
- =IGN
 
-  ¹HOLCONST
-c5 : BOOL ­ BOOL,
-c6 : BOOL ­ BOOL
-÷
-(µ x · c5 x = ³ x)
-±
-(µ y · c6 y = y)
-  °;
-
- =IGN
+=TEX
+=IGN
 
  ¹HOLCONST
-c7 : 'a ¸ 'b,
-c8 : 'b ¸ 'a
+x4 : BOOL ­ BOOL;-
+x5 : BOOL ­ BOOL
 ÷
-T
+ ¶x6 · x6 = x5
+  °;
+
+  ¹HOLCONST
+c1 : BOOL ­ BOOL
+÷
+ T
+  °;
+
+ ¹HOLCONST
+c2 : BOOL ­ BOOL;
+c3 : BOOL ­ BOOL
+÷
+ T
   °;
 =TEX
 \subsection{Extracting the Best Specification}
