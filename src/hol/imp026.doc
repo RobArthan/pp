@@ -66,10 +66,115 @@ rel001 makefile.
 \subsubsection{Deficiencies}
 
 \subsubsection{Possible Enhancements}
-\section{THE REWRITING RULES OF INFERENCE}
+\section{START OF THE SIGNATURE}
 =SML
 structure Rewriting : Rewriting = struct
 =TEX
+\section{CANONICALISATION FUNCTIONS}
+=TEX
+=SML
+type ‚CANON· = THM -> (THM list);
+=TEX
+=SML
+val ‚id_canon· : CANON = (fn thm => [thm]);
+=TEX
+=SML
+val ‚fail_canon· : CANON = (fn _ => fail "fail_canon" 26201 []);
+=TEX
+=SML
+fun ‚fail_with_canon· 	(area : string) (msg : int)
+	(inserters : (unit -> string) list) : CANON = (
+	fail area msg inserters
+);
+=TEX
+=SML
+fun (lr1 : CANON) ‚THEN_CAN· (lr2 : CANON) : CANON = (
+	flat o (map lr2 o lr1)
+);
+=TEX
+=SML
+fun (lr1 : CANON) ‚ORELSE_CAN· (lr2 : CANON) : CANON = (fn thm =>
+	(lr1 thm) handle Fail _ => lr2 thm
+);
+=TEX
+=SML
+fun (lr1 : CANON) ‚THEN_LIST_CAN· (lrs : CANON list) : CANON = (fn thm =>
+	let	fun aux (thm :: morethms) (lr :: morelrs) = (
+			lr thm @ aux morethms morelrs
+		) | aux [] [] = ([]
+		) | aux _ _ = fail "CANON" 26202 [];
+	in	aux (lr1 thm) lrs
+	end	
+);
+=TEX
+=SML
+fun ‚EVERY_CAN· (lrs : CANON list) : CANON = fold (op THEN_CAN) lrs id_canon;
+=TEX
+=SML
+fun ‚FIRST_CAN· (lrs : CANON list) = fold (op ORELSE_CAN) lrs fail_canon;
+=TEX
+=SML
+fun ‚REPEAT_CAN· (lr : CANON) : CANON = (fn thm =>
+	((lr THEN_CAN REPEAT_CAN lr) ORELSE_CAN id_canon) thm
+);
+=TEX
+=SML
+fun ‚Ä_rewrite_canon· (thm : THM) : THM list = (
+	[Ä_left_elim thm, Ä_right_elim thm]
+);
+=TEX
+The following is not right yet:
+=SML
+fun ‚å_rewrite_canon· (thm : THM) : THM list = (
+	[conv_rule (FIRST_C[
+		simple_eq_match_conv å_Å_thm,
+		simple_å_Ñ_conv,
+		simple_eq_match_conv å_1_thm])thm]
+);
+=TEX
+=SML
+fun ‚Ç_t_rewrite_canon· (thm : THM) : THM list = (
+	if is_eq (concl thm)
+	then fail_canon thm
+	else [Ç_t_intro thm]
+);
+=TEX
+=SML
+fun ‚simple_É_rewrite_canon· (thm : THM) : THM list = (
+	if is_É (concl thm)
+	then [simple_all_É_elim thm]
+	else fail_canon thm
+);
+=TEX
+=SML
+fun ‚thm_aconv· (thm1: THM) (thm2: THM) : bool = (
+	let	val (asms1, conc1) = dest_thm thm1;
+		val (asms2, conc2) = dest_thm thm2;
+	in	aconv conc1 conc2
+		andalso all asms1 (switch(present (uncurry aconv)) asms2)
+		andalso all asms2 (switch(present (uncurry aconv)) asms1)
+	end
+);
+=TEX
+=TEX
+=SML
+fun ‚thm_frees· (thm: THM) : TERM list = (
+	let	val (asms, conc) = dest_thm thm;
+	in	(frees conc) cup (list_cup (map frees asms))
+	end
+);
+=TEX
+=SML
+fun ‚rewrite_gen_canon· (fvs : TERM list) (thm : THM) : THM list = (
+	[simple_list_É_intro ((thm_frees thm) drop (fn v => (v mem fvs))) thm]
+);
+=TEX
+=SML
+fun ‚gen_rewrite_canon· (lrs : CANON list) (thm : THM) (* : THM list *)= (
+	(REPEAT_CAN (FIRST_CAN lrs) THEN_CAN rewrite_gen_canon (thm_frees thm)) thm
+);
+=TEX
+\section{THE REWRITING RULES OF INFERENCE}
 \subsection{Utilities}
 =SML
 val ‚thm_union· = union (fn (thm1,thm2) => (dest_thm thm1 = dest_thm thm2));
@@ -104,19 +209,19 @@ local
 
 in
 fun ‚prim_rewrite_conv· (other_conv : (TERM * CONV) list) :
-	(THM list -> THM list) -> 
+	CANON -> 
 	THM list -> (CONV -> CONV) -> 
 	THM list -> TERM -> THM = (
 let 	val net1 = list_enter other_conv empty
 in
-(fn (canon : THM list -> THM list) =>
+(fn (canon : CANON) =>
 (fn (basis : THM list) =>
-let 	val base_entries = mapfilter mk_net_entry (canon basis);
+let 	val base_entries = mapfilter mk_net_entry (flat (map canon basis));
 	val net2 = list_enter base_entries net1;
 in
 (fn (traverse : CONV -> CONV) => 
 (fn (with_thms : THM list) =>
-let	val with_entries = mapfilter mk_net_entry (canon with_thms);
+let	val with_entries = mapfilter mk_net_entry (flat (map canon with_thms));
 	val net3 = list_enter with_entries net2;
 in
 (fn (tm : TERM) =>
@@ -136,12 +241,12 @@ end; (* local open NetTools ... *)
 Since we wish to profile rules, we have to mess around a little.
 =SML
 fun  ‚prim_rewrite_rule·  (other_conv : (TERM * CONV) list) :
-	(THM list -> THM list) -> 
+	CANON -> 
 	THM list -> (CONV -> CONV) -> 
 	THM list -> THM -> THM = (
 let 	val c1 = prim_rewrite_conv other_conv;
 in
-(fn (canon : THM list -> THM list) =>
+(fn (canon : CANON) =>
 let 	val c2 = c1 canon;
 in
 (fn (basis : THM list) =>
@@ -168,12 +273,12 @@ end);
 =TEX
 =SML
 fun  ‚prim_rewrite_tac·  (other_conv : (TERM * CONV) list) :
-	(THM list -> THM list) -> 
+	CANON -> 
 	THM list -> (CONV -> CONV) -> 
 	THM list -> TACTIC = (
 let 	val c1 = prim_rewrite_conv other_conv;
 in
-(fn (canon : THM list -> THM list) =>
+(fn (canon : CANON) =>
 let 	val c2 = c1 canon;
 in
 (fn (basis : THM list) =>
@@ -197,11 +302,19 @@ being able to dynamically change the $rewrite\_canon$ and
 $basic\_rewrites$. 
 =SML
 local
-val ‚rewrite_canon· : (THM list -> THM list) ref = ref Combinators.I;
+val ‚rewrite_canon· : CANON ref = ref id_canon;
 
+val ‚rewrite_canons· : (string * CANON) list ref = ref [
+	("Ä_rewrite_canon",		Ä_rewrite_canon),
+	("å_rewrite_canon",		å_rewrite_canon),
+	("simple_É_rewrite_canon",	simple_É_rewrite_canon),
+	("Ç_t_rewrite_canon",		Ç_t_rewrite_canon)
+];
+=TEX
+=SML
 val ‚basic_rewrites· : (THM list) ref = ref [];
 
-val ‚rewrite_conversions· : ((TERM * CONV) list) ref = ref [];
+val ‚rewrite_convs· : ((TERM * CONV) list) ref = ref [];
 =TEX
 We then have a number of variables that cannot be directly
 set by the user.
@@ -210,9 +323,9 @@ first three arguments to $prim\_rewrite\_conv$,
 and the four kinds of rule/conversion: 
 $rewrite$, $once\_rewrite$, $pure\_rewrite$, $pure\_once\_rewrite$.
 =SML
-val ‚prc1· : ((THM list -> THM list) -> THM list -> 
+val ‚prc1· : (CANON -> THM list -> 
 	(CONV -> CONV) -> THM list -> TERM -> THM) ref =
-	ref (prim_rewrite_conv (!rewrite_conversions));
+	ref (prim_rewrite_conv (!rewrite_convs));
 
 val ‚prc2· : (THM list -> 
 	(CONV -> CONV) -> THM list -> TERM -> THM) ref =
@@ -237,9 +350,9 @@ in
 =TEX
 To set the rewriting parameters:
 =SML
-fun ‚set_rewrite_conversions· (cnvs : (TERM * CONV) list) : unit = (
-	rewrite_conversions := cnvs;
-	prc1 := prim_rewrite_conv (!rewrite_conversions);
+fun ‚set_rewrite_convs· (cnvs : (TERM * CONV) list) : unit = (
+	rewrite_convs := cnvs;
+	prc1 := prim_rewrite_conv (!rewrite_convs);
 	prc2 := (!prc1) (!rewrite_canon);
 	prc3 := (!prc2) (!basic_rewrites);
 	prc4 := (!prc3) TOP_MAP_C;
@@ -248,9 +361,14 @@ fun ‚set_rewrite_conversions· (cnvs : (TERM * CONV) list) : unit = (
 	prc4pureonce := prim_rewrite_conv [] (!rewrite_canon) [] ONCE_MAP_C;
 	()
 );
-
-fun ‚set_rewrite_canon· (canon : THM list -> THM list) : unit = (
-	rewrite_canon := canon;
+fun ‚get_rewrite_convs· (() : unit) : (TERM * CONV) list = (
+	!rewrite_convs
+);
+=TEX
+=SML
+fun ‚set_rewrite_canons· (canons : (string * CANON) list) : unit = (
+	rewrite_canons := canons;
+	rewrite_canon := gen_rewrite_canon (map snd canons);
 	prc2 := (!prc1) (!rewrite_canon);
 	prc3 := (!prc2) (!basic_rewrites);
 	prc4 := (!prc3) TOP_MAP_C;
@@ -259,7 +377,13 @@ fun ‚set_rewrite_canon· (canon : THM list -> THM list) : unit = (
 	prc4pureonce := prim_rewrite_conv [] (!rewrite_canon) [] ONCE_MAP_C;
 	()
 );
-
+=TEX
+=SML
+fun ‚get_rewrite_canons· (() : unit) : (string * CANON) list = (
+	!rewrite_canons
+);
+=TEX
+=SML
 fun ‚set_basic_rewrites· (thms : THM list) : THM list = (
 let
 	val old = (!basic_rewrites)
@@ -272,6 +396,11 @@ in
 	prc4pureonce := prim_rewrite_conv [] (!rewrite_canon) [] ONCE_MAP_C;
 	old)
 end);
+=TEX
+=SML
+fun ‚get_basic_rewrites· (() : unit) : THM list = (
+	!basic_rewrites
+);
 =TEX
 Now the actual inferences.
 Rules first:
@@ -520,11 +649,57 @@ in
 	handle complaint =>
 	divert complaint "TOP_MAP_C" "pure_once_fasm_rewrite_tac" 26001 []
 end);
-
-
 =TEX
 =SML
-end; (* local val rewrite_canon ... *)
+end; (* of local val basic_ ... in ... end *)
+=TEX
+\section{BASIC REWRITE THEOREMS}
+=SML
+val ‚eq_rewrite_thm· = save_thm("eq_rewrite_thm", tac_proof(([],
+		ªÉ xé(x = x) Ç Tº),
+	REPEAT strip_tac THEN accept_tac (refl_convªxº)));
+val ‚Ç_rewrite_thm· = save_thm("Ç_rewrite_th", tac_proof(([],
+		ªÉ té((T Ç t) = t) Ä ((t Ç T) = t) Ä ((F Ç t) = (å t)) Ä (t Ç F) = (å t)º),
+	REPEAT strip_tac));
+val ‚å_rewrite_thm· = save_thm("å_rewrite_thm", tac_proof(([],
+		ªÉ téååt Ç t Ä ((å T) Ç F) Ä (å F) Ç Tº),
+	REPEAT strip_tac));
+val ‚Ä_rewrite_thm· = save_thm("Ä_rewrite_thm", tac_proof(([],
+		ªÉ té((T Ä t) Ç t) Ä ((t Ä T) Ç t) Ä
+		(å (F Ä t)) Ä (å (t Ä F)) Ä (t Ä t) = tº),
+	REPEAT strip_tac));
+val ‚Å_rewrite_thm· = save_thm("Å_rewrite_thm", tac_proof(([],
+		ªÉ té(T Å t) Ä (t Å T) Ä ((F Å t) = t) Ä ((t Å F) = t) Ä (t Å t) = tº),
+	REPEAT strip_tac));
+val ‚ä_rewrite_thm· = save_thm("ä_rewrite_thm", tac_proof(([],
+		ªÉ té((T ä t) = t) Ä ((F ä t) = T) Ä ((t ä T) = T) Ä ((t ä t) = T)
+  Ä (t ä F) = (å t)º),
+	REPEAT strip_tac));
+val ‚if_rewrite_thm· = save_thm("if_rewrite_thm", tac_proof(([],
+		ªÉ t1 t2:BOOLé((if T then t1 else t2) = t1) Ä (if F then t1 else t2) = t2º),
+	REPEAT strip_tac));
+val ‚É_rewrite_thm· = save_thm("É_rewrite_thm", tac_proof(([],
+		ªÉ té(É xét) = tº),
+	REPEAT strip_tac THEN POP_ASM_T (accept_tac o simple_all_É_elim)));
+val ‚Ñ_rewrite_thm· = save_thm("Ñ_rewrite_thm", tac_proof(([],
+		ªÉ té(Ñ xét) = tº),
+	REPEAT strip_tac THEN simple_Ñ_tac ªxº THEN goal_in_asms_tac));
+val ‚%beta%_rewrite_thm· = save_thm("%beta%_rewrite_thm", tac_proof(([],
+		ªÉ t1:'a; t2:'bé((ç xét1)t2) = t1º),
+	REPEAT strip_tac THEN accept_tac(simple_%beta%_conv ª(ç x:'bét1:'a)t2º)));
+=TEX
+=SML
+val ‚side_effect· = set_basic_rewrites [
+		eq_rewrite_thm,
+		Ç_rewrite_thm,
+		å_rewrite_thm,
+		Ä_rewrite_thm,
+		Å_rewrite_thm,
+		ä_rewrite_thm,
+		if_rewrite_thm,
+		É_rewrite_thm,
+		Ñ_rewrite_thm,
+		%beta%_rewrite_thm];
 =TEX
 \section{END OF THE STRUCTURE}
 =SML
