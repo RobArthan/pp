@@ -42,6 +42,7 @@ Bool add_find_tool(Widget text_w)
 	Widget shell, rowcol, find_form, replace_form,
 		find_text, replace_text, find_btn, replace_btn,
 		find_lab, replace_lab, button_form;
+	char	*to_find;
 
 	static void find_cb(), replace_cb();
 
@@ -94,6 +95,12 @@ Bool add_find_tool(Widget text_w)
 		XmNleftPosition,		2,
 		XmNcolumns,			40,
 		NULL);
+
+	if(to_find = XmTextGetSelection(text_w)) {
+		XmTextSetString(find_text, to_find);
+		XmTextShowPosition(find_text, strlen(to_find));
+		XtFree(to_find);
+	}
 
 	replace_lab = XtVaCreateManagedWidget("Replace With:",
 		xmLabelWidgetClass,	replace_form,
