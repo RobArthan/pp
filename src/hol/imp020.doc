@@ -70,11 +70,13 @@ The name atom  ``definition(s)'' changed to ``defn(s)'', and
 ``constant(s)'' to ``const(s)''.
 \item [Issue 1.7 (22 May 1991)]
 Added $get\_alias$. Corrected handling of languages.
-\item [Issue \SCCSversion (\FormatDate{$Date$%
-})] Added $get\_language$. $get\_terminators$ renamed as
+\item [Issue 1.8 (25 July 1991)] Added $get\_language$. $get\_terminators$ renamed as
 $get\_current\_terminators$ and $get\_terminators$ added as theory
 access function. Slight reorganisation of last part of document.
+\item [Issue 1.9 (25 July 1991)]
 Delete $FIXITY$ (moved to lexical analyser~\cite{DS/FMU/IED/DTD015}).
+\item [Issue \SCCSversion (\FormatDate{$Date$%
+})]	Rework of theory access and type abbreviation interfaces.
 
 \end{description}
 \subsection{Changes forecast}
@@ -800,18 +802,10 @@ fun âis_type_abbrevá (a : string) : bool =(
 );
 =TEX
 =SML
-fun âexpand_type_abbrevá (a : string, actuals : TYPE list) : TYPE = (
+fun âget_type_abbrevá (a : string) : string list * TYPE = (
 	case get_type_info a of
-		Value(_, Value (formals, ty)) => (
-			let	val subs = (combine actuals formals)
-					handle X =>
-						divert X "combine" "expand_type_abbrev"
-						(if length formals = 1 then 20405 else 20406)
-						[fn()=>string_of_int(length formals),
-						 fn()=>string_of_int(length actuals)];
-			in	icl'inst_type subs ty
-			end
-	) |	_ => fail "expand_type_abbrev" 20404 [fn()=>a]
+		Value(_, Value (formals, ty)) => (formals, ty)
+	|	_ => fail "expand_type_abbrev" 20404 [fn()=>a]
 );
 =TEX
 \subsection{Languages}
@@ -844,23 +838,15 @@ fun âget_type_languageá (s : string) : string = (
 All the theory access functions go via the following utility which
 selects the relevant information from the theory. 
 =SML
-fun get_selected_ids (thy : string) (sel : DECL -> bool) (uds : USER_DATUM list) : string list = (
+fun get_selected_ids (thy : string) (sel : DECL -> bool) (uds : USER_DATUM list) : (DECL) list = (
 	case uds of
 		[] => []
 	|	ud :: more => (
 			let	val dec = decode_decl thy ud;
 			in	if sel dec
-				then 	case dec of
-						DeclTerminator t => [t]
-					|	UnDeclTerminator t => [t]
-					|	DeclFixity (s, _)  => [s]
-					|	DeclAlias (a, _) => [a]
-					|	UnDeclAlias (a, _) => [a]
-					|	DeclTypeAbbrev (a, _) => [a]
-					|	UnDeclTypeAbbrev a => [a]
-					|	SetLanguage lang => [lang]
-				else []
-			end @ get_selected_ids thy sel more
+				then 	dec :: get_selected_ids thy sel more
+				else get_selected_ids thy sel more
+			end
 	)
 );
 =TEX
@@ -868,7 +854,20 @@ fun get_selected_ids (thy : string) (sel : DECL -> bool) (uds : USER_DATUM list)
 fun âget_terminatorsá (thy : string) : string list = (
 	let	fun sel (DeclTerminator _) = true
 		|   sel _ = false;
-	in	get_selected_ids thy sel (fetch_sym_tab_data thy)
+		fun coerce(DeclTerminator t) = t
+		|   coerce _ = fail "get_terminators" 20003 [fn()=> "coercion failed"];
+	in	map coerce(get_selected_ids thy sel (fetch_sym_tab_data thy))
+	end	handle X => reraise X "get_terminators"
+);
+=TEX
+=TEX
+=SML
+fun âget_undeclared_terminatorsá (thy : string) : string list = (
+	let	fun sel (UnDeclTerminator _) = true
+		|   sel _ = false;
+		fun coerce(UnDeclTerminator t) = t
+		|   coerce _ = fail "get_undeclared_terminators" 20003 [fn()=> "coercion failed"];
+	in	map coerce(get_selected_ids thy sel (fetch_sym_tab_data thy))
 	end	handle X => reraise X "get_terminators"
 );
 =TEX
@@ -876,31 +875,39 @@ fun âget_terminatorsá (thy : string) : string list = (
 fun âget_bindersá (thy : string) : string list = (
 	let	fun sel (DeclFixity(_, Binder)) = true
 		|   sel _ = false;
-	in	get_selected_ids thy sel (fetch_sym_tab_data thy)
+		fun coerce(DeclFixity(s, Binder)) = s
+		|   coerce _ = fail "get_binders" 20003 [fn()=> "coercion failed"];
+	in	map coerce(get_selected_ids thy sel (fetch_sym_tab_data thy))
 	end	handle X => reraise X "get_binders"
 );
 =TEX
 =SML
-fun âget_infixesá (thy : string) : string list = (
+fun âget_infixesá (thy : string) : (int * string) list = (
 	let	fun sel (DeclFixity(_, Infix _)) = true
 		|   sel _ = false;
-	in	get_selected_ids thy sel (fetch_sym_tab_data thy)
+		fun coerce(DeclFixity(s, Infix p)) = (p, s)
+		|   coerce _ = fail "get_infixes" 20003 [fn()=> "coercion failed"];
+	in	map coerce(get_selected_ids thy sel (fetch_sym_tab_data thy))
 	end	handle X => reraise X "get_infixes"
 );
 =TEX
 =SML
-fun âget_prefixesá (thy : string) : string list = (
+fun âget_prefixesá (thy : string) : (int * string) list = (
 	let	fun sel (DeclFixity(_, Prefix _)) = true
 		|   sel _ = false;
-	in	get_selected_ids thy sel (fetch_sym_tab_data thy)
+		fun coerce(DeclFixity(s, Prefix p)) = (p, s)
+		|   coerce _ = fail "get_prefixes" 20003 [fn()=> "coercion failed"];
+	in	map coerce(get_selected_ids thy sel (fetch_sym_tab_data thy))
 	end	handle X => reraise X "get_prefixes"
 );
 =TEX
 =SML
-fun âget_postfixesá (thy : string) : string list = (
+fun âget_postfixesá (thy : string) : (int * string) list = (
 	let	fun sel (DeclFixity(_, Postfix _)) = true
 		|   sel _ = false;
-	in	get_selected_ids thy sel (fetch_sym_tab_data thy)
+		fun coerce(DeclFixity(s, Postfix p)) = (p, s)
+		|   coerce _ = fail "get_postfixes" 20003 [fn()=> "coercion failed"];
+	in	map coerce(get_selected_ids thy sel (fetch_sym_tab_data thy))
 	end	handle X => reraise X "get_postfixes"
 );
 =TEX
@@ -908,15 +915,19 @@ fun âget_postfixesá (thy : string) : string list = (
 fun âget_nonfixesá (thy : string) : string list = (
 	let	fun sel (DeclFixity(_, Nonfix)) = true
 		|   sel _ = false;
-	in	get_selected_ids thy sel (fetch_sym_tab_data thy)
+		fun coerce(DeclFixity(s, Nonfix)) = s
+		|   coerce _ = fail "get_nonfixes" 20003 [fn()=> "coercion failed"];
+	in	map coerce(get_selected_ids thy sel (fetch_sym_tab_data thy))
 	end	handle X => reraise X "get_nonfixes"
 );
 =TEX
 =SML
-fun âget_type_abbrevsá (thy : string) : string list = (
+fun âget_type_abbrevsá (thy : string) : (string * (string list * TYPE)) list = (
 	let	fun sel (DeclTypeAbbrev _) = true
 		|   sel _ = false;
-	in	get_selected_ids thy sel (fetch_sym_tab_data thy)
+		fun coerce(DeclTypeAbbrev tyab) = tyab
+		|   coerce _ = fail "get_type_abbrevs" 20003 [fn()=> "coercion failed"];
+	in	map coerce(get_selected_ids thy sel (fetch_sym_tab_data thy))
 	end	handle X => reraise X "get_type_abbrevs"
 );
 =TEX
@@ -924,23 +935,29 @@ fun âget_type_abbrevsá (thy : string) : string list = (
 fun âget_undeclared_type_abbrevsá (thy : string) : string list = (
 	let	fun sel (UnDeclTypeAbbrev _) = true
 		|   sel _ = false;
-	in	get_selected_ids thy sel (fetch_sym_tab_data thy)
+		fun coerce(UnDeclTypeAbbrev tyab) = tyab
+		|   coerce _ = fail "get_undeclared_type_abbrevs" 20003 [fn()=> "coercion failed"];
+	in	map coerce(get_selected_ids thy sel (fetch_sym_tab_data thy))
 	end	handle X => reraise X "get_undeclared_type_abbrevs"
 );
 =TEX
 =SML
-fun âget_aliasesá (thy : string) : string list = (
+fun âget_aliasesá (thy : string) : (string * TERM) list = (
 	let	fun sel (DeclAlias _) = true
 		|   sel _ = false;
-	in	get_selected_ids thy sel (fetch_sym_tab_data thy)
+		fun coerce(DeclAlias (a, sty)) = (a, mk_const sty)
+		|   coerce _ = fail "get_aliases" 20003 [fn()=> "coercion failed"];
+	in	map coerce(get_selected_ids thy sel (fetch_sym_tab_data thy))
 	end	handle X => reraise X "get_aliases"
 );
 =TEX
 =SML
-fun âget_undeclared_aliasesá (thy : string) : string list = (
+fun âget_undeclared_aliasesá (thy : string) : (string * TERM) list = (
 	let	fun sel (UnDeclAlias _) = true
 		|   sel _ = false;
-	in	get_selected_ids thy sel (fetch_sym_tab_data thy)
+		fun coerce(UnDeclAlias (a, sty)) = (a, mk_const sty)
+		|   coerce _ = fail "get_undeclared_aliases" 20003 [fn()=> "coercion failed"];
+	in	map coerce(get_selected_ids thy sel (fetch_sym_tab_data thy))
 	end	handle X => reraise X "get_undeclared_aliases"
 );
 =TEX
@@ -950,7 +967,7 @@ fun âget_languageá (thy : string) : string = (
 	let	fun sel (SetLanguage _) = true
 		|   sel _ = false;
 	in	case get_selected_ids thy sel (fetch_sym_tab_data thy) of
-			lang :: _ => lang
+			SetLanguage lang :: _ => lang
 		|	_ => "HOL"
 	end	handle X => reraise X "get_language"
 );
