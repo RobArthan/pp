@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.16 2002/08/10 10:33:45 rda Exp rda $
+ * $Id: pterm.c,v 2.17 2002/08/11 10:58:36 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -587,9 +587,8 @@ static void try_drain_queue(Widget w)
 /* If not, reclaim space if appropriate: */
 
 		queue = XtRealloc(queue, INIT_Q_LEN); 
-		if(queue == 0)  {
+		if(queue == 0)  { /* weird, but ... */
 			ok_dialog(root, queue_malloc_failed_message);
-			return False;
 		}
 		q_size = INIT_Q_LEN;
 		q_head = 0;
