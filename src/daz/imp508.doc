@@ -81,9 +81,9 @@ The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD504}.
 \section{PREAMBLE}
 
 =SML
-structure €CNBasicDeclsAndExprs› (*: CNBasicDeclsAndExprs *)  = struct
+structure €CNBasicDeclsAndExprs› : CNBasicDeclsAndExprs = struct
 local
-	open CaseIndependence CNTypes CNEnvironmentTypes ZProofMode;
+	open CaseIndependence CNTypes ZProofMode;
 in
 =TEX
 
@@ -135,14 +135,6 @@ fun €join_tmarks› ((s1::s2::rest) : string list) : string = (
   | join_tmarks _ = "";
 =TEX
 =SML
-fun €z_decls_to_exp› (zdecls : Z_DECL list) : Z_EXP = (
-let	fun dec (d,e) = mk_z_dec ([mk_z_lvar(d, type_of e, [])],e);
-in
-	mk_z_decl(map dec zdecls)
-end
-);
-=TEX
-=SML
 fun €trans_range› ((RRange range) : EXP RANGE) : EXP RANGELOHI = (
 	range
 ) | trans_range _ = fail "trans_range" 508001 [fn()=>"not supported"];
@@ -160,7 +152,19 @@ and €last› = hd o rev;
 
 \subsection{Z Declarations}
 
-Z Declarations are modelled in \cite{ISS/HAT/DAZ/DTD513}.
+=SML
+type €Z_DECL› = Z_ID * Z_EXP;
+type €Z_MODULE› = string;
+=TEX
+TBS - following is extra.
+=SML
+fun €z_decls_to_exp› (zdecls : Z_DECL list) : Z_EXP = (
+let	fun dec (d,e) = mk_z_dec ([mk_z_lvar(d, type_of e, [])],e);
+in
+	mk_z_decl(map dec zdecls)
+end
+);
+=TEX
 
 \subsection{Z Unary Expressions}
 =SML
@@ -173,8 +177,8 @@ val		€z_unary_minus› =	Ò(~ _)Æ
 val 		€z_bool_and› =		Ò(_ and _)Æ
 	and	€z_bool_or› =		Ò(_ or _)Æ
 	and	€z_bool_xor› =		Ò(_ xor _)Æ
-	and	€z_bool_eq› =		Ò(_ eq _)Æ
-	and	€z_bool_noteq› =	Ò(_ noteq _)Æ
+	and	€z_bool_eq› =		Ò(_ eq _)∫((BOOLEAN ∏ BOOLEAN)≠BOOLEAN)Æ
+	and	€z_bool_noteq› =	Ò(_ noteq _)∫((BOOLEAN ∏ BOOLEAN)≠BOOLEAN)Æ
 	and	€z_bool_less› =		Ò(_ less _)Æ
 	and	€z_bool_less_eq› =	Ò(_ less_eq _)Æ
 	and	€z_bool_greater› =	Ò(_ greater _)Æ
@@ -186,8 +190,8 @@ val 		€z_bool_and› =		Ò(_ and _)Æ
 	and	€z_mod› =		Ò(_ mod _)Æ
 	and	€z_rem› =		Ò(_ rem _)Æ
 	and	€z_expon› =		Ò(_ ** _)Æ
-	and	€z_bool_mem› =		Ò(_ mem _)Æ
-	and	€z_bool_notmem› =	Ò(_ notmem _)Æ
+	and	€z_bool_mem› =		Ò(_ mem _)∫((BOOLEAN ∏  BOOLEAN)≠BOOLEAN)Æ
+	and	€z_bool_notmem› =	Ò(_ notmem _)∫((BOOLEAN ∏  BOOLEAN)≠BOOLEAN)Æ;
 =TEX
 
 \subsection{Z Expressions}
@@ -199,7 +203,7 @@ let	val freevars = frees tm;
 	val newtys = map (fn (tm,c) => (c, type_of tm)) ts;
 	val tymap = map (fn (n, ty) => (ty,lassoc3 fvs n)) newtys;
 	val tymap' = (fn (t1,t2) => type_match
-		(mk_ctype ("A",t1)) (mk_ctype("A",t2))) (split tymap);
+		(mk_ctype ("abc",t1)) (mk_ctype("abc",t2))) (split tymap);
 	val tm_inst = inst [] tymap' tm;
 	val namemap = map (fn (tm, s) => (tm, mk_var(s, lassoc3 newtys s))) ts;
 in
@@ -368,9 +372,8 @@ fun €other_z_exp› (exp : Z_EXP) : Z_EXP = exp;
 
 \subsection{Z Predicates}
 =SML
-fun €z_eq› (exp1 : Z_EXP, exp2 : Z_EXP) : Z_EXP = (
-	mk_z_eq (exp1, exp2)
-);
+val €z_eq› : (Z_EXP * Z_EXP) -> Z_EXP = mk_z_eq;
+=TEX
 =SML
 fun €z_many_and› ((exps as e1::e2::rest) : Z_EXP list) : Z_EXP = (
 	mk_z_± (e1, z_many_and (e2::rest))
@@ -502,7 +505,9 @@ val €extended_digits› : (string * int) list = (
 );
 =TEX
 =SML
-fun €based_to_int› (base : int) (sl : NUMBERS) = (
+fun €based_to_int› (10 : int) (sl : NUMBERS) = (
+	(nat_of_string o implode) sl handle _ => 0
+) | €based_to_int› base sl = (
 let	val valid = extended_digits to (base-1);
 	val sl' = map to_upper sl;
 	val f = lassoc3 valid;
@@ -569,16 +574,10 @@ In the following, ``1'' is prefixed to the decimal part in order to preserve lea
 =SML
 fun €numeric_to_int_lit› ({base,m,n,expon} : NUMERIC) : int = (
 let	val nbase = (nat_of_string o implode) base handle _ => 10;
-	val f = if nbase = 10
-		then
-			fn a => (case a of
-				(_::_) => (nat_of_string o implode) a
-				| _ => 0
-			)
-		else
-			based_to_int nbase;
-	val nm = f m;
-	val nn = f ("1"::n);
+	fun add_prefix (n as (_::_)) = "1"::n
+	  | add_prefix _ = [];
+	val nm = based_to_int nbase m;
+	val nn = ((based_to_int nbase) o add_prefix) n;
 	val nexpon = signed_nat_of_numbers expon handle _ => 0;
 in
 	case (nbase,nm,nn,nexpon) of
@@ -749,7 +748,7 @@ let	fun expand_assocs comp (ch::rest) = (
 	let	val chcplist = expand_assocs comp choice;
 	in
 		map (fn (ch, comp) =>
-			z_eq (zid env (trans_id ch), trans_exp env comp)) chcplist
+			z_eq(zid env (trans_id ch), trans_exp env comp)) chcplist
 	end);
 in
 	one_assoc assoc@do_assocs env rest
@@ -878,27 +877,6 @@ and €exp_auxiliary_exp› (ae : Z_EXP) : Z_EXP = (
 	ae
 )
 =TEX
-\subsection{Translating Qualified Expressions}
-This is additional to the specification...
-
-=SML
-and €exp_qualified_exp› (env : CN_ENV) ({exp, tmark} : EXP QUALIFIED_EXPRESSION) : Z_EXP = (
-	case exp of
-	EArrayAggPos{comps,...} => (
-		exp_array_agg_pos env {comps=comps, tmark=tmark}
-	)| EArrayAggPosOthers{agg_pos={comps,...}, others} => (
-		exp_array_agg_pos_others env 
-			{agg_pos={comps=comps,tmark=tmark},others=others}
-	)| EArrayAggOthers{others,...} => (
-		exp_array_agg_others env {others=others,tmark=tmark}
-	)| EArrayAggNamed an => (
-		exp_array_agg_named  env an
-	)| EArrayAggNamedOthers {agg_named, others,...} => (
-		exp_array_agg_named_others env 
-			{agg_named=agg_named, others=others, tmark=tmark}
-	)|_ => fail "exp_qualified_exp" 508001 [fn()=>"badly formed qualified expression"]
-)
-=TEX
 \subsection{The Function $trans\_exp$}
 =SML
 and €trans_exp› (env : CN_ENV) ((EId id) : EXP) : Z_EXP = exp_id env id
@@ -918,7 +896,8 @@ and €trans_exp› (env : CN_ENV) ((EId id) : EXP) : Z_EXP = exp_id env id
   | trans_exp env (ESelectedComp sc) = exp_selected_comp env sc
   | trans_exp env (EFunCall fc) = exp_fun_call env fc
   | trans_exp env (EAuxiliaryExp ae) = exp_auxiliary_exp ae
-  | trans_exp env (EQualifiedExp qe) = exp_qualified_exp env qe
+  | trans_exp env (EQualifiedExp qe) = 
+	fail "trans_exp" 508001 [fn()=>"qualified expression syntax not supported here"]
   | trans_exp env (EBracketed e) = trans_exp env e
   | trans_exp env (EStringLiteral c) =
 	fail "trans_exp" 508001 [fn()=>"string literals not supported"]
@@ -932,7 +911,7 @@ and €trans_exp› (env : CN_ENV) ((EId id) : EXP) : Z_EXP = exp_id env id
 \subsection{Translating Constants}
 
 =SML
-fun €basic_decl_const› (env : CN_ENV) {consts=consts, tm=tm, expr=expr} = (
+fun €basic_decl_const› (env : CN_ENV) ({consts=consts, tm=tm, expr=expr} : EXP CONST_DECL) = (
 	map (fn c => z_eq_eq(trans_id c, trans_exp env expr)) consts
 );
 =TEX
@@ -1139,13 +1118,172 @@ fun €trans_basic_decl› (env : CN_ENV) ((BDConstDecl cd) : BASIC_DECL) : PARAINFO
 );
 =TEX
 
+\section{ADJUSTMENT OF ABSTRACT SYNTAX FOR EXPRESSIONS}
+
+=SML
+fun €adjust_rangelohi› (env : CN_ENV) ({lo=l, hi=h} : EXP RANGELOHI) = (
+	{lo=adjust_exp env l, hi=adjust_exp env h}
+)
+and €adjust_range› (env : CN_ENV) (RRange x : EXP RANGE) = (
+	RRange (adjust_rangelohi env x)
+) | adjust_range env (RRangeAttr x : EXP RANGE) = (
+	RRangeAttr (adjust_exp env x)
+)
+and €adjust_discrete_range_constrained› (env : CN_ENV) ({tmark=t, range=r} :
+		EXP DISCRETE_RANGE_CONSTRAINED) = (
+	{tmark=t, range=adjust_range env r}
+)
+and €adjust_discrete_range› (env : CN_ENV) (DRRange x : DISCRETE_RANGE) = (
+	DRRange (adjust_range env x)
+) | adjust_discrete_range env (DRConstrained x : DISCRETE_RANGE) = (
+	DRConstrained(adjust_discrete_range_constrained env x)
+)
+and €adjust_agg_choice› (env : CN_ENV) (ACAggChoiceRange x : AGG_CHOICE) = (
+	ACAggChoiceRange (adjust_discrete_range env x)
+) | adjust_agg_choice env(ACAggChoiceSingle x : AGG_CHOICE) = (
+	ACAggChoiceSingle (adjust_exp env x)
+)
+and €adjust_named_assoc› (env : CN_ENV) ({choice=c, comp=e} : (AGG_CHOICE, EXP) NAMED_ASSOC) = (
+	{choice=map (adjust_agg_choice env) c, comp=adjust_exp env e}
+)
+and €adjust_others› (env : CN_ENV) ({others=oth} : EXP OTHERS) = (
+	{others=adjust_exp env oth}
+)
+and €adjust_agg_pos› (env : CN_ENV) ({tmark=t, comps=c} : EXP AGG_POS) = (
+	case env t of
+	(ty, EIEnvRecordAgg) => (
+			ERecAggPos {tmark=t, comps=map (adjust_exp env) c}
+        ) |_ => (
+			EArrayAggPos {tmark=t, comps=map (adjust_exp env) c}
+	)
+)
+and €adjust_agg_pos_others› (env : CN_ENV) ({agg_pos = {tmark=t, comps=c} :
+		EXP AGG_POS, others = oth} : EXP AGG_POS_OTHERS) = (
+	EArrayAggPosOthers {agg_pos={tmark=t, comps=map (adjust_exp env) c},others=adjust_others env oth}
+)
+and €adjust_agg_others› (env : CN_ENV) ({tmark=t, others=oth} : EXP AGG_OTHERS) = (
+         EArrayAggOthers{tmark=t, others=adjust_others env oth}
+)
+and €adjust_agg_named› (env : CN_ENV) ({named_assocs=n} : (AGG_CHOICE, EXP) AGG_NAMED) = (
+let	val n' = map (adjust_named_assoc env) n;
+in
+	case env (name_to_tmark(#comp (hd n))) of
+	(ty, EIEnvRecordAgg) => (
+			ERecAggNamed {tmark="TBS", named_assocs=n'}
+        ) |_ => (
+			EArrayAggNamed {named_assocs=n'}
+	)
+end
+)
+and €adjust_agg_named_others› (env : CN_ENV) ({tmark=t, agg_named=a, others=oth} :
+		(AGG_CHOICE, EXP) AGG_NAMED_OTHERS) = (
+let	val adjagg = case adjust_agg_named env a of
+		EArrayAggNamed ag => (
+			ag
+		) | _ => fail "adjust_agg_named_others" 508001 [fn()=>"weird error"]
+in
+	EArrayAggNamedOthers{tmark=t, agg_named=adjagg,others=adjust_others env oth}
+end
+)and €adjust_unary_exp› (env : CN_ENV) ({uop=u, right=r} : EXP UNARY_EXP) = (
+	EUnaryExp{uop=u, right=adjust_exp env r}
+)
+and €adjust_bin_exp› (env : CN_ENV) ({bop=b, left=l, right=r} : EXP BIN_EXP) = (
+	EBinExp{left=adjust_exp env l, bop=b, right=adjust_exp env r}
+)
+and €adjust_attrib_desig› (env : CN_ENV) (ADAttrib x : ATTRIB_DESIG) = (
+	ADAttrib x
+) | adjust_attrib_desig env (ADAttribArg (a,e) : ATTRIB_DESIG) = (
+	ADAttribArg (a, adjust_exp env e)
+)
+and €adjust_attribute› (env : CN_ENV) ({prefix=p, attribute_desig=a} :
+		(EXP, ATTRIB_DESIG) ATTRIBUTE) = (
+	EAttribute{prefix=adjust_exp env p, attribute_desig=adjust_attrib_desig env a}
+)
+and €adjust_indexed_comp› (env : CN_ENV) ({prefix=p, index=i} : EXP INDEXED_COMP) = (
+let	val prename = name_to_tmark p;
+in
+	case (env prename, i) of
+	((_, EIEnvFunction), EArrayAggPos{comps,...}) => (
+		EFunCall{fun_name=prename, args=map (adjust_exp env) comps}
+	) |((_, EIEnvFunction), EArrayAggNamed{named_assocs}) => (
+		EFunCall{fun_name=prename, args=map (adjust_exp env) [EId "TBS"]}
+	) |((_, _), EArrayAggNamed _) => (
+		fail "adjust_indexed_comp" 508001
+			[fn()=>"can't index using a named association"]
+	) |_ => (
+		EIndexedComp{prefix=adjust_exp env p, index = adjust_exp env i}
+	)
+end
+)
+and €adjust_selected_comp› env ({prefix=p, selector=s} : EXP SELECTED_COMP) = (
+	ESelectedComp{prefix=adjust_exp (env : CN_ENV) p, selector=s}
+)
+and €adjust_qualified_expression› (env : CN_ENV) ({tmark=t, exp=e} : EXP QUALIFIED_EXPRESSION) = (
+	case e of
+	EArrayAggPos{comps,...} => (
+		adjust_agg_pos env {comps=comps, tmark=t}
+	)| EArrayAggPosOthers{agg_pos={comps,...}, others} => (
+		adjust_agg_pos_others env 
+			{agg_pos={comps=comps,tmark=t},others=others}
+	)| EArrayAggOthers{others,...} => (
+		adjust_agg_others env {others=others,tmark=t}
+	)| EArrayAggNamed an => (
+		 adjust_agg_named env an
+	)| EArrayAggNamedOthers {agg_named, others,...} => (
+		adjust_agg_named_others env 
+			{agg_named=agg_named, others=others, tmark=t}
+	)|_ => fail "adjust_qualified_exp" 508001 [fn()=>"badly formed qualified expression"]
+)
+and €adjust_exp› (env : CN_ENV) (exp as (EId _ : EXP)) = (
+	exp
+) | adjust_exp env (exp as (EInt _)) = (
+	exp
+) | adjust_exp env (exp as (EArrayAggPos x)) = (
+	adjust_agg_pos env x
+) | adjust_exp env (exp as (EArrayAggPosOthers x)) = (
+	 (adjust_agg_pos_others env x)
+) | adjust_exp env (exp as (EArrayAggOthers x)) = (
+	 (adjust_agg_others env x)
+) | adjust_exp env (exp as (EArrayAggNamed x)) = (
+	adjust_agg_named env x
+) | adjust_exp env (exp as (EArrayAggNamedOthers x)) = (
+	 (adjust_agg_named_others  env x)
+) | adjust_exp env (exp as (ERecAggPos x)) = (
+	fail "ERecAggPos : this error shouldn't be raised" 508001 []
+) | adjust_exp env (exp as (ERecAggNamed x)) = (
+	fail "ERecAggNamed : this error shouldn't be raised" 508001 []
+) | adjust_exp env (exp as (EUnaryExp x)) = (
+	 (adjust_unary_exp env x)
+) | adjust_exp env (exp as (EBinExp x)) = (
+	 (adjust_bin_exp env x)
+) | adjust_exp env (exp as (EMemRange x)) = (
+	fail "EMemRange : this error shouldn't be raised" 508001 []
+) | adjust_exp env (exp as (EAttribute x)) = (
+	 (adjust_attribute env x)
+) | adjust_exp env (exp as (EIndexedComp x)) = (
+	adjust_indexed_comp env x
+) | adjust_exp env (exp as (ESelectedComp x)) = (
+	 (adjust_selected_comp env x)
+) | adjust_exp env (exp as (EFunCall _)) = (
+	fail "EFunCall : this error shouldn't be raised" 508001 []
+) | adjust_exp env (exp as (EAuxiliaryExp _)) = (
+	exp
+) | adjust_exp env (exp as (EQualifiedExp x)) = (
+	 (adjust_qualified_expression env x)
+) | adjust_exp env (exp as (EBracketed x)) = (
+	EBracketed (adjust_exp env x)
+) | adjust_exp env (exp as (EStringLiteral _)) = (
+	exp
+) | adjust_exp env (exp as (ECharacterLiteral _)) = (
+	exp
+);
+=TEX
 
 \subsection{Epilogue}
 
 =SML
 end (* of local...in *);
 end (* structure CNBasicDeclsAndExprs *);
-open CNBasicDeclsAndExprs;
 =TEX
 
 \small
