@@ -1,4 +1,4 @@
-% imp508.doc   %Z% $Date: 2002/05/04 15:44:40 $ $Revision: 1.94 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2002/05/07 18:09:12 $ $Revision: 1.95 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.94 $%
+\def\SCCSversion{$Revision: 1.95 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/05/04 15:44:40 $%
+\TPPdate{\FormatDate{$Date: 2002/05/07 18:09:12 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -113,7 +113,8 @@ to avoid possible clash with an Ada name.
 \item[Issues 1.90] Sliding now handled properly in aggregates.
 \item[Issues 1.91-1.93] Spring 2002 enhancements: allowing for new syntax for interim release.
 \item[Issues 1.94] R0050: discriminants now working.
-\item[Issue 1.95]  Support for R0047: renaming.
+\item[Issue 1.95, 1.96]  Support for R0047: subprogram renaming.
+\item[Issue 1.95, 1.96]  R0047: object renaming.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -139,8 +140,8 @@ infix 3 ^^;
 =TEX
 =SML
 structure €CNBasicDeclsAndExprs› : CNBasicDeclsAndExprs = struct
-	open CNParser CNTypes ZGeneratedConstants ZParagraphs;
-	open ZUserInterfaceSupport ZTypesAndTermsSupport;
+	open	CNTypes ZGeneratedConstants ZParagraphs
+		ZUserInterfaceSupport ZTypesAndTermsSupport ZTermGenerator ZTypeInference;
 =TEX
 \section{SUPPORTING FUNCTIONS}
 \subsection{Miscellaneous}
@@ -371,7 +372,8 @@ fun €zid› (env : CN_ENV) (id : Z_ID) : Z_EXP = (
 					if retry
 					then aux false id2
 					else fail "zid" 508021 [fn()=>id]
-			|	Value (ty, EIEnvVar _) => mk_z_lvar(id1, ty, [])
+			|	Value (ty, EIEnvVar (_, Value id2)) => mk_z_lvar(id2, ty, [])
+			|	Value (ty, EIEnvVar (_, Nil)) => mk_z_lvar(id1, ty, [])
 			|	Value (ty, EIEnvAuxVar _) => mk_z_lvar(id1, ty, [])
 			|	Value (ty, _) => mk_z_gvar(id, ty, [])
 			|	Nil => fail "zid" 508021 [fn()=>id]
@@ -687,6 +689,144 @@ val €z_mem› : (Z_EXP * Z_EXP) -> Z_PRED = mk_z_ç;
 =SML
 fun €other_z_pred› (z_pred : Z_PRED) : Z_PRED = z_pred;
 =TEX
+=SML
+val €z_tm_true› = 
+=FULLVERSION
+  ZUserInterfaceSupport.ZTmTruth true; 
+=CUTDOWNVERSION
+  dummy_z_tm;
+=TEX
+The following functions support the external interface $z\_predexp\_of\_z\_tm$.
+=FULLVERSION
+fun €z_para_of_zinferred› ((ZInferred p) : Z_INFERRED) : Z_PARA = (p)
+|   z_para_of_zinferred (ZTypeError inf) = (print_z_error inf);
+=CUTDOWNVERSION
+fun €z_para_of_zinferred› x = ();
+
+=TEX
+The following is used to give diagnostics, which may sometimes be helpful.
+=SML
+val €cn_show_typing_context› : bool ref = ref false;
+val _ = new_flag{
+	name="cn_show_typing_context",
+	check=fun_true,
+	control=cn_show_typing_context,
+	default=fun_false} handle Fail _ => ();
+=TEX
+=FULLVERSION
+fun €show_typing_context› (t : TERM) = (
+	if	!cn_show_typing_context
+	then	let	val cur_thy = get_current_theory_name();
+			val zlib = (get_ancestors "z_library" less "z_library")
+						handle Fail _ => [];
+			val ancs = Sort.sort Sort.string_order
+					(get_ancestors cur_thy less cur_thy)
+					diff zlib;
+			val tic = map dest_var (TypeInference.get_ti_context());
+			fun do1tici (n, ty) = "  " ^ n ^ ": " ^ string_of_type ty;
+		in	diag_line ("Current theory: " ^ cur_thy);
+			diag_line
+			(case zlib of [] => "Ancestors:"
+			| _ => "Ancestors (up to z_library):");
+			map (diag_line o (curry (op^) "  ")) ancs;
+			diag_line
+			(case tic of [] => "No type inference context."
+			| _ => "Type inference context:");
+			map (diag_line o do1tici) tic;
+			diag_line ("Type-checked term: " ^ string_of_term t);
+			()
+		end
+	else	()
+);
+=TEX
+In the following, it will sometimes be impossible to get a cache theory into
+scope. This may happen, for example, in the function {\it z\_prefix} in
+the Z Generator module, if a package specification was loaded into a database
+that is now an ancestor of the current database. In those cases, the term
+should already have been processed when there was a good cache theory and that
+cache theory should still be in scope. Consequently we don't fail if we can't
+get a cache theory.
+(These remarks may become obsolete if we ever get to the situation where all
+pre- and post-conditions are type-checked as early as possible and never
+type-checked again.)
+=FULLVERSION
+fun €term_of_z_para› ((ZParaTerm (gpars, tm, _)) : Z_PARA) : TERM = (
+    let	val vns = map string_of_ident gpars;
+	val vs = map (fn vn =>
+		mk_var(vn, mk_z_power_type(mk_vartype ("'" ^ vn)))) vns;
+	val t = do_in_theory (force_get_cache_theory()) handle Fail _ => Combinators.I;
+    in	list_mk_µ(vs, (t term_of_z_tm tm))
+    end
+) | term_of_z_para _ = (fail "z_term_recogniser" 49001 []);
+=CUTDOWNVERSION
+fun €term_of_z_para› () = mk_t;
+=TEX
+
+=SML
+=FULLVERSION 
+fun €z_predexp_of_z_tm› (sub : Z_PRED -> Z_PRED)  (z_tm : Z_TM) : Z_PRED = (
+	 let	val standard = get_flag "standard_z_terms";
+		val z_para = ZParaTerm ([], z_tm, Nil);
+		val type_checked = type_check_z_para
+					 {standard = standard, allow_frees = true} z_para;
+		val para = z_para_of_zinferred type_checked;
+		val tm = term_of_z_para para;
+	 in	show_typing_context tm;
+		sub tm
+	 end
+);
+fun €z_predexp_of_z_tm1› (env : CN_ENV)  (z_tm : Z_TM) : Z_PRED = (
+	let	fun subs_pair n n' ty = (
+			[(mk_var(n', ty), mk_var(n, ty)), (mk_var(n' ^" â0", ty), mk_var(n ^" â0", ty))]
+		);
+		fun rename tm = (
+			let	val ntys = (map dest_var o frees) tm;
+				fun aux acc [] = acc
+				|    aux acc ((n, ty)::more) = (
+					case env n of
+						Value (_, EIEnvVar(_, Value n')) =>
+						aux (subs_pair n n' ty @ acc) more
+					| 	_ => aux acc more
+				);
+				val subs = aux [] ntys;
+			in	subst subs tm
+			end
+		);
+	in	z_predexp_of_z_tm rename z_tm
+	end
+);
+
+=TEX
+=SML
+fun €name_to_tmark› (e : EXP) : TMARK = (
+    case e 
+    of EId id => id
+    |  ESelectedComp {prefix, selector} => (name_to_tmark prefix)^"o"^selector
+    |  _ => "__invalid"
+);
+=TEX
+=SML
+fun €is_range_attribute› (EAttribute{attribute_desig=ad,...} : EXP)  : bool = (
+    case ad 
+    of ADAttrib attname => attname = "RANGE"
+    |  ADAttribArg (attname,_) => attname = "RANGE")
+    |  is_range_attribute _ = false;
+=TEX
+=SML
+fun €exp_to_discrete_range› (EDiscreteRange (DRConstrained{tmark, range}) : EXP)
+	: SI_DISCRETE_RANGE = (
+	SIDiscreteRangeSubInd{tmark = tmark, con = CRange range}
+) | exp_to_discrete_range (EDiscreteRange (DRRange range)) = (
+	SIDiscreteRangeRange range
+) | exp_to_discrete_range e = (
+	if	is_range_attribute e
+	then	SIDiscreteRangeRange(RRangeAttr e)
+  	else	case name_to_tmark e of
+			"__invalid"  =>  fail "exp_to_discrete_range" 508091 []
+		|	tmk => SIDiscreteRangeSubInd{tmark = tmk, con = CNoCon}
+);
+=TEX
+
 
 \subsection{Z Paragraphs}
 =SML
@@ -1743,8 +1883,8 @@ The function $exp\_char\_lit$ is defined in section \ref{CharacterLiterals}.
 The function $exp\_string\_lit$ is defined in section \ref{StringLiterals}.
 \subsection{Translating Auxiliary Expressions}
 =SML
-and €exp_auxiliary_exp› (ae : Z_TM) : Z_EXP = (
-	z_predexp_of_z_tm ae
+and €exp_auxiliary_exp› (env : CN_ENV) (ae : Z_TM) : Z_EXP = (
+	z_predexp_of_z_tm1 env ae
 )
 =TEX
 \subsection{Translating Discrete Range Expressions}
@@ -1784,7 +1924,7 @@ and €trans_exp› (env : CN_ENV) ((EId id) : EXP) : Z_EXP = exp_id env id
   | trans_exp env (EIndexedComp ic) = exp_indexed_comp env ic
   | trans_exp env (ESelectedComp sc) = exp_selected_comp env sc
   | trans_exp env (EFunCall fc) = exp_fun_call env fc
-  | trans_exp env (EAuxiliaryExp ae) = exp_auxiliary_exp ae
+  | trans_exp env (EAuxiliaryExp ae) = exp_auxiliary_exp env ae
   | trans_exp env (EQualifiedExp qe) = exp_qualified env qe
   | trans_exp env (ETypeConversion tc) = exp_type_conv env tc
   | trans_exp env (EBracketed e) = trans_exp env e

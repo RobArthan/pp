@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.190 $ $RCSfile: imp507.doc,v $ $Date: 2002/05/06 14:58:08 $
+% imp507.doc %Z% $Revision: 1.191 $ $RCSfile: imp507.doc,v $ $Date: 2002/05/07 18:09:12 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.190 $%
+\def\SCCSversion{$Revision: 1.191 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/05/06 14:58:08 $%
+\TPPdate{\FormatDate{$Date: 2002/05/07 18:09:12 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -141,6 +141,7 @@ statements in stubs.
 \item[Issue 1.189] R0058: forward declarations of subprograms.
 \item[Issue 1.190] Spring 2002 enhancements: return and exit statements.
 \item[Issue 1.191] Spring 2002 enhancements: subprogram renaming.
+\item[Issue 1.192] Spring 2002 enhancements: object renaming.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -157,7 +158,7 @@ See \cite{ISS/HAT/DAZ/DTD507}.
 structure ÛCNZGeneratorÝ : CNZGenerator = struct
 =SML
 open CNTypes CNTypes1 CNTypes2 CNBasicDeclsAndExprs ZParagraphs
-	CNVCGenerator CNParser ZUserInterfaceSupport TypeInference ;
+	CNVCGenerator ZUserInterfaceSupport TypeInference CNParser;
 =TEX
 
 The following function returns the current level for the specified theory.  This is used as an index to order objects being added to the theory.
@@ -230,8 +231,8 @@ fun Ûkslot_compilation_unit_nameÝ (kcu : KSLOT_COMPILATION_UNIT) : string = (
 In some places, we need to form the HOL term corresponding to a Z predicate.
 This may require coercion of a schema into a predicate:
 =SML
-fun Ûz_pred_of_z_tmÝ (zt : Z_TM) : Z_PRED = (
-	let	val tm = z_predexp_of_z_tm zt;
+fun Ûz_pred_of_z_tmÝ (env : CN_ENV)  (zt : Z_TM) : Z_PRED = (
+	let	val tm = z_predexp_of_z_tm1 env zt;
 	in	if	type_of tm =: BOOL
 		then	tm
 		else	mk_z_schema_pred (tm, "")
@@ -1911,9 +1912,13 @@ fun Ûtype_of_tmarkÝ (tmark : TMARK) : TYPE OPT = (
 	handle Fail _ => Nil
 );
 =TEX
-$get\_tmark\_from\_inscope$ searches an $IN\_SCOPE$ value for the type mark associated with a variable or parameter name, or the type associated with an auxiliary variable:
+$get\_tmark\_from\_inscope$ searches an $IN\_SCOPE$ value for the type mark associated with a variable or parameter name, or the type associated with an auxiliary variable.
+The recur parameter is needed to handle variable renamings, for which we sometimes have to look
+in outer scopes to find the information we need. It is caller's responsibility to supply a value
+for this parameter that will not cause an infinite recursion.
 =SML
-fun Ûget_tmark_from_inscopeÝ (n : Z_ID) (inscope : IN_SCOPE)
+fun Ûget_tmark_from_inscopeÝ (recur : Z_ID -> (TYPE OPT * ENV_INFO) OPT)
+	 (n : Z_ID) (inscope : IN_SCOPE)
 	: (TYPE OPT * ENV_INFO) OPT = (
 	let	fun do_vars [] = Nil
 		|   do_vars ({vars, tmark} :: more) = (
@@ -1934,6 +1939,18 @@ fun Ûget_tmark_from_inscopeÝ (n : Z_ID) (inscope : IN_SCOPE)
 			|	Value ty =>
 				Value(ty, snd(dest_z_dec dec))
 		);
+		fun do_renamings [] = Nil
+		|    do_renamings ((new, old)::more) = (
+			if	new = n
+			then	case recur old of
+					Value (ty, EIEnvVar(tmk, _)) => (
+					Value(ty, EIEnvVar(tmk, Value old))
+				) |	_ => (
+					error "get_tmark_from_inscope" 507069
+					[fn _ => old, fn _ => new]
+				)
+			else	do_renamings more
+		);
 	in	case do_vars (#vc_vars inscope) of
 			Value tmk	=> Value(type_of_tmark tmk, EIEnvVar (tmk, Nil))
 		|	Nil		=> (
@@ -1942,7 +1959,7 @@ fun Ûget_tmark_from_inscopeÝ (n : Z_ID) (inscope : IN_SCOPE)
 		|	Nil		=> (
 		case do_aux_vars (#vc_aux_vars inscope) of
 			Value (ty, tm)	=> Value(Value ty, EIEnvAuxVar tm)
-		|	Nil		=> Nil
+		|	Nil		=> do_renamings (#renamings inscope) 
 		))
 	end
 );
@@ -1952,7 +1969,7 @@ Now $get\_tmark\_from\_env$, which searches the running environment using the pr
 fun Ûget_tmark_from_envÝ (_ : Z_ID) ([] : ENV) : (TYPE OPT * ENV_INFO) OPT = (
 	Nil
 ) | Ûget_tmark_from_envÝ n (block :: more) = (
-	case get_tmark_from_inscope n (#in_scope (#declab block)) of
+	case get_tmark_from_inscope (switch get_tmark_from_env more) n (#in_scope (#declab block)) of
 			Nil		=> get_tmark_from_env n more
 		|	v as Value _	=> v
 );
@@ -2027,7 +2044,8 @@ fun Ûcurrent_cn_envÝ (n : Z_ID) : (TYPE * ENV_INFO) OPT = (
 =SML
 fun Ûcn_env_of_in_scopeÝ (in_scope : IN_SCOPE) (n : Z_ID)
 	: (TYPE * ENV_INFO) OPT = (
-	case get_tmark_from_inscope n in_scope of
+	let	val recur = switch (get_tmark_from_inscope (fn _ => Nil)) in_scope;
+	in	case get_tmark_from_inscope recur n in_scope of
 		Value (Value ty, ei) => ( Value (ty, ei)
 	) |	Value (Nil, _) => (env_retry n
 	) |	Nil => (
@@ -2035,6 +2053,7 @@ fun Ûcn_env_of_in_scopeÝ (in_scope : IN_SCOPE) (n : Z_ID)
 				Value ty => Value(env_info_of_g_var n ty)
 			|	Nil => env_retry n
 	)
+	end
 );
 =TEX
 =SML
@@ -2404,7 +2423,7 @@ let	fun aux acc ((id, (exp, tmark))::more) = (
 	val vi_init_dcs = aux [] vi;
 in
 	case opre of 
-	Value pre => z_quote(z_many_and (z_pred_of_z_tm pre :: vi_init_dcs), 
+	Value pre => z_quote(z_many_and (z_pred_of_z_tm cn_env pre :: vi_init_dcs), 
 		Value(bool_extype))
 	| Nil => z_quote(z_many_and vi_init_dcs, Value(bool_extype))
 end
@@ -3015,7 +3034,7 @@ fun Ûspec_stmt_otherwiseÝ ({spec : SPEC, label : LABEL}) : unit = (
 			env = env,
 			till = till,
 			named_tills = [],
-			return = z_pred_of_z_tm return,
+			return = z_pred_of_z_tm env return,
 			fun_header = fun_header,
 			formal_procs = []
 		};
@@ -3064,7 +3083,7 @@ fun Ûadd_log_con_envÝ (defs : LOG_CON_DEF list) : unit = (
 		val block1 = block 1;
 		val side = set_current_ti_context[];
 		fun make_decl (x, t) = (
-			let	val zt = z_predexp_of_z_tm t;
+			let	val zt = z_predexp_of_z_tm1 current_cn_env t;
 				val zvar = mk_z_lvar(x, (dest_z_power_type o type_of) zt, []);
 			in	mk_z_dec([zvar], zt)
 			end
@@ -3152,7 +3171,7 @@ If the till-predicate is in a refinement step, then we must adjust the type infe
 fun Ûtill_predÝ (t : Z_TM) : unit = (
 	let	val block1 = block 1;
 		val label = #spec_lab block1;
-		fun set_cxt() = (
+		fun set_cxt()  : CN_ENV = (
 		if	test_flag #speclabel_flag 1
 		then	let	val spec_env_lab =
 				force_value( s_lookup label (!spec_env) );
@@ -3168,12 +3187,12 @@ fun Ûtill_predÝ (t : Z_TM) : unit = (
 					formal_procs = #formal_procs in_scope,
 					dec_labels = #dec_labels in_scope
 				};
-			in	(set_in_scope_ti_context in_scope'; ())
-			end	handle Fail _ => set_current_ti_context[]
-		else	set_current_ti_context[]
+			in	(set_in_scope_ti_context in_scope'; cn_env_of_in_scope in_scope')
+			end	handle Fail _ => (set_current_ti_context[]; current_cn_env)
+		else	(set_current_ti_context[]; current_cn_env)
 		);
-		val side = set_cxt();
-		val till = z_pred_of_z_tm t;
+		val env = set_cxt();
+		val till = z_pred_of_z_tm env t;
 	in	blocks := block_till (block_till_flag(block1, true), till)
 		:: tl (!blocks)
 	end
@@ -3357,18 +3376,19 @@ fun Ûvcs_body_proc_auxÝ (st : STATEMENT) : (LABEL * (VC list * SPEC)) = (
 		};
 		val _ = set_current_ti_context
 			(ti_context_of_formal_proc current_cn_env current_formal_proc1);
+		val env  = cn_env_of_in_scope in_scope1;
 		val wp_env :WP_ENV = {
-			env = cn_env_of_in_scope in_scope1,
+			env = env,
 			till = mk_z_true,
 			named_tills = [],
-			return = z_pred_of_z_tm post1,
+			return = z_pred_of_z_tm env post1,
 			fun_header = dummy_informal_fun,
 			formal_procs = formal_procs
 		};
 		val pre1 =  var_inits_pre
 				(Value (#pre(#spec current_formal_proc1)))
 				vc_inits1 
-				(#env wp_env)
+				env
 			handle exn => 
 			pass_on exn "var_inits_pre" "vcs_body_proc_aux";
 		val spec : SPEC = {
@@ -3586,7 +3606,7 @@ fun Ûform_proc_pack_body_auxÝ
 		val add_aux0 = map ((fn (n, ty) => mk_var(n^"‰0", ty)) o dest_var)
 					add_aux;
 		val post6 = z_quote (z_many_and
-						([z_pred_of_z_tm post3] @
+						([z_pred_of_z_tm current_cn_env post3] @
 						 map z_eq (combine add_aux add_aux0)),
 				Nil);
 		val aux_vars4 = #aux_vars package4;
@@ -3616,29 +3636,29 @@ fun Ûform_proc_pack_body_auxÝ
 
 		val w5 = frame_aux_conc cup (#w (#spec speclab5));
 		
-		val pre5 = z_quote (z_exists (aux_vars,
-				z_many_and(z_pred_of_z_tm pre6::invs)),
-				Nil);
-		val post5 = z_quote (z_forall (seq_aux, z_imp (subs_pred (
-			  z_many_and (z_pred_of_z_tm pre6::invs),
-					frame_aux_conc, frame_aux_conc0),
-			    z_exists (aux_vars,
-				z_many_and(z_pred_of_z_tm post6::invs)))),
-			Nil);
-
 		val in_scope5 = #in_scope speclab5;
 		val vc_varsENV = #vc_vars (flatten_env (!blocks));
 		val vc_vars1 = #vc_vars (#in_scope (#declab block1));
 		val in_scope5a = in_scope_vc_vars(in_scope5, 
 					vc_varsENV cup conc_vars);
+		val env5a = cn_env_of_in_scope in_scope5a;
 		val wp_env5a :WP_ENV = {
-			env = cn_env_of_in_scope in_scope5a,
+			env = env5a,
 			till = mk_z_true,
 			named_tills = [],
 			return = mk_z_true,
 			fun_header = dummy_informal_fun,
 			formal_procs = #formal_procs (#wp_env speclab5)
 		};
+		val pre5 = z_quote (z_exists (aux_vars,
+				z_many_and(z_pred_of_z_tm  env5a pre6::invs)),
+				Nil);
+		val post5 = z_quote (z_forall (seq_aux, z_imp (subs_pred (
+			  z_many_and (z_pred_of_z_tm  env5a pre6::invs),
+					frame_aux_conc, frame_aux_conc0),
+			    z_exists (aux_vars,
+				z_many_and(z_pred_of_z_tm env5a post6::invs)))),
+			Nil);
 		val spec5 : SPEC = {
 			w = w5,
 			w0 = map (fn s => s^"‰0") w5,
@@ -3759,7 +3779,7 @@ It computes a list of HOL terms representing the set of variables which is teste
 =SML
 fun Ûaux_vars_in_fp_frameÝ (formal_proc3 as {formal_ids, ...} : FORMAL_PROC)
 			(package4 : PACKAGE) : TERM list = (
-	let	val f = map (fst o dest_var) o frees o z_predexp_of_z_tm;
+	let	val f = map (fst o dest_var) o frees o z_predexp_of_z_tm1 current_cn_env;
 		val spec3 = #spec formal_proc3;
 		val side1 = set_package_ti_context package4;
 		val side2 = add_params_ti_context formal_ids;
@@ -3941,7 +3961,7 @@ fun Ûtrans_formal_funÝ (cnenv : CN_ENV)
 		val new_ti_cxt = frees dec term_union flat
 				(map frees (pardecs @ globdecs));
 		val side = set_current_ti_context new_ti_cxt;
-		val imp = z_imp(z_pred_of_z_tm pre, z_pred_of_z_tm post);
+		val imp = z_imp(z_pred_of_z_tm cnenv pre, z_pred_of_z_tm cnenv post);
 		val pred = z_forall_opt(globdecs, z_forall_opt(pardecs, imp));
 	in	AxDesInfo([], mk_z_decl[dec], Value pred, ntys)
 	end
@@ -4254,11 +4274,11 @@ fun Ûconformant_specsÝ
 		 : FORMAL_PROC)
 		: bool = (
 	let	val _ = set_current_ti_context(ti_context_of_formal_proc current_cn_env fpA);
-		val tpreA = z_predexp_of_z_tm preA;
-		val tpostA = z_predexp_of_z_tm postA;
+		val tpreA = z_predexp_of_z_tm Combinators.I preA;
+		val tpostA = z_predexp_of_z_tm Combinators.I postA;
 		val _ = set_current_ti_context(ti_context_of_formal_proc current_cn_env fpB);
-		val tpreB = z_predexp_of_z_tm preB;
-		val tpostB = z_predexp_of_z_tm postB;
+		val tpreB = z_predexp_of_z_tm Combinators.I preB;
+		val tpostB = z_predexp_of_z_tm Combinators.I postB;
 	in	gA = gB andalso wA = wB andalso w0A = w0B andalso
 		tpreA ~=$ tpreB andalso tpostA ~=$ tpostB
 	end
@@ -4343,18 +4363,19 @@ fun Ûvcs_body_funÝ (st : STATEMENT) : SPEC = (
 		val side1 = set_in_scope_ti_context in_scope1;
 		val side2 = set_ti_context
 			(frees fun_dec @ get_ti_context());
+		val env = cn_env_of_in_scope in_scope1;
 		val wp_env : WP_ENV = {
-			env = cn_env_of_in_scope in_scope1,
+			env = env,
 			till = mk_z_true,
 			named_tills = [],
-			return = z_pred_of_z_tm post1,
+			return = z_pred_of_z_tm env post1,
 			fun_header = #informal_fun current_formal_fun1,
 			formal_procs = formal_procs
 		};
 		val pre1 =  var_inits_pre
 				(Value (#pre(#spec current_formal_fun1)))
 				vc_inits1 
-				(#env wp_env)
+				env
 			handle exn =>
 			pass_on exn "var_inits_pre" "vcs_body_fun";
 		val spec : SPEC = {
@@ -4453,9 +4474,10 @@ fun Ûnew_idsÝ (p : PACKAGE) : ID list = (
 		val f1 = map #name informal_funs;
 		val f2 = map (#name o #informal_fun) formal_funs;
 		val a = flat (map z_names_of_z_dec aux_vars);
+		val rens = map fst renamings;
 	 
 	in
-		list_cup [v, c_t_ident_s, p, f1, f2, a]
+		list_cup [v, c_t_ident_s, p, f1, f2, a, rens]
 	end
 );
 =TEX
@@ -4779,8 +4801,8 @@ fun Ûprefix_spec_stmtÝ (ident : ID)
 		val {w, pre, post, w0} = spec;
 		val w'= map (prefix_package_id ident newids) w;
 		val w0' = map (prefix_package_id ident newids) w0;
-		val pretm = z_predexp_of_z_tm pre;
-		val posttm = z_predexp_of_z_tm post;
+		val pretm = z_predexp_of_z_tm1 current_cn_env pre;
+		val posttm = z_predexp_of_z_tm1 current_cn_env post;
 		val pre' = z_quote
 				(prefix_term ident tysubs newids pretm, Nil);
 		val post' = z_quote
@@ -4857,7 +4879,21 @@ fun Ûprefix_formal_procsÝ (ident : ID)
 		(fps : FORMAL_PROC list) : FORMAL_PROC list  = (
 	map (prefix_formal_proc ident tysubs newids) fps
 );
-
+=TEX
+When the following is called it is important that the specification script
+theory for the package be the current theory and that it be populated
+with all its types and constants.
+=SML
+fun Ûprefix_renamingsÝ (ident : ID)
+		(newids : ID list)
+		(renamings : (Z_ID * Z_ID) list) : (Z_ID * Z_ID) list  = (
+	let	fun pfx zn = (
+			trans_id (prefix_package_id  ident newids
+				(implode (map (fn "o" => "." |  ch => ch) (explode zn))))
+		);
+	in	map (pfx ** pfx) renamings
+	end
+);
 =TEX
 The following function does the prefixing of the given set paragraphs and returns a list of paragraph infos representing the prefixed paragraphs, together with a substitution list for use in prefixing appearances of type names in terms.
 It does not touch defining axioms for these given sets.
@@ -5205,12 +5241,12 @@ In order to do the relevant substitutions, we need to type check the Z predicate
 This has already been done at the point of originally entering the specification
 theory.
 The following function returns information which the caller may need.
-It returns a triple comprising: the list of type substitutions which need to be made; the list of formal procedures with the relevant names prefixed in the specs and the prefixed auxiliary variables).
+It returns a triple comprising: the list of type substitutions which need to be made; the list of formal procedures with the relevant names prefixed in the specs. the prefixed auxiliary variables and the prefixed variable renamings).
 
 The script theory becomes current after successful or unsuccessful execution.
 =SML
 fun Ûz_prefixÝ (ident : ID) (newids : ID list) (package : PACKAGE)
-		: (string * string) list * FORMAL_PROC list * Z_DECL list = (
+		: (string * string) list * FORMAL_PROC list * Z_DECL list * (Z_ID * Z_ID) list = (
 	let	val package = force_value(s_lookup ident (!pack_env))
 				handle Fail _ =>
 				error "z_prefix" 507029 [fn() => ident];
@@ -5245,7 +5281,7 @@ fun Ûz_prefixÝ (ident : ID) (newids : ID list) (package : PACKAGE)
 				(UD_String(pack_spec_name ident,
 					[UD_Int (current_level(),[])]))
 		else	());
-		(tysubs, fps, aux_vars)
+		(tysubs, fps, aux_vars, prefix_renamings ident newids (#renamings package))
 	end	handle ex => (
 			open_theory (!script_name);
 			reraise ex "z_prefix"
@@ -5261,7 +5297,7 @@ fun Ûnew_scope_withÝ (ident : ID) : unit = (
 		let
 			val flags = false_flags;
 			val newids = new_ids package;
-			val (tysubs, formal_procs1, aux_vars1) = 
+			val (tysubs, formal_procs1, aux_vars1, renamings) = 
 				z_prefix ident newids package;
 			val dummy1 = new_parent_aux false (pack_spec_name ident);
 			val vc_vars1 = map (prefix_vardecl ident newids)
@@ -5270,6 +5306,7 @@ fun Ûnew_scope_withÝ (ident : ID) : unit = (
 			val block = block_vc_vars(block, vc_vars1);
 			val block = block_vc_aux_vars(block, aux_vars1);
 			val block = block_formal_procs(block, formal_procs1);
+			val block = block_renamings(block, renamings);
 		in	new_parent_aux true (pack_spec_name ident);
 			blocks := block :: !blocks
 		end
@@ -5285,7 +5322,7 @@ The following analogue of {\it z\_prefix} does this.
 
 =SML
 fun Ûz_prefix_nestedÝ (ident : ID) (newids : ID list) (package : PACKAGE)
-		: (string * string) list * FORMAL_PROC list * Z_DECL list = (
+		: (string * string) list * FORMAL_PROC list * Z_DECL list * (Z_ID * Z_ID) list = (
 	let	val package = force_value(s_lookup ident (!pack_env))
 				handle Fail _ =>
 				error "z_prefix_nested" 507029 [fn() => ident];
@@ -5296,7 +5333,7 @@ fun Ûz_prefix_nestedÝ (ident : ID) (newids : ID list) (package : PACKAGE)
 			(	prefix_formal_procs ident tysubs newids
 					(#formal_procs package))
 		);
-	in	(tysubs, fps, aux_vars)
+	in	(tysubs, fps, aux_vars,  prefix_renamings ident newids (#renamings package))
 	end
 );
 =TEX
@@ -5307,7 +5344,7 @@ then	case s_lookup ident (!pack_env) of
 		Nil => fail "update_envs_pack_spec" 507060 [fn _ => ident]
 	|Value package => (
 		let	val newids = new_ids package;
-			val (_, formal_procs2, aux_vars2) = 
+			val (_, formal_procs2, aux_vars2, renamings2) = 
 				z_prefix_nested ident newids package;
 			val vc_vars2 = map (prefix_vardecl ident newids)
 							(#vc_vars package);
@@ -5316,9 +5353,11 @@ then	case s_lookup ident (!pack_env) of
 			val vc_vars1 = #vc_vars(#in_scope(#declab block1));
 			val vc_aux_vars1 = #vc_aux_vars(#in_scope(#declab block1));
 			val formal_procs1 = #formal_procs(#in_scope(#declab block1));
+			val renamings1 = #renamings(#in_scope(#declab block1));
 			val block = block_vc_vars(block1, vc_vars1 cup vc_vars2);
 			val block = block_vc_aux_vars(block, vc_aux_vars1 @ aux_vars2);
 			val block = block_formal_procs(block, formal_procs1 @ formal_procs2);
+			val block = block_renamings(block, renamings1 @ renamings2);
 		in	blocks := block :: tl(!blocks)
 		end
 	)
@@ -5373,7 +5412,7 @@ fun Ûaux_varÝ (av : AUX_VAR) : unit = (
 		|	Nil => error "aux_var" 507001 [];
 		val {aux, t} = av;
 		val side = set_current_ti_context[];
-		val zt = z_predexp_of_z_tm t;
+		val zt = z_predexp_of_z_tm1 current_cn_env t;
 		val zvar = mk_z_lvar(aux, (dest_z_power_type o type_of) zt, []);
 		val zdecl = mk_z_dec([zvar], zt);
 		val aux_vars1 = #aux_vars package drop (fn x => zdecl =$ x);
@@ -5409,8 +5448,8 @@ fun Ûud_fun_of_using_decÝ (ud : USING_DEC)
 			handle Fail _ =>
 			error "ud_fun_of_using_dec" 507012 [fn()=>block_name1];
 		val side = set_current_ti_context (#aux_vars package);
-		val (id, _, _) = (dest_z_lvar o z_predexp_of_z_tm) aux;
-	in	(id, (concrete_vars, z_pred_of_z_tm invariant))
+		val (id, _, _) = (dest_z_lvar o z_predexp_of_z_tm1 current_cn_env) aux;
+	in	(id, (concrete_vars, z_pred_of_z_tm current_cn_env invariant))
 	end
 );
 =TEX
@@ -5583,7 +5622,7 @@ fun Ûrenames_proc_commonÝ
 			error "frenames_proc_common" 507012 [fn()=>block_name2];
 		val (new, par_names) = get_name_and_par_names ss;
 		val old_fp  =
-			Value( find fps (fn {name, ...}  =>  name = old) )
+			Value( find fps (fn {name, ...}  =>  name = name) )
 			handle Fail _ => (
 				comment "renames_proc_common" 507059
 				[fn _ => old, fn _ => new];
@@ -5679,7 +5718,8 @@ fun Ûrenames_funÝ
 		val tm = zid current_cn_env old_zname;
 		val new_pars_tmarks = combine  par_names (map snd pars_tmarks);
 		val _ =add_globs_pars_return globals new new_pars_tmarks res_tmark;
-		val parainfo = AbbDefInfo(new, [], tm);
+		val new_zname = trans_id new;
+		val parainfo = AbbDefInfo(new_zname, [], tm);
 	in	store_para parainfo
 	end	handle Fail msg =>
 			comment "renames_proc" 507059
@@ -5698,13 +5738,86 @@ fun Ûrenames_opsymÝ
 			force_value (resolve_opsym current_cn_env name2 formal_part tmark);
 		val new_pars_tmarks = combine  par_names tmks;
 		val _ = add_globs_pars_return [] new new_pars_tmarks res_tmark;
-		val parainfo = AbbDefInfo(new, [], tm);
+		val new_zname = trans_id new;
+		val parainfo = AbbDefInfo(new_zname, [], tm);
 	in	store_para parainfo
 	end	handle Fail msg =>
 			comment "renames_proc" 507059
 			[fn _ => name2, fn _ => new]
 	end
 ) | renames_opsym _ = ();
+=TEX
+\subsection{The SID function renames\_object}
+=SML
+fun Ûrenames_object_commonÝ
+	({new_name, old_name, ...}
+		: OBJECT_RENAMING) : (Z_ID * Z_ID) OPT  = (
+	let	val old_zname =  trans_id old_name;
+		val new_zname = trans_id new_name;
+	in let	val tm = zid current_cn_env old_zname;
+		val parainfo = AbbDefInfo(new_zname, [], tm);
+	in	store_para parainfo; Nil
+	end	handle Fail msg => (
+		let	val renaming as (new_zname, _)  =
+			case current_cn_env old_zname of 
+				Value(_, EIEnvVar(_,  Nil)) =>  (new_zname, old_zname)
+			|	Value(_, EIEnvVar(_, Value orig)) => (new_zname, orig)
+			|	_ => fail "" 0 [] (* caught immediately *);
+			val block1 = block 1
+			handle Fail _ => error "add_var_env" 507006 [];
+			val block_name1 = #block_name(#declab block1);
+			val avs = #aux_vars (
+				force_value(s_lookup block_name1 (!pack_env)))
+				handle Fail _ => [];
+			val av_names = flat (map z_names_of_z_dec avs);
+			val renamings1 = #renamings(#in_scope(#declab block1));
+			val zids_in_scope = av_names cup
+				(z_names_of_in_scope o #in_scope o #declab) block1;
+		in	map (check_new_z_id zids_in_scope) [new_zname];
+			check_new_spark_ids current_cn_env [new_zname];
+			blocks :=
+			block_renamings(block1, renamings1 @ [renaming]):: tl (!blocks);
+			Value renaming
+		end
+	)
+	end	handle Fail _ => (
+		comment "renames_proc" 507059
+		[fn _ =>old_name, fn _ => new_name];
+		Nil
+	)
+);
+=TEX
+=SML
+fun Ûrenames_object_pack_specÝ (obj_ren : OBJECT_RENAMING) : unit = (
+	let	val block_name1 = #block_name(#declab (block 1));
+		val package = case (s_lookup block_name1 (!pack_env)) of
+			Value p => p
+		|	Nil => error "renames_object_pack_spec" 507001 [fn _=>block_name1]; 
+	in	case renames_object_common obj_ren of
+			Nil => ()
+		|	Value renaming =>
+			pack_env :=
+			s_enter
+			block_name1
+			(package_renamings(package,
+				#renamings package @ [renaming]))
+			(!pack_env)
+	end
+);
+=TEX
+=SML
+fun Ûrenames_objectÝ (obj_ren : OBJECT_RENAMING)
+	: unit = (
+	if	test_flag #pack_spec_flag 1
+	then	renames_object_pack_spec obj_ren
+	else	(renames_object_common obj_ren; ())
+);
+=TEX
+\subsection{The SID function renames\_pack}
+=SML
+fun Ûrenames_packÝ ({old_name, new_name} : PACKAGE_RENAMING)  : unit = (
+		comment "do_declaration" 505001 [fn _=>"Package renaming TBS"]
+);
 =TEX
 \section{STUBS AND SUBUNITS}\label{STUBSANDSUBUNITS}
 \subsection{The SID function begin\_stub}
@@ -6169,10 +6282,10 @@ fun Ûdo_declarationÝ (y as (DDeclarationKSlot (
 		()  (* check on symbols made in parser *)
 	) |	RDOpsym y => (
 				renames_opsym y
-	) |	RDObject _ => (
-		comment "do_declaration" 505001 [fn _=>"Object renaming TBS"]
-	) |	RDPackage _ => (
-		comment "do_declaration" 505001 [fn _=>"Package renaming TBS"]
+	) |	RDObject y => (
+				renames_object y
+	) |	RDPackage y => (
+			renames_pack y
 	)
 ) | do_declaration (y as (DBasicDecl x) : DECLARATION) = (
 	map do_basic_declaration (adjust_basic_decls current_cn_env [x]); ()

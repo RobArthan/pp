@@ -1,4 +1,4 @@
-% %Z% $Date: 2002/05/06 14:58:08 $ $Revision: 1.98 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2002/05/07 18:09:12 $ $Revision: 1.99 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -16,7 +16,7 @@
 \TPPtitle{Implementation: Verification Condition Generator}  %% Mandatory field
 \def\TPPheadtitle{Verification Condition Generator}
 \TPPref{ISS/HAT/DAZ/IMP505}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.98 $%
+\def\SCCSversion{$Revision: 1.99 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 \TPPdate{\FormatDate{97/07/18%
@@ -144,9 +144,8 @@ infix 5 cap;
 =TEX
 =SML
 structure €CNVCGenerator› : CNVCGenerator = struct
-	open CaseIndependence;
-	open CNTypes1 CNTypes2 CNParser CNTypes CNBasicDeclsAndExprs;
-	open ZUserInterfaceSupport ZGeneratedConstants TypeInference;
+	open CaseIndependence CNTypes1 CNTypes2 CNTypes CNBasicDeclsAndExprs
+		ZUserInterfaceSupport ZGeneratedConstants TypeInference;
 =TEX
 \section{SUPPORTING FUNCTIONS}
 In version 0.6 and onwards we follow the new policy of not attempting to recover when a construct cannot be handled formally.
@@ -337,7 +336,12 @@ The implementation of $simple\_assign$ works on an assignment where the expressi
 =SML
 fun €simple_assign› ({wp_env={env,...}, a, ...} : WP_PARS)
 		(x : ID) (ze : Z_EXP) : RESULT = (
-	{wp = add_domain_conds env ([ze], subseq(a, trans_id x, ze)), side = []}
+	let	val zx = trans_id x;
+		val orig = case env zx of
+			Value(_, EIEnvVar(_, Value orig)) => orig
+		|	_ => zx;
+	in	{wp = add_domain_conds env ([ze], subseq(a, orig, ze)), side = []}
+	end
 )
 (*
 =TEX
@@ -561,16 +565,16 @@ fun €case_others› (pars as {wp, a, wp_env as {env,...}} : WP_PARS)
 
 \subsection{Undecorated Loop}\label{wp-loop}
 =SML
-fun €loop› ({a, ...} : WP_PARS) ({t, stmt} : STATEMENT LOOP)
+fun €loop› ({a, wp_env={env, ...}, ...} : WP_PARS) ({t, stmt} : STATEMENT LOOP)
 			: RESULT = (
 let	val (pre1, post1) = case stmt of
 		STSpecNoIvars {spec={pre, post, ...}, ...} => (
-			(z_predexp_of_z_tm pre,z_predexp_of_z_tm post)
+			(z_predexp_of_z_tm1 env pre,z_predexp_of_z_tm1 env post)
 		) |_ => fail "loop" 505022 [];
 	val wp = [[] Ù pre1];
 	val side = case t of
 			Value till => [[post1] Ù pre1] @
-				((z_predexp_of_z_tm till) %Longrightarrow% a)
+				((z_predexp_of_z_tm1 env till) %Longrightarrow% a)
 			|Nil => [[post1] Ù pre1];
 in
 	{wp = wp, side = side}
@@ -590,8 +594,8 @@ fun €cn_while›	({a, wp_env={env, ...}, ...} : WP_PARS)
 let	val {w, w0, pre, post} = case stmt of
 		STSpecNoIvars {spec, ...} => spec
 		|_ => fail "loop" 505022 [];
-	val pre1 = z_predexp_of_z_tm pre;
-	val post1 = z_predexp_of_z_tm post;
+	val pre1 = z_predexp_of_z_tm1 env pre;
+	val post1 = z_predexp_of_z_tm1 env post;
 	val ze = trans_exp env g;
 	val wp = add_domain_conds env([ze],
 		([z_eq(ze, zid env "TRUE")] Ù pre1) ::
@@ -599,7 +603,7 @@ let	val {w, w0, pre, post} = case stmt of
 				%Longrightarrow% a));
 	val side = case t of
 			Value till => (post1 %Longrightarrow% wp) @
-					((z_predexp_of_z_tm till) %Longrightarrow% a)
+					((z_predexp_of_z_tm1 env till) %Longrightarrow% a)
 			|Nil => (post1 %Longrightarrow% wp);
 in
 	{wp = wp, side = side}
@@ -615,8 +619,8 @@ let	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
 	val {pre, post, ...} = case stmt of
 		STSpecNoIvars {spec, ...} => spec
 		|_ => fail "for_static" 505022 [];
-	val pre1 = z_predexp_of_z_tm pre;
-	val post1 = z_predexp_of_z_tm post;
+	val pre1 = z_predexp_of_z_tm1 env pre;
+	val post1 = z_predexp_of_z_tm1 env post;
 	val zi = trans_id i;
 	val zlo = adjust_and_trans lo;
 	val zhi = adjust_and_trans hi;
@@ -632,7 +636,7 @@ let	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
 		(z_greater (zlo, zhi) %Longrightarrow% a));
 	val till_part = case t of
 			Value till => (
-				zran %Longrightarrow% ((z_predexp_of_z_tm till) %Longrightarrow% a)
+				zran %Longrightarrow% ((z_predexp_of_z_tm1 env till) %Longrightarrow% a)
 			) | Nil => [];
 	val side = add_domain_conds env ([zfinal],
 			[[zran, z_noteq(zid_zi, zfinal), post1] Ù 
@@ -651,8 +655,8 @@ fun €for_tmark› ({a, wp_env={env, ...}, ...} : WP_PARS)
 let	val {pre, post, ...} = case stmt of
 		STSpecNoIvars {spec, ...} => spec
 		|_ => fail "for_tmark" 505022 [];
-	val pre1 = z_predexp_of_z_tm pre;
-	val post1 = z_predexp_of_z_tm post;
+	val pre1 = z_predexp_of_z_tm1 env pre;
+	val post1 = z_predexp_of_z_tm1 env post;
 	val zi = trans_id i;
 	val zlo = zid env (trans_id tmark ^^ zfst);
 	val zhi = zid env (trans_id tmark ^^ zlst);
@@ -666,7 +670,7 @@ let	val {pre, post, ...} = case stmt of
 		(z_greater (zlo, zhi) %Longrightarrow% a);
 	val till_part = case t of
 			Value till => (
-				(z_predexp_of_z_tm till) %Longrightarrow% a
+				(z_predexp_of_z_tm1 env till) %Longrightarrow% a
 			) | Nil => [];
 	val side = [[z_noteq(zid env zi, zfinal), post1] Ù 
 			sub(pre1, zi, z_bin_exp (zleft, zop, zright))] @
@@ -890,7 +894,7 @@ fun €z_preds_in_callee_cxt›
 		val filt_old_cxt = old_cxt drop (fn t => fst(dest_var t) mem extra_ns);
 		val new_cxt =  extra_cxt @ filt_old_cxt;
 		val side1 = set_ti_context new_cxt;
-		val zps = map z_predexp_of_z_tm ztms;
+		val zps = map (z_predexp_of_z_tm1 env) ztms;
 		val side2  = set_ti_context old_cxt;
 	in	zps
 	end
@@ -993,8 +997,8 @@ let	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
 	val {pre, post, w, w0, ...} = case stmt of
 		STSpecNoIvars {spec, ...} => spec
 		|_ => fail "for_non_static" 505022 [];
-	val pre1 = z_predexp_of_z_tm pre;
-	val post1 = z_predexp_of_z_tm post;
+	val pre1 = z_predexp_of_z_tm1 env pre;
+	val post1 = z_predexp_of_z_tm1 env post;
 	val zi = trans_id i;
 	val zlo = adjust_and_trans lo;
 	val zhi = adjust_and_trans hi;
@@ -1010,7 +1014,7 @@ let	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
 		(z_greater(zlo, zhi) %Longrightarrow% a));
 	val till_part = case t of
 			Value till => (
-				zran %Longrightarrow% ((z_predexp_of_z_tm till )%Longrightarrow% a)
+				zran %Longrightarrow% ((z_predexp_of_z_tm1 env till )%Longrightarrow% a)
 			) | Nil => [];
 	val side = add_domain_conds env ([zfinal0],
 		[[zran, z_noteq(zid env zi, zfinal0), post1] Ù 
@@ -1069,14 +1073,14 @@ fun €log_con› ({wp, a, wp_env as {env, ...}} : WP_PARS)
 	({defs, spec as {w, w0, pre, post}, ...} : LOG_CON)
 		: RESULT = (
 
-let	val (defs, pre1) = analyse_log_con defs (z_predexp_of_z_tm pre);
+let	val (defs, pre1) = analyse_log_con defs (z_predexp_of_z_tm1 env pre);
 	val hyps = map (z_log_con_def ([], [])) defs;
 	fun aux acc ((hyp, {x, t, e})::more) = (
-		(acc Ù z_mem(e, z_predexp_of_z_tm t)) :: aux (hyp::acc) more
+		(acc Ù z_mem(e, z_predexp_of_z_tm1 env t)) :: aux (hyp::acc) more
 	) | aux _ [] = [];
 	val wp = [hyps Ù pre1] @ aux [] (combine hyps defs);
 	val side = add_hyps (map (z_log_con_def(w, w0)) defs,
-		z_predexp_of_z_tm post %Longrightarrow% a);
+		z_predexp_of_z_tm1 env post %Longrightarrow% a);
 in
 	{wp = wp, side = side}
 end);
@@ -1115,9 +1119,11 @@ in
 	any names (fn s => is_init_var s)
 end
 );
+=TEX
+In the following, the renaming substitution is not relevant to the test being made.
 =SMLPLAIN
 fun €any_initial_variables_z_tm› (z_tm : Z_TM) : bool = (
-	any_initial_variables_z_pred (z_predexp_of_z_tm z_tm)
+	any_initial_variables_z_pred (z_predexp_of_z_tm (Combinators.I) z_tm)
 );
 =TEX
 =SML
@@ -1256,7 +1262,7 @@ in	case adjust_statement wp_env st of
 			assign pars (adjust name, adjust_and_trans e)
 	|	STSpecNoIvars {spec={pre, post, w, ...}, ...} => 
 			spec_no_ivars_either pars w
-				(z_predexp_of_z_tm pre, z_predexp_of_z_tm post)
+				(z_predexp_of_z_tm1 env pre, z_predexp_of_z_tm1 env post)
 	|	STSemicolon x => semicolon pars x
 	|	STIfThenElse {g, p, q, elsif} =>
 			if_then_else pars {g=adjust g, p=p, q=q, elsif=elsif}
@@ -1277,7 +1283,7 @@ in	case adjust_statement wp_env st of
 	|	STPragma _ => null pars
 	|	STAnnotation _ => null pars
 	|	SSpecIvars {spec={pre, post, ...}, ...} =>
-			spec_ivars pars (z_predexp_of_z_tm pre, z_predexp_of_z_tm  post)
+			spec_ivars pars (z_predexp_of_z_tm1 env pre, z_predexp_of_z_tm1 env  post)
 	|	SForNonStatic x => for_non_static pars x
 	|	SLogCon x => log_con pars x
 	|	SProcIvars x => proc_call_ivars pars x
@@ -1371,8 +1377,13 @@ fun €entire_var_exp› (cn_env : CN_ENV) (e : EXP) : ID = (
 =TEX
 =SML
 fun €name_to_entire_variable_name› (cn_env : CN_ENV) (e : EXP) : Z_ID = (
-	trans_id (entire_var_exp cn_env e)
-	handle exn => reraise exn "name_to_entire_variable_name"
+	let	val zx = trans_id (entire_var_exp cn_env e);
+		val orig = case cn_env zx of
+			Value(_, EIEnvVar(_, Value orig)) => orig
+		|	_ => zx;
+	in	orig
+	end	handle exn => reraise exn "name_to_entire_variable_name"
+
 );
 =TEX
 =SML
@@ -1872,13 +1883,13 @@ statements (see schema {\it Spec} in \cite[volume 2]{DRA/CIS/CSE3/TR/94/27/3.0})
 
 =SML
 fun €vcs› ((sl as {spec as {w, w0, pre, post},
-			wp_env, ...}, st): SPECLAB * STATEMENT)
+			wp_env as {env, ...}, ...}, st): SPECLAB * STATEMENT)
 			: VC list * SPEC = (
 
 let	val side_effect = do_soundness_checks (sl, st);
 
-	val pre1 = z_predexp_of_z_tm pre;
-	val post1 = z_predexp_of_z_tm post;
+	val pre1 = z_predexp_of_z_tm1 env pre;
+	val post1 = z_predexp_of_z_tm1 env post;
 	val {wp, side} = wp (st, [[] Ù post1], wp_env);
 	fun subs_c (h, c) = (
 		h Ù subs_pred(c, w0, w)
@@ -1904,8 +1915,8 @@ val (sl as 	{	spec ,
 		st)= hd(! CNZGenerator.diag_vc_args);
 val  {w, w0, pre, post} = spec;
 
-val pre1 = z_predexp_of_z_tm pre;
-val post1 = z_predexp_of_z_tm post;
+val pre1 = z_predexp_of_z_tm1 env pre;
+val post1 = z_predexp_of_z_tm1 env post;
 val a = [[] Ù post1];
 wp (st, a, wp_env);
 (* assignments in wp *)
