@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.16 2003/06/26 13:45:00 rda Exp rda $ 
+ * $Id: templates.c,v 2.17 2003/07/17 11:37:16 rda Exp rda $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -341,7 +341,7 @@ void add_templates_tool(Widget w)
 		XtPopup(shell, XtGrabNone);
 		fix_pane_height(template_form, template_form);
 		fix_pane_height(other_btn_area, other_btn_area);
-	};
+	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * templates_cb: simulate typing of a character into a text widget
@@ -389,125 +389,136 @@ static void dismiss_cb(CALLBACK_ARGS);
 static void templates_help_dialog(Widget w)
 {
 	Widget dismiss_btn_area, dismiss_btn;
-	static Widget	help_shell,
+	static Widget	shell,
 			help_pane;
-	Widget		row_col,
+	Widget		form,
 			help_item,
 			introduction,
 			template_icon,
 			template_text;
 	Dimension h;
-	int i;
-	if(!help_shell) {
+	int i, fbase, x, y;
+	if(shell) {
+		XtPopup(shell, XtGrabNone);
+		return;
+	} /* else */
 
-		help_shell = XtVaCreatePopupShell("xpp-Help",
-			xmDialogShellWidgetClass,	w,
-			XmNdeleteResponse,		XmUNMAP,
-			NULL);
+	shell = XtVaCreatePopupShell("xpp-Help",
+		xmDialogShellWidgetClass,	w,
+		XmNdeleteResponse,		XmUNMAP,
+		NULL);
 #ifdef EDITRES
 	add_edit_res_handler(shell);
 #endif
-		help_pane = XtVaCreateWidget("help-pane",
-			xmPanedWindowWidgetClass,	help_shell,
-			XmNsashWidth,			1,
-				/* PanedWindow won't let us set these to 0! */
-			XmNsashHeight,			1,
-				/* Make small so user doesn't try to resize */
+	XtAddCallback(shell, XmNpopupCallback, centre_popup_cb, 0);
+	help_pane = XtVaCreateWidget("help-pane",
+		xmPanedWindowWidgetClass,	shell,
+		XmNsashWidth,			1,
+			/* PanedWindow won't let us set these to 0! */
+		XmNsashHeight,			1,
+			/* Make small so user doesn't try to resize */
+		NULL);
+
+	introduction = XtVaCreateManagedWidget("introduction",
+		xmLabelGadgetClass,	help_pane,
+		XmNlabelString,		format_msg(Help_Templates_Tool,
+						HELP_LINE_LEN),
+		XmNalignment,		XmALIGNMENT_CENTER,
+		NULL);
+
+	XtManageChild(introduction);
+
+	XtVaGetValues(introduction, XmNheight, &h, NULL);
+
+	XtVaSetValues(introduction,
+		XmNpaneMaximum,	h,
+		XmNpaneMinimum,	h,
+		NULL);
+
+	fbase = (template_table_size + 1) & ~0x01;
+
+	form = XtVaCreateWidget("help-form",
+		xmFormWidgetClass,	help_pane,
+		XmNfractionBase,		fbase,
+		NULL);
+
+	for (i=0; i < template_table_size; i++) {
+		x = (fbase / 2) * (i % 2);
+		y = 2 * (i / 2);
+
+		help_item = XtVaCreateWidget("help-item",
+			xmRowColumnWidgetClass,		form,
+			XmNorientation,			XmHORIZONTAL,
+			XmNpacking,			XmPACK_TIGHT,
+			XmNleftAttachment,	XmATTACH_POSITION,
+			XmNleftPosition,	x,
+			XmNrightAttachment,	XmATTACH_POSITION,
+			XmNrightPosition,	x + (fbase / 2),
+			XmNtopAttachment,	XmATTACH_POSITION,
+			XmNtopPosition,	y,
+			XmNbottomAttachment,	XmATTACH_POSITION,
+			XmNbottomPosition,	y + 2,
 			NULL);
 
-		introduction = XtVaCreateManagedWidget("introduction",
-			xmLabelGadgetClass,	help_pane,
-			XmNlabelString,		format_msg(Help_Templates_Tool,
-							HELP_LINE_LEN),
-			XmNalignment,		XmALIGNMENT_CENTER,
+		template_icon = XtVaCreateManagedWidget("template-icon",
+			xmLabelWidgetClass,		help_item,
+			XmNlabelPixmap, get_pixmap(w,
+			                           template_table[i].bitmap_file,
+			                           i < template_table_size - 1),
+			XmNlabelType,			XmPIXMAP,
 			NULL);
 
-		XtManageChild(introduction);
-
-		XtVaGetValues(introduction, XmNheight, &h, NULL);
-
-		XtVaSetValues(introduction,
-			XmNpaneMaximum,	h,
-			XmNpaneMinimum,	h,
+		template_text = XtVaCreateManagedWidget("template-text",
+			xmLabelGadgetClass,		help_item,
+			XmNlabelString,		
+				format_msg (template_table[i].help_text,
+								MSG_LINE_LEN),
 			NULL);
 
-		row_col = XtVaCreateWidget("help-form",
-			xmRowColumnWidgetClass,	help_pane,
-			XmNorientation,		XmVERTICAL,
-			XmNpacking,		XmPACK_TIGHT,
-			NULL);
+		XtManageChild(help_item);
 
-		for (i=0; i < template_table_size; i++) {
-
-			help_item = XtVaCreateWidget("help-item",
-				xmRowColumnWidgetClass,		row_col,
-				XmNorientation,			XmHORIZONTAL,
-				XmNpacking,			XmPACK_TIGHT,
-				NULL);
-
-			template_icon = XtVaCreateManagedWidget("template-icon",
-				xmLabelWidgetClass,		help_item,
-				XmNlabelPixmap, get_pixmap(w,
-				                           template_table[i].bitmap_file,
-				                           i < template_table_size - 1),
-				XmNlabelType,			XmPIXMAP,
-				NULL);
-
-			template_text = XtVaCreateManagedWidget("template-text",
-				xmLabelGadgetClass,		help_item,
-				XmNlabelString,		
-					format_msg (template_table[i].help_text,
-									MSG_LINE_LEN),
-				NULL);
-
-			XtManageChild(help_item);
-
-		}
-
-		XtVaSetValues(help_item,
-			XmNbottomAttachment,	XmATTACH_FORM,
-			NULL);
-
-		XtManageChild(row_col);
-
-		XtVaGetValues(row_col, XmNheight, &h, NULL);
-
-		XtVaSetValues(row_col,
-			XmNpaneMinimum,	h,
-			NULL);
-
-		dismiss_btn_area = XtVaCreateWidget("dismiss_btn_area",
-				xmFormWidgetClass,	help_pane,
-				XmNfractionBase,	30,
-				NULL);
-
-		dismiss_btn = XtVaCreateManagedWidget("Dismiss",
-			xmPushButtonGadgetClass, dismiss_btn_area,
-			XmNtopAttachment,		XmATTACH_FORM,
-			XmNbottomAttachment,		XmATTACH_FORM,
-			XmNleftAttachment,		XmATTACH_POSITION,
-			XmNleftPosition,		10,
-			XmNrightAttachment,		XmATTACH_POSITION,
-			XmNrightPosition,		20,
-			XmNshowAsDefault,		True,
-			XmNdefaultButtonShadowThickness, 1,
-			NULL);
-
-		XtAddCallback(dismiss_btn, XmNactivateCallback,
-				dismiss_cb, help_shell);
-
-		XtManageChild(dismiss_btn_area);
-
-		XtVaGetValues(dismiss_btn, XmNheight, &h, NULL);
-
-		XtVaSetValues(dismiss_btn_area,
-			XmNpaneMaximum,	h,
-			XmNpaneMinimum,	h,
-			NULL);
 	}
 
+	XtVaSetValues(help_item,
+		XmNbottomAttachment,	XmATTACH_FORM,
+		NULL);
+
+	XtManageChild(form);
+
+	dismiss_btn_area = XtVaCreateWidget("dismiss_btn_area",
+			xmFormWidgetClass,	help_pane,
+			XmNfractionBase,	30,
+			NULL);
+
+	dismiss_btn = XtVaCreateManagedWidget("Dismiss",
+		xmPushButtonGadgetClass, dismiss_btn_area,
+		XmNtopAttachment,		XmATTACH_FORM,
+		XmNbottomAttachment,		XmATTACH_FORM,
+		XmNleftAttachment,		XmATTACH_POSITION,
+		XmNleftPosition,		10,
+		XmNrightAttachment,		XmATTACH_POSITION,
+		XmNrightPosition,		20,
+		XmNshowAsDefault,		True,
+		XmNdefaultButtonShadowThickness, 1,
+		NULL);
+
+	XtAddCallback(dismiss_btn, XmNactivateCallback,
+			dismiss_cb, shell);
+
+	XtManageChild(dismiss_btn_area);
+
+	XtVaGetValues(dismiss_btn, XmNheight, &h, NULL);
+
+	XtVaSetValues(dismiss_btn_area,
+		XmNpaneMaximum,	h,
+		XmNpaneMinimum,	h,
+		NULL);
+
 	XtManageChild(help_pane);
-	XtPopup(help_shell, XtGrabNone);
+	XtPopup(shell, XtGrabNone);
+	fix_pane_height(introduction, introduction);
+	fix_pane_height(form, form);
+	fix_pane_height(dismiss_btn_area, dismiss_btn_area);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
