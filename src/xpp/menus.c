@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$
+ * $Id: menus.c,v 2.2 1998/03/13 17:04:00 rda Rel rda $
  *
  * menus.c -  creation of menus for the X/Motif ProofPower
  * Interface
@@ -21,42 +21,21 @@
 #include "xpp.h"
 
 
-static Widget setup_menu_aux(
-	Widget	parent,
-	int	type,
-	char	*menu_title,
-	char	menu_mnemonic,
-	Bool	tear_off_enabled,
+static void setup_menu_items(
+	Widget		menu,
+	int		type,
 	MenuItem	*items)
 {
-	Widget		menu, cascade, w;
+	Widget w;
 	MenuItem	*item;
 	XmString	lab;
-	if(type == XmMENU_POPUP) {
-/*
- * just create the popup menu:
- */
-		menu = XmCreatePopupMenu(parent, "menu", NULL, 0);
-	} else {
-/*
- * Create the pulldown menu and its cascade button:
- */
-		if(tear_off_enabled) {
-			XtVaSetValues(
-				menu,
-				XmNtearOffModel,	XmTEAR_OFF_ENABLED,
-				NULL);
-		}
-		menu = XmCreatePulldownMenu(parent, "menu", NULL, 0);
-		lab = XmStringCreateSimple(menu_title);
-		cascade = XtVaCreateManagedWidget(
-			menu_title, xmCascadeButtonGadgetClass, parent,
-			XmNsubMenuId,	menu,
-			XmNlabelString,	lab,
-			XmNmnemonic,	menu_mnemonic,
-			NULL);
-		XmStringFree(lab);
-	}
+	static Widget setup_menu_aux(
+		Widget	parent,
+		int	type,
+		char	*menu_title,
+		char	menu_mnemonic,
+		Bool	tear_off_enabled,
+		MenuItem	*items);
 /*
  * Loop round the menu items
  */
@@ -99,6 +78,7 @@ static Widget setup_menu_aux(
 				XmNaccelerator,		item->accelerator,
 				XmNacceleratorText, 	lab,
 				NULL);
+			XmStringFree(lab);
 		}
 /*
  * Is there a callback? Again not sensible for pull-right submenu
@@ -109,6 +89,46 @@ static Widget setup_menu_aux(
 				item->callback, item->callback_data);
 		}
 	}
+}
+
+static Widget setup_menu_aux(
+	Widget	parent,
+	int	type,
+	char	*menu_title,
+	char	menu_mnemonic,
+	Bool	tear_off_enabled,
+	MenuItem	*items)
+{
+	Widget		menu, cascade;
+	XmString	lab;
+	if(type == XmMENU_POPUP) {
+/*
+ * just create the popup menu:
+ */
+		menu = XmCreatePopupMenu(parent, "menu", NULL, 0);
+	} else {
+/*
+ * Create the pulldown menu and its cascade button:
+ */
+		if(tear_off_enabled) {
+			XtVaSetValues(
+				menu,
+				XmNtearOffModel,	XmTEAR_OFF_ENABLED,
+				NULL);
+		}
+		menu = XmCreatePulldownMenu(parent, "menu", NULL, 0);
+		lab = XmStringCreateSimple(menu_title);
+		cascade = XtVaCreateManagedWidget(
+			menu_title, xmCascadeButtonGadgetClass, parent,
+			XmNsubMenuId,	menu,
+			XmNlabelString,	lab,
+			XmNmnemonic,	menu_mnemonic,
+			NULL);
+		XmStringFree(lab);
+	}
+
+	setup_menu_items(menu, type, items);
+
 	return type == XmMENU_POPUP ? menu : cascade;
 }
 
