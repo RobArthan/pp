@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp515.doc   %Z% $Date: 2002/11/10 18:45:34 $ $Revision: 1.43 $ $RCSfile: imp515.doc,v $
+% imp515.doc   %Z% $Date: 2004/02/07 17:28:56 $ $Revision: 1.44 $ $RCSfile: imp515.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Compliance Tool Test Utilities}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP515}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.43 $%
+\def\SCCSversion{$Revision: 1.44 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/11/10 18:45:34 $%
+\TPPdate{\FormatDate{$Date: 2004/02/07 17:28:56 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -90,6 +90,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \item[Issue 1.41, 1.42] DAZ-specific updates to banner for open source release
 \item[Issue 1.43] Uniform treatment of block statements.
 \item[Issue 1.44] The SPARK program is now referred to as the Ada program.
+\item[Issue 1.45] Allowed for reformed environments.
 \end{description}
 \subsection{Changes Forecast}
 $fmt\_repl\_env$ has an untidy option, put in to make pattern matching 
@@ -215,7 +216,7 @@ end);
 
 \section{A TEST ENVIRONMENT}
 =SML
-val €var_info› : (ID * (TYPE * ENV_INFO)) list ref = ref [];
+val €var_info› : ENV_INFO S_DICT ref = ref [];
 =TEX
 
 =SML
@@ -225,26 +226,24 @@ fun €init_env› (() : unit) : unit = (var_info := []);
 =SML
 val €env› = (fn id =>
 	case lassoc5 (!var_info) id of
-	Value te => Value te
+	Value ei => Value ei
 	|Nil =>	 (
 		case get_const_info ("z'"^id) of
-		Value (ty,_) => Value (ty, EIEnvOther)
+		Value (ty,_) => Value {tipe = Value ty, canon_name = id, info = EIEnvOther}
 		|Nil => Nil
 	)
 );
 =TEX
 
 =SML
-fun €extend_env› (id : ID) (ty : TYPE) (envty : ENV_INFO) : unit = (
-	(var_info := (id,(ty, envty))::(!var_info))
+fun €extend_env› (id : ID)  (ei : ENV_INFO) : unit = (
+	(var_info := s_extend id ei (!var_info))
 );
 =TEX
 
 =SML
-fun €change_env› (id : ID) (envty : ENV_INFO) : unit = (
-	case env id of
-	Value(ty, _) => (var_info := (id, (ty, envty))::(!var_info))
-	|Nil => fail "change_env" 505001 [fn()=>"name not in scope"]
+fun €change_env› (id : ID) (ei : ENV_INFO) : unit = (
+	(var_info := s_enter id ei (!var_info))
 );
 =TEX
 
@@ -253,10 +252,13 @@ fun €update_env_with_vars› ({vars, tmark} : VAR_DECL) : unit = (
 let	val vars' = map to_upper vars;
 	val tmark' = to_upper tmark;
 	val ty = case env tmark' of
-				Value (ty, _) => dest_z_power_type ty
+				Value {tipe =Value ty, ...} => dest_z_power_type ty
 				|_ => fail "" 505001 [fn()=>tmark^" not declared"];
 in
-	((map (fn s => extend_env s ty (EIEnvVar (tmark', Nil))) vars');())
+	((map (fn s => extend_env s 
+		{tipe = Value ty,
+		 canon_name = s,
+		 info = EIEnvVar {tmark =  tmark', kind = VKVar}}) vars');())
 end
 );
 =TEX
@@ -280,7 +282,7 @@ let	val des = to_upper designator;
 			[par_ty] => par_ty
 			|_ => mk_z_tuple_type par_tys;
 	fun get_global_ty (zn : Z_ID) = (
-		fst (force_value (env zn))
+		force_value(#tipe (force_value (env zn)))
 	);
 	val ty1 = mk_z_power_type(mk_z_tuple_type [par_ty, ret_ty]);
 	val ty2 = case globals of
@@ -291,7 +293,13 @@ let	val des = to_upper designator;
 	val tci = TypeCheckInfo ([(des, ty2)], []);
 	val side = update_theory_db_with_parainfo tci;
 in
-	extend_env des ty2 (EIEnvFunction (globals, pars_tmarks_defs, return))
+	extend_env des 
+	{tipe = Value ty2,
+	 canon_name = des,
+	info = EIEnvFunction {formal = true,
+			deps = globals,
+			pars = map (fn (p, (t, d)) => {id =p, tmark = t, default = d}) pars_tmarks_defs,
+			return_tmark = return}}
 end
 );
 =TEX
@@ -320,7 +328,10 @@ fun €cn_declare› (s : string) : unit = (
 		let	val adj_bds = adjust_basic_decls env [bd];
 			val paras = flat (map (trans_basic_decl env) adj_bds);
 			val _ = map update_theory_db_with_parainfo paras;
-			fun do1 ty tm c = extend_env c ty (EIEnvConstant tm);
+			fun do1 ty tm c = extend_env c
+				{tipe = Value ty,
+				canon_name =c ,
+				info = EIEnvConstant {tmark = tm}};
 			fun get_ty (id : ID) : TYPE = (
 				 (dest_z_power_type o type_of) (trans_exp env (EId id))
 			);
@@ -333,7 +344,7 @@ fun €cn_declare› (s : string) : unit = (
 				diag_line("Weird result from adjust_basic_decls")
 			)
 		end
-	)| DBasicDecl bd => (
+	) | DBasicDecl bd => (
 		let	val adj_bds = adjust_basic_decls env [bd];
 			val paras = flat (map (trans_basic_decl env) adj_bds);
 			
@@ -473,16 +484,87 @@ fun €aux_flag› (s : string) (fl : FLAG) : string list =
 =TEX
 
 =SML
+fun €formal_procs_of_in_scope› ({dict, ...} : IN_SCOPE) : FORMAL_PROC list = (
+	let	fun aux acc [] = rev acc
+		|   aux acc (EIEnvProcedure {formal = true, formal_proc = fp}::more) = (
+			aux (fp::acc) more
+		) | aux acc (_::more) = aux acc more;
+		val sd = flatten_env_dict dict;
+		fun my_order (s1, _) (s2, _) = Sort.string_order s1 s2;
+	in	aux [] (map (#info o snd) (Sort.sort my_order sd))
+	end
+);
+=TEX
+=SML
+fun €vc_vars_of_in_scope› ({dict, ...} : IN_SCOPE) : VAR_DECL list = (
+	let	val var_names = Sort.sort Sort.string_order (#vc_vars(get_local_vars dict));
+		fun do1 vn = (
+			case env_of_env_dict dict vn of
+				Value{info = EIEnvVar{tmark, ...}, canon_name, ...} =>
+					if	vn = canon_name
+					then	{vars = [vn], tmark = tmark}
+					else	{vars = [vn^"("^canon_name^")"], tmark = tmark}
+			|	_ => {vars = [vn], tmark = "** CORRUPT ENVIRONMENT ENTRY **"}
+		);
+	in	map do1 var_names
+	end
+);
+=TEX
+=SML
+fun €vc_pars_of_in_scope› ({dict, ...} : IN_SCOPE) : PARAM_SPEC list = (
+	let	val par_names = Sort.sort Sort.string_order (#vc_pars(get_local_vars dict));
+		fun do1 pn = (
+			case env_of_env_dict dict pn of
+				Value{info = EIEnvVar{tmark, kind = VKPar mode}, canon_name, ...} =>
+					if	pn = canon_name
+					then	{var_decl = {vars = [pn], tmark = tmark},
+						 mode = mode}
+					else	{var_decl = {vars = [pn^"("^canon_name^")"], tmark = tmark},
+						 mode = mode}
+			|	_ => {var_decl = {vars = [pn], tmark = "** CORRUPT ENVIRONMENT ENTRY **"},
+					mode = MSparkIn false}
+		);
+	in	map do1 par_names
+	end
+);
+=TEX
+=SML
+fun €vc_aux_vars_of_in_scope› ({dict, ...} : IN_SCOPE) : TERM list = (
+	let	val av_names = Sort.sort Sort.string_order (#vc_aux_vars(get_local_vars dict));
+		fun do1 avn = (
+			case env_of_env_dict dict avn of
+				Value{info = EIEnvAuxVar{decl, ...}, ...} => decl
+			|	_ => mk_var(avn ^  " : ** CORRUPT ENVIRONMENT ENTRY **", BOOL)
+		);
+	in	map do1 av_names
+	end
+);
+=TEX
+=SML
+fun €vc_log_cons_of_in_scope› ({dict, ...} : IN_SCOPE) : TERM list = (
+	let	val lc_names = Sort.sort Sort.string_order (#vc_log_cons(get_local_vars dict));
+		fun do1 lcn = (
+			case env_of_env_dict dict lcn of
+				Value{info = EIEnvAuxVar{decl, ...}, ...} => decl
+			|	_ => mk_var(lcn ^  " : ** CORRUPT ENVIRONMENT ENTRY **", BOOL)
+		);
+	in	map do1 lc_names
+	end
+);
+=TEX
+=SML
 fun €aux_in_scope› (p : string) (insc : IN_SCOPE) : string list =
 	(cond_fmt_string (p ^ "vc_vars: ")
-		(aux_var_decl_list (#vc_vars insc)))@
+		(aux_var_decl_list (vc_vars_of_in_scope insc)))@
 	(cond_fmt_string (p ^ "vc_pars: ")
-		(flat (map aux_param_spec (#vc_pars insc))))@
+		(flat (map aux_param_spec (vc_pars_of_in_scope insc))))@
 	(cond_fmt_string (p ^ "vc_log_cons: ")
-		(map string_of_term (#vc_log_cons insc)))@
+		(map string_of_term (vc_aux_vars_of_in_scope insc)))@
+	(cond_fmt_string (p ^ "vc_log_cons: ")
+		(map string_of_term (vc_log_cons_of_in_scope insc)))@
 	(cond_fmt_string (p ^ "formal_procs: ")
-		(flat (map aux_formal_proc (#formal_procs insc))))@
-	(cond_fmt_string (p ^ "dec_labels") (#dec_labels insc));
+		(flat (map aux_formal_proc (formal_procs_of_in_scope insc))))@
+	(cond_fmt_string (p ^ "dec_labels: ") (#dec_labels insc));
 =TEX
 
 =SML
@@ -544,10 +626,7 @@ fun €aux_wp_env› (p : string) (wp : WP_ENV) : string list = (
 	(cond_fmt_string (p ^ "fun_header: ")
 		[(aux_informal_fun (#fun_header wp))])@
 	[p ^ "return: " ^ (string_of_term (#return wp))]@
-	[p ^ "till: " ^ (string_of_term (#till wp))]@
-	(cond_fmt_string (p ^ "formal_procs: ")
-		(flat (map aux_formal_proc (#formal_procs wp))))
-
+	[p ^ "till: " ^ (string_of_term (#till wp))]
 );
 =TEX
 
