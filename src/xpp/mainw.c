@@ -1086,9 +1086,6 @@ gotpty:
 		if (slave_fd > 2) {
 			close(slave_fd);
 		};
-		if((tty_fd = open("/dev/tty", O_RDWR)) >= 0) {
-			ioctl(tty_fd, TIOCNOTTY, 0);
-		};
 		read(0, &buf, 1);		/* Wait until told */
 		execvp(arglist[0], arglist);
 	/* **** error if reach here **** */
