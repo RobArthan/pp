@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2002/12/10 22:46:42 $ $Revision: 2.14 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2002/12/12 14:06:50 $ $Revision: 2.15 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -119,7 +119,7 @@ void help_dialog(Widget w, char *str)
 		XtSetArg(args[5], XmNwordWrap,              True);
 		XtSetArg(args[6], XmNrows,                  HELP_SCREEN_HEIGHT);
 		XtSetArg(args[7], XmNcolumns,               HELP_LINE_LEN);
-		help_text = XmCreateScrolledText(pane, "help_text", args, 8);
+		help_text = XmCreateScrolledText(pane, "help-text", args, 8);
 		XtManageChild(help_text);
 		form = XtVaCreateWidget("form", xmFormWidgetClass, pane,
 			XmNfractionBase,    5,
