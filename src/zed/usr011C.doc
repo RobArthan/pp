@@ -129,6 +129,7 @@ z_¬_conv Ò (Ã x:X | P x ∑ f x) aÆ;
 =GFT ProofPower output
 val it = P a, a ç X Ù (Ã x : X | P x ∑ f x) a = f a : THM   
 =TEX
+
 Applications may also be eliminated in favour of definite descriptions (though this is not particularly helpful).
 
 =SML
@@ -137,8 +138,145 @@ z_app_conv Ò f aÆ;
 val it = Ù f a = Õ f_a : U | (a, f_a) ç f ∑ f_a : THM   
 =TEX
 
-More commonly function applications will be eliminated by rewriting with the definition of the relevant function.
+More commonly function applications are eliminated by rewriting with the definition of the relevant function.
 
+Reasoning at a low level, $z_app_eq_tac$ may be used to reduce an equation involving an application to sufficient conditions for its truth, in terms of the membership of the function, e.g.:
+=SML
+set_goal([],Ò f a = vÆ);
+a z_app_eq_tac;
+=GFT ProofPower output
+...
+(* ?Ù *)  Ò(µ f_a : U | (a, f_a) ç f ∑ f_a = v) ± (a, v) ç fÆ
+...
+=TEX
+
+The first conjunct of this result is needed to ensure that $f$ is functional at $a$ (i.e. maps $a$ to only one value).
+In the case that $f$ is known to be a function, the theorem $z_fun_app_clauses$ may be used with forward chaining, avoiding the need to prove that $f$ is functional at $a$.
+=GFT
+val z_fun_app_clauses =
+  Ù µ f : U; x : U; y : U; X : U; Y : U
+    ∑ (f ç X ﬂ Y
+          ≤ f ç X ˛ Y
+          ≤ f ç X œ Y
+          ≤ f ç X ≠ Y
+          ≤ f ç X ‡ Y
+          ≤ f ç X Ô Y
+          ≤ f ç X è Y)
+        ± (x, y) ç f
+      ¥ f x = y : THM
+=TEX
+In this case the result $(a,v)\ ç\ f$ would have to be proven and added to the assumptions before undertaking the forward chaining, e.g.:
+=SML
+drop_main_goal();
+set_goal([], Òf ç Ó Ô ˙ ¥ (4, ~45) ç f ¥ f 4 = ~45Æ);
+a (REPEAT z_strip_tac);
+=GFT ProofPower output
+...
+(*  2 *)  Òf ç Ó Ô ˙Æ
+(*  1 *)  Ò(4, ~ 45) ç fÆ
+
+(* ?Ù *)  Òf 4 = ~ 45Æ
+
+=SML
+a (all_fc_tac [z_fun_app_clauses]);
+pop_thm();
+=GFT ProofPower output
+Tactic produced 0 subgoals:
+Current and main goal achieved
+=TEX
+
+A common problem is to have to establish that the value of some expression formed by application falls within some particular set.
+This is often needed to establish the conditions necessary for use of a rewriting equation on the expression.
+
+In these circumstances the theorem $z_fun_ç_clauses$ may be used:
+=GFT
+val z_fun_ç_clauses = Ù µ f : U; x : U; X : U; Y : U
+ ∑ ((f ç X ≠ Y ≤ f ç X ‡ Y ≤ f ç X Ô Y ≤ f ç X è Y) ± x ç X
+ 	¥ f x ç Y)
+ ± ((f ç X ﬂ Y ≤ f ç X ˛ Y ≤ f ç X œ Y) ± x ç dom f
+ 	¥ f x ç Y) : THM
+=TEX
+The claim that a global variable is a member of a function space will often be obained from the specification of the constant (as part of the predicate implicit in the declaration part of the specification).
+Where the function is an expression the result is likely to have been established by forward inference using similar methods.
+=SML
+set_goal([], Ò[X](µ b: bag X∑ count[X] b ç X ≠ Ó)Æ);
+a (REPEAT z_strip_tac);
+=GFT ProofPower output
+...
+(*  1 *)  Òb ç bag XÆ
+
+(* ?Ù *)  Òcount[X] b ç X ≠ ÓÆ
+...
+=TEX
+We need the fact about $count$ which is found in its defining declaration instantiated to $X$ to make the required inference.
+This is added to the assumptions as follows:
+=SML
+a (strip_asm_tac (z_gen_pred_elim [ÒXÆ] (z_get_spec ÒcountÆ)));
+=GFT ProofPower output
+...
+(*  3 *)  Òb ç bag XÆ
+(*  2 *)  Òcount[X] ç bag X è X ≠ ÓÆ
+(*  1 *)  Òµ x : X; B : bag X ∑ count[X] B = (Ã x : X ∑ 0) ´ BÆ
+
+(* ?Ù *)  Òcount[X] b ç X ≠ ÓÆ
+...
+=TEX
+Assumption 1 is spurious but harmless.
+Next we forward chain using the theorem $z_fun_ç_clauses$, which suffices to discharge the goal.
+=SML
+a (all_fc_tac [z_fun_ç_clauses]);
+save_pop_thm "bag_lemma1";
+=GFT ProofPower output
+Tactic produced 0 subgoals:
+Current and main goal achieved
+...
+=TEX
+
+Care is sometimes needed when proving membership lemmas which require intermediate results which involve constructs such as cartesian products, since most proof contexts will eliminate these.
+=SML
+set_goal([],Ò[X](µ b,c: bag X ∑ ((_Ç_)[X](b, c)) ç bag X)Æ);
+a (REPEAT strip_tac);
+a (strip_asm_tac (z_gen_pred_elim [ÒXÆ] (z_get_spec Ò(_Ç_)Æ)));
+=GFT ProofPower output
+...
+(*  4 *)  Òb ç bag XÆ
+(*  3 *)  Òc ç bag XÆ
+(*  2 *)  Ò(_ Ç _)[X] ç (bag X) ∏ (bag X) ≠ bag XÆ
+(*  1 *)  Òµ B, C : bag X; x : X
+             ∑ count ((_ Ç _)[X] (B, C)) x = count B x + count C xÆ
+
+(* ?Ù *)  Ò(_ Ç _)[X] (b, c) ç bag XÆ
+...
+=TEX
+Here the assumption
+=INLINEFT
+(b,c) ç (bag X) ∏ (bag X)
+=TEX
+\ is needed to enable the forward chaining, but the obvious methods of obtaining this, e.g.:
+=SML
+a (lemma_tac Ò(b,c) ç (bag X) ∏ (bag X)Æ THEN1 contr_tac);
+=TEX
+have no effect since the lemma is broken up as it is added to the assumptions.
+This break-up can be inhibited as follows:
+=SML
+a (LEMMA_T Ò(b,c) ç (bag X) ∏ (bag X)Æ asm_tac THEN1 contr_tac);
+=GFT ProofPower output
+...
+(*  1 *)  Ò(b, c) ç (bag X) ∏ (bag X)Æ
+
+(* ?Ù *)  Ò(_ Ç _)[X] (b, c) ç bag XÆ
+...
+=TEX
+where $asm_tac$ is used instead of the default $strip_asm_tac$ for processing the new assumption.
+Now the forward chaining will work.
+=SML
+a (all_fc_tac [z_fun_ç_clauses]);
+save_pop_thm "bag_lemma2";
+=GFT ProofPower output
+Tactic produced 0 subgoals:
+Current and main goal achieved
+...
+=TEX
 
 \subsection{Lambda Abstraction}
 
@@ -208,7 +346,7 @@ val it = Ù µ x' : U
 }
 \subsubsection{Proof Support}
 
-Membership statements concerning power sets may be eliminated using $z_ç__conv$, or by rewriting in proof context ``$z_language_ext$''.
+Membership statements concerning power sets may be eliminated using $z_ç__conv$, or by rewriting in proof context $z_language_ext$.
 
 =SML
 PC_C1 "z_language_ext" rewrite_conv[] Ò z ç  yÆ;
@@ -229,7 +367,7 @@ val it = Ù z ç  y § (µ x1 : U ∑ x1 ç z ¥ x1 ç y) : THM
 }
 \subsubsection{Proof Support}
 
-Membership statements sets displays may be eliminated using $z_ç_setd_conv$, or by rewriting in proof context ``$z_language$''.
+Membership statements sets displays may be eliminated using $z_ç_setd_conv$, or by rewriting in proof context $z_language$.
 
 =SML
 rewrite_conv[] Ò z ç {1,2,3,4,5}Æ;
@@ -252,7 +390,7 @@ val it = Ù z ç {1, 2, 3, 4, 5} §
 }
 \subsubsection{Proof Support}
 
-Statements about membership of set abstractions may be eliminated using $z_ç_seta_conv$, or by rewriting in proof context ``$z_language$''.
+Statements about membership of set abstractions may be eliminated using $z_ç_seta_conv$, or by rewriting in proof context $z_language$.
 
 A simple abstraction results in straightforward substitution into the body of the abstraction:
 
@@ -299,7 +437,7 @@ val it = Ù z ç {x, y : Ó | x < y ∑ x * y - x}
 =TEX
 }
 
-Note that $n-$tuples for $n > 2$ are not iterated pairs.
+Note that $n-$tuples for $n > 2$ are not iterated pairs, i.e. $Ò(1,(2,3))Æ$ is not the same as $Ò(1,2,3)Æ$ (and doesn't have the same type either).
 
 \subsubsection{Proof Support}
 
@@ -325,7 +463,7 @@ val it = Ù (x, y) = (a, b) § x = a ± y = b : THM
 }
 \subsubsection{Proof Support}
 
-Conversions to effect projection from tuple displays are also built into proof context ``$z_language$''.
+Conversions to effect projection from tuple displays are also built into proof context $z_language$.
 =SML
 rewrite_conv[] Ò (x,y).1Æ;
 =GFT ProofPower output
@@ -432,6 +570,8 @@ z_ _conv Ò  File'Æ;
 val it = Ù  File' = (age ¶ age', people ¶ people') : THM   
 =TEX
 
+In most respects $ $-terms are treated in the same way as binding displays.
+
 \subsection{Binding Component Selection}\label{BindCompSel}
 
 \subsubsection{Syntax}
@@ -453,7 +593,7 @@ Which is typed ``Meta-tab s''.
 
 \subsubsection{Proof Support}
 
-Projection from binding displays is built in to proof context ``$z_language$''.
+Projection from binding displays is built in to proof context $z_language$.
 
 =SML
 rewrite_conv[] Ò (x ¶ a, y ¶ b).yÆ;
@@ -461,7 +601,7 @@ rewrite_conv[] Ò (x ¶ a, y ¶ b).yÆ;
 val it = Ù (x ¶ a, y ¶ b).y = b : THM   
 =TEX
 
-Projection from theta terms is also built in to proof context ``$z_language$''.
+Projection from theta terms is also built in to proof context $z_language$.
 =SML
 rewrite_conv[] Ò ( File').ageÆ;
 =GFT ProofPower output
@@ -633,7 +773,7 @@ val it = Ù z ç ßa, b, c¢ §
 
 
 Note here that though the logical operators have been overloaded, at present the system does not support the overloading of other schema operators which clash with names in the Z ToolKit.
-For these operators ($ªâs, ˘âs, \âs$), the name subscripted with s has been used for the schema operator.
+For these operators ($ªâs, ˘âs, \\âs$), the name subscripted with s has been used for the schema operator.
 
 \subsection{Schema Negation}
 
@@ -647,13 +787,13 @@ For these operators ($ªâs, ˘âs, \âs$), the name subscripted with s has been used
 =TEX
 }
 
-A negation occurring at the outermost level in a term quotation will be interpreted as a logical negation rather than a schema negation, unless a cast is applied.
+A negation occurring at the outermost level in a term quotation is interpreted as a logical negation rather than a schema negation, unless a cast is applied.
 
 \subsubsection{Proof Support}
 
 A binding is an element of the schema negation of a schema iff it is not an element of the schema.
 
-This rule is captured by the conversion $z_ç_≥âs_conv$, which is built into the standard rewrites for proof context ``z_language''.
+This rule is captured by the conversion $z_ç_≥âs_conv$, which is built into the standard rewrites for proof context $z_language$.
 
 =SML
 rewrite_conv[]Òz ç (≥ File)Æ;
@@ -677,13 +817,13 @@ val it = Ù z ç (≥ File) § ≥ z ç File : THM
 
 The two operands must be schema expressions with compatible types.
 
-A conjunction occurring at the outermost level in a term quotation will be interpreted as a logical conjunction rather than a schema conjunction, unless a cast is applied.
+A conjunction occurring at the outermost level in a term quotation is interpreted as a logical conjunction rather than a schema conjunction, unless a cast is applied.
 
 \subsubsection{Proof Support}
 
 A binding is an element of the schema conjunction of two schemas iff both the projections of the binding to the signatures of the operands are elements of the corresponding operand schemas.
 
-This rule is captured by the conversion $z_ç_±âs_conv$, which is built into the standard rewrites for proof context ``z_language''.
+This rule is captured by the conversion $z_ç_±âs_conv$, which is built into the standard rewrites for proof context $z_language$.
 
 =IGN
 z_ç_±âs_conv Òz ç (File ± File2)Æ;
@@ -711,13 +851,13 @@ val it = Ù z ç (File ± File2)
 
 The two operands must be schema expressions with compatible types.
 
-A disjunction occurring at the outermost level in a term quotation will be interpreted as a logical disjunction rather than a schema disjunction, unless a cast is applied.
+A disjunction occurring at the outermost level in a term quotation is interpreted as a logical disjunction rather than a schema disjunction, unless a cast is applied.
 
 \subsubsection{Proof Support}
 
 A binding (of appropriate type) is an element of the schema disjunction of two schemas iff either of the projections of the binding to the signatures of the operands are elements of the corresponding operand schemas.
 
-This rule is captured by the conversion $z_ç_≤âs_conv$, which is built into the standard rewrites for proof context ``z_language''.
+This rule is captured by the conversion $z_ç_≤âs_conv$, which is built into the standard rewrites for proof context $z_language$.
 
 =IGN
 z_ç_≤âs_conv Òz ç (File ≤ File2)Æ;
@@ -744,7 +884,7 @@ val it = Ù z ç (File ≤ File2)
 
 The two operands must be schema expressions with compatible types.
 
-An implication occurring at the outermost level in a term quotation will be interpreted as a logical implication rather than a schema implication, unless a cast is applied.
+An implication occurring at the outermost level in a term quotation is interpreted as a logical implication rather than a schema implication, unless a cast is applied.
 
 \subsubsection{Proof Support}
 
@@ -778,7 +918,7 @@ val it = Ù z ç (File ¥ File2)
 
 The two operands must be schema expressions with compatible types.
 
-An equivalence occurring at the outermost level in a term quotation will be interpreted as a logical equivalence rather than a schema equivalence, unless a cast is applied.
+An equivalence occurring at the outermost level in a term quotation is interpreted as a logical equivalence rather than a schema equivalence, unless a cast is applied.
 
 
 \subsubsection{Proof Support}
@@ -814,7 +954,7 @@ val it = Ù z ç (File § File2)
 The last operand must be a schema expressions with type compatible with the signature of the declaration.
 The signature of the declaration part must be contained in the signature of the body.
 
-An existential occurring at the outermost level in a term quotation will be interpreted as a logical existential rather than a schema existential, unless a cast is applied.
+An existential occurring at the outermost level in a term quotation is interpreted as a logical existential rather than a schema existential, unless a cast is applied.
 
 \subsubsection{Proof Support}
 
@@ -848,7 +988,7 @@ val it = Ù z ç (∂ File3 | people = {} ∑ File2)
 The last operand must be a schema expressions with type compatible with the signature of the declaration.
 The signature of the declaration part must be contained in the signature of the body.
 
-A unique existential occurring at the outermost level in a term quotation will be interpreted as a logical existential rather than a schema existential, unless a cast is applied.
+A unique existential occurring at the outermost level in a term quotation is interpreted as a logical existential rather than a schema existential, unless a cast is applied.
 
 \subsubsection{Proof Support}
 
@@ -882,7 +1022,7 @@ val it = Ù z ç (∂â1 File3 | people = {} ∑ File2)
 The last operand must be a schema expressions with type compatible with the signature of the declaration.
 The signature of the declaration part must be contained in the signature of the body.
 
-A universal occurring at the outermost level in a term quotation will be interpreted as a logical universal rather than a schema universal, unless a cast is applied.
+A universal occurring at the outermost level in a term quotation is interpreted as a logical universal rather than a schema universal, unless a cast is applied.
 
 \subsubsection{Proof Support}
 
@@ -946,7 +1086,7 @@ val it = Ù z ç (pre FileOp) §
 =TEX
 
 Normally the membership of the horizontal schema thus introduced would be immediately eliminated.
-Where a binding display or theta term is used selections will be eliminated.
+Where a binding display or theta term is used selections are eliminated.
 
 =SML
 rewrite_conv[]Ò(age ¶ age, i? ¶ i?, people ¶ people) ç (pre FileOp)Æ;
@@ -969,6 +1109,12 @@ val it = Ù (age ¶ age, i? ¶ i?, people ¶ people) ç (pre FileOp)
  			* string list		(* component names *)
 =TEX
 }
+
+This is entered into the source document as:
+=GFTSHOW
+Ò FileOp \âs (age, i?)Æ
+=TEX
+
 \subsubsection{Proof Support}
 
 This is characterised by $z_ç_hideâs_conv$ which is built into the proof context $z_language$.
@@ -1173,21 +1319,5 @@ val it = Ù z ç (ò File)
       ± z.age = z.age'
       ± z.people = z.people' : THM
 =TEX
-
-\ignore{
-Here we have hit one of the points at which {\Product} slips out of Z.
-This arises from substitution into the theta expressions.
-The correct thing to do at this point is to eliminate the theta terms in favour of explicit binding constructions, which is achieved by adding $z' _def$ into the rewrites as follows:
-=SML
-rewrite_conv[z' _def]Òz ç (òFile)Æ; 
-=TEX
-=GFT ProofPower output
-val it = Ù z ç (ò File)
-    § ((age ¶ z.age, people ¶ z.people) ç File
-      ± (age ¶ z.age', people ¶ z.people') ç File)
-      ± z.age = z.age'
-      ± z.people = z.people' : THM
-=TEX
-}%\ignore
 
 }%\ftmargins
