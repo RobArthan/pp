@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.22 2003/02/09 19:02:10 rda Exp rda $ 
+ * $Id: search.c,v 2.23 2003/02/09 22:48:14 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -1050,21 +1050,21 @@ static bm_search_t *bm_search_comp(char *pattern)
 	if(bm == 0) { /* malloc failed */
 		return bm;
 	}
-	for(i = 0; i < 256; ++i) {
-		(bm->index)[i] = -1;
-	}
-	for(i = len - 1; i >= 0; --i) {
-		if( (bm->index)[pattern[i]] == -1 ) {
-			(bm->index)[pattern[i]] = i;
-		}
-	}
-	bm->length = len;
 	strcpy(&(bm->pattern)[0], pattern);
 	if(global_options.ignore_case) {
 		for(i = 0; i < len; ++i) {
 			(bm->pattern)[i]= toupper((bm->pattern)[i]);
 		}
 	}
+	for(i = 0; i < 256; ++i) {
+		(bm->index)[i] = -1;
+	}
+	for(i = len - 1; i >= 0; --i) {
+		if( (bm->index)[(bm->pattern)[i]] == -1 ) {
+			(bm->index)[(bm->pattern)[i]] = i;
+		}
+	}
+	bm->length = len;
 	return bm;
 }
 /*
