@@ -68,8 +68,10 @@ Corrected $C\_CONTR\_T$.
 \item [Issue 1.16 (18th November 1991)]
 Reacting to issue 1.5/6 of \cite{DS/FMU/IED/DTD051}.
 
-\item[Issue \SCCSversion, \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 1.17, \FormatDate{92/01/20} ] Updated to use new fonts.
 
+\item [Issue 1.18 (5th February 1992)]
+Modified $strip\_tac$, added $swap\_asm\_concl\_tac$, et al.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -180,7 +182,7 @@ fun Ûasm_cases_tacÝ (t1 : TERM) : TACTIC = (fn gl as (asms, conc) =>
 =TEX
 \subsection{Concerning ´}
 =SML
-fun ´_T (ttac : THM -> TACTIC) : TACTIC = (fn (asms, conc) =>
+fun Û´_TÝ (ttac : THM -> TACTIC) : TACTIC = (fn (asms, conc) =>
 	let	val (t1, t2) = dest_´ conc;
 		val (sgs, pf) = ttac (asm_rule t1) (asms, t2);
 	in	(sgs, ´_intro t1 o pf)
@@ -300,9 +302,14 @@ When we undischarge more than one assumption we need to be careful not
 to fail if the list of assumptions we are discharging contains repeats
 which is allowed with the convention that the repeats are ignored.
 =SML
-val Ûlist_undisch_tacÝ : TERM list ->  TACTIC = (
-	MAP_EVERY (TRY_T o undisch_tac) o rev
-);
+fun Ûlist_undisch_tacÝ (lasms : TERM list):  TACTIC = (
+fn (asms,gl) =>
+let	val missing = fold (fn (a,b) => b term_less a) asms lasms;
+in
+	case missing of
+	[] => MAP_EVERY (TRY_T o undisch_tac) (rev lasms) (asms,gl)
+	| (a :: x) => term_fail "list_undisch_tac" 28052 [a]
+end);
 =TEX
 =SML
 val Ûall_undisch_tacÝ :  TACTIC = (
@@ -346,7 +353,7 @@ fun Ûsimple_¶_tacÝ (tm : TERM) : TACTIC = (fn (asms, conc) =>
 =SML
 fun Ûcheck_asm_tacÝ (thm : THM) : TACTIC = (fn gl as (asms, conc) =>
 	let	val t = concl thm;
-	in	if %alpha%_eq t conc
+	in	if Á_eq t conc
 		then accept_tac thm
 		else if is_t t
 		then id_tac
@@ -355,22 +362,22 @@ fun Ûcheck_asm_tacÝ (thm : THM) : TACTIC = (fn gl as (asms, conc) =>
 		else if is_³ t
 		then	let	val t' = dest_³ t;
 				fun aux (asm :: more) = (
-					if %alpha%_eq t asm
+					if Á_eq t asm
 					then id_tac
-					else if %alpha%_eq asm t'
+					else if Á_eq asm t'
 					then accept_tac (³_elim conc (asm_rule asm) thm)
-					else if %alpha%_eq asm conc
+					else if Á_eq asm conc
 					then accept_tac (asm_rule asm)
 					else aux more
 				) | aux [] = asm_tac thm;
 			in	aux asms
 			end
 		else	let	fun aux (asm :: more) = (
-					if %alpha%_eq t asm
+					if Á_eq t asm
 					then id_tac
-					else if is_³ asm andalso %alpha%_eq (dest_³ asm) t
+					else if is_³ asm andalso Á_eq (dest_³ asm) t
 					then accept_tac (³_elim conc thm (asm_rule asm))
-					else if %alpha%_eq asm conc
+					else if Á_eq asm conc
 					then accept_tac (asm_rule asm)
 					else aux more
 					) | aux [] = asm_tac thm;
@@ -395,10 +402,10 @@ $get\_proof\_context()$ being evaluated before point of use.
 =SML
 val ÛSTRIP_THM_THENÝ : THM_TACTICAL = (fn ttac:THM_TACTIC => 
 	fn thm :THM =>
-	(FIRST_TTCL[±_THEN, 
+	(FIRST_TTCL[CONV_THEN (get_epc_st_conv (get_proof_context())),
+		±_THEN, 
 		²_THEN, 
-		SIMPLE_¶_THEN,
-		CONV_THEN (get_epc_st_conv (get_proof_context()))]
+		SIMPLE_¶_THEN]
 	ORELSE_TTCL
 		FAIL_WITH_THEN "STRIP_THM_THEN" 28003 
 			[fn () => string_of_thm thm])
@@ -412,11 +419,11 @@ use the $(fn\ =>\ \ldots)$ form, to prevent
 $get\_proof\_context()$ being evaluated before point of use.
 =SML
 fun ÛSTRIP_GOAL_TÝ (ttac : THM_TACTIC) : TACTIC = (fn gl =>
-	(FIRST[ simple_µ_tac,
+	(FIRST[ conv_tac(get_epc_sg_conv (get_proof_context())),
+		simple_µ_tac,
 		±_tac,
 		´_T ttac,
 		t_tac,
-		conv_tac(get_epc_sg_conv (get_proof_context())),
 		goal_in_asms_tac]
 	ORELSE_T
 		fail_with_tac "STRIP_GOAL_T" 28003 
@@ -454,6 +461,7 @@ val Ûlocal_strip_epcÝ : EPROOF_CONTEXT =  (
 Now remove the local proof context, and put the fuller one 
 on the stack.
 =SML
+val _ = pop_proof_context ();
 val _ = push_proof_context local_strip_epc;
 =TEX
 We now have some machinery in place with which we can prove the tautologies
@@ -545,22 +553,22 @@ val Û³_if_thmÝ = (* ô µ a b c· ³(if a then b else c) ¤ (if a then ³b else ³c)  *
 \subsection{Additional Conversions, Tactics and Tacticals}
 \subsubsection{Concerning ¶$_1$}
 =SML
-val Ûsimple_¶%down%1_convÝ : CONV = (fn tm =>
-	let	val (x, b) = dest_simple_¶%down%1 tm
-		val s1 = ´_intro tm (simple_¶%down%1_elim (asm_rule tm));
+val Ûsimple_¶‰1_convÝ : CONV = (fn tm =>
+	let	val (x, b) = dest_simple_¶‰1 tm
+		val s1 = ´_intro tm (simple_¶‰1_elim (asm_rule tm));
 		val y = variant (x :: frees b) x;
 		val conj = mk_±(b, mk_µ(y, mk_´(var_subst[(y, x)]b, mk_eq(y, x))));
 		val exi = mk_¶(x, conj)
 		val s2 = asm_rule conj;
-		val s3 = simple_¶%down%1_intro (±_left_elim s2) (±_right_elim s2)
+		val s3 = simple_¶‰1_intro (±_left_elim s2) (±_right_elim s2)
 		val s4 = simple_¶_elim x (asm_rule exi) s3
 		val s5 = ´_intro exi s4;
 	in	¤_intro s1 s5
-	end handle ex => pass_on ex "dest_simple_¶%down%1" "simple_¶%down%1_conv"
+	end handle ex => pass_on ex "dest_simple_¶‰1" "simple_¶‰1_conv"
 );
-val Ûsimple_³_¶%down%1_convÝ : CONV = (fn tm =>
-	((RAND_C simple_¶%down%1_conv THEN_C simple_³_¶_conv) tm)
-	handle  Fail _ => term_fail "simple_³_¶%down%1_conv" 28091 [tm]
+val Ûsimple_³_¶‰1_convÝ : CONV = (fn tm =>
+	((RAND_C simple_¶‰1_conv THEN_C simple_³_¶_conv) tm)
+	handle  Fail _ => term_fail "simple_³_¶‰1_conv" 28091 [tm]
 );
 =TEX
 \subsubsection{Concerning ³}
@@ -572,7 +580,7 @@ local
 		 ³_¤_thm, ³_if_thm, ³_t_thm, ³_f_thm]) @
 		[(¬³(µ x · y)®, simple_³_µ_conv),
 		(¬³(¶ x · y)®, simple_³_¶_conv),
-		(¬³(¶%down%1 x · y)®, simple_³_¶%down%1_conv)]);
+		(¬³(¶‰1 x · y)®, simple_³_¶‰1_conv)]);
 in
 val Ûsimple_³_in_convÝ : CONV = (fn tm =>
 	c tm
@@ -589,7 +597,7 @@ val Ûsimple_³_in_convÝ : CONV = FIRST_C(
 		map simple_eq_match_conv
 		[³_³_thm, ³_±_thm, ³_²_thm, ³_´_thm,
 		 ³_¤_thm, ³_if_thm, ³_t_thm, ³_f_thm] 
-	@	[simple_³_µ_conv, simple_³_¶_conv, simple_³_¶%down%1_conv])
+	@	[simple_³_µ_conv, simple_³_¶_conv, simple_³_¶‰1_conv])
 	ORELSE_C (fn tm => term_fail "simple_³_in_conv" 28131 [tm]);
 =IGN
 On the following list of test cases the $TRY\_C$ of the net version seems to run at twice the speed.
@@ -605,7 +613,7 @@ val test_simple_³_in_conv = [
 	¬³ F®,
 	¬³(µ x · f x y)®,
 	¬³(¶ x · f x y)®,
-	¬³(¶%down%1 x · f x y)®,
+	¬³(¶‰1 x · f x y)®,
 	¬x®,
 	¬x ± y®,
 	¬³ a®,
@@ -692,7 +700,7 @@ val Ûinitial_strip_thm_thensÝ : EQN_CXT =
 		(thm_eqn_cxt ¤_thm),
 		(thm_eqn_cxt local_if_thm),
 		(¬³ x®, simple_³_in_conv),
-		(¬¶%down%1 x · p®, simple_¶%down%1_conv)];
+		(¬¶‰1 x · p®, simple_¶‰1_conv)];
 =TEX
 =SML
 val Ûinitial_strip_goal_tsÝ : EQN_CXT =
@@ -1000,26 +1008,174 @@ val Ûif_tacÝ : TACTIC = (fn gl =>
 =TEX
 \subsection{Concerning ¶$_1$}
 =SML
-fun Ûsimple_¶%down%1_tacÝ (tm : TERM) : TACTIC = (fn (asms, conc) =>
-	let	val (x, b) = dest_simple_¶%down%1 conc;
+fun Ûsimple_¶‰1_tacÝ (tm : TERM) : TACTIC = (fn (asms, conc) =>
+	let	val (x, b) = dest_simple_¶‰1 conc;
 		val u = mk_µ(x, mk_´(b, mk_eq(x, tm)))
 	in
 		([(asms, var_subst[(tm, x)] b), (asms, u)],
-		(fn [th1, th2] => simple_¶%down%1_intro th1 th2
-		| _ => bad_proof "simple_¶%down%1_tac"))
+		(fn [th1, th2] => simple_¶‰1_intro th1 th2
+		| _ => bad_proof "simple_¶‰1_tac"))
 	end
 	handle ex =>
 	case area_of ex of
-		"dest_simple_¶%down%1" => fail "simple_¶%down%1_tac" 28101 []
-	|	"mk_eq conc" => term_fail "simple_¶%down%1_tac" 28092 [tm]
+		"dest_simple_¶‰1" => fail "simple_¶‰1_tac" 28101 []
+	|	"mk_eq conc" => term_fail "simple_¶‰1_tac" 28092 [tm]
 	|	_ => raise ex
 );
 
-fun ÛSIMPLE_¶%down%1_THENÝ (ttac : THM -> TACTIC) = (fn thm =>
-	(SIMPLE_¶_THEN ttac (simple_¶%down%1_elim thm))
-	handle ex => divert ex "simple_¶%down%1_elim" 
-		"SIMPLE_¶%down%1_THEN" 28102 
+fun ÛSIMPLE_¶‰1_THENÝ (ttac : THM -> TACTIC) = (fn thm =>
+	(SIMPLE_¶_THEN ttac (simple_¶‰1_elim thm))
+	handle ex => divert ex "simple_¶‰1_elim" 
+		"SIMPLE_¶‰1_THEN" 28102 
 		[fn () => string_of_thm thm]
+);
+=TEX
+\subsection{Swapping Assumptions and Conclusions}
+=SML
+local
+	val thm1 = tac_proof(([], ¬µ f · (f ´ F) ¤ ³ f®),
+		REPEAT strip_tac);
+	val thm2 = tac_proof(([], ¬µ f · ((³ f) ´ F) ¤ f®),
+		REPEAT strip_tac);
+	val thm3 = tac_proof(([], ¬µ f g · (f ´ g) ¤ ((³ f) ² g)®),
+		REPEAT strip_tac);
+	val thm4 = tac_proof(([], ¬µ f g · ((³ f) ´ g) ¤ (f ² g)®),
+		REPEAT strip_tac);
+	val ´_F_conv = (fn ntm =>
+		let	val tm = fst(dest_´ ntm);
+		in
+			if is_³ tm
+			then simple_µ_elim(dest_³ tm) thm2
+			else simple_µ_elim tm thm1
+		end);
+	fun local_conv (tm : TERM) : THM = (
+	let	val (d1,d2) = dest_´ tm;
+	in
+		if d2 = mk_f
+		then ´_F_conv tm
+		else ((fn _ => if is_³ d1
+		then list_simple_µ_elim[dest_³ d1, d2] thm4
+		else list_simple_µ_elim[d1, d2] thm3)
+			FURTHER_C (RAND_C local_conv)) tm
+	end);
+	fun local_tac ([] : THM list) : TACTIC = id_tac
+	| local_tac thms = (
+	let	val rthms = rev thms;
+	in
+		MAP_EVERY ante_tac rthms
+		THEN conv_tac local_conv
+	end);
+	
+	
+in	
+=TEX
+=SML		
+fun  ÛSWAP_ASM_CONCL_TÝ (asm:TERM) (thmtac:THM -> TACTIC) : TACTIC = (
+fn gl as (asms, conc) =>
+let	val ³_conc = mk_³ conc;
+	val (sgs, pf) =  ((undisch_tac asm THEN
+		conv_tac ´_F_conv THEN
+		thmtac (asm_rule ³_conc)) (asms, mk_f))
+		handle complaint =>
+		pass_on complaint "undisch_tac" "SWAP_ASM_CONCL_T";
+	fun rule thm = (
+		if ³_conc term_mem (hyps thm)
+		then c_contr_rule conc thm
+		else contr_rule conc thm
+	);
+in	(sgs, rule o pf)
+end
+handle complaint => 
+divert complaint "mk_³" "SWAP_ASM_CONCL_T" 28027 []
+);
+=TEX
+=SML		
+fun  ÛLIST_SWAP_ASM_CONCL_TÝ ([]:TERM list) (thmtac:THM -> TACTIC) : TACTIC = (
+	C_CONTR_T thmtac
+) | LIST_SWAP_ASM_CONCL_T lasms thmtac = (
+fn gl as (asms, conc) =>
+let	val ³_conc = mk_³ conc;
+	val (sgs, pf) =  ((list_undisch_tac lasms THEN
+		conv_tac (TRY_C local_conv) THEN
+		thmtac (asm_rule ³_conc)) (asms, mk_f))
+		handle complaint =>
+		pass_on complaint "list_undisch_tac" "LIST_SWAP_ASM_CONCL_T";
+	fun rule thm = (
+		if ³_conc term_mem (hyps thm)
+		then c_contr_rule conc thm
+		else contr_rule conc thm
+	);
+in	(sgs, rule o pf)
+end
+handle complaint => 
+divert complaint "mk_³" "LIST_SWAP_ASM_CONCL_T" 28027 []
+);
+=TEX
+=SML
+fun  ÛSWAP_NTH_ASM_CONCL_TÝ (n:int) (thmtac:THM -> TACTIC) : TACTIC = (
+fn gl as (asms, conc) =>
+let	val ³_conc = mk_³ conc;
+	val (sgs, pf) =  (((DROP_NTH_ASM_T n ante_tac) THEN
+		conv_tac ´_F_conv THEN
+		thmtac (asm_rule ³_conc)) (asms, mk_f))
+		handle complaint =>
+		pass_on complaint "DROP_NTH_ASM_T" "SWAP_NTH_ASM_CONCL_T";
+	fun rule thm = (
+		if ³_conc term_mem (hyps thm)
+		then c_contr_rule conc thm
+		else contr_rule conc thm
+	);
+in	(sgs, rule o pf)
+end
+handle complaint => 
+divert complaint "mk_³" "SWAP_NTH_ASM_CONCL_T" 28027 []
+);
+=TEX
+=SML		
+fun ÛLIST_SWAP_NTH_ASM_CONCL_TÝ ([]:int list) (thmtac:THM -> TACTIC) : TACTIC = (
+	C_CONTR_T thmtac
+) | LIST_SWAP_NTH_ASM_CONCL_T ns thmtac = (
+fn gl as (asms, conc) =>
+let	val ³_conc = mk_³ conc;
+	val (sgs, pf) =  ((LIST_DROP_NTH_ASM_T ns local_tac THEN
+		thmtac (asm_rule ³_conc)) (asms, mk_f))
+		handle complaint =>
+		pass_on complaint "LIST_DROP_NTH_ASM_T" "LIST_SWAP_NTH_ASM_CONCL_T";
+	fun rule thm = (
+		if ³_conc term_mem (hyps thm)
+		then c_contr_rule conc thm
+		else contr_rule conc thm
+	);
+in	(sgs, rule o pf)
+end
+handle complaint => 
+divert complaint "mk_³" "LIST_SWAP_NTH_ASM_CONCL_T" 28027 []
+);
+=TEX
+=SML
+end;
+=TEX
+Now the standard forms:
+=SML
+fun Ûswap_asm_concl_tacÝ (tm : TERM) : TACTIC = (fn gl =>
+	SWAP_ASM_CONCL_T tm strip_asm_tac gl
+	handle complaint =>
+	pass_on complaint "SWAP_ASM_CONCL_T" "swap_asm_concl_tac"
+);
+fun Ûswap_nth_asm_concl_tacÝ (n : int) : TACTIC = (fn gl =>
+	SWAP_NTH_ASM_CONCL_T n strip_asm_tac gl
+	handle complaint =>
+	pass_on complaint "SWAP_NTH_ASM_CONCL_T" "swap_nth_asm_concl_tac"
+);
+fun Ûlist_swap_asm_concl_tacÝ (tml : TERM list) : TACTIC = (fn gl =>
+	LIST_SWAP_ASM_CONCL_T tml strip_asm_tac gl
+	handle complaint =>
+	pass_on complaint "LIST_SWAP_ASM_CONCL_T" "list_swap_asm_concl_tac"
+);
+fun Ûlist_swap_nth_asm_concl_tacÝ (ns : int list) : TACTIC = (fn gl =>
+	LIST_SWAP_NTH_ASM_CONCL_T ns strip_asm_tac gl
+	handle complaint =>
+	pass_on complaint "LIST_SWAP_NTH_ASM_CONCL_T" "list_swap_nth_asm_concl_tac"
 );
 =TEX
 \subsection{$lemma\_tac$}
