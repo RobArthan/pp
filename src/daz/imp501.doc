@@ -183,11 +183,7 @@ end; (* of structure CaseIndependence *)
 \section{LEXICAL ANALYSER}
 =SML
 structure ÛCNLexÝ : CNLex = struct
-=TEX
-=SML
-local
 	open CNTypes CaseIndependence Lex ZLex;
-in
 =TEX
 The main lexical analysis algorithm is exception-driven
 using the following local exception:
@@ -609,111 +605,184 @@ fun Ûrec_next_tokenÝ (st : LEX_STATE) : LEX_STATE = (
 );
 =TEX
 \subsection{Lexical Analyser}
+The following constitute some essential requirements of this lexical analyser.
+\begin{enumerate}
+\item
+The function to read over the Z necessitates the matching of brackets in the Z in order that we don't terminate the lookahead too early. This bracket matching is best done in the function $lookahead$.
+
+\end{enumerate}
 =SML
 val z_lex1 = (rev o tl o rev o ZLex.z_lex);
 =TEX
 =SML
-fun ÛlookaheadÝ (terml : string list) (old : INPUT list, (ip::rest) : INPUT list)
-		: (INPUT list * string OPT * INPUT list) = (
-	case ip of
-	Lex.Text txt => (
-		let	fun aux (sold : string list, (c::srest) : string list) = (
-				if c mem terml
-				then
-					(sold, Value c, srest)
-				else
-					aux (sold@[c], srest)
-			) | aux (sold, snew) = (sold, Nil, snew);
-			val (s1, flg, s2) = aux ([], explode txt);
-		in
-			(old@[Lex.Text (implode s1)], flg, (Lex.Text (implode s2))::rest)
-		end
-	) | _ => (
-		lookahead terml (old@[ip], rest)
-	)
-) | lookahead _ (old, new) = (old, Nil, new);
+val Ûz_delimitersÝ = [
+	(LCGrkDelta, ["[", "{"]),
+	(LCLStrachey, ["ý"]),
+	(LCCon, ["·"]),
+	(LCLChevron, ["¢"]),
+	(LCAuxiliary, [";"]),
+	(LCUsing, ["IMPLEMENT"]),
+	(LCImplement, ["BY"]),
+	(LCBy, [";"])];
+
+val Ûz_open_bracketsÝ = ["(", "§", "[", "{"];
+val Ûz_close_bracketsÝ = [")", "¢", "]", "}"];
+=TEX
+
+=SML
+type ÛINPUT_HANDLEÝ = {
+	left_input : Lex.INPUT list,
+	left_text : string list,
+	right_text : string list,
+	right_input : Lex.INPUT list,
+	bracket_depth : int
+	};
 =TEX
 =SML
-fun Ûspark_ss1Ý (iplist : INPUT list) : CN_LEX_ITEM list = (
-let	val (left, found, right) = lookahead ["[", "{"] ([], iplist);
-	val left_cxt = (LCZ, CNZ (ZLex.z_lex left));
-in
-	case found of
-	Value (sym as "[") => (
-		left_cxt::classify sym::spark_ss2 0 ("[","]") [] right
-	)|Value (sym (* must be "{" *)) => (
-		left_cxt::classify sym::spark_ss2 0 ("{","}") [] right
-	)| Nil => (
-		left_cxt::spark_lex right
-	)
-end)
-=TEX
-=SML
-and Ûspark_ss2Ý (n : int) (brks as (lbrk :string, rbrk : string))
-		(lctxt : INPUT list) (iplist : INPUT list) : CN_LEX_ITEM list = (
-let	val (left, found, right) = lookahead [lbrk, rbrk] ([], iplist);
-	val left' = lctxt@left;
-	fun flatten_input (Lex.Text s1::Lex.Text s2::rest) = (
-		flatten_input (Lex.Text (s1^s2)::rest)
-	) | flatten_input (ip::rest) = (
-		ip::flatten_input rest
-	) | flatten_input [] = [];
-in
-	case found of
-	Nil => (
-		(LCZ, CNZ (ZLex.z_lex (flatten_input left')))::spark_lex right
-	)| Value sym => (
-		if sym = rbrk
-		then	if n = 0
+fun Ûfind_in_textÝ (terml : string list)
+	({left_input, left_text, right_text, right_input, bracket_depth}
+		: INPUT_HANDLE)
+		: (bool * INPUT_HANDLE) = (
+	let	fun aux (brk, sold, c::srest) = (
+			if c mem terml andalso brk = 0
 			then
-				(LCZ, CNZ (ZLex.z_lex (flatten_input left')))
-					::classify sym
-					::spark_lex right
+				(true, brk, sold, c::srest)
+			else if c mem z_open_brackets
+			then
+				aux (brk + 1, sold@[c], srest)
+			else if c mem z_close_brackets
+			then
+				aux (brk - 1, sold@[c], srest)
 			else
-				spark_ss2 (n - 1) brks (left'@[Lex.Text sym]) right 
-		else	(* sym = lbrk *)
-				spark_ss2 (n + 1) brks (left'@[Lex.Text sym]) right 
-	)
-end)
+				aux (brk, sold@[c], srest)
+		) | aux (brk, sold, []) = (false, brk, sold, []);
+		val (flg, brk, sold, snew) =
+				aux (bracket_depth, left_text, right_text)
+	in
+		(flg, {left_input=left_input,
+			left_text=sold,
+			right_text=snew,
+			right_input=right_input,
+			bracket_depth=brk})
+	end
+);
+=IGN
+fun mk_ih s =
+	{left_input=[],left_text=[],right_text=explode s, right_input=[],
+		bracket_depth=0} : INPUT_HANDLE;
+
+find_in_text ["·", "]"] (mk_ih "x");
+find_in_text ["·", "]"] (mk_ih "xdfdf]");
+find_in_text ["·", "]"] (mk_ih "abc·");
+find_in_text ["·", "]"] (mk_ih "abc·def");
+find_in_text ["·", "]"] (mk_ih "abc[def]ghi]");
+find_in_text ["·", "]"] (mk_ih "bc[de·f]ghi]kjm");
 =TEX
 =SML
-and Ûspark_lstracheyÝ (iplist : INPUT list) : CN_LEX_ITEM list = (
-let	val (left, found, right) = lookahead ["ý"] ([], iplist);
-	val left_cxt = (LCZ, CNZ (ZLex.z_lex left));
-in
-	case found of
-	Value sym => (
-		left_cxt::classify sym::spark_lex right
-	)| Nil => (
-		left_cxt::spark_lex right
-	)
-end)
+
+fun Ûfind_in_inputÝ (terml : string list)
+	(ih as {left_input, left_text, right_text, right_input, bracket_depth}
+		: INPUT_HANDLE)
+		: (bool * INPUT_HANDLE) = (
+
+	case find_in_text terml ih of
+	(true, ih') => (true, ih')
+	| (false, ih') =>
+		let	val lt = #left_text ih';
+			val li = case lt of
+					[] => #left_input ih'
+					|_ => (#left_input ih') 
+						@[(Lex.Text o implode) lt];
+		in
+			case #right_input ih' of
+			Lex.Text txt::more => (
+				find_in_input terml
+					{	left_input=li,
+						left_text=[],
+						right_text=explode txt,
+						right_input=more,
+						bracket_depth= #bracket_depth ih'
+					}
+			) | other::more => (
+				find_in_input terml
+					{	left_input= li @ [other],
+						left_text=[],
+						right_text=[],
+						right_input=more,
+						bracket_depth= #bracket_depth ih'
+					}
+			) | [] => (
+				(false,{	left_input= li,
+						left_text=[],
+						right_text=[],
+						right_input=[],
+						bracket_depth= #bracket_depth ih'
+					})
+			)
+		end
+);
+=IGN
+find_in_text ["·", "]"];
+fun mk_inp_ih s =
+	{left_input=[],left_text=[],right_text=[], right_input=s,
+		bracket_depth=0} : INPUT_HANDLE;
+
+find_in_input ["·", "]"] (mk_inp_ih [Lex.Text "abc"]);
+find_in_input ["·", "]"] (mk_inp_ih [Lex.Text "abc]"]);
+find_in_input ["·", "]"] (mk_inp_ih [Lex.Text "abc·"]);
+find_in_input ["·", "]"] (mk_inp_ih [Lex.Text "abc·def"]);
+find_in_input ["·", "]"] (mk_inp_ih [Lex.Text "abc[·d{ef]gh}i]"]);
+find_in_input ["·", "]"] (mk_inp_ih [Lex.Text "ab(c·"]);
+find_in_input ["·", "]"] (mk_inp_ih [Lex.Text "abc",Lex.Text "def·"]);
+find_in_input ["·", "]"] (mk_inp_ih [Lex.Text "ab(c·",Lex.Text "de·f)]g"]);
+find_in_input ["·", "]"] (mk_inp_ih [Lex.Text "ab(c·",
+						Lex.String"xyz",Lex.Text "de·f)]g"]);
+find_in_input ["·", "]"] (mk_inp_ih [Lex.Text "abc·"]);
+find_in_input ["·", "]"] (mk_inp_ih [Lex.Text "abc·"]);
+
 =TEX
+
 =SML
-and Ûspark_conÝ (iplist : INPUT list) : CN_LEX_ITEM list = (
-let	val (left, found, right) = lookahead ["·"] ([], iplist);
-	val left_cxt = (LCZ, CNZ (ZLex.z_lex left));
+fun Ûread_untilÝ (classification : CN_LEX_CLASS, cn_fun) (terml : string list)
+		 (iplist : INPUT list)			 
+		: CN_LEX_ITEM list = (
+let	val (found, ih') = find_in_input terml
+			{	left_input=[],
+				left_text=[],
+				right_text=[],
+				right_input=iplist,
+				bracket_depth = 0};
+	val lt = #left_text ih';
+	val li = case lt of
+			[] => #left_input ih'
+			| lt' => (#left_input ih')@[(Lex.Text o implode) lt];
+	val rt = #right_text ih';
+	val ri = #right_input ih';
+	val left_cxt = case li of
+				[] => []
+				| li' => [(classification,
+						cn_fun li)];
+	val right_inp = case rt of
+				[] => ri
+				| rt' => (Lex.Text o implode) rt::ri;
 in
-	case found of
-	Value sym => (
-		left_cxt::classify sym::spark_lex right
-	)| Nil => (
-		left_cxt::spark_lex right
-	)
+	if found
+	then
+		left_cxt@spark_lex right_inp
+
+	else
+		left_cxt
 end)
-=TEX
-=SML
-and Ûspark_kslotÝ (iplist : INPUT list) : CN_LEX_ITEM list = (
-let	val (left, found, right) = lookahead ["¢"] ([], iplist);
-	val left_cxt = (LCKSlot, CNKSlot left);
-in
-	case found of
-	Value sym => (
-		left_cxt::classify sym::spark_lex right
-	)| Nil => (
-		left_cxt::spark_lex right
-	)
-end)
+=IGN
+read_until ["·", "]"] [Lex.Text "abc]"];
+read_until ["·", "]"] [Lex.Text "ab(c·",Lex.String"x",
+				Lex.Text "de·f)]g"];
+read_until ["·", "]"] [Lex.Text "abc"];
+read_until ["]"] [Lex.Text "pre, post]"];
+read_until ["·", "]"] [Lex.Text "abc]"];
+read_until ["·", "]"] [Lex.Text "abc]"];
+read_until ["·", "]"] [Lex.Text "abc]"];
+read_until ["·", "]"] [Lex.Text "abc]"];
 =TEX
 =SML
 and Ûspark_xtextÝ (slist : string list) (rest : INPUT list) : CN_LEX_ITEM list  = (
@@ -725,25 +794,24 @@ in
 		case skip_space(rec_next_token other) of
 		st' as (srest, Known s) => (
 			let	val res as (class, _) = classify s;
-			in case class of
-				LCGrkDelta => (
+			in case (class, lassoc5 z_delimiters class) of
+				(LCLChevron, Value terml) => (
 					res
-					::(spark_ss1 (Lex.Text (implode srest)::rest))
-				)|LCLStrachey => (
+					::(read_until (LCKSlot, CNKSlot) terml
+						(Lex.Text (implode srest)::rest)
+							)
+				)|(_, Value terml) => (
 					res
-					::(spark_lstrachey (Lex.Text (implode srest)::rest))
-				)|LCCon => (
-					res
-					::(spark_con (Lex.Text (implode srest)::rest))
-				)|LCLChevron => (
-					res
-					::(spark_kslot (Lex.Text (implode srest)::rest))
-				)|LCCharacterLiteral => (
-					(class, CNString ((implode o tl o rev
-					o tl o explode) s))::spark_xtext srest rest
-				)|_ =>
-					res::spark_xtext srest rest
+					::(read_until (LCZ, CNZ o ZLex.z_lex)terml
+						(Lex.Text (implode srest)::rest)
+							)
+				)|(LCCharacterLiteral, Nil) => (
+					(class, (CNString o implode o tl
+							o rev o tl o explode) s)
+					::spark_xtext srest rest
 
+				)|(_, Nil) => 	
+					res::spark_xtext srest rest
 			end
 		)| (_, Unknown) =>
 			fail "CN-Parser" 501001 [fn() => implode slist]
@@ -751,17 +819,12 @@ in
 end)
 =TEX
 =SML
-and Ûspark_stringÝ (s : string) (rest : INPUT list) : CN_LEX_ITEM list = (
-	(LCStringLiteral, CNString s) :: spark_lex rest
-)
-=TEX
-=SML
 and Ûspark_lexÝ ((ip::more) : INPUT list) : CN_LEX_ITEM list = (
 	case ip of
 		Lex.Text s => (
 			spark_xtext (explode s) more
 	) |	Lex.String s => (
-			spark_string s more
+			(LCStringLiteral, CNString s)::spark_lex more
 	) |	Lex.Char s => (
 			fail "CN-Parser" 501001  [fn () => "`"^s^"`"]
 	) |	Lex.Type ty => (
@@ -780,9 +843,6 @@ fun Ûcn_lexÝ (classify_label : CN_LEX_ITEM list -> CN_LEX_ITEM list) (inp : INPU
 );
 =TEX
 \section{EPILOGUE}
-=SML
-end (* of local ... in *);
-=TEX
 =SML
 end (* of structure CNLex *);
 =TEX
