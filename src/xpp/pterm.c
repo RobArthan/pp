@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.9 2001/07/13 09:20:13 rda Exp rda $
+ * $Id: pterm.c,v 2.10 2001/07/27 09:40:51 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -71,6 +71,8 @@ static int control_fd;
 static pid_t child_pid;
 
 static XtInputId app_ip_req;
+
+static XtSignalId sigid;
 
 /* For the following three see "Data transfer to application" below */
 static char queue[MAX_Q_LEN];
@@ -681,8 +683,14 @@ void restart_application () {
  * Ctrl-C Signal handling for the controller process.
  * Following treats Ctrl-C similarly to window close
  * or selection of quit from the command menu.
+ * We use the new X11R6 signal handling functions.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void sigint_handler(int sig)
+{
+	XtNoticeSignal(sigid);
+}
+
+static void sigint_callback(XtPointer c_ignored, XtSignalId *s_ignored)
 {
 	XtAppAddTimeOut(app, 0, (XtTimerCallbackProc) check_quit_cb, root);
 }
@@ -708,6 +716,8 @@ static void panic_exit(char * m, NAT code)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Other signal handling for the controller process.
  * Try to save the editor text if the widget's there then bomb out.
+ * This does no X windows work, so the Xt signal handling functions
+ * do not need to be used.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void sigother_handler(int sig)
 {
@@ -735,6 +745,7 @@ void handle_sigs()
 	sigemptyset(&acts.sa_mask);
 	acts.sa_flags = 0;
 	sigaction(SIGINT, &acts, 0);
+	sigid = XtAppAddSignal(&app, sigint_callback, (XtPointer) SIGINT);
 	acts.sa_handler = sigother_handler;
 	sigaction(SIGSEGV, &acts, 0);
 	sigaction(SIGBUS, &acts, 0);
