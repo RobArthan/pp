@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.156 $ $RCSfile: imp507.doc,v $ $Date: 2000/05/24 18:52:32 $
+% imp507.doc %Z% $Revision: 1.157 $ $RCSfile: imp507.doc,v $ $Date: 2000/05/25 11:26:13 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.156 $%
+\def\SCCSversion{$Revision: 1.157 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2000/05/24 18:52:32 $%
+\TPPdate{\FormatDate{$Date: 2000/05/25 11:26:13 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -114,7 +114,7 @@ of $pack\_spec\_with\_modules$ for WP 3).
 \item[Issue 1.154] Included check 16 calls for specification statements as statements (to catch cases where formality has been broken).
 \item[Issue 1.155] Typo revealed by LaTeX.
 \item[Issue 1.155] Prototyping enhancement R5: Initial Variables in Conditionals.
-\item[Issue 1.156] Prototyping enhancement R4: Frame Abbreviations.
+\item[Issue 1.156-1.158] Prototyping enhancement R4: Frame Abbreviations.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -5239,12 +5239,12 @@ fun Ûdo_annotationÝ (anns : ANNOTATION) : unit = (
 	end
 );
 =TEX
-{\it expand\_spec} looks for schema names appearing in frames and expands them
+{\it expand\_frame} looks for schema names appearing in frames and expands them
 into the corresponding list of signature variables.
 When the frame is expanded, it makes the list {\it w0} of initial variables.
 It is applied to any {\it SPEC} before passing it into the SID functions.
 =SML
-fun Ûexpand_specÝ ({w, w0, pre, post} : SPEC) : SPEC = (
+fun Ûexpand_frameÝ ({w, w0, pre, post} : SPEC) : SPEC = (
 	let	fun expand1 n = (
 		((map fst o dest_z_schema_type o dest_z_power_type o force_value o get_const_type) ("z'" ^ n))
 			handle Fail _ => [n]
@@ -5257,15 +5257,16 @@ fun Ûexpand_specÝ ({w, w0, pre, post} : SPEC) : SPEC = (
 =TEX
 The abstract syntax separates two forms of for-loop which are processed identically here.
 The following function does the common processing.
+It returns the inner statement of the loop (with frames expanded).
 =SML
 fun Ûdo_for_loopÝ (t : Z_TM OPT, i : ID, stmt : STATEMENT,
-			tmark : TMARK, dir : LOOP_DIRECTION) = (
+			tmark : TMARK, dir : LOOP_DIRECTION)
+		: STATEMENT = (
 	if	dir = LDForwards
 	then	(new_scope_loop();
 		for_param (i, tmark);
 		(case t of Value till => till_pred till | Nil => ());
-		do_statement stmt;
-		end_scope())
+		let val res = do_statement stmt; in end_scope(); res end)
 	else	(comment "do_statement" 507020 [];
 		do_statement stmt)
 )
@@ -5277,63 +5278,92 @@ To have the same order of invocation of the SID functions for for- and while- lo
 
 Note that the parser is not expected to produce the {\it SSpecIvars}, {\it SProcIvars} or {\it SForNonStatic} alternatives, since it cannot carry out the necessary analysis of free variables.
 It uses the no-initial-variables or static forms to carry the information
-on, since these forms is inadequately general.
+on, since these forms are adequately general.
 The $STATEMENT$ alternatives are produced where necessary in the VC generator.
 =SML
 *)
-and Ûdo_statementÝ (y as STNull : STATEMENT) = (
-) | do_statement (y as STImplicitNull : STATEMENT) = (
-) | do_statement (y as (STAssign x) : STATEMENT) = (
+and Ûdo_statementÝ (y as STNull : STATEMENT) : STATEMENT = (y
+) | do_statement (y as STImplicitNull : STATEMENT) = (y
+) | do_statement (y as (STAssign x) : STATEMENT) = (y
 ) | do_statement (y as (STSpecNoIvars {spec, label}) : STATEMENT) = (
-	new_k_slot(label, RSSpecStatement, get_current_theory_name());
-	spec_stmt {spec = expand_spec spec, label = label}
+	let	val expanded = {spec = expand_frame spec, label = label};
+	in	new_k_slot(label, RSSpecStatement, get_current_theory_name());
+		spec_stmt expanded;
+		STSpecNoIvars expanded
+	end
 ) | do_statement (y as (STSemicolon (x1, x2)) : STATEMENT) = (
-	do_statement x1;
-	do_statement x2
-) | do_statement (y as (STIfThenElse {p, q, ...}) : STATEMENT) = (
-	do_statement p;
-	do_statement q
-) | do_statement (y as (STCase {s, others, ...}) : STATEMENT) = (
-	map (do_statement o #p) s;
-	do_statement others
-) | do_statement (y as (STLoop {t=Value till, stmt}) : STATEMENT) = (
+	let	val expanded1 = do_statement x1;
+		val expanded2 = do_statement x2;
+	in	STSemicolon(expanded1, expanded2)
+	end
+) | do_statement (y as (STIfThenElse {p, q, g, elsif}) : STATEMENT) = (
+	let	val expanded_p = do_statement p;
+		val expanded_q = do_statement q;
+	in	STIfThenElse {p = expanded_p, q = expanded_q, g = g, elsif = elsif}
+	end
+) | do_statement (y as (STCase {s, others, e}) : STATEMENT) = (
+	let	fun expand_s {choices, p} = {choices = choices, p = do_statement p};
+		val expanded_s = map expand_s s;
+		val expanded_others = do_statement others;
+	in	STCase{s = expanded_s, others = expanded_others, e = e}
+	end
+) | do_statement (y as (STLoop {t= t, stmt}) : STATEMENT) = (
 	new_scope_loop();
-	till_pred till;
-	do_statement stmt;
-	end_scope()
-) | do_statement (y as (STLoop {t=Nil, stmt}) : STATEMENT) = (
+	(case t of Value till => till_pred till | Nil => ());
+	let	val expanded_stmt = do_statement stmt;
+	in	end_scope();
+		STLoop{t = t, stmt = expanded_stmt}
+	end
+) | do_statement (y as (STNamedLoop {t, stmt, name}) : STATEMENT) = (
 	new_scope_loop();
-	do_statement stmt;
-	end_scope()
-) | do_statement (y as (STNamedLoop {t, stmt, ...}) : STATEMENT) = (
-	do_statement (STLoop {t = t, stmt = stmt})
-) | do_statement (y as (STWhile {loop as {t, stmt}, ...}) : STATEMENT) = (
-	do_statement (STLoop {t = t , stmt = stmt})
+	(case t of Value till => till_pred till | Nil => ());
+	let	val expanded_stmt = do_statement stmt;
+	in	end_scope();
+		STNamedLoop{t = t, stmt = expanded_stmt, name = name}
+	end
+) | do_statement (y as (STWhile {loop as {t, stmt}, name, g}) : STATEMENT) = (
+	new_scope_loop();
+	(case t of Value till => till_pred till | Nil => ());
+	let	val expanded_stmt = do_statement stmt;
+	in	end_scope();
+		STWhile{loop = {t = t, stmt = expanded_stmt}, name = name, g = g}
+	end
 ) | do_statement
-	(y as (STForStatic {i, loop as {stmt, t, ...}, tmark, dir, ...}) : STATEMENT) = (
-	do_for_loop(t, i, stmt, tmark, dir)
+	(y as (STForStatic {name, i, tmark, range, dir, loop as {stmt, t}}) : STATEMENT) = (
+	let	val expanded_stmt = do_for_loop(t, i, stmt, tmark, dir);
+	in	STForStatic {name = name, i = i, tmark = tmark, range = range, dir = dir,
+			loop= {stmt=expanded_stmt, t = t}}
+	end
 ) | do_statement
-	(y as (STForTmark {i, loop as {stmt, t, ...}, tmark, dir, ...}) : STATEMENT) = (
-	do_for_loop(t, i, stmt, tmark, dir)
-) | do_statement (y as (STExitWhen x) : STATEMENT) = (
-) | do_statement (y as STExit : STATEMENT) = (
-) | do_statement (y as (STRet x) : STATEMENT)  = (
-) | do_statement (y as (STProcNoIvars x) : STATEMENT) = (
+	(y as (STForTmark {name, i, tmark, dir, loop as {stmt, t}}) : STATEMENT) = (
+	let	val expanded_stmt = do_for_loop(t, i, stmt, tmark, dir);
+	in	STForTmark {name = name, i = i, tmark = tmark, dir = dir,
+			loop= {stmt=expanded_stmt, t = t}}
+	end
+) | do_statement (y as (STExitWhen x) : STATEMENT) = (y
+) | do_statement (y as STExit : STATEMENT) = (y
+) | do_statement (y as (STRet x) : STATEMENT)  = (y
+) | do_statement (y as (STProcNoIvars x) : STATEMENT) = (y
 ) | do_statement (y as (STKSlot {label, content}) : STATEMENT) = (
 	new_k_slot(label, RSStatement, get_current_theory_name());
-	k_slot_stmt label
-) | do_statement (y as (STPragma _) : STATEMENT) = (
-) | do_statement (y as (STAnnotation _) : STATEMENT) = (
+	k_slot_stmt label;
+	y
+) | do_statement (y as (STPragma _) : STATEMENT) = (y
+) | do_statement (y as (STAnnotation _) : STATEMENT) = (y
 ) | do_statement (y as (SSpecIvars x) : STATEMENT) = (
 	error "do_statement" 507019 []
 ) | do_statement (y as (SForNonStatic x) : STATEMENT) = (
 	error "do_statement" 507019 []
-) | do_statement (y as (SLogCon log_con) : STATEMENT) = (
-	new_k_slot(#label log_con,
-		RSSpecStatement, get_current_theory_name());
-	add_log_con_env log_con;
-	spec_stmt {spec= #spec log_con, label= #label log_con};
-	remove_log_con_env()
+) | do_statement (y as (SLogCon (log_con as {x, t, e, spec, pre1, label})) : STATEMENT) = (
+	let	val expanded_spec = expand_frame spec;
+		val expanded_log_con = {x = x, t = t, e = e,
+			spec = expanded_spec, pre1 = pre1, label = label};
+	in	new_k_slot(label, RSSpecStatement, get_current_theory_name());
+		add_log_con_env expanded_log_con;
+		spec_stmt {spec = expanded_spec, label = label};
+		remove_log_con_env();
+		SLogCon expanded_log_con
+	end
 ) | do_statement (y as (SProcIvars x) : STATEMENT) = (
 	error "do_statement" 507019 []
 );
@@ -5417,14 +5447,15 @@ The following reflects the SID functions for $procedure\_specification$:
 and Ûdo_procedure_specÝ (
 	{name, formal_part, spec as Value sp, annotation}
 		: PROCEDURE_SPECIFICATION) = (
-	let	val formal_proc : FORMAL_PROC =
-		{name=name, spec=expand_spec sp, formal_ids = map mk_param_spec formal_part};
+	let	val esp = expand_frame sp;
+		val formal_proc : FORMAL_PROC =
+		{name=name, spec=esp, formal_ids = map mk_param_spec formal_part};
 	in	subunit_form name;
 		new_scope_proc_form name;
 		do_annotation annotation;
 		stub();
 		fformal_part formal_part;
-		check_19 current_cn_env sp;
+		check_19 current_cn_env esp;
 		stub_spec_proc formal_proc;
 		form_proc formal_proc;
 		curr_form_proc formal_proc
@@ -5451,7 +5482,7 @@ and Ûdo_function_specÝ (
 		formal_pars = map mk_param_spec formal_part,
 		return_type = return};
 		val formal_fun : FORMAL_FUN =
-		{spec = expand_spec sp, informal_fun = informal_fun, globals = globals};
+		{spec = expand_frame sp, informal_fun = informal_fun, globals = globals};
 	in	subunit_form designator;
 		new_scope_fun_form designator;
 		do_annotation annotation;
@@ -5550,8 +5581,7 @@ and Ûdo_proper_bodyÝ (y as (PBProcedure
 	: unit = (
 	do_procedure_spec procedure_spec;
 	map do_declaration declarative_part;
-	do_statement statement;
-	vcs_body statement;
+	vcs_body (do_statement statement);
 	update_envs_proc();
 	add_proc_env();
 	end_scope()
@@ -5559,18 +5589,16 @@ and Ûdo_proper_bodyÝ (y as (PBProcedure
 	{function_spec as {designator,...}, declarative_part, statement}) : PROPER_BODY) = (
 	do_function_spec function_spec;
 	map do_declaration declarative_part;
-	do_statement statement;
-	vcs_body statement;
+	vcs_body (do_statement statement);
 	end_scope()
 ) | do_proper_body (y as (PBPackage 
 	{name, decls, statement, annotation}) : PROPER_BODY) = (
 	new_scope_pack_body name;
 	do_annotation annotation;
 	map do_declaration decls;
-	if any decls (fn d => case d of DUsing _ => true |_ => false)
-	then	(do_statement statement;
-		vcs_aux_initial statement)
-	else	do_statement statement;
+	(if any decls (fn d => case d of DUsing _ => true |_ => false)
+	then	vcs_aux_initial(do_statement statement)
+	else	(do_statement statement; ()));
 	end_scope()
 );
 =TEX
@@ -5704,11 +5732,13 @@ end
 let	val {label=label,statement=statement} = x;
 	val current_theory = get_current_theory_name ();
 in	open_label_theory label;
-	update_replacement_env(label, RefineStat x);
 	set_bottom_block_name label;
 	new_scope_speclabel label;
-	do_statement statement;
-	vcs_speclabel x;
+	let	val expanded_statement = do_statement statement;
+		val expanded_x = {label = label, statement = expanded_statement};
+	in	update_replacement_env(label, RefineStat expanded_x);
+		vcs_speclabel expanded_x
+	end;
 	end_scope_speclabel();
 	lazy_open_theory current_theory
 end
@@ -5716,10 +5746,12 @@ end
 let	val {label=label,statement=statement} = x;
 	val current_theory = get_current_theory_name ();
 in	open_label_theory label;
-	update_replacement_env(label, ReplaceStat x);
 	set_bottom_block_name label;
 	new_scope_stmt_label label;
-	do_statement statement;
+	let	val expanded_statement = do_statement statement;
+		val expanded_x = {label = label, statement = expanded_statement};
+	in	update_replacement_env(label, RefineStat expanded_x)
+	end;
 	end_scope_stmt_label();
 	lazy_open_theory current_theory
 end
