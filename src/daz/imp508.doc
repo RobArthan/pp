@@ -81,7 +81,7 @@ The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD508}.
 \section{PREAMBLE}
 
 =SML
-structure €CNBasicDeclsAndExprs› : CNBasicDeclsAndExprs = struct
+structure €CNBasicDeclsAndExprs› (* : CNBasicDeclsAndExprs *) = struct
 local
 	open CaseIndependence CNTypes ZProofMode;
 in
@@ -92,7 +92,7 @@ in
 =SML
 datatype €ENV_INFO› =
 			€EIEnvFunction› of ID list
-		|	€EIEnvVar›
+		|	€EIEnvVar› of TMARK
 		|	€EIEnvRecordAgg›
 		|	€EIEnvOther›;
 
@@ -154,7 +154,7 @@ and €last› = hd o rev;
 \subsection{Z Declarations}
 
 =SML
-type €Z_DECL› = Z_ID * Z_EXP;
+type €Z_DECL› = {zvar : Z_ID, zexp : Z_EXP};
 type €Z_MODULE› = string;
 =TEX
 
@@ -210,7 +210,7 @@ val €zsucc› : Z_EXP = ÒsuccÆ;
 =SML
 fun €zid› (env : CN_ENV) (id : Z_ID) : Z_EXP = (
 	case env id of
-	Value (ty, EIEnvVar) => mk_z_lvar(id, ty, [])
+	Value (ty, EIEnvVar _) => mk_z_lvar(id, ty, [])
 	|Value (ty, _) => mk_z_gvar(id, ty, [])
 	|Nil => fail "zid" 508001 [fn()=>("undeclared variable: "^id)]
 );
@@ -279,9 +279,9 @@ fun €z_set_minus› (exp1 : Z_EXP, exp2 : Z_EXP) : Z_EXP = (
 );
 =TEX
 =SML
-fun €z_set_comp› ((d,e) : Z_DECL, p : Z_EXP) : Z_EXP = (
-let	val dexp = mk_z_lvar(d, type_of e, []);
-	val decl = mk_z_decl[mk_z_dec ([dexp],e)];
+fun €z_set_comp› ({zvar,zexp} : Z_DECL, p : Z_EXP) : Z_EXP = (
+let	val dexp = mk_z_lvar(zvar, (dest_z_power_type o type_of) zexp, []);
+	val decl = mk_z_decl[mk_z_dec ([dexp],zexp)];
 in
 	mk_z_seta (decl, p, dexp)
 end
@@ -400,7 +400,7 @@ fun €z_eq_eq› (id : Z_ID, exp : Z_EXP) : PARAINFO = (
 local
 	val z_true = ÒtrueÆ;
 	fun z_decls_to_exp (zdecls : Z_DECL list) : Z_EXP = (
-	let	fun dec (d,e) = (
+	let	fun dec {zvar=d, zexp=e} = (
 			mk_z_dec ([mk_z_lvar(d, (dest_z_power_type o type_of) e,
 					[])],e)
 		);
@@ -722,7 +722,7 @@ and €exp_array_agg_named_others› (env : CN_ENV) ({tmark,agg_named,others} : (AGG
 TBS - Proper code required for the following which is a stub.
 =SML
 and €retrieve_record_components› (env : CN_ENV) (tmark : TMARK) : (TMARK * TYPE) list = (
-	(dest_z_schema_type o dest_z_power_type	o type_of o (zid env) o trans_id)
+	(dest_z_schema_type o dest_z_power_type o type_of o (zid env) o trans_id)
 	tmark
 	handle _ => fail "retrieve_record_components" 508001
 				[fn()=>tmark^" is not a record type"]
@@ -737,7 +737,7 @@ and €exp_rec_agg_pos› (env : CN_ENV) ({tmark, comps} : EXP AGG_POS) : Z_EXP = (
 let	val record_components = retrieve_record_components env tmark;
 	fun env' id = (
 		case lassoc5 record_components id of
-		Value ty => Value (ty, EIEnvVar)
+		Value ty => Value (ty, EIEnvVar tmark)
 		|Nil => env id
 	);
 	val ap_components = combine ((map fst) record_components) comps
@@ -779,7 +779,7 @@ and €exp_rec_agg_named› (env : CN_ENV) ({tmark, named_assocs} : (AGG_CHOICE,EXP)
 let	val record_components = retrieve_record_components env tmark;
 	fun env' id = (
 		case lassoc5 record_components id of
-		Value ty => Value (ty, EIEnvVar)
+		Value ty => Value (ty, EIEnvVar tmark)
 		|Nil => env id
 	);
 	val zp = z_many_and (
@@ -1046,7 +1046,7 @@ fun €trans_decl› (env : CN_ENV) {var : ID, tmark : TMARK} : Z_DECL = (
 let	val zvar = trans_id var;
 	val zexp = zid env (trans_id tmark);
 in
-	(trans_id zvar, zexp)
+	{zvar = trans_id zvar, zexp = zexp}
 end);
 =TEX
 =SML
@@ -1111,13 +1111,12 @@ let	val zname = trans_id name;
 	val zindex = join_tmarks (map trans_id index);
 	val zexp = zid env (trans_id tmark);
 	val zvar =  "UNC"
-	val zdecl = (zvar, zexp);
 	val zvar_ty = dest_z_power_type(type_of zexp);
-	val env' = fn id => if id = "UNC" then Value (zvar_ty, EIEnvVar)					else env id; 
-	val zp = z_eq (z_dom (zid env' zvar), zid env zindex);
+	val env' = fn id => if id = "UNC" then Value (zvar_ty, EIEnvVar tmark)					else env id; 
+	val zp = z_eq (z_dom (zid env' zvar), zid env' zindex);
 in
-	[z_eq_eq (zname, z_set_comp (zdecl, zp))] @
-	array_attrib env (zname, zindex)
+	[z_eq_eq (zname, z_set_comp ({zvar=zvar,zexp=zexp},zp))] @
+	array_attrib env' (zname, zindex)
 end
 );
 =TEX
@@ -1323,6 +1322,12 @@ and €adjust_qualified_expression› (env : CN_ENV) ({tmark=t, exp=e} : EXP QUALIFI
 			{agg_named=agg_named, others=others, tmark=t}
 	)|_ => fail "adjust_qualified_exp" 508001 [fn()=>"badly formed qualified expression"]
 )
+=TEX
+In the following, both named and positional record aggregates and function calls
+need no adjustment since these constructs can only be produced by adjust\_exp.
+If they occur in the input then it adjust\_exp will already have been called
+and need not be called again.
+=SML
 and €adjust_exp› (env : CN_ENV) (exp as (EId id : EXP)) = (
 	exp
 ) | adjust_exp env (exp as (EInt _)) = (
@@ -1338,9 +1343,9 @@ and €adjust_exp› (env : CN_ENV) (exp as (EId id : EXP)) = (
 ) | adjust_exp env (exp as (EArrayAggNamedOthers x)) = (
 	adjust_agg_named_others  env x
 ) | adjust_exp env (exp as (ERecAggPos x)) = (
-	fail "ERecAggPos : this error shouldn't be raised" 508001 []
+	exp
 ) | adjust_exp env (exp as (ERecAggNamed x)) = (
-	fail "ERecAggNamed : this error shouldn't be raised" 508001 []
+	exp
 ) | adjust_exp env (exp as (EUnaryExp x)) = (
 	adjust_unary_exp env x
 ) | adjust_exp env (exp as (EBinExp x)) = (
@@ -1354,7 +1359,7 @@ and €adjust_exp› (env : CN_ENV) (exp as (EId id : EXP)) = (
 ) | adjust_exp env (exp as (ESelectedComp x)) = (
 	adjust_selected_comp env x
 ) | adjust_exp env (exp as (EFunCall _)) = (
-	fail "EFunCall : this error shouldn't be raised" 508001 []
+	exp
 ) | adjust_exp env (exp as (EAuxiliaryExp _)) = (
 	exp
 ) | adjust_exp env (exp as (EQualifiedExp x)) = (
