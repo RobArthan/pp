@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% $Header: /home/rda/daz/RCS/imp510.doc,v 1.124 2002/12/17 18:23:07 rda Exp rda $
+% $Header: /home/rda/daz/RCS/imp510.doc,v 1.125 2003/05/19 12:44:32 rda Exp rda $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: SPARK Output Function}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP510}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.124 $%
+\def\SCCSversion{$Revision: 1.125 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/12/17 18:23:07 $%
+\TPPdate{\FormatDate{$Date: 2003/05/19 12:44:32 $%
 }}
 \TPPstatus{Draft}	    %% Mandatory field
 \TPPtype{Specification}
@@ -197,7 +197,12 @@ names arising from use clauses.
 \item[Issues 1.115--1.120] R0055: warnings for non-SPARK constructs.
 \item[Issue 1.121] Residual problems with {\it translate\_for\_output}
 \item[Issue 1.122] We now learn that named numbers are allowed in SPARK.
-\item[Issue 1.123] Support for NOTHING statement form.
+\item[Issue 1.123, 1.124] Support for NOTHING statement form.
+N.b., this includes a change to the {\it PP\_FMT\_INFO} type to defer the binding
+of the output function to the replacement formatter. This means that by changing
+the output function to a function that just carries out some kind of test, the formatting
+apparatus can also be re-used as a combinator to apply a test over the SPARK abstract
+syntax without doing any output.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -413,7 +418,7 @@ The optional function returns {\tt true} iff. the label had a replacement.
 =SML
 type ÛPP_FMT_INFOÝ = {
     outf : string -> unit,
-    fmt_repl : (LABEL -> bool) OPT
+    fmt_repl : ((string -> unit) -> LABEL -> bool) OPT
     };
 =TEX
 =TEX
@@ -1303,7 +1308,7 @@ in strings print correctly.
 fun Ûfmt_annÝ (fmtinfo as {outf,fmt_repl} : PP_FMT_INFO)
 	(anks as ANKSlot {content, label} : ANN) = (
     case fmt_repl of
-    Value f => (f label; ())
+    Value f => (f outf label; ())
     | Nil => (outf (translate_for_output ("§ " ^ content^" ¢    "));
 	(fmt_label fmtinfo label);
 	outf "\n"
@@ -1319,11 +1324,11 @@ fun Ûfmt_annotationÝ (fmtinfo : PP_FMT_INFO) (anns: ANNOTATION) = (
 );
 =TEX
 =SML
-fun Ûfmt_expansionÝ (fmtinfo as {fmt_repl, ...} : PP_FMT_INFO)
+fun Ûfmt_expansionÝ (fmtinfo as {fmt_repl, outf} : PP_FMT_INFO)
 	(label : LABEL) : unit = (
 	case fmt_repl of
 		Nil => ()
-	|	Value f => (f label; ())
+	|	Value f => (f outf label; ())
 );
 =IGN
 =TEX
@@ -1331,7 +1336,7 @@ fun Ûfmt_expansionÝ (fmtinfo as {fmt_repl, ...} : PP_FMT_INFO)
 fun Ûfmt_spec_no_ivarsÝ (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO) (s as
 		{spec, label, is_assertion} : SPEC_NO_IVARS) = (
 	if	(case fmt_repl of
-			Value f => (f label) orelse is_assertion
+			Value f => (f outf label) orelse is_assertion
 		|	Nil => false)
 	then	()
 	else	(
@@ -1395,7 +1400,7 @@ fun Ûfmt_proc_call_no_ivarsÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
 
 fun Ûfmt_k_slotÝ (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO) ({content, label} : K_SLOT) = (
     case fmt_repl of
-    Value f =>    (f label; ())
+    Value f =>    (f outf label; ())
     |Nil =>    (
 	outf "§";
 	outf (translate_for_output content);
@@ -3248,10 +3253,9 @@ outf "12345";outf "12345";outf "12345";inc_tabs(); outf "12345";outf "12345";
 outf "12345";outf "12345";outf "12345";outf "\n");
 =SML
 fun Ûmk_fmt_replÝ
-	(outf : string -> unit)
 	(repl_fun : LABEL -> REPLACEMENT OPT)
-	: LABEL -> bool = (fn label =>
-let    val fmtinfo = {outf = outf, fmt_repl = Value(mk_fmt_repl outf repl_fun)};
+	: (string -> unit) -> LABEL -> bool = (fn outf => fn label =>
+let    val fmtinfo = {outf = outf, fmt_repl = Value(mk_fmt_repl repl_fun)};
 in
     case repl_fun label of
     Value repl => (
@@ -3321,7 +3325,7 @@ fun Ûmk_fmt_infoÝ
 	(Value repl_fun : (LABEL -> REPLACEMENT OPT) OPT)
 	: PP_FMT_INFO = (
 	{outf = outf,
-	 fmt_repl = Value(mk_fmt_repl outf repl_fun)}
+	 fmt_repl = Value(mk_fmt_repl repl_fun)}
 ) | mk_fmt_info outf Nil = {outf = outf, fmt_repl = Nil};
 =TEX
 =SML
