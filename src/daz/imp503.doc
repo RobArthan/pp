@@ -157,7 +157,15 @@ fun Ûparse_errorÝ (msg : int) (insert : string) : 'a = (
 =SML
 local
 	open ZLex ZParser ZTypeInference ZTermGenerator ZUserInterfaceSupport;
-
+=TEX
+=SML
+fun Ûz_para_of_zinferredÝ ((ZInferred p) : Z_INFERRED) : Z_PARA = (
+	p
+) | z_para_of_zinferred (ZTypeError inf) = (
+	print_z_error inf
+);
+=TEX
+=SML
 fun Ûterm_of_z_paraÝ ((ZParaTerm (gpars, tm, _)) : Z_PARA) : TERM = (
 let	val vns = map string_of_ident gpars;
 	val vs = map (fn vn => mk_var(vn, mk_z_power_type(mk_vartype ("'" ^ vn)))) 
@@ -166,13 +174,6 @@ in	list_mk_µ(vs, (do_in_theory (force_get_cache_theory()) term_of_z_tm tm))
 end
 ) | term_of_z_para _ = (
 	fail "z_term_recogniser" 49001 []
-);
-=TEX
-=SML
-fun Ûz_para_of_zinferredÝ ((ZInferred p) : Z_INFERRED) : Z_PARA = (
-	p
-) | z_para_of_zinferred (ZTypeError inf) = (
-	print_z_error inf
 );
 =TEX
 =SML
@@ -190,48 +191,12 @@ in	term_of_z_para para
 end);
 =TEX
 =SML
-fun Ûschema_tokensÝ (ztokens : ZLex.Z_TOKEN list) = (
-	ZTLsqbrack::((rev o tl o rev) ztokens)@[ZTRsqbrack, ZTEos]
-);
-
-fun Ûtuple_tokensÝ (ztokens : ZLex.Z_TOKEN list) = (
-	ZTLbrack::((rev o tl o rev) ztokens)@[ZTRbrack, ZTEos]
-);
-
-fun Ûpi_tokensÝ (ztokens : ZLex.Z_TOKEN list) = (
-	(ZTId "")::ZTLbrack::((rev o tl o rev) ztokens)@[ZTRbrack, ZTEos]
-);
-
 in
-=TEX
-=SML
-fun Ûz_tm_of_z_tokensÝ (tokens : Z_TOKEN list) : TERM = (
-let
-	val standard = get_flag "standard_z_terms";
-	val parsed = z_parser {is_quot = true} tokens;
-	val side = case parsed of
-		ZParaTerm _ => ()
-		|_ => fail "z_term_recogniser" 49001 [];
-	val type_checked = type_check_z_para
-				{standard = standard, allow_frees = true} parsed;
-	val para = z_para_of_zinferred type_checked;
-in	term_of_z_para para
-end);
-=TEX
-=SML
-fun Ûprocess_frameÝ (ztokens : ZLex.Z_TOKEN list) : ID list = (
-let	val zterm = z_term_of_z_tokens (tuple_tokens ztokens);
-	val ids =
-		case dest_z_term zterm of
-		ZTuple ids => map (fst o dest_var) ids
-		|_ => [(fst o dest_var) zterm];
-in
-	ids
-end);
 =TEX
 =SML
 fun Ûprocess_con_declÝ (ztokens : ZLex.Z_TOKEN list) : (string * TERM) = (
-let	val zterm = z_term_of_z_tokens (schema_tokens ztokens);
+let	val schtoks = ZTLsqbrack::((rev o tl o rev) ztokens)@[ZTRsqbrack, ZTEos];
+	val zterm = z_term_of_z_tokens schtoks;
 	val dec = (
 		case (dest_z_decl o fst o dest_z_h_schema) zterm of
 		[dec] => (case dest_z_dec dec of
@@ -247,9 +212,59 @@ in
 end);
 =TEX
 =SML
-fun Ûprocess_conditionÝ (ztokens : ZLex.Z_TOKEN list) : TERM = (
-	z_term_of_z_tokens (pi_tokens ztokens)
-);
+fun Ûprocess_frameÝ (ztokens : ZLex.Z_TOKEN list) : ID list = (
+let	val tuptoks = ZTLbrack::((rev o tl o rev) ztokens)@[ZTRbrack, ZTEos];
+	val zterm = z_term_of_z_tokens tuptoks;
+	val ids =
+		case dest_z_term zterm of
+		ZTuple ids => map (fst o dest_var) ids
+		|_ => [(fst o dest_var) zterm];
+in
+	ids
+end);
+=TEX
+=SML
+val Ûprocess_pre_conditionÝ : ZLex.Z_TOKEN list -> TERM = z_term_of_z_tokens;
+=TEX
+=SML
+fun Ûprocess_pre_and_post_conditionsÝ (ztokens : ZLex.Z_TOKEN list) : TERM OPT * TERM = (
+let	val tuptoks = ZTLbrack::((rev o tl o rev) ztokens)@[ZTRbrack, ZTEos];
+	val zpara = ZParserInternals.z_parser_pass_1 tuptoks;
+	fun apply_pi p = (
+		case p of
+		ParGeneralTerm (PredBracketed (pp, ""), Nil) => (
+			(Nil, ParGeneralTerm (
+			PredFancyFix(TmplPre (("", Nil), StubUS), "", [[pp]]),
+			Nil))
+		) |ParGeneralTerm (PredTuple [p1,p2], Nil) => (
+			(Value (ParGeneralTerm (
+			PredFancyFix(TmplPre (("", Nil), StubUS), "", [[p1]]),
+			Nil)),
+			ParGeneralTerm (
+			PredFancyFix(TmplPre (("", Nil), StubUS), "", [[p2]]),
+			Nil))
+		) |_ => parse_error 0 "Too much stuff"
+	);
+	val (pretm_opt, posttm) = apply_pi zpara;
+	val standard = get_flag "standard_z_terms";
+	fun aux parsed = (
+	let	val pp = ZParserInternals.z_parser_pass_2 {is_quot = true} parsed;
+		val type_checked = type_check_z_para
+				{standard = standard, allow_frees = true} pp;
+		val tzp = (case type_checked of
+				ZInferred p => p
+				|ZTypeError inf => print_z_error inf
+			);
+	in
+		term_of_z_para tzp
+	end);
+in
+	case pretm_opt of
+	Value pre => (Value (aux pre), aux posttm)
+	|Nil => (Nil, aux posttm)
+end);
+
+val Ûprocess_aux_expÝ : ZLex.Z_TOKEN list -> TERM = z_term_of_z_tokens;
 =TEX
 =SML
 end (* local...in *);
@@ -436,7 +451,6 @@ val red_type_declaration1 = red_accept;
 val red_type_declaration2 = red_accept;
 =TEX
 =SML
-(* HERE *)
 fun red_full_type_declaration1 _ (Token ((_,CNText id), _)) (Parsed(PPDiscriminantPart d)) _ (Parsed(PPTypeDef td)) _ = (
 	PPBasicDecls[BDTypeDecl{name=id,discr=Value d, type_def=td}]
 ) | red_full_type_declaration1 _ _ _ _ _ _ = stack_error "red_full_type_declaration1";
@@ -953,8 +967,43 @@ end
 val red_statement4 = red_accept;
 val red_statement5 = red_accept;
 =TEX
-
 =SML
+fun red_specification_statement1 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ = (
+let	val (pre, post) =
+		case process_pre_and_post_conditions z2 of
+		(Value pre', post') => (pre', post')
+		|(Nil, post') => (ñtrue®, post');
+in
+	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=pre,post=post,label=LImplicit})
+end
+) | red_specification_statement1 _ _ _ _ _ = stack_error "red_specification_statement1";
+
+fun red_specification_statement2 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ = (
+let	val (pre, post) = (process_pre_condition z2, ñtrue®);
+in
+	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=pre,post=post,label=LImplicit})
+end
+) | red_specification_statement2 _ _ _ _ _ = stack_error "red_specification_statement2";
+
+fun red_specification_statement3 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ (Parsed(PPId lab))= (
+let	val (pre, post) =
+		case process_pre_and_post_conditions z2 of
+		(Value pre', post') => (pre', post')
+		|(Nil, post') => (ñtrue®, post');
+in
+	PPStmt(STSpecNoIvars{w=process_frame z1,w0=["<Stub>"],pre=pre,post=post, label=LExplicit lab})
+end
+) | red_specification_statement3 _ _ _ _ _ _ = stack_error "red_specification_statement3";
+
+fun red_specification_statement4 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ (Parsed(PPId lab))= (
+let	val (pre, post) = (process_pre_condition z2, ñtrue®);
+in
+	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=pre,post=post,label=LExplicit lab})
+end
+) | red_specification_statement4 _ _ _ _ _ _ = stack_error "red_specification_statement4";
+=TEX
+
+=IGN
 fun red_specification_statement1 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ = (
 	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=ñtrue®,post=process_condition z2, label=LImplicit})
 ) | red_specification_statement1 _ _ _ _ _ = stack_error "red_specification_statement1";
@@ -1159,7 +1208,7 @@ fun red_till_opt2 _ (Parsed(PPExp(EAuxiliaryExp z))) = (
 =TEX
 =SML
 fun red_abstract_expression _ (Token ((LCZ,CNZ z), _)) _ = (
-	PPExp(EAuxiliaryExp (z_tm_of_z_tokens z))
+	PPExp(EAuxiliaryExp (process_aux_exp z))
 ) | red_abstract_expression _ _ _ = stack_error "red_abstract_expression";
 
 fun red_exit_statement1 _ _ = (

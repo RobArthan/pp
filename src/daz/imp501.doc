@@ -292,7 +292,7 @@ val €delimiter› : string list list =
 	(Sort.sort (switch(Sort.lexicographic Sort.string_order)) o map explode)
 	["&", "'", "(", ")", "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", 
 	">", "|", "=>", "..", "**", ":=", "/=", ">=", "<=", "<<", ">>", "<>",
-	"Ñ", "[", "]", "{","}", "∑", "˚", "˝", "ß","¢"];
+	"Ñ", "[", "]", "{","}", "∑", "˚", "˝", "ß","¢", "√", "È"];
 =TEX
 =SML
 fun next_is_delimiter (cs : string list) = (
@@ -378,10 +378,10 @@ val €class_table› = list_e_merge initial_e_dict [
 	("private",	LCPrivate),
 	("procedure",	LCProcedure),
 	("record",	LCRecord),
-	("%sqsubseteq%",LCRefinedBy),
+	("√",		LCRefinedBy),
 	("rem",		LCRem),
 	("renames",	LCRenames),
-	("%identical%",	LCReplacedBy),
+	("È",		LCReplacedBy),
 	("return",	LCReturn),
 	("reverse",	LCReverse),
 	("range",	LCRRange),
@@ -551,24 +551,7 @@ fun €rec_next_token› (st : LEX_STATE) : LEX_STATE = (
 =TEX
 \subsection{Lexical Analyser}
 =SML
-val €z_lex1› = (rev o tl o rev o ZLex.z_lex);
-=TEX
-=SML
-fun €flatten_input› ((Lex.Text s1::Lex.Text s2::rest) : INPUT list) : INPUT list  = (
-	flatten_input (Lex.Text (s1^s2)::rest)
-) | flatten_input (ip::rest) = (
-	ip::flatten_input rest
-) | flatten_input [] = [];
-=TEX
-=SML
-fun €brk_match› (stk : string list) (b : string) = (
-	(case hd stk of
-		"[" => "]"
-		| "{" => "}"
-		| "(" => ")"
-		| x => x
-	) = b
-);
+val z_lex1 = (rev o tl o rev o ZLex.z_lex);
 =TEX
 =SML
 fun €lookahead› (terml : string list) (old : INPUT list, (ip::rest) : INPUT list)
@@ -598,68 +581,39 @@ let	val (left, found, right) = lookahead ["[", "{"] ([], iplist);
 in
 	case found of
 	Value (sym as "[") => (
-		left_cxt::(classify sym, CNText sym)::spark_ss2  ["["] [] right
+		left_cxt::(classify sym, CNText sym)::spark_ss2 0 ("[","]") [] right
 	)|Value (sym (* must be "{" *)) => (
-		left_cxt::(classify sym, CNText sym)::spark_ss2 ["{"] [] right
+		left_cxt::(classify sym, CNText sym)::spark_ss2 0 ("{","}") [] right
 	)| Nil => (
 		left_cxt::spark_lex right
 	)
 end)
 =TEX
 =SML
-and €spark_ss2› (stk : string list)
+and €spark_ss2› (n : int) (brks as (lbrk :string, rbrk : string))
 		(lctxt : INPUT list) (iplist : INPUT list) : CN_LEX_ITEM list = (
-let	val (left, found, right) = lookahead ["[","]","(",")","{","}",","] ([], iplist);
+let	val (left, found, right) = lookahead [lbrk, rbrk] ([], iplist);
 	val left' = lctxt@left;
+	fun flatten_input (Lex.Text s1::Lex.Text s2::rest) = (
+		flatten_input (Lex.Text (s1^s2)::rest)
+	) | flatten_input (ip::rest) = (
+		ip::flatten_input rest
+	) | flatten_input [] = [];
 in
 	case found of
 	Nil => (
 		(LCZ, CNZ (ZLex.z_lex (flatten_input left')))::spark_lex right
 	)| Value sym => (
-	
-	if brk_match stk sym 
-	then	if length stk = 1
-		then
-			(LCZ, CNZ (ZLex.z_lex (flatten_input left')))
-				::(classify sym, CNText sym)
-				::spark_lex right
-		else
-			spark_ss2 (tl stk) (left'@[Lex.Text sym]) right
-	else	if sym mem ["[","{","("]
-		then
-			spark_ss2 (sym::stk) (left'@[Lex.Text sym]) right
-		else	(* sym = "," *)
-			if length stk = 1
+		if sym = rbrk
+		then	if n = 0
 			then
 				(LCZ, CNZ (ZLex.z_lex (flatten_input left')))
-						::(classify sym, CNText sym)
-						::spark_ss3 stk [] right
+					::(classify sym, CNText sym)
+					::spark_lex right
 			else
-				spark_ss2 stk (left'@[Lex.Text sym]) right
-	)
-end)
-=TEX
-=SML
-and €spark_ss3› (stk : string list)
-		(lctxt : INPUT list) (iplist : INPUT list) : CN_LEX_ITEM list = (
-let	val (left, found, right) = lookahead ["[","]","(",")","{","}"] ([], iplist);
-	val left' = lctxt@left;
-in
-	case found of
-	Nil => (
-		(LCZ, CNZ (ZLex.z_lex (flatten_input left')))::spark_lex right
-	)| Value sym => (
-	
-	if brk_match stk sym 
-	then	if length stk = 1
-		then
-			(LCZ, CNZ (ZLex.z_lex (flatten_input left')))
-				::(classify sym, CNText sym)
-				::spark_lex right
-		else
-			spark_ss3 (tl stk) (left'@[Lex.Text sym]) right
-	else	(* sym mem ["[","{","("] *)
-			spark_ss3 (sym::stk) (left'@[Lex.Text sym]) right
+				spark_ss2 (n - 1) brks (left'@[Lex.Text sym]) right 
+		else	(* sym = lbrk *)
+				spark_ss2 (n + 1) brks (left'@[Lex.Text sym]) right 
 	)
 end)
 =TEX
