@@ -19,23 +19,14 @@
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #include <stdio.h>
 #include <ctype.h>
-#include <Xm/DialogS.h>
-#include <Xm/MainW.h>
-#include <Xm/RowColumn.h>
-#include <Xm/Text.h>
-#include <Xm/TextF.h>
-#include <Xm/PushBG.h>
-#include <Xm/Form.h>
-#include <Xm/LabelG.h>
-#include <Xm/MessageB.h>
-#include <Xm/PanedW.h>
-#include <Xm/FileSB.h>
-
-
 #include "xpp.h"
 
-Widget get_top_shell(w)
-Widget w;
+#define MSG_LINE_LEN 50
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Private functions:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static Widget get_top_shell(Widget w)
 {
 	while (w && !XtIsWMShell(w)) {
 		w = XtParent(w);
@@ -43,13 +34,43 @@ Widget w;
 	return w;
 }
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * The following put's new lines in a copy of its string argument
+ * at appropriate places to fit in lines of length MSG_LINE_LEN.
+ * and then makes a compound string of it with the default char set.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static XmString format_msg(char *msg)
+{
+	char *buf;
+	char *p1, *p2, *pm;
+	unsigned cursor;
+	XmString str;
+	if((buf = XtMalloc(strlen(msg) + 1)) == NULL) {
+		return(XmStringCreateLtoR(buf, XmFONTLIST_DEFAULT_TAG));
+	}
+	for(	p1 = buf, p2 = buf, pm = msg, cursor=0;
+		*p2 = *pm;
+		++p2, ++pm ) {
+		++cursor;
+		if(cursor >= MSG_LINE_LEN) {
+			if(*p1 == ' ') {
+				*p1 = '\n';
+				cursor = p2 - p1 - 1;
+			}
+		};
+		if(*p2 == ' ') {
+			p1 = p2;
+		}
+	}
+	str = XmStringCreateLtoR(buf, XmFONTLIST_DEFAULT_TAG);
+	XtFree(buf);
+	return str;
+}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * help_dialog: put up an information window without grabbing control
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void help_dialog(w, str)
-Widget w;
-char *str;
+void help_dialog(Widget w, char *str)
 {
 	Widget dialog_w, pane, help_text, form, widget;
 	extern void ok_reply();
@@ -108,8 +129,7 @@ char *str;
 	XtPopup(dialog_w, XtGrabNone);
 }
 
-void ok_reply(widget, shell)
-Widget widget, shell;
+void ok_reply(Widget widget, Widget shell)
 {
 	XtDestroyWidget(shell);
 }
@@ -117,9 +137,7 @@ Widget widget, shell;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * yes_no_dialog: ask a question with a mandatory yes/no answer
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-BOOL yes_no_dialog(w, question)
-Widget w;
-char *question;
+Boolean yes_no_dialog(Widget w, char *question)
 {
 	static Widget dialog;
 	XmString text, yes, no, confirm;
@@ -148,7 +166,7 @@ char *question;
 		XmStringFree(no);
 		XmStringFree(confirm);
 	}
-	text = XmStringCreateSimple(question);
+	text = format_msg(question);
 	XtVaSetValues(dialog, XmNmessageString, text, NULL);
 	XmStringFree(text);
 	XtManageChild(dialog);
@@ -185,9 +203,7 @@ XmAnyCallbackStruct *cbs;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * ok_dialog: error message which the user must confirm
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void ok_dialog(w, msg)
-Widget w;
-char *msg;
+void ok_dialog(Widget w, char *msg)
 {
 	static Widget dialog;
 	XmString text, ok, error;
@@ -213,7 +229,7 @@ char *msg;
 		XmStringFree(ok);
 		XmStringFree(error);
 	}
-	text = XmStringCreateSimple(msg);
+	text = format_msg(msg);
 	XtVaSetValues(dialog, XmNmessageString, text, NULL);
 	XmStringFree(text);
 	XtManageChild(dialog);
@@ -236,9 +252,7 @@ char *msg;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static char *file_name;
 
-char *file_dialog(w, opn)
-Widget w;
-char *opn;
+char *file_dialog(Widget w, char *opn)
 {
 	static Widget dialog;
 	XmString ok, title;
@@ -295,10 +309,10 @@ char *opn;
 }
 
 
-void file_sel_cb(w, reply, cbs)
-Widget w;
-NAT *reply;
-XmFileSelectionBoxCallbackStruct *cbs;
+void file_sel_cb(
+	Widget w,
+	NAT *reply,
+	XmFileSelectionBoxCallbackStruct *cbs)
 {
 	switch (cbs->reason) {
 		case XmCR_OK:

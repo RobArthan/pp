@@ -7,13 +7,9 @@
  * (c) ICL 1993
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-#include <Xm/XmAll.h>
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * MACROS
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-#define BOOL char
-#define TRUE 1
-#define FALSE 0
 
 #define NAT Cardinal
 #define INT long int
@@ -23,6 +19,7 @@
 #define STDERR 2
 
 #include <X11/Intrinsic.h>
+#include <Xm/XmAll.h>
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * TYPE DEFS
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -79,7 +76,7 @@ typedef struct menu_item {
 	extern void help_dialog(
 		Widget	w,
 		char	*msg);
-	extern BOOL yes_no_dialog(
+	extern Boolean yes_no_dialog(
 		Widget	w,
 		char	*question);
 	extern void ok_dialog(
@@ -90,14 +87,14 @@ typedef struct menu_item {
 		char	*opn	/* Save/Open/... */);
 #endif
 #ifndef _palette
-	extern BOOL add_palette(
+	extern Boolean add_palette(
 		Widget	w);
 #endif
 #ifndef _xmisc
 	extern void set_menu_item_sensitivity(
 		Widget	w,	/* menu widget */
 		NAT	i,	/* i-th menu entry */
-		BOOL	b	/* true => sensitise */);
+		Boolean	b	/* true => sensitise */);
 	extern void toggle_menu_item_sensitivity(
 		Widget	w,	/* menu widget */
 		NAT	i	/* i-th menu entry */);
@@ -124,6 +121,9 @@ typedef struct menu_item {
 		Widget	text,
 		char	*name);
 	extern Boolean *save_file(
+		Widget	text,
+		char	*name);
+	extern Boolean *save_file_as(
 		Widget	text,
 		char	*name);
 #endif

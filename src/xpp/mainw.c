@@ -65,11 +65,11 @@ static NAT q_head = 0;
 /* The following is used to implement undo in the edit menu */
 
 struct undo_details {
-	BOOL can_undo;		/* true iff. can do an undo */
-	BOOL moved_away;	/* true if the change is complete */
+	Boolean can_undo;	/* true iff. can do an undo */
+	Boolean moved_away;	/* true if the change is complete */
 	NAT first, last;
 	char *oldtext;
-} undo_buffer = {FALSE, TRUE, 0, 0, NULL};
+} undo_buffer = {False, True, 0, 0, NULL};
 
 /* Messages for various purposes */
 
@@ -77,7 +77,7 @@ static char *undo_redo[2] = {"Undo", "Redo"};
 
 static NAT undo_redo_index;
 
-static BOOL undoing;
+static Boolean undoing;
 
 static char* help_message =
 "\
@@ -155,7 +155,7 @@ static pid_t child_pgrp;
 
 static XtInputId app_ip_req;
 
-static BOOL listening;
+static Boolean listening;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * X MANAGEMENT OF THE MAIN WINDOW
@@ -172,7 +172,7 @@ static BOOL listening;
 static void scroll_out(buf, ct, ignored)
 char *buf;
 NAT ct;
-BOOL ignored;
+Boolean ignored;
 {
 
 	XmTextPosition ins_pos, last_pos;
@@ -585,7 +585,7 @@ XmAnyCallbackStruct *cbs;
 {
 	char *cmd;
 	Bool execute_command();
-	BOOL application_alive();
+	Boolean application_alive();
 	static void 
 		kill_application(),
 		send_nl(),
@@ -657,7 +657,7 @@ Widget w;
 XtPointer d;
 XmTextVerifyCallbackStruct *cbs;
 {
-	undo_buffer.moved_away = TRUE;
+	undo_buffer.moved_away = True;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -667,10 +667,10 @@ XmTextVerifyCallbackStruct *cbs;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void reinit_undo_buffer (cbs, cu)
 XmTextVerifyCallbackStruct *cbs;
-BOOL cu;
+Boolean cu;
 {
 	undo_buffer.can_undo = cu;
-	undo_buffer.moved_away = FALSE;
+	undo_buffer.moved_away = False;
 	undo_buffer.first = cbs->startPos;
 	undo_buffer.last = cbs->startPos;
 	if(undo_buffer.oldtext != NULL) {
@@ -687,7 +687,7 @@ Widget w;
 XtPointer d;
 XmTextVerifyCallbackStruct *cbs;
 {
-	BOOL restart = undo_buffer.moved_away;
+	Boolean restart = undo_buffer.moved_away;
 	NAT len;
 	char *cut_chars;
 /* XmGetSelection doesn't seem to work as one might like in a 
@@ -699,17 +699,17 @@ XmTextVerifyCallbackStruct *cbs;
 		cut_chars = XtMalloc(len + 1);
 		if(XmTextGetSubstring(w, cbs->startPos, len, len+1, cut_chars)
 			!= XmCOPY_SUCCEEDED) {
-			reinit_undo_buffer(cbs, FALSE);
+			reinit_undo_buffer(cbs, False);
 		} else {
 			cut_chars[len] = '\0';
-			reinit_undo_buffer(cbs, TRUE); /* for the XtFreee */
-			undo_buffer.moved_away = FALSE;
+			reinit_undo_buffer(cbs, True); /* for the XtFreee */
+			undo_buffer.moved_away = False;
 			undo_buffer.first = cbs->startPos;
 			undo_buffer.last = cbs->startPos + cbs->text->length;	
 			undo_buffer.oldtext = cut_chars;
 		}
 	} else if (restart) {
-		reinit_undo_buffer(cbs, TRUE);
+		reinit_undo_buffer(cbs, True);
 		undo_buffer.last = cbs->startPos + cbs->text->length;
 	} else {
 		undo_buffer.last += cbs->text->length;
@@ -742,8 +742,8 @@ Widget w;
 	NAT len;
 	char *str;
 	if(undo_buffer.can_undo) {
-		undoing = TRUE;
-		undo_buffer.moved_away = TRUE;
+		undoing = True;
+		undo_buffer.moved_away = True;
 		if(undo_buffer.oldtext == NULL) {
 			len = 0;
 			str = XtMalloc(len + 1);
@@ -766,7 +766,7 @@ Widget w;
 		}
 		XmTextShowPosition(w, fst);
 		XtFree(str);
-		undoing = FALSE;
+		undoing = False;
 	}
 }
 
@@ -834,7 +834,7 @@ gotpty:
 		app_ip_req = XtAppAddInput(app,
 			control_fd, (XtPointer) XtInputReadMask,
 			get_from_application, NULL);
-		listening = TRUE;
+		listening = True;
 	} else { /* Child */
 		close(control_fd);
 		dup2(slave_fd, 0);
@@ -857,7 +857,7 @@ gotpty:
  * Test whether the application is alive
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-BOOL application_alive()
+Boolean application_alive()
 {
 
 	return !kill(child_pid, 0);
@@ -873,7 +873,7 @@ XtPointer unused_p;
 	NAT ct;
 	static	char buf[1001];
 	while((ct = read(control_fd, buf, 1000)) > 0) {
-		scroll_out(buf, ct, FALSE);
+		scroll_out(buf, ct, False);
 	};
 }
 
@@ -891,11 +891,11 @@ XtPointer unused_p;
  * the line is taken to end at that boundary.
  * It returns true iff. it reduced the size of the queue.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static BOOL dequeue()
+static Boolean dequeue()
 {
 	NAT bytes_written, line_len, i, top;
-	BOOL sent_something = FALSE;
-	BOOL sys_error = FALSE;
+	Boolean sent_something = False;
+	Boolean sys_error = False;
 
 /* nothing to do if the queue is empty */
 	if(q_length == 0) {
@@ -929,7 +929,7 @@ static BOOL dequeue()
 				--line_len;
 			} else {
 				perror("xpp");
-				sys_error = TRUE;
+				sys_error = True;
 				ok_dialog(root, send_error_message);
 			}
 		}
@@ -938,7 +938,7 @@ static BOOL dequeue()
 /* display what was sent, if anything: */
 
 	if(sent_something)  {
-		scroll_out(queue + q_head, bytes_written, TRUE);
+		scroll_out(queue + q_head, bytes_written, True);
 		q_head = (q_head + bytes_written) % MAX_Q_LEN;
 		q_length -= bytes_written;
 	};
@@ -952,7 +952,7 @@ static BOOL dequeue()
  * it attempts to dequeue things.
  * It returns true if it got its argument onto the queue.
  * **** **** **** **** **** ***. **** **** **** **** **** **** */
-static BOOL enqueue(buf, siz)
+static Boolean enqueue(buf, siz)
 char *buf;
 NAT siz;
 {
@@ -1109,7 +1109,7 @@ static void post_mortem_tidy_up ()
 {
 	if(listening && !application_alive()) {
 		XtRemoveInput(app_ip_req);
-		listening = FALSE;
+		listening = False;
 	}
 }
 
@@ -1121,7 +1121,7 @@ static void kill_application ()
 	if(application_alive()) {
 		if(listening) {
 			XtRemoveInput(app_ip_req);
-			listening = FALSE;
+			listening = False;
 		};
 		kill(child_pid, SIGKILL);
 		waitpid(child_pid, NULL, WNOHANG);
