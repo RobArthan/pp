@@ -102,6 +102,9 @@ First version, based on \cite{DS/FMU/IED/DTD016}.
 	of the structure). Document is now ready for an
 	inspection.
 
+\item[Issue 1.16 20 August 1991]
+	rework done as required by Desk Check ID0039.
+
 \end{description}
 \subsection{Changes forecast}
 None.
@@ -144,7 +147,7 @@ HOL term.
 
 \subsubsection{Dependencies}
 
-The sml code in this document depends on the literate script
+The Standard ML code in this document depends on the literate script
 contained in \cite{DS/FMU/IED/DTD016} for the signature of
 $TypeInference$,
 and on~\cite{DS/FMU/IED/DTD015} for fixity information.
@@ -162,6 +165,11 @@ At present, there are no known deficiencies in this document.
 This code is largely believed to be self-documenting. Where
 this is not considered to be the case, additional description
 has been provided.
+The code is organised in to sections of the document
+which correspond to sections of the same name in
+the parent document \cite{DS/FMU/IED/DTD016}. A overview of
+the features of the code in each section can be found in
+\cite{DS/FMU/IED/DTD016}.
 =SML
 structure âTypeInferenceá : TypeInference = struct
 =TEX
@@ -169,10 +177,10 @@ structure âTypeInferenceá : TypeInference = struct
 =SML
 open Parser Unification;
 
-val ti_verbose = ref false;
+val âti_verboseá = ref false;
 
-val _ =
-new_flag {name = "ti_verbose", control=ti_verbose, check=fun_true, default = fun_true};
+(*val _ =
+new_flag {name = "ti_verbose", control=ti_verbose, check=fun_true, default = fun_true};*)
 
 type âENVá = string -> (EXTYPE*bool);
 type âINF_TUPLEá = EXTYPE TM * EXTYPE * SUBS;
@@ -469,7 +477,7 @@ in
 				then
 					string_of_int x
 				else
-					chr (x+96))
+					chr (x+(ord "a")-1))
 			)
 		end
 	);
@@ -561,14 +569,15 @@ fun âformat_extypeá (phi : SUBS) (namemap : (int * string) list) (t : EXTYPE) : 
 			  ExVartype (Unknown y) =>
 				((lassoc3 namemap y)
 				handle Fail msg =>
-				  error "format_extype" 16100 [fn()=>get_message msg])
+				  error "format_extype" 16100 [fn()=>get_message_text msg])
 			| Other => format_extype phi namemap Other)
-	|	ExType ("‹", [tya, tyb]) => (
+	|	ExType (s, tys as [tya, tyb]) => (
+		case get_fixity s of
+		Lex.Infix _ =>
 			brkt(format_extype phi namemap tya^" ‹ "^format_extype phi
-								namemap tyb))
-	|	ExType ("‰", [tya, tyb]) => (
-			brkt(format_extype phi namemap tya^" ‰ "^format_extype phi
-								namemap tyb))
+					namemap tyb)
+		|_	=>
+			brkt(format_list (format_extype phi namemap) tys ", ") ^ s)
 	|	ExType (s, tys) => (
 			brkt(format_list (format_extype phi namemap) tys ", ") ^ s)
 );
@@ -637,7 +646,7 @@ fun âunify1á (phi : SUBS) ((t1, t2) : EXTYPE * EXTYPE) (term : TY TM) (env : ENV
 		ti_errline 16002
 			[format_tm format_ty term];
 		ti_errline 16020 [format_extype1 phi t1, format_extype1 phi t2];
-		ti_errline 16022 [get_message msg];
+		ti_errline 16022 [get_message_text msg];
 		ti_errcontext (vars_in_term term env) phi;
 		fail "HOL type inferrer"  16000 [])
 );
@@ -651,7 +660,7 @@ fun âlist_unify1á (phi : SUBS) (tl : EXTYPE list) (term : TY TM) (env : ENV) : S
 		ti_errline 16002
 			[format_tm format_ty term];
 		ti_errline 16021 [format_list ((curry op ^ ":") o format_extype1 phi) tl ", "];
-		ti_errline 16022 [get_message msg];
+		ti_errline 16022 [get_message_text msg];
 		ti_errcontext (vars_in_term term env) phi;
 		fail "HOL type inferrer"  16000 [])
 );
@@ -662,7 +671,7 @@ fun âextype_to_type1á (phi : SUBS) (namemap : (int * string) list) (ty : EXTYPE)
 	extype_to_type phi namemap ty
 
 	handle Fail msg => error "extype_to_type" 16101
-		[fn() => get_message msg]
+		[fn() => get_message_text msg]
 );
 =TEX
 
@@ -717,15 +726,15 @@ and
 âti_letá (env : ENV) (tmlist : (TY TM * TY TM) list) (a : TY TM) (term : TY TM)
 	: INF_TUPLE = (
 
-	let	fun rep_is_varstruct nil = true
-		  | rep_is_varstruct (x::xs) = (
+	let	fun list_is_varstruct nil = true
+		  | list_is_varstruct (x::xs) = (
 			if is_varstruct x
 			then
-				rep_is_varstruct xs
+				list_is_varstruct xs
 			else
 				ti_fail 16010 term [format_tm format_ty x]);
 		val (left, right) = split tmlist;
-		val side_effect = rep_is_varstruct left
+		val side_effect = list_is_varstruct left;
 	in
 		ti_let1 env left right a term
 	end)
@@ -931,7 +940,7 @@ fun âextm_to_termá (phi : SUBS) (namemap : (int * string) list) ((Binder ("", a
 	in
 		mk_ (ta, tb)
 		handle Fail msg =>
-			error "extm_to_term" 16101 [fn() => get_message msg]
+			error "extm_to_term" 16101 [fn() => get_message_text msg]
 	end
   )|extm_to_term phi namemap (Binder (_, _, _)) =
 	error "extm_to_term" 16101 [fn()=>"Invalid Binder Construct"]
@@ -944,7 +953,7 @@ fun âextm_to_termá (phi : SUBS) (namemap : (int * string) list) ((Binder ("", a
 	in
 		mk_let (til, ta)
 		handle Fail msg =>
-			error "extm_to_term" 16101 [fn() => get_message msg]
+			error "extm_to_term" 16101 [fn() => get_message_text msg]
 	end)
   | extm_to_term phi namemap (Cond (c, a, b)) = (
 	let	val tc = extm_to_term phi namemap c;
@@ -953,7 +962,7 @@ fun âextm_to_termá (phi : SUBS) (namemap : (int * string) list) ((Binder ("", a
 	in
 		mk_if (tc, ta, tb)
 		handle Fail msg =>
-			error "extm_to_term" 16101 [fn() => get_message msg]
+			error "extm_to_term" 16101 [fn() => get_message_text msg]
 	end)
   | extm_to_term phi namemap (App (f, a, _)) = (
 	let	val tf = extm_to_term phi namemap f;
@@ -961,7 +970,7 @@ fun âextm_to_termá (phi : SUBS) (namemap : (int * string) list) ((Binder ("", a
 	in
 		mk_app (tf, ta)
 		handle Fail msg =>
-			error "extm_to_term" 16101 [fn() => get_message msg]
+			error "extm_to_term" 16101 [fn() => get_message_text msg]
 	end)
   | extm_to_term phi namemap (TmTyped (Id s, ty)) = ((
 	(case type_of_const s of
@@ -969,7 +978,7 @@ fun âextm_to_termá (phi : SUBS) (namemap : (int * string) list) ((Binder ("", a
 	|	Nil => mk_var)
 			(s, extype_to_type1 phi namemap ty)
 	)
-	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message msg]
+	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message_text msg]
 	)
   | extm_to_term phi namemap (TmTyped (SetDisplay tl, ty)) = (
 	(case tl of
@@ -979,7 +988,7 @@ fun âextm_to_termá (phi : SUBS) (namemap : (int * string) list) ((Binder ("", a
 				mk_enum_set til
 			end))
 
-	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message msg]
+	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message_text msg]
 	)
   | extm_to_term phi namemap (TmTyped (ListDisplay tl, ty)) = (
 	(case tl of
@@ -989,7 +998,7 @@ fun âextm_to_termá (phi : SUBS) (namemap : (int * string) list) ((Binder ("", a
 				mk_list til
 			end))
 
-	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message msg]
+	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message_text msg]
 
 	)
   | extm_to_term phi namemap (TmTyped (a, ty)) = extm_to_term phi namemap a
@@ -1002,7 +1011,7 @@ fun âextm_to_termá (phi : SUBS) (namemap : (int * string) list) ((Binder ("", a
 	in
 		mk_set_comp (ta, tb)
 		handle Fail msg =>
-			error "extm_to_term" 16101 [fn() => get_message msg]
+			error "extm_to_term" 16101 [fn() => get_message_text msg]
 	end)
   | extm_to_term phi namemap (ListDisplay _ ) =
 	error "extm_to_term" 16101 [fn() => "Invalid ListDisplay Construct"]
@@ -1010,15 +1019,15 @@ fun âextm_to_termá (phi : SUBS) (namemap : (int * string) list) ((Binder ("", a
 	error "extm_to_term" 16101 [fn() => "Invalid Id Construct"]
   | extm_to_term phi namemap (CharLit c) = (
 	mk_char c
-	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message msg]
+	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message_text msg]
 	)
   | extm_to_term phi namemap (StringLit s) = (
 	mk_string s
-	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message msg]
+	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message_text msg]
 	)
   | extm_to_term phi namemap (NumLit s) = (
 	mk_† s
-	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message msg]
+	handle Fail msg => error "extm_to_term" 16101 [fn() => get_message_text msg]
 	);
 =TEX
 
