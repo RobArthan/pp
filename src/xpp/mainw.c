@@ -132,10 +132,11 @@ XtAppContext app; /* global because needed in msg.c */
  * helpmenu	menubar	 the help menu
  *
  * All widgets except command have the same name in the
- * widget hierarchy as their C name above except command.
- * command is called "pp_text" in the Widget hierarchy
- * to allow keyboard translation resources to be set up
- * for all the text input windows at one go.
+ * widget hierarchy as their C name above except:
+ * 	command is called "pp_text" in the Widget hierarchy
+ * 	to allow keyboard translation resources to be set up
+ * 	for all text input windows at one go.
+ *	all menus are called "menu" for similar reasons
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 
@@ -296,8 +297,6 @@ setup_cmdwin(Bool edit_only)
  * Command window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	i = 0;
-	XtSetArg(args[i], XmNrows,	 		3); ++i;
-	XtSetArg(args[i], XmNcolumns, 			80); ++i;
 	XtSetArg(args[i], XmNeditable, 			True); ++i;
 	XtSetArg(args[i], XmNeditMode, 			XmMULTI_LINE_EDIT); ++i;
 	XtSetArg(args[i], XmNautoShowCursorPosition, 	True); ++i;
@@ -307,6 +306,7 @@ setup_cmdwin(Bool edit_only)
 
 	XtAddCallback(command,
 		XmNmodifyVerifyCallback, command_modify_cb, NULL);
+
 
 	XtAddCallback(command,
 		XmNmotionVerifyCallback, command_motion_cb, NULL);
@@ -333,13 +333,20 @@ if( !edit_only ) {
 	s3 = XmStringCreateSimple("Edit");
 	s4 = XmStringCreateSimple("Command");
 	s5 = XmStringCreateSimple("Help");
+if(!edit_only) {
 	menubar = XmVaCreateSimpleMenuBar(frame, "menubar",
 		XmVaCASCADEBUTTON, s1, 'F',
 		XmVaCASCADEBUTTON, s2, 'T',
 		XmVaCASCADEBUTTON, s3, 'E',
 		XmVaCASCADEBUTTON, s4, 'C',
 		XmVaCASCADEBUTTON, s5, 'H', NULL);
-
+} else {
+	menubar = XmVaCreateSimpleMenuBar(frame, "menubar",
+		XmVaCASCADEBUTTON, s1, 'F',
+		XmVaCASCADEBUTTON, s2, 'T',
+		XmVaCASCADEBUTTON, s3, 'E',
+		XmVaCASCADEBUTTON, s5, 'H', NULL);
+}
 	XmStringFree(s1);
 	XmStringFree(s2);
 	XmStringFree(s3);
@@ -362,7 +369,7 @@ if( !edit_only ) {
 	s6 = XmStringCreateSimple("Quit");
 
 	filemenu = XmVaCreateSimplePulldownMenu(
-		menubar, "file_menu", nmenus++, file_menu_cb,
+		menubar, "menu", nmenus++, file_menu_cb,
 		XmVaPUSHBUTTON, s1, "S", NULL, NULL,
 		XmVaPUSHBUTTON, s2, "a", NULL, NULL,
 		XmVaPUSHBUTTON, s3, "O", NULL, NULL,
@@ -385,7 +392,7 @@ if( !edit_only ) {
 	s1 = XmStringCreateSimple("Palette");
 
 	toolsmenu = XmVaCreateSimplePulldownMenu(
-		menubar, "tools_menu", nmenus++, tools_menu_cb,
+		menubar, "menu", nmenus++, tools_menu_cb,
 		XmVaPUSHBUTTON, s1, 'P', NULL, NULL,
 		NULL);
 
@@ -402,7 +409,7 @@ if( !edit_only ) {
 	undoing = FALSE;
 
 	editmenu = XmVaCreateSimplePulldownMenu(
-		menubar, "edit_menu", nmenus++, edit_menu_cb,
+		menubar, "menu", nmenus++, edit_menu_cb,
 		XmVaPUSHBUTTON, s1, 'C', NULL, NULL,
 		XmVaPUSHBUTTON, s2, 'o', NULL, NULL,
 		XmVaPUSHBUTTON, s3, 'P', NULL, NULL,
@@ -432,7 +439,7 @@ if( !edit_only ) {
 	s8 = XmStringCreateSimple("Quit");
 
 	cmdmenu = XmVaCreateSimplePulldownMenu(
-		menubar, "command_menu", nmenus++, cmd_menu_cb,
+		menubar, "menu", nmenus++, cmd_menu_cb,
 		XmVaPUSHBUTTON, s1, 'x', "Ctrl<Key>x", s2,
 		XmVaPUSHBUTTON, s3, 'x', "Ctrl<Key>m", s4,
 		XmVaSEPARATOR,
@@ -458,8 +465,8 @@ if( !edit_only ) {
 	s2 = XmStringCreateSimple("Other");
 
 	helpmenu = XmVaCreateSimplePulldownMenu(
-		menubar, "help_menu", nmenus++, help_menu_cb,
-		XmVaPUSHBUTTON, s1, 'G', NULL, NULL,
+		menubar, "menu", nmenus++, help_menu_cb,
+		XmVaPUSHBUTTON, s1, 'G', "Help", NULL,
 		XmVaPUSHBUTTON, s2, 'O', NULL, NULL,
 		NULL);
 
@@ -564,7 +571,7 @@ XmAnyCallbackStruct *cbs;
 		break;
 	case 1:
 		result = XmTextCopy(command, CurrentTime);
-		if(!result) {
+		if(!result && display) {
 			result = XmTextCopy(display, CurrentTime);
 		};
 		break;
@@ -659,7 +666,17 @@ XmAnyCallbackStruct *cbs;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * MONITORING CHANGES FOR THE UNDO COMMAND
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-
+/*
+ * What follows implements a very simple undo/redo facility.
+ * Undoable actions are:
+ *
+ *	typing a single character (possibly overstriking many others)
+ *	cut
+ *	paste (possibly overstriking some chars)
+ *	undo/redo
+ *
+ * Only the last action is undoable
+ */
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Monitor cursor motions:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -708,30 +725,26 @@ XmTextVerifyCallbackStruct *cbs;
 {
 	BOOL restart = undo_buffer.moved_away;
 	NAT len;
-	char *text, *cut_chars;
+	char *cut_chars;
 	TRACE("command_modify_cb");
 
-/* XmGetSelection doesn't seem to work as one would like in a 
- * callback like this. Therefore, if a block delete is being done,
- * we have to get the entire contents of the text window to find out
- * what's being deleted */
+/* XmGetSelection doesn't seem to work as one might like in a 
+ * callback like this. However XmTextGetSubstring is just the job
+ */
 
-	TRACE("command_modify_cb");
 	if(cbs->startPos < cbs->endPos) {
-		text = XmTextGetString(w);
 		len = cbs->endPos - cbs->startPos;
 		cut_chars = XtMalloc(len + 1);
-		if(text == NULL || cut_chars == NULL) {
+		if(XmTextGetSubstring(w, cbs->startPos, len, len+1, cut_chars)
+			!= XmCOPY_SUCCEEDED) {
 			reinit_undo_buffer(cbs, FALSE);
 		} else {
-			strncpy(cut_chars, text + (cbs->startPos), len);
 			cut_chars[len] = '\0';
 			reinit_undo_buffer(cbs, TRUE); /* for the XtFreee */
 			undo_buffer.moved_away = FALSE;
 			undo_buffer.first = cbs->startPos;
 			undo_buffer.last = cbs->startPos + cbs->text->length;	
 			undo_buffer.oldtext = cut_chars;
-			XtFree(text);
 		}
 	} else if (restart) {
 		reinit_undo_buffer(cbs, TRUE);
@@ -751,11 +764,11 @@ XmTextVerifyCallbackStruct *cbs;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Do an undo. Note that the text replacement will cause
- * the modify/verify call back monitor_typing to be invoked
+ * the modify/verify call back command_modify_cb to be invoked
  * so that the next undo will undo the undo (i.e. undo + undo = redo).
  * Since this will change the undo buffer we must copy the relevant
  * fields. We must set the moved_away field to indicate that we're
- * monitor_typing is to stop accumulating changes.
+ * command_modify_cb is to stop accumulating changes.
  * Any text inserted by the undo is selected and the insertion
  * position is set to the end of the undo point. The beginning
  * of the new selection (or the insertion point if no text was
