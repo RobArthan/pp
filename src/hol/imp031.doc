@@ -1,0 +1,969 @@
+% imp031.doc   %Z% $Date$ $Revision$ $RCSfile$
+
+=TEX
+% imp031.doc   %Z% $Date$ $Revision$ $RCSfile$
+\documentstyle[hol,11pt,TQ]{article}
+
+\TPPtitle{Implementation of Pretty Printer Support Structure}
+\TPPref{DS/FMU/IED/IMP031}
+\def\SCCSissue{$Revision$%
+}
+\TPPissue{\SCCSissue}
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPproject{FST PROJECT}
+
+=IGN
+
+Commands to process this document in various ways.
+
+make -f rel001.mkf imp031.dvi
+doc4tex imp031
+tex4dvi imp031
+bibtex imp031
+doc4tex imp031 ; tex4dvi imp031
+doc4tex imp031 ; tex4dvi imp031 ; bibtex imp031
+dvipage imp031 &
+
+doc4errors imp031
+usefile "imp031.sml";
+
+lasp -s imp031.doc > zz1
+lasp -s -u imp031.OKwords imp031.doc > zz1
+
+=TEX
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Standard}
+\TPPkeywords{HOL}
+\TPPauthor{A.J. Hammon & WIN01}  %% Mandatory field
+\TPPauthorisation{R.B.~Jones & FMU Manager}
+\TPPabstract{This document contains declarations for the supporting the
+	ICL~HOL pretty printer.  They form a framework for pretty
+	printing terms and are used to declare and install printing
+	functions for the concrete syntaxes of the languages supported
+	by or added into ICL~HOL.}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	Library
+}}
+
+%\ftlinepenalty=9999
+\makeindex
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\catcode`\_=\active
+\def\_{\kern.06em\vbox{\hrule height.1ex width.3em}\hskip0.1em\relax}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+\makeTPPfrontpage
+
+\vfill
+\begin{center}
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+\end{center}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{DOCUMENT CONTROL}
+
+%********************************************************************
+
+\subsection{Contents List}
+\tableofcontents
+% \listoftables
+
+%********************************************************************
+
+\subsection{Document Cross References}
+
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+%********************************************************************
+
+\subsection{Changes History}
+
+\begin{description}
+
+\item[\FormatDate{$Date$%
+}, issue \SCCSissue ] First issue.
+
+\end{description}
+
+%********************************************************************
+
+\subsection{Changes Forecast} \label{ChangesForecast}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{GENERAL}
+
+%********************************************************************
+
+\subsection{Scope}
+
+This document contains type declarations and the primitive pretty
+printing routines for Release~1 of the ICL HOL system.  These
+declarations and routines provide the hooks for adding printing
+routines for specific languages.
+
+%********************************************************************
+
+\subsection{Introduction}
+
+One goal of ICL HOL is to enable the embedding of other languages by
+providing many tools which may be used or readily extended in their
+support.  The pretty printer is one of these tools.  To this end the
+pretty printer is split into a number of main components.
+
+\begin{itemize}
+
+\item Basic textual output routines that provide string output, line
+	breaking, spacing and indentation are made available by the
+	Oppen style printing routines in~\cite{DS/FMU/IED/IMP024}.  In
+	the PolyML compiler the function $PolyML.install_pp$ provides
+	the same interfaces and very similar functionality.
+
+\item This document, which provides a framework for the printing of HOL
+	terms.  One of the difficulties in producing an extensible
+	pretty printer is the need to add new functions into a set of
+	mutually recursive routines without needing to edit and
+	recompile.  This framework provides the basic recursion
+	handling plus a mechanism for adding new functions into the
+	recursion.  (Adding is achieved by updating a Standard~ML
+	mutable value.)
+
+\item Language specific printing routines are placed in further
+	documents, those for the HOL concrete syntax are
+	in~\cite{DS/FMU/IED/IMP032}.
+
+\item The general printing functions, for converting HOL terms into
+	strings, are in the final component~\cite{DS/FMU/IED/IMP032}.
+	The smallest useful (i.e., useable) pretty printer requires
+	printing functions for at least the HOL language.  These also
+	supply a HOL~type printer plus derived printers for (e.g.)
+	theorems.
+
+\end{itemize}
+
+%********************************************************************
+
+%\subsection{Purpose and Background}
+
+%********************************************************************
+
+\subsection{Dependencies}
+
+Basic output mechanisms are provided by the Oppen style printing
+routines in~\cite{DS/FMU/IED/IMP024} and by the PolyML function
+$PolyML.install_pp$.
+
+To be of any use this primitive pretty printer requires language
+specific printing functions to be installed.  For HOL they are
+in~\cite{DS/FMU/IED/IMP032}.  If no printing functions can be found
+an error message is produced.  Note that the dependency
+upon~\cite{DS/FMU/IED/IMP032} is for achieving any useful
+functionality, it is not needed for successful compilation.
+
+The pretty printing facilities are installed into the PolyML system by
+the final pretty printer document~\cite{DS/FMU/IED/IMP024}.  No working
+pretty printer is available until them.
+
+%********************************************************************
+
+%\subsection{Interface}
+
+%********************************************************************
+
+\subsection{Algorithms}
+
+The basic algorithm of pretty printing uses a recursive descent of the
+tree that constitutes the HOL term or type to be printed.  The
+traversal order is such that the tree may be printed by side effects of
+the printing functions.
+
+%--------------------------------------------------------------------
+
+\subsubsection{Bracket Elimination}
+
+Bracket elimination is achieved during the recursive pass.  Each term
+or type production in the concrete syntax construct is given a
+precedence level, each position that a term or type may occur with the
+syntax construct production is also given a precedence level.  Brackets
+are output only when a comparison of these precedence levels shows that
+they are needed.
+
+%--------------------------------------------------------------------
+
+\subsubsection{Language Embedding}
+
+Terms are printed using the rules for a particular language.  HOL is
+the first language.  Other languages, such as~Z, are to be embedded in
+ICL~HOL.  Printing is always done in the context of a `current
+language'.  When the pretty printer is initially entered with a term
+its first task is to identify the language to be used.  If the
+outermost structure of the term is that of a HOL constant applied to a
+number of arguments then the language of that constant is chosen.  In
+all other cases the HOL term language, with concrete syntax given
+in~\cite{DS/FMU/IED/DEF001} is chosen.
+
+If a constant whose language is not the current language is found then
+the pretty printer produces text to indicate the quotation of one
+language within text of another.
+
+%--------------------------------------------------------------------
+
+\subsubsection{Concrete Syntax Forms}
+
+Printing the concrete syntax form of a HOL term involves finding
+applications of HOL constants.  The language of a constant is used to
+select a printing function, HOL is the default.  The task of this
+function is to format the constant and its arguments in their concrete
+form, it also passes information back to indicate whether it can print
+the arguments.  Three cases are distinguished.  Firstly the function
+could print the arguments, but too many provided.  Here the function
+prints nothing, it returns a number indicating how many arguments it
+could print.  Secondly the function cannot print the arguments at all,
+the arguments do not correspond to a concrete syntax form handled by
+the function.  Thirdly the function can prints the arguments, in which
+case it does so and returns a success indicator.
+
+The body of the printing function breaks the term into pieces that
+correspond to concrete syntax.  Printing is achieved by a sequence of
+outputs of fixed strings, of spaces and of recursive calls of the main
+pretty printing routine $main_term_pp$ for the pieces of the term.
+
+%********************************************************************
+
+\subsection{Possible Enhancements}
+
+Avoid the repetitive examination of constants for (e.g.) HOL lists that
+do not have $Nil$ as their tail.
+
+Print out HOL types in a language dependent manner.  Possibly by
+finding the language and a printing function for type constructors in a
+similar manner to the way that HOL constants are handled.
+
+When printing out HOL types (with the HOL concrete syntax) provide more
+controls for selecting when types are printed.  A useful control would
+produce the minimum amount of explicit typing that allows the text
+produced for a term to be successfully read back into the system.
+
+%********************************************************************
+
+%\subsection{Deficiencies}
+
+%********************************************************************
+
+\subsection{Terminology}
+
+\begin{description}
+
+\item[Associativity ] When operators are combined to form expressions
+	the evaluation order must be defined.  For example the
+	expression `$1-2-3$' may be `$(1-2)-3$' which yields `$-4$' or
+	it may be `$1-(2-3)$' which yields `$0$', the chosen order is
+	known as the associativity of the operator.  Left associativity
+	means grouped together on the left, or with brackets on the
+	left.  Correspondingly, right associativity means grouped
+	together on the right, or with brackets on the right.  Thus a
+	left associative subtract gives `$1-2-3 = -4$' and a right
+	associative subtract gives `$1-2-3 = 0$'.
+
+%\item[Left Associativity ] See Associativity.
+%\item[Right Associativity ] See Associativity.
+
+\end{description}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\newpage
+\section{PRETTY PRINTER SUPPORT STRUCTURE}
+
+%********************************************************************
+
+\subsection{Prelude}
+
+=SML
+structure âPrettyPrinterSupportá : PrettyPrinterSupport = struct
+=TEX
+
+=SML
+open OppenFormatting;
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{BRACKET REDUCTION}
+
+Bracket reduction (bracket elimination) uses a scheme based upon
+precedence levels which are determined from the concrete syntax of the
+languages being printed.  The discussion and examples of bracket
+reduction are centered on HOL, since that is the primary language of
+Release~1.  The mechanisms used are believed to be compatible with
+other languages.
+
+%********************************************************************
+
+\subsection{Mechanism}
+
+Each production in the concrete syntax construct for a HOL type or term
+is given a precedence level, each position where a term or type may
+occur with the syntax construct production is also given a precedence
+level.  Brackets are output only when a comparison of these precedence
+levels shows that brackets are needed.  The precedence levels are
+chosen so that most of the unnecessary brackets are eliminated.  The
+word `most' is correct in the previous sentence, brackets are inserted
+in a small number of cases where, strictly speaking, they are not
+necessary.  This is done partly to present output which the author
+believes is easier to read and partly because a much more complex
+algorithm would be needed to determine when some brackets were
+unnecessary.
+
+An example of a case which requires a complex algorithm to determine
+whether brackets are necessary.  All but one pair of brackets may be
+removed from the following HOL term, it does not matter which pair are
+retained.  If the binder term were replaced with a variable then all of
+the brackets may be removed.  The distinction may only be found when
+the binder is recognised.  Note that the operator `$\land$' binds more
+tightly than the `$=$' in this term.
+
+óHOL example
+	» (a € (b € (c € (d € (e € (ƒ f Ž g)))))) = h ¼
+æ
+
+The problem comes from the HOL syntax rule that binder terms extend as
+far to the right as possible.  Similar problems occur with `{\tt if}'
+and `{\tt let}' terms.  The solution adopted is to set the precedences
+so that binder terms (also `{\tt if}' and `{\tt let}' terms, for the
+same reason) are always bracketted when used as arguments to infix
+operators.
+
+Bracket reduction is merged into the recursive pass over the term by
+each printing routine having the enclosing precedence level as one of
+its input parameters.  A called routine, knowing the precedence of the
+concrete syntax production to be printed, compares the two
+precedences.
+
+Precedence levels are ordered in the same way as in the concrete
+syntax.  ``High'' precedences bind more tightly than ``low''
+precedences.  Each concrete syntax production (not the actual concrete
+syntax of~\cite{DS/FMU/IED/DEF001}, rather an idealised syntax that
+allows for the extra brackets that are inserted) is given a particular
+precedence level, if it is used in a higher precedence context then it
+must be enclosed in round brackets.  The round brackets themselves
+require the highest precedence level, thus never need to be enclosed in
+round brackets.  The context within round brackets is the lowest
+normally used precedence level allowing any concrete syntax production
+to be used without brackets.
+
+Precedence levels of the other concrete syntax productions are
+generally simple to decide.  All the self-bracketing forms assume
+highest normal precedence level and enclose the lowest.
+
+Using the precedence levels the basic algorithm for printing part of
+the HOL term language is then as follows.  A recursive routine
+traverses the input term outputting parts of the term as they are
+reached.  Arguments to the routine include the term to be printed and
+the precedence level of the current context.  The term is analysed to
+find its concrete syntax form, which has its own precedence level.  If
+the current context level is higher than that of the concrete syntax
+form then brackets are required.
+
+An extra set of low precedences are provided for use in places where
+brackets are always required.  E.g., in HOL pairs of values are formed
+using the infix comma as an operator, Tuples may be formed by nesting
+pairs, the comma is right associative allowing some brackets to be
+eliminated.  Having an extra precedence below the normal lowest level
+allows the general bracket elimination mechanism to be used to insert
+only those brackets that are necessary.
+
+%********************************************************************
+
+\subsection{Data Type for Precedence Levels}
+
+Precedence levels are identified by the constructors of $Prec_Context$,
+they are ordered by the comparison function $ge_prec$ which are
+declared below.  Values of type $Prec_Context$ form a series of partial
+orderings, one for each collection of concrete syntax productions.
+There are three for HOL, for terms, for types and for varstructs.
+Other languages will have their own partial orderings.  In HOL the
+processing of lists of declarations from the abbreviated form of nested
+binders (concrete syntax~\cite{DS/FMU/IED/DEF001} productions $BinDec$,
+$Block$ and $Vars_Ty$) are handled outside of the precedence
+structure.
+
+=SML
+datatype âPrec_Contextá
+	=	âpc_highestá
+	|	âpc_normalá		of int * int * bool
+	|	âpc_lowestá
+	|	âpc_very_lowá		of int * int * bool
+	;
+=TEX
+
+%********************************************************************
+
+\subsection{Precedence Comparison}
+
+A simple mechanism is used to produce a fully bracketed form, namely by
+getting virtually all precedence comparisons to indicate that brackets
+are required.
+
+=SML
+val pp_add_brackets : bool ref = ref false;
+val _ =
+new_flag {name = "âpp_add_bracketsá",  control=pp_add_brackets, default=fn () => false};
+=TEX
+
+=IGN
+set_flag("pp_add_brackets", true);
+set_flag("pp_add_brackets", false);
+=TEX
+
+The constructors of type $Prec_Context$ are ranked by converting them
+(with local function $pc_ord$) to integers.  This coding style was
+chosen because it is easier to understand than the full pattern match
+between all precedence pairs.
+
+=SML
+local
+	fun	âpc_ordá	pc_highest		= (4, 0, 0, false)
+	|	pc_ord		(pc_normal(a, b, c))	= (3, a, b, c)
+	|	pc_ord		pc_lowest		= (2, 0, 0, false)
+	|	pc_ord		(pc_very_low(a, b, c))	= (1, a, b, c)
+	;
+in
+	infix ge_prec;
+
+	fun	(outer:Prec_Context) âge_precá (inner:Prec_Context) = (
+		if !pp_add_brackets
+		then
+			case (outer, inner)
+			of (_, pc_very_low _) => true
+			| (pc_lowest, _) => false
+			| _ => true
+		else
+			let
+				val (o1, o2, o3, ia)	= pc_ord outer;
+				val (i1, i2, i3, ib)	= pc_ord inner;
+			in
+				if	o1 <> i1 then o1 > i1
+				else if	o2 <> i2 then o2 > i2
+				else if	o3 <> i3 then o3 > i3
+				else	ia andalso ib
+			end
+	);
+end;
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{HOL TERM PATTERNS}
+
+The basic pretty printing algorithm is to receive a term and split
+it up into one of a small number of patterns.
+
+=SML
+datatype âPATTERNá
+	=	âp_fun_appá	of string * TYPE * (TERM list)
+	|	âp_combá	of TERM * (TERM list)
+	|	âp_vará		of string * TYPE
+	|	âp_absá		of TERM * TERM
+	;
+=TEX
+
+Where:
+
+\begin{description}
+\def\ITEM#1{\item[$#1$ ] }
+
+\ITEM{p_fun_app} Function application of a constant (with name and
+	type) to a list of arguments.
+
+\ITEM{p_comb} Function application of a non-constant to a (possibly
+	empty) list of arguments.
+
+\ITEM{p_var, p_abs} As returned by $simple_dest_term$.
+
+\end{description}
+
+For each pattern, including $p_fun_app$, have a printing routine for
+the current language which gives the default printing form for that
+pattern type.
+
+\bigskip
+
+Function $open_up$ returns the pattern corresponding to a term.
+
+=SML
+fun âopen_upá (tm:TERM) : PATTERN = (
+let
+	fun aux tm1 rest = (
+		case simple_dest_term tm1
+		of	Const(str, ty) =>	p_fun_app(str, ty, rest)
+		|	Comb(t1, t2) =>	aux t1 (t2::rest)
+		|	_ =>			p_comb(tm1, rest)
+	);
+in
+	case simple_dest_term tm
+	of	Var str_ty =>		p_var str_ty
+	|	Const(str, ty) =>	p_fun_app(str, ty, nil)
+	|	Abs t1_t2 =>		p_abs t1_t2
+	|	Comb(t1, t2) =>	aux t1 [t2]
+end);
+=TEX
+
+If the given term is a constant applied to a list of arguments then
+return its name. 
+
+=SML
+fun âget_first_constá (tm:TERM) : string OPT = (
+	case open_up tm
+	of p_fun_app(const, _, _) => Value const
+	| _ => Nil
+);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{APPLICATIONS OF HOL CONSTANTS}
+
+For patterns of type $p_fun_app$ we have a table of functions indexed
+by language name.  The indicated function is called with the arguments
+of the constructor.  These printing functions return a value of the
+following type.
+
+=SML
+datatype âPFUN_ANSá
+	=	âpf_fewerá		of int
+	|	âpf_not_possibleá
+	|	âpf_oká
+	;
+=TEX
+
+If these functions cannot handle the quantity of arguments given in the
+list, but they could handle a smaller list, then they do nothing apart
+from returning $pf_fewer$ with their preferred number of arguments.  A
+function that can handle various number of arguments, but not the
+number given, must select the number it would prefer to print.  If they
+cannot handle the arguments at all then $pf_not_possible$ is returned.
+If they handled all of the arguments successfully and printed out the
+term then $pf_ok$ is returned.
+
+The calling sequence of these functions is to call them with all of the
+available arguments, if the result is $pf_fewer$ they are split into
+two portions, one of the required size, the other the remainder.  The
+function is called again, but not immediately, the second time it may
+only return $pf_ok$ (view the first call as setting a contract: the
+function says it cannot handle the initial set of arguments, but it
+contracts to handle a specified number of arguments if it is called
+again).  Pattern $p_fun_app$ after splitting becomes a use of pattern
+$p_comb$ where the single term is built from the required number of
+arguments, and the list holds the remainder.  The delay in making the
+second call stems from outputting the $p_comb$ that combines the two
+portions of the original call chain.
+
+If any function returns $pf_not_possible$ then its arguments are
+reformatted and printed using the more primitive formatting routines
+for the current language.
+
+Looping where the called function keeps returning different values with
+$pf_fewer$ should always terminate because the repackaging of the
+argument list (in function $handle_fun_app$) always makes the list
+smaller.
+
+%********************************************************************
+
+\subsection{Some Examples}
+
+\paragraph{HOL conditional} These expect three arguments:  condition,
+consequence and alternative.  The HOL printing function is entered, it
+recognises the constant name for a conditional.  If more than three
+arguments are given it returns $pf_fewer\;\;3$, if it is given less
+than three arguments it returns $pf_not_possible$, for exactly three
+arguments it does the following steps.
+
+\begin{itemize}
+
+\item If the enclosing precedence is greater than that of a conditional
+	then output an open bracket.
+
+\item Print an `{\tt if}'.
+
+\item Call the main printer recursively with the condition argument and
+	precedence of $pc_lowest$.
+
+\item Print a `{\tt then}'.
+
+\item Call the main printer recursively with the consequence argument
+	and precedence of $pc_lowest$.
+
+\item Print an `{\tt else}'.
+
+\item Call the main printer recursively with the alternative argument
+	and precedence indicating the last element of a conditional.
+
+\item If the enclosing precedence is greater than that of a conditional
+	then output a closing bracket.
+
+\end{itemize}
+
+There are some extra actions to set the spacing and indentation
+required at various places within the conditional.
+
+%--------------------------------------------------------------------
+
+\paragraph{HOL lists}  The constant $Cons$ would normally expect two
+arguments, the head element and the rest.  It will recursively examine
+the second argument until it does not find a $Cons$, if a $Nil$ is
+found then it has a list that can be printed using the HOL syntax for
+lists.  If anything else is found then the function returns
+$pf_not_possible$ and the $p_fun_app$ is printed in a more primitive
+form.
+
+A valid list is printed by a sequence of calls to output fixed strings,
+spacing and recursive calls of the main printer.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{CURRENT PRINTING ENVIRONMENT}
+
+Information about the current printing environment is passed to all
+called printing functions.  The value passed into a function is
+expected to be passed onto any printing function that it calls,
+although there may be some modifications.  In particular the four Oppen
+printing functions (components $pe_addstring$, $pe_beginb$, $pe_endb$
+and $pe_space$) should not be changed, they are the only output
+mechanism allowed to the printers.
+
+A number of functions are held in the environment, for convenience
+their types are named here.  Type $FUN_APP_PR$ is used for the
+application of constants to arguments.  The next types are used for the
+primitive HOL constructors with corresponding name.  Type
+$PRIM_PRS$ combines these types to hold the functions for `abs',
+`comb', `const', application and `var', its functions are given in
+alphabetical order.
+
+=SML
+datatype âPP_ENVá = pp_env of {
+	âpe_precá		: Prec_Context,
+	âpe_langá		: string,
+	âpe_fun_appá		: FUN_APP_PR,
+	âpe_combá		: COMB_PR,
+	âpe_constá		: VAR_CONST_PR,
+	âpe_vará		: VAR_CONST_PR,
+	âpe_absá		: ABS_PR,
+	âpe_addstringá		: string -> unit,
+	âpe_beginbá		: (int * bool) -> unit,
+	âpe_endbá		: unit -> unit,
+	âpe_spaceá		: (int * int) -> unit
+}
+
+withtype âFUN_APP_PRá	= PP_ENV -> string -> TYPE -> TERM list -> PFUN_ANS
+
+and âABS_PRá			= PP_ENV -> TERM -> TERM -> unit
+and âCOMB_PRá		= PP_ENV -> TERM -> TERM list -> unit
+and âVAR_CONST_PRá	= PP_ENV -> string -> TYPE -> unit;
+
+type âPRIM_PRSá		= (ABS_PR * COMB_PR * VAR_CONST_PR
+					* FUN_APP_PR * VAR_CONST_PR);
+=TEX
+
+Where:
+
+\begin{description}
+\def\ITEM#1{\item[$#1$ ] }
+
+\ITEM{pe_prec} The enclosing precedence context provided by the calling
+	printing function.
+
+\ITEM{pe_lang} The `current language'.
+
+\ITEM{pe_fun_app} The function for printing function applications
+	in the current language.
+
+\ITEM{pe_const, pe_comb, pe_var, pe_abs} The four functions for
+	printing the basic HOL term types in the current language.
+
+\ITEM{pe_addstring, pe_beginb, pe_endb, pe_space} The Oppen printing
+	functions to be used, see~\cite{DS/FMU/IED/IMP024}.
+
+\end{description}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{DATABASE OF PRINTING FUNCTIONS}
+
+A database of functions for printing each of the languages is held.
+
+As the number of expected languages is small a simple dictionary
+suffices to hold the database.
+
+=SML
+local
+
+open SimpleDictionary;
+
+val âdatabaseá : PRIM_PRS S_DICT ref = ref initial_s_dict;
+
+in
+
+fun âset_printersá (lang:string, functions : PRIM_PRS) : unit = (
+	if is_all_graphical lang
+	then
+		database := s_enter lang functions (!database)
+	else
+		fail "pretty_printer" 25004 nil
+);
+
+fun âget_printersá (lang:string) : PRIM_PRS OPT = (
+	s_lookup lang (!database)
+);
+
+end;
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{ENVIRONMENT MANIPULATION}
+
+A small number of functions are useful for altering $PP_ENV$ records.
+
+=SML
+fun âset_env_for_languageá (lang:string) (cur_env:PP_ENV) = (
+let
+	val pp_env{pe_lang = cur_lang, pe_addstring = cur_addstring, pe_beginb = cur_beginb,
+		pe_endb = cur_endb, pe_space = cur_space, pe_comb = comb,
+		pe_const = const, pe_var = var, pe_abs = abs, ...} = cur_env;
+
+	val (new_abs, new_comb, new_const, new_fun_app, new_var) = (
+		case get_printers lang
+		of Value printers => printers
+		| Nil => (	case get_printers "HOL"
+				of Value printers => printers
+				| Nil => fail "pretty_printer" 25003 nil
+			)
+	);
+in
+	pp_env{	pe_lang	= lang,
+			pe_prec		= pc_lowest,
+			pe_fun_app	= new_fun_app,
+			pe_comb	= new_comb,
+			pe_const	= new_const,
+			pe_var		= new_var,
+			pe_abs		= new_abs,
+			pe_addstring	= cur_addstring,
+			pe_beginb	= cur_beginb,
+			pe_endb	= cur_endb,
+			pe_space	= cur_space
+	}
+end
+);
+=TEX
+
+An initial environment is required, it does not do anything useful.
+
+=SML
+local
+	fun (dummy_fun_app : FUN_APP_PR) _ _ _ _ = pf_ok;
+	fun (dummy_abs : ABS_PR) _ _ _ = ();
+	fun (dummy_comb : COMB_PR) _ _ _ = ();
+	fun (dummy_var_const : VAR_CONST_PR) _ _ _ = ();
+in
+	fun initial_env (lang:string) ((addstring, beginb, space, endb):OPPEN_FUNS) = (
+		set_env_for_language lang
+			(pp_env	{	pe_lang	= " -- none -- ",
+						pe_prec		= pc_lowest,
+						pe_fun_app	= dummy_fun_app,
+						pe_comb	= dummy_comb,
+						pe_var		= dummy_var_const,
+						pe_const	= dummy_var_const,
+						pe_abs		= dummy_abs,
+						pe_addstring	= addstring,
+						pe_beginb	= beginb,
+						pe_endb	= endb,
+						pe_space	= space
+					})
+	);
+end;
+=TEX
+
+=SML
+fun âset_precá (new_prec:Prec_Context) (cur_env:PP_ENV) = (
+let
+	val pp_env{pe_lang = cur_lang, pe_fun_app = cur_fun_app, pe_comb = cur_comb,
+		pe_const = cur_const, pe_var = cur_var, pe_abs = cur_abs,
+		pe_addstring = cur_addstring, pe_beginb = cur_beginb, pe_endb = cur_endb,
+		pe_space = cur_space, ...} = cur_env;
+in
+	pp_env{	pe_lang	= cur_lang,
+			pe_prec		= new_prec,
+			pe_fun_app	= cur_fun_app,
+			pe_comb	= cur_comb,
+			pe_const	= cur_const,
+			pe_var		= cur_var,
+			pe_abs		= cur_abs,
+			pe_addstring	= cur_addstring,
+			pe_beginb	= cur_beginb,
+			pe_endb	= cur_endb,
+			pe_space	= cur_space
+	}
+end
+);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{LANGUAGE QUOTATIONS}
+
+These routines are used to output the language quotation symbols around
+any text to be output.
+
+=SML
+fun âstart_new_languageá (pp_env{pe_addstring=addstring, ...}:PP_ENV) new = (
+	addstring (	case new
+			of "HOL"	=> "»"
+			| "HOL:"	=> "»:"
+			| _		=> "»%%down%%" ^ new)
+);
+
+fun âconclude_new_languageá (pp_env{pe_addstring=addstring, ...}:PP_ENV) new = (
+	addstring "¼"
+);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{BASIC HOL TERM PRINTER}
+
+%********************************************************************
+
+\subsection{Printing Uses of HOL Constants}
+
+HOL constants may be applied to arguments or they may just be named.
+
+Function $handle_fun_app$ deals with uses of HOL constants, both
+applied uses and constants as arguments.  It calls the printing
+function for applications of constants in the current language.  If the
+printing function cannot print the values then a more primitive
+function is used.  For function applications this is component
+$pe_comb$, for non applied uses it is component $pe_const$, both from
+the current environment.
+
+If the printing function indicates that it can handle fewer arguments
+then they are recombined and passed to component $pe_comb$ from the
+current environment.  This routine will print the function application
+of a term to the excess arguments, the term will passed to function
+$main_term_pp$ which will open it up to find a $p_fun_app$, but this
+time it will have the correct number of arguments.
+
+The test of `$length\;\;args <= num$' is, strictly, unnecessary given
+the specification of how the functions should operate and the meaning
+of $pf_fewer$, however it is an easy check to make and may avoid some
+problems when writing or testing printing functions.
+
+=SML
+fun âhandle_fun_appá (cur_env:PP_ENV) (const:string) (const_ty:TYPE)
+		(args:TERM list) : unit = (
+let
+	val pp_env{pe_fun_app = do_fun_app, pe_comb=do_comb,
+		pe_const=do_const, ...} = cur_env;
+
+	val alias = SymbolTable.get_alias(const, const_ty);
+in
+	case do_fun_app cur_env alias const_ty args
+	of pf_not_possible => (
+		if length args = 0
+		then
+			do_const cur_env alias const_ty
+		else
+			do_comb cur_env (mk_const(alias, const_ty)) args
+		)
+	| pf_ok => ()
+	| pf_fewer num => (
+		if length args <= num
+		then
+			do_comb cur_env (mk_const(alias, const_ty)) args
+		else
+			do_comb cur_env
+				(revfold	(fn(el, prev) => mk_comb(prev, el))
+						(args to (num-1))
+						(mk_const(alias, const_ty))
+				)
+				(args from num)
+		)
+end
+);
+=TEX
+
+%********************************************************************
+
+\subsection{Main Recursive Entry Point}
+
+Function $main_term_pp$ is the function that is called by all the other
+term printing functions when they have a sub term to be printed.
+
+=SML
+fun âmain_term_ppá (cur_env:PP_ENV) (tm:TERM) : unit = (
+let
+	val pp_env{pe_comb=do_comb, pe_var=do_var, pe_abs=do_abs,
+		pe_lang=cur_lang, pe_beginb=beginb, pe_endb=endb, ...} = cur_env;
+in
+	case open_up tm
+	of p_fun_app(const, const_ty, args) =>
+		let
+			val lang = get_const_language const;
+		in
+			if cur_lang = lang
+			then
+				handle_fun_app cur_env const const_ty args
+			else (
+				start_new_language cur_env lang;
+				handle_fun_app (set_env_for_language lang cur_env)
+					const const_ty args;
+				conclude_new_language cur_env lang
+			)
+		end
+	| p_comb(head_fn, args)	=> do_comb	cur_env head_fn args
+	| p_var(name, ty)		=> do_var	cur_env name ty
+	| p_abs(tm1, tm2)		=> do_abs	cur_env tm1 tm2
+end
+);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\newpage
+\section{FINALE}
+
+%********************************************************************
+
+\subsection{End of Pretty Printer Structure}
+
+=SML
+end (* of structure PrettyPrinterSupport *);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%********************************************************************
+%--------------------------------------------------------------------
+
+\newpage
+
+\makeatletter
+\def\refstepcounter#1{\stepcounter{#1}\global\edef\@currentlabel{\csname
+	p@#1\endcsname\csname the#1\endcsname}}
+\makeatother
+
+\twocolumn[\section{INDEX}] \label{Index}
+
+\footnotesize
+\printindex
+
+\onecolumn
+
+\end{document}
