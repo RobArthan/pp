@@ -100,6 +100,8 @@ Performance tweak to {\it format\_list}.
 Replaced tree sort with a merge sort and optimised the string ordering function.
 \item[Issue 2.33] Copyright and banner updates for open source release.
 \item[Issue 2.34] PPDev-specific updates for open source release
+\item [Issue 2.35] Reworked various of the list-processing functions to make better use
+of time and space. Added set inclusion test for lists.
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -134,12 +136,6 @@ Versions of the general functions defined here
 may well be supplied with particular
 Standard ML compilers. It may improve performance if
 the supplied versions are used.
-
-Various functions could be recoded with auxiliary functions,
-to avoid passing unchanging arguments through a recursive loop, and such-like putative optimisations.
-
-The $Integer$ structure would be better reimplemented to work with
-decimal literal strings.
 
 \section{LIST UTILITIES}
 =SML
@@ -198,10 +194,15 @@ in
 end;
 =TEX
 =SML
-fun €filter› (pred : 'a -> bool) ([]:'a list) : 'a list = []
-| filter pred (a :: x) = (if pred a
-	then (a :: filter pred x)
-	else filter pred x
+fun €filter› (pred : 'a -> bool) (xs:'a list) : 'a list = (
+	let	fun aux acc [] = rev acc
+		|   aux acc (x :: xs) = (
+			if	pred x
+			then	aux (x :: acc) xs
+			else	aux acc xs
+		);
+	in	aux [] xs
+	end
 );
 =TEX
 \subsection{Lists as Sets}
@@ -253,26 +254,31 @@ fun €all› ((x :: xs) : 'a list) (cond : 'a -> bool) : bool = (
 
 $list\,drop\,cond$ is the list obtained by deleting all members
 of $list$ for which the boolean function $cond$ returns true.
-Could rewrite with auxiliary function.
 =SML
 fun (xs : 'a list) €drop› (cond : 'a  -> bool) : 'a list = (
-let fun aux (x :: xs) = (
-	if cond x
-	then aux xs
-	else x :: (aux xs)
-   ) | aux [] = [];
-in
-	aux xs
-end);
+	let	fun aux acc [] = rev acc
+		|   aux acc (x :: xs) = (
+			if	cond x
+			then	aux acc xs
+			else	aux (x :: acc) xs
+		);
+	in	aux [] xs
+	end
+);
 =TEX
 $list\,less\,what$ is the list obtained by deleting all members
 of $list$ which are equal to $what$.
 =SML
-fun ((x :: xs) : ''a list) €less› (what : ''a) : ''a list = (
-	if x = what
-	then xs less what
-	else x :: (xs less what)
-) | ([] : ''a list) less (_ : ''a) : ''a list = [];
+fun (xs : ''a list) €less› (what : ''a) : ''a list = (
+	let	fun aux acc [] = rev acc
+		|   aux acc (x :: morexs) = (
+			if	x = what
+			then	aux acc morexs
+			else	aux (x::acc) morexs
+		);
+	in	aux [] xs
+	end
+);
 =TEX
 $list\, grab\,what$ is the list obtained by inserting $what$
 at the head of $list$ if it is not a member of it already.
@@ -306,7 +312,6 @@ Note also that if one of the lists is small it is better
 supplied as the first list argument if efficiency is of
 the essence.
 
-Could rewrite $insert\_it$ with auxiliary function.
 =SML
 fun €union› (eq : ('a*'a) -> bool) (list1 : 'a list)(list2 : 'a list) : 'a list = (
 	let
@@ -362,22 +367,18 @@ fun (x : ''a list) €subset› (y : ''a list) : bool = (
 	all x (fn a => a mem y)
 );
 =TEX
-Given two lists, considered as sets are they equal:
+Given two lists, considered as sets, test whether the first is contained in the second:
 =SML
-fun ([]: ''a list)  €~=› ([]:''a list) : bool = true 
-| [] ~= _  = false
-| _ ~= [] = false
-| (a1 :: x1) ~= l2 = (
-let fun aux acc (a2 :: x2) = (
-	if (a1 = a2)
-	then (true, acc @ (x2 less a1))
-	else aux (a2 :: acc) x2
-	) | aux acc [] = (false, []);
-
-	val (ok,res) = aux [] l2;
-in
-	ok andalso ((x1 less a1) ~= res)
-end);
+fun ([]: ''a list)  €~<=› (_:''a list) : bool = true 
+| (a1 :: x1) ~<= l2 = (
+	a1 mem l2 andalso x1 ~<= l2
+);
+=TEX
+Given two lists, considered as sets, test whether they are equal:
+=SML
+fun (l1: ''a list)  €~=› (l2:''a list) : bool = (
+	l1 ~<= l2 andalso l2 ~<= l1
+);
 =TEX
 $diff$ is the set difference operator for lists.
 =SML
@@ -391,8 +392,6 @@ lists of pairs. The following associative lookup functions are
 used to implement application of such functions or relations.
 We will need some variations on the same theme.
 Each variation has left- and right-handed versions.
-
-They could all be rewritten with auxiliary functions.
 
 The first two variations are used to view a list of pairs as
 representing a total function. The function is applied to an argument
@@ -503,16 +502,19 @@ $list\_overwrite$ with a list of elements.
 Both work with the argument before value representation
 (corresponding to $lassoc\ldots$ above).
 
-Could rewrite with auxiliary function.
 =SML
-fun (((a, b) :: abs) : (''a * 'b) list) €overwrite› ((x, y) : ''a * 'b) : (''a * 'b) list = (
-	if a = x
-	then (x, y) :: abs
-	else (a, b) :: (abs overwrite (x, y))
-) | [] overwrite (x, y) = [(x, y)];
+fun (abs : (''a * 'b) list) €overwrite› ((xy as (x, y)) : ''a * 'b) : (''a * 'b) list = (
+	let	fun aux acc [] = rev (xy :: acc)
+		|   aux acc ((ab as (a, b)) :: moreabs) = (
+			if	a = x
+			then	rev acc @ (xy :: moreabs)
+			else	aux (ab :: acc) moreabs
+		);
+	in	aux [] abs
+	end
+);
 =TEX
 =SML
-
 fun (abs : (''a * 'b) list) €list_overwrite› (xys : (''a * 'b) list) : (''a * 'b) list = (
 	fold (fn (l1, l2) => l2 overwrite l1) xys abs
 );
@@ -520,11 +522,16 @@ fun (abs : (''a * 'b) list) €list_overwrite› (xys : (''a * 'b) list) : (''a * 'b
 $roverwrite$ and $list\_roverwrite$ are the value before
 argument versions of the above.
 =SML
-fun (((a, b) :: abs) : ('a * ''b) list) €roverwrite› ((x, y) : 'a * ''b)  : ('a * ''b) list = (
-	if b = y
-	then (x, y) :: abs
-	else (a, b) :: (abs roverwrite (x, y))
-) | ([] : ('a * ''b) list) roverwrite (x, y) = [(x, y)];
+fun (abs : ('a * ''b) list) €roverwrite› ((xy as (x, y)) : 'a * ''b) : ('a * ''b) list = (
+	let	fun aux acc [] = rev (xy :: acc)
+		|   aux acc ((ab as (a, b)) :: moreabs) = (
+			if	b = y
+			then	rev acc @ (xy :: moreabs)
+			else	aux (ab :: acc) moreabs
+		);
+	in	aux [] abs
+	end
+);
 =TEX
 =SML
 fun (abs : ('a * ''b) list) €list_roverwrite› (xys : ('a * ''b) list) : ('a * ''b) list = (
@@ -555,11 +562,12 @@ the pair of lists:
 [x_0, x_1, ... , x_k],  [y_0, y_1, ... , y_k]
 =TEX
 =SML
-fun €split› ((x, y) :: xys : ('a * 'b) list) : ('a list) * ('b list) = (
-	let	val (xs, ys) = split xys
-	in	(x :: xs, y :: ys)
+fun €split› (xys : ('a * 'b) list) : ('a list) * ('b list) = (
+	let	fun aux xacc yacc [] = (rev xacc, rev yacc)
+		|   aux xacc yacc ((x, y) :: morexys) = aux (x :: xacc) (y :: yacc) morexys;
+	in	aux [] [] xys
 	end
-) | split [] = ([], []);
+);
 =TEX
 $split3$ is the analogue of $split$ for lists of triples.
 =SML
@@ -572,10 +580,14 @@ fun €split3› ((x, y, z) :: xyzs : ('a * 'b * 'c) list) : ('a list) * ('b list) *
 $combine$ is the left inverse of $split$; it signals an error
 if its arguments are not lists of equal length.
 =SML
-fun €combine› ((x :: xs) : 'a list) ((y :: ys) : 'b list) : ('a * 'b) list = (
-	(x, y) :: combine xs ys
-) | combine ([] : 'a list) ([] : 'b list) : ('a * 'b) list = []
-|   combine _ _ = fail "combine" 1007 [];
+fun €combine› (xs : 'a list) (ys : 'b list) : ('a * 'b) list = (
+	let	fun aux acc [] [] = rev acc
+		|   aux acc (x :: morexs) (y :: moreys) = (
+			aux ((x, y) :: acc) morexs moreys
+		) | aux acc _ _ = fail "combine" 1007 [];
+	in	aux [] xs ys
+	end
+);
 =TEX
 $all\_different$ determines whether a list has any
 repeated entries:
@@ -597,30 +609,36 @@ slices of lists. The conventions are such
 that, e.g. $$[0,1,2,3] from 2 = [2,3]$$ and
 $$[0,1,2,3] to 2 = [0,1,2]$$.
 =SML
-fun ((h :: t) : 'a list) €from› (n : int) : 'a list = (
+fun ((ht as (_ :: t)) : 'a list) €from› (n : int) : 'a list = (
 	if n > 0
 	then t from (n-1)
-	else h :: t
+	else ht
 ) | [] from _ = [];
 =TEX
 =SML
-fun ((h :: t): 'a list) €to› (n: int) : 'a list = (
-	if n >= 0
-	then h :: (t to (n-1))
-	else []
-) | [] to _ = [];
+fun (xs: 'a list) €to› (n: int) : 'a list = (
+	let	fun aux acc [] _ = rev acc
+		|   aux acc (h :: t) i = (
+			if	i < 0
+			then	rev acc
+			else	aux (h :: acc) t (i - 1)
+		);
+	in	aux [] xs n
+	end
+);
 =TEX
 $interval\;a\;b$ is the list $[a,a+1,a+2\ldots,b]$.
 This is taken to be $[]$ if $a > b$ and to be $[a]$
 if $a = b$.
-Could rewrite with auxiliary function.
 =SML
 fun €interval› (a:int) (b:int) : int list = (
-	if a < b
-	then a :: interval (a+1) b
-	else if a = b
-	then [a]
-	else []
+	let	fun aux acc i = (
+			if	i < a
+			then	acc
+			else	aux (i :: acc) (i-1)
+		);
+	in	aux [] b
+	end
 );
 =TEX
 Map a function over a list - failure on an element is treated as do not include in the list.
