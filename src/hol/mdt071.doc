@@ -1,4 +1,8 @@
-%  $Id$ %Z%
+%  %Z% $Date$ $Revision$ $RCSfile$
+
+doctex mdt071 ; texdvi mdt071
+bibtex mdt071
+
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -21,7 +25,7 @@ Theory of Relations}
 %\TPPauthors{K.Blackburn & WIN01\\D.J.~King & WIN01}
 \TPPauthorisation{R.D.Arthan & Project Manager}
 \TPPabstract{A set of module tests are given for the 
-functions (conversions ,etc) associated with the
+functions (conversions, etc) associated with the
 theory of relations.
 It also checks that the theory design has been met by the theory implementation.}
 \TPPdistribution{\parbox[t]{4.0in}{%
@@ -37,9 +41,9 @@ It also checks that the theory design has been met by the theory implementation.
 \begin{document}
 \makeTPPfrontpage
 \vfill
-\begin{centering}
+\begin{center}
 \bf Copyright \copyright\ : International Computers Ltd 1992
-\end{centering}
+\end{center}
 \pagebreak
 \section{Document Control}
 \subsection{Contents List}
@@ -50,27 +54,43 @@ It also checks that the theory design has been met by the theory implementation.
 
 \subsection{Changes History} 
 \begin{description}
-\item[Issue \SCCSversion (\SCCSdate)]
 
-This is the first draft of the document.
+\item[Issues 1.1 to 1.6 ]
+	First drafts of the document.
+
+\item[\FormatDate{$Date$%
+}, issue \SCCSversion~]
+	Add checks of Spivey's rules from~\cite{Spivey92}, the Z~Reference Manual.
+
+%\item[\FormatDate{$Date$%
+%}, issue \SCCSversion~]
 
 \end{description}
-\subsection{Changes Forecast}
+%\subsection{Changes Forecast}
 
 \section{GENERAL}
 \subsection{Scope}
-This document contains the module testing of the functions (conversions ,etc) associated with the theory of relations, required by \cite{DS/FMU/IED/DTD071}.
+This document contains the module testing of the functions
+(conversions, etc) associated with the theory of relations, required
+by~\cite{DS/FMU/IED/DTD071}.
 The design is in \cite{DS/FMU/IED/DTD071} and it is implemented in \cite{DS/FMU/IED/IMP071}.
 
 \subsection{Introduction}
 \subsubsection{Purpose and Background}
-This document contains the module testing of the function material given a design in \cite{DS/FMU/IED/DTD071}, following the test policy given in that document and the general policy given in \cite{DS/FMU/IED/PLN008}.
+This document contains the module testing for the material given in the
+design document~\cite{DS/FMU/IED/DTD071}, following the test policy
+given in that document and the general policy given
+in~\cite{DS/FMU/IED/PLN008}.
 
 The testing uses material from \cite{DS/FMU/IED/DTD013}.
 
 \subsubsection{Dependencies}
-This document is derived from the detailed design in \cite{DS/FMU/IED/DTD071}, and is further influenced by the implementation, in  \cite{DS/FMU/IED/IMP071}.
-It also requires a theory check file, ``dtd071.tch'', created by \[doctch\ dtd071\]
+This document is derived from the detailed design
+in~\cite{DS/FMU/IED/DTD071} and is further influenced by the
+implementation in~\cite{DS/FMU/IED/IMP071}.  It also requires a theory
+check file, ``dtd071.tch'', created by running the Unix command ``{\tt
+doctch dtd071}''.
+
 \subsubsection{Deficiencies}
 None known.
 \section{INITIALISATION}
@@ -80,7 +100,11 @@ use_file "dtd013";
 use_file "imp013";
 init_mt_results();
 open_theory "bin_rel";
+
+val bin_rel_defs = map snd(get_defns "-");
+
 repeat drop_main_goal;
+repeat pop_pc;
 =TEX
 =SML
 fun list_eq (eq:'a * 'a -> bool) ((a :: x), (b :: y)) : bool = (
@@ -88,70 +112,412 @@ fun list_eq (eq:'a * 'a -> bool) ((a :: x), (b :: y)) : bool = (
 ) | list_eq eq ([], []) = true
 | list_eq _ _ = false;
 =TEX
-\section{TESTING FUNCTIONS OF THE DESIGN}
+
+
+\subsection{Timing}
+
+This section copied from~\cite{DS/FMU/IED/IMP059}, but edited a little.
+
+The following value allows timing to be invoked as on one off
+(false invokes timing).
+These functions are not currently used in the document,
+but would become useful if further tuning is required.
+
+=SML
+val Ûtac_timingÝ = ref true;
+=IGN
+tac_timing := true;
+tac_timing := false;
+=TEX
+
+=SML
+val Ûtac_diagÝ = ref true;
+
+fun debug s = if !tac_diag then diag_line s else ();
+=IGN
+tac_diag := true;
+tac_diag := false;
+=TEX
+
+Time the application of a tactic to a goal, and its resulting proof to its
+arguments.
+
+=SML
+local (* for timing functions *)
+
+fun report (l1, l2, ts, was_ok) = (
+let
+	val duration = System.processtime() - ts;
+in
+	(diag_string o implode)
+		[	l1
+		,	" for "
+		,	l2
+		,	" took: "
+		,	(string_of_int duration)
+		,	(if was_ok then "" else ", but failed")
+		]
+end
+);
+
+in (* local for timing functions *)
+
+fun ÛTIME_TÝ (name:string) (tac : TACTIC) : TACTIC = (
+	if ! tac_timing 
+	then ( fn asms_gl =>
+		let
+			val t1 = System.processtime ();
+			val (sgs, prf) = (tac asms_gl)
+				handle  E => (
+					report("Tactic setting", name, t1, false);
+					raise E
+					);
+			val sideeffect = report("Tactic setting", name, t1, true);
+		in
+			(sgs,(fn x => 
+			let
+				val t2 = System.processtime ();
+				val res = (prf x)
+					handle E => (
+						report("Tactic proof  ", name, t1, false);
+						raise E
+						);
+				val sideeffect = report("Tactic proof  ", name, t1, true);
+			in
+				res
+			end))
+		end
+	)
+	else tac);
+=TEX
+
+Time the application of a rule to a theorem.
+
+=SML
+fun Ûtime_ruleÝ (name:string) (rule : 'a -> THM) : 'a -> THM = (
+	if ! tac_timing
+	then (fn arg =>
+		let	val t1 = System.processtime ();
+			val s1 = rule arg
+				handle E => (report("Rule", name, t1, false);
+					raise E
+					);
+			val sideeffect = report("Rule", name, t1, true);
+		in
+			s1
+		end)
+	else rule
+);
+
+end (* of local for timing functions *);
+=TEX
+
+=IGN
+push_goal(nil, ¬ µ z · (Fst z, Snd z) = z ®);
+a(rewrite_tac [pair_clauses]);
+val fst_snd_lemma = pop_thm();
+
+push_goal(nil, ¬ µ z · z = (Fst z, Snd z) ®);
+a(rewrite_tac [pair_clauses]);
+val fst_snd_lemma1 = pop_thm();
+=TEX
+
+%\section{TESTING FUNCTIONS OF THE DESIGN}
 \section{CHECK THE THEORY DESIGN}
+
+=SML
+"Check the theory design";
+=TEX
+
 =SML
 use_file "dtd071.tch";
-store_mt_results mt_run [
+store_mt_results_show mt_run [
 ("theory design of bin_rel",
 	theory_check_success,
 	(),
 	true)];
 =TEX
+\newpage
 \section{CHECK THE PROOF CONTEXTS}
-=GFT
+
+=SML
+"Check the proof contexts";
+
+push_merge_pcs["'basic_prove_¶_conv","'bin_rel_ext","hol1"];
+=TEX
+
+=IGN
+set_merge_pcs["sets_ext", "'pair"];
+set_merge_pcs["sets_ext", "'pair1"];
+a(rewrite_tac bin_rel_defs THEN prove_tac nil);
+=TEX
+
+We save the test cases which allows us to rerun them later without
+actually typing in the term.  This block of code is not used by the
+normal test path.
+
+We expect several tests to fail at present.  We keep track of them
+to report the details at the end of the run.
+
+=SML
+val save_test_cases : (string * TERM) list ref = ref nil;
+val expected_fails : (string * TERM) list ref = ref nil;
+
+fun get_test_case (lab:string) = (
+	(lab, lassoc3 (!save_test_cases) lab)
+);
+
+fun run_test (lab:string, t:TERM) = (
+	diag_line("\n\n" ^ lab);
+	push_goal(nil, t);
+	a(TIME_T lab (prove_tac nil));
+	repeat drop_main_goal
+);
+
+fun get_failed_test_labels () =
+	map (fn (x,_) => x) (get_mt_results() drop (fn (_, x) => x));
+
+fun run_failed_tests() = (
+	let
+		val fails = get_failed_test_labels();
+		val e_fails = map (fn (x,_) => x) (!expected_fails);
+	in
+		map (run_test o get_test_case) (fails @ e_fails);
+		()
+	end
+);
+=TEX
+
+The normal test path uses these next declarations.
+
+=SML
 local
-fun map_tactic t = map (fn x => (
-		let	val a = push_pc "relation_ext";
-			val res = tac_proof(([],x),t);
-			val b = pop_pc()
-		in (snd o dest_thm) res
-		end))
+	fun aux (lab:string) (tm:TERM) : bool = ((
+			tac_proof((nil, tm), TIME_T lab (prove_tac nil));
+			true
+		) handle Fail _ => false
+	);
 in
-local
-val terms1 =
-	[
-		
-	];
-in
-val it =
-store_mt_results (mt_runf (list_eq(op =$)))[
-("proof context relation_ext_epc 1",
-	map_tactic contr_tac,
-	terms1,
-	terms1)];
-val it =
-store_mt_results (mt_runf (list_eq(op =$)))[
-("proof context relation_ext_epc 2",
-	map_tactic (REPEAT strip_tac),
-	terms1,
-	terms1)]
-end;
-local
-val terms2 =
-	[	
-	];
-in
-val it =
-store_mt_results (mt_runf (list_eq(op =$))) [
-("proof context relation_ext_epc 3",
-	map_tactic contr_tac,
-	terms2,
-	terms2)];
-val it =
-store_mt_results (mt_runf (list_eq(op =$))) [
-("proof context relation_ext_epc 4",
-	map_tactic (REPEAT strip_tac),
-	terms2,
-	terms2)]
-end;
+	fun make_test_case (lab:string, tm:TERM, expected_success:bool)
+			: string * (TERM -> bool) * TERM * bool = (
+		save_test_cases := (lab, tm) :: (!save_test_cases);
+		if expected_success then () else
+			expected_fails := (lab, tm) :: (!expected_fails);
+		(lab, aux lab, tm, expected_success)
+	);
 end;
 =TEX
 
-\section{END OF TESTS}
+These terms are copied from page~96 of the Z~Reference Manual~\cite{Spivey92}.
+
+
+=IGN
+:> map(make_test_case);
+val it = fn : (string * TERM * bool) list -> (string * (TERM -> bool) * TERM * bool) list
+
+:> store_mt_results_show mt_run ;
+val it = fn : (string * ('a -> TERM) * 'a * TERM) list -> (string * bool) list
+
+
+
 =SML
+store_mt_results_show mt_run (map make_test_case [
+("96_01",	¬ x  Dom R ¤ ( ¶ y · (x í y)  R ) ® , true ),
+("96_02",	¬ y  Ran R ¤ ( ¶ x · (x í y)  R ) ® , true ),
+
+(* 		¬ Dom { x1 í y1; ... ; xn í yn } = { x1; ... ; xn } ®
+			Spivey's statement *)
+("96_03a",	¬ Dom { } = { } ® , true ),
+("96_03b",	¬ Dom { x1 í y1 } = { x1 } ® , true ),
+("96_03c",	¬ Dom { x1 í y1; x2 í y2 } = { x1; x2 } ® , true ),
+("96_03d",	¬ Dom { x1 í y1; x2 í y2; x3 í y3 } = { x1; x2; x3 } ® , true ),
+("96_03e",	¬ Dom { x1 í y1; x2 í y2; x3 í y3; x4 í y4 } =
+				{ x1; x2; x3; x4 } ® , true ),
+("96_03f",	¬ ( ¶ y · ( x í y )  S1 ) ¤ x  Dom S1 ® , true ),
+("96_03g",	¬ Dom ( { x í y } À xy_s ) = { x } À Dom xy_s ® , true ),
+
+(* 		¬ Ran { x1 í y1; ... ; xn í yn } = { y1; ... ; yn } ®
+			Spivey's statement *)
+("96_04a",	¬ Ran { } = { } ® , true ),
+("96_04b",	¬ Ran { x1 í y1 } = { y1 } ® , true ),
+("96_04c",	¬ Ran { x1 í y1; x2 í y2 } = { y1; y2 } ® , true ),
+("96_04d",	¬ Ran { x1 í y1; x2 í y2; x3 í y3 } = { y1; y2; y3 } ® , true ),
+("96_04e",	¬ Ran { x1 í y1; x2 í y2; x3 í y3; x4 í y4 } =
+				{ y1; y2; y3; y4 } ® , true ),
+("96_04f",	¬ ( ¶ x · ( x í y )  S1 ) ¤ y  Ran S1 ® , true ),
+("96_04g",	¬ Ran ( { x í y } À xy_s ) = { y } À Ran xy_s ® , true ),
+
+("96_06",	¬ Dom ( Q À R ) = ( Dom Q ) À ( Dom R ) ® , true ),
+("96_07",	¬ Ran ( Q À R ) = ( Ran Q ) À ( Ran R ) ® , true ),
+("96_08",	¬ Dom ( Q ¡ R ) € ( Dom Q ) ¡ ( Dom R ) ® , true ),
+("96_09",	¬ Ran ( Q ¡ R ) € ( Ran Q ) ¡ ( Ran R ) ® , true ),
+
+("96_10",	¬ Dom { } = { } ® , true ),
+("96_11",	¬ Ran { } = { } ® , true )
+]);
+=TEX
+
+These terms are copied from page~97 of the Z~Reference Manual~\cite{Spivey92}.
+
+=SML
+store_mt_results_show mt_run (map make_test_case [
+("97_01",	¬ ( x í x')  Id X ¤ ( x  X ± x = x' ) ® , true ),
+("97_02",	¬ ( x í z )  P » Q ¤ ( ¶ y · (x, y)  P ± (y, z)  Q ) ® , true ),
+("97_03",	¬  P R_»_R ( Q » R ) = ( P » Q ) » R ® , true ),
+
+(*		¬ Id X » P = P ®
+			False *)
+("97_04a",	¬ Dom P € X ´ Id X » P = P ® , false ),
+("97_04b",	¬ Id X » P = X ò P ® , false ),
+
+(*		¬ P » Id Y = P ®
+			False *)
+("97_05a",	¬ Ran P  € Y ´ P » Id Y = P ® , false ),
+("97_05b",	¬ P R_»_R Id Y = P ’ Y ® , false ),
+("97_06",	¬ Id V » Id W = Id ( V ¡ W ) ® , false )
+
+(*		¬ (f o g) x = f(g x) ®
+			Spivey's statement, cannot be written here *)
+]);
+=TEX
+
+The last item above, i.e.,
+=INLINEFT
+¬ (f o g) x = f(g x) ®
+=TEX
+{} needs the functional application of relations, which is deferred to
+the "fun\_rel" theory in~\cite{DS/FMU/IED/DTD072}.
+
+These terms are copied from page~98 of the Z~Reference Manual~\cite{Spivey92}.
+
+=SML
+store_mt_results_show mt_run (map make_test_case [
+("98_01",	¬ S ò R = Id S » R ® , false ),
+(*		¬ S ò R = (S ¸ Y) ¡ R ®
+			Not enough detail *)
+("98_02",	¬ Ran R € Y ´ S ò R = (S ¸ Y) ¡ R ® , true ),
+("98_03",	¬ R ’ T1 = R » Id T1 ® , false ),
+(*		¬ R ’ T1 = R ¡ (X ¸ T1) ®
+			Not enough detail *)
+("98_04",	¬ Dom R € X ´ R ’ T1 = R ¡ (X ¸ T1) ® , true ),
+("98_05",	¬ Dom (S ò R) = S ¡ Dom R ® , true ),
+("98_06",	¬ Ran (R ’ T1) = Ran R ¡ T1 ® , true ),
+("98_07",	¬ S ò R € R ® , true ),
+("98_08",	¬ R ’ T1 € R ® , true ),
+("98_09",	¬ (S ò R) ’ T1 = S ò (R ’ T1) ® , true ),
+("98_10",	¬ S ò (V ò R) = (S ¡ V) ò R ® , true ),
+("98_11",	¬ (R ’ T1) ’ W = R ’ (T1 ¡ W) ® , true )
+]);
+=TEX
+
+These terms are copied from page~99 of the Z~Reference Manual~\cite{Spivey92}.
+
+=SML
+store_mt_results_show mt_run (map make_test_case [
+("99_01",	¬ Dom R € X ´ S á R = (X \ S) ò R ® , true ),
+("99_02",	¬ Ran R € Y ´ R  T1 = R ’ (Y \ T1) ® , true ),
+("99_03",	¬ (S ò R) À (S á R) = R ® , true ),
+("99_04",	¬ (R ’ T1) À (R  T1) = R ® , true )
+]);
+=TEX
+
+These terms are copied from page~100 of the Z~Reference Manual~\cite{Spivey92}.
+
+=SML
+store_mt_results_show mt_run (map make_test_case [
+("100_01",	¬ (y í x)  Rç~ê ¤ (x í y)  R ® , true ),
+("100_02",	¬ (Rç~ê)ç~ê = R ® , true ),
+("100_03",	¬ (Q » R)ç~ê = Rç~ê » Qç~ê ® , true ),
+("100_04",	¬ (Id V)ç~ê = Id V ® , false ),
+("100_05",	¬ Dom(Rç~ê) = Ran R ® , true ),
+("100_06",	¬ Ran(Rç~ê) = Dom R ® , true ),
+("100_07",	¬ Id(Dom R) € R » Rç~ê ® , false ),
+("100_08",	¬ Id(Ran R) € Rç~ê » R ® , false )
+]);
+=TEX
+
+These terms are copied from page~101 of the Z~Reference Manual~\cite{Spivey92}.
+
+=SML
+store_mt_results_show mt_run (map make_test_case [
+("101_01",	¬ y  R Image S ¤ (¶ x · x  S ± (x, y)  R) ® , true ),
+("101_02",	¬ R Image S = Ran(S ò R) ® , true ),
+("101_03",	¬ Dom(Q » R) = Qç~ê Image (Dom R) ® , true ),
+("101_04",	¬ Ran(Q » R) = R Image (Ran Q) ® , true ),
+("101_05",	¬ R Image (S À T1) = R Image S À R Image T1 ® , true ),
+("101_06",	¬ R Image (S ¡ T1) € R Image S ¡ R Image T1 ® , true ),
+("101_07",	¬ R Image (Dom R) = Ran R ® , true ),
+("101_08",	¬ Dom R = (Graph Fst) Image R ® , false ),
+("101_09",	¬ Ran R = (Graph Snd) Image R ® , false )
+]);
+=TEX
+
+These terms are copied from page~102 of the Z~Reference Manual~\cite{Spivey92}.
+
+=SML
+store_mt_results_show mt_run (map make_test_case [
+("102_01",	¬ R « R = R ® , true ),
+("102_02",	¬ P « (Q « R) = (P « Q) « R ® , false ),
+("102_03",	¬ P = { } « P ® , true ),
+("102_04",	¬ P = P « { } ® , true ),
+("102_05",	¬ Dom(Q « R) = Dom Q À Dom R ® , false ),
+("102_06",	¬ Dom Q ¡ Dom R = { } ´ Q « R = Q À R ® , true ),
+("102_07",	¬ V ò (Q « R) = (V ò Q) « (V ò R) ® , true ),
+("102_08",	¬ (Q « R) ’ W € (Q ’ W) « (R ’ W) ® , true )
+(*		¬ x  (Dom f) \ (Dom g) ´ (f « g) x = f x ® *)
+(*		¬ x  Dom g ´ (f « g) x = g x ® *)
+]);
+=TEX
+
+These terms are copied from page~103 of the Z~Reference Manual~\cite{Spivey92}.
+
+=GFT
+val terms103 = [
+("103_01",	¬ r € rç+ê ® , true ),
+("103_02",	¬ rç+ê » rç+ê € rç+ê ® , true ),
+("103_03",	¬ r € q ± q » q € q ´ rç+ê € q ® , true ),
+("103_04",	¬ Id X € rç*ê ® , true ),
+("103_05",	¬ r € rç*ê ® , true ),
+("103_06",	¬ rç*ê » rç*ê = rç*ê ® , true ),
+("103_07",	¬ Id X € q ± r € q ± q » q € q ´ rç*ê € q ® , true ),
+("103_08",	¬ rç*ê = rç+ê À Id x ® , true ),
+("103_09",	¬ rç*ê = ( r À Id x) ç+ê ® , true ),
+("103_10",	¬ rç+ê = r » rç*ê ® , true ),
+("103_11",	¬ rç+ê = rç*ê » r ® , true ),
+("103_12",	¬ ( rç+ê )ç+ê = rç+ê ® , true ),
+("103_13",	¬ ( rç*ê )ç*ê = rç*ê ® , true ),
+("103_14",	¬ s € rç*ê Image s ® , true ),
+("103_15",	¬ r Image ( rç*ê Image s ) € rç*ê Image s ® , true ),
+("103_16",	¬ s € t ± r Image t € t ´ rç*ê Image s € t ® , true )
+];
+
+store_mt_results_show mt_run
+	(map make_test_case terms103);
+=TEX
+
+\newpage
+\section{END OF TESTS}
+
+=SML
+diag_string "\n\n\
+	\We do not expect all of the rules from Spivey's Z Reference \
+	\Manual to be proven automatically by the proof context.  The \
+	\module tests here accomodate this view by having a boolean to \
+	\show the expected success or otherwise of the proof.  Tests \
+	\that unexpectedly fail to be proven are considered failed. \
+	\Less obviously, tests that are unexpectedly proven are \
+	\also considered failed.\n\n";
+
+("Expected proof failures", !expected_fails);
+
+diag_string(
+	(string_of_int(length(!expected_fails))) ^
+	" expected proof failures which are not counted as failing tests below.");
+
+("Number of failing tests",
+	length(map(fn (x,_) => x)
+		(get_mt_results() drop (fn (_, x) => x))));
 diag_string(summarize_mt_results());
 =TEX
+
 \end{document}
-
-
