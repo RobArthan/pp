@@ -92,10 +92,7 @@ static char* changed_message =
 "The text has been edited. Do you want to throw away the changes?";
 
 static char* help_message =
-"\
- This is a test help message which should presently be\n\
- replaced by a message amongst many introduced by\n\
- a more general mechanism";
+"The help system is not yet implemented. Sorry!";
 
 static char *no_selection_message =
 	 "No text has been selected";
