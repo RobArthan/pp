@@ -3,7 +3,7 @@
 \ftlinepenalty=9999
 \makeindex
 \TPPproject{IED 1563}  %% Mandatory field
-\TPPtitle{Release 1  ICL HOL: Implementation for Derived Terms}  %% Mandatory field
+\TPPtitle{Release 1 ICL HOL: Implementation for Derived Terms}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP004}  %% Mandatory field
 \def\SCCSversion{$Revision$
 }
@@ -18,7 +18,7 @@
 \TPPauthorisation{R.D.Arthan & FMU Manager}
 \TPPabstract{This document gives an implementation for functions concerning derived terms that are not used in defining the type $THM$.}
 \TPPdistribution{\parbox[t]{4.0in}{%
-	    R.D.~Arthan
+	    Library
 }}
 %\TPPclass{CLASSIFICATION}
 %\def\TPPheadlhs{}
@@ -43,8 +43,8 @@
 
 \subsection{Changes history}
 \begin{description}
-\item 1.1
-First version.
+\item 1.2
+First full version.
 Based on the first part of DS/FMU/IED/SML002.
 \end{description}
 \subsection{Changes forecast}
@@ -80,14 +80,16 @@ fun ‚dest_fun_type· ((mk_type ("ã",[t1, t2])): TYPE) : TYPE * TYPE = (t1, t2)
 =TEX
 As the $selector$ in the below is likely to just an error-trapped attempt to to apply the $destroyer$ this is less efficient than it might be in some instances.
 =SML
-fun ‚list_mk_binder· (maker : TERM * TERM -> TERM) ((tml, tm) : TERM list * TERM) : TERM = (
+fun ‚list_mk_binder· (maker : TERM * TERM -> TERM) ((tml, tm) 
+	: TERM list * TERM) : TERM = (
 let fun aux [] = tm
 	| aux (htm :: ttm) = maker(htm, (aux ttm))
 in
 	aux tml
 end);
 
-fun ‚strip_binder· (selector : TERM -> bool) (destroyer : TERM -> (TERM * TERM)) (tm : TERM) : TERM list * TERM = (
+fun ‚strip_binder· (selector : TERM -> bool) (destroyer : TERM -> (TERM * TERM)) 
+	(tm : TERM) : TERM list * TERM = (
 let fun aux tm1 =
 	if selector tm
 	then	let	val (v, tm2) = destroyer tm;
@@ -196,7 +198,7 @@ val ‚dest_Ä· : TERM -> (TERM * TERM) = dest_bin_op "dest_Ä" 4032 "Ä";
 
 val ‚is_Ä· : TERM -> bool = is_bin_op dest_Ä;
 
-val ‚list_mk_Ä· : TERM list -> TERM = list_mk_bin_op "list_mk_Ä" 4024 (bin_bool_op "Ä");
+val ‚list_mk_Ä· : TERM list -> TERM = list_mk_bin_op "list_mk_Ä" 4025 (bin_bool_op "Ä");
 
 val ‚strip_Ä· : TERM -> TERM list = strip_bin_op "Ä";
 =TEX
@@ -260,6 +262,7 @@ We implement $mk\_let$ to carry out three steps:
 \item
 Given a list of local bindings, $bindings$, process them with $process\_bindings$, to replace bindings of local functions, e.g. $f\ x\ =\ y$, with bindings of variable structures (actually the replacement will always be with variables) to abstractions, e.g. $f\ =\ ç\ x\ é\ y$.
 This gives us $bindings'$.
+Bindings to variable structures will be left unchanged in this step.
 \item
 Abstract, as a list, the variable structures of $bindings'$ from the body of the local definition, $bdy$, using $list\_mk\_abs$.
 \item
@@ -285,7 +288,9 @@ let
 	| aux ((t1, t2) :: blist) bd = aux blist (l_mk_let(t2, bd));
 
 	fun process_bindings ((t1, t2) :: blist) = (
-	let fun aux1 (Var v) = ((t1, t2) :: process_bindings blist)
+	if type_of t1 <> type_of t2
+	then fail "mk_let" 4008 []
+	else let fun aux1 (Var v) = ((t1, t2) :: process_bindings blist)
 		| aux1 (Comb cc) = (
 		 if is_pair t1
 		 then ((t1, t2) :: process_bindings blist)
@@ -305,7 +310,7 @@ end)
 handle complaint => list_divert complaint "mk_let" 
 	[("mk_abs", 4007, []),
 	 ("mk_comb", 4008, [])]
-);	
+);
 =TEX
 To destroy a $let\ldots in$, we first strip off as many $Let$'s as
 possible, saving the arguments as they are the values bound to.
@@ -314,7 +319,7 @@ The remaining term is the body of the local definition.
 
 The function will fail entirely if it attempts to destroy, e.g.
 \[let\ x\ =\ 1\ in\ (Let\ p\ q)\]
-where $p$ is not an abstractor, and $Let$ is the marker function for
+where $p$ is not an abstraction, and $Let$ is the marker function for
 local definitions.
 In this case, for instance, it would not return
 $([(x,\ 1)],\ (Let\ p\ q))$.
@@ -323,12 +328,11 @@ fun ‚dest_let· (tm : TERM) : (TERM * TERM)list * TERM = (
 	if is_bin_op (dest_bin_op "" 0 "Let") tm
 	then (let
 	fun get_values trm value_list = (
-		if is_bin_op (dest_bin_op "" 0 "Let") trm
-		then let val (bd, vl) = dest_bin_op "" 0 "Let" trm
+		let val (bd, vl) = dest_bin_op "" 0 "Let" trm
 		in
 			get_values bd (vl :: value_list)
 		end
-		else (value_list, trm));
+		handle _ => (value_list, trm));
 
 	fun get_vstructs trm value_list = (
 		let val (rev_vslist,bdy) = (
@@ -364,12 +368,11 @@ fun ‚list_mk_let· ((bindings, bdy):((TERM * TERM)list)list * TERM) : TERM = (
 fun ‚strip_let· (trm:TERM): ((TERM * TERM)list)list * TERM = (
 let
 	fun aux (tm:TERM) (bindings:((TERM * TERM) list)list) = (
-		if is_let tm
-		then let val (binding, bdy) = dest_let tm;
+		let val (binding, bdy) = dest_let tm;
 		in
 			aux bdy (binding :: bindings)
 		end
-		else (rev bindings, tm)
+		handle _ => (rev bindings, tm)
 	);
 in
 	aux trm []
@@ -677,6 +680,8 @@ fun ‚dest_DERIV_TERM· ((DVar v) : DERIV_TERM) : TERM = mk_var v
 =SML
 end; (* of DerivedTerms signature *)
 =TEX
+=SML
+open DerivedTerms;
 =TEX
 \twocolumn[\section{INDEX}]
 \small
