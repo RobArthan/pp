@@ -155,6 +155,7 @@ lasp -s -u imp005.OKwords imp005.doc > zz1
 \item[Issue \SCCSissue, \FormatDate{$Date$
 } ]
 	Avoid using $PolyML.makestring$. {}
+	Change keywords used for general quotations.
 
 %\item[Issue \SCCSissue, \FormatDate{$Date$
 %} ]
@@ -1578,10 +1579,6 @@ These forms of quotation are identified as follows.
 
 \subsection{General Quotations}
 
-This quotation style is to have the $language_code$ option removed,
-then specific characters or keywords will be required for each
-language.
-
 In all languages the two keywords `{\tt\%<\%}' and `{\tt\%>\%}' (and
 the corresponding extended characters) are used to denote embedding of
 text from another language.  The BNF syntax,
@@ -1590,7 +1587,7 @@ see~\cite{ds/fmu/ied/pln009}, is as follows.
 =GFTSHOW BNF
 quotation	=	'%<%', [ language_code ], quoted_text, '%>%';
 
-language_code	=	'%down%', name, white_space
+language_code	=	'%dntext%', name, '%cantext%'
 		|	':' ;
 =TEX
 
@@ -1609,6 +1606,13 @@ Where:
 The $name$ identifies the quoted language.  The default quotation is of
 a HOL term, which may also be indicated by a name of ``{\tt HOL}''.
 The colon form is equivalent to using the name ``{\tt HOL:}''.
+=IGN
+The extended character for keyword `{\tt\%cantext\%}' is
+included as part of the name held in the database and thus there is
+no explicit test for these characters.  Rather the extended character
+is added by function $add_general_reader$ however, this character
+must be removed when the name is passed on to the reader function.
+=TEX
 
 Convention.  Languages which yield HOL types should have a colon
 as the last character of their name.
@@ -2006,6 +2010,13 @@ end
 in
 =TEX
 
+=GFTSHOW BNF
+	'%<%', '%dntext%', name, '%cantext%'
+or
+	'¬', 'è', name, 'ê'
+
+=TEX
+
 =SMLPLAIN SML
 fun Ûadd_general_readerÝ (name1:string, name2:string, constructor:string,
 		reader:READER_FUNCTION) : unit = (
@@ -2066,11 +2077,14 @@ end (* of local for holding reader names *);
 
 \subsection{General Quotation}
 
+Function $get_language_name$ here returns the name of the
+language and a valid-name flag.
+
 {\ftlinepenalty=9999
 =SMLPLAIN SML
 local (* for function general_quotation *)
 
-fun Ûget_language_nameÝ (R:READER_ENV) : string = (
+fun Ûget_language_nameÝ (R:READER_ENV) : (string * bool) = (
 let
 	open PrettyNames;
 
@@ -2082,9 +2096,10 @@ let
 				of "\^D" => fail  "ReaderWriter" 5031 []
 				| _ => get_name (ch :: prev)
 			)
-		|	SymKnown(_, _, (_, _, Starting _)) => prev
-		|	SymKnown(_, _, (_, _, Ending _)) => prev
-		|	SymKnown(_, _, (_, _, Middle _)) => prev
+		|	sym as SymKnown(_, _, (_, _, Starting _)) => (#push_back R (expand_symbol sym); prev)
+		|	sym as SymKnown(_, _, (_, _, Ending _)) => (#push_back R (expand_symbol sym); prev)
+		|	sym as SymKnown(_, _, (_, _, Middle _)) => (#push_back R (expand_symbol sym); prev)
+		|	SymKnown(_, _, ("cantext"::_, Value ch, _)) => ch :: prev
 		|	SymKnown(_, _, (_, Value ch, _)) => get_name (ch :: prev)
 		|	SymKnown(_, _, (names, _, _)) => get_name ((hd names) :: prev)
 		|	SymUnknownKw(sym, _) => (
@@ -2104,13 +2119,17 @@ in
 	if next = "%" orelse ord next > 127
 	then
 		case read_symbol R
-		of	SymKnown(sym, _, ("down"::_, _, _)) => implode(rev(get_name nil))
-		|	sym => (#push_back R (expand_symbol sym); "")
+		of	SymKnown(sym, _, ("dntext"::_, _, _)) => (
+				case get_name nil
+				of "ê" :: name => (implode(rev name), true)
+				| name => (implode(rev name), false)
+			)
+		|	sym => (#push_back R (expand_symbol sym); ("", true))
 	else if next = ":"
 	then
-		(#advance R (); ":")
+		(#advance R (); (":", true))
 	else
-		""
+		("", true)
 end
 );
 =TEX
@@ -2131,10 +2150,12 @@ fun Ûgeneral_quotationÝ (R:READER_ENV) (start as (start_str, _):string * bool)
 		(prevA:string list)
 		: string list = (
 let
-	val lang_name = get_language_name R;
+	val (lang_name, valid) = get_language_name R;
 
 	val (reader, constructor) =
-			case look_up_general_reader (start_str, lang_name)
+			case	if valid
+				then look_up_general_reader (start_str, lang_name)
+				else Nil
 			of Nil => (
 				local_error  "general_quotation" 5011 nil;
 				(skipping_reader, ""))
