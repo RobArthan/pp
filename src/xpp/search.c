@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.14 2002/12/12 14:06:50 rda Exp rda $ 
+ * $Id: search.c,v 2.15 2003/01/17 17:09:30 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -257,6 +257,8 @@ Boolean add_search_tool(Widget text_w)
 		XmNcolumns,			40,
 		NULL);
 
+	XtAddCallback(search_text, XmNmodifyVerifyCallback, text_verify_cb, NULL);
+
 	attach_rw_edit_popup(search_text);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -340,6 +342,8 @@ Boolean add_search_tool(Widget text_w)
 		XmNrows,			2,
 		XmNcolumns,			40,
 		NULL);
+
+	XtAddCallback(replace_text, XmNmodifyVerifyCallback, text_verify_cb, NULL);
 
 	attach_rw_edit_popup(replace_text);
 
