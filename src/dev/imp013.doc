@@ -1,0 +1,269 @@
+=TEX
+% TQtemplate.tex
+\documentstyle[hol,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation of the Module Test Harness}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP013}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}  %% Mandatory field (with sensible default)
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.D.~Arthan & FST Team Leader}
+\TPPabstract{This document implements the module test harness
+described in document DS/FMU/IED/DTD013.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+      Library \\ R.D. Arthan\\ D.J. King}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history}  % to get section number `0.3'
+\begin{description}
+\item[Issue 1.1]
+First version, based on DS/FMU/IED/DTD011.
+\end{description}
+\subsection{Changes forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+
+This document contains Standard ML code for implementing the
+module test harness. It corresponds to the detailed
+design of the module test harness as specified
+in DS/FMU/IED/DTD013.
+
+\subsection{Introduction}
+
+\subsubsection{Background and Purpose}
+
+The purpose of this document is to provide an implementation
+of the module test harness for use in testing Standard ML code
+developed in the FST project. The harness described here
+requires testing. The tests for the harness are specified
+in DS/FMU/IED/MDT013.
+
+\subsubsection{Dependencies}
+
+The Standard ML code in this document depends on the
+literate script contained in  the document DS/FMU/IED/DTD013 for the
+signature $ModuleTest$.
+
+\subsubsection{Possible Enhancements}
+
+This document and the Standard ML code is subject to change.
+The document will be inspected in due course according
+to project standards and procedures. Also, the Standard ML
+code will be tested using the tests specified in the
+document DS/FMU/IED/MDT013.
+
+\subsubsection{Deficiencies}
+
+None known.
+
+\section{THE STRUCTURE $ModuleTest$}
+
+This section introduces the structure $ModuleTest$ which
+has the signature $ModuleTest$ specified in DS/FMU/IED/DTD013.
+The functions in this section are described in detail in that
+document. Description in this document is provided only
+where important design decisions have been made at the
+implementation level.
+
+=SML
+structure âModuleTestá : ModuleTest = struct
+=TEX
+
+\section{A FUNCTION FOR GENERATING ERROR MESSAGES FOR TEST DATA}
+
+=SML
+fun âgen_fail_msgá (s : string) (n : int) (us : string list) : string = (
+	(fail s n (map (fn f => (fn () => f)) us))
+	handle	Fail msg => get_message msg);
+=TEX
+
+\section{FUNCTIONS FOR RUNNING TESTS}
+
+If any exceptions are raised during the execution of a
+test case, then the exception is handled and the result
+is recorded as an failed test case.
+
+=SML
+fun âmt_runfá (compare : ('b * 'c) -> bool)
+	(nil : (string * ('a -> 'b) * 'a * 'c) list)
+		: (string * bool) list = nil
+  | mt_runf compare ((tcase, f, arg, res)::rest) = (
+	if compare(f arg,res)
+	then
+		(tcase,true)::mt_runf compare rest
+	else
+		(tcase,false)::mt_runf compare rest
+	handle	ANY => (tcase,false)::mt_runf compare rest);
+=TEX
+
+This function is implemented using $mt\_runf$ with the
+comparison function provided as $=$.
+=SML
+val âmt_runá : (string * ('a -> ''b) * 'a * ''b) list ->
+   (string * bool) list =
+	mt_runf (op =);
+=TEX
+
+This function will always fail test cases unless an
+exception with the constructor ``Fail'' is raised.
+
+=SML
+fun âmt_run_failá (nil : (string * ('a -> 'b) * 'a * string) list)
+	: (string * bool) list = nil
+  | mt_run_fail ((tcase, f, arg, ex_str)::rest) = (
+	let fun aux msg =
+		(if ex_str = get_message msg
+		then
+			(tcase,true)::mt_run_fail rest
+		else
+			(tcase,false)::mt_run_fail rest)
+	in
+		let val res = f arg
+		in
+			(tcase,false)::mt_run_fail rest
+		end
+
+		handle	Fail msg => aux msg
+		|	ANY => (tcase,false)::mt_run_fail rest
+	end);
+=TEX
+
+=SML
+fun âmt_run_errorá (nil : (string * ('a -> 'b) * 'a * string) list)
+	: (string * bool) list = nil
+  | mt_run_error ((tcase, f, arg, ex_str)::rest) = (
+	let fun aux msg =
+		(if ex_str = get_message msg
+		then
+			(tcase,true)::mt_run_error rest
+		else
+			(tcase,false)::mt_run_error rest)
+	in
+		let val res = f arg
+		in
+			(tcase,false)::mt_run_error rest
+		end
+
+		handle	Error msg => aux msg
+		|	ANY => (tcase,false)::mt_run_error rest
+	end);
+=TEX
+
+\section{FUNCTIONS FOR STORING AND PRINTING RESULTS}
+
+All test results are of the type $string * bool$. The
+results are stored in a place called $accumulator$ which
+refers to a list of test results. $accumulator$ is used
+by the rest of the functions in this structure for
+storing and subsequently retreiving results. $accumulator$
+is the implementation of the $results store$ notion introduced
+in DS/FMU/IED/DTD013.
+
+=SML
+val âaccumulatorá : ((string * bool) list) ref = ref [];
+=TEX
+
+=SML
+fun âinit_mt_resultsá (() : unit) : unit = (accumulator := []);
+=TEX
+
+=SML
+fun âstore_mt_resultsá (f : 'a -> (string * bool) list) (x : 'a) : unit
+	= (accumulator := (!accumulator)@(f x));
+=TEX
+
+=SML
+fun âstore_mt_results_showá (f : 'a -> (string * bool) list) (x : 'a) : (string * bool) list
+	 = (store_mt_results f x;
+		f x);
+=TEX
+
+=SML
+fun âget_mt_resultsá (() : unit) : (string * bool) list  = !accumulator;
+=TEX
+
+$summarize\_results$ is more complicated because it returns
+one string if the tests all passed. Otherwise it has to
+construct a string comprising the test case identifiers of
+all the tests that failed. The local functions $mt\_failed$
+and $mk\_string\_from\_list$ are provided to do this work.
+
+=SML
+fun âsummarize_mt_resultsá () = (
+	let	fun mt_failed nil = nil
+		  | mt_failed ((tcase,ok)::xs) = (
+			if ok = true
+			then
+				mt_failed xs
+			else
+				tcase::mt_failed xs);
+		fun mk_string_from_list nil = ""
+		  | mk_string_from_list (x::xs) =
+			" " ^ x ^ mk_string_from_list xs;
+	in
+		if mt_failed (!accumulator) = nil
+		then
+			"All module tests passed."
+		else
+			"The following module tests failed:"
+			^ mk_string_from_list (mt_failed (!accumulator))
+	end);
+=TEX
+
+=SML
+end; (* of structure ModuleTest *)
+=TEX
+
+=SML
+open ModuleTest;
+=TEX
+
+\newpage
+\twocolumn[\section{INDEX OF DEFINED TERMS}]
+\printindex
+\end{document}
