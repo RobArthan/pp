@@ -333,15 +333,34 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\section{PRINTING AUXILIARY FUNCTIONS}
+\section{AUXILIARY PRINTING FUNCTIONS}
+
 \subsection{Names}
+
+Function $chop_z_name$ splits a Z name into three pieces.  A leading
+``{\tt z'}'' is discarded.  The value returned has the body of the name
+and the decoration if any.
+
 =SML
-fun Ûmake_z_nameİ (name : string) : string = (
+local
+	fun aux((ch as "?") :: more, prev) = aux(more, ch::prev)
+	| aux((ch as "!") :: more, prev) = aux(more, ch::prev)
+	| aux((ch as "'") :: more, prev) = aux(more, ch::prev)
+	| aux(more, nil) = (implode(rev more), Nil)
+	| aux(more, prev) = (implode(rev more), (Value o implode o rev) prev)
+	;
+in
+
+fun Ûchop_z_nameİ (name : string) : string * string OPT = (
 	case explode name of
-		"z" :: "'" :: (more as(_ :: _)) => implode more
-	|	_ => name
+		"z" :: "'" :: (more as(_ :: _)) =>
+			aux (rev more, nil)
+	|	ename => aux (rev ename, nil)
 );
+
+end;
 =TEX
+
 \subsection{Simple Infix, Prefix and Postfix Operators}
 
 Function $Z_fun_app$ deals with the functionale application of
@@ -451,7 +470,20 @@ fun Ûdo_„_˜İ (cur_env:PP_ENV, name:string, tm:TERM) : PFUN_ANS = (
 );
 =TEX
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 \section{FANCY-FIX TERMS}
+
+A fancy fix expression is viewed as a list of terms and strings.  The
+terms are the subexpresions or arguments of the fancy fix expression,
+the strings are the parts of the identifier.  The goal is to take an
+identifier and its arguments and reformat them as a list of values of
+data type $Z_PIECE$ which contains the necessary terms and strings.
+Most of the functions involved in fancy fix formatting manipulate a
+optional list of these values, where an empty list is not expected, it
+would represent some sort of internal error.  The $Nil$ value is used
+to show that a routine has been unable to perform its part of the
+formatting and so the expression cannot be shown in a fancy fix form.
 
 =SML
 datatype ÛZ_PIECEİ
@@ -460,18 +492,49 @@ datatype ÛZ_PIECEİ
 	;
 =TEX
 
+After the pieces have been assembled we must decide upon how to format
+them.  This involves deciding (1)~where to output spaces; (2)~which
+spaces may be line breaks; (3)~where Oppen begin and end tokens are
+placed within the text; (4)~what sort of Oppen begin tokens are
+wanted.  To hold the results of these decisions we need another data
+structure.  Function $make_print_tokens$ makes the necessary decisions
+by converting lists of $Z_PIECE$s into $PRINT_TOKEN$s.
+
+=SML
+datatype ÛPRINT_TOKENİ
+	=	Ûpt_termİ	of TERM * PREC_CONTEXT
+	|	Ûpt_stringİ	of string
+	|	Ûpt_spaceİ	of int * int
+	|	Ûpt_beginbİ	of int * bool
+	|	Ûpt_endbİ
+	;
+=TEX
+
+%********************************************************************
+
 \subsection{Creation of the Pieces to Print}
+
+Function $format_fancy_fix$ basically merges its $tmpl$ and $args$
+arguments to form a single list which comprises the pieces of the fancy
+fix expression ready for printing.  If the merge is successful then the
+pretty printer can commit itself to printing the original term in fancy
+fix form, which is done in function $print_pieces$.  An unsuccessful
+merge is indicated by returning a $Nil$ value.
+
+This function is closly based upon a function of the same name
+from ``Z User Interface Support'~\cite{DS/FMU/IED/IMP079}.
 
 =SML
 fun Ûformat_fancy_fixİ
 	(class:CLASS)
 	(tmpl : TEMPLATE)
+	(decor : string OPT)
 	(args : TERM list)
 	: Z_PIECE list OPT = (
 let
-	val ids = rev(tmpl_ids tmpl class);
+	val rids = rev(tmpl_ids tmpl class);
 
-	val rids = rev ids;
+	val ids = rev(case (rids, decor) of ((i, f) :: t, Value d) => (i^d, f) :: t | _ => rids);
 
 	fun aux1 names tms = (
 		fold	(fn ((n, t), prev) => (zp_string n) :: (zp_term(t, PcLowest)) :: prev)
@@ -496,6 +559,8 @@ handle Fail _ => Nil
 );
 =TEX
 
+%********************************************************************
+
 \subsection{Identifying the Template}
 
 In determining whether a Z~identifier has some fancy fix form we make
@@ -503,11 +568,12 @@ several consistency checks, these aim to ensure that the text printed
 is compatible with the various symbol table information and so the
 parser can read back the text to generate the same term.
 
-(Following is wrong. It should chop decoration off the end of the name.)
+The $name$ argument here has already had any leading ``{\tt z'}''
+and trailing decoration discarded.
+
 =SML
-fun Ûget_template_infoİ(holname:string) : (TEMPLATE * CLASS * STUB list) OPT = (
+fun Ûget_template_infoİ(name:string) : (TEMPLATE * CLASS * STUB list) OPT = (
 let
-	val name = make_z_name holname;
 	val tmpl = template_of_string name handle Fail _ => TmplNon(name, Nil);
 	val fst_tmpl_name = first_tmpl_id tmpl;
 in
@@ -527,28 +593,36 @@ end
 );
 =TEX
 
+%********************************************************************
+
 \subsection{Printing the Pieces}
+
+Some analysis and modification must be done to the $Z_PIECE$s before
+printing.
+
+Function $analyse_prec$ determines the precedance of the pieces of the
+term.  This is the enclosed precedance of the term which will be used
+as the right hand argument of $gt_prec$ when the need for brackets is
+being determined.
 
 =SML
 local
+	fun class_p(ZClFun p) = pc_expr1_in_fun p
+	| class_p ZClRel = pc_pred2_rel
+	| class_p(ZClGen p) = pc_expr0_gen p
+	;
+
 	fun get_p(zp_term(_, p)) = p
 	| get_p(zp_string(_, (ff, cl))) = (
-		let
-			val clp =	case cl
-					of (ZClFun p) => pc_expr1_in_fun p
-					| ZClRel => pc_pred2_rel
-					| (ZClGen p) => pc_expr0_gen p
-		in
-			case ff
-			of ZFFBeginOp		=> PcHighest
-			| ZFFEndOp		=> PcHighest
-			| ZFFInOp		=> clp
-			| ZFFPostBeginOp	=> clp
-			| ZFFThenOp		=> PcLowest
-			| ZFFPostOp		=> clp
-			| ZFFPreEndOp		=> clp
-			| ZFFPreOp		=> clp
-		end
+		case ff
+		of ZFFBeginOp		=> PcLowest
+		| ZFFEndOp		=> PcLowest
+		| ZFFInOp		=> class_p cl
+		| ZFFPostBeginOp	=> class_p cl
+		| ZFFThenOp		=> PcLowest
+		| ZFFPostOp		=> class_p cl
+		| ZFFPreEndOp		=> class_p cl
+		| ZFFPreOp		=> class_p cl
 	);
 
 	fun aux(p, prev) = if p gt_prec prev then prev else p;
@@ -560,6 +634,9 @@ fun Ûanalyse_precİ (pieces:Z_PIECE list) : PREC_CONTEXT =(
 
 end;
 =TEX
+
+Function $set_end_precs$ sets the precedances of the first and last
+terms of the $Z_PIECE$s to the given value.
 
 =SML
 fun Ûset_end_precsİ (tm_prec:PREC_CONTEXT) (pieces:Z_PIECE list) : Z_PIECE list = (
@@ -573,22 +650,77 @@ in
 end
 );
 =TEX
-The spacing below is just wrong (you will get irrelevant space before
-and after beginops and endops
+
+Function $make_print_tokens$ decides how to format various types of
+fancy fix expression.  There are special cases for the three main
+forms, namely infix, postfix and prefix.  Note the enclosing text
+is responsible for adding Oppen begin and end tokens at the ends.
+
+=SML
+local
+	val hsp = pt_string " ";
+	val ssp = pt_space(1, 2);
+
+	fun aux nil = nil
+	| aux (zp_term t1 :: zp_string(s1, _) :: nil) =
+		ssp :: pt_term t1 :: hsp :: pt_string s1 :: nil
+	| aux (zp_string(s1, _) :: nil) = hsp :: pt_string s1 :: nil
+	| aux (zp_term t1 :: nil) = ssp :: pt_term t1 :: nil
+	| aux (zp_string(s1, _) :: more) = hsp :: pt_string s1 :: hsp :: aux more
+	| aux (zp_term t1 :: more) = ssp :: pt_term t1 :: ssp :: aux more
+	;
+in
+
+fun Ûmake_print_tokensİ (pieces:Z_PIECE list) : PRINT_TOKEN list = (
+	case pieces
+	of (zp_term t1 :: zp_string(s1, _) :: zp_term t2 :: nil) => (
+		(* Infix *)
+		pt_term t1 :: ssp :: pt_string s1 :: hsp :: pt_term t2 :: nil
+		)
+	| (zp_term t1 :: zp_string(s1, _) :: nil) => (
+		(* Postfix *)
+		pt_term t1 :: hsp :: pt_string s1 :: nil
+		)
+	| (zp_string(s1, _) :: zp_term t2 :: nil) => (
+		(* Prefix *)
+		pt_string s1 :: hsp :: pt_term t2 :: nil
+		)
+	| (zp_term t1 :: more) => (
+		pt_term t1 :: aux more
+		)
+	| (zp_string(s1, _) :: more) => (
+		pt_string s1 :: aux more
+		)
+	| nil => nil
+);
+
+end;
+=TEX
+
+Finally, function $print_pieces$ combines the various modifiers and
+prints out the fancy fix expresion.  Note that whilst this
+function returns a value of type $PFUN_ANS$ it may only return the
+value $PfOk$ (which is done by function $bracket$ here) because at
+this stage in the processing it is been decided that the expression
+will be printed in a fancy fix fashion.
+
 =SML
 fun Ûprint_piecesİ (cur_env:PP_ENV) (pieces:Z_PIECE list) : PFUN_ANS = (
 let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring,
 		pe_beginb=beginb, pe_space=space, pe_endb=endb, ...} = cur_env;
 
-	val tm_prec:PREC_CONTEXT = analyse_prec pieces;
-	val pieces1:Z_PIECE list = set_end_precs tm_prec pieces;
+	val tm_prec = analyse_prec pieces;
+	val pieces1 = make_print_tokens(set_end_precs tm_prec pieces);
 in
-	bracket(cur_env, tm_prec, false,
-		fn e => (map(	fn zp_term(t, p) => main_term_pp (set_prec p e) t
-				| zp_string(s, _) => (
-					space(1,2); addstring s; space(1,2)
-				)) pieces1
+	bracket(cur_env, tm_prec, true,
+		fn e => (map(	fn pt_term(t, p) => main_term_pp (set_prec p e) t
+				| pt_string s => addstring s
+				| pt_space ss => space ss
+				| pt_beginb ss => beginb ss
+				| pt_endb => endb()
+				)
+				pieces1
 			; ()
 			)
 	)
@@ -596,27 +728,33 @@ end
 );
 =TEX
 
+%********************************************************************
+
 \subsection{Dealing with Functional Applications}
 
 =SML
-fun Ûget_fancy_fixİ(name:string, (* ty:TYPE, hd_term:TERM, *) arg_tm:TERM) : Z_PIECE list OPT = (
+fun Ûget_fancy_fixİ(fullname:string, arg_tm:TERM) : Z_PIECE list OPT = (
+let
+	val (name, decor) = chop_z_name fullname;
+in
 	case get_template_info name
 	of Nil => Nil
 	| Value(tmpl, class, stubs) => (
 		if length stubs = 1
 		then
-			format_fancy_fix class tmpl [arg_tm]
+			format_fancy_fix class tmpl decor [arg_tm]
 		else
 			let
 				val args = dest_z_tuple arg_tm (* may fail *);
 			in
 				if length args = length stubs
 				then
-					format_fancy_fix class tmpl args
+					format_fancy_fix class tmpl decor args
 				else
 					Nil
 			end handle Fail _ => Nil
 	)
+end
 );
 =TEX
 =SML
@@ -644,7 +782,7 @@ let
 	val PpEnv{pe_space=space, ...} = cur_env;
 in
 	case get_fancy_fix1(hd_term, arg_tm)
-	of Nil => bracket(cur_env, pc_expr2, false,
+	of Nil => bracket(cur_env, pc_expr2, true,
 			fn e => (
 				main_term_pp (set_prec pc_expr2_lhs e) hd_term;
 				space(1, 2);
@@ -656,31 +794,40 @@ end
 );
 =TEX
 
+%********************************************************************
+
 \subsection{Dealing with Generics}
 
 =SML
-fun Ûdo_genericİ (cur_env:PP_ENV) (name:string, _:TYPE, tms:TERM list) : PFUN_ANS = (
-	case 
+fun Ûdo_genericİ (cur_env:PP_ENV) (fullname:string, _:TYPE, tms:TERM list)
+		: PFUN_ANS = (
+let
+	val (name, decor) = chop_z_name fullname;
+in
+	case
 		case get_template_info name
 		of Nil => Nil
 		| Value(tmpl, class, stubs) => (
 			if length tms = length stubs
 			andalso all tms is_u
 			then
-				format_fancy_fix class tmpl tms
+				format_fancy_fix class tmpl decor tms
 			else
 				Nil
 		)
 	of Value pieces => print_pieces cur_env pieces
-	| Nil => bracket(cur_env, pc_expr3_gvar, false,
+	| Nil => bracket(cur_env, pc_expr3_gvar, true,
 		fn e => (
 			let val PpEnv {pe_addstring = addstring, ...} = cur_env;
 			in	addstring name;
 				do_wrapped_list("[", ",", "]", tms) e
 			end
 		))
+end
 );
 =TEX
+
+%********************************************************************
 
 \subsection{Dealing with Relations}
 =SML
@@ -690,6 +837,8 @@ fun Ûdo_relationİ (cur_env:PP_ENV, (l:TERM, r:TERM)) : PFUN_ANS = (
 	| Nil => bracket(cur_env, pc_pred2_, false, do_infix("", (l, r)))
 );
 =TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \section{APPLICATION OF CONSTANT OR VARIABLE}
 
@@ -734,11 +883,15 @@ of Zdec(tms, dec_ty) => (
 	endb();
 	PfOk
 )
+=TEX
+=SML
 | Zdecsexp(decl, decor) => (
 	main_term_pp cur_env decl;
 	addstring decor;
 	PfOk
 )
+=TEX
+=SML
 | Zdecl tms => (
 	let
 		fun aux nil = ()
@@ -808,7 +961,10 @@ Global variables, $Zgvar$, have their generic parameters in the list
 
 =SML
 | Zgvar(name, var_ty, nil) => (
-	addstring (make_z_name name);
+	addstring(
+		case chop_z_name name
+		of (n, Value d) => n ^ d
+		| (n, Nil) => n);
 	PfOk
 )
 | Zgvar name_args => do_generic cur_env name_args
@@ -852,25 +1008,25 @@ Now a simplistic treatment for $ZString$
 	)
 )
 | Zğ tm => bracket(cur_env, pc_expr1_ğ, false, do_prefix("ğ", tm))
-| Ztuple tms => bracket(cur_env, PcHighest, false, do_wrapped_list("(", ",", ")", tms))
+| Ztuple tms => bracket(cur_env, PcHighest, true, do_wrapped_list("(", ",", ")", tms))
 | Z¸ tms => bracket(cur_env, pc_expr0_¸, true, do_list(false, "¸", tms))
 =TEX
 
 =SML
-| ZÊ(tm, "") => bracket(cur_env, pc_schema_name, false,
+| ZÊ(tm, "") => bracket(cur_env, pc_schema_name, true,
 	fn e => (
 		addstring "Ê";
 		main_term_pp e tm
 	)
 )
-| ZÊ(tm, decor) => bracket(cur_env, pc_schema_name, false,
+| ZÊ(tm, decor) => bracket(cur_env, pc_schema_name, true,
 	fn e => (
 		addstring "Ê";
 		main_term_pp e tm;
 		addstring decor
 	)
 )
-| Zsel(tm, sel) => bracket(cur_env, pc_expr3_sel, false,
+| Zsel(tm, sel) => bracket(cur_env, pc_expr3_sel, true,
 	fn e => (
 		main_term_pp e tm;
 		addstring ".";  (* full stop "." for selection *)
@@ -911,7 +1067,7 @@ Horizontal schemas.
 Useage of a schema, with optional decoration.
 
 =SML
-| Zdec‰s(tm, decor) => bracket(cur_env, pc_schema_name, false,
+| Zdec‰s(tm, decor) => bracket(cur_env, pc_schema_name, true,
 	fn e => (
 		main_term_pp e tm;
 		addstring decor
@@ -933,7 +1089,7 @@ Useage of a schema, with optional decoration.
 | Z»‰s tms => bracket(cur_env, pc_sch1_», false, do_infix("»", tms))
 =TEX
 =SML
-| Zhide‰s(tm, strs) => bracket(cur_env, pc_sch1_hide, false,
+| Zhide‰s(tm, strs) => bracket(cur_env, pc_sch1_hide, true,
 	fn e => (
 		main_term_pp e tm;
 		space(1, 2);
@@ -949,7 +1105,7 @@ Useage of a schema, with optional decoration.
 | Z˜‰s tm => do_„_˜(cur_env, "˜", tm)
 =TEX
 
-According to the grammar in~\cite{Spivey1992} renaming is just an
+According to the grammar in~\cite{Spivey92} renaming is just an
 optional component of a schema reference, we therefore use the same
 precedance.
 
@@ -960,7 +1116,7 @@ precedance.
 
 		fun pr_comma_2ids ids = (addstring ","; space(1, 2); pr_2ids ids)
 	in
-		bracket(cur_env, pc_sch1_ref, false,
+		bracket(cur_env, pc_sch1_ref, true,
 			fn e => (
 				main_term_pp e tm;
 				space(1, 2);
