@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.24 2002/05/18 10:21:36 rda Exp rda $
+ * $Id: mainw.c,v 2.25 2002/08/09 10:54:31 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -11,7 +11,7 @@
  * the user interface for interacting with the interactive program.
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char rcsid[] = "$Id: mainw.c,v 2.24 2002/05/18 10:21:36 rda Exp rda $";
+static char rcsid[] = "$Id: mainw.c,v 2.25 2002/08/09 10:54:31 rda Exp rda $";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:
@@ -94,6 +94,7 @@ XtAppContext app; /* global because needed in msg.c */
  * namestring   filename  displays name of file being edited
  * modified     filename  label indicating that the file has changed
  * newfile      filename  label indicating that the file is new
+ * linenumber	infobar   current line number indicator
  * logo         infobar   ProofPower logo
  * mainpanes    work      paned window for the script and journal window
  * script       mainpanes the script being edited
@@ -117,7 +118,7 @@ Widget  script,
 
 static Widget
 	frame, work, infobar, filename, filelabel, modified, newfile,
-	namestring, logo,
+	namestring, logo, linenumber,
 	mainpanes,
 	menubar, filemenu, toolsmenu, popupeditmenu, editmenu, cmdmenu, helpmenu;
 
@@ -144,6 +145,8 @@ static void execute_action(
     XEvent*		/* event */,
     String*		/* params */,
     Cardinal*		/* num_params */);
+
+static void line_number_cb(CALLBACK_ARGS);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu descriptions:
@@ -606,22 +609,26 @@ static Boolean setup_main_window(
 		NULL);
 	XmStringFree(s1);
 
-	s1 = XmStringCreateSimple("(New)");
 	newfile = XtVaCreateManagedWidget("filelabel",
-		xmLabelWidgetClass, filename,
-		XmNlabelString,	s1,
+		xmLabelWidgetClass, 	filename,
 		NULL);
-	XmStringFree(s1);
 
 	logo = XtVaCreateManagedWidget("logo",
 		xmLabelWidgetClass, infobar,
 		XmNlabelType,		XmPIXMAP,
-		XmNlabelPixmap,	get_pp_pixmap(),
+		XmNlabelPixmap,		get_pp_pixmap(),
 		XmNtopAttachment,	XmATTACH_FORM,
 		XmNbottomAttachment,	XmATTACH_FORM,
 		XmNrightAttachment,	XmATTACH_FORM,
 		NULL);
 
+	linenumber = XtVaCreateManagedWidget("linenumber",
+		xmLabelWidgetClass,	infobar,
+		XmNtopAttachment,	XmATTACH_FORM,
+		XmNbottomAttachment,	XmATTACH_FORM,
+		XmNrightAttachment,	XmATTACH_WIDGET,
+		XmNrightWidget,		logo,
+		NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * User resizables paned window for the script and journal windows
@@ -644,6 +651,8 @@ static Boolean setup_main_window(
 	script = XmCreateScrolledText(mainpanes, "script", args, i);
 
 	XtOverrideTranslations(script, text_translations);
+
+	line_number_cb(script, NULL, NULL);
 
 /*
  * The pop-up edit menu looks a bit neater if we get rid of the accelerator
@@ -674,6 +683,9 @@ static Boolean setup_main_window(
 
 	XtAddCallback(script,
 		XmNmotionVerifyCallback, undo_motion_cb, undo_ptr);
+
+	XtAddCallback(script,
+		XmNmotionVerifyCallback, line_number_cb, NULL);
 
 	XtAddEventHandler(script, ButtonPressMask, False, post_popupeditmenu, NULL);
 
@@ -748,6 +760,7 @@ static Boolean setup_main_window(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	XtManageChild(filename);
 	XtManageChild(infobar);
+	XtManageChild(linenumber);
 	XtUnmanageChild(modified);
 	if(!isNewFile) {
 		XtUnmanageChild(newfile);
@@ -1168,7 +1181,34 @@ static void script_modify_cb(
 	}
 	changed = True;
 }
-
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Monitor line number
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static Boolean line_number_req_pending = False;
+static Boolean line_number_work_proc(
+		XtPointer	cbd)
+{
+	long int line_num;
+	char buf[20];
+	XmString s;
+	line_num = get_line_no((Widget) cbd);
+	sprintf(buf, "Line: %6ld", line_num);
+	s = XmStringCreateSimple(buf);
+	XtVaSetValues(linenumber, XmNlabelString, s, NULL);
+	XmStringFree(s);
+	line_number_req_pending = False;
+	return True;
+}
+static void line_number_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	if(!line_number_req_pending) {
+		XtAppAddWorkProc(app, line_number_work_proc, (XtPointer) w);
+		line_number_req_pending = True;
+	}
+}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * See if the user really wants to quit, and if so do so:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
