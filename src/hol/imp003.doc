@@ -59,6 +59,8 @@ Reimplemented some functions by ``failure''.
 \item[Issue 2.5 \FormatDate{92/01/20} ] Updated to use new fonts.
 \item [Issue 2.6\FormatDate{92/02/10} ]
 Put $translate\_for\_output$ around uses of $makestring$.
+\item [Issue 2.7 (1st April 1992)]
+Changes required by CR0016.
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
@@ -75,6 +77,11 @@ None known.
 \subsubsection{Possible Enhancements}
 None known.
 \section{TYPES AND TERMS}
+=SML
+local 
+infix 3 =$$;
+in
+=TEX
 =SML
 structure €icl'TypesAndTerms› : icl'TypesAndTerms = struct
 =TEX
@@ -95,23 +102,56 @@ functions using this also see errors raised by, e.g. $lassoc3$.
 =SML
 val €just_fail› = fail "just_fail" 3064  [] handle complaint => complaint;
 =TEX
+\subsection{Utilities}
+This section contains material required for the abstract data
+types, but which don't need including within them.
+=SML
+local
+	val €variant_suffix› : string ref = ref "'";
+	val side_effect = (
+		new_string_control
+		{name="variant_suffix", 
+		control=variant_suffix, 
+		default = (fn () => "'"), 
+		check = (fn s => if s = ""
+			then fail "variant_suffix" 3028 []
+			else true)}
+	);
+
+in
+fun €set_variant_suffix› (s : string) : string = (
+	set_string_control("variant_suffix",s)
+);
+
+fun €get_variant_suffix› (():unit) : string = (
+	get_string_control "variant_suffix"
+);
+
+fun €string_variant› (vars : string list) (s : string) : string = (
+	if s mem vars
+	then string_variant vars (s ^ (!variant_suffix))
+	else s
+);
+end; (* of local *)
+=TEX
+
 \subsection{Types}
 We implement types by using local definition to hide
 its data constructors, rather than declaring it as an abstract data type,
 to keep $TYPE$ an equality type.
 =SML
-local 
-datatype €TYPE› = 
+abstype €TYPE› = 
 	€LVartype› of string |
 	€LCtype› of string * TYPE list |
 	€L≠Type› of (TYPE * TYPE)
-in
-type €TYPE› = TYPE;
-
+with
 datatype €DEST_SIMPLE_TYPE› = €Vartype› of string |
  	€Ctype› of (string * TYPE list);
 =TEX
 \subsection{Functions for Types}
+=SML
+val op €=:› : (TYPE * TYPE) -> bool = op =;
+=TEX
 =SML
 fun €string_of_type› (ty : TYPE) : string = (
 	translate_for_output (PolyML.makestring ty)
@@ -209,9 +249,9 @@ datatype €icl'TERM›	 =
 	€icl'Const› of string |
 	€icl'App› of icl'TERM * icl'TERM * TYPE |
 	€icl'SimpleÃ› of string * icl'TERM;
-datatype TERM = typed of icl'TERM * TYPE
 in
-type €TERM› = TERM;
+abstype €TERM› = typed of icl'TERM * TYPE
+with
 =TEX
 The type of destroyed terms, and functions upon it:
 =SML
@@ -219,6 +259,12 @@ datatype €DEST_SIMPLE_TERM› = €Var› of string * TYPE |
 	€Const› of string * TYPE |
 	€App› of TERM * TERM |
 	€SimpleÃ› of TERM * TERM;
+=TEX
+$=\$\$$ is a local function to express the equality of sdestroyed contants and variables.
+=SML
+val op €=$› : (TERM * TERM) -> bool = op =;
+val op €=$$› : ((string * TYPE) * (string * TYPE)) -> bool = op =;
+=TEX
 =TEX
 =SML
 fun €string_of_term› (tm : TERM) : string = (
@@ -360,14 +406,86 @@ in
 	);
 end;
 =TEX
+\subsubsection{¡-conversion}
+This is probably the most compact presentation, but it might be faster to match only the first argument, and then test the second separately.
+Otherwise we will always do four tests on mismatched structures.
+This depends on the cleverness of compilation.
 =SML
-end; (* of local defining TERM *)
-end; (* of local defining TYPE *)
+fun (tm1 : TERM) €~=$› (tm2 : TERM) : bool = (
+let	fun aux (App (tm11, tm12))(App(tm21, tm22)) map2to1 = (
+		aux(dest_simple_term tm11)(dest_simple_term tm21) map2to1
+		andalso
+		aux(dest_simple_term tm12)(dest_simple_term tm22) map2to1
+	) | aux (Const c1)(Const c2) map2to1 = (c1 =$$ c2)
+	  | aux (Var v1) (Var v2) map2to1 = (lassoc1 map2to1 v1 = v2
+		andalso rassoc1 map2to1 v2 = v1
+	) | aux (SimpleÃ(v1,b1)) (SimpleÃ(v2, b2)) map2to1 = (
+		(type_of v1 =: type_of v2)
+		andalso
+		aux (dest_simple_term b1) (dest_simple_term b2) 
+			(((dest_var v1), (dest_var v2)) :: map2to1)
+	) | aux _ _ _ = false
+ 	in
+		(tm1 =$ tm2) orelse (aux (dest_simple_term tm1) (dest_simple_term tm2) [])
+	end
+);
 =TEX
-\subsection{Functions derived from Abstract Data Type $TYPE$ Part}
-Some of these functions could be improved by being placed within
-the abstract data type.
-
+\subsubsection{Substitution}
+A destroyed variable renaming function, used in substitution:
+=IGN
+$new\_frees$ in the below, determines the free variables in the abstraction, changes those found in $R$ to their substitution, finds the frees in the results, and flattens these to gain a single list of resulting frees.
+=SML
+fun €icl'subst› ([] : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = tm
+| icl'subst (R : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = (
+let
+	fun aux R (App(f, a)) = (
+		let	val f' = aux R (dest_simple_term f);
+		in
+			mk_app(f',
+				(aux R (dest_simple_term a)
+				handle (Fail _) =>
+				a))
+		end
+		handle (Fail _) =>
+		mk_app(f, aux R (dest_simple_term a)))
+	| aux R (Const c) = raise just_fail
+	| aux R (Var v) = rassoc3 R v
+	| aux R (SimpleÃ(vty, b)) = (
+		let	val (s, ty) = dest_var vty;
+			val new_frees =
+				flat (map
+				(icl'frees o rassoc2 R mk_var)
+				(icl'frees b less (s, ty)));
+			val s' = string_variant (map fst new_frees) s;
+		in 
+			if s' = s
+			then (let val RR = ((vty, (s, ty)) :: R);
+				val b' = aux RR (dest_simple_term b);
+			in
+				mk_simple_Ã(vty, b')
+			end)
+			else(let val vty' = mk_var (s', ty);
+				val RR = ((vty', (s, ty)) :: R);
+			in
+			(let	val b' = aux RR (dest_simple_term b);
+			in mk_simple_Ã(vty', b')
+			end)
+			handle (Fail _) =>
+			mk_simple_Ã(vty', b) (* using this would be very odd *)
+			end)
+		end
+	);
+in
+	(map (fn (t, (vnm, ty)) => 
+		if type_of t = ty
+		then ()
+		else term_fail "icl'subst" 3012 [t,mk_var(vnm,ty)])
+		R;
+	(aux R (dest_simple_term tm)
+	 handle (Fail_) => tm))
+end);
+=TEX
+\subsubsection{Instantiation of Types and Terms}
 The following  will fail if it causes no type instantiation.
 =SML
 fun €icl'inst_type› ([] : (TYPE * string) list) (mty : TYPE) : TYPE = raise just_fail
@@ -393,6 +511,323 @@ in
 	aux mty
 end);
 =TEX
+The use of $string\_variant$ in $rename\_dups$ is untidy.
+=SML
+local
+	fun	inst_loc1 
+		(tysubs : (TYPE * string) list)
+		(App(f, a) : DEST_SIMPLE_TERM)
+		(vars : string list)
+		(varmap : ((string * TYPE) * (string * TYPE)) list)
+		: TERM = (
+		let	val fi = inst_loc1 tysubs (dest_simple_term f) vars varmap;
+		in
+			mk_app(fi,
+				(inst_loc1 tysubs (dest_simple_term a) vars varmap
+				handle (Fail _) => a))
+		end
+		handle (Fail _) =>
+		let	val ai = inst_loc1 tysubs (dest_simple_term a) vars varmap;
+		in
+			mk_app(f,ai)
+		end
+	) | inst_loc1 tysubs (Const(s,ty)) vars varmap = (
+		mk_const(s, icl'inst_type tysubs ty)
+	) | inst_loc1 tysubs (Var(s,ty)) vars varmap = (
+		mk_var(lassoc3 varmap (s,ty))
+	) | inst_loc1 tysubs (SimpleÃ(v, b)) vars varmap = (
+		let	val sty as (s, ty) = dest_var v;
+			val s' = string_variant vars s;
+		in
+		((let	val ty' = icl'inst_type tysubs ty;
+		in mk_simple_Ã(mk_var (s',ty'),
+			(inst_loc1
+			tysubs
+			(dest_simple_term b)
+			(s' :: vars)
+			((sty, (s',ty')) :: varmap)
+			handle (Fail _) => b))
+		end) 
+		handle (Fail _) =>
+		if s = s'
+		then mk_simple_Ã(v,
+			inst_loc1
+			tysubs
+			(dest_simple_term b)
+			(s :: vars)
+			varmap)
+		else mk_simple_Ã(mk_var (s',ty),
+			(inst_loc1
+			tysubs
+			(dest_simple_term b)
+			(s' :: vars)
+			((sty, (s',ty)) :: varmap)
+			handle (Fail _) => b)))
+		end
+	);
+=TEX
+=SML
+	fun rename_dups _ _ [] = []
+	| rename_dups tysubs av ((s, ty) :: rest) = (
+		let	val ty' = icl'inst_type tysubs ty;
+		in	if ty = ty'
+			then (s, ty) :: rename_dups tysubs av rest
+			else
+				let val s' = (string_variant 
+					(map fst(av less (s,ty))) s);
+					val sty' = (s' , ty');
+				in sty' :: rename_dups tysubs (sty' :: av) rest
+				end
+		end
+		handle (Fail _) =>
+		(s, ty) :: rename_dups tysubs av rest);
+	fun	inst_loc2
+		(avoid : (string * TYPE) list)
+		(tysubs : (TYPE * string) list)
+		(frees : (string * TYPE) list)
+		:	((string * TYPE) * (string * TYPE)) list = (
+			combine
+			frees
+			(rename_dups
+			tysubs
+			(frees @ avoid)
+			frees)
+	);
+=TEX
+=SML
+in
+	fun	€icl'inst›
+		(avoid : (string * TYPE) list)
+		(tysubs : (TYPE * string) list)
+		(tm : TERM) : TERM = (
+		inst_loc1
+		tysubs
+		(dest_simple_term tm)
+		[]
+		(inst_loc2 avoid tysubs (icl'frees tm))
+	);
+end; (* of local ... in ... end *)
+=TEX
+\subsubsection{$term\_match$ and $type\_match$}
+We will need functions which attempt to determine
+if one type (or term) is an instance of another.
+$type\_match\;ty1\;ty2$ determines if the type $ty1$
+is an instance of $ty2$.
+If so it returns a list giving the correspondence between
+types in $ty1$ with type variables in $ty2$.
+If not it raises an exception.
+Similarly $term\_match\;tm1\;tm2$ determines if the term
+$tm1$ is an instance of $tm2$. If so it returns
+a pair of lists, the first giving the correspondence
+between types and the second the correspondence between
+free variables of (the appropriate type instance of)
+$tm2$ and corresponding subterms of $tm1$.
+As with $type\_match$, an exception is raised if the
+matching is unsuccessful.
+
+The main work of the matching is done by
+auxiliary functions ($tyaux1$ and $tmaux2$).
+These
+operate in a fairly straight forward way by a structural
+recursion on their second type (or term) argument building
+up the correspondence between leaves in the structure
+and substructures of the first type (or term) argument.
+$tmaux2$ uses $tyaux1$ to process types in the terms.
+
+=SML
+local
+=TEX
+$tyaux1$ is quite straightforward. It uses an auxiliary
+$tyaux0$ to handle lists of types:
+=SML
+	fun tyaux1 match t1 t2 = (
+	if is_vartype t2
+	then (
+		let	val s2 = dest_vartype t2
+		in
+		if (rassoc4 match t1 s2 = t1)
+		then match grab (t1, s2)
+		else fail "type_match" 3053 []
+		end
+	) else if is_ctype t1
+	then (let val (s1, tl1) = dest_ctype t1;
+		val (s2, tl2) = dest_ctype t2;
+		fun tyaux0 match [] [] = (
+				match
+		) | tyaux0 match (h1 :: t1) (h2 :: t2) = (
+			tyaux0 (tyaux1 match h1 h2) t1 t2
+		) | tyaux0 _ _ _ = fail "type_match" 3053 []
+		in
+			if s1 = s2
+			then tyaux0 match tl1 tl2
+			else fail "type_match" 3053 []
+		end)
+
+	else fail "type_match" 3053 []);
+=TEX
+The treatment of terms is more complex than that of types
+because of bound variables.
+As a result $tmaux2$ is supported by two auxiliary functions, $tmaux1$ and $tmaux0$.
+The three functions work with two association lists:
+$fvmatch$, which records the correspondence between subterms
+of $tm1$ and free variables of $tm2$ and $bvmatch$,
+which records the correspondence between
+those bound variables of the two terms which are in
+scope in the subterm being examined.
+It is convenient for $fvmatch$ to have type
+$TERM * (string * TYPE)$ and for $bvmatch$
+to have type $(string * TYPE) * (string * TYPE)$,
+since these choices facilitate the use of $rassoc5$ etc.
+
+$tmaux0$ handles the case when we have encountered a
+variable, $v2$ say, in $tm2$ alongside a subterm, $t1$ say, of
+$tm1$ which is known not to be
+bound variable of $tm1$ (by inspection of $bvmatch$).
+We first check that $v2$ is not bound and that
+no free variable of $t1$ is bound, if these conditions
+are not satisfied the terms do not match.
+Assuming all is well,
+if we have encountered $v2$ before there
+will be an entry for it in $fvmatch$ and
+$t1$ must agree (up to $\alpha$-conversion) with that entry.
+If we have not encountered $v2$ before,
+there will be no entry in $fvmatch$ for it and now
+is the time to make one, using $tyaux1$ to handle the
+type matching.
+=SML
+	fun tmaux0 (tymatch, fvmatch) bvmatch tm1 (v2ty2 : string * TYPE) = (
+		case rassoc5 bvmatch v2ty2 of
+			Nil => (
+				if any (icl'frees tm1) (fn x => any bvmatch (fn (x1, _) => (x = x1)))
+				then fail "term_match" 3054 []
+
+				else case rassoc5 fvmatch v2ty2 of
+					Value tm1' => (
+						if tm1 ~=$ tm1'
+						then (tymatch, fvmatch)
+						else fail "term_match" 3054 []
+				) |	Nil => (
+						let	val tymatch' =
+						tyaux1 tymatch (type_of tm1) (snd v2ty2);
+						in	(tymatch', (tm1, v2ty2) :: fvmatch)
+						end
+				)
+			) |	Value _ => fail "term_match" 3054 []
+	);
+=TEX
+$tmaux1$ handles the case when we have encountered a variable, $v2$ say,
+in $tm2$.
+If the corresponding subterm, $t1$ say, of $tm1$ is
+a variable, then we must consult $bvmatch$ to see whether
+it is a bound variable.
+If it is, then all we must do is consult
+$bvmatch$ again to ensure that $v2$ is the corresponding
+bound variable of $tm2$, and fail if it is not.
+If $t1$ is either a free variable of $tm1$ or some
+other sort of term then we just pass the problem
+on to $tmaux0$.
+=SML
+	fun tmaux1 (tymatch, fvmatch) (bvmatch : ((string * TYPE) * (string * TYPE)) list) 
+			tm1 v2ty2 = (
+		if is_var tm1
+		then	(let	val v1ty1 = dest_var tm1;
+			in case lassoc5 bvmatch v1ty1 of
+				Value vty => (
+					if vty = v2ty2 andalso rassoc5 bvmatch v2ty2 = Value v1ty1
+					then (tymatch, fvmatch)
+					else fail "term_match" 3054 []
+			) |	Nil => tmaux0 (tymatch, fvmatch) bvmatch tm1 v2ty2
+			end)
+		else 	tmaux0 (tymatch, fvmatch) bvmatch tm1 v2ty2
+	);
+=TEX
+$tmaux2$ handles the general case. If the subterm, $t2$ say,
+of $tm2$ is a variable, then $tmaux1$ is applied.
+If $t2$ is a constant then the corresponding subterm
+of $tm2$ must also be a constant with the same
+name and we just use 
+$tyaux1$ to handle the type instantiation.
+If $t2$ is a combination, then the corresponding subterm
+of $tm1$ must be too. The subterms of the
+combinations are examined in turn, with matching information
+gleaned from the operator passed on for use in examining
+of the operand.
+If $t2$ is an abstraction, then so must be the corresponding
+subterm of $tm1$. The bodies of the abstractions
+are examined with the bound variable matching information
+in $bvmatch$ suitably adjusted.
+Mismatched structures will result in an exception.
+=SML
+	fun tmaux2 (tymatch, fvmatch) bvmatch (App(f1, a1)) (App(f2, a2)) = (
+		tmaux2 (tmaux2 (tymatch, fvmatch) bvmatch 
+				(dest_simple_term f1) (dest_simple_term f2))
+			bvmatch 
+			(dest_simple_term a1) 
+			(dest_simple_term a2)
+	) | tmaux2 (tymatch, fvmatch) bvmatch (Const(s1,ty1))(Const(s2,ty2)) = (
+		if (s1 = s2)
+		then (tyaux1 tymatch ty1 ty2, fvmatch)
+		else fail "term_match" 3054 []
+	) | tmaux2 (tymatch, fvmatch) bvmatch tm1 (Var v2) = (
+		tmaux1 (tymatch, fvmatch) bvmatch (mk_simple_term tm1) v2
+	) | tmaux2 (tymatch, fvmatch) bvmatch (SimpleÃ(v1,b1))(SimpleÃ(v2,b2)) = (
+		
+		let	val v1ty1 = dest_var v1;
+			val v2ty2 = dest_var v2;
+			val bvmatch' = (v1ty1, v2ty2) :: bvmatch;
+			val tymatch' = tyaux1 tymatch (snd v1ty1) (snd v2ty2);
+		in	tmaux2 (tymatch', fvmatch) bvmatch' 
+			(dest_simple_term b1) (dest_simple_term b2)
+		end
+	) | tmaux2 _ _ _ _ = fail "term_match" 3054 [];
+in
+=TEX
+It will often be the case that identical subtypes or
+subterms correspond.
+For compactness, the result lists of the matching functions
+do not contain trivial correspondences.
+$type\_match$ and $term\_match$ therefore both work
+by calling the relevant auxiliary and then
+removing trivial correspondences from the result.
+=SML
+	fun €type_match› (ty1 : TYPE) (ty2 : TYPE) : (TYPE * TYPE) list = (
+		map(Combinators.I ** mk_vartype)
+		((tyaux1 [] ty1 ty2) drop 
+			(fn (x, y) => is_vartype x andalso (dest_vartype x = y)))
+		handle complaint =>
+		if area_of complaint = "type_match"
+		then type_fail "type_match" 3053 [ty1,ty2]
+		else reraise complaint (area_of complaint)
+	);
+	fun €term_match› (tm1 : TERM) (tm2 : TERM)
+		: (TYPE * TYPE) list * (TERM * TERM) list = (
+		(let	val (tym, tmm) = tmaux2 ([], []) [] 
+				(dest_simple_term tm1) 
+				(dest_simple_term tm2);
+			val tym' = tym drop 
+				(fn (x, y) => is_vartype x andalso 
+				(dest_vartype x = y));
+			val tmm' = tmm drop
+		(fn (x, (s, ty)) => is_var x andalso 
+			(dest_var x = (s, (icl'inst_type tym' ty handle (Fail _) => ty))));
+			val tmm'' = map (fn(x, (s,_)) => (x, (s, type_of x))) tmm';
+		in 	(map(Combinators.I ** mk_vartype)tym',
+			 map(Combinators.I ** mk_var)tmm'')
+		end) 
+		handle (Fail _) => term_fail "term_match" 3054 [tm1,tm2]
+	);
+end;
+=TEX
+
+=SML
+end; (* of abstype defining TERM *)
+end; (* of local defining TERM *)
+end; (* of abstype defining TYPE *)
+=TEX
+\subsection{Functions derived from Abstract Data Type $TYPE$ Part}
+Some of these functions could be improved by being placed within
+the abstract data type.
+
 =SML
 fun €inst_type› (f : (TYPE * TYPE) list) (ty : TYPE) : TYPE = (
 	icl'inst_type 
@@ -477,11 +912,13 @@ Some of these functions could be improved by being placed within
 the abstract data type.
 =SML
 fun €is_free_var_in› (vsvty as (vs, vty): string * TYPE) (tm : TERM) : bool = (
-let
+let	
 	fun ifvi (App (f, a)) = ifvi (dest_simple_term f) orelse ifvi (dest_simple_term a)
 	| ifvi (Const _) = false
-	| ifvi (Var sty) = (sty = vsvty)
-	| ifvi (SimpleÃ (av, bdy)) = (dest_var av <> vsvty) andalso ifvi (dest_simple_term bdy)
+	| ifvi (Var s) = s =$$ vsvty
+	| ifvi (SimpleÃ (av, bdy)) = 
+		not(dest_var av =$$ vsvty)
+		andalso ifvi (dest_simple_term bdy)
 in
 	ifvi (dest_simple_term tm)
 end);
@@ -712,7 +1149,7 @@ Numerics:
 fun €is_Ó› (tm : TERM) : bool = (
 let	val (tmn,tmty) = dest_const tm
 in
-	(tmty = Ó) andalso (is_all_decimal tmn)
+	(tmty =: Ó) andalso (is_all_decimal tmn)
 end
 handle Fail _ => false
 );
@@ -726,7 +1163,7 @@ fun €mk_Ó› (n : int) : TERM = (
 fun €dest_Ó› (tm : TERM) : int = (
 let	val (tmn,tmty) = dest_const tm
 in
-	if (tmty = Ó)
+	if (tmty =: Ó)
 	then nat_of_string tmn
 	else term_fail "dest_Ó" 3026 [tm]
 end
@@ -743,7 +1180,7 @@ in
 fun €is_char› (tm : TERM) : bool = (
 let	val (tmn,tmty) = dest_const tm
 in
-	(tmty = CHAR) andalso
+	(tmty =: CHAR) andalso
 	(tmn <> "") andalso
 	(ordquote = ord tmn) andalso
 	(size tmn = 2)
@@ -762,7 +1199,7 @@ let	val (tmn,tmty) = (dest_const tm
 		handle (Fail _) =>
 		term_fail "dest_char" 3024 [tm]);
 in
-	case	if tmty = CHAR
+	case	if tmty =: CHAR
 		then	case explode tmn
 			of "`"::c2::nil => Value c2
 			| _ => Nil
@@ -780,7 +1217,7 @@ in
 fun €is_string› (tm : TERM) : bool = (
 let	val (tmn,tmty) = dest_const tm
 in
-	(tmty = STRING) andalso 
+	(tmty =: STRING) andalso 
 	(tmn <> "") andalso
 	(orddquote = ord tmn)
 end
@@ -794,7 +1231,7 @@ let	val (tmn,tmty) = (dest_const tm
 		handle (Fail _) =>
 		term_fail "dest_string" 3025 [tm]);
 in
-	if (tmty = STRING) andalso (tmn <> "") 
+	if (tmty =: STRING) andalso (tmn <> "") 
 		andalso (ord tmn = orddquote)
 	then implode(tl(explode tmn))
 	else term_fail "dest_string" 3025 [tm]
@@ -802,34 +1239,10 @@ end);
 end; (* local *)
 =TEX
 \subsection{Functions Upon Terms}
-\subsubsection{$\alpha$-conversion}
-This is probably the most compact presentation, but it might be faster to match only the first argument, and then test the second separately.
-Otherwise we will always do four tests on mismatched structures.
-This depends on the cleverness of compilation.
-=SML
-fun €%alpha%_eq› (tm1 : TERM) (tm2 : TERM) : bool = (
-let	fun aux (App (tm11, tm12))(App(tm21, tm22)) map2to1 = (
-		aux(dest_simple_term tm11)(dest_simple_term tm21) map2to1
-		andalso
-		aux(dest_simple_term tm12)(dest_simple_term tm22) map2to1
-	) | aux (Const c1)(Const c2) map2to1 = (c1 = c2)
-	  | aux (Var v1) (Var v2) map2to1 = (lassoc1 map2to1 v1 = v2
-		andalso rassoc1 map2to1 v2 = v1
-	) | aux (SimpleÃ(v1,b1)) (SimpleÃ(v2, b2)) map2to1 = (
-		(type_of v1 = type_of v2)
-		andalso
-		aux (dest_simple_term b1) (dest_simple_term b2) 
-			(((dest_var v1), (dest_var v2)) :: map2to1)
-	) | aux _ _ _ = false
- 	in
-		(tm1 = tm2) orelse (aux (dest_simple_term tm1) (dest_simple_term tm2) [])
-	end
-);
-=TEX
 Now some functions viewing term lists as sets under $\alpha$-convertibility.
 =SML
 fun (tm : TERM) €term_mem› (tml : TERM list) : bool = (
-let	fun test (h :: t) = (%alpha%_eq tm h) orelse test t
+let	fun test (h :: t) = (tm ~=$ h) orelse test t
 	| test [] = false
 in
 	test tml
@@ -837,7 +1250,7 @@ end);
 =TEX
 =SML
 fun ((x :: xs) : TERM list) €term_less› (tm : TERM) : TERM list = (
-	if %alpha%_eq tm x
+	if tm ~=$ x
 	then xs term_less tm
 	else (x :: (xs term_less tm))
 ) | [] term_less _ = [];
@@ -850,15 +1263,22 @@ fun (tml : TERM list) €term_grab› (tm : TERM) : TERM list = (
 );
 =TEX
 =SML
+fun ([] : TERM list) €term_diff› (tml2 : TERM list) : TERM list = []
+| (tm :: rest) term_diff tml2 = (if tm term_mem tml2
+	then rest term_diff tml2
+	else( tm :: (rest term_diff tml2))
+);
+=TEX
+=SML
 fun (tml1 : TERM list) €term_union› (tml2 : TERM list) : TERM list = (
 	let
-		fun insert (what, lst) = (
+		fun insert_it (what, lst) = (
 			if what term_mem lst
 			then lst
 			else (what :: lst)
 		);
 	in
-		fold insert tml1 tml2
+		fold insert_it tml1 tml2
 	end
 );
 =TEX
@@ -867,201 +1287,20 @@ fun €list_term_union› (lists : TERM list list) : TERM list = (
 	fold (fn (l1, l2) => l1 term_union l2) lists []
 );
 =TEX
-\subsubsection{Substitution}
-A destroyed variable renaming function, used in substitution:
-=SML
-local
-	val €variant_suffix› : string ref = ref "'";
-	val side_effect = (
-		new_string_control
-		{name="variant_suffix", 
-		control=variant_suffix, 
-		default = (fn () => "'"), 
-		check = (fn s => if s = ""
-			then fail "variant_suffix" 3028 []
-			else true)}
-	);
-
-in
-fun €set_variant_suffix› (s : string) : string = (
-	set_string_control("variant_suffix",s)
-);
-
-fun €get_variant_suffix› (():unit) : string = (
-	get_string_control "variant_suffix"
-);
-
-fun €string_variant› (vars : string list) (s : string) : string = (
-	if s mem vars
-	then string_variant vars (s ^ (!variant_suffix))
-	else s
-);
-end; (* of local *)
-=TEX
-=IGN
-$new\_frees$ in the below, determines the free variables in the abstraction, changes those found in $R$ to their substitution, finds the frees in the results, and flattens these to gain a single list of resulting frees.
-=SML
-fun €icl'subst› ([] : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = tm
-| icl'subst (R : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = (
-let
-	fun aux R (App(f, a)) = (
-		let	val f' = aux R (dest_simple_term f);
-		in
-			mk_app(f',
-				(aux R (dest_simple_term a)
-				handle (Fail _) =>
-				a))
-		end
-		handle (Fail _) =>
-		mk_app(f, aux R (dest_simple_term a)))
-	| aux R (Const c) = raise just_fail
-	| aux R (Var v) = rassoc3 R v
-	| aux R (SimpleÃ(vty, b)) = (
-		let	val (s, ty) = dest_var vty;
-			val new_frees =
-				flat (map
-				(icl'frees o rassoc2 R mk_var)
-				(icl'frees b less (s, ty)));
-			val s' = string_variant (map fst new_frees) s;
-		in 
-			if s' = s
-			then (let val RR = ((vty, (s, ty)) :: R);
-				val b' = aux RR (dest_simple_term b);
-			in
-				mk_simple_Ã(vty, b')
-			end)
-			else(let val vty' = mk_var (s', ty);
-				val RR = ((vty', (s, ty)) :: R);
-			in
-			(let	val b' = aux RR (dest_simple_term b);
-			in mk_simple_Ã(vty', b')
-			end)
-			handle (Fail _) =>
-			mk_simple_Ã(vty', b) (* using this would be very odd *)
-			end)
-		end
-	);
-in
-	(map (fn (t, (vnm, ty)) => 
-		if type_of t = ty
-		then ()
-		else term_fail "icl'subst" 3012 [t,mk_var(vnm,ty)])
-		R;
-	(aux R (dest_simple_term tm)
-	 handle (Fail_) => tm))
-end);
-=TEX
 \subsubsection{Renaming}
 =SML
 fun €rename› ((v, ty) : string * TYPE) (w : string) (tm : TERM) : TERM = (
 	icl'subst[(mk_var(w, ty), (v, ty))]tm
 );
 =TEX
-\subsubsection{Instantiation of Types and Terms}
-The use of $string\_variant$ in $rename\_dups$ is untidy.
-=SML
-local
-	fun	inst_loc1 
-		(tysubs : (TYPE * string) list)
-		(App(f, a) : DEST_SIMPLE_TERM)
-		(vars : string list)
-		(varmap : ((string * TYPE) * (string * TYPE)) list)
-		: TERM = (
-		let	val fi = inst_loc1 tysubs (dest_simple_term f) vars varmap;
-		in
-			mk_app(fi,
-				(inst_loc1 tysubs (dest_simple_term a) vars varmap
-				handle (Fail _) => a))
-		end
-		handle (Fail _) =>
-		let	val ai = inst_loc1 tysubs (dest_simple_term a) vars varmap;
-		in
-			mk_app(f,ai)
-		end
-	) | inst_loc1 tysubs (Const(s,ty)) vars varmap = (
-		mk_const(s, icl'inst_type tysubs ty)
-	) | inst_loc1 tysubs (Var(s,ty)) vars varmap = (
-		mk_var(lassoc3 varmap (s,ty))
-	) | inst_loc1 tysubs (SimpleÃ(v, b)) vars varmap = (
-		let	val sty as (s, ty) = dest_var v;
-			val s' = string_variant vars s;
-		in
-		((let	val ty' = icl'inst_type tysubs ty;
-		in mk_simple_Ã(mk_var (s',ty'),
-			(inst_loc1
-			tysubs
-			(dest_simple_term b)
-			(s' :: vars)
-			((sty, (s',ty')) :: varmap)
-			handle (Fail _) => b))
-		end) 
-		handle (Fail _) =>
-		if s = s'
-		then mk_simple_Ã(v,
-			inst_loc1
-			tysubs
-			(dest_simple_term b)
-			(s :: vars)
-			varmap)
-		else mk_simple_Ã(mk_var (s',ty),
-			(inst_loc1
-			tysubs
-			(dest_simple_term b)
-			(s' :: vars)
-			((sty, (s',ty)) :: varmap)
-			handle (Fail _) => b)))
-		end
-	);
-=TEX
-=SML
-	fun rename_dups _ _ [] = []
-	| rename_dups tysubs av ((s, ty) :: rest) = (
-		let	val ty' = icl'inst_type tysubs ty;
-		in	if ty = ty'
-			then (s, ty) :: rename_dups tysubs av rest
-			else
-				let val s' = (string_variant 
-					(map fst(av less (s,ty))) s);
-					val sty' = (s' , ty');
-				in sty' :: rename_dups tysubs (sty' :: av) rest
-				end
-		end
-		handle (Fail _) =>
-		(s, ty) :: rename_dups tysubs av rest);
-	fun	inst_loc2
-		(avoid : (string * TYPE) list)
-		(tysubs : (TYPE * string) list)
-		(frees : (string * TYPE) list)
-		:	((string * TYPE) * (string * TYPE)) list = (
-			combine
-			frees
-			(rename_dups
-			tysubs
-			(frees @ avoid)
-			frees)
-	);
-=TEX
-=SML
-in
-	fun	€icl'inst›
-		(avoid : (string * TYPE) list)
-		(tysubs : (TYPE * string) list)
-		(tm : TERM) : TERM = (
-		inst_loc1
-		tysubs
-		(dest_simple_term tm)
-		[]
-		(inst_loc2 avoid tysubs (icl'frees tm))
-	);
-end; (* of local ... in ... end *)
-=TEX
+\subsection{Viewing Functions}
 =SML
 fun €term_types› (tm : TERM) : TYPE list = (
 let	fun aux (App (f, a)) = (
-		aux (dest_simple_term f) cup aux (dest_simple_term a)
+		union (op =:) (aux (dest_simple_term f)) (aux (dest_simple_term a))
 	) | aux (Const (_, ty)) = [ty]
 	  | aux (Var (_,ty)) = [ty]
-	  | aux (SimpleÃ (v, b)) = aux (dest_simple_term b) grab (type_of v)
+	  | aux (SimpleÃ (v, b)) = insert (op =:) (aux (dest_simple_term b)) (type_of v)
 in
 	aux(dest_simple_term tm)
 end);
@@ -1102,7 +1341,7 @@ This function extracts the subterms of a term which
 are constants.
 =SML
 fun €term_consts› (tm : TERM) : (string * TYPE) list = (
-let	fun aux (App(f, a)) = aux(dest_simple_term f) cup aux(dest_simple_term a)
+let	fun aux (App(f, a)) = union (op =$$) (aux(dest_simple_term f)) (aux(dest_simple_term a))
 	| aux (Var _) = []
 	| aux (Const c) = [c]
 	| aux (SimpleÃ (v, b)) = aux (dest_simple_term b)
@@ -1114,223 +1353,13 @@ This function extracts the subterms of a term which
 are variables.
 =SML
 fun €term_vars› (tm : TERM) : (string * TYPE) list = (
-let	fun aux (App(f, a)) = aux(dest_simple_term f) cup aux(dest_simple_term a)
+let	fun aux (App(f, a)) = union (op =$$) (aux(dest_simple_term f)) (aux(dest_simple_term a))
 	| aux (Var v) = [v]
 	| aux (Const c) = []
-	| aux (SimpleÃ (v, b)) = [dest_var v] cup aux (dest_simple_term b)
+	| aux (SimpleÃ (v, b)) = union (op =$$) [dest_var v] (aux (dest_simple_term b))
 in
 	aux (dest_simple_term tm)
 end);
-=TEX
-\subsubsection{$term\_match$ and $type\_match$}
-We will need functions which attempt to determine
-if one type (or term) is an instance of another.
-$type\_match\;ty1\;ty2$ determines if the type $ty1$
-is an instance of $ty2$.
-If so it returns a list giving the correspondence between
-types in $ty1$ with type variables in $ty2$.
-If not it raises an exception.
-Similarly $term\_match\;tm1\;tm2$ determines if the term
-$tm1$ is an instance of $tm2$. If so it returns
-a pair of lists, the first giving the correspondence
-between types and the second the correspondence between
-free variables of (the appropriate type instance of)
-$tm2$ and corresponding subterms of $tm1$.
-As with $type\_match$, an exception is raised if the
-matching is unsuccessful.
-
-The main work of the matching is done by
-auxiliary functions ($tyaux1$ and $tmaux2$).
-These
-operate in a fairly straight forward way by a structural
-recursion on their second type (or term) argument building
-up the correspondence between leaves in the structure
-and substructures of the first type (or term) argument.
-$tmaux2$ uses $tyaux1$ to process types in the terms.
-
-=SML
-local
-=TEX
-$tyaux1$ is quite straightforward. It uses an auxiliary
-$tyaux0$ to handle lists of types:
-=SML
-	fun tyaux1 match t1 t2 = (
-	if is_vartype t2
-	then (
-		let	val s2 = dest_vartype t2
-		in
-		if (rassoc4 match t1 s2 = t1)
-		then match grab (t1, s2)
-		else fail "type_match" 3053 []
-		end
-	) else if is_ctype t1
-	then (let val (s1, tl1) = dest_ctype t1;
-		val (s2, tl2) = dest_ctype t2;
-		fun tyaux0 match [] [] = (
-				match
-		) | tyaux0 match (h1 :: t1) (h2 :: t2) = (
-			tyaux0 (tyaux1 match h1 h2) t1 t2
-		) | tyaux0 _ _ _ = fail "type_match" 3053 []
-		in
-			if s1 = s2
-			then tyaux0 match tl1 tl2
-			else fail "type_match" 3053 []
-		end)
-
-	else fail "type_match" 3053 []);
-=TEX
-The treatment of terms is more complex than that of types
-because of bound variables.
-As a result $tmaux2$ is supported by two auxiliary functions, $tmaux1$ and $tmaux0$.
-The three functions work with two association lists:
-$fvmatch$, which records the correspondence between subterms
-of $tm1$ and free variables of $tm2$ and $bvmatch$,
-which records the correspondence between
-those bound variables of the two terms which are in
-scope in the subterm being examined.
-It is convenient for $fvmatch$ to have type
-$TERM * (string * TYPE)$ and for $bvmatch$
-to have type $(string * TYPE) * (string * TYPE)$,
-since these choices facilitate the use of $rassoc5$ etc.
-
-$tmaux0$ handles the case when we have encountered a
-variable, $v2$ say, in $tm2$ alongside a subterm, $t1$ say, of
-$tm1$ which is known not to be
-bound variable of $tm1$ (by inspection of $bvmatch$).
-We first check that $v2$ is not bound and that
-no free variable of $t1$ is bound, if these conditions
-are not satisfied the terms do not match.
-Assuming all is well,
-if we have encountered $v2$ before there
-will be an entry for it in $fvmatch$ and
-$t1$ must agree (up to $\alpha$-conversion) with that entry.
-If we have not encountered $v2$ before,
-there will be no entry in $fvmatch$ for it and now
-is the time to make one, using $tyaux1$ to handle the
-type matching.
-=SML
-	fun tmaux0 (tymatch, fvmatch) bvmatch tm1 (v2ty2 : string * TYPE) = (
-		case rassoc5 bvmatch v2ty2 of
-			Nil => (
-				if any (icl'frees tm1) (fn x => any bvmatch (fn (x1, _) => (x = x1)))
-				then fail "term_match" 3054 []
-
-				else case rassoc5 fvmatch v2ty2 of
-					Value tm1' => (
-						if %alpha%_eq tm1 tm1'
-						then (tymatch, fvmatch)
-						else fail "term_match" 3054 []
-				) |	Nil => (
-						let	val tymatch' =
-						tyaux1 tymatch (type_of tm1) (snd v2ty2);
-						in	(tymatch', (tm1, v2ty2) :: fvmatch)
-						end
-				)
-			) |	Value _ => fail "term_match" 3054 []
-	);
-=TEX
-$tmaux1$ handles the case when we have encountered a variable, $v2$ say,
-in $tm2$.
-If the corresponding subterm, $t1$ say, of $tm1$ is
-a variable, then we must consult $bvmatch$ to see whether
-it is a bound variable.
-If it is, then all we must do is consult
-$bvmatch$ again to ensure that $v2$ is the corresponding
-bound variable of $tm2$, and fail if it is not.
-If $t1$ is either a free variable of $tm1$ or some
-other sort of term then we just pass the problem
-on to $tmaux0$.
-=SML
-	fun tmaux1 (tymatch, fvmatch) (bvmatch : ((string * TYPE) * (string * TYPE)) list) 
-			tm1 v2ty2 = (
-		if is_var tm1
-		then	(let	val v1ty1 = dest_var tm1;
-			in case lassoc5 bvmatch v1ty1 of
-				Value vty => (
-					if vty = v2ty2 andalso rassoc5 bvmatch v2ty2 = Value v1ty1
-					then (tymatch, fvmatch)
-					else fail "term_match" 3054 []
-			) |	Nil => tmaux0 (tymatch, fvmatch) bvmatch tm1 v2ty2
-			end)
-		else 	tmaux0 (tymatch, fvmatch) bvmatch tm1 v2ty2
-	);
-=TEX
-$tmaux2$ handles the general case. If the subterm, $t2$ say,
-of $tm2$ is a variable, then $tmaux1$ is applied.
-If $t2$ is a constant then the corresponding subterm
-of $tm2$ must also be a constant with the same
-name and we just use 
-$tyaux1$ to handle the type instantiation.
-If $t2$ is a combination, then the corresponding subterm
-of $tm1$ must be too. The subterms of the
-combinations are examined in turn, with matching information
-gleaned from the operator passed on for use in examining
-of the operand.
-If $t2$ is an abstraction, then so must be the corresponding
-subterm of $tm1$. The bodies of the abstractions
-are examined with the bound variable matching information
-in $bvmatch$ suitably adjusted.
-Mismatched structures will result in an exception.
-=SML
-	fun tmaux2 (tymatch, fvmatch) bvmatch (App(f1, a1)) (App(f2, a2)) = (
-		tmaux2 (tmaux2 (tymatch, fvmatch) bvmatch 
-				(dest_simple_term f1) (dest_simple_term f2))
-			bvmatch 
-			(dest_simple_term a1) 
-			(dest_simple_term a2)
-	) | tmaux2 (tymatch, fvmatch) bvmatch (Const(s1,ty1))(Const(s2,ty2)) = (
-		if (s1 = s2)
-		then (tyaux1 tymatch ty1 ty2, fvmatch)
-		else fail "term_match" 3054 []
-	) | tmaux2 (tymatch, fvmatch) bvmatch tm1 (Var v2) = (
-		tmaux1 (tymatch, fvmatch) bvmatch (mk_simple_term tm1) v2
-	) | tmaux2 (tymatch, fvmatch) bvmatch (SimpleÃ(v1,b1))(SimpleÃ(v2,b2)) = (
-		
-		let	val v1ty1 = dest_var v1;
-			val v2ty2 = dest_var v2;
-			val bvmatch' = (v1ty1, v2ty2) :: bvmatch;
-			val tymatch' = tyaux1 tymatch (snd v1ty1) (snd v2ty2);
-		in	tmaux2 (tymatch', fvmatch) bvmatch' 
-			(dest_simple_term b1) (dest_simple_term b2)
-		end
-	) | tmaux2 _ _ _ _ = fail "term_match" 3054 [];
-in
-=TEX
-It will often be the case that identical subtypes or
-subterms correspond.
-For compactness, the result lists of the matching functions
-do not contain trivial correspondences.
-$type\_match$ and $term\_match$ therefore both work
-by calling the relevant auxiliary and then
-removing trivial correspondences from the result.
-=SML
-	fun €type_match› (ty1 : TYPE) (ty2 : TYPE) : (TYPE * TYPE) list = (
-		map(Combinators.I ** mk_vartype)
-		((tyaux1 [] ty1 ty2) drop 
-			(fn (x, y) => is_vartype x andalso (dest_vartype x = y)))
-		handle complaint =>
-		if area_of complaint = "type_match"
-		then type_fail "type_match" 3053 [ty1,ty2]
-		else reraise complaint (area_of complaint)
-	);
-	fun €term_match› (tm1 : TERM) (tm2 : TERM)
-		: (TYPE * TYPE) list * (TERM * TERM) list = (
-		(let	val (tym, tmm) = tmaux2 ([], []) [] 
-				(dest_simple_term tm1) 
-				(dest_simple_term tm2);
-			val tym' = tym drop 
-				(fn (x, y) => is_vartype x andalso 
-				(dest_vartype x = y));
-			val tmm' = tmm drop
-		(fn (x, (s, ty)) => is_var x andalso 
-			(dest_var x = (s, (icl'inst_type tym' ty handle (Fail _) => ty))));
-			val tmm'' = map (fn(x, (s,_)) => (x, (s, type_of x))) tmm';
-		in 	(map(Combinators.I ** mk_vartype)tym',
-			 map(Combinators.I ** mk_var)tmm'')
-		end) 
-		handle (Fail _) => term_fail "term_match" 3054 [tm1,tm2]
-	);
-end;
 =TEX
 =SML
 fun €is_type_instance› (ty1 : TYPE) (ty2 : TYPE) : bool = (
@@ -1530,7 +1559,7 @@ fun €subst›
 		val Xs = gen_vars (map type_of ys) terms;
 		val ysXs = combine ys Xs;
 		fun aux bvs tm = (
-			let	val (t, X) = find ysXs (fn (u, Y) => %alpha%_eq u tm);
+			let	val (t, X) = find ysXs (fn (u, Y) => u ~=$ tm);
 			in	if all bvs (not o switch is_free_in tm)
 				then X
 				else tm
@@ -1541,7 +1570,7 @@ fun €subst›
 		var_subst (combine xs Xs) mediator
 	end
 	handle complaint =>
-	(map (fn (x,y) => if type_of x = type_of y
+	(map (fn (x,y) => if type_of x =: type_of y
 			then ()
 			else term_fail "subst" 3012 [x,y])
 		subs;
@@ -1571,6 +1600,7 @@ end);
 =TEX
 =SML
 end; (* of structure icl'TypesAndTerms *)
+end;
 =TEX
 We now open the structure for system creation, though the user will only see
 the items provided by the structure via the opening of structure

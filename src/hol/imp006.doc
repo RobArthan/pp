@@ -292,6 +292,18 @@ fun €two_the_same› ((a :: x): ''a list) : ''a = (
 	else two_the_same x
 ) | two_the_same _ = error "two_the_same" 6032 [];
 =TEX
+=SML
+fun €two_the_same1› (eq : 'a * 'a -> bool) ((a :: x): 'a list) : 'a = (
+	if present eq a x
+	then a
+	else two_the_same1 eq x
+) | two_the_same1 _ _ = error "two_the_same1" 6032 [];
+=TEX
+=SML
+fun €st_equals› (((nm1,ty1):string * TYPE), ((nm2,ty2):string * TYPE))  : bool = (
+	nm1 = nm2 andalso ty1 =: ty2
+);
+=TEX
 \subsubsection{Ranges}
 We are interested in supporting ranges of deleted levels,
 but the code can be given in isolation from
@@ -438,6 +450,45 @@ type €HIERARCHY› = (string * THEORY_INFO) list;
 \subsection{The Type of Conversions}
 =SML
 type €CONV› = TERM -> THM;
+=TEX
+\subsection{Equalities}
+The following doesn't require very much from the ADT,
+and could be moved out.
+=SML
+fun €list_eq› eq (a :: x) (b :: y) = eq (a,b) andalso list_eq eq x y
+| list_eq eq [] [] = true
+| list_eq eq _ _ = false;
+=TEX
+=SML
+fun sequal (eq:'a * 'a -> bool) ([]: 'a list) ([]:'a list) : bool = true 
+| sequal _ [] _  = false
+| sequal _ _ [] = false
+| sequal eq (a1 :: x1) l2 = (
+let fun aux acc (a2 :: x2) = (
+	if eq (a1, a2)
+	then (true, acc @ (x2 drop (fn v => eq(v, a1))))
+	else aux (a2 :: acc) x2
+	) | aux acc [] = (false, []);
+
+	val (ok,res) = aux [] l2;
+in
+	ok andalso (sequal eq (x1 drop (fn v => eq(v, a1))) res)
+end);
+
+fun ((asms1,conc1):SEQ) €=#› ((asms2,conc2):SEQ) = (
+	conc1 =$ conc2
+	andalso list_eq (op =$) asms1 asms2
+);
+
+fun ((asms1,conc1):SEQ) €~=#› ((asms2,conc2):SEQ) = (
+	conc1 ~=$ conc2
+	andalso sequal (op ~=$) asms1 asms2
+);
+
+fun (Thm {sequent=seq1,...}:THM) €=|-›
+	(Thm {sequent=seq2,...}:THM) = seq1 =# seq2;
+fun (Thm {sequent=seq1,...}:THM) €~=|-›
+	(Thm {sequent=seq2,...}:THM) = seq1 ~=# seq2;
 =TEX
 \subsection{Formatting Theorems and Theorem Failures}
 =SML
@@ -680,7 +731,7 @@ in
 	fun €wf_thm› (caller : string) (thm : THM as Thm{sequent = (tml,tm),...}) : unit = (
 	let	val tyv = list_cup (term_tycons tm ::
 			map term_tycons tml);
-		val con = list_cup (term_consts tm ::
+		val con = list_union st_equals (term_consts tm ::
 			map term_consts tml);
 		val fw = (fn () => string_of_thm thm);
 	in
@@ -1933,9 +1984,9 @@ let	val {theory=theory,...} = !current;
 		wf_term "icl'new_axiom" tm;
 		if keys = []
 		then fail "icl'new_axiom" 6031 []
-		else if type_of tm <> BOOL
-		then term_fail "icl'new_axiom" 3031 [tm]
-		else ()); 
+		else if type_of tm =: BOOL
+		then ()
+		else term_fail "icl'new_axiom" 3031 [tm]); 
 			(* spec step 1 *)
 
 	val new_axiom = Thm{level = current_level+1, 
@@ -2111,7 +2162,7 @@ Do the checks required (other than on keys):
 		| InDescendant => fail "icl'new_defn" 6063 [fn () => cnm]
 		| NotPresent => ());
 		wf_term "icl'new_defn" vl;
-		if keys = []
+		if is_nil keys
 		then fail "icl'new_defn" 6031 []
 		else if not(is_nil (frees vl))
 		then fail "icl'new_defn" 6059 [fn () => string_of_term vl,
@@ -2200,9 +2251,9 @@ Do the checks required (other than on keys):
 		| NotPresent => ());
 		check_thm "icl'new_type_defn" defthm;
 		wf_thm "icl'new_type_defn" defthm;
-		if keys = []
+		if is_nil keys
 		then fail "icl'new_type_defn" 6031 []
-		else if hyps <> []
+		else if not(is_nil hyps)
 		then thm_fail "icl'new_type_defn" 6053 [defthm]
 		else if not(is_nil (frees concl))
 		then fail "icl'new_type_defn" 6056 
@@ -2228,7 +2279,7 @@ Now build up the new material:
 		| "dest_simple_∂" => thm_fail "icl'new_type_defn" 6054 [defthm]
 		| _ => reraise complaint (area_of complaint));
 
-	val dummy = if not(x=x1)
+	val dummy = if not(x =$ x1)
 		then thm_fail "icl'new_type_defn" 6080 [defthm]
 		else ();
 
@@ -2311,7 +2362,7 @@ Do the checks required (other than on keys, and theorem form):
 	val dummy = (check_c_writable "icl'new_specification";
 		check_thm "icl'new_specification" defthm;
 		wf_thm "icl'new_specification" defthm;
-		if keys = []
+		if is_nil keys
 		then fail "icl'new_specification" 6031 []
 		else if not(is_nil (frees concl))
 		then fail "icl'new_specification" 6056
@@ -2319,9 +2370,9 @@ Do the checks required (other than on keys, and theorem form):
 			 fn () => format_list (fst o dest_var) (frees concl) ", "]	
 		else if ndef < 1
 		then fail "icl'new_specification" 6044 []
-		else if hyps <> []
-		then thm_fail "icl'new_specification" 6053 [defthm]
-		else ()
+		else if is_nil hyps
+		then ()
+		else thm_fail "icl'new_specification" 6053 [defthm]
 		);
 =TEX
 Now build up the new material:
@@ -2345,17 +2396,17 @@ Now build up the new material:
 =TEX
 Check the results of picking apart the theorem:
 =SML
-	val dummy = (if any (tl xlist) (fn x => not((term_tyvars x) set_eq xtyvars)) 
+	val dummy = (if any (tl xlist) (fn x => not((term_tyvars x) ~= xtyvars)) 
 		then term_fail "icl'new_specification" 6081 [hd xlist, 
-			find (tl xlist) (fn x => not((term_tyvars x) set_eq xtyvars))]
-		else if ((term_tyvars bdt) diff xtyvars) <> []
+			find (tl xlist) (fn x => not((term_tyvars x) ~= xtyvars))]
+		else if not(is_nil((term_tyvars bdt) diff xtyvars))
 		then fail "icl'new_specification" 6061
 			[fn () => string_of_thm defthm,
 			 fn () => format_list (Combinators.I) 
 			 ((term_tyvars concl) diff xtyvars) ", "]
-		else if not(all_different xlist)
+		else if not(all_distinct (op =$) xlist)
 		then fail "icl'new_specification" 6016 
-			[fn () => fst(dest_var(two_the_same xlist)),
+			[fn () => fst(dest_var(two_the_same1 (op =$) xlist)),
 			 fn () => string_of_thm defthm]
 		else ();
 		map (fn x =>
@@ -2447,7 +2498,7 @@ The functions in this section, other than the utilities, follow the specificatio
 Do union up to $\alpha$-conversion:
 Give the frees of a list of terms:
 =SML
-val €list_frees› = list_cup o map frees;
+val €list_frees› = list_union (op =$) o map frees;
 =TEX
 Then provide a test for being free in a list of terms:
 =SML
@@ -2493,7 +2544,7 @@ local
 	in
 		if not(is_var vari)
 		then term_fail "icl'subst_rule" 3007 [vari]
-		else if type_of lhsi <> type_of vari
+		else if not(type_of lhsi =: type_of vari)
 		then fail "icl'subst_rule" 6029 [fn () => string_of_thm thmi, 
 			fn () => string_of_term vari]
 		else (two_subst_lists ((lhsi, vari) :: lhslst)
@@ -2516,7 +2567,7 @@ We optimize for the special case of an empty $thm\_var\_list$, which is just ret
 		(fn (ithm as Thm{sequent = (hyps,concl),...}) =>
 		let val dummy = check_thm "icl'subst_rule" ithm;
 		in
-			if ¡_eq concl template
+			if concl ~=$ template
 			then mk_current_thm(hyps, template)
 			else term_fail "icl'subst_rule" 6001 [template, concl]
 		end))
@@ -2541,7 +2592,7 @@ return the theorem that the $rhs$ term is true.
 		let val dummy = (check_thm "icl'subst_rule" ithm;
 			map (check_thm "icl'subst_rule" o fst) thm_var_list);
 		in
-			if ¡_eq concl template_as_lhs
+			if concl ~=$ template_as_lhs
 			then mk_current_thm(hyps term_union new_hyps, template_as_rhs)
 			else term_fail "icl'subst_rule" 6001 [template_as_lhs, concl]
 		end
@@ -2631,9 +2682,9 @@ icl'¥_intro
 =SML
 fun €icl'¥_intro› (asm : TERM) (thrm : THM as Thm{sequent = (hyps,concl),...}) : THM = (
 let	val dummy = (check_thm "icl'¥_intro" thrm;
-	if type_of asm <> BOOL
-	then term_fail "icl'¥_intro" 3031 [asm]
-	else ());
+	if type_of asm =: BOOL
+	then ()
+	else term_fail "icl'¥_intro" 3031 [asm]);
 in
 	mk_current_thm(hyps term_less asm, mk_¥(asm, concl))
 end);
@@ -2658,7 +2709,7 @@ let	val dummy = (check_thm "icl'¥_elim" thrm1;
 		"dest_¥" => thm_fail "icl'¥_elim" 6010 [thrm1]
 		| _ => reraise complaint (area_of complaint));
 in
-	if ¡_eq hconcl1 concl2
+	if hconcl1 ~=$ concl2
 	then mk_current_thm(hyps1 term_union hyps2, cconcl1)
 	else thm_fail "icl'¥_elim" 6011 [thrm1, thrm2]
 end);
@@ -2673,7 +2724,7 @@ t Ù t
 =TEX
 =SML
 fun €icl'asm_rule› (tm : TERM) : THM = (
-	if type_of tm = BOOL
+	if type_of tm =: BOOL
 	then mk_current_thm([tm],tm)
 	else term_fail "icl'asm_rule" 3031 [tm]
 );
@@ -2794,7 +2845,7 @@ let	val sex = explode(dest_string tm)
 		handle complaint =>
 		pass_on complaint "dest_string" "icl'string_conv";
 
-	val rhs = if sex = []
+	val rhs = if is_nil sex
 		then SNil
 		else list_mk_app(SCons,
 			[mk_char(hd sex),
@@ -2933,7 +2984,7 @@ let	val dummy = (check_thm "icl'eq_trans_rule" thrm1;
 
 	val (hyps2,(lhs_concl2,rhs_concl2)) = dest_thm_eq "icl'eq_trans_rule" 6020 thrm2;
 
-	val dummy = if ¡_eq rhs_concl1 lhs_concl2
+	val dummy = if rhs_concl1 ~=$ lhs_concl2
 		then ()
 		else thm_fail "icl'eq_trans_rule" 6022 [thrm1, thrm2];
 
@@ -2985,11 +3036,11 @@ let	val dummy = (check_thm "icl'§_mp_rule" thrm1;
 
 	val (hyps1,(lhs_concl1,rhs_concl1)) = dest_thm_eq "icl'§_mp_rule" 6030 thrm1;
 
-	val side_effect = if type_of lhs_concl1 <> BOOL
-		then thm_fail "icl'§_mp_rule" 6030 [thrm1]
-		else ();
+	val side_effect = if type_of lhs_concl1 =: BOOL
+		then ()
+		else thm_fail "icl'§_mp_rule" 6030 [thrm1];
 
-	val new_concl = if ¡_eq lhs_concl1 concl2
+	val new_concl = if lhs_concl1 ~=$ concl2
 		then rhs_concl1
 		else thm_fail "icl'§_mp_rule" 6024 [thrm1, thrm2];
 in
@@ -3040,7 +3091,7 @@ let	val dummy = check_thm "icl'inst_term_rule" thrm;
 			handle complaint =>
 			pass_on complaint "dest_var" "icl'inst_term_rule")
 		in
-			if type_of t = xty
+			if type_of t =: xty
 			then x
 			else term_fail "icl'inst_term_rule" 6027 [t,x]
 		end))		
@@ -3048,9 +3099,9 @@ let	val dummy = check_thm "icl'inst_term_rule" thrm;
 		
 	val hfrees = list_frees hyps;
  
-	val dummy = if any svars (fn x => x mem hfrees)
+	val dummy = if any svars (fn x => present (op =$) x hfrees)
 		then term_fail "icl'inst_term_rule" 6028 
-			[find svars (fn x => x mem hfrees)]
+			[find svars (fn x => present (op =$) x hfrees)]
 		else ();
 
 	val new_concl = var_subst tvl concl;
@@ -3096,5 +3147,3 @@ end; (* of structure icl'Kernel *)
 \small
 \printindex
 \end{document}
-
-
