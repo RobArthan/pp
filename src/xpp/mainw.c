@@ -35,6 +35,7 @@
 #include <X11/Xatom.h>
 #include <X11/Intrinsic.h>
 #include <X11/Shell.h>
+#include <Xm/Protocols.h>
 #include <Xm/Xm.h>
 
 #include <stdio.h>
@@ -210,16 +211,31 @@ setup_cmdwin()
 	Arg args[12];
 	int i;
 	XmString s1, s2, s3, s4, s5, s6, s7, s8;
+	Atom WM_DELETE_WINDOW;
 	void 	tools_menu_cb(),
 		edit_menu_cb(),
 		cmd_menu_cb(),
 		help_menu_cb(),
+		close_down_cb(),
 		command_modify_cb(),
 		command_motion_cb();
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Main window setup:  (root is done in main in xpp.c)
+ * Main window setup:  (root is created in main in xpp.c)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+	XtVaSetValues(root,
+		XmNdeleteResponse,	XmDO_NOTHING,
+		NULL);
+
+	WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
+		"WM_DELETE_WINDOW",
+		False);
+
+	XmAddWMProtocolCallback(root,
+		WM_DELETE_WINDOW,
+		close_down_cb,
+		root);
 
 	frame = XtVaCreateWidget("frame",
 		xmMainWindowWidgetClass,
@@ -462,6 +478,7 @@ XmAnyCallbackStruct *cbs;
 	void send_nl();
 	void restart_application();
 	void interrupt_application();
+	void close_down_cb();
 	void post_mortem_tidy_up();
 
 	post_mortem_tidy_up();
@@ -488,10 +505,7 @@ XmAnyCallbackStruct *cbs;
 		};
 		break;
 	case 5:
-		if(yes_no_dialog(root, quit_message)) {
-			kill_application();
-			exit(0);
-		};
+		close_down_cb(root, NULL, NULL);
 		break;
 	default:
 		break;
@@ -1012,6 +1026,20 @@ void restart_application () {
 	get_pty();
 }
 
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * See if the user really wants to quit, and if so do so:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void close_down_cb (w, cd, cbs)
+Widget w;
+XtPointer cd;
+XmAnyCallbackStruct cbs;
+{
+	if(yes_no_dialog(w, quit_message)) {
+		kill_application();
+		exit(0);
+	};
+}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Executing text from the selection in a text window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
