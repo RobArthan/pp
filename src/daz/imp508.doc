@@ -1,4 +1,4 @@
-% imp508.doc   %Z% $Date: 2000/10/18 13:28:49 $ $Revision: 1.63 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2000/10/18 15:57:13 $ $Revision: 1.64 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.63 $%
+\def\SCCSversion{$Revision: 1.64 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2000/10/18 13:28:49 $%
+\TPPdate{\FormatDate{$Date: 2000/10/18 15:57:13 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -91,7 +91,7 @@ Adjusted $ENV\_INFO$ and allowed for type conversions.
 \item[Issues 1.58-1.61] Enhancement R1 --- multi-dimensional arrays.
 \item[Issues 1.62] Enhancement CTLE R1/2 --- ``Others'' in case statements.
 \item[Issues 1.63] Enhancement CTLE R1/4 --- logical operators on arrays of booleans, including all the basics of overload resolution.
-\item[Issues 1.63] Enhancement CTLE R1/8 --- characters and strings (translation of expressions, part complete)
+\item[Issues 1.64, 1.65] Enhancement CTLE R1/8 --- characters and strings
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -201,7 +201,7 @@ fun €MY_Z_RANDS_C› (c : CONV) : CONV = (fn tm =>
 );
 =TEX
 We put these pieces together to give the following conversion which does the required static evaluation of integer expressions.
-The parameter to the conversion is used to record which constants have had their definitions unwound somewhere in the branch of the expression tree currently being attacked and is used to avoid infinite recursion (e.g., if someone has used HOL to produce something which looks like a Z global variable with a definition like $X = X$ or $X = X + 0$.
+The parameter to the conversion is used to record which constants have had their definitions unwound somewhere in the branch of the expression tree currently being attacked and is used to avoid infinite recursion (e.g., if someone has used HOL to produce something which looks like a Z global variable with a definition like $X = X$ or $X = X + 0$).
 =SML
 fun €cn_eval_conv› (consts : TERM list) : CONV = (fn tm => (
 		MY_Z_RANDS_C (cn_eval_conv consts)
@@ -224,15 +224,15 @@ fun €cn_eval_conv› (consts : TERM list) : CONV = (fn tm => (
 		])	tm
 );
 =TEX
-The following is the interface used in handling attributes.
 The handling of ranges uses the above function directly.
+The following is the interface used in handling attributes.
 =SML
 fun €eval_attr_arg› (ze : Z_EXP) : int = (
 	let	val n = (dest_z_signed_int o snd o dest_eq o
 				snd o dest_thm o TRY_C(cn_eval_conv[])) ze; 
 	in	if 	n @> integer_of_int 0
 		then	int_of_integer n
-		else	fail "" 0 [] (* immediately caught *)
+		else	term_fail "eval_attr_arg" 508030 [ze]
 	end	handle	Fail _ => term_fail "eval_attr_arg" 508029 [ze]
 );
 =TEX
@@ -642,6 +642,43 @@ in
 	AbbDefInfo (name, [], z_sch)
 end
 );
+=TEX
+\subsection{Calculating Base Types}
+=SML
+local
+val €z_u› = ÒUÆ;
+fun €base_def› (n : Z_EXP) : Z_EXP = (
+	let	val rhs = snd(dest_z_eq(snd(dest_thm(z_get_spec n))));
+	in	(term_match rhs z_u; n)
+		handle Fail _ =>
+	let	fun aux r = (
+			let	val (decl, _, _) = dest_z_seta r;
+			in	(snd o dest_z_dec o hd o dest_z_decl) decl
+			end	handle Fail _ => r
+		);
+		val supertype = aux rhs;
+	in	if	is_z_gvar supertype
+		then	base_def supertype
+		else	n
+	end
+	end	handle Fail _ => n
+);
+in
+fun €base_type› (t : Z_EXP) : TMARK OPT = (
+	let	val n = base_def t;
+		val ty = dest_z_power_type (type_of n);
+		val (v, _, _)  = dest_z_gvar n;
+	in	if	is_z_power_type ty orelse is_z_schema_type ty
+		then	Value v
+		else	let	val vsucc = mk_z_gvar(v ^ "vSUCC", BOOL, []);
+			in	if	is_eq(snd(dest_thm(z_get_spec vsucc)))
+				then	Value v
+				else	Nil
+			end
+	end	handle Fail _ => Nil
+
+);
+end;
 =TEX
 \section{SUPPORT FOR TRANSLATION OF EXPRESSIONS}
 It is convenient to take some of the work for translation of
@@ -1691,7 +1728,7 @@ The following function generates the VC for checking that a type or subtype defi
 val €x_var› = Ò(x ∫  ˙)Æ;
 val €vc_pattern› = Òëx_varÆ Ω öÆ;
  
-fun €range_check_vc› (n : Z_ID) = (
+fun €range_check_vc› (n : Z_ID) : Z_EXP = (
 	subst[(mk_z_gvar(n, ˙_ty, []), x_var)] vc_pattern
 );
 =TEX
@@ -2066,6 +2103,31 @@ fun €basic_decl_subtype_range_con› (env : CN_ENV) (name : ID) (tmark : TMARK)
 val €basic_decl_subtype_floating_fixed_con› : CN_ENV -> ID
 	-> TMARK -> PARAINFO list = basic_decl_subtype_axdes;
 =SML
+=TEX
+The following function is used to check whether a subtype has base type
+{\it STRING} and, if so, to check the lower index bound.
+=SML
+local
+val z_one = Ò1Æ;
+in
+fun €string_bound_check› (env : CN_ENV) (name : ID) ([ix] : TMARK list) (ztmark : Z_EXP)
+		 : PARAINFO list = (
+	case base_type ztmark of
+	Value "STRING" =>
+		let	val zbnd = zid env (trans_id ix ^^ zfst);
+			val zval = (snd o dest_eq o concl o TRY_C(cn_eval_conv[])) zbnd;
+		in	if	is_z_signed_int zval
+			then	if	zval =$ z_one
+				then	[]
+				else	fail "string_bound_check" 508075 [fn _ => name]
+			else	(comment "string_bound_check" 508076 [fn _ => name];
+				[ConjectureInfo(Value name, [], mk_z_eq(zbnd, z_one))])
+		end
+	| _ => []
+) | string_bound_check _ _ _ _ = [];
+end;
+=TEX
+=SML
 fun €basic_decl_subtype_index_con› (env : CN_ENV) (name : ID) (tmark : TMARK)
 		(ci : EXP list) : PARAINFO list = (
 let	val zname = trans_id name;
@@ -2080,7 +2142,8 @@ let	val zname = trans_id name;
 	val zp = z_eq (z_dom (zid env' var), z_many_cross(map (zid env) zindex));
 	val set_comp = z_set_comp (trans_decl env' {vars=[var],tmark=tmark}, zp)
 	val abb_def = z_eq_eq (zname, set_comp);
-in	abb_def :: array_attrib env (zname, zindex)
+in	abb_def :: array_attrib env (zname, zindex) @
+	string_bound_check env name index zexp
 end
 );
 =TEX
