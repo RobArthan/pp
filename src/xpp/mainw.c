@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.26 2002/08/14 13:13:37 rda Exp rda $
+ * $Id: mainw.c,v 2.27 2002/08/14 13:28:29 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -11,7 +11,7 @@
  * the user interface for interacting with the interactive program.
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char rcsid[] = "$Id: mainw.c,v 2.26 2002/08/14 13:13:37 rda Exp rda $";
+static char rcsid[] = "$Id: mainw.c,v 2.27 2002/08/14 13:28:29 rda Exp rda $";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:
@@ -95,6 +95,7 @@ XtAppContext app; /* global because needed in msg.c */
  * modified     filename  label indicating that the file has changed
  * newfile      filename  label indicating that the file is new
  * linenumber	infobar   current line number indicator
+ * lnpopup	linenumber popup menu to enable/disable the line number indicator
  * logo         infobar   ProofPower logo
  * mainpanes    work      paned window for the script and journal window
  * script       mainpanes the script being edited
@@ -118,7 +119,7 @@ Widget  script,
 
 static Widget
 	frame, work, infobar, filename, filelabel, modified, newfile,
-	namestring, logo, linenumber,
+	namestring, logo, linenumber, lnpopup,
 	mainpanes,
 	menubar, filemenu, toolsmenu, popupeditmenu, editmenu, cmdmenu, helpmenu;
 
@@ -135,10 +136,12 @@ static void
 	help_menu_cb(CALLBACK_ARGS),
 	reopen_cb(CALLBACK_ARGS),
 	script_modify_cb(CALLBACK_ARGS),
-	tools_menu_cb(CALLBACK_ARGS);
+	tools_menu_cb(CALLBACK_ARGS),
+	ln_popup_cb(CALLBACK_ARGS);
 
 static void setup_reopen_menu(char *filename);
 static void post_popupeditmenu(EVENT_HANDLER_ARGS);
+static void post_ln_popup_menu(EVENT_HANDLER_ARGS);
 static Bool execute_command(void);
 static void execute_action(
     Widget 		/* widget */,
@@ -288,10 +291,11 @@ static MenuItem cmd_menu_items[] = {
 #define	HELP_MENU_ABOUT_XPP     0
 #define	HELP_MENU_USING_HELP    1
 #define	HELP_MENU_TUTORIAL      2
-#define	HELP_MENU_FILE_MENU     3
-#define	HELP_MENU_TOOLS_MENU    4
-#define	HELP_MENU_EDIT_MENU     5
-#define	HELP_MENU_COMMAND_MENU  6
+#define	HELP_MENU_FILE_NAME_BAR 3
+#define	HELP_MENU_FILE_MENU     4
+#define	HELP_MENU_TOOLS_MENU    5
+#define	HELP_MENU_EDIT_MENU     6
+#define	HELP_MENU_COMMAND_MENU  7
 static MenuItem help_menu_items[] = {
     { "About Xpp", &xmPushButtonGadgetClass, 'A', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_ABOUT_XPP, (MenuItem *)NULL, False },
@@ -299,6 +303,8 @@ static MenuItem help_menu_items[] = {
         help_menu_cb, (XtPointer)HELP_MENU_USING_HELP, (MenuItem *)NULL, False },
     { "Tutorial", &xmPushButtonGadgetClass, 'u', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_TUTORIAL, (MenuItem *)NULL, False },
+    { "File Name Bar", &xmPushButtonGadgetClass, 'N', NULL, NULL,
+        help_menu_cb, (XtPointer)HELP_MENU_FILE_NAME_BAR, (MenuItem *)NULL, False },
     { "File Menu", &xmPushButtonGadgetClass, 'F', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_FILE_MENU, (MenuItem *)NULL, False },
     { "Tools Menu", &xmPushButtonGadgetClass, 'T', NULL, NULL,
@@ -307,6 +313,14 @@ static MenuItem help_menu_items[] = {
         help_menu_cb, (XtPointer)HELP_MENU_EDIT_MENU, (MenuItem *)NULL, False },
     { "Command Menu", &xmPushButtonGadgetClass, 'C', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_COMMAND_MENU, (MenuItem *)NULL, False },
+    {NULL}
+};
+
+#define LN_POPUP_TOGGLE 0
+
+static MenuItem ln_popup_menu_items[] = {
+    { "Stop", &xmPushButtonGadgetClass, 'S', NULL, NULL,
+        ln_popup_cb, (XtPointer)NULL, (MenuItem *)NULL, False },
     {NULL}
 };
 
@@ -630,6 +644,11 @@ static Boolean setup_main_window(
 		XmNrightWidget,		logo,
 		NULL);
 
+	lnpopup = setup_menu(
+		linenumber, XmMENU_POPUP, "", ' ', False, ln_popup_menu_items);
+
+	XtAddEventHandler(linenumber, ButtonPressMask, False, post_ln_popup_menu, NULL);
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * User resizables paned window for the script and journal windows
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -795,6 +814,20 @@ static void post_popupeditmenu(
 	if (event->button == 3) {
 		XmMenuPosition(popupeditmenu, event);
 		XtManageChild(popupeditmenu);
+	}
+}
+
+
+static void post_ln_popup_menu(
+	Widget		w,
+	XtPointer	x,
+	XEvent		*ev,
+	Boolean		*unused)
+{
+	XButtonPressedEvent *event = &(ev->xbutton);
+	if (event->button == 3) {
+		XmMenuPosition(lnpopup, event);
+		XtManageChild(lnpopup);
 	}
 }
 
@@ -1151,6 +1184,9 @@ static void help_menu_cb(
 	case HELP_MENU_TUTORIAL:
 		help_dialog(root, Help_Tutorial);
 		break;
+	case HELP_MENU_FILE_NAME_BAR:
+		help_dialog(root, Help_File_Name_Bar);
+		break;
 	case HELP_MENU_FILE_MENU:
 		help_dialog(root, Help_File_Menu);
 		break;
@@ -1185,6 +1221,7 @@ static void script_modify_cb(
  * Monitor line number
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static Boolean line_number_req_pending = False;
+static Boolean line_number_stopped = False;
 static Boolean line_number_work_proc(
 		XtPointer	cbd)
 {
@@ -1192,6 +1229,12 @@ static Boolean line_number_work_proc(
 	static long int last_line_num = -1;
 	char buf[20];
 	XmString s;
+
+	line_number_req_pending = False;
+
+	if(line_number_stopped) {
+		return;
+	}
 
 	line_num = get_line_no((Widget) cbd);
 
@@ -1202,7 +1245,7 @@ static Boolean line_number_work_proc(
 		XmStringFree(s);
 		last_line_num = line_num;
 	}
-	line_number_req_pending = False;
+
 	return True;
 }
 static void line_number_cb(
@@ -1217,6 +1260,17 @@ static void line_number_cb(
 		line_number_req_pending = True;
 	}
 }
+
+static void ln_popup_cb (
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	line_number_stopped = !line_number_stopped;
+	set_menu_item_label(lnpopup, 0,
+		line_number_stopped ? "Start" : "Stop");
+}
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * See if the user really wants to quit, and if so do so:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
