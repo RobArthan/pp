@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.20 2002/10/30 10:47:16 rda Exp $
+ * $Id: pterm.c,v 2.21 2002/11/14 14:51:43 rda Exp $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -72,6 +72,19 @@
 
 #define PPLINELENGTH "PPLINELENGTH"
 
+/*
+ * The argument to get_from_app_work_proc is one of the following two:
+ */
+#define	CONTINUE_LISTENING	0
+#define	STOP_LISTENING		1
+/*
+ * The argument to listening_state is on of the following four:
+ */
+#define	LISTEN	10
+#define	IGNORE	20
+#define	QUERY	30
+#define DEAD	40
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * global, static and external data:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -111,71 +124,11 @@ static char* carry_on_waiting_message =
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Listening to the application: the following function
- * is used to toggle between the state where xp is listening
- * for output from the application being run and the state
- * where it is not. The state changes needs to be protected
- * against signals.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-static void get_from_application(INPUT_CALLBACK_ARGS);
-static Boolean get_from_app_work_proc(XtPointer);
-/*
- * The argument to get_from_app_work_proc is one of the following two:
- */
-#define	CONTINUE_LISTENING	0
-#define	STOP_LISTENING		1
-
-/*
- * Listening states:
- */
-#define	LISTEN	10
-#define	IGNORE	20
-#define	QUERY	30
-#define DEAD	40
-
-Boolean listening_state(int req)
-{
-	static Boolean listening = False;
-	sigset_t now, before;
-	sigfillset(&now);
-	sigprocmask(SIG_BLOCK, &now, &before);
-	switch(req) {
-		case LISTEN:
-			if(application_alive() && !listening) {
-				app_ip_req = XtAppAddInput(app,
-					control_fd, (XtPointer) XtInputReadMask,
-					get_from_application, NULL);
-				listening = True;
-			}
-			break;
-		case IGNORE:
-			if(listening) {
-				XtRemoveInput(app_ip_req);
-				listening = False;
-			};
-			break;
-		case QUERY:
-			break;
-		case DEAD:
-			if(listening) {
-	/* Set up work proc to see if there is any final output from app */
-				XtRemoveInput(app_ip_req);
-				XtAppAddWorkProc(app,
-						get_from_app_work_proc,
-						(XtPointer) STOP_LISTENING);
-			};
-			break;
-	}
-	sigprocmask(SIG_SETMASK, &before, 0);
-	return listening;
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
  * Pseudo-terminal initialisation:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void default_sigs(void);
+static Boolean listening_state(int req);
 
 void get_pty(void)
 {
@@ -406,8 +359,71 @@ Boolean application_alive(void)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ *
  * Data transfer from application:
+ * 
+ * The point of most of the complication is to stop big data transfers
+ * from the application swamping the user interface. The input callback proc,
+ * get_from_application, reads just a small amount of data (XFER_SIZE)
+ * and if it looks like there's more, removes the input request and
+ * sets up a work proc get_from_app_work_proc to finish off the transfer
+ * in further little chunks, rescheduling itself if necessary.
+ * When it looks like there's no more input for now, the work proc
+ * arranges for the input callback request to be set up again if
+ * appropriate.
+ *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void get_from_application(INPUT_CALLBACK_ARGS);
+static Boolean get_from_app_work_proc(XtPointer);
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ *
+ * listening_state is used to toggle between the state where xp is listening
+ * for output from the application being run and the state
+ * where it is not. The state changes needs to be protected
+ * against signals.
+ * The actual listening state is just a flag which is true when we have Xt
+ * polling for input from control_fd.
+ *
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static Boolean listening_state(int req)
+{
+	static Boolean listening = False;
+	sigset_t now, before;
+	sigfillset(&now);
+	sigprocmask(SIG_BLOCK, &now, &before);
+	switch(req) {
+		case LISTEN:
+			if(application_alive() && !listening) {
+				app_ip_req = XtAppAddInput(app,
+					control_fd, (XtPointer) XtInputReadMask,
+					get_from_application, NULL);
+				listening = True;
+			}
+			break;
+		case IGNORE:
+			if(listening) {
+				XtRemoveInput(app_ip_req);
+				listening = False;
+			};
+			break;
+		case QUERY:
+			break;
+		case DEAD:
+			if(listening) {
+	/* Set up work proc to see if there is any final output from app */
+				XtRemoveInput(app_ip_req);
+				listening = False;
+				XtAppAddWorkProc(app,
+						get_from_app_work_proc,
+						(XtPointer) STOP_LISTENING);
+			};
+			break;
+	}
+	sigprocmask(SIG_SETMASK, &before, 0);
+	return listening;
+}
 
 static void get_from_application(
 	XtPointer	unused_p,
@@ -442,7 +458,6 @@ static Boolean get_from_app_work_proc(XtPointer continue_flag)
 				listening_state(LISTEN);
 				break;
 			case STOP_LISTENING:
-				listening_state(IGNORE);
 				break;
 		}
 		return True;
