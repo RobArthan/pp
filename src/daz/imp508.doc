@@ -86,8 +86,21 @@ infix 3 ^^;
 =SML
 structure ÛCNBasicDeclsAndExprsÝ : CNBasicDeclsAndExprs = struct
 local
-	open CaseIndependence CNEnvironmentTypes CNParser CNTypes ZProofMode;
+	open CaseIndependence CNParser CNTypes ZProofMode;
 in
+=TEX
+
+\section{CUSTOMIZED ENVIRONMENT HANDLING}
+
+=SML
+datatype ÛENV_INFOÝ =
+			ÛEIEnvFunctionÝ of ID list
+		|	ÛEIEnvVarÝ of TMARK
+		|	ÛEIEnvRecordAggÝ
+		|	ÛEIEnvOtherÝ;
+=TEX
+=SML
+type ÛCN_ENVÝ = Z_ID -> (TYPE * ENV_INFO) OPT;
 =TEX
 
 \section{MISCELLANEOUS SUPPORTING FUNCTIONS}
@@ -105,7 +118,7 @@ fun Ûtrans_rangeÝ ((RRange range) : EXP RANGE) : EXP RANGELOHI = (
 val ÛheadÝ = hd
 and ÛlastÝ = hd o rev;
 =TEX
-\section{ABSTRACT SYNTAX OF Z}
+\section{SUPPORT FOR Z ABSTRACT SYNTAX}
 
 \subsection{Z Unary Expressions}
 =SML
@@ -228,11 +241,14 @@ fun Ûz_set_minusÝ (exp1 : Z_EXP, exp2 : Z_EXP) : Z_EXP = (
 );
 =TEX
 =SML
-fun Ûz_set_compÝ ({zvar,zexp} : Z_DECL, p : Z_EXP) : Z_EXP = (
-let	val dexp = mk_z_lvar(zvar, (dest_z_power_type o type_of) zexp, []);
-	val decl = mk_z_decl[mk_z_dec ([dexp],zexp)];
+fun Ûz_set_compÝ (zdecl : Z_DECL, p : Z_EXP) : Z_EXP = (
+let	val dec = (fst o dest_z_dec) zdecl
+			handle _ => fail "z_set_comp" 505001 [fn()=>"invalid declaration"];
+	val zdexp = case dec of
+		[dec] => dec
+		|_ => mk_z_tuple dec;
 in
-	mk_z_seta (decl, p, dexp)
+	mk_z_seta (mk_z_decl [zdecl], p, zdexp)
 end
 );
 =TEX
@@ -366,21 +382,11 @@ fun Ûz_greaterÝ (exp1 : Z_EXP, exp2 : Z_EXP) : Z_PRED = (
 
 =SML
 val Ûz_trueÝ = ñtrue®;
-
-fun Ûz_decls_to_expÝ (zdecls : Z_DECL list) : Z_EXP = (
-let	fun dec {zvar=d, zexp=e} = (
-		mk_z_dec ([mk_z_lvar(d, (dest_z_power_type o type_of) e,
-				[])],e)
-	);
-in
-	mk_z_decl(map dec zdecls)
-end
-);
 =TEX
 
 =SML
 fun Ûz_forallÝ (zdecls : Z_DECL list, zp : Z_PRED) : Z_PRED = (
-	mk_z_µ (z_decls_to_exp zdecls, z_true, zp)
+	mk_z_µ (mk_z_decl zdecls, z_true, zp)
 );
 =TEX
 
@@ -403,7 +409,7 @@ fun Ûz_eq_eqÝ (id : Z_ID, exp : Z_EXP) : PARAINFO = (
 =SML
 
 fun Ûz_schemaÝ (name : Z_ID, decls : Z_DECL list) : PARAINFO = (
-	AbbDefInfo (name, [], mk_z_h_schema(z_decls_to_exp decls, z_true))
+	AbbDefInfo (name, [], mk_z_h_schema(mk_z_decl decls, z_true))
 );
 =TEX
 
@@ -1045,10 +1051,11 @@ end);
 =TEX
 =SML
 fun Ûtrans_declÝ (env : CN_ENV) {var : ID, tmark : TMARK} : Z_DECL = (
-let	val zvar = trans_id var;
+let	val zv = trans_id var;
 	val zexp = zid env (trans_id tmark);
+	val zvar = mk_z_gvar (zv, (dest_z_power_type o type_of) zexp, []);
 in
-	{zvar = trans_id zvar, zexp = zexp}
+	mk_z_dec ([zvar], zexp)
 end);
 =TEX
 =SML
@@ -1117,12 +1124,13 @@ let	val zname = trans_id name;
 				[fn()=>"multi-dimensional arrays not yet formalised"];
 	val zindex = trans_id ind;
 	val zexp = zid env (trans_id tmark);
-	val zvar =  "UNC"
+	val var =  "UNC"
 	val zvar_ty = dest_z_power_type(type_of zexp);
-	val env' = fn id => if id = "UNC" then Value (zvar_ty, EIEnvVar tmark)					else env id; 
-	val zp = z_eq (z_dom (zid env' zvar), zid env' zindex);
+	val env' = fn id => if id = "UNC" then Value (zvar_ty, EIEnvVar tmark)
+					else env id; 
+	val zp = z_eq (z_dom (zid env' var), zid env' zindex);
 in
-	[z_eq_eq (zname, z_set_comp ({zvar=zvar,zexp=zexp},zp))] @
+	[z_eq_eq (zname, z_set_comp (trans_decl env' {var=var,tmark=tmark}, zp))] @
 	array_attrib env' (zname, zindex)
 end
 );
