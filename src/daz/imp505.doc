@@ -1,4 +1,4 @@
-% %Z% $Date: 2002/05/09 00:04:19 $ $Revision: 1.101 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2002/05/10 16:13:59 $ $Revision: 1.102 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -16,7 +16,7 @@
 \TPPtitle{Implementation: Verification Condition Generator}  %% Mandatory field
 \def\TPPheadtitle{Verification Condition Generator}
 \TPPref{ISS/HAT/DAZ/IMP505}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.101 $%
+\def\SCCSversion{$Revision: 1.102 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 \TPPdate{\FormatDate{97/07/18%
@@ -122,6 +122,7 @@ procedure calls.
 \item[Issue 1.98] Spring 2002 enhancements: return and exit statements.
 \item[Issue 1.99,1.100] Spring 2002 enhancements: subprogram and object renaming.
 \item[Issue 1.101,1.102] Spring 2002 enhancements: package renaming.
+\item[Issue 1.103] Spring 2002 enhancements: VC derivations enquiries - adding information to sequents.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -223,6 +224,104 @@ fun €add_domain_conds› (env : CN_ENV)
 	end
 );
 =TEX
+\subsubsection{Information on Sequent Provenance}
+We have functions \textit{\slshape init\_sr}, \textit{\slshape cons\_sr},
+  \textit{\slshape cons\_dec\_sr}, 
+ \textit{\slshape cons\_srs}, \textit{\slshape cons\_dec\_srs}, \textit{\slshape extract\_routes}.
+
+The constructors are nullary e.g. 
+=INLINEFT
+ÒSR_while_pre_introÆ
+=TEX
+\ or unary e.g.
+=INLINEFT
+ÒSR_while_viaÆ
+=TEX
+\ in the \textit{\slshape Sequent\_Route} argument. 
+
+Supporting functions are: \textit{\slshape is\_route}, \textit{\slshape dest\_route}, 
+  \textit{\slshape mk\_route}, \textit{\slshape extend\_path}, \textit{\slshape extend\_dec\_path}.
+
+We use the type \textit{\slshape ROUTE} for the route information and form a \textit{\slshape Z\_PRED}
+in order to include it in a sequent.
+
+=SML
+type ROUTE = TERM
+
+val sequent_route_set = ÒSequent_RouteÆ
+
+fun €mk_route› ( path : ROUTE ) : Z_PRED = mk_z_ç(path,sequent_route_set)
+
+fun €is_route›  ( rpred : Z_PRED ) : bool = 
+	 case dest_term rpred of 
+            DApp(_, sr) =>  sr =$ sequent_route_set
+          | _ => false
+
+fun €dest_route› ( rpred : Z_PRED ) : ROUTE = 
+	let val DApp(sr1,_) = dest_term rpred
+	    val DApp(_,sr2) = dest_term sr1   (* get first argument of curried eps *)
+	in
+		sr2
+	end
+
+fun €extend_path› ( constr : TERM ) ( p : ROUTE) : ROUTE = z_fun_call( constr, [p] )
+
+fun €extend_dec_path› ( constr : TERM,  d : TERM list ) ( p : ROUTE ) : ROUTE = 
+	z_fun_call( constr,  rev(p::(rev d)) )
+=SML
+
+
+fun €init_sr› ( constr : ROUTE ) ( (h,c) : SEQUENT) : SEQUENT = 
+		(mk_route(constr)::h, c)
+
+fun €init_dec_sr› ( constr : ROUTE, d : TERM list ) ( (h,c) : SEQUENT) : SEQUENT = 
+		(mk_route(z_fun_call(constr,d))::h, c)
+=TEX
+example: 
+=INLINEFT
+init_sr ÒSR_while_pre_introÆ s
+=SML
+
+fun €cons_sr›  (constr : TERM ) ( (h,c) : SEQUENT ) : SEQUENT = 
+		( map (fn zp => 
+			if is_route zp then mk_route(extend_path constr (dest_route zp))
+			else zp
+		      )  h,  
+		  c
+		)
+
+fun €cons_dec_sr›  (constr : TERM, d : TERM list ) ( (h,c) : SEQUENT ) : SEQUENT = 
+		( map (fn zp => 
+			if is_route zp then mk_route(extend_dec_path (constr,d) (dest_route zp))
+			else zp
+		      )  h,  
+		  c
+		)
+
+fun €cons_srs› (constr : TERM) ( hcs : SEQUENT list ) : SEQUENT list = 
+	map (cons_sr constr) hcs 
+
+fun €cons_dec_srs› (constr : TERM, d : TERM list ) ( hcs : SEQUENT list ) : SEQUENT list = 
+	map (cons_dec_sr (constr, d)) hcs ;
+
+
+fun extract_routes  ( [] : SEQUENT list ) : (SEQUENT list * ROUTE OPT list) = ([],[])
+|   extract_routes  ( hc :: hcs ) = 
+	let 	fun drop_get_routes ([],c) =  ( ([],c), Nil )
+             	|   drop_get_routes (zp::zps,c) = 
+			let val ( (h,c), r ) = drop_get_routes(zps,c)
+			in   	if is_route zp  then  
+					let val DApp(app_eps1,_) = dest_term zp
+				    	    val DApp(_, rte) = dest_term app_eps1
+					in ( (h,c), Value rte )
+					end
+				else  ( (zp::h,c), r)
+			end
+	 	val ( seqs, routes ) = extract_routes hcs
+		val (sequ, optrte) = drop_get_routes hc
+	in	( sequ :: seqs, optrte :: routes )
+	end
+=TEX
 \pagebreak
 \section{Substitutions}
 =TEX
@@ -253,7 +352,7 @@ fun €list_sub› ((p, xes) :Z_PRED * ((Z_ID * Z_EXP) list)) : Z_PRED = (
 				(e, mk_var(x, type_of e))
 			);
 			val isubs1 = (map mk_subs xes);
-			val isubs2 = isubs1 drop (fn (a, b) => (a =$ b));
+		val isubs2 = isubs1 drop (fn (a, b) => (a =$ b));
 			val p' = var_subst isubs2 p;
 			val back_to_z_conv = TRY_C(TOP_MAP_C (
 				z_schema_pred_conv1 ORELSE_C
@@ -304,7 +403,7 @@ See \cite{ISS/HAT/DAZ/DTD502}.
 \subsection{Null Statement}\label{wp-null}
 =SML
 fun €null› ({a, ...} : WP_PARS) : RESULT = (
-	{wp = a, side = []}
+	{wp = cons_srs Ò(SR_null _)Æ a, side = []}
 );
 =TEX
 \subsection{Assignment Statement}\label{wp-assignment}
@@ -397,7 +496,7 @@ fun €assign› (wp_pars as {wp_env as {env, ...}, ...} : WP_PARS) ((name, ze) : EX
 let	val tmark = tmark_of_prefix env(trans_exp env name);
 	val ze' = slide_to_tmark env (ze, tmark);
 	val {wp = wp1, side = side1} = assign_rec wp_pars (name, ze');
-in	{wp = wp1, side = side1}
+in	{wp = cons_srs Ò(SR_assign _)Æ wp1, side = cons_srs Ò(SR_any _)Æ side1}
 end
 );
 =TEX
@@ -405,13 +504,22 @@ end
 =SML
 fun €spec_no_ivars› ({a, ...} : WP_PARS) ((pre, post) : Z_EXP * Z_EXP)
 			: RESULT = (
-	{wp = [[] Ù pre], side = post %Longrightarrow% a}
+	let 	val wphd = [] Ù pre
+		val side = post %Longrightarrow% a
+	in
+		{wp = [ init_sr ÒSR_spec_pre_introÆ wphd ], 
+		 side = cons_srs Ò(SR_spec_to_side _)Æ side 
+		}
+	end
 );
 =TEX
 =SML
 fun €spec_no_ivars_empty› ({a, ...} : WP_PARS) ((pre, post) : Z_EXP * Z_EXP)
 			: RESULT = (
-	{wp = ([] Ù pre) :: (post %Longrightarrow% a), side = []}
+	{wp = cons_sr ÒSR_spec_pre_introÆ  ([] Ù pre):: 
+		(cons_srs Ò(SR_spec_via _)Æ  (post %Longrightarrow% a)), 
+	 side = []
+	}
 );
 =TEX
 =SML
@@ -426,10 +534,12 @@ fun €spec_no_ivars_either› (wp : WP_PARS) (w : Z_ID list) ((pre, post) : Z_EXP *
 =SML
 fun €semicolon› ({wp, a, wp_env} : WP_PARS) ((p, q) : STATEMENT * STATEMENT)
 			: RESULT = (
-let	val {wp = wp2, side = side2} = wp (q, a, wp_env);
+let	val {wp = wp2, side = side2} = wp (q, cons_srs Ò(SR_end_semi _)Æ a, wp_env);
 	val {wp = wp1, side = side1} = wp (p, wp2, wp_env);
 in
-	{wp = wp1, side = side1 @ side2}
+	{wp = cons_srs Ò(SR_semi _)Æ  wp1, 
+	 side = cons_srs Ò(SR_semi _)Æ (side1 @ (cons_srs Ò(SR_any _)Æ side2)) 
+	}
 end
 );
 =TEX
@@ -442,14 +552,20 @@ val exp= q;
 \subsection{If Statement}\label{wp-if-then-else}
 =SML
 fun €if_then_else›	({wp, a, wp_env as {env,...}} : WP_PARS)
-			({g, p, q,...} : STATEMENT IF_THEN_ELSE) : RESULT = (
-let	val {wp = wp1, side = side1} = wp (p, a, wp_env);
-	val {wp = wp2, side = side2} = wp (q, a, wp_env);
+			({g, p, q, elsif} : STATEMENT IF_THEN_ELSE) : RESULT = (
+let	val sr_a = cons_srs Ò(SR_end_if _)Æ a
+	val {wp = wp1, side = side1} = wp (p, sr_a, wp_env);
+	val {wp = wp2, side = side2} = wp (q, sr_a, wp_env);
+         val sr_elsf = if elsif then ÒSR_elsf_trueÆ else ÒSR_elsf_falseÆ
+	val sr_wp1 = cons_dec_srs (Ò(SR_if_then _)Æ, [sr_elsf]) wp1
+	val sr_wp2 = cons_dec_srs (Ò(SR_if_else _)Æ, [sr_elsf]) wp2
 	val ze = trans_exp env g;
 	val wp = add_domain_conds env ([ze],
-		(z_eq(ze, zid env "TRUE") %Longrightarrow% wp1) @
-		(z_eq(ze, zid env "FALSE") %Longrightarrow% wp2));
-	val side = side1 @ side2;
+		(z_eq(ze, zid env "TRUE") %Longrightarrow% sr_wp1) @
+		(z_eq(ze, zid env "FALSE") %Longrightarrow% sr_wp2));
+	val sr_side1 = cons_dec_srs (Ò(SR_if_then _)Æ,[sr_elsf]) side1
+	val sr_side2 = cons_dec_srs (Ò(SR_if_else _)Æ,[sr_elsf]) side2
+	val side = sr_side1 @ sr_side2;
 in
 	{wp = wp, side = side}
 end
@@ -505,39 +621,45 @@ end
 );
 =TEX
 =SML
-fun €case_base› ({wp, a, wp_env as {env,...}} : WP_PARS) (e : EXP)
+fun €case_base› ({wp, a, wp_env as {env,...}} : WP_PARS) (e : EXP) (n : int)
 			({choices, p} : STATEMENT CASE_ALTERNATIVE)
 			 : RESULT * Z_EXP = (
 let	val {wp = wp1, side = side1} = wp (p, a, wp_env);
 	val ze = trans_exp env e;
 	val zcs = trans_case_choices env choices;
-	val wp' = z_elem (ze, zcs) %Longrightarrow% wp1;
-in	({wp = add_domain_conds env ([ze, zcs], wp'), side = side1}, zcs)
+         val sr_op = cons_dec_srs (Ò(SR_case_branch _)Æ, [mk_z_int (string_of_int n)] ) 
+	val sr_wp1 = sr_op wp1
+         val sr_side1 =  sr_op side1
+	val wp' = z_elem (ze, zcs) %Longrightarrow% sr_wp1;
+in	({wp = add_domain_conds env ([ze, zcs], wp'), side = sr_side1}, zcs)
 end
 );
 =TEX
 {\it case\_step} expects to be called by {\it case\_others} and ignores
 the ``others'' part.
 =SML
-fun €case_step› (pars as {wp, a, wp_env as {env,...}} : WP_PARS)
+fun €case_step› (pars as {wp, a, wp_env as {env,...}} : WP_PARS) (n : int) 
 		({e, s, others} : STATEMENT CASE) : RESULT * Z_EXP list = (
 	case s of
 	[] =>
 		fail "case_step" 505030 []
 	| [alt] =>
-		let	val (res, ze) = case_base pars e alt;
+		let	val (res, ze) = case_base pars e n alt;
 		in	(res, [ze])
 		end
 	| ({choices, p} :: s') =>
 		let	val {wp = wp1, side = side1} =
 				wp (p, a, wp_env);
+         		val sr_op = cons_dec_srs 
+					(Ò(SR_case_branch _)Æ, [mk_z_int (string_of_int n)] ) 
+			val (sr_wp1, sr_side1) = (sr_op wp1, sr_op side1)
 			val ({wp = wp2, side = side2}, rest) =
-				case_step pars {e=e, s=s', others=others};
+				case_step pars (n+1) {e=e, s=s', others=others};
 			val ze = trans_exp env e;
 			val zcs = trans_case_choices env choices;
 			val wp3 = add_domain_conds env([ze, zcs],
-				(z_elem (ze, zcs) %Longrightarrow% wp1) @ wp2);
-		in	({wp = wp3 , side = side1 @ side2},
+				(z_elem (ze, zcs) %Longrightarrow% sr_wp1) @ wp2);
+		in	({wp = wp3 , side = sr_side1 @ side2},
 			 zcs :: rest)
 		end
 );
@@ -550,15 +672,19 @@ handling the others part if present.
 =SML
 fun €case_others› (pars as {wp, a, wp_env as {env,...}} : WP_PARS)
 		(st as {e, others, ...} : STATEMENT CASE) : RESULT = (
-	let	val (res as {wp = wp1, side = side1}, exps) = case_step pars st;
+	let	val a_in = cons_srs Ò(SR_end_case _)Æ a
+		val pars_in = {wp = wp, a = a_in, wp_env = wp_env}
+		val (res as {wp = wp1, side = side1}, exps) = case_step pars_in 1 st;
 		val ze = trans_exp env e
 	in	case others of 
 		STImplicitNull => res
 	|	stmt =>
-		let	val {wp = wp2, side = side2} = wp(others, a, wp_env);
-			val wp = wp1 @ (z_notelem(ze, z_many_union exps)
-					%Longrightarrow% wp2);
-			val side = side1 @ side2;
+		let	val {wp = wp2, side = side2} = wp(others, a_in, wp_env);
+			val wp2_g = (z_notelem(ze, z_many_union exps) %Longrightarrow% wp2);
+			val sr_wp2_g = cons_srs Ò(SR_case_others _)Æ wp2_g;
+			val wp = wp1 @ sr_wp2_g;
+                           val sr_side2 = cons_srs Ò(SR_case_others _)Æ side2;
+			val side = side1 @ sr_side2;
 		in	{wp = add_domain_conds env (ze::exps, wp), side = side}
 		end
 	end
@@ -573,11 +699,13 @@ let	val (pre1, post1) = case stmt of
 		STSpecNoIvars {spec={pre, post, ...}, ...} => (
 			(z_predexp_of_z_tm1 env pre,z_predexp_of_z_tm1 env post)
 		) |_ => fail "loop" 505022 [];
-	val wp = [[] Ù pre1];
+	val wp = [init_sr ÒSR_loop_undec_pre_introÆ ([] Ù pre1)];
 	val side = case t of
-			Value till => [[post1] Ù pre1] @
-				((z_predexp_of_z_tm1 env till) %Longrightarrow% a)
-			|Nil => [[post1] Ù pre1];
+			Value till => 
+			   [init_sr ÒSR_loop_undec_pre_to_sideÆ ([post1] Ù pre1)] @
+				(cons_srs Ò(SR_loop_undec_to_side _)Æ
+					((z_predexp_of_z_tm1 env till) %Longrightarrow% a))
+			|Nil => [init_sr ÒSR_loop_undec_pre_to_sideÆ ([post1] Ù pre1)];
 in
 	{wp = wp, side = side}
 end
@@ -599,14 +727,18 @@ let	val {w, w0, pre, post} = case stmt of
 	val pre1 = z_predexp_of_z_tm1 env pre;
 	val post1 = z_predexp_of_z_tm1 env post;
 	val ze = trans_exp env g;
-	val wp = add_domain_conds env([ze],
-		([z_eq(ze, zid env "TRUE")] Ù pre1) ::
-			(z_eq(ze, zid env "FALSE")
-				%Longrightarrow% a));
-	val side = case t of
-			Value till => (post1 %Longrightarrow% wp) @
-					((z_predexp_of_z_tm1 env till) %Longrightarrow% a)
-			|Nil => (post1 %Longrightarrow% wp);
+         val pre_intro_seq = init_sr ÒSR_while_pre_introÆ ([z_eq(ze, zid env "TRUE")] Ù pre1);
+         val via_seqs = (z_eq(ze, zid env "FALSE") %Longrightarrow% a);
+         val sr_via_seqs = cons_srs Ò(SR_while_via _)Æ via_seqs
+	val wp = add_domain_conds env([ze], pre_intro_seq :: sr_via_seqs );
+         val wp_to_side = (post1 %Longrightarrow% wp);
+	val sr_wp_to_side = cons_srs Ò(SR_while_WP_to_side _)Æ wp_to_side;
+	val till_part = case t of
+			Value till => (z_predexp_of_z_tm1 env till) %Longrightarrow% a
+					
+			|Nil => [];
+	val sr_till_part = cons_srs Ò(SR_loop_to_side _)Æ till_part;
+	val side = sr_till_part @ sr_wp_to_side;
 in
 	{wp = wp, side = side}
 end
@@ -633,18 +765,23 @@ let	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
 	val zid_zi = zid env zi;
 	val zran = z_elem (zid_zi, z_rng (zlo, zhi));
 	val z_bin_exp_theta = z_bin_exp (zleft, zop, zright);
-	val wp = add_domain_conds env ([zlo, zhi],
-		[[z_less_eq (zlo, zhi)] Ù sub(pre1, zi, zinitial)] @
-		(z_greater (zlo, zhi) %Longrightarrow% a));
+	val pre_intro = [z_less_eq (zlo, zhi)] Ù sub(pre1, zi, zinitial);
+	val sr_pre_intro = [init_sr ÒSR_for_pre_introÆ pre_intro];
+	val via = z_greater (zlo, zhi) %Longrightarrow% a;
+	val sr_via = cons_srs Ò(SR_for_via _)Æ via;
+	val wp = add_domain_conds env ([zlo, zhi], sr_pre_intro @ sr_via );
 	val till_part = case t of
 			Value till => (
 				zran %Longrightarrow% ((z_predexp_of_z_tm1 env till) %Longrightarrow% a)
 			) | Nil => [];
-	val side = add_domain_conds env ([zfinal],
-			[[zran, z_noteq(zid_zi, zfinal), post1] Ù 
-			sub(pre1, zi, z_bin_exp (zleft, zop, zright))] @
-			(sub(post1, zi, zfinal) %Longrightarrow% a) @
-			till_part);
+         val sr_till_part = cons_srs Ò(SR_for_exit_to_side _)Æ till_part;
+	val go_round = [zran, z_noteq(zid_zi, zfinal), post1] Ù 
+			sub(pre1, zi, z_bin_exp (zleft, zop, zright));
+	val sr_go_round = [init_sr ÒSR_for_pre_to_sideÆ  go_round];
+	val dont_go = sub(post1, zi, zfinal) %Longrightarrow% a;
+	val sr_dont_go = cons_srs Ò(SR_for_to_side _)Æ dont_go;
+	val side = add_domain_conds env ([zfinal], 
+			sr_go_round @ sr_dont_go @ sr_till_part);
 in
 	{wp = wp, side = side}
 end
@@ -668,16 +805,22 @@ let	val {pre, post, ...} = case stmt of
 	val zright = z_num one;
 	val zran = z_elem (zid env zi, z_rng (zlo, zhi));
 	val z_bin_exp_theta = z_bin_exp (zleft, zop, zright);
-	val wp = [[z_less_eq (zlo, zhi)] Ù sub(pre1, zi, zinitial)] @
-		(z_greater (zlo, zhi) %Longrightarrow% a);
+	val pre_intro = [z_less_eq (zlo, zhi)] Ù sub(pre1, zi, zinitial);
+	val sr_pre_intro = [init_sr ÒSR_for_pre_introÆ pre_intro];
+	val via = z_greater (zlo, zhi) %Longrightarrow% a;
+	val sr_via = cons_srs Ò(SR_for_via _)Æ via;
+ 	val wp = sr_pre_intro @ sr_via;
 	val till_part = case t of
 			Value till => (
 				(z_predexp_of_z_tm1 env till) %Longrightarrow% a
 			) | Nil => [];
-	val side = [[z_noteq(zid env zi, zfinal), post1] Ù 
-			sub(pre1, zi, z_bin_exp (zleft, zop, zright))] @
-			(sub(post1, zi, zfinal) %Longrightarrow% a) @
-			till_part;
+         val sr_till_part = cons_srs Ò(SR_for_to_side _)Æ till_part;
+	val go_round = [z_noteq(zid env zi, zfinal), post1] Ù 
+			sub(pre1, zi, z_bin_exp (zleft, zop, zright));
+	val sr_go_round = [init_sr ÒSR_for_pre_to_sideÆ go_round];
+	val dont_go = sub(post1, zi, zfinal) %Longrightarrow% a;
+	val sr_dont_go = cons_srs Ò(SR_for_to_side _)Æ dont_go;
+	val side = sr_go_round @ sr_dont_go @ sr_till_part;
 in
 	{wp = wp, side = side}
 end
@@ -699,10 +842,12 @@ end
 let	val ze = trans_exp env g;
 	val till = case s_lookup name named_tills of
 		Value p => p
-	|	Nil => fail "exit_when" 505069 [fn _ => name]
-	val wp = add_domain_conds env ([ze],
-		([z_eq(ze, zid env "TRUE")] Ù till) ::
-		(z_eq(ze, zid env "FALSE") %Longrightarrow% a));
+	|	Nil => fail "exit_when" 505069 [fn _ => name];
+	val do_exit = ([z_eq(ze, zid env "TRUE")] Ù till);
+	val sr_do_exit = [init_sr ÒSR_exit_till_introÆ do_exit];
+	val dont_exit = z_eq(ze, zid env "FALSE") %Longrightarrow% a;
+	val sr_dont_exit = cons_srs Ò(SR_exit_via _)Æ dont_exit;
+	val wp = add_domain_conds env ([ze], sr_do_exit @ sr_dont_exit );
 in	{wp = wp, side = []}
 end
 );
@@ -710,12 +855,14 @@ end
 \subsection{Exit}\label{wp-exit}
 =SML
 fun €cn_exit› ({wp_env={till, ...},...} : WP_PARS) ({n = Nil} : EXIT): RESULT = (
-	{wp = [[] Ù till], side = []}
+	{wp = [init_sr ÒSR_exit_till_intro ""Æ ([] Ù till)], side = []}
 ) | cn_exit ({wp_env={named_tills, ...},...} : WP_PARS) ({n = Value name} : EXIT) = (
 let	val till = case s_lookup name named_tills of
 		Value p => p
 	|	Nil => fail "exit_when" 505069 [fn _ => name]
-in	{wp = [[] Ù till], side = []}
+in	{wp = [init_dec_sr(ÒSR_exit_till_intro nameÆ,[mk_z_string name]) ([] Ù till)], 
+	 side = []
+	}
 end
 );
 =TEX
@@ -732,8 +879,9 @@ let	val zfun = trans_fun_name env name;
 	val ids = flat (map (fn {vars, ...} => vars) var_decls);
 	val zargs = map (fn id => zid env (trans_id id)) ids;
 	val ze = slide_to_tmark env (trans_exp env exp, return_type);
-	val wp = add_domain_conds env ([ze],
-		 [[z_eq(z_fun_call(zfun, zargs), ze)] Ù return]);
+	val do_return = [z_eq(z_fun_call(zfun, zargs), ze)] Ù return;
+	val sr_do_return = [init_sr ÒSR_return_introÆ do_return];
+	val wp = add_domain_conds env ([ze], sr_do_return );
 	val side = [];
 in
 	{wp = wp, side = side}
@@ -965,9 +1113,12 @@ let	fun is_it ({name = n, ...} : FORMAL_PROC) : bool = (name = n);
 					pre=z_quote(pre, Nil),
 					post=z_quote(post, Nil)},
 				label = ""}, asgns);
-	val {wp = wp1, side = side1} = wp (xform, a, wp_env);
-	val side2 = map (fn p => [] Ù p) vc_preds;
-in	{wp = add_hyps(dc_preds, wp1), side = add_hyps(dc_preds, side1@side2)}
+         val a_in = cons_srs Ò(SR_proc_call_end _)Æ a;
+	val {wp = wp1, side = side1} = wp (xform, a_in, wp_env);
+	val side2 = map (fn p => init_sr ÒSR_proc_rng_introÆ ([] Ù p)) vc_preds;
+         val sr_wp1 = cons_srs Ò(SR_proc_call _)Æ wp1;
+	val sr_side1 = cons_srs Ò(SR_proc_call _)Æ side1;
+in	{wp = add_hyps(dc_preds, sr_wp1), side = add_hyps(dc_preds, sr_side1@side2)}
 end
 );
 =TEX
@@ -982,10 +1133,11 @@ fun is_it ({name = n, ...} : FORMAL_PROC) : bool = (name = n);
 =SML
 fun €spec_ivars› ({wp, a, wp_env as {env, ...}} : WP_PARS)
 	(((pre, post)) : (Z_EXP * Z_EXP)) : RESULT = (
-let		val wp = [[] Ù pre];
+let	val sr_wp = [init_sr ÒSR_spec_pre_introÆ ([] Ù pre)];
 	val side = post %Longrightarrow% a;
+	val sr_side = cons_srs Ò(SR_spec_to_side _)Æ side;
 in
-	{wp = wp, side = side}
+	{wp = sr_wp, side = sr_side}
 end
 );
 =TEX
@@ -997,7 +1149,7 @@ fun €for_non_static› (pars as {wp, a, wp_env as {env, ...}} : WP_PARS)
 let	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
 	val {lo, hi} = dest_range range;
 	val {pre, post, w, w0, ...} = case stmt of
-		STSpecNoIvars {spec, ...} => spec
+		STSpecNoIvars {spec,  ...} => spec
 		|_ => fail "for_non_static" 505022 [];
 	val pre1 = z_predexp_of_z_tm1 env pre;
 	val post1 = z_predexp_of_z_tm1 env post;
@@ -1011,18 +1163,23 @@ let	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
 	val (zinitial0, zfinal0, zop) =
 		if dir = LDForwards then (zlo0, zhi0, z_add) else (zhi0, zlo0, z_minus);
 	val zran = z_elem(zid env zi, z_rng (zlo0, zhi0));
-	val wp = add_domain_conds env ([zlo, zhi],
-		[[z_less_eq (zlo, zhi)] Ù sub(pre1, zi, zinitial0)] @
-		(z_greater(zlo, zhi) %Longrightarrow% a));
+	val pre_intro = [z_less_eq (zlo, zhi)] Ù sub(pre1, zi, zinitial0);
+	val sr_pre_intro = [init_sr ÒSR_for_pre_introÆ pre_intro];
+	val via = z_greater(zlo, zhi) %Longrightarrow% a;
+	val sr_via = cons_srs Ò(SR_for_via _)Æ via;
+	val wp = add_domain_conds env ([zlo, zhi], sr_pre_intro @ sr_via);
 	val till_part = case t of
 			Value till => (
 				zran %Longrightarrow% ((z_predexp_of_z_tm1 env till )%Longrightarrow% a)
 			) | Nil => [];
+	val sr_till_part = cons_srs Ò(SR_for_exit_to_side _)Æ till_part;
+	val go_round = [zran, z_noteq(zid env zi, zfinal0), post1] Ù 
+			sub(pre1, zi, z_bin_exp(zleft, zop, zright));
+	val sr_go_round = [init_sr ÒSR_for_pre_to_sideÆ go_round];
+	val dont_go = sub(post1, zi, zfinal0) %Longrightarrow% a;
+	val sr_dont_go = cons_srs Ò(SR_for_to_side _)Æ dont_go;
 	val side = add_domain_conds env ([zfinal0],
-		[[zran, z_noteq(zid env zi, zfinal0), post1] Ù 
-			sub(pre1, zi, z_bin_exp(zleft, zop, zright))] @
-				(sub(post1, zi, zfinal0) %Longrightarrow% a) @
-				till_part);
+			sr_go_round @ sr_dont_go @ sr_till_part);
 in
 	{wp = wp, side = side}
 end
@@ -1078,11 +1235,13 @@ fun €log_con› ({wp, a, wp_env as {env, ...}} : WP_PARS)
 let	val (defs, pre1) = analyse_log_con defs (z_predexp_of_z_tm1 env pre);
 	val hyps = map (z_log_con_def ([], [])) defs;
 	fun aux acc ((hyp, {x, t, e})::more) = (
-		(acc Ù z_mem(e, z_predexp_of_z_tm1 env t)) :: aux (hyp::acc) more
+		(init_sr ÒSR_log_con_type_mem_introÆ 
+		(acc Ù z_mem(e, z_predexp_of_z_tm1 env t))) :: aux (hyp::acc) more
 	) | aux _ [] = [];
-	val wp = [hyps Ù pre1] @ aux [] (combine hyps defs);
+	val wp = [init_sr ÒSR_log_con_pre_introÆ (hyps Ù pre1)] @ aux [] (combine hyps defs);
 	val side = add_hyps (map (z_log_con_def(w, w0)) defs,
-		z_predexp_of_z_tm1 env post %Longrightarrow% a);
+			cons_srs Ò(SR_log_con_to_side _)Æ 
+			  (z_predexp_of_z_tm1 env post %Longrightarrow% a));
 in
 	{wp = wp, side = side}
 end);
@@ -1102,9 +1261,12 @@ let	fun is_it ({name = n, ...} : FORMAL_PROC) : bool = (name = n);
 					pre=z_quote(pre, Nil),
 					post=z_quote(post, Nil)},
 				label = ""}, asgns);
-	val {wp = wp1, side = side1} = wp (xform, a, wp_env);
-	val side2 = map (fn p => [] Ù p) vc_preds;
-in	{wp = add_hyps(dc_preds, wp1), side = add_hyps(dc_preds, side1@side2)}
+	val a_in = cons_srs Ò(SR_proc_call_end _)Æ a;
+	val {wp = wp1, side = side1} = wp (xform, a_in, wp_env);
+	val side2 = map (fn p => init_sr ÒSR_proc_call_rng_introÆ ([] Ù p)) vc_preds;
+         val sr_wp1 = cons_srs Ò(SR_proc_call _)Æ wp1;
+         val sr_side = cons_srs Ò(SR_proc_call _)Æ (side1@side2)
+in	{wp = add_hyps(dc_preds, sr_wp1), side = add_hyps(dc_preds, sr_side)}
 end
 );
 =TEX
@@ -1886,7 +2048,7 @@ statements (see schema {\it Spec} in \cite[volume 2]{DRA/CIS/CSE3/TR/94/27/3.0})
 =SML
 fun €vcs› ((sl, st): SPECLAB * STATEMENT)
 
-			: VC list * SPEC = (
+			: (VC * ROUTE OPT) list * SPEC = (
 
 let	val {spec as {w, w0, pre, post},
 			wp_env as {env, ...}, ...} = sl;
@@ -1895,17 +2057,19 @@ let	val {spec as {w, w0, pre, post},
 
 	val pre1 = z_predexp_of_z_tm1 env pre;
 	val post1 = z_predexp_of_z_tm1 env post;
-	val {wp, side} = wp (st, [[] Ù post1], wp_env);
+	val {wp, side} = wp (st, [init_sr ÒSR_refinement_introÆ ([] Ù post1)], wp_env);
 	fun subs_c (h, c) = (
 		h Ù subs_pred(c, w0, w)
 	);
-	val wp1 = map subs_c wp;
+	val wp1 = map subs_c (cons_srs Ò(SR_refinement_begin _)Æ wp);
+	val sr_side = cons_srs Ò(SR_refinement_begin _)Æ side;
 	val s = (pre1 %Longrightarrow% wp1) @
-		(subs_pred(pre1, w, w0) %Longrightarrow% side);
+		(subs_pred(pre1, w, w0) %Longrightarrow% sr_side);
+         val (no_sr_s, routes) = extract_routes s 
 in
 	if	any_initial_variables_z_pred pre1
 	then	fail "vcs" 505095 []
-	else	(vc_local_decls(s, sl),
+	else	(combine (vc_local_decls(no_sr_s, sl)) routes,
 		 {	w = w,
 			w0 = w0,
 			pre = z_quote (pre1, Nil),
