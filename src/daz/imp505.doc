@@ -261,15 +261,16 @@ end
 \subsection{Case Statement}\label{wp-case}
 =SML
 fun Ûtrans_case_choicesÝ (env : CN_ENV) (choices : CASE_CHOICE list) : Z_EXP = (
-let	fun aux_range (ch::rest) = (
+let	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
+	fun aux_range (ch::rest) = (
 		case ch of
 		CCCaseRange (DRRange(RRange{lo,hi})) =>
-			z_rng(trans_exp env lo, trans_exp env hi)::aux_range rest
+			z_rng(adjust_and_trans lo, adjust_and_trans hi)::aux_range rest
 		|CCCaseRange (DRRange _) =>
 			fail "trans_named_assoc" 508001
 				[fn()=>"range attributes not supported"] 
 		|CCCaseRange (DRConstrained{range=RRange{lo,hi},...}) =>
-			z_rng(trans_exp env lo, trans_exp env hi)::aux_range rest
+			z_rng(adjust_and_trans lo, adjust_and_trans hi)::aux_range rest
 		|CCCaseRange (DRConstrained _) =>
 			fail "trans_named_assoc" 508001
 				[fn()=>"range attributes not supported"] 
@@ -380,13 +381,13 @@ let	val side = if dir = LDForwards
 			then ()
 			else fail "for_static" 505001 [fn()=>"cannot proeed formally: REVERSE not supported"];
 	val {lo, hi} = case range of
-			RRange r => r
+			RRange {lo, hi} => {lo=adjust_exp env lo, hi=adjust_exp env hi}
 			|RRangeAttr _ =>
 				fail "for_static" 505001 [fn()=>"range attributes not supported"];
 	val {pre, post, ...} = case stmt of
 		STSpecNoIvars spec => spec
 		|_ => fail "for_static" 505001 [fn()=>
-			"Cannot proceed formally when loop body size > 1"];
+			"cannot proceed formally: LOOP body must be a specification statement"];
 	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
 	val zi = trans_id i;
@@ -422,7 +423,7 @@ let	val side = if dir = LDForwards
 	val {pre, post, ...} = case stmt of
 		STSpecNoIvars spec => spec
 		|_ => fail "for_static" 505001 [fn()=>
-			"Cannot proceed formally when loop body size > 1"];
+			"cannot proceed formally: LOOP body must be a specification statement"];
 	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
 	val zi = trans_id i;
@@ -542,14 +543,14 @@ fun Ûfor_non_staticÝ (pars as {wp, a, wp_env as {env, ...}} : WP_PARS)
 			(({i, range, loop = {t, stmt}, ...}, q) : FOR_NON_STATIC * STMT)
 			 : RESULT = (
 let	val {lo, hi} = case range of
-			RRange r => r
+			RRange {lo, hi} => {lo=adjust_exp env lo, hi=adjust_exp env hi}
 			|RRangeAttr _ =>
 				fail "for_static" 505001
 					[fn()=>"range attributes not supported"];
 	val {pre, post, w, w0, ...} = case stmt of
 		STSpecNoIvars spec => spec
 		|_ => fail "for_static" 505001 [fn()=>
-			"Cannot proceed formally when loop body size > 1"];
+			"cannot proceed formally: LOOP body must be a specification statement"];
 	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
 	val zi = trans_id i;
@@ -622,29 +623,35 @@ end
 );
 =TEX
 \subsection{$wp$}\label{wp}
+
 =SML
 fun ÛwpÝ ((st, a, wp_env) : STATEMENT * SEQUENT list * WP_ENV) : RESULT = (
 let	val pars as {wp_env as {env, ...}, ...} : WP_PARS =
 			{wp = wp, a = a, wp_env = wp_env};
+	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
+	val adjust = adjust_exp env;
 in	case st of
 		SStmt STNull => null pars
 	|	SStmt STImplicitNull => null pars
 	|	SStmt (STAssign {name, e}) =>
-			assign pars (name, ((trans_exp env) o (adjust_exp env)) e)
+			assign pars (name, adjust_and_trans e)
 	|	SStmt (STSpecNoIvars {pre, post, w, ...}) => 
-			spec_no_ivars_either pars w (z_predexp_of_z_tm pre,
-					z_predexp_of_z_tm  post)
+			spec_no_ivars_either pars w
+				(z_predexp_of_z_tm pre, z_predexp_of_z_tm post)
 	|	SStmt (STSemicolon x) => semicolon pars x
-	|	SStmt (STIfThenElse x) => if_then_else pars x
-	|	SStmt (STCase x) => case_either pars x
+	|	SStmt (STIfThenElse {g, p, q, elsif}) =>
+			if_then_else pars {g=adjust g, p=p, q=q, elsif=elsif}
+	|	SStmt (STCase {e, s, others}) =>
+			case_either pars {e=adjust e, s=s, others=others}
 	|	SStmt (STLoop x) => loop pars x
 	|	SStmt (STNamedLoop x) => named_loop pars x
-	|	SStmt (STWhile x) => cn_while pars x
+	|	SStmt (STWhile {g, loop, name}) =>
+			cn_while pars {g=adjust g, loop=loop, name=name}
 	|	SStmt (STForStatic x) => for_static pars x
 	|	SStmt (STForTmark x) => for_tmark pars x
-	|	SStmt (STExitWhen x) => exit_when pars x
+	|	SStmt (STExitWhen {g}) => exit_when pars {g=adjust g}
 	|	SStmt (STExit) => cn_exit pars
-	|	SStmt (STRet x) => cn_return pars x
+	|	SStmt (STRet {e}) => cn_return pars {e=adjust e}
 	|	SStmt (STProcNoIvars x) => proc_call_no_ivars pars x
 	|	SStmt (STKSlot x) => {wp=[],side=[]}
 	|	SSpecIvars ({pre, post, ...}, q) =>
