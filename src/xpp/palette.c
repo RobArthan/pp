@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.13 2003/06/25 10:55:03 rda Exp rda $ 
+ * $Id: palette.c,v 2.14 2003/06/26 13:45:00 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -98,6 +98,7 @@ void popup_palette(Widget w)
 #ifdef EDITRES
 	add_edit_res_handler(shell);
 #endif
+	XtAddCallback(shell, XmNpopupCallback, centre_popup_cb, 0);
 	form = XtVaCreateWidget("form",
 		xmFormWidgetClass, shell,
 		XmNfractionBase, 	16,

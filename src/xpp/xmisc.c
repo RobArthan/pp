@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.18 2003/06/26 11:40:03 rda Exp $
+ * $Id: xmisc.c,v 2.19 2003/06/26 13:45:00 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -302,6 +302,48 @@ void text_verify_cb(
 	if(has_controls) {
 		ok_dialog(text_w, binary_data_message);
 	}
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * centre_popup_cb: XmNpopupCallback callback that
+ * attempts to centre a popup-shell relative to the root
+ * window. If this would come within 10 pixels of
+ * obscuring the root window, it places the top left-hand
+ * corner of the popup 10 pixels south and west of
+ * that of the root window. In any case, if either of the resulting
+ * absolute coordinates would be negative, set it to 10.
+ * The callback removes itself from the list - if the user moves
+ * the pop-up after it has first been seen, then we don't want to
+ * interfere.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void  centre_popup_cb(
+	Widget		popup,
+	XtPointer		unused1,
+	XtPointer		unused2)
+{
+	Position popup_rel_x, popup_rel_y, popup_abs_x, popup_abs_y;
+	Dimension root_wd, root_ht, popup_wd, popup_ht;
+	XtVaGetValues(popup,
+		XmNwidth,	&popup_wd,
+		XmNheight,	&popup_ht,
+		NULL);
+	XtVaGetValues(root,
+		XmNwidth,	&root_wd,
+		XmNheight,	&root_ht,
+		NULL);
+	popup_rel_x = (root_wd - popup_wd) / 2;
+	popup_rel_y = (root_ht - popup_ht) / 2;
+	if(popup_rel_x <= 10 && popup_rel_y <= 10) {
+		popup_rel_x = 10;
+		popup_rel_y = 10;
+	}
+	XtTranslateCoords(root, popup_rel_x, popup_rel_y, &popup_abs_x, &popup_abs_y);
+	if(popup_abs_x <= 10) {popup_abs_x = 10;}
+	if(popup_abs_y <= 10) {popup_abs_y = 10;}
+	XtVaSetValues(popup,
+		XmNx,	popup_abs_x,
+		XmNy,	popup_abs_y,
+		NULL);
+	XtRemoveCallback(popup, XmNpopupCallback, centre_popup_cb, 0);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * text_show_position: like XmTextShowPosition but centres the

@@ -278,6 +278,7 @@ typedef struct menu_item {
 	extern void blink_owner_cb(CALLBACK_ARGS);
 	extern	void number_verify_cb(CALLBACK_ARGS);
 	extern	void text_verify_cb(CALLBACK_ARGS);
+	extern	void centre_popup_cb(CALLBACK_ARGS);
 	extern	void attach_rw_edit_popup(Widget text_w);
 	extern	void attach_ro_edit_popup(Widget text_w);
 	extern	void register_selection_source(

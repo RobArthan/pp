@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2003/06/26 13:45:00 $ $Revision: 2.30 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2003/06/27 11:44:39 $ $Revision: 2.31 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -107,6 +107,7 @@ void help_dialog(Widget w, char *str)
 #ifdef EDITRES
 		add_edit_res_handler(dialog);
 #endif
+		XtAddCallback(dialog, XmNpopupCallback, centre_popup_cb, 0);
 		pane = XtVaCreateWidget("pane", xmPanedWindowWidgetClass, dialog,
 			XmNsashWidth,  1, /* PanedWindow won't let us set these to 0! */
 			XmNsashHeight, 1, /* Make small so user doesn't try to resize */
