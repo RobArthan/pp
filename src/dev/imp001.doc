@@ -74,11 +74,16 @@ Made implementation of length SML97-compatible.
 \item [Issues 2.14-2.17 (6th March 1999)] Added $Integer$ structure.
 \item [Issue 2.18 (16th July 2001)] Added $DynamicArray$ structure.
 \item [Issue 2.19-2.22 (3rd August 2001)] Even slicker hash function!
-\item [Issues 2.23 (7th August 2001)] {\it e\_delete} now reclaims space when possible (to
+\item [Issue 2.23 (7th August 2001)] {\it e\_delete} now reclaims space when possible (to
 support the pattern of use in the abstract data type of theorems better).
 {\it e\_lookup} tests for an empty tree before doing anything else.
-\item [Issues 2.24 (9th August 2001)] Added timing structure.
-\item [Issues 2.25 (28th August 2001)] Minor performance tweak to {\it mem}.
+\item [Issue 2.24 (9th August 2001)] Added timing structure.
+\item [Issue 2.25 (28th August 2001)] Minor performance tweak to {\it mem}.
+\item[Issue 2.26] Port to Poly/ML
+\item[Issue 2.27]
+New efficient dictionary functions and new stopwatch timer functions.
+\item[Issue 2.28]
+New type of order-preserving efficient dictionaries.
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -1168,10 +1173,16 @@ local
 in
 =TEX
 The various operations on the dictionaries are straightforward
-to code. We do the hash-key versions first then the string versions using them
+to code. We do the hash-key versions first then the string versions using them.
+First of all the operations on keys:
 =SML
 	fun €e_get_key› (s: string)  : E_KEY = (
 		Key(hash s, s)
+	);
+=TEX
+=SML
+	fun €string_of_e_key› (Key(_, s)  : E_KEY) = (
+		s
 	);
 =TEX
 Like $s\_lookup$, $e\_key\_lookup$ implements application.
@@ -1371,6 +1382,86 @@ end; (* of abstype E_DICT *)
 end (* of EfficientDictionary *);
 
 open EfficientDictionary;
+=TEX
+\subsection{Order Preserving Efficient Dictionaries}
+=SML
+structure €OrderedEfficientDictionary› : OrderedEfficientDictionary = struct
+open EfficientDictionary;
+=TEX
+The implementation provides the combined services of a simple dictionary and an
+efficient one  by having both:
+=SML
+abstype 'a €OE_DICT› = OEDict of ('a S_DICT * 'a E_DICT)
+with
+=TEX
+=SML
+	val €initial_oe_dict› : 'a OE_DICT =OEDict (initial_s_dict, initial_e_dict);
+=TEX
+We arrange to have the failure behaviour for {\e\_extend} simply by always calling the
+``{\it e\ _}'' function first. For efficiency, we bypass the simple dictionary function
+wherever possible.
+=SML
+	fun €oe_key_extend›  (key : E_KEY) (item : 'a)  (OEDict(sd, ed): 'a OE_DICT) : 'a OE_DICT = (
+		let	val ed' = e_key_extend key item ed;
+			val sd' = (string_of_e_key key, item) :: sd;
+		in	OEDict (sd', ed')
+		end
+	);
+	fun €oe_key_enter›  (key : E_KEY) (item : 'a)  (OEDict(sd, ed): 'a OE_DICT) : 'a OE_DICT = (
+		let	val ed' = e_key_enter key item ed;
+			val sd' = (string_of_e_key key, item) :: sd;
+		in	OEDict (sd', ed')
+		end
+	);
+	fun €oe_key_lookup›  (key : E_KEY)  (OEDict(_, ed): 'a OE_DICT) : 'a  OPT = (
+		e_key_lookup key ed
+	);
+	fun €oe_key_delete›  (key : E_KEY)  (OEDict(sd, ed): 'a OE_DICT) : 'a  OE_DICT = (
+		let	val ed' = e_key_delete key ed;
+			val sd' = s_delete (string_of_e_key key) sd;
+		in	OEDict (sd', ed')
+		end
+	);
+	fun €oe_extend›  (key : string) (item : 'a)  (OEDict(sd, ed): 'a OE_DICT) : 'a OE_DICT = (
+		let	val ed' = e_extend key item ed;
+			val sd' = (key, item) :: sd;
+		in	OEDict (sd', ed')
+		end
+	);
+	fun €oe_enter›  (key : string) (item : 'a)  (OEDict(sd, ed): 'a OE_DICT) : 'a OE_DICT = (
+		let	val ed' = e_enter key item ed;
+			val sd' = (key, item) :: sd;
+		in	OEDict (sd', ed')
+		end
+	);
+	fun €oe_lookup›  (key : string)  (OEDict(_, ed): 'a OE_DICT) : 'a  OPT = (
+		e_lookup key ed
+	);
+	fun €oe_delete›  (key : string)  (OEDict(sd, ed): 'a OE_DICT) : 'a  OE_DICT = (
+		let	val ed' = e_delete key ed;
+			val sd' = s_delete key sd;
+		in	OEDict (sd', ed')
+		end
+	);
+	fun €oe_flatten› (OEDict(sd, _) : 'a OE_DICT) : 'a S_DICT = (
+		sd
+	);
+	fun €list_oe_merge› (sed : 'a OE_DICT)  (new : 'a S_DICT) : 'a OE_DICT = (
+		fold (fn ((k,x), d) => oe_extend k x d) new sed
+	);
+=TEX
+For merging we need to be careful to use the approach of {\it s\_merge}:
+=SML
+	fun €oe_merge› (OEDict(sd1, _ )  : 'a OE_DICT) (dict2 : 'a OE_DICT) : 'a OE_DICT = (
+		fold (uncurry(uncurry oe_extend)) sd1 dict2
+	);
+=TEX
+=SML
+end; (* of abstype OE_DICT *)
+end (* of OrderedEfficientDictionary *);
+
+open OrderedEfficientDictionary;
+
 =TEX
 \section{CODE PROFILING}
 The following definitions may be used to record
