@@ -93,7 +93,7 @@ Also implemented remedies for issues 1 and 4 (V0.6).
 \item[Issue 1.124] Fixing $is\_id\_in\_package$.
 \item[Issue 1.125-126] Improved prefixing functions.
 \item[Issue 1.127-1.128] IUCT WP7 changes.
-\item[Issue 1.129] Changes for IUCT WP 2.
+\item[Issue 1.129 - 1.130] Changes for IUCT WP 2.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -3991,13 +3991,26 @@ fun Ûprefix_param_specÝ (ident : ID)
 	var_decl = {vars = vars, tmark = prefix_tmark ident newids tmark}}
 );
 =TEX
-When the following is called it is important that the temporary body theory for the package be the current theory and that it be populated with all its types and constants.
+When the following is called it is important that the internal specification theory for the package be the current theory and that it be populated with all its types and constants.
 =SML
 fun Ûprefix_spec_stmtÝ (ident : ID)
 	(tysubs : (string * string) list)
 	(newids : ID list)
 	(spec : SPEC) : SPEC = (
-	let	val {w, pre, post, w0} = spec;
+	let
+(* DESIGN ERROR checking code - could delete *)
+		val package = force_value(s_lookup ident (!pack_env))
+				handle Fail _ =>
+				error "prefix_spec_stmt" 507029 [fn() => ident];
+		val internal_name = #zmod package;
+		val dummy = if (internal_name = get_current_theory_name())
+			then ()
+			else error "prefix_spec_stmt" 507047 [
+				fn () => internal_name,
+				fn () => get_current_theory_name()
+			];
+(* end DESIGN ERROR checking code *)
+		val {w, pre, post, w0} = spec;
 		val w'= map (prefix_id ident) w;
 		val w0' = map (prefix_id ident) w0;
 		val pretm = z_predexp_of_z_tm pre;
@@ -4011,6 +4024,7 @@ fun Ûprefix_spec_stmtÝ (ident : ID)
 	end
 );
 =TEX
+When the following is called it is important that the internal specification theory for the package be the current theory and that it be populated with all its types and constants.
 =SML
 fun Ûprefix_formal_procÝ (ident : ID)
 		(tysubs : (string * string) list)
@@ -4048,6 +4062,7 @@ fun Ûprefix_formal_funÝ (ident : ID) (tysubs : (string * string) list)
 	 informal_fun = prefix_informal_fun ident newids informal_fun}
 );
 =TEX
+When the following is called it is important that the internal specification theory for the package be the current theory and that it be populated with all its types and constants.
 =SML
 fun Ûprefix_formal_procsÝ (ident : ID)
 		(tysubs : (string * string) list) (newids : ID list)
@@ -4144,6 +4159,34 @@ fun Ûprefix_conjecturesÝ (ident : ID)
 	end
 );
 =TEX
+The following checks to see if any of the function specifications refer
+to other functions of the package, which is an error.
+=SML
+fun Ûcheck_ff_xrefÝ (pfx_funs: INFORMAL_FUN list) 
+	(formal_fun_paras : PARAINFO list) : unit = (
+let 	val names = map (fn f => (#name f)) pfx_funs;
+	fun is_pfx_fun_name (v: TERM) = (
+		fst(dest_var v) mem names
+	);
+	fun aux (AxDesInfo(_, decl, Value pred, evars)) = (
+	let	val fdecl = frees decl;
+		val fpred = frees pred;
+		val no_worries = union (op =$) fdecl (map mk_var evars);
+		val worries = fpred drop (fn x => x term_mem no_worries);
+		val suspects = worries drop (fn w => not(is_pfx_fun_name w));
+	in
+		if is_nil suspects
+		then ()
+		else fail "create_prefixed_spec_from_internal_theory"
+			507048
+			[fn () => format_list string_of_term suspects ", ",
+			 fn () => string_of_term decl]
+	end) | aux _ = ();
+in
+	map aux formal_fun_paras;
+	()
+end);
+=TEX
 The following creates and populates the spec theory.
 It returns the list of type substitutions which need to be made.
 The new theory becomes the current theory (unless an exception is raised in which case the script theory is made current).
@@ -4171,6 +4214,10 @@ fun Ûcreate_prefixed_spec_from_internal_theoryÝ
 		val (tysubs, paras1) = prefix_given_sets ident tys;
 		val paras2 = prefix_const_thms ident tysubs newids const_thms;
 		val paras3 = prefix_conjectures ident tysubs newids conjectures;
+		val thychange1 = open_theory internal_name;
+		val pformal_funs = map (prefix_formal_fun ident tysubs newids)
+			(#formal_funs package);
+		val thychange1 = open_package_spec_theory ident;
 		val informal_fun_paras = map trans_informal_fun pinformal_funs;
 		val dummy = (map store_para paras1;
 			map store_para paras2;
@@ -4180,9 +4227,8 @@ fun Ûcreate_prefixed_spec_from_internal_theoryÝ
 				(#consts_types package);
 			map store_para informal_fun_paras);
 		(* need to do other store_paras first to get right env *)
-		val pformal_funs = map (prefix_formal_fun ident tysubs newids)
-			(#formal_funs package);
 		val formal_fun_paras = map trans_formal_fun pformal_funs;
+		val dummy1 = check_ff_xref pfx_funs formal_fun_paras;
 	in	
 		map store_para formal_fun_paras;
 		tysubs
@@ -4479,21 +4525,29 @@ fun Ûrenames_proc_commonÝ
 		SSProcedure {name = new, ... } => (
 		   case s_lookup pack (!pack_env) of
 		   Value package => (
-			let	val formal_proc2  =
+			let	val internal_name = (#zmod package);
+				val formal_proc2  =
 					find
 						(#formal_procs package)
 						(fn p => #name p = old);
-(* !!! temporary fix starts here until WP 2 in place !!! *)
-(* need PP internal theory of pack to be present, and type_names correct *)
-				val type_names = [];
-				val (tysubs, _) = prefix_given_sets pack type_names;
+
+				val (tys, _) =
+					internal_theory_types_and_const_thms internal_name;
+
+				val (tysubs, _) = prefix_given_sets pack tys;
+				val oldthy = get_current_theory_name();
+				val changethy = open_theory internal_name;
 				val {name=pname, formal_ids=pformal_ids,
-					 spec=pspec} : FORMAL_PROC = 
+					 spec=pspec} : FORMAL_PROC = (
 					prefix_formal_proc
 						pack
 						tysubs
 						(new_ids package)
-						formal_proc2;
+						formal_proc2)
+					handle exn as (Fail _) =>
+					(open_theory oldthy;
+					 raise exn);
+				val changethy2 = open_theory oldthy;
 				val formal_proc3 =
 						{name = new,
 						formal_ids = pformal_ids,
