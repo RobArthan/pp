@@ -539,6 +539,7 @@ if(global_options.edit_only) {
 		xmTextFieldWidgetClass, filename,
 		XmNeditable,			False,
 		XmNcursorPositionVisible,	False,
+		XmNtraversalOn,			False,
 		NULL);
 
 	s1 = XmStringCreateSimple("(Modified)");
