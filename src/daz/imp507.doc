@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.224 $ $RCSfile: imp507.doc,v $ $Date: 2002/10/17 16:04:45 $
+% imp507.doc %Z% $Revision: 1.225 $ $RCSfile: imp507.doc,v $ $Date: 2002/10/20 21:56:28 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.224 $%
+\def\SCCSversion{$Revision: 1.225 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 16:04:45 $%
+\TPPdate{\FormatDate{$Date: 2002/10/20 21:56:28 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -179,7 +179,8 @@ being renamed is defined in the same package specification.
 \item[Issue 1.222] Copyright and banner updates for open source release.
 \item[Issue 1.223] DAZ-specific updates to banner for open source release
 \item[Issue 1.224] DAZ-specific updates to banner for open source release
-\item[Issue 1.225] Fix to get ito compile with SML/NJ again.
+\item[Issue 1.225] Fix to get it to compile with SML/NJ again.
+\item[Issue 1.226] Uniform treatment of block statements.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -225,15 +226,15 @@ fun €procedure_specification_name›
 	designator
 );
 
-fun €procedure_body_name› ({procedure_spec, ...} : DECLARATION PROCEDURE_BODY)
+fun €procedure_body_name› ({procedure_spec, ...} : PROCEDURE_BODY)
 	: string = (
 	procedure_specification_name procedure_spec
 );
-fun €function_body_name› ({function_spec,...} : DECLARATION FUNCTION_BODY)
+fun €function_body_name› ({function_spec,...} :  FUNCTION_BODY)
 	: string = (
 	function_specification_name function_spec
 );
-fun €package_body_name› ({name, ...} : DECLARATION PACKAGE_BODY) : string = (
+fun €package_body_name› ({name, ...} : PACKAGE_BODY) : string = (
 	name ^ "body"
 );
 =TEX
@@ -3791,9 +3792,8 @@ generates VCs and can be chosen by caller in the call that just makes checks).
 The speclab is augmented by any variables brought into scope by a for-loop.
 
 =SML
-fun €vcs_speclabel_aux› (just_checking : bool) ({label, statement = sob} : REFINED_BY) : SPEC = (
-	let	val statement = case sob of SOBStatement s => s | SOBBlock{statement =s,...} => s;
-		val block1 = block 1;
+fun €vcs_speclabel_aux› (just_checking : bool) ({label, statement} : REFINED_BY) : SPEC = (
+	let	val block1 = block 1;
 		val spec_env_lab = force_value( s_lookup label (!spec_env) )
 			handle Fail _ => fail "vcs_speclabel" 507003
 				[fn () => label];
@@ -3957,7 +3957,7 @@ fun €spec_stmt› (specstmt as {spec : SPEC, label : LABEL}) : SPEC = (
 	(if	test_flag #speclabel_flag 1
 	then	spec_stmt_speclabel
 	else	spec_stmt_otherwise) specstmt;
-	vcs_speclabel_aux true {label = label, statement = SOBStatement STNull}
+	vcs_speclabel_aux true {label = label, statement = STNull}
 );
 =TEX
 \subsection{The SID function k\_slot\_stmt}
@@ -7496,6 +7496,30 @@ fun €expand_frame› ({w, w0, pre, post} : SPEC) : SPEC = (
 	end
 );
 =TEX
+The following functions look
+after the passage from {\it SI\_BASIC\_DECL}s to {\it BASIC\_DECL}s
+in a using declaration.
+=SML
+=TEX
+=SML
+fun €extract_vardecls› ((bd::more) : BASIC_DECL list) : VAR_DECL list = (
+	case bd of
+		BDVarDecl vd => vd::extract_vardecls more
+	|	BDVarDeclInit (vd, init) => vd::extract_vardecls more
+	|	_ => extract_vardecls more
+) | extract_vardecls _ = [];
+=TEX
+=SML
+fun €adjust_using_dec› ({aux, basic_decls, invariant} : SI_USING_DEC)
+	: USING_DEC = (
+	let	val basic_decls' = adjust_basic_decls current_cn_env basic_decls;
+	in	{aux = aux,
+		 concrete_vars = extract_vardecls basic_decls',
+		 basic_decls = basic_decls',
+		 invariant = invariant}
+	end
+);
+=TEX
 The following function does the common processing for the various sorts of for loop
 in the abstract syntax.
 It returns the inner statement of the loop (with frames expanded).
@@ -7607,11 +7631,22 @@ and €do_statement› (y as STNull : STATEMENT) : STATEMENT = (y
 	end
 ) | do_statement (y as (SProcIvars x) : STATEMENT) = (
 	error "do_statement" 507019 []
-);
+) | do_statement (SBlockStatement {declarative_part = Nil, statement = s, name}) = (
+	SBlockStatement{declarative_part = Nil, statement = do_statement s, name = name}
+) | do_statement (SBlockStatement {declarative_part = dp as Value decs, statement = s, name}) = (
+	new_block();
+	map do_declaration decs;
+	let	val res = SBlockStatement{declarative_part = dp, statement = do_statement s, name  = name};
+	in	update_spec_env_block();
+		res
+	end
+)
+(*
 =TEX
 The following processes a single {\it BASIC\_DECL}.
 =SML
-fun €do_basic_declaration› (x : BASIC_DECL) : unit = (
+*)
+and €do_basic_declaration› (x : BASIC_DECL) : unit = (
 	diag_basic_decl_list := x :: !diag_basic_decl_list;
 	case x of
 		BDTypeDecl _ => (basic_declaration x
@@ -7631,37 +7666,15 @@ fun €do_basic_declaration› (x : BASIC_DECL) : unit = (
 	) |	BDPragma _ => (
 	) |	BDAnnotation _ => (
 	)
-);
-=TEX
-The following functions look
-after the passage from {\it SI\_BASIC\_DECL}s to {\it BASIC\_DECL}s
-in a using declaration.
-=SML
-=TEX
-=SML
-fun €extract_vardecls› ((bd::more) : BASIC_DECL list) : VAR_DECL list = (
-	case bd of
-		BDVarDecl vd => vd::extract_vardecls more
-	|	BDVarDeclInit (vd, init) => vd::extract_vardecls more
-	|	_ => extract_vardecls more
-) | extract_vardecls _ = [];
-=TEX
-=SML
-fun €adjust_using_dec› ({aux, basic_decls, invariant} : SI_USING_DEC)
-	: USING_DEC = (
-	let	val basic_decls' = adjust_basic_decls current_cn_env basic_decls;
-	in	{aux = aux,
-		 concrete_vars = extract_vardecls basic_decls',
-		 basic_decls = basic_decls',
-		 invariant = invariant}
-	end
-);
+)
+(*
 =TEX
 The following reflects the SID functions for $dec$, $basic\_declaration$, $renaming\_declaration$, $subprogram\_declaration$ and {\it pack\_stub}.
 Note that the $with\_context$ is an argument used for package declarations so that when the package theories are created, the $with$ packages can become parents.
 
 =SML
-fun €do_declaration› (y as (DDeclarationKSlot (
+*)
+and €do_declaration› (y as (DDeclarationKSlot (
 	{label, content}, dkty)) : DECLARATION) = (
 	let	val rsty = case dkty of
 					DKDeclaration => RSDeclaration
@@ -7948,7 +7961,8 @@ let  val chk_exists_r = map (fn w => case s_lookup w (!pack_env) of
 in
 	aux [] (rev (ws @ rfs))
 end);
-
+=TEX
+=SML
 fun €do_context_compilation_unit›
 	({context, references, comp_unit, annotation, ...}
 		: CONTEXT_COMPILATION_UNIT) : unit = (
@@ -7981,20 +7995,6 @@ fun €do_kslot_compilation_unit›
 	do_context_compilation_unit x
 ) | do_kslot_compilation_unit
 	(KCUPragma _ : KSLOT_COMPILATION_UNIT) = (
-);
-=TEX
-=SML
-fun €do_statement_or_block› (SOBStatement s : STATEMENT_OR_BLOCK) : STATEMENT_OR_BLOCK = (
-	SOBStatement(do_statement s)
-) | do_statement_or_block (SOBBlock {declarative_part = Nil, statement = s, name}) = (
-	SOBBlock{declarative_part = Nil, statement = do_statement s, name = name}
-) | do_statement_or_block (SOBBlock{declarative_part = dp as Value decs, statement = s, name}) = (
-	new_block();
-	map do_declaration decs;
-	let	val res = SOBBlock{declarative_part = dp, statement = do_statement s, name  = name};
-	in	update_spec_env_block();
-		res
-	end
 );
 =TEX
 The following reflects the SID functions for the production $web\_clause$.
@@ -8073,10 +8073,9 @@ let	val {label=label,statement=statement} = x;
 in	open_label_theory label;
 	set_bottom_block_name label;
 	new_scope_speclabel label;
-	let	val expanded_statement = do_statement_or_block statement;
+	let	val expanded_statement = do_statement statement;
 		val expanded_x = {label = label, statement = expanded_statement};
 	in	update_replacement_env(label, RefineStat expanded_x);
-(* TBS update_spec_env_block if appropriate *)
 		vcs_speclabel expanded_x
 	end;
 	end_scope_speclabel();
@@ -8088,7 +8087,7 @@ let	val {label=label,statement=statement} = x;
 in	open_label_theory label;
 	set_bottom_block_name label;
 	new_scope_stmt_label label;
-	let	val expanded_statement = do_statement_or_block statement;
+	let	val expanded_statement = do_statement statement;
 		val expanded_x = {label = label, statement = expanded_statement};
 	in	update_replacement_env(label, RefineStat expanded_x)
 	end;
@@ -8156,10 +8155,17 @@ fun €sco_statement› (y as STNull : STATEMENT) : unit = ( ()
 	new_k_slot(label, RSSpecStatement, get_current_theory_name())
 ) | sco_statement (y as (SProcIvars x) : STATEMENT) = (
 	error "sco_statement" 507019 []
-);
+) | sco_statement (SBlockStatement {declarative_part = Nil, statement = s, name}) = (
+	sco_statement s
+) | sco_statement (SBlockStatement {declarative_part = dp as Value decs, statement = s, name}) = (
+	map sco_declaration decs;
+	sco_statement s
+)
+(*
 =TEX
 =SML
-fun €sco_declaration› (y as (DDeclarationKSlot (
+*)
+and €sco_declaration› (y as (DDeclarationKSlot (
 	{label, content}, dkty)) : DECLARATION) = (
 	let	val rsty = case dkty of
 					DKDeclaration => RSDeclaration
@@ -8238,16 +8244,6 @@ fun €sco_kslot_compilation_unit›
 );
 =TEX
 =SML
-fun €sco_statement_or_block› (SOBStatement s : STATEMENT_OR_BLOCK) : unit = (
-	sco_statement s
-) | sco_statement_or_block (SOBBlock {declarative_part = Nil, statement = s, name}) = (
-	sco_statement s
-) | sco_statement_or_block (SOBBlock{declarative_part = dp as Value decs, statement = s, name}) = (
-	map sco_declaration decs;
-	sco_statement s
-);
-=TEX
-=SML
 fun €sco_web_clause› (y as (WCCompilation x) : WEB_CLAUSE) : unit = (
 	update_spark_prog x;
 	map sco_kslot_compilation_unit x; ()
@@ -8284,12 +8280,12 @@ in	update_replacement_env(label, ReplaceDecl x);
 end
 ) | sco_web_clause (y as (WCRefinedBy x) : WEB_CLAUSE) = (
 let	val {label=label,statement=statement} = x;
-in	sco_statement_or_block statement;
+in	sco_statement statement;
 	update_replacement_env(label, RefineStat x)
 end
 ) | sco_web_clause (y as (WCReplacedBy x) : WEB_CLAUSE) = (
 let	val {label=label,statement=statement} = x;
-in	sco_statement_or_block statement;
+in	sco_statement statement;
 	update_replacement_env(label, RefineStat x)
 end
 ) | sco_web_clause (y as (WCReplacedByArbitraryAda x) : WEB_CLAUSE) = (
