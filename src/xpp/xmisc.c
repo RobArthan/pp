@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.27 2004/02/08 14:23:49 rda Exp rda $
+ * $Id: xmisc.c,v 2.28 2004/02/08 14:44:53 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -566,11 +566,7 @@ void attach_popup_menu(Widget work_w, Widget menu_w)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void attach_edit_popup(Widget text_w, MenuItem *menu_items)
 {
-	MenuItem *mip = menu_items;
 	Widget menu_w;
-	while(mip->label != NULL) {
-		(mip++)->callback_data = text_w;
-	}
 	menu_w = setup_menu(
 		text_w, XmMENU_POPUP, "popup-edit-menu", ' ', False, menu_items);
 	attach_popup_menu(text_w, menu_w);	
@@ -593,6 +589,10 @@ static MenuItem rw_edit_menu_items[] = {
 };
 void attach_rw_edit_popup(Widget text_w)
 {
+	MenuItem *mip = rw_edit_menu_items;
+	while(mip->label != NULL) {
+		(mip++)->callback_data = text_w;
+	}
 	attach_edit_popup(text_w, rw_edit_menu_items);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -609,6 +609,10 @@ static MenuItem ro_edit_menu_items[] = {
 };
 void attach_ro_edit_popup(Widget text_w)
 {
+	MenuItem *mip = ro_edit_menu_items;
+	while(mip->label != NULL) {
+		(mip++)->callback_data = text_w;
+	}
 	attach_edit_popup(text_w, ro_edit_menu_items);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
