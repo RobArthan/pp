@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% $Header: /home/rda/daz/RCS/imp510.doc,v 1.123 2002/12/16 15:55:43 rda Exp rda $
+% $Header: /home/rda/daz/RCS/imp510.doc,v 1.124 2002/12/17 18:23:07 rda Exp rda $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: SPARK Output Function}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP510}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.123 $%
+\def\SCCSversion{$Revision: 1.124 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/12/16 15:55:43 $%
+\TPPdate{\FormatDate{$Date: 2002/12/17 18:23:07 $%
 }}
 \TPPstatus{Draft}	    %% Mandatory field
 \TPPtype{Specification}
@@ -197,6 +197,7 @@ names arising from use clauses.
 \item[Issues 1.115--1.120] R0055: warnings for non-SPARK constructs.
 \item[Issue 1.121] Residual problems with {\it translate\_for\_output}
 \item[Issue 1.122] We now learn that named numbers are allowed in SPARK.
+\item[Issue 1.123] Support for NOTHING statement form.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -1404,6 +1405,25 @@ fun €fmt_k_slot› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO) ({content, label} :
 	)
 );
 =TEX
+For else parts and for semicolon, we need to be able to detect when a statement comprises
+only implicit nulls. The following function tests for this condition. It will return
+false if the {\fmt\_repl} component is Nil and the statement contains statement labels.
+=SML
+fun €all_implicit_nulls›
+	(fmt_stat : PP_FMT_INFO -> STATEMENT -> unit)
+	 ({fmt_repl, ...} : PP_FMT_INFO)  (stmt :  STATEMENT) :  bool = (
+	let	val saved_cn_spark_syntax_warnings = !cn_spark_syntax_warnings;
+		val _ = cn_spark_syntax_warnings := false;
+		val result =
+			let	exception FoundSomething;
+				fun outf _ = raise FoundSomething;
+			in	(fmt_stat {fmt_repl = fmt_repl, outf = outf} stmt; true)
+				handle FoundSomething => false
+			end;
+		val _ = cn_spark_syntax_warnings := saved_cn_spark_syntax_warnings;
+	in	result
+	end
+);
 =SML
 fun €fmt_elsif› 
 	(fmt_stat : PP_FMT_INFO -> STATEMENT -> unit)
@@ -1425,14 +1445,12 @@ fun €fmt_elsif›
 	(fmt_cond fmtinfo g); outf "\n";
 	outf (kw"THEN"); outf "\n";
 	inc_tabs(); fmt_stat fmtinfo p; dec_tabs();
-	(case q
-	of STImplicitNull => ()
-	| z => (
-		outf (kw"ELSE"); outf "\n";
+	(if all_implicit_nulls fmt_stat fmtinfo q
+	then	()
+	else	(outf (kw"ELSE"); outf "\n";
 		inc_tabs();
 		(fmt_stat fmtinfo q);
-		dec_tabs()
-	)
+		dec_tabs())
 	)
    )
   | fmt_elsif fmt_stat (fmtinfo as {outf,...} : PP_FMT_INFO) (stmt : STATEMENT) = (
@@ -1453,14 +1471,12 @@ fun €fmt_if_then_else›
 	inc_tabs();
 	(fmt_stat fmtinfo p);
 	dec_tabs();
-	(case q
-	of STImplicitNull => ()
-	| _ => (
-		outf (kw"ELSE"); outf "\n";
+	(if all_implicit_nulls fmt_stat fmtinfo q
+	then	()
+	else	(outf (kw"ELSE"); outf "\n";
 		inc_tabs();
 		(fmt_stat fmtinfo q);
-		dec_tabs()
-	    )
+		dec_tabs())
 	);
 	outf (kw2"END" "IF" ^ ";");
 	outf "\n"
@@ -1523,10 +1539,9 @@ fun €fmt_case›
 	inc_tabs();
 	(fmt_case_alt_list fmt_stat fmtinfo s);
 	dec_tabs();
-	(
-	    case oth
-	    of STImplicitNull => ()
-	    | _ => (outf (kw2"WHEN""OTHERS" ^ " =>");
+	(if	all_implicit_nulls fmt_stat fmtinfo oth
+	then	()
+	else	(outf (kw2"WHEN""OTHERS" ^ " =>");
 			outf"\n";
 			inc_tabs();
 			fmt_stat fmtinfo oth;
@@ -2831,9 +2846,9 @@ fun €fmt_package_body›
     fmt_annotation fmtinfo ann;
     (outf (kw"IS"); outf "\n");
     inc_tabs(); fmt_decls  fmtinfo d; dec_tabs();
-    (case s
-    of STImplicitNull => ()
-    | _ => (outf (kw"BEGIN"); outf "\n"; 
+    (if all_implicit_nulls fmt_stat fmtinfo s
+   then ()
+    else (outf (kw"BEGIN"); outf "\n"; 
 	inc_tabs();fmt_stat fmtinfo s; dec_tabs())
     );
     outf (kw"END"); (fmt_id fmtinfo n); outf ";"; outf "\n")
@@ -2881,7 +2896,8 @@ fun €fmt_statement› (fmtinfo as {outf,...} : PP_FMT_INFO) (STNull : STATEMENT) =
 	fmt_spec_no_ivars fmtinfo x;
 	fmt_warnings fmtinfo
 ) | fmt_statement (fmtinfo : PP_FMT_INFO) (STSemicolon (a,b) : STATEMENT) = (
-	fmt_statement fmtinfo a; fmt_statement fmtinfo b;
+	fmt_statement fmtinfo a;
+	fmt_statement fmtinfo b;
 	fmt_warnings fmtinfo
 ) | fmt_statement (fmtinfo : PP_FMT_INFO) (STIfThenElse x : STATEMENT) = (
 	fmt_if_then_else fmt_statement fmtinfo x;
