@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.13 2003/01/29 17:23:12 rda Exp rda $
+ * $Id: files.c,v 2.15 2003/01/30 12:50:49 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -68,7 +68,7 @@ static char *cant_stat_message =
 static char *cant_stat_message2 =
 	 "The file \"%s\" does not seem to exist: edit a new empty buffer or quit?";
 
-static char *contains_nulls_message =
+static char *contains_binary_message =
 	" The file \"%s\" contains binary data and cannot be edited";
 
 static char *load_not_reg_message =
@@ -295,11 +295,18 @@ static char *get_file_contents(
 	};
 	p = buf;
 	ft_state = FT_ANY;
+/*
+ * Now the FSM that reads the file and copies it into the buffer mapping DOS and Mac line terminators
+ * onto Unix ones. Exit from the loop is either the return in the error case where binary data is detected
+ * or when end-of-file or read-error occurs. In those cases, the last value of whatgot to be read will be
+ * EOF, and ft_state will be one of FT_UNIX, FT_DOS, FT_MAC or FT_MIXED enabling the file type
+ * to be set up accordingly.
+ */
 	while( !feof(fp) && !ferror(fp) ) {
 		whatgot = getc(fp);
 		if(whatgot != EOF && whatgot >= 0 && whatgot < ' '
 		&& whatgot != '\t' && whatgot != '\n' && whatgot != '\r') {
-			file_error_dialog(w, contains_nulls_message, name);
+			file_error_dialog(w, contains_binary_message, name);
 			XtFree(buf);
 			return NULL;
 
@@ -315,6 +322,7 @@ static char *get_file_contents(
 						*p++ = whatgot;
 						break;
 					case EOF:
+						ft_state = FT_UNIX;
 						break;
 					default:
 						*p++ = whatgot;
@@ -374,7 +382,9 @@ static char *get_file_contents(
 						*p++ = '\n';
 						break;
 					case '\n':
-						ft_state = FT_MIXED; /* No break! */
+						ft_state = FT_MIXED;
+						*p++ = whatgot;
+						break;
 					case EOF:
 						break;
 					default:
@@ -436,18 +446,20 @@ static char *get_file_contents(
 				}
 				break;
 			case FT_MIXED_CR:
-				ft_state = FT_MIXED;
 				switch(whatgot) {
 					case '\r':
 						*p++ = '\n';
 						break;
 					case '\n': /* CR/LF */
+						ft_state = FT_MIXED;
 						*p++ = '\n';
 						break;
 					case EOF:
+						ft_state = FT_MIXED;
 						*p++ = '\n';
 						break;
 					default:
+						ft_state = FT_MIXED;
 						*p++ = '\n';
 						*p++ = whatgot;
 						break;
@@ -463,18 +475,15 @@ static char *get_file_contents(
 	};
 	switch(ft_state) {
 		case FT_MIXED:
-		case FT_MIXED_CR:
-		case FT_DOS_CR:
 			if(!including) {
 				file_error_dialog(w, mixed_file_type_message, name);
 			}
-			/* No break - recover by treating as UNIX */
+			file_type = UNIX;
+			break;
 		case FT_UNIX:
-		case FT_ANY:
 			file_type = UNIX;
 			break;
 		case FT_MAC:
-		case FT_DOS_OR_MAC: /* one line Mac file */
 			file_type = MACINTOSH;
 			break;
 		case FT_DOS:
