@@ -16,10 +16,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for the Interface to the Abstract Data Type $THM$}  %% Mandatory field
 \def\TPPheadtitle{Implementation for the \cr Interface to the Abstract Data Type $THM$}
 \TPPref{DS/FMU/IED/IMP012}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.17 $
+\def\SCCSversion{$Revision: 2.18 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $ %
+\TPPdate{\FormatDate{$Date: 2002/12/11 21:21:58 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -90,6 +90,7 @@ Allowed for use of ordered efficient dictionaries in theory data type.
 \item[Issue 2.16] Copyright and banner updates for open source release.
 \item[Issue 2.17] PPHol-specific updates for open source release
 \item[Issue 2.18] Removed unnecessary level of indirection from the {\it USER\_DATA} data type.
+\item[Issue 2.19] Added checkpointing and rollbacks.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -626,10 +627,17 @@ in
 end);
 =TEX
 For the following $delete\_$ functions we need an auxiliary ``delete to level'' function.
+This delete everything whose level is greater than or equal to the level supplied
+as an argument.
 This will find out what is to be deleted, and do all the
-kernel and user notification required.
+kernel and, if {\it do\_warn} is true, user notification required.
+If {\it do\_warn} is false, the kernel notifications are done, but there is
+no feedback to the user, moreover, the function will delete theorems even
+if the theory has children.
+
 =SML
-fun Ûdelete_to_levelÝ (caller : string) (target : string) (level : int) : unit = (
+fun Ûdelete_to_levelÝ (do_warn : bool)
+	(caller : string) (target : string) (level : int) : unit = (
 let	val dummy = case (get_current_theory_status()) of
 		TSNormal => ()
 		| TSDeleted => error caller 6008 
@@ -641,7 +649,7 @@ let	val dummy = case (get_current_theory_status()) of
 
 	val {children = children,...} = icl'get_theory_info "-";
 
-	val dummy = if children <> [] 
+	val dummy = if children <> [] andalso do_warn
 		then fail caller 6076 [fn () => get_current_theory_name()]
 		else ();
 
@@ -649,15 +657,17 @@ let	val dummy = case (get_current_theory_status()) of
 		axiom_dict = oe_axiom_dict, thm_dict = oe_thm_dict,
 		defn_dict = oe_defn_dict,...} = icl'get_theory "-";
 
-	val con_env = oe_flatten oe_con_env;
+	fun thms_only x = if children = [] then x else [];
 
-	val ty_env = oe_flatten oe_ty_env;
+	val con_env =  (thms_only o oe_flatten) oe_con_env;
 
-	val axiom_dict = oe_flatten oe_axiom_dict;
+	val ty_env = (thms_only o oe_flatten) oe_ty_env;
+
+	val axiom_dict = (thms_only o oe_flatten) oe_axiom_dict;
 
 	val thm_dict = oe_flatten oe_thm_dict;
 
-	val defn_dict = oe_flatten oe_defn_dict;
+	val defn_dict = (thms_only o oe_flatten) oe_defn_dict;
 
 	val (del_con,del_lev1) = split (map (fn (name,{ty = ty,level = lev,...}) => 
 			((name, ty),lev))
@@ -722,7 +732,10 @@ We now ask the interactive user whether he wishes everything
 necessary to be deleted.
 =SML
 *)
-	val dummy = warn caller 12012 [(fn () => target),(fn () => to_be_d)];
+	val dummy =
+		if	do_warn
+		then	warn caller 12012 [(fn () => target),(fn () => to_be_d)]
+		else	();
 (*
 =TEX
 We now have permission to proceed:
@@ -769,7 +782,7 @@ let	val cnt = fst(strip_app icnt);
 			 fn () => cnm]
 		else ();
 in
-	delete_to_level "delete_const" cnm level
+	delete_to_level true "delete_const" cnm level
 end);
 =TEX
 =SML
@@ -782,7 +795,7 @@ let	val {ty_env = ty_env,...} = icl'get_theory "-";
 			[fn () => get_current_theory_name (),
 			 fn () => tnm];
 in
-	delete_to_level "delete_type" tnm level
+	delete_to_level true "delete_type" tnm level
 end);
 =TEX
 =SML
@@ -797,7 +810,7 @@ let	val {axiom_dict = axiom_dict,...} = icl'get_theory "-";
 
 	val {level = level,...} = icl'dest_thm ax;
 in
-	delete_to_level "delete_axiom" anm level
+	delete_to_level true "delete_axiom" anm level
 end);
 =TEX
 =SML
@@ -1272,6 +1285,99 @@ let	val {status = status,...} = icl'get_theory_info thynm
 in
 	status
 end);
+=TEX
+\subsection{Checkpointing}
+=TEX
+The representation of the checkpoint data type is 
+the theory name together with a dictionary mapping
+theory names to pairs each comprising a level number and the user data.
+We make it an abstype so that the compiler won't print the values.
+=SML
+abstype ÛCHECKPOINTÝ =
+	Checkpoint of (string * (int * USER_DATA) S_DICT)
+with
+	fun Ûmk_checkpointÝ
+	(d : (string * (int * USER_DATA) S_DICT)) : CHECKPOINT = (
+		Checkpoint d
+	);
+	fun Ûdest_checkpointÝ
+	(Checkpoint d : CHECKPOINT) :  (string * (int * USER_DATA) S_DICT) = (
+		d
+	);
+end;
+=TEX
+=SML
+fun ÛcheckpointÝ (thy : string) : CHECKPOINT = (
+	let	val thys = get_descendants thy
+			handle ex => pass_on ex "get_descendants" "checkpoint";
+		fun aux t = (
+			let	val {contents = {
+					current_level = lev,
+					user_data = ref ud,
+					...}, ...} = icl'get_theory_info t;
+				val _ = icl'increment_level t;
+			in	(t, (lev, ud))
+			end
+		);
+		fun check_status t = (
+			case get_theory_status t of
+				TSNormal => ()
+			|	TSLocked =>
+				fail "checkpoint"12018 [fn ()=>t]
+			|	_ =>
+				fail "checkpoint"12019 [fn ()=>t]
+		);
+		val _ = map check_status thys;
+	in	mk_checkpoint (thy, map aux thys)
+	end
+);
+=TEX
+Now for {\it rollback}. In the function  {\it rec\_del} the outermost handler
+is for the {\it get\_descendants} call and is trapping the situation where
+the theory has already been deleted by an earlier call.
+=SML
+fun ÛrollbackÝ (cp : CHECKPOINT) : unit = (
+	let	val (cp_thy, dict) = dest_checkpoint cp;
+		fun rec_del thy = (
+			let	val _ = unlock_theory thy handle Fail _ => ();
+				val thys = get_descendants thy less thy;
+			in	map rec_del thys;
+				delete_theory thy
+				handle Fail _ =>
+				comment "rollback" 12015
+				[fn () => thy]
+			end	handle Fail _ => ()
+		);
+		val old_descs = map fst dict;
+		val new_descs = get_descendants cp_thy
+			handle Fail _ =>
+			(comment "rollback" 12016 [fn  () => cp_thy]; []);
+	in	case new_descs of
+			[] => ()
+		|	_ =>
+	let	val to_delete = new_descs diff old_descs;
+		val _ = open_theory cp_thy
+			handle ex => pass_on ex "open_theory" "rollback";
+		val _ = map rec_del to_delete;
+		fun restore (thy, (lev, ud)) = (
+			let	val _ = open_theory thy
+				handle  Fail _ =>
+				comment "rollback" 12016 [fn  () => thy];
+				val _ = unlock_theory thy handle Fail _ => ();
+				val {user_data,...} = icl'get_theory thy;
+			in	delete_to_level false "rollback" thy (lev+1);
+				user_data := ud
+			end	handle  Fail msg =>
+				comment "rollback" 12017 [
+					fn  () => thy,
+					fn () =>  get_message_text msg]
+
+		);
+	in	map restore dict;  ()
+	end
+	end
+);
+=SML
 =TEX
 \subsection{End of Structure}
 =SML
