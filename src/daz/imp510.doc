@@ -1,4 +1,4 @@
-% $Header: /home/rda/daz/RCS/imp510.doc,v 1.101 2002/05/04 13:48:39 rda Exp rda $
+% $Header: /home/rda/daz/RCS/imp510.doc,v 1.102 2002/05/04 15:44:40 rda Exp rda $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: SPARK Output Function}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP510}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.101 $%
+\def\SCCSversion{$Revision: 1.102 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/05/04 13:48:39 $%
+\TPPdate{\FormatDate{$Date: 2002/05/04 15:44:40 $%
 }}
 \TPPstatus{Draft}	    %% Mandatory field
 \TPPtype{Specification}
@@ -173,7 +173,7 @@ new symbol for statement replacement.
 \item [Issue 1.100,1.101] More new syntax plus R0063: unexpanded specification statements
 are now handled by printing a comment and then the specification statement.
 \item [Issue 1.102] R0050: discriminants now working.
-
+\item[Issue 1.103] Spring 2002 enhancements: return and exit statements.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -207,10 +207,6 @@ structure ÛCNSparkOutputÝ : CNSparkOutput = struct
 =FULLVERSION
     open    ZUserInterfaceSupport;
     open    CNVCGenerator;
-=TEX
-
-=CUTDOWNVERSION
-    fun do_soundness_checks2 a b c = ();
 =TEX
 
 \subsection{Checking for Name Clashes}
@@ -268,13 +264,6 @@ then	let	fun full_name (st : SCOPE list) (n : ID) : ID list = (
 	end
 else	()
 );
-val Ûsoundness_check_resultsÝ : string list ref = ref [];
-fun Ûlog_soundness_check_resultÝ (msg : MESSAGE) = (
-	if	!error_checking
-	then	soundness_check_results :=
-		get_message_text msg :: !soundness_check_results
-	else	()
-);
 =TEX
 In many cases the following gives a convenient idiom:
 =SML
@@ -290,7 +279,6 @@ fun Ûin_new_scopeÝ (check_n : bool) (n : ID) (what : unit -> 'b) : 'b = (
 =SML
 fun Ûwith_soundness_checksÝ (what : unit -> 'a) : 'a = (
 	clashes := [];
-	soundness_check_results := [];
 	stack := [];
 	error_checking := true;
 	let	fun show_name n = format_list Combinators.I n ".";
@@ -308,29 +296,17 @@ fun Ûwith_soundness_checksÝ (what : unit -> 'a) : 'a = (
 				fail "soundness_checks" 510003 []
 			)
 		);
-		fun report_soundness_check_results scrs = (
-			case scrs of
-			[]	=> ()
-		|	_ => (
-				map diag_line scrs;
-				fail "soundness_checks" 510005 []
-			)
-		);
 		val res = what();
 		val cls = !clashes;
-		val scrs = !soundness_check_results;
 	in	error_checking := false;
 		clashes := [];
-		soundness_check_results := [];
 		stack := [];
-		report_soundness_check_results scrs;
 		report_clashes cls;
 		res
 	end
 )	handle ex => (
 		error_checking := false;
 		clashes := [];
-		soundness_check_results := [];
 		stack := [];
 		raise ex
 );
@@ -2567,8 +2543,6 @@ fun Ûfmt_procedure_bodyÝ
 	(fmtinfo as {outf,...} : PP_FMT_INFO)
 	({procedure_spec=p, declarative_part=d, statement=s} :
 	DECLARATION PROCEDURE_BODY) = (
-    do_soundness_checks2 get_replacement false s
-    handle Fail msg => log_soundness_check_result msg;
 	let val res = (fmt_procedure_specification fmtinfo p;
 			outf (kw"IS"); outf "\n";
 			(inc_tabs();
@@ -2589,8 +2563,6 @@ fun Ûfmt_function_bodyÝ
 	(fmtinfo as {outf,...} : PP_FMT_INFO)
 	({function_spec=f, declarative_part=d, statement=s} :
 	DECLARATION FUNCTION_BODY) = (
-    do_soundness_checks2 get_replacement true s
-    handle Fail msg => log_soundness_check_result msg;
 	let val res = (fmt_function_specification fmtinfo f;
 			outf (kw"IS"); outf "\n";
 			(inc_tabs(); 
@@ -2609,8 +2581,6 @@ fun Ûfmt_package_bodyÝ
 	({name=n, decls=d, statement=s, annotation=ann}
 		: DECLARATION PACKAGE_BODY) = (
     in_new_scope true n (fn () => (
-    do_soundness_checks2 get_replacement false s
-    handle Fail msg => log_soundness_check_result msg;
     outf (kw2"PACKAGE""BODY"); fmt_id fmtinfo n; outf "\n";
     fmt_annotation fmtinfo ann;
     (outf (kw"IS"); outf "\n");

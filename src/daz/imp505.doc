@@ -1,4 +1,4 @@
-% %Z% $Date: 2002/03/21 13:32:07 $ $Revision: 1.96 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2002/05/02 16:29:28 $ $Revision: 1.97 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -16,7 +16,7 @@
 \TPPtitle{Implementation: Verification Condition Generator}  %% Mandatory field
 \def\TPPheadtitle{Verification Condition Generator}
 \TPPref{ISS/HAT/DAZ/IMP505}  %% Mandatory field
-\def\SCCSversion{$Revision:$%
+\def\SCCSversion{$Revision: 1.97 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 \TPPdate{\FormatDate{97/07/18%
@@ -119,6 +119,7 @@
 procedure calls.
 \item[Issue 1.96] Fixing bug in check on case statement with omitted others part.
 \item[Issue 1.97] Spring 2002 enhancements: adjustments for syntax for interim release.
+\item[Issue 1.98] Spring 2002 enhancements: return and exit statements.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -162,7 +163,9 @@ fun v_v0 (in_mode : bool) (ty : TYPE) (v : ID) : TERM list = (
 		then	[mk_var(v, ty)]
 		else	[mk_var(init_var v, ty), mk_var(v, ty)]
 );
-fun ti_context_of_formal_ids (env : CN_ENV) ([] : PARAM_SPEC list)
+=TEX
+=SML
+fun €ti_context_of_formal_ids› (env : CN_ENV) ([] : PARAM_SPEC list)
 		: TERM list = []
 |  ti_context_of_formal_ids env ({var_decl as {vars, tmark}, mode} :: more) = (
 	let	val ty = dest_z_power_type (type_of (zid env (trans_id tmark)));
@@ -170,6 +173,13 @@ fun ti_context_of_formal_ids (env : CN_ENV) ([] : PARAM_SPEC list)
 	in	flat (map (v_v0 inmode ty) vars)
 		@ ti_context_of_formal_ids env more
 	end	handle Fail _ => fail "vcs" 508051 [fn()=>tmark]
+);
+=TEX
+The following is exported as a convenience for use in the Z Generator.
+=SML
+fun €ti_context_of_formal_proc› (env : CN_ENV) ({formal_ids, ...} : FORMAL_PROC)
+	: TERM list =  (
+	ti_context_of_formal_ids env formal_ids
 );
 =TEX
 \section{STORAGE OF Z TERMS}
@@ -678,17 +688,29 @@ let	val ze = trans_exp env g;
 		(z_eq(ze, zid env "FALSE") %Longrightarrow% a));
 in	{wp = wp, side = []}
 end
-) | exit_when ({a, wp_env={till, env, ...}, ...})
+) | exit_when ({a, wp_env={named_tills, env, ...}, ...})
 	({g, n = Value name} : EXIT_WHEN) = (
-	fail "exit_when" 505001 [fn _ => "VC generation for exit to named loop is TBS"]
+let	val ze = trans_exp env g;
+	val till = case s_lookup name named_tills of
+		Value p => p
+	|	Nil => fail "exit_when" 505069 [fn _ => name]
+	val wp = add_domain_conds env ([ze],
+		([z_eq(ze, zid env "TRUE")] Ù till) ::
+		(z_eq(ze, zid env "FALSE") %Longrightarrow% a));
+in	{wp = wp, side = []}
+end
 );
 =TEX
 \subsection{Exit}\label{wp-exit}
 =SML
 fun €cn_exit› ({wp_env={till, ...},...} : WP_PARS) ({n = Nil} : EXIT): RESULT = (
 	{wp = [[] Ù till], side = []}
-) | cn_exit ({wp_env={till, ...},...} : WP_PARS) ({n = Value name} : EXIT) = (
-	fail "cn_exit" 505001 [fn _ => "VC generation for exit to named loop is TBS"]
+) | cn_exit ({wp_env={named_tills, ...},...} : WP_PARS) ({n = Value name} : EXIT) = (
+let	val till = case s_lookup name named_tills of
+		Value p => p
+	|	Nil => fail "exit_when" 505069 [fn _ => name]
+in	{wp = [[] Ù till], side = []}
+end
 );
 =TEX
 \subsection{Return}\label{wp-return}
@@ -710,9 +732,9 @@ let	val zfun = trans_fun_name env name;
 in
 	{wp = wp, side = side}
 end
-) | cn_return ({wp, a, wp_env= {env, ...}})
+) | cn_return ({wp, a, wp_env= {env, return, ...}})
 		({e = Nil} : RETURN) : RESULT = (
-	fail "cn_return" 505001 [fn _ => "VC generation for exit to named loop is TBS"]
+	{wp = [[] Ù return], side = []}
 );
 =TEX
 \subsection{Procedure Call (No Initial Variables in Spec)}\label{wp-proc-call-no-ivars}
@@ -1573,7 +1595,7 @@ fun €anti_aliasing_check› (env : CN_ENV) (speclab : SPECLAB,
 =TEX
 \subsection{Invoking the Checks}
 =SML
-fun €do_soundness_checks1› (
+fun €do_soundness_checks› (
 	(speclab as {wp_env as {env, ...}, ...},
 		statement): SPECLAB * STATEMENT) : unit = (
 
@@ -1608,10 +1630,12 @@ let	fun pass_over_statement (st : STATEMENT) = (
 				pass_over_statement (#stmt loop)
 		)|	STForTmark {name,i,tmark,dir,loop} => (
 				pass_over_statement (#stmt loop)
+		)|	STExitWhen {n = Nil, ...} => (
+				check_1_c speclab
 		)|	STExitWhen _ => (
+		)|	STExit {n = Nil} => (
 				check_1_c speclab
 		)|	STExit _ => (
-				check_1_c speclab
 		)|	STRet _ => (
 				check_1_b speclab
 		)|	STProcNoIvars (proc as {name,actuals}) => (
@@ -1630,171 +1654,6 @@ let	fun pass_over_statement (st : STATEMENT) = (
 		)
 	);
 	in	pass_over_statement statement
-	end
-);
-=TEX
-=SML
-fun €resolver› (repl_function : LABEL -> REPLACEMENT OPT) (label : LABEL)
-			: STATEMENT = (
-	let	val repl = case repl_function label of
-					Nil => (
-						UnReplaced (RSStatement, "")
-				) |	Value repl => repl;
-	in
-		case repl of
-			ReplaceComp _ => ( STImplicitNull
-		) |    ReplacePPart _ => (	STImplicitNull
-		) |    ReplaceVPart _ => (	STImplicitNull
-		) |    ReplaceDecl _ => (	STImplicitNull
-		) |    RefineStat {statement, ...} => ( statement
-		) |    ReplaceStat {statement, ...}  => ( statement
-		) |    ReplaceArbitrary _ => ( STImplicitNull
-		) |    ReplaceAnnotation _ => ( STImplicitNull
-		) |    UnReplaced _ => ( STImplicitNull
-		)	
-	end
-);
-=TEX
-=SML
-datatype €CHECK_STATE› = €CSTop› | €CSInLoop› | €CSInCase›
-		| €CSOKToExit› | €CSInIfThenElse›;
-
-=TEX
-=SML
-fun €check_3a›	 (state : CHECK_STATE, st : STATEMENT) = (
-
-	case  st of
-		STExitWhen _ => (
-			if state = CSInLoop
-			then ()
-			else checking_error "check_3a" 505065 []
-	) |	_ =>	error "check_3a" 505076 []
-);
-=TEX
-=SML
-fun €check_3b›	 (state : CHECK_STATE, st : STATEMENT) = (
-
-	case  st of
-		STExit _ => (
-			if state = CSOKToExit
-			then ()
-			else checking_error "check_3b" 505066 []
-	) |	_ =>	error "check_3b" 505077 []
-);
-=TEX
-=SML
-datatype €ENDING› = €EndsInReturn› | €EndsInOther›;
-=TEX
-=SML
-fun €check_4a›	 (is_function_subprogram : bool) : unit = (
-
-	if is_function_subprogram
-	then
-		()
-	else
-		checking_error "check_4a" 505078 []
-);
-
-fun €check_4b›	 (is_function_subprogram : bool,
-		 	ends_in_return : ENDING) : unit = (
-
-	if is_function_subprogram
-	then
-		case ends_in_return of
-			EndsInReturn => (
-		) |	EndsInOther =>
-				checking_error "check_4b" 505079 []
-	else	()
-);
-=TEX
-
-=SML
-fun €do_soundness_checks2›	(repl_function : LABEL -> REPLACEMENT OPT)
-				(is_function_subprogram : bool)
-				(statement : STATEMENT) : unit = (
-
-let	val local_resolver = resolver repl_function;
-	fun check_over_statement (state : CHECK_STATE) (st : STATEMENT) : ENDING = (
-
-	case st of
-			STNull => (	EndsInOther
-		)| 	STImplicitNull => ( EndsInOther
-		)|	STAssign {name,e} => ( EndsInOther
-		)|	STSpecNoIvars {spec,label} => (
-				check_over_statement state (local_resolver label)
-		)|	STSemicolon (s1,s2) => (
-				if state = CSOKToExit
-				then
-					(check_over_statement CSInIfThenElse s1;
-					check_over_statement state s2)
-				else
-					(check_over_statement state s1;
-					check_over_statement state s2)
-		)|	STIfThenElse  {g,p,q,elsif} => (
-				if not elsif andalso state = CSInLoop
-				then	(check_over_statement CSOKToExit p;
-					check_over_statement CSOKToExit q;
-					EndsInOther)
-				else	(check_over_statement CSInIfThenElse p;
-					check_over_statement CSInIfThenElse q;
-					EndsInOther)
-		)|	STCase {e,s,others} => (
-			let	val res =  map
-				   (fn st1 => check_over_statement CSInCase (#p st1)) s;
-				val res1 = 
-					case others of
-						STImplicitNull => EndsInReturn
-					|	_ => check_over_statement CSInCase others;
-			in
-				if all (res1::res) (fn r => r = EndsInReturn)
-				then	EndsInReturn
-				else	EndsInOther
-			end
-		)|	STLoop {t,stmt} => (
-				check_over_statement CSInLoop stmt;
-				EndsInOther
-		)|	STNamedLoop {name,t,stmt} => (
-				check_over_statement CSInLoop stmt;
-				EndsInOther
-		)|	STWhile {name,g,loop} => (
-				check_over_statement CSInLoop (#stmt loop);
-				EndsInOther
-		)|	STForStatic {name,i,tmark,range,dir,loop} => (
-				check_over_statement CSInLoop (#stmt loop);
-				EndsInOther
-		)|	STForTmark {name,i,tmark,dir,loop} => (
-				check_over_statement CSInLoop (#stmt loop);
-				EndsInOther
-		)|	STExitWhen _ => (
-				check_3a (state, st);
-				EndsInOther
-		)|	STExit _ => (
-				check_3b (state, st);
-				EndsInOther
-		)|	STRet _ => (
-				check_4a is_function_subprogram;
-				EndsInReturn
-		)|	STProcNoIvars (proc as {name,actuals}) => (
-				EndsInOther
-		)|	STKSlot {content,label} => (
-				check_over_statement state (local_resolver label);
-				EndsInOther
-		)| 	STAnnotation _ => ( EndsInOther
-		)| 	STPragma _ => ( EndsInOther
-		)|	SSpecIvars {label, ...} => (
-				check_over_statement state (local_resolver label)
-		)|	SLogCon {label, ...} => (
-				check_over_statement state (local_resolver label)
-		)|	SForNonStatic {loop, ...} => (
-				check_over_statement state (#stmt loop)
-		)|	SProcIvars _ => (
-				EndsInOther
-		)
-	);
-		val ends_in_return = check_over_statement CSTop statement;
-	in
-		check_4b (is_function_subprogram, ends_in_return);
-		()
 	end
 );
 =TEX
@@ -2018,7 +1877,7 @@ fun €vcs› ((sl as {spec as {w, w0, pre, post},
 			wp_env, ...}, st): SPECLAB * STATEMENT)
 			: VC list * SPEC = (
 
-let	val side_effect = do_soundness_checks1 (sl, st);
+let	val side_effect = do_soundness_checks (sl, st);
 
 	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
