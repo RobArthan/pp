@@ -87,6 +87,8 @@ Changed ``native'' theory.
 \item[Issue 1.21 (24th June 1992)]
 Renamings from issue 1.6 of \cite{DS/FMU/IED/WRK038},
 mostly proof context name changes.
+\item [Issue 1.22 (5th July 1992)]
+Added $step\_strip\_tac$ and $THEN1$.
 \end{description}
 \subsection{Changes Forecast}
 None known.
@@ -336,6 +338,172 @@ end
 handle complaint =>
 term_fail "taut_conv" 27037 [tm]
 );
+=TEX
+\subsection{Single Stepping $strip\_tac$}
+=SML
+fun Ûright_strip_±_ruleÝ (thm : THM) : THM list = (
+let	val s1 = ±_left_elim thm;
+	val s2 = ±_right_elim thm;
+in
+	(s1 :: right_strip_±_rule s2)
+end
+handle (Fail _) => [thm]
+);
+=TEX
+=SML
+fun Ûante_±_tacÝ ([]:THM list) : TACTIC = id_tac
+| ante_±_tac x = ante_tac (list_±_intro x);
+=TEX
+=SML
+fun Ûstep_check_asm_tacÝ (thm : THM) : TACTIC = (fn gl as (seqasms, conc) =>
+let	val cnjs = right_strip_±_rule thm;
+	val t = concl (hd cnjs);
+in	if t ~=$ conc
+	then (accept_tac (hd cnjs))
+	else if is_t t
+	then ante_±_tac (tl cnjs)
+	else if is_f t
+	then f_thm_tac (hd cnjs)
+	else if is_³ t
+	then	let	val t' = dest_³ t;
+			fun aux (asm :: more) = (
+				if t ~=$ asm
+				then ante_±_tac (tl cnjs)
+				else if asm ~=$ t'
+				then accept_tac (³_elim conc (asm_rule asm) (hd cnjs))
+				else if asm ~=$ conc
+				then (accept_tac (asm_rule asm))
+				else aux more
+			) | aux [] = asm_tac (hd cnjs) THEN
+				ante_±_tac (tl cnjs);
+		in	aux seqasms
+		end
+	else	let	fun aux (asm :: more) = (
+				if t ~=$ asm
+				then ante_±_tac (tl cnjs)
+				else if is_³ asm andalso (dest_³ asm) ~=$ t
+				then accept_tac (³_elim conc (hd cnjs) (asm_rule asm))
+				else if asm ~=$ conc
+				then (accept_tac (asm_rule asm))
+				else aux more
+				) | aux [] = asm_tac (hd cnjs) THEN
+					ante_±_tac (tl cnjs);
+		in	aux seqasms
+		end
+end	gl
+);
+=TEX
+=SML
+fun Ûstep_conv_´_tacÝ (cnv : CONV) : THM -> TACTIC = (fn thm =>
+let	val cnjs = right_strip_±_rule thm;
+	val cnj1 = conv_rule (CHANGED_C cnv) (hd cnjs);
+in
+	ante_±_tac (cnj1 :: tl cnjs)
+end);
+=TEX
+=SML
+val Ûstep_²_´_tacÝ : THM -> TACTIC = (fn thm => 
+let	val cnjs = right_strip_±_rule thm;
+	val (t1,t2) = dest_² (concl (hd cnjs));
+in	(fn (seqasms, conc) =>
+	let	val (sgs1, pf1) = ante_±_tac (asm_rule t1 :: tl cnjs) (seqasms, conc);
+		val (sgs2, pf2) = ante_±_tac (asm_rule t2 :: tl cnjs) (seqasms, conc);
+	in	(sgs1 @ sgs2,
+			(fn thl =>
+			let	val len = length sgs1;
+			in ²_elim (hd cnjs) (pf1(thl to (len - 1))) 
+				(pf2(thl from len))
+			end
+			))
+	end)
+end
+handle ex => divert ex "dest_²" "step_²_´_tac" 28042 
+	[fn () => string_of_thm thm]
+);
+=TEX
+
+=SML
+val Ûstep_±_´_tacÝ : THM -> TACTIC = (fn thm =>
+let	val cnjs = right_strip_±_rule thm;
+	val thm1 = ±_left_elim (hd cnjs);
+	val thm2 = ±_right_elim (hd cnjs);
+in
+	ante_±_tac (thm1 :: thm2 :: tl cnjs)
+end
+handle ex => divert ex "±_left_elim" "step_±_´_tac" 28032 
+	[fn () => string_of_thm thm]
+);
+=TEX
+=SML
+val Ûstep_simple_¶_´_tacÝ : THM_TACTIC = (fn thm =>
+let	val cnjs = right_strip_±_rule thm;
+	val (x, b) = dest_simple_¶(concl (hd cnjs));
+in	(fn (seqasms, conc) =>
+	let	val x' = variant (flat(map frees
+			(conc :: concl thm :: asms thm @ seqasms))) x;
+		val (sgs, pf) = ante_±_tac ((asm_rule (var_subst[(x', x)] b)) :: (tl cnjs)) 
+			(seqasms, conc);
+	in	
+		(sgs, (simple_¶_elim x' (hd cnjs)) o pf)
+	end)
+end
+handle ex => divert ex "dest_simple_¶" "step_simple_¶_´_tac" 28093 
+	[fn () => string_of_thm thm]
+);
+=TEX
+
+=SML
+fun MAP_FIRST1 [] v = (
+	fail_with_tac "step_strip_asm_tac" 28003 
+		[fn () => string_of_thm v]
+) | MAP_FIRST1 (a :: x) v = a v handle (Fail _) => 
+	MAP_FIRST1 x v;
+=TEX
+If the theorem given is a conjunct then this
+should operate on the first conjunct, returning the second
+unchanged.
+This may cause compatibility problems for a proof context conversion that
+matches against conjuncts.
+=SML
+val Ûstep_strip_asm_tacÝ : THM_TACTIC = (fn thm :THM =>
+	MAP_FIRST1
+	[step_conv_´_tac (current_ad_st_conv()),
+		step_±_´_tac, 
+		step_²_´_tac, 
+		step_simple_¶_´_tac,
+		step_check_asm_tac]
+	thm
+);
+=TEX
+=SML
+val Ûstep_strip_tacÝ : TACTIC = (fn gl =>
+	(FIRST[ conv_tac(current_ad_sc_conv()),
+		simple_µ_tac,
+		±_tac,
+		´_T step_strip_asm_tac,
+		t_tac,
+		concl_in_asms_tac]
+	ORELSE_T
+		fail_with_tac "step_strip_tac" 28003 
+		[fn () => string_of_term(snd gl)])
+	gl
+);
+=TEX
+\section{TACTICALS}
+=SML
+fun ((tac1 : TACTIC) ÛTHEN_T1Ý (tac2 : TACTIC)) : TACTIC = (fn gl =>
+	let	val (sgs1, pf) = tac1 gl;
+		val (sgs2pfs2) = case sgs1 of
+			(a :: x) => (tac2 a :: map id_tac x)
+			| _ => [];
+	in	(flat (map fst sgs2pfs2),
+		pf o map_shape (map (fn (sgs, pf) => (pf, length sgs))sgs2pfs2))
+	end
+);
+=TEX
+=SML
+val op ÛTHEN1Ý : (TACTIC * TACTIC) -> TACTIC = op THEN_T1;
+
 =TEX
 \section{CANONICALISATION}
 =SML
