@@ -47,6 +47,10 @@ rewriting rules of inference in ICL HOL.}
 \begin{description}
 \item [Issue 1.1]
 First version.
+\item [Issue 1.2]
+Moved tautology material to \cite{DS/FMU/IED/DTD027}.
+Some issues clarified in text.
+Introduced $set\_rewrite\-\_conversions$.
 \end{description}
 \subsection{Changes forecast}
 Most of the text outside the documentation boxes is a discussion
@@ -99,7 +103,7 @@ prim_rewrite_conv
 (canon : THM list -> THM list)
 (basis : THM list)
 (traverse : CONV -> CONV)
-(with : THM list)
+(with_thms : THM list)
 »t¼
 É
 É
@@ -107,7 +111,7 @@ prim_rewrite_conv
 =TEX
 where »t'¼ is »t¼, rewritten according to the parameters of the
 conversion, and $ö$ are the assumptions required to allow the
-rewriting.
+rewriting. If no rewriting occurs, $prim\_rewrite\_conv$ is as $refl\_conv$.
 
 The function is partially evaluable with any number of its arguments present, though in some cases partial evaluation is not considered
 likely to be of use.
@@ -121,15 +125,16 @@ Members of the list will be applied to the sub-term until
 one succeeds, or all fail.
 This can be used to cause, e.g., $\beta$ reduction, during rewriting.
 \item[canon]
-This function will be applied to both the $basis$ and $with$ theorems, to produce a list of theorems to be rewritten with from these inputs.
+This function will be applied to both the $basis$ and $with\_thms$ theorems, to produce a list of theorems to be rewritten with from these inputs.
 This will generally involve producing canonical or simplified
 forms of the original theorems.
 
-The resulting theorems will be (perhaps) universally 
-quantified theorems, that the rewriting may instantiate in any or all of their 
-universally quantified variables, or any of their type variables,
-to match the term being rewritten.
+The resulting theorems will be (perhaps) simply universally 
+quantified equations, that the rewriting may instantiate in any or all of their 
+universally quantified variables, or any of their type variables (not in their assumptions),
+to match their lhs to the term being rewritten.
 They will not be instantiated in any free variables.
+Results other than possibly quantified equations will be discarded.
 \item[basis]
 This is a basic set of theorems to rewrite with.
 $prim\_rewrite\_conv$ will be partially evaluable with just
@@ -137,7 +142,7 @@ $canon$ and $basis$ as arguments, which is the only reason for having two theore
 \item[traverse]
 This is a conversional, which defines the traversal of term $t$ by the
 rewriting conversion derived from $prim\_rewrite\_conv$'s other arguments.
-\item[with]
+\item[with$\_$thms]
 This is an additional set of theorems to be processed by $canon$
 and the results used in rewriting.
 \end{description}
@@ -159,7 +164,7 @@ prim_rewrite_rule
 (canon : THM list -> THM list)
 (basis : THM list)
 (traverse : CONV -> CONV)
-(with : THM list)
+(with_thms : THM list)
 É
 ö … t
 É
@@ -189,7 +194,9 @@ process their theorems.
 
 If a rule is ``pure'' then there are no default rewrite theorems,
 otherwise the rewriting theorems given by $set\_basic\_rewrites$
-(q.v.) will be the default rewriting theorems, and any $\beta$ redexes will be reduced.
+(q.v.) will be the default rewriting theorems, and 
+the conversions set by $set\_rewrite\_conversions$(q.v.)
+will be used.
 
 If a rule is ``once'' then rewriting will proceed from the root
 of the rewritten conclusion's theorem, towards the leaves,
@@ -217,7 +224,9 @@ process their theorems.
 
 If a conversion is ``pure'' then there are no default rewrite theorems,
 otherwise the $basic\_rewrites$ (of $set\_basic\_rewrites$(q.v.))
-will be the default rewriting theorems and any $\beta$ redexes will be reduced.
+will be the default rewriting theorems and 
+the conversions set by $set\_rewrite\_conversions$(q.v.)
+will be used.
 
 If a conversion is ``once'' then rewriting will proceed from the root
 of the rewritten conversion's term argument, towards the leaves,
@@ -226,64 +235,9 @@ If not, rewriting will continue moving from the root to the leaves, repeating if
 anywhere within the rewritten term.
 This may cause non-terminating looping.
 =ENDDOC
-=DOC
-val âtaut_ruleá : TERM -> THM;
-=DESCRIBE
-A tautology prover.
-If its argument is a tautologically true term, then the
-function will return that term as a theorem.
-=RULE
-taut_rule
-»t¼
-É
-É
-… t
-=TEX
-=FAILURE
-7002	Term is not boolean
-26001	Term is not tautologically true
-=ENDDOC
-This is not a conversion, but there are two conversions leading
-from it:
-=DOC
-val âtaut_convá : CONV;
-=DESCRIBE
-A tautology prover.
-If its argument is a tautologically true term, then the
-function will return a theorem that the term is equivalent to $T$.
-=CONVERSION
-taut_conv
-»t¼
-É
-É
-… t ‚ T
-=TEX
-=FAILURE
-7002	Term is not boolean
-26001	Term is not tautologically true
-=ENDDOC
-=DOC
-val âtaut_eq_convá : TERM -> CONV;
-=DESCRIBE
-A tautology prover.
-If its two boolean arguments are tautologically equal terms, then the
-function will return a theorem that the terms are equal.
-=CONVERSION
-taut_eq_conv
-»t1¼
-»t2¼
-É
-É
-… t2 ‚ t1
-=TEX
-=FAILURE
-26002	Cannot prove equation
-26003	First term is not boolean
-26004	Second term is not boolean
-=ENDDOC
 
 \subsection{Parameterising Rewriting}
-The following two functions allow the user to modify the
+The following functions allow the user to modify the
 standard pattern of rewriting.
 =DOC
 val âset_rewrite_canoná : (THM list -> THM list) -> unit;
@@ -292,6 +246,9 @@ This sets the canonicalisation function used in $rewrite\_conv$ and
 its relatives.
 The list is produced by processing each member of the list, resulting in a list of theorems. 
 This list will be added to those produced so far, bar duplicates.
+
+This will only take effect for instances of the rewrite rules and conversions that have not yet been applied to 
+the list of theorems to rewrite with.
 =ENDDOC
 We would expect this to be set to something that at least does the following:
 
@@ -321,6 +278,20 @@ val âset_basic_rewritesá : THM list -> THM list;
 This sets the list of default rewrites used by $rewrite\_conv$,
 $rewrite\_rule$, $rewrite\_tac$, etc.
 It returns the previously set value.
+
+This will only take effect for instances of the rewrite rules and conversions that have not yet been applied to 
+the list of theorems to rewrite with.
+=ENDDOC
+=DOC
+val âset_rewrite_conversionsá : ((TERM * CONV) list) -> unit;
+=DESCRIBE
+This sets the list of conversions used by $rewrite\_conv$,
+$rewrite\_rule$, $rewrite\_tac$, etc,
+in addition to rewriting with equations.
+
+
+This will only take effect for instances of the rewrite rules and conversions that have not yet been applied to 
+the list of theorems to rewrite with.
 =ENDDOC
 \section{END OF THE SIGNATURE}
 =SML
