@@ -75,6 +75,7 @@ Adjusted $ENV\_INFO$ and allowed for type conversions.
 \item[Issue 1.38] Enhancement 15.
 \item[Issue 1.39-1.41] Enhancements to basic declarations.
 \item[Issue 1.42] Enhancement 12 (type conversions) and rejig of enhancement 11.
+\item[Issue 1.43] Enhancement 3.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -745,19 +746,21 @@ fun Ûexp_idÝ (env : CN_ENV) (ident : ID) : Z_EXP = (
 =TEX
 \subsection{Translating Aggregates (Positional Array)}
 =SML
-and Ûexp_array_agg_posÝ (env : CN_ENV) ({tmark, comps} : EXP AGG_POS) : Z_EXP = (
+and Ûexp_array_agg_posÝ (env : CN_ENV)
+	({tmark as Value tm, comps} : EXP AGG_POS) : Z_EXP = (
 let	val zop = z_minus;
 	val zleft = z_num 1;
-	val zright = zid env (trans_id tmark ^^ zfst);
+	val zright = zid env (trans_id tm ^^ zfst);
 	val zseq = map (trans_exp env) comps;
 in
 	z_rel_comp(z_power(zsucc, z_bin_exp(zleft,zop, zright)), z_seq zseq)
 end
-)
+) | exp_array_agg_pos _ _ = fail "trans_exp" 508054 []
 =TEX
 \subsection{Translating Aggregates (Positional Array with Others)}
 =SML
-and Ûexp_array_agg_pos_othersÝ (env : CN_ENV) ({agg_pos as {tmark,comps},
+and Ûexp_array_agg_pos_othersÝ (env : CN_ENV)
+	({agg_pos as {tmark, comps},
 		others} : EXP AGG_POS_OTHERS) : Z_EXP = (
 	z_override(trans_exp env (EArrayAggOthers {tmark=tmark,others=others}),
 		trans_exp env (EArrayAggPos agg_pos))
@@ -765,10 +768,10 @@ and Ûexp_array_agg_pos_othersÝ (env : CN_ENV) ({agg_pos as {tmark,comps},
 =TEX
 \subsection{Translating Aggregates (Positional Array with Just Others)}
 =SML
-and Ûexp_array_agg_othersÝ (env : CN_ENV) ({tmark,
+and Ûexp_array_agg_othersÝ (env : CN_ENV) ({tmark as Value tm,
 		others={others=ot}} : EXP AGG_OTHERS) : Z_EXP = (
-	z_cross(zid env (trans_id tmark ^^ zrange), z_set [trans_exp env ot])
-)
+	z_cross(zid env (trans_id tm ^^ zrange), z_set [trans_exp env ot])
+) | exp_array_agg_others _ _ = fail "trans_exp" 508054 []
 =TEX
 \subsection{Translating Aggregates (Named Array)}
 =SML
@@ -801,38 +804,40 @@ end
 )
 =TEX
 =SML
-and Ûexp_array_agg_namedÝ (env : CN_ENV) ({named_assocs}
+and Ûexp_array_agg_namedÝ (env : CN_ENV) ({tmark as Value _, named_assocs}
 		: (AGG_CHOICE,EXP) AGG_NAMED) : Z_EXP = (
 	z_many_union (map (trans_named_assoc env) named_assocs)
-)
+) | exp_array_agg_named _ _ = fail "trans_exp" 508054 []
 =TEX
 \subsection{Translating Aggregates (Named Array with Others)}
 =SML
-and Ûexp_array_agg_named_othersÝ (env : CN_ENV) ({tmark,agg_named,others}
+and Ûexp_array_agg_named_othersÝ (env : CN_ENV)
+		({agg_named as {tmark, ...}, others}
 		: (AGG_CHOICE,EXP) AGG_NAMED_OTHERS) : Z_EXP = (
-	z_override(trans_exp env (EArrayAggOthers {tmark=tmark,others=others}),
+	z_override(trans_exp env (EArrayAggOthers {tmark=tmark, others=others}),
 		trans_exp env (EArrayAggNamed agg_named))
 )
 =TEX
 \subsection{Translating Aggregates (Positional Record)}
 =SML
-and Ûexp_rec_agg_pos_zÝ (env : CN_ENV) ((tmark, comps) : TMARK * Z_EXP list)
+and Ûexp_rec_agg_pos_zÝ
+		(env : CN_ENV) ((tmark as Value tm, comps) : TMARK OPT * Z_EXP list)
 		: Z_EXP = (
 let	val record_components = (
-		case env tmark of
+		case env tm of
 			Value (_, EIEnvRecordType (cmps as _::_)) => cmps
-		|	_ => fail "exp_rec_agg_pos_z" 508026 [fn()=>tmark]
+		|	_ => fail "exp_rec_agg_pos_z" 508026 [fn()=>tm]
 	);
 	val zbinds = combine record_components comps
-		handle Fail _ => fail "exp_rec_agg_pos" 508027 [fn()=>tmark];
+		handle Fail _ => fail "exp_rec_agg_pos" 508027 [fn()=>tm];
 in
 	z_binding zbinds
 end
-)
+) | exp_rec_agg_pos_z _ _ = fail "trans_exp" 508054 []
 =TEX
 \subsection{Translating Aggregates (Named Record)}
 =SML
-and Ûexp_rec_agg_namedÝ (env : CN_ENV) ({tmark, named_assocs}
+and Ûexp_rec_agg_namedÝ (env : CN_ENV) ({tmark as Value tm, named_assocs}
 		: (AGG_CHOICE,EXP) REC_AGG_NAMED) : Z_EXP = (
 let	fun named_assoc_to_ids_exp {choice, comp} = (
 	let	fun aux (ch::rest) comp = (
@@ -848,7 +853,7 @@ let	fun named_assoc_to_ids_exp {choice, comp} = (
 	val zbinds = flat (map named_assoc_to_ids_exp named_assocs);
 in	z_binding zbinds
 end
-)
+) | exp_rec_agg_named _ _ = fail "trans_exp" 508054 []
 =TEX
 
 \subsection{Translating Unary Expressions}
@@ -1093,14 +1098,15 @@ and Ûadjust_named_assocÝ (env : CN_ENV) ({choice=c, comp=e}
 and Ûadjust_othersÝ (env : CN_ENV) ({others=oth} : EXP OTHERS) = (
 	{others=adjust_exp env oth}
 )
-and Ûadjust_agg_posÝ (env : CN_ENV) ({tmark=t, comps=c} : EXP AGG_POS) = (
+and Ûadjust_agg_posÝ (env : CN_ENV)
+		({tmark=tmark as Value t, comps=c} : EXP AGG_POS) = (
 	case env t of
 	Value (ty, EIEnvRecordType _) => (
-			ERecAggPos {tmark=t, comps=map (adjust_exp env) c}
+			ERecAggPos {tmark=tmark, comps=map (adjust_exp env) c}
         ) |_ => (
-			EArrayAggPos {tmark=t, comps=map (adjust_exp env) c}
+			EArrayAggPos {tmark=tmark, comps=map (adjust_exp env) c}
 	)
-)
+) | adjust_agg_pos _ _ = fail "adjust_exp" 508054 []
 and Ûadjust_agg_pos_othersÝ (env : CN_ENV) ({agg_pos = {tmark=t, comps=c} :
 		EXP AGG_POS, others = oth} : EXP AGG_POS_OTHERS) = (
 	EArrayAggPosOthers {	agg_pos={	tmark=t,
@@ -1111,30 +1117,31 @@ and Ûadjust_agg_othersÝ	(env : CN_ENV)
 				({tmark=t, others=oth} : EXP AGG_OTHERS) = (
          EArrayAggOthers{tmark=t, others=adjust_others env oth}
 )
-and Ûadjust_agg_namedÝ (env : CN_ENV) ({named_assocs=n}
+and Ûadjust_agg_namedÝ (env : CN_ENV) ({tmark=t, named_assocs=n}
 		: (AGG_CHOICE, EXP) AGG_NAMED) = (
-	EArrayAggNamed {named_assocs=map (adjust_named_assoc env) n}
+	EArrayAggNamed {tmark=t, named_assocs=map (adjust_named_assoc env) n}
 )
-and Ûadjust_agg_named1Ý (env : CN_ENV) (t : TMARK) ({named_assocs=n}
+and Ûadjust_agg_named1Ý (env : CN_ENV)
+		({tmark=tmark as Value t, named_assocs=n}
 		: (AGG_CHOICE, EXP) AGG_NAMED) = (
 let	val n' = map (adjust_named_assoc env) n;
 in
 	case env t of
 	Value (ty, EIEnvRecordType _) => (
-			ERecAggNamed {tmark=t, named_assocs=n'}
+			ERecAggNamed {tmark=tmark, named_assocs=n'}
         ) |_ => (
-			EArrayAggNamed {named_assocs=n'}
+			EArrayAggNamed {tmark=tmark, named_assocs=n'}
 	)
 end
-)
-and Ûadjust_agg_named_othersÝ (env : CN_ENV) ({tmark=t, agg_named=a, others=oth} :
+) | adjust_agg_named1 _ _ = fail "adjust_exp" 508054 []
+and Ûadjust_agg_named_othersÝ (env : CN_ENV) ({agg_named=a, others=oth} :
 		(AGG_CHOICE, EXP) AGG_NAMED_OTHERS) = (
-let	val adjagg = case adjust_agg_named1 env t a of
+let	val adjagg = case adjust_agg_named1 env a of
 		EArrayAggNamed ag => (
 			ag
 		) | _ => fail "adjust_exp" 508046 []
 in
-	EArrayAggNamedOthers{tmark=t, agg_named=adjagg,others=adjust_others env oth}
+	EArrayAggNamedOthers{agg_named=adjagg,others=adjust_others env oth}
 end
 )
 and Ûadjust_unary_expÝ (env : CN_ENV) ({uop=u, right=r} : EXP UNARY_EXP) = (
@@ -1166,7 +1173,7 @@ Is it a function call?
 =SML
 	(Value (_, EIEnvFunction _), EArrayAggPos{comps,...}) => (
 		EFunCall{fun_name=prename, args=map (adjust_exp env) comps}
-	) |(Value (_, EIEnvFunction names), EArrayAggNamed{named_assocs}) => (
+	) |(Value (_, EIEnvFunction names), EArrayAggNamed{named_assocs, ...}) => (
 	let	val args = named_assocs_to_exps names named_assocs;
 	in
 		EFunCall{fun_name=prename, args=map (adjust_exp env) args}
@@ -1220,17 +1227,19 @@ and Ûadjust_qualified_expressionÝ
 	EArrayAggPos{comps = [comp],...} => (
 		EQualifiedExp{tmark = t, exp = adjust_exp env comp}
 	)| EArrayAggPos{comps,...} => (
-		adjust_agg_pos env {comps=comps, tmark=t}
+		adjust_agg_pos env {comps=comps, tmark=Value t}
 	)| EArrayAggPosOthers{agg_pos={comps,...}, others} => (
 		adjust_agg_pos_others env 
-			{agg_pos={comps=comps,tmark=t},others=others}
+			{agg_pos={comps=comps,tmark=Value t},others=others}
 	)| EArrayAggOthers{others,...} => (
-		adjust_agg_others env {others=others,tmark=t}
-	)| EArrayAggNamed an => (
-		 adjust_agg_named1 env t an
-	)| EArrayAggNamedOthers {agg_named, others,...} => (
+		adjust_agg_others env {others=others,tmark=Value t}
+	)| EArrayAggNamed {named_assocs = n, tmark= _} => (
+		 adjust_agg_named1 env {named_assocs = n, tmark = Value t}
+	)| EArrayAggNamedOthers
+			{agg_named as {named_assocs = n, tmark = _}, others} => (
 		adjust_agg_named_others env 
-			{agg_named=agg_named, others=others, tmark=t}
+			{	agg_named={named_assocs = n, tmark = Value t},
+				others=others}
 	)|_ => error "adjust_qualified_exp" 508042 []
 )
 =TEX

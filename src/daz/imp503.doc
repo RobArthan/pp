@@ -68,6 +68,7 @@ This document contains the implementation for the Compliance Notation Parser to 
 \item[Issue 1.60-1.65] Enhancement 10.
 \item[Issue 1.66] Bug 19 (batch 2).
 \item[Issue 1.67] Operator associativity bug.
+\item[Issue 1.68] Enhancement 3.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1069,12 +1070,12 @@ fun red_aggregate _ (Parsed p) _ = (
 fun red_component_association1 (Parsed(PPAgg{named_assocs=na,others=ot,...})) = (
     case (ot, na) 
     of (Value oe, _::_) => (
-        PPExp (EArrayAggNamedOthers{tmark="__comp_assoc",
-            agg_named={named_assocs=na},others={others=oe}})
+        PPExp (EArrayAggNamedOthers{
+            agg_named={tmark=Nil, named_assocs=na},others={others=oe}})
     )|  (Value oe, _) => (
-        PPExp (EArrayAggOthers{tmark="__comp_assoc", others={others=oe}})
+        PPExp (EArrayAggOthers{tmark=Nil, others={others=oe}})
     )|(Nil, _) => (
-        PPExp (EArrayAggNamed{named_assocs=na})
+        PPExp (EArrayAggNamed{tmark=Nil, named_assocs=na})
     ))
 |   red_component_association1 _ =
         stack_error "red_component_association1";
@@ -1142,12 +1143,12 @@ fun red_aggregate_choice (Parsed(PPDiscrete (idopt, sr))) = (
         stack_error "red_aggregate_choice";
 
 fun red_positional_association1 (Parsed(PPExps es)) = (
-    PPExp(EArrayAggPos{tmark="__positional_association",comps = es}))
+    PPExp(EArrayAggPos{tmark=Nil,comps = es}))
 |   red_positional_association1 _ =
         stack_error "red_positional_association1";
 
 fun red_positional_association2 (Parsed(PPExps es)) _ _ _ (Parsed(PPExp e)) = (
-    PPExp(EArrayAggPosOthers{agg_pos={tmark="__positional_association",comps=es},
+    PPExp(EArrayAggPosOthers{agg_pos={tmark=Nil,comps=es},
         others={others=e}}))
 |   red_positional_association2 _ _ _ _ _ =
         stack_error "red_positional_association2";
@@ -1316,10 +1317,10 @@ fun red_primary3 (Token ((LCStringLiteral,CNString s), _)) = (
 
 val red_primary4 = red_accept;
 val red_primary5 = red_accept;
-fun red_primary6 _ (Parsed (PPExp e)) _ = (
+fun red_primary6 (Parsed (PPExp (EArrayAggPos{tmark=Nil,comps = [e]}))) = (
     PPExp (EBracketed e))
-|   red_primary6 _ _ _ =
-        stack_error "red_primary6";
+|   red_primary6 (Parsed pagg) = pagg
+|   red_primary6 _ = stack_error "red_primary6";
 
 val red_primary7 = red_accept;
 =TEX
@@ -1899,7 +1900,8 @@ fun red_procedure_call_statement (Parsed (p as (PPExp e))) _ = (
     of EIndexedComp{prefix=prefix,index=EArrayAggPos{comps = comps,...}} => (
         PPStmt (STProcNoIvars{name=name_to_tmark prefix,
             actuals=APositional comps})
-    )|  EIndexedComp{prefix=prefix,index=EArrayAggNamed{named_assocs=na}} => (
+    )|  EIndexedComp{prefix=prefix,index=EArrayAggNamed
+		{tmark=_,named_assocs=na}} => (
         PPStmt (STProcNoIvars{name=name_to_tmark prefix,
             actuals=ANamed na})
     )|  EIndexedComp{index=EArrayAggNamedOthers _,...} => (
@@ -1923,14 +1925,14 @@ fun red_parameter_association1
     (Parsed(PPAgg{tm=tm,named_assocs=na,others=ot})) = (
     case ot 
     of Value oe => PPExp (EArrayAggNamedOthers
-            {tmark="__param_assoc",agg_named={named_assocs=na},
+            {agg_named={tmark=Nil,named_assocs=na},
             others={others=oe}})
-    |  Nil => PPExp (EArrayAggNamed{named_assocs=na}))
+    |  Nil => PPExp (EArrayAggNamed{tmark=Nil,named_assocs=na}))
 |   red_parameter_association1 _ =
         stack_error "red_parameter_association1";
 
 fun red_parameter_association2 (Parsed(PPExps es)) = (
-    PPExp(EArrayAggPos{tmark="__param_assoc",comps = es}))
+    PPExp(EArrayAggPos{tmark=Nil,comps = es}))
 |   red_parameter_association2 _ =
         stack_error "red_parameter_association2";
 
@@ -2093,14 +2095,16 @@ fun red_using_dec _ (Parsed(PPBasicDecls bds)) _
 				basic_decls=bds,
 				invariant=z_tm_of_z_tokens zpred}]
     else
-	parse_error 503001 "bad declarative part in the USING declaration")
+	parse_error 503001
+	"private types and deferred constants are not allowed in a USING declaration")
 |   red_using_dec _ _ _ _ _ _ _ =
         stack_error "red_using_dec";
 
 =TEX
 =SML
+
 fun red_basic_dec_list1 (Parsed(PPBasicDecls bds)) = (
-    PPBasicDecls bds)
+	PPBasicDecls bds)
 |   red_basic_dec_list1 _ =
         stack_error "red_basic_dec_list1";
 
@@ -2110,10 +2114,17 @@ fun red_basic_dec_list2 (Parsed(PPBasicDecls bds1))
 |   red_basic_dec_list2 _ _ =
         stack_error "red_basic_dec_list2";
 
+=TEX
+=SML
+fun is_k_slot (DDeclarationKSlot _ : DECLARATION) : bool = true
+|   is_k_slot _ = false;
 
 fun red_declarative_part_1_1 (Parsed (PPDeclarations d1)) = (
-    PPDeclarations d1)
-|   red_declarative_part_1_1 _ =
+	if	any d1 is_k_slot
+	then	parse_error 503001
+       "a k-slot is not allowed after the using declarations"
+	else	PPDeclarations d1
+) | red_declarative_part_1_1 _ =
         stack_error "red_declarative_part_1_1";
 
 fun red_declarative_part_1_2 (Parsed (PPDeclarations d1)) (Parsed (PPDeclarations d2)) = (
