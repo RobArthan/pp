@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.273 $ $RCSfile: imp507.doc,v $ $Date: 2004/08/10 14:58:46 $
+% imp507.doc %Z% $Revision: 1.274 $ $RCSfile: imp507.doc,v $ $Date: 2004/08/20 16:16:59 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.273 $%
+\def\SCCSversion{$Revision: 1.274 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/08/10 14:58:46 $%
+\TPPdate{\FormatDate{$Date: 2004/08/20 16:16:59 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -211,6 +211,7 @@ by doing all the work of checking and generating the VC terms in {\it call\_vcs}
 \item[Issue 1.272] Private type declarations are now put through {\em basic\_declaration} to set up their enviroment  entries.
 \item[Issue 1.273] Fixed anomaly in use of replacement environment. 
 \item[Issue 1.274] Performance tweaks in type inference context handling to avoid list-based processing of the contexts.
+\item[Issue 1.275] Implemented distinction between empty private part and omitted private part.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -7321,8 +7322,10 @@ fun Ûcheck_pack_completeÝ
 			|	(Value (ReplaceVPart {visible, ...})) => check_decls acc (visible@more)
 			|	(Value (ReplacePPart {private, ...})) => check_decls acc (private@more)
 			|	_ => check_decls acc more
-		)  | check_decls acc (DPackageDeclaration  {visible_decs, private_decs, ...}:: more) = (
-			check_decls acc (private_decs@visible_decs@more)
+		)  | check_decls acc (DPackageDeclaration  {visible_decs, private_decs as Value pds, ...}:: more) = (
+			check_decls acc (pds@visible_decs@more)
+		)  | check_decls acc (DPackageDeclaration  {visible_decs, private_decs as Nil, ...}:: more) = (
+			check_decls acc (visible_decs@more)
 		) | check_decls acc (_::more) = check_decls acc more;
 	in	case check_decls [] [DPackageDeclaration pack_decl] of
 			[] => ()
@@ -8126,7 +8129,9 @@ and Ûdo_package_specÝ (decl as {name, visible_decs, private_decs, annotation, ..
 		then (	new_scope_pack_spec name decl;
 			do_annotation annotation;
 			map (check_fail () do_declaration) visible_decs;
-			map (check_fail () do_declaration) private_decs;
+			(case private_decs of
+				Value pds =>  (map (check_fail () do_declaration) pds; ())
+			|	Nil =>  ());
 			end_scope();
 			update_envs_pack_spec name )
 		else	fail "do_package_name" 507040
@@ -8537,7 +8542,9 @@ The following reflects the SID functions for $package\_specification$:
 and Ûsco_package_specÝ (decl as {name, visible_decs, private_decs, annotation, ...}
 			: DECLARATION PACKAGE_DECLARATION) = (
 	map sco_declaration visible_decs;
-	map sco_declaration private_decs; ()
+	(case private_decs of
+		Value pds => (map sco_declaration pds; ())
+	|	Nil => ())
 )
 (*
 =TEX
