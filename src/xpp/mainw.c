@@ -77,6 +77,13 @@ static NAT undo_redo_index;
 
 static Boolean changed = False;
 
+/* The following is used to circumvent the fact that cut/paste *
+/* messes up non-ascii characters at the moment. */
+/* if this bug is permanent, a more sophisticated */
+/* scheme should be investigated, perhaps. */
+
+static char *cut_paste_buf = NULL;
+
 /* Messages for various purposes */
 
 static char *undo_redo[2] = {"Undo", "Redo"};
@@ -505,6 +512,32 @@ if( !edit_only ) {
 	} else {
 		XmTextFieldSetString(namestring, no_file_message);
 	};
+
+/* Lines marked !!! below are a work-around for  a Motif/X bug whereby
+  characters >127 are mapped to spaces during a cut/paste sequence
+   Similar lines may appear elsewhere */
+/* !!! */{
+/* !!! */	static void do_nothing();
+/* !!! */	static void do_cut();
+/* !!! */	static void do_copy();
+/* !!! */	static void do_paste();
+/* !!! */	String trans_tab =
+/* !!! */		"<Btn2Down>: my-do-nothing()\n"
+/* !!! */		"<Btn2Motion>: my-do-nothing()\n"
+/* !!! */		"<Btn2Up>: my-do-nothing()\n"
+/* !!! */		"<Key>osfCut: my-do-cut()\n"
+/* !!! */		"<Key>osfCopy: my-do-copy()\n"
+/* !!! */		"<Key>osfPaste: my-do-paste()";
+
+/* !!! */	static XtActionsRec act_tab [] = {
+/* !!! */		{"my-do-nothing", do_nothing},
+/* !!! */		{"my-do-cut", do_cut},
+/* !!! */		{"my-do-copy", do_copy},
+/* !!! */		{"my-do-paste", do_paste}};
+/* !!! */	XtAppAddActions(app, act_tab, 4);
+/* !!! */	XtOverrideTranslations(script,
+/* !!! */		XtParseTranslationTable(trans_tab));
+/* !!! */};
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Management and Realisation:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -521,6 +554,18 @@ if( !edit_only ) {
 
 }
 
+/* !!! */static void do_nothing() {
+/* !!! */	return;
+/* !!! */};
+/* !!! */static void do_cut() {
+/* !!! */	edit_menu_cb(script, EDIT_MENU_CUT, NULL);
+/* !!! */};
+/* !!! */static void do_copy() {
+/* !!! */	edit_menu_cb(script, EDIT_MENU_COPY, NULL);
+/* !!! */};
+/* !!! */static void do_paste() {
+/* !!! */	edit_menu_cb(script, EDIT_MENU_PASTE, NULL);
+/* !!! */};
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * MENU PROCESSING
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -615,25 +660,68 @@ XmAnyCallbackStruct *cbs;
 
 	Boolean result = True;
 
+/* Lines marked !!! below are a work-around for  a Motif/X bug whereby
+  characters >127 are mapped to spaces during a cut/paste sequence
+   Similar lines may appear elsewhere */
+
+	char *p;
+
 	switch(i) {
 	case EDIT_MENU_CUT:
+
+/* !!! */	if((p = XmTextGetSelection(script)) != NULL) {
+/* !!! */		if(cut_paste_buf != NULL) {
+/* !!! */			XtFree(cut_paste_buf);
+/* !!! */		};
+/* !!! */		cut_paste_buf = p;
+/* !!! */	};
+
 		result = XmTextCut(script, CurrentTime);
 		break;
+
 	case EDIT_MENU_COPY:
+
+/* !!! */	if((p = XmTextGetSelection(script)) != NULL) {
+/* !!! */		if(cut_paste_buf != NULL) {
+/* !!! */			XtFree(cut_paste_buf);
+/* !!! */		};
+/* !!! */		cut_paste_buf = p;
+/* !!! */	};
+
 		result = XmTextCopy(script, CurrentTime);
 		if(!result && journal) {
+/* !!! */		if((p = XmTextGetSelection(journal)) != NULL) {
+/* !!! */			if(cut_paste_buf != NULL) {
+/* !!! */				XtFree(cut_paste_buf);
+/* !!! */			};
+/* !!! */			cut_paste_buf = p;
+/* !!! */		};
+
 			result = XmTextCopy(journal, CurrentTime);
 		};
 		break;
+
 	case EDIT_MENU_PASTE:
+/* !!! Next line commented out because of bug
 		result = XmTextPaste(script);
+ * !!! End of commenting out */
+
+/* !!! */	if(cut_paste_buf != NULL) {
+/* !!! */	XmTextInsert(script,
+/* !!! */			XmTextGetInsertionPosition(script),
+/* !!! */			cut_paste_buf);
+/* !!! */	};
+
 		break;
+
 	case EDIT_MENU_CLEAR:
 		XmTextClearSelection(script, CurrentTime);
 		break;
+
 	case EDIT_MENU_UNDO:
 		do_undo(script);
 		break;
+
 	default:
 		break;
 	};
