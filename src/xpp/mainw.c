@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.38 2002/12/03 23:39:50 rda Exp rda $
+ * $Id: mainw.c,v 2.39 2002/12/10 16:15:53 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -97,23 +97,24 @@ XtAppContext app; /* global because needed in msg.c */
  * root         -         the top level of the hierarchy
  * frame        root      main window
  * work         frame     work area
- * infobar      work      manager form for next five
- * filelabel    infobar  label for name of file being edited
- * namestring   infobar  displays name of file being edited
- * infolabel    infobar  label indicating whether file has been modified, etc.
+ * infobar      work      manager form for next four
+ * infolabel    infobar   label indicating whether file has been modified, etc.
  * linenumber	infobar   current line number indicator
  * logo         infobar   ProofPower logo
+ * filename     infobar   rowcol for the next two:
+ * filelabel    filename  label for name of file being edited
+ * namestring   filename  displays name of file being edited
  * lnpopup	linenumber popup menu to enable/disable the line number indicator
- * mainpanes    work      paned window for the script and journal window
- * script       mainpanes the script being edited
- * journal      mainpanes displays application output
- * menubar      frame     the menu bar at the top of the main window
- * filemenu     menubar   the file menu
- * toolsmenu    menubar   the tools menu
- * editmenu     menubar   the edit menu
- * popupeditmenu menubar  the popup edit menu
- * cmdmenu      menubar   the command menu
- * helpmenu     menubar   the help menu
+ * mainpanes    work       paned window for the script and journal window
+ * script       mainpanes  the script being edited
+ * journal      mainpanes  displays application output
+ * menubar      frame      the menu bar at the top of the main window
+ * filemenu     menubar    the file menu
+ * toolsmenu    menubar    the tools menu
+ * editmenu     menubar    the edit menu
+ * popupeditmenu menubar   the popup edit menu
+ * cmdmenu      menubar    the command menu
+ * helpmenu     menubar    the help menu
  *
  * All widgets have the same name in the widget hierarchy
  * as their C name.
@@ -125,7 +126,7 @@ Widget  script,
 	journal;	/* global because needed in pterm.c */
 
 static Widget
-	frame, work, infobar, filelabel, infolabel, newfile,
+	frame, work, infobar, filelabel, filename, infolabel, newfile,
 	namestring, logo, linenumber, lnpopup,
 	mainpanes,
 	menubar, filemenu, toolsmenu, popupeditmenu, editmenu, cmdmenu, helpmenu;
@@ -506,14 +507,13 @@ void show_file_info(void)
 			started = True;
 		}
 		if(file_info.changed) {
-			if(started) strcat(info, ", ");
-			strcat(info, "Modified");
+			strcat(info, started ? ", m" : "M");
+			strcat(info, "odified");
 			started = True;
 		}
 		if(global_options.read_only) {
-			if(started) strcat(info, ", ");
-			strcat(info, "Read only");
-			started = True;
+			strcat(info, started ? ", r" : "R");
+			strcat(info, "ead only");
 		}
 		strcat(info, ")");
 	}
@@ -682,26 +682,27 @@ static Boolean setup_main_window(
 		xmFormWidgetClass, work,
 		NULL);
 
+
+	filename = XtVaCreateWidget("filename",
+		xmRowColumnWidgetClass, infobar,
+		XmNorientation,		XmHORIZONTAL,
+		XmNpacking,		XmPACK_TIGHT,
+		XmNleftAttachment,	XmATTACH_FORM,
+		NULL);
+
 	s1 = XmStringCreateSimple("File Name:");
 	filelabel = XtVaCreateManagedWidget("filelabel",
-		xmLabelWidgetClass, infobar,
-		XmNlabelString,	s1,
-		XmNtopAttachment,	XmATTACH_FORM,
-		XmNbottomAttachment,	XmATTACH_FORM,
-		XmNleftAttachment,	XmATTACH_FORM,
+		xmLabelWidgetClass,	filename,
+		XmNlabelString,		s1,
 		NULL);
 
 	XmStringFree(s1);
 
 	namestring = XtVaCreateManagedWidget("namestring",
-		xmTextFieldWidgetClass, infobar,
+		xmTextFieldWidgetClass,		filename,
 		XmNeditable,			False,
 		XmNcursorPositionVisible,	False,
 		XmNtraversalOn,			False,
-		XmNtopAttachment,		XmATTACH_FORM,
-		XmNbottomAttachment,		XmATTACH_FORM,
-		XmNleftAttachment,		XmATTACH_WIDGET,
-		XmNleftWidget,			filelabel,
 		NULL);
 
 	attach_ro_edit_popup(namestring);
@@ -709,12 +710,12 @@ static Boolean setup_main_window(
 
 	s1 = XmStringCreateSimple("");
 	infolabel = XtVaCreateManagedWidget("infolabel",
-		xmLabelWidgetClass, infobar,
-		XmNlabelString,	s1,
+		xmLabelWidgetClass,	infobar,
+		XmNlabelString,		s1,
 		XmNtopAttachment,	XmATTACH_FORM,
 		XmNbottomAttachment,	XmATTACH_FORM,
 		XmNleftAttachment,	XmATTACH_WIDGET,
-		XmNleftWidget,		namestring,
+		XmNleftWidget,		filename,
 		NULL);
 	XmStringFree(s1);
 
@@ -874,12 +875,16 @@ static Boolean setup_main_window(
 	reinit_changed(False);
 	set_icon_name_and_title();
 
+	set_menu_item_sensitivity(filemenu,
+		FILE_MENU_REVERT, !file_info.new);
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Management and Realisation:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	XtManageChild(infobar);
-	XtManageChild(linenumber);
+	XtManageChild(filename);
 	XtManageChild(infolabel);
+	XtManageChild(linenumber);
 	show_file_info();
 	XtManageChild(menubar);
 	XtManageChild(script);
@@ -948,6 +953,8 @@ static void file_menu_cb(
 				flash_file_name(fname);
 				set_icon_name_and_title();
 				reinit_changed(True);
+				set_menu_item_sensitivity(filemenu,
+					FILE_MENU_REVERT, True);
 			}
 		}
 		if(fname != NULL) {XtFree(fname);};
@@ -968,6 +975,8 @@ static void file_menu_cb(
 			reinit_changed(True);
 			set_menu_item_sensitivity(filemenu,
 				FILE_MENU_SAVE, True);
+			set_menu_item_sensitivity(filemenu,
+				FILE_MENU_REVERT, True);
 		};
 		if(fname != NULL) {XtFree(fname);};
 		break;
