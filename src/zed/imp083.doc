@@ -42,6 +42,9 @@ of the derived rules of inference, conversions and tactics for the ProofPower Z 
 \begin{description}
 \item [Issues 1.1] 
 First version, derived from \cite{DS/FMU/IED/IMP042}.
+\item [Issues 1.2 (21st October 1992)] 
+Corrected pre-processing in proof contexts,
+added in $z\_rel\_inv\_thm$.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -66,13 +69,15 @@ $z\_∏\_conv$ is comparatively slow compared to like functions.
 None known.
 
 \section{PREAMBLE}
+Structure done in two parts.
 =SML
-structure €ZLibraryProofSupport› : ZLibraryProofSupport = struct
+structure €ZLibraryProofSupport› = struct
 =TEX
 =SML
 open ZGeneratedConstants;
 val lthy = get_current_theory_name();
 val _ = open_theory €"z_library"›;
+val _ = delete_theory "z_library_ps" handle (Fail _) => ();
 val _ = new_theory €"z_library_ps"›;
 val _ = push_merge_pcs ["z_predicates","'z_ç_set_lang","'z_decl", "'propositions", "'z_tuples_lang"];
 val _ = set_flag("z_type_check_only",false);
@@ -837,6 +842,11 @@ val €z_reflex_trans_closure_thm› =
 end;
 =TEX
 =SML
+end; (* of part 1 of ZLibraryProofSupport *)
+structure €ZLibraryProofSupport› : ZLibraryProofSupport = struct
+open ZLibraryProofSupport;
+=TEX
+=SML
 local
 	val spec = (rewrite_rule[]
 		(get_spec Ò(_ ﬂ _)Æ));
@@ -1048,11 +1058,16 @@ end;
 The following is in recognition of the problems of
 using Z generated constants with discrimination nets.
 =SML
+local
+	val cnv1 = simple_eq_match_conv1 (
+		conv_rule z_µ_elim_conv1 z_sets_ext_thm);
+in
 fun €make_ç_rule› thm = all_µ_intro
 	(conv_rule z_µ_elim_conv1
-	(conv_rule z_sets_ext_conv
+	(conv_rule cnv1
 	(all_µ_elim
 	(conv_rule(TRY_C z_µ_elim_conv1) thm))));
+end;
 =TEX
 =SML
 fun €make_pair_trio_rule› thm = (
@@ -1086,7 +1101,10 @@ val €ç_operator_clauses1› = [
 	make_ç_rule z_´_thm, 
 	make_ç_rule z_trans_closure_thm,
 	make_ç_rule z_reflex_trans_closure_thm,
-	z_rel_image_thm, 
+	conv_rule ((ONCE_MAP_C 
+		(z_∂_elim_conv2 THEN_C z_∂_intro_conv1 THEN_C rewrite_conv[]))) 
+		z_rel_image_thm, 
+	z_rel_inv_thm,
 	make_pair_trio_rule z_·_thm, 
 	make_pair_trio_rule z_Å_thm, 
 	make_pair_trio_rule z_Ú_thm,
@@ -1269,9 +1287,57 @@ a(z_spec_nth_asm_tac 6 Ò(xâ1 ¶ ¨xÆ, xâ2 ¶ y)Æ);
 pop_pc();
 save_thm ("z_≠_app_thm",pop_thm()));
 =TEX
+=SML
+local
+val s1 = conv_rule z_defn_conv (get_spec ÒfirstÆ);
+val s2 = ±_left_elim (list_µ_elim[Ua,Ub] s1);
+val s3 = conv_rule(DECL_C dec_pred_conv) s2;
+val s4 = z_µ_elim Ò(X ¶ ÒëUaÆ ∏ ëUbÆÆ,
+		Y ¶ ëUaÆ, f ¶ first[ëUaÆ,ëUbÆ],
+		x ¶ ëmk_var("x",dest_z_power_t(type_of ÒëUaÆ ∏ ëUbÆÆ))Æ)Æ z_≠_app_thm;
+val s5 = pure_rewrite_rule [s3] s4;
+val s6 = rewrite_rule[]  s5;
+val s7 = all_µ_intro s6;
+val s8 = z_µ_elim Ò(X ¶ ÒëUaÆ ∏ ëUbÆÆ,
+		Y ¶ ëUbÆ, f ¶ second[ëUaÆ,ëUbÆ],
+		x ¶ ëmk_var("x",dest_z_power_t(type_of ÒëUaÆ ∏ ëUbÆÆ))Æ)Æ z_≠_app_thm;
+val s9 = pure_rewrite_rule [s3] s8;
+val s10 = rewrite_rule[]  s9;
+val s11 = all_µ_intro s10;
+in
+val €z_ç_first_thm› = (
+set_goal([],Òµ x : U ∑ x ç first § x.1.1 = x.2Æ);
+a(REPEAT strip_tac);
+(* *** Goal "1" *** *)
+a(strip_asm_tac(±_left_elim s3));
+a(DROP_NTH_ASM_T 4 (strip_asm_tac o conv_rule(LEFT_C z_tuple_selection_intro_conv)));
+a(strip_asm_tac(µ_elim Ò¨xÆ.1Æ s7));
+a(z_spec_nth_asm_tac 4  Ò(x ¶ ¨xÆ.1, yâ1 ¶ ¨xÆ.1.1, yâ2 ¶ ¨xÆ.2)Æ);
+(* *** Goal "2" *** *)
+a(conv_tac(LEFT_C (z_tuple_selection_intro_conv)));
+a(POP_ASM_T(pure_rewrite_thm_tac o eq_sym_rule));
+a(rewrite_tac[s7]);
+save_thm("z_ç_first_thm",pop_thm()));
+
+val €z_ç_second_thm› = (
+set_goal([],Òµ x : U ∑ x ç second § x.1.2 = x.2Æ);
+a(REPEAT strip_tac);
+(* *** Goal "1" *** *)
+a(strip_asm_tac(±_right_elim s3));
+a(DROP_NTH_ASM_T 4 (strip_asm_tac o conv_rule(LEFT_C z_tuple_selection_intro_conv)));
+a(strip_asm_tac(µ_elim Ò¨xÆ.1Æ s11));
+a(z_spec_nth_asm_tac 4  Ò(x ¶ ¨xÆ.1, yâ1 ¶ ¨xÆ.1.2, yâ2 ¶ ¨xÆ.2)Æ);
+(* *** Goal "2" *** *)
+a(conv_tac(LEFT_C (z_tuple_selection_intro_conv)));
+a(POP_ASM_T(pure_rewrite_thm_tac o eq_sym_rule));
+a(rewrite_tac[s11]);
+save_thm("z_ç_second_thm",pop_thm()));
+end;
+=TEX
+
 \section{EPILOGUE}
 =SML
-end; (* of structure ZLibraryProofSupport *)
+end; (* of structure ZLibraryProofSupport part 2 *)
 open ZLibraryProofSupport;
 pop_pc();
 =TEX
