@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.26 2004/02/08 11:17:28 rda Exp rda $
+ * $Id: files.c,v 2.27 2004/02/18 16:23:57 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -1031,7 +1031,7 @@ void panic_save(
 			return;
 		}
 	}
-	fp = fdopen(fd, "w");
+	fp = (FILE*) fdopen(fd, "w"); /* some stdio.h implementations don't declare fdopen */
 	i = 0;
 	while((success = XmTextGetSubstring(text, i,
 						BUFSIZ, BUFSIZ + 1, buf))
