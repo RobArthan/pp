@@ -89,6 +89,11 @@ Renamings from version 1.5 of DS/FMU/IED/WRK038.
 
 \item [Issue 1.19 (1 June 1992)]
 	Cange the way $translate\-\_for\-\_output$ is used.
+
+\item[Issue \SCCSversion~(\FormatDate{$Date$%
+})]	Output from $output_theory$ now include indexing characters.
+
+
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -271,6 +276,8 @@ it is given as argument the number of columns in the table
 \item[$etable$]a string to be output after each multicolumn table;
 \item[$bother$]a string to be output before each section which
 is not multicolumn table;
+\item[$add_index$]indicates whether `declarative' uses of names
+should be enclosed in indexing characters in the output;
 \item[$eother$]a string to be output after each section which
 is not multicolumn table;
 \item[$ppwidth$] gives the length parameter to be passed to calls of
@@ -296,6 +303,7 @@ type IO_INFO = 	{
 		etable : string,
 		bother : string,
 		eother : string,
+		add_index : bool,
 		width : int,
 		indent : int,
 		ppwidth : int};
@@ -306,6 +314,13 @@ does the work.
 Note that $pad$ is applied when the label is printed, so that the
 length of its string argument may be longer than the given length.
 In this case the label is printed on a line of its own.
+
+=SML
+val (€index_start_char›, €index_end_char›) =
+=SMLLITERAL
+	("€", "›");
+=TEX
+
 =SML
 local (* for print_table and print_single_column_table *)
 
@@ -446,6 +461,7 @@ change the flag $pp\_show\_HOL\_types$ as needed.
 =SML
 val €show_types› : string = "pp_show_HOL_types";
 val €use_alias› : string = "pp_use_alias";
+val €show_index› : string = "pp_show_index";
 =TEX
 Note that the functions also assume that the theory being listed is in
 scope.
@@ -527,8 +543,12 @@ list.
 fun €do_consts› (ii : IO_INFO) (thyn : string) :unit = (
 	let	val old_st = set_flag(show_types, false);
 		val old_ua = set_flag(use_alias, false);
+		val old_si = set_flag(show_index, false);
 	in let	fun do1 c = (
-			let	val lab = format_term1 false (#ppwidth ii) c;
+			let
+				val SideEffect = set_flag(show_index, #add_index ii);
+				val lab = format_term1 false (#ppwidth ii) c;
+				val SideEffect = set_flag(show_index, false);
 				val ty = format_type1 false (#ppwidth ii) (type_of c);
 			in	print_single_column_table ii (fold (op ^) lab "") ty
 			end
@@ -537,9 +557,11 @@ fun €do_consts› (ii : IO_INFO) (thyn : string) :unit = (
 		(map do1 o mysort (fst o dest_const)) false thyn
 	end 	handle ex => (	set_flag(show_types, old_st);
 				set_flag(use_alias, old_ua);
+				set_flag(show_index, old_si);
 				raise ex);
 	set_flag(show_types, old_st);
 	set_flag(use_alias, old_ua);
+	set_flag(show_index, old_si);
 	()
 	end
 );
@@ -549,8 +571,12 @@ fun €do_aliases› (ii : IO_INFO) (thyn : string) :unit = (
 	let	val old_st = set_flag(show_types, true);
 		val old_ua = set_flag(use_alias, false);
 	in let	fun do1 (a, tm) = (
-			let	val tab = format_term1 false (#ppwidth ii) tm;
-			in	print_single_column_table ii a tab
+			let
+				val aa =	if #add_index ii
+						then index_start_char ^ a ^ index_end_char
+						else a
+				val tab = format_term1 false (#ppwidth ii) tm;
+			in	print_single_column_table ii aa tab
 			end
 		);
 	in	do_section ii 33005 (rev o get_aliases)
@@ -569,8 +595,12 @@ fun €do_undeclared_aliases› (ii : IO_INFO) (thyn : string) :unit = (
 	let	val old_st = set_flag(show_types, true);
 		val old_ua = set_flag(use_alias, false);
 	in let	fun do1 (a, tm) = (
-			let	val tab = format_term1 false (#ppwidth ii) tm;
-			in	print_single_column_table ii a tab
+			let
+				val aa =	if #add_index ii
+						then index_start_char ^ a ^ index_end_char
+						else a
+				val tab = format_term1 false (#ppwidth ii) tm;
+			in	print_single_column_table ii aa tab
 			end
 		);
 	in	do_section ii 33013 (rev o get_undeclared_aliases)
@@ -586,21 +616,32 @@ fun €do_undeclared_aliases› (ii : IO_INFO) (thyn : string) :unit = (
 =TEX
 =SML
 fun €do_types› (ii : IO_INFO) (thyn : string) :unit = (
-	let	fun do1 t = (
+	let
+		val old_si = set_flag(show_index, #add_index ii);
+		fun do1 t = (
 			let	val ty = format_type1 false (#ppwidth ii) t;
 			in	map (out_line ii) ty
 			end
 		);
-	in	do_section ii 33006 (rev o get_types)
-		(map do1 o mysort (fst o dest_ctype)) false thyn
+	in
+		(	do_section ii 33006 (rev o get_types)
+			(map do1 o mysort (fst o dest_ctype)) false thyn
+		) handle ex => (	set_flag(show_index, old_si);
+					raise ex)
+		;
+		set_flag(show_index, old_si);
+		()
 	end
 );
 =TEX
 =SML
 fun €do_type_abbrevs› (ii : IO_INFO) (thyn : string) :unit = (
 	let	fun do1 (s, (args, ty)) = (
-			let	val lab = format_type1 false (#ppwidth ii)
+			let
+				val SideEffect = set_flag(show_index, #add_index ii);
+				val lab = format_type1 false (#ppwidth ii)
 				(mk_ctype(s, map mk_vartype args));
+				val SideEffect = set_flag(show_index, false);
 				val tab = format_type1 false (#ppwidth ii) ty
 			in	print_single_column_table ii (implode lab) tab
 			end
@@ -612,9 +653,20 @@ fun €do_type_abbrevs› (ii : IO_INFO) (thyn : string) :unit = (
 =TEX
 =SML
 fun €do_undeclared_type_abbrevs› (ii : IO_INFO) (thyn : string) :unit = (
+let
+	val getter = (mysort Combinators.I o rev o get_undeclared_type_abbrevs);
+
+	val getter1 =
+		if #add_index ii
+		then
+			fn x => map (fn a => index_start_char ^ a ^ index_end_char) (getter x)
+		else
+			getter;
+in
 	do_section ii 33014
-	(mysort Combinators.I o rev o get_undeclared_type_abbrevs)
+	getter1
 	(print_table ii "") true thyn
+end
 );
 =TEX
 We now define two functions which support the fixity part of the listing.
@@ -624,7 +676,7 @@ The function below always sorts the operators within each precedence (since
 the division by precedence destroys any useful ordering by order of
 definition).
 =SML
-fun €do_prec_fixity› (_ : int)  (_ : IO_INFO)([] : (int * string) list) : unit  = ()
+fun €do_prec_fixity› (_ : int)  (ii : IO_INFO)([] : (int * string) list) : unit  = ()
 |   do_prec_fixity  msg ii items = (
 	let	fun myorder (i1, s1) (i2, s2) = ( 
 			case i1 - i2 of
@@ -640,10 +692,17 @@ fun €do_prec_fixity› (_ : int)  (_ : IO_INFO)([] : (int * string) list) : unit  
 			else	([(i1, s1)], (i2, s2) :: more)
 		) | strip1 ( (i1, s1) :: [] ) = ([(i1, s1)], [])
 		|   strip1 [] = ([], []);
+
+		val get_name =	if #add_index ii
+				then
+					fn (_, a) => index_start_char ^ a ^ index_end_char
+				else
+					snd;
+
 		fun go (iss as (i1, _) :: _) = (
 			let 	val (this, rest) = strip1 iss;
 				val lab = get_error_message msg[string_of_int i1];
-			in	print_table ii lab (map snd this);
+			in	print_table ii lab (map get_name this);
 				go rest
 			end
 		) | go [] = ();
@@ -656,9 +715,15 @@ identifiers.
 =SML
 fun €do_other_fixity› (msg : int) (ii : IO_INFO) ([] : string list) = ()
 |   do_other_fixity  msg ii items = (
-	let	val sitems = sort string_order items;
+	let
+		val sitems = sort string_order items;
+		val sitems1 =	if #add_index ii
+				then
+					map (fn a => index_start_char ^ a ^ index_end_char) sitems
+				else
+					sitems;
 		val lab = get_error_message msg[];
-	in	print_table ii lab sitems
+	in	print_table ii lab sitems1
 	end
 );
 =TEX
@@ -711,11 +776,18 @@ fun €do_undeclared_terminators› (ii : IO_INFO) (thyn : string) : unit = (
 =SML
 fun €do_thms_aux› (ii : IO_INFO) (items : (string list * THM) list) = (
 	let	fun do1 (name :: (more as (_ :: _)), thm) = (
-			out_line ii name;
+			out_line ii (	if #add_index ii
+					then index_start_char ^ name ^ index_end_char
+					else name);
 			do1 (more, thm) 
 		) | do1 (name :: [], thm) = (
 			let	val th = format_thm1 (#ppwidth ii) thm;
-			in	print_single_column_table ii name th
+			in	print_single_column_table ii
+					(if #add_index ii
+					then index_start_char ^ name ^ index_end_char
+					else name
+					)
+					th
 			end
 		) | do1 ([], seq) = do1 ([""], seq);
 		fun key (ss, _) = (fold (op ^) ss "");
@@ -802,6 +874,7 @@ fun €screen_ii› () : IO_INFO = (
 			etable= "",
 			bother= "",
 			eother= "",
+			add_index= false,
 			width=actll, indent = !listing_indent,
 			ppwidth=(actll - !listing_indent)*tabstop}
 	end
@@ -841,7 +914,7 @@ Width		& Initial	& Control		& Unit		& Purpose \\
 0.08		& 8		& $thl_char_width$	& inch/100	& Character width for \LaTeX\\\hline
 5		& 5		& $thl_chars_per_tab$	& 		& Chars per tab-width for \LaTeX\\\hline
 \end{tabular}
-\end{{center}
+\end{center}
 
 =SML
 val €thl_line_width› : int ref = ref 13;
@@ -900,6 +973,7 @@ fun €latex_ii› (stream : outstream) : IO_INFO = (
 			etable= "=TEX\n",
 			bother= "=THEORYLISTINGOTHER\n",
 			eother= "=TEX\n",
+			add_index= true,
 			width=ll,
 			indent = list_indent,
 			ppwidth=(ll - list_indent) * chars_per_tab}
