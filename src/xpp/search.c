@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.24 2003/02/09 23:36:11 rda Exp rda $ 
+ * $Id: search.c,v 2.25 2003/02/12 16:34:01 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -21,6 +21,10 @@
 
 #define NO_MEMORY		-1
 enum {FORWARDS, BACKWARDS};
+
+#define CHECK_MAP_STATE(SDP) \
+	{if (get_map_state((SDP)->text_w) != IsViewable) { XBell(XtDisplay(root), 50); return; }}
+
 #include <stdio.h>
 #include <ctype.h>
 #include <sys/types.h>
@@ -653,6 +657,7 @@ static void search_forwards_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
+	CHECK_MAP_STATE(cbdata)
 	(void) search_either(w, cbdata, FORWARDS);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -664,6 +669,7 @@ static void search_backwards_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
+	CHECK_MAP_STATE(cbdata)
 	(void) search_either(w, cbdata, BACKWARDS);
 }
 
@@ -730,6 +736,7 @@ static void replace_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
+	CHECK_MAP_STATE(cbdata)
 	(void) replace_selection(w, cbdata);
 }
 
@@ -816,6 +823,7 @@ static void replace_all_cb(
 	Substring ss;
 	NAT start_point;
 	char *pattern, *text_buf, *replacement, *all_replaced;
+	CHECK_MAP_STATE(cbdata)
 	pattern = XmTextGetString(cbdata->search_w);
 	text_buf = XmTextGetString(cbdata->text_w);
 	start_point = XmTextGetInsertionPosition(cbdata->text_w);
@@ -877,6 +885,7 @@ static void search_backwards_replace_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
+	CHECK_MAP_STATE(cbdata)
 	if(search_either(w, cbdata, BACKWARDS)) {
 		(void) replace_selection(w, cbdata);
 	}
@@ -891,6 +900,7 @@ static void search_forwards_replace_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
+	CHECK_MAP_STATE(cbdata)
 	if(search_either(w, cbdata, FORWARDS)) {
 		(void) replace_selection(w, cbdata);
 	}
@@ -905,6 +915,7 @@ static void replace_search_backwards_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
+	CHECK_MAP_STATE(cbdata)
 	if(replace_selection(w, cbdata)) {
 		(void) search_either(w, cbdata, BACKWARDS);
 	}
@@ -919,6 +930,7 @@ static void replace_search_forwards_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
+	CHECK_MAP_STATE(cbdata)
 	if(replace_selection(w, cbdata)) {
 		(void) search_either(w, cbdata, FORWARDS);
 	}
@@ -997,6 +1009,7 @@ static void goto_line_no_cb(
 	short nrows;
 	int scroll;
 	char *line_no_string;
+	CHECK_MAP_STATE(cbdata)
 
 	line_no_string = XmTextGetString(cbdata->line_no_w);
 
