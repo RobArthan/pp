@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%  mdt017.doc  %Z% $Date: 2002/10/17 16:08:07 $ $Revision: 2.9 $ $RCSfile: mdt017.doc,v $
+%  mdt017.doc  %Z% $Date: 2003/02/22 17:03:44 $ $Revision: 2.10 $ $RCSfile: mdt017.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -22,11 +22,11 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Module Tests for SLR Parser Generator}  %% Mandatory field
 \TPPref{DS/FMU/IED/MDT017}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.9 $%
+\def\SCCSversion{$Revision: 2.10 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 %\TPPdate{}  %% Mandatory field (with sensible default)
-\TPPdate{\FormatDate{$Date: 2002/10/17 16:08:07 $
+\TPPdate{\FormatDate{$Date: 2003/02/22 17:03:44 $
 }}  %% Mandatory field (with sensible default)
 \TPPstatus{Draft}			%% Mandatory field
 %\TPPstatus{Approved}			%% Mandatory field
@@ -90,6 +90,7 @@ in a portable way.
 \item[Issue 2.8] Copyright and banner updates for open source release.
 \item[Issue 2.9] PPDev-specific updates for open source release
 \item[Issue 2.10] Added test for LALR(1) parsing.
+\item[Issue 2.11] Added tests for {\it quote\_con} feature.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -109,7 +110,7 @@ by the program are to be comprehensively tested.
 \subsection{Purpose and Background}
 See \cite{DS/FMU/IED/DTD017}.
 \section{TEST CASES}
-We consider just three test cases:
+We consider six test cases:
 
 \begin{description}
 \item[SLRP.1]
@@ -123,8 +124,10 @@ the second pocket calculator example from \cite{DS/FMU/IED/DTD017}
 \item[SLRP.4]
 the same example as SLRP.3 but with an error routine
 which permits  partial parsing of an input stream. 
-\item[SLRP.4]
+\item[SLRP.5]
 the grammar which is neither SLR(1) or NQLALR(1) from \cite{Bermudez}.
+\item[SLRP.6]
+Like SLRP.2 but using the {\it quote\_con} feature.
 \end{description}
 
 \subsection{Test Environment}
@@ -502,6 +505,72 @@ mt_run
 [("SLRP.5.1", slrp_5, "agd", ()),
 ("SLRP.5.2", slrp_5, "bgc", ())
 ];
+=TEX
+\subsection{SLRP.6}
+=TEX
+=SML
+=DUMP mdt017f.grm.txt
+(* Grammar for a Pocket Calculator with « meaning addition and tab meaning multiplication! *)
+	E	=	E, `«`, T				(add x1 x3)
+		|	T 				(fetch x1);
+
+	T	=	T, `	`, F			(mul x1 x3)
+		|	F				(fetch x1);
+
+	F	=	`(`, E, `)`			(fetch x2)
+		|	Num				(conv x1);
+=TEX
+We use the following datatype for the lexical classes here:
+=SML
+datatype SLRP_6_CLASS = MkLit of string | Num | Eos | Wrong;
+=TEX
+Now we invoke SLRP:
+=SH
+slrp -e Eos -c MkLit -f mdt017f.grm.txt | tee mdt017f.grm.run 1>&2
+cat mdt017f.grm.sml
+=TEX
+
+=SML
+fun slrp_6_classify "\t" = MkLit "\t"
+|   slrp_6_classify "\171" = MkLit "\171"
+|   slrp_6_classify "(" = MkLit "("
+|   slrp_6_classify ")" = MkLit ")"
+|   slrp_6_classify "<end-of-input>" = Eos
+|   slrp_6_classify Other = if is_all_decimal Other then Num else Wrong;
+=SML
+fun slrp_6_parser x = slrp'gen_parser default_resolver
+			slrp_6_classify slrp_2_error slrp_2_reader x;
+=TEX
+=TEX
+=SML
+val slrp_6: string -> int = slrp_6_parser o slrp_2_lex;
+=TEX
+=SML
+store_mt_results
+mt_run
+[("SLRP.6.1", slrp_6, "1", 1),
+ ("SLRP.6.2", slrp_6, "2\1712", 4),
+ ("SLRP.6.3", slrp_6, "(2)\1712", 4),
+ ("SLRP.6.4", slrp_6, "(2\1713)\t6", (2+3)*6),
+ ("SLRP.6.5", slrp_6, "(2\t3)\t6", 2*3*6),
+ ("SLRP.6.6", slrp_6, "2\t(3\t6)", 2*3*6),
+ ("SLRP.6.7", slrp_6, "2\t((((( ((((( ((((( 3\t6 ))))) ))))) )))))", 2*3*6),
+ ("SLRP.6.8", slrp_6, "2\1712", 4)];
+=TEX
+=SML
+fun check_6 f s = (f s; "Wrong") handle SYNTAX_ERROR => "OK";
+=TEX
+=SML
+store_mt_results
+mt_run
+[("SLRP.6a.1", check_6 slrp_6, "1)", "OK"),
+ ("SLRP.6a.2", check_6 slrp_6, "", "OK"),
+ ("SLRP.6a.3", check_6 slrp_6, "(2\1712", "OK"),
+ ("SLRP.6a.4", check_6 slrp_6, "(2\171\1713)\t6", "OK"),
+ ("SLRP.6a.5", check_6 slrp_6, "(2\t3)\t\t6", "OK"),
+ ("SLRP.6a.6", check_6 slrp_6, "2\t3\t6)", "OK"),
+ ("SLRP.6a.7", check_6 slrp_6, "2\t((((( (( (( ((((( 3\t6 ))))) ))))) )))))", "OK"),
+ ("SLRP.6a.8", check_6 slrp_6, "2\171", "OK")];
 =TEX
 \subsection{Epilogue}
 =SML

@@ -22,7 +22,7 @@ Don't worry about this!
 %\TPPpart{}
 \TPPtitle{SLR Parser Generator}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP017}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.38 $%
+\def\SCCSversion{$Revision: 1.39 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 %\TPPdate{}  %% Mandatory field (with sensible default)
@@ -127,6 +127,8 @@ Port to Poly/ML.
 \item[Issue 1.37] Now calculates LALR(1) lookahead sets when the SLR(1) algorithm results in conflicts.
 \item[Issues 1.38, 1.39] Added option to print out the LR(0) automaton and tidied up some
 of the printing code.
+\item[Issue1.40] Can now specify a constructor to apply to string literals in the action tables
+(and they are output as valid ML strings now).
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -392,7 +394,10 @@ type €NONTERMINAL› = string;
 datatype ''lc €SYMBOL› = €Terminal› of ''lc | €NonTerminal› of NONTERMINAL;
 type ''lc €PRODUCTION› = NONTERMINAL * (''lc SYMBOL list list);
 type ''lc €GRAMMAR› = ''lc PRODUCTION list;
-datatype €SYM_CLASS› = €VarClass› of string | €PuncClass› of string;
+datatype €SYM_CLASS› =
+		€VarClass› of string
+	|	€PuncClass› of string
+	|	€EosClass› of string;
 =TEX
 =SML
 fun €expand› (g : ''lc GRAMMAR) (name : NONTERMINAL) : ''lc SYMBOL list list = (
@@ -1557,7 +1562,8 @@ fun €make_grammar_and_reduction_table›
 		|   make_sym(VarClass s) =
 			if s mem nts
 			then NonTerminal s
-			else Terminal(VarClass s);
+			else Terminal(VarClass s)
+		| make_sym (EosClass s) = Terminal (EosClass s);
 		val Y = map (fn(x, y) => (x, map (fn (a,b) =>(map make_sym a, b)) y)) G';
 		fun folder((def, alts), g) = g overwrite (def, lassoc4 g nil def rcup alts);
 		val AG = revfold folder Y nil;
@@ -1899,7 +1905,7 @@ fun €BNF_parse›
 		BNF_classify BNF_error  BNF_reader
 		(BNF_lex_string(read_file file)));
 =TEX
-The following function is used for formatting quoted terminal symbols.
+The following function is used for formatting quoted terminal symbols in listings:
 =SML
 fun €escapify›  (x : string) : string = (
 	let	val chars = explode x;
@@ -1915,32 +1921,9 @@ fun €escapify›  (x : string) : string = (
 =TEX
 The formatter for $sym\_class$ values is the following:
 =SML
-fun €format_sym_class› (VarClass V) = V
-|   format_sym_class (PuncClass P) = "`" ^ escapify P ^ "`";
-=TEST
-fun dump_string file string = (
-	let	val os = open_out file;
-	in	(output(os, string); close_out os)
-	end
-);
-dump_string "slr.tst""E = E, `+`, T | T; T = T, `*`, F | F; F = `(`, E, `)` | id;";
-
-val (test_grm1, test_rt1) = BNF_parse "slr.tst";
-val (actions1, gotos1, Ijs, init) = slr_tables test_grm1 (PuncClass "$") sentence_symbol;
-
-print_states (test_grm1, format_sym_class) Ijs;
-listofarray actions1;
-listofarray gotos1;
-conflicts actions1 (* shouldn't be any *);
-
-dump_string "slr.tst""E = A | B; A = x | x, A; B = | x, B;";
-val (test_grm2, test_rt2) = BNF_parse "slr.tst";
-
-val (actions2, gotos2, Ijs2, init2) = slr_tables test_grm2 (PuncClass "$") sentence_symbol;
-print_states (test_grm2, format_sym_class) Ijs2;
-
-conflicts actions2;
-
+fun €format_sym_class› (VarClass v) = v
+|   format_sym_class (EosClass e) = e
+|   format_sym_class (PuncClass p) = "`" ^ escapify p ^ "`";
 =TEX
 \section{CONFLICT RESOLUTION}\label{CONFLICTRESOLUTION}
 =TEX
@@ -2244,11 +2227,38 @@ in	output_table tabs aux "slrp'a" "slrp'actions"
 end
 );
 =TEX
+The following function is used for formatting quoted terminal symbols in the ML output:
 =SML
-fun €do_sym_class›(VarClass x : SYM_CLASS) : string = x
-|   do_sym_class(PuncClass x) = x;
-=TEST
-output_action_table do_sym_class actions3;
+fun €ml_escapify›  (x : string) : string = (
+	let	val chars = explode x;
+		fun digits n = (
+			let	val ds = string_of_int n;
+				val s = size ds;
+			in	if	s = 1
+				then	"00" ^ ds
+				else if	s = 2
+				then	"0" ^ ds
+				else	ds
+			end
+		);
+		fun aux acc [] = implode(rev acc)
+		|   aux acc (ch :: chs) = (
+			if	ch = "\\" orelse ch = "\""
+			then	aux (ch::"\\"::acc) chs
+			else if	ord ch < ord " "
+			orelse	ord ch > 126
+			then	aux (digits (ord ch)::"\\"::acc) chs
+			else	aux (ch::acc) chs
+		);
+	in	aux [] chars
+	end
+);
+=TEX
+=SML
+fun €do_sym_class› (_ : string OPT)  (VarClass x : SYM_CLASS) : string = x
+|  do_sym_class _ (EosClass e) = e
+|  do_sym_class Nil (PuncClass x) = x
+|   do_sym_class (Value qc) (PuncClass x) = qc^"\"" ^ ml_escapify x ^ "\"";
 =TEX
 \subsection{Goto Table}
 =SML
@@ -2385,6 +2395,7 @@ val in_file = "t.txt";
 val out_file = "t.sml";
 val log_file = "t.log";
 val eos = "eos";
+val quote_con = Nil;
 val log_level = 6;
 val slr_only = false;
 =SML
@@ -2393,6 +2404,7 @@ fun €slrp› {
 	out_file : string,
 	log_file : string,
 	eos:string,
+	quote_con:string OPT,
 	log_level:int,
 	slr_only : bool} : unit = (
 	(let	val se00 = if log_level > 0 then open_log_file log_file else ();
@@ -2408,8 +2420,9 @@ fun €slrp› {
 				print_terms format_sym_class grm;
 				flush_log_file() )
 			else ());
+		val sym_eos = EosClass eos;
 		val (actions, gotos, Ijs, eff_grammar, init) =
-			slr_tables grm (PuncClass eos) sentence_symbol;
+			slr_tables grm sym_eos sentence_symbol;
 		val se05 = (if log_level >= 2
 			then (	log "\n"; log(burst "State Table"); log"\n";
 				print_states (grm, format_sym_class) Ijs eff_grammar)
@@ -2418,7 +2431,7 @@ fun €slrp› {
 		val se06 = if slr_only then () else 
 				 lalr_resolve_conflicts
 				actions gotos eff_grammar
-				sentence_symbol (PuncClass eos) init
+				sentence_symbol sym_eos init
 				(map (fn (s, l, _) => (l, s)) confs1)
 				format_sym_class (log_level >= 5) (log_level >= 6);
 		val confs2 = conflicts actions;
@@ -2442,7 +2455,8 @@ fun €slrp› {
 				chat(burst "Dynamic Actions");
 				print_dynamic_actions chat (grm, format_sym_class) actions)
 			else());
-		val se11 = output_parser do_sym_class grm actions gotos reducers init;
+		val se11 = output_parser (do_sym_class quote_con)
+				grm actions gotos reducers init;
 		val se12 =
 			if log_level >= 4
 			then print_lr0_automaton_graph actions gotos init format_sym_class
@@ -2465,7 +2479,7 @@ end; (* of structure Slrp *)
 \subsection{Shell Interface}
 =DUMP slrp
 #!/bin/sh
-# slrp From: $Id: imp017.doc,v 1.38 2003/02/22 22:12:50 rda Exp rda $
+# slrp From: $Id: imp017.doc,v 1.39 2003/02/23 12:02:35 rda Exp rda $
 # Shell script to run the SLRP Parser Generator
 if test -z "$PROGNAME"
 then
@@ -2475,13 +2489,15 @@ fi
 LOGLEVEL=2
 EOS=
 INFILE=
+QUOTECONSUPPLIED=n
 SLRONLY=false
-while getopts l:e:f:s arg
+while getopts l:e:f:sc: arg
 do
 	case $arg in
-		l)	LOGLEVEL=$OPTARG ;;
+		c)	QUOTECONSUPPLIED=y; QUOTECON=$OPTARG ;;
 		e)	EOS=$OPTARG ;;
 		f)	INFILE=$OPTARG ;;
+		l)	LOGLEVEL=$OPTARG ;;
 		s)	SLRONLY=true
 	esac
 done
@@ -2504,14 +2520,27 @@ DIR=`dirname $INFILE`
 BASE=`basename $INFILE .txt`
 OUTFILE=$DIR/$BASE.sml
 LOGFILE=$DIR/$BASE.log
-ML="(Slrp.slrp{\
-	in_file=\"$INFILE\",\
-	out_file=\"$OUTFILE\",\
-	eos=\"$EOS\",\
-	log_file=\"$LOGFILE\",\
-	log_level=$LOGLEVEL,\
-	slr_only=$SLRONLY}; PPCompiler.exit 0)\
-	handle _ => PPCompiler.exit 1;"
+if	test "$QUOTECONSUPPLIED" = n
+then	ML="(Slrp.slrp{\
+		in_file=\"$INFILE\",\
+		out_file=\"$OUTFILE\",\
+		eos=\"$EOS\",\
+		quote_con=Nil,\
+		log_file=\"$LOGFILE\",\
+		log_level=$LOGLEVEL,\
+		slr_only=$SLRONLY}; PPCompiler.exit 0)\
+		handle _ => PPCompiler.exit 1;"
+else	ML="(Slrp.slrp{\
+		in_file=\"$INFILE\",\
+		out_file=\"$OUTFILE\",\
+		eos=\"$EOS\",\
+		quote_con=Value \"$QUOTECON\",\
+		log_file=\"$LOGFILE\",\
+		log_level=$LOGLEVEL,\
+		slr_only=$SLRONLY}; PPCompiler.exit 0)\
+		handle _ => PPCompiler.exit 1;"
+
+fi
 =POLYDUMPMORE slrp
 COMPILER=${PPCOMPILER:-POLYML}
 =NJMLDUMPMORE slrp
@@ -2542,89 +2571,3 @@ chmod +x slrp
 \printindex
 
 \end{document}
-=TEST
-fun dump_string file string = (
-	let	val os = open_out file;
-	in	(output(os, string); close_out os)
-	end
-);
-
-dump_string "slr.tst"(
-"E    = E, `Plus`, T (add x1 x3)            \n" ^
-"    | T (fetch x1);            \n" ^
-"T    = T, `Times`, F (mul x1 x3)        \n    " ^
-"    | F (fetch x1);\n" ^
-"F    = `Lbrack`, E, `Rbrack` (fetch x2)    \n        " ^
-"    | Num (conv x1);            \n");
-
-
-datatype LC3 = Plus | Times | Lbrack | Rbrack | Num | Eos | Wrong;
-open SlrpDriver;
-
-fun add (Parsed (x:int)) (Parsed (y:int)) = x + y
-|   add _ _ = raise PARSER_ERROR "corrupt stack";
-fun mul (Parsed (x:int)) (Parsed (y:int)) = x * y
-|   mul _ _ = raise PARSER_ERROR "corrupt stack";
-fun fetch (Parsed (x:int)) = x
-|   fetch _= raise PARSER_ERROR "corrupt stack";
-fun conv (Token (n:string, _)) = nat_of_string n
-|   conv _ = raise PARSER_ERROR "corrupt stack";
-val resolver3 = default_resolver;
-fun error3 () = default_error Combinators.I;
-fun lex3 (s : string) : string list = (
-	let	val chars = explode s;
-		fun get_num acc (x :: more) = (
-			if is_all_decimal x
-			then get_num (acc ^ x) more
-			else (acc, x :: more)
-		)  | get_num acc [] = (acc, []);
-		fun get_tok (x :: more) = (
-			if is_all_decimal x
-			then let val (num, rest) = get_num x more
-			in	num :: get_tok rest
-			end else if x = " "
-			then get_tok more
-			else x :: get_tok more
-		) | get_tok [] = []
-	in	get_tok chars
-	end
-);
-fun reader3 (ip : string list) : string * string list = (
-	case ip of
-		(h :: more) => (h, more)
-	|	[] => ("<end-of-input>", [])
-);
-fun classify3 "*" = Times
-|   classify3 "+" = Plus
-|   classify3 "(" = Lbrack
-|   classify3 ")" = Rbrack
-|   classify3 "<end-of-input>" = Eos
-|   classify3 Other = if is_all_decimal Other then Num else Wrong;
-Slrp.slrp {in_file="slr.tst", out_file="slr.sml", log_file ="slr.log", eos ="Eos", log_level=2};
-open EfficientDictionary;
-use"slr.sml";
-val parser3 = slrp'gen_parser resolver3 classify3 (error3()) reader3 o lex3;
-
-parser3"1001+42";
-parser3"1001 * 42";
-parser3"(1001)";
-parser3"1001";
-parser3"(1*(2*(3*(4*(5*(6*(7*8)))))))";
-parser3"(((((((1+2)+3)+4)+5)+6)+7)+8)";
-parser3"((((((1+2)+3)+4)+5)+6)+7)+8)" (* error case *);
-parser3"((((((((((1+2)+3)+4)+5)+6)+7)+8)" (* error case *);
-
-Slrp.slrp {in_file="", out_file="boo", log_file ="goo", eos ="Eos", log_level=42};
-Slrp.slrp {in_file="/dev/null", out_file="boo", log_file ="goo", eos ="Eos", log_level=42};
-Slrp.slrp {in_file="test1.txt", out_file="boo", log_file ="goo", eos ="Eos", log_level=42};
-Slrp.slrp {in_file="test2.txt", out_file="boo", log_file ="goo", eos ="Eos", log_level=42};
-Slrp.slrp {in_file="test3.txt", out_file="boo", log_file ="goo", eos ="Eos", log_level=42};
-Slrp.slrp {in_file="test4.txt", out_file="test4.sml", log_file ="goo", eos ="Eos", log_level=42};
-
-dump_string "slr.tst"(
-"E    = E, `sub`, E, `sup`, E        \n" ^
-"    | E, `sub`, E            \n" ^
-"    | E, `sup`, E            \n" ^
-"    | `{`, E, `}`;            \n");
-
-Slrp.slrp {in_file="slr.tst", out_file="slr.sml", log_file ="slr.log", eos ="Eos", log_level=2};

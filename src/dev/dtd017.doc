@@ -50,9 +50,9 @@ the services the parser generator supplies and how these services are accessed.}
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 2.11 $%
+\def\Version{$Revision: 2.12 $%
 }
-\def\Date{\FormatDate{$Date: 2003/02/22 17:03:44 $%
+\def\Date{\FormatDate{$Date: 2003/02/22 22:12:50 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -103,6 +103,8 @@ of the ML interface has been rationalised to facilitate this.
 \item[Issue 2.8] Copyright and banner updates for open source release.
 \item[Issue 2.9] PPDev-specific updates for open source release
 \item[Issues 2.10, 2.11] Now have LALR(1) algorithm as well as SLR(1).
+\item[Issue 2.12] Can now identify a constructor to be applied to string literals
+in the action tables.
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -276,6 +278,10 @@ This has two constructors: $Token$ and $Parsed$. The $Token$ constructor
 corresponds to a terminal symbol in an alternative, and $Parsed$ corresponds
 to a non-terminal. In the above example, all of the $x$s will be constructed
 with $Parsed$, except for $x1$ in the second alternative for $F$.
+The identifier {\it stk} may be used to refer to the parsing stack.
+It is provided to allow the user to access the left context of the input.
+The left context does not include the stack items referred to as
+{\it x1,  x2 , ... }.
 
 We will refer to this example as the pocket calculator example in the
 rest of this document.
@@ -647,7 +653,7 @@ The script is supported by a simple API described in section~\ref{MLInterface}.
 =TEX
 }
 =DOC
-	€slrp› [-l n] [-s] -e eos -f grammar_file
+	€slrp› [-l n] [-s] -e eos [-c quote_con] -f grammar_file
 =DESCRIBE
 The shell script {\it slrp} runs the \Slrp\ parser generator.
 It is part of the {\Product} developer toolkit.
@@ -664,20 +670,29 @@ e.g., {\it myparser.sml}; log information (see below), if any,
 is written to a file whose name is formed by replacing
 ``.txt'' with ``.log'', e.g., {\it myparser.log}.
 
-The input file should contain a BNF grammar in which optional fragments of
-Standard ML may be supplied in brackets at the end of each alternative.
-The identifiers $x1$, $x2$, ... may be used to refer to
-the successive components of the alternative in these Standard ML fragments.
-The identifier {\it stk} may be used to refer to the parsing stack.
-It is provided to allow the user to access the left context of the input.
-The left context does not include the stack items referred to as
-{\it x1,  x2 , ... }.
+The input file should contain a BNF grammar in the \Slrp\ format.
 See the main text for more information on the input format and for examples.
 
 $eos$ gives the name of the lexical class denoting end of input.
 
+If $quote\_con$ is supplied, quoted constants in the grammar are interpreted
+as Standard ML strings, and $quote\_con$ is the name of an constructor
+to apply to the strings where they appear in the action tables. If $quote\_con$
+quoted constants in the grammar are interpreted as Standard ML identifiers.
+
 The option {\it -l} may be used to specify an integer {\it n} determining the level
-of log information to be written to the file named {\it log\_file}, as follows:
+of log information to be written to the file named {\it log\_file}, as shown in the table below.
+The option {\it -l 2}
+is the most useful level during development of a parser and is the default.
+Options {\it -l 5} and {\it -l 6} causes the LALR(1) calculations to be made even if the grammar is SLR(1).
+Option {\it -l 6} causes all the LALR(1) lookahead sets to be calculated whether or not the results
+are needed to resolve conflicts in the grammar.
+
+The option {\it -s} suppresses the LALR(1) calculations and will override the option {\it -l 5} or {\it -l 6}.
+It may be used to check whether a grammar is SLR(1). This option and the options {\it -l }
+for $n \geq 3$ are mainly useful for debugging {\Slrp} or for studying the SLR(1) and LALR(1)
+techniques.
+
 
 \begin{center}
 \begin{tabular}{|l|p{5.5in}|}\hline
@@ -689,23 +704,14 @@ dynamic resolution. \\ \hline
 $2$ & As 1 together with a listing
 of the grammar and its terminals and the state table and a listing of any conflicts
 before resolution. \\ \hline
-$\geq 3$ & As 2 together with a listing of the full action table. \\ \hline
-$\geq 4$ & As 3 together with a listing of the graph of the LR(0) automaton. \\ \hline
-$\geq 5$ & As 4 together with a listing of the Bermudez-Logothetis state transition
+$ 3$ & As 2 together with a listing of the full action table. \\ \hline
+$ 4$ & As 3 together with a listing of the graph of the LR(0) automaton. \\ \hline
+$5$ & As 4 together with a listing of the Bermudez-Logothetis state transition
 grammar. \\ \hline
 $\geq 6$ & As 5 together with a list of all the LALR(1) lookahead sets. \\ \hline
 \end{tabular}
 \end{center}
 
-The option {\it -l 2}
-is the most useful level during development of a parser and is the default.
-Options {\it -l 5} and {\it -l 6} causes the LALR(1) calculations to be made even if the grammar is SLR(1).
-Option {\it -l 6} causes all the LALR(1) lookahead sets to be calculated whether or not the results
-are needed to resolve conflicts in the grammar.
-The option {\it -s} suppresses the LALR(1) calculations and will override the option {\it -l 5} or {\it -l 6}.
-It may be used to check whether a grammar is SLR(1). This option and the options {\it -l }
-for $n \geq 3$ are mainly useful for debugging {\Slrp} or for studying the SLR(1) and LALR(1)
-techniques ({\it -l 4} is also useful for writing user manuals about \Slrp).
 =ENDDOC
 \Hide{
 =SML
@@ -724,11 +730,12 @@ but is packaged in a separate ML database called {\it slrp}.
 The parser generator may be invoked from ML code using the following function {\it slrp}.
 =DOC
 val €slrp› : {
-	in_file	: string,
+	in_file		: string,
 	out_file	: string,
-	eos:string,
+	eos		: string,
+	quote_con	: string OPT,
 	log_file	: string,
-	log_level:int,
+	log_level	: int,
 	slr_only	: bool} -> unit;
 
 exception €SlrpError› of string;
@@ -742,7 +749,9 @@ $in\_file$ names the input file for \Slrp.
 some Standard ML source text defining some tables and a function
 $slrp'gen\_parser$ which acts as a parser for the supplied grammar.
 
-$eos$ gives the name of the lexical class denoting end of input.
+$eos$ gives the name of the lexical class denoting end of input
+and $quote\_con$ gives the string to use as the constructor applied
+to quoted string constants in the actions table.
 
 The integer {\it loglevel} determines the amount
 of log information to be written to the file named {\it log\_file}.
