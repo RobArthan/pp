@@ -38,7 +38,7 @@
 
 \end{centering}
 \pagebreak
-\section{Document Control}
+\section{DOCUMENT CONTROL}
 \subsection{Contents List}
 \tableofcontents
 \subsection{Document Cross References}
@@ -49,14 +49,16 @@
 \begin{description}
 \item [Issue 1.1]
 First draft: place holder for tautology material.
+\item [Issue 1.2]
+Added rest of material.
 \end{description}
 \subsection{Changes Forecast}
-Many.
+None known.
 \section{GENERAL}
 \subsection{Scope}
 This document contains an implementation of third group of tactics.
 This primarily concerns adding paired abstraction handling
-to the functions of {DS/FMU/IED/???}.
+to the functions of \cite{DS/FMU/IED/DTD028}.
 This is called for in \cite{DS/FMU/IED/HLD012}.
 The design is in \cite{DS/FMU/IED/DTD029},
 and the functions tested in {DS/FMU/IED/MDT029}
@@ -64,9 +66,9 @@ and the functions tested in {DS/FMU/IED/MDT029}
 \subsubsection{Purpose and Background}
 This document contains an implementation of the third group of tactics.
 This primarily concerns adding paired abstraction handling
-to the functions of {DS/FMU/IED/DTD007}.
+to the functions of \cite{DS/FMU/IED/DTD028}.
 \subsubsection{Dependencies}
-None known.
+This documents signature is found in \cite{DS/FMU/IED/DTD029}.
 \subsubsection{Deficiencies}
 None known.
 \subsubsection{Possible Enhancements}
@@ -74,49 +76,277 @@ None known.
 
 \section{THE CODE}
 =SML
-(* structure ‚TacticsIII· : TacticsIII = struct *)
+structure ‚TacticsIII· : TacticsIII = struct
 =TEX
-\subsection{Local Theorems}
+\subsection{Utilities}
+=SML
+fun ‚mk_fst· tm = (
+let	val ttm = type_of tm;
+	val (ta,tb) = dest_â_type ttm;
+in
+	mk_app(mk_const("Fst", mk_ã_type(ttm,ta)), tm)
+end);
+fun ‚mk_snd· tm = (
+let	val ttm = type_of tm;
+	val (ta,tb) = dest_â_type ttm;
+in
+	mk_app(mk_const("Snd", mk_ã_type(ttm,tb)), tm)
+end);
+=TEX
+The following makes a term follow the pairing structure  of a variant structure, using $Fst$ and $Snd$.
+=SML
+fun ‚varstruct_match· (caller : string) (fmsg : int) (tm : TERM) (vs : TERM) : TERM = (
+let	val sideeffect = if type_of tm <> type_of vs
+		then term_fail caller fmsg [tm,vs]
+		else ();
+	fun aux (ltm : TERM) (lvs : TERM) = (
+		if is_var lvs
+		then ltm
+		else let val (vs1,vs2) = dest_pair lvs;
+			val (tm1,tm2) = if is_pair ltm
+				then dest_pair ltm
+				else (mk_fst ltm, mk_snd ltm);
+		in
+			mk_pair(aux tm1 vs1, aux tm2 vs2)
+		end);
+in
+	aux tm vs
+end
+handle complaint =>
+divert complaint "dest_pair" caller fmsg 
+	[fn () => string_of_term tm,
+	 fn () => string_of_term vs]
+);
+=TEX		
 \subsection{Concerning Tautologies}
 =SML
 fun ‚taut_rule· (tm : TERM) : THM = (
 	tac_proof(([],tm),taut_tac)
 handle complaint =>
-list_divert complaint "taut_rule" [
-	("tac_proof",27030,[fn () => string_of_term tm]),
-	("taut_tac",27037,[fn () => string_of_term tm])]
+divert complaint "tac_proof" "taut_rule" 27037 [fn () => string_of_term tm]
 );
 =TEX
 =SML
-local
-	val T = ªTº;
-in
 val ‚taut_conv· : CONV = (fn (tm : TERM) =>
-	tac_proof(([],mk_Ç(tm,T)),taut_tac)
+	tac_proof(([],mk_Ç(tm,mk_t)),taut_tac)
 handle complaint =>
-list_divert complaint "taut_conv" [
-	("mk_Ç",27030,[fn () => string_of_term tm]),
-	("taut_tac",27037,[fn () => string_of_term tm])]
+term_fail "taut_conv" 27037 [tm]
 );
-end;
 =TEX
 =SML
-local
-	val T = ªTº;
-in
 fun ‚taut_eq_conv· (tm1 : TERM) : CONV = (fn (tm2 : TERM) =>
 	tac_proof(([],mk_Ç(tm2,tm1)),taut_tac)
 handle complaint =>
-list_divert complaint "taut_eq_conv" [
-	("mk_Ç",27030,[fn () => string_of_term tm]),
-	("taut_tac",27037,[fn () => string_of_term tm])]
+term_fail "taut_eq_conv" 27015 [tm1,tm2]
+);
+=TEX
+\subsection{Concerning å}
+=SML
+val ‚simple_å_Ñ%down%1_conv· : CONV = (fn tm =>
+	((RAND_C simple_Ñ%down%1_conv THEN_C simple_å_Ñ_conv) tm)
+	handle  Fail _ => term_fail "å_Ñ%down%1_conv" 28091 [tm]
+);
+val ‚å_Ñ%down%1_conv· : CONV = (fn tm =>
+	((RAND_C Ñ%down%1_conv THEN_C å_Ñ_conv) tm)
+	handle  Fail _ => term_fail "å_Ñ%down%1_conv" 28091 [tm]
+);
+=TEX
+=SML
+local
+	val c = eqn_cxt_conv ((map thm_for_eqn_cxt
+		[å_å_thm, å_Ä_thm, å_Å_thm, å_ä_thm,
+		 å_Ç_thm, å_if_thm, å_t_thm, å_f_thm]) @
+		[(ªå(É x é y)º, simple_å_É_conv),
+		(ªå(Ñ x é y)º, simple_å_Ñ_conv),
+		(ªå(Ñ%down%1 x é y)º, simple_å_Ñ%down%1_conv),
+		(ªå($É (Uncurry x))º, å_É_conv),
+		(ªå($Ñ (Uncurry x))º, å_Ñ_conv),
+		(ªå($Ñ%down%1 (Uncurry x))º, å_Ñ%down%1_conv)]);
+in
+val ‚å_in_conv· : CONV = (fn tm =>
+	c tm
+	handle complaint =>
+	divert complaint "eqn_cxt_conv" "å_in_conv" 28131
+		[fn () => string_of_term tm]
 );
 end;
 =TEX
+=SML
+val ‚å_in_tac· : TACTIC = (fn ag => conv_tac å_in_conv ag
+	handle complaint =>
+	divert complaint "å_in_conv" "å_in_tac" 28025 []
+);
+=TEX
+=SML
+val ‚å_IN_THEN· : THM_TACTICAL = (fn ttac => fn thm =>
+	(ttac(conv_rule å_in_conv thm))
+	handle Fail _ => thm_fail "å_IN_THEN" 29010 [thm]
+);
+=TEX
+\subsection{Concerning É}
+=SML
+val ‚É_tac· : TACTIC = (fn (asms, conc) =>
+	let	val (x, b) = dest_É conc;
+		val x' = varstruct_variant (flat(map frees(conc::asms))) x;
+		val xtm = snd(term_match x' x);
+	in
+		([(asms, var_subst xtm b)],
+		(fn [thm] => É_intro x' thm | _ => bad_proof "É_tac"))
+	end handle ex => divert ex "dest_É" "É_tac" 29001 []
+);
+=TEX
+\subsection{Concerning Ñ}
+=TEX
+=SML
+fun ‚Ñ_tac· (tm : TERM) : TACTIC = (fn (asms, conc) =>
+let	val (x, b) = dest_Ñ conc;
+	val tym = type_match (type_of x) (type_of tm);
+	val tm' = inst [] tym tm;
+	val tm'' = varstruct_match "Ñ_tac" 29008 tm' x;
+	val tmsubs = snd(term_match tm'' x);
+in
+		([(asms, var_subst tmsubs b)],
+		(fn [thm] => Ñ_intro conc thm | _ => bad_proof "Ñ_tac"))
+end
+handle ex =>
+list_divert ex "Ñ_tac" [
+	("type_match", 29008, 
+		[fn () => string_of_term tm,
+		fn () => string_of_term (fst(dest_Ñ conc))]),
+	("dest_Ñ", 29002, [])]
+);
+=TEX
+=SML
+fun ‚Ñ_THEN· (ttac : THM -> TACTIC): THM -> TACTIC = (fn thm =>
+let	val (x, b) = dest_Ñ(concl thm);
+in	(fn (asms, conc) =>
+	let	val x' = varstruct_variant (flat(map frees
+			(conc :: concl thm :: hyps thm @ asms))) x;
+		val xtm = snd(term_match x' x);
+		val (sgs, pf) = ttac (asm_rule (var_subst xtm b)) (asms, conc);
+	in	(sgs, (Ñ_elim x' thm) o pf)
+	end)
+end
+handle ex => divert ex "dest_Ñ" "Ñ_THEN" 29003 
+		[fn () => string_of_thm thm]
+);
+=TEX
+\subsection{Concerning Ñ$_1$}
+=SML
+fun ‚Ñ%down%1_tac· (tm : TERM): TACTIC = (fn (asms,gl) =>
+	((conv_tac Ñ%down%1_conv
+	THEN Ñ_tac tm)	(asms,gl)
+	handle complaint =>
+	pass_on complaint "Ñ_tac" "Ñ%down%1_tac")
+	handle complaint =>
+	divert complaint "Ñ%down%1_conv" "Ñ%down%1_tac" 29004 []
+);
+=TEX
+=SML
+fun ‚Ñ%down%1_THEN· (ttac : THM -> TACTIC): THM -> TACTIC = (fn thm =>
+	Ñ_THEN ttac (conv_rule Ñ%down%1_conv thm)
+	handle complaint =>
+	divert complaint "Ñ%down%1_conv" "Ñ%down%1_THEN"
+		29005 [fn ()=> string_of_thm thm]
+);
+=TEX
+\subsection{Concerning Assumptions}
+=SML
+fun ‚spec_asm_tac· (asm : TERM) (instance : TERM)  :TACTIC = (
+	DROP_ASM_T asm (strip_asm_tac o É_elim instance)
+);
+fun ‚list_spec_asm_tac· (asm : TERM) (instances : TERM list)  :TACTIC = (
+	DROP_ASM_T asm (strip_asm_tac o list_É_elim instances)
+);
+fun ‚spec_nth_asm_tac· (n : int) (instance : TERM)  :TACTIC = (
+	DROP_NTH_ASM_T n (strip_asm_tac o É_elim instance)
+);
+fun ‚list_spec_nth_asm_tac· (n : int) (instances : TERM list)  :TACTIC = (
+	DROP_NTH_ASM_T n (strip_asm_tac o list_É_elim instances)
+);
+=TEX
+\section{CANONICALISATION}
+=SML
+fun ‚å_rewrite_canon· (thm : THM) : THM list = (
+	[conv_rule (FIRST_C[
+		simple_eq_match_conv å_Å_thm,
+		å_Ñ_conv,
+		simple_eq_match_conv å_1_thm])thm]
+	handle complaint =>
+	fail_canon thm
+);
+=TEX
+=SML
+fun ‚É_rewrite_canon· (thm : THM) : THM list = (
+	if is_É (concl thm)
+	then [all_É_elim thm]
+	else fail_canon thm
+);
+=TEX
+=SML
+val ‚pair_rw_canon· : CANON =
+	REWRITE_CAN
+	(REPEAT_CAN(FIRST_CAN [
+	É_rewrite_canon,
+	Ä_rewrite_canon,
+	å_rewrite_canon,
+	Ç_t_rewrite_canon]));
+=TEX
+\section{PROOF CONTEXTS}
+\subsection{Local Theorems}
+=SML
+fun ‚sprove· (tm : TERM) = tac_proof(([],tm),REPEAT strip_tac);
+=SML
+val ‚lif_thm· = sprove ªÉ a t1 t2é (if a then t1 else t2) Ç (a ä t1) Ä (å a ä t2)º;
+val ‚lÅ_å_thm· = sprove ªÉ t1 t2 é (t1 Å å t2) Ç (t2 ä t1)º;
+val ‚lå_Å_thm· = sprove ªÉ t1 t2 é (å t1 Å t2) Ç (t1 ä t2)º;
+val ‚lÅ_thm· = sprove ªÉ t1 t2 é (t1 Å t2) Ç (å t1 ä t2)º;
+=TEX
+\subsection{The Contexts}
+=SML
+val ‚pair_proof_context· : PROOF_CONTEXT = {
+	sa_eqn_cxt = [(thm_for_eqn_cxt ä_thm),
+		 (thm_for_eqn_cxt Ç_thm),
+		 (thm_for_eqn_cxt lif_thm),
+		 (ªå xº, å_in_conv),
+		 (ªÑ%down%1 x é pº, simple_Ñ%down%1_conv),
+		 (ª$Ñ%down%1(Uncurry f)º, Ñ%down%1_conv),
+		 (ª$É (Uncurry f)º, É_uncurry_conv),
+		 (ª$Ñ (Uncurry f)º, Ñ_uncurry_conv)
+],
+	sg_eqn_cxt = [(thm_for_eqn_cxt lÅ_å_thm),
+		 (thm_for_eqn_cxt lå_Å_thm),
+		 (thm_for_eqn_cxt lÅ_thm),
+		 (thm_for_eqn_cxt Ç_thm),
+		 (thm_for_eqn_cxt lif_thm),
+		 (ªå xº, å_in_conv),
+		 (ª$É (Uncurry f)º, É_uncurry_conv)],
+	rw_canon = pair_rw_canon,
+	rw_eqn_cxt = (flat(map (cthm_for_eqn_cxt initial_rw_canon) [
+		eq_rewrite_thm,
+		Ç_rewrite_thm,
+		å_rewrite_thm,
+		Ä_rewrite_thm,
+		Å_rewrite_thm,
+		ä_rewrite_thm,
+		if_rewrite_thm,
+		É_rewrite_thm,
+		Ñ_rewrite_thm,
+		%beta%_rewrite_thm])) @
+	[(ª(ç x é y) zº, simple_%beta%_conv),
+ 	 (ªUncurry x yº, %beta%_conv)]};
+=TEX
+=SML
+val ‚epair_proof_context· : EPROOF_CONTEXT = evaluate_proof_context pair_proof_context;
+=TEX
+Now set this context as the current one:
+=SML
+val _ = push_proof_context epair_proof_context;
+=TEX
 \section{END OF THE STRUCTURE}
 =SML
-(* end; of structure TacticsIII *)
-(* open TacticsIII *)
+end; (* of structure TacticsIII *)
+open TacticsIII;
 =TEX
 \twocolumn[\section{INDEX}]
 \small
