@@ -174,6 +174,10 @@ lasp -s -u imp005.OKwords imp005.doc > zz1
 	that Ctrl-D is no longer appropriate as an end of file marker - reading
 	the empty string is the proper marker;
 	that extended characters may not be sent to PolyML.compiler.
+
+\item[Issue 2.20]
+	Handling of Q's and percentage signs firmed up in $translate\_for\_output$.
+
 \end{description}
 
 %********************************************************************
@@ -2863,18 +2867,34 @@ pQp, pQppQp, pQppQppQp&To avoid conflicts with SCCS keywords.\\
 fun Ûtranslate_for_outputÝ (s : string) : string = (
 let
 	val ord_0 = ord "0";
-
+=TEX
+$get\_kw$ must only return true as its second argument if
+it has been given a recognisable keyword followed by two Qs.
+When it returns false its first argument contains no percents, nor double Qs.
+=SMLPLAIN SML
 	fun get_kw (prev, nil) = (prev, false, nil)
-	|   get_kw (prev, "Q"::"Q"::t) = (prev, true, t)
-	|   get_kw (prev, h::t) = (	if	(h >= "A" andalso h <= "Z")
+	|   get_kw (prev, rest as ("Q"::"Q"::t)) = (
+		case PrettyNames.find_name prev of
+		Value _ => (prev, true, t)
+		| Nil => (prev, false, rest)
+	) |  get_kw (prev, h::t) = (	if	(h >= "A" andalso h <= "Z")
 					orelse	(h >= "a" andalso h <= "z")
 					orelse	(h >= "0" andalso h <= "9")
 					then	get_kw(prev ^ h, t)
 					else	(prev, false, h::t));
-
+=TEX
+$get\_pc$ must only return true as its second argument if
+it has been given a recognisable keyword followed by a percent.
+When it returns false its first argument contains no percents (but maybe
+double Qs).
+=SMLPLAIN SML
 	fun get_pc (prev, nil) = (prev, false, nil)
-	|   get_pc (prev, "%"::t) = (prev, true, t)
-	|   get_pc (prev, h::t) = (	if	(h >= "A" andalso h <= "Z")
+	|   get_pc ("", rest as ("%"::t)) = ("", false, rest)
+	|   get_pc (prev, rest as ("%"::t)) = (
+		if is_Nil (PrettyNames.find_name prev)
+		then (prev, false, rest)
+		else (prev, true, t)
+	)|   get_pc (prev, h::t) = (	if	(h >= "A" andalso h <= "Z")
 					orelse	(h >= "a" andalso h <= "z")
 					orelse	(h >= "0" andalso h <= "9")
 					orelse	(is_special_char h)
@@ -2899,15 +2919,25 @@ let
 			of Value(kw::_, _, _)	=> "%" ^ kw ^ "%"
 			| _			=> ch;
 
+=TEX
+Because the first argument of the $false% response of $aux\_kw$ may contain double Qs we cannot
+rely on $get\_pcs$ processing to have spotted other simplifications, so
+we discard the first and third argument.
+=SMLPLAIN SML
 	fun aux_kw x_aux tail = (
 		case	get_pc ("", tail)
-		of (badkw, false, tail) => "%":: badkw :: (x_aux tail)
-		| (kw, true, tail) => (string_of_kw kw) :: (x_aux tail));
+		of (_, false, _) => "%":: "%":: (x_aux tail)
+		| (kw, true, tail1) => (string_of_kw kw) :: (x_aux tail1));
 
 	val pQp = "%" ^ "Q" ^ "%";
 	val pQppQp = pQp ^ pQp;
 	val pQppQppQp = pQp ^ pQp ^ pQp;
 
+=TEX
+Because the first argument of the $false$ response of $get\_kw$ 
+cannot contain percents or double Qs we can safely just output
+this first argument.
+=SMLPLAIN SML
 	fun aux nil = []
 	|   aux ("Q"::"Q"::"Q"::"Q"::t) = "Q"::(aux t)
 	|   aux (f as "Q"::"Q"::"Q"::t) = pQppQppQp :: (aux t)
@@ -2961,6 +2991,11 @@ let
 in
 	implode(aux(explode s))
 end);
+=IGN
+val pc = chr(ord("%"));
+val Q = chr(ord("Q"));
+translate_for_output ("ab" ^ pc ^ "de" ^ Q ^ Q ^"delta"^ Q ^ Q);
+translate_for_output ( "de" ^ Q ^ Q ^"delta"^ Q ^ Q);
 =TEX
 }
 
