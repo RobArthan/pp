@@ -104,6 +104,10 @@ lasp -s -u dtd031.OKwords dtd031.doc > zz1
 	Add a $pe_depth$ to the $PP_ENV$ type to support for
 		a ``print depth'' of terms and types, plus
 		functions to support this field.	
+	Add functions for choosing the language for printing
+		terms.
+	Change the language related printing functions in type $PP_ENV$
+		to all return an answer of type $PFUN_ANS$. {}
 
 %\item[\FormatDate{$Date$%
 %}, issue \SCCSissue~]
@@ -294,12 +298,13 @@ datatype ÛPFUN_ANSÝ
 	;
 =DESCRIBE
 This is a datatype used in the pretty printing system, it holds
-the result type of functions used to print out a function application
-of a constant or variable  to a list of arguments, these are
-components $pe_fun_const$ and $pe_fun_var$ of
+the result type of functions used to print out a part of a term.
+These are components $pe_fun_const$, $pe_fun_var$, $pe_app$,
+$pe_const$, $pe_var$ and $pe_Ì$ of
 datatype $PP_ENV$ below.  Value $PfOk$ means that the application has
-been output.  Value $PfNotPossible$ means that the application cannot
-be printed by this function.  Value $PfFewer$ means the function can
+been output.  Value $PfNotPossible$ means that the term cannot be
+printed by this function.  Value $PfFewer$ means a term which is a
+function application can
 print out the application, but not with the given number of arguments,
 the integer indicates how many arguments it could print.
 =ENDDOC
@@ -315,10 +320,10 @@ datatype ÛPP_ENVÝ = PpEnv of {
 				-> TERM list -> PFUN_ANS,
 	Ûpe_fun_varÝ	: PP_ENV -> TERM -> string -> TYPE
 				-> TERM list -> PFUN_ANS,
-	Ûpe_appÝ	: PP_ENV -> TERM -> TERM list -> unit,
-	Ûpe_constÝ	: PP_ENV -> TERM -> string -> TYPE -> unit,
-	Ûpe_varÝ	: PP_ENV -> TERM -> string -> TYPE -> unit,
-	Ûpe_ÌÝ		: PP_ENV -> TERM -> TERM -> unit,
+	Ûpe_appÝ	: PP_ENV -> TERM -> TERM list -> PFUN_ANS,
+	Ûpe_constÝ	: PP_ENV -> TERM -> string -> TYPE -> PFUN_ANS,
+	Ûpe_varÝ	: PP_ENV -> TERM -> string -> TYPE -> PFUN_ANS,
+	Ûpe_ÌÝ		: PP_ENV -> TERM -> TERM -> PFUN_ANS,
 	Ûpe_addstringÝ	: string -> unit,
 	Ûpe_beginbÝ	: (int * bool) -> unit,
 	Ûpe_endbÝ	: unit -> unit,
@@ -387,6 +392,15 @@ list below which describes of all of the environment values.
 	basic HOL term types in the current language, although the
 	application form is generalised to allow a list of arguments.
 
+\item A value of type $PFUN_ANS$ is returned by the preceeding four
+	functions.  It has the same general meaning as if it were
+	returned by by the functions $pe_fun_const$ or $pe_fun_var$,
+	however a value of $PfFewer$ is interpreted as if it were
+	$PfNotPossible$, both are taken to mean that the term cannot be
+	printed.  If the current language (as held in $pe_lang$) is
+	``HOL'' then an error is declared, otherwise the HOL language
+	is set and the corresponding ``HOL'' function invoked.
+
 \ITEM{pe_addstring, pe_beginb, pe_endb, pe_space} The Oppen printing
 	functions to be used, see~\cite{DS/FMU/IED/IMP024}.
 
@@ -398,14 +412,14 @@ list below which describes of all of the environment values.
 =DOC
 val Ûset_printersÝ :
 	(string *
-		( (PP_ENV -> TERM -> TERM -> unit)			(* Ì *)
-		* (PP_ENV -> TERM -> TERM list -> unit)		(* app *)
-		* (PP_ENV -> TERM -> string -> TYPE -> unit)	(* const *)
+		( (PP_ENV -> TERM -> TERM -> PFUN_ANS)  (* Ì *)
+		* (PP_ENV -> TERM -> TERM list -> PFUN_ANS)  (* app *)
+		* (PP_ENV -> TERM -> string -> TYPE -> PFUN_ANS)  (* const *)
 		* (PP_ENV -> TERM -> string -> TYPE -> TERM list
-				-> PFUN_ANS)				(* const fun app *)
+				-> PFUN_ANS)  (* const fun app *)
 		* (PP_ENV -> TERM -> string -> TYPE -> TERM list
-				-> PFUN_ANS)				(* var fun app *)
-		* (PP_ENV -> TERM -> string -> TYPE -> unit)	(* var *)
+				-> PFUN_ANS)  (* var fun app *)
+		* (PP_ENV -> TERM -> string -> TYPE -> PFUN_ANS)  (* var *)
 	))  -> unit;
 =DESCRIBE
 Sets the printing functions to be used for the language named
@@ -488,6 +502,13 @@ If called when $pe_depth$ of the first argument is negative or zero the
 string ``\verb*|... |'' is printed (``\verb*| |'' denotes a space).
 When this function calls any printing routine it sets $pe_depth$ field
 to one less than its entry value.
+=FAILURE
+31003	design error, the term cannot be printed
+=FAILUREC
+Error 31003 denotes that neither the pretty printer for the current
+language in the $PP_ENV$ nor the pretty printer for HOL could print
+part of the given term.  The design of the HOL printing routines should
+ensure that this error never happens.
 =ENDDOC
 %--------------------------------------------------------------------
 
@@ -497,6 +518,51 @@ val Ûget_first_constÝ : TERM -> string OPT;
 =DESCRIBE
 If the given term is a constant applied to a list of arguments then
 return its name. 
+=ENDDOC
+%--------------------------------------------------------------------
+
+%--------------------------------------------------------------------
+=DOC
+val Ûchoose_const_languageÝ : string * string list -> string;
+=DESCRIBE
+Identifies the language to be used for printing a term based on the
+name of a constant given as the first argument.  Function
+$get_const_language$ gives a set of candidate languages for the
+constant.  The preferred languages are given by the second argument.
+The first preferred language that is also a candidate will be
+returned.  If no preferred language is a candidate matches then the
+head element of the candidates will be returned.  Finally, the current
+language (as given by $get_current_language$) is chosen if nothing else
+is appropriate.
+=SEEALSO
+get_const_language, get_current_language
+=ENDDOC
+%--------------------------------------------------------------------
+
+Note that function $get_const_language$ will return the current
+language (as returned by function $get_current_language$) for unknown
+constants, so the last sentence of the descriptions of the two
+$choose_\ldots_language$ functions is superfluous, however it is useful
+as it conveys the actions of these  routines in the case of unknown
+constants without the reader needing to refer to the description of
+$get_const_language$.
+
+%--------------------------------------------------------------------
+=DOC
+val Ûchoose_term_languageÝ : TERM * string list -> string;
+=DESCRIBE
+Identifies the language to be used for printing a term.  The choice is
+based upon the outermost construct in the term: if it is a constant
+applied to a list of arguments then the languages that
+$get_const_language$ returns are considered as candidate languages for
+the term.  The preferred languages are given by the second argument.
+The first preferred language that is also a candidate will be
+returned.  If no preferred language is a candidate matches then the
+head element of the candidates will be returned.  Finally, the current
+language (as given by $get_current_language$) is chosen if nothing else
+is appropriate.
+=SEEALSO
+get_const_language, get_current_language
 =ENDDOC
 %--------------------------------------------------------------------
 
