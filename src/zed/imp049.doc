@@ -534,9 +534,9 @@ fun €consts_in_z_para› (p : Z_PARA) : (string * TYPE) list = (
 );
 =TEX
 =SML
-fun €update_theory_db› ((ZParaFixity fixinfo) : Z_PARA) : unit = (
+fun €tco_update_theory_db› ((ZParaFixity fixinfo) : Z_PARA) : unit = (
 	set_zfixity_info fixinfo
-) | update_theory_db p =
+) | tco_update_theory_db p =
 let	val consts = consts_in_z_para p;
 	val tys = list_cup (map (fn (s, ty) => type_tycons ty) consts);
 	val side =
@@ -553,15 +553,40 @@ end (* of structure ZTypeCheckOnlyMode *);
 =TEX
 
 \section{PROOF SUPPORT MODE}
-
 =SML
 structure €ZProofMode› : ZProofMode = struct
 local
-	open	Unification ZUserInterfaceSupport;
-	open	ZTypesAndTermsSupport ZTypeInference ZGeneratedConstants
-	open	ZTermGenerator;
+	open	Unification
+		ZUserInterfaceSupport
+		ZTypesAndTermsSupport
+		ZTypeInference
+		ZGeneratedConstants
+		ZTermGenerator
+		ZTypeCheckOnlyMode;
 	
 in
+=TEX
+=SML
+val €z_type_check_only› = ref true;
+val _ = if contains (map fst (get_flags()))
+			"z_type_check_only"
+	then	()
+	else	new_flag{name = "z_type_check_only",
+			control = z_type_check_only,
+			default = fun_true,
+			check = fun_true
+	};
+=TEX
+=SML
+val €z_use_axioms› = ref true;
+val _ = if contains (map fst (get_flags()))
+			"z_use_axioms"
+	then	()
+	else	new_flag{name = "z_use_axioms",
+			control = z_use_axioms,
+			default = fun_true,
+			check = fun_true
+	};
 =TEX
 =SML
 datatype €PARAINFO› =
@@ -688,12 +713,33 @@ in
 end);
 
 =TEX
-
+\subsection{Checks}
+For given sets we (including free types), we must check that the
+name is not in use as a type name and that the z-ified name is
+not in use as a constant name:
+=SML
+fun check_gset_name (s : string) : unit = (
+	case (get_type_arity s, get_const_type (bind_gvar_name s)) of
+		(_, Value _) => fail "check_gset_name" 49003 [fn _ => s]
+	|	(Value _, _) => fail "check_gset_name" 49002 [fn _ => s]
+	|	_ => ()
+);
+=TEX
+For other global variables we only need to check the use of the
+z-ified name:
+=SML
+fun check_gvar_name (s : string) : unit = (
+	case get_const_type (bind_gvar_name s) of
+		Value _ => fail "check_gvar_name" 49003 [fn _ => s]
+	|	_ => ()
+);
+=TEX
 \section{DEFINITIONS BY AXIOM} 
 
 =SML
 fun €abbdef_defn› (flag : bool) ((name, gen_formals, tm) : string * string list * TERM) : unit = (
 let	val wrap = if flag then ¨$"Z'SchBox"Æ else ¨$"Z'AbbDef"Æ;
+	val side_effect = check_gvar_name name;
 	val name' = bind_gvar_name name;
 	val ty = type_of tm;
 in
@@ -729,12 +775,13 @@ end
 
 =TEX
 =SML
-fun €axdes_defn› ((gen_formals, tm1, otm, idtyl) : string list * TERM * TERM OPT * (string * TYPE) list) : unit = (
+fun €ax_axdes_defn› ((gen_formals, tm1, otm, idtyl) : string list * TERM * TERM OPT * (string * TYPE) list) : unit = (
 let	val def_tm = case otm of
 		Value tm2 => mk_± (tm1, tm2)
-		|Nil => tm1;
+		|Nil => mk_± (tm1, mk_t);
 	val gens = map (fn id => mk_var (id, (mk_z_power_t o mk_z_var_t) id)) gen_formals;
 	val vars = map mk_var idtyl;
+	val side_effect = (map (check_gvar_name o fst) idtyl; ());
 	val zidtyl = map (fn (id, ty) => (bind_gvar_name id, ty)) idtyl;
 	val zconsts = map mk_const zidtyl;
 	val generify = (
@@ -765,39 +812,47 @@ in
 	()
 end);
 =TEX
-
 =SML
-fun €next_axiom_name› (s : string) : string = (
-let	val axiom_names = flat (map fst (get_axioms "-"));
-	fun aux i =
-	let	val si = s^(string_of_int i);
-	in
-		if si mem axiom_names
-		then
-			aux (i+1)
-		else
-			if i = 0 then s else si
-	end;
+fun €cons_axdes_defn› ((gen_formals, tm1, otm, idtyl) : string list * TERM * TERM OPT * (string * TYPE) list) : unit = (
+let	val def_tm = case otm of
+		Value tm2 => mk_± (tm1, tm2)
+		|Nil => mk_± (tm1, mk_t);
+	val gens = map (fn id => mk_var (id, (mk_z_power_t o mk_z_var_t) id)) gen_formals;
+	val vars = map mk_var idtyl;
+	val side_effect = (map (check_gvar_name o fst) idtyl; ());
+	val zidtyl = map (fn (id, ty) => (bind_gvar_name id, ty)) idtyl;
+	val zvars = map mk_var zidtyl;
+	val generify = (
+		case gens of
+		[] => Combinators.I
+		|_ => (
+			let	val pval = mk_z_tuple gens;
+				val side = do_in_theory (force_get_cache_theory()) tuple_gen_semantic_const pval;
+				val ptype = type_of pval;
+			in	(fn v =>
+					let	val (s, ty) = dest_var v;
+						val v' = mk_var(s, mk_≠_type (ptype, ty));
+					in
+						mk_app(v', pval)
+					end)
+			end
+			)
+	);
+
+	val varsubs = map (fn (v1, v2) => (generify v1, v2)) (combine zvars vars);
+	val newvars = map (fst o strip_app o fst) varsubs;
+	val def_tm' = subst varsubs def_tm;
+	val defn1 = list_mk_µ (gens, def_tm');
+	val defn2 = mk_app(¨$"Z'AxDes"Æ, defn1);
+	val side = const_spec ((map fst idtyl)@(map fst zidtyl), newvars, defn2);
 in
-	aux 0
+	()
 end);
 =TEX
-=SML
-fun €consts_in_axiom› (tm : TERM) : string list = (
-let	val tcs = map fst (term_consts tm);
-	val cconsts = map (fst o dest_const) (get_consts"-");
-in
-	tcs drop (fn x => not (x mem cconsts))
-end);
-=TEX
-=SML
-fun €names_of_axiom› (tm : TERM) : string list = 
-	map next_axiom_name (consts_in_axiom tm);
-=TEX
-
 =SML
 fun €simple_new_z_type› (s : string) : THM = (
-let	val ty = new_type (s, 0);
+let	val side_effect = check_gset_name s;
+	val ty = new_type (s, 0);
 	val zs = bind_gvar_name s;
 	val var = mk_var (zs, mk_z_power_t ty);
 	val totty = mk_z_power_t ty;
@@ -811,7 +866,7 @@ end);
 
 =SML
 fun €new_z_type› (sl : string list) (tm : TERM) : THM = (
-let	val tyl = map (fn s => new_type (s, 0)) sl;
+let	val tyl = map (fn s => (check_gset_name s; new_type (s, 0))) sl;
 	val zsl = map bind_gvar_name sl;
 in
 	new_axiom (sl@zsl, tm)
@@ -830,15 +885,335 @@ in
 	()
 end);
 =TEX
+Free type definition processing involves rather more messing about than
+the other sorts of paragraph. We have to build apparatus to construct
+the defining property for the free type from the syntax of its constructors.
+The following tiresome code does this.
+=SML
+local
+=TEX
+We need the following types:
+=SML
+	val a = î'aÆ;
+	val €'a› : TYPE = mk_z_power_t a;
+	val b = î 'bÆ;
+	val €'b› : TYPE = mk_z_power_t b;
+	val ˙ = mk_ctype("˙", []);
+=TEX
+We need to be able to construct terms formed with $ran$ ...
+=SML
+	val €ran_ty› = mk_z_power_t(mk_z_tuple_t[
+				mk_z_power_t(mk_z_tuple_t[a, b]) , 'b]);
+	val €ran› = mk_z_gvar("ran", ran_ty,  [mk_u 'a, mk_u 'b]);
+	fun €make_ran› (f : TERM) : TERM = (
+		let 	val tys = dest_z_tuple_t (dest_z_power_t (type_of f));
+			val ty1 = hd tys;
+			val ty2 = hd(tl tys);
+			val iran = inst [] [(ty1, a), (ty2, b)] ran;
+		in	mk_z_app(iran, f)
+		end
+	);
+=TEX
+... and $disjoint$ ...
+=SML
+	val €disjoint_ty› : TYPE = mk_z_power_t(mk_z_power_t(mk_z_tuple_t[a, 'b]));
+	val €disjoint› = mk_z_gvar("disjoint _", disjoint_ty, [mk_u 'a, mk_u 'b]);
+	fun €mk_disjoint› (ty : TYPE) (sl : TERM list) = (
+		let	val idisjoint = inst [] [(˙, a), (ty, b)] disjoint;
+		in	mk_z_ç(mk_z_ß¢ (mk_z_power_t ty, sl), idisjoint)
+		end
+	);
+=TEX
+... and $¿$ ...
+=SML
+	val €¿_ty› : TYPE = mk_z_power_t(mk_z_tuple_t[mk_z_tuple_t['a, 'a], 'a]);
+	val €¿› : TERM = mk_z_gvar("_ ¿ _", ¿_ty, [mk_u 'a]);
+	fun €list_¿› (ty : TYPE) (ts : TERM list) : TERM = (
+		let	val i¿ = inst [] [(ty,  a)] ¿;
+			fun make_¿ t1 t2 = mk_z_app(i¿, mk_z_tuple[t1, t2]);
+			fun aux []  = mk_z_setd (ty, [])
+			|   aux [t] = t
+			|   aux (t::more) = make_¿ t (aux more);
+		in	aux ts
+		end
+	);
+=TEX
+... and $Ä$ ...
+=SML
+	val €Ä_ty› : TYPE = mk_z_power_t(mk_z_tuple_t['a, 'a]);
+	val €Ä› : TERM = mk_z_gvar("_ Ä _", Ä_ty, [mk_u 'a]);
+	fun €make_Ä› (ty : TYPE) (t1 : TERM) (t2 : TERM) : TERM = (
+		let	val iÄ = inst [] [(ty,  a)] Ä;
+		in	mk_z_ç(mk_z_tuple[t1, t2], iÄ)
+		end
+	);
+=TEX
+... and relational image ...
+=SML
+	val €rel_image_ty› : TYPE = mk_z_power_t(mk_z_tuple_t[
+			mk_z_tuple_t[mk_z_power_t(
+				mk_z_tuple_t[a, b]), 'a] , 'b]);
+	val €rel_image› : TERM = mk_z_gvar("_ ® _ ©", rel_image_ty, [mk_u 'a, mk_u 'b]);
+	fun €make_rel_image› (f : TERM) (t : TERM): TERM = (
+		let 	val tys = dest_z_tuple_t (dest_z_power_t (type_of f));
+			val ty1 = hd tys;
+			val ty2 = hd(tl tys);
+			val irel_image = inst [] [(ty1, a), (ty2, b)] rel_image;
+		in	mk_z_app(irel_image, mk_z_tuple[f, t])
+		end
+	);
+=TEX
+... and $‡$.
+=SML
+	val €‡_ty› : TYPE = mk_z_power_t(mk_z_power_t(mk_z_tuple_t[a, b]));
+	fun €make_‡› (ty1 : TYPE) (t1 : TERM) (ty2 : TYPE) (t2 : TERM) : TERM = (
+		let	val i‡_ty = inst_type [(ty1,  a), (ty2,  b)] ‡_ty;
+		in	mk_z_gvar("_ ‡ _", i‡_ty, [t1, t2])
+		end
+	);
+=TEX
+Now we can define functions to compute the bits of the defining property.
+In the following
+\begin{description}
+\item[$ty$] is the type of the free type
+\item[$tyn$] is the name of the free type
+\item[$fty$] is the global variable (HOL constant) which is the set of all
+elements of the free type
+\item[$bs$] is the branches of the free type, with the constructors as
+local variables (HOL variables) of the appropriate type, and the domains
+of the constructors with instances of $fty$ as global variables (not the
+local variables which the type inferrer will have planted).
+\item[$w$] is the local variable to appear in the universal quantification
+\end{description}
+
+
+Note that the constructor names need to be local variables here
+not globals, (since they will be passed on to $axdes\_defn$, which expects
+the variables to be defined to be local).
+
+First a function to construct the set display ...
+=SML
+	fun €make_ft_setd› (ty : TYPE) (bs : (TERM * TERM OPT) list) : TERM OPT = (
+		case map fst (bs drop (not o is_Nil o snd)) of
+			[] => Nil
+		|	ts => Value (mk_z_setd (ty, ts))
+		
+	);
+=TEX
+... then the union ...
+=SML
+	fun €make_ft_¿› (ty : TYPE) (bs : (TERM * TERM OPT) list)
+			(w : TERM) (fty : TERM) : TERM = (
+		let	fun aux [] = []
+			|   aux ((f, Value t) :: more) = (
+				let	val t' = subst [(w, fty)] t;
+				in	make_rel_image f t'
+				end :: aux more
+			) | aux (_ :: more) = aux more;
+		in	case make_ft_setd ty bs of
+				Nil => list_¿ ty (aux bs)
+			|	Value t => list_¿ ty (t :: aux bs)
+		end
+	);
+=TEX
+... then the disjointness assertion ...
+=SML
+	fun €make_ft_disjoint› (ty : TYPE) (bs : (TERM * TERM OPT) list) : TERM = (
+		let	fun aux [] = []
+			|   aux ((f, Value t) :: more) = (
+				make_ran f :: aux more
+			) | aux ((c, Nil) :: more) = (
+				mk_z_setd (ty, [c]) :: aux more
+			);
+		in	mk_disjoint ty (aux bs)
+		end
+	);
+=TEX
+... then put these together to form the predicate part of the definition ...
+=SML
+	fun €make_ft_pred›
+			(fty : TERM)
+			(ty : TYPE) (bs : (TERM * TERM OPT) list) : TERM = (
+		let	val w = mk_z_lvar("W", mk_z_power_t ty, []);
+			val disj = make_ft_disjoint ty bs;
+			val Ä1 = make_Ä ty (make_ft_¿ ty bs w fty) w;
+			val Ä2 = make_Ä ty fty w;
+			val decl = mk_z_decl[mk_z_dec([w], mk_z_ fty)];
+		in	mk_±(disj, mk_z_µ(decl, Ä1, Ä2))
+		end
+	);
+=TEX
+... and, finally, form the declaration part of the definition.
+=SML
+	fun €make_ft_decs› (fty : TERM) (ty : TYPE) (bs : (TERM * TERM OPT) list) : TERM list = (
+		let	val cs = map fst (bs drop (not o is_Nil o snd));
+			val ds = map (Combinators.I ** force_value)
+						(bs drop (is_Nil o snd));
+			fun aux [] = []
+			|   aux ((f, t) :: more) = (
+				mk_z_dec
+				([f],
+				make_‡
+				((dest_z_power_t o type_of) t)
+				t
+				ty
+				fty)
+				:: aux more
+			);
+		in	case cs of
+				[] =>  (aux ds)
+			|	_ =>  (mk_z_dec(cs, fty) :: aux ds)
+		end
+	);
+=TEX
+Now a function to construct the constructors from the information
+passed on by the type inferrer.
+=SML
+	fun €make_constructors›
+		(tyn : string)
+		(ty : TYPE)
+		(fty : TERM)
+		(pars : (string * TERM OPT) list)
+		: (TERM * TERM OPT) list = (
+		let	fun make_con_ty t = (
+				mk_z_power_t(mk_z_tuple_t[dest_z_power_t(type_of t),ty])
+			);
+			fun aux (n, Nil) = (mk_var(n, ty), Nil)
+			|   aux (n, Value t) = (
+					(mk_var(n, make_con_ty t),
+					Value (subst
+					[(fty, mk_var(tyn, mk_z_power_t ty))] t))
+			);
+		in	map aux pars
+		end
+	);
+=TEX
+We need to check that all of the library objects we use are in scope:
+=SML
+	val things_to_check = [
+		dest_const (fst (strip_app ran)),
+		dest_const (fst (strip_app disjoint)),
+		dest_const (fst (strip_app ¿)),
+		dest_const (fst (strip_app Ä)),
+		dest_const (fst (strip_app rel_image)),
+		dest_const (fst (strip_app (make_‡ a (mk_u ('a)) b (mk_u 'b))))
+	];
+	fun €fty_scope_check› () : unit = (
+		let	fun same_ty ty1 ty2 = (
+				(type_match ty1 ty2;
+				type_match ty2 ty1;
+				true)
+				handle Fail _ => false
+			);
+			fun chk [] = []
+			|   chk ((s, ty) :: more) = (
+				case get_const_type s of
+					Value t => (
+						if same_ty ty t
+						then chk more
+						else mk_const (s, ty) :: chk more
+				) |	Nil => mk_const (s, ty) :: chk more
+			);
+		in	case chk things_to_check of
+				[] => ()
+			|	tms =>
+				fail "freetype_defn" 49005
+				[fn () => format_list string_of_term tms " "]
+		end
+	);
+=TEX
+And, at long last, the function to bring all the above together.
+=SML
+in
+fun €freetype_defn› ([] : (string * ((string * TERM OPT)list))list) : unit = (
+	error "freetype_defn" 49004 [fn()=>"unexpected empty list"]
+) | €freetype_defn› ftyl : unit = (
+let	val tynames = map fst ftyl;
+	val side_effect = fty_scope_check();
+	val side_effect = map (map (check_gvar_name o fst)) (map snd ftyl);
+	fun do1 (tyn, pars) = (
+		let	val ty = mk_ctype(tyn, []);
+			val fty = mk_z_gvar(tyn, mk_z_power_t ty, []);
+			val bs = make_constructors tyn ty fty pars;
+		in	(make_ft_decs fty ty bs, (make_ft_pred fty ty bs, bs))
+		end
+	);
+	fun do_all ftyl = (
+		let	val (decs, predsbs) = split (map do1 ftyl);
+			val preds = map fst predsbs;
+			val vs = map fst(flat (map snd predsbs));
+			val decl = mk_z_decl (flat decs);
+			val pred = list_mk_± preds;
+		in	([], decl, Value pred, map dest_var vs)
+		end
+	);
+in	givenset_defn (tynames, Nil);
+	ax_axdes_defn (do_all ftyl)
+end);
+end (* of local ... in ... end *)
+=TEX
+=SML
+=SML
+fun €next_axiom_name› (s : string) : string = (
+let	val axiom_names = flat (map fst (get_axioms "-"));
+	fun aux i =
+	let	val si = s^(string_of_int i);
+	in	if si mem axiom_names
+		then	aux (i+1)
+		else	si
+	end;
+in
+	aux 1
+end);
+=TEX
+=SML
+fun €constraint_defn›  ((gpars, tm) : string list * TERM) : unit = (
+let	val vs = map (fn n => mk_var(n, mk_vartype ("'" ^ n))) gpars;
+in	new_axiom([next_axiom_name "Constraint "], list_mk_µ(vs, tm)); ()
+end);
+=TEX
 =SML
 fun €ax_update_theory_db› (para : Z_PARA) : unit = (
 	case parainfo_of_z_para para of
 	FixityInfo fixinfo => set_zfixity_info fixinfo
 	|AbbDefInfo pbody => abbdef_defn false pbody
 	|SchBoxInfo pbody => abbdef_defn true pbody
-	|AxDesInfo pbody => axdes_defn pbody
+	|AxDesInfo pbody => ax_axdes_defn pbody
 	|GivenSetInfo pbody => givenset_defn pbody
-	|other => ZTypeCheckOnlyMode.update_theory_db para
+	|FreeTypeInfo pbody => freetype_defn pbody
+	|ConstraintInfo pbody => constraint_defn pbody
+	|ConjectureInfo _ => ()
+);
+=TEX
+=SML
+fun €cons_update_theory_db› (para : Z_PARA) : unit = (
+	case parainfo_of_z_para para of
+	FixityInfo fixinfo => set_zfixity_info fixinfo
+	|AbbDefInfo pbody => abbdef_defn false pbody
+	|SchBoxInfo pbody => abbdef_defn true pbody
+	|AxDesInfo pbody => cons_axdes_defn pbody
+	|GivenSetInfo pbody => givenset_defn pbody
+	|FreeTypeInfo pbody => freetype_defn pbody
+	|ConstraintInfo pbody => constraint_defn pbody
+	|ConjectureInfo _ => ()
+);
+=TEX
+=SML
+fun €my_tco_update_theory_db› (para : Z_PARA) : unit = (
+	case parainfo_of_z_para para of
+	FixityInfo fixinfo => set_zfixity_info fixinfo
+	|GivenSetInfo pbody => givenset_defn pbody
+	|FreeTypeInfo pbody => givenset_defn (map fst pbody, Nil)
+	|_ => tco_update_theory_db para
+);
+=TEX
+=SML
+fun €update_theory_db› (para : Z_PARA) : unit = (
+	(if get_flag "z_type_check_only"
+	then my_tco_update_theory_db
+	else if get_flag "z_use_axioms"
+	then ax_update_theory_db
+	else cons_update_theory_db) para
 );
 =TEX
 =SML
@@ -859,29 +1234,8 @@ local
 	open ZReaderWriter;
 	open ZUserInterfaceSupport ZLex ZParser ZTypeInference ZTermGenerator;
 in
-val €z_type_check_only› = ref true;
 
 val €debug› : Z_INFERRED OPT ref = ref Nil;
-
-val _ = if contains (map fst (get_flags()))
-			"z_type_check_only"
-	then	()
-	else	new_flag{name = "z_type_check_only",
-			control = z_type_check_only,
-			default = fun_true,
-			check = fun_true
-	};
-
-val €z_use_axioms› = ref true;
-
-val _ = if contains (map fst (get_flags()))
-			"z_use_axioms"
-	then	()
-	else	new_flag{name = "z_use_axioms",
-			control = z_use_axioms,
-			default = fun_true,
-			check = fun_true
-	};
 
 val €standard_z_paras› = ref true;
 
@@ -991,13 +1345,7 @@ let	val side_effect =
 	val side = (debug := Value type_checked);
 	val para = z_para_of_zinferred type_checked;
 in
-	if get_flag "z_type_check_only"
-	then	ZTypeCheckOnlyMode.update_theory_db para
-	else	if get_flag "z_use_axioms"
-		then
-			ZProofMode.ax_update_theory_db para
-		else
-			ZProofMode.ax_update_theory_db para
+	ZProofMode.update_theory_db para
 end);
 
 =TEX
@@ -1021,13 +1369,7 @@ let	val side_effect =
 	val side = (debug := Value type_checked);
 	val para = z_para_of_zinferred type_checked;
 in
-	if get_flag "z_type_check_only"
-	then	ZTypeCheckOnlyMode.update_theory_db para
-	else	if get_flag "z_use_axioms"
-		then
-			ZProofMode.ax_update_theory_db para
-		else
-			ZProofMode.ax_update_theory_db para
+	ZProofMode.update_theory_db para
 end);
 
 =TEX
@@ -1051,13 +1393,7 @@ let	val side_effect =
 	val side = (debug := Value type_checked);
 	val para = z_para_of_zinferred type_checked;
 in
-	if get_flag "z_type_check_only"
-	then	ZTypeCheckOnlyMode.update_theory_db para
-	else	if get_flag "z_use_axioms"
-		then
-			ZProofMode.ax_update_theory_db para
-		else
-			ZProofMode.ax_update_theory_db para
+	ZProofMode.update_theory_db para
 end);
 =TEX
 \subsection{Z General Text Recogniser}
@@ -1080,13 +1416,7 @@ let	val side_effect =
 	val side = (debug := Value type_checked);
 	val para = z_para_of_zinferred type_checked;
 in
-	if get_flag "z_type_check_only"
-	then	ZTypeCheckOnlyMode.update_theory_db para
-	else	if get_flag "z_use_axioms"
-		then
-			ZProofMode.ax_update_theory_db para
-		else
-			ZProofMode.ax_update_theory_db para
+	ZProofMode.update_theory_db para
 end);
 =TEX
 \section{RECOGNIZING Z TERMS}
