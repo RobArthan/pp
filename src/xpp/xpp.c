@@ -13,8 +13,8 @@
 
 #define _xpp
 
-#define XtNcommandLine	"commandLine"
-#define XtCCommandLine	"CommandLine"
+#define XtNtextTranslations	"textTranslations"
+#define XtCTextTranslations	"TextTranslations"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files: 
@@ -28,12 +28,15 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Static and global data
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+XtTranslations text_translations;
+
 #ifdef BUILDVERSION
 static char *title = "  xpp    v" BUILDVERSION "  ";
 #else
 static char *title = "xpp (test version)";
 #endif
-char *file_name;
+static char *file_name;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Following option table reserves single lower-case letter
@@ -69,6 +72,27 @@ static XrmOptionDescRec options [] = {
 	{"-y", "*commandLine",  XrmoptionSkipLine, NULL},
 	{"-z", "*commandLine",  XrmoptionSkipLine, NULL}
 };
+
+typedef struct {
+	XtTranslations text_translations;
+} XppResources;
+
+XppResources xpp_resources;
+
+static XtResource resources[] = {
+	{
+		XtNtextTranslations,
+		XtCTextTranslations,
+		XtRTranslationTable,
+		sizeof(char *),
+		XtOffsetOf(XppResources, text_translations),
+		XtRString,
+		""
+	}
+};
+
+		
+
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Usage line
@@ -179,6 +203,14 @@ char **argv;
 	XtVaSetValues(root,
 		XmNtitle, title,
 		NULL);
+
+	XtVaGetApplicationResources(root,
+		&xpp_resources,
+		resources,
+		XtNumber(resources),
+		NULL);
+
+	text_translations = xpp_resources.text_translations;
 
 	global_options.command_line = get_command_line(argc, argv);
 
