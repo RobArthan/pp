@@ -1,0 +1,361 @@
+% imp016.doc   %Z% $Date$ $Revision$ $RCSfile$
+=TEX
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation of Z Paragraphs}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP049}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}  %% Mandatory field (with sensible default)
+\TPPstatus{Draft}
+%\TPPstatus{Approved}
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.D.~Arthan & FST Team Leader}
+\TPPabstract{This document contains the implementation of the interface used to input Z specifications into the Z Proof Support System.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+      Library \\ R.D. Arthan\\ D.J. King}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+
+\item[Issue 1.1] First Draft
+
+\end{description}
+\subsection{Changes Forecast}
+When a Z lexical analyser and a Z lexis is available
+\cite{DS/FMU/IED/DTD060}, the
+implementation will be modified to use that. Also, the
+Z term representation which is used by the parser for
+parsed terms will be modified to be brought into line
+when the representation has been agreed and made available
+in the Z term/schematext parser design \cite{DS/FMU/IED/DTD061}.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+The implementation contained in this document corresponds
+to the design of Z paragraphs in \cite{DS/FMU/IED/DTD049}.
+\subsection{Introduction}
+\subsubsection{Background and Purpose}
+\subsubsection{Dependencies}
+\subsubsection{Possible Enhancements}
+\subsubsection{Deficiencies}
+
+\section{EXTENSIONS TO READER/WRITER}
+
+=SML
+structure ÛZParagraphsÝ : ZParagraphs = struct
+=TEX
+=SML
+local
+open Lex;
+open ReaderWriterSupport;
+open PrettyNames;
+open HOLReaderWriter;
+open SymbolTable;
+in
+=TEX
+=SMLLITERAL
+val sd = let open PrettyNames in add_new_symbols [
+	([	"StartZGeneric"],	Value "", Starting(specific_quotation, "")),
+	([	"StartZSchema"],	Value "ÿ", Starting(specific_quotation, "")),
+	([	"EndZBox"],	Value "ˆ", Ending ""),
+	([	"StartZTerm"],	Value "ñ", Starting(specific_quotation, ""))
+] end;
+=TEX
+=SML
+val Ûz_axbox_readerÝ = HOL_reader "Z_axbox_recogniser";
+val Ûz_genbox_readerÝ = HOL_reader "Z_genbox_recogniser";
+val Ûz_schbox_readerÝ = HOL_reader "Z_schbox_recogniser";
+val Ûz_term_readerÝ = HOL_reader "Z_term_recogniser";
+val Ûz_other_readerÝ = HOL_reader "Z_other_recogniser";
+=TEX
+=SMLLITERAL
+val sd = add_named_reader("¹", "ZAX", "Lex.Term", z_axbox_reader);
+val sd = add_specific_reader("", "Lex.Term", z_genbox_reader);
+val sd = add_specific_reader("ÿ", "Lex.Term", z_schbox_reader);
+val sd = add_specific_reader("ñ", "Lex.Term", z_term_reader);
+val sd = add_named_reader("¹", "Z", "Lex.Term", z_other_reader);
+=TEX
+
+\section{PARSING Z PARAGRAPHS}
+\subsection{The $ZParagraph$ Datatype}
+=SML
+
+datatype ÛZPARAGRAPHÝ	= ZPAbbDef of IDENT * ZOPCLASS * (IDENT list) * ZTM
+			| ZPAxDes of IDENT list * ZSCHTEXT
+			| ZPGivens of (IDENT list)
+			| ZPConstraint of (IDENT list * ZTM)
+			| ZPFreeType of IDENT * (IDENT * (ZTM OPT)) list;
+=TEX
+\subsection{The Parsing Functions}
+\subsubsection{Identifiers}
+=SML
+fun Ûparse_identsÝ ((HTLsqbrack::more) : HOL_TOKEN list) = (
+let	fun aux res (HTRsqbrack :: more) = (res, more)
+	|   aux res (HTName name :: more) = aux (res@[name]) more
+	|   aux res (HTInOp{name=",", is_type_op=_,
+		is_term_op=_, prec=_}:: more) = aux res more
+	|   aux res _ = fail "parse_idents" 49070 [];
+in	aux [] more
+end
+) | parse_idents htl = ([], htl);
+
+=TEX
+\subsubsection{Axiomatic Boxes}
+
+=SML
+fun Ûparse_axboxÝ (tokens : HOL_TOKEN list) = (
+let	val (params, rest) = parse_idents tokens;
+in	(params, parse_z_schtext rest)
+end
+);
+=TEX
+\subsubsection{Schema Boxes}
+=SML
+fun Ûparse_schboxÝ (HTName name :: more : HOL_TOKEN list) = (
+let	val (params, rest) = parse_idents more;
+in	(name, ZNormal, params, parse_z_term rest)
+end
+) | parse_schbox _ = fail "parse_schbox" 49040 [];
+=TEX
+\subsubsection{Abbreviations}
+=SML
+
+fun Ûparse_abbreviationÝ (tokens : HOL_TOKEN list) = (
+let
+	fun aux branch (HTInOp{name="=",is_type_op=_,is_term_op=_,prec=_} :: rest) =
+		(branch, rest)
+	  | aux branch (next :: more) = aux (branch@[next]) more
+	  | aux branch _ = fail "parse" 49020 [];
+	fun aux1 (HTInOp{name="=",is_type_op=_,is_term_op=_,prec=_} :: rest) =
+		rest
+	  | aux1 _ = fail "parse" 49020 [];
+	val (lhs, rest) = aux [] tokens;
+	val (name, zop, params) = parse_deflhs lhs;
+	val rest = aux1 rest;
+in
+	(name, zop, params, parse_z_term rest)
+end
+);
+=TEX
+\subsubsection{Horizontal Schema Definitions}
+=SML
+fun Ûparse_horiz_schemaÝ (tokens : HOL_TOKEN list) = (
+let
+	fun aux branch (HTName "¦" :: rest) =
+		(branch, rest)
+	  | aux branch (next :: more) = aux (branch@[next]) more
+	  | aux branch _ = fail "parse" 49030 [];
+	val (lhs, rest) = aux [] tokens;
+	val (name, zop, params) = parse_deflhs lhs;
+in
+	(name, zop, params, parse_z_term rest)
+end
+);
+=TEX
+\subsubsection{Free Type Definitions}
+=SML
+fun Ûparse_free_type_rhsÝ (toks : HOL_TOKEN list) : (IDENT * (ZTM OPT)) list = (
+let
+	fun aux2 (HTName "¢¢" :: rest) = rest
+	  | aux2 _ = fail "parse_free_type" 49040 [];
+	fun aux1 (HTName name :: HTName "§§" :: more) = (
+	let 	val (rest, ztm) = pparse_z_term more;			val rest' = aux2 rest;
+	in	((name,  Value ztm), rest')
+	end	handle X => fail "parse1" 49040 []
+	) | aux1 (HTName name :: more) = (
+		((name, Nil), more)
+	) | aux1 _ = fail "parse2" 49040 [];
+	fun dorest (HTVert :: more) = (
+	let	val (this, rest) = aux1 more
+	in	this :: dorest rest
+	end
+	) | dorest [HTEos] = []
+	| dorest _ = fail "parse3" 49040 [];
+	val (first, more) = aux1 toks;
+in	first :: dorest more
+end
+);
+=TEX
+=SML
+fun Ûparse_free_typeÝ (HTName lhs :: HTColon :: HTColon ::
+	(HTInOp {name = "=", is_type_op =_,is_term_op=_,prec=_}) ::
+	 more) = (
+	(lhs, parse_free_type_rhs more)
+)
+  | parse_free_type _ = fail "parse4" 49040 [];
+=TEX
+\subsubsection{Given Sets}
+=SML
+fun Ûparse_given_setsÝ ((HTLsqbrack::more) : HOL_TOKEN list) : IDENT list = (
+let	fun aux res [HTRsqbrack, HTEos] = res
+	|   aux res (HTName name :: more) = aux (res@[name]) more
+	|   aux res (HTInOp{name=",", is_type_op=_,
+		is_term_op=_, prec=_}:: more) = aux res more
+	|   aux res _ = fail "parse" 49010 [];
+in	aux [] more
+end
+) | parse_given_sets _ = fail "parse" 49010 [];
+=TEX
+\section{Z PARAGRAPH RECOGNISERS}
+\subsection{Z Axiomatic Box Recogniser}
+=SML
+fun ÛZ_axbox_recogniserÝ (start:string, lang:string, value:INPUT list, finish:string) = (
+	if	is_same_symbol(start, "¹")
+	andalso	is_same_symbol(finish, "°")
+	andalso	(lang = "ZAX")
+	then
+		(ZPAxDes (parse_axbox((lex (get_current_terminators())
+			get_fixity) value)))
+	else
+		fail "Z_axbox_recogniser" 22010 [fn () => start, fn () => lang, fn () => finish]
+);
+=TEX
+\subsection{Z Generic Box Recogniser}
+=SML
+fun ÛZ_genbox_recogniserÝ (start:string, lang:string, value:INPUT list, finish:string) = (
+	if	is_same_symbol(start, "StartZGeneric")
+	andalso	is_same_symbol(finish, "EndZBox")
+	andalso	(lang = "")
+	then
+		(ZPAxDes (parse_axbox((lex (get_current_terminators())
+			get_fixity) value)))
+	else
+		fail "Z_genbox_recogniser" 22010 [fn () => start, fn () => lang, fn () => finish]
+);
+=TEX
+\subsection{Z Schema Box Recogniser}
+=SML
+fun ÛZ_schbox_recogniserÝ (start:string, lang:string, value:INPUT list, finish:string) = (
+	if	is_same_symbol(start, "StartZSchema")
+	andalso	is_same_symbol(finish, "EndZBox")
+	andalso	(lang = "")
+	then
+		ZPAbbDef(parse_schbox (
+			(lex (get_current_terminators())
+			get_fixity) value))
+	else
+		fail "Z_schbox_recogniser" 22010 [fn () => start, fn () => lang, fn () => finish]
+);
+=TEX
+\subsection{Z Term Recogniser}
+=SML
+fun ÛZ_term_recogniserÝ (start:string, lang:string, value:INPUT list, finish:string) = (
+	if (is_same_symbol(start, "StartZTerm")
+		andalso	is_same_symbol(finish, ">")
+		andalso	(lang = ""))
+	then
+		(
+		lex (get_current_terminators()) get_fixity) value
+	else
+		fail "Z_term_recogniser" 22010 [fn () => start, fn () => lang, fn () => finish]
+);
+=TEX
+\subsection{Z General Text Recogniser}
+=SML
+datatype PARATYPE =	GivenSet | FreeType | Abbreviation |
+			HorizSchema | Constraint | Other;
+=TEX
+=SML
+fun Ûparagraph_typeÝ (HTLsqbrack::more) : PARATYPE = (
+let	fun aux (HTEos :: more) = GivenSet
+	  | aux _ = Constraint;
+	fun aux1 (HTRsqbrack :: more) = aux more
+	  | aux1 (other :: more) = aux1 more
+	  | aux1 [] = GivenSet
+in aux1 more end
+) | paragraph_type (HTColon :: HTColon ::
+	(HTInOp {name = "=", is_type_op =_,is_term_op=_,prec=_}) :: more) =
+		FreeType
+  | paragraph_type (HTInOp{name="=",is_type_op=_,is_term_op=_,prec=_} ::
+	HTInOp{name="=",is_type_op=_,is_term_op=_,prec=_} :: more) =
+		Abbreviation
+  | paragraph_type (HTName "¦" :: rest) = HorizSchema
+  | paragraph_type (HTEos :: more) = Constraint
+  | paragraph_type (any :: more) = paragraph_type more
+  | paragraph_type [] = Other;
+=TEX
+
+=SML
+fun ÛZ_other_recogniserÝ (start:string, lang:string, value:INPUT list, finish:string) = (
+let	val sd = if (is_same_symbol(start, "¹") andalso is_same_symbol(finish, "°")
+				andalso	(lang = "Z"))
+		then ()
+		else fail "Z_other_recogniser" 22010
+			[fn () => start, fn () => lang, fn () => finish];
+	val tokens = (lex (get_current_terminators()) get_fixity) value;
+in
+	(case paragraph_type tokens of
+	GivenSet =>
+		ZPGivens (parse_given_sets tokens)
+	|FreeType =>
+		ZPFreeType (parse_free_type tokens)
+	|Abbreviation =>
+		ZPAbbDef (parse_abbreviation tokens)
+	|HorizSchema =>
+		ZPAbbDef (parse_horiz_schema tokens)
+	|Constraint => (
+		let val (gen, rest) = parse_idents tokens;
+		in
+			ZPConstraint (gen, parse_z_term rest)
+		end)
+	|Other => fail "parse" 49060 [])
+end);
+
+end (* local ... in *);
+
+=TEX
+\section{EPILOGUE}
+=SML
+end (* of structure ZParagraphs *);
+open ZParagraphs;
+=TEX
+
+\twocolumn[\section{INDEX OF DEFINED TERMS}]
+\printindex
+\end{document}
+
+
