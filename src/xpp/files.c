@@ -206,6 +206,7 @@ static Boolean backup_file(
 	struct stat status;
 	NAT siz;
 	FILE *fp, *backup_fp;
+	const char *suffix = ".xpp.backup";
 
 	*backup_name = NULL;
 	if(stat(name, &status) == 0) { /* file exists */
@@ -218,13 +219,13 @@ static Boolean backup_file(
 	};
 
 	siz = strlen(name);
-	if((*backup_name = XtMalloc(siz + 5)) == NULL) {
+	if((*backup_name = XtMalloc(siz + strlen(suffix) + 1)) == NULL) {
 		file_error_dialog(w,
 			no_backup_name_space_message, name);
 		return False;
 	};
 	strcpy(*backup_name, name);
-	strcpy(*backup_name + siz, ".old");
+	strcpy(*backup_name + siz, suffix);
 	if((backup_fp = fopen(*backup_name, "w")) == NULL) {
 		fclose(fp);
 		XtFree(*backup_name);
