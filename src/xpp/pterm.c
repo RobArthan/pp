@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.25 2003/05/07 16:32:20 rda Exp rda $
+ * $Id: pterm.c,v 2.26 2003/05/08 11:23:29 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -1092,8 +1092,8 @@ void new_editor(void)
 				perror("xpp");
 				exit(9);
 			}
-			/* exec argv[0] -file "" */
-			execlp(argv0, argv0, "-file", "", NULL);
+			/* exec argv[0] "" */
+			execlp(argv0, argv0, "", NULL);
 			/* **** error if reach here **** */
 			msg("system error", "could not exec");
 			perror("xpp");
