@@ -99,9 +99,25 @@ structure ZLex : ZLex = struct
 =TEX
 \section{DATA TYPES}
 \subsection{Interface with Parser}
+\subsubsection{Z Fixity Information}
+=SML
+datatype ÛCLASSÝ =
+	ÛFunÝ of int
+	|ÛRelÝ
+	|ÛGenÝ of int;
+=TEX
+=SML
+datatype ÛFANCYFIXÝ =
+	ÛBeginOpÝ	|ÛEndOpÝ	|ÛInOpÝ	|ÛPostBeginOpÝ
+	|ÛThenOpÝ	|ÛPostOpÝ	|ÛPreEndOpÝ	|ÛPreOpÝ;
+=TEX
+=SML
+type ÛZFIXITYÝ 	= FANCYFIX * CLASS;
+=TEX
+
 \subsubsection{Identifiers and Literals}
 =SML
-datatype ÛZ_TOKENÝ	=
+datatype ÛZTOKENÝ	=
 		ÛZTAqTmÝ of TERM
 	|	ÛZTIdÝ of string
 	|	ÛZTDecorÝ of string
@@ -114,13 +130,14 @@ The following constructors identify the fixity of
 identifiers which are stored in the symbol table.
 =SML
 
-	|	ÛZTBeginOpÝ of string
-	|	ÛZTEndOpÝ of string
-	|	ÛZTInOpÝ of string
-	|	ÛZTPostBeginOpÝ of string
-	|	ÛZTPostOpÝ of string
-	|	ÛZTPreEndOpÝ of string
-	|	ÛZTPreOpÝ of string
+	|	ÛZTBeginOpÝ of string * CLASS
+	|	ÛZTEndOpÝ of string * CLASS
+	|	ÛZTInOpÝ of string * CLASS
+	|	ÛZTPostBeginOpÝ of string * CLASS
+	|	ÛZTThenOpÝ of string * CLASS
+	|	ÛZTPostOpÝ of string * CLASS
+	|	ÛZTPreEndOpÝ of string * CLASS
+	|	ÛZTPreOpÝ of string * CLASS
 =TEX
 \subsubsection{Paragraph Separators}
 The following constructors correspond to paragraph
@@ -190,7 +207,78 @@ forming tokens:
 	|	ÛZTÊÝ
 	|	ÛZTEosÝ;
 =TEX
+\section{Z FIXITY INFORMATION SUPPORT}
+=SML
+local
+	val base1 = 4;
+	val base2 = 8;
+in
+=TEX
+=SML
+fun Ûdeclare_zfixityÝ (id : string, (ff, cl) : ZFIXITY) : unit = (
+let	val enc_cl = (
+		case cl of
+		Fun i => i * base1
+		|Rel =>  1
+		|Gen i => i * base1 + 2);
+	val enc_ff = (
+		case ff of
+		BeginOp => 0
+		|EndOp => 1
+		|InOp => 2
+		|PostBeginOp => 3
+		|ThenOp => 4
+		|PostOp => 5
+		|PreEndOp => 6
+		|PreOp => 7);
+in
+	SymbolTable.declare_prefix (enc_cl*base2 + enc_ff, id)
+end);
+=TEX
+=SML
+fun Ûget_zfixityÝ (id:string) : ZFIXITY = (
+let	val enc = (
+		case SymbolTable.get_fixity id of
+		Prefix i => i
+		|_ => fail "get_zfixity" 60020 [fn()=>id]);
+	val ff = (
+		case enc mod base2 of
+		0 => BeginOp
+		|1 =>EndOp
+		|2 => InOp
+		|3 => PostBeginOp
+		|4 => ThenOp
+		|5 => PostOp
+		|6 => PreEndOp
+		|7 => PreOp
+		|_ => fail "get_zfixity" 60021[]);
+	val enc_cl = enc div base2;
+	val pri = enc_cl div base1;
+	val cl = (
+		case enc_cl mod base1 of
+		0 => Fun pri
+		|1 => Rel
+		|2 => Gen pri
+		|_ => fail "get_zfixity" 60021 []);
+in
+	(ff, cl)
+end);
 
+end (* local ... in *);
+=TEX
+=SML
+fun Ûundeclare_zfixityÝ (id:string) : unit = (
+	declare_nonfix id
+);
+=TEX
+=IGN
+declare_zfixity ("a",(InOp, Fun 0));
+declare_zfixity ("b",(EndOp, Gen 0));
+declare_zfixity ("c",(BeginOp, Rel));
+declare_zfixity ("d",(PostBeginOp, Fun 123456));
+declare_zfixity ("e",(InOp, Gen 987654));
+
+=TEX
 \section{THE LEXICAL ANALYSER}
 \subsection{Local Type Definitions}
 The main lexical analysis algorithm is exception-driven
@@ -374,7 +462,7 @@ fun ÛnextÝ (test : string -> bool) ((c :: _, _) : LEX_STATE) = test c
 When a lexeme 
 has been recognised, the following function is used to classify the result.
 =SML
-fun ÛclassifyÝ (what : string) : Z_TOKEN = (
+fun ÛclassifyÝ (what : string) : ZTOKEN = (
 	case what of
 		"Ì" => ZTÌ
 	|	"Í" => ZTÍ
@@ -761,19 +849,21 @@ The supporting function $opclass$ determines fixity information
 of known identifiers.
 =SML
 fun ÛopclassÝ s = (
-	case get_fixity s of
-	Prefix 1 => ZTBeginOp s
-	|Prefix 2 => ZTEndOp s
-	|Prefix 3 => ZTInOp s
-	|Prefix 4 => ZTPostBeginOp s
-	|Prefix 5 => ZTPostOp s
-	|Prefix 6 => ZTPreEndOp s
-	|Prefix 7 => ZTPreOp s
-	|other => ZTId s
+	(case get_zfixity s of
+	(BeginOp, cl) => ZTBeginOp (s, cl)
+	|(EndOp, cl) => ZTEndOp (s, cl)
+	|(InOp, cl) => ZTInOp (s, cl)
+	|(PostBeginOp, cl) => ZTPostBeginOp (s, cl)
+	|(ThenOp, cl) => ZTThenOp(s, cl)
+	|(PostOp, cl) => ZTPostOp(s, cl)
+	|(PreEndOp, cl) => ZTPreEndOp (s, cl)
+	|(PreOp, cl) => ZTPreOp(s, cl))
+		handle Fail msg =>
+			ZTId s
 );
 =TEX
 =SML
-fun Ûlex_stringÝ (ip : string list) : Z_TOKEN list = (
+fun Ûlex_stringÝ (ip : string list) : ZTOKEN list = (
 	case skip_space (ip, Unknown) of
 	([], _) => []
 	|other => (
@@ -801,7 +891,7 @@ fun Ûlex_stringÝ (ip : string list) : Z_TOKEN list = (
 This is the lexical analyser function, visible via
 the signature $ZLex$.
 =SML
-fun ÛzlexÝ (ip : INPUT list) : Z_TOKEN list = (
+fun ÛzlexÝ (ip : INPUT list) : ZTOKEN list = (
 	case ip of
 	Text s1 :: Text s2 :: more => (
 		error
@@ -869,6 +959,7 @@ end; (* of structure Lex *)
 ñð®;
 ñ(®;
 
+fun z s = ZLex.zlex [Lex.Text s];
 
 
 °
