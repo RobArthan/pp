@@ -119,8 +119,8 @@ This removes the need for various special cases and type conversion functions.
 \item[Issue 1.119] Improved coverage of checks against ranges as expressions.
 \item[Issue 1.120] Support for NOTHING statement form.
 \item[Issue 1.121] R0096: improved formatting of nothing statement form in web clauses
-\item[Issue 1.122, 1.123]  Improved error messages for syntax errors generally and undeclared or
-incorrect label errors in particular.
+\item[Issue 1.122, 1.123]  Improved error messages for syntax errors generally .
+\item[Issue 1.124] The name at the end of a package specification or a proper body is now optional.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -459,7 +459,6 @@ datatype €PPARSED› =
 	|	€PPKSlotCUList› of KSLOT_COMPILATION_UNIT list
 	|	€PPMode› of MODE
 	|	€PPPackageSpecification› of DECLARATION PACKAGE_DECLARATION
-	|	€PPParameterAssociation› of DECLARATION PACKAGE_DECLARATION
 	|	€PPPragma› of (AGG_CHOICE, EXP) PRAGMA
 	|	€PPPragmaArgs› of (AGG_CHOICE OPT * EXP) list
 	|	€PPPragmaList› of (AGG_CHOICE, EXP) PRAGMA list
@@ -471,7 +470,7 @@ datatype €PPARSED› =
 	|	€PPRepresentationClause› of REPRESENTATION_CLAUSE
 	|	€PPStatement› of STATEMENT
 	|	€PPSubInds› of (EXP * SI_CONSTRAINT) list
-	|	€PPSubprogram› of (DECLARATION list * STATEMENT * ID)
+	|	€PPSubprogram› of (DECLARATION list * STATEMENT * ID list)
 	|	€PPSubprogramSpec› of SUBPROGRAM_SPECIFICATION
 	|	€PPSubtypeIndication› of (EXP * SI_CONSTRAINT)
 	|	€PPTypeDef› of SI_TYPE_DEF
@@ -480,11 +479,17 @@ datatype €PPARSED› =
 	|	€PPVarDecls› of SI_VAR_DECL list
 	|	€PPWebClause› of WEB_CLAUSE;
 =TEX
-
+In the following, the list will have at most 2 elements (it is always the concatenation of the names
+found at the beginning and end of a proper body, a package declaration or similar.
 =SML
-fun €different_ids› (id1 : ID, id2 : ID) : bool = (
+fun €different_ids› ([id1, id2] : ID list) : bool = (
     (id1 <> id2)
-    );
+) | different_ids _ = false;
+=TEX
+In the following, the list will have at most 1 element (it always represents an optional construct)
+=SML
+fun €opt_of_list› ([x] : 'a list) : 'a OPT = Value x
+| opt_of_list _ = Nil;
 =TEX
 =SML
 fun €mk_type_mark› (e : EXP) : TMARK = (
@@ -1804,17 +1809,12 @@ SPARK manual 5.5:
 =SML
 fun €red_loop_statement› (Parsed(PPIds ids)) (Parsed p) (Parsed(PPExps es))
     (Parsed(PPStatement st)) (Parsed(PPIds ids')) _ = (
-let val side = case (ids', ids) 
-    of ([id'], [id]) => (
-            if different_ids (id', id)
+let val side = (
+            if different_ids (ids' @ ids)
             then    parse_error 503001 "LOOP names do not match"
             else    ()
-        )|  _ => (
-            ()
         );
-    val name = case ids 
-    of [id] => Value id
-            |_ => Nil;
+    val name = opt_of_list ids;
     val till = case es 
     of [EAuxiliaryExp tm] => Value tm
             |_ => Nil;
@@ -2159,32 +2159,34 @@ fun €red_mode4› _ _ = PPMode MSparkInOut;
 SPARK manual 6.3:
 =SML
 fun €red_subprogram_body1› (Parsed (PPProcedureSpecification ps)) _
-    (Parsed (PPSubprogram (d, s, id))) = (
+    (Parsed (PPSubprogram (d, s, ido))) = (
 let val {name=id',...} = ps;
-    val side =if    different_ids (id', id)
+    val side =if    different_ids (id' :: ido)
             then    parse_error 503001 "PROCEDURE identifiers do not match"
             else    ();
 in
-    PPProperBody (PBProcedure {procedure_spec=ps,declarative_part=d,statement=s})
+    PPProperBody (PBProcedure {procedure_spec = ps,declarative_part = d,
+	statement = s, end_name = opt_of_list ido})
 end)
 |   red_subprogram_body1 _ _ _ =
         stack_error "red_subprogram_body1";
 
 fun €red_subprogram_body2› (Parsed (PPFunctionSpecification fs)) _
-    (Parsed (PPSubprogram (d, s, id))) = (
+    (Parsed (PPSubprogram (d, s, ido))) = (
 let val {designator=id',...} = fs;
-    val side =if    different_ids (id', id)
+    val side =if    different_ids (id' :: ido)
             then    parse_error 503001 "FUNCTION designators do not match"
             else    ();
 in
-    PPProperBody (PBFunction {function_spec=fs,declarative_part=d,statement=s})
+    PPProperBody (PBFunction {function_spec = fs,declarative_part = d,
+		statement = s, end_name=opt_of_list ido})
 end)
 |   red_subprogram_body2 _ _ _ =
         stack_error "red_subprogram_body2";
 
 fun €red_subprogram_implementation› (Parsed(PPDeclarations d)) _ 
-    (Parsed(PPStatement s)) _ (Token ((_,CNText id), _)) _ = (
-    PPSubprogram (d, s, id))
+    (Parsed(PPStatement s)) _ (Parsed(PPIds ido)) _ = (
+    PPSubprogram (d, s, ido))
 |   red_subprogram_implementation _ _ _ _ _ _ =
         stack_error "red_subprogram_implementation";
 =TEX
@@ -2259,12 +2261,13 @@ fun €red_package_declaration› (Parsed (PPPackageSpecification p)) _ = (
 
 fun €red_package_specification1› _ (Token ((_,CNText id), _))
 	(Parsed (PPAnnotation ann)) _
-    (Parsed(PPDeclarations v)) _ (Token ((_,CNText id'), _)) = (
-let val side =if    different_ids (id', id)
+    (Parsed(PPDeclarations v)) _ (Parsed(PPIds ido)) = (
+let val side =if    different_ids (id::ido)
             then    parse_error 503001 "PACKAGE names do not match"
             else    ();
 in	PPPackageSpecification
-	{name=id,visible_decs=v,private_decs=[],annotation=ann}
+	{name=id,visible_decs = v,private_decs = [],
+		annotation = ann, end_name = opt_of_list ido}
 end)
 |   red_package_specification1 _ _ _ _ _ _ _ =
         stack_error "red_package_specification1";
@@ -2272,13 +2275,14 @@ end)
 fun €red_package_specification2› _ (Token ((_,CNText id), _))
 	(Parsed (PPAnnotation ann))  _
     (Parsed(PPDeclarations v)) _  (Parsed(PPDeclarations p)) _
-    (Token ((_,CNText id'), _)) = (
-let val side =if    different_ids (id', id)
+    (Parsed(PPIds ido)) = (
+let val side =if    different_ids (id::ido)
             then    parse_error 503001 "PACKAGE names do not match"
             else    ();
 in
     	PPPackageSpecification
-	{name=id,visible_decs=v,private_decs=p,annotation=ann}
+	{name = id, visible_decs = v, private_decs = p,
+		annotation = ann, end_name = opt_of_list ido}
 end)
 |   red_package_specification2 _ _ _ _ _ _ _ _ _ =
         stack_error "red_package_specification2";
@@ -2335,25 +2339,25 @@ val €red_pdec3› = red_accept;
 =SML
 fun €red_package_body› _ _ (Token ((_,CNText id), _)) 
 	(Parsed (PPAnnotation ann)) _
-    (Parsed(PPSubprogram (d,s, _))) _ (Token ((_,CNText id'), _)) _ = (
-let val side =if    different_ids (id', id)
+    (Parsed(PPSubprogram (d,s, _))) _ (Parsed(PPIds ido)) _ = (
+let val side =if    different_ids (id::ido)
             then    parse_error 503001 "PACKAGE names do not match"
             else    ();
 in
    	PPProperBody
-	(PBPackage{name=id,decls=d,statement=s,annotation=ann})
+	(PBPackage{name=id,decls=d,statement=s,annotation=ann, end_name = opt_of_list ido})
 end)
 |   red_package_body _ _ _ _ _ _ _ _ _ =
         stack_error "red_package_body";
 
 fun €red_package_implementation1› (Parsed (PPDeclarations d)) = (
-    PPSubprogram (d, (STNull SNImplicit), ""))
+    PPSubprogram (d, (STNull SNImplicit), []))
 |   red_package_implementation1 _ =
         stack_error "red_package_implementation1";
 
 fun €red_package_implementation2› (Parsed (PPDeclarations d)) _
     (Parsed(PPStatement s)) = (
-    PPSubprogram (d, s, ""))
+    PPSubprogram (d, s, []))
 |   red_package_implementation2 _ _ _ =
         stack_error "red_package_implementation2";
 
@@ -2366,7 +2370,7 @@ fun €red_package_implementation3› (Parsed (PPDeclarations using))
 	if      any d is_k_slot
 	then    parse_error 503001
 		"a k-slot is not allowed after the using declarations"
-	else    PPSubprogram (using@d, (STNull SNImplicit), ""))
+	else    PPSubprogram (using@d, (STNull SNImplicit), []))
 |   red_package_implementation3 _ _  =
         stack_error "red_package_implementation3";
 
@@ -2375,7 +2379,7 @@ fun €red_package_implementation4› (Parsed (PPDeclarations using))
 	if      any d is_k_slot
 	then    parse_error 503001
 		"a k-slot is not allowed after the using declarations"
-	else    PPSubprogram (using@d, s, ""))
+	else    PPSubprogram (using@d, s, []))
 |   red_package_implementation4 _ _ _ _ =
         stack_error "red_package_implementation4";
 
