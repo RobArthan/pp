@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.61 2003/06/25 10:55:03 rda Exp rda $
+ * $Id: mainw.c,v 2.62 2003/06/25 15:22:25 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -706,6 +706,10 @@ static Boolean setup_main_window(
 		XtVaSetValues(menubar,
 			XmNmenuHelpWidget, btns[num_btns-1], NULL);
 	}
+
+#ifdef LISTWIDGETS
+	list_widget_hierarchy(XtParent(helpmenu));
+#endif
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Paned window for info bar and script window

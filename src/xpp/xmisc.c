@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.16 2003/06/25 12:23:01 rda Exp rda $
+ * $Id: xmisc.c,v 2.17 2003/06/25 15:22:49 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -600,8 +600,8 @@ static void list_widget_and_descendants(Widget w, path p)
 	path_cell cell;
 	cell.w = w;
 	cell.link = p;
+	fprintf(stderr, "%s ", (XtClass(w))->core_class.class_name);
 	(void)print_path(&cell);
-	fprintf(stderr, " %s", (XtClass(w))->core_class.class_name);
 	fprintf(stderr, "\n");
 	if(XtIsComposite(w)) {
 		Widget *children;

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2003/06/25 10:55:03 $ $Revision: 2.27 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2003/06/25 15:23:22 $ $Revision: 2.28 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -227,7 +227,7 @@ Boolean yes_no_dialog(Widget w, char *question)
 		XmStringFree(no);
 		XmStringFree(confirm);
 #ifdef LISTWIDGETS
-		list_widget_hierarchy(dialog);
+		list_widget_hierarchy(XtParent(dialog));
 #endif
 	}
 	text = format_msg(question, MSG_LINE_LEN);
@@ -284,7 +284,7 @@ Boolean quit_new_dialog(Widget w, char *question)
 		XmStringFree(new);
 		XmStringFree(confirm);
 #ifdef LISTWIDGETS
-		list_widget_hierarchy(dialog);
+		list_widget_hierarchy(XtParent(dialog));
 #endif
 	}
 	text = format_msg(question, MSG_LINE_LEN);
@@ -346,7 +346,7 @@ int yes_no_cancel_dialog(Widget w, char *question)
 		XmStringFree(cancel);
 		XmStringFree(confirm);
 #ifdef LISTWIDGETS
-		list_widget_hierarchy(dialog);
+		list_widget_hierarchy(XtParent(dialog));
 #endif
 	}
 	text = format_msg(question, MSG_LINE_LEN);
@@ -444,7 +444,7 @@ void ok_dialog(Widget w, char *msg)
 		XmStringFree(ok);
 		XmStringFree(error);
 #ifdef LISTWIDGETS
-		list_widget_hierarchy(dialog);
+		list_widget_hierarchy(XtParent(dialog));
 #endif
 	}
 	text = format_msg(msg, MSG_LINE_LEN);
@@ -504,7 +504,7 @@ void memory_warning_dialog(Widget w, Boolean show)
 		XtVaSetValues(dialog, XmNmessageString, text, NULL);
 		XmStringFree(text);
 #ifdef LISTWIDGETS
-		list_widget_hierarchy(dialog);
+		list_widget_hierarchy(XtParent(dialog));
 #endif
 	}
 	if(!show) {
@@ -561,7 +561,7 @@ void nomemory_dialog(Widget w, Boolean show)
 		XtVaSetValues(dialog, XmNmessageString, text, NULL);
 		XmStringFree(text);
 #ifdef LISTWIDGETS
-		list_widget_hierarchy(dialog);
+		list_widget_hierarchy(XtParent(dialog));
 #endif
 	}
 	if(!show) {
@@ -626,7 +626,7 @@ char *file_dialog(Widget w, char *opn)
 			NULL);
 		XmStringFree(title);
 #ifdef LISTWIDGETS
-		list_widget_hierarchy(dialog);
+		list_widget_hierarchy(XtParent(dialog));
 #endif
 	}
 
@@ -799,7 +799,7 @@ void startup_dialog(Widget w, char **cmd_line, char **file_name)
 	XtManageChild(dialog);
 
 #ifdef LISTWIDGETS
-	list_widget_hierarchy(dialog);
+	list_widget_hierarchy(XtParent(dialog));
 #endif
 
 	XtPopup(XtParent(dialog), XtGrabNone);
