@@ -194,5 +194,7 @@ void number_verify_cb(
 	extern void undo_modify_cb();
 	extern void undo_cb();
 #endif
-
+#ifndef _pixmaps
+	extern Pixmap get_pp_pixmap();
+#endif
 

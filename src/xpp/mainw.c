@@ -140,21 +140,23 @@ XtAppContext app; /* global because needed in msg.c */
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Widget	Parent	 Purpose
- * root		-	 the top level of the hierarchy
- * frame	root	 main window
- * work		frame	 work area
- * journal	work	 displays application output
- * filename     work     rowcol for the next two:
- * filelabel    filename label for name of file being edited
- * modified	filename	label indicating that the file has changed
- * namestring   filename displays name of file being edited
- * script	work	 the script being edited
- * menubar	frame	 the menu bar at the top of the main window
- * filemenu	menubar	 the file menu
- * toolsmenu	menubar	 the tools menu
- * editmenu	menubar	 the edit menu
- * cmdmenu	menubar	 the command menu
- * helpmenu	menubar	 the help menu
+ * root		-	  the top level of the hierarchy
+ * frame	root	  main window
+ * work		frame	  work area
+ * journal	work	  displays application output
+ * infobar	work	  manager for filename and logo
+ * filename   infobar  rowcol for the next three:
+ * filelabel  filename label for name of file being edited
+ * namestring filename displays name of file being edited
+ * modified	filename label indicating that the file has changed
+ * logo		infobar	  ProofPower logo
+ * script	work	  the script being edited
+ * menubar	frame	  the menu bar at the top of the main window
+ * filemenu	menubar	  the file menu
+ * toolsmenu	menubar	  the tools menu
+ * editmenu	menubar	  the edit menu
+ * cmdmenu	menubar	  the command menu
+ * helpmenu	menubar	  the help menu
  *
  * All widgets have the same name in the widget hierarchy
  * as their C name.
@@ -164,7 +166,8 @@ XtAppContext app; /* global because needed in msg.c */
 Widget root;	/* global because needed in xpp.c */
 
 static Widget
-	frame, work, journal, filename, filelabel, modified, namestring, script,
+	frame, work, journal, infobar, filename, filelabel, modified,
+	namestring, logo, script,
 	menubar, filemenu, toolsmenu, editmenu, cmdmenu, helpmenu;
 
 XtPointer undo_ptr;
@@ -494,13 +497,18 @@ if( !global_options.edit_only ) {
 	}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * File-name area:
+ * Info Bar: File-name area and logo
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+	infobar = XtVaCreateWidget("filename",
+		xmFormWidgetClass, work,
+		NULL);
+
 	filename = XtVaCreateWidget("filename",
-		xmRowColumnWidgetClass, work,
+		xmRowColumnWidgetClass, infobar,
 		XmNorientation,	XmHORIZONTAL,
 		XmNpacking,	XmPACK_TIGHT,
+		XmNleftAttachment,	XmATTACH_FORM,
 		NULL);
 
 
@@ -524,6 +532,14 @@ if( !global_options.edit_only ) {
 		NULL);
 	XmStringFree(s1);
 
+	logo = XtVaCreateManagedWidget("logo",
+		xmLabelWidgetClass, infobar,
+		XmNlabelType,		XmPIXMAP,
+		XmNlabelPixmap,	get_pp_pixmap(),
+		XmNtopAttachment,	XmATTACH_FORM,
+		XmNbottomAttachment,	XmATTACH_FORM,
+		XmNrightAttachment,	XmATTACH_FORM,
+		NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Script window:
@@ -608,6 +624,7 @@ if( !global_options.edit_only ) {
  * Management and Realisation:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	XtManageChild(filename);
+	XtManageChild(infobar);
 	XtUnmanageChild(modified);
 	XtManageChild(menubar);
 	XtManageChild(script);
