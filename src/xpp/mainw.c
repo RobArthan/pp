@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.82 2004/03/09 17:15:39 rda Exp rda $
+ * $Id: mainw.c,v 2.83 2004/06/30 16:42:46 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -93,7 +93,9 @@ static char *no_selection_message =
 static char* kill_message =
 "Do you really want to kill the application?";
 
-static char* not_running_message =
+/* The following is global: it is also used in cmdline.c */
+
+char* not_running_message =
 "The application is not running";
 
 static char* restart_message =

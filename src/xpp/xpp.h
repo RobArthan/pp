@@ -182,6 +182,7 @@ typedef enum {
 	extern void scroll_out(char *buf, NAT ct, Boolean ignored);
 	extern void show_modified(Boolean force);
 	extern void show_file_info(void);
+	extern char *not_running_message;
 /* Module: menus */
 	extern	Widget setup_menu(
 		Widget		parent,

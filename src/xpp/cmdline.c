@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.24 2004/02/18 16:37:37 rda Exp rda $
+ * $Id: cmdline.c,v 2.25 2004/02/21 13:44:04 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -490,6 +490,10 @@ static void exec_cb(
 	CmdLineData *cbdata = cbd;
 	char *cmd;
 	static char *nl = "\n";
+	if(!application_alive()) {
+		ok_dialog(root, not_running_message);
+		return;
+	} /* else */
 	if((cmd = XmTextGetString(cbdata->cmd_w)) != NULL) {
 		send_to_application(cmd, strlen(cmd));
 		send_to_application(nl, 1);
