@@ -241,6 +241,10 @@ Symbol & Name \\\hline\hline
  Ñ
 =TEX
 & Specification statement symbol \\\hline
+=INLINEFT
+ ò
+=TEX
+& Function specification statement symbol \\\hline
 \end{tabular}}
 
 \end{center}
@@ -305,6 +309,7 @@ In addition to the reserved words of ALRM, the following identifiers (which are 
 	by
 	con
 	implement
+	references
 	using
 =TEX
 
@@ -338,15 +343,10 @@ package declarations can only be handled formally when they are used as library 
 
 constant_declaration	=	identifier_list ":" "constant" type_mark ":=" expression ";"
 
-variable_declaration	=	identifier_list ":" type_mark ";"
-			|	identifier_list ":" type_mark ":=" expression ";"
+variable_declaration	=	identifier_list ":" type_mark ";" [ ":=" expression  ] ";"
 =TEX
 
 Named number declarations and declarations involving anonymous types are not supported.
-
-Note that initialisation of variables at declaration is a new feature
-of the SPARK Ada Kernel v3.2, and applies both for simple declarations,
-and within using declarations.
 
 \subsection{Types and Subtypes}\label{3.3}
 \subsubsection{Type Declarations}\label{3.3.1}
@@ -578,8 +578,8 @@ Here
 =TEX
 .
 The optional numeric tag is used to identify the k-slot when the Ada construct whose place it is holding is provided in a refinement or replacement step.
-If the numeric tag is omitted, then the next refinement
-or replacement step in the script that does not specify a tag is taken to 
+If the numeric tag is omitted, then an anonymous tag is implicitly introduced to identify the k-slot.
+The next refinement or replacement step in the script that also omits the tag will be treated as if it referred to this anonymous tag.
 
 
 
@@ -804,7 +804,7 @@ Universal expressions are only handled formally for the universal integer type.
 		"Ñ" frame "[" [pre_condition ","] post_condition "]"
 	|	"Ñ" frame "{" pre_condition "}"
 
-€frame› ::= z_identifier {"," z_identifier}
+€frame› ::= [ z_identifier {"," z_identifier} ]
 
 €pre_condition› ::= z_predicate
 
@@ -841,6 +841,8 @@ X = E
 The forms of specification statement with only one predicate are abbreviations of special cases of the form with two predicates.
 The form with square brackets and only one predicate is taken as having a pre-condition of $true$.
 In the form of specification statement with braces, the post-condition is taken to be $true$.
+
+Anonymous tags are introduced for specification statements appearing as statements without a tag in the same way as for k-slots (see section \ref{3.9}).
 
 A k-slot as a statement cannot be handled formally.
 
@@ -961,7 +963,7 @@ Goto statements are not supported.
 		"procedure" identifier [formal_part]
 		specification_statement
 	|	"function" designator [formal_part] "return" type_mark
-		specification_statement
+		function_specification_statement
 
 €designator› ::= identifier
 
@@ -973,15 +975,26 @@ Goto statements are not supported.
 
 €mode› ::= ["in"] | "in" "out" | "out"
 
+€function_specification_statement› ::=
+		"ò" global_dependencies "[" [pre_condition ","] post_condition "]"
+	|	"ò" global_dependencies "{" pre_condition "}"
 
+€global_dependencies› ::= [ z_identifier {"," z_identifier} ]
 =TEX
 
-For the syntax of specification statements see section \ref{5.1}.
+For the syntax of specification statements see section \ref{5.1};
+
 
 Use of an operator symbol as a function designator is not supported for user-defined functions.
 
 A subprogram, procedure or function is said to be a {\em formal} subprogram, procedure or function if it has a specification statement and is said to be informal otherwise.
 Subprogram calls can only be handled formally for formal subprograms.
+
+A formal function may not have side effects --- the frame of its specification
+statement is implicitily empty. A formal function may read the values
+of variables declared outside the function.
+Such variables must be identified in the global dependencies list of the function specification statement and must be in scope at the point that the function is declared.
+Such variables need not actually be global: they might be local to a subprogram containing the function definition.
 
 \subsection{Formal Parameter Modes}\label{6.2}
 The following rules are applied when a formal procedure call is processed to ensure that parameter aliasing does not compromise the soundness of the VCs generated for the call.
@@ -1161,6 +1174,7 @@ The SPARK program is extracted from a literate script as follows:
 \item Any auxiliary declarations are commented out;
 \item Any using declarations are replaced by their constituent simple declarations;
 \item Any till predicates are commented out;
+\item Any references clauses are commented out;
 \item Any specification statements not occurring as statements are commented out;
 \item The constituent web clauses of the script are scanned in order and k-slots and specification statements in each web clause are expanded in turn;
 \begin{enumerate}
@@ -1176,7 +1190,13 @@ The phrase ``current SPARK program'' or ``current SPARK program for $C$'' is use
 The declarative region in which a Compliance Notation construct occurs is determined by the declarative region it occupies in the current SPARK program.
 
 \subsection{Scope of Declarations}\label{8.2}
-The scope of a declaration includes any Compliance Notation construct, $C$, which would be in the scope of the declaration in the current SPARK program for $C$.
+Within one compilation unit, the scope of a declaration includes any Compliance Notation construct, $C$, which would be in the scope of the declaration in the current SPARK program for $C$.
+
+A compilation unit $U_1$ may only refer to entities defined in another compilation unit, $U_2$, under the following circumstances:
+{\em(a)}, $U_1$ is the package body implementing the package specification in $U_2$ and the entity is a type, constant or variable,
+or, {\em(b)}, $U_2$ gives the package specification of a package identified in the context clause of $U_2$.
+In case {\em(a)}, the entity must be referred to by its simple name, without a package name prefix.
+In case {\em(b)}, since use clauses are not supported, the entity must be referred to with the package name prefix.
 
 \subsection{Visibility}\label{8.3}
 
@@ -1264,9 +1284,11 @@ Generic packages are not supported.
 \subsubsection{Context Clauses --- With Clauses}\label{10.1.1}
 
 =GFT
-€context_clause› ::= [ with_clause ]
+€context_clause› ::= [ with_clause ] [ references_clause ]
 
-€with_clauses› ::= "with" simple_name {"," simple_name} ";"
+€with_clause› ::= "with" simple_name {"," simple_name} ";"
+
+€references_clause› ::= "references" simple_name {"," simple_name} ";"
 =TEX
 
 A context clause contains at most one with clause.
@@ -1274,6 +1296,10 @@ Use clauses are not supported.
 
 To allow use of packages for purely informal purposes, the names in a with clause need not all identify packages whose specifications have been provided.
 The use of entities declared in such packages is not handled formally.
+
+A context clause may also include a references clause.
+A references clause is used to identify packages that are needed to specify the semantics of a compilation unit.
+This allows such packages to be identified without including them in a with clause.
 
 \subsection{Subunits of Compilation Units}
 
@@ -1444,7 +1470,10 @@ The examples used depend on the following definitions:
    subtype €INDEX› is INTEGER range 2 .. 5;
    type €ARR› is array (INDEX) of DAY;
    type €REC› is record  START : DAY; FINISH : DAY; end record; 	 
-   function €MAX› (x, y: DAY) return DAY;
+   function €MAX› (x, y: DAY) return DAY ò [true];
+   function €CONST] return INTEGER ò [CONST = 1001];
+   function €SUMXY] return INTEGER ò X, Y [SUMXY(X, Y) = X + Y];
+   function €XPLUSY] (Y : INTEGER) return INTEGER ò X [XPLUSY(X)(Y) = X + Y];
    ArrVar : €ARR›;
    RecVar : €REC›;
 =TEX
@@ -1604,6 +1633,36 @@ MAX(FRI, THU)
 MAX(FRI, THU)
 =TEX
 .
+A call of a function with neither global dependencies or arguments is translated as a Z global variable, for example
+=INLINEFT
+CONST
+=TEX
+\ is translated as
+=INLINEFT
+CONST
+=TEX
+.
+If a function has global dependencies, then these are formed into
+a tuple (if there is more than one), and become an extra argument to
+the Z function call.
+For example, the
+=INLINEFT
+SUMXY
+=TEX
+\ and
+=INLINEFT
+PLUSX(42)
+=TEX
+\ are translated as
+=INLINEFT
+SUMXY(X, Y)
+=TEX
+\ and
+=INLINEFT
+PLUSX X 42
+=TEX
+\ respectively.
+
 \subsection{Qualified Expressions}\label{Qualified}
 A qualified expression is translated in the same way as its operand.
 For example,
@@ -1909,9 +1968,9 @@ new_script1 {name="usr504pack", state=initial_cn_state,
  package FUNS
  is
     function TEST (A : INTEGER) return BOOLEAN
-     Ñ [COND (A, TEST(A))] ;
+     ò [COND (A, TEST(A))] ;
     function COMPUTE (A : INTEGER) return INTEGER
-     Ñ [COND (A, COMPUTE(A))] ;
+     ò [COND (A, COMPUTE(A))] ;
  end FUNS;
 ∞
 The following Standard ML command is used to set up the tool to process each of the many other little Compliance Notation scripts given in this document.
@@ -2486,7 +2545,7 @@ ns"usr504x16";
 πCN
 with FUNS;
  function vc_return1 (A : INTEGER) return INTEGER
- Ñ [PRE A, POST (A, VC_RETURN1(A))]
+ ò [PRE A, POST (A, VC_RETURN1(A))]
  is
  begin
   return FUNS.COMPUTE(A);
@@ -2509,7 +2568,7 @@ ns"usr504x17";
 πCN
 with FUNS;
  function vc_return2 (A : INTEGER) return INTEGER
- Ñ [PRE A, POST (A, VC_RETURN2(A))]
+ ò [PRE A, POST (A, VC_RETURN2(A))]
  is
  begin
      Ñ  [ PRE1 A , false ]   (1121)
@@ -2598,13 +2657,18 @@ A refinement of the logical constant statement into a sequence of statements is 
 
 \HOLindexOn
 \section{Program Structure}\label{PS}
-The Z paragraphs in a Z document produced by processing a Compliance Notation script are put in {\Product} theories so as to manage the namespace in a way which represents some aspects of the Ada program structure.
-In particular, there may be no more than one Ada compilation unit stored
-in each theory (and in particular, in each script theory). 
+The Z paragraphs in a Z document produced by processing a Compliance Notation script are put in {\Product} theories so as to manage the namespace in a way which represents the Ada program structure.
+For this to work correctly, the following rules are imposed:
+{\em(a)} a script may contain at most one compilation unit,
+and, {\em(b)}, a script delimits the scope of all the k-slots tags and specification statement tags it contains, i.e., the refinement,
+replacement, or arbitrary replacement step that expands a tag must be given in
+the same script as the k-slot or specification statement that introduced the
+tag.
 
-A theory, referred to as the {\em script theory} is created before the script is processed to hold any Z paragraphs in the script,
-and certain kinds of the Z material produced by processing the Ada in the script.
-Processing of the various forms of library unit or secondary unit may then cause other theories to be created as shown in table \ref{UoT}.
+
+A theory, referred to as the {\em script theory} is created before the script is processed to hold any Z paragraphs in the script and the Z paragraphs that are generated directly by the type, constant and function definitions in the script together with the VCs generated for the script.
+
+Processing of the various forms of library unit or secondary unit may cause other theories to be created indirectly as shown in table \ref{UoT}.
 In this table, {\em PACKAGE} (resp. {\em UNIT}, {\em SUBUNIT}) stand for the name of the package (resp. {\em UNIT}, {\em SUBUNIT}) in question; {\em SCRIPT} stands for the name  of the script theory (determined by the function $new\_script$ or $new\_script1$ called by convention at the beginning of each script, see \CNUSERGUIDE). 
 
 With one exception, all VCs generated during processing of a script are placed in the script theory.
