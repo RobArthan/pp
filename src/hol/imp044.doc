@@ -77,6 +77,8 @@ Added $sets\_simple\_¶\_conv$.
 \item[Issue 1.17 (24th June 1992)]
 Renamings from issue 1.6 of \cite{DS/FMU/IED/WRK038},
 mostly proof context name changes.
+\item[Issue 1.18 (27th January 1993)]
+Added $sets\_eq\_conv$ etc.
 \end{description}
 \subsection{Changes Forecast}
 Further theorems, and some function tools will be later provided.
@@ -673,7 +675,175 @@ New term implies old:
 	)
 end);
 =TEX
+\subsection{Extensionality for Sets of Pairs}
+=TEX
+=SML
+local
+	val ÛordxÝ = ord "x";
+	fun ÛxnamesÝ (nm : string, ty : TYPE) : string = (if
+		(ordx = ord nm) handle Ord => true
+		then nm
+		else fail "" 0 []);
+	fun Ûgive_n_namesÝ (nn : int) (lst : string list) : string list = (
+	let	fun nextn n = (let val poss = "x" ^ string_of_int n
+			in
+			if poss mem lst
+			then nextn (n+1)
+			else (n,poss)
+			end);
+		fun nextnm 0 m = []
+		| nextnm n m = (let val (ind,next) = nextn m
+			in
+			(next :: nextnm (n-1) (ind+1))
+			end)
+	in
+		nextnm nn 1
+	end);
 
+	val Ûpair_intro_thmÝ : THM = (¤_t_elim o rewrite_conv[pair_clauses])
+			¬µx : 'a ¸ 'b ·x = (Fst x, Snd x)®;
+
+	val (ÛtyaÝ, ÛtybÝ) = (dest_¸_type o type_of o fst o dest_µ o concl) pair_intro_thm;
+
+	fun Ûexplode_tmÝ (tm : TERM) : THM = (
+		let	fun c1 t = (
+				let	val (ty1, ty2) = dest_¸_type (type_of t);
+				in	(simple_µ_elim t o
+					inst_type_rule[(ty1, tya), (ty2, tyb)])
+					pair_intro_thm
+				end
+			);
+			fun c2 tm =
+				(c1 THEN_TRY_C (LEFT_C c2 AND_OR_C RIGHT_C c2)) tm;
+		in	c2 ORELSE_C refl_conv
+		end	tm
+	);
+
+	fun Ûexploded_bitsÝ tm = (
+		let	val (tm1, tm2) = dest_pair tm;
+		in	exploded_bits tm1 @ exploded_bits tm2
+		end	handle Fail _ => [tm]
+	);
+=TEX
+=SML
+fun Ûgive_new_bitsÝ (ty:TYPE) (tm:TERM) :
+	THM * TERM * TERM list * TERM list * TERM = (
+let	val names = (mapfilter xnames (term_vars tm));
+	val x = mk_var(string_variant names "x", ty);
+	val explode_x_thm = explode_tm x;
+	val exploded = (snd(dest_eq(concl explode_x_thm)));
+	val explode_bits_x = exploded_bits exploded;
+	val xi_names = give_n_names (length explode_bits_x) names;
+	val xi = map (fn (nm,tm) => mk_var(nm,type_of tm))
+		 (combine xi_names explode_bits_x);
+	val construct = subst (combine xi explode_bits_x) exploded;
+in
+	(explode_x_thm, construct, xi, explode_bits_x, x)
+end);
+=TEX
+=SML
+	val Ûsets_ext_thmÝ = rewrite_conv[sets_ext_clauses] ¬a:'a SET = b®;
+	val Ûsets_ext_€_thmÝ = rewrite_conv[€_def] ¬a:'a SET € b®;
+	val Ûsym_sets_ext_thmÝ = all_µ_intro(eq_sym_rule sets_ext_thm);
+	val Ûsym_sets_ext_€_thmÝ = all_µ_intro(eq_sym_rule sets_ext_€_thm);
+	val Û€_def_thmÝ = all_µ_intro sets_ext_€_thm;
+	val Ûgen_sets_ext_thmÝ = all_µ_intro sets_ext_thm;
+	val Û _thmÝ = tac_proof(
+		([], ¬µa b·a   b ¤ (a € b ± ³b € a)®),
+		rewrite_tac[sets_ext_clauses] THEN contr_tac
+		THEN all_asm_fc_tac[]);
+	val Û³_´_thmÝ = taut_rule¬µp q·³(p ´ q) ¤ ³q ± p®;
+=TEX
+=SML
+val rec Û³_µ_´_convÝ : CONV = (fn tm =>
+	((³_simple_µ_conv THEN_C BINDER_C ³_µ_´_conv) ORELSE_C
+	(switch list_simple_µ_elim ³_´_thm o
+		(fn (p, q) => [p, q]) o dest_´ o dest_³)) tm
+);
+=TEX
+=SML
+in
+val Ûsets_eq_convÝ : CONV = (fn tm =>
+let	val (v,w) = dest_eq tm
+		handle complaint =>
+		divert complaint "dest_eq" "sets_eq_conv"
+			44021 [fn () => string_of_term tm];
+	val vty = type_of v;
+	val elem_ty = case dest_ctype vty of
+		("SET",[elem_ty]) => elem_ty
+		| _ => term_fail "sets_eq_conv" 44021 [tm];
+	val i_r = inst_type_rule[(elem_ty, tya)];
+in	if not (is_¸_type elem_ty)
+	then list_simple_µ_elim[v, w]( i_r gen_sets_ext_thm)
+	else
+let
+	val (explode_x_thm, construct, xs, explode_bits_x, x) =
+		give_new_bits elem_ty tm;
+	val s1 = asm_rule tm;
+	val s2 = app_fun_rule
+		(mk_app( (mk_const("",
+			mk_­_type(elem_ty,
+			mk_­_type(vty,BOOL)))),
+			construct)) 
+		s1;
+	val s3 = list_simple_µ_intro xs s2;
+	val s4 = asm_rule (concl s3);
+	val s5 = list_simple_µ_elim explode_bits_x s4;
+	val s6 = conv_rule(RANDS_C (LEFT_C (fn _ => eq_sym_rule explode_x_thm))) s5;
+	val s7 = simple_µ_intro x s6;
+	val s8 = list_simple_µ_elim[v,w] (i_r sym_sets_ext_thm);
+	val s9 = ¤_mp_rule s8 s7;
+	val s10 = ¤_intro (all_´_intro s3) (all_´_intro s9);	
+	val res = eq_trans_rule (refl_conv tm) s10;
+in	res
+end
+end);
+val Û€_convÝ : CONV = (fn tm =>
+let	val (v,w) = dest_bin_op "€_conv" 44022 "€" tm;
+	val vty = type_of v;
+	val elem_ty = case dest_ctype vty of
+		("SET",[elem_ty]) => elem_ty
+		| _ => term_fail "€_conv" 44022 [tm];
+	val i_r = inst_type_rule[(elem_ty, tya)];
+in	if not (is_¸_type elem_ty)
+	then list_simple_µ_elim[v, w](i_r €_def_thm)
+	else
+let
+	val (explode_x_thm, construct, xs, explode_bits_x, x) =
+		give_new_bits elem_ty tm;
+	val s1 = list_simple_µ_elim [v, w](inst_type_rule [(elem_ty, tya)]
+			€_def_thm);
+	val s2 = ¤_mp_rule s1 (asm_rule tm);
+	val s3 = list_simple_µ_intro xs (simple_µ_elim construct s2);
+	val s4 = asm_rule (concl s3);
+	val s5 = list_simple_µ_elim explode_bits_x s4;
+	val s6 = conv_rule(RANDS_C (LEFT_C (fn _ => eq_sym_rule explode_x_thm))) s5;
+	val s7 = simple_µ_intro x s6;
+	val s8 = list_simple_µ_elim[v,w] (i_r sym_sets_ext_€_thm);
+	val s9 = ¤_mp_rule s8 s7;
+	val s10 = ¤_intro (all_´_intro s3) (all_´_intro s9);	
+	val res = eq_trans_rule (refl_conv tm) s10;
+in	res
+end
+end);
+=TEX
+=SML
+val Û _convÝ : CONV = (fn tm =>
+let	val (v,w) = dest_bin_op " _conv" 44023 " " tm;
+	val vty = type_of v;
+	val elem_ty = case dest_ctype vty of
+		("SET",[elem_ty]) => elem_ty
+		| _ => term_fail " _conv" 44023 [tm];
+	val i_r = inst_type_rule[(elem_ty, tya)];
+in	(fn _ => list_simple_µ_elim[v, w] (i_r  _thm)) THEN_C
+	LEFT_C €_conv THEN_C
+	RIGHT_C (RAND_C €_conv THEN_C ³_µ_´_conv)
+end	tm
+);
+=TEX
+=SML
+end	(* of local ... in ... end *); 
+=IGN
 =TEX
 \section{EPILOGUE}
 We wish to make the pre-existing theory ``hol''
