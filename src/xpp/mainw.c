@@ -199,8 +199,8 @@ static void
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu descriptions:
- * N.b. the parts of what follows which deal with menu item
- * sensitivity require each item macro to be the same as the
+ * N.b. parts of what follow (e.g., those dealing with menu item
+ * sensitivity) require each item macro to be the same as the
  * position of the item in the menu; if new items are added
  * in the middle of a menu, macros for later entries should
  * be incremented accordingly.
@@ -230,15 +230,21 @@ static MenuItem file_menu_items[] = {
         file_menu_cb, (XtPointer)FILE_MENU_QUIT, (MenuItem *)NULL, False },
     NULL,
 };
-
+/*
+ * In the following, entries after and including
+ * TOOLS_MENU_CMD_LINE are zero-ed out in an edit-only session.
+ */
 #define TOOLS_MENU_SEARCH_REPLACE	0
 #define TOOLS_MENU_PALETTE		1
+#define TOOLS_MENU_CMD_LINE		2
 
 static MenuItem tools_menu_items[] = {
     { "Search and Replace", &xmPushButtonGadgetClass, 'S', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_SEARCH_REPLACE, (MenuItem *)NULL, False },
     { "Palette", &xmPushButtonGadgetClass, 'P', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_PALETTE, (MenuItem *)NULL, False },
+    { "Command Line", &xmPushButtonGadgetClass, 'C', NULL, NULL,
+        tools_menu_cb, (XtPointer)TOOLS_MENU_CMD_LINE, (MenuItem *)NULL, False },
     NULL,
 };
 
@@ -339,10 +345,10 @@ Boolean ignored;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * show_new_file_name: update the file name displayed in
- * the script editor namestring label.
+ * flash_file_name: update and blink the file name displayed in
+ * the script editor's namestring label.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void show_new_file_name(char *fname)
+static void flash_file_name(char *fname)
 {
 	if(fname) { /* not NULL; i.e. not the time-out call */ 
 		XmTextFieldSetString(namestring, fname);
@@ -353,7 +359,7 @@ static void show_new_file_name(char *fname)
 			XmHIGHLIGHT_SELECTED);
 		XtAppAddTimeOut(app,
 			500,
-			(XtTimerCallbackProc)show_new_file_name,
+			(XtTimerCallbackProc)flash_file_name,
 			NULL);
 	} else { 
 		XmTextFieldSetHighlight(namestring,
@@ -491,6 +497,9 @@ if( !edit_only ) {
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Tools menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+if(edit_only) {
+	tools_menu_items[TOOLS_MENU_CMD_LINE].label = NULL;
+}
 	toolsmenu = setup_pulldown_menu(
 		menubar, "Tools", '\0', False, tools_menu_items);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -611,6 +620,7 @@ XmAnyCallbackStruct *cbs;
 /* No file name: just do nothing */
 		} else {
 			save_file(script, fname);
+			flash_file_name(fname);
 			reinit_changed();
 		}
 		break;
@@ -619,7 +629,7 @@ XmAnyCallbackStruct *cbs;
 		if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 		} else if(save_file_as(script, fname)) {
-			show_new_file_name(fname);
+			flash_file_name(fname);
 			reinit_changed();
 			set_menu_item_sensitivity(filemenu,
 				FILE_MENU_SAVE, True);
@@ -646,7 +656,7 @@ XmAnyCallbackStruct *cbs;
 			if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 			} else if(open_file(script, fname)) {
-				show_new_file_name(fname);
+				flash_file_name(fname);
 				reinit_changed();
 				set_menu_item_sensitivity(filemenu,
 					FILE_MENU_SAVE, True);
@@ -692,6 +702,9 @@ XmAnyCallbackStruct *cbs;
 		break;
 	case TOOLS_MENU_SEARCH_REPLACE:
 		add_search_tool(script);
+		break;
+	case TOOLS_MENU_CMD_LINE:
+		add_cmd_line(script);
 		break;
 	default:
 		break;
