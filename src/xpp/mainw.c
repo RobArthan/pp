@@ -1051,8 +1051,7 @@ gotpty:
 
 Boolean application_alive()
 {
-
-	return !kill(child_pid, 0);
+	return (child_pid ? !kill(child_pid, 0) : False);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
