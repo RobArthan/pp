@@ -299,6 +299,34 @@ represented as an abstract syntax tree, and the parts which comprise
 Z paragraphs. These interfaces are intended to be public as they will no
 doubt prove useful to applications programmers and testers.
 
+First a few of auxiliary functions which will be useful.
+
+=SML
+fun Ûextype_to_type1Ý (phi : SUBS) (f : int -> string) ty = (
+let	fun aux (ExVartype(Known x)) = (
+		mk_vartype x
+	) | aux (ExVartype(Unknown x)) = (
+		case SparseArray.sub_opt (phi, x) of
+			Nil => (mk_vartype (f x))
+			| Value y => aux y
+	) | aux (ExType(s, l)) = (
+		mk_ctype(s, map aux l)
+	);
+in
+	aux ty
+end);
+
+fun Ûmk_freetype_nameÝ (i : int) : string =
+	if i >= 0 andalso i < 26
+	then "'"^(chr (i+ord "a"))
+	else "'"^(string_of_int i);
+
+fun Ûgen_hol_typeÝ (ty : EXTYPE) : TYPE = (
+	extype_to_type1 zti_subs mk_freetype_name ty
+);
+=TEX
+
+
 =SML
 fun Ûformat_identÝ ((tmp, d) : IDENT) : string = (
 	(format_template tmp)^d
@@ -311,17 +339,17 @@ fun Ûformat_ident_listÝ idl = (
 	|_ => " ["^(format_list format_ident idl ", ")^"] "
 );
 =TEX
-=SML
+=IGN
 local
 
 fun aux_fmt_extype (ExVartype ty : EXTYPE) : string = (
 	case ty of
 	Known name => name
 	|Unknown tvn => "'"^(string_of_int tvn)
-) | aux_fmt_extype (ExType ("ð", [ExType ("¸", [ty1, ty2])])) = (
+) | aux_fmt_extype (ExType ("SET", [ExType ("¸", [ty1, ty2])])) = (
 	(aux_fmt_extype ty1)^"ª"^(aux_fmt_extype ty2)
-) | aux_fmt_extype (ExType ("ð", [tyl])) = (
-	"ð("^(aux_fmt_extype tyl)^")"
+) | aux_fmt_extype (ExType ("SET", [tyl])) = (
+	"set("^(aux_fmt_extype tyl)^")"
 ) | aux_fmt_extype (ExType ("¸", tyl)) = (
 	let	fun aux (ty1::ty2::rest) = (
 		(aux_fmt_extype ty1)^"¸"^(aux_fmt_extype ty2)
@@ -348,10 +376,81 @@ fun Ûformat_extypeÝ (ty : EXTYPE) : string = (
 end (* local ... in *);
 =TEX
 =SML
+local
+
+fun	f_ztype (ty : TYPE) : string =
+	if is_ZgivenT ty
+	then
+		dest_ZgivenT ty
+	else
+	if is_ZvarT ty
+	then
+		"*" ^ (dest_ZvarT ty)
+	else
+	if is_ZpowerT ty
+	then
+		"ð " ^ (f_ztype(dest_ZpowerT ty))
+	else
+	if is_ZtupleT ty
+	then
+	let	val tyl = dest_ZtupleT ty
+		fun 	f [] = ""
+		|	f [ty] = f_ztype ty
+		|	f (h::t) = "(" ^ (f_ztype h) ^ " ¸ " ^ (f t) ^ ")"
+	in
+		f tyl
+	end
+	else
+	if is_ZschemaT ty
+	then
+	let	val tym = dest_ZschemaT ty
+		fun 	f [] = ""
+		|	f [(s,ty)] = s ^ ":" ^ (f_ztype ty)
+		|	f ((s,ty)::t) = s ^ ":" ^ (f_ztype ty) ^ ";" ^ (f t)
+	in
+		"[" ^ (f tym) ^ "]"
+	end
+	else
+		fail "f_ztype" 62999 [];
+fun	f_gens (ty : TYPE) : string = 
+	let	val tyl = map (dest_ZvarT o dest_ZpowerT) (dest_ZtupleT ty);
+		fun	f [] = ""
+		|	f [s] = s
+		|	f (h::t) = h ^ "," ^ (f t);
+	in
+		"[" ^ (f tyl) ^ "]"
+	end;
+fun	strip_­_type1 (ty : TYPE): TYPE list * TYPE = (
+	let fun aux typ l= (
+		if is_­_type typ
+		then 	let 	val (ty1,ty2) = dest_­_type typ
+			in aux  ty2 (l @ [ty1]) 
+			end
+		else (l,typ)
+		);
+	in	aux ty [] 
+	end
+);
+in
+fun	Ûformat_ztypeÝ (ty : TYPE) : string = (
+let	val (gens,zty) = strip_­_type1 ty;
+in
+	f_ztype zty
+end
+handle Fail _ => (PolyML.makestring ty)
+)
+end (* of local ... in *);
+=TEX
+=SML
+fun Ûformat_zextypeÝ (ty : EXTYPE) : string = format_ztype (gen_hol_type ty);
+=TEX
+
+=TEX
+=SML
 fun Ûformat_otyÝ oty = (
 	case oty of
 	Nil => ""
-	|Value ty => " : "^(format_extype ty)
+	|Value ty => " : "^(format_zextype ty)
 );
 =TEX
 =SML
@@ -385,7 +484,7 @@ and Ûformat_ztmÝ (tm : Z_TM) : string = (
 	|	ZTmSetd (_, tml) => "{"^(format_list format_ztm tml ",")^"}"
 	|	ZTmSeta1 sch => "{"^(format_zschtext sch)^"}"
 	|	ZTmSeta2 (sch,tm) => "{"^(format_zschtext sch)^"·"^(format_ztm tm)^"}"
-	|	ZTmð tm => "ð "^(format_ztm tm)
+	|	ZTmð tm => "set "^(format_ztm tm)
 	|	ZTmTuple tml => "("^(format_list format_ztm tml ", ")^")"
 	|	ZTm¸ tml => (format_list format_ztm tml " ¸ ")
 	|	ZTmÊ (tm, d) => "Ê "^(format_ztm tm)^d
@@ -533,13 +632,12 @@ fun Ûformat_zparaÝ (p : Z_PARA) : string = (
 
 \subsection{Auxiliary Functions}
 =SML
-fun Ûex_ðÝ t = ExType ("ð", [t]);
+fun Ûex_setÝ t = ExType ("SET", [t]);
 val Ûex_úÝ = ExType ("ú", []);
 val Ûex_stringÝ = ExType ("LIST", [ExType ("CHAR",[])]);
 fun Ûex_­Ý (f, a) = ExType ("­", [f, a]);
 val Ûex_boolÝ = ExType ("BOOL", []);
 =TEX
-
 
 \section{ERROR HANDLING AND REPORTING}
 
@@ -559,7 +657,7 @@ datatype ÛZ_DETAILSÝ	=
 		Failed§¢ of Z_TM list * EXTYPE list
 	|	FailedSetd of Z_TM list * EXTYPE list
 	|	FailedSeta of Z_TM * EXTYPE * int
-	|	Failedð of Z_TM * EXTYPE
+	|	Failedset of Z_TM * EXTYPE
 	|	Failed¸ of Z_TM list * EXTYPE list
 	|	FailedÊ of Z_TM * EXTYPE
 	|	FailedSel‰T1 of int * int
@@ -634,42 +732,42 @@ fun ÛreportÝ (msg : int) (inserts : string list) : unit = (
 =SML
 fun Ûnot_a_setÝ (tm : Z_TM) (ty : EXTYPE) = (
 	report 62910 [];
-	report 62900 [format_ztm tm, format_extype ty]
+	report 62900 [format_ztm tm, format_zextype ty]
 );
 =TEX
 
 =SML
 fun Ûnot_a_sequenceÝ (tm : Z_TM) (ty : EXTYPE) = (
 	report 62911 [];
-	report 62900 [format_ztm tm, format_extype ty]
+	report 62900 [format_ztm tm, format_zextype ty]
 );
 =TEX
 
 =SML
 fun Ûnot_a_predicateÝ (tm : Z_TM) (ty : EXTYPE) = (
 	report 62912 [];
-	report 62900 [format_ztm tm, format_extype ty]
+	report 62900 [format_ztm tm, format_zextype ty]
 );
 =TEX
 
 =SML
 fun Ûnot_a_schemaÝ (tm : Z_TM) (ty : EXTYPE) = (
 	report 62913 [];
-	report 62900 [format_ztm tm, format_extype ty]
+	report 62900 [format_ztm tm, format_zextype ty]
 );
 =TEX
 
 =SML
 fun Ûnot_a_bindingÝ (tm : Z_TM) (ty : EXTYPE) = (
 	report 62914 [];
-	report 62900 [format_ztm tm, format_extype ty]
+	report 62900 [format_ztm tm, format_zextype ty]
 );
 =TEX
 
 =SML
 fun Ûnot_a_tupleÝ (tm : Z_TM) (ty : EXTYPE) = (
 	report 62915 [];
-	report 62900 [format_ztm tm, format_extype ty]
+	report 62900 [format_ztm tm, format_zextype ty]
 );
 =TEX
 
@@ -699,7 +797,7 @@ let
 		do_errmsgs rest
 	) | do_errmsgs nil = nil;
 	val stml = map format_ztm tml;
-	val styl = map format_extype tyl;
+	val styl = map format_zextype tyl;
 	val tmty = (combine stml styl);
 	val itmty = combine (interval 1 (length styl)) tmty;
 	val stmty = (map snd) (Sort.sort sort1 (rev itmty));
@@ -714,9 +812,9 @@ fun Ûincompatible_schemasÝ (tm1 : Z_TM) (tm2 : Z_TM) (idtyl1 : (IDENT * EXTYPE) 
 	(idtyl2 : (IDENT * EXTYPE) list) = (
 	report 62921 [];
 	report 62922 [format_ztm tm1];
-	map (fn (id, ty) => report 62900 [format_ident id, format_extype ty]) idtyl1;
+	map (fn (id, ty) => report 62900 [format_ident id, format_zextype ty]) idtyl1;
 	report 62922 [format_ztm tm2];
-	map (fn (id, ty) => report 62900 [format_ident id, format_extype ty]) idtyl2;
+	map (fn (id, ty) => report 62900 [format_ident id, format_zextype ty]) idtyl2;
 	()
 );
 =TEX
@@ -724,17 +822,17 @@ fun Ûincompatible_schemasÝ (tm1 : Z_TM) (tm2 : Z_TM) (idtyl1 : (IDENT * EXTYPE) 
 fun Ûincompatible_quantÝ (tm : Z_TM) (idtyl1 : (IDENT * EXTYPE) list) (idtyl2 : (IDENT * EXTYPE) list) = (
 	report 62921 [];
 	report 62924 [];
-	map (fn (id, ty) => report 62900 [format_ident id, format_extype ty]) idtyl1;
+	map (fn (id, ty) => report 62900 [format_ident id, format_zextype ty]) idtyl1;
 	report 62922 [format_ztm tm];
-	map (fn (id, ty) => report 62900 [format_ident id, format_extype ty]) idtyl2;
+	map (fn (id, ty) => report 62900 [format_ident id, format_zextype ty]) idtyl2;
 	()
 );
 =TEX
 =SML
 fun Ûincompatible_compsÝ (idtyl1 : (IDENT * EXTYPE) list) (idtyl2 : (IDENT * EXTYPE) list) = (
 	report 62921 [];
-	map (fn (id, ty) => report 62900 [format_ident id, format_extype ty]) idtyl1;
-	map (fn (id, ty) => report 62900 [format_ident id, format_extype ty]) idtyl2
+	map (fn (id, ty) => report 62900 [format_ident id, format_zextype ty]) idtyl1;
+	map (fn (id, ty) => report 62900 [format_ident id, format_zextype ty]) idtyl2
 );
 =TEX
 =SML
@@ -748,7 +846,7 @@ fun Ûprint_zerrorÝ ((FailedZTm (term, env, details)) : ERROR_INFO) = (
 		report 62021 []; print_zerrlistinfo tml tyl
 	) | FailedSeta (tm, ty, ierr) => (
 		report ierr []; not_a_predicate tm ty
-	) | Failedð (tm, ty) => (
+	) | Failedset (tm, ty) => (
 		report 62041 []; not_a_set tm ty
 	) | Failed¸ (tml, tyl) => (
 		report 62061 []; print_zerrlistinfo tml tyl
@@ -765,12 +863,12 @@ fun Ûprint_zerrorÝ ((FailedZTm (term, env, details)) : ERROR_INFO) = (
 		report 62084 []; not_a_binding tm ty
 	) | FailedApp (tm1, tm2, ty1, ty2) => (
 		report 62091 [];
-		report 62092 [format_ztm tm1, format_extype ty1];
-		report 62093 [format_ztm tm2, format_extype ty2]
+		report 62092 [format_ztm tm1, format_zextype ty1];
+		report 62093 [format_ztm tm2, format_zextype ty2]
 	) | FailedFancyApp (id, tm, ty1, ty2) => (
 		report 62091 [];
-		report 62092 [format_ident id, format_extype ty1];
-		report 62093 [format_ztm tm, format_extype ty2]
+		report 62092 [format_ident id, format_zextype ty1];
+		report 62093 [format_ztm tm, format_zextype ty2]
 	) | Failed³‰F (tm, ty) => (
 		report 62151 []; not_a_predicate tm ty
 	) | FailedLogInOp‰F (inop, tm, ty) => (
@@ -816,8 +914,8 @@ fun Ûprint_zerrorÝ ((FailedZTm (term, env, details)) : ERROR_INFO) = (
 	) | FailedEq (tm1, tm2, ty1, ty2) => (
 		report 62251 [];
 		report 62904 [];
-		report 62900 [format_ztm tm1, format_extype ty1];
-		report 62900 [format_ztm tm2, format_extype ty2]
+		report 62900 [format_ztm tm1, format_zextype ty1];
+		report 62900 [format_ztm tm2, format_zextype ty2]
 	) | Failed»1 (tm1, tm2, idtyl1, idtyl2) => (
 		report 62281 [];
 		report 62282 [];
@@ -839,10 +937,10 @@ fun Ûprint_zerrorÝ ((FailedZTm (term, env, details)) : ERROR_INFO) = (
 	) | Failed2 (tm, ty) => (
 		report 62253 [];
 		report 62903 [];
-		report 62900 [format_ztm tm, format_extype ty]
+		report 62900 [format_ztm tm, format_zextype ty]
 	) | FailedConstrained (tm1, ty, tm2) => (
 		report 62261 [];
-		report 62262 [format_ztm tm1, format_extype ty];
+		report 62262 [format_ztm tm1, format_zextype ty];
 		report 62263 [format_ztm tm2]
 	) | FailedRename1 (tm, ty) => (
 		report 62271 []; not_a_schema tm ty
@@ -866,9 +964,9 @@ fun Ûprint_zerrorÝ ((FailedZTm (term, env, details)) : ERROR_INFO) = (
 	) | FailedEnv (tm, id, ty1, ty2) => (
 		report 62504 []; report 62505 [];
 		report 62922 [format_ztm tm];
-		report 62900 [format_ident id, format_extype ty1];
+		report 62900 [format_ident id, format_zextype ty1];
 		report 62925 [];
-		report 62900 [format_ident id, format_extype ty2]
+		report 62900 [format_ident id, format_zextype ty2]
 	) (* end case *)
 	);
 	fail "Z-Parser" 62000 []
@@ -935,8 +1033,8 @@ fun Ûsub_tyÝ (env:Z_ENV) : Z_ENV = (
 
 =SML
 local
-	fun freety id = (id, BoundVar (ex_ð (ExType (ident_to_string id, []))));
-	fun formal id = (id, BoundVar (ex_ð (ExVartype(Known("'"^(ident_to_string id))))));
+	fun freety id = (id, BoundVar (ex_set (ExType (ident_to_string id, []))));
+	fun formal id = (id, BoundVar (ex_set (ExVartype(Known("'"^(ident_to_string id))))));
 in
 fun Ûinit_zenvÝ (ftdef : bool) (genformals : IDENT list) : Z_ENV = (
 let	val dummy = start_again();
@@ -1102,7 +1200,7 @@ fun Ûuntuple_extypeÝ (ty : EXTYPE) : EXTYPE list = (
 fun  ÛmanifestÝ (ty:EXTYPE) : MANIFEST_EXTYPE = (
 	case ty of
 
-	ExType("ð",[ty']) => (
+	ExType("SET",[ty']) => (
 	   	SchemaType (unbind_extype ty')
 		handle Fail _ => NotManifest
 
@@ -1138,7 +1236,7 @@ end);
 fun Ûmake_chartupleÝ ((decls, _, _) : Z_SCH_TEXT) : Z_TM * EXTYPE = (
 let	fun f (ZDec(ids, tm, Value ty)) = (
 	let	val ty' = case sub_type zti_subs ty of
-				ExType ("ð", [ty'']) => ty''
+				ExType ("SET", [ty'']) => ty''
 				| _ => error "make_chartuple.1" 62999 [];
 	in
 		(map (fn id => ZTmLVar(id, Nil, [])) ids, ty')
@@ -1146,7 +1244,7 @@ let	fun f (ZDec(ids, tm, Value ty)) = (
 
 	) | f (ZSchemaDec (ZTmDecor (tm, d), Value ty)) = (
 	let	val ty' = case sub_type zti_subs ty of
-				ExType ("ð", [ty'']) => ty''
+				ExType ("SET", [ty'']) => ty''
 				| _ => error "make_chartuple.2" 62999 [];
 	in
 		([ZTmÊ(tm, d)], ty')
@@ -1154,7 +1252,7 @@ let	fun f (ZDec(ids, tm, Value ty)) = (
 		
 	) | f (ZSchemaDec (tm, Value ty)) = (
 	let	val ty' = case sub_type zti_subs ty of
-				ExType ("ð", [ty'']) => ty''
+				ExType ("SET", [ty'']) => ty''
 				| _ => error "make_chartuple.3" 62999 [];
 	in
 		([ZTmÊ(tm, "")], ty')
@@ -1264,7 +1362,7 @@ and Ûti_zdec_pass_2Ý (env : Z_ENV) ((zdec as ZSchemaDec (tm, _)) : Z_DEC, _, idt
 let	val (tm', ty') = ti_ztm env tm;
 	val ty'' = (
 		case ty' of
-		ExType ("ð", [ty'']) => ty''
+		ExType ("SET", [ty'']) => ty''
 		|_ =>raise ZExn (FailedZDec1 (zdec, env, tm', ty'))
 		);
 	val side = map (curry (unify zti_subs) ty'') (map snd idtyl)
@@ -1347,9 +1445,9 @@ let	val tmlist = list_ti_ztm env tl;
 		  [] => ExVartype(Unknown(next_name()))
 		  | _ => hd tyl
 		);
-	val resty = ex_ð (tuple_extype [ex_ú, sub_type zti_subs ty]);
+	val resty = (tuple_extype [ex_ú, sub_type zti_subs ty]);
 in
-	(ZTm§¢ (Value resty, tml), resty)
+	(ZTm§¢ (Value resty, tml), ex_set resty)
 end)
   | ti_ztm env (ZTm§¢ (Value _, _)) = (
 	fail "ti_ztm" 62998 [fn()=>
@@ -1369,9 +1467,9 @@ let	val tmlist = list_ti_ztm env tl;
 		  [] => ExVartype(Unknown(next_name()))
 		  | _ => hd tyl
 		);
-	val resty = ex_ð (sub_type zti_subs ty);
+	val resty = sub_type zti_subs ty;
 in
-	(ZTmSetd (Value resty, tml), resty)
+	(ZTmSetd (Value resty, tml), ex_set resty)
 end)
   | ti_ztm env (ZTmSetd (Value _, _)) = (
 	fail "ti_ztm" 62998 [fn()=>
@@ -1388,7 +1486,7 @@ let	val ctm = chartuple schtext;
 		raise ZExn (FailedZTm (term, env, FailedSeta(tm',ty',62031)));
 	val (_, ty') = ti_ztm (sub_ty env') ctm;
 in
-	(ZTmSeta1 schtext', ex_ð ty')
+	(ZTmSeta1 schtext', ex_set ty')
 end)
 =TEX
 =SML
@@ -1398,7 +1496,7 @@ let	val (schtext', env', _) = ti_zschtext env schtext
 		raise ZExn (FailedZTm (term, env, FailedSeta(tm',ty',62032)));
 	val (tm', ty') = ti_ztm (sub_ty env') tm;
 in
-	(ZTmSeta2(schtext', tm'), ex_ð ty')
+	(ZTmSeta2(schtext', tm'), ex_set ty')
 end)
 =TEX
 
@@ -1406,12 +1504,12 @@ end)
 =SML
   | ti_ztm env (term as ZTmð tm) = (
 let	val (tm', ty') = ti_ztm env tm;
-	val tya = ex_ð (ExVartype (Unknown (next_name())));
+	val tya = ex_set (ExVartype (Unknown (next_name())));
 	val side = unify zti_subs (ty', tya)
 		handle Fail _ =>
-		raise ZExn (FailedZTm (term, env, Failedð (tm', ty')));
+		raise ZExn (FailedZTm (term, env, Failedset (tm', ty')));
 in
-	(ZTmð tm, ex_ð (sub_type zti_subs tya))
+	(ZTmð tm', ex_set (sub_type zti_subs tya))
 end)
 =TEX
 
@@ -1446,7 +1544,7 @@ let	fun get_unify_failures ((tm, (ty1, ty2))::rest) = (
 	val tmlist = list_ti_ztm env tml;
 	val (tml', tyl') = split tmlist;
 	val unkl = map (fn x => (ExVartype (Unknown(next_name())))) tml';
-	val punkl = map (fn x => ex_ð x) unkl;
+	val punkl = map (fn x => ex_set x) unkl;
 	val typairs = combine punkl tyl';
 	val side = case get_unify_failures (combine tml' typairs) of
 		[] => ()
@@ -1455,7 +1553,7 @@ let	fun get_unify_failures ((tm, (ty1, ty2))::rest) = (
 		   in
 			raise ZExn (FailedZTm (term, env, Failed¸ (ftml, ftyl)))
 		   end);
-	val ty =  ex_ð (tuple_extype (map (sub_type zti_subs) unkl));
+	val ty =  ex_set (tuple_extype (map (sub_type zti_subs) unkl));
 
 in
 	(ZTm¸ tml', ty)
@@ -1470,7 +1568,7 @@ in
 	SchemaType _ =>
 		let	val bty = (
 				case ty' of
-				ExType ("ð", [x]) => x
+				ExType ("SET", [x]) => x
 				|_ => error "ti_ztm" 62998 [fn()=> "ZTmÊ"]
 			);
 		in
@@ -1533,7 +1631,7 @@ end)
 let	val (tm1', ty1') = ti_ztm env tm1;
 	val (tm2', ty2') = ti_ztm (sub_ty env) tm2;
 	val unk = ExVartype (Unknown (next_name()));
-	val side = unify zti_subs (ex_ð unk, ty2')
+	val side = unify zti_subs (ex_set unk, ty2')
 		handle Fail _ =>
 			raise ZExn (FailedZTm (term, env, Failed1(tm2', ty2')));
 	val side = unify zti_subs (ty1', sub_type zti_subs unk)
@@ -1549,7 +1647,7 @@ let	val (tmf', tyf) = ti_ztm env tmf;
 	val (tma', tya) = ti_ztm (sub_ty env) tma;
 	val tvn = next_name();
 	val tyr = ExVartype(Unknown tvn);
-	val side = unify zti_subs (tyf, ex_ð (tuple_extype([tya,tyr])))
+	val side = unify zti_subs (tyf, ex_set (tuple_extype([tya,tyr])))
 			handle Fail _ =>
 			raise ZExn (FailedZTm (term, env,
 				FailedApp (tmf', tma', tyf, tya)));
@@ -1574,7 +1672,7 @@ end)
 let	val (tm1', ty1') = ti_ztm env tm1;
 	val (tm2', ty2') = ti_ztm (sub_ty env) tm2;
 	val unk = ExVartype (Unknown (next_name()));
-	val side = unify zti_subs (ex_ð unk, ty2')
+	val side = unify zti_subs (ex_set unk, ty2')
 		handle Fail _ =>
 			raise ZExn (FailedZTm (term, env, Failed1(tm2', ty2')));
 	val side = unify zti_subs (ty1', sub_type zti_subs unk)
@@ -1610,7 +1708,7 @@ end)
 			|_ => tya;
 		val tvn = next_name();
 		val tyr = ExVartype(Unknown tvn);
-		val side = unify zti_subs (tyf, ex_ð (tuple_extype([tya',tyr])))
+		val side = unify zti_subs (tyf, ex_set (tuple_extype([tya',tyr])))
 				handle Fail _ =>
 				raise ZExn (FailedZTm (term, env,
 					FailedFancyApp (id, tma', tyf, tya')));
@@ -1628,7 +1726,7 @@ let	val ctm = chartuple sch;
 	val (tm', ty') = ti_ztm env2 tm;
 	val env3 = sub_ty env2;
 	val (tm2, ty2) = ti_ztm (sub_ty env3) ctm;
-	val ty = ex_ð (tuple_extype [ty2, ty']);
+	val ty = ex_set (tuple_extype [ty2, ty']);
 in
 	(ZTmÌ (sch', tm'), ty)
 end)
@@ -1749,7 +1847,7 @@ end
 =SML
   | ti_ztm env (term as ZTmHorizSchema sch) = (
 let	val (sch', env', idtyl) = ti_zschtext env sch;
-	val ty = ex_ð (bind_extype idtyl);
+	val ty = ex_set (bind_extype idtyl);
 in
 	(ZTmHorizSchema sch', ty)
 end)
@@ -1778,7 +1876,7 @@ in
 	case manifest ty' of
 	SchemaType idtyl => (
 		let	val idtyl' = idtyl drop (fn(id, ty) => is_post id);
-			val ty'' = ex_ð (bind_extype idtyl');
+			val ty'' = ex_set (bind_extype idtyl');
 		in
 			(ZTmPre tm', ty'')
 		end)
@@ -1814,7 +1912,7 @@ in
 				raise ZExn (FailedZTm (term, env,
 					FailedLogInOp‰S1 (inop, tm1', tm2', idtyl1, idtyl2)))
 		in
-			(ZTmLogInOp‰S(inop, tm1',tm2'), ex_ð (bind_extype idtyl'))
+			(ZTmLogInOp‰S(inop, tm1',tm2'), ex_set (bind_extype idtyl'))
 		end
 	) | (SchemaType _, _) => (
 		raise ZExn (FailedZTm (term, env, FailedLogInOp‰S2 (inop, tm2', ty2')))
@@ -1860,7 +1958,7 @@ in
 	case manifest ty' of
 	SchemaType idtyl => (
 		let	val idm = idtyl drop (fn(id,ty) => (id mem idl));
-			val ty'' = ex_ð (bind_extype idm);
+			val ty'' = ex_set (bind_extype idm);
 		in
 			(ZTmHide(tm',idl), ty'')
 		end)
@@ -1887,7 +1985,7 @@ in
 					raise ZExn (FailedZTm (term, env, 
 					FailedQuant‰S3 (quant, tm2', idl))));
 		in
-			(ZTmQuant‰S(quant, sch', tm2'), ex_ð (bind_extype idtyl'))
+			(ZTmQuant‰S(quant, sch', tm2'), ex_set (bind_extype idtyl'))
 		end
 	) |_ => raise ZExn(FailedZTm(term, env, FailedQuant‰S2 (quant, tm2', ty2')))
 end)
@@ -1966,7 +2064,7 @@ in
 						raise ZExn (FailedZTm (term, env,
 						Failed»1 (tm1', tm2', idtyl1'', idtyl2'')))
 				in
-					(ZTm»(tm1',tm2'), ex_ð (bind_extype idtyl'))
+					(ZTm»(tm1',tm2'), ex_set (bind_extype idtyl'))
 				end)
 			|_ => raise ZExn (FailedZTm (term, env, Failed»1 (tm1', tm2', fidtyl1, fidtyl2)))
 		end
@@ -2015,7 +2113,7 @@ in
 						raise ZExn (FailedZTm (term, env,
 						FailedPipe1 (tm1', tm2', idtyl1'', idtyl2'')))
 				in
-					(ZTmPipe(tm1',tm2'), ex_ð (bind_extype idtyl'))
+					(ZTmPipe(tm1',tm2'), ex_set (bind_extype idtyl'))
 				end)
 			|_ => raise ZExn (FailedZTm (term, env, FailedPipe1 (tm1', tm2', fidtyl1, fidtyl2)))
 		end
@@ -2039,11 +2137,11 @@ let	val (tm1', ty1') = ti_ztm env tm1;
 	val (tm2', ty2') = ti_ztm (sub_ty env) tm2;
 in
 	case (manifest ty1', ty2') of
-	(SchemaType _,ExType("ð",[ExType("BOOL",[])])) => (
+	(SchemaType _,ExType("SET",[ExType("BOOL",[])])) => (
 		(ZTmSchemaPred (tm1'), ex_bool)
 		)
 	|_ => (
-		let	val side = unify zti_subs (ex_ð ty1', ty2')
+		let	val side = unify zti_subs (ex_set ty1', ty2')
 			handle Fail msg =>
 			raise ZExn (FailedZTm (term, env, FailedConstrained
 						(tm1', ty1', tm2')));
@@ -2093,7 +2191,7 @@ let	fun find_in_scope (ident as (n, d)) = (
 				val argty = tuple_extype tyl;
 				val tvn = next_name();
 				val resty = ExVartype(Unknown tvn);
-				val side = unify zti_subs (ty, ex_ð (tuple_extype [argty, resty]))
+				val side = unify zti_subs (ty, ex_set (tuple_extype [argty, resty]))
 					handle Fail msg =>
 					fail "ti_ztm" 62998 [fn ()=>
 					"ZTmLVar (message to be supplied later)"];
@@ -2309,7 +2407,7 @@ end
 ) | ti_zpara (p as ZParaSchBox (id, formals, sch, Nil)) = (
 let	val env = init_zenv false formals;
 	val (sch', env', idtyl) = ti_zschtext env sch;
-	val ty = ex_ð (bind_extype idtyl);
+	val ty = ex_set (bind_extype idtyl);
 in
 	Inferred (ZParaSchBox (id, formals, sch', Value ty), zti_subs)
 
@@ -2422,20 +2520,11 @@ end (* of structure ZTypeInference *);
 fun tc p = type_check_zpara {standard = true} p;
 fun tf p = diag_line (format_zinferred (tc p));
 
-  new_theory"ft";
-
- ¹Z
-[ú, î]
-°
-
- ñ[x : ú | x = x']®;
-
-
 
  ¹Z
 ZLIST ::= ZNil | ZCons (ZITEM ¸ ZLIST)
 &
-ZITEM ::= ZNumber ú | ZSet (ð î)
+ZITEM ::= ZNumber ú | ZSet (set î)
  °
 
 
