@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.39 2003/07/03 13:50:47 rda Exp rda $
+ * $Id: pterm.c,v 2.40 2003/07/07 15:57:40 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -323,6 +323,9 @@ static char* signal_handled_message2 =
 
 static char* signal_handled_message3 =
 "apparently during X initialisation";
+
+static char* signal_in_signal_handler_message =
+"fatal error in signal handler";
 
 static char* send_error_message = 
 "A system error occurred writing to the application.";
@@ -1164,6 +1167,13 @@ static void sig_ask_callback(XtPointer cbd_ignored, XtSignalId *s_ignored)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void panic_exit(char * m, NAT code)
 {
+	static Boolean recursive = False;
+	if(recursive) {
+		msg(m, signal_in_signal_handler_message);
+		exit(code);
+	} else {
+		recursive = True;
+	}
 	if(application_alive()) {
 		kill_application();
 	}
