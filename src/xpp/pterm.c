@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$
+ * $Id: pterm.c,v 2.4 1999/04/19 15:52:12 rda Exp xpp $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -30,13 +30,13 @@
 #ifndef LINUX
 #include <stropts.h>
 #include <sys/filio.h>
-#include <signal.h>
+#include <sys/termio.h>
 #else
-#include <bsd/signal.h>
+#include <termio.h>
 #endif
 
+#include <signal.h>
 
-#include <sys/termio.h>
 #include <sys/termios.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -54,8 +54,6 @@
 #define STDERR 2
 
 #ifdef LINUX
-#define CTRL(c) ((c)&037)
-#define CINTR CTRL('c')
 #define sigset signal
 #endif
 
@@ -157,22 +155,22 @@ void get_pty()
 	    perror("xpp");
 	    exit(4);
 	}
-#endif
+	if(ioctl(slave_fd, TCGETS, &tio) < 0 ) {
+		msg("system error", "ioctl on slave fd failed");
+		perror("xpp");
+		exit(11);
+	}
 	tio.c_lflag |= ISIG;
 	tio.c_lflag |= ICANON;
 	tio.c_lflag &= ~ECHO;
 	tio.c_lflag &= ~PENDIN;
 	tio.c_lflag &= ~NOFLSH;
 	tio.c_lflag &= ~TOSTOP;
-
 	tio.c_oflag &= ~OLCUC;
 	tio.c_oflag &= ~ONLCR;
 	tio.c_oflag &= ~XTABS;
 	tio.c_oflag |= OCRNL;
-
 	tio.c_cc[VINTR] = CINTR;
-
-#ifdef LINUX
 	if(ioctl(slave_fd, TCSETS, &tio) < 0 ) {
 		msg("system error", "ioctl on slave fd failed");
 		perror("xpp");
@@ -229,22 +227,34 @@ void get_pty()
 			perror("xpp");
 			exit(9);
 		};
-		read(0, &buf, 1);		/* Wait until told */
+		read(STDIN, &buf, 1);		/* Wait until told */
 #ifndef LINUX
-		if(	ioctl(0, I_PUSH, "ptem") < 0
-		||	ioctl(0, I_PUSH, "ldterm") < 0 
-		||	ioctl(0, I_PUSH, "ttcompat") < 0
-		||	ioctl(0, TCGETS, &tio) < 0 ) {
-			msg("system error", "ioctl on slave fd failed");
-			perror("xpp");
-			exit(10);
-		};
-		if(ioctl(0, TCSETS, &tio) < 0 ) {
+		if(ioctl(STDIN, TCGETS, &tio) < 0 ) {
 			msg("system error", "ioctl on slave fd failed");
 			perror("xpp");
 			exit(11);
 		}
+		tio.c_lflag |= ISIG;
+		tio.c_lflag |= ICANON;
+		tio.c_lflag &= ~ECHO;
+		tio.c_lflag &= ~PENDIN;
+		tio.c_lflag &= ~NOFLSH;
+		tio.c_lflag &= ~TOSTOP;
+		tio.c_oflag &= ~OLCUC;
+		tio.c_oflag &= ~ONLCR;
+		tio.c_oflag &= ~XTABS;
+		tio.c_oflag |= OCRNL;
+		tio.c_cc[VINTR] = CINTR;
+		if(	ioctl(STDIN, I_PUSH, "ptem") < 0
+		||	ioctl(STDIN, I_PUSH, "ldterm") < 0 
+		||	ioctl(STDIN, I_PUSH, "ttcompat") < 0
+		||	ioctl(STDIN, TCGETS, &tio) < 0 ) {
+			msg("system error", "ioctl on slave fd failed");
+			perror("xpp");
+			exit(10);
+		};
 #endif
+
 		arglist = get_arg_list();
 		execvp(arglist[0], arglist);
 	/* **** error if reach here **** */
@@ -641,6 +651,9 @@ void restart_application () {
 static void sigint_handler(int sig)
 {
 	XtAppAddTimeOut(app, 0, (XtTimerCallbackProc) check_quit_cb, root);
+#ifdef LINUX
+	sigset(SIGINT, sigint_handler);
+#endif
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
