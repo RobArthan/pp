@@ -88,7 +88,7 @@ generate a lexeme to indicate this. This is required by the Z grammar
 \cite{DS/FMU/IED/DEF007}.
 
 \subsubsection{Dependencies}
-The structure $ZParagraphs$ is constrained by the signature
+The structure $ZParagraphRecognizers$ is constrained by the signature
 of the same name, which is specified in \cite{DS/FMU/IED/DTD049}.
 
 \subsubsection{Possible Enhancements}
@@ -267,8 +267,8 @@ end (* of structure ZReaderWriter *);
 
 =SML
 structure €ZTypeCheckOnlyMode› : ZTypeCheckOnlyMode = struct
-open Unification ZUserInterfaceSupport  ZTypeInference ZTermGenerator;
-open ZTypesAndTermsSupport icl'Kernel;
+	open	icl'Kernel Unification ZUserInterfaceSupport ZTypeInference;
+	open	ZTermGenerator ZTypesAndTermsSupport ;
 =TEX
 
 \subsection{Saving Types and Constants in the Theory}
@@ -544,10 +544,12 @@ end (* of structure ZTypeCheckOnlyMode *);
 \section{PROOF SUPPORT MODE}
 
 =SML
-structure €ZProofModeSupport› : ZProofModeSupport = struct
+structure €ZProofMode› : ZProofMode = struct
 local
 	open	Unification ZUserInterfaceSupport;
-	open	ZTypesAndTermsSupport ZTypeInference ZTermGenerator;
+	open	ZTypesAndTermsSupport ZTypeInference ZGeneratedConstants
+	open	ZTermGenerator;
+	
 in
 =TEX
 =SML
@@ -674,20 +676,8 @@ end);
 
 =TEX
 
-=SML
-end (* of local ... in *);
-end (* of structure ZProofModeSupport *);
-=TEX
-
 \section{DEFINITIONS BY AXIOM} 
 
-=SML
-structure €ZAxiomaticMode› : ZAxiomaticMode = struct
-local
-	open ZUserInterfaceSupport ZTypesAndTermsSupport ZProofModeSupport;
-	open ZGeneratedConstants ZTermGenerator;
-in
-=TEX
 =SML
 fun €abbdef_defn› (flag : bool) ((name, gen_formals, tm) : string * string list * TERM) : unit = (
 let	val wrap = if flag then ¨$"Z'SchBox"Æ else ¨$"Z'AbbDef"Æ;
@@ -837,107 +827,14 @@ fun €ax_update_theory_db› (para : Z_PARA) : unit = (
 =TEX
 =SML
 end (* of local ... in *);
-end (* of structure ZAxiomaticMode *);
-=TEX
-
-\section{DEFINITIONS BY CONSERVATIVE EXTENSION} 
-=SML
-structure €ZConservativeMode› : ZConservativeMode = struct
-local
-	open ZUserInterfaceSupport ZTypesAndTermsSupport ZProofModeSupport;
-	open ZGeneratedConstants ZTermGenerator;
-in
-=TEX
-=SML
-fun €abbdef_defn› (flag : bool) ((name, gen_formals, tm) : string * string list * TERM) : unit = (
-let	val wrap = if flag then ¨$"Z'SchBox"Æ else ¨$"Z'AbbDef"Æ;
-	val name' = bind_gvar_name name;
-	val ty = type_of tm;
-in
-	case map (mk_z_power_t o mk_z_var_t) gen_formals of
-	[] => (
-		let	val var = mk_var(name, ty);
-			val var' = mk_var(name', ty) ;
-			val tm' = subst [(var', var)] tm;
-			val defn1 = mk_eq(var', tm');
-			val defn2 = mk_app (wrap, defn1);
-			val side = paragraph_const_spec ([name, name'],[var'], defn2);
-		in
-			()
-		end)
-	| gftyl => (
-		let	val ty' = mk_≠_type(mk_z_tuple_t gftyl,ty);
-			val var = mk_var(name, ty');
-			val var' = mk_var (name', ty');
-			val tm' = subst [(var', var)] tm;
-			val gfl = map mk_var (combine gen_formals gftyl);
-			val arg = mk_z_tuple gfl;
-			val side = do_in_theory (current_cache_theory()) tuple_gen_semantic_const arg;
-			val defn1 = mk_eq(mk_app(var', arg), tm');
-			val defn2 = list_mk_µ (gfl, defn1);
-			val defn3 = mk_app (wrap, defn2);
-			val side = paragraph_const_spec ([name, name'], [var'], defn3);
-		in
-			()
-		end)
-end);
-=TEX
-
-=SML
-fun €axdes_defn› ((gen_formals, tm1, otm, idtyl) : string list * TERM * TERM OPT * (string * TYPE) list) : unit = (
-let	val def_tm = case otm of
-		Value tm2 => mk_± (tm1, tm2)
-		|Nil => tm1;
-	val gens = map (fn id => mk_var (id, (mk_z_power_t o mk_z_var_t) id)) gen_formals;
-	val vars = map mk_var idtyl;
-	val zidtyl = map (fn (id, ty) => (bind_gvar_name id, ty)) idtyl;
-	val zvars = map mk_var zidtyl;
-	val generify = (
-		case gens of
-		[] => Combinators.I
-		|_ => (
-			let	val pval = mk_z_tuple gens;
-				val side = do_in_theory (current_cache_theory()) tuple_gen_semantic_const pval;
-				val ptype = type_of pval;
-			in	(fn v =>
-					let	val (s, ty) = dest_var v;
-						val v' = mk_var(s, mk_≠_type (ptype, ty));
-					in
-						mk_app(v', pval)
-					end)
-			end
-			)
-	);
-
-	val varsubs = map (fn (v1, v2) => (generify v1, v2)) (combine zvars vars);
-	val newvars = map (fst o strip_app o fst) varsubs;
-	val def_tm' = subst varsubs def_tm;
-	val defn1 = list_mk_µ (gens, def_tm');
-	val defn2 = mk_app (¨$"Z'AxDes"Æ, defn1);
-	val side = const_spec ((map fst idtyl)@(map fst zidtyl), newvars, defn2);
-in
-	()
-end);
-=TEX
-=SML
-fun €con_update_theory_db› (para : Z_PARA) : unit = (
-	case parainfo_of_z_para para of
-	FixityInfo fixinfo => set_zfixity_info fixinfo
-	|AbbDefInfo pbody => abbdef_defn false pbody
-	|SchBoxInfo pbody => abbdef_defn true pbody
-	|AxDesInfo pbody => axdes_defn pbody
-	|other => ZAxiomaticMode.ax_update_theory_db para
-);
-
-end (* of local ... in *);
-end (* of structure ZConservativeMode *);
+end (* of structure ZProofMode *);
 =TEX
 
 
 \section{THE STRUCTURE FOR Z PARAGRAPH PROCESSORS}
 
 =SML
-structure €ZParagraphs› : ZParagraphs = struct
+structure €ZParagraphRecognizers› : ZParagraphRecognizers = struct
 =TEX
 =SML
 local
@@ -1082,9 +979,9 @@ in
 	then	ZTypeCheckOnlyMode.update_theory_db para
 	else	if get_flag "z_use_axioms"
 		then
-			ZAxiomaticMode.ax_update_theory_db para
+			ZProofMode.ax_update_theory_db para
 		else
-			ZConservativeMode.con_update_theory_db para
+			ZProofMode.ax_update_theory_db para
 end);
 
 =TEX
@@ -1112,9 +1009,9 @@ in
 	then	ZTypeCheckOnlyMode.update_theory_db para
 	else	if get_flag "z_use_axioms"
 		then
-			ZAxiomaticMode.ax_update_theory_db para
+			ZProofMode.ax_update_theory_db para
 		else
-			ZConservativeMode.con_update_theory_db para
+			ZProofMode.ax_update_theory_db para
 end);
 
 =TEX
@@ -1142,9 +1039,9 @@ in
 	then	ZTypeCheckOnlyMode.update_theory_db para
 	else	if get_flag "z_use_axioms"
 		then
-			ZAxiomaticMode.ax_update_theory_db para
+			ZProofMode.ax_update_theory_db para
 		else
-			ZConservativeMode.con_update_theory_db para
+			ZProofMode.ax_update_theory_db para
 end);
 =TEX
 \subsection{Z General Text Recogniser}
@@ -1171,9 +1068,9 @@ in
 	then	ZTypeCheckOnlyMode.update_theory_db para
 	else	if get_flag "z_use_axioms"
 		then
-			ZAxiomaticMode.ax_update_theory_db para
+			ZProofMode.ax_update_theory_db para
 		else
-			ZConservativeMode.con_update_theory_db para
+			ZProofMode.ax_update_theory_db para
 end);
 =TEX
 \section{RECOGNIZING Z TERMS}
@@ -1217,8 +1114,8 @@ reader/writer.
 
 =SML
 end (* of local ... in *);
-end (* of structure ZParagraphs *);
-open ZParagraphs;
+end (* of structure ZParagraphRecognizers *);
+open ZParagraphRecognizers;
 =TEX
 
 \twocolumn[\section{INDEX OF DEFINED TERMS}]
