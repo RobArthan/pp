@@ -59,6 +59,8 @@ First draft version.
 \item [Issue 1.32 (July 16th 1992)]
 Added support for schema renaming.
 $dest\_z\_name$ given protection from subscripted punctuation. 
+\item [Issue \SCCSversion (\FormatDate{$Date$%
+})] Added binding display.
 \end{description}
 %\subsection{Changes Forecast}
 \newpage
@@ -231,6 +233,15 @@ let	fun aux acc ("|" :: rest) = (
 in
 	aux [hd ss] (tl ss)
 end);
+=TEX
+The following function tests for multiple occurrences of a string in a list
+of same.
+=SML
+fun moccurs (area : string) (msg : int) (a :: x : string list) : unit = (
+	if	a mem x
+	then	fail area msg [fn () => a]
+	else	moccurs area msg x
+) | moccurs _ _ [] = ();
 
 =TEX
 \section{Z TYPES}
@@ -417,6 +428,7 @@ datatype	ÛZ_TERMÝ
 		|		ÛZsetaÝ of TERM * TERM * TERM
 		|		ÛZðÝ of TERM
 		|		ÛZtupleÝ of TERM list
+		|		ÛZbindingÝ of (string * TERM) list
 		|		ÛZ¸Ý of TERM list
 		|		ÛZÊÝ of TERM * string
 		|		ÛZselÝ of TERM * string
@@ -817,6 +829,15 @@ constant part.
 =SML
 | "Z'ð"	=> zdest_0_1	(comp_list, args, 47140, Zð)
 | "Z'Mk_T"	=> zdest_1_gt0	(comp_list, args, 47150, Ztuple)
+| "Z'Mk_S"	=> (
+	case comp_list
+	of [comps] => (
+		(BdzOk(Zbinding(combine comps args)))
+		handle Fail _ =>
+		BdzFail{BdzFCode=47130, BdzFCompc=1, BdzFArgc=length comps}
+	)
+	| _ => BdzNotZ 47900
+)
 | "Z'¸"	=> zdest_1_gt0	(comp_list, args, 47160, Z¸)
 =TEX
 =SML
@@ -835,11 +856,6 @@ constant part.
 		handle Fail _ => BdzNotZ 47170
 	)
 	| _ => BdzFail{BdzFCode=47170, BdzFCompc=0, BdzFArgc=1}
-)
-=TEX
-=SML
-| "Z'Mk_S" => (
-	BdzFail{BdzFCode=47180, BdzFCompc=2, BdzFArgc=1}
 )
 
 =SML
@@ -1272,6 +1288,12 @@ fun	Ûdest_z_tupleÝ (t:TERM) :TERM list =
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_z_tuple" 47150 [t];
 
+fun	Ûdest_z_bindingÝ (t:TERM) :(string * TERM) list = 
+	case dest_z_term t of 
+		Zbinding stl => stl 
+	|	_ => fail "" 0 [] 
+	handle Fail _ => term_fail "dest_z_binding" 47151 [t];
+
 fun	Ûdest_z_¸Ý (t:TERM) :TERM list = 
 	case dest_z_term t of 
 		Z¸(tml) => (tml) 
@@ -1361,6 +1383,12 @@ fun	Ûis_z_ðÝ (t:TERM) :bool =
 fun	Ûis_z_tupleÝ (t:TERM) :bool = 
 	case dest_z_term t of 
 		Ztuple(tml) => true 
+	|	_ => false 
+	handle Fail _ => false;
+
+fun	Ûis_z_bindingÝ (t:TERM) :bool = 
+	case dest_z_term t of 
+		Zbinding(tml) => true 
 	|	_ => false 
 	handle Fail _ => false;
 
@@ -1774,6 +1802,15 @@ fun	Ûmk_z_tupleÝ (tml:TERM list) :TERM =
 		list_mk_app(tuple_cterm tyl,tml)
 	end;
 
+fun	Ûmk_z_bindingÝ (stl:(string * TERM) list) :TERM = (
+	let	val (nl, tl) = split stl;
+		val side =  moccurs "mk_zbinding" 47152 nl;
+	in	case stl of
+			[] => fail "mk_z_binding" 47153 []
+		|	_ => list_mk_app(bind_cterm (combine nl (map type_of tl)), tl)
+	end
+);
+
 fun	Ûmk_z_¸Ý (tml:TERM list) :TERM = 
 	let	val tyl = map (dest_z_power_t o type_of) tml;
 	in
@@ -1983,20 +2020,14 @@ fun	Ûmk_z_»‰sÝ ((tm1,tm2):TERM * TERM) :TERM =
 		list_mk_app(bind_»_term tym1 tym2,[tm1,tm2])
 	end;
 
-local
-	fun moccurs n (a :: x) = (if a mem x
-		then fail "mk_z_rename‰s" n [fn () => a]
-		else moccurs n x
-	) | moccurs n [] = ();
-in
 fun	Ûmk_z_rename‰sÝ (tm:TERM, ididl : (string * string) list) :TERM = (
 	let	val tym = dest_z_schema_t(dest_z_power_t(type_of tm));
 		val (xs,ys) = split ididl;
-		val dummy = (moccurs 47463 xs; moccurs 47462 ys);
+		val dummy = (moccurs "mk_z_rename‰s" 47463 xs;
+				moccurs "mk_z_rename‰s" 47462 ys);
 	in
 		mk_app(bind_rename_term tym ididl, tm)
 	end);
-end;
 =TEX
 Can renaming collapse two distinct components onto one,
 by renaming one component to be the same as another?
@@ -2029,6 +2060,7 @@ fun	Ûmk_z_termÝ	(Zdec(tml:TERM list,tm:TERM) :Z_TERM) :TERM = mk_z_dec(tml,tm)
 |	mk_z_term	(Zseta(tm1:TERM,tm2:TERM,tm3:TERM)) = mk_z_seta(tm1,tm2,tm3)
 |	mk_z_term	(Zð(tm:TERM)) = mk_z_ð tm
 |	mk_z_term	(Ztuple(tml:TERM list)) = mk_z_tuple tml
+|	mk_z_term	(Zbinding(stl:(string * TERM) list)) = mk_z_binding stl
 |	mk_z_term	(Z¸(tml:TERM list)) = mk_z_¸ tml
 |	mk_z_term	(ZÊ(tm:TERM,s:string)) = mk_z_Ê(tm,s)
 |	mk_z_term	(Zsel(tm:TERM,s:string)) = mk_z_sel(tm,s)
