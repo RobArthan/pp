@@ -305,6 +305,14 @@ fun Ûall_undisch_ruleÝ (thm : THM) : THM = (
 );
 val Ûres_subsÝ = new_subs 100;
 =TEX
+=SML
+fun check_prove_asm_rule (athm : THM) (rthm : THM) = (
+	let	val cnc = concl athm;
+	in	(find (asms rthm) (fn t => t ~=$ cnc));
+		prove_asm_rule athm rthm
+	end
+);
+=TEX
 The following is the resolution part of the prolog-like search.
 =SML
 fun Ûthm_resolveÝ
@@ -330,7 +338,7 @@ fun Ûthm_resolveÝ
 		val asravtys = thm_tyvars q_thm';
 		val f_thm' = asm_spec_rule hyp_tyvars hyp_tmvars asravtys asravtms
 					f_tysubs f_tmsubs f_thm;
-		val r_thm = prove_asm_rule f_thm' q_thm';
+		val r_thm = check_prove_asm_rule f_thm' q_thm';
 		val r_fvs = thm_frees r_thm;
 		val r_fts = thm_tyvars r_thm;
 	in	{fvs = r_fvs, fts = r_fts, thm = r_thm}
@@ -342,6 +350,12 @@ The following functions uses a rule which given a term $tm$ is expected either t
 „ ô tm
 =TEX
 . Such a rule can be used in much the same way as a fact theorem.
+In the following, we allow (as an exceptional case) for the theorem
+to have the form
+=INLINEFT
+„ ô tm'
+=TEX
+, where $tm'$ can be unified with $tm$ using $thm\_resolve$.
 =SML
 fun Ûrule_resolveÝ
 	(hyp_tyvars : TYPE list)
@@ -359,14 +373,25 @@ fun Ûrule_resolveÝ
 						avtys avtms [] [] f_thm
 			end
 		);
-		val r_thms = map (switch prove_asm_rule q_thm o freshen) f_thms;
-		fun aux r_thm = (
-			let	val r_fvs = thm_frees r_thm;
+		fun apply f_thm = (
+			let	val fthm1 = freshen f_thm;
+			in let	val r_thm = check_prove_asm_rule f_thm q_thm;
+				val r_fvs = thm_frees r_thm;
 				val r_fts = thm_tyvars r_thm;
 			in	{fvs = r_fvs, fts = r_fts, thm = r_thm}
+			end	handle Fail _ => (
+				let	val mfthm = {
+						fvs = thm_frees fthm1,
+						fts = thm_tyvars fthm1,
+						thm = fthm1
+					};
+				in	thm_resolve hyp_tyvars hyp_tmvars
+						query asm mfthm
+				end
+				)
 			end
 		);
-	in	map aux r_thms
+	in	mapfilter apply f_thms
 	end
 );
 =TEX
@@ -390,10 +415,6 @@ fun Ûmake_queryÝ (tm : TERM) : MARKED_THM = (
 	end
 );
 =SML
-fun Ûmap_failÝ (f : 'a -> 'b) ([] : 'a list) : 'b list = []
-|   map_fail f (x::xs) = (
-	((f x) :: map_fail f xs) handle Fail _ => map_fail f xs
-);
 fun Ûhc_diagÝ (msg : string OPT) (pass : int) (thms : THM list) : unit = (
 	(case msg of 
 		Nil => diag_line
@@ -418,7 +439,7 @@ fun Ûhc_auxÝ (diag : bool) (sel : TERM list -> TERM)
 	let	val recur = hc_aux diag sel hyps hyp_tyvars hyp_tmvars
 					fact_rules fact_thms limit (pass+1);
 		fun	chk (mthm as {thm, fvs, fts}:MARKED_THM) : MARKED_THM = (
-			let	val thm' = prove_asm_rule t_thm thm
+			let	val thm' = check_prove_asm_rule t_thm thm
 						handle Fail _ => thm;
 			in	if	all (asms thm') (fn t => t term_mem hyps)
 				then	raise GotIt thm'
@@ -430,10 +451,10 @@ fun Ûhc_auxÝ (diag : bool) (sel : TERM list -> TERM)
 			ts as _::_ => (
 			let	val t = sel ts;
 			in		flat
-				(map_fail
+				(mapfilter
 				(map chk o rule_resolve hyp_tyvars hyp_tmvars q t)
 				fact_rules) @
-				map_fail
+				mapfilter
 				(chk o thm_resolve hyp_tyvars hyp_tmvars q t)
 					fact_thms
 			end
