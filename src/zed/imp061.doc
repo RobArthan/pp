@@ -1,0 +1,661 @@
+% imp061.doc   %Z% $Date$ $Revision$ $RCSfile$
+=TEX
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation of the Z Parser}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP061}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.D.~Arthan & FST Team Leader}
+\TPPabstract{
+This document contains the implementation for the
+parser for HOL/Z.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	Library}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+
+\item[Issue \SCCSversion, \FormatDate{$Date$%
+} ] Initial Draft.
+
+\end{description}
+\subsection{Changes Forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the implementation for the parser for
+HOL/Z.
+The detailed design for this material is in \cite{DS/FMU/IED/DTD061}.
+\subsection{Introduction}
+
+\subsection{Purpose and Background}
+See \cite{DS/FMU/IED/DTD061}.
+
+\subsection{Dependencies}
+The parser is dependent on the Z lexical analyser, \cite{DS/FMU/IED/DTD060}, 
+and on the HOL symbol table, \cite{DS/FMU/IED/DTD020}.
+\subsection{Possible Enhancements}
+The error messages could be improved by using a hand-coded function to
+print out the parsing stack.
+\subsection{Deficiencies}
+The parser accepts a slightly larger language than that specified in
+\cite{DS/FMU/IED/DEF007} in that it allows infix, prefix and
+postfix syntax and type constraints in local function definitions.
+It also allows antiquotation in local definitions and bound variable
+declarations.
+
+The error report for errors in varstructs and local definitions
+does not indicate the position of the error as accurately as one might
+like. The error marker appears immediately after the $let$-term or
+abstraction (or similar) containing the error. To fix this would require
+quite a lot of work (one would probably have to label the $TM$s with
+token numbers so that the code which makes the checks when the
+entire containing phrase has been recognised
+could calculate where the error in the input arose from).
+As the second line of the error report does print out the rogue construct
+in full, the situation as is is not intolerable.
+\section{PREAMBLE}
+SML
+structure ÛZParserÝ : ZParser = struct
+=TEX
+We need to include the SLRP driver code at this point:
+=INCLUDE
+imp018.sml
+=SML
+open SlrpDriver;
+open ZLex ZTypeInference;
+=TEX
+\section{TYPE DEFINITIONS}
+
+SML
+type INPUTINDEX	=	int * int;
+type ÛDECORÝ	=	string;
+type ÛIDENTÝ	=	string*DECOR;
+datatype ÛZTMÝ	=	Zt§¢ of EXTYPE OPT * ZTM list
+		|	Ztsetd of EXTYPE OPT * ZTM list
+		|	Ztseta1 of ZSCHTEXT
+		|	Ztseta2 of ZSCHTEXT * ZTM
+		|	Ztð of ZTM
+		|	Zttuple of ZTM list
+		|	Zt¸ of ZTM list
+		|	ZtÊ of ZTM * DECOR
+		|	Ztsel of ZTM * IDENT
+		|	Ztapp of ZTM * ZTM * INPUTINDEX
+		|	ZtÌ of ZSCHTEXT * ZTM
+		|	ZtÍ1 of ZSCHTEXT
+		|	ZtÍ2 of ZSCHTEXT * ZTM
+		|	Ztschema of ZSCHTEXT
+		|	Ztdec of ZTM * DECOR
+		|	Ztpre of ZTM
+		|	Zt³ of ZTM
+		|	Zt± of ZTM * ZTM
+		|	Zt² of ZTM * ZTM
+		|	Zt´ of ZTM * ZTM
+		|	Zt¤ of ZTM * ZTM
+		|	Ztù of ZTM * ZTM
+		|	Zthide of (ZTM * IDENT list)
+		|	Ztµ of ZSCHTEXT * ZTM
+		|	Zt¶ of ZSCHTEXT * ZTM
+		|	Zt¶‰1 of ZSCHTEXT * ZTM
+		|	Zt„ of ZTM
+		|	Zt˜ of ZTM
+		|	Zttrue
+		|	Ztfalse
+		|	Zteq of ZTM * ZTM
+		|	Zt of ZTM * ZTM
+		|	Zt» of ZTM * ZTM
+		|	Ztpipe of ZTM * ZTM
+		|	Ztú of int
+		|	Ztûý of EXTYPE OPT * ZTM list
+		|	Ztconstrained of (ZTM * ZTM)
+		|	Ztlvar of IDENT*EXTYPE OPT*ZTM list*INPUTINDEX
+		|	Ztgvar of IDENT*EXTYPE OPT*ZTM list
+		|	Ztbracketed of ZTM * INPUTINDEX
+=TEX
+SML
+and ÛZDECÝ	=	ZdDec of IDENT list * ZTM
+		|	ZdDecsexp of ZTM * DECOR
+=TEX
+SML
+withtype ÛZSCHTEXTÝ =	ZDEC list * ZTM;
+=TEX
+
+\subsection{Lexical Classes}
+The type of tokens for the HOL parser is the following:
+The lexical classes have the following type (cf. the listing of terminals
+in the grammar produced by SLRP).
+=SML
+datatype ÛZ_LEX_CLASSÝ	=
+ÛZLAqTmÝ	|ÛZLIdÝ	|ÛZLDecorÝ 
+|ÛZLCharÝ	|ÛZLStringÝ	|ÛZLNumberÝ
+
+|ÛZLBeginOpÝ	|ÛZLEndOpÝ
+|ÛZLInOpÝ 	|ÛZLPostBeginOpÝ
+|ÛZLThenOpÝ	|ÛZLPostOpÝ	|ÛZLPreEndOpÝ
+|ÛZLPreOpÝ
+
+|ÛZLAxÝ		|ÛZLSchÝ	|ÛZLEndÝ	|ÛZLIsÝ	|ÛZLStÝ	|ÛZLBarÝ
+
+|ÛZLAmpersandÝ	|ÛZLÌÝ	|ÛZLÍÝ
+|ÛZLµÝ	|ÛZL¶Ý	|ÛZL¶‰1Ý	|ÛZL³Ý	|ÛZL±Ý 	|ÛZL²Ý 	|ÛZL¤Ý 	|ÛZL´Ý
+|ÛZLPreÝ	|ÛZL„Ý	|ÛZL˜Ý	|ÛZLPipeÝ 	|ÛZLùÝ 	|ÛZL»Ý	|ÛZLLetÝ
+|ÛZLFunÝ	|ÛZLGenÝ	|ÛZLRelÝ	|ÛZLOpenÝ	|ÛZLLbraceÝ
+|ÛZLRbraceÝ	|ÛZLLbrackÝ	|ÛZLRbrackÝ	|ÛZLLsqbrackÝ	|ÛZLRsqbrackÝ
+|ÛZL§Ý	|ÛZL¢Ý	|ÛZLCommaÝ	|ÛZLDotsÝ	|ÛZLDotÝ	|ÛZLSlashÝ
+|ÛZLBSlashÝ	|ÛZLFreeTyDefÝ	|ÛZLColonÝ	|ÛZLSemiÝ
+|ÛZLVertÝ	|ÛZLConjectureÝ	|ÛZL¦Ý	|ÛZL·Ý
+|ÛZL¸Ý	|ÛZLÊÝ	|ÛZLEosÝ;
+=TEX
+\subsection{Abstract Representation}
+The first phase of the parser will return a value of type $TM$ defined
+as follows
+(in which we remember fixity and bracketing solely for the purposes of error messages).
+=SML
+=TEX
+The partially parsed inputs for the parser will therefore have the following
+type:
+=SML
+datatype ÛPPÝ	=	ÛZIdÝ of IDENT
+		|	ÛZIdsÝ of IDENT list
+		|	ÛZTmÝ of ZTM
+		|	ÛZGenParamsÝ of ZTM
+		|	ÛZAppÝ of ZTM * ZTM
+		|	ÛZTmsÝ of ZTM list
+		|	ÛZDecÝ of ZDEC
+		|	ÛZDeclÝ of ZDEC list
+		|	ÛZParaÝ of ZPARAGRAPH
+		|	ÛZIdsZTmÝ of IDENT list * ZTM;
+=TEX
+\section{ERROR HANDLING}
+=TEX
+To give error reports which are closely related to the actual input,
+the following two variables are set up by the functions
+$zparser$ and $zreader$. At any time during parsing $input\_toks$
+can be expected to contain the totality of the token stream being parsed
+and $toks\_read$ contains the offset in it of the token most recently
+read (or is =INLINEFT
+~1
+=TEX
+\ if nothing has been read yet).
+=SML
+val input_toks : ZTOKEN list ref = ref [];
+val cur_tok : int ref = ref ~1;
+=TEX
+The following function converts a token into a string for use
+in an error report:
+=SML
+fun Ûformat_ztokenÝ  (tok : ZTOKEN) : string = (
+	case tok of
+		ZTId name	=> name
+	|	ZTNumber n	=> string_of_int n
+	|	ZTFun		=> "fun"
+	|	ZTGen		=> "gen"
+	|	ZTRel		=> "rel"
+	|	ZTLbrack	=> "("
+	|	ZTLsqbrack	=> "["
+	|	ZTRbrack	=> ")"
+	|	ZTRsqbrack	=> "]"
+	|	ZTComma		=> ","
+	|	ZT¸		=> "¸"
+	|	ZTVert	=> "|"
+	|	ZTEos	=> "®"
+	|	other	=> fail (makestring other) 61000 []
+);
+=TEX
+=SML
+fun Ûparse_error_hdrÝ () : unit = (
+	let	val ok_toks =	format_list
+				format_ztoken
+				((!input_toks) to (!cur_tok-1))
+				" ";
+		val bad_tok =	if !cur_tok >= 0 andalso !cur_tok < length (!input_toks)
+				then " <?> " ^ format_ztoken (nth (!cur_tok) (!input_toks))
+				else "";
+	in	diag_string (get_error_message 61001 [ok_toks ^ bad_tok])
+	end
+);
+=TEX
+
+=SML
+fun Ûparse_errorÝ (stk : (ZTOKEN, Z_LEX_CLASS, PP) INPUT_STACK) (msg : int) (insert : string) : 'a = (
+	parse_error_hdr();
+	diag_string (get_error_message msg [insert,
+		format_stack format_ztoken stk]);
+	raise SYNTAX_ERROR
+);
+=TEX
+=SML
+fun Ûstack_errorÝ (insert : string) : 'a = (
+	error "Z-Parser"  61005 [fn() => insert]
+);
+=TEX
+\section{THE GRAMMAR}\label{THEGRAMMAR}
+The reference grammar given in \cite{DS/FMU/IED/DEF007} requires a certain
+amount of adaptation. First of all we identify several subcategories of
+the category $Tm$ as follows (each one of which includes the next):
+
+\begin{tabular}{|l|p{4in}|}\hline
+Name & Description \\ \hline
+$Tm$ & The low precedence mixfix term constructs, viz. binders, conditionals, 
+and let-terms,
+together with applications of nonfix functions to such constructs.
+\\\hline
+$Tm1$ & The infix, prefix and postfix term constructs, with comma identified
+as a special case of infix (since it plays a special role in types).
+\\\hline
+$Tm2$ & Nonfix function applications, possibly with type constraints.
+\\\hline
+$Tm3$ & The atomic term constructs such as names, string literals etc. and the
+various bracketed term constructs
+\end{tabular}
+
+This makes the grammar reflect roughly the precedence rules of
+\cite{DS/FMU/IED/DEF001}. We then spell out the iteration constructs which
+are used in \cite{DS/FMU/IED/DEF001}. To abbreviate the grammar, we choose
+to use $Tm2$ and $Tm4$ instead of the categories $V$ and $V1$, leaving the
+check on the form of the variable structure to be handled by the reduction
+functions. Similarly we use $Tm1$ instead of $L$.
+
+The resulting grammar, together with the actions we assocate with each
+alternative is as follows:
+
+=DUMP imp061.grm.txt
+(* Grammar `play' *)
+
+Para	= Expr3		(red_conjecture(Parsed(red_expr stk x1)));
+Expr3	= Atom		(red_fetch x1)
+	| Expr3, Atom	(red_appl stk x1 x2);
+
+Atom	= ZLId		(red_var x1)
+	| ZLLsqbrack, Expr3, ZLRsqbrack	(red_genparams x2)
+	| ZLLsqbrack, Expr3, ZLVert, Expr3, ZLRsqbrack
+				(red_horiz_schema x2 x4)
+	| ZLLbrack, Expr3, ZLRbrack	(red_brack(Parsed(red_expr stk x2)));
+
+=TEX
+
+The following shell script runs the SLRP parser generator on the grammar
+and puts the generated parser code in the file `imp061.grm.sml'. This file
+is included in this document later on.
+=SH
+poly `arch`slrp.db >imp061.grm.run <<!
+Slrp.slrp{infile="imp061.grm.txt", outfile="imp061.grm.sml",
+		logfile="imp061.grm.log",  eos="ZLEos", loglevel=2};
+PolyML.quit();
+!
+=TEX
+=TEX
+\subsection{Reduction Functions}
+
+=TEX
+$mk\_binder$ makes a binder given a binder name,
+a list of $TM$s which are the blocks of bound variables and the body
+\subsubsection{The Reduction Functions}
+The types of the reduction functions are rather long. To avoid cluttering
+the definitions, we deliberately violate standards by omitting the arguments
+types from the definitions. The arguments of the functions all have type
+$(ZTOKEN, Z\_LEX\_CLASS, PP)INPUT\_STACK\_ITEM$.
+
+\subsubsection{Z Paragraph Reduction}
+
+SML
+fun decl_to_ids decl = [("X","")];
+fun Ûred_axbox1Ý (Parsed(ZDecl decl)) : PP = (
+	ZPara (AxDes (decl_to_ids decl, [], (decl, Zttrue)))
+) | red_axbox1 _ = stack_error "red_givenset";
+=TEX
+
+SML
+fun decl_to_ids decl = [("X","")];
+fun Ûred_axbox2Ý (Parsed(ZDecl decl)) : PP = (
+	ZPara (AxDes (decl_to_ids decl, [], (decl, Zttrue)))
+) | red_axbox1 _ = stack_error "red_givenset";
+=TEX
+
+SML
+fun Ûred_givensetÝ (Parsed(ZIds idl)) : PP = (
+	ZPara (GivenSet idl)
+) | red_givenset _ = stack_error "red_givenset";
+=TEX
+
+SML
+fun Ûred_constraintÝ (Parsed(ZIdsZTm (idl, tm))) : PP = (
+	ZPara (Constraint (idl, tm))
+) | red_constraint _ = stack_error "red_constraint";
+=TEX
+
+=SML
+fun Ûred_conjectureÝ (Parsed(ZTm tm)) : PP = (
+	ZPara (Conjecture tm)
+) | red_conjecture _ = stack_error "red_conjecture";
+=TEX
+
+=SML
+fun Ûred_applÝ stk (Parsed p1) (Parsed p2) : PP = (
+	case p2 of
+	ZGenParams tm2 => (
+		case p1 of
+		ZTm (Ztlvar (id, oty, [])) =>
+			ZTm (Ztlvar (id, oty, [tm2]))
+		|ZApp (tm1, (Ztlvar (id, oty, []))) =>
+			ZApp (tm1, Ztlvar (id, oty, [tm2]))
+		|other => parse_error stk 61003
+			"Generic parameter"
+		)
+	|ZTm tm2 => (
+		case p1 of
+		ZTm tm1 => ZApp(tm1, tm2)
+		|ZApp (tm1a, tm1b) =>
+			ZApp (Ztapp(tm1a, tm1b), tm2)
+		|other => stack_error "red_appl1"
+		)
+	|other => stack_error "red_appl2"
+) | red_appl _ _ _ = stack_error "red_appl3";
+=TEX
+=SML
+fun Ûred_exprÝ stk (Parsed (ZTm tm)) : PP = (
+	 ZTm tm
+) | red_expr stk (Parsed (ZApp (tm1, tm2))) : PP = (
+	 ZTm (Ztapp(tm1, tm2))
+) | red_expr stk (Parsed (ZGenParams tm1)) = (
+	parse_error stk 61003 "Generic parameter"
+) | red_expr _ _ = stack_error "red_expr";
+=TEX
+
+SML
+fun Ûred_idÝ (Token (ZTId s, _)) : PP = (
+	ZId (s, "")
+) | red_id _ = stack_error "red_id";
+=TEX
+SML
+fun Ûred_iddecÝ (Token (ZTId s, _)) (Token (ZTDecor d, _)) : PP = (
+	ZId (s, d)
+) | red_iddec _ _ = stack_error "red_iddec";
+=TEX
+=SML
+fun Ûred_varÝ (Token (ZTId s, _)) : PP = (
+	ZTm (Ztlvar ((s,""), Nil, []))
+) | red_var (Token (ZTNumber n, _)) = (
+	ZTm (Ztú n)
+) | red_var _ = stack_error "red_var";
+=TEX
+=SML
+fun Ûred_genparamsÝ (Parsed (ZTm tm)) : PP = (
+	ZGenParams tm
+) | red_genparams _ = stack_error "red_genparams";
+=TEX
+=SML
+fun Ûred_brackÝ (Parsed (ZTm p)) : PP = (
+	ZTm (Ztbracketed p)
+) | red_brack _ = stack_error "red_brack";
+=TEX
+=SML
+fun Ûred_atomÝ (Parsed (ZApp (tm1, tm2))) : PP = (
+	ZTm (Ztapp(tm1, tm2))
+) | red_atom (Parsed p) : PP = (
+	p
+) | red_atom _ = stack_error "red_atom";
+=TEX
+=SML
+fun Ûred_fetchÝ (Parsed pp) : PP = ( pp
+) | red_fetch _ = stack_error "red_fetch";
+=TEX
+=SML
+fun Ûred_horiz_schemaÝ (Parsed (ZTm tm1)) (Parsed (ZTm tm2)) : PP = (
+	ZTm (Ztschema ([], tm2))
+) | red_horiz_schema _ _ = stack_error "horiz_schema";
+=TEX
+SML
+fun Ûred_decnames1Ý (Parsed(ZId id)) : PP = (
+	ZIds [id]
+) | red_decnames1 _ = stack_error "red_decnames1";
+=TEX
+SML
+fun Ûred_decnames2Ý (Parsed(ZId id)) (Parsed(ZIds idl)) : PP = (
+	ZIds (id::idl)
+) | red_decnames2 id idl = (
+	print id;print idl;stack_error "red_decnames2");
+=TEX
+SML
+fun Ûred_fixity1Ý (Parsed (ZId class)) (Parsed tmpl) : PP = (
+	case class of
+	("Rel", "") =>  tmpl
+	|("Fun", "") => fail "fixity" 61999 []
+	|("Gen", "") => fail "fixity" 61999 []
+	|_	=> stack_error "red_fixity1"
+) | red_fixity1 _ _ = stack_error "red_fixity1";
+=TEX
+SML
+fun Ûred_fixity2Ý (Parsed (ZId class)) (Token (ZTNumber i, _)) (Parsed tmpl) : PP = (
+	case class of
+	("Rel", "") => fail "fixity" 61999 []
+	|("Fun", "") => tmpl
+	|("Gen", "") => tmpl
+	|_	=> stack_error "red_fixity2"
+) | red_fixity2 _ _ _= stack_error "red_fixity2";
+=TEX
+SML
+fun Ûred_fixity_classÝ (Token (tok, _)) : PP = (
+	case tok of
+	ZTFun	=> ZId ("Fun", "")
+	|ZTRel	=> ZId ("Rel", "")
+	|ZTGen	=> ZId ("Gen", "")
+	|_	=> stack_error "fixity_class"
+) | red_fixity_class _ = stack_error "red_fixity_class";
+=TEX
+=INCLUDE
+imp061.grm.sml
+=TEX
+\subsection{Lexical Classification}
+Tokens are classified by the following function.
+Note that if the user declares ``,'' to have fixity other than infix
+then it will no longer be possible to parse the alternative for $Tys$
+involving $HLComma$.
+=SML
+fun ÛzclassifyÝ  (tok : ZTOKEN) : Z_LEX_CLASS = (
+	case tok of
+	ÛZTAqTmÝ _	=>	ZLAqTm
+	|ÛZTIdÝ _	=>	ZLId
+	|ÛZTDecorÝ _	=>	ZLDecor
+	|ÛZTCharÝ _	=>	ZLChar
+	|ÛZTStringÝ _	=>	ZLString
+	|ÛZTNumberÝ _	=>	ZLNumber
+
+	|ÛZTBeginOpÝ _	=>	ZLBeginOp
+	|ÛZTEndOpÝ _	=>	ZLEndOp
+	|ÛZTInOpÝ _	=>	ZLInOp
+	|ÛZTPostBeginOpÝ _	=>	ZLPostBeginOp
+	|ÛZTThenOpÝ _	=>	ZLThenOp
+	|ÛZTPostOpÝ _	=>	ZLPostOp
+	|ÛZTPreEndOpÝ _	=>	ZLPreEndOp
+	|ÛZTPreOpÝ _	=>	ZLPreOp
+
+	|ÛZTAxÝ	=>	ZLAx
+
+	|ÛZTSchÝ	=>	ZLSch
+	|ÛZTEndÝ	=>	ZLEnd
+	|ÛZTIsÝ	=>	ZLIs
+	|ÛZTStÝ	=>	ZLSt
+	|ÛZTBarÝ	=>	ZLBar
+
+	|ÛZTAmpersandÝ	=>	ZLAmpersand
+	|ÛZTÌÝ	=>	ZLÌ
+	|ÛZTÍÝ	=>	ZLÍ
+	|ÛZTµÝ	=>	ZLµ
+	|ÛZT¶Ý	=>	ZL¶
+	|ÛZT¶‰1Ý	=>	ZL¶‰1
+	|ÛZT³Ý	=>	ZL³
+	|ÛZT±Ý	=>	ZL±
+	|ÛZT²Ý	=>	ZL²
+	|ÛZT¤Ý	=>	ZL¤
+	|ÛZT´Ý	=>	ZL´
+	|ÛZTPreÝ	=>	ZLPre
+	|ÛZT„Ý	=>	ZL„
+	|ÛZT˜Ý	=>	ZL˜
+	|ÛZTPipeÝ=>	ZLPipe
+	|ÛZTùÝ	=>	ZLù
+	|ÛZT»Ý	=>	ZL»
+	|ÛZTLetÝ	=>	ZLLet
+	|ÛZTFunÝ	=>	ZLFun
+	|ÛZTGenÝ	=>	ZLGen
+	|ÛZTRelÝ	=>	ZLRel
+	|ÛZTOpenÝ	=>	ZLOpen
+	|ÛZTLbraceÝ	=>	ZLLbrace
+	|ÛZTRbraceÝ	=>	ZLRbrace
+	|ÛZTLbrackÝ	=>	ZLLbrack
+	|ÛZTRbrackÝ	=>	ZLRbrack
+	|ÛZTLsqbrackÝ	=>	ZLLsqbrack
+	|ÛZTRsqbrackÝ	=>	ZLRsqbrack
+	|ÛZT§Ý	=>	ZL§
+	|ÛZT¢Ý	=>	ZL¢
+	|ÛZTCommaÝ	=>	ZLComma
+	|ÛZTDotsÝ	=>	ZLDots
+	|ÛZTDotÝ	=>	ZLDot
+	|ÛZTSlashÝ	=>	ZLSlash
+	|ÛZTBSlashÝ	=>	ZLBSlash
+	|ÛZTFreeTyDefÝ	=>	ZLFreeTyDef
+	|ÛZTColonÝ	=>	ZLColon
+	|ÛZTSemiÝ	=>	ZLSemi
+	|ÛZTVertÝ	=>	ZLVert
+	|ÛZTConjectureÝ	=>	ZLConjecture
+	|ÛZT¦Ý	=>	ZL¦
+	|ÛZT·Ý	=>	ZL·
+	|ÛZT¸Ý	=>	ZL¸
+	|ÛZTÊÝ	=>	ZLÊ
+	|ÛZTEosÝ	=>	ZLEos
+);
+=TEX
+=SML
+fun ÛzreaderÝ (ip : ZTOKEN list) : ZTOKEN * (ZTOKEN list) = (
+	case ip of
+		(h :: more) => (cur_tok := !cur_tok + 1; (h, more))
+	|	[] => (ZTEos, [])
+);
+=TEX
+=SML
+val ÛzerrorÝ : (ZTOKEN, 'b, 'c, 'd) ERROR_ROUTINE = (fn (tok, stk, _, _) => (
+	parse_error_hdr();
+	diag_string (get_error_message 61003 [format_ztoken tok,
+				format_stack format_ztoken stk]);
+	raise SYNTAX_ERROR
+));
+=TEX
+Note that to be frugal with store, we take care to set the $input_toks$ variable
+to $[]$ between runs of the parser.
+Note also that the error function $HOL\_error$  raises $SYNTAX_ERROR$
+which $HOL\_parser$ catches so that it can do this tidying up even if
+an error has occurred.
+
+If an internal error occurs this tidying up is suppressed, which could
+help in obscure debugging circumstances (and only costs the user
+a bit of space until the next parser run).
+=SML
+fun ÛzparserÝ (ip : ZTOKEN list) : ZPARAGRAPH = (
+	let	val se1 = (input_toks := ip; cur_tok := ~1);
+		val res =(Value(
+			case (slrp'gen_parser
+				default_resolver zclassify
+				zerror
+				zreader) ip of
+			ZPara p => p
+			|	_ => error "Z-Parser" 61006 []))
+			handle	SYNTAX_ERROR => Nil
+			|	PARSER_ERROR msg => (
+					error "Z-Parser" 61007 [fn()=>msg]
+			);
+		val se2 = (input_toks := []);
+	in	case res of
+			Value tm => tm
+		|	Nil => fail "Z-Parser" 61000 []
+	end
+);
+
+fun Ûz_term_recogniserÝ (start:string, lang:string, value:INPUT list, finish:string) = (
+let	val side_effect =
+		if	is_same_symbol(start, "StartZTerm")
+			andalso	is_same_symbol(finish, ">")
+			andalso	(lang = "")
+		then	()
+		else
+			fail "z_term_recogniser" 49010 [
+				fn () => start,
+				fn () => lang,
+				fn () => finish];
+	val tokens = zlex value;
+	val parsed = zparser tokens;
+in	parsed 
+end);
+=TEX
+\section{EPILOGUE}
+SML
+end (* of structure Parser *);
+=TEX
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+
+\end{document}
+=IGN
+
+
+ñx®;
+ñx y®;
+ñ(x)®;
+ñ(x y)®;
+ñ[x]®;
+ñx [y]®;
+ñ[y|z]®;
+ñx [y|z]®;
+ñfun 10 3®;
+ñ[a,b,c]®;
+
+
+
+°
