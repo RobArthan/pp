@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.202 $ $RCSfile: imp507.doc,v $ $Date: 2002/05/21 12:23:27 $
+% imp507.doc %Z% $Revision: 1.203 $ $RCSfile: imp507.doc,v $ $Date: 2002/05/22 13:56:20 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.202 $%
+\def\SCCSversion{$Revision: 1.203 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/05/21 12:23:27 $%
+\TPPdate{\FormatDate{$Date: 2002/05/22 13:56:20 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -151,6 +151,7 @@ statements in stubs.
 added the state database into the CN state.
 in the same package.
 \item[Issue 1.203] Changed signature of vcs for sequent origins necessitates changed use.
+\item[Issue 1.204] Support for full syntax-check-only mode.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -6924,6 +6925,190 @@ in	update_replacement_env(label, ReplaceAnnotation x);
 end
 );
 =TEX
+\section{SYNTAX-CHECK-ONLY}
+In this section we provide an adaptation of the {\it do\_XXX} functions of the previous section
+to support the syntax-check-only mode. The adapted functions confine themselves
+to the SID functions that deal with the replacement environment. No other SID functions
+are called.
+=SML
+fun €sco_statement› (y as STNull : STATEMENT) : unit = ( ()
+) | sco_statement (y as STImplicitNull : STATEMENT) = ( ()
+) | sco_statement (y as (STAssign x) : STATEMENT) = ( ()
+) | sco_statement (y as (STSpecNoIvars {spec, label}) : STATEMENT) = ( 
+	new_k_slot(label, RSSpecStatement, get_current_theory_name())
+) | sco_statement (y as (STSemicolon (x1, x2)) : STATEMENT) = (
+	sco_statement x1;
+	sco_statement x2
+) | sco_statement (y as (STIfThenElse {p, q, g, elsif}) : STATEMENT) = (
+	sco_statement p;
+	sco_statement q
+) | sco_statement (y as (STCase {s, others, e}) : STATEMENT) = (
+	map (sco_statement o #p) s;
+	sco_statement others
+) | sco_statement (y as (STLoop {t= t, stmt}) : STATEMENT) = (
+	sco_statement stmt
+) | sco_statement (y as (STNamedLoop {t, stmt, name}) : STATEMENT) = (
+	sco_statement stmt
+) | sco_statement (y as (STWhile {loop as {t, stmt}, name, g}) : STATEMENT) = (
+	sco_statement stmt
+) | sco_statement
+	(y as (STForStatic {name, i, tmark, range, dir, loop as {stmt, t}}) : STATEMENT) = (
+	sco_statement stmt
+) | sco_statement
+	(y as (STForTmark {name, i, tmark, dir, loop as {stmt, t}}) : STATEMENT) = (
+	sco_statement stmt
+) | sco_statement (y as (STExitWhen x) : STATEMENT) = ( ()
+) | sco_statement (y as (STExit x): STATEMENT) = ( ()
+) | sco_statement (y as (STRet x) : STATEMENT)  = ( ()
+) | sco_statement (y as (STProcNoIvars x) : STATEMENT) = ( ()
+) | sco_statement (y as (STKSlot {label, content}) : STATEMENT) = (
+	new_k_slot(label, RSStatement, get_current_theory_name())
+) | sco_statement (y as (STPragma _) : STATEMENT) = ( ()
+) | sco_statement (y as (STAnnotation _) : STATEMENT) = ( ()
+) | sco_statement (y as (SSpecIvars x) : STATEMENT) = (
+	error "sco_statement" 507019 []
+) | sco_statement (y as (SForNonStatic x) : STATEMENT) = (
+	error "sco_statement" 507019 []
+) | sco_statement (y as (SLogCon (log_con as {defs, spec, pre1, label})) : STATEMENT) = (
+	new_k_slot(label, RSSpecStatement, get_current_theory_name())
+) | sco_statement (y as (SProcIvars x) : STATEMENT) = (
+	error "sco_statement" 507019 []
+);
+=TEX
+=SML
+fun €sco_declaration› (y as (DDeclarationKSlot (
+	{label, content}, dkty)) : DECLARATION) = (
+	let	val rsty = case dkty of
+					DKDeclaration => RSDeclaration
+				|	DKPrivate => RSPrivatePart
+				|	DKVisible => RSVisiblePart;
+		val ident = trans_id label;
+	in	new_k_slot(label, rsty, get_current_theory_name())
+	end
+) | sco_declaration (y as (DProperBody x) : DECLARATION) = (
+	sco_proper_body x
+) | sco_declaration (y as (DPackageDeclaration x) : DECLARATION) = (
+	sco_package_spec x
+) | sco_declaration _ = ( ()
+)
+(*
+=TEX
+The following reflects the SID functions for $package\_specification$:
+=SML
+*)
+and €sco_package_spec› (decl as {name, visible_decs, private_decs, annotation}
+			: DECLARATION PACKAGE_DECLARATION) = (
+	map sco_declaration visible_decs;
+	map sco_declaration private_decs; ()
+)
+(*
+=TEX
+The following reflects the SID functions for $package\_body$:
+=SML
+*)
+(*
+=TEX
+=SML
+*)
+and €sco_proper_body› (y as (PBProcedure 
+	{procedure_spec as {name,...}, declarative_part, statement}) : PROPER_BODY)
+	: unit = (
+	map sco_declaration declarative_part;
+	sco_statement statement
+) | sco_proper_body (y as (PBFunction 
+	{function_spec as {designator,...}, declarative_part, statement}) : PROPER_BODY) = (
+	map sco_declaration declarative_part;
+	sco_statement statement
+) | sco_proper_body (y as (PBPackage 
+	{name, decls, statement, annotation}) : PROPER_BODY) = (
+	map sco_declaration decls;
+	sco_statement statement
+);
+=TEX
+=SML
+fun €sco_compilation_unit›
+	(y as (CUPackageDeclaration (x as {name, ...})) : COMPILATION_UNIT)
+	: unit = (
+	sco_declaration (DPackageDeclaration x)
+) | sco_compilation_unit (y as (CUProperBody x)) = (
+	sco_declaration (DProperBody x)
+) | sco_compilation_unit (y as (CUSubUnit {name, proper_body})) = (
+	sco_declaration (DProperBody proper_body)
+);
+=TEX
+=SML
+fun €sco_context_compilation_unit›
+	({context, references, comp_unit, annotation, ...}
+		: CONTEXT_COMPILATION_UNIT) : unit = (
+	sco_compilation_unit comp_unit
+);
+=TEX
+=SML
+fun €sco_kslot_compilation_unit›
+	(y as (KCUKSlot {label, content}) : KSLOT_COMPILATION_UNIT) : unit = (
+	new_k_slot (label, RSCompilation, get_current_theory_name())
+) | sco_kslot_compilation_unit
+	(y as (KCUUnit x) : KSLOT_COMPILATION_UNIT) = (
+	sco_context_compilation_unit x
+) | sco_kslot_compilation_unit
+	(KCUPragma _ : KSLOT_COMPILATION_UNIT) = ( ()
+);
+=TEX
+=SML
+fun €sco_web_clause› (y as (WCCompilation x) : WEB_CLAUSE) : unit = (
+	update_spark_prog x;
+	map sco_kslot_compilation_unit x; ()
+) | sco_web_clause (y as (WCReplacedByCompilation x) : WEB_CLAUSE) = (
+let	val {label=label, comp=comp} = x;
+in	case (s_lookup label (!repl_env), comp) of
+		(Value (UnReplaced _), _) => (
+			update_replacement_env(label, ReplaceComp x)
+	) |	(Nil, [KCUUnit {comp_unit = CUProperBody (pb as PBPackage {name, ...}),
+			context=[], references=[], ...}]) => (
+			case s_lookup (trans_id name) (!repl_env) of
+				Value (UnReplaced _) => (
+					update_replacement_env
+						(name, ReplaceComp{label = name, comp=comp});
+					sco_compilation_unit
+						(CUSubUnit {name=label, proper_body=pb})
+			) |	_ => (fail "sco_web_clause" 507065 [fn _ => label])
+	) | _ => fail "sco_web_clause" 507065 [fn _ => label]
+end
+) | sco_web_clause (y as (WCReplacedByPrivatePart x) : WEB_CLAUSE) = (
+let	val {label=label, private=private} = x;
+in	update_replacement_env(label, ReplacePPart x);
+	map sco_declaration (#private x); ()
+end
+) | sco_web_clause (y as (WCReplacedByVisiblePart x) : WEB_CLAUSE) = (
+let	val {label=label,visible=visible} = x;
+in	update_replacement_env(label, ReplaceVPart x);
+	map sco_declaration (#visible x); ()
+end
+) | sco_web_clause (y as (WCReplacedByDecl x) : WEB_CLAUSE) = (
+let	val {label=label,decls=decls} = x;
+in	update_replacement_env(label, ReplaceDecl x);
+	map sco_declaration decls; ()
+end
+) | sco_web_clause (y as (WCRefinedBy x) : WEB_CLAUSE) = (
+let	val {label=label,statement=statement} = x;
+in	sco_statement statement;
+	update_replacement_env(label, RefineStat x)
+end
+) | sco_web_clause (y as (WCReplacedBy x) : WEB_CLAUSE) = (
+let	val {label=label,statement=statement} = x;
+in	sco_statement statement;
+	update_replacement_env(label, RefineStat x)
+end
+) | sco_web_clause (y as (WCReplacedByArbitraryAda x) : WEB_CLAUSE) = (
+let	val {label=label, ...} = x;
+in	update_replacement_env(label, ReplaceArbitrary x)
+end
+) | sco_web_clause (y as (WCReplacedByAnnotation x) : WEB_CLAUSE) = (
+let	val {label=label, replacement=ann} = x;
+in	update_replacement_env(label, ReplaceAnnotation x)
+end
+);
+=TEX
 \section{INTERFACE}
 The following function is called from \cite{ISS/HAT/DAZ/IMP504} to classify a label.
 =SML
@@ -6956,13 +7141,13 @@ It is tricky in the following to know whether or not to save the state
 if an exception is raised. The current approach is to save.
 =SML
 *)
-	fun €cn_z_generator› (w : WEB_CLAUSE) : unit = (
+	fun €common_z_generator› (sco : bool) (w : WEB_CLAUSE) : unit = (
 		let	val save_zg_state = get_z_generator_state();
 			val save_ti_cxt = get_ti_context();
 		in	diag_vc_args := [];
 			diag_basic_decl_list := [];
 			diag_web_clause := w;
-			(do_web_clause w)
+			((if sco then sco_web_clause else do_web_clause) w)
 			handle ex => (
 				diag_z_generator_state := get_z_generator_state();
 				save_z_generator_state();
@@ -6973,6 +7158,12 @@ if an exception is raised. The current approach is to save.
 			save_z_generator_state();
 			set_ti_context save_ti_cxt
 		end
+	);
+	fun €cn_z_generator› (w : WEB_CLAUSE) : unit = (
+		common_z_generator false w
+	);
+	fun €sco_z_generator› (w : WEB_CLAUSE) : unit = (
+		common_z_generator true w
 	);
 (*
 =TEX
