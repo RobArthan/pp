@@ -1,4 +1,4 @@
-% mdt512.doc	%Z% $Date$ $Revision$ $RCSfile$
+% mdt512.doc    %Z% $Date$ $Revision$ $RCSfile$
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -6,24 +6,23 @@
 \def\Hide#1{}
 \def\Bool{``$\it{:}bool\,$''}
 \makeindex
-\TPPproject{DAZ PROJECT}	%% Mandatory field
+\TPPproject{DAZ PROJECT}    %% Mandatory field
 %\TPPvolume{}
 %\TPPpart{}
 \TPPtitle{Module Tests: Compliance Notation Reader/Writer}  %% Mandatory field
-\TPPref{ISS/HAT/DAZ/MDT512}	%% Mandatory field
+\TPPref{ISS/HAT/DAZ/MDT512}    %% Mandatory field
 \def\SCCSversion{$Revision$
 }
-\TPPissue{\SCCSversion}	%% Mandatory field
+\TPPissue{\SCCSversion}    %% Mandatory field
 \TPPdate{\FormatDate{$Date$
 }}  %% Mandatory field (with sensible default)
-\TPPstatus{Draft}			%% Mandatory field
+\TPPstatus{Draft}            %% Mandatory field
 \TPPtype{Specification}
 \TPPkeywords{HOL}
 \TPPauthor{A.C.~Hayward & WIN01}  %% Mandatory field
 %\TPPauthors{D.J.~King & WIN01\\A.C.~Hayward & WIN01}
 \TPPauthorisation{R.B.~Jones & HAT Manager}
-\TPPabstract{
-This document comprises test cases and test code/data for testing the DAZ Compliance Notation Reader/Writer as described in the document ISS/HAT/DAZ/MDT512.}
+\TPPabstract{This document comprises test cases for testing the DAZ Compliance Notation Reader/Writer as described in the document ISS/HAT/DAZ/MDT512.}
 
 %\TPPabstractB{}
 %\TPPabstractC{}
@@ -63,8 +62,8 @@ This document comprises test cases and test code/data for testing the DAZ Compli
 \subsection{Changes History}  % to get section number `0.3'
 \begin{description}
 
-\item[Issue 1.1, \FormatDate{94/07/18}]
-First version.
+\item[Issue 1.1, \FormatDate{94/07/18}] First version.
+\item[Issue 1.2, \FormatDate{94/07/19}] Working properly.
 
 \end{description}
 \subsection{Changes Forecast}
@@ -79,7 +78,7 @@ This document comprises test cases and test code/data for testing the DAZ Compli
 
 \subsubsection{Background and Purpose}
 
-This document is intended to supply module tests for the DAZ Compliance Notation Reader/Writer as defined in \cite{ISS/HAT/DAZ?DTD512} and implemented in \cite{ISS/HAT?DAZ/IMP512}. The tests are intended to meet the requirements for tests identified in the quality plan \cite{ISS/HAT/DAZ/PLN003}.
+This document is intended to supply module tests for the DAZ Compliance Notation Reader/Writer as defined in \cite{ISS/HAT/DAZ/DTD512} and implemented in \cite{ISS/HAT/DAZ/IMP512}. The tests are intended to meet the requirements for tests identified in the quality plan \cite{ISS/HAT/DAZ/PLN003}.
 
 \subsubsection{Dependencies}
 
@@ -94,7 +93,7 @@ None known.
 There are no known deficiencies.
 
 \section{INITIALISATION}
-First we need to load the test harnes and initialise it.
+First we need to load the test harness and initialise it.
 
 =SML
 use_file "dtd013";
@@ -106,18 +105,299 @@ init_mt_results();
 Set up the theory database as necessary.
 
 =SML
-
 open_theory "z_library";
 force_delete_theory "mdt512" handle (_) => ();
 new_theory "mdt512";
+open Lex;
+=TEX
+
+A function to compare two objects of Lex.INPUT list.  This is the type returned by the basic Compliance Notation Reader Writer.
+
+=SML
+local
+    fun comp_input (Char x, Char y) = if x=y then true else false
+    |   comp_input (Error x, Error y) = if x=y then true else false
+    |   comp_input (Separator x, Separator y) = if x=y then true else false
+    |   comp_input (String x, String y) = if x=y then true else false
+    |   comp_input (Term x, Term y) = if x=$y then true else false
+    |   comp_input (Text x, Text y) = if x=y then true else false
+    |   comp_input (Type x, Type y) = if x=:y then true else false
+    |   comp_input (_ : INPUT, _ : INPUT) = false;
+in
+    fun comp_input_list ([] : INPUT list, [] : INPUT list) = true
+    |   comp_input_list (xs : INPUT list, [] : INPUT list) = false
+    |   comp_input_list ([] : INPUT list, ys : INPUT list) = false
+    |   comp_input_list (x::xs : INPUT list, y::ys : INPUT list) =
+        if (comp_input (x,y)) = false
+        then false
+        else comp_input_list (xs,ys);
+end (* local ... in *);
+=TEX
+
+Set up the Compilance Notation Reader Writer.  This is just a basic reader,
+giving us a list of strings.
+
+=SML
+fun cn_recogniser
+    (start:string, lang:string, value:Lex.INPUT list, finish:string) = (
+    if ReaderWriterSupport.PrettyNames.is_same_symbol(start, "¹")
+        andalso ReaderWriterSupport.PrettyNames.is_same_symbol(finish, "°")
+        andalso (lang = "CN")
+    then
+        value
+    else
+        fail "cn_recogniser" 504010
+            [fn () => start, fn () => lang, fn () => finish]
+);
+=TEX
+
+\section{Testing the Compilance Notation Reader/Writer}
+
+\subsection{Keywords and Percent symbols}
+
+Keywords inside a string should be ignored and not converted to an extended character.  i.e. Strings should be kept verbatim.  However keywords not in a string should be converted to extended characters as usual.
+
+=SML
+local
+    val t1 =
+=TEX
+¹CN
+"%forall% %spot%"
+°
+=SML
+    val t2 =
+=TEX
+¹CN
+%forall% %spot%
+°
+=SML
+    val a1 = [Text "", String "%forall% %spot%", Text " "] : INPUT list;
+    val a2 = [Text "µ · "] : INPUT list;
+in
+    val _ = store_mt_results (mt_runf comp_input_list) [
+        ("Keyword.1", (fn x => x), t1, a1),
+        ("Keyword.2", (fn x => x), t2, a2)];
+end;
+=TEX
+
+\subsection{Quotation symbols}
+
+To represent quotation symbol in a string we use two adjacent quotation symbols.
+
+=SML
+local
+    val t1 =
+=TEX
+¹CN
+""""
+°
+=SML
+    val t2 =
+=TEX
+¹CN
+"""Hello, World"""
+°
+=SML
+    val a1 = [Text "", String "\"", Text " "] : INPUT list;
+    val a2 = [Text "", String "\"Hello, World\"", Text " "] : INPUT list;
+in
+    val _ = store_mt_results (mt_runf comp_input_list) [
+        ("Quotation.1", (fn x => x), t1, a1),
+        ("Quotation.2", (fn x => x), t2, a2)];
+end;
+=TEX
+
+\subsection{Backslash symbols}
+
+Both inside and outside strings a backslash character is converted to a double backslash character because of its use as a string escape symbol.
+
+=SML
+local
+    val t1 =
+=TEX
+¹CN
+\ \\ \\\
+°
+=SML
+    val t2 =
+=TEX
+¹CN
+"\ \\ \\\"
+°
+=SML
+    val a1 = [Text "\\ \\\\ \\\\\\ "] : INPUT list;
+    val a2 = [Text "", String "\\ \\\\ \\\\\\", Text " "] : INPUT list;
+in
+    val _ = store_mt_results (mt_runf comp_input_list) [
+        ("Backslash.1", (fn x => x), t1, a1),
+        ("Backslash.2", (fn x => x), t2, a2)];
+end;
+=TEX
+
+\subsection{Strings}
+
+In SPARK a string is defined as a sequence of graphic characters (possibly none) enclosed between two quotation characters.
+
+=SML
+local
+    val t1 =
+=TEX
+¹CN
+"A B C D E F G H I J K L M N O P Q R S T U V W X Y Z"
+°
+=SML
+    val t2 =
+=TEX
+¹CN
+"0 1 2 3 4 5 6 7 8 9"
+°
+=SML
+    val t3 =
+=TEX
+¹CN
+""" # & ' ( ) * + , - . / : ; < = > _ |"
+°
+=SML
+    val t4 =
+=TEX
+¹CN
+" "
+°
+=SML
+    val t5 =
+=TEX
+¹CN
+"a b c d e f g h i j k l m n o p q r s t u v w x y z"
+°
+=SML
+    val t6 =
+=TEX
+¹CN
+"! $ % ? @ [ \ ] ^ ` { } ~"
+°
+=SML
+    val t7 =
+=TEX
+¹CN
+""
+°
+=SMLPLAIN
+    val a1 = [Text "",
+              String "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z",
+              Text " "] : INPUT list;
+    val a2 = [Text "", String "0 1 2 3 4 5 6 7 8 9", Text " "] : INPUT list;
+    val a3 = [Text "", String "\" # & ' ( ) * + , - . / : ; < = > _ |",
+              Text " "] : INPUT list;
+    val a4 = [Text "", String " ", Text " "] : INPUT list;
+    val a5 = [Text "",
+              String "a b c d e f g h i j k l m n o p q r s t u v w x y z",
+              Text " "] : INPUT list;
+    val a6 = [Text "", String "! $ %% ? @ [ \\ ] ^ ` { } ~",
+              Text " "] : INPUT list;
+    val a7 = [Text "", String "", Text " "] : INPUT list;
+in
+    val _ = store_mt_results (mt_runf comp_input_list) [
+        ("Strings.1", (fn x => x), t1, a1),
+        ("Strings.2", (fn x => x), t2, a2),
+        ("Strings.3", (fn x => x), t3, a3),
+        ("Strings.4", (fn x => x), t4, a4),
+        ("Strings.5", (fn x => x), t5, a5),
+        ("Strings.6", (fn x => x), t6, a6),
+        ("Strings.7", (fn x => x), t7, a7)];
+end;
+=TEX
+
+\subsection{Q's}
+
+The character Q is used internally when representing the extended characters.  We check that nothing odd happens when various combinations of the character Q are presented at the input.
+
+=SML
+local
+    val t1 =
+=TEX
+¹CN
+Q QQ QQQ QQQQ
+°
+=SML
+    val t2 =
+=TEX
+¹CN
+"Q QQ QQQ QQQQ"
+°
+=SML
+    val a1 = [Text "Q QQ QQQ QQQQ "] : INPUT list;
+    val a2 = [Text "", String "Q QQ QQQ QQQQ", Text " "] : INPUT list;
+in
+    val _ = store_mt_results (mt_runf comp_input_list) [
+        ("Q.1", (fn x => x), t1, a1),
+        ("Q.2", (fn x => x), t2, a2)];
+end;
+=TEX
+
+\subsection{Comments}
+
+A comment starts with two adjacent hyphens and extends to the end of the line.  The presence or absence of comments has no influence on whether the programe is legal or illegal, nor on the effect of the program.  Comments are converted to a single space by the Compliance Notation reader writer.
+
+=SML
+local
+    val t1 =
+=TEX
+¹CN
+    -- this is a comment
+°
+=SML
+    val t2 =
+=TEX
+¹CN
+"-- not a comment"
+°
+=SML
+    val a1 = [Text ""] : INPUT list;
+    val a2 = [Text "", String "-- not a comment", Text " "] : INPUT list
+in
+    val _ = store_mt_results (mt_runf comp_input_list) [
+        ("Comments.1", (fn x => x), t1, a1),
+        ("Comments.2", (fn x => x), t2, a2)];
+end;
+=TEX
+
+\subsection{White Space}
+
+The Compliance Notation reader writer reduces all white space down to a single space character.  A compliance notation section consisting wholly of white space is an empty string.
+
+=SML
+local
+    val t1 =
+=TEX
+¹CN
+a     b		c      d          e
+
+f
+
+
+g
+°
+=SML
+    val t2 =
+=TEX
+¹CN
+
+°
+=SML
+    val a1 = [Text "a b c d e f g "] : INPUT list;
+    val a2 = [Text ""] : INPUT list;
+in
+    val _ = store_mt_results (mt_runf comp_input_list) [
+        ("WhiteSpace.1", (fn x => x), t1, a1),
+        ("WhiteSpace.2", (fn x => x), t2, a2)];
+end;
 =TEX
 
 \section{SUMMARY OF RESULTS}
 
 =SML
-
+diag_line "++++ Results for module test : mdt512.doc";
 diag_line(summarize_mt_results());
-
 =TEX
 
 \end{document}
