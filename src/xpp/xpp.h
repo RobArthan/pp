@@ -1,12 +1,16 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * xpp.h 1.32 94/08/10 
+ * $Id: xpp.h,v 2.21 2002/03/18 19:14:49 phil Exp phil "
  *
  * xpp.h - main include file for the X/Motif ProofPower Interface
  *
  * (c) ICL 1993, 1994
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+#ifdef _xpp
+static char rcsid_h[] = "$Id: xpp.h,v 2.21 2002/03/18 19:14:49 phil Exp phil $";
+#endif
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * MACROS
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -201,10 +205,12 @@ typedef struct menu_item {
 	extern XtPointer add_undo(
 		Widget	text_w,
 		Widget	*menu_w,
-		NAT	menu_entry_offset);
+		NAT	undo_menu_entry_offset,
+		NAT	redo_menu_entry_offset);
 	extern void undo_motion_cb(CALLBACK_ARGS);
 	extern void undo_modify_cb(CALLBACK_ARGS);
 	extern void undo_cb(CALLBACK_ARGS);
+	extern void redo_cb(CALLBACK_ARGS);
 /* Module: xmisc */
 	extern void set_menu_item_sensitivity(
 		Widget	w,	/* menu widget */
