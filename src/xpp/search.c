@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.30 2003/05/22 11:44:45 rda Exp rda $ 
+ * $Id: search.c,v 2.31 2003/06/25 10:55:03 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -1238,18 +1238,25 @@ static Substring re_search_exec(regex_t *preg, char *text, Boolean bol)
 	int error_code;
 	char *p;
 	result.offset = -1; /* assume no match until we get one */
-	for(p = text; *p; ++p) {
+	p = text;
+	while(*p) {
 		error_code = regexec(preg, p, 1, pmatch, eflags);
 		if(error_code == 0) {
 			result.length = pmatch[0].rm_eo - pmatch[0].rm_so;
 			if(result.length != 0) {
 				result.offset = pmatch[0].rm_so + (p - text);
 				break;
+			} else { /* found only 0-length match, go round again: */
+				p += pmatch[0].rm_so;
+				if(!*p) {
+					break;
+				}/* else */
+				p += 1;
+				eflags = *(p-1) == '\n' ? 0 : REG_NOTBOL;
 			}
 		} else {
-			result.offset = -1;
 			break;
-		} /* found only 0-length match, go round again: */
+		}
 	}
 	return result;
 }
