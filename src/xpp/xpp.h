@@ -223,14 +223,14 @@ typedef struct menu_item {
 	extern void fix_pane_height(
 			Widget child_w,
 			Widget scale_w);
-void blink_owner_cb(
-	Widget					w,
-	Widget					text_w,
-	XmPushButtonCallbackStruct		*unused);
-void number_verify_cb(
-	Widget				unused1,
-	XtPointer			unused2,
-	XmTextVerifyCallbackStruct	*cbs);
+	extern void blink_owner_cb(
+		Widget					w,
+		Widget					text_w,
+		XmPushButtonCallbackStruct		*unused);
+	extern	void number_verify_cb(
+		Widget				unused1,
+		XtPointer			unused2,
+		XmTextVerifyCallbackStruct	*cbs);
 #endif
 #ifndef _xpp
 	extern XtTranslations text_translations;
