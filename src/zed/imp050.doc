@@ -245,7 +245,7 @@ end;
 =TEX
 \subsection{Tuple Types}
 =SML
-fun Ûtuple_type_specÝ(ty : TYPE) : THM =
+fun Ûtuple_type_specÝ (ty : TYPE) : THM =
 let 	
 	val (cnam,pnaml) = tuple_con_proj ty
 		handle complaint => 
@@ -281,59 +281,15 @@ in
 	end		| _ => fail "get_tuple_info" 50002 [fn () => cnam]
 end;
 =TEX
-\subsection{Retrieving Type Information}
-=IGN
-\subsubsection{Specific Cases}
-fun Ûget_constructor_defnÝ (ty : TYPE) : THM =
-let 	val (cnam,_) = 
-			if is_z_schema_t ty
-				then (binding_type_spec ty;bind_con_proj ty)
-			else 	if is_z_tuple_t ty
-					then (tuple_type_spec ty;tuple_con_proj ty)
-				else fail  "get_constructor_defn" 5003 
-				[fn () => string_of_type ty];
-	val thm = get_cached_defn cnam
-		handle complaint => 
-		divert complaint "get_defn""get_constructor_defn" 50004[fn () => cnam]
-in
-	hd(strip_±_rule((conv_rule µ_±_conv)thm))
-end;
-fun Ûget_projections_defnÝ(ty : TYPE) : THM list =
-let 	val (cnam,_) = 
-			if is_z_schema_t ty
-				then (binding_type_spec ty;bind_con_proj ty)
-			else 	if is_z_tuple_t ty
-					then (tuple_type_spec ty;tuple_con_proj ty)
-				else fail  "get_projections_defn" 5003 
-				[fn () => string_of_type ty];
-	val thm = get_cached_defn cnam
-		handle complaint => 
-		divert complaint "get_defn""get_projections_defn" 50005[fn () => cnam]
-in
-	strip_±_rule(hd(tl(strip_±_rule((conv_rule µ_±_conv)thm))))
-end;
-=TEX
-
-=SML
-fun Ûadd_polymorphismÝ (ty : TYPE) : TYPE = (
-let	val (nam, tyl) = dest_ctype ty;
-in
-	mk_ctype (nam, int_to_tyvl (length tyl))
-end);
-=TEX
 
 \section{Z CONSTANT DEFINITION GENERATION}\label{ZCONST}
 
 \subsection{Tuples}
 =SML
-fun Ûtuple_gen_semantic_constÝ (tm : TERM) : unit = (
-let	val (name, ty) = (dest_const o fst o strip_app) tm;
-	val (nam, tyl) = dest_ctype ty;
-	val tyl' = mk_ctype (name, int_to_tyvl (length tyl));
-in
-	(new_const (name, tyl'); ())
-			handle Fail _ => ()
-end);
+fun Ûtuple_gen_semantic_constÝ (tm : TERM) : THM = (
+	tuple_type_spec ((hd o rev o strip_­_type o
+		snd o dest_const o fst o strip_app) tm)
+);
 =TEX
 \subsection{Set Abstraction}
 =SML
@@ -462,7 +418,8 @@ in
 	("Z'¸",[[sn]], Nil) => (get_cached_defn (nam ^ "_def")
 		handle Fail _ => (
 		let	val aty = dest_z_power_t(type_of tm);
-			val bty = add_polymorphism aty;
+			val (tnam, ttyl) = dest_ctype aty;
+			val bty = mk_ctype (tnam, int_to_tyvl (length ttyl));
 			val tyvl = dest_z_tuple_t bty;
 			val side = tuple_type_spec(mk_z_tuple_t tyvl);
 			val (con,projs) = get_tuple_info (mk_z_tuple_t tyvl);
@@ -496,7 +453,57 @@ fun Ûbinding_gen_semantic_constÝ (tm : TERM) : THM = (
 	handle Fail _ => fail "binding_gen_semantic_const" 50111 []
 );
 =TEX
+\subsection{Unique Existential Quantification}
+=SML
+fun list_mk_pair [a] = a
+  | list_mk_pair [a,b] = mk_pair (a,b)
+  | list_mk_pair (a::rest) =
+	mk_pair (a,list_mk_pair rest)
+  | list_mk_pair _ = fail "list_mk_pair" 50000 [fn()=>"empty list not allowed"];
+=TEX
+
+=IGN
+val tm = ñ¶‰1 a,b : X · true®;
+val tm'= fst (strip_app tm);
+val nam = fst(dest_const tm');
+val ("Z'¶‰1",[[sn]], Nil) = dest_z_name nam;
+=SML
+fun Û¶‰1_gen_semantic_constÝ (tm:TERM) : THM = (
+let	val nam = fst(dest_const(fst(strip_app tm)));
+in
+	case dest_z_name nam of
+	("Z'¶‰1",[[sn]], Nil) => (get_cached_defn (nam ^ "_def")
+	handle Fail _ => (
+	let	val tyvl = string_to_styl sn;
+		val tyv = BOOL;
+		val dpvty = mk_z_schema_t[("d",BOOL),("p",BOOL),("v",tyv)];
+		val side = binding_type_spec dpvty;
+		val (dpvcon,dpvprojs) = get_binding_info dpvty;
+		val resty = BOOL;
+		val argty = list_mk_­_type(tyvl@[dpvty]);
+		val cvar = mk_var(nam,mk_­_type(argty,resty));
+		val anaml = map (fn s => implode("a" :: tl(explode s))) (map dest_vartype tyvl);
+		val al = map mk_var (combine anaml tyvl);
+		val alt = list_mk_pair al;
+		val pack = mk_var("pack",list_mk_­_type(tyvl@[dpvty]));
+		val pack_al = list_mk_app (pack, al);
+		val t = mk_var("t",type_of pack_al);
+		val projs = map (fn f => match_mk_app(f,t)) dpvprojs;
+		val pred = list_mk_± projs;
+		val abs_pred = mk_Ì(t,pred);
+		val abs_pred_pack_al = mk_app(abs_pred,pack_al);
+		val exists = mk_¶‰1 (alt, abs_pred_pack_al);
+		val lhs = mk_app(cvar,pack);
+		val body = mk_eq(lhs,exists);
+		val defn = mk_µ(pack,body);
+	in
+		local_const_spec "¶‰1_gen_semantic_const" (nam, cvar, defn)
+	end))
+	| _ => error "¶‰1_gen_semantic_const" 50100 []
+end);
+=TEX
 \subsection{Schema Constructor}
+=IGN
 val tm = ñ[x,y,z:X]®;
 val nam = (fst(dest_const (fst (strip_app tm))));
 val ("Z'‰s",[cpl], Nil) = dest_z_name nam;
@@ -1123,5 +1130,4 @@ end (* of structure ZGeneratedConstants *);
 \small
 \printindex
 \end{document}
-
 
