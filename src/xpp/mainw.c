@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.77 2004/02/08 14:44:53 rda Exp rda $
+ * $Id: mainw.c,v 2.78 2004/02/09 16:41:37 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -162,9 +162,15 @@ static void
 	file_menu_cb(CALLBACK_ARGS),
 	help_menu_cb(CALLBACK_ARGS),
 	reopen_cb(CALLBACK_ARGS),
-	tools_menu_cb(CALLBACK_ARGS),
 	ln_popup_cb(CALLBACK_ARGS),
-	journal_modify_cb(CALLBACK_ARGS);
+	journal_modify_cb(CALLBACK_ARGS),
+	popup_search_tool_cb(CALLBACK_ARGS),
+	popup_palette_cb(CALLBACK_ARGS),
+	popup_templates_tool_cb(CALLBACK_ARGS),
+	popup_command_line_tool_cb(CALLBACK_ARGS),
+	popup_options_tool_cb(CALLBACK_ARGS),
+	new_editor_session_cb(CALLBACK_ARGS),
+	new_command_session_cb(CALLBACK_ARGS);
 
 static void setup_reopen_menu(char *filename);
 static void defer_resize (EVENT_HANDLER_ARGS);
@@ -191,8 +197,10 @@ static void line_number_cb(CALLBACK_ARGS);
 #define FILE_MENU_REVERT          6
 #define FILE_MENU_EMPTY_FILE      7
 #define FILE_MENU_REOPEN          8
-/* Item 9 is a separator */
-#define FILE_MENU_QUIT           10
+/* Item 9 is  separator */
+#define FILE_MENU_NEW_SESSION     10
+/* Item 11 is a separator */
+#define FILE_MENU_QUIT            12
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * The items for the pull-right menu attached to Reopen in the
@@ -201,6 +209,14 @@ static void line_number_cb(CALLBACK_ARGS);
 #define MAX_REOPEN_MENU_ITEMS    16
 
 static MenuItem reopen_menu_items[MAX_REOPEN_MENU_ITEMS+1] = {
+	{NULL}
+};
+
+static MenuItem new_session_menu_items[MAX_REOPEN_MENU_ITEMS+1] = {
+    { "Editor Session", &xmPushButtonGadgetClass, 'E', NULL, NULL,
+        new_editor_session_cb, (XtPointer)0, (MenuItem *)NULL, False },
+    { "Command Session", &xmPushButtonGadgetClass, 'C', NULL, NULL,
+        new_command_session_cb, (XtPointer)0, (MenuItem *)NULL, False },
 	{NULL}
 };
 
@@ -223,37 +239,11 @@ static MenuItem file_menu_items[] = {
      { "Reopen",  &xmPushButtonGadgetClass, 'p', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_REOPEN, reopen_menu_items, False },
    MENU_ITEM_SEPARATOR,
+     { "New Session",  &xmPushButtonGadgetClass, 'N', NULL, NULL,
+        file_menu_cb, (XtPointer)FILE_MENU_NEW_SESSION, new_session_menu_items, False },
+   MENU_ITEM_SEPARATOR,
     { "Quit",  &xmPushButtonGadgetClass, 'Q', "Ctrl<Key>q", "Ctrl-Q",
         file_menu_cb, (XtPointer)FILE_MENU_QUIT, (MenuItem *)NULL, False },
-    {NULL}
-};
-/*
- * In the following, entries after and including
- * TOOLS_MENU_CMD_LINE are zero-ed out in an edit-only session.
- */
-#define TOOLS_MENU_SEARCH_REPLACE  0
-#define TOOLS_MENU_PALETTE         1
-#define TOOLS_MENU_TEMPLATES       2
-#define TOOLS_MENU_OPTIONS         3
-#define TOOLS_MENU_NEW_EDITOR         4
-#define TOOLS_MENU_NEW_COMMAND        5
-#define TOOLS_MENU_CMD_LINE        6
-
-static MenuItem tools_menu_items[] = {
-    { "Search and Replace", &xmPushButtonGadgetClass, 'S', NULL, NULL,
-        tools_menu_cb, (XtPointer)TOOLS_MENU_SEARCH_REPLACE, (MenuItem *)NULL, False },
-    { "Palette", &xmPushButtonGadgetClass, 'P', NULL, NULL,
-        tools_menu_cb, (XtPointer)TOOLS_MENU_PALETTE, (MenuItem *)NULL, False },
-    { "Templates", &xmPushButtonGadgetClass, 'T', NULL, NULL,
-        tools_menu_cb, (XtPointer)TOOLS_MENU_TEMPLATES, (MenuItem *)NULL, False },
-    { "Options", &xmPushButtonGadgetClass, 'O', NULL, NULL,
-        tools_menu_cb, (XtPointer)TOOLS_MENU_OPTIONS, (MenuItem *)NULL, False },
-    { "New Editor Session", &xmPushButtonGadgetClass, 'N', NULL, NULL,
-        tools_menu_cb, (XtPointer)TOOLS_MENU_NEW_EDITOR, (MenuItem *)NULL, False },
-    { "New Command Session", &xmPushButtonGadgetClass, 'N', NULL, NULL,
-        tools_menu_cb, (XtPointer)TOOLS_MENU_NEW_COMMAND, (MenuItem *)NULL, False },
-    { "Command Line", &xmPushButtonGadgetClass, 'C', NULL, NULL,
-        tools_menu_cb, (XtPointer)TOOLS_MENU_CMD_LINE, (MenuItem *)NULL, False },
     {NULL}
 };
 
@@ -262,8 +252,8 @@ static MenuItem tools_menu_items[] = {
  * undo and redo entries. (Used to set the sensitivity).
  */
 
-#define EDIT_MENU_UNDO  4
-#define EDIT_MENU_REDO  5
+#define EDIT_MENU_UNDO  5
+#define EDIT_MENU_REDO  6
 
 static MenuItem edit_menu_items[] = {
     { "Cut", &xmPushButtonGadgetClass, 'C', NULL, NULL,
@@ -274,10 +264,28 @@ static MenuItem edit_menu_items[] = {
         edit_paste_cb, (XtPointer)0, (MenuItem *)NULL, False },
     { "Clear", &xmPushButtonGadgetClass, 'l', NULL, NULL,
         edit_clear_cb, (XtPointer)0, (MenuItem *)NULL, False },
+    MENU_ITEM_SEPARATOR,
     { "Undo", &xmPushButtonGadgetClass, 'U', NULL, NULL,
         script_undo_cb, (XtPointer)0, (MenuItem *)NULL, False },
     { "Redo", &xmPushButtonGadgetClass, 'R', NULL, NULL,
         script_redo_cb, (XtPointer)0, (MenuItem *)NULL, False },
+    MENU_ITEM_SEPARATOR,
+    { "Search and Replace ...", &xmPushButtonGadgetClass, 'S', NULL, NULL,
+        popup_search_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
+    {NULL}
+};
+/*
+ * In the following, the templates tool item is desensitized if the tool
+ * initialisation fails.
+ */
+#define TOOLS_MENU_TEMPLATES 1
+static MenuItem tools_menu_items[] = {
+    { "Palette", &xmPushButtonGadgetClass, 'P', NULL, NULL,
+        popup_palette_cb, (XtPointer)0, (MenuItem *)NULL, False },
+    { "Templates", &xmPushButtonGadgetClass, 'T', NULL, NULL,
+        popup_templates_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
+    { "Options", &xmPushButtonGadgetClass, 'O', NULL, NULL,
+        popup_options_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
     {NULL}
 };
 
@@ -308,6 +316,9 @@ static MenuItem cmd_menu_items[] = {
         cmd_menu_cb, (XtPointer)CMD_MENU_KILL, (MenuItem *)NULL, False },
     { "Restart", &xmPushButtonGadgetClass, 'R', NULL, NULL,
         cmd_menu_cb, (XtPointer)CMD_MENU_RESTART, (MenuItem *)NULL, False },
+    MENU_ITEM_SEPARATOR,
+    { "Command Line ...", &xmPushButtonGadgetClass, 'C', NULL, NULL,
+        popup_command_line_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
     {NULL}
 };
 
@@ -854,9 +865,6 @@ static Boolean setup_main_window(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Tools menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-	if(global_options.edit_only) {
-		tools_menu_items[TOOLS_MENU_CMD_LINE].label = NULL;
-	}
 	toolsmenu = setup_menu(
 		menubar, XmMENU_PULLDOWN, "Tools", 'T', False, tools_menu_items);
 
@@ -1267,39 +1275,55 @@ static void reopen_cb(
 	}
 	if(oldfname) {XtFree(oldfname);}
 }
-
-static void tools_menu_cb(
+static void popup_search_tool_cb(
 		Widget		w,
 		XtPointer	cbd,
 		XtPointer	cbs)
 {
-	NAT i = (NAT) cbd;
-	switch(i) {
-	case TOOLS_MENU_PALETTE:
-		popup_palette(script);
-		break;
-	case TOOLS_MENU_TEMPLATES:
-		add_templates_tool(script);
-		break;
-	case TOOLS_MENU_SEARCH_REPLACE:
 		add_search_tool(script);
-		break;
-	case TOOLS_MENU_CMD_LINE:
+}
+
+static void popup_palette_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	popup_palette(script);
+}
+static void popup_templates_tool_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	add_templates_tool(script);
+}
+static void popup_command_line_tool_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
 		add_command_line_tool(script);
-		break;
-	case TOOLS_MENU_OPTIONS:
-		add_options_tool();
-		break;
-	case TOOLS_MENU_NEW_EDITOR:
-		new_editor_session();
-		break;
-	case TOOLS_MENU_NEW_COMMAND:
-		new_command_session();
-		break;
-	default:
-		break;
-	}
-/* Perhaps should test for success and make menu items insensitive */
+}
+static void popup_options_tool_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	add_options_tool();
+}
+static void new_editor_session_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	new_editor_session();
+}
+static void new_command_session_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	new_command_session();
 }
 
 static void script_undo_cb(
