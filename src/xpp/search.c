@@ -183,7 +183,7 @@ Bool add_search_tool(Widget text_w)
 
 	search_text = XtVaCreateManagedWidget("search",
 		xmTextWidgetClass,		form,
-		XmNtraversalOn,		False,
+		XmNtraversalOn,		True,
 		XmNeditMode,			XmMULTI_LINE_EDIT,
 		XmNrows,			2,
 		XmNcolumns,			32,
@@ -232,7 +232,7 @@ Bool add_search_tool(Widget text_w)
 
 	replace_text = XtVaCreateManagedWidget("replace",
 		xmTextWidgetClass,		form,
-		XmNtraversalOn,		False,
+		XmNtraversalOn,		True,
 		XmNeditMode,			XmMULTI_LINE_EDIT,
 		XmNrows,			2,
 		XmNcolumns,			32,
@@ -252,7 +252,7 @@ Bool add_search_tool(Widget text_w)
 
 	line_no_text = XtVaCreateManagedWidget("line-number",
 		xmTextWidgetClass,		form,
-		XmNtraversalOn,		False,
+		XmNtraversalOn,		True,
 		XmNtopAttachment,		XmATTACH_WIDGET,
 		XmNtopWidget,			replace_text,
 		XmNleftAttachment,		XmATTACH_POSITION,
