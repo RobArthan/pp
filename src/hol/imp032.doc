@@ -85,8 +85,14 @@ lasp -s -u imp032.OKwords imp032.doc > zz1
 
 \begin{description}
 
+\item[\FormatDate{91/07/10}, issue 1.1 ] First issue.
+
 \item[\FormatDate{$Date$%
-}, issue \SCCSissue ] First issue.
+}, issue \SCCSissue ]
+	Corrected fault in $Uncurry$. {}
+	Change `let' terms to have a syntax of the form ``{\tt let
+		$term$ in $term$}''. {}
+	Allow variables to have fixity.
 
 \end{description}
 
@@ -116,6 +122,9 @@ prepass which marked uses of constants and free variables which require
 typing together with the pretty printer always typing defining
 instances of variables.
 
+Add the correct body to function $print_identifier$ in
+section~\ref{PrintingIdentifiers}.
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \newpage
 \section{GENERAL}
@@ -144,7 +153,8 @@ pretty printing support system of~\cite{DS/FMU/IED/DTD031} and
 Pretty printing requires understanding uses of HOL constants which
 correspond to the various syntactic productions of HOL.  The pretty
 printer support~\cite{DS/FMU/IED/DTD031} decodes applications of
-constants and invokes one of the main routines (namely $HOL_fun_app$)
+constants and variables, it then invokes one of the main
+routines (namely $HOL_fun_const$ or $HOL_fun_var$)
 in this document.  Other, more primitive, types of HOL term are printed
 by other routines in this document.
 
@@ -202,7 +212,8 @@ allocation of HOL precedences easier to understand.
 
 =SML
 val ‚pc_h_post_type·			= pc_normal(60, 0, false);
-val ‚pc_h_apply·			= pc_normal(50, 0, true);
+val ‚pc_h_apply_first·			= pc_normal(50, 0, false);
+val ‚pc_h_apply_later·			= pc_normal(50, 0, true);
 fun ‚pc_h_oper·(op_prec, assoc)	= pc_normal(40, op_prec, assoc);
 val ‚pc_h_if_let_bind·			= pc_normal(30, 0, false);
 val ‚pc_h_if_let_bind_last·		= pc_normal(20, 0, false);
@@ -235,6 +246,7 @@ to type $PP_ENV$.
 %********************************************************************
 
 \subsection{Printing Identifiers}
+\label{PrintingIdentifiers}
 
 HOL variables and constants may contain arbitrary text as their
 identifiers.  Simple identifiers are printed as themselves, more
@@ -321,7 +333,7 @@ end
 \subsection{Variables and Constants}
 
 =SML
-fun ‚do_var_const· (cur_env:PP_ENV) name ty add_dollar = (
+fun ‚do_var_const· (cur_env:PP_ENV) name ty = (
 let
 	val pp_env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
@@ -329,7 +341,7 @@ let
 	val br = !pp_show_HOL_types andalso prec ge_prec pc_h_typing;
 in
 	if br then (addstring "("; (*=)=*) beginb(2, true)) else ();
-	if add_dollar then addstring "$" else ();
+	if get_fixity name <> Nonfix then addstring "$" else ();
 	print_identifier addstring name;
 	if !pp_show_HOL_types
 	then (
@@ -343,7 +355,7 @@ end
 =TEX
 
 =SML
-fun ‚HOL_do_var· cur_env name ty = do_var_const cur_env name ty false;
+fun ‚HOL_do_var· cur_env name ty = do_var_const cur_env name ty;
 =TEX
 
 HOL constants representing strings and character literals include
@@ -361,7 +373,7 @@ in
 	then	(addstring name; addstring "`")
 	else if is_string orig
 	then	(addstring name; addstring "\"")
-	else	do_var_const cur_env name ty (get_fixity name <> Nonfix)
+	else	do_var_const cur_env name ty
 end
 );
 =TEX
@@ -373,8 +385,9 @@ end
 These combinations are applications of the function $head_fn$ to a list
 of arguments in $args$ which may be empty.  Function application is
 left associative, thus the brackets may be omitted in the HOL fragment
-``$((f\;\;a)\;\;b)\;\;c$''.  {} Value $pc_h_apply$ is already set with
-this associativity.
+``$((f\;\;a)\;\;b)\;\;c$''.  {} Value $pc_h_apply_first$ is already set
+with this associativity, $pc_h_apply_later$ is set for the arguments to
+indicate that they will need brackets if they are combinations.
 
 Bracket elimination works as follows.  On entry to this routine we have
 the function and each of its arguments, we know that function
@@ -397,23 +410,25 @@ let
 		pe_space=space, pe_beginb=beginb, pe_endb=endb, pe_const=do_const,
 		pe_var=do_var, ...} = cur_env;
 
-	val br = prec ge_prec pc_h_apply;
+	val br = prec ge_prec pc_h_apply_later;
 
-	val new_env = set_prec pc_h_apply cur_env;
-
-	fun print_it tm = (
+	fun print_it p tm = (
+	let
+		val new_env = set_prec p cur_env;
+	in
 		case  simple_dest_term tm
 		of	Var(str, ty) =>	do_var new_env str ty
 		|	Const(str, ty) =>	do_const new_env str ty
 		|	_  =>			main_term_pp new_env tm
+	end
 	);
 in
 	case args
-	of nil =>	print_it head_fn
+	of nil =>	print_it pc_h_apply_first head_fn
 	| _ => (		beginb(0, false);
 			if br then (addstring "("; (*=)=*) beginb(2, true)) else ();
-			print_it head_fn;
-			map (fn t => (space(1, 0); print_it t)) args;
+			print_it pc_h_apply_first head_fn;
+			map (fn t => (space(1, 0); print_it pc_h_apply_later t)) args;
 			if br then (endb(); (*=(=*) addstring ")") else ();
 			endb()
 		)
@@ -699,6 +714,19 @@ in(
 \newpage
 \subsection{Local Definitions}
 
+HOL `let' terms are printed as if their syntax is of the form ``{\tt
+let $term$ in $term$}'' or ``{\tt let $term$ and $term$ in $term$}'',
+which is almost what the concrete syntax allows.  This general form
+allows easy handling of the fixity of the locally declared items.
+
+Printing out a HOL let term is done in several stages, function
+$HOL_let$ conducts the process.  First (in function $get_let_pieces$)
+the let term is broken open into the component pieces for printing.
+This includes rebuilding the components into a form
+compatible with the syntax shown above.
+Function $print_list_of_lets$ prints the individual let terms.
+Function $print_definer$ prints the defining terms.
+
 Breaking open local definitions to get their constituents works as
 follows.
 
@@ -755,41 +783,34 @@ set_flag("pp_let_as_lambda", true);
 set_flag("pp_let_as_lambda", false);
 =TEX
 
-Printing out a HOL let term is done in several stages, function
-$HOL_let$ conducts the process.  First (in function $get_let_pieces$)
-the let term is broken open into the component pieces for printing.
-Function $print_list_of_lets$ prints the individual let terms.
-Function $print_definer$ prints the associations of names with values.
-
 In $get_let_pieces$ a complex value is returned, as follows.  The value
 is a pair comprising (in $fst$ element) a list of the declarative parts
 of the nested let terms and (in $snd$ element) the innermost term over
 which the ``lets'' are defined.  Each declarative part is itself a
 list, with one element per definition, i.e., one element per `$=$'
 symbol, which is one more than the number of {\tt and} symbols.  Each
-definition is a pair comprising (in $fst$ element) list of terms
-corresponding to a value or a function name and its arguments and (in
-$snd$ element) the value.
+definition is a term formed as an equality between the left and right
+sides of the `$=$' symbol.
 
 =SML
-fun ‚get_let_pieces· (orig_tm:TERM) : (TERM list * TERM) list list * TERM = (
+fun ‚get_let_pieces· (orig_tm:TERM) : TERM list list * TERM = (
 let
 	fun aux_as_fn(t1:TERM, t2:TERM) =
 		let
 			val (decs, value) = strip_abs t2
 		in
-			(t1::decs, value)
+			mk_eq(list_mk_comb(t1, decs), value)
 		end;
 
-	fun aux_as_lambda(t1:TERM, t2:TERM) = ([t1], t2);
+	fun aux_as_lambda(t1:TERM, t2:TERM) = mk_eq(t1, t2);
+
+	val aux =	if ! pp_let_as_lambda
+			then	aux_as_lambda
+			else	aux_as_fn;
 
 	val (decls, tm) = strip_let orig_tm;
 
-	val fulldecls : (TERM list * TERM) list list
-		=	(	if ! pp_let_as_lambda
-				then	map (map aux_as_lambda)
-				else	map (map aux_as_fn)
-			) decls;
+	val fulldecls = map (map aux) decls;
 in
 	(fulldecls, tm)
 end
@@ -804,11 +825,10 @@ let
 
 	fun tm_p p t = main_term_pp (set_prec p cur_env) t;
 
-	fun aux((lhs, rhs), prefix) = (
+	fun aux(definer, prefix) = (
 		addstring prefix;
-		map (fn tm => (space(1, 0); tm_p pc_lowest tm)) lhs;
-		addstring " = ";
-		tm_p pc_lowest rhs;
+		space(1, 0);
+		tm_p pc_lowest definer;
 		space(1,0);
 		"and"
 	);
@@ -892,14 +912,16 @@ fun ‚HOL_uncurry· (cur_env:PP_ENV) (name:string) (ty:TYPE)
 		([arg]:TERM list) : PFUN_ANS = (
 let
 	val orig_tm = mk_comb(mk_const(name, ty), arg);
-
-	val (u_decls, u_body) = strip_abs orig_tm;
 in
-	display_binder cur_env "ç" u_decls u_body;
-	pf_ok
+	case strip_abs orig_tm
+	of (nil, _) => pf_not_possible
+	| (u_decls, u_body) => (	display_binder cur_env "ç" u_decls u_body;
+					pf_ok
+				)
 end
 )
-| HOL_uncurry _ _ _ args = if length args > 1 then pf_fewer 1 else pf_not_possible;
+| HOL_uncurry _ _ _ nil = pf_not_possible
+| HOL_uncurry _ _ _ _ = pf_fewer 1;
 =TEX
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1032,10 +1054,26 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \newpage
-\section{FUNCTION APPLICATION OF CONSTANTS}
+\section{FUNCTION APPLICATION OF CONSTANTS AND VARIABLES}
 
 =SML
-fun ‚HOL_fun_app· (cur_env:PP_ENV) (name:string) (ty:TYPE)
+local
+fun ‚do_fixity· (cur_env:PP_ENV) constr (name:string) (ty:TYPE)
+		(args:TERM list) : PFUN_ANS = (
+	case get_fixity name
+	of Nonfix => (
+			HOL_do_comb cur_env (constr(name, ty)) args;
+			pf_ok
+		)
+	| Prefix op_prec	=> do_prefix	cur_env name op_prec args
+	| Infix op_prec		=> do_infix	cur_env name op_prec args
+	| Postfix op_prec	=> do_postfix	cur_env name op_prec args
+	| Binder		=> do_binder	cur_env name ty args
+);
+
+in
+
+fun ‚HOL_fun_const· (cur_env:PP_ENV) (name:string) (ty:TYPE)
 		(args:TERM list) : PFUN_ANS = (
 	case
 		case name
@@ -1050,18 +1088,17 @@ fun ‚HOL_fun_app· (cur_env:PP_ENV) (name:string) (ty:TYPE)
 		| ","		=> Value HOL_comma
 		| _		=> Nil
 	of Value printer => printer cur_env name ty args
-	| Nil => (
-		case get_fixity name
-		of Nonfix => (
-				HOL_do_comb cur_env (mk_const(name, ty)) args;
-				pf_ok
-			)
-		| Prefix op_prec	=> do_prefix	cur_env name op_prec args
-		| Infix op_prec		=> do_infix	cur_env name op_prec args
-		| Postfix op_prec	=> do_postfix	cur_env name op_prec args
-		| Binder		=> do_binder	cur_env name ty args
-	)
+	| Nil => do_fixity cur_env mk_const name ty args
 );
+=TEX
+
+=SML
+fun ‚HOL_fun_var· (cur_env:PP_ENV) (name:string) (ty:TYPE)
+		(args:TERM list) : PFUN_ANS = (
+	do_fixity cur_env mk_var name ty args
+)
+
+end;
 =TEX
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1075,7 +1112,8 @@ fun ‚HOL_fun_app· (cur_env:PP_ENV) (name:string) (ty:TYPE)
 =SML
 val side_effect =
 set_printers("HOL",
-	(HOL_do_abs, HOL_do_comb, HOL_do_const, HOL_fun_app, HOL_do_var));
+	(HOL_do_abs, HOL_do_comb, HOL_do_const, HOL_fun_const,
+		HOL_fun_var, HOL_do_var));
 =TEX
 
 %********************************************************************
