@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.4 2002/01/25 00:34:39 rda Exp $
+ * $Id: xmisc.c,v 2.5 2002/10/17 17:09:34 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -38,6 +38,9 @@
 #include <X11/Intrinsic.h>
 #include <X11/Shell.h>
 #include <Xm/Xm.h>
+#ifdef EDITRES
+#include <X11/Xmu/Editres.h>
+#endif
 
 #include<Xm/Text.h>
 #include<varargs.h>
@@ -411,3 +414,17 @@ char *get_selection(Widget w, char *err_msg)
 	}
 	return sel;
 }
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * add_edit_res_handler: add support for editres to a shell widget
+ * **** **** **** **** **** **** **** **** **** **** **** ****/
+#ifdef EDITRES
+void add_edit_res_handler(Widget shell)
+{
+	XtAddEventHandler(shell,
+			(EventMask) 0,
+			True,
+			_XEditResCheckMessages,
+			NULL);
+}
+#endif

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2002/10/17 17:09:34 $ $Revision: 2.10 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2002/10/28 14:35:20 $ $Revision: 2.11 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -95,16 +95,19 @@ static void help_cb(CALLBACK_ARGS);
 void help_dialog(Widget w, char *str)
 {
 	Widget form, widget;
-	static Widget dialog_w, pane, help_text;
+	static Widget dialog, pane, help_text;
 	Atom WM_DELETE_WINDOW;
 	Dimension h;
 	Arg args[8];
-	if(!dialog_w) {
-		dialog_w = XtVaCreatePopupShell("xpp-Help",
+	if(!dialog) {
+		dialog = XtVaCreatePopupShell("xpp-Help",
 			xmDialogShellWidgetClass, get_top_shell(w),
 			XmNdeleteResponse, XmUNMAP,
 			NULL);
-		pane = XtVaCreateWidget("pane", xmPanedWindowWidgetClass, dialog_w,
+#ifdef EDITRES
+		add_edit_res_handler(dialog);
+#endif
+		pane = XtVaCreateWidget("pane", xmPanedWindowWidgetClass, dialog,
 			XmNsashWidth,  1, /* PanedWindow won't let us set these to 0! */
 			XmNsashHeight, 1, /* Make small so user doesn't try to resize */
 			NULL);
@@ -132,7 +135,7 @@ void help_dialog(Widget w, char *str)
 			XmNshowAsDefault,        True,
 			XmNdefaultButtonShadowThickness, 1,
 			NULL);
-		XtAddCallback(widget, XmNactivateCallback, help_cb, dialog_w);
+		XtAddCallback(widget, XmNactivateCallback, help_cb, dialog);
 		XtManageChild(form);
 		XtVaGetValues(widget, XmNheight, &h, NULL);
 		XtVaSetValues(form, XmNpaneMaximum, h, XmNpaneMinimum, h, NULL);
@@ -141,7 +144,7 @@ void help_dialog(Widget w, char *str)
 	}
 	XmTextSetString(help_text, str);
 	XtManageChild(pane);
-	XtPopup(dialog_w, XtGrabNone);
+	XtPopup(dialog, XtGrabNone);
 }
 
 static void help_cb(
@@ -176,6 +179,9 @@ Boolean yes_no_dialog(Widget w, char *question)
 	reply = 0;
 	if (!dialog) {
 		dialog = XmCreateQuestionDialog(w, "yes_no", NULL, 0);
+#ifdef EDITRES
+		add_edit_res_handler(dialog);
+#endif
 		yes = XmStringCreateSimple("   Yes   ");
 		no = XmStringCreateSimple("   No   ");
 		confirm = XmStringCreateSimple("Confirm");
@@ -229,6 +235,9 @@ Boolean quit_new_dialog(Widget w, char *question)
 	reply = 0;
 	if (!dialog) {
 		dialog  = XmCreateQuestionDialog(w, "quit_new", NULL, 0);
+#ifdef EDITRES
+		add_edit_res_handler(dialog);
+#endif
 		new     = XmStringCreateSimple("   New   ");
 		quit    = XmStringCreateSimple("   Quit   ");
 		confirm = XmStringCreateSimple("Confirm");
@@ -285,6 +294,9 @@ int yes_no_cancel_dialog(Widget w, char *question)
 	reply = 0;
 	if (!dialog) {
 		dialog = XmCreateQuestionDialog(w, "yes_no", NULL, 0);
+#ifdef EDITRES
+		add_edit_res_handler(dialog);
+#endif
 		yes = XmStringCreateSimple(   "   Yes   ");
 		no = XmStringCreateSimple(    "   No   ");
 		cancel = XmStringCreateSimple(" Cancel ");
@@ -380,6 +392,9 @@ void ok_dialog(Widget w, char *msg)
 	confirmed = False;
 	if (!dialog) {
 		dialog = XmCreateQuestionDialog(w, "ok", NULL, 0);
+#ifdef EDITRES
+		add_edit_res_handler(dialog);
+#endif
 		ok = XmStringCreateSimple("   OK   ");
 		error = XmStringCreateSimple("Error");
 		XtVaSetValues(dialog,
@@ -432,6 +447,9 @@ void memory_warning_dialog(Widget w, Boolean show)
 	confirmed = False;
 	if (!dialog) {
 		dialog = XmCreateQuestionDialog(w, "ok", NULL, 0);
+#ifdef EDITRES
+		add_edit_res_handler(dialog);
+#endif
 		ok = XmStringCreateSimple("   OK   ");
 		error = XmStringCreateSimple("Error");
 		XtVaSetValues(dialog,
@@ -485,6 +503,9 @@ void nomemory_dialog(Widget w, Boolean show)
 	confirmed = False;
 	if (!dialog) {
 		dialog = XmCreateQuestionDialog(w, "ok", NULL, 0);
+#ifdef EDITRES
+		add_edit_res_handler(dialog);
+#endif
 		ok = XmStringCreateSimple("   OK   ");
 		error = XmStringCreateSimple("Error");
 		XtVaSetValues(dialog,
@@ -560,6 +581,9 @@ char *file_dialog(Widget w, char *opn)
 	if (!dialog) {
 		dialog = XmCreateFileSelectionDialog(w, "filesel",
 				NULL, 0);
+#ifdef EDITRES
+		add_edit_res_handler(dialog);
+#endif
 		XtAddCallback(dialog, XmNokCallback, file_ok_cb, &reply);
 		XtAddCallback(dialog, XmNcancelCallback, file_cancel_cb, &reply);
 		XtAddCallback(dialog, XmNhelpCallback, file_help_cb, NULL);

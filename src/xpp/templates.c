@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.9 2002/05/21 14:49:51 phil Exp $ 
+ * $Id: templates.c,v 2.10 2002/10/17 17:09:34 rda Exp rda $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -244,7 +244,9 @@ Boolean init_templates_tool(Widget w)
 	shell = XtVaCreatePopupShell("xpp-Templates",
 			xmDialogShellWidgetClass, w,
 		NULL); 
-
+#ifdef EDITRES
+	add_edit_res_handler(shell);
+#endif
 	template_pane = XtVaCreateWidget("template-pane",
 		xmPanedWindowWidgetClass, 	shell,
 		NULL);
@@ -395,7 +397,9 @@ static void templates_help_dialog(Widget w)
 			xmDialogShellWidgetClass,	w,
 			XmNdeleteResponse,		XmUNMAP,
 			NULL);
-
+#ifdef EDITRES
+	add_edit_res_handler(shell);
+#endif
 		help_pane = XtVaCreateWidget("help-pane",
 			xmPanedWindowWidgetClass,	help_shell,
 			XmNsashWidth,			1,

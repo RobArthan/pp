@@ -267,6 +267,9 @@ typedef struct menu_item {
 	extern	void register_selection_source(
 		Widget w);
 	extern	char *get_selection(Widget w, char *err_msg);
+#ifdef EDITRES
+	extern	void add_edit_res_handler(Widget shell);
+#endif
 /* Module: xpp */
 #ifndef _xpp
 	extern

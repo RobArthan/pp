@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.7 2002/01/21 22:42:47 rda Exp $
+ * $Id: options.c,v 2.8 2002/10/17 17:09:34 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -110,7 +110,9 @@ void init_options(Widget owner_w)
 	shell = XtVaCreatePopupShell("xpp-Controls",
 		xmDialogShellWidgetClass, owner_w,
 		NULL); 
-
+#ifdef EDITRES
+	add_edit_res_handler(shell);
+#endif
 	shell_row_col = XtVaCreateWidget("shell-row-col",
 		xmRowColumnWidgetClass, 	shell,
 		NULL);

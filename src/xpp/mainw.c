@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.35 2002/12/02 22:55:14 rda Exp rda $
+ * $Id: mainw.c,v 2.36 2002/12/03 00:29:29 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -544,6 +544,10 @@ static Boolean setup_main_window(
 		WM_DELETE_WINDOW,
 		check_quit_cb,
 		root);
+
+#ifdef EDITRES
+	add_edit_res_handler(root);
+#endif
 
 	XtInsertEventHandler(root,
 		StructureNotifyMask,

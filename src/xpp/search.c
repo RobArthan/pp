@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.10 2002/08/14 13:28:56 rda Exp $ 
+ * $Id: search.c,v 2.11 2002/10/17 17:09:34 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -169,7 +169,9 @@ Boolean add_search_tool(Widget text_w)
 		transientShellWidgetClass, text_w,
 		XmNdeleteResponse,		XmUNMAP,
 		NULL); 
-
+#ifdef EDITRES
+	add_edit_res_handler(shell);
+#endif
 	paned = XtVaCreateWidget("search-replace-paned",
 		xmPanedWindowWidgetClass, 	shell,
 		NULL);

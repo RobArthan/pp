@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.5 2002/10/17 17:09:34 rda Exp rda $ 
+ * $Id: palette.c,v 2.6 2002/11/05 13:56:06 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -101,7 +101,9 @@ Widget w;
 	shell = XtVaCreatePopupShell("xpp-Palette",
 		xmDialogShellWidgetClass, w,
 		NULL); 
-
+#ifdef EDITRES
+	add_edit_res_handler(shell);
+#endif
 	form = XtVaCreateWidget("form",
 		xmFormWidgetClass, shell,
 		XmNfractionBase, 	16,
