@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.3 2000/05/25 08:21:10 rda Rel rda $
+ * $Id: xpp.c,v 2.4 2001/11/16 17:20:38 rda Exp phil $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -153,7 +153,7 @@ static XtResource resources[] = {
 	}
 };
 
-		
+
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -189,13 +189,18 @@ int check_sep(int argc, char **argv)
 	if(	(l = strlen(argv[1])) <= strlen("-file")
 	&&	!strncmp(argv[1], "-file", l) ) {
 		if(argc < 3) {
+			/* it's not possible to get here!  PG. 12/3/2002 */
 			usage();
 			exit(60);
 		}
 		file_name = argv[2];
-		acc = 2;	
-	} else {
+		acc = 2;
+	} else if ( (l = strlen(argv[1])) <= strlen("-command")
+	       && !strncmp(argv[1], "-command", l) ) {
 		file_name = NULL;
+		acc = 1;
+	} else {
+		file_name = argv[1];
 		acc = 1;
 	}
 	if(	argc > acc + 1
@@ -218,7 +223,7 @@ static char *get_command_line(int argc, char **argv)
 	char *p, *res;
 
 	skip = check_sep(argc, argv);
-		
+
 	siz = 0;
 
 	for(i = skip; i < argc; ++i) {
