@@ -1,0 +1,592 @@
+% $Id$ %Z%
+
+=TEX
+\documentstyle[11pt,TQ,hol1]{article}
+
+\TPPtitle{Detailed Design of the UNIX Interface for ProofPower under Solaris 2}
+\TPPref{DS/FMU/IED/DTD069}
+\def\SCCSissue{$Revision$%
+}
+
+\TPPissue{\SCCSissue}
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPproject{FST PROJECT}
+
+\TPPstatus{Draft}
+\TPPtype{Literate Script}
+\TPPkeywords{HOL}
+\TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
+\TPPauthorisation{R.D.~Arthan & FST Team Leader}
+\TPPabstract{This document contains the detailed design
+	of the \Product{} UNIX Interface, and in particular the 
+	standard way of invoking \Product{}.}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	Library
+}}
+
+%\ftlinepenalty=9999
+\makeindex
+
+\begin{document}
+\makeTPPfrontpage
+\vfill
+\begin{center}
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+\end{center}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Previous work]
+The contents of this document come from \cite{DS/FMU/IED/DTD069}.
+It has been updated to work under Solaris 2.
+
+\item [Issue 1.1]
+First version.
+
+\end{description}
+
+\subsection{Changes Forecast}
+None.
+\newpage
+
+\section{GENERAL}
+
+\subsection{Scope}
+
+This document contains a detailed design of the \Product/ UNIX  interface programs
+called for by~\cite{DS/FMU/IED/HLD005}
+
+\subsection{Introduction}
+
+\subsubsection{Purpose and Background}
+This document provides designs for the methods of invoking 
+\Product,
+making a new database and listing theories held in a
+database.
+It is closely modelled on the design material of \cite{DS/FMU/IED/HLD005},
+but made specific for a Poly/ML implementation.
+The methods allow the user to distinguish between \ProductHOL{}, \ProductZ{}, and generic use of \Product{}.
+
+The style of documentation and program coding used on the FST project
+places both sorts of information in a single text file which is then
+processed in various ways.  The program code may be extracted for
+compilation.  The whole of the text may be used as source to the
+\LaTeX{} document processing system, after some preprocessing by {\tt doctex}.  The {\tt sieve} program
+(see \cite{DS/FMU/IED/DTD053}) performs the necessary extraction and
+adding of format instructions.  This process is known as
+``sieving''.  The source text is augmented by sieving directives
+which delimit the sorts of text.   The {\tt sieve} program is driven
+by steering files which describe how to process the various sorts of
+text.
+
+Thus the commands given a design in this document will be 
+implemented by shell scripts ``sieved'' from \cite{DS/FMU/IED/IMP069}.
+
+\subsubsection{Dependencies}
+
+None of the commands will work without access to a
+\Product{} database of a certain minimum functionality
+(the initial system built via \cite{DS/FMU/IED/IMP021}
+satisfies the criteria)
+and (in this first release) Poly/ML.
+
+\subsubsection{Interface}
+
+The user interface is described in the style of UNIX manual pages in
+\cite{DS/FMU/IED/HLD005}.
+
+\subsubsection{Possible Enhancements}
+The changes necessary for working with other Standard ML systems
+become very apparent in implementing the functions described in this document.
+However, such changes may become necessary.
+
+\subsubsection{Deficiencies}
+The child database name in {\tt pp\_make\_database} 
+may only be the ``root'' of the name, rather than
+the variants allowed by adding allowed suffixes and prefixes.
+\section{DESIGN CHOICES}
+\subsection{Finding a Named Database}
+When we are given a database search name $name$ by the user we do not immediately know
+if it is to be prefixed by an architecture name, or
+given the standard suffix ``.db''.
+We can however recognise any directory prefix.
+As is implied (but not explicitly stated) by the high level design, the actual
+filename (after the directory part) must start with the architecture, and end in ``.db''.
+
+We thus strip off, if present, any ``.db'' suffix, failing if any other
+suffix is found.
+We then strip off, if present, a correct architecture prefix, failing if any other
+architectural prefix is found.
+We then search, using {\tt findfile} from \cite{DS/FMU/IED/DTD053}
+for
+=INLINEFT
+Dir`arch`Base.db
+=TEX
+{}.
+We use ``Dir'' to represent any directory prefix in the input
+name, including the final ``/'',
+and ``Base'' for the base name of the input (with any correct prefix and suffix removed).
+
+If no filename is given (as an argument to {\tt -d})
+then search name and database name are taken to be 
+either some default (e.g. {\tt hol} in some cases),
+or the function will fail.
+
+For {\tt pp\_make\_database}, when we are creating a new database
+with a given name, then there must be neither suffix,
+nor any known architectural prefix for the name supplied.
+In addition, in this case, we do not allow a directory prefix.
+
+Note that these design choices imply that a list of known
+architecture prefixes is available to the programs.
+Initially this list will just contain ``sun3'' and ``sun4''.
+\subsection{What is a Database's Theory Hierarchy and Current Theory Name, Default Cache Theories, Etc?}
+These names may be found by loading the database into Poly/ML
+and then examining what is bound to the Standard ML variables
+(N.B. not an assignable variables)
+=INLINEFT
+icl'database_info
+=TEX
+{}, and {}
+=INLINEFT
+icl'theory_hierarchy
+=TEX
+{}.
+If the variables are not of the right type, or the current theory is not present in the theory hierarchy,
+or various other well-formedness problems,
+then the database may be considered corrupt,
+though the function will continue if appropriate and possible.
+These variables will be set as part of {\tt pp\_make\_database} and by $save\_and\_quit$,
+and should not be changed any other way.
+\section{THE PROGRAMS}
+\subsection{Invoking The Product}
+=DOC
+€hol› [-i script] [-d database[#theoryname]]
+=DESCRIBE
+{\tt hol}
+runs \ProductHOL{} on the indicated database.
+It differs from {\tt zed} only in choice of defaults,
+e.g. in default database name.
+
+If no {\tt -d database}
+is supplied then the first database called {\tt hol}
+(i.e. held in the file {\tt `arch`hol.db})
+to be found in the search path is used.
+This is the name of the \ProductHOL{} database provided with a release
+of the system.
+The architecture prefix, and {\tt.db} suffix may be
+left out of the supplied database name, even when there is a further directory prefix,
+and the database is sought upon the user's execution path (i.e. the result of {\tt echo $\$$PATH}).
+
+At the start of the session the current theory will be set
+to the theory current when the database was last saved by 
+$save\_and\_quit$ which, if just created,
+is the cache theory for the database (which in turn in the supplied database is the theory
+{\tt cache'hol}).
+The files identified by any {\tt [-i script]} options are then
+executed in turn.
+The system then issues a prompt for user input. 
+=FAILUREC
+\paragraph{Errors}
+{\tt hol} prints a message and exits (with status~1) if
+the database cannot be accessed or if the theory name specified as part of the {\tt -d} option does
+not exist in the database.
+It will also fail if the requested database name has an inappropriate architecture prefix - e.g. requesting ``sun3hol.db''
+on a SPARCstation,
+or a suffix other than ``.db''.
+=SEEALSO
+{\tt zed}, {\tt pp},
+{\tt pp\_make\_database},
+{\tt hol\_list}
+=ENDDOC
+=DOC
+€zed› [-i script] [-d database[#theoryname]]
+=DESCRIBE
+{\tt zed}
+runs \ProductZ{} on the indicated database.
+It differs from {\tt hol} only in choice of defaults,
+e.g. in default database name.
+
+If no {\tt -d database}
+is supplied then the first database called {\tt zed}
+(i.e. held in the file {\tt `arch`zed.db})
+to be found in the search path is used.
+This is the name of the \ProductZ{} database provided with a release
+of the system.
+The architecture prefix, and {\tt.db} suffix may be
+left out of the supplied database name, even when there is a further directory prefix,
+and the database is sought upon the user's execution path (i.e. the result of {\tt echo $\$$PATH}).
+
+At the start of the session the current theory will be set
+to the theory current when the database was last saved by 
+$save\_and\_quit$ or, if just created,
+to the cache theory for the database
+(which in turn in the supplied database is the theory
+{\tt cache'zed}).
+The files identified by any {\tt [-i script]} options are
+then
+executed in turn.
+The system then issues a prompt for user input. 
+=FAILUREC
+\paragraph{Errors}
+{\tt zed} prints a message and exits (with status~1) if
+the database cannot be accessed or if the theory specified as
+part of the {\tt -d} argument does
+not exist in the database.
+It will also fail if the requested database name has an inappropriate architecture prefix - e.g. requesting ``sun3zed.db''
+on a SPARCstation,
+or a suffix other than ``.db''.
+=SEEALSO
+{\tt hol}, {\tt pp},
+{\tt pp\_make\_database},
+{\tt zed\_list}
+=ENDDOC
+=DOC
+€pp› [-i script] -d database[#theoryname]
+=DESCRIBE
+{\tt pp}
+runs \Product{} on the indicated database.
+It differs from {\tt hol} and {\tt zed} only in choice of defaults,
+and in requiring a database name.
+
+If no {\tt -d database} is provided the function fails.
+The architecture prefix, and {\tt.db} suffix may be
+left out of the supplied database name, even when there is a further directory prefix,
+and the database is sought upon the user's execution path (i.e. the result of {\tt echo $\$$PATH}).
+
+At the start of the session the current theory will be set
+to the theory current when the database was last saved by 
+$save\_and\_quit$ or, if just created,
+to the cache theory for the database.
+The files identified by any {\tt [-i script]} options are
+then
+executed in turn.
+The system then issues a prompt for user input. 
+=FAILUREC
+\paragraph{Errors}
+{\tt pp} prints a message and exits (with status~1) if
+the database cannot be accessed or if the theory name specified 
+as part of the {\tt -d} argument
+does
+not exist in the database.
+It will also fail if the requested database name has an inappropriate architecture prefix - e.g. requesting ``sun3pp$\_$hol.db''
+on a SPARCstation,
+or a suffix other than ``.db''.
+=SEEALSO
+{\tt hol}, {\tt zed},
+{\tt pp\_make\_database},
+{\tt pp\_list}, {\tt pp\_read}
+=ENDDOC
+
+\subsection{Making Child Databases}
+
+=DOC
+€pp_make_database› [-f] [-p parentdatabase[#parenttheory]] newdatabase[#cachetheory]
+=DESCRIBE
+{\tt pp\_make\_database}
+makes a new child database to contain \Product{} theories. The new database initially
+contains a single theory, called the {\em cache theory}
+for the database, with name given by {\tt cachetheory}
+(which is used by
+certain system functions to cache various definitions and theorems and
+which is used as the initial current theory when the database
+is used by the {\tt pp}, {\tt hol} and {\tt zed} commands).
+If {\tt cachetheory} is omitted then the database name, prefixed by ``cache' '' is taken to be the same
+as the name of the new cache theory.
+
+The {\tt -p} option may be used to indicate
+the database which is to be the parent of the new database
+and to indicate which theory in it is to be the parent of the theory
+{\tt cachetheory}.
+The file in which the database named {\it name} is held is
+called {\tt `arch`}{\it name}{\tt.db}.
+The architecture
+and {\tt.db} extension may either or both be given explicitly,
+if desired, even when the supplied name has a further 
+directory prefix.
+The database is sought upon the user's execution path (i.e. the result of {\tt echo $\$$PATH}).
+The parent theory is taken to be the cache theory for the parent
+database if it is not given explicitly.
+
+If the {\tt -p}
+option is not supplied then the database {\tt pp\_hol} supplied with the system is used
+as the parent database, and the parent theory is the theory {\it hol}.
+This is an appropriate default for a \ProductHOL{} child database.
+An appropriate default for \ProductZ{} would be {\tt pp\_zed}.
+
+In interactive use, {\tt pp\_make\_database}
+will normally ask for confirmation before overwriting the database if it
+already exists. The {\tt -f} (force) option may be used to suppress
+the request for confirmation before overwriting an existing database.
+
+The supplied child database name will be used to create the child database file name 
+=INLINEFT
+./`arch`name.db
+=TEX
+{}
+and should contain neither suffix, architecture prefix, nor directory prefix.
+=FAILUREC
+\paragraph{Errors}
+{\tt pp\_make\_database} prints a message and
+exits (with value 1) if the parent database or theory does not exist,
+if the new database cannot be created, if either of the
+database names has an inappropriate suffix or architecture prefix or if
+the name of the cache theory clashes with the name of a theory
+in the parent database.
+
+Some systems impose a limit on the depth of nesting of the
+database hierarchy and the command will print an error message and
+exit (with value 1) if this limit would be exceeded.
+=SEEALSO
+{\tt hol}, {\tt zed}, {\tt pp}.
+=ENDDOC
+\subsection{Making Theory Listings}
+
+=DOC
+€hol_list› [-c] [-d database[#theoryname]] [-i script] [-v] theory ...
+€hol_list› [-d database[#theoryname]] [-i script] [-v]
+€hol_list› [-c] [-d database] [-i script] [-v] -a
+=DESCRIBE
+{\tt hol\_list} is used to obtain selected information from
+a \ProductHOL{} database.
+It functions in the same manner as {\tt zed\_list} except
+that it uses defaults appropriate to the \ProductHOL{},
+and a HOL theory lister.
+
+In the first form of use, where a list 
+of one or more theory names is specified,
+{\tt hol\_list} uses \ProductHOL{} to generate on its standard output
+listings (in the HOL  language
+using the function $output\_theory$) of the indicated theories in a form suitable
+for processing by {\tt doctex}. 
+Any cache theory (i.e. the theory name is in the list
+returned by $get\_cache\_theories$) will be printed
+with most of the theory detail elided, unless the {\tt -c}
+option is given.
+
+In the second form, with no list of theory names, {\tt hol\_list}
+lists the names of all the theories in the database whose 
+language is ``HOL'', in a sorted order, one
+per line on its standard output channel.
+The third form, with {\tt -a}, is like the first but causes all
+of the theories in the database whose language is ``HOL'' to be listed in a sorted order.
+
+In any of the three forms
+the program will start a session as if by command
+{\tt hol} with the supplied {\tt -d} and {\tt -i} arguments (if any),
+and it is in this environment that the theory
+listing is done.
+The output of this startup will be suppressed, including any indication of failure to load the initialisation scripts.
+
+Each theory is, if possible, made current, or at least in scope, when it is listed.
+
+In any form {\tt -v} indicates the log of the preprocessing
+should also be output.
+=FAILUREC
+\paragraph{Errors}
+{\tt hol\_list} prints a message and exits (with the value 1)
+if the database or any of the theories does not exist.
+The log of the failure is sent to the standard output, the message to the
+error output.
+=SEEALSO
+{\tt pp\_list}, {\tt zed\_list},
+{\tt pp},
+{\tt pp\_make\_database}
+=ENDDOC
+=DOC
+€zed_list› [-c] [-d database[#theory]] [-i script] [-v] theory ...
+€zed_list› [-d database[#theory]] [-i script] [-v]
+€zed_list› [-c] [-d database] [-i script] [-v] -a
+=DESCRIBE
+{\tt zed\_list} is used to obtain selected information from
+a \ProductZ{} database.
+It functions in the same manner as {\tt hol\_list} except
+that it uses defaults appropriate to the \ProductZ{},
+and a Z theory lister.
+
+In the first form of use, where a list 
+of one or more theory names is specified,
+{\tt zed\_list} uses \ProductZ{} to generate on its standard output
+listings (in the Z language using the function $z\_output\_theory$) of the indicated theories,
+in a form suitable
+for processing by {\tt doctex}. 
+Any cache theory (i.e. the theory name is in the list
+returned by $get\_cache\_theories$) will be printed
+with most of the theory detail elided, unless the {\tt -c}
+option is given.
+
+In the second form, with no list of theory names, {\tt zed\_list}
+lists the names of all the theories whose language is Z in the database one
+per line on its standard output channel, in a sorted order.
+
+The third form, with {\tt -a}, is like the first but causes all
+of the theories in the database whose language is ``Z'' to be listed in a sorted order.
+
+In any of the three forms
+the program will start a session as if by command
+{\tt zed} with the supplied {\tt -d} and {\tt -i} arguments
+(if any),
+and it is in this environment that the theory
+listing is done.
+The output of this startup will be suppressed, including any indication of failure to load the initialisation scripts.
+
+Each theory is, if possible, made current, or at least in scope, when it is listed.
+
+In any form {\tt -v} indicates the log of the preprocessing
+should also be output.
+=FAILUREC
+\paragraph{Errors}
+{\tt zed\_list} prints a message and exits (with the value 1)
+if the database or any of the theories does not exist.
+The log of the failure is sent to the standard output, the message to the
+error output.
+=SEEALSO
+{\tt pp\_list}, {\tt hol\_list},
+{\tt zed},
+{\tt pp\_make\_database}
+=ENDDOC
+
+=DOC
+€pp_list› [-c] -d database[#theory] [-i script] [-l lang] [-v] theory ...
+€pp_list› -d database[#theory] [-i script] [-l lang1 [-l lang2 ...]] [-v]
+€pp_list› [-c] -d database [-i script] [-l lang1 [-l lang2 ...]] [-v] -a
+=DESCRIBE
+{\tt pp\_list} is used to obtain selected information from
+a \Product{} database.
+
+In the first form of use, where a list 
+of one or more theory names is specified,
+{\tt pp\_list} uses \Product{} to generate on its standard output
+listings of the indicated theories held in the
+database given by the {\tt -d} option in a form suitable
+for processing by {\tt doctex}.
+
+If there is no {\tt -l} option then the theory lister used
+will depend on the language of the theory.
+If the language is ``HOL'' then $output\_theory$ is used.
+Otherwise it will attempt to use a function named:
+=GFT
+<language in lower case>_output_theory
+=TEX
+and only if that doesn't exist will it use $output\_theory$.
+All but the first language will be ignored.
+
+If the {\tt -l\ lang} option is given then it will take the language code of all theories given to be {\tt lang},
+and then work as above.
+
+If no {\tt -d} option is given then the function fails.
+
+Any cache theory (i.e. the theory name is in the list
+returned by $get\_cache\_theories$) will be printed
+with most of the theory detail elided, unless the {\tt -c}
+option is given.
+
+In the second form, with no list of theory names, {\tt pp\_list}
+lists the names of all the theories in the database one
+per line on its standard output channel in a sorted order.
+If any {\tt -l} options are given then only theories
+whose language is one of those listed will be noted.
+
+The third form, with {\tt -a}, is like the first but causes all
+of the theories in the database to be listed in a sorted order.
+If any {\tt -l} options are given then only theories
+whose language is one of those given will be listed,
+and they will be individually printed according to their own language.
+
+In any of the three forms,
+the program will start a session as if by command
+{\tt pp} with the supplied {\tt -d} and {\tt -i} arguments (if any),
+and it is in this environment that the theory
+listing is done.
+The output of this startup will be suppressed, including any indication of failure to load the initialisation scripts.
+
+Each theory is, if possible, made current, or at least in scope, when it is listed.
+
+In any form {\tt -v} indicates the log of the preprocessing
+should also be output.
+=FAILUREC
+\paragraph{Errors}
+{\tt pp\_list} prints a message and exits (with the value 1)
+if the database or any of the theories does not exist.
+The log of the failure is sent to the standard output, the message to the
+error output.
+=SEEALSO
+{\tt zed\_list}, {\tt hol\_list},
+{\tt pp},
+{\tt pp\_make\_database}
+=ENDDOC
+\section{READING VALUES FROM DATABASE}
+\subsection{The Program {\tt pp\_read}}
+=DOC
+€pp_read› [-d database[#theory]] [-i script] [-v] argument
+=DESCRIBE
+{\tt pp\_read}
+runs \Product{} on the indicated database to evaluate,
+and then display on the standard output, the argument provided.
+
+This evaluatation and output is done by:
+=GFT
+diag_line (PolyML.makestring (argument));
+=TEX
+Thus a string will be output with double quotes, an integer
+as the digits making up its value, etc.
+
+If no {\tt -d database}
+is supplied then the first database called {\tt hol}
+(i.e. held in the file {\tt `arch`hol.db})
+to be found in the search path is used.
+This is the name of the \ProductHOL{} database provided with a release
+of the system.
+The architecture prefix, and {\tt.db} suffix may be
+left out of the supplied database name, even when there is a further directory prefix,
+and the database is sought upon the user's execution path (i.e. the result of {\tt echo $\$$PATH}).
+
+At the start of the session the current theory will be set
+to the theory current when the database was last saved by 
+$save\_and\_quit$ which, if just created,
+is the cache theory for the database (which in turn in the supplied database is the theory
+{\tt cache'hol}).
+The files identified by any {\tt [-i script]} options are then
+executed in turn.
+=FAILUREC
+\paragraph{Errors}
+{\tt pp\_read} prints a message and exits (with status~1) if
+the database cannot be accessed or if the theory name specified as part of the {\tt -d} option does
+not exist in the database, or if the argument is not supplied.
+It will also fail if the requested database name has an inappropriate architecture prefix - e.g. requesting ``sun3hol.db''
+on a SPARCstation,
+or a suffix other than ``.db''.
+=SEEALSO
+{\tt pp}
+=ENDDOC
+
+\section{TEST POLICY}
+The commands are simple and short shell scripts. There is
+little point in setting up special test harnesses for them. Instead
+they should be module and integration tested after the subsystems
+which they invoke have been integration tested.
+These tests are done in \cite{DS/FMU/IED/INT001}.
+
+The tests should try to check out that the commands exhibit the
+proper error action. They should also check that the commands
+leave the user environment tidy. E.g. any temporary files created
+should be deleted, even after an abnormal exit (say a keyboard
+interrupt, or when one of the programs called has been terminated
+by a trappable signal).
+
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+
+\end{document}
