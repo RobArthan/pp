@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.11 2002/12/04 20:53:18 rda Exp rda $
+ * $Id: options.c,v 2.12 2002/12/10 16:15:53 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -203,6 +203,7 @@ if(!global_options.edit_only) {
 
 	attach_rw_edit_popup(command_text);
 	register_selection_source(command_text);
+	register_palette_client(command_text);
 
 	journal_max_form = XtVaCreateWidget("journal-form",
 		xmFormWidgetClass, 		app_row_col,
@@ -230,6 +231,7 @@ if(!global_options.edit_only) {
 
 	attach_rw_edit_popup(journal_max_text);
 	register_selection_source(journal_max_text);
+	register_palette_client(journal_max_text);
 
 	copy_font_list(command_text, owner_w);
 	copy_font_list(journal_max_text, owner_w);
@@ -359,7 +361,7 @@ if(!global_options.edit_only) {
 		journal_max_buf = XmTextGetString(journal_max_text);
 		sscanf(journal_max_buf, "%lu", &m);
 		global_options.journal_max = (m >= 2000 ? m : 2000);
-	};
+	}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * save initial setting for later resets
@@ -412,7 +414,7 @@ char **get_arg_list(void) {
 				if(!isspace(*p)) {
 					state = 1;
 					++argc;
-				};
+				}
 				break;
 			case 1:
 				if(isspace(*p)) {
@@ -430,7 +432,7 @@ char **get_arg_list(void) {
 				if(!isspace(*p)) {
 					state = 1;
 					argv[argc++] = p;
-				};
+				}
 				break;
 			case 1:
 				if(isspace(*p)) {

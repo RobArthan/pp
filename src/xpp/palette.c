@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.6 2002/11/05 13:56:06 rda Exp rda $ 
+ * $Id: palette.c,v 2.7 2002/12/03 15:25:38 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -18,7 +18,6 @@
  * macros:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #define _palette
-#define MAX_PALETTES 4
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files: 
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -35,6 +34,11 @@
 #include <Xm/PushB.h>
 
 #include "xpp.h"
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * forward declarations of callbacks:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void type_char_cb(CALLBACK_ARGS);
+static void focus_cb(CALLBACK_ARGS);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * static data:
@@ -62,39 +66,29 @@ typedef struct {
 	Widget text_w, palette_w;
 } PaletteData;
 
-static PaletteData palette_info[MAX_PALETTES];
+static PaletteData palette_info = { NULL, NULL };
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * add_palette: attach a palette to a text widget
+ * popup_palette: pop up the palette widget (creating it if
+ * necessary). The widget argument is the text widget to
+ * which the palette will write in the first instance (see
+ * register_palette_client for how this changes when input focus
+ * transfers to a different text widget client).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void type_char_cb(CALLBACK_ARGS);
-Boolean add_palette(w)
-Widget w;
+void popup_palette(Widget w)
 {
 	XmString lab;
 	char buf[2];
-	NAT i, n_chars, x, y, twi;
+	NAT i, n_chars, x, y;
 	NAT cbdata;
 	Widget shell, form, button;
 
-	for(	twi= 0;
-		twi< MAX_PALETTES &&
-		palette_info[twi].text_w != w &&
-		palette_info[twi].palette_w != NULL ;
-		++twi) {
-		continue;
-	};
-
-	if(twi>= MAX_PALETTES) {
-		msg("palette creation", "no more space for palettes");
-		return False;
-	};
-
-	if((form = palette_info[twi].palette_w) != NULL) {
+	palette_info.text_w = w;
+	if((form = palette_info.palette_w) != NULL) {
 		XtManageChild(form);
 		XtPopup(XtParent(form), XtGrabNone);
-		return True;
-	};
+		return;
+	} /* else ... */
 
 	n_chars = strlen((char*)prettychars);
 
@@ -110,8 +104,7 @@ Widget w;
 		XmNautoUnmanage,	False,
 		NULL);
 
-	palette_info[twi].text_w = w;
-	palette_info[twi].palette_w = form;
+	palette_info.palette_w = form;
 
 	buf[1] = '\0';
 
@@ -136,17 +129,37 @@ Widget w;
 			NULL);
 		copy_font_list(button, w);
 		XmStringFree(lab);
-		cbdata = (twi << 8) | (prettychars[i] & 0xff);
+		cbdata = prettychars[i];
 		XtAddCallback(button, XmNactivateCallback, type_char_cb,
 			(XtPointer) cbdata);
-	};
+	}
 
 	XtManageChild(form);
 	XtPopup(shell, XtGrabNone);
 
-	return True;
 }
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * register_palette_client: add a new client text widget (caller
+ * must ensure the argument is a text or text field widget).
+ * Just adds the focus callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void register_palette_client(Widget w)
+{
+	XtAddCallback(w, XmNfocusCallback, focus_cb, NULL);
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * focus_cb: when a client text widget gains focus redirect
+ * the palette to it.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void focus_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
+{
+	palette_info.text_w = w;
+}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * type_char_cb: simulate typing of a character into a text widget
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -158,19 +171,23 @@ static void type_char_cb(
 {
 	NAT cbdata = (NAT) cbd;
 	char buf[2];
-	NAT text_index = cbdata >> 8;
 	XmTextPosition start, end;
-	Widget text_w;
+	Widget text_w = palette_info.text_w;
+	Boolean editable;
 
-	if(text_index >= MAX_PALETTES ||
-		!(text_w = palette_info[text_index].text_w)) {
-		char m [sizeof("unexpected argument 0xXXXXXXXX")];
-		sprintf(m, "unexpected argument 0x%x", cbdata);
-		msg("palette handler", m);
+	if( !text_w ) {
 		return;
-	};
+	} /* else ... */
 
-	buf[0] = cbdata & 0xff;
+	XtVaGetValues(text_w,
+			XmNeditable, &editable,
+			NULL);
+	if(!editable) {
+		XBell(XtDisplay(root), 50);
+		return;
+	} /* else ... */
+
+	buf[0] = cbdata;
 	buf[1] = '\0';
 
 	if(XmTextGetSelectionPosition(text_w, &start, &end)) {
@@ -179,7 +196,7 @@ static void type_char_cb(
 	} else {
 		start = XmTextGetInsertionPosition(text_w);
 		XmTextInsert(text_w, start, buf);
-	};
+	}
 
 	XmTextSetInsertionPosition(text_w, start + 1);
 	XmTextShowPosition(text_w, start);

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.12 2002/12/03 15:25:38 rda Exp rda $ 
+ * $Id: search.c,v 2.13 2002/12/10 20:39:47 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -163,7 +163,7 @@ Boolean add_search_tool(Widget text_w)
 		XtManageChild(search_data.manager_w);
 		XtPopup(search_data.shell_w, XtGrabNone);
 		return True;
-	};
+	}
 
 	shell = XtVaCreatePopupShell("xpp-Search-and-Replace",
 		transientShellWidgetClass, text_w,
@@ -432,12 +432,19 @@ Boolean add_search_tool(Widget text_w)
 	search_data.line_no_w = line_no_text;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * set up the text windows in the search dialog as selection sources:
+ * set up the text windows in the search dialog as selection sources
+ * and palette clients. (This sounds silly but is intuitively right for
+ * the line number widget - if focus is in the line number pushing
+ * a palette button will cause a blink or a bleat and then send focus
+ * back to the line number).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	register_selection_source(search_text);
+	register_palette_client(search_text);
 	register_selection_source(replace_text);
+	register_palette_client(replace_text);
 	register_selection_source(line_no_text);
+	register_palette_client(line_no_text);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * add callbacks
@@ -621,7 +628,7 @@ static Boolean search_either(
 		start_point = (dir == FORWARDS ? pr : pl);
 	} else {
 		start_point = XmTextGetInsertionPosition(search_data.text_w);
-	};
+	}
 	search_string(pattern, text_buf, start_point, &left, &len, dir);
 	if(left >= 0) {
 		text_show_position(
@@ -821,7 +828,7 @@ static void search_set_cb(
 	char *sel;
 	if ((sel = get_selection(cbdata->shell_w, no_selection_search)) == NULL) {
 		return;
-	};
+	}
 	XmTextSetString(cbdata->search_w, sel);
 	XtFree(sel);
 }
@@ -838,7 +845,7 @@ static void replace_set_cb(
 	char *sel;
 	if ((sel = get_selection(cbdata->shell_w, no_selection_replace)) == NULL) {
 		return;
-	};
+	}
 	XmTextSetString(cbdata->replace_w, sel);
 	XtFree(sel);
 }
@@ -910,7 +917,7 @@ static void goto_line_no_cb(
 		XtVaGetValues(cbdata->text_w, XmNrows, &nrows, NULL);
 		if(line_no > (scroll = nrows / 2)) {
 			XmTextScroll(cbdata->text_w, -scroll);
-		};		
+		}
 		XmTextSetSelection(cbdata->text_w,
 				left, right, CurrentTime);
 	}
@@ -1023,7 +1030,7 @@ static void replace_all(
 				sp += replacement_len - matched_len;
 			} else if (p - text_buf <= *start_point) {
 				sp = q;
-			};
+			}
 			p = next_p;
 			q += replacement_len;
 		} else {
@@ -1079,12 +1086,12 @@ static void line_no_to_offset(
 	if((data = XmTextGetString(text_w)) == NULL) {
 		*first = NO_MEMORY;
 		return;
-	};
+	}
 	for(p = data, line_ct = line_no - 1; *p && line_ct; ++p) {
 		if(*p == '\n' && *(p + 1)) {
 			--line_ct;
 		}
-	};
+	}
 	if(line_ct == 0) {
 		*first = p - data;
 		*last = *first;

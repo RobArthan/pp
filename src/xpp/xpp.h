@@ -194,8 +194,8 @@ typedef struct menu_item {
 	extern void set_read_only(Boolean read_only);
 	extern GlobalOptions orig_global_options;
 /* Module: palette */
-	extern Boolean add_palette(
-		Widget	w);
+	extern void popup_palette(Widget w);
+	extern void register_palette_client(Widget w);
 /* Module: pixmaps */
 	extern Pixmap get_pp_pixmap(void);
 /* Module: pterm */

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.7 2002/10/17 17:09:34 rda Exp rda $
+ * $Id: cmdline.c,v 2.8 2002/12/03 15:25:38 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -50,6 +50,7 @@ static void
 	add_cb(CALLBACK_ARGS),
 	delete_cb(CALLBACK_ARGS),
 	dismiss_cb(CALLBACK_ARGS),
+	focus_cb(CALLBACK_ARGS),
 	help_cb(CALLBACK_ARGS);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -101,7 +102,7 @@ void add_cmd_line(Widget text_w)
 		XtManageChild(cmd_line_data.manager_w);
 		XtPopup(cmd_line_data.shell_w, XtGrabNone);
 		return;
-	};
+	}
 
 	shell = XtVaCreatePopupShell("xpp-Command-Line",
 		transientShellWidgetClass,	root,
@@ -135,6 +136,7 @@ void add_cmd_line(Widget text_w)
 
 	attach_rw_edit_popup(cmd_text);
 	register_selection_source(cmd_text);
+	register_palette_client(cmd_text);
 
 	btn_form = XtVaCreateWidget("command_line_form",
 		xmFormWidgetClass, 		paned,
@@ -230,6 +232,9 @@ void add_cmd_line(Widget text_w)
 
 	XtAddCallback(cmd_text, XmNactivateCallback,
 		exec_cb, (XtPointer)(&cmd_line_data));
+
+	XtAddCallback(cmd_text, XmNfocusCallback,
+		focus_cb, (XtPointer)(&cmd_line_data));
 
 	XtAddCallback(add_btn, XmNactivateCallback,
 		add_cb, (XtPointer)(&cmd_line_data));
@@ -402,3 +407,13 @@ static void help_cb(
 	help_dialog(root, Help_Command_Line_Tool);
 }
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * focus callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void focus_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
+{
+	fprintf(stderr, "cmdline gets focus\n");
+}

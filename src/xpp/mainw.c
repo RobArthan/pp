@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.39 2002/12/10 16:15:53 rda Exp rda $
+ * $Id: mainw.c,v 2.40 2002/12/10 16:35:42 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -795,6 +795,7 @@ static Boolean setup_main_window(
 	XtAddEventHandler(script, ButtonPressMask, False, post_popupeditmenu, NULL);
 
 	register_selection_source(script);
+	register_palette_client(script);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Journal window:
@@ -812,6 +813,7 @@ static Boolean setup_main_window(
 		journal = XmCreateScrolledText(mainpanes, "journal", args, i);
 		attach_ro_edit_popup(journal);
 		register_selection_source(journal);
+		register_palette_client(journal);
 		copy_font_list(journal, script);
 
 		XtVaGetValues(mainpanes, XmNchildren, &children,
@@ -1162,7 +1164,7 @@ static void tools_menu_cb(
 	NAT i = (NAT) cbd;
 	switch(i) {
 	case TOOLS_MENU_PALETTE:
-		add_palette(script);
+		popup_palette(script);
 		break;
 	case TOOLS_MENU_TEMPLATES:
 		add_templates_tool(script);
