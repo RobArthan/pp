@@ -1236,6 +1236,16 @@ z__¸_conv ñ(1,2,3)   X ¸ X ¸ X®;
 z__¸_conv ñx   X ¸ X ¸ X®;
 =TEX
 \subsection{Extensionality of Sets II}
+=TEX
+The following returns four ``bits'' derived from a type
+that may have nested bindings or tuples at the outer level,
+and a term which is a source of variable names to avoid.
+Returned is a theorem that explodes a variable $x$ 
+into a construct formed by selecting from $x$,
+a construct of the form as the RHS of the above, but formed from
+$x1$, $x2$, ...,
+the $x_i$ as a list,
+and $x$ itself.
 =SML
 local
 	val ordx = ord"x";
@@ -1243,9 +1253,7 @@ local
 		then nm
 		else fail "" 0 []);
 	fun give_n_names nn lst = (
-=SMLLITERAL
 	let	fun nextn n = (let val poss = "x" ^ string_of_int n
-=SML
 			in
 			if poss mem lst
 			then nextn (n+1)
@@ -1259,12 +1267,43 @@ local
 	in
 		nextnm nn 1
 	end);
-	val cnv1 = simple_eq_match_conv1 (conv_rule z_µ_elim_conv1 z_sets_ext_thm);
-	fun cnv2 nm = cnv1 THEN_C 
-			z_µ_elim_conv2 THEN_C
-			RAND_C(simple_Á_conv nm) THEN_C
-			z_µ_intro_conv1;
+
+	fun explode_tm (tm : TERM) : THM = (
+	(case dest_z_type (type_of tm) of
+	ZSchemaType _ => z_bindingd_intro_conv THEN_C (RANDS_C explode_tm)
+	| ZTupleType _ => z_sel‰t_intro_conv THEN_C (RANDS_C explode_tm)
+	| _ => refl_conv)
+	tm
+	);
+
+	fun exploded_bits tm = (
+	case dest_z_term tm of
+	ZTuple bits => flat(map exploded_bits bits)
+	| ZBinding bits1 => flat (map (exploded_bits o snd) bits1)
+	| _ => [tm]
+	);
+	val Ua = ñU®;
 	fun uf ty = inst [] [(ty, ”'a®)] Ua;
+
+in
+fun Ûgive_new_bitsİ (ty:TYPE) (tm:TERM) = (
+let	val names = (mapfilter xnames (term_vars tm));
+	val x = mk_var(string_variant names "x", ty);
+	val explode_x_thm = explode_tm x;
+	val exploded = (snd(dest_eq(concl explode_x_thm)));
+	val explode_bits_x = exploded_bits exploded;
+	val xi_names = give_n_names (length explode_bits_x) names;
+	val xi = map (fn (nm,tm) => mk_var(nm,type_of tm))
+		 (combine xi_names explode_bits_x);
+	val construct = subst (combine xi explode_bits_x) exploded;
+in
+	(explode_x_thm, construct, xi, explode_bits_x, x)
+end);
+end;
+=TEX
+
+=SML
+local
 	val sets_ext_thm = pc_rule1 "'sets_ext" rewrite_conv[] ¬p:'a SET = q®;
 	val sym_sets_ext_thm = all_µ_intro(eq_sym_rule sets_ext_thm);
 =TEX
@@ -1279,61 +1318,27 @@ let	val (v,w) = dest_z_eq tm
 	val elem_ty = case dest_ctype vty of
 		("SET",[elem_ty]) => elem_ty
 		| _ => term_fail "z_sets_ext_conv" 42010 [tm];
-	val names = (mapfilter xnames (term_vars v)) cup (mapfilter xnames (term_vars w));
-	val res =
-	case dest_simple_type elem_ty of
-	Ctype (nm,args) => ((case dest_z_name nm of
-		("Z'T",[[ns]],Nil) => (
-		let 	val n = nat_of_string ns;
-			val xs =map mk_var
-				(combine
-				(give_n_names n names)
-				args);
-			val xs_decl = mk_z_decl
-				(map (fn x => 
-				 mk_z_dec([x],uf(type_of x))) xs);
-			val xs_tuple = mk_z_tuple xs;
-			val conc_gl = mk_z_µ(xs_decl,
-				mk_t, mk_z_¤(
-				mk_z_(xs_tuple, v),
-				mk_z_(xs_tuple, w)));
-			val s1 = asm_rule tm;
-			val s2 = app_fun_rule
-				(mk_app( (mk_const("",
-				mk_­_type(type_of xs_tuple,
-				mk_­_type(vty,BOOL)))),
-				xs_tuple)) s1;
-			val s3 = z_µ_intro xs s2;
-			val s4 = asm_rule (concl s3);
-			val xv = variant (frees (concl s3)) 
-				(mk_var("x",type_of xs_tuple));
-			val s5 = z_sel‰t_intro_conv xv;
-			val xparts = dest_z_tuple(snd(dest_eq(concl s5)));
-			val s6 = conv_rule z_µ_elim_conv1 s4;
-			val s7 = list_µ_elim xparts s6;
-			val s8 = conv_rule(RANDS_C (LEFT_C (fn _ => eq_sym_rule s5))) s7;
-			val s9 = simple_µ_intro xv s8;
-			val s10 = list_µ_elim[v,w] sym_sets_ext_thm;
-			val s11 = ¤_mp_rule s10 s9;
-			val s12 = ¤_intro (all_´_intro s3) (all_´_intro s11);	
-		in
-			eq_trans_rule (refl_conv tm) s12
-		end)
+	val (explode_x_thm, construct, xs, explode_bits_x, x) =
+		give_new_bits elem_ty tm;
+	val s1 = asm_rule tm;
+	val s2 = app_fun_rule
+		(mk_app( (mk_const("",
+			mk_­_type(elem_ty,
+			mk_­_type(vty,BOOL)))),
+			construct)) 
+		s1;
+	val s3 = z_µ_intro xs s2;
+	val s4 = asm_rule (concl s3);
+	val s6 = conv_rule z_µ_elim_conv1 s4;
+	val s7 = list_µ_elim explode_bits_x s6;
+	val s8 = conv_rule(RANDS_C (LEFT_C (fn _ => eq_sym_rule explode_x_thm))) s7;
+	val s9 = simple_µ_intro x s8;
+	val s10 = list_µ_elim[v,w] sym_sets_ext_thm;
+	val s11 = ¤_mp_rule s10 s9;
+	val s12 = ¤_intro (all_´_intro s3) (all_´_intro s11);	
+	val res = eq_trans_rule (refl_conv tm) s12;
 =TEX
 =SML
-		| _ => (let val nm = hd(give_n_names 1 names)
-		in
-			cnv2 nm tm
-		end))
-		handle (Fail _) =>
-		(let val nm = hd(give_n_names 1 names)
-		in
-			cnv2 nm tm
-		end))
-	| _ => (let val nm = hd(give_n_names 1 names)
-		in
-			cnv2 nm tm
-		end)
 in
 	check_is_z_conv_result "z_sets_ext_conv" res
 end);
@@ -1345,33 +1350,11 @@ z_sets_ext_conv ñ{(1,p,2,x2,x),(2,q,3,x2,x)} = {(2,q,3,x2,x),(1,p,2,x2,x)}®;
 =TEX
 =SML
 local
-	val ordx = ord"x";
-	fun xnames (nm,ty) = (if ord nm = ordx
-		then nm
-		else fail "" 0 []);
-	fun give_n_names nn lst = (
-=SMLLITERAL
-	let	fun nextn n = (let val poss = "x" ^ string_of_int n
-=SML
-			in
-			if poss mem lst
-			then nextn (n+1)
-			else (n,poss)
-			end);
-		fun nextnm 0 m = []
-		| nextnm n m = (let val (ind,next) = nextn m
-			in
-			(next :: nextnm (n-1) (ind+1))
-			end)
-	in
-		nextnm nn 1
-	end);
 	val cnv1 = simple_eq_match_conv1 (conv_rule z_µ_elim_conv1 z__ğ_thm1);
 	fun cnv2 nm = cnv1 THEN_C 
 			z_µ_elim_conv2 THEN_C
 			RAND_C(simple_Á_conv nm) THEN_C
 			z_µ_intro_conv1;
-	fun uf ty = inst [] [(ty, ”'a®)] Ua;
 	val thm1 = taut_rule ¬µ x y · x ´ ((y ± T) ´ x)®;
 	val thm2 = prove_rule[] ¬µ x y · x ´ ((y  ñU® ± T) ´ x)®;
 =TEX
@@ -1390,74 +1373,31 @@ let	val (v,pw) = dest_z_ tm
 	val elem_ty = case dest_ctype wty of
 		("SET",[elem_ty]) => elem_ty
 		| _ => term_fail "z__ğ_conv" 42010 [tm];
-	val names = (mapfilter xnames (term_vars v)) cup (mapfilter xnames (term_vars w));
-	val res =
-	case dest_simple_type elem_ty of
-	Ctype (nm,args) => ((case dest_z_name nm of
-		("Z'T",[[ns]],Nil) => (
-		let 	val n = nat_of_string ns;
-			val xs =map mk_var
-				(combine
-				(give_n_names n names)
-				args);
-			val xs_decl = mk_z_decl
-				(map (fn x => mk_z_dec([x],uf(type_of x))) xs);
-			val xs_tuple = mk_z_tuple xs;
-			val conc_gl = mk_z_µ(xs_decl,
-				mk_t, mk_z_´(
-				mk_z_(xs_tuple, v),
-				mk_z_(xs_tuple, w)));
-			val s1 = cnv1 tm;
-			val tm' = snd(dest_eq(concl s1));
-			val s2 = asm_rule tm';
-			val s3 = simple_µ_elim xs_tuple(
-				conv_rule z_µ_elim_conv1 s2);
-			val s4 = list_simple_µ_elim [concl s3, xs_decl] thm1;
-			val s5 = ´_elim s4 s3;
-			val s6 = conv_rule z_µ_intro_conv1 
-				(list_µ_intro xs s5);
-=TEX
-Now back the other way:
-=SML
-			val s7 = asm_rule (concl s6);
-			val xv = variant (frees (concl s7)) 
-				(mk_var("x",type_of xs_tuple));
-			val s8 = z_sel‰t_intro_conv xv;
-			val xparts = dest_z_tuple(snd(dest_eq(concl s8)));
-			val s9 = conv_rule z_µ_elim_conv1 s7;
-			val s10 = list_µ_elim xparts s9;
-			val s11 = conv_rule(RANDS_C (LEFT_C 
-				(fn _ => eq_sym_rule s8))) s10;			
-			val s12 =  ´_elim (list_µ_elim [concl s11, xv] thm2) s11;
-			val s13 = z_µ_intro1 s12;
-			val s14 = ¤_intro (all_´_intro s6) (all_´_intro s13);	
-		in
-			eq_trans_rule (refl_conv tm) 
-				(eq_trans_rule s1 s14)
-		end)
-=TEX
-=SML
-		| _ => (let val nm = hd(give_n_names 1 names)
-		in
-			cnv2 nm tm
-		end))
-		handle (Fail _) =>
-		(let val nm = hd(give_n_names 1 names)
-		in
-			cnv2 nm tm
-		end))
-	| _ => (let val nm = hd(give_n_names 1 names)
-		in
-			cnv2 nm tm
-		end)
+	val s1 = cnv1 tm;
+	val tm' = snd(dest_eq(concl s1));
+	val (explode_x_thm, construct, xs, explode_bits_x, x) =
+		give_new_bits elem_ty tm';
+	val s2 = asm_rule tm';
+	val s3 = simple_µ_elim construct(
+			conv_rule z_µ_elim_conv1 s2);
+	val s4 = z_µ_intro xs (´_intro mk_t s3);
+	val s5 = asm_rule (concl s4);
+	val s6 = conv_rule z_µ_elim_conv1 s5;
+	val s7 = list_µ_elim explode_bits_x s6;
+	val s8 = conv_rule(RANDS_C (LEFT_C (fn _ => eq_sym_rule explode_x_thm))) s7;
+	val s9 = z_µ_intro [x] (´_intro mk_t s8);
+	val s10 = ¤_intro (all_´_intro s4) (all_´_intro s9);
+	val s11 = eq_trans_rule s1 s10;
 in
-	check_is_z_conv_result "z__ğ_conv" res
+	check_is_z_conv_result "z__ğ_conv" s11
 end);
 end; 
 =IGN
 z__ğ_conv ñp  ğ q®;
 z__ğ_conv ñp  ğ (x ¸ y)®;
 z__ğ_conv ñp  ğ (ğ u)®;
+z__ğ_conv ñp  ğ [a : (X ¸ Y);b:X]®;
+
 =TEX
 \section{BINDINGS}
 The following is necessary because we may have, e.g., a variable
