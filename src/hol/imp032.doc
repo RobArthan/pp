@@ -99,9 +99,17 @@ lasp -s -u imp032.OKwords imp032.doc > zz1
 \item[\FormatDate{91/08/07}, issue 1.6 ] 
         $new\_flag$ parameter change.
 
-\item[\FormatDate{$Date$%
-}, issue \SCCSissue ]
+\item[\FormatDate{91/08/15}, issue 1.7 ]
         Renamings of functions containing the name atom $simple$, and renaming of $aconv$.
+
+\item[\FormatDate{91/08/20}, issue 1.8 ]
+	Renaming of objects from~\cite{DS/FMU/IED/DTD031}.
+	Extra arguments for some functions to give better handling of
+		aliases, constants and variables.
+
+%\item[\FormatDate{$Date$%
+%}, issue \SCCSissue~]
+
 \end{description}
 
 %********************************************************************
@@ -207,7 +215,7 @@ definitions of the main pretty printer are made available.
 structure HOLPrettyPrinter : HOLPrettyPrinter = struct
 
 open PrettyPrinterSupport;
-infix ge_prec;
+infix gt_prec;
 =END
 
 %********************************************************************
@@ -215,17 +223,17 @@ infix ge_prec;
 \subsection{Precedences}
 
 A number of precedence values are defined.  They are used rather than
-the numeric values based $pc_normal$ and $pc_very_low$ to make the
+the numeric values based $Pc_Normal$ and $Pc_Very_Low$ to make the
 allocation of HOL precedences easier to understand.
 
 =SML
-val ‚pc_h_post_type·			= pc_normal(60, 0, false);
-val ‚pc_h_apply_first·			= pc_normal(50, 0, false);
-val ‚pc_h_apply_later·			= pc_normal(50, 0, true);
-fun ‚pc_h_oper·(op_prec, assoc)	= pc_normal(40, op_prec, assoc);
-val ‚pc_h_if_let_bind·			= pc_normal(30, 0, false);
-val ‚pc_h_if_let_bind_last·		= pc_normal(20, 0, false);
-val ‚pc_h_typing·			= pc_normal(10, 0, false);
+val ‚pc_h_post_type·			= Pc_Normal(60, 0, false);
+val ‚pc_h_apply_first·			= Pc_Normal(50, 0, false);
+val ‚pc_h_apply_later·		= Pc_Normal(50, 0, true);
+fun ‚pc_h_oper·(op_prec, assoc)	= Pc_Normal(40, op_prec, assoc);
+val ‚pc_h_if_let_bind·			= Pc_Normal(30, 0, false);
+val ‚pc_h_if_let_bind_last·		= Pc_Normal(20, 0, false);
+val ‚pc_h_typing·			= Pc_Normal(10, 0, false);
 =TEX
 
 %********************************************************************
@@ -277,7 +285,7 @@ fun ‚print_identifier· (addstring:string -> unit) (identifier:string) : unit = (
 =SML
 fun ‚main_type_pp· (cur_env:PP_ENV) (ty:TYPE) : unit = (
 let
-	val pp_env{pe_prec = prec, pe_addstring = addstring, pe_beginb = beginb,
+	val Pp_Env{pe_prec = prec, pe_addstring = addstring, pe_beginb = beginb,
 		pe_endb = endb, pe_space = space, ...} = cur_env;
 
 	fun ty_p prec t = main_type_pp (set_prec prec cur_env) t;
@@ -287,10 +295,10 @@ let
 		beginb(0, false);
 		addstring "("; (*=)=*)
 		beginb(2, false);
-		ty_p pc_lowest t;
+		ty_p Pc_Lowest t;
 		map	(fn tx => (	addstring ",";
 					space(1,0);
-					ty_p pc_lowest tx))
+					ty_p Pc_Lowest tx))
 			rest;
 		endb();
 		(*=(=*) addstring ")";
@@ -312,7 +320,7 @@ in
 			case get_fixity name
 			of Lex.Infix op_prec =>
 				let
-					val br = prec ge_prec (pc_h_oper(op_prec, true))
+					val br = prec gt_prec (pc_h_oper(op_prec, true))
 				in(
 					if br then (beginb(0, false); addstring "("; (*=)=*)
 						beginb(2, false)) else ();
@@ -341,12 +349,12 @@ end
 \subsection{Variables and Constants}
 
 =SML
-fun ‚do_var_const· (cur_env:PP_ENV) name ty = (
+fun ‚do_var_const· (cur_env:PP_ENV) (name:string) (ty:TYPE) = (
 let
-	val pp_env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
+	val Pp_Env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
-	val br = !pp_show_HOL_types andalso prec ge_prec pc_h_typing;
+	val br = !pp_show_HOL_types andalso prec gt_prec pc_h_typing;
 in
 	if br then (addstring "("; (*=)=*) beginb(2, true)) else ();
 	if get_fixity name <> Lex.Nonfix then addstring "$" else ();
@@ -363,70 +371,76 @@ end
 =TEX
 
 =SML
-fun ‚HOL_do_var· cur_env name ty = do_var_const cur_env name ty;
+fun ‚HOL_do_var· (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE) =
+	do_var_const cur_env name ty;
 =TEX
 
 HOL constants representing strings and character literals include
 the leading quote character.
 
 =SML
-fun ‚HOL_do_const· cur_env name ty = (
+fun ‚HOL_do_const· (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE) = (
 let
-	val pp_env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
+	val Pp_Env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
-
-	val orig = mk_const(name, ty)
 in
-	if is_char orig
-	then	(addstring name; addstring "`")
+	if is_char orig 
+	then
+		if name = "`" ^ (dest_char orig)
+		then	(addstring name; addstring "`")
+		else	do_var_const cur_env name ty
 	else if is_string orig
-	then	(addstring name; addstring "\"")
-	else	do_var_const cur_env name ty
+	then
+		if name = "\"" ^ (dest_string orig)
+		then	(addstring name; addstring "\"")
+		else	do_var_const cur_env name ty
+	else
+		do_var_const cur_env name ty
 end
 );
 =TEX
 
 %********************************************************************
 \newpage
-\subsection{Combinations}
+\subsection{Applications}
 
-These combinations are applications of the function $head_fn$ to a list
+These applications of the function $head_fn$ to a list
 of arguments in $args$ which may be empty.  Function application is
 left associative, thus the brackets may be omitted in the HOL fragment
 ``$((f\;\;a)\;\;b)\;\;c$''.  {} Value $pc_h_apply_first$ is already set
 with this associativity, $pc_h_apply_later$ is set for the arguments to
-indicate that they will need brackets if they are combinations.
+indicate that they will need brackets if they are applications.
 
 Bracket elimination works as follows.  On entry to this routine we have
 the function and each of its arguments, we know that function
 application is left associative and therefore we know we do not need
-any brackets with the whole combination.  Brackets may be required
-around the whole combination:  when it is used as the argument of
-another combination the associativity rule indicates that brackets are
+any brackets with the whole application.  Brackets may be required
+around the whole application:  when it is used as the argument of
+another application the associativity rule indicates that brackets are
 wanted.
 
-If this combination were required to be produced with all the brackets
+If this application were required to be produced with all the brackets
 added (i.e., perhaps when flag $pp_add_brackets$
 of~\cite{DS/FMU/IED/IMP031} is set) then one opening bracket would need
 to be output for each argument before outputting any of the arguments
 and one closing bracket after each argument.
 
 =SML
-fun ‚HOL_do_app· (cur_env:PP_ENV) head_fn args = (
+fun ‚HOL_do_app· (cur_env:PP_ENV) (head_fn:TERM) (args:TERM list) = (
 let
-	val pp_env{pe_prec=prec, pe_lang=cur_lang, pe_addstring=addstring,
+	val Pp_Env{pe_prec=prec, pe_lang=cur_lang, pe_addstring=addstring,
 		pe_space=space, pe_beginb=beginb, pe_endb=endb, pe_const=do_const,
 		pe_var=do_var, ...} = cur_env;
 
-	val br = prec ge_prec pc_h_apply_later;
+	val br = prec gt_prec pc_h_apply_later;
 
 	fun print_it p tm = (
 	let
 		val new_env = set_prec p cur_env;
 	in
 		case  dest_simple_term tm
-		of	Var(str, ty) =>	do_var new_env str ty
-		|	Const(str, ty) =>	do_const new_env str ty
+		of	Var(str, ty) =>	do_var new_env tm str ty
+		|	Const(str, ty) =>	do_const new_env tm str ty
 		|	_  =>			main_term_pp new_env tm
 	end
 	);
@@ -505,12 +519,12 @@ end
 =SML
 fun ‚display_binder· (cur_env:PP_ENV) (name:string) (decls:TERM list) (body:TERM) : unit = (
 let
-	val pp_env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
+	val Pp_Env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
 	fun tm_p p t : unit = main_term_pp (set_prec p cur_env) t;
 
-	fun vs_printer vs : unit = (space(1, 0); tm_p pc_lowest vs);
+	fun vs_printer vs : unit = (space(1, 0); tm_p Pc_Lowest vs);
 
 	fun pr_decls (decs, ty) : unit = (
 		beginb(0, false);
@@ -522,7 +536,7 @@ let
 		endb()
 	);
 
-	val br = prec ge_prec pc_h_if_let_bind;
+	val br = prec gt_prec pc_h_if_let_bind;
 in
 	if br then (beginb(0, false); addstring "(" (*=)=*) ) else ();
 	beginb(2, false);
@@ -567,15 +581,15 @@ end
 \subsection{Conditionals}
 
 =SML
-fun ‚HOL_conditional· (cur_env:PP_ENV) (name:string) (ty:TYPE)
+fun ‚HOL_conditional· (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 		(args:TERM list) : PFUN_ANS = (
 	case args
 	of cond :: then_part :: else_part :: nil =>
 		let
-			val pp_env{pe_prec = prec, pe_addstring = addstring, pe_beginb = beginb,
+			val Pp_Env{pe_prec = prec, pe_addstring = addstring, pe_beginb = beginb,
 				pe_endb = endb, pe_space = space, ...} = cur_env;
 
-			val br = prec ge_prec pc_h_if_let_bind;
+			val br = prec gt_prec pc_h_if_let_bind;
 
 			fun aux str inner_prec tm = (
 				beginb(2, false);
@@ -587,16 +601,16 @@ fun ‚HOL_conditional· (cur_env:PP_ENV) (name:string) (ty:TYPE)
 		in
 			if br then addstring "(" (*=)=*) else ();
 			beginb(2, true);
-			aux "if"	pc_lowest		cond;		space(1, 0);
-			aux "then"	pc_lowest		then_part;	space(1, 0);
+			aux "if"	Pc_Lowest		cond;		space(1, 0);
+			aux "then"	Pc_Lowest		then_part;	space(1, 0);
 			aux "else"	pc_h_if_let_bind_last	else_part;	space(0, 0);
 			endb();
 			if br then (*=(=*) addstring ")" else ();
-			pf_ok
+			Pf_Ok
 		end
 	| _ => (	if length args < 3
-		then	pf_not_possible
-		else	pf_fewer 3
+		then	Pf_Not_Possible
+		else	Pf_Fewer 3
 	)
 );
 =TEX
@@ -611,16 +625,16 @@ their brackets.
 Empty lists and sets are achieved by outputting a fixed string.
 
 =SML
-fun ‚HOL_empty_list_set· (token:string) (cur_env:PP_ENV) (name:string) (ty:TYPE)
-		(args:TERM list) : PFUN_ANS = (
+fun ‚HOL_empty_list_set· (token:string) (cur_env:PP_ENV) (orig:TERM)
+		(name:string) (ty:TYPE) (args:TERM list) : PFUN_ANS = (
 	case args
 	of nil =>	let
-				val pp_env{pe_addstring = addstring, ...} = cur_env;
+				val Pp_Env{pe_addstring = addstring, ...} = cur_env;
 			in
 				addstring token;
-				pf_ok
+				Pf_Ok
 			end
-	| _ => pf_not_possible
+	| _ => Pf_Not_Possible
 );
 =TEX
 
@@ -635,10 +649,10 @@ so there is no test of precedences.
 =SML
 fun ‚print_list_or_set· (cur_env:PP_ENV) (opener:string) (body:TERM list) (closer:string) = (
 let
-	val pp_env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
+	val Pp_Env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
-	fun tm_p t = main_term_pp (set_prec pc_lowest cur_env) t;
+	fun tm_p t = main_term_pp (set_prec Pc_Lowest cur_env) t;
 in(
 	beginb(0, false);
 	addstring opener;
@@ -651,38 +665,40 @@ in(
 	endb();
 	addstring closer;
 	endb();
-	pf_ok
+	Pf_Ok
 )end
 );
 =TEX
 
 {\hfuzz 3pt
 =SML
-fun ‚HOL_list· (cur_env:PP_ENV) (name:string) (ty:TYPE) ([a1, a2]:TERM list) : PFUN_ANS = (
+fun ‚HOL_list· (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
+		([a1, a2]:TERM list) : PFUN_ANS = (
 let
 	val tail = dest_list a2;
 	val body = a1::tail;
 in
 	print_list_or_set cur_env "[" body "]"
 end
-handle Fail _ => pf_not_possible
+handle Fail _ => Pf_Not_Possible
 )
-| HOL_list _ _ _ args = if length args > 2 then pf_fewer 2 else pf_not_possible;
+| HOL_list _ _ _ _ args = if length args > 2 then Pf_Fewer 2 else Pf_Not_Possible;
 =TEX
 }
 
 {\hfuzz 3pt
 =SML
-fun ‚HOL_set· (cur_env:PP_ENV) (name:string) (ty:TYPE) ([a1, a2]:TERM list) : PFUN_ANS = (
+fun ‚HOL_set· (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
+		([a1, a2]:TERM list) : PFUN_ANS = (
 let
 	val tail = dest_enum_set a2;
 	val body = a1::tail;
 in
 	print_list_or_set cur_env "{" body "}"
 end
-handle Fail _ => pf_not_possible
+handle Fail _ => Pf_Not_Possible
 )
-| HOL_set _ _ _ args = if length args > 2 then pf_fewer 2 else pf_not_possible;
+| HOL_set _ _ _ _ args = if length args > 2 then Pf_Fewer 2 else Pf_Not_Possible;
 =TEX
 }
 
@@ -690,17 +706,15 @@ Set comprehensions are formed by the application of a constant to an
 abstraction.
 
 =SML
-fun ‚HOL_set_comp· (cur_env:PP_ENV) (name:string) (ty:TYPE)
+fun ‚HOL_set_comp· (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 		([a1]:TERM list) : PFUN_ANS = (
 let
-	val pp_env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
+	val Pp_Env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
-	fun tm_p t = main_term_pp (set_prec pc_lowest cur_env) t;
+	fun tm_p t = main_term_pp (set_prec Pc_Lowest cur_env) t;
 
-	val orig = mk_app(mk_const(name, ty), a1);
-
-	val (decs, pred) = dest_set_comp orig;
+	val (decs, pred) = dest_set_comp(mk_app(orig, a1));
 in(
 	beginb(0, false);
 	addstring "{";
@@ -712,11 +726,11 @@ in(
 	endb();
 	addstring "}";
 	endb();
-	pf_ok
+	Pf_Ok
 )end
-handle Fail _ => pf_not_possible
+handle Fail _ => Pf_Not_Possible
 )
-| HOL_set_comp _ _ _ args = if length args > 1 then pf_fewer 1 else pf_not_possible;
+| HOL_set_comp _ _ _ _ args = if length args > 1 then Pf_Fewer 1 else Pf_Not_Possible;
 =TEX
 
 %********************************************************************
@@ -829,7 +843,7 @@ end
 =SML
 fun ‚print_definer· (cur_env:PP_ENV) let_clause = (
 let
-	val pp_env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
+	val Pp_Env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
 	fun tm_p p t = main_term_pp (set_prec p cur_env) t;
@@ -837,7 +851,7 @@ let
 	fun aux(definer, prefix) = (
 		addstring prefix;
 		space(1, 0);
-		tm_p pc_lowest definer;
+		tm_p Pc_Lowest definer;
 		space(1,0);
 		"and"
 	);
@@ -866,27 +880,27 @@ $strip_let$ to accommodate the four components passed that comprise the
 whole term.  The components of the term are found.
 
 =SML
-fun ‚HOL_let· (cur_env:PP_ENV) (name:string) (ty:TYPE)
+fun ‚HOL_let· (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 		([a1, a2]:TERM list) : PFUN_ANS = (
 let
-	val pp_env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
+	val Pp_Env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_endb=endb, ...} = cur_env;
 
 	fun tm_p p t = main_term_pp (set_prec p cur_env) t;
 
-	val br = prec ge_prec (pc_lowest);
+	val br = prec gt_prec (Pc_Lowest);
 
-	val orig_tm = mk_app(mk_app(mk_const(name, ty), a1), a2);
+	val orig_tm = mk_app(mk_app(orig, a1), a2);
 
 	val let_term = get_let_pieces orig_tm;
 in(
 	if br then (beginb(2, false); addstring "(" (*=)=*)) else ();
 	print_list_of_lets cur_env let_term;
 	if br then ((*=(=*) addstring ")"; endb()) else ();
-	pf_ok
+	Pf_Ok
 )end
 )
-| HOL_let _ _ _ args = if length args > 2 then pf_fewer 2 else pf_not_possible;
+| HOL_let _ _ _ _ args = if length args > 2 then Pf_Fewer 2 else Pf_Not_Possible;
 =TEX
 
 %********************************************************************
@@ -894,43 +908,39 @@ in(
 \subsection{Pairs}
 
 =SML
-fun ‚HOL_comma· (cur_env:PP_ENV) (name:string) (ty:TYPE)
+fun ‚HOL_comma· (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 		([a1, a2]:TERM list) : PFUN_ANS = (
 let
-	val pp_env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
+	val Pp_Env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
 	fun tm_p p t = main_term_pp (set_prec p cur_env) t;
 
-	val br = prec ge_prec (pc_very_low(10, 0, true));
+	val br = prec gt_prec (Pc_Very_Low(10, 0, true));
 in(
 	if br then (beginb(2, false); addstring "(" (*=)=*)) else ();
-	tm_p (pc_very_low(10, 0, true)) a1;
+	tm_p (Pc_Very_Low(10, 0, true)) a1;
 	addstring ",";
 	space(1,0);
-	tm_p (pc_very_low(10, 0, false)) a2;
+	tm_p (Pc_Very_Low(10, 0, false)) a2;
 	if br then ((*=(=*) addstring ")"; endb()) else ();
-	pf_ok
+	Pf_Ok
 )end
 )
-| HOL_comma _ _ _ args = if length args > 2 then pf_fewer 2 else pf_not_possible;
+| HOL_comma _ _ _ _ args = if length args > 2 then Pf_Fewer 2 else Pf_Not_Possible;
 =TEX
 
 =SML
-fun ‚HOL_uncurry· (cur_env:PP_ENV) (name:string) (ty:TYPE)
+fun ‚HOL_uncurry· (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 		([arg]:TERM list) : PFUN_ANS = (
-let
-	val orig_tm = mk_app(mk_const(name, ty), arg);
-in
-	case strip_ç orig_tm
-	of (nil, _) => pf_not_possible
+	case strip_ç (mk_app(orig, arg))
+	of (nil, _) => Pf_Not_Possible
 	| (u_decls, u_body) => (	display_binder cur_env "ç" u_decls u_body;
-					pf_ok
+					Pf_Ok
 				)
-end
 )
-| HOL_uncurry _ _ _ nil = pf_not_possible
-| HOL_uncurry _ _ _ _ = pf_fewer 1;
+| HOL_uncurry _ _ _ _ nil = Pf_Not_Possible
+| HOL_uncurry _ _ _ _ _ = Pf_Fewer 1;
 =TEX
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -941,23 +951,23 @@ end
 fun ‚do_prefix· (cur_env:PP_ENV) (name:string) (op_prec:int)
 		((a1::nil):TERM list) : PFUN_ANS = (
 let
-	val pp_env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
+	val Pp_Env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
 	fun tm_p p t = main_term_pp (set_prec p cur_env) t;
 
-	val br = prec ge_prec (pc_h_oper(op_prec, true));
+	val br = prec gt_prec (pc_h_oper(op_prec, true));
 in(
 	if br then (beginb(2, false); addstring "(" (*=)=*)) else ();
 	print_identifier addstring name;
 	space(1,0);
 	tm_p (pc_h_oper(op_prec, false)) a1;
 	if br then ((*=(=*) addstring ")"; endb()) else ();
-	pf_ok
+	Pf_Ok
 )end
 )
-| do_prefix _ _ _ nil = pf_not_possible
-| do_prefix _ _ _ _ = pf_fewer 1
+| do_prefix _ _ _ nil = Pf_Not_Possible
+| do_prefix _ _ _ _ = Pf_Fewer 1
 ;
 =TEX
 
@@ -965,23 +975,23 @@ in(
 fun ‚do_postfix· (cur_env:PP_ENV) (name:string) (op_prec:int)
 		((a1::nil):TERM list) : PFUN_ANS = (
 let
-	val pp_env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
+	val Pp_Env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
 	fun tm_p p t = main_term_pp (set_prec p cur_env) t;
 
-	val br = prec ge_prec (pc_h_oper(op_prec, true));
+	val br = prec gt_prec (pc_h_oper(op_prec, true));
 in(
 	if br then (beginb(2, false); addstring "(" (*=)=*)) else ();
 	tm_p (pc_h_oper(op_prec, true)) a1;
 	space(1,0);
 	print_identifier addstring name;
 	if br then ((*=(=*) addstring ")"; endb()) else ();
-	pf_ok
+	Pf_Ok
 )end
 )
-| do_postfix _ _ _ nil = pf_not_possible
-| do_postfix _ _ _ _ = pf_fewer 1
+| do_postfix _ _ _ nil = Pf_Not_Possible
+| do_postfix _ _ _ _ = Pf_Fewer 1
 ;
 =TEX
 
@@ -989,12 +999,12 @@ in(
 fun ‚do_infix· (cur_env:PP_ENV) (name:string) (op_prec:int)
 		((a1::a2::nil):TERM list) : PFUN_ANS = (
 let
-	val pp_env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
+	val Pp_Env{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
 	fun tm_p p t = main_term_pp (set_prec p cur_env) t;
 
-	val br = prec ge_prec (pc_h_oper(op_prec, true));
+	val br = prec gt_prec (pc_h_oper(op_prec, true));
 in(
 	if br then (beginb(2, false); addstring "(" (*=)=*)) else ();
 	tm_p (pc_h_oper(op_prec, true)) a1;
@@ -1003,11 +1013,11 @@ in(
 	space(1,0);
 	tm_p (pc_h_oper(op_prec, false)) a2;
 	if br then ((*=(=*) addstring ")"; endb()) else ();
-	pf_ok
+	Pf_Ok
 )end
 )
 | do_infix _ _ _ args =
-	if length args < 2 then pf_not_possible else pf_fewer 2
+	if length args < 2 then Pf_Not_Possible else Pf_Fewer 2
 ;
 =TEX
 
@@ -1047,17 +1057,17 @@ fun ‚do_binder· (cur_env:PP_ENV) (name:string) (ty:TYPE)
 	val outermost = ((Value(dest_ç arg)) handle (Fail _) => Nil);
 in
 	case outermost
-	of Nil => pf_not_possible
+	of Nil => Pf_Not_Possible
 	| Value(first_decl, first_body) =>
 		let
 			val (more_decls, body) = strip_binder first_body;
 		in
 			display_binder cur_env name (first_decl :: more_decls) body;
-			pf_ok
+			Pf_Ok
 		end
 end
 )
-| do_binder _ _ _ _ = pf_fewer 1
+| do_binder _ _ _ _ = Pf_Fewer 1
 ;
 =TEX
 
@@ -1069,12 +1079,12 @@ end
 local
 open Lex;
 
-fun ‚do_fixity· (cur_env:PP_ENV) constr (name:string) (ty:TYPE)
+fun ‚do_fixity· (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 		(args:TERM list) : PFUN_ANS = (
 	case get_fixity name
 	of Nonfix => (
-			HOL_do_app cur_env (constr(name, ty)) args;
-			pf_ok
+			HOL_do_app cur_env orig args;
+			Pf_Ok
 		)
 	| Prefix op_prec	=> do_prefix	cur_env name op_prec args
 	| Infix op_prec		=> do_infix	cur_env name op_prec args
@@ -1084,7 +1094,7 @@ fun ‚do_fixity· (cur_env:PP_ENV) constr (name:string) (ty:TYPE)
 
 in
 
-fun ‚HOL_fun_const· (cur_env:PP_ENV) (name:string) (ty:TYPE)
+fun ‚HOL_fun_const· (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 		(args:TERM list) : PFUN_ANS = (
 	case
 		case name
@@ -1098,15 +1108,15 @@ fun ‚HOL_fun_const· (cur_env:PP_ENV) (name:string) (ty:TYPE)
 		| "Uncurry"	=> Value HOL_uncurry
 		| ","		=> Value HOL_comma
 		| _		=> Nil
-	of Value printer => printer cur_env name ty args
-	| Nil => do_fixity cur_env mk_const name ty args
+	of Value printer => printer cur_env orig name ty args
+	| Nil => do_fixity cur_env orig name ty args
 );
 =TEX
 
 =SML
-fun ‚HOL_fun_var· (cur_env:PP_ENV) (name:string) (ty:TYPE)
+fun ‚HOL_fun_var· (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 		(args:TERM list) : PFUN_ANS = (
-	do_fixity cur_env mk_var name ty args
+	do_fixity cur_env orig name ty args
 )
 
 end;
