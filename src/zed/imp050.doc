@@ -46,6 +46,9 @@ First draft version.
 \item [Issue 1.2]Changed to new fonts.
 \item [Issue 1.10 (17th July 1992)]
 Gave ``caller'' parameter to $local\_labelled\_product\_spec$.
+\item [Issue 1.11 (20th July 1992)]
+Added schema renaming definition mechanism.
+Used all in-scope caches for look-up, rather than just current one.
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -311,6 +314,18 @@ in
 end;
 =TEX
 \section{RETRIEVING TYPE INFORMATION}
+\subsection{Retrieving from Some Cache theory}
+=SML
+fun Ûget_cached_defnÝ (nm:string):THM = (
+let	val cs = current_cache_theories();
+	fun aux (a :: x) = (get_defn a nm
+		handle _ => aux x)
+	| aux [] = fail "get_cached_defn" 0 [];
+in
+	aux cs
+end);
+=TEX
+\subsection{Specific Cases}
 These don't work - $µ\_±\_conv$ requires theory $combin$ as parent.
 =SML
 fun Ûget_constructor_defnÝ (ty : TYPE) : THM =
@@ -321,7 +336,7 @@ let 	val (cnam,_) =
 					then (tuple_type_spec ty;tuple_con_proj ty)
 				else fail  "get_constructor_defn" 5003 
 				[fn () => string_of_type ty];
-	val thm = get_defn (current_cache_theory()) cnam
+	val thm = get_cached_defn cnam
 		handle complaint => 
 		divert complaint "get_defn""get_constructor_defn" 50004[fn () => cnam]
 in
@@ -337,7 +352,7 @@ let 	val (cnam,_) =
 					then (tuple_type_spec ty;tuple_con_proj ty)
 				else fail  "get_projections_defn" 5003 
 				[fn () => string_of_type ty];
-	val thm = get_defn (current_cache_theory()) cnam
+	val thm = get_cached_defn cnam
 		handle complaint => 
 		divert complaint "get_defn""get_projections_defn" 50005[fn () => cnam]
 in
@@ -401,7 +416,7 @@ fun Ûseta_const_specÝ (tm : TERM) : THM = (
 let	val nam = fst (dest_const (fst (dest_app tm)));
 in
 	case dest_z_name nam of
-	("Z'Seta", [[sn]], Nil) => (get_defn (current_cache_theory()) (nam^"_def")
+	("Z'Seta", [[sn]], Nil) => (get_cached_defn (nam^"_def")
 		handle Fail _ => (
 		let	val tyvl = map (fn x => mk_vartype ("'"^string_of_int (next_name())))
 				(interval 1 (nat_of_string sn));
@@ -437,7 +452,7 @@ fun	ÛÌ_const_specÝ (tm : TERM) : THM = (
 let	val nam = fst(dest_const (fst (dest_app tm)));
 in
 	case dest_z_name nam of
-	("Z'Ì",[[sn]], Nil) => (get_defn (current_cache_theory()) (nam ^ "_def")
+	("Z'Ì",[[sn]], Nil) => (get_cached_defn (nam ^ "_def")
 		handle Fail _ => (
 		let	val tyvl = map (fn x => mk_vartype ("'"^string_of_int (next_name())))
 				(interval 1 (nat_of_string sn));
@@ -478,7 +493,7 @@ fun Û¸_const_specÝ (tm:TERM) : THM = (
 let	val nam = fst(dest_const (fst (dest_app tm)));
 in
 	case dest_z_name nam of
-	("Z'¸",[[sn]], Nil) => (get_defn (current_cache_theory()) (nam ^ "_def")
+	("Z'¸",[[sn]], Nil) => (get_cached_defn (nam ^ "_def")
 		handle Fail _ => (
 		let	val aty = hd(snd(dest_ctype(type_of tm)));
 
@@ -722,8 +737,54 @@ in
 	(schquantm,list_mk_µ([p,q],mk_eq(lhs,rhs)))
 end;
 =TEX
+\subsection{Renaming Z Schemas}
+=SML
+fun Ûrename‰s_const_specÝ (tm : TERM) : THM = (
+let	val (s,rnl) = dest_z_rename‰s tm
+		handle complaint =>
+		pass_on complaint "dest_z_rename‰s" "rename‰s_const_spec";
+	val nam = fst(dest_const (fst (dest_app tm)));
+in
+	get_cached_defn (nam ^ "_def")
+	handle Fail _ => (
+let
+	val tyfrom = dest_z_power_t(type_of s);
+	val tyto = dest_z_power_t(type_of tm);
+=TEX
+The following two may be redundant, but ...
+=SML
+	val side = binding_type_spec tyto;
+	val side = binding_type_spec tyfrom;
+	val from_comp = map fst (dest_z_schema_t tyfrom);
+	val to_comp = map fst (dest_z_schema_t tyto);
+	val tyfrom_generic = mk_ctype(fst(dest_ctype tyfrom),
+			map (mk_vartype o (fn y => "'" ^ y)) from_comp);
+	val tyto_generic = mk_ctype(fst(dest_ctype tyto),
+			map (mk_vartype o (fn y => "'" ^ y)) to_comp);
+	val ty_insts =(map (fn (a,b) => 
+		(mk_vartype ("'"^a),
+		mk_vartype ("'"^b))) rnl);
+	val ty_inst = inst [] ty_insts;
+	val const_generic = mk_var(nam,
+		mk_­_type(inst_type ty_insts tyfrom_generic, tyto_generic));
+	val arg = mk_var("S",tyfrom_generic);
+	val (to_con,_) = get_binding_info tyto_generic;
+	val (_,from_projs) = get_binding_info tyfrom_generic;
+ 	val from_bits = map (fn x => mk_app(x,arg)) from_projs;
+	val from_bits_assoc = combine from_comp from_bits;
+	fun aux tb = lassoc3 from_bits_assoc (lassoc1 rnl tb);
+	val to_bits = map (ty_inst o aux) to_comp;
+	val lhs = mk_app(const_generic, ty_inst arg);
+	val rhs = list_mk_app(to_con, to_bits);
+	val def_tm = mk_µ(ty_inst arg,
+		mk_eq(lhs,rhs));
+in
+	local_const_spec "rename‰s_const_spec" (nam, const_generic, def_tm)
+end)
+end);
+=TEX	 
 \section{END OF STRUCTURE}
-The structure is left open.
+The structure is left closed.
 =SML
 end (* of local ... in *);
 end (* of structure ZGeneratedConstants *);
