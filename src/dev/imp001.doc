@@ -72,6 +72,7 @@ Improving known space hogs: mem, drop and lassoc5.
 \item [Issue 2.13 (6th February 1998)]
 Made implementation of length SML97-compatible.
 \item [Issues 2.14-2.17 (6th March 1999)] Added $Integer$ structure.
+\item [Issues 2.18 (16th July 2001)] Added $DynamicArray$ structure.
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -1486,8 +1487,121 @@ fun €uindex› (array :'_a SPARSE_ARRAY) : int = (
 );
 =TEX
 =SML
-end; (* of abstype 'a SPARSEARRAY *)
+end; (* of abstype 'a SPARSE_ARRAY *)
 end; (* of structure SparseArray *)
+=TEX
+\section{DYNAMIC ARRAYS}
+=SML
+structure DynamicArray : DynamicArray = struct
+=TEX
+=TEX
+The sparse arrays are represented using the following data structure.
+An empty array is signalled by $lbound$ being greater than $ubound$.
+=SML
+abstype '_a €DYNAMIC_ARRAY› = DA of {
+	init_size: int,
+	ubound: int ref,
+	data	: ('_a OPT) Array.array ref
+}
+with
+=TEX
+=SML
+fun €array› (init : int) : '_a DYNAMIC_ARRAY = (
+	if init <= 0
+	then	fail "array" 1301 []
+	else	DA{init_size = init, ubound = ref ~1, data = ref (Array.array (init, Nil))}
+);
+=TEX
+The following number is the growth factor expressed as a percentage.
+We use an approximation to $\sqrt{2}$.
+=SML
+val €growth_rate› = 141;
+=TEX
+Then following function calculates the new size:
+=SML
+fun €new_size› (cur_sz : int) (ind : int) : int  = (
+	let	val estimate1 = (cur_sz * growth_rate) div 100;
+	in	if 	estimate1 > ind
+		then	estimate1
+		else	ind + 1
+	end
+);
+=TEX
+Now here's the function that does the growing:
+
+=SML
+fun €grow› (array:'_a DYNAMIC_ARRAY, ind : int) : unit  = (
+	let	val DA{	init_size = init_size,
+			ubound = ubound as ref ub,
+			data = data as ref arr} = array;
+		val cur_sz = Array.length arr;
+	in	if	ind < cur_sz
+		then	()
+		else	let	val new_sz = new_size cur_sz ind;
+				val new_arr = Array.array(new_sz, Nil);
+				val _ = Array.copy{
+						si = 0, src = arr,
+						di = 0, dst = new_arr, len = NONE};
+			in	data := new_arr
+			end
+	end
+);
+=SML
+fun €update› (array:'_a DYNAMIC_ARRAY, ind : int, a : '_a) : unit  = (
+	let	val DA{	init_size = init_size,
+			ubound = ubound as ref ub,
+			data = data} = array;
+	in	if	ind < 0
+		then	fail "update" 1302 []
+		else	(grow (array, ind);
+			(if	ind > ub
+			then	ubound := ind
+			else	());
+			Array.update(!data, ind, Value a))
+	end
+);
+=TEX
+=SML
+fun €scratch› (array:'_a DYNAMIC_ARRAY) : unit  = (
+	let	val DA{	init_size = init_size,
+			ubound = ubound as ref ub,
+			data = data} = array;
+	in	(ubound := ~1; data := Array.array(init_size, Nil))
+	end
+);
+=TEX
+=SML
+fun €sub› (array:'_a DYNAMIC_ARRAY, ind : int) : '_a  = (
+	let	val DA{	init_size = init_size,
+			ubound = ref ub,
+			data = data} = array;
+	in	if	ind < 0
+		then	fail "sub" 1302 []
+		else if	ind > ub
+		then	fail "sub" 1303 [fn () => string_of_int ind]
+		else	case Array.sub(!data, ind) of
+				Nil => fail "sub" 1101 [fn () => string_of_int ind]
+			|	Value a => a
+	end
+);
+=TEX
+=SML
+fun €sub_opt› (arrayind :'_a DYNAMIC_ARRAY * int) : '_a OPT = (
+	(Value (sub arrayind)) handle Fail _ => Nil
+);
+=TEX
+=SML
+fun €uindex› (array :'_a DYNAMIC_ARRAY) : int = (
+	let	val DA{	init_size = _,
+			ubound = ref ub,
+			data = _} = array;
+	in	ub
+	end
+);
+=TEX
+=SML
+end; (* of abstype 'a DYNAMIC_ARRAY *)
+end; (* of structure DynamicArray *)
 =TEX
 \section{ARBITRARY MAGNITUDE INTEGER ARITHMETIC}
 =SML
