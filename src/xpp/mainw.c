@@ -224,7 +224,7 @@ static MenuItem file_menu_items[] = {
 #define TOOLS_MENU_PALETTE		1
 
 static MenuItem tools_menu_items[] = {
-    { "Search and  Replace", &xmPushButtonGadgetClass, 'F', NULL, NULL,
+    { "Search and Replace", &xmPushButtonGadgetClass, 'S', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_SEARCH_REPLACE, (MenuItem *)NULL, False },
     { "Palette", &xmPushButtonGadgetClass, 'P', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_PALETTE, (MenuItem *)NULL, False },
