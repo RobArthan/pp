@@ -147,6 +147,7 @@ typedef struct menu_item {
 		XtPointer cbs);
 	extern void scroll_out(char *buf, NAT ct, Boolean ignored);
 	extern void show_modified(void);
+	extern void show_file_info(void);
 /* Module: menus */
 	extern	Widget setup_menu(
 		Widget		parent,

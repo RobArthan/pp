@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.10 2002/12/03 23:39:50 rda Exp rda $
+ * $Id: options.c,v 2.11 2002/12/04 20:53:18 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -505,6 +505,8 @@ static void apply_cb(
 		global_options.command_line =
 			XmTextGetString(command_text);
 	}
+
+	show_file_info();
 
 }
 

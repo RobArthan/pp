@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.37 2002/12/03 15:25:38 rda Exp rda $
+ * $Id: mainw.c,v 2.38 2002/12/03 23:39:50 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -42,7 +42,11 @@
  * global, static and external data:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static Boolean changed = False;
+
+static struct {
+	Boolean	new;
+	Boolean changed;
+} file_info; /* read-only is in the global options */
 
 /* Messages for various purposes */
 
@@ -93,15 +97,13 @@ XtAppContext app; /* global because needed in msg.c */
  * root         -         the top level of the hierarchy
  * frame        root      main window
  * work         frame     work area
- * infobar      work      manager for filename and logo
- * filename     infobar   rowcol for the next three:
- * filelabel    filename  label for name of file being edited
- * namestring   filename  displays name of file being edited
- * modified     filename  label indicating that the file has changed
- * newfile      filename  label indicating that the file is new
+ * infobar      work      manager form for next five
+ * filelabel    infobar  label for name of file being edited
+ * namestring   infobar  displays name of file being edited
+ * infolabel    infobar  label indicating whether file has been modified, etc.
  * linenumber	infobar   current line number indicator
- * lnpopup	linenumber popup menu to enable/disable the line number indicator
  * logo         infobar   ProofPower logo
+ * lnpopup	linenumber popup menu to enable/disable the line number indicator
  * mainpanes    work      paned window for the script and journal window
  * script       mainpanes the script being edited
  * journal      mainpanes displays application output
@@ -123,7 +125,7 @@ Widget  script,
 	journal;	/* global because needed in pterm.c */
 
 static Widget
-	frame, work, infobar, filename, filelabel, modified, newfile,
+	frame, work, infobar, filelabel, infolabel, newfile,
 	namestring, logo, linenumber, lnpopup,
 	mainpanes,
 	menubar, filemenu, toolsmenu, popupeditmenu, editmenu, cmdmenu, helpmenu;
@@ -491,6 +493,37 @@ static void flash_file_name(char *fname)
 }
 
 
+void show_file_info(void)
+{
+	char info[sizeof "(New, Modified, Read only)"];
+	XmString s;
+	Boolean started = False;
+	strcpy(info, "");
+	if(file_info.new || file_info.changed || global_options.read_only) {
+		strcat(info, "(");
+		if(file_info.new) {
+			strcat(info, "New");
+			started = True;
+		}
+		if(file_info.changed) {
+			if(started) strcat(info, ", ");
+			strcat(info, "Modified");
+			started = True;
+		}
+		if(global_options.read_only) {
+			if(started) strcat(info, ", ");
+			strcat(info, "Read only");
+			started = True;
+		}
+		strcat(info, ")");
+	}
+	s = XmStringCreateSimple(info);
+	XtVaSetValues(infolabel,
+		XmNlabelString,	s,
+		NULL);
+	XmStringFree(s);
+}
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * reinit_changed: unset changed flag and clear the modified label;
  * Also either clear the undo buffer or notify the undo packaged
@@ -498,14 +531,14 @@ static void flash_file_name(char *fname)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void reinit_changed(Boolean saving)
 {
-	changed = False;
-	XtUnmanageChild(modified);
+	file_info.changed = False;
 	if(saving) {
-		XtUnmanageChild(newfile);
+		file_info.new = False;
 		notify_save(undo_ptr);
 	} else {
 		clear_undo(undo_ptr);
 	}
+	show_file_info();
 }
 
 
@@ -524,7 +557,6 @@ static Boolean setup_main_window(
 	Widget *wp;
 	XtActionsRec action;
 	FileOpenAction foAction = NoAction;
-	Boolean isNewFile = False;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Main window setup:  (root is created in main in xpp.c)
@@ -646,46 +678,43 @@ static Boolean setup_main_window(
  * Info Bar: File-name area and logo
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	infobar = XtVaCreateWidget("filename",
+	infobar = XtVaCreateWidget("infobar",
 		xmFormWidgetClass, work,
 		NULL);
 
-	filename = XtVaCreateWidget("filename",
-		xmRowColumnWidgetClass, infobar,
-		XmNorientation,	XmHORIZONTAL,
-		XmNpacking,	XmPACK_TIGHT,
+	s1 = XmStringCreateSimple("File Name:");
+	filelabel = XtVaCreateManagedWidget("filelabel",
+		xmLabelWidgetClass, infobar,
+		XmNlabelString,	s1,
+		XmNtopAttachment,	XmATTACH_FORM,
+		XmNbottomAttachment,	XmATTACH_FORM,
 		XmNleftAttachment,	XmATTACH_FORM,
 		NULL);
 
-
-	s1 = XmStringCreateSimple("File Name:");
-	filelabel = XtVaCreateManagedWidget("filelabel",
-		xmLabelWidgetClass, filename,
-		XmNlabelString,	s1,
-		NULL);
 	XmStringFree(s1);
 
 	namestring = XtVaCreateManagedWidget("namestring",
-		xmTextFieldWidgetClass, filename,
+		xmTextFieldWidgetClass, infobar,
 		XmNeditable,			False,
 		XmNcursorPositionVisible,	False,
 		XmNtraversalOn,			False,
+		XmNtopAttachment,		XmATTACH_FORM,
+		XmNbottomAttachment,		XmATTACH_FORM,
+		XmNleftAttachment,		XmATTACH_WIDGET,
+		XmNleftWidget,			filelabel,
 		NULL);
 
 	attach_ro_edit_popup(namestring);
 	register_selection_source(namestring);
 
-	s1 = XmStringCreateSimple("(Modified)");
-	modified = XtVaCreateManagedWidget("modified",
-		xmLabelWidgetClass, filename,
+	s1 = XmStringCreateSimple("");
+	infolabel = XtVaCreateManagedWidget("infolabel",
+		xmLabelWidgetClass, infobar,
 		XmNlabelString,	s1,
-		NULL);
-	XmStringFree(s1);
-
-	s1 = XmStringCreateSimple("(New)");
-	newfile = XtVaCreateManagedWidget("newfile",
-		xmLabelWidgetClass, 	filename,
-		XmNlabelString,	s1,
+		XmNtopAttachment,	XmATTACH_FORM,
+		XmNbottomAttachment,	XmATTACH_FORM,
+		XmNleftAttachment,	XmATTACH_WIDGET,
+		XmNleftWidget,		namestring,
 		NULL);
 	XmStringFree(s1);
 
@@ -834,7 +863,7 @@ static Boolean setup_main_window(
 				XmTextFieldSetString(namestring, file_name);
 				XmTextFieldShowPosition(namestring, strlen(file_name));
 				set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
-				isNewFile = True;
+				file_info.new = True;
 				break;
 			default:	/* QuitNow */
 				return False;
@@ -848,13 +877,10 @@ static Boolean setup_main_window(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Management and Realisation:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-	XtManageChild(filename);
 	XtManageChild(infobar);
 	XtManageChild(linenumber);
-	XtUnmanageChild(modified);
-	if(!isNewFile) {
-		XtUnmanageChild(newfile);
-	}
+	XtManageChild(infolabel);
+	show_file_info();
 	XtManageChild(menubar);
 	XtManageChild(script);
 	if( !global_options.edit_only ) {
@@ -960,7 +986,7 @@ static void file_menu_cb(
 		break;
 	case FILE_MENU_OPEN:
 		oldfname = XmTextGetString(namestring);
-		if(!changed || yes_no_dialog(root, changed_message)) {
+		if(!file_info.changed || yes_no_dialog(root, changed_message)) {
 			fname = file_dialog(frame, "Open");
 			if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
@@ -996,7 +1022,7 @@ static void file_menu_cb(
 		if(fname != NULL) {XtFree(fname);};
 		break;
 	case FILE_MENU_REVERT:
-		if(!changed || yes_no_dialog(root, changed_message)) {
+		if(!file_info.changed || yes_no_dialog(root, changed_message)) {
 			fname = XmTextGetString(namestring);
 			pause_undo(undo_ptr);
 			if(!fname || !*fname || *fname == '*') {
@@ -1016,7 +1042,7 @@ static void file_menu_cb(
 		break;
 	case FILE_MENU_EMPTY_FILE:
 		oldfname = XmTextGetString(namestring);
-		if(!changed || yes_no_dialog(root, revert_message)) {
+		if(!file_info.changed || yes_no_dialog(root, revert_message)) {
 			pause_undo(undo_ptr);
 			XmTextFieldSetString(namestring, no_file_message);
 			XmTextSetString(script, "");
@@ -1100,7 +1126,7 @@ static void reopen_cb(
 	NAT i = (NAT) cbd;
 	oldfname = XmTextGetString(namestring);
 	fname = reopen_menu_items[i].label;
-	if(!changed || yes_no_dialog(root, changed_message)) {
+	if(!file_info.changed || yes_no_dialog(root, changed_message)) {
 		pause_undo(undo_ptr);
 		if(open_file(script, fname, False, (FileOpenAction *) NULL)) {
 			if(!oldfname || !*oldfname || *oldfname == '*') {
@@ -1279,11 +1305,8 @@ static void help_menu_cb(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void show_modified(void)
 {
-	if(!changed) {	/* Only do this when change from !changed to changed */
-		XtManageChild(modified);
-		XtUnmanageChild(newfile);
-	}
-	changed = True;
+	file_info.changed = True;
+	show_file_info();
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Monitor line number
@@ -1397,11 +1420,11 @@ void check_quit_cb (
 		XtPointer	cbd,
 		XtPointer	cbs)
 {
-	if((!changed && !application_alive())
+	if((!file_info.changed && !application_alive())
 	||	yes_no_dialog(root,
-			(	changed && application_alive()
+			(	file_info.changed && application_alive()
 			?	changed_running_quit_message
-			:	changed
+			:	file_info.changed
 			?	changed_quit_message
 			:	running_quit_message))) {
 		kill_application();
