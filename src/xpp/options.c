@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.25 2004/02/10 21:47:07 rda Exp rda $
+ * $Id: options.c,v 2.26 2004/06/30 16:42:46 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -87,7 +87,8 @@ static Widget
 				command_form,
 					command_lab, command_text,
 				journal_max_form,
-					journal_max_lab, journal_max_text,
+					journal_max_lab,
+						journal_max_text,
 		add_new_line_frame,
 			add_new_line_radio_buttons,
 		button_frame,
@@ -390,6 +391,7 @@ if(!global_options.edit_only) {
 		journal_max_buf = XmTextGetString(journal_max_text);
 		sscanf(journal_max_buf, "%lu", &m);
 		global_options.journal_max = (m >= 2000 ? m : 2000);
+
 	}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -483,16 +485,24 @@ void add_options_tool(void)
 		XtManageChild(button_form);
 		XtManageChild(button_frame);
 		if(!global_options.edit_only) {
+			XmTextPosition last_pos;
 			XtManageChild(journal_max_form);
 			XtManageChild(command_form);
 			XtManageChild(app_row_col);
 			XtManageChild(add_new_line_radio_buttons);
 			XtManageChild(add_new_line_frame);
+			last_pos = XmTextGetLastPosition(command_text);
+			XmTextSetInsertionPosition(command_text, last_pos);
+			XmTextShowPosition(command_text, last_pos);
+			last_pos = XmTextGetLastPosition(journal_max_text);
+			XmTextSetInsertionPosition(journal_max_text, last_pos);
+			XmTextShowPosition(journal_max_text, last_pos);
 		}
 		XtManageChild(edit_row_col);
 		XtManageChild(edit_frame);
 		XtManageChild(shell_row_col);
 		XtPopup(shell, XtGrabNone);
+		set_input_focus(shell);
 	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -577,15 +587,23 @@ static void reset_cb(
 	XtVaSetValues(file_type_menu, XmNmenuHistory, file_type_buttons[options->file_type], NULL);
 
 	if(command_text) {
+		XmTextPosition last_pos;
 		XmTextSetString(command_text,
 			options->command_line);
+		last_pos = XmTextGetLastPosition(command_text);
+		XmTextSetInsertionPosition(command_text, last_pos);
+		XmTextShowPosition(command_text, last_pos);
 	}
 
 	if(journal_max_text) {
 		char buf[20];
+		XmTextPosition last_pos;
 		unsigned long m = options->journal_max;
 		sprintf(buf, "%lu", m);
 		XmTextSetString(journal_max_text, buf);
+		last_pos = XmTextGetLastPosition(journal_max_text);
+		XmTextSetInsertionPosition(journal_max_text, last_pos);
+		XmTextShowPosition(journal_max_text, last_pos);
 	}
 
 	if(add_new_line_radio_buttons) {
