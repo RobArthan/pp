@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.5 2001/12/15 16:52:27 rda Exp phil $
+ * $Id: undo.c,v 2.6 2002/03/21 16:36:43 phil Exp phil $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -8,7 +8,7 @@
  *
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char rcsid[] = "$Id: undo.c,v 2.5 2001/12/15 16:52:27 rda Exp phil $";
+static char rcsid[] = "$Id: undo.c,v 2.6 2002/03/21 16:36:43 phil Exp phil $";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:
@@ -22,6 +22,7 @@ static char rcsid[] = "$Id: undo.c,v 2.5 2001/12/15 16:52:27 rda Exp phil $";
 #include <stdio.h>
 #include "xpp.h"
 
+
 /* Messages for various purposes: */
 
 static char* changes_saved_warning =
@@ -33,13 +34,13 @@ static char* changes_saved_warning =
 static NAT next_debug_no = 0;
 typedef struct undo_node {
 	NAT debug_no;           /* only for debugging */
-	Boolean stop_here;      /* stop point when rolling back */
 	Boolean in_business;    /* true if first & last are valid */
 	Boolean changes_saved;  /* true if changes have been saved */
 	Boolean moved_away;     /* true if the change is complete */
 	NAT first,              /* position in text of chars to */
 	    last;               /* be replaced by an undo */
 	char *oldtext;          /* deleted characters to put in */
+    Boolean was_null;
 	struct undo_node *next,
 	                 *prev;
 } UndoNode;
@@ -58,19 +59,21 @@ typedef struct undo_details {
 } UndoBuffer;
 
 /* Debug functions */
-#define DBGMAX 50
+#define DBGMAX 47
 static char *debugFormatText(char *in)
 {
-  static char out[DBGMAX + 1];
+  static char out[DBGMAX + 3];
   char *iptr = in,
        *optr = out;
   NAT cnt = 0;
   if(in == (char *) NULL) {
-   return (char *) NULL;
+   return "<null>";
   }
+  *optr++ = '"';
   while(cnt < (DBGMAX - 5)) {
    switch(*iptr) {
     case '\0':
+     *optr++ = '"';
      *optr = *iptr;
      return out;
      break;
@@ -98,6 +101,7 @@ static char *debugFormatText(char *in)
   *optr++ = '.';
   *optr++ = '.';
   *optr++ = '.';
+  *optr++ = '"';
   *optr   = '\0';
   return out;
 }
@@ -105,31 +109,34 @@ static char *debugFormatText(char *in)
 static void dumpUndoStack(UndoBuffer *ub, char *where)
 {
  UndoNode *ptr;
+ char buf[4];
  fprintf(stderr, "Undo Stack dump at %s\n", where);
- fprintf(stderr, "%s%s%s",
+ sprintf(buf, "%s%s%s",
          ub->can_undo ? "U" : "_",
          ub->can_redo ? "R" : "_",
          ub->undoing  ? "U" : "_");
  ptr = ub->root;
  if(ptr == (UndoNode *) NULL) {
-  fprintf(stderr, " <empty>");
+  fprintf(stderr, "%s <empty>\n", buf);
  } else {
   while(ptr != (UndoNode *) NULL) {
    fprintf(stderr,
-           "\n   %2d%s %s%s%s%s %4d - %4d \"%s\"",
+           "%s %2d%s %s%s%s%s %4d - %4d [%3d] %s\n",
+           buf,
            ptr->debug_no,
            (ptr == ub->active) ? "A" : " ",
-           ptr->stop_here     ? "S" : "_",
            ptr->in_business   ? "B" : "_",
            ptr->changes_saved ? "S" : "_",
            ptr->moved_away    ? "M" : "_",
+           ptr->was_null      ? "n" : "_",
            ptr->first,
            ptr->last,
+           (ptr->oldtext == (char *) NULL) ? 0 : strlen(ptr->oldtext),
            debugFormatText(ptr->oldtext));
+   sprintf(buf, "   ");
    ptr = ptr->next;
   }
  }
- fprintf(stderr, "\n");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -146,17 +153,21 @@ void setOldtext(UndoBuffer *ub, char *value)
 {
 	ub->active->oldtext = value;
 }
+void clearOldtext(UndoBuffer *ub)
+{
+	sprintf(ub->active->oldtext, "");
+}
 
-static Boolean stop_here(UndoBuffer *ub)
+static Boolean was_null(UndoBuffer *ub)
 {
 	if(ub->active == (UndoNode *) NULL) {
-		return True;
+		return False;
 	}
-	return ub->active->stop_here;
+	return ub->active->was_null;
 }
-void setStop_here(UndoBuffer *ub, Boolean value)
+void setWas_null(UndoBuffer *ub, Boolean value)
 {
-	ub->active->stop_here = value;
+	ub->active->was_null = value;
 }
 
 static Boolean moved_away(UndoBuffer *ub)
@@ -228,7 +239,6 @@ void freeUndoNodes(UndoNode *nd)
 		return;
 	}
 	freeUndoNodes(nd->next);
-fprintf(stderr, "freeUndoNodes[%d]\n", nd->debug_no);
 	nd->next = (UndoNode *) NULL;
 	nd->prev = (UndoNode *) NULL;
 	if(nd->oldtext != (char *) NULL) {
@@ -254,6 +264,7 @@ Boolean newUndoNode(UndoBuffer *ub)
 	new->in_business   = False;
 	new->changes_saved = False;
 	new->oldtext       = (char *) NULL;
+    new->was_null      = False;
 	new->next          = (UndoNode *) NULL;
 	new->prev          = (UndoNode *) NULL;
 
@@ -262,7 +273,6 @@ Boolean newUndoNode(UndoBuffer *ub)
 		freeUndoNodes(ub->active);  /* paranoi! */
 		ub->root   = new;
 		ub->active = new;
-fprintf(stderr, "newUndoNode no. %d at root\n", ub->active->debug_no);
 		return True;
 	}
 
@@ -271,10 +281,9 @@ fprintf(stderr, "newUndoNode no. %d at root\n", ub->active->debug_no);
 		freeUndoNodes(ub->active->next);
 	} else {
 		/* this happens when undone to the start */
-		freeUndoNodes(ub->active);
+		freeUndoNodes(ub->root);
 		ub->root   = new;
 		ub->active = new;
-fprintf(stderr, "newUndoNode no. %d replaced root\n", ub->active->debug_no);
 		return True;
 	}
 
@@ -283,14 +292,6 @@ fprintf(stderr, "newUndoNode no. %d replaced root\n", ub->active->debug_no);
 
 	/* move the active node */
 	ub->active = new;
-if(new->prev == (UndoNode *) NULL) {
- fprintf(stderr, "newUndoNode no. %d: (first)\n", ub->active->debug_no);
-} else {
- fprintf(stderr,
-         "newUndoNode no. %d: prev %d\n",
-         ub->active->debug_no,
-         ub->active->prev->debug_no);
-}
 
 	return True;
 }
@@ -327,9 +328,6 @@ static void setUndo(UndoBuffer *ub, Boolean state)
 				                          ub->undo_menu_entry_offset,
 				                          state);
 			}
-/*
-fprintf(stderr, "setUndo: set to %s\n", state ? "True" : "False");
-*/
 		}
 	}
 }
@@ -347,11 +345,9 @@ static void setRedo(UndoBuffer *ub, Boolean state)
 				                          state);
 			}
 		}
-/*
-fprintf(stderr, "setRedo: set to %s\n", state ? "True" : "False");
-*/
 	}
 }
+
 
 /* set the menu buttons properly according to the undoNodes */
 static void setUndoRedo(UndoBuffer *ub)
@@ -368,22 +364,12 @@ static void setUndoRedo(UndoBuffer *ub)
 
 
 /* can an undo/redo actually be done according to the structures? */
-static Boolean canUnRedo(UndoBuffer *ub, Boolean amUndoing)
+static Boolean canUnRedo(UndoBuffer *ub)
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return False;
-		setUndo(ub, False);  /* just in case */
-		setRedo(ub, False);
 	}
-	if(amUndoing) {
-		setUndo(ub, True);
-		return True;
-	}
-	if(ub->active->next != (UndoNode *) NULL) {
-		setRedo(ub, True);
-	}
-	setRedo(ub, False);
-	return False;
+	return True;
 }
 
 
@@ -418,7 +404,6 @@ void clear_undo(XtPointer xtp)
 			                    "Redo");
 		}
 	}
-dumpUndoStack(ub, "1e");
 }
 
 
@@ -497,14 +482,10 @@ static void reinit_undo_buffer (
 	XmTextVerifyCallbackStruct *cbs,
 	Boolean cu)
 {
-fprintf(stderr,
-        "reinit_undo_buffer: cu = %s, undoing = %s%s\n",
-        cu ? "True" : "False",
-        ub->undoing ? "True" : "False",
-        (ub->active == (UndoNode *) NULL) ? " no undo buffer" : "");
-dumpUndoStack(ub, "2s");
-	setUndo(ub, cu);
-	setRedo(ub, False);
+	if(!ub->undoing) {
+		setUndo(ub, cu);
+		setRedo(ub, False);
+	}
 
 	if(!ub->undoing || ub->active == (UndoNode *) NULL) {
 		if (! newUndoNode(ub)) {
@@ -516,8 +497,6 @@ dumpUndoStack(ub, "2s");
 	setFirst(ub,       cbs->startPos);
 	setLast(ub,        cbs->startPos);
 	setIn_business(ub, True);
-
-dumpUndoStack(ub, "2e");
 }
 
 
@@ -536,10 +515,6 @@ void undo_modify_cb(
 	char *cut_chars;
 	Widget *wp;
 
-if(!ub->undoing) {
- dumpUndoStack(ub, "3s");
-}
-
 	if(	!cbs->text->length &&
 		!ub->undoing &&
 		cbs->endPos == cbs->startPos + 1 &&
@@ -556,7 +531,6 @@ if(!ub->undoing) {
 				char buf[2];
 				if(XmTextGetSubstring(ub->text_w, cbs->startPos, 1, 2, buf)
 					!= XmCOPY_SUCCEEDED) {
-fprintf(stderr, " --A: calling reinit_undo_buffer(False)\n");
 						reinit_undo_buffer(ub, cbs, False);
 				} else {
 					setUndo(ub, True);
@@ -571,7 +545,6 @@ fprintf(stderr, " --A: calling reinit_undo_buffer(False)\n");
 			if(XmTextGetSubstring(ub->text_w,
 					cbs->startPos, 1, 2, buf)
 				!= XmCOPY_SUCCEEDED) {
-fprintf(stderr, " --B: calling reinit_undo_buffer(False)\n");
 					reinit_undo_buffer(ub, cbs, False);
 			} else {
 				setUndo(ub, True);
@@ -586,11 +559,9 @@ fprintf(stderr, " --B: calling reinit_undo_buffer(False)\n");
 		cut_chars = XtMalloc(len + 1);
 		if(XmTextGetSubstring(ub->text_w, cbs->startPos, len, len+1, cut_chars)
 			!= XmCOPY_SUCCEEDED) {
-fprintf(stderr, " --C: calling reinit_undo_buffer(False)\n");
 			reinit_undo_buffer(ub, cbs, False);
 		} else {
 			cut_chars[len] = '\0';
-fprintf(stderr, " --D: calling reinit_undo_buffer(True)\n");
 			reinit_undo_buffer(ub, cbs, True); /* for the XtFree */
 			setMoved_away(ub, False);
 			setFirst(ub,      cbs->startPos);
@@ -599,7 +570,6 @@ fprintf(stderr, " --D: calling reinit_undo_buffer(True)\n");
 		}
 	} else if(moved_away(ub) || last(ub) != cbs->startPos) {
 					/* started typing somewhere new */
-fprintf(stderr, " --E: calling reinit_undo_buffer(True)\n");
 		reinit_undo_buffer(ub, cbs, True);
 		setLast(ub, cbs->startPos + cbs->text->length);
 	} else {
@@ -614,9 +584,6 @@ fprintf(stderr, " --E: calling reinit_undo_buffer(True)\n");
 		setRedo(ub, False);
 	}
 
-if(!ub->undoing) {
- dumpUndoStack(ub, "3e");
-}
 }
 
 
@@ -642,7 +609,7 @@ static void undoRedo(
 	NAT len;
 	char *str;
 
-	if(canUnRedo(ub, amUndoing)) {
+	if(canUnRedo(ub)) {
 		if(	changes_saved(ub)
 		&&	!yes_no_dialog(text_w, changes_saved_warning)) {
 			return;
@@ -653,8 +620,14 @@ static void undoRedo(
 			len = 0;
 			str = XtMalloc(len + 1);
 			strcpy(str, "");
+			if(amUndoing) {
+				setWas_null(ub, True);
+			}
 		} else {
 			len = strlen(oldtext(ub));
+			if(amUndoing) {
+				setWas_null(ub, len == 0);
+			}
 			str = XtMalloc(len + 1);
 			strcpy(str, oldtext(ub));
 		};
@@ -671,8 +644,9 @@ static void undoRedo(
 
 		XtFree(str);
 		ub->undoing = False;
-		setUndo(ub, False);
-		setRedo(ub, True);
+		if(!amUndoing && was_null(ub) && oldtext(ub) != (char *) NULL) {
+			clearOldtext(ub);
+		}
 	}
 }
 
@@ -680,13 +654,9 @@ static void undoRedo(
 void undo_cb(Widget text_w, XtPointer cbd, XtPointer cbs)
 {
 	UndoBuffer *ub = cbd;
-fprintf(stderr, "undo =====================================================\n");
-dumpUndoStack(ub, "4s");
 	undoRedo(text_w, ub, cbs, True);
     backtrack(ub);
 	setUndoRedo(ub);
-dumpUndoStack(ub, "4e");
-fprintf(stderr, "undo =====================================================\n");
 }
 
 
@@ -694,15 +664,9 @@ void redo_cb(Widget text_w, XtPointer cbd, XtPointer cbs)
 {
 	UndoBuffer *ub = cbd;
 
-fprintf(stderr, "redo =====================================================\n");
-dumpUndoStack(ub, "5s");
 	retrack(ub);
-/*	setUndo(ub, True);  /* force a change, undoRedo will set this False ... */
 	undoRedo(text_w, ub, cbs, False);
-	undoRedo(text_w, ub, cbs, True);
 	setUndoRedo(ub);
-dumpUndoStack(ub, "5e");
-fprintf(stderr, "redo =====================================================\n");
 }
 
 
