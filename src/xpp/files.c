@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.11 2002/12/04 14:16:56 rda Exp rda $
+ * $Id: files.c,v 2.12 2003/01/29 16:31:43 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -130,8 +130,7 @@ static char *file_deleted_message =
 
 static char *mixed_file_type_message =
 	 "The file \"%s\"  contains a mixture of Unix, MS-DOS or Macintosh line terminators."
-	"The file type will be set to Unix. You may use the Options Tool to change the file type.";
-
+	"The file type will be taken as Unix. You may use the Options Tool to change the file type.";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Static data:
@@ -215,10 +214,14 @@ static Boolean file_yes_no_dialog(
  * to open the file named on the command line (for which it is not
  * an error if the file does not exist).
  *
- * The fourth parameter, foAction, tells caller more about what happened (supply
+ * The fourth parameter, including, should be set true iff. this is the call
+ * to open a file to be included in the text window (which affects the
+ * behaviour with respect to file type).
+ *
+ * The fifth parameter, foAction, tells caller more about what happened (supply
  * NULL if not interested).
  *
- * The fifth parameter, stat_buf, is a buffer to contain the stat of the file
+ * The sixth parameter, stat_buf, is a buffer to contain the stat of the file
  * if it already existed (supply NULL if not interested).
  * If all is well the return value is a pointer to a buffer
  * containing the contents of the file as a null-terminated
@@ -229,6 +232,7 @@ static Boolean file_yes_no_dialog(
  * message dialogue).
  * The buffer should be XtFree'd when caller is done with it
  * (if it is not NULL).
+ *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static char *get_file_contents(
@@ -417,7 +421,9 @@ static char *get_file_contents(
 		case FT_MIXED:
 		case FT_MIXED_CR:
 		case FT_DOS_CR:
-			file_error_dialog(w, mixed_file_type_message, name);
+			if(!including) {
+				file_error_dialog(w, mixed_file_type_message, name);
+			}
 			/* No break - recover by treating as UNIX */
 		case FT_UNIX:
 		case FT_ANY:
@@ -431,7 +437,9 @@ static char *get_file_contents(
 			file_type = MSDOS;
 			break;
 	}
-	set_file_type(file_type);
+	if(!including) {
+		set_file_type(file_type);
+	}
 	fclose(fp);
 	*p = '\0';
 	if(stat_buf != NULL) {
