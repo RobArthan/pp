@@ -124,6 +124,22 @@ val destroy_cb : Widget * 'a XEvent * unit -> unit = (fn (w, _, _) =>
 );
 =TEX
 =SML
+val icon_rect = XWindows.Area{x = 0, y = 0, w = 32, h = 32};
+=TEX
+=SML
+val pp_bitmap_bits = [
+	255, 255, 255, 255, 1, 0, 0, 128, 1, 0, 0, 128, 1, 0, 0, 128,
+	1, 0, 0, 128, 1, 0, 254, 129, 129, 1, 254, 131, 129, 1, 54, 134,
+	1, 0, 54, 134, 1, 0, 54, 134, 1, 0, 54, 134, 1, 0, 54, 134,
+	1, 0, 246, 131, 225, 31, 246, 129, 225, 63, 54, 128, 97, 99, 54, 128,
+	97, 99, 54, 128, 97, 99, 54, 128, 97, 99, 62, 128, 97, 99, 62, 128,
+	97, 63, 0, 128, 97, 31, 0, 128, 97, 3, 0, 128, 97, 3, 0, 128,
+	97, 3, 48, 128, 97, 3, 48, 128, 225, 3, 0, 128, 225, 3, 0, 128,
+	1, 0, 0, 128, 1, 0, 0, 128, 1, 0, 0, 128, 255, 255, 255, 255];
+=TEX
+=SML
+=TEX
+=SML
 fun help_widget (owner_w : Widget) (text : string list) : Widget = (
 	let	val fmtd_txt = format_list Combinators.I
 				(flat (map (format_string 60) text)) "\n";
@@ -142,15 +158,16 @@ fun help_widget (owner_w : Widget) (text : string list) : Widget = (
 	end
 );
 =TEX
+The result type of the following function is a long record and has ben omitted.
 =SML
 fun gen_correlator_tool_widgets {
 	left_keys : unit -> string list,
 	right_keys : unit -> string list} = (
 let
 	val shell = XtAppInitialise "" "VCBrowser" "Xpp" [] [];
-	val side_effect = XtSetValues shell [
-		XmNdeleteResponse	XmDO_NOTHING
-	];
+
+	val side_effect = XtSetValue shell (XmNdeleteResponse XmDO_NOTHING);
+
 	val outer_paned = XmCreatePanedWindow shell "outer-paned" [
 		XmNsashHeight		1,
 		XmNsashWidth		1
@@ -296,6 +313,13 @@ let
 				XtSetValues button_form
 				[(XmNpaneMaximum h), (XmNpaneMinimum h)]
 		) |	_ => ());
+
+	val side_effect = XtSetValue shell (
+		XmNiconPixmap		(XCreateBitmapFromData
+					(XtWindow shell)
+					((implode o map chr) pp_bitmap_bits)
+					icon_rect));
+
 in {	left_filter_btn = left_filter_btn,
 	left_reset_btn = left_reset_btn,
 	right_filter_btn = right_filter_btn,
@@ -338,25 +362,27 @@ let	val {shell, left_list, left_text, right_list, right_text,
 			XmNtopItemPosition	1]
 		else	XtSetValues list_w [XmNitems	keys]
 	);
-	fun filter from_list_w to_list_w f = (fn () =>
-		let	val keys = (
-				case XtGetValue from_list_w "selectedItems" of
-					XmNselectedItems (x::_) => (
-						f x
-				) |	_ => []
-			);
-		in	set to_list_w keys
-		end
-	);
-	fun reset list_w f = (fn () =>
-		set list_w (f())
-	);
 	fun select list_w text_w f = (fn () =>
 		case XtGetValue list_w "selectedItems" of
 			XmNselectedItems (x::_) => (
 				XmTextSetString text_w "Please wait.";
 				XmTextSetString text_w (f x)
 		) |	_ => XmTextSetString text_w ""
+	);
+	fun reset list_w text_w f g = (fn () => (
+		set list_w (f());
+		select list_w text_w g ()
+	));
+	fun filter from_list_w to_list_w to_text_w f g = (fn () => 
+		let	val keys = (
+				case XtGetValue from_list_w "selectedItems" of
+					XmNselectedItems (x::_) => (
+						f x
+				) |	_ => []
+			);
+		in	set to_list_w keys;
+			select to_list_w to_text_w g ()
+		end
 	);
 	fun destroy shell_w = (fn () =>
 		XtDestroyWidget shell_w
@@ -373,16 +399,16 @@ in	XtSetCallbacks left_list
 		(select right_list right_text right_key_to_text))] ();
 	XtSetCallbacks left_filter_btn
 	[(XmNactivateCallback, simple_cb
-		(filter right_list left_list left_filter))] ();
+		(filter right_list left_list left_text left_filter left_key_to_text))] ();
 	XtSetCallbacks right_filter_btn
 	[(XmNactivateCallback, simple_cb
-		(filter left_list right_list right_filter))] ();
+		(filter left_list right_list right_text right_filter right_key_to_text ))] ();
 	XtSetCallbacks left_reset_btn
 	[(XmNactivateCallback, simple_cb
-		(reset left_list left_keys))] ();
+		(reset left_list left_text left_keys left_key_to_text))] ();
 	XtSetCallbacks right_reset_btn
 	[(XmNactivateCallback, simple_cb
-		(reset right_list right_keys))] ();
+		(reset right_list right_text right_keys right_key_to_text))] ();
 	XtSetCallbacks help_btn
 	[(XmNactivateCallback, simple_cb help)] ();
 	XtSetCallbacks done_btn
@@ -399,7 +425,8 @@ end (* of local .. in .. end *);
 end (* of structure CNBrowserFrontEnd *);
 =TEX
 \section{USER INTERFACE}
-=IGNSML
+=TEX
+=SML
 structure €CNVCBrowser› : CNVCBrowser = struct 
 =TEX
 \subsection{Preamble}
@@ -425,12 +452,15 @@ val €help_text› : unit -> string list = Combinators.K [
 =SML
 fun €web_clause_names› ((): unit) : string list = (
 	let val {repl_env, spark_prog, ...} = get_cn_state();
-	in	map kslot_compilation_unit_name spark_prog
-	@	map fst repl_env
+	in	rev (map kslot_compilation_unit_name spark_prog)
+	@	(map fst repl_env)
 	end
 );
 =SML
-val €left_keys› = Sort.sort Sort.string_order o web_clause_names;
+val €left_keys› = (
+	map translate_for_output o
+	web_clause_names
+);
 =TEX
 \subsection{Web Clauses}
 =SML
@@ -469,14 +499,23 @@ fun €text_of_replacement› (rplcmnt : REPLACEMENT) : string list = (
 			"√" :: flat (map text_of_declaration visible)
 	) |	ReplaceDecl {decls, ...} => (
 			"√" :: flat (map text_of_declaration decls)
+	) |	RefineStat {statement, ...} => (
+			"√" :: text_of_statement statement
 	) |	ReplaceStat {statement, ...} => (
 			"È" :: text_of_statement statement
 	) |	UnReplaced (rsort, lbl) => ["TBS"]
 );
 =TEX
 =SML
+fun €fmt_label› (lbl : string) : string = (
+	if	is_all_decimal lbl
+	then	"(" ^ lbl ^ ")"
+	else	"-- " ^ lbl
+);
+=TEX
+=SML
 fun €text_of_repl_env_entry› ((lbl, rplcmnt) : string * REPLACEMENT) : string list = (
-	lbl :: text_of_replacement rplcmnt
+	fmt_label lbl :: text_of_replacement rplcmnt
 );
 =TEX
 =SML
@@ -485,10 +524,13 @@ fun €left_key_to_text› (key : string) : string = (
 	in
 		format_list Combinators.I
 		((text_of_repl_env_entry
-			(find repl_env(fn (k, _) => k = key)))
+			(find repl_env(fn (k, _) => translate_for_output k = key)))
 			handle Fail _ => (
 		(text_of_kslot_compilation_unit
-			(find spark_prog (fn kscu => kslot_compilation_unit_name kscu = key)))
+			(find spark_prog (fn kscu =>
+				translate_for_output
+				(kslot_compilation_unit_name kscu)
+				= key)))
 		) handle Fail _ =>[get_error_message 506001 [key]])
 		"\n"
 	end
@@ -497,55 +539,45 @@ fun €left_key_to_text› (key : string) : string = (
 \subsection{VC Names}
 =SML
 fun €vc_names› ((): unit) : string list = (
-	(Sort.sort Sort.string_order o flat o map fst o get_conjectures) "-"
+	(rev o flat o map fst o get_conjectures) "-"
 );
-val €right_keys› : unit -> string list = vc_names;
+val €right_keys› : unit -> string list = map translate_for_output o vc_names;
 =TEX
 \subsection{VCs}
 =SML
 fun €right_key_to_text› (key : string) : string = (
-	format_list Combinators.I
-	(	key ::
-		 "?Ù" ::
-		 PrettyPrinter.format_term1
-	 		false
-	 		(#line_length(vc_browser_fmt_info()))
-			(get_conjecture "-" key))
-	"\n"
+	let	 val act_key = find (vc_names())
+			(fn k => translate_for_output k = key);
+	in
+		format_list Combinators.I
+		(	key ::
+			 "?Ù" ::
+			 PrettyPrinter.format_term1
+	 			false
+	 			(#line_length(vc_browser_fmt_info()))
+				(get_conjecture "-" key))
+		"\n"
+	end	handle Fail _ => "There is no VC called " ^ key
 );
 =TEX
 \subsection{Filtering the Clauses}
 =SML
-fun make_label_prefix (wcn : string) : string = (
-	(case explode wcn of
-		"(" :: more => (implode o rev o tl o rev) more ^ "u"
-	|	"$" :: more => implode more ^ "s"
-	|	_ => wcn ^ "u")
-);
-=TEX
-=SML
-fun prefix_of_vc_name (vcn : string) : string * string = (
-	let	fun aux acc [] = (acc, "?")
-		|   aux acc (ch :: more) = (
-			if	"a" <= ch andalso ch <= "z"
-			then	(acc, ch)
-			else	aux (acc^ch) more
+fun prefix_of_vc_name (vcn : string) : string = (
+	let	fun aux [] = vcn
+		|   aux (ch :: more) = (
+			if	ch = "_"
+			then	implode (rev more)
+			else	aux more
 		);
 	in	case explode vcn of
-			"v" :: "c" :: more => aux "" more
-		|	_ => (vcn, "?")
+			"v" :: "c" :: more => aux (rev more)
+		|	_ => vcn
 	end
 );
 =TEX
 =SML
 fun find_clause (vcn : string) : string list = (
-	let	val (nm, ch) = prefix_of_vc_name vcn;
-	in	if	is_all_decimal nm
-		then	case ch of
-				"u" => ["(" ^ nm ^ ")"]
-			|	_ => ["$" ^ nm]
-		else	[nm]
-	end
+	[prefix_of_vc_name vcn]
 );
 =TEX
 =SML
@@ -554,9 +586,8 @@ val €left_filter› : string -> string list = find_clause;
 \subsection{Filtering the VCs}
 =SML
 fun €find_vcs› (cln : string) : string list = (
-	let	val pfx = make_label_prefix cln;
-	in	vc_names() drop (fn n => (op ^ o prefix_of_vc_name) n <> pfx)
-	end
+		map translate_for_output (vc_names())
+	drop	(fn n => prefix_of_vc_name n <> cln)
 );
 =TEX
 =SML
@@ -576,7 +607,8 @@ fun €browse_vcs› (() : unit) : unit = (
 	in	()
 	end
 );
-=IGNSML
+=TEX
+=SML
 end (* of structure CNVCBrowser *);
 =TEX
 \small
@@ -603,4 +635,21 @@ XtSetValues shell [XmNmappedWhenManaged false];
 val XmNchildren cs = XtGetValue shell "children";
 XtSetValues (hd cs) [XmNmappedWhenManaged true];
 XmNeditable;
+*)
+(*
+The following may be used to help convert an X11 bitmap file into
+what is needed by XCreateBitmapFromData (although it would be
+much better to supply 
+fun int_of_hexit ch = (
+	if	"0" <= ch andalso ch <= "9"
+	then	ord ch - ord "0"
+	else if "a" <= ch andalso ch <= "f"
+	then	(ord ch - ord "a") + 10
+	else	~1
+);
+fun Ox bb = (
+	case explode bb of
+		(h :: l :: []) => 16 * int_of_hexit h + int_of_hexit l
+	|	_ => ~1
+);
 *)
