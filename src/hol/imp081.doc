@@ -47,8 +47,12 @@ for HOL terms).}
 })])] Fixed bug in $anf\_conv$ (it used to prove $1 + 1 = 2*1$, not $1 + 1 = 2$).
 \item[1.3 (\FormatDate{%92/09/24%%
 })])] Improved efficiency of $anf\_conv$.
-\item[\SCCSversion (\FormatDate{$Date$%
+\item[1.4 (\FormatDate{%92/09/24%%
 })])] Further work on efficiency of $anf\_conv$.
+\item[1.5 (\FormatDate{%92/10/06%%
+})])] Normalisations now fail when nothing to do.
+\item[\SCCSversion (\FormatDate{$Date$%
+})])] Various bug fixes.
 \end{description}
 \subsection{Changes forecast}
 None.
@@ -98,8 +102,14 @@ fun  €conv_rhs_rule› (thm : THM) (conv : CONV) : THM = (
 	handle Fail _ => thm
 );
 =TEX
-Given a term and a equality theorem, use $\alpha$-conversion to make the LHS of the theorem match the term.
-Apply a conversion to the first or second argument of a binary operator.
+To get around problems with proof contexts changing the rewriting canonicalisation
+we use the following simple function to make rewriting with a single theorem
+easier:
+=SML
+fun €simple_rewrite› (thm : THM) : CONV = (fn tm =>
+	(ONCE_MAP_C (simple_eq_match_conv(all_µ_intro thm))) tm
+);
+=TEX
 \section{ORDERING TYPES AND TERMS}
 =TEX
 The conjunctive (or disjunctive) normal form for a term
@@ -545,7 +555,7 @@ fun €thm_ii› (rator : TERM) (comm : THM) (assoc : THM) : THM = (
 			(hd(gen_vars[ty](concl comm::concl assoc::asms comm@asms assoc)))
 			(app_fun_rule rator comm);
 	in	all_µ_intro(check_thm rator template3
-		(pure_once_rewrite_rule[all_µ_intro assoc]thm1))
+		(conv_rule(RANDS_C(simple_eq_match_conv (all_µ_intro assoc))) thm1))
 	end
 	handle Fail _ => thm_fail "sort_conv" 81022 [assoc]
 (* ?0 does not have the form Ù (A op B) op C = A op B op C" *)
@@ -563,7 +573,7 @@ fun €thm_iii› (rator : TERM) (comm : THM) (assoc : THM) : THM = (
 	let	val (tym, tmm) = term_match rator op_var;
 		val tm = subst tmm (inst [] tym(fst(dest_eq template4)));
 	in	all_µ_intro(check_thm rator template4
-		(pure_once_rewrite_conv[all_µ_intro assoc]tm))
+		(MAP_C (simple_eq_match_conv (all_µ_intro assoc))tm))
 	end
 	handle Fail _ => thm_fail "sort_conv" 81022 [assoc]
 (* ?0 does not have the form Ù (A op B) op C = A op (B op C)" *)
@@ -769,9 +779,9 @@ in
 	case gvs of
 	[gv1, gv2, gv3, gv4] => 
 		all_µ_intro(check_2_thm m_op a_op template5
-		((pure_rewrite_conv[all_µ_intro v] THEN_C
-		 pure_rewrite_conv[all_µ_intro vi] THEN_C
-		 pure_rewrite_conv[all_µ_intro add_assoc])
+		((simple_rewrite v THEN_C
+		 simple_rewrite vi THEN_C
+		 simple_rewrite add_assoc)
 		(list_mk_app(m_op,
 			[list_mk_app(a_op, [gv1, gv2]),
 				list_mk_app(a_op, [gv3, gv4])]))))
@@ -796,7 +806,7 @@ let
 	val Smult_comm = all_µ_elim mult_comm;
 	val Smult_assoc = all_µ_elim mult_assoc;
 	val Sleft_distrib = all_µ_elim left_distrib;
-	val right_distrib = pure_once_rewrite_rule[mult_comm]Sleft_distrib
+	val right_distrib = conv_rule(simple_rewrite mult_comm)Sleft_distrib
 
 		handle Fail _ =>
 		thm_fail "poly_conv" 81024 [mult_comm, left_distrib];
@@ -993,12 +1003,13 @@ end;
 \section{ANF}
 We need conversions and supporting theorems which do collection of
 like terms. Since $term\_order$ brings the like terms together and puts
-$m$ before $c*m$ for $c$ literal, there are only four cases to consider:
+$m$ before $c*m$ for $c$ literal, there are several cases to consider:
 =GFT
 1.	c*m +d*m 	=	(c + d)*m
 2.	m +d*m 		=	(c + d)*m
-3.	c + d		=	c + d
-4.	m + m 		=	2*m
+3.	0 + m		=	d
+4.	c + d		=	c + d
+5.	m + m 		=	2*m
 =TEX
 where case 3 is directly supported by $plus\_conv$ (note that the order
 here is important since case 4 overlaps case 3).
@@ -1009,7 +1020,9 @@ val €case1_thm› = tac_proof(([], ¨µc d m∑c*m + d*m = (c + d)*mÆ),
 	rewrite_tac[times_plus_distrib_thm]);
 val €case2_thm› = tac_proof(([], ¨µd m∑m + d*m = (1 + d)*mÆ),
 	rewrite_tac[times_plus_distrib_thm, plus_assoc_thm]);
-val €case4_thm› = tac_proof(([], ¨µm∑m + m = 2*mÆ),
+val €case3_thm› = tac_proof(([], ¨µm∑0 + m = mÆ),
+	rewrite_tac[]);
+val €case5_thm› = tac_proof(([], ¨µm∑m + m = 2*mÆ),
 	pure_rewrite_tac[pc_rule1 "'Ó_lit"prove_rule[]¨2 = 1 + 1Æ, times_plus_distrib_thm]
 	THEN rewrite_tac[]);
 val €case1_conv› : CONV = (fn tm =>
@@ -1021,8 +1034,13 @@ val €case2_conv› : CONV = (fn tm =>
 	((dest_Ó o fst o dest_times o snd o dest_plus) tm;
 	(simple_eq_match_conv case2_thm THEN_C LEFT_C plus_conv) tm)
 );
-val €case3_conv› = plus_conv;
-val €case4_conv› = simple_eq_match_conv case4_thm;
+val €case3_conv› : CONV = (fn tm =>
+	if (dest_Ó o fst o dest_plus) tm = 0
+	then (simple_eq_match_conv case3_thm) tm
+	else fail_conv tm
+);
+val €case4_conv› = plus_conv;
+val €case5_conv› = simple_eq_match_conv case5_thm;
 =TEX
 The following conversional converts a conversion acting on $x + y$, say,
 to one which will also act on $x + y + z$ (by rewriting it as $(x + y) + z$
@@ -1070,7 +1088,7 @@ val €times1_conv› = simple_eq_match_conv times1_thm;
 Pulling these bits together we get:
 =SML
 val €add_simp_conv› =
-	FIRST_C(map A_C[case1_conv, case2_conv, case3_conv, case4_conv]);
+	FIRST_C(map A_C[case1_conv, case2_conv, case3_conv, case4_conv, case5_conv]);
 val €times_simp_conv› =
 	FIRST_C(map M_C[times0_conv, times1_conv, times_conv]);
 =TEX
