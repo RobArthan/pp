@@ -116,26 +116,29 @@ sense to be decided) could be provided and would support a nicer pretty printing
 option in a future release.
 \subsection{Deficiencies}
 None known.
-\section{DOMAIN OF SYMBOL TABLE}
+\section{DISCUSSION}
 The symbol table serves the lexical analyser,
 parser, pretty printer and type inferrer
-by supplying a mapping from identifiers onto records containing information
+by supplying a mapping from identifiers onto information
 which they may need.
 Symbol table records are held for the following sorts of identifier:
 \begin{enumerate}
 \item
-identifiers of types and constants
+identifiers of type constructor
+introduced with the interfaces defined in \cite{DS/FMU/IED/DTD012};
+\item
+identifiers of constants
 introduced with the interfaces defined in \cite{DS/FMU/IED/DTD012};
 \item
 identifiers which have been declared as type abbreviations;
+\item
+identifiers which have been declared as aliases;
 \item
 identifiers which have been declared as binders, postfixes, infixes or prefixes;
 \item
 identifiers which have been declared as terminators.
 \end{enumerate}
 
-In addition, the symbol table provides the lexical analyser with the
-list of terminators which apply in the current context.
 \section{PREAMBLE}
 =DOC
 signature SymbolTable = sig
@@ -144,16 +147,19 @@ This is the signature for the structure which contains the symbol
 table and its access functions.
 This structure contains private functions which are invoked as one
 navigates around the theory database.
-These private functions may give rise to the following errors if the
+These private functions may give rise to error 20001 if the
 theory database user data has been corrupted (e.g. by explicit and incorrect use
 of the lower level interfaces).
+
+Any of the functions in the structure which update the current theory may
+give rise to error 20002
+
 =FAILURE
-20001	A symbol table entry corrupt for ?0 is corrupt (use restore_defaults to correct)
-20002	Terminator entry ?0 is corrupt (use undeclare_terminator to correct)
+20001	A symbol table entry in theory ?0 is corrupt (use restore_defaults to clear)
+20002	The current theory, ?0, is not open for writing
 =ENDDOC
 \section{DATA TYPES}\label{DATATYPES}
-In this section we give the Standard ML types used in the symbol table module.
-
+The following type is used to communicate syntactic status information.
 =DOC
 datatype FIXITY	=	Nonfix
 			|	Binder
@@ -166,91 +172,7 @@ syntactic status of a name. $Nonfix$ means no special status.
 The integer components are the precedences
 for infix, prefix or postfix status.
 =ENDDOC
-=DOC
-type âSYM_TAB_INFOá
-=DESCRIBE
-$SYM\_TAB\_INFO$ is the type of the records used to store information about
-identifiers in the symbol table module.
-Access functions are available to extract the information
-held in the records in
-a more convenient means than by direct access to the records.
 
-The type has fields as follows:
-
-\begin{centering}
-\begin{tabular}{|l|p{5in}|}\hline
-
-$ty\_info$	& {\bf Type:} $int * ((TYPE * (string list)) OPT)$ $OPT$ \\
-& {\bf Description:}
-this is $Nil$ for an identifier which is not a type constructor or a type
-abbreviation in the current context.
-Otherwise it gives the arity of the constructor or abbreviation and
-a field which is $Nil$ for a constructor and which otherwise
-gives the type for which this identifier is an abbreviation
-together with the names of its formal parameters.
-
-\\\hline
-$const\_info$	& {\bf Type:} $(TYPE * ((string * TYPE)list))) OPT$ \\
- & {\bf Description:}
-this field is $Nil$ for an identifier which is not the name of a constant 
-or an alias in the current context. For a constant or an alias it
-has the form $Value(\tau, [(s_1, \tau_1), \ldots, (s_k, \tau_k)])$.
-Each $s_i$ gives the
-actual constant name to be associated with an occurrence of the identifier
-which has type an instance of $\tau_i$.
-$\tau$ is the antiunifier of the $\tau_i$. For a constant which is not an
-alias $k = 1$ and $\tau = \tau_1$. 
-\\\hline
-$language$	& {\bf Type:} $string$ \\
- & {\bf Description:}
-this gives the language associated with the identifier. It has the value
-``$HOL$'' for all names supplied as part of the ICL HOL system.
-\\\hline
-$fixity$		& {\bf Type:} $FIXITY$ \\
- & {\bf Description:}
-this gives the fixity associated with the identifier.
-\\\hline
-\end{tabular}
-\end{centering}
-=ENDDOC
-
-Note that a name may be both an alias and an actual constant name.
-For example, in the supplied system the conjunction
-symbol `€' will have a symbol table
-entry something like:
-óExample
-	{	type_info	= Nil,
-		const_info	= Value(»:BOOL‹BOOL‹BOOL¼,
-					[("€", »:BOOL‹BOOL‹BOOL¼)]),
-		language	= "HOL",
-		fixity		= Infix 100	}
-æ
-The user might wish to overload `€', e.g., by making it an alias of
-the function `$fand$' defined by the following theorem:
-óExample
-	… ƒf g:'a->BOOLŽfand f g x = f x € g x
-æ
-
-The effect of the call
-óExample
-	new_alias("€", »fand:('a->BOOL)‹('a->BOOL)‹('a->BOOL)¼);
-æ
-
-is to make the symbol table entry for  `€' something like:
-
-óExample
-	{	type_info	= Nil,
-		const_info	= Value(»:'b‹'b‹'b¼,
-					[("fand", »:('a->BOOL)‹('a->BOOL)‹('a->BOOL)¼),
-					 ("€", »:BOOL‹BOOL‹BOOL¼)]),
-		language	= "HOL",
-		fixity		= Infix 100	}
-æ
-
-Thus to determine the actual type of a constant the correct procedure
-would be to access the second component of the $const\_info$ field, not the first.
-The access function $get\_const\_type$ is supplied to perform this particular
-calculation.
 \section{ACCESS FUNCTIONS}
 \subsection{Terminators}
 % Errors in this subsection start with 201
@@ -268,9 +190,10 @@ one character.
 $declare\_terminator\,s$ checks that $s$ is a valid terminator, and if so declares
 that $s$ is to be used as a lexical terminator in the current context.
 =FAILURE
-20101	The identifier ?0 is not a valid terminator. Terminators must start
+20101	The string ?0 is not a valid terminator. Terminators must start
 	with a symbolic character, must not contain spaces,
 	and must not end with underscore, %up% or %down%
+20102	The string ?0 is already declared as a terminator
 =ENDDOC
 =DOC
 	val âundeclare_terminatorá : string -> unit
@@ -279,7 +202,7 @@ $undeclare\_terminator\,s$ removes $s$
 from the list of identifiers which act as terminators for parsing purposes
 in the current context.
 =FAILURE
-20102	?0 is not in the list of terminators in the current context
+20103	?0 is not in the list of terminators in the current context
 =ENDDOC
 \subsection{Fixity}
 % Errors in this subsection should start with 202
@@ -294,7 +217,7 @@ No checks are made on the form of $s$
 =ENDDOC
 
 =DOC
-	val âdeclare_infixá : string -> unit;
+	val âdeclare_infixá : (int * string)-> unit;
 =DESCRIBE
 $declare\_infix\,(s, p)$ declares $s$ to have the syntactic status of an
 infix operator with precedence $p$
@@ -339,33 +262,63 @@ $get\_fixity\,s$ returns the syntactic status of $s$ in the current context.
 =ENDDOC
 \subsection{Constants and Aliases}
 % Errors in this subsection start with 203
-$get\_const\_info\,s$ is the interface which the type inferrer will use to
+$get\_const\_info$ is the interface which the type inferrer will use to
 give the type associated with a name in a parsed term. The type it should use
 is the first element of the pair.
+
+$get\_const\_info\,s$ is $Nil$ for an identifier, $s$ which is not the name of a constant 
+or an alias in the current context.
+If s is a constant or an alias $get\_const\_info\,s$
+has the form $Value(\tau, [(s_1, \tau_1), \ldots, (s_k, \tau_k)])$.
+Each $s_i$ gives the
+actual constant name to be associated with an occurrence of $s$
+which has type an instance of $\tau_i$.
+$\tau$ is the antiunifier of the $\tau_i$. For a constant which is not an
+alias $k = 1$ and $\tau = \tau_1$. 
+
+
+Note that a name may be both an alias and an actual constant name.
+For example, in the supplied system the conjunction
+$get\_const\_info$``€'' will return something like:
+óExample
+		Value(»:BOOL‹BOOL‹BOOL¼, [("€", »:BOOL‹BOOL‹BOOL¼)])
+æ
+The user might wish to overload `€', e.g., by making it an alias of
+the function `$fand$' defined by the following theorem:
+
+óExample
+	… ƒf g:'a->BOOLŽfand f g x = f x € g x
+æ
+
+The effect of the call
+óExample
+	new_alias("€", »fand:('a->BOOL)‹('a->BOOL)‹('a->BOOL)¼);
+æ
+is to make the symbol table entry for  `€' something like:
+
+óExample
+	Value(»:'b‹'b‹'b¼,
+		[("fand", »:('a->BOOL)‹('a->BOOL)‹('a->BOOL)¼),
+					 ("€", »:BOOL‹BOOL‹BOOL¼)])
+æ
+
+
 =DOC
-	val âget_const_infoá : string -> (TYPE * (string * TYPE list)) OPT;
+	val âget_const_infoá : string -> (TYPE * ((string * TYPE)list)) OPT;
 =DESCRIBE
 $get\_const\_info\,s$ returns the information associated with
 the name $s$ used as a constant name, if any.
 See DS/FMU/IED/DTD020 for more information.
 =ENDDOC
-$get\_const\_type\,s$ is for use, e.g. in the theory lister, to find the type
-associated with an actual constant (not an alias).
-=DOC
-	val âget_const_typeá : string -> TYPE OPT;
-=DESCRIBE
-$get\_const\_type\,s$ returns an instance of the most general type associated with
-the constant $s$ , if any.
-See DS/FMU/IED/DTD020 for more information.
-=ENDDOC
-The format of the alias information is described as part of
-the description of $ST\_INFO$ in section \ref{DATATYPES} above
+
+
 =DOC
 	val âdeclare_aliasá : (string * TERM) -> unit;
 =DESCRIBE
 $declare\_alias\,(s, c)$ declares $s$ as an alias for the constant $c$.
 =FAILURE
-20301	The term ?0 is not a constant.
+20301	The term argument is not a constant
+20302	The string ?0 is already in use as an abbreviation for ?1
 =ENDDOC
 =DOC
 	val âundeclare_aliasá : (string * TERM) -> unit;
@@ -373,7 +326,7 @@ $declare\_alias\,(s, c)$ declares $s$ as an alias for the constant $c$.
 $undeclare\_alias\,(s, c)$ reverses the effect
 of a declaration of $s$ as an alias for the constant $c$ in the current context.
 =FAILURE
-20302	The term ?0 is not a constant.
+20301	The term ?0 is not a constant.
 20303	The identifier ?0 is not declared as an alias for ?1
 =ENDDOC
 =DOC
@@ -388,11 +341,22 @@ in which the aliased constant has a type $\tau'$ which can be instantiated
 to $\tau$. If more than one such declaration is applicable the most recent
 one is used. 
 =FAILURE
-20304	The identifier ?0 is not a valid constant name (or alias) at the type ?1
+20304	The identifier ?0 is not a valid constant name (or alias) at this type
 =ENDDOC
 
 \subsection{Types and Type Abbreviations}
 % Errors in this subsection start with 204
+$get\_type\_info\,s$ returns information about the identifier $s$ when
+it appears as a type constructor or type abbreviation.
+$get\_type\_info\,s$ is $Nil$ for an identifier
+which is not a type constructor or a type
+abbreviation in the current context.
+Otherwise get\_type\_info\,s$
+gives the arity of the constructor or abbreviation and
+a field which is $Nil$ for a constructor and which otherwise
+gives the type for which $s$ is an abbreviation
+together with the names of its formal parameters.
+
 =DOC
 	val âget_type_infoá : string -> (int * (string * TYPE list) OPT) OPT;
 =DESCRIBE
@@ -400,8 +364,6 @@ $get\_type\_info\,s$ returns the type information, if any, associated
 with $s$.
 See DS/FMU/IED/DTD020 for more information.
 =ENDDOC
-The format of the alias information is described as part of
-the description of $ST\_INFO$ ins section \ref{DATATYPES} above
 =DOC
 	val âdeclare_type_abbrevá : (string * TYPE list * TYPE) -> FIXITY;
 =DESCRIBE
@@ -439,7 +401,8 @@ $[\tau_1, \ldots, \tau_k]$.
 20405	The type abbreviation ?0 should have ?1 arguments not ?2
 =ENDDOC
 \subsection{Languages}
-The symbol table stores a language indicator in each theory.
+T% Errors in this subsection start with 205
+he symbol table stores a language indicator in each theory.
 This determines the language in the symbol table records for the names
 in that theory. The language indicator for a new theory is initially taken
 from its (first) parent. The language indicator for the initial theory
@@ -451,33 +414,35 @@ $set\_current\_language\,s$ sets the language indicator associated with
 the current theory to $s$.
 =ENDDOC
 =DOC
-	val âget_current_languageá : unit -> string;
-=DESCRIBE
-$get\_current\_language()$ returns the language indicator associated with
-the current theory.
-=ENDDOC
-=DOC
 	val âget_languageá : string -> string;
 =DESCRIBE
 $get\_language\,s$ returns the language indicator associated with
 the name $s$ in the current context. If there is no symbol table record
 associated with $s$ $get\_language\,s$ the language indicator associated
-with the current theory is returned
+with the current theory is returned. The language indicator
+``$HOL$'' for all identifers supplied as part of the ICL HOL system.
 =ENDDOC
 
-\subsection{General Access Functions}
+\subsection{Miscellaneous Functions}
 % Errors in this subsection start with 206
-=DOC
-	val âget_sym_tab_infoá : string -> string -> SYM_TAB_INFO OPT;
-=DESCRIBE
-$get\_sym\_tab\_info\,thy\,id$ returns the symbol table information associated
-with $id$ in theory $thy$.
-=ENDDOC
 =DOC
 	val âget_sym_tab_idsá : string -> string list;
 =DESCRIBE
 $get\_sym\_tab\_ids\,thy$ returns the list of identifiers which have a symbol
 table record in the theory $thy$.
+=ENDDOC
+
+=DOC
+	val ârestore_defaultsá : unit -> unit;
+=DESCRIBE
+$restore\_defaults()$ may be used to clear corrupted symbol
+table information in the current theory. It does this by restoring the theory
+to the state it would have if no terminator, fixity, alias, type abbreviations
+or language declarations had been performed. A warning message is issued
+(and the interactive user is prompted as to whether to continue) before the
+operation is performed.
+=FAILURE
+20601	This operation will delete all symbol table information from theory ?0
 =ENDDOC
 
 =SML

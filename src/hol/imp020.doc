@@ -76,6 +76,40 @@ The symbol table module is dependent on the interface to the
 abstract data type $THM$, \cite{DS/FMU/IED/IMP012}
 and on the lexical analyser module, \cite{DS/FMU/IED/IMP015}.
 \subsection{Algorithms}
+The most straightforward implementation of the
+design would simply define an encoding allowing finite functions
+from identifiers to an appropriate record type to
+be stored in a theory (as $USER\_DATA$) and would implement the various
+access functions by direct access to the information stored in the theory.
+However, this approach would be slow (since it would imply
+linear table searches to find the information pertaining to an identifier)
+and would also consume unnecessary space (since ``most'' identifiers do
+not have any special properties, all we need to know about them is
+already stored in the theory database). 
+
+For the purposes of parsing, type inferring and pretty printing, the interrogative
+functions:
+$get\_terminators$, $get\_fixity$, $get\_const\_info$,
+$get\_const\_type$, $resolve\_alias$, $get\_type\_info$,
+$expand\_type\_abbrev$, $get\_language$ 
+and, perhaps, $get\_sym\_tab\_info$, need to be quite fast.
+Consequently, we maintain caches containing the 
+information required to compute these functions
+in the current context. As an optimisation (to the space usage) we do
+not keep records for identifers with no special properties. The relevant
+symbol table information for such an identifier may readily be computed
+from the theory database as necessary.
+
+We store in each theory an encoding of the
+declarative operations ($declare\_terminator$, $declare\_infix$ etc.) which
+have been made in the context of that theory.
+Then, in essence, corresponding to each
+declarative operation we define an operation on the cache and an operation
+on the current theory. Thus a context change is effected by replaying
+a sequence of operations on the cache which correspond to the declarations
+which apply in that context. The declarative operations performed by the
+user are implemented by performing the corresponding operations on both
+the current theory and the cache,
 
 \subsection{Possible Enhancements}
 It is not yet known whether the encoding of symbol table information
@@ -84,20 +118,16 @@ in the theory database is adequately compact.
 \section{PREAMBLE}
 =SML
 structure SymbolTable = struct
+=SML
+open Lex;
 =TEX
 \subsection{Utilities}
-=TEX
-$is\_format\_char\,s$ returns true iff. the first character of $s$ is
-a space, tab, carriage return or other formatting character:
-=SML
-fun is_format_char ("" : string) : bool = false
-|   is_format_char (ch : string) : bool = ord ch  <= ord " ";
 =TEX
 $split_string\,sep\,s$ splits string into a list of strings treating
 characters for which $sep$ returns true as separator characters.
 Runs of more than one separator are treated like a single separator.
 =SML
-fun split_string (sep : string -> bool) (s : string) = (
+fun âsplit_stringá (sep : string -> bool) (s : string) = (
 	let	fun aux words "" (ch :: more) = (
 			if sep ch
 			then aux words "" more
@@ -115,17 +145,22 @@ fun split_string (sep : string -> bool) (s : string) = (
 $words\,s$ splits $s$ into a list of  strings treating formatting characters
 as separators.
 =SML
-val words : string -> string list = split_string is_format_char;
-
+val âwordsá : string -> string list = split_string is_space;
 =TEX
-\section{DATA TYPES}\label{DATATYPES}
-In this section we give the Standard ML types used in the symbol table module
-and give functions which encode them in the type
-$USER\_DATUM$ used to store data in theories.
-We also give the corresponding decoding functions.
-Some care has been taken too make the encoding compact.
+$is\_same\_type\,ty1,\,ty2$ is true iff. $ty1$ and $ty2$ are the same
+type modulo renaming of type variables.
+=SML
+fun âis_same_typeá (ty1:TYPE) (ty2:TYPE) : bool = (
+	is_type_instance ty1 ty2 andalso is_type_instance ty2 ty1
+);
+=TEX
+\section{TYPES}\label{TYPES}
+In this section we give the Standard ML types used in the symbol table module.
+\subsection{Visible Types}
 =IGN
 (* Dummy for definition of USER_DATUM *)
+open EfficientDictionary SimpleDictionary;
+
 datatype âUSER_DATUMá =
 	âUD_Termá of TERM * (USER_DATUM list) |
 	âUD_Typeá of TYPE * (USER_DATUM list) |
@@ -178,8 +213,6 @@ fun set_user_datum (key:string, ud : USER_DATUM) = (
 );
 
 =TEX
-We encode constructors as small numbers, since on most Standard ML compilers
-these are held in a single word of storage.
 =SML
 datatype âFIXITYá	=	âNonfixá
 			|	âBinderá
@@ -187,6 +220,207 @@ datatype âFIXITYá	=	âNonfixá
 			|	âPrefixá of int
 			|	âPostfixá of int;
 =TEX
+\subsection{Private Types}
+The following datatype is used to encode the various declarative operations.
+Note that:
+
+\begin{enumerate}
+\item
+the various fixity operations are merged into a single case parameterised
+by a $FIXITY$;
+\item
+there is no $UnDeclFixity$ --- this operation corresponds to a nonfix
+declaration;
+\item
+the $set\_language$ operation is not catered for here.
+\end{enumerate}
+=SML
+datatype âDECLá	=	âDeclTerminatorá of string
+			|	âUnDeclTerminatorá of string
+			|	âDeclFixityá of string * FIXITY
+			|	âDeclAliasá of string * (string * TYPE)
+			|	âUnDeclAliasá of string * (string * TYPE)
+			|	âDeclTypeAbbrevá of string * (string list * TYPE)
+			|	âUnDeclTypeAbbrevá of string
+			|	âSetLanguageá of string;
+=TEX
+\section{THE CACHES AND THEIR ACCESS FUNCTIONS}
+In this section we define the caches in which symbol table information relating
+to the current context is stored for rapid access. We also define the
+functions which read and write these caches (the read functions are part of
+the visible interface).
+
+
+=SML
+val âty_info_cacheá : (int * (((string list) * TYPE)OPT)) E_DICT ref = ref initial_e_dict;
+=TEX
+=SML
+val âconst_info_cacheá : (TYPE * ((string * TYPE)list)) E_DICT ref = ref initial_e_dict;
+=TEX
+=SML
+val âlanguage_cacheá : string E_DICT ref = ref initial_e_dict;
+=TEX
+=SML
+val âfixity_cacheá : FIXITY E_DICT ref = ref initial_e_dict;
+=TEX
+=SML
+val âterminatorsá : string list list ref = ref[];
+=TEX
+For uniformity, the current language is held in an assignable variable
+(although it may fairly rapidly be computed from the theory database).
+=SML
+val âlanguageá : string ref = ref "HOL";
+=TEX
+It is actually more convenient to have a single update function
+parameterised by the type of declaration being made. This requires a few
+local utilities to cope with the more complex cases:
+=SML
+local
+=TEX
+=SML
+fun âcache_terminatorá (t : string) = (
+	let	val et = explode t;
+		val len = length et;
+		fun aux [] = [et]
+		|   aux (h :: more) = (
+			if length h > len
+			then h :: aux more
+			else et :: h :: more
+		);
+	in	terminators := aux(!terminators)
+	end
+);
+=TEX
+=SML
+fun âuncache_terminatorá (t : string) = (
+	terminators := !terminators less explode t
+);
+=TEX
+=SML
+fun âcache_fixityá (s : string, fix : FIXITY) = (
+	case fix of
+		Nonfix => fixity_cache := e_delete s (!fixity_cache)
+	|	_ => fixity_cache := e_enter s fix (!fixity_cache)
+);
+=TEX
+=SML
+fun âcache_aliasá (a : string, (s:string, ty : TYPE)) : unit = (
+	const_info_cache :=
+	e_enter
+	a
+	(case e_lookup a (!const_info_cache) of
+		Value(ty', alinfs) => (
+			 (Antiunify.antiunify(ty, ty'), (s, ty) :: alinfs)
+	) |	Nil => (
+			 (ty, [(s, ty)])
+	))
+	(!const_info_cache)
+);
+=TEX
+We need to antiunify lists of types when aliases are deleted:
+=SML
+fun âlist_antiunifyá ([] : TYPE list) : TYPE = mk_vartype "'a"
+|   list_antiunify [ty] = ty
+|   list_antiunify (ty :: more) = Antiunify.antiunify(ty, list_antiunify more);
+=TEX
+=SML
+fun âuncache_aliasá (a : string, (s:string, ty : TYPE)) : unit = (
+	case e_lookup a (!const_info_cache) of
+		Value(_, alinfs) => const_info_cache := (
+			case alinfs drop 
+					(fn(s', ty') => s = s' andalso is_same_type ty ty')
+			of
+				[] => e_delete a (!const_info_cache)
+			|	some => e_enter a(list_antiunify (map snd some) , some)(!const_info_cache)
+	) |	Nil => ( ()
+	)
+);
+=TEX
+=SML
+fun âcache_type_abbrevá(a : string, (args : string list, ty : TYPE)) : unit = (
+	ty_info_cache := e_enter a (length args, Value(args, ty)) (!ty_info_cache)
+);
+=TEX
+=SML
+fun âuncache_type_abbrevá(a : string) : unit = (
+	case get_type_arity a of
+		Nil => ty_info_cache := e_delete a (!ty_info_cache)
+	|	Value ar => ty_info_cache := e_enter a (ar, Nil) (!ty_info_cache)
+);
+=TEX
+=SML
+fun âcache_languageá (lang : string) = (
+	let	val ids = map (fst o dest_const) (get_constants "-") cup
+			map (fst o dest_type) (get_types "-");
+		fun aux dict [] = dict
+		|   aux dict (id :: more) = aux (e_enter id lang dict) more;
+	in	language_cache := aux (!language_cache) ids
+	end;
+	language := lang
+);
+=TEX
+=SML
+in
+fun âcache_declá (dec : DECL) : unit = (
+	case dec of
+		DeclTerminator t => cache_terminator t
+	|	UnDeclTerminator t => uncache_terminator t
+	|	DeclFixity sfix  => cache_fixity sfix
+	|	DeclAlias asty => cache_alias asty
+	|	UnDeclAlias asty => uncache_alias asty
+	|	DeclTypeAbbrev aargsty => cache_type_abbrev aargsty
+	|	UnDeclTypeAbbrev  a => uncache_type_abbrev a
+	|	SetLanguage lang => cache_language lang
+);
+end; (* of local ... in ... end *)
+=TEX
+\subsection{THEORY DATABASE ACCESS FUNCTIONS}
+The symbol table module uses a single slot in the theory user data 
+under the key ``icl'st'' to hold the declarations which apply
+to the theory. The declarations are held as a fairly direct encoding
+of a list of $DECL$s.
+
+\subsection{Utilities For Accessing the User Data}
+In this section we define the functions we use to fetch and store the
+lists of $USER\_DATUM$s belonging to the symbol table held in theories.
+=SML
+val ud_key = "icl'st";
+=TEX
+=SML
+fun fetch_sym_tab_data (thy : string) : USER_DATUM list = (
+	case get_user_datum thy ud_key handle Fail _ => UD_Int(0, []) of
+		(UD_Int(0, uds)) => uds
+	|	_ => fail "fetch_sym_tab_data" 20001 [fn()=>thy]
+);
+=TEX
+The theory name argument to $store\_sym\_tab\_datum$ and
+$delete\_sym\_tab\_datum$ are only used in error messages.
+=SML
+fun store_sym_tab_datum (ud : USER_DATUM) : unit = (
+	let	val uds = (
+			case get_user_datum "-" ud_key handle Fail _ => UD_Int(0, []) of
+				(UD_Int(0, uds)) => uds
+			|	_ => fail "fetch_sym_tab_data" 20001 [fn()=>"-"]);
+	in 	set_user_datum(ud_key, UD_Int(0, ud :: uds))
+	end
+);
+=TEX
+We sometimes need to delete entries. $delete\_sym\_tab\_datum$
+does this (and does nothing if the entry to be deleted is not there).
+=SML
+fun delete_sym_tab_datum (ud : USER_DATUM) : unit = (
+	let	val uds = (
+			case get_user_datum "-" ud_key handle Fail _ => UD_Int(0, []) of
+				(UD_Int(0, uds)) => uds
+			|	_ => fail "fetch_sym_tab_data" 20001 [fn()=>"-"])
+	in 	set_user_datum(ud_key, UD_Int(0, uds less ud))
+	end
+);
+=TEX
+\subsection{Encoding and Decoding Functions}
+First of all we give an encoding for $FIXITY$ values.
+We encode constructors as small numbers, since on most Standard ML compilers
+these are held in a single word of storage.
 =SML
 fun âencode_fixityá (fix : FIXITY) : USER_DATUM = (
 	case fix of
@@ -208,449 +442,302 @@ fun âdecode_fixityá (ud : USER_DATUM) : FIXITY = (
 	|	_ => fail "decode_fixity" 20001 []
 );
 =TEX
-The following is the form in which the symbol table records are held
-in the dictionary of same.
 =SML
-type âSYM_TAB_INFOá = {
-	ty_info		: (int * ((TYPE * (string list))OPT))OPT,
-	const_info	: (TYPE * ((string * TYPE)list))OPT,
-	language	: string,
-	fixity		: FIXITY};
-=TEX
-\section{ASSIGNABLE VARIABLES}
-The symbol table records are held in the following variable.
-=SML
-val sym_tab_recs : SYM_TAB_INFO E_DICT ref = ref initial_e_dict;
-=TEX
-The lexical terminators are held in the following variable:
-=SML
-val terminators : string list list ref = ref[];
-=TEX
-The list of symbol table identifiers for the current theory
-is held in the following variable:
-=SML
-val cur_sym_tab_ids : string list ref = ref [];
-=TEX
-\section{ENCODING AND DECODING FUNCTIONS}
-In this section we give functions which encode the
-symbol table data in the type
-$USER\_DATUM$ used to store data in theories.
-We also give the corresponding decoding functions.
-Some care has been taken too make the encoding compact.
-We take some care to avoid redundancy in the encoding of the
-symbol table records. The main saving is in the $language$ fields (which
-are common to all identifiers in one theory), the $const\_info$ fields
-(for which the first component can be computed from the types in the
-second component, and which is redundant when the corresponding identifier
-is not an alias), and the $ty\_info$ fields (which are redundant except
-for type abbreviation names).
-
-It turns out that the fixity, $const\_info$ and $ty\_info$ fields
-correspond to distinct classes of $USER\_DATUM$ (namely, $UD\_Int$,
-$UD\_String$ and $UD\_Type$ respectively.
-
-=SML
-fun âencode_intá (i : int) : USER_DATUM = (
-	UD_Int(i, [])
+fun âencode_declá (dec : DECL) : USER_DATUM = (
+	case dec of
+		DeclTerminator t => UD_Int(0, [UD_String(t, [])])
+	|	UnDeclTerminator t => UD_Int(1, [UD_String(t, [])])
+	|	DeclFixity (s, fix)  => UD_Int(2, [UD_String(s, [encode_fixity fix])])
+	|	DeclAlias (a, (s, ty)) =>
+			UD_Int(3, [UD_String(a, [UD_String(s, [UD_Type(ty, [])])])])
+	|	UnDeclAlias (a, (s, ty)) =>
+			UD_Int(4, [UD_String(a, [UD_String(s, [UD_Type(ty, [])])])])
+	|	DeclTypeAbbrev (a, (args, ty)) =>
+			UD_Int(5, [UD_String(a, [UD_Type(ty, map ((switch(curry UD_String))[]) args)])])
+	|	UnDeclTypeAbbrev a => UD_Int(6, [UD_String(a, [])])
+	|	SetLanguage lang => UD_Int(7, [UD_String(lang, [])])
 );
 =TEX
 =SML
-fun âdecode_intá (ud : USER_DATUM) : int = (
+fun âdecode_declá (thy : string) (ud : USER_DATUM) : DECL = (
 	case ud of
-		UD_Int(i, []) => i
-	|	_ => fail "decode_int" 20001 []
+		UD_Int(0, [UD_String(t, [])]) => DeclTerminator t
+	|	UD_Int(1, [UD_String(t, [])]) => UnDeclTerminator t
+	|	UD_Int(2, [UD_String(s, [fix])]) => DeclFixity (s, decode_fixity fix)
+	|	UD_Int(3, [UD_String(a, [UD_String(s, [UD_Type(ty, [])])])]) => 
+				DeclAlias (a, (s, ty))
+	|	UD_Int(4, [UD_String(a, [UD_String(s, [UD_Type(ty, [])])])]) => 
+				UnDeclAlias (a, (s, ty))
+	|	UD_Int(5, [UD_String(a, [UD_Type(ty, args)])]) =>
+			DeclTypeAbbrev (a, (map
+				(fn UD_String(arg, []) => arg
+				| _ => fail "decode_decl" 20001 [fn()=> thy]) args, ty))
+	|	UD_Int(6, [UD_String(a, [])]) => UnDeclTypeAbbrev a
+	|	UD_Int(7, [UD_String(lang, [])]) => SetLanguage lang
+	|	_ => fail "decode_decl" 20001 [fn()=> thy]
+);
+=TEX
+Occasionally we need to extract from a theory the
+declarations relating to a particular name.
+=SML
+fun get_id_data (id : string) (thy : string) : USER_DATUM list = (
+		fetch_sym_tab_data thy
+	drop	(fn UD_Int(_, [UD_String(s, _)]) => s <> id | _ => true)
+);
+=TEX
+\subsection{Update Functions}
+As with the cache update functions, it is convenient to have a single update
+function parameterised by the type of declaration being made.
+As theory updates are never done without also updating the cache the theory
+update function calls the cache update function when its own work is complete.
+Again we have a section of local utilities to assist:
+=SML
+local
+=TEX
+=SML
+fun store_terminator (thy : string) (s : string) : unit = (
+	delete_sym_tab_datum (encode_decl(UnDeclTerminator s));
+	store_sym_tab_datum (encode_decl(DeclTerminator s))
 );
 =TEX
 =SML
-fun âencode_stringá (s : string) : USER_DATUM = (
-	UD_String(s, [])
-);
-=TEX
-=SML
-fun âdecode_stringá (ud : USER_DATUM) : string = (
-	case ud of
-		UD_String(s, []) => s
-	|	_ => fail "decode_string" 20001 []
-);
-=TEX
-=SML
-fun âencode_typeá (ty : TYPE) : USER_DATUM = (
-	UD_Type(ty, [])
-);
-=TEX
-=SML
-fun âdecode_typeá (ud : USER_DATUM) : TYPE = (
-	case ud of
-		UD_Type(ty, []) => ty
-	|	_ => fail "decode_type" 20001 []
-);
-=TEX
-We only need to encode the type abbreviation information part
-of a $ty\_info$.
-=SML
-fun âencode_ty_infoá ( (_, abinfo) : (int * ((TYPE * (string list))OPT)) )
-				: USER_DATUM = (
-	case abinfo of
-		Value (ty, args) => UD_Type(ty, map encode_string args)
-	|	Nil => error "encode_ty_info" 20001 []
-);
-=TEX
-=SML
-fun âdecode_ty_infoá  (ud : USER_DATUM) : (int * ((TYPE * (string list))OPT)) = (
-	case ud of
-		UD_Type(ty, uds) => (length uds, Value(ty, map decode_string uds))
-	|	_ => fail "decode_ty_info" 20001 []
-);
-=TEX
-When we encode a $const\_info$ we do not need to store the first
-component. Thus we encode it as a list of $USER\_DATUM$s.
-By dint of the way $encode\_const\_info$ is called in
-$encode\_sym\_tab\_info$ this list
-will never be empty.
-=SML
-fun âencode_const_infoá ( (_, alinfo) : (TYPE * ((string * TYPE)list)) )
-				: USER_DATUM list = (
-	 map (fn(s, ty) => UD_String(s, [UD_Type(ty, [])])) alinfo
-);
-=TEX
-When we decode a $const\_info$ we recompute the first component as the
-antiunifier of the types in the second component.
-=SML
-fun âdecode_const_infoá  (uds: USER_DATUM list) : TYPE * ((string * TYPE)list) = (
-	let	val pairs = (
-			 map 
-			(fn	UD_String(s, [UD_Type(ty, [])]) => (s, ty)
-				|	_ => fail "decode_const_info" 20001 [])
-			uds
+fun unstore_terminator (thy : string) (s : string) : unit = (
+	let	val uds = get_id_data s thy;
+		fun aux ud = (
+			case decode_decl thy ud of
+				DeclTerminator s' => s' = s
+			|	_ => false
 		);
-		fun aux [] = fail "decode_const_info" 20001 []
-		|   aux [(_, ty)] = ty
-		|   aux((_, ty) :: more) = Antiunify.antiunify(ty, aux more);
-	in	(aux pairs, pairs)
-	end
-);
-=TEX
-A name is a genuine alias if its list of real-names has length other than 1 or
-if the name in the singleton list is different from the alias.
-=SML
-fun is_alias_info (id : string) ( (_, alinfo) : (TYPE * ((string * TYPE)list)) ) : bool = (
-	case alinfo of
-		[(s, _)] => s <> id
-	|	_ => true
-);
-=TEX
-=SML
-fun	encode_sym_tab_info
-	(id : string, {ty_info, const_info, fixity, ...}:SYM_TAB_INFO)
-	: USER_DATUM = (
-	UD_String(id, 
-		(case ty_info of
-			Nil => []
-		|	Value (_, Nil) => []
-		|	Value tyinf => [encode_ty_info tyinf])
-	@	(case const_info of
-			Nil => []
-		|	Value coninf => (
-				if is_alias_info id coninf
-				then	[UD_Int(1, encode_const_info coninf)]
-				else []
-			))
-	@	(case fixity of
-			Nonfix => []
-		|	other =>[ UD_Int(2, [encode_fixity other])])
-	)
-);
-=TEX
-=SML
-fun get_type_info (id : string) (uds : USER_DATUM list) : (int * ((TYPE * (string list))OPT)) OPT = (
-	case uds of
-		[] => (	case get_type_arity id of
-				Value ar => Value(ar, Nil)
-			|	Nil => Nil
-	) |	(ud as UD_Type _) :: _ => Value(decode_ty_info ud)
-	|	_ :: more => get_type_info id more
-);
-=SML
-=TEX
-fun get_const_info (id : string) (uds : USER_DATUM list) : (TYPE * ((string * TYPE)list)) OPT = (
-	case uds drop (fn UD_String _ => false | _ => true) of
-		[] => (	case get_const_type id of
-				Value ty => Value(ty, [(id, ty)])
-			|	Nil => Nil
-	) |	_ => Value(decode_const_info uds)
-);
-=SML
-=TEX
-fun get_fixity (uds : USER_DATUM list) : FIXITY = (
-	case uds of
-		[] => Nonfix
-	|	(ud as UD_Int _) :: _ => decode_fixity ud
-	|	_ :: more => get_fixity more
-);
-=TEX
-=SML
-fun	decode_sym_tab_info (lang : string) (ud : USER_DATUM)
-			: (string * SYM_TAB_INFO) = (
-	case ud of
-		UD_String(id, uds) => (
-			id,
-			{	ty_info = get_type_info id uds,
-				const_info = get_const_info id uds,
-				language = lang,
-				fixity = get_fixity uds}
-	) |	_ => fail "decode_sym_tab_info" 20001 []
-);
-=TEX
-=SML
-fun	encode_sym_tab_infos
-	(idinfs : (string * SYM_TAB_INFO)list)
-	: USER_DATUM list = (
-	case idinfs of
-		[] => []
-	|	idinf :: more => ((case encode_sym_tab_info idinf of
-					UD_String(_, []) => []
-				|	interesting => [interesting])
-				@	encode_sym_tab_infos more)
-);
-=TEX
-=SML
-fun	decode_sym_tab_infos (lang : string)
-	(uds : USER_DATUM list) : (string * SYM_TAB_INFO)list = (
-	map (decode_sym_tab_info lang) uds
-);
-=TEX
-\subsection{ACCESSING THE USER DATA}
-The symbol table module uses up to three slot in the theory user data 
-under under keys as follows:
-
-\begin{centering}
-\begin{tabular}{|l|p{4in}|}\hline
-Key & Description \\ \hline
-SymTab.Recs & The symbol table records for this theory \\ \hline
-SymTab.Language & The language indicator for this theory (stored as a string). \\ \hline
-SymTab.Terminators &
-The terminators and explicit non-terminators
-for this theory (encoded as a pair of strings)
-\\ \hline
-\end{tabular}
-\end{centering}
-
-$sym\_tab\_info$ records are only stored in the
-theory database for identifiers which need them --- constants and type
-constructors for which the defaults apply need no entries.
-=SML
-val language_key = "SymTab.Language";
-val recs_key = "SymTab.Recs";
-val terminators_key = "SymTab.Terminators";
-=TEX
-\subsection{Language Operations}
-=SML
-fun get_language (thy : string) : string = (
-	case get_user_datum thy language_key of
-		Nil => "HOL"
-	|	Value (UD_String(lang, [])) => lang
-	|	_ => fail "get_language" 20003 [fn()=>thy]
-);
-=TEX
-=SML
-fun set_current_language (lang : string) : unit = (
-	 set_user_datum(language_key, UD_String(lang, []))
-);
-=TEX
-\subsection{Loading and Storing the Symbol Table Records}
-
-=TEX
-The $sym\_tab\_info$ records are held in the
-$load\_symbol\_table\_data$ loads symbol table entries for a given theory.
-Note that the theory in question must be in scope (so that the uses
-of $get\_const\_type$ and $get\_type\_arity$ above will have the desired
-effect.
-=SML
-fun store_sym_tab_recs (thy : string) : unit = (
-	let	val recs = (map
-			(fn s => (s, force_value(e_lookup s(!sym_tab_recs))))
-			(!cur_sym_tab_ids))
-			handle Fail _ => error "store_sym_tab_recs" 20004 [];
-		val ud = UD_Int(0, encode_sym_tab_infos recs);
-	in	set_user_datum(recs_key, ud)
+	in	if any uds aux
+		then	delete_sym_tab_datum (find uds aux)
+		else	store_sym_tab_datum (encode_decl(UnDeclTerminator s))
 	end
 );
 =TEX
 =SML
-fun load_sym_tab_recs (thy : string) : unit = (
-	let	val lang = get_language thy;
-		val recs = (
-			case get_user_datum thy recs_key of
-				Nil => []
-			|	Value (UD_Int(0, uds)) => decode_sym_tab_infos lang uds
-			|	_ => fail "load_sym_tab_recs" 20005 []);
-		val ids = (map (fst o dest_const)(get_constants thy) cup
-			map (fst o dest_type)(get_types thy)) diff (map fst recs);
-		val recs = recs cup decode_sym_tab_infos lang
-			(map (fn s => UD_String(s, [])) ids);
-		val dict = list_e_merge(!sym_tab_recs) recs;
-	in	sym_tab_recs := dict
+fun store_fixity (thy : string) (s : string, fix : FIXITY) : unit = (
+	let	val uds = get_id_data s thy;
+		fun aux ud = (
+			case decode_decl thy ud of
+				DeclFixity(s', _) => s' = s
+			|	_ => false
+		);
+	in	if any uds aux
+		then 	case fix of
+				Nonfix => delete_sym_tab_datum (find uds aux)
+			|	_ => (
+					delete_sym_tab_datum (find uds aux);
+					store_sym_tab_datum (encode_decl(DeclFixity (s, fix)))
+			)
+		else	store_sym_tab_datum (encode_decl(DeclFixity (s, fix)))
 	end
 );
 =TEX
-\subsubsection{Terminator Operations}
 =SML
-fun get_terminators (() : unit) : string list list = (
-	!terminators
+fun store_alias (thy : string) (a : string, (s:string, ty:TYPE)) : unit = (
+	store_sym_tab_datum (encode_decl(DeclAlias (a, (s, ty))))
 );
+=TEX
+=SML
+fun unstore_alias (thy : string) (a : string, (s:string, ty:TYPE)) : unit = (
+	let	val uds = get_id_data a thy;
+		fun aux ud = (
+			case decode_decl thy ud of
+				DeclAlias(a', (s', ty')) => a = a' andalso s = s'
+					andalso is_same_type ty ty' 
+			|	_ => false
+		);
+	in	if any uds aux
+		then	delete_sym_tab_datum (find uds aux)
+		else	store_sym_tab_datum (encode_decl(DeclAlias (a, (s, ty))))
+	end
+);
+=TEX
+=SML
+fun store_type_abbrev (thy : string) (a : string, (args:string list, ty:TYPE)) : unit = (
+	store_sym_tab_datum (encode_decl(DeclTypeAbbrev (a, (args, ty))))
+);
+=TEX
+=SML
+fun unstore_type_abbrev (thy : string) (a : string) : unit = (
+	let	val uds = get_id_data a thy;
+		fun aux ud = (
+			case decode_decl thy ud of
+				DeclTypeAbbrev(a', _) => a = a'
+			|	_ => false
+		);
+	in	if any uds aux
+		then	delete_sym_tab_datum (find uds aux)
+		else	store_sym_tab_datum (encode_decl(UnDeclTypeAbbrev a))
+	end
+);
+=TEX
+=SML
+fun store_language (thy : string) (lang : string) : unit = (
+	store_sym_tab_datum (encode_decl(SetLanguage lang))
+);
+=TEX
+=SML
+in
+fun âstore_declá (area : string) (dec : DECL) : unit = (
+	let	val thy = get_current_theory_name();
+	in
+		case get_current_theory_status() of
+			TSNormal => (
+				(case dec of
+					DeclTerminator t => store_terminator thy t
+				|	UnDeclTerminator t => unstore_terminator thy t
+				|	DeclFixity sfix  => store_fixity thy sfix
+				|	DeclAlias asty => store_alias thy asty
+				|	UnDeclAlias asty => unstore_alias thy asty
+				|	DeclTypeAbbrev aargsty => store_type_abbrev thy aargsty
+				|	UnDeclTypeAbbrev  a => unstore_type_abbrev thy a
+				|	SetLanguage lang => store_language thy lang);
+				cache_decl dec
+		) |	_ => fail area 20002 [fn () => thy]
+	end
+);
+end; (* of local ... in ... end *)
 =TEX
 =TEX
 \section{ACCESS FUNCTIONS}
 \subsection{Terminators}
-% Errors in this subsection start with 201
-=DOC
-	val âget_terminatorsá : unit -> string list list;
-=DESCRIBE
-$get\_terminators()$ returns the list of identifiers which have been
-declared as terminators in the current context using $new\_terminator$. The 
-names are returned in exploded form, i.e. as a list of strings each containing
-one character.
-=ENDDOC
-=DOC
-	val âdeclare_terminatorá : string -> unit
-=DESCRIBE
-$declare\_terminator\,s$ checks that $s$ is a valid terminator, and if so declares
-that $s$ is to be used as a lexical terminator in the current context.
-=FAILURE
-20101	The identifier ?0 is not a valid terminator. Terminators must start
-	with a symbolic character, must not contain spaces,
-	and must not end with underscore, %up% or %down%
-=ENDDOC
-=DOC
-	val âundeclare_terminatorá : string -> unit
-=DESCRIBE
-$undeclare\_terminator\,s$ removes $s$
-from the list of identifiers which act as terminators for parsing purposes
-in the current context.
-=FAILURE
-20102	?0 is not in the list of terminators in the current context
-=ENDDOC
+=SML
+fun âget_terminatorsá (():unit) : string list list =(
+	!terminators
+);
+=TEX
+The following function checks that a string obeys the rules for terminators
+identified in \cite{DS/FMU/IED/DEF001}. 
+=SML
+fun is_ok_terminator (s : string) = (
+	let	fun strip_macro (s :: more) = (
+			if is_macro s
+			then more
+			else strip_macro more
+		) | strip_macro [] = [];
+
+		fun ok_rest (s :: more) = (
+			(is_alnum s orelse is_symbolic s orelse is_copula s)
+			andalso ok_rest more
+		) | ok_rest [] = true;
+	in	case explode s of
+			s :: more => (
+				if is_macro s
+				then ok_rest(strip_macro more)
+				else is_symbolic s andalso ok_rest more
+		) |	[] => false
+	end
+);
+=SML
+fun âdeclare_terminatorá (s :  string) : unit = (
+	if not(is_ok_terminator s)
+	then fail "declare_terminator" 20101 [fn()=>s]
+	else if explode s mem (!terminators)
+	then fail "declare_terminator" 20102 [fn()=>s]
+	else store_decl "declare_terminator" (DeclTerminator s)
+);
+=TEX
+=SML
+fun âundeclare_terminatorá (s : string) : unit = (
+	if not(explode s mem !terminators)
+	then fail "undeclare_terminator" 20102 [fn()=>s]
+	else store_decl "undeclare_terminator" (UnDeclTerminator s)
+);
 \subsection{Fixity}
-% Errors in this subsection should start with 202
-Note that there are not undeclare operations in this section. A fixity
-declaration may be suppressed by a nonfix declaration. 
-=DOC
-	val âdeclare_binderá : string -> unit;
-=DESCRIBE
-$declare\_binder\,s$ declares $s$ to have the syntactic status of a binder
-in the current context.
-No checks are made on the form of $s$
-=ENDDOC
+=SML
+fun âget_fixityá (s : string) : FIXITY = (
+	case e_lookup s (!fixity_cache) of
+		Value fix => fix
+	| 	_ => Nonfix
+);
+=SML
+fun âdeclare_binderá (s : string) = (
+	store_decl "declare_binder" (DeclFixity(s, Binder))
+);
+=TEX
+=SML
+fun âdeclare_infixá (prec : int, s : string) : unit = (
+	store_decl "declare_infix" (DeclFixity(s, Infix prec))
+);
+=TEX
+=SML
+fun âdeclare_prefixá (prec : int, s : string) : unit = (
+	store_decl "declare_prefix" (DeclFixity(s, Prefix prec))
+);
+=TEX
+=SML
+fun âdeclare_postfixá (prec : int, s : string) : unit = (
+	store_decl "declare_postfix" (DeclFixity(s, Postfix prec))
+);
 
-=DOC
-	val âdeclare_infixá : string -> unit;
-=DESCRIBE
-$declare\_infix\,(s, p)$ declares $s$ to have the syntactic status of an
-infix operator with precedence $p$
-in the current context.
-No checks are made on the form of $s$
-=ENDDOC
-=ENDDOC
-
-=DOC
-	val âdeclare_prefixá : string -> unit;
-=DESCRIBE
-$declare\_prefix\,(s, p)$ declares $s$ to have the syntactic status of a
-prefix operator with precedence $p$ in the current context.
-No checks are made on the form of $s$
-=ENDDOC
-
-=DOC
-	val âdeclare_postfixá : string -> unit;
-=DESCRIBE
-$declare\_postfix\,(s, p)$ declares $s$ to have the syntactic status of a
-postfix operator with precedence $p$ in the current context.
-No checks are made on the form of $s$
-=ENDDOC
-
-=DOC
-	val âdeclare_nonfixá : string -> unit;
-=DESCRIBE
-$declare\_nonfix\,s$ declares $s$ to have no special
-syntactic status in the current context.
-No checks are made on the form of $s$
-=ENDDOC
-In line with the principle that everything should be undoable,
-$declare\_nonfix$ actually deletes the symbol table record for the identifier
-if the symbol table record for it
-has $ty\_info$ and $const\_info$ field $Nil$ and language field
-the same as the language of the current theory.
-
-=DOC
-	val âget_fixityá : string -> FIXITY;
-=DESCRIBE
-$get\_fixity\,s$ returns the syntactic status of $s$ in the current context.
-=ENDDOC
+=SML
+fun âdeclare_nonfixá (s : string) : unit = (
+	case get_fixity s of
+		Nonfix => ()
+	|	_ => store_decl "declare_nonfix" (DeclFixity(s, Nonfix))
+);
 \subsection{Constants and Aliases}
-% Errors in this subsection start with 203
-$get\_const\_info\,s$ is the interface which the type inferrer will use to
-give the type associated with a name in a parsed term. The type it should use
-is the first element of the pair.
+=SML
+fun âget_const_infoá (c : string) : (TYPE * ((string * TYPE)list)) OPT = (
+	(e_lookup c (!const_info_cache))
+	handle Fail _ => (
+		case get_constant_type c of
+			Value ty => Value(ty, [(c, ty)])
+		|	Nil => Nil
+	)
+);
+=SML
+fun âdeclare_aliasá (s : string, tm : TERM) : unit = (
+	if not (is_const tm)
+	then fail "declare_alias" 20301 []
+	else	let	val (c, ty) = dest_const tm
+		in	case get_const_info s of
+				Nil => store_decl"declare_alias"(DeclAlias(s, (c, ty)))
+			|	Value (_, stys) => (
+					if any stys (fn (c', ty') => c = c' andalso is_same_type ty ty')
+					then fail "declare_alias" 20302 [fn()=>s, fn()=>c]
+					else store_decl"declare_alias"(DeclAlias(s, (c, ty)))
+			)
+		end
+);
+=TEX
+=SML
+fun âundeclare_aliasá (s : string, tm : TERM) : unit = (
+	if not (is_const tm)
+	then fail "undeclare_alias" 20301 []
+	else	let	val (c, ty) = dest_const tm
+		in	case get_const_info s of
+				Nil => store_decl"undeclare_alias"(DeclAlias(s, (c, ty)))
+			|	Value (_, stys) => (
+					if not(any stys (fn (c', ty') => c = c' andalso is_same_type ty ty'))
+					then fail "undeclare_alias" 20303 [fn()=>s, fn()=>c]
+					else store_decl"undeclare_alias"(UnDeclAlias(s, (c, ty)))
+			)
+		end
+);
 =DOC
-	val âget_const_infoá : string -> (TYPE * (string * TYPE list)) OPT;
-=DESCRIBE
-$get\_const\_info\,s$ returns the information associated with
-the name $s$ used as a constant name, if any.
-See DS/FMU/IED/DTD020 for more information.
-=ENDDOC
-$get\_const\_type\,s$ is for use, e.g. in the theory lister, to find the type
-associated with an actual constant (not an alias).
-=DOC
-	val âget_const_typeá : string -> TYPE OPT;
-=DESCRIBE
-$get\_const\_type\,s$ returns an instance of the most general type associated with
-the constant $s$ , if any.
-See DS/FMU/IED/DTD020 for more information.
-=ENDDOC
-The format of the alias information is described as part of
-the description of $ST\_INFO$ in section \ref{DATATYPES} above
-=DOC
-	val âdeclare_aliasá : (string * TERM) -> unit;
-=DESCRIBE
-$declare\_alias\,(s, c)$ declares $s$ as an alias for the constant $c$.
-=FAILURE
-20301	The term ?0 is not a constant.
-=ENDDOC
-=DOC
-	val âundeclare_aliasá : (string * TERM) -> unit;
-=DESCRIBE
-$undeclare\_alias\,(s, c)$ reverses the effect
-of a declaration of $s$ as an alias for the constant $c$ in the current context.
-=FAILURE
-20302	The term ?0 is not a constant.
-20303	The identifier ?0 is not declared as an alias for ?1
-=ENDDOC
-=DOC
-	val âresolve_aliasá : (string * TYPE) -> TERM;
-=DESCRIBE
-$resolve\_alias(s, \tau)$ returns a term of the form $mk\_const(c, \tau)$ where
-$c$ is the ``best' resolution for the identifier $s$. This best resolution
-will be $s$ if $s$ has been introduced as a constant of type $\tau'$
-where $\tau'$ is an instance of $\tau$.
-If $s$ is an alias then $c$ is taken from the alias declaration for $s$
-in which the aliased constant has a type $\tau'$ which can be instantiated
-to $\tau$. If more than one such declaration is applicable the most recent
-one is used. 
-=FAILURE
-20304	The identifier ?0 is not a valid constant name (or alias) at the type ?1
-=ENDDOC
+fun âresolve_aliasá (s : string, ty : TYPE) = (
+	case get_const_info s of
+		Nil => fail "resolve_alias" 20304 [fn()=>s]
+	|	Value (_, stys) => (
+			(mk_const(fst(find stys (fn(s', ty') => is_type_instance ty ty')), ty))
+			handle Fail _ => fail "resolve_alias" 20304 [fn()=>s]
+	)
+);
 
 \subsection{Types and Type Abbreviations}
-% Errors in this subsection start with 204
-=DOC
-	val âget_type_infoá : string -> (int * (string * TYPE list) OPT) OPT;
-=DESCRIBE
-$get\_type\_info\,s$ returns the type information, if any, associated
-with $s$.
-See DS/FMU/IED/DTD020 for more information.
-=ENDDOC
-The format of the alias information is described as part of
-the description of $ST\_INFO$ ins section \ref{DATATYPES} above
+=SML
+fun âget_type_infoá (t : string) : (int * (string * TYPE list) OPT) OPT = (
+	(e_lookup t (!ty_info_cache))
+	handle Fail _ => (
+		case get_type_arity c of
+			Value a => Value(a, Nil)
+		|	Nil => Nil
+	)
+);
+=TEX
+!!! GOT HERE
 =DOC
 	val âdeclare_type_abbrevá : (string * TYPE list * TYPE) -> FIXITY;
 =DESCRIBE
@@ -714,14 +801,8 @@ associated with $s$ $get\_language\,s$ the language indicator associated
 with the current theory is returned
 =ENDDOC
 
-\subsection{General Access Functions}
+\subsection{Miscellaneous Functions}
 % Errors in this subsection start with 206
-=DOC
-	val âget_sym_tab_infoá : string -> string -> SYM_TAB_INFO OPT;
-=DESCRIBE
-$get\_sym\_tab\_info\,thy\,id$ returns the symbol table information associated
-with $id$ in theory $thy$.
-=ENDDOC
 =DOC
 	val âget_sym_tab_idsá : string -> string list;
 =DESCRIBE
@@ -730,44 +811,75 @@ table record in the theory $thy$.
 =ENDDOC
 
 =SML
+fun restore_defaults (():unit) : unit = (
+	warn "restore_defaults" 20601 [get_current_theory_name];
+	set_user_datum(ud_key, UD_Int(0, []))
+);
+=SML
 end; (* of signature SymbolTable *)
 =TEX
-\section{TEST POLICY}
-The symbol table functions are to be tested according to the
-general criteria laid down in the quality plan, \cite{DS/FMU/IED/PLN008}.
 \small
 \twocolumn[\section{INDEX}]
 \printindex
 
 \end{document}
 
-=TEX
-$is\_format\_char\,s$ returns true iff. the first character of $s$ is
-a space, tab, carriage return or other formatting character:
-=SML
-fun is_format_char ("" : string) : bool = false
-|   is_format_char (ch : string) : bool = ord ch  <= ord " ";
-=TEX
-$split_string\,sep\,s$ splits string into a list of strings treating
-characters for which $sep$ returns true as separator characters.
-Runs of more than one separator are treated like a single separator.
-=SML
-fun split_string (sep : string -> bool) (s : string) = (
-	let	fun aux words "" (ch :: more) = (
-			if sep ch
-			then aux words "" more
-			else aux words ch more
-		) | aux words word (ch :: more) = (
-			if sep ch
-			then aux (words @ [word]) "" more
-			else aux words (word ^ ch) more
-		) | aux words "" [] = (words
-		) | aux words word [] = words @ [word];
-	in	aux [] "" (explode s)
-	end
+cache_decl (DeclTerminator "„1");
+cache_decl (DeclTerminator "ƒ1");
+cache_decl (UnDeclTerminator "„1");
+
+cache_decl (DeclFixity ("+", Infix 20));
+cache_decl (DeclFixity ("-", Infix 20));
+cache_decl (DeclFixity ("-", Prefix 30));
+cache_decl (DeclFixity ("-", Nonfix));
+cache_decl (DeclFixity ("+", Nonfix));
+
+cache_decl (DeclAlias("‚", ("=", mk_fun(BOOL, mk_fun(BOOL, BOOL)))));
+cache_decl (DeclAlias("‚", ("xyz", mk_fun(mk_vartype"'a", mk_vartype"'b"))));
+cache_decl (DeclAlias("‚", ("abc", mk_fun(BOOL, mk_vartype"'b"))));
+
+cache_decl (UnDeclAlias("‚", ("xyz", mk_fun(mk_vartype"'a", mk_vartype"'b"))));
+cache_decl (UnDeclAlias("‚", ("abc", mk_fun(BOOL, mk_vartype"'b"))));
+cache_decl (UnDeclAlias("‚", ("=", mk_fun(BOOL, mk_fun(BOOL, BOOL)))));
+
+cache_decl (DeclTypeAbbrev("auto", (["'a"], mk_fun(mk_vartype"'a", mk_vartype"'a"))));
+cache_decl (DeclTypeAbbrev("revfun", (["'a", "'b"], mk_fun(mk_vartype"'b", mk_vartype"'a"))));
+cache_decl (UnDeclTypeAbbrev "auto");
+cache_decl (UnDeclTypeAbbrev "revfun");
+
+cache_decl (SetLanguage "Z");
+cache_decl (SetLanguage "HOL");
+
+fun sh () = (
+	map (decode_decl "-")(fetch_sym_tab_data "-")
 );
-=TEX
-$words\,s$ splits $s$ into a list of  strings treating formatting characters
-as separators.
-=SML
-val words : string -> string list = split_string is_format_char;
+val s = sh o store_decl "-";
+
+s (DeclTerminator "„1");
+s (DeclTerminator "ƒ1");
+s (UnDeclTerminator "„1");
+s (UnDeclTerminator "ƒ1");
+
+s (DeclFixity ("+", Infix 20));
+s (DeclFixity ("-", Infix 20));
+s (DeclFixity ("-", Prefix 30));
+s (DeclFixity ("-", Nonfix));
+s (DeclFixity ("+", Nonfix));
+
+s (DeclAlias("‚", ("=", mk_fun(BOOL, mk_fun(BOOL, BOOL)))));
+s (DeclAlias("‚", ("xyz", mk_fun(mk_vartype"'a", mk_vartype"'b"))));
+s (DeclAlias("‚", ("abc", mk_fun(BOOL, mk_vartype"'b"))));
+
+s (UnDeclAlias("‚", ("xyz", mk_fun(mk_vartype"'a", mk_vartype"'b"))));
+s (UnDeclAlias("‚", ("abc", mk_fun(BOOL, mk_vartype"'b"))));
+s (UnDeclAlias("‚", ("=", mk_fun(BOOL, mk_fun(BOOL, BOOL)))));
+
+s (DeclTypeAbbrev("auto", (["'a"], mk_fun(mk_vartype"'a", mk_vartype"'a"))));
+s (DeclTypeAbbrev("revfun", (["'a", "'b"], mk_fun(mk_vartype"'b", mk_vartype"'a"))));
+s (UnDeclTypeAbbrev "auto");
+s (UnDeclTypeAbbrev "revfun");
+
+s (SetLanguage "Z");
+s (SetLanguage "HOL");
+
+
