@@ -1,4 +1,4 @@
-% imp508.doc   %Z% $Date: 2002/07/15 15:16:58 $ $Revision: 1.105 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2002/08/01 10:04:47 $ $Revision: 1.106 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.105 $%
+\def\SCCSversion{$Revision: 1.106 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/07/15 15:16:58 $%
+\TPPdate{\FormatDate{$Date: 2002/08/01 10:04:47 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -123,6 +123,7 @@ are now automatically used to qualify the initial expression.
 \item[Issues 1.103, 1.104] R0054: reworked treatment of use clauses.
 \item[Issue 1.105] moved {\it init\_var} in from IMP505.
 \item[Issue 1.106] Fixed bug in handling of environment when adjusting qualified expressions.
+\item[Issue 1.107] R0051: default parameters.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1876,7 +1877,7 @@ and Ûexp_fun_callÝ (env : CN_ENV) ({fun_name, args} : EXP FUN_CALL) : Z_EXP = (
 	case args of
 		[] => trans_fun_name env fun_name
 	|	_ => (
-		let	val args_tmarks = (combine (map (trans_exp env) args) (map snd(
+		let	val args_tmarks = (combine (map (trans_exp env) args) (map (fst o snd)(
 				case env fun_name of
 					Value(_, EIEnvFunction (_, psts, _)) => psts
 				| 	_ => fail "exp_fun_call" 508081 [fn _ => fun_name])))
@@ -2073,40 +2074,51 @@ fun Ûresolve_opsymÝ
 \section{ADJUSTMENT OF ABSTRACT SYNTAX FOR EXPRESSIONS}
 
 =SML
-fun Ûnamed_assocs_to_expsÝ (names : ID list)
+fun Ûnamed_assocs_to_expsÝ (names_defs : (ID * Z_EXP OPT) list)
 		(ns : (AGG_CHOICE,EXP) NAMED_ASSOC list) : EXP list = (
-let	val lns = length ns;
-	val table =	if lns = length names
-			then	combine names (interval 0 (length ns - 1))
-			else	fail "named_assocs_to_exps" 508043 [];
-	fun aux1 ((ACAggChoiceSingle exp)::rest) = (
-		(	lassoc3 table (name_to_tmark exp)
-				handle _ => fail "named_assocs_to_exps" 508044
-					[fn()=>name_to_tmark exp]
-		)::aux1 rest
-	) | aux1 ((ACAggChoiceRange _)::_) = (
+let	fun name_act_of_choice ({choice = [ACAggChoiceSingle (EId n)], comp = e}) = (
+		(n, e)
+	) | name_act_of_choice _ = (
 		fail "named_assocs_to_exps" 508045 []
-	) | aux1 _ = [];
-	fun aux2 ({choice=cs,comp}::rest) = (
-	let	val chmap = map (fn choice => (choice, comp))(aux1 cs);
-	in
-		chmap::(aux2 rest)
-	end) | aux2 _ = [];
-	val s = flat (aux2 ns);
-	fun order (a:int,_) (b,_) = a-b;
-	val nssorted = Sort.sort order s;
-	fun aux3 count ((i, exp)::rest) = (
-		if count=i
-		then
-			exp::aux3 (count+1) rest
-		else
-			fail "named_assocs_to_exps" 508043 []
-	) | aux3 _ _ = [];
-in
-	aux3 0 nssorted
+	);
+	val names_acts = map name_act_of_choice ns;
+	fun do1_formal (name, def) = (
+		case s_lookup name names_acts of
+			Value e => e
+		|	Nil => (
+			case def of
+				Value e => EAuxiliaryExp(ZTmQuotation(e, Nil))
+			|	Nil =>  fail "named_assocs_to_exps" 508044 [fn _ => name]
+		)
+	);
+	fun check_acts ((name, _)::rest) = (
+		if	any rest (fn (n, _) => n = name)
+		then	fail "named_assocs_to_exps" 508043 [fn _ => name]
+		else if	all names_defs (fn (n, _) => n <> name)
+		then	fail "named_assocs_to_exps" 508063 [fn _ => name]
+		else 	check_acts rest
+	) | check_acts [] = ();
+in	check_acts names_acts;
+	map do1_formal names_defs
 end);
 =TEX
 
+=SML
+fun Ûpositional_assocs_to_expsÝ (names_defs : (ID * Z_EXP OPT) list)
+		(acts :  EXP list) : EXP list = (
+let	val num_formals = length names_defs;
+	val num_actuals = length acts;
+in	if	num_actuals > num_formals
+	then	fail "positional_assocs_to_exps" 508064 []
+	else if	num_actuals = num_formals
+	then	acts
+	else	let	fun mk_exp t = EAuxiliaryExp(ZTmQuotation (t, Nil));
+			val defs = map (mk_exp o force_value o snd) (names_defs from num_actuals)
+				handle Fail _ => fail "positional_assocs_to_exps" 508069 [];
+		in	acts @ defs
+		end
+end);
+=TEX
 =SML
 val Ûinformal_functionÝ : Z_ID = "Informal_Function";
 fun Ûadjust_idÝ (env : CN_ENV) (id : ID)  = (
@@ -2245,13 +2257,16 @@ in
 =TEX
 Is it a function call?
 =SML
-	(Value (ty, EIEnvFunction _), EArrayAggPos{comps,...}) => (
-		if	(fst(dest_ctype ty) <> informal_function)
-		then	EFunCall{fun_name=prename, args=map (adjust_exp env) comps}
+	(Value (ty, EIEnvFunction (_, names_tmarks_defs, _)), EArrayAggPos{comps,...}) => (
+	let	val names_defs = map (fn (n, (_, eo)) => (n, eo)) names_tmarks_defs; 
+		val args = positional_assocs_to_exps names_defs comps;
+	in	if	(fst(dest_ctype ty) <> informal_function)
+		then	EFunCall{fun_name=prename, args=map (adjust_exp env)  args}
 		else	fail "adjust_id" 508049 [fn()=>prename]
-	) |(Value (ty, EIEnvFunction (_, names_tmarks, _)), EArrayAggNamed{named_assocs, ...}) => (
-	let	val names = map fst names_tmarks;
-		val args = named_assocs_to_exps names named_assocs;
+	end
+	) |(Value (ty, EIEnvFunction (_, names_tmarks_defs, _)), EArrayAggNamed{named_assocs, ...}) => (
+	let	val names_defs = map (fn (n, (_, eo)) => (n, eo)) names_tmarks_defs;
+		val args = named_assocs_to_exps names_defs named_assocs;
 	in	if	(fst(dest_ctype ty) <> informal_function)
 		then	EFunCall
 			{fun_name=prename, args=map (adjust_exp env) args}
@@ -3502,7 +3517,8 @@ fun Ûresolve_constraintÝ (env : CN_ENV) (tmark : TMARK)
 			) |	EArrayAggNamed{named_assocs, ...} => (
 				let	val names = comp_names to (ndiscs-1);
 					val discs = named_assocs_to_exps
-							names named_assocs;
+							(map (fn n => (n, Nil)) names)
+							 named_assocs;
 				in	SIDiscriminantCon discs
 				end
 			) |	_ => c
