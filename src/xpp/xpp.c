@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.11 2003/05/08 14:57:53 rda Exp rda $
+ * $Id: xpp.c,v 2.12 2003/05/20 15:16:13 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -186,15 +186,12 @@ Boolean check_option(char *option,  char*keyword)
 	&&	!strncmp(option + 1, keyword, l - 1);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Check whether the -command or -file command-line option is there
- * And set up static data accordingly.
+ * check_sep: check for command line options, and set up some of the static data accordingly.
  * Returns number of argv items to skip
- * Error message and exit if no command line at all.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 int check_sep(int argc, char **argv)
 {
 	int i;
-	Boolean have_file_name = False;
 	synchronous = False;
 	file_name = NULL;
 	for (i = 1; i < argc; i += 1) {
@@ -202,30 +199,19 @@ int check_sep(int argc, char **argv)
 			synchronous = True;
 		} else if (check_option(argv[i], "readonly")) {
 			global_options.read_only = True;
-		} else if (!have_file_name && check_option(argv[i], "filename")) {
+		} else if (check_option(argv[i], "filename")) {
 			if(i + 1 < argc) {
 				file_name = argv[i+1];
-				have_file_name = True;
-				i += i + 2 < argc && check_option(argv[i+2], "command") ? 3 : 2;
+				i += (i + 2 < argc && check_option(argv[i+2], "command")) ? 3 : 2;
 				break;
 			} else {
 				file_name = "";
-				have_file_name = True;
 			}
 		} else if (check_option(argv[i], "command")) {
-			if(i + 1 < argc) {
-				i += 1;
-				break;
-			} else {
-				usage();
-				exit(1);
-			}
-		} else if (!have_file_name) {
-			file_name = argv[i];
-			have_file_name = True;
 			i += 1;
 			break;
 		} else {
+			file_name = argv[i];
 			i += 1;
 			break;
 		}
@@ -247,7 +233,7 @@ static char *get_command_line(int argc, char **argv)
 
 	skip = check_sep(argc, argv);
 
-	siz = 0;
+	siz = 1;
 
 	for(i = skip; i < argc; ++i) {
 		siz += strlen(argv[i]) + 1;
