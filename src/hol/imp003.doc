@@ -53,6 +53,8 @@ First drafts.
 Changes in reaction to deskcheck ID0090.
 \item [Issue 2.1 (11th October 1991)]
 Approved version of issue 1.21.
+\item [Issue 2.2 (11th October 1991)]
+Reimplemented some functions by ``failure''.
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
@@ -342,16 +344,31 @@ end; (* of local defining TYPE *)
 \subsection{Functions derived from Abstract Data Type $TYPE$ Part}
 Some of these functions could be improved by being placed within
 the abstract data type.
+
+The following  will fail if it causes no type instantiation.
 =SML
-fun âicl'inst_typeá (f : (TYPE * string) list) (ty : TYPE) : TYPE = (
+fun âicl'inst_typeá ([] : (TYPE * string) list) (mty : TYPE) : TYPE = fail "icl'inst_type" 0 []
+| âicl'inst_typeá (f : (TYPE * string) list) (mty : TYPE) : TYPE = (
+let	fun aux ty = (
 	if is_vartype ty
-	then rassoc4 f ty (dest_vartype ty)
+	then rassoc3 f (dest_vartype ty)
 	else (
-		let	val (s,tyl) = dest_ctype ty
+		let	val (s,tyl) = dest_ctype ty;
+			fun aux1 [] = fail "aux1" 0 []
+			| aux1 (a :: x) = (let	val a' = aux a
+			in
+				a' :: map (fn t => aux t handle (Fail _) => t) x
+			end
+			handle (Fail _) =>
+			a :: aux1 x);
 		in
-			mk_ctype(s, map (icl'inst_type f) tyl)
+			mk_ctype(s, aux1 tyl)
 		end)
-);
+	);
+
+in
+	aux mty
+end);
 =TEX
 =SML
 fun âinst_typeá (f : (TYPE * TYPE) list) (ty : TYPE) : TYPE = (
@@ -359,7 +376,9 @@ fun âinst_typeá (f : (TYPE * TYPE) list) (ty : TYPE) : TYPE = (
 		(map (fn (ty,tyv) => (ty,dest_vartype tyv)) f)
 		ty
 	handle complaint =>
-	pass_on complaint "dest_vartype" "inst_type"
+	if area_of complaint = "dest_vartype"
+	then pass_on complaint "dest_vartype" "inst_type"
+	else ty
 );
 =TEX
 This function extracts the type constructors contained
@@ -411,16 +430,23 @@ fun âtype_mapá (tyfun :TYPE -> TYPE) (ty : TYPE) : TYPE = (
 let
 	fun aux (ty : TYPE) = (
 		tyfun ty
-			handle (Fail _) =>
-			if is_vartype ty
-			then ty
-			else (let val (tc,tyl) = dest_ctype ty
+		handle (Fail _) =>
+		if is_vartype ty
+		then fail "type_map" 0 []
+		else (
+		let	val (s,tyl) = dest_ctype ty;
+			fun aux1 [] = fail "aux1" 0 []
+			| aux1 (a :: x) = (let	val a' = aux a
 			in
-			mk_ctype(tc,map aux tyl)
-			end)
-	);
+				a' :: map (fn t => aux t handle (Fail _) => t) x
+			end
+			handle (Fail _) =>
+			a :: aux1 x);
+		in
+			mk_ctype(s, aux1 tyl)
+		end));
 in
-		aux ty
+		(aux ty handle (Fail _) => ty)
 end);
 =TEX
 \subsection{Functions derived from Abstract Data Type $TERM$ Part}
@@ -852,12 +878,21 @@ end; (* of local *)
 =IGN
 $new\_frees$ in the below, determines the free variables in the abstraction, changes those found in $R$ to their substitution, finds the frees in the results, and flattens these to gain a single list of resulting frees.
 =SML
-fun âicl'substá (R : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = (
+fun âicl'substá ([] : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = tm
+| icl'subst (R : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = (
 let
-	fun aux R (App(f, a)) = mk_app(aux R (dest_simple_term f), 
-		aux R (dest_simple_term a))
-	| aux R (Const c) = mk_const c
-	| aux R (Var v) = rassoc2 R mk_var v
+	fun aux R (App(f, a)) = (
+		let	val f' = aux R (dest_simple_term f);
+		in
+			mk_app(f',
+				(aux R (dest_simple_term a)
+				handle (Fail _) =>
+				a))
+		end
+		handle (Fail _) =>
+		mk_app(f, aux R (dest_simple_term a)))
+	| aux R (Const c) = fail "icl'subst" 0 []
+	| aux R (Var v) = rassoc3 R v
 	| aux R (Simple(vty, b)) = (
 		let	val (s, ty) = dest_var vty;
 			val new_frees =
@@ -865,19 +900,32 @@ let
 				(icl'frees o rassoc2 R mk_var)
 				(icl'frees b less (s, ty)));
 			val s' = string_variant (map fst new_frees) s;
-			val vty' = mk_var (s', ty);
-			val RR = (vty', (s, ty)) :: R;
-			val b' = aux RR (dest_simple_term b);
-		in mk_simple_(vty', b')
+		in 
+			if s' = s
+			then (let val RR = ((vty, (s, ty)) :: R);
+				val b' = aux RR (dest_simple_term b);
+			in
+				mk_simple_(vty, b')
+			end)
+			else(let val vty' = mk_var (s', ty);
+				val RR = ((vty', (s, ty)) :: R);
+			in
+			(let	val b' = aux RR (dest_simple_term b);
+			in mk_simple_(vty', b')
+			end)
+			handle (Fail _) =>
+			mk_simple_(vty', b) (* using this would be very odd *)
+			end)
 		end
 	);
 in
-		(map (fn (t, (vnm, ty)) => 
-			if type_of t = ty
-			then ()
-			else term_fail "icl'subst" 3012 [t,mk_var(vnm,ty)])
-			R;
-		aux R (dest_simple_term tm))
+	(map (fn (t, (vnm, ty)) => 
+		if type_of t = ty
+		then ()
+		else term_fail "icl'subst" 3012 [t,mk_var(vnm,ty)])
+		R;
+	(aux R (dest_simple_term tm)
+	 handle (Fail_) => tm))
 end);
 =TEX
 \subsubsection{Renaming}
@@ -896,23 +944,49 @@ local
 		(vars : string list)
 		(varmap : ((string * TYPE) * (string * TYPE)) list)
 		: TERM = (
+		let	val fi = inst_loc1 tysubs (dest_simple_term f) vars varmap;
+		in
 			mk_app(inst_loc1 tysubs (dest_simple_term f) vars varmap,
-				inst_loc1 tysubs (dest_simple_term a) vars varmap)
+				(inst_loc1 tysubs (dest_simple_term a) vars varmap
+				handle (Fail _) => a))
+		end
+		handle (Fail _) =>
+		let	val ai = inst_loc1 tysubs (dest_simple_term a) vars varmap;
+		in
+			mk_app(f,ai)
+		end
 	) | inst_loc1 tysubs (Const(s,ty)) vars varmap = (
 		mk_const(s, icl'inst_type tysubs ty)
 	) | inst_loc1 tysubs (Var(s,ty)) vars varmap = (
 		mk_var(lassoc3 varmap (s,ty))
 	) | inst_loc1 tysubs (Simple(v, b)) vars varmap = (
 		let	val sty as (s, ty) = dest_var v;
-			val ty' = icl'inst_type tysubs ty;
 			val s' = string_variant vars s;
-			val sty' = (s', ty');
-		in mk_simple_(mk_var sty',
-			inst_loc1
+		in
+		((let	val ty' = icl'inst_type tysubs ty;
+		in mk_simple_(mk_var (s',ty'),
+			(inst_loc1
 			tysubs
 			(dest_simple_term b)
 			(s' :: vars)
-			((sty, sty') :: varmap))
+			((sty, (s',ty')) :: varmap)
+			handle (Fail _) => b))
+		end) 
+		handle (Fail _) =>
+		if s = s'
+		then mk_simple_(v,
+			inst_loc1
+			tysubs
+			(dest_simple_term b)
+			(s :: vars)
+			varmap)
+		else mk_simple_(mk_var (s',ty),
+			(inst_loc1
+			tysubs
+			(dest_simple_term b)
+			(s' :: vars)
+			((sty, (s',ty)) :: varmap)
+			handle (Fail _) => b)))
 		end
 	);
 =TEX
@@ -928,7 +1002,9 @@ local
 					val sty' = (s' , ty');
 				in sty' :: rename_dups tysubs (sty' :: av) rest
 				end
-		end);
+		end
+		handle (Fail _) =>
+		(s, ty) :: rename_dups tysubs av rest);
 	fun	inst_loc2
 		(avoid : (string * TYPE) list)
 		(tysubs : (TYPE * string) list)
@@ -1207,7 +1283,8 @@ removing trivial correspondences from the result.
 =SML
 	fun âtype_matchá (ty1 : TYPE) (ty2 : TYPE) : (TYPE * TYPE) list = (
 		map(Combinators.I ** mk_vartype)
-		((tyaux1 [] ty1 ty2) drop (fn (x, y) => x = mk_vartype y))
+		((tyaux1 [] ty1 ty2) drop 
+			(fn (x, y) => is_vartype x andalso (dest_vartype x = y)))
 		handle complaint =>
 		if area_of complaint = "type_match"
 		then type_fail "type_match" 3053 [ty1,ty2]
@@ -1218,9 +1295,12 @@ removing trivial correspondences from the result.
 		(let	val (tym, tmm) = tmaux2 ([], []) [] 
 				(dest_simple_term tm1) 
 				(dest_simple_term tm2);
-			val tym' = tym drop (fn (x, y) => x = mk_vartype y);
+			val tym' = tym drop 
+				(fn (x, y) => is_vartype x andalso 
+				(dest_vartype x = y));
 			val tmm' = tmm drop
-		(fn (x, (s, ty)) => x = mk_var(s, icl'inst_type tym' ty));
+		(fn (x, (s, ty)) => is_var x andalso 
+			(dest_var x = (s, (icl'inst_type tym' ty handle (Fail _) => ty))));
 			val tmm'' = map (fn(x, (s,_)) => (x, (s, type_of x))) tmm';
 		in 	(map(Combinators.I ** mk_vartype)tym',
 			 map(Combinators.I ** mk_var)tmm'')
@@ -1243,9 +1323,12 @@ let	val (s, ty) = dest_var v
 		pass_on complaint "dest_var" "variant";
 	val vss = map (fst o dest_var) vs
 		handle complaint => 
-		pass_on complaint "dest_var" "variant";	
+		pass_on complaint "dest_var" "variant";
+	val s' = string_variant vss s;
 in
-	mk_var(string_variant vss s,ty)
+	if s' = s
+	then v
+	else mk_var(s',ty)
 end);
 
 fun âlist_variantá (av : TERM list) (tml: TERM list) : TERM list = (
@@ -1254,19 +1337,20 @@ let
 		handle complaint =>
 		pass_on complaint "dest_var" "list_variant";
 
-	val tm_vars = map dest_var tml
-		handle complaint => 
-		pass_on complaint "dest_var" "list_variant";
-	
-	fun aux avs ((s,ty) :: rest) = (
-	let
-		val s' = string_variant avs s;
+	fun aux avs (v :: rest) = (
+	let	val (vnm,vty) = dest_var v
+			handle complaint => 
+			pass_on complaint "dest_var" "list_variant";
+		val vnm' = string_variant avs vnm;
+		val v' = if vnm = vnm'
+			then v
+			else mk_var(vnm',vty);
 	in
-		(mk_var(s',ty) :: aux (s' :: avs) rest)	
+		(v' :: aux (vnm' :: avs) rest)	
 	end
 	) | aux _ [] = [];
 in
-	aux av_vars tm_vars
+	aux av_vars tml
 end);
 
 =TEX
@@ -1389,16 +1473,22 @@ let
 		(App(f, a)) = (
 			(tmfun bvs tm)
 			handle (Fail _) =>
-			mk_app(aux bvs f (dest_simple_term f),
-			aux bvs a (dest_simple_term a))
-	) | aux bvs tm (Const _) = ((tmfun bvs tm) handle (Fail _) => tm)
-	| aux bvs tm (Var _) = ((tmfun bvs tm) handle (Fail _) => tm)
+			(let	val f' = aux bvs f (dest_simple_term f);
+			in
+			mk_app(f',
+			(aux bvs a (dest_simple_term a) handle (Fail _) => a))
+			end
+			handle (Fail _) =>
+			mk_app(f,aux bvs a (dest_simple_term a)))
+	) | aux bvs tm (Const _) = (tmfun bvs tm)
+	| aux bvs tm (Var _) = (tmfun bvs tm)
 	| aux bvs tm (Simple(v, b)) = (
 		(tmfun bvs tm) handle (Fail _) =>
 			mk_simple_(v, aux (v :: bvs) b (dest_simple_term b))
 	);
 in
-		aux [] tm (dest_simple_term tm)
+	aux [] tm (dest_simple_term tm)
+	handle (Fail _) => tm
 end);
 =TEX
 \subsection{$subst$}
@@ -1409,6 +1499,9 @@ variables.
 fun âsubstá
 	(subs : (TERM * TERM) list)
 	(tm : TERM) = (
+	if is_nil subs
+	then tm
+	else
 	let	val (xs, ys) = split subs;
 		val terms = tm :: (xs @ ys); 
 		val Xs = gen_vars (map type_of ys) terms;
@@ -1438,14 +1531,20 @@ fun	 âinstá
 	(avoid : TERM list)
 	(tysubs : (TYPE * TYPE) list)
 	: TERM -> TERM = (
+let	val vs = ((map dest_var avoid)
+		handle complaint => 
+		pass_on complaint "dest_var" "inst");
+	val tys = ((map (Combinators.I ** dest_vartype) tysubs)
+		handle complaint => 
+		pass_on complaint "dest_vartype" "inst");
+in
+	(fn tm =>
 	icl'inst
-	((map dest_var avoid)
-	handle complaint => 
-		pass_on complaint "dest_var" "inst")
-	((map (Combinators.I ** dest_vartype) tysubs)
-	handle complaint => 
-		pass_on complaint "dest_vartype" "inst")
-);
+	vs
+	tys
+	tm
+	handle (Fail _) => tm)
+end);
 =TEX
 =SML
 end; (* of structure icl'TypesAndTerms *)
