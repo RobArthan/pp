@@ -100,6 +100,14 @@ interface has been implemented.
 
 None known.
 
+=SML
+local open ZUserInterfaceSupport in
+fun €string_of_ident› ((tmpl, dec) : IDENT) : string = (
+	string_of_template tmpl ^ dec
+);
+end;
+=TEX
+
 
 \section{Z READER WRITER}
 
@@ -271,7 +279,7 @@ structure €ZTypeCheckOnlyMode› : ZTypeCheckOnlyMode = struct
 open Unification ZUserInterfaceSupport  ZTypeInference ZTermGenerator;
 open ZTypesAndTermsSupport icl'Kernel;
 =TEX
-=SML
+SML
 fun €string_of_ident› ((tmpl, dec) : IDENT) : string = (
 	string_of_template tmpl ^ dec
 );
@@ -455,7 +463,8 @@ fun €type_of_formal› (id : IDENT) : TYPE = (
 fun	€tuple_exname› (tyl: EXTYPE list) : string =
 	tuple_tname (map type_of_zextype tyl);
 fun	€tuple_extype› (tyl: EXTYPE list) :EXTYPE = ExType(tuple_exname tyl,tyl);
-
+=TEX
+=SML
 fun €consts_in_zpara› (p : Z_PARA) : (string * TYPE) list = (
 	case p of
 	ZParaAbbDef (id, [], _, Value ty) =>
@@ -550,19 +559,352 @@ end (* of structure ZTypeCheckOnlyMode *);
 =TEX
 
 \section{PROOF SUPPORT MODE}
+
 =SML
-structure €ZProofSupportMode› : ZTypeCheckOnlyMode = struct
-open	ZUserInterfaceSupport;
+structure €ZProofModeSupport› : ZProofModeSupport = struct
+local
+	open	Unification ZUserInterfaceSupport;
+	open	ZTypesAndTermsSupport ZTypeInference ZTermGenerator;
+in
 =TEX
 =SML
-fun €update_theory_db› ((ZParaFixity fixinfo) : Z_PARA) : unit = (
-	set_zfixity_info fixinfo
-) | update_theory_db _ = ();
+datatype €PARAINFO› =
+	€FixityInfo› of FIXITY
+	|€AbbDefInfo› of string * string list * TERM
+	|€SchBoxInfo› of string * string list * TERM
+	|€AxDesInfo› of string list * TERM * TERM OPT * (string * TYPE) list
+	|€FreeTypeInfo› of (string * (string * TERM OPT) list) list
+	|€GivenSetInfo› of string list * (string list * TERM) OPT
+	|€ConstraintInfo› of string list * TERM
+	|€ConjectureInfo› of string OPT * string list * TERM;
+=TEX
+=SML
+fun €mk_fixity_info› (fixinfo : FIXITY) = (
+	FixityInfo fixinfo
+);
+=TEX
+=SML
+fun €mk_abbdef_info› ((id, idl, ztm, oty) : IDENT * IDENT list * Z_TM * EXTYPE OPT) = (
+	AbbDefInfo (string_of_ident id, map string_of_ident idl, term_of_ztm ztm)
+);
+=TEX
+=SML
+fun €mk_schbox_info› ((id,idl,sch, _) : IDENT * IDENT list * Z_SCH_TEXT * EXTYPE OPT) : PARAINFO = (
+let	val tm = term_of_ztm (ZTmHorizSchema sch);
+in
+	SchBoxInfo (string_of_ident id, map string_of_ident idl, tm)
+end);
+=TEX
+=SML
+fun €mk_axdes_info› ((idl, sch, Value idtyl) : IDENT list * Z_SCH_TEXT *
+				(IDENT * EXTYPE) list OPT) : PARAINFO = (
+let	val (tm, otm) = term_of_zschtext sch;
+	val idtyl' = map (fn (id, ty) => (string_of_ident id, type_of_zextype ty)) idtyl;
+in
+	AxDesInfo (map string_of_ident idl, tm, otm, idtyl')
+end
+) | €mk_axdes_info› (_, _, Nil) = (
+	fail "mk_axdes_info" 49000 []
+);
+=TEX
+=SML
+fun €mk_freetype_info› (ftdeflist : (IDENT * (IDENT * EXTYPE OPT * Z_TM OPT) list) list) : PARAINFO= ( 
+let	fun aux (id, _, Value ztm) =
+		(string_of_ident id, Value (term_of_ztm ztm))
+	  | aux (id, _, Nil) = (string_of_ident id, Nil);
+	fun aux1 (id, branch) = (string_of_ident id, map aux branch);
+in
+	FreeTypeInfo (map aux1 ftdeflist)
+end);
+=TEX
+=SML
+fun €mk_givenset_info› ((idl, Value (gens, ztm)) : IDENT list * (IDENT list * Z_TM) OPT) : PARAINFO = (
+	GivenSetInfo (map string_of_ident idl, Value (map string_of_ident gens,term_of_ztm ztm))
+) | mk_givenset_info (idl, Nil) = GivenSetInfo  (map string_of_ident idl, Nil);
 
 =TEX
 =SML
-end (* of structure ZProofSupportMode *);
+fun €mk_constraint_info› ((idl, ztm) : (IDENT list * Z_TM)) : PARAINFO = (
+		ConstraintInfo (map string_of_ident idl, term_of_ztm ztm)
+);
 =TEX
+=SML
+fun €mk_conjecture_info› ((Value id, idl, ztm) : (IDENT OPT * IDENT list * Z_TM)) : PARAINFO = (
+		ConjectureInfo (Value (string_of_ident id),
+			map string_of_ident idl, term_of_ztm ztm)
+) | mk_conjecture_info (Nil, idl, ztm) = (
+		ConjectureInfo (Nil, map string_of_ident idl, term_of_ztm ztm)
+);
+=TEX
+=SML
+fun €parainfo_of_zpara› ((ZParaFixity pbody) : Z_PARA) : PARAINFO = (
+	mk_fixity_info pbody
+) | parainfo_of_zpara (ZParaAbbDef pbody) = (
+	mk_abbdef_info pbody
+) | parainfo_of_zpara (ZParaSchBox pbody) = (
+	mk_schbox_info pbody
+) | parainfo_of_zpara (ZParaAxDes pbody) = (
+	mk_axdes_info pbody
+) | parainfo_of_zpara (ZParaFreeType pbody) = (
+	mk_freetype_info pbody
+) | parainfo_of_zpara (ZParaGivenSet pbody) = (
+	mk_givenset_info pbody
+) | parainfo_of_zpara (ZParaConstraint pbody) = (
+	mk_constraint_info pbody
+) | parainfo_of_zpara (ZParaConjecture pbody) = (
+	mk_conjecture_info pbody
+) | parainfo_of_zpara _ = (
+	fail "parainfo_of_zpara" 49999 []
+);
+
+end (* of local ... in *);
+end (* of structure ZProofModeSupport *);
+=TEX
+
+\section{DEFINITIONS BY AXIOM} 
+
+=SML
+structure €ZAxiomaticMode› : ZAxiomaticMode = struct
+local
+	open ZUserInterfaceSupport ZTypesAndTermsSupport ZProofModeSupport;
+	open ZGeneratedConstants;
+in
+=TEX
+=SML
+fun €next_axiom_name› (s : string) : string = (
+let	val axiom_names = flat (map fst (get_axioms "-"));
+	fun aux i =
+	let	val si = s^(string_of_int i);
+	in
+		if si mem axiom_names
+		then
+			aux (i+1)
+		else
+			if i = 0 then s else si
+	end;
+in
+	aux 0
+end);
+=TEX
+=SML
+fun €consts_in_axiom› (tm : TERM) : string list = (
+let	val tcs = map fst (term_consts tm);
+	val cconsts = map (fst o dest_const) (get_consts"-");
+in
+	tcs drop (fn x => not (x mem cconsts))
+end);
+=TEX
+=SML
+fun €names_of_axiom› (tm : TERM) : string list = 
+	map next_axiom_name (consts_in_axiom tm);
+=TEX
+
+=SML
+fun €znew_type› (s : string) : THM = (
+let	val ty = new_type (s, 0);
+	val zs = bind_gvar_name s;
+	val var = mk_var (zs, mk_ZpowerT (mk_ctype (s, [])));
+	val set = mk_set_comp (mk_var ("x", ty), mk_t);
+in
+	const_spec ([zs], [var], mk_eq (var, set))
+end);
+=TEX
+=SML
+fun €abbdef_defn› (flag : bool) ((name, gen_formals, tm) : string * string list * TERM) : unit = (
+let	val wrap = if flag then ¨$"Z'SchBox"Æ else ¨$"Z'AbbDef"Æ;
+	val name' = bind_gvar_name name;
+in
+	case map (mk_ZpowerT o mk_ZvarT) gen_formals of
+	[] => (
+		let	val ty = type_of tm;
+			val var = mk_var(name, ty);
+			val var' = mk_var(name', ty);
+			val tm' = subst [(var', var)] tm;
+			val defn1 = mk_eq(var', tm');
+			val defn2 = mk_app (wrap, defn1);
+			val side = const_spec ([name, name'],[var'], defn2);
+		in
+			()
+		end)
+	| gftyl => (
+		let	val ty = mk_≠_type(mk_ZtupleT gftyl,type_of tm);
+			val var = mk_var(name, ty);
+			val var' = mk_var(name', ty);
+			val tm' = subst [(var', var)] tm;
+			val gfl = map mk_var (combine gen_formals gftyl);
+			val arg = mk_Ztuple gfl;
+			val defn1 = mk_eq(mk_app(var', arg), tm');
+			val defn2 = list_mk_µ (gfl, defn1);
+			val defn3 = mk_app (wrap, defn2);
+			val side = (new_const o dest_var) var';
+			val side = new_axiom ([name, name'], defn3);
+		in
+			()
+		end)
+end
+
+);
+
+=TEX
+=SML
+fun €axdes_defn› ((gen_formals, tm1, otm, idtyl) : string list * TERM * TERM OPT * (string * TYPE) list) : unit = (
+let	val def_tm = case otm of
+		Value tm2 => mk_± (tm1, tm2)
+		|Nil => tm1;
+	val gens = map (fn id => mk_var (id, (mk_ZpowerT o mk_ZvarT) id)) gen_formals;
+	val vars = map mk_var idtyl;
+	val zidtyl = map (fn (id, ty) => (bind_gvar_name id, ty)) idtyl;
+	val zvars = map mk_var zidtyl;
+	val generify = (
+		case gens of
+		[] => Combinators.I
+		|_ => (
+			let	val pval = mk_Ztuple gens;
+				val ptype = type_of pval;
+			in	(fn v =>
+					let	val (s, ty) = dest_var v;
+						val v' = mk_var(s, mk_≠_type (ptype, ty));
+					in
+						mk_app(v', pval)
+					end)
+			end
+			)
+	);
+
+	val varsubs = map (fn (v1, v2) => (generify v1, v2)) (combine zvars vars);
+	val newvars = map (fst o strip_app o fst) varsubs;
+	val def_tm' = subst varsubs def_tm;
+	val defn1 = list_mk_µ (gens, def_tm');
+	val defn2 = mk_app(¨$"Z'AxDes"Æ, defn1);
+	val side = map (new_const o dest_var) newvars;
+	val side = new_axiom ((map fst idtyl)@(map fst zidtyl), defn2);
+in
+	()
+end);
+=TEX
+
+=SML
+fun €givenset_defn› ((idl, oidltm) : string list * (string list * TERM) OPT) : unit = (
+let	val side = map znew_type idl;
+in
+	case oidltm of
+	Nil => ()
+	|Value (idl', tm) => (
+		let	val side = new_axiom (names_of_axiom tm, tm);
+		in
+			()
+		end)
+end);
+=TEX
+=SML
+fun €ax_update_theory_db› (para : Z_PARA) : unit = (
+	case parainfo_of_zpara para of
+	FixityInfo fixinfo => set_zfixity_info fixinfo
+	|AbbDefInfo pbody => abbdef_defn false pbody
+	|SchBoxInfo pbody => abbdef_defn true pbody
+	|AxDesInfo pbody => axdes_defn pbody
+	|GivenSetInfo pbody => givenset_defn pbody
+	|other => ZTypeCheckOnlyMode.update_theory_db para
+);
+=TEX
+=SML
+end (* of local ... in *);
+end (* of structure ZAxiomaticMode *);
+=TEX
+
+\section{DEFINITIONS BY CONSERVATIVE EXTENSION} 
+=SML
+structure €ZConservativeMode› : ZConservativeMode = struct
+local
+	open ZUserInterfaceSupport ZTypesAndTermsSupport ZProofModeSupport;
+	open ZGeneratedConstants;
+in
+=TEX
+=SML
+fun €abbdef_defn› (flag : bool) ((name, gen_formals, tm) : string * string list * TERM) : unit = (
+let	val wrap = if flag then ¨$"Z'SchBox"Æ else ¨$"Z'AbbDef"Æ;
+	val name' = bind_gvar_name name;
+in
+	case map (mk_ZpowerT o mk_ZvarT) gen_formals of
+	[] => (
+		let	val ty = type_of tm;
+			val var = mk_var(name, ty);
+			val var' = mk_var(name', ty);
+			val tm' = subst [(var', var)] tm;
+			val defn1 = mk_eq(var', tm');
+			val defn2 = mk_app (wrap, defn1);
+			val side = const_spec ([name, name'],[var'], defn2);
+		in
+			()
+		end)
+	| gftyl => (
+		let	val ty = mk_≠_type(mk_ZtupleT gftyl,type_of tm);
+			val var = mk_var(name, ty);
+			val var' = mk_var(name', ty);
+			val tm' = subst [(var', var)] tm;
+			val gfl = map mk_var (combine gen_formals gftyl);
+			val arg = mk_Ztuple gfl;
+			val defn1 = mk_eq(mk_app(var', arg), tm');
+			val defn2 = list_mk_µ (gfl, defn1);
+			val defn3 = mk_app (wrap, defn2);
+			val side = const_spec ([name, name'],[var'], defn3);
+		in
+			()
+		end)
+end
+
+);
+
+=TEX
+=SML
+fun €axdes_defn› ((gen_formals, tm1, otm, idtyl) : string list * TERM * TERM OPT * (string * TYPE) list) : unit = (
+let	val def_tm = case otm of
+		Value tm2 => mk_± (tm1, tm2)
+		|Nil => tm1;
+	val gens = map (fn id => mk_var (id, (mk_ZpowerT o mk_ZvarT) id)) gen_formals;
+	val vars = map mk_var idtyl;
+	val zidtyl = map (fn (id, ty) => (bind_gvar_name id, ty)) idtyl;
+	val zvars = map mk_var zidtyl;
+	val generify = (
+		case gens of
+		[] => Combinators.I
+		|_ => (
+			let	val pval = mk_Ztuple gens;
+				val ptype = type_of pval;
+			in	(fn v =>
+					let	val (s, ty) = dest_var v;
+						val v' = mk_var(s, mk_≠_type (ptype, ty));
+					in
+						mk_app(v', pval)
+					end)
+			end
+			)
+	);
+
+	val varsubs = map (fn (v1, v2) => (generify v1, v2)) (combine zvars vars);
+	val newvars = map (fst o strip_app o fst) varsubs;
+	val def_tm' = subst varsubs def_tm;
+	val defn1 = list_mk_µ (gens, def_tm');
+	val defn2 = mk_app (¨$"Z'AxDes"Æ, defn1);
+	val side = const_spec ((map fst idtyl)@(map fst zidtyl), newvars, defn2);
+in
+	()
+end);
+=TEX
+=SML
+fun €con_update_theory_db› (para : Z_PARA) : unit = (
+	case parainfo_of_zpara para of
+	FixityInfo fixinfo => set_zfixity_info fixinfo
+	|AbbDefInfo pbody => abbdef_defn false pbody
+	|SchBoxInfo pbody => abbdef_defn true pbody
+	|AxDesInfo pbody => axdes_defn pbody
+	|other => ZAxiomaticMode.ax_update_theory_db para
+);
+
+end (* of local ... in *);
+end (* of structure ZConservativeMode *);
+=TEX
+
 
 \section{THE STRUCTURE FOR Z PARAGRAPH PROCESSORS}
 
@@ -570,25 +912,37 @@ end (* of structure ZProofSupportMode *);
 structure €ZParagraphs› : ZParagraphs = struct
 =TEX
 =SML
+local
 	open Lex SymbolTable ReaderWriterSupport;
 	open HOLReaderWriter PrettyNames;
 	open ZReaderWriter;
 	open ZUserInterfaceSupport ZLex ZParser ZTypeInference ZTermGenerator;
-
-val €ztype_check_only› = ref false;
+in
+val €z_type_check_only› = ref true;
 
 val _ = if contains (map fst (get_flags()))
-			"ztype_check_only"
+			"z_type_check_only"
 	then	()
-	else	new_flag{name = "ztype_check_only",
-			control = ztype_check_only,
-			default = fun_false,
+	else	new_flag{name = "z_type_check_only",
+			control = z_type_check_only,
+			default = fun_true,
+			check = fun_true
+	};
+
+val €z_use_axioms› = ref true;
+
+val _ = if contains (map fst (get_flags()))
+			"z_use_axioms"
+	then	()
+	else	new_flag{name = "z_use_axioms",
+			control = z_use_axioms,
+			default = fun_true,
 			check = fun_true
 	};
 =TEX
 
 
-\section{PARAGRAPH PROCESSING}
+\subsection{Processing Z Terms}
 
 =SML
 fun €term_of_zpara› ((ZParaTerm (_, tm, _)) : Z_PARA) : TERM = (
@@ -666,9 +1020,13 @@ let	val side_effect =
 	val type_checked = type_check_zpara {standard=true} parsed;
 	val para = zpara_of_zinferred type_checked;
 in
-	if get_flag "ztype_check_only"
+	if get_flag "z_type_check_only"
 	then	ZTypeCheckOnlyMode.update_theory_db para
-	else	ZProofSupportMode.update_theory_db para
+	else	if get_flag "z_use_axioms"
+		then
+			ZAxiomaticMode.ax_update_theory_db para
+		else
+			ZConservativeMode.con_update_theory_db para
 end);
 
 =TEX
@@ -690,9 +1048,13 @@ let	val side_effect =
 	val type_checked = type_check_zpara {standard=true} parsed;
 	val para = zpara_of_zinferred type_checked;
 in
-	if get_flag "ztype_check_only"
+	if get_flag "z_type_check_only"
 	then	ZTypeCheckOnlyMode.update_theory_db para
-	else	ZProofSupportMode.update_theory_db para
+	else	if get_flag "z_use_axioms"
+		then
+			ZAxiomaticMode.ax_update_theory_db para
+		else
+			ZConservativeMode.con_update_theory_db para
 end);
 
 =TEX
@@ -714,9 +1076,13 @@ let	val side_effect =
 	val type_checked = type_check_zpara {standard=true} parsed;
 	val para = zpara_of_zinferred type_checked;
 in
-	if get_flag "ztype_check_only"
+	if get_flag "z_type_check_only"
 	then	ZTypeCheckOnlyMode.update_theory_db para
-	else	ZProofSupportMode.update_theory_db para
+	else	if get_flag "z_use_axioms"
+		then
+			ZAxiomaticMode.ax_update_theory_db para
+		else
+			ZConservativeMode.con_update_theory_db para
 end);
 =TEX
 \subsection{Z General Text Recogniser}
@@ -737,9 +1103,13 @@ let	val side_effect =
 	val type_checked = type_check_zpara {standard=true} parsed;
 	val para = zpara_of_zinferred type_checked;
 in
-	if get_flag "ztype_check_only"
+	if get_flag "z_type_check_only"
 	then	ZTypeCheckOnlyMode.update_theory_db para
-	else	ZProofSupportMode.update_theory_db para
+	else	if get_flag "z_use_axioms"
+		then
+			ZAxiomaticMode.ax_update_theory_db para
+		else
+			ZConservativeMode.con_update_theory_db para
 end);
 =TEX
 \section{RECOGNIZING Z TERMS}
@@ -775,6 +1145,7 @@ The structure for Z paragraphs is required to be open for use by the
 reader/writer.
 
 =SML
+end (* of local ... in *);
 end (* of structure ZParagraphs *);
 open ZParagraphs;
 =TEX
@@ -782,3 +1153,11 @@ open ZParagraphs;
 \twocolumn[\section{INDEX OF DEFINED TERMS}]
 \printindex
 \end{document}
+
+
+=IGN
+
+val x= mk_Zapp (Ò{(a,b)}Æ, ÒyÆ);
+
+new_axiom(["thing"],x);
+
