@@ -65,12 +65,13 @@ This document contains the implementation for the Compliance Notation Reader/Wri
 
 \item[Issue 1.1 - 1.4] Initial Drafts.
 
-\item[Issue 1.5 (27th May 1994)] First draft for comment.
+\item[Issue 1.5] First draft for comment.
 
-\item[Issues 1.6, 1.7 (13th July 1994)] Minor typographical corrections.
+\item[Issues 1.6, 1.7] Minor typographical corrections.
 
-\item[Issue 1.8 (19th July 1994)] Bug fixing.
+\item[Issue 1.8] Bug fixing.
 
+\item[Issue 1.9 ] Recognition of annotations added (CTE 1).
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -223,23 +224,25 @@ end);
 
 \section{SPARK COMMENTS}
 
-The following function is called when two consecutive hyphens are recognised in the input. This function skips over the input until the end of the line is reached and then returns.
+These are handled in the lexical analyser.
+
+=TEX
+\section{WHITE SPACE}
+White space needs more complicated handling than with most other object languages.
+This is because of the requirement to respect the line layout for hidden text (SPARK hide directive) and for arbitrary Ada replacements.
+The following function turns a white space character into ML.
 
 =SMLPLAIN SML
-fun Ûskip_cn_commentÝ (R:READER_ENV) : unit = (
-	case read_symbol R of
-	SymWhite wh => (	if contains wh "\n"
-				then
-					()
-				else
-					skip_cn_comment R
-	)| _ => skip_cn_comment R
+fun Ûprotect_spaceÝ (ch : string) : string = (
+	case ch of
+		" " => ch
+	|	"" => ch
+	|	_ => "\\" ^ string_of_int (ord ch)
 );
 =TEX
-
 \section{COMPLIANCE NOTATION TEXT INPUT}
 
-The following function eats compliance notation input, calling the special handlers for strings and comments as required.
+The following function eats compliance notation input, calling the special handlers for strings as required.
 It reads and assembles the quoted text (i.e., the body of the quotation) and the closing text.
 {\ftlinepenalty=9999
 =SMLPLAIN SML
@@ -273,25 +276,19 @@ let
 			get_cn_any R (lex_error_codes(errnos, text_so_far))
 		end
 	);
-	val next = #look_at_next R ()
+
 in
 	case read_symbol R
 	of	SymCharacter ch => (
 			case ch
-			of "-"	=>	(	if #look_at_next R () = "-"
-						then
-							(
-							skip_cn_comment R;
-							get_cn_any R prevA)
-						else
-							get_cn_any R ( "-" ::  prevA))
-			|  "\""	=>	do_string () (*="=*)
+			of "\""	=>	do_string () (*="=*)
 			|  "\^D" =>	prevA
 			|  "Q"	=>	get_cn_any R ("QQQQ" :: prevA)
 			|  "\\"	=>	get_cn_any R ("\\\\" :: prevA)
 			|  _ => 	get_cn_any R (ch :: prevA)
 		)
-	|	SymWhite _ => get_cn_any R (" " :: prevA)
+	|	SymWhite chs => 
+			get_cn_any R (implode (map protect_space chs) :: prevA)
 	|	SymKnown(sym, is_keyword, info) => do_keyword (sym, is_keyword) info prevA
 	|	SymDoublePercent => get_cn_any R ("%%" :: prevA)
 	|	SymUnknownKw(sym, is_closed) => (
