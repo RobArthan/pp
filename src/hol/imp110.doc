@@ -6,8 +6,10 @@
 
 \TPPtitle{File and Terminal Reader Writer}
 \TPPref{DS/FMU/IED/IMP005}
-\def\SCCSversion{$Revision$
+\def\SCCSissue{$Revision$%
 }
+\TPPissue{\SCCSissue}
+
 \TPPdate{\FormatDate{$Date$%
 }}
 \TPPproject{IED 1563}
@@ -41,7 +43,6 @@ lasp -s imp005.doc > zz1
 lasp -s -u imp005.OKwords imp005.doc > zz1
 
 =TEX
-\TPPissue{\SCCSversion}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Standard}
 \TPPkeywords{HOL}
@@ -154,9 +155,21 @@ lasp -s -u imp005.OKwords imp005.doc > zz1
 		$useterminal$ to match changes to the system build
 		mechanism.
 
-\item[\FormatDate{$Date$%
-}, issue \SCCSissue ]
-$new\_flag$ parameter change.
+\item[7 August 1991, issue 1.11 ]
+	Function $new_flag$, parameter change.
+
+\item[14 August 1991, issue 1.12 ]
+	Add function $translate_for_output$, control flag
+		$use_extended_chars$ and keyword ``{\tt\%Q\%}''; on
+		output translate unexpected `{\tt Q}'s into this
+		keyword.
+	Change the diagnostic controls to bits in an integer.
+	Use strings held by basic error package~\cite{DS/FMU/IED/DTD002}
+		for holding output messages.
+
+%\item[\FormatDate{$Date$%
+%}, issue \SCCSissue~]
+
 \end{description}
 
 %********************************************************************
@@ -360,26 +373,16 @@ the users input which are detected by the reader writer.
 
 =SML
 fun ‚local_warn· (area : string) (id : int) (inserters : (unit -> string) list) : unit = (
-	diag_string(
-			"*** WARNING "
-		^	(string_of_int id)
-		^	" from "
-		^	area
-		^	": "
-		^	(get_error_message id (map (fn f => f())inserters))
+	diag_string(get_error_message 5531
+		[string_of_int id, area, get_error_message id (map (fn f => f())inserters)]
 	)
 );
 =TEX
 
 =SML
 fun ‚local_error· (area : string) (id : int) (inserters : (unit -> string) list) : unit = (
-	diag_string(
-			"*** ERROR "
-		^	(string_of_int id)
-		^	" from "
-		^	area
-		^	": "
-		^	(get_error_message id (map (fn f => f())inserters))
+	diag_string(get_error_message 5532
+		[string_of_int id, area, get_error_message id (map (fn f => f())inserters)]
 	)
 );
 =TEX
@@ -397,6 +400,22 @@ fun	‚add_error_codes· (nil:int list, prev:string list) : string list =
 		prev
 |	add_error_codes (err_nos, prev) = (
 		fold add_error_code err_nos prev
+);
+=TEX
+
+Some error messages require part of the left hand context of where they
+are detected.
+
+=SML
+fun ‚prev_context· (num:int) (prev:string list) : string = (
+let
+	val part1 = rev(prev to num);
+	val part2 =	if length prev > num
+			then	" ... " :: part1
+			else	part1
+in
+	implode part2
+end
 );
 =TEX
 
@@ -452,7 +471,7 @@ structure ‚PrettyNames· = struct
 The class of each symbol is recorded.  Type $Simple$ is for those that
 may be part of identifiers.  Type $Invalid$ are those that are always
 invalid when found by the reader, these include the symbols understood
-by the document processing programs\footnote{Provide a reference.} for
+by the document processing programs~\cite{DS/FMU/IED/USR001} for
 surrounding formal text which does not require processing by this
 reader writer.  Type $Ignore$ is for symbols which are to be completely
 ignored.
@@ -533,17 +552,16 @@ let
 	fun add_name(pcd as (names, _, _) : PRETTY_NAME, dict : PRETTY_NAME E_DICT
 			) : PRETTY_NAME E_DICT = (
 	let
-		fun moan_kw name = local_warn "add_new_symbols" 5100 [fn () => name];
-
 		fun ok_kw("Q"::"Q"::_) = false
 		| ok_kw(_::t) = ok_kw t
 		| ok_kw nil = true;
 
-		fun aux("Q", dict) = (moan_kw "Q"; dict)
-		| aux(name, dict) = (
+		fun aux(name, dict) = (
 			if ok_kw(explode name)
-			then	e_enter name pcd dict
-			else	(moan_kw name; dict)
+			then (	(e_extend name pcd dict)
+				handle E => divert E "e_extend" "add_new_symbols"
+					5103 [fn () => name])
+			else	(local_warn "add_new_symbols" 5100 [fn () => name]; dict)
 		)
 	in
 		case names
@@ -554,13 +572,15 @@ let
 	fun add_char((_, Nil, _) : PRETTY_NAME, dict : PRETTY_NAME E_DICT
 			) : PRETTY_NAME E_DICT = dict
 	|   add_char(pcd as (names, Value ch, _), dict) = (
-		if size ch = 1 andalso ord ch >= 128
-		then	e_enter ch pcd dict
-		else (	local_warn "add_new_symbols" 5102  [fn () => PolyML.makestring names];
+		if size ch = 1
+		then (
+			(e_extend ch pcd dict)
+			handle E => divert E "e_extend" "add_new_symbols"  5104 [fn () => ch])
+		else (	local_warn "add_new_symbols" 5102
+				[fn () => ch, fn () => PolyML.makestring names];
 			dict)
 	)
 in
-	output(std_out, "Adding " ^ (PolyML.makestring(length pnl)) ^ " new symbols\n");
 	name_dict := fold add_name pnl (!name_dict);
 	char_dict := fold add_char pnl (!char_dict)
 end);
@@ -590,16 +610,6 @@ symbols, and a few specials used in forming identifiers.
 local (* for raw_symbol_names *)
 
 val ‚raw_symbol_names· : PRETTY_NAME list = [
-=TEX
-
-=IGN
-(* Some symbols to test add_new_symbols and provoke some error messages *)
-	([	"abcQQdef"],	Nil,				Simple),
-	([	"QQdef"],	Nil,				Simple),
-	([	"abcQQ"],	Nil,				Simple),
-	([	"QQ"],		Nil,				Simple),
-	([	"Q"],		Nil,				Simple),
-	([	],		Nil,				Simple),
 =TEX
 
 The first group of symbols are for the Greek letters.  Note, there are
@@ -758,6 +768,16 @@ Maths symbols.
 	([	"x"],		Value "â",			Simple),
 =TEX
 }
+
+The letter ``{\tt Q}'' is specially treated in several places.  The
+writer, via function $translate_for_output$, converts unexpected letter
+``{\tt Q}''s into uses of the keyword ``{\tt \%Q\%}'', see
+section~\ref{WriterFunction}.
+
+=SMLLITERAL
+	([	"Q"],	Value "Q",			Simple),
+=TEX
+
 Several symbols are provided for use with identifiers.
 
 Four new characters are created which have significant processing with
@@ -989,6 +1009,13 @@ treat the name and the enclosing `{\tt\%}' characters, whereas the rest
 of the system only needs one-character look-ahead.
 
 =SML
+fun ‚is_special_char· ch = (
+	contains ["!", "&", "$", "#", "+", "-", "/", ":", "<", "=", ">",
+		"?", "@", "\\", "~", "'", "^", "|", "*"] ch
+);
+=TEX
+
+=SML
 fun ‚get_percent_name· (R:READER_ENV)
 		: (string * PrettyNames.PRETTY_NAME OPT * bool) = (
 	let
@@ -1004,13 +1031,8 @@ fun ‚get_percent_name· (R:READER_ENV)
 			else	""
 		);
 
-		fun is_special ch = (
-			contains ["!", "&", "$", "#", "+", "-", "/", ":", "<", "=", ">",
-				"?", "@", "\\", "~", "'", "^", "|", "*"] ch
-		);
-
 		fun collect_specials next = (
-			if is_special next
+			if is_special_char next
 			then	next ^ (collect_specials(#skip_and_look_at_next R ()))
 			else	""
 		);
@@ -1266,16 +1288,23 @@ fun ‚string_body· (ML_string:bool) (R:READER_ENV) (prev:string list, preverrs:in
 		|  _ =>		string_body ML_string R (ch::prev, preverrs)
 		)
 	| SymDoublePercent => string_body ML_string R ("%" :: prev, preverrs)
-	| SymWhite wh => string_body ML_string R (wh::prev, preverrs)
+	| SymWhite wh => (	if contains (explode wh) "\n"
+				then
+					(local_error "string_body" 5014 [fn () =>
+						prev_context 20 prev];
+					((if ML_string then "5014\"" (*="=*) else "5014'") :: prev,
+						5014 :: preverrs))
+				else
+					string_body ML_string R (wh::prev, preverrs))
 	| SymKnown(_, _, info) =>
 				string_body ML_string R ((
 					case info
 					of (_, Value ch, _) => "\\" ^ string_of_int3(ord ch)
-					| (names,_,Simple) => hd names
+					| (names,_,Simple) => "%" ^ (hd names) ^ "%"
 				) :: prev, preverrs)
 	| SymUnknownKw(sym, _) => (
 				local_error "string_body" 5003 [fn () => sym, fn () =>
-					implode(rev(" ... " :: (prev to 10)))];
+					prev_context 20 prev];
 				string_body ML_string R  (" 5003 " :: prev, 5003 :: preverrs))
 	| SymUnknownChar ch =>
 				string_body ML_string R
@@ -1455,13 +1484,13 @@ in
 				do_keyword (sym, is_keyword) info prev
 		|	SymUnknownKw(sym, _) => (
 				local_error "get_ML_any" 5003 [fn () => sym, fn () =>
-					implode(rev(" ... " :: (prev to 10)))];
+					prev_context 20 prev];
 				get_ML_any R (add_error_code(5003, prev))
 			)
 		|	SymUnknownChar ch => (
 				local_error "get_ML_any" 5005 [fn () => next,
 					fn () => string_of_int(ord ch),
-					fn () => implode(rev(" ... " :: (prev to 10)))];
+					fn () => prev_context 20 prev];
 				get_ML_any R (add_error_code(5005, prev))
 			)
 	)
@@ -1796,7 +1825,7 @@ Standard~ML topdec.
 =SML
 type ‚READER_FUNCTION·
 	= READER_ENV
-	-> (string * bool)		(* Starting symbol *)
+	-> (string * bool)	(* Starting symbol *)
 	-> string		(* Language name *)
 	-> string		(* Opening text *)
 	-> string list		(* Left hand context *)
@@ -1875,7 +1904,8 @@ in
 
 fun ‚add_general_reader· (name:string, constructor:string,
 		reader:READER_FUNCTION) : unit = (
-	general_reader := e_enter name (reader, constructor) (!general_reader)
+	(general_reader := e_extend name (reader, constructor) (!general_reader))
+	handle E => divert E "e_extend" "add_general_reader" 5033 [fn () => name]
 );
 
 fun ‚look_up_general_reader· (name:string) : (READER_FUNCTION * string) OPT = (
@@ -1884,7 +1914,8 @@ fun ‚look_up_general_reader· (name:string) : (READER_FUNCTION * string) OPT = (
 
 fun ‚add_specific_reader· (name:string, constructor:string,
 		reader:READER_FUNCTION) : unit = (
-	specific_reader := e_enter name (reader, constructor) (!specific_reader)
+	(specific_reader := e_extend name (reader, constructor) (!specific_reader))
+	handle E => divert E "e_extend" "add_specific_reader" 5033 [fn () => name]
 );
 
 fun ‚look_up_specific_reader· (name:string) : (READER_FUNCTION * string) OPT = (
@@ -2140,29 +2171,43 @@ fun abandon_reader_writer () : unit = (
 
 Several control flags are provided in this structure for debugging
 purposes.  These flags are used throughout the rest of the structure.
+The flags are implemented as `bits' in an integer;
 This section defines all of the debugging flags used by the reader
 writer.
 
 =SML
-val RWchars_read = ref false;
-val _ =
-new_flag {name = "‚RWchars_read·",  control=RWchars_read, check=fun_true, default=fun_false};
+val RWtext_read = ref false;		(* 2 ^^ 0 = 1 *)
+val RWphrases_read = ref false;	(* 2 ^^ 1 = 2 *)
+val RWchars_read = ref false;		(* 2 ^^ 2 = 4 *)
+val RWchars_written = ref false;	(* 2 ^^ 3 = 8 *)
+val RWwriter_convert = ref false;	(* 2 ^^ 4 = 16 *)
 
-val RWchars_written = ref false;
-val _ =
-new_flag {name = "‚RWchars_written·",  control=RWchars_written, check=fun_true, default= fun_false};
+val RW_diagnostics : int ref = ref 0;
 
-val RWphrases_read = ref false;
-val _ =
-new_flag {name = "‚RWphrases_read·",  control=RWphrases_read, check=fun_true, default=fun_false};
+fun check_diagnostics(flags) : bool = (
+let
+	val flags2 = flags div 2;
+	val flags4 = flags2 div 2;
+	val flags8 = flags4 div 2;
+	val flags16 = flags8 div 2;
+	fun odd n = (n mod 2) <> 0;
+in
+	if flags >= 0
+	then (
+		RWtext_read := odd flags;
+		RWphrases_read := odd flags2;
+		RWchars_read := odd flags4;
+		RWchars_written := odd flags8;
+		RWwriter_convert := odd flags16;
+		true)
+	else
+		false
+end
+);
 
-val RWtext_read = ref false;
 val _ =
-new_flag {name = "‚RWtext_read·",  control=RWtext_read, check=fun_true, default=fun_false};
-
-val RNC = ref false;
-val _ =
-new_flag {name = "‚RNC·",  control=RNC, check=fun_true, default=fun_false};
+new_int_control {name = "‚RW_diagnostics·", control = RW_diagnostics,
+	default = fn () => 0, check = check_diagnostics};
 =TEX
 
 =IGN
@@ -2171,17 +2216,12 @@ new_flag {name = "‚RNC·",  control=RNC, check=fun_true, default=fun_false};
 
 It is useful to have the commands to set and clear these flags easily available.
 
-set_flag("RWchars_read", true);
-set_flag("RWchars_written", true);
-set_flag("RWphrases_read", true);
-set_flag("RWtext_read", true);
-set_flag("RNC", true);
-
-set_flag("RWchars_read", false);
-set_flag("RWchars_written", false);
-set_flag("RWphrases_read", false);
-set_flag("RWtext_read", false);
-set_flag("RNC", false);
+set_int_control("RW_diagnostics", 0);
+set_int_control("RW_diagnostics", 1);
+set_int_control("RW_diagnostics", 2);
+set_int_control("RW_diagnostics", 4);
+set_int_control("RW_diagnostics", 8);
+set_int_control("RW_diagnostics", 16);
 
 %--------------------------------------------------------------------
 
@@ -2499,6 +2539,7 @@ val max_copies_of_char_sent = 30;
 %********************************************************************
 
 \subsection{Writer Function}
+\label{WriterFunction}
 
 A common writer function is used by all three reader writers, its most
 complex tasks are to recognise ASCII keywords and convert them to their
@@ -2513,18 +2554,27 @@ single ``{\tt\%}'' characters.  To preserve ``{\tt Q}''s in the original
 text the string ``{\tt QQQQ}'' is considered to be the keyword whose
 representation is a single ``{\tt Q}''.
 In no cases are an isolated ``{\tt Q}'' or ``{\tt QQQ}'' valid as part
-of a keyword, they indicate either an internal error or that user code
-has produced a string containing these letters.  An opening ``{\tt
+of a keyword, they indicate that user code has produced a string
+containing these letters.  Such isolated ``{\tt Q}''s are converted
+into uses of the keyword `{\tt \%Q\%}' so that the text may be read
+back in and have the same meaning.  An opening ``{\tt
 QQ}'' with a non-alphanumeric before the closing ``{\tt QQ}'' is
-produced in the same manner.  Both cases provoke an error message.
+treated in the same manner.
 
-On occasions no conversions should be performed by the writer so a
-control flag is provided.
+Keywords enclosed by percent signs are converted to the corresponding
+pretty character if one is available.
+
+When operating on simple terminals pretty characters may not be
+generated, in these cases the translations are modified as follows.
+Pretty characters are not output, the keyword form is used instead.
+
+Temporarily, the flag controlling this will be defined here.
 
 =SML
-val writer_convert = ref true;
+val use_extended_chars = ref true;
 val _ =
-new_flag {name = "‚writer_convert·",  control=writer_convert, check=fun_true, default=fun_true};
+new_flag {name = "‚use_extended_chars·",  control=use_extended_chars,
+	check=fun_true, default=fn () => true};
 =TEX
 
 From observation of $PolyML.compiler$ it seems that no identifier or
@@ -2532,17 +2582,35 @@ string is split over two or more calls of the writer function,
 therefore no memory is required\footnote{This may need to be
 reconsidered after further experience of the use of $PolyML.compiler$
 is obtained.} between invocations of the writer to deal with partial
-identifiers or partial strings.  Additional work will be
-needed\footnote{To be done.} to support HOL text output via the
-writer.
+identifiers or partial strings.
+
+Function $translate_for_output$ does the work needed by the writer.
+Translation is not always required, 
+
+Local functions within $translate_for_output$ are as follows:
+
+\begin{center}
+\begin{tabular}{rp{4.7in}}
+aux&Main recursion point of $translate_for_output$, examines the
+	head of the string to be output, and selects an appropriate action.\\
+aux_str&Sub function of $aux$ for handling Standard~ML string literals.\\
+aux_kw&Sub function of $aux$ and $aux_str$ for completing their actions
+	after handling percent `{\tt\%}' enclosed keywords.\\
+get_kw&Get a keyword enclosed in double `{\tt Q}'s.\\
+get_pc&Get a keyword enclosed percent `{\tt\%}' characters.\\
+string_of_kw&Convert a keyword to its percent `{\tt\%}' enclosed form.\\
+string_of_extended_char&Convert an extended character to its
+	percent `{\tt\%}' enclosed form.\\
+\end{tabular}
+\end{center}
 
 {\ftlinepenalty=9999
 =SML
-fun ‚writer· (s : string) : unit = (
+fun ‚translate_for_output· (s : string) : string = (
 let
 	val ord_0 = ord "0";
 
-	fun get_kw (prev, nil) = (prev, true, nil)
+	fun get_kw (prev, nil) = (prev, false, nil)
 	|   get_kw (prev, "Q"::"Q"::t) = (prev, true, t)
 	|   get_kw (prev, h::t) = (	if	(h >= "A" andalso h <= "Z")
 					orelse	(h >= "a" andalso h <= "z")
@@ -2550,26 +2618,53 @@ let
 					then	get_kw(prev ^ h, t)
 					else	(prev, false, h::t));
 
-	val e5009 = " (* ERROR 5009 *) ";
+	fun get_pc (prev, nil) = (prev, false, nil)
+	|   get_pc (prev, "%"::t) = (prev, true, t)
+	|   get_pc (prev, h::t) = (	if	(h >= "A" andalso h <= "Z")
+					orelse	(h >= "a" andalso h <= "z")
+					orelse	(h >= "0" andalso h <= "9")
+					orelse	(is_special_char h)
+					then	get_pc(prev ^ h, t)
+					else	(prev, false, h::t));
+
+	fun string_of_kw kw =
+		if !use_extended_chars
+		then
+			case	PrettyNames.find_name kw
+			of Value(_, Value ch, _)	=> ch
+			| _				=> "%" ^ kw ^ "%"
+		else
+			"%" ^ kw ^ "%";
+
+	fun string_of_extended_char ch =
+		if !use_extended_chars orelse ord ch < 128
+		then
+			ch
+		else
+			case	PrettyNames.find_char ch
+			of Value(kw::_, _, _)	=> "%" ^ kw ^ "%"
+			| _			=> ch;
+
+	fun aux_kw x_aux tail = (
+		case	get_pc ("", tail)
+		of (_, false, tail) => "%"::(x_aux tail)
+		| (kw, true, tail) => (string_of_kw kw) :: (x_aux tail));
 
 	fun aux nil = []
 	|   aux ("Q"::"Q"::"Q"::"Q"::t) = "Q"::(aux t)
-	|   aux (f as "Q"::"Q"::"Q"::t) = (
-		local_error "writer" 5009 [fn () => implode f];
-		e5009 :: (aux t))
+	|   aux (f as "Q"::"Q"::"Q"::t) = "%Q%%Q%%Q%" :: (aux t)
 	|   aux (f as "Q"::"Q"::rest) = (
 		case	get_kw ("", rest)
-		of (_, false, t) => (local_error "writer" 5009 [fn () => implode f]; e5009 :: (aux t))
-		|  (kw, true, t) => (	case	PrettyNames.find_name kw
-					of Value(_, Value ch, _)	=> ch
-					| _				=> "%" ^ kw ^ "%"
-				) :: (aux t))
-	|   aux (f as "Q"::t) = (local_error "writer" 5009 [fn () => implode f]; e5009 :: (aux t))
+		of (_, false, t) => "%Q%%Q%" :: (aux t)
+		|  (kw, true, t) => (string_of_kw kw) :: (aux t))
+	|   aux (f as "Q"::t) = "%Q%" :: (aux t)
 	|   aux ((h as "\"")::t) = h::(aux_str t)  (*="=*)
-	|   aux (h::t) = h::(aux t)
+	|   aux ("%"::t) = aux_kw aux t
+	|   aux (h::t) = (string_of_extended_char h)::(aux t)
 
 	and aux_str nil = []
 	|   aux_str ("\""::t) = "\""::(aux t)
+	|   aux_str ("%"::t) = aux_kw aux_str t
 	|   aux_str ("\\"::d1::d2::d3::t) = (
 		if		(d1 >= "0" andalso d1 <= "9")
 		andalso	(d2 >= "0" andalso d2 <= "9")
@@ -2579,24 +2674,46 @@ let
 				val dd1 = ord d1 - ord_0;
 				val dd2 = ord d2 - ord_0;
 				val dd3 = ord d3 - ord_0;
-				val ch = (dd1 * 10 + dd2) * 10 + dd3
+				val ch = (dd1 * 10 + dd2) * 10 + dd3;
+				val chr_ch = chr ch;
+				val opt_str =
+					if ch > 127
+					then
+						if !use_extended_chars
+						then
+							Value chr_ch
+						else
+							case PrettyNames.find_char chr_ch
+							of Value(kw::_, _, _) =>
+								Value("%" ^ kw ^ "%")
+							| _ => Nil
+					else
+						Nil;
+				val rep_str =	case opt_str
+						of Value str => str
+						| Nil => implode["\\", d1, d2, d3]
 			in
-				if ch > 127
-				then	(chr ch) :: (aux_str t)
-				else	"\\"::d1::d2::d3::(aux_str t)
+				rep_str::(aux_str t)
 			end
 		else
 			"\\"::d1::(aux_str(d2::d3::t)))
-	|   aux_str(h::t) = h::(aux_str t);
-
-	val chars = logit RWchars_written "writer" s
+	|   aux_str(h::t) = (string_of_extended_char h)::(aux_str t);
 in
-	output(std_out,	if	!writer_convert
-				then	implode(aux(explode chars))
-				else	chars)
+	implode(aux(explode s))
 end);
 =TEX
 }
+
+=SML
+fun ‚writer· (s : string) : unit = (
+let
+	val chars = logit RWchars_written "translate_for_output" s;
+in
+	output(std_out,	if	!RWwriter_convert
+				then	chars
+				else	translate_for_output chars)
+end);
+=TEX
 
 %********************************************************************
 
@@ -2630,7 +2747,7 @@ processed.
 val usefile_non_stop_mode = ref false;
 val _ =
 new_flag {name = "‚usefile_non_stop_mode·",  control=usefile_non_stop_mode,
-	check=fun_true, default=fun_false};
+	check = fun_true, default=fn () => false};
 =TEX
 
 {\ftlinepenalty=9999
@@ -2723,25 +2840,18 @@ in
 	while (
 	 (use_file_loop (); false)
 		handle Read_too_often ch => (
-			output(std_out,
-				"Character \"" ^ ch ^ "\" read too often, abandoning file "
-				^ file ^ " at line "
-				^ (string_of_int (!line_number)) ^ "\n");
+			diag_string(get_error_message 5501 [ch, file, string_of_int (!line_number)]);
 			close_in cur_in;
 			raise Read_too_often ch)
 		| E =>
 			if !usefile_non_stop_mode
 			then (
-				diag_string(
-					"Exception+ " ^ (PolyML.makestring E)
-					^ " handled by usefile at line "
-					^ (string_of_int (!line_number)) ^ "\n");
+				diag_string(get_error_message 5502 [PolyML.makestring E,
+					string_of_int (!line_number)]);
 				true)
 			else (
-				diag_string(
-					"Exception+, abandoning file "
-					^ file ^ " at line "
-					^ (string_of_int (!line_number)) ^ "\n");
+				diag_string(get_error_message 5503
+					[file, string_of_int (!line_number)]);
 				close_in cur_in;
 				raise E)
 	) do ( (* nothing *) )
@@ -2826,15 +2936,10 @@ let
 in
 	use_string_loop ()
 		handle Read_too_often ch => (
-			diag_string(
-				"Character \"" ^ ch
-				^ "\" read too often, abandoning string at character "
-				^ (string_of_int (!char_number)) ^ "\n");
+			diag_string(get_error_message 5511 [ch, string_of_int (!char_number)]);
 			raise Read_too_often ch)
 		| E => (
-			diag_string(
-				"Exception+, abandoning string at character "
-				^ (string_of_int (!char_number)) ^ "\n");
+			diag_string(get_error_message 5512 [string_of_int (!char_number)]);
 			raise E)
 	(* Only reach here after reading end-of-string *)
 end);
@@ -2866,7 +2971,7 @@ Prompts are required when the system wants the user to enter some
 	should have a different prompt to the first.  To distinguish
 	this reader from the PolyML default reader the prompts have a
 	colon `:' added.  A prompt is required when the previously read
-	character is a new line or a control-X.
+	character is a new line.
 
 =SML
 local (* for useterminal and ask_at_terminal *)
@@ -2878,18 +2983,10 @@ local (* for useterminal and ask_at_terminal *)
 	val console_last : string ref = ref "\n";
 
 	fun issue_prompt() : unit = (
-		if !console_last = "\n" orelse !console_last = "\^X"
+		if !console_last = "\n"
 		then	output(std_out, !cur_prompt)
 		else	()
 	);
-=TEX
-
-The control-X character is taken to mean break as soon as
-	possible to the main prompt of this reader, ignoring any text
-	typed and processed already.
-
-=SML
-	exception QuitTopDec;
 =TEX
 
 All exceptions should be fielded by the reader, they should be
@@ -2932,9 +3029,7 @@ local
 					|  ch => ch
 		in
 			console_last := last;
-			if last = "\^X"
-			then	raise	QuitTopDec
-			else if last <> "\n"
+			if last <> "\n"
 			then	(cur_prompt := prompt2; last)
 			else	last
 		end
@@ -3020,10 +3115,7 @@ to the parsing functions, the response is\footnote{Should probably also
 	the commit, which means that the quit is performed.  This leads
 	to a PolyML database which quits immediately after it is
 	started.  Some more investigation is required in this area.}
-to call $PolyML.quit$.  Function $read_next_character$ deals with
-control-X characters
-locally by raising $QuitTopDec$ to indicate the users request to return
-to the outer level of useterminal.  Exception $Read_too_often$ denotes
+to call $PolyML.quit$.  Exception $Read_too_often$ denotes
 a coding fault in the processing of the users input.  Exception
 $AbandonReaderWriter$ indicates the users desire to abandon this reader
 writer package.  All other exceptions are just reported.  Note that in
@@ -3033,6 +3125,7 @@ declared local to the PolyML system).  This means that there needs to be
 a check for abandoning in the ``others'' clause of the match for
 exceptions below.
 
+{\ftlinepenalty=9999
 =SML
 val ‚useterminal_is_active· : bool ref = ref false;
 
@@ -3042,30 +3135,23 @@ fun ‚useterminal· () : unit = (
 let
 	fun ‚use_term_loop· () = (
 		if (PolyML.compiler (get_ML_outermost reader, writer) (); true)
-			handle EndOfInput => (diag_string 
-					"End of input to useterminal.  Quit.";
+			handle EndOfInput => (diag_string(get_error_message 5523 nil);
 				PolyML.quit(); false)
-			| Fail x => (diag_string(
-					"Exception+ Fail " ^ (PolyML.makestring x) ^ " raised");
+			| Fail x => (diag_string(get_error_message 5522
+					["Fail", PolyML.makestring x]);
 				true)
-			| Error x => (diag_string(
-					"Exception+ Error " ^ (PolyML.makestring x) ^ " raised");
+			| Error x => (diag_string(get_error_message 5522
+					["Error", PolyML.makestring x]);
 				true)
-			| AbandonReaderWriter => (diag_string "Abandoning reader writer";
+			| AbandonReaderWriter => (diag_string(get_error_message 5525 nil);
 				false)
-			| QuitTopDec => (diag_string
-					"Control-X read, return to outer level of useterminal";
-				true)
 			| Read_too_often ch => (
-				diag_string( "Character \"" ^ ch
-					^ "\" read too often, abandoning current input");
+				diag_string(get_error_message 5524 [ch]);
 				true)
 			| E =>	if !abandoning
-				then (	diag_string "Abandoning reader writer";
+				then (	diag_string(get_error_message 5525 nil);
 					false)
-				else (	diag_string(
-						"Exception+ " ^ (PolyML.makestring E)
-						^ " handled by useterminal");
+				else (	diag_string(get_error_message 5521 [PolyML.makestring E]);
 					true)
 		then	(cur_prompt := prompt1; use_term_loop ())
 		else	()
@@ -3091,6 +3177,7 @@ Alternatively:
 			output(std_out, "End of input to useterminal.  Commit and quit.\n");
 			PolyML.commit();
 =TEX
+}
 
 The PolyML input output system has a `type ahead' buffer which is normally
 invisible, however when questions are to be asked of the user at the terminal
@@ -3251,14 +3338,14 @@ in
 	|	SymDoublePercent => get_HOL_any R ("%%" :: prevA)
 	|	SymUnknownKw(sym, is_closed) => (
 			local_error "get_HOL_any" 5003 [fn () => sym, fn () =>
-							implode(rev(" ... " :: (prevA to 10)))];
+							implode(rev(" ... " :: (prevA to 20)))];
 			get_HOL_any R (lex_error_code(5003, prevA))
 		)
 	|	SymUnknownChar ch => (
 			local_error "get_HOL_any" 5005
 						[fn () => ch,
 						fn () => string_of_int(ord ch),
-						fn () => implode(rev(" ... " :: (prevA to 10)))];
+						fn () => implode(" ... " :: (rev(prevA to 20)))];
 				get_ML_any R (lex_error_code(5005, prevA))
 		)
 end);
@@ -3401,38 +3488,6 @@ val _ =	map (fn (name, recogniser) =>
 
 =SML
 end (* of structure HOLReaderWriter *);
-=TEX
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-\newpage
-\section{FINALE}
-
-Some checks that things have been built properly.
-
-=SMLLITERAL
-let
-	fun check_name (n, l) = (
-		case ReaderWriterSupport.PrettyNames.find_name n
-		of Nil => n :: l
-		| _ => l
-	);
-
-	fun check_char (c, l) = (
-		case ReaderWriterSupport.PrettyNames.find_char c
-		of Nil => c :: l
-		| _ => l
-	);
-
-	fun wrap nil title = ()
-	| wrap l title = list_diag_string("Failed to load the" :: title :: l);
-
-	val bad_names = fold check_name ["<", "SHS", "lambda", "fn"] nil;
-	val bad_chars = fold check_char ["ª", "«", "ç"] nil
-in
-	wrap bad_names "keywords:";
-	wrap bad_chars "pretty characters:"
-end;
 =TEX
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

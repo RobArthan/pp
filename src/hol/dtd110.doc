@@ -88,10 +88,28 @@ lasp -s -u dtd005.OKwords dtd005.doc > zz1
 	quotation of other languages.  More extensive documentation of
 	the interfaces.
 
-\item[17 May, issue 1.7 ] Add function $ask_at_terminal$.
+\item[17 May 1991, issue 1.6 ] Add function $ask_at_terminal$.
+
+{\sloppy
+\item[14 August 1991, issue 1.7 ] Add:
+	functions $translate_for_output$ and $is_special_char$;
+	the test strategy section; strings for textual outputs;
+	control flag $use_extended_chars$.
+
+}%
 
 \end{description}
-%\subsection{Changes forecast}
+
+%********************************************************************
+
+\subsection{Changes forecast}
+
+Some of the text in this document and in the
+implementation~\cite{DS/FMU/IED/IMP005} is more appropriate to the
+system builder's guide~\cite{DS/FMU/IED/USR008} and should be
+moved into that document.  When that happens the descriptions in the
+reference manual entries should be rewritten to refer to the system
+builder's guide.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -107,9 +125,11 @@ lasp -s -u dtd005.OKwords dtd005.doc > zz1
 \subsection{Scope}
 
 This document contains a detailed design of the file and terminal
-reading and writing functions, called for by~\cite{DS/FMU/IED/DEF002}
+reading and writing functions, called for by~\cite{DS/FMU/IED/HLD008}.
+These functions implement the extensions to Standard~ML detailed
+in~\cite{DS/FMU/IED/DEF002}
 which discusses the lexical nature of the Release 1 ICL HOL.  The
-design is implemented in \cite{DS/FMU/IED/IMP005}.
+design is implemented in~\cite{DS/FMU/IED/IMP005}.
 
 %********************************************************************
 
@@ -220,16 +240,22 @@ File and terminal reading and writing functions.
 5006	Unknown extended character `?0` (decimal ?1)
 5007	Unexpected symbol `?0` (a symbol of type $Invalid$ has been read)
 5008	Bracket mismatch, `?0` found after an opening `?1`
-5009	Output of unknown keyword that starts with ?0
 5010	Unknown language requested by symbol `?0` with language name `?1`
 5011	Unknown language requested
+5014	Newline found in string after `?0`
 =IGN
 Spare error codes
-5014-5029
-5033-5039
+5009
+5015-5029
+5034-5039
 5041-5049
 5051-5099
-5102-5999
+5105-5499
+Codes 5500-5599 reserved for sections of text.
+5504-5510
+5513-5520
+5526-5530
+5533-5999
 =FAILUREC
 Several error messages are provided to report faults in the users
 textual input to the ICL HOL system, they may be produced from all of
@@ -255,6 +281,13 @@ try the suffix ``{\tt.sml}''.
 Error messages given with signature for $ReaderWriter$.
 Flag $usefile_non_stop_mode$.
 =ENDDOC
+
+=FAILURE
+5501	Character `?0` read too often, abandoning file ?1 at character number ?2
+5502	Exception+ ?0 handled by usefile at line ?1 when in `non_stop_mode`
+5503	Exception+, abandoning file ?0 at line ?1
+=TEX
+
 %--------------------------------------------------------------------
 =DOC
 val ‚usestring· : string -> unit;
@@ -263,6 +296,12 @@ Read Standard~ML with pretty characters allowed, from the given string.
 =SEEALSO
 Error messages given with signature for $ReaderWriter$.
 =ENDDOC
+
+=FAILURE
+5511	Character `?0` read too often, abandoning string at character number ?1
+5512	Exception+, abandoning string at character number ?0
+=TEX
+
 %--------------------------------------------------------------------
 =DOC
 val ‚useterminal· : unit -> unit;
@@ -284,6 +323,15 @@ abandons the current {\em topdec.}
 =SEEALSO
 Error messages given with signature for $ReaderWriter$.
 =ENDDOC
+
+=FAILURE
+5521	Exception+ ?0 handled by useterminal
+5522	Exception+ ?0 ?1 raised
+5523	End of input to useterminal.  Quit.
+5524	Character `?0` read too often, abandoning current input
+5525	Abandoning reader writer
+=TEX
+
 %--------------------------------------------------------------------
 =DOC
 val ‚abandon_reader_writer· : unit -> unit;
@@ -298,24 +346,6 @@ forces an exit from that routine.
 Makes $usefile$ continue reading text (if the flag is true) or stop
 reading (if false) from the file after an error is reported.  Default
 is to stop reading.
-=ENDDOC
-%--------------------------------------------------------------------
-=DOC
-(* ‚writer_convert·  - boolean flag declared by new_flag, default: true *)
-=DESCRIBE
-Controls whether the reader writer makes any changes to the text output
-from the PolyML compiler.  This control is similar but not the same as
-that required when running Release 1 ICL HOL on a glass teletype ---
-the controls for that mode are not yet available.
-=ENDDOC
-%--------------------------------------------------------------------
-=DOC
-(* ‚RWchars_read·  - boolean flag declared by new_flag, default: false *)
-(* ‚RWchars_written·  - boolean flag declared by new_flag, default: false *)
-(* ‚RWphrases_read·  - boolean flag declared by new_flag, default: false *)
-(* ‚RWtext_read·  - boolean flag declared by new_flag, default: false *)
-=DESCRIBE
-Flags declared by the reader writer for debugging purposes.
 =ENDDOC
 %--------------------------------------------------------------------
 =DOC
@@ -338,23 +368,64 @@ call of $ExtendedIO.input_line$.
 =ENDDOC
 %--------------------------------------------------------------------
 
+Strings produced by, for example, converting parts of HOL terms into
+textual form may contain keywords that should be converted into other
+forms, in some cases these keywords may be wrapped in double letter
+`{\tt QQ}'' characters, see~\cite{DS/FMU/IED/DEF002} for an
+explanation.  Translation is automatically performed by the reader
+writer for all text that the PolyML system writes to the standard
+output.  Text written by $BasicIO.output$ to the standard output is not
+converted --- this is because of how PolyML controls its output
+streams.  Function $translate_for_output$ performs the conversions.  It
+is forgiving with its processing: unknown keywords are left in their
+keyword form; unexpected letter `{\tt Q}'s are converted to an
+equivalent keyword, namely `{\tt\%Q\%}'; escape sequences used in
+Standard~ML strings are echoed literally if they are malformed.
+
+A forgiving behaviour is appropriate given the expected context of use
+of the function.  The ICL~HOL system or the user has created some text
+to be output.  The text is often the display of a top-level binding,
+frequently it indicates some change in the state of the Standard~ML
+bindings.  It is appropriate to show as much as possible of these
+changes to the user even if occasionally the results contain a few
+unconverted characters.
+
+=DOC
+val ‚translate_for_output· : string -> string;
+=DESCRIBE
+Translates a string according to the macro processing rules used when
+outputting text.  The output produced depends on the setting of the
+control flag $use_extended_chars$, when false the result will have no
+extended characters, the keyword forms will be used.
+=ENDDOC
+%--------------------------------------------------------------------
+=DOC
+(* ‚use_extended_chars·  - boolean flag declared by new_flag, default: true *)
+=DESCRIBE
+Controls how the writer changes the text output from the PolyML
+compiler.  When $true$ extended characters are written, when $false$
+the corresponding keywords are written.
+=ENDDOC
+%--------------------------------------------------------------------
+
 =SML
 end (* of signature ReaderWriter *);
 =TEX
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+\newpage
 \section{SUPPORTING OTHER LANGUAGES}
 
 A large part of the reader writer interface allows the embedding
 of other languages.
 
-The style of the interface should\footnote{To be done, perhaps as a new
-document describing how to embed new languages.  Most of the required
-information is contained within the implementation
+The style of the interface is to be documented
+in~\cite{DS/FMU/IED/USR008}, most of the required information is
+contained within this document and the implementation
 document~\cite{DS/FMU/IED/IMP005}, but it is too bulky to be placed in
-this document.} be documented.  The descriptions that follow assume
-that such a description has been seen by the reader of this document.
+this document.  The descriptions that follow assume that such a
+description has been seen by the reader of this document.
 
 Many routines have an argument of type $READER_ENV$ which provides the
 functions to read characters from the current input stream.  This
@@ -370,6 +441,8 @@ languages.  The HOL language is an example of a language embedded into
 a basic system that understands Standard~ML with pretty characters and
 percent keywords.
 =ENDDOC
+
+%--------------------------------------------------------------------
 
 \subsection{Diagnostic Support}
 
@@ -392,10 +465,16 @@ val ‚local_warn· : string -> int -> (unit -> string) list -> unit;
 =DESCRIBE
 An error or warning message is written to the standard output, then the
 function returns.  The arguments are identical in form to functions
-$error$ and $fail$ of~\cite{DS/FMU/IED/DTD002}.
+$error$ and $fail$ of {\tt DS/FMU/IED/DTD002}.
 =SEEALSO
 Functions $error$ and $fail$.
 =ENDDOC
+
+=FAILURE
+5531	*** WARNING ?0 from ?1: ?2
+5532	*** ERROR ?0 from ?1: ?2
+=TEX
+
 %--------------------------------------------------------------------
 =DOC
 val ‚add_error_code· : int * string list -> string list;
@@ -404,6 +483,33 @@ val ‚add_error_codes· : int list * string list -> string list;
 For each error number ``$nn$'' given as the first argument an
 entry of the form ``\verb*| ERROR__|$nn$\verb*| |'' is added
 to the head of the second argument.
+=ENDDOC
+%--------------------------------------------------------------------
+
+Diagnostic control $RW_diagnostics$ is interpreted as a series of
+`bits'  each controlling some diagnostic output which is written to the
+PolyML standard output.  A zero value indicates no diagnostics.  The
+value is selected by adding numbers from the following table according
+to the diagnostic outputs required.
+
+\begin{center}
+\begin{tabular}{crp{4in}}
+\multicolumn{2}{c}{Value}&	Purpose\\
+$2^0$&1&	Text passed to PolyML.\\
+$2^1$&2&        Text passed to PolyML, but showing the list structure
+		passed by routines such as $get_ML_any$.\\
+$2^2$&4&	Characters as they are read.\\
+$2^3$&8&	Text passed to the writer function before any
+		translation is performed.\\
+$2^4$&16&	Prevents text from being translated before output by the
+		writer function.\\
+\end{tabular}
+\end{center}
+
+=DOC
+(* ‚RW_diagnostics·  - integer control declared by new_int_control, default: 0 *)
+=DESCRIBE
+For reader writer diagnostic purposes.
 =ENDDOC
 %--------------------------------------------------------------------
 
@@ -478,9 +584,15 @@ Each symbol is defined in a three-element tuple of this type.  Elements
 of the tuple are as follows.  First, a non-empty list of the keywords
 that may used for this symbol, the preferred keyword is at the head of
 the list.  These keywords exclude the enclosing percent signs.
-Second, an optional pretty character
-for the symbol.  Third:  a value of datatype $NAME_CLASS$ indicating
+Second, an optional character (normally an extended character)
+for the symbol.  Third, a value of datatype $NAME_CLASS$ indicating
 the characteristics of the symbol.
+
+The pretty character field, when used, contains a single character.
+Normally it has decimal code greater than 127.  Lower values may be
+used to achieve keywords for single characters, care should be taken to
+avoid converting such characters into keywords on output when using
+this facility.
 =SEEALSO
 Function $add_new_symbols$, for details of the validation of values
 of this type.
@@ -494,14 +606,16 @@ of this type.
 =DESCRIBE
 Adds details of new symbols to the data structures characterising all
 known symbols.  There is some validation of the symbols added, the list
-of names should not be empty, the individual names should not be a
-single ``{\tt Q}'', should not contain two adjacent ``{\tt Q}''s, and
-the pretty character field should have
-a single character with value greater than decimal~127.
+of names should not be empty, the individual names should not
+contain two adjacent ``{\tt Q}''s, duplicates and
+the character field should have
+a single character.
 =FAILURE
-5100	Keyword `?0` has single `Q` or has adjacent `Q`s
+5100	Keyword `?0` has adjacent `Q`s
 5101	Empty keyword list
-5102	Invalid pretty character with keyword ?0
+5102	Invalid pretty character `?0` with keyword `?1`
+5103	Keyword `?0` duplicated
+5104	Character `?0` duplicated
 =ENDDOC
 %--------------------------------------------------------------------
 =DOC
@@ -518,6 +632,17 @@ the tuple given to $add_new_symbols$ for known symbols.
 
 \subsection{Character Input --- Part 2}
 
+%--------------------------------------------------------------------
+=DOC
+val ‚is_special_char· : string -> bool;
+=DESCRIBE
+Checks whether the string contains a single non-alphanumeric character
+that is allowed in a keyword.  Returns $true$ if the argument contains
+exactly one of the characters listed in the description of function
+$get_percent_name$, otherwise $false$ is returned.
+=SEEALSO
+Function $get_percent_name$.
+=ENDDOC
 %--------------------------------------------------------------------
 =DOC
 val ‚get_percent_name· : READER_ENV
@@ -541,6 +666,7 @@ from the omission of the `{\tt\%}' character.
 =SEEALSO
 Type $PRETTY_NAME$.
 Type $READER_ENV$.
+Function $is_special_char$.
 =ENDDOC
 %--------------------------------------------------------------------
 
@@ -650,13 +776,25 @@ double~(~{\tt"}~) prime characters interchanged.
 
 An end of file found in the string indicates that there is no more
 input available, and so an immediate failure (error 5002) is raised.
+Error code 5014 is included to aid in understanding where errors occur,
+this error is not actually generated until the first non white-space
+character after the newline is processed.
 All other errors detected in strings are reported when found,
 additionally their numbers passed back in the result.
 =FAILURE
 5002	End of file found in string
+5014	Newline found in string after `?0`
 =SEEALSO
 Type $READER_ENV$.
 =ENDDOC
+
+Note that error code 5014 could be deferred for detection and reporting
+by the Standard~ML compiler but the PolyML compiler's error messages is
+not very helpful in this case.  The delay in its production is due to
+how function $read_symbol$ gathers white-space characters.
+
+\bigskip
+
 %--------------------------------------------------------------------
 =DOC
 val ‚get_box_braces· : (READER_ENV -> string list -> string list)
@@ -712,15 +850,16 @@ routine $PolyML.makestring$ cannot be used, if the value last passed to
 of $PolyML.print_depth$ is zero then $PolyML.makestring$ converts
 numbers into three dots.
 =FAILURE
-5040	Number ?0 is too big
+5040	DESIGN ERROR:Number ?0 is too big or is negative
 =ENDDOC
 %--------------------------------------------------------------------
 =DOC
 val ‚to_ML_string· : string -> string
 =DESCRIBE
-Converts any string into a another string which may be read by a
-Standard~ML compiler and has the same meaning.  This is intended to
-form the string representation of pretty characters for passing them
+Converts characters which are to form part of a string literal into
+another string which may be read by a Standard~ML compiler and which
+has the same meaning.  This is intended to form the string
+representation of extended characters for passing them
 through to a Standard~ML compiler.  Characters other than space, tab
 and newline which are outside the range~32 to~126 (decimal) inclusive
 are converted to their four character equivalent of a backslash
@@ -728,7 +867,7 @@ followed by a three digit decimal number with leading zeroes.
 =ENDDOC
 %--------------------------------------------------------------------
 
-\subsection{Supporting Other Languages}
+\subsection{Embedding Other Languages}
 
 Other languages may be embedded
 
@@ -740,7 +879,7 @@ There are two styles of embedding provided.  ``General quotations'' use
 the keywords ``{\tt\%<\%}'' and ``{\tt\%>\%}'' (or the corresponding
 extended characters) to enclose the embedded text, the language is
 indicated by the characters immediately following the opening keyword.
-The BNF syntax, see~\cite{ds/fmu/ied/pln009}, of general quotations is
+The BNF syntax, see~\cite{DS/FMU/IED/PLN009}, of general quotations is
 as follows.
 
 ÛBNF
@@ -825,6 +964,8 @@ the second string holds the name of a Standard~ML constructor which is
 to be written before the quotation when it occurs in within languages
 other than Standard~ML.  Expected values of the second string are
 ``{\tt Lex.Term}'' and ``{\tt Lex.Type}''.
+=FAILURE
+5033	Reader already present for language `?0`
 =ENDDOC
 %--------------------------------------------------------------------
 =DOC
@@ -933,6 +1074,132 @@ All the errors that the basic reader writer may raise may also be raised
 by the HOL reader writer.
 =ENDDOC
 %--------------------------------------------------------------------
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{TEST STRATEGY}
+
+There are three main test areas for the reader writer.
+
+\begin{itemize}
+
+\item Reasonable behaviour.  Does the reader writer do the correct task
+	most of the time, does it allow the compiling and execution of
+	programs written in enhanced Standard~ML.
+
+\item Correct processing.  Are the input and output streams correctly
+	manipulated and passed on to or received from from the PolyML system?
+
+\item Functional interfaces.  Do the functional interfaces do the
+	correct task?
+
+\end{itemize}
+
+These areas are distinguished by the sort of testing that sensible to
+do.  Many aspects of the first two could probably be tested using the
+module test harness~\cite{DS/FMU/IED/DTD013}, but doing so would
+involve excessive work and would result in opaque test scripts.
+
+Reasonable behaviour is determined by actually using the reader writer
+during the compilation of the much of the ICL~HOL system.  This is
+because it is written using the extended Standard~ML supported by the
+reader writer.  If the modules of the ICL~HOL system compile
+successfully producing the correct signatures then a large portion of
+the reader writer must be executing reasonably and properly.  The
+reader writer is similarly needed during the development of other
+modules, its reasonable behaviour is indicated by how it supports the
+development activity in the context of error detection and recovery.
+
+Thus, tests for reasonable behaviour are:
+
+\begin{itemize}
+
+\item Compilation and execution of much of the ICL~HOL system.
+
+\item Compilation and execution of module tests of the reader writer
+	and the rest of the ICL~HOL system.
+
+\end{itemize}
+
+Correct processing concerns the manipulation of text that is to be
+passed to the read phase of the (conventional) read-evaluate-print
+cycle of the PolyML system, followed by the manipulation of system
+outputs.  In this context much of the reader writer deals with text
+that may not successfully parse as Standard~ML: the reader writer is
+required to behave itself in the presence of any text the user presents
+and to either report the problems itself or to pass the problem onto
+the PolyML compiler for it to report.  The reader writer works by side
+effect on the input output streams and via an interface to the
+read-evaluate-print cycle of the PolyML system.  Accordingly the reader
+writer deals with text that cannot easily be tested using the
+facilities of the module test harness~\cite{DS/FMU/IED/DTD013}.
+
+Tests for correct processing are part of integration testing of
+the ICL~HOL system, they include demonstrating that the
+following cases are correctly handled on both input and output.
+Much of the input processing can be tested with function
+$usestring$ under control of the module test
+harness~\cite{DS/FMU/IED/DTD013}.
+
+\begin{itemize}
+
+\item Strings.  Empty strings.  Escape sequences: ignored white space,
+	newline characters, decimal codes, control (caret
+	``{\verb|^|}'') codes.  Extended characters.  Percent
+	``{\tt\%}'' characters.  Percent keywords.
+
+\item Simple Standard~ML expressions.
+
+\item Extended characters.  Use of equivalent keywords.  Use in
+	extended Standard~ML identifiers.
+
+\item Quotations.  Comments strings and character literals.  Nested
+	quotations.  Quotations of Standard~ML.  Quotations of unknown
+	languages.  Term and type quotations.  Declarative quotations,
+	i.e., with schema boxes and similar.
+
+\item Malformed variants of most of the preceding items.
+
+\end{itemize}
+
+Parts of the reader writer may be tested with the module test
+harness~\cite{DS/FMU/IED/DTD013} and a module test document is
+used for these.  Note that successful execution of the module tests
+also demonstrates both reasonable behaviour and correct processing.
+Functions with an argument of type $READER_ENV$ cannot easily be
+tested here since they work by side effect upon that argument.
+
+\begin{itemize}
+
+\item $usestring$.
+
+\item Comments.  Nested comments.  Comments containing asterisks.
+
+\item Function $translate_for_output$ with both settings of control
+	flag $use_extended_chars$.
+
+{\sloppy\hbadness 1500
+\item Simple functions from structure $ReaderWriterSupport$, namely:
+	$local_error$, $local_warn$, $add_error_code$,
+	$add_error_codes$, $is_special_char$, $string_of_int3$, and
+	$to_ML_string$.
+
+}%
+
+\item Accessing extended characters and keywords from structure
+	$PrettyNames$:  accessing predefined symbols by character and
+	by keyword; adding and accessing some new symbols; unknown
+	characters and keywords.
+
+{\sloppy\hbadness 1500
+\item The following functions from structure $ReaderWriterSupport$ can
+	be invoked but cannot be easily tested for their correct side
+	effects:  $add_general_reader$, $add_specific_reader$,
+	$look_up_general_reader$, and $look_up_specific_reader$.
+
+}%
+
+\end{itemize}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %********************************************************************
