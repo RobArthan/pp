@@ -156,7 +156,7 @@ XmPushButtonCallbackStruct *cbs;
 
 	if(text_index >= MAX_PALETTES ||
 		!(text_w = palette_info[text_index].text_w)) {
-		char *m = "unexpected argument 0xXXXXXXXX";
+		char m [sizeof("unexpected argument 0xXXXXXXXX")];
 		sprintf(m, "unexpected argument 0x%x", cbdata);
 		msg("palette handler", m);
 		return;
@@ -175,6 +175,13 @@ XmPushButtonCallbackStruct *cbs;
 
 	XmTextSetInsertionPosition(text_w, start + 1);
 	XmTextShowPosition(text_w, start);
+/*
+ * Next line works OK with keyboarFocusPolicy EXPLICIT, but not with POINTER
+ * (with POINTER it makes the text window gets the keyboard focus regardless of where
+ * the pointer is).
+	XSetInputFocus(XtDisplay(text_w), XtWindow(text_w), RevertToParent, CurrentTime);
+ */
+
 }
 
 
