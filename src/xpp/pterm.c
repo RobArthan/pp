@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.27 2003/05/08 12:44:47 rda Exp rda $
+ * $Id: pterm.c,v 2.28 2003/05/08 14:57:53 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -1062,7 +1062,7 @@ static void default_sigs(void)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * new_editor: fork and exec another edit-only xpp session.
+ * new_session: fork and exec another xpp session.
  * We actually fork a child which then forks again and
  * the grand-child becomes the new xpp process. The
  * child then exits, which makes init rather than this xpp
@@ -1071,7 +1071,7 @@ static void default_sigs(void)
  * without which we would be spawning a generation of zombies.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-void new_editor(void)
+void new_session(char *argv[])
 {
 	pid_t new_pid;
 	new_pid = fork();
@@ -1093,7 +1093,7 @@ void new_editor(void)
 				exit(13);
 			}
 			/* exec argv[0] "" */
-			execlp(argv0, argv0, "", NULL);
+			execvp(argv0, argv);
 			/* **** error if reach here **** */
 			msg("system error", "could not exec");
 			perror("xpp");
@@ -1105,6 +1105,27 @@ void new_editor(void)
 		/* Parent - wait for the child */
 		wait(0);
 	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * new_editor_session: start an edit-only session
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+void new_editor_session(void)
+{
+	static char *argv[] = {"", "-f", "", 0};
+	argv[0] = argv0;
+	new_session(argv);
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * new_command_session: start a command session
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+void new_command_session(void)
+{
+	static char *argv[] = {"", "-f", "", "-c", "", 0};
+	argv[0] = argv0;
+	new_session(argv);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  *  run_in_background: fork and then have the parent exit.

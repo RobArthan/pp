@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.55 2003/05/07 16:32:20 rda Exp rda $
+ * $Id: mainw.c,v 2.56 2003/05/08 11:23:29 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -217,7 +217,8 @@ static MenuItem file_menu_items[] = {
 #define TOOLS_MENU_TEMPLATES       2
 #define TOOLS_MENU_OPTIONS         3
 #define TOOLS_MENU_NEW_EDITOR         4
-#define TOOLS_MENU_CMD_LINE        5
+#define TOOLS_MENU_NEW_COMMAND        5
+#define TOOLS_MENU_CMD_LINE        6
 
 static MenuItem tools_menu_items[] = {
     { "Search and Replace", &xmPushButtonGadgetClass, 'S', NULL, NULL,
@@ -228,8 +229,10 @@ static MenuItem tools_menu_items[] = {
         tools_menu_cb, (XtPointer)TOOLS_MENU_TEMPLATES, (MenuItem *)NULL, False },
     { "Options", &xmPushButtonGadgetClass, 'O', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_OPTIONS, (MenuItem *)NULL, False },
-    { "New Editor", &xmPushButtonGadgetClass, 'N', NULL, NULL,
+    { "New Editor Session", &xmPushButtonGadgetClass, 'N', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_NEW_EDITOR, (MenuItem *)NULL, False },
+    { "New Command Session", &xmPushButtonGadgetClass, 'N', NULL, NULL,
+        tools_menu_cb, (XtPointer)TOOLS_MENU_NEW_COMMAND, (MenuItem *)NULL, False },
     { "Command Line", &xmPushButtonGadgetClass, 'C', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_CMD_LINE, (MenuItem *)NULL, False },
     {NULL}
@@ -910,6 +913,20 @@ static Boolean setup_main_window(
 	fix_pane_height(infobar, infobar);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * If this is a command session and there is no command line put up
+ * dialogue for user to enter one
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+	if(!global_options.edit_only
+	&& !*global_options.command_line) { /* explicit empty string; ask the user: */
+		if(!string_input_dialog(root, 
+			"Please enter the command you wish to run",
+			"Quit",
+			&global_options.command_line)) {
+			exit(0);
+		}
+	}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * Open file if file_name not NULL
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	pause_undo(undo_ptr);
@@ -1234,7 +1251,10 @@ static void tools_menu_cb(
 		add_options_tool();
 		break;
 	case TOOLS_MENU_NEW_EDITOR:
-		new_editor();
+		new_editor_session();
+		break;
+	case TOOLS_MENU_NEW_COMMAND:
+		new_command_session();
 		break;
 	default:
 		break;

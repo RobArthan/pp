@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.10 2003/05/08 11:23:45 rda Exp rda $
+ * $Id: xpp.c,v 2.11 2003/05/08 14:57:53 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -206,7 +206,7 @@ int check_sep(int argc, char **argv)
 			if(i + 1 < argc) {
 				file_name = argv[i+1];
 				have_file_name = True;
-				i += 2;
+				i += i + 2 < argc && check_option(argv[i+2], "command") ? 3 : 2;
 				break;
 			} else {
 				file_name = "";
@@ -230,7 +230,7 @@ int check_sep(int argc, char **argv)
 			break;
 		}
 	}
-	global_options.edit_only = i == argc;
+	global_options.edit_only = i == argc && !check_option(argv[argc-1], "command");
 	return i;
 }
 

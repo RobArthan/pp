@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2003/04/11 10:58:21 $ $Revision: 2.17 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2003/05/07 16:32:20 $ $Revision: 2.18 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -441,6 +441,89 @@ void ok_dialog(Widget w, char *msg)
 	beep();
 	poll(&confirmed);
 	XtPopdown(XtParent(dialog));
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * string_input_dialog: ask a question whose answer is a string
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void
+	string_input_ok_cb(CALLBACK_ARGS),
+	string_input_cancel_cb(CALLBACK_ARGS);
+Boolean string_input_dialog(Widget w, char *question, char *cancel, char **answer)
+{
+	static Widget dialog, text_field;
+	XmString text, ok, cncl, title;
+	Atom WM_DELETE_WINDOW;
+	static int reply;
+	/* 0 = not replied; otherwise YES/NO */
+	reply = 0;
+	if (!dialog) {
+		dialog = XmCreateQuestionDialog(w, "string-input", NULL, 0);
+#ifdef EDITRES
+		add_edit_res_handler(dialog);
+#endif
+		ok = XmStringCreateSimple("   OK   ");
+		cncl = XmStringCreateSimple(cancel);
+		title = XmStringCreateSimple("Enter a string");
+		XtVaSetValues(dialog,
+			XmNdialogStyle,		XmDIALOG_FULL_APPLICATION_MODAL,
+			XmNokLabelString,	ok,
+			XmNcancelLabelString,	cncl,
+			XmNdialogTitle, 	title,
+			XmNdialogType,		XmDIALOG_QUESTION,
+			NULL);
+		XtUnmanageChild(
+			XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON));
+		XtAddCallback(dialog, XmNokCallback, string_input_ok_cb, &reply);
+		XtAddCallback(dialog, XmNcancelCallback, string_input_cancel_cb, &reply);
+		WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
+			"WM_DELETE_WINDOW",
+			False);
+		XmAddWMProtocolCallback(XtParent(dialog),
+			WM_DELETE_WINDOW,
+			string_input_cancel_cb,
+			&reply);
+		text_field = XtVaCreateManagedWidget("answer",
+			xmTextFieldWidgetClass,		dialog,
+			XmNcolumns,			30,
+			NULL);
+		XtAddCallback(text_field, XmNactivateCallback,
+			string_input_ok_cb, &reply);
+		XmStringFree(ok);
+		XmStringFree(cncl);
+		XmStringFree(title);
+	}
+	text = format_msg(question, MSG_LINE_LEN);
+	XtVaSetValues(dialog, XmNmessageString, text, NULL);
+	XmStringFree(text);
+	XtManageChild(dialog);
+	XtPopup(XtParent(dialog), XtGrabNone);
+	XmProcessTraversal(text_field, XmTRAVERSE_CURRENT);
+	poll(&reply);
+	XtPopdown(XtParent(dialog));
+	if(reply == YES) {
+		*answer = XmTextFieldGetString(text_field);
+	}
+	return reply == YES;
+}
+/*
+ * Call-backs for the above.
+ */
+static void string_input_ok_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
+{
+	NAT *reply = cbd;
+	*reply = YES;
+}
+static void string_input_cancel_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
+{
+	NAT *reply = cbd;
+	*reply = NO;
 }
 
 /* Similar to ok_dialog, but used when memory's

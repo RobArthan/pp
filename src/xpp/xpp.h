@@ -176,6 +176,11 @@ typedef struct menu_item {
 	extern void ok_dialog(
 		Widget	w,
 		char	*msg);
+	extern Boolean string_input_dialog(
+		Widget w,
+		char *question,
+		char *cancel,
+		char **answer);
 	extern char *file_dialog(
 		Widget	w,
 		char	*opn,    /* Save/Open/... */
@@ -212,7 +217,8 @@ typedef struct menu_item {
 	extern void send_to_application(
 		char	*buf,
 		NAT	siz);
-	extern void new_editor(void);
+	extern void new_editor_session(void);
+	extern void new_command_session(void);
 	extern void run_in_background(void);
 /* Module: search */
 	extern Boolean add_search_tool(
