@@ -297,19 +297,189 @@ fun €reset_tabs› (() :unit) =
     (reset_PPTab_no());
 fun €len_tab› (():unit) : int = (get_PPTab_no() * get_PPTab_size());
 =TEX
+\subsection{Bracketing}
 In a few places it is important not to put extra brackets around a
 bracketed construct (e.g., an array index).
-In the following, we use $ord$ to avoid exploding the string.
+We check by having a parallel set of functions for expressions and their fragments
+(all prefixed by ``nb''),
+which return false if the item is either such that it is not printed
+(i.e. its string representation would be empty), or it is already bracketed.
 =SML
-local
-   val ord_rbrk = ord "(";
-in
-fun €bracket›  (s : string) : string = (
-	if	s = "" orelse ord s <> ord_rbrk
-	then	"(" ^ s ^ ")"
-	else	s
+fun €nb_spaces› (i : int) : bool = if (i > 0) then true else false;
+fun €nb_tabs› (i : int) : bool = if (i > 0) then true else false;
+fun €nb_z_tm› ({outf,...} : PP_FMT_INFO) (z_tm : Z_TM) : boolean = true;
+
+fun €nb_id_plus›  (fmtinfo: PP_FMT_INFO) (n : ID) (s : string): boolean = (
+	(snb_id_plus fmtinfo n s) <> ""
 );
-end;
+
+fun €nb_id_comma›  (fmtinfo : PP_FMT_INFO) (n : ID) : boolean  = true;
+fun €nb_id›  (fmtinfo : PP_FMT_INFO) (n : ID) : boolean = (nb_id_plus fmtinfo n "");
+
+fun €nb_tmark_plus›  (fmtinfo : PP_FMT_INFO) (t : TMARK) (s : string): boolean =
+	nb_id_plus fmtinfo t s;
+fun €nb_tmark›  (fmtinfo : PP_FMT_INFO) (t : TMARK) : boolean = 
+	nb_tmark_plus fmtinfo t "";
+fun €nb_tmark_comma›  (fmtinfo : PP_FMT_INFO) (t : TMARK) : boolean = true;
+
+fun €nb_term›  ({outf,...} : PP_FMT_INFO) (z : TERM) : boolean = (
+let	val strs = PrettyPrinter.format_term1 false (get_int_control
+		 "cn_automatic_line_splitting" - len_tab()) z;
+in
+	(length strs > 1 orelse (length strs = 1 andalso (hd strs <> "")))
+end);
+
+fun €nb_label› ({outf,...} : PP_FMT_INFO) (label : LABEL) = false;
+
+fun €nb_unary_op› ({outf,...} : PP_FMT_INFO) (_ : UNARY_OP) = true;
+
+fun €nb_binary_op› ({outf,...} : PP_FMT_INFO)(_ : BIN_OP) = true;
+
+fun €nb_mode› ({outf,...} : PP_FMT_INFO)(_ : MODE) = true;
+ 
+fun €nb_loop_direction› ({outf,...} : PP_FMT_INFO) (LDForwards : LOOP_DIRECTION) = false
+  | nb_loop_direction ({outf,...} : PP_FMT_INFO)(LDReverse : LOOP_DIRECTION) = true;
+
+fun €nb_operator_symbol› ({outf,...} : PP_FMT_INFO)(s : OPERATOR_SYMBOL) = s <> "";
+
+fun €snb_operator_symbol› ({outf,...} : PP_FMT_INFO)(s : OPERATOR_SYMBOL) = true;
+
+fun €nb_id_list› (fmtinfo : PP_FMT_INFO)([] : ID list) = false
+  | nb_id_list (fmtinfo : PP_FMT_INFO)([x] : ID list) = (nb_id fmtinfo x)
+  | nb_id_list (fmtinfo : PP_FMT_INFO)(x::xs: ID list) = true;
+
+fun €nb_tmark_list› (_ : PP_FMT_INFO)([] : TMARK list) = false
+  | nb_tmark_list (fmtinfo : PP_FMT_INFO)([x] : TMARK list) = (nb_tmark fmtinfo x)
+  | nb_tmark_list (fmtinfo: PP_FMT_INFO)(x::xs : TMARK list) = true;
+
+fun €nb_z_pred› (fmtinfo : PP_FMT_INFO) (z : Z_PRED) = nb_term fmtinfo z;
+fun €nb_z_exp› (fmtinfo : PP_FMT_INFO) (z : Z_EXP) =  nb_term fmtinfo z;
+fun €nb_z_id› ({outf, ...} : PP_FMT_INFO) (z : Z_ID) = z <> "";
+fun €nb_attrib› (fmtinfo : PP_FMT_INFO) (x : ATTRIB) = nb_id fmtinfo x;
+fun €nb_int_lit› (fmtinfo : PP_FMT_INFO) (x : INT_LIT) = nb_id fmtinfo x;
+
+fun €nb_rangelohi› (fmtinfo: PP_FMT_INFO) 
+	({lo=l, hi=h} : EXP RANGELOHI) = true
+and €nb_range› (fmtinfo: PP_FMT_INFO)(RRange x : EXP RANGE) = true
+  | nb_range fmtinfo (RRangeAttr x : EXP RANGE) = nb_exp fmtinfo x
+and €nb_discrete_range_constrained› (fmtinfo: PP_FMT_INFO)
+		({tmark=t, range=r} : EXP DISCRETE_RANGE_CONSTRAINED) = true
+and €nb_discrete_range› (fmtinfo : PP_FMT_INFO) (DRRange x : DISCRETE_RANGE) = (nb_range fmtinfo x)
+  | nb_discrete_range (fmtinfo : PP_FMT_INFO)(DRConstrained x : DISCRETE_RANGE) =
+    (nb_discrete_range_constrained fmtinfo x)
+and €nb_agg_choice› (fmtinfo : PP_FMT_INFO) (ACAggChoiceRange x : AGG_CHOICE) = (nb_discrete_range fmtinfo x)
+  | nb_agg_choice (fmtinfo : PP_FMT_INFO) (ACAggChoiceSingle x : AGG_CHOICE) = (nb_exp fmtinfo x)
+and €nb_agg_choice_list› (_: PP_FMT_INFO)([] : AGG_CHOICE list) = false
+ | nb_agg_choice_list (fmtinfo: PP_FMT_INFO) ([x] : AGG_CHOICE list) = (nb_agg_choice fmtinfo x)
+  | nb_agg_choice_list (fmtinfo: PP_FMT_INFO) (x::xs : AGG_CHOICE list) = true
+and €nb_named_assoc› (fmtinfo: PP_FMT_INFO)({choice=c, comp=e} : (AGG_CHOICE, EXP) NAMED_ASSOC) = true
+and €nb_named_assoc_list› (_: PP_FMT_INFO)([] : (AGG_CHOICE, EXP) NAMED_ASSOC list) = false
+  | nb_named_assoc_list (fmtinfo: PP_FMT_INFO) ([x] : (AGG_CHOICE, EXP) NAMED_ASSOC list) =
+    (nb_named_assoc fmtinfo x)
+  | nb_named_assoc_list (fmtinfo: PP_FMT_INFO) (x::xs : (AGG_CHOICE, EXP) NAMED_ASSOC list) = true
+and €nb_others› (fmtinfo: PP_FMT_INFO)({others=oth} : EXP OTHERS) = true
+and €nb_agg_pos› (fmtinfo: PP_FMT_INFO) ({tmark=tm, comps=c} : EXP AGG_POS) =
+    (case tm
+        of Nil => false
+         | Value t => true
+    )
+and €nb_agg_pos_others› (fmtinfo: PP_FMT_INFO) ({agg_pos = {tmark=tm, comps=c} :
+    EXP AGG_POS, others = oth} : EXP AGG_POS_OTHERS) =
+    (case tm
+        of Nil => false
+	 | Value t => true
+    )
+and €nb_agg_others› (fmtinfo: PP_FMT_INFO) ({tmark=tm, others=oth} : EXP AGG_OTHERS) =
+    (case tm
+        of Nil =>  false
+	 | Value t => true
+    )
+and €nb_agg_named› (fmtinfo: PP_FMT_INFO)
+	({tmark=tm,named_assocs=n} : (AGG_CHOICE, EXP) AGG_NAMED) =
+    (case tm
+        of Nil => false
+	 | Value t => true
+    )
+and €nb_agg_named_others› (fmtinfo: PP_FMT_INFO) 
+	({agg_named=a as{tmark=tm, named_assocs=n}, others=oth} :
+		(AGG_CHOICE, EXP) AGG_NAMED_OTHERS) =
+    (case tm
+        of Nil => false
+	 | Value t => true
+    )
+and €nb_unary_exp› (fmtinfo: PP_FMT_INFO) ({uop=u, right=r} 
+		: EXP UNARY_EXP) = true
+and €nb_bin_exp› (fmtinfo: PP_FMT_INFO) ({bop=b, left=l, right=r}
+		 : EXP BIN_EXP) = true
+and €nb_attrib_desig› (fmtinfo : PP_FMT_INFO) (ADAttrib x : ATTRIB_DESIG) =
+	 nb_attrib fmtinfo x
+  | nb_attrib_desig (fmtinfo: PP_FMT_INFO) (ADAttribArg (a,e) 
+		: ATTRIB_DESIG) = true
+and €nb_mem_range› (fmtinfo: PP_FMT_INFO) 
+	({left=e, mop=m, range=r} : EXP MEM_RANGE) = true
+
+and €nb_attribute› (fmtinfo: PP_FMT_INFO)
+	({prefix=p, attribute_desig=a} : (EXP, ATTRIB_DESIG) ATTRIBUTE) = true
+
+and €nb_indexed_comp› (fmtinfo: PP_FMT_INFO) 
+	({prefix=p, index=i} : EXP INDEXED_COMP) = true
+and €nb_selected_comp› (fmtinfo: PP_FMT_INFO) 
+	({prefix=p, selector=s} : EXP SELECTED_COMP) = true
+and €nb_qualified_expression› (fmtinfo: PP_FMT_INFO)
+	({tmark=t, exp=e} : EXP QUALIFIED_EXPRESSION) = true
+and €nb_type_conversion› (fmtinfo: PP_FMT_INFO)
+	({tmark=t, exp=e} : EXP QUALIFIED_EXPRESSION) = true
+and €nb_exp› (fmtinfo: PP_FMT_INFO) (EId x : EXP) = (nb_id fmtinfo x)
+  | nb_exp (fmtinfo: PP_FMT_INFO) (EInt x : EXP) = (nb_int_lit fmtinfo x)
+  | nb_exp (fmtinfo: PP_FMT_INFO) (EArrayAggPos x : EXP) = (nb_agg_pos fmtinfo x)
+  | nb_exp (fmtinfo: PP_FMT_INFO) (EArrayAggPosOthers x : EXP) = 
+	(nb_agg_pos_others fmtinfo x)
+  | nb_exp (fmtinfo: PP_FMT_INFO) (EArrayAggOthers x : EXP) = 
+	(nb_agg_others  fmtinfo x)
+  | nb_exp (fmtinfo: PP_FMT_INFO) (EArrayAggNamed x : EXP) = 
+	(nb_agg_named fmtinfo x)
+  | nb_exp (fmtinfo: PP_FMT_INFO) (EArrayAggNamedOthers x : EXP) = 
+	(nb_agg_named_others fmtinfo x)
+  | nb_exp (fmtinfo: PP_FMT_INFO) (ERecAggPos x : EXP) = (nb_agg_pos fmtinfo x)
+  | nb_exp (fmtinfo: PP_FMT_INFO) (ERecAggNamed x : EXP) = false
+  | nb_exp (fmtinfo: PP_FMT_INFO) (EUnaryExp x : EXP) = (nb_unary_exp fmtinfo x)
+  | nb_exp (fmtinfo: PP_FMT_INFO) (EBinExp x : EXP) = (nb_bin_exp fmtinfo x)
+  | nb_exp (fmtinfo: PP_FMT_INFO) (EMemRange x : EXP) = (nb_mem_range fmtinfo x)
+  | nb_exp (fmtinfo: PP_FMT_INFO) (EAttribute x : EXP) = (nb_attribute fmtinfo x)
+  | nb_exp (fmtinfo: PP_FMT_INFO) (EIndexedComp x : EXP) = 
+	(nb_indexed_comp fmtinfo x)
+  | nb_exp (fmtinfo: PP_FMT_INFO) (ESelectedComp x : EXP) = 
+	(nb_selected_comp fmtinfo x)
+  | nb_exp (fmtinfo: PP_FMT_INFO) (EFunCall x : EXP) = false
+  | nb_exp (fmtinfo: PP_FMT_INFO) (EAuxiliaryExp x : EXP) = true
+  | nb_exp (fmtinfo: PP_FMT_INFO) (EQualifiedExp x : EXP) =
+	 (nb_qualified_expression fmtinfo x)
+  | nb_exp (fmtinfo: PP_FMT_INFO) (ETypeConversion x : EXP) =
+	(nb_type_conversion fmtinfo x)
+  | nb_exp (fmtinfo  : PP_FMT_INFO) (EBracketed e : EXP) = false
+  | nb_exp ({outf,...}: PP_FMT_INFO) (EStringLiteral s : EXP) = true
+  | nb_exp ({outf,...}: PP_FMT_INFO) (ECharacterLiteral c : EXP) = true
+and €nb_exp_list› (fmtinfo: PP_FMT_INFO) ([] : EXP list) = false
+  | nb_exp_list (fmtinfo: PP_FMT_INFO) ([x] : EXP list) = (nb_exp fmtinfo x)
+  | nb_exp_list (fmtinfo : PP_FMT_INFO) (x::xs : EXP list) = true;
+=TEX
+=SML
+fun €nb_static_exp› (fmtinfo: PP_FMT_INFO)(x : STATIC_EXP) = (nb_exp fmtinfo x);
+
+fun €nb_static_rangelohi› (fmtinfo: PP_FMT_INFO) ({lo=l, hi=h} : STATIC_EXP RANGELOHI) = true;
+fun €nb_static_range› (fmtinfo: PP_FMT_INFO) (RRange x : EXP RANGE) =
+	 nb_static_rangelohi fmtinfo x
+  | nb_static_range (fmtinfo: PP_FMT_INFO) (RRangeAttr x : EXP RANGE) =
+	 nb_static_exp fmtinfo x;
+
+fun €nb_cond› (fmtinfo: PP_FMT_INFO) (c : COND) = (nb_exp fmtinfo c);
+
+fun €nb_actuals› (fmtinfo : PP_FMT_INFO) (_ : (AGG_CHOICE, EXP) ACTUALS) = false;
+
+=TEX
+Statements, nor items embedding them never need brackets.
+
+\subsection{Expression Fragments}
 =SML
 fun €is_expansion_selected› ({fmtfn, ...} : PP_FMT_INFO) : bool = (
     case fmtfn of
@@ -334,7 +504,7 @@ Leaf functions, these don't call any other functions.
 
 =SML
 
-fun €fmt_id_plus›  ({outf,...} : PP_FMT_INFO) (n : ID) (s : string): unit  = (
+fun €sfmt_id_plus›  ({outf,...} : PP_FMT_INFO) (n : ID) (s : string): string  = (
 	let	fun break_up acc (lhs, "o"::rest) = (
 			break_up ((implode o rev) lhs::acc) ([], rest)
 		) | break_up acc (lhs, (c::rest)) = (
@@ -346,12 +516,17 @@ fun €fmt_id_plus›  ({outf,...} : PP_FMT_INFO) (n : ID) (s : string): unit  = (
 				o fst o (break_up [])) ([], explode n);
 		fun fmt_aux (a::b::rest) = (
 			a^"."^fmt_aux (b::rest)
-		) | fmt_aux (a::rest) = a
+		) | fmt_aux (a::rest) = a ^ s
 		  | fmt_aux [] = s;
 	in
-		outf(fmt_aux comps)
+		fmt_aux comps
 	end
 );
+
+fun €fmt_id_plus›  (fmtinfo as {outf,...}: PP_FMT_INFO) (n : ID) (s : string): unit  = (
+	outf(sfmt_id_plus fmtinfo n s)
+);
+
 fun €fmt_id_comma›  (fmtinfo : PP_FMT_INFO) (n : ID) : unit  = (
 	fmt_id_plus fmtinfo n ","
 );
@@ -377,7 +552,7 @@ in
 		())
 end);
 
-fun €fmt_label› ({outf,...} : PP_FMT_INFO) (label : LABEL) = outf ("("^label^") ");
+fun €fmt_label› ({outf,...} : PP_FMT_INFO) (label : LABEL) = outf ("("^label^")");
 
 fun €fmt_unary_op› ({outf,...} : PP_FMT_INFO) (UOSparkUnaryAdd : UNARY_OP) = outf "+"
   | fmt_unary_op ({outf,...} : PP_FMT_INFO) (UOSparkUnaryMinus : UNARY_OP) = outf "-"
@@ -414,7 +589,12 @@ fun €fmt_loop_direction› ({outf,...} : PP_FMT_INFO) (LDForwards : LOOP_DIRECTION
   | fmt_loop_direction ({outf,...} : PP_FMT_INFO)(LDReverse : LOOP_DIRECTION) = outf "REVERSE";
 
 fun €fmt_operator_symbol› ({outf,...} : PP_FMT_INFO)(s : OPERATOR_SYMBOL) = outf s;
-
+=TEX
+To ensure that the string quotes are adjacent to the operator name.
+=SML
+fun €sfmt_operator_symbol› ({outf,...} : PP_FMT_INFO)(s : OPERATOR_SYMBOL) = (
+	( "\"" ^ s ^ "\"")
+);
 =TEX
 
 Lists of leaf functions.
@@ -452,10 +632,6 @@ fun €fmt_int_lit› (fmtinfo : PP_FMT_INFO) (x : INT_LIT) = fmt_id fmtinfo x;
 
 Expressions.
 
-=SML
-=IGN
-fun fmt_exp (fmtinfo: PP_FMT_INFO) (e:EXP) = ();
-fun fmt_exp_list (fmtinfo: PP_FMT_INFO) (e:EXP list) = ();
 =SML
 fun €fmt_rangelohi› (fmtinfo as {outf,...}: PP_FMT_INFO) 
 	({lo=l, hi=h} : EXP RANGELOHI) = (
@@ -585,29 +761,35 @@ and €fmt_mem_range› (fmtinfo as {outf,...}: PP_FMT_INFO)
     (* following doesn't look right *)
 and €fmt_attribute› (fmtinfo as {outf,...}: PP_FMT_INFO)
 	({prefix=p, attribute_desig=a} : (EXP, ATTRIB_DESIG) ATTRIBUTE) =
-    ((fmt_exp fmtinfo p); outf "'"; (fmt_attrib_desig fmtinfo a))
+    (fmt_exp fmtinfo p; outf "'"; (fmt_attrib_desig fmtinfo a))
 
 and €fmt_indexed_comp› (fmtinfo as {outf,...}: PP_FMT_INFO) 
-	({prefix=p, index=i} : EXP INDEXED_COMP) =
-    ((fmt_exp fmtinfo p); (* bracket *)
-	outf "(";
-	(fmt_exp fmtinfo i);
-	outf ")")
+	({prefix=p, index=i} : EXP INDEXED_COMP) = (
+      fmt_exp fmtinfo p;
+      (if (nb_exp fmtinfo i)
+       then ( (* bracket *)
+	   outf "("; fmt_exp fmtinfo i;	outf ")"
+       ) else (fmt_exp fmtinfo i))
+   )
 and €fmt_selected_comp› (fmtinfo as {outf,...}: PP_FMT_INFO) 
 	({prefix=p, selector=s} : EXP SELECTED_COMP) =
-    ((fmt_exp fmtinfo p); outf "."; (fmt_id fmtinfo s))
+    (fmt_exp fmtinfo p; outf "."; (fmt_id fmtinfo s))
 and €fmt_qualified_expression› (fmtinfo as {outf,...}: PP_FMT_INFO)
-	({tmark=t, exp=e} : EXP QUALIFIED_EXPRESSION) =
-    ((fmt_tmark fmtinfo t); 
-     outf "'("; (* bracket *)
-     (fmt_exp fmtinfo e);
-     outf ")")
+	({tmark=t, exp=e} : EXP QUALIFIED_EXPRESSION) = (
+    	(fmt_tmark fmtinfo t); 
+     	outf "'";
+     	(if (nb_exp fmtinfo e)
+      	then ( (* bracket *)
+	   outf "("; fmt_exp fmtinfo e;	outf ")"
+	) else (fmt_exp fmtinfo e)))
 and €fmt_type_conversion› (fmtinfo as {outf,...}: PP_FMT_INFO)
-	({tmark=t, exp=e} : EXP QUALIFIED_EXPRESSION) =
-    (fmt_tmark fmtinfo t; (* bracket *)
-	outf "(";
-	fmt_exp fmtinfo e;
-	outf ")")
+	({tmark=t, exp=e} : EXP QUALIFIED_EXPRESSION) = (
+    	fmt_tmark fmtinfo t;
+	(if (nb_exp fmtinfo e)
+       	then ( (* bracket *)
+	   outf "("; fmt_exp fmtinfo e;	outf ")"
+       	) else (fmt_exp fmtinfo e))
+)
 and €fmt_exp› (fmtinfo: PP_FMT_INFO) (EId x : EXP) = (fmt_id fmtinfo x)
   | fmt_exp (fmtinfo: PP_FMT_INFO) (EInt x : EXP) = (fmt_int_lit fmtinfo x)
   | fmt_exp (fmtinfo: PP_FMT_INFO) (EArrayAggPos x : EXP) = (fmt_agg_pos fmtinfo x)
@@ -728,7 +910,7 @@ in	(outf ("PRAGMA " ^ id);
 		| _ => (
 			outf "(";
 			fmt_arg_list args;
-			outf ");";
+			outf ")"; outf ";";
 			outf "\n"
 		)
 	))
@@ -754,10 +936,11 @@ in
 end);
 =IGN
 fun €fmt_expansion› (fmtinfo : PP_FMT_INFO) (label : LABEL) = Value ();
+fun €fmt_stmt› (fmtinfo : PP_FMT_INFO) (stmt : STMT) = ();
 =SML
 fun €fmt_ann› (fmtinfo as {outf,fmtfn} : PP_FMT_INFO) (anks as ANKSlot {content, label} : ANN) = (
     if (has_expansion fmtinfo label)
-    then fmt_expansion fmtinfo label
+    then (fmt_expansion fmtinfo label;())
     else (outf ("ß " ^ content^" ¢    ");
 	   (fmt_label fmtinfo label);
 	   outf "\n"
@@ -767,7 +950,7 @@ fun €fmt_ann› (fmtinfo as {outf,fmtfn} : PP_FMT_INFO) (anks as ANKSlot {content,
 	outf "\n"
 )
 and €fmt_annotation› (fmtinfo : PP_FMT_INFO) (anns: ANNOTATION) = (
-	(map (fmt_ann fmtinfo) anns)
+	(map (fmt_ann fmtinfo) anns; ())
 ) 
 and €fmt_expansion› (fmtinfo as {outf, fmtfn} : PP_FMT_INFO) (label : LABEL) = (
 let    val f = case fmtfn of
@@ -801,7 +984,7 @@ in
         |    ReplaceAnnotation {replacement, ...}    =>
 		fmt_annotation fmtinfo replacement
         |    UnReplaced (RSCompilation, s) => (
-              outf "-- k-slot " ^label;
+              outf ("-- k-slot " ^label);
  		 outf "\n"
         ) |    UnReplaced (RSSpecStatement, s) => (
               outf ("NULL; -- " ^ label);
@@ -829,7 +1012,7 @@ end)
 and €fmt_spec_no_ivars› (fmtinfo as {outf,...} : PP_FMT_INFO) (s as
 		{spec, label} : SPEC_NO_IVARS) = (
 	if (has_expansion fmtinfo label)
-    	then fmt_expansion fmtinfo label 
+    	then (fmt_expansion fmtinfo label; ())
 	else (
 		fmt_spec fmtinfo spec;
 		outf "    ";
@@ -844,7 +1027,7 @@ Statements.
 =SML
 and €fmt_assign› (fmtinfo as {outf,...} : PP_FMT_INFO) ({name=n, e=e} : ASSIGN) = (
     	(fmt_exp fmtinfo n);
-	outf " := ";
+	outf ":=";
 	(fmt_exp fmtinfo e);
 	outf ";";
 	outf "\n"
@@ -898,8 +1081,7 @@ and €fmt_elsif› (fmtinfo as {outf,...} : PP_FMT_INFO)
 	outf "ELSIF";
 	(fmt_cond fmtinfo g);
 	outf "THEN";
-	inc_tabs();
-	(fmt_stmt fmtinfo p);
+	inc_tabs(); fmt_stmt fmtinfo p; dec_tabs();
 	(case q
          of STImplicitNull => outf "\n"
          | z => (
@@ -968,7 +1150,7 @@ and €fmt_case_alt› (fmtinfo as {outf,...} : PP_FMT_INFO)
 	outf "\n";
 	inc_tabs();
     	(fmt_stmt fmtinfo s);
-	dec_tabs()
+	dec_tabs(); outf "\n"
 )
 and €fmt_case_alt_list› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ([] : STMT CASE_ALTERNATIVE list) = ()
@@ -977,139 +1159,179 @@ and €fmt_case_alt_list› (fmtinfo as {outf,...} : PP_FMT_INFO)
     	(fmt_case_alt fmtinfo x);
 	(fmt_case_alt_list fmtinfo xs)
    )
-and €fmt_case› (fmtinfo as {outf,...} : PP_FMT_INFO) ({e=e, s=s, others=oth} : STMT CASE) =
-    [(FmtInfo, "CASE "^(fmt_exp e)^" IS")]@
-    (fmt_case_alt_list (inc_tabs FmtInfo) s)@
-    (
-      case oth
-      of STImplicitNull => []
-       | _ => [(FmtInfo, "WHEN OTHERS =>")]@(fmt_stmt (inc_tabs FmtInfo) oth)
-    )@
-    [(FmtInfo, "END CASE;")]
-and €fmt_unnamed_loop› (fmtinfo as {outf,...} : PP_FMT_INFO) ({t=Value t, stmt=s} : STMT LOOP) =
-    (if is_expansion_selected FmtInfo
-    then    [(FmtInfo, "-- TILL ...")]
-    else    [(FmtInfo, "TILL ˚"^(fmt_z_tm t)^"˝")]
-    ) @
-    [(FmtInfo, "LOOP")]@
-    (fmt_stmt (inc_tabs FmtInfo) s)@
-    [(FmtInfo, "END LOOP;")]
-  | fmt_unnamed_loop (fmtinfo as {outf,...} : PP_FMT_INFO) ({t=Nil, stmt=s} : STMT LOOP) =
-    [(FmtInfo, "LOOP")]@
-    (fmt_stmt (inc_tabs FmtInfo) s)@
-    [(FmtInfo, "END LOOP;")]
+and €fmt_case› (fmtinfo as {outf,...} : PP_FMT_INFO) ({e=e, s=s, others=oth} : STMT CASE) = (
+	outf "CASE";
+	(fmt_exp fmtinfo e);
+	outf "IS";
+	inc_tabs();
+    	(fmt_case_alt_list fmtinfo s);
+	dec_tabs();
+	(
+	      case oth
+	      of STImplicitNull => ()
+	       | _ => (outf "WHEN OTHERS =>";
+			inc_tabs();
+		        fmt_stmt fmtinfo oth;
+			dec_tabs();
+			outf "\n"
+		)
+	);
+	outf "END CASE;";
+	outf "\n"
+   )
+and €fmt_unnamed_loop› (fmtinfo as {outf,...} : PP_FMT_INFO) ({t=Value t, stmt=s} : STMT LOOP) = (
+    (if is_expansion_selected fmtinfo
+    then    (outf "-- TILL ..."; outf "\n")
+    else    (outf "TILL ˚"; (fmt_z_tm fmtinfo t); outf "˝"; outf "\n")
+    );
+    outf "LOOP"; outf "\n";
+    inc_tabs();
+    (fmt_stmt fmtinfo s);
+    dec_tabs();
+    outf "END LOOP;";
+    outf "\n"
+    )
+  | fmt_unnamed_loop (fmtinfo as {outf,...} : PP_FMT_INFO) ({t=Nil, stmt=s} : STMT LOOP) = (
+	outf "LOOP"; outf "\n";
+	inc_tabs();
+	(fmt_stmt fmtinfo s);
+	dec_tabs(); outf "\n"
+   )
+
 and €fmt_named_loop› (fmtinfo as {outf,...} : PP_FMT_INFO)
-        ({name=n, t=Value t, stmt=s} : STMT NAMED_LOOP) =
-    in_new_scope false n (fn () =>
-	[(FmtInfo, (fmt_id n)^":")]@
-   	 (    if is_expansion_selected FmtInfo
-   	 then    [(FmtInfo, "-- TILL statement")]
-   	 else    [(FmtInfo, "TILL ˚"^(fmt_z_tm t)^"˝")]
-   	 ) @
-   	 [(FmtInfo, "LOOP")]@
-   	 (fmt_stmt (inc_tabs FmtInfo) s)@
-   	 [(FmtInfo, "END LOOP "^(fmt_id n)^";")]
+        ({name=n, t=Value t, stmt=s} : STMT NAMED_LOOP) = (
+    in_new_scope false n (fn () => (
+	(fmt_id fmtinfo n); outf ":"; outf "\n";
+   	 (    if is_expansion_selected fmtinfo
+   	 then    (outf "-- TILL statement"; outf "\n")
+   	 else    (outf "TILL ˚"; (fmt_z_tm fmtinfo t); outf "˝"; outf "\n")
+   	 );
+   	 outf "LOOP"; outf "\n";
+	 inc_tabs();
+   	 (fmt_stmt fmtinfo s);
+	 dec_tabs();
+   	 outf "END LOOP"; (fmt_id fmtinfo n); outf ";"; outf "\n"
+	)
+   )
 )  | fmt_named_loop (fmtinfo as {outf,...} : PP_FMT_INFO)
-        ({name=n, t=Nil, stmt=s} : STMT NAMED_LOOP) =
-    in_new_scope false n (fn () =>
-	[(FmtInfo, (fmt_id n)^":")]@
-	[(FmtInfo, "LOOP")]@
-	(fmt_stmt (inc_tabs FmtInfo) s)@
-	[(FmtInfo, "END LOOP "^(fmt_id n)^";")]
-) and €fmt_loop_body› (fmtinfo as {outf,...} : PP_FMT_INFO) ({t=Value t, stmt=s} : STMT LOOP) =
-    (    if is_expansion_selected FmtInfo
-    then    [(FmtInfo, "-- TILL statement")]
-    else    [(FmtInfo, "TILL ˚"^(fmt_z_tm t)^"˝")]
-    ) @
-    [(FmtInfo, "LOOP")]@
-    (fmt_stmt (inc_tabs FmtInfo) s)
-  | fmt_loop_body (fmtinfo as {outf,...} : PP_FMT_INFO) ({t=Nil, stmt=s} : STMT LOOP) =
-    [(FmtInfo, "LOOP")]@
-    (fmt_stmt (inc_tabs FmtInfo) s)
+        ({name=n, t=Nil, stmt=s} : STMT NAMED_LOOP) = (
+    in_new_scope false n (fn () => (
+	(fmt_id fmtinfo n); outf ":"; outf "\n";
+	outf "LOOP"; outf "\n";
+	(inc_tabs(); fmt_stmt fmtinfo s; dec_tabs());
+	outf "END LOOP";(fmt_id fmtinfo n); outf ";"; outf "\n"
+    ))
+) and €fmt_loop_body› (fmtinfo as {outf,...} : PP_FMT_INFO) ({t=Value t, stmt=s} : STMT LOOP) =  (
+    (if is_expansion_selected fmtinfo
+    then    (outf "-- TILL statement"; outf "\n")
+    else    (outf "TILL ˚"; (fmt_z_tm fmtinfo t); outf "˝"; outf "\n")
+    );
+    outf "LOOP"; outf "\n";
+    (inc_tabs(); fmt_stmt fmtinfo s; dec_tabs())
+   )  | fmt_loop_body (fmtinfo as {outf,...} : PP_FMT_INFO) ({t=Nil, stmt=s} : STMT LOOP) = (
+	outf "LOOP"; outf "\n";
+	(inc_tabs(); fmt_stmt fmtinfo s; dec_tabs())
+   )
 and €fmt_while› (fmtinfo as {outf,...} : PP_FMT_INFO)
-        ({name=Value n, g=g, loop=l} : STMT WHILE) =
-    [(FmtInfo, (fmt_id n)^":")]@
-    [(FmtInfo, "WHILE "^(fmt_cond g))]@
-    (fmt_loop_body FmtInfo l)@
-    [(FmtInfo, "END LOOP "^(fmt_id n)^";")]
+        ({name=Value n, g=g, loop=l} : STMT WHILE) = (
+	(fmt_id fmtinfo n); ":"; outf "\n";
+	outf  "WHILE"; (fmt_cond fmtinfo g); outf "\n";
+	(fmt_loop_body fmtinfo l);
+	outf "END LOOP"; (fmt_id fmtinfo n); outf ";"; outf "\n"
+  )
   | fmt_while (fmtinfo as {outf,...} : PP_FMT_INFO)
-        ({name=Nil, g=g, loop=l} : STMT WHILE) =
-    [(FmtInfo, "WHILE "^(fmt_cond g))]@
-    (fmt_loop_body FmtInfo l)@
-    [(FmtInfo, "END LOOP;")]
+        ({name=Nil, g=g, loop=l} : STMT WHILE) = (
+	outf "WHILE"; (fmt_cond fmtinfo g); outf "\n";
+	(fmt_loop_body fmtinfo l);
+	outf "END LOOP;"; outf "\n"
+   )
 and €fmt_for_static› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({name=Value n, tmark=t, i=i, dir=d, range=r, loop=loop}:
-    STMT FOR_STATIC) =
+    STMT FOR_STATIC) = (
     in_new_scope false n (fn () => (
 	check_decl i;
-   	 [(FmtInfo, (fmt_id n)^":")]@
-  	  [(FmtInfo, "FOR "^(fmt_id i)^" IN "^
-  	      (fmt_loop_direction d)^(fmt_tmark t)^" RANGE "^(fmt_range r))]@
-  	  (fmt_loop_body FmtInfo loop)@
-  	  [(FmtInfo, "END LOOP "^(fmt_id n)^";")]
-))  | fmt_for_static (fmtinfo as {outf,...} : PP_FMT_INFO)
+   	(fmt_id fmtinfo n); outf ":"; outf "\n";
+  	outf "FOR"; fmt_id fmtinfo i; outf "IN";
+  	fmt_loop_direction fmtinfo d;
+	fmt_tmark fmtinfo t; outf "RANGE";
+	(fmt_range fmtinfo r); outf"\n";
+  	(fmt_loop_body fmtinfo loop);
+  	outf "END LOOP";(fmt_id fmtinfo n); outf ";"; outf "\n"
+)))
+ | fmt_for_static (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({name=Nil, tmark=t, i=i, dir=d, range=r, loop=loop} :
-    STMT FOR_STATIC) =
+    STMT FOR_STATIC) = (
     in_new_scope false "" (fn () => (
        check_decl i;
-	[(FmtInfo, "FOR "^(fmt_id i)^" IN "^(fmt_loop_direction d)^
-        	(fmt_tmark t)^" RANGE "^(fmt_range r))]@
-	(fmt_loop_body FmtInfo loop)@
-	[(FmtInfo, "END LOOP;")]
-)) and €fmt_for_tmark› (fmtinfo as {outf,...} : PP_FMT_INFO)
+	outf "FOR";
+	fmt_id fmtinfo i;
+	outf "IN";
+	(fmt_loop_direction fmtinfo d);
+        (fmt_tmark fmtinfo t);
+	outf "RANGE";
+	(fmt_range fmtinfo r); outf "\n";
+	(fmt_loop_body fmtinfo loop);
+	outf "END LOOP;"; outf "\n"
+)))
+ and €fmt_for_tmark› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({name=Value n, i=i, tmark=t, dir=d, loop=loop} :
-    STMT FOR_TMARK) =
+    STMT FOR_TMARK) = (
     in_new_scope false n (fn () => (
 	check_decl i;
-    	[(FmtInfo, (fmt_id n)^":")]@
-    	[(FmtInfo, "FOR "^(fmt_id i)^" IN "^
-        	(fmt_loop_direction d)^(fmt_tmark t))]@
-   	 (fmt_loop_body FmtInfo loop)@
-   	[(FmtInfo, "END LOOP "^(fmt_id n)^";")]
-)) | fmt_for_tmark (fmtinfo as {outf,...} : PP_FMT_INFO)
+    	(fmt_id fmtinfo n); outf ":"; outf "\n";
+    	outf "FOR"; fmt_id fmtinfo i; outf "IN";
+        (fmt_loop_direction fmtinfo d);(fmt_tmark fmtinfo t); outf "\n";
+   	(fmt_loop_body fmtinfo loop);
+   	outf "END LOOP"; (fmt_id fmtinfo n); outf ";"; outf "\n"
+)))
+ | fmt_for_tmark (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({name=Nil, i=i, tmark=t, dir=d, loop=loop} :
-    STMT FOR_TMARK) =
+    STMT FOR_TMARK) = (
     in_new_scope false "" (fn () => (
        check_decl i;
-       [(FmtInfo, "FOR "^(fmt_id i)^" IN "^
-           (fmt_loop_direction d)^(fmt_tmark t))]@
-       (fmt_loop_body FmtInfo loop)@
-       [(FmtInfo, "END LOOP;")]
-)) and €fmt_stmt› (fmtinfo as {outf,...} : PP_FMT_INFO) (STNull : STMT) = [(FmtInfo, "NULL;")]
-  | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STImplicitNull : STMT) = []
+       outf "FOR"; fmt_id fmtinfo i; outf "IN"; 
+       (fmt_loop_direction fmtinfo d);
+	(fmt_tmark fmtinfo t); outf "\n";
+       (fmt_loop_body fmtinfo loop);
+       outf "END LOOP;"; outf "\n"
+)))
+ and €fmt_stmt› (fmtinfo as {outf,...} : PP_FMT_INFO) (STNull : STMT) = (
+	outf "NULL;"; outf "\n")
+  | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STImplicitNull : STMT) = ()
   | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STAssign x : STMT) =
-        (fmt_assign FmtInfo x)
+        (fmt_assign fmtinfo x)
   | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STSpecNoIvars x : STMT) =
-        (fmt_spec_no_ivars FmtInfo x)
+        (fmt_spec_no_ivars fmtinfo x)
   | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STSemicolon (a,b) : STMT) =
-        (fmt_stmt FmtInfo a)@(fmt_stmt FmtInfo b)
+        (fmt_stmt fmtinfo a; fmt_stmt fmtinfo b)
   | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STIfThenElse x : STMT) =
-        (fmt_if_then_else FmtInfo x)
+        (fmt_if_then_else fmtinfo x)
   | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STCase x : STMT) =
-        (fmt_case FmtInfo x)
+        (fmt_case fmtinfo x)
   | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STLoop x : STMT) =
-        (fmt_unnamed_loop FmtInfo x)
+        (fmt_unnamed_loop fmtinfo x)
   | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STNamedLoop x : STMT) =
-        (fmt_named_loop FmtInfo x)
+        (fmt_named_loop fmtinfo x)
   | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STWhile x : STMT) =
-        (fmt_while FmtInfo x)
+        (fmt_while fmtinfo x)
   | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STForStatic x : STMT) =
-        (fmt_for_static FmtInfo x)
+        (fmt_for_static fmtinfo x)
   | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STForTmark x : STMT) =
-        (fmt_for_tmark FmtInfo x)
+        (fmt_for_tmark fmtinfo x)
   | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STExitWhen x : STMT) =
-        (fmt_exit_when FmtInfo x)
-  | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STExit : STMT) = [(FmtInfo, "EXIT;")]
+        (fmt_exit_when fmtinfo x)
+  | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STExit : STMT) = (
+	outf "EXIT;"; outf "\n")
   | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STRet x : STMT)  =
-        (fmt_return FmtInfo x)
+        (fmt_return fmtinfo x)
   | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STProcNoIvars x : STMT) =
-        (fmt_proc_call_no_ivars FmtInfo x)
+        (fmt_proc_call_no_ivars fmtinfo x)
   | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STKSlot x : STMT) =
-        (fmt_k_slot FmtInfo x)
+        (fmt_k_slot fmtinfo x)
   | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STPragma x : STMT) =
-        (fmt_pragma FmtInfo x)
+        (fmt_pragma fmtinfo x)
   | fmt_stmt (fmtinfo as {outf,...} : PP_FMT_INFO) (STAnnotation x : STMT) =
-        (fmt_annotation FmtInfo x)
+        (fmt_annotation fmtinfo x)
 
 =TEX
 
@@ -1119,26 +1341,32 @@ Logical constructs.
 
 (* we don't print out pre1 since it doesn't come from the user *)
 and €fmt_log_con› (fmtinfo as {outf,...} : PP_FMT_INFO)
-        ({x=x, t=t, spec=s, label, ...} : LOG_CON, stmt :STMT) =
-    if is_expansion_selected FmtInfo
-    then    (fmt_spec_no_ivars FmtInfo {spec=s, label=label})
-			@ (fmt_stmt FmtInfo stmt)
-    else    [(FmtInfo,
-            "CON "^(fmt_z_id x)^" : "^(fmt_z_tm t)^" ∑ "^
-            (fmt_spec s)^"    "^(fmt_label label))] @ (fmt_stmt FmtInfo stmt)
-
+        ({x=x, t=t, spec=s, label, ...} : LOG_CON, stmt :STMT) = (
+    if is_expansion_selected fmtinfo
+    then    (fmt_spec_no_ivars fmtinfo {spec=s, label=label};
+		fmt_stmt fmtinfo stmt)
+    else    (
+		outf "CON";
+		(fmt_z_id fmtinfo x); outf ":";fmt_z_tm fmtinfo t;
+		outf "∑";
+            	(fmt_spec fmtinfo s);
+		outf "    ";(fmt_label fmtinfo label);
+		outf "\n";
+		fmt_stmt fmtinfo stmt
+	)
+)
 =TEX
 
 Top level statements.
 
 =SML
 
-and €fmt_statement› (fmtinfo as {outf,...} : PP_FMT_INFO) (SStmt x) = (fmt_stmt FmtInfo x)
+and €fmt_statement› (fmtinfo as {outf,...} : PP_FMT_INFO) (SStmt x) = (fmt_stmt fmtinfo x)
   | fmt_statement (fmtinfo as {outf,...} : PP_FMT_INFO) (SSpecIvars x) =
     fail "fmt_statement" 510999 [fn()=>"spec with ivars"]
   | fmt_statement (fmtinfo as {outf,...} : PP_FMT_INFO) (SForNonStatic x) = 
     fail "fmt_statement" 510999 [fn()=>"for with non-static bounds"]
-  | fmt_statement (fmtinfo as {outf,...} : PP_FMT_INFO) (SLogCon x) = (fmt_log_con FmtInfo x)
+  | fmt_statement (fmtinfo as {outf,...} : PP_FMT_INFO) (SLogCon x) = (fmt_log_con fmtinfo x)
   | fmt_statement (fmtinfo as {outf,...} : PP_FMT_INFO) (SProcIvars x) =
     fail "fmt_statement" 510999 [fn()=>"proc with ivars"]
 
@@ -1151,11 +1379,14 @@ Variable declarations.
 =SML
 
 and €fmt_var_decl› (fmtinfo as {outf,...} : PP_FMT_INFO) ({vars=v, tmark=t} : VAR_DECL) = (
-    map check_decl v;
-    [(FmtInfo, (fmt_id_list v)^" : "^(fmt_tmark t)^";")]
-) and fmt_var_decl_list (fmtinfo as {outf,...} : PP_FMT_INFO) ([] : VAR_DECL list) = []
+	map check_decl v;
+	(fmt_id_list fmtinfo v);
+	outf ":";
+	(fmt_tmark fmtinfo t);
+	outf ";"; outf "\n"
+) and fmt_var_decl_list (fmtinfo as {outf,...} : PP_FMT_INFO) ([] : VAR_DECL list) = ()
   | fmt_var_decl_list (fmtinfo as {outf,...} : PP_FMT_INFO) (x::xs : VAR_DECL list) =
-    (fmt_var_decl FmtInfo x)@(fmt_var_decl_list FmtInfo xs)
+    (fmt_var_decl fmtinfo x; fmt_var_decl_list fmtinfo xs)
 
 =TEX
 
@@ -1166,12 +1397,14 @@ Constant and deferred constant declarations.
 and €fmt_const_decl› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({consts=c, tm=t, expr=e} : EXP CONST_DECL) = (
     map check_decl c;
-    [(FmtInfo, (fmt_id_list c)^" : CONSTANT "^
-        (fmt_tmark t)^" := "^(fmt_exp e)^";")]
-) and fmt_deferred_const_decl (fmtinfo as {outf,...} : PP_FMT_INFO)
+    (fmt_id_list fmtinfo c); outf ": CONSTANT";
+    (fmt_tmark fmtinfo t); outf ":=";
+    (fmt_exp fmtinfo e); outf ";"; outf "\n"
+) and €fmt_deferred_const_decl› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({consts=c, tmark=t} : DEFERRED_CONST_DECL) = (
-    map check_decl c;
-    [(FmtInfo, (fmt_id_list c)^" : CONSTANT "^(fmt_tmark t)^";")]
+	map check_decl c;
+	(fmt_id_list fmtinfo c); outf ": CONSTANT";
+	(fmt_tmark fmtinfo t); outf ";"; outf "\n"
 )
 =TEX
 
@@ -1182,8 +1415,8 @@ Enumerated types.
 and €fmt_enum_type_def› (fmtinfo as {outf,...} : PP_FMT_INFO)
         (name, {vals=v} : ENUM_TYPE_DEF) = (
     check_decl name;
-    [(FmtInfo, "TYPE "^(fmt_id name)^
-        " IS ("^(fmt_id_list v)^");")]
+	outf "TYPE"; (fmt_id fmtinfo name);
+	outf "IS ("; (fmt_id_list fmtinfo v); outf ")"; outf ";"; outf "\n"
 )
 =TEX
 
@@ -1193,8 +1426,8 @@ Integer types.
 
 and €fmt_int_type_def› (fmtinfo as {outf,...} : PP_FMT_INFO) (name, r : EXP RANGE) = (
     check_decl name;
-    [(FmtInfo, "TYPE "^(fmt_id name)^
-        " IS RANGE "^(fmt_range r)^";")]
+	outf "TYPE"; (fmt_id fmtinfo name);
+        outf "IS RANGE"; (fmt_range fmtinfo r); outf ";"; outf "\n"
 )
 =TEX
 
@@ -1202,17 +1435,18 @@ Floating point types.
 
 =SML
 
-and €fmt_floating_point_constraint› ({exp=e, range=Value r} :
-        EXP FLOATING_POINT_CONSTRAINT) =
-    " DIGITS "^(fmt_exp e)^" RANGE "^(fmt_range r)
-  | fmt_floating_point_constraint ({exp=e, range=Nil} :
-        EXP FLOATING_POINT_CONSTRAINT) =
-    " DIGITS "^(fmt_exp e)
+and €fmt_floating_point_constraint› (fmtinfo as {outf,...} : PP_FMT_INFO)
+        ({exp=e, range=Value r} : EXP FLOATING_POINT_CONSTRAINT) = (
+	outf "DIGITS"; (fmt_exp fmtinfo e); outf "RANGE";
+	(fmt_range fmtinfo r)
+  ) | fmt_floating_point_constraint (fmtinfo as {outf,...} : PP_FMT_INFO)
+        ({exp=e, range=Nil} : EXP FLOATING_POINT_CONSTRAINT) = (
+	outf "DIGITS"; fmt_exp fmtinfo e)
 and €fmt_floating_type_def› (fmtinfo as {outf,...} : PP_FMT_INFO)
         (name, x : EXP FLOATING_TYPE_DEF) = (
     check_decl name;
-    [(FmtInfo, "TYPE "^(fmt_id name)^
-        " IS"^(fmt_floating_point_constraint x)^";")]
+	outf "TYPE"; (fmt_id fmtinfo name);
+        outf "IS"; (fmt_floating_point_constraint fmtinfo x); outf ";"; outf "\n"
 )
 =TEX
 
@@ -1220,17 +1454,18 @@ Fixed point types.
 
 =SML
 
-and €fmt_fixed_point_constraint› ({exp=e, range=Value r} :
-        EXP FIXED_POINT_CONSTRAINT) =
-    " DELTA "^(fmt_exp e)^" RANGE "^(fmt_range r)
-  | fmt_fixed_point_constraint ({exp=e, range=Nil} :
-        EXP FIXED_POINT_CONSTRAINT) =
-    " DELTA "^(fmt_exp e)
+and €fmt_fixed_point_constraint›(fmtinfo as {outf,...} : PP_FMT_INFO)
+         ({exp=e, range=Value r} : EXP FIXED_POINT_CONSTRAINT) = (
+	outf "DELTA"; (fmt_exp fmtinfo e); outf "RANGE";
+	(fmt_range fmtinfo r)
+) | fmt_fixed_point_constraint(fmtinfo as {outf,...} : PP_FMT_INFO)
+         ({exp=e, range=Nil} : EXP FIXED_POINT_CONSTRAINT) = (
+	outf "DELTA"; fmt_exp fmtinfo e)
 and €fmt_fixed_type_def› (fmtinfo as {outf,...} : PP_FMT_INFO)
         (name, x : EXP FIXED_TYPE_DEF) = (
     check_decl name;
-    [(FmtInfo, "TYPE "^(fmt_id name)^
-        " IS"^(fmt_fixed_point_constraint x)^";")]
+	outf "TYPE"; (fmt_id fmtinfo name);
+        outf "IS"; (fmt_fixed_point_constraint fmtinfo x); outf ";"; outf "\n"
 )
 =TEX
 
@@ -1241,17 +1476,23 @@ Array types.
 and €fmt_array_def› (fmtinfo as {outf,...} : PP_FMT_INFO)
         (name, {index=i, comp=c} : ARRAY_DEF) = (
     check_decl name;
-    [(FmtInfo, "TYPE "^(fmt_id name)^
-        " IS ARRAY ("^(fmt_tmark_list i)^") OF "^(fmt_tmark c)^";")]
-) and €fmt_uncon_tmark_list› ([] : TMARK list) = ""
-  | fmt_uncon_tmark_list ([x] : TMARK list) = (fmt_tmark x)^" RANGE <>"
-  | fmt_uncon_tmark_list (x::xs : TMARK list) =
-    (fmt_uncon_tmark_list [x])^", "^(fmt_uncon_tmark_list xs)
+	outf "TYPE"; (fmt_id fmtinfo name);
+        outf "IS ARRAY (";
+	(fmt_tmark_list fmtinfo i);
+	outf ")"; outf "OF";
+	(fmt_tmark fmtinfo c); outf ";"; outf "\n"
+) and €fmt_uncon_tmark_list› (fmtinfo as {outf,...} : PP_FMT_INFO)([] : TMARK list) = ()
+  | fmt_uncon_tmark_list(fmtinfo as {outf,...} : PP_FMT_INFO) ([x] : TMARK list) = (fmt_tmark fmtinfo x; outf "RANGE <>")
+  | fmt_uncon_tmark_list (fmtinfo as {outf,...} : PP_FMT_INFO)(x::xs : TMARK list) = (
+	fmt_uncon_tmark_list fmtinfo [x]; 
+	outf ","; fmt_uncon_tmark_list fmtinfo xs)
 and €fmt_uncon_array_def› (fmtinfo as {outf,...} : PP_FMT_INFO)
         (name, {index=i, comp=c} : ARRAY_DEF) = (
     check_decl name;
-    [(FmtInfo, "TYPE "^(fmt_id name)^
-        " IS ARRAY ("^(fmt_uncon_tmark_list i)^") OF "^(fmt_tmark c)^";")]
+	outf "TYPE"; (fmt_id fmtinfo name);
+        outf "IS ARRAY (";
+	(fmt_uncon_tmark_list fmtinfo i);
+	outf ")"; outf "OF"; (fmt_tmark fmtinfo c); outf ";"; outf "\n"
 )
 =TEX
 
@@ -1265,10 +1506,17 @@ and €fmt_record_type_def› (fmtinfo as {outf,...} : PP_FMT_INFO)
     	check_decl name;
    	let 	val old_st = !stack;
 		val res = (stack := [];
-   		 	[(FmtInfo, "TYPE "^(fmt_id name)^" IS")]@
-   		 	[(FmtInfo, "RECORD")]@
-   		 	(fmt_var_decl_list (inc_tabs FmtInfo) d)@
-    			[(FmtInfo, "END RECORD;")]);
+   		 	outf "TYPE"; 
+			(fmt_id fmtinfo name);
+			outf "IS";
+			outf "\n";
+   		 	outf "RECORD"; 
+			outf "\n";
+			inc_tabs();
+   		 	(fmt_var_decl_list fmtinfo d);
+			dec_tabs();
+    			outf "END RECORD;";
+			outf "\n");
 	in	stack := old_st;
 		res
 	end
@@ -1281,28 +1529,28 @@ Type declarations.
 
 and €fmt_type_def› (fmtinfo as {outf,...} : PP_FMT_INFO)
         (name, (TDEnumTypeDef x) : TYPE_DEF) =
-    (fmt_enum_type_def FmtInfo (name, x))
+    (fmt_enum_type_def fmtinfo (name, x))
   | fmt_type_def (fmtinfo as {outf,...} : PP_FMT_INFO)
         (name, (TDIntTypeDef x) : TYPE_DEF) =
-    (fmt_int_type_def FmtInfo (name, x))
+    (fmt_int_type_def fmtinfo (name, x))
   | fmt_type_def (fmtinfo as {outf,...} : PP_FMT_INFO)
         (name, (TDFloatingTypeDef x) : TYPE_DEF) =
-    (fmt_floating_type_def FmtInfo (name, x))
+    (fmt_floating_type_def fmtinfo (name, x))
   | fmt_type_def (fmtinfo as {outf,...} : PP_FMT_INFO)
         (name, (TDFixedTypeDef x) : TYPE_DEF) =
-    (fmt_fixed_type_def FmtInfo (name, x))
+    (fmt_fixed_type_def fmtinfo (name, x))
   | fmt_type_def (fmtinfo as {outf,...} : PP_FMT_INFO)
         (name, (TDUnconArrayDef x) : TYPE_DEF) =
-    (fmt_uncon_array_def FmtInfo (name, x))
+    (fmt_uncon_array_def fmtinfo (name, x))
   | fmt_type_def (fmtinfo as {outf,...} : PP_FMT_INFO)
         (name, (TDConArrayDef x) : TYPE_DEF) =
-    (fmt_array_def FmtInfo (name, x))
+    (fmt_array_def fmtinfo (name, x))
   | fmt_type_def (fmtinfo as {outf,...} : PP_FMT_INFO) 
         (name, (TDRecordTypeDef x) : TYPE_DEF) =
-    (fmt_record_type_def FmtInfo (name, x))
+    (fmt_record_type_def fmtinfo (name, x))
 and €fmt_type_decl› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({name=n, type_def=t} : TYPE_DEF TYPE_DECL) =
-    (fmt_type_def FmtInfo (n, t))
+    (fmt_type_def fmtinfo (n, t))
 
 =TEX
 
@@ -1310,18 +1558,21 @@ Subtype declarations.
 
 =SML
 
-and €fmt_constraint› (CRange x : CONSTRAINT) = "RANGE "^fmt_range x
-  | fmt_constraint (CIndex x : CONSTRAINT) = "(" ^ fmt_exp_list x ^ ")"
-  | fmt_constraint (CFloating x : CONSTRAINT) =
-    (fmt_floating_point_constraint x)
-  | fmt_constraint (CFixed x : CONSTRAINT) =
-    (fmt_fixed_point_constraint x)
-and €fmt_sub_ind› ({tmark=t, con=c} : CONSTRAINT SUB_IND) =
-    (fmt_tmark t)^" "^(fmt_constraint c)
+and €fmt_constraint› (fmtinfo as {outf,...} : PP_FMT_INFO) (CRange x : CONSTRAINT) = (
+	outf "RANGE"; fmt_range fmtinfo x)
+  | fmt_constraint (fmtinfo as {outf,...} : PP_FMT_INFO)(CIndex x : CONSTRAINT) = (
+	outf "("; fmt_exp_list fmtinfo x; outf ")")
+  | fmt_constraint (fmtinfo as {outf,...} : PP_FMT_INFO)(CFloating x : CONSTRAINT) =
+    (fmt_floating_point_constraint fmtinfo x)
+  | fmt_constraint (fmtinfo as {outf,...} : PP_FMT_INFO)(CFixed x : CONSTRAINT) =
+    (fmt_fixed_point_constraint fmtinfo x)
+and €fmt_sub_ind› (fmtinfo as {outf,...} : PP_FMT_INFO)({tmark=t, con=c} : CONSTRAINT SUB_IND) =
+    (fmt_tmark fmtinfo t; fmt_constraint fmtinfo c)
 and €fmt_subtype_decl› (fmtinfo as {outf,...} : PP_FMT_INFO)
         (d as {name=n, sub_ind=s} : CONSTRAINT SUBTYPE_DECL) = (
-    check_decl n;
-    [(FmtInfo, "SUBTYPE "^(fmt_id n)^" IS "^(fmt_sub_ind s)^";")]
+    	check_decl n;
+	outf "SUBTYPE"; (fmt_id fmtinfo n); 
+	outf "IS"; (fmt_sub_ind fmtinfo s); outf ";"; outf "\n"
 )
 =TEX
 
@@ -1331,9 +1582,10 @@ Private type declarations.
 
 and €fmt_private_type_decl› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({id=i, limited=l} : PRIVATE_TYPE_DECL) = (
-    check_decl i;
-    [(FmtInfo, "TYPE "^(fmt_id i)^" IS"^
-        (if l=true then " LIMITED" else "")^" PRIVATE;")]
+	check_decl i;
+	outf "TYPE"; fmt_id fmtinfo i; outf "IS"; 
+        (if l=true then outf "LIMITED" else ());
+	outf "PRIVATE;"; outf "\n"
 )
 =TEX
 
@@ -1342,25 +1594,25 @@ Basic declarations.
 =SML
 
 and €fmt_basic_decl› (fmtinfo as {outf,...} : PP_FMT_INFO) (BDConstDecl x : BASIC_DECL) =
-    (fmt_const_decl FmtInfo x)
+    (fmt_const_decl fmtinfo x)
   | fmt_basic_decl (fmtinfo as {outf,...} : PP_FMT_INFO)
         (BDDeferredConstDecl x : BASIC_DECL) =
-    (fmt_deferred_const_decl FmtInfo x)
+    (fmt_deferred_const_decl fmtinfo x)
   | fmt_basic_decl (fmtinfo as {outf,...} : PP_FMT_INFO) (BDTypeDecl x : BASIC_DECL) =
-    (fmt_type_decl FmtInfo x)
+    (fmt_type_decl fmtinfo x)
   | fmt_basic_decl (fmtinfo as {outf,...} : PP_FMT_INFO) (BDVarDecl x : BASIC_DECL) =
-    (fmt_var_decl FmtInfo x)
+    (fmt_var_decl fmtinfo x)
   | fmt_basic_decl (fmtinfo as {outf,...} : PP_FMT_INFO) (BDSubtypeDecl x : BASIC_DECL) =
-    (fmt_subtype_decl FmtInfo x)
+    (fmt_subtype_decl fmtinfo x)
   | fmt_basic_decl (fmtinfo as {outf,...} : PP_FMT_INFO) (BDPrivateTypeDecl x : BASIC_DECL ) =
-    (fmt_private_type_decl FmtInfo x)
+    (fmt_private_type_decl fmtinfo x)
   | fmt_basic_decl (fmtinfo as {outf,...} : PP_FMT_INFO) (BDPragma x : BASIC_DECL ) =
-    (fmt_pragma FmtInfo x)
+    (fmt_pragma fmtinfo x)
   | fmt_basic_decl (fmtinfo as {outf,...} : PP_FMT_INFO) (BDAnnotation x : BASIC_DECL ) =
-    (fmt_annotation FmtInfo x)
-and €fmt_basic_decl_list› (fmtinfo as {outf,...} : PP_FMT_INFO) ([] : BASIC_DECL list) = []
+    (fmt_annotation fmtinfo x)
+and €fmt_basic_decl_list› (fmtinfo as {outf,...} : PP_FMT_INFO) ([] : BASIC_DECL list) = ()
   | fmt_basic_decl_list (fmtinfo as {outf,...} : PP_FMT_INFO) (x::xs : BASIC_DECL list) =
-    (fmt_basic_decl FmtInfo x)@(fmt_basic_decl_list FmtInfo xs)
+    (fmt_basic_decl fmtinfo x; fmt_basic_decl_list fmtinfo xs)
 
 =TEX
 
@@ -1370,19 +1622,27 @@ Procedure and Function parameter specifications.
 
 =SML
 
-and €fmt_parameter_specification› ({idlist=i, mode=m, name=n} :
+and €fmt_parameter_specification› (fmtinfo as {outf,...} : PP_FMT_INFO) ({idlist=i, mode=m, name=n} :
         PARAMETER_SPECIFICATION) = (
    map  check_decl i;
-    (fmt_id_list i)^" :"^(fmt_mode m)^(fmt_tmark n)
-) and €fmt_parameter_specification_list1› ([] : PARAMETER_SPECIFICATION list) = ""
-  | fmt_parameter_specification_list1 ([x] : PARAMETER_SPECIFICATION list) =
-    (fmt_parameter_specification x)
-  | fmt_parameter_specification_list1 (x::xs : PARAMETER_SPECIFICATION list) =
-    (fmt_parameter_specification x)^"; "^(fmt_parameter_specification_list1 xs)
-and €fmt_parameter_specification_list› ([] : PARAMETER_SPECIFICATION list) = ""
-  | fmt_parameter_specification_list (xs : PARAMETER_SPECIFICATION list) =
-    " ("^(fmt_parameter_specification_list1 xs)^")"
-
+    (fmt_id_list fmtinfo i); outf ":"; (fmt_mode fmtinfo m); (fmt_tmark fmtinfo n)
+) and €fmt_parameter_specification_list1› (fmtinfo as {outf,...} : PP_FMT_INFO)
+	([] : PARAMETER_SPECIFICATION list) = ()
+  | fmt_parameter_specification_list1 (fmtinfo as {outf,...} : PP_FMT_INFO)
+	 ([x] : PARAMETER_SPECIFICATION list) =
+    (fmt_parameter_specification fmtinfo x)
+  | fmt_parameter_specification_list1 (fmtinfo as {outf,...} : PP_FMT_INFO)
+		(x::xs : PARAMETER_SPECIFICATION list) = (
+	(fmt_parameter_specification fmtinfo x);
+	outf ";";
+	(fmt_parameter_specification_list1 fmtinfo xs)
+)
+and €fmt_parameter_specification_list› (fmtinfo as {outf,...} : PP_FMT_INFO)
+	([] : PARAMETER_SPECIFICATION list) = ()
+  | fmt_parameter_specification_list (fmtinfo as {outf,...} : PP_FMT_INFO)
+	(xs : PARAMETER_SPECIFICATION list) = (
+	outf "("; fmt_parameter_specification_list1 fmtinfo xs; outf ")"
+  )
 =TEX
 
 Procedure and Function specifications.
@@ -1395,43 +1655,60 @@ and €fmt_procedure_specification› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({name=n, formal_part=f, spec=Value s, annotation=ann} 
 		 : PROCEDURE_SPECIFICATION) = (
     push_scope n;
-    (if is_expansion_selected FmtInfo
-    then
-        [(FmtInfo, "PROCEDURE "^
-            (fmt_id n)^(fmt_parameter_specification_list f))]@
-            [((inc_tabs FmtInfo), "-- Spec ...")]
-    else
-        [(FmtInfo, "PROCEDURE "^
-            (fmt_id n)^(fmt_parameter_specification_list f))]@
-            [((inc_tabs FmtInfo), (fmt_spec s))]) @
-    fmt_annotation FmtInfo ann
+    (if is_expansion_selected fmtinfo
+    then (
+        outf "PROCEDURE";
+        (fmt_id fmtinfo n);
+	(fmt_parameter_specification_list fmtinfo f);
+	outf "\n";
+	inc_tabs(); outf "-- Spec ..."; dec_tabs(); outf "\n"
+    ) else (
+	outf "PROCEDURE";
+        (fmt_id fmtinfo n);
+	(fmt_parameter_specification_list fmtinfo f);
+	outf "\n";
+        inc_tabs(); (fmt_spec fmtinfo s); dec_tabs(); outf "\n"
+    );
+    fmt_annotation fmtinfo ann
+    )
 )  | fmt_procedure_specification (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({name=n, formal_part=f, spec=Nil, annotation=ann}
 		: PROCEDURE_SPECIFICATION) = (
     push_scope n;
-    [(FmtInfo, "PROCEDURE "^(fmt_id n)^(fmt_parameter_specification_list f))] @
-    fmt_annotation FmtInfo ann
-) and €fmt_function_specification› (fmtinfo as {outf,...} : PP_FMT_INFO)
+	outf "PROCEDURE";
+	(fmt_id fmtinfo n);
+	(fmt_parameter_specification_list fmtinfo f);
+	outf "\n";
+	fmt_annotation fmtinfo ann
+)
+ and €fmt_function_specification› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({designator=d, return=r, formal_part=f, spec=Value s, annotation=ann}
 			: FUNCTION_SPECIFICATION) = (
     push_scope d;
-    (if is_expansion_selected FmtInfo
-    then
-        [(FmtInfo, "FUNCTION "^(fmt_id d)^
-            (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r))]@
-            [((inc_tabs FmtInfo), "-- Spec ...")]
-    else
-        [(FmtInfo, "FUNCTION "^(fmt_id d)^
-            (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r))]@
-            [((inc_tabs FmtInfo), (fmt_spec s))]) @
-    fmt_annotation FmtInfo ann
-)  | €fmt_function_specification› (fmtinfo as {outf,...} : PP_FMT_INFO)
+    (if is_expansion_selected fmtinfo
+    then (
+        outf "FUNCTION";(fmt_id fmtinfo d);
+        (fmt_parameter_specification_list fmtinfo f); 
+	outf "RETURN"; (fmt_tmark fmtinfo r);
+	outf "\n";
+        inc_tabs(); outf "-- Spec ..."; dec_tabs(); outf "\n"
+    ) else (
+        outf "FUNCTION";(fmt_id fmtinfo d);
+        (fmt_parameter_specification_list fmtinfo f); 
+	outf "RETURN"; (fmt_tmark fmtinfo r); outf "\n";
+        inc_tabs(); (fmt_spec fmtinfo s); dec_tabs(); outf "\n"
+    );
+    fmt_annotation fmtinfo ann
+    )
+)
+  | fmt_function_specification (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({designator=d, return=r, formal_part=f, spec=Nil, annotation=ann}
 		: FUNCTION_SPECIFICATION) = (
-    push_scope d;
-    [(FmtInfo, "FUNCTION "^(fmt_id d)^
-        (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r))] @
-    fmt_annotation FmtInfo ann
+	push_scope d;
+	outf "FUNCTION";(fmt_id fmtinfo d);
+        (fmt_parameter_specification_list fmtinfo f); outf "RETURN"; 
+	(fmt_tmark fmtinfo r); outf "\n";
+	fmt_annotation fmtinfo ann
 )
 =TEX
 
@@ -1442,10 +1719,10 @@ Callers of this must pop the scope pushed by the support functions.
 
 and €fmt_subprogram_specification› (fmtinfo as {outf,...} : PP_FMT_INFO)
         (SSProcedure x : SUBPROGRAM_SPECIFICATION) =
-    (fmt_procedure_specification FmtInfo x)
+    (fmt_procedure_specification fmtinfo x)
   | €fmt_subprogram_specification› (fmtinfo as {outf,...} : PP_FMT_INFO)
         (SSFunction x : SUBPROGRAM_SPECIFICATION) =
-    (fmt_function_specification FmtInfo x)
+    (fmt_function_specification fmtinfo x)
 
 =TEX
 
@@ -1456,25 +1733,36 @@ Renaming declarations.
 and €fmt_function_renaming› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({opsym1=o1, formal_part=f, tmark=t, name=n, opsym2=o2} :
         FUNCTION_RENAMING) =
-	in_new_scope false o1 (fn () =>
-    [(FmtInfo, "FUNCTION \""^(fmt_operator_symbol o1)^"\""^
-        (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark t)^
-        " RENAMES "^(fmt_id n)^".\""^(fmt_operator_symbol o2)^"\";")]
-) and €fmt_subprogram_renaming› (fmtinfo as {outf,...} : PP_FMT_INFO)
+	in_new_scope false o1 (fn () => (
+	outf "FUNCTION"; 
+	outf (sfmt_operator_symbol fmtinfo o1);
+        (fmt_parameter_specification_list fmtinfo f); 
+	outf "RETURN"; 
+	(fmt_tmark fmtinfo t);
+        outf "RENAMES";
+	fmt_id_plus fmtinfo n ("." ^ sfmt_operator_symbol fmtinfo o2); 
+	outf ";"; outf "\n"
+	)
+) 
+and €fmt_subprogram_renaming› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({subprogram_specification=s, name1=n1, name2=n2} :
-        SUBPROGRAM_RENAMING) =
-	let	val res =
-   		 (fmt_subprogram_specification FmtInfo s)@
-   		 [((inc_tabs FmtInfo), " RENAMES "
-			^(fmt_id n1)^"."^(fmt_id n2)^";")];
+        SUBPROGRAM_RENAMING) = (
+	let	val res = (
+   		 (fmt_subprogram_specification fmtinfo s);
+		 inc_tabs ();
+			outf "RENAMES";
+			(fmt_id_plus fmtinfo n1 ( "." ^ sfmt_id_plus fmtinfo n2 ""));
+			outf ";"; outf "\n";
+		 dec_tabs());
 	in	pop_scope(); res
 	end
+)
 and €fmt_renaming_declaration› (fmtinfo as {outf,...} : PP_FMT_INFO)
         (RDFunction x : RENAMING_DECLARATION) =
-    (fmt_function_renaming FmtInfo x)
+    (fmt_function_renaming fmtinfo x)
   | fmt_renaming_declaration (fmtinfo as {outf,...} : PP_FMT_INFO)
         (RDSubprogram x : RENAMING_DECLARATION) =
-    (fmt_subprogram_renaming FmtInfo x)
+    (fmt_subprogram_renaming fmtinfo x)
 
 =TEX
 
@@ -1483,48 +1771,66 @@ Representation clauses.
 =SML
 
 and €fmt_component_clause› (fmtinfo as {outf,...} : PP_FMT_INFO)
-        ({name=n, exp=e, range=r} : COMPONENT_CLAUSE) =
-    [(FmtInfo, (fmt_id n)^" AT "^(fmt_exp e)^" RANGE "^(fmt_range r)^";")]
+        ({name=n, exp=e, range=r} : COMPONENT_CLAUSE) = (
+	(fmt_id fmtinfo n);
+	outf "AT";
+	(fmt_exp fmtinfo e); outf "RANGE";
+	(fmt_range fmtinfo r); outf ";"; outf "\n"
+)
 and €fmt_component_clause_list› (fmtinfo as {outf,...} : PP_FMT_INFO)
-        ([] : COMPONENT_CLAUSE list) = []
+        ([] : COMPONENT_CLAUSE list) = ()
   | fmt_component_clause_list (fmtinfo as {outf,...} : PP_FMT_INFO)
         (x::xs : COMPONENT_CLAUSE list) =
-    (fmt_component_clause FmtInfo x)@(fmt_component_clause_list FmtInfo xs)
+    (fmt_component_clause fmtinfo x; fmt_component_clause_list fmtinfo xs)
 and €fmt_length_clause› (fmtinfo as {outf,...} : PP_FMT_INFO)
-        ({attribute=a, exp=e} : LENGTH_CLAUSE) =
-    [(FmtInfo, "FOR "^(fmt_exp a)^" USE "^(fmt_exp e)^";")]
+        ({attribute=a, exp=e} : LENGTH_CLAUSE) = (
+	outf "FOR"; (fmt_exp fmtinfo a);
+	outf "USE"; (fmt_exp fmtinfo e); outf ";"; outf "\n"
+)
 and €fmt_enumeration_representation_clause› (fmtinfo as {outf,...} : PP_FMT_INFO)
-       ({name=n, exp=e} : ENUMERATION_REPRESENTATION_CLAUSE) =
-    [(FmtInfo, "FOR "^(fmt_id n)^" USE "^(fmt_exp e)^";")]
+       ({name=n, exp=e} : ENUMERATION_REPRESENTATION_CLAUSE) = (
+	outf "FOR"; (fmt_id fmtinfo n); "USE"; 
+	(fmt_exp fmtinfo e); outf ";"; outf "\n"
+)
 and €fmt_record_representation_clause› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({name=n, alignment_opt=Value a,  component_pack=c} :
-        RECORD_REPRESENTATION_CLAUSE) =
-    [(FmtInfo, "FOR "^(fmt_id n)^" USE")]@
-    [((inc_tabs FmtInfo), "RECORD AT MOD "^(fmt_exp a)^";")]@
-    (fmt_component_clause_list (inc_tabs FmtInfo) c)@
-    [((inc_tabs FmtInfo), "END RECORD;")]
-  | fmt_record_representation_clause (fmtinfo as {outf,...} : PP_FMT_INFO)
+        RECORD_REPRESENTATION_CLAUSE) = (
+	outf "FOR"; (fmt_id fmtinfo n); outf "USE"; outf "\n";
+	inc_tabs();
+		outf "RECORD AT MOD"; (fmt_exp fmtinfo a); 
+		outf ";"; outf "\n";
+		(fmt_component_clause_list fmtinfo c);
+		outf "END RECORD;";
+	dec_tabs(); outf "\n"
+ ) | fmt_record_representation_clause (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({name=n, alignment_opt=Nil, component_pack=c} :
-        RECORD_REPRESENTATION_CLAUSE) =
-    [(FmtInfo, "FOR "^(fmt_id n)^" USE")]@
-    [((inc_tabs FmtInfo), "RECORD")]@
-    (fmt_component_clause_list (inc_tabs FmtInfo) c)@
-    [((inc_tabs FmtInfo), "END RECORD;")]
+        RECORD_REPRESENTATION_CLAUSE) = (
+	outf "FOR"; (fmt_id fmtinfo n); outf "USE"; outf "\n"; 
+	inc_tabs();
+ 		outf "RECORD"; outf "\n";
+		(fmt_component_clause_list fmtinfo c);
+		outf "END RECORD;";
+	dec_tabs();
+	outf "\n"
+)
 and €fmt_address_clause› (fmtinfo as {outf,...} : PP_FMT_INFO)
-        ({name=n, exp=e} : ADDRESS_CLAUSE) =
-    [(FmtInfo, "FOR "^(fmt_id n)^" USE AT "^(fmt_exp e)^";")]
+        ({name=n, exp=e} : ADDRESS_CLAUSE) = (
+	outf "FOR"; (fmt_id fmtinfo n);
+	outf " USE AT"; 
+	(fmt_exp fmtinfo e); outf ";"; outf "\n"
+)
 and €fmt_representation_clause› (fmtinfo as {outf,...} : PP_FMT_INFO)
         (RCLength x : REPRESENTATION_CLAUSE) =
-    (fmt_length_clause FmtInfo x)
+    (fmt_length_clause fmtinfo x)
   | fmt_representation_clause (fmtinfo as {outf,...} : PP_FMT_INFO)
         (RCEnumeration x : REPRESENTATION_CLAUSE) =
-    (fmt_enumeration_representation_clause FmtInfo x)
+    (fmt_enumeration_representation_clause fmtinfo x)
   | fmt_representation_clause (fmtinfo as {outf,...} : PP_FMT_INFO)
         (RCRecord x : REPRESENTATION_CLAUSE) =
-    (fmt_record_representation_clause FmtInfo x)
+    (fmt_record_representation_clause fmtinfo x)
   | fmt_representation_clause (fmtinfo as {outf,...} : PP_FMT_INFO)
         (RCAddress x : REPRESENTATION_CLAUSE) =
-    (fmt_address_clause FmtInfo x)
+    (fmt_address_clause fmtinfo x)
 
 =TEX
 
@@ -1535,183 +1841,228 @@ and €fmt_procedure_declaration› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({name=n, formal_part=f, spec=Value s, annotation=ann}
 		: PROCEDURE_DECLARATION) =
     in_new_scope true n (fn () =>
-    (if is_expansion_selected FmtInfo
-    then
-        [(FmtInfo, "PROCEDURE "^
-            (fmt_id n)^(fmt_parameter_specification_list f)^";")]@
-            [((inc_tabs FmtInfo), "-- Spec ...")]
-    else
-        [(FmtInfo, "PROCEDURE "^
-            (fmt_id n)^(fmt_parameter_specification_list f))]@
-            [((inc_tabs FmtInfo), (fmt_spec s)^";")]) @
-    fmt_annotation FmtInfo ann
-)  | fmt_procedure_declaration (fmtinfo as {outf,...} : PP_FMT_INFO)
+    (if is_expansion_selected fmtinfo
+    then (
+        outf "PROCEDURE"; 
+        (fmt_id fmtinfo n);
+	(fmt_parameter_specification_list fmtinfo f); outf ";"; outf "\n";
+	inc_tabs(); outf "-- Spec ..."; outf "\n"; dec_tabs()
+    ) else (
+        outf "PROCEDURE"; 
+        (fmt_id fmtinfo n);
+	(fmt_parameter_specification_list fmtinfo f); outf "\n";
+        inc_tabs(); (fmt_spec fmtinfo s); outf ";"; 
+	outf "\n"; dec_tabs()
+    );
+    fmt_annotation fmtinfo ann
+    )
+)
+  | fmt_procedure_declaration (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({name=n, formal_part=f, spec=Nil, annotation=ann}
 		: PROCEDURE_DECLARATION) =
-    in_new_scope true n (fn () =>
-    [(FmtInfo, "PROCEDURE "^(fmt_id n)
-			^(fmt_parameter_specification_list f)^";")] @
-    fmt_annotation FmtInfo ann
+    in_new_scope true n (fn () => (
+	outf "PROCEDURE"; (fmt_id fmtinfo n);
+	(fmt_parameter_specification_list fmtinfo f); 
+	outf ";"; outf "\n";
+	fmt_annotation fmtinfo ann
+   )
 )
 and €fmt_function_declaration› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({designator=d, return=r, formal_part=f, spec=Value s, annotation=ann}
 		: FUNCTION_DECLARATION) =
     in_new_scope true d (fn () =>
-    (if is_expansion_selected FmtInfo
-    then
-        [(FmtInfo, "FUNCTION "^(fmt_id d)^
-            (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r)^";")]@
-            [((inc_tabs FmtInfo), "-- Spec ...")]
-    else
-        [(FmtInfo, "FUNCTION "^(fmt_id d)^
-            (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r))]@
-            [((inc_tabs FmtInfo), (fmt_spec s)^";")]) @
-    fmt_annotation FmtInfo ann
+    (if is_expansion_selected fmtinfo
+    then (
+        outf "FUNCTION";(fmt_id fmtinfo d);
+        (fmt_parameter_specification_list fmtinfo f); outf "RETURN";
+	(fmt_tmark fmtinfo r); outf ";"; outf "\n";
+        inc_tabs(); outf "-- Spec ..."; dec_tabs(); outf "\n"
+    ) else (
+        outf "FUNCTION";(fmt_id fmtinfo d);
+        (fmt_parameter_specification_list fmtinfo f); 
+	outf "RETURN"; (fmt_tmark fmtinfo r); outf "\n";
+        inc_tabs(); (fmt_spec fmtinfo s); outf ";"; outf "\n";
+	dec_tabs()
+    );
+    fmt_annotation fmtinfo ann
+    )
 )  | fmt_function_declaration  (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({designator=d, return=r, formal_part=f, spec=Nil,annotation=ann} :
-        FUNCTION_DECLARATION) =
-    in_new_scope true d (fn () =>
-    [(FmtInfo, "FUNCTION "^(fmt_id d)^
-        (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r)^";")] @
-    fmt_annotation FmtInfo ann
+        FUNCTION_DECLARATION) = (
+    in_new_scope true d (fn () => (
+    	outf "FUNCTION";(fmt_id fmtinfo d);
+        (fmt_parameter_specification_list fmtinfo f); outf "RETURN"; 
+	(fmt_tmark fmtinfo r); outf ";"; outf "\n";
+	fmt_annotation fmtinfo ann
+    ))
 )
 and €fmt_procedure_stub› (fmtinfo as {outf,...} : PP_FMT_INFO)
 	(x as {spec, name, formal_part, ...} : PROCEDURE_DECLARATION) =
     in_new_scope true name (fn () =>
     case spec of
-       Nil =>
-    [(FmtInfo, "PROCEDURE "^(fmt_id name)^
-        (fmt_parameter_specification_list formal_part)^" IS SEPARATE;")]
-    | Value s =>
-         if is_expansion_selected FmtInfo
-	  then
-    [(FmtInfo, "PROCEDURE "^(fmt_id name)^
-        (fmt_parameter_specification_list formal_part))]@
-    [(FmtInfo, "-- Spec ...")]@
-    [(FmtInfo, "IS SEPARATE;")]
-         else
-    [(FmtInfo, "PROCEDURE "^(fmt_id name)^
-        (fmt_parameter_specification_list formal_part))]@
-    [(FmtInfo, fmt_spec s)]@
-    [(FmtInfo, "IS SEPARATE;")]
+       Nil => (
+	outf "PROCEDURE"; (fmt_id fmtinfo name);
+        (fmt_parameter_specification_list fmtinfo formal_part);
+	outf "IS SEPARATE;"; outf "\n"
+    ) | Value s => (
+         if is_expansion_selected fmtinfo
+	 then (
+		outf "PROCEDURE"; (fmt_id fmtinfo name);
+       		(fmt_parameter_specification_list fmtinfo formal_part);
+		outf "\n";
+		outf "-- Spec ..."; outf "\n";
+		outf "IS SEPARATE;"; outf "\n"
+         ) else (
+		outf "PROCEDURE"; (fmt_id fmtinfo name);
+        	(fmt_parameter_specification_list fmtinfo formal_part);
+		outf "\n";
+		fmt_spec fmtinfo s; outf "\n";
+		outf "IS SEPARATE;"; outf "\n"
+	))
 )
 and €fmt_function_stub› (fmtinfo as {outf,...} : PP_FMT_INFO)
 	(x as {spec, designator, formal_part, return, ...}
-			: FUNCTION_DECLARATION) =
+			: FUNCTION_DECLARATION) = (
     in_new_scope true designator (fn () =>
     case spec of
-       Nil =>
-    [(FmtInfo, "FUNCTION "^(fmt_id designator)^
-        (fmt_parameter_specification_list formal_part)^" RETURN "^
-        (fmt_tmark return)^" IS SEPARATE;")]
-    | Value s =>
-         if is_expansion_selected FmtInfo
-	  then
-    [(FmtInfo, "FUNCTION "^(fmt_id designator)^
-        (fmt_parameter_specification_list formal_part)^" RETURN "^
-        (fmt_tmark return))]@
-    [(FmtInfo, "-- Spec ...")]@
-    [(FmtInfo, "IS SEPARATE;")]
-         else
-    [(FmtInfo, "FUNCTION "^(fmt_id designator)^
-        (fmt_parameter_specification_list formal_part)^" RETURN "^
-        (fmt_tmark return))]@
-    [(FmtInfo, fmt_spec s)]@
-    [(FmtInfo, "IS SEPARATE;")]
+       Nil => (
+	    outf "FUNCTION";(fmt_id fmtinfo designator);
+		(fmt_parameter_specification_list fmtinfo formal_part);
+		outf "RETURN"; 
+        	(fmt_tmark fmtinfo return); outf "\n"; 
+		outf "IS SEPARATE;"; outf "\n"
+      ) | Value s => (
+         if is_expansion_selected fmtinfo
+	  then (
+	    outf "FUNCTION";(fmt_id fmtinfo designator);
+	        (fmt_parameter_specification_list fmtinfo formal_part); 
+		outf "RETURN"; 
+	        (fmt_tmark fmtinfo return); outf "\n";
+		outf "-- Spec ..."; outf "\n";
+		outf "IS SEPARATE;"; outf "\n"
+         ) else (
+	    outf "FUNCTION";(fmt_id fmtinfo designator);
+	        (fmt_parameter_specification_list fmtinfo formal_part); 
+		outf "RETURN"; 
+ 	       	(fmt_tmark fmtinfo return); outf "\n";
+		fmt_spec fmtinfo s; outf "\n";
+		outf "IS SEPARATE;"; outf "\n"
+	)
+    ))
 )
-and €fmt_package_stub› (fmtinfo as {outf,...} : PP_FMT_INFO) (n : ID) =
-    [(FmtInfo, "PACKAGE BODY "^(fmt_id n)^" IS SEPARATE;")]
+and €fmt_package_stub› (fmtinfo as {outf,...} : PP_FMT_INFO) (n : ID) = (
+	outf "PACKAGE BODY";
+	(fmt_id fmtinfo n); outf "IS SEPARATE;";
+	outf "\n"
+)
 and €fmt_auxiliary› (fmtinfo as {outf,...} : PP_FMT_INFO) (av : AUX_VAR) =
-    (if is_expansion_selected FmtInfo
-    then    [(FmtInfo, "-- AUXILIARY ... ;")]
-    else    [(FmtInfo, "-- AUXILIARY "^(fmt_z_id (#aux av))^" ;")]
+    (if is_expansion_selected fmtinfo
+    then    (outf "-- AUXILIARY ... ;"; outf "\n")
+    else    (
+	outf "-- AUXILIARY"; (fmt_z_id fmtinfo (#aux av));
+	outf" ;"; outf "\n"
     )
+)
 and €fmt_using› (fmtinfo as {outf,...} : PP_FMT_INFO) (u : USING_DEC) =
-    (if is_expansion_selected FmtInfo
-    then	[(FmtInfo, "-- USING ...")]@
-		(fmt_basic_decl_list FmtInfo (#basic_decls u))@
-		[(FmtInfo, "-- IMPLEMENT ... BY ... ;")]
-    else	[(FmtInfo, "USING ")]@
-		(fmt_basic_decl_list FmtInfo (#basic_decls u))@
-		[(FmtInfo, "IMPLEMENT "^(fmt_z_tm (#aux u))^" BY "
-		^(fmt_z_tm (#invariant u))^" ;")]
-    )
+    (if is_expansion_selected fmtinfo
+    then (
+	outf  "-- USING ..."; outf "\n";
+	fmt_basic_decl_list fmtinfo (#basic_decls u); outf "\n";
+	outf "-- IMPLEMENT ... BY ... ;"; outf "\n"
+    ) else (
+	outf "USING"; outf "\n";
+	(fmt_basic_decl_list fmtinfo (#basic_decls u));
+	outf "IMPLEMENT"; (fmt_z_tm fmtinfo (#aux u));
+	outf "BY"; (fmt_z_tm fmtinfo (#invariant u));
+	outf " ;"; outf "\n"
+    ))
 and €fmt_package_declaration› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({name=n, visible_decs=v, private_decs=p, annotation=ann} :
-    DECLARATION PACKAGE_DECLARATION) =
-    in_new_scope false n (fn () =>
-  	  [(FmtInfo, "PACKAGE " ^ fmt_id n)] @
-   	 fmt_annotation FmtInfo ann @
-   	 [(FmtInfo, "IS")] @
-   	 (fmt_declaration_list (inc_tabs FmtInfo) v)
-   ) @
+    DECLARATION PACKAGE_DECLARATION) = (
+    (in_new_scope false n (fn () => (
+  	 outf "PACKAGE"; fmt_id fmtinfo n; outf "\n";
+   	 fmt_annotation fmtinfo ann;
+   	 outf "IS"; outf "\n";
+   	 (inc_tabs();
+		fmt_declaration_list fmtinfo v;
+	 dec_tabs()))
+    ));
     (case p
-        of [] => []
-         | _ => [(FmtInfo, "PRIVATE")]@
+        of [] => ()
+         | _ => (outf "PRIVATE"; outf "\n";
                 in_new_scope false n
-		(fn () => fmt_declaration_list (inc_tabs FmtInfo) p)
-    ) @
-    [(FmtInfo, "END "^(fmt_id n)^";")]
+		(fn () => (inc_tabs();
+			fmt_declaration_list fmtinfo p;
+			dec_tabs())
+		))
+    );
+    outf "END"; (fmt_id fmtinfo n); outf ";"; outf "\n"
+   )
 and €fmt_declaration› (fmtinfo as {outf,...} : PP_FMT_INFO)
         (DDeclarationKSlot (x, _) : DECLARATION) =
-    (fmt_k_slot FmtInfo x)
+    (fmt_k_slot fmtinfo x)
   | fmt_declaration (fmtinfo as {outf,...} : PP_FMT_INFO)
         (DRenamingDeclaration x : DECLARATION) =
-    (fmt_renaming_declaration FmtInfo x)
+    (fmt_renaming_declaration fmtinfo x)
   | fmt_declaration (fmtinfo as {outf,...} : PP_FMT_INFO)
         (DBasicDecl x : DECLARATION) =
-    (fmt_basic_decl FmtInfo x)
+    (fmt_basic_decl fmtinfo x)
   | fmt_declaration (fmtinfo as {outf,...} : PP_FMT_INFO)
         (DRepresentationClause x : DECLARATION) =
-    (fmt_representation_clause FmtInfo x)
+    (fmt_representation_clause fmtinfo x)
   | fmt_declaration (fmtinfo as {outf,...} : PP_FMT_INFO)
         (DProperBody x : DECLARATION) =
-    (fmt_proper_body FmtInfo x)
+    (fmt_proper_body fmtinfo x)
   | fmt_declaration (fmtinfo as {outf,...} : PP_FMT_INFO)
         (DProcedureDeclaration x : DECLARATION) =
-    (fmt_procedure_declaration FmtInfo x)
+    (fmt_procedure_declaration fmtinfo x)
   | fmt_declaration (fmtinfo as {outf,...} : PP_FMT_INFO)
         (DFunctionDeclaration x : DECLARATION) =
-    (fmt_function_declaration FmtInfo x)
+    (fmt_function_declaration fmtinfo x)
   | fmt_declaration (fmtinfo as {outf,...} : PP_FMT_INFO)
         (DPackageDeclaration x : DECLARATION) =
-    (fmt_package_declaration FmtInfo x)
+    (fmt_package_declaration fmtinfo x)
   | fmt_declaration (fmtinfo as {outf,...} : PP_FMT_INFO)
         (DProcedureStub x : DECLARATION) =
-    (fmt_procedure_stub FmtInfo x)
+    (fmt_procedure_stub fmtinfo x)
   | fmt_declaration (fmtinfo as {outf,...} : PP_FMT_INFO)
         (DFunctionStub x : DECLARATION) =
-    (fmt_function_stub FmtInfo x)
+    (fmt_function_stub fmtinfo x)
   | fmt_declaration (fmtinfo as {outf,...} : PP_FMT_INFO)
         (DPackageStub x : DECLARATION) =
-    (fmt_package_stub FmtInfo x)
+    (fmt_package_stub fmtinfo x)
   | fmt_declaration (fmtinfo as {outf,...} : PP_FMT_INFO)
         (DExternalProcedureStub x : DECLARATION) =
-    (fmt_procedure_declaration FmtInfo x)
+    (fmt_procedure_declaration fmtinfo x)
   | fmt_declaration (fmtinfo as {outf,...} : PP_FMT_INFO)
         (DExternalFunctionStub x : DECLARATION) =
-    (fmt_function_declaration FmtInfo x)
+    (fmt_function_declaration fmtinfo x)
   | fmt_declaration (fmtinfo as {outf,...} : PP_FMT_INFO)
         (DAuxiliary x : DECLARATION) =
-    (fmt_auxiliary FmtInfo x)
+    (fmt_auxiliary fmtinfo x)
   | fmt_declaration (fmtinfo as {outf,...} : PP_FMT_INFO)
         (DUsing x : DECLARATION) =
-    (fmt_using FmtInfo x)
+    (fmt_using fmtinfo x)
 =TEX
 =SML
-and €fmt_declaration_list› (fmtinfo as {outf,...} : PP_FMT_INFO) ([] : DECLARATION list) = []
+and €fmt_declaration_list› (fmtinfo as {outf,...} : PP_FMT_INFO) ([] : DECLARATION list) = ()
   | fmt_declaration_list (fmtinfo as {outf,...} : PP_FMT_INFO) (x::xs : DECLARATION list) =
-    (fmt_declaration FmtInfo x)@(fmt_declaration_list FmtInfo xs)
+    (fmt_declaration fmtinfo x; fmt_declaration_list fmtinfo xs)
 and €fmt_procedure_body› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({procedure_spec=p, declarative_part=d, statement=s} :
          DECLARATION PROCEDURE_BODY) = (
     do_soundness_checks2 get_replacement false s;
-   	let val res = (fmt_procedure_specification FmtInfo p)@
-  			 [(FmtInfo, "IS")]@
-   			(fmt_declaration_list (inc_tabs FmtInfo) d)@
-   			[(FmtInfo, "BEGIN")]@
-    			(fmt_statement (inc_tabs FmtInfo) s)@
-    			[(FmtInfo, "END "^(fmt_id (#name p))^";")];
+   	let val res = (fmt_procedure_specification fmtinfo p;
+  			outf "IS"; outf "\n";
+   			(inc_tabs();
+				fmt_declaration_list fmtinfo d;
+			dec_tabs());
+   			outf "BEGIN"; outf "\n";
+    			(inc_tabs();
+				fmt_statement fmtinfo s;
+			dec_tabs());
+    			outf "END";
+			(fmt_id fmtinfo (#name p)); outf ";"; outf "\n");
 	in	pop_scope (); res
 	end
 )
@@ -1719,12 +2070,15 @@ and €fmt_function_body› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({function_spec=f, declarative_part=d, statement=s} :
         DECLARATION FUNCTION_BODY) = (
     do_soundness_checks2 get_replacement true s;
-   	let val res = (fmt_function_specification FmtInfo f)@
-			[(FmtInfo, "IS")]@
-			(fmt_declaration_list (inc_tabs FmtInfo) d)@
-    			[(FmtInfo, "BEGIN")]@
-    			(fmt_statement (inc_tabs FmtInfo) s)@
-    			[(FmtInfo, "END "^(fmt_id (#designator f))^";")];
+   	let val res = (fmt_function_specification fmtinfo f;
+			outf "IS"; outf "\n";
+			(inc_tabs(); 
+				fmt_declaration_list fmtinfo d;
+			dec_tabs());
+    			outf "BEGIN"; outf "\n";
+    			(inc_tabs();fmt_statement fmtinfo s; dec_tabs());
+    			outf "END"; (fmt_id fmtinfo (#designator f));
+			 outf ";"; outf "\n");
 	in	pop_scope(); res
 	end
 )
@@ -1733,22 +2087,23 @@ and €fmt_package_body› (fmtinfo as {outf,...} : PP_FMT_INFO)
 		: DECLARATION PACKAGE_BODY) = (
     in_new_scope false n (fn () => (
     do_soundness_checks2 get_replacement false s;
-    [(FmtInfo, "PACKAGE BODY " ^ fmt_id n)] @
-    fmt_annotation FmtInfo ann @
-    [(FmtInfo, "IS")] @
-    fmt_declaration_list (inc_tabs FmtInfo) d @
+    outf "PACKAGE BODY"; fmt_id fmtinfo n; outf "\n";
+    fmt_annotation fmtinfo ann;
+    (outf "IS"; outf "\n");
+    inc_tabs(); fmt_declaration_list  fmtinfo d; dec_tabs();
     (case s
-      of SStmt STImplicitNull => []
-      | _ => [(FmtInfo, "BEGIN")]@(fmt_statement (inc_tabs FmtInfo) s)
-    ) @
-    [(FmtInfo, "END "^(fmt_id n)^";")])
+      of SStmt STImplicitNull => ()
+      | _ => (outf "BEGIN"; outf "\n"; 
+	inc_tabs();fmt_statement fmtinfo s; dec_tabs())
+    );
+    outf "END"; (fmt_id fmtinfo n); outf ";"; outf "\n")
 ))
 and €fmt_proper_body› (fmtinfo as {outf,...} : PP_FMT_INFO) (PBProcedure x : PROPER_BODY) =
-    (fmt_procedure_body FmtInfo x)
+    (fmt_procedure_body fmtinfo x)
   | fmt_proper_body (fmtinfo as {outf,...} : PP_FMT_INFO) (PBFunction x : PROPER_BODY) =
-    (fmt_function_body FmtInfo x)
+    (fmt_function_body fmtinfo x)
   | fmt_proper_body (fmtinfo as {outf,...} : PP_FMT_INFO) (PBPackage x : PROPER_BODY) =
-    (fmt_package_body FmtInfo x)
+    (fmt_package_body fmtinfo x)
 
 =TEX
 
@@ -1757,8 +2112,11 @@ Compilation subunits.
 =SML
 
 and €fmt_compilation_subunit› (fmtinfo as {outf,...} : PP_FMT_INFO)
-        ({name=n, proper_body=p} : COMP_SUBUNIT) =
-    [(FmtInfo, "SEPARATE ("^(fmt_id n)^")")]@(fmt_proper_body (inc_tabs FmtInfo) p)
+        ({name=n, proper_body=p} : COMP_SUBUNIT) = (
+	outf "SEPARATE (";
+	(fmt_id fmtinfo n); outf")"; outf "\n";
+	(inc_tabs(); fmt_proper_body fmtinfo p; dec_tabs())
+)
 
 =TEX
 
@@ -1766,41 +2124,43 @@ Compilation units.
 
 =SML
 
-and €fmt_context_clause› (fmtinfo as {outf,...} : PP_FMT_INFO) ([] : ID list) = []
-  | fmt_context_clause (fmtinfo as {outf,...} : PP_FMT_INFO) (x : ID list) =
-    [(FmtInfo, "WITH "^(fmt_id_list x)^";")]
+and €fmt_context_clause› (fmtinfo as {outf,...} : PP_FMT_INFO) ([] : ID list) = ()
+  | fmt_context_clause (fmtinfo as {outf,...} : PP_FMT_INFO) (x : ID list) = (
+	outf "WITH"; fmt_id_list fmtinfo x; outf ";"; outf "\n"
+)
 and €fmt_compilation_unit› (fmtinfo as {outf,...} : PP_FMT_INFO)
         (CUPackageDeclaration x : COMPILATION_UNIT) =
-    (fmt_package_declaration FmtInfo x)
+    (fmt_package_declaration fmtinfo x)
   | fmt_compilation_unit (fmtinfo as {outf,...} : PP_FMT_INFO)
         (CUProperBody x : COMPILATION_UNIT) =
-    (fmt_proper_body FmtInfo x)
+    (fmt_proper_body fmtinfo x)
   | fmt_compilation_unit (fmtinfo as {outf,...} : PP_FMT_INFO)
         (CUSubUnit x : COMPILATION_UNIT) =
-    (fmt_compilation_subunit FmtInfo x)
+    (fmt_compilation_subunit fmtinfo x)
 and €fmt_context_compilation_unit› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({context=i, comp_unit=c,pragmas=p,annotation=ann}
 		: CONTEXT_COMPILATION_UNIT) =
-    (fmt_context_clause FmtInfo i)@
-    (flat (map (fmt_pragma FmtInfo) p))@
-    (fmt_annotation FmtInfo ann)@
-    (fmt_compilation_unit FmtInfo c) 
+    (fmt_context_clause fmtinfo i;
+    (map (fmt_pragma fmtinfo) p);
+    (fmt_annotation fmtinfo ann);
+    (fmt_compilation_unit fmtinfo c) 
+)
 and €fmt_kslot_compilation_unit› (fmtinfo as {outf,...} : PP_FMT_INFO)
         (KCUKSlot x : KSLOT_COMPILATION_UNIT) =
-    (fmt_k_slot FmtInfo x)
+    (fmt_k_slot fmtinfo x)
   | fmt_kslot_compilation_unit (fmtinfo as {outf,...} : PP_FMT_INFO)
         (KCUUnit x : KSLOT_COMPILATION_UNIT) =
-    (fmt_context_compilation_unit FmtInfo x)
+    (fmt_context_compilation_unit fmtinfo x)
   | fmt_kslot_compilation_unit (fmtinfo as {outf,...} : PP_FMT_INFO)
         (KCUPragma x : KSLOT_COMPILATION_UNIT) =
-    (fmt_pragma FmtInfo x)
+    (fmt_pragma fmtinfo x)
 and €fmt_kslot_compilation_unit_list› (fmtinfo as {outf,...} : PP_FMT_INFO)
-    ([] : KSLOT_COMPILATION_UNIT list) = []
+    ([] : KSLOT_COMPILATION_UNIT list) = ()
   | fmt_kslot_compilation_unit_list (fmtinfo as {outf,...} : PP_FMT_INFO)
     (x::xs : KSLOT_COMPILATION_UNIT list) =
-    (fmt_kslot_compilation_unit FmtInfo x)@
-    [(FmtInfo, "")]@[(FmtInfo, "")]@
-    (fmt_kslot_compilation_unit_list FmtInfo xs)
+    (fmt_kslot_compilation_unit fmtinfo x;
+    outf "\n"; outf "\n";
+    fmt_kslot_compilation_unit_list fmtinfo xs)
 
 =TEX
 
@@ -1808,26 +2168,36 @@ and €fmt_kslot_compilation_unit_list› (fmtinfo as {outf,...} : PP_FMT_INFO)
 
 and €fmt_replaced_by_comp› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({label=l, comp=c} : REPLACED_BY_COMP) =
-    [(FmtInfo, (fmt_label l)^" È ")]@
-    (fmt_kslot_compilation_unit_list (inc_tabs FmtInfo) c)
+    (fmt_label fmtinfo l; outf "È"; outf "\n";
+    inc_tabs();  
+	fmt_kslot_compilation_unit_list fmtinfo c;
+    dec_tabs())
 and €fmt_replaced_by_private_part› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({label=l, private=p} : REPLACED_BY_PRIVATE_PART) =
-    [(FmtInfo, (fmt_label l)^" È ")]@(fmt_declaration_list (inc_tabs FmtInfo) p)
+    (fmt_label fmtinfo l; outf "È"; outf "\n";
+	inc_tabs();
+		fmt_declaration_list fmtinfo p;
+	dec_tabs())
 and €fmt_replaced_by_visible_part› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({label=l, visible=v} : REPLACED_BY_VISIBLE_PART) =
-    [(FmtInfo, (fmt_label l)^" È ")]@(fmt_declaration_list (inc_tabs FmtInfo) v)
+    (fmt_label fmtinfo l; outf "È"; outf "\n";
+	inc_tabs(); fmt_declaration_list fmtinfo v; dec_tabs())
 and €fmt_replaced_by_decl› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({label=l, decls=d} : REPLACED_BY_DECL) =
-    [(FmtInfo, (fmt_label l)^" È ")]@(fmt_declaration_list (inc_tabs FmtInfo) d)
+    (fmt_label fmtinfo l; outf "È"; outf "\n";
+	inc_tabs(); fmt_declaration_list  fmtinfo d; dec_tabs())
 and €fmt_refined_by› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({label=l, statement=s} : REFINED_BY) =
-    [(FmtInfo, (fmt_label l)^" √ ")]@(fmt_statement (inc_tabs FmtInfo) s)
+    	(fmt_label fmtinfo l; "√";
+	outf "\n"; inc_tabs();fmt_statement fmtinfo s; dec_tabs())
 and €fmt_replaced_by› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({label=l, statement=s} : REFINED_BY) =
-    [(FmtInfo, (fmt_label l)^" È ")]@(fmt_statement (inc_tabs FmtInfo) s)
+    (fmt_label fmtinfo l; outf "È"; outf "\n";
+	inc_tabs();fmt_statement fmtinfo s; dec_tabs())
 and €fmt_replaced_by_annotation› (fmtinfo as {outf,...} : PP_FMT_INFO)
         ({label=l, replacement=a} : REPLACED_BY_ANNOTATION) =
-    [(FmtInfo, (fmt_label l)^" È ")]@(fmt_annotation (inc_tabs FmtInfo) a)
+    (fmt_label fmtinfo l; outf "È"; outf "\n";
+	inc_tabs(); fmt_annotation fmtinfo a; dec_tabs());
 
 =TEX
 
@@ -1835,33 +2205,33 @@ Web Clauses.
 
 =SML
 
-and €fmt_web_clause› (fmtinfo as {outf,...} : PP_FMT_INFO)
+fun €fmt_web_clause› (fmtinfo as {outf,...} : PP_FMT_INFO)
         (WCCompilation x : WEB_CLAUSE) =
-    (fmt_kslot_compilation_unit_list FmtInfo x)
+    (fmt_kslot_compilation_unit_list fmtinfo x)
   | fmt_web_clause (fmtinfo as {outf,...} : PP_FMT_INFO)
         (WCReplacedByCompilation x : WEB_CLAUSE) =
-    (fmt_replaced_by_comp FmtInfo x)
+    (fmt_replaced_by_comp fmtinfo x)
   | fmt_web_clause (fmtinfo as {outf,...} : PP_FMT_INFO)
         (WCReplacedByPrivatePart x : WEB_CLAUSE) =
-    (fmt_replaced_by_private_part FmtInfo x)
+    (fmt_replaced_by_private_part fmtinfo x)
   | fmt_web_clause (fmtinfo as {outf,...} : PP_FMT_INFO)
         (WCReplacedByVisiblePart x : WEB_CLAUSE) =
-    (fmt_replaced_by_visible_part FmtInfo x)
+    (fmt_replaced_by_visible_part fmtinfo x)
   | fmt_web_clause (fmtinfo as {outf,...} : PP_FMT_INFO)
         (WCReplacedByDecl x : WEB_CLAUSE) =
-    (fmt_replaced_by_decl FmtInfo x)
+    (fmt_replaced_by_decl fmtinfo x)
   | fmt_web_clause (fmtinfo as {outf,...} : PP_FMT_INFO)
         (WCReplacedByArbitraryAda x : WEB_CLAUSE) =
-    (fmt_replaced_by_arbitrary_ada FmtInfo x)
+    (fmt_replaced_by_arbitrary_ada fmtinfo x)
   | fmt_web_clause (fmtinfo as {outf,...} : PP_FMT_INFO)
         (WCRefinedBy x : WEB_CLAUSE) =
-    (fmt_refined_by FmtInfo x)
+    (fmt_refined_by fmtinfo x)
   | fmt_web_clause (fmtinfo as {outf,...} : PP_FMT_INFO)
         (WCReplacedBy x : WEB_CLAUSE) =
-    (fmt_replaced_by FmtInfo x)
+    (fmt_replaced_by fmtinfo x)
   | fmt_web_clause (fmtinfo as {outf,...} : PP_FMT_INFO)
         (WCReplacedByAnnotation x : WEB_CLAUSE) =
-    (fmt_replaced_by_annotation FmtInfo x);
+    (fmt_replaced_by_annotation fmtinfo x);
 
 =TEX
 
@@ -1886,7 +2256,7 @@ let  val max_line_len = get_int_control("cn_automatic_line_splitting");
     );
     val curr_line_length : int ref = ref 0;
     fun out_fun (s : string) : unit = (
-   	if (s = "\n") 
+   	if (s = "\n")
    	then (
  		curr_line_length := 0;
  		diag_fragment("\n");
@@ -1911,10 +2281,12 @@ let  val max_line_len = get_int_control("cn_automatic_line_splitting");
 					out_fun(s);
 				       ()
 				) else (
-					diag_fragment(" ");
+					if (s = ";" orelse s = "," orelse s = ")" orelse s = "." or else s = "'")
+					then ()
+					else (diag_fragment(" ");
+						curr_line_length := (!curr_line_length) + 1; ());
 					diag_fragment(s);
-					curr_line_length := (!curr_line_length) +
-						 len_s + 1;
+					curr_line_length := (!curr_line_length) + len_s;
 					()
 				)
 			)
@@ -1934,11 +2306,13 @@ outf "12345";outf "12345";outf "12345";inc_tabs(); outf "12345";outf "12345";
 outf "12345";outf "12345";outf "12345";outf "\n");
 =SML
 
-fun €format_web_clause› (fmtinfo : (LABEL -> REPLACEMENT OPT) OPT) 
+fun €format_web_clause› (fmtfn : (LABEL -> REPLACEMENT OPT) OPT) 
 	(x : WEB_CLAUSE) : unit = (
 let val outf = make_output_fun std_out;
 in
-         (fmt_web_clause {outf = outf, fmtinfo = fmtinfo} x;
+         (
+	   reset_tabs();
+	   fmt_web_clause {outf = outf, fmtfn = fmtfn} x;
 	   reset_tabs())
 end);
 
@@ -1958,7 +2332,9 @@ let	val stream = open_out out_file;
 	val outf = make_output_fun stream;
        val x = (WCCompilation (#spark_prog (get_z_generator_state())));
 in
-         (fmt_web_clause  {outf = outf, fmtinfo = (Value get_replacement)} x;
+         (
+	   reset_tabs();
+	   fmt_web_clause  {outf = outf, fmtfn = (Value get_replacement)} x;
 	   reset_tabs();
   	   close_out stream
 	  )
@@ -1968,7 +2344,7 @@ end);
 
 \section{EPILOGUE}
 
-=SML
+=IGN
 
 end (* of structure CNSparkOutput *);
 
