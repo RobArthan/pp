@@ -95,6 +95,8 @@ Changes to $subgoal\_package\_quiet$, effect of duplicate free variables in goal
 \item[Issue 1.16] Updated to use new fonts.
 \item [Issue 1.17]
 Added $set\_goal$.
+\item [Issue 1.18 (June 26th 1992)]
+Undo stacks persist over pushing and popping goals.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -200,10 +202,13 @@ and a new goal state, based on the tactics application, becomes the current one
 (replacing the previous ``current goal state'' at the top of the main goal stack).
 The user may then {\em undo} such commands by retrieving past
 goal states from the undo buffer to the limit of the buffer.
-If the buffer fills to its limit, which may be set by the user,then it will discard the oldest goal states to make room for new ones.
-Note that the undo buffer is not part of any goal state,
-and so, for example, pushing a goal onto the main goal stack
-discards the old undo buffer contents from the system.
+If the buffer fills to its limit for an individual main goal, which may be set by the user,then it will discard the oldest goal states to make room for new ones.
+Note that an undo buffer is associated with each
+main goal,
+and so, for example, pushing a goal onto the main goal stack,
+and then dropping it
+will restore the original undo buffer contents, as well as its
+goal.
 The free variables of the current goal are, by default, used to maintain a type context (set $set\_ti\_context$)
 to simplify the typing of new terms using these variables.
 The feature can be truned off by $set\-\_subgoal\-\_package\-\_ti\-\_context$ $false$.
@@ -264,6 +269,7 @@ The following design errors should never occur - they are an act of ``defensive 
 30015	DESIGN ERROR : duplicated label in labelled
 30021	DESIGN ERROR : goal is unprintable
 30031	DESIGN ERROR : superseded label in labelled
+30044	DESIGN ERROR : length of main_goal_stack Ω length of undo_buffer
 =TEX
 \subsection{Type of Goal State}
 =DOC
@@ -285,7 +291,8 @@ Sets a new current main goal, creating an appropriate goal state and pushing it
 onto the main goal stack.
 The current (and only) goal in the new goal state will be the main goal, with label ``''.
 The current goal will be displayed.
-The undo buffer will be emptied.
+The current undo buffer will also be stacked, and a new empty
+one made current.
 =SEEALSO
 $set\_goal$
 =FAILURE
@@ -313,7 +320,8 @@ It then sets a new current main goal, creating an appropriate goal state and pus
 onto the main goal stack.
 The current (and only) goal in the new goal state will be the main goal, with label ``''.
 The current goal will be displayed.
-The undo buffer will be emptied.
+The current undo buffer will also be stacked, and a new empty
+one made current.
 =GFT Defn
 set_goal gl = (drop_main_goal() handle (Fail _) => (); 
 	push_goal gl);
@@ -342,7 +350,8 @@ If it is the only assumption of the theorem argument then the corresponding goal
 otherwise label ``1'',
 and the other assumptions of the theorem will become subsequent goals with labels ``2'',``3'',...
 This new goal state is pushed onto the main goal stack.
-The undo buffer will be emptied.
+The current undo buffer will also be stacked, and a new empty
+one made current.
 =USES
 For the advanced user, interested in partial proof.
 =FAILURE
@@ -541,7 +550,7 @@ Attempting to go past the end of the buffer will cause a failure, rather than a 
 A single $undo$ command can itself be undone by $redo$(q.v),
 but otherwise entries on the undo buffer between its start and the $n$th entry will be discarded.
 
-Note that the undo buffer is emptied on starting a new main goal (e.g. with $push\_goal$) or on popping the current
+Note that the undo buffer is stacked on starting a new main goal (e.g. with $push\_goal$), and unstacked on popping the current
 main goal (e.g. with $pop\_thm$ or $drop\_main\_goal$).
 =FAILURE
 30010	The subgoal package is not in use
@@ -575,7 +584,7 @@ val €top_goal_state› : unit -> GOAL_STATE;
 =DESCRIBE
 This provides the current goal state as a value:
 note that a goal state does not contain an undo buffer,
-and thus function does not save the current undo buffer.
+and thus function does not return the current undo buffer.
 =SEEALSO
 $push\_goal\_state$
 =FAILURE
@@ -589,7 +598,8 @@ and sets the given value as the current goal state.
 The most likely reason that a goal state value is ill-formed
 is that it is not being pushed in the same context as it was formed, e.g. it was formed in a theory that is now out of scope, e.g. because the user has changed theory since
 the states creation.
-The undo buffer will be emptied.
+The current undo buffer will also be stacked, and a new empty
+one made current.
 =SEEALSO
 $top\_goal\_state$
 =ENDDOC
@@ -722,15 +732,27 @@ of $print\_goal\_state$:
 30049	Main goal is:
 30050	Goals to be proven are:
 =TEX
+=DOC
+val €subgoal_package_size› : unit -> int;
+=DESCRIBE
+This returns the size of the subgoal package's storage,
+in words - where one word is four bytes.
+=ENDDOC
+=ENDDOC
 \subsection{Parameterising the Subgoal Package}
 =DOC
 (* €undo_buffer_length› : int *)
 =DESCRIBE
 This is a system control, handled by $set\_int\_control$, etc,
 which sets the maximum number of entries that can be held on
-the undo buffer: i.e. how many tactic applications, etc, may be undone.
+the undo buffer for each main goal: i.e. how many tactic applications, etc, may be undone.
 It is initially set to 12,
 and cannot be made negative.
+Any changes to this parameter will take immediate
+effect upon the undo buffers stored for all the
+main goals, i.e. if necessary they will be shortened
+at the point of changing the value, rather
+than at the point of, e.g., applying a new tactic.
 =ENDDOC
 =DOC
 (* €subgoal_package_quiet› : bool *)
