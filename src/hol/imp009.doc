@@ -67,6 +67,7 @@ Changed message 9504.
 \item [Issue 1.18]
 Corrected $FAIL\_THEN$, etc.
 Minor corrections.
+\item [Issue 1.19(12th March 1992)] Various minor additions and extensions.
 \end{description}
 \subsection{Changes Forecast}
 Most of the text outside the documentation boxes is a discussion
@@ -144,7 +145,8 @@ val €fail_tac› : TACTIC = (fn gl =>
 );
 =TEX
 =SML
-fun €fail_with_tac› (area : string) (msg : int) (inserts : (unit -> string) list): TACTIC = (fn gl =>
+fun €fail_with_tac› (area : string) (msg : int) (inserts : (unit -> string) list)
+	: TACTIC = (fn gl =>
 	fail area msg inserts
 );
 =TEX
@@ -158,6 +160,140 @@ in
         (prof "prove_asm_rule";
         s2)
 end);
+=TEX
+=SML
+fun €list_¥_intro› [] thm = thm
+| list_¥_intro (a :: x) thm = ¥_intro a (list_¥_intro x thm);
+
+=TEX
+=SML
+local
+=TEX
+The following keeps on changing a name until it becomes
+acceptable
+=SML
+	fun make_ok slist s = (
+	let	val s1 = string_variant slist s;
+	in
+		if s1 <> s
+		then make_ok slist s1
+		else (case (get_const_info s) of
+		Value _ => make_ok slist (s ^ get_variant_suffix ())
+		| Nil => s)
+	end);
+=TEX
+=SML
+in
+fun €rename_tac› (renamings: (TERM * string) list) : TACTIC = (
+let	val dummy = map (dest_var o fst) renamings
+		handle complaint =>
+		pass_on complaint "dest_var" "rename_tac";
+	val rename_to_names = map (make_ok [] o snd) renamings;
+	val renamings' = map (fn ((v,s),s') => (v,mk_var(s',type_of v))) 
+		(combine renamings rename_to_names);
+=TEX
+Traverse a list of terms applying $make\_ok$ and renamings.
+=SML
+	fun lvariant acc [] = []
+	| lvariant acc (a :: x) = (
+	let	val a1 = lassoc1 renamings' a;
+		val (a1nm,a1ty) = dest_var a1;
+		val a2nm = make_ok acc a1nm;
+	in
+		(mk_var(a2nm,a1ty) :: lvariant (a2nm :: acc) x)
+	end);
+=TEX
+Traverse a term, with a substituition/avoid list, making 
+changes according to the substituition, and modifying 
+bound variable names as necessary.
+=SML
+fun trav subs slist tm (App (f,a)) = (
+	let val f' = trav subs slist f (dest_simple_term f);
+	in
+	(let val a' = trav subs slist a (dest_simple_term a)
+	in
+		mk_app(f',a')
+	end
+	handle (Fail _) =>
+	mk_app(f',a))
+	end
+	handle (Fail _) =>
+	mk_app(f,trav subs slist a (dest_simple_term a))
+) | trav subs slist tm (Var (nm,ty)) = (
+	lassoc3 subs tm
+) | trav subs slist tm (Const _) = fail "" 0 []
+| trav subs slist tm (SimpleÃ(x,bdy)) = (
+let	val x1 = lassoc1 renamings' x;
+	val (x1nm,x1ty) = dest_var x1;
+	val x2nm = make_ok slist x1nm;
+	val x2 = mk_var(x2nm,x1ty);
+in
+	mk_simple_Ã(x2, trav  ((x,x2) :: subs) (x2nm :: slist) bdy 
+		(dest_simple_term bdy))
+end);
+
+fun trav1 subs slist tm = (
+	trav subs slist tm (dest_simple_term tm)
+	handle (Fail _) => tm
+);
+=TEX
+The main function:
+=SML
+in
+(fn (asms,conc) => 
+let	val glfrees = list_cup (frees conc :: map frees asms);
+	val newfrees1 = lvariant [] glfrees;
+	val init_subs = mapfilter (fn (a,b) => if a = b
+		then fail "" 0 []
+		else (a,b)) (combine glfrees newfrees1);
+	val init_names = map (fst o dest_var) newfrees1;
+	val asms' = map (fn asm => trav1 init_subs init_names asm) asms;
+	val conc' = trav1 init_subs init_names conc;
+	val template = list_mk_¥(asms @ [mk_§(conc,mk_t)]);
+	val template' = list_mk_µ(rev(frees template), template);
+in
+	([(asms',conc')],(fn thms => 
+		case thms of
+		[thm] => (let val thm1 = 
+			all_µ_intro(list_¥_intro asms' (§_t_intro thm));
+		val thm2 = subst_rule [] template' thm1;
+		val thm3 = §_t_elim(strip_¥_rule(all_µ_elim thm2))
+		in
+			thm3
+		end)
+		| _ => bad_proof "rename_tac"))
+end)
+end);
+end;
+=IGN
+val renamings = [(¨xÆ,"y"),(¨yÆ,"x"),
+	(mk_var("1",BOOL),"one"), 
+	(mk_var("one'",Ó),"1"),
+	(mk_var("brackets",BOOL),"[]"),
+	(mk_var("brackets'",BOOL),"[]"),
+	(mk_var("sigma'",BOOL),"”'")];
+fun test gl = (push_goal gl;
+	(a (rename_tac renamings)handle complaint =>
+	 (drop_main_goal(); 
+	  reraise complaint (area_of complaint)));
+	drop_main_goal();());
+test ([],¨a ± aÆ);
+test ([],¨a ± µ a ∑ a = 1Æ);
+test ([¨µ a ∑ a = 1Æ],¨a ± µ a ∑ a = 1Æ);
+test ([¨µ a ∑ a = []Æ],¨a ± µ a ∑ a = 1Æ);
+test ([],¨x ± µ x :'a∑ x = yÆ);
+test ([¨µ x ∑ x = []Æ,¨µ x :'a∑ f x (y:'a)Æ],¨x ± µ x :'a∑ x = yÆ);
+test ([¨µ x ∑ x = []Æ,¨µ ” :'a ∑ g ”Æ,¨µ x :'a∑ f x (y:'a) ”Æ],¨x ± µ x :'a∑ x = yÆ);
+test ([¨µ x ∑ x = []Æ,¨µ ” :'a ∑ g ëmk_var("”'",BOOL)Æ ”Æ,¨µ x :'a∑ f x (y:'a) ”Æ],¨x ± µ x :'a∑ x = yÆ);
+test ([¨µ x ∑ ëmk_var("1",BOOL)Æ  ≤ (x = [])Æ,
+	¨µ ” :'a ∑ g ëmk_var("”'",BOOL)Æ ”Æ,
+	¨µ x :'a∑ (1 = one') ± f x (y:'a) ”Æ],
+	¨x ± µ x :'a∑ brackets ±brackets' ±  ëmk_var("()",BOOL)Æ ± (x = y) ± sigma'Æ);
+test ([],ëmk_var("1",BOOL)Æ);
+test ([¨µ x ∑ ëmk_var("1",BOOL)Æ  ≤ (x = []) ≤ (1 = one')Æ],mk_t);
+test ([],¨µ (x:'a) ∑ µ (x:'b) ∑ µ (x:'c) ∑ f ¨x:'aÆ ¨x:'bÆ ¨x:'cÆ ≤
+	∂ (x:'a) ∑ ∂ (x:'b) ∑ ∂ (x:'c) ∑ g ¨x:'aÆ ¨x:'bÆ ¨x:'cÆÆ);
+
 =TEX
 \section{ELEMENTARY TACTICALS}
 =SML
@@ -202,7 +338,8 @@ fun €MAP_EVERY_T› (tacf : 'a -> TACTIC) (things : 'a list) : TACTIC = (
 val €MAP_EVERY› : ('a -> TACTIC) -> 'a list -> TACTIC = MAP_EVERY_T;
 =TEX
 =SML
-fun ((tac1 : TACTIC) €ORELSE_T› (tac2 : TACTIC)) : TACTIC = (fn gl =>
+fun ((tac1 : TACTIC) €ORELSE_T› (tac2 : TACTIC)) 
+	: TACTIC = (fn gl =>
 	(tac1 gl) handle (Fail _) => tac2 gl
 );
 =TEX
@@ -230,7 +367,8 @@ fun €MAP_FIRST_T› (tacf : 'a -> TACTIC) (things : 'a list) : TACTIC = (fn gl =>
 val €MAP_FIRST› : ('a -> TACTIC) -> 'a list -> TACTIC = MAP_FIRST_T;
 =TEX
 =SML
-fun €COND_T› (p : GOAL -> bool) (tac1 : TACTIC) (tac2 : TACTIC) : TACTIC = (fn gl =>
+fun €COND_T› (p : GOAL -> bool) (tac1 : TACTIC) (tac2 : TACTIC) 
+	: TACTIC = (fn gl =>
 	(if p gl then tac1 else tac2) gl
 );
 fun €REPEAT_T› (tac : TACTIC) : TACTIC = (fn g =>
@@ -255,12 +393,14 @@ fun €REPEAT_N_T› (n : int) (tac : TACTIC) : TACTIC = (
 val €REPEAT_N› : int -> TACTIC -> TACTIC = REPEAT_N_T;
 =TEX
 =SML
-fun €REPEAT_UNTIL_T› (p : GOAL -> bool) (tac : TACTIC) : TACTIC = (
+fun €REPEAT_UNTIL_T› (p : GOAL -> bool) (tac : TACTIC) 
+	: TACTIC = (
 	REPEAT (COND_T p fail_tac tac)
 );
 =TEX
 =SML
-val €REPEAT_UNTIL› : (GOAL -> bool) -> TACTIC -> TACTIC = REPEAT_UNTIL_T;
+val €REPEAT_UNTIL› : (GOAL -> bool) -> TACTIC -> TACTIC = 
+	REPEAT_UNTIL_T;
 =TEX
 \section{BASIC THEOREM TACTICALS AND COMBINATORS}
 =SML
@@ -269,7 +409,8 @@ type €THM_TACTIC› = THM -> TACTIC;
 type €THM_TACTICAL› = THM_TACTIC -> THM_TACTIC;
 =TEX
 =SML
-val op €THEN_TTCL› : (THM_TACTICAL * THM_TACTICAL) -> THM_TACTICAL = op o;
+val op €THEN_TTCL› : (THM_TACTICAL * THM_TACTICAL) -> THM_TACTICAL = 
+	op o;
 =TEX
 =SML
 fun  (ttcl1 : THM_TACTICAL) €ORELSE_TTCL› (ttcl2 : THM_TACTICAL)
@@ -279,6 +420,17 @@ fun  (ttcl1 : THM_TACTICAL) €ORELSE_TTCL› (ttcl2 : THM_TACTICAL)
 =TEX
 =SML
 val €ID_THEN› : THM_TACTICAL = Combinators.I;
+=TEX
+=SML
+fun €TRY_TTCL› (ttcl : THM_TACTICAL) : THM_TACTICAL= (fn ttac => fn th =>
+	(ttcl ORELSE_TTCL ID_THEN) ttac th
+);
+=TEX
+=SML
+fun  (ttcl1 : THM_TACTICAL) €THEN_TRY_TTCL› (ttcl2 : THM_TACTICAL)
+				: THM_TACTICAL = (fn ttac =>
+	(ttcl1 THEN_TTCL (ttcl2 ORELSE_TTCL ID_THEN)) ttac
+);
 =TEX
 =SML
 fun €CONV_THEN› (conv : CONV) : THM_TACTICAL = (fn ttac => fn thm =>
@@ -365,12 +517,14 @@ fun €POP_ASM_T› (thmtac : (THM -> TACTIC)) : TACTIC = (fn (asms, conc) =>
 );
 =TEX
 =SML
-fun €GET_ASMS_T› (thmstac : (THM list -> TACTIC)) : TACTIC = (fn gl as (asms, _) =>
+fun €GET_ASMS_T› (thmstac : (THM list -> TACTIC)) : TACTIC = (
+	fn gl as (asms, _) =>
 	thmstac (map asm_rule asms) gl
 );
 =TEX
 =SML
-fun €DROP_ASMS_T› (thmstac : (THM list -> TACTIC)) : TACTIC = (fn (asms, conc) =>
+fun €DROP_ASMS_T› (thmstac : (THM list -> TACTIC)) : TACTIC = (
+	fn (asms, conc) =>
 	(thmstac (map asm_rule asms))([], conc)
 );
 =TEX
@@ -394,11 +548,12 @@ fun €LIST_GET_NTH_ASM_T› (ilst : int list)
 fun €DROP_NTH_ASM_T› (i : int) (thmtac : (THM -> TACTIC))
 						: TACTIC = (fn gl as (asms, _) =>
 	((DROP_ASM_T  (nth (i-1) asms) thmtac) gl)
-	handle ex => divert ex "nth" "DROP_NTH_ASM_T" 9303 [fn () => string_of_int i]
+	handle ex => divert ex "nth" "DROP_NTH_ASM_T" 9303 
+	[fn () => string_of_int i]
 );
 fun €LIST_DROP_NTH_ASM_T› (ilst : int list) 
 		(thmtac : (THM list -> TACTIC))
-					: TACTIC = (fn gl as (asms, _) =>
+			: TACTIC = (fn gl as (asms, _) =>
 	(LIST_DROP_ASM_T  (map(fn i => nth (i-1) asms)ilst) thmtac) gl
 	handle ex => divert ex "nth" "LIST_DROP_NTH_ASM_T" 9303 [fn () => 
 		(let val lasms = length asms;
@@ -429,7 +584,8 @@ fun €ROTATE_T› (i : int) (tac : TACTIC) : TACTIC = (fn gl =>
 );
 =TEX
 =SML
-fun €LEMMA_T› (newsg : TERM) (thmtac : THM -> TACTIC) : TACTIC = (fn gl as (asms, _) =>
+fun €LEMMA_T› (newsg : TERM) (thmtac : THM -> TACTIC) : TACTIC = (
+	fn gl as (asms, _) =>
 	let	val (sgs, pf) = thmtac (asm_rule newsg) gl;
 	in	((asms, newsg) :: sgs,
 		(fn (thm :: thms) => prove_asm_rule thm (pf thms) |
@@ -459,25 +615,61 @@ fun €SOLVED_T› (tac : TACTIC) : TACTIC = (fn gl =>
 	) |	sgp => fail "SOLVED_T" 9602 []
 );
 =TEX
+=SML
+fun ((tac1 : TACTIC) €THEN_TRY_T› (tac2 : TACTIC)) 
+	: TACTIC = (fn gl =>
+	let	val (sgs1, pf) = tac1 gl;
+		val (sgs2pfs2) = (map (TRY_T tac2) sgs1);
+	in	(flat (map fst sgs2pfs2),
+		pf o mapshape (map (fn (sgs, pf) => 
+			(pf, length sgs))sgs2pfs2))
+	end
+);
+=TEX
+=SML
+val op €THEN_TRY› : (TACTIC * TACTIC) -> TACTIC = op THEN_TRY_T;
+=TEX
+=SML
+fun (tac : TACTIC) €THEN_TRY_LIST_T› (tacs : TACTIC list) : TACTIC = (fn gl =>
+	let	val (sgs1, pf) = tac gl;
+	in	if length tacs = length sgs1
+		then	let	val sgs2pfs2 = (map (fn (f, a) => (TRY_T f) a) 
+				(combine tacs sgs1));
+			in	(flat (map fst sgs2pfs2),
+				pf o mapshape (map (fn (sgs, pf) => 
+				(pf, length sgs))sgs2pfs2))
+			end
+		else	fail "THEN_TRY_LIST_T" 9101 []
+	end
+);
+=TEX
+=SML
+val op €THEN_TRY_LIST› : (TACTIC * TACTIC list) -> TACTIC = 
+	op THEN_TRY_LIST_T;
+=TEX
+
 \section{BASIC TACTICS 2}
 =SML
 fun €accept_tac› (thm : THM) : TACTIC = (fn (asms, conc) =>
 	if %alpha%_eq conc (concl thm) 
 	then	([], (fn [] => thm | _ => bad_proof "accept_tac"))
-	else	fail "accept_tac" 9102 [fn () => string_of_thm thm,
+	else	fail "accept_tac" 9102 [
+		fn () => string_of_thm thm,
 		fn () => string_of_term conc]
 );
 =TEX
 =SML
 fun  €asm_tac› (thm : THM) : TACTIC = (fn (asms, conc) =>
 	([((concl thm) :: asms, conc)],
-	(fn [thm1] => prove_asm_rule thm thm1 | _ => bad_proof "asm_tac"))
+	(fn [thm1] => prove_asm_rule thm thm1 | _ => 
+		bad_proof "asm_tac"))
 );
 =TEX
 =SML
 fun €conv_tac› (conv : CONV) : TACTIC = (fn (asms, conc) =>
 	let	val thm = conv conc;
-		val (lhs, rhs) = dest_eq (concl thm)			handle complaint =>
+		val (lhs, rhs) = dest_eq (concl thm)
+		handle complaint =>
 		divert complaint "dest_eq" "conv_tac" 9400
 			[fn () => string_of_thm thm,
 			 fn () => string_of_term conc];
@@ -497,11 +689,14 @@ fun €conv_tac› (conv : CONV) : TACTIC = (fn (asms, conc) =>
 =SML
 fun simple_tac_proof (gl : GOAL, tac : TACTIC) : THM = (
 	case (tac gl)
-		handle Fail msg => fail "simple_tac_proof" 9502 [fn()=>get_message msg]
+		handle Fail msg => fail "simple_tac_proof" 9502
+		 [fn()=>get_message msg]
 	 of
 		([], pf) => ((pf [])
-		handle Fail msg => fail "simple_tac_proof" 9503 [fn()=>get_message msg])
-	|	(sgs, pf) => fail "simple_tac_proof" 9501 [fn () => translate_for_output(PolyML.makestring sgs)]
+		handle Fail msg => fail "simple_tac_proof" 9503 
+		[fn()=>get_message msg])
+	|	(sgs, pf) => fail "simple_tac_proof" 9501 
+		[fn () => translate_for_output(PolyML.makestring sgs)]
 );
 =TEX
 $tac\_proof$ is surprisingly complicated. First of all we check that

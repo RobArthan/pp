@@ -96,6 +96,8 @@ Changes to $subgoal\_package\_quiet$, effect of duplicate free variables in goal
 Added missing definition key.
 \item[Issue 1.21]
 More satisfactory use of $translate\_for\_output$.
+\item[Issue 1.22]
+Added $set\_goal$.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -217,7 +219,8 @@ We now give some functions on this structure:
 
 Look up the label:
 =SML
-fun €lookup_in_labelled› (caller : string) (lab : LABEL) ((assoc,ach) : LABELLED) : TERM = (
+fun €lookup_in_labelled› (caller : string) (lab : LABEL) 
+	((assoc,ach) : LABELLED) : TERM = (
 let	fun lab_eq (a1 :: x1) (a2 :: x2) =
 		(a1 = a2) andalso
 		lab_eq x1 x2
@@ -239,7 +242,7 @@ end);
 fun €replace_by_1_in_labelled› (old : TERM) (new : TERM) 
 	((assoc,ach) : LABELLED) : LABELLED = (
 let	fun aux ((lab, tm) :: x) = (
-		if %alpha%_eq old tm
+		if ¡_eq old tm
 		then (lab,new) :: aux x
 		else (lab,tm) :: aux x
 	) | aux [] = [];
@@ -251,7 +254,7 @@ end);
 fun €replace_by_1_in_labelled› (old : TERM) (new : TERM) 
 	((assoc,ach) : LABELLED) : LABELLED = (
 let	fun aux ((lab, tm) :: x) = (
-		if %alpha%_eq old tm
+		if ¡_eq old tm
 		then (lab,new) :: aux x
 		else (lab,tm) :: aux x
 	) | aux [] = [];
@@ -266,7 +269,7 @@ let	val n_newl = length newl;
 	val nl_newl = map (fn x => [x]) (interval 1 n_newl);
 	val tm_nl_newl = combine nl_newl newl;
 	fun aux ((lab, tm) :: x) = (
-		if %alpha%_eq old tm
+		if ¡_eq old tm
 		then  ((map (fn (lb,tm) => (lab @ lb, tm)) tm_nl_newl)
 			@ aux x)
 		else (lab,tm) :: aux x
@@ -278,7 +281,7 @@ end);
 =SML
 fun €achieve_in_labelled› (old : TERM) ((assoc,ach) : LABELLED) : LABELLED = (
 let	fun aux ((lab, tm) :: x) ass prv = (
-		if %alpha%_eq old tm
+		if ¡_eq old tm
 		then  aux x ass (lab :: prv)
 		else aux x ((lab,tm) :: ass) prv
 	) | aux [] ass prv = (rev ass, prv);
@@ -290,7 +293,7 @@ Find the labels of a given term:
 =SML
 fun €labels_in_labelled› (vl : TERM) ((assoc,_) :LABELLED) : LABEL list = (
 let	fun aux ((lab, tm) :: x) = (
-		if %alpha%_eq vl tm
+		if ¡_eq vl tm
 		then lab :: aux x
 		else aux x
 	) | aux [] = [];
@@ -663,7 +666,8 @@ let	val {main_goal_stack = main_goal_stack,...} = !current;
 in
 	((if is_nil main_goal_stack orelse not flag
 	then set_ti_context_to_empty()
-	else (let 	val GS{labelling = lg,current_goal = current_goal, ...} = hd main_goal_stack;
+	else (let val GS{labelling = lg,current_goal = current_goal, ...} = 
+		hd main_goal_stack;
 	in
 	(case current_goal of
 		Nil => set_ti_context_to_empty()
@@ -734,18 +738,18 @@ end;
 Return two $\alpha$-convertible terms:
 =SML
 local
-fun €two_%alpha%_eq› ((a :: x): TERM list) : unit = (
+fun €two_¡_eq› caller ((a :: x): TERM list) : unit = (
 	if a term_mem x
-	then fail "push_goal" 30004 [(fn () => string_of_term a), 
-		(fn () => string_of_term(find x (fn y => %alpha%_eq a y)))]
-	else two_%alpha%_eq x
-) | two_%alpha%_eq _ = ();
+	then fail caller 30004 [(fn () => string_of_term a), 
+		(fn () => string_of_term(find x (fn y => ¡_eq a y)))]
+	else two_¡_eq caller x
+) | two_¡_eq caller _ = ();
 =TEX
 =SML
 in
 fun €push_goal› (goal as (asms,conc) : GOAL) : unit = (
 let	val {main_goal_stack = main_goal_stack, ...} = !current;
-	val side_effect = two_%alpha%_eq asms;
+	val side_effect = two_¡_eq "push_goal" asms;
 	val side_effect = two_same_name "push_goal" goal;
 	val tm_goal = mk_term_form_goal goal
 		handle complaint =>
@@ -760,6 +764,31 @@ let	val {main_goal_stack = main_goal_stack, ...} = !current;
 in
 	(set_ti_context_to_goal goal;
 	current := {main_goal_stack = (new_gs :: main_goal_stack), 
+		undo_buffer = [], redo = []};
+	qdiag_line(get_error_message 30001 [string_of_int len_stack, opts]);
+	print_labelled_goal [];
+	())
+end);
+fun €set_goal› (goal as (asms,conc) : GOAL) : unit = (
+let	val {main_goal_stack = main_goal_stack, ...} = !current;
+	val side_effect = two_¡_eq "set_goal" asms;
+	val side_effect = two_same_name "set_goal" goal;
+	val tm_goal = mk_term_form_goal goal
+		handle complaint =>
+		pass_on complaint "mk_term_form_goal" "set_goal";
+	val lg = ([(top_label,tm_goal)],[]);
+	val cg = Value top_label;
+	val gst = asm_rule tm_goal;
+	val new_gs = GS{labelling = lg, current_goal = cg, 
+		goal_state_thm = gst, mgst = false};
+	val len_stack = length main_goal_stack;
+	val opts = if len_stack = 1 then "" else "s";
+	val main_goal_stack' = case main_goal_stack of
+		[] => []
+		(a::x) => x;
+in
+	(set_ti_context_to_goal goal;
+	current := {main_goal_stack = (new_gs :: main_goal_stack'), 
 		undo_buffer = [], redo = []};
 	qdiag_line(get_error_message 30001 [string_of_int len_stack, opts]);
 	print_labelled_goal [];
@@ -976,7 +1005,7 @@ by the tactic, but which are present in the result.
 	end)
 	else 	(print_goal_with_label new_lab a;
 		add_aux x 
-			(if %alpha%_eq a old_goal 
+			(if ¡_eq a old_goal 
 			then (	get_error_message 30006 [snew_lab] ::
 				get_error_message 30029 [snew_lab] ::
 				accm)
@@ -1008,7 +1037,7 @@ by the tactic, except when unused.
 	end)
 	else (	print_goal_with_label new_lab a;
 		aux x (a :: prev) 
-			(if %alpha%_eq a old_goal 
+			(if ¡_eq a old_goal 
 			then (get_error_message 30006 [snew_lab] ::
 				accm)
 			else accm)
@@ -1070,7 +1099,7 @@ let	val {main_goal_stack = main_goal_stack,
 	val proof_thm = proof sgs_thms;
 	val proof_thm' = term_form_goal_rule expected_sgs asms proof_thm;
 	val super_conc = concl proof_thm';
-	val sideeffect = (if %alpha%_eq super_conc cg_term
+	val sideeffect = (if ¡_eq super_conc cg_term
 		then ()
 		else thm_fail "apply_tactic" 30008 [proof_thm]);
 	val new_gst = prove_asm_rule proof_thm' goal_state_thm;
@@ -1482,7 +1511,7 @@ end);
 local
 	fun compact acc ((lab,gl) :: x) = (
 	let	fun aux ((labs,tm) :: rest) = (
-			if %alpha%_eq gl tm
+			if ¡_eq gl tm
 			then ((lab :: labs),tm) :: rest
 			else (labs,tm) :: aux rest
 		) | aux [] = [([lab],gl)];
@@ -1526,7 +1555,7 @@ fun €print_goal_state› (gs as GS{labelling = labelling,
 =SML
 local
 	fun label1 ((labs:LABEL list,tm) :: rest) ltm = (
-		if %alpha%_eq tm ltm
+		if ¡_eq tm ltm
 		then labs cup (label1 rest ltm)
 		else label1 rest ltm
 	) | label1 [] ltm = [];
