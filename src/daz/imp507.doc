@@ -75,7 +75,7 @@
 \item[Issue 1.96] Fixed bug 18 (batch 2).
 \item[Issue 1.97] Enhancement 13.
 \item[Issues 1.98-1.103] Bug-fixing of enhancements.
-\item[Issue 1.104] Enhancements 3 and 18 (and a fairly major rework of the funcitons which support $new\_scope\_with$).
+\item[Issues 1.104,1.105] Enhancements 3 and 18 (and a fairly major rework of the funcitons which support $new\_scope\_with$).
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1824,9 +1824,10 @@ The material in this section uses the following function, which is also required
 infix dot;
 fun (x : ID) €dot› (y : ID) = x ^ "." ^ y;
 =TEX
+The following function returns the name of the parent of the script theory.
 =SML
-val €get_parent_name› : unit -> string = (
-	hd o rev o get_parents o get_current_theory_name
+fun  €get_parent_name› ((): unit) : string = (
+	(hd o rev o get_parents) (!script_name)
 );
 =TEX
 =SML
@@ -1839,16 +1840,21 @@ fun €pack_tmpbody_name› (name : string) : string = (
 	(trans_id name) ^ "tmpbody"
 );
 =TEX
+In the following, the spec theories and related theories are made as children of the parent of the script theory.
+The new theory becomes the current theory (unless an exception is raised in which case the script theory is made current).
 =SML
 fun €new_package_spec_theory› (context : ID list) (name : string) : unit = (
 	let	val thy = pack_spec_name name;
 		val pars = map pack_spec_name context;
-		val old_thy = get_current_theory_name();
-	in	(	new_theory_aux pars thy;
+	in	(	open_theory(get_parent_name());
+			new_theory_aux pars thy;
 			add_script_theory thy;
 			open_theory thy )
-		handle Fail _ =>
-		fail "new_package_spec_theory" 507023 [fn()=>thy, fn()=>name]
+		handle Fail _ => (
+			open_theory (!script_name);
+			fail "new_package_spec_theory"
+			507023 [fn()=>thy, fn()=>name]
+		)
 	end
 );
 =TEX
@@ -1857,13 +1863,18 @@ val €open_package_spec_theory› : string -> unit = (
 	open_theory o pack_spec_name
 );
 =TEX
+In the following the new theory becomes the current theory (unless the exception is raised in which case the script theory is made current).
 =SML
 fun €new_package_tmpbody_theory› (context : ID list) (name : string) : unit = (
 	let	val thy = pack_tmpbody_name name;
 		val pars = map pack_spec_name context;
-	in	new_theory_aux pars thy
-		handle Fail _ =>
-		fail "new_package_tmpbody_theory" 507024 [fn()=>thy, fn()=>name]
+	in	(	open_theory(get_parent_name());
+			new_theory_aux pars thy )
+		handle Fail _ => (
+			open_theory(!script_name);
+			fail "new_package_tmpbody_theory" 507024
+			[fn()=>thy, fn()=>name]
+		)
 	end
 );
 =TEX
@@ -1876,28 +1887,31 @@ fun €open_package_tmpbody_theory› (name : string) : unit = (
 	end
 );
 =TEX
-In the following the call to the {\Product} function $duplicate\_theory$ creates a new theory which is a copy of the current theory.
+In the following the call to the {\Product} function $duplicate\_theory$ creates a new theory which is a copy of the script theory.
+The script theory is made the current theory.
 =SML
 fun €new_subunit_theory› (unit_name : string, subunit_name : string) : unit = (
 	let	val su_name = unit_name dot subunit_name;
 		val thy = trans_id (su_name ^ "stub");
 		fun delete_vc n = ((delete_conjecture n; ())
 						handle Fail _ => ());
-		val old_thy = get_current_theory_name () ;
-		val dummy1 = duplicate_theory ("-", thy);
+		val dummy1 = duplicate_theory (!script_name, thy);
 		val dummy2 = add_script_theory thy;
 		val dummy3 = open_theory thy;
 		val dummy4 = (map delete_vc o flat o map fst o get_conjectures) thy;
 		val thy_level = current_level();
-		val dummy5 = open_theory old_thy;
+		val dummy5 = open_theory (!script_name);
 	in	(	
 			update_user_datum cn_subunit_ud_key
 				(UD_String(thy, [UD_Int (current_level(),
 				[UD_Int (thy_level, [])])]));
 			()
 		)
-		handle Fail _ =>
-		fail "new_subunit_theory" 507026 [fn()=>thy, fn()=>su_name]
+		handle Fail _ => (
+			open_theory (!script_name);
+			fail "new_subunit_theory" 507026
+			[fn()=>thy, fn()=>su_name]
+		)
 	end
 );
 =TEX
@@ -3453,8 +3467,6 @@ fun type_subst_term (subs : (string * string) list) (tm : TERM) : TERM = (
 );
 =TEX
 Now we define various functions to do the actual prefixing of identifiers, terms etc.
-N.B. prefixing of type names (arising from given sets produced by real types etc.) is done later.
-
 =SML
 fun €prefix_id› (ident : ID) (n : string) : ID = (
 	trans_id (ident dot "")^n
@@ -3518,6 +3530,8 @@ fun €prefix_vardecl› (ident : ID) (newids : ID list)
 		tmark=		prefix_tmark ident newids tmark
 	}
 );
+=TEX
+When the following is called it is important that the temporary body theory for the package be the current theory and that it be populated with all its types and constants.
 =SML
 fun €prefix_spec_stmt› (ident : ID)
 	(tysubs : (string * string) list)
@@ -3629,12 +3643,12 @@ fun €do_const_thms› (ident : ID)
 =TEX
 The following creates and populates the spec theory.
 It returns the list of type substitutions which need to be made.
+The new theory becomes the current theory (unless an exception is raised in which case the script theory is made current).
 =SML
 fun €create_spec_from_tmpbody_theory›
-		(context : ID list) (parent : string) (ident : ID)
+		(context : ID list) (ident : ID)
 		: (string * string) list = (
-	let	val thy = get_current_theory_name();
-		val side = open_package_tmpbody_theory ident;
+	let	val side = open_package_tmpbody_theory ident;
 		val package = force_value(s_lookup ident (!pack_env))
 				handle Fail _ =>
 				error "create_spec_from_tmpbody_theory" 507029 
@@ -3644,24 +3658,20 @@ fun €create_spec_from_tmpbody_theory›
 		val pfx_funs = map (prefix_informal_fun ident newids)
 			(#informal_funs package @
 			map #informal_fun (#formal_funs package));
-		val side = open_theory parent;
 		val side = new_package_spec_theory context ident
 				handle Fail _ => open_package_spec_theory ident;
 		val (tysubs, paras1) = do_given_sets ident tys;
 		val paras2 = do_const_thms ident tysubs newids const_thms;
-	in (
-		map store_para paras1;
+	in	map store_para paras1;
 		map store_para paras2;
 		map set_par_names pfx_funs;
 		map	(set_basic_decl_info(prefix_id ident))
 			(#consts_types package);
-		open_theory thy;
 		tysubs
-	   ) handle ex => (
-		open_theory thy;
-		reraise ex "create_spec_from_tmpbody_theory"
+	end	handle ex => (
+			open_theory (!script_name);
+			reraise ex "create_spec_from_tmpbody_theory"
 		)
-	end
 );
 =TEX
 The order of events in the following is important.
@@ -3693,18 +3703,14 @@ fun €populate_theory_with_functions› (ident : ID) : unit = (
 );
 =TEX
 =SML
-fun €delete_tmpbody_theory› (parent : string) (ident : ID) : unit = (
-	let	val thy = get_current_theory_name();
-	in (
-		open_theory parent;
-		force_delete_theory (pack_tmpbody_name ident)
-			handle _ => ();
-		open_theory thy
-	   )	handle ex => (
-			open_theory thy;
+fun €delete_tmpbody_theory› (ident : ID) : unit = (
+	(	open_theory (get_parent_name());
+		force_delete_theory (pack_tmpbody_name ident) handle _ => ();
+		open_theory (!script_name)
+	)	handle ex => (
+			open_theory (!script_name);
 			reraise ex "delete_tmpbody_theory"
-		)
-	end
+	)
 );
 =TEX
 =SML
@@ -3730,21 +3736,16 @@ This activity corresponds to those parts of $new\_scope\with$ concerned with out
 To create the theory, we first create a temporary ``body'' theory with the unprefixed names.
 This is very like what happens when a package body is processed, except that in this case the theory is also populated with functions.
 =SML
-fun €create_tmpbody_theory› (context : ID list) (parent : string) (ident : ID) : unit = (
-	let	val thy = get_current_theory_name();
-	in (
-		open_theory parent;
+fun €create_tmpbody_theory› (context : ID list) (ident : ID) : unit = (
+	(	open_theory (get_parent_name());
 		new_package_tmpbody_theory context ident
 			handle Fail _ => open_package_tmpbody_theory ident;
 		populate_theory_with_types_consts ident;
 		populate_theory_with_functions ident
-	   )	handle ex => (
-			open_theory thy;
-			delete_tmpbody_theory parent ident
-				handle _ => ();
+	)	handle ex => (
+			delete_tmpbody_theory ident handle _ => ();
 			reraise ex "create_tmpbody_theory"
-		)
-	end
+	)
 );
 =TEX
 In $new\_scope\_with$, we also need to prefix names occurring in the specification statements in any formal procedures in the withed package.
@@ -3753,39 +3754,48 @@ This type checking must be carried out with the temporary body theory as the cur
 The following function creates the temporary body theory and returns information which the caller will need.
 If the package specification theory has not already been created it creates it.
 Finally, it deletes the temporary body theory.
-It returns the list of type substitutions which need to be made and the list formal procedures with the relevant names prefixed.
+It returns a triple comprising: the list of type substitutions which need to be made; the list of formal procedures with the relevant names prefixed in the specs and the prefixed auxiliary variables).
+
+The script theory becomes current after successful or unsuccessful execution.
 =SML
 fun €create_pack_spec_z_doc›
 	(context : ID list) (ident : ID) (newids : ID list)
-		(fps : FORMAL_PROC list)
-		: (string * string) list * FORMAL_PROC list = (
-	let	val parent = get_parent_name ();
-	in let	val cur_thy = get_current_theory_name();
-		val se1 = create_tmpbody_theory context parent ident;
+		(package : PACKAGE)
+		: (string * string) list * FORMAL_PROC list * Z_DECL list = (
+	let	val se1 = create_tmpbody_theory context ident;
+		val spec_created =
+			pack_spec_name ident mem
+				get_descendants (get_parent_name());
 		val tysubs = 
-			if pack_spec_name ident mem (get_descendants parent)
+			if	spec_created
 			then	let 	val (tys, _) =
 						tmpbody_types_and_const_thms ident;
 
 					val (tysubs, _) = do_given_sets ident tys;
 				in	tysubs
 				end
-			else	let val tysubs = 
-					create_spec_from_tmpbody_theory
-						context parent ident;
-				in	update_user_datum cn_spec_ud_key
-					(UD_String(pack_spec_name ident,
-						[UD_Int (current_level(),[])]));
-					tysubs
-				end;
-		val fps = prefix_formal_procs ident tysubs newids fps;
-		val se2 = open_theory cur_thy;
-	in	delete_tmpbody_theory parent ident;
-		(tysubs, fps)
+			else	create_spec_from_tmpbody_theory context ident;
+		val (fps, aux_vars) = (
+			open_package_tmpbody_theory ident;
+			set_package_ti_context package;
+			(	prefix_formal_procs ident tysubs newids
+					(#formal_procs package),
+				map	(prefix_aux_vars ident tysubs newids)
+					(#aux_vars package)	)
+		);
+	in	open_theory (!script_name);
+		delete_tmpbody_theory ident;
+		(if	not spec_created
+		then	update_user_datum cn_spec_ud_key
+				(UD_String(pack_spec_name ident,
+					[UD_Int (current_level(),[])]))
+		else	());
+		(tysubs, fps, aux_vars)
 	end	handle ex => (
-			delete_tmpbody_theory parent ident;
-			reraise ex "create_pack_spec_z_doc")
-	end
+			delete_tmpbody_theory ident handle Fail _ => ();
+			open_theory (!script_name);
+			reraise ex "create_pack_spec_z_doc"
+		)
 );
 =TEX
 
@@ -3808,16 +3818,11 @@ fun €new_scope_with› (ident : ID) : unit = (
 				speclabel_flag = false,
 				till_flag = false
 			};
-			val ti_cxt = set_package_ti_context package;
 			val newids = new_ids package;
-			val (tysubs, formal_procs1) =
-				create_pack_spec_z_doc context ident newids
-					(#formal_procs package);
+			val (tysubs, formal_procs1, vc_aux_vars1) =
+			create_pack_spec_z_doc context ident newids package;
 			val vc_vars1 = map (prefix_vardecl ident newids)
 							(#vc_vars package);
-			val vc_aux_vars1 = map
-					(prefix_aux_vars ident tysubs newids)
-					(#aux_vars package);
 			val block = block_flags(empty_block, flags);
 			val block = block_vc_vars(block, vc_vars1);
 			val block = block_vc_aux_vars(block, vc_aux_vars1);
