@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.7 2002/03/22 13:57:41 phil Exp phil $
+ * $Id: undo.c,v 2.8 2002/03/26 15:54:46 phil Exp phil $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -8,7 +8,7 @@
  *
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char rcsid[] = "$Id: undo.c,v 2.7 2002/03/22 13:57:41 phil Exp phil $";
+static char rcsid[] = "$Id: undo.c,v 2.8 2002/03/26 15:54:46 phil Exp phil $";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:
@@ -152,14 +152,14 @@ static char *oldtext(UndoBuffer *ub)
 	}
 	return ub->active->oldtext;
 }
-void setOldtext(UndoBuffer *ub, char *value)
+static void setOldtext(UndoBuffer *ub, char *value)
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return;
 	}
 	ub->active->oldtext = value;
 }
-void clearOldtext(UndoBuffer *ub)
+static void clearOldtext(UndoBuffer *ub)
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return;
@@ -174,7 +174,7 @@ static Boolean was_null(UndoBuffer *ub)
 	}
 	return ub->active->was_null;
 }
-void setWas_null(UndoBuffer *ub, Boolean value)
+static void setWas_null(UndoBuffer *ub, Boolean value)
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return;
@@ -189,7 +189,7 @@ static Boolean moved_away(UndoBuffer *ub)
 	}
 	return ub->active->moved_away;
 }
-void setMoved_away(UndoBuffer *ub, Boolean value)
+static void setMoved_away(UndoBuffer *ub, Boolean value)
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return;
@@ -204,7 +204,7 @@ static Boolean in_business(UndoBuffer *ub)
 	}
 	return ub->active->in_business;
 }
-void setIn_business(UndoBuffer *ub, Boolean value)
+static void setIn_business(UndoBuffer *ub, Boolean value)
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return;
@@ -219,7 +219,7 @@ static Boolean changes_saved(UndoBuffer *ub)
 	}
 	return ub->active->changes_saved;
 }
-void setChanges_saved(UndoBuffer *ub, Boolean value)
+static void setChanges_saved(UndoBuffer *ub, Boolean value)
 {
 	UndoNode *ptr;
 
@@ -261,7 +261,7 @@ static NAT first(UndoBuffer *ub)
 	}
 	return ub->active->first;
 }
-void setFirst(UndoBuffer *ub, NAT value)
+static void setFirst(UndoBuffer *ub, NAT value)
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return;
@@ -276,7 +276,7 @@ static NAT last(UndoBuffer *ub)
 	}
 	return ub->active->last;
 }
-void setLast(UndoBuffer *ub, NAT value)	
+static void setLast(UndoBuffer *ub, NAT value)	
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return;
@@ -293,12 +293,14 @@ static void noMemory(UndoBuffer *ub) {
 	}
 	ub->noMemory = True;
 	/* should display a dialogue box here */
-	fprintf(stderr, "Have run out of memory\n");
+	fprintf(stderr,
+	        "Danger, have run out of memory\n"
+	        "You are strongly urged to save all work, exit and restart\n");
 }
 
 
 /* a (sort of) destructor */
-void freeUndoNodes(UndoBuffer *ub, UndoNode *nd)
+static void freeUndoNodes(UndoBuffer *ub, UndoNode *nd)
 {
 	if(nd == (UndoNode *) NULL) {
 		return;
@@ -316,7 +318,7 @@ void freeUndoNodes(UndoBuffer *ub, UndoNode *nd)
 
 
 /* a (sort of) constructor */
-Boolean newUndoNode(UndoBuffer *ub)
+static Boolean newUndoNode(UndoBuffer *ub)
 {
 	UndoNode *new;
 	new = (UndoNode *) XtMalloc(sizeof(UndoNode));
@@ -363,7 +365,7 @@ Boolean newUndoNode(UndoBuffer *ub)
 	return True;
 }
 
-void backtrack(UndoBuffer *ub)
+static void backtrack(UndoBuffer *ub)
 {
 	if(ub->active == (UndoNode *) NULL) {
 		return;
@@ -371,7 +373,7 @@ void backtrack(UndoBuffer *ub)
 	ub->active = ub->active->prev;
 }
 
-void retrack(UndoBuffer *ub)
+static void retrack(UndoBuffer *ub)
 {
 	if(ub->active == (UndoNode *) NULL) {
 		ub->active = ub->root;
