@@ -8,8 +8,8 @@
 \TPPproject{FST PROJECT}  %% Mandatory field
 %\TPPvolume{}
 %\TPPpart{}
-\TPPtitle{Implementation of System Control and Basic Error Handling}  %% Mandatory field
-\TPPref{DS/FMU/IED/IMP001}  %% Mandatory field
+\TPPtitle{Implementation of System Control and Basic Error Reporting}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP002}  %% Mandatory field
 \def\SCCSversion{$Revision$
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
@@ -76,7 +76,11 @@ This document contains the implementation of the
 material whose detailed design may be found in
 \cite{DS/FMU/IED/DTD002}.
 \subsection{Dependencies}
-Some of the code contained here is compiler dependent.
+Occasional use is made of the compiler-dependent
+function $PolyML.makestring$ (which most compilers have).
+The use of $PolyML.install_pp$
+immediately after the definition of $give\_message$ is
+also compiler-specific.
 \subsection{Interface}
 See \cite{DS/FMU/IED/DTD002}.
 \subsection{Algorithms}
@@ -120,27 +124,45 @@ can give rise to errors. None of these errors is recoverable
 or trappable.
 We therefore need the following simple function to raise errors.
 =SML
-fun ‚scream· (area : string) (msg : int) : 'a = (
-	raise (Error(Message(fn () => {area=area, id=msg, inserts=[]})))
+fun ‚scream· (area : string) (msg : int) (inserts : string list): 'a = (
+	raise (Error(Message(fn () => {area=area, id=msg, inserts=inserts})))
 );
+=TEX
+Note the use of $makestring$ below is compiler-specific (but
+most compilers have it).
 =SML
 fun ‚new_error_message· (arg as {id:int, text: string}) : unit = (
 	let	fun aux ((arg' as {id=id', text=text'}) :: rest) = (
 			if id' = id
-			then scream "new_error_message" 2001
+			then scream "new_error_message" 2001 [(PolyML.makestring id)]
 			else arg' :: aux rest
 		) | aux [] = [arg]
 	in	message_db := aux(!message_db)
 	end
 );
 =SML
-fun ‚give_error_message· (id:int) : string = (
-	let	fun aux ({id=id', text=text'} :: rest) = (
+fun ‚give_error_message· (id:int) (inserts:string list) : string = (
+	let	fun aux1 ({id=id', text=text'} :: rest) = (
 			if id' = id
 			then text'
-			else aux rest
-		) | aux [] = scream "give_error_message" 2002
-	in	aux (!message_db)
+			else aux1 rest
+		) | aux1 [] = scream "give_error_message" 2002 [(PolyML.makestring id)];
+		fun aux2 [] i = "?" ^ PolyML.makestring i
+		|   aux2 (h::t) i = (if i <= 0 then h else aux2 t (i-1));
+		fun aux3 chs = (
+			case chs of
+				("?"::c::cs) => (
+					if c = "?"
+					then "?" :: aux3 cs
+					else	let val num = ord c - ord "0"
+						in	if num >= 0 andalso num <= 9
+							then aux2 inserts num :: aux3 cs
+							else "?" :: c :: aux3 cs
+						end
+			) |	c :: cs => (c :: aux3 cs
+			) |	[] => []
+		);
+	in	implode(aux3(explode(aux1 (!message_db))))
 	end
 );
 =SML
@@ -176,25 +198,28 @@ fun ‚error· (area : string) (id : int) (inserters : (unit -> string) list) : 'a 
 );
 =TEX
 \subsection{Printing Errors}
+The format of the message for on PolyML is:
+ÛExample Format
+Error raised by <area>:<the message>:Error <number>
+Ê
+This fits in with the PolyML format for printing
+an exception as:
+ÛExample Format
+Exception- <exception constructor> <exception value> raised
+Ê
+since the overall appearance is then, e.g.
+ÛExample Format
+Exception- Fail Error raised by <the message> Error <number>
+Ê
+
 =SML
 fun ‚give_message· (Message msg:MESSAGE) : string = (
 	let	val {area:string, id:int, inserts:string list} = msg();
-		fun aux1 [] _ = "?"
-		|   aux1 (h::t) i = (if i <= 0 then h else aux1 t (i-1));
-		fun aux2 chs = (
-			case chs of
-				("?"::c::cs) => (
-					if c = "?"
-					then "?" :: aux2 cs
-					else	let val num = ord c - ord "0"
-						in	if num >= 0 andalso num <= 9
-							then aux1 inserts num :: aux2 cs
-							else "?" :: c :: aux2 cs
-						end
-			) |	c :: cs => (c :: aux2 cs
-			) |	[] => []
-		);
-	in	"Error raised by" ^ area ^ ":\n" ^ implode(aux2(explode(give_error_message id)))
+		val number = PolyML.makestring id;
+	in	"ERROR " ^ number ^ " raised by " ^ area ^ ": " ^
+		(give_error_message id inserts)
+		handle Error _ => ("ERROR 2002 raised by give_message: " ^
+			give_error_message 2002 [PolyML.makestring id])
 	end
 );
 =TEX
@@ -203,7 +228,19 @@ using the following function.
 =SML
 val _ = let
 		fun error_pp (addstring, beginb, space, endb) (msg:MESSAGE) = (
-			addstring (give_message msg)
+			let	fun aux [] = (endb())
+				|   aux (ch :: chs) = (
+					(if ch = " "
+					then space(1, 0)
+					else addstring ch);
+					aux chs
+				);
+				val text = give_message msg;
+			in	beginb(0, false);
+				addstring "*** ";
+				aux(explode(give_message msg));
+				addstring " ***"
+			end 
 		);
 	in
 		PolyML.install_pp error_pp
@@ -277,8 +314,7 @@ fun ‚new_control·
 fun ‚set_control·
 	(func_name : string)
 	(var : 'a CONTROL_REC list ref)
-	(name : string)
-	(value : 'a) : unit = (
+	(name : string, value : 'a) : unit = (
 	let	val {name, control, check, ...} = lookup "set_control" (!var) name
 	in	if (check value)
 		then control := value
@@ -330,28 +366,43 @@ fun ‚new_flag· {name:string, control:bool ref, default:unit->bool} : unit = (
 	{name=name, control=control, default=default, check=(fn _=>true)}
 );
 =SML
-val ‚new_int_control· = new_control "new_int_control" int_controls;
-val ‚new_string_control· = new_control "new_string_control" string_controls;
+val ‚new_int_control· : {name:string, control:int ref, default:unit->int, check:int->bool} -> unit
+	 = new_control "new_int_control" int_controls;
+val ‚new_string_control· : {name:string, control:string ref, default:unit->string, check:string->bool} -> unit
+	 = new_control "new_string_control" string_controls;
 =SML
-val ‚set_flag· = set_control "set_flag" flags;
-val ‚set_int_control· = set_control "set_int_control" int_controls;
-val ‚set_string_control· = set_control "set_string_control" string_controls;
+val ‚set_flag· : (string * bool) -> unit
+	= set_control "set_flag" flags;
+val ‚set_int_control· : (string * int) -> unit
+	 = set_control "set_int_control" int_controls;
+val ‚set_string_control· : (string * string) -> unit
+	= set_control "set_string_control" string_controls;
 =SML
-val ‚reset_flag· = reset_control "reset_flag" flags;
-val ‚reset_int_control· = reset_control "reset_int_control" int_controls;
-val ‚reset_string_control· = reset_control "reset_string_control" string_controls;
+val ‚reset_flag· : string -> unit
+	= reset_control "reset_flag" flags;
+val ‚reset_int_control· : string -> unit
+	= reset_control "reset_int_control" int_controls;
+val ‚reset_string_control· : string -> unit
+	= reset_control "reset_string_control" string_controls;
 =SML
-val ‚get_flag· = get_control "get_flag" flags;
-val ‚get_int_control· = get_control "get_int_control" int_controls;
-val ‚get_string_control· = get_control "get_string_control" string_controls;
+val ‚get_flag· : string -> bool
+	= get_control "get_flag" flags;
+val ‚get_int_control· : string -> int
+	= get_control "get_int_control" int_controls;
+val ‚get_string_control· : string -> string
+	= get_control "get_string_control" string_controls;
 =SML
-val ‚get_flags· = get_controls "get_flag" flags;
-val ‚get_int_controls· = get_controls "get_int_control" int_controls;
-val ‚get_string_controls· = get_controls "get_string_control" string_controls;
+val ‚get_flags· : unit -> (string * bool) list
+	= get_controls "get_flag" flags;
+val ‚get_int_controls· : unit -> (string * int) list
+	= get_controls "get_int_control" int_controls;
+val ‚get_string_controls· : unit -> (string * string) list
+	= get_controls "get_string_control" string_controls;
 =TEX
 That completes the structure:
 =SML
 end; (* of structure SystemControl *)
+open SystemControl;
 =TEX
 \twocolumn[\section{INDEX OF DEFINED TERMS}]
 \printindex
@@ -362,7 +413,18 @@ end; (* of structure SystemControl *)
 
 new_error_message {id=100, text="?0 not expected here"};
 fail "foo" 100 [];
+fail "foo" 200 [];
 fail "foo" 100 [fn()=>"BLAH"];
 new_error_message {id=101, text="?0 not expected after ?1?. ??"};
 fail "foo" 101 [(fn()=>"BLAH"), (fn ()=>"BAH")];
-reset_string_control
+error "foo" 101 [(fn()=>"B"), (fn ()=>"BAH")];
+new_error_message {id=2002, text="The error number ?0 does not identify an entry in the error message database"};
+
+fail "foo" 2002 [fn()=>"42"];
+val line_length : int ref = ref 40;
+
+new_int_control{name="line_length",
+	control=line_length,
+	default=(fn()=>80),
+	check=(fn n=> n >= 20)};
+
