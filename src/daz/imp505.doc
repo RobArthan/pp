@@ -1,4 +1,4 @@
-% %Z% $Date: 2002/01/30 16:17:29 $ $Revision: 1.91 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2002/02/13 17:03:13 $ $Revision: 1.92 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -113,7 +113,7 @@
 \item[Issue 1.87] Fixed bug in treatment of expressions in for loops.
 \item[Issue 1.88--1.90] Further fixes and R0044: checks on array ranges.
 \item[Issue 1.91] Fixed {\LaTeX} errors.
-\item[Issue 1.92] Fixed bug in {\it proc\_call\_param}.
+\item[Issues 1.92, 1.93] Fixed bug in {\it proc\_call\_param}.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -773,7 +773,7 @@ all the information from the formal parameter specification for this parameter.
 It returns two substitution lists: one to be applied to the pre-condition
 and one to be applied to the post-condition.
 It also returns, if necessary, a list of predicates giving
-the domain conditions for the actual parameter (TBD) and,
+the domain conditions for the actual parameter and,
 if this is a record or array component actual parameter being
 exported, the membership constraint giving the declaration for
 the new Z variable that represents the parameter.
@@ -781,9 +781,9 @@ the new Z variable that represents the parameter.
 The optional predicate is the VC that may be needed if an exported parameter
 is being passed to a formal whose type is a constrained array subtype
 and which therefore may be subject to sliding.
-The control logic relies on the fact that a slided expression is not a variable
+The control logic relies on the fact that a slid expression is not a variable
 and so we will always end up in the exception handler in the case where a VC may be necessary.
-In this case, if the parameter is an {\tt in} we can just use the (possibly) slided expression.
+In this case, if the parameter is an {\tt in} we can just use the (possibly) slid expression.
 We therefore only have to test whether sliding has occurred in the handler in the
 case of an exported parameter.
 
@@ -797,20 +797,33 @@ fun Ûproc_call_paramÝ (env : CN_ENV)
 	: (Z_ID * Z_EXP) list * (Z_ID * Z_EXP) list * Z_PRED list * Z_PRED OPT * STATEMENT OPT = (
 let	val	ntm as (n, tm) = (trans_id formal, trans_exp env actual);
 	val	sl_tm = slide_to_tmark env (tm, tmark);
-	val	dcs = [] (* domain_conds tm *);
+	val	dcs = domain_conds env tm;
 in	let	val (v, ty) = dest_var sl_tm;
 	in	([ntm], [ntm, (init_var n, mk_var(init_var v, ty))], dcs, Nil, Nil)
 	end	handle Fail _ => (
 			case mode of
 				MSparkIn => ([(n, sl_tm)], [(n, sl_tm)], dcs, Nil, Nil)
-			|	_ =>
+			|	_ => (
+				let	val (v, ty) = dest_var tm;
+					val cnstrnt = zid env (trans_id tmark);
+					val vc_opt = (
+						case con_array_range_from_tmark cnstrnt of
+							Nil => Nil
+						|	Value r => Value (z_eq(z_dom tm, r))
+					);
+				in	([ntm],
+					 [ntm, (init_var n, mk_var(init_var v, ty))],
+					 dcs,
+					 vc_opt,
+					 Nil)
+				end handle Fail _ =>
 				let	val ty = type_of tm;
 					val nv = param_tmp_name (type_of tm);
 					val cnstrnt = zid env (trans_id tmark);
 					val nvtm = mk_z_lvar(nv, ty, []);
 					val pred = z_mem(nvtm, cnstrnt);
 					val vc_opt = (
-						case con_array_range_from_tmark cnstrnt of
+							case con_array_range_from_tmark cnstrnt of
 							Nil => Nil
 						|	Value r => Value (z_eq(z_dom tm, r))
 					);
@@ -823,6 +836,7 @@ in	let	val (v, ty) = dest_var sl_tm;
 					 vc_opt,
 					 stmt)
 				end
+			)
 		)
 	end
 );
