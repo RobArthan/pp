@@ -19,10 +19,11 @@
 Commands to process this document in various ways.
 
 make -f rel001.mkf imp005.dvi
-doc4tex imp005
-tex4dvi imp005
+doctex imp005
+texdvi imp005
 bibtex imp005
-doc4tex imp005 ; tex4dvi imp005
+doctex imp005 ; texdvi imp005
+doctex imp005 ; texdvi imp005 ; bibtex imp005
 dvipage imp005 &
 
 dviselect 31:   imp005.dvi | pstex -
@@ -30,7 +31,7 @@ dviselect 16:30 imp005.dvi | pstex -
 dviselect  1:15 imp005.dvi | pstex -
 
 
-doc4errors imp005
+docsml imp005
 PolyML.use "imp005.sml";
 
 abandon_reader_writer();
@@ -137,6 +138,13 @@ lasp -s -u imp005.OKwords imp005.doc > zz1
 	Fix missing percent in handling of percent keywords which
 	have no extended character when they are used in HOL text.
 
+\item[Issue 2.8, 13 April 1992 ]
+	Fix loss of text in mal-formed keywords used in strings
+		processed by function $translate_for_output$.
+	Makes prompts user alterable control strings.
+	Make $useterminal$ force a prompt if called when it is
+		already active.
+
 \end{description}
 
 %********************************************************************
@@ -155,8 +163,6 @@ lasp -s -u imp005.OKwords imp005.doc > zz1
 	quotation but seem unnecessary with the style now provided
 	here.  However, how does the error recovery cope when there is
 	less knowledge of the language structure?
-
-\item Allow for user settable prompts in $useterminal$.
 
 \item The character class classification codes which (e.g.{}) test if a
 	character is alphanumeric might be optimised to reduce the
@@ -2875,7 +2881,7 @@ let
 
 	fun aux_kw x_aux tail = (
 		case	get_pc ("", tail)
-		of (_, false, tail) => "%"::(x_aux tail)
+		of (badkw, false, tail) => "%":: badkw :: (x_aux tail)
 		| (kw, true, tail) => (string_of_kw kw) :: (x_aux tail));
 
 	val pQp = "%" ^ "Q" ^ "%";
@@ -2887,7 +2893,7 @@ let
 	|   aux (f as "Q"::"Q"::"Q"::t) = pQppQppQp :: (aux t)
 	|   aux (f as "Q"::"Q"::rest) = (
 		case	get_kw ("", rest)
-		of (_, false, t) => pQppQp :: (aux t)
+		of (badkw, false, t) => pQppQp :: badkw :: (aux t)
 		|  (kw, true, t) => (string_of_kw kw) :: (aux t))
 	|   aux (f as "Q"::t) = pQp :: (aux t)
 	|   aux ((h as "\"")::t) = h::(aux_str t)  (*="=*)
@@ -3169,7 +3175,8 @@ let
 in
 	use_string_loop ()
 		handle Read_too_often ch => (
-			raw_diag_string(get_error_message 5511 [ch, string_of_int (!char_number)]);
+			raw_diag_string(get_error_message 5511
+				[ch, string_of_int (!char_number)]);
 			raise Read_too_often ch)
 		| E => (
 			raw_diag_string(get_error_message 5512 [string_of_int (!char_number)]);
@@ -3206,12 +3213,56 @@ Prompts are required when the system wants the user to enter some
 	colon `:' added.  A prompt is required when the previously read
 	character is a new line.
 
+These prompts may be redefined by the user.  Prompts must be normal ASCII
+printing characters except `{\tt Q}' and `{\tt \%}'.
+
 =SMLPLAIN SML
 local (* for useterminal and ask_at_terminal *)
-	val prompt1 = ":> ";
-	val prompt2 = ":# ";
 
-	val cur_prompt = ref prompt1;
+val ord_sp	= ord " ";
+val ord_Q	= ord "Q";
+val ord_pc	= ord "%";
+
+fun check_prompt(pr:string) : bool = (
+let
+	fun aux ch = (
+	let
+		val chord = ord ch
+	in
+		not(		chord < ord_sp
+			orelse	chord > 126
+			orelse	chord = ord_Q
+			orelse	chord = ord_pc)
+	end
+	);
+
+	fun check(nil) = true
+	| check(h::t) = (aux h) andalso (check t)
+	;
+in
+	check(explode pr)
+end
+);
+=TEX
+
+=SMLPLAIN SML
+val prompt1_default = ":> ";
+val prompt2_default = ":# ";
+
+val prompt1 : string ref = ref prompt1_default;
+val prompt2 : string ref = ref prompt2_default;
+
+val _ =
+new_string_control{name="prompt1", control=prompt1,
+	default = fn() => prompt1_default, check = check_prompt};
+
+val _ =
+new_string_control{name="prompt2", control=prompt2,
+	default = fn() => prompt2_default, check = check_prompt};
+=TEX
+
+=SMLPLAIN SML
+	val cur_prompt : string ref = ref(!prompt1);
 
 	val console_last : string ref = ref "\n";
 
@@ -3263,7 +3314,7 @@ local
 		in
 			console_last := last;
 			if last <> "\n"
-			then	(cur_prompt := prompt2; last)
+			then	(cur_prompt := !prompt2; last)
 			else	last
 		end
 	);
@@ -3375,7 +3426,8 @@ let
 			| Error x => (raw_diag_string(get_error_message 5522
 					["Error", PolyML.makestring x]);
 				true)
-			| AbandonReaderWriter => (raw_diag_string(get_error_message 5525 nil);
+			| AbandonReaderWriter => (
+				raw_diag_string(get_error_message 5525 nil);
 				false)
 			| Read_too_often ch => (
 				raw_diag_string(get_error_message 5524 [ch]);
@@ -3384,17 +3436,20 @@ let
 				then (	raw_diag_string(get_error_message 5525 nil);
 					false)
 				else (true)
-		then	(cur_prompt := prompt1; use_term_loop ())
+		then	(cur_prompt := !prompt1; use_term_loop ())
 		else	()
 	)
 in
 	if !useterminal_is_active
 	then
-		()
+		(
+			cur_prompt := !prompt1;
+			console_last := "\n"
+		)
 	else
 		(
 			useterminal_is_active := true;
-			cur_prompt := prompt1;
+			cur_prompt := !prompt1;
 			abandoning := false;
 			console_last := "\n";
 
@@ -3602,7 +3657,7 @@ hand context.
 ( recogniser ( "starting symbol", "language name", quoted_text, "closing symbol" ))
 =TEX
 
-When the $add_semi$ argumenty is true then add, additionaly, a semi-colon
+When the $add_semi$ argument is true then add, additionaly, a semi-colon
 to indicate the end of an outermost Standard~ML expression.
 
 Where the $quoted_text$ is a list of values of type $Lex.INPUT$, see
@@ -3757,7 +3812,8 @@ val _ = add_new_symbols [
 Box drawing, symbols used within boxes.
 
 =SMLLITERAL
-	([	"BT"],		Value "÷",			Middle "\", Lex.Separator\"÷\", Lex.Text\"")
+	([	"BT"],		Value "÷",
+			Middle "\", Lex.Separator\"÷\", Lex.Text\"")
 ]
 end (* of local *);
 =TEX
