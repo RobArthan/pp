@@ -1,9 +1,11 @@
 % imp512.doc   %Z% $Date$ $Revision$ $RCSfile$
+% use_file "dtd512";PolyML.use "imp512";
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
 \def\Hide#1{}
 \def\Bool{``$\it{:}bool\,$''}
+\def\Compiler{C{\tiny OMPILER}}
 \makeindex
 \TPPproject{DAZ PROJECT}  %% Mandatory field
 %\TPPvolume{}
@@ -17,10 +19,10 @@
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
-\TPPkeywords{HOL}
+%\TPPkeywords{HOL}
 \TPPauthor{D.J.~King & WIN01}  %% Mandatory field
 %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
-\TPPauthorisation{D.J.~King & DAZ Team Leader}
+\TPPauthorisation{R.D.~Arthan & DAZ Team}
 \TPPabstract{
 This document contains the implementation for the Compliance Notation Reader/Writer.}
 %\TPPabstractB{}
@@ -56,33 +58,34 @@ This document contains the implementation for the Compliance Notation Reader/Wri
 \tableofcontents
 \subsection{Document Cross References}
 \bibliographystyle{fmu}
-\bibliography{fmu}
+\bibliography{fmu,daz}
 
 \subsection{Changes History}  % to get section number `0.3'
 \begin{description}
 
-\item[Issue \SCCSversion, \FormatDate{$Date$%
-} ] Initial Draft.
+\item[Issue 1.1 - 1.4] Initial Drafts.
+
+\item[Issue 1.5 (27th May 1994)] First draft for comment.
 
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
 \section{GENERAL}
 \subsection{Scope}
-This document contains the implementation for the parser for
-HOL/Z.
-The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD512}.
+This document contains the implementation of the compliance notation reader/writer. It is written in response to the detailed design to be found in \cite{ISS/HAT/DAZ/DTD512}.
+
 \subsection{Introduction}
 \subsection{Purpose and Background}
-\subsection{Algorithms}
-\subsection{Dependencies}
-\subsection{Known Deficencies}
+
+See \cite{ISS/HAT/DAZ/DTD512}.
+%\subsection{Algorithms}
+%\subsection{Dependencies}
+%\subsection{Known Deficencies}
 \subsection{Possible Enhancements}
+None.
 =TEX
-=TEX
-=TEX
-\section{PREAMBLE}
-\section{SPARK READER WRITER}
+
+\section{THE STRUCTURE $CNReaderWriter$}
 
 =SMLPLAIN SML
 structure ÛCNReaderWriterÝ : CNReaderWriter = struct
@@ -90,9 +93,7 @@ structure ÛCNReaderWriterÝ : CNReaderWriter = struct
 open ReaderWriterSupport;
 =TEX
 
-%********************************************************************
-
-\subsection{Warning Messages}
+\section{WARNING MESSAGES}
 
 Faults detected in the embedded text are reported via $local_error$ as
 they occur, they are also noted in the generated output using these
@@ -105,22 +106,137 @@ fun Ûlex_error_codeÝ (id : int, prev:string list) : string list = (
 	"\", " :: (*="=*)
 	prev
 );
-
+=TEX
+=SMLPLAIN SML
 fun	Ûlex_error_codesÝ (nil : int list, prev:string list) : string list =
 		prev
 |	lex_error_codes (errnos, prev) =
-		fold lex_error_code errnos prev
-;
+		fold lex_error_code errnos prev;
 =TEX
 
-%********************************************************************
+This is a function to print out the previous context upon an error.
+=SMLPLAIN SML
+fun Ûprev_contextÝ (num:int) (prev:string list) : string = (
+let
+	val part1 = rev(prev to num);
+	val part2 =	if length prev > num
+			then	" ... " :: part1
+			else	part1
+in
+	implode part2
+end
+);
+=TEX
 
-\subsection{Recursive SPARK Parser}
+\section{STRINGS IN SPARK}
 
-Brackets within SPARK text need only be examined to see if they relate to
-comments, all the other forms of bracket can simple be passed on for
-the SPARK lexical analyser and parser to deal with.
+The following function is a re-implementation of $read\_symbol$ in \cite{DS/FMU/IED/IMP005}, adjusted to ignore keywords and treat percent signs as regular symbols. This is in accordance with the requirement to support SPARK strings, where no keyword recognition is required.
+=SMLPLAIN SML
+fun Ûcn_read_symbolÝ (R:READER_ENV) : SYMBOL = (
+let
+	fun formatters next =
+	let
+		fun aux prev next =
+			if is_white next
+			then	aux (next::prev) (#skip_and_look_at_next R ())
+			else	prev;
+	in
+		SymWhite(aux nil next)
+	end;
 
+	val next = #look_at_next R ()
+in
+		if is_white next
+		then	formatters next
+		else
+			let
+				val ch = #advance R ();
+				val ord_ch = ord ch
+			in
+				if ord_ch > 127
+				then	case PrettyNames.find_char ch
+					of Value info => SymKnown(ch, false, info)
+					|  Nil	=> SymUnknownChar ch
+				else
+					SymCharacter ch
+			end
+end);
+=TEX
+=SMLPLAIN SML
+fun Ûcn_string_bodyÝ (R:READER_ENV) (prev:string list, preverrs:int list)
+			: (string list * int list) = (
+	case cn_read_symbol R
+	of SymCharacter ch => (
+		case ch
+		of "\"" =>	(*="=*)
+				if #look_at_next R () = "\""
+				then	(
+					#advance R ();
+					cn_string_body R ("\\\"\\\"" (*="=*) :: prev, preverrs))
+				else	(
+					("\"" (*="=*) :: prev, preverrs))
+		|  "\^D" =>	fail "cn_string_body" 5002 nil
+		|  "Q" =>	cn_string_body R ("QQQQ"::prev, preverrs)
+		|  "%" =>	cn_string_body R ("%"::prev, preverrs)
+		|  "\\" =>	cn_string_body R ("\\\\"::prev, preverrs)
+		|  _ =>		cn_string_body R (ch::prev, preverrs)
+		)
+	| SymDoublePercent => cn_string_body R ("%%" :: prev, preverrs)
+	| SymWhite wh => (	if contains wh "\n"
+				then
+					(	local_error "cn_string_body" 5014 [fn () =>
+							prev_context 20 prev];
+						(("5014\"" (*="=*)
+						) :: prev, 5014 :: preverrs)
+					)
+				else
+					cn_string_body R (wh@prev, preverrs))
+	| sy as SymKnown _ =>
+				cn_string_body R ((expand_symbol sy) :: prev, preverrs)
+	| SymUnknownKw(sym, _) => (
+				local_error "cn_string_body" 5003 [fn () => sym, fn () =>
+					prev_context 20 prev];
+				cn_string_body R  (" 5003 " :: prev, 5003 :: preverrs))
+	| SymUnknownChar ch =>
+				cn_string_body R
+					(("\\" ^ string_of_int3(ord ch))::prev, preverrs)
+);
+=TEX
+
+The result from $cn_string_body$ is a sequence of mainly one-character
+strings, it seems appropriate to convert it to one long string at this
+stage rather than retaining the space overhead until the whole input
+text is formed.
+
+=SMLPLAIN SML
+fun Ûget_cn_stringÝ (R:READER_ENV) (prev:string list) : string list * int list = (
+let
+	val (str, errs) = cn_string_body R (["\"" (*="=*)], nil)
+in
+	([implode(rev str)] @ prev, errs)
+end);
+=TEX
+
+\section{SPARK COMMENTS}
+
+The following function is called when two consecutive hyphens are recognised in the input. This function skips over the input until the end of the line is reached and then returns.
+
+=SMLPLAIN SML
+fun Ûskip_cn_commentÝ (R:READER_ENV) : unit = (
+	case read_symbol R of
+	SymWhite wh => (	if contains wh "\n"
+				then
+					()
+				else
+					skip_cn_comment R
+	)| _ => skip_cn_comment R
+);
+=TEX
+
+\section{COMPLIANCE NOTATION TEXT INPUT}
+
+The following function eats compliance notation input, calling the special handlers for strings and comments as required.
+It reads and assembles the quoted text (i.e., the body of the quotation) and the closing text.
 {\ftlinepenalty=9999
 =SMLPLAIN SML
 fun Ûget_cn_anyÝ (R:READER_ENV) (prevA:string list) : string list= (
@@ -144,31 +260,28 @@ let
 				[fn () => if is_keyword then "%" ^ k ^ "%" else k];
 			get_cn_any R (lex_error_code(5007, p)));
 
-	fun do_string ML_string = (
-		let	val (read_string, ol_name) =
-				if ML_string
-				then	(get_ML_string, "Lex.String")
-				else	(get_primed_string, "Lex.Char");
+	fun do_string () = (
+		let	val (read_string, ol_name) = (get_cn_string,
+					"Lex.String")
 			val (str, errnos) = read_string R (ol_name :: "\", " :: prevA); (*="=*)
 			val text_so_far = ", Lex.Text\"" (*="=*) :: str;
 		in
 			get_cn_any R (lex_error_codes(errnos, text_so_far))
 		end
 	);
-
 	val next = #look_at_next R ()
 in
 	case read_symbol R
 	of	SymCharacter ch => (
 			case ch
-			of "("	=>	(	if #look_at_next R () = "*"
+			of "-"	=>	(	if #look_at_next R () = "-"
 						then
-							(skip_comment R;
-							get_cn_any R (" " :: prevA))
+							(
+							skip_cn_comment R;
+							get_cn_any R prevA)
 						else
-							get_cn_any R ( "(" ::  prevA))
-			|  "\""	=>	do_string true (*="=*)
-			|  "`"	=>	do_string false
+							get_cn_any R ( "-" ::  prevA))
+			|  "\""	=>	do_string () (*="=*)
 			|  "\^D" =>	prevA
 			|  "Q"	=>	get_cn_any R ("QQQQ" :: prevA)
 			|  "\\"	=>	get_cn_any R ("\\\\" :: prevA)
@@ -193,30 +306,13 @@ end);
 =TEX
 }
 
-%********************************************************************
+\section{COMPLIANCE NOTATION READER FUNCTION}
 
-\subsection{Outer Level of the SPARK Reader}
-
-SPARK text is to be read, the opening symbol and language name are
-given.  Produce Standard~ML text as follows to add onto the left
-hand context.
-
-=GFT SML
-( recogniser ( "starting symbol", "language name", quoted_text, "closing symbol" ))
-=TEX
-
-When the $add_semi$ argument is true then add, additionaly, a semi-colon
-to indicate the end of an outermost Standard~ML expression.
-
-Where the $quoted_text$ is a list of values of type $Lex.INPUT$, see
-section\ref{DatatypeForParserInterface}.  Function $cn_reader$ is
-responsible for building the opening part of the Standard~ML text,
-function $get_cn_any$ reads and assembles the quoted text (i.e., the
-body of the quotation) and the closing text.
+Function $cn_reader$ is responsible for building the opening part of the Standard~ML text; the function $get\_cn\_any$ (see above) reads and assembles the quoted text (i.e., the body of the quotation) and the closing text.
 
 =SMLPLAIN SML
-fun Ûcn_readerÝ (recogniser:string) (add_semi:bool)
-		(R:READER_ENV) (start:string, is_keyword:bool)
+fun Ûcn_readerÝ (recogniser:string) (R:READER_ENV)
+		(start:string, is_keyword:bool)
 		(lang:string) (opening:string) (prevA:string list) : string list = (
 let
 	val prevB =
@@ -232,35 +328,17 @@ let
 
 	val read_text = get_cn_any R prevB;
 in
-	if add_semi
-	then
 		";" :: read_text
-	else
-		read_text
 end
 );
 =TEX
 
-%********************************************************************
-=IGN
-\subsection{Installing the Compliance Notation Reader}
-
-SMLLITERAL
-val _ = Initialisation.new_init_fun (fn () =>
-let	val dummy = ReaderWriterSupport.add_named_reader(
-			"¹",
-			"CN",
-			"Lex.Term",
-			cn_reader "cn_recogniser" true
-	);
-in () end);
-=TEX
-
 \section{EPILOGUE}
-=SML
+=SMLPLAIN
 end (* of structure CNReaderWriter *);
 =TEX
 \small
 \twocolumn[\section{INDEX}]
 \printindex
 \end{document}
+
