@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.159 $ $RCSfile: imp507.doc,v $ $Date: 2000/06/14 16:41:09 $
+% imp507.doc %Z% $Revision: 1.160 $ $RCSfile: imp507.doc,v $ $Date: 2000/06/16 11:47:10 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.159 $%
+\def\SCCSversion{$Revision: 1.160 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2000/06/14 16:41:09 $%
+\TPPdate{\FormatDate{$Date: 2000/06/16 11:47:10 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -115,6 +115,10 @@ of $pack\_spec\_with\_modules$ for WP 3).
 \item[Issue 1.155] Typo revealed by LaTeX.
 \item[Issue 1.155] Prototyping enhancement R5: Initial Variables in Conditionals.
 \item[Issue 1.156-1.160] Prototyping enhancement R4: Frame Abbreviations.
+\item[Issue 1.161] Improving error-detection for specification statements: dummy
+calls on the VC generator are made whenever a specification statement is processed
+in a context where VC generation is not carried out immediately. This makes sure
+that the checks on free variables etc. are made.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -2548,6 +2552,55 @@ fun €k_slot_dec› (label : LABEL) : unit = (
 );
 =TEX
 \section{STATEMENTS}\label{STATEMENTS}
+\subsection{Support for Processing Specification Statement}
+The code that follows is essentially the implementation of {\it vc\_speclabel}
+with an option not to store the generated VCs. This facility is used to
+make checks a specification statement (as statement) as soon as it is encountered
+rather than waiting until someone tries to refine it (which they may never do).
+
+The code does not follow the specification in fishing the label out of the environment
+but takes it from the argument (which will have the same value in the call that actually
+generates VCs and can be chosen by caller in the call that just makes checks).
+The speclab is augmented by any variables brought into scope by a for-loop.
+
+=SML
+fun €vcs_speclabel_aux› (just_checking : bool) ({label, statement} : REFINED_BY) : unit = (
+	let	val block1 = block 1;
+		val spec_env_lab = force_value( s_lookup label (!spec_env) )
+			handle Fail _ => fail "vcs_speclabel" 507003
+				[fn () => label];
+		val {wp_env as {env, till, return, fun_header, formal_procs},
+			spec, in_scope, formal_body_flag, fun_flag, till_flag}
+			= spec_env_lab;
+		val current_for_vars1 = #current_for_vars block1;
+		val current_log_cons1 = #current_log_cons block1;
+		val in_scope1 = {
+			vc_vars = #vc_vars in_scope,
+			vc_pars = (#vc_pars in_scope) cup current_for_vars1,
+			vc_log_cons = (#vc_log_cons in_scope) @ current_log_cons1,
+			vc_aux_vars = #vc_aux_vars in_scope,
+			formal_procs = #formal_procs in_scope,
+			dec_labels = #dec_labels in_scope
+		};
+		val wp_env1 :WP_ENV = {
+			env = cn_env_of_in_scope in_scope1,
+			till = till,
+			return = return,
+			fun_header = fun_header,
+			formal_procs = formal_procs
+		};
+		val speclab : SPECLAB = {
+			spec = spec,
+			formal_body_flag = formal_body_flag,
+			fun_flag = fun_flag,
+			till_flag = till_flag,
+			wp_env = wp_env1,
+			in_scope = in_scope1
+		};
+	in	if just_checking then () else store_vcs (label, call_vcs (speclab, statement))
+	end
+);
+=TEX
 \subsection{The SID function spec\_stmt}
 The decision about which support function to call is made in $spec\_stmt$ itself.
 =SML
@@ -2645,11 +2698,14 @@ fun €spec_stmt_otherwise› ({spec : SPEC, label : LABEL}) : unit = (
 	end
 );
 =TEX
+After doing the work prescribed by the specification, we call {\it vcs\_spec\_label\_aux}
+to check the specification statement for free variables or other oddities. 
 =SML
 fun €spec_stmt› (specstmt as {spec : SPEC, label : LABEL}) : unit = (
 	(if	test_flag #speclabel_flag 1
 	then	spec_stmt_speclabel
-	else	spec_stmt_otherwise) specstmt
+	else	spec_stmt_otherwise) specstmt;
+	vcs_speclabel_aux true {label = label, statement = STNull}
 );
 =TEX
 \subsection{The SID function k\_slot\_stmt}
@@ -2851,7 +2907,7 @@ fun €new_scope_proc_form› (ident : ID) : unit = (
 	end		
 );
 =TEX
-\subsection{The SID function new\_scope\_fun\_inf}
+\subsection{The SID function stub}
 This corresponds to $make\_module$ as used in the Z spec.
 =SML
 fun €stub› (() : unit) : unit = (
@@ -2994,7 +3050,7 @@ fun €vcs_body_proc_aux› (st : STATEMENT) : (LABEL * VC list) = (
 =SML
 fun €check_formal_proc› (formal_proc : FORMAL_PROC) : unit = (
 let
-	(* mimic curr_form_proc & mimc being in proc body *)
+	(* mimic curr_form_proc & mimic being in proc body *)
 	val block1 = block 1;
 	val block2 = block 2;
 	val dummy1 = (blocks :=
@@ -3018,7 +3074,7 @@ let
 	val package =
 			(force_value(s_lookup block_name2 (!pack_env)))
 			handle Fail _ =>
-			error "form_proc_pack_spec" 507012 [fn()=>block_name2];
+			error "check_formal_proc" 507012 [fn()=>block_name2];
 	val new_in_scope2 = in_scope_vc_aux_vars (in_scope2, 
 		union (op =$) (#vc_aux_vars in_scope2) (#aux_vars package));
 	val new_declab2 =  {block_name = block_name2,
@@ -3239,8 +3295,13 @@ fun €form_proc_pack_body_aux›
 	end
 );
 =TEX
+To make sure that all checks on the specification statement in a formal procedure
+stub ({\it ... is separate) are made at the point of declaration, {\it form\_proc\_subunit\_aux}
+is called just for the checks it makes immediately after the call to {\it stub\_spec\_proc}.
+For this purpose, its {\it just\_cheking} parameter is set true to prevent it having
+any side-effects apart from any error reporting done by the VC generator.
 =SML
-fun €form_proc_subunit› (form_proc: FORMAL_PROC) : unit = (
+fun €form_proc_subunit_aux› (just_checking : bool) (form_proc: FORMAL_PROC) : unit = (
 	let	val block1 = block 1;
 		val block2 = block 2;
 		val block_name1 = #block_name(#declab block1);
@@ -3250,7 +3311,7 @@ fun €form_proc_subunit› (form_proc: FORMAL_PROC) : unit = (
 			handle Fail _ =>
 			fail "form_proc_subunit" 507011
 					[fn()=>block_name2, fn()=>block_name1];
-	in	subunit_env := s_delete tbn1_bn2 (!subunit_env);
+	in	(if just_checking then () else subunit_env := s_delete tbn1_bn2 (!subunit_env));
 		if	#specif_flag subunit3
 		then	
 	let
@@ -3282,10 +3343,23 @@ fun €form_proc_subunit› (form_proc: FORMAL_PROC) : unit = (
 			wp_env = wp_env4,
 			in_scope = in_scope4
 		};
-	in	store_vcs (block_name1, call_vcs (speclab4, st))
+		val resulting_vcs = call_vcs (speclab4, st)
+	in	if just_checking then () else store_vcs (block_name1, resulting_vcs)
 	end
 		else	()
 	end
+);
+=TEX
+=SML
+fun €form_proc_subunit› (form_proc: FORMAL_PROC) : unit = (
+	form_proc_subunit_aux false form_proc
+);
+=TEX
+=SML
+fun €check_stub_spec_proc› (form_proc: FORMAL_PROC) : unit = (
+	if	test_flag #stub_flag 2
+	then	form_proc_subunit_aux true form_proc
+	else	()
 );
 =TEX
 =SML
@@ -5129,48 +5203,9 @@ fun €new_scope_speclabel› (label : LABEL) : unit = (
 );
 =TEX
 \subsection{THE SID function vcs\_speclabel}
-The following follows the specification in fishing the label out of the environment (although it will be the same as the label in the argument).
-
-The speclab is augmented by any variables brought into scope by a for-loop.
-
+All the work of this SID function is done in {\it vcs\_speclabel\_aux} (see above).
 =SML
-fun €vcs_speclabel› ({label = unused, statement} :REFINED_BY) : unit = (
-	let	val block1 = block 1;
-		val label = #spec_lab block1;
-		val spec_env_lab = force_value( s_lookup label (!spec_env) )
-			handle Fail _ => fail "vcs_speclabel" 507003
-				[fn () => label];
-		val {wp_env as {env, till, return, fun_header, formal_procs},
-			spec, in_scope, formal_body_flag, fun_flag, till_flag}
-			= spec_env_lab;
-		val current_for_vars1 = #current_for_vars block1;
-		val current_log_cons1 = #current_log_cons block1;
-		val in_scope1 = {
-			vc_vars = #vc_vars in_scope,
-			vc_pars = (#vc_pars in_scope) cup current_for_vars1,
-			vc_log_cons = (#vc_log_cons in_scope) @ current_log_cons1,
-			vc_aux_vars = #vc_aux_vars in_scope,
-			formal_procs = #formal_procs in_scope,
-			dec_labels = #dec_labels in_scope
-		};
-		val wp_env1 :WP_ENV = {
-			env = cn_env_of_in_scope in_scope1,
-			till = till,
-			return = return,
-			fun_header = fun_header,
-			formal_procs = formal_procs
-		};
-		val speclab : SPECLAB = {
-			spec = spec,
-			formal_body_flag = formal_body_flag,
-			fun_flag = fun_flag,
-			till_flag = till_flag,
-			wp_env = wp_env1,
-			in_scope = in_scope1
-		};
-	in	store_vcs (label, call_vcs (speclab, statement))
-	end
-);
+val €vcs_speclabel› : REFINED_BY -> unit = vcs_speclabel_aux false;
 =TEX
 \subsection{THE SID function end\_scope\_speclabel}
 =SML
@@ -5464,6 +5499,7 @@ and €do_procedure_spec› (
 		fformal_part formal_part;
 		check_19 current_cn_env esp;
 		stub_spec_proc formal_proc;
+		check_stub_spec_proc formal_proc;
 		form_proc formal_proc;
 		curr_form_proc formal_proc
 	end
