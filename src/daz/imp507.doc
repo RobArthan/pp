@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.268 $ $RCSfile: imp507.doc,v $ $Date: 2004/07/14 16:52:30 $
+% imp507.doc %Z% $Revision: 1.269 $ $RCSfile: imp507.doc,v $ $Date: 2004/07/15 13:52:02 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.268 $%
+\def\SCCSversion{$Revision: 1.269 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/07/14 16:52:30 $%
+\TPPdate{\FormatDate{$Date: 2004/07/15 13:52:02 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -207,7 +207,7 @@ by doing all the work of checking and generating the VC terms in {\it call\_vcs}
 \item[Issue 1.255] Fixed bug in {\it combine\_param\_specs}.
 \item[Issue 1.256] Fixed bug in {\it renames\_object\_common}.
 \item[Issue 1.257] Now allows duplicates in a use clause.
-\item[Issues 1.258-1.269] Reform of the Environments.
+\item[Issues 1.258-1.270] Reform of the Environments.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -455,31 +455,11 @@ fun €package_decl› (
 );
 =TEX
 =SML
-fun €package_local_dict› (
-	{vc_vars, consts_types, formal_procs, informal_funs,
-		formal_funs, aux_vars, var_renamings, zmod, decl, local_dict, with_dict}
-	: PACKAGE,
-	new_local_dict : ENV_DICT) : PACKAGE = (
-	{	vc_vars				=	vc_vars,
-		consts_types			=	consts_types,
-		formal_procs			=	formal_procs,
-		informal_funs			=	informal_funs,
-		formal_funs			=	formal_funs,
-		aux_vars			=	aux_vars,	
-		var_renamings			= var_renamings,
-		zmod				=	zmod,
-		decl				=	decl,
-		local_dict				=	new_local_dict,
-		with_dict				=	with_dict
-	}	
-);
-=TEX
-=SML
 fun €package_with_dict› (
 	{vc_vars, consts_types, formal_procs, informal_funs,
 		formal_funs, aux_vars, var_renamings, zmod, decl, local_dict, with_dict}
 	: PACKAGE,
-	new_with_dict : ENV_DICT OPT) : PACKAGE = (
+	new_with_dict : ENV_DICT) : PACKAGE = (
 	{	vc_vars				=	vc_vars,
 		consts_types			=	consts_types,
 		formal_procs			=	formal_procs,
@@ -1567,12 +1547,12 @@ To restrict the scope of frame widening, the block names are also passed in and 
 =SML
 fun €merge_declabs›
 	(block_name1 : ID)
-	({	dict=_,
+	({	dict=dict1,
 		dec_labels = dec_labels1} : IN_SCOPE)
 	(block_name2 : ID)
-	({	dict = dict2,
+	({	dict = _,
 		dec_labels = dec_labels2} : IN_SCOPE) : IN_SCOPE = (
-	{	dict = dict2,
+	{	dict = dict1,
 		dec_labels =
 		if block_name1 = block_name2
 		then dec_labels1 cup dec_labels2
@@ -1602,10 +1582,10 @@ fun €flatten_env› ([] : ENV) : IN_SCOPE = (
 	#in_scope(#declab blk)
 ) |  flatten_env (blk1 :: (blks as (blk2 :: _))) = (
 	merge_declabs
-	(#block_name  (#declab blk2))
-	(flatten_env blks)
 	(#block_name (#declab blk1))
 	(#in_scope (#declab blk1))
+	(#block_name  (#declab blk2))
+	(flatten_env blks)
 );
 =TEX
 The following function is used here and elsewhere to find the HOL name corresponding to a Z one.
@@ -2143,7 +2123,7 @@ We do not need to provide the type here, but we do if it is available: subsequen
 {\em env\_of\_env\_dict} will fill it in from the HOL type of the constant if it is not in the environment info.
 =SML
 fun €env_entry_of_entity_info› (zn : Z_ID, ent_inf : ENTITY_INFO) : Z_ID * ENV_INFO = (
-	(zn, {tipe = get_const_type zn, info = ent_inf, canon_name = zn})
+	(zn, {tipe = get_const_type (z_id_of_id zn), info = ent_inf, canon_name = zn})
 );
 =TEX
 In the following, named number declarations are just ignored.
@@ -2378,12 +2358,13 @@ fun €set_in_scope_ti_context1› (in_scope : IN_SCOPE, extras : TERM list) : unit 
 );
 =TEX
 =SML
-fun €ti_context_of_package› (package as {vc_vars, aux_vars, var_renamings, ...}: PACKAGE)
+fun €ti_context_of_package› (package as {vc_vars, aux_vars, var_renamings, local_dict, ...}: PACKAGE)
 	: TYPE E_DICT  = (
 	ti_context_of_in_scope(
 		in_scope_renamings(
 			in_scope_vc_aux_vars Nil
-				(in_scope_vc_vars Nil (empty_in_scope, vc_vars), aux_vars),
+				(in_scope_vc_vars (Value local_dict)
+					(empty_in_scope, vc_vars), aux_vars),
 			var_renamings))
 );
 =TEX
@@ -3331,14 +3312,34 @@ fun €add_init_vars_spec› ({w, pre, post, w0} : SPEC) : SPEC = (
 );
 =TEX
 =SML
-fun €add_init_vars_speclab› ({spec, wp_env, fun_flag, in_scope,
+fun €add_init_vars_speclab› ({spec as {w, pre, post, ...},
+		wp_env as {env,
+			fun_header,
+			named_tills,
+			till, return}, fun_flag, in_scope as {dict, ...},
 	till_flag, formal_body_flag} : SPECLAB) : SPECLAB = (
-	{spec = add_init_vars_spec spec,
-	wp_env = wp_env,
-	fun_flag = fun_flag,
-	in_scope = in_scope,
-	till_flag = till_flag,
-	formal_body_flag = formal_body_flag}
+	let	fun v_v0 v = (v, v ^ "â0");
+		val vs_v0s = map v_v0 w;
+		fun aux acc ((v, v0) :: more) = (
+			case env_of_env_dict dict v of
+				Value {tipe, canon_name, info} => (
+					aux
+					((v0, 
+					{tipe = tipe,
+					canon_name = canon_name ^"â0",
+					info = info})::acc) more
+			) |	Nil => aux acc more
+		) | aux acc [] = acc;
+		val dict' = add_to_env_dict dict (aux [] vs_v0s);
+		val env' = env_of_env_dict dict';
+	in	{spec = {w = w, w0 = map snd vs_v0s, pre = pre, post = post},
+		wp_env = {env = env', fun_header = fun_header,
+			named_tills = named_tills, till = till, return = return},
+		fun_flag = fun_flag,
+		in_scope = in_scope_dict (in_scope, dict'),
+		till_flag = till_flag,
+		formal_body_flag = formal_body_flag}
+	end
 );
 =TEX
 =SML
@@ -3874,8 +3875,10 @@ fun €spec_stmt_speclabel› ({spec : SPEC, label : LABEL}) : unit = (
 		val dict1 = #dict(#in_scope(#declab block1));
 		val {vc_log_cons = vc_log_con_ids1, ...} = get_local_vars dict1;
 		val vc_log_cons1 = map (log_con_of_env_dict dict1) vc_log_con_ids1;
+(* TBD: why was the following here? The check is made in add_log_con_env
 		val zids_in_scope = (current_cn_env, []);
 		val side = map (check_new_z_id zids_in_scope) vc_log_con_ids1;
+*)
 		val in_scope0 : IN_SCOPE =
 			in_scope_vc_pars Nil (
 				in_scope_vc_log_cons Nil (in_scope2, vc_log_cons1),
@@ -4107,7 +4110,7 @@ fun €till_pred› (t : Z_TM) : unit = (
 =SML
 fun €new_block› ((): unit) : unit = (
 	let	val block1 = block 1;
-	in	blocks := block_body_flag (block1, true) :: tl(!blocks)
+	in	blocks := new_scope_common(block_body_flag (block1, true) :: tl(!blocks))
 	end
 );
 =TEX
@@ -4170,7 +4173,7 @@ fun €subunit_form_inf› (ident : ID, is_inf : bool) : unit = (
 				 (trans_subunit_name(block_name, ident));
 			val in_scope' = #in_scope subunit1;
 			val block' = block_in_scope(block, in_scope');
-		in	blocks := block' :: tl (!blocks);
+		in	blocks := new_scope_common(block' :: tl (!blocks));
 			if	is_inf
 			then	(subunit_env := s_delete tbn_id (!subunit_env);
 				deletion_info := s_enter tbn_id subunit1 (!deletion_info))
@@ -4327,9 +4330,9 @@ fun €vcs_body_proc_aux› (st : STATEMENT)
 				env
 			handle exn => 
 			pass_on exn "var_inits_pre" "vcs_body_proc_aux";
-		val spec : SPEC = {
+		val spec : SPEC = add_init_vars_spec {
 			w = w,
-			w0 = map (fn n => n ^ "â0") w,
+			w0 = [],
 			pre = pre1,
 			post = post1
 		};
@@ -4417,12 +4420,11 @@ fun €subs_formals_spec› (
 				);
 				val new_pars = map do_param_spec pars;
 				val new_w = map subs_id w;
-				val new_w0 = map subs_id w0;
 				val new_pre = z_quote(subs_pred (z_pre, xs0, ys0), tyo1);
 				val new_post = z_quote(subs_pred (z_post, xs0, ys0), tyo2);
 			in	(new_pars,
-				{w = new_w,
-				w0 = new_w0,
+				add_init_vars_spec {w = new_w,
+				w0 = [],
 				pre = new_pre,
 				post = new_post})
 			end
@@ -4531,9 +4533,9 @@ fun €form_proc_pack_body_common› (form_proc: FORMAL_PROC)
 		val spec3 = #spec formal_proc3;
 		val w5 = (#w spec3) cup
 				(flat (map (map trans_id o #vars) pack_body_vars));
-		val spec5 : SPEC = {
+		val spec5 : SPEC = add_init_vars_spec {
 			w = w5,
-			w0 = map (fn s => s^"â0") w5,
+			w0 = [],
 			pre = #pre spec3,
 			post = #post spec3
 		};
@@ -4639,9 +4641,9 @@ fun €form_proc_pack_body_aux›
 			    z_exists (aux_vars,
 				z_many_and(z_pred_of_z_tm env5a post6::invs)))),
 			Nil);
-		val spec5 : SPEC = {
+		val spec5 : SPEC = add_init_vars_spec {
 			w = w5,
-			w0 = map (fn s => s^"â0") w5,
+			w0 = [],
 			pre = pre5,
 			post = post5
 		};
@@ -5661,9 +5663,9 @@ fun €vcs_body_fun› (st : STATEMENT) : SPEC = (
 				env
 			handle exn =>
 			pass_on exn "var_inits_pre" "vcs_body_fun";
-		val spec : SPEC = {
+		val spec : SPEC = add_init_vars_spec {
 			w = w,
-			w0 = map (fn n => n ^ "â0") w,
+			w0 = [],
 			pre = pre1,
 			post = post1
 		};
@@ -5697,7 +5699,26 @@ fun €vcs_body› (st : STATEMENT) : unit = (
 \section{PACKAGES}\label{PACKAGES}
 \subsection{The SID function new\_scope\_pack\_spec}
 =SML
+fun €init_with_dict› (dict : ENV_DICT) : ENV_DICT = (
+	let	fun unwanted (zn, {canon_name, info, ...} : ENV_INFO)  = (
+			(case  info of
+				EIEnvFunction _ => false
+			|	EIEnvRecordType _ => false
+			|	EIEnvOtherType => false
+			|	EIEnvConstant _ => false
+			|	_ => true)
+			orelse
+			(zn <> canon_name andalso not("o" mem explode zn))
+		);
+		val wanted_entries = flatten_env_dict dict drop unwanted;
+	in	add_to_env_dict initial_env_dict wanted_entries
+	end
+);
+=TEX
+=SML
 fun €empty_package› (ccu : CONTEXT_COMPILATION_UNIT) : PACKAGE = (
+	let	val dict  = #dict(#in_scope(#declab(block 1)));
+	in
 	{	vc_vars				=	[],
 		consts_types			=	[],
 		formal_procs			=	[],
@@ -5707,9 +5728,10 @@ fun €empty_package› (ccu : CONTEXT_COMPILATION_UNIT) : PACKAGE = (
 		var_renamings			=	[],
 		zmod 				=	(!script_name),
 		decl				=	ccu,
-		local_dict				=	initial_env_dict,
-		with_dict				=	Nil
+		local_dict				=	dict,
+		with_dict				=	init_with_dict dict
 	}
+	end
 );
 =TEX
 =SML
@@ -6540,16 +6562,16 @@ fun €create_prefixed_spec›
 			(#formal_funs package);
 		val side = (blocks := tl (!blocks));
 		val vc_vars1 = map (prefix_vardecl ident newids)(#vc_vars package);
-		val dict1 = add_to_env_dict initial_env_dict types_consts_env;
+		val thychange1 = 
+			if	nested_package
+			then	()
+			else	open_package_spec_theory ident;
+		val dict1 = add_to_env_dict (#with_dict package) types_consts_env;
 		val block = block_vc_vars Nil (block_dict(empty_block, dict1), vc_vars1);
 		val aux_vars = map (prefix_aux_vars ident tysubs newids)
 					(#aux_vars package);
 		val block = block_vc_aux_vars Nil (block, aux_vars);
 		val side = (blocks := new_scope_common(block :: !blocks));
-		val thychange1 = 
-			if	nested_package
-			then	()
-			else	open_package_spec_theory ident;
 		val informal_fun_paras = map trans_informal_fun pinformal_funs;
 		fun par_aux (ff:FORMAL_FUN) = (
 			set_spark_function_info true (#globals ff) (#informal_fun ff)
@@ -6607,13 +6629,13 @@ fun €z_prefix› (ident : ID) (newids : ID list) (package : PACKAGE)
 				in	(tysubs,
 					map (prefix_aux_vars ident tysubs newids)
 						(#aux_vars package),
-					(force_value (#with_dict package)))
+					(#with_dict package))
 		end
 			else	create_prefixed_spec false parents ident package;
 		val _ = open_theory spec_script_name;
-		val _ = set_package_ti_context package;
 		val block1 = block_dict (empty_block, #local_dict package);
 		val _ = blocks := new_scope_common(block1 :: !blocks);
+		val _ = set_package_ti_context package;
 		val fps =prefix_formal_procs ident tysubs newids (#formal_procs package);
 		val _ = blocks := tl(!blocks);
 	in	open_theory (!script_name);
@@ -6648,7 +6670,7 @@ fun €new_scope_with› (ident : ID) : unit = (
 			val block = block_vc_aux_vars Nil (block, aux_vars1);
 			val block = block_formal_procs Nil (block, formal_procs1);
 			val block = block_renamings (block, var_renamings);
-			val package' = package_with_dict (package, Value dict);
+			val package' = package_with_dict (package, dict);
 		in	new_parent_aux true (pack_spec_name ident);
 			pack_env := s_enter ident package' (!pack_env);
 			blocks := new_scope_common(block :: !blocks)
@@ -6716,6 +6738,23 @@ else	()
 N.B. this section has been moved after $new\_scope\_with$ so that that function can be called from $new\_scope\_pack\_body$
 =TEX
 =SML
+fun €init_pack_body_dict› (dict : ENV_DICT, pack_vc_vars : VAR_DECL list) : ENV_DICT = (
+	let	fun unwanted (zn, {canon_name, info, ...} : ENV_INFO)  = (
+			(case  info of
+				EIEnvFunction _ => false
+			|	EIEnvRecordType _ => false
+			|	EIEnvOtherType => false
+			|	EIEnvConstant _ => false
+			|	_ => true)
+			orelse
+			(zn <> canon_name andalso not("o" mem explode zn))
+		);
+		val wanted_entries = flatten_env_dict dict drop unwanted;
+	in	dict_vc_vars(add_to_env_dict initial_env_dict wanted_entries, pack_vc_vars)
+	end
+);
+=TEX
+=SML
 fun €new_scope_pack_body› (ident : ID) : unit = (
 	let	val package1 = force_value(s_lookup ident (!pack_env))
 			handle Fail _ =>
@@ -6733,9 +6772,10 @@ fun €new_scope_pack_body› (ident : ID) : unit = (
 			body_flag = true
 		};
 		val old_subunit_flag = test_flag #subunit_flag 1;
+		val dict = init_pack_body_dict(#local_dict package1, #vc_vars package1);
 		val block = block_vc_vars Nil (
 			block_dict  (
-				block_flags(empty_block, flags), #local_dict package1),
+				block_flags(empty_block, flags), dict),
 			#vc_vars package1);
 		val block' = block_block_name(block, ident);
 	in
@@ -6847,9 +6887,9 @@ fun €vcs_aux_initial› (st : STATEMENT) : SPEC = (
 		val invariants = (map snd o map snd) using_decs1;
 		val post1 = z_exists (aux_vars1, z_many_and invariants);
 
-		val spec : SPEC = {
+		val spec : SPEC = add_init_vars_spec {
 			w = w,
-			w0 = map (fn n => n ^ "â0") w,
+			w0 = [],
 			pre = pre1,
 			post = z_quote (post1, Nil)
 		};
@@ -7548,7 +7588,7 @@ fun €new_scope_subunit› (ident : ID) : unit = (
 		};
 		val block = block_block_name(
 				block_flags(empty_block, flags), ident);
-	in	blocks := block :: !blocks
+	in	blocks := new_scope_common(block :: !blocks)
 	end
 );
 =TEX
@@ -7599,7 +7639,7 @@ fun €new_scope_dec_replace› ({label, decls} : REPLACED_BY_DECL) : unit = (
 		till = #till empty_block,
 		using_decs = #using_decs empty_block,
 		var_inits = #var_inits empty_block};
-			in	blocks := block :: !blocks;
+			in	blocks := new_scope_common(block :: !blocks);
 				dec_env := s_delete label (!dec_env)
 			end
 	) |	Nil => fail "new_scope_dec_replace" 507002
@@ -7658,6 +7698,8 @@ fun €update_envs_remove_declabel› (label_decls : REPLACED_BY_DECL) : unit = (
 );
 =TEX
 \subsection{THE SID function new\_scope\_speclabel}
+In this one, the use of {\em new\_scope\_common} is for future-proofing.
+There won't be anything in {\em blocks}.
 =SML
 fun €new_scope_speclabel› (label : LABEL) : unit = (
 	let	val spec_env_lab = force_value( s_lookup label (!spec_env) )
@@ -7677,12 +7719,14 @@ fun €new_scope_speclabel› (label : LABEL) : unit = (
 			till_flag = till_flag,
 			body_flag = false
 		};
-		val block =	block_till(
-					block_spec_lab(
-						block_flags(empty_block, flags),
-					label),
-				till);
-	in	blocks := block :: !blocks
+		val block1 =
+		block_till(
+			block_spec_lab(
+				block_flags(block_in_scope
+					(empty_block, #in_scope spec_env_lab), flags),
+				label),
+			till);
+	in	blocks := new_scope_common(block1 :: !blocks)
 	end
 );
 =TEX
@@ -7791,8 +7835,7 @@ It is applied to any {\it SPEC} before passing it into the SID functions.
 =SML
 fun €expand_frame› ({w, w0, pre, post} : SPEC) : SPEC = (
 	let	val new_w = expand_names w;
-		val new_w0 = (map (fn s => s ^ "â0")) new_w;
-	in	{w = new_w, w0 = new_w0, pre = pre, post = post}
+	in	add_init_vars_spec {w = new_w, w0 = [], pre = pre, post = post}
 	end
 );
 =TEX
@@ -8029,8 +8072,10 @@ and €do_declaration› (y as (DDeclarationKSlot (
 	do_procedure_spec x;
 	end_scope()
 ) | do_declaration (y as (DFunctionDeclaration x) : DECLARATION) = (
-	do_function_spec x;
-	end_scope()
+	let	val (formal, globals, inffun) = do_function_spec x;
+	in	end_scope();
+		set_spark_function_info formal globals inffun
+	end
 ) | do_declaration (y as (DPackageDeclaration x) : DECLARATION) = (
 	do_package_spec x
 ) | do_declaration (y as (DProcedureStub x) : DECLARATION) = (
@@ -8099,7 +8144,8 @@ represent a single component of the first parameter of the Z translation of the 
 and €do_function_spec› (
 	func_spec as {designator, return, formal_part,
 		spec as Value sp, annotation, globals, ...}
-			: FUNCTION_SPECIFICATION) = (
+			: FUNCTION_SPECIFICATION) 
+	: (bool * Z_ID list * INFORMAL_FUN) = (
 	subunit_form designator;
 	new_scope_fun_form designator;
 	do_annotation annotation;
@@ -8116,7 +8162,8 @@ and €do_function_spec› (
 	in	curr_form_fun formal_fun;
 		stub_spec_fun formal_fun;
 		check_19 current_cn_env (Value (expand_names globals)) spec;
-		form_fun formal_fun
+		form_fun formal_fun;
+		(true, globals, informal_fun)
 	end
 ) | €do_function_spec› (
 	func_spec as {designator, return, formal_part, spec as Nil, annotation, ...}
@@ -8131,7 +8178,8 @@ and €do_function_spec› (
 		do_annotation annotation;
 		stub();
 		fformal_part formal_part;
-		inf_fun informal_fun
+		inf_fun informal_fun;
+		(false, [], informal_fun)
 	end
 )
 (*
@@ -8170,8 +8218,10 @@ and €do_procedure_stub› (
 and €do_function_stub› (
 	fun_spec : FUNCTION_DECLARATION) = (
 	begin_stub();
-	do_function_spec fun_spec;
-	end_scope();
+	let	val (formal, globals, inffun) = do_function_spec fun_spec;
+	in	end_scope();
+		set_spark_function_info formal globals inffun
+	end;
 	end_stub()
 )
 and €do_package_stub› (name : ID) = (
@@ -8190,8 +8240,10 @@ and €do_external_procedure_stub› (
 )
 and €do_external_function_stub› (
 	fun_spec : FUNCTION_DECLARATION) = (
-	do_function_spec fun_spec;
-	end_scope()
+	let	val (formal, globals, inffun) = do_function_spec fun_spec;
+	in	end_scope();
+		set_spark_function_info formal globals inffun
+	end
 )
 (*
 =TEX
@@ -8217,11 +8269,13 @@ and €do_proper_body› (y as (PBProcedure
 	end_scope()
 ) | do_proper_body (y as (PBFunction 
 	{function_spec as {designator,...}, declarative_part, statement, ...}) : PROPER_BODY) = (
-	do_function_spec function_spec;
-	subprogram_implementation();
-	map (check_fail () do_declaration) declarative_part;
-	vcs_body (check_fail (STNull SNImplicit) do_statement statement);
-	end_scope()
+	let	val (formal, globals, inffun) = do_function_spec function_spec;
+	in	subprogram_implementation();
+		map (check_fail () do_declaration) declarative_part;
+		vcs_body (check_fail (STNull SNImplicit) do_statement statement);
+		end_scope();
+		set_spark_function_info formal globals inffun
+	end
 ) | do_proper_body (y as (PBPackage 
 	{name, decls, statement, annotation, ...}) : PROPER_BODY) = (
 	new_scope_pack_body name;
