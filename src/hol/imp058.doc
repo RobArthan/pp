@@ -1,0 +1,2352 @@
+=TEX
+\documentstyle[hol,11pt,TQ]{article}
+\ftlinepenalty=9999
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation of Automatic Existence Proofs}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP058}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{SML Literate Script}
+\TPPkeywords{}
+\TPPauthor{K.Blackburn & WIN01}
+\TPPauthorisation{R.D.Arthan & FST Team Leader}
+\TPPabstract{This document contains the implementation
+of the tools supporting automatic existence proofs.}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	    Library
+}}
+\begin{document}
+\makeTPPfrontpage
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History} 
+\begin{description}
+\item [Issues 1.1] 
+First version.
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+Tools providing automatic existence proofs
+are a supporting tools for the specification of constants
+and are called for in \cite{DS/FMU/IED/HLD010}.
+This document provides an implementation for these tools.
+A design for such tools is given in \cite{DS/FMU/IED/DTD058}.
+This document provides an implementations for them.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains an implementation for the
+tools supporting automatic existence proofs.
+\subsubsection{Dependencies}
+This document takes its signature from \cite{DS/FMU/IED/DTD058}.
+\subsubsection{Deficiencies}
+None known.
+\subsubsection{Possible Enhancements}
+None known.
+
+\section{Preamble}
+=SML
+structure ‚ExistenceProofs· : ExistenceProofs = struct
+=TEX
+=SML
+val lsubgoal_package_quiet = set_flag("subgoal_package_quiet",true);
+=TEX
+\section{THE THEORY}
+=SML
+val lthy = get_current_theory_name ();
+val _ = open_theory "combin";
+val _ = push_proof_context pair_epc;
+=TEX
+The following are just to extract particular clause from the standard
+rewriting theorems:
+=SML
+val ‚Ñ_not_binding_thm· = tac_proof(([],ªÉ p:BOOL é (Ñ x:'aé p) = pº),
+	rewrite_tac[]);
+=TEX
+=SML
+val ‚É_not_binding_thm· = tac_proof(([],ªÉ p:BOOL é (É x:'aé p) = pº),
+	rewrite_tac[]);
+=TEX
+=SML
+val ‚Ñ_eq_clauses· = tac_proof(([],ªÉ t:'a é (Ñ xé x = t) Ä 
+				(Ñ xé t = x) Ä (Ñ y é y)º),
+		É_tac THEN REPEAT Ä_tac THEN_LIST_T
+		 [Ñ_tac ªt:'aº THEN rewrite_tac[],
+		  Ñ_tac ªt:'aº THEN rewrite_tac[],
+		  Ñ_tac ªTº THEN accept_tac t_thm]);
+=TEX
+The following two theorems speed the swapping of $É$ and $Ñ$.
+=SML
+val ‚É_Ñ_thm· = (
+push_goal([], ªÉPé(ÉxéÑyéP x y) Ç (Ñf:'a ã 'béÉxéP x (f x))º);
+a(REPEAT strip_tac);
+(* *** Goal "1" *** *)
+a(Ñ_tacªçaéábéP a bº THEN REPEAT strip_tac THEN rewrite_tac[]);
+a(POP_ASM_T (accept_tac o Ñ_á_rule o all_É_elim));
+(* *** Goal "2" *** *)
+a(Ñ_tacªf xº THEN asm_rewrite_tac[]);
+
+pop_thm());
+=TEX
+=SML
+val ‚Ñ_É_thm· = (
+push_goal([], ªÉPé(ÑxéÉyéP x y) Ç (Éf:'a ã 'béÑxéP x (f x))º);
+a(REPEAT strip_tac);
+(* *** Goal "1" *** *)
+a(Ñ_tacªxº THEN asm_rewrite_tac[]);
+(* *** Goal "2" *** *)
+a(C_CONTR_T (asm_tac o conv_rule (TOP_MAP_C(å_É_conv ORELSE_C å_Ñ_conv))));
+a(undisch_tacªÉ fé Ñ xé P x (f x)º THEN rewrite_tac[]);
+a(strip_tac);
+a(Ñ_tacªçxéáyéåP x yº THEN rewrite_tac[] THEN REPEAT strip_tac);
+a(POP_ASM_T (accept_tac o Ñ_á_rule o É_elimªx'º));
+pop_thm());
+=TEX
+=SML
+val ‚uncurry_curry_thm· = (
+push_goal([],ªÉ f f' é (Uncurry(Curry f) = f) Ä (Curry(Uncurry f') = f')º);
+a(rewrite_tac[ext_thm, pair_clauses]);
+pop_thm());
+=TEX
+=SML
+val ‚Ñ_uncurry_thm· = (
+push_goal([],ªÉ P é (Ñ f é P f) Ç (Ñ f' é P(Uncurry f'))º);
+a(REPEAT strip_tac);
+(* *** Goal "1" *** *)
+a(Ñ_tacªCurry fº THEN asm_rewrite_tac[uncurry_curry_thm]);
+(* *** Goal "2" *** *)
+a(Ñ_tacªUncurry f'º THEN asm_rewrite_tac[]);
+pop_thm());
+=TEX
+\section{UTILITIES}
+\subsection{General}
+Return the minimum value of a (non-empty) list of integers:
+=SML
+fun ‚list_min· ([]:int list) = fail "list_min" 0 []
+| list_min (a :: x) = (
+let	fun aux (sofar:int) [] = sofar
+	| aux sofar (a1 :: x1) = (
+		if a1 < sofar
+		then aux a1 x1
+		else aux sofar x1);
+in
+	aux a x
+end);
+=TEX
+Split a list into two, all members satisfying the supplied predicate
+into the first list, the rest into the other list.
+The internal order of the lists is maintains (thus the $rev$).
+=SML
+fun ‚two_way· (f:'a -> bool) (lst : 'a list) : 'a list * 'a list = (
+let	fun aux lst1 lst2 [] = (rev lst1,rev lst2)
+	| aux lst1 lst2 (a :: x) = (
+		if f a
+		then aux (a :: lst1) lst2 x
+		else aux lst1 (a :: lst2) x
+	);
+in
+	aux [] [] lst
+end);
+=TEX
+The standard filter function.
+=SML
+fun ‚filter· (f:'a -> bool) ([]:'a list) : 'a list = []
+| filter f (a :: x) = (
+	if f a
+	then a :: filter f x
+	else filter f x
+);
+=TEX
+
+\subsection{Terms and Types}
+To save on repeated parsing we bind these two type variables to ML variables:
+=SML
+val tva = ª:'aº;
+val tvb = ª:'bº;
+=TEX
+Still not global!
+=SML
+fun ‚list_mk_ã_type· [ty] = ty
+| list_mk_ã_type (a :: x) = mk_ã_type (a, list_mk_ã_type x)
+| list_mk_ã_type [] = fail "list_mk_ã_type" 0 [];
+=TEX
+If the type of the first, function, term, can be instantiated
+to it can be applied to the second term, 
+then the instantiation is done, and the application made.
+=SML
+fun ‚match_mk_app·(ftm:TERM, xtm:TERM) : TERM = (
+let	val (fty1,_) = dest_ã_type (type_of ftm);
+	val tyinsts = type_match (type_of xtm) fty1 ;
+in
+	mk_app(inst [] tyinsts ftm, xtm)
+end
+handle complaint =>
+list_divert complaint "match_mk_app" 
+	[("dest_ã_type",3006,[fn () => string_of_term ftm]),
+	 ("type_match",3005,[fn () => string_of_term ftm,
+		fn () => string_of_term xtm])]);
+=IGN
+match_mk_app(ªFstº,ª(T,F)º);
+=TEX
+Flatten a paired structure:
+=SML
+fun ‚strip_pair· (tm : TERM) = (
+	(let val (tm1,tm2) = dest_pair tm
+	in
+		strip_pair tm1 @ strip_pair tm2
+	end) handle (Fail _) => [tm]
+);
+=TEX
+Flatten a conjunction structure ($strip_Ä$ only flattens to the right):
+=SML
+fun ‚full_strip_Ä· (tm:TERM) : TERM list = (
+let	val (tm1,tm2) = dest_Ä tm;
+in
+	full_strip_Ä tm1 @ full_strip_Ä tm2
+end
+handle (Fail _) => [tm]
+);
+=TEX
+Flatten a disjunction structure ($strip_Å$ only flattens to the right):
+=SML
+fun ‚full_strip_Å· (tm:TERM) : TERM list = (
+let	val (tm1,tm2) = dest_Å tm;
+in
+	full_strip_Å tm1 @ full_strip_Å tm2
+end
+handle (Fail _) => [tm]
+);
+=TEX
+Remove $n$ simple universal quantifiers:
+=SML
+fun ‚strip_n_simple_É· 0 tm = tm
+| strip_n_simple_É n tm = strip_n_simple_É (n - 1)(snd(dest_simple_É tm));
+=TEX
+
+Place an order on two variables, to allow them to be sorted:
+=SML
+local
+	open Sort;
+in
+fun	var_order (v1:TERM) (v2:TERM) : int = (
+let	val (v1n,v1t) = dest_var v1;
+	val (v2n,v2t) = dest_var v2;
+	val no = stringorder v1n v2n
+in
+	if no <> 0
+	then no
+	else stringorder (string_of_type v1t) (string_of_type v2t)
+end);
+end;
+=TEX
+
+\subsection{Conversionals and Tacticals}
+We want a variant on $SIMPLE\_Ñ\_THEN$ that refuses
+to rename the introduced variable (failing only if the new variable
+equals the old in name and type).
+=SML
+fun ‚NR_SIMPLE_Ñ_THEN· (ttac : THM -> TACTIC) = (fn thm =>
+	let	val (x, b) = dest_simple_Ñ(concl thm);
+	in	(fn (asms, conc) =>
+			let	val sideffect = if x mem
+					(flat(map frees
+					(conc :: hyps thm @ asms)))	
+				then term_fail "NR_SIMPLE_Ñ_THEN" 0 [x]
+				else ();
+				val (sgs, pf) = ttac (asm_rule b) (asms, conc);
+			in	(sgs, (simple_Ñ_elim x thm) o pf)
+			end)
+	end
+	handle ex => divert ex "dest_simple_Ñ" "NR_SIMPLE_Ñ_THEN" 28093 
+		[fn () => string_of_thm thm]
+);
+=TEX
+A variant on $APP\_C$, but which will happily fail on one ``side'' of the application, and complete 
+successfully if the other ``side'' works:
+=SML
+fun ‚APP_C1· (cnv1 : CONV, cnv2 : CONV) : CONV = (fn (tm:TERM) =>
+let	val (f,x) = dest_app tm
+		handle complaint =>
+		pass_on complaint "dest_app" "APP_C1";
+in
+	(let val thm1 = cnv1 f
+	in
+	(let val thm2 = (cnv2 x
+		handle (Fail _) => refl_conv x)
+	 in
+		mk_app_rule thm1 thm2
+	 end)
+	end)
+	handle (Fail _) =>
+	(let val thm2 = cnv2 x
+	in
+		(ap_fun_rule f thm2
+		handle complaint =>
+		divert complaint "ap_fun_rule" "APP_1C" 7104
+		[fn () => string_of_thm thm2])
+	end)
+end);
+=TEX
+\subsection{``Working Through'' Operators}
+We wish to work within the body(bodies) of certain operators.
+The following are a collection of conversionals used to this end within this document.
+\subsubsection{Working Through a Stated Number of Binders}
+Apply a conversions within the body of $n$ simple binders:
+=SML
+fun ‚N_SIMPLE_BINDER_C· (0:int) (conv : CONV) :CONV = conv
+| N_SIMPLE_BINDER_C n conv = BINDER_C(N_SIMPLE_BINDER_C(n-1) conv);
+=TEX
+Apply a conversions within the body of $n$ binders:
+=SML
+fun ‚N_BINDER_C· 0 (conv : CONV) :CONV = conv
+| N_BINDER_C n conv = CBINDER_C(N_BINDER_C(n-1) conv);
+=TEX
+Notice the assumption that when called $n$ will be a suitable number.
+\subsubsection{Working Through É Binders}
+To work through an arbitrary number of simple universals:
+=SML
+fun ‚ALL_SIMPLE_É_C· (conv:CONV): CONV = (fn tm =>
+	if is_simple_É tm
+	then (BINDER_C (ALL_SIMPLE_É_C conv)) tm
+	else conv tm
+);
+=TEX
+\subsubsection{Working Through Ñ Binders}
+To work through an arbitrary number of simple existentials:
+=SML
+fun ‚ALL_SIMPLE_Ñ_C· (conv:CONV): CONV = (fn tm =>
+	if is_simple_Ñ tm
+	then (BINDER_C (ALL_SIMPLE_Ñ_C conv)) tm
+	else conv tm
+);
+=TEX
+Working through all but the last one of a sequence of existential
+quantifiers:
+=SML
+fun ‚LAST_SIMPLE_Ñ_C· (conv:CONV): CONV = (fn tm =>
+	if is_simple_Ñ (snd(dest_simple_Ñ tm))
+	then (BINDER_C (LAST_SIMPLE_Ñ_C conv)) tm
+	else conv tm
+);
+=TEX
+\subsubsection{Working Through Ä}
+To work through an arbitrary number of conjunctions:
+=SML
+local
+	val rw_conv= eqn_cxt_conv(map thm_eqn_cxt (initial_rw_canon Ä_rewrite_thm));
+in
+fun ‚ALL_Ä_C· (conv:CONV): CONV = (fn tm =>
+	if is_Ä tm
+	then ((APP_C1(RAND_C (ALL_Ä_C conv),
+		(ALL_Ä_C conv))) FURTHER_C rw_conv) tm
+	else conv tm
+);
+end;
+=TEX
+\subsubsection{Working Through Å}
+To work through an arbitrary number of conjunctions:
+=SML
+local
+	val rw_conv= eqn_cxt_conv( map thm_eqn_cxt (initial_rw_canon Å_rewrite_thm));
+in
+fun ‚ALL_Å_C· (conv:CONV): CONV = (fn tm =>
+	if is_Å tm
+	then ((APP_C1(RAND_C (ALL_Å_C conv),
+		(ALL_Å_C conv))) FURTHER_C rw_conv) tm
+	else conv tm
+);
+end;
+=TEX
+\subsection{Marking and Unmarking}
+We wish to ``mark'' some terms, to prevent stripping going too far.
+We use $CombI$ as a marker.
+
+``mark'' a term:
+=SML
+local
+	val ci = ªCombI:BOOL ã BOOLº;
+in
+fun ‚mark· (tm:TERM):TERM = mk_app(ci,tm)
+end;
+=TEX
+We also wish to unmark them, and so need to prove the 
+unmarked form equal to the marked one.
+The first form does not bother checking whether
+the conversion applies, the second, $check\_unmark\_conv$, does.
+=SML
+local
+	val thm = tac_proof(([],ªÉ t:BOOL é CombI t Ç tº),
+		rewrite_tac[comb_i_def]);
+in
+val ‚unmark_conv· : CONV = (fn tm => 
+let	val (c,t) = dest_app tm
+in
+	simple_É_elim t thm
+end);
+=TEX
+
+=SML
+val ‚check_unmark_conv· : CONV = (fn tm => 
+let	val t = dest_mon_op "check_unmark_conv" 0 "CombI" tm
+in
+	simple_É_elim t thm
+end)
+
+end;
+=TEX
+\subsection{Distributing Operators over Equalities}
+=SML
+fun ‚Ñ_Ç_rule· (tm :TERM) (thm :THM) : THM = (
+let	val thm1= ç_eq_rule tm thm;
+	val Ñ_tm = mk_const("Ñ",mk_ã_type(type_of(fst(dest_eq(concl thm1))),BOOL));
+in
+	ap_fun_rule Ñ_tm thm1
+end);
+=IGN
+Ñ_Ç_rule ª(p,q)º (all_É_elim(asm_rule ªÉ p qég p Ç f qº));
+=TEX
+=SML
+fun ‚É_Ç_rule· (tm :TERM) (thm :THM) : THM = (
+let	val thm1= ç_eq_rule tm thm;
+	val É_tm = mk_const("É",mk_ã_type(type_of(fst(dest_eq(concl thm1))),BOOL));
+in
+	ap_fun_rule É_tm thm1
+end);
+=IGN
+É_Ç_rule ª(p,q)º (all_É_elim(asm_rule ªÉ p qég p Ç f qº));
+
+=TEX
+=RULE
+bin_op_eq_rule
+"opr"
+ª:tyº
+…
+ˆ1 Ö a1 = a2
+ˆ2 Ö b1 = b2
+…
+ˆ1 ° ˆ2 Ö (opr a1 b1 : ty) = opr a2 b2
+=TEX 
+=SML
+local
+	fun lhst thm = type_of(fst(dest_eq(concl thm)));
+in
+fun ‚bin_op_eq_rule· (nm:string) (ty:TYPE) (thm1 : THM) (thm2 : THM) : THM = (
+let	val bo_tm = mk_const(nm,mk_ã_type(lhst thm1,mk_ã_type(lhst thm2, ty)));
+in
+	mk_app_rule (ap_fun_rule bo_tm thm1) thm2
+end);
+end;
+=IGN
+bin_op_eq_rule "=" BOOL (refl_conv mk_t) å_t_thm;
+bin_op_eq_rule "=" BOOL (refl_conv ªaº) (refl_conv ªbº);
+bin_op_eq_rule "ä" BOOL (refl_conv mk_t) å_t_thm;
+=TEX
+\section{MAIN FUNCTIONS}
+We will work by providing some processing conversions,
+and applying them in a particular manner.
+This is a little inefficient, but clearer to present.
+We also presume that we immediately go through any universal quantifiers, and ``stay there'',
+until complete, and then we attempt to remove any redundant
+universal quantifiers before finishing off.
+\subsection{Uncurrying}
+For uncurrying we can just use $Ñ\_uncurry\_conv$ ``straight''.
+\subsection{Removing Redundant Ñ Binders}
+To remove redundant binders we use $Ñ\_not\_binding\_thm$.
+We wish to descend down the $Ñ$ binders until there are no
+more.
+=CONVERSION
+redundant_simple_Ñ_conv
+ªÑ x1 ... xn é P [y1 ... ym]º
+…
+…
+Ö (Ñ x1 ... xn é P [y1 ... ym]) Ç
+	(Ñ y1 ... ym é P [y1 ... ym])
+=TEX
+where $\{y1...ym\}\ ¶\ \{x1 ... xn\}$.
+=SML
+local
+	val tc = simple_eq_match_1_conv Ñ_not_binding_thm;
+in
+val rec ‚redundant_simple_Ñ_conv·: CONV = (fn tm =>
+	if is_simple_Ñ tm
+	then ((tc FURTHER_C redundant_simple_Ñ_conv) ORELSE_C 
+		(BINDER_C redundant_simple_Ñ_conv)) tm
+	else fail "redundant_simple_Ñ_conv" 0 []
+);
+end;
+=TEX
+\subsection{Removing Redundant É Binders}
+To remove redundant binders we use $É\_not\_binding\_thm$.
+We wish to descend down the $É$ binders until there are no
+more.
+=CONVERSION
+redundant_simple_Ñ_conv
+ªÉ x1 ... xn é P [y1 ... ym]º
+…
+…
+Ö (É x1 ... xn é P [y1 ... ym]) Ç
+	(É y1 ... ym é P [y1 ... ym])
+=TEX
+where $\{y1...ym\}\ ¶\ \{x1 ... xn\}$.
+=SML
+local
+	val tc = simple_eq_match_1_conv É_not_binding_thm;
+in
+val rec ‚redundant_simple_É_conv·: CONV = (fn tm =>
+	if is_simple_É tm
+	then ((tc FURTHER_C redundant_simple_É_conv) ORELSE_C 
+		(BINDER_C redundant_simple_É_conv)) tm
+	else fail "redundant_simple_É_conv" 0 []
+);
+end;
+=TEX
+\subsection{Pushing In Ñ}
+We wish to be able to push $Ñ$ into conjuncts and disjuncts as far as possible.
+We will not distribute $Å$ over $Ä$, though this may lead to 
+simpler terms (by allowing more pushing in), as simplification is not certain, and 
+may be difficult to judge.
+None of the other predicate calculus operators seem to be useful candidates for ``pushing in'' gaining any simplification.
+
+If pushing in occurs we will also ``flatten'' the disjunct
+or conjunct structure.
+\subsubsection{Over Å}
+=CONVERSION
+simple_Ñ_Å_conv
+ªÑ x1 ... xn é P [y1 ... ym] Å Q [z1 ...zo]º
+…
+…
+Ö (Ñ x1 ... xn é P [y1 ... ym] Å Q [z1 ...zo]) Ç
+	(Ñ y1 ... ym é P [y1 ... ym]) Å
+	(Ñ z1 ... zo é P [z1 ... zo])
+=TEX
+=TEX
+where $\{y1...ym\}\ ¶\ \{x1 ... xn\}$, and
+$\{z1...zo\}\ ¶\ \{x1 ... xn\}$.
+The conversion will actualy distribute over an arbitrary disjunctive
+structure, though the result is ``flattened''.
+=SML
+local
+	val rw_tac = (prim_rewrite_tac
+		(make_net( map thm_eqn_cxt ((initial_rw_canon Å_rewrite_thm) to 1)))
+		id_canon 
+		TOP_MAP_C
+		[]);
+in
+val ‚simple_Ñ_Å_conv·: CONV = (fn (tm : TERM) =>
+let	val (vs,bdy) = strip_Ñ tm;
+	val sideeffect = if is_nil vs orelse (not(is_Å bdy))
+		then term_fail "simple_Ñ_Å_conv" 58010 [tm]
+		else ();
+	val tm_frees = frees tm;
+	val disjs = map mark (full_strip_Å bdy);
+	val disj_frees = map (fn x => rev(frees x diff tm_frees)) disjs;
+	val new_term = list_mk_Å(map list_mk_simple_Ñ (combine disj_frees disjs));
+in
+	conv_rule(RAND_C (ONCE_MAP_C check_unmark_conv))
+	(tac_proof(([],mk_Ç(tm,new_term)),
+		Ç_T2
+		(fn thm1 => ((REPEAT_TTCL NR_SIMPLE_Ñ_THEN THEN_TTCL
+			REPEAT_TTCL Å_THEN) asm_tac) thm1 THEN
+		 (fn (asms,gl) => let val asm = hd asms;
+			val asm_frees = rev(frees asm diff tm_frees);
+		in
+			(LEMMA_T (list_mk_Ñ(asm_frees,mark asm))
+			(fn thm => rw_tac[Ç_t_intro thm])
+			THEN MAP_EVERY_T simple_Ñ_tac asm_frees
+			THEN conv_tac unmark_conv
+			THEN goal_in_asms_tac)
+			(asms,gl)
+		end))
+		(fn thm2 => ((REPEAT_TTCL Å_THEN THEN_TTCL
+			REPEAT_TTCL NR_SIMPLE_Ñ_THEN THEN_TTCL
+			CONV_THEN unmark_conv) asm_tac) thm2 THEN
+		MAP_EVERY_T simple_Ñ_tac vs THEN
+		POP_ASM_T (fn thm => rw_tac[Ç_t_intro thm]))
+		))
+end
+handle complaint =>
+divert complaint "tac_proof" "simple_Ñ_Å_conv" 58015 [fn () => string_of_term tm]);
+end;
+=IGN
+simple_Ñ_Å_conv  ªÑ a b c d é ((a Ä c) Å b) Å ((a Ä d) Å e Å f)º;
+simple_Ñ_Å_conv  ªÑ a b c d é ((a Ä c) Å b) Å (Ñ a é a Ä d) Å ((a Ä d) Å e Å f)º;
+
+=TEX
+
+\subsubsection{Over Ä}
+This auxiliary function counts, for each member of the first argument, the number of sublists in the second argument which contain it.
+=SML
+fun ‚count_mem· ([] : TERM list) (fls : (TERM list) list):(int * TERM) list = []
+| count_mem (v :: rest) fls = (
+let	fun aux [] n = (n,v)
+	| aux (fl :: flrest) n = if v mem fl
+		then aux flrest (n+1)
+		else aux flrest n;
+in
+	(aux fls 0 :: count_mem rest fls)
+end);
+=TEX
+This conversion will push simple existential quantifiers
+into a term body that consists of nested conjunctions
+when not all the conjuncts have all of the quantified
+variables free in them.
+=SML
+local
+	open Sort;
+=TEX
+This auxiliary function sorts a list of numbers paired with variables,
+the order of the numbers having precedence over variables.
+=SML
+	val sorted_bound_n = sort (fn (m,tm1) => fn(n,tm2) =>
+		if m = n
+		then var_order tm1 tm2
+		else m - n);
+=TEX
+This auxiliary function  recombines a list of existentially
+quantified conjuncts with reference to the presence
+of a given variable within the conjuncts.
+=SML
+	fun recombine_conjs [] conjs = list_mk_Ä conjs
+	| recombine_conjs ((_,v) :: rest) conjs = (
+	let	val (withit,without) = two_way (fn x => is_free_in v x) conjs;
+	in
+		recombine_conjs rest (mk_simple_Ñ(v,list_mk_Ä withit) :: without)
+	end);
+
+in
+val ‚simple_Ñ_Ä_conv· = (fn (tm : TERM) =>
+let	val (vs,bdy) = strip_Ñ tm;
+	val sideeffect = if is_nil vs orelse (not(is_Ä bdy))
+		then term_fail "simple_Ñ_Ä_conv" 58012 [tm]
+		else ();
+	val tm_frees = frees tm;
+	val conjs = map mark (full_strip_Ä bdy);
+	val conj_frees = map (fn x => rev(frees x diff tm_frees)) conjs;
+	val length_vs = length vs;
+	val sideeffect = if any conj_frees (fn x => length x < length_vs)
+		then ()
+		else term_fail "simple_Ñ_Ä_conv" 58014 [tm];
+=TEX
+We take a simplistic approach to forming the resulting term:
+we first bind conjuncts with quantifiers which only apply to 
+one conjunct.
+Then we bind pairs of conjuncts, then triples, etc.
+Within this ordering we make no attempt to optimise,
+nor recalculate sets of frees.
+=SML
+	val bound_n = count_mem vs conj_frees;
+
+	val new_term = recombine_conjs (sorted_bound_n  bound_n) conjs;
+in
+	conv_rule (RAND_C(ONCE_MAP_C check_unmark_conv))
+	(tac_proof(([],mk_Ç(tm,new_term)),
+		Ç_T2
+		(fn thm1 => ((REPEAT_TTCL NR_SIMPLE_Ñ_THEN
+			THEN_TTCL
+			REPEAT_TTCL Ä_THEN) asm_tac) thm1 
+			THEN
+		SOLVED_T(REPEAT_T
+			(FIRST_T[
+			(fn (asms,gl) => let val (v,b) = dest_simple_Ñ gl;
+				in simple_Ñ_tac v(asms,gl)
+				end),
+			Ä_tac,
+			(conv_tac check_unmark_conv THEN
+			 goal_in_asms_tac)])))
+		(fn thm2 => ((REPEAT_TTCL(NR_SIMPLE_Ñ_THEN
+				ORELSE_TTCL Ä_THEN) 
+			THEN_TTCL (CONV_THEN unmark_conv))asm_tac) thm2
+		THEN
+		REPEAT_T (fn (asms,gl) => let val (v,b) = dest_simple_Ñ gl;
+				in simple_Ñ_tac v(asms,gl)
+				end)
+		THEN
+		REPEAT_T Ä_tac
+		THEN
+		goal_in_asms_tac)))
+end
+handle complaint =>
+divert complaint "tac_proof" "simple_Ñ_Ä_conv" 58015 [fn () => string_of_term tm]);
+end; (* local open Sort *)
+=IGN
+simple_Ñ_Ä_conv  ªÑ a b c d é ((a Å c) Ä b) Ä ((d Å a) Ä e Ä f)º;
+simple_Ñ_Ä_conv  ªÑ a b c d é ((a Å c) Ä b) Ä (Ñ a éa Ä d) Ä ((d Å a) Ä e Ä f)º;
+simple_Ñ_Ä_conv  ªÑ a b c d é ((a Å c) Ä b) Ä ((a Å d) Ä (e  Å c) Ä f)º;
+simple_Ñ_Ä_conv  (subst[(ªa:'aº,ªh:'aº)]
+	(ªÑ a b c d é ((a Å c) Ä b Ä g h) Ä ((a Å d) Ä (e  Å c) Ä f)º));
+
+simple_Ñ_Ä_conv  
+	(ªÑ a b c d é ((a Å c) Ä b Ä g ª%down%SML mk_var("a",ª:'aº)º) Ä ((a Å d) Ä (e  Å c) Ä f)º);
+simple_Ñ_Ä_conv  
+	(ªÑ a b c d é ((a Å c) Ä b Ä (a Å g ª%down%SML mk_var("a",ª:'aº)º)) Ä ((a Å d) Ä (e  Å c) Ä f)º);
+
+=TEX
+\subsection{Pushing In É}
+We wish to be able to push $É$ into conjuncts and disjuncts as far as possible.
+We will not distribute $Å$ over $Ä$, though this may lead to 
+simpler terms (by allowing more pushing in), as simplification is not certain, and 
+may be difficult to judge.
+None of the other predicate calculus operators seem to be useful candidates for ``pushing in'' gaining any simplification.
+
+If pushing in occurs we will also ``flatten'' the disjunct
+or conjunct structure.
+\subsubsection{Over Ä}
+=CONVERSION
+É_Ä_conv
+ªÉ x1 ... xn é P [y1 ... ym] Ä Q [z1 ...zo]º
+…
+…
+Ö (É x1 ... xn é P [y1 ... ym] Ä Q [z1 ...zo]) Ç
+	(É y1 ... ym é P [y1 ... ym]) Ä
+	(É z1 ... zo é P [z1 ... zo])
+=TEX
+where $\{y1...ym\}\ ¶\ \{x1 ... xn\}$, and
+$\{z1...zo\}\ ¶\ \{x1 ... xn\}$.
+The conversion will actualy distribute over an arbitrary conjunctive
+structure, though the result is ``flattened''.
+
+Note that in the below $conv\_tac\ unmark\_conv$ can solve a conjunct $CombI\ T$,
+and therefore needs pushing into the $THEN\_LIST\_T$ to preserve the right number of tactics in its ``to do'' list.
+=SML
+local
+	val É_Ä_canon = 
+		((REPEAT_CAN É_rewrite_canon)
+		THEN_CAN (REPEAT_CAN Ä_rewrite_canon));
+	val Ä_É_canon = 
+		((REPEAT_CAN Ä_rewrite_canon)
+		THEN_CAN (REPEAT_CAN É_rewrite_canon)
+		THEN_CAN (fn x => [conv_rule unmark_conv x]));
+in
+val ‚É_Ä_conv·: CONV = (fn (tm : TERM) =>
+let	val (vs,bdy) = strip_É tm;
+in
+	if is_nil vs
+		then term_fail "É_Ä_conv" 58020 [tm]
+		else if (not(is_Ä bdy))
+		then (all_É_uncurry_conv tm handle (Fail _) =>
+			term_fail "É_Ä_conv" 58020 [tm])
+		else (
+let	val tm_frees = frees tm;
+	val conjs = map mark (full_strip_Ä bdy);
+	val conj_frees = map (fn x => rev(frees x diff tm_frees)) conjs;
+	val new_term = list_mk_Ä(map list_mk_É (combine conj_frees conjs));
+in
+	conv_rule(RAND_C (ONCE_MAP_C check_unmark_conv))
+	(tac_proof(([],mk_Ç(tm,new_term)),
+		Ç_T2
+		(fn thm1 => 
+		let val thm1_can = É_Ä_canon thm1
+		in
+		REPEAT Ä_tac THEN REPEAT É_tac 
+		THEN_LIST_T (map (fn thm => conv_tac unmark_conv 
+			THEN accept_tac thm) thm1_can)
+		end)
+		(fn thm2 =>
+		let val thm2_can = Ä_É_canon thm2
+		in
+		REPEAT É_tac THEN REPEAT Ä_tac 
+		THEN_LIST_T (map accept_tac thm2_can)
+		end)
+		))
+end
+handle complaint =>
+divert complaint "tac_proof" "É_Ä_conv" 58015 [fn () => string_of_term tm])
+end);
+end;
+=IGN
+É_Ä_conv  ªÉ a b c d é ((a Å c) Ä b) Ä ((a Å d) Ä e Ä f)º;
+É_Ä_conv  ªÉ a b c d é ((a Å c) Ä b) Ä (É a é a Ä d) Ä ((a Å d) Ä e Ä f)º;
+É_Ä_conv  ªÉ a (b,c) d é ((a Å c) Ä b) Ä (É a é a Ä d) Ä ((a Å d) Ä e Ä f)º;
+É_Ä_conv  ªÉ (a, (b,c), d) é ((a Å c) Ä b) Ä (É a é a Ä d) Ä ((a Å d) Ä e Ä f)º;
+É_Ä_conv  ªÉ (a, (b,c), d) é f a b c dº;
+É_Ä_conv  ªÉ a (b,c) d é f a b c dº;
+
+=TEX
+
+\subsubsection{Over Å}
+This is difficult to do efficiently!
+=IGN
+local
+	open Sort;
+in
+val É_Å_conv = (fn (tm : TERM) =>
+let	val (vs,bdy) = strip_É tm;
+	val sideeffect = if is_nil vs orelse (not(is_Å bdy))
+		then term_fail "É_Å_conv" 58012 [tm]
+		else ();
+	val tm_frees = frees tm;
+	val disjs = map mark (full_strip_Å bdy);
+	val disj_frees = map (fn x => rev(frees x diff tm_frees)) disjs;
+	val length_vs = length vs;
+	val sideeffect = if any disj_frees (fn x => length x < length_vs)
+		then ()
+		else term_fail "É_Å_conv" 58014 [tm];
+=IGN
+We take a simplistic approach to forming the resulting term:
+we first bind disjuncts with quantifiers which only apply to 
+one disjunct.
+Then we bind pairs of disjuncts, then triples, etc.
+Within this ordering we make no attempt to optimise,
+nor recalculate sets of frees.
+=IGN
+	val bound_n = count_mem vs disj_frees;
+	val sorted_bound_n = sort (fn (m,tm1) => fn(n,tm2) =>
+		if m = n
+		then var_order tm1 tm2
+		else m - n) bound_n;
+
+	fun aux [] disjs = list_mk_Å disjs
+	| aux ((_,v) :: rest) disjs = (
+	let	val (withit,without) = two_way (fn x => is_free_in v x) disjs;
+	in
+		aux rest (mk_simple_É(v,list_mk_Å withit) :: without)
+	end);
+
+	val new_term = aux sorted_bound_n disjs;
+in
+	conv_rule (RAND_C(ONCE_MAP_C check_unmark_conv))
+	(tac_proof(([],mk_Ç(tm,new_term)),
+		Ç_T2
+		(????)
+		(????)
+		))
+end
+handle complaint =>
+divert complaint "tac_proof" "É_Å_conv" 58015 [fn () => string_of_term tm]);
+end; (* local open Sort *)
+=IGN
+É_Å_conv  ªÉ a b c d é ((a Ä c) Å b) Å ((d Ä a) Å e Å f)º;
+É_Å_conv  ªÉ a b c d é ((a Å c) Å b) Å (É a éa Å d) Å ((d Å a) Å e Å f)º;
+É_Å_conv  ªÉ a b c d é ((a Å c) Å b) Å ((a Å d) Å (e  Å c) Å f)º;
+É_Å_conv  (subst[(ªa:'aº,ªh:'aº)]
+	(ªÉ a b c d é ((a Å c) Å b Å g h) Å ((a Å d) Å (e  Å c) Å f)º));
+
+É_Å_conv  
+	(ªÉ a b c d é ((a Å c) Å b Å g ª%down%SML mk_var("a",ª:'aº)º) Å ((a Å d) Å (e  Å c) Å f)º);
+É_Å_conv  
+	(ªÉ a b c d é ((a Å c) Å b Å (a Å g ª%down%SML mk_var("a",ª:'aº)º)) Å ((a Å d) Å (e  Å c) Å f)º);
+
+=TEX
+\subsection{Swapping É and Ñ}
+In the following we are careful to maintain naming,
+using $eq\_trans\_rule$ and $simple\_\alpha\_conv$.
+=SML
+val ‚simple_É_Ñ_conv· :CONV = (fn tm =>
+let	val (x, t) = dest_simple_É tm;
+	val (y, body) = dest_simple_Ñ t;
+	val abs = mk_simple_ç(x, mk_simple_ç(y, body));
+	val thm1 = simple_É_elim abs(inst_type_rule
+			[(type_of x, tva), (type_of y, tvb)] É_Ñ_thm);
+	val newy = string_variant (map fst(term_vars tm)) (fst(dest_var y));
+	val conv0 = RAND_C(RAND_C (simple_%alpha%_conv newy
+		THEN_C ç_C(RAND_C(simple_%alpha%_conv (fst(dest_var x))))));
+	val conv1 = RATOR_C (simple_%beta%_conv) THEN_C simple_%beta%_conv;
+	val conv2 = BINDER_C(BINDER_C conv1);
+	val conv3 = conv0 THEN_C APP_C(RAND_C conv2, conv2);
+	val thm2 = conv_rule conv3 thm1;
+in
+	eq_trans_rule (refl_conv tm) thm2
+end
+handle complaint =>
+list_divert complaint "simple_É_Ñ_conv"
+	[("dest_simple_É", 58016,[fn () => string_of_term tm]),
+	("dest_simple_Ñ", 58016,[fn () => string_of_term tm]),
+	("eq_trans_rule", 58018,[fn () => string_of_term tm])
+]);
+=IGN
+simple_É_Ñ_conv ªÉ p:'c é Ñ q : BOOL é q Å f pº;
+simple_É_Ñ_conv ªÉ x:'a é Ñ y:'b é g y xº;
+=TEX
+=SML
+val ‚simple_Ñ_É_conv· :CONV = (fn tm =>
+let	val (x, t) = dest_simple_Ñ tm;
+	val (y, body) = dest_simple_É t;
+	val abs = mk_simple_ç(x, mk_simple_ç(y, body));
+	val thm1 = simple_É_elim abs(inst_type_rule
+			[(type_of x, tva), (type_of y, tvb)] Ñ_É_thm);
+	val newy = string_variant (map fst(term_vars tm)) (fst(dest_var y));
+	val conv0 = RAND_C(RAND_C (simple_%alpha%_conv newy
+		THEN_C ç_C(RAND_C(simple_%alpha%_conv (fst(dest_var x))))));
+	val conv1 = RATOR_C (simple_%beta%_conv) THEN_C simple_%beta%_conv;
+	val conv2 = BINDER_C(BINDER_C conv1);
+	val conv3 = conv0 THEN_C APP_C(RAND_C conv2, conv2);
+	val thm2 = conv_rule conv3 thm1
+in
+	eq_trans_rule (refl_conv tm) thm2
+end
+handle complaint =>
+list_divert complaint "simple_Ñ_É_conv"
+	[("dest_simple_É", 58017,[fn () => string_of_term tm]),
+	("dest_simple_Ñ", 58017,[fn () => string_of_term tm]),
+	("eq_trans_rule", 58018,[fn () => string_of_term tm])
+]);
+=IGN
+simple_Ñ_É_conv ªÑ p:'c é É q : BOOL é q Å f pº;
+simple_Ñ_É_conv ªÑ p:'c é É q : BOOL é f (g q) pº;
+simple_Ñ_É_conv ªÑ x:'a é É y:'b é g y xº;
+=TEX
+=SML
+val ‚Ñ_É_thm1· = (
+push_goal([],ªÉ P é (Ñ f é É x é P(f x) x) Ç (É x é Ñ f'éP f' x)º);
+a(REPEAT strip_tac);
+(* *** Goal "1" *** *)
+a(Ñ_tacªf xº THEN asm_rewrite_tac[]);
+(* *** Goal "2" *** *)
+a(POP_ASM_T(strip_asm_tac o conv_rule simple_É_Ñ_conv));
+a(simple_Ñ_tac ªf''º THEN asm_rewrite_tac[]);
+pop_thm());
+=TEX
+
+=CONVERSION
+simple_Ñ_É_conv1
+ªÑ f é É x é P[f x, x]º
+…
+…
+(Ñ f é É x é P[f x, x]) Ç (É x é Ñ f' é P[f', x])
+=TEX
+=SML
+val ‚simple_Ñ_É_conv1· :CONV = (fn tm =>
+let	val (f, t) = dest_simple_Ñ tm;
+	val (x, body) = dest_simple_É t;
+	val fx = mk_app (f, x);
+	val newfnm = string_variant (map fst(term_vars tm)) (fst(dest_var f));
+	val newf = mk_var(newfnm, type_of fx);
+	val body' = subst[(newf, fx)] body;
+	val sideeffect = if is_free_in f body'
+		then term_fail "simple_Ñ_É_conv1" 58019 [tm]
+		else ();
+	val abs = mk_simple_ç(newf, mk_simple_ç(x, body'));
+	val thm1 = simple_É_elim abs(inst_type_rule
+			[(snd(dest_ã_type(type_of f)), tva), (type_of x, tvb)] Ñ_É_thm1);
+	val conv0 = RAND_C(RAND_C (simple_%alpha%_conv (fst(dest_var x))
+		THEN_C ç_C(RAND_C(simple_%alpha%_conv newfnm))));
+	val conv1 = RATOR_C (simple_%beta%_conv) THEN_C simple_%beta%_conv;
+	val conv2 = BINDER_C(BINDER_C conv1);
+	val conv3 = conv0 THEN_C APP_C(RAND_C conv2, conv2);
+	val thm2 = conv_rule conv3 thm1
+in
+	eq_trans_rule (refl_conv tm) thm2
+end
+handle complaint =>
+list_divert complaint "simple_Ñ_É_conv1"
+	[("mk_app", 58019,[fn () => string_of_term tm]),
+	("dest_simple_É", 58019,[fn () => string_of_term tm]),
+	("dest_simple_Ñ", 58019,[fn () => string_of_term tm]),
+	("eq_trans_rule", 58018,[fn () => string_of_term tm])
+]);
+=IGN
+simple_Ñ_É_conv1 ªÑ p é É q : BOOL é f q (p q) q (p q) º;
+simple_Ñ_É_conv1 ªÑ f é É x é x Ä f xº;
+=TEX
+Do as many calls of $all\_simple\_Ñ\_É_conv1$ as will work.
+=SML
+val rec ‚all_simple_Ñ_É_conv1· :CONV = (fn tm =>
+	(simple_Ñ_É_conv1 FURTHER_C
+	(BINDER_C all_simple_Ñ_É_conv1)) tm
+);
+=TEX
+\subsection{Context of Existentially Quantified Variables}
+We can attempt to handle a number of different contexts for an existentially quantified variable $f$ in the term $Ñ\ f\ é\ ...$.
+
+We presume that universal quantifiers have already been pushed through and conjunctions in the body.
+\begin{enumerate}
+\item
+Somewhere in the body, reached only through $Ñ$, $É$ or $Ä$
+is a subterm of the form $f\ =\ P[x_1,...,x_n]$
+or $P[x_1,...,x_n]\ =\ f$ where the $x_i$, the free variables of
+$P[x_1,...,x_n]$ are not bound by any quantifier ``between'' he binding of $f$ and this conjunct.
+If so, $f$ can be eliminated from the term, with $P[x_1,...,x_n]$ being used instead.
+A variant on this is to find $f$ alone, where it may be taken to be $f\ Ç T$, and similarly $å\ f$ to be $f\ Ç\ F$.
+\item
+The term can be rearranged to the form
+Û
+Ñ x1 ... xn é Ñ f é É y1 ... ym é P[f y1...ym, y1...ym, x1, ..., xn]
+Ê
+In this case we can use $(all\_)simple\_Ñ\_É\_conv1$,
+and we may often find the $y_i$ becoming redundant quantifiers
+($simple\_Ñ\_É\_conv$ cannot itself be considered to simplify
+a term, so we don't automatically use it, only its special case).
+\item
+The term can be rearranged to the form:
+Û
+Ñ x1 ... xn é Ñ f é É y1 ... ym é P[f c1, ..., f cm, y1,...ym,...,x1, ..., xn]
+Ê
+where the $c_i$ are distinct data constructors applied to the $y_i$.
+In this case we may be able to appeal to an appropriate
+inductive theorem to recast the term via step (2)
+to:
+Û
+Ñ x1 ... xn é É y é Ñ f' é É y1 ... ym é P[f',y1,...,ym,x1, ..., xn]
+Ê
+In the case of pairs, and any other type with a single
+data constructor, we can consider variables and constructions
+as interchangeable.
+In some cases the rearranged term may contain applications of $f$ to a variable as well as to data constructions.
+\item
+The term can be rearranged by using $f'$ with the same arguments, but
+in a different order, to gain the state of case (2) or case (3).
+(We do not currently cater for this.)
+\end{enumerate}
+
+We give an approach that is only interested in handling a single
+ existential quantifier.
+This avoids complexity, at the cost of multiple passes
+for multiple quantifiers.
+\subsubsection{Equations of the Existential Quantifier}
+The following auxiliary knows that embedded in $tm$,
+through operators that ``respect'' $F$,
+is an equality of on of the outer existentially quantified variables
+with $witness$.
+
+Crudely:
+=CONVERSION
+simple_Ñ_equation_conv
+ªÑ f é ...f... (f = witness) ...f...
+…
+…
+(Ñ f é ...f... (f = witness) ...f...) Ç
+ (...witness...T...witness...)
+=TEX
+In fact, various forms of equation can be handled,
+and the $T$ is eliminated by rewriting.
+
+We do not handle the special cases of, e.g., 
+$ªÑ\ fé\ f\ x\ Ç\ Tº$,
+where $x$ is a redundant argument, because more
+general cases don't work - e.g. consider:
+
+Û
+É p x é Ñ f é (f x Ç T) Ä p x f
+
+which is not equal to (but only implied by):
+
+É p x é p x (ç y é T)
+Ê
+
+=SML
+local
+	val å_Ç_thm = tac_proof(([],ªÉ x é 
+		(å(x Ç T) Ç (å x)) Ä
+		(å(x Ç F) Ç x)º),
+		REPEAT strip_tac THEN asm_rewrite_tac[]);
+	val rwc = prim_rewrite_conv empty_net
+		initial_rw_canon
+		TOP_MAP_C
+		[]
+		[Ä_rewrite_thm, Ñ_rewrite_thm,
+		É_rewrite_thm, eq_rewrite_thm, ä_rewrite_thm, å_rewrite_thm];
+	val rw_rule = prim_rewrite_rule empty_net
+		initial_rw_canon
+		TOP_MAP_C
+		[]
+		[Ä_rewrite_thm, Ñ_rewrite_thm,
+		å_Ç_thm,
+		É_rewrite_thm, eq_rewrite_thm, ä_rewrite_thm, å_rewrite_thm];
+	val rw_tac1 = (prim_rewrite_tac	
+		(make_net(flat(map (cthm_eqn_cxt initial_rw_canon) [ä_rewrite_thm])))
+		initial_rw_canon 
+		TOP_MAP_C
+		[]);
+	val rw_tac2 = (prim_rewrite_tac	
+		(make_net(flat(map (cthm_eqn_cxt initial_rw_canon)
+			[Ä_rewrite_thm, Ñ_rewrite_thm,
+			É_rewrite_thm, eq_rewrite_thm,
+			ä_rewrite_thm, å_rewrite_thm])))
+		initial_rw_canon 
+		TOP_MAP_C
+		[]);
+in
+=TEX
+After the auxiliary rewriting stuff:
+=SML
+val ‚simple_Ñ_equation_conv· : CONV = (fn mtm =>	
+let	val (x,bdy) = dest_simple_Ñ mtm
+		handle complaint =>
+		pass_on complaint "dest_simple_Ñ" "simple_Ñ_equation_conv";
+	val dest_x = dest_var x;
+	val (following_Ñ, bdy') = strip_simple_Ñ bdy;
+	val rhs_ok = frees bdy' less x;
+	fun aux_eq_usage binders tm = (
+		case (dest_term tm) of
+		DEq (tm1,tm2) => (if tm1 = x andalso
+				((frees tm2) subset rhs_ok)
+			then Value tm2
+			else if tm2 = x andalso
+				((frees tm1) subset rhs_ok)
+			then Value tm1
+			else Nil)
+		| DÇ (tm1,tm2) => (if tm1 = x andalso
+				((frees tm2) subset rhs_ok)
+			then Value tm2
+			else if tm2 = x andalso
+				((frees tm1) subset rhs_ok)
+			then Value tm1
+			else Nil)
+		| DÑ(vs,bdy) => (let val vss = strip_pair vs
+			in
+			if x mem vss
+			then Nil
+			else aux_eq_usage (vss @ binders) bdy
+			end)
+		| DÉ(vs,bdy) => (let val vss = strip_pair vs
+			in
+			if x mem vss
+			then Nil
+			else aux_eq_usage (vss @ binders) bdy
+			end)
+		| DÄ(tm1,tm2) => (case (aux_eq_usage binders tm1) of
+			Nil => aux_eq_usage binders tm2
+			| vx => vx)
+		| DVar arg => (if arg = dest_x
+			then Value mk_t
+			else Nil)
+		| Då arg =>  (if arg = x
+			then Value mk_f
+			else Nil)
+		| _ => Nil
+		);
+	val witness = case (aux_eq_usage [] bdy') of
+		Value wit => wit
+		| Nil => term_fail "simple_Ñ_equation_conv" 58013 [mtm];
+	val frees_witness = frees witness;
+	val (move_out,keep_in) = two_way (fn y => y mem frees_witness) following_Ñ;
+in
+=TEX
+We need some manipulations if the existentials require reordering:
+=SML
+	(
+	(fn cnv =>
+	if not (is_nil move_out)
+	then ((Ñ_reorder_conv (list_mk_simple_Ñ((move_out @ [x] @ keep_in), bdy')) 
+		THEN_C (N_SIMPLE_BINDER_C(length move_out) cnv )))
+	else cnv)
+=TEX
+Now the bit that assumes the existentials are in the right order:
+=SML
+(fn mtm' =>
+let	val work_on_bdy = list_mk_simple_Ñ(keep_in, bdy');
+	val work_on_tm = mk_simple_Ñ (x, work_on_bdy);
+	val side_effect = if mtm' <> work_on_tm
+		then term_fail "oops-simple_Ñ_equation_conv" 0 [mtm]
+		else ();
+	val new_term = subst [(witness,x)] work_on_bdy;
+	val new_term_rw = (TRY_C rwc) new_term;
+	val new_term' = snd(dest_eq(concl new_term_rw));
+	val thm = tac_proof(([],mk_Ç(work_on_tm,new_term')),
+		Ç_T2 (fn thm =>
+		conv_tac(fn ag => eq_sym_rule new_term_rw)
+		THEN
+		SIMPLE_Ñ_THEN ante_tac thm
+		THEN (
+=TEX
+we know what the introduced variable is by the following means
+(based on implementation of $SIMPLE\_Ñ\_THEN$):
+=SML
+			let val x' = variant (frees(concl thm) @ frees new_term) x;
+			in
+			CASES_T2 (mk_eq(x',witness))
+			(fn thm1 => rw_tac1[thm1])
+			(fn thm1 => rw_tac2[
+				thm1,
+				((rw_rule thm1) handle _ => t_thm),
+				å_eq_sym_rule thm1])
+			end)			
+		)
+		(fn thm =>
+		simple_Ñ_tac witness THEN accept_tac 
+			(Ç_mp_rule (eq_sym_rule new_term_rw) thm)
+		))
+		handle complaint =>
+		if area_of complaint = "tac_proof"
+		then term_fail "simple_Ñ_equation_conv" 58022 [mtm,witness]
+		else reraise complaint (area_of complaint);
+in
+	eq_trans_rule (refl_conv mtm') thm
+end) 
+)
+mtm
+end
+handle complaint =>
+divert complaint "tac_proof" "simple_Ñ_equation_conv" 58013 
+	[fn () => string_of_term mtm]);
+end;
+=IGN
+simple_Ñ_equation_conv ªÑ f é f Ç Tº;
+simple_Ñ_equation_conv ªÑ f é x Ç fº;
+simple_Ñ_equation_conv ªÑ f é a = fº;
+simple_Ñ_equation_conv ªÑ f é f = aº;
+simple_Ñ_equation_conv ªÑ f é (a = f) Ä f gº;
+simple_Ñ_equation_conv ªÑ f é É z é (z h Ä (a = f) Ä z f) Ä f gº;
+simple_Ñ_equation_conv ªÑ f é É z x é (z h Ä (a = f) Ä z (f x)) Ä (É g é f g) º;
+simple_Ñ_equation_conv ªÑ f g h é (f = g x) Ä h xº;
+simple_Ñ_equation_conv ªÑ f h g é (f = g x) Ä h xº;
+simple_Ñ_equation_conv ªÑ f é (f x = g) Ä h xº;
+=TEX
+\subsubsection{Special Cases of Equations}
+$Ñ\_equation\_conv$ does not handle the special cases of, e.g., $ªÑ\ fé\ f\ x\ Ç\ Tº$, where $x$ is a redundant argument, because more
+general cases don't work - e.g. consider:
+Û
+Ñ f é (f x Ç T) Ä p x f
+
+which is not equal to (but only implied by):
+
+p x (ç y é T)
+Ê
+The following conversion handles a few of these special
+cases, namely those in which the body is
+(perhaps implicitly) only an equation.
+=SML
+local
+	val rw_tac = (prim_rewrite_tac	
+	(make_net(flat(map (cthm_eqn_cxt initial_rw_canon)
+		[eq_rewrite_thm, å_rewrite_thm, Ñ_rewrite_thm, É_rewrite_thm])))
+		initial_rw_canon 
+		TOP_MAP_C
+		[(ª(ç x é y)zº,simple_%beta%_conv)]
+		[]);
+
+	fun is_redundant_args frees_bdy tm1 tm2 x = (
+	let	val (x',args) = strip_app tm1;
+	in
+		x' = x andalso
+		(let	val ftm2 = frees tm2
+		in
+		not(any (frees tm1) (fn x => x mem ftm2))
+		andalso
+		ftm2 subset frees_bdy
+		end)
+	end);
+
+	fun do_redundant_args tm1 tm2 x = (
+	let	val (x',args) = strip_app tm1;
+	in
+		list_mk_simple_ç(gen_vars(map type_of args) [tm2], tm2)
+	end);
+=TEX
+=SML
+in
+val simple_Ñ_equation_conv1: CONV = (fn mtm =>
+let	val (x,bdy) = dest_simple_Ñ mtm;
+	val dest_x = dest_var x;
+	val (following_Ñ, bdy') = strip_simple_Ñ bdy;
+	val frees_bdy = frees bdy';
+	fun  aux tm = (case (dest_term tm) of
+		DEq (tm1,tm2) => (
+			if is_redundant_args frees_bdy tm1 tm2 x
+			then do_redundant_args tm1 tm2 x
+			else if is_redundant_args frees_bdy tm2 tm1 x
+			then do_redundant_args tm2 tm1 x
+			else term_fail "simple_Ñ_equation_conv1" 0 [mtm]
+		) | DÇ (tm1,tm2) => (
+			if is_redundant_args frees_bdy tm1 tm2 x
+			then do_redundant_args tm1 tm2 x
+			else if is_redundant_args frees_bdy tm2 tm1 x
+			then do_redundant_args tm2 tm1 x
+			else term_fail "simple_Ñ_equation_conv1" 0 [mtm]
+		) | DÑ(vs,bdy) => (let val vss = strip_pair vs
+			in
+			if x mem vss
+			then term_fail "simple_Ñ_equation_conv1" 0 [mtm]
+			else aux bdy
+			end
+		) | DÉ(vs,bdy) => (let val vss = strip_pair vs
+			in
+			if x mem vss
+			then term_fail "simple_Ñ_equation_conv1" 0 [mtm]
+			else aux bdy
+			end
+		) | Då arg => (
+			if is_redundant_args frees_bdy arg mk_f x
+			then do_redundant_args arg mk_f x
+			else term_fail "simple_Ñ_equation_conv1" 0 [mtm]
+		) | DApp _ => (
+			if is_redundant_args frees_bdy tm mk_t x
+			then do_redundant_args tm mk_t x
+			else term_fail "simple_Ñ_equation_conv1" 0 [mtm]
+		) | DVar _ => (
+			if is_redundant_args frees_bdy tm mk_t x
+			then do_redundant_args tm mk_t x
+			else term_fail "simple_Ñ_equation_conv1" 0 [mtm]
+		) | _ => term_fail "simple_Ñ_equation_conv1" 0 [mtm]);
+	val witness = aux bdy';
+in
+	((Ñ_reorder_conv (list_mk_simple_Ñ(following_Ñ @ [x], bdy')))
+	THEN_C
+	(LAST_SIMPLE_Ñ_C (fn mtm' =>
+		tac_proof(([],mk_Ç(mtm',mk_t)),
+		Ç_t_tac THEN
+		simple_Ñ_tac witness THEN
+		(rw_tac ORELSE_T t_tac))))
+	FURTHER_C
+	(pure_rewrite_conv [Ñ_rewrite_thm]))
+	mtm
+end);
+end;
+=IGN
+simple_Ñ_equation_conv1 ªÑ f g é f x = Tº;
+simple_Ñ_equation_conv1 ªÑ f é T = f xº;
+simple_Ñ_equation_conv1 ªÑ f h é f hº;
+simple_Ñ_equation_conv1 ªÑ f h é å f hº;
+simple_Ñ_equation_conv1 ªÑ f é fº;
+simple_Ñ_equation_conv1 ªÑ f é å fº;
+simple_Ñ_equation_conv1 ªÑ f é É a é Ñ b é f a bº;
+simple_Ñ_equation_conv1 ªÑ f é É a é Ñ b é g = f a bº;
+simple_Ñ_equation_conv1 ªÑ f g é É a é Ñ b é g = f a bº;
+simple_Ñ_equation_conv1 ªÑ f é É a éf = aº; (* fails, as is proper *)
+=TEX
+\subsubsection{Pulling out the Argument to the Existential Quantifier}
+A call to the following function by $Ñ\_proof\_by\_body\_conv$ merely
+indicates the possibility of success, and the maximum level of
+success achievable (i.e. how many arguments may be removed).
+
+In this version we will assume the term is of the form:
+Û
+Ñ f é Ñ x1 ... xn é 
+	(É ... a ... é P(f a, a)) Ä
+	(É ... b ... é Q(f b, b)) Ä
+	...
+Ê
+This may be achieved, if at all, by $Ñ\_C$ $simple\_É\_Ä\_conv$,
+and may be done in the calling function.
+
+We wish to reach the form:
+Û
+Ñ x1 ... xn é Ñ f é É x é
+	(É ... ... é P(f x, x)) Ä
+	(É ... ... é Q(f x, x)) Ä
+	...
+Ê
+at which point we can use $simple\_Ñ\_É\_conv1$.
+
+We will go a few steps further and manage types with only a single data constructor ($â$ is the only immediately obvious case), if we have a theorem and projection functions of the form:
+Û
+Ö É x é DataConstructor (Proj1 x) (Proj2 x) ... = x
+Ö É x1 ... é Proj1(DataConstructor x1 ...) = x1
+Ö É x1 x2 ... é Proj2(DataConstructor x1 x2 ...) = x2
+Ê
+Incorporate $â$ into the functions knowledge space:
+=SML
+val ‚pair_rewrite_thm· = tac_proof(([],ªÉ x y p é
+	Fst (x, y) = x Ä Snd (x, y) = y Ä
+	(Fst p, Snd p) = pº),
+	rewrite_tac[pair_clauses]);
+
+
+=TEX
+Process the functions knowledge space:
+=SML
+fun ‚dc_simps· () = (
+	flat(map (fn (_,(_,thm)) => 
+	initial_rw_canon thm) 
+	(get_epc_Ñ_vs_thm(get_proof_context())))
+);
+=TEX
+This auxiliary function tests that we can handle the argument
+provided, with the current $SDCS$:
+=SML
+fun ‚can_handle· tm = (
+	is_var tm orelse
+	(let val (dc,args) = strip_app tm
+	in
+	is_const dc andalso
+	(let val nmdc = fst(dest_const dc)
+	in
+	any (get_epc_Ñ_vs_thm(get_proof_context())) (fn (nm,_) => nm = nmdc)
+	end) andalso
+	all args can_handle
+	end)
+);
+=TEX
+Given a list of boolean values, how many initial $true$'s are there:
+=SML
+fun ‚n_true· [] = 0
+| n_true (true :: x) = 1 + n_true x
+| n_true _ = 0;
+=TEX
+Find the first usage of $f$ in term $mtm$.
+The context $mcxt$ is the current usage of $f$, if $mtm$
+should prove to be of the form $f$ $arg_1$ $arg_2$ $\ldots$
+(with possibly 0 arguments).
+=SML
+fun ‚an_f· f mcxt mtm = (
+let 	val dest_f = dest_var f
+	fun aux cxt tm  = (
+	case (dest_simple_term tm) of
+	Var arg => (if arg = dest_f
+		then Value cxt
+		else Nil
+	) | Const _ => Nil
+	| App (tm1,tm2) => (
+		let val cxts1 = aux cxt tm1
+		in
+			case cxts1 of
+			Value _ => cxts1
+			| Nil => aux tm2 tm2
+		end)
+	| Simpleç(y,tm1) => (if y = f
+		then Nil
+		else aux tm1 tm1)
+	)
+in
+	aux mcxt mtm
+end);
+
+=TEX
+Find the first usage of $f$ in term $mtm$, where it
+is applied to either a constant or an application.
+The context $mcxt$ is the current usage of $f$, if $mtm$
+should prove to be of the form $f$ $arg_1$ $arg_2$ $\ldots$
+(with possibly 0 arguments).
+=SML
+local
+	fun is_fst_arg_dc tm = (
+	let	val (_,args) = strip_app tm;
+		val fst_arg = hd args;
+	in
+		is_app fst_arg orelse is_const fst_arg
+	end);
+in
+fun ‚an_f_dc· f mcxt mtm = (
+let 	val dest_f = dest_var f
+	fun aux cxt tm  = (
+	case (dest_simple_term tm) of
+	Var arg => (if arg = dest_f andalso is_fst_arg_dc cxt
+		then Value cxt
+		else Nil
+	) | Const _ => Nil
+	| App (tm1,tm2) => (
+		let val cxts1 = aux cxt tm1
+		in
+			case cxts1 of
+			Value _ => cxts1
+			| Nil => aux tm2 tm2
+		end)
+	| Simpleç(y,tm1) => (if y = f
+		then Nil
+		else aux tm1 tm1)
+	)
+in
+	aux mcxt mtm
+end);
+end;
+=TEX
+This function expands any ``new'' arguments using projection functions stored in $SDCS$ to match the variables in the list of ``old'' arguments,
+that may be embedded in data constructions.
+It results in a substitution list (i.e. for $subst$) for the old variables, in terms
+of the new ones.
+=SML
+fun ‚match_f_args· ([]:TERM list) ([]:TERM list):(TERM * TERM) list = []
+| match_f_args (new :: nrest) (old :: orest) = (
+	if is_var old
+	then (new, old) :: match_f_args nrest orest
+	else (let val (dc,bits) = strip_app old;
+		val (projs,thm) = lassoc3 
+			(get_epc_Ñ_vs_thm(get_proof_context())) 
+			(fst(dest_const dc));
+	in
+		match_f_args ((map (fn x => match_mk_app(x,new)) projs) 
+			@ nrest)
+			(bits @ orest)
+	end)
+)
+| match_f_args _ _ = fail "match_f_args" 0 [];
+=TEX
+The following handles the case of a first argument being a pair that has constants embedded
+in as well.
+=SML
+local
+	val gen_f = ª:'a â 'b ã 'cº;
+	val rwc = pure_rewrite_conv [
+		tac_proof(([],ªÉ x y f a é 
+			(Uncurry f (x,y) = f x y) Ä
+			(Uncurry f a = f (Fst a) (Snd a))º),
+		rewrite_tac[pair_clauses])];
+in
+fun ‚simple_Ñ_paired_arg_conv· (usages: TERM list):CONV = (fn mtm =>
+let	val sideeffect = if any usages (fn tm => is_pair(snd(dest_app tm)))
+		then ()
+		else term_fail"simple_Ñ_paired_arg_conv" 0 [];
+	val (f,bdy) = dest_simple_Ñ mtm;
+	val P = mk_simple_ç(f, bdy);
+	val s1 = inst_type_rule(type_match (type_of f) gen_f) Ñ_uncurry_thm;
+	val s2 = simple_É_elim P s1;
+	val f' = variant (frees bdy) f;
+	val s3 = conv_rule(RAND_C(RAND_C (simple_%alpha%_conv 
+			(fst(dest_var f')))) THEN_C
+		ONCE_MAP_C simple_%beta%_conv THEN_C
+		rwc) s2;
+in
+	eq_trans_rule (refl_conv mtm) s3
+end);
+end;
+=TEX
+This auxiliary function eliminates $É$'s with either the 
+value associated with the bound variable in $alist$, or just
+the bound variable itself.
+=SML
+fun ‚opt_list_simple_É_elim· alist thm = (
+let 	val (vs,_) = strip_simple_É (concl thm);
+	val vs' = map (rassoc1 alist) vs;
+in
+	list_simple_É_elim vs' thm
+end);
+=TEX
+The following rearranges universals and conjunctions
+(though the order of the conjunctions must not change),
+to match a new term.
+It handles certain forms of changing in paired structure of quantifiers.
+=SML
+fun ‚local_rearrange_conv· (f:TERM) (new_term:TERM) : CONV = (fn tm =>
+	tac_proof(([],mk_Ç(tm,new_term)),
+		let val ldc_simps = dc_simps ();
+			val prwr = pure_rewrite_rule ldc_simps;
+			val prwt = pure_rewrite_tac ldc_simps;
+		in
+		Ç_T2
+		(fn thm1 =>
+		let val thm1s = strip_Ä_rule thm1
+		in
+		REPEAT simple_É_tac THEN 
+		COND_T(fn _ => length thm1s > 1)
+			(REPEAT Ä_tac THEN REPEAT simple_É_tac )
+			(id_tac)
+		THEN_LIST_T
+		(map (fn thm => fn (asms,gl) =>
+		let 	val conc = concl thm;
+			val thm_fuse = case(an_f f conc conc) of
+				Value tm => tm
+				| Nil => mk_t;
+			val gl_fuse = case(an_f f gl gl) of
+				Value tm => tm
+				| Nil => mk_t;
+			val (_,match1) = term_match thm_fuse gl_fuse;
+			val (omatch1,nmatch1) = split match1;
+			val match2 = match_f_args nmatch1 omatch1;
+			val thm' = opt_list_simple_É_elim match2 thm;
+			val thm'' = (prwr thm'
+				handle (Fail _) => thm');
+		in
+			(TRY_T prwt THEN
+			accept_tac thm'') (asms,gl)
+		end) 
+		thm1s)
+		end)
+		(fn thm2 =>
+		let val (ivs,bdy) = strip_simple_É(concl thm2);
+			val thm2s = if is_Ä tm
+				then (map (list_simple_É_intro ivs) 
+					(strip_Ä_rule (all_simple_É_elim thm2)))
+				else [thm2];
+		in
+			REPEAT Ä_tac THEN
+			REPEAT simple_É_tac THEN_LIST_T
+		(map (fn thm => fn (asms,gl) =>
+		let 	val conc = concl thm;
+			val thm_fuse = case(an_f f conc conc) of
+				Value tm => tm
+				| Nil => mk_t;
+			val gl_fuse = case(an_f f gl gl) of
+				Value tm => tm
+				| Nil => mk_t;
+			val (_,match1) = term_match gl_fuse thm_fuse;
+			val thm' = opt_list_simple_É_elim match1 thm;
+			val thm'' = (prwr thm'
+				handle (Fail _) => thm');
+		in
+			(TRY_T  prwt
+			THEN accept_tac thm'') (asms, gl)
+		end) 
+		thm2s)	
+		end)
+		end)
+);
+=IGN
+local_rearrange_conv ªf:'a â 'b ã 'aº ªÉ x :'a â 'b é (f x = Fst x) Ä (f x = Fst x) Ä zº
+ª(É a b é f (a,b) = a) Ä (É y é f y = Fst y) Ä zº;
+
+local_rearrange_conv ªf:'a â 'b ã 'aº 
+	ªÉ x :'a â 'b é (f x = Fst x)º 
+	ª(É a b é f (a,b) = a)º;
+
+=TEX
+Given a list of usages of variable $f$, pull as many as possible universals
+out of the body to which $f$ is existentially bound.
+
+We make no attempt to determine which of the outer most existentials would make the best candidate to work on,
+and the lack of this attempt
+can mean the ordering of quantifiers affects how far $prove\_Ñ\_conv$ can progress.
+=SML
+fun ‚simple_Ñ_varstruct_arg_conv· (usages: TERM list) = (fn (mtm: TERM) =>
+let	val (f,bdy) = dest_simple_Ñ mtm;
+	val dest_f = dest_var f;
+	val (following_Ñ, bdy') = strip_simple_Ñ bdy;
+	val stripped_usages = map (snd o strip_app) usages;
+	val ch = map (map can_handle) stripped_usages;
+	val tryupto = list_min(map n_true ch);
+in
+	if tryupto < 1 
+	then simple_Ñ_paired_arg_conv usages mtm
+	else
+(let	val base_xs = (hd stripped_usages) to (tryupto -1);
+	val base_xs' = map (fn y => if is_var y
+			then y
+			else mk_var("x",type_of y)) base_xs;
+=TEX
+$xs$ will be the variables we pull out through $f$.
+=SML
+	val xs = list_variant (map mk_var(term_vars mtm)) base_xs';
+=TEX
+Now we form the new term:
+=SML
+	val conjs = full_strip_Ä bdy';
+
+	fun process_conj conj = (
+	let	val (vs, cbody) = strip_simple_É conj;
+	in
+		case (an_f f conj conj) of
+		Nil => conj
+		| Value fuse => (let val (f,args) = strip_app fuse;
+			val args' = args to (tryupto -1);
+			val substs = match_f_args xs args';
+			val ncbody = subst (combine xs args') cbody;
+			val ncbody' = subst substs ncbody;
+			val vs' = vs diff (flat(map frees args'));
+		in
+			list_mk_simple_É(vs',ncbody')
+		end)
+	end);
+
+	val new_conjs = map process_conj conjs;
+	val new_body = list_mk_Ä new_conjs;
+	val new_term = list_mk_simple_É(xs,new_body);
+=TEX
+As we have a reasonable hope of succeeding, we shuffle
+the existential quantifiers:
+=SML
+	val s1 = Ñ_reorder_conv (list_mk_simple_Ñ(following_Ñ @ [f], bdy'))
+		mtm;
+	val s2 = conv_rule(RAND_C(ALL_SIMPLE_Ñ_C 
+		(local_rearrange_conv f new_term))) s1;
+	val s3 = conv_rule(RAND_C(LAST_SIMPLE_Ñ_C 
+		(all_simple_Ñ_É_conv1 FURTHER_C redundant_simple_É_conv))) s2;
+in
+	s3
+end)
+end);
+=TEX
+\subsubsection{Handling Clausal Definitions}
+This auxiliary adds a value to the head of the last of a list of lists.
+=SML
+fun ‚add_to_last· vl [a] = [(vl :: a)]
+| add_to_last vl (a :: x) = a :: add_to_last vl x
+| add_to_last vl [] = fail "add_to_last" 0 [];
+=TEX
+In the following we are passed the applications of the function
+applied to an argument which is either a constant
+or an application.
+One of these must either be ``recognised'' (by matching a member of the $dc\_recog$ list), or we assume that we cannot 
+handle this case.
+=SML
+fun ‚add_to_named· (dc_recog :: dc_recogs) (conjs :: conjsl) fst_arg conj = (
+	if ((term_match fst_arg dc_recog;true) handle _ => false)
+	then ((conj :: conjs) :: conjsl)
+	else (conjs :: add_to_named dc_recogs conjsl fst_arg conj)
+)
+| add_to_named _ _ _ conj = term_fail "add_to_named" 0 [conj];
+=TEX
+For each item of clausal definition material we hold:
+\begin{enumerate}
+\item
+The list of data constructor recognisers.
+These are the generic terms which must be matchable to the actual argument.
+\item
+The number of free variables there should be in the use of the constructor (e.g. 2 for $Cons$, 0 for $Nil$).
+\item
+An instance of the most general type of the function's argument.
+\item
+A list of dummy arguments for each ``constructor'', to allow dummy
+conjuncts to be created.
+\item
+The actual theorem.
+The theorem is an equation, whose LHS is of the form:
+\begin{itemize}
+\item
+Universally quantify by one predicate per ``constructor'',
+\item
+Existentially quantify by function, $f$,
+\item
+one conjunct per constructor, in same order as predicates.
+\item
+Each conjunct will universally quantified in the order that
+the the free variables of the subterm to which $f$ is first applied, that is a recognised argument by the data constructor
+recogniser.
+\item
+The body of the conjunct will be the associated predicate
+applied to each available use of $f$ and its arguments,
+the first being the recognised argument.
+\end{itemize}
+ 
+\end{enumerate}
+These are calculated from a clausal definition theorem by:
+=SML
+local
+	val aux_thm = tac_proof(([],ªÉ p q é (p Ç (q Å CombI p)) Ç (q ä p)º),
+		rewrite_tac[comb_i_def] THEN
+		REPEAT strip_tac);
+in
+fun ‚evaluate_Ñ_cd_thm· (thm : THM) = (
+let	val (new_fns,ue) = strip_É (concl thm);
+	val all_nf = flat(map strip_pair new_fns);
+	val (f,bdy) = dest_simple_Ñ%down%1 ue;
+	val conjs = full_strip_Ä bdy;
+	fun aux conj = (
+	let	val (vs,bdy) = strip_É conj;
+		val (lhs,rhs) = dest_eq bdy;
+		val (f',recog) = dest_app lhs;
+		val sideeffect = if f = f'
+			then ()
+			else thm_fail "evaluate_Ñ_cd_thm" 58009 [thm];
+		val (nf,args) = strip_app rhs;
+		val sideeffect = if nf mem all_nf
+			then ()
+			else thm_fail "evaluate_Ñ_cd_thm" 58023 [thm];
+	in
+		(recog, (lhs :: args), nf)
+	end);
+	val proc_conjs = map aux conjs;
+	val preds = gen_vars (BOOL :: (map (fn (_,xs,_) => 
+		list_mk_ã_type(map type_of xs @ [BOOL]))
+		proc_conjs))
+ 		[concl thm];
+	val other_pred = hd preds;
+	val preds' = tl preds;
+	val preds_conjs = combine preds' proc_conjs;
+	val tm1 = list_mk_Ä(map (fn (pred,(recog,args,_)) => 
+		list_mk_simple_É(rev(frees recog),
+			list_mk_app(pred,args)))
+		preds_conjs
+		@ [other_pred]);
+	val tm2 = mk_simple_Ñ(f, tm1);
+	fun aux1 (pred,(recog,args,_)) = (
+	let	val gvs = gen_vars (map type_of args) (pred :: args);
+	in
+		list_mk_simple_É(tl gvs,
+			mk_simple_Ñ(hd gvs,
+			list_mk_app(pred, gvs)))
+	end);
+	val tm3 = list_mk_Ä((map aux1 preds_conjs) @ [other_pred]);
+	val tm4 = mk_Å(tm3, mark tm2);
+	val tm5 = list_mk_simple_É(preds' @ [other_pred],
+		mk_eq(tm2,tm4));
+	fun mk_spec (pred,(recog,args,_)) = (
+	let	val gvs_args = gen_vars(map type_of args)[pred];
+	in
+		list_mk_simple_ç(tl gvs_args,
+		mk_á(hd gvs_args,
+		list_mk_app(pred,gvs_args)))
+	end);
+	val thm_specs = map (fn bdr =>
+		mk_spec(find preds_conjs (fn (_,(_,_,abdr)) => bdr = abdr)))
+		new_fns;
+=TEX
+Now prove the theorem whose conclusion we have just generated:
+=SML
+	val cd_thm = tac_proof((hyps thm,tm5),
+		pure_rewrite_tac[aux_thm] THEN
+		REPEAT É_tac THEN
+		ä_T(fn athm => MAP_EVERY_T asm_tac (strip_Ä_rule athm)) THEN
+		strip_asm_tac (list_simple_É_elim thm_specs thm) THEN
+		simple_Ñ_tac f THEN asm_rewrite_tac[] THEN
+		REPEAT (Ä_tac ORELSE_T simple_É_tac) THEN
+		(fn (asms,gl) =>
+		(let val (pred,args) = strip_app gl;
+		in
+		DROP_ASM_T (find asms (fn asm =>
+			let val (_,bdy) = strip_É asm;
+				val (_,bdy') = dest_simple_Ñ bdy;
+				val (pred',_) = strip_app bdy'
+			in
+				pred = pred'
+			end
+			handle _ => false))
+			(rewrite_thm_tac o Ñ_á_rule o
+			list_simple_É_elim(tl args))
+		end) (asms,gl)));
+	val recogs = map (fn (x,_,_) => x) proc_conjs;
+	val nfrees_recogs = map (length o frees) recogs;
+	val gen_f = type_of f;
+	val dummies = map (rev o frees) recogs;
+in
+	(recogs, nfrees_recogs, gen_f, dummies, cd_thm)
+end
+handle complaint =>
+list_divert complaint "evaluate_Ñ_cd_thm" 
+	[("dest_simple_Ñ%down%1",58007,[fn () => string_of_thm thm]),
+	("dest_app",58008,[fn () => string_of_thm thm]),
+	("dest_eq",58008,[fn () => string_of_thm thm]),
+	("tac_proof",58021,[fn () => string_of_thm thm])
+	]
+);
+end;
+=TEX
+We now extend $evaluate\_proof\_context$ with this theorem:
+=SML
+fun ‚evaluate_proof_context· (nm : string) (pc : PROOF_CONTEXT) : EPROOF_CONTEXT = (
+	set_epc_name nm
+	(set_epc_rw_net(make_net (get_pc_rw_eqn_cxt pc))
+	(set_epc_rw_canon(REWRITE_CAN
+		(REPEAT_CAN(FIRST_CAN (get_pc_rw_canons pc @
+		[Ç_t_rewrite_canon]))))
+	(set_epc_st_conv (eqn_cxt_conv(get_pc_st_eqn_cxt pc))
+	(set_epc_sg_conv (eqn_cxt_conv(get_pc_sg_eqn_cxt pc))
+	(set_epc_cs_Ñ_rule (get_pc_cs_Ñ_rule pc)
+	(set_epc_Ñ_vs_thm ( get_pc_Ñ_vs_thm pc)
+	(set_epc_Ñ_cd_thm (map evaluate_Ñ_cd_thm 
+		(get_pc_Ñ_cd_thm pc))
+	initial_epc)))))))
+);
+=SML
+fun ‚find_recursion_candidate· (usages : TERM list) = (
+let	val good_use = find usages 
+		(fn tm => 
+		((let val fst_arg = hd(snd(strip_app tm));
+		in
+		is_app fst_arg orelse is_const fst_arg
+		end)
+		handle _ => false));
+	val rarg = hd(snd(strip_app good_use));
+	val poss_cand = find (get_epc_Ñ_cd_thm(get_proof_context())) 
+		(fn (recogs,_,_,_,_) =>
+		any recogs (fn recog => 
+			((term_match rarg recog; true) handle _ => false)));
+in
+	poss_cand
+end
+handle complaint =>
+list_divert complaint "find_recursion_candidate" 
+	[("hd",0,[]),
+	 ("find",0,[])]
+);
+=TEX
+Given a recursion theorem of our desired particular form, and a term modified to be in the right
+form, get the theorem instantiated to the right form to serve as a 
+result of a conversion.
+=SML
+fun ‚simple_Ñ_cd_thm_conv· (rthm : THM) : CONV = (fn tm =>
+let	val (f,bdy) = dest_simple_Ñ tm;
+	val fname = fst(dest_var f);
+	val conjs = strip_Ä bdy;
+	val (lhs,rhs) = dest_eq(snd(strip_simple_É(concl rthm)));
+	val (ft,bdyt) = dest_simple_Ñ lhs;
+	val ftname = fst(dest_var ft);
+	val new_rthm = inst_type_rule (fst(term_match f ft)) rthm;
+	val new_rthm' = conv_rule (ONCE_MAP_C 
+		(COND_C (fn tm => is_simple_ç tm andalso
+			fst(dest_var(fst(dest_simple_ç tm))) = ftname)
+		(simple_%alpha%_conv fname)
+		(fail_conv))) new_rthm;
+	val (lhs',rhs') = dest_eq(snd(strip_simple_É(concl new_rthm')));
+	val (ft',bdyt') = dest_simple_Ñ lhs';
+	val conjst = strip_Ä bdyt';
+	val sideeffect = if f = ft'
+		then ()
+		else term_fail "simple_Ñ_cd_thm_conv" 0 [tm];
+=TEX
+Get the predicates by matching the conjuncts:
+=SML
+	val avoid = map mk_var (term_vars tm);
+	fun get_pred (conj, conjt) = (
+	let	val (vs,cbdy) = strip_simple_É conj;
+		val (vst,cbdyt) = strip_simple_É conjt;
+		val renames = combine (vs to (length vst -1)) vst;
+		val conj' = strip_n_simple_É (length vst) conj;
+		val args = snd(strip_app cbdyt);
+		val rnargs = map (subst renames) args;
+		val gvs = gen_vars (map type_of args) avoid;
+	in
+		list_mk_simple_ç (gvs,subst (combine gvs rnargs) conj')
+	end);
+	val preds = map get_pred (combine conjs conjst);
+	val snd_thm = conv_rule(TRY_C all_simple_%beta%_conv)
+		 (list_simple_É_elim preds new_rthm');
+	val fst_thm = TRY_C all_simple_%beta%_conv tm;
+in
+	eq_trans_rule fst_thm snd_thm
+end);
+
+=TEX
+We will wish to prove something that is pretty much an arbitrary 
+redistribution of conjunctions and simple universals:
+=SML
+local 
+	val lrrc_canon = REWRITE_CAN
+		(REPEAT_CAN
+		(simple_É_rewrite_canon ORELSE_CAN Ä_rewrite_canon)
+		THEN_CAN (fn thm => [Ç_t_intro thm]));
+	val rw_tac = (prim_rewrite_tac (make_net 
+		(map thm_eqn_cxt (initial_rw_canon Ä_rewrite_thm)))
+		lrrc_canon
+		Combinators.I
+		[]);
+in
+fun ‚local_recursion_rearrange_conv· (new_tm : TERM) : CONV = (fn tm =>
+	tac_proof(([],mk_Ç(tm,new_tm)),
+	Ç_T(fn thm =>
+	let val rw_tac' = rw_tac [thm]
+	in
+	(REPEAT (Ä_tac ORELSE_T É_tac)
+	THEN (TRY_T rw_tac') THEN t_tac)
+	end))
+);
+end;
+=TEX
+We now come to the main function for handling recursion and case splits.
+
+When looking for a use of $f$ for $simplify\_Ñ\_by\_recursion$ that is applied to an argument we may be looking
+at a recursive call, or at the results of the call:
+e.g. in:
+
+Û
+É x é f (n + 1) = n * f n
+Ê
+
+$ªf(n+1)º$ is the recursive call, and $ªf nº$ the result.
+These multiple possibilities makes it pretty much impossible to do a cheap check on the usages of $f$:
+we just ``suck it and see''.
+=IGN
+val usages = [ª(f : 'a LIST ã BOOL) (Cons a x)º,
+	ª(f : 'a LIST ã BOOL) xº,
+	ª(f : 'a LIST ã BOOL) Nilº];
+val mtm = ªÑ f é (É a x é f (Cons a x) Ç (g a x Ä f x))
+	Ä (Ñ a x ég a x) Ä (T = f Nil)º;
+
+val usages = [ª(ff : 'c LIST ã BOOL) (Cons r q)º,
+	ª(ff : 'c LIST ã BOOL) qº,
+	ª(ff : 'c LIST ã BOOL) Nilº];
+val mtm = ªÑ ffé (É p q ré ff (Cons r q) Ç g p q r Ä ff q) Ä
+	(É s é Ñ a x sé g a x s) Ä (É t é t Ç ff [])º;
+
+=SML
+fun ‚simple_Ñ_rec_arg_conv· (usages: TERM list) = (fn (mtm: TERM) =>
+let	val (f,bdy) = dest_simple_Ñ mtm;
+	val dest_f = dest_var f;
+	val (following_Ñ, bdy') = strip_simple_Ñ bdy;
+	val (dc_recogs,nvars_list,generic_f,dummy_vars_list,cand_thm) = 
+		(find_recursion_candidate usages);
+=TEX
+Now we form the new term:
+=SML
+	val conjs = full_strip_Ä bdy';
+=TEX
+We wish to partition the conjuncts by data constructor,
+while moving the quantifiers around, so that the free variables in the arguments
+to the data constructor are on the outside.
+The last partition is for conjuncts not containing 
+any uses of the quantified variable.
+=SML
+	val init_conj_lists = [] :: map (fn x => []) dc_recogs;
+
+	fun process_conjs conj_lists [] = conj_lists
+	| process_conjs conj_lists (conj :: rest) = (
+	process_conjs (
+	let	val (vs, cbody) = strip_simple_É conj;
+	in
+		case (an_f_dc f conj conj) of
+		Nil => add_to_last conj conj_lists
+		| Value fuse => (
+		let 	val (f,args) = strip_app fuse;
+			val fst_arg = hd args;
+			val fst_arg_frees = rev(frees fst_arg);
+			val new_conj = list_mk_simple_É(fst_arg_frees @ 
+				(vs diff fst_arg_frees), cbody);
+		in
+			add_to_named dc_recogs 
+				conj_lists 
+				fst_arg
+				new_conj
+		end)
+	end)
+	rest);
+	val new_conjs = process_conjs init_conj_lists conjs;
+=TEX
+Group together the partitioned conjuncts, bring out the ``common'' quantified
+variables.
+=SML
+	val specific_types = type_match (type_of f) generic_f;
+
+	fun group_conjs (nvars :: nvarsl) (dummy_vars:: dummy_varsl) (conjs :: conjsl) = (
+		(
+		if is_nil conjs
+		then list_mk_simple_É ((map (inst [] specific_types) dummy_vars),mk_t)
+		else (let val (vs1,_) = strip_simple_É (hd conjs);
+			val initial_vs = vs1 to (nvars -1);
+			fun rename_conj conj = (
+			let val (vs,bdy) = strip_simple_É conj;
+				val init_vs = vs to (nvars -1);
+			in
+				subst(combine initial_vs init_vs) 
+					(list_mk_simple_É(vs from nvars,bdy))
+			end);
+			val nconjs = map rename_conj conjs;
+		in
+			list_mk_simple_É(initial_vs,list_mk_Ä nconjs)
+		end)) :: 
+		group_conjs nvarsl dummy_varsl conjsl
+	)
+	| group_conjs _ _ [no_fs] = (
+		if is_nil no_fs
+		then [mk_t]
+		else [list_mk_Ä no_fs]
+	) | group_conjs _ _ _ = fail "group_conjs" 0 [];
+	val new_conjs1 = group_conjs nvars_list dummy_vars_list new_conjs;	
+	val new_body = list_mk_Ä new_conjs1;
+	val new_term = mk_simple_Ñ(f,new_body);
+=TEX
+As we have a reasonable hope of succeeding, we shuffle
+the existential quantifiers:
+=SML
+	val s1 = Ñ_reorder_conv (list_mk_simple_Ñ(following_Ñ @ [f], bdy'))
+		mtm;
+	val s2 = conv_rule(RAND_C(ALL_SIMPLE_Ñ_C
+		(local_recursion_rearrange_conv new_body))) s1;
+	val s3 = conv_rule(RAND_C(LAST_SIMPLE_Ñ_C 
+		(simple_Ñ_cd_thm_conv cand_thm))) s2;
+in
+	s3
+end);
+=TEX
+
+\subsubsection{Controlling Function for Quantifier Context}
+This function calls the appropriate subsidiary function,
+based on the uses of the existentially
+quantified variable within the body of the term.
+
+Incidentally, successful looking for usage is bound to fail
+if an equality is available for $Ñ\_equation\_conv$.
+Note that if any usage is not applied to some argument
+then the approach cannot succeed, so we fail immediately.
+=SML
+val ‚simple_Ñ_arg_conv· : CONV = (fn mtm =>	
+let	val (x,bdy) = dest_simple_Ñ mtm;
+	val dest_x = dest_var x;
+	fun aux_usage cxt tm = (
+		case (dest_simple_term tm) of
+		Var arg => (if arg = dest_x
+			then [cxt]
+			else []
+		) | Const arg => []
+		| App (tm1,tm2) => (
+			let val cxts1 = aux_usage cxt tm1
+			in
+				cxts1 @ aux_usage tm2 tm2
+			end)
+		| Simpleç(y,tm1) => (if y = x
+			then []
+			else aux_usage tm1 tm1)
+	);
+	val usages = aux_usage mtm bdy;
+in
+	((COND_C (fn _ => x mem usages) (fail_conv) 
+		(simple_Ñ_varstruct_arg_conv usages)) 
+	EITHER_C
+	(simple_Ñ_rec_arg_conv usages)
+	EITHER_C
+	(fn _ => term_fail "simple_Ñ_arg_conv" 0 [mtm]))
+	mtm
+end
+handle complaint =>
+divert complaint "dest_simple_Ñ mtm" "simple_Ñ_arg_conv" 0 
+	[fn () => string_of_term mtm]);
+=IGN
+simple_Ñ_arg_conv ªÑ f é É x é f xº;
+simple_Ñ_arg_conv ªÑ f é (É x é f x = g) Ä (É y é h (f  y))º;
+simple_Ñ_arg_conv ªÑ f g h é (É x é f x = g) Ä (É y é h (f  y))º;
+simple_Ñ_arg_conv ªÑ f h é (É x g é f x = g) Ä (É z y é h (f  y z))º;
+simple_Ñ_arg_conv ªÑ f g h é (É x y z é f x y z = g y z x) Ä (É a b c é h (f c a) b)º;
+simple_Ñ_arg_conv ªÑ f é (É a b c p é f (a,(b,c)) p Ç Fst a Ä c Ä p) Ä
+		(É d e g p é f ((d,e),g) p Ç Snd g Ä p Ä d)  Ä
+		(É a g q é f(a,g) q Ç q Ä Snd g Ä Fst a)º;
+simple_Ñ_arg_conv ªÑ f é (É a b c p é (f (a,(b,c)) p Ç Fst a) Ä c Ä p)º;
+
+simple_Ñ_arg_conv ªÑ fé (É a xé f (Cons a x) Ç g a x Ä f x) Ä 
+	(Ñ a xé g a x) Ä (T Ç f [])º;
+simple_Ñ_arg_conv ªÑ ffé (É p q ré ff (Cons r q) Ç g p q r Ä ff q) Ä 
+	(É s é Ñ a x sé g a x s) Ä (É t é t Ç ff [])º;
+simple_Ñ_arg_conv ªÑ f éÉ a x é f (Cons a x) = aº;
+simple_Ñ_arg_conv ªÑ f éÉ x é f (0,x) = xº;
+
+=TEX
+
+\subsection{The Main Function}
+When implementing the following we use our knowledge of
+when it is worth reapplying processors, and when
+things are ``once off''.
+
+Note that $simple\_Ñ\_Ä\_conv$ can spoil $Ñ\_proof\_by\_body\_conv$,
+by masking conjunctions.
+=SML
+fun (‚prove_Ñ_conv· : CONV) (tm : TERM) = (
+let	fun aux tm = (
+let	fun move_in_conv ltm = (case (dest_term ltm) of
+		DÑ _ => aux ltm
+		| DÉ (vs,_) => (
+			(COND_C (fn _ => is_pair vs) all_É_uncurry_conv fail_conv)
+			EITHER_C
+			(É_Ä_conv FURTHER_C move_in_conv)
+			ORELSE_C
+			(ALL_SIMPLE_É_C move_in_conv 
+			FURTHER_C redundant_simple_É_conv)) ltm
+		| DÄ _ => ALL_Ä_C move_in_conv ltm
+		| DÅ _ => ALL_Å_C move_in_conv ltm
+		| _ => fail_with_conv "aux-pass through" ltm);
+in
+(
+	(if is_Ñ tm
+	then
+	(all_Ñ_uncurry_conv
+	EITHER_C
+	(redundant_simple_Ñ_conv
+	EITHER_C
+	(simple_Ñ_Å_conv FURTHER_C move_in_conv)
+	ORELSE_C
+	((REPEAT1_C simple_Ñ_equation_conv)
+	EITHER_C
+	(simple_Ñ_equation_conv1
+	ORELSE_C
+	(ALL_SIMPLE_Ñ_C É_Ä_conv
+	EITHER_C
+	((simple_Ñ_arg_conv FURTHER_C move_in_conv)
+	ORELSE_C
+	((simple_Ñ_Ä_conv FURTHER_C move_in_conv)
+	ORELSE_C
+	((BINDER_C move_in_conv FURTHER_C aux)
+	ORELSE_C (fn _ => term_fail "prove_Ñ_conv" 58002 [tm]))))))))) (* we know its an Ñ *)
+	else term_fail "prove_Ñ_conv" 58001 [tm])
+	tm
+)
+end);
+in
+	(aux FURTHER_C pure_rewrite_conv[comb_i_def]) tm
+end);
+
+=TEX
+Now a rule and tactic that will only succeed if its term argument
+can be proven.
+=SML
+fun ‚prove_Ñ_rule· (tm : TERM) : THM = (
+let	val s1 = prove_Ñ_conv tm
+		handle complaint =>
+		pass_on complaint "prove_Ñ_conv" "prove_Ñ_rule";
+in
+	if snd(dest_Ç(concl s1)) = mk_t
+	then Ç_t_elim s1
+	else term_fail "prove_Ñ_rule" 58003 [tm]
+end);
+=TEX
+=SML
+val ‚prove_Ñ_tac· :TACTIC = (fn (asms, gl) =>
+let	val s1 = prove_Ñ_conv gl
+		handle complaint =>
+		if is_Ñ gl
+		then fail "prove_Ñ_tac" 58005 []
+		else fail "prove_Ñ_tac" 58004 [];
+in
+	if snd(dest_Ç(concl s1)) = mk_t
+	then accept_tac (Ç_t_elim s1) (asms,gl)
+	else fail "prove_Ñ_tac" 58006 []
+end);
+=TEX
+=IGN
+prove_Ñ_rule ªÑ a (b, c) d e é (a = b) Ä (a = d) Ä (b = 1) Ä (c = d) Ä (e = c)º;
+prove_Ñ_rule ªÑ f éfº;
+prove_Ñ_rule ªÑ f é f Ç Tº;
+prove_Ñ_rule ªÑ f é a = fº;
+prove_Ñ_conv ªÑ f é (a = f) Ä f gº;
+prove_Ñ_conv ªÑ f é É z é (z h Ä (a = f) Ä z f) Ä f gº;
+prove_Ñ_conv ªÑ f é É z x é (z h Ä (a = f) Ä z (f x)) Ä (É g é f g) º;
+prove_Ñ_conv ªÑ f é É (z, x) é (z h Ä (a = f) Ä z (f x)) Ä (É g é f g) º;
+prove_Ñ_conv ªÑ f é É x é f = xº; (* fails *)
+prove_Ñ_conv ªTº; (* fails *)
+prove_Ñ_rule ªÑ f é É x é f xº;
+prove_Ñ_conv ªÑ f é (É x é f x = g) Ä (É y é h (f  y))º;
+prove_Ñ_rule ªÑ f g h é (É x é f x = g) Ä (É y é h (f  y))º;
+prove_Ñ_conv ªÑ f h é (É x g é f x = g) Ä (É z y é h (f  y z))º;
+=IGN
+Sadly only one of the two following works ``well'': ordering still matters.
+=IGN
+prove_Ñ_conv ªÑ f g h é (É x y z é f x y z = g y z x) Ä (É a b c é h (f c a) b)º;
+prove_Ñ_rule ªÑ g h f é (É x y z é f x y z = g y z x) Ä (É a b c é h (f c a) b)º;
+prove_Ñ_conv ªÑ f g h é (É x (y, z) é f x y z = g y z x) Ä (É a b c é h (f c a) b)º;
+prove_Ñ_conv ªÑ f é (É a b c p é f (a,(b,c)) p Ç Fst a Ä c Ä p) Ä
+		(É d e g p é f ((d,e),g) p Ç Snd g Ä p Ä d)  Ä
+		(É a g q é f(a,g) q Ç q Ä Snd g Ä Fst a)º;
+prove_Ñ_conv ªÑ f é (É a b c p é (f (a,(b,c)) p Ç Fst a) Ä c Ä p)º;
+prove_Ñ_rule ªÑ fst snd é É x y é (fst(x,y) = x) Ä (snd(x,y) = y)º;
+prove_Ñ_conv ªÑ fé (É a xé f (Cons a x) Ç g a x Ä f x) Ä 
+	(Ñ a xé g a x) Ä (T Ç f [])º;
+prove_Ñ_conv ªÑ ffé (É p q ré (ff (Cons r q) Ç g k q r Ä ff q) Ä p) Ä 
+	(É s é Ñ a x sé g a x s) Ä (É t é t Ç ff [])º;
+prove_Ñ_rule ªÑ app é É p q r é (app [] q = q) Ä
+	(app (Cons p q) r = (Cons p (app q r))) Ä Tº;
+prove_Ñ_rule ªÑ app é (É q é (app [] q = q)) Ä
+	(É p q r é (app (Cons p q) r = (Cons p (app q r))))º;
+prove_Ñ_rule ªÑ app é (É q é (app q [] = q)) Ä
+	(É p q r é (app r (Cons p q) = (Cons p (app r q))))º;
+prove_Ñ_rule ªÑ mp é É f é (mp f [] = []) Ä (É p q é mp f (Cons p q) = Cons (f p) (mp f q))º;
+prove_Ñ_rule ªÑ ce éÉ p q r s é 
+	(ce (Cons p r) (Cons q s) Ç (p = q) Ä (ce r s)) Ä
+	(ce [] []) Ä
+	(å ce (Cons p r) []) Ä
+	(å ce [] (Cons p r))º;
+prove_Ñ_rule ªÑ fact é É n é (fact 0 = 1) Ä (fact (n+1) = (n + 1) *  fact n)º;
+prove_Ñ_rule ªÑ limit_it é É n a x é 
+	(limit_it (n + 1) (Cons a x) = Cons a (limit_it n x)) Ä
+	(limit_it (n + 1) [] = []) Ä
+	(limit_it 0 [] = []) Ä
+	(limit_it 0 (Cons a x) = [])º;
+prove_Ñ_rule ªÑ limit_it é É n a x é 
+	(limit_it (n + 1) (Cons a x) = Cons a (limit_it n x)) Ä
+	(limit_it (n + 1) [] = []) Ä
+	(limit_it 0 x = []) º;
+prove_Ñ_conv ªÑ len é É n x t é(len n [] = n) Ä
+	(len n (Cons x t) = len (n + 1) t)º; (* doesn't do much *)
+prove_Ñ_conv ªÑ len é É n x t é(len (n+1) [] = (n+1)) Ä
+	(len 0 [] = 0) Ä
+	(len n (Cons x t) = len (n + 1) t)º; (* doesan unlikely step *)
+prove_Ñ_rule ªÑ f é É x y é (f(InL x) = g x)Ä (f(InR y) = h y)º;
+prove_Ñ_rule ªÑ f éf [] = 1º;
+prove_Ñ_rule ªÑ f éÉ x a é f (Cons a x) = aº;
+prove_Ñ_conv ªÑ f éÉ x a b é f (Cons a (Cons b x)) = bº; (* fails *)
+prove_Ñ_rule ªÑ f éÉ x a é f (a+1) = aº;
+prove_Ñ_rule ªÑ f éf 0 = a º;
+prove_Ñ_conv ªÑ f ép Ä f 0 = a º;
+prove_Ñ_rule ªÑ f éÉ x é f (0,x) = xº;
+prove_Ñ_rule ªÑ ce éÉ p q r s é 
+	(ce (Cons p r, Cons q s) Ç (p = q) Ä (ce (r, s))) Ä
+	(ce ([], [])) Ä
+	(å ce (Cons p r,[])) Ä
+	(å ce ([], Cons p r))º;
+=IGN
+new_type ("OPS",1);
+new_const("Op1",ª:'a OPS ã 'a OPS ã 'a OPSº);
+new_const("Op2",ª:'a OPS ã 'a OPS ã 'a OPSº);
+new_const("Atom",ª:'a ã 'a OPSº);
+val ops_axiom = new_axiom("ops_axiom",
+	ªÉ a op1 op2 é Ñ%down%1 f é
+	(É x é f (Atom x) = a x) Ä
+	(É p q é f (Op1 p q) = op1 p q (f p) (f q)) Ä
+	(É p q é f (Op2 p q) = op2 (f p) (f q) p q)º);
+prove_Ñ_rule ªÑ g é É p q a é (g (Op2 p q) Ç h p Ä g q)
+	Ä 
+	(g (Op1 p q) Ç h q Ä g p)
+	Ä 
+	g(Atom a) = (a=0)º;
+prove_Ñ_conv ªÑ g é É p q a é (g (Op2  p q) Ç h p Ä g q)
+	Ä 
+	(g (Op1 p q) Ç h q Ä g p)
+	Ä 
+	(g(Atom a) = (a=0))
+	Ä
+	(i p ä g(Op2 p q))º;
+
+new_type ("NARY",1);
+new_const("NNode",ª:('a NARY)LIST ã 'a NARYº);
+new_const("NLeaf",ª:'a ã 'a NARYº);
+val nary_axiom = new_axiom("nary_axiom",
+	ªÉ node leaf é Ñ%down%1 f é 
+	(É n é f (NLeaf n) = leaf n) Ä
+	(É l é f (NNode l) = node l (Map f l))º);
+prove_Ñ_rule ªÑ sum_tree é
+	(É n é sum_tree (NLeaf n) = n) Ä
+	(É l é sum_tree (NNode l) = Fold ($+) (Map sum_tree l) 0)º;
+prove_Ñ_rule ªÑ map_tree é É f é 
+	(É l é map_tree f (NNode l) = NNode (Map (map_tree f) l))
+	Ä
+	(É n é map_tree f (NLeaf n) = NLeaf (f n))
+º;
+
+new_type("TRIPLE",3);
+val triple = new_const("Triple",ª:'a ã 'b ã 'c ã ('a, 'b, 'c)TRIPLEº);
+val tripe1 = new_const("Tripe1",ª:('a, 'b, 'c)TRIPLE ã 'aº);
+val tripe2 = new_const("Tripe2",ª:('a, 'b, 'c)TRIPLE ã 'bº);
+val tripe3 = new_const("Tripe3",ª:('a, 'b, 'c)TRIPLE ã 'cº);
+val tripe_rw = new_axiom("tripe_rw",
+	ªÉ a b c x é 
+	(Triple(Tripe1 x)(Tripe2 x)(Tripe3 x) = x)
+	Ä
+	(Tripe1(Triple a b c) = a)
+	Ä
+	(Tripe2(Triple a b c) = b)
+	Ä
+	(Tripe3(Triple a b c) = c)º);
+
+prove_Ñ_rule ªÑ f é É a b c n x é (f 0 (Triple a b c) Ç a Ä b Ä c) Ä
+		(f (n+1) x Ç h n Ä f n x)º;
+=TEX
+\subsection{New Proof Contexts}
+=SML
+val _ = open_theory "sum";
+val ‚prove_Ñ_pc· = 
+	set_pc_name "prove_Ñ_pc"
+	(set_pc_cs_Ñ_rule prove_Ñ_rule
+	(set_pc_Ñ_vs_thm [(",",([ªFstº,ªSndº],pair_rewrite_thm))]
+	(set_pc_Ñ_cd_thm [prim_rec_thm,
+		list_prim_rec_thm,
+		(rewrite_rule[ext_thm, o_def] sum_fns_thm)]
+	pair_pc)));
+
+val ‚prove_Ñ_epc· = 
+	set_epc_name "prove_Ñ_epc"
+	(set_epc_cs_Ñ_rule prove_Ñ_rule
+	(set_epc_Ñ_vs_thm [(",",([ªFstº,ªSndº],pair_rewrite_thm))]
+	(set_epc_Ñ_cd_thm [evaluate_Ñ_cd_thm prim_rec_thm,
+		evaluate_Ñ_cd_thm list_prim_rec_thm,
+		evaluate_Ñ_cd_thm (rewrite_rule[ext_thm, o_def] sum_fns_thm)]
+	pair_epc)));
+
+val _ = pop_proof_context ();
+val _ = push_proof_context prove_Ñ_epc;
+=IGN
+val new_prove_Ñ_epc = (
+	set_epc_Ñ_vs_thm 
+	(("Triple",([tripe1, tripe2, tripe3],tripe_rw)) ::(get_epc_Ñ_vs_thm(get_proof_context())))
+	(set_epc_Ñ_cd_thm
+	(evaluate_Ñ_cd_thm nary_axiom :: evaluate_Ñ_cd_thm ops_axiom :: (get_epc_Ñ_cd_thm(get_proof_context())))
+	prove_Ñ_epc)
+);
+push_proof_context new_prove_Ñ_epc;
+=TEX
+\section{EPILOGUE}
+=SML
+val _ = open_theory lthy;
+val _ = pop_proof_context();
+val lsubgoal_package_quiet = set_flag("subgoal_package_quiet",
+	lsubgoal_package_quiet);
+end; (* of structure ExistenceProofs *)
+open ExistenceProofs;
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
