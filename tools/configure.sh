@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.16 2002/10/30 12:30:42 rda Exp rda $
+# $Id: configure.sh,v 1.17 2002/10/30 13:03:15 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -263,7 +263,7 @@ then
 	then	out "echo Installing zed demo database"
 		out './install_zeddemo >zed.log 2>&1 || give_up $PPTARGETDIR/zed.log'
 	fi
-	if	[ "$daz" = y -a $PPCOMPILER=POLYML ]
+	if	[ "$daz" = y -a "$PPCOMPILER" = POLYML ]
 	then	out "echo Freezing daz database"
 		out '( pp_make_database -f -p daz junk$$; rm junk$$.polydb ) >daz.log 2>&1 || give_up $PPTARGETDIR/daz.log'
 	fi
