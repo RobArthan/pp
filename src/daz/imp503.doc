@@ -523,19 +523,6 @@ else    (
     );
 =TEX
 
-In a function or a procedure specification, the specification statement has no label. However, in the reduction functions, push\_label has already been called at the point that the context of the specification statement is recognised to be  part of a procedure or a function specification. The following function undoes the effect of the previous push\_label.
-=SML
-fun €cancel_push_label› (() : unit) : unit = (
-    if !unlabelled_provisional <> Nil
-    then
-        (unlabelled_counter := (!unlabelled_counter) - 1;
-        unlabelled_provisional := Nil
-        )
-    else
-        weird_error "weird error in cancel_push_label"
-    );
-=TEX
-
 The following function should be called when a refinement or replaced-by has been parsed. It updates the label stack with a newly generated label. This caters for a specification statement which is unlabelled, and is itself intended to be expanded with an unlabelled expansion.
 
 =SML
@@ -1380,19 +1367,28 @@ fun red_statement1 (Parsed(PPKSlot k)) = (
 |   red_statement1 _ =
         stack_error "red_statement1";
 
-val red_statement2  = red_accept;
+fun red_statement2 (Parsed(PPStmt(STSpecNoIvars{spec=spec, ...}))) = (
+    PPStmt(STSpecNoIvars{spec=spec, label=push_label()}))
+|   red_statement2 _ = stack_error "red_statement2";
 
-fun red_statement3 _ (Token ((LCZ,CNZ z1), _)) _
-    (Parsed(PPStmt(STSpecNoIvars s))) = (
-    let val (n, ty) = process_con_decl z1;
+fun red_statement3 (Parsed(PPStmt(STSpecNoIvars{spec=spec, ...})))
+			(Parsed(PPId label)) = (
+    PPStmt(STSpecNoIvars{spec=spec, label=label}))
+|   red_statement3 _ _ = stack_error "red_statement3";
+
+fun red_statement4 _ (Token ((LCZ,CNZ z1), _)) _
+    (Parsed(PPStmt(STSpecNoIvars {spec=s, label=label}))) = (
+    let		val (n, ty) = process_con_decl z1;
+		val label' = if label = "" then push_label() else label;
     in
-        PPLogCon{x=n, t=ty, e=mk_z_true, spec=s, pre1 = mk_z_true}
+        PPLogCon{x=n, t=ty, e=mk_z_true, spec=s,
+			pre1 = mk_z_true, label=label'}
     end)
-|   red_statement3 _ _ _ _ =
+|   red_statement4 _ _ _ _ =
         stack_error "red_statement3";
 
-val red_statement4 = red_accept;
 val red_statement5 = red_accept;
+val red_statement6 = red_accept;
 =TEX
 
 =SML
@@ -1404,8 +1400,8 @@ fun red_specification_statement1 _ (Token ((LCZ,CNZ z1), _)) _
             |  (Nil, post') => (z_tm_true, post');
         val w=process_frame z1;
 in
-    PPStmt(STSpecNoIvars{w=w,
-         w0=mk_w0 w, pre=pre, post=post, label=push_label()})
+    PPStmt(STSpecNoIvars{spec={w=w, w0=mk_w0 w, pre=pre, post=post},
+			label=""})
 end)
 |   red_specification_statement1 _ _ _ _ _ =
         stack_error "red_specification_statement1";
@@ -1415,33 +1411,11 @@ fun red_specification_statement2 _ (Token ((LCZ,CNZ z1), _)) _
 let val (pre, post) = (process_pre_condition z2, z_tm_true);
     val w=process_frame z1;
 in
-    PPStmt(STSpecNoIvars{w=w, w0=mk_w0 w,pre=pre,post=post,label=push_label()})
+    PPStmt(STSpecNoIvars{spec={w=w, w0=mk_w0 w, pre=pre,post=post},
+			label=""})
 end)
 |   red_specification_statement2 _ _ _ _ _ =
         stack_error "red_specification_statement2";
-
-fun red_specification_statement3 _ (Token ((LCZ,CNZ z1), _)) _
-    (Token ((LCZ,CNZ z2), _)) _ (Parsed(PPId lab))= (
-let val (pre, post) =
-        case process_pre_and_post_conditions z2 
-    of (Value pre', post') => (pre', post')
-        |(Nil, post') => (z_tm_true, post');
-    val w=process_frame z1;
-in
-    PPStmt(STSpecNoIvars{w=w,w0=mk_w0 w,pre=pre,post=post, label= lab})
-end)
-|   red_specification_statement3 _ _ _ _ _ _ =
-        stack_error "red_specification_statement3";
-
-fun red_specification_statement4 _ (Token ((LCZ,CNZ z1), _)) _
-    (Token ((LCZ,CNZ z2), _)) _ (Parsed(PPId lab))= (
-let val (pre, post) = (process_pre_condition z2, z_tm_true);
-    val w=process_frame z1;
-in
-    PPStmt(STSpecNoIvars{w=w,w0=mk_w0 w,pre=pre,post=post,label= lab})
-end)
-|   red_specification_statement4 _ _ _ _ _ _ =
-        stack_error "red_specification_statement4";
 =TEX
 
 =SML
@@ -1730,8 +1704,7 @@ fun red_procedure_specification1 _ (Token ((_,CNText id), _)) = (
         stack_error "red_procedure_specification1";
 
 fun red_procedure_specification2 _ (Token ((_,CNText id), _))
-    (Parsed(PPStmt(STSpecNoIvars s))) = (
-    cancel_push_label();
+    (Parsed(PPStmt(STSpecNoIvars {spec=s, ...}))) = (
     PPProcedureSpecification{name=id,formal_part=[],spec=Value s})
 |   red_procedure_specification2 _ _ _ =
         stack_error "red_procedure_specification2";
@@ -1743,8 +1716,7 @@ fun red_procedure_specification3 _ (Token ((_,CNText id), _))
         stack_error "red_procedure_specification3";
 
 fun red_procedure_specification4 _ (Token ((_,CNText id), _))
-    (Parsed (PPFormals f)) (Parsed(PPStmt(STSpecNoIvars s))) = (
-    cancel_push_label();
+    (Parsed (PPFormals f)) (Parsed(PPStmt(STSpecNoIvars {spec=s, ...}))) = (
     PPProcedureSpecification{name=id,formal_part=f,spec=Value s})
 |   red_procedure_specification4 _ _ _ _=
         stack_error "red_procedure_specification4";
@@ -1757,8 +1729,7 @@ fun red_function_specification1 _ (Token((_,CNText des), _)) _
         stack_error "red_function_specification1";
 
 fun red_function_specification2 _ (Token((_,CNText des), _)) _
-    (Parsed(PPExp n)) (Parsed(PPStmt(STSpecNoIvars s))) = (
-    cancel_push_label();
+    (Parsed(PPExp n)) (Parsed(PPStmt(STSpecNoIvars {spec=s, ...}))) = (
     PPFunctionSpecification{designator=des,
         return=name_to_tmark n,formal_part=[],spec=Value s})
 |   red_function_specification2 _ _ _ _ _ =
@@ -1773,8 +1744,7 @@ fun red_function_specification3 _ (Token((_,CNText des), _))
 
 fun red_function_specification4 _ (Token((_,CNText des), _))
     (Parsed(PPFormals f)) _ (Parsed(PPExp n))
-    (Parsed(PPStmt(STSpecNoIvars s))) = (
-    cancel_push_label();
+    (Parsed(PPStmt(STSpecNoIvars {spec=s, ...}))) = (
     PPFunctionSpecification{designator=des,
         return=name_to_tmark n,formal_part=f,spec=Value s})
 |   red_function_specification4 _ _ _ _ _ _ =
