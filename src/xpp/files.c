@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.20 2003/05/08 15:42:15 rda Exp $
+ * $Id: files.c,v 2.21 2003/07/29 16:42:57 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -123,15 +123,15 @@ static char *save_not_reg_message =
 static char *write_error_message =
 	 "Error writing the file \"%s\"";
 
-static char *file_changed_message =
+static char *save_file_changed_message =
 	 "The file \"%s\" appears to have been modified since it was last "
 	 "opened or saved. Do you want to overwrite it?";
 
-static char *file_created_message =
+static char *save_file_created_message =
 	 "The file \"%s\" appears to have been created since this "
 	 "xpp session was started. Do you want to overwrite it?";
 
-static char *file_deleted_message =
+static char *save_file_deleted_message =
 	 "The file \"%s\" appears to have been deleted since it was last "
 	 "opened or saved. Do you want to create it?";
 
@@ -142,6 +142,10 @@ static char *open_file_changed_message =
 static char *open_file_created_message =
 	 "The file \"%s\" appears to have been created since this "
 	 "xpp session was started. Do you want to open %s?";
+
+static char *open_file_deleted_message =
+	 "The file \"%s\" appears to have been deleted since it was last "
+	 "opened or saved. Do you want to open %s?";
 
 static char *contains_binary_message =
 	" The file \"%s\" contains binary data."
@@ -696,6 +700,9 @@ file_status check_file_status(char *name)
 {
 	char *buf;
 	struct stat new_status;
+	if(name == NULL) {
+		return FS_OK;
+	}
 	if(current_file_status != NULL) {
 		if(stat(name, &new_status) == 0) { /* file still exists */
 			if(	new_status.st_mtime != current_file_status->st_mtime
@@ -740,9 +747,9 @@ Boolean save_file(
 		set_read_only(False);
 	}
 	switch(check_file_status(name)) {
-		case FS_CHANGED: msg = file_changed_message; break;
-		case FS_DELETED: msg = file_deleted_message; break;
-		case FS_CREATED: msg = file_created_message; break;
+		case FS_CHANGED: msg = save_file_changed_message; break;
+		case FS_DELETED: msg = save_file_deleted_message; break;
+		case FS_CREATED: msg = save_file_created_message; break;
 		case FS_OK: msg = NULL; break;
 	}
 	if(msg != NULL) {
@@ -871,19 +878,25 @@ Boolean open_file(
 	static struct stat status;
 	Boolean binary;
 	char *read_only_message;
-	char *fmt;
+	char *msg_text;
 	switch(oldname != NULL ? check_file_status(oldname) : FS_OK) {
-		case FS_CHANGED: fmt = open_file_changed_message; break;
-		case FS_DELETED: fmt = NULL; break;
-		case FS_CREATED: fmt = open_file_created_message; break;
-		case FS_OK: fmt = NULL; break;
+		case FS_CHANGED: msg_text = open_file_changed_message; break;
+		case FS_DELETED: msg_text = open_file_deleted_message; break;
+		case FS_CREATED: msg_text = open_file_created_message; break;
+		case FS_OK: msg_text = NULL; break;
 	}
-	if(fmt != NULL) {
+	if(msg_text != NULL) {
 		Boolean reply;
-		char *qname = XtMalloc(strlen(name == NULL ? "an empty file" : name) + 2);
-		char *msg = XtMalloc(strlen(fmt) + strlen(oldname) + strlen(qname));
-		sprintf(qname, name == NULL ? "%s" : "\"%s\"", name == NULL ? "an empty file"  : name);
-		sprintf(msg, fmt, oldname, qname);
+		char *qname, *msg;
+		if(name == NULL) {
+			qname = XtMalloc(strlen("an empty file" ));
+			sprintf(qname, "an empty file");
+		} else {
+			qname = XtMalloc(strlen(name) + 2);
+			sprintf(qname, "\"%s\"", name);
+		}
+		msg = XtMalloc(strlen(msg_text) + strlen(oldname) + strlen(qname));
+		sprintf(msg, msg_text, oldname, qname);
 		reply = yes_no_dialog(text, msg);
 		XtFree(qname);
 		XtFree(msg);
@@ -896,7 +909,7 @@ Boolean open_file(
 		if (foAction != (FileOpenAction *) NULL) {
 			*foAction = EmptyFile;
 		}
-		return False;
+		return True;
 	}
 	if((buf = get_file_contents(text, name, cmdLine, False, foAction, &status, &binary)) != NULL) {
 		read_only_message = read_only_access_message(name, &status);
