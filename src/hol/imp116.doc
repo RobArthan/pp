@@ -72,7 +72,7 @@
 %%%%% CHANGES HISTORY:
 \subsection{Changes History}
 \begin{description}
-\item[Issues 1.1] First draft.
+\item[Issues 1.1-1.5] First development drafts.
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -5509,6 +5509,9 @@ val Ûpos_scale_¼_thmÝ = tac_proof(
 	THEN1 rewrite_tac[] THEN
 	i_contr_tac THEN swap_nth_asm_concl_tac 1 THEN
 	strip_asm_tac(µ_elim¬i':î®î¯_0_less_thm) THEN all_fc_tac[¯_times_mono_thm]);
+val Ûpos_scale_less_thmÝ = tac_proof(([], ¬µm:î; i j:¯·i < j ´ î¯ (m+1) * i < î¯ (m+1) * j®),
+	REPEAT strip_tac THEN bc_thm_tac ¯_times_mono_thm THEN REPEAT strip_tac
+	THEN rewrite_tac[î¯_0_less_thm]);
 =TEX
 The next set of theorems justify adding equalities and inequalities:
 =SML
@@ -5523,10 +5526,21 @@ val Ûadd_¼_¼_thmÝ = tac_proof(
 	rewrite_tac[¯_¼_def] THEN REPEAT strip_tac THEN_TRY
 	(all_var_elim_asm_tac1 THEN asm_rewrite_tac[])
 	THEN all_fc_tac[¯_plus_mono_thm2]);
+val Ûadd_eq_less_thmÝ = tac_proof(([],
+	¬µm n i j:¯·m = n ± i < j ´ m + i < n + j®),
+	REPEAT strip_tac THEN asm_rewrite_tac[]);
+val Ûadd_less_less_thmÝ = tac_proof(([],
+	¬µm n i j:¯·m < n ± i < j ´ m + i < n + j®),
+	accept_tac ¯_plus_mono_thm2);
+val Ûadd_less_¼_thmÝ = tac_proof(([],
+	¬µm n i j:¯·m < n ± i ¼ j ´ m + i < n + j®),
+	rewrite_tac[¯_¼_def] THEN REPEAT strip_tac THEN_LIST [
+		all_asm_fc_tac[¯_plus_mono_thm2],
+		asm_rewrite_tac[]]);
 =TEX
 Note: notwithstanding the rather complex coding of the version of these functions
 for the natural numbers, Hodes' algorithm as implemented in \cite{DS/FMU/IED/IMP082} produces a polynomial in which the only negative coefficients correspond to equations in the original input.
-The following function does not therefore need a case for negating a ¼.
+The following function does not therefore need a case for negating an inequality.
 
 If performance dictates, a more customised conversion than
 =INLINEFT
@@ -5536,19 +5550,23 @@ If performance dictates, a more customised conversion than
 conclusion in ANF in our application here.
 =SML
 fun Ûlit_scale_ruleÝ (b : INTEGER) (th : THM) : THM = (
-	let	val scale_th =  (
+	let	val (scale_th, conv) =  (
 			case (fst o dest_const o fst o strip_app o concl) th of
 				"¼‰R" => (
-				simple_µ_elim (mk_î b) pos_scale_¼_thm
+				(simple_µ_elim (mk_î b) pos_scale_¼_thm, id_conv)
+			) |	"<‰R" => (
+				(simple_µ_elim (mk_î (b @- one)) pos_scale_less_thm,
+				 LEFT_C (RAND_C plus_conv))
 			) |	_ => (
-				simple_µ_elim (
+				(simple_µ_elim (
 					if	b @>= zero
 					then	mk_î¯ (mk_î b)
 					else	mk_¯_minus(mk_î¯ (mk_î (@~ b))))
-					scale_eq_thm
+					scale_eq_thm, id_conv)
 			)
 		);
-	in	(conv_rule (RANDS_C (TRY_C ¯_anf_conv)) o ´_match_mp_rule scale_th) th
+	in	(conv_rule (RANDS_C (conv THEN_C TRY_C ¯_anf_conv))
+			o ´_match_mp_rule scale_th) th
 	end
 );
 =IGN
@@ -5557,6 +5575,7 @@ val th2 = asm_rule¬~(3/2)*a ¼ ~(1/2)®;
 val th3 = asm_rule¬~b  + (4/52)*a ¼ ~(î¯ 1)®;
 val th4 = asm_rule¬~b  + (4/5)*a = ~(î¯ 1)®;
 val th5 = asm_rule¬a = ~(î¯ 1)®;
+val th6 = asm_rule¬~b  + (4/5)*a < ~(î¯ 1)®;
 lit_scale_rule (@@"1") th1;
 lit_scale_rule (@@"4") th1;
 lit_scale_rule (@@"3") th2;
@@ -5564,6 +5583,7 @@ lit_scale_rule (@@"5") th3;
 lit_scale_rule (@@"5") th4;
 lit_scale_rule (@@"-6") th4;
 lit_scale_rule (@@"-2") th5;
+lit_scale_rule (@@"2") th6;
 =TEX
 =SML
 fun Ûsum2_ruleÝ (th1 : THM) (th2: THM) : THM = (
@@ -5573,8 +5593,13 @@ fun Ûsum2_ruleÝ (th1 : THM) (th2: THM) : THM = (
 			case (rator1, rator2) of
 				("=", "=") => (add_eq_eq_thm, ±_intro th1 th2)
 			|	("=", "¼‰R") => (add_eq_¼_thm, ±_intro th1 th2)
-			|	("¼‰R", "¼‰R") => (add_¼_¼_thm, ±_intro th1 th2)
+			|	("=", "<‰R") => (add_eq_less_thm, ±_intro th1 th2)
 			|	("¼‰R", "=") => (add_eq_¼_thm, ±_intro th2 th1)
+			|	("¼‰R", "¼‰R") => (add_¼_¼_thm, ±_intro th1 th2)
+			|	("¼‰R", "<‰R") => (add_less_¼_thm, ±_intro th2 th1)
+			|	("<‰R", "=") => (add_eq_less_thm, ±_intro th2 th1)
+			|	("<‰R", "¼‰R") => (add_less_¼_thm, ±_intro th1 th2)
+			|	("<‰R", "<‰R") => (add_less_less_thm, ±_intro th1 th2)
 			|	_ => thm_fail "sum2_rule" 999 [th1, th2]
 		);
 	in	(conv_rule (RAND_C ¯_plus_conv) o ´_match_mp_rule add_th)
@@ -5586,8 +5611,13 @@ fun Ûsum2_ruleÝ (th1 : THM) (th2: THM) : THM = (
 =IGN
 sum2_rule (asm_rule¬x = î¯ 2®) (asm_rule¬y = î¯ 3®);
 sum2_rule (asm_rule¬x ¼ î¯ 2®) (asm_rule¬y = î¯ 3®);
+sum2_rule (asm_rule¬x < î¯ 2®) (asm_rule¬y = î¯ 3®);
 sum2_rule (asm_rule¬x = î¯ 2®) (asm_rule¬y ¼ î¯ 3®);
 sum2_rule (asm_rule¬x ¼ î¯ 2®) (asm_rule¬y ¼ î¯ 3®);
+sum2_rule (asm_rule¬x < î¯ 2®) (asm_rule¬y ¼ î¯ 3®);
+sum2_rule (asm_rule¬x = î¯ 2®) (asm_rule¬y < î¯ 3®);
+sum2_rule (asm_rule¬x ¼ î¯ 2®) (asm_rule¬y < î¯ 3®);
+sum2_rule (asm_rule¬x < î¯ 2®) (asm_rule¬y < î¯ 3®);
 =TEX
 =SML
 fun Ûscale_and_sum2_ruleÝ (a1 : INTEGER) (th1 : THM) (th2: THM) : THM = (
@@ -5605,7 +5635,7 @@ fun Ûscaled_sum_ruleÝ (aths : (INTEGER * THM) list) : THM = (
 					scale_and_sum2_rule a th (r more)
 		);
 	in	conv_rule (TRY_C (LEFT_C ¯_anf_conv)
-			THEN_C TRY_C (¯_¼_conv ORELSE_C ¯_eq_conv)) (r aths)
+			THEN_C TRY_C (¯_¼_conv ORELSE_C ¯_less_conv ORELSE_C ¯_eq_conv)) (r aths)
 	end
 );
 =IGN
@@ -5627,6 +5657,11 @@ scaled_sum_rule (map (Combinators.I ** asm_rule) [
 	(@@"2",		¬a + b = î¯ 0®),
 	(minus_one,	¬î¯ 2*a = î¯ 1®),
 	(minus_one,	¬î¯ 2*b = î¯ 1®)
+]);
+scaled_sum_rule (map (Combinators.I ** asm_rule) [
+	(@@"2",		¬~a + ~b = î¯ 0®),
+	(one,	¬î¯ 2*a < ~(î¯ 1)®),
+	(one,	¬î¯ 2*b < î¯ 1®)
 ]);
 =TEX
 \subsection{Creating the input for the decision procedure}
@@ -5706,12 +5741,16 @@ strip_¯_plus¬x:¯®;
 strip_¯_plus¬x:¯ + y + î¯ 42 * v + q®;
 strip_¯_plus¬x:¯ + y + î¯ 42 * v + q + 157/59 + ~(43/5)*z®;
 =TEX
-The following rule takes a theorem $t = c$ or $ t \le c$ where $t$ is in ANF and $c$ is a
-rational literal and scales it so that all coefficients are integers.
+The following rule takes a theorem of
+one of the forms: $t = c$, $t < c$ or $ t \le c$ where $t$ is in ANF and $c$ is a
+rational literal,
+and scales it so that all coefficients are integers.
 =SML 
 fun Ûto_ú_ruleÝ (thm : THM) : THM = (
 	let	val tm = concl thm;
-		val (t, c) = dest_eq tm handle Fail _ => dest_¯_¼ tm;
+		val (t, c) = dest_eq tm
+			handle Fail _ => dest_¯_¼ tm
+			handle Fail _ => dest_¯_less tm;
 		val (_, c_denom) = dest_coefficient c;
 		val t_denoms = map (snd o get_coefficient) (strip_¯_plus t);
 		val factor = list_lcm (c_denom::t_denoms);
@@ -5723,6 +5762,8 @@ fun Ûto_ú_ruleÝ (thm : THM) : THM = (
 =IGN
 val th6 = asm_rule¬(1001/4)*b  + (1/13)*a ¼ ~(6/7)®;
 val th7 = asm_rule¬~(1001/4)*b  + (1/13)*a ¼ ~(6/7)®;
+val th8 = asm_rule¬~(1001/4)*b  + (1/13)*a = ~(6/7)®;
+val th9 = asm_rule¬~(1001/4)*b  + (1/13)*a < ~(6/7)®;
 to_ú_rule th1;
 to_ú_rule th2;
 to_ú_rule th3;
@@ -5730,6 +5771,8 @@ to_ú_rule th4;
 to_ú_rule th5;
 to_ú_rule th6;
 to_ú_rule th7;
+to_ú_rule th8;
+to_ú_rule th9;
 =TEX
 We now need to build a mapping of variable numbers to monomials as
 needed to construct polynomials as used in the linear arithmetic decision
@@ -5754,7 +5797,7 @@ fun ÛestablishÝ (tm : TERM) (vm as {next, table}: VAR_MAP) : (int * VAR_MAP) = (
 	(next, {next = next + 1, table = (next, tm) :: table})	
 );
 =TEX
-=SML
+=IGN
 val vm0 : VAR_MAP = {next = 1, table = []};
 val (i1, vm1) = establish ¬a*b:¯® vm0;
 val (i2, vm2) = establish ¬a*c:¯® vm1;
@@ -5805,7 +5848,6 @@ fun Ûmake_polyÝ (vm : VAR_MAP) (tm : TERM) : VAR_MAP * POLY = (
 	in	aux (vm, []) summands
 	end
 );
-
 =IGN
 val vm = vm0;
 val tm10 = ¬x*y + î¯ 1*a + ~(î¯ 3)*b®;
@@ -5826,6 +5868,7 @@ fun Ûmake_constraintÝ (vm : VAR_MAP) (ind : int) (tm : TERM) : VAR_MAP * CONSTRA
 			case fst(dest_const rel) of
 				"=" => Eq
 			|	"¼‰R" => LessEq
+			|	"<‰R" => Less
 			|	_ => fail "make_constraint" 0 []
 		);
 		val (vm', p) = make_poly vm lhs;
@@ -5892,7 +5935,7 @@ val tms2 = [
 	¬î¯ 2*b = î¯ 1®
 ];
 ¯_lin_arith_rule_aux (map asm_rule tms2);
-=SML
+=TEX
 =SML
 fun Û¯_lin_arith_ruleÝ (tml : TERM list) : THM = (
 	let	val thl = map asm_rule tml;
@@ -5924,11 +5967,44 @@ val tms5 = [
 	¬~a + b ¼ (1/100)®,
 	¬T®
 ];
+val tms6 = [¬a ¼ 1 / 2®,¬~ a ¼ ~ (3 / 4)®,¬T®];
+val tms7 = [
+	¬a + ~b ¼ ~(î¯ 1)®,
+	¬(1/2)*b + ~ (1/2)*c ¼ î¯ 0®,
+	¬(7/6)*c + ~ (7/6)*d ¼ î¯ 0®,
+	¬d + ~ a ¼ î¯ 0®,
+	¬T®
+];
+val tms7 = [
+	¬a + ~b < ~(î¯ 1)®,
+	¬(1/2)*b + ~ (1/2)*c ¼ î¯ 0®,
+	¬(7/6)*c + ~ (7/6)*d ¼ î¯ 0®,
+	¬d + ~ a ¼ î¯ 0®,
+	¬T®
+];
+val tms8 = [
+	¬a + ~b < ~(î¯ 1)®,
+	¬(1/2)*b + ~ (1/2)*c ¼ î¯ 0®,
+	¬(7/6)*c + ~ (7/6)*d = î¯ 0®,
+	¬(î¯ 99)*d + ~ (î¯ 99)*e < î¯ 0®,
+	¬e + ~ a = î¯ 0®,
+	¬T®
+];
+val tms9 = [
+	¬~ a * a ¼ î¯ 0®,
+	¬~ b * b ¼ î¯ 0®,
+	¬a * a + b * b < î¯ 0®,
+	¬T®
+];
 ¯_lin_arith_rule tms1;
 ¯_lin_arith_rule tms2;
 ¯_lin_arith_rule tms3;
 ¯_lin_arith_rule tms4;
 ¯_lin_arith_rule tms5;
+¯_lin_arith_rule tms6;
+¯_lin_arith_rule tms7;
+¯_lin_arith_rule tms8;
+¯_lin_arith_rule tms9;
 =TEX
 =SML
 val Û¯_lin_arith_tacÝ : TACTIC = (fn gl =>
@@ -5936,7 +6012,8 @@ val Û¯_lin_arith_tacÝ : TACTIC = (fn gl =>
 	handle ex => reraise ex "¯_lin_arith_tac"
 );
 =TEX
-Now the tactic which is the automatic proof tactic
+Now the tactic which is the automatic proof tactic.
+(Note error message number 82200 is generic enough for us to use here).
 =SML
 val Û¯_lin_arith_prove_tacÝ : THM list -> TACTIC = (fn thl => fn gl =>
 	((	DROP_ASMS_T (MAP_EVERY strip_asm_tac)
@@ -5955,6 +6032,8 @@ val Û¯_lin_arith_prove_convÝ : THM list -> CONV = (fn thl => fn tm =>
 	in	¤_t_intro  th
 	end	handle ex => reraise ex "¯_lin_arith_prove_conv"
 );
+=IGN
+
 =TEX
 \section{OTHER RULES}
 =TEX
@@ -5981,7 +6060,7 @@ val Û¯_eq_cancel_conv_auxÝ = (
 		id_conv	
 );
 val Û¯_eq_cancel_convÝ = (fn tm =>
-	¯_eq_cancel_conv_aux tm
+	CHANGED_C ¯_eq_cancel_conv_aux tm
 	handle Fail _ => term_fail "¯_eq_cancel_conv" 116520 [tm]
 );
 =IGN
@@ -5989,6 +6068,7 @@ val Û¯_eq_cancel_convÝ = (fn tm =>
 ¯_eq_cancel_conv¬1/2 = y®;
 ¯_eq_cancel_conv¬1/2 = 1/2®;
 ¯_eq_cancel_conv¬1/2 = î¯ 0®;
+¯_eq_cancel_conv¬î¯ 0 = î¯ 0®;
 =TEX
 =SML
 val Û¯_¼_cancel_conv_lemmaÝ = (
@@ -6008,7 +6088,7 @@ val Û¯_¼_cancel_conv_auxÝ = (
 		id_conv	
 );
 val Û¯_¼_cancel_convÝ = (fn tm =>
-	¯_¼_cancel_conv_aux tm
+	CHANGED_C ¯_¼_cancel_conv_aux tm
 	handle Fail _ => term_fail "¯_¼_cancel_conv" 116521 [tm]
 );
 =IGN
@@ -6016,6 +6096,115 @@ val Û¯_¼_cancel_convÝ = (fn tm =>
 ¯_¼_cancel_conv¬1/2 ¼ y®;
 ¯_¼_cancel_conv¬1/2 ¼ 1/2®;
 ¯_¼_cancel_conv¬1/2 ¼ î¯ 0®;
+¯_¼_cancel_conv¬î¯ 0 ¼ î¯ 0®;
+=TEX
+=SML
+val Û¯_less_cancel_conv_lemmaÝ = (
+set_goal([], ¬µc x:¯· c + x < î¯ 0 ¤ x < ~c®);
+a(REPEAT µ_tac);
+a(conv_tac (RIGHT_C (once_rewrite_conv[¯_less_less_0_thm])));
+a(asm_rewrite_tac[¯_minus_clauses, µ_elim¬x®¯_plus_order_thm]);
+pop_thm()
+);
+=TEX
+=SML
+val Û¯_less_cancel_conv_auxÝ = (
+	simple_eq_match_conv ¯_less_less_0_thm THEN_TRY_C
+	LEFT_C ¯_anf_conv THEN_C
+	COND_C	(check_lhs dest_¯_less)
+		(simple_eq_match_conv ¯_less_cancel_conv_lemma THEN_TRY_C RIGHT_C ¯_anf_conv)
+		id_conv	
+);
+val Û¯_less_cancel_convÝ = (fn tm =>
+	CHANGED_C ¯_less_cancel_conv_aux tm
+	handle Fail _ => term_fail "¯_less_cancel_conv" 116522 [tm]
+);
+=IGN
+¯_less_cancel_conv¬x + 1/2 < y®;
+¯_less_cancel_conv¬1/2 < y®;
+¯_less_cancel_conv¬1/2 < 1/2®;
+¯_less_cancel_conv¬1/2 < î¯ 0®;
+¯_less_cancel_conv¬î¯ 0 < î¯ 0®;
+=TEX
+\ubsection{Linear Arithmetic Proof Context}
+The equational contexts required are the same for stripping goals and stripping
+theorems. We take numeric $=$, $<$ and $¼$ as the atomic
+predicates which we will deal with. The possibilities are:
+{\em(i)} put the a ground atomic predicate into normal form with the appropriate canncellation conversion;
+{\em(ii)} convert a negated atomic predicate into an atomic one;
+{\em(iii)} convert a predicate formed with $<$, $¾$ or $>$ into an atomic one;
+{\em(iv)} convert the negation of a predicate formed with $<$, $¾$ or $>$ into an atomic one;
+and
+{\em(v)} attempt to evaluate ground inequalities.
+=SML
+val Û¯_³_eq_thmÝ = (
+set_goal([], ¬µx y:¯· ³x = y ¤ x < y ² y < x®);
+a(REPEAT µ_tac);
+a(rewrite_tac[¯_eq_¼_thm, taut_rule¬µp q·³(p ± q) ¤ ³p ² ³ q®, ¯_³_¼_less_thm]);
+a(REPEAT strip_tac);
+pop_thm()
+);
+=TEX
+The following is a little bit more leisurely than the natural numbers versions;
+it does the conversion into atomic predicates in easy stages.
+=SML
+val strip_cxt = [
+
+	(¬(x:¯) = y®, ¯_eq_conv),
+	(¬(x:¯) ¼ y®, ¯_¼_conv),
+	(¬(x:¯) < y®, ¯_less_conv),
+
+	(¬³(x:¯) = y®, simple_eq_match_conv ¯_³_eq_thm),
+	(¬³(x:¯) ¼ y®, simple_eq_match_conv ¯_³_¼_less_thm),
+	(¬³(x:¯) < y®, simple_eq_match_conv ¯_³_less_¼_thm),
+
+	(¬(x:¯) ¾ y®, ¯_¾_conv),
+	(¬(x:¯) > y®, ¯_greater_conv),
+	(¬³ (x:¯) ¾ y®, RAND_C ¯_¾_conv),
+	(¬³ (x:¯) > y®, RAND_C ¯_greater_conv),
+
+	(¬(x:¯) = y®, ¯_eq_cancel_conv),
+	(¬(x:¯) ¼ y®, ¯_¼_cancel_conv),
+	(¬(x:¯) < y®, ¯_less_cancel_conv)
+];
+=IGN
+map (fn (t, c) => TRY_C c t) strip_cxt;
+=TEX
+=SML
+val _ = delete_pc "'¯_lin_arith" handle Fail _ => ();
+val _ = new_pc Û"'¯_lin_arith"Ý;
+val _ = set_rw_eqn_cxt strip_cxt "'¯_lin_arith";
+val _ = set_st_eqn_cxt strip_cxt "'¯_lin_arith";
+val _ = set_sc_eqn_cxt strip_cxt "'¯_lin_arith";
+val _ = set_pr_tac ¯_lin_arith_prove_tac "'¯_lin_arith";
+val _ = set_pr_conv ¯_lin_arith_prove_conv "'¯_lin_arith";
+val _ = commit_pc "'¯_lin_arith";
+=TEX
+=SML
+val _ = delete_pc "¯_lin_arith" handle Fail _ => ();
+val _ = new_pc Û"¯_lin_arith"Ý;
+val _ = merge_pcs ["predicates","'¯_lin_arith"] "¯_lin_arith";
+val _ = commit_pc "¯_lin_arith";
+=TEX
+=IGN
+map (PC_C1 "¯_lin_arith" rewrite_conv[]) [
+	¬î¯ 1 = î¯ 2®, ¬î¯ 3 ¼ î¯ 2®, ¬î¯ 2 = î¯ 2®, ¬î¯ 1 ¼ î¯ 2®
+,	¬a + b = b + a + î¯ 1®, ¬a + î¯ 20 + b = (a+ î¯ 10)+(b+ î¯ 10)®
+,	¬a + b ¼ b + a - î¯ 1®, ¬a + î¯ 20 + b ¼ (a+ î¯ 14)+(b+ î¯ 10)®
+,	¬³î¯ 10 = î¯ 20®, ¬³(a:¯) + b = b + a®
+,	¬³î¯ 10 ¼ î¯ 20®, ¬³(a:¯) + b ¼ b + a®
+,	¬î¯ 10 < î¯ 20®, ¬(a:¯) + b ¾ b + a®, ¬(a:¯) + b > b + a®
+,	¬³î¯ 10 < î¯ 20®, ¬³(a:¯) + b ¾ b + a®, ¬³(a:¯) + b > b + a®
+,	¬(a:¯ +b)*(a-b) = a*a - b*b®, ¬(a:¯ +b)*(a-b) = a*a - b*b ®
+,	¬³10/1001 < 9/900®, ¬³(3/4)*(a + b) ¾ b + a®, ¬³(a:¯) + b > 1/2 + a®
+]; 
+map (PC_C1 "¯_lin_arith" prove_rule[]) [
+	¬a*a ¾ î¯ 0 ± b*b ¾ î¯ 0 ´ (a+b)*(a+b) ¾ î¯ 2 * a * b®
+];
+map (PC_C1 "¯_lin_arith" prove_rule[]) [
+	¬a*a ¾ î¯ 0 ± b*b ¾ î¯ 0 ´ (1/2)*(a+b)*(a+b) ¾ a * b®
+];
+=TEX
 =TEX
 \section{EPILOGUE}
 =TEX
