@@ -101,6 +101,8 @@ New  treatment of standardness.
 Restore SCCS keywords.
 \item[Issue 1.43 (17th February 1993)]
 Modified so as to use original input in errors where possible.
+\item[Issue 1.44 (1st March 1993)]
+Fix for bug 109.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1147,35 +1149,32 @@ end);
 The first thing we need to do is to type infer schema as declarations which
 appear in a group of declarations. Note that the
 environment is not extended at this point.
-The following function achieves this:
+The following function achieves this; it type infers each
+declaration  in the outer environment, where necessary,
+with a view to finding out its signature variables. 
 
 =SML
 fun Ûti_dec_pass_1Ý (env : Z_ENV) (z_dec as ZDSchemaDec (tm, _) : Z_DEC)
-				: Z_DEC * Z_ENV * (IDENT * EXTYPE) list = (
+				: Z_DEC * (IDENT * EXTYPE) list = (
 let	val (tm', ty') = ti_z_tm env tm;
 in
 	case manifest ty' of
-	SchemaType idtyl => (
-		let	val env' = dec_boundvars env idtyl;
-		in
-			(ZDSchemaDec (tm', Value ty'), env',  idtyl)
-		end)
+	SchemaType idtyl => (ZDSchemaDec (tm', Value ty'), idtyl)
 	|_ => raise ZExn (FailedZDDec2 (z_dec, env, tm, ty'))
 end)
   | ti_dec_pass_1 env (z_dec as ZDDec (ids, tm, _)) = (
 let	val unk = ExVartype (Unknown (next_name()));
 	val idtyl = map (fn id => (id, unk)) ids;
-	val env' = dec_boundvars env idtyl;
 in
-	(ZDDec (ids, tm, Nil), env', idtyl)
+	(ZDDec (ids, tm, Nil), idtyl)
 end)
 =TEX
 
 =SML
-and Ûti_z_dec_pass_2Ý (env : Z_ENV) ((z_dec as ZDSchemaDec (tm, _)) : Z_DEC, _, idtyl) = (
+and Ûti_z_dec_pass_2Ý (env : Z_ENV) ((z_dec as ZDSchemaDec (tm, _)) : Z_DEC, idtyl) = (
 	(z_dec, idtyl)
 )
-  | ti_z_dec_pass_2 env (z_dec as ZDDec (ids, tm, _), _, idtyl) = (
+  | ti_z_dec_pass_2 env (z_dec as ZDDec (ids, tm, _), idtyl) = (
 let	val (tm', ty') = ti_z_tm env tm;
 	val ty'' = ExVartype (Unknown (next_name()));
 	val side = unify zti_subs (ExType ("SET", [ty'']), ty')
@@ -1191,30 +1190,23 @@ end)
 =TEX
 
 =SML
-and Ûmap_compatÝ ((dec, env, idtyl)::more) res = (
+and Ûmap_compatÝ env ((dec, idtyl)::more) res = (
 let	val idtyl' = compatible (idtyl, res)
 			handle ZExn (FailedZCompat (idtyl1, idtyl2)) =>
 			raise ZExn (FailedZDDec3 (dec, env, idtyl1, idtyl2));
 
 in
-	map_compat more (idtyl' cup res)
+	map_compat env more (idtyl' cup res)
 end)
-  | map_compat [] res = res
+  | map_compat _ [] res = res
 =TEX
 
 =SML
 and Ûlist_ti_z_decÝ (env : Z_ENV) (z_decl : Z_DEC list) : (Z_DEC list * Z_ENV
 		* (IDENT * EXTYPE) list) = (
-let	val pass1 = map (ti_dec_pass_1 env) z_decl;
-	val idtyl =  map_compat pass1 [];
-	val (_, envl, _) = split3 pass1;
-	fun mk_env (env::rest) = (
-		fn id => (
-			case env id of
-			FreeVar Nil => (mk_env rest) id
-			|thing => thing)
-	) | mk_env [] = fn id => FreeVar Nil;
-	val env' = mk_env envl;
+let	val pass1  = map (ti_dec_pass_1 env) z_decl;
+	val idtyl =  map_compat env pass1 [];
+	val env' = dec_boundvars env (flat (map snd pass1));
 	val pass2 = map (ti_z_dec_pass_2 env') pass1;
 	val idtyl' = map (fn (id,ty) => (id, sub_type zti_subs ty)) idtyl;
 in
