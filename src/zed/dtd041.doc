@@ -18,7 +18,7 @@
 %\TPPauthors{G.~Prout & WIN01\\K.~Blackburn & WIN01}
 \TPPauthorisation{R.D.Arthan & FST Team Leader}
 \TPPabstract{This document contains the detailed design for the 
-derived rules of inference, conversions and tactics for the Z Proof Support System predicate calculus.}
+derived rules of inference, conversions and tactics for the ProofPower Z predicate calculus.}
 \TPPdistribution{\parbox[t]{4.0in}{%
 	    FST Library
 }}
@@ -55,20 +55,22 @@ Tidied up theorems and conversion about $U$ into a single conversion $Z\_U\_true
 Taken over by KB, and reworked, new fonts.
 \item [Issue 1.4 (14th July 1992)]
 Significant changes after RBJ, RDA comments.
+\item [Issue 1.5 (16th July 1992)]
+Changes after RDA comments.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
 \subsection{Scope}
 This document contains a detailed design for the 
 derived rules of inference, conversions and tactics for
-the Z Proof Support System (see \cite{DS/FMU/IED/HLD015}) predicate calculus.
+the ProofPower Z (see \cite{DS/FMU/IED/HLD015}) predicate calculus.
 This is called for in \cite{DS/FMU/IED/HLD016}.
 The design is
 implemented in \cite{DS/FMU/IED/IMP041}.
 \subsection{Introduction}
 \subsubsection{Purpose and Background}
 This document contains a detailed design for the 
-initial set of rules, conversions and tactics for the predicate calculus of the Z Proof Support System.
+initial set of rules, conversions and tactics for the predicate calculus of the ProofPower Z.
 \subsubsection{Dependencies}
 Loading this document is dependent on 
 the Z Library \cite{DS/FMU/IED/DTD078} and Z Term generator
@@ -90,9 +92,9 @@ Contradiction tactic
 $∂\_tac$
 \end{itemize}
 plus some of the auxiliary functions necessary for implementing these.
-\section{OVERLAP WITH ProofPower HOL}
+\section{OVERLAP WITH HOL}
 Some functions operating on Z have the same purpose
-as an equivalent for ProofPower HOL,
+as an equivalent for HOL,
 but perhaps different functionality.
 
 Where this happens we will
@@ -133,22 +135,47 @@ where this is convenient - the most notable example of this
 is in $strip\_tac$ when a Z universal quantification is broken into a sequence of HOL universal quantifications.
 \section{Z PREDICATE CALCULUS}
 =DOC
-signature€ZPredicateCalculus› = sig
+signature €ZPredicateCalculus› = sig
 =DESCRIBE
 This provides a set of rules of inference, conversions and tactics sufficient for reasoning about the Z predicate calculus in ProofPower.
 =ENDDOC
 
 \subsection{Subsidiary Functions}
 \subsubsection{What is Z}
+Errors start with 4100.
 =DOC
-val €check_z_language› : TERM -> bool;
+val €full_dest_z_term› : TERM -> bool;
 =DESCRIBE
-If the term given is in the range of the Z mapping
-then this function will return true.
+This function acts exactly as $dest\_z\_term$ on terms
+in the Z language, but checks the exact top-level form of the
+terms to see whether they are in the Z language,
+rather than $dest\_z\_term$ whose
+intended purpose is to categorise Z terms,
+and only detect terms outside of the Z language because
+the categorisation fails.
+=USES
+To replace $dest\_z\_term$ when a term may be ``almost Z'',
+and must not be categorised as Z. 
+=FAILURE
+41002	Not within the Z language due to subterm ?0
+=ENDDOC
+=DOC
+val €is_z› : TERM -> bool;
+val €is_all_z_type› : TYPE -> bool;
+=DESCRIBE
+If the term or type given is in the range of the Z mapping
+for a type or term respectively
+then these functions will return true.
+The test is to traverse the provided object 
+by using $dest\_z\-\_term$ or $dest\_z\-\_type$ - the test is passed
+if the entire term can be broken into non-type and non-term parts.
 Otherwise it will fail with the given error message.
+In addition, any subterms that might fail $is\-\_canonical\-\_decl$
+will be tested by that function.
 Note that a term is a subterm of itself for these purposes.
 =FAILURE
-	?0 is not within the Z language due to subterm ?1
+41002	Not within the Z language due to subterm ?0
+41003	Not within the Z language due to subtype ?0
 =ENDDOC
 =DOC
 val €not_z_subterms› : TERM -> TERM list;
@@ -158,8 +185,41 @@ of all the subterms that prevent a term being within the
 Z language.
 The subterms given will be maximal in the sense that subterms of those given will not be included in the list.
 =ENDDOC
+=DOC
+(* €check_is_z› : boolean flag *)
+=DESCRIBE
+This flag, if true, will cause all Z inference rules and tactics
+to check any terms they change (i.e. assumptions and conclusions) for remaining within the Z 
+language.
+If any fail then the informational message 41004 is used
+to output text to the user.
+If the flag is false (the default), not such checks are made.
+The checks are computationally expensive,
+and the results may be excessively verbose if terms are not 
+all Z.
+=FAILURE
+41004	The following subterms in the result are not in the Z language: ?0
+=ENDDOC
+Actually, in initial work the flag will be defaulted to true.
+=DOC
+val €check_is_z_thm› : string -> THM -> THM;
+val €check_is_z_goal› : string -> GOAL -> GOAL;
+val €check_is_z_term› : string -> GOAL -> GOAL;
+=DESCRIBE
+For $check\_is\_z\_thm$,
+if flag $check\_is\_z$ is true then the conclusion and
+assumptions of the provided theorem are checked for being 
+within the Z language, and informational message 41004 used if not.
+The string argument is the name of the calling function.
+If the flag is false then the theorem is passed unchanged.
+In either case the theorem is passed through unchanged.
 
-\subsubsection{Realignment after ¡-conversion}
+check_is_z_goal and check_is_z_term are analogous.
+=FAILURE
+41005	In the result of ?0 the following subterms are not in the Z language: ?1
+=ENDDOC
+
+\subsubsection{Adjustment after ¡-conversion}
 If a substitution via $var\_subst$ is made upon a term in Z (that may be
 part of a theorem or subgoal) by the 
 many important functions that call $var\_subst$
@@ -169,53 +229,53 @@ resulting term may no longer be in the Z language.
 This may be because either the types of bindings may no longer match the variable names bound,
 or because the variables in the binding have ceased being in a canonical order.
 Either of these two problems can be ``fixed'' by post-processing.
-The problems may be removed by ``realignment'', using
+The problems may be adjusted back to Z by using
 Z renaming constructs, returning the term to being within
 the Z language.
 
-The following two functions fulfill this need:
+The following two functions fulfil this need:
 =DOC
-val €realign_renamed_z_term› : TERM -> TERM;
+val €¡_to_z› : TERM -> TERM;
 =DESCRIBE
-This function will realign all sub-terms that fail to be 
+This function will adjust all sub-terms that fail to be 
 Z because either:
 \begin{itemize}
 \item
 The subterm is a binding, and the type of the binding
 does not match the names of the free variables bound.
-This is realigned using the Z renaming construct.
+This is adjusted using the Z renaming construct.
 \item
 The subterm is a binding whose bound variables are not
 in the canonical ordering that would result from the Z mapping.
-This is realigned by reorganising the order of abstractions and arguments.
+This is adjusted by reorganising the order of abstractions and arguments.
 \end{itemize}
-Subterms that are not covered by these two cases will be traversed, regardless of their language.
+Subterms that are not covered by these two cases will be unchanged, regardless of their language.
 =SEEALSO
-$realign\_renamed\_z\_conv$
+$¡\_to\_z\_conv$
 =FAILURE
-	No realignment took place
+41100	No adjustment took place
 =ENDDOC
 =DOC
-val €realign_renamed_z_conv› : CONV;
+val €¡_to_z_conv› : CONV;
 =DESCRIBE
 This function will return the equality theorem between a term
-and one that realigns all sub-terms that fail to be 
+and one that adjusts all sub-terms that fail to be 
 Z because either:
 \begin{itemize}
 \item
 The subterm is a binding, and the type of the binding
 does not match the names of the free variables bound.
-This is realigned using the Z renaming construct.
+This is adjusted using the Z renaming construct.
 \item
 The subterm is a binding whose bound variables are not
 in the canonical ordering that would result from the Z mapping.
-This is realigned by reorganising the order of abstractions and arguments.
+This is adjusted by reorganising the order of abstractions and arguments.
 \end{itemize}
 Subterms that are not covered by these two cases will be traversed, regardless of their language.
 =SEEALSO
-$realign\_renamed\_z\_term$
+$¡\-\_to\_z$
 =FAILURE
-	No realignment took place
+41100	No adjustment took place
 =ENDDOC
 
 \subsubsection{Concerning The Universe, U} \label{U}
@@ -254,7 +314,7 @@ their declaration as predicate form.
 =SEEALSO
 $ç\_u\_conv$
 =FAILURE
-	?0 cannot be proven equal to ÒUÆ
+41101	?0 cannot be proven equal to ÒUÆ
 =ENDDOC
 Later releases may react to introduced generic type abbreviations
 that collapse to Universe, and to introduced given sets
@@ -290,8 +350,8 @@ converted to predicates.
 =SEEALSO
 $u\_conv$
 =FAILURE
-	?0 cannot be proven equal to ÒUÆ
-	?0 is not of the form: Òx ç S[U]Æ
+41102	?0 cannot be proven equal to ÒUÆ
+41103	?0 is not of the form: Òx ç S[U]Æ
 =ENDDOC
 Later releases may react to introduced generic type abbreviations
 that collapse to Universe, and to introduced given sets
@@ -301,6 +361,7 @@ that collapse to Universe, and to introduced given sets
 These are represented by HOL universals and may thus
 be manipulated by $µ\_elim$, etc.
 \subsection{Concerning Z Universal Quantification}
+Errors start with  4102
 =DOC
 val €z_µ_elim› : TERM -> THM -> THM;
 =DESCRIBE
@@ -322,7 +383,7 @@ DECL_C dec_pred_conv
 . 
 The theorem may be type instantiated to allow the 
 specialisation to be valid, thus the primed $Pâi$.
-The result may also require realignment to restore it to being within the Z language (see $realign\-\_renamed\-\_z\-\_conv$).
+The result may also require adjustment to restore it to being within the Z language (see $¡\-\_to\-\_z\-\_conv$).
 
 If both the supplied binding and the declaration are
 recognisably ``empty'' then the universal quantification will be eliminated.
@@ -351,8 +412,9 @@ z_µ_elim
 =TEX
 
 =FAILURE
-	Supplied binding ?0 does not match conclusions binding ?1
-	?0 cannot be interpreted as an appropriate binding
+47310	?0 is not a Z universal quantification
+41020	Supplied binding ?0 does not match binding in the theorem ?1
+41021	?0 cannot be interpreted as an appropriate binding
 =ENDDOC
 
 =DOC
@@ -388,9 +450,9 @@ This rule will not introduce empty bindings.
 =SEEALSO
 $Z\_µ\_intro1$ for implicit $xâi\ ç\ U$ conjuncts.
 =FAILURE
-	?0 not of the form á Ù D ± Pâ1 ¥ Pâ2
-	?0 cannot be made into a binding
-	?0 appears free in the assumptions
+41106	?0 not of the form á Ù D ± Pâ1 ¥ Pâ2
+41107	?0 cannot be made into a binding
+41108	?0 appears free in the assumptions
 =ENDDOC
 This rule, and the following are included in the initial release from a belief that they are likely to be necessary at some point,
 rather than any more rigorous requirement.
@@ -447,17 +509,17 @@ This rule will not introduce empty bindings.
 =SEEALSO
 $Z\_µ\_intro$ for use without additional $xâi\ ç\ U$.
 =FAILURE
-	?0 not of the form á Ù Pâ1 ¥ Pâ2
-	?0 cannot be made into a binding
-	?0 appears free in the assumptions
-	?0 is not a variable
+41109	?0 not of the form á Ù Pâ1 ¥ Pâ2
+41110	?0 cannot be made into a binding
+41111	?0 appears free in the assumptions
+41112	?0 is not a variable
 =ENDDOC
 =DOC
 val €z_µ_elim_conv› : CONV;
 val €z_µ_intro_conv› : CONV;
 =DESCRIBE
 Turn a Z universally quantified term into
-a ProofPower HOL universally quantified term.
+a HOL universally quantified term.
 =FRULE 1 Conversion
 z_µ_elim_conv
 Òµ D[xâi,...] | Pâ1∑ Pâ2Æ
@@ -482,18 +544,21 @@ z_µ_intro_conv
 =USES
 Used in the Z form of $strip\_tac$,
 and handling negations with quantifiers.
+It will handle paired quantifiers, and quantifiers in any order, so long as the quantifiers and declaration can be matched
+in names and types.
 =SEEALSO
 $z\_µ\_elim\_conv1$
 =FAILURE
-	?0 is not of the form: Òµ D | Pâ1∑ Pâ2Æ
-	?0 is not of the form: ¨µ xâ1 ...∑
-	D ± Pâ1 ¥ Pâ2Æ
+41022	?0 is not of the form: Òµ D | Pâ1∑ Pâ2Æ
+41023	?0 is not of the form: ¨µ xâ1 ...∑ D ± Pâ1 ¥ Pâ2Æ
+41024	?0 is not of the form: ¨µ xâ1 ...∑ D ± Pâ1 ¥ Pâ2Æ
+	where the ¨xâiÆ do not match the declaration
 =ENDDOC
 =DOC
 val €z_µ_elim_conv1› : CONV;
 =DESCRIBE
 Turn a Z universally quantified term into
-a ProofPower HOL universally quantified term,
+a HOL universally quantified term,
 eliminating the declaration part of the original quantification using $ç\_u\_conv$.
 The function fails if the declaration cannot be eliminated.
 =FRULE 1 Conversion
@@ -544,10 +609,11 @@ z_µ_inv_conv
 	Pâ1 ¥ (µ D | true∑ false) ≤ Pâ2
 =TEX
 if both are free.
+The appropriate simplification will be avoided where the predicate $Pâ1$, is $ÒtrueÆ$ or the value, $Pâ2$ is $ÒfalseÆ$.
 =SEEALSO
 $Z\_∂\_inv\_conv$
 =FAILURE
-	?0 is not of the form Òµ D | Pâ1∑ Pâ2Æ where at least
+41025	?0 is not of the form Òµ D | Pâ1∑ Pâ2Æ where at least
 	one of Pâ1 or Pâ2 are unbound by D
 =ENDDOC
 =DOC
@@ -562,7 +628,7 @@ z_intro_µ_tac
 ˜
 { á } µ xâ1:U; ... | true∑ t[xâ1/tâ1,...]
 =TEX
-The result may require realignment to restore it to being within the Z language (see $realign\-\_renamed\-\_z\-\_conv$).
+The result may require adjustment to restore it to being within the Z language (see $¡\-\_to\-\_z\-\_conv$).
 
 If the supplied term is a schema object then:
 =FRULE 2 Tactic
@@ -576,13 +642,13 @@ z_intro_µ_tac
 where the $S.xâi$ substituted for are the actual values 
 bound by the schema, or the expression $¨S.xâiÆ$.
 =FAILURE
-	?0 cannot be interpreted to be of the form: Ò(xâ1 ¶ tâ1, ...)Æ
+41117	?0 cannot be interpreted to be of the form: Ò(xâ1 ¶ tâ1, ...)Æ
 =ENDDOC
 I'm not certain the schema object form makes sense!
 
 =DOC
-val €z_spec_asm_tac› TERM -> TERM -> TACTIC;
-val €z_spec_nth_asm_tac› int -> TERM -> TACTIC;
+val €z_spec_asm_tac› : TERM -> TERM -> TACTIC;
+val €z_spec_nth_asm_tac› : int -> TERM -> TACTIC;
 =DESCRIBE
 These are two methods of specialising a Z universally quantified assumption.
 both leave the old assumption in place, and place the
@@ -600,8 +666,8 @@ z_spec_asm_tac
 á, Òµ D | Pâ1∑ Pâ2Æ} t1
 =TEX
 where $D'$, $Pâ1'$ and $Pâ2'$ are specialised appropriately,
-and perhaps realigned to the Z language
-by $realign\-\_renamed\-\_z\-\_conv$.
+and perhaps adjusted to the Z language
+by $¡\-\_to\-\_z\-\_conv$.
 
 $z\_spec\_nth\_asm\_tac$ uses an assumption number rather than an explicit statement of the assumption to be specialised.
 =FAILUREC
@@ -610,12 +676,13 @@ As the constituents of the implementing functions
 (e.g. $GET\_ASM\_T$ and $z\_µ\_elim$).
 =ENDDOC
 \subsection{Concerning Z Existential Quantification}
+Errors start with 4104
 =DOC
 val €z_∂_elim_conv› : CONV;
 val €z_∂_intro_conv› : CONV;
 =DESCRIBE
 Turn a Z existentially quantified term into
-a ProofPower HOL existentially quantified term.
+a HOL existentially quantified term.
 =FRULE 1 Conversion
 z_∂_elim_conv
 Ò∂ D[xâi,...] | Pâ1∑ Pâ2Æ
@@ -643,14 +710,14 @@ and handling negations with quantifiers.
 =SEEALSO
 $z\_∂\_elim\_conv1$
 =FAILURE
-	?0 is not of the form: Ò∂ D | Pâ1∑ Pâ2Æ
-	?0 is not of the form: ¨∂ xâ1 ...∑ D[xâi,...] ± Pâ1 ± Pâ2Æ
+41118	?0 is not of the form: Ò∂ D | Pâ1∑ Pâ2Æ
+41119	?0 is not of the form: ¨∂ xâ1 ...∑ D[xâi,...] ± Pâ1 ± Pâ2Æ
 =ENDDOC
 =DOC
 val €z_∂_elim_conv1› : CONV;
 =DESCRIBE
 Turn a Z existentially quantified term into
-a ProofPower HOL universally quantified term,
+a HOL universally quantified term,
 eliminating the declaration part of the original quantification using $ç\_u\_conv$.
 The function fails if the declaration cannot be eliminated.
 =FRULE 1 Conversion
@@ -666,8 +733,8 @@ will also be applied.
 =USES
 For stripping proof contexts.
 =FAILURE
-	?0 is not of the form: Ò∂ D | Pâ1∑ Pâ2Æ
-	?0 is of the form: Ò∂ D | Pâ1∑ Pâ2Æ, but D non-trivial
+41120	?0 is not of the form: Ò∂ D | Pâ1∑ Pâ2Æ
+41121	?0 is of the form: Ò∂ D | Pâ1∑ Pâ2Æ, but D non-trivial
 =ENDDOC
 
 =DOC
@@ -689,7 +756,7 @@ z_∂_conv
 where the $yâi$ are variants of the $xâi$, not occurring
 in the term being processed.
 =FAILURE
-	?0 is not of the form: Ò∂â1D | Pâ1∑ Pâ2Æ
+41122	?0 is not of the form: Ò∂â1D | Pâ1∑ Pâ2Æ
 =ENDDOC
 =DOC
 val €z_∂_tac› : TERM -> TACTIC ;
@@ -709,7 +776,7 @@ z_∂_tac
 where the $tâi'$ are appropriately type instantiated
 forms of the $tâi$.
 See $dec\_pred\_conv$ for the conversion of a declaration to a predicate.
-The result may require realignment to restore it to being within the Z language (see $realign\-\_renamed\-\_z\-\_conv$).
+The result may require adjustment to restore it to being within the Z language (see $¡\-\_to\-\_z\-\_conv$).
 An empty declaration may be given an empty binding.
 
 If the goal's conclusion has a single Z existentially bound variable, and the supplied argument can be type instantiated to match that, then it will be used as a witness.
@@ -739,9 +806,9 @@ z_∂_tac
 where $t'$ is an appropriately type instantiated
 form of the $t$.
 =FAILURE
-	Subgoal is not of the form: `{ á } ∂ D | Pâ1∑ Pâ2`
-	Supplied binding ?0 does not match conclusions binding ?1
-	?0 cannot be interpreted as an appropriate binding
+41123	Subgoal is not of the form: `{ á } ∂ D | Pâ1∑ Pâ2`
+41124	Supplied binding ?0 does not match conclusions binding ?1
+41125	?0 cannot be interpreted as an appropriate binding
 =ENDDOC
 =DOC
 val €z_∂_inv_conv› : CONV;
@@ -778,7 +845,7 @@ if both are free.
 =SEEALSO
 $Z\_µ\_inv\_conv$
 =FAILURE
-	?0 is not of the form Ò∂ D | Pâ1∑ Pâ2Æ where at least
+41040	?0 is not of the form Ò∂ D | Pâ1∑ Pâ2Æ where at least
 	one of Pâ1 or Pâ2 are unbound by D
 =ENDDOC
 
@@ -788,16 +855,16 @@ $Z\_µ\_inv\_conv$
 val €z_≥_µ_conv› : CONV;
 val €z_≥_∂_conv› : CONV;
 =DESCRIBE
-$≥\_Z\_µ\_conv$ converts a negated Z universal quantification to a Z existential quantification.
+$z\_≥\_µ\_conv$ converts a negated Z universal quantification to a Z existential quantification.
 =FRULE 1 Conversion
-z_≥_µ_conv 
+≥_z_µ_conv 
 Ò≥(µ D | Pâ1∑ Pâ2)Æ
 ˜
 ˜
 Ù ≥(µ D | Pâ1∑ Pâ2) § 
 	(∂ D | Pâ1∑ ≥ Pâ2)
 =TEX
-The dual is $Z\_≥\_∂\_conv$:
+The dual is $z\_≥\_∂\_conv$:
 =FRULE 1 Conversion
 z_≥_∂_conv 
 Ò≥(∂ D | Pâ1∑ Pâ2)Æ
@@ -808,31 +875,32 @@ z_≥_∂_conv
 =TEX
 
 =FAILURE
-	?0 not of the form: Ò≥(µ D | Pâ1∑ Pâ2)Æ
-	?0 not of the form: Ò≥(∂ D | Pâ1∑ Pâ2)Æ
+41128	?0 not of the form: Ò≥(µ D | Pâ1∑ Pâ2)Æ
+41129	?0 not of the form: Ò≥(∂ D | Pâ1∑ Pâ2)Æ
 =ENDDOC
 We are not immediately interested in providing support for pulling
 out $≥$.
 
 \subsection{Conversions betweens Declarations and Predicates}
+Errors start with 4101.
 =DOC
 val €dec_pred_conv› : CONV;
 =DESCRIBE
 A conversion which rewrites a $dec$ type of declaration to a predicate. A $decsexp$ type of declaration remains unchanged (since $decsexp$ and $predsexp$ are, in fact, the same thing). 
 =FRULE 1 Conversion
 dec_pred_conv 
-Òx : XÆ
+¨x : XÆ
 ˜
 ˜
-Ù (x : X) § x ç X
+Ù ¨(x : X)Æ § x ç X
 =TEX
 and
 =FRULE 1 Conversion
 dec_pred_conv 
-Òxâ1, ... : XÆ
+¨xâ1, ... : XÆ
 ˜
 ˜
-Ù (xâ1, ... : X) § {xâ1,...} Ä X
+Ù ¨(xâ1, ... : X)Æ § {xâ1,...} Ä X
 =TEX
 and
 =FRULE 1 Conversion
@@ -843,18 +911,22 @@ dec_pred_conv
 Ù S = S
 =TEX
 where S is a schema (here promoted to a predicate).
+
+Note that a declaration on its own is not a Z expression,
+though it may be correctly embedded within certain
+forms of Z expressions.
 =SEEALSO
 $pred\_dec\_conv$
 =FAILURE
-	?0 is not a declaration
+41010	?0 is not a declaration
 =ENDDOC
 
 =DOC
 val €DECL_C› : CONV -> CONV;
 =DESCRIBE
-$DEC\_C$ applies the supplied conversion to each member of a declaration and returns the conjunction of the results.
+$DECL\_C$ applies the supplied conversion to each member of a declaration and returns the conjunction of the results.
 =USES
-	?0 is not a conjunctive structure of declarations
+41130	?0 is not a declaration
 =ENDDOC
 
 =DOC
@@ -893,18 +965,18 @@ pred_dec_conv Ò S ç SÆ
 =SEEALSO
 $dec\_pred\_conv$
 =FAILURE
-	?0 cannot be rewritten to a declaration
+41131	?0 cannot be rewritten to a declaration
 =ENDDOC
 
 =DOC
-val €DEC_INTRO_C› : CONV -> CONV;
+val €DECL_INTRO_C› : CONV -> CONV;
 =DESCRIBE
-$DEC\_INTRO\_C$ applies the supplied conversion to each conjunct of a predicate, flattening the conjunctive structure.
+$DECL\_INTRO\_C$ applies the supplied conversion to each conjunct of a predicate, flattening the conjunctive structure.
 If this is successful, it attempts to produce a declaration from the results.
 =FAILURE
-	?0 not of the form: Ò câ1 ± ...Æ where all the câi
+41132	?0 not of the form: Ò câ1 ± ...Æ where all the câi
 	may have the supplied conversion applied
-	?0 when converted to ?1 cannot be viewed as a declaration
+41133	?0 when converted to ?1 cannot be viewed as a declaration
 =ENDDOC
 
 \section{Z REWRITING}
@@ -913,7 +985,7 @@ If this is successful, it attempts to produce a declaration from the results.
 val €z_µ_rewrite_canon› : CANON;
 =DESCRIBE
 Take a Z universally quantified theorem and
-make it into, as far as possible, a ProofPower HOL universally quantified
+make it into, as far as possible, a HOL universally quantified
 theorem usable for rewriting.
 Simplifications due to $U$ and $true$ will be carried out.
 =FRULE 1 Canon
@@ -927,10 +999,10 @@ z_µ_rewrite_canon
 =TEX
 where if any portion of the body of the result can be simplified away due to $U$, $true$ or $false$ it will be.
 =FAILURE
-	?0 is not of the form: Ò(µ D | Pâ1∑ Pâ2)Æ
+41134	?0 is not of the form: Ò(µ D | Pâ1∑ Pâ2)Æ
 =ENDDOC
 \subsection{Conditional Rewriting}
-This is a yet to be implemented part of the ProofPower HOL system,
+This is a yet to be implemented part of the HOL system,
 that may have some Z specific features.
 \section{Z STRIPPING AND PROOF CONTEXTS}
 In designing the following proof context we assume
@@ -983,7 +1055,7 @@ REPEAT step_strip_tac
 =TEX
  will remain within the Z language if its argument starts there.
 \subsection{Contradiction Tactics}
-The tactics supplied for ProofPower HOL extend to Z without
+The tactics supplied for HOL extend to Z without
 change.
 \section{END OF THE SIGNATURE}
 

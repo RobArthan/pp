@@ -40,8 +40,8 @@ of the derived rules of inference, conversions and tactics for the ProofPower Z 
 
 \subsection{Changes History} 
 \begin{description}
-\item [Issues 1.1] 
-First version.
+\item [Issues 1.1,1.2] 
+First versions.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -79,7 +79,9 @@ val lthy = get_current_theory_name();
 val _ = open_theory "z_library";
 val _ = new_theory "z_predicate_calculus" handle _ => open_theory "z_predicate_calculus";
 val _ = push_pc "hol";
-
+val _ = set_flag("z_type_check_only",false);
+val _ = push_pc "hol1";
+val _ = new_pc "'z_predicate_calculus_build";
 =TEX
 \section{THE CODE}
 \subsection{Utilities}
@@ -88,12 +90,33 @@ fun Ûlist_eqÝ (eq : 'a * 'a -> bool) (a :: x) (b :: y) = eq(a,b) andalso list_eq
 | list_eq _ [] [] = true
 | list_eq _ _ _ = false;
 =TEX
+Swap a universally quanitifed equation around:
 =SML
 fun Ûsym_eqn_ruleÝ (thm : THM) = (
 let 	val (vs,bdy) = strip_µ(concl thm);
 	val s1 = eq_sym_rule (list_µ_elim vs thm);
 in
 	list_µ_intro vs s1
+end);
+=TEX
+Find the Z constants (i.e. declared in 
+=INLINEFT
+get_descendants "cache'zed"
+=TEX
+) in a term.
+Note we return terms, not name/type pairs like
+$term\_consts$.
+=SML
+fun Ûterm_z_constsÝ (tm : TERM) : TERM list = (
+let	val in_thys = get_descendants "cache'zed";
+	val hol_cons = term_consts tm;
+	val zed_consts = mapfilter
+		(fn (nm,ty) => if get_const_theory nm mem in_thys
+			then mk_const(nm,ty)
+			else fail "" 0 [])
+		hol_cons;
+in
+	zed_consts
 end);
 =TEX
 \subsection{Recognising Z}
@@ -524,7 +547,10 @@ end;
 =TEX
 =SML
 fun Ûfull_dest_z_ÊÝ (tm : TERM) : TERM * string = (
-let	val (con,(bind,sch)) = (Combinators.I ** dest_pair)(dest_app tm);
+let	val (con,args) = strip_app tm;
+	val (bind,sch) = case args of
+		[a,b] => (a,b)
+		| _ => fail "full_dest_z_Ê" 0 [];
 	val dummy = if (fst(dest_const con) = "Z'Ê")
 			andalso type_of tm =: type_of bind
 		then ()
@@ -731,7 +757,9 @@ full_dest_z_term tm'; (* fails *)
 As ``!'' is before ```'' in ordering:
 =GFT
 val tm = ñµ x, x! : X · x = z®;
-val tm' = subst [(¬x:'d®,¬z:'d®)] tm;
+val z = hd(frees tm);
+val x_ins = mk_var("x",type_of z);
+val tm' = subst [(x_ins,z)] tm;
 full_dest_z_term tm;
 dest_z_term tm';
 full_dest_z_term tm'; (* fails *)
@@ -739,7 +767,9 @@ full_dest_z_term tm'; (* fails *)
 As ``!'' is before ```'' in ordering:
 =GFT
 val tm = ñ¶ x, x! : X · x = z®;
-val tm' = subst [(¬x:'d®,¬z:'d®)] tm;
+val z = hd(frees tm);
+val x_ins = mk_var("x",type_of z);
+val tm' = subst [(x_ins,z)] tm;
 full_dest_z_term tm;
 dest_z_term tm';
 full_dest_z_term tm'; (* fails *)
@@ -747,31 +777,39 @@ full_dest_z_term tm'; (* fails *)
 As ``!'' is before ```'' in ordering:
 =GFT
 val tm = ñ¶‰1 x, x! : X · x = z®;
-val tm' = subst [(¬x:'d®,¬z:'d®)] tm;
+val z = hd(frees tm);
+val x_ins = mk_var("x",type_of z);
+val tm' = subst [(x_ins,z)] tm;
 full_dest_z_term tm;
 dest_z_term tm';
 full_dest_z_term tm'; (* fails *)
 =TEX
 =GFT
 val Z¶(a,b,c) = dest_z_term ñ¶ x, x! : X | x = z · [x,x! : X | true]®;
-val tm = mk_z_¶‰s(a,b,inst [] [(”'e®,”'a®)] ñ[x,x! : X | true]®);
-val tm' = subst [(¬x:'e®,¬z:'e®)] tm;
+val tm = mk_z_¶‰s(a,b,ñ[x,x! : X | true]®);
+val z = hd(frees tm);
+val x_ins = mk_var("x",type_of z);
+val tm' = subst [(x_ins,z)] tm;
 full_dest_z_term tm;
 dest_z_term tm';
 full_dest_z_term tm'; (* fails *)
 =TEX
 =GFT
-val Z¶(a,b,c) = dest_z_term ñ¶ x, x! : X | x = z · [x,x! : X | true]®;
-val tm = mk_z_¶‰1‰s(a,b,inst [] [(”'e®,”'a®)] ñ[x,x! : X | true]®);
-val tm' = subst [(¬x:'e®,¬z:'e®)] tm;
+val Z¶(xa,xb,xc) = dest_z_term ñ¶ x, x! : X | x = z · [x,x! : X | true]®;
+val tm = mk_z_¶‰1‰s(xa,xb,ñ[x,x! : X | true]®);
+val z = hd(frees tm);
+val x_ins = mk_var("x",type_of z);
+val tm' = subst [(x_ins,z)] tm;
 full_dest_z_term tm;
 dest_z_term tm';
 full_dest_z_term tm'; (* fails *)
 =TEX
 =GFT
-val Z¶(a,b,c) = dest_z_term ñ¶ x, x! : X | x = z · [x,x! : X | true]®;
-val tm = mk_z_µ‰s(a,b,inst [] [(”'e®,”'a®)] ñ[x,x! : X | true]®);
-val tm' = subst [(¬x:'e®,¬z:'e®)] tm;
+val Z¶(xa,xb,xc) = dest_z_term ñ¶ x, x! : X | x = z · [x,x! : X | true]®;
+val tm = mk_z_µ‰s(xa,xb,ñ[x,x! : X | true]®);
+val z = hd(frees tm);
+val x_ins = mk_var("x",type_of z);
+val tm' = subst [(x_ins,z)] tm;
 full_dest_z_term tm;
 dest_z_term tm';
 full_dest_z_term tm'; (* fails *)
@@ -779,49 +817,56 @@ full_dest_z_term tm'; (* fails *)
 =GFT
 val tm1 = ñ[x,x!:X | x = z] ± true®;
 val tm = fst(dest_z_± tm1);
-val tm' = subst [(¬x':'d®,¬x:'d®)] tm;
+val z = hd(frees tm);
+val x_ins = mk_var("x",type_of z);
+val x_ins' = mk_var("x'",type_of z);
+val tm' = subst [(x_ins',x_ins)] tm;
 full_dest_z_term tm;
 dest_z_term tm';
 full_dest_z_term tm';
 =TEX
 =GFT
 val tm = ñ{x, x! : X | x = z}®;
-val tm' = subst [(¬x:'d®,¬z:'d®)] tm;
+val z = hd(frees tm);
+val x_ins = mk_var("x",type_of z);
+val tm' = subst [(x_ins,z)] tm;
 full_dest_z_term tm;
 dest_z_term tm';
 full_dest_z_term tm';
 =TEX
 =GFT
 val tm = ñÊ[x, x! : X | x = z]®;
-val tm' = subst [(¬x':'d®,¬x:'d®)] tm;
+val z = hd(frees tm);
+val x_ins = mk_var("x",type_of z);
+val x_ins' = mk_var("x'",type_of z);
+val tm' = subst [(x_ins',x_ins)] tm;
 full_dest_z_term tm;
 dest_z_term tm';
 full_dest_z_term tm';
 =TEX
 =GFT
 val tm = ñ Ì x, x! : X · x = z®;
-val tm' = subst [(¬x:'d®,¬z:'d®)] tm;
+val z = hd(frees tm);
+val x_ins = mk_var("x",type_of z);
+val tm' = subst [(x_ins,z)] tm;
 full_dest_z_term tm;
 dest_z_term tm';
 full_dest_z_term tm';
 =TEX
 =GFT
 val tm = ñ Í x, x! : X · x = z®;
-val tm' = subst [(¬x:'d®,¬z:'d®)] tm;
+val z = hd(frees tm);
+val x_ins = mk_var("x",type_of z);
+val tm' = subst [(x_ins,z)] tm;
 full_dest_z_term tm;
 dest_z_term tm';
 full_dest_z_term tm';
 =TEX
 =GFT
 val tm = ñ [x,x! : X | x = z]®;
-val tm' = subst [(¬x:'d®,¬z:'d®)] tm;
-full_dest_z_term tm;
-dest_z_term tm';
-full_dest_z_term tm';
-=TEX
-=GFT
-val tm = mk_z_binding([("x",ñy®),("y",ñz®)]);
-val tm' = subst [(¬x:'a®,¬z:'a®)] tm;
+val z = hd(frees tm);
+val x_ins = mk_var("x",type_of z);
+val tm' = subst [(x_ins,z)] tm;
 full_dest_z_term tm;
 dest_z_term tm';
 full_dest_z_term tm';
@@ -980,7 +1025,7 @@ local
 	val Ûcheck_is_zÝ = ref true;
 in
 	val _ = new_flag{name = "check_is_z",
-		check = (fn _ => true),
+		check = fun_true,
 		control = check_is_z,
 		default = (fn () => false)}
 	handle (Fail _) => ();
@@ -1026,10 +1071,100 @@ in
 		(gasms,conc))
 end));
 =TEX
+\section{Getting Things into the Existence Prover}
+Tuple type ``varstruct'' constructions:
+=SML
+local
+val tt_sofar : (string * (TERM list * THM)) list ref = ref [];
+in
+fun add_tt_to_pc (ty : TYPE) : unit = (
+let	val (abs,cons) = get_tuple_info ty;
+	val def_thm = get_spec (hd cons);
+	val abs_nm = fst(dest_const abs);
+in
+	case lassoc5 (!tt_sofar) abs_nm of
+	Nil => (tt_sofar := (abs_nm,(cons, def_thm)) :: (!tt_sofar);
+		set_¶_vs_thms (!tt_sofar) "'z_predicate_calculus_build";
+		set_merge_pcs ["hol1","'z_predicate_calculus_build"])
+	| Value _ => ()
+end);
+end;
+
+=TEX
+Theorems to rewrite with before further existence proof:
+=SML
+local
+val ¶_rw_thms : THM list ref = ref [];
+in
+fun Ûadd_¶_rw_thmÝ (thm :THM) : unit = (
+let	val dummy = (¶_rw_thms := thm :: (!¶_rw_thms));
+	val ¶_conv = pure_rewrite_conv (!¶_rw_thms);
+in
+	(set_cs_¶_convs [¶_conv] "'z_predicate_calculus_build";
+	set_merge_pcs ["hol1","'z_predicate_calculus_build"]
+	)
+end);
+end;
+=TEX
+=SML
+local
+	val z'abb_def = get_spec ¬$"Z'AbbDef"®;
+	val dummy = set_rw_canons 
+		[fn thm => [conv_rule(eq_match_conv1 z'abb_def) thm]]
+		"'z_predicate_calculus_build";
+in
+val _ = set_merge_pcs ["hol1","'z_predicate_calculus_build"];
+end;
+=TEX
+\section{Consistency Proofs I}
+=SML
+val _ = add_tt_to_pc (type_of ñ(x,y)®);
+val _ = add_¶_rw_thm (get_spec ¬$"Z'AbbDef"®);
+=TEX
+=SML
+val _ = (
+push_consistency_goal ñU ª U®;
+a(prove_¶_tac);
+save_consistency_thm ñU ª U® (pop_thm()));
+=TEX
+\section{Concerning The Universe, U}
+=SML
+push_goal([],¬µ x · ñx  U®®);
+a(µ_tac);
+set_current_language "HOL";
+a(rewrite_tac[get_specñU®,get_spec ñTotality®]);
+a(rewrite_tac[get_spec ¬$"Z'T[1]1"®, get_spec ¬$"Z'Mk_T[1]"®]);
+set_current_language "Z";
+val _u_thm = pop_thm();
+=TEX
+=SML
+val ð_u_thm =  (
+push_goal([],¬ñð U = U®®);
+a(rewrite_tac[_u_thm]);
+a(rewrite_tac[get_specñð U[Totality]®, get_specñU[Totality]®,
+	get_specñTotality®]);
+a(rewrite_tac[get_spec ¬$"Z'T[1]1"®, get_spec ¬$"Z'Mk_T[1]"®]);
+pop_thm());
+=TEX
+The following is not used in the general $U$ simplification,
+but helps get there.
+=SML
+push_goal([],ñ¬$"Z'¸[2]" ñU® ñU®® = U®);
+a(rewrite_tac[_u_thm]);
+a(rewrite_tac [get_spec ¬$"Z'¸[2]"®]);
+drop_main_goal(); (* HARDLY CORRECT! *)
+=TEX
+\section{Concerning The Universe, U II}
+
+=SML
+push_goal([],ñU ª U = U®);
+a(rewrite_tac[_u_thm, get_specñU ª U®]);
+drop_main_goal(); (* HARDLY CORRECT! *)
+=TEX
+
 \section{Concerning Declarations}
 \subsection{Theorems}
 =SML
-push_pc "hol1";
 val adecl = mk_z_dec([¬x:'a®],¬s:'a SET®);
 push_goal ([],¬µ x:'a; s:'a SET · 
 	ñ‘adecl® = ¬x:'a®  ¬s:'a SET®®®);
@@ -1039,11 +1174,13 @@ val sym_single_dec_thm = sym_eqn_rule single_dec_thm;
 =TEX
 =SML
 push_goal ([],¬µ xs:'a LIST; s:'a SET ·  
-	ñ¬Z'Dec((xs:'a LIST),(s:'a SET))® = ¬Z'Setd(xs:'a LIST)® € ¬s:'a SET®®®);
+	ñ¬$"Z'Dec"((xs:'a LIST),(s:'a SET))® = ¬$"Z'Setd"(xs:'a LIST)® € ¬s:'a SET®®®);
 a(REPEAT µ_tac);
-???
-a(rewrite_tac[get_spec adecl]);
-???
+a(LIST_INDUCTION_T ¬xs:'a LIST® asm_tac);
+(* *** Goal "1" *** *)
+a(rewrite_tac(map get_spec [¬$"Z'Dec"®,¬$"Z'Setd"®,¬$"z'_ € _"®]));
+drop_main_goal(); (* HARDLY CORRECT! *)
+=IGN
 val many_dec_thm = pop_thm();
 val sym_many_dec_thm = sym_eqn_rule many_dec_thm;
 =TEX
@@ -1068,18 +1205,19 @@ term_fail "dec_pred_conv" 41010 [tm]
 local
 in
 val ÛÊ_s__s_convÝ : CONV (fn tm =>
-let	val Z(Ês,s) = dest_z_term tm;
-	val ZÊ(s',decor) = dest_z_term Ês;
-	val dummy = if s' =$ s andalso decor = "";
+let	val (Ês,s) = dest_z_ tm;
+	val (s',decor) = dest_z_Ê Ês;
+	val dummy = if s' =$ s andalso decor = ""
 		then ()
-		else fail_with_conv "Ê_s__s_conv";
+		else fail "Ê_s__s_conv" 0 [];
 	val decs = mk_z_decsexp(s',decor);
 	val gl = ([],mk_eq(tm,decs));
 in
 	tac_proof (gl ,
 		pure_rewrite_tac[z'Ê_def,
-			z'decsexp_def]
-			
+			z'decsexp_def] (* NOT ENOUGH! *)
+	)
+end);		
 =TEX
 =SML
 val Ûpred_dec_convÝ : CONV = (fn tm =>
@@ -1091,38 +1229,15 @@ val Ûpred_dec_convÝ : CONV = (fn tm =>
 handle (Fail _) =>
 term_fail "pred_dec_conv" 41010 [tm]
 );
-
-\section{Concerning The Universe, U}
-=SML
-push_goal([],¬µ x · ñx  U®®);
-a(µ_tac);
-set_current_language "HOL";
-a(rewrite_tac[get_specñU®,get_spec ñTotality®]);
-a(rewrite_tac[get_spec ¬$"Z'T[1]1"®, get_spec ¬$"Z'Mk_T[1]"®]);
-set_current_language "Z";
-val _u_thm = pop_thm();
 =TEX
-=SML
-push_goal([],¬ñð U = U®®);
-a(rewrite_tac[_u_thm]);
-a(rewrite_tac[get_specñð U[Totality]®, get_specñU[Totality]®,
-	get_specñTotality®]);
-a(rewrite_tac[get_spec ¬$"Z'T[1]1"®, get_spec ¬$"Z'Mk_T[1]"®]);
-val ð_u_thm = pop_thm();
-=TEX
-=SML
-push_goal([],ñU ª U = U®);
-a(rewrite_tac[_u_thm, get_specñU ª U®, get_specñU[Totality]®,
-	get_specñTotality®]);
-drop_main_goal(); (* HARDLY CORRECT! *)
-=TEX
+\section{Concerning The Universe, U, II}
 =SML
 val dpv_proj_thm = all_µ_intro(list_±_intro
 	(strip_±_rule (all_µ_elim (get_spec ¬$"Z'S[d,p,v]v"®))
 		to 2));
 
-fun seta_u_conv (tm : TERM) : THM = (
-let	val Zseta(decl,pred,vl) = dest_z_term tm;
+fun Ûseta_u_convÝ (tm : TERM) : THM = (
+let	val (decl,pred,vl) = dest_z_seta tm;
 	val s1 = eq_match_conv1(get_spec tm) tm;
 	val s2 = conv_rule(RIGHT_C(all_Â_conv THEN_C
 		pure_rewrite_conv [_u_thm,dpv_proj_thm])) s1;
@@ -1130,6 +1245,337 @@ in
 	s2 (* HARDLY CORRECT! *)
 end);
 =TEX
+\section{Concerning Z Universal Quantification}
+=SML
+local
+	val cnv1 = eq_match_conv1 z'µ_def;
+	val cnv2 = eq_match_conv1 z'µbody_def;
+	val cnv3 = eq_match_conv1 (sym_eqn_rule z'µbody_def);
+	val cnv4 = eq_match_conv1 (sym_eqn_rule z'µ_def);
+
+ 	fun var_sort (itym: (string * TYPE)list) : TERM list = (
+	let	val sl = idsetseq(fst(split itym));
+		val tyl = map (lassoc3 itym) sl;
+	in
+		map mk_var (combine sl tyl)
+	end);
+ 
+in
+val Ûz_µ_elim_convÝ :CONV = (
+	cnv1 THEN_C ALL_SIMPLE_µ_C cnv2
+);
+
+val Ûz_µ_intro_convÝ :CONV = (
+all_µ_uncurry_conv AND_OR_C
+(fn tm =>
+let	val (vs,bdy) = strip_simple_µ tm;
+	val ((d,p),v) = (dest_± ** Combinators.I)(dest_´ bdy);
+	val dbind =  dest_decl d;
+	val vs' = map dest_var vs;
+	val vnames = map fst vs';
+	val dummy = if vnames ~= (map fst dbind)
+		then ()
+		else term_fail "z_µ_intro_conv" 41024 [tm];
+	val dummy = if all vs' (fn (nm,ty) => lassoc3 dbind nm =: ty)
+		then ()
+		else term_fail "z_µ_intro_conv" 41024 [tm];
+	val s1 = cnv3 bdy;
+	val s2 = fold (fn (x,t) => µ_¤_rule x t) vs s1;
+	val svs = var_sort vs';
+	val rs2 = snd(dest_eq(concl s2));
+	val rbs2 = snd(strip_simple_µ rs2);
+	val s3 = µ_reorder_conv rs2 (list_mk_simple_µ (svs,rbs2));
+	val s4 = eq_trans_rule s2 s3;
+	val s5 = conv_rule(RIGHT_C cnv4) s4;
+in
+	s5
+end));
+end;
+=TEX
+Examples:
+=GFT
+val thm1 = z_µ_elim_conv ñµ z:X; x,y : î  · (x = 0) ² (y = 0) ² (z = z)®;
+val tmr = snd(dest_eq(concl thm1));
+z_µ_intro_conv tmr;
+=SML
+
+Compose a list of type instantiations, checking that we
+are not send one type variable to two different types.
+=SML
+local 
+	fun lrassoc5 ((a1,a2) :: x) v = (if a2 =: v
+		then Value a1
+		else lrassoc5 x v
+	) | lrassoc5 [] v = Nil;
+in
+fun Ûcompose_tyiÝ (tys : (TYPE * TYPE) list list) : (TYPE * TYPE) list = (
+let	fun aux1 acc ((tyn,tyo) :: x) = (
+		case lrassoc5 acc tyo of
+		Nil => aux1 ((tyn,tyo) :: acc) x
+		| Value tyn' => (if tyn =: tyn'
+			then aux1 acc x
+			else fail "compose_tyi" 0 [])
+	) | aux1 acc [] = acc;
+
+	fun aux acc [] = acc 
+	| aux acc (a :: x) = aux (aux1 acc a) x;
+in
+	aux [] tys
+end);
+end;
+=TEX
+The following copes with three forms of $bind$ - 
+a true binding, a single value, or an object with a binding type.
+It returns the required specialisations and type instantiations.
+=SML
+fun Ûmatch_decl_tmÝ (caller : string) (decl : TERM) (tm: TERM) : (string * TERM) list * (TYPE * TYPE) list = (
+let	val dbinds = dest_decl decl
+		handle complaint =>
+		pass_on complaint "dest_decl" caller;
+	val dnms = map fst dbinds;
+in
+=TEX
+Conventional binding:
+=SML
+(let	val tbinds = dest_z_binding tm;
+	val dummy = if dnms ~= map fst tbinds
+		then ()
+		else fail "" 0 [];
+	fun aux (nm,ty) = (
+	let val v = lassoc3 tbinds nm;
+		val tyi = type_match (type_of v) ty;
+	in
+		tyi
+	end);
+	val tys = map aux dbinds;
+in
+	(tbinds,compose_tyi tys)
+end
+handle (Fail _) =>
+=TEX
+Single variable in declaration:
+=SML
+	case dbinds of
+	[(nm,ty)] => ([(nm,tm)],type_match (type_of tm) ty)
+	| _ => fail "" 0 []
+handle (Fail _) =>
+=TEX
+Term has a binding type:
+=SML
+let	val to_tm = type_of tm;
+	val dbt_tm = dest_bind_type to_tm;
+	val (_,projs) = get_binding_info to_tm;
+	val projs' = map (fn f => match_mk_app(f,tm)) projs;
+	val tbinds = combine(fst (split dbt_tm)) projs';
+	val dummy = if dnms ~= map fst tbinds
+		then ()
+		else fail "" 0 [];
+	fun aux (nm,ty) = (
+	let val v = lassoc3 tbinds nm;
+		val tyi = type_match (type_of v) ty;
+	in
+		tyi
+	end);
+	val tys = map aux dbinds;
+in
+	(tbinds,compose_tyi tys)
+end
+handle (Fail _) =>
+term_fail caller 41021 [tm]
+)
+end);
+=TEX
+Tests:
+=GFT
+val (d,_,_) = dest_z_µ ñµx,y : Z; z : Y · true®;
+val (d1,_,_) = dest_z_µ ñµx : Z· true®;
+val tm1 = ñ(y ¦ 1, x ¦ 2, z ¦ y)®;
+
+match_decl_tm "hello" d tm1;
+match_decl_tm "hello" d (mk_var("B",type_of tm1));
+match_decl_tm "hello" d1 ¬1®;
+=TEX
+fun Ûµ_elim_by_templateÝ (template : (string * TERM)list)(thm : THM) : THM = (
+let	val (vs,_) = strip_simple_µ (concl thm);
+	val exps = map (lassoc3 template) (map (fst o dest_var) vs);
+in
+	list_simple_µ_elim exps thm
+end);
+=SML
+local
+	val cnv1 = eq_match_conv1 z'µ_def;
+	val cnv2 = eq_match_conv1 z'µbody_def;
+in
+fun Ûz_µ_elimÝ (tm : TERM) (thm : THM) : THM = (
+let	val (d,p,v) = dest_z_µ (concl thm)
+		handle complaint =>
+		pass_on complaint "dest_z_µ" "z_µ_elim";
+	val (specs,insts) = match_decl_tm "z_µ_elim" d tm;
+	val s1 = conv_rule cnv1 thm;
+	val s2 = inst_type_rule insts s1
+		handle complaint =>
+		pass_on complaint "inst_type_rule" "z_µ_elim";
+	val s3 = µ_elim_by_template specs s2;
+	val s4 = conv_rule cnv2 s3;
+	val s5 = conv_rule (LEFT_C(LEFT_C id_conv)) s4;
+		(* should actually change the declaration to
+		   a predicate *)
+	val s6 = check_is_z_thm "z_µ_elim" s5;
+		(* should actually make any renaming changes
+		   the declaration to the thm *)
+in
+	s6
+end);
+end;
+=TEX
+=SML
+local
+val cnv1 = eq_match_conv1 (taut_rule ¬µ t · (t ¤ (T ´ t)) ¤ T®);
+val cnv2 = eq_match_conv1 (taut_rule ¬µ t · F ´ t ¤ T®);
+val thm1 = conv_rule(ALL_SIMPLE_µ_C (RIGHT_C (rewrite_conv[])))
+	(simple_µ_intro ¬d:BOOL®
+	(list_simple_µ_elim[¬d:BOOL®, mk_f] z'µbody_def));
+val cnv3 = eq_match_conv1 thm1;
+val tac1 = pure_rewrite_tac[z'µ_def,µ_rewrite_thm,
+	eq_rewrite_thm];
+val cnv4 = eq_match_conv1 (taut_rule ¬µ t · (t ¤ (t ² F)) ¤ T®);
+val cnv5 = eq_match_conv1 (taut_rule ¬µ t · t ² T ¤ T®);
+val thm2 = conv_rule(ALL_SIMPLE_µ_C (RIGHT_C (rewrite_conv[])))
+	(list_simple_µ_intro [¬d:BOOL®,¬p:BOOL®]
+	(list_simple_µ_elim[¬d:BOOL®, ¬p:BOOL®, mk_t] z'µbody_def));
+val cnv6 = eq_match_conv1 thm2;
+val cnv7 = eq_match_conv1 (taut_rule ¬µ s t · (t ´ (s ² T)) ¤ T®);
+val cnv8 = eq_match_conv1 (taut_rule ¬µ t · (t ¤ (T ´ (t ² F))) ¤ T®);
+fun Z_µ_P_C cnv = RAND_C(ALL_SIMPLE_µ_C(LEFT_C cnv));
+fun Z_µ_V_C cnv = RAND_C(ALL_SIMPLE_µ_C(RIGHT_C cnv));
+
+fun cnv9 thm = APP_C(RAND_C(Z_µ_P_C(fn _ => thm)),(LEFT_C(fn _ => thm)));
+fun cnv10 thm = APP_C(RAND_C(Z_µ_V_C(fn _ => thm)),(RIGHT_C(fn _ => thm)));
+fun cnv11 thm = APP_C(RAND_C(Z_µ_V_C(fn _ => thm)),RIGHT_C(RIGHT_C(fn _ => thm)));
+
+in
+val Ûz_µ_inv_convÝ : CONV = (fn tm => 
+let	val (d,p,v) = dest_z_µ tm
+		handle complaint =>
+		pass_on complaint "dest_z_µ" "z_µ_inv_conv";
+	val vs = fst(strip_simple_µ(snd(dest_app tm)));
+in
+	case (any (frees p) (fn x => x term_mem vs) andalso (not (is_t p)),
+		any (frees v) (fn x => x term_mem vs) andalso (not (is_f v))) of
+ 	(true, true) => term_fail "z_µ_inv_conv" 41025 [tm]
+	| (false, true) => tac_proof(([],mk_eq(tm,
+			mk_´(p,mk_z_µ(d,mk_t,v)))),
+		²_THEN (conv_tac o cnv9) (µ_elim p bool_cases_axiom) 
+		THEN_LIST [
+		conv_tac cnv1,
+		conv_tac(APP_C ((RAND_C(RAND_C(ALL_SIMPLE_µ_C cnv3))), cnv2)) THEN
+		tac1] )
+	| (true, false) =>  tac_proof(([],mk_eq(tm,
+			mk_²(mk_z_µ(d,p,mk_f),v))),
+		²_THEN (conv_tac o cnv10) (µ_elim v bool_cases_axiom) 
+		THEN_LIST [
+		conv_tac(APP_C ((RAND_C(RAND_C(ALL_SIMPLE_µ_C cnv6))), cnv5)) THEN
+		tac1,
+		conv_tac cnv4] )
+	| (false,false) => tac_proof(([],mk_eq(tm,
+			mk_´(p,mk_²(mk_z_µ(d,mk_t,mk_f),v)))),
+		²_THEN (conv_tac o cnv9) (µ_elim p bool_cases_axiom) THEN
+		²_THEN (conv_tac o cnv11) (µ_elim v bool_cases_axiom) 
+		THEN_LIST [
+		conv_tac(APP_C(RAND_C(RAND_C(ALL_SIMPLE_µ_C cnv6)), cnv7)) THEN
+		tac1,
+		conv_tac cnv8,
+		conv_tac(APP_C(RAND_C(RAND_C(ALL_SIMPLE_µ_C cnv6)), cnv7)) THEN
+		tac1,
+		conv_tac(APP_C(RAND_C(RAND_C(ALL_SIMPLE_µ_C cnv3)), cnv2)) THEN
+		tac1		
+		])
+end);
+end;
+=TEX
+Examples:
+=GFT
+z_µ_inv_conv ñµ x ,y : X | f · g®;
+z_µ_inv_conv ñµ x ,y : X | x > 0 · z®;
+z_µ_inv_conv ñµ x,y : X | f · x = y®;
+=TEX
+\section{Concerning Z Existential Quantification}
+=SML
+local
+val cnv1 = eq_match_conv1 (taut_rule ¬µ t · (t ¤ (T ± t)) ¤ T®);
+val cnv2 = eq_match_conv1 (taut_rule ¬µ t · F ± t ¤ F®);
+val thm1 = conv_rule(ALL_SIMPLE_µ_C (RIGHT_C (rewrite_conv[])))
+	(simple_µ_intro ¬d:BOOL®
+	(list_simple_µ_elim[¬d:BOOL®, mk_f] z'¶body_def));
+val cnv3 = eq_match_conv1 thm1;
+val tac1 = pure_rewrite_tac[z'¶_def,¶_rewrite_thm,
+	eq_rewrite_thm];
+val cnv4 = eq_match_conv1 (taut_rule ¬µ t · (t ¤ (t ± T)) ¤ T®);
+val cnv5 = eq_match_conv1 (taut_rule ¬µ t · t ± F ¤ F®);
+val thm2 = conv_rule(ALL_SIMPLE_µ_C (RIGHT_C (rewrite_conv[])))
+	(list_simple_µ_intro [¬d:BOOL®,¬p:BOOL®]
+	(list_simple_µ_elim[¬d:BOOL®, ¬p:BOOL®, mk_f] z'¶body_def));
+val cnv6 = eq_match_conv1 thm2;
+val cnv7 = eq_match_conv1 (taut_rule ¬µ s t · (t ± s ± F) ¤ F®);
+val cnv8 = eq_match_conv1 (taut_rule ¬µ t · (t ¤ (T ± t ± T)) ¤ T®);
+fun Z_¶_P_C cnv = RAND_C(ALL_SIMPLE_¶_C(LEFT_C cnv));
+fun Z_¶_V_C cnv = RAND_C(ALL_SIMPLE_¶_C(RIGHT_C cnv));
+
+fun cnv9 thm = APP_C(RAND_C(Z_¶_P_C(fn _ => thm)),(LEFT_C(fn _ => thm)));
+fun cnv10 thm = APP_C(RAND_C(Z_¶_V_C(fn _ => thm)),(RIGHT_C(fn _ => thm)));
+fun cnv11 thm = APP_C(RAND_C(Z_¶_V_C(fn _ => thm)),RIGHT_C(RIGHT_C(fn _ => thm)));
+
+in
+val Ûz_¶_inv_convÝ : CONV = (fn tm => 
+let	val (d,p,v) = dest_z_¶ tm
+		handle complaint =>
+		pass_on complaint "dest_z_¶" "z_¶_inv_conv";
+	val vs = fst(strip_simple_¶(snd(dest_app tm)));
+in
+	case (any (frees p) (fn x => x term_mem vs) andalso (not (is_t p)),
+		any (frees v) (fn x => x term_mem vs) andalso (not (is_f v))) of
+ 	(true, true) => term_fail "z_¶_inv_conv" 41025 [tm]
+	| (false, true) => tac_proof(([],mk_eq(tm,
+			mk_±(p,mk_z_¶(d,mk_t,v)))),
+		²_THEN (conv_tac o cnv9) (µ_elim p bool_cases_axiom) 
+		THEN_LIST [
+		conv_tac cnv1,
+		conv_tac(APP_C ((RAND_C(RAND_C(ALL_SIMPLE_¶_C cnv3))), cnv2)) THEN
+		tac1] )
+	| (true, false) =>  tac_proof(([],mk_eq(tm,
+			mk_±(mk_z_¶(d,p,mk_t),v))),
+		²_THEN (conv_tac o cnv10) (µ_elim v bool_cases_axiom) 
+		THEN_LIST [
+		conv_tac cnv4,
+		conv_tac(APP_C ((RAND_C(RAND_C(ALL_SIMPLE_¶_C cnv6))), cnv5)) THEN
+		tac1] )
+	| (false,false) => tac_proof(([],mk_eq(tm,
+			mk_±(p,mk_±(mk_z_¶(d,mk_t,mk_t),v)))),
+		²_THEN (conv_tac o cnv9) (µ_elim p bool_cases_axiom) THEN
+		²_THEN (conv_tac o cnv11) (µ_elim v bool_cases_axiom) 
+		THEN_LIST [
+		conv_tac cnv8,
+		conv_tac(APP_C(RAND_C(RAND_C(ALL_SIMPLE_¶_C cnv6)), cnv7)) THEN
+		tac1,
+		conv_tac(APP_C(RAND_C(RAND_C(ALL_SIMPLE_¶_C cnv3)), cnv2)) THEN
+		tac1,
+		conv_tac(APP_C(RAND_C(RAND_C(ALL_SIMPLE_¶_C cnv6)), cnv7)) THEN
+		tac1
+		])
+end);
+end;
+=TEX
+Examples:
+=GFT
+z_¶_inv_conv ñ¶ x ,y : X | f · g®;
+z_¶_inv_conv ñ¶ x ,y : X | x > 0 · z®;
+z_¶_inv_conv ñ¶ x,y : X | f · x = y®;
+=TEX
+\subsection{Conversions between Z Universal and Existential Quantifications}
+=SML
+die;
+local
+val thm1 = prove_rule [z'µ_def] ¬µ x · ³ ($"Z
 \section{EPILOGUE}
 =IGN
 val _ = open_theory lthy;
