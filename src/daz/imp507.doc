@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.167 $ $RCSfile: imp507.doc,v $ $Date: 2000/10/17 15:58:47 $
+% imp507.doc %Z% $Revision: 1.168 $ $RCSfile: imp507.doc,v $ $Date: 2000/10/24 14:39:49 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.167 $%
+\def\SCCSversion{$Revision: 1.168 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2000/10/17 15:58:47 $%
+\TPPdate{\FormatDate{$Date: 2000/10/24 14:39:49 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -74,7 +74,7 @@
 \item[Issue 1.95] Fixed bugs 10 and 11 (batch 2).
 \item[Issue 1.96] Fixed bug 18 (batch 2).
 \item[Issue 1.97] Enhancement 13.
-\item[Issues 1.98-1.103] Bug-fixing of enhancements.
+\item[Issue 1.98-1.103] Bug-fixing of enhancements.
 \item[Issues 1.104,1.105] Enhancements 3 and 18 (and a fairly major rework of the funcitons which support $new\_scope\_with$).
 \item[Issues 1.106,1.107] Tidy-up
 \item[Issues 1.108] fix to $form\_proc\_pack\_body\_common$.
@@ -128,6 +128,7 @@ statements in stubs.
 \item[Issue 1.166] CTLE II R2/2: reverse loops.
 \item[Issue 1.167] CTLE II R2/10: multiple with clauses (causes a minor change to syntax).
 \item[Issue 1.168] CTLE II R1/9: SPARK 83 attributes.
+\item[Issues 1.169] CTLE II R2/1: global variable unsoundness.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1106,7 +1107,8 @@ val €dummy_formal_fun› : FORMAL_FUN = {
 val €dummy_formal_proc› : FORMAL_PROC = {
 		name		=	"*dummy formal proc*",
 		formal_ids	=	[],
-		spec		=	dummy_spec};
+		spec		=	dummy_spec,
+		globals		=	[]};
 val €empty_in_scope› : IN_SCOPE = {
 		vc_vars		=	[],
 		vc_pars		=	[],
@@ -1189,6 +1191,19 @@ fun €merge_in_scopes›
 		else dec_labels1
 	}
 );
+=TEX
+We also need a function to extract the name and global dependency list of
+the current formal subprogram:
+=SML
+fun €subprog_info› (block : BLOCK) : ID * Z_ID list= (
+	if	#fun_flag (#flags (#declab block))
+	then	let	val formal_fun = #current_formal_fun block;
+		in	(#name (#informal_fun(formal_fun)), #globals formal_fun)
+		end
+	else	let	val formal_proc = #current_formal_proc block;
+		in	(#name formal_proc, #globals formal_proc)
+		end
+);
 in
 =TEX
 Now we define $flatten\_env$, which uses $merge\_in\_scopes$ to merge all the $in\_scope$ components of the blocks in a running environment.
@@ -1206,22 +1221,20 @@ fun €flatten_env› ([] : ENV) : IN_SCOPE = (
 	(flatten_env blks)
 );
 =TEX
-Now we define $check\_fun\_flatten\_env$: the $filter\_XXX$ functions implement
+Now we define $subprog\_flatten\_env$: the $filter\_XXX$ functions implement
 the set comprehensions in the specification, with $filter_env$ fitting
 the results together into an $IN\_SCOPE$.
 =SML
-fun €check_fun_flatten_env› ([] : ENV) : IN_SCOPE = (
+fun €subprog_flatten_env› ([] : ENV) : IN_SCOPE = (
 	empty_in_scope
-) |  check_fun_flatten_env (blocks : ENV) = (
+) |  subprog_flatten_env (blocks : ENV) = (
 	let	val block1 = hd blocks;
 		val flags = #flags (#declab block1);
-	in	if	not(#fun_flag flags) orelse not(#formal_body_flag flags)
+	in	if	not(#formal_body_flag flags)
 		then	flatten_env blocks
-		else	let	val formal_fun = #current_formal_fun block1;
-				val name = #name (#informal_fun(formal_fun));
+		else	let	val (name, globals) = subprog_info block1;
 				val blocks2 = blocks drop
 					(fn b => #block_name (#declab b) <> name);
-				val globals = #globals formal_fun;
 				fun filter_vars ([] : VAR_DECL list) = []
 				|   filter_vars (vardec :: vardecs) = (
 					case #vars vardec drop
@@ -1258,10 +1271,10 @@ fun €check_fun_flatten_env› ([] : ENV) : IN_SCOPE = (
 					in	merge_in_scopes ""{
 		vc_vars = filter_vars(#vc_vars in_scope),
 		vc_pars = filter_pars(#vc_pars in_scope),
-		vc_log_cons = [],
+		vc_log_cons = #vc_log_cons in_scope,
 		vc_aux_vars = filter_aux_vars(#vc_aux_vars in_scope),
-		formal_procs = [],
-		dec_labels = []		} 
+		formal_procs = #formal_procs in_scope,
+		dec_labels = #dec_labels in_scope	} 
 						"" (filter_env blks)
 					end
 				);
@@ -2720,7 +2733,7 @@ fun €spec_stmt_otherwise› ({spec : SPEC, label : LABEL}) : unit = (
 					{informal_fun = fun_header,
 					spec = spec1 as {post = return, ...}, ...},
 			...} = block1;
-		val in_scope1 : IN_SCOPE = check_fun_flatten_env(!blocks);
+		val in_scope1 : IN_SCOPE = subprog_flatten_env(!blocks);
 		val side = set_in_scope_ti_context in_scope1;
 		val env = cn_env_of_in_scope in_scope1;
 		val wp_env1 :WP_ENV = {
@@ -2985,9 +2998,9 @@ fun €stub› (() : unit) : unit = (
 	else	()
 );
 =TEX
-The following does the main work for $stub\_spec\_proc$ and $stub\_spec\_fun$.
+The following does all the work for $stub\_spec\_proc$ and $stub\_spec\_fun$.
 =SML
-fun €stub_spec_proc_fun› (is_fun : bool)
+fun €stub_spec_proc_fun› 
 		(spec : SPEC) (globs : Z_ID list) : unit = (
 	if	test_flag #stub_flag 2
 	then	let	val block1 = block 1;
@@ -3006,10 +3019,7 @@ fun €stub_spec_proc_fun› (is_fun : bool)
 				handle Fail _ =>
 				fail "stub_spec_proc_fun" 507011
 						[fn()=>id1, fn()=>id2];
-			val in_scope' =
-				if is_fun
-				then check_fun_flatten_env (!blocks)
-				else #in_scope subunit;
+			val in_scope' = subprog_flatten_env (!blocks);
 			val subunit' = {
 				in_scope	= in_scope',
 				specif		= spec,
@@ -3024,7 +3034,7 @@ fun €stub_spec_proc_fun› (is_fun : bool)
 =TEX
 =SML
 fun €stub_spec_proc› (form_proc : FORMAL_PROC) : unit = (
-	stub_spec_proc_fun false (#spec form_proc) []
+	stub_spec_proc_fun (#spec form_proc) (#globals form_proc)
 );
 =TEX
 \subsection{The SID function form\_proc}
@@ -3050,7 +3060,7 @@ fun €vcs_body_proc_aux› (st : STATEMENT) : (LABEL * VC list) = (
 				w1 cup (w_vcvars diff w_vars_uds)
 			     end
 			else w1 cup w_vcvars;
-		val in_scope = flatten_env (!blocks);
+		val in_scope = subprog_flatten_env (!blocks);
 		val formal_procs = #formal_procs in_scope;
 		val current_for_vars1 = #current_for_vars block1;
 		val current_log_cons1 = #current_log_cons block1;
@@ -3161,12 +3171,29 @@ fun €form_proc_pack_spec› (form_proc: FORMAL_PROC) : unit = (
 	end
 );
 =TEX
+The following function is common to {\it form\_proc\_pack\_body\_common},
+{\it form\_proc\_subunit}.
+=SML
+fun €check_globals_proc› (block_name1 : string)
+	(fp : FORMAL_PROC) (globals3 : Z_ID list) : unit = (
+	if	is_nil ((#globals fp diff #w (#spec fp)) diff globals3)
+	then	()
+	else	let	fun fmt_strs [] () = (
+				"empty list of global dependencies"
+			) | fmt_strs strs () = (
+				format_list Combinators.I strs ", "
+			);
+		in	fail "check_globals_proc" 507058
+			[fmt_strs (#globals fp diff #w (#spec fp)), fmt_strs globals3,
+			fn()=>block_name1]
+		end
+);
 =TEX
 The VC generator is responsible for distinguishing specification between statements with and without initial variables.
 Here, we follow the parser in generating the form without initial variables for it to modify as necessary.
 =SML
 fun €form_proc_pack_body_common› (form_proc: FORMAL_PROC)
-		= (
+	: (BLOCK * FORMAL_PROC * PACKAGE * SPECLAB) OPT = (
 	let	val block1 = block 1;
 		val block2 = block 2;
 		val block_name1 = #block_name(#declab block1);
@@ -3185,6 +3212,7 @@ fun €form_proc_pack_body_common› (form_proc: FORMAL_PROC)
 			find 
 			formal_procs4
 			(fn p => #name p = block_name1);
+		val _ = check_globals_proc block_name1 form_proc (#globals formal_proc3);
 		val vc_vars2 = #vc_vars(#in_scope(#declab block2));
 		val vc_vars5 = #vc_vars(flatten_env (tl (!blocks)));
 		val vc_vars4 = #vc_vars package4;
@@ -3358,6 +3386,7 @@ fun €form_proc_subunit› (form_proc: FORMAL_PROC) : unit = (
 	let
 		val st = STSpecNoIvars{spec= #spec form_proc,
 			label=""};
+		val _ = check_globals_proc block_name1 form_proc (#globs subunit3);
 		val vc_vars3 = #vc_vars(#in_scope(subunit3));
 		val vc_pars1 = #vc_pars (#in_scope (#declab block1));
 		val vc_aux_vars3 = #vc_aux_vars (#in_scope (subunit3));
@@ -3521,7 +3550,7 @@ fun €new_scope_fun_form› (ident : ID) : unit = (
 \subsection{The SID function stub\_spec\_fun}
 =SML
 fun €stub_spec_fun› (form_fun : FORMAL_FUN) : unit = (
-	stub_spec_proc_fun true (#spec form_fun) (#globals form_fun)
+	stub_spec_proc_fun (#spec form_fun) (#globals form_fun)
 );
 =TEX
 \subsection{The SID function inf\_fun}
@@ -3665,7 +3694,7 @@ fun €form_fun_pack_body› (form_fun: FORMAL_FUN) : unit = (
 			formal_funs4
 			(fn f => #name(#informal_fun f) = block_name1);
 		val vc_pars1 = #vc_pars (#in_scope (#declab block1));
-		val in_scope5 = check_fun_flatten_env(!blocks);
+		val in_scope5 = subprog_flatten_env(!blocks);
 		val wp_env5 :WP_ENV = {
 			env = cn_env_of_in_scope in_scope5,
 			till = mk_z_true,
@@ -3687,7 +3716,7 @@ fun €form_fun_pack_body› (form_fun: FORMAL_FUN) : unit = (
 	in	if	globals = globals3
 		then	store_vcs (block_name2, call_vcs (speclab5, st))
 		else	let	fun fmt_strs [] () = (
-					"no global dependencies"
+					"empty list of global dependencies"
 				) | fmt_strs strs () = (
 					format_list Combinators.I strs ", "
 				);
@@ -3698,6 +3727,22 @@ fun €form_fun_pack_body› (form_fun: FORMAL_FUN) : unit = (
 	end
 		else	()
 	end
+);
+=TEX
+=SML
+fun €check_globals_fun› (block_name1 : string)
+	(globals : Z_ID list) (globals3 : Z_ID list) : unit = (
+	if	globals = globals3
+	then	()
+	else	let	fun fmt_strs [] () = (
+				"no global dependencies"
+			) | fmt_strs strs () = (
+				format_list Combinators.I strs ", "
+			);
+		in	fail "check_globals_fun" 507050
+			[fmt_strs globals, fmt_strs globals3,
+			fn()=>block_name1]
+		end
 );
 =TEX
 =SML
@@ -3720,7 +3765,7 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 		val st = STSpecNoIvars{spec= #spec form_fun,
 				label=""};
 		val vc_pars1 = #vc_pars (#in_scope (#declab block1));
-		val in_scope4 = check_fun_flatten_env(!blocks);
+		val in_scope4 = subprog_flatten_env(!blocks);
 		val wp_env4 :WP_ENV = {
 			env = cn_env_of_in_scope in_scope4,
 			till = mk_z_true,
@@ -3738,17 +3783,8 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 		};
 		val globals = #globals form_fun;
 		val globals3 = #globs subunit3;
-	in	if	globals = globals3
-		then	store_vcs (block_name2, call_vcs (speclab4, st))
-		else	let	fun fmt_strs [] () = (
-					"no global dependencies"
-				) | fmt_strs strs () = (
-					format_list Combinators.I strs ", "
-				);
-			in	fail "form_fun_subunit" 507050
-				[fmt_strs globals, fmt_strs globals3,
-				fn()=>block_name1]
-			end
+		val _ = check_globals_fun block_name1 globals globals3;
+	in	store_vcs (block_name2, call_vcs (speclab4, st))
 	end
 		else	()
 	end
@@ -3907,7 +3943,7 @@ fun €vcs_body_fun› (st : STATEMENT) : unit = (
 		val vc_inits1 = #var_inits block1;
 		val post1 = #post(#spec current_formal_fun1);
 		val w = flat (map (map trans_id o #vars) vc_vars1);
-		val in_scope = check_fun_flatten_env (!blocks);
+		val in_scope = subprog_flatten_env (!blocks);
 		val formal_procs = #formal_procs in_scope;
 		val current_for_vars1 = #current_for_vars block1;
 		val current_log_cons1 = #current_log_cons block1;
@@ -4374,15 +4410,17 @@ When the following is called it is important that the internal specification the
 fun €prefix_formal_proc› (ident : ID)
 		(tysubs : (string * string) list)
 		(newids : ID list)
-		({name, formal_ids, spec} : FORMAL_PROC)
+		({name, formal_ids, spec, globals} : FORMAL_PROC)
 			: FORMAL_PROC = (
 	let	val old_cxt = add_params_ti_context formal_ids;
+		val globals1 = map (prefix_package_id ident newids) globals;
 		val result = {	
 			name = prefix_package_id ident newids name,
 			formal_ids =
 				map
 				(prefix_param_spec ident newids)
 				formal_ids,
+			globals = globals1,
 			spec = prefix_spec_stmt ident tysubs newids spec};
 	in	set_ti_context old_cxt;
 		result
@@ -5010,7 +5048,7 @@ fun €renames_proc_common›
 				val (tysubs, _) = prefix_given_sets pack newids tys;
 				val oldthy = get_current_theory_name();
 				val changethy = open_theory internal_name;
-				val {name=pname, formal_ids=pformal_ids,
+				val {name=pname, formal_ids=pformal_ids, globals=g,
 					 spec=pspec} : FORMAL_PROC = (
 					prefix_formal_proc
 						pack
@@ -5024,6 +5062,7 @@ fun €renames_proc_common›
 				val formal_proc3 =
 						{name = new,
 						formal_ids = pformal_ids,
+						globals = g,
 						spec = pspec};
 			in	Value formal_proc3
 			end	handle (exn as Fail f) =>
@@ -5347,17 +5386,27 @@ fun €do_annotation› (anns : ANNOTATION) : unit = (
 	end
 );
 =TEX
-{\it expand\_frame} looks for schema names appearing in frames and expands them
+{\it expand\_names} looks for schema names appearing in frames 
+or global dependency lists and expands them
 into the corresponding list of signature variables.
-When the frame is expanded, it makes the list {\it w0} of initial variables.
+=SML
+fun expand_names (ns : ID list) : Z_ID list = (
+	let	fun aux n = (
+			((map fst o dest_z_schema_type o dest_z_power_type o
+				force_value o get_const_type) ("z'" ^ n))
+			handle Fail _ => [n]
+		);
+	in	flat (map aux ns)
+	end
+);
+=TEX
+When the frame is expanded, {\it expand\_frame}
+uses {\it expand\_names} to make the frame {\it w}
+and the list {\it w0} of initial variables.
 It is applied to any {\it SPEC} before passing it into the SID functions.
 =SML
 fun €expand_frame› ({w, w0, pre, post} : SPEC) : SPEC = (
-	let	fun expand1 n = (
-		((map fst o dest_z_schema_type o dest_z_power_type o force_value o get_const_type) ("z'" ^ n))
-			handle Fail _ => [n]
-		);
-		val new_w = flat (map expand1 w);
+	let	val new_w = expand_names w;
 		val new_w0 = (map (fn s => s ^ "â0")) new_w;
 	in	{w = new_w, w0 = new_w0, pre = pre, post = post}
 	end
@@ -5550,24 +5599,25 @@ The following reflects the SID functions for $procedure\_specification$:
 =SML
 *)
 and €do_procedure_spec› (
-	{name, formal_part, spec as Value sp, annotation}
+	{name, formal_part, globals, spec as Value sp, annotation}
 		: PROCEDURE_SPECIFICATION) = (
 	let	val esp = expand_frame sp;
+		val eg = #w esp @ expand_names globals @ flat (map #idlist formal_part);
 		val formal_proc : FORMAL_PROC =
-		{name=name, spec=esp, formal_ids = map mk_param_spec formal_part};
+		{name=name, spec=esp, globals = eg, formal_ids = map mk_param_spec formal_part};
 	in	subunit_form name;
 		new_scope_proc_form name;
 		do_annotation annotation;
 		stub();
 		fformal_part formal_part;
 		check_19 current_cn_env esp;
-		stub_spec_proc formal_proc;
-		check_stub_spec_proc formal_proc;
+		curr_form_proc formal_proc;
 		form_proc formal_proc;
-		curr_form_proc formal_proc
+		stub_spec_proc formal_proc;
+		check_stub_spec_proc formal_proc
 	end
 ) | €do_procedure_spec› (
-	{name, formal_part, spec as Nil, annotation} : PROCEDURE_SPECIFICATION) = (
+	{name, formal_part, spec as Nil, annotation, globals} : PROCEDURE_SPECIFICATION) = (
 	subunit_inf name;
 	new_scope_proc_inf name;
 	fformal_part formal_part;
