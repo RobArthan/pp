@@ -79,6 +79,8 @@ Changes after comments - proof context changes,
 added $z\_µ\_tac$, etc, replaced $z\_defn\_conv$ by $z\_para\_pred\_conv$, etc, added $z\_decl\_pred\_conv$.
 \item [Issue 1.24 (13th Novemember 1992)]
 Correcting error message numbers.
+\item [Issue 1.25 (17th Novemember 1992)]
+Added $z\_term\_of\_type$
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1297,6 +1299,11 @@ in
 end));
 end;
 =TEX	
+\subsubsection{Representing HOL Types as Z Terms}
+The code of $z\_term\_of\_type$ is immediately after $z\_get\_spec$,
+which it uses (perhaps it shouldn't, but that does ensure they recognise
+the same things as $U$, e.g. if a global variable has been defined equal
+to $U$ or a free type name).
 \subsubsection{Adjustment after Á-conversion}
 =SML
 fun ÛÁ_to_zÝ (tm : TERM):TERM = 
@@ -2896,6 +2903,55 @@ fun Ûz_get_specÝ (cst : TERM) : THM = (
 	pass_on complaint "get_spec" "z_get_spec"
 );
 =TEX
+See earlier remarks about $z\_term\_of\_type$ for the location in this
+document of the following:
+=SML
+fun Ûz_term_of_typeÝ (ty : TYPE) : TERM = (
+	let	val member_type = dest_z_power_t ty;
+	in	(case dest_z_tuple_t member_type of
+			[ty1, ty2] => 
+				mk_z_gvar
+				("_ ª _", mk_z_power_t ty, [z_term_of_type ty1, z_term_of_type ty2])
+		|	_ => mk_z_ð (z_term_of_type member_type))
+		handle Fail _ =>
+		mk_z_ð (z_term_of_type member_type)
+	end	handle Fail _ =>
+	let	val component_types = dest_z_tuple_t ty;
+	in	mk_z_¸ (map z_term_of_type component_types)
+	end	handle Fail _ =>
+	let	val component_names_types = dest_z_schema_t ty;
+		fun do_dec (ns, cty) = (
+			mk_z_dec
+			(map(fn n => mk_var(n, cty)) ns,
+				z_term_of_type cty)
+		);
+		fun get_a_batch acc [] = (acc, [])
+		|   get_a_batch (acc as (ns, ty1)) (what as ((n, ty) :: more)) = (
+				if	ty1 =: ty
+				then	get_a_batch (ns@[n], ty1) more
+				else	(acc, what)
+		);
+		fun get_batches [] = []
+		|   get_batches ((n, ty) :: more) = (
+			let	val (batch, rest) = get_a_batch ([n], ty) more;
+			in	batch :: get_batches rest
+			end
+		);
+		val decl = mk_z_decl (map do_dec (get_batches component_names_types));
+	in	mk_z_‰s (decl, mk_z_true)
+	end	handle Fail _ => (
+			case dest_ctype ty of
+				(s, []) => (
+				let	val tm = mk_z_gvar(s, mk_z_power_t ty, []);
+					val chk = concl (z_get_spec tm);
+				in	if	is_u (snd(dest_eq chk))
+					then	tm
+					else	mk_u (mk_z_power_t ty)
+				end
+			) |	_ => mk_u (mk_z_power_t ty)
+		)
+);
+=TEX
 =SML
 fun Ûz_µ_rewrite_canonÝ (thm : THM) : THM list = (
 let	val s1 = conv_rule z_µ_elim_conv2 thm
@@ -3310,6 +3366,7 @@ val _ = commit_pc "z_predicates";
 =TEX
 Forwarding chaining proof context:
 =SML
+val _ = delete_pc "'z_fc" handle Fail _ => ();
 val _ = new_pc Û"'z_fc"Ý;
 val _ = set_pr_tac z_fc_prove_tac "'z_fc";
 val _ = set_pr_conv z_fc_prove_conv "'z_fc";
