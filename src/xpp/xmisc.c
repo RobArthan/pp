@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.24 2003/07/24 10:46:50 rda Exp rda $
+ * $Id: xmisc.c,v 2.25 2003/07/24 11:13:32 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -535,6 +535,21 @@ void fix_pane_height(
 		NULL);
 }
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * set_input_focus: try to set the input focus to a given
+ * widget without falling over if it can't be done.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static int ignore_error_handler(Display *d, XErrorEvent *ev)
+{
+	return 0;
+}
+void set_input_focus(Widget w)
+{
+	XErrorHandler oldhandler;
+	oldhandler = XSetErrorHandler(ignore_error_handler);
+	XSetInputFocus(XtDisplay(w), XtWindow(w), RevertToParent, CurrentTime);
+	(void) XSetErrorHandler(oldhandler);
+}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * attach_edit_popup: attach a popup edit menu to a text widget
  * with menu items given as parameter:

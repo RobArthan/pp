@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.21 2003/07/22 15:39:07 rda Exp rda $ 
+ * $Id: templates.c,v 2.22 2003/07/23 14:02:14 rda Exp rda $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -385,7 +385,7 @@ static void templates_cb(
 	after = start + strlen (*cbdata);
 	XmTextSetInsertionPosition(text_w, after);
 	XmTextShowPosition(text_w, after);
-	XSetInputFocus(XtDisplay(text_w), XtWindow(text_w), RevertToParent, CurrentTime);
+	set_input_focus(text_w);
 }
 
 

@@ -285,6 +285,7 @@ typedef struct menu_item {
 			Widget shell,
 			void cancel_cb(CALLBACK_ARGS),
 			XtPointer cancel_cbd);
+	extern	void set_input_focus(Widget w);
 	extern	void attach_rw_edit_popup(Widget text_w);
 	extern	void attach_ro_edit_popup(Widget text_w);
 	extern	void register_selection_source(

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.17 2003/07/18 15:54:19 rda Exp rda $ 
+ * $Id: palette.c,v 2.18 2003/07/23 14:02:14 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -266,8 +266,7 @@ static void type_char_cb(
  * of where the pointer was moved to). It seems to work OK in 21st century versions
  * of Motif (although there are a lot of OS/Window manager combinations to test).
  */
-	XSetInputFocus(XtDisplay(text_w), XtWindow(text_w), RevertToParent, CurrentTime);
-
+	set_input_focus(text_w);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****

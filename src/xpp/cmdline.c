@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.20 2003/07/23 14:02:14 rda Exp rda $
+ * $Id: cmdline.c,v 2.21 2003/07/24 10:46:50 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -446,7 +446,7 @@ void take_command_input(Widget w, XmTextVerifyCallbackStruct *cbs)
 	XmTextSetInsertionPosition(cmd_w,
 	XmTextGetLastPosition(cmd_w));
 	if(get_map_state(cmd_w) == IsViewable) {
-		XSetInputFocus(XtDisplay(cmd_w), XtWindow(cmd_w), RevertToParent, CurrentTime);
+		set_input_focus(cmd_w);
 	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
