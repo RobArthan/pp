@@ -22,7 +22,7 @@ Don't worry about this!
 %\TPPpart{}
 \TPPtitle{SLR Parser Generator}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP017}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.34 $%
+\def\SCCSversion{$Revision: 1.35 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 %\TPPdate{}  %% Mandatory field (with sensible default)
@@ -123,7 +123,8 @@ Port to Poly/ML.
 \item[Issue 1.32] PPDev-specific updates for open source release
 \item[Issue 1.33] Removed misplaced comment in the shell script.
 \item[Issue 1.34] Improved {\it LaTeX} layout.
-\item[Issue 1.35] Tidy-up in preparation for implementing calculation of LALR(1) lookahead sets.
+\item[Issues 1.35, 1.36] Tidy-up in preparation for implementing calculation of LALR(1) lookahead sets.
+\item[Issue 1.37] Now calculates LALR(1) lookahead sets where appropriate.
 \end{description}
 \subsection{Changes Forecast}
 The implementation of LALR(1) lookahead sets is in sight.
@@ -131,16 +132,25 @@ The implementation of LALR(1) lookahead sets is in sight.
 \pagebreak
 \section{GENERAL}
 \subsection{Scope}
-This document contains the implementation of the SLR(1) parser generator
+This document contains the implementation of the SLR(1)/LALR(1) parser generator
 the detailed design of which is given in \cite{DS/FMU/IED/DTD017}.
 \subsection{Introduction}
 \cite{DS/FMU/IED/DTD017} gives a ``black box'' description of the parser
-generator. The implementation given here attempts to follow the treatment
+generator.
+For historical reasons, and because it is quite a sensible and efficent design,
+we first use the SLR(1) algorithm and only calculate the LALR(1) lookahead
+if this gives rise to conflicts.
+The SLR(1) implementation given here follows the treatment
 in \cite{Aho77} fairly closely and the reader of this document is assumed
 to be familiar with sections 6.1, 6.2 and 6.3 of that book. 
 The calculation of LALR(1) lookahead sets is based on the excellent treatment
 of \cite{bermudez89}.
-
+The key point, not stated explicitly in \cite{Aho77}, is that the LALR(1) states
+are the same as the SLR(1) states as are the shift transitions while the
+LALR(1) reduce transitions are a subset of the SLR(1) ones.
+The approach to calculating them in \cite{bermudez89} is based on repeating
+parts of the SLR(1) calculations on a transformed grammar, which we
+will call the state transition grammar or STG.
 After beginning the definition of the structure $Slrp$ in section
 \ref{PREAMBLE},
 the implementation proper starts in section \ref{UTILITIES}
@@ -170,6 +180,11 @@ define two strings at the ML top level: {\it system\_version} and {\it copyright
 \section{PREAMBLE}\label{PREAMBLE}
 =TEX
 =SML
+infix 4 rgrab;
+infix 4 rcup;
+infix 4 rcup';
+infix 4 rcup'';
+infix 4 rgrab';
 structure €Slrp› : Slrp = struct
 =TEX
 The following banner is written to the log file and to standard output
@@ -212,7 +227,6 @@ it is helpful to have (i) a version of $grab$ which adds the new element
 at the end of the list, and (ii) a version of $cup$ which accumulates its
 second operand into its first:
 =SML
-infix 4 rgrab;
 fun (xs : ''a list) €rgrab› (what : ''a) = (
 	if	what mem xs
 	then	xs
@@ -220,7 +234,6 @@ fun (xs : ''a list) €rgrab› (what : ''a) = (
 );
 =TEX
 =SML
-infix 4 rcup;
 fun (list1 : ''a list) €rcup› (list2 : ''a list) : ''a list = (
 	revfold (fn(x, xs) => xs rgrab x) list2 list1
 );
@@ -332,33 +345,40 @@ read_file "/etc/passwd";
 let val str = read_file "slr.doc" in chat str end;
 =SML
 local
-val €log_file› : outstream ref = ref std_out;
+val €log_file› : outstream OPT ref = ref Nil;
 in
 =TEX
 =SML
 fun €open_log_file› (file : string) : unit = (
 	(if file <> ""
-	then log_file := open_out file
-	else raise SlrpError "an empty filename is not allowed for the log file")
+	then log_file := Value(open_out file)
+	else ())
 	handle ex as Io _ =>
 	raise SlrpError("i/o failure on log file: " ^ file ^ " (" ^ string_of_exn ex ^ ")")
 );
 =TEX
 =SML
 fun €flush_log_file› () : unit = (
-	ExtendedIO.flush_out (!log_file)
+	case !log_file of
+		Value s => ExtendedIO.flush_out s
+	|	Nil => ()
+	
 );
 =TEX
 =SML
 fun €close_log_file› () : unit = (
-	close_out (!log_file)
+	case !log_file of
+		Value s => close_out s
+	|	Nil => ()
 );
 =TEX
 =SML
 fun €log› (msg : string) = (
-	output(!log_file, msg)
+	(case !log_file of
+		Value s => output(s, msg)
+	|	Nil => output(std_out, msg))
 	handle ex as Io _ =>
-	raise SlrpError("i/o failure on output file (" ^ string_of_exn ex ^ ")")
+	raise SlrpError("i/o failure on log file (" ^ string_of_exn ex ^ ")")
 );
 end; (* of local ... in ... end *)
 =TEX
@@ -395,6 +415,7 @@ to define, names of non-terminals have become integer indexes into an array:
 =SML
 type €FNONTERM› = int;
 type €ITEM› = (FNONTERM * int * int);
+type €ALT› = (FNONTERM * int);
 =TEX
 We now introduce an efficient representation of the
 grammar denoted by the type $FGRAMMAR$.
@@ -484,16 +505,13 @@ in
 	aux xx yy
 end);
 
-infix 4 rcup';
 fun xx €rcup'› yy = merge item_order xx yy;
 
 
-infix 4 rcup'';
 fun xx €rcup''› yy = merge item_list_order xx yy;
 
 fun €maprcup''› f = (Sort.sort (curry item_list_order)) o (map f);
 
-infix 4 rgrab';
 fun xx €rgrab'› y = xx rcup' [y];
 
 fun €gen_eq› (eqfn:(''a*''a)->int) (xx:''a list) (yy:''a list) : bool = (
@@ -512,10 +530,6 @@ val €set_eq'› = gen_eq item_order;
 =TEX
 \subsection{Converting the Grammar to an Efficient Representation}
 =SML
-type NTDICT = FNONTERM E_DICT;
-
-val €nt_dict› : NTDICT ref = ref initial_e_dict;
-
 =SML
 fun €nt_name› (g : ''a FGRAMMAR) (nt : FNONTERM) 
 		: NONTERMINAL = (
@@ -523,8 +537,8 @@ fun €nt_name› (g : ''a FGRAMMAR) (nt : FNONTERM)
 );
 =TEX
 =SML
-fun €make_grammar› (g : ''a GRAMMAR) : ''a FGRAMMAR =
-let	val sd = (nt_dict := initial_e_dict);
+fun €make_grammar› (sen : NONTERMINAL)  (g : ''a GRAMMAR) : ''a FGRAMMAR * FNONTERM =
+let	val €nt_dict› : FNONTERM E_DICT ref = ref initial_e_dict;	val sd = (nt_dict := initial_e_dict);
 	val mapping = combine (map fst g) (interval 0 (bound g)) ;
 	fun aux1 (s,i) = (nt_dict := e_extend s i (!nt_dict));
 	val sd = map aux1 mapping;
@@ -538,9 +552,11 @@ let	val sd = (nt_dict := initial_e_dict);
 	fun aux4 (nt, rhs) =
 		(nt,  PPArray.arrayoflist
 			(map PPArray.arrayoflist (aux3 rhs)));
-
+	val sent = (case e_lookup sen (!nt_dict) of 
+		Nil => raise SlrpError "SLR_TABLES"
+		|Value x => x);
 in
-	PPArray.arrayoflist (map aux4 g)
+	(PPArray.arrayoflist (map aux4 g), sent)
 end;
 =TEX
 $f\_expand$ is a version of the function $expand$ which
@@ -668,7 +684,8 @@ fun €first› (g : ''a GRAMMAR) : (''a SYMBOL * (''a OPT list)) list = (
 =TEX
 The following computes the $FOLLOW$ function of \cite{Aho77}.
 =SML
-fun €follow› (g : ''lc GRAMMAR) (sen : string) (eos : ''lc): (string * (''lc list)) list = (
+fun €follow› (g : ''lc GRAMMAR) (sen : NONTERMINAL) (eos : ''lc)
+	: ''lc list E_DICT = (
 	let	val first_tab = first g;
 		fun first_syms (sym :: more) = (
 			let	val firsts = lassoc3 first_tab sym;
@@ -706,30 +723,26 @@ fun €follow› (g : ''lc GRAMMAR) (sen : string) (eos : ''lc): (string * (''lc lis
 				else go tab'
 			end
 		);
-	in	go (map (fn (nt, _) => (nt, 
-			if nt = sen then [eos] else [])) g)
+		val sd =	go (map (fn (nt, _) => (nt,  if nt = sen then [eos] else [])) g);
+	in	list_e_merge initial_e_dict sd
 	end 
 );
-
 =TEX
 
 \subsection{The Table Construction}
 
 =SML
-fun €slr_tables› (g : ''lc GRAMMAR) (eos : ''lc) (sen : string) 
+fun €slr_tables› (g : ''lc GRAMMAR) (eos : ''lc) (sen : NONTERMINAL) 
 	: (''lc)ACTION_TABLE * GOTO_TABLE * (ITEM list * int) list *
 			 ''lc FGRAMMAR * STATE = (
 	let	open PPArray;
-		val g' = make_grammar g;
-		val sent = (case e_lookup sen (!nt_dict) of 
-			Nil => raise SlrpError "SLR_TABLES"
-			|Value x => x);
+		val (g' , sent) = make_grammar sen g;
 		val C = make_items g' sent;
 		val n = bound C;
 		val js = interval 0 n;
 		val Ijs = combine C js;
 		val actions = array (n+1, []:(''lc * ACTION)list);
-		val gotos = array (n+1, []: (string * STATE)list);
+		val gotos = array (n+1, []: (NONTERMINAL * STATE)list);
 		val follow_tab = follow g sen eos;
 		fun my_follower item = (
 			(Value (f_follower g' item)) handle _ => Nil
@@ -746,7 +759,7 @@ fun €slr_tables› (g : ''lc GRAMMAR) (eos : ''lc) (sen : string)
 			) |	Nil => (
 				if nt <> sent
 				then let	fun f lc = (lc, Reduce((nt_name g' nt, alt), dot));
-						val lcs = lassoc3 follow_tab (nt_name g' nt);
+					val lcs = force_value(e_lookup (nt_name g' nt) follow_tab);
 				in	make_actions items more rcup map f lcs
 				end else make_actions items more rgrab (eos, Accept) 
 			)
@@ -776,7 +789,6 @@ fun €slr_tables› (g : ''lc GRAMMAR) (eos : ''lc) (sen : string)
 	in	(actions, gotos, Ijs, g', init_state)
 	end
 );
-
 =TEX
 \subsection{Conflict Detection}
 The following function calculates whether there are any conflicts in an action table.
@@ -795,6 +807,236 @@ fun €conflicts›  (actions : (''lc) ACTION_TABLE) :
 				(interval 0 (length actions - 1)))
 	end
 );
+=TEX
+\section{CALCULATING LALR(1) LOOKAHEAD SETS}\label{LALRLA}
+The input to the functions in this section is the output of the SLR(1) table
+construction of the previous section.
+I.e., we have an action table, the goto table (for non-terminal transitions),
+the sets of items that the parser states represent, and the grammar in the
+efficient array-based representation.
+Both the action table and the goto table are represented as arrays whose
+index sets are the numeric representations of the states of the parser.
+To avoid recalculating it, we are also given the list of states for
+which conflicts have been detected.
+We follow \cite{Bermudez89} for the calculation of the LALR(1) lookahead
+sets and then use them to filter out unnecessary reductions from the action
+table. 
+
+Given the current structure of the overall process, there should not be any dynamic actions
+in the action table at this stage, because they are only introduced if the LALR(1) calculations have
+not removed all the conflicts. However, they have an obvious interpretation here and so we allow for them
+in the event of future changes. There will be no error actions in the action table.
+
+=TEX
+To make the grammar more informative for the user, we include the target
+state of each transition in the grammar symbols (only the source state
+and edge-label are strictly needed). Thus,  we differ from \cite{Bermudez89}, by having triples
+$[p:X:q]$ rather than pairs $[p:X]$. For $X$ terminal, $q$ is optional, a missing $q$ corresponds
+to the accepting state. The following function computes the string representation of a non-terminal.
+=SML
+fun €mk_stg_nonterminal› ((s0 : STATE , nt : NONTERMINAL), s1 : STATE) : string  = (
+	"[" ^ string_of_int s0 ^ ":" ^ nt ^ ":" ^ string_of_int s1 ^ "]"
+);
+=TEX
+The following function takes a step along a terminal symol in an action table.
+=SML
+fun €step_terminal› 
+	(actions : ''lc ACTION_TABLE)
+	(p : STATE)
+	(lc : ''lc)
+	: (STATE * ''lc * STATE OPT) list = (
+	let	open PPArray;
+		val lc_acts = sub(actions, p);
+		fun aux acc [] = rev acc
+		|   aux acc ((lc', Shift q)::more) =
+			aux (if lc = lc' then (p, lc, Value q)::acc else acc) more
+		|   aux acc ((lc', Dynamic(q, _))::more) =
+			aux (if lc = lc' then (p, lc, Value q)::acc else acc) more
+		|   aux acc ((lc', Accept)::more) =
+			aux (if lc = lc' then (p, lc, Nil) ::acc else acc) more
+		|   aux acc (_::more) = aux acc more;
+	in	aux [] lc_acts
+	end
+);
+=TEX
+The following function takes a step along a non-terminal symol in a goto table.
+=SML
+fun €step_nonterminal› 
+	(gotos : GOTO_TABLE)
+	(p : STATE)
+	(nt : NONTERMINAL)
+	: STATE list = (
+	let	open PPArray;
+		val nt_sts = sub(gotos, p);
+		fun aux acc [] = rev acc
+		|   aux acc ((nt', q)::more) =
+			aux (if nt = nt' then q ::acc else acc) more;
+	in	aux [] nt_sts
+	end
+);
+=TEX
+The following function walks along an alternative in a grammar starting at a given state and
+produces the list of all paths through the LR(0) automaton starting in a given state with
+a sequence of edge labels given by the symbols in the alternative. It is caller's responsibility
+to supply a state/alternative pair that does actually correspond to a nonterminal transition
+in the LR(0) automaton (else you will get a spurious production with an empty right-hand side
+in the state transition grammar).
+=SML
+fun €walk› 
+	(actions : ''lc ACTION_TABLE)
+	(gotos : GOTO_TABLE)
+	(g : ''lc FGRAMMAR)
+	(s0 : STATE)
+	((nt, i) : ALT)
+	:((STATE * ''lc * STATE OPT)  SYMBOL list * STATE OPT) list = (
+	let	open PPArray;
+		val alt = sub(f_expand g nt, i);
+		val len = length alt;
+		fun step p k = (
+			case sub(alt, k) of
+				FNonTerm fnt => (
+				let	val nt_sts = sub(gotos, p);
+					val nt = nt_name g fnt;
+					fun aux q =
+					(NonTerminal(mk_stg_nonterminal((p, nt), q)), Value q);
+				in	map aux (step_nonterminal gotos p nt)
+				end
+			) |	FTerm lc =>  map (fn x as (_,_, q)=> (Terminal x, q))(step_terminal actions p lc)
+		);
+		fun gather_step k (syms, Value q)= (
+			let	val new_sqs = step q k;
+			in	map
+				(fn (sym, q') => (sym::syms, q'))
+				new_sqs
+			end
+		) | gather_step _ syms_nil = [syms_nil];
+		fun gather_steps k (syms_qs) = (
+			if	k = len
+			then	rev(map (fn (syms, q) => (rev syms, q)) syms_qs)
+			else	gather_steps(k+1)  (flat(map (gather_step k) syms_qs))
+		);
+	in	gather_steps 0 [([], Value s0)]
+	end
+);
+=TEX
+
+The main step is the construction of the state transition grammar.
+In this step, we also construct some auxiliary items: a dictionary
+mapping non-terminals, $A$, of the original grammar to the sets of states, $p$, for which
+there is a transition $[p:A:q]$ for some state $q$;
+a dictionary mapping non-terminals to their integer representations in the efficent grammar
+representation; the sentence symbol for the state transition grammar; and the
+end of stream symbol.
+
+
+=SML
+fun €make_transition_grammar› 
+	(actions : ''lc ACTION_TABLE)
+	(gotos : GOTO_TABLE)
+	(g : ''lc FGRAMMAR)
+	(sen : NONTERMINAL)
+	(eos : ''lc)
+	(init_state : STATE) 
+	: (STATE * ''lc * STATE OPT) GRAMMAR *
+	  STATE list E_DICT *
+	  FNONTERM E_DICT *
+	  NONTERMINAL *
+	   (STATE * ''lc * STATE OPT) = (
+	let	open PPArray;
+		val b = length gotos - 1;
+		val states = interval 0 b;
+		fun mk_nt_triples (s0, nts_s1s) = map (fn (nt, s1) => ((s0, nt), s1)) nts_s1s;
+		val nt_triples = flat(map (fn s => mk_nt_triples (s, sub(gotos, s))) states);
+		fun mk_st_edict acc [] = acc
+		|   mk_st_edict acc (((s, nt), _)::more) = (
+			case e_lookup nt acc of
+				Nil => mk_st_edict (e_enter nt [s] acc) more
+			|	Value sl => mk_st_edict (e_enter nt (sl rgrab s) acc) more
+		);
+		val st_edict = mk_st_edict initial_e_dict nt_triples;
+		val fnts = interval 0 (length g - 1);
+		val nt_sdict = map (fn fnt => (fst(sub(g, fnt)), fnt))  (interval 0 (length g - 1));
+		val nt_edict = list_e_merge initial_e_dict nt_sdict;
+		fun do_prod (s0nts1 as ((s0, nt), s1)) = (
+			let	val fnt = force_value(e_lookup nt nt_edict);
+				val prod = snd(sub(g, fnt));
+				val nalts = length prod;
+				val alts = map (fn i => (fnt, i)) (interval 0 (nalts-1));
+				val my_walk = map fst o walk actions gotos g s0;
+			in	(mk_stg_nonterminal s0nts1, flat (map my_walk alts))
+			end
+		);
+		val init_triple = ((init_state, sen), ~1);
+		val g' = map do_prod (init_triple::nt_triples);
+		val eos_triple = (~1, eos, Nil)
+	in	(g', st_edict, nt_edict, mk_stg_nonterminal init_triple, eos_triple)
+	end
+);
+=IGN
+val (g', st_ed, nt_ed, sen) = make_transition_grammar BNF_actions BNF_gotos BNF_effgrammar "Grammar'" 13;
+fun fmt_terminal (s0, lc, Value s1) = "[" ^ string_of_int s0 ^ ":" ^ fmt_BNF_lex_class lc ^ ":" ^ string_of_int s1 ^"]"
+| fmt_terminal (s0, lc, Nil) = "[" ^ string_of_int s0 ^ ":" ^ fmt_BNF_lex_class lc ^ ":]";
+
+print_grammar fmt_terminal g';
+=TEX
+The next step is the computation of the LALR(1) look-ahead (assuming the follow table
+has already been calculated). It is callers responsibiliity to provide an alternative
+which does label a transition leading from the supplied state.
+=SML
+fun €lalr_lookahead›
+	(actions : ''lc ACTION_TABLE)
+	(gotos : GOTO_TABLE)
+	(g : ''lc FGRAMMAR)
+	 (st_ed : STATE list E_DICT)
+	 (nt_ed : FNONTERM E_DICT)
+	(follow_tab : (STATE * ''lc * STATE OPT) list E_DICT)
+	(q : STATE)
+	(alt as (a, i) : NONTERMINAL * int) : ''lc list = (
+	let	open PPArray;
+		val fnt = force_value(e_lookup a nt_ed);
+		val ps = force_value(e_lookup a st_ed);
+		fun unwanted_state p =  (
+			all (walk actions gotos g p (fnt, i)) (fn (_, Value q') => q <> q' | _ => true)
+		);
+		val ps' = ps drop unwanted_state;
+		fun collect acc  [] = flat acc
+		|   collect acc (p::more) = (
+			let	val p1 = snd(find(sub(gotos, p)) (fn(a', _) => a = a'));
+				val name = mk_stg_nonterminal((p, a), p1);
+				val lcs =	case e_lookup name follow_tab of
+						Value triples => map (fn(_, lc, _) => lc) triples
+					|	Nil => [];
+			in	collect (lcs::acc) more
+			end
+		);
+	in	collect [] ps'
+	end
+);
+=TEX
+We can now define the function which carries out the resolution of conflicts using the LALR(1) look-ahead sets.
+Only call this if there are conflicts to resolve or if the user has asked for a print-out of the
+state transition grammar (otherwise lots of calculation for no purpose).
+=SML
+fun €lalr_resolve_conflicts›
+	(actions : ''lc ACTION_TABLE)
+	(gotos : GOTO_TABLE)
+	(g : ''lc FGRAMMAR)
+	(sen : NONTERMINAL)
+	(eos : ''lc)
+	(init_state : STATE) 
+	(conf_states : STATE list)
+	(prt_stg : bool)  : unit = (
+	let	open PPArray;
+		val (g', st_ed, nt_ed, sen', eos') =
+			make_transition_grammar actions gotos g sen eos init_state;
+		val follow_tab = follow g' sen' eos';
+		fun do_state q = (
+			(* TBS *)
+		);
+	in	map do_state conf_states; ()
+	end
+);
+=SML
 =TEX
 \section{DIAGNOSTIC UTILITIES}\label{DIAGNOSTICUTILITIES}
 It is helpful to have code which attempts to explain the conflicts which
@@ -962,6 +1204,16 @@ datatype €BNF_lex_class›	=	BNF_var
 			|	BNF_action
 			|	BNF_eos;
 =TEX
+=IGN
+fun fmt_BNF_lex_class (BNF_var : BNF_lex_class) : string = "Nam"
+| fmt_BNF_lex_class BNF_con = "Con"
+| fmt_BNF_lex_class BNF_eq = "="
+| fmt_BNF_lex_class BNF_semi = ";"
+| fmt_BNF_lex_class BNF_vert = "|"
+| fmt_BNF_lex_class BNF_comma = ","
+| fmt_BNF_lex_class BNF_action = "Action"
+| fmt_BNF_lex_class BNF_eos = "$";
+
 =SML
 type €BNF_lex_item› = BNF_lex_class * string;
 =TEX
@@ -1084,7 +1336,7 @@ the sentence symbol.
 The resulting parser will compute
 a value of type $P\_GRAMMAR$. Such a value may be used to compute a
 grammar and a reduction table as follows (where from now on we
-use a standard ``impossible'' nonterminal as a sentence symbol to augment
+use a standard ``impossible'' non-terminal as a sentence symbol to augment
 the grammar):
 =SML
 val €sentence_symbol› ="*Start*";
@@ -1414,14 +1666,14 @@ val €BNF_error› : (BNF_lex_item, BNF_lex_class, 'a, 'b) ERROR_ROUTINE = (
 val €BNF_end_of_string› : BNF_lex_item = (BNF_eos, "<End-of-Input>");
 =TEX
 =SML
-fun BNF_reader (toks : BNF_lex_item list) : BNF_lex_item  * BNF_lex_item list = (
+fun €BNF_reader› (toks : BNF_lex_item list) : BNF_lex_item  * BNF_lex_item list = (
 	case toks of
 		(h :: more) => (h, more)
 	|	[] => (BNF_end_of_string, [])
 );
 =TEX
 =SML
-val (BNF_actions, BNF_gotos, BNF_Ijs, BNF_effgrammar, BNF_init) =
+val (€BNF_actions›, €BNF_gotos›, €BNF_Ijs›, €BNF_effgrammar›, €BNF_init›) =
 					slr_tables BNF_grammar BNF_eos "Grammar'";
 =TEX
 The grammar has no conflicts so we may safely use the default
@@ -1964,7 +2216,7 @@ end; (* of structure Slrp *)
 \subsection{Shell Interface}
 =DUMP slrp
 #!/bin/sh
-# slrp From: $Id: imp017.doc,v 1.34 2003/02/17 13:14:19 rda Exp rda $
+# slrp From: $Id: imp017.doc,v 1.35 2003/02/20 15:28:04 rda Exp rda $
 # Shell script to run the SLRP Parser Generator
 if test -z "$PROGNAME"
 then
@@ -2124,5 +2376,3 @@ dump_string "slr.tst"(
 "    | `{`, E, `}`;            \n");
 
 Slrp.slrp {in_file="slr.tst", out_file="slr.sml", log_file ="slr.log", eos ="Eos", log_level=2};
-
-
