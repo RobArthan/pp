@@ -140,7 +140,6 @@ fun €k_slot_compilation_unit_name› (kcu : KSLOT_COMPILATION_UNIT) : string = (
 	|	KCUUnit ccu => context_compilation_unit_name ccu
 );
 =TEX
-
 \subsection{Component Update Functions}
 =SML
 fun €package_vc_vars› (
@@ -1259,6 +1258,25 @@ fun €test_flag› (selector : FLAGS -> bool) (index : int) : bool = (
 	(selector o #flags o #declab o block) index
 );
 =TEX
+The specification does not specify the block name to be used in the bottom block in the running environment.
+It is convenient to use this to tell the code which stores VCs the name of the current web clause.
+The following two functions assist in this.
+=SML
+fun €set_bottom_block_name› (n : ID) : unit = (
+	let	fun aux [] = [block_block_name(empty_block, n)]
+		|   aux [blk] = [block_block_name(blk, n)]
+		|   aux (blk :: more) = blk :: aux more;
+	in	blocks := aux (!blocks)
+	end
+);
+fun €get_bottom_block_name› (() : unit) : ID = (
+	let	fun aux [] = ""
+		|   aux [blk :BLOCK] = #block_name(#declab blk)
+		|   aux (blk :: more) = aux more;
+	in	aux (!blocks)
+	end
+);
+=TEX
 \subsection{Function Parameter Lists}
 When the global variable representing a SPARK function is stored in a theory, a user data entry giving its formal parameter list is also stored.
 This is later accessed via the $CN\_ENV$ when function calls using named parameter associations are translated into Z.
@@ -1499,11 +1517,15 @@ fun €current_ti_context› (() : unit) : TERM list = (
 \subsection{Updating the Z Theory Database}
 =SML
 fun €store_vc_term› (label : LABEL) (tm : TERM) : unit = (
-	let	fun aux i = (
-			let val vc_name = "VC_" ^label^"_"^ string_of_int i;
-			in	if (get_thm "-" vc_name; false)
+	let	val bbn = get_bottom_block_name ();
+		val vc_lab =	if 	bbn = "" orelse bbn = label
+				then	"VC_" ^ label ^ "__"
+				else	"VC_" ^ bbn ^ "__" ^ label ^ "_";
+		fun aux i = (
+			let val vc_name = vc_lab ^ string_of_int i;
+			in	if (get_conjecture "-" vc_name; false)
 						handle Fail _ => true
-				then	(save_thm (vc_name, asm_rule tm); ())
+				then	(new_conjecture ([vc_name], tm); ())
 				else	aux (i + 1)
 			end
 		);
@@ -3911,13 +3933,16 @@ The following reflects the need to register compilation k-slots .
 =SML
 fun €do_kslot_compilation_unit›
 	(y as (KCUKSlot {label, content}) : KSLOT_COMPILATION_UNIT) : unit = (
+	set_bottom_block_name (k_slot_compilation_unit_name y);
 	new_k_slot (label, RSCompilation, get_current_theory_name())
 ) | do_kslot_compilation_unit
 	(y as (KCUUnit x) : KSLOT_COMPILATION_UNIT) = (
+	set_bottom_block_name (k_slot_compilation_unit_name y);
 	do_context_compilation_unit x
 );
 =TEX
-The following reflects the SID functions for the production $web\_clause$:
+The following reflects the SID functions for the production $web\_clause$.
+(Note that we set up the label on the bottom block for possible use in generating VC names except in the first two cases, where the processing of the constituent k-slots or compilations units will do this.)
 =SML
 fun €do_web_clause› (y as (WCCompilation x) : WEB_CLAUSE) : unit = (
 let	val current_theory = get_current_theory_name ();
@@ -3938,6 +3963,7 @@ let	val {label=label, private=private} = x;
 	val current_theory = get_current_theory_name ();
 in	open_label_theory label;
 	update_replacement_env(label, ReplacePPart x);
+	set_bottom_block_name label;
 	map (do_declaration []) (#private x);
 	lazy_open_theory current_theory
 end
@@ -3946,6 +3972,7 @@ let	val {label=label,visible=visible} = x;
 	val current_theory = get_current_theory_name ();
 in	open_label_theory label;
 	update_replacement_env(label, ReplaceVPart x);
+	set_bottom_block_name label;
 	map (do_declaration []) (#visible x);
 	lazy_open_theory current_theory
 end
@@ -3954,6 +3981,7 @@ let	val {label=label,decls=decls} = x;
 	val current_theory = get_current_theory_name ();
 in	open_label_theory label;
 	update_replacement_env(label, ReplaceDecl x);
+	set_bottom_block_name label;
 	new_scope_dec_replace x;
 	map (do_declaration []) decls;
 	update_envs_remove_declabel x;
@@ -3965,6 +3993,7 @@ let	val {label=label,statement=statement} = x;
 	val current_theory = get_current_theory_name ();
 in	open_label_theory label;
 	update_replacement_env(label, ReplaceStat x);
+	set_bottom_block_name label;
 	new_scope_speclabel label;
 	do_statement statement;
 	vcs_speclabel x;
@@ -3976,6 +4005,7 @@ let	val {label=label,statement=statement} = x;
 	val current_theory = get_current_theory_name ();
 in	open_label_theory label;
 	update_replacement_env(label, ReplaceStat x);
+	set_bottom_block_name label;
 	new_scope_stmt_label label;
 	do_statement statement;
 	end_scope_stmt_label();
