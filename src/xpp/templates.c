@@ -46,7 +46,15 @@ typedef struct {
 	char * expansion;
 } TemplateEntry;
 
+typedef struct {
+	NAT text_index;
+	char * expansion;
+} TemplateCallbackData;
+
 #define MAX_TEMPLATES 100
+
+static TemplateCallbackData template_callback_data[MAX_TEMPLATES];
+
 static TemplateEntry template_table[MAX_TEMPLATES];
 static NAT template_table_size;
 
@@ -55,20 +63,20 @@ Bool get_templates_data()
 	char *ptr = templates;
 	NAT i;
 
-	while (*ptr != ':' && *ptr != '\0') ptr++;
+	while (*ptr != '/' && *ptr != '\0') ptr++;
 	for (	i = 0;
 		i < MAX_TEMPLATES && *++ptr != '\0';
 		i++) {
 			template_table[i].bitmap_file = ptr;
-			while (*ptr != ':' && *ptr != '\0') ptr++;
-			if (*ptr == ':') {
+			while (*ptr != '/' && *ptr != '\0') ptr++;
+			if (*ptr == '/') {
 				*ptr = '\0';
 			} else {
 				break;
 			};
 			template_table[i].expansion = ++ptr;
-			while (*ptr != ':' && *ptr != '\0') ptr++;
-			if (*ptr == ':') {
+			while (*ptr != '/' && *ptr != '\0') ptr++;
+			if (*ptr == '/') {
 				*ptr = '\0';
 			} else {
 				break;
@@ -86,9 +94,7 @@ Bool add_templates(w)
 Widget w;
 {
 	XmString lab;
-	char buf[2];
 	NAT i, x, y, twi, fbase;
-	NAT cbdata;
 	Widget shell, form, button;
 	void templates_cb();
 
@@ -112,37 +118,30 @@ Widget w;
 	};
 
 	get_templates_data();
-	for (i-0; i<template_table_size; i++)
-	{	printf("template_table_size[%d] = %s\n", i,
-			template_table[i].bitmap_file);
-	}
 
-	fbase = /* 1 + ((template_table_size-1) / 2)*/ (template_table_size + 1) & ~0x01;
+	fbase = (template_table_size + 1) & ~0x01;
 
 	shell = XtVaCreatePopupShell("xpp-Templates",
-		xmDialogShellWidgetClass, w,
+			xmDialogShellWidgetClass, w,
 		NULL); 
 
 	form = XtVaCreateWidget("form",
-		xmFormWidgetClass, shell,
-		XmNfractionBase, 	fbase,
-		XmNautoUnmanage,	False,
+			xmFormWidgetClass,	shell,
+			XmNfractionBase, 	fbase,
+			XmNautoUnmanage,	False,
 		NULL);
 
 	templates_data[twi].text_w = w;
 	templates_data[twi].templates_w = form;
 
-	buf[1] = '\0';
-
 	for(i = 0; i < template_table_size; ++i) {
 
-		buf[0] = templates[i];
 		lab = XmStringCreateSimple(template_table[i].bitmap_file);
 		x = (fbase / 2) * (i % 2);
 		y = 2 * (i / 2);
 		button = XtVaCreateManagedWidget("button",
 			xmPushButtonGadgetClass, form,
-			XmNlabelString, lab, 
+			XmNlabelString,	lab, 
 			XmNleftAttachment,	XmATTACH_POSITION,
 			XmNleftPosition,	x,
 			XmNrightAttachment,	XmATTACH_POSITION,
@@ -152,11 +151,12 @@ Widget w;
 			XmNbottomAttachment,	XmATTACH_POSITION,
 			XmNbottomPosition,	y + 2,
 			NULL);
-		copy_font_list(button, w);
+/*		copy_font_list(button, w); */
 		XmStringFree(lab);
-		cbdata = (twi << 8) | (templates[i] & 0xff);
+		template_callback_data[i].text_index = twi;
+		template_callback_data[i].expansion = template_table[i].expansion;
 		XtAddCallback(button, XmNactivateCallback, templates_cb,
-			(XtPointer) cbdata);
+			(XtPointer) &(template_callback_data[i]) );
 	};
 
 	XtManageChild(form);
@@ -171,11 +171,10 @@ Widget w;
 
 void templates_cb(w, cbdata, cbs)
 Widget w;
-NAT cbdata;
+TemplateCallbackData * cbdata;
 XmPushButtonCallbackStruct *cbs;
 {
-	char buf[2];
-	NAT text_index = cbdata >> 8;
+	NAT text_index = cbdata->text_index;
 	XmTextPosition start, end;
 	Widget text_w;
 
@@ -187,18 +186,15 @@ XmPushButtonCallbackStruct *cbs;
 		return;
 	};
 
-	buf[0] = cbdata & 0xff;
-	buf[1] = '\0';
-
 	if(XmTextGetSelectionPosition(text_w, &start, &end)) {
-		XmTextReplace(text_w, start, end, buf);
+		XmTextReplace(text_w, start, end, cbdata->expansion);
 		XmTextClearSelection(text_w, CurrentTime);
 	} else {
 		start = XmTextGetInsertionPosition(text_w);
-		XmTextInsert(text_w, start, buf);
+		XmTextInsert(text_w, start, cbdata->expansion);
 	};
 
-	XmTextSetInsertionPosition(text_w, start + 1);
+	XmTextSetInsertionPosition(text_w, start);
 	XmTextShowPosition(text_w, start);
 }
 
