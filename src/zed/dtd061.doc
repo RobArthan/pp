@@ -149,12 +149,16 @@ structure for parsed paragraphs.
 The grammar of  \cite{DS/FMU/IED/DEF007} requires some recasting
 for use in the parser. This section contains the actual form
 for processing with $SLRP$ and inclusion in the implementation.
+We include reduction functions for use in the implementation.
+These have mnemonic names relating to the grammar rules in which
+they appear in order to make the grammar easier to change when necessary.
 
 The main differences in the grammar is the  widening of the grammar for
 $Expr1$ to allow its re-use (possibly with some extra checks) in
 all places in the grammar where applied use
 of something approximately like a fancy-fix expression is called for.
 In more detail this works out as follows.
+
 
 \begin{enumerate}
 \item
@@ -199,12 +203,12 @@ SLR(1) problems right at the other end of the grammar in
 $Expr4$.
 This enables one parser to handle all of the requirements for parsing Z.
 =DUMP dtd061.grm.txt
-€Paragraph›		= Fixity
-			| GeneralTerm
-			| AbbDef
-			| FreeTypeDef
-			| AxBox
-			| Conjecture;
+€Paragraph›		= Fixity				(red_fixity x1 stk)
+			| GeneralTerm				(red_general_term x1 stk)
+			| AbbDef				(red_abb_def x1 stk)
+			| FreeTypeDef				(red_free_type_def x1 stk)
+			| AxBox				(red_ax_box x1 stk)
+			| Conjecture				(red_conjecture x1 stk);
 =TEX
 \subsubsection{Fixity Paragraph}
 
@@ -231,25 +235,24 @@ a fixity paragraph.
 \end{enumerate}
 
 =DUMPMORE dtd061.grm.txt
-€Fixity›			= FixityClass, Templates
-			| FixityClass, Number, Templates;
-
-€FixityClass›		= `fun` | `gen` | `rel`;
+€Fixity›			= FixityClass, Templates		(red_templates x1 x2 stk)
+			| FixityClass, Number, Templates	(red_prec_templates x1 x2 x3 stk);
 =TEX
 =DUMPMORE dtd061.grm.txt
-€Templates›		= Template
-			| Template, `,`, Templates;
+€Templates›		= Template				(red_template x1 stk)
+			| Template, `Comma`, Templates
+					(red_template_templates x1 x2 x3 stk);
 
-€Template›		= StubIds
-			| IdStubs;
+€Template›		= StubIds				(red_stub_ids x1 stk)
+			| IdStubs				(red_id_stubs x1 stk);
 
-€StubIds›			= Stub, Id
-			| Stub, Id, Stub
-			| Stub, Id, StubIds;
+€StubIds›		= Stub, Id				(red_stub_id x1 x2 stk)
+			| Stub, Id, Stub			(red_stub_id_stub x1 x2 x3 stk)
+			| Stub, Id, StubIds			(red_stub_id_stub_ids x1 x2 x3 stk);
 
-€IdStubs›			= Id, Stub
-			| Id, Stub, Id
-			| Id, Stub, IdStubs;
+€IdStubs›			= Id, Stub			(red_id_stub x1 x2)
+			| Id, Stub, Id				(red_id_stub_id x1 x2 x3 stk)
+			| Id, Stub, IdStubs			(red_id_stub_id_stubs x1 x2 x3 stk);
 =TEX
 
 \subsubsection{Given Set Definition, Constraint and Term}
@@ -260,9 +263,8 @@ or if it consists of a single generic formal parameter list it must
 be a given set definition.
 
 =DUMPMORE dtd061.grm.txt
-€GeneralTerm›	= Pred
-			| Pred, `&`, AxBox
-			| Pred, `&`, Pred;
+€GeneralTerm›	= Pred					(red_pred x1 stk)
+			| Pred, `Ampersand`, Pred			(red_pred_constraint x1 x2 x3 stk);
 =TEX
 Note that in the second two forms the first $Pred$ has to be a given
 set definition and that these forms are only allowed when the
@@ -273,44 +275,52 @@ the Z Quine corners to delimit it.
 =TEX
 \subsubsection{Abbreviation Definition}
 =DUMPMORE dtd061.grm.txt
-€AbbDef›		= EqDef
-			| `SCH`, DefLhs, `IS`, Decl, `ST`, Pred, `END`
-			| `SCH`, DefLhs, `IS`, Decl, `END`;
+€AbbDef›		= EqDef						(red_eq_def x1 stk)
+			| `Sch`, DefLhs, `Is`, Decl, `St`, Pred
+					(red_schema x1 x2 x3 x4 x5 x6 x7 stk)
+			| `Sch`, DefLhs, `Is`, Decl
+					(red_schema_no_pred x1 x2 x3 x4 x5 stk);
 
-€EqDef›			= DefLhs, `¶`, Pred;
+€EqDef›			= DefLhs, `EqHat`, Pred		(red_deflhs_pred x1 x2 x3 stk);
 =TEX
 We take the meat of a $DefLhs$ just as $Expr1$. It is required that the expression
 be a simple variable or a possibly fancy-fix
 generic instantiation thereof.
 =DUMPMORE dtd061.grm.txt
-€DefLhs›		= Expr1;
+€DefLhs›		= Expr1					(red_expr1as_def_lhs x1);
 =TEX
 \subsubsection{FreeType Definition}
 We take $Branches$ to be a `$\vert$' separated list of $Expr1$s.
-This is the {\em only} place in the grammar where an $Expr1$ containing
-`...' is permitted.
 
 Here the $Expr1$s on the left of
 the `$::=$' are the $DecName$s of \cite{DS/FMU/IED/DEF007}.
-=DUMPMORE dtd061.grm.txt
-€FreeTypeDef›		= Expr1, `::=`, Branches
-			| Expr1, `::=`, Branches, `&`, FreeTypeDef;
 
-€Branches›		= Pred
-			| Pred, `|`, Branches;
+=DUMPMORE dtd061.grm.txt
+€FreeTypeDef›		= Expr1, `ColonsEq`, Branches
+					(red_a_free_type x1 x2 x3)
+			| Expr1, `ColonsEq`, Branches, `Ampersand`, FreeTypeDef
+					(red_free_types x1 x2 x3 x4 x5);
+
+€Branches›		= Pred						(red_pred_as_branch x1 stk)
+			| Pred, `Bar`, Branches				(red_branches x1 x2 x3 stk);
 =TEX
 \subsection{Axiomatic box}
 =DUMPMORE dtd061.grm.txt
-€AxBox›		= `AX`, Decl, `END`
-			| `AX`, `[`, SomeExprs, `]`, Decl, `END`
-			| `AX`, Decl, `ST`, Pred, `END`
-			| `AX`, `[`, SomeExprs, `]`, Decl, `ST`, Pred, `END`;
+€AxBox›		= `Ax`, Decl
+					(red_ax_box_no_pred x1 x2 x3 stk)
+			| `Ax`, `LSqBrk`, SomeExprs, `RSqBrk`, `Bars`, Decl
+					(red_gen_ax_box_no_pred x1 x2 x3 x4 x5 x6  x7stk)
+			| `Ax`, Decl, `St`, Pred			(red_ax_box x1 x2 x3 x4 x5 stk)
+			| `Ax`, `LSqBrk`, SomeExprs, `RSqBrk`, `Bars`, Decl, `St`, Pred
+					(red_gen_ax_box x1 x2 x3 x4 x5 x6 x7 x8 x9 stk);
 =TEX
 \subsection{Conjecture}
 As with constraint we just use $Pred$ for the notion of a possibly generic term:
 =DUMPMORE dtd061.grm.txt
-€Conjecture›		= `Ù`, Pred
-			| Id, `Ù`, Pred;
+€Conjecture›		= `TurnStile`, Pred
+					(red_conjecture x1 x2 stk)
+			| Id, `TurnStile`, Pred	
+					(red_id_conjecture x1 x2 x3 stk);
 =TEX
 \section{PREDICATES, SCHEMAS AND EXPRESSIONS}
 \subsection{Discussion}
@@ -351,7 +361,7 @@ However, in extended Z:
 =GFT Extended Z Examples
 Ò(A ± B) ç {true}Æ				contains a predicate conjunction
 Ò(µA | a = a ∑ B) ∫ [A; B]Æ			contains a schema quantifier
-Ò(A ± B ≤ C § D] ∫ [A; B; C; D]Æ		contains no predicate logical operators
+Ò[A ± B ≤ C § D] ∫ [A; B; C; D]Æ		contains no predicate logical operators
 Ò(A ± [B | C ± D] ∫ [A; B]Æ			contains both sorts of conjunction
 =TEX
 The point in the last example is that the local reversion to standard
@@ -361,8 +371,8 @@ quantifiers.
 \subsection{Predicate}
 In a $Pred$ the $Pred1$s are contexts requiring predicates.
 =DUMPMORE dtd061.grm.txt
-€Pred›			= Pred1
-			| Pred1, `;`, Pred;
+€Pred›			= Pred1				(red_pred1_as_pred x1 stk)
+			| Pred1, `Semi`, Pred			(red_pred_semi_pred x1 x2 x3 stk);
 =TEX
 $Pred1$, $Pred2$ and $Pred2$ cater for both schemas and predicates.
 
@@ -370,24 +380,25 @@ In a $Pred1$, the constituent $Pred1$s and $Pred2$ are contexts
 where either expressions or predicates are allowed.
 
 =DUMPMORE dtd061.grm.txt
-€Pred1›			= Pred2
-			| Quant, Decl, `|`, Pred, `∑`, Pred1
-			| Quant, Decl, `∑`, Pred1
-			| `let`, EqDefs, `∑`, Pred1
-			| `open`, Expr, `∑`, Pred1;
+€Pred1›			= Pred2				(red_pred2_as_pred1 x1 stk)
+			| Quant, Decl, `Bar`, Pred, `Spot`, Pred1
+					(red_quant x1 x2 x3 x4 x5 x6 stk)
+			| Quant, Decl, `Spot`, Pred1
+					(red_quant_no_bar x1 x2 x3 x4 stk)
+			| `Let`, EqDefs, `Spot`, Pred1	(red_let x1 x2 x3 x4 stk);
 =TEX
 In a $Pred2$, the constituent $Pred2$s and $Pred3$ are contexts
 where either expressions or predicates are allowed.
 =DUMPMORE dtd061.grm.txt
-€Pred2›			= Pred3
-			| Pred2, LogInOp, Pred2;
+€Pred2›			= Pred3				(red_pred3_as_pred2 x1 stk)
+			| Pred2, LogInOp, Pred2		(red_log_in_op x1 x2 x3 stk);
 =TEX
 In a $Pred3$, the constituent $Schema2$s and $Pred3$ are contexts
 where either expressions or predicates are allowed.
 
 =DUMPMORE dtd061.grm.txt
-€Pred3›			= Schema2
-			| `≥`, Pred3;
+€Pred3›			= Schema2				(red_schema2_as_pred3 x1 stk)
+			| `Not`, Pred3				(red_neg x1 x2 stk);
 =TEX
 
 As in \cite{DS/FMU/IED/DEF007},
@@ -401,15 +412,15 @@ In the first sort of $Schema2$, the constituent $Schema3$ is a context where an
 expression or predicate is allowed. In the second sort of $Schema2$
 the constituent $Schema2$s are contexts where only an expression is allowed.
 =DUMPMORE dtd061.grm.txt
-€Schema2›		= Schema3
-			| Schema2, SchInOp, Schema2;
+€Schema2›		= Schema3				(red_schema3_as_schema2 x1 stk)
+			| Schema2, SchInOp, Schema2	(red_sch_in_op x1  x2 x3 stk);
 =TEX
 In the first sort of $Schema3$, the constituent $Schema4$ is a context where an
 expression or predicate is allowed. In the second sort of $Schema3$
 the constituent $Schema3$s are contexts where only an expression is allowed.
 =DUMPMORE dtd061.grm.txt
-€Schema3›		= Schema4
-			| SchPreOp, Schema3;
+€Schema3›		= Schema4				(red_schema4_as_schema3 x1 stk)
+			| SchPreOp, Schema3			(red_sch_pre_op x1 x2 stk);
 =TEX
 $SchPreOp$ comprises the prefix special purpose schema operators:
 
@@ -425,35 +436,38 @@ $Expr4$. The parser must check that the position in the expression
 of any $RenameList$s agrees with the grammar of \cite{DS/FMU/IED/DEF007}
 and then move them out to their proper position.
 =DUMPMORE dtd061.grm.txt
-€Schema4›		= Expr0
-			| Schema4, `\\`, `(`, SomeExprs, `)` ;
+€Schema4›		= Expr0				(red_expr0_as_schema4 x1 stk)
+			| Schema4, `BackSlash`, `LBrk`, SomeExprs, `RBrk`
+					(red_schema_hiding x1 x2 x3 x4 x5 stk);
 
-€RenameList›		= `[`, Renames, `]`;
+€RenameList›		= `LSqBrk`, Renames, `RSqBrk`			(red_rename_list x1 x2 x3 stk);
 
-€Renames›		= Expr1, `/`, Expr1
-			| Expr1, `/`, Expr1, `,`, Renames;
+€Renames›		= Expr1, `Slash`, Expr1		(red_rename x1 x2 x3 stk)
+			| Expr1, `Slash`, Expr1, `Comma`, Renames
+					(red_renames x1 x2 x3 x4 x5 stk);
 =TEX
 \subsection{Declaration}
 In order to allow a declaration which does not
 comprise just one schema-as-declaration
 to be detected (e.g. in set comprehensions), we rework
 the grammar of $Decl$.
-=DUMPMORE def007.grm.txt
-€Decl›			= DeclMinusPred
-			| Pred1;
+=DUMPMORE dtd061.grm.txt
+€Decl›			= DeclMinusPred			(red decl_minus_pred x1 stk)
+			| Pred1					(red_pred1_as_decl x1 stk);
 =TEX
-=DUMPMORE def007.grm.txt
-€DeclMinusPred›	= DeclSemi, VarDecs, Pred1
-			| DeclSemi, Pred1
-			| VarDecs, Pred1;
+=DUMPMORE dtd061.grm.txt
+€DeclMinusPred›	= DeclSemi, SomeExprs, `Colon`, Pred1
+					(red_decl_semi_var_decs_pred1 x1 x2 x3 x4 stk)
+			| DeclSemi, Pred1			(red_decl_semi_pred1 x1 x2 stk)
+			| SomeExprs, `Colon`, Pred1		(red_var_decs_pred1 x1 x2 x3 stk);
 
-€VarDecs›		= DecName, `:`
-			| DecName, `,`, VarDecs;
 
-€DeclSemi›		= VarDecs, Pred1, `;`
-			| Pred1, `;`
-			| DeclSemi, VarDecs, Pred1, `;`
-			| DeclSemi, Pred1, `;`;
+€DeclSemi›		= SomeExprs, `Colon`, Pred1, `Semi`			(red_var_decs_pred1 x1 x2 x3 x4 stk)
+			| Pred1, `Semi`				(red_pred1_as_decl x1 x2 stk)
+			| DeclSemi, SomeExprs, `Colon`, Pred1, `Semi`
+					(red_decl_semi_var_decs_pred1 x1 x2 x3 x4 x5 stk)
+			| DeclSemi, Pred1, `Semi`
+					(red_decl_semi_pred1_semi x1 x2 x3 stk);
 =TEX
 \subsection{Expressions}
 In the first sort of $Expr0$, the constituent $Expr1$ is a context where an
@@ -461,13 +475,15 @@ expression or predicate is allowed. In the other sorts of $Expr0$
 the constituent $Expr0$s are contexts where only an expression is allowed.
 
 =DUMPMORE dtd061.grm.txt
-€Expr0›			= Expr1
-			| MuLambda, Decl, `∑`, Expr0
-			| MuLambda, Decl, `|`, Pred, `∑`, Expr0;
+€Expr0›			= Expr1				(red expr1_as_expr0 x1 stk)
+			| MuLambda, Decl, `Spot`, Expr0
+					(red_mu_lambda_no_pred x1 x2 x3 x4 stk)
+			| MuLambda, Decl, `Bar`, Pred, `Spot`, Expr0
+					(red_mu_lambda x1 x2 x3 x4 x5 x6 stk);
 =TEX
 =DUMPMORE dtd061.grm.txt
-€EqDefs›		= EqDef
-			| EqDef, `,`, EqDefs;
+€EqDefs›		= EqDef				(red_eq_def_as_eq_defs x1 stk)
+			| EqDef, `Comma`, EqDefs			(red_eq_defs x1 x2 x3 stk);
 =TEX
 
 Note that while cartesian product looks like a binary operator here,
@@ -480,41 +496,42 @@ The resulting $Expr1$ is an expression unless the template matching
 the $Expr1$ comes from a `$rel$' fixity paragraph in which case it
 is a predicate. 
 =DUMPMORE dtd061.grm.txt
-€Expr1›			= Expr2
-			| PreOp, Expr1
-			| Expr1, PostOp
-			| Expr1, InOp, Expr1
+€Expr1›			= Expr2				(red_expr2_as_expr1 x1 stk)
+			| PreOp, Expr1			(red_pre_op x1 x2 stk)
+			| Expr1, PostOp			(red_post_op x1 x2 stk)
+			| Expr1, InOp, Expr1		(red_in_op x1 x2 stk)
 			| BeginOp, CoreExpr, EndOp
+					(red_bo_ce_eo x1 x2 x3 stk)
 			| BeginOp, CoreExpr, PreEndOp, Expr1
+					(red_bo_ce_peo x1 x2 x3 x4 stk)
 			| Expr1, PostBeginOp, CoreExpr, EndOp
+					(red_pbo_ce_eo x1 x2 x3 x4 stk)
 			| Expr1, PostBeginOp, CoreExpr, PreEndOp, Expr1
-			| Expr1, `∏`, Expr1;
+					(red_pbo_ce_peo x1 x2 x3 x4 x5 stk)
+			| Expr1, `Cross`, Expr1		(red_cross x1 x2 x3 stk);
 =TEX
-The above reformulation requires the following auxiliary productions
-(in which the third form is only permitted on the right-hand side
-of a free type definition):
+The above reformulation requires the following auxiliary productions:
 =DUMPMORE dtd061.grm.txt
 
-€CoreExpr›		= Exprs
-			| Exprs, ThenOp, CoreExpr
-			| Exprs, `...`, ThenOp, CoreExpr;
+€CoreExpr›		= Exprs					(red_exprs x1 stk)
+			| Exprs, ThenOp, CoreExpr	(red_es_to_ce x1 x2 x3 stk);
 =TEX
 =DUMPMORE dtd061.grm.txt
-€Exprs›			=
-			| SomeExprs;
+€Exprs›			=				(red_no_exprs stk)
+			| SomeExprs			(red_some_exprs x1 stk);
 =TEX
 In both sorts of $SomeExprs$, the constituent $Pred1$s are contexts where
 only expressions are allowed. 
 =DUMPMORE dtd061.grm.txt
-€SomeExprs›		= Pred1
-			| Pred1, `,`, SomeExprs;
+€SomeExprs›		= Pred1				(red_pred1_as_some_exprs x1 stk)
+			| Pred1, `Comma`, SomeExprs		(red_some_exprs x1 x2 x3 stk);
 =TEX
 In the first sort of $Expr2$, the constituent $Expr3$ is a context where an
 expression or predicate is allowed. In the other sort of $Expr2$
 the constituent $Expr3$ is a context where only an expression is allowed.
 =DUMPMORE dtd061.grm.txt
-€Expr2›			= Expr3
-			| ``, Expr2;
+€Expr2›			= Expr3					(red expr2_as_expr3 x1 stk)
+			| `BBoldP`, Expr2				(red_pow x1 x2 stk);
 =TEX
 In the first sort of $Expr3$, the constituent $Expr4$ is a context where an
 expression or predicate is allowed. In the other sort of $Expr3$
@@ -532,13 +549,14 @@ out into the abstract  -construct. Note it must distinguish
 =TEX
 \ etc.
 We have to expand the rule for $VarName$ to get an LR(1) grammar.
+
+In the form with  `$Dot$' the $Expr4$ must be an identifier or a numeric
+literal.
 =DUMPMORE dtd061.grm.txt
-€Expr3›			= Expr4
-			| Expr3, Expr4
-			| ` `, Expr4
-			| Expr3, `.`, IdDec
-			| Expr3, `.`, `(`, Template, `)`
-			| Expr3, `.`, Number;
+€Expr3›			= Expr4			(red_expr4_as_expr3 x1 stk)
+			| Expr3, Expr4		(red_expr3_expr4 x1 x2 stk)
+			| `Theta`, Expr4		(red_theta x1 x2 stk)
+			| Expr3, `Dot`, Expr4		(red_expr3_dot_expr4 x1 x2 x3 stk);
 =TEX
 In an $Expr4$, any constituent $Pred1$s are contexts in which
 only an expression is allowed.
@@ -553,30 +571,45 @@ and conjectures and for given set definitions).
 
 In the form which covers $Pred$ in brackets and tuple displays,
 the initial $Pred$ must actually be a $Pred1$ if it is a tuple display.
+
+The binding display has been omitted for the time being since there
+is currently some disagreement about its format.
+
 =DUMPMORE dtd061.grm.txt
-€Expr4›			= IdDec
-			| `_`
-			| Number
-			| String
-			| `(`, Pred, `,`, Exprs, `)`
-			| `(`, EqDefs, `)`
-			| `ß`, Exprs, `¢`
-			| `{`, SomeExprs, `}`
-			| `{`, Decl, `|`, Pred, `}`
-			| `{`, DeclMinusPred, `}`
-			| `{`, Decl, `|`, Pred, `∑`, Pred1, `}`
-			| `{`, Decl, `∑`, Pred1, `}`
-			| `[`, Decl, `|`, Pred, `]`
-			| `[`, DeclMinusPred, `]`
-			| `[`, SomeExprs, `]`
-			| RenameList
-			| `(`, Pred, `)`, Decor;
+€Expr4›			= IdDec				(red_id_dec_as_exp x1 stk)
+			| Quotation			(red_quotation x1 stk)
+			| Stub			(red_stub x1 stk)
+			| Number			(red_number x1 stk)
+			| String			(red_string x1 stk)
+			| `LBrk`, Pred, `Comma`, Exprs, `RBrk`
+					(red_tuple x1 x2 x3 x4 x5 stk)
+			| `LBrace`, SomeExprs, `RBrace`	(red_set_display x1 x2 x3 stk)
+			| `LSeqBrk`, SomeExprs, `RSeqBrk`	(red_sequence_brk x1 x2 x3 stk)
+			| `LBrace`, Decl, `Bar`, Pred, `RBrace`
+					(red_set_comp_no_spot x1 x2 x3 x4 x5 stk)
+			| `LBrace`, DeclMinusPred, `RBrace`
+					(red_set_comp_no_pred x1 x2 x3 stk)
+			| `LBrace`, Decl, `Bar`, Pred, `Spot`, Pred1, `RBrace`
+					(red_set_comp x1 x2 x3 x4 x5 x6 x7 stk)
+
+			| `LBrace`, Decl, `Spot`, Pred1, `RBrace`
+					(red_set_comp_no_bar x1 x2 x3 x4 x5 stk)
+			| `LSqBrk`, Decl, `Bar`, Pred, `RSqBrk`
+					(red_horiz_schema x1 x2 x3 x4 x5 stk)
+			| `LSqBrk`, DeclMinusPred, `RSqBrk`
+					(red_horiz_schema_no_pred x1 x2 x3 stk)
+			| `LSqBrk`, SomeExprs, `RSqBrk`	(red_gen_inst x1 x2 x3)
+			| RenameList		(red_rename_list_as_expr x1 stk)
+			| `LBrk`, Pred, `RBrk`
+					(red_brk_pred x1 x2 x3 x4 stk)
+			| `LBrk`, Pred, `RBrk`, Decor
+					(red_pred_decor x1 x2 x3 x4 stk);
 =TEX
 \subsection{Names}
 =TEX
 =DUMPMORE dtd061.grm.txt
-€IdDec›			= Id
-			| Id, Decor;
+€IdDec›			= Id				(red_id x1 stk)
+			| Id, Decor			(red_id_dec x1 x2 stk);
 =TEX
 
 
@@ -586,7 +619,7 @@ Slrp.slrp{
 	infile="dtd061.grm.txt",
 	outfile="dtd061.grm.sml",
 	logfile="dtd061.grm.log",
-	eos="ZLEos",
+	eos="Eos",
 	loglevel=2};
 PolyML.quit();
 !
@@ -645,5 +678,6 @@ criteria identified in \cite{DS/FMU/IED/PLN008}.
 \printindex
 
 \end{document}
+
 
 
