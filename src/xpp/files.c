@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.21 2003/07/29 16:42:57 rda Exp rda $
+ * $Id: files.c,v 2.22 2003/07/30 12:11:16 rda Exp $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -45,28 +45,29 @@ static char *cant_write_message =
 	 "The file \"%s\" cannot be opened for writing";
 
 static char *cant_write_backup_message =
-	"An error has occurred while taking a backup. "
+	"An error has occurred while taking a backup.\n"
 	"Do you want to overwrite the file \"%s\" without a backup?";
 
 static char *cant_open_file_to_backup_message =
-	"Cannot read the file \"%s\" to take a backup. "
+	"Cannot read the file \"%s\" to take a backup\n "
 	"Do you want to overwrite your file without a backup?";
 
 static char *backup_file_same_as_file_message =
 	"Cannot take a backup of the file. "
 	"It is probably on an MS-DOS or similar file system that will "
-	"not support a file named \"%s.xpp.backup\". "
+	"not support a file named \"%s.xpp.backup\".\n"
 	"Do you want to overwrite your file without a backup?";
 
 static char *cant_open_backup_message =
-	"Cannot open a backup file. "
+	"Cannot open a backup file.\n"
 	"Do you want the file \"%s\" to be overwritten anyway?";
 
 static char *cant_stat_message =
 	 "The file \"%s\" does not seem to exist";
 
 static char *cant_stat_message2 =
-	 "The file \"%s\" does not seem to exist: edit a new empty buffer or quit?";
+	 "The file \"%s\" does not seem to exist:\n"
+	  "Do you want to edit a new empty buffer?";
 
 static char *load_not_reg_message =
 	 "The file \"%s\" is not an ordinary file";
@@ -84,7 +85,8 @@ static char *no_message_space_message =
 	"Not enough memory is available to report a file error";
 
 static char *overwrite_message =
-	 "The file \"%s\" exists. Do you want to overwrite it?";
+	 "The file \"%s\" exists.\n"
+	"Do you want to overwrite it?";
 
 static char *panic_file_cant_be_opened =
 	"xpp: sorry! cannot open a file to save the editor text\n";
@@ -99,21 +101,21 @@ static char *read_error_message =
 	 "Error reading the file \"%s\"";
 
 static char *open_read_only_message =
-	 "The file \"%s\" is read-only. "
+	 "The file \"%s\" is read-only.\n"
 	 "Do you want to open it?";
 
 static char *root_read_only_message =
 	 "You are running as the super-user. "
-	"The file \"%s\" does not have owner write-permission and will be opened read-only. "
+	"The file \"%s\" does not have owner write-permission and will be opened read-only.\n"
 	 "Do you want to open it?";
 
 static char *root_not_owner_message =
 	 "You are running as the super-user. "
-	"The file \"%s\"  is not owned by the super-user and will be opened read-only. "
+	"The file \"%s\"  is not owned by the super-user and will be opened read-only.\n"
 	 "Do you want to open it?";
 
 static char *save_read_only_message =
-	"The read-only option is turned on. "
+	"The read-only option is turned on.\n"
 	"Do you really want to turn this option off "
 	"and save the file \"%s\"?";
 
@@ -125,27 +127,30 @@ static char *write_error_message =
 
 static char *save_file_changed_message =
 	 "The file \"%s\" appears to have been modified since it was last "
-	 "opened or saved. Do you want to overwrite it?";
+	 "opened or saved.\n"
+	"Do you want to overwrite it?";
 
 static char *save_file_created_message =
 	 "The file \"%s\" appears to have been created since this "
-	 "xpp session was started. Do you want to overwrite it?";
+	 "xpp session was started.\n"
+	"Do you want to overwrite it?";
 
 static char *save_file_deleted_message =
 	 "The file \"%s\" appears to have been deleted since it was last "
-	 "opened or saved. Do you want to create it?";
+	 "opened or saved.\n"
+	"Do you want to create it?";
 
-static char *open_file_changed_message =
-	 "The file \"%s\" you are currently editing appears to have been modified since it was last "
-	 "opened or saved. Do you want to open %s?";
+static char *old_file_changed_message =
+	 "The file \"%s\" that you are currently editing appears to have been modified since it was last "
+	 "opened or saved.";
 
-static char *open_file_created_message =
-	 "The file \"%s\" appears to have been created since this "
-	 "xpp session was started. Do you want to open %s?";
+static char *old_file_created_message =
+	 "The file \"%s\" that you are currently editing appears to have been created since this "
+	 "xpp session was started.";
 
-static char *open_file_deleted_message =
-	 "The file \"%s\" appears to have been deleted since it was last "
-	 "opened or saved. Do you want to open %s?";
+static char *old_file_deleted_message =
+	 "The file \"%s\" that you are currently editing appears to have been deleted since it was last "
+	 "opened or saved.";
 
 static char *contains_binary_message =
 	" The file \"%s\" contains binary data."
@@ -855,6 +860,50 @@ char * read_only_access_message(
 	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * old_file_checks: check for anomalous conditions
+ * with the current file prior to opening a new one.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+Boolean old_file_checks(
+		Widget	text,
+		char	*oldname,
+		char	*extra_message,
+		char	*continue_message)
+{
+	char *msg_text;
+	switch(oldname != NULL ? check_file_status(oldname) : FS_OK) {
+		case FS_CHANGED: msg_text = old_file_changed_message; break;
+		case FS_DELETED: msg_text = old_file_deleted_message; break;
+		case FS_CREATED: msg_text = old_file_created_message; break;
+		case FS_OK: msg_text = NULL; break;
+	}
+	if(msg_text != NULL || extra_message != NULL) {
+		Boolean reply;
+		char *msg = XtMalloc(200);
+		*msg = '\0';
+		if(extra_message != NULL) {
+			msg = XtRealloc(msg, strlen(extra_message) + 1);
+			strcat(msg, extra_message);
+		}
+		if(msg_text != NULL) {
+			char *m = XtMalloc(strlen(msg_text) + strlen(oldname) + 1);
+			sprintf(m, msg_text, oldname);
+			msg = XtRealloc(msg, strlen(msg) + strlen(m) + 2);
+			strcat(msg, "\n");
+			strcat(msg, m);
+			XtFree(m);
+		}
+		msg = XtRealloc(msg, strlen(msg) + strlen(continue_message) + 2);
+		strcat(msg, "\n");
+		strcat(msg, continue_message);
+		reply = yes_no_dialog(text, msg);
+		XtFree(msg);
+		return reply;
+	} else {
+		return True;
+	}
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * open_file: open a file and load it into a text widget given the
  * widget and the file name 
  * Implements `open' in a file menu.
@@ -870,7 +919,6 @@ char * read_only_access_message(
 Boolean open_file(
 		Widget	text,
 		char	*name,
-		char	*oldname,
 		Boolean cmdLine,
  		FileOpenAction *foAction)
 {
@@ -878,32 +926,6 @@ Boolean open_file(
 	static struct stat status;
 	Boolean binary;
 	char *read_only_message;
-	char *msg_text;
-	switch(oldname != NULL ? check_file_status(oldname) : FS_OK) {
-		case FS_CHANGED: msg_text = open_file_changed_message; break;
-		case FS_DELETED: msg_text = open_file_deleted_message; break;
-		case FS_CREATED: msg_text = open_file_created_message; break;
-		case FS_OK: msg_text = NULL; break;
-	}
-	if(msg_text != NULL) {
-		Boolean reply;
-		char *qname, *msg;
-		if(name == NULL) {
-			qname = XtMalloc(strlen("an empty file" ));
-			sprintf(qname, "an empty file");
-		} else {
-			qname = XtMalloc(strlen(name) + 2);
-			sprintf(qname, "\"%s\"", name);
-		}
-		msg = XtMalloc(strlen(msg_text) + strlen(oldname) + strlen(qname));
-		sprintf(msg, msg_text, oldname, qname);
-		reply = yes_no_dialog(text, msg);
-		XtFree(qname);
-		XtFree(msg);
-		if(reply == False) {
-			return False;
-		}
-	}
 	if(!(name && *name)) { /* NULL or empty */
 		XmTextSetString(text, "");
 		if (foAction != (FileOpenAction *) NULL) {

@@ -130,10 +130,14 @@ typedef enum {
 		char	*s1,	/* title: ... */
 		char	*s2	/* ...: message */);
 /* Module: files */
+	extern Boolean old_file_checks(
+		Widget	text,
+		char	*oldname,
+		char	*extra_message,
+		char	*continue_message);
 	extern Boolean open_file(
 		Widget	text,
 		char	*name,
-		char	*oldname,
 		Boolean cmdLine,
 		FileOpenAction *foAction);
 	extern file_status check_status(

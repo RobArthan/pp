@@ -1,5 +1,5 @@
-#/* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.71 2003/07/30 12:11:16 rda Exp rda $
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * $Id: mainw.c,v 2.72 2003/07/30 12:21:05 rda Exp $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -49,25 +49,36 @@ static struct {
 
 
 static char *changed_message =
-"The text has been edited. Do you want to throw away the changes?";
+"The text has been modified.";
+/*
+ * The following four are kept separate to allow them easily to be worded differently, if ever requried.
+ */
+static char *want_to_open_message =
+"Do you want to continue?";
 
-static char *changed_quit_message =
-"The text has been edited.\n";
+static char *want_to_save_as_message =
+"Do you want to continue?";
+
+static char *want_to_empty_message =
+"Do you want to continue?";
+
+static char *want_to_revert_message =
+"Do you want to continue?";
 
 static char *running_quit_message =
-"The application in the journal window is still running.\n";
+"The application in the journal window is still running.";
 
 static char *file_changed_quit_message =
-"The file \"%s\" you are currently editing appears to have been modified since it was last opened or saved.\n";
+"The file \"%s\" you are currently editing appears to have been modified since it was last opened or saved.";
 
 static char *file_created_quit_message =
-"The file \"%s\" appears to have been created since this xpp session was started.\n";
+"The file \"%s\" appears to have been created since this xpp session was started.";
 
 static char *file_deleted_quit_message =
-"The file \"%s\" appears to have been deleted since it was last opened or saved.\n";
+"The file \"%s\" appears to have been deleted since it was last opened or saved.";
 
 static char * check_quit_message =
-"%s%s%sDo you really want to quit?";
+"Do you really want to quit?";
 
 static char *no_selection_message =
 	 "No text selection is available.";
@@ -81,9 +92,6 @@ static char* not_running_message =
 static char* restart_message =
 "The application is running. "
 "Do you want to kill it and then restart it?";
-
-static char* revert_message =
-"The text has been edited. Do you want to throw away the changes?";
 
 static char *add_new_line_message = 
 "The selection to be executed does not end in a new-line character."
@@ -945,7 +953,7 @@ static Boolean setup_main_window(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	pause_undo(undo_ptr);
 
-	if(open_file(script, file_name, NULL, True, &foAction) && file_name != NULL) {
+	if(open_file(script, file_name, True, &foAction) && file_name != NULL) {
 		XmTextFieldSetString(namestring, file_name);
 		XmTextFieldShowPosition(namestring, strlen(file_name));
 		set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
@@ -1036,22 +1044,28 @@ static void file_menu_cb(
 		break;
 	case FILE_MENU_SAVE_AS:
 		oldfname = get_file_name();
-		fname = file_dialog(frame, "Save");
-		if(!fname || !*fname || !strcmp(fname, no_file_name)) {
+		if(old_file_checks(
+			script,
+			oldfname,
+			NULL,
+			want_to_save_as_message)) {
+			fname = file_dialog(frame, "Save");
+			if(!fname || !*fname || !strcmp(fname, no_file_name)) {
 /* No file name: just do nothing */
-		} else if(save_file_as(script, fname)) {
-			if(oldfname != NULL) {
-				setup_reopen_menu(oldfname);
+			} else if(save_file_as(script, fname)) {
+				if(oldfname != NULL) {
+					setup_reopen_menu(oldfname);
+				}
+				flash_file_name(fname);
+				set_icon_name_and_title();
+				reinit_changed(True);
+				set_menu_item_sensitivity(filemenu,
+					FILE_MENU_SAVE, True);
+				set_menu_item_sensitivity(filemenu,
+					FILE_MENU_REVERT, True);
 			}
-			flash_file_name(fname);
-			set_icon_name_and_title();
-			reinit_changed(True);
-			set_menu_item_sensitivity(filemenu,
-				FILE_MENU_SAVE, True);
-			set_menu_item_sensitivity(filemenu,
-				FILE_MENU_REVERT, True);
-		};
-		if(fname != NULL) {XtFree(fname);};
+			if(fname != NULL) {XtFree(fname);}
+		}
 		if(oldfname) {XtFree(oldfname);}
 		break;
 	case FILE_MENU_SAVE_SELECTION:
@@ -1069,13 +1083,17 @@ static void file_menu_cb(
 		break;
 	case FILE_MENU_OPEN:
 		oldfname = get_file_name();
-		if(!file_info.changed || yes_no_dialog(root, changed_message)) {
+		if(old_file_checks(
+			script,
+			oldfname,
+			file_info.changed ? changed_message : NULL,
+			want_to_open_message)) {
 			fname = file_dialog(frame, "Open");
 			if(!fname || !*fname || !strcmp(fname, no_file_name)) {
 /* No file name: just do nothing */
 			} else {
 				pause_undo(undo_ptr);
-				if(open_file(script, fname, oldfname, False, (FileOpenAction *) NULL)) {
+				if(open_file(script, fname, False, (FileOpenAction *) NULL)) {
 					if(oldfname && strcmp(fname, oldfname)) {
 						setup_reopen_menu(oldfname);
 					}
@@ -1102,43 +1120,47 @@ static void file_menu_cb(
 		break;
 	case FILE_MENU_REVERT:
 		fname = get_file_name();
-		if(!file_info.changed || yes_no_dialog(root, changed_message)) {
+		if(old_file_checks(
+			script,
+			fname,
+			file_info.changed ? changed_message : NULL,
+			want_to_revert_message)) {
 			pause_undo(undo_ptr);
 			if(fname == NULL) {
 /* No file name: get an empty file */
 				XmTextSetString(script, "");
 				flash_file_name(no_file_name);
-			} else if(!open_file(script, fname, fname, False,(FileOpenAction *) NULL)){
-/* Can't open it; */
-				XtFree(fname);
-				unpause_undo(undo_ptr);
-				if(fname) {XtFree(fname);}
-				break;
+			} else if(open_file(script, fname, False,(FileOpenAction *) NULL)){
+				set_icon_name_and_title();
 				flash_file_name(fname);
+				reinit_changed(False);
+			} else  {/* Can't open it; */
+				unpause_undo(undo_ptr);
 			}
-			set_icon_name_and_title();
-			reinit_changed(False);
 		};
 		if(fname) {XtFree(fname);}
 		break;
 	case FILE_MENU_EMPTY_FILE:
 		oldfname = get_file_name();
-		if(!file_info.changed || yes_no_dialog(root, revert_message)) {
+		if(old_file_checks(
+			script,
+			oldfname,
+			file_info.changed ? changed_message : NULL,
+			want_to_empty_message)) {
 			pause_undo(undo_ptr);
-			if(!open_file(script, NULL, oldfname, False, (FileOpenAction*)NULL)) {
-				if(oldfname) {XtFree(oldfname);}
+			if(open_file(script, NULL, False, (FileOpenAction*)NULL)) {
+				XmTextFieldSetString(namestring, no_file_name);
+				if(oldfname != NULL) {
+					setup_reopen_menu(oldfname);
+				}
+				flash_file_name(no_file_name);
+				set_icon_name_and_title();
+				reinit_changed(False);
+				set_menu_item_sensitivity(filemenu,
+					FILE_MENU_SAVE, False);
+			} else { /* Can't do it (very odd!) */
 				unpause_undo(undo_ptr);
-				break;
 			}
-			XmTextFieldSetString(namestring, no_file_name);
-			if(oldfname != NULL) {
-				setup_reopen_menu(oldfname);
-			}
-			flash_file_name(no_file_name);
-			set_icon_name_and_title();
-			reinit_changed(False);
-			set_menu_item_sensitivity(filemenu,
-				FILE_MENU_SAVE, False);
 		}
 		if(oldfname) {XtFree(oldfname);}
 		break;
@@ -1224,10 +1246,14 @@ static void reopen_cb(
 	oldfname = get_file_name();
 	fname = reopen_menu_items[i].label;
 	strcpy(fname,reopen_menu_items[i].label);
-	if(!file_info.changed || yes_no_dialog(root, changed_message)) {
+	if(old_file_checks(
+		script,
+		oldfname,
+		file_info.changed ? changed_message : NULL,
+		want_to_open_message)) {
 		pause_undo(undo_ptr);
-		if(open_file(script, fname, oldfname, False, (FileOpenAction *) NULL)) {
-			flash_file_name(fname); /* last use */
+		if(open_file(script, fname, False, (FileOpenAction *) NULL)) {
+			flash_file_name(fname);
 			if(oldfname && *oldfname && strcmp(oldfname, no_file_name)) {
 				setup_reopen_menu(oldfname);
 			}
@@ -1544,19 +1570,31 @@ void check_quit_cb (
 	char *fname = get_file_name();
 	file_status status = check_file_status(fname);
 	if(changed || app_alive || status != FS_OK) {
-		char *m1, *f2, *m2, *m3, *msg;
-		m1 = changed ? changed_quit_message : "";
-		f2 =	status == FS_CHANGED ? file_changed_quit_message
-		:	status == FS_DELETED ? file_deleted_quit_message
-		:	status == FS_CREATED ? file_created_quit_message
-		:	"";
-		if(fname == NULL) {fname = no_file_name;} /* just to make following not fall over */
-		m2 = XtMalloc(strlen(f2) + strlen(fname));
-		sprintf(m2, f2, fname);
-		m3 = app_alive ? running_quit_message : "";
-		msg = XtMalloc(strlen(check_quit_message) + strlen(m1) + strlen(m2) + strlen(m3));
-		sprintf(msg, check_quit_message, m1, m2, m3);
-		XtFree(m2);
+		char *msg = XtMalloc(200);
+		*msg = '\0';
+		if(changed) {
+			msg = XtRealloc(msg, strlen(changed_message) + 1);
+			strcpy(msg, changed_message);
+		}
+		if(status != FS_OK && fname != NULL) {
+			char *f =	status == FS_CHANGED ? file_changed_quit_message
+			:	status == FS_DELETED ? file_deleted_quit_message
+			:	file_created_quit_message;
+			char *m = XtMalloc(strlen(f) + strlen(fname) + 1);
+			sprintf(m, f, fname);
+			msg = XtRealloc(msg, strlen(msg) + strlen(m) + 2);
+			if(*msg) {strcat(msg, "\n");}
+			strcat(msg, m);
+			XtFree(m);
+		}
+		if(app_alive) {
+			msg = XtRealloc(msg, strlen(msg) + strlen(running_quit_message) + 2);
+			if(*msg) {strcat(msg, "\n");}
+			strcat(msg, running_quit_message);
+		}
+		msg = XtRealloc(msg, strlen(msg) + strlen(check_quit_message) + 2);
+		strcat(msg, "\n");
+		strcat(msg, check_quit_message);
 		do_it = yes_no_dialog(root, msg);
 		XtFree(msg);
 	} else {
