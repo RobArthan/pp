@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.24 2003/08/01 11:13:13 rda Exp rda $
+ * $Id: files.c,v 2.25 2003/10/29 14:15:51 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -743,6 +743,10 @@ Boolean save_file(
 	static struct stat status;
 	struct stat new_status;
 	char *msg;
+	if(access(name, W_OK) != 0) {
+		file_error_dialog(text, cant_write_message, name);
+		return False;
+	}
 	if(global_options.read_only) {
 		if(!file_yes_no_dialog(text, save_read_only_message, name, "Confirm Save")) {
 			return False;
@@ -792,6 +796,10 @@ Boolean save_file_as(
 			file_error_dialog(text, save_not_reg_message, name);
 			return False;
 		};
+		if(access(name, W_OK) != 0) {
+			file_error_dialog(text, cant_write_message, name);
+			return False;
+		}
 		if(!file_yes_no_dialog(text, overwrite_message, name, "Confirm Save As")) {
 			return False;
 		}
