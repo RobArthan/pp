@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.1 1994/08/30 12:07:53 djk Rel rda $
+ * $Id: xmisc.c,v 2.2 2001/11/16 17:20:38 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -194,15 +194,12 @@ void number_verify_cb(
 	XtPointer			unused2,
 	XmTextVerifyCallbackStruct	*cbs)
 {
-	int i, j;
-	char *p = cbs->text->ptr; /* Not modified later */
+	int i;
+	char *p = cbs->text->ptr;
 	for(i = 0; i < cbs->text->length; ++i) {
 		if((p[i] & 0x80) || !isdigit(p[i] & 0x7f)) {
-			for(j = i; j < cbs->text->length; ++j) {
-				p[j] = p[j+1];
-				--cbs->text->length;
-				--i;
-			}
+			cbs->doit = False;
+			return;
 		}
 	}
 }
@@ -249,3 +246,110 @@ void fix_pane_height(
 		NULL);
 }
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * attach_edit_popup: attach a popup edit menu to a text widget
+ * with menu items given as parameter:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void post_popupeditmenu(EVENT_HANDLER_ARGS);
+static void attach_edit_popup(Widget text_w, MenuItem *menu_items)
+{
+	MenuItem *mip = menu_items;
+	Widget menu_w;
+	while(mip->label != NULL) {
+		(mip++)->callback_data = text_w;
+	}
+	menu_w = setup_menu(
+		text_w, XmMENU_POPUP, "", ' ', False, menu_items);
+	XtAddEventHandler(text_w, ButtonPressMask, False,
+		post_popupeditmenu, menu_w);
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * attach_rw_edit_popup: attach a popup edit menu to a read-write
+ * (i.e., editable) text widget. Supported functions are
+ * Cut, Copy, Paste & Clear:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void
+	edit_cut_cb(CALLBACK_ARGS),
+	edit_copy_cb(CALLBACK_ARGS),
+	edit_paste_cb(CALLBACK_ARGS),
+	edit_clear_cb(CALLBACK_ARGS);
+static MenuItem rw_edit_menu_items[] = {
+    { "Cut", &xmPushButtonGadgetClass, '\0', NULL, NULL,
+        edit_cut_cb, NULL, (MenuItem *)NULL, False },
+    { "Copy", &xmPushButtonGadgetClass, '\0', NULL, NULL,
+        edit_copy_cb, NULL, (MenuItem *)NULL, False },
+    { "Paste", &xmPushButtonGadgetClass, '\0', NULL, NULL,
+        edit_paste_cb, NULL, (MenuItem *)NULL, False },
+    { "Clear", &xmPushButtonGadgetClass, '\0', NULL, NULL,
+        edit_clear_cb, NULL, (MenuItem *)NULL, False },
+    {NULL}
+};
+void attach_rw_edit_popup(Widget text_w)
+{
+	attach_edit_popup(text_w, rw_edit_menu_items);
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * attach_ro_edit_popup: attach a popup edit menu to a read-only
+ * (i.e., uneditable) text widget. Supported functions are
+ * Copy & Clear:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static MenuItem ro_edit_menu_items[] = {
+    { "Copy", &xmPushButtonGadgetClass, '\0', NULL, NULL,
+        edit_copy_cb, NULL, (MenuItem *)NULL, False },
+    { "Clear", &xmPushButtonGadgetClass, '\0', NULL, NULL,
+        edit_clear_cb, NULL, (MenuItem *)NULL, False },
+    {NULL}
+};
+void attach_ro_edit_popup(Widget text_w)
+{
+	attach_edit_popup(text_w, ro_edit_menu_items);
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Callback routines for the popup edit menus:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void edit_cut_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	Widget text_w = (Widget) cbd;
+	(void) XmTextCut(text_w, CurrentTime);
+}
+static void edit_copy_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	Widget text_w = (Widget) cbd;
+	(void) XmTextCopy(text_w, CurrentTime);
+}
+static void edit_paste_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	Widget text_w = (Widget) cbd;
+	(void) XmTextPaste(text_w);
+}
+static void edit_clear_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	Widget text_w = (Widget) cbd;
+	(void) XmTextClearSelection(text_w, CurrentTime);
+}
+static void post_popupeditmenu(
+	Widget		w,
+	XtPointer	cd,
+	XEvent		*ev,
+	Boolean		*unused)
+{
+	XButtonPressedEvent *event = &(ev->xbutton);
+	if (event->button == 3) {
+		Widget menu_w = (Widget) cd;
+		XmMenuPosition(menu_w, event);
+		XtManageChild(menu_w);
+	}
+}
