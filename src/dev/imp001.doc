@@ -86,8 +86,8 @@ New efficient dictionary functions and new stopwatch timer functions.
 New type of order-preserving efficient dictionaries.
 \item[Issue 2.29]
 Performance tweak to {\it format\_list}.
-\item[Issue 2.30]
-Replaced tree sort with a merge sort.
+\item[Issue 2.30, 2.31]
+Replaced tree sort with a merge sort and optimised the string ordering function.
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -1625,38 +1625,27 @@ comparison is made, with the string having the first unmatched capitalisation be
 The integer result is appropriate for use in $sort$ (q.v.).
 
 The original implementation exploded the strings and used {\it lexicographic}; the coding now
-uses indexing and is a lot faster. It could probably be made even faster using a table to encode
-the required ordering.
+uses indexing and a table and is a lot faster.
 =SML
 local
 	val orda = ord "a";
 	val ordz = ord "z";
 	val ordA = ord "A";
 	val ordZ = ord "Z";
-	val atoA = ordA - orda;
-	datatype CASE = Ucase | Lcase | Other;
-	fun classify (x : int) : CASE = (
-		if x < ordA
-		then Other
-		else if x <= ordZ
-		then Ucase
-		else if (orda <= x) andalso (x <= ordz)
-		then Lcase
-		else Other
+	fun char_pos (ord_ch : int) : int = (
+		if	ordA <= ord_ch andalso ord_ch <= ordZ
+		then	2*(ord_ch - ordA)
+		else if	orda <= ord_ch andalso ord_ch <= ordz
+		then	2*(ord_ch - orda) + 1
+		else if	ord_ch > ordZ andalso ord_ch > ordz
+		then	ord_ch
+		else if	ord_ch > ordZ orelse ord_ch > ordz (* but not both *)
+		then	ord_ch + 26
+		else	ord_ch + 52
 	);
-	fun charorder (x : int, y : int) : int = (
-		case (classify x, classify y) of
-			(Ucase, Ucase) => x - y
-		|	(Lcase, Lcase) => x - y
-		|	(Ucase, Lcase) => x - (y + atoA)
-		|	(Lcase, Ucase) => (x + atoA) - y
-		|	(Ucase, Other) => ~1
-		|	(Lcase, Other) => ~1
-		|	(Other, Ucase) => 1
-		|	(Other, Lcase) => 1
-		|	(Other, Other) => x - y
-	);
-	fun €string_lex_order› (char_comp : int * int -> int) (s1 : string) (s2 : string) : int = (
+	val order_table : int PPVector.vector = PPVector.vector (map char_pos (interval 0 255));
+in
+	fun €string_order›   (s1 : string) (s2 : string) : int = (
 		let	val sz1 = size s1;
 			val sz2 = size s2;
 			val ascii_code = SML97BasisLibrary.Char.ord;
@@ -1669,7 +1658,9 @@ local
 				then	1		(* s2 proper substring of s1 - out of order *)
 				else 	let	val c1 = ascii_code(String.sub(s1, i));
 						val c2 = ascii_code(String.sub(s2, i));
-					in	case char_comp (c1, c2) of
+						val i1 = PPVector.sub(order_table, c1);
+						val i2 = PPVector.sub(order_table, c2);
+				in	case i1 - i2 of
 							0 => first_diff (i+1)
 						|	x => x
 					end
@@ -1677,16 +1668,6 @@ local
 		in	first_diff 0
 		end
 	);
-in
-	fun €string_order› (s1 : string) (s2 : string) : int = (
-let	val case_ins = string_lex_order charorder s1 s2;
-in
-	if case_ins = 0
-	then  (	if s1 = s2
-		then 0
-		else string_lex_order (op-) s1 s2
-	) else case_ins
-end);
 end;
 =TEX
 \subsection{$sort$}
