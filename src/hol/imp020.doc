@@ -67,8 +67,12 @@ Corrected a use of $get\_const\_type$.
 \item [Issue 1.5]
 The name atom  ``definition(s)'' changed to ``defn(s)'', and
 ``constant(s)'' to ``const(s)''.
+\item [Issue 1.7 (22 May 1991)]
+Added $get\_alias$. Corrected handling of languages.
 \item [Issue \SCCSversion (\FormatDate{$Date$%
-})] Added $get\_alias$. Corrected handling of languages.
+})] Added $get\_language$. $get\_terminators$ renamed as
+$get\_current\_terminators$ and $get\_terminators$ added as theory
+access function. Slight reorganisation of last part of document.
 \end{description}
 \subsection{Changes forecast}
 \pagebreak
@@ -133,30 +137,6 @@ structure SymbolTable : SymbolTable = struct
 open Lex;
 =TEX
 \subsection{Utilities}
-=TEX
-$split_string\,sep\,s$ splits string into a list of strings treating
-characters for which $sep$ returns true as separator characters.
-Runs of more than one separator are treated like a single separator.
-=SML
-fun âsplit_stringá (sep : string -> bool) (s : string) = (
-	let	fun aux words "" (ch :: more) = (
-			if sep ch
-			then aux words "" more
-			else aux words ch more
-		) | aux words word (ch :: more) = (
-			if sep ch
-			then aux (words @ [word]) "" more
-			else aux words (word ^ ch) more
-		) | aux words "" [] = (words
-		) | aux words word [] = words @ [word];
-	in	aux [] "" (explode s)
-	end
-);
-=TEX
-$words\,s$ splits $s$ into a list of  strings treating formatting characters
-as separators.
-=SML
-val âwordsá : string -> string list = split_string is_space;
 =TEX
 $is\_same\_type\,ty1,\,ty2$ is true iff. $ty1$ and $ty2$ are the same
 type modulo renaming of type variables.
@@ -404,9 +384,11 @@ lists of $USER\_DATUM$s belonging to the symbol table held in theories.
 =SML
 val ud_key = "icl'st";
 =TEX
+The following function is the only place at which we pass an unknown
+theory name to the kernel interface.
 =SML
 fun fetch_sym_tab_data (thy : string) : USER_DATUM list = (
-	if thy mem theory_names ()
+	if thy mem theory_names () orelse thy = "-"
 	then	case get_user_datum thy ud_key handle Fail _ => UD_Int(0, []) of
 			(UD_Int(0, uds)) => uds
 		|	_ => fail "fetch_sym_tab_data" 20001 [fn()=>thy]
@@ -643,7 +625,7 @@ end; (* of local ... in ... end *)
 \section{ACCESS FUNCTIONS}
 \subsection{Terminators}
 =SML
-fun âget_terminatorsá (():unit) : string list list =(
+fun âget_current_terminatorsá (():unit) : string list list =(
 	!terminators
 );
 =TEX
@@ -861,7 +843,10 @@ fun âget_type_languageá (s : string) : string = (
 	|	Nil => get_current_language()
 );
 =TEX
-\subsection{Miscellaneous Functions}
+\subsection{Theory Access Functions}
+=TEX
+All the theory access functions go via the following utility which
+selects the relevant information from the theory. 
 =SML
 fun get_selected_ids (thy : string) (sel : DECL -> bool) (uds : USER_DATUM list) : string list = (
 	case uds of
@@ -877,10 +862,18 @@ fun get_selected_ids (thy : string) (sel : DECL -> bool) (uds : USER_DATUM list)
 					|	UnDeclAlias (a, _) => [a]
 					|	DeclTypeAbbrev (a, _) => [a]
 					|	UnDeclTypeAbbrev a => [a]
-					|	SetLanguage lang => []
+					|	SetLanguage lang => [lang]
 				else []
 			end @ get_selected_ids thy sel more
 	)
+);
+=TEX
+=SML
+fun âget_terminatorsá (thy : string) : string list = (
+	let	fun sel (DeclTerminator _) = true
+		|   sel _ = false;
+	in	get_selected_ids thy sel (fetch_sym_tab_data thy)
+	end	handle X => reraise X "get_terminators"
 );
 =TEX
 =SML
@@ -955,22 +948,33 @@ fun âget_undeclared_aliasesá (thy : string) : string list = (
 	end	handle X => reraise X "get_undeclared_aliases"
 );
 =TEX
+=TEX
+=SML
+fun âget_languageá (thy : string) : string = (
+	let	fun sel (SetLanguage _) = true
+		|   sel _ = false;
+	in	case get_selected_ids thy sel (fetch_sym_tab_data thy) of
+			lang :: _ => lang
+		|	_ => "HOL"
+	end	handle X => reraise X "get_language"
+);
+=TEX
 =SML
 fun âget_const_theoryá (c : string) : string = (
 	case e_lookup c (!const_theory_cache) of
 		Value (thy, _) => thy
-	|	Nil => fail "get_const_theory" 20603 [fn()=>c]
+	|	Nil => fail "get_const_theory" 20701 [fn()=>c]
 );
 =TEX
 =SML
 fun âget_type_theoryá (ty : string) : string = (
 	case e_lookup ty (!ty_theory_cache) of
 		Value (thy, _) => thy
-	|	Nil => fail "get_type_theory" 20604 [fn()=>ty]
+	|	Nil => fail "get_type_theory" 20702 [fn()=>ty]
 );
 =SML
 fun restore_defaults (():unit) : unit = (
-	warn "restore_defaults" 20602 [get_current_theory_name];
+	warn "restore_defaults" 20703 [get_current_theory_name];
 	set_user_datum(ud_key, UD_Int(0, []))
 );
 =TEX
