@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.170 $ $RCSfile: imp507.doc,v $ $Date: 2000/10/26 09:17:54 $
+% imp507.doc %Z% $Revision: 1.171 $ $RCSfile: imp507.doc,v $ $Date: 2000/10/26 17:05:11 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.170 $%
+\def\SCCSversion{$Revision: 1.171 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2000/10/26 09:17:54 $%
+\TPPdate{\FormatDate{$Date: 2000/10/26 17:05:11 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -129,7 +129,7 @@ statements in stubs.
 \item[Issue 1.167] CTLE II R1/10: multiple with clauses (causes a minor change to syntax).
 \item[Issue 1.168] CTLE II R1/9: SPARK 83 attributes.
 \item[Issues 1.169,1.170] CTLE II R2/1: global variable unsoundness.
-\item[Issue 1.171] CTLE II R1/11: nested packages.
+\item[Issue 1.171,1.172] CTLE II R1/11: nested packages.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1425,8 +1425,9 @@ val €cn_spec_ud_key› = "CN'createspec";
 val €cn_subunit_ud_key› = "CN'createsubunit";
 val €cn_new_parent_ud_key› = "CN'newparent";
 val €cn_script_library_theories_ud_key› = "CN'script_library_theories";
-val €cn_compilation_unit_ud_key› = "CN'comilation_unit";
 val €cn_created_ud_key› = "CN'created";
+val €cn_compilation_unit_ud_key› = "CN'compilation_unit";
+val €cn_body_name_ud_key› = "CN'body_name";
 =TEX
 
 The following function is used in several places;
@@ -1484,10 +1485,12 @@ fun €add_script_theory› (thy : string) : unit = (
 	end
 );
 =TEX
-The following should be used when about to add material for a compilation unit to
-a theory. 
+The following should be used when about to add material for
+a compilation unit to a theory. 
 It raised a failure if a different compilation unit has already used the theory.
-This function implements check 17, and thus the failure message origins.
+This function implements check 17.
+The name is stored for the purposes of this check and to use
+in the error message.
 =SML
 fun €set_cu› (cu_name: string) : unit = (
 let	val dummy = if (get_cn_created())
@@ -1506,8 +1509,6 @@ in
 				fn () => get_current_theory_name(),
 				fn () => was]
 end);
-=IGN
-set_cu "goodbye";
 =TEX
 The following is necessary when the key has been set incorrectly.
 In particular, $duplicate\_theory$ copies keys, which is not helpful
@@ -1517,14 +1518,32 @@ fun €force_set_cu› (cu_name: string) : unit = (
 	set_user_datum(cn_compilation_unit_ud_key, UD_String (cu_name,[]))
 );
 =TEX
+The following should be used when a package body is encountered.
 =SML
-fun €get_thy_compilation_unit› (thy : string) : string = (
-let	val (was, _) = dest_ud_string(get_user_datum thy
-				 cn_compilation_unit_ud_key)
-			handle Fail _ => ("(no compilation unit present)" ,[]);
-in
-	was
-end);
+fun €set_body_name› (name: ID) : unit = (
+	set_user_datum(cn_body_name_ud_key, UD_String (name,[]))
+);
+=TEX
+=SML
+fun €get_parent_body_names› ((): unit) : string list = (
+	let	val cur_thy = get_current_theory_name();
+		val anc_thys = get_ancestors cur_thy less cur_thy diff get_ancestors"cn";
+		fun trawl acc [] = acc
+		|   trawl acc (thy::more) = (
+			let	val res = fst(dest_ud_string
+					(get_user_datum thy cn_body_name_ud_key));
+			in	trawl (res::acc) more
+			end	handle Fail _ => trawl acc more
+		);
+	in	trawl [] anc_thys
+	end
+);
+=TEX
+=IGN
+get_parent_body_names();
+open_theory"cn"; new_theory "t"; set_body_name "FRED";
+new_theory "u"; set_body_name "BILL"; get_parent_body_names();
+new_theory "v"; get_parent_body_names();
 =TEX
 The following functions are used to maintain the list of library theories ``belonging'' to the current literate script.
 =SML
@@ -1804,16 +1823,37 @@ fun €env_info_of_g_var› (zn : ID) (ty : TYPE) : (TYPE * ENV_INFO) = (
 	)
 );
 =TEX
-The following treats the (anomalous?, impossible?) case where it has not been possible to convert the type mark for a name found in the environment into a type as if the name were not declared. 
+If a name is not found in the environment, it may be a prefixed name
+of an item in the enclosing package or subprogram body. In that case,
+we may strip off the prefix and invite the caller to try again.
+(If we do this, the type in the returned value is a dummy).
 =SML
-fun €current_cn_env› (n : ID) : (TYPE * ENV_INFO) OPT = (
+fun €env_retry› (n : Z_ID) : (TYPE * ENV_INFO) OPT = (
+	let	fun match ("o"::c1s) [] = (
+			implode c1s
+		) | match (c1::c1s) (c2::c2s) = (
+			if c1 = c2 then match c1s c2s else ""
+		) | match _ _ = "";
+		fun hunt _ [] = Nil
+		|   hunt en (body::bodies) = (
+			case match en (explode body) of
+				"" => hunt en bodies
+			|	new_n => Value (BOOL, EIEnvRetry new_n)
+		);
+	in	hunt (explode n) (get_parent_body_names())
+	end			
+);
+=TEX
+The following treats the case where it has not been possible to convert the type mark for a name found in the environment into a type as if the name were not declared. 
+=SML
+fun €current_cn_env› (n : Z_ID) : (TYPE * ENV_INFO) OPT = (
 	case get_tmark_from_env n (!blocks) of
 		Value (Value ty, ei) => ( Value (ty, ei)
-	) |	Value (Nil, _) => (Nil
+	) |	Value (Nil, _) => (env_retry n
 	) | 	Nil => (
 			case type_of_g_var (z_id_of_id n) of
 				Value ty => Value(env_info_of_g_var n ty)
-			|	Nil => Nil
+			|	Nil => env_retry n
 	)
 );
 =TEX
@@ -1822,11 +1862,11 @@ fun €cn_env_of_in_scope› (in_scope : IN_SCOPE) (n : Z_ID)
 	: (TYPE * ENV_INFO) OPT = (
 	case get_tmark_from_inscope n in_scope of
 		Value (Value ty, ei) => ( Value (ty, ei)
-	) |	Value (Nil, _) => (Nil
+	) |	Value (Nil, _) => (env_retry n
 	) |	Nil => (
 			case type_of_g_var (z_id_of_id n) of
 				Value ty => Value(env_info_of_g_var n ty)
-			|	Nil => Nil
+			|	Nil => env_retry n
 	)
 );
 =TEX
@@ -2219,20 +2259,21 @@ fun €pack_spec_name› (name : string) : string = (
 );
 =TEX
 The following are used to describe the compilation unit that is present in the
-current theory, based on its name.
+current theory, based on its name. This is to do with implementing
+check 17.
 =SML
 fun €pack_spec_desc› (name : string) : string = (
 	name ^ " (external specification)"
 );
 =TEX
 =SML
-fun €stub_theory_desc› (name : string) : string = (
-	name ^ " (stub)"
+fun €spec_script_desc› (name : string) : string = (
+	name ^ " (internal specification)"
 );
 =TEX
 =SML
-fun €internal_spec_desc› (name : string) : string = (
-	name ^ " (internal specification)"
+fun €stub_theory_desc› (name : string) : string = (
+	name ^ " (stub)"
 );
 =TEX
 =SML
@@ -2438,7 +2479,7 @@ fun €var_pack_spec› (var_decl : VAR_DECL) : unit = (
 	then	let	val block_name1 = #block_name(#declab (block 1));
 			val package = case (s_lookup block_name1 (!pack_env)) of
 				Value p => p
-			|	Nil => error "var_pack_spec" 507001 [];
+			|	Nil => error "var_pack_spec" 507001 [fn _=>block_name1];
 		in	pack_env :=
 			s_enter
 			block_name1
@@ -4205,12 +4246,29 @@ fun €is_id_in_package› (newids : ID list) (id : ID) : bool = (
 );
 end;
 =TEX
-The following function extracts from the internal specification theory the types (corresponding to given sets) and the constants (corresponding to global variables) together with their definitions if any.
+The handling of the theory hierarchy was rationalised considerably during
+the IUCT project in 1997. Unfortunately, a small amount of legacy code
+and nomenclature persisted beyond that project. The ``internal specification
+theory'' that used to be set up to hold the Z definitions needed to type-check
+a package specification is no longer needed --- the one-compilation-unit-per-script
+rule now means that it is the user who defines the script theory in which
+those Z definitions are placed. By agreement with DERA a potential soundness problem
+is avoided by agreeing that Z definitions are not generated for the functions
+in the package. Thus the former ``internal specification theory'' is replaced
+by the ``specification script theory''.
+
+In the case of a package nested within a package or subprogram body, the
+``specification script theory'' is the script theory for the containing body.
+
+
+The following function extracts from the specification script theory the types
+(corresponding to given sets) and the constants
+(corresponding to global variables) together with their definitions if any.
 =SML
-fun €internal_theory_types_and_const_thms› (thyname : ID)
+fun €spec_script_theory_types_and_const_thms› (spec_script_thy : ID)
 	: string list * (TERM * THM OPT) list = (
-	let	val type_names = rev(map (fst o dest_ctype) (get_types thyname));
-		val consts = get_consts thyname;
+	let	val type_names = rev(map (fst o dest_ctype) (get_types spec_script_thy));
+		val consts = get_consts spec_script_thy;
 		val const_thms = rev (map (fn x => (x, (Value (get_spec x)
 						handle Fail _=> Nil))) consts);
 	in	(type_names, const_thms)
@@ -4407,7 +4465,7 @@ fun €prefix_param_spec› (ident : ID)
 );
 =TEX
 
-When the following is called it is important that the internal specification theory for the package be the current theory and that it be populated with all its types and constants.
+When the following is called it is important that the specification script theory for the package be the current theory and that it be populated with all its types and constants.
 
 It is also important that the typing context has been correctly set if the statement
 is affected by the typing of other variables, e.g. function or procedure parameters.
@@ -4421,11 +4479,11 @@ fun €prefix_spec_stmt› (ident : ID)
 		val package = force_value(s_lookup ident (!pack_env))
 				handle Fail _ =>
 				error "prefix_spec_stmt" 507029 [fn() => ident];
-		val internal_name = #zmod package;
-		val dummy = if (internal_name = get_current_theory_name())
+		val spec_script_name = #zmod package;
+		val dummy = if (spec_script_name = get_current_theory_name())
 			then ()
 			else error "prefix_spec_stmt" 507047 [
-				fn () => internal_name,
+				fn () => spec_script_name,
 				fn () => get_current_theory_name()
 			];
 (* end DESIGN ERROR checking code *)
@@ -4443,7 +4501,9 @@ fun €prefix_spec_stmt› (ident : ID)
 	end
 );
 =TEX
-When the following is called it is important that the internal specification theory for the package be the current theory and that it be populated with all its types and constants.
+When the following is called it is important that the specification script
+theory for the package be the current theory and that it be
+populated with all its types and constants.
 =SML
 fun €prefix_formal_proc› (ident : ID)
 		(tysubs : (string * string) list)
@@ -4498,7 +4558,9 @@ in
 	 globals = globals1}
 end);
 =TEX
-When the following is called it is important that the internal specification theory for the package be the current theory and that it be populated with all its types and constants.
+When the following is called it is important that the specification script
+theory for the package be the current theory and that it be populated
+with all its types and constants.
 =SML
 fun €prefix_formal_procs› (ident : ID)
 		(tysubs : (string * string) list) (newids : ID list)
@@ -4657,32 +4719,39 @@ fun €is_type_in_package› (newids : ID list) (ty : TYPE) : bool = (
 	in	is_id_in_package newids n
 	end	handle Fail _ => false
 );
+=TEX
+In the following, definitions are copied (with modifications, viz.,
+package name prefixes) from one theory to another target theory
+whose names are given by the last two arguments and which may be
+the same (in the case of a package nested inside a package or
+subprogram body).
+The specification script theory is the source for the copying. 
 =SML
 fun €store_prefix_types_and_consts›	
 		(nested_package : bool)
 		(ident : ID)
 		(newids : ID list)
-		(internal_thy : string) 
-		(thyname : string) : (string * string) list = (
+		(spec_script_thy : string) 
+		(target_thy : string) : (string * string) list = (
 let	val old_thy = get_current_theory_name();
-	val dummy1 = open_theory internal_thy;
+	val dummy1 = open_theory spec_script_thy;
 	val ifixities = rev(ZUserInterfaceSupport.get_zfixity_infos
-		internal_thy);
+		spec_script_thy);
 	val itypes =
 		if	nested_package
-		then	rev(get_types internal_thy) drop (not o is_type_in_package newids)
-		else	rev(get_types internal_thy);
+		then	rev(get_types spec_script_thy) drop (not o is_type_in_package newids)
+		else	rev(get_types spec_script_thy);
 	val iconsts = 
 		if	nested_package
-		then	rev(get_consts internal_thy) drop (not o is_const_in_package newids)
-		else	rev(get_consts internal_thy);
+		then	rev(get_consts spec_script_thy) drop (not o is_const_in_package newids)
+		else	rev(get_consts spec_script_thy);
 	val iconst_thms = map (fn x => (x, (Value (get_spec x)
 					handle Fail _=> Nil))) 
 				iconsts;
 	val type_names = map (fst o dest_ctype) itypes;
 	val pfxd_names = map (prefix_package_id ident newids) type_names;
 	val tysubs = (combine pfxd_names type_names) drop (fn (x,y) => (x = y));
-	val dummy2 = open_theory thyname;
+	val dummy2 = open_theory target_thy;
 	val dummyfixities = map 
 		(fn (c, t) => ZUserInterfaceSupport.set_zfixity_info(c, [t]))
 		ifixities;
@@ -4764,21 +4833,23 @@ end);
 The following creates and populates the package spec theory when a with-clause
 for a top-level package is first encountered.
 It returns the list of type substitutions which need to be made.
-The package spec theory
-becomes the current theory (unless an exception is raised in which case the script theory is made current).
+If this is not a nested package and all goes well,
+the package spec theory becomes the current theory.
+If this is a nested package or if
+an exception is raised in which case the script theory becomes current.
 =SML
 fun €create_prefixed_spec›
 		(nested_package : bool)
 		(parents : string list) (ident : ID) (package : PACKAGE)
 		: (string * string) list * Z_DECL list = (
-	let	val internal_name = #zmod package;
-		val side = open_theory internal_name handle (Fail _) =>
+	let	val spec_script_name = #zmod package;
+		val side = open_theory spec_script_name handle (Fail _) =>
 			fail "create_prefixed_spec" 507038
 			[fn () => ident];
 		val conjectures =
 			if	nested_package
 			then	[]
-			else	get_conjectures internal_name;
+			else	get_conjectures spec_script_name;
 		val newids = new_ids package;
 		val pinformal_funs = map (prefix_informal_fun ident newids)
 					(#informal_funs package);
@@ -4794,10 +4865,13 @@ fun €create_prefixed_spec›
 		val side = (blocks := block :: !blocks);
 		val tysubs =
 			store_prefix_types_and_consts nested_package ident newids
-			internal_name (pack_spec_name ident);
+			spec_script_name
+			(if nested_package
+			 then spec_script_name
+			 else pack_spec_name ident);
 		val paras3 = prefix_conjectures ident tysubs newids conjectures;
 		val dummy3 =	map store_para paras3;
-		val thychange1 = open_theory internal_name;
+		val thychange1 = open_theory spec_script_name;
 		val pformal_funs = map (prefix_formal_fun ident tysubs newids)
 			(#formal_funs package);
 		val side = (blocks := tl (!blocks));
@@ -4807,7 +4881,10 @@ fun €create_prefixed_spec›
 					(#aux_vars package);
 		val block = block_vc_aux_vars(block, aux_vars);
 		val side = (blocks := block :: !blocks);
-		val thychange1 = open_package_spec_theory ident;
+		val thychange1 = 
+			if	nested_package
+			then	()
+			else	open_package_spec_theory ident;
 		val informal_fun_paras = map trans_informal_fun pinformal_funs;
 		fun par_aux (ff:FORMAL_FUN) = (
 			add_spark_function_info (#globals ff) (#informal_fun ff)
@@ -4847,19 +4924,19 @@ fun €z_prefix› (ident : ID) (newids : ID list) (package : PACKAGE)
 	let	val package = force_value(s_lookup ident (!pack_env))
 				handle Fail _ =>
 				error "z_prefix" 507029 [fn() => ident];
-		val internal_name = #zmod package;
-		val dummy = if internal_name mem (get_descendants ("cn"))
+		val spec_script_name = #zmod package;
+		val dummy = if spec_script_name mem (get_descendants ("cn"))
 			then ()
-			else fail "z_prefix" 507038 [fn () => internal_name];
-		val parents = get_parents internal_name;
+			else fail "z_prefix" 507038 [fn () => spec_script_name];
+		val parents = get_parents spec_script_name;
 		val prefixed_theory_name = pack_spec_name ident;
 		val spec_already_created =
 			 prefixed_theory_name mem get_descendants ("cn");
 		val (tysubs, aux_vars) = 
 			if	spec_already_created
 			then	let 	val (tys, _) =
-						internal_theory_types_and_const_thms
-						internal_name;
+						spec_script_theory_types_and_const_thms
+						spec_script_name;
 					val (tysubs, _) = prefix_given_sets ident newids tys;
 				in	(tysubs,
 					map (prefix_aux_vars ident tysubs newids)
@@ -4867,7 +4944,7 @@ fun €z_prefix› (ident : ID) (newids : ID list) (package : PACKAGE)
 		end
 			else	create_prefixed_spec false parents ident package;
 		val fps = (
-			open_theory internal_name;
+			open_theory spec_script_name;
 			set_package_ti_context package;
 			(	prefix_formal_procs ident tysubs newids
 					(#formal_procs package))
@@ -4979,11 +5056,12 @@ fun €new_scope_pack_body› (ident : ID) : unit = (
 			body_flag = true
 		};
 		val vc_vars1 = #vc_vars package1;
+		val old_subunit_flag = test_flag #subunit_flag 1;
 		val block = block_vc_vars(
 			block_flags(empty_block, flags), vc_vars1);
 		val block' = block_block_name(block, ident);
 	in
-		new_parent_aux false (#zmod package1);
+		(if old_subunit_flag then () else new_parent_aux false (#zmod package1));
 		blocks := block' :: !blocks
 	end	
 );
@@ -5151,18 +5229,18 @@ fun €renames_proc_common›
 		SSProcedure {name = new, ... } => (
 		   case s_lookup pack (!pack_env) of
 		   Value package => (
-			let	val internal_name = (#zmod package);
+			let	val spec_script_name = (#zmod package);
 				val formal_proc2  =
 					find
 						(#formal_procs package)
 						(fn p => #name p = old);
 
 				val (tys, _) =
-					internal_theory_types_and_const_thms internal_name;
+					spec_script_theory_types_and_const_thms spec_script_name;
 				val newids = new_ids package;
 				val (tysubs, _) = prefix_given_sets pack newids tys;
 				val oldthy = get_current_theory_name();
-				val changethy = open_theory internal_name;
+				val changethy = open_theory spec_script_name;
 				val {name=pname, formal_ids=pformal_ids, globals=g,
 					 spec=pspec} : FORMAL_PROC = (
 					prefix_formal_proc
@@ -5667,7 +5745,8 @@ and €do_statement› (y as STNull : STATEMENT) : STATEMENT = (y
 );
 =TEX
 
-The following reflects the SID functions for $dec$, $basic\_declaration$, $renaming\_declaration$, and $subprogram\_declaration$. Note that the $with\_context$ is an argument used for package declarations so that when the package theories are created, the $with$ packages can become parents.
+The following reflects the SID functions for $dec$, $basic\_declaration$, $renaming\_declaration$, $subprogram\_declaration$ and {\it pack\_stub}.
+Note that the $with\_context$ is an argument used for package declarations so that when the package theories are created, the $with$ packages can become parents.
 
 =SML
 fun €do_declaration› (y as (DDeclarationKSlot (
@@ -5676,7 +5755,10 @@ fun €do_declaration› (y as (DDeclarationKSlot (
 					DKDeclaration => RSDeclaration
 				|	DKPrivate => RSPrivatePart
 				|	DKVisible => RSVisiblePart;
-	in
+		val ident = trans_id label;
+	in	(case s_lookup ident (!pack_env) of
+			Value _ => ( pack_stub ident
+		) |	Nil => ());
 		new_k_slot(label, rsty, get_current_theory_name())
 	end;
 	k_slot_dec label;
@@ -5897,6 +5979,7 @@ and €do_proper_body› (y as (PBProcedure
 ) | do_proper_body (y as (PBPackage 
 	{name, decls, statement, annotation}) : PROPER_BODY) = (
 	new_scope_pack_body name;
+	set_body_name (trans_id name);
 	do_annotation annotation;
 	map do_declaration decls;
 	(if any decls (fn d => case d of DUsing _ => true |_ => false)
@@ -5910,8 +5993,7 @@ The following reflects the SID functions for $subunit$ (in its final clause).
 fun €do_compilation_unit›
 	(y as (CUPackageDeclaration (x as {name, ...})) : COMPILATION_UNIT)
 	: unit = (
-(* compilation_unit_name y  would give name^"spec" with is the external name *)
-	set_cu(internal_spec_desc name);
+	set_cu(spec_script_desc name);
 	do_declaration (DPackageDeclaration x)
 ) | do_compilation_unit (y as (CUProperBody x)) = (
 	case x of
@@ -5986,11 +6068,24 @@ in	update_spark_prog x;
 end
 ) | do_web_clause (y as (WCReplacedByCompilation x) : WEB_CLAUSE) = (
 let	val {label=label, comp=comp} = x;
-	val current_theory = get_current_theory_name ();
-in	open_label_theory label;
-	update_replacement_env(label, ReplaceComp x);
-	map do_kslot_compilation_unit (#comp x);
-	lazy_open_theory current_theory
+in	case (s_lookup label (!repl_env), comp) of
+		(Value (UnReplaced _), _) => (
+		let	val current_theory = get_current_theory_name ();
+		in	open_label_theory label;
+			update_replacement_env(label, ReplaceComp x);
+			map do_kslot_compilation_unit (#comp x);
+			lazy_open_theory current_theory
+		end
+	) |	(Nil, [KCUUnit {comp_unit = CUProperBody (pb as PBPackage {name, ...}),
+			context=[], references=[], ...}]) => (
+			case s_lookup (trans_id name) (!repl_env) of
+				Value (UnReplaced _) => (
+					update_replacement_env
+						(name, ReplaceComp{label = name, comp=comp});
+					do_compilation_unit
+						(CUSubUnit {name=label, proper_body=pb})
+			) |	_ => (fail "do_web_clause" 507065 [fn _ => label])
+	) | _ => fail "do_web_clause" 507065 [fn _ => label]
 end
 ) | do_web_clause (y as (WCReplacedByPrivatePart x) : WEB_CLAUSE) = (
 let	val {label=label, private=private} = x;
@@ -6078,7 +6173,11 @@ The following function is called from \cite{ISS/HAT/DAZ/IMP504} to classify a la
 fun €classify_label› (lab : string) : REPL_SORT OPT = (
 	case s_lookup lab (!repl_env) of
 		Value(UnReplaced(rs, _)) => Value rs
-	|	_ => Nil
+	|	_ => (
+			case (s_lookup (trans_id lab) (!pack_env)) of
+				Value _ => Value RSCompilation
+			|	Nil => Nil
+	)
 );
 =TEX
 =SML
@@ -6120,15 +6219,29 @@ fun €restart_cn_z_generator› (():unit) : unit = (
 );
 =TEX
 =SML
-fun €init_cn_z_generator› (script_name : string) : unit = (
-	set_z_generator_state{pack_env = !pack_env,
-		subunit_env = !subunit_env,
-		dec_env = dec_env0,
-		spec_env = spec_env0,
-		blocks = env0,
-		repl_env = repl_env0,
-		spark_prog = spark_prog0,
-		script_name = script_name};
+fun €init_cn_z_generator› 
+	(continue : bool)
+	(script_name : string) : unit = (
+	set_z_generator_state
+	(if continue
+	then	let	val {repl_env, spark_prog, ...} = get_z_generator_state();
+		in	{	pack_env = !pack_env,
+				subunit_env = !subunit_env,
+				dec_env = dec_env0,
+				spec_env = spec_env0,
+				blocks = env0,
+				repl_env = repl_env,
+				spark_prog = spark_prog,
+				script_name = script_name}
+		end
+	else	{	pack_env = !pack_env,
+			subunit_env = !subunit_env,
+			dec_env = dec_env0,
+			spec_env = spec_env0,
+			blocks = env0,
+			repl_env = repl_env0,
+			spark_prog = spark_prog0,
+			script_name = script_name});
 	reset_cn_parser_state()
 );
 =TEX
@@ -6145,8 +6258,9 @@ abstype €CN_STATE› = CNState of Z_GENERATOR_STATE with
 			spark_prog = spark_prog0,
 			script_name = ""}
 	);
-
-	fun €new_script› {	name : string,
+local
+	fun €do_new_script› (continue : bool)
+		{	name : string,
 			state = CNState zg_state : CN_STATE} : unit = (
 		let	val old_state = get_z_generator_state ();
 			val thy = get_current_theory_name();
@@ -6156,7 +6270,7 @@ abstype €CN_STATE› = CNState of Z_GENERATOR_STATE with
 			new_theory_aux [] name;
 			set_cn_created();
 			CaseIndependence.reset_names ();
-			init_cn_z_generator name
+			init_cn_z_generator continue name
 		) handle ex => (
 			set_z_generator_state old_state;
 			open_theory thy;
@@ -6165,7 +6279,8 @@ abstype €CN_STATE› = CNState of Z_GENERATOR_STATE with
 		end		
 	);
 
-	fun €new_script1› {	name : string,
+	fun €do_new_script1› (continue : bool)
+		{	name : string,
 			state = CNState zg_state : CN_STATE,
 			library_theories : string list} : unit = (
 		let	val old_state = get_z_generator_state ();
@@ -6176,7 +6291,7 @@ abstype €CN_STATE› = CNState of Z_GENERATOR_STATE with
 			new_theory_aux [] name;
 			set_cn_created();
 			CaseIndependence.reset_names ();
-			init_cn_z_generator name;
+			init_cn_z_generator continue name;
 			(map (fn t => new_parent_aux false t
 				handle (Fail m) =>
 				fail "new_script1"
@@ -6191,6 +6306,18 @@ abstype €CN_STATE› = CNState of Z_GENERATOR_STATE with
 			)
 		end		
 	);
+in
+	val €new_script› : {name : string, state : CN_STATE} -> unit
+		= do_new_script false;
+	val €new_script1› :
+		{name : string, state : CN_STATE, library_theories : string list} -> unit
+		= do_new_script1 false;
+	val €new_continuation_script› : {name : string, state : CN_STATE} -> unit
+		= do_new_script true;
+	val €new_continuation_script1› :
+		{name : string, state : CN_STATE, library_theories : string list} -> unit
+		= do_new_script1 true;
+end;
 
 	fun €get_cn_state› (() : unit) : CN_STATE = (
 		CNState (get_z_generator_state())
