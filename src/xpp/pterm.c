@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.22 2002/11/14 15:33:15 rda Exp $
+ * $Id: pterm.c,v 2.23 2003/03/18 14:09:53 robarthan Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -460,7 +460,7 @@ void get_pty(void)
 
 #ifndef SET_ATTRS_IN_PARENT
 		if(	PUSH_MODULES(STDIN)
-		||	GET_ATTRS(STDIN, &TIO) ) {
+		||	GET_ATTRS(STDIN, &tio) ) {
 			msg("system error", "I/O control operation on slave fd failed (GET in child)");
 			perror("xpp");
 			exit(10);
