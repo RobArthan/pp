@@ -353,6 +353,9 @@ Bool add_search_tool(Widget text_w)
 	XtAddCallback(goto_line_no_btn, XmNactivateCallback,
 		goto_line_no_cb, (XtPointer)(&search_data));
 
+	XtAddCallback(line_no_text, XmNactivateCallback,
+		goto_line_no_cb, (XtPointer)(&search_data));
+
 	XtAddCallback(dismiss_btn, XmNactivateCallback,
 		dismiss_cb, (XtPointer)(&search_data));
 
@@ -374,12 +377,23 @@ Bool add_search_tool(Widget text_w)
 	line_no_set(&search_data);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- *set up text widget translations and font
+ *set up text widget translations
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	XtOverrideTranslations(search_text, text_translations);
 	XtOverrideTranslations(replace_text, text_translations);
 	XtOverrideTranslations(line_no_text, text_translations);
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Make return in the line number text widget activate it
+ **** **** **** **** **** **** **** **** **** **** **** **** */
+
+	XtOverrideTranslations(line_no_text,
+		XtParseTranslationTable("<Key>Return: activate()"));
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ *set up text widget fonts
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	copy_font_list(search_text, text_w);
 	copy_font_list(replace_text, text_w);
