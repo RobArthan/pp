@@ -13,7 +13,7 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-#define _cmdwin
+#define _mainw
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -100,6 +100,10 @@ static char *cmd_too_long_message =
 
 static char *send_error_message = 
 "A system error occurred writing to the application.";
+
+static char *no_file_message =
+	/* This message just displayed instead of the file name */
+"* NO FILE NAME SELECTED *";
 
 XtAppContext app; /* global because needed in msg.c */
 
@@ -301,7 +305,9 @@ static MenuItem help_menu_items[] = {
     NULL,
 };
 
-static setup_main_window(Bool edit_only)
+static setup_main_window(
+	Bool	edit_only,
+	char	*file_name)
 {
 	Arg args[12];
 	NAT i;
@@ -441,6 +447,16 @@ if( !edit_only ) {
 			XmNmenuHelpWidget, btns[num_btns-1], NULL);
 	}
 
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Open file if file_name not NULL
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+	if(open_file(script, file_name)) {
+		XmTextFieldSetString(namestring, file_name);
+		XmTextFieldShowPosition(namestring, strlen(file_name));
+	} else {
+		XmTextFieldSetString(namestring, no_file_message);
+	};
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Management and Realisation:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -454,7 +470,6 @@ if( !edit_only ) {
 	XtManageChild(frame);
 
 	XtRealizeWidget(root);
-
 
 }
 
@@ -471,6 +486,13 @@ XmAnyCallbackStruct *cbs;
 
 	switch(i) {
 	case FILE_MENU_SAVE:
+		fname = XmTextGetString(namestring);
+		if(!fname || !*fname || *fname == '*') {
+/* No file name: just do nothing for now */
+			break;
+		} else {
+			save_file(script, fname);
+		}
 		break;
 	case FILE_MENU_SAVE_AS:
 		fname = file_dialog(frame, "Save As");
@@ -1153,9 +1175,11 @@ Bool execute_command()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * main entry point:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void main_window_go(Bool edit_only)
+void main_window_go(
+	Bool	edit_only,
+	char	*file_name)
 {
-	setup_main_window(edit_only);
+	setup_main_window(edit_only, file_name);
 if( !edit_only ) {
 	get_pty();
 }
