@@ -61,20 +61,206 @@ whose detailed design is given in in \cite{DS/FMU/IED/DTD028}.
 
 \subsubsection{Deficiencies}
 \section{PREAMBLE}
-=SML
+=IG_SML
 structure ‚Tactics2· : Tactics1 = struct
 =TEX
-=SML
-end; (* of structure Tactics2 *)
-open Tactics2;
+\section{UTILITIES}
 =TEX
-\section{CONCERNING $T$}
+=IGN
+fun show (th : THM) = (diag_line(PolyML.makestring th); th);
+fun show_goal (gl : GOAL) = (diag_line(PolyML.makestring gl); gl);
+=SML
+fun ‚pass_on· (e : exn) (fromnm : string) (tonm : string) : 'a = (
+let 	val efrom = area_of e
+in
+	if efrom = fromnm
+	then reraise e tonm
+	else reraise e efrom
+end);
+=IGN
+val mk_t = mk_T;
+val mk_f = mk_F;
+val is_t = is_T;
+val is_f = is_F;
+map usefile["dtd009", "imp009", "sg", "imp028"];
+=TEX
+\section{TACTICALS FOR THE PREDICATE CALCULUS}
+\subsection{Concerning $F$}
+=SML
+fun  ‚C_CONTR_T· (thmtac : THM -> TACTIC) : TACTIC = (fn gl as (asms, conc) =>
+	let	val å_conc = mk_å conc;
+		val (sgs, pf) =  (thmtac (asm_rule å_conc)) (asms, mk_f);
+		fun rule thm = (
+			if å_conc term_mem (hyps thm)
+			then c_contr_rule conc thm
+			else contr_rule å_conc thm
+		);
+	in	(sgs, rule o pf)
+	end
+);
+=TEX
+\subsection{Concerning Negation}
+=TEX
+=SML
+fun  ‚å_T2· (t1 : TERM)
+	(thmtac1 : THM -> TACTIC) (thmtac2 : THM -> TACTIC)
+		: TACTIC = (fn gl as (asms, conc) =>
+	let	val t2 = (dest_å conc)
+			handle Fail _ => fail "å_T2" 28003 [];
+		val å_t1 = (mk_å t1)
+			handle Fail _ => term_fail "å_T2" 28002 [t1];
+		val (sgs1, pf1) = (thmtac1 (asm_rule t2)) (asms, t1);
+		val (sgs2, pf2) = (thmtac2 (asm_rule t2)) (asms, å_t1);
+		fun rule [thm1, thm2] = å_intro t2 thm1 thm2
+		|   rule _ = bad_proof "å_T2";
+	in	(sgs1 @ sgs2, rule o mapshape[(pf1, length sgs1), (pf2, length sgs2)])
+	end	
+);
+=TEX
+=SML
+fun  ‚å_T· (t1 : TERM) (thmtac : THM -> TACTIC) : TACTIC = (fn thm =>
+	(å_T2 t1 thmtac thmtac thm)
+	handle ex => pass_on ex "å_T2" "å_T"
+);
+=TEX
+\subsection{Concerning Ä}
+=SML
+fun ‚Ä_THEN2· (ttac1 : THM -> TACTIC) (ttac2 : THM -> TACTIC)
+						: THM -> TACTIC = (fn thm => 
+	let	val thm1 = Ä_left_elim thm;
+		val thm2 = Ä_right_elim thm;
+	in	ttac1 thm1 THEN ttac2 thm2
+	end
+	handle ex => divert ex "Ä_left_elim" "Ä_THEN2" 28005 []
+);
+=TEX
+=SML
+fun ‚Ä_THEN· (ttac : THM -> TACTIC) : THM -> TACTIC = (fn thm => 
+	(Ä_THEN2 ttac ttac thm)
+	handle ex => pass_on ex "Ä_THEN2" "Ä_THEN"
+);
+=TEX
+\subsection{Concerning Å}
+=TEX
+$Å\_LEFT\_T$ and $Å\_RIGHT\_T$ are deferred until we have support
+to do them via $ä\_T$.
+=SML
+fun ‚Å_THEN2· (ttac1 : THM -> TACTIC) (ttac2 : THM -> TACTIC)
+						: THM -> TACTIC = (fn thm => 
+	let	val (t1, t2) = dest_Å(concl thm);
+	in	(fn (asms, conc) =>
+			let	val (sgs1, pf1) = ttac1 (asm_rule t1) (asms, conc);
+				val (sgs2, pf2) = ttac2 (asm_rule t2) (asms, conc);
+			in	(sgs1 @ sgs2,
+				(fn thl =>
+					let	val len = length sgs1;
+					in	Å_elim thm (pf1(thl to (len - 1))) (pf2(thl from len))
+					end
+				))
+			end)
+	end
+	handle ex => divert ex "dest_Å" "Å_THEN2" 28009 []
+);
+=TEX
+=SML
+fun ‚Å_THEN· (ttac : THM -> TACTIC) : THM -> TACTIC = Å_THEN2 ttac ttac;
+=TEX
+\subsection{Concerning ä}
+=SML
+fun ä_T (ttac : THM -> TACTIC) : TACTIC = (fn (asms, conc) =>
+	let	val (t1, t2) = dest_ä conc;
+		val (sgs, pf) = ttac (asm_rule t1) (asms, t2);
+	in	(sgs, ä_intro t1 o pf)
+	end
+	handle ex => divert ex "dest_ä" "ä_T" 28010 []
+);
+=TEX
+\subsection{Concerning Ç}
+=SML
+fun ‚Ç_THEN2· (ttac1 : THM -> TACTIC) (ttac2 : THM -> TACTIC)
+						: THM -> TACTIC = (fn thm => 
+	let	val (thm1, thm2) = Ç_elim thm;
+	in	ttac1 thm1 THEN ttac2 thm2
+	end
+	handle ex => divert ex "Ç_elim" "Ä_THEN2" 28005 []
+);
+=TEX
+=SML
+fun ‚Ç_THEN· (ttac : THM -> TACTIC) : THM -> TACTIC = (fn thm => 
+	(Ç_THEN2 ttac ttac thm)
+	handle ex => pass_on ex "Ç_THEN2" "Ç_THEN"
+);
+=TEX
+\subsection{Concerning $if \ldots then \ldots else \ldots$}
+=SML
+fun ‚IF_THEN2· (ttac1 : THM -> TACTIC) (ttac2 : THM -> TACTIC)
+						: THM -> TACTIC = (fn thm => 
+	let	val thm1 = if_then_elim thm;
+		val thm2 = if_else_elim thm;
+	in	ttac1 thm1 THEN ttac2 thm2
+	end
+	handle ex => divert ex "if_left_elim" "IF_THEN2" 28005 []
+);
+=TEX
+=SML
+fun ‚IF_THEN· (ttac : THM -> TACTIC) : THM -> TACTIC = (fn thm => 
+	(IF_THEN2 ttac ttac thm)
+	handle ex => pass_on ex "IF_THEN2" "IF_THEN"
+);
+=TEX
+=SML
+fun ‚IF_T2· (ttac1 : THM -> TACTIC) (ttac2 : THM -> TACTIC) : TACTIC = (fn (asms, conc) =>
+	let	val (a, tt, et) = dest_if conc;
+		val (tsgs, tpf) = ttac1 (asm_rule a) (asms, tt);
+		val (esgs, epf) = ttac2 (asm_rule a) (asms, et);
+		fun rule [thm1, thm2] = if_intro a thm1 thm2
+		|   rule _ = bad_proof "åIF_T2";
+
+	in	(tsgs @ esgs, rule o mapshape[(tpf, length tsgs), (epf, length esgs)])
+	end handle ex => divert ex "dest_if" "IF_T2" 28024 []
+);
+=TEX
+=SML
+fun  ‚IF_T· (ttac : THM -> TACTIC) : TACTIC = (fn thm =>
+	(IF_T2 ttac ttac thm)
+	handle ex => pass_on ex "IF_T2" "IF_T"
+);
+=TEX
+\subsection{Concerning Ñ}
+=SML
+fun ‚SIMPLE_Ñ_THEN· (ttac : THM -> TACTIC) = (fn thm =>
+	let	val (x, b) = simple_dest_Ñ(concl thm);
+	in	(fn (asms, conc) =>
+			let	val x' = variant (flat(map frees
+					(conc :: concl thm :: hyps thm @ asms))) x;
+				val (sgs, pf) = ttac (asm_rule (var_subst[(x', x)] b)) (asms, conc);
+			in	(sgs, (simple_Ñ_elim x' thm) o pf)
+			end)
+	end
+	handle ex => divert ex "simple_dest_Ñ" "SIMPLE_Ñ_THEN" 28048 []
+);
+=TEX
+\subsection{Concerning Ñ∞}
+=SML
+fun ‚SIMPLE_Ñ%down%1_THEN· (ttac : THM -> TACTIC) = (fn thm =>
+	(SIMPLE_Ñ_THEN ttac (simple_Ñ%down%1_elim thm))
+	handle ex => divert ex "simple_Ñ%down%1_elim" "SIMPLE_Ñ1_THEN" 28048 []
+);
+=TEX
+\subsection{Concerning Assumptions}
+=SML
+fun ‚asm_cases_tac· (t1 : TERM) : TACTIC = (fn gl as (asms, conc) =>
+	([(t1 :: asms, conc), (mk_å t1 :: asms, conc)],
+	  fn [th1, th2] => asm_elim t1 th1 th2
+	 | _ => bad_proof "asm_cases_tac")
+	handle ex => divert ex "mk_å" "asm_cases_tac" 28002 []
+);
+=TEX
+\section{TACTICS FOR THE PREDICATE CALCULUS}
+=TEX
+\subsection{Concerning $T$}
 =SML
 val ‚t_tac· : TACTIC = accept_tac t_thm;
-=TEX
-=SML
-val mk_t = ªT:BOOLº;
-val mk_f = ªF:BOOLº;
 =TEX
 =SML
 val ‚Ç_t_tac· : TACTIC = (fn (asms, conc) => 
@@ -89,61 +275,445 @@ val ‚Ç_t_tac· : TACTIC = (fn (asms, conc) =>
 	end	handle Fail _ => term_fail "Ç_t_tac" 28001 [conc]
 );
 =TEX
-\section{CONCERNING $F$)
+\subsection{Concerning $F$}
 =SML
 val ‚contr_tac· : TACTIC = (fn (asms, conc) => 
 	([(asms, mk_f)],
-	 fn [th] => contr_rule conc th | _ => bad_proof "Ç_t_tac")
+	 fn [th] => contr_rule conc th | _ => bad_proof "contr_tac")
 );
 =TEX
 =SML
-fun  ‚C_CONTR_T· (thmtac : THM -> TACTIC) : TACTIC = (fn gl as (asms, conc) =>
-	let	val å_conc = mk_å conc;
-		val (sgs, pf) = REMOVED_ASMS_T [å_conc] (thmtac (asm_rule å_conc)) (asms, mk_f);
-		fun rule thm = (
-			if å_conc asm_mem (hyps thm)
-			then c_contr_rule conc thm
-			else contr_rule å_conc thm
-		);
-	in	(sgs, rule o pf)
+fun ‚f_thm_tac· (thm	 : THM) : TACTIC = (fn gl as (_, conc) => 
+	let	val thm1 = contr_rule conc thm
+	in	accept_tac thm1 gl
 	end
+	handle	ex => divert ex "contr_rule" "f_thm_tac" 28050 []
 );
 =TEX
-\section{CONCERNING NEGATION}
+\subsection{Concerning Negation}
 =TEX
 =SML
-fun  ‚å_INTRO2_T· (t1 : TERM)
-	(thmtac1 : THM -> TACTIC) (thmtac2 : THM -> TACTIC)
-		: TACTIC = (fn gl as (asms, conc) =>
-	let	val t2 = (dest_å conc)
-			handle Fail _ => fail "å_INTRO2_T" 28003 [];
-		val å_t1 = (mk_å t1)
-			handle Fail _ => term_fail "å_INTRO2_T" 28002 [t1];
-		val (sgs1, pf1) = REMOVED_ASMS_T [t2] (thmtac1 (asm_rule t2)) (asms, t1);
-		val (sgs2, pf2) = REMOVED_ASMS_T [t2] (thmtac2 (asm_rule t2)) (asms, å_t1);
-		fun rule [thm1, thm2] = å_intro t2 thm1 thm2
-		|   rule _ = bad_proof "å_INTRO2_T";
-	in	(sgs1 @ sgs2, rule o mapshape[(pf1, length sgs1), (pf2, length sgs2)])
-	end	
+fun  ‚å_elim_tac· (tm : TERM) : TACTIC = (
+	if type_of tm <> BOOL
+	then term_fail "å_elim_tac" 28002 [tm]
+	else	(fn (asms, conc) =>
+			([(asms, tm), (asms, mk_å tm)],
+			 fn [th1, th2] => å_elim conc th1 th2
+			 |   _ => bad_proof "å_elim_tac" )
+		)
 );
-
+=TEX
+\subsection{Concerning Ä}
+=SML
+val ‚Ä_tac· : TACTIC = (fn (asms, conc) =>
+	let	val (t1, t2) = dest_Ä conc
+	in	([(asms, t1), (asms, t2)],
+			 fn [th1, th2] => Ä_intro th1 th2
+			 |   _ => bad_proof "Ä_tac" )
+	end handle ex => divert ex "dest_Ä" "Ä_tac" 28004 []
+);
+=TEX
+\subsection{Concerning Å}
+=SML
+val  ‚Å_left_tac· : TACTIC = (fn (asms, conc) =>
+	let	val (a, b) = dest_Å conc
+	in	([(asms, a)],
+			 fn [th] => Å_right_intro b th
+			 |   _ => bad_proof "Å_left_tac" )
+	end handle ex => divert ex "dest_Å" "Å_left_tac" 28004 []
+);
+=TEX
+=SML
+val  ‚Å_right_tac· : TACTIC = (fn (asms, conc) =>
+	let	val (a, b) = dest_Å conc
+	in	([(asms, b)],
+			 fn [th] => Å_left_intro a th
+			 |   _ => bad_proof "Å_right_tac" )
+	end handle ex => divert ex "dest_Å" "Å_right_tac" 28004 []
+);
+=TEX
+\subsection{Concerning ä}
+=SML
+fun ‚undisch_tac· (t1 : TERM) : TACTIC = (fn (asms, conc) =>
+	if t1 term_mem asms
+	then ([(asms term_less t1, mk_ä(t1, conc))],
+		(fn [thm] => undisch_rule thm | _ => bad_proof "undisch_tac"))
+	else  term_fail "undisch_tac" 28011 [t1]
+);
+=TEX
+=SML
+val ‚pop_tac· : TACTIC = (fn (asm :: asms, conc) =>
+	([(asms, mk_ä(asm, conc))],
+	(fn [thm] => undisch_rule thm | _ => bad_proof "pop_tac"))
+|	gl => fail_tac gl 
+);
+=TEX
+=SML
+val ‚list_undisch_tac· : TERM list ->  TACTIC = MAP_EVERY undisch_tac o rev;
+=TEX
+=SML
+val ‚all_undisch_tac· :  TACTIC = REPEAT pop_tac;
+=TEX
+\subsection{Concerning Ç}
+=SML
+val ‚Ç_tac· : TACTIC = (fn (asms, conc) =>
+	let	val (t1, t2) = dest_Ç conc
+	in	([(asms, mk_ä(t1, t2)), (asms, mk_ä(t2, t1))],
+			 fn [th1, th2] => Ç_intro th1 th2
+			 |   _ => bad_proof "Ç_tac" )
+	end handle ex => divert ex "dest_Ç" "Ç_tac" 28016 []
+);
+=TEX
+\subsection{Concerning É}
+=SML
+val ‚simple_É_tac· : TACTIC = (fn (asms, conc) =>
+	let	val (x, b) = simple_dest_É conc;
+		val x' = variant (flat(map frees(conc::asms))) x;
+	in
+		([(asms, var_subst[(x', x)] b)],
+		(fn [thm] => simple_É_intro x' thm | _ => bad_proof "simple_É_tac"))
+	end handle ex => divert ex "dest_É" "simple_É_tac" 28051 []
+);
+=TEX
+\subsection{Concerning Ñ}
+=TEX
+=SML
+fun ‚simple_Ñ_tac· (tm : TERM) : TACTIC = (fn (asms, conc) =>
+	let	val (x, b) = simple_dest_Ñ conc;
+	in
+		([(asms, var_subst[(tm, x)] b)],
+		(fn [thm] => simple_Ñ_intro conc thm | _ => bad_proof "simple_Ñ_tac"))
+	end
+	handle ex => list_divert ex "simple_Ñ_tac"
+[("var_subst", 28052, []), ("simple_dest_Ñ conc", 28053, [])]
+);
+=TEX
+\subsection{Concerning Ñ}
+=SML
+fun ‚simple_Ñ%down%1_tac· (tm : TERM) : TACTIC = (fn (asms, conc) =>
+	let	val (x, b) = simple_dest_Ñ%down%1 conc;
+		val u = mk_É(x, mk_ä(b, mk_eq(x, tm)))
+	in
+		([(asms, var_subst[(tm, x)] b), (asms, u)],
+		(fn [th1, th2] => simple_Ñ%down%1_intro th1 th2
+		| _ => bad_proof "simple_Ñ%down%1_tac"))
+	end
+	handle ex => list_divert ex "simple_Ñ%down%1_tac"
+[("mk_eq", 28054, []), ("simple_dest_Ñ conc", 28055, [])]
+);
+=TEX
+\section{STRIPPING THEOREMS AND GOALS}
+=TEX
+=SML
+fun ‚check_asm_tac· (thm : THM) : TACTIC = (fn gl as (asms, conc) =>
+	let	val t = concl thm;
+	in	if aconv t conc
+		then accept_tac thm
+		else if is_t t
+		then always_tac
+		else if is_f t
+		then f_thm_tac thm
+		else if is_å t
+		then	let	val t' = dest_å t;
+				fun aux (asm :: more) = (
+					if aconv t asm
+					then always_tac
+					else if aconv asm t'
+					then accept_tac (å_elim conc (asm_rule asm) thm)
+					else if aconv asm conc
+					then accept_tac (asm_rule asm)
+					else aux more
+				) | aux [] = asm_tac thm;
+			in	aux asms
+			end
+		else	let	fun aux (asm :: more) = (
+					if aconv t asm
+					then always_tac
+					else if is_å asm andalso aconv (dest_å asm) t
+					then accept_tac (å_elim conc thm (asm_rule asm))
+					else if aconv asm conc
+					then accept_tac (asm_rule asm)
+					else aux more
+					) | aux [] = asm_tac thm;
+			in	aux asms
+			end
+	end	gl
+);
+=TEX
+=SML
+val ‚goal_in_asms_tac· : TACTIC = (fn gl as (asms, conc) =>
+	if conc term_mem asms
+	then accept_tac (asm_rule conc) gl
+	else fail "goal_in_asms_tac" 28052 []
+);
+=TEX
+We start of with theorem strippers and  goal strippers which understand a
+subset of the desired final list. We then use these to construct 
+$strip\_tac$ and then use it to prove results needed to supply
+the missing strippers.
+=SML
+val strip_thm_thens : THM_TACTICAL list ref =
+		ref [Ä_THEN, Å_THEN, SIMPLE_Ñ_THEN];
+=TEX
+=SML
+fun ‚get_strip_thm_thens· (() : unit) : THM_TACTICAL list = (
+	!strip_thm_thens
+);
+=TEX
+=SML
+fun ‚set_strip_thm_thens· (ttcls : THM_TACTICAL list) : unit = (
+	strip_thm_thens := ttcls
+);
+=TEX
+=SML
+val ‚STRIP_THM_THEN· : THM_TACTICAL = (fn thmtac =>
+	FIRST_TTCL(!strip_thm_thens) thmtac
+);
+=TEX
+=SML
+val strip_goal_ts : (THM_TACTIC -> TACTIC) list ref =
+	ref[ 	fn _ => simple_É_tac,
+		fn _ => Ä_tac,
+		ä_T,
+		fn _ => Ç_tac,
+		fn _ => t_tac,
+		fn _ => goal_in_asms_tac];
+=TEX
+=SML
+fun ‚get_strip_goal_ts· (() : unit) : (THM_TACTIC -> TACTIC) list = (
+	!strip_goal_ts
+);
+=TEX
+=SML
+fun ‚set_strip_goal_ts· (ts : (THM_TACTIC -> TACTIC) list) : unit = (
+	strip_goal_ts := ts
+);
+=TEX
+=SML
+fun ‚STRIP_GOAL_T· (ttac : THM_TACTIC) : TACTIC = (fn gl =>
+	FIRST(map (fn t => t ttac) (!strip_goal_ts)) gl
+);
+=TEX
+=SML
+val ‚strip_asm_tac· : THM_TACTIC =
+			REPEAT_TTCL STRIP_THM_THEN check_asm_tac;
+=TEX
+=SML
+val  ‚strip_tac· : TACTIC = STRIP_GOAL_T strip_asm_tac;
+=TEX
+\subsection{Some Tautologies}
+We now have some machinery in place with which we can prove the tautologies
+need for the tacticals which support $simple\_strip\_tac$:
+=SML
+val ‚ä_thm· = tac_proof( ([], ªÉa bé(a ä b) Ç (åa Å b)º),
+	REPEAT strip_tac
+	THEN asm_cases_tac ªa:BOOLº THEN_LIST
+	[Å_right_tac THEN all_undisch_tac THEN REPEAT strip_tac,
+	 Å_left_tac THEN all_undisch_tac THEN REPEAT strip_tac]);
+=TEX
+=SML
+val ‚å_å_thm· = tac_proof( ([], ªÉaéå åa Ç aº),
+		REPEAT strip_tac THEN_LIST
+	[accept_tac (å_å_elim (asm_rule ªååaº)),
+	 accept_tac (å_å_intro (asm_rule ªa:BOOLº))]);
+=TEX
+=SML
+val ‚å_Å_thm· = tac_proof( ([], ªÉa béå (a Å b) Ç (åa Ä åb)º),
+	conv_tac(TRAVERSE_C (simple_eq_match_conv å_thm)) THEN
+	REPEAT strip_tac THEN_LIST 
+	[LEMMA_T ªa Å bº(accept_tac o ä_mp_rule (asm_rule ªa Å b ä Fº)) THEN 
+		Å_left_tac THEN accept_tac(asm_rule ªa:BOOLº), 
+	LEMMA_T ªa Å bº(accept_tac o ä_mp_rule (asm_rule ªa Å b ä Fº)) THEN
+		Å_right_tac THEN accept_tac(asm_rule ªb:BOOLº),
+	accept_tac(ä_mp_rule (asm_rule ªa ä Fº) (asm_rule ªa:BOOLº)),
+	accept_tac(ä_mp_rule (asm_rule ªb ä Fº) (asm_rule ªb:BOOLº))] );
+=TEX
+=SML
+val ‚Å_å_thm· = tac_proof( ([], ªÉa bé(a Å åb) Ç (b ä a)º),
+	REPEAT strip_tac THEN
+	asm_cases_tac ªa:BOOLº  THEN_LIST
+	[Å_left_tac THEN all_undisch_tac THEN REPEAT strip_tac,
+	Å_right_tac THEN accept_tac(modus_tollens_rule(asm_ruleªb ä aº)(asm_ruleªåaº))]);
+=TEX
+=SML
+val ‚å_Ä_thm· = ( (* Ö å(a Ä b) Ç (åa Å åb) *)
+let	val thm1 = tac_proof( ([], ªå(a Ä b) Ç (a ä åb)º),
+	conv_tac(TRAVERSE_C (simple_eq_match_conv å_thm))
+	THEN REPEAT strip_tac
+	THEN_LIST
+	[asm_cases_tacªa:BOOLº
+		THEN LEMMA_T ªa Ä bº
+		(fn th1 => accept_tac(ä_mp_rule(asm_ruleªa Ä b ä Fº)(asm_ruleªa Ä bº)))
+		THEN REPEAT strip_tac,
+		accept_tac(ä_mp_rule(ä_mp_rule(asm_ruleªa ä b ä Fº)
+					(asm_ruleªa:BOOLº))(asm_ruleªb:BOOLº))]);
+		val thm2 = tac_proof( ([], ª(a ä åb) Ç (åa Å åb)º),
+	conv_tac(TRAVERSE_C(FIRST_C(map simple_eq_match_conv
+	[ä_thm, å_å_thm, Ç_t_intro(refl_convªxº)])))
+	THEN t_tac);
+in	simple_list_É_intro[ªa:BOOLº, ªb:BOOLº](eq_trans_rule thm1 thm2)
+end);
+=TEX
+=SML
+val ‚å_ä_thm· = tac_proof( ([], ªÉa béå(a ä b) Ç (a Ä åb)º),
+	conv_tac(TOP_TRAVERSE_C(FIRST_C (map simple_eq_match_conv
+		[ä_thm, å_Å_thm, å_å_thm] )))
+		THEN REPEAT strip_tac);
+=TEX
+=SML
+=TEX
+=SML
+val ‚Ç_thm· = ( (* Ö (a Ç b) Ç (a ä b) Ä (b ä a) *)
+let
+	val thm1 = asm_rule ª(a ä b) Ä (b ä a)º; 
+	val thm2 = Ç_intro(Ä_left_elim thm1) (Ä_right_elim thm1);
+	val (thm3, thm4) = Ç_elim(asm_ruleªa Ç bº);
+	val thm5 = Ä_intro thm3 thm4;
+in
+	simple_list_É_intro[ªa:BOOLº, ªb:BOOLº](Ç_intro(all_ä_intro thm5)(all_ä_intro thm2))
+end);
+=TEX
+=SML
+val ‚å_Ç_thm· = (* Ö É a b é å (a Ç b) Ç a Ä å b Å b Ä å a  *)
+		simple_list_É_intro[ªa:BOOLº, ªb:BOOLº]
+		((RAND_C(simple_eq_match_conv Ç_thm)
+		THEN_C (simple_eq_match_conv å_Ä_thm)
+		THEN_C (TRAVERSE_C(simple_eq_match_conv å_ä_thm)))
+		ªå(a Ç b)º);
+=TEX
+=SML
+val ‚å_f_thm· = tac_proof( ([], ªåF Ç Tº),
+	Ç_t_tac THEN conv_tac (simple_eq_match_conv å_thm) THEN strip_tac);
+=TEX
+\subsection{Additional Conversions Tactics and Tacticals}
+\subsubsection{Concerning Ñ∞}
+=SML
+val ‚simple_Ñ%down%1_conv· : CONV = (fn tm =>
+	let	val (x, b) = simple_dest_Ñ%down%1 tm
+		val s1 = ä_intro tm (simple_Ñ%down%1_elim (asm_rule tm));
+		val y = variant (x :: frees b) x;
+		val conj = mk_Ä(b, mk_É(y, mk_ä(var_subst[(y, x)]b, mk_eq(y, x))));
+		val exi = mk_Ñ(x, conj)
+		val s2 = asm_rule conj;
+		val s3 = simple_Ñ%down%1_intro (Ä_left_elim s2) (Ä_right_elim s2)
+		val s4 = simple_Ñ_elim conj (asm_rule exi) s3
+		val s5 = ä_intro exi s4;
+	in	Ç_intro s1 s5
+	end handle ex => pass_on ex "simple_dest_Ñ%down%1" "simple_Ñ%down%1_conv"
+);
+=SML
+val ‚simple_å_Ñ%down%1_conv· : CONV = (fn tm =>
+	((RAND_C simple_Ñ%down%1_conv THEN_C simple_å_Ñ_conv) tm)
+	handle  Fail _ => fail "simple_å_Ñ%down%1_conv" 28061 []
+);
+=TEX
+\subsubsection{Concerning å}
+=SML
+val ‚simple_å_in_conv· : CONV = FIRST_C(
+		map simple_eq_match_conv
+		[å_å_thm, å_Ä_thm, å_Å_thm, å_ä_thm,
+		 å_Ç_thm, å_t_thm, å_f_thm] 
+	@	[simple_å_É_conv, simple_å_Ñ_conv, simple_å_Ñ%down%1_conv]);
+=TEX
+=SML
+val ‚SIMPLE_å_IN_THEN· : THM_TACTICAL = (fn ttac => fn thm =>
+	ttac(Ç_mp_rule(simple_å_in_conv(concl thm))thm)
+);
+=TEX
+=SML
+val ‚simple_å_in_tac· : TACTIC = conv_tac simple_å_in_conv;
+=TEX
+\subsubsection{Concerning ä}
+=SML
+val ‚ä_THEN· : THM_TACTICAL = (fn ttac => fn thm =>
+	let	val (t1, t2) = dest_ä (concl thm)
+	in	ttac(Ç_mp_rule(simple_list_É_elim[t1, t2]ä_thm)thm)
+	end	handle ex => pass_on ex "dest_ä" "ä_THEN"
+);
+=TEX
+\subsubsection{Concerning Ç}
+=SML
+fun ‚Ç_T2· (ttac1 : THM -> TACTIC) (ttac2 : THM -> TACTIC) : TACTIC = (fn gl =>
+	((conv_tac (simple_eq_match_conv Ç_thm) THEN Ä_tac
+	 THEN_LIST [ä_T ttac1, ä_T ttac2]) gl)
+	handle ex => divert ex "simple_eq_match_conv" "Ç_T2" 28088 []
+);
+=TEX
+=SML
+fun  ‚Ç_T· (ttac : THM -> TACTIC) : TACTIC = (fn thm =>
+	(Ç_T2 ttac ttac thm)
+	handle ex => pass_on ex "Ç_T2" "Ç_T"
+);
+=TEX
+\subsubsection{Concerning Å}
+=SML
+local
+val ‚Å_conv· = FIRST_C(map simple_eq_match_conv
+	[Å_å_thm,
+	simple_list_É_intro[ªa:BOOLº, ªb:BOOLº](eq_sym_rule(all_simple_É_elim ä_thm))
+,
+	conv_rule(TRAVERSE_C(simple_eq_match_conv å_å_thm))
+	(simple_list_É_intro[ªa:BOOLº, ªb:BOOLº]
+			(eq_sym_rule(simple_list_É_elim[ªåaº, ªb:BOOLº]ä_thm)))]);
+in
+val ‚Å_tac· = conv_tac(Å_conv);
+end;
+=TEX
+\section{Remaining Stripping Tacticals}
+=SML
+val ‚basic_strip_thm_thens· : THM_TACTICAL list =
+	[	Ä_THEN,
+		ä_THEN,
+		Å_THEN,
+		SIMPLE_å_IN_THEN,
+		Ç_THEN,
+		SIMPLE_Ñ_THEN,
+		SIMPLE_Ñ%down%1_THEN,
+		IF_THEN];
+=TEX
+=SML
+val side_effect = set_strip_thm_thens basic_strip_thm_thens;
+=TEX
+=SML
+val ‚basic_strip_goal_ts· : (THM_TACTIC -> TACTIC) list =
+	[	fn _ => simple_É_tac,
+		fn _ => Ä_tac,
+		ä_T,
+		Ç_T,
+		fn _ => simple_å_in_tac,
+		fn _ => Å_tac,
+		IF_T,
+		fn _ => t_tac,
+		fn _ => goal_in_asms_tac];
+=TEX
+=SML
+val side_effect = set_strip_goal_ts basic_strip_goal_ts;
+=TEX
+\section{TAUTOLOGY PROVER}
+The tautology prover defends itself against changes in the theorem and goal
+strippers by using a private version of $strip\_tac$: 
+=SML
+local
+val local_strip_tac = 
+	FIRST
+	(map(fn t => t(REPEAT_TTCL (FIRST_TTCL basic_strip_thm_thens) check_asm_tac))
+		basic_strip_goal_ts);
+val ‚simple_taut_tac_thm·  = tac_proof (([], ªÉaéa Ç (åa ä F)º), REPEAT local_strip_tac);
+in
+val ‚simple_taut_tac· : TACTIC = (fn gl =>
+	case (conv_tac(simple_eq_match_conv simple_taut_tac_thm)
+			THEN	REPEAT local_strip_tac) gl of
+		done as ([], _) => done
+	|	_ => fail "simple_taut_tac" 28070 []
+);
+end;
+=TEX
+=IG_SML
+end; (* of structure Tactics2 *)
+open Tactics2;
 =TEX
 \twocolumn[\section{INDEX}]
 \small
 \printindex
 \end{document}
-
-=IGN
-val a = asm_ruleªa:BOOLº;
-val b = asm_ruleªb:BOOLº;
-val c = asm_ruleªc:BOOLº;
-val ab = Ä_intro a b;
-val abc = Ä_intro ab c;
-
-val t = list_prove_asm_rule [c, b, a] abc;
-
-
-val gl : GOAL =  ([ªb:BOOLº, ªa:BOOLº], ªa Ä b:BOOLº);
-
-accept_tac ab gl;
-
+=SML
