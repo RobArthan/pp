@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.11 2000/06/29 15:38:03 rda Rel rda $
+ * $Id: mainw.c,v 2.12 2000/07/09 13:32:54 rda Rel rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -312,7 +312,8 @@ static MenuItem help_menu_items[] = {
  * of interest, write them to the journal window, journal.
  * If the insertion position is visible, then the window is scrolled,
  * otherwise the new characters are written out of sight and
- * the journal window text is left where it is.
+ * the journal window text is left where it is. It seems to be important
+ * on some systems to check for visibility before inserting the new text.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 void scroll_out(char *buf, NAT ct, Boolean ignored)
@@ -322,9 +323,12 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 	Position dontcare;
 	char *p;
 	char overwritten;
-
+	Boolean visible;
 
 	ins_pos = XmTextGetLastPosition(journal);
+
+	visible = XmTextPosToXY(journal, (ins_pos ? ins_pos - 1 : 0),
+			&dontcare, &dontcare);
 
 /* need to temporarily null-terminate the buffer: */
 
@@ -337,9 +341,8 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 
 	last_pos = XmTextGetLastPosition(journal);
 
-	if(XmTextPosToXY(journal, (ins_pos ? ins_pos - 1 : 0),
-			&dontcare, &dontcare)) {
-		/* insertion position is visible: scroll */
+	if(visible) {
+		/* insertion point was visible: scroll */
 		XmTextPosition old_top, new_top;
 		old_top = XmTextGetTopCharacter(journal);
 		while(!XmTextPosToXY(journal, last_pos, &dontcare, &dontcare)
@@ -347,7 +350,7 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 					 XmTextGetTopCharacter(journal)))) {
 			old_top = new_top;
 		};
-	};
+	}
 
 	XmTextSetInsertionPosition(journal, last_pos);
 
