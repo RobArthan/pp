@@ -79,6 +79,8 @@ Changed ``native'' theory.
 \item[Issue 1.22 (24th June 1992)]
 Renamings from issue 1.6 of \cite{DS/FMU/IED/WRK038},
 mostly proof context name changes.
+\item[Issue 1.23 (29th June 1992)]
+Tinkering to improve performance.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -131,6 +133,9 @@ val _ = set_rw_canons ((lget o get_rw_canons) "'propositions" @
 		"build_predicates";
 =TEX
 \section{THEOREMS}
+=IGN
+val Ûlocal_´_thmÝ = taut_rule ¬µ x y · (x ´ y) = (³ x ² y)®;
+=TEX
 The following are just to extract particular clause from the standard
 rewriting theorems:
 =SML
@@ -449,7 +454,10 @@ local
 		[]);
 in
 val Ûsimple_¶_²_convÝ: CONV = (fn (tm : TERM) =>
-let	val (vs,bdy) = strip_¶ tm;
+let	val (vs,bdy) = strip_simple_¶ tm
+		handle complaint =>
+		divert complaint "strip_simple_¶" "simple_¶_²_conv" 
+			58010 [fn () => string_of_term tm];
 	val sideeffect = if is_nil vs orelse (not(is_² bdy))
 		then term_fail "simple_¶_²_conv" 58010 [tm]
 		else ();
@@ -533,7 +541,10 @@ of a given variable within the conjuncts.
 
 in
 val Ûsimple_¶_±_convÝ = (fn (tm : TERM) =>
-let	val (vs,bdy) = strip_¶ tm;
+let	val (vs,bdy) = strip_simple_¶ tm
+		handle complaint =>
+		divert complaint "strip_simple_¶" "simple_¶_±_conv" 
+			58012 [fn () => string_of_term tm];
 	val sideeffect = if is_nil vs orelse (not(is_± bdy))
 		then term_fail "simple_¶_±_conv" 58012 [tm]
 		else ();
@@ -624,20 +635,19 @@ or conjunct structure.
 =TEX
 where $\{y1...ym\}\  \ \{x1 ... xn\}$, and
 $\{z1...zo\}\  \ \{x1 ... xn\}$.
-The conversion will actualy distribute over an arbitrary conjunctive
+The conversion will actually distribute over an arbitrary conjunctive
 structure, though the result is ``flattened''.
 
 Note that in the below $conv\_tac\ unmark\_conv$ can solve a conjunct $icl'TS\ T$,
 and therefore needs pushing into the $THEN\_LIST\_T$ to preserve the right number of tactics in its ``to do'' list.
 =SML
 local
-	val µ_±_canon = 
-		((REPEAT_CAN µ_rewrite_canon)
-		THEN_CAN (REPEAT_CAN ±_rewrite_canon));
-	val ±_µ_canon = 
-		((REPEAT_CAN ±_rewrite_canon)
-		THEN_CAN (REPEAT_CAN µ_rewrite_canon)
-		THEN_CAN (fn x => [conv_rule unmark_conv x]));
+	fun µ_±_canon thm = (
+		strip_±_rule (all_µ_elim thm));
+	fun ±_µ_canon thm = (
+		map  (fn x => conv_rule unmark_conv
+			(all_µ_elim x))
+		(strip_±_rule thm));
 in
 val Ûµ_±_convÝ: CONV = (fn (tm : TERM) =>
 let	val (vs,bdy) = strip_µ tm;
@@ -1937,6 +1947,10 @@ let	fun move_in_conv ltm = (case (dest_term ltm) of
 			THEN_TRY_C redundant_simple_µ_conv)) ltm
 		| D± _ => ALL_±_C move_in_conv ltm
 		| D² _ => ALL_²_C move_in_conv ltm
+=IGN
+		| D´ _ => ((simple_eq_match_conv local_´_thm)
+			THEN_C move_in_conv) ltm
+=SML
 		| _ => fail_with_conv "aux-pass through" ltm);
 in
 (
@@ -1945,6 +1959,10 @@ in
 	(all_¶_uncurry_conv
 	AND_OR_C
 	(redundant_simple_¶_conv
+=IGN
+	AND_OR_C
+	(ALL_SIMPLE_¶_C (simple_eq_match_conv local_´_thm))
+=SML
 	AND_OR_C
 	(simple_¶_²_conv THEN_TRY_C move_in_conv)
 	ORELSE_C
