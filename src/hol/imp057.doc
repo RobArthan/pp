@@ -1,0 +1,621 @@
+
+=TEX
+% TQtemplate.tex
+\documentstyle[hol,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation of Arithmetic Computation Conversions}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP053}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+%\TPPdate{\FormatDate{$Date$%
+}}  %% Mandatory field (with sensible default)
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.B.Jones & HAT Team Leader}
+\TPPabstract{This document contains the implementation of conversions
+which perform arithmetic computations (over the natural numbers).}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	Library}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item [Issue \SCCSversion\ (\FormatDate{91/10/16%
+})]
+First draft.
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document implements the material whose detailed design is given
+in \cite{DS/FMU/IED/DTD057}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+See \cite{DS/FMU/IED/DTD057}.
+\subsubsection{Dependencies}
+This document depends on the theory and proof procedures defined
+in \cite{DS/FMU/IED/DTD038,DS/FMU/IED/IMP038} and on the proof context defined
+in \cite{DS/FMU/IED/DTD029,DS/FMU/IED/IMP029}.
+\subsubsection{Algorithms}
+The implementation begins with some miscellaneous functions which
+are used throughout the sequel. Thereafter,
+for ease of development and maintenance, the conversions are implemented
+following a standard pattern: for each
+conversion we first prove one or
+more theorems which capture the essence of the arithmetic computation
+to be supported; then we define an auxiliary function which is parameterised
+by the operands of the operation to be computed; and, finally we define
+an interface function which calls the auxiliary, handles errors and
+does any additional error-case detection which is not covered by the
+auxiliary. The only exceptions are $gt\_conv$ and
+$ge\_conv$ which are able to use the auxiliary functions supporting
+$lt\_conv$ and $le\_conv$ fairly directly after rewriting the argument
+term with the appropriate definition.
+
+This style of implementation has the additional benefit that by formulating
+the supporting theorems so as to minimise the amount of inference required
+to use them, the resulting implementations can be made quite efficient.
+\subsubsection{Possible Enhancements}
+None known.
+\subsubsection{Deficiencies}
+None known.
+\section{PROLOGUE}
+=SML
+(* structure ArithmeticComputation : ArithmeticComputation = struct *)
+val old_theory = get_current_theory_name();
+open_theory"Ü";
+=TEX
+\section{MISCELLANEOUS FUNCTIONS}
+These functions do not do any error handling, it is the caller's
+responsibility to ensure that arguments are in range.
+=SML
+val ‚plus· = ª$+º;
+val ‚one· = ª1º;
+val ‚times· = ª$*º;
+val ‚lt· = ª$<º;
+=TEX
+=SML
+fun ‚mk_plus· (x : TERM, y : TERM) : TERM = (
+	mk_app(mk_app(plus, x), y)
+);
+=TEX
+=SML
+fun ‚mk_times· (x : TERM, y : TERM) : TERM = (
+	mk_app(mk_app(times, x), y)
+);
+=TEX
+=SML
+fun ‚mk_lt· (x : TERM, y : TERM) : TERM = (
+	mk_app(mk_app(lt, x), y)
+);
+=TEX
+$aux\_conv1$ proves any theorem of the form $x = q + q$, where
+$x$ and $q$ are numeric literals. It is caller's responsibility
+to supply an even $x$.
+=SML
+val ‚aux_conv1· : CONV = (fn tm =>
+	let	val x = dest_Ü tm;
+		val xdiv2 = mk_Ü(x div 2);
+	in	eq_sym_rule
+		(plus_conv (mk_plus(xdiv2, xdiv2)))
+	end
+);
+=TEX
+=SML
+val ‚list_ä_mp_rule· = revfold (uncurry(switch ä_mp_rule));
+=TEX
+=IGN
+list_ä_mp_rule [asm_ruleªA:BOOLº, asm_ruleªB:BOOLº, asm_ruleªC:BOOLº]
+	(asm_ruleªA ä B ä C ä Dº);
+=TEX
+\section{RELATIONS}
+\subsection{$û$}
+We use the following lemmas to assist in $le\_conv$:
+=TEX
+=SML
+val ‚le_t_lemma· = tac_proof(
+	([], ªÉx y aéx + a = y ä (x û y Ç T)º),
+	REPEAT strip_tac THEN rewrite_tac[le_def]
+	THEN simple_Ñ_tacªa:Üº THEN asm_rewrite_tac[]);
+=TEX
+=SML
+val ‚le_f_lemma· = tac_proof(
+	([], ªÉx y aéy + a + 1 = x ä (x û y Ç F)º),
+	rewrite_tac[å_le_thm, lt_def, le_def] THEN REPEAT strip_tac
+	THEN simple_Ñ_tacªa:Üº THEN POP_ASM_T (rewrite_thm_tac o eq_sym_rule)
+	THEN rewrite_tac[plus_clauses, plus_assoc_thm]);
+=TEX
+=SML
+fun ‚le_conv_aux· (tmx : TERM) (tmy : TERM) = (
+	let	val x = dest_Ü tmx;
+		val y = dest_Ü tmy;
+	in	if x <= y
+		then	let	val a = y - x;
+				val tma = mk_Ü a;
+				val thm1 = plus_conv(mk_plus(tmx, tma));
+				val thm2 = list_simple_É_elim[tmx, tmy, tma]
+						le_t_lemma;
+			in	ä_mp_rule thm2 thm1
+		end else let	val a = x - (y + 1);
+				val tma = mk_Ü a;
+				val thm1 = (RAND_C plus_conv THEN_C plus_conv)
+					(mk_plus(tmy, mk_plus(tma, one)));
+				val thm2 = list_simple_É_elim[tmx, tmy, tma]
+						le_f_lemma;
+			in	ä_mp_rule thm2 thm1
+		end
+	end
+);
+=TEX
+=IGN
+val tmx = ª10º;
+val tmy = ª20º;
+=SML
+val ‚le_conv· : CONV = (fn aopb =>
+	let	val (a, b) = dest_bin_op "le_conv" 99999  "û" aopb;
+	in	le_conv_aux  a b
+	end	handle ex => pass_on ex "dest_Ü" "le_conv"
+);
+=TEX
+\subsection{$<$}
+We use the following lemmas to assist in $le\_conv$:
+=TEX
+=SML
+val ‚lt_t_lemma· = tac_proof(
+	([], ªÉx y aéx + a + 1 = y ä (x < y Ç T)º),
+	rewrite_tac[lt_def, le_def] THEN REPEAT strip_tac
+	THEN simple_Ñ_tacªa:Üº THEN POP_ASM_T (rewrite_thm_tac o eq_sym_rule)
+	THEN rewrite_tac[plus_clauses, plus_assoc_thm]);
+=TEX
+=SML
+val ‚lt_f_lemma· = tac_proof(
+	([], ªÉx y aéy + a = x ä (x < y Ç F)º),
+	rewrite_tac[å_lt_thm, le_def] THEN REPEAT strip_tac
+	THEN simple_Ñ_tacªa:Üº THEN POP_ASM_T (rewrite_thm_tac o eq_sym_rule)
+	THEN rewrite_tac[plus_clauses, plus_assoc_thm]);
+=TEX
+=SML
+fun ‚lt_conv_aux· (tmx : TERM) (tmy : TERM) = (
+	let	val x = dest_Ü tmx;
+		val y = dest_Ü tmy;
+	in	if x < y
+		then	let	val a = y - (x + 1);
+				val tma = mk_Ü a;
+				val thm1 = (RAND_C plus_conv THEN_C plus_conv)
+					(mk_plus(tmx, mk_plus(tma, one)));
+				val thm2 = list_simple_É_elim[tmx, tmy, tma]
+						lt_t_lemma;
+			in	ä_mp_rule thm2 thm1
+		end else let	val a = x - y;
+				val tma = mk_Ü a;
+				val thm1 = plus_conv(mk_plus(tmy, tma));
+				val thm2 = list_simple_É_elim[tmx, tmy, tma]
+						lt_f_lemma;
+			in	ä_mp_rule thm2 thm1
+		end
+	end
+);
+=TEX
+=SML
+val ‚lt_conv· : CONV = (fn aopb =>
+	let	val (a, b) = dest_bin_op "lt_conv" 99999  "<" aopb;
+	in	lt_conv_aux  a b
+	end	handle ex => pass_on ex "dest_Ü" "lt_conv"
+);
+=TEX
+\subsection{$ü$}
+=SML
+val ‚ge_conv· : CONV = (fn aopb =>
+	let	val check = dest_bin_op "ge_conv" 99999  "ü" aopb;
+	in	(simple_eq_match_conv ge_def THEN_C le_conv) aopb
+	end	handle ex => pass_on ex "le_conv" "ge_conv"
+);
+=TEX
+\subsection{$>$}
+=SML
+val ‚gt_conv· : CONV = (fn aopb =>
+	let	val check = dest_bin_op "gt_conv" 99999  ">" aopb;
+	in	(simple_eq_match_conv gt_def THEN_C lt_conv) aopb
+	end	handle ex => pass_on ex "lt_conv" "gt_conv"
+);
+=TEX
+\subsection{Numerical Equality}
+=SML
+=TEX
+=SML
+val ‚Ü_eq_lemma1· = tac_proof(
+	([], ªÉx yéx < y ä (x = y Ç F)º),
+	REPEAT strip_tac
+	THEN undisch_tac ªx < yº
+	THEN asm_rewrite_tac[]
+	THEN strip_asm_tac (list_É_elim[ªy:Üº, ªy:Üº] lt_irrefl_thm)
+);
+=TEX
+=SML
+val ‚Ü_eq_lemma2· = tac_proof(
+	([], ªÉx yéy < x ä (x = y Ç F)º),
+	REPEAT strip_tac
+	THEN strip_asm_tac (list_É_elim[ªy:Üº, ªx:Üº] Ü_eq_lemma1)
+	THEN undisch_tacªå (y:Ü) = xº 
+	THEN asm_rewrite_tac[]
+);
+=TEX
+=SML
+fun ‚Ü_eq_conv_aux· (tmx : TERM) (tmy : TERM) = (
+	let	val x = dest_Ü tmx;
+		val y = dest_Ü tmy;
+	in	if x = y
+		then	refl_conv tmx
+		else if x < y
+		then let	val thm1 = Ç_t_elim(lt_conv_aux tmx tmy);
+				val thm2 = list_simple_É_elim[tmx, tmy]
+						Ü_eq_lemma1;
+			in	ä_mp_rule thm2 thm1
+		end else let	val thm1 = Ç_t_elim(lt_conv_aux tmy tmx);
+				val thm2 = list_simple_É_elim[tmx, tmy]
+						Ü_eq_lemma2;
+			in	ä_mp_rule thm2 thm1
+		end
+	end
+);
+=TEX
+=SML
+val ‚Ü_eq_conv· : CONV = (fn aopb =>
+	let	val (a, b) = dest_bin_op "lt_conv" 99999  "=" aopb;
+	in	Ü_eq_conv_aux  a b
+	end	handle ex => pass_on ex "dest_Ü" "Ü_eq_conv"
+);
+=TEX
+\section{SUBTRACTION}
+\subsection{Lemma}
+=SML
+val ‚minus_lemma· = tac_proof(
+	([], ªÉx y aéa + y = x ä (x - y = a)º),
+	REPEAT strip_tac THEN POP_ASM_T (rewrite_thm_tac o eq_sym_rule)
+	THEN rewrite_tac[minus_def]);
+=TEX
+=SML
+fun ‚minus_conv_aux· (tmx : TERM) (tmy : TERM) = (
+	let	val x = dest_Ü tmx;
+		val y = dest_Ü tmy;
+	in	if x >= y
+		then	let	val a = x - y;
+				val tma = mk_Ü a;
+				val thm1 = plus_conv(mk_plus(tma, tmy));
+				val thm2 = list_simple_É_elim[tmx, tmy, tma]
+						minus_lemma;
+			in	ä_mp_rule thm2 thm1
+		 end else 	term_fail "minus_conv" 99999 [tmx, tmy]
+	end
+);
+=TEX
+=SML
+val ‚minus_conv· : CONV = (fn aopb =>
+	let	val (a, b) = dest_bin_op "minus_conv" 99999  "-" aopb;
+	in	minus_conv_aux  a b
+	end	handle ex => pass_on ex "dest_Ü" "minus_conv"
+);
+=TEX
+\section{MULTIPLICATION}
+=TEX
+\subsection{Lemmas}
+=SML
+val ‚times_0_x· = tac_proof(([], ªÉxé0 * x = 0º), rewrite_tac[times_clauses]);
+val ‚times_1_x· = tac_proof(([], ªÉxé1 * x = xº), rewrite_tac[times_clauses]);
+=TEX
+\subsection{The Multiplier}
+We compute $x * y$ where $x > 1$ is even as follows:
+ÛExample
+1.	Ö x = a + a			aux_conv1
+2.	Ö x*y = (a + a)*y		1
+3.	Ö (a + a)*y = a*y + a*y		2, distributivity
+4.	Ö a*y = z			recursive call
+5.	Ö a*y + a*y = z + z		4
+6.	Ö u = z + z			aux_conv1
+7.	Ö x*y = u			2, 3, 5, 6
+Ê
+If $x$ is odd we work as follows:
+ÛExample
+1.	Ö x = b + 1			plus1_conv
+2.	Ö b*y = z			recursive call
+3.	Ö x*y = (b + 1)*y		1
+4.	Ö (b + 1)*y = b*y + 1*y		3, distributivity
+5.	Ö b*y + 1*y = z + y		2, times_1_x
+6.	Ö z + y = u			plus_conv
+7.	Ö x*y = u			3, 4, 5, 6 
+Ê
+=TEX
+We capture the above arguments in two theorems:
+=SML
+val ‚evenx_times_y_thm· = (
+push_goal([],ªÉx y a z ué
+		x = a + a
+	ä	a * y = z
+	ä	u = z + z
+	ä	x * y = uº);
+a(REPEAT strip_tac);
+a(asm_rewrite_tac[times_plus_distrib_thm]);
+pop_thm()
+);
+=TEX
+=SML
+val ‚oddx_times_y_thm· = (
+push_goal([],ªÉx y b z ué
+		x = b + 1
+	ä	b * y = z
+	ä	z + y = u
+	ä	x * y = uº);
+a(REPEAT strip_tac);
+a(asm_rewrite_tac[times_plus_distrib_thm, times_clauses]);
+pop_thm()
+);
+=TEX
+=SML
+fun ‚times_conv_aux· (x : int) (y : int) = (
+	case x of
+		0 => simple_É_elim (mk_Ü y) times_0_x
+	|	1 => simple_É_elim (mk_Ü y) times_1_x
+	|	x =>
+		if x mod 2 = 0
+		then	let	val a = x div 2;
+				val z = a * y;
+				val u = z + z;
+				val tmx = mk_Ü x;
+				val tmy = mk_Ü y;
+				val tma = mk_Ü a;
+				val tmz = mk_Ü z;
+				val tmu = mk_Ü u;
+				val thm1 = aux_conv1 tmx;
+				val thm2 = times_conv_aux a y;
+				val thm3 = aux_conv1 tmu
+			in	list_ä_mp_rule [thm1, thm2, thm3]
+				(list_simple_É_elim[tmx, tmy, tma, tmz, tmu]
+				evenx_times_y_thm)
+		end else let	val b = x - 1;
+				val z = b * y;
+				val u = z + y;
+				val tmx = mk_Ü x;
+				val tmy = mk_Ü y;
+				val tmb = mk_Ü b;
+				val tmz = mk_Ü z;
+				val tmu = mk_Ü u;
+				val thm1 = plus1_conv tmx;
+				val thm2 = times_conv_aux b y;
+				val thm3 = plus_conv (mk_plus(tmz, tmy))
+			in	list_ä_mp_rule [thm1, thm2, thm3]
+				(list_simple_É_elim[tmx, tmy, tmb, tmz, tmu]
+				oddx_times_y_thm)
+			end 
+);
+=TEX
+=SML
+val ‚times_conv· : CONV = (fn aopb =>
+	let	val (a, b) = dest_bin_op "times_conv" 99999  "*" aopb;
+	in	times_conv_aux  (dest_Ü a) (dest_Ü b)
+	end	handle ex => pass_on ex "dest_Ü" "times_conv"
+);
+=SML
+=TEX
+fun test_times (m : int) (n : int) = (
+	let	val range = interval m n;
+		fun aux1 i j = list_mk_app(ª$*º, [mk_Ü i, mk_Ü j]);
+		fun aux2 i = map (aux1 i) range;
+		val tab = map aux2 range;
+	in	map (map times_conv) tab
+	end
+);
+=TEX
+\section{DIVISION AND MODULUS}
+\subsection{Lemmas}
+=SML
+val ‚div_lemma· = (
+push_goal([], ªÉx y d ré r < y ä d * y + r = x ä x Div y = dº);
+a(conv_tac (ONCE_MAP_C eq_sym_conv) THEN REPEAT strip_tac);
+a(strip_asm_tac(list_É_elim[ªxº, ªyº, ªdº, ªrº]div_mod_unique_thm));
+pop_thm()
+);
+=TEX
+=SML
+val ‚mod_lemma· = (
+push_goal([], ªÉx y d ré r < y ä d * y + r = x ä x Mod y = rº);
+a(conv_tac (ONCE_MAP_C eq_sym_conv) THEN REPEAT strip_tac);
+a(strip_asm_tac(list_É_elim[ªxº, ªyº, ªdº, ªrº]div_mod_unique_thm));
+pop_thm()
+);
+=TEX
+\subsect{The Divider}
+=SML
+fun ‚div_mod_conv_aux· (thm : THM) (tmx : TERM) (tmy : TERM) = (
+	let	val x = dest_Ü tmx;
+		val y = dest_Ü tmy;
+	in	if y <> 0
+		then	let	val d = x div y;
+				val r = x mod y;
+				val tmd = mk_Ü d;
+				val tmr = mk_Ü r;
+				val thm1 = Ç_t_elim(lt_conv(mk_lt(tmr, tmy)));
+				val thm2 =
+	(RATOR_C(RAND_C times_conv) THEN_C plus_conv)
+					(mk_plus(mk_times(tmd, tmy), tmr));
+				val thm3 = list_simple_É_elim[tmx, tmy, tmd, tmr]
+						thm;
+			in	list_ä_mp_rule [thm1, thm2] thm3
+		 end else 	term_fail "div_conv" 99999 [tmy]
+	end
+);
+=TEX
+=SML
+val ‚div_conv· : CONV = (fn aopb =>
+	let	val (a, b) = dest_bin_op "div_conv" 99999  "Div" aopb;
+	in	div_mod_conv_aux div_lemma a b
+	end	handle ex => pass_on ex "dest_Ü" "div_conv"
+);
+=TEX
+=SML
+val ‚mod_conv· : CONV = (fn aopb =>
+	let	val (a, b) = dest_bin_op "mod_conv" 99999  "Mod" aopb;
+	in	div_mod_conv_aux mod_lemma a b
+	end	handle ex => pass_on ex "dest_Ü" "mod_conv"
+);
+=TEX
+=SML
+val ‚rw_eqn_cxt· = get_pc_rw_eqn_cxt pair_pc;
+val ‚new_eqn_cxt· = rw_eqn_cxt @ [
+	(ªx + yº, plus_conv),
+	(ªx * yº, times_conv),
+	(ªx - yº, minus_conv),
+	(ªx Div yº, div_conv),
+	(ªx Mod yº, mod_conv),
+	(ªx û yº, le_conv),
+	(ªx < yº, lt_conv),
+	(ªx > yº, gt_conv),
+	(ªx ü yº, ge_conv),
+	(ªx = yº, Ü_eq_conv)];
+val ‚arith_pc· = set_pc_name "arithmetic" (set_pc_rw_eqn_cxt new_eqn_cxt pair_pc);
+val ‚earith_pc· = evaluate_proof_context "arithmetic" arith_pc;
+=TEX
+\section{EPILOGUE}
+=SML
+open_theory old_theory;
+(* end; (* of structure ArithmeticComputation *) *)
+=TEX
+\end{document}
+=IGN
+fun test_div (m : int) (n : int) = (
+	let	val range = interval m n;
+		fun aux1 i j = list_mk_app(ª$Divº, [mk_Ü i, mk_Ü j]);
+		fun aux2 i = map (aux1 i) range;
+		val tab = map aux2 range;
+	in	map (map div_conv) tab
+	end
+);
+=TEX
+=IGN
+fun test_mod (m : int) (n : int) = (
+	let	val range = interval m n;
+		fun aux1 i j = list_mk_app(ª$Modº, [mk_Ü i, mk_Ü j]);
+		fun aux2 i = map (aux1 i) range;
+		val tab = map aux2 range;
+	in	map (map mod_conv) tab
+	end
+);
+=TEX
+=IGN
+push_proof_context earith_pc;
+=TEX
+=IGN
+rewrite_conv[]ª1 + 2 = 3º;
+rewrite_conv[]ª1 + 2 = 4º;
+rewrite_conv[]ª7 * 11 * 13º;
+rewrite_conv[]ª7 * 11 * 13 < (42 - 37) * (10 + 1) * 99º;
+rewrite_conv[]ªz + 128 + 64 + 32 + 16 + 8 + 4 + 2 + 1º;
+rewrite_conv[]ª
+	if 2 * 3 û 6
+	then (99 Div 12, 99 Mod 12)
+	else (1, 1)º;
+=TEX
+=IGN
+new_theory"temp";
+declare_postfix(400, "!");
+=TEX
+=IGN
+push_goal([], ªÑ$!éÉmé
+		0! = 1
+	Ä	(m + 1)! = (m + 1) * m!		º);
+a(strip_asm_tac (conv_rule all_simple_%beta%_conv
+	(list_simple_É_elim
+	[ª1º, ªçnéçmé(m + 1) * nº]
+	(inst_type_rule[(ª:Üº, ª:'aº)]prim_rec_thm))));
+a(simple_Ñ_tac ªfº);
+a(asm_rewrite_tac[]);
+=TEX
+=IGN
+val fact_exists_thm = pop_thm();
+=TEX
+=IGN
+val ‚fact_def· = new_specification(["fact_def", "!"], 1, fact_exists_thm);
+=TEX
+=IGN
+push_goal([], ªÉmém! = if 0 < m then m * (m-1)! else 1º);
+a(strip_tac);
+a(induction_tacªm:Üº);
+(* *** Goal "1" *** *)
+a(rewrite_tac[fact_def]);
+(* *** Goal "2" *** *)
+a(rewrite_tac[fact_def, lt_clauses, minus_def]);
+=TEX
+=IGN
+val fact_thm = pop_thm();
+=TEX
+=IGN
+val fact_conv = COND_C (is_Ü o snd o dest_app)
+	(simple_eq_match_conv fact_thm) fail_conv;
+=TEX
+=IGN
+fact_conv ª6!º;
+fact_conv ªx!º;
+=TEX
+=IGN
+val ‚new_eqn_cxt2· = new_eqn_cxt @ [(ªx!º, fact_conv)];
+val ‚arith_pc2· = set_pc_name "factorial" (set_pc_rw_eqn_cxt new_eqn_cxt2 arith_pc);
+val ‚earith_pc2· = evaluate_proof_context "factorial" arith_pc2;
+push_proof_context earith_pc2;
+=TEX
+=IGN
+rewrite_conv[]ª0!º;
+rewrite_conv[]ª1!º;
+rewrite_conv[]ª6!º;
+rewrite_conv[]ª10!º;		(* 1.9 *)
+rewrite_conv[]ª20!º;		(* 5.1 *)
+rewrite_conv[]ª30!º;		(* 11.1 *)
+rewrite_conv[]ª40!º;		(* 21.1 *)
+=TEX
+=IGN
+init_stats();
+set_flag("profiling", true);
+print_stats(get_stats());
+rewrite_conv[]ª10!º;
+fold op + (map snd (get_stats())) 0;
