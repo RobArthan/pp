@@ -176,7 +176,6 @@ BOOL ignored;
 	char *p;
 	char overwritten;
 
-	TRACE("scroll_out");
 
 	ins_pos = XmTextGetLastPosition(display);
 
@@ -200,7 +199,6 @@ BOOL ignored;
 
 	check_text_window_limit(display,  display_max);
 
-	LEAVE("scroll_out");
 
 }
 
@@ -296,8 +294,6 @@ setup_cmdwin(Bool edit_only)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Main window setup:  (root is created in main in xpp.c)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-	TRACE("setup_cmdwin");
 
 	XtVaSetValues(root,
 		XmNdeleteResponse,	XmDO_NOTHING,
@@ -442,7 +438,6 @@ if( !edit_only ) {
 
 	XtRealizeWidget(root);
 
-	LEAVE("setup_cmdwin");
 
 }
 
@@ -456,8 +451,6 @@ NAT i;
 XmAnyCallbackStruct *cbs;
 {
 	char *fname = NULL;
-
-	TRACE("file_menu_cb");
 
 	switch(i) {
 	case 1:
@@ -476,7 +469,6 @@ XmAnyCallbackStruct *cbs;
 		XtFree(fname);
 	};
 
-	LEAVE("file_menu_cb");
 
 }
 
@@ -486,8 +478,6 @@ NAT i;
 XmAnyCallbackStruct *cbs;
 {
 
-	TRACE("tools_menu_cb");
-
 	switch(i) {
 	case 0:
 		add_palette(command);
@@ -496,7 +486,6 @@ XmAnyCallbackStruct *cbs;
 	default:
 		break;
 	}
-	LEAVE("tools_menu_cb");
 }
 
 static void edit_menu_cb(w, i, cbs)
@@ -507,8 +496,6 @@ XmAnyCallbackStruct *cbs;
 	static void do_undo();
 
 	Boolean result = True;
-
-	TRACE("edit_menu_cb");
 
 	switch(i) {
 	case 0:
@@ -534,7 +521,6 @@ XmAnyCallbackStruct *cbs;
 	};
 /* Could also test for result in cases where there is no
    selection to cut, copy or paste. */
-	LEAVE("edit_menu_cb");
 }
 
 static void cmd_menu_cb(w, i, cbs)
@@ -552,8 +538,6 @@ XmAnyCallbackStruct *cbs;
 		interrupt_application(),
 		close_down_cb(),
 		post_mortem_tidy_up();
-
-	TRACE("cmd_menu_cb");
 
 	post_mortem_tidy_up();
 
@@ -584,9 +568,6 @@ XmAnyCallbackStruct *cbs;
 	default:
 		break;
 	}
-
-	LEAVE("cmd_menu_cb");
-
 }
 
 static void help_menu_cb(w, i, cbs)
@@ -594,8 +575,6 @@ Widget w;
 NAT i;
 XmAnyCallbackStruct *cbs;
 {
-	TRACE("help_menu_cb");
-
 	switch(i) {
 	case 0:
 		toggle_menu_item_sensitivity(helpmenu, 1);
@@ -604,8 +583,6 @@ XmAnyCallbackStruct *cbs;
 	default:
 		break;
 	}
-
-	LEAVE("help_menu_cb");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -630,11 +607,7 @@ Widget w;
 XtPointer d;
 XmTextVerifyCallbackStruct *cbs;
 {
-	TRACE("command_motion_cb");
-
 	undo_buffer.moved_away = TRUE;
-
-	LEAVE("command_motion_cb");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -646,8 +619,6 @@ static void reinit_undo_buffer (cbs, cu)
 XmTextVerifyCallbackStruct *cbs;
 BOOL cu;
 {
-	TRACE("reinit_undo_buffer");
-
 	undo_buffer.can_undo = cu;
 	undo_buffer.moved_away = FALSE;
 	undo_buffer.first = cbs->startPos;
@@ -656,8 +627,6 @@ BOOL cu;
 		XtFree(undo_buffer.oldtext);
 		undo_buffer.oldtext = NULL;
 	}
-
-	LEAVE("reinit_undo_buffer");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -671,8 +640,6 @@ XmTextVerifyCallbackStruct *cbs;
 	BOOL restart = undo_buffer.moved_away;
 	NAT len;
 	char *cut_chars;
-	TRACE("command_modify_cb");
-
 /* XmGetSelection doesn't seem to work as one might like in a 
  * callback like this. However XmTextGetSubstring is just the job
  */
@@ -704,7 +671,6 @@ XmTextVerifyCallbackStruct *cbs;
 		undo_redo_index = 0;
 		set_menu_item_label(editmenu, 4, undo_redo[0]);
 	}
-	LEAVE("command_modify_cb");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -725,7 +691,6 @@ Widget w;
 	XmTextPosition fst, lst;
 	NAT len;
 	char *str;
-	TRACE("do_undo");
 	if(undo_buffer.can_undo) {
 		undoing = TRUE;
 		undo_buffer.moved_away = TRUE;
@@ -753,7 +718,6 @@ Widget w;
 		XtFree(str);
 		undoing = FALSE;
 	}
-	LEAVE("do_undo");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -772,7 +736,6 @@ static void get_pty()
 	NAT i;
 	char line[20];
 	static void get_from_application();
-	TRACE("get_pty");
 	for (c = 'p'; c <= 's'; c++) {
 		for(i = 0; i < 16; i++) {
 			sprintf(line, "/dev/pty%c%x", c, i);
@@ -838,7 +801,6 @@ gotpty:
 		msg("system error", "could not exec");
 		exit(1);
 	}
-	LEAVE("get_pty");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -848,9 +810,7 @@ gotpty:
 BOOL application_alive()
 {
 
-	TRACE("application_alive");
-
-	RETURN("application_alive", !kill(child_pid, 0));
+	return !kill(child_pid, 0);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -862,11 +822,9 @@ XtPointer unused_p;
 {
 	NAT ct;
 	static	char buf[1001];
-	TRACE("get_from_application");
 	while((ct = read(control_fd, buf, 1000)) > 0) {
 		scroll_out(buf, ct, FALSE);
 	};
-	LEAVE("get_from_application");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -890,15 +848,14 @@ static BOOL dequeue()
 	BOOL sys_error = FALSE;
 
 /* nothing to do if the queue is empty */
-	TRACE("dequeue");
 	if(q_length == 0) {
-		RETURN("dequeue", FALSE);
+		return False;
 	};
 
 /* no way of emptying the queue if there's no application running: */
 
 	if(!application_alive()) {
-		RETURN("dequeue", FALSE);
+		return False;
 	};
 
 /* something to do; find the next command line:*/
@@ -936,7 +893,7 @@ static BOOL dequeue()
 		q_length -= bytes_written;
 	};
 
-	RETURN("dequeue", sent_something);
+	return sent_something;
 }
 
 
@@ -950,7 +907,6 @@ char *buf;
 NAT siz;
 {
 	NAT buf_i, q_i;
-	TRACE("enqueue");
 /* Make room, if we can: */
 
 	while(dequeue()) {
@@ -959,7 +915,7 @@ NAT siz;
 /* If no room now, there's no hope: */
 
 	if(siz > MAX_Q_LEN - q_length) {
-		RETURN("enqueue", FALSE);
+		return False;
 	};
 
 	q_i = (q_head + q_length) % MAX_Q_LEN;
@@ -982,7 +938,7 @@ NAT siz;
 		continue;
 	}
 
-	RETURN("enqueue", TRUE);
+	return True;
 }
 
 
@@ -995,7 +951,6 @@ static void try_drain_queue(w)
 Widget w;
 {
 /* If there's something in the queue try to process it */
-	TRACE("try_drain_queue");
 	if(q_length) {
 		while(dequeue()) {
 			continue;
@@ -1007,7 +962,6 @@ Widget w;
 	if(q_length) {
 		XtAppAddTimeOut(app, 25, try_drain_queue, w);
 	};
-	LEAVE("try_drain_queue");
 }
 
 
@@ -1016,11 +970,9 @@ Widget w;
  * **** **** **** **** **** ***. **** **** **** **** **** **** */
 static void clear_queue ()
 {
-	TRACE("clear_queue");
 	if(q_length) {
 		q_length = 0;
 	}
-	LEAVE("clear_queue");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1034,9 +986,8 @@ NAT siz;
 	NAT bytes_written;
 
 /* Check there's something listening: */
-	TRACE("send_to_application");
 	if(!application_alive()) {
-		LEAVE("send_to_application");
+		return;
 	};
 
 /* Check if the command could never fit in the queue: */
@@ -1045,7 +996,7 @@ NAT siz;
 		char msg[256];
 		sprintf(msg, cmd_too_long_message, siz, MAX_Q_LEN);
 		ok_dialog(root, msg);
-		LEAVE("send_to_application");
+		return;
 	};
 
 /* Send it off: */
@@ -1055,8 +1006,6 @@ NAT siz;
 /* Call the timeout function to arrange to drain the queue if needed: */
 
 	try_drain_queue(root);
-
-	LEAVE("send_to_application");
 }
 
 
@@ -1070,19 +1019,15 @@ NAT sig, code;
 struct sigcontext *scp;
 char *addr;
 {
-	TRACE("sig_handler");
 	if(application_alive()) {
 		clear_queue();
 		kill((pid_t)-child_pgrp, sig);
 	}
-	LEAVE("sig_handler");
 }
 
 static void handle_sigs()
 {
-	TRACE("handle_sigs");
 	signal(SIGINT, sig_handler);
-	LEAVE("handle_sigs");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1090,13 +1035,9 @@ static void handle_sigs()
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void interrupt_application ()
 {
-	TRACE("interrupt_application");
 	if(application_alive()) {
 		kill((pid_t)-child_pgrp, SIGINT);
-	} else {
-diag("interrupt_application", "application not running");
-}
-	LEAVE("interrupt_application");
+	} 
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1106,9 +1047,7 @@ static void send_nl ()
 {
 	char *buf = "\n";
 
-	TRACE("send_nl");
 	send_to_application(buf, 1);
-	LEAVE("send_nl");
 
 }
 
@@ -1117,12 +1056,10 @@ static void send_nl ()
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void post_mortem_tidy_up ()
 {
-	TRACE("post_mortem_tidy_up");
 	if(listening && !application_alive()) {
 		XtRemoveInput(app_ip_req);
 		listening = FALSE;
 	}
-	LEAVE("post_mortem_tidy_up");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1130,7 +1067,6 @@ static void post_mortem_tidy_up ()
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void kill_application ()
 {
-	TRACE("kill_application");
 	if(application_alive()) {
 		if(listening) {
 			XtRemoveInput(app_ip_req);
@@ -1140,17 +1076,14 @@ static void kill_application ()
 		waitpid(child_pid, NULL, WNOHANG);
 		close(control_fd);
 	}
-	LEAVE("kill_application");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Restart the application
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void restart_application () {
-	TRACE("restart_application");
 	kill_application();
 	get_pty();
-	LEAVE("restart_application");
 }
 
 
@@ -1162,12 +1095,10 @@ Widget w;
 XtPointer cd;
 XmAnyCallbackStruct cbs;
 {
-	TRACE("close_down_cb");
 	if(yes_no_dialog(root, quit_message)) {
 		kill_application();
 		exit(0);
 	};
-	LEAVE("close_down_cb");
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Executing text from the selection in a text window:
@@ -1179,7 +1110,6 @@ Bool execute_command()
 	NAT len;
 	XmTextPosition dontcare;
 	Widget w = command;
-	TRACE("execute_command");
 /*
 	if(XmTextGetSelectionPosition(w, &dontcare, &dontcare)) {
 		w = display;
@@ -1190,9 +1120,9 @@ Bool execute_command()
 		len = strlen(cmd);
 		send_to_application(cmd, len);
 		XtFree(cmd);
-		RETURN("execute_command", True);
+		return True;
 	} else {
-		RETURN("execute_command", False);
+		return False;
 	}
 }
 		
@@ -1201,7 +1131,6 @@ Bool execute_command()
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void cmdwin(Bool edit_only)
 {
-	TRACE("cmdwin");
 	setup_cmdwin(edit_only);
 if( !edit_only ) {
 	get_pty();
@@ -1209,5 +1138,4 @@ if( !edit_only ) {
 }
 	XtRealizeWidget(root);
 	XtAppMainLoop(app);
-	LEAVE("cmdwin");
 }
