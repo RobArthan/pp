@@ -48,8 +48,7 @@ bibtex imp047
 \item [Issue 1.19 (\TPPdate{\FormatDate{92/03/03}})]
 First draft version.
 
-\item [Issue \SCCSversion (\TPPdate{\FormatDate{$Date$
-}})]
+\item [Issue 1.20 to 1.31]
 	Restructure function $dest\_z\_term$ to meet the needs of the
 	pretty printer.  This is done by adding function
 	$basic\_dest\_z\_term$ to do the actual destruction or production
@@ -57,7 +56,9 @@ First draft version.
 	$dest\_z\_term$ and by the pretty printer. Changed handling for naming of
 	projection functions (including a change to the interface of
 	dest\_z\_name).
-
+\item [Issue 1.32 (July 16th 1992)]
+Added support for schema renaming.
+$dest\_z\_name$ given protection from subscripted punctuation. 
 \end{description}
 %\subsection{Changes Forecast}
 \newpage
@@ -135,14 +136,34 @@ which is split into the following:
 Function $dest\_z\_name$ splits up well formed names by interpreting the
 square brackets and commas, it complains about mal-formed names.
 
+The implementation of function $dest\_z\_name$ merits some discussion.
+Their intention is to split a Z~identifier into its component pieces
+whilst detecting malformed Z~identifiers.  The first stage, in function
+$hide\_subscripts$, is to split the identifier into its component
+augmented characters, where an augmented character includes any
+subscripting.  Function $get\_id$ extracts any leading name then
+function $aux$ does the main work of splitting at square brackets and
+commas.  It has three arguments: (1)~the unprocessed characters of the
+identifier; (2)~details of the `current' pair of square brackets; and
+(3)~information from previous pairs of square brackets.  Argument
+(2)~is $Nil$ before opening and after square brackets between them it
+is a pair of values comprising: (2.1)~the characters of the current
+name; and (2.2)~a list of the previous comma separated names.
+
 =SML
-fun	Ûdest_z_nameÝ (s:string) :string * string list list * string OPT = (
-let
+local
 	exception bad_name;
 
 	fun	addnam (nil:string list) (cl:string list)
 			: string list = cl
 	|	addnam n cl = (implode(rev n)) :: cl
+	;
+
+	fun	get_id(nil, prev) = (nil, prev)
+	|	get_id(l as ("["::_ (*=]=*)), prev) = (l, prev)
+	|	get_id(","::t, _) = raise bad_name
+	|	get_id((*=[=*) "]"::t, _) = raise bad_name
+	|	get_id(ch::t, prev) = get_id(t, ch :: prev)
 	;
 
 	fun	aux(nil, Value _, _) = raise bad_name
@@ -162,27 +183,54 @@ let
 			of (nil, nam) => (rev pl, Value(implode(rev nam)))
 			| _ => raise bad_name
 		)
-	|	aux(ch::t, Value(cn, cl), pl) = aux(t, Value(ch::cn, cl), pl)
+	|	aux(ch::t, Value(cn, cl), pl) = aux(t, Value(ch::cn, cl), pl);
 	
-
-	and	get_id(nil, prev) = (nil, prev)
-	|	get_id(l as ("["::_ (*=]=*)), prev) = (l, prev)
-	|	get_id(","::t, _) = raise bad_name
-	|	get_id((*=[=*) "]"::t, _) = raise bad_name
-	|	get_id(ch::t, prev) = get_id(t, ch :: prev)
+	fun	hide_subscripts(nil, prev) = rev prev
+	|	hide_subscripts(_::"‰"::"‰" :: _, _) = raise bad_name
+	|	hide_subscripts(_::"‰"::nil, _) = raise bad_name
+	|	hide_subscripts(c1::"‰"::c2::t, prev) = hide_subscripts((c1^"‰"^c2)::t, prev)
+	|	hide_subscripts(c::t, prev) = hide_subscripts(t, c::prev)
 	;
+
 in
-	let
-		val (tail, front) = get_id(explode s, nil);
+fun	Ûdest_z_nameÝ (s:string) :string * string list list * string OPT = (
+let		val (tail, front) = get_id(hide_subscripts(explode s, nil),nil);
 		val (boxed_lists, projector) = aux(tail, Nil, nil);
-	in
+in
 		(implode(rev front), boxed_lists, projector)
-	end
-	handle Fail _ => fail "dest_z_name" 47000 [fn () => s]
-	| bad_name => fail "dest_z_name" 47000 [fn () => s]
 end
+handle Fail _ => fail "dest_z_name" 47000 [fn () => s]
+| bad_name => fail "dest_z_name" 47000 [fn () => s]
 );
+end;
 =TEX
+The following function, used in analysing the 2nd list of names
+in the argument of $Z'Rename‰s$ requires a name with a single
+bar, ``$|$'', surrounded one either side by at least one character.
+In addition subscripted or subscripting bars, which are allowed parts
+of identifiers, are not considered to be splitting points.
+
+This code duplicates that found in imp048.doc.
+=SML
+fun Ûsplit_on_barÝ (s:string) : string * string = (
+let	fun aux acc ("|" :: rest) = (
+		if is_nil rest
+		then fail "split_on_bar" 0 []
+		else if hd rest = "‰"
+		then aux ("‰" :: "|" :: acc) (tl rest)
+		else (implode(rev acc),implode rest)
+	) |  aux acc ("‰" :: a :: rest) = (
+		aux (a :: "‰" :: acc) rest
+	) | aux acc ("‰" :: rest) = fail "split_on_bar" 0 []
+	| aux acc (a :: rest) = aux (a :: acc) rest
+	| aux acc [] = fail "split_on_bar" 0 [];
+	val ss = explode s;
+	val dummy = if is_nil ss
+		then fail "split_on_bar" 0 []
+		else ();
+in
+	aux [hd ss] (tl ss)
+end);
 
 =TEX
 \section{Z TYPES}
@@ -391,6 +439,7 @@ datatype	ÛZ_TERMÝ
 		|		ÛZ„‰sÝ of TERM
 		|		ÛZ˜‰sÝ of TERM
 		|		ÛZ»‰sÝ of TERM * TERM
+		| 		ÛZRename‰sÝ of TERM * (string * string) list
 		;
 =TEX
 
@@ -504,7 +553,20 @@ fun	Ûdest_µbodyÝ (t:TERM) :TERM list =
 		snd(strip_app(snd(strip_µ t)))
 	handle Fail _ => term_fail "dest_z_term" 47901 [t];
 =TEX
-
+=SML
+fun Ûzdest_renameÝ(comp_list, args, n, v)Ý = (
+	if length comp_list = 2 
+	then if length args = 1
+		then (let val a2 = map split_on_bar (hd(tl comp_list))
+		in
+		BdzOk (v(hd args, a2))
+		end
+		handle (Fail _) =>
+		BdzFail{BdzFCode=n, BdzFCompc=2, BdzFArgc=1})
+		else BdzFail{BdzFCode=n, BdzFCompc=2, BdzFArgc=1}
+	else BdzNotZ 47900
+);
+=TEX	
 \subsection{The Basic Destructor Function}
 
 Function $basic\_dest\_z\_term$ does the work of destroying a term to
@@ -884,6 +946,8 @@ constant part.
 | "Z'„‰s"	=> zdest_1_1(comp_list, args, 47460, Z„‰s)
 | "Z'˜‰s"	=> zdest_1_1(comp_list, args, 47470, Z˜‰s)
 | "Z'»‰s"	=> zdest_2_2(comp_list, args, 47480, Z»‰s)
+| "Z'Rename‰s"	=> zdest_rename(comp_list, args, 47461, ZRename‰s)
+	
 =TEX
 \subsubsection{Local and Global Variables}
 =SML
@@ -925,7 +989,7 @@ destroying arbitrary Z~terms.
 fun	Ûdest_z_termÝ (t:TERM) :Z_TERM = (
 let
 	val bdz_ans = basic_dest_z_term (strip_app t);
-	fun sh(s, v) = diag_string("dest_z_term: ans is " ^ s ^ " " ^ (string_of_int v));
+(*	fun sh(s, v) = diag_string("dest_z_term: ans is " ^ s ^ " " ^ (string_of_int v)); *)
 in
 	case bdz_ans
 	of BdzOk zt => zt
@@ -1433,6 +1497,12 @@ fun	Ûdest_z_»‰sÝ (t:TERM) :TERM * TERM =
 		Z»‰s(tm1,tm2) => (tm1,tm2) 
 	|	_ => fail "" 0 [] 
 	handle Fail _ => term_fail "dest_z_»‰s" 47480 [t];
+fun	Ûdest_z_rename‰sÝ (t:TERM) :TERM * (string * string)list = 
+	case dest_z_term t of 
+		ZRename‰s(args) => (args) 
+	|	_ => fail "" 0 [] 
+	handle Fail _ => term_fail "dest_z_rename‰s" 47461 [t];
+
 =TEX
 \subsection{Discriminators for the Schema Calculus}
 =SML
@@ -1529,6 +1599,12 @@ fun	Ûis_z_˜‰sÝ (t:TERM) :bool =
 fun	Ûis_z_»‰sÝ (t:TERM) :bool = 
 	case dest_z_term t of 
 		Z»‰s(tm1,tm2) => true 
+	|	_ => false 
+	handle Fail _ => false;
+
+fun	Ûis_z_rename‰sÝ (t:TERM) :bool = 
+	case dest_z_term t of 
+		ZRename‰s _ => true 
 	|	_ => false 
 	handle Fail _ => false;
 =TEX
@@ -1906,7 +1982,25 @@ fun	Ûmk_z_»‰sÝ ((tm1,tm2):TERM * TERM) :TERM =
 	in
 		list_mk_app(bind_»_term tym1 tym2,[tm1,tm2])
 	end;
+
+local
+	fun moccurs n (a :: x) = (if a mem x
+		then fail "mk_z_rename‰s" n [fn () => a]
+		else moccurs n x
+	) | moccurs n [] = ();
+in
+fun	Ûmk_z_rename‰sÝ (tm:TERM, ididl : (string * string) list) :TERM = (
+	let	val tym = dest_z_schema_t(dest_z_power_t(type_of tm));
+		val (xs,ys) = split ididl;
+		val dummy = (moccurs 47463 xs; moccurs 47462 ys);
+	in
+		mk_app(bind_rename_term tym ididl, tm)
+	end);
+end;
 =TEX
+Can renaming collapse two distinct components onto one,
+by renaming one component to be the same as another?
+
 \subsection{The General Constructor Function}
 This function uses the constructors defined above to convert a $Z\_TERM$ to the corresponding $TERM$.
 =SML
@@ -1956,7 +2050,10 @@ fun	Ûmk_z_termÝ	(Zdec(tml:TERM list,tm:TERM) :Z_TERM) :TERM = mk_z_dec(tml,tm)
 |	mk_z_term	(Zµ‰s(tm1:TERM,tm2:TERM,tm3:TERM)) = mk_z_µ‰s(tm1,tm2,tm3)
 |	mk_z_term	(Z„‰s(tm:TERM)) = mk_z_„‰s tm
 |	mk_z_term	(Z˜‰s(tm:TERM)) = mk_z_˜‰s tm
-|	mk_z_term	(Z»‰s(tm1:TERM,tm2:TERM)) = mk_z_»‰s(tm1,tm2);
+|	mk_z_term	(Z»‰s(tm1:TERM,tm2:TERM)) = mk_z_»‰s(tm1,tm2)
+|	mk_z_term	(ZRename‰s(tm:TERM,ididl:(string * string)list)) = mk_z_rename‰s(tm,ididl)
+
+;
 =TEX
 Finally, we leave the structure open.
 =SML
