@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.37 2003/07/03 12:48:38 rda Exp rda $
+ * $Id: pterm.c,v 2.38 2003/07/03 13:09:18 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -630,9 +630,7 @@ static void set_pty_attrs(int fd)
 	tio.c_lflag &= ~PENDIN;
 	tio.c_lflag &= ~NOFLSH;
 	tio.c_lflag &= ~TOSTOP;
-	tio.c_oflag &= ~OLCUC;
-	tio.c_oflag &= ~ONLCR;
-	tio.c_oflag &= ~XTABS;
+	tio.c_oflag &= ~OPOST;
 	tio.c_oflag |= OCRNL;
 	tio.c_cc[VINTR] = CINTR;
 	tio.c_cc[VMIN] = 1;
