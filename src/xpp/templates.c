@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.5 1997/12/03 16:09:40 rda Rel rda $ 
+ * $Id: templates.c,v 2.6 2001/11/16 17:19:56 rda Exp phil $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -54,6 +54,7 @@ typedef char * TemplateCallbackData;
 
 static TemplateEntry template_table[MAX_TEMPLATES];
 static NAT template_table_size;
+static NAT template_table_bitmaps_size;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * the static Widgets for the template tool
@@ -75,8 +76,8 @@ static char *bad_templates_msg =
 "The templates tool will not be available in this session.";
 
 static char *bad_pixmap_msg =
-"An error was detected while setting up the templates tool. "
-"The image name \"%s\" could not be used to make a label for a push-button.";
+"An error was detected while setting up the templates tool.  "
+"The image name%s %s could not be used to make %slabel%s for %spush-button%s.";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * get_templates_data: get template information from the resource
@@ -90,6 +91,7 @@ static void get_templates_data(void)
 
 	while (*ptr != '/' && *ptr != '\0') ptr++;
 	template_table_size = 0;
+	template_table_bitmaps_size = 0;
 	if(!*ptr) {
 		return;
 	}
@@ -98,6 +100,7 @@ static void get_templates_data(void)
 		i++) {
 			++template_table_size;
 			template_table[i].bitmap_file = ptr;
+			template_table_bitmaps_size += strlen(ptr);
 
 			while (*ptr != '/' && *ptr) ptr++;
 			if (*ptr == '/') {
@@ -130,19 +133,57 @@ static void get_templates_data(void)
  * push-buttons inform the user if something goes wrong.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static Pixmap get_pixmap (Widget w, char *name)
-{	Pixmap result;
-	result = XmGetPixmap(XtScreen(w), name,
-		BlackPixelOfScreen(XtScreen(root)),
-		WhitePixelOfScreen(XtScreen(root)));
-	if(result == XmUNSPECIFIED_PIXMAP) {
-		char *msg;
-		msg = XtMalloc(strlen(name) + strlen(bad_pixmap_msg) + 1);
-		if(msg) {
-			sprintf(msg, bad_pixmap_msg, name);
-			ok_dialog(w, msg);
+static Pixmap get_pixmap (Widget   w,
+                          char    *name,
+                          Boolean  notLast)
+{	static char *names = (char *) NULL;
+	static int nFailures = 0;
+	Pixmap result;
+
+	result = XmGetPixmap(XtScreen(w),
+	                     name,
+	                     BlackPixelOfScreen(XtScreen(root)),
+	                     WhitePixelOfScreen(XtScreen(root)));
+	if (result == XmUNSPECIFIED_PIXMAP) {
+		nFailures++;
+		if (nFailures == 1) {
+			names = XtMalloc(template_table_bitmaps_size +
+			                 (template_table_size * 4) + 4);
+			if (names) {
+				sprintf(names, "\"%s\"", name);
+			}
+			else {
+				nFailures = 0;
+			}
+		}
+		else {
+			char newNames[template_table_bitmaps_size +
+			              (template_table_size * 4) + 4];
+			sprintf(newNames,
+			        "\"%s\"%s %s",
+			        name,
+			        (nFailures == 2) ? " and" : ",",
+			        names);
+			strcpy(names, newNames);
 		}
 	}
+	if (! notLast && nFailures > 0) {
+		char msg[strlen(names) + strlen(bad_pixmap_msg)];
+		sprintf(msg,
+		        bad_pixmap_msg,
+		        (nFailures == 1) ? ""   : "s",
+		        names,
+		        (nFailures == 1) ? "a " : "",
+		        (nFailures == 1) ? ""   : "s",
+		        (nFailures == 1) ? "a " : "",
+		        (nFailures == 1) ? ""   : "s");
+		ok_dialog(w, msg);
+
+		XtFree(names);
+		names = (char *) NULL;
+		nFailures = 0;
+	}
+
 	return result;
 }
 
@@ -194,14 +235,14 @@ Boolean init_templates_tool(Widget w)
 	text_w = w;
 
 	for(i = 0; i < template_table_size; ++i) {
-
 		x = (fbase / 2) * (i % 2);
 		y = 2 * (i / 2);
 
 		template_btn = XtVaCreateManagedWidget("template_btn",
 			xmPushButtonGadgetClass, template_form,
 			XmNlabelPixmap,	get_pixmap(w,
-						   template_table[i].bitmap_file),
+			                           template_table[i].bitmap_file,
+			                           i < template_table_size - 1),
 			XmNlabelType,		XmPIXMAP,
 			XmNleftAttachment,	XmATTACH_POSITION,
 			XmNleftPosition,	x,
@@ -372,9 +413,9 @@ static void templates_help_dialog(Widget w)
 
 			template_icon = XtVaCreateManagedWidget("template-icon",
 				xmLabelWidgetClass,		help_item,
-				XmNlabelPixmap,
-					get_pixmap(w,
-						template_table[i].bitmap_file),
+				XmNlabelPixmap, get_pixmap(w,
+				                           template_table[i].bitmap_file,
+				                           i < template_table_size - 1),
 				XmNlabelType,			XmPIXMAP,
 				NULL);
 
