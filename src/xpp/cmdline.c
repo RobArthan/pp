@@ -41,11 +41,19 @@ static CmdLineData cmd_line_data;
  * prepare a line of text for execution.
  * `Command' is a push button which will cause the command
  * string to be executed (with a new-line tagged on the end).
- * Activate (i.e. carriage return) in the text widget also
- * causes the string to be executed.
+ *
  * The parameter is a widget to be the parent of the
  * popup shell. It should be a text widget from which the translations
  * and font for the text widget can be borrowed.
+ *
+ * Because we want to borrow the translations from a multi-line text
+ *  widget, it seems that we cannot make the text area here a
+ * text field or single-line text widget. However, we do want
+ * carriage return in the text area to cause the command to be
+ * executed. The solution is: (a) to use a multi-line text widget
+ * with XmNrows set to 1; (b) copy the translations from the
+ * argument text widget; and (c) override the translations of
+ * the resulting widget with "<Key>Return: activate()"
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 void add_cmd_line(Widget text_w)
