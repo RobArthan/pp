@@ -126,4 +126,7 @@ typedef struct menu_item {
 	extern Boolean *save_file_as(
 		Widget	text,
 		char	*name);
+	extern Boolean *include_file(
+		Widget	text,
+		char	*name);
 #endif
