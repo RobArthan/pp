@@ -177,10 +177,12 @@ lasp -s -u imp005.OKwords imp005.doc > zz1
 
 \item[Issues 2.20, 2.21, 2.22, 2.23]
 	Handling of Q's and percentage signs firmed up in $translate\_for\_output$.
-\item[Issue 2.24]
+\item[Issues 2.24,2.25]
 	Port to NJML. The treatment of prompts is not as good as with Poly/ML.
 	This could perhaps be fixed with more work. At present a ``secondary''
 	or ``continuation'' prompt is not supported.
+
+	The treatment of exceptions is tolerable but far from ideal.
 \end{description}
 
 %********************************************************************
@@ -3017,14 +3019,6 @@ in
 	else	translate_for_output chars
 end);
 =TEX
-=SMLPLAIN SML
-fun ÛhandlerÝ (ex : exn) : unit = (
-	case ex of 
-		Fail msg => raw_diag_string (translate_for_output(get_message msg))
-	|	Error msg => raw_diag_string (translate_for_output(get_message msg))
-	|	_ => raise ex
-);
-=TEX
 
 %********************************************************************
 
@@ -3046,7 +3040,28 @@ end);
 =TEX
 
 %********************************************************************
+\subsection{Common Utilities for $useXXX$ functions}
 
+We are not using the exception handler feature in the compatibility module
+yet:
+=SMLPLAIN SML
+fun ÛhandlerÝ (ex : exn) : unit = (
+	raise ex
+);
+=TEX
+=SML
+fun Ûmy_string_of_exnÝ (ex : exn) : string = (
+	case ex of
+		Fail msg => get_message msg
+	|	Error msg => get_message msg
+	|	ex => string_of_exn ex
+);
+=TEX
+$use_string$ and $use_file$ raise the following exception if they have
+successfully printed out an exception.
+=SML
+exception Stop;
+=TEX
 \subsection{Reading From a File -- {\tt use_file}}
 
 Reading from a file is normally stopped at the first failure noted
@@ -3059,7 +3074,6 @@ val _ =
 new_flag {name = "Ûuse_file_non_stop_modeÝ",  control=use_file_non_stop_mode,
 	check = fun_true, default=fn () => false};
 =TEX
-
 {\ftlinepenalty=9999
 =SMLPLAIN SML
 fun Ûuse_fileÝ (user_file:string) : unit = (
@@ -3157,18 +3171,18 @@ in
 			raw_diag_string(get_error_message 5501
 				[ch, file, string_of_int (!line_number)]);
 			close_in cur_in;
-			raise Read_too_often ch)
-		| E =>
+			raise Stop)
+		| ex =>
 			if !use_file_non_stop_mode
 			then (
-				raw_diag_string(get_error_message 5502 [string_of_exn E,
+				raw_diag_string(get_error_message 5502 [my_string_of_exn ex,
 					string_of_int (!line_number)]);
 				true)
 			else (
 				raw_diag_string(get_error_message 5503
-					[file, string_of_int (!line_number)]);
+					[my_string_of_exn ex, file, string_of_int (!line_number)]);
 				close_in cur_in;
-				raise E)
+				raise Stop)
 	) do ( (* nothing *) )
 	;
 	(* Only reach here after reading end-of-file *)
@@ -3258,9 +3272,9 @@ in
 			raw_diag_string(get_error_message 5511
 				[ch, string_of_int (!char_number)]);
 			raise Read_too_often ch)
-		| E => (
-			raw_diag_string(get_error_message 5512 [string_of_int (!char_number)]);
-			raise E)
+		| ex => (
+			raw_diag_string(get_error_message 5512 [my_string_of_exn ex, string_of_int (!char_number)]);
+			raise Stop)
 	(* Only reach here after reading end-of-string *)
 end);
 =TEX
@@ -3521,10 +3535,13 @@ if look_ahead_char() <> "" then
 			  | Read_too_often ch => (
 				raw_diag_string(get_error_message 5524 [ch]);
 				true)
-			  | E =>	if !abandoning
+			  | ex =>
+				if !abandoning
 				then (	raw_diag_string(get_error_message 5525 nil);
 					false)
-				else (true))
+				else (raw_diag_string(get_error_message 5526
+					[my_string_of_exn ex]);
+					true))
 else (raw_diag_string(get_error_message 5523 nil);
 			PPCompiler.exit 1; false)
 		) (* end of if expression *)
