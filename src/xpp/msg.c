@@ -22,6 +22,8 @@
 #include "xpp.h"
 
 #define MSG_LINE_LEN 40
+#define HELP_LINE_LEN 60
+#define HELP_SCREEN_HEIGHT 20
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Private functions:
@@ -35,24 +37,24 @@ static Widget get_top_shell(Widget w)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * The following put's new lines in a copy of its string argument
- * at appropriate places to fit in lines of length MSG_LINE_LEN.
- * and then makes a compound string of it with the default char set.
+ * The following put's copies msg to buf putting new-lines in
+ * at appropriate places to fit in lines of length line-len.
+ * buf should be at least as long as msg
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static XmString format_msg(char *msg)
+static void c_format_msg(char *buf, char *msg, NAT line_len)
 {
-	char *buf;
 	char *p1, *p2, *pm;
 	unsigned cursor;
-	XmString str;
-	if((buf = XtMalloc(strlen(msg) + 1)) == NULL) {
-		return(XmStringCreateLtoR(buf, XmFONTLIST_DEFAULT_TAG));
-	}
 	for(	p1 = buf, p2 = buf, pm = msg, cursor=0;
 		*p2 = *pm;
 		++p2, ++pm ) {
-		++cursor;
-		if(cursor >= MSG_LINE_LEN) {
+		if(*p2 == '\n') {
+			cursor = 0;
+			p1 = p2;
+		} else {
+			++cursor;
+		};
+		if(cursor >= line_len) {
 			if(*p1 == ' ') {
 				*p1 = '\n';
 				cursor = p2 - p1 - 1;
@@ -62,6 +64,17 @@ static XmString format_msg(char *msg)
 			p1 = p2;
 		}
 	}
+}
+static XmString format_msg(char *msg, NAT line_len)
+{
+	char *buf;
+	char *p1, *p2, *pm;
+	unsigned cursor;
+	XmString str;
+	if((buf = XtMalloc(strlen(msg) + 1)) == NULL) {
+		return(XmStringCreateLtoR(buf, XmFONTLIST_DEFAULT_TAG));
+	}
+	c_format_msg(buf, msg, line_len);
 	str = XmStringCreateLtoR(buf, XmFONTLIST_DEFAULT_TAG);
 	XtFree(buf);
 	return str;
@@ -75,7 +88,11 @@ void help_dialog(Widget w, char *str)
 	Widget dialog_w, pane, help_text, form, widget;
 	static void help_cb();
 	Arg args[9];
-	char buf[BUFSIZ];
+	char *buf;
+	if( (buf = XtMalloc(strlen(str) + 1)) == NULL ) {
+		return;
+	};
+	c_format_msg(buf, str, HELP_LINE_LEN);
 	dialog_w = XtVaCreatePopupShell("Help",
 		xmDialogShellWidgetClass, get_top_shell(w),
 		XmNdeleteResponse, XmDESTROY,
@@ -90,9 +107,11 @@ void help_dialog(Widget w, char *str)
 	XtSetArg(args[3], XmNeditable,              False);
 	XtSetArg(args[4], XmNcursorPositionVisible, False);
 	XtSetArg(args[5], XmNwordWrap,              True);
-	XtSetArg(args[6], XmNvalue,                 str);
-	XtSetArg(args[7], XmNrows,                  5);
-	help_text = XmCreateScrolledText(pane, "help_text", args, 8);
+	XtSetArg(args[6], XmNvalue,                 buf);
+	XtSetArg(args[7], XmNrows,                  HELP_SCREEN_HEIGHT);
+	XtSetArg(args[8], XmNcolumns,               HELP_LINE_LEN);
+	help_text = XmCreateScrolledText(pane, "help_text", args, 9);
+	XtFree(buf);
 	XtManageChild(help_text);
 	form = XtVaCreateWidget("form", xmFormWidgetClass, pane,
 		XmNfractionBase,    3,
@@ -163,7 +182,7 @@ Boolean yes_no_dialog(Widget w, char *question)
 		XmStringFree(no);
 		XmStringFree(confirm);
 	}
-	text = format_msg(question);
+	text = format_msg(question, MSG_LINE_LEN);
 	XtVaSetValues(dialog, XmNmessageString, text, NULL);
 	XmStringFree(text);
 	XtManageChild(dialog);
@@ -235,7 +254,7 @@ void ok_dialog(Widget w, char *msg)
 		XmStringFree(ok);
 		XmStringFree(error);
 	}
-	text = format_msg(msg);
+	text = format_msg(msg, MSG_LINE_LEN);
 	XtVaSetValues(dialog, XmNmessageString, text, NULL);
 	XmStringFree(text);
 	XtManageChild(dialog);

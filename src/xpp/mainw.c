@@ -46,6 +46,8 @@
 
 #include "xpp.h"
 
+#include "help.h"
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macro definitions:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -96,8 +98,6 @@ static char* changed_running_quit_message =
 static char *cmd_too_long_message = 
 "The command is too long (%d bytes supplied; max. %d bytes).";
 
-static char* help_message =
-"The help system is not yet implemented. Sorry!";
 
 static char *no_selection_message =
 	 "No text has been selected";
@@ -307,9 +307,12 @@ static MenuItem cmd_menu_items[] = {
 };
 
 #define	HELP_MENU_GENERAL	0
+#define	HELP_MENU_FILE_MENU	1
 static MenuItem help_menu_items[] = {
-    { "General", &xmPushButtonGadgetClass, 'G', "Help", "Help",
+    { "General", &xmPushButtonGadgetClass, 'G', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_GENERAL, (MenuItem *)NULL, False },
+    { "File Menu", &xmPushButtonGadgetClass, 'F', NULL, NULL,
+        help_menu_cb, (XtPointer)HELP_MENU_FILE_MENU, (MenuItem *)NULL, False },
     NULL,
 };
 
@@ -853,7 +856,10 @@ XmAnyCallbackStruct *cbs;
 {
 	switch(i) {
 	case HELP_MENU_GENERAL:
-		help_dialog(w, help_message);
+		help_dialog(w, help_menu_general);
+		break;
+	case HELP_MENU_FILE_MENU:
+		help_dialog(w, help_menu_file_menu);
 		break;
 	default:
 		break;
