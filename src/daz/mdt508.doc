@@ -1,0 +1,515 @@
+%  mdt508.doc  %Z% $Date$ $Revision$ $RCSfile$
+=TEX
+% TQtemplate.tex
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{DAZ PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Module Tests for Basic Declarations and Expressions}  %% Mandatory field
+\TPPref{ISS/HAT/DAZ/MDT508}  %% Mandatory field
+\def\SCCSversion{$Revision$
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$
+}}  %% Mandatory field (with sensible default)
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%\TPPauthors{D.J.~King & WIN01\\A.C.~Hayward & WIN01}
+\TPPauthorisation{R.D.~Arthan &}
+\TPPabstract{
+This document comprises test cases and test code/data for
+testing the DAZ parser as described in the document
+ISS/HAT/DAZ/DTD508.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+      Library \\ A.C. Hayward\\ D.J. King}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{daz,fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+
+\item[Issue 1.1]
+First draft.
+
+\end{description}
+\subsection{Changes Forecast}
+As the DAZ Compliance Notation Parser is extended, so will this document.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+
+This document comprises test cases and test code/data for
+testing the DAZ Compliance Notation Parser specified in \cite{ISS/HAT/DAZ/DTD508}, and for the DAZ SPARK Output Function as specified in \cite{ISS/HAT/DAZ/DTD510}.
+
+\subsection{Introduction}
+
+\subsubsection{Background and Purpose}
+This document is intended to supply module tests for the DAZ Compliance Notation Parser as defined in \cite{ISS/HAT/DAZ/DTD508} and implemented in \cite{ISS/HAT/DAZ/IMP508}, and for the DAZ SPARK Output Function as defined in \cite{ISS/HAT/DAZ/DTD510} and implemented in \cite{ISS/HAT/DAZ/IMP510}. The tests are intended to meet the requirements for tests identified in the quality plan \cite{ISS/HAT/DAZ/PLN003}.
+
+\subsubsection{Dependencies}
+
+These tests depend on the test harness as implemented in DS/FMU/IED/IMP013, and its corresponding detailed design document, DS/FMU/IED/DTD013.
+
+\subsubsection{Possible Enhancements}
+
+None known.
+
+\subsubsection{Deficiencies}
+
+There are no known deficiencies.
+
+\section{TEST CASES}
+
+\section{PREAMBLE}
+Set up the theory database as necessary.
+
+=SML
+use_file "dtd013";
+use_file "imp013";
+	open CaseIndependence CNTypes CNBasicDeclsAndExprs ZProofMode;
+=TEX
+
+=SML
+open_theory "daz_toolkit_extensions";
+force_delete_theory "mdt508_test" handle (_) => ();
+new_theory "mdt508_test";
+=TEX
+\section{SUPPORTING FUNCTIONS}
+
+\subsection{String to Expression/Declaration Conversion}
+This section of code takes a string and parses it into CN.
+
+=SML
+local
+fun classify_label (itemlist : CN_LEX_ITEM list) : CN_LEX_ITEM list =
+  (case itemlist
+    of (LCOrd, _)::(LCNumericLiteral, CNText ntxt)::(LCCrd, _)::rest =>
+      (
+        (
+          (case nat_of_string ntxt
+            of 1 => LCCompLabel
+             | 2 => LCPPartLabel
+             | 3 => LCVPartLabel
+             | 4 => LCDecLabel
+             | 5 => LCStmtLabel
+             | 6 => LCSpecLabel
+             | _ => LCCompLabel
+          ),
+          CNText ("("^ntxt^")")
+        )::rest
+      )
+     |_ => itemlist
+  );
+in
+fun Ûcn_of_stringÝ (s : string) : CNTypes.WEB_CLAUSE = (
+  let
+    val inp = [Lex.Text s];
+  in
+    (CNParser.cn_parser o (CNLex.cn_lex classify_label)) inp
+  end)
+end;
+=TEX
+\subsection{Test Environment}
+=SML
+fun init_env id = (
+	case get_const_info ("z'"^id) of
+	Value (ty,_) => Value (ty, EIEnvOther)
+	|Nil => Nil
+);
+
+fun Ûmake_envÝ (env : CN_ENV) (tm : TERM) (envty : ENV_INFO) = (
+let	val (id, ty, _) = dest_z_gvar tm;
+in
+	fn id' =>
+		if to_upper id' = id
+		then	Value (ty, envty)
+		else	env id'
+end
+);
+=TEX
+
+\section{INITIALISATION}
+First we need to initialise the test results routine.
+
+=SML
+
+init_mt_results();
+
+=TEX
+\section{BASIC DECLARATIONS}
+=SML
+fun Ûcn_basic_decl_of_stringÝ (s : string) : BASIC_DECL = (
+let	val prefix = "(4) é ";
+	val epilogue = ";";
+	val result = cn_of_string (prefix^s^";");
+in
+	case result of
+	WCReplacedByDecl{decls=[DBasicDecl d],...} => d
+	|_ => fail "cn_decl_of_string" 508001 []
+end);
+=TEX
+=SML
+fun Ûupdate_db_with_parainfoÝ (p : PARAINFO) : unit = (
+let	val iw = get_flag"ignore_warnings";
+	val side = set_flag("ignore_warnings", true);
+	fun do_const(s, tm) =
+	let	val side = delete_const(mk_const ("z'"^s, type_of tm))
+			handle _ => (set_flag("ignore_warnings", iw);())
+		val side = new_const("z'"^s, type_of tm);
+		val side = set_flag("ignore_warnings", iw);
+	in () end;
+	fun do_ty (tc, i) =
+	let	val side = delete_type tc handle _ => ();
+		val side = (new_type (tc, i);()) handle _ => ();
+	in () end;
+in
+	case p of
+	AbbDefInfo (s, _, tm) => (map do_ty (type_tycons (type_of tm));
+					do_const (s, tm))
+	|_ => ()
+end
+);
+=TEX
+=SML
+fun Ûvar_declÝ (names, tm) = (
+let	val ty=(dest_z_power_type o type_of) tm;
+in
+	map (fn n => new_const ("z'"^n, ty)) names
+end
+);
+=TEX
+=SML
+fun ÛdeclarationÝ (s : string) : PARAINFO list = (
+let	val paras = ((trans_basic_decl init_env) o cn_basic_decl_of_string) s;
+	val side = map update_db_with_parainfo paras;
+in
+	paras
+end);
+=SML
+fun ÛbdtestÝ (tm : TERM) : bool = (
+	case frees tm of
+	[] => true
+	|_ => false
+);
+=TEX
+=TEX
+\subsection{Translating Enumeration Types}
+=SML
+val bd1 = declaration "type DAY is (MON, TUE, WED, THU, FRI, SAT, SUN)";
+store_mt_results (mt_runf (op =)) [
+("bd1", bdtest, ñ{MON, TUE, WED, THU, FRI, SAT, SUN} € DAY®, true)];
+=TEX
+\subsection{Translating Constants}
+=SML
+val bd2 = declaration "PAY_DAY : constant WEEKDAY := FRI";
+store_mt_results (mt_runf (op =)) [
+("bd2", bdtest, ñPAY_DAY = FRI®, true)];
+=TEX
+\subsection{Translating Array Types}
+=SML
+val bd3 = declaration "type ARR is array (DAY) of DAY";
+val bd4 = declaration "type UNCON is array (DAY range <>) of DAY";
+store_mt_results (mt_runf (op =)) [
+("bd3", bdtest, ñ{day : ARR | SUN = day(1)}®, true),
+("bd4", bdtest, ñ{day : UNCON | SUN = day(1)}®, true)];
+=TEX
+\subsection{Translating Record Types}
+=SML
+val bd5 = declaration "type REC is record START : DAY; FINISH : DAY; YESTERDAY : ARR; end record";
+store_mt_results (mt_runf (op =)) [
+("bd5", bdtest, ñÍ REC | START=FINISH=FRI · YESTERDAY®, true)];
+=TEX
+\subsection{Translating Subtypes}
+=SML
+val bd6 = declaration "subtype WEEKDAY is DAY range MON..FRI";
+val bd7 = declaration "subtype SUB is UNCON(WEEKDAY)";
+store_mt_results (mt_runf (op =)) [
+("bd6", bdtest, ñMON  WEEKDAY®, true),
+("bd7", bdtest, ñSUN  {MON,TUE, WED, THU, FRI}®, true)];
+=TEX
+\subsection{Translating Integer Types}
+=SML
+val bd8 = declaration "type HOURS is range 0..23";
+store_mt_results (mt_runf (op =)) [
+("bd8", bdtest, ñHOURS   0 .. 23®, true)];
+=TEX
+
+\section{EXPRESSIONS}
+=SML
+fun Ûcn_exp_of_stringÝ (s : string) : EXP = (
+let	val prefix = "Ã a:= ";
+	val epilogue = ";";
+	val result = cn_of_string (prefix^s^";");
+in
+	case result of
+	WCRefinedBy{statement=SStmt(STAssign{e,...}),...} => e
+	|_ => fail "cn_exp_of_string" 508001 []
+end);
+=TEX
+
+=SML
+fun Ûetest0Ý env = (trans_exp env) o (adjust_exp env) o cn_exp_of_string;
+=TEX
+=SML
+val ÛetestÝ = etest0 init_env;
+=TEX
+
+=SML
+var_decl (["TOMORROW"], ñARR®);
+var_decl (["REC2"], ñREC®);
+var_decl (["A", "B"], ñHOURS®);
+var_decl (["MAX"], ñ(DAY ¸ DAY)­ DAY®);
+=TEX
+=SML
+val env_max = make_env init_env ñMAX® (EIEnvFunction[]);
+
+val env_rec = make_env init_env ñREC® EIEnvRecordAgg;
+=TEX
+\subsection{Identifiers}
+=SML
+store_mt_results (mt_runf (op =$)) [
+("id1", etest, "a", ñA®),
+("id2", etest, "A", ñA®),
+("id3", etest, "DAY", ñDAY®)
+];
+=TEX
+
+\subsection{Aggregates (Positional Array)}
+=SML
+val arg = "ARR'(TUE,WED,THU,FRI,SAT,SUN,MON)";
+val res = ñsucc ç 1 - ARRvFIRST ê » §TUE,WED,THU,FRI,SAT,SUN,MON¢®;
+store_mt_results (mt_runf (op =$)) [
+("arraggpos", etest, arg, res)
+];
+=TEX
+
+\subsection{Aggregates (Positional Array with Others)}
+
+etest "ARR'(THU,WED,SUN, others=> SAT)";
+=SML
+val arg = "ARR'(THU,WED,SUN, others=> SAT)";
+val res = ñ(ARRvRANGE ¸ {SAT}) « (succ ç 1 - ARRvFIRST ê » §THU, WED, SUN¢)®;
+store_mt_results (mt_runf (op =$)) [
+("arraggposoth", etest, arg, res)
+];
+=TEX
+\subsection{Aggregates (Positional Array with Just Others)}
+=SML
+val arg = "ARR'(others=>WED)";
+val res = ñARRvRANGE ¸ {WED}®;
+store_mt_results (mt_runf (op =$)) [
+("arraggoth", etest, arg, res)
+];
+=TEX
+
+\subsection{Aggregates (Named Array)}
+=SML
+val arg="ARR'(MON..THU | FRI => WED, SAT | SUN => TUE)";
+val res = ñ((MON .. THU) À {FRI} ¸ {WED}) À ({SAT,SUN} ¸ {TUE})®;
+store_mt_results (mt_runf (op =$)) [
+("arraggnamed", etest, arg, res)
+];
+=TEX
+\subsection{Aggregates (Named Array with Others)}
+=SML
+val arg="ARR'(MON..FRI => WED, others => TUE)";
+val res = ñ(ARRvRANGE ¸ {TUE}) « (MON..FRI ¸ {WED})®;
+store_mt_results (mt_runf (op =$)) [
+("arraggnamedothers", etest, arg, res)
+];
+=TEX
+
+\subsection{Aggregates (Positional Record)}
+=SML
+val arg="REC'(WED,SUN,ARR'(others => THU))";
+val res = ñÍ REC |
+	FINISH = WED ± START = SUN ± YESTERDAY = ARRvRANGE ¸ {THU} · REC®;
+store_mt_results (mt_runf (op =$)) [
+("recaggpos", etest0 env_rec, arg, res)
+];
+=TEX
+
+\subsection{Aggregates (Named Record)}
+=SML
+val arg="REC'(START => THU, FINISH => FRI, YESTERDAY => ARR'(others => SUN))";
+val res = ñÍ REC |
+	START = THU ± FINISH = FRI ± YESTERDAY = ARRvRANGE ¸ {SUN} · REC®;
+store_mt_results (mt_runf (op =$)) [
+("recaggnamed", etest0 env_rec, arg, res)
+];
+=TEX
+
+
+\subsection{Unary Expressions}
+=SML
+store_mt_results (mt_runf (op =$)) [
+("unary1", etest, "3", ñ3®),
+("unary2", etest, "+3", ñ3®),
+("unary3", etest, "-3", ñ~3®),
+("unary4", etest, "not a", ñnot A®),
+("unary5", etest, "abs 0", ñAbs 0®)
+];
+=TEX
+\subsection{Binary Expressions}
+=SML
+store_mt_results (mt_runf (op =$)) [
+("binop1", etest, "a and b", ñA and B®),
+("binop2", etest, "a or b", ñA or B®),
+("binop3", etest, "a xor b", ñA xor B®),
+("binop7", etest, "a = b", ñA eq B®),
+("binop8", etest, "a /= b", ñA noteq B®),
+("binop9", etest, "a < b", ñA less B®),
+("binop10", etest, "a > b", ñA greater B®),
+("binop11", etest, "a >= b", ñA greater_eq B®),
+("binop12", etest, "a + b", ñA + B®),
+("binop13", etest, "a - b", ñA - B®),
+("binop14", etest, "a * b", ñA * B®),
+("binop15", etest, "a / b", ñA intdiv B®),
+("binop16", etest, "a mod b", ñA mod B®)
+];
+=TEX
+\subsection{Membership of a Range}
+=SML
+store_mt_results (mt_runf (op =$)) [
+("memop", etest, "PAY_DAY not in SAT .. SUN", ñPAY_DAY notmem SAT .. SUN®)
+];
+=TEX
+
+\subsection{Attributes}
+=SML
+store_mt_results (mt_runf (op =$)) [
+("attrib", etest, "WEEKDAY'FIRST", ñWEEKDAYvFIRST®)
+];
+=TEX
+
+\subsection{Indexed Components}
+=SML
+store_mt_results (mt_runf (op =$)) [
+("indexed_comp", etest, "TOMORROW(DAY'FIRST)", ñTOMORROW(DAYvFIRST)®)
+];
+=TEX
+
+\subsection{Selected Components}
+=SML
+store_mt_results (mt_runf (op =$)) [
+("selected_comp", etest, "REC2.FINISH", ñREC2.FINISH®)
+];
+=TEX
+
+\subsection{Functions Calls}
+=SML
+store_mt_results (mt_runf (op =$)) [
+("fun_call", etest0 env_max, "MAX(WED, DAY'LAST)", ñMAX(WED,DAYvLAST)®)
+];
+=TEX
+
+\subsection{Integer Literals}
+=SML
+store_mt_results (mt_runf (op =$)) [
+("intlit1", etest, "25", ñ25®),
+("intlit2", etest, "15_234", ñ15234®),
+("intlit3", etest, "12E3", ñ12000®),
+("intlit4", etest, "12E+3", ñ12000®),
+("intlit5", etest, "200E-2", ñ2®),
+("intlit6", etest, "2#101#", ñ5®),
+("intlit7", etest, "2#101#e+2", ñ20®)
+];
+=TEX
+\subsection{Auxiliary Expressions}
+
+\section{SUMMARY OF RESULTS}
+
+=SML
+diag_line(summarize_mt_results());
+=TEX
+
+\end{document}
+
+
+=IGN
+z"DAYS(1)";
+
+z"f(1,2)";
+z"F(1,2)";
+z"RECS'(1)";
+z"REC'(1=>r,2=>3)";
+z"REC'(1,2)";
+z"REC'(1)";
+z"abc'(a=>0, b=>10, c=>20)"; (* wrong error message *)
+z"FN(a=>0, b=>10, c=>20)";
+z"FN(b=>10, a=>0, c=>20)";
+z"FN(c=>20, b=>10, a=>0)";
+z"FN(c=>20, a=>0)"; (* crap error message *)
+z"FN(c=>20, a=>0, a=>0)";
+z"FN(c=>20, a=>0, a=>0, b=> 4)"; (* crap error message *)
+z"FN(c=>20, a=>0, d=>2)"; (* crap error message *)
+
+
+
+z"f(a(f(2,3)))(4)"; (* problem with arrays and attributes - these do not
+		     * appear as constants in the theory database.
+		     *);
+z"r(1)";
+
+
+
+
+
+
+fun make_env env envty ((id,ty)::rest) = (
+	fn id' =>
+		if to_upper id' = id
+		then	Value (ty, envty)
+		else	make_env env envty rest id'
+) | make_env env _ _ = env;
+
+val env2 = make_env env1 (EIEnvFunction[])
+	[("F", type_of ñú­ú®),("G", type_of ñú­ú®)];
+
+val env3 = make_env env2 EIEnvRecordAgg
+	[("REC", type_of ñ[a:ú]®)];
+
+val env4 = make_env env3 (EIEnvFunction["a","b","c"])
+	[("FN", type_of ñú­ú®)];
+
+val t = cn_exp_of_string;
+
+val Ûf1Ý  = (adjust_exp init_env) o cn_exp_of_string;
+
+new_axiom(["fred"],etest"max(2)");
