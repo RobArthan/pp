@@ -50,6 +50,8 @@ First version.
 Based on the first part of DS/FMU/IED/SML002.
 \item [Issue 1.2]
 Many changes while deciding upon a format.
+\item [Issue 1.3]
+Changes made during writing implementation.
 \end{description}
 \subsection{Changes forecast}
 \section{GENERAL}
@@ -70,7 +72,7 @@ The proposed pretty character facilities would allow such renamings as $mk\_fora
 \subsubsection{Possible Enhancements}
 
 =TEX
-\section{THIS DOCUMENT'S INFIX DECLARATIONS}
+\section{INFIX DIRECTIVES}
 =SML
 infix 4 TERM_eq;
 =TEX
@@ -118,7 +120,7 @@ val âmk_funá : (TYPE * TYPE) -> TYPE;
 $mk\_fun$ $(ty_1,\ ty_2)$ is $":ty_1 ‹ ty_2"$.
 =ENDDOC
 =DOC
-val âinst_typeá : ((TYPE * string) list) -> TYPE -> TYPE;
+val âicl'inst_typeá : ((TYPE * string) list) -> TYPE -> TYPE;
 =DESCRIBE
 $inst\_type$ $alist$ $type$ recursively descends through $type$, replacing any type variables by whatever the association list $alist$ associates with them.
 If the association list does not contain a type variable found in $type$, then that type variable will not be changed.
@@ -167,6 +169,8 @@ val âdest_TERMá : TERM -> DEST_TERM;
 =DESCRIBE
 An injective function, that destroys a term, returning its 
 top-level structure, and the associated constituent parts.
+=FAILURE
+3063	DESIGN ERROR : Ill-formed representation of TERM
 =SEEALSO
 $mk\_TERM$, $DEST\_TERM$
 =ENDDOC
@@ -180,9 +184,7 @@ This may produce terms that are not well-formed within the context of some theor
 $dest\_TERM$, $DEST\_TERM$
 =FAILURE
 3002	Given `Comb(f, x)', where `f' cannot be applied to `x'
-3003	Given `Abs(x, b)', where `x' is not a variable
-=FAILUREC
-Further details of the error will be given, before the above exceptions are raised.
+3003	Ill-formed argument to mk_TERM
 =ENDDOC
 =DOC
 val âtype_ofá : TERM -> TYPE;
@@ -314,7 +316,7 @@ $is\_abs$
 val âlist_mk_simple_absá : (TERM list * TERM) -> TERM;
 =DESCRIBE
 óDefinition
-list_mk_abs (["a","b","c",...], "body") =  a b c ... Ž body
+list_mk_simple_abs (["a","b","c",...], "body") =  a b c ... Ž body
 æ
 This function will be implemented using $mk\_simple\_abs$, not $mk\_abs$.
 =FAILUREC
@@ -336,6 +338,8 @@ presenting them as destroyed variables.
 =USES
 For when we know the free variables are to be destroyed to use them.
 This function is faster than $frees$.
+=FAILURE
+3064	DESIGN ERROR : applied to ill-formed term
 =SEEALSO
 $frees$
 =ENDDOC
@@ -381,6 +385,15 @@ The failure message for failing to apply $rator$ to its arguments will be from a
 val âis_bin_opá : (TERM -> 'a) -> TERM -> bool;
 =DESCRIBE
 $is\_bin\_op$ $dest$ $term$ is true iff. $dest$ can be applied to $term$ without a catchable exception being raised.
+=ENDDOC
+=DOC
+val âstrip_bin_opá : string -> TERM -> TERM list
+=DESCRIBE
+This function strips a binary operator, attempting to destroy its term argument, and recursively stripping to the right.
+A test not formed from the operator is returned unchanged,
+as a singleton list.
+=EXAMPLE
+strip_bin_op "€" (a € (b € c) € d) = [a, (b € c), d]
 =ENDDOC
 =DOC
 val âmk_mon_opá : string -> int -> (TYPE -> TERM) ->
@@ -429,6 +442,12 @@ If the term cannot be destroyed, then the error will be from $area$, with a mess
 val âis_simple_binderá : (TERM -> 'a) -> TERM -> bool;
 =DESCRIBE
 $is\_simple_binder$ $dest$ $term$ returns true iff. $dest$ can be applied to $term$ without raising a catchable exception.
+=ENDDOC
+=DOC
+val âbin_bool_opá : string -> TYPE -> TYPE -> TERM;
+=DESCRIBE
+Returns a constant with the given name, and type $:BOOL\ ‹\ BOOL\ ‹\ BOOL$.
+The type arguments are dummies.
 =ENDDOC
 \subsubsection{Specific Derived Term Structure Functions}
 =DOC
@@ -502,11 +521,11 @@ val âmk_simple_forallá : (TERM * TERM) -> TERM;
 =DESCRIBE
 A derived term construction function for generating foralls.
 óDefinition
-mk_forall (var, body) = ƒ var Ž body
+mk_simple_forall (var, body) = ƒ var Ž body
 æ
 $var$ must be a term variable.
 =FAILURE
-3031	First argument must be a term variable
+3031	Argument must have the form: (variable, boolean)
 =SEEALSO
 $mk\_forall$
 =ENDDOC
@@ -527,11 +546,12 @@ A derived term test for forall, not formed with paired abstractions.
 val âlist_mk_simple_forallá : TERM list * TERM -> TERM;
 =DESCRIBE
 óDefinition
-list_mk_forall ["a","b","c",...] body = "ƒ a b c ... Ž body"
+list_mk_simple_forall ["a","b","c",...] body = "ƒ a b c ... Ž body"
 æ
 This uses $mk\_simple\_forall$ to generate its result.
-=FAILURE
-3042	Argument list must be of term variables
+=FAILUREC
+\paragraph{Failure}
+This may give $mk\_simple\_forall$ error messages.
 =ENDDOC
 =DOC
 val âmk_simple_existá : (TERM * TERM) -> TERM;
@@ -542,7 +562,7 @@ mk_exist (var, body) = „ var Ž body
 æ
 $var$ must be a term variable.
 =FAILURE
-3033	First argument must be a term variable
+3031	Argument must have the form: (variable, boolean)
 =SEEALSO
 $mk\_exist$
 =ENDDOC
@@ -565,12 +585,13 @@ A derived term test for exist, not formed with paired abstractions.
 val âlist_mk_simple_existá : TERM list * TERM -> TERM;
 =DESCRIBE
 óDefinition
-list_mk_exist ["a","b","c",...] body = "„ a b c ... Ž body"
+list_mk_simple_exist ["a","b","c",...] body = "„ a b c ... Ž body"
 æ
 This uses $mk\_simple\_exist$ to generate its result.
-=FAILURE
-3042	Argument list must be of term variables
-=ENDDOC
+=FAILUREC
+\paragraph{Failure}
+This may give $mk\_simple\_exist$ error messages.
+g=ENDDOC
 \subsection{Other Term Functions}
 =DOC
 val âaconvá : TERM -> TERM -> bool;
@@ -580,7 +601,7 @@ Tests whether two terms are alpha-convertable, that is it only differs by the na
 =DOC
 val âicl'variantá : ((string * TYPE) list) -> (string * TYPE) -> string;
 =DESCRIBE
-$dest\_variant$ $vlist$ $(name,\ type)$ returns a string that is a variant of any name in $vlist$ with the associated type $type$.
+$icl'variant$ $vlist$ $(name,\ type)$ returns a string that is a variant of any name in $vlist$ with the associated type $type$.
 Variants are formed by repeatedly priming $name$.
 Note that $dest\_variant$ $[]$ $(name,\ type)$ gives $name$.
 =USES
@@ -591,8 +612,9 @@ $variant$
 =DOC
 val âicl'substá : (TERM * (string * TYPE)) list -> TERM -> TERM;
 =DESCRIBE
-$icl'subst$ $alist$ $term$ returns a term based on $term$, but with with any term variable that may be found in the association list
-(in a destroyed form) being replaced with the associated term.
+$icl'subst$ $alist$ $term$ returns a term based on $term$, but with with any term variable that may be found in the association list (second of a pair,
+in a destroyed form) 
+being replaced with the associated term(first of the pair).
 =FAILURE
 3052	Invalid types in term substitution
 =ENDDOC
@@ -673,20 +695,22 @@ If the string is non-empty, and doesn't contain spaces, then a HOL term variable
 =DOC
 val âvariantá : TERM list -> TERM -> TERM;
 =DESCRIBE
-$variant$ $stoplist$ $v$ returns a variant of $v$ that is not present in the $stoplist$.
+$variant$ $stoplist$ $v$ returns a variant of variable $v$ that is not present in the $stoplist$.
 The variants are generated by sufficient priming.
 =FAILURE
-3056	Second argument is not a variable
+3056	Can only give a variant of a variable
 3057	First argument is not a list of term variables
+=SEEALSO
+$icl'variant$
 =ENDDOC
 =DOC
 val âlist_variantá : TERM list -> TERM list -> TERM;
 =DESCRIBE
-$list\_variant$ $stoplist$ $vlist$ returns a list of variants that are not present in the $stoplist$, one for each member of $vlist$.
+$list\_variant$ $stoplist$ $vlist$ returns a list of variants that are not present in the $stoplist$, nor contain any duplicates, one for each member of $vlist$.
 The variants are generated by sufficient priming.
-=FAILURE
-3058	Second argument is not a list of term variables
-3059	First argument is not a list of term variables
+=FAILUREC
+\begin{paragraph}
+The function may give rise to errors from $variant$.
 =ENDDOC
 =DOC
 val âis_free_iná : TERM -> TERM -> bool;
@@ -702,9 +726,11 @@ Lists the free variables of a term.
 =DOC
 val âvar_substá : (TERM * TERM) list -> TERM -> TERM;
 =DESCRIBE
-$var\_subst$ $alist$ $term$ returns the term formed by, for each pair in $alist$, substituting in $term$ all instances of the term variable which is the first of the pair with the second of the pair.
+$var\_subst$ $alist$ $term$ returns the term formed by, for each pair in $alist$, substituting in $term$ all instances of the term variable which is the second of the pair with the first of the pair.
+=USES
+
 =FAILURE
-3060	The first of each pair in the substitution list must be a term variable
+3060	The second of each pair in the substitution list must be a term variable
 =SEEALSO
 $subst$
 =ENDDOC
@@ -723,6 +749,7 @@ $tm$ (breadth first) looking for subterms for which
 the application $tmfun\,tm$ does not fail and replaces
 such subterms with $tmfun\,tm$. $tmfun$ has as its first argument a list giving
 the bound variables which are in scope at the point of use.
+It does not attempt to apply $tmfun$ to a bound variable of an abstraction.
 =ENDDOC
 =DOC
 val âinstá : TERM list -> (TYPE * TYPE) list -> TERM -> TERM;
@@ -738,4 +765,7 @@ end(* signature of icl'TypesAndTerms *);
 =TEX
 \section{TESTING}
 ???
+\twocolumn[\section{INDEX}]
+\small
+\printindex
 \end{document}
