@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.15 2003/06/19 14:35:27 rda Exp rda $
+ * $Id: xmisc.c,v 2.16 2003/06/25 12:23:01 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -359,7 +359,7 @@ static void attach_edit_popup(Widget text_w, MenuItem *menu_items)
 		(mip++)->callback_data = text_w;
 	}
 	menu_w = setup_menu(
-		text_w, XmMENU_POPUP, "", ' ', False, menu_items);
+		text_w, XmMENU_POPUP, "popup-edit-menu", ' ', False, menu_items);
 	XtAddEventHandler(text_w, ButtonPressMask, False,
 		post_popupeditmenu, menu_w);
 }
@@ -579,26 +579,29 @@ void add_edit_res_handler(Widget shell)
 #include <X11/IntrinsicP.h> /* to let us look at widget class names */
 typedef struct _path
 {
-	char		*data;
+	Widget		w;
 	struct _path	*link;
 } path_cell, *path;
-static void print_path(path list)
+static Boolean print_path(path list)
 {
+	char *name;
+	Boolean head;
 	if(list == 0) {
-		fprintf(stderr, "%s%", APP_CLASS);
-		return;
+		return True;
 	} /* else */
-	print_path(list->link);
-	fprintf(stderr, ".%s", *list->data == '\0' ? "\"\"" : list->data);
+	head = print_path(list->link);
+	name = XtName(list->w);
+	fprintf(stderr, head ? "%s" : ".%s", *name == '\0' ? "\"\"" : name);
+	return False;
 }
 static void list_widget_and_descendants(Widget w, path p)
 {
 	char *class_name;
 	path_cell cell;
-	cell.data = XtName(w);
+	cell.w = w;
 	cell.link = p;
-	fprintf(stderr, "%s ", (XtClass(w))->core_class.class_name);
-	print_path(&cell);
+	(void)print_path(&cell);
+	fprintf(stderr, " %s", (XtClass(w))->core_class.class_name);
 	fprintf(stderr, "\n");
 	if(XtIsComposite(w)) {
 		Widget *children;
@@ -615,10 +618,10 @@ static void list_widget_and_descendants(Widget w, path p)
 static void get_ancestors_and_list(Widget w, Widget anc, path p)
 {
 	path_cell cell;
-	if(!XtIsShell(anc)) {
-		Widget parent = XtParent(anc);
-		cell.data = XtName(anc);
-		if(p != NULL) {
+	Widget parent = XtParent(anc);
+	if(parent != (Widget)0) {
+		cell.w = parent;
+		if(p != 0) {
 			cell.link = p->link;
 			p-> link = &cell;
 		} else {
