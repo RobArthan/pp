@@ -211,11 +211,7 @@ structure €CNLex› : CNLex = struct
 =TEX
 =SML
 local
-
-open CNTypes;
-open CaseIndependence;
-open Lex ZLex (*ZUserInterfaceSupport*);
-
+	open CNTypes CaseIndependence Lex ZLex;
 in
 =TEX
 The main lexical analysis algorithm is exception-driven
@@ -296,7 +292,7 @@ val €delimiter› : string list list =
 	(Sort.sort (switch(Sort.lexicographic Sort.string_order)) o map explode)
 	["&", "'", "(", ")", "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", 
 	">", "|", "=>", "..", "**", ":=", "/=", ">=", "<=", "<<", ">>", "<>",
-	"Ñ", "[", "]", "{","}", "∑", "˚", "˝"];
+	"Ñ", "[", "]", "{","}", "∑", "˚", "˝", "ß","¢"];
 =TEX
 =SML
 fun next_is_delimiter (cs : string list) = (
@@ -409,7 +405,9 @@ val €class_table› = list_e_merge initial_e_dict [
 	("{",		LBrace),
 	("}",		RBrace),
 	("˚",		LStrachey),
-	("˝",		RStrachey)
+	("˝",		RStrachey),
+	("ß",		LChevron),
+	("¢",		RChevron)
 			];
 
 =TEX
@@ -551,246 +549,171 @@ fun €rec_next_token› (st : LEX_STATE) : LEX_STATE = (
 	end
 );
 =TEX
-\subsection{Lexical Analyser for Strings}
+\subsection{Lexical Analyser}
 =SML
-=TEX
-$lex\_string$ converts an input string into a list of tokens.
-=SML
-fun €lex_string› (ip : string list) : LEX_ITEM list  = (
-	let			val st = skip_space (ip, Unknown);
-		fun   recur ct more = (
-			let	val cts = lex_string more;
-			in	ct :: cts
-			end
-		);
-	in	case skip_space st of
-			([], _) => []
-		|	other => (
-			case skip_space(rec_next_token other) of
-				st' as (ip', Known s) => (recur (classify s, SPARKText s) ip'
-			) |	st' as (ip', Unknown) => (
-					fail
-					"CN-Parser"
-					501011
-					[fn()=>	implode ip]
-			)
-		)
-	end
-);
+val z_lex1 = (rev o tl o rev o ZLex.z_lex);
 =TEX
 =SML
-fun €spark_lex› (ip : INPUT list) : LEX_ITEM list = (
+fun €lookahead› (terml : string list) (old : INPUT list, (ip::rest) : INPUT list)
+		: (INPUT list * string OPT * INPUT list) = (
 	case ip of
-		Lex.Text s :: more => (
-			lex_string (explode s) @
-			spark_lex more
-	) |	Lex.String s :: more => (
-			(StringLiteral, SPARKString s) :: spark_lex more
-	) |	Lex.Char s :: more => (
-			fail "CN-Parser" 501011  [fn () => s]
-	) |	Lex.Type ty :: more => (
-			fail "CN-Parser" 501011  [fn () => string_of_type ty]
-	) |	Lex.Term tm :: more => (
-			fail "CN-Parser" 501011  [fn () =>
-				"Antiquotation"]
-	) |	Lex.Separator s :: _ => (
-			fail "CN-Parser" 501011  [fn () => s]
-	) |	Lex.Error n :: more => (fail "lexical analyser" 15006 [fn () => string_of_int n]
-	) |	[] => []
-);
+	Lex.Text txt => (
+		let	fun aux (sold : string list, (c::srest) : string list) = (
+				if c mem terml
+				then
+					(sold, Value c, srest)
+				else
+					aux (sold@[c], srest)
+			) | aux (sold, snew) = (sold, Nil, snew);
+			val (s1, flg, s2) = aux ([], explode txt);
+		in
+			(old@[Lex.Text (implode s1)], flg, (Lex.Text (implode s2))::rest)
+		end
+	) | _ => (
+		lookahead terml (old@[ip], rest)
+	)
+) | lookahead _ (old, new) = (old, Nil, new);
 =TEX
-\subsection{Pre-Processor for Compliance Notation}
 =SML
-fun €match_string› (sym : string) (slist : string list) : (bool * string list) = (
-let	fun aux (s1::rest1) (s2::rest2) = (
-		if to_upper s1 = to_upper s2
-		then
-			aux rest1 rest2
-		else
-			(false, slist)
-	) | aux [] slist2 = (true, slist2)
-	  | aux _ _ = (false, slist);
+fun €spark_ss1› (iplist : INPUT list) : LEX_ITEM list = (
+let	val (left, found, right) = lookahead ["[", "{"] ([], iplist);
+	val left_cxt = (Z, SPARKZ (ZLex.z_lex left));
 in
-	aux (explode sym) slist
-end);
-=TEX
-=SML
-fun €srch_symbol› (syms : string list) (old : string list, new:string list)
-	: (string list * string * string list) OPT = (
-let	fun aux (sym::rest) chrs = (
-		case match_string sym chrs of
-		(true, res) => (
-			Value (sym, res)
-		) | (false, _) => (
-			aux rest chrs
-		)
-	) | aux _ _ = Nil;
-
-	fun aux1 old' (chrs as c::rest) = (
-		case aux syms chrs of
-		Value (sym, res) => Value (old', sym, res)
-		|Nil => aux1 (old'@[c]) rest 
-	) | aux1 _ _ = Nil;
-in
-	aux1 old new
-end);
-=TEX
-=SML
-fun €srch_matching› (left : string, right : string, old : string list, new : string list)
-		: (string list * string list) OPT = (
-let	fun €aux› (count, old, s1::rest) = (
-	let	val s' = old@[s1];
-	in
-		if s1 = left
-		then
-			aux (count+1, s', rest)
-		else if s1 = right
-		then
-			if count = 0
-			then
-				Value (old, s1::rest)
-			else
-				aux (count-1, s', rest)
-		else
-			aux (count, s', rest)
-	end
-	)| aux (_, _, []) = Nil;
-in
-	aux (0, old, new)
-end);
-=TEX
-=SML
-datatype €CN_INPUT› =	€SparkInput› of INPUT list
-		|	€ZInput› of INPUT list
-		|	€KSlotInput› of INPUT list;
-=TEX
-=SML
-fun €do_upto_matching_rbrack› (brk : string) (ipl : INPUT list) : CN_INPUT list = (
-let	fun close s = (
-		if s = "[" then "]"
-		else "}");
-	fun aux (ip::rest) = (
-		case ip of
-		Lex.Text s => (
-			case srch_matching (brk, close brk, [], explode s) of
-			Value (left, right) => (
-				ZInput [Lex.Text (implode left)]
-					::do_upto_start (Text (implode right)::rest)
-			)| Nil => (ZInput[Lex.Text s])::aux rest
-		) |other => (ZInput [other])::aux rest
-	) | aux []  = [];
-in
-	aux ipl
+	case found of
+	Value (sym as "[") => (
+		left_cxt::(classify sym, SPARKText sym)::spark_ss2 0 ("[","]") [] right
+	)|Value (sym (* must be "{" *)) => (
+		left_cxt::(classify sym, SPARKText sym)::spark_ss2 0 ("{","}") [] right
+	)| Nil => (
+		left_cxt::spark_lex right
+	)
 end)
 =TEX
 =SML
-and €do_upto_lbrack› ((ip::rest) : INPUT list) : CN_INPUT list = (
-	case ip of
-	Lex.Text s => (
-		case srch_symbol ["[", "{"] ([], explode s) of
-		Value (left, sym, right) => (
-			(ZInput [Lex.Text (implode left)]::SparkInput [Lex.Text sym]
-				::do_upto_matching_rbrack sym (Text (implode right)::rest)
-			)
-		)| Nil => (SparkInput[Lex.Text s])::do_upto_lbrack rest
-	) |other => (SparkInput [other])::do_upto_lbrack rest
-)
-  | do_upto_lbrack []  = []
-=TEX
-=SML
-and €do_upto_¢› ((ip::rest) : INPUT list) : CN_INPUT list = (
-	case ip of
-	Lex.Text s => (
-		case srch_symbol ["¢"] ([], explode s) of
-		Value (left, _, right) => (
-			(KSlotInput [Lex.Text ((implode left)^"¢")])
-				::do_upto_start (Text (implode right)::rest)
-		)| Nil => (KSlotInput[Lex.Text s])::do_upto_¢ rest
-	) |other => (KSlotInput [other])::do_upto_¢ rest
-)
-  | do_upto_¢ []  = []
-=TEX
-=SML
-and €do_upto_˝› ((ip::rest) : INPUT list) : CN_INPUT list = (
-	case ip of
-	Lex.Text s => (
-		case srch_symbol ["˝"] ([], explode s) of
-		Value (left, sym, right) => (
-			ZInput [Lex.Text (implode left)]::SparkInput [Lex.Text sym]
-				::do_upto_start (Text (implode right)::rest)
-		)| Nil => (ZInput[Lex.Text s])::do_upto_˝ rest
-	) |other => (ZInput [other])::do_upto_˝ rest
-)
-  | do_upto_˝ []  = []
-=TEX
-=SML
-and €do_upto_∑› ((ip::rest) : INPUT list) : CN_INPUT list = (
-	case ip of
-	Lex.Text s => (
-		case srch_symbol ["∑"] ([], explode s) of
-		Value (left, sym, right) => (
-			ZInput [Lex.Text (implode left)]::SparkInput [Lex.Text sym]
-				::do_upto_start (Text (implode right)::rest)
-		)| Nil => (ZInput[Lex.Text s])::do_upto_∑ rest
-	) |other => (ZInput [other])::do_upto_∑ rest
-)
-  | do_upto_∑ []  = []
-=TEX
-=SML
-and €do_upto_start› ((ip::rest) : INPUT list) : CN_INPUT list = (
-	case ip of
-	Lex.Text s => (
-		case srch_symbol ["Ñ", "ß", "˚","CON"] ([], explode s) of
-		Value (left, "Ñ", right) => (
-			(SparkInput [Lex.Text ((implode left)^"Ñ")])
-				::do_upto_lbrack (Text (implode right)::rest)
-		)| Value (left, "ß", right) => (
-			(SparkInput [Lex.Text (implode left)])
-				::(KSlotInput [Lex.Text "ß"])
-				::do_upto_¢ (Text (implode right)::rest)
-		)| Value (left, "˚", right) => (
-			(SparkInput [Lex.Text ((implode left)^"˚")])
-				::do_upto_˝ (Text (implode right)::rest)
-		)| Value (left, "CON", right) => (
-			(SparkInput [Lex.Text ((implode left)^"CON")])
-				::do_upto_∑ (Text (implode right)::rest)
-		)| _ => (SparkInput[Lex.Text s])::do_upto_start rest
-	) |other => (SparkInput [other])::do_upto_start rest
-)
-  | do_upto_start []  = [];
-=TEX
-=SML
-fun €classify_inputs› (ips : INPUT list) : CN_INPUT list = (
-let	val classified = do_upto_start ips;
-	fun sort ((SparkInput i1)::(SparkInput i2)::rest) = (
-		(SparkInput (i1@i2))::sort rest
-	) | sort ((ZInput i1)::(ZInput i2)::rest) = (
-		(ZInput (i1@i2))::sort rest
-	) | sort ((KSlotInput i1)::(KSlotInput i2)::rest) = (
-		(KSlotInput (i1@i2))::sort rest
-	) | sort (inp1::inp2::rest) = (
-		inp1::sort (inp2::rest)
-	) | sort other = other;
+and €spark_ss2› (n : int) (brks as (lbrk :string, rbrk : string))
+		(lctxt : INPUT list) (iplist : INPUT list) : LEX_ITEM list = (
+let	val (left, found, right) = lookahead [lbrk, rbrk] ([], iplist);
+	val left' = lctxt@left;
+	fun flatten_input (Lex.Text s1::Lex.Text s2::rest) = (
+		flatten_input (Lex.Text (s1^s2)::rest)
+	) | flatten_input (ip::rest) = (
+		ip::flatten_input rest
+	) | flatten_input [] = [];
 in
-	sort classified
-end);
+	case found of
+	Nil => (
+		(Z, SPARKZ (ZLex.z_lex (flatten_input left')))::spark_lex right
+	)| Value sym => (
+		if sym = rbrk
+		then	if n = 0
+			then
+				(Z, SPARKZ (ZLex.z_lex (flatten_input left')))
+					::(classify sym, SPARKText sym)
+					::spark_lex right
+			else
+				spark_ss2 (n - 1) brks (left'@[Lex.Text sym]) right 
+		else	(* sym = lbrk *)
+				spark_ss2 (n + 1) brks (left'@[Lex.Text sym]) right 
+	)
+end)
 =TEX
 =SML
-fun €choose_lexer› (lex_items : CN_INPUT list) : LEX_ITEM list = (
-let	fun aux (ip::more) = (
-		case ip of
-		SparkInput ip' => (spark_lex ip')@aux more
-		|ZInput ip' => (Z,SPARKZ (z_lex ip'))::aux more
-		|KSlotInput ip' => (KSlot, SPARKKSlot ( ip'))::aux more
-	) | aux [] = [];
+and €spark_lstrachey› (iplist : INPUT list) : LEX_ITEM list = (
+let	val (left, found, right) = lookahead ["˝"] ([], iplist);
+	val left_cxt = (Z, SPARKZ (ZLex.z_lex left));
 in
-	(aux lex_items)@[(Eos, SPARKEos)]
-end);
+	case found of
+	Value sym => (
+		left_cxt::(classify sym, SPARKText sym)::spark_lex right
+	)| Nil => (
+		left_cxt::spark_lex right
+	)
+end)
+=TEX
+=SML
+and €spark_con› (iplist : INPUT list) : LEX_ITEM list = (
+let	val (left, found, right) = lookahead ["∑"] ([], iplist);
+	val left_cxt = (Z, SPARKZ (ZLex.z_lex left));
+in
+	case found of
+	Value sym => (
+		left_cxt::(classify sym, SPARKText sym)::spark_lex right
+	)| Nil => (
+		left_cxt::spark_lex right
+	)
+end)
+=TEX
+=SML
+and €spark_kslot› (iplist : INPUT list) : LEX_ITEM list = (
+let	val (left, found, right) = lookahead ["¢"] ([], iplist);
+	val left_cxt = (KSlot, SPARKKSlot (left@[Lex.Text "¢"]));
+in
+	case found of
+	Value sym => (
+		(KSlot, SPARKKSlot (left@[Lex.Text "¢"]))::spark_lex right
+	)| Nil => (
+		(KSlot, SPARKKSlot (left))::spark_lex right
+	)
+end)
+=TEX
+=SML
+and €spark_xtext› (slist : string list) (rest : INPUT list) : LEX_ITEM list  = (
+let	val st = skip_space (slist, Unknown);
+in
+	case skip_space st of
+	([], _) => []
+	| other => (
+		case skip_space(rec_next_token other) of
+		st' as (srest, Known s) => (
+			let	val class = classify s;
+			in case class of
+				GrkDelta => (
+					(class, SPARKText s)
+					::(spark_ss1 (Lex.Text (implode srest)::rest))
+				)|LStrachey => (
+					(class, SPARKText s)
+					::(spark_lstrachey (Lex.Text (implode srest)::rest))
+				)|Con => (
+					(class, SPARKText s)
+					::(spark_con (Lex.Text (implode srest)::rest))
+				)|LChevron => (
+					(spark_kslot (Lex.Text (implode (s::srest))::rest))
+				)|_ =>
+					(class, SPARKText s)::spark_xtext srest rest
+
+			end
+		)| (_, Unknown) =>
+			fail "CN-Parser" 501011 [fn() => implode slist]
+	)
+end)
+=TEX
+=SML
+and €spark_string› (s : string) (rest : INPUT list) : LEX_ITEM list = (
+	(StringLiteral, SPARKString s) :: spark_lex rest
+)
+=TEX
+=SML
+and €spark_lex› ((ip::more) : INPUT list) : LEX_ITEM list = (
+	case ip of
+		Lex.Text s => (
+			spark_xtext (explode s) more
+	) |	Lex.String s => (
+			spark_string s more
+	) |	Lex.Char s => (
+			fail "CN-Parser" 501011  [fn () => s]
+	) |	Lex.Type ty => (
+			fail "CN-Parser" 501011  [fn () => string_of_type ty]
+	) |	Lex.Term tm => (
+			fail "CN-Parser" 501011  [fn () => "Antiquotation"]
+	) |	Lex.Separator s => (
+			fail "CN-Parser" 501011  [fn () => s]
+	) |	Lex.Error n => (fail "lexical analyser" 15006 [fn () => string_of_int n])
+) | spark_lex _ = [];
 =TEX
 =SML
 fun €cn_lex› (classify_label : LEX_ITEM list -> LEX_ITEM list) (inp : INPUT list) 
 		: LEX_ITEM list = (
-	(classify_label o choose_lexer o classify_inputs) inp
+	(classify_label o spark_lex) inp
 );
 =TEX
 \section{EPILOGUE}
