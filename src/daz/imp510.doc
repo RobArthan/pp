@@ -107,6 +107,8 @@ Fixed DRA bug 3 (batch 1)
 Fixed DRA bug 20 (batch 2)
 \item[Issue 1.43]
 Fixed DRA bug 5 (batch 2)
+\item[Issue 1.44]
+Added annotations and pragmas.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -391,17 +393,38 @@ fun €fmt_actuals› (APositional x : (AGG_CHOICE, EXP) ACTUALS) =
 
 \subsection{Statements}
 
-A couple of minor functions before we do statements.
+A few auxiliary functions before we do statements.
 
 =SML
 
-fun €fmt_spec› ({w=w, w0=w0, pre=pre, post=post} : SPEC) =
+fun €fmt_spec› ({w=w, w0=w0, pre=pre, post=post} : SPEC) : string =
     "Ñ "^(fmt_id_list w)^" ["^(fmt_z_tm pre)^", "^
                 (fmt_z_tm post)^"] ";
 
-fun €fmt_proc_call› ({name=n, actuals=e} : (AGG_CHOICE, EXP) PROC_CALL) =
+fun €fmt_proc_call› ({name=n, actuals=e} : (AGG_CHOICE, EXP) PROC_CALL)
+				: string =
     (fmt_id n)^(fmt_actuals e);
 
+fun €fmt_pragma› (FmtInfo : PP_FMT_INFO)
+		({id, args} : (AGG_CHOICE, EXP) PRAGMA) : (PP_FMT_INFO * string) list = (
+	let	fun fmt_arg (Nil, e) =
+			fmt_exp e
+		|   fmt_arg (Value ac, e) =
+			fmt_agg_choice ac ^ " => " ^ fmt_exp e;
+	in	[(FmtInfo, id ^ "(" ^ format_list fmt_arg args ", " ^ ")")]
+	end
+);
+
+fun €fmt_annotation› (FmtInfo : PP_FMT_INFO) (anns: ANNOTATION)
+	: (PP_FMT_INFO * string) list = (
+	map (fn ann => (FmtInfo, ann)) anns
+);
+
+fun €fmt_replaced_by_arbitrary_ada› (FmtInfo : PP_FMT_INFO)
+	({label, replacement} : REPLACED_BY_ARBITRARY_ADA )
+	: (PP_FMT_INFO * string) list = (
+    [(FmtInfo, (fmt_label label)^" !È" ^ replacement)]
+);
 =TEX
 =SML
 fun €fmt_expansion› (FmtInfo : PP_FMT_INFO) (label : LABEL) :
@@ -414,12 +437,20 @@ in
     case f label of
     Value repl => Value (
         case repl of
-            ReplaceComp {comp, ...} =>        fmt_kslot_compilation_unit_list FmtInfo comp
-        |    ReplacePPart {private, ...} =>    fmt_declaration_list FmtInfo private
-        |    ReplaceVPart {visible, ...} =>    fmt_declaration_list FmtInfo visible
-        |    ReplaceDecl {decls, ...} =>        fmt_declaration_list FmtInfo decls
-        |    RefineStat {statement, ...}    =>    fmt_statement FmtInfo statement
-        |    ReplaceStat {statement, ...}    =>    fmt_statement FmtInfo statement
+            ReplaceComp {comp, ...} =>       
+			fmt_kslot_compilation_unit_list FmtInfo comp
+        |    ReplacePPart {private, ...} =>
+			fmt_declaration_list FmtInfo private
+        |    ReplaceVPart {visible, ...} =>
+			fmt_declaration_list FmtInfo visible
+        |    ReplaceDecl {decls, ...} =>
+			fmt_declaration_list FmtInfo decls
+        |    RefineStat {statement, ...}    =>
+			fmt_statement FmtInfo statement
+        |    ReplaceStat {statement, ...}    =>
+			fmt_statement FmtInfo statement
+        |    ReplaceArbitrary {replacement, ...}    =>
+			[({tabs=1,line_length=10000,fmtfn=Nil}, replacement)]
         |    UnReplaced (RSCompilation, s) =>
                 [(FmtInfo, "NULL; -- " ^ label)]
         |    UnReplaced (RSSpecStatement, s) =>
@@ -634,6 +665,10 @@ and €fmt_stmt› (FmtInfo : PP_FMT_INFO) (STNull : STMT) = [(FmtInfo, "NULL;")]
         (fmt_proc_call_no_ivars FmtInfo x)
   | fmt_stmt (FmtInfo : PP_FMT_INFO) (STKSlot x : STMT) =
         (fmt_k_slot FmtInfo x)
+  | fmt_stmt (FmtInfo : PP_FMT_INFO) (STPragma x : STMT) =
+        (fmt_pragma FmtInfo x)
+  | fmt_stmt (FmtInfo : PP_FMT_INFO) (STAnnotation x : STMT) =
+        (fmt_annotation FmtInfo x)
 
 =TEX
 
@@ -859,6 +894,10 @@ and €fmt_basic_decl› (FmtInfo : PP_FMT_INFO) (BDConstDecl x : BASIC_DECL) =
     (fmt_subtype_decl FmtInfo x)
   | fmt_basic_decl (FmtInfo : PP_FMT_INFO) (BDPrivateTypeDecl x : BASIC_DECL ) =
     (fmt_private_type_decl FmtInfo x)
+  | fmt_basic_decl (FmtInfo : PP_FMT_INFO) (BDPragma x : BASIC_DECL ) =
+    (fmt_pragma FmtInfo x)
+  | fmt_basic_decl (FmtInfo : PP_FMT_INFO) (BDAnnotation x : BASIC_DECL ) =
+    (fmt_annotation FmtInfo x)
 and €fmt_basic_decl_list› (FmtInfo : PP_FMT_INFO) ([] : BASIC_DECL list) = []
   | fmt_basic_decl_list (FmtInfo : PP_FMT_INFO) (x::xs : BASIC_DECL list) =
     (fmt_basic_decl FmtInfo x)@(fmt_basic_decl_list FmtInfo xs)
@@ -890,8 +929,9 @@ Procedure and Function specifications.
 =SML
 
 and €fmt_procedure_specification› (FmtInfo : PP_FMT_INFO)
-        ({name=n, formal_part=f, spec=Value s} : PROCEDURE_SPECIFICATION) =
-    if is_expansion_selected FmtInfo
+        ({name=n, formal_part=f, spec=Value s, annotation=ann} 
+		 : PROCEDURE_SPECIFICATION) =
+    (if is_expansion_selected FmtInfo
     then
         [(FmtInfo, "PROCEDURE "^
             (fmt_id n)^(fmt_parameter_specification_list f))]@
@@ -899,15 +939,17 @@ and €fmt_procedure_specification› (FmtInfo : PP_FMT_INFO)
     else
         [(FmtInfo, "PROCEDURE "^
             (fmt_id n)^(fmt_parameter_specification_list f))]@
-            [((inc_tabs FmtInfo), (fmt_spec s))]
-
+            [((inc_tabs FmtInfo), (fmt_spec s))]) @
+    fmt_annotation FmtInfo ann
   | fmt_procedure_specification (FmtInfo : PP_FMT_INFO)
-        ({name=n, formal_part=f, spec=Nil} : PROCEDURE_SPECIFICATION) =
-    [(FmtInfo, "PROCEDURE "^(fmt_id n)^(fmt_parameter_specification_list f))]
+        ({name=n, formal_part=f, spec=Nil, annotation=ann}
+		: PROCEDURE_SPECIFICATION) =
+    [(FmtInfo, "PROCEDURE "^(fmt_id n)^(fmt_parameter_specification_list f))] @
+    fmt_annotation FmtInfo ann
 and €fmt_function_specification› (FmtInfo : PP_FMT_INFO)
-        ({designator=d, return=r, formal_part=f, spec=Value s} :
-        FUNCTION_SPECIFICATION) =
-    if is_expansion_selected FmtInfo
+        ({designator=d, return=r, formal_part=f, spec=Value s, annotation=ann}
+			: FUNCTION_SPECIFICATION) =
+    (if is_expansion_selected FmtInfo
     then
         [(FmtInfo, "FUNCTION "^(fmt_id d)^
             (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r))]@
@@ -915,12 +957,14 @@ and €fmt_function_specification› (FmtInfo : PP_FMT_INFO)
     else
         [(FmtInfo, "FUNCTION "^(fmt_id d)^
             (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r))]@
-            [((inc_tabs FmtInfo), (fmt_spec s))]
+            [((inc_tabs FmtInfo), (fmt_spec s))]) @
+    fmt_annotation FmtInfo ann
   | €fmt_function_specification› (FmtInfo : PP_FMT_INFO)
-        ({designator=d, return=r, formal_part=f, spec=Nil} :
-        FUNCTION_SPECIFICATION) =
+        ({designator=d, return=r, formal_part=f, spec=Nil, annotation=ann}
+		: FUNCTION_SPECIFICATION) =
     [(FmtInfo, "FUNCTION "^(fmt_id d)^
-        (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r))]
+        (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r))] @
+    fmt_annotation FmtInfo ann
 
 =TEX
 
@@ -1015,8 +1059,9 @@ Declarations, these are defined simultaneously since they can be recursive.
 
 =SML
 and €fmt_procedure_declaration› (FmtInfo : PP_FMT_INFO)
-        ({name=n, formal_part=f, spec=Value s} : PROCEDURE_DECLARATION) =
-    if is_expansion_selected FmtInfo
+        ({name=n, formal_part=f, spec=Value s, annotation=ann}
+		: PROCEDURE_DECLARATION) =
+    (if is_expansion_selected FmtInfo
     then
         [(FmtInfo, "PROCEDURE "^
             (fmt_id n)^(fmt_parameter_specification_list f)^";")]@
@@ -1024,17 +1069,18 @@ and €fmt_procedure_declaration› (FmtInfo : PP_FMT_INFO)
     else
         [(FmtInfo, "PROCEDURE "^
             (fmt_id n)^(fmt_parameter_specification_list f))]@
-            [((inc_tabs FmtInfo), (fmt_spec s)^";")]
-
+            [((inc_tabs FmtInfo), (fmt_spec s)^";")]) @
+    fmt_annotation FmtInfo ann
   | fmt_procedure_declaration (FmtInfo : PP_FMT_INFO)
-        ({name=n, formal_part=f, spec=Nil} : PROCEDURE_DECLARATION) =
+        ({name=n, formal_part=f, spec=Nil, annotation=ann}
+		: PROCEDURE_DECLARATION) =
     [(FmtInfo, "PROCEDURE "^(fmt_id n)
-			^(fmt_parameter_specification_list f)^";")]
-
+			^(fmt_parameter_specification_list f)^";")] @
+    fmt_annotation FmtInfo ann
 and €fmt_function_declaration› (FmtInfo : PP_FMT_INFO)
-        ({designator=d, return=r, formal_part=f, spec=Value s} :
-        FUNCTION_DECLARATION) =
-    if is_expansion_selected FmtInfo
+        ({designator=d, return=r, formal_part=f, spec=Value s, annotation=ann}
+		: FUNCTION_DECLARATION) =
+    (if is_expansion_selected FmtInfo
     then
         [(FmtInfo, "FUNCTION "^(fmt_id d)^
             (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r)^";")]@
@@ -1042,14 +1088,14 @@ and €fmt_function_declaration› (FmtInfo : PP_FMT_INFO)
     else
         [(FmtInfo, "FUNCTION "^(fmt_id d)^
             (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r))]@
-            [((inc_tabs FmtInfo), (fmt_spec s)^";")]
+            [((inc_tabs FmtInfo), (fmt_spec s)^";")]) @
+    fmt_annotation FmtInfo ann
   | fmt_function_declaration  (FmtInfo : PP_FMT_INFO)
-        ({designator=d, return=r, formal_part=f, spec=Nil} :
+        ({designator=d, return=r, formal_part=f, spec=Nil,annotation=ann} :
         FUNCTION_DECLARATION) =
     [(FmtInfo, "FUNCTION "^(fmt_id d)^
-        (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r)^";")]
-
-
+        (fmt_parameter_specification_list f)^" RETURN "^(fmt_tmark r)^";")] @
+    fmt_annotation FmtInfo ann
 and €fmt_procedure_stub› (FmtInfo : PP_FMT_INFO) (x : PROCEDURE_DECLARATION) =
     case #spec x of
        Nil =>
@@ -1105,9 +1151,11 @@ and €fmt_using› (FmtInfo : PP_FMT_INFO) (u : USING_DEC) =
 		^(fmt_z_tm (#invariant u))^" ;")]
     )
 and €fmt_package_declaration› (FmtInfo : PP_FMT_INFO)
-        ({name=n, visible_decs=v, private_decs=p} :
+        ({name=n, visible_decs=v, private_decs=p, annotation=ann} :
     DECLARATION PACKAGE_DECLARATION) =
-    [(FmtInfo, "PACKAGE "^(fmt_id n)^" IS")]@
+    [(FmtInfo, "PACKAGE " ^ fmt_id n)] @
+    fmt_annotation FmtInfo ann @
+    [(FmtInfo, "IS")] @
     (fmt_declaration_list (inc_tabs FmtInfo) v)@
     (case p
         of [] => []
@@ -1149,6 +1197,12 @@ and €fmt_declaration› (FmtInfo : PP_FMT_INFO)
         (DPackageStub x : DECLARATION) =
     (fmt_package_stub FmtInfo x)
   | fmt_declaration (FmtInfo : PP_FMT_INFO)
+        (DExternalProcedureStub x : DECLARATION) =
+    (fmt_procedure_declaration FmtInfo x)
+  | fmt_declaration (FmtInfo : PP_FMT_INFO)
+        (DExternalFunctionStub x : DECLARATION) =
+    (fmt_function_declaration FmtInfo x)
+  | fmt_declaration (FmtInfo : PP_FMT_INFO)
         (DAuxiliary x : DECLARATION) =
     (fmt_auxiliary FmtInfo x)
   | fmt_declaration (FmtInfo : PP_FMT_INFO)
@@ -1180,14 +1234,17 @@ and €fmt_function_body› (FmtInfo : PP_FMT_INFO)
     (fmt_statement (inc_tabs FmtInfo) s)@
     [(FmtInfo, "END "^(fmt_id (#designator f))^";")])
 and €fmt_package_body› (FmtInfo : PP_FMT_INFO)
-        ({name=n, decls=d, statement=s} : DECLARATION PACKAGE_BODY) = (
+        ({name=n, decls=d, statement=s, annotation=ann}
+		: DECLARATION PACKAGE_BODY) = (
     do_soundness_checks2 get_replacement false s;
-    [(FmtInfo, "PACKAGE BODY "^(fmt_id n)^" IS")]@
-    (fmt_declaration_list (inc_tabs FmtInfo) d)@
+    [(FmtInfo, "PACKAGE BODY " ^ fmt_id n)] @
+    fmt_annotation FmtInfo ann @
+    [(FmtInfo, "IS")] @
+    fmt_declaration_list (inc_tabs FmtInfo) d @
     (case s
       of SStmt STImplicitNull => []
       | _ => [(FmtInfo, "BEGIN")]@(fmt_statement (inc_tabs FmtInfo) s)
-    )@
+    ) @
     [(FmtInfo, "END "^(fmt_id n)^";")])
 and €fmt_proper_body› (FmtInfo : PP_FMT_INFO) (PBProcedure x : PROPER_BODY) =
     (fmt_procedure_body FmtInfo x)
@@ -1225,14 +1282,21 @@ and €fmt_compilation_unit› (FmtInfo : PP_FMT_INFO)
         (CUSubUnit x : COMPILATION_UNIT) =
     (fmt_compilation_subunit FmtInfo x)
 and €fmt_context_compilation_unit› (FmtInfo : PP_FMT_INFO)
-        ({context=i, comp_unit=c} : CONTEXT_COMPILATION_UNIT) =
-    (fmt_context_clause FmtInfo i)@(fmt_compilation_unit FmtInfo c)
+        ({context=i, comp_unit=c,pragmas=p,annotation=ann}
+		: CONTEXT_COMPILATION_UNIT) =
+    (fmt_context_clause FmtInfo i)@
+    (flat (map (fmt_pragma FmtInfo) p))@
+    (fmt_annotation FmtInfo ann)@
+    (fmt_compilation_unit FmtInfo c) 
 and €fmt_kslot_compilation_unit› (FmtInfo : PP_FMT_INFO)
         (KCUKSlot x : KSLOT_COMPILATION_UNIT) =
     (fmt_k_slot FmtInfo x)
   | fmt_kslot_compilation_unit (FmtInfo : PP_FMT_INFO)
         (KCUUnit x : KSLOT_COMPILATION_UNIT) =
     (fmt_context_compilation_unit FmtInfo x)
+  | fmt_kslot_compilation_unit (FmtInfo : PP_FMT_INFO)
+        (KCUPragma x : KSLOT_COMPILATION_UNIT) =
+    (fmt_pragma FmtInfo x)
 and €fmt_kslot_compilation_unit_list› (FmtInfo : PP_FMT_INFO)
     ([] : KSLOT_COMPILATION_UNIT list) = []
   | fmt_kslot_compilation_unit_list (FmtInfo : PP_FMT_INFO)
@@ -1286,6 +1350,9 @@ and €fmt_web_clause› (FmtInfo : PP_FMT_INFO)
   | fmt_web_clause (FmtInfo : PP_FMT_INFO)
         (WCReplacedByDecl x : WEB_CLAUSE) =
     (fmt_replaced_by_decl FmtInfo x)
+  | fmt_web_clause (FmtInfo : PP_FMT_INFO)
+        (WCReplacedByArbitraryAda x : WEB_CLAUSE) =
+    (fmt_replaced_by_arbitrary_ada FmtInfo x)
   | fmt_web_clause (FmtInfo : PP_FMT_INFO)
         (WCRefinedBy x : WEB_CLAUSE) =
     (fmt_refined_by FmtInfo x)
