@@ -129,6 +129,9 @@ typedef enum {
 	extern void msg(
 		char	*s1,	/* title: ... */
 		char	*s2	/* ...: message */);
+	extern void env_diag(
+		char	*fmt,
+		char	*value);
 /* Module: files */
 	extern Boolean old_file_checks(
 		Widget	text,
@@ -158,6 +161,13 @@ typedef enum {
 		char	*name);
 	extern void panic_save(
 		Widget text);
+/* Module: findfile (generated from imp096.doc during build); only list interfaces actually used here */
+	extern char *get_real_name (
+		char * name);
+	extern voidsplit_file_name(
+		char *name,
+		char **dir,
+		char **base);
 /* Module: help.c (automatically generated during build) */
 	#include "help.h"
 /* Module: mainw */
@@ -329,6 +339,8 @@ typedef enum {
 	extern char *command_line_list;
 	extern char *title;
 	extern char *argv0;
+	extern char *pp_home;
+	extern Boolean pp_env_debug;
 	extern Boolean journal_editable;
 	extern const char *const file_type_names[]
 #ifdef _xpp

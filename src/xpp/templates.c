@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.22 2003/07/23 14:02:14 rda Exp rda $ 
+ * $Id: templates.c,v 2.23 2003/07/24 13:09:22 rda Exp rda $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -47,6 +47,8 @@
 #define MSG_LINE_LEN 40
 #define HELP_LINE_LEN 80
 #define HELP_SCREEN_HEIGHT 24
+
+#define BITMAP_TMPL "%s/bitmaps/%s"
 
 typedef struct {
 	char * bitmap_file;
@@ -151,9 +153,21 @@ static Pixmap get_pixmap (Widget   w,
 	Pixmap result;
 
 	result = XmGetPixmap(XtScreen(w),
-	                     name,
-	                     BlackPixelOfScreen(XtScreen(root)),
-	                     WhitePixelOfScreen(XtScreen(root)));
+			name,
+			BlackPixelOfScreen(XtScreen(root)),
+		WhitePixelOfScreen(XtScreen(root)));
+	if(result == XmUNSPECIFIED_PIXMAP) { /* try in PPHOME/bitmaps */
+		char * alt_name = (char*) XtMalloc(
+			sizeof(BITMAP_TMPL)  +
+			sizeof(pp_home) +
+			sizeof(name) + 1);
+		sprintf(alt_name, BITMAP_TMPL, pp_home, name);
+		result = XmGetPixmap(XtScreen(w),
+				name,
+				BlackPixelOfScreen(XtScreen(root)),
+				WhitePixelOfScreen(XtScreen(root)));
+		XtFree(alt_name);
+	}
 	if (result == XmUNSPECIFIED_PIXMAP) {
 		nFailures++;
 		if (nFailures == 1) {
