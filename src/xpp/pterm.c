@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.14 2002/03/17 13:06:56 rda Exp rda $
+ * $Id: pterm.c,v 2.15 2002/08/09 10:15:43 rda Exp $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -59,7 +59,7 @@
 
 
 /* For the following see "Data transfer to application" below */
-#define MAX_Q_LEN 40000
+#define INIT_Q_LEN 40000
 
 /* The following is the name of an environment variable used */
 /* in the ProofPower system initialisation. */
@@ -78,15 +78,14 @@ static XtInputId app_ip_req;
 
 static XtSignalId sigid;
 
-/* For the following three see "Data transfer to application" below */
-static char queue[MAX_Q_LEN];
-static NAT q_length = 0;
-static NAT q_head = 0;
+/* For the following see "Data transfer to application" below */
+static char *queue = 0;
+static int q_size, q_head, q_tail;
 
 /* Messages for various purposes */
 
-static char *cmd_too_long_message = 
-"The command is too long (%d bytes supplied; max. %d bytes).";
+static char *queue_malloc_failed_message = 
+"Could not allocate memory for application transfer queue.";
 
 static char* signal_handled_message1 =
 "system error reported";
@@ -451,7 +450,7 @@ static Boolean dequeue(void)
 	Boolean sys_error = False;
 
 /* nothing to do if the queue is empty */
-	if(q_length == 0) {
+	if(queue == 0 || q_tail < q_head) {
 		return False;
 	};
 
@@ -461,15 +460,15 @@ static Boolean dequeue(void)
 		return False;
 	};
 
-/* something to do; find the next command line:*/
+/* something to do; find the next command line. */
 
-	top = ((i = q_head + q_length) > MAX_Q_LEN ? MAX_Q_LEN : i);
-
-	for(i = q_head; i < top && queue[i] != '\n'; ++i) {
+	for(i = q_head; i < q_tail && queue[i] != '\n'; ++i) {
 		continue;
-	};
+	}
 
-	line_len = (i < top ? i - q_head + 1 : i - q_head);
+	/* i now is index of last byte in command to send */
+
+	line_len = i - q_head + 1;
 
 /* try to send the command line: */
 	while(!sent_something && !sys_error && line_len) {
@@ -492,8 +491,7 @@ static Boolean dequeue(void)
 
 	if(sent_something)  {
 		scroll_out(queue + q_head, bytes_written, True);
-		q_head = (q_head + bytes_written) % MAX_Q_LEN;
-		q_length -= bytes_written;
+		q_head = (q_head + bytes_written);
 	};
 
 	return sent_something;
@@ -508,30 +506,51 @@ static Boolean dequeue(void)
 static Boolean enqueue(char *buf, NAT siz)
 {
 	NAT buf_i, q_i;
+/* start the queue off if it's empty: */
+	if(queue == 0) {
+		queue = XtMalloc(INIT_Q_LEN);
+		if(queue == 0)  {
+			ok_dialog(root, queue_malloc_failed_message);
+			return False;
+		}
+		q_size = INIT_Q_LEN;
+		q_head = 0;
+		q_tail = -1;
+	}
+
 /* Make room, if we can: */
 
 	while(dequeue()) {
 		continue;
-	};
-/* If no room now, there's no hope: */
+	}
 
-	if(siz > MAX_Q_LEN - q_length) {
-		return False;
-	};
 
-	q_i = (q_head + q_length) % MAX_Q_LEN;
+/* If no room, first move things up and see if that makes enough room: */
+
+	if(q_tail + siz + 1 > q_size) {
+		if(q_head > 0) {
+			memmove(queue, queue + q_head, q_tail - q_head + 1);
+			q_tail = q_tail - q_head;
+			q_head = 0;
+		}
+
+/* if still not enough room, realloc: */
+
+		if(q_tail + siz + 1 > q_size) {
+			queue = realloc(queue, q_tail + siz + 1);
+			if(queue == 0) {
+				ok_dialog(root, queue_malloc_failed_message);
+				return False;
+			}
+			q_size = q_tail + siz + 1;
+		}
+	}
 
 /* Put data onto the queue: */
 
-	for(buf_i = 0; buf_i < siz && q_i < MAX_Q_LEN; ++buf_i) {
-		queue[q_i++] = buf[buf_i];
-	};
+	memmove(queue + q_tail + 1, buf, siz);
 
-	for(q_i = 0; buf_i < siz; ++q_i) {
-		queue[q_i] = buf[buf_i++];
-	};
-
-	q_length += siz;
+	q_tail += siz;
 
 /* Have a go at flushing the queue: */
 
@@ -551,27 +570,38 @@ static Boolean enqueue(char *buf, NAT siz)
 static void try_drain_queue(Widget w)
 {
 /* If there's something in the queue try to process it */
-	if(q_length) {
-		while(dequeue()) {
-			continue;
-		}
-	};
+	while(dequeue()) {
+		continue;
+	}
 
 /* If there's still something in the queue ask to be called again: */
 
-	if(q_length) {
+	if(queue != 0 && q_tail >= q_head) {
 		XtAppAddTimeOut(app, 25,
 			(XtTimerCallbackProc)try_drain_queue, w);
-	};
+	} else if(queue != 0 && q_size > INIT_Q_LEN) {
+
+/* If not, reclaim space if appropriate: */
+
+		queue = realloc(queue, INIT_Q_LEN); 
+		if(queue == 0)  {
+			ok_dialog(root, queue_malloc_failed_message);
+			return False;
+		}
+		q_size = INIT_Q_LEN;
+		q_head = 0;
+		q_tail = -1;
+	}
 }
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * clear_queue clears out the queue by reinitialising q_length.
+ * clear_queue clears out the queue by reinitialising q_head and q_tail.
  * **** **** **** **** **** ***. **** **** **** **** **** **** */
 static void clear_queue (void)
 {
-	q_length = 0;
+	q_head = 0;
+	q_tail = -1;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -584,16 +614,8 @@ NAT siz;
 {
 
 /* Check there's something to talk to: */
+
 	if(!application_alive()) {
-		return;
-	};
-
-/* Check if the command could never fit in the queue: */
-
-	if(siz > MAX_Q_LEN) {
-		char msg[256];
-		sprintf(msg, cmd_too_long_message, siz, MAX_Q_LEN);
-		ok_dialog(root, msg);
 		return;
 	};
 
