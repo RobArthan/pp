@@ -1,4 +1,4 @@
-%  imp003.doc  %Z% $Date: 2001/07/25 16:26:07 $ $Revision: 2.18 $ $RCSfile: imp003.doc,v $
+%  imp003.doc  %Z% $Date: 2001/07/26 14:08:43 $ $Revision: 2.19 $ $RCSfile: imp003.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -7,10 +7,10 @@
 \TPPtitle{Implementation for Types and Terms}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Types and Terms}
 \TPPref{DS/FMU/IED/IMP003}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.18 $
+\def\SCCSversion{$Revision: 2.19 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2001/07/25 16:26:07 $%
+\TPPdate{\FormatDate{$Date: 2001/07/26 14:08:43 $%
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -76,7 +76,8 @@ Updates for SML'97.
 \item [Issue 2.17] Optimised instantiation and substitution operations in cases where
 the instantiation or substitution lists are effectively empty (as happens surprisingly
 often, e.g., in the conversions that move negation through quantifiers).
-\item [Issue 2.18] Fixed performance problem in {\it icl'subst}.
+\item [Issues 2.18, 2.19] Addressed performance problem in {\it icl'subst}.
+\item [Issue 2.20] More minor performance upgrades.
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
@@ -245,23 +246,18 @@ of the expression trees --- this means we must recompute
 the type of the term from scratch whenever we need it.
 At the opposite extreme, we could keep type information
 for every node in the tree --- but this might take
-up a lot of space. We will try a compromise which allows
+up a lot of space. We use a compromise which allows
 the type of a term and its immediate subterms to
 be computed using only simple combinations of information
 available at the corresponding node.
 
+The root of a term tree is always annotated with the type of
+the term.
 At nodes of a term tree other than the root,
-type information is only given for combinations
-(where we give the type of the result and the type
-of the argument).
-At the root of the tree we give the type unless the
-term is a combination, when the type information is
-available ``just underneath''.
-The local type $TERM\_term$ is introduced to allow this approach.
+type information is only given for applications
+for which we give the type of of the operand.
+The local type $icl'TERM$ is introduced to allow this approach.
 
-We implement terms by using local definition to hide
-its data constructors, rather than declaring it as an abstract data type,
-to keep $TERM$ an equality type.
 =SML
 local
 datatype Ûicl'TERMÝ	 =
@@ -304,11 +300,10 @@ fun Ûterm_failÝ (area : string) (msg : int) (tml : TERM list) : 'a = (
 	fail area msg (map (fn tm => (fn () => string_of_term tm)) tml)
 );
 =TEX
-Initially we do check that the types of abstractions and the operators of
-applications have types formed by $L­Type$,
-and provide default clauses to catch cases where no match is made,
-even when apparently unnecessary
-because of the supposed well-formedness of the terms.
+We provide default clauses to catch cases where no match is made,
+even when apparently unnecessary because of the supposed well-formedness of the terms.
+This avoids annoying messages from the compiler, and would be marginally more informative
+for a user if disaster ever befell the code.
 =SML
 fun Ûdest_simple_termÝ (typed vl:TERM) : DEST_SIMPLE_TERM = (
 	case vl of
@@ -396,6 +391,17 @@ fun Ûdest_appÝ ((typed(icl'App(ftm, atm, aty), faty)): TERM) : TERM * TERM = (
 fun Ûis_appÝ (typed(icl'App _, _)) = true
 | is_app _ = false;
 =TEX
+In substitution and type instantiation (of terms), there is no need to make
+the check on types that {\it mk\_app} makes. {\it uncheck\_mk\_app} supports
+this optimisation.
+=SML
+fun Ûunchecked_mk_appÝ
+	((tm1 as typed(f, L­Type(_, ty2)), tm2 as typed(atm, aty)): 
+		TERM * TERM) : TERM = (
+	typed(icl'App(f, atm, aty), ty2)
+) | Ûunchecked_mk_appÝ _ = error "unchecked_mk_app" 3064 [];
+
+=TEX
 =SML
 fun Ûmk_simple_ÌÝ ((typed(icl'Var v, ty), typed(btm, bty)):TERM * TERM):TERM = (
 	typed(icl'SimpleÌ(v, btm), L­Type (ty, bty))
@@ -408,8 +414,14 @@ fun Ûdest_simple_ÌÝ ((typed(icl'SimpleÌ (s, b), L­Type(ty1,ty2))): TERM): TERM *
 fun Ûis_simple_ÌÝ (typed(icl'SimpleÌ _, _)) = true
 | is_simple_Ì _ = false;
 =TEX
-This is present in the abstract data type for speed reasons:
-it is frequently used in critical functions.
+\section{CRITICAL FUNCTIONS}
+The functions in this section are critical for performance of the system.
+Consequently, they are implemented inside the abstract data type of
+terms so that they can access the internal representations of terms.
+Thus they become critical for correctness as well!
+
+\subsection{Computing Free Variables}
+
 =SML
 local
 	fun fvaux
@@ -438,31 +450,45 @@ in
 	);
 end;
 =TEX
-\subsubsection{Á-conversion}
-This is probably the most compact presentation, but it might be faster to match only the first argument, and then test the second separately.
-Otherwise we will always do four tests on mismatched structures.
-This depends on the cleverness of compilation.
+\subsection{Á-conversion}
+The auxiliary function below can be written more compactly but probably less efficiently
+by doing all the pattern matching in the function binding
+(and earlier versions of this code did just that).
+However this might encourage the compiler to do four tests on mismatched structures.
+The following slightly longer formulation avoids this small performance risk.
 =SML
 fun (tm1 : TERM) Û~=$Ý (tm2 : TERM) : bool = (
-let	fun aux (App (tm11, tm12))(App(tm21, tm22)) map2to1 = (
-		aux(dest_simple_term tm11)(dest_simple_term tm21) map2to1
-		andalso
-		aux(dest_simple_term tm12)(dest_simple_term tm22) map2to1
-	) | aux (Const c1)(Const c2) map2to1 = (c1 =$$ c2)
-	  | aux (Var v1) (Var v2) map2to1 = (lassoc1 map2to1 v1 = v2
-		andalso rassoc1 map2to1 v2 = v1
-	) | aux (SimpleÌ(v1,b1)) (SimpleÌ(v2, b2)) map2to1 = (
-		(type_of v1 =: type_of v2)
-		andalso
-		aux (dest_simple_term b1) (dest_simple_term b2) 
-			(((dest_var v1), (dest_var v2)) :: map2to1)
-	) | aux _ _ _ = false
+let	fun aux (App (tm11, tm12)) tm2 = (fn map2to1 =>
+		case tm2 of
+			(App(tm21, tm22)) => (
+				aux(dest_simple_term tm11)(dest_simple_term tm21) map2to1
+				andalso
+				aux(dest_simple_term tm12)(dest_simple_term tm22) map2to1
+		) | _ => false
+	) | aux (Const c1) tm2 = (fn _ =>
+		case tm2 of
+			(Const c2) => (c1 =$$ c2
+		) |	_ => false
+	)  | aux (Var v1) tm2 = (fn map2to1 =>
+		case tm2 of
+			(Var v2) => (lassoc1 map2to1 v1 = v2
+				andalso rassoc1 map2to1 v2 = v1
+		) | 	_ => false
+	) | aux (SimpleÌ(v1,b1)) tm2 = (fn map2to1 =>
+		case tm2 of
+			(SimpleÌ(v2, b2)) => (
+				(type_of v1 =: type_of v2)
+				andalso
+				aux (dest_simple_term b1) (dest_simple_term b2) 
+				(((dest_var v1), (dest_var v2)) :: map2to1)
+		) | _ => false
+	);
  	in
 		(tm1 =$ tm2) orelse (aux (dest_simple_term tm1) (dest_simple_term tm2) [])
 	end
 );
 =TEX
-\subsubsection{Substitution}
+\subsection{Substitution}
 A destroyed variable renaming function, used in substitution:
 
 In $aux$, $R$ is the local substitution, which is the original
@@ -563,11 +589,6 @@ local
 	end);
 	fun dest_app_node (AppNode (fvm1, fvm2)) = (fvm1, fvm2)
 	|   dest_app_node _ = (Leaf, Leaf);
-	fun unchecked_mk_app
-		((tm1 as typed(f, L­Type(_, ty2)), tm2 as typed(atm, aty)): 
-			TERM * TERM) : TERM = (
-		typed(icl'App(f, atm, aty), ty2)
-	) | unchecked_mk_app _ = error "subst" 3064 [];
 	fun do_subst RF (App(f, a), fvm) = (
 		let	val (fvm1, fvm2) = dest_app_node fvm;
 		in	let	val f' = do_subst RF (dest_simple_term f, fvm1);
@@ -636,7 +657,7 @@ end);
 end;
 =TEX
 
-\subsubsection{Instantiation of Types and Terms}
+\subsection{Instantiation of Types and Terms}
 The following  will fail if it causes no type instantiation.
 =SML
 fun Ûicl'inst_typeÝ ([] : (TYPE * string) list) (mty : TYPE) : TYPE = raise just_fail
@@ -673,14 +694,14 @@ local
 		: TERM = (
 		let	val fi = inst_loc1 tysubs (dest_simple_term f) vars varmap;
 		in
-			mk_app(fi,
+			unchecked_mk_app(fi,
 				(inst_loc1 tysubs (dest_simple_term a) vars varmap
 				handle (Fail _) => a))
 		end
 		handle (Fail _) =>
 		let	val ai = inst_loc1 tysubs (dest_simple_term a) vars varmap;
 		in
-			mk_app(f,ai)
+			unchecked_mk_app(f,ai)
 		end
 	) | inst_loc1 tysubs (Const(s,ty)) vars varmap = (
 		mk_const(s, icl'inst_type tysubs ty)
@@ -759,7 +780,7 @@ in
 	);
 end; (* of local ... in ... end *)
 =TEX
-\subsubsection{$term\_match$ and $type\_match$}
+\subsection{$term\_match$ and $type\_match$}
 We will need functions which attempt to determine
 if one type (or term) is an instance of another.
 $type\_match\;ty1\;ty2$ determines if the type $ty1$
