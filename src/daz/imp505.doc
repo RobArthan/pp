@@ -1,3 +1,4 @@
+% %Z% $Date$ $Revision$ $RCSfile$
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -12,22 +13,22 @@
 \TPPproject{DAZ PROJECT}  %% Mandatory field
 %\TPPvolume{}
 %\TPPpart{}
-\TPPtitle{Implementation of the Verification Condition Generator}  %% Mandatory field
-\def\TPPheadtitle{VC Generation}
+\TPPtitle{Implementation: Verification Condition Generator}  %% Mandatory field
+\def\TPPheadtitle{Verification Condition Generator}
 \TPPref{ISS/HAT/DAZ/IMP505}  %% Mandatory field
 \def\SCCSversion{$Revision$%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 \TPPdate{\FormatDate{$Date$%
 }}  %% Mandatory field (with sensible default)
-\TPPstatus{Informal}
+\TPPstatus{Draft}
 %\TPPstatus{Informal}
-\TPPtype{Technical}
-\TPPkeywords{HOL}
+\TPPtype{Specification}
+%\TPPkeywords{HOL}
 %\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
 \TPPauthors{D.J.~King & WIN01\\R.D.~Arthan & WIN01}
-\TPPauthorisation{R.B.~Jones & HAT Manager}
-\TPPabstract{%
+\TPPauthorisation{R.D.~Arthan & HAT Team}
+\TPPabstract{This is the implementation of the verification condition generator for the compliance tool.}
 %\TPPabstractB{}
 %\TPPabstractC{}
 %\TPPabstractD{}
@@ -65,16 +66,26 @@
 
 \subsection{Changes History}  % to get section number `0.3'
 \begin{description}
-\item[Issue \SCCSversion] First issue for distribution.
+\item[Issue 1.1-1.9] Initial Drafts.
+\item[Issue 1.10]
+
 \end{description}
 \subsection{Changes Forecast}
 None.
 \pagebreak
 \section{GENERAL}
 \subsection{Scope}
+This document contains the implementation of the compliance tool verification condition generator. It is written in response to the detailed design to be found in \cite{ISS/HAT/DAZ/DTD505}.
 \subsection{Introduction}
-=TEX
+\subsection{Purpose and Background}
+See \cite{ISS/HAT/DAZ/DTD505}.
+\subsection{Possible Enhancements}
+None.
+
 \pagebreak
+
+\section{THE STRUCTURE $CNVCGenerator$}
+
 =SML
 infix 3 ô;
 infix 4 %Longrightarrow%;
@@ -91,10 +102,10 @@ in
 \section{STRUCTURE OF VERIFICATION CONDITIONS}\label{VCSTRUCTURE}
 \subsection{Sequents}
 =SML
-fun (H : Z_PRED list) ô (c : Z_PRED) : SEQUENT = (H, c);
+fun (h : Z_PRED list) ô (c : Z_PRED) : SEQUENT = (h, c);
 
-fun (h : Z_PRED) %Longrightarrow% (S : SEQUENT list) : SEQUENT list = (
-	map (fn (H, c) => (h :: H, c)) S
+fun (h : Z_PRED) %Longrightarrow% (s : SEQUENT list) : SEQUENT list = (
+	map (fn (h', c) => (h :: h', c)) s
 );
 =TEX
 \pagebreak
@@ -669,30 +680,34 @@ fun Ûvc_local_declsÝ (seqs : SEQUENT list,
 	{fun_flag, in_scope as {vc_vars, vc_pars, ...},
 		wp_env={env, ...}, ...} : SPECLAB)
 		: VC list = (
-let	fun conv_var_decl ({vars=vs, tmark=t} : VAR_DECL)
-		: {var : ID, tmark : TMARK} list = (
-	 map (fn id => {var=id, tmark=t}) vs
+let	fun do_vars var = (
+		[trans_id var, trans_id var ^ "‰0"]
 	);
-	fun var_decl_decls {var, tmark} =
-		[{var = trans_id var, tmark=tmark},
-		{var = (trans_id var ^ "‰0"), tmark=tmark}];
-	val vdd = flat o (map var_decl_decls) o conv_var_decl;
+	fun var_decl_decls {vars, tmark} =
+		{vars = (flat o (map do_vars)) vars, tmark=tmark};
 	fun param_spec_decls {var_decl, mode} = (
-		if	mode = MSparkIn
-		then	[hd(vdd var_decl)]
-		else	vdd var_decl
+		var_decl_decls var_decl
 	);
-	val decls = flat(map vdd vc_vars @
-			map param_spec_decls vc_pars);
-	fun add_decls decs (seq as (H, c)) = (
-		let	val vns = map (fst o dest_var)
-				(flat(frees c :: map frees H));
-		in	(decs drop (fn {var, tmark} => var mem vns),
+	val decls = map var_decl_decls vc_vars @ map param_spec_decls vc_pars;
+	fun drop_vars vns {vars, tmark} = (
+		{vars=vars drop (fn var => not (var mem vns)),tmark=tmark}
+	);
+	fun frees_in_seq (seq as (h, c)) = (
+		map (fst o dest_var) (flat(frees c :: map frees h))
+	);
+	fun add_decls decs seq = (
+		let	val vns = frees_in_seq seq;
+			val ddecs = map (drop_vars vns) decs;
+		in	(ddecs drop (fn {vars, tmark} => vars=[]),
 			seq)
 		end
 	);
+	fun conv_var_decl ({vars=vs, tmark=t} : VAR_DECL)
+			: {var : ID, tmark : TMARK} list = (
+		map (fn id => {var=id, tmark=t}) vs
+	);		
 	fun mk_z_decl_part  (vartml, seq) =
-		(map (trans_decl env) vartml, seq);
+		(((map (trans_decl env)) o flat o (map conv_var_decl)) vartml, seq);
 	val res = map (add_decls decls) seqs;
 
 in
