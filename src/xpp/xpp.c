@@ -15,6 +15,8 @@
 
 #define XtNtextTranslations	"textTranslations"
 #define XtCTextTranslations	"TextTranslations"
+#define XtNtemplates		"templates"
+#define XtCTemplates		"Templates"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files: 
@@ -30,6 +32,7 @@
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 XtTranslations text_translations;
+char * templates;
 
 #ifdef BUILDVERSION
 static char *title = "  xpp    v" BUILDVERSION "  ";
@@ -75,6 +78,7 @@ static XrmOptionDescRec options [] = {
 
 typedef struct {
 	XtTranslations text_translations;
+	char * templates;
 } XppResources;
 
 XppResources xpp_resources;
@@ -86,6 +90,15 @@ static XtResource resources[] = {
 		XtRTranslationTable,
 		sizeof(char *),
 		XtOffsetOf(XppResources, text_translations),
+		XtRString,
+		""
+	},
+	{
+		XtNtemplates,
+		XtCTemplates,
+		XtRString,
+		sizeof(char *),
+		XtOffsetOf(XppResources, templates),
 		XtRString,
 		""
 	}
@@ -211,6 +224,7 @@ char **argv;
 		NULL);
 
 	text_translations = xpp_resources.text_translations;
+	templates = xpp_resources.templates;
 
 	global_options.command_line = get_command_line(argc, argv);
 

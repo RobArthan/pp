@@ -112,6 +112,10 @@ typedef struct menu_item {
 	extern Boolean add_palette(
 		Widget	w);
 #endif
+#ifndef _templates
+	extern Boolean add_templates(
+		Widget	w);
+#endif
 #ifndef _search
 	extern Boolean add_search_tool(
 		Widget	w);
@@ -148,6 +152,7 @@ void number_verify_cb(
 #endif
 #ifndef _xpp
 	extern XtTranslations text_translations;
+	extern char * templates;
 #endif
 #ifndef _edit
 	extern void *setup_edit(
