@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.3 2001/11/16 17:20:38 rda Exp rda $
+ * $Id: undo.c,v 2.4 2001/12/15 16:37:49 rda Exp rda $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -26,7 +26,8 @@
 /* Messages for various purposes: */
 
 static char* changes_saved_warning =
-"The file has been saved. Do you really want to undo?";
+"The file has been saved since you last changed it. "
+"Do you really want to undo the last change?";
 
 /* The following is used to implement undo in the edit menu */
 
@@ -79,13 +80,25 @@ void clear_undo(XtPointer xtp)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * notify_save: set the changes_saved flag to provoke a warning
  * if the user asks to undo; also set the moved_away to tell
- * undo_modify_cb to stop accumulating changes.
+ * undo_modify_cb to stop accumulating changes and set the
+ * undo_redo_index to 0 (i.e., undo - the wording of the
+ * saved_changes_warning would be confusing otherwise) and update
+ * the menus accordingly.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void notify_save(XtPointer xtp)
 {
 	UndoBuffer *ub = xtp;
+	Widget *wp;
 	ub->changes_saved = True;
 	ub->moved_away = True;
+	ub->undo_redo_index = 0;
+	if(ub->menu_ws) {
+		for(wp = ub->menu_ws; *wp; ++wp){
+			set_menu_item_label(
+				*wp, ub->menu_entry_offset,
+				undo_redo[0]);
+		}
+	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * add_undo: attach an undo capability to a text window.
