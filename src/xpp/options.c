@@ -55,7 +55,7 @@ GlobalOptions	orig_global_options;
  * <>	`Execute' adds missing new-lines;
  * <>  `Execute' prompts for new-lines
  * <>  `Execute' ignores missing new-lines
- * Apply Reset Dismiss
+ * Apply Reset Dismiss Help
  * The parameter is a widget to be the owner of the
  * popup shell. It should be the text widget from which the source
  * and font for the text widgets can be borrowed.
@@ -79,7 +79,7 @@ static Widget
 			add_new_line_radio_buttons,
 		button_frame,
 			button_form,
-				apply_btn, reset_btn, dismiss_btn;
+				apply_btn, reset_btn, dismiss_btn, help_btn;
 /*
  * We use a variable to record the state of the radio buttons:
  */
@@ -94,7 +94,8 @@ void init_options(Widget owner_w)
 		reset_cb(),
 		dismiss_cb(),
 		journal_max_cb(),
-		add_new_line_cb();
+		add_new_line_cb(),
+		help_cb();
 
 	XmString s1, s2, s3;
 
@@ -236,7 +237,7 @@ if(!global_options.edit_only) {
 
 	button_form = XtVaCreateManagedWidget("app-row-col",
 		xmFormWidgetClass,		button_frame,
-		XmNfractionBase,		3,
+		XmNfractionBase,		4,
 		NULL);
 
 	apply_btn = XtVaCreateManagedWidget("Apply",
@@ -263,9 +264,20 @@ if(!global_options.edit_only) {
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
-		XmNrightAttachment,		XmATTACH_FORM,
+		XmNrightAttachment,		XmATTACH_POSITION,
 		XmNleftPosition,		2,
+		XmNrightPosition,		3,
 		NULL);
+
+	help_btn = XtVaCreateManagedWidget("Help",
+		xmPushButtonWidgetClass,		button_form,
+		XmNtopAttachment,		XmATTACH_FORM,
+		XmNbottomAttachment,		XmATTACH_FORM,
+		XmNleftAttachment,		XmATTACH_POSITION,
+		XmNrightAttachment,		XmATTACH_FORM,
+		XmNleftPosition,		3,
+		NULL);
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * add other callbacks:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -278,6 +290,9 @@ if(!global_options.edit_only) {
 
 	XtAddCallback(dismiss_btn, XmNactivateCallback,
 			dismiss_cb, (XtPointer)NULL);
+
+	XtAddCallback(help_btn, XmNactivateCallback,
+			help_cb, (XtPointer)NULL);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set up initial values of global_options which have not
  * been done already in xpp.c); these are the ones which the user
@@ -492,4 +507,14 @@ static void add_new_line_cb(
 	add_new_line_button_state = btn_n;
 }
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * help callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void help_cb(
+	Widget				w,
+	XtPointer			*cbdata,
+	XmPushButtonCallbackStruct	cbs)
+{
+	help_dialog(root, Help_Options_Tool);
+}
 
