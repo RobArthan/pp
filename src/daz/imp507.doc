@@ -106,6 +106,7 @@ failure (not comment) is raised).
 \item[Issue 1.143] Changed format of warning VC.
 \item[Issue 1.144] Corrected bug in prefixing of functions.
 \item[Issue 1.145] Typos affecting LaTeX only.
+\item[Issue 1.146] Changes for IUCT WP 4.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1096,7 +1097,8 @@ val €dummy_informal_fun› : INFORMAL_FUN = {
 		return_type	=	"*dummy type*"};
 val €dummy_formal_fun› : FORMAL_FUN = {
 		informal_fun	=	dummy_informal_fun,
-		spec		=	dummy_spec};
+		spec		=	dummy_spec,
+		globals		=	[]};
 val €dummy_formal_proc› : FORMAL_PROC = {
 		name		=	"*dummy formal proc*",
 		formal_ids	=	[],
@@ -1463,19 +1465,26 @@ fun €fun_name_par_names› ({name, formal_pars, ...} : INFORMAL_FUN)
 	(name, (flat o map (#vars o #var_decl)) formal_pars)
 );
 in
-fun €get_par_names› (fun_name : Z_ID) : ID list OPT = (
-	((Value o map (fst o dest_ud_string) o snd o dest_ud_string o
-		switch find (wanted fun_name) o snd o dest_ud_string o
-		get_user_datum (get_const_theory (z_id_of_id fun_name)))
-	cn_pars_ud_key)
-	handle Fail _ => Nil
+fun €get_par_names› (fun_name : Z_ID) : (Z_ID list * ID list) OPT = (
+	let	val uds = (snd o dest_ud_string o
+			switch find (wanted fun_name) o snd o dest_ud_string o
+			get_user_datum (get_const_theory (z_id_of_id fun_name)))
+				cn_pars_ud_key;
+		val gs = (map (fst o dest_ud_string) o snd o dest_ud_string)
+				(hd uds);
+		val ps = (map (fst o dest_ud_string) o snd o dest_ud_string)
+				(hd (tl uds));
+	in	Value (gs, ps)
+	end	handle Fail _ => Nil
 );
-fun €set_par_names› (inf_fun : INFORMAL_FUN) : unit = (
+fun €set_par_names› (globals : Z_ID list) (inf_fun : INFORMAL_FUN) : unit = (
 	let	val (fun_name, pars) = fun_name_par_names inf_fun;
 		val old = (snd o dest_ud_string o get_user_datum "-") cn_pars_ud_key
 			handle Fail _ => [];
+		val gs = UD_String("", map (fn g => UD_String(g, [])) globals);
+		val ps = UD_String("", map (fn p => UD_String(p, [])) pars);
 		val new = 
-			UD_String(fun_name, map (fn p => UD_String(p, [])) pars)
+			UD_String(fun_name, [gs, ps])
 			:: (old drop wanted fun_name);
 	in	set_user_datum(cn_pars_ud_key, UD_String("", new))
 	end
@@ -1564,7 +1573,8 @@ fun €get_tmark_from_inscope› (n : Z_ID) (inscope : IN_SCOPE)
 		|  do_aux_vars (decl :: more) = (
 			case s_lookup n (map dest_var (frees decl)) of
 				Nil => do_aux_vars more
-			|	v as Value _ => v
+			|	Value ty =>
+				Value(ty, snd(dest_z_dec(hd(dest_z_decl decl))))
 		);
 	in	case do_vars (#vc_vars inscope) of
 			Value tmk	=> Value(type_of_tmark tmk, EIEnvVar tmk)
@@ -1573,7 +1583,7 @@ fun €get_tmark_from_inscope› (n : Z_ID) (inscope : IN_SCOPE)
 			Value tmk	=> Value(type_of_tmark tmk, EIEnvVar tmk)
 		|	Nil		=> (
 		case do_aux_vars (#vc_aux_vars inscope) of
-			Value ty	=> Value(Value ty, EIEnvAuxVar)
+			Value (ty, tm)	=> Value(Value ty, EIEnvAuxVar tm)
 		|	Nil		=> Nil
 		))
 	end
@@ -1608,7 +1618,7 @@ if it's neither a function nor a type name, its an `other'.
 =SML
 fun €env_info_of_g_var› (zn : ID) (ty : TYPE) : (TYPE * ENV_INFO) = (
 	case get_par_names zn of
-		Value pars => (ty, EIEnvFunction pars)
+		Value gsps => (ty, EIEnvFunction gsps)
 	|	Nil => (
 			ty,
 			case get_type_info zn of
@@ -1729,15 +1739,18 @@ fun €ti_context_of_declab› (declab : DECLAB) : TERM list = (
 );
 =TEX
 =SML
-val €fun_decl1› = CNVCGenerator.fun_decl current_cn_env;
-=TEX
-=SML
 fun €ti_context_of_speclab› (speclab : SPECLAB) : TERM list = (
-	let 	val cxt = ti_context_of_in_scope (#in_scope speclab);
-	in	if	#formal_body_flag speclab andalso #fun_flag speclab
-		then	fun_decl1(#fun_header(#wp_env speclab)) :: cxt
-		else	cxt
-	end
+	if	#formal_body_flag speclab andalso #fun_flag speclab
+	then	let 	val cxt = ti_context_of_in_scope (#in_scope speclab);
+			val env = cn_env_of_in_scope (#in_scope speclab);
+			val inf_fun = #fun_header(#wp_env speclab);
+			val form_fun = {
+				informal_fun = inf_fun,
+				spec = dummy_spec,
+				globals	 = fun_globals env (#name inf_fun)};
+		in	fun_decl env form_fun :: cxt
+		end
+	else	ti_context_of_in_scope (#in_scope speclab)
 );
 =TEX
 =SML
@@ -2534,7 +2547,7 @@ fun €spec_stmt_otherwise› ({spec : SPEC, label : LABEL}) : unit = (
 			till,
 			current_formal_fun = formal_fun1 as
 					{informal_fun = fun_header,
-					spec = spec1 as {post = return, ...}},
+					spec = spec1 as {post = return, ...}, ...},
 			...} = block1;
 		val in_scope1 : IN_SCOPE = flatten_env(!blocks);
 		val side = set_in_scope_ti_context in_scope1;
@@ -3190,7 +3203,7 @@ fun €form_proc_subunit› (form_proc: FORMAL_PROC) : unit = (
 );
 =TEX
 =SML
-fun €z_decls› (par_specs : PARAM_SPEC list) : Z_DECL list = (
+fun €z_par_decl› (par_spec : PARAM_SPEC) : Z_DECL = (
 	let	fun aux1 ({vars, tmark} : VAR_DECL) : Z_DECL = (
 			let	val e = (zid current_cn_env o trans_id) tmark;
 				val ty = (dest_z_power_type o type_of) e;
@@ -3198,9 +3211,10 @@ fun €z_decls› (par_specs : PARAM_SPEC list) : Z_DECL list = (
 			in	mk_z_dec(map v vars, e)
 			end
 		);
-	in	map (aux1 o #var_decl) par_specs
+	in	(aux1 o #var_decl) par_spec
 	end
-handle exn => pass_on exn "zid" "z_decls");
+handle exn => pass_on exn "zid" "z_par_decl"
+);
 =TEX
 The following function is required to determine whether $form\_proc$ should call $form\_proc\_pack\_body$ or $form\_proc\_pack\_body\_aux$.
 It computes a list of HOL terms representing the set of variables which is tested in the first clause in the predicate part of the corresponding Z schemas in the specification.
@@ -3298,17 +3312,27 @@ fun €stub_spec_fun› (form_fun : FORMAL_FUN) : unit = (
 );
 =TEX
 \subsection{The SID function inf\_fun}
-=SML
-val €cart_prod1› = CNVCGenerator.cart_prod current_cn_env;
 =TEX
 The decision of which of the following two functions to call is made in $inf\_fun$
 =SML
-fun €trans_informal_fun› (f: INFORMAL_FUN) : PARAINFO = (
-	let	val dec = fun_decl1 f;
-		val ntys = (map dest_var o fst o dest_z_dec) dec;
-	in	AxDesInfo([], mk_z_decl[dec], Nil, ntys)
+local
+val €informal_function_ty› : TYPE = mk_ctype(informal_function, []);
+val €informal_function_gvar› : Z_EXP =
+	mk_z_gvar(informal_function, mk_z_power_type informal_function_ty, []);
+in
+fun €inf_fun_decl ({name, ...}: INFORMAL_FUN) : (Z_DECL * Z_ID) = (
+	let	val n = trans_id name;
+		val zexp = informal_function_gvar;
+		val zvar = mk_z_lvar(n, informal_function_ty, [])
+	in	(mk_z_dec([zvar], zexp), n)
 	end
 );
+fun €trans_informal_fun› (f : INFORMAL_FUN) : PARAINFO = (
+	let	val (dec, n) = inf_fun_decl f;
+	in	AxDesInfo([], mk_z_decl[dec], Nil, [(n, informal_function_ty)])
+	end
+);
+end;
 =TEX
 =SML
 fun €inf_fun_pack_spec› (inf_fun: INFORMAL_FUN) : unit = (
@@ -3332,7 +3356,7 @@ fun €inf_fun_pack_spec› (inf_fun: INFORMAL_FUN) : unit = (
 =SML
 fun €inf_fun_otherwise› (inf_fun: INFORMAL_FUN) : unit = (
 	store_para(trans_informal_fun inf_fun);
-	set_par_names inf_fun
+	set_par_names [] inf_fun
 );
 =TEX
 =SML
@@ -3343,29 +3367,50 @@ fun €inf_fun› (informal_fun: INFORMAL_FUN) : unit = (
 );
 =TEX
 \subsection{The SID function form\_fun}
-The decision of which of the four cases to apply is made in $form\_fun$
+=TEX
 =SML
-fun €trans_formal_fun› ({spec as {pre, post, ...},
-			informal_fun as {formal_pars, ...}} : FORMAL_FUN)
+fun €z_forall_opt› (decs : Z_DECL list, zpred : Z_PRED) : Z_PRED = (
+	case decs of
+		[] =>	zpred
+	|	_ => z_forall(decs, zpred)
+);
+=TEX
+=SML
+fun €z_var_decl› (cnenv : CN_ENV) (zname : Z_ID) : Z_DECL = (
+	let	val zexp = var_sig cnenv zname;
+		val ty = (dest_z_power_type o type_of) zexp;
+	in	mk_z_dec([mk_z_lvar(zname, ty, [])], zexp)
+	end
+);
+=TEX
+The decision of which of the four cases to apply is made in $form\_fun$
+=TEX
+=SML
+fun €trans_formal_fun› (cnenv : CN_ENV)
+			(form_fun as {
+			spec as {pre, post, ...},
+			informal_fun as {formal_pars, ...},
+			globals} : FORMAL_FUN)
 				: PARAINFO = (
-	let	val dec = fun_decl1 informal_fun;
-		val pardecs = z_decls formal_pars
-			handle exn => pass_on exn "z_decls" "trans_formal_fun";
+	let	val dec = fun_decl cnenv form_fun;
+		val pardecs = map z_par_decl formal_pars
+			handle exn => pass_on exn "z_par_decl" "trans_formal_fun";
+		val globdecs = map (z_var_decl cnenv) globals
+			handle exn => pass_on exn "z_par_decl" "trans_formal_fun";
 		val ntys = (map dest_var o fst o dest_z_dec) dec;
-		val new_ti_cxt = frees dec term_union flat (map frees pardecs);
+		val new_ti_cxt = frees dec term_union flat
+				(map frees (pardecs @ globdecs));
 		val side = set_current_ti_context new_ti_cxt;
 		val imp = z_imp(z_pred_of_z_tm pre, z_pred_of_z_tm post);
-		val pred = (
-			case formal_pars of
-				[] => imp
-			|	non_empty => z_forall(pardecs, imp));
+		val pred = z_forall_opt(globdecs, z_forall_opt(pardecs, imp));
 	in	AxDesInfo([], mk_z_decl[dec], Value pred, ntys)
 	end
 );
 =TEX
 =SML
 fun €form_fun_pack_spec› (form_fun: FORMAL_FUN) : unit = (
-	let	val test_save = test_store_para(trans_formal_fun form_fun);
+	let	val test_save = test_store_para
+			(trans_formal_fun current_cn_env form_fun);
 		val block2 = block 2;
 		val block_name2 = #block_name(#declab block2);
 		val package =
@@ -3394,8 +3439,8 @@ fun €form_fun_pack_body› (form_fun: FORMAL_FUN) : unit = (
 			handle Fail _ =>
 			error "form_fun_pack_body" 507012 [fn()=>block_name2];
 		val formal_funs4 = #formal_funs package4;
-	in	store_para(trans_formal_fun form_fun);
-		set_par_names (#informal_fun form_fun);
+	in	store_para(trans_formal_fun current_cn_env form_fun);
+		set_par_names (#globals form_fun) (#informal_fun form_fun);
 		if	any
 			formal_funs4
 			(fn f => #name(#informal_fun f) = block_name1)
@@ -3447,8 +3492,8 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 			handle Fail _ =>
 			fail "form_fun_subunit" 507011
 	 			[fn()=>block_name2, fn()=>block_name1];
-	in	store_para(trans_formal_fun form_fun);
-		set_par_names (#informal_fun form_fun);
+	in	store_para(trans_formal_fun current_cn_env form_fun);
+		set_par_names (#globals form_fun) (#informal_fun form_fun);
 		subunit_env := s_delete tbn1_bn2 (!subunit_env);
 		if	#specif_flag subunit3
 		then	
@@ -3487,8 +3532,8 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 =TEX
 =SML
 fun €form_fun_otherwise› (form_fun: FORMAL_FUN) : unit = (
-	store_para(trans_formal_fun form_fun);
-	set_par_names (#informal_fun form_fun)
+	store_para(trans_formal_fun current_cn_env form_fun);
+	set_par_names (#globals form_fun) (#informal_fun form_fun)
 );
 =TEX
 =SML
@@ -3650,7 +3695,7 @@ fun €vcs_body_fun› (st : STATEMENT) : unit = (
 			formal_procs = #formal_procs in_scope,
 			dec_labels = #dec_labels in_scope
 		};
-		val fun_dec = fun_decl1 (#informal_fun current_formal_fun1);
+		val fun_dec = fun_decl current_cn_env current_formal_fun1;
 		val side1 = set_in_scope_ti_context in_scope1;
 		val side2 = set_ti_context
 			(frees fun_dec @ get_ti_context());
@@ -4138,21 +4183,24 @@ Note how we set up, and later restore, the typing context:
 =SML
 fun €prefix_formal_fun› (ident : ID) (tysubs : (string * string) list)
 	(newids : ID list)
-	({spec : SPEC, 
-	  informal_fun  as {formal_pars, ...} : INFORMAL_FUN} : FORMAL_FUN) : 
+	(form_fun as {
+		spec : SPEC, 
+		informal_fun  as {formal_pars, ...} : INFORMAL_FUN, 
+		globals} : FORMAL_FUN) : 
 		FORMAL_FUN = (
-let		val dec = fun_decl1 informal_fun;
-		val pardecs = z_decls formal_pars
-			handle exn => [];
+let		val dec = fun_decl current_cn_env form_fun;
+		val pardecs = map z_par_decl formal_pars handle exn => [];
 		val old_ti_cxt = current_ti_context();
 		val new_ti_cxt = frees dec term_union (
 			flat (map frees pardecs) term_union old_ti_cxt);
 		val side = set_current_ti_context new_ti_cxt;
 		val spec1 = prefix_spec_stmt ident tysubs newids spec;
+		val globals1 = map (prefix_package_id ident newids) globals;
 		val side1 = set_current_ti_context old_ti_cxt;
 in
 	{spec = spec1,
-	 informal_fun = prefix_informal_fun ident newids informal_fun}
+	 informal_fun = prefix_informal_fun ident newids informal_fun,
+	 globals = globals1}
 end);
 =TEX
 When the following is called it is important that the internal specification theory for the package be the current theory and that it be populated with all its types and constants.
@@ -4414,14 +4462,19 @@ fun €create_prefixed_spec_from_internal_theory›
 			(#formal_funs package);
 		val thychange1 = open_package_spec_theory ident;
 		val informal_fun_paras = map trans_informal_fun pinformal_funs;
+		fun par_aux (ff:FORMAL_FUN) = (
+			set_par_names (#globals ff) (#informal_fun ff)
+		);
 		val dummy = (
-			map set_par_names pfx_funs;
+			map (set_par_names []) pinformal_funs;
+			map par_aux pformal_funs;
 			map	(set_basic_decl_info
 				   (prefix_package_id ident newids))
 				(#consts_types package);
 			map store_para informal_fun_paras);
 		(* need to do other store_paras first to get right env *)
-		val formal_fun_paras = map trans_formal_fun pformal_funs;
+		val formal_fun_paras =
+			map (trans_formal_fun current_cn_env) pformal_funs;
 		val dummy1 = check_ff_xref pfx_funs formal_fun_paras;
 	in	
 		map store_para formal_fun_paras;
@@ -5293,14 +5346,15 @@ The following reflects the SID functions for $function\_specification$:
 =SML
 *)
 and €do_function_spec› (
-	{designator, return, formal_part, spec as Value sp, annotation, ...}
+	{designator, return, formal_part,
+		spec as Value sp, annotation, globals, ...}
 			: FUNCTION_SPECIFICATION) = (
 	let	val informal_fun : INFORMAL_FUN =
 		{name=designator,
 		formal_pars = map mk_param_spec formal_part,
 		return_type = return};
 		val formal_fun : FORMAL_FUN =
-			{spec = sp, informal_fun = informal_fun};
+		{spec = sp, informal_fun = informal_fun, globals = globals};
 	in	subunit_form designator;
 		new_scope_fun_form designator;
 		do_annotation annotation;
