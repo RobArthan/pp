@@ -1312,14 +1312,29 @@ val €cn_theories_ud_key› = "CN'theories";
 val €cn_spec_ud_key› = "CN'createspec";
 val €cn_subunit_ud_key› = "CN'createsubunit";
 val €cn_new_parent_ud_key› = "CN'newparent";
-
 =TEX
+
 The following function is used in several places;
 its clients must handle the exception it can raise.
+
 =SML
 fun €dest_ud_string› (UD_String (n, uds)) = (n, uds)
 |   dest_ud_string _ = fail "" 0 [] (* Caller MUST catch this *);
 =TEX
+
+The following function updates the user data for the current theory.  Given a user data key and an item of data it retrieves any data currently stored under that key, append the new data to it and then replaces it.
+
+=SML
+fun €update_user_datum› (key : string) (xs : USER_DATUM) =
+let
+    val old_datum = (snd o dest_ud_string o get_user_datum "-")
+					key handle Fail _ => [];
+    val new_datum = xs::old_datum;
+in
+    set_user_datum(key, UD_String ("",new_datum))
+end;
+=TEX
+
 The following functions are used to maintain the list of theories ``belonging'' to the current literate script.
 =SML
 fun €get_script_theories› (thy : string) : string list = (
@@ -1332,15 +1347,24 @@ fun €get_script_theories› (thy : string) : string list = (
 fun €add_script_theory› (thy : string) : unit = (
 	let	val old = get_current_theory_name();
 		val side = open_theory (!script_name);
-		val uds = (snd o dest_ud_string o get_user_datum "-")
-					cn_theories_ud_key
-					handle Fail _ => [];
-	in	set_user_datum(cn_theories_ud_key,
-				UD_String("", UD_String(thy, []) :: uds));
-		open_theory old
+	in	
+		update_user_datum cn_theories_ud_key (UD_String(thy, []));
+		open_theory old;
+		()
 	end
 );
 =TEX
+
+The next function adds a new parent to the current theory, and makes an entry of this fact in the current theory's user data.
+
+=SML
+fun €new_parent_aux› (thy : string) : unit = (
+	new_parent thy;
+	update_user_datum cn_new_parent_ud_key
+		(UD_String(thy, [UD_Int (current_level(),[])]))
+);
+=TEX
+
 \subsection{Function Parameter Lists}
 When the global variable representing a SPARK function is stored in a theory, a user data entry giving its formal parameter list is also stored.
 This is later accessed via the $CN\_ENV$ when function calls using named parameter associations are translated into Z.
@@ -1392,12 +1416,8 @@ fun €get_type_names› (thy : string) : ID list = (
 	handle Fail _ => []
 );
 fun €add_type_name› (tyn : ID) : unit = (
-	let	val old = (snd o dest_ud_string o get_user_datum "-")
-				 cn_types_ud_key
-			handle Fail _ => [];
-		val new = UD_String(tyn, []) :: old;
-	in	set_user_datum(cn_types_ud_key, UD_String("", new))
-	end
+	update_user_datum cn_types_ud_key (UD_String(tyn, []));
+	()
 );
 fun €is_type_name› (n : ID) : bool = (
 	(n mem get_type_names (get_const_theory (z_id_of_id n)))
@@ -1683,19 +1703,18 @@ fun €new_subunit_theory› (unit_name : string, subunit_name : string) : unit = (
 		fun delete_vc n = ((delete_conjecture n; ())
 						handle Fail _ => ());
 		val old_thy = get_current_theory_name () ;
-		val old_datum = (snd o dest_ud_string o get_user_datum "-")
-					cn_subunit_ud_key handle Fail _ => [];
 		val dummy1 = duplicate_theory ("-", thy);
 		val dummy2 = add_script_theory thy;
 		val dummy3 = open_theory thy;
 		val dummy4 = (map delete_vc o flat o map fst o get_conjectures) thy;
 		val thy_level = current_level();
 		val dummy5 = open_theory old_thy;
-		val new_datum = UD_String(thy, [UD_Int (current_level(),
-			[UD_Int (thy_level, [])])])::old_datum;
 	in	(	
-			set_user_datum(cn_subunit_ud_key, UD_String ("",new_datum));
-			() )
+			update_user_datum cn_subunit_ud_key
+				(UD_String(thy, [UD_Int (current_level(),
+				[UD_Int (thy_level, [])])]));
+			()
+		)
 		handle Fail _ =>
 		fail "new_subunit_theory" 507026 [fn()=>thy, fn()=>su_name]
 	end
@@ -1713,12 +1732,8 @@ fun €new_parent_subunit_theory› (unit_name : string, x : PROPER_BODY) : unit = (
 		));
 		val su_name = unit_name dot subunit_name;
 		val thy = trans_id (su_name ^ "stub");
-		val old_datum = (snd o dest_ud_string o get_user_datum "-")
-					cn_new_parent_ud_key handle Fail _ => [];
-		val new_datum = UD_String(thy,
-				[UD_Int (current_level(),[])])::old_datum;
-	in	new_parent thy handle Fail _ => ();
-		set_user_datum(cn_new_parent_ud_key, UD_String ("",new_datum))
+	in	new_parent_aux thy handle Fail _ => ();
+		()
 	end
 );
 =TEX
@@ -2822,13 +2837,14 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 	let
 		val st = SStmt(STSpecNoIvars{spec= #spec form_fun,
 				label=""});
+		val vc_pars1 = #vc_pars (#in_scope (#declab block1));
 		val in_scope4 = {
 			dec_labels = [],
 			formal_procs = [],
 			vc_log_cons = [],
 			vc_aux_vars = [],
 			vc_vars = [],
-			vc_pars = []			
+			vc_pars = vc_pars1			
 		};
 		val wp_env4 :WP_ENV = {
 			env = cn_env_of_in_scope in_scope4,
@@ -3289,10 +3305,6 @@ fun €populate_package_spec_theory› (ident : ID) : unit = (
 		val parents_of_pack = (rev o get_parents) thy;
 		val father = hd parents_of_pack;
 		val ps_name = pack_spec_name ident;
-		val old_datum = (snd o dest_ud_string o get_user_datum "-")
-					cn_spec_ud_key handle Fail _ => [];
-		val new_datum = UD_String((pack_spec_name ident),
-				[UD_Int (current_level(),[])])::old_datum;
 	in
 		if ps_name mem (get_descendants father)
 		then
@@ -3315,7 +3327,9 @@ fun €populate_package_spec_theory› (ident : ID) : unit = (
 			force_delete_theory (pack_tmpbody_name ident)
 			handle _ => ();
 			open_theory thy;
-			set_user_datum(cn_spec_ud_key, UD_String ("",new_datum));
+			update_user_datum cn_spec_ud_key
+				(UD_String((pack_spec_name ident),
+				[UD_Int (current_level(),[])]));
 			()
 		)
 	end
@@ -3345,15 +3359,10 @@ fun €new_scope_with› (ident : ID) : unit = (
 			val block = block_vc_vars(empty_block, vc_vars1);
 			val block = block_vc_aux_vars(empty_block, vc_aux_vars1);
 			val block = block_formal_procs(block, formal_procs1);
-			val old_datum = (snd o dest_ud_string o get_user_datum "-")
-				cn_new_parent_ud_key handle Fail _ => [];
-			val new_datum = UD_String((pack_spec_name ident),
-				[UD_Int (current_level(),[])])::old_datum;
 		in	populate_package_spec_theory ident;
-			new_parent (pack_spec_name ident) handle Fail _ => ();
+			new_parent_aux (pack_spec_name ident) handle Fail _ => ();
 			blocks := block :: !blocks;
-			set_user_datum(cn_new_parent_ud_key,
-				UD_String ("",new_datum))
+			()
 		end
 	)
 );
@@ -3685,7 +3694,8 @@ val €end_scope_stmt_label›: unit -> unit = end_scope_speclabel;
 =TEX
 \section{SPARK PROGRAM ENVIRONMENT}
 \subsection{The SID Function update\_replacement\_env}
-TBS - the error reporting here could usefully be made more sophisticated.
+=IGNORE
+The error reporting here could usefully be made more sophisticated.
 (By checking that $repl$ and the replacement environment entry are of the same sort.)
 =SML
 fun €update_replacement_env› ((label, repl) : LABEL * REPLACEMENT) : unit = (
