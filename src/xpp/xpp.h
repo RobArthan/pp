@@ -40,7 +40,7 @@
  * exception of `main' in xpp.c).
  */
 #ifndef _cmdwin
-	extern void setup_cmdwin();
+	extern void setup_cmdwin(Bool edit_only);
 	extern XtAppContext app;
 	extern Widget root;
 	extern void send_to_application(
@@ -103,4 +103,9 @@
 		Widget	owner,
 		char	*name,
 		void	(*exec)());
+#endif
+#ifndef _files
+	extern void *load_file(
+		Widget	text,
+		char	*name);
 #endif

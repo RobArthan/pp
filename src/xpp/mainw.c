@@ -40,8 +40,11 @@
 
 #include <stdio.h>
 #include<Xm/Text.h>
+#include<Xm/TextF.h>
+#include<Xm/RowColumn.h>
 #include<Xm/MainW.h>
 #include<Xm/PanedW.h>
+#include<Xm/Label.h>
 #include<varargs.h>
 
 #include "xpp.h"
@@ -112,17 +115,21 @@ static char *send_error_message =
 XtAppContext app; /* global because needed in msg.c */
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Widget	Parent	Purpose
- * root		-	the top level of the hierarchy
- * frame	root	main window
- * work		frame	work area
- * display	work	displays application output
- * command	work	command line input
- * menubar	frame	the menu bar at the top of the main window
- * toolsmenu	menubar	the tools menu
- * editmenu	menubar	the edit menu
- * cmdmenu	menubar	the command menu
- * helpmenu	menubar	the help menu
+ * Widget	Parent	 Purpose
+ * root		-	 the top level of the hierarchy
+ * frame	root	 main window
+ * work		frame	 work area
+ * display	work	 displays application output
+ * filename     work     rowcol for the next two:
+ * filelabel    filename label for name of file being edited
+ * namestring   filename displays name of file being edited
+ * command	work	 command line input
+ * menubar	frame	 the menu bar at the top of the main window
+ * filemenu	menubar	 the file menu
+ * toolsmenu	menubar	 the tools menu
+ * editmenu	menubar	 the edit menu
+ * cmdmenu	menubar	 the command menu
+ * helpmenu	menubar	 the help menu
  *
  * All widgets except command have the same name in the
  * widget hierarchy as their C name above except command.
@@ -135,8 +142,8 @@ XtAppContext app; /* global because needed in msg.c */
 Widget root;	/* global because needed in xpp.c */
 
 static Widget
-	frame, work, display, command,
-	menubar, toolsmenu, editmenu, cmdmenu, helpmenu;
+	frame, work, display, filename, filelabel, namestring, command,
+	menubar, filemenu, toolsmenu, editmenu, cmdmenu, helpmenu;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * limits on text window sizes in the main window:
@@ -212,13 +219,15 @@ BOOL ignored;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 
-setup_cmdwin()
+setup_cmdwin(Bool edit_only)
 {
 	Arg args[12];
 	NAT i;
+	NAT nmenus;
 	XmString s1, s2, s3, s4, s5, s6, s7, s8;
 	Atom WM_DELETE_WINDOW;
 	static void
+		file_menu_cb(),
 		tools_menu_cb(),
 		edit_menu_cb(),
 		cmd_menu_cb(),
@@ -260,9 +269,32 @@ setup_cmdwin()
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Command window:
+ * File-name area:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+	filename = XtVaCreateWidget("filename",
+		xmRowColumnWidgetClass, work,
+		XmNorientation,	XmHORIZONTAL,
+		XmNpacking,	XmPACK_TIGHT,
+		NULL);
+
+
+	s1 = XmStringCreateSimple("File Name:");
+	filelabel = XtVaCreateManagedWidget("filelabel",
+		xmLabelWidgetClass, filename,
+		XmNlabelString,	s1,
+		NULL);
+	XmStringFree(s1);
+
+	namestring = XtVaCreateManagedWidget("namestring",
+		xmTextFieldWidgetClass, filename,
+		XmNeditable,			False,
+		XmNcursorPositionVisible,	False,
+		NULL);
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Command window:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
 	i = 0;
 	XtSetArg(args[i], XmNrows,	 		3); ++i;
 	XtSetArg(args[i], XmNcolumns, 			80); ++i;
@@ -279,11 +311,10 @@ setup_cmdwin()
 	XtAddCallback(command,
 		XmNmotionVerifyCallback, command_motion_cb, NULL);
 
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Display window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-
+if( !edit_only ) {
 	i = 0;
 	XtSetArg(args[i], XmNrows,	 		24); ++i;
 	XtSetArg(args[i], XmNcolumns, 			80); ++i;
@@ -293,24 +324,60 @@ setup_cmdwin()
 	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
 
 	display = XmCreateScrolledText(work, "display", args, i);
-
+}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu bar:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-	s1 = XmStringCreateSimple("Tools");
-	s2 = XmStringCreateSimple("Edit");
-	s3 = XmStringCreateSimple("Command");
-	s4 = XmStringCreateSimple("Help");
+	s1 = XmStringCreateSimple("File");
+	s2 = XmStringCreateSimple("Tools");
+	s3 = XmStringCreateSimple("Edit");
+	s4 = XmStringCreateSimple("Command");
+	s5 = XmStringCreateSimple("Help");
 	menubar = XmVaCreateSimpleMenuBar(frame, "menubar",
-		XmVaCASCADEBUTTON, s1, 'T',
-		XmVaCASCADEBUTTON, s2, 'E',
-		XmVaCASCADEBUTTON, s3, 'C',
-		XmVaCASCADEBUTTON, s4, 'H', NULL);
+		XmVaCASCADEBUTTON, s1, 'F',
+		XmVaCASCADEBUTTON, s2, 'T',
+		XmVaCASCADEBUTTON, s3, 'E',
+		XmVaCASCADEBUTTON, s4, 'C',
+		XmVaCASCADEBUTTON, s5, 'H', NULL);
 
 	XmStringFree(s1);
 	XmStringFree(s2);
 	XmStringFree(s3);
 	XmStringFree(s4);
+	XmStringFree(s5);
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Menus: nmenus is used to set the post_from_button argument
+ * for XmVaCreateSimplePulldownMenu
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+	nmenus = 0;
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * File menu:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+	s1 = XmStringCreateSimple("Save");
+	s2 = XmStringCreateSimple("Save as...");
+	s3 = XmStringCreateSimple("Open...");
+	s4 = XmStringCreateSimple("Include...");
+	s5 = XmStringCreateSimple("New");
+	s6 = XmStringCreateSimple("Quit");
+
+	filemenu = XmVaCreateSimplePulldownMenu(
+		menubar, "file_menu", nmenus++, file_menu_cb,
+		XmVaPUSHBUTTON, s1, "S", NULL, NULL,
+		XmVaPUSHBUTTON, s2, "a", NULL, NULL,
+		XmVaPUSHBUTTON, s3, "O", NULL, NULL,
+		XmVaPUSHBUTTON, s4, "I", NULL, NULL,
+		XmVaPUSHBUTTON, s5, "N", NULL, NULL,
+		XmVaPUSHBUTTON, s6, "Q", NULL, NULL,
+		NULL);
+
+	XmStringFree(s1);
+	XmStringFree(s2);
+	XmStringFree(s3);
+	XmStringFree(s4);
+	XmStringFree(s5);
+	XmStringFree(s6);
+
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Tools menu:
@@ -318,12 +385,11 @@ setup_cmdwin()
 	s1 = XmStringCreateSimple("Palette");
 
 	toolsmenu = XmVaCreateSimplePulldownMenu(
-		menubar, "tools_menu", 0, tools_menu_cb,
+		menubar, "tools_menu", nmenus++, tools_menu_cb,
 		XmVaPUSHBUTTON, s1, 'P', NULL, NULL,
 		NULL);
 
-	XmStringFree(s1);
-
+	XmStringFree(s1); 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Edit menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -336,7 +402,7 @@ setup_cmdwin()
 	undoing = FALSE;
 
 	editmenu = XmVaCreateSimplePulldownMenu(
-		menubar, "edit_menu", 1, edit_menu_cb,
+		menubar, "edit_menu", nmenus++, edit_menu_cb,
 		XmVaPUSHBUTTON, s1, 'C', NULL, NULL,
 		XmVaPUSHBUTTON, s2, 'o', NULL, NULL,
 		XmVaPUSHBUTTON, s3, 'P', NULL, NULL,
@@ -355,6 +421,7 @@ setup_cmdwin()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Command menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+if( !edit_only ) {
 	s1 = XmStringCreateSimple("Execute");
 	s2 = XmStringCreateSimple("Ctrl-X");
 	s3 = XmStringCreateSimple("Return");
@@ -365,7 +432,7 @@ setup_cmdwin()
 	s8 = XmStringCreateSimple("Quit");
 
 	cmdmenu = XmVaCreateSimplePulldownMenu(
-		menubar, "command_menu", 2, cmd_menu_cb,
+		menubar, "command_menu", nmenus++, cmd_menu_cb,
 		XmVaPUSHBUTTON, s1, 'x', "Ctrl<Key>x", s2,
 		XmVaPUSHBUTTON, s3, 'x', "Ctrl<Key>m", s4,
 		XmVaSEPARATOR,
@@ -383,7 +450,7 @@ setup_cmdwin()
 	XmStringFree(s6);
 	XmStringFree(s7);
 	XmStringFree(s8);
-
+}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Help menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -391,7 +458,7 @@ setup_cmdwin()
 	s2 = XmStringCreateSimple("Other");
 
 	helpmenu = XmVaCreateSimplePulldownMenu(
-		menubar, "help_menu", 3, help_menu_cb,
+		menubar, "help_menu", nmenus++, help_menu_cb,
 		XmVaPUSHBUTTON, s1, 'G', NULL, NULL,
 		XmVaPUSHBUTTON, s2, 'O', NULL, NULL,
 		NULL);
@@ -412,9 +479,12 @@ setup_cmdwin()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Management and Realisation:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+	XtManageChild(filename);
 	XtManageChild(menubar);
 	XtManageChild(command);
+if( !edit_only ) {
 	XtManageChild(display);
+}
 	XtManageChild(work);
 	XtManageChild(frame);
 
@@ -427,6 +497,37 @@ setup_cmdwin()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * MENU PROCESSING
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+void file_menu_cb(w, i, cbs)
+Widget w;
+NAT i;
+XmAnyCallbackStruct *cbs;
+{
+	char *fname = NULL;
+
+	TRACE("file_menu_cb");
+
+	switch(i) {
+	case 1:
+		fname = file_dialog(frame, "Save");
+		break;
+	case 2:
+		fname = file_dialog(frame, "Open");
+		load_file(command, fname);
+		break;
+	default:
+		break;
+	};
+
+	if(fname != NULL) {
+		XmTextFieldSetString(namestring, fname);
+		XtFree(fname);
+	};
+
+	LEAVE("file_menu_cb");
+
+}
+
 static void tools_menu_cb(w, i, cbs)
 Widget w;
 NAT i;
@@ -1140,12 +1241,14 @@ Bool execute_command()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * main entry point:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void cmdwin()
+void cmdwin(Bool edit_only)
 {
 	TRACE("cmdwin");
-	setup_cmdwin();
+	setup_cmdwin(edit_only);
+if( !edit_only ) {
 	get_pty();
 	handle_sigs();
+}
 	XtRealizeWidget(root);
 	XtAppMainLoop(app);
 	LEAVE("cmdwin");

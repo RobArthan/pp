@@ -27,6 +27,8 @@ char *cmd_buf;
 
 char *arglist[MAX_ARGS + 1];
 
+Bool edit_only = False;
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Following option table reserves single lower-case letter
  * options for the command-line. The resource name is irrelevant.
@@ -71,10 +73,12 @@ void usage ()
 };
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Check whether the -command command-line option is there
+ * Check whether the -command or -edit command-line option is there
  * Returns number of argv items to skip ((1 or 2)
  * Error message and exit if no command line at all.
- * Note can omit -command if there are no X options.
+ * Note can omit -command if there are no X options 
+ * and pro-tem this gives a stand-alone editor
+ * (In real life, need a way of specifying a file for the S.A.E)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 int check_sep(argc, argv)
 int argc;
@@ -89,6 +93,7 @@ char **argv;
 	&&	!strncmp(argv[1], "-command", l) ) {
 		return(2);
 	} else {
+		edit_only = True;
 		return(1);
 	}
 }
@@ -165,6 +170,6 @@ char **argv;
 		}
 	}
 
-	cmdwin();
+	cmdwin(edit_only);
 	exit(0);
 }
