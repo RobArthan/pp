@@ -122,6 +122,7 @@ typedef struct menu_item {
 	extern XtAppContext app;
 	extern Widget root;
 	extern Widget script;
+	extern Widget journal;
 	extern void check_quit_cb (
 		Widget w,
 		XtPointer cd,
