@@ -83,6 +83,8 @@ Changes in reaction to ID0021.
 Corrected message 6061.
 \item [Issue 1.14]
 Minor changes, in preparation for inspection.
+\item [Issue 1.15]
+Changes in response to deskcheck ID0042.
 \end{description}
 % \subsection{Changes Forecast}
 \pagebreak
@@ -115,7 +117,8 @@ None known.
 The following supplements the terminology used in those documents
 upon which this one depends.
 \begin{tabular}{p{1.3in} p{4.9in}}
-sealed theory & ICL and system extenders may seal a theory, ensuring that all opened theories must either be it, or have it as a parent. Only one theory may be sealed at any time, and this is the ``sealed theory''. \\
+sealed theory & ICL and system extenders may seal a theory, ensuring that to be opened a theory must either be the sealed theory, or have it as a parent. Only one theory may be sealed at any time, and this is the ``sealed theory''. 
+This is done to prevent access to what is considered somehow an incomplete theory structure. \\
 \end{tabular}
 
 \section{DISCUSSION}
@@ -149,8 +152,8 @@ data type $THM$.
 6015	?0 is ill-formed in current theory: constant name ?1 not declared
 6038	?0 is ill-formed in current theory: constant name ?1 cannot have type used
 =FAILUREC
-The above are various kinds of well-formedness check failures.
-A well-formedness check occurs on any types, terms and theorems saved in a theory, and thus for various functions in this signature.
+The above are error messages various kinds of well-formedness check failures.
+A well-formedness check occurs on any types, terms and theorems saved in a theory, and thus these errors may occur for any function which saves types, terms or theorems in a theory.
 =ENDDOC
 There are errors common to many kernel (i.e. from the abstract data type) functions, that
 are raised by $error$.
@@ -178,12 +181,14 @@ val âopen_theoryá : string -> unit;
 =DESCRIBE
 All specification and proof work is carried out in the context
 of some theory, referred to as the current theory.
-$open\_theory\,thy$ makes the theory $thy$ the current theory.
-One theory in the theory database is ``sealed'', and a theory may not be opened if it is neither that theory nor does not have that theory as a parent..
-Theories are only sealed by ICL or system extenders.
+$open\_theory\,thy$ makes an existing theory $thy$ the current theory.
 =FAILURE
 6017	Theory ?0 is neither the sealed theory ?1, nor has it as a parent
 6035	Theory ?0 is not present in the current hierarchy
+=FAILUREC
+One theory in the theory database is ``sealed'', and a theory may not be opened if it is neither that theory nor does not have that theory as a parent.
+If this is attempted then error 6017 is raised.
+Theories are only sealed by ICL or system extenders.
 =ENDDOC
 
 =DOC
@@ -217,8 +222,9 @@ val ânew_parentá : string -> unit;
 Adds the given parent theory to the list of parents of the current
 theory, considered as a set.
 It will fail if the parent theory does not exist, is already a parent of the current theory,
-or if making it a parent causes clashes in the current theory
-or its children.
+or if making it a parent would bring a new theory into scope (perhaps the new parent itself)
+that declares a new type or constant that is already in scope,
+or is declared in the children of the current theory.
 =FAILURE
 6035	Theory ?0 is not present in the current hierarchy
 6037	Theory ?0 is locked
@@ -258,7 +264,6 @@ called $newthy$
 with the same contents and parents as $oldthy$,
 but without any children.
 The current theory remains unchanged.
-To ensure that the duplicate theory can be opened by $open\_theory$ (q.v.) the system will prevent the duplication of the sealed theory or its ancestors.
 =USES
 To allow the user to modify and experiment with a theory that
 has child theories that are not involved in the experiment,
@@ -268,9 +273,11 @@ and would perhaps clash with the experiment.
 6042	Cannot duplicate ?0 as it is an ancestor of the sealed theory ?1
 6035	Theory ?0 is not present in the current hierarchy
 6040	Theory ?0 is already present in current theory hierarchy
+=FAILUREC
+To ensure that the duplicate theory can be opened by $open\_theory$ (q.v.) the system will prevent the duplication of the sealed theory or its ancestors, giving rise to errors 6026 and 6042.
 =ENDDOC
 
-\subsection{Operations on Theory Contents}
+\subsection{Operations on Theorem Contents}
 =DOC
 val âdest_thmá : THM -> SEQ;
 =DESCRIBE
@@ -279,13 +286,12 @@ This returns the representation of a theorem as a sequent, i.e. as a list of ass
 =DOC
 val âvalid_thmá : THM -> bool;
 =DESCRIBE
-This function uses the check for the validity of theorems
-that can give rise to errors 6036, 6065, 6066 and 6072,
-returning false if such errors would be caused by processing
-the theorem, and true otherwise : it cannot raise exceptions.
+This function uses the check for the validity of theorems:
+returning true if valid and false otherwise: it cannot raise exceptions.
 =USES
-To preempt errors caused by the primitive inference rules, et al,
-and return more helpful error messages.
+To preempt errors caused by the primitive inference rules,
+which raise uncatchable errors when given invalid theorems,
+and so return more helpful error messages.
 =ENDDOC
 =DOC
 val âthm_failá : string -> int -> THM list -> 'a;
@@ -323,6 +329,7 @@ but not if the theory has been deleted.
 12007	?0 proven in theory with internal name ?1, 
 	which is not present in current hierarchy
 =ENDDOC
+\subsection{Operations on Theory Contents}
 =DOC
 val âsave_thmá : (string * THM) -> THM
 =DESCRIBE
@@ -349,7 +356,8 @@ theory.
 =DOC
 val âdelete_constá : TERM -> unit
 =DESCRIBE
-$delete\_const\,c$ deletes the constant $c$ and any other object which
+$delete\_const\,c$ deletes the constant $c$
+(or the constant with the same type, up to renaming of type variables) and any other object which
 depends on $c$ from the current theory. If any saved objects other than $c$ and
 its defining theorem do depend on $c$, the interactive user will be notified
 and asked whether to proceed with the deletion.
@@ -362,7 +370,9 @@ Note that the deletion will attempt to delete all necessary
 theorems before deleting constants, types, and axioms in single steps,
 and thus may fail with a partially modified theory.
 This is because checks in the interface may not be as definitive as those of the kernel.
-The kernel state change functions will be notified as if
+The ``before kernel state change'' functions will be notified only
+ about the deleted constant itself.
+The ``on kernel state change'' functions will be notified as if
 a sequence of $delete\_thm$'s had been done, and then
 the necessary ``single step'' deletions of constants, types and axioms to achieve the goal.
 =FAILURE
@@ -390,7 +400,9 @@ Note that the deletion will attempt to delete all necessary
 theorems before deleting constants, types, and axioms in single steps,
 and thus may fail with a partially modified theory.
 This is because checks in the interface may not be as definitive as those of the kernel.
-The kernel state change functions will be notified as if
+The ``before kernel state change'' functions will be notified only
+ about the deleted type itself.
+The ``on kernel state change'' functions will be notified as if
 a sequence of $delete\_thm$'s had been done, and then
 the necessary ``single step'' deletions of constants, types and axioms to achieve the goal.
 =FAILURE
@@ -417,7 +429,9 @@ Note that the deletion will attempt to delete all necessary
 theorems before deleting constants, types, and axioms in single steps,
 and thus may fail with a partially modified theory.
 This is because checks in the interface may not be as definitive as those of the kernel.
-The kernel state change functions will be notified as if
+The ``before kernel state change'' functions will be notified only
+ about the deleted axiom itself.
+The ``on kernel state change'' functions will be notified as if
 a sequence of $delete\_thm$'s had been done, and then
 the necessary ``single step'' deletions of constants, types and axioms to achieve the goal.
 =FAILURE
@@ -515,8 +529,7 @@ val âsimple_new_defná : (string * string * TERM) -> THM;
 $simple\_new\_defn$ $(key, name, value)$ declares a new
 constant with name $name$, and with most general type being
 the type of $value$ in the current theory.
-It creates an equational theorem (i.e. of the form `$… name = value$',
-or `$… name ‚ value$' if $value$ is boolean), and saves it as a definition
+It creates an equational theorem (i.e. of the form `$… name = value$'), and saves it as a definition
 under key $key$ in the current theory,
 provided the theorem is well-formed.
 If either the constant or theorem introduction fails then
@@ -643,6 +656,8 @@ val âget_const_typeá : string -> TYPE OPT;
 If a constant with the given name is in scope, then its type is returned, otherwise $Nil$.
 =USES
 This is likely to be often used just as a rapid test for a constant being in scope.
+=SEEALSO
+$get\_const\_info$
 =ENDDOC
 =DOC
 val âget_type_arityá : string -> int OPT;
@@ -650,6 +665,8 @@ val âget_type_arityá : string -> int OPT;
 If a type with the given name is in scope, then its arity is returned, otherwise $Nil$.
 =USES
 This is likely to be often used just as a rapid test for a type being in scope.
+=SEEALSO
+$get\_type\_info$
 =ENDDOC
 \subsubsection{Theory Names and Ancestry}
 =DOC
@@ -802,7 +819,7 @@ the functions which change the state of the theory database in the lowest
 level of interface.
 When used to notify the system of a change that has been made
 certain additional information is also included. 
-If used to notify the system before a change is made the slots will be given ``null'' default values ($``''$, $[]$, $asm\_rule$ $mk\_t$).
+If used to notify the system before a change is made the slots will be given ``null'' default values (``'', $[]$, $asm\_rule$ $mk\_t$).
 
 {\hfuzz 3pt
 \begin{tabular}{|l|l|p{2.73in}|}\hline
