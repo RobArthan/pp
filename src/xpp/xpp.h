@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$ 
+ * xpp.h 1.32 94/08/10 
  *
  * xpp.h - main include file for the X/Motif ProofPower Interface
  *
@@ -12,10 +12,6 @@
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #define NAT Cardinal
 #define INT long int
-
-#define STDIN 0
-#define STDOUT 1
-#define STDERR 2
 
 #include <X11/Intrinsic.h>
 #include <Xm/XmAll.h>
