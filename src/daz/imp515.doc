@@ -1,0 +1,242 @@
+% imp515.doc   %Z% $Date$ $Revision$ $RCSfile$
+=TEX
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{DAZ PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation: Test Utilities}  %% Mandatory field
+\TPPref{ISS/HAT/DAZ/IMP515}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{D.J.~King & DAZ Team Leader}
+\TPPabstract{}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	Library}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+
+\item[Issue \SCCSversion, \FormatDate{$Date$%
+} ] Initial Draft.
+
+\end{description}
+\subsection{Changes Forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD515}.
+\subsection{Introduction}
+\subsection{Purpose and Background}
+\subsection{Algorithms}
+\subsection{Dependencies}
+\subsection{Known Deficencies}
+\subsection{Possible Enhancements}
+=TEX
+
+\section{TEST UTILITIES}
+=SML
+structure ÛCNTestUtilitiesÝ = struct
+local
+	open CaseIndependence CNBasicDeclsAndExprs CNTypes;
+	open CNVolumeIITypes ZProofMode ;
+in
+=TEX
+=SML
+local
+fun classify_label (itemlist : CN_LEX_ITEM list) : CN_LEX_ITEM list =
+  (case itemlist
+    of (LCOrd, _)::(LCNumericLiteral, CNText ntxt)::(LCCrd, _)::rest =>
+      (
+        (
+          (case nat_of_string ntxt
+            of 1 => LCCompLabel
+             | 2 => LCPPartLabel
+             | 3 => LCVPartLabel
+             | 4 => LCDecLabel
+             | 5 => LCStmtLabel
+             | 6 => LCSpecLabel
+             | _ => LCCompLabel
+          ),
+          CNText ("("^ntxt^")")
+        )::rest
+      )
+     |_ => itemlist
+  );
+in
+fun Ûcn_of_stringÝ (s : string) : CNTypes.WEB_CLAUSE = (
+  let
+    val inp = [Lex.Text s];
+  in
+    (CNParser.cn_parser o (CNLex.cn_lex classify_label)) inp
+  end)
+end;
+=TEX
+=SML
+fun Ûcn_basic_decl_of_stringÝ (s : string) : BASIC_DECL = (
+let	val prefix = "(4) é ";
+	val result = cn_of_string (prefix^s);
+in
+	case result of
+	WCReplacedByDecl{decls=[DBasicDecl d],...} => d
+	|_ => fail "cn_decl_of_string" 508001 []
+end);
+=TEX
+=SML
+fun Ûcn_exp_of_stringÝ (s : string) : EXP = (
+let	val prefix = "Ã a:= ";
+	val epilogue = ";";
+	val result = cn_of_string (prefix^s^epilogue);
+in
+	case result of
+	WCRefinedBy{statement=SStmt(STAssign{e,...}),...} => e
+	|_ => fail "cn_exp_of_string" 508001 []
+end);
+=TEX
+=SML
+fun Ûcn_statement_of_stringÝ (s : string) : STATEMENT = (
+let	val prefix = "Ã";
+	val result = cn_of_string (prefix^s);
+in
+	case result of
+	WCRefinedBy{statement=st,...} => st
+	|_ => fail "cn_statement_of_string" 508001 []
+end);
+=TEX
+=SML
+fun Ûcn_prepost_of_stringÝ (s : string) : (Z_EXP * Z_EXP) = (
+let	val prefix = "Ã";
+	val result = cn_of_string (prefix^s);
+in
+	case result of
+	WCRefinedBy{statement=SStmt(STSpecNoIvars{pre, post, ...}), ...} =>
+		(pre, post)
+	|_ => fail "cn_prepost_of_string" 508001 []
+end);
+=TEX
+=SML
+val var_info : (ID * (TYPE * ENV_INFO)) list ref = ref [];
+
+val ÛenvÝ = (fn id =>
+	case get_const_info ("z'"^id) of
+	Value (ty,_) => (
+		Value (ty, EIEnvOther)
+	)|Nil => lassoc5 (!var_info) id
+);
+
+fun Ûextend_envÝ (id : ID) (ty : TYPE) (envty : ENV_INFO) = (
+	(var_info := (id,(ty, envty))::(!var_info))
+);
+
+fun Ûchange_envÝ (id : ID) (envty : ENV_INFO) = (
+	case lassoc3(!var_info) id of
+	(ty, _) => (var_info := (id, (ty, envty))::(!var_info))
+);
+=TEX
+
+=SML
+fun Ûupdate_db_with_parainfoÝ (p : PARAINFO) : unit = (
+let	val iw = get_flag"ignore_warnings";
+	val side = set_flag("ignore_warnings", true);
+	fun do_const(s, tm) =
+	let	val side = delete_const(mk_const ("z'"^s, type_of tm))
+			handle _ => (set_flag("ignore_warnings", iw);());
+		val side = extend_env s (type_of tm) EIEnvOther;
+		val side = new_const("z'"^s, type_of tm);
+		val side = set_flag("ignore_warnings", iw);
+	in () end;
+	fun do_ty (tc, i) =
+	let	val side = delete_type tc handle _ => ();
+		val side = (new_type (tc, i);()) handle _ => ();
+	in () end;
+in
+	case p of
+	AbbDefInfo (s, _, tm) => (map do_ty (type_tycons (type_of tm));
+					do_const (s, tm))
+	|_ => ()
+end
+);
+=TEX
+=SML
+fun Ûupdate_env_with_varsÝ ({vars, tmark} : VAR_DECL) : unit = (
+let	val vars' = map to_upper vars;
+	val tmark' = to_upper tmark;
+	val ty = case env tmark' of
+				Value (ty, _) => dest_z_power_type ty
+				|_ => fail "" 505001 [fn()=>tmark^" not declared"];
+in
+	((map (fn s => extend_env s ty (EIEnvVar tmark')) vars');())
+end
+);
+=TEX
+
+=SML
+fun Ûcn_declareÝ (s : string) : unit = (
+	case cn_basic_decl_of_string s of
+	BDVarDecl vd => (
+		update_env_with_vars vd
+	)| bd => (
+		let	val paras = trans_basic_decl env bd;
+			val side = map update_db_with_parainfo paras;
+		in
+			()
+		end
+	)
+);
+=TEX
+
+=SML
+end (* local ... in *);
+end (* of structure CNTestUtilities *);
+open CNTestUtilities;
+=TEX
+
+=TEX
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+\end{document}
+
