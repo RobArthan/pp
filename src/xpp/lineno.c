@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: lineno.c,v 1.2 2004/07/08 16:56:21 rda Exp rda $ 
+ * $Id: lineno.c,v 1.3 2004/08/08 10:42:37 rda Exp rda $ 
  *
  * lineno.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -43,8 +43,7 @@ typedef struct {
 	Widget	text_w,
 		shell_w,
 		manager_w,
-		line_no_w,
-		default_focus_w;
+		line_no_w;
 } LineNoData;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -137,6 +136,9 @@ Boolean add_line_no_tool(Widget text_w)
 	if((line_no_data.shell_w) != NULL) {
 		XtManageChild(line_no_data.manager_w);
 		XtPopup(line_no_data.shell_w, XtGrabNone);
+		XmProcessTraversal(line_no_data.line_no_w, XmTRAVERSE_CURRENT);
+		XmTextSetInsertionPosition(line_no_data.line_no_w,
+				XmTextGetLastPosition(line_no_data.line_no_w));
 		return True;
 	}
 
@@ -232,7 +234,6 @@ Boolean add_line_no_tool(Widget text_w)
 	line_no_data.shell_w = shell;
 	line_no_data.manager_w = paned;
 	line_no_data.line_no_w = line_no_text;
-	line_no_data.default_focus_w = goto_line_no_btn;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set up the text windows in the search dialog as selection sources
@@ -322,7 +323,7 @@ Boolean add_line_no_tool(Widget text_w)
 		}
 	}
 
-	XmProcessTraversal(goto_line_no_btn, XmTRAVERSE_CURRENT);
+	XmProcessTraversal(line_no_text, XmTRAVERSE_CURRENT);
 
 	return True;
 }
@@ -336,7 +337,6 @@ static void dismiss_cb(
 	XtPointer	cbs)
 {
 	LineNoData *cbdata = cbd;
-	XmProcessTraversal(cbdata->default_focus_w, XmTRAVERSE_CURRENT);
 	XtPopdown(cbdata->shell_w);
 }
 
@@ -361,7 +361,6 @@ static void line_no_set_cb(
 	XtPointer	cbs)
 {
 	LineNoData *cbdata = cbd;
-	cbdata->default_focus_w = w;
 	line_no_set(cbdata);
 }
 
@@ -380,7 +379,6 @@ static void goto_line_no_cb(
 	short nrows;
 	int scroll;
 	char *line_no_string;
-	cbdata->default_focus_w = w;
 	CHECK_MAP_STATE(cbdata)
 
 	line_no_string = XmTextGetString(cbdata->line_no_w);
