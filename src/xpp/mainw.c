@@ -220,9 +220,12 @@ static MenuItem file_menu_items[] = {
     NULL,
 };
 
-#define TOOLS_MENU_PALETTE	0
+#define TOOLS_MENU_FIND_REPLACE	0
+#define TOOLS_MENU_PALETTE	1
 
 static MenuItem tools_menu_items[] = {
+    { "Find & Replace", &xmPushButtonGadgetClass, 'F', NULL, NULL,
+        tools_menu_cb, (XtPointer)TOOLS_MENU_FIND_REPLACE, (MenuItem *)NULL, False },
     { "Palette", &xmPushButtonGadgetClass, 'P', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_PALETTE, (MenuItem *)NULL, False },
     NULL,
@@ -675,11 +678,14 @@ XmAnyCallbackStruct *cbs;
 	switch(i) {
 	case TOOLS_MENU_PALETTE:
 		add_palette(script);
-/* Perhaps should test for success and make this menu item insensitive */
+		break;
+	case TOOLS_MENU_FIND_REPLACE:
+		add_find_tool(script);
 		break;
 	default:
 		break;
 	}
+/* Perhaps should test for success and make menu items insensitive */
 }
 
 static void edit_menu_cb(w, i, cbs)
