@@ -22,7 +22,7 @@ Don't worry about this!
 %\TPPpart{}
 \TPPtitle{SLR Parser Generator}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP017}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.49 $%
+\def\SCCSversion{$Revision: 1.50 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 %\TPPdate{}  %% Mandatory field (with sensible default)
@@ -137,6 +137,9 @@ of the printing code.
 \item[Issues 1.46--1.48] Added generic parser output facility --- it can now write the reduction functions for you!
 \item[Issue 1.49] Fixed bug in FOLLOW.
 \item[Issue 1.50] Fixed obscure problem with accept/reduce conflicts.
+\item[Issue 1.51] Stopped {\it make\_grammar\_and\_reduction\_table} deleting duplicated alternatives
+(which prevents detection of a quite likely error); added check for non-terminals that generate
+an empty language.
 \end{description}
 
 See also HISTORICAL NOTES below.
@@ -1059,9 +1062,6 @@ fun ÛfollowÝ (g : ''lc FGRAMMAR) (sen : FNONTERM) (eos : ''lc)
 				end
 		);
 		val num_nts = PPArray.length g;
-(*
-		val result = PPArray.array(num_nts, [] : BNF_lex_class list);
-*)
 		val result = PPArray.array(num_nts, [] : ''lc list);
 		fun doalt changed a alt k = (
 			if	k = PPArray.length alt
@@ -1751,7 +1751,7 @@ fun Ûmake_grammar_and_reduction_tableÝ
 			else Terminal(VarClass s)
 		| make_sym (EosClass s) = Terminal (EosClass s);
 		val Y = map (fn(x, y) => (x, map (fn (a,b) =>(map make_sym a, b)) y)) G';
-		fun folder((def, alts), g) = g overwrite (def, lassoc4 g nil def rcup alts);
+		fun folder((def, alts), g) = g overwrite (def, lassoc4 g nil def @ alts);
 		val AG = revfold folder Y nil;
 	in	(strip_action AG, make_reduction_table AG)
 	end
@@ -2292,7 +2292,9 @@ fun Ûresolve_conflictsÝ (g : (''lc)GRAMMAR) (actions : (''lc)ACTION_TABLE) : uni
 =TEX
 \section{OTHER CHECKS}\label{OTHER CHECKS}
 In addition to the other checks carried out as part of the parser
-generation, we also have a check for non-terminals that aren't
+generation, we also have some other checks.
+
+The following function checks for non-terminals that aren't
 linked into the grammar. These are ones other than the sentence symbol of
 the augmented grammar that don't appear in the goto table.
 =SML
@@ -2309,6 +2311,52 @@ fun ÛorphansÝ (g : ''lc GRAMMAR) (gotos : GOTO_TABLE) : NONTERMINAL list = (
 		val orphan_nts = map fst g drop (fn a => not(is_Nil(e_lookup a dict)));
 	in	Sort.sort Sort.string_order orphan_nts
 	end
+);
+=TEX
+The following computes the set of non-terminals which generate an empty language.
+=SML
+fun Ûempty_non_terminalsÝ (g : ''lc FGRAMMAR) 
+	: NONTERMINAL list = (
+	let	val num_nts = PPArray.length g;
+		val non_empty = PPArray.array(num_nts, false);
+		fun doalt changed a alt k = (
+			if	k = PPArray.length alt
+			then	(PPArray.update(non_empty, a, true); true)
+			else case PPArray.sub(alt, k) of 
+				FNonTerm b => (
+					if	PPArray.sub(non_empty, b)
+					then	doalt changed a alt (k+1)
+					else	changed
+			) |	FTerm _ => (
+					 doalt changed a alt (k+1)
+			)
+		);
+		fun doprod changed a alts j = (
+			if	j = PPArray.length alts
+			then	changed
+			else if	PPArray.sub(non_empty, a)
+			then	changed
+			else	doprod(doalt changed a (PPArray.sub(alts, j)) 0) a alts (j+1)
+		);
+		fun again changed i = (
+			if	i = num_nts
+			then	changed
+			else	again (doprod changed i (snd(PPArray.sub(g, i))) 0) (i+1)
+		);
+		fun go () = (
+			if	again false 0
+			then	go()
+			else	()
+		);
+		val _ = go();
+		fun extract_result acc 0 = acc
+		|   extract_result acc i = (
+			if	PPArray.sub(non_empty, i)
+			then	extract_result acc (i-1)
+			else	extract_result (fst(PPArray.sub(g, i))::acc) (i-1)
+		);
+	in	extract_result [] (num_nts - 1)
+	end 
 );
 =TEX
 \section{OUTPUT ROUTINES}\label{OUTPUTROUTINES}
@@ -2744,7 +2792,7 @@ fun ÛslrpÝ {
 			then (resolve_conflicts grm actions;
 				store_exec_time timings "Resolving reduce/reduce conflicts")
 			else ());
-		val se10 = (if not(is_nil confs2)
+		val se10 = (if any confs2 (fn (_, _, acts) => has_sr acts)
 			then (	my_log "\n"; my_log(burst "Dynamic Actions"); my_log"\n";
 				print_dynamic_actions my_log (grm, format_sym_class) actions;
 				chat(burst "Dynamic Actions");
@@ -2769,8 +2817,19 @@ fun ÛslrpÝ {
 				my_log msg2; my_log "\n"
 			end
 		));
+		val se14 = (case empty_non_terminals eff_grammar of
+			[] => ()
+		|	nts => (
+			let	val msg1 = "Detected " ^ so_many false (length nts)
+					"non-terminal" ^ " generating an empty language";
+				val msg2 = format_list Combinators.I nts "\n\t";
+			in	chat "\n"; chat msg1; chat "\n\n";
+				my_log "\n"; my_log msg1; my_log ":\n\n\t";
+				my_log msg2; my_log "\n"
+			end
+		));
 		val _ = report_exec_times timings;
-		val se14 = (chat (burst "End of Run");
+		val se15 = (chat (burst "End of Run");
 				my_log "\n"; my_log (burst "End of Run"));
 	in	(close_out_file(); close_log_file())
 	end	handle ex as SlrpError msg =>
@@ -2789,7 +2848,7 @@ end; (* of structure Slrp *)
 \subsection{Shell Interface}
 =DUMP slrp
 #!/bin/sh
-# slrp From: $Id: imp017.doc,v 1.49 2003/02/28 10:52:59 rda Exp $
+# slrp From: $Id: imp017.doc,v 1.50 2003/03/03 17:52:17 rda Exp rda $
 # Shell script to run the SLRP Parser Generator
 if test -z "$PROGNAME"
 then
