@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.27 2002/08/14 13:28:29 rda Exp rda $
+ * $Id: mainw.c,v 2.28 2002/08/14 14:41:12 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -11,7 +11,7 @@
  * the user interface for interacting with the interactive program.
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char rcsid[] = "$Id: mainw.c,v 2.27 2002/08/14 13:28:29 rda Exp rda $";
+static char rcsid[] = "$Id: mainw.c,v 2.28 2002/08/14 14:41:12 rda Exp rda $";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:
@@ -1269,6 +1269,9 @@ static void ln_popup_cb (
 	line_number_stopped = !line_number_stopped;
 	set_menu_item_label(lnpopup, 0,
 		line_number_stopped ? "Start" : "Stop");
+	if(!line_number_stopped) {
+		line_number_cb(script, NULL, NULL);
+	}
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
