@@ -106,6 +106,10 @@ $save\_and\_quit$ now checks for state being inconsistent.
 Bug 126 fixed.
 \item [Issue 1.27 (17th August 1993)]
 Added clearing the type compactification cache into $save\_and\_quit$.
+\item [Issue 1.28 (1st February 1994)]
+Changed $exit$ and $save\_and\_exit$ to return the exit status, provided
+as an argument, to the calling process. Both functions now have type $int -> unit$.
+Added $use\_files\_save\_and\_exit$ to support batch processing of files. 
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -296,25 +300,26 @@ let	val resp = ask_at_terminal (get_error_message 36001 ["quit"]);
 in
 	if resp = "y\n"
 	then PolyML.quit()
-	else diag_line (get_error_message 36011 ["quit"])
+	else diag_line (get_error_message 36011 [])
 end)
 handle complaint =>
 if area_of complaint = "ask_at_terminal"
 then PolyML.quit()
 else raise complaint);
 
-fun ÛexitÝ (():unit) : unit = ((
+fun ÛexitÝ (ret : int) : unit = ((
 let	val resp = ask_at_terminal (get_error_message 36001 ["exit"]);
 in
 	if resp = "y\n"
-	then PolyML.quit()
-	else diag_line (get_error_message 36011 ["exit"])
+	then PolyML.exit ret
+	else diag_line (get_error_message 36018 [])
 end)
 handle complaint =>
 if area_of complaint = "ask_at_terminal"
 then PolyML.quit()
 else raise complaint);
-
+=TEX
+=SML
 fun Ûsave_and_quitÝ () : unit = (
 let	val dummy = if valid_thm bool_cases_axiom
 		then ()
@@ -329,7 +334,70 @@ in	PolyML.commit();
 	else	Initialisation.init()	(* new session *)
 end);
 
-val Ûsave_and_exitÝ : unit -> unit = save_and_quit;
+fun Ûsave_and_exitÝ (ret : int) : unit = (
+let	val dummy = if valid_thm bool_cases_axiom
+		then ()
+		else error "save_and_exit" 36017 [];
+	val strm = open_in "/";
+	val side_effect = clear_compactification_cache();
+	val reset = Initialisation.icl'set_database_info();
+in	PolyML.commit();
+	if	ExtendedIO.can_input(strm, 1)
+	then	(close_in strm;
+		PolyML.exit ret)	(* same session *)
+	else	Initialisation.init()	(* new session *)
+end);
+
+=TEX
+=SML
+fun Ûuse_files_save_and_exitÝ {filelist : string list, save_on_fail : bool}
+				: unit = (
+let	val is_batch = (not o ExtendedIO.is_term_in) std_in;
+	fun do_file (file : string) (last_one : bool) : bool = (
+	let	val last_one_msg = if last_one then
+				get_error_message 36024 []
+				else "";
+	in
+		(
+			use_file file;
+			diag_line(get_error_message 36021 [
+				file,
+				get_error_message 36022 [],
+				last_one_msg
+				]);
+			true
+		)
+		handle _ => (
+			diag_line(get_error_message 36021 [
+				file,
+				get_error_message 99003 [],
+				last_one_msg
+				]);
+			false
+		)
+	end);
+	fun do_file_list (f1::f2::rest) : bool = (
+		do_file f1 false andalso do_file_list (f2::rest)
+	) | do_file_list (f1::rest) = (
+		do_file f1 true
+	) | do_file_list [] = true;
+	val all_ok = do_file_list filelist;
+in
+	if not all_ok
+	then
+		if is_batch
+		then
+			if save_on_fail
+			then
+				save_and_exit 1
+			else
+				PolyML.exit 1
+		else
+			()
+	else
+		save_and_exit 0
+end);
+
 =TEX
 =SML
 
