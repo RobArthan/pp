@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.24 2003/08/01 16:24:24 rda Exp rda $
+# $Id: configure.sh,v 1.25 2003/08/01 16:25:46 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -21,7 +21,7 @@
 #                    versions of the DVI files in the doc directory
 #                    (default: you just get the DVI files).
 #
-# PPINSTALLDIR     - if set must give the absolute path name of
+# PPHOME     - if set must give the absolute path name of
 #                    a directory the user can create or write to
 #                    (default: first of /usr/share/pp, /usr/local/pp,
 #                    /opt/pp, $HOME/pp that looks like it will work).
@@ -29,7 +29,7 @@
 # PPMOTIFLINKING   - if set must be one of static or dynamic
 #                    (default: dynamic).
 #
-# PPTARGETDIR      - as PPINSTALLDIR, overrides PPINSTALLDIR if set and non-empty.
+# PPTARGETDIR      - as PPHOME, overrides PPHOME if set and non-empty.
 #
 # PPTARGETS        - a space separated list of packages to include or "all" for
 #                  everything in the src directory.
@@ -41,7 +41,7 @@
 # If any of these is an empty string, it is treated as if it were unset.
 #
 # PPTARGETDIR is for developers who may want to test this script while
-# retaining an existing setting for PPINSTALLDIR.
+# retaining an existing setting for PPHOME.
 #
 # The package names in PPTARGETS if used must be taken from the list:
 # pptex dev hol zed daz xpp. This is mostly useful if you want to
@@ -115,7 +115,7 @@ fi
 # Find a target directory
 #
 if	[ "${PPTARGETDIR:-}" = "" ]
-then	PPTARGETDIR=$PPINSTALLDIR
+then	PPTARGETDIR=$PPHOME
 fi
 if	[ "${PPTARGETDIR:-}" = "" ]
 then	for parent in /usr/share /usr/local /opt $HOME
@@ -239,6 +239,8 @@ out "# Edit it at your own risk!"
 export_it PPCOMPILER
 export_it PPMOTIFLINKING
 export_it PPTARGETDIR
+out 'PPHOME=$PPTARGETDIR'
+out "export PPHOME"
 if	[ "$PPCOMPILER" = POLYML ]
 then	export_it PPPOLYDBASE
 fi
