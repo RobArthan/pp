@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.28 2003/05/08 12:10:05 rda Exp rda $ 
+ * $Id: search.c,v 2.29 2003/05/08 13:39:18 rda Exp $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -194,7 +194,13 @@ Boolean add_search_tool(Widget text_w)
 		help_btn;
 
 	char	*pattern;
-
+/*
+ * The following are used to record what sashes in paned before the
+ * replacement text pane is added. This then allows us to remove the unwanted
+ * sash underneath the replacement text.
+ */
+	Widget	*children_before, *children;
+	int	num_children_before, num_children, i, j;
 
 	if((search_data.shell_w) != NULL) {
 		XtManageChild(search_data.manager_w);
@@ -372,6 +378,17 @@ Boolean add_search_tool(Widget text_w)
 		XmNtopPosition,			12,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		NULL);
+/*
+ * Now take a snapshot of the children before creating the replacement text widget.
+ */
+	XtVaGetValues(paned,
+		XmNchildren,		&children,
+		XmNnumChildren,		&num_children_before,
+		NULL);
+	children_before = (Widget*) XtMalloc(num_children_before * sizeof(Widget));
+	for(i = 0; i < num_children_before; ++i) {
+		children_before[i] = children[i];
+	}
 
 	replace_text = XtVaCreateManagedWidget("replace",
 		xmTextWidgetClass,		paned,
@@ -612,6 +629,33 @@ Boolean add_search_tool(Widget text_w)
 	fix_pane_height(replace_form, replace_form);
 	fix_pane_height(line_no_form, line_no_form);
 	fix_pane_height(action_form, action_form);
+/*
+ * Now remove any sashes introduced while or since the replacement text pane
+ * was added.
+ */	XtVaGetValues(paned,
+		XmNchildren,		&children,
+		XmNnumChildren,		&num_children,
+		NULL);
+
+	for(i = 0; i < num_children; ++i) {
+		if(!strcmp(XtName(children[i]), "Sash")) {
+			Boolean unwanted = True;
+			for(j = 0; j < num_children_before; ++j) {
+				if(children[i] == children_before[j]) {
+					unwanted = False;
+					break;
+				}
+			}
+			if(unwanted) {
+				XtVaSetValues(children[i],
+					XmNheight,	1,
+					XmNwidth,	1,
+					XmNsensitive,	False,
+					NULL);
+			}
+		}
+	}
+	XtFree((char*)children_before);
 
 	XmProcessTraversal(search_forwards_btn, XmTRAVERSE_CURRENT);
 
