@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.9 2002/03/26 16:26:30 phil Exp phil $
+ * $Id: undo.c,v 2.10 2002/05/15 11:02:48 phil Exp phil $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -8,7 +8,7 @@
  *
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char rcsid[] = "$Id: undo.c,v 2.9 2002/03/26 16:26:30 phil Exp phil $";
+static char rcsid[] = "$Id: undo.c,v 2.10 2002/05/15 11:02:48 phil Exp phil $";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:
@@ -263,16 +263,17 @@ static void dumpUndoStack(UndoBuffer *ub, char *where)
 	} else {
 		while(ptr != (UndoNode *) NULL) {
 			fprintf(stderr,
-			        "%s %2d%s %s%s%s%s %4d - %4d [%3d] %s\n",
+			        "%s %2d%s %s%s%s%s %7d - %7d <%3d> [%3d] %s\n",
 			        buf,
 			        ptr->debug_no,
 			        (ptr == ub->active) ? "A" : " ",
-			        ptr->in_business   ? "B" : "_",
-			        ptr->changes_saved ? "S" : "_",
-			        ptr->moved_away    ? "M" : "_",
-			        ptr->was_null      ? "n" : "_",
+			        ptr->in_business    ? "B" : "_",
+			        ptr->changes_saved  ? "S" : "_",
+			        ptr->moved_away     ? "M" : "_",
+			        ptr->was_null       ? "n" : "_",
 			        ptr->first,
 			        ptr->last,
+			        ptr->oldtextSize,
 			        (ptr->oldtext == (char *) NULL) ? 0 : strlen(ptr->oldtext),
 			        debugFormatText(ptr->oldtext));
 			sprintf(buf, "   ");
@@ -381,10 +382,45 @@ static void clearOldtext(UndoBuffer *ub)
 	 * be a realloc.  If it isn't the old value will be freed then.    */
 }
 
+static Boolean growOldtextTo(UndoBuffer *ub, NAT len, Boolean *answer)
+{
+	/* Make the oldtext buffer (at least) len+1 big */
+	char *ptr;
+
+	if(ub->active == (UndoNode *) NULL) {
+		return False;
+	}
+
+	if(len < ub->active->oldtextSize) {
+		/* There's already enough space */
+		return True;
+	}
+
+	if(ub->active->oldtextSize == 0 || ub->active->oldtext == (char *) NULL) {
+		ptr = lXtMalloc(len+1, ub, answer);
+	} else {
+		ptr = ub->active->oldtext;
+		ptr = lXtRealloc(ptr, len+1, ub, answer);
+		if(ptr) {
+			memSize -= ub->active->oldtextSize;
+		}
+	}
+	if(!ptr) {
+		return False;
+	} else {
+		memSize += len+1;
+	}
+	ub->active->oldtext     = ptr;
+	ub->active->oldtextSize = len+1;
+
+	return True;
+}
+
 #define MIN_OT_SIZE 128
 #define OT_GROWTH_FACTOR 0.25
 static Boolean growOldtext(UndoBuffer *ub, Boolean *answer)
 {
+	/* Make the oldtext buffer (at least) one character bigger */
 	NAT len,
 	    newSize;
 	char *ptr;
@@ -1038,7 +1074,6 @@ static Boolean undoModifyCB(
 {
 	XmTextVerifyCallbackStruct *cbs = xtp_cbs;
 	NAT len;
-	char *cut_chars;
 	Widget *wp;
 
 	if(!cbs->text->length &&
@@ -1060,10 +1095,10 @@ static Boolean undoModifyCB(
 				                      2,
 				                      buf) != XmCOPY_SUCCEEDED) {
 					/* I havn't figured out why this code is here as *
-					 * we're only to get to this point if the above  *
-					 * call couldn't copy the text buffer, so we're  *
-					 * not going to be able to undo it since we      *
-					 * don't know what to undo it to.  PG 2002 05 13 */
+					 * we'll only be at this point if the above call *
+					 * couldn't copy the text buffer, so we're not   *
+					 * going to be able to undo it since we don't    *
+					 * know what to undo it to.        PG 2002 05 13 */
 					if(!reinit_undo_buffer(ub, cbs, False, noMA)) {
 #						ifdef HANDLE_NO_MEMORY
 							if(*noMA) {
@@ -1101,8 +1136,8 @@ static Boolean undoModifyCB(
 			                      1,
 			                      2,
 			                      buf) != XmCOPY_SUCCEEDED) {
-				/* See the comment below the call to  *
-				 * XmTextGetSubstring before this one */
+				/* See the comment below the call to *
+				 * XmTextGetSubstring above this one */
 				if(!reinit_undo_buffer(ub, cbs, False, noMA)) {
 #					ifdef HANDLE_NO_MEMORY
 						if(*noMA) {
@@ -1133,6 +1168,7 @@ static Boolean undoModifyCB(
 			}
 		}
 	} else if(cbs->startPos < cbs->endPos) {
+		char *cut_chars;
 #ifdef PG_DEBUG
 if(ub->undoing) {
  fprintf(stderr,
@@ -1143,12 +1179,33 @@ if(ub->undoing) {
 #endif
 		/* deleted something else */
 		len = cbs->endPos - cbs->startPos;
-		cut_chars = lXtMalloc(len+1, ub, noMA);
-		if(!cut_chars) {
+
+		if(!reinit_undo_buffer(ub, cbs, True, noMA)) {
 #			ifdef HANDLE_NO_MEMORY
 				if(*noMA) {
 #ifdef PG_DEBUG
-  fprintf(stderr, "Need to do a sort of undo here (couldn't get cut_chars)\n");
+  fprintf(stderr, "Need to do a sort of undo here (couldn't reinit undo buffer)\n");
+  fprintf(stderr, "  start pos: %d\n", cbs->startPos);
+  fprintf(stderr, "    end pos: %d\n", cbs->endPos);
+  fprintf(stderr, "        len: %d\n", len);
+  fprintf(stderr, "  cut_chars: %s\n", debugFormatText(cut_chars));
+  fprintf(stderr, "       text: %s\n", debugFormatText(cbs->text->ptr));
+  fprintf(stderr, "     length: %d\n", cbs->text->length);
+  fprintf(stderr, "       doit: %s\n", cbs->doit ? "True" : "False");
+#endif
+					memSize -= len+1;
+					ub->noMemory = False;
+					return False;
+				}
+#			else
+				return False;
+#			endif
+		}
+		if(!growOldtextTo(ub, len, noMA)) {
+#			ifdef HANDLE_NO_MEMORY
+				if(*noMA) {
+#ifdef PG_DEBUG
+  fprintf(stderr, "Need to do a sort of undo here (couldn't grow oldtext)\n");
   fprintf(stderr, "  start pos: %d\n", cbs->startPos);
   fprintf(stderr, "    end pos: %d\n", cbs->endPos);
   fprintf(stderr, "        len: %d\n", len);
@@ -1164,65 +1221,21 @@ if(ub->undoing) {
 				return False;
 #			endif
 		}
-		memSize += len+1;
 		if(XmTextGetSubstring(ub->text_w,
                               cbs->startPos,
                               len,
                               len+1,
-                              cut_chars) != XmCOPY_SUCCEEDED) {
-			if(!reinit_undo_buffer(ub, cbs, False, noMA)) {
-#				ifdef HANDLE_NO_MEMORY
-					if(*noMA) {
-#ifdef PG_DEBUG
-  fprintf(stderr, "Need to do a sort of undo here (copy fail)\n");
-  fprintf(stderr, "  start pos: %d\n", cbs->startPos);
-  fprintf(stderr, "    end pos: %d\n", cbs->endPos);
-  fprintf(stderr, "        len: %d\n", len);
-  fprintf(stderr, "  cut_chars: %s\n", debugFormatText(cut_chars));
-  fprintf(stderr, "       doit: %s\n", cbs->doit ? "True" : "False");
-#endif
-						cbs->doit = False;
-						lXtFree(cut_chars);
-						memSize -= len+1;
-						ub->noMemory = False;
-						return False;
-					}
-#				else
-					return False;
-#				endif
-			}
-			lXtFree(cut_chars);
-			memSize -= len+1;
-			ub->noMemory = False;
-		} else {
-			cut_chars[len] = '\0';
-			if(!reinit_undo_buffer(ub, cbs, True, noMA)) { /* for the XtFree */
-#				ifdef HANDLE_NO_MEMORY
-					if(*noMA) {
-#ifdef PG_DEBUG
-  fprintf(stderr, "Need to do a sort of undo here\n");
-  fprintf(stderr, "  start pos: %d\n", cbs->startPos);
-  fprintf(stderr, "    end pos: %d\n", cbs->endPos);
-  fprintf(stderr, "        len: %d\n", len);
-  fprintf(stderr, "  cut_chars: %s\n", debugFormatText(cut_chars));
-  fprintf(stderr, "       text: %s\n", debugFormatText(cbs->text->ptr));
-  fprintf(stderr, "     length: %d\n", cbs->text->length);
-  fprintf(stderr, "       doit: %s\n", cbs->doit ? "True" : "False");
-#endif
-						cbs->doit = False;
-						lXtFree(cut_chars);
-						memSize -= len+1;
-						ub->noMemory = False;
-						return False;
-					}
-#				else
-					return False;
-#				endif
-			}
+                              oldtext(ub)) == XmCOPY_SUCCEEDED) {
+			char *ptr = oldtext(ub)+len;
+			*ptr = '\0';
+
 			setMoved_away(ub, False);
 			setFirst(ub,      cbs->startPos);
 			setLast(ub,       cbs->startPos + cbs->text->length);	
-			setOldtext(ub,    cut_chars);
+		} else {
+			if(!ub->undoing) {
+				setUndo(ub, False);
+			}
 		}
 	} else if(ub->undoing && cbs->startPos == cbs->endPos) {
 		/* undoing a delete */
