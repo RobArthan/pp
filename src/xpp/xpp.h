@@ -29,11 +29,11 @@ typedef struct {
 	Boolean			edit_only;
 	Boolean			backup_before_save;
 	Boolean			delete_backup_after_save;
-	char			execute_new_line_mode;
+	char			add_new_line_mode;
 	NAT			journal_max;
 	String			command_line;
 	String			interrupt_prompt;
-	String			interrupt_abandon_reply;}
+	String			abandon_reply;}
 		GlobalOptions;	
 /*
  * The following are the values of execute_new_line_mode:

@@ -75,15 +75,15 @@ static Widget
 					command_lab, command_text,
 				journal_max_form,
 					journal_max_lab, journal_max_text,
-		execute_new_line_frame,
-			execute_new_line_radio_buttons,
+		add_new_line_frame,
+			add_new_line_radio_buttons,
 		button_frame,
 			button_form,
 				apply_btn, reset_btn, dismiss_btn;
 /*
  * We use a variable to record the state of the radio buttons:
  */
-static char	execute_new_line_button_state = EXECUTE_ADD_NEW_LINES;
+static char	add_new_line_button_state;
 
 void init_options(Widget owner_w)
 {
@@ -94,7 +94,7 @@ void init_options(Widget owner_w)
 		reset_cb(),
 		dismiss_cb(),
 		journal_max_cb(),
-		execute_new_line_cb();
+		add_new_line_cb();
 
 	XmString s1, s2, s3;
 
@@ -198,7 +198,7 @@ if(!global_options.edit_only) {
 	copy_font_list(command_text, owner_w);
 	copy_font_list(journal_max_text, owner_w);
 
-	execute_new_line_frame = XtVaCreateManagedWidget(
+	add_new_line_frame = XtVaCreateManagedWidget(
 		"execute-new-line-frame",
 		xmFrameWidgetClass,		shell_row_col,
 		NULL);
@@ -207,11 +207,13 @@ if(!global_options.edit_only) {
 	s2 = XmStringCreateSimple("`Execute' prompts for new-lines");
 	s3 = XmStringCreateSimple("`Execute' ignores missing new-lines");
 
-	execute_new_line_radio_buttons = XmVaCreateSimpleRadioBox(
+	add_new_line_button_state = global_options.add_new_line_mode;
+
+	add_new_line_radio_buttons = XmVaCreateSimpleRadioBox(
 		shell_row_col,
 		"execute-new-line-frame",
-		execute_new_line_button_state,
-		execute_new_line_cb,
+		add_new_line_button_state,
+		add_new_line_cb,
 		XmVaRADIOBUTTON, s1, NULL, NULL, NULL,
 		XmVaRADIOBUTTON, s2, NULL, NULL, NULL,
 		XmVaRADIOBUTTON, s3, NULL, NULL, NULL,
@@ -277,16 +279,15 @@ if(!global_options.edit_only) {
 	XtAddCallback(dismiss_btn, XmNactivateCallback,
 			dismiss_cb, (XtPointer)NULL);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * set up initial values of global_options:
- * (edit_only and command_line should have been done already in xpp.c)
+ * set up initial values of global_options which have not
+ * been done already in xpp.c); these are the ones which the user
+ * sets in the resource file by initialising option tool widgets.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	global_options.backup_before_save =
 		XmToggleButtonGetState(backup_toggle);
 
 	global_options.delete_backup_after_save =
 		XmToggleButtonGetState(delete_backup_toggle);
-
-	global_options.execute_new_line_mode = execute_new_line_button_state;
 
 	if(journal_max_text) {
 		char	*journal_max_buf;
@@ -384,8 +385,8 @@ void add_option_tool()
 			XtManageChild(journal_max_form);
 			XtManageChild(command_form);
 			XtManageChild(app_row_col);
-			XtManageChild(execute_new_line_radio_buttons);
-			XtManageChild(execute_new_line_frame);
+			XtManageChild(add_new_line_radio_buttons);
+			XtManageChild(add_new_line_frame);
 		}
 		XtManageChild(edit_row_col);
 		XtManageChild(edit_frame);
@@ -424,7 +425,7 @@ static void apply_cb(
 		XmTextSetString(journal_max_text, buf);
 	};
 
-	global_options.execute_new_line_mode = execute_new_line_button_state;
+	global_options.add_new_line_mode = add_new_line_button_state;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -461,10 +462,10 @@ static void reset_cb(
 		XmTextSetString(journal_max_text, buf);
 	}
 
-	XtVaGetValues(execute_new_line_radio_buttons,
+	XtVaGetValues(add_new_line_radio_buttons,
 		XmNchildren,		&btns, NULL);
 
-	XmToggleButtonSetState(btns[orig_global_options.execute_new_line_mode],
+	XmToggleButtonSetState(btns[orig_global_options.add_new_line_mode],
 			True, True);
 }
 
@@ -483,12 +484,12 @@ static void dismiss_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * dismiss callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void execute_new_line_cb(
+static void add_new_line_cb(
 	Widget				w,
 	int				btn_n,
 	XmAnyCallbackStruct		cbs)
 {
-	execute_new_line_button_state = btn_n;
+	add_new_line_button_state = btn_n;
 }
 
 

@@ -866,10 +866,10 @@ Bool execute_command()
 		len = strlen(cmd);
 		add_nl =	cmd[len] == '\n'
 			?	0
-			:	global_options.execute_new_line_mode
+			:	global_options.add_new_line_mode
 					== EXECUTE_ADD_NEW_LINES
 			?	1
-			:	global_options.execute_new_line_mode
+			:	global_options.add_new_line_mode
 						== EXECUTE_PROMPT_NEW_LINES
 			?	yes_no_cancel_dialog(root, add_new_line_message)
 			:	0;
