@@ -63,7 +63,7 @@ Put $translate\_for\_output$ around uses of $makestring$.
 Changes required by CR0016.
 \item[Issue 2.8]
 	Do not do any calls of $translate\_for\_output$, undo change~2.6.
-\item [Issue 2.9,2.10 (2nd July 1992)]
+\item [Issue 2.9,2.10, 2.11 (2nd July 1992)]
 Improve (?) $icl'subst$.
 \end{description}
 % \subsection{Changes Forecast}
@@ -446,7 +446,17 @@ fun flat_map f (a :: x) = f a @ flat_map f x
 =TEX
 =SML
 local
-	val a_term = mk_const("a_term",mk_vartype "'a");
+	fun blackbox RF b s_ty = (
+	let fun bbaux (a :: x) = (
+		if a = s_ty
+		then bbaux x
+		else case rassoc5 RF a of
+			Value (_,fvs) => fvs @ bbaux x
+			| _ => (fst a :: bbaux x)
+	) | bbaux _ = [];
+	in
+		bbaux (icl'frees b)
+	end);
 in
 fun €icl'subst› ([] : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = tm
 | icl'subst (R : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = (
@@ -465,14 +475,7 @@ let
 	| aux RF (Var v) = fst(rassoc3 RF v)
 	| aux RF (SimpleÃ(vty, b)) = (
 		let	val (s_ty as (s, ty)) = dest_var vty;
-			val new_frees =
-				flat_map
-				(snd o rassoc2 RF (fn x => (a_term,[fst x])))
-				(icl'frees b less s_ty);
-=TEX
-Why $a\_term$? - Because it is a pre-exisiting term, and
-anything placed here is thrown away again by the $snd$.
-=SML
+			val new_frees = blackbox RF b s_ty;
 			val s' = string_variant new_frees s;
 		in 
 			if s' = s
@@ -488,8 +491,19 @@ anything placed here is thrown away again by the $snd$.
 			in mk_simple_Ã(vty', b')
 			end)
 			handle (Fail _) =>
-			mk_simple_Ã(vty', b) (* using this would be very odd *)
+			mk_simple_Ã(vty', b)
 			end)
+=TEX
+This last case would occur for:
+=INLINEFT
+¨Ã s : 'a ∑ f [s : 'b]Æ
+=TEX
+where the current substituitions leave 
+=INLINEFT
+¨f [s : 'b]Æ
+=TEX
+unchanged.
+=SML
 		end
 	);
 	val init_RF = (map 
@@ -1565,10 +1579,18 @@ in
 end);
 =TEX
 \subsection{$subst$}
-This is the more general interface to $icl'subst$ or $var\_subst$ which
+This is the more general interface to $icl'subst$ than $var\_subst$ which
 can substitute for arbitrary subterms of a term, not just
 variables.
+It does however pass over the term twice.
 =SML
+local
+	fun find2 (a :: x) (b :: y) cond = (
+		if cond a
+		then b
+		else find2 x y cond
+	) | find2 _ _ _ = raise just_fail;
+in
 fun €subst›
 	(subs : (TERM * TERM) list)
 	(tm : TERM) = (
@@ -1578,17 +1600,22 @@ fun €subst›
 	let	val (xs, ys) = split subs;
 		val terms = tm :: (xs @ ys); 
 		val Xs = gen_vars (map type_of ys) terms;
-		val ysXs = combine ys Xs;
-		fun aux bvs tm = (
-			let	val (t, X) = find ysXs (fn (u, Y) => u ~=$ tm);
-			in	if all bvs (not o switch is_free_in tm)
-				then X
-				else tm
+=TEX
+Note that it is thought faster to fail on $find2$
+rather than the bound variable check, and thus the presentation
+of $aux$.
+=SML
+		fun aux bvs tm1 = (
+			let val X = find2 ys Xs (fn u => u ~=$ tm1);
+			in
+			if all bvs (fn x => not(is_free_in x tm1))
+			then X
+			else raise just_fail
 			end
 		);
 		val mediator = term_map aux tm;
 	in
-		var_subst (combine xs Xs) mediator
+		icl'subst (combine xs (map dest_var Xs)) mediator
 	end
 	handle complaint =>
 	(map (fn (x,y) => if type_of x =: type_of y
@@ -1597,6 +1624,7 @@ fun €subst›
 		subs;
 	reraise complaint "subst")
 );
+end;
 =TEX
 \subsection{$inst$}
 =SML
