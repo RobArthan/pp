@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.4 2002/03/18 19:14:49 phil Exp $
+ * $Id: files.c,v 2.5 2002/10/17 17:09:34 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -531,7 +531,11 @@ Boolean include_file(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * panic_save: attempt to save the contents of a text widget, e.g.,
  * in the event of an Xt error. Reports success or failure
- * on standard error.
+ * on standard error. N.b., all variables are static in case
+ * the problem is that we've run out of stack but there's just
+ * enough left to call this function and save the file. More
+ * importantly, the text is read out of the text widget with
+ * XmTextGetSubstring which shouldn't need to call malloc.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 void panic_save(
@@ -542,21 +546,20 @@ void panic_save(
 	static char buf[BUFSIZ+1];
 	const char *nameXXX = "xpp.panic.XXXXXX";
 	const char *tmp = "/tmp/";
-	static char name_buf[30];
-	static char *name;
+	static char name[30];
+	static int fd;
 	static FILE *fp;
 	static NAT bytes_written, success, i;
-	strcpy(name_buf, nameXXX);
-	if(!*(name = mktemp(name_buf)) ||
-			!(fp = fopen(name, "w"))) {
-		strcpy(name_buf, tmp);
-		strcat(name_buf, nameXXX);
-		if(!*(name = mktemp(name_buf)) ||
-				!(fp = fopen(name, "w"))) {
+	strcpy(name, nameXXX);
+	if((fd = mkstemp(name)) < 0 ) {
+		strcpy(name, tmp);
+		strcat(name, nameXXX);
+		if((fd = mkstemp(name)) < 0 ) {
 			fprintf(stderr, panic_file_cant_be_opened);
 			return;
 		}
 	}
+	fp = fdopen(fd, "w");
 	i = 0;
 	while((success = XmTextGetSubstring(text, i,
 						BUFSIZ, BUFSIZ + 1, buf))
