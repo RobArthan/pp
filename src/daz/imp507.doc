@@ -83,7 +83,7 @@ Because the implementations of the component update functions are rather long-wi
 =TEX
 \section{PREAMBLE AND AUXILIARIES}\ref{PREAMBLE}
 =SML
-(* structure ÛCNZGeneratorÝ : CNZGenerator = struct *)
+structure ÛCNZGeneratorÝ (* : CNZGenerator *) = struct
 open CNTypes CNTypes1 CNTypes2 CNBasicDeclsAndExprs;
 =TEX
 \subsection{Component Update Functions}
@@ -671,10 +671,10 @@ fun Ûblock_tillÝ  (
 
 =TEX
 =SML
-val Ûpack_env0Ý : PACK_ENV = initial_e_dict;
-val Ûsubunit_env0Ý : SUBUNIT_ENV = initial_e_dict;
-val Ûdec_env0Ý : DEC_ENV = initial_e_dict;
-val Ûspec_env0Ý : SPEC_ENV = initial_e_dict;
+val Ûpack_env0Ý : PACK_ENV = initial_s_dict;
+val Ûsubunit_env0Ý : SUBUNIT_ENV = initial_s_dict;
+val Ûdec_env0Ý : DEC_ENV = initial_s_dict;
+val Ûspec_env0Ý : SPEC_ENV = initial_s_dict;
 =TEX
 $empty\_block$ is the initial value for a block, as loosely specified in \cite{ISS/HAT/DTD513}.
 Fields which are not specified there are given place-holder values.
@@ -735,7 +735,7 @@ val Ûenv0Ý : ENV = [empty_block];
 =TEX
 We also require initial values for the SPARK program and replacement environments discussed in \cite{ISS/HAT/DTD513}
 =SML
-val Ûrepl_env0Ý : REPL_ENV = initial_e_dict;
+val Ûrepl_env0Ý : REPL_ENV = initial_s_dict;
 val Ûspark_prog0Ý : SPARK_PROG = [];
 =TEX
 For uniformity, we give the initial value for the theory name component of the global state here.
@@ -822,14 +822,139 @@ fun Ûget_cn_stateÝ (() : unit) : CN_STATE = (
 		script_name = !script_name}
 );
 =TEX
-The code here must pass type information into the functions defined in \cite{ISS/HAT/DAZ/DTD505,ISS/HAT/DAZ/DTD508} using the data type $CN\_ENV$ defined in \cite{ISS/HAT/DAZ/DTD508}.
-The following function does this:
+\subsection{Function Parameter Lists}
+When the global variable representing a SPARK function is stored in a theory, a user data entry giving its formal parameter list is also stored.
+This is later accessed via the $CN\_ENV$ when function calls using named parameter associations are translated into Z.
 =SML
-fun Ûcurrent_cn_envÝ (zid : Z_ID) : (TYPE * ENV_INFO) OPT = (
-	let	val in_scope = flatten_env (!blocks);
-	in	(* !!!! GOT HERE !!!! *)
-		Nil
+local
+val Ûcn_ud_keyÝ = "CN'formal_pars";
+fun Ûdest_ud_stringÝ (UD_String (n, uds)) = (n, uds)
+|   dest_ud_string _ = fail "" 0 [] (* always caught below *);
+fun ÛwantedÝ (fun_name : ID) (UD_String (i, _)) = (i = fun_name)
+|   wanted _ _ = false;
+in
+fun Ûget_par_namesÝ (fun_name : Z_ID) : ID list OPT = (
+	((Value o map (fst o dest_ud_string) o snd o dest_ud_string o
+		switch find (wanted fun_name) o snd o dest_ud_string o
+		get_user_datum (get_const_theory fun_name))
+	cn_ud_key)
+	handle Fail _ => Nil
+);
+fun Ûset_par_namesÝ (fun_name : ID) (pars : ID list) : unit = (
+	let	val old = (snd o dest_ud_string o get_user_datum "-") cn_ud_key
+			handle Fail _ => [];
+		val new = 
+			UD_String(fun_name, map (fn p => UD_String(p, [])) pars)
+			:: (old drop wanted fun_name);
+	in	set_user_datum(cn_ud_key, UD_String("", new))
 	end
+);
+end;
+=TEX
+=IGN
+new_const("fruit", BOOL);
+get_par_names "fruit";
+set_par_names "fruit" ["apple", "banana", "cherry"];
+get_par_names "fruit";
+set_par_names "fruit" ["apple", "banana", "cherry", "date"];
+get_par_names "fruit";
+new_const("veg", BOOL);
+get_par_names "veg";
+set_par_names "veg" ["artichoke", "bean", "carrot"];
+get_par_names "veg";
+set_par_names "veg" ["leek", "marrow"];
+get_par_names "veg";
+get_par_names "fruit";
+=TEX
+\subsection{Constructing $CN\_ENV$s}
+The code here must pass type information into the functions defined in \cite{ISS/HAT/DAZ/DTD505,ISS/HAT/DAZ/DTD508} using the data type $CN\_ENV$ defined in \cite{ISS/HAT/DAZ/DTD508}.
+The following functions are used to do this.
+
+=SML
+fun Ûz_id_of_idÝ (n : ID) : Z_ID = (
+	(fst o dest_const o mk_z_gvar)(trans_id n, BOOL, [])
+);
+=TEX
+$get\_tmark\_from\_inscope$ searches an $IN\_SCOPE$ value for the type mark associated with a variable or parameter name:
+=SML
+fun Ûget_tmark_from_inscopeÝ (n : Z_ID) (inscope : IN_SCOPE) : TMARK OPT = (
+	let	fun do_vars [] = Nil
+		|   do_vars ({vars, tmark} :: more) = (
+			if	n mem vars
+			then	Value tmark
+			else	do_vars more
+		);
+		fun do_pars [] = Nil
+		|   do_pars ({var_decl as {vars, tmark}, mode} :: more) = (
+			if	n mem vars
+			then	Value tmark
+			else	do_pars more
+		);
+	in	case do_vars (#vc_vars inscope) of
+			Nil		=> do_pars (#vc_pars inscope)
+		|	value_tmark	=> value_tmark
+	end
+);
+=TEX
+Now $get\_tmark\_from\_env$, which searches the running environment using the previous function to look for the required type mark.
+=SML
+fun Ûget_tmark_from_envÝ (_ : Z_ID) ([] : ENV) : TMARK OPT = (
+	Nil
+) | Ûget_tmark_from_envÝ (n : Z_ID) (block :: more) : TMARK OPT = (
+	case get_tmark_from_inscope n (#in_scope (#declab block)) of
+			Nil		=> get_tmark_from_env n more
+		|	value_tmark	=> value_tmark
+);
+=TEX
+Now, if we find a type mark, we need to convert it to an HOL type.
+This is done by looking in the theory database.
+The type there for a type $\tau$ will be $ð\tau$.
+We must strip off the ð.
+=SML
+fun Ûtype_of_tmarkÝ (tmark : TMARK) : TYPE OPT = (
+	(case (get_const_type (z_id_of_id(tmark))) of
+		Value ty => (Value (dest_z_power_type ty))
+	|	Nil => Nil)
+	handle Fail _ => Nil
+);
+=TEX
+If we don't find a type mark, then the only possibility is that the name is that of a SPARK function, constant or type stored as a global variable in the theory database.
+In this case the stored type is correct as it stands (no ð to take away).
+=SML
+fun Ûtype_of_g_varÝ (zn : Z_ID) : TYPE OPT = (
+	(case get_const_type zn of
+		Value ty => (Value ty)
+	|	Nil => Nil)
+);
+=TEX
+If we have the a global variable, then we need to classify it as a function, or record type type mark or other sort of SPARK entity.
+for a function, we also need the formal parameter list.
+To make this classification, we first check to see whether any formal parameters have been associated with the name:
+if so, then it's a function and we have the parameter names to hand;
+if not, then we dismantle the type: if its a set of bindings, then this is a record type mark; otherwise its an `other'.
+=SML
+fun Ûenv_info_of_g_varÝ (zn : Z_ID) (ty : TYPE) = (
+	case get_par_names zn of
+		Value pars => (ty, EIEnvFunction pars)
+	|	Nil => (
+		(ty,
+		(dest_z_schema_type (dest_z_power_type ty); EIEnvRecordAgg)
+		handle Fail _ => EIEnvOther)
+	)
+);
+=TEX
+=SML
+fun Ûcurrent_cn_envÝ (n : ID) : (TYPE * ENV_INFO) OPT = (
+	case get_tmark_from_env (trans_id n) (!blocks) of
+		Value tmark => (
+			case type_of_tmark tmark of
+				Value ty => Value (ty, EIEnvVar tmark)
+			|	Nil => Nil
+	) | 	Nil => (
+			case type_of_g_var n of
+				Value ty => Value(env_info_of_g_var n ty)
+			|	Nil => Nil
+	)
 );
 =TEX
 \section{BASIC DECLARATIONS}\label{BASICDECLARATIONS}
@@ -837,11 +962,11 @@ The decision about which function to call is made in $basic\_declaration$ itself
 =SML
 fun Ûbasic_decl_pack_specÝ (basic_decl : BASIC_DECL) : unit = (
 	let	val block_name1 = #block_name(#declab (hd (!blocks)));
-		val package = case (e_lookup block_name1 (!pack_env)) of
+		val package = case (s_lookup block_name1 (!pack_env)) of
 			Value p => p
 		|	Nil => error "basic_decl_pack_spec" 507001 [];
 	in	pack_env :=
-		e_extend
+		s_extend
 		block_name1
 		(package_consts_types(package,
 				#consts_types package @ [basic_decl]))
@@ -849,18 +974,61 @@ fun Ûbasic_decl_pack_specÝ (basic_decl : BASIC_DECL) : unit = (
 	end
 );
 =TEX
+=SML
+fun update_theory_db_with_parainfo pi = ();
+
 fun Ûbasic_decl_otherwiseÝ (basic_decl : BASIC_DECL) : unit = (
 	let	val para_infos = trans_basic_decl current_cn_env basic_decl;
 	in	map update_theory_db_with_parainfo para_infos; ()
 	end
 );
-=SML	
+=TEX	
 =SML
 fun Ûbasic_declarationÝ (basic_decl : BASIC_DECL) : unit = (
 	if	#pack_spec_flag(#flags(#declab (hd (!blocks))))
 	then	basic_decl_pack_spec basic_decl
 	else	basic_decl_otherwise basic_decl
 );
+=TEX
+=SML
+fun Ûvar_pack_specÝ (var_decl : VAR_DECL) : unit = (
+	let	val block_name1 = #block_name(#declab (hd (!blocks)));
+		val package = case (s_lookup block_name1 (!pack_env)) of
+			Value p => p
+		|	Nil => error "var_pack_spec" 507001 [];
+	in	pack_env :=
+		s_extend
+		block_name1
+		(package_vc_vars(package,
+				#vc_vars package @ [var_decl]))
+		(!pack_env)
+	end
+);
+=TEX
+=IGN
+fun Ûupdate_subunit_env_varÝ (var_decl : VAR_DECL) : unit = (
+	let	val dec_lab1 = #dec_lab (hd (!blocks));
+		val package = case (s_lookup block_name1 (!pack_env)) of
+			Value p => p
+		|	Nil => error "var_pack_spec" 507001 [];
+	in	pack_env :=
+		s_extend
+		block_name1
+		(package_vc_vars(package,
+				#vc_vars package @ [var_decl]))
+		(!pack_env)
+	end
+);
+=TEX
+=IGN
+val d1 = cn_basic_decl_of_string "x : constant Integer := 42;";
+val d2 = cn_basic_decl_of_string "x : constant Integer;";
+val d3 = cn_basic_decl_of_string "type zed is range 0 .. 20;";
+val d4 = cn_basic_decl_of_string "y : Integer;";
+val d5 = cn_basic_decl_of_string "type why is private;";
+trans_basic_decl env d5;
+
+
 =TEX
 \section{DECLARATIONS}\label{DECLARATIONS}
 \section{STATEMENTS}\label{STATEMENTS}
