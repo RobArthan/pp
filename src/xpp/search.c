@@ -437,7 +437,7 @@ static void search_cb(
 			left,
 			left + len,
 			CurrentTime);
-		XmTextShowPosition(
+		XmTextSetTopCharacter(
 			search_data.text_w,
 			left);
 	} else if (!(*pattern)){
@@ -476,7 +476,7 @@ static void replace_cb(
 			left,
 			left + strlen(replacement),
 			CurrentTime);
-		XmTextShowPosition(
+		XmTextSetTopCharacter(
 			cbdata->text_w,
 			left);
 		XtFree(replacement);
@@ -526,7 +526,7 @@ static void replace_all_cb(
 			XmTextSetInsertionPosition(
 				cbdata->text_w,
 				start_point);
-			XmTextShowPosition(
+			XmTextSetTopCharacter(
 				cbdata->text_w,
 				start_point);
 			XtFree(replacement);
@@ -553,13 +553,11 @@ static void search_set_cb(
 	XmPushButtonCallbackStruct	cbs)
 {
 	char *sel;
-	XmTextPosition ins_pos;
 	if((sel = XmTextGetSelection(cbdata->text_w)) == NULL) {
 		ok_dialog(cbdata->shell_w, no_selection_search);
 		return;
 	};
-	ins_pos = XmTextGetInsertionPosition(cbdata->search_w);
-	XmTextInsert(cbdata->search_w, ins_pos, sel);
+	XmTextSetString(cbdata->search_w, sel);
 	XtFree(sel);
 }
 
@@ -572,13 +570,11 @@ static void replace_set_cb(
 	XmPushButtonCallbackStruct	cbs)
 {
 	char *sel;
-	XmTextPosition ins_pos;
 	if((sel = XmTextGetSelection(cbdata->text_w)) == NULL) {
 		ok_dialog(cbdata->shell_w, no_selection_replace);
 		return;
 	};
-	ins_pos = XmTextGetInsertionPosition(cbdata->replace_w);
-	XmTextInsert(cbdata->replace_w, ins_pos, sel);
+	XmTextSetString(cbdata->replace_w, sel);
 	XtFree(sel);
 }
 
@@ -623,8 +619,8 @@ static void goto_line_no_cb(
 	SearchData			*cbdata,
 	XmPushButtonCallbackStruct	cbs)
 {
-	static long int line_no_to_offset();
-	long int offset;
+	static void line_no_to_offset();
+	long int left, right;
 	long int line_no = 0;
 	char *line_no_string;
 
@@ -638,16 +634,17 @@ static void goto_line_no_cb(
 		return;
 	}
 
-	offset = line_no_to_offset(cbdata->text_w, line_no);
-	if(offset == NO_MEMORY) {
+	line_no_to_offset(cbdata->text_w, line_no, &left, &right);
+	if(left == NO_MEMORY) {
 		ok_dialog(cbdata->shell_w, cant_goto_line_no);
-	} else if (offset < 0) {
+	} else if (left < 0) {
 		char buf[200];
-		sprintf(buf, line_no_too_big, -offset - 1);
+		sprintf(buf, line_no_too_big, -left - 1);
 		ok_dialog(cbdata->shell_w, buf);
 	} else {
-		XmTextSetTopCharacter(cbdata->text_w, offset);
-		XmTextSetInsertionPosition(cbdata->text_w, offset);
+		XmTextSetTopCharacter(cbdata->text_w, left);
+		XmTextSetSelection(cbdata->text_w,
+				left, right, CurrentTime);
 	}
 	XtFree(line_no_string);
 }
@@ -781,29 +778,41 @@ static long int get_line_no(Widget text_w)
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * line_no_to_offset returns the character offset of the 
- * first character of a given line in a text widget.
- * returns -(nlines + 1), where nlines is the total number
+ * first and last characters of a given line in a text widget.
+ * first is set to  -(nlines + 1), where nlines is the total number
  * of line in the file if number out of range.
- * returns NO_MEMORY if could not allocate memory to do the job.
+ * first is set to NO_MEMORY if not enough memory to do the job.
+ * last is unchanged in these two error cases.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static long int line_no_to_offset (Widget text_w, NAT line_no)
+static void line_no_to_offset (
+	Widget		text_w,
+	NAT		line_no,
+	long int	*first,
+	long int	*last)
 {
-	XmTextPosition ins_pos;
 	char *data, *p;
 	long int line_ct;
 
-	XmTextPosition res;
 	if((data = XmTextGetString(text_w)) == NULL) {
-		return NO_MEMORY;
+		*first = NO_MEMORY;
+		return;
 	};
 	for(p = data, line_ct = line_no - 1; *p && line_ct; ++p) {
 		if(*p == '\n' && *(p + 1)) {
 			--line_ct;
 		}
 	};
-	res =  (line_ct == 0 ? p - data : -(line_no - line_ct + 1));
+	if(line_ct == 0) {
+		*first = p - data;
+		*last = *first;
+		while(*p && *p != '\n') {
+			++*last;
+			++p;
+		}
+	} else {
+		*first = -(line_no - line_ct + 1);
+	}
 	XtFree(data);
-	return res;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
