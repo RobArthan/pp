@@ -540,7 +540,8 @@ datatype €BIN_OP› =
 Added the following which are missing in the original.
 =SML
 		|	€BOSparkAndThen›
-		|	€BOSparkOrElse›;
+		|	€BOSparkOrElse›
+		|	€BOSparkConcat›;
 =TEX
 
 ˇBin_Exp[EXP]¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸
@@ -724,6 +725,7 @@ and €ATTRIB_DESIG› =
 			€ADAttrib› of ATTRIB
 		|	€ADAttribArg› of (ATTRIB * EXP)
 =TEX
+In order to reproduce the SPARK program as the user entered it, it is necessary to store bracketing information in the abstract syntax. Also string and character literals have been added.
 =SML
 and €EXP› =
 		€EId› of ID | €EInt› of INT_LIT | €EArrayAggPos› of (EXP) AGG_POS |
@@ -738,7 +740,9 @@ and €EXP› =
 		€ESelectedComp› of (EXP) SELECTED_COMP |
 		€EFunCall› of (EXP) FUN_CALL |
 		€EAuxiliaryExp› of Z_EXP |
-		€EBracketed› of EXP;
+		€EBracketed› of EXP |
+		€EStringLiteral› of string |
+		€ECharacterLiteral› of string;
 =TEX
 
 
@@ -809,9 +813,29 @@ datatype €LABEL› =
 ‹	G : COND;
 ‹	P, Q : STMT
 à¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸
+
+In an nested if statement 
+
+=GFT SPARK Fragment
+IF	<cond>	THEN	<stmt>;
+ELSIF	<cond>	THEN	<stmt>;
+...
+ELSIF	<cond>	THEN	<stmt>;
+END IF;
+=TEX
+is equivalent to
+=GFT SPARK Fragment
+IF	<cond>	THEN	<stmt>;
+ELSE IF	<cond>	THEN	<stmt>;
+...
+ELSE IF	<cond>	THEN	<stmt>;
+END IF;
+=TEX
+I.e., ELSIF is the same as writing ELSEIF. In order to make the input reproducable in the SPARK program to be generated, a flag is stored with each abstract representation of the if statement indicating whether the else condition was input as an ELSIF or not.
 =SML
 	type €COND› (* = EXP; *)
-	type ('STMT) €IF_THEN_ELSE› (* = {g : COND, p : 'STMT, q : 'STMT}; *)
+	type ('STMT) €IF_THEN_ELSE› (* = {
+		g : COND, p : 'STMT, q : 'STMT, elsif : bool}; *)
 =TEX
 \subsubsection{Case}\label{case}
 
@@ -850,10 +874,11 @@ This case is a little more complicated, however, but as there is no overlap betw
 
 The till clause may not be present in which case the t component will be true. However we make t optional to reflect the concrete syntax so that the SPARK program can be reproduced authentically.
 
+A loop body may be a sequence of statements in which case the treatment of the loop can only be informal with respect to generating verification conditions.
 A loop without an iteration scheme can have a name, so we introduce an additional type called NAMED\_LOOP.
 =SML
-	type €LOOP› (* = {t : Z_PRED OPT, spec : SPEC_NO_IVARS}; *)
-	type €NAMED_LOOP› (* = {name : ID, t : Z_PRED OPT, spec : SPEC_NO_IVARS}; *)
+	type 'STMT €LOOP› (* = {t : Z_PRED OPT, stmt : 'STMT}; *)
+	type 'STMT €NAMED_LOOP› (* = {name : ID, t : Z_PRED OPT, stmt : 'STMT}; *)
 =TEX
 
 \subsubsection{While Loop}\label{while-loop}
@@ -864,7 +889,7 @@ A loop without an iteration scheme can have a name, so we introduce an additiona
 
 Loops can have names, so a name is introduced into the abstract representation.
 =SML
-	type €WHILE› (* = {name : ID OPT, g : COND, loop : LOOP}; *)
+type 'STMT €WHILE› (* = {name : ID OPT, g : COND, loop : 'STMT LOOP}; *)
 =TEX
 \subsubsection{For Loop (Values as Bounds)}\label{for-static}
 
@@ -887,14 +912,14 @@ datatype €LOOP_DIRECTION› =
 				LDForwards
 			|	LDReverse;
 
-type €FOR_STATIC› (* = {
+type 'STMT €FOR_STATIC› (* = {
 	name : ID OPT,
 	i : ID,
 	tmark : ID,
 	lo : STATIC_EXP,
 	hi : STATIC_EXP,
 	dir : LOOP_DIRECTION,
-	loop : LOOP}; *)
+	loop : 'STMT LOOP}; *)
 =TEX
 \subsubsection{For Loop (Type Mark as Range)}\label{for-typemark}
 
@@ -907,12 +932,12 @@ type €FOR_STATIC› (* = {
 FOR\_TMARK is augmented in the same way as for FOR\_STATIC.
 
 =SML
-type €FOR_TMARK› (* = {
+type 'STMT €FOR_TMARK› (* = {
 	name : ID OPT,
 	i : ID,
 	tmark : TMARK,
 	dir : LOOP_DIRECTION,
-	loop : LOOP}; *)
+	loop : 'STMT LOOP}; *)
 =TEX
 \subsubsection{Exit}\label{exit}
 
@@ -974,20 +999,21 @@ type €K_SLOT› (* = {content : string, label : LABEL} *);
 =TEX
 =SML
 datatype €STMT›	= 	€STNull›
-		|	€STAssign› of (ASSIGN)
-		|	€STSpecNoIvars› of (SPEC_NO_IVARS)
+		| 	€STImplicitNull›
+		|	€STAssign› of ASSIGN
+		|	€STSpecNoIvars› of SPEC_NO_IVARS
 		|	€STSemicolon› of (STMT * STMT)
-		|	€STIfThenElse› of ((STMT)IF_THEN_ELSE)
-		|	€STCase› of ((STMT)CASE)
-		|	€STLoop› of (LOOP)
-		|	€STNamedLoop› of (NAMED_LOOP)
-		|	€STWhile› of (WHILE)
-		|	€STForStatic› of (FOR_STATIC)
-		|	€STForTmark› of (FOR_TMARK)
-		|	€STExitWhen› of (EXIT_WHEN)
+		|	€STIfThenElse› of  STMT IF_THEN_ELSE
+		|	€STCase› of STMT CASE
+		|	€STLoop› of STMT LOOP
+		|	€STNamedLoop› of STMT NAMED_LOOP
+		|	€STWhile› of STMT WHILE
+		|	€STForStatic› of STMT FOR_STATIC
+		|	€STForTmark› of STMT FOR_TMARK
+		|	€STExitWhen› of EXIT_WHEN
 		|	€STExit›
-		|	€STRet› of (RETURN)
-		|	€STProcNoIvars› of (PROC_CALL_NO_IVARS)
+		|	€STRet› of RETURN
+		|	€STProcNoIvars› of PROC_CALL_NO_IVARS
 		|	€STKSlot› of K_SLOT;
 =TEX
 \pagebreak
@@ -1014,7 +1040,7 @@ datatype €STMT›	= 	€STNull›
 ‹		hi é STATIC_EXP
 à¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸¸
 =SML
-	type €FOR_NON_STATIC› (* = {i : ID, lo : STATIC_EXP, hi : STATIC_EXP, loop : LOOP}; *)
+	type €FOR_NON_STATIC› (* = {i : ID, lo : STATIC_EXP, hi : STATIC_EXP, loop : STMT LOOP}; *)
 =TEX
 \subsubsection{Logical Constants}\label{logical-constants}
 πZAX
@@ -1060,7 +1086,7 @@ syntax functions.
 =TEX
 =SML
 datatype €STATEMENT› =
-		 	€SStmt› of (STMT)
+		 	€SStmt› of STMT
 		|	€SSpecIvars› of (SPEC_IVARS * STMT)
 		|	€SForNonStatic› of (FOR_NON_STATIC * STMT)
 		|	€SLogCon› of (LOG_CON * STMT)
