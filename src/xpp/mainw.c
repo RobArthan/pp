@@ -326,6 +326,32 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * set_icon_name: get the file name out of the script editor's
+ * namestring label; strip away any directory names and use
+ * the resulting file name as the icon name for the root window.
+ * Relies on the no_file_message string not containing any
+ * `/' characters.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void set_icon_name(void)
+{
+	char *fname, *p;
+	fname = XmTextGetString(namestring);
+	if(!fname || !*fname) {
+/* no file name; shouldn't happen; do nothing */
+	} else {
+		p = fname + strlen(fname) - 1;
+		while (*p && p > fname & *p != '/') {
+			--p;
+		}
+		if(p > fname) {
+			++p;
+		}
+		XtVaSetValues(root, XmNiconName, p, NULL);
+		XtFree(fname);
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * flash_file_name: update and blink the file name displayed in
  * the script editor's namestring label.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -554,6 +580,7 @@ if( !global_options.edit_only ) {
 		XmTextFieldSetString(namestring, no_file_message);
 		set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, False);
 	};
+	set_icon_name();
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Initialise options and templates packages
@@ -605,9 +632,11 @@ XmAnyCallbackStruct *cbs;
 		} else {
 			if(save_file(script, fname)) {
 				flash_file_name(fname);
+				set_icon_name();
 				reinit_changed();
 			}
 		}
+		if(fname != NULL) {XtFree(fname);};
 		break;
 	case FILE_MENU_SAVE_AS:
 		fname = file_dialog(frame, "Save");
@@ -615,11 +644,12 @@ XmAnyCallbackStruct *cbs;
 /* No file name: just do nothing */
 		} else if(save_file_as(script, fname)) {
 			flash_file_name(fname);
+			set_icon_name();
 			reinit_changed();
 			set_menu_item_sensitivity(filemenu,
 				FILE_MENU_SAVE, True);
-			if(fname != NULL) {XtFree(fname);};
 		};
+		if(fname != NULL) {XtFree(fname);};
 		break;
 	case FILE_MENU_SAVE_SELECTION:
 		if((buf = XmTextGetSelection(script)) == NULL) {
@@ -642,6 +672,7 @@ XmAnyCallbackStruct *cbs;
 /* No file name: just do nothing */
 			} else if(open_file(script, fname)) {
 				flash_file_name(fname);
+				set_icon_name();
 				reinit_changed();
 				set_menu_item_sensitivity(filemenu,
 					FILE_MENU_SAVE, True);
@@ -666,9 +697,11 @@ XmAnyCallbackStruct *cbs;
 				XmTextSetString(script, "");
 			} else if(!open_file(script, fname)) {
 /* Can't open it; */
+				XtFree(fname);
 				break;
 			};
 			flash_file_name(fname);
+			set_icon_name();
 			reinit_changed();
 			XtFree(fname);
 		};
@@ -678,6 +711,7 @@ XmAnyCallbackStruct *cbs;
 			XmTextFieldSetString(namestring, no_file_message);
 			XmTextSetString(script, "");
 			flash_file_name(no_file_message);
+			set_icon_name();
 			reinit_changed();
 			set_menu_item_sensitivity(filemenu,
 				FILE_MENU_SAVE, False);
