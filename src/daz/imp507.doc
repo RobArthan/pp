@@ -90,7 +90,8 @@ Also implemented remedies for issues 1 and 4 (V0.6).
 \item[Issue 1.120-1.121] Added $new\_script1$ for IUCT project WP 1.
 \item[Issue 1.122] Fixing Bug 4.3 of INT502.
 \item[Issue 1.123] Fixing bug 6.1 of INT502.
-\item[Issue 1.123] Fixing $is\_id\_in\_package$.
+\item[Issue 1.124] Fixing $is\_id\_in\_package$.
+\item[Issue 1.125] Improved prefixing functions.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -3663,19 +3664,62 @@ fun Ûtmpbody_conjecturesÝ (ident : ID)
 );
 =TEX
 The following functions are used to rename the HOL type names corresponding to given sets in the theory.
+Note that neither are visible outside this module, and they work by raising
+failures for no change.
 =SML
+val Ûjust_failÝ = fail "just_fail" 3064  [] handle complaint => complaint;
+
 fun Ûtype_subst_typeÝ (subs : (string * string) list) (ty : TYPE) : TYPE = (
-	case dest_simple_type ty of
-		Vartype _ => ty
+let
+	(* boolean param is interpreted as "anything changed?" *)
+	fun aux b [] = (
+		if b then [] else raise just_fail
+	) | aux b (a :: x) = (
+		let val (a', b') = (type_subst_type subs a, true) 
+			handle _ => (a, b)
+		in
+			(a' :: aux b' x)
+		end
+	);
+	fun aux1 aty = (
+	case dest_simple_type aty of
+		Vartype _ => raise just_fail
 	|	Ctype(con, pars) => (
-			mk_ctype (
-				(case rassoc5 subs con of
-					Value con' => con'
-				|	Nil => con),
-				map (type_subst_type subs) pars
-			)
-	)
-);
+		   case rassoc5 subs con of
+			(* constructor name changed *)
+			Value con' => 
+			   mk_ctype(con', 
+				map (fn p => aux1 p 
+					       handle _ => p) 
+					pars)
+			(* no constructor name change, so if pars also
+			   unchanged then fail *)
+		       | Nil => mk_ctype (con, aux false pars)
+	));
+in
+	aux1 ty
+end);
+
+=IGN
+let	val b = mk_ctype("b",[]);
+	val c = mk_ctype("c",[]);
+	val d = mk_ctype("d",[]);
+	val av = mk_vartype "a";
+	val big = list_mk_­_type [
+		mk_ctype("a",[c, d]),
+		b,
+		mk_ctype("e", [av]),
+		mk_ctype("a", [av, b]),
+		mk_ctype("a", [b, av]),
+		mk_ctype("a", [mk_ctype("a", [b, av]), b]),
+		mk_ctype("f", [c,d]),
+		mk_ctype("f", [av, b]),
+		mk_ctype("f", [b, av]),
+		mk_ctype("f", [mk_ctype("a", [b, av]), b])];
+in		
+type_subst_type [("x","a"),("y","b")] 
+big
+end;
 =TEX
 =SML
 fun type_subst_term (subs : (string * string) list) (tm : TERM) : TERM = (
@@ -3684,14 +3728,42 @@ fun type_subst_term (subs : (string * string) list) (tm : TERM) : TERM = (
 			case dest_simple_term tm of
 				Const(nm, ty) => mk_const(nm, do_ty ty)
 			|	Var(nm, ty) => mk_var(nm, do_ty ty)
-			|	App(tm1, tm2) => mk_app(aux tm1, aux tm2)
-			|	SimpleÌ(v, tm1) => mk_simple_Ì(aux v, aux tm1)
+			|	App(tm1, tm2) => (
+				let val tm1' = aux tm1;
+				in
+					mk_app(tm1', 
+						(aux tm2 handle (Fail _) => tm2))
+				end
+				handle (Fail _) => mk_app(tm1, aux tm2)
+			) |	SimpleÌ(v, tm1) => (
+				let val v' = aux v;
+				in
+					mk_simple_Ì(v', 
+						(aux tm1 handle (Fail _) => tm1))
+				end
+				handle (Fail _) => mk_simple_Ì(v, aux tm1)
+			)
 		);
 	in	case subs of
 			[] => tm
-		|	_ => aux tm
+		|	_ => (aux tm handle (Fail _) => tm)
 	end
 );
+=IGN
+set_flag("pp_show_HOL_types",true);	
+let	val b = mk_var("b", mk_ctype("bt",[]));
+	val c = mk_const("c", mk_ctype("ct",[]));
+	val d = mk_simple_Ì (mk_var("d", mk_ctype("dt",[])), ¬d1®);
+	val e = mk_simple_Ì (mk_var("a", mk_ctype("at",[])), ¬d1®);
+	val f = mk_simple_Ì (mk_var("d", mk_ctype("dt",[])), b);
+	val g = mk_app(mk_const("a", 
+		mk_­_type(mk_ctype("ct",[]), mk_ctype("at",[]))),
+		c);
+in	
+type_subst_term [("x","at"),("y","bt")] 
+	¬(‘b®, ‘c®, ‘d®, ‘e®, ‘f®,  ‘g®)®
+end;
+set_flag("pp_show_HOL_types",false);
 =TEX
 Now we define various functions to do the actual prefixing of identifiers, terms etc.
 =SML
@@ -3842,7 +3914,8 @@ fun Ûdo_const_thmsÝ (ident : ID)
 		(newids : ID list)
 		(const_thms : (TERM * THM OPT) list)
 		: PARAINFO list = (
-	let	val ty_ty = type_subst_type tysubs;
+	let	val ty_ty = (fn ty => (type_subst_type tysubs ty 
+			handle (Fail _) => ty));
 		fun aux ((const, Nil) :: more) = (
 			let	val (name, ty, _) = dest_z_gvar const;
 			in
