@@ -86,6 +86,8 @@ of $format\_term$.
 Protected $print\_goal$ against too short a line length.
 \item[Issue 1.17]
 Fixed $goal\_rule$.
+\item [Issue 1.18]
+Changes to $subgoal\_package\_quiet$, effect of duplicate free variables in goal, no longer observes kernel state change, message 30055.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -113,8 +115,9 @@ structure âSubgoalPackageá : SubgoalPackage = struct
 val _ = open_theory "misc";
 =TEX
 \subsection{Quietening the Package}
+We expect $imp036$ to execute $reset\_flag$ $"subgoal\_package\_quiet"$.
 =SML
-val subgoal_package_quiet : bool ref = ref false;
+val subgoal_package_quiet : bool ref = ref true;
 val _ = new_flag {
 	name="subgoal_package_quiet",
 	control=subgoal_package_quiet,
@@ -445,36 +448,9 @@ fun âgs_equalá (GS{labelling = lg1, current_goal = cg1, goal_state_thm = gst1,..
 
 Now we initialise the current state of the subgoal package:
 =SML
-val current : PACKAGE_STATE ref = ref {main_goal_stack = [], 
+val âcurrentá : PACKAGE_STATE ref = ref {main_goal_stack = [], 
 	undo_buffer = [],
 	redo = []};
-=TEX
-\subsection{Protecting Against Kernel State Changes}
-Some Kernel State changes may make the goal state theorems 
-upon the main goal stack or undo buffer invalid, either
-due to change of scope or
-deletion of conservative extensions.
-The following function is thus set to be called before any such commands whenever the main goal stack is not empty.
-The function cannot test for all benign changes, and so merely issues 
-a warning.
-=SML
-fun âsg_protect_vs_kscá (ksc: KERNEL_STATE_CHANGE) : unit = (
-let	val {main_goal_stack = main_goal_stack, ...} = !current;
-in
-	if is_nil main_goal_stack
-	then ()
-	else (case ksc of
-	OpenTheory (thnm,_) => (
-		if thnm <> get_current_theory_name()
-		then (warn "open_theory" 30056 [fn () => "open_theory"])
-		else ()
-	) | DeleteConst _ => warn "delete_const" 30056 [fn () => "delete_const"]
-	| DeleteType _ => warn "delete_type" 30056 [fn () => "delete_type"]
-	| DeleteAxiom _ => warn "delete_axiom" 30056 [fn () => "delete_axiom"]
-	| _ => ())
-end);
-
-val side_effect = before_kernel_state_change sg_protect_vs_ksc;
 =TEX
 \subsection{Handling the buffer}
 We have a non-negative size of buffer:
@@ -639,38 +615,91 @@ in
 end);
 =TEX
 \subsection{Maintaining the Type Context}
+The following gives an argument for calling warning messages 30056 or 30059, when the type context has problems.
+=SML
+local
+	fun aux_dups (s :: rest) = (
+	if s mem rest
+	then s :: aux_dups (rest less s)
+	else aux_dups rest
+	) | aux_dups [] = []
+in
+fun âlocal_set_ti_contextá (tms:TERM list) : unit = (
+let	val allfrees = list_term_union (map frees tms);
+	val dups = aux_dups (map (fst o dest_var) allfrees);
+in
+	case dups of
+	[] =>  TypeInference.set_ti_context allfrees
+	| [a] => (warn "subgoal package" 30059 [fn () => a];
+		TypeInference.set_ti_context (allfrees drop (fn x=> fst(dest_var x) = a)))
+	| _ => (warn "subgoal package" 30056 
+			[fn () => format_list (Combinators.I) dups ", "];
+		TypeInference.set_ti_context (allfrees drop (fn x=> fst(dest_var x) mem dups)))
+end);
+end; 
+=TEX
 =SML
 local
 	val subgoal_package_ti_context : bool ref = ref true;
+in
+	fun âset_ti_context_to_emptyá (():unit):unit = (
+		TypeInference.set_ti_context []
+	);
+=TEX
+The check function in the call of $new\_flag$ will clear or set the type context as necessary.
+=SML
+local
+fun check_fun (flag : bool) : bool = (
+let	val {main_goal_stack = main_goal_stack,...} = !current;
+in
+	((if is_nil main_goal_stack orelse not flag
+	then set_ti_context_to_empty()
+	else (let 	val GS{labelling = lg,current_goal = current_goal, ...} = hd main_goal_stack;
+	in
+	(case current_goal of
+		Nil => set_ti_context_to_empty()
+		| Value lb =>  (
+let	val (asms,conc) = mk_goal_from_term(lookup_in_labelled 
+		"subgoal_package_ti_context" lb lg);
+in
+	local_set_ti_context (conc :: asms)
+end
+			))
+	end));
+	true)
+end);
+in
 	val side_effect = new_flag {
 		name="subgoal_package_ti_context",
 		control=subgoal_package_ti_context,
-		default=(fn () => true),
-		check= (fn x => true)};
-in
+		default=(fn () => check_fun true),
+		check= check_fun};
+end;
+=TEX
+=SML
 	fun âset_ti_context_to_goalá ((asms,conc):GOAL) : unit = (
 		if (!subgoal_package_ti_context)
-		then TypeInference.set_ti_context (conc :: asms)
+		then local_set_ti_context (conc :: asms)
 		else ()
 	);
-	fun âset_ti_context_to_labelá (lab : LABEL OPT) : unit = (
+	fun âset_ti_context_to_labelá (lab : LABEL OPT) (gs : GOAL_STATE) : unit = (
 		if (!subgoal_package_ti_context)
 		then (case lab of
-			Nil => TypeInference.set_ti_context []
+			Nil => set_ti_context_to_empty()
 			| Value lb =>  (
 let	val {main_goal_stack = main_goal_stack, ...} = !current;
-	val GS{labelling = lg,...} = case main_goal_stack of
-		(a :: _) => a
-		| [] =>  fail "print_labelled_goal" 30010 [];
+	val GS{labelling = lg,...} = gs;
 	val (asms,conc) = mk_goal_from_term(lookup_in_labelled 
 		"set_ti_context_to_label" lb lg);
 in
-TypeInference.set_ti_context (conc :: asms)
+	local_set_ti_context (conc :: asms)
 end
 			))
 		else ()
 	);
-end;
+=TEX
+=SML
+end; (* local *)
 =TEX
 \subsection{Starting a New Main Goal}
 Check whether two distinct free variables in a goal have
@@ -720,9 +749,9 @@ let	val {main_goal_stack = main_goal_stack, ...} = !current;
 	val len_stack = 1+ length main_goal_stack;
 	val opts = if len_stack = 1 then "" else "s";
 in
-	(current := {main_goal_stack = (new_gs :: main_goal_stack), 
+	(set_ti_context_to_goal goal;
+	current := {main_goal_stack = (new_gs :: main_goal_stack), 
 		undo_buffer = [], redo = []};
-	set_ti_context_to_goal goal;
 	qdiag_line(get_error_message 30001 [string_of_int len_stack, opts]);
 	print_labelled_goal [];
 	())
@@ -758,10 +787,10 @@ let	val {main_goal_stack = main_goal_stack, ...} = !current;
 	val len_stack = 1+ length main_goal_stack;
 	val opts = if len_stack = 1 then "" else "s";
 in
-	(current := {main_goal_stack = (new_gs :: main_goal_stack), 
+	(set_ti_context_to_label cg new_gs;
+	current := {main_goal_stack = (new_gs :: main_goal_stack), 
 		undo_buffer = [], redo = []};
-	set_ti_context_to_label cg;
-	qdiag_line(get_error_message 30001 [string_of_int len_stack, opts]);
+		qdiag_line(get_error_message 30001 [string_of_int len_stack, opts]);
 	case hys of
 	[] => qdiag_line(get_error_message 30048 [])
 	| [_] => (qdiag_line(get_error_message 30047 []);
@@ -1048,10 +1077,10 @@ let	val {main_goal_stack = main_goal_stack,
 		then qdiag_line(get_error_message 30034 [])
 		else ();
 in
-	(current := {main_goal_stack = new_gs :: tl main_goal_stack,
+	(set_ti_context_to_label new_cg new_gs;
+	current := {main_goal_stack = new_gs :: tl main_goal_stack,
 		undo_buffer = add_to_buffer current_goal_state undo_buffer,
 		redo = []};
-	set_ti_context_to_label new_cg;
 	if generated_sgs = []
 	then (case new_cg of
 		Nil => qdiag_line(get_error_message 30036 [])
@@ -1082,14 +1111,14 @@ let	val {main_goal_stack = main_goal_stack,...} = !current;
 	val new_mgs = tl main_goal_stack;
 	val lnew_mgs = length new_mgs;
 in
-	(current := {main_goal_stack = new_mgs, 
-		undo_buffer = [],redo = []};
-	(case lnew_mgs of 
-	0 => set_ti_context_to_label Nil
+	((case lnew_mgs of 
+	0 => set_ti_context_to_empty()
 	| _ => (let val GS{current_goal = cg,...} = hd new_mgs
 		in
-		set_ti_context_to_label cg
+		set_ti_context_to_label cg (hd new_mgs)
 		end));
+	current := {main_goal_stack = new_mgs, 
+		undo_buffer = [],redo = []};
 	if mgst then qdiag_line(get_error_message 30024 []) else ();
 	qdiag_line(get_error_message 30001 [
 		string_of_int lnew_mgs,
@@ -1118,13 +1147,14 @@ let	val {main_goal_stack = main_goal_stack,...} = !current;
 	val new_mgs = tl main_goal_stack;
 	val lnew_mgs = length new_mgs;
 in
-	(current := {main_goal_stack = new_mgs, undo_buffer = [],redo = []};
-	(case lnew_mgs of 
-	0 => set_ti_context_to_label Nil
+	((case lnew_mgs of 
+	0 => set_ti_context_to_empty()
 	| _ => (let val GS{current_goal = cg,...} = hd new_mgs
 		in
-		set_ti_context_to_label cg
+		set_ti_context_to_label cg (hd new_mgs)
 		end));
+	current := {main_goal_stack = new_mgs, 
+		undo_buffer = [],redo = []};
 	if mgst then qdiag_line(get_error_message 30024 []) else ();
 	qdiag_line(get_error_message 30001 [
 		string_of_int lnew_mgs,
@@ -1211,14 +1241,14 @@ let	val {main_goal_stack = main_goal_stack,...} = !current;
 	val new_mgs = tl main_goal_stack;
 	val lnew_mgs = length new_mgs;
 in
-	(current := {main_goal_stack = new_mgs, 
-		undo_buffer = [], redo = []};
-	(case lnew_mgs of 
-	0 => set_ti_context_to_label Nil
+	((case lnew_mgs of 
+	0 => set_ti_context_to_empty()
 	| _ => (let val GS{current_goal = cg,...} = hd new_mgs
 		in
-		set_ti_context_to_label cg
+		set_ti_context_to_label cg (hd new_mgs) 
 		end));
+current := {main_goal_stack = new_mgs, 
+		undo_buffer = [], redo = []};
 	qdiag_line(get_error_message 30001 [
 		string_of_int lnew_mgs,
 		if lnew_mgs = 1 then "" else "s"]);
@@ -1249,10 +1279,10 @@ let	val {main_goal_stack = main_goal_stack,
 	val new_undo = undo_buffer from n;
 	val new_redo = current_gs :: undo_buffer to (n-1);
 in
-	(current := {main_goal_stack = new_gs :: tl main_goal_stack,
+	(set_ti_context_to_label new_cg new_gs;
+	current := {main_goal_stack = new_gs :: tl main_goal_stack,
 		undo_buffer = new_undo,
 		redo = new_redo};
-	set_ti_context_to_label new_cg;
 	(case new_cg of
 		Nil => qdiag_line(get_error_message 30048 [])
 		| Value v => (qdiag_line(get_error_message 30047 []);
@@ -1277,10 +1307,10 @@ let	val {main_goal_stack = main_goal_stack,
 	val new_undo = (tl new_states) to (get_int_control "undo_buffer_length" -1);
 	val new_redo = [];
 in
-	(current := {main_goal_stack = new_gs :: tl main_goal_stack,
+	(set_ti_context_to_label new_cg new_gs;
+	current := {main_goal_stack = new_gs :: tl main_goal_stack,
 		undo_buffer = new_undo,
 		redo = new_redo};
-	set_ti_context_to_label new_cg;
 	(case new_cg of
 		Nil => qdiag_line(get_error_message 30048 [])
 		| Value v => (qdiag_line(get_error_message 30047 []);
@@ -1311,10 +1341,10 @@ let	val nlabel = label_of_string label
 	val new_undo = add_to_buffer current_gs undo_buffer;
 	val new_redo = [];
 in
-	(current := {main_goal_stack = new_gs :: tl main_goal_stack,
+	(set_ti_context_to_goal (asms,conc);
+	current := {main_goal_stack = new_gs :: tl main_goal_stack,
 		undo_buffer = new_undo,
 		redo = new_redo};
-	set_ti_context_to_goal (asms,conc);
 	(qdiag_line(get_error_message 30047 []);
 	print_labelled_goal nlabel);
 	())
@@ -1348,8 +1378,8 @@ let	val {main_goal_stack = main_goal_stack,...} = !current;
 	val new_mgs = new_gs :: main_goal_stack;
 	val lnew_mgs = length new_mgs;
 in
-	(current := {main_goal_stack = new_mgs, undo_buffer = [], redo = []};
-	set_ti_context_to_label current_goal;
+	(set_ti_context_to_label current_goal new_gs;
+	current := {main_goal_stack = new_mgs, undo_buffer = [], redo = []};
 	qdiag_line(get_error_message 30001 [
 		string_of_int lnew_mgs,
 		if lnew_mgs = 1 then "" else "s"]);
