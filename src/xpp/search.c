@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.23 2003/02/09 22:48:14 rda Exp rda $ 
+ * $Id: search.c,v 2.24 2003/02/09 23:36:11 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -78,37 +78,37 @@ static char *cant_goto_line_no =
 	"Not enough memory is left to move to the line number";
 
 static char *no_line_no = 
-	"Line number to go to is missing or zero";
+	"Line number to go to is missing or zero.";
 
 static char *no_room_for_search_op = 
 	"Running out of memory! "
-	"Not enough memory is left to perform this search operation";
+	"Not enough memory is left to perform this search operation.";
 
 static char *no_search_string = 
-	"There is nothing in the search field";
+	"There is nothing in the search field.";
 
 static char *no_selection_replace = 
-	"No text is selected in this xpp session "
-	"to be copied into the replacement field";
+	"No text selection is available "
+	"to be copied into the replacement field.";
 
 static char *no_selection_search = 
-	"No text is selected in this xpp session "
-	"to be copied into the search field";
+	"No text is available "
+	"to be copied into the search field.";
 
 static char *no_selection_to_replace = 
-	"There is no selection in the text window to be replaced";
+	"There is no selection in the text window to be replaced.";
 
 static char *not_found = 
-	"Search pattern \"%s\" not found";
+	"Search pattern \"%s\" not found.";
 
 static char *re_error = 
 	"Error in regular expression \"%s\": %s";
 
 static char *line_no_too_big1 =
-	"There is only 1 line in the file";
+	"There is only 1 line in the file.";
 
 static char *line_no_too_big =
-	"There are only %ld lines in the file";
+	"There are only %ld lines in the file.";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * static data

@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.47 2003/02/07 17:06:17 rda Exp rda $
+ * $Id: mainw.c,v 2.48 2003/02/08 16:15:31 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -63,7 +63,7 @@ static char* changed_running_quit_message =
 "window is still running. Do you really want to quit?";
 
 static char *no_selection_message =
-	 "No text is selected in this xpp session";
+	 "No text selection is available.";
 
 static char* running_quit_message =
 "The application in the journal window is still running. "
