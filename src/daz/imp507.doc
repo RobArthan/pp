@@ -100,6 +100,7 @@ Also implemented remedies for issues 1 and 4 (V0.6).
 \item[Issue 1.135] Prefixing paramater specifications.
 \item[Issue 1.136-137] IUCT WP 3 changes and further use of update functions.
 \item[Issue 1.138] IUCT WP 5 changes and further use of update functions.
+\item[Issue 1.139] Improved handling of prefixing Z paragraphs.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -4103,19 +4104,19 @@ let	val ty_ty = (fn ty => (type_subst_type tysubs ty
 	fun collapse (consts : TERM list) (othm : THM OPT) ([] : (TERM * THM OPT) list) = (
 		if is_nil consts
 		then []
-		else [(consts, othm)]
+		else [(rev consts, othm)]
 	) | collapse consts Nil ((const, othm) :: more) = (
 		if is_nil consts
 		then collapse [const] othm more
-		else (consts, Nil) :: collapse [const] othm more
+		else (rev consts, Nil) :: collapse [const] othm more
 	) | collapse consts othm ((const, Nil) :: more) = (
 		if is_nil consts
 		then collapse [const] Nil more
-		else (consts, othm) :: collapse [const] Nil more
+		else (rev consts, othm) :: collapse [const] Nil more
 	) | collapse consts (Value thm) ((const, (Value thm1)) :: more) = (
 		if (thm =|- thm1)
 		then collapse (const :: consts) (Value thm) more
-		else (consts, (Value thm)) :: collapse [const] (Value thm1) more
+		else (rev consts, (Value thm)) :: collapse [const] (Value thm1) more
 	);
 	fun aux ((consts, Nil) :: more) = (map (fn const =>
 		let	val (name, ty, _) = dest_z_gvar const;
@@ -4149,18 +4150,34 @@ let	val ty_ty = (fn ty => (type_subst_type tysubs ty
 	in
 		case (fst o dest_const) pty handle Fail _ => "" of
 		"Z'AxDes" => (
-			(let val (decl, vp) =
-				((Combinators.I ** Value) o dest_±) tm
-					handle Fail _ => (tm, Nil);
+			(let 	val (formals, body) = strip_µ tm;
+				val fnames = map ((fn (n,_,_) => n) o dest_z_lvar)
+					 formals;
+				val (decl, vp) =
+				((Combinators.I ** Value) o dest_±) body
+					handle Fail _ => (body, Nil);
 			in
-				store_para(AxDesInfo ([], decl, vp, pntys))
+				if is_nil (fnames)
+				then store_para(AxDesInfo ([], decl, vp, pntys))
+				(* below is cowardice , but sorta correct *)
+				else store_para(AxDesInfo ([], tm, Nil, pntys))
 			end);
 			aux more
 		) |"Z'AbbDef" => (
-			store_para(AbbDefInfo (fst(hd pntys), [], (snd o dest_eq) tm));
+			(let val (formals, body) = strip_µ tm;
+				val fnames =  map ((fn (n,_,_) => n) o dest_z_lvar) formals;
+			in	
+			store_para(AbbDefInfo (fst(hd pntys), fnames, (snd o dest_eq) body))
+			end handle (Fail _) =>
+			comment "z_prefix" 507057 [fn () => name_strings]);
 				 aux more
 		) |"Z'SchBox" => (
-			store_para(SchBoxInfo (fst(hd pntys), [], (snd o dest_eq) tm));
+			(let val (formals, body) = strip_µ tm;
+				val fnames =  map ((fn (n,_,_) => n) o dest_z_lvar) formals;
+			in	
+			store_para(SchBoxInfo (fst(hd pntys), fnames , (snd o dest_eq) body))
+			end handle (Fail _) =>
+			comment "z_prefix" 507057 [fn () => name_strings]);
 				 aux more
 		) | _ => (if (length consts = 1)
 			then ((let val (lhs, rhs) = dest_eq (concl thm);
@@ -4192,6 +4209,8 @@ fun Ûstore_prefix_types_and_constsÝ (ident : ID)
 		(thyname : string) : (string * string) list = (
 let	val old_thy = get_current_theory_name();
 	val dummy1 = open_theory internal_thy;
+	val ifixities = rev(ZUserInterfaceSupport.get_zfixity_infos
+		internal_thy);
 	val itypes = rev(get_types internal_thy);
 	val iconsts = rev(get_consts internal_thy);
 	val iconst_thms = map (fn x => (x, (Value (get_spec x)
@@ -4201,6 +4220,10 @@ let	val old_thy = get_current_theory_name();
 	val pfxd_names = map (prefix_package_id ident newids) type_names;
 	val tysubs = (combine pfxd_names type_names) drop (fn (x,y) => (x = y));
 	val dummy2 = open_theory thyname;
+	val dummyfixities = map 
+		(fn (c, t) => ZUserInterfaceSupport.set_zfixity_info(c, [t]))
+		ifixities;
+
 	fun do_type (ty : TYPE) = (
 	let 	val (s,args) = dest_ctype ty;
 		val n = length args;
