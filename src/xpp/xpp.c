@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.19 2004/01/25 15:52:10 rda Exp rda $
+ * $Id: xpp.c,v 2.20 2004/01/26 11:22:52 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -234,7 +234,7 @@ void set_pp_home(void)
 		}
 		if(strchr(argv0, '/') == NULL) { /* must have been invoked via PATH */
 			char *n;
-			n = find_file(argv0, unix_path);
+			n = find_file(argv0, unix_path, 1);
 			if(n != NULL) {
 				real_name = get_real_name(n);
 				XtFree(n);

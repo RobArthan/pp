@@ -170,7 +170,8 @@ typedef enum {
 		char **base);
 	char * find_file(
 		char *name,
-		char *dirs);
+		char *dirs,
+		int is_reg);
 /* Module: help.c (automatically generated during build) */
 	#include "help.h"
 /* Module: mainw */
