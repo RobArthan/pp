@@ -1,4 +1,4 @@
-% %Z% $Date: 2002/07/24 14:09:59 $ $Revision: 1.110 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2002/08/14 11:39:02 $ $Revision: 1.111 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -16,7 +16,7 @@
 \TPPtitle{Implementation: Verification Condition Generator}  %% Mandatory field
 \def\TPPheadtitle{Verification Condition Generator}
 \TPPref{ISS/HAT/DAZ/IMP505}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.110 $%
+\def\SCCSversion{$Revision: 1.112 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 \TPPdate{\FormatDate{97/07/18%
@@ -132,6 +132,7 @@ some expressions which is not appropriate in general).
 \item[Issue 1.109, 1.110] R0079: assertions (allowed for new syntax).
 \item[Issue 1.111] Checks 1(a) and 19 now made for logical constant statements as well as
 ordinary specification statements.
+\item[Issue 1.112] R0051: default parameters. Fixed bug in {\it proc\_call\_spec}.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -877,7 +878,7 @@ end
 $conv\_var\_decl$ is implemented in \cite{ISS/HAT/DAZ/IMP508}.
 =SML
 fun €cn_return› ({wp, a, wp_env= {env,
-		fun_header={name, formal_pars, return_type},
+		fun_header={name, formal_pars, return_type, par_names_defs},
 			return, ...}} : WP_PARS)
 		({e = Value exp} : RETURN) : RESULT = (
 let	val zfun = trans_fun_name env name;
@@ -1056,23 +1057,25 @@ fun €z_preds_in_callee_cxt›
 	end
 );
 =TEX
-In the following, the {\it Spec} of the specification is just given by the
-pre- and post-condition as Z predicates. The frames are irrelevant to
-the weakest pre-condition calculation.
+In the following, computing the precise frame of the {\it SPEC}  returned would be a little tricky.
+However, all that matters in the weakest pre-condition calcualation is whether or not the
+frame is empty, so we just copy the original frame from the {\it FORMAL\_PROC}.
 
 =SML
 fun €proc_call_spec› (env : CN_ENV)
 		({actuals, ...} : (AGG_CHOICE,EXP) PROC_CALL)
-		(fp as {name, formal_ids, par_names = names, spec={pre, post, ...}, ...} : FORMAL_PROC)
-			: Z_PRED * Z_PRED * STATEMENT * Z_PRED list * Z_PRED list = (
-let	val pre1_post1 = z_preds_in_callee_cxt env fp [pre, post];
+		(fp as {name, formal_ids, par_names_defs, spec={pre, post, w, w0}, ...} : FORMAL_PROC)
+			: SPEC * STATEMENT * Z_PRED list * Z_PRED list = (
+let	val names = map fst par_names_defs;
+	val pre1_post1 = z_preds_in_callee_cxt env fp [pre, post];
 	val pre1 = hd pre1_post1;
 	val post1 = hd(tl pre1_post1);
 	val var_decls = map #var_decl formal_ids;
 	val adj_actuals = case actuals of
-			APositional exps => map (adjust_exp env) exps
+			APositional exps => map (adjust_exp env)
+					(positional_assocs_to_exps par_names_defs exps)
 			|ANamed nas => map (adjust_exp env)
-					(named_assocs_to_exps names nas);
+					(named_assocs_to_exps par_names_defs nas);
 	fun do_params (acc as (presub, postsub, dc_preds, vc_preds, st))
 		(acts as (act::more_acts) : EXP list)
 		({var_decl = {vars = frm::more_frms, tmark}, mode}::more_pss : PARAM_SPEC list)
@@ -1096,10 +1099,16 @@ let	val pre1_post1 = z_preds_in_callee_cxt env fp [pre, post];
 	) | do_params _ _ _ = (
 		fail "proc_call_spec" 505026 [fn () => name]
 	);
-	val (presubs, postsubs, dc_preds, vc_preds, st) =
+	val (presubs, postsubs, dc_preds, vc_preds, asgns) =
 		do_params ([], [], [], [], STNull) adj_actuals formal_ids;
+	val pre2 = list_sub(pre1, presubs);
+	val post2 = list_sub(post1, postsubs);
+	val spec = {w = w, w0=w0,
+				pre=z_quote(pre2, Nil),
+				post=z_quote(post2, Nil)};
+
 in
-	(list_sub(pre1, presubs), list_sub(post1, postsubs), st, dc_preds, vc_preds)
+	(spec, asgns, dc_preds, vc_preds)
 end
 );
 =TEX
@@ -1120,17 +1129,14 @@ in	find fps is_it
 end
 );
 =TEX
-In the following, we call $spec\_no\_ivars\_either$ directly rather than call $wp$ because the pre- and post-conditions have already been converted to $Z\_PRED$s. 
 =SML
 fun €proc_call_no_ivars› ({wp, a, wp_env as {formal_procs, env, ...}} : WP_PARS)
 		(pc as {name, actuals} : (AGG_CHOICE,EXP) PROC_CALL)
 			: RESULT = (
 let	val fp as {spec = {w, ...}, ...} = get_proc_spec "proc_call_no_ivars" env formal_procs name;
-	val (pre, post, asgns, dc_preds, vc_preds) = proc_call_spec env pc fp;
+	val (spec, asgns, dc_preds, vc_preds) = proc_call_spec env pc fp;
 	val xform = STSemicolon(
-			STSpecNoIvars{spec = {w = [], w0=[],
-					pre=z_quote(pre, Nil),
-					post=z_quote(post, Nil)},
+			STSpecNoIvars{spec = spec,
 				label = "", is_assertion = false}, asgns);
          val a_in = cons_srs Ò(SR_proc_call_end _)Æ a;
 	val {wp = wp1, side = side1} = wp (xform, a_in, wp_env);
@@ -1264,11 +1270,9 @@ fun €proc_call_ivars› ({wp, a, wp_env as {formal_procs, env, ...}} : WP_PARS)
 	(pc as {name, actuals} : (AGG_CHOICE, EXP) PROC_CALL)
 					: RESULT = (
 let	val fp as {spec = {w, ...}, ...} = get_proc_spec "proc_call_ivars" env formal_procs name;
-	val (pre, post, asgns, dc_preds, vc_preds) = proc_call_spec env pc fp;
+	val (spec, asgns, dc_preds, vc_preds) = proc_call_spec env pc fp;
 	val xform = STSemicolon(
-			SSpecIvars{spec = {w = [], w0=[],
-					pre=z_quote(pre, Nil),
-					post=z_quote(post, Nil)},
+			SSpecIvars{spec = spec,
 				label = ""}, asgns);
 	val a_in = cons_srs Ò(SR_proc_call_end _)Æ a;
 	val {wp = wp1, side = side1} = wp (xform, a_in, wp_env);
@@ -1620,7 +1624,7 @@ The following function makes a pair-wise list of actual parameters (EXPs) with t
 The actuals are in the order given in the procedure specification.
 The actual parameter expressions are not adjusted.
 =SML
-fun €anti_aliasing_actuals_modes› (env : CN_ENV) (formal_proc as {par_names, ...}: FORMAL_PROC)
+fun €anti_aliasing_actuals_modes› (env : CN_ENV) (formal_proc as {par_names_defs, ...}: FORMAL_PROC)
 				(proc : (AGG_CHOICE, EXP) PROC_CALL) :
 			(EXP * MODE) list = (
 	let	val name = #name proc;
@@ -1636,8 +1640,8 @@ fun €anti_aliasing_actuals_modes› (env : CN_ENV) (formal_proc as {par_names, ...
 		val (formals,modes) = (split o flat o map do_formals_modes)
 						vars_modes;
 		val actuals = (case #actuals proc of
-				APositional exps => exps
-			|	ANamed nas => named_assocs_to_exps par_names nas)
+				APositional exps => positional_assocs_to_exps par_names_defs exps
+			|	ANamed nas => named_assocs_to_exps par_names_defs nas)
 			handle Fail _ => fail "anti_aliasing_check_1" 505068
 						[fn() => fmt_id name];
 		val actuals_modes = combine actuals modes
@@ -1897,7 +1901,7 @@ fun €var_sig› (env : CN_ENV) (zn : Z_ID) : Z_EXP = (
 =TEX
 =SML
 fun €fun_decl_aux›
-	((env, {name, formal_pars, return_type}, globals)
+	((env, {name, formal_pars, return_type, par_names_defs}, globals)
 	: CN_ENV * INFORMAL_FUN * Z_ID list) : Z_DECL * TERM * TERM = (
 	let	val zn = trans_id name;
 		val z_ret_ty = zid env (trans_id return_type);
