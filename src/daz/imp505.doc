@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% %Z% $Date: 2004/12/08 16:35:01 $ $Revision: 1.134 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2005/02/22 17:43:26 $ $Revision: 1.135 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -26,7 +26,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation: Verification Condition Generator}  %% Mandatory field
 \def\TPPheadtitle{Verification Condition Generator}
 \TPPref{ISS/HAT/DAZ/IMP505}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.134 $%
+\def\SCCSversion{$Revision: 1.135 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 \TPPdate{\FormatDate{97/07/18%
@@ -158,6 +158,7 @@ More corrections to VC derivation code. Change names {\it Sequent\_Route} to
 \item[Issue 1.133] Fixed unsoundness arising from use of initial values of out mode parameters.
 \item[Issue 1.134] Labelled statements are now supported formally and goto statements are supported informally.
 \item[Issue 1.135] Improved domain condition generation for for-loops following a suggestion of Alf Smith.
+\item[Issue 1.136] New treatment of initial variables in side-conditions.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -216,6 +217,13 @@ fun €ti_context_of_formal_proc› (env : CN_ENV) ({formal_ids, ...} : FORMAL_PROC)
 	ti_context_of_formal_ids env formal_ids
 );
 =TEX
+The following are useful in forming error messages.
+=SML
+fun €fmt_id› (n : ID) : string = CaseIndependence.get_external_name n;
+fun €fmt_id_list› ([] : ID list) = ""
+  | fmt_id_list ([x] : ID list) = (fmt_id x)
+  | fmt_id_list (x::xs: ID list) = (fmt_id x)^", "^(fmt_id_list xs);
+=TEX
 \section{STORAGE OF Z TERMS}
 =TEX
 First we introduce the new flag.
@@ -242,11 +250,18 @@ fun (h : Z_PRED list) Ù (c : Z_PRED) : SEQUENT = (h, c);
 fun (h : Z_PRED) %Longrightarrow% (s : SEQUENT list) : SEQUENT list = (
 	map (fn (h', c) => (h' term_grab h, c)) s
 );
-
 =TEX
 =SML
 fun €add_hyps› ([] : Z_PRED list, s : SEQUENT list) : SEQUENT list = s
 |    add_hyps (h::more, s) = h %Longrightarrow% add_hyps (more, s);
+=TEX
+=SML
+fun €add_hyps_to_side› (h : Z_PRED list, seqs : (SEQUENT * Z_ID list) list)
+	: (SEQUENT * Z_ID list) list = (
+	let	fun do1 (seq, w) = (hd(add_hyps (h, [seq])), w);
+	in	map do1 seqs
+	end
+);
 =TEX
 =SML
 fun €add_domain_conds› (env : CN_ENV)
@@ -314,31 +329,48 @@ example:
 =INLINEFT
 init_sr vr_while_pre_intro s
 =SML
-
 fun €cons_sr›  (constr : TERM ) ( (h,c) : SEQUENT ) : SEQUENT = 
 		( map (fn zp => 
 			if is_route zp then mk_route(extend_path constr (dest_route zp))
 			else zp
 		      )  h,  
 		  c
-		)
-
+);
+=TEX
+=SML
 fun €cons_dec_sr›  (constr : TERM, d : TERM list ) ( (h,c) : SEQUENT ) : SEQUENT = 
 		( map (fn zp => 
 			if is_route zp then mk_route(extend_dec_path (constr,d) (dest_route zp))
 			else zp
 		      )  h,  
 		  c
-		)
-
-fun €cons_srs› (constr : TERM) ( hcs : SEQUENT list ) : SEQUENT list = 
-	map (cons_sr constr) hcs 
-
-fun €cons_dec_srs› (constr : TERM, d : TERM list ) ( hcs : SEQUENT list ) : SEQUENT list = 
-	map (cons_dec_sr (constr, d)) hcs ;
-
-
-fun extract_routes  ( [] : SEQUENT list ) : (SEQUENT list * ROUTE OPT list) = ([],[])
+);
+=TEX
+=SML
+fun €cons_srs› (constr : TERM) ( hcs : SEQUENT list ) : SEQUENT list = (
+	map (cons_sr constr) hcs
+);
+=TEX
+=SML
+fun €cons_srs_side› (constr : TERM) ( hcws : (SEQUENT * 'a) list )
+	: (SEQUENT * 'a) list = (
+	map (fn (hc, w) => (cons_sr constr hc, w)) hcws
+);
+=TEX
+=SML
+fun €cons_dec_srs› (constr_d : TERM * TERM list )
+	( hcs : SEQUENT list ) : SEQUENT list = (
+	map (cons_dec_sr constr_d) hcs
+);
+=TEX
+=SML
+fun €cons_dec_srs_side› (constr_d : TERM * TERM list )
+	( hcws : (SEQUENT * 'a) list ) : (SEQUENT * 'a) list = (
+	map (fn (hc, w) => (cons_dec_sr constr_d hc, w)) hcws
+);
+=TEX
+=SML
+fun €extract_routes›  ( [] : SEQUENT list ) : (SEQUENT list * ROUTE OPT list) = ([],[])
 |   extract_routes  ( hc :: hcs ) = 
 	let 	fun drop_get_routes ([],c) =  ( ([],c), Nil )
              	|   drop_get_routes (zp::zps,c) = 
@@ -479,7 +511,7 @@ See \cite{ISS/HAT/DAZ/DTD502}.
 \subsection{Null Statement}\label{wp-null}
 =SML
 fun €null› ({a, ...} : WP_PARS) : RESULT = (
-	{wp = cons_srs vr_null a, side = []}
+	{wp = cons_srs vr_null a, side = [], modifies = []}
 );
 =TEX
 \subsection{Assignment Statement}\label{wp-assignment}
@@ -517,14 +549,14 @@ fun €simple_assign› ({wp_env={env,...}, a, ...} : WP_PARS)
 		val orig = case env zx of
 			Value{canon_name, ...} => canon_name
 		|	_ => zx;
-	in	{wp = add_domain_conds env ([ze], subseq(a, orig, ze)), side = []}
+	in {	wp = add_domain_conds env ([ze], subseq(a, orig, ze)),
+		side = [],
+		modifies = [orig]	}
 	end
-)
-(*
+);
 =TEX
 =SML
-*)
-and €array_assign› ({wp, a, wp_env as {env,...}} : WP_PARS)
+fun €array_assign› ({wp, a, wp_env as {env,...}} : WP_PARS)
 			({prefix, index as EArrayAggPos{comps, tmark as Nil}} : EXP INDEXED_COMP) (ze : Z_EXP) : RESULT = (
 let	val name' = prefix;
 	val e' = (z_override
@@ -571,31 +603,35 @@ fun €assign› (wp_pars as {wp_env as {env, ...}, ...} : WP_PARS) ((name, ze) : EX
 			: RESULT = (
 let	val tmark = tmark_of_prefix env(trans_exp env name);
 	val ze' = slide_to_tmark env (ze, tmark);
-	val {wp = wp1, side = side1} = assign_rec wp_pars (name, ze');
-in	{wp = cons_srs vr_assign wp1, side = cons_srs vr_any side1}
+	val {wp = wp1, side = side1, modifies = modifies1} =
+		assign_rec wp_pars (name, ze');
+in {	wp = cons_srs vr_assign wp1,
+	side = cons_srs_side vr_any side1,
+	modifies = modifies1	}
 end
 );
 =TEX
 \subsection{Specification Statement (No initial variables)}\label{wp-specification-no-ivars}
 =SML
-fun €spec_no_ivars› ({a, ...} : WP_PARS) ((pre, post) : Z_EXP * Z_EXP)
+fun €spec_no_ivars› ({a, ...} : WP_PARS)
+	(w : Z_ID list)
+	((pre, post) : Z_EXP * Z_EXP)
 			: RESULT = (
 	let 	val wphd = [] Ù pre
-		val side = post %Longrightarrow% a
-	in
-		{wp = [ init_sr vr_spec_pre_intro wphd ], 
-		 side = cons_srs vr_spec_to_side side 
-		}
+		val side = map (fn s => (s, w)) (post %Longrightarrow% a)
+	in {	wp = [ init_sr vr_spec_pre_intro wphd ], 
+		 side = cons_srs_side vr_spec_to_side side ,
+		 modifies = w}
 	end
 );
 =TEX
 =SML
 fun €spec_no_ivars_empty› ({a, ...} : WP_PARS) ((pre, post) : Z_EXP * Z_EXP)
 			: RESULT = (
-	{wp = init_sr vr_spec_pre_intro  ([] Ù pre):: 
+ {	wp = init_sr vr_spec_pre_intro  ([] Ù pre):: 
 		(cons_srs vr_spec_via  (post %Longrightarrow% a)), 
-	 side = []
-	}
+	side = [],
+	modifies = []	}
 );
 =TEX
 =SML
@@ -603,19 +639,23 @@ fun €spec_no_ivars_either› (wp : WP_PARS) (w : Z_ID list) ((pre, post) : Z_EXP *
 		: RESULT = (
 	if	w = []
 	then	spec_no_ivars_empty wp (pre, post)
-	else	spec_no_ivars wp (pre, post)
+	else	spec_no_ivars wp w (pre, post)
 );
 =TEX
 \subsection{Semicolon}\label{wp-semicolon}
 =SML
 fun €semicolon› ({wp, a, wp_env} : WP_PARS) ((p, q) : STATEMENT * STATEMENT)
 			: RESULT = (
-let	val {wp = wp2, side = side2} = wp (q, cons_srs vr_end_semi a, wp_env);
-	val {wp = wp1, side = side1} = wp (p, wp2, wp_env);
-in
-	{wp = cons_srs vr_semi  wp1, 
-	 side = cons_srs vr_semi (side1 @ (cons_srs vr_any side2)) 
-	}
+let	val {	wp = wp2,
+		side = side2,
+		modifies = modifies2} = wp (q, cons_srs vr_end_semi a, wp_env);
+	val {	wp = wp1,
+		side = side1,
+		modifies = modifies1} = wp (p, wp2, wp_env);
+	val side2' = map (fn (s, w) => (s, w cup modifies1)) side2;
+in {	wp = cons_srs vr_semi  wp1, 
+	side = cons_srs_side vr_semi (side1 @ (cons_srs_side vr_any side2')),
+	modifies = modifies1 cup modifies2	}
 end
 );
 =TEX
@@ -630,8 +670,12 @@ val exp= q;
 fun €if_then_else›	({wp, a, wp_env as {env,...}} : WP_PARS)
 			({g, p, q, elsif} : STATEMENT IF_THEN_ELSE) : RESULT = (
 let	val sr_a = cons_srs vr_end_if a
-	val {wp = wp1, side = side1} = wp (p, sr_a, wp_env);
-	val {wp = wp2, side = side2} = wp (q, sr_a, wp_env);
+	val {	wp = wp1,
+		side = side1,
+		modifies = modifies1} = wp (p, sr_a, wp_env);
+	val {	wp = wp2,
+		side = side2,
+		modifies = modifies2} = wp (q, sr_a, wp_env);
          val sr_elsf = if elsif then vr_elsf_true else vr_elsf_false
 	val sr_wp1 = cons_dec_srs (vr_if_then, [sr_elsf]) wp1
 	val sr_wp2 = cons_dec_srs (vr_if_else, [sr_elsf]) wp2
@@ -639,11 +683,12 @@ let	val sr_a = cons_srs vr_end_if a
 	val wp = add_domain_conds env ([ze],
 		(z_eq(ze, zid env "TRUE") %Longrightarrow% sr_wp1) @
 		(z_eq(ze, zid env "FALSE") %Longrightarrow% sr_wp2));
-	val sr_side1 = cons_dec_srs (vr_if_then,[sr_elsf]) side1
-	val sr_side2 = cons_dec_srs (vr_if_else,[sr_elsf]) side2
+	val sr_side1 = cons_dec_srs_side (vr_if_then,[sr_elsf]) side1
+	val sr_side2 = cons_dec_srs_side (vr_if_else,[sr_elsf]) side2
 	val side = sr_side1 @ sr_side2;
+	val modifies = modifies1 cup modifies2;
 in
-	{wp = wp, side = side}
+	{wp = wp, side = side, modifies = modifies}
 end
 );
 =TEX
@@ -700,14 +745,18 @@ end
 fun €case_base› ({wp, a, wp_env as {env,...}} : WP_PARS) (e : EXP) (n : int)
 			({choices, p} : STATEMENT CASE_ALTERNATIVE)
 			 : RESULT * Z_EXP = (
-let	val {wp = wp1, side = side1} = wp (p, a, wp_env);
+let	val {	wp = wp1,
+		side = side1,
+		modifies = modifies1} = wp (p, a, wp_env);
 	val ze = trans_exp env e;
 	val zcs = trans_case_choices env choices;
-         val sr_op = cons_dec_srs (vr_case_branch, [mk_z_int (string_of_int n)] ) 
-	val sr_wp1 = sr_op wp1
-         val sr_side1 =  sr_op side1
+	val sr_ops = (vr_case_branch, [mk_z_int (string_of_int n)] ) 
+	val sr_wp1 = cons_dec_srs sr_ops wp1
+	val sr_side1 =  cons_dec_srs_side sr_ops side1
 	val wp' = z_elem (ze, zcs) %Longrightarrow% sr_wp1;
-in	({wp = add_domain_conds env ([ze, zcs], wp'), side = sr_side1}, zcs)
+in 	({	wp = add_domain_conds env ([ze, zcs], wp'),
+		side = sr_side1,
+		modifies = modifies1}, zcs)
 end
 );
 =TEX
@@ -724,18 +773,21 @@ fun €case_step› (pars as {wp, a, wp_env as {env,...}} : WP_PARS) (n : int)
 		in	(res, [ze])
 		end
 	| ({choices, p} :: s') =>
-		let	val {wp = wp1, side = side1} =
+		let	val {wp = wp1, side = side1, modifies = modifies1} =
 				wp (p, a, wp_env);
-         		val sr_op = cons_dec_srs 
-					(vr_case_branch, [mk_z_int (string_of_int n)] ) 
-			val (sr_wp1, sr_side1) = (sr_op wp1, sr_op side1)
-			val ({wp = wp2, side = side2}, rest) =
+         		val sr_ops = (vr_case_branch, [mk_z_int (string_of_int n)] ) 
+			val (sr_wp1, sr_side1) =
+				(cons_dec_srs sr_ops wp1,
+				 cons_dec_srs_side sr_ops side1)
+			val ({wp = wp2, side = side2, modifies = modifies2}, rest) =
 				case_step pars (n+1) {e=e, s=s', others=others};
 			val ze = trans_exp env e;
 			val zcs = trans_case_choices env choices;
 			val wp3 = add_domain_conds env([ze, zcs],
 				(z_elem (ze, zcs) %Longrightarrow% sr_wp1) @ wp2);
-		in	({wp = wp3 , side = sr_side1 @ side2},
+		in	({	wp = wp3 ,
+				side = sr_side1 @ side2,
+				modifies = modifies1 cup modifies2},
 			 zcs :: rest)
 		end
 );
@@ -758,19 +810,25 @@ fun €case_others› (pars as {wp, a, wp_env as {env,...}} : WP_PARS)
 		(st as {e, others, ...} : STATEMENT CASE) : RESULT = (
 	let	val a_in = cons_srs vr_end_case a
 		val pars_in = {wp = wp, a = a_in, wp_env = wp_env}
-		val (res as {wp = wp1, side = side1}, exps) = case_step pars_in 1 st;
+		val (res as {wp = wp1, side = side1, modifies = modifies1}, exps)
+			= case_step pars_in 1 st;
 		val ze = trans_exp env e
 	in	case others of 
 		(STNull SNImplicit) => res
 	|	(STNull SNNothing) => res
 	|	stmt =>
-		let	val {wp = wp2, side = side2} = wp(others, a_in, wp_env);
+		let	val {	wp = wp2,
+				side = side2,
+				modifies = modifies2} = wp(others, a_in, wp_env);
 			val wp2_g = (z_notelem(ze, z_many_union exps) %Longrightarrow% wp2);
 			val sr_wp2_g = cons_srs vr_case_others wp2_g;
 			val wp = wp1 @ sr_wp2_g;
-                           val sr_side2 = cons_srs vr_case_others side2;
+                           val sr_side2 = cons_srs_side vr_case_others side2;
 			val side = side1 @ sr_side2;
-		in	{wp = add_domain_conds env (ze::exps, wp), side = side}
+			val modifies = modifies1 cup modifies2;
+		in {	wp = add_domain_conds env (ze::exps, wp),
+			side = side,
+			modifies = modifies}
 		end
 	end
 );
@@ -780,19 +838,20 @@ fun €case_others› (pars as {wp, a, wp_env as {env,...}} : WP_PARS)
 =SML
 fun €loop› ({a, wp_env={env, ...}, ...} : WP_PARS) ({t, stmt} : STATEMENT LOOP)
 			: RESULT = (
-let	val (pre1, post1) = case stmt of
-		STSpecNoIvars {spec={pre, post, ...}, ...} => (
-			(z_predexp_of_z_tm1 env pre,z_predexp_of_z_tm1 env post)
+let	val (pre1, post1, w) = case stmt of
+		STSpecNoIvars {spec={pre, post, w, ...}, ...} => (
+			(z_predexp_of_z_tm1 env pre, z_predexp_of_z_tm1 env post, w)
 		) |_ => fail "loop" 505022 [];
 	val wp = [init_sr vr_loop_undec_pre_intro ([] Ù pre1)];
-	val side = case t of
+	val side_seqs = case t of
 			Value till => 
 			   [init_sr vr_loop_undec_pre_to_side ([post1] Ù pre1)] @
 				(cons_srs vr_loop_undec_to_side
 					((z_predexp_of_z_tm1 env till) %Longrightarrow% a))
 			|Nil => [init_sr vr_loop_undec_pre_to_side ([post1] Ù pre1)];
+	val side = map (fn s => (s, w)) side_seqs;
 in
-	{wp = wp, side = side}
+	{wp = wp, side = side, modifies = w}
 end
 );
 =TEX
@@ -806,7 +865,7 @@ fun €named_loop› (wp_pars : WP_PARS) ({t, stmt, ...} : STATEMENT NAMED_LOOP)
 =SML
 fun €cn_while›	({a, wp_env={env, ...}, ...} : WP_PARS)
 		({g, loop={t,stmt}, ...} : STATEMENT WHILE) : RESULT = (
-let	val {w, w0, pre, post} = case stmt of
+let	val {w, pre, post, ...} = case stmt of
 		STSpecNoIvars {spec, ...} => spec
 		|_ => fail "loop" 505022 [];
 	val pre1 = z_predexp_of_z_tm1 env pre;
@@ -823,9 +882,8 @@ let	val {w, w0, pre, post} = case stmt of
 					
 			|Nil => [];
 	val sr_till_part = cons_srs vr_while_to_side till_part;
-	val side = sr_wp_to_side @ sr_till_part;
-in
-	{wp = wp, side = side}
+	val side = map (fn s => (s, w)) (sr_wp_to_side @ sr_till_part);
+in	{wp = wp, side = side, modifies = w}
 end
 );
 =TEX
@@ -835,7 +893,7 @@ fun €for_static› ({a, wp_env={env, ...}, ...} : WP_PARS)
 	({i, tmark, range, dir, loop = {t, stmt}, ...} : STATEMENT FOR_STATIC) : RESULT = (
 let	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
 	val {lo, hi} = dest_range range;
-	val {pre, post, ...} = case stmt of
+	val {pre, post, w, ...} = case stmt of
 		STSpecNoIvars {spec, ...} => spec
 		|_ => fail "for_static" 505022 [];
 	val pre1 = z_predexp_of_z_tm1 env pre;
@@ -865,10 +923,10 @@ let	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
 	val sr_go_round = [init_sr vr_for_pre_to_side  go_round];
 	val dont_go = sub(post1, zi, zfinal) %Longrightarrow% a;
 	val sr_dont_go = cons_srs vr_for_to_side dont_go;
-	val side = add_domain_conds env ([zlo, zhi], 
-			sr_go_round @ sr_dont_go @ sr_till_part);
-in
-	{wp = wp, side = side}
+	val side = map (fn s => (s, w))
+			(add_domain_conds env ([zlo, zhi], 
+				sr_go_round @ sr_dont_go @ sr_till_part));
+in	{wp = wp, side = side, modifies = w}
 end
 );
 =TEX
@@ -876,7 +934,7 @@ end
 =SML
 fun €for_tmark› ({a, wp_env={env, ...}, ...} : WP_PARS)
 	({i, tmark, dir, loop = {t, stmt}, ...} : STATEMENT FOR_TMARK) : RESULT = (
-let	val {pre, post, ...} = case stmt of
+let	val {pre, post, w, ...} = case stmt of
 		STSpecNoIvars {spec, ...} => spec
 		|_ => fail "for_tmark" 505022 [];
 	val pre1 = z_predexp_of_z_tm1 env pre;
@@ -905,9 +963,9 @@ let	val {pre, post, ...} = case stmt of
 	val sr_go_round = [init_sr vr_for_pre_to_side go_round];
 	val dont_go = sub(post1, zi, zfinal) %Longrightarrow% a;
 	val sr_dont_go = cons_srs vr_for_to_side dont_go;
-	val side = sr_go_round @ sr_dont_go @ sr_till_part;
+	val side = map (fn s => (s, w)) (sr_go_round @ sr_dont_go @ sr_till_part);
 in
-	{wp = wp, side = side}
+	{wp = wp, side = side, modifies = w}
 end
 );
 =TEX
@@ -922,7 +980,7 @@ let	val ze = trans_exp env g;
 	val dont_exit = (z_eq(ze, zid env "FALSE") %Longrightarrow% a);
 	val sr_dont_exit = cons_srs vr_exit_via dont_exit;
 	val wp = add_domain_conds env ([ze], sr_do_exit @ sr_dont_exit);
-in	{wp = wp, side = []}
+in	{wp = wp, side = [], modifies = []}
 end
 ) | exit_when ({a, wp_env={named_tills, env, ...}, ...})
 	({g, n = Value name} : EXIT_WHEN) = (
@@ -935,21 +993,22 @@ let	val ze = trans_exp env g;
 	val dont_exit = z_eq(ze, zid env "FALSE") %Longrightarrow% a;
 	val sr_dont_exit = cons_srs vr_exit_via dont_exit;
 	val wp = add_domain_conds env ([ze], sr_do_exit @ sr_dont_exit );
-in	{wp = wp, side = []}
+in	{wp = wp, side = [], modifies = []}
 end
 );
 =TEX
 \subsection{Exit}\label{wp-exit}
 =SML
 fun €cn_exit› ({wp_env={till, ...},...} : WP_PARS) ({n = Nil} : EXIT): RESULT = (
-	{wp = [init_dec_sr (vr_exit_till_intro , [mk_z_string ""]) ([] Ù till)], side = []}
+	{wp = [init_dec_sr (vr_exit_till_intro , [mk_z_string ""]) ([] Ù till)],
+	 side = [], modifies = []}
 ) | cn_exit ({wp_env={named_tills, ...},...} : WP_PARS) ({n = Value name} : EXIT) = (
 let	val till = case s_lookup name named_tills of
 		Value p => p
 	|	Nil => fail "exit_when" 505069 [fn _ => name]
-in	{wp = [init_dec_sr(vr_exit_till_intro,[mk_z_string name]) ([] Ù till)], 
-	 side = []
-	}
+in {	wp = [init_dec_sr(vr_exit_till_intro,[mk_z_string name]) ([] Ù till)], 
+	side = [],
+	modifies = []	}
 end
 );
 =TEX
@@ -969,13 +1028,11 @@ let	val zfun = trans_fun_name env name;
 	val do_return = [z_eq(z_fun_call(zfun, zargs), ze)] Ù return;
 	val sr_do_return = [init_sr vr_return_intro do_return];
 	val wp = add_domain_conds env ([ze], sr_do_return );
-	val side = [];
-in
-	{wp = wp, side = side}
+in	{wp = wp, side = [], modifies = []}
 end
 ) | cn_return ({wp, a, wp_env= {env, return, ...}})
 		({e = Nil} : RETURN) : RESULT = (
-	{wp = [ init_sr vr_return_intro ([] Ù return) ], side = []}
+	{wp = [ init_sr vr_return_intro ([] Ù return) ], side = [], modifies = []}
 );
 =TEX
 \subsection{Procedure Call (No Initial Variables in Spec)}\label{wp-proc-call-no-ivars}
@@ -1026,7 +1083,6 @@ fun €param_tmp_name› (ty : TYPE) : Z_ID = (
 	in	res
 	end
 );
-=IGN
 =TEX
 The work done for an individual parameter is sufficiently complicated to
 merit a separate function.
@@ -1038,7 +1094,8 @@ It also returns, if necessary, a list of predicates giving
 the domain conditions for the actual parameter and,
 if this is a record or array component actual parameter being
 exported, the membership constraint giving the declaration for
-the new Z variable that represents the parameter.
+the new Z variable that represents the transformed parameter.
+The actual actual parameter (i.e., after this transformation) is also returned so that caller can calculate the effective frame accurately.
 
 The optional predicate is the VC that may be needed if an exported parameter
 is being passed to a formal whose type is a constrained array subtype
@@ -1049,22 +1106,22 @@ In this case, if the parameter is an {\tt in} we can just use the (possibly) sli
 We therefore only have to test whether sliding has occurred in the handler in the
 case of an exported parameter.
 
-The final part of the return value is the optional
+The final part of the return value gives the optional
 assignment statement that gives the update to the actual parameter
 to be considered as executed after the call.
 =SML
 fun €proc_call_param› (env : CN_ENV)
 	(actual : EXP, formal : ID, tmark : TMARK, mode : MODE)
 
-	: (Z_ID * Z_EXP) list * (Z_ID * Z_EXP) list * Z_PRED list * Z_PRED OPT * STATEMENT OPT = (
+	: (Z_ID * Z_EXP) list * (Z_ID * Z_EXP) list * Z_PRED list * EXP * Z_PRED OPT * STATEMENT OPT = (
 let	val	ntm as (n, tm) = (trans_id formal, trans_exp env actual);
 	val	sl_tm = slide_to_tmark env (tm, tmark);
 	val	dcs = domain_conds env tm;
 in	let	val (v, ty) = dest_var sl_tm;
-	in	([ntm], [ntm, (init_var n, mk_var(init_var v, ty))], dcs, Nil, Nil)
+	in	([ntm], [ntm, (init_var n, mk_var(init_var v, ty))], dcs, actual, Nil, Nil)
 	end	handle Fail _ => (
 			case mode of
-				MSparkIn _ => ([(n, sl_tm)], [(n, sl_tm)], dcs, Nil, Nil)
+				MSparkIn _ => ([(n, sl_tm)], [(n, sl_tm)], dcs, actual, Nil, Nil)
 			|	_ => (
 				let	val (v, ty) = dest_var tm;
 					val cnstrnt = zid env (trans_id tmark);
@@ -1076,6 +1133,7 @@ in	let	val (v, ty) = dest_var sl_tm;
 				in	([ntm],
 					 [ntm, (init_var n, mk_var(init_var v, ty))],
 					 dcs,
+					 actual,
 					 vc_opt,
 					 Nil)
 				end handle Fail _ =>
@@ -1089,12 +1147,14 @@ in	let	val (v, ty) = dest_var sl_tm;
 							Nil => Nil
 						|	Value r => Value (z_eq(z_dom tm, r))
 					);
+					val e = EAuxiliaryExp(z_quote(nvtm, Nil));
 					val stmt = Value (STAssign {
 						name = actual,
-						e = EAuxiliaryExp(z_quote(nvtm, Nil))});
+						e = e});
 				in	([ntm],
 					 [(init_var n, tm), (n, nvtm)],
 					 pred::dcs,
+					 e,
 					 vc_opt,
 					 stmt)
 				end
@@ -1122,14 +1182,92 @@ fun €z_preds_in_callee_cxt›
 	end
 );
 =TEX
-In the following, computing the precise frame of the {\it SPEC}  returned would be a little tricky.
-However, all that matters in the weakest pre-condition calcualation is whether or not the
-frame is empty, so we just copy the original frame from the {\it FORMAL\_PROC}.
+The following function extracts the entire variable from an expression.
+=SML
+fun €entire_var_exp› (cn_env : CN_ENV) (e : EXP) : ID = (
+	let	fun aux (EId id) = id
+		|   aux (ESelectedComp {prefix, selector}) = aux prefix
+		|   aux (EIndexedComp{prefix, index}) = aux prefix
+		|   aux (EAuxiliaryExp (ZTmQuotation(t, _))) = (
+			fst(dest_var t)
+			handle Fail _ => fail "entire_var_exp" 505080 []
+		) | aux _ = fail "entire_var_exp" 505080 [];
+	in	aux (adjust_exp cn_env e)
+	end
+);
+=TEX
+=SML
+fun €name_to_entire_variable_name› (cn_env : CN_ENV) (e : EXP) : Z_ID = (
+	let	val zx = trans_id (entire_var_exp cn_env e);
+		val orig = case cn_env zx of
+			Value {canon_name, ...} => canon_name
+		|	_ => zx;
+	in	orig
+	end	handle exn => reraise exn "name_to_entire_variable_name"
 
+);
+=TEX
+The following function makes a pair-wise list of actual parameters (EXPs) with their modes (which are extracted from the corresponding $formal\_proc$).
+The actuals are in the order given in the procedure specification.
+The actual parameter expressions are not adjusted.
+=SML
+fun €proc_call_actuals_modes› (env : CN_ENV) (formal_proc as {par_names_defs, ...}: FORMAL_PROC)
+				(proc : (AGG_CHOICE, EXP) PROC_CALL) :
+			(EXP * MODE) list = (
+	let	val name = #name proc;
+		val formal_ids = #formal_ids formal_proc;
+		val var_decls_modes = map (fn {var_decl, mode,...}
+					=> (var_decl,mode)) formal_ids;
+		val vars_modes = map
+				(fn ({vars, ...},mode) => (vars,mode))
+				 var_decls_modes;
+		fun do_formals_modes (id::rest, m) = (
+			(id, m)::do_formals_modes (rest, m)
+		) | do_formals_modes _ = [];
+		val (formals,modes) = (split o flat o map do_formals_modes)
+						vars_modes;
+		val actuals = (case #actuals proc of
+				APositional exps => positional_assocs_to_exps par_names_defs exps
+			|	ANamed nas => named_assocs_to_exps par_names_defs nas)
+			handle Fail _ => fail "anti_aliasing_check_1" 505068
+						[fn() => fmt_id name];
+		val actuals_modes = combine actuals modes
+			handle Fail _ => fail "anti_aliasing_check_1" 505068
+						[fn() => fmt_id name];
+	in	combine actuals modes
+	end
+);
+=TEX
+The following function computes the effective frame of a procedure call --- the frame that is obtained by substituting the entire variables of the actual parameters
+for the formals in the original frame.  
+=SML
+fun €proc_frame› (env : CN_ENV)
+			({formal_ids, spec={w, ...}, ...} : FORMAL_PROC )
+			(actuals_modes : (EXP * MODE) list)
+				: Z_ID list = (
+	let	val var_decls = map (fn {var_decl, ...} => var_decl) formal_ids;
+		val formals = flat (map (fn {vars, ...} => vars) var_decls);
+		val table = combine formals (map fst actuals_modes);
+		fun aux (v :: vs) = (
+			(case lassoc5 table v of
+				Nil => v
+			|	Value e =>
+				name_to_entire_variable_name env e)
+			:: aux vs
+		) | aux [] = [];
+	in	aux w
+	end
+);
+=TEX
+The following function combines the functionality of {\it proc\_call\_spec}
+and {\it proc\_call\_range\_checks} from the specification.
+The fourth part of the returned value gives the range checks.
+
+Formerly, a very approximate treatment of the frame was acceptable in the following, but now the treatment of side conditions needs us to keep an accurate track of possible side effects.
 =SML
 fun €proc_call_spec› (env : CN_ENV)
-		({actuals, ...} : (AGG_CHOICE,EXP) PROC_CALL)
-		(fp as {name, formal_ids, par_names_defs, spec={pre, post, w, w0}, ...} : FORMAL_PROC)
+		(pc as {actuals, name = n} : (AGG_CHOICE,EXP) PROC_CALL)
+		(fp as {name, formal_ids, par_names_defs, spec={pre, post, ...}, ...} : FORMAL_PROC)
 			: SPEC * STATEMENT * Z_PRED list * Z_PRED list = (
 let	val names = map fst par_names_defs;
 	val pre1_post1 = z_preds_in_callee_cxt env fp [pre, post];
@@ -1137,49 +1275,51 @@ let	val names = map fst par_names_defs;
 	val post1 = hd(tl pre1_post1);
 	val var_decls = map #var_decl formal_ids;
 	val adj_actuals = case actuals of
-			APositional exps => map (adjust_exp env)
-					(positional_assocs_to_exps par_names_defs exps)
-			|ANamed nas => map (adjust_exp env)
-					(named_assocs_to_exps par_names_defs nas);
-	fun do_params (acc as (presub, postsub, dc_preds, vc_preds, st))
+		APositional exps => map (adjust_exp env)
+				(positional_assocs_to_exps par_names_defs exps)
+	|	ANamed nas => map (adjust_exp env)
+				(named_assocs_to_exps par_names_defs nas);
+	fun do_params (acc as (presub, postsub, dc_preds, vc_preds, st, es))
 		(acts as (act::more_acts) : EXP list)
 		({var_decl = {vars = frm::more_frms, tmark}, mode}::more_pss : PARAM_SPEC list)
-	: (Z_ID * Z_EXP) list * (Z_ID * Z_EXP) list * Z_PRED list * Z_PRED list * STATEMENT = (
-		let	val (prs, psts, prds, prd_opt, st_opt) =
+	: (Z_ID * Z_EXP) list * (Z_ID * Z_EXP) list *
+		Z_PRED list * Z_PRED list * STATEMENT * EXP list = (
+		let	val (prs, psts, prds, e, prd_opt, st_opt) =
 			proc_call_param env (act, frm, tmark, mode);
 		in	do_params
 			(prs@presub, psts@postsub, prds term_union dc_preds,
 			(case prd_opt of Nil => vc_preds
 			| Value prd => vc_preds @ [prd]),
 			(case st_opt of Nil => st
-			 | Value asgn => STSemicolon(asgn, st)))
+			 | Value asgn => STSemicolon(asgn, st)), e::es)
 			more_acts
 			({var_decl = {vars = more_frms, tmark = tmark},
 			  mode = mode}::more_pss)
 		end
 	) | do_params acc acts ({var_decl = {vars = [], ...}, ...}::more_pss) = (
 		do_params acc acts more_pss
-	) | do_params acc [] [] = (
-		acc
+	) | do_params (presub, postsub, dc_preds, vc_preds, st, es) [] [] = (
+		(presub, postsub, dc_preds, vc_preds, st, rev es)
 	) | do_params _ _ _ = (
 		fail "proc_call_spec" 505026 [fn () => name]
 	);
-	val (presubs, postsubs, dc_preds, vc_preds, asgns) =
-		do_params ([], [], [], [], STNull SNImplicit) adj_actuals formal_ids;
+	val (presubs, postsubs, dc_preds, vc_preds, asgns, es) =
+		do_params ([], [], [], [], STNull SNImplicit, []) adj_actuals formal_ids;
 	val pre2 = list_sub(pre1, presubs);
 	val post2 = list_sub(post1, postsubs);
+	val actuals_modes = proc_call_actuals_modes env fp {name = n, actuals = APositional es};
+	val w = proc_frame env fp actuals_modes;
+	val w0 = map init_var w;
 	val spec = {w = w, w0=w0,
 				pre=z_quote(pre2, Nil),
 				post=z_quote(post2, Nil)};
 
-in
-	(spec, asgns, dc_preds, vc_preds)
+in	(spec, asgns, dc_preds, vc_preds)
 end
 );
 =TEX
 The following function, common to either kind of procedure call, looks for the formal specification
-of a procedure taking into account the possibility that its name may be the unexpanded form
-of a procedure in a used package.
+of a procedure.
 =SML
 fun €get_proc_spec› (caller : string)  (env : CN_ENV)
 	 (name : ID)  : FORMAL_PROC= (
@@ -1193,28 +1333,33 @@ fun €proc_call_no_ivars› ({wp, a, wp_env as {env, ...}} : WP_PARS)
 		(pc as {name, actuals} : (AGG_CHOICE,EXP) PROC_CALL)
 			: RESULT = (
 let	val fp as {spec = {w, ...}, ...} = get_proc_spec "proc_call_no_ivars" env name;
-	val (spec, asgns, dc_preds, vc_preds) = proc_call_spec env pc fp;
+	val (spec as {w, ...}, asgns, dc_preds, vc_preds) =
+		proc_call_spec env pc fp;
 	val xform = STSemicolon(
 			STSpecNoIvars{spec = spec,
 				label = "", is_assertion = false}, asgns);
 	val a_in = cons_srs vr_proc_call_end a;
-	val {wp = wp1, side = side1} = wp (xform, a_in, wp_env);
-	val side2 = map (fn p => init_sr vr_proc_call_rng_intro ([] Ù p)) vc_preds;
+	val {wp = wp1, side = side1, modifies = _} = wp (xform, a_in, wp_env);
+	val side2_seqs = map (fn p => init_sr vr_proc_call_rng_intro ([] Ù p)) vc_preds;
          val sr_wp1 = cons_srs vr_proc_call wp1;
-	val sr_side1 = cons_srs vr_proc_call side1;
-in	{wp = add_hyps(dc_preds, sr_wp1), side = add_hyps(dc_preds, sr_side1@side2)}
+	val sr_side1 = cons_srs_side vr_proc_call side1;
+	val side2 = map (fn s => (s, [])) side2_seqs;
+in {	wp = add_hyps(dc_preds, sr_wp1),
+	side = add_hyps_to_side (dc_preds, sr_side1@side2),
+	modifies = w}
 end
 );
 =TEX
 \subsection{Specification Statement (with Initial Variables)}\label{wp-spec-ivars}
 =SML
 fun €spec_ivars› ({wp, a, wp_env as {env, ...}} : WP_PARS)
+	(w : Z_ID list)
 	(((pre, post)) : (Z_EXP * Z_EXP)) : RESULT = (
 let	val sr_wp = [init_sr vr_spec_pre_intro ([] Ù pre)];
-	val side = post %Longrightarrow% a;
-	val sr_side = cons_srs vr_spec_to_side side;
-in
-	{wp = sr_wp, side = sr_side}
+	val side = map (fn s => (s, w)) (post %Longrightarrow% a)
+in {	wp = sr_wp,
+	side = cons_srs_side vr_spec_to_side side,
+	modifies = w	}
 end
 );
 =TEX
@@ -1255,10 +1400,11 @@ let	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
 	val sr_go_round = [init_sr vr_for_pre_to_side go_round];
 	val dont_go = sub(post1, zi, zfinal0) %Longrightarrow% a;
 	val sr_dont_go = cons_srs vr_for_to_side dont_go;
-	val side = add_domain_conds env ([zlo0, zhi0],
-			sr_go_round @ sr_dont_go @ sr_till_part);
+	val side = map (fn s => (s, w))
+			(add_domain_conds env ([zlo0, zhi0],
+				sr_go_round @ sr_dont_go @ sr_till_part));
 in
-	{wp = wp, side = side}
+	{wp = wp, side = side, modifies = w}
 end
 );
 =TEX
@@ -1320,11 +1466,11 @@ let	val (defs, pre1) = analyse_log_con defs (z_predexp_of_z_tm1 env pre);
 		(acc Ù z_mem(e, z_predexp_of_z_tm1 env t))) :: aux (hyp::acc) more
 	) | aux _ [] = [];
 	val wp = [init_sr vr_log_con_pre_intro (hyps Ù pre1)] @ aux [] (combine hyps defs);
-	val side = add_hyps (map (z_log_con_def(w, w0)) defs,
+	val side = map (fn s => (s, w))
+		(add_hyps (map (z_log_con_def(w, w0)) defs,
 			cons_srs vr_log_con_to_side 
-			  (z_predexp_of_z_tm1 env post %Longrightarrow% a));
-in
-	{wp = wp, side = side}
+			  (z_predexp_of_z_tm1 env post %Longrightarrow% a)));
+in	{wp = wp, side = side, modifies = w}
 end);
 =TEX
 \subsection{Procedure Call (Initial Variables in Spec)}\label{wp-proc-call-ivars}
@@ -1338,11 +1484,14 @@ let	val fp as {spec = {w, ...}, ...} = get_proc_spec "proc_call_ivars" env name;
 			SSpecIvars{spec = spec,
 				label = ""}, asgns);
 	val a_in = cons_srs vr_proc_call_end a;
-	val {wp = wp1, side = side1} = wp (xform, a_in, wp_env);
-	val side2 = map (fn p => init_sr vr_proc_call_rng_intro ([] Ù p)) vc_preds;
+	val {wp = wp1, side = side1, modifies = _} = wp (xform, a_in, wp_env);
+	val side2_seqs = map (fn p => init_sr vr_proc_call_rng_intro ([] Ù p)) vc_preds;
          val sr_wp1 = cons_srs vr_proc_call wp1;
-         val sr_side = cons_srs vr_proc_call (side1@side2)
-in	{wp = add_hyps(dc_preds, sr_wp1), side = add_hyps(dc_preds, sr_side)}
+	val sr_side1 = cons_srs_side vr_proc_call side1;
+	val side2 = map (fn s => (s, [])) side2_seqs;
+in	 {	wp = add_hyps(dc_preds, sr_wp1),
+	side = add_hyps_to_side (dc_preds, sr_side1@side2),
+	modifies = w}
 end
 );
 =TEX
@@ -1550,8 +1699,8 @@ in	case adjust_statement wp_env st of
 	|	STPragma _ => null pars
 	|	STAnnotation _ => null pars
 	|	STGoto _ => fail "wp" 505098 []
-	|	SSpecIvars {spec={pre, post, ...}, ...} =>
-			spec_ivars pars (z_predexp_of_z_tm1 env pre, z_predexp_of_z_tm1 env  post)
+	|	SSpecIvars {spec={pre, post, w, ...}, ...} =>
+			spec_ivars pars w (z_predexp_of_z_tm1 env pre, z_predexp_of_z_tm1 env  post)
 	|	SForNonStatic x => for_non_static pars x
 	|	SLogCon x => log_con pars x
 	|	SProcIvars x => proc_call_ivars pars x
@@ -1562,13 +1711,6 @@ end
 \pagebreak
 \section{APPLICATION OF CHECKS}
 
-
-\subsection{Useful Printing Functions in Lieu of CNSparkOutput}
-=SML
-fun €fmt_id› (n : ID) : string = CaseIndependence.get_external_name n;
-fun €fmt_id_list› ([] : ID list) = ""
-  | fmt_id_list ([x] : ID list) = (fmt_id x)
-  | fmt_id_list (x::xs: ID list) = (fmt_id x)^", "^(fmt_id_list xs);
 =TEX
 \subsection{The Error Printing Function}
 =SML
@@ -1636,27 +1778,6 @@ end
 fun op €cap› (a, b) = (a cup b) diff (a diff b) diff (b diff a);
 =TEX
 =SML
-fun €entire_var_exp› (cn_env : CN_ENV) (e : EXP) : ID = (
-	let	fun aux (EId id) = id
-		|   aux (ESelectedComp {prefix, selector}) = aux prefix
-		|   aux (EIndexedComp{prefix, index}) = aux prefix
-		|   aux _ = fail "entire_var_exp" 505080 [];
-	in	aux (adjust_exp cn_env e)
-	end
-);
-=TEX
-=SML
-fun €name_to_entire_variable_name› (cn_env : CN_ENV) (e : EXP) : Z_ID = (
-	let	val zx = trans_id (entire_var_exp cn_env e);
-		val orig = case cn_env zx of
-			Value {canon_name, ...} => canon_name
-		|	_ => zx;
-	in	orig
-	end	handle exn => reraise exn "name_to_entire_variable_name"
-
-);
-=TEX
-=SML
 fun €free_var_names› (fv::rest : TERM list) : ID list = (
 		if is_z_lvar fv
 		then
@@ -1712,37 +1833,6 @@ fun €anti_aliasing_pars› (fp : FORMAL_PROC) (pc : (AGG_CHOICE,EXP)PROC_CALL)
 		val trans_formals = map trans_id formals;
 	in
 		(formals, #globals fp)
-	end
-);
-=TEX
-The following function makes a pair-wise list of actual parameters (EXPs) with their modes (which are extracted from the corresponding $formal\_proc$).
-The actuals are in the order given in the procedure specification.
-The actual parameter expressions are not adjusted.
-=SML
-fun €anti_aliasing_actuals_modes› (env : CN_ENV) (formal_proc as {par_names_defs, ...}: FORMAL_PROC)
-				(proc : (AGG_CHOICE, EXP) PROC_CALL) :
-			(EXP * MODE) list = (
-	let	val name = #name proc;
-		val formal_ids = #formal_ids formal_proc;
-		val var_decls_modes = map (fn {var_decl, mode,...}
-					=> (var_decl,mode)) formal_ids;
-		val vars_modes = map
-				(fn ({vars, ...},mode) => (vars,mode))
-				 var_decls_modes;
-		fun do_formals_modes (id::rest, m) = (
-			(id, m)::do_formals_modes (rest, m)
-		) | do_formals_modes _ = [];
-		val (formals,modes) = (split o flat o map do_formals_modes)
-						vars_modes;
-		val actuals = (case #actuals proc of
-				APositional exps => positional_assocs_to_exps par_names_defs exps
-			|	ANamed nas => named_assocs_to_exps par_names_defs nas)
-			handle Fail _ => fail "anti_aliasing_check_1" 505068
-						[fn() => fmt_id name];
-		val actuals_modes = combine actuals modes
-			handle Fail _ => fail "anti_aliasing_check_1" 505068
-						[fn() => fmt_id name];
-	in	combine actuals modes
 	end
 );
 =TEX
@@ -1827,33 +1917,12 @@ fun €anti_aliasing_check_3› (speclab : SPECLAB)
 	end
 );
 =TEX
-The following function computes the effective frame of a procedure call --- the frame that is obtained by substituting the entire variables of the actual parameters
-for the formals in the original frame.  
-=SML
-fun €proc_frame› (env : CN_ENV)
-			({formal_ids, spec={w, ...}, ...} : FORMAL_PROC )
-			(actuals_modes : (EXP * MODE) list)
-				: Z_ID list = (
-	let	val var_decls = map (fn {var_decl, ...} => var_decl) formal_ids;
-		val formals = flat (map (fn {vars, ...} => vars) var_decls);
-		val table = combine formals (map fst actuals_modes);
-		fun aux (v :: vs) = (
-			(case lassoc5 table v of
-				Nil => v
-			|	Value e =>
-				name_to_entire_variable_name env e)
-			:: aux vs
-		) | aux [] = [];
-	in	aux w
-	end
-);
-=TEX
 =SML
 fun €anti_aliasing_check› (speclab as {wp_env as {env, ...}, ...}: SPECLAB,
 				proc as {name, ...}: (AGG_CHOICE,EXP)PROC_CALL) = (
 	let	val formal_proc = get_proc_spec "anti_aliasing_check" env name;
 		val actuals_modes =
-			anti_aliasing_actuals_modes env formal_proc proc
+			proc_call_actuals_modes env formal_proc proc
 			handle Fail _ =>
 			fail "anti_aliasing_check" 505068 [fn()=> #name proc];
 	in
@@ -2019,7 +2088,8 @@ fun €fun_decl›
 	end
 );
 =TEX
-The following originally followed he algorithm as suggested by the specification which would have us calculate the set of all variables and parameters that are in scope, add a few things to them and then remove unnecessary ones, i.e. the ones that don't appear free in the sequent.
+The following originally followed the algorithm as suggested by the specification which would have us calculate the set of all variables and parameters that are in scope, add a few things to them and then remove unnecessary ones, i.e. the ones that don't appear free in the sequent.
+However, this is inefficient and has been reworked to start from the free variables.
 =SML
 fun €vc_local_decls1› 
 	({formal_body_flag, fun_flag,
@@ -2193,14 +2263,22 @@ let	val {spec as {w, w0, pre, post},
 
 	val pre1 = z_predexp_of_z_tm1 env pre;
 	val post1 = z_predexp_of_z_tm1 env post;
-	val {wp, side} = wp (st, [init_sr vr_refinement_intro ([] Ù post1)], wp_env);
-	fun subs_c (h, c) = (
+	val {wp, side, modifies = _} =
+		wp (st, [init_sr vr_refinement_intro ([] Ù post1)], wp_env);
+	fun subs_wp (h, c) = (
 		h Ù subs_pred(c, w0, w)
 	);
-	val wp1 = map subs_c (cons_srs vr_refinement_begin wp);
-	val sr_side = cons_srs vr_refinement_begin side;
+	fun subs_side ((h, c), t) = (
+		let	val v = w diff t;
+			val v0 = map init_var v;
+			val t0 = map init_var t;
+		in	(h term_grab subs_pred(pre1, t, t0)) Ù subs_pred (c, v0, v)
+		end
+	);
+	val wp1 = map subs_wp (cons_srs vr_refinement_begin wp);
+	val sr_side = cons_srs_side vr_refinement_begin side;
 	val s = (pre1 %Longrightarrow% wp1) @
-		(subs_pred(pre1, w, w0) %Longrightarrow% sr_side);
+		(map subs_side sr_side);
          val (no_sr_s, routes) = extract_routes s 
 in
 	initial_variable_checks "vcs" env (pre1, post1);
