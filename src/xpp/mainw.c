@@ -788,7 +788,9 @@ gotpty:
 
 BOOL application_alive()
 {
+
 	TRACE("application_alive");
+
 	RETURN("application_alive", !kill(child_pid, 0));
 }
 
@@ -1032,7 +1034,9 @@ static void interrupt_application ()
 	TRACE("interrupt_application");
 	if(application_alive()) {
 		kill((pid_t)-child_pgrp, SIGINT);
-	}
+	} else {
+diag("interrupt_application", "application not running");
+}
 	LEAVE("interrupt_application");
 }
 
