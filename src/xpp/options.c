@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.9 2002/12/03 15:25:38 rda Exp rda $
+ * $Id: options.c,v 2.10 2002/12/03 23:39:50 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -63,7 +63,7 @@ GlobalOptions	orig_global_options;
  * <>	`Execute' adds missing new-lines;
  * <>  `Execute' prompts for new-lines
  * <>  `Execute' ignores missing new-lines
- * Apply Reset Dismiss Help
+ * Apply Current Original Dismiss Help
  * The parameter is a widget to be the owner of the
  * popup shell. It should be the text widget from which the source
  * and font for the text widgets can be borrowed.
@@ -88,7 +88,10 @@ static Widget
 			add_new_line_radio_buttons,
 		button_frame,
 			button_form,
-				apply_btn, reset_btn, dismiss_btn, help_btn;
+				apply_btn, current_btn, original_btn, dismiss_btn, help_btn;
+
+static char add_new_line_mode; /* mirrors value of the radio buttons */
+
 /*
  * Call-backs:
  */
@@ -232,7 +235,7 @@ if(!global_options.edit_only) {
 	copy_font_list(journal_max_text, owner_w);
 
 	add_new_line_frame = XtVaCreateManagedWidget(
-		"execute-new-line-frame",
+		"add-new-line-frame",
 		xmFrameWidgetClass,		shell_row_col,
 		NULL);
 
@@ -242,7 +245,7 @@ if(!global_options.edit_only) {
 
 	add_new_line_radio_buttons = XmVaCreateSimpleRadioBox(
 		shell_row_col,
-		"execute-new-line-frame",
+		"add-new-line-radio-buttons",
 		global_options.add_new_line_mode,
 		add_new_line_cb,
 		XmVaRADIOBUTTON, s1, NULL, NULL, NULL,
@@ -267,7 +270,7 @@ if(!global_options.edit_only) {
 
 	button_form = XtVaCreateManagedWidget("app-row-col",
 		xmFormWidgetClass,		button_frame,
-		XmNfractionBase,		4,
+		XmNfractionBase,		5,
 		NULL);
 
 	apply_btn = XtVaCreateManagedWidget("Apply",
@@ -279,14 +282,24 @@ if(!global_options.edit_only) {
 		XmNrightPosition,		1,
 		NULL);
 
-	reset_btn = XtVaCreateManagedWidget("Reset",
+	current_btn = XtVaCreateManagedWidget("Current",
 		xmPushButtonWidgetClass,		button_form,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
-		XmNrightAttachment,		XmATTACH_POSITION,
 		XmNleftPosition,		1,
+		XmNrightAttachment,		XmATTACH_POSITION,
 		XmNrightPosition,		2,
+		NULL);
+
+	original_btn = XtVaCreateManagedWidget("Original",
+		xmPushButtonWidgetClass,		button_form,
+		XmNtopAttachment,		XmATTACH_FORM,
+		XmNbottomAttachment,		XmATTACH_FORM,
+		XmNleftAttachment,		XmATTACH_POSITION,
+		XmNleftPosition,		2,
+		XmNrightAttachment,		XmATTACH_POSITION,
+		XmNrightPosition,		3,
 		NULL);
 
 	dismiss_btn = XtVaCreateManagedWidget("Dismiss",
@@ -294,9 +307,9 @@ if(!global_options.edit_only) {
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
+		XmNleftPosition,		3,
 		XmNrightAttachment,		XmATTACH_POSITION,
-		XmNleftPosition,		2,
-		XmNrightPosition,		3,
+		XmNrightPosition,		4,
 		NULL);
 
 	help_btn = XtVaCreateManagedWidget("Help",
@@ -304,8 +317,8 @@ if(!global_options.edit_only) {
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
+		XmNleftPosition,		4,
 		XmNrightAttachment,		XmATTACH_FORM,
-		XmNleftPosition,		3,
 		NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -315,8 +328,11 @@ if(!global_options.edit_only) {
 	XtAddCallback(apply_btn, XmNactivateCallback,
 			apply_cb, (XtPointer)NULL);
 
-	XtAddCallback(reset_btn, XmNactivateCallback,
-			reset_cb, (XtPointer)NULL);
+	XtAddCallback(current_btn, XmNactivateCallback,
+			reset_cb, (XtPointer)&global_options);
+
+	XtAddCallback(original_btn, XmNactivateCallback,
+			reset_cb, (XtPointer)&orig_global_options);
 
 	XtAddCallback(dismiss_btn, XmNactivateCallback,
 			dismiss_cb, (XtPointer)NULL);
@@ -358,10 +374,13 @@ if(!global_options.edit_only) {
 			global_options.command_line);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * use reset as a handy way to store the values in the widgets
+ * use callbacks  as a handy way to store the values in the widgets
+ * and initialize add_new_line_mode.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	reset_cb(NULL, NULL, NULL);
+	reset_cb(NULL, (XtPointer)&orig_global_options, NULL);
+
+	add_new_line_cb(NULL, NULL, NULL);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -467,11 +486,7 @@ static void apply_cb(
 	global_options.read_only =
 		XmToggleButtonGetState(read_only_toggle);
 
-	if(command_text) {
-		XtFree(global_options.command_line);
-		global_options.command_line =
-			XmTextGetString(command_text);
-	}
+	global_options.add_new_line_mode = add_new_line_mode;
 
 	if(journal_max_text) {
 		char	*journal_max_buf;
@@ -483,7 +498,13 @@ static void apply_cb(
 		global_options.journal_max = m;
 		sprintf(buf, "%lu", m);
 		XmTextSetString(journal_max_text, buf);
-	};
+	}
+
+	if(command_text) {
+		XtFree(global_options.command_line);
+		global_options.command_line =
+			XmTextGetString(command_text);
+	}
 
 }
 
@@ -491,38 +512,29 @@ static void apply_cb(
  * reset callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void reset_cb(
-	Widget		u1,
-	XtPointer	u2,
-	XtPointer	u3)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
 	Widget *btns;
-
-	XtFree(global_options.command_line);
-
-	global_options = orig_global_options;
-
-	global_options.command_line =
-			XtMalloc(strlen(orig_global_options.command_line) + 1);
-
-	strcpy(global_options.command_line,
-			orig_global_options.command_line);
+	GlobalOptions *options = cbd;
 
 	XmToggleButtonSetState(backup_toggle,
-		global_options.backup_before_save, False);
+		options->backup_before_save, False);
 
 	XmToggleButtonSetState(delete_backup_toggle,
-		global_options.delete_backup_after_save, False);
+		options->delete_backup_after_save, False);
 
 	XmToggleButtonSetState(read_only_toggle,
-		global_options.read_only, False);
+		options->read_only, False);
 
 	if(command_text) {
 		XmTextSetString(command_text,
-			global_options.command_line);
+			options->command_line);
 	}
 	if(journal_max_text) {
 		char buf[20];
-		unsigned long m = global_options.journal_max;
+		unsigned long m = options->journal_max;
 		sprintf(buf, "%lu", m);
 		XmTextSetString(journal_max_text, buf);
 	}
@@ -531,7 +543,7 @@ static void reset_cb(
 		XtVaGetValues(add_new_line_radio_buttons,
 			XmNchildren,		&btns, NULL);
 		XmToggleButtonSetState(
-			btns[orig_global_options.add_new_line_mode],
+			btns[options->add_new_line_mode],
 			True, True);
 	}
 }
@@ -549,14 +561,14 @@ static void dismiss_cb(
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * dismiss callback.
+ * add-new-line radio buttons callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void add_new_line_cb(
 	Widget		w,
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
-	global_options.add_new_line_mode = (int) cbd;
+	add_new_line_mode = (int) cbd;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
