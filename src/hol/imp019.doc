@@ -83,11 +83,8 @@ The error messages could be improved by using a hand-coded function to
 print out the parsing stack.
 \subsection{Deficiencies}
 The parser accepts a slightly larger language than that specified in
-\cite{DS/FMU/IED/DEF001} because of the way blocks of bound variables
-and type arguments are handled --- as things are the user can put brackets
-in places where the grammar should not allow them.
-The data type $PP$ should be enlarged to allow the parser to throw out
-these cases.
+\cite{DS/FMU/IED/DEF001} in that it allows infix, prefix and
+postfix syntax and type constraints in local function definitions.
 \subsection{PREAMBLE}
 =DOC
 structure âParserá : Parser = struct
@@ -108,12 +105,143 @@ fun âparse_errorá (msg : int) (insert : string) : 'a = (
 );
 =TEX
 =SML
-fun âred_errorá (insert : string) : 'a = (
+fun âstack_errorá (insert : string) : 'a = (
 	error "HOL parser"  17005 [fn() => insert]
 );
 =TEX
-\subsection{Type Definitions}
-\subsubsection{Lexical Classes}
+\section{THE GRAMMAR}
+The reference grammar given in \cite{DS/FMU/IED/DEF001} requires a certain
+amount of adaptation. First of all we identify several subcategories of
+the category $Tm$ as follows (each one of which includes the next):
+
+\begin{tabular}{|l|p{4in}|}\hline
+Name & Description \\ \hline
+$Tm$ & The low precedence mixfix term constructs, viz. binders, conditionals, 
+and let-terms,
+together with applications of nonfix functions to such constructs.
+\\\hline
+$Tm1$ & The infix, prefix and postfix term constructs, with comma identified
+as a special case of infix (since it plays a special role in types).
+\\\hline
+$Tm2$ & Nonfix function applications, possibly with type constraints.
+\\\hline
+$Tm3$ & The atomic term constructs such as names, string literals etc. and the
+various bracketed term constructs
+\end{tabular}
+
+This makes the grammar reflect roughly the precedence rules of
+\cite{DS/FMU/IED/DEF001}. We then spell out the iteration constructs which
+are used in \cite{DS/FMU/IED/DEF001}. To abbreviate the grammar, we choose
+to use $Tm2$ and $Tm4$ instead of the categories $V$ and $V1$, leaving the
+check on the form of the variable structure to be handled by the reduction
+functions. Similarly we use $Tm1$ instead of $L$.
+
+The resulting grammar, together with the actions we assocate with each
+alternative is as follows:
+
+=IGN
+cat >imp019.grm.txt
+=DUMP
+imp019.grm.txt
+(* Terms *)
+	Tm	=	HLBinder, BndVars, `HLBlob`, Tm		(red_binder x1 x2 x4)
+		|	`HLLet`, Tm1, AndLet, `HLIn`, Tm		(red_let2 x2 x3 x5)
+		|	`HLIf`, Tm, `HLThen`, Tm, `HLElse`, Tm 	(red_cond x2 x4 x6)
+		|	Tm2, HLBinder, BndVars, `HLBlob`, Tm		(red_tm2_binder x1 x2 x3 x5)
+		|	Tm2, `HLLet`, Tm1, AndLet, `HLIn`, Tm	(red_tm2_let2 x1 x3 x4 x6)
+		|	Tm2, `HLIf`, Tm, `HLThen`, Tm, `HLElse`, Tm 	(red_tm2_cond x1 x3 x5 x7)
+		|	Tm1					(red_fetch x1);
+
+	Tm1	=	Tm1, HLInOp, Tm				(red_inop x1 x2 x3)
+		|	Tm1, `HLComma`, Tm			(red_pair x1 x3)
+		|	HLPreOp, Tm				(red_preop x1 x2)
+		|	Tm1, HLPostOp				(red_postop x1 x2)
+		|	Tm2					(red_fetch x1);
+
+	Tm2	=	Tm2, `HLColon`, Ty			(red_typed x1 x3)
+		|	Tm2, Tm3				(red_app x1 x2)
+		|	Tm3					(red_fetch x1);
+
+	Tm3	=	HLName					(red_tmname x1)
+		|	HLString				(red_string x1)
+		|	HLChar					(red_char x1)
+		|	HLAqTm					(red_tmaq x1)
+		|	`HLLbrace`, OptTms, `HLRbrace`		(red_setdisplay x2)
+		|	`HLLbrace`, Tm, `HLVert`, Tm, `HLRbrace`(red_setcomprehension x2 x4)
+		|	`HLLbrack`, Tm, `HLRbrack`		(red_fetch x2)
+		|	`HLLsqbrack`, OptTms, `HLRsqbrack`		(red_listdisplay x2);
+
+	BndVars	=	Block					(red_bndvars1 x1)
+		|	Block, `HLSemi`, BndVars		(red_bndvars2 x1 x3);
+
+	Block	=	Tm3s 					(red_block1 x1)
+		|	Tm3s, `HLColon`, Ty			(red_block2 x1 x2);
+
+	Tm3s	=	Tm3					(red_tms1 x1)
+		|	Tm3, Tm3s				(red_tms2 x1 x2);
+
+	Tms  	=	Tm					(red_tms1 x1)
+		|	Tm, `HLSemi`, Tms			(red_tms2 x1 x3);
+
+	OptTms	=						(red_empty_tms)
+		|	Tms					(red_fetch x1);
+
+	AndLet	=						(red_andlet1)
+		|	`HLAnd`, Tm1, AndLet			(red_andlet2 x2 x3);
+
+(* Types *)
+
+	Ty	=	Ty1					(red_fetch x1)
+		|	Ty, HLInOp, Ty				(red_tyinop x1 x2 x3)
+		|	HLAqTy					(red_tyaq x1);
+
+	Ty1	=	HLName					(red_tyname x1)
+		|	`HLLbrack`, Ty, `HLRbrack`		(red_fetch x2)
+		|	Ty1, HLName				(red_tycompound1 x1 x2)
+		|	`HLLbrack`, Tys, `HLRbrack`, HLName	(red_tycompound2 x2 x4);
+	Tys	=	Ty, `HLComma`, Ty			(red_tys1 x1 x3)
+		|	Ty, `HLComma`, Tys			(red_tys2 x1 x3);
+=TEX
+
+=TEX
+The following shell script runs the SLRP parser generator on the grammar
+and puts the generated parser code in the file `imp019.grm.sml'. This file
+is included in this document later on.
+=IGSH
+poly `arch`slrp.db >imp019.grm.run <<!
+Slrp.slrp{infile="imp019.grm.txt", outfile="imp019.grm.sml",
+		logfile="imp019.grm.log",  eos="HLEos", loglevel=2};
+PolyML.quit();
+!
+=TEX
+The resulting grammar produces 6 shift/reduce conflicts (and no reduce/reduce
+conflicts) when we run it through SLRP, as follows:
+óSLRP Output
+State 6 on symbol HLPostOp
+        Either shift to 30 or reduce by Tm = ... | Tm1
+State 6 on symbol `HLComma`
+        Either shift to 29 or reduce by Tm = ... | Tm1
+State 6 on symbol HLInOp
+        Either shift to 28 or reduce by Tm = ... | Tm1
+State 48 on symbol HLInOp
+        Either shift to 69 or reduce by Tm2 = Tm2, `HLColon`, Ty | ...
+State 49 on symbol HLName
+        Either shift to 70 or reduce by Ty = Ty1 | ...
+State 81 on symbol HLInOp
+        Either shift to 69 or reduce by Ty = ... | Ty, HLInOp, Ty | ...
+æ.
+
+The first three of these correspond to disambiguation rule 3
+in section 2.1.1 of \cite{DS/FMU/IED/DEF001}
+and are resolved by the numeric precedences for
+infix, prefix and postfix operators (and comma).
+The remaining conflicts are resolved using the numeric precedences
+and the rule that
+``a term containing a type must be parsed so that each type extends
+as far to the right as possible'' (rule 2 in section 2.1.1 of \cite{DS/FMU/IED/DEF001}).
+=TEX
+\section{TYPE DEFINITIONS}
+\subsection{Lexical Classes}
 The type of tokens for the HOL parser is the following:
 =TEX
 The lexical classes have the following type (cf. the listing of terminals
@@ -124,8 +252,11 @@ datatype âHOL_LEX_CLASSá	=	âHLAqTmá
 			|	âHLBinderá 
 			|	âHLInOpá
 			|	âHLNameá
+			|	âHLStringá
+			|	âHLChará
 			|	âHLPostOpá
 			|	âHLPreOpá
+			|	âHLCommaá
 			|	âHLAndá 
 			|	âHLBlobá
 			|	HLColon
@@ -144,16 +275,11 @@ datatype âHOL_LEX_CLASSá	=	âHLAqTmá
 			|	âHLVertá
 			|	âHLEosá;
 =TEX
-\subsubsection{Abstract Representation}
+\subsection{Abstract Representation}
 The first phase of the parser will return a value of type $TM$ defined
 as follows
 (in which we remember fixity and bracketing solely for the purposes of error messages).
 =SML
-datatype âFIXITYá	=	âInfixá of int
-			|	âPrefixá of int 
-			|	âPostfixá of int
-			|	âNonfixá;
-
 datatype âTYá	=	âTyAtomá of string
 		|	âTyCompoundá of (TY list) * string * FIXITY
 		|	âTyAqá of TYPE;
@@ -176,8 +302,10 @@ The partially parsed inputs for the parser will therefore have the following
 type:
 =SML
 datatype âPPá	=	âTyá of TY
+		|	âTysá of TY list
 		|	âTmá of (TY)TM
-		|	âTmsá of(TY) TM list
+		|	âTmsá of (TY)TM list
+		|	âTmssá of (TY)TM list list
 		|	âDefsá of ((TY)TM * (TY)TM) list;
 =TEX
 \subsection{Pretty Printing Functions}
@@ -257,47 +385,48 @@ fun âmk_vá (tm : (TY)TM) :(TY) TM = (
 	|	_ => parse_error 17002 (format_tm format_ty tm)
 );
 =TEX
-$mk\_block$ handles a term considered as a block of declarations.
-It is slightly overgenerous, in that it allows multiple type constraints
-and (left-associating) brackets in the block.
+$mk\_block$ handles a block of declarations.
 =SML
-fun âmk_blocká (tm : (TY)TM) : (TY)TM list = (
-	case tm of
-		TmTyped (tm, ty) => map (fn v => TmTyped(v, ty)) (mk_block tm)
-	|	App(tm1,  tm2, Nonfix) => mk_block tm1 @ [mk_v tm2]
-	|	tm => [mk_v tm]
-);
-=TEX
-$mk\_tys$ splits apart a type argument list represented as iterated application
-of the comma operator. As the resolver always reduces when it encounters a comma
-in a type context, comma acts as a left associative operator, hence:
-=SML
-fun âmk_tysá (ty : TY) : TY list = (
-	case ty of
-		TyCompound([ty1, ty2], ",", Infix _) => (mk_tys ty1 @ [ty2]
-	) |	_ => [ty]
+fun âmk_blocká (tms : (TY)TM list) : (TY)TM list = (
+	map mk_v tms
 );
 =TEX
 $mk\_binder$ makes a binder given a binder name,
 a list of $TM$s which are the blocks of bound variables and the body
 =SML
-fun âmk_binderá (n : string) (tms : (TY)TM list)  (b : (TY)TM) : (TY)TM = (
+fun âmk_binderá (n : string) (blks : (TY)TM list list)  (b : (TY)TM) : (TY)TM = (
 	let	fun aux [] = b
 		|   aux (v :: more) = Binder(n, v, aux more);
-	in	aux (flat (map mk_block tms))
+	in	aux (flat (map mk_block blks))
 	end
 );
 =TEX
-$mk\_def$ handles a term considered as a defining equation (in a $let$-term):
+$mk\_def$ handles a term considered as a defining equation (in a $let$-term).
+It is a little complicated. The local function $aux$ is a 
+$strip\_comb$ operation for $TM$s which, however, treats an application of
+the comma operator as indivisible. It is used to break apart the left hand
+side of the defining equation. The result should either be a singleton list,
+corresponding to a single varstruct, or a list which begins with an identifier
+(possibly typed), corresponding to local definition of a function.
 =SML
 fun âmk_defá (tm : (TY)TM) : (TY)TM * (TY)TM = (
-	case tm	 of
-		App(App(Id "=", tm1, _),  tm2, Infix _) => (
-			case mk_block tm1 of
-				[v] => (v, tm2)
-			|	Id s :: more => (Id s, mk_binder"" more tm2)
-			|	_ => parse_error 17004 (format_tm format_ty tm)
-	) |	_ => parse_error 17004 (format_tm format_ty tm)
+	let	fun aux tm = (
+			case tm of
+				TmTyped (tm, ty) => [TmTyped(mk_v tm, ty)]
+			|	App(App(Id ",", _, _),  _, Infix _) => [mk_v tm]
+			|	App(tm1,  tm2, _) => aux tm1 @ [mk_v tm2]
+			|	tm => [mk_v tm]
+		);
+		fun mk_blocks bs = map (fn b => [b]) bs;
+	in	case tm	 of
+			App(App(Id "=", tm1, _), tm2, Infix _) => (
+				case aux tm1 of
+					[v] => (v, tm2)
+				|	Id s :: more => (Id s, mk_binder"" (mk_blocks more) tm2)
+				|	TmTyped(Id s, ty) :: more => (Id s, TmTyped(mk_binder"" (mk_blocks more) tm2, ty))
+				|	_ => parse_error 17004 (format_tm format_ty tm)
+		) |	_ => parse_error 17004 (format_tm format_ty tm)
+	end
 );
 =TEX
 \subsubsection{The Reduction Functions}
@@ -306,286 +435,256 @@ the definitions, we deliberately violate standards by omitting the arguments
 types from the definitions. The arguments of the functions all have type
 $(HOL\_TOKEN, HOL\_LEX\_CLASS, PP)INPUT\_STACK\_ITEM$.
 =SML
-fun âred_binderá (Token (HTBinder s, _)) (Parsed(Tms tms)) (Parsed (Tm tm)) : PP = (
-	Tm(mk_binder s tms tm)
-) | red_binder _ _ _ = red_error "red_binder";
+fun âred_binderá (Token (HTBinder s, _)) (Parsed(Tmss tmss)) (Parsed (Tm tm)) : PP = (
+	Tm(mk_binder s tmss tm)
+) | red_binder _ _ _ = stack_error "red_binder";
 =TEX
 =SML
-fun âred_let1á  (Parsed(Tm tm1)) (Parsed (Tm tm2)) : PP = (
-	Tm(Let([mk_def tm1], tm2))
-) | red_let1 _ _ = red_error "red_let1";
-=TEX
-=SML
-fun âred_let2á  (Parsed(Tm tm1)) (Parsed (Defs defs)) (Parsed (Tm tm2)) : PP = (
+fun âred_let2á (Parsed(Tm tm1)) (Parsed (Defs defs)) (Parsed (Tm tm2)) : PP = (
 	Tm(Let(mk_def tm1 :: defs, tm2))
-) | red_let2 _ _ _ = red_error "red_let2";
+) | red_let2 _ _ _ = stack_error "red_let2";
 =TEX
 =SML
-fun âred_condá  (Parsed(Tm tm1)) (Parsed (Tm tm2)) (Parsed (Tm tm3)) : PP = (
+fun âred_condá (Parsed(Tm tm1)) (Parsed (Tm tm2)) (Parsed (Tm tm3)) : PP = (
 	Tm(Cond(tm1, tm2, tm3))
-) | red_cond _ _ _ = red_error "red_cond";
+) | red_cond _ _ _ = stack_error "red_cond";
 =TEX
 =SML
-fun âred_inopá  (Parsed(Tm tm1)) (Token (HTInOp{name, prec, ...}, _)) (Parsed (Tm tm2)) : PP = (
+fun âred_tm2_binderá (Parsed (Tm f)) (Token (HTBinder s, _)) (Parsed(Tmss tmss)) (Parsed (Tm tm)) : PP = (
+	Tm(App(f, (mk_binder s tmss tm), Nonfix))
+) | red_tm2_binder _ _ _ _ = stack_error "red_tm2_binder";
+=TEX
+=SML
+fun âred_tm2_let2á (Parsed (Tm f)) (Parsed(Tm tm1)) (Parsed (Defs defs)) (Parsed (Tm tm2)) : PP = (
+	Tm(App(f, (Let(mk_def tm1 :: defs, tm2)), Nonfix))
+) | red_tm2_let2 _ _ _ _ = stack_error "red_tm2_let2";
+=TEX
+=SML
+fun âred_tm2_condá (Parsed (Tm f)) (Parsed(Tm tm1)) (Parsed (Tm tm2)) (Parsed (Tm tm3)) : PP = (
+	Tm(App(f, (Cond(tm1, tm2, tm3)), Nonfix))
+) | red_tm2_cond _ _ _ _ = stack_error "red_tm2_cond";
+=TEX
+=SML
+fun âred_inopá (Parsed(Tm tm1)) (Token (HTInOp{name, prec, ...}, _)) (Parsed (Tm tm2)) : PP = (
 	Tm(App(App(Id name, tm1, Nonfix), tm2, Infix prec))
-) | red_inop _ _ _ = red_error "red_inop";
+) | red_inop _ _ _ = stack_error "red_inop";
+=TEX
+The symbol table functions for declaring fixity should not allow the fixity of
+comma to be changed. The parser will, in fact, treat comma as infix regardless
+of what the symbol table says.
+=SML
+fun âred_pairá (Parsed(Tm tm1)) (Parsed (Tm tm2)) : PP = (
+	case get_fixity "," of
+		Infix prec => Tm(App(App(Id ",", tm1, Nonfix), tm2, Infix prec))
+	|	_ => Tm(App(App(Id ",", tm1, Nonfix), tm2, Infix 0))
+) | red_pair _ _ = stack_error "red_pair";
 =TEX
 =SML
-fun âred_preopá  (Token (HTPreOp{name, prec, ...}, _)) (Parsed (Tm tm)) : PP = (
+fun âred_preopá (Token (HTPreOp{name, prec, ...}, _)) (Parsed (Tm tm)) : PP = (
 	Tm(App(Id name, tm, Prefix prec))
-) | red_preop  _ _ = red_error "red_preop";
+) | red_preop _ _ = stack_error "red_preop";
 =TEX
 =SML
-fun âred_postopá  (Parsed (Tm tm)) (Token (HTPostOp{name, prec, ...}, _)) : PP = (
+fun âred_postopá (Parsed (Tm tm)) (Token (HTPostOp{name, prec, ...}, _)) : PP = (
 	Tm(App(Id name, tm, Postfix prec))
-) | red_postop  _ _ = red_error "red_postop";
+) | red_postop _ _ = stack_error "red_postop";
 =TEX
 =SML
-fun âred_typedá  (Parsed (Tm tm)) (Parsed (Ty ty)) : PP = (
+fun âred_typedá (Parsed (Tm tm)) (Parsed (Ty ty)) : PP = (
 	Tm(TmTyped(tm, ty))
-) | red_typed  _ _ = red_error "red_typed";
+) | red_typed _ _ = stack_error "red_typed";
 =TEX
 =SML
-fun âred_appá  (Parsed (Tm tm1)) (Parsed (Tm tm2)) : PP = (
+fun âred_appá (Parsed (Tm tm1)) (Parsed (Tm tm2)) : PP = (
 	Tm(App(tm1, tm2, Nonfix))
-) | red_app  _ _ = red_error "red_app";
+) | red_app _ _ = stack_error "red_app";
 =TEX
 =SML
-fun âred_tmnameá  (Token (HTName s, _)) : PP = (
+fun âred_tmnameá (Token (HTName s, _)) : PP = (
 	Tm((if is_all_decimal s then NumLit o nat_of_string else Id) s)
-) | red_tmname  (Token (HTString s, _)) : PP = (
+) | red_tmname _ = stack_error "red_tmname";
+=TEX
+=SML
+fun âred_stringá (Token (HTString s, _)) : PP = (
 	Tm(StringLit s)
-) | red_tmname  (Token (HTChar s, _)) : PP = (
+) | red_string _ = stack_error "red_string";
+=TEX
+=SML
+fun âred_chará (Token (HTChar s, _)) : PP = (
 	Tm(CharLit s)
-) | red_tmname  _ = red_error "red_tmname";
+) | red_char _ = stack_error "red_char";
 =TEX
 =SML
-fun âred_tmaqá  (Token (HTAqTm t, _)) : PP = (
+fun âred_tmaqá (Token (HTAqTm t, _)) : PP = (
 	Tm(TmAq t)
-) | red_tmaq  _ = red_error "red_tmaq";
+) | red_tmaq _ = stack_error "red_tmaq";
 =TEX
 =SML
-fun âred_setdisplayá  (Parsed(Tms tms)) : PP = (
+fun âred_setdisplayá (Parsed(Tms tms)) : PP = (
 	Tm(SetDisplay tms)
-) | red_setdisplay  _ = red_error "red_setdisplay";
+) | red_setdisplay _ = stack_error "red_setdisplay";
 =TEX
 =SML
-val âred_setemptyá : PP = (Tm(SetDisplay []));
+fun red_fetch (Parsed pp) : PP = ( pp
+) | red_fetch _ = stack_error "red_fetch";
 =TEX
 =SML
-fun red_fetch  (Parsed pp) : PP = ( pp
-) | red_fetch  _ = red_error "red_fetch";
-=TEX
-=SML
-fun âred_setcomprehensioná  (Parsed(Tm tm1)) (Parsed(Tm tm2)) : PP = (
+fun âred_setcomprehensioná (Parsed(Tm tm1)) (Parsed(Tm tm2)) : PP = (
 	Tm(SetComprehension(mk_v tm1, tm2))
-) | red_setcomprehension _ _ = red_error "red_setcomprehension";
+) | red_setcomprehension _ _ = stack_error "red_setcomprehension";
 =TEX
 =SML
-fun âred_listdisplayá  (Parsed(Tms tms)) : PP = (
+fun âred_listdisplayá (Parsed(Tms tms)) : PP = (
 	Tm(ListDisplay tms)
-) | red_listdisplay _ = red_error "red_listdisplay";
+) | red_listdisplay _ = stack_error "red_listdisplay";
 =TEX
 =SML
-val âred_listemptyá  : PP = (Tm(ListDisplay []));
+fun âred_bndvars1á (Parsed (Tms tms)) : PP = (
+	Tmss[tms]
+) | red_bndvars1 _ = stack_error "red_bndvars1";
 =TEX
 =SML
-fun âred_tms1á  (Parsed(Tm tm)) : PP = (
+fun âred_bndvars2á (Parsed (Tms tms)) (Parsed (Tmss tmss)) : PP = (
+	Tmss(tms :: tmss)
+) | red_bndvars2 _ _ = stack_error "red_bndvars2";
+=TEX
+=SML
+fun âred_block1á (Parsed (Tms tms)) : PP = (
+	Tms tms
+) | red_block1 _ = stack_error "red_block1";
+=TEX
+=SML
+fun âred_block2á (Parsed(Tms tms)) (Parsed(Ty ty)) : PP = (
+	Tms (map(fn tm =>  TmTyped(tm, ty)) tms)
+) | red_block2 _ _ = stack_error "red_block2";
+=TEX
+=SML
+fun âred_tms1á (Parsed(Tm tm)) : PP = (
 	Tms[tm]
-) | red_tms1 _ = red_error "red_tms1";
+) | red_tms1 _ = stack_error "red_tms1";
 =TEX
 =SML
-fun âred_tms2á  (Parsed(Tms tms)) (Parsed(Tm tm)) : PP = (
-	Tms(tms @ [tm])
-) | red_tms2 _ _ = red_error "red_tms2";
+fun âred_tms2á (Parsed(Tm tm)) (Parsed(Tms tms)) : PP = (
+	Tms(tm :: tms)
+) | red_tms2 _ _ = stack_error "red_tms2";
 =TEX
 =SML
-fun âred_andlet1á  (Parsed(Tm tm)) : PP = (
-	Defs([mk_def tm])
-) | red_andlet1 _ = red_error "red_andlet1";
+val âred_empty_tmsá : PP = Tms[];
 =TEX
 =SML
-fun âred_andlet2á  (Parsed(Defs defs)) (Parsed(Tm tm)) : PP = (
-	Defs(defs @ [mk_def tm])
-) | red_andlet2 _ _ = red_error "red_andlet2";
+val âred_andlet1á  : PP = Defs [];
 =TEX
 =SML
-fun âred_tynameá  (Token (HTName s, _)) : PP = (
+fun âred_andlet2á (Parsed(Tm tm)) (Parsed(Defs defs)) : PP = (
+	Defs(mk_def tm :: defs)
+) | red_andlet2 _ _ = stack_error "red_andlet2";
+=TEX
+=SML
+fun âred_tynameá (Token (HTName s, _)) : PP = (
 	Ty(TyAtom s)
-) | red_tyname  _ = red_error "red_tyname";
+) | red_tyname _ = stack_error "red_tyname";
 =TEX
 =SML
-fun âred_tyinopá  (Parsed(Ty ty1)) (Token (HTInOp{name, prec, ...}, _)) (Parsed(Ty ty2)) : PP = (
+fun âred_tyinopá (Parsed(Ty ty1)) (Token (HTInOp{name, prec, ...}, _)) (Parsed(Ty ty2)) : PP = (
 	Ty(TyCompound([ty1, ty2], name, Infix prec))
-) | red_tyinop _ _ _ = red_error "red_tyinop";
+) | red_tyinop _ _ _ = stack_error "red_tyinop";
 =TEX
 =SML
-fun âred_tyaqá  (Token (HTAqTy t, _)) : PP = (
+fun âred_tyaqá (Token (HTAqTy t, _)) : PP = (
 	Ty(TyAq t)
-) | red_tyaq  _ = red_error "red_tyaq";
+) | red_tyaq _ = stack_error "red_tyaq";
 =TEX
 =SML
-fun âred_tycompoundá  (Parsed(Ty ty)) (Token (HTName s, _)) : PP = (
-	Ty(TyCompound(mk_tys ty, s, Nonfix))
-) | red_tycompound _ _ = red_error "red_tycompound";
-=IGN
-screen grm <holparse.doc >holparse.grm
-Slrp.slrp {infile="holparse.grm", outfile="holparse.grm.sml", logfile ="holparse.grm.log", eos ="HLEos", loglevel=2};
-=DUMP
-imp019.grm.txt
-(* Terms *)
-	Tm	=	HLBinder, Tms, `HLBlob`, Tm		(red_binder x1 x2 x4)
-		|	`HLLet`, Tm, `HLIn`, Tm		(red_let1 x2 x4)
-		|	`HLLet`, Tm, AndLet, `HLIn`, Tm	(red_let2 x2 x3 x5)
-		|	`HLIf`, Tm, `HLThen`, Tm, `HLElse`, Tm 	(red_cond x2 x4 x6)
-		|	 Tm, HLInOp, Tm				(red_inop x1 x2 x3)
-		|	HLPreOp, Tm				(red_preop x1 x2)
-		|	Tm, HLPostOp				(red_postop x1 x2)
-		|	Tm2					(red_fetch x1);
-
-	Tm2	=	Tm2, `HLColon`, Ty			(red_typed x1 x3)
-		|	Tm3					(red_fetch x1);
-
-	Tm3	=	Tm3, Tm4				(red_app x1 x2)
-		|	Tm4					(red_fetch x1);
-
-	Tm4	=	HLName					(red_tmname x1)
-		|	HLAqTm					(red_tmaq x1)
-		|	`HLLbrace`, Tms, `HLRbrace`		(red_setdisplay x2)
-		|	`HLLbrace`, `HLRbrace`			(red_setempty) 
-		|	`HLLbrace`, Tm, `HLVert`, Tm, `HLRbrace`(red_setcomprehension x2 x4)
-		|	`HLLbrack`, Tm, `HLRbrack`		(red_fetch x2)
-		|	`HLLsqbrack`, Tms, `HLRsqbrack`		(red_listdisplay x2)
-		|	`HLLsqbrack`, `HLRsqbrack`		(red_listempty);
-
-	Tms  	 =	Tm					(red_tms1 x1)
-		|	Tms, `HLSemi`, Tm			(red_tms2 x1 x3);
-
-	AndLet	=	`HLAnd`, Tm				(red_andlet1 x2)
-		|	AndLet, `HLAnd`, Tm			(red_andlet2 x1 x3);
-
-(* Types *)
-
-	Ty	=	Ty1					(red_fetch x1)
-		|	Ty, HLInOp, Ty				(red_tyinop x1 x2 x3)
-		|	HLAqTy					(red_tyaq x1);
-	Ty1	=	HLName					(red_tyname x1)
-		|	`HLLbrack`, Ty, `HLRbrack`		(red_fetch x2)
-		|	Ty1, HLName				(red_tycompound x1 x2);
-
-
+fun âred_tycompound1á  (Parsed(Ty ty)) (Token (HTName s, _)) : PP = (
+	Ty(TyCompound([ty], s, Nonfix))
+) | red_tycompound1 _ _ = stack_error "red_tycompound1";
 =TEX
-Mods to reference grammar of def004:
-\begin{enumerate}
-\item Disamibiguated parsing by making guts of a Typars have at least two elements
-\item Introduced Tm1-4 to reflect precedence rules in the grammar
-\item Replaced BinDec by Tm4 (checks on form to be made after parsing)
-\item Removed Vcommas etc.
-\item Replaced L by Tm3 (checks on form to be made after parsing)
-\item Replaced the comma in Tys by InTmOp (check to be made after parsing)
-\item Made token names all alphabetic
-\item Replaced the commas which appear in types  by InTmOp (checks on form etc.)
-\item Replaced Tys in Ty1 by Ty1 since a comma separated list of types looks
-like an iterated application of comma as a binary operator (checks to
-be made after parsing)
-end{enumerate}
-
+=SML
+fun âred_tycompound2á  (Parsed(Tys tys)) (Token (HTName s, _)) : PP = (
+	Ty(TyCompound(tys, s, Nonfix))
+) | red_tycompound2 _ _ = stack_error "red_tycompound2";
 =TEX
-The following shell script runs the SLRP parser generator on the grammar:
-
-=SH
-poly `arch`slrp.db >imp019.grm.run <<!
-Slrp.slrp{infile="imp019.grm.txt", outfile="imp019.grm.sml",
-		logfile="imp019.grm.log",  eos="HLEos", loglevel=2};
-PolyML.quit();
-!
+=SML
+fun âred_tys1á  (Parsed(Ty ty1)) (Parsed(Ty ty2)) : PP = (
+	Tys [ty1, ty2]
+) | red_tys1 _ _ = stack_error "red_tys1";
 =TEX
-The above puts the parser code in the file `imp019.grm.sml'
+=SML
+fun âred_tys2á  (Parsed(Ty ty)) (Parsed(Tys tys)) : PP = (
+	Tys (ty :: tys)
+) | red_tys2 _ _ = stack_error "red_tys2";
 =INCLUDE
 imp019.grm.sml
 =TEX
-The resulting grammar produces shift/reduce conflicts.
-All conflicts arise when an infix or postfix operator is read and in all cases
-the possible reduction has as its last token one of
-$HL\_PreOp$, $HL\_InOp$, $HL\_colon$, $HL\_blob$, $HL\_in$ or $HL\_else$
-(this actually corresponds to 14 conflicts rather than just 12 because of
-the two alternatives for a let expression). 
-The rules given
-in \cite{DS/FMU/IED/DEF001} say that we should shift  when the last token
-is $HL\_colon$ (provided the input symbol is a type operator),
-$HL\_blob$, $HL\_in$ or $HL\_else$ (i.e. these symbols
-have lower precedence) and we should use the numeric precedences to decide
-whether to shift when the last token is $HL\_PreOp$ or $HL\_InOp$.
-If the numeric precedences are equal then the rule of right associativity
-given in \cite{DS/FMU/IED/DEF001} means that we should shift.
-
 =SML
-fun âHOL_precá (tk1 : HOL_TOKEN) (tk2 : HOL_TOKEN) : RESOLUTION = (
-	let	val prec2 = (
-			case tk2 of
-				HTInOp {prec, ...} => prec
-			|	HTPostOp {prec, ...}  => prec
-			|	_ => raise PARSER_ERROR "unexpected symbol in HOL_resolve(1)");
-		fun by_num (prec1 : int) (prec2 : int) = (
-				if prec1 < prec2
-				then DoShift
-				else if prec1 > prec2
-				then DoReduce
-				else DoShift
-		);
-	in
-		case tk1 of
-			HTInOp {prec, ...} => by_num prec prec2
-		|	HTPreOp {prec, ...}  => by_num prec prec2
-		|	HTColon => (
-				case tk2 of
-					HTInOp {is_type_op, ...} => DoShift
-				|	_ => DoReduce
-		) |	HTBlob => DoShift
-		|	HTIn => DoShift
-		|	HTElse => DoShift
-		|	_ => raise PARSER_ERROR "unexpected symbol in HOL_resolve(2)"
-	end
+fun by_num (Value prec1 : int OPT) (prec2 : int) : RESOLUTION = (
+		if prec1 <= prec2
+		then DoShift
+		else DoReduce
+) | by_num Nil _ = DoShift;
+=TEX
+=SMNL
+fun âtop_precá (stk : (HOL_TOKEN, 'lc, 'pp)INPUT_STACK) : int OPT = (
+	case stk of
+		Token(HTInOp{prec, ...}, _) :: _ => Value prec
+	|	Token(HTPreOp{prec, ...}, _) :: _ => Value prec
+	|	Token(HTPostOp{prec, ...}, _) :: _ => Value prec
+	|	_ :: more => top_prec more
+	|	[] => Nil
 );
 =TEX
-An additional source of complexity is that the comma symbol acts both
-as a term operator and as the separator in the argument lists of compound
-types. The grammar we give fudges around this by assuming that comma is classified
-as an infix type operator. However, the precedence of comma acting as if it were
-a type operator must be lower than any other infix type operator. Thus we need
-to know the context to determine how to treat comma. This may be established by
-examining the reduction information to see whether the parser would reduce
-for a type or for a term --- in the case of a type we always reduce on comma.
-The production in question is called ``$Ty$'', so the following adaptation
-of the simple resolver is used:
 =SML
 val rec âHOL_resolverá : (HOL_TOKEN, HOL_LEX_CLASS, 'pp)RESOLVER = (
-	fn ((tok, _), stk, red as ((nonterm, _), _)) =>
-	let	fun aux stk = (
-				case stk of
-				Token (tok', _) :: _ => HOL_prec tok' tok
-			|	_ :: more =>  aux more
-			|	[] => DoError
-		);
-	in	case (tok, nonterm) of
-			(HTInOp{name=",", ...}, "Ty") => DoReduce
-		|	_ => aux stk
-	end
+fn ((tok, _), stk, red as ((nonterm, _), _)) =>
+	case nonterm of
+		"Tm" => (
+			case tok of
+				HTInOp{prec, ...} => (
+					by_num (top_prec stk) prec
+			) |	HTPostOp{prec, ...} => (
+					by_num (top_prec stk) prec
+			) |	_ => (stack_error "HOL_resolver"
+			)
+	) |	"Tm2" => (
+			case tok of
+				HTInOp {name = s, prec=prec, ...} => (
+						case get_type_info s of
+							Value _ => DoShift
+						|	Nil => DoReduce
+			) |	_ => stack_error "HOL_resolver"
+	) |	"Ty" => (
+			case tok of
+				HTName s => (
+					case get_type_info s of
+						Value _ => DoShift
+					|	Nil => DoReduce
+			) |	HTInOp {name = s, prec=prec, ...} => (
+						case get_type_info s of
+							Value _ => by_num (top_prec stk) prec
+						|	Nil => DoReduce
+			) |	_ => stack_error "HOL_resolver"
+	) |	_ => stack_error "HOL_resolver"
 );
 =TEX
 \subsection{Lexical Classification}
-Tokens are classified as follows:
+Tokens are classified by the following function. Note that the comma symbol
+is treated as a comma regardless of its declared fixity. The symbol table
+should prevent the user from trying to change the fixity of comma.
 =SML
 fun âHOL_classifyá  (tok : HOL_TOKEN) : HOL_LEX_CLASS = (
 	case tok of
 		HTAqTm _	=> HLAqTm
 	|	HTAqTy _	=> HLAqTy
 	|	HTBinder  _	=> HLBinder 
+	|	HTInOp {name=",", ...}	=> HLComma
 	|	HTInOp _	=> HLInOp
+	|	HTName ","	=> HLComma
 	|	HTName _	=> HLName
-	|	HTString _	=> HLName
-	|	HTChar _	=> HLName
+	|	HTString _	=> HLString
+	|	HTChar _	=> HLChar
+	|	HTPostOp {name=",", ...}	=> HLComma
 	|	HTPostOp _	=> HLPostOp
+	|	HTPreOp {name=",", ...}	=> HLComma
 	|	HTPreOp _	=> HLPreOp
 	|	HTAnd 		=> HLAnd 
 	|	HTBlob		=> HLBlob
@@ -663,14 +762,3 @@ end; (* of structure Parser *)
 
 \end{document}
 =IGN
-val classify : (string -> HOL_TOKEN) ref =
-	ref (fn		 "" => HTBinder ""
-		|	"€" => HTInOp{name="€", prec=40, is_term_op=true, is_type_op=true}
-		|	"" => HTInOp{name="", prec=30, is_term_op=true, is_type_op=true}
-		|	"=" => HTInOp{name="=", prec=50, is_term_op=true, is_type_op=true}
-		|	"," => HTInOp{name=",", prec=100, is_term_op=true, is_type_op=true}
-		|	"+" => HTInOp{name="+", prec=200, is_term_op=true, is_type_op=true}
-		|	"‹" => HTInOp{name="‹", prec=100, is_term_op=false, is_type_op=true}
-		|	"Œ" => HTPreOp{name="Œ", prec=300}
-		|	"!" => HTPostOp{name="!", prec=400}
-		|	_ => HTBlob);
