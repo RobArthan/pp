@@ -66,7 +66,8 @@ Changes required by CR0016.
 Changes due to CR0017.
 \item [Issue 1.17 (15th April 1992)]
 Change to $show\_stack\_pcs$, added $delete\_pc\_fields$.
-
+\item [Issue 1.18 (8th May 1992)]
+Reorganised after RBJ comments.
 \end{description}
 \subsection{Changes Forecast}
 As detailed design.
@@ -95,10 +96,10 @@ None known.
 As detailed design.
 \section{PREAMBLE}
 =SML
-val lthy = get_current_theory_name();
-open_theory "min";
-=SML
 structure ÛProofContextÝ : ProofContext = struct
+val lthy = get_current_theory_name();
+val dummy = open_theory "min";
+
 =TEX
 \section{UTILITIES}
 =SML
@@ -189,8 +190,6 @@ Now the evaluated parts:
 	cs_¶_conv: TERM -> THM,
 	¶_ad_cd_thms:  (TERM list * int list * TYPE * (TERM list)list * THM) list,
 	¶_ad_vs_thms:  (string * (TERM list * THM))list,
-	ad_pr_tac : THM list -> TACTIC,
-	ad_pr_conv : THM list -> CONV,
 =TEX
 And finally the commital data
 =SML
@@ -225,8 +224,6 @@ Now the evaluated parts:
 	cs_¶_conv = (fn _ => fail "icl'set_eval_ad_cs_¶_convs" 51015 []),
 	¶_ad_cd_thms = [],
 	¶_ad_vs_thms = [],
-	ad_pr_tac = (fn _ => fail_tac),
-	ad_pr_conv = (fn _ => fail_conv),	
 =TEX
 And finally the commital data
 =SML
@@ -310,6 +307,13 @@ fun Ûnew_pcÝ (new: string) : unit = (
 	extend_pc "new_pc" new (empty_pc false [new])
 );
 =TEX
+=SML
+fun Ûpending_reset_pc_databaseÝ () : unit -> unit = (
+let	val temp_db = (!pc_db)
+in
+	(fn () => pc_db := temp_db)
+end);
+=TEX
 End of database functions
 =SML
 end;
@@ -339,8 +343,8 @@ local
 	val ad_cs_¶_convs = ref (#cs_¶_conv initial_pc);
 	val ad_¶_ad_cd_thms = ref (#¶_ad_cd_thms initial_pc);
 	val ad_¶_ad_vs_thms = ref (#¶_ad_vs_thms initial_pc);
-	val ad_pr_tac = ref (#ad_pr_tac initial_pc);
-	val ad_pr_conv = ref (#ad_pr_conv initial_pc);
+	val ad_pr_tac = ref (#pr_tac initial_pc);
+	val ad_pr_conv = ref (#pr_conv initial_pc);
 	val ad_valid_thm = ref (#a_valid_thm initial_pc);
 	val ad_theoryname = ref (#theoryname initial_pc);
 in
@@ -356,8 +360,8 @@ fun set_current_pc pc = (
 	ad_cs_¶_convs := (#cs_¶_conv pc);
 	ad_¶_ad_cd_thms := (#¶_ad_cd_thms pc);
 	ad_¶_ad_vs_thms := (#¶_ad_vs_thms pc);
-	ad_pr_tac := (#ad_pr_tac pc);
-	ad_pr_conv := (#ad_pr_conv pc);
+	ad_pr_tac := (#pr_tac pc);
+	ad_pr_conv := (#pr_conv pc);
 	ad_valid_thm := (#a_valid_thm pc);
 	ad_theoryname := (#theoryname pc);
 	()
@@ -457,10 +461,6 @@ val eval_ad_¶_ad_cd_thms : (THM list ->
 	ref (fn _ => []);
 val eval_ad_¶_ad_vs_thms : ((string * (TERM list * THM)) list ->
 	(string * (TERM list * THM)) list) ref = ref Combinators.I;
-val eval_ad_pr_tac : ((THM list -> TACTIC) -> (THM list -> TACTIC)) ref 
-	= ref Combinators.I;
-val eval_ad_pr_conv : ((THM list -> CONV) -> (THM list -> CONV)) ref 
-	= ref Combinators.I;
 in
 fun Ûicl'set_eval_ad_rw_netÝ (f:(EQN_CXT -> CONV NET)) : unit =
 	(eval_ad_rw_net := f; ());
@@ -479,10 +479,6 @@ fun Ûicl'set_eval_ad_¶_cd_thmsÝ (f:(THM list ->
 fun Ûicl'set_eval_ad_¶_vs_thmsÝ (f:((string * (TERM list * THM)) list ->
 	(string * (TERM list * THM)) list)) =
 	(eval_ad_¶_ad_vs_thms := f; ());
-fun Ûicl'set_eval_ad_pr_tacÝ (f:(THM list -> TACTIC) -> (THM list -> TACTIC)) : unit =
-	(eval_ad_pr_tac := f; ());
-fun Ûicl'set_eval_ad_pr_convÝ (f:(THM list -> CONV) -> (THM list -> CONV)) : unit =
-	(eval_ad_pr_conv := f; ());
 =TEX
 Now the method of evaluating a proof context:
 =SML
@@ -496,7 +492,6 @@ fun Ûevaluate_proof_contextÝ (
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
 	: PROOF_CONTEXT) : PROOF_CONTEXT = 
@@ -517,8 +512,6 @@ fun Ûevaluate_proof_contextÝ (
 	cs_¶_conv = (!eval_ad_cs_¶_convs) (flat(map fst cs_¶_convs)),
 	¶_ad_cd_thms = (!eval_ad_¶_ad_cd_thms) ¶_cd_thms,
 	¶_ad_vs_thms  = (!eval_ad_¶_ad_vs_thms) ¶_vs_thms,
-	ad_pr_tac = (!eval_ad_pr_tac) pr_tac, 
-	ad_pr_conv = (!eval_ad_pr_conv) pr_conv, 
 	names = names,
 	theoryname = theoryname,
 	a_valid_thm = a_valid_thm,
@@ -545,7 +538,6 @@ change_pc "set_rw_eqn_cxt" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
  =>
@@ -559,7 +551,6 @@ change_pc "set_rw_eqn_cxt" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed})
 );
@@ -583,7 +574,6 @@ change_pc "add_rw_thms" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}:PROOF_CONTEXT
  =>
@@ -602,7 +592,6 @@ change_pc "add_rw_thms" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
 	end)
@@ -625,7 +614,6 @@ change_pc "set_rw_canons" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
  =>
@@ -639,7 +627,6 @@ change_pc "set_rw_canons" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed})
 );
@@ -662,7 +649,6 @@ change_pc "set_st_eqn_cxt" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
  =>
@@ -676,7 +662,6 @@ change_pc "set_st_eqn_cxt" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed})
 );
@@ -700,7 +685,6 @@ change_pc "add_st_thms" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}:PROOF_CONTEXT
  =>
@@ -720,7 +704,6 @@ change_pc "add_st_thms" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
 	end)
@@ -743,7 +726,6 @@ change_pc "set_sg_eqn_cxt" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
  =>
@@ -757,7 +739,6 @@ change_pc "set_sg_eqn_cxt" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed})
 );
@@ -779,7 +760,6 @@ change_pc "add_sg_thms" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}:PROOF_CONTEXT
  =>
@@ -799,7 +779,6 @@ change_pc "add_sg_thms" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
 	end)
@@ -823,7 +802,6 @@ change_pc "set_cs_¶_convs" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
  =>
@@ -837,7 +815,6 @@ change_pc "set_cs_¶_convs" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed})
 );
@@ -860,7 +837,6 @@ change_pc "set_¶_cd_thms" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
  =>
@@ -874,7 +850,6 @@ change_pc "set_¶_cd_thms" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed})
 );
@@ -896,7 +871,6 @@ change_pc "add_¶_cd_thms" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}:PROOF_CONTEXT
  =>
@@ -913,7 +887,6 @@ change_pc "add_¶_cd_thms" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
 	)
@@ -942,7 +915,6 @@ change_pc "set_¶_vs_thms" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
  =>
@@ -956,7 +928,6 @@ change_pc "set_¶_vs_thms" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed})
 );
@@ -980,7 +951,6 @@ change_pc "set_pr_tac" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
  =>
@@ -994,7 +964,6 @@ change_pc "set_pr_tac" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed})
 );
@@ -1017,7 +986,6 @@ change_pc "set_pr_conv" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
  =>
@@ -1031,7 +999,6 @@ change_pc "set_pr_conv" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed})
 );
@@ -1055,7 +1022,6 @@ change_pc "commit_pc" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}
  =>
@@ -1069,7 +1035,6 @@ change_pc "commit_pc" key
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = true})
 o evaluate_proof_context)
@@ -1096,7 +1061,6 @@ fun Ûlocal_merge_pcÝ (caller:string) (test_committed:bool) (({
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}:PROOF_CONTEXT),
 	({
@@ -1108,7 +1072,6 @@ fun Ûlocal_merge_pcÝ (caller:string) (test_committed:bool) (({
 	rw_canon = rw_canon1, st_conv = st_conv1,
 	sg_conv = sg_conv1, cs_¶_conv = cs_¶_conv1,
 	¶_ad_cd_thms = ¶_ad_cd_thms1, ¶_ad_vs_thms  = ¶_ad_vs_thms1,
-	ad_pr_conv = ad_pr_conv1, ad_pr_tac = ad_pr_tac1,
 	names = names1, theoryname = theoryname1,
 	a_valid_thm = a_valid_thm1, committed = committed1}:PROOF_CONTEXT
 )) : PROOF_CONTEXT = (
@@ -1132,8 +1095,6 @@ fun Ûlocal_merge_pcÝ (caller:string) (test_committed:bool) (({
 	cs_¶_conv = cs_¶_conv1,
 	¶_ad_cd_thms = ¶_ad_cd_thms1,
 	¶_ad_vs_thms  = ¶_ad_vs_thms1,
-	ad_pr_tac = ad_pr_tac1,
-	ad_pr_conv = ad_pr_conv1,
 	names = names1,
 	theoryname = theoryname1,
 	a_valid_thm = a_valid_thm1,
@@ -1167,7 +1128,6 @@ fun Ûprune_pcÝ (caller : string) (fields : string list) ({
 	rw_canon = rw_canon, st_conv = st_conv,
 	sg_conv = sg_conv, cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms, ¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names, theoryname = theoryname,
 	a_valid_thm = a_valid_thm, committed = committed}: PROOF_CONTEXT) 
 	: PROOF_CONTEXT = (
@@ -1192,7 +1152,6 @@ fun Ûprune_pcÝ (caller : string) (fields : string list) ({
 	cs_¶_conv = cs_¶_conv,
 	¶_ad_cd_thms = ¶_ad_cd_thms,
 	¶_ad_vs_thms  = ¶_ad_vs_thms,
-	ad_pr_tac = ad_pr_tac, ad_pr_conv = ad_pr_conv,
 	names = names,
 	theoryname = theoryname,
 	a_valid_thm = a_valid_thm,
@@ -1236,6 +1195,23 @@ in
 end);
 =TEX
 =SML
+fun Ûpending_push_pcÝ (key : string): unit -> unit = (
+let	val pc = get_pc "pending_push_pc" key;
+	val epc = if #committed pc
+		then pc
+		else evaluate_proof_context pc;
+in
+	(fn () =>
+	((if valid_thm (#a_valid_thm pc)
+	then ()
+	else fail "pending_push_pc" 51014 [
+		(fn () => format_list (Combinators.I) (#names pc) ","),
+		(fn () => (#theoryname pc))]);
+	push_pc_stack (get_current_pc());
+	set_current_pc epc))
+end);
+=TEX
+=SML
 fun Ûpop_pcÝ (): unit = (
 let	val pc = pop_pc_stack "pop_pc";
 in
@@ -1265,6 +1241,24 @@ in
 end);
 =TEX
 =SML
+fun Ûpending_push_merge_pcsÝ ([]: string list): unit -> unit = fail "pending_push_merge_pcs" 51020 []
+| pending_push_merge_pcs (keys) = (
+let	val pc = empty_pc false keys;
+	val fullpc = fold (local_merge_pc "pending_push_merge_pcs" false) 
+		(map (get_pc "pending_push_merge_pcs") keys) pc;
+	val epc = evaluate_proof_context fullpc;
+in
+	(fn () =>
+	((if valid_thm (#a_valid_thm fullpc)
+	then ()
+	else fail "pending_push_merge_pcs" 51014 [
+		(fn () => format_list (Combinators.I) (#names fullpc) ","),
+		(fn () => (#theoryname fullpc))]);
+	push_pc_stack (get_current_pc());
+	set_current_pc epc))
+end);
+=TEX
+=SML
 fun Ûset_merge_pcsÝ ([]: string list): unit = fail "set_merge_pcs" 51020 []
 | set_merge_pcs (keys) = (
 let	val pc = empty_pc false keys;
@@ -1277,81 +1271,137 @@ end);
 =TEX
 \section{USING THE PROOF CONTEXTS}
 =SML
-fun ÛPC_TÝ (key : string) (tac: TACTIC):  TACTIC = (fn gl => 
-let	val dummy = push_pc key handle complaint => pass_on complaint "push_pc" "PC_T";
-	val res = tac gl;
+fun ÛPC_TÝ (key : string) (tac: TACTIC): TACTIC = (fn gl => 
+let	val ppc = pending_push_pc key 
+		handle complaint => 
+		pass_on complaint "pending_push_pc" "PC_T";
+	val dummy = ppc()
+		 handle complaint => 
+		pass_on complaint "pending_push_pc" "PC_T";
+	val (sgs,prf) = (tac gl
+		handle complaint =>
+		(pop_pc();
+		reraise complaint (area_of complaint)));
 	val dummy = pop_pc();
+	val prf' = (fn x => 
+		let val p1 = ppc()
+			handle complaint => 
+			pass_on complaint "pending_push_pc" "PC_T";
+		val p2 = prf x
+			handle complaint =>
+			(pop_pc();
+			reraise complaint (area_of complaint));
+		in
+			(pop_pc();
+			p2)
+		end);
 in
-	res
+	(sgs,prf')
 end);
 =TEX
 =SML
-fun ÛPC_T1Ý (key : string) (tac: THM list -> TACTIC) (thms : THM list):  TACTIC = (fn gl => 
-let	val dummy = push_pc key handle complaint => pass_on complaint "push_pc" "PC_T1";
-	val res = tac thms gl;
+fun ÛPC_T1Ý (key : string) (tac: 'a -> TACTIC) (arg : 'a):  TACTIC = (fn gl => 
+let	val ppc = pending_push_pc key 
+		handle complaint => 
+		pass_on complaint "pending_push_pc" "PC_T1";
+	val dummy = ppc()
+		 handle complaint => 
+		pass_on complaint "pending_push_pc" "PC_T1";
+	val (sgs,prf) = (tac arg gl 
+		handle complaint =>
+		(pop_pc();
+		reraise complaint (area_of complaint)));
 	val dummy = pop_pc();
+	val prf' = (fn x => 
+		let val p1 = ppc()
+			handle complaint => 
+			pass_on complaint "pending_push_pc" "PC_T1";
+		val p2 = prf x
+			handle complaint =>
+			(pop_pc();
+			reraise complaint (area_of complaint));
+		in
+			(pop_pc();
+			p2)
+		end);
 in
-	res
+	(sgs,prf')
 end);
 =TEX
 =SML
 fun ÛPC_CÝ (key : string) (conv: CONV) :  CONV = (fn tm => 
 let	val dummy = push_pc key handle complaint => pass_on complaint "push_pc" "PC_C";
-	val res = conv tm;
+	val res = (conv tm
+		handle complaint =>
+		(pop_pc();
+		reraise complaint (area_of complaint)));
 	val dummy = pop_pc();
 in
 	res
 end);
 =TEX
 =SML
-fun ÛPC_C1Ý (key : string) (conv: THM list -> CONV) (thms : THM list):  CONV = (fn tm => 
+fun ÛPC_C1Ý (key : string) (conv: 'a -> CONV) (arg : 'a):  CONV = (fn tm => 
 let	val dummy = push_pc key handle complaint => pass_on complaint "push_pc" "PC_C1";
-	val res = conv thms tm;
+	val res = (conv arg tm
+		handle complaint =>
+		(pop_pc();
+		reraise complaint (area_of complaint)));
 	val dummy = pop_pc();
 in
 	res
 end);
 =TEX
 =SML
-fun Ûpc_ruleÝ (key : string) (rule: 'a -> THM) :  'a -> THM = (fn x => 
+fun Ûpc_ruleÝ (key : string) (rule: 'a -> THM) (x : 'a) : THM = ( 
 let	val dummy = push_pc key handle complaint => pass_on complaint "push_pc" "pc_rule";
-	val res = rule x;
+	val res = (rule x
+		handle complaint =>
+		(pop_pc();
+		reraise complaint (area_of complaint)));
 	val dummy = pop_pc();
 in
 	res
 end);
 =TEX
 =SML
-fun Ûpc_rule1Ý (key : string) (rule: THM list -> 'a -> THM) 
-	(thms : THM list) :  'a -> THM = (fn x => 
+fun Ûpc_rule1Ý (key : string) (rule: 'a -> 'b -> THM) 
+	(arg1 : 'a) (arg2 : 'b) : THM = (
 let	val dummy = push_pc key 
 		handle complaint => 
 		pass_on complaint "push_pc" "pc_rule1";
-	val res = rule thms x;
+	val res = (rule arg1 arg2
+		handle complaint =>
+		(pop_pc();
+		reraise complaint (area_of complaint)));
 	val dummy = pop_pc();
 in
 	res
 end);
 =TEX
 =SML
-fun Ûprove_tacÝ (thms: THM list) :  TACTIC = (fn gl =>
-	current_ad_pr_tac () thms gl
+fun Ûprove_tacÝ (thms: THM list) :  TACTIC = (
+	current_ad_pr_tac () thms
 	handle complaint => 
 	pass_on complaint "current_ad_pr_tac" "prove_tac"
 );
 =TEX
 =SML
-fun Ûprove_convÝ (thms: THM list) :  CONV = (fn tm =>
-	current_ad_pr_conv () thms tm
+fun Ûprove_convÝ (thms: THM list) :  CONV = (
+	current_ad_pr_conv () thms
 	handle complaint => 
 	pass_on complaint "current_ad_pr_conv" "prove_conv"
 );
 =TEX
 =SML
-fun Ûprove_ruleÝ (thms: THM list) (tm : TERM) : THM = (
-let	val res = current_ad_pr_conv () thms tm
+fun Ûprove_ruleÝ (thms: THM list) : TERM -> THM = (
+let	val res1 = current_ad_pr_conv () thms
 		handle complaint => 
 		pass_on complaint "current_ad_pr_conv" "prove_rule";
+in
+	(fn tm => 
+let
+	val res = res1 tm;
 	val dummy = if is_nil (asms res)
 		then ()
 		else fail "prove_rule" 51022 [
@@ -1368,6 +1418,7 @@ in
 	else fail "prove_rule" 51022 [
 			fn () => string_of_term tm,
 			fn () => string_of_thm res]
+end)
 end);
 =TEX
 =SML
