@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.23 2004/02/02 14:30:03 rda Exp rda $
+ * $Id: xpp.c,v 2.24 2004/02/02 14:35:19 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -451,16 +451,13 @@ static char *get_command_line(int argc, char **argv)
 int main(int argc, char **argv)
 {
 	char **retry_argv;
-	int i, orig_argc;
+	int i, orig_argc, num_x_args;
 
 	argv0 = argv[0];
 	orig_argc = argc;
 	retry_argv = (char **) XtMalloc((argc+2)*(sizeof(char*)));
-	for(i = 0; i <  argc; i += 1) {
-		retry_argv[i] = argv[i];
-	}
-	retry_argv[++i] = (char*) 0;
-	retry_argv[++i] = (char*) 0;
+/* N.b., argc not argc - 1 below because we want the final null, and similarly later */
+	memmove((void*)retry_argv, (void*) argv, argc * (sizeof(char*)));
 
 	set_pp_home();
 
@@ -474,12 +471,15 @@ int main(int argc, char **argv)
 		applicationShellWidgetClass,
 		NULL, 0); /* default widget resources*/
 
-	for(i = orig_argc - 1; i > orig_argc - argc + 1; i -= 1) { /* move non-X arguments up 1 place */
-		retry_argv[i+1] = retry_argv[i];
-	}
+	num_x_args = orig_argc - argc;
 
-	retry_argv[orig_argc - argc + 1] = "-h";
+	memmove((void*) &retry_argv[num_x_args+2], (void*) &retry_argv[num_x_args + 1], argc * (sizeof(char*)));
 
+	retry_argv[num_x_args+1] = "-h";
+
+for(i = 0; i < orig_argc + 2; ++ i) {
+	fprintf(stderr, "retry_argv[%d]=\"%s\"\n", i, retry_argv[i]);
+}
 	(void) fcntl(ConnectionNumber(XtDisplay(root)), F_SETFD, 1);
 
 	XtVaSetValues(root,
