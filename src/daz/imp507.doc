@@ -89,6 +89,7 @@ Also implemented remedies for issues 1 and 4 (V0.6).
 \item[Issue 1.119] Correcting IUCT project WP8, bug 1.
 \item[Issue 1.120-1.121] Added $new\_script1$ for IUCT project WP 1.
 \item[Issue 1.22] Fixing Bug 4.3 of INT502.
+\item[Issue 1.23] Fixing bug 6.1 of INT502.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1891,6 +1892,14 @@ The material in this section uses the following function, which is also required
 infix dot;
 fun (x : ID) ÛdotÝ (y : ID) = x ^ "." ^ y;
 =TEX
+The following forms two identifiers into an index string for $subunit\_env$.
+Working on the principle that $(trans\_id$ $o$ $trans\_id)$ equals $trans\_id$,
+and that sometimes the arguments will already be translated:
+we translate both sides of the pair we are looking up, and combine them with a dot.
+=SML
+fun Ûsubunit_env_indexÝ (id1 : ID) (id2 : ID) = 
+	(trans_id id1) dot (trans_id id2);
+=TEX
 The following function returns the name of the parent of the script theory.
 =SML
 fun  Ûget_parent_nameÝ ((): unit) : string = (
@@ -2481,14 +2490,16 @@ fun Ûtill_predÝ (t : Z_TM) : unit = (
 The SID function $end\_scope$ used in processing these has already been defined in section \ref{LOOPS}.
 \section{PROCEDURES}\label{PROCEDURES}
 \subsection{The SID function subunit\_form}
-This SID function and the next are best handled by a common function with a parameter to determine what to do:
+This SID function and the next are best handled by a common function with a parameter to determine what to do.
+Note that the block name must be in the translated form (i.e. had $trans\_id$
+applied to it).
 =SML
 fun Ûsubunit_form_infÝ (ident : ID, is_inf : bool) : unit = (
 	if	test_flag #subunit_flag 1
 	then	let	val block = hd(!blocks);
 			val block_name = #block_name(#declab block);
-			val bn_id = block_name dot ident;
-			val subunit1 = (force_value(s_lookup bn_id (!subunit_env)))
+			val tbn_id = subunit_env_index block_name ident;
+			val subunit1 = (force_value(s_lookup tbn_id (!subunit_env)))
 				handle Fail _ =>
 				fail "subunit_form_inf" 507011
 						[fn()=>block_name, fn()=>ident];
@@ -2496,7 +2507,7 @@ fun Ûsubunit_form_infÝ (ident : ID, is_inf : bool) : unit = (
 			val block' = block_in_scope(block, in_scope');
 		in	blocks := block' :: tl (!blocks);
 			if	is_inf
-			then	subunit_env := s_delete bn_id (!subunit_env)
+			then	subunit_env := s_delete tbn_id (!subunit_env)
 			else	()
 		end
 	else	()
@@ -2570,6 +2581,7 @@ fun ÛstubÝ (() : unit) : unit = (
 				then	block_name3 dot block_name2
 				else	block_name2;
 			val id1_id2 = id1 dot id2;
+			val tid1_id2 = subunit_env_index id1 id2;
 			val subunit = {
 				in_scope	=	flatten_env(!blocks),
 				specif		=	dummy_spec,
@@ -2578,7 +2590,7 @@ fun ÛstubÝ (() : unit) : unit = (
 			};
 		in	new_subunit_theory(id1, id2)
 			handle Fail _ => fail "stub" 507013 [fn() => id1_id2];
-			subunit_env := s_enter id1_id2 subunit (!subunit_env)
+			subunit_env := s_enter tid1_id2 subunit (!subunit_env)
 		end
 	else	()
 );
@@ -2598,8 +2610,8 @@ fun Ûstub_spec_proc_funÝ (spec : SPEC) : unit = (
 				if	test_flag #subunit_flag 3
 				then	block_name3 dot block_name2
 				else	block_name2;
-			val id1_id2 = id1 dot id2;
-			val subunit = force_value(s_lookup id1_id2 (!subunit_env))
+			val tid1_id2 = subunit_env_index id1 id2;
+			val subunit = force_value(s_lookup tid1_id2(!subunit_env))
 				handle Fail _ =>
 				fail "stub_spec_proc_fun" 507011
 						[fn()=>id1, fn()=>id2];
@@ -2610,7 +2622,7 @@ fun Ûstub_spec_proc_funÝ (spec : SPEC) : unit = (
 				specif_flag	=	true,			
 				zmod		=	#zmod subunit
 			};
-		in	subunit_env := s_enter id1_id2 subunit' (!subunit_env)
+		in	subunit_env := s_enter tid1_id2 subunit' (!subunit_env)
 		end
 	else	()
 );
@@ -2826,12 +2838,12 @@ fun Ûform_proc_subunitÝ (form_proc: FORMAL_PROC) : unit = (
 		val block2 = block 2;
 		val block_name1 = #block_name(#declab block1);
 		val block_name2 = #block_name(#declab block2);
-		val bn1_bn2 = block_name2 dot block_name1
-		val subunit3 = (force_value(s_lookup bn1_bn2 (!subunit_env)))
+		val tbn1_bn2 = subunit_env_index block_name2 block_name1
+		val subunit3 = (force_value(s_lookup tbn1_bn2 (!subunit_env)))
 			handle Fail _ =>
 			fail "form_proc_subunit" 507011
 					[fn()=>block_name2, fn()=>block_name1];
-	in	subunit_env := s_delete bn1_bn2 (!subunit_env);
+	in	subunit_env := s_delete tbn1_bn2 (!subunit_env);
 		if	#specif_flag subunit3
 		then	
 	let
@@ -3119,14 +3131,14 @@ fun Ûform_fun_subunitÝ (form_fun: FORMAL_FUN) : unit = (
 		val block2 = block 2;
 		val block_name1 = #block_name(#declab block1);
 		val block_name2 = #block_name(#declab block2);
-		val bn1_bn2 = block_name2 dot block_name1
-		val subunit3 = (force_value(s_lookup bn1_bn2 (!subunit_env)))
+		val tbn1_bn2 = subunit_env_index block_name2 block_name1
+		val subunit3 = (force_value(s_lookup tbn1_bn2 (!subunit_env)))
 			handle Fail _ =>
 			fail "form_fun_subunit" 507011
 	 			[fn()=>block_name2, fn()=>block_name1];
 	in	store_para(trans_formal_fun form_fun);
 		set_par_names (#informal_fun form_fun);
-		subunit_env := s_delete bn1_bn2 (!subunit_env);
+		subunit_env := s_delete tbn1_bn2 (!subunit_env);
 		if	#specif_flag subunit3
 		then	
 	let
