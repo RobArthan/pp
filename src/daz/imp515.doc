@@ -8,7 +8,7 @@
 \TPPproject{DAZ PROJECT}  %% Mandatory field
 %\TPPvolume{}
 %\TPPpart{}
-\TPPtitle{Implementation: Test Utilities}  %% Mandatory field
+\TPPtitle{Implementation: Compliance Notation Test Utilities}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP515}  %% Mandatory field
 \def\SCCSversion{$Revision$%
 }
@@ -82,7 +82,7 @@ The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD515}.
 structure ÛCNTestUtilitiesÝ = struct
 local
 	open CaseIndependence CNBasicDeclsAndExprs CNTypes;
-	open CNVolumeIITypes ZProofMode ;
+	open CNTypes2 ZProofMode ;
 in
 =TEX
 =SML
@@ -115,6 +115,20 @@ fun Ûcn_of_stringÝ (s : string) : CNTypes.WEB_CLAUSE = (
   end)
 end;
 =TEX
+=SML
+fun Ûcn_decl_of_stringÝ (s : string) : DECLARATION = (
+let	val prefix = "package mdt505 is ";
+	val epilogue = " end mdt505;"
+	val result = cn_of_string (prefix^s^epilogue);
+in
+	case result of
+	WCCompilation[KCUUnit{
+		comp_unit=CUPackageDeclaration{
+			visible_decs = [decl], ...}, ...}] => decl
+	|_ => fail "cn_decl_of_string" 508001 []
+end);
+=TEX
+
 =SML
 fun Ûcn_basic_decl_of_stringÝ (s : string) : BASIC_DECL = (
 let	val prefix = "(4) é ";
@@ -158,15 +172,20 @@ in
 end);
 =TEX
 =SML
-val var_info : (ID * (TYPE * ENV_INFO)) list ref = ref [];
+val Ûvar_infoÝ : (ID * (TYPE * ENV_INFO)) list ref = ref [];
 
 val ÛenvÝ = (fn id =>
-	case get_const_info ("z'"^id) of
-	Value (ty,_) => (
-		Value (ty, EIEnvOther)
-	)|Nil => lassoc5 (!var_info) id
+	case lassoc5 (!var_info) id of
+	Value te => Value te
+	|Nil =>	 (
+		case get_const_info ("z'"^id) of
+		Value (ty,_) => Value (ty, EIEnvOther)
+		|Nil => Nil
+	)
 );
+=TEX
 
+=SML
 fun Ûextend_envÝ (id : ID) (ty : TYPE) (envty : ENV_INFO) = (
 	(var_info := (id,(ty, envty))::(!var_info))
 );
@@ -214,19 +233,57 @@ end
 =TEX
 
 =SML
+fun Ûupdate_db_with_functionÝ ({designator, return, formal_part, ...}
+	 : FUNCTION_SPECIFICATION) : unit = (
+let	val des = to_upper designator;
+	fun get_ty (id : ID) : TYPE = (
+		 (dest_z_power_type o type_of) (trans_exp env (EId id))
+	);
+	val ret_ty = get_ty return;
+	fun mk_pars ({name, idlist, ...}:PARAMETER_SPECIFICATION) = (
+		map (fn id => (id,get_ty name)) idlist
+	);
+	val (pars, par_tys) = (split o flat) (map mk_pars formal_part);
+	val par_ty = case par_tys of
+			[par_ty] => par_ty
+			|_ => mk_z_tuple_type par_tys;
+	val ty = mk_z_power_type(mk_z_tuple_type [par_ty, ret_ty]);
+	val iw = get_flag"ignore_warnings";
+	val side = set_flag("ignore_warnings", true);
+	val side = delete_const(mk_const ("z'"^des, ty))
+			handle _ => (set_flag("ignore_warnings", iw);());
+	val side = new_const("z'"^des, ty);
+	val side = set_flag("ignore_warnings", iw);
+in
+	extend_env des ty (EIEnvFunction pars)
+end
+);
+=TEX
+=SML
 fun Ûcn_declareÝ (s : string) : unit = (
-	case cn_basic_decl_of_string s of
-	BDVarDecl vd => (
+	case cn_decl_of_string s of
+	DBasicDecl (BDVarDecl vd) => (
 		update_env_with_vars vd
-	)| bd => (
+	)| DBasicDecl bd => (
 		let	val paras = trans_basic_decl env bd;
 			val side = map update_db_with_parainfo paras;
 		in
 			()
 		end
-	)
+	)| DFunctionDeclaration fd => (
+		update_db_with_function fd
+
+	)| _ => ()
 );
 =TEX
+
+cn_declare"function func (x,y : integer) return day;";
+env "FUNC";
+
+¹CN
+package mdt505 is
+function fred (x,y : integer; z : day) return integer;end mdt505;
+°
 
 =SML
 end (* local ... in *);

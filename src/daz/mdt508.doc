@@ -99,10 +99,10 @@ There are no known deficiencies.
 \section{PREAMBLE}
 Set up the theory database as necessary.
 
-=SML
+SML
 use_file "dtd013";
 use_file "imp013";
-	open CaseIndependence CNTypes CNBasicDeclsAndExprs ZProofMode;
+	open CNTypes CNBasicDeclsAndExprs (* ZProofMode*);
 =TEX
 
 =SML
@@ -110,59 +110,7 @@ open_theory "daz_toolkit_extensions";
 force_delete_theory "mdt508_test" handle (_) => ();
 new_theory "mdt508_test";
 =TEX
-\section{SUPPORTING FUNCTIONS}
 
-\subsection{String to Expression/Declaration Conversion}
-This section of code takes a string and parses it into CN.
-
-=SML
-local
-fun classify_label (itemlist : CN_LEX_ITEM list) : CN_LEX_ITEM list =
-  (case itemlist
-    of (LCOrd, _)::(LCNumericLiteral, CNText ntxt)::(LCCrd, _)::rest =>
-      (
-        (
-          (case nat_of_string ntxt
-            of 1 => LCCompLabel
-             | 2 => LCPPartLabel
-             | 3 => LCVPartLabel
-             | 4 => LCDecLabel
-             | 5 => LCStmtLabel
-             | 6 => LCSpecLabel
-             | _ => LCCompLabel
-          ),
-          CNText ("("^ntxt^")")
-        )::rest
-      )
-     |_ => itemlist
-  );
-in
-fun Ûcn_of_stringÝ (s : string) : CNTypes.WEB_CLAUSE = (
-  let
-    val inp = [Lex.Text s];
-  in
-    (CNParser.cn_parser o (CNLex.cn_lex classify_label)) inp
-  end)
-end;
-=TEX
-\subsection{Test Environment}
-=SML
-fun init_env id = (
-	case get_const_info ("z'"^id) of
-	Value (ty,_) => Value (ty, EIEnvOther)
-	|Nil => Nil
-);
-
-fun Ûmake_envÝ (env : CN_ENV) (tm : TERM) (envty : ENV_INFO) = (
-let	val (id, ty, _) = dest_z_gvar tm;
-in
-	fn id' =>
-		if to_upper id' = id
-		then	Value (ty, envty)
-		else	env id'
-end
-);
-=TEX
 
 \section{INITIALISATION}
 First we need to initialise the test results routine.
@@ -172,55 +120,6 @@ First we need to initialise the test results routine.
 init_mt_results();
 
 =TEX
-\section{BASIC DECLARATIONS}
-=SML
-fun Ûcn_basic_decl_of_stringÝ (s : string) : BASIC_DECL = (
-let	val prefix = "(4) é ";
-	val epilogue = ";";
-	val result = cn_of_string (prefix^s^";");
-in
-	case result of
-	WCReplacedByDecl{decls=[DBasicDecl d],...} => d
-	|_ => fail "cn_decl_of_string" 508001 []
-end);
-=TEX
-=SML
-fun Ûupdate_db_with_parainfoÝ (p : PARAINFO) : unit = (
-let	val iw = get_flag"ignore_warnings";
-	val side = set_flag("ignore_warnings", true);
-	fun do_const(s, tm) =
-	let	val side = delete_const(mk_const ("z'"^s, type_of tm))
-			handle _ => (set_flag("ignore_warnings", iw);())
-		val side = new_const("z'"^s, type_of tm);
-		val side = set_flag("ignore_warnings", iw);
-	in () end;
-	fun do_ty (tc, i) =
-	let	val side = delete_type tc handle _ => ();
-		val side = (new_type (tc, i);()) handle _ => ();
-	in () end;
-in
-	case p of
-	AbbDefInfo (s, _, tm) => (map do_ty (type_tycons (type_of tm));
-					do_const (s, tm))
-	|_ => ()
-end
-);
-=TEX
-=SML
-fun Ûvar_declÝ (names, tm) = (
-let	val ty=(dest_z_power_type o type_of) tm;
-in
-	map (fn n => new_const ("z'"^n, ty)) names
-end
-);
-=TEX
-=SML
-fun ÛdeclarationÝ (s : string) : PARAINFO list = (
-let	val paras = ((trans_basic_decl init_env) o cn_basic_decl_of_string) s;
-	val side = map update_db_with_parainfo paras;
-in
-	paras
-end);
 =SML
 fun ÛbdtestÝ (tm : TERM) : bool = (
 	case frees tm of
@@ -231,41 +130,43 @@ fun ÛbdtestÝ (tm : TERM) : bool = (
 =TEX
 \subsection{Translating Enumeration Types}
 =SML
-val bd1 = declaration "type DAY is (MON, TUE, WED, THU, FRI, SAT, SUN)";
+val bd1 = cn_declare "type DAY is (MON, TUE, WED, THU, FRI, SAT, SUN);";
 store_mt_results (mt_runf (op =)) [
 ("bd1", bdtest, ñ{MON, TUE, WED, THU, FRI, SAT, SUN} € DAY®, true)];
 =TEX
 \subsection{Translating Constants}
 =SML
-val bd2 = declaration "PAY_DAY : constant WEEKDAY := FRI";
+val bd2 = cn_declare "PAY_DAY : constant WEEKDAY := FRI;";
 store_mt_results (mt_runf (op =)) [
 ("bd2", bdtest, ñPAY_DAY = FRI®, true)];
 =TEX
 \subsection{Translating Array Types}
 =SML
-val bd3 = declaration "type ARR is array (DAY) of DAY";
-val bd4 = declaration "type UNCON is array (DAY range <>) of DAY";
+val bd3 = cn_declare "type ARR is array (DAY) of DAY;";
+val bd4 = cn_declare "type UNCON is array (DAY range <>) of DAY;";
 store_mt_results (mt_runf (op =)) [
 ("bd3", bdtest, ñ{day : ARR | SUN = day(1)}®, true),
 ("bd4", bdtest, ñ{day : UNCON | SUN = day(1)}®, true)];
 =TEX
 \subsection{Translating Record Types}
 =SML
-val bd5 = declaration "type REC is record START : DAY; FINISH : DAY; YESTERDAY : ARR; end record";
+val bd5 = cn_declare "type REC is record START : DAY; FINISH : DAY; YESTERDAY : ARR; end record;";
+change_env "REC" EIEnvRecordAgg;
+
 store_mt_results (mt_runf (op =)) [
 ("bd5", bdtest, ñÍ REC | START=FINISH=FRI · YESTERDAY®, true)];
 =TEX
 \subsection{Translating Subtypes}
 =SML
-val bd6 = declaration "subtype WEEKDAY is DAY range MON..FRI";
-val bd7 = declaration "subtype SUB is UNCON(WEEKDAY)";
+val bd6 = cn_declare "subtype WEEKDAY is DAY range MON..FRI;";
+val bd7 = cn_declare "subtype SUB is UNCON(WEEKDAY);";
 store_mt_results (mt_runf (op =)) [
 ("bd6", bdtest, ñMON  WEEKDAY®, true),
 ("bd7", bdtest, ñSUN  {MON,TUE, WED, THU, FRI}®, true)];
 =TEX
 \subsection{Translating Integer Types}
 =SML
-val bd8 = declaration "type HOURS is range 0..23";
+val bd8 = cn_declare "type HOURS is range 0..23;";
 store_mt_results (mt_runf (op =)) [
 ("bd8", bdtest, ñHOURS   0 .. 23®, true)];
 =TEX
@@ -284,29 +185,24 @@ end);
 =TEX
 
 =SML
-fun Ûetest0Ý env = (trans_exp env) o (adjust_exp env) o cn_exp_of_string;
-=TEX
-=SML
-val ÛetestÝ = etest0 init_env;
+val ÛetestÝ = (trans_exp env) o (adjust_exp env) o cn_exp_of_string;
 =TEX
 
-=SML
-var_decl (["TOMORROW"], ñARR®);
-var_decl (["REC2"], ñREC®);
-var_decl (["A", "B"], ñHOURS®);
-var_decl (["MAX"], ñ(DAY ¸ DAY)­ DAY®);
-=TEX
-=SML
-val env_max = make_env init_env ñMAX® (EIEnvFunction[]);
 
-val env_rec = make_env init_env ñREC® EIEnvRecordAgg;
+=SML
+cn_declare "tomorrow : arr;";
+cn_declare "rec2 : rec;";
+cn_declare "a, b : hours;";
+cn_declare "FUNCTION max (d1, d2 : DAY) return DAY;";
+=TEX
+
 =TEX
 \subsection{Identifiers}
 =SML
 store_mt_results (mt_runf (op =$)) [
-("id1", etest, "a", ñA®),
-("id2", etest, "A", ñA®),
-("id3", etest, "DAY", ñDAY®)
+("id1", etest, "a", ñAºú®),
+("id2", etest, "A", ñAºú®),
+("id3", etest, "DAY", ñDAYº ð SET®)
 ];
 =TEX
 
@@ -359,9 +255,9 @@ store_mt_results (mt_runf (op =$)) [
 =SML
 val arg="REC'(WED,SUN,ARR'(others => THU))";
 val res = ñÍ REC |
-	FINISH = WED ± START = SUN ± YESTERDAY = ARRvRANGE ¸ {THU} · REC®;
+	FINISH = WED ± START = SUN ± YESTERDAY = ARRvRANGE ¸ {THU} · ÊREC®;
 store_mt_results (mt_runf (op =$)) [
-("recaggpos", etest0 env_rec, arg, res)
+("recaggpos", etest, arg, res)
 ];
 =TEX
 
@@ -369,9 +265,9 @@ store_mt_results (mt_runf (op =$)) [
 =SML
 val arg="REC'(START => THU, FINISH => FRI, YESTERDAY => ARR'(others => SUN))";
 val res = ñÍ REC |
-	START = THU ± FINISH = FRI ± YESTERDAY = ARRvRANGE ¸ {SUN} · REC®;
+	START = THU ± FINISH = FRI ± YESTERDAY = ARRvRANGE ¸ {SUN} · ÊREC®;
 store_mt_results (mt_runf (op =$)) [
-("recaggnamed", etest0 env_rec, arg, res)
+("recaggnamed", etest, arg, res)
 ];
 =TEX
 
@@ -392,8 +288,8 @@ store_mt_results (mt_runf (op =$)) [
 ("binop1", etest, "a and b", ñA and B®),
 ("binop2", etest, "a or b", ñA or B®),
 ("binop3", etest, "a xor b", ñA xor B®),
-("binop7", etest, "a = b", ñA eq B®),
-("binop8", etest, "a /= b", ñA noteq B®),
+("binop7", etest, "a = b", ñ(Aºú) eq B®),
+("binop8", etest, "a /= b", ñ(Aºú) noteq B®),
 ("binop9", etest, "a < b", ñA less B®),
 ("binop10", etest, "a > b", ñA greater B®),
 ("binop11", etest, "a >= b", ñA greater_eq B®),
@@ -404,6 +300,7 @@ store_mt_results (mt_runf (op =$)) [
 ("binop16", etest, "a mod b", ñA mod B®)
 ];
 =TEX
+
 \subsection{Membership of a Range}
 =SML
 store_mt_results (mt_runf (op =$)) [
@@ -421,21 +318,21 @@ store_mt_results (mt_runf (op =$)) [
 \subsection{Indexed Components}
 =SML
 store_mt_results (mt_runf (op =$)) [
-("indexed_comp", etest, "TOMORROW(DAY'FIRST)", ñTOMORROW(DAYvFIRST)®)
+("indexed_comp", etest, "TOMORROW(DAY'FIRST)", ñTOMORROW(DAYvFIRST)ºú®)
 ];
 =TEX
 
 \subsection{Selected Components}
 =SML
 store_mt_results (mt_runf (op =$)) [
-("selected_comp", etest, "REC2.FINISH", ñREC2.FINISH®)
+("selected_comp", etest, "REC2.FINISH", ñ(REC2ºREC).FINISH®)
 ];
 =TEX
 
 \subsection{Functions Calls}
 =SML
 store_mt_results (mt_runf (op =$)) [
-("fun_call", etest0 env_max, "MAX(WED, DAY'LAST)", ñMAX(WED,DAYvLAST)®)
+("fun_call", etest, "MAX(WED, DAY'LAST)", ñMAX(WED,DAYvLAST)®)
 ];
 =TEX
 
@@ -462,54 +359,4 @@ diag_line(summarize_mt_results());
 \end{document}
 
 
-=IGN
-z"DAYS(1)";
 
-z"f(1,2)";
-z"F(1,2)";
-z"RECS'(1)";
-z"REC'(1=>r,2=>3)";
-z"REC'(1,2)";
-z"REC'(1)";
-z"abc'(a=>0, b=>10, c=>20)"; (* wrong error message *)
-z"FN(a=>0, b=>10, c=>20)";
-z"FN(b=>10, a=>0, c=>20)";
-z"FN(c=>20, b=>10, a=>0)";
-z"FN(c=>20, a=>0)"; (* crap error message *)
-z"FN(c=>20, a=>0, a=>0)";
-z"FN(c=>20, a=>0, a=>0, b=> 4)"; (* crap error message *)
-z"FN(c=>20, a=>0, d=>2)"; (* crap error message *)
-
-
-
-z"f(a(f(2,3)))(4)"; (* problem with arrays and attributes - these do not
-		     * appear as constants in the theory database.
-		     *);
-z"r(1)";
-
-
-
-
-
-
-fun make_env env envty ((id,ty)::rest) = (
-	fn id' =>
-		if to_upper id' = id
-		then	Value (ty, envty)
-		else	make_env env envty rest id'
-) | make_env env _ _ = env;
-
-val env2 = make_env env1 (EIEnvFunction[])
-	[("F", type_of ñú­ú®),("G", type_of ñú­ú®)];
-
-val env3 = make_env env2 EIEnvRecordAgg
-	[("REC", type_of ñ[a:ú]®)];
-
-val env4 = make_env env3 (EIEnvFunction["a","b","c"])
-	[("FN", type_of ñú­ú®)];
-
-val t = cn_exp_of_string;
-
-val Ûf1Ý  = (adjust_exp init_env) o cn_exp_of_string;
-
-new_axiom(["fred"],etest"max(2)");
