@@ -234,6 +234,7 @@ typedef struct menu_item {
 	extern void undo_cb(CALLBACK_ARGS);
 	extern void redo_cb(CALLBACK_ARGS);
 /* Module: xmisc */
+	extern int get_map_state(Widget w); /* From XGetWindowAttributes */
 	extern void set_menu_item_sensitivity(
 		Widget	w,	/* menu widget */
 		NAT	i,	/* i-th menu entry */

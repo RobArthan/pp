@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.12 2003/02/12 23:06:43 rda Exp $
+ * $Id: xmisc.c,v 2.12 2003/02/13 13:01:07 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -65,7 +65,15 @@ static char *binary_data_message =
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static int num_selection_sources;
 static Widget selection_sources[MAX_SELECTION_SOURCES];
-
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * get_map_state: get the map state of a window (IsUnmapped/IsUnviewable/IsViewable)
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+int get_map_state(Widget w)
+{
+	XWindowAttributes attrs;
+	(void) XGetWindowAttributes(XtDisplay(w), XtWindow(w), &attrs);
+	return attrs.map_state;
+}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * toggle_menu_item_sensitivity: given a menu w toggle the
  * sensitivity of the i-th item in the menu.
