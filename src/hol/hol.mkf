@@ -1,6 +1,6 @@
 ######################################################################
 #
-#	hol.mkf from $Header: /home/rda/bld/hol/src/RCS/hol.mkf,v 1.17 2001/08/29 14:17:49 rda Exp rda $
+#	hol.mkf from $Header: /home/rda/bld/hol/src/RCS/hol.mkf,v 1.18 2001/12/02 20:48:13 rda Exp rda $
 #
 #	makefile for the HOL database for ProofPower
 #
@@ -34,9 +34,54 @@ PRODUCT=$(PRODNAME)-$(PPVER)
 CWD=$(shell pwd)
 RELEASE=$(shell echo $(PPVER) | sed -e /-/s/-//)
 
+# Compiler specifics:
+
+ifeq ($(PPCOMPILER), POLYML)
 
 # Architecture type (used as a file-name suffix for images by NJML)
+
+HEAP_SUFFIX=		"polydb"
+
+# Commands to build the empty database
+
+EXPORT="PolyML.commit();"
+
+HOLSTARTMLCMD=	val system_version : string = \"$(RELEASE)\";\
+	use\"dtd108.sml\"; use\"imp108.sml\"; \
+	PolyML.commit();
+
+HOLSTARTCMD= cat /usr/lib/poly/ML_dbase > $(HOLDB);\
+	echo "$(HOLSTARTMLCMD)" | poly $(HOLDB)
+
+# Command to run ML
+
+RUNML="poly"
+MLDBPFX=""
+
+else
+
+ifeq ($(PPCOMPILER), SMLNJ)
+
+# Architecture type (used as a file-name suffix for images by NJML)
+
 HEAP_SUFFIX=		$(shell eval `.arch-n-opsys`; echo $$HEAP_SUFFIX)
+
+# Commands to build the empty database
+
+HOLSTARTMLCMD=	val system_version : string = \"$(RELEASE)\";\
+	use\"dtd108.sml\"; use\"imp108.sml\"; \
+	SMLofNJ.exportML \"$(HOLDBNAME)\";
+
+HOLSTARTCMD= echo "$(HOLSTARTMLCMD)" | sml
+
+# Command to run ML
+
+RUNML="sml"
+MLDBPFX="@SMLload="
+
+endif
+
+endif
 
 # database names
 HOLDBNAME=	hol
@@ -207,10 +252,6 @@ IEDTESTSMLS=	$(IEDTESTDOCS:.doc=.sml)
 
 # Flags for ML compiler.  Currently non needed
 MLFLAGS=	
-# Build the empty database
-
-HOLEMPTYCMD=	val system_version : string = \"$(RELEASE)\";\
-	SMLofNJ.exportML \"$(HOLDBNAME)\";
 
 # Hol database initialisation commands
 
@@ -802,7 +843,7 @@ usr029.dvi1  : hol1.sty USR.sty usr029.doc 0kwic.tex \
 	fi
 	rm -f 0cite.temp
 	rm -f usr029.dvi usr029.log
-	texdvi usr029 > usr029.dvi.ldd0 </dev/null
+	texdvi usr029 > usr029.dvi.ldd </dev/null
 	$(MAKE) -f $(HOLMKF) 0kwic.tex
 	@echo "starting bibtex"
 	-bibtex  usr029
@@ -1180,7 +1221,7 @@ holbuilt.ldd: holstage1.$(HEAP_SUFFIX) $(HOLLDDFILES2)
 	@- rm -rf holbuilt.ldd
 	$(MAKE) -f $(HOLMKF) holinitcmd
 	$(MAKE) -f $(HOLMKF) holbannercmd
-	grep '+++ Compiled' $(HOLLDDFILES0)
+#	grep '+++ Compiled' $(HOLLDDFILES0)
 	grep '+++ Compiled' $(HOLLDDFILES1)
 #	grep 'module' $(HOLTESTTTDS)
 	grep '+++ Compiled' $(HOLLDDFILES2)
@@ -1198,17 +1239,17 @@ $(HOLLDDFILES2) $(HOLLDDFILES1) $(HOLLDDFILES0): $(HOLDBLDD)
 
 holstage1.$(HEAP_SUFFIX): $(HOLLDDFILES1) $(HOLLDDFILES0)
 	echo "PPBuild.pp'save_name := \"holstage1\"; PPBuild.pp'save();" \
-		| sml @SMLload=$(HOLDB)
+		| $(RUNML) $(MLFLAGS) $(MLDBPFX)$(HOLDB)
 
 holinitcmd:
-	echo "$(HOLINITCMD)" | sml @SMLload=$(HOLDB)
+	echo "$(HOLINITCMD)" | $(RUNML) $(MLFLAGS) $(MLDBPFX)$(HOLDB)
 
 holbannercmd:
-	echo "$(HOLBANNERCMD)" | sml @SMLload=$(HOLDB)
+	echo "$(HOLBANNERCMD)" | $(RUNML) $(MLFLAGS) $(MLDBPFX)$(HOLDB)
 
-holdb $(HOLDBLDD):
+holdb $(HOLDBLDD) $(HOLLDDFILES0) : $(HOLSMLFILES0)
 	rm -f $(HOLDB)
-	echo "$(HOLEMPTYCMD)" | sml
+	$(HOLSTARTCMD)  | tee dtd108.ldd0 > imp108.ldd0
 	chmod u+wr $(HOLDB)
 	@touch $(HOLDBLDD)
 
@@ -1571,19 +1612,11 @@ veryclean: clean
 #
 ######################################################################
 
-%.ldd0: %.sml
-	@rm -f $@ $*.err 2>/dev/null
-	@echo "Compiling (code)" $<
-	@echo "use \"$<\"; SMLofNJ.exportML \"$(HOLDBNAME)\";"\
-		| sml $(MLFLAGS) @SMLload=$(HOLDB) > $*.err
-	@echo "+++ Compiled $<: OK (Compilation Run Complete) +++" >> $*.err
-	@mv $*.err $@
-
 %.ldd: %.sml
 	@rm -f $@ $*.err 2>/dev/null
 	@echo "Compiling (code)" $<
 	@echo "PPBuild.pp'load \"$<\";"\
-		| sml $(MLFLAGS) @SMLload=$(HOLDB) > $*.err
+		| $(RUNML) $(MLFLAGS) $(MLDBPFX)$(HOLDB) > $*.err
 	@echo "+++ Compiled $<: OK (Compilation Run Complete) +++" >> $*.err
 	@mv $*.err $@
 
@@ -1591,13 +1624,13 @@ veryclean: clean
 %.ttd: %.sml $(IEDTESTSMLS) $(TESTTOOLS)
 	@rm -f $@ $.err 2>/dev/null
 	@echo "Compiling (test)" $<
-	@echo "use_file \"$<\"; quit();" | sml $(MLFLAGS) @SMLload=$(HOLDB) > $*.err
+	@echo "use_file \"$<\"; quit();" | $(RUNML) $(MLFLAGS) $(MLDBPFX)$(HOLDB) > $*.err
 	@mv $*.err $@
 
 %.ttd0: %.sml $(IEDTESTSMLS) $(TESTTOOLS)
 	@rm -f $@ $.err 2>/dev/null
 	@echo "Compiling (test)" $<
-	@echo "use_file \"$<\"; quit();" | sml $(MLFLAGS) @SMLload=holstage1.$(HEAP_SUFFIX) > $*.err
+	@echo "use_file \"$<\"; quit();" | $(RUNML) $(MLFLAGS) $(MLDBPFX)holstage1.$(HEAP_SUFFIX) > $*.err
 	@mv $*.err $@
 
 %.sml: %.doc hol.svf
