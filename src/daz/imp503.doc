@@ -119,6 +119,8 @@ This removes the need for various special cases and type conversion functions.
 \item[Issue 1.119] Improved coverage of checks against ranges as expressions.
 \item[Issue 1.120] Support for NOTHING statement form.
 \item[Issue 1.121] R0096: improved formatting of nothing statement form in web clauses
+\item[Issue 1.122]  Improved error messages for syntax errors generally and undeclared or
+incorrect label errors in particular.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -198,16 +200,32 @@ read (or is
 val input_toks : CN_LEX_ITEM list ref = ref [];
 val cur_tok : int ref = ref ~1;
 =TEX
-
 =SML
-fun Ûformat_lex_itemÝ  ((_, tok) : CN_LEX_ITEM) : string =
-    (case tok
-        of CNZ _ => " <Z-Quotation> "
-        |  CNText s => s
-        |  CNString s => s
-        |  CNKSlot s => "K-Slot"
-        |  CNEos => "<End-of-Input>"
-    );
+val Ûlabel_lex_classesÝ  = [
+	LCCompLabel,
+	LCPPartLabel,
+	LCVPartLabel,
+	LCDecLabel,
+	LCStmtLabel,
+	LCSpecLabel,
+	LCAnnotationLabel, 
+	LCUndeclaredLabel];
+=TEX
+=SML
+fun Ûformat_lex_itemÝ  ((lc, tok) : CN_LEX_ITEM) : string =(
+	let	fun bracket_label s = (
+			if	lc mem label_lex_classes
+			then	"(" ^ s ^ ")"
+			else	s
+		);
+	in	bracket_label (case tok of
+			CNZ _ => " <Z-Quotation> "
+		|  CNText s => s
+		|  CNString s => s
+		|  CNKSlot s => "K-Slot"
+		|  CNEos => "<End-of-Input>")
+	end
+);
 =TEX
 
 =SML
@@ -229,14 +247,15 @@ fun Ûformat_input_itemsÝ  ((ip::rest) : Lex.INPUT list) : string = (
 
 =SML
 fun Ûparse_error_hdrÝ () : unit = (
-    let val ok_toks =
-            format_list format_lex_item ((!input_toks) to (!cur_tok-1)) " ";
-        val bad_tok =
-            if !cur_tok >= 0 andalso !cur_tok < length (!input_toks)
-            then " <?> " ^ format_lex_item (nth (!cur_tok) (!input_toks))
-            else "";
-    in diag_string (get_error_message 19001 [ok_toks ^ bad_tok])
-    end);
+	let	val ok_toks =
+			format_list format_lex_item ((!input_toks) to (!cur_tok-1)) " ";
+		val bad_tok =
+			if !cur_tok >= 0 andalso !cur_tok < length (!input_toks)
+			then " <?> " ^ format_lex_item (nth (!cur_tok) (!input_toks))
+			else "";
+	in	diag_string (get_error_message 503005 [ok_toks ^ bad_tok])	
+	end
+);
 =TEX
 
 The following function produces the error reports for the unexpected
@@ -2823,12 +2842,35 @@ fun Ûcn_readerÝ (ip : CN_LEX_ITEM list) : CN_LEX_ITEM * (CN_LEX_ITEM list) = (
 =TEX
 
 =SML
+val Ûlabel_descsÝ : (CN_LEX_CLASS * string) list = [
+	(LCCompLabel, "the label of a compilation unit k-slot"),
+	(LCPPartLabel, "the label of a private part declaration k-slot"),
+	(LCVPartLabel, "the label of a visible part declaration k-slot"),
+	(LCDecLabel, "the label of a declaration k-slot"),
+	(LCStmtLabel, "the label of a statement k-slot"),
+	(LCSpecLabel, "the label of a specification statement"),
+	(LCAnnotationLabel, "the label of an annotation k-slot")
+];
+=TEX
+
+=SML
 val Ûcn_errorÝ : (CN_LEX_ITEM, 'b, 'c, 'd) ERROR_ROUTINE =
     (fn (tok, stk, _, _) => (
-    parse_error_hdr();
-        diag_string (get_error_message 19003 [format_lex_item tok,
-                    format_stack format_lex_item stk]);
-        raise SYNTAX_ERROR
+	parse_error_hdr();
+	diag_string (get_error_message 503004
+		[format_lex_item tok, format_stack format_lex_item stk]);
+	(case tok of 
+		(LCUndeclaredLabel, _) => (
+			diag_string (get_error_message 503002 [format_lex_item tok])
+	) |	_ => ());
+	(case stk of
+		[Token (li as (lc, _), _)] => (
+			if	any label_descs (fn (lc', _) => lc' = lc)
+			then	diag_string (get_error_message 503003
+					[format_lex_item li, lassoc3 label_descs lc])
+			else	()
+	) |	_ => ());
+	raise SYNTAX_ERROR
 ));
 =TEX
 
