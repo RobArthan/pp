@@ -93,6 +93,8 @@ Protecting against run-time environment errors.
 Swapped order of initialisation functions.
 \item [Issue 1.17 (3rd November 1992)]
 Improved banner mechanism, lost system version from $print\_status$.
+\item [Issue 1.18 (15th December 1992)]
+Improved $save\_and\_quit$.
 \end{description}
 \subsection{Changes forecast}
 \pagebreak
@@ -146,20 +148,60 @@ fun ÛinitÝ (() : unit) : unit = (
 end;
 =TEX
 =SML
-val Ûicl'database_infoÝ : {
-	theory_hierarchy : icl'Kernel.icl'HIERARCHY OPT,
-	cache_theory : string,
-	caches : string list} = {
-	theory_hierarchy = Nil,
-	cache_theory = "hol",
-	caches = ["hol","basic_hol"]};
+type ÛICL'DATABASE_INFO_TYPEÝ = {
+	theory : string,
+	language : string,
+	cache_theories : string list,
+	controls : ((string * bool) list * 
+		(string * int) list * 
+		(string * string) list),
+	error_messages : {id:int, text:string} list,
+	stats : int S_DICT,
+	pc_stack : unit -> unit,
+	pc_db : unit -> unit,
+	pc_evaluators : unit -> unit,
+	ksc_functions : unit -> unit,
+	subgoal_package : unit -> unit
+}; 
+val _ = set_cache_theories ["hol","basic_hol"];
+val _ = open_theory "hol";
+val Ûicl'theory_hierarchyÝ: icl'Kernel.icl'HIERARCHY OPT = Nil;
+val Ûicl'database_infoÝ : ICL'DATABASE_INFO_TYPE = { 
+	theory = get_current_theory_name(), 
+	language = get_current_language(), 
+	cache_theories = get_cache_theories(), 
+	controls = get_controls (), 
+	error_messages = get_error_messages(), 
+	stats = get_stats (), 
+	pc_stack = pending_reset_pc_stack(), 
+	pc_db = pending_reset_pc_db(), 
+	pc_evaluators = pending_reset_pc_evaluators(), 
+	ksc_functions = pending_reset_ksc_functions(), 
+	subgoal_package = pending_reset_subgoal_package() 
+	};
+fun Ûicl'set_database_infoÝ () = use_string " \
+\ val Ûicl'database_infoÝ : ICL'DATABASE_INFO_TYPE = { \
+\ 	theory = get_current_theory_name(), \
+\ 	language = get_current_language(), \
+\ 	cache_theories = get_cache_theories(), \
+\ 	controls = get_controls (), \
+\ 	error_messages = get_error_messages(), \
+\ 	stats = get_stats (), \
+\ 	pc_stack = pending_reset_pc_stack(), \
+\ 	pc_db = pending_reset_pc_db(), \
+\ 	pc_evaluators = pending_reset_pc_evaluators(), \
+\ 	ksc_functions = pending_reset_ksc_functions(), \
+\ 	subgoal_package = pending_reset_subgoal_package() \
+\ 	};";
+val _ = icl'set_database_info ();
 =TEX
 =SML
 end; (* of structure Initialisation *)
 =TEX
-We now wish to expose $icl'database_info$:
+We now wish to expose $icl'database_info$ and $icl'theory\_hierarchy$.
 =SML
-val icl'database_info = Initialisation.icl'database_info;
+val Ûicl'database_infoÝ = Initialisation.icl'database_info;
+val Ûicl'theory_hierarchyÝ = Initialisation.icl'theory_hierarchy;
 =TEX
 \section{USER INTERFACES}
 =SML
@@ -209,6 +251,7 @@ else raise complaint);
 
 fun Ûsave_and_quitÝ () : unit = (
 let	val strm = open_in "/";
+	val reset = icl'set_database_info();
 in	PolyML.commit();
 	if	ExtendedIO.can_input(strm, 1)
 	then	(close_in strm;
@@ -300,7 +343,7 @@ val initial2 = Initialisation.new_init_fun init_line_length;
 =SML
 fun Ûinit_theory_hierarchyÝ () : unit = (
 	use_string(
-	"case (#theory_hierarchy icl'database_info) of " ^
+	"case (icl'database_info) of " ^
 	"Value th => icl'Kernel.icl'load_hierarchy th " ^
 	"| Nil => ();")
 	handle _ => ()
@@ -310,7 +353,7 @@ val initial3 = Initialisation.new_init_fun init_theory_hierarchy;
 =TEX
 Note that we deliberately catch any exceptions in the above.
 
-\subsubsection{Current Theory}
+\subsubsection{Current State}
 First a function to write a list of strings to
 the initialisation error file:
 =SML
@@ -327,10 +370,13 @@ fun Ûicl'write_to_initialisation_error_fileÝ (sl : string list) : unit = (
 =TEX
 Then the function proper:
 =SML
-fun Ûinit_current_theoryÝ () : unit = (
-	case get_shell_var "hol_current_theory" of
+fun Ûinit_current_stateÝ () : unit = (
+=TEX
+Current theory:
+=SML
+	(case get_shell_var "hol_current_theory" of
 	"" => (use_string(
-		"open_theory (#cache_theory icl'database_info);")
+		"open_theory (#current_theory icl'database_info);")
 		handle _ => ()
 	) | hct => (
 		open_theory hct
@@ -339,24 +385,86 @@ fun Ûinit_current_theoryÝ () : unit = (
 		icl'write_to_initialisation_error_file [
 		get_error_message 36002 [hct]];
 		PolyML.quit())
-	)
-);
-
-val initial4 = Initialisation.new_init_fun init_current_theory;
+	));
 =TEX
-Note that we deliberately catch any exceptions in the above.
-
-\subsubsection{Module Initialisation}
+Current language:
 =SML
-fun Ûinit_cache_theoriesÝ () : unit = (
 	(use_string(
-	"set_cache_theories (#caches icl'database_info);")
-	handle _ => ())
+		"set_current_language (#current_theory icl'database_info);")
+		handle _ => ()
+	);
+=TEX
+Cache theories:
+=SML
+	(use_string(
+		"set_cache_theories (#cache_theories icl'database_info);")
+		handle _ => ()
+	);
+=TEX
+Controls (flags, strings and integers):
+=SML
+	(use_string(
+		"set_controls (#controls icl'database_info);")
+		handle _ => ()
+	);
+=TEX
+Error message database:
+=SML
+	(use_string(
+		"set_error_messages (#error_messages icl'database_info);")
+		handle _ => ()
+	);
+=TEX
+Statistics from profiling:
+=SML
+	(use_string(
+		"set_stats (#stats icl'database_info);")
+		handle _ => ()
+	);
+=TEX
+Proof context stack:
+=SML
+	(use_string(
+		"(#pc_stack icl'database_info) ();")
+		handle _ => ()
+	);
+=TEX
+Proof context evaluators:
+=SML
+	(use_string(
+		"(#pc_evaluators icl'database_info) ();")
+		handle _ => ()
+	);
+=TEX
+Proof context database:
+=SML
+	(use_string(
+		"(#pc_db icl'database_info) ();")
+		handle _ => ()
+	);
+=TEX
+Kernel State Change functions:
+=SML
+	(use_string(
+		"(#ksc_functions icl'database_info) ();")
+		handle _ => ()
+	);
+=TEX
+Kernel State Change functions:
+=SML
+	(use_string(
+		"(#subgoal_package icl'database_info) ();")
+		handle _ => ()
+	)
+=TEX
+End of current state setting:
+=SML	
 );
 
-val initial5 = Initialisation.new_init_fun init_cache_theories;
+val initial4 = Initialisation.new_init_fun init_current_state;
 =TEX
 Note that we deliberately catch any exceptions in the above.
+
 \subsubsection{Initialisation Scripts}
 =SML
 local
@@ -418,7 +526,6 @@ val initial7 = Initialisation.new_init_fun print_banner;
 =SML
 val initial8 = Initialisation.new_init_fun use_terminal;
 =TEX
-
 =SML
 end; (* of structure HOLSystem *)
 open HOLSystem;
