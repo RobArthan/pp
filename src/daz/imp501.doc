@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp501.doc   %Z% $Date: 2002/12/11 22:07:05 $ $Revision: 1.62 $ $RCSfile: imp501.doc,v $
+% imp501.doc   %Z% $Date: 2003/05/19 12:44:32 $ $Revision: 1.63 $ $RCSfile: imp501.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Compliance Notation Lexical Analyser}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP501}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.62 $%
+\def\SCCSversion{$Revision: 1.63 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/12/11 22:07:05 $%
+\TPPdate{\FormatDate{$Date: 2003/05/19 12:44:32 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -100,6 +100,7 @@ it as a delimiter).
 \item[Issue 1.60] DAZ-specific updates to banner for open source release
 \item[Issues 1.61, 1.62] Fixing problems with SPARK output function.
 \item[Issue 1.62] Support for NOTHING statement form.
+\item[Issue 1.63] Dollar escapes for Compliance Notation reserved words.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -354,6 +355,11 @@ fun Ûis_alnumÝ  (c : string) = (
 );
 =TEX
 =SML
+fun Ûis_dollarÝ  (c : string) = (
+	c = "$"
+);
+=TEX
+=SML
 fun Ûis_numericliteralÝ (s : string) = (
 	case explode s of
 	i::rest =>	is_digit i
@@ -422,7 +428,7 @@ has been recognised, the following material is used to classify the result.
 
 We list the Ada symbols and reserved words first
 =SML
-val Ûclass_tableÝ = list_e_merge initial_e_dict [
+val Ûada_classesÝ :  CN_LEX_CLASS S_DICT = [
 	("ABS",		LCAbs),
 	("&",		LCAmpersand),
 	("--#",		LCAnnotation),
@@ -497,12 +503,12 @@ val Ûclass_tableÝ = list_e_merge initial_e_dict [
 	("WHEN",	LCWhen),
 	("WHILE",	LCWhile),
 	("WITH",	LCWith),
-	("XOR",		LCXor),
-(*
+	("XOR",		LCXor)
+];
 =TEX
 Now the symbols and reserved words of the Compliance Notation:
 =SML
-*)
+val Ûcn_classesÝ :  CN_LEX_CLASS S_DICT = [
 	("Ã",		LCRefinedBy),
 	("!Ã",		LCImplementedBy),
 	("é",		LCReplacedBy),
@@ -526,16 +532,31 @@ Now the symbols and reserved words of the Compliance Notation:
 	("REFERENCES",	LCReferences),
 	("TILL",	LCTill),
 	("USING",	LCUsing)
-			];
+];
+=TEX
+=SML
+val Ûcn_reserved_wordsÝ : string list =
+	map fst cn_classes drop (not o is_alpha);
+=SML
+val Ûclass_tableÝ : CN_LEX_CLASS E_DICT
+	= list_e_merge initial_e_dict (ada_classes @ cn_classes);
 
 =TEX
 =SML
 fun ÛclassifyÝ (use_get_internal : bool) (what : string) : CN_LEX_ITEM = (
-let	val convert = if use_get_internal	then get_internal_name
-						else to_upper;
-	val WHAT = convert what;
+let	val convert =
+		if use_get_internal
+		then get_internal_name
+		else to_upper;
+	val converted = convert what;
 in
-	(case e_lookup WHAT class_table of
+	if	is_dollar(substring(converted, 0, 1))
+	then	let	val identifier = substring(converted, 1, size what - 1);
+		in	if	identifier mem cn_reserved_words
+			then	(LCIdentifier, CNText identifier)
+			else	fail "CN-Parser" 501004 []
+		end
+	else	(case e_lookup converted class_table of
 		Value cl => cl
 		|	Nil	=> (
 				if	is_numericliteral what
@@ -546,7 +567,7 @@ in
 				then	LCPrimedIdentifier
 				else	LCIdentifier
 			),
-		CNText WHAT)
+		CNText converted)
 end
 );
 =TEX
@@ -577,7 +598,7 @@ fun Ûrec_simple_identifierÝ (st : LEX_STATE) : LEX_STATE = (
 			then aux (collect st)
 			else st
 		);
-	in	if next is_alpha st
+	in	if next is_alpha st orelse next is_dollar st
 		then	aux(collect st)
 		else raise Unrecognised
 	end
@@ -1095,7 +1116,7 @@ and Ûspark_lexÝ ((ip::more) : INPUT list) : CN_LEX_ITEM list = (
 			fail "CN-Parser" 501001  [fn () => "antiquotation"]
 	) |	Lex.Separator s => (
 			fail "CN-Parser" 501001  [fn () => s]
-	) |	Lex.Error n => (fail "CN-Parser (Lexer)" 501003 [fn () => string_of_int n])
+	) |	Lex.Error n => (fail "CN-Parser" 501003 [fn () => string_of_int n])
 ) | spark_lex _ = [];
 =TEX
 Finally $cn\_lex$ is the external interface for the lexical analyser:
