@@ -75,6 +75,8 @@ This document gives scripts to test the new features implemented under the indus
 \item[Issue 1.1] First Draft
 \item[Issues 1.2,1.3] Stage 1 WPs being filled in.
 \item[Issue 1.4] IUCT WP 4 syntax change.
+\item[Issue 1.5] IUCT WP 3, 5, and 7 material added.
+\item[Issue 1.6] IUCT WP 4 material added from RDA work.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -596,9 +598,270 @@ mt_run [
 ];
 =TEX
 
+% #### #### #### #### #### #### #### #### #### #### #### #### #### ####
 \subsection{WP 4. Ada functions with global dependencies}\label{WP4}
+
 \subsubsection{Test Objectives}
+This enhancement introduces new syntax for function specifications allowing the user to say what global variables the function depends upon.
+The test script is in 5 parts as as follows:
+
+\begin{tabular}{|l|l|}\hline
+{\bf Part} & {\bf Description}\\\hline\hline
+4.1 & Regression test: check that a function without global dependencies can be developed as before. \\\hline
+
+4.2 & Check functions with 0, 1 and many global dependencies and 0, 1 and many parameters. \\\hline
+
+4.3 & Check that access to outer local variables works OK. \\\hline
+
+4.4 & Check that functions may not access variables other than those indicated. \\\hline
+\end{tabular}
 \subsubsection{Test Script}
+\paragraph{4.1}\
+
+For the regression test, we show specification and implementation of a function in a package and its use in a main program.
+=SML
+clean_up();
+new_script{name= "int513.4.1.A", state=initial_cn_state};
+πCN
+package INT513_4_1_A is
+  function F(X, Y:INTEGER) return INTEGER
+  ò [ X + 1 < Y, X < F(X, Y) < Y ];
+end INT513_4_1_A;
+∞
+=SML
+new_script{name= "int513.4.1.Abody", state=get_cn_state()};
+πCN
+package body INT513_4_1_A is
+  function F(X, Y:INTEGER) return INTEGER
+  ò [ X + 1 < Y, X < F(X, Y) < Y ]
+  is
+  begin
+    return X + 1;
+  end F;
+end INT513_4_1_A;
+∞
+
+This should produce a number of easily-provable VCs:
+=SML
+fun int513_4_1_prove_vcs () = (
+	(map (fn (_, (_, t)) => tac_proof(([], t),
+		cn_vc_simp_tac[] THEN REPEAT strip_tac THEN asm_rewrite_tac[])))
+	(get_conjectures "-")
+);
+=TEX
+=SML
+store_mt_results_show
+mt_run [
+    ("int513.4.1.1", check_ok, int513_4_1_prove_vcs, true)
+];
+=TEX
+=SML
+new_script{name= "int513.4.1.B", state=get_cn_state()};
+πCN
+with INT513_4_1_A;
+procedure INT513_4_1_B
+is
+ A, B, C : INTEGER;
+begin
+ Ñ B [A + 1 < B] (1)
+ Ñ C [A + 1 < B, A < C < B] (2)
+end INT513_4_1_B;
+∞
+πCN
+ (1) √ B := A + 2;
+∞
+πCN
+ (2) √ C := INT513_4_1_A.F(A, B);
+∞
+=SML
+set_goal([], get_conjecture"-""vc1_1");
+a(PC_T1 "z_lin_arith" prove_tac[]);
+store_mt_results_show mt_run [("int513.4.1.2", check_ok, pop_thm, true)];
+=TEX
+=SML
+set_goal([], get_conjecture"-""vc2_1");
+a(z_strip_tac THEN z_strip_tac);
+a(all_fc_tac[z_get_specÒINT513_4_1_AoFÆ]);
+a(REPEAT strip_tac);
+store_mt_results_show mt_run [("int513.4.1.3", check_ok, pop_thm, true)];
+=TEX
+\paragraph{4.2}\
+
+For this test, we interpret ``many'' as 3 and specify, implement and use a package of functions with the specified numbers of global dependencies and parameters.
+=SML
+clean_up();
+new_script{name= "int513.4.2.A", state=initial_cn_state};
+πCN
+package INT513_4_2_A is
+  A, B, C : INTEGER;
+  function F00 return INTEGER
+  ò [ F00 > 10 ];
+  function F10 return INTEGER
+  ò A [ F10 A = A ];
+  function F01 (X : INTEGER) return INTEGER
+  ò [ F01 X = X ];
+  function F11 (X : INTEGER) return INTEGER
+  ò A [ F11 A X = A - X ];
+  function F30  return INTEGER
+  ò A, B, C [ F30 (A, B, C) = A + B + C ];
+  function F03 (X, Y, Z : INTEGER) return INTEGER
+  ò [ F03 (X, Y, Z) = X + Y + Z ];
+  function F33 (X, Y, Z : INTEGER)  return INTEGER
+  ò A, B, C [ F33 (A, B, C) (X, Y, Z) = A + B + C - (X + Y + Z) ];
+end INT513_4_2_A;
+∞
+=SML
+new_script{name= "int513.4.2.Abody", state=get_cn_state()};
+πCN
+package body INT513_4_2_A is
+  function F00 return INTEGER
+  ò [ F00 > 10 ] is begin return 11; end F00;
+  function F10 return INTEGER
+  ò A [ F10 A = A ] is begin return A; end F10;
+  function F01 (X : INTEGER) return INTEGER
+  ò [ F01 X = X ] is begin return X; end F01;
+  function F11 (X : INTEGER) return INTEGER
+  ò A [ F11 A X = A - X ] is begin return A - X; end F11;
+  function F30  return INTEGER
+  ò A, B, C [ F30 (A, B, C) = A + B + C ] is begin return A + B + C; end F30;
+  function F03 (X, Y, Z : INTEGER) return INTEGER
+  ò [ F03 (X, Y, Z) = X + Y + Z ] is begin return X + Y + Z; end F03;
+  function F33 (X, Y, Z : INTEGER)  return INTEGER
+  ò A, B, C [ F33 (A, B, C) (X, Y, Z) = A + B + C - (X + Y + Z) ]
+  is begin return A + B + C - (X + Y + Z); end F33;
+end INT513_4_2_A;
+∞
+This should produce a number of easily-provable VCs:
+=SML
+fun int513_4_2_prove_vcs () = (
+	(map (fn (_, (_, t)) => tac_proof(([], t),
+		cn_vc_simp_tac[] THEN REPEAT strip_tac THEN asm_rewrite_tac[])))
+	(get_conjectures "-")
+);
+=TEX
+=SML
+store_mt_results_show
+mt_run [
+    ("int513.4.2.1", check_ok, int513_4_2_prove_vcs, true)
+];
+=TEX
+=SML
+new_script{name= "int513.4.2.B", state=get_cn_state()};
+πCN
+with INT513_4_2_A;
+function G return INTEGER
+ò INT513_4_2_AoA, INT513_4_2_AoB, INT513_4_2_AoC
+ [ G(INT513_4_2_AoA, INT513_4_2_AoB, INT513_4_2_AoC) > 10 ]
+is
+begin
+ return
+  INT513_4_2_A.F00 +
+  INT513_4_2_A.F10 -
+  INT513_4_2_A.F01(INT513_4_2_A.A) +
+  INT513_4_2_A.F11(INT513_4_2_A.A) +
+  INT513_4_2_A.F30 -
+  INT513_4_2_A.F03(INT513_4_2_A.A, INT513_4_2_A.B, INT513_4_2_A.C) +
+  INT513_4_2_A.F33(INT513_4_2_A.A, INT513_4_2_A.B, INT513_4_2_A.C) ;
+end G;
+∞
+=TEX
+=SML
+val thms4_2 = map z_get_spec [
+	ÒINT513_4_2_AoF00Æ, ÒINT513_4_2_AoF10Æ,
+	ÒINT513_4_2_AoF01Æ, ÒINT513_4_2_AoF11Æ,
+	ÒINT513_4_2_AoF30Æ, ÒINT513_4_2_AoF03Æ,
+	ÒINT513_4_2_AoF33Æ];
+set_goal([], get_conjecture"-""vcG_1");
+a(cn_vc_simp_tac[] THEN REPEAT strip_tac);
+a(POP_ASM_T rewrite_thm_tac);
+a(ALL_FC_T rewrite_tac thms4_2);
+a(conv_tac (TOP_MAP_C z_anf_conv));
+a(strip_asm_tac (hd thms4_2));
+store_mt_results_show mt_run [("int513.4.2.2", check_ok, pop_thm, true)];
+=TEX
+\paragraph{4.3}\
+
+For this test, we have a function inside another function:
+=SML
+clean_up();
+new_script{name= "int513.4.3.A", state=initial_cn_state};
+=TEX
+πCN
+function G(Y : INTEGER) return INTEGER
+ò [ G Y > Y ]
+is
+  X: INTEGER;
+  function F10 return INTEGER
+  ò X [ F10 X = X ]
+  is begin return X; end F10;
+begin
+  X := Y;
+  return F10 + 1;
+end G;
+∞
+=SML
+set_goal([], get_conjecture"-""vcG_1");
+a(cn_vc_simp_tac[] );
+store_mt_results_show mt_run [("int513.4.3.1", check_ok, pop_thm, true)];
+=TEX
+=SML
+set_goal([], get_conjecture"-""vcG_2");
+a(REPEAT strip_tac THEN ALL_FC_T asm_rewrite_tac[z_get_specÒF10Æ]);
+store_mt_results_show mt_run [("int513.4.3.2", check_ok, pop_thm, true)];
+=TEX
+\paragraph{4.4}\
+
+For this test, we try various approaches to accessing variables that we shouldn't
+=SML
+clean_up();
+new_script{name= "int513.4.4.1", state=initial_cn_state};
+=TEX
+=SML
+fun test_4_4_1() =
+πCN
+function G(Y : INTEGER) return INTEGER
+ò [ G Y > Y ]
+is
+  X: INTEGER;
+  function F10 return INTEGER
+  ò [ F10 = X ] -- shouldn't read X here
+  is begin return X; end F10;
+begin
+  X := Y;
+  return F10 + 1;
+end G;
+∞
+=SML
+store_mt_results_show mt_run [("int513.4.4.1", check_fail, test_4_4_1, true)];
+=SML
+clean_up();
+new_script{name= "int513.4.4.2", state=initial_cn_state};
+=TEX
+πCN
+function G(Y : INTEGER) return INTEGER
+ò [ G Y > Y ]
+is
+  X: INTEGER;
+  function F10 return INTEGER
+  ò [ F10 = 42 ] -- shouldn't read X here
+  is A : INTEGER;
+  begin 
+   Ñ A [ A = 42 ]
+   return A;
+  end F10;
+begin
+  X := Y;
+  return F10 + 1;
+end G;
+∞
+=SML
+fun test_4_4_2 () =
+πCN
+ √  A := X;
+∞
+=SML
+store_mt_results_show mt_run [("int513.4.4.2", check_fail, test_4_4_2, true)];
+=TEX
 
 \subsection{WP 5. Scope of auxiliaries}\label{WP5}
 \subsubsection{Test Objectives}
@@ -765,6 +1028,11 @@ proving VCs.
 Note that initialisation of variables in a package specification has
 no formal effect, and in a package body only within an ``implements''
 clause.
+
+The effect of the initialisation of a package body variable can be seen by VC $vcINT513\_7\_1\_1body\_5$.
+
+The effect of the initialisation of a subprograms variable can be seen by VC $vcINT513\_7\_1\_1body\_4$.
+
 =SML
 clean_up();
 new_script{name="int513.7.1.1", state=initial_cn_state};
@@ -773,7 +1041,7 @@ package int513_7_1_1 is
 X : INTEGER := 1;
 auxiliary s : Ó;
 procedure P 
- Ñ X [ X = s + Xâ0 + 3 ± s = sâ0];
+ Ñ s, X [ X = s + Xâ0 + 3 ± s = sâ0];
 end int513_7_1_1;
 ∞
 =SML
@@ -785,11 +1053,11 @@ using
 implement s by (s = Z);
 
 procedure P 
-Ñ X [Z ç Ó, X = Z + Xâ0 + 3 ± Z = Zâ0]
+Ñ X, Z [Z ç Ó, X = Z + Xâ0 + 3 ± Z = Zâ0]
 is
 Y : INTEGER := 3;
 begin 
-	 Ñ X [Z ç Ó, X = Z + Xâ0 + 3] (1)
+	 Ñ X, Y, Z [Z ç Ó, X = Z + Xâ0 + Y ± Y = Yâ0 ± Z = Zâ0] (1)
 end P;
 
 begin
@@ -801,16 +1069,166 @@ end int513_7_1_1;
 	X := Z + X + Y;
 ∞
 =SML
-get_conjectures "-";
+set_goal([],get_conjecture "-" "vcINT513_7_1_1body_1");
+a(REPEAT strip_tac);
+a(all_var_elim_asm_tac1);
+store_mt_results_show mt_run [("int513.7.1.1", check_ok, pop_thm, true)];
+=TEX
+=SML
 set_goal([],get_conjecture "-" "vcINT513_7_1_1body_2");
 a(REPEAT strip_tac);
 a(all_var_elim_asm_tac1);
-a(prove_tac[]);
+a(z_∂_tac ÒZâ0Æ);
+a(REPEAT strip_tac);
+store_mt_results_show mt_run [("int513.7.1.2", check_ok, pop_thm, true)];
+=TEX
+=SML
+set_goal([],get_conjecture "-" "vcINT513_7_1_1body_3");
+a(REPEAT strip_tac);
+store_mt_results_show mt_run [("int513.7.1.3", check_ok, pop_thm, true)];
+=TEX
+=SML
+set_goal([],get_conjecture "-" "vcINT513_7_1_1body_4");
+a(REPEAT strip_tac);
+a(all_var_elim_asm_tac1);
+a(rewrite_tac[]);
+store_mt_results_show mt_run [("int513.7.1.4", check_ok, pop_thm, true)];
+=TEX
+=SML
+set_goal([],get_conjecture "-" "vcINT513_7_1_1body_5");
+a(REPEAT strip_tac);
+a(all_var_elim_asm_tac1);
+a(z_∂_tac Ò2Æ);
+a(rewrite_tac[]);
+store_mt_results_show mt_run [("int513.7.1.5", check_ok, pop_thm, true)];
+=TEX
+=SML
+set_goal([],get_conjecture "-" "vc1_1");
+a(REPEAT strip_tac);
+a(rewrite_tac[z_plus_assoc_thm]);
+store_mt_results_show mt_run [("int513.7.1.6", check_ok, pop_thm, true)];
+=TEX
+=SML
+store_mt_results_show mt_run [("int513.7.1.7", length, get_conjectures "-", 6)];
+=TEX
+
 =TEX
 \paragraph{Function Renaming}
+=SML
+clean_up();
+new_script{name="int513.7.2.1", state=initial_cn_state};
+πCN
+package int513_7_2_1 is
+function f return INTEGER
+ò [F = 3];
 
+function g(x : INTEGER) return INTEGER
+ò [G X = X + 2];
+end int513_7_2_1;
+∞
+=SML
+new_script{name="int513.7.2.2", state=get_cn_state()};
+πCN
+with int513_7_2_1; 
+package int513_7_2_2 is
+function f1 return INTEGER
+renames int513_7_2_1.f;
+
+function g1(x : INTEGER) return INTEGER
+renames int513_7_2_1.g;
+end int513_7_2_2;
+∞
+Now try using this in a package body:
+=SML
+new_script{name="int513.7.2.3", state=get_cn_state()};
+πCN
+with int513_7_2_1; 
+package body int513_7_2_2 is
+
+procedure P (Y : out INTEGER)
+ Ñ Y [1 ç INTEGER, Y = 6 ]
+is
+begin
+	Y := F1 + G1(1);
+end P;
+end int513_7_2_2;
+∞
+=SML
+set_goal([],get_conjecture "-" "vcINT513_7_2_2body_1");
+a(REPEAT strip_tac);
+a(rewrite_tac[z_get_spec ÒF1Æ,  z_get_spec ÒG1Æ, 
+	z_get_spec ÒINT513_7_2_1oFÆ]);
+a(strip_asm_tac ((z_µ_elim Ò1Æ o ±_right_elim) (z_get_spec ÒINT513_7_2_1oGÆ)));
+a(asm_rewrite_tac[]);
+store_mt_results_show mt_run [("int513.7.2.1", check_ok, pop_thm, true)];
+=TEX
 \paragraph{Unconstrained Subtypes}
+=SML
+clean_up();
+new_script{name="int513.7.3.1", state=initial_cn_state};
+πCN
+package int513_7_3_1 is
+type RNG is range 1 .. 5;
+subtype RRNG is RNG;
 
+procedure P (X : in out RRNG)
+ Ñ X [ X > RRNGvFIRST ];
+end int513_7_3_1;
+∞
+=SML
+new_script{name="int513.7.3.2", state=get_cn_state()};
+πCN
+with int513_7_3_1;
+package int513_7_3_2 is
+Y : int513_7_3_1.RRNG;
+
+procedure Q (X : in out int513_7_3_1.RRNG)
+ Ñ X [ X > INT513_7_3_1oRRNGvFIRST ];
+end int513_7_3_2;
+∞
+=SML
+new_script{name="int513.7.3.3", state=get_cn_state()};
+πCN
+with INT513_7_3_1;
+package body int513_7_3_2 is
+
+procedure Q (X : in out INT513_7_3_1.RRNG)
+ Ñ X [  X > INT513_7_3_1oRRNGvFIRST  ]
+is
+begin 
+	if (X = INT513_7_3_1.RRNG'LAST)
+	then null;
+	else INT513_7_3_1.P(X);
+	end if;
+end Q;
+end int513_7_3_2;
+∞
+=SML
+get_conjectures "-";
+fun simple_proof ((name) :: x) = (
+	tac_proof(([], get_conjecture "-" name), prove_tac[]);
+	simple_proof x
+) | simple_proof [] = ();
+
+store_mt_results_show mt_run
+	[("int513.7.3.1", simple_proof, 
+		["vcINT513_7_3_2body_1",
+		"vcINT513_7_3_2body_2",
+		"vcINT513_7_3_2body_4",
+		"vcINT513_7_3_2body_5"], ())];
+=TEX
+=SML
+set_goal([], get_conjecture "-" "vcINT513_7_3_2body_3");
+a(REPEAT strip_tac);
+a(DROP_NTH_ASM_T 1 ante_tac);
+a(rewrite_tac[cn_relational_clauses, cn_boolean_clauses]);
+a(rewrite_tac[z_get_spec ÒINT513_7_3_1oRRNGvLASTÆ,
+	z_get_spec ÒINT513_7_3_1oRRNGvFIRSTÆ]);
+a(rewrite_tac[z_get_spec ÒINT513_7_3_1oRNGvLASTÆ,
+	z_get_spec ÒINT513_7_3_1oRNGvFIRSTÆ]);
+a(PC_T1 "z_lin_arith" prove_tac[]);
+store_mt_results_show mt_run [("int513.7.3.2", check_ok, pop_thm, true)];
+=TEX
 \subsection{WP 8. DAZ bugs}\label{WP8}
 Tests for the bugs fixed under WP8 are given in \cite{ISS/HAT/DAZ/INT502}.
 
