@@ -91,12 +91,14 @@ lasp -s -u imp031.OKwords imp031.doc > zz1
 
 \item[\FormatDate{91/07/10}, issue 1.1 ] First issue.
 
-\item[\FormatDate{$Date$%
-}, issue \SCCSissue ]
+\item[\FormatDate{91/07/26}, issue 1.4 ]
 	Encode function applications of a HOL variable to a list of
 	arguments in the same style as applications of HOL constants.
 	Removed error message 25004.
 
+\item[\FormatDate{$Date$%
+}, issue \SCCSissue ]
+	Changed names of syntax functions.
 \end{description}
 
 %********************************************************************
@@ -476,7 +478,7 @@ it up into one of a small number of patterns.
 datatype âPATTERNá
 	=	âp_fun_constá	of string * TYPE * (TERM list)
 	|	âp_fun_vará	of string * TYPE * (TERM list)
-	|	âp_combá	of TERM * (TERM list)
+	|	âp_appá	of TERM * (TERM list)
 	|	âp_vará		of string * TYPE
 	|	âp_absá		of TERM * TERM
 	;
@@ -491,7 +493,7 @@ Where:
 	variable (with name and
 	type) to a list of arguments.
 
-\ITEM{p_comb} Function application of a non-constant to a (possibly
+\ITEM{p_app} Function application of a non-constant to a (possibly
 	empty) list of arguments.
 
 \ITEM{p_var, p_abs} As returned by $simple_dest_term$.
@@ -513,15 +515,15 @@ let
 		case simple_dest_term tm1
 		of	Const(str, ty) =>	p_fun_const(str, ty, rest)
 		|	Var(str, ty) =>	p_fun_var(str, ty, rest)
-		|	Comb(t1, t2) =>	aux t1 (t2::rest)
-		|	_ =>			p_comb(tm1, rest)
+		|	App(t1, t2) =>	aux t1 (t2::rest)
+		|	_ =>			p_app(tm1, rest)
 	);
 in
 	case simple_dest_term tm
 	of	Var(str, ty) =>		p_fun_var(str, ty, nil)
 	|	Const(str, ty) =>	p_fun_const(str, ty, nil)
-	|	Abs t1_t2 =>		p_abs t1_t2
-	|	Comb(t1, t2) =>	aux t1 [t2]
+	|	Simple t1_t2 =>		p_abs t1_t2
+	|	App(t1, t2) =>	aux t1 [t2]
 end);
 =TEX
 
@@ -570,9 +572,9 @@ only return $pf_ok$ (view the first call as setting a contract: the
 function says it cannot handle the initial set of arguments, but it
 contracts to handle a specified number of arguments if it is called
 again).  Patterns $p_fun_\ldots$ after splitting become a use of pattern
-$p_comb$ where the single term is built from the required number of
+$p_app$ where the single term is built from the required number of
 arguments, and the list holds the remainder.  The delay in making the
-second call stems from outputting the $p_comb$ that combines the two
+second call stems from outputting the $p_app$ that combines the two
 portions of the original call chain.
 
 If any function returns $pf_not_possible$ then its arguments are
@@ -653,7 +655,7 @@ their types are named here.  Type $FUN_APP_PR$ is used for the
 application of constants to arguments.  The next types are used for the
 primitive HOL constructors with corresponding name.  Type
 $PRIM_PRS$ combines these types to hold the functions for `abs',
-`comb', `const', application and `var', its functions are given in
+`app', `const', application and `var', its functions are given in
 alphabetical order.
 
 =SML
@@ -662,10 +664,10 @@ datatype âPP_ENVá = pp_env of {
 	âpe_langá		: string,
 	âpe_fun_constá		: FUN_APP_PR,
 	âpe_fun_vará		: FUN_APP_PR,
-	âpe_combá		: COMB_PR,
+	âpe_appá		: APP_PR,
 	âpe_constá		: VAR_CONST_PR,
 	âpe_vará		: VAR_CONST_PR,
-	âpe_absá		: ABS_PR,
+	âpe_á		: _PR,
 	âpe_addstringá		: string -> unit,
 	âpe_beginbá		: (int * bool) -> unit,
 	âpe_endbá		: unit -> unit,
@@ -674,11 +676,11 @@ datatype âPP_ENVá = pp_env of {
 
 withtype âFUN_APP_PRá	= PP_ENV -> string -> TYPE -> TERM list -> PFUN_ANS
 
-and âABS_PRá			= PP_ENV -> TERM -> TERM -> unit
-and âCOMB_PRá		= PP_ENV -> TERM -> TERM list -> unit
+and â_PRá			= PP_ENV -> TERM -> TERM -> unit
+and âAPP_PRá		= PP_ENV -> TERM -> TERM list -> unit
 and âVAR_CONST_PRá	= PP_ENV -> string -> TYPE -> unit;
 
-type âPRIM_PRSá		= (ABS_PR * COMB_PR * VAR_CONST_PR
+type âPRIM_PRSá		= (_PR * APP_PR * VAR_CONST_PR
 					* FUN_APP_PR * FUN_APP_PR * VAR_CONST_PR);
 =TEX
 
@@ -696,7 +698,7 @@ Where:
 	applications of constants and variables
 	in the current language.
 
-\ITEM{pe_const, pe_comb, pe_var, pe_abs} The four functions for
+\ITEM{pe_const, pe_app, pe_var, pe_} The four functions for
 	printing the basic HOL term types in the current language.
 
 \ITEM{pe_addstring, pe_beginb, pe_endb, pe_space} The Oppen printing
@@ -743,10 +745,10 @@ A small number of functions are useful for altering $PP_ENV$ records.
 fun âset_env_for_languageá (lang:string) (cur_env:PP_ENV) = (
 let
 	val pp_env{pe_lang = cur_lang, pe_addstring = cur_addstring, pe_beginb = cur_beginb,
-		pe_endb = cur_endb, pe_space = cur_space, pe_comb = comb,
-		pe_const = const, pe_var = var, pe_abs = abs, ...} = cur_env;
+		pe_endb = cur_endb, pe_space = cur_space, pe_app = app,
+		pe_const = const, pe_var = var, pe_ = abs, ...} = cur_env;
 
-	val (new_abs, new_comb, new_const, new_fun_const, new_fun_var, new_var) = (
+	val (new_abs, new_app, new_const, new_fun_const, new_fun_var, new_var) = (
 		case get_printers lang
 		of Value printers => printers
 		| Nil => (	case get_printers "HOL"
@@ -759,10 +761,10 @@ in
 			pe_prec		= pc_lowest,
 			pe_fun_const	= new_fun_const,
 			pe_fun_var	= new_fun_var,
-			pe_comb	= new_comb,
+			pe_app	= new_app,
 			pe_const	= new_const,
 			pe_var		= new_var,
-			pe_abs		= new_abs,
+			pe_		= new_abs,
 			pe_addstring	= cur_addstring,
 			pe_beginb	= cur_beginb,
 			pe_endb	= cur_endb,
@@ -777,8 +779,8 @@ An initial environment is required, it does not do anything useful.
 =SML
 local
 	fun (dummy_fun_cv : FUN_APP_PR) _ _ _ _ = pf_ok;
-	fun (dummy_abs : ABS_PR) _ _ _ = ();
-	fun (dummy_comb : COMB_PR) _ _ _ = ();
+	fun (dummy_abs : _PR) _ _ _ = ();
+	fun (dummy_app : APP_PR) _ _ _ = ();
 	fun (dummy_var_const : VAR_CONST_PR) _ _ _ = ();
 in
 	fun initial_env (lang:string) ((addstring, beginb, space, endb):OPPEN_FUNS) = (
@@ -787,10 +789,10 @@ in
 						pe_prec		= pc_lowest,
 						pe_fun_const	= dummy_fun_cv,
 						pe_fun_var	= dummy_fun_cv,
-						pe_comb	= dummy_comb,
+						pe_app	= dummy_app,
 						pe_var		= dummy_var_const,
 						pe_const	= dummy_var_const,
-						pe_abs		= dummy_abs,
+						pe_		= dummy_abs,
 						pe_addstring	= addstring,
 						pe_beginb	= beginb,
 						pe_endb	= endb,
@@ -804,7 +806,7 @@ end;
 fun âset_precá (new_prec:Prec_Context) (cur_env:PP_ENV) = (
 let
 	val pp_env{pe_lang = cur_lang, pe_fun_const = cur_fun_const, pe_fun_var = cur_fun_var,
-		pe_const = cur_const, pe_var = cur_var, pe_abs = cur_abs, pe_comb = cur_comb,
+		pe_const = cur_const, pe_var = cur_var, pe_ = cur_abs, pe_app = cur_app,
 		pe_addstring = cur_addstring, pe_beginb = cur_beginb, pe_endb = cur_endb,
 		pe_space = cur_space, ...} = cur_env;
 in
@@ -812,10 +814,10 @@ in
 			pe_prec		= new_prec,
 			pe_fun_const	= cur_fun_const,
 			pe_fun_var	= cur_fun_var,
-			pe_comb	= cur_comb,
+			pe_app		= cur_app,
 			pe_const	= cur_const,
 			pe_var		= cur_var,
-			pe_abs		= cur_abs,
+			pe_		= cur_abs,
 			pe_addstring	= cur_addstring,
 			pe_beginb	= cur_beginb,
 			pe_endb	= cur_endb,
@@ -860,14 +862,14 @@ applied uses and constants as arguments.  It calls the printing
 function for applications of constants in the current language.  If the
 printing function cannot print the values then a more primitive
 function is used.  For function applications this is component
-$pe_comb$, for non applied uses it is component $pe_const$, both from
+$pe_app$, for non applied uses it is component $pe_const$, both from
 the current environment.
 
 Similarly, function $handle_fun_var$ deals with uses of HOL variables,
 but in this case no language change is required.
 
 If the printing function indicates that it can handle fewer arguments
-then they are recombined and passed to component $pe_comb$ from the
+then they are recombined and passed to component $pe_app$ from the
 current environment.  This routine will print the function application
 of a term to the excess arguments, the term will passed to function
 $main_term_pp$ which will open it up to find a $p_fun_\ldots$, but this
@@ -882,7 +884,7 @@ problems when writing or testing printing functions.
 fun âhandle_fun_constá (cur_env:PP_ENV) (const:string) (const_ty:TYPE)
 		(args:TERM list) : unit = (
 let
-	val pp_env{pe_fun_const = do_fun_const, pe_comb=do_comb,
+	val pp_env{pe_fun_const = do_fun_const, pe_app=do_app,
 		pe_const=do_const, ...} = cur_env;
 
 	val alias = SymbolTable.get_alias(const, const_ty);
@@ -893,16 +895,16 @@ in
 		then
 			do_const cur_env alias const_ty
 		else
-			do_comb cur_env (mk_const(alias, const_ty)) args
+			do_app cur_env (mk_const(alias, const_ty)) args
 		)
 	| pf_ok => ()
 	| pf_fewer num => (
 		if length args <= num
 		then
-			do_comb cur_env (mk_const(alias, const_ty)) args
+			do_app cur_env (mk_const(alias, const_ty)) args
 		else
-			do_comb cur_env
-				(revfold	(fn(el, prev) => mk_comb(prev, el))
+			do_app cur_env
+				(revfold	(fn(el, prev) => mk_app(prev, el))
 						(args to (num-1))
 						(mk_const(alias, const_ty))
 				)
@@ -916,7 +918,7 @@ end
 fun âhandle_fun_vará (cur_env:PP_ENV) (var:string) (var_ty:TYPE)
 		(args:TERM list) : unit = (
 let
-	val pp_env{pe_fun_var = do_fun_var, pe_comb=do_comb,
+	val pp_env{pe_fun_var = do_fun_var, pe_app=do_app,
 		pe_var=do_var, ...} = cur_env;
 in
 	case do_fun_var cur_env var var_ty args
@@ -925,16 +927,16 @@ in
 		then
 			do_var cur_env var var_ty
 		else
-			do_comb cur_env (mk_var(var, var_ty)) args
+			do_app cur_env (mk_var(var, var_ty)) args
 		)
 	| pf_ok => ()
 	| pf_fewer num => (
 		if length args <= num
 		then
-			do_comb cur_env (mk_var(var, var_ty)) args
+			do_app cur_env (mk_var(var, var_ty)) args
 		else
-			do_comb cur_env
-				(revfold	(fn(el, prev) => mk_comb(prev, el))
+			do_app cur_env
+				(revfold	(fn(el, prev) => mk_app(prev, el))
 						(args to (num-1))
 						(mk_var(var, var_ty))
 				)
@@ -954,7 +956,7 @@ term printing functions when they have a sub term to be printed.
 =SML
 fun âmain_term_ppá (cur_env:PP_ENV) (tm:TERM) : unit = (
 let
-	val pp_env{pe_comb=do_comb, pe_var=do_var, pe_abs=do_abs,
+	val pp_env{pe_app=do_app, pe_var=do_var, pe_=do_abs,
 		pe_lang=cur_lang, pe_beginb=beginb, pe_endb=endb, ...} = cur_env;
 in
 	case open_up tm
@@ -973,7 +975,7 @@ in
 			)
 		end
 	| p_fun_var(const, const_ty, args) =>	handle_fun_var cur_env const const_ty args
-	| p_comb(head_fn, args)	=> do_comb	cur_env head_fn args
+	| p_app(head_fn, args)	=> do_app	cur_env head_fn args
 	| p_var(name, ty)		=> do_var	cur_env name ty
 	| p_abs(tm1, tm2)		=> do_abs	cur_env tm1 tm2
 end
