@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.10 2003/03/19 13:06:37 rda Exp rda $ 
+ * $Id: palette.c,v 2.11 2003/04/11 10:58:21 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -78,7 +78,7 @@ static PaletteData palette_info = { NULL, NULL };
 void popup_palette(Widget w)
 {
 	XmString lab;
-	char buf[2];
+	char label_buf[2], name_buf[sizeof "charXX"];
 	NAT i, n_chars, x, y;
 	NAT cbdata;
 	Widget shell, form, button;
@@ -106,15 +106,16 @@ void popup_palette(Widget w)
 
 	palette_info.palette_w = form;
 
-	buf[1] = '\0';
+	label_buf[1] = '\0';
 
 	for(i = 0; i < n_chars; ++i) {
 
-		buf[0] = prettychars[i];
-		lab = XmStringCreateSimple(buf);
+		label_buf[0] = prettychars[i];
+		sprintf(name_buf, "char%02X", prettychars[i]);
+		lab = XmStringCreateSimple(label_buf);
 		x = 2 * (i % 8);
 		y = i / 8;
-		button = XtVaCreateManagedWidget("button",
+		button = XtVaCreateManagedWidget(name_buf,
 			xmPushButtonGadgetClass, form,
 			XmNlabelString, lab,
 			XmNleftAttachment,	XmATTACH_POSITION,
