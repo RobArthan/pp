@@ -1,4 +1,4 @@
-% $Header: /home/rda/bld/daz/src/RCS/imp510.doc,v 1.85 2001/03/16 09:41:20 rda Exp rda $
+% $Header: /home/rda/daz/RCS/imp510.doc,v 1.86 2001/12/15 22:21:37 rda Exp rda $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: SPARK Output Function}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP510}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.85 $%
+\def\SCCSversion{$Revision: 1.86 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{{$Date: 2001/03/16 09:41:20 $%
+\TPPdate{\FormatDate{{$Date: 2001/12/15 22:21:37 $%
 }}
 \TPPstatus{Draft}	    %% Mandatory field
 \TPPtype{Specification}
@@ -149,6 +149,7 @@ for keyword ``CONSTANT'', attribute designators and pragmas.
 pretty-printing of Web clauses containing nested quotations
 in a format that can more often be re-entered.
 \item[Issue 1.86] R0037: support for named numbers.
+\item[Issue 1.87] R0043: problem with long lines when the frames of specification statements are printed.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -986,13 +987,17 @@ A few auxiliary functions before we do statements.
 
 fun Ûfmt_specİ (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({w=w, w0=w0, pre=pre, post=post} : SPEC) = (
-    outf "„";
-    outf(format_list (sfmt_z_id fmtinfo) w ",");
-    outf "[";
-    (fmt_z_tm fmtinfo pre);
-    outf ",";
-    (fmt_z_tm fmtinfo post);
-    outf "]"
+	let	fun out_frame [] = ()
+		|   out_frame [zn] = outf ((sfmt_z_id fmtinfo) zn)
+		|   out_frame (zn::zns) = (out_frame [zn]; outf ","; out_frame zns);
+	in	outf "„";
+		out_frame w;
+		outf "[";
+		(fmt_z_tm fmtinfo pre);
+		outf ",";
+		(fmt_z_tm fmtinfo post);
+		outf "]"
+	end
 );
 
 fun Ûfmt_proc_callİ (fmtinfo : PP_FMT_INFO)
@@ -2507,7 +2512,7 @@ reset_tabs();
 let val skipspace : bool ref = ref false;
     val strings : string list ref = ref [];
     val curr_str : string ref = ref "";
-    val was_ll = set_int_control("line_length", 80);
+    val line_length = get_int_control"line_length";
     fun out_fun (s : string) : unit = (
 	if (s = "\n")
 	then (
@@ -2520,7 +2525,13 @@ let val skipspace : bool ref = ref false;
 			orelse s = "." orelse s = "'" orelse s = ".."
 			orelse !skipspace)
 		then ()
-		else (curr_str := !curr_str ^ " ");
+		else	let	val cur_len = size (!curr_str);
+				val s_len = size s;
+			in	if	cur_len > 0 andalso cur_len + s_len > line_length
+				then	(strings := !strings @ [!curr_str];
+					 curr_str := "")
+				else	(curr_str := !curr_str ^ " ")
+			end;
 		curr_str := !curr_str ^ s;
 		if (s = "'" orelse s = "(" orelse s = "." orelse s = "..")
 		then skipspace := true
@@ -2533,7 +2544,6 @@ in
 	reset_tabs();
 	fmt {outf = out_fun, fmtfn = Nil} syntax;
 	reset_tabs();
-	set_int_control("line_length", was_ll);
 	if (!curr_str = "")
 	then (!strings)
 	else !strings @ [!curr_str]
