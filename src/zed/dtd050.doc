@@ -39,9 +39,11 @@
 
 \subsection{Changes history} 
 \begin{description}
-\item [Issue 1.1] (\TPPdate{\FormatDate{$Date$
-}})
+\item [Issue 1.1] 
 First draft version.
+\item [Issue 1.2] (\TPPdate{\FormatDate{$Date$
+}})
+
 \end{description}
 %\subsection{Changes forecast}
 \section{GENERAL}
@@ -61,7 +63,22 @@ In the Z Proof Support Subsystem, two types of constants have been identified:
 \item 
 Constants that belong to infinite families and thus cannot be defined as primitive. 
 \end{enumerate}
-This document gives the detailed design for the generation of constants of type (2). These constants are defined dynamically on initial introduction and stored in theory ??? at the top of the user hierarchy. A detailed discussion of data storage of dynamically generated constants may be found in \cite{DS/FMU/IED/HLD017}.
+This document gives the detailed design for the generation of constants of type (2). 
+These constants are defined dynamically on initial introduction. The mechanism for storing the Z constants
+will depend on the users choice of mode of operation of the Z proof support system, as described in 
+\cite{DS/FMU/IED/???}.
+In type-checking mode, these constants and any required associated types will be stored in the user's current theory. In conservative extension mode and axiom mode they will be stored in theory Z at the top of the user hierarchy. A detailed discussion of data storage of dynamically generated constants may be found in \cite{DS/FMU/IED/HLD017}. 
+It is anticipated that a user will typically work first in 
+type-checking mode. In this mode, the generated types and constants are stored using $new\_type$ and $new\_const$
+ of  \cite{DS/FMU/IED/DTD012}. The user
+will be able to alter his
+specification easily, deleting any types and constants that he no longer 
+requires. If the user then wishes to switch to ``proof'' mode, i.e. conservative 
+extension mode or axiom mode, 
+he will re-enter his specification and  the mechanism employed for
+storing the generated types  will be a 
+call to $labelled\_product\_spec$ of \cite{DS/FMU/IED/DTD059} and for storing the generated constants will be 
+a call to $const\_spec$ of \cite{DS/FMU/IED/DTD012}.
 \subsubsection{Dependencies}
 The functions in this document are dependent on the Release 1 HOL System.
 =IGN
@@ -76,189 +93,441 @@ Thus we give the commands here for those functions declared in the following sig
 =DOC
 signature ‚ZConstants· = sig
 =DESCRIBE
-The functions which define the Z semantic constants are packaged into this signature.
+The functions which define the dynamically generated Z semantic constants are packaged into this signature.
 =ENDDOC
-\section{BINDING TYPE DEFINITION}
+\subsection{Mode of Operation}
 =DOC
-val ‚binding_type_defn· : TYPE -> TERM * TERM list;
+val ‚set_mode· : int -> int
 =DESCRIBE
-The function which takes a binding type  and yields the  the binding constructor  and a list of binding projections.
-The binding constructor  and binding projections are type instantiated before being returned. 
+Set the mode of operation, returning the previous mode. There is a choice of three modes:
+\begin{enumerate}
+\item
+type-checking
 
-$binding\_type\_defn$ is used in all the following functions which define the Z semantic constants.
+No definitions are stored in this mode.
+\item
+axiom
+
+Definitions will be stored in theory Z with consistency proof obligations stored as axioms.
+\item
+conservative extension
+
+Definitions will be stored in theory Z with consistency proof obligations discharged.
+\end{enumerate}
+The default mode is 1.
+=SEEALSO
+$get\_mode$
 =FAILURE
-50001	?0 is not a binding type
+50001	mode must be 1, 2 or 3
 =ENDDOC
-Do we need constructors $mk\_binding\_type\_construction\_defn$ and $mk\_binding\_type\_projection\_defn$ ? 
-
-\section{Z CONSTANT DEFINITION GENERATION FUNCTIONS}
-In \cite{DS/FMU/IED/HLD017} the issue of defining members of infinite families of constants is discussed. The first time such a constant is introduced, its definition is dynamically generated and stored in the theory ???. A polymorhic type definition of the constant is actually stored, which is type instantiated before being returned. If the definition of a constant already exists in the theory, then that definition, type instantiated, is returned.
-
-\subsection{Constants for Schema Calculus}
 =DOC
-val ‚Z%down%s_defn· : TERM -> THM;
+val ‚get_mode· : unit -> int
 =DESCRIBE
-The schema constructor definition generation function. 
+Returns current mode of operation.
+=SEEALSO
+$set\_mode$
+=ENDDOC
+
+
+\subsection{Binding Types}
+=DOC
+val ‚binding_type_spec· : TYPE -> unit;
+val ‚get_binding_info· : TYPE -> TERM * TERM list;
+
+=DESCRIBE
+For each finite set of identifiers a polymorphic type constructor is required 
+which is the type of bindings which bind values to just the identifiers in the set. 
+Each of these type constructors has a unique name formed by
+ appending to the 
+prefix ``$Z'mk\_S$'' the alphabetically ordered list of identifiers. 
+In axiom mode and conservative extension mode,
+the purpose of the function  $binding\_type\_spec$ is to check for the existence of the binding type 
+and, if the type has not been defined, to generate its  definition 
+ and the polymorphic definitions of the binding constructor and the 
+binding projections. In type-checking mode, no definitions will be generated; 
+the binding type and its constructor and projections will be
+put in place in the users current theory by $new\_type$ and $new\_const$.
+The function $get\_binding\_info$ returns
+ the polymorphic  names of the binding constructor  and 
+list of binding projections if they exist; it fails otherwise.
+ 
+An example of a binding type is $('a, 'b)Z'S[a,b]$. The application of $binding\_type\_spec$ determines whether or not the type 
+$Z'S[a,b]$ already exists. If not, the type $Z'S[a,b]$ and  the polymorphic constants $Z'mk\_S[a,b]$ (the binding constructor)
+ $Z'S[a,b]a$ and $Z'S[a,b]b$ (the binding  projections)
+are generated.
+The application of $get\_binding\_info$ 
+to the binding type $('a, 'b)Z'S[a,b]$ yields the  binding constructor $Z'mk\_S[a,b]$ 
+and list of binding  projections 
+$[Z'S[a,b]a, Z'S[a,b]b]$. In axiom mode and conservative extension mode,
+ the type definition generated in this example would be:
+Û
+Ö Ñ f:('a, 'b)Z'S[a,b] ã 'a â 'b é TypeDefn (çx:'a â 'b é T)f
+Ê
+
+and the definition of the binding constructor  and binding projections would be:
+ÛHOL Constant
+Z'mk_S[a,b]: 'a ã 'b ã ('a,'b)Z'S[a,b]
+Z'S[a,b]a:('a,'b)Z'S[a,b] ã 'a
+Z'S[a,b]b:('a,'b)Z'S[a,b] ã 'b
+…
+É t x1 x2é
+Z'S[a,b]a (Z'mk_S[a,b] x1 x2) = x1 Ä Z'S[a,b]b (Z'mk_S[a,b] x1 x2) = x2
+Ä
+Z'mk_S[a,b] (Z'S[a,b]a t) (Z'S[a,b]b t) = t
+Ê
+The definition of the binding type would be saved in the 
+theory Z under the key $Z'S[a,b]$, and the defining theorem for
+the binding constructor  and binding projections
+ under the keys $Z'mk\_S[a,b]$, $Z'S[a,b]a$ and $Z'S[a,b]b$.
+The functions $binding\_type\_spec$ and $get\_binding\_info$ are used by all the functions in 
+section \ref{ZCONST} which define the Z semantic constants.
 =FAILURE
-47330	?0 is not a schema
+47050	?0 is not a binding type
+50002	There is no binding type called ?0 
+=ENDDOC
+ 
+The function $labelled\_product\_spec$ described in \cite{DS/FMU/IED/DTD059} is called to generate the defining theorems for the binding type and for its associated constants.
+
+\subsection{Tuple Types}
+=DOC
+val ‚tuple_type_spec· : TYPE -> unit ;
+val ‚get_tuple_info· : TYPE -> TERM ;
+=DESCRIBE
+Each tuple type constructor has a unique name formed by
+ appending the 
+prefix ``$Z'mk\_T$'' to a singleton list containing the arity of the tuple. 
+In axiom mode and conservative extension mode,
+the purpose of the function  $tuple\_type\_spec$ is to check for the existence of the tuple type and, if it has not been defined, to
+generate its  definition
+ and the polymorphic definition of the tuple constructor and the tuple
+projections. In type-checking mode, no definition will be generated; 
+the tuple type and its constructor  and projections will be
+put in place in the users current theory by $new\_type$ and $new\_const$.
+The function $get\_tuple\_info$ returns
+ the  names of the tuple constructor and list of tuple projections if they exist; it fails otherwise.
+ 
+An example of a tuple type is $('1, '2, '3)Z'T[3]$. The application of $tuple\_type\_spec$ determines whether or not the type 
+$Z'T[3]$ already exists. If not, the type $Z'T[3]$ and  the polymorphic constants $Z'mk\_T[3]$ (the tuple constructor)
+$Z'T[3]1$, $Z'T[3]2$ and $Z'T[3]3$ (the tuple  projections)
+are generated.
+The application of $get\_tuple\_info$ 
+to the tuple type $('1, '2, '3)Z'T[3]$ yields the  
+tuple constructor $Z'mk\_T[3]$ and list of tuple  projections 
+$[Z'T[3]1, Z'T[3]2], Z'T[3]3]$.
+ In axiom mode and conservative extension mode, the type definition 
+generated in this example would be:
+Û
+Ö Ñ f:('1, '2, '3)Z'T[3] ã '1 â '2 â '3é  TypeDefn (çx:'1 â '2 â '3 é T)f
+Ê
+
+
+and the definition of the tuple constructor and tuple projections  would be:
+ÛHOL Constant
+Z'mk_T[3]: '1 ã '2 ã '3 ã ('1,'2,'3)ZT'[3]
+Z'T[3]1: ('1,'2,'3)ZT'[3] ã '1 
+Z'T[3]2: ('1,'2,'3)ZT'[3] ã '2
+Z'T[3]3: ('1,'2,'3)ZT'[3] ã '3 
+	
+…
+É t x1 x2 x3é
+  Z'T[3]1 (Z'mk_T[3] x1 x2 x3) = x1 
+Ä Z'T[3]2 (Z'mk_T[3] x1 x2 x3) = x2
+Ä Z'T[3]3 (Z'mk_T[3] x1 x2 x3) = x3 
+Ä Z'mk_T[3] (Z'T[3]1 t) (Z'T[3]2 t) (Z'T[3]3 t) = t
+Ê
+The definition of the tuple type would be saved in the 
+theory Z under the key $Z'T[3]$, and the defining theorem
+for the tuple constructor and tuple projections
+ under the keys $Z'mk\_T[3]$, $Z'T[3]1$, $Z'T[3]2$ and
+ $Z'T[3]3$.
+
+=FAILURE
+47040	?0 is not a tuple type
+50003	There is no tuple type called ?0 
+=ENDDOC
+ 
+The function $labelled\_product\_spec$ described in \cite{DS/FMU/IED/DTD059} is called to generate the defining theorems for the tuple type and for its associated constants.
+
+\subsection{Retrieving Definitions of Constructors and Projections}
+=DOC
+val ‚get_constructor_defn· : TYPE -> THM;
+val ‚get_projections_defn· : TYPE -> THM list;
+=DESCRIBE
+These functions  take a binding type (or a tuple type) and return information from the 
+appropriate conjunct of the definition of 
+the binding constructor (or tuple constructor) and binding projections (or tuple projections). This is achieved by first calling $binding\_type\_spec$ (or $tuple\_type\_spec$), which generates the definition where necessary, and then retrieving that definition. In type-checking mode, no definitions are generated and the functions fail.
+In the examples given above, the theorems returned for 
+the binding constants would be:
+Û
+Ö É t é Z'mk_S[a,b] (Z'S[a,b]a t) (Z'S[a,b]b t) = t
+Ê
+and
+Û
+[Ö É x1 x2 é Z'S[a,b]a(Z'mk_S[a,b](x1 x2)) = x1,
+Ö É x1 x2 é Z'S[a,b]b(Z'mk_S[a,b](x1 x2)) = x2] 
+Ê
+The theorems returned for 
+the tuple constants would be:
+Û
+Ö É t é Z'mk_T[3] (Z'T[3]1 t) (Z'T[3]2 t)(Z'T[3]3 t) = t
+Ê
+and
+Û
+[Ö É x1 x2 x3 é Z'T[3]1(Z'mk_T[3](x1 x2 x3)) = x1,
+Ö É x1 x2  x3é Z'T[3]2(Z'mk_T[3](x1 x2 x3)) = x2,
+Ö É x1 x2  x3é Z'T[3]3(Z'mk_T[3](x1 x2 x3)) = x3] 
+Ê
+
+	
+=FAILURE
+50004	?0 is not a binding type or a tuple type
+50005	The binding constructor for ?0 has not been defined
+50006	The binding projections for ?0 have not been defined
+50007	The tuple constructor for ?0 has not been defined
+50008	The tuple projections for ?0 have not been defined
+=ENDDOC
+	
+=TEX
+\section{Z CONSTANT DEFINITION GENERATION}\label{ZCONST}
+In \cite{DS/FMU/IED/HLD017} the issue of defining members of infinite families of constants is discussed. In type-checking mode, the first time such a constant is introduced, it will be stored in the users
+current theory as a 
+polymorphic constant with no defining theorem. Any undefined associated types will also be stored 
+in the users current theory  with no defining theorems.
+In axiom and conservative extension modes, the first time such a constant is introduced its definition, and those of any associated types, will be dynamically generated and stored in the theory Z at the top of the users hierarchy. 
+=DOC
+val ‚types_in_zcon_spec· : TYPE -> unit;
+=DESCRIBE
+This function recurses through the polymorphic type of a term  
+which is one of the infinite families of Z constants,
+defining any new types
+encountered. The functions $binding\_type\_spec$ and $tuple\_type\_spec$
+are called to enter the new types  (and their constructors and projections) into the theory.
+=FAILURE
+50009 	?0 is not the type of a Z constant
 =ENDDOC
 
 =DOC
-val ‚Zdec%down%s_defn· : TERM -> THM;
+val ‚name_to_termpr· : string -> TERM * TERM;
 =DESCRIBE
-The schema decoration definition generation function. 
+$name\_to\_termpr$ $znam$ takes the name  of a 
+Z schema constant,  and returns a pair consisting of
+the corresponding polymorphic constant and its polymorphic defining term. 
 =FAILURE
-47340	?0 is not a decorated schema
+47000	?0 is a badly formed Z constant name 
 =ENDDOC
-
-=DOC
-val ‚Zpre%down%s_defn· : TERM -> THM;
-=DESCRIBE
-The schema precondition definition generation function.
-=FAILURE
-47350	?0 is not a schema precondition
-=ENDDOC
-
-=DOC
-val ‚Zdyop%down%s_defn· : TERM -> THM;
-=DESCRIBE
-The schema dyadic operator definition generation function (The schema dyadic operators are Ä, Å, ä and Ç). 
-=FAILURE
-50002	?0 is not a dyadic schema operation
-=ENDDOC
-
-=DOC
-val ‚Z¡%down%s_defn· : TERM -> THM;
-=DESCRIBE
-The schema projection definition generation function. 
-=FAILURE
-47410	?0 is not schema projection
-=ENDDOC
-
-=DOC
-val ‚Zƒ%down%s_defn· : TERM -> THM;
-=DESCRIBE
-The schema hiding definition generation function.
-=FAILURE
-47420	?0 is not schema hiding
-=ENDDOC
-
-
-
 
 
 =DOC
-val ‚ZÑ%down%s_defn· : TERM -> THM;
+val ‚z_const_spec· : string -> unit;
 =DESCRIBE
-The schema existential quantifier definition generation function. 
+$z\_const\_spec$ $znam$ checks for the existence of the Z constant  named $znam$.  In axiom mode and conservative extension mode, if the constant does not exist, its polymorphic definition, and polymorhic definitions of any new constants introduced by the defining term, will be generated using $const\_spec$, see \cite{DS/FMU/IED/DTD046}. The definition  would be saved in the 
+theory Z under the key $znam$.
+In type-checking mode, if $znam$ does not exist, $new\_const$ is called to store the polymorphic constant $znam$ in the 
+current theory.  Where a new constant is generated, all necessary new types (and their constructors and projections) are put in place by a call to $types\_in\_zcon\_spec$. 
 =FAILURE
-47430	?0 is not schema existential
+47000	?0 is a badly formed Z constant name
+50009 	?0 is not the type of a Z constant
 =ENDDOC
 
 =DOC
-val ‚ZÑ%down%1s_defn· : TERM -> THM;
+val ‚get_z_const_defn· : TERM -> THM;
 =DESCRIBE
-The schema unique existential quantifier definition generation function. 
+ The function $get\_z\_const\_defn$ $zcon$ returns the type instantiated defining theorem for the Z constant  
+$zcon$.  
+This is achieved by first calling $z\_const\_spec$, which generates the definition where necessary, 
+and then retrieving that definition. Examples of the defining theorems are given in DS/FMU/IED/DTD050.
+In type-checking mode, no definitions are generated  by $z\_const\_spec$ and the function fails.
 =FAILURE
-47440	?0 is not schema unique existential
+3009	?0 is not a constant
+47000	?0 is a badly formed Z constant name
+50010	The Z constant ?0 has not been defined
 =ENDDOC
-
-=DOC
-val ‚ZÉ%down%s_defn· : TERM -> THM;
-=DESCRIBE
-The schema universal quantifier definition generation function. 
-=FAILURE
-47450	?0 is not schema universal
-=ENDDOC
-
-=DOC
-val ‚ZÒ%down%s_defn· : TERM -> THM;
-=DESCRIBE
-The delta constructor definition generation function. 
-=FAILURE
-47460	?0 is not delta
-=ENDDOC
-
-=DOC
-val ‚ZÚ%down%s_defn· : TERM -> THM;
-=DESCRIBE
-The xi constructor definition generation function. 
-=FAILURE
-47470	?0 is not xi
-=ENDDOC
-
-=DOC
-val ‚ZØ%down%s_defn· : TERM -> THM;
-=DESCRIBE
-The schema composition definition generation function. 
-=FAILURE
-47480	?0 is not a schema composition
-=ENDDOC
-
-\subsection{Other Constants}
-
-=DOC
-val ‚Zseta_defn· : TERM -> THM;
-=DESCRIBE
-The set comprehension definition generation function. 
-=FAILURE
-47130	?0 is not a set comprehension
-=ENDDOC
-
-=DOC
-val ‚Zâ_defn· : TERM -> THM;
-=DESCRIBE
-The cartesian product definition generation function. 
-=FAILURE
-47160	?0 is not a cartesian product
-=ENDDOC
-
-=DOC
-val ‚Zç_defn· : TERM -> THM;
-=DESCRIBE
-The lambda abstraction definition generation function. 
-=FAILURE
-47200	?0 is not a lambda abstraction
-=ENDDOC
-
-=DOC
-val ‚Zá_defn· : TERM -> THM;
-=DESCRIBE
-The definite description definition generation function. 
-=FAILURE
-47210	?0 is not a mu term
-=ENDDOC
-
-=DOC
-val ‚ZÑ_defn· : TERM -> THM;
-=DESCRIBE
-The existential quantifier definition generation function. 
-=FAILURE
-47290	?0 is not an existential quantification
-=ENDDOC
-
-=DOC
-val ‚ZÑ%down%1_defn· : TERM -> THM;
-=DESCRIBE
-The unique existential quantifier definition generation function. 
-=FAILURE
-47300	?0 is not a unique existential quantification
-=ENDDOC
-
-=DOC
-val ‚ZÉ_defn· : TERM -> THM;
-=DESCRIBE
-The universal quantifier definition generation function. 
-=FAILURE
-47310	?0 is not a universal quantification
-=ENDDOC
-
-
 \section{END OF SIGNATURE}
 =SML
 end (* end of ZConstants signature *);
+=TEX
+
+\section{EXAMPLE DEFINITIONS OF Z CONSTANTS}
+A sample definition is given for each of the Z constants that are dynamically generated. In the following, 
+$Z'absë$ is the set abstraction function of \cite{DS/FMU/IED/DTD052}.
+\subsection{Constants for Schema Calculus}
+\subsubsection{Schema Constructor}
+ÛHOL Constant
+‚Z'%down%s[a,b]·	: ('a ã 'b ã (BOOL,BOOL)Z'S[d,p]) ã (('a,'b)Z'S[a,b])ë
+…
+Ép:('a ã 'b ã (BOOL,BOOL)Z'S[d,p])é
+(Z'%down%s[a,b] p
+	=	Z'absë(çx:('a,'b)Z'S[a,b]é
+			let	t = p  x.a  x.b
+			in	t.d  Ä  t.p))
+
+Ê
+\subsubsection{Schema Decoration}
+
+ÛHOL Constant
+‚Z'dec%down%s[a,b,c][!]· : ('a,'b,'c) Z'S[a,b,c]ë ã ('a,'b,'c)Z'S[a!,b!,c!]ë
+…
+Ép:('a ã 'b ã 'c ã (BOOL,BOOL)Z'S[d,p]) é
+	Z'dec%down%s[a,b,c][!](Z'%down%s[a,b,c] p) = Z'%down%s[a!,b!,c!] p	
+Ê
+
+\subsubsection{Schema Precondition}
+ÛHOL Constant
+‚Z'pre%down%s[a',b]·:(('a','b)Z'S[a',b])ë ã (('b)Z'S[b])ë
+…
+És:(('a','b)Z'S[a',b])ë é
+	Z'pre%down%s[a',b] s = [b:'b|Ña':'a'é s]
+Ê
+\subsubsection{Schema Dyadic operators}
+The schema dyadic operators are Ä, Å, ä and Ç. 
+A sample definition for $Z'Ä_s$:
+ÛHOL Constant
+‚Z'Ä%down%s[a,b][b,c]·:(('a,'b)Z'S[a,b])ë ã (('b,'c)Z'S[b,c])ë  ã (('a,'b,'c)Z'S[a,b,c])ë
+…
+Ésc1:(('a,'b)Z'S[a,b])ë; sc2:(('b,'c)Z'S[b,c])ëé
+	Z'Ä%down%s[a,b][b,c] sc1 sc2 = [a:'a; b:'b; c:'c | sc1 Ä sc2]
+Ê
+\subsubsection{Schema Projection}
+ÛHOL Constant
+‚Z'¡%down%s[a,b][b,c]·:(('a,'b)Z'S[a,b])ë ã (('b,'c)Z'S[b,c])ë  ã (('b,'c)Z'S[b,c])ë
+…
+Ésc1:(('a,'b)Z'S[a,b])ë; sc2:(('b,'c)Z'S[b,c])ëé
+	Z'¡%down%s[a,b][b,c] sc1 sc2 = (sc1 Ä sc2) ƒ (a)
+Ê
+\subsubsection{Schema Hiding}
+ÛHOL Constant
+‚Z'ƒ%down%s[a,b][b]·:(('a,'b)Z'S[a,b])ë ã (('a)Z'S[a])ë
+…
+Ésc:(('a,'b)Z'S[a,b])ëé
+	Z'ƒ%down%s[a,b][b] sc = [a:'a | Ñb:'bé sc]
+Ê
+\subsubsection{Schema Existential Quantification}
+ÛHOL Constant
+‚Z'Ñ%down%s[a,b][c,d]·	:
+	('a ã 'b ã (BOOL,BOOL)Z'S[d,p]) ã (('a,'b,'c,'d)Z'S[a,b,c,d])ë ã (('c,'d)Z'S[c,d])ë
+…
+Ép:('a ã 'b ã (BOOL,BOOL)Z'S[d,p]);q:(('a,'b,'c,'d)Z'S[a,b,c,d])ëé
+(Z'Ñ%down%s[a,b][c,d] p q
+	= 	Z'absë(çx:Z'S[c,d]é Ñy:Z'S[a,b]é
+			let	t = p  y.a  y.b
+			in	t.d  Ä  t.p
+				Ä (Z'mk_S[a,b,c,d]  y.a  y.b  x.c  x.d) ù q))
+Ê
+\subsubsection{Schema Unique Existential Quantification}
+ÛHOL Constant
+‚Z'Ñ%down%1%down%s[a,b][c,d]·	:
+	('a ã 'b ã (BOOL,BOOL)Z'S[d,p]) ã (('a,'b,'c,'d)Z'S[a,b,c,d])ë ã (('c,'d)Z'S[c,d])ë
+…
+(Z'Ñ%down%1%down%s[a,b][c,d] p q
+	= 	Z'absë(çx:Z'S[c,d]é ¿y:Z'S[a,b]é
+			let	t = p  y.a  y.b
+			in	t.d  Ä  t.p
+				Ä (Z'S[a,b,c,d]  y.a  y.b  x.c  x.d) ù q))
+Ê
+\subsubsection{Schema Universal Quantification}
+ÛHOL Constant
+‚Z'É%down%s[a,b][c,d]·	:
+	('a ã 'b ã (BOOL,BOOL)Z'S[d,p]) ã (('a,'b,'c,'d)Z'S[a,b,c,d])ë ã (('c,'d)Z'S[c,d])ë
+…
+(Z'É%down%s[a,b][c,d] p q
+	=	Z'absë(çx:Z'S[c,d]é Éy:Z'S[a,b]é
+			let	t = p  y.a  y.b
+			in	t.d  Ä  t.p
+				ä (Z'S[a,b,c,d] y.a y.b x.c x.d) ù q))
+Ê
+\subsubsection{Delta Constructor}
+ÛHOL Constant
+‚Z'Ò%down%s·	:
+…
+
+
+Ê
+\subsubsection{Xi Constructor}
+ÛHOL Constant
+‚Z'Ú%down%s·	:
+…
+
+
+Ê
+
+\subsubsection{Schema Composition}
+ÛHOL Constant
+‚Z'Ø%down%s·	:
+…
+
+
+Ê
+
+
+\subsection{Other Constants}
+\subsubsection{Set Comprehension}
+ÛHOL Constant
+‚Z'seta[2]·	:
+	('1 ã '2 ã (BOOL,BOOL,'v)Z'S[d,p,v]) ã ('v)ë
+…
+(Z'seta[2] p
+	=	Z'absë(çx:'vé Ñ(y:'1) (z:'2)é
+			let 	t = p y z 
+			in	t.d Ä t.p Ä (t.v = x))
+Ê
+=IGN
+Í
+	zconst_spec : TERM -> THM
+…
+É setatm | 
+	setaty = ª%down%SML (type_of setatm)º
+	Ä
+	
+	é
+	 zconst_spec tm = (Z'absë:(ªvº ã BOOL) ã (ªvº)ë)
+	(ç x é 
+À
+=TEX
+
+\subsubsection{Cartesian Product}
+ÛHOL Constant
+‚Z'â[2]·	:'1 ë ã '2 ë ã ('1,'2)Z'T[2] ë
+…
+Z'â[2] x y  
+	=	
+		Z'absë(çt:('1,'2)Z'T[2]é 
+			Z'T[2]1 t ù x 
+			Ä 
+			Z'T[2]2 t ù y)
+Ê
+
+\subsubsection{Lambda Abstraction}
+
+ÛHOL Constant
+‚Z'ç[2]·	:
+	('1 ã '2 ã (BOOL,BOOL,'t,'v)Z'S[d,p,t,v]) ã (('t,'v)Z'T[2])ë
+…
+(Z'ç[2] p
+	=	Z'absë(çx:('t,'v)Z'S[1,2]é Ñ(y:'1) (z:'2)é
+			let	t = p y z
+			in	t.d Ä t.p Ä (t.t = x.1 Ä t.v = x.2))
+Ê
+\subsubsection{Definite Description}
+Note that Z'á is the primitive definite description constant described in \cite{DS/FMU/IED/DTD052}.
+ÛHOL Constant
+‚Z'á[2]·		:
+	('1 ã '2 ã (BOOL,BOOL,'v)Z'S[d,p,v]) ã 'v
+…
+(Z'á[2] p
+	=	Z'á(çx:'vé Ñ(y:'1) (z:'2)é
+			let	t = p y z
+			in	t.d Ä t.p Ä (t.v = x)))
+Ê
+\subsubsection{Existential Quantification}
+
+
+\subsubsection{Unique Existential Quantification}
+
+
+\subsubsection{Universal Quantification}
 =TEX
 \twocolumn[\section{INDEX}]
 \small
 \printindex
 \end{document}
+
