@@ -86,13 +86,10 @@ Widget w;
 	row_col = XtVaCreateManagedWidget("row_col",
 		xmRowColumnWidgetClass, shell,
 		XmNpacking, 		XmPACK_COLUMN,
-	/*	XmNnumColumns,		n_chars % N_COLS,*/
-		XmNnumColumns,		8,
+		XmNnumColumns,		N_COLS,
 		XmNorientation,		XmHORIZONTAL,
-		XmNresizeHeight,	True,
-		XmNresizeWidth,		True,
-	/*	XmNnumColumns,		N_COLS,
-		XmNorientation,		XmVERTICAL, */
+		XmNresizeHeight,	False,
+		XmNresizeWidth,		False,
 		NULL);
 
 	buf[1] = '\0';
@@ -128,7 +125,7 @@ XmPushButtonCallbackStruct *cbs;
 {
 	char buf[2];
 	int text_index = cbdata >> 8;
-	XmTextPosition ins_pos;
+	XmTextPosition start, end;
 	Widget text_w;
 
 	if(text_index >= MAX_PALETTES ||
@@ -139,15 +136,18 @@ XmPushButtonCallbackStruct *cbs;
 		return;
 	};
 
-	if(debug) {
-		char *m = "0xXXXXXXXX";
-		sprintf(m, "0x%x", cbdata);
-		msg("palette handler got", m);
-	};
-
 	buf[0] = cbdata & 0xff;
 	buf[1] = '\0';
-	ins_pos = XmTextGetInsertionPosition(text_w);
-	XmTextInsert(text_w, ins_pos, buf);
-	XmTextSetInsertionPosition(text_w, ins_pos + 1);
+
+	if(XmTextGetSelectionPosition(text_w, &start, &end)) {
+		XmTextReplace(text_w, start, end, buf);
+		XmTextClearSelection(text_w, CurrentTime);
+	} else {
+		start = XmTextGetInsertionPosition(text_w);
+		XmTextInsert(text_w, start, buf);
+	};
+
+	XmTextSetInsertionPosition(text_w, start + 1);
+	XmTextShowPosition(text_w, start);
+
 }

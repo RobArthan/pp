@@ -26,6 +26,7 @@
 #include <sys/termio.h>
 #include <sys/termios.h>
 #include <sys/wait.h>
+#include <stropts.h>
 
 #include <signal.h>
 #include <errno.h>
@@ -205,7 +206,7 @@ char **argv;
 {
 	Arg args[12];
 	int i;
-	XmString s1, s2, s3, s4, s5, s6;
+	XmString s1, s2, s3, s4, s5, s6, s7, s8;
 	void 	tools_menu_cb(),
 		edit_menu_cb(),
 		cmd_menu_cb(),
@@ -315,7 +316,7 @@ char **argv;
 		XmVaPUSHBUTTON, s2, 'o', NULL, NULL,
 		XmVaPUSHBUTTON, s3, 'P', NULL, NULL,
 		XmVaPUSHBUTTON, s4, 'l', NULL, NULL,
-		XmVaPUSHBUTTON, s5, NULL, NULL, NULL,
+		XmVaPUSHBUTTON, s5, NULL, "<Key>Undo", NULL,
 		NULL);
 
 	XmStringFree(s1);
@@ -331,19 +332,22 @@ char **argv;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	s1 = XmStringCreateSimple("Execute");
 	s2 = XmStringCreateSimple("Ctrl-X");
-	s3 = XmStringCreateSimple("Interrupt Application");
-	s4 = XmStringCreateSimple("Kill Application");
-	s5 = XmStringCreateSimple("Restart Application");
-	s6 = XmStringCreateSimple("Quit");
+	s3 = XmStringCreateSimple("Return");
+	s4 = XmStringCreateSimple("Ctrl-M");
+	s5 = XmStringCreateSimple("Interrupt Application");
+	s6 = XmStringCreateSimple("Kill Application");
+	s7 = XmStringCreateSimple("Restart Application");
+	s8 = XmStringCreateSimple("Quit");
 
 	cmdmenu = XmVaCreateSimplePulldownMenu(
 		menubar, "command_menu", 2, cmd_menu_cb,
 		XmVaPUSHBUTTON, s1, 'x', "Ctrl<Key>x", s2,
+		XmVaPUSHBUTTON, s3, 'x', "Ctrl<Key>m", s4,
 		XmVaSEPARATOR,
-		XmVaPUSHBUTTON, s3, 'I', NULL, NULL,
-		XmVaPUSHBUTTON, s4, 'K', NULL, NULL,
-		XmVaPUSHBUTTON, s5, 'R', NULL, NULL,
-		XmVaPUSHBUTTON, s6, 'Q', NULL, NULL,
+		XmVaPUSHBUTTON, s5, 'I', NULL, NULL,
+		XmVaPUSHBUTTON, s6, 'K', NULL, NULL,
+		XmVaPUSHBUTTON, s7, 'R', NULL, NULL,
+		XmVaPUSHBUTTON, s8, 'Q', NULL, NULL,
 		NULL);
 
 	XmStringFree(s1);
@@ -352,6 +356,8 @@ char **argv;
 	XmStringFree(s4);
 	XmStringFree(s5);
 	XmStringFree(s6);
+	XmStringFree(s7);
+	XmStringFree(s8);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Help menu:
@@ -466,6 +472,7 @@ XmAnyCallbackStruct *cbs;
 	Bool execute_command();
 	BOOL application_alive();
 	void kill_application();
+	void send_nl();
 	void restart_application();
 	void interrupt_application();
 
@@ -475,20 +482,23 @@ XmAnyCallbackStruct *cbs;
 		execute_command();
 		break;
 	case 1:
-		interrupt_application();
+		send_nl();
 		break;
 	case 2:
+		interrupt_application();
+		break;
+	case 3:
 		if(yes_no_dialog(root, kill_message)) {
 			kill_application();
 		};
 		break;
-	case 3:
+	case 4:
 		if(!application_alive()
 			|| yes_no_dialog(root, restart_message)) {
 			restart_application();
 		};
 		break;
-	case 4:
+	case 5:
 		if(yes_no_dialog(root, quit_message)) {
 			kill_application();
 			exit(0);
@@ -974,6 +984,17 @@ void interrupt_application ()
 	if(application_alive()) {
 		killpg(child_pgrp, SIGINT);
 	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Send new line to the application
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void send_nl ()
+{
+	char *buf = "\n";
+
+	send_to_application(buf, 1);
+
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
