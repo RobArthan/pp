@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.51 2003/03/18 14:08:33 robarthan Exp rda $
+ * $Id: mainw.c,v 2.52 2003/03/18 15:39:31 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -495,25 +495,27 @@ static void set_icon_name_and_title(void)
  * flash_file_name: update and blink the file name displayed in
  * the script editor's namestring label.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void flash_file_name_timeout_proc(
+		XtPointer	unused1,
+		XtIntervalId	*unused2)
+{
+	XmTextFieldSetHighlight(namestring,
+		0,
+		XmTextFieldGetLastPosition(namestring),
+		XmHIGHLIGHT_NORMAL);
+}
 static void flash_file_name(char *fname)
 {
-	if(fname) { /* not NULL; i.e. not the time-out call */ 
-		XmTextFieldSetString(namestring, fname);
-		XmTextFieldShowPosition(namestring, strlen(fname));
-		XmTextFieldSetHighlight(namestring,
-			0,
-			XmTextFieldGetLastPosition(namestring),
-			XmHIGHLIGHT_SELECTED);
-		XtAppAddTimeOut(app,
-			500,
-			(XtTimerCallbackProc)flash_file_name,
-			NULL);
-	} else { 
-		XmTextFieldSetHighlight(namestring,
-			0,
-			XmTextFieldGetLastPosition(namestring),
-			XmHIGHLIGHT_NORMAL);
-	}
+	XmTextFieldSetString(namestring, fname);
+	XmTextFieldShowPosition(namestring, strlen(fname));
+	XmTextFieldSetHighlight(namestring,
+		0,
+		XmTextFieldGetLastPosition(namestring),
+		XmHIGHLIGHT_SELECTED);
+	XtAppAddTimeOut(app,
+		500,
+		(XtTimerCallbackProc)flash_file_name_timeout_proc,
+		NULL);
 }
 
 
@@ -1000,9 +1002,7 @@ static void file_menu_cb(
 		if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 		} else if(save_file_as(script, fname)) {
-			if(!oldfname || !*oldfname || *oldfname == '*') {
-				if(oldfname) {XtFree(oldfname);}
-			} else {
+			if(oldfname && *oldfname && *oldfname != '*') {
 				setup_reopen_menu(oldfname);
 			}
 			flash_file_name(fname);
@@ -1014,6 +1014,7 @@ static void file_menu_cb(
 				FILE_MENU_REVERT, True);
 		};
 		if(fname != NULL) {XtFree(fname);};
+		if(oldfname) {XtFree(oldfname);}
 		break;
 	case FILE_MENU_SAVE_SELECTION:
 		if((buf = get_selection(script, no_selection_message))
@@ -1037,12 +1038,10 @@ static void file_menu_cb(
 			} else {
 				pause_undo(undo_ptr);
 				if(open_file(script, fname, False, (FileOpenAction *) NULL)) {
-					if(!oldfname ||
-					   !*oldfname ||
-					   *oldfname == '*' ||
-					   !strcmp(fname, oldfname)) {
-						if(oldfname) {XtFree(oldfname);}
-					} else {
+					if(oldfname &&
+					   *oldfname &&
+					   *oldfname != '*' &&
+					   strcmp(fname, oldfname)) {
 						setup_reopen_menu(oldfname);
 					}
 					flash_file_name(fname);
@@ -1055,6 +1054,7 @@ static void file_menu_cb(
 			}
 			if(fname != NULL) {XtFree(fname);}
 		}
+		if(oldfname) {XtFree(oldfname);}
 		break;
 	case FILE_MENU_INCLUDE:
 		fname = file_dialog(frame, "Include");
@@ -1090,9 +1090,7 @@ static void file_menu_cb(
 			pause_undo(undo_ptr);
 			XmTextFieldSetString(namestring, no_file_message);
 			XmTextSetString(script, "");
-			if(!oldfname || !*oldfname || *oldfname == '*') {
-				if(oldfname) {XtFree(oldfname);}
-			} else {
+			if(oldfname && *oldfname && *oldfname != '*') {
 				setup_reopen_menu(oldfname);
 			}
 			flash_file_name(no_file_message);
@@ -1101,6 +1099,7 @@ static void file_menu_cb(
 			set_menu_item_sensitivity(filemenu,
 				FILE_MENU_SAVE, False);
 		}
+		if(oldfname) {XtFree(oldfname);}
 		break;
 	case FILE_MENU_QUIT:
 		check_quit_cb(root, NULL, NULL);
@@ -1122,7 +1121,13 @@ static void file_menu_cb(
  * duplicates in the array, and when an entry is inserted it
  * is always at the top. The initial call with name == NULL
  * initialises this array so that only the labels need changing
- * later.
+ * later. Subsequent calls should supply a file name string which
+ * can be feed on return from this function. Entries in the array
+ * are moved down to make room for the new one at the top. If the
+ * new entry is already there, we re-use it rather than freeing
+ * it and allocating new space. If the new entry is not already there
+ * we have to allocate space for a copy of the string, and if the
+ * set was full, the last entry in the old set must be freed.
  */
 static void setup_reopen_menu(char *filename)
 {
@@ -1143,19 +1148,26 @@ static void setup_reopen_menu(char *filename)
 	XtVaGetValues(filemenu, XmNchildren, &btns, NULL);
 	XtVaGetValues(btns[FILE_MENU_REOPEN],
 		XmNsubMenuId, &pull_right_menu, NULL);
-	for(	p = filename, i = 0, t = NULL;
-		i < MAX_REOPEN_MENU_ITEMS-1 && p != NULL;
+	for(	p = NULL, i = 0, t = NULL;
+		i < MAX_REOPEN_MENU_ITEMS;
 		i += 1 ) {
 		t = reopen_menu_items[i].label;
 		reopen_menu_items[i].label = p;
 		p = t;
-		if(p != NULL && !strcmp(p, filename)) {
+		if(p == NULL) {
+			break;
+		} else if (!strcmp(p, filename)) {
+			reopen_menu_items[0].label = p;
 			t = NULL;
 			break;
 		}
 	}
 	if(t != NULL) {
-		 XtFree(t);
+		XtFree(t);
+	}
+	if(reopen_menu_items[0].label == NULL) {
+		reopen_menu_items[0].label = XtMalloc(strlen(filename) + 1);
+		strcpy(reopen_menu_items[0].label, filename);
 	}
 	resetup_menu(pull_right_menu, XmMENU_PULLDOWN, reopen_menu_items);
 	set_menu_item_sensitivity(filemenu, FILE_MENU_REOPEN, True);
@@ -1170,15 +1182,14 @@ static void reopen_cb(
 	NAT i = (NAT) cbd;
 	oldfname = XmTextGetString(namestring);
 	fname = reopen_menu_items[i].label;
+	strcpy(fname,reopen_menu_items[i].label);
 	if(!file_info.changed || yes_no_dialog(root, changed_message)) {
 		pause_undo(undo_ptr);
 		if(open_file(script, fname, False, (FileOpenAction *) NULL)) {
-			if(!oldfname || !*oldfname || *oldfname == '*') {
-				if(oldfname) {XtFree(oldfname);}
-			} else {
-				setup_reopen_menu(oldfname);
+			flash_file_name(fname); /* last use */
+			if(oldfname && *oldfname && *oldfname != '*') {
+				setup_reopen_menu(oldfname); /* may junk fname */
 			}
-			flash_file_name(fname);
 			set_icon_name_and_title();
 			reinit_changed(False);
 			set_menu_item_sensitivity(filemenu,
@@ -1187,6 +1198,7 @@ static void reopen_cb(
 			unpause_undo(undo_ptr);
 		}
 	}
+	if(oldfname) {XtFree(oldfname);}
 }
 
 static void tools_menu_cb(
