@@ -9,13 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.18 2002/10/31 10:19:57 rda Exp rda $
-#
-# configure has one command line option:
-#
-# -p               - supply this option if you are patching an
-#                    existing installation (prevents it from
-#                    overwriting your documentation index page).
+# $Id: configure.sh,v 1.18 2002/10/31 10:19:57 rda Exp $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -201,21 +195,11 @@ then	if	which dvips >/dev/null 2>&1
 	fi
 fi
 #
-# Check the command line option:
-#
-if	[ "$1" = "-p" ]
-then	PATCHING=y
-	echo 'The HTML roadmap to the documents will not be re-installed'
-elif	[ "$1" = "" ]
-then	PATCHING=n
-	echo 'The HTML roadmap to the documents will be installed'
-else	give_up 'usage [environment variable settings] ./configure [-p]'
-fi
-#
 # Build the script
 #
+TAB=
 out(){
-	echo $* >>install
+	echo "$TAB$*" >>install
 }
 export_it(){
 	VAR=$1
@@ -242,6 +226,9 @@ out 'give_up(){'
 out '	echo "install: installation failed; see $1 for more details"'
 out '	exit 1'
 out '}'
+out 'if [ "$1" = "" -o "$1" = "-d" ]'
+out 'then'
+TAB="	"
 out "echo \"Moving to build directory $CWD/src\""
 out "cd $CWD/src"
 out 'OLD_PATH=$PATH'
@@ -265,7 +252,7 @@ out "fi"
 # databases, en passant, or explicitly for daz which doesn't have
 # demo scripts at the moment).
 #
-if	[ "$hol" = y -o "$zed" = y -o "$daz" = y -o "$DOPDF" = y -o "$DOPS" = y ]
+if	[ "$hol" = y -o "$zed" = y -o "$daz" = y ]
 then
 	out "echo \"Moving to installation directory $PPTARGETDIR\" ..."
 	out "echo \"See $PPTARGETDIR/<package>.log for messages\""
@@ -284,6 +271,14 @@ then
 	then	out "echo Freezing daz database"
 		out '( pp_make_database -f -p daz junk$$; rm junk$$.polydb ) >daz.log 2>&1 || give_up $PPTARGETDIR/daz.log'
 	fi
+fi
+TAB=
+out "fi"
+out 'if [ "$1" = "" -o "$1" = "+d" ]'
+out 'then'
+TAB="	"
+if	[ "$DOPDF" = y -o "$DOPS" = y ]
+then
 	if	[ "$DOPDF" = y -o "$DOPS" = y ]
 	then	out "echo \"Moving to documentation directory $PPTARGETDIR/doc\" ..."
 		out "cd $PPTARGETDIR/doc"
@@ -301,24 +296,23 @@ then
 		out "done >$PPTARGETDIR/dvips.log 2>&1"
 	fi
 fi
-if	[ "$PATCHING" = n ]
-then
-	out "echo Generating HTML roadmap to the documents: $PPTARGETDIR/doc/index.html"
-	if	[ "$DOPDF" = y ]
-	then	HTMLEDIT='-e /@ext@/s/@ext@/pdf/g'
-	elif	[ "$DOPS" = y ]
-	then	HTMLEDIT='-e /@ext@/s/@ext@/ps/g'
-	else	HTMLEDIT='-e /@ext@/s/@ext@/dvi/g'
-	fi
-	for f in  $SUPPORTEDTARGETS
-	do	
-		if [ "`eval echo '$'$f`" != y ]
-		then	HTMLEDIT="$HTMLEDIT -e /@$f@/d"
-		else	HTMLEDIT="$HTMLEDIT -e /@$f@/s/@$f@//g"
-		fi
-	done
-	out "sed $HTMLEDIT  <$CWD/src/index.html.src > $PPTARGETDIR/doc/index.html"
-	out "cp $CWD/src/lemma1.gif $CWD/src/newpplogo.gif $PPTARGETDIR/doc"
+out "echo Generating HTML roadmap to the documents: $PPTARGETDIR/doc/index.html"
+if	[ "$DOPDF" = y ]
+then	HTMLEDIT='-e /@ext@/s/@ext@/pdf/g'
+elif	[ "$DOPS" = y ]
+then	HTMLEDIT='-e /@ext@/s/@ext@/ps/g'
+else	HTMLEDIT='-e /@ext@/s/@ext@/dvi/g'
 fi
+for f in  $SUPPORTEDTARGETS
+do	
+	if [ "`eval echo '$'$f`" != y ]
+	then	HTMLEDIT="$HTMLEDIT -e /@$f@/d"
+	else	HTMLEDIT="$HTMLEDIT -e /@$f@/s/@$f@//g"
+	fi
+done
+out "sed $HTMLEDIT  <$CWD/src/index.html.src > $PPTARGETDIR/doc/index.html"
+out "cp $CWD/src/lemma1.gif $CWD/src/newpplogo.gif $PPTARGETDIR/doc"
+TAB=
+out "fi"
 out "echo Installation complete"
 echo "If you are happy with these settings, now run ./install to install ProofPower."
