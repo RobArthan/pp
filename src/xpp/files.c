@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.30 2004/11/19 15:57:48 rda Exp rda $
+ * $Id: files.c,v 2.31 2004/11/20 14:05:04 rda Exp $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -152,11 +152,16 @@ static char *old_file_deleted_message =
 	 "The file \"%s\" that you are currently editing appears to have been deleted since it was last "
 	 "opened or saved.";
 
-static char *contains_binary_message =
+static char *writable_binary_message =
 	"The file \"%s\" contains binary data."
 	" If you open it, uneditable characters will be replaced by question"
 	" marks and the read-only option will be set."
 	" Do you wish to open it?";
+
+static char *read_only_binary_message =
+	"The file \"%s\" is read-only and contains binary data."
+	" If you open it, uneditable characters will be replaced by question"
+	" marks. Do you wish to open it?";
 
 static char *mixed_file_type_message =
 	 "The file \"%s\"  contains a mixture of Unix, MS-DOS or Macintosh line terminators."
@@ -945,7 +950,7 @@ Boolean open_file(
 			False, foAction, &new_status, &binary, &file_type))
 				!= NULL) {
 		read_only_message = read_only_access_message(name, &new_status);
-		if(read_only_message != NULL) {
+		if(read_only_message && !binary) {
 			if(	(	orig_global_options.read_only
 				&&	global_options.read_only)
 			||	file_yes_no_dialog(text, read_only_message, name, NULL)) {
@@ -956,7 +961,10 @@ Boolean open_file(
 			}
 		} else if (binary) {
 			if (file_yes_no_dialog(text,
-					contains_binary_message, name, NULL)) {
+					read_only_message ?
+						read_only_binary_message
+					:	writable_binary_message,
+					name, NULL)) {
 				set_read_only(True);
 			} else {
 				XtFree(buf);
