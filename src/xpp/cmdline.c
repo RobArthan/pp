@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.11 2003/01/30 17:56:28 rda Exp rda $
+ * $Id: cmdline.c,v 2.12 2003/04/11 10:55:34 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -55,6 +55,7 @@ static void
 	get_initial_command_line_list(Widget list_w),
 	list_select_cb(CALLBACK_ARGS),
 	exec_cb(CALLBACK_ARGS),
+	cmd_modify_cb(CALLBACK_ARGS),
 	add_cb(CALLBACK_ARGS),
 	delete_cb(CALLBACK_ARGS),
 	dismiss_cb(CALLBACK_ARGS),
@@ -248,6 +249,9 @@ void add_cmd_line(Widget text_w)
 	XtAddCallback(cmd_text, XmNactivateCallback,
 		exec_cb, (XtPointer)(&cmd_line_data));
 
+	XtAddCallback(cmd_text, XmNmodifyVerifyCallback,
+		cmd_modify_cb, (XtPointer)(&cmd_line_data));
+
 	XtAddCallback(add_btn, XmNactivateCallback,
 		add_cb, (XtPointer)(&cmd_line_data));
 
@@ -343,6 +347,7 @@ static void record_command(char *cmd, CmdLineData *cbdata)
  * the action routines for the command history list.
  * Use direct access to static data for these.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static Boolean in_history = False;
 static void command_history_either(Boolean go_up)
 {
 	char *cmd, *new_cmd;
@@ -354,6 +359,7 @@ static void command_history_either(Boolean go_up)
 		beep();
 		return;
 	}
+	in_history = True;
 	cmd = XmTextGetString(cmd_line_data.cmd_w);
 /*
  * Now there is something in the history; if the current contents of the command line text widget
@@ -388,6 +394,7 @@ static void command_history_either(Boolean go_up)
  */
 	XmTextSetString(cmd_line_data.cmd_w, new_cmd);
 	XtFree(cmd);
+	in_history = False;
 }
 void command_history_up(
 	Widget w,
@@ -429,6 +436,21 @@ static void exec_cb(
 			CurrentTime);
 		record_command(cmd, cbdata);
 		XtFree(cmd);
+		cbdata->previous = 0;
+	}
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * the callback for modifications in the command line.
+ * Resets history navigation (so that user's modifications won't
+ * be discarded if they start navigating again).
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void cmd_modify_cb(
+	Widget		w,
+	XtPointer		cbd,
+	XtPointer		cbs)
+{
+	CmdLineData *cbdata = cbd;
+	if(!in_history) {
 		cbdata->previous = 0;
 	}
 }
