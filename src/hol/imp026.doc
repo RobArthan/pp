@@ -1,0 +1,374 @@
+=TEX
+\documentstyle[hol,11pt,TQ]{article}
+\ftlinepenalty=9999
+\makeindex
+\TPPproject{IED 1563}  %% Mandatory field
+\TPPtitle{Implementation for the Derived Rules of Inference}  %% Mandatory field
+\def\TPPheadtitle{Implementation for the Derived Rules of Inference}
+\TPPref{DS/FMU/IED/IMP026}  %% Mandatory field
+\def\SCCSversion{$Revision$
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$ %
+}}  %% Mandatory field
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{SML Literate Script}
+\TPPkeywords{}
+\TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
+%\TPPauthors{K.~Blackburn & WIN01\\D.J.~King & WIN01}
+\TPPauthorisation{R.D.Arthan & FST Team Leader}
+\TPPabstract{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	    Project Library
+}}
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+\begin{document}
+\makeTPPfrontpage
+\vfill
+\begin{centering}
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+\end{centering}
+\pagebreak
+\section{Document Control}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}
+\begin{description}
+\item [Issue 1.1]
+First version.
+\end{description}
+\subsection{Changes Forecast}
+\section{GENERAL}
+\subsection{Scope}
+This document contains an implementation of the rewriting rules of inference.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains an implementation of the rewriting rules of inference.
+\subsubsection{Dependencies}
+This document takes its signature from \cite{DS/FMU/IED/DTD026},
+and also requires those files indicated as preceding it in the 
+rel001 makefile.
+\subsubsection{Deficiencies}
+
+\subsubsection{Possible Enhancements}
+\section{THE REWRITING RULES OF INFERENCE}
+=SML
+(* structure RewritingInferenceRules : RewritingInferenceRules = struct *)
+=TEX
+\subsection{Utilities}
+=SML
+val âthm_unioná = union (fn (thm1,thm2) => (dest_thm thm1 = dest_thm thm2));
+=TEX
+\subsection{prim\_rewrite\_conv}
+The core function:
+=SML
+local
+	open NetTools;
+
+	val simple_strip_ƒ = strip_binder simple_is_ƒ simple_dest_ƒ;
+
+	fun list_enter (tmal: (TERM * 'a)list) (base:'a NET) = (
+		fold (uncurry enter) tmal base
+	);
+
+	fun mk_net_entry (thm : THM) = (
+	let val lhs = fst(dest_eq(snd(simple_strip_ƒ (concl thm))))
+	in
+		(lhs, simple_eq_match_1_conv thm)
+	end);
+
+	fun net_lookup_conv net : CONV = (fn (tm : TERM) =>
+	let	val cnvs = lookup net tm;
+	in
+		FIRST_C cnvs tm
+	end);
+
+in
+fun âprim_rewrite_convá (other_conv : (TERM * CONV) list) :
+	(THM list -> THM list) -> 
+	THM list -> (CONV -> CONV) -> 
+	THM list -> TERM -> THM = (
+let 	val net1 = list_enter other_conv empty
+in
+(fn (canon : THM list -> THM list) =>
+(fn (basis : THM list) =>
+let 	val base_entries = mapfilter mk_net_entry (canon basis);
+	val net2 = list_enter base_entries net1;
+in
+(fn (traverse : CONV -> CONV) => 
+(fn (with_thms : THM list) =>
+let	val with_entries = mapfilter mk_net_entry (canon with_thms);
+	val net3 = list_enter with_entries net2;
+in
+(fn (tm : TERM) =>
+let
+	val s1 = traverse (net_lookup_conv net3) tm
+in
+	(prof "prim_rewrite_conv";
+	s1)
+end)
+end)
+)
+end)
+)
+end);
+end; (* local open NetTools ... *)
+=TEX
+=SML
+fun  âprim_rewrite_ruleá  (other_conv : (TERM * CONV) list) :
+	(THM list -> THM list) -> 
+	THM list -> (CONV -> CONV) -> 
+	THM list -> THM -> THM = (
+let 	val c1 = prim_rewrite_conv other_conv;
+in
+(fn (canon : THM list -> THM list) =>
+let 	val c2 = c1 canon;
+in
+(fn (basis : THM list) =>
+let 	val c3 = c2 basis;
+in
+(fn (traverse : CONV -> CONV) => 
+let 	val c4 = c3 traverse;
+in
+(fn (with_thms : THM list) =>
+let	val c5 = c4 with_thms;
+in
+(fn (thm : THM) =>
+let
+	val s1 = conv_rule c5 thm
+in
+	(prof "prim_rewrite_rule";
+	s1)
+end)
+end)
+end)
+end)
+end)
+end);
+=TEX
+We now do all the following in the context of
+being able to dynamically change the $rewrite\_canon$ and
+$basic\_rewrites$. 
+=SML
+local
+val ârewrite_canoná : (THM list -> THM list) ref = ref Combinators.I;
+
+val âbasic_rewritesá : (THM list) ref = ref [];
+
+val ârewrite_conversionsá : ((TERM * CONV) list) ref = ref [];
+=TEX
+We then have a number of variables that cannot be directly
+set by the user.
+They correspond to the conversions gained from applying the
+first three arguments to $prim\_rewrite\_conv$,
+and the four kinds of rule/conversion: 
+$rewrite$, $once\_rewrite$, $pure\_rewrite$, $pure\_once\_rewrite$.
+=SML
+val âprc1á : ((THM list -> THM list) -> THM list -> 
+	(CONV -> CONV) -> THM list -> TERM -> THM) ref =
+	ref (prim_rewrite_conv (!rewrite_conversions));
+
+val âprc2á : (THM list -> 
+	(CONV -> CONV) -> THM list -> TERM -> THM) ref =
+	ref ((!prc1) (!rewrite_canon));
+
+val âprc3á : ((CONV -> CONV) -> THM list -> TERM -> THM) ref =
+	ref ((!prc2) (!basic_rewrites));
+
+val âprc4á : (THM list -> TERM -> THM) ref =
+	ref ((!prc3) TOP_TRAVERSE_C);
+
+val âprc4onceá : (THM list -> TERM -> THM) ref =
+	ref ((!prc3) ONCE_TRAVERSE_C);
+
+val âprc4pureá : (THM list -> TERM -> THM) ref =
+	ref (prim_rewrite_conv [] (!rewrite_canon) [] TOP_TRAVERSE_C);
+
+val âprc4pureonceá : (THM list -> TERM -> THM) ref =
+	ref (prim_rewrite_conv [] (!rewrite_canon) [] ONCE_TRAVERSE_C);
+
+in
+=TEX
+To set the rewriting parameters:
+=SML
+fun âset_rewrite_conversionsá (cnvs : (TERM * CONV) list) : unit = (
+	rewrite_conversions := cnvs;
+	prc1 := prim_rewrite_conv (!rewrite_conversions);
+	prc2 := (!prc1) (!rewrite_canon);
+	prc3 := (!prc2) (!basic_rewrites);
+	prc4 := (!prc3) TOP_TRAVERSE_C;
+	prc4once := (!prc3) ONCE_TRAVERSE_C;
+	prc4pure := prim_rewrite_conv [] (!rewrite_canon) [] TOP_TRAVERSE_C;
+	prc4pureonce := prim_rewrite_conv [] (!rewrite_canon) [] ONCE_TRAVERSE_C;
+	()
+);
+
+fun âset_rewrite_canoná (canon : THM list -> THM list) : unit = (
+	rewrite_canon := canon;
+	prc2 := (!prc1) (!rewrite_canon);
+	prc3 := (!prc2) (!basic_rewrites);
+	prc4 := (!prc3) TOP_TRAVERSE_C;
+	prc4once := (!prc3) ONCE_TRAVERSE_C;
+	prc4pure := prim_rewrite_conv [] (!rewrite_canon) [] TOP_TRAVERSE_C;
+	prc4pureonce := prim_rewrite_conv [] (!rewrite_canon) [] ONCE_TRAVERSE_C;
+	()
+);
+
+fun âset_basic_rewritesá (thms : THM list) : THM list = (
+let
+	val old = (!basic_rewrites)
+in
+	(basic_rewrites := thms;
+	prc3 := (!prc2) (!basic_rewrites);
+	prc4 := (!prc3) TOP_TRAVERSE_C;
+	prc4once := (!prc3) ONCE_TRAVERSE_C;
+	prc4pure := prim_rewrite_conv [] (!rewrite_canon) [] TOP_TRAVERSE_C;
+	prc4pureonce := prim_rewrite_conv [] (!rewrite_canon) [] ONCE_TRAVERSE_C;
+	old)
+end);
+=TEX
+Now the actual inferences.
+Rules first:
+=SML
+fun ârewrite_ruleá (thms : THM list) : THM -> THM = (
+let	val c1 = (!prc4) thms;
+in
+	(fn (thm : THM) => conv_rule c1 thm)
+end);
+
+fun âpure_rewrite_ruleá (thms : THM list) : THM -> THM = (
+let	val c1 = (!prc4pure) thms;
+in
+	(fn (thm : THM) => conv_rule c1 thm)
+end);
+
+fun âonce_rewrite_ruleá (thms : THM list) : THM -> THM = (
+let	val c1 = (!prc4once) thms;
+in
+	(fn (thm : THM) => conv_rule c1 thm)
+end);
+
+fun âpure_once_rewrite_ruleá (thms : THM list) : THM -> THM = (
+let	val c1 = (!prc4pureonce) thms;
+in
+	(fn (thm : THM) => conv_rule c1 thm)
+end);
+=TEX
+Now with assumptions:
+=SML
+fun âasm_rewrite_ruleá (thms : THM list) (thm : THM) : THM = (
+let	val c1 = (!prc4) (thm_union thms (map asm_rule (hyps thm)));
+in
+	conv_rule c1 thm
+end);
+
+fun âasm_rewrite_ruleá (thms : THM list) (thm : THM) : THM = (
+let	val c1 = (!prc4) (thm_union thms (map asm_rule (hyps thm)));
+in
+	conv_rule c1 thm
+end);
+
+fun âpure_asm_rewrite_ruleá (thms : THM list) (thm : THM) : THM = (
+let	val c1 = (!prc4pure) (thm_union thms (map asm_rule (hyps thm)));
+in
+	conv_rule c1 thm
+end);
+
+fun âonce_asm_rewrite_ruleá (thms : THM list) (thm : THM) : THM = (
+let	val c1 = (!prc4once) (thm_union thms (map asm_rule (hyps thm)));
+in
+	conv_rule c1 thm
+end);
+
+fun âpure_once_asm_rewrite_ruleá (thms : THM list) (thm : THM) : THM = (
+let	val c1 = (!prc4pureonce) (thm_union thms (map asm_rule (hyps thm)));
+in
+	conv_rule c1 thm
+end);
+=TEX
+Now we give rules with filtered assumption lists.
+We fail to maximise partial evaluation because we need to
+know all the theorems, including those generated from the theorem being rewritten, as the last argument to
+$prim\_rewrite\_conv$.
+We could partially evaluate given the theorem list alone
+if we bypassed $prim\_rewrite\_conv$ in some manner.
+=SML
+fun âfasm_rewrite_ruleá (thms : THM list) (fil : TERM -> bool) (thm : THM) : THM = (
+let	val c1 = (!prc4) (thm_union thms (map asm_rule 
+		((hyps thm) drop fil)));
+in
+	conv_rule c1 thm
+end);
+
+fun âpure_fasm_rewrite_ruleá (thms : THM list) (fil : TERM -> bool) (thm : THM) : THM = (
+let	val c1 = (!prc4pure) (thm_union thms (map asm_rule 
+		((hyps thm) drop fil)));
+in
+	conv_rule c1 thm
+end);
+
+fun âonce_fasm_rewrite_ruleá (thms : THM list) (fil : TERM -> bool) (thm : THM) : THM = (
+let	val c1 = (!prc4pure) (thm_union thms (map asm_rule 
+		((hyps thm) drop fil)));
+in
+	conv_rule c1 thm
+end);
+
+fun âpure_once_fasm_rewrite_ruleá (thms : THM list) (fil : TERM -> bool) (thm : THM) : THM = (
+let	val c1 = (!prc4pureonce) (thm_union thms (map asm_rule 
+		((hyps thm) drop fil)));
+in
+	conv_rule c1 thm
+end);
+=TEX
+Conversions:
+=SML
+fun ârewrite_convá (thms : THM list) : CONV = (
+	(!prc4) thms
+);
+
+fun âpure_rewrite_convá (thms : THM list) : CONV = (
+	(!prc4pure) thms
+);
+
+fun âonce_rewrite_convá (thms : THM list) : CONV = (
+	(!prc4once) thms
+);
+
+fun âpure_once_rewrite_convá (thms : THM list) : CONV = (
+	(!prc4pureonce) thms
+);
+=TEX
+=SML
+end; (* local val rewrite_canon ... *)
+=TEX
+\section{END OF THE STRUCTURE}
+=SML
+(* end; of structure RewritingInferenceRules *)
+(* open RewritingInferenceRules; *)
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+=IGN
+Statistics:
+
+open Sort;
+fun comp_stats (s1,n1) (s2,n2) = (
+	if n1 = n2
+	then stringorder s1 s2
+	else (n1 - n2)
+);
+
+sort comp_stats (get_stats ());
