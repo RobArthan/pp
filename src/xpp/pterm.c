@@ -449,7 +449,7 @@ void interrupt_application ()
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Interrupt the applications (as with Cntl-C) and then poll
+ * Interrupt the application (as with Cntrl-C) and then poll
  * for the interrupt prompt and send the reply set up for
  * abandoning command execution. 
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -463,7 +463,6 @@ void interrupt_and_abandon ()
 		send_to_application(
 			global_options.abandon_reply,
 			strlen(global_options.abandon_reply));
-		send_to_application("\n", 1);
 	}
 }
 
@@ -471,7 +470,7 @@ void interrupt_and_abandon ()
  * Get output from the application looking for the interrupt prompt.
  * Ask the user what to do if no prompt is found within about 10 seconds.
  * If the user wants to carry on waiting,it asks the user what to do about
- * every 60 seconds after the first try.
+ * every 30 seconds after the first try.
  * Returns True if the prompt is found; False if the user says to
  * give up trying.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -519,7 +518,7 @@ static Boolean wait_for_prompt()
 			}
 			XFlush(XtDisplay(root));
 			tries = 0;
-			delay = 60;
+			delay = 30;
 		} else {
 			sleep(1);
 		}
