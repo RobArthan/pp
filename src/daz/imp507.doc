@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.249 $ $RCSfile: imp507.doc,v $ $Date: 2003/06/18 16:33:50 $
+% imp507.doc %Z% $Revision: 1.250 $ $RCSfile: imp507.doc,v $ $Date: 2003/07/17 12:54:05 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.249 $%
+\def\SCCSversion{$Revision: 1.250 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2003/06/18 16:33:50 $%
+\TPPdate{\FormatDate{$Date: 2003/07/17 12:54:05 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -215,7 +215,7 @@ See \cite{ISS/HAT/DAZ/DTD507}.
 =SML
 structure €CNZGenerator› : CNZGenerator = struct
 =SML
-open CNTypes CNTypes1 CNTypes2 CNBasicDeclsAndExprs ZParagraphs
+open CNTypes CNTypes1 CNTypes2 CNBasicDeclsAndExprs ZParagraphs ZTermGenerator
 	CNVCGenerator ZUserInterfaceSupport TypeInference CNParser;
 =TEX
 The following function returns the current level for the specified theory.  This is used as an index to order objects being added to the theory.
@@ -3239,22 +3239,6 @@ fun €store_vc_term› (label : LABEL) (tm : TERM) : string = (
 	end
 );
 =TEX
-=SML
-fun €term_of_vc› (vc as (decs, (asms, conc)) : VC) : TERM = (
-	let	val tm = (
-		case (decs, asms) of
-			([], []) => conc
-		|	([], _) => mk_z_¥ (list_mk_± asms, conc)
-		|	(_, []) => mk_z_µ(mk_z_decl decs, mk_z_true, conc)
-		|	(_, _) => mk_z_µ(mk_z_decl decs, list_mk_± asms, conc));
-	in	case frees tm of
-			[] => tm
-		|	[t] => term_fail "store_vcs" 507051 [tm, t]
-		|	fs => fail "store_vcs" 507052 [fn () => string_of_term tm,
-				fn () =>  format_list string_of_term fs ", "]
-	end
-);
-=TEX
 For various (good) reasons, the underlying {\Product} operations of adding new parent or saving a conjecture (e.g., a VC) do not increment the level counter.
 In order for the Z document generator to be able to output the necessary commands in the right place, we make and deletes a dummy type declaration before storing each batch of VCs to force the level counter up.
 In order to avoid a potential infinite loop (e.g., if the current theory is not writable), the attempt to do this dummy declaration is abandoned after 10,000 goes (this protects the code against an extremely unlikely event!)
@@ -3613,18 +3597,69 @@ fun €add_formal_procs_wp_env›
 );
 =TEX
 =SML
-fun €call_vcs›
-	((sl, st) : SPECLAB * STATEMENT) : TERM list * ROUTE OPT list * SPEC = (
-	let	val sl1 = add_init_vars_speclab sl;
-		val sl1_st = (add_formal_procs_wp_env sl1, st);
-	in	diag_vc_args := sl1_st :: !diag_vc_args;
-		set_ti_context (ti_context_of_speclab sl1);
-		let 	val (vcs_routes, spc) = vcs sl1_st
-		in	(map (term_of_vc o fst) vcs_routes, map snd vcs_routes, spc)
+fun €terms_of_vcs›
+	(acc : TERM list)
+	(gs_pre_post :  Z_ID list OPT * TERM * TERM)
+	(vc as (decs, (asms, conc)) :: more : VC list) : TERM list = (
+	let	val tm = (
+		case (decs, asms) of
+			([], []) => conc
+		|	([], _) => mk_z_¥ (list_mk_± asms, conc)
+		|	(_, []) => mk_z_µ(mk_z_decl decs, mk_z_true, conc)
+		|	(_, _) => mk_z_µ(mk_z_decl decs, list_mk_± asms, conc));
+	in	terms_of_vcs (tm :: acc) gs_pre_post more
+	end
+) | terms_of_vcs acc (globals, pre, post) [] = (
+	let	val all_error_frees = list_term_union (map frees acc);
+	in	case all_error_frees of
+			[] => rev acc
+		|	_ => 
+		let	val pre_frees = frees pre;
+			val post_frees = frees post;
+			val pre_post_frees = pre_frees term_union post_frees;
+			val other_error_frees = all_error_frees term_diff pre_post_frees;
+			val pre_post_error_frees = all_error_frees term_diff other_error_frees;
+			val post_error_frees = pre_post_error_frees term_diff pre_frees;
+			val pre_error_frees = pre_post_error_frees term_diff post_error_frees;
+			fun report number (term, [var]) = term_fail "call_vcs" number [term, var]
+			|  report number (term, vars) = (
+				fail "call_vcs" (number+1)
+				[ fn () => string_of_term term,
+				  fn () => format_list string_of_term vars ", " ]
+			);
+		in	case post_error_frees of
+				_::_ =>  report 507121 (post, post_error_frees)
+			|	[] =>  (
+				case pre_error_frees of
+					_::_ => (
+					report 507123 (pre, pre_error_frees)
+				) |	[] =>  (
+					map (report 507125) (map (fn t => (t, frees t)) (rev acc))
+				)
+			)
 		end
 	end
 );
-
+=TEX
+=SML
+fun €call_vcs›
+	(globals : Z_ID list OPT)
+	((sl, st) : SPECLAB * STATEMENT) : TERM list * ROUTE OPT list * SPEC = (
+	let	val sl1 = add_init_vars_speclab sl;
+		val sl1_st = (add_formal_procs_wp_env sl1, st);
+		fun unquote (ZTmQuotation (tm, _)) = tm
+		|   unquote _ = mk_t;
+	in	diag_vc_args := sl1_st :: !diag_vc_args;
+		set_ti_context (ti_context_of_speclab sl1);
+		let 	val (vcs_routes, spc as {pre, post, ...}) = vcs sl1_st;
+			val seqs = map fst vcs_routes;
+			val routes = map snd vcs_routes;
+		in	(terms_of_vcs [] (globals, unquote pre, unquote post) seqs, routes, spc)
+		end
+	end
+);
+=TEX
+=SML
 fun €speclab_update_spec›
 	( sl : SPECLAB, s : SPEC ) : SPECLAB = 
 	let 	val {spec,formal_body_flag,fun_flag,till_flag,wp_env,in_scope} = 
@@ -3983,7 +4018,7 @@ fun €vcs_speclabel_aux› (just_checking : bool) ({label, statement = s} : REFINED
 			wp_env = wp_env1,
 			in_scope = in_scope1
 		};
-		val (vcs, routes, spec) = call_vcs (speclab, statement)
+		val (vcs, routes, spec) = call_vcs Nil (speclab, statement)
 	in	if just_checking then () 
 		else 	store_vcs (label, vcs, 
 				Value (speclab_update_spec(speclab,spec)), routes,
@@ -4496,7 +4531,8 @@ fun €vcs_body_proc_aux› (st : STATEMENT)
 			wp_env = wp_env,
 			in_scope = in_scope1
 		};
-	in	(#name current_formal_proc1, call_vcs (speclab, st), speclab)
+	in	(#name current_formal_proc1,
+		 call_vcs (Value(#globals current_formal_proc1)) (speclab, st), speclab)
 	end	
 );
 =TEX
@@ -4721,7 +4757,7 @@ fun €form_proc_pack_body›
 			(speclab_vc_vars(speclab5, vc_vars5a));
 		val st = STSpecNoIvars{spec= #spec form_proc,
 					label="", is_assertion = false};
-		val (vcs, routes, spec) = call_vcs (speclab5a, st);
+		val (vcs, routes, spec) = call_vcs (Value(#globals form_proc)) (speclab5a, st);
 	in	store_vcs (
 			#name formal_proc3, vcs, 
 			Value (speclab_update_spec(speclab5a,spec)), routes,
@@ -4819,7 +4855,7 @@ fun €form_proc_pack_body_aux›
 		};
 		val st = STSpecNoIvars{spec= #spec form_proc, label="", is_assertion = false};
 
-		val (vcs, routes, spec) = call_vcs (speclab5a, st);
+		val (vcs, routes, spec) = call_vcs (Value(#globals form_proc)) (speclab5a, st);
 	in	store_vcs (
 			#name formal_proc3, vcs, 
 			Value (speclab_update_spec(speclab5a,spec)), routes,
@@ -4878,7 +4914,7 @@ fun €form_proc_subunit› (form_proc: FORMAL_PROC) : unit = (
 			wp_env = wp_env4,
 			in_scope = in_scope4
 		};
-		val (resulting_vcs, routes, spec) = call_vcs (speclab4, st)
+		val (resulting_vcs, routes, spec) = call_vcs (Value(#globals form_proc)) (speclab4, st)
 	in	store_vcs (
 			block_name1, resulting_vcs, 
 			Value (speclab_update_spec(speclab4,spec)), routes,
@@ -4909,7 +4945,7 @@ fun €check_stub_spec_proc› (form_proc: FORMAL_PROC) : unit = (
 				wp_env = wp_env,
 				in_scope = in_scope
 			};
-		in	 call_vcs(speclab, (STNull SNNull)); ()
+		in	 call_vcs (Value(#globals form_proc)) (speclab, (STNull SNNull)); ()
 		end
 	else	()
 );
@@ -5316,7 +5352,7 @@ fun €form_fun_pack_body›
 		val globals = #globals form_fun;
 		val globals3 = #globals formal_fun3;
 	in	if	globals = globals3
-		then	let	val (vcs, routes, spec) = call_vcs (speclab5, st);
+		then	let	val (vcs, routes, spec) = call_vcs (Value globals) (speclab5, st);
 			in	store_vcs (
 					block_name2, vcs, 
 					Value (speclab_update_spec(speclab5,spec)), 
@@ -5403,8 +5439,9 @@ fun €form_fun_pack_body_aux›
 			wp_env = wp_env5,
 			in_scope = in_scope5
 		};
-		val (vcs, routes, spec) = call_vcs (speclab5a, st);
-	in	case #globals form_fun diff conc_zids of
+		val globals = #globals form_fun;
+		val (vcs, routes, spec) = call_vcs (Value globals) (speclab5a, st);
+	in	case globals diff conc_zids of
 			[] => (
 			store_vcs (
 				#name (#informal_fun formal_fun3), vcs, 
@@ -5478,7 +5515,7 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 		val globals = #globals form_fun;
 		val globals3 = #globs subunit3;
 		val _ = check_globals_fun block_name1 globals globals3;
-		val (vcs, routes, spec) = call_vcs(speclab4, st);
+		val (vcs, routes, spec) = call_vcs (Value globals) (speclab4, st);
 	in	store_vcs (
 			block_name2, vcs, 
 			Value (speclab_update_spec(speclab4,spec)), routes,
@@ -5769,7 +5806,7 @@ fun €vcs_body_fun› (st : STATEMENT) : SPEC = (
 			wp_env = wp_env,
 			in_scope = in_scope1
 		};
-		val (vcs, routes, spec) = call_vcs (speclab, st);
+		val (vcs, routes, spec) = call_vcs (Value(#globals current_formal_fun1)) (speclab, st);
 	in	store_vcs(
 			(#name o #informal_fun) current_formal_fun1, vcs,
 			Value (speclab_update_spec(speclab,spec)), routes,
@@ -6947,7 +6984,7 @@ fun €vcs_aux_initial› (st : STATEMENT) : SPEC = (
 			wp_env = wp_env,
 			in_scope = in_scope1
 		};
-		val (vcs, routes, res_spec) = call_vcs (speclab, st)
+		val (vcs, routes, res_spec) = call_vcs Nil (speclab, st)
 	in	store_vcs(
 			block_name1, vcs, 
 			Value (speclab_update_spec(speclab,res_spec)), routes,
