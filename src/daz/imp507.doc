@@ -109,6 +109,7 @@ failure (not comment) is raised).
 \item[Issue 1.146-1.150] Changes for IUCT WP 4 (and final removal
 of $pack\_spec\_with\_modules$ for WP 3).
 \item[Issue 1.151] Fixed bug in $vcs\_aux\_initial$.
+\item[Issue 1.152] Addressing frame widening issue (issue 4, v0.7.3).
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1140,15 +1141,18 @@ val €script_name0› : string = "-";
 =TEX
 \subsection{$flatten\_env$}
 To implement $flatten\_env$, we first need a function to merge two $IN\_SCOPE$s.
+To restrict the scope of frame widening, the block names are also passed in and $dec\_labels$ are only taken from the first $IN\_SCOPE$ when the two block names are different.
 =SML
-
+local
 fun €merge_in_scopes›
+	(block_name1 : ID)
 	({	vc_vars = vc_vars1,
 		vc_pars = vc_pars1,
 		vc_log_cons = vc_log_cons1,
 		vc_aux_vars = vc_aux_vars1,
 		formal_procs = formal_procs1,
 		dec_labels = dec_labels1} : IN_SCOPE)
+	(block_name2 : ID)
 	({	vc_vars = vc_vars2,
 		vc_pars = vc_pars2,
 		vc_log_cons = vc_log_cons2,
@@ -1161,19 +1165,27 @@ fun €merge_in_scopes›
 		vc_aux_vars = union (op =$) vc_aux_vars1 vc_aux_vars2,
 		formal_procs = formal_procs1 @ formal_procs2,
 		(* an equality test for formal procedure lists is non-trival *)
-		dec_labels = dec_labels1 cup dec_labels2}
+		dec_labels =
+		if block_name1 = block_name2
+		then dec_labels1 cup dec_labels2
+		else dec_labels1
+	}
 );
+in
 =TEX
 Now we define $flatten\_env$, which uses $merge\_in\_scopes$ to merge all the $in\_scope$ components of the blocks in a running environment.
-To avoid unnecessary merging with the empty $in\_scope$ value, the case of a singleton list in the environment is treated separately (the function would compute the same value if the second clause were omitted but would be less efficient with space).
 
 =SML
 fun €flatten_env› ([] : ENV) : IN_SCOPE = (
 	empty_in_scope
 ) |  flatten_env [blk] = (
 	#in_scope(#declab blk)
-) |  flatten_env (blk :: blks) = (
-	merge_in_scopes (#in_scope(#declab blk)) (flatten_env blks)
+) |  flatten_env (blk1 :: (blks as (blk2 :: _))) = (
+	merge_in_scopes
+	(#block_name (#declab blk1))
+	(#in_scope (#declab blk1))
+	(#block_name  (#declab blk2))
+	(flatten_env blks)
 );
 =TEX
 Now we define $check\_fun\_flatten\_env$: the $filter\_XXX$ functions implement
@@ -1225,22 +1237,23 @@ fun €check_fun_flatten_env› ([] : ENV) : IN_SCOPE = (
 					empty_in_scope
 				) | filter_env (blk :: blks) = (
 					let	val in_scope = #in_scope(#declab blk);
-					in	merge_in_scopes{
+					in	merge_in_scopes ""{
 		vc_vars = filter_vars(#vc_vars in_scope),
 		vc_pars = filter_pars(#vc_pars in_scope),
 		vc_log_cons = [],
 		vc_aux_vars = filter_aux_vars(#vc_aux_vars in_scope),
 		formal_procs = [],
 		dec_labels = []		} 
-						(filter_env blks)
+						"" (filter_env blks)
 					end
 				);
 			in	merge_in_scopes
-				(flatten_env blocks2)
-				(filter_env blocks)
+				"" (flatten_env blocks2)
+				"" (filter_env blocks)
 			end
 	end
 );
+end (* of local ... in ... end; *);
 =TEX
 \subsection{The Global State}
 For convenience in the implementation, the eight components of the state are held in eight assignable variables.
@@ -1289,7 +1302,7 @@ fun €get_z_generator_state› (() : unit) : Z_GENERATOR_STATE = (
 );
 =TEX
 \subsection{Accessing the Running Environment}
-The function $block$ below implements the 1-based indexing of the running environment which is such a common feature of te Z spec.
+The function $block$ below implements the 1-based indexing of the running environment which is such a common feature of the Z spec.
 =SML
 fun €block› (index : int) : BLOCK = (
 	(nth (index - 1) (!blocks))
