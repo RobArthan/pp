@@ -73,6 +73,8 @@ Changes in response to ID0021.
 Changes in response to ID0042: weakened condition on $delete\_const$.
 \item [Issue 1.13]
 Tidying up in preparation for a desk check.
+\item [Issue 1.14]
+Changes in response to deskcheck ID0042.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -174,7 +176,7 @@ in
 end; (* local *)
 =TEX
 \subsection{Operations on Theory Attributes}
-These are generally strait forward:
+These are generally straight forward:
 =SML
 fun âopen_theoryá (nm : string) : unit = (
 let	val sideeffect = notify_before_ksc (OpenTheory (nm, ([],[])));
@@ -316,7 +318,9 @@ in
 	get_levels level del_levels
 end);
 =TEX
-For the following $delete\_$ functions we need an auxiliary ``delete to level'' function:
+For the following $delete\_$ functions we need an auxiliary ``delete to level'' function.
+This will find out what is to be deleted, and do all the
+kernel and user notification required.
 =SML
 fun âdelete_to_levelá (caller : string) (target : string) (level : int) : unit = (
 let	val dummy = case (get_current_theory_status()) of
@@ -366,11 +370,34 @@ let	val dummy = case (get_current_theory_status()) of
 	val I = Combinators.I;
 
 	val to_be_d = (
-		"Constants:" ^ (format_list fst del_con ", ") ^
-		"; Types:" ^ (format_list I del_type ", ") ^
-		"; Theorems:" ^ (format_list I del_thms ", ") ^
-		"; Axioms:" ^ (format_list I del_axioms ", ") ^
-		"; Definitions:" ^ (format_list I del_defns ", "));
+		format_list Combinators.I 
+		(flat [
+		if is_nil del_con
+		then []
+		else [get_error_message 12100 
+			[if length del_con = 1 then "s" else ""] ^ 
+			(format_list fst del_con ", ")],
+		if is_nil del_type
+		then []
+		else [get_error_message 12101 
+			[if length del_type = 1 then "s" else ""] ^ 
+			(format_list I del_type ", ")],
+		if is_nil del_thms
+		then []
+		else [get_error_message 12102 
+			[if length del_thms = 1 then "s" else ""] ^ 
+			(format_list I del_thms ", ")],
+		if is_nil del_axioms
+		then []
+		else [get_error_message 12103 
+			[if length del_axioms = 1 then "s" else ""] ^ 
+			(format_list I del_axioms ", ")],
+		if is_nil del_defns
+		then []
+		else [get_error_message 12104 
+			[if length del_defns = 1 then "s" else ""] ^ 
+			(format_list I del_defns ", ")]])
+		) "; ";
 =TEX
 We now ask the interactive user whether he wishes everything
 necessary to be deleted.
@@ -381,21 +408,27 @@ We now have permission to proceed:
 =SML
 	val dl = list_cup[del_lev1, del_lev2, del_lev3, del_lev4];
 
-	val dummy = map delete_thm del_thms;
+	val dummy = (map (fn xt => notify_before_ksc (DeleteConst (mk_const xt))) del_con;
+		map (fn t => notify_before_ksc (DeleteType t)) del_type;
+		map (fn ax => notify_before_ksc (DeleteAxiom ax)) del_axioms;
+		map (fn thm => notify_before_ksc (DeleteThm thm)) del_thms;
+		());
+
+	val dummy = map icl'delete_thm del_thms;
 
 	val dummy = map (fn x => icl'delete_extension ()) dl;
 in
 	map (fn xt => notify_on_ksc (DeleteConst (mk_const xt))) del_con;
 	map (fn t => notify_on_ksc (DeleteType t)) del_type;
 	map (fn ax => notify_on_ksc (DeleteAxiom ax)) del_axioms;
+	map (fn thm => notify_on_ksc (DeleteThm thm)) del_thms;
 	()
 end);
 =TEX
 We can now give the deletion functions:
 =SML
 fun âdelete_constá (cnt : TERM) : unit = (
-let	val sideeffect = notify_before_ksc (DeleteConst cnt);
-	val (cnm, cty) = dest_const cnt
+let	val (cnm, cty) = dest_const cnt
 		handle complaint =>
 		pass_on complaint "dest_const" "delete_const";
 
@@ -419,8 +452,7 @@ end);
 =TEX
 =SML	
 fun âdelete_typeá (tnm : string) : unit = (
-let	val sideeffect = notify_before_ksc (DeleteType tnm);
-	val {ty_env = ty_env,...} = icl'get_theory "-";
+let	val {ty_env = ty_env,...} = icl'get_theory "-";
 
 	val {level = level, ...} = force_value(s_lookup tnm ty_env)
 		handle complaint =>
@@ -433,8 +465,7 @@ end);
 =TEX
 =SML	
 fun âdelete_axiomá (anm : string) : unit = (
-let	val sideeffect = notify_before_ksc (DeleteAxiom anm);
-	val {axiom_dict = axiom_dict,...} = icl'get_theory "-";
+let	val {axiom_dict = axiom_dict,...} = icl'get_theory "-";
 
 	val ax = force_value(s_lookup anm axiom_dict)
 		handle complaint =>
