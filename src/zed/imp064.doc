@@ -1,0 +1,766 @@
+% imp064.doc   %Z% $Date$ $Revision$ $RCSfile$
+
+=TEX
+% imp064.doc   %Z% $Date$ $Revision$ $RCSfile$
+\documentstyle[hol1,11pt,TQ]{article}
+
+\TPPtitle{Implementation of the Z Pretty Printer}
+\TPPref{DS/FMU/IED/IMP064}
+\def\SCCSissue{$Revision$%
+}
+\TPPissue{\SCCSissue}
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPproject{FST PROJECT}
+
+=IGN
+
+Commands to process this document in various ways.
+
+make -f rel001.mkf imp064.dvi
+doctex imp064
+texdvi imp064
+bibtex imp064
+doctex imp064 ; texdvi imp064
+doctex imp064 ; texdvi imp064 ; bibtex imp064
+dvipage imp064 &
+
+
+docsml imp064
+use_file "imp064.sml";
+
+lasp -s imp064.doc > zz1
+lasp -s -u imp064.OKwords imp064.doc > zz1
+
+=TEX
+%\TPPstatus{Approved}
+\TPPstatus{Draft}
+\TPPtype{Standard}
+\TPPkeywords{HOL}
+\TPPauthor{A.J. Hammon & WIN01}  %% Mandatory field
+\TPPauthorisation{R.D.~Arthan & FST Team Leader}
+\TPPabstract{This document contains the implementation of the
+	Z~pretty printer.}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	Library
+}}
+
+%\ftlinepenalty=9999
+\makeindex
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\underscoreoff
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+\makeTPPfrontpage
+
+\vfill
+\begin{center}
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+\end{center}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{DOCUMENT CONTROL}
+
+%********************************************************************
+
+\subsection{Contents List}
+\tableofcontents
+% \listoftables
+
+%********************************************************************
+
+\subsection{Document Cross References}
+
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+%********************************************************************
+
+\subsection{Changes History}
+
+\begin{description}
+
+\item[\FormatDate{$Date$%
+}, issue \SCCSissue~]
+	Initial drafts.
+
+%\item[\FormatDate{$Date$%
+%}, issue \SCCSissue~]
+
+
+\end{description}
+
+%********************************************************************
+
+\subsection{Changes Forecast} \label{ChangesForecast}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{GENERAL}
+
+%********************************************************************
+
+\subsection{Scope}
+
+This document contains the pretty printer for the Z proof support
+system.  The detailed level design for this document
+in~\cite{DS/FMU/IED/DTD064}.
+
+%********************************************************************
+
+\subsection{Introduction}
+
+%--------------------------------------------------------------------
+
+\subsubsection{Purpose and Background}
+
+%--------------------------------------------------------------------
+
+\subsubsection{Dependencies}
+
+%--------------------------------------------------------------------
+
+\subsubsection{Interface}
+
+%--------------------------------------------------------------------
+
+\subsubsection{Algorithms}
+
+%--------------------------------------------------------------------
+
+%\subsubsection{Possible Enhancements}
+%\subsubsection{Deficiencies}
+%\subsubsection{Terminology}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%\newpage
+\section{STRUCTURE} \label{StartStructure}
+
+=SML
+structure €ZPrettyPrinter› : ZPrettyPrinter = struct
+=TEX
+
+=SML
+open PrettyPrinterSupport;
+infix gt_prec;
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{UTILITIES}
+
+=SML
+fun €show_comma_list_of_strings› (addstring : string -> unit)
+		(space : int * int -> unit) (strs : string list) : unit = (
+let
+	fun aux nil = ()
+	| aux (t1::nil) = addstring t1
+	| aux (t1::more) = (
+		addstring t1;
+		addstring ",";
+		space(1, 0);
+		aux more
+	)
+in
+	aux strs
+end
+);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{PRECEDANCES}
+
+Rather than place lots of numeric precedance codes in the code we
+declare several precedance codes here.  Syntax rules refer to
+productions from the Z~grammar of~\cite{DS/FMU/IED/DTD061}.
+These declarations are given in order with the loosly
+binding first and most tightly binding at the end.
+
+=SML
+val pc_sch0_quant : PREC_CONTEXT = PcNormal(0, 10, false);
+=TEX
+
+=IGN
+val pc_sch1 : PREC_CONTEXT = PcNormal(10, 0, false);
+val pc_sch1_text : PREC_CONTEXT = PcNormal(10, 10, false);
+=TEX
+
+=SML
+val pc_sch1_ref : PREC_CONTEXT = PcNormal(20, 15, false);
+val pc_sch1_≥ : PREC_CONTEXT = PcNormal(20, 20, false);
+val pc_sch1_pre : PREC_CONTEXT = PcNormal(20, 30, false);
+val pc_sch1_± : PREC_CONTEXT = PcNormal(20, 40, false);
+val pc_sch1_≤ : PREC_CONTEXT = PcNormal(20, 50, false);
+val pc_sch1_¥ : PREC_CONTEXT = PcNormal(20, 60, true);
+val pc_sch1_§ : PREC_CONTEXT = PcNormal(20, 70, false);
+val pc_sch1_˘ : PREC_CONTEXT = PcNormal(20, 80, false);
+val pc_sch1_hide : PREC_CONTEXT = PcNormal(20, 90, false);
+val pc_sch1_ª : PREC_CONTEXT = PcNormal(20, 100, false);
+=TEX
+
+=SML
+val pc_pred0 : PREC_CONTEXT = PcNormal(100, 0, false);
+=TEX
+
+=IGN
+val pc_pred1 : PREC_CONTEXT = PcNormal(110, 0, false);
+=TEX
+
+Symbols in syntax rule $Pred2$ (which is $Predicate-1$
+in~\cite{Spivey89}) need their own precedance group.  Note that the
+implication is right associative, the other infixes are left
+associative
+
+=IGN
+val pc_pred2 : PREC_CONTEXT = PcNormal(120, 0, false);
+val pc_pred2_pre : PREC_CONTEXT = PcNormal(120, 20, false);
+=TEX
+
+=SML
+val pc_pred2_eq : PREC_CONTEXT = PcNormal(120, 10, false);
+val pc_pred2_ç : PREC_CONTEXT = pc_pred2_eq;
+val pc_pred2_≥ : PREC_CONTEXT = PcNormal(120, 30, false);
+val pc_pred2_± : PREC_CONTEXT = PcNormal(120, 40, false);
+val pc_pred2_≤ : PREC_CONTEXT = PcNormal(120, 50, false);
+val pc_pred2_¥ : PREC_CONTEXT = PcNormal(120, 60, true);
+val pc_pred2_§ : PREC_CONTEXT = PcNormal(120, 70, false);
+=TEX
+
+=IGN
+val pc_expr0_in_gen : PREC_CONTEXT = PcNormal(200, 20, false);
+=TEX
+
+=SML
+val pc_expr0_Ã_Õ : PREC_CONTEXT = PcNormal(200, 10, false);
+val pc_expr0_∏ : PREC_CONTEXT = PcNormal(200, 30, false);
+=TEX
+
+Syntax rule $Expr1$ captures the fancy fix operators plus it is used by
+some other productions.  Have two precedance values:  one for its
+direct recursive uses (i.e., where $Expr1$ calls $Expr1$); the other
+for its other uses.
+
+=IGN
+val pc_expr1_in_fun : PREC_CONTEXT = PcNormal(210, 10, false);
+=TEX
+
+=SML
+val pc_expr1_ : PREC_CONTEXT = PcNormal(210, 20, false);
+=TEX
+
+=SML
+val pc_expr2 : PREC_CONTEXT = PcNormal(220, 0, false);
+val pc_expr2_lhs : PREC_CONTEXT = PcNormal(220, 10, false);
+val pc_expr2_rhs : PREC_CONTEXT = PcNormal(220, 20, false);
+=TEX
+
+=SML
+val pc_expr3_gvar : PREC_CONTEXT = PcNormal(230, 10, false);
+val pc_expr3_schref : PREC_CONTEXT = PcNormal(230, 20, false);
+val pc_expr3_sel : PREC_CONTEXT = PcNormal(230, 30, false);
+=TEX
+
+=IGN
+val pc_expr4 : PREC_CONTEXT = PcNormal(240, 0, false);
+=TEX
+
+=SML
+val pc_schema_name : PREC_CONTEXT = PcNormal(300, 0, false);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{BRACKET GENERATION}
+
+We have many small sections of code which need to enclose something
+in round brackets if the precedances require.  Function $bracket$
+does this for us.
+
+=SML
+fun €bracket› (cur_env:PP_ENV, enclosed_prec:PREC_CONTEXT,
+		block:bool, how: PP_ENV -> unit) : PFUN_ANS = (
+let
+	val PpEnv{pe_prec=enclosing_prec, pe_addstring=addstring,
+		pe_beginb=beginb, pe_endb=endb, ...} = cur_env;
+
+	val br = enclosing_prec gt_prec enclosed_prec;
+
+	val inner_prec = if br then PcLowest else enclosed_prec;
+
+	val bl = block orelse br;
+in
+	if br then addstring "(" (*=)=*) else ();
+	if bl then beginb(2, true) else ();
+
+	how (set_prec inner_prec cur_env);
+
+	if bl then endb() else ();
+	if br then (*=(=*) addstring ")" else ();
+
+	PfOk
+end
+);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{APPLICATION OF CONSTANT OR VARIABLE}
+
+Function $Z_fun_app$ deals with the functionale application of
+constants.  The first term $orig_tm$ is the constant, the string
+$alias$ and type $ty$ are from its destroyed form after aliases are
+found.  The term list $args$ holds the arguments that the constant is
+applied to.  The original term may be recreated by $list_mk_app$
+applied to the term and the term list.
+
+=SML
+fun €do_prefix› (oper: string, tm:TERM) (cur_env:PP_ENV) : unit = (
+let
+	val PpEnv{pe_addstring=addstring,
+		pe_beginb=beginb, pe_space=space, pe_endb=endb, ...} = cur_env;
+in
+	addstring oper;
+	space(1, 0);
+	beginb(2, true);
+	main_term_pp cur_env tm;
+	endb()
+end
+);
+=TEX
+
+=SML
+fun €do_infix› (oper: string, (l:TERM, r:TERM)) (cur_env:PP_ENV) : unit = (
+let
+	val PpEnv{pe_addstring=addstring, pe_space=space, ...} = cur_env;
+in
+	main_term_pp cur_env l;
+	space(1, 0);
+	addstring oper;
+	addstring " ";
+	main_term_pp cur_env r
+end
+);
+=TEX
+
+=SML
+fun €do_binder› (oper: string, (t1:TERM, t2:TERM, t3:TERM))
+		(cur_env:PP_ENV) : unit = (
+let
+	val PpEnv{pe_addstring=addstring, pe_space=space, ...} = cur_env;
+in
+	addstring oper;
+	addstring " ";
+	main_term_pp cur_env t1;
+	space(1, 0);
+	addstring "| ";
+	main_term_pp cur_env t2;
+	space(1, 0);
+	addstring "∑ ";
+	main_term_pp cur_env t3
+end
+);
+=TEX
+
+There are several variations on lists.
+
+Some lists (typically those separated by commas or semicolons)
+have the separator plus a space token come between value.
+Others lists have the space token before the separator.
+
+=SML
+fun €do_list› (after:bool, sep:string, tms:TERM list) (cur_env:PP_ENV) : unit = (
+let
+	val PpEnv{pe_addstring=addstring, pe_space=space, ...} = cur_env;
+
+	fun aux nil = ()
+	| aux (t1::nil) = main_term_pp cur_env t1
+	| aux (t1::more) = (
+		main_term_pp cur_env t1;
+		if after then () else space(1, 0);
+		addstring sep;
+		if after then space(1, 0) else ();
+		aux more
+	)
+	;
+in
+	aux tms
+end
+);
+=TEX
+
+=SML
+fun €do_wrapped_list› (opener:string, sep:string, closer:string, tms:TERM list)
+		(cur_env:PP_ENV) : unit = (
+let
+	val PpEnv{pe_addstring=addstring, pe_space=space, ...} = cur_env;
+in
+	addstring opener;
+	do_list(true, sep, tms) cur_env;
+	addstring closer
+end
+);
+=TEX
+
+=SML
+(* HERE *)
+fun €do_Ñ_ò› (cur_env:PP_ENV, name:string, tm:TERM) : PFUN_ANS = (
+	bracket(cur_env, pc_sch1_ref, false,
+		fn e => (do_prefix(name, tm) (set_prec pc_schema_name e))
+	)
+);
+=TEX
+
+=SML
+fun €Z_fun_app› (cur_env:PP_ENV) (orig_tm:TERM) (alias:string)
+		(ty:TYPE) (args:TERM list) : PFUN_ANS = (
+let
+	val PpEnv{pe_prec=prec, pe_addstring=addstring,
+		pe_beginb=beginb, pe_space=space, pe_endb=endb, ...} = cur_env;
+
+	fun tm_p p = main_term_pp (set_prec p cur_env);
+in
+	case basic_dest_ZTERM(orig_tm, args)
+	of bdz_not_Z _ => PfNotPossible
+	| bdz_fail{bdz_f_argc=c, ...}  => PfFewer c
+	| bdz_ok dzt => (
+		case dzt
+=TEX
+
+The next part of this function is a big case clause with one branch for each
+of the forms of Z~term.  These branch are spread over several blocks of
+Standard~ML code, the function finishes in section~\ref{EndZFunApp}
+on page~\pageref{EndZFunApp}.
+
+\subsection{Declarations}
+
+In theory the three constructors $Zdec$, $Zdecsexp$ and $Zdecl$ occur
+only in related groups where the (destroyed) terms of the $Zdecl$ can
+only be $Zdec$ or $Zdecsexp$. {} Correspondingly, the only place where
+a ($mk_ZTERM$ applied to a) $Zdec$ or $Zdecsexp$ occurs is is a
+$Zdecl$.
+
+=SML
+of Zdec(tms, dec_ty) => (
+	beginb(2, false);
+	beginb(0, false);
+	do_list(true, ",", tms) cur_env;
+	endb();
+	space(1, 2);
+	addstring ": ";
+	main_term_pp cur_env dec_ty;
+	endb();
+	PfOk
+)
+| Zdecsexp(decl, decor) => (
+	main_term_pp cur_env decl;
+	addstring decor;
+	PfOk
+)
+| Zdecl tms => (
+	let
+		fun aux nil = ()
+		| aux (t1::nil) = main_term_pp cur_env t1
+		| aux (t1::more) = (
+			main_term_pp cur_env t1;
+			addstring ";";
+			space(1, 0);
+			aux more
+		)
+		;
+	in
+		beginb(2, true);
+		aux tms;
+		endb()
+	end;
+	PfOk
+)
+=TEX
+
+\subsection{Predicates}
+
+=SML
+| Zeq tms => bracket(cur_env, pc_pred2_eq, false, do_infix("=", tms))
+| Zç tms => bracket(cur_env, pc_pred2_ç, false, do_infix("ç", tms))
+| Ztrue => (addstring "true"; PfOk)
+| Zfalse => (addstring "false"; PfOk)
+| Z≥ tm => bracket(cur_env, pc_pred2_≥, false, do_prefix("≥", tm))
+| Z± tms => bracket(cur_env, pc_pred2_±, false, do_infix("±", tms))
+| Z≤ tms => bracket(cur_env, pc_pred2_≤, false, do_infix("≤", tms))
+| Z¥ tms => bracket(cur_env, pc_pred2_¥, false, do_infix("¥", tms))
+| Z§ tms => bracket(cur_env, pc_pred2_§, false, do_infix("§", tms))
+| Z∂ tms => bracket(cur_env, pc_pred0, true, do_binder("∂", tms))
+| Z∂â1 tms => bracket(cur_env, pc_pred0, true, do_binder("∂â1", tms))
+| Zµ tms => bracket(cur_env, pc_pred0, true, do_binder("µ", tms))
+=TEX
+
+Constructor $Zpredsexp$ is for a schema used as a predicate.
+
+=SML
+| Zpredsexp(decl, decor) => bracket(cur_env, pc_expr3_schref, false,
+	fn e => (
+		main_term_pp e decl;
+		addstring decor
+	)
+)
+=TEX
+
+\subsection{Variables}
+
+Local variables, $Zlvar$, do not expect anything in the list, but if
+we get something then try and print something.
+
+=SML
+| Zlvar(name, var_ty, nil) => (
+	addstring name;
+	PfOk
+)
+| Zlvar(name, var_ty, tms) => (
+	addstring name;
+	do_wrapped_list("?[?", ",", "?]?", tms);
+	PfOk
+)
+=TEX
+
+Global variables, $Zgvar$, have their generic parameters in the list
+
+=SML
+| Zgvar(name, var_ty, nil) => (
+	addstring name;
+	PfOk
+)
+| Zgvar(name, var_ty, tms) => bracket(cur_env, pc_expr3_gvar, false,
+	fn e => (
+		addstring name;
+		do_wrapped_list("[", ",", "]", tms) e
+	)
+)
+=TEX
+
+=SML
+| Zint n => (
+	addstring "n";
+	PfOk
+)
+=TEX
+
+\subsection{Lists, Sets, Etc.}
+
+=SML
+| Zß¢(_:TYPE, tms) => bracket(cur_env, PcHighest, true,
+	do_wrapped_list("ß", ",", "¢", tms)
+)
+| Zsetd(_:TYPE, tms) => bracket(cur_env, PcHighest, true,
+	do_wrapped_list("{", ",", "}", tms)
+)
+| Zseta(t1, t2, t3) => bracket(cur_env, PcHighest, true,
+	fn e => (
+		addstring "{";
+		main_term_pp (set_prec PcLowest e) t1;
+		space(1, 2);
+		addstring "| ";
+		main_term_pp (set_prec PcLowest e) t2;
+		space(1, 2);
+		addstring "∑ ";
+		main_term_pp (set_prec PcLowest e) t3;
+		addstring "}"
+	)
+)
+| Z tm => bracket(cur_env, pc_expr1_, false, do_prefix("", tm))
+| Ztuple tms => bracket(cur_env, PcHighest, false, do_wrapped_list("(", ",", ")", tms))
+| Z∏ tms => bracket(cur_env, pc_expr0_∏, true, do_list(false, "∏", tms))
+=TEX
+
+=SML
+| Z (tm, "") => bracket(cur_env, pc_schema_name, false,
+	fn e => (
+		addstring " ";
+		main_term_pp e tm
+	)
+)
+| Z (tm, decor) => bracket(cur_env, pc_schema_name, false,
+	fn e => (
+		addstring " ";
+		main_term_pp e tm;
+		addstring decor
+	)
+)
+| Zsel(tm, sel) => bracket(cur_env, pc_expr3_sel, false,
+	fn e => (
+		main_term_pp e tm;
+		addstring ".";  (* full stop "." for selection *)
+		addstring sel
+	)
+)
+=TEX
+
+Applications, here we must think about templates for fancy-fix
+operator invocations.
+
+=SML
+| Zapp(tm1, tm2) => bracket(cur_env, pc_expr2, false,
+	fn e => (
+		main_term_pp (set_prec pc_expr2_lhs e) tm1;
+		space(1, 2);
+		main_term_pp (set_prec pc_expr2_rhs e) tm2
+	)
+)
+| ZÃ tms => bracket(cur_env, pc_expr0_Ã_Õ, true, do_binder("Ã", tms))
+| ZÕ tms => bracket(cur_env, pc_expr0_Ã_Õ, true, do_binder("Õ", tms))
+=TEX
+
+\subsection{Schema Expressions}
+
+Horizontal schemas.
+
+=SML
+| Zâs(tm1, tm2) => (
+	let
+		val new_env = set_prec PcLowest cur_env;
+	in
+		addstring "[";
+		main_term_pp new_env tm1;
+		space(1, 2);
+		addstring "| ";
+		main_term_pp new_env tm2;
+		addstring "]";
+		PfOk
+	end
+)
+=TEX
+
+Useage of a schema, with optional decoration.
+
+=SML
+| Zdecâs(tm, decor) => bracket(cur_env, pc_schema_name, false,
+	fn e => (
+		main_term_pp e tm;
+		addstring decor
+	)
+)
+=TEX
+
+=SML
+| Zpreâs tms => bracket(cur_env, pc_sch1_pre, false, do_prefix("pre", tms))
+| Z≥âs tms => bracket(cur_env, pc_sch1_≥, false, do_prefix("≥", tms))
+| Z±âs tms => bracket(cur_env, pc_sch1_±, false, do_infix("±", tms))
+| Z≤âs tms => bracket(cur_env, pc_sch1_≤, false, do_infix("≤", tms))
+| Z¥âs tms => bracket(cur_env, pc_sch1_¥, false, do_infix("¥", tms))
+| Z§âs tms => bracket(cur_env, pc_sch1_§, false, do_infix("§", tms))
+| Z˘âs tms => bracket(cur_env, pc_sch1_˘, false, do_infix("˘", tms))
+| Z∂âs tms => bracket(cur_env, pc_sch0_quant, true, do_binder("∂", tms))
+| Z∂â1âs tms => bracket(cur_env, pc_sch0_quant, true, do_binder("∂â1", tms))
+| Zµâs tms => bracket(cur_env, pc_sch0_quant, true, do_binder("µ", tms))
+| Zªâs tms => bracket(cur_env, pc_sch1_ª, false, do_infix("ª", tms))
+=TEX
+=SML
+| Zhideâs(tm, strs) => bracket(cur_env, pc_sch1_hide, false,
+	fn e => (
+		main_term_pp e tm;
+		space(1, 2);
+		addstring "\\ (";
+		show_comma_list_of_strings addstring space strs;
+		addstring ")"
+	)
+)
+=TEX
+
+=SML
+| ZÑâs tm => do_Ñ_ò(cur_env, "Ñ", tm)
+| Zòâs tm => do_Ñ_ò(cur_env, "ò", tm)
+=TEX
+
+\subsection{End of Function} \label{EndZFunApp}
+
+=SML
+		(* end of case dzt *)
+	)
+	(* end of case basic_dest_ZTERM ... *)
+end (* of let in fun Z_fun_app *)
+) (* of fun Z_fun_app *);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{ISOLATED CONSTANT OR VARIABLE}
+
+The term value is the constant or variable, the string and type are
+from its destroyed form after aliases are found.
+
+=SML
+fun €Z_do_const_var› (cur_env:PP_ENV) (orig_tm:TERM) (alias:string)
+		(ty:TYPE) : PFUN_ANS = (
+	Z_fun_app cur_env orig_tm alias ty nil
+);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%\newpage
+\subsection{LAMBDA AND APPLICATION TERMS}
+
+Isolated `$mk_Ã$' and `$mk_app$' terms are not expected in Z.
+
+=SML
+fun €Z_do_Ã› (_:PP_ENV) (_:TERM) (_:TERM) : PFUN_ANS = PfNotPossible;
+
+fun €Z_do_app› (_:PP_ENV) (_:TERM) (_:TERM list) : PFUN_ANS = PfNotPossible;
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%\newpage
+\section{FINALE}
+
+%********************************************************************
+
+\subsection{Install the Z Printing Functions}
+
+=SML
+val side_effect =
+set_printers("Z",
+	(Z_do_Ã, Z_do_app, Z_do_const_var, Z_fun_app,
+		Z_fun_app, Z_do_const_var));
+=TEX
+
+%********************************************************************
+
+\subsection{End of Structure}
+
+=SML
+end (* of structure ZPrettyPrinter *);
+=TEX
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%********************************************************************
+%--------------------------------------------------------------------
+
+\makeatletter
+\def\refstepcounter#1{\stepcounter{#1}\global\edef\@currentlabel{\csname
+	p@#1\endcsname\csname the#1\endcsname}}
+\makeatother
+
+%\twocolumn[\section{INDEX}] \label{Index}
+\section{INDEX}
+
+\footnotesize
+\printindex
+
+\onecolumn
+
+\end{document}
+
+
