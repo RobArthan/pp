@@ -64,8 +64,11 @@ parser for HOL/Z.}
 
 \item[Issues 1.8-1.20, \FormatDate{92/05/01}-\FormatDate{92/07/29}] 
 Initial Drafts.
+\item[Issue 1.21 \FormatDate{92/10/28}]
+Changed treatment of term quotation. Various bug fixes.
 \item[Issue \SCCSversion~\FormatDate{$Date$%
-}] Changed treatment of term quotation. Various bug fixes.
+}]
+Now no longer sensitive to difference between standard and extended Z.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -150,10 +153,6 @@ open ZLex;
 open Unification;
 in
 open SlrpDriver;
-=TEX
-\section{FLAGS}\label{FLAGS}
-=SML
-val Ûstandard_zÝ : bool ref = ref true;
 =TEX
 \section{PHASE 1 DATA TYPES}\label{PHASE1DATATYPES}
 We require data types to represent the result of a context-free parse
@@ -1580,12 +1579,12 @@ fun Ûx_pred_gen_instÝ
 	case p of
 		PredApplication(p1, p2) => (
 			if is_var_name p2
-			then ZTmApp(xp true p1,ZTmLVar(x_var_name p2, Nil, map (xp (!standard_z)) ps))
+			then ZTmApp(xp true p1,ZTmLVar(x_var_name p2, Nil, map (xp true) ps))
 			else ZTmApp(xp true p, x_gen_inst_as_schema xp ps)
 	) |	_ =>  (
 			if is_var_name p
-			then ZTmLVar(x_var_name p, Nil, map (xp (!standard_z)) ps)
-			else ZTmApp(xp (!standard_z) p, x_gen_inst_as_schema xp ps)
+			then ZTmLVar(x_var_name p, Nil, map (xp true) ps)
+			else ZTmApp(xp true p, x_gen_inst_as_schema xp ps)
 	)
 );
 =TEX
@@ -1624,7 +1623,7 @@ fun Ûx_predÝ (expr : bool) (p : PRED) : Z_TM = (
 				else ZTmQuant‰F(q, (xdecl, xp1opt, Nil), xp2)
 			end
 	|	PredLet (eqdefs, p) =>
-			ZTmLet(map x_loc_eq_def eqdefs, x_pred (!standard_z) p)
+			ZTmLet(map x_loc_eq_def eqdefs, x_pred true p)
 	|	PredLogInOp (p1, rator, p2) => 
 			let	val xp1 = x_pred expr p1;
 				val xp2 = x_pred expr p2;
@@ -1644,35 +1643,35 @@ fun Ûx_predÝ (expr : bool) (p : PRED) : Z_TM = (
 	|	PredSchemaHiding (p, ps) =>
 			ZTmHide(x_pred true p, map x_dec_name ps)
 	|	PredMu (decl, Value p1, Value p2) =>
-			ZTmÍ2 ((x_decl decl, Value(x_pred false p1), Nil), x_pred (!standard_z) p2)
+			ZTmÍ2 ((x_decl decl, Value(x_pred false p1), Nil), x_pred true p2)
 	|	PredMu (decl, Nil, Value p) =>
-			ZTmÍ2 ((x_decl decl, Nil, Nil), x_pred (!standard_z) p)
+			ZTmÍ2 ((x_decl decl, Nil, Nil), x_pred true p)
 	|	PredMu (decl, Value p, Nil) =>
 			ZTmÍ1 (x_decl decl, Value(x_pred false p), Nil)
 	|	PredMu (decl, Nil, Nil) =>
 			ZTmÍ1 (x_decl decl, Nil, Nil)
 	|	PredLambda (decl, Value p1, Value p2) =>
-			ZTmÌ ((x_decl decl, Value(x_pred false p1), Nil), x_pred (!standard_z) p2)
+			ZTmÌ ((x_decl decl, Value(x_pred false p1), Nil), x_pred true p2)
 	|	PredLambda (decl, Nil, Value p) =>
-			ZTmÌ ((x_decl decl, Nil, Nil), x_pred (!standard_z) p)
+			ZTmÌ ((x_decl decl, Nil, Nil), x_pred true p)
 	|	PredLambda _ => raise PARSER_ERROR "invalid PredLambda arguments"
-	|	PredFancyFix (tmpl as (TmplIn (StubUS, ("º", Nil), StubUS)),
+	|	PredFancyFix (tmpl as (TmplPre (("", Nil), StubUS)),
 				decor, args) =>
-			x_fancyfix_args (x_pred true) tmpl decor args
+			x_fancyfix_args (x_pred false) tmpl decor args
 	|	PredFancyFix (tmpl, decor, args) =>
-			x_fancyfix_args (x_pred (!standard_z)) tmpl decor args
+			x_fancyfix_args (x_pred true) tmpl decor args
 	|	PredCrossProduct ps => 
-			ZTm¸(map (x_pred (!standard_z)) ps)
-	|	PredPow p => ZTmð (x_pred (!standard_z) p)
+			ZTm¸(map (x_pred true) ps)
+	|	PredPow p => ZTmð (x_pred true p)
 	|	PredApplication (p, PredGenInst ps) =>
 			x_pred_gen_inst x_pred p ps
 	|	PredApplication (p, PredRenameList pps) =>
-			let	val xp = x_pred (!standard_z) p;
+			let	val xp = x_pred true p;
 				val xpps = map (x_dec_name ** x_dec_name) pps
 			in	ZTmRename(xp, xpps)
 			end
 	|	PredApplication (p1, p2) =>
-			ZTmApp(x_pred true p1, x_pred (!standard_z) p2)
+			ZTmApp(x_pred true p1, x_pred true p2)
 	|	PredTheta (PredIdDec (id, dec)) =>
 			ZTmÊ(ZTmLVar(x_var_name (PredIdDec (id, "")), Nil, []), dec)
 	|	PredTheta (PredBracketed (p, dec)) =>
@@ -1695,17 +1694,17 @@ fun Ûx_predÝ (expr : bool) (p : PRED) : Z_TM = (
 	|	PredString s =>
 			ZTmString s
 	|	PredTuple ps =>
-			ZTmTuple (map (x_pred (!standard_z)) ps)
+			ZTmTuple (map (x_pred true) ps)
 	|	PredBinding eqdefs =>
 			ZTmBinding(map x_loc_eq_def eqdefs)
 	|	PredSetDisplay ps  =>
-			ZTmSetd (Nil, map (x_pred (!standard_z)) ps)
+			ZTmSetd (Nil, map (x_pred true) ps)
 	|	PredSeqDisplay ps  =>
-			ZTm§¢ (Nil, map (x_pred (!standard_z)) ps)
+			ZTm§¢ (Nil, map (x_pred true) ps)
 	|	PredSetComp (decl, Value p1, Value p2) =>
-			ZTmSeta2 ((x_decl decl, Value(x_pred false p1), Nil), x_pred (!standard_z) p2)
+			ZTmSeta2 ((x_decl decl, Value(x_pred false p1), Nil), x_pred true p2)
 	|	PredSetComp (decl, Nil, Value p) =>
-			ZTmSeta2 ((x_decl decl, Nil, Nil), x_pred (!standard_z) p)
+			ZTmSeta2 ((x_decl decl, Nil, Nil), x_pred true p)
 	|	PredSetComp (decl, Value p, Nil) =>
 			ZTmSeta1 (x_decl decl, Value(x_pred false p), Nil)
 	|	PredSetComp (decl, Nil, Nil) =>
@@ -1735,11 +1734,11 @@ and Ûx_declÝ (decl : DECL) : (Z_DEC list) = (
 			case popt of
 				Value p => 
 				let	val ps' = map x_dec_name ps;
-					val p' = x_pred (!standard_z) p;
+					val p' = x_pred true p;
 				in	ZDDec(ps', p', Nil)
 				end
 			|	Nil => case ps of
-				[p] => ZDSchemaDec(x_pred (!standard_z) p, Nil)
+				[p] => ZDSchemaDec(x_pred true p, Nil)
 			|	_ => (
 				phase_2_error
 				61012
@@ -1752,7 +1751,7 @@ and Ûx_declÝ (decl : DECL) : (Z_DEC list) = (
 	end		
 )
 and Ûx_loc_eq_defÝ ((lp, rp) : EQ_DEF) : Z_EQ_DEF = (
-	(x_dec_name lp, x_pred (!standard_z) rp)
+	(x_dec_name lp, x_pred true rp)
 );
 =TEX
 The following function extracts any leading generic formal parameter list
@@ -1828,7 +1827,7 @@ fun Ûx_def_lhsÝ (p : PRED) : IDENT * IDENT list = (
 =SML
 fun Ûx_eq_defÝ ((lp, rp) : EQ_DEF) : IDENT * IDENT list * Z_TM * EXTYPE OPT = (
 	let	val (id, ids) = x_def_lhs lp;
-	in	(id, ids, x_pred (!standard_z) rp, Nil)
+	in	(id, ids, x_pred true rp, Nil)
 	end
 );
 =TEX
@@ -1841,7 +1840,7 @@ fun Ûx_sch_textÝ (decs : DECL, p : PRED OPT) : Z_SCH_TEXT = (
 fun Ûx_branchÝ (p : PRED) : (IDENT * EXTYPE OPT * (Z_TM OPT))  = (
 	case p of
 		PredApplication(p1, p2) => (
-			(x_var_name p1, Nil, Value(x_pred (!standard_z) p2))
+			(x_var_name p1, Nil, Value(x_pred true p2))
 	) |	PredFancyFix (tmpl, decor, preds) => (
 			case x_pred false p of
 				ZTmFancyApp(id, t) =>
@@ -1943,8 +1942,7 @@ in
 =TEX
 \section{MAIN INTERFACE}\label{MAININTERFACE}
 =SML
-fun Ûz_parserÝ  {is_quot : bool, standard : bool} (tokens : Z_TOKEN list) = (
-	standard_z := standard;
+fun Ûz_parserÝ  {is_quot : bool} (tokens : Z_TOKEN list) = (
 	(case phase_1 tokens of
 		PPParagraph para => x_para is_quot para
 	|	_ => raise PARSER_ERROR "weird result from phase 1")
