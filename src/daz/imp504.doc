@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% %Z% $Date: 2003/06/18 16:33:50 $ $Revision: 1.38 $ $RCSfile: imp504.doc,v $
+% %Z% $Date: 2003/07/14 13:12:01 $ $Revision: 1.39 $ $RCSfile: imp504.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Web Clause Processor}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP504}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.38 $%
+\def\SCCSversion{$Revision: 1.39 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2003/06/18 16:33:50 $%
+\TPPdate{\FormatDate{$Date: 2003/07/14 13:12:01 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -88,8 +88,8 @@ This document contains the implementation for the compliance notation web clause
 \item[Issue 1.35] Uniform treatment of blocks. 
 \item[Issue 1.36, 1.37] Now uses flag {\it cn\_stop\_on\_exceptions}.
 \item[Issue 1.38] R0096: improved formatting of nothing statement form in web clauses
-\item[Issue 1.39]  Improved error messages for syntax errors generally and undeclared or
-incorrect label errors in particular.
+\item[Issue 1.39]  Fixed incorrect classification of undeclared labels.
+\item[Issue 1.40] Now checks for undeclared label errors.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -391,6 +391,25 @@ end);
 =TEX
 
 \subsection{Interface}
+The following function checks whether an undeclared label is potentially valid.
+The only potentiall valid case is when the label is an identifier and the construct looks
+like a compilation unit refinement step introducing a package body (which might be
+the body of a nested package, with the label giving the name of the enclosing package).
+Even this could be invalid, but that will be detected by a semantic check.
+=SML
+fun Ûcheck_labelÝ (is_ident : bool, items : CN_LEX_ITEM list) : CN_LEX_ITEM list = (
+	case (is_ident, items) of
+		(true,
+			(LCUndeclaredLabel, _)  ::
+			(LCReplacedBy, _) ::
+			(LCPackage, _) ::
+			(LCBBody, _) ::
+			more) => items
+	|	(_, (LCUndeclaredLabel, CNText lab)::_) => 
+			fail "CN-Parser" 504012 [fn () => lab]
+	|	_ => items
+);
+=TEX
 The following function looks at the initial label in a web clause (if there is one). The label determines the kind of web clause entered. This classification function is called from within the lexical analyser, and it is necessary for it to be called prior to the parser since the parser recognises a language in which the distinction between the kinds of web clause is made in the parser's input.
 
 =SML
@@ -399,7 +418,8 @@ fun Ûclassify_initial_labelÝ (itemlist : CN_LEX_ITEM list) : CN_LEX_ITEM list = 
 	(LCOrd, _)::(lex_class, CNText labn)::(LCCrd, _)::rest => (
 		if	lex_class = LCNumericLiteral
 		orelse	lex_class = LCIdentifier
-		then	((case classify_label labn of
+		then	check_label(lex_class = LCIdentifier,
+				((case classify_label labn of
 					Value RSCompilation => LCCompLabel
 				|	Value RSPrivatePart => LCPPartLabel
 				|	Value RSVisiblePart => LCVPartLabel
@@ -408,7 +428,7 @@ fun Ûclassify_initial_labelÝ (itemlist : CN_LEX_ITEM list) : CN_LEX_ITEM list = 
 				|	Value RSSpecStatement => LCSpecLabel
 				|	Value RSAnnotation => LCAnnotationLabel
 				|	Nil => LCUndeclaredLabel
-			), CNText labn)::rest
+				), CNText labn)::rest)
 		else	itemlist
 	)|_ => itemlist
 );
