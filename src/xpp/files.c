@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.9 2002/12/03 23:39:50 rda Exp rda $
+ * $Id: files.c,v 2.10 2002/12/04 00:34:40 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -101,9 +101,14 @@ static char *panic_file_written =
 static char *read_error_message =
 	 "Error reading the file \"%s\"";
 
-static char *read_only_message =
+static char *open_read_only_message =
 	 "The file \"%s\" is read-only. "
 	 "Do you want to open it?";
+
+static char *save_read_only_message =
+	"The read-only option is turned on. "
+	"Do you really want to turn this option off "
+	"and save the file \"%s\"?";
 
 static char *save_not_reg_message =
 	 "The file \"%s\" is not an ordinary file";
@@ -440,6 +445,14 @@ Boolean save_file(
 	Boolean success;
 	static struct stat status;
 	struct stat new_status;
+	if(global_options.read_only) {
+		if(!file_yes_no_dialog(text,
+					save_read_only_message,
+					name)) {
+			return False;
+		}
+		set_read_only(False);
+	}
 	if(current_file_status != NULL) {
 		if(stat(name, &new_status) == 0) { /* file still exists */
 			if(	new_status.st_mtime != current_file_status->st_mtime
@@ -507,6 +520,9 @@ Boolean save_file_as(
 	} else { /* bad news, give up on file status checks for now */
 		current_file_status = NULL;
 	}
+	if(success) {
+		set_read_only(False);
+	}
 	return success;
 }
 
@@ -571,7 +587,7 @@ Boolean open_file(
 		if(access(name, W_OK) != 0) { /* read-only (or worse?) */
 			if(	(	orig_global_options.read_only
 				&&	global_options.read_only)
-			||	file_yes_no_dialog(text, read_only_message, name)) {
+			||	file_yes_no_dialog(text, open_read_only_message, name)) {
 				set_read_only(True);
 			} else {
 				XtFree(buf);
