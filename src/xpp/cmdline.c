@@ -242,8 +242,7 @@ void add_cmd_line(Widget text_w)
 	XtManageChild(paned);
 	XtManageChild(list_w);
 	XtPopup(shell, XtGrabNone);
-	fix_pane_height(XtParent(list_w), XtParent(list_w));
-	fix_pane_height(cmd_text, cmd_text);
+	/*fix_pane_height(cmd_text, cmd_text);*/
 	fix_pane_height(btn_form, btn_form);
 
 }
