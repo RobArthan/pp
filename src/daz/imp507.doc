@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.259 $ $RCSfile: imp507.doc,v $ $Date: 2004/06/21 16:32:48 $
+% imp507.doc %Z% $Revision: 1.260 $ $RCSfile: imp507.doc,v $ $Date: 2004/07/03 14:22:21 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.259 $%
+\def\SCCSversion{$Revision: 1.260 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/06/21 16:32:48 $%
+\TPPdate{\FormatDate{$Date: 2004/07/03 14:22:21 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -1258,6 +1258,21 @@ fun €block_in_scope›  (blk as
 		{block_name = block_name,
 				flags = flags,
 				in_scope = new_in_scope})
+);
+=TEX
+=SML
+fun €block_dict›  (blk as
+	{
+	declab as {block_name,
+		flags,
+		in_scope},
+	...
+	} : BLOCK,
+	new_dict :ENV_DICT) : BLOCK = (
+	block_declab(blk, 
+		{block_name = block_name,
+				flags = flags,
+				in_scope = in_scope_dict(in_scope, new_dict)})
 );
 =TEX
 =SML
@@ -3551,6 +3566,32 @@ fun €vcs_speclabel_aux› (just_checking : bool) ({label, statement = s} : REFINED
 );
 =TEX
 \subsection{The SID function spec\_stmt}
+The following utilities are used here and in the sequel to convert plain Z identifiers (as stored in the locals part of an ENV\_DICT) into the data structures required by the spec:
+=SML
+fun €log_con_of_env_dict› (dict : ENV_DICT) (zn : Z_ID) : Z_EXP = (
+	case env_of_env_dict dict zn of
+		Value{info = EIEnvLogCon{decl, ...}, ...} => decl
+	|	_ =>  fail "log_con_of_env_dict" 507131 [fn _ => zn]
+);
+fun €par_of_env_dict› (dict : ENV_DICT) (zn : Z_ID) : PARAM_SPEC = (
+	case env_of_env_dict dict zn of
+		Value{info = EIEnvVar{tmark = tm, kind = Par mode}, ...} =>
+			 {var_decl = {vars = [zn], tmark = tm},
+			  mode = mode}
+	|	_ => 	fail "par_of_env_dict" 507131 [fn _ => zn]
+);
+fun €aux_var_of_env_dict› (dict : ENV_DICT) (zn : Z_ID) : Z_EXP = (
+	case env_of_env_dict dict zn of
+		Value{info = EIEnvAuxVar{decl, ...}, ...} => decl
+	|	_ =>  fail "aux_var_of_env_dict" 507131 [fn _ => zn]
+);
+fun €var_of_env_dict› (dict : ENV_DICT) (zn : Z_ID) : VAR_DECL = (
+	case env_of_env_dict dict zn of
+		Value{info = EIEnvVar{kind = Var, tmark = tm}, ...} => 
+			{vars = [zn], tmark = tm}
+	|	_ =>  fail "var_of_env_dict" 507131 [fn _ => zn]
+);
+=TEX
 The decision about which support function to call is made in $spec\_stmt$ itself.
 =SML
 fun €spec_stmt_speclabel› ({spec : SPEC, label : LABEL}) : unit = (
@@ -3568,26 +3609,13 @@ fun €spec_stmt_speclabel› ({spec : SPEC, label : LABEL}) : unit = (
 		val env_pars = #vc_pars (get_local_vars(#dict(flatten_env(!blocks))));
 		val dict1 = #dict(#in_scope(#declab block1));
 		val {vc_log_cons = vc_log_con_ids1, ...} = get_local_vars dict1;
-		fun mk_log_con1 zn = (
-			case env_of_env_dict dict1 zn of
-				Value{info = EIEnvLogCon{decl, ...}, ...} => decl
-			|	_ => mk_t
-		);
-		fun mk_par1 zn = (
-			case env_of_env_dict dict1 zn of
-				Value{info = EIEnvVar{tmark = tm, kind = Par mode}, ...} =>
-					 {var_decl = {vars = [zn], tmark = tm},
-					  mode = mode}
-			|	_ => 	{var_decl = {vars = [], tmark = ""},
-					mode = MSparkIn true}
-		);
-		val vc_log_cons1 = map mk_log_con1 vc_log_con_ids1;
+		val vc_log_cons1 = map (log_con_of_env_dict dict1) vc_log_con_ids1;
 		val zids_in_scope = (current_cn_env, []);
 		val side = map (check_new_z_id zids_in_scope) vc_log_con_ids1;
 		val in_scope0 : IN_SCOPE =
 			in_scope_vc_pars Nil (
 				in_scope_vc_log_cons Nil (in_scope2, vc_log_cons1),
-				map mk_par1 env_pars);
+				map (par_of_env_dict dict1) env_pars);
 		val env = cn_env_of_in_scope in_scope0;
 		val named_tills1 =
 			if	till_flag
@@ -3722,6 +3750,13 @@ fun €remove_log_con_env› (() : unit) : unit = (
 \section{LOOPS}\label{LOOPS}
 \subsection{The SID function new\_scope\_loop}
 =SML
+fun €new_scope_common› (blk1 :: (more as (blk2 :: _)) : BLOCK list) : BLOCK list = (
+	let	val dict2 = #dict(#in_scope(#declab blk2));
+		val dict2' = new_scope_env_dict dict2;
+	in	block_dict(blk1, dict2')::more
+	end
+) | new_scope_common other = other;
+=SML
 fun €new_scope_loop› (loop_name  :  ID OPT) : unit = (
 	let	val block1 = block 1;
 		val {declab as {flags as 
@@ -3745,7 +3780,7 @@ fun €new_scope_loop› (loop_name  :  ID OPT) : unit = (
 					flags = flags,
 					in_scope = in_scope});
 		val block1 = block_current_loop_name(block, loop_name);
-	in	blocks := block1 :: !blocks
+	in	blocks := new_scope_common(block1 :: !blocks)
 	end		
 );
 =TEX
@@ -3894,7 +3929,7 @@ fun €subunit_inf› (ident : ID) : unit = (
 fun €new_scope_proc_inf› (ident : ID) : unit = (
 	let	val block = block_block_name(
 				block_flags(empty_block, false_flags), ident);
-	in	blocks := block :: !blocks
+	in	blocks := new_scope_common(block :: !blocks)
 	end		
 );
 =TEX
@@ -3915,7 +3950,7 @@ fun €new_scope_proc_form› (ident : ID) : unit = (
 		};
 		val block = block_block_name(
 				block_flags(empty_block, flags), ident);
-	in	blocks := block :: !blocks
+	in	blocks := new_scope_common(block :: !blocks)
 	end		
 );
 =TEX
@@ -4178,7 +4213,7 @@ fun €check_globals_proc› (block_name1 : string)
 		end
 );
 =TEX
-The VC generator is responsible for distinguishing  between specificationstatements with and without initial variables.
+The VC generator is responsible for distinguishing  between specification statements with and without initial variables.
 Here, we follow the parser in generating the form without initial variables for it to modify as necessary.
 =SML
 fun €form_proc_pack_body_common› (form_proc: FORMAL_PROC)
@@ -4202,31 +4237,30 @@ fun €form_proc_pack_body_common› (form_proc: FORMAL_PROC)
 			formal_procs4
 			(fn p => #name p = block_name1);
 		val _ = check_globals_proc block_name1 form_proc (#globals formal_proc3);
-		val vc_vars2 = #vc_vars(#in_scope(#declab block2));
+		val dict2 = #dict(#in_scope(#declab block2));
+		val vc_vars2 = map (var_of_env_dict dict2) (#vc_vars(get_local_vars dict2));
 		val vc_vars4 = #vc_vars package4;
-		val vc_pars1 = #vc_pars (#in_scope (#declab block1));
+		val dict1 = #dict(#in_scope(#declab block1));
+		val vc_par_ids1 = #vc_pars(get_local_vars dict1);
 		val in_scope5a = subprog_flatten_env(!blocks);
-		val vc_vars5 = #vc_vars in_scope5a;
-		val vc_aux_vars5 = (#vc_aux_vars in_scope5a) term_diff (#aux_vars package4);
-		val var_renamings5 = #var_renamings in_scope5a;
-		val use_clause_subs5 = #use_clause_subs in_scope5a;
+		val dict5a = #dict in_scope5a;
+		val {vc_vars = vc_var_ids5, vc_aux_vars = vc_aux_var_ids5a, ...} =
+			get_local_vars dict5a;
+		val aux_var_ids4 = map (fst o dest_var)
+				(flat (map (fst o dest_z_dec)(#aux_vars package4)));
+		val vc_aux_var_ids5 = vc_aux_var_ids5a diff aux_var_ids4;
+		val cn_scope = vc_par_ids1 cup vc_aux_var_ids5 cup vc_var_ids5;
+		val dict5 = set_cn_scope dict5a cn_scope;
 		val in_scope5 = {
 			dec_labels = [],
-			formal_procs = [],
-			vc_log_cons = [],
-			vc_aux_vars = vc_aux_vars5,
-			var_renamings = var_renamings5,
-			use_clause_subs = use_clause_subs5,
-			vc_vars = vc_vars5,
-			vc_pars = vc_pars1	
+			dict = dict5	
 		};
 		val wp_env5 :WP_ENV = {
 			env = cn_env_of_in_scope in_scope5,
 			till = mk_z_true,
 			named_tills = [],
 			return = mk_z_true,
-			fun_header = dummy_informal_fun,
-			formal_procs = []
+			fun_header = dummy_informal_fun
 		};
 		val pack_body_vars = vc_vars2 diff vc_vars4;
 		val spec3 = #spec formal_proc3;
@@ -4260,15 +4294,12 @@ fun €form_proc_pack_body›
 	(block2 : BLOCK, formal_proc3 : FORMAL_PROC,
 			package4 : PACKAGE, speclab5 : SPECLAB)
 	(form_proc: FORMAL_PROC) : SPEC = (
-	let	val vc_vars5a = #vc_vars (subprog_flatten_env(!blocks));
-		val speclab5a = speclab_wp_env_from_in_scope 
-			(speclab_vc_vars(speclab5, vc_vars5a));
-		val st = STSpecNoIvars{spec= #spec form_proc,
+	let	val st = STSpecNoIvars{spec= #spec form_proc,
 					label="", is_assertion = false};
-		val (vcs, routes, spec) = call_vcs (Value(#globals form_proc)) (speclab5a, st);
+		val (vcs, routes, spec) = call_vcs (Value(#globals form_proc)) (speclab5, st);
 	in	store_vcs (
 			#name formal_proc3, vcs, 
-			Value (speclab_update_spec(speclab5a,spec)), routes,
+			Value (speclab_update_spec(speclab5,spec)), routes,
 			VCG_subprogram_spec
 		);
 		spec
@@ -4325,18 +4356,14 @@ fun €form_proc_pack_body_aux›
 		val w5 = frame_aux_conc cup (#w (#spec speclab5));
 		
 		val in_scope5 = #in_scope speclab5;
-		val vc_varsENV = #vc_vars (subprog_flatten_env (!blocks));
-		val vc_vars1 = #vc_vars (#in_scope (#declab block1));
-		val in_scope5a = in_scope_vc_vars(in_scope5, 
-					vc_varsENV cup conc_vars);
+		val in_scope5a = in_scope_vc_vars Nil (in_scope5,  conc_vars);
 		val env5a = cn_env_of_in_scope in_scope5a;
 		val wp_env5a :WP_ENV = {
 			env = env5a,
 			till = mk_z_true,
 			named_tills = [],
 			return = mk_z_true,
-			fun_header = dummy_informal_fun,
-			formal_procs = #formal_procs (#wp_env speclab5)
+			fun_header = dummy_informal_fun
 		};
 		val pre5 = z_quote (z_exists (aux_vars,
 				z_many_and(z_pred_of_z_tm  env5a pre6::invs)),
@@ -4391,28 +4418,25 @@ fun €form_proc_subunit› (form_proc: FORMAL_PROC) : unit = (
 		val st = STSpecNoIvars{spec= #spec form_proc,
 			label="", is_assertion = false};
 		val _ = check_globals_proc block_name1 form_proc (#globs subunit3);
-		val vc_vars3 = #vc_vars(#in_scope subunit3);
-		val vc_pars1 = #vc_pars (#in_scope (#declab block1));
-		val vc_aux_vars3 = #vc_aux_vars (#in_scope subunit3);
-		val var_renamings3 = #var_renamings (#in_scope subunit3)
-		val use_clause_subs3 = #use_clause_subs (#in_scope subunit3)
-		val in_scope4 = {
+		val dict3 = #dict(#in_scope subunit3);
+		val {vc_vars = vc_var_ids3, vc_pars = vc_par_ids3,
+			vc_aux_vars = vc_aux_var_ids3, ...} = get_local_vars dict3;
+		val dict1 = #dict(#in_scope(#declab block1));
+		val vc_par_ids1 = #vc_pars(get_local_vars dict1);
+		val vc_pars1 = map (par_of_env_dict dict1) vc_par_ids1;
+		val cn_scope = vc_par_ids1 cup vc_par_ids3 cup
+			vc_aux_var_ids3 cup vc_var_ids3;
+		val in_scope4a ={
 			dec_labels = [],
-			formal_procs = [],
-			vc_log_cons = [],
-			vc_aux_vars = vc_aux_vars3,
-			vc_vars = vc_vars3,
-			var_renamings = var_renamings3,
-			use_clause_subs = use_clause_subs3,
-			vc_pars = vc_pars1			
-		}
+			dict = set_cn_scope dict3 cn_scope
+		};
+		val in_scope4 =in_scope_vc_pars Nil (in_scope4a, vc_pars1);
 		val wp_env4 :WP_ENV = {
 			env = cn_env_of_in_scope in_scope4,
 			till = mk_z_true,
 			named_tills = [],
 			return = mk_z_true,
-			fun_header = dummy_informal_fun,
-			formal_procs = []
+			fun_header = dummy_informal_fun
 		};
 		val speclab4 : SPECLAB = {
 			spec = #specif subunit3,
@@ -4442,8 +4466,7 @@ fun €check_stub_spec_proc› (form_proc: FORMAL_PROC) : unit = (
 				till = mk_z_true,
 				named_tills = [],
 				return = mk_z_true,
-				fun_header = dummy_informal_fun,
-				formal_procs = []
+				fun_header = dummy_informal_fun
 			};
 			val speclab : SPECLAB = {
 				spec = #spec form_proc,
@@ -4532,7 +4555,7 @@ fun €new_scope_fun_inf› (ident : ID) : unit = (
 		};
 		val block = block_block_name(
 				block_flags(empty_block, flags), ident);
-	in	blocks := block :: !blocks
+	in	blocks := new_scope_common(block :: !blocks)
 	end		
 );
 =TEX
@@ -4554,7 +4577,7 @@ fun €new_scope_fun_form› (ident : ID) : unit = (
 		};
 		val block = block_block_name(
 				block_flags(empty_block, flags), ident);
-	in	blocks := block :: !blocks
+	in	blocks := new_scope_common(block :: !blocks)
 	end		
 );
 =TEX
