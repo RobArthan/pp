@@ -130,6 +130,23 @@ fun Ûformat_lex_itemÝ  ((_, tok) : CN_LEX_ITEM) : string = (
 	|	CNEos		=> "<end-of-input>"
 );
 =TEX
+
+=SML
+fun Ûformat_input_itemsÝ  ((ip::rest) : Lex.INPUT list) : string = (
+let	val s = (case ip of
+		Lex.Char c	=> "`"^c^"`"
+	|	Lex.Error s	=> "ERROR__"^(string_of_int s)
+	|	Lex.Separator s	=> s
+	|	Lex.String s	=> "\""^s^"\""
+	|	Lex.Term t	=> string_of_term t
+	|	Lex.Text s	=> s
+	|	Lex.Type t	=> string_of_type t
+	);
+in
+	s^(format_input_items rest)
+end
+) | format_input_items _ = "";
+=TEX
 =SML
 fun Ûparse_error_hdrÝ () : unit = (
 	let	val ok_toks =	format_list
@@ -293,7 +310,7 @@ type AGG = {tm : TMARK OPT, named_assocs : (AGG_CHOICE,EXP) NAMED_ASSOC list, ot
 	
 datatype ÛPPARSEDÝ =
 			PPAgg of AGG
-		|	PPAggregateChoices of AGG_CHOICE list OPT
+		|	PPAggregateChoices of (AGG_CHOICE list * bool)
 		|	PPBasicDecls of BASIC_DECL list
 		|	PPBinaryOp of BIN_OP
 		|	PPBinOpTail of (BIN_OP * EXP) list
@@ -328,7 +345,7 @@ datatype ÛPPARSEDÝ =
 		|	PPSRExpression of (EXP * EXP OPT)
 		|	PPStmt of STMT
 		|	PPStatement of STATEMENT
-		|	PPSubprogram of (DECLARATION list * STATEMENT)
+		|	PPSubprogram of (DECLARATION list * STATEMENT * ID)
 		|	PPSubprogramSpec of SUBPROGRAM_SPECIFICATION
 		|	PPSubtypeDeclaration of (EXP * EXP * EXP OPT)
 		|	PPTypeDef of TYPE_DEF
@@ -339,10 +356,6 @@ datatype ÛPPARSEDÝ =
 		|	PPWebClause of WEB_CLAUSE;
 =TEX
 =SML
-fun format_rw_input (ip : Lex.INPUT list) = (
-	"RW-Input"
-);
-
 fun format_label (n : string) = (
 	"("^n^")"
 );
@@ -586,7 +599,7 @@ fun red_name_list2 (Parsed(PPExp n)) _ (Parsed(PPExps nl)) = (
 	PPExps (n::nl)
 ) | red_name_list2 _ _ _ = stack_error "red_name_list2";
 =TEX
-TDS Information lost in the following...
+TBS Information lost in the following...
 =SML
 fun red_discrete_range1 (Parsed (PPExp e)) (Parsed p) = (
 let	val side = name_to_tmark e;
@@ -723,7 +736,6 @@ fun red_expression_list2 (Parsed(PPExp e)) _ (Parsed(PPExps es)) = (
 	PPExps (e::es)
 ) | red_expression_list2 _ _ _ = stack_error "red_expression_list2";
 =TEX
-TBS - the correct handling of character literals
 =SML
 fun red_attribute1 (Parsed(PPExp n)) (Token ((_,CNText primedid), _)) = (
 	PPExp(EIndexedComp{prefix=n, index=EId primedid})
@@ -752,33 +764,37 @@ fun red_component_association2 (Parsed(PPExps es)) = (
 =SML
 fun red_named_association1 (Parsed(PPAggregateChoices v)) _ (Parsed(PPExp e)) = (
 	case v of
-	Value c => PPAgg{tm=Nil, named_assocs =[{choice=c, comp=e}],others=Nil}
-	|Nil => PPAgg{tm=Nil, named_assocs=[], others=Value e}
+	([],true) => PPAgg{tm=Nil, named_assocs=[], others=Value e}
+	|(c, false) => PPAgg{tm=Nil, named_assocs =[{choice=c, comp=e}],others=Nil}
+	|_ => parse_error 503001 "OTHERS cannot be in a choice list"
 ) | red_named_association1 _ _ _ = stack_error "red_named_association1";
 
 fun red_named_association2 (Parsed(PPAggregateChoices v)) _ (Parsed(PPExp e)) _ (Parsed(PPAgg {named_assocs=na,others=ot,...})) = (
 	case v of
-	Value c => PPAgg{tm=Nil,named_assocs={choice=c,comp=e}::na,others=ot}
-	|Nil => stack_error "red_named_association2_a"
+	(c as _::_, false) =>
+		PPAgg{tm=Nil,named_assocs={choice=c,comp=e}::na,others=ot}
+	|_ => parse_error 503001 "OTHERS must occur last in the choice list"
 ) | red_named_association2 _ _ _ _ _ = stack_error "red_named_association2";
 
 fun red_aggregate_choice_list1 (Token ((LCOthers,_), _)) = (
-	PPAggregateChoices Nil
+	PPAggregateChoices ([], true)
 ) | red_aggregate_choice_list1 _ = stack_error "red_aggregate_choice_list1";
 
 val red_aggregate_choice_list2 = red_accept;
 
-fun red_aggregate_choice_list3 (Parsed(PPAggregateChoices v)) _ (Parsed(PPAggregateChoices (Value acl))) = (
+fun red_aggregate_choice_list3 (Parsed(PPAggregateChoices v)) _ (Parsed(PPAggregateChoices (acl, true))) = (
+	parse_error 503001 "OTHERS cannot be in a choice list"
+) | red_aggregate_choice_list3 (Parsed(PPAggregateChoices v)) _ (Parsed(PPAggregateChoices (acl, false))) = (
 	case v of
-	Value [ac] => PPAggregateChoices(Value(ac::acl))
-	|_ => stack_error "red_aggregate_choice_list3_a"
+	([ac], false) => PPAggregateChoices((ac::acl), false)
+	|_ => parse_error 503001 "OTHERS cannot be in a choice list"
 ) | red_aggregate_choice_list3 _ _ _ = stack_error "red_aggregate_choice_list3";
 =TEX
 =SML
 fun red_aggregate_choice (Parsed(PPSRExpression (e,v))) = (
 	case v of
-	Value e2 => PPAggregateChoices(Value[ACAggChoiceRange{lo=e,hi=e2}])
-	|Nil => PPAggregateChoices(Value[ACAggChoiceSingle e])
+	Value e2 => PPAggregateChoices([ACAggChoiceRange{lo=e,hi=e2}], false)
+	|Nil => PPAggregateChoices([ACAggChoiceSingle e], false)
 ) | red_aggregate_choice _ = stack_error "red_aggregate_choice";
 
 val red_positional_association = red_accept;
@@ -1037,15 +1053,19 @@ fun red_specification_statement6 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ 
 =TEX
 =SML
 fun red_label _ (Token ((LCNumericLiteral,CNText n), _)) _ = (
-	PPId (format_label n)
+	if is_all_decimal n
+	then
+		PPId (format_label n)
+	else
+		parse_error 503001 "the label can only contain digits"
 ) | red_label _ _ _ = stack_error "red_label";
 
 fun red_k_slot1 (Token ((LCKSlot,CNKSlot lx), _)) = (
-	PPKSlot{content=format_rw_input lx, label=LImplicit}
+	PPKSlot{content=format_input_items lx, label=LImplicit}
 ) | red_k_slot1 _ = stack_error "red_k_slot1";
 
 fun red_k_slot2 (Token ((LCKSlot,CNKSlot lx), _)) (Parsed(PPId lab)) = (
-	PPKSlot{content=format_rw_input lx, label=LExplicit lab}
+	PPKSlot{content=format_input_items lx, label=LExplicit lab}
 ) | red_k_slot2 _ _ = stack_error "red_k_slot2";
 =TEX
 =SML
@@ -1109,8 +1129,8 @@ fun red_case_statement_alternative_list2 (Parsed(PPCaseAlternatives [c]))
 	stack_error "red_case_statement_alternative_list2";
 
 fun red_case_statement_alternative _ (Parsed(PPCaseChoices c)) _
-	(Parsed(PPStmt s)) = (
-	PPCaseAlternatives[{choices=c, p=s}]
+	(Parsed(PPStatement st)) = (
+	PPCaseAlternatives[{choices=c, p=statement_to_stmt st}]
 ) | red_case_statement_alternative _ _ _ _ =
 	stack_error "red_case_statement_alternative";
 =TEX
@@ -1129,15 +1149,18 @@ fun red_case_choice (Parsed(PPSRExpression (e,v))) = (
 ) | red_case_choice _ = stack_error "red_case_choice";
 
 val red_others_part1 = PPStmt STImplicitNull;
-fun red_others_part2 _ _ (Parsed(PPStmt s)) = (
-	PPStmt s
+fun red_others_part2 _ _ (Parsed(PPStatement st)) = (
+	PPStmt (statement_to_stmt st)
 ) | red_others_part2 _ _ _ = stack_error "red_others_part2";
 =TEX
 SPARK manual 5.5:
 =SML
 fun red_loop_statement (Parsed(PPIds ids)) (Parsed p) (Parsed(PPExps es))
-	_ (Parsed(PPStatement st)) _ _ _ _ = (
-let	val name = case ids of
+	_ (Parsed(PPStatement st)) _ _ (Parsed(PPIds ids')) _ = (
+let	val side =	if	ids' <> ids
+			then	parse_error 503001 "loop names do not match"
+			else	();
+	val name = case ids of
 			[id] => Value id
 			|_ => Nil;
 	val till = case es of
@@ -1174,10 +1197,10 @@ fun red_name_opt12 (Token ((_,CNText id), _)) _ = (
 	PPIds [id]
 ) | red_name_opt12 _ _ = stack_error "red_name_opt12";
 
-val red_name_opt21 = PPExps [];
+val red_name_opt21 = PPIds [];
 
 fun red_name_opt22 (Token ((_,CNText id), _)) = (
-	PPExps [EId id]
+	PPIds [id]
 ) | red_name_opt22 _ = stack_error "red_name_opt22";
 
 val red_iteration_scheme_opt1 = PPId "__no_scheme";
@@ -1319,16 +1342,28 @@ fun red_mode4 _ _ = PPMode MSparkInOut;
 =TEX
 SPARK manual 6.3:
 =SML
-fun red_subprogram_body1 (Parsed (PPProcedureSpecification ps)) _ (Parsed (PPSubprogram (d, s))) = (
+fun red_subprogram_body1 (Parsed (PPProcedureSpecification ps)) _ (Parsed (PPSubprogram (d, s, id))) = (
+let	val {name=id',...} = ps;
+	val side =	if	id' <> id
+			then	parse_error 503001 "procedure identifiers do not match"
+			else	();
+in
 	PPProperBody (PBProcedure {procedure_spec=ps,declarative_part=d,statement=s})
+end
 ) | red_subprogram_body1 _ _ _ = stack_error "red_subprogram_body1";
 
-fun red_subprogram_body2 (Parsed (PPFunctionSpecification fs)) _ (Parsed (PPSubprogram (d, s))) = (
+fun red_subprogram_body2 (Parsed (PPFunctionSpecification fs)) _ (Parsed (PPSubprogram (d, s, id))) = (
+let	val {designator=id',...} = fs;
+	val side =	if	id' <> id
+			then	parse_error 503001 "function designators do not match"
+			else	();
+in
 	PPProperBody (PBFunction {function_spec=fs,declarative_part=d,statement=s})
+end
 ) | red_subprogram_body2 _ _ _ = stack_error "red_subprogram_body2";
 
-fun red_subprogram_implementation (Parsed(PPDeclarations d)) _ (Parsed(PPStatement s)) _ _ _ = (
-	PPSubprogram (d, s)
+fun red_subprogram_implementation (Parsed(PPDeclarations d)) _ (Parsed(PPStatement s)) _ (Parsed(PPId id)) _ = (
+	PPSubprogram (d, s, id)
 ) | red_subprogram_implementation _ _ _ _ _ _ = stack_error "red_subprogram_implementation";
 =TEX
 =SML
@@ -1366,13 +1401,22 @@ SPARK manual 7.1:
 fun red_package_declaration (Parsed p) _ = (p
 ) | red_package_declaration _ _ = stack_error "red_package_declaration";
 
-fun red_package_specification1 _ (Token ((_,CNText id), _)) _ (Parsed(PPDeclarations v)) _ _ = (
+fun red_package_specification1 _ (Token ((_,CNText id), _)) _ (Parsed(PPDeclarations v)) _ (Token ((_,CNText id'), _)) = (
+let	val side =	if	id' <> id
+			then	parse_error 503001 "package names do not match"
+			else	();
+in
 	PPPackageSpecification {name=id,visible_decs=v,private_decs=[]}
+end
 ) | red_package_specification1 _ _ _ _ _ _ = stack_error "red_package_specification1";
 
-fun red_package_specification2 _ (Token ((_,CNText id), _)) _ (Parsed(PPDeclarations v)) _  (Parsed(PPDeclarations p)) _ _ = (
+fun red_package_specification2 _ (Token ((_,CNText id), _)) _ (Parsed(PPDeclarations v)) _  (Parsed(PPDeclarations p)) _ (Token ((_,CNText id'), _)) = (
+let	val side =	if	id' <> id
+			then	parse_error 503001 "package names do not match"
+			else	();
+in
 	PPPackageSpecification {name=id,visible_decs=v,private_decs=p}
-
+end
 ) | red_package_specification2 _ _ _ _ _ _ _ _ = stack_error "red_package_specification2";
 val red_visible_part1 = red_accept;
 
@@ -1404,16 +1448,21 @@ fun red_pdec1 (Parsed (PPKSlot k)) = (
 val red_pdec2 = red_accept;
 =TEX
 =SML
-fun red_package_body _ _ (Token ((_,CNText id), _)) _ (Parsed(PPSubprogram (d,s))) _ _ _ = (
+fun red_package_body _ _ (Token ((_,CNText id), _)) _ (Parsed(PPSubprogram (d,s, _))) _ (Token ((_,CNText id'), _)) _ = (
+let	val side =	if	id' <> id
+			then	parse_error 503001 "package names do not match"
+			else	();
+in
 	PPProperBody(PBPackage{name=id,decls=d,statement=s})
+end
 ) | red_package_body _ _ _ _ _ _ _ _ = stack_error "red_package_body";
 
 fun red_package_implementation1 (Parsed (PPDeclarations d)) = (
-	PPSubprogram (d, SStmt STImplicitNull)
+	PPSubprogram (d, SStmt STImplicitNull, "")
 ) | red_package_implementation1 _ = stack_error "red_package_implementation1";
 
 fun red_package_implementation2 (Parsed (PPDeclarations d)) _ (Parsed(PPStatement s)) = (
-	PPSubprogram (d, s)
+	PPSubprogram (d, s, "")
 ) | red_package_implementation2 _ _ _ = stack_error "red_package_implementation2";
 
 val red_package_initialization = red_accept;
