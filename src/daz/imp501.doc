@@ -253,6 +253,16 @@ val €ordz›	= ord "z";
 val €ordZ›	= ord "Z";
 =TEX
 =SML
+fun €is_percent› (c : string) = c = "%%";
+fun €is_prime› (c : string) = c = "'";
+fun €is_us› (c : string) = c = "_";
+fun €is_e› (c : string) = c = "E" orelse c = "e";
+fun €is_plusminus› (c : string) = c = "+" orelse c = "-";
+fun €is_dot› (c : string) = c = ".";
+fun €is_hash› (c : string) = c = "#";
+fun €is_space› c = c <= " ";
+=TEX
+=SML
 fun €is_digit›  (d : string) = (
 	let	val ordd = ord d
 	in	(ordd >= ord0) andalso (ordd <= ord9)
@@ -273,10 +283,26 @@ fun €is_alnum›  (c : string) = (
 );
 =TEX
 =SML
-fun €is_percent› (c : string) = c = "%%";
-fun €is_prime› (c : string) = c = "'";
+fun €is_numericliteral› (s : string) = (
+	case explode s of
+	i::rest =>	is_digit i
+	|_ =>		false
+);
 =TEX
-
+=SML
+fun €is_primedid› (s : string) = (
+	case explode s of
+	"'"::_::_ =>	true
+	|_ =>		false
+);
+=TEX
+=SML
+fun €is_characterliteral› (s : string) = (
+	case explode s of
+	"'"::_::"'"::rest =>	true
+	|_ =>			false
+);
+=TEX
 =TEX
 Note that the following list includes ``.'' but omits the string quotation
 character. ``.'' is included so that $is\_delimiter$ may be
@@ -298,12 +324,6 @@ val €delimiter› : string list list =
 fun next_is_delimiter (cs : string list) = (
 	any delimiter (fn chs => cs to (length chs - 1) = chs)
 );
-=TEX
-=SML
-fun €is_space› c = c <= " ";
-=TEX
-=SML
-fun €is_us› c = c = "_";
 =TEX
 =SML
 fun €skip_space› (st as (cs as (c :: more), tk) : LEX_STATE) : LEX_STATE = (
@@ -412,34 +432,6 @@ val €class_table› = list_e_merge initial_e_dict [
 
 =TEX
 =SML
-fun €is_numericliteral› (s : string) = (
-	case explode s of
-	i::rest =>	is_digit i
-	|_ =>		false
-);
-=TEX
-=SML
-fun €is_prime› (s : string) = (
-	case explode s of
-	"'"::_ =>	true
-	|_ =>		false
-);
-=TEX
-=SML
-fun €is_primedid› (s : string) = (
-	case explode s of
-	"'"::_::_ =>	true
-	|_ =>		false
-);
-=TEX
-=SML
-fun €is_characterliteral› (s : string) = (
-	case explode s of
-	"'"::_::"'"::rest =>	true
-	|_ =>			false
-);
-=TEX
-=SML
 fun €classify› (what : string) : CN_LEX_CLASS = (
 	case e_lookup (to_lower what) class_table of
 		Value cl => cl
@@ -458,7 +450,7 @@ fun €classify› (what : string) : CN_LEX_CLASS = (
 =SML
 fun €get_next_delimiter› (cs : string list) : string = (
 	implode (find delimiter (fn chs => cs to (length chs - 1) = chs))
-	handle ex => fail "CN-Parser" 501201 [fn()=>"invalid call of get_next_delimiter"]
+	handle ex => fail "CN-Parser" 501002 [fn()=>"invalid call of get_next_delimiter"]
 );
 =TEX
 $rec\_delimiter$ returns an appropriately updated state if the input
@@ -506,20 +498,57 @@ fun €rec_identifier› (st : LEX_STATE) : LEX_STATE = (
 =TEX
 \subsection{Recognition of Numbers}
 =TEX
-The following is a simplification of numbers used in CN and will be
-updated later.
 =SML
-fun €rec_number› (st : LEX_STATE) : LEX_STATE = (
-	let	fun aux st = (
-			if next is_digit st
-			then aux (collect st)
-			else st
+fun €rec_gen_integer› (f : string -> bool) (st : LEX_STATE) : LEX_STATE = (
+	let	fun aux1 st = (
+			if	next f (collect st)
+			then	aux (collect st)
+			else	raise Unrecognised
+		)
+		and aux st = (
+			if	next f st
+			then	aux (collect st)
+			else if	next is_us st
+			then	aux1 st
+			else	st
 		);
-	in	if next is_digit st
+	in	if next f st
 		then aux (collect st)
 		else raise Unrecognised
 	end
 );
+=TEX
+=SML
+val €rec_integer› = rec_gen_integer is_digit;
+val €rec_based_integer› = rec_gen_integer is_alnum;
+=TEX
+=SML
+fun €rec_exponent› (st : LEX_STATE) : LEX_STATE = (
+	if	next is_e st
+	then	let val st' = collect st;
+		in
+			if	next is_plusminus st'
+			then	rec_integer (collect st')
+			else	rec_integer st'
+		end
+	else	st
+);
+=TEX
+=SML
+fun €rec_numeric_literal› (st : LEX_STATE) : LEX_STATE = (
+let	val st' = rec_integer st;
+	fun aux st =
+		if	next is_hash st
+		then	rec_exponent (collect st)
+		else	raise Unrecognised;
+in
+	if	next is_dot st'
+	then	((rec_exponent o rec_integer) (collect st')
+		handle _ => st')
+	else if	next is_hash st'
+	then	(aux o rec_based_integer) (collect st')
+	else	st'
+end);
 =TEX
 \subsection{Recognition of Keywords}
 =SML
@@ -580,7 +609,7 @@ fun €rec_next_token› (st : LEX_STATE) : LEX_STATE = (
 		handle Unrecognised =>
 			(rec_delimiter st))
 		handle Unrecognised =>
-			(rec_number st))
+			(rec_numeric_literal st))
 		handle Unrecognised =>
 			(rec_keyword st))
 		handle Unrecognised =>
@@ -725,7 +754,7 @@ in
 
 			end
 		)| (_, Unknown) =>
-			fail "CN-Parser" 501011 [fn() => implode slist]
+			fail "CN-Parser" 501001 [fn() => implode slist]
 	)
 end)
 =TEX
@@ -742,14 +771,14 @@ and €spark_lex› ((ip::more) : INPUT list) : CN_LEX_ITEM list = (
 	) |	Lex.String s => (
 			spark_string s more
 	) |	Lex.Char s => (
-			fail "CN-Parser" 501011  [fn () => "`"^s^"`"]
+			fail "CN-Parser" 501001  [fn () => "`"^s^"`"]
 	) |	Lex.Type ty => (
-			fail "CN-Parser" 501011  [fn () => string_of_type ty]
+			fail "CN-Parser" 501001  [fn () => string_of_type ty]
 	) |	Lex.Term tm => (
-			fail "CN-Parser" 501011  [fn () => "antiquotation"]
+			fail "CN-Parser" 501001  [fn () => "antiquotation"]
 	) |	Lex.Separator s => (
-			fail "CN-Parser" 501011  [fn () => s]
-	) |	Lex.Error n => (fail "lexical analyser" 15006 [fn () => string_of_int n])
+			fail "CN-Parser" 501001  [fn () => s]
+	) |	Lex.Error n => (fail "lexical analyser" 501003 [fn () => string_of_int n])
 ) | spark_lex _ = [];
 =TEX
 =SML
@@ -769,22 +798,3 @@ end (* of structure CNLex *);
 \twocolumn[\section{INDEX}]
 \printindex
 \end{document}
-=IGN
-fun €cn_lex› (classify_label : CN_LEX_ITEM list -> CN_LEX_ITEM list) (inp : INPUT list) 
-		 = (
-	(classify_inputs) inp
-);
-
-structure WebClauses  = struct
-fun cn_recogniser (start:string, lang:string, value:Lex.INPUT list, finish:string) = (
-	if	ReaderWriterSupport.PrettyNames.is_same_symbol(start, "π")
-	andalso	ReaderWriterSupport.PrettyNames.is_same_symbol(finish, "∞")
-	andalso	(lang = "CN")
-	then
-		(cn_lex (fn x => x) value)
-	else
-		fail "cn_recogniser" 22010
-			[fn () => start, fn () => lang, fn () => finish]
-);
-end (* of structure WebClauses *);
-open WebClauses;
