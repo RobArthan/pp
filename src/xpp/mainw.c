@@ -878,7 +878,7 @@ Bool execute_command()
 	if(	XmTextGetSelectionPosition(script, &dontcare, &dontcare)
 	&&	(cmd = XmTextGetSelection(script))) {
 		len = strlen(cmd);
-		add_nl =	cmd[len] == '\n'
+		add_nl =	len && cmd[len-1] == '\n'
 			?	0
 			:	global_options.add_new_line_mode
 					== EXECUTE_ADD_NEW_LINES
