@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.85 2004/08/27 15:54:39 rda Exp rda $
+ * $Id: mainw.c,v 2.86 2004/09/23 15:12:19 rda Exp $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -339,10 +339,10 @@ static MenuItem cmd_menu_items[] = {
 #define	HELP_MENU_ABOUT_XPP     0
 #define	HELP_MENU_USING_HELP    1
 #define	HELP_MENU_TUTORIAL      2
-#define	HELP_MENU_FILE_NAME_BAR 3
-#define	HELP_MENU_FILE_MENU     4
-#define	HELP_MENU_TOOLS_MENU    5
-#define	HELP_MENU_EDIT_MENU     6
+#define	HELP_MENU_FILE_MENU     3
+#define	HELP_MENU_TOOLS_MENU    4
+#define	HELP_MENU_EDIT_MENU     5
+#define	HELP_MENU_FILE_NAME_BAR 6
 #define	HELP_MENU_COMMAND_MENU  7
 static MenuItem help_menu_items[] = {
     { "About Xpp", &xmPushButtonGadgetClass, 'A', NULL, NULL,
@@ -357,10 +357,10 @@ static MenuItem help_menu_items[] = {
         help_menu_cb, (XtPointer)HELP_MENU_EDIT_MENU, (MenuItem *)NULL, False },
     { "Tools Menu", &xmPushButtonGadgetClass, 'T', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_TOOLS_MENU, (MenuItem *)NULL, False },
-    { "Command Menu", &xmPushButtonGadgetClass, 'C', NULL, NULL,
-        help_menu_cb, (XtPointer)HELP_MENU_COMMAND_MENU, (MenuItem *)NULL, False },
     { "File Name Bar", &xmPushButtonGadgetClass, 'N', NULL, NULL,
         help_menu_cb, (XtPointer)HELP_MENU_FILE_NAME_BAR, (MenuItem *)NULL, False },
+    { "Command Menu", &xmPushButtonGadgetClass, 'C', NULL, NULL,
+        help_menu_cb, (XtPointer)HELP_MENU_COMMAND_MENU, (MenuItem *)NULL, False },
     {NULL}
 };
 
@@ -1440,9 +1440,6 @@ static void help_menu_cb(
 	case HELP_MENU_TUTORIAL:
 		help_dialog(root, Help_Tutorial);
 		break;
-	case HELP_MENU_FILE_NAME_BAR:
-		help_dialog(root, Help_File_Name_Bar);
-		break;
 	case HELP_MENU_FILE_MENU:
 		help_dialog(root, Help_File_Menu);
 		break;
@@ -1451,6 +1448,9 @@ static void help_menu_cb(
 		break;
 	case HELP_MENU_EDIT_MENU:
 		help_dialog(root, Help_Edit_Menu);
+		break;
+	case HELP_MENU_FILE_NAME_BAR:
+		help_dialog(root, Help_File_Name_Bar);
 		break;
 	case HELP_MENU_COMMAND_MENU:
 		help_dialog(root, Help_Command_Menu);
