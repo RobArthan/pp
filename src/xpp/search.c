@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.44 2004/02/09 16:43:33 rda Exp rda $ 
+ * $Id: search.c,v 2.45 2004/02/11 21:00:03 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -92,7 +92,7 @@ static char *no_selection_replace =
 	"to be copied into the replacement field.";
 
 static char *no_selection_search = 
-	"No text is available "
+	"No text selection is available "
 	"to be copied into the search field.";
 
 static char *no_selection_to_replace = 
@@ -1027,7 +1027,7 @@ static void replace_set_cb(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * search field clear callback.
+ * search field empty callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void empty_search_cb(
 	Widget		w,
@@ -1040,7 +1040,7 @@ static void empty_search_cb(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * search field clear callback.
+ * replacement field empty callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void empty_replace_cb(
 	Widget		w,
