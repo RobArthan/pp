@@ -238,7 +238,7 @@ static MenuItem cmd_menu_items[] = {
     MENU_ITEM_SEPARATOR,
     { "Abandon", &xmPushButtonGadgetClass, 'A', "Ctrl<Key>a", "Ctrl-A",
         cmd_menu_cb, (XtPointer)CMD_MENU_ABANDON, (MenuItem *)NULL, False },
-    { "Interrupt", &xmPushButtonGadgetClass, 'I', NULL, NULL,
+    { "Interrupt", &xmPushButtonGadgetClass, 'I', "Ctrl<Key>i", "Ctrl-I", 
         cmd_menu_cb, (XtPointer)CMD_MENU_INTERRUPT, (MenuItem *)NULL, False },
     MENU_ITEM_SEPARATOR,
     { "Kill", &xmPushButtonGadgetClass, 'K', NULL, NULL,
@@ -465,6 +465,10 @@ if(global_options.edit_only) {
 if( !global_options.edit_only ) {
 	cmdmenu = setup_menu(
 		menubar, XmMENU_PULLDOWN, "Command", 'C', False, cmd_menu_items);
+	if(!global_options.interrupt_prompt || !*global_options.interrupt_prompt) {
+		/* no interrupt prompt; disable abandon menu item */
+		set_menu_item_sensitivity(cmdmenu, CMD_MENU_ABANDON, False);
+	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Help menu:
