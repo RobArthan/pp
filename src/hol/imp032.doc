@@ -101,6 +101,7 @@ lasp -s -u imp032.OKwords imp032.doc > zz1
 		blocks used in the printing.
 	Fix non-terminating loop in printing non-standard let clauses.
 	Changes forecast moved into~\cite{DS/FMU/IED/DTD032}.
+	Add support for $pe_depth$ field of the $PP_ENV$ type.
 
 %\item[\FormatDate{$Date$%
 %}, issue \SCCSissue~]
@@ -201,10 +202,10 @@ allocation of HOL precedences easier to understand.
 
 =SML
 val Ûpc_h_post_typeÝ			: PREC_CONTEXT = PcNormal(60, 0, false);
-val Ûpc_h_apply_firstÝ			: PREC_CONTEXT = PcNormal(50, 0, false);
+val Ûpc_h_apply_firstÝ		: PREC_CONTEXT = PcNormal(50, 0, false);
 val Ûpc_h_apply_laterÝ		: PREC_CONTEXT = PcNormal(50, 0, true);
 fun Ûpc_h_operÝ(op_prec, assoc)	: PREC_CONTEXT = PcNormal(40, op_prec, assoc);
-val Ûpc_h_if_let_bindÝ			: PREC_CONTEXT = PcNormal(30, 0, false);
+val Ûpc_h_if_let_bindÝ		: PREC_CONTEXT = PcNormal(30, 0, false);
 val Ûpc_h_if_let_bind_lastÝ		: PREC_CONTEXT = PcNormal(20, 0, false);
 val Ûpc_h_typingÝ			: PREC_CONTEXT = PcNormal(10, 0, false);
 =TEX
@@ -331,6 +332,70 @@ handle Fail _ => false
 );
 =TEX
 
+%********************************************************************
+
+\subsection{Printing Lists of Objects}
+
+We commonly need to print a list of objects but want to truncate
+the printing at the print depth.
+
+Function $pr_list_with_env$ does much like a $map$ over the list, but
+the $env$ changes as the list is traversed.  Function
+$pr_list_revfold_with_env$ is much like a $revfold$ over the list, but
+in this case both the $env$ and the supplied value (of type ``~$'b$~'')
+change.
+
+=IGN
+pr_list_with_env : ('a * PP_ENV -> unit) -> 'a list -> PP_ENV -> unit
+pr_list_revfold_with_env : ('a * 'b * PP_ENV -> 'b) -> 'a list -> 'b -> PP_ENV -> 'b
+=TEX
+
+=SML
+fun Ûpr_list_revfold_with_envÝ
+			(what:('a * 'b * PP_ENV) -> 'b)
+			(nil:'a list)
+			(b : 'b)
+			(env:PP_ENV)
+		:	'b =
+	b
+| pr_list_revfold_with_env what (h::t) (b : 'b) env = (
+let
+	val PpEnv{pe_depth = depth, pe_addstring = addstring, pe_space = space, ...} = env;
+in
+	if case depth of Nil => true | Value d => d >= 0
+	then
+		pr_list_revfold_with_env what t (what(h, b, env)) (decrement_depth env)
+	else(
+		addstring "...";
+		space(1,0);
+		b
+	)
+end
+);
+=TEX
+
+=SML
+fun Ûpr_list_with_envÝ
+			(what:('a * PP_ENV) -> unit)
+			(nil:'a list)
+			(env:PP_ENV)
+		:	unit = ()
+| pr_list_with_env what (h::t) env = (
+let
+	val PpEnv{pe_depth = depth, pe_addstring = addstring, pe_space = space, ...} = env;
+in
+	if case depth of Nil => true | Value d => d >= 0
+	then(
+		what(h, env);
+		pr_list_with_env what t (decrement_depth env)
+	) else(
+		addstring "...";
+		space(1,0)
+	)
+end
+);
+=TEX
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \newpage
 \section{PRINTING TYPES}
@@ -340,9 +405,13 @@ handle Fail _ => false
 fun Ûmain_type_ppÝ (cur_env:PP_ENV) (ty:TYPE) : unit = (
 let
 	val PpEnv{pe_prec = prec, pe_addstring = addstring, pe_beginb = beginb,
+		pe_depth = cur_depth,
 		pe_endb = endb, pe_space = space, ...} = cur_env;
 
-	fun ty_p prec t = main_type_pp (set_prec prec cur_env) t;
+	val new_env = decrement_depth cur_env;
+
+	fun ty_p prec t = main_type_pp (set_prec prec new_env) t;
+
 	fun name_p n = (
 		if is_simple_name n
 		then
@@ -354,15 +423,19 @@ let
 		)
 	);
 
+	fun print_list_aux(ty, env) = (
+		addstring ",";
+		space(1,0);
+		main_type_pp env ty
+	);
+
 	fun print_list name t rest = (
 		beginb(0, false);
 		addstring "("; (*=)=*)
 		beginb(2, true);
 		ty_p PcLowest t;
-		map	(fn tx => (	addstring ",";
-					space(1,0);
-					ty_p PcLowest tx))
-			rest;
+		pr_list_with_env print_list_aux rest
+			(set_prec PcLowest (decrement_depth new_env));
 		endb();
 		(*=(=*) addstring ")";
 		space(1,0);
@@ -370,6 +443,8 @@ let
 		endb()
 	);
 in
+	if case cur_depth of Nil => true | Value d => d >= 0
+	then
 	if is_vartype ty
 	then
 		name_p(dest_vartype ty)
@@ -411,6 +486,7 @@ in
 			else print_list name t1 [t2]
 			)
 		| (name, t1 :: rest) => print_list name t1 rest
+	else (addstring "..."; space(1, 0))
 end
 );
 =TEX
@@ -425,7 +501,8 @@ end
 \subsection{Variables and Constants}
 
 =SML
-fun Ûpr_mk_var_or_constÝ (cur_env:PP_ENV) (constr:string) (name:string) (ty:TYPE) : unit = (
+fun Ûpr_mk_var_or_constÝ (cur_env:PP_ENV) (constr:string)
+			(name:string) (ty:TYPE) : unit = (
 let
 	val PpEnv{pe_addstring=addstring, ...} = cur_env;
 in
@@ -496,6 +573,7 @@ print out $mk_const$ terms where the constant is not declared, or
 is an alias for a not declared constant, in a manner that allows
 it to be recognised as a $mk_const$ term.
 
+{\ftlinepenalty=9999
 =SML
 fun ÛHOL_do_constÝ (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE) : unit = (
 let
@@ -546,6 +624,7 @@ in
 end
 );
 =TEX
+}
 
 %********************************************************************
 \newpage
@@ -591,20 +670,20 @@ let
 		|	_  =>			main_term_pp head_env tm
 	);
 
-	fun print_arg tm = (
+	fun print_args(tm, env) = (
 		endb();
 		space(1, 0);
 		beginb(2, true);
-		main_term_pp arg_env tm
+		main_term_pp env tm
 	);
 in
 	case args
 	of nil =>	print_head head_fn
 	| _ => 		(	if br then addstring "(" (*=)=*) else ();
-				beginb(2, false);
+				beginb(2, true);
 				beginb(0, true);
 				print_head head_fn;
-				map print_arg args;
+				pr_list_with_env print_args args arg_env;
 				endb();
 				endb();
 				if br then (*=(=*) addstring ")" else ()
@@ -674,35 +753,36 @@ end
 The caller of $display_binder$ is responsible for ensuring that the
 name may be printed as a binder.
 
+{\ftlinepenalty=9999
 =SML
-fun Ûdisplay_binderÝ (cur_env:PP_ENV) (name:string) (decls:TERM list) (body:TERM) : unit = (
+fun Ûdisplay_binderÝ (cur_env:PP_ENV) (name:string) (decls:TERM list)
+			(body:TERM) : unit = (
 let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
-	fun tm_p p t : unit = (
+	fun vs_printer(vs:TERM, env:PP_ENV) : unit = (
+		space(1, 0);
 		beginb(2, true);
-		main_term_pp (set_prec p cur_env) t;
+		main_term_pp (set_prec PcLowest env) vs;
 		endb()
 	);
 
-	fun vs_printer vs : unit = (space(1, 0); tm_p PcLowest vs);
-
-	fun pr_decls (decs, ty) : unit = (
+	fun pr_decls (decs:TERM list, ty:TYPE) (env:PP_ENV) : unit = (
 		beginb(0, false);
-		map vs_printer decs;
+		pr_list_with_env vs_printer decs env;
 		space(1, 0);
 		addstring ": ";
-		main_type_pp cur_env ty;
+		main_type_pp env ty;
 		endb()
 	);
 
-	fun pr_semi_decls dec = (
+	fun pr_semi_decls (decs_ty:TERM list * TYPE, env:PP_ENV) : unit = (
 		addstring ";";
 		space(0, 0);
 		endb();
 		beginb(2, true);
-		pr_decls dec
+		pr_decls decs_ty env
 	);
 
 	val br = prec gt_prec pc_h_if_let_bind;
@@ -715,25 +795,32 @@ in
 	then	(	beginb(2, true);
 			case group_declarations decls
 			of nil => ()
-			| h::nil => pr_decls h
-			| h::t => (pr_decls h; map pr_semi_decls t; ())
+			| h::nil => pr_decls h cur_env
+			| h::t => (
+				pr_decls h cur_env;
+				pr_list_with_env pr_semi_decls t
+					(decrement_depth cur_env);
+				())
 			;
 			()
 		)
 	else	(
 		beginb(2, false);
-		map vs_printer decls;
+		pr_list_with_env vs_printer decls cur_env;
 		())
 	;
 	endb();
-	space(0, 2);
+	space(0, 0);
 	addstring "· ";
+	beginb(2, true);
 	main_term_pp (set_prec pc_h_if_let_bind_last cur_env) body;
+	endb();
 	if br then (*=(=*) addstring ")" else ();
 	endb()
 end
 );
 =TEX
+}
 
 =SML
 fun ÛHOL_do_ÌÝ (cur_env:PP_ENV) (tm1:TERM) (tm2:TERM) : unit = (
@@ -753,6 +840,28 @@ end
 
 \subsection{Conditionals}
 
+Treat a cascaded set of if clauses as a unit, this involves recursively
+breaking open the else clause until finding something that is not an
+if expression.  The result is a list of tuples.  The first element
+if the label (i.e., the part of the if clause), the second is the
+condition which is absent for the final else clause and the third
+is the consequence.
+
+=SML
+fun Ûopen_up_ifÝ (prev:(string * TERM OPT * TERM) list) (tm:TERM)
+		: (string * TERM OPT * TERM) list = (
+	if is_if tm
+	then
+		let
+			val (cond, conseq, alt) = dest_if tm;
+		in
+			open_up_if (("else if", Value cond, conseq) :: prev) alt
+		end
+	else
+		("else", Nil, tm) :: prev
+);
+=TEX
+
 =SML
 fun ÛHOL_conditionalÝ (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 		(args:TERM list) : PFUN_ANS = (
@@ -764,20 +873,31 @@ fun ÛHOL_conditionalÝ (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 
 			val br = prec gt_prec pc_h_if_let_bind;
 
-			fun aux str inner_prec tm = (
-				beginb(0, false);
+			fun aux str env tm = (
+				beginb(2, false);
 				addstring str;
 				space(1, 0);
-				beginb(2, true);
-				main_term_pp (set_prec inner_prec cur_env) tm;
+				beginb(0, true);
+				main_term_pp env tm;
 				endb();
 				endb()
 			);
+
+			fun aux2 ((label, Value if_bit, then_bit), env) = (
+				aux label	(set_prec PcLowest env) if_bit;	space(1, 0);
+				aux "then"	(set_prec PcLowest env) then_bit;	space(1, 0)
+			)
+			| aux2 ((label, Nil, else_bit), env) = (
+				aux "else"	(set_prec pc_h_if_let_bind_last env) else_bit
+			);
+
+			val if_clause =
+				open_up_if
+					[("if", Value cond, then_part)]
+					else_part;
 		in
 			if br then (addstring "(" (*=)=*); beginb(2, true)) else beginb(0, true);
-			aux "if"	PcLowest		cond;		space(1, 0);
-			aux "then"	PcLowest		then_part;	space(1, 0);
-			aux "else"	pc_h_if_let_bind_last	else_part;
+			pr_list_with_env aux2 (rev if_clause) cur_env;
 			endb();
 			if br then (*=(=*) addstring ")" else ();
 			PfOk
@@ -827,23 +947,25 @@ let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
-	fun tm_p t = main_term_pp (set_prec PcLowest cur_env) t;
+	val new_env = set_prec PcLowest cur_env;
 
-	fun later_elem t = (
+	fun later_elem(t, env) = (
 		addstring ";";
 		endb();
 		space(1, 2);
 		beginb(2, true);
-		tm_p t
+		main_term_pp env t
 	);
 in(
 	beginb(0, false);
 	addstring opener;
 	beginb(2, true);
 	case body
-	of one_tm::nil =>	tm_p one_tm
-	| hd_tm::rest => (	tm_p hd_tm;
-				map later_elem rest; ())
+	of one_tm::nil =>	main_term_pp new_env one_tm
+	| hd_tm::rest => (	main_term_pp new_env hd_tm;
+				pr_list_with_env later_elem rest
+					(decrement_depth new_env);
+				())
 	| nil => ();
 	endb();
 	addstring closer;
@@ -895,19 +1017,19 @@ let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
-	fun tm_p t = main_term_pp (set_prec PcLowest cur_env) t;
+	val new_env = set_prec PcLowest cur_env;
 
 	val (decs, pred) = dest_set_comp(mk_app(orig, a1));
 in(
 	beginb(0, false);
 	addstring "{";
 	beginb(2, true);
-	tm_p decs;
+	main_term_pp new_env decs;
 	endb();
 	space(0, 0);
 	addstring"|";
 	beginb(2, true);
-	tm_p pred;
+	main_term_pp new_env pred;
 	endb();
 	addstring "}";
 	endb();
@@ -1026,38 +1148,42 @@ end
 =TEX
 
 =SML
-fun Ûprint_list_of_letsÝ (cur_env:PP_ENV) (let_clauses : TERM list list, tm : TERM) : unit = (
+fun Ûprint_list_of_letsÝ (cur_env:PP_ENV)
+			(let_clauses : TERM list list, tm : TERM)
+			: unit = (
 let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
 	val br = prec gt_prec (PcLowest);
 
-	fun tm_p p t = (
+	fun aux(definer, (add_space, prefix), env) = (
+		if add_space then space(1,0) else ();
 		beginb(2, true);
-		main_term_pp (set_prec p cur_env) t;
-		endb()
-	);
-
-	fun aux(definer, prefix) = (
-		beginb(2, false);
 		addstring prefix;
-		tm_p PcLowest definer;
+		main_term_pp env definer;
 		endb();
-		space(1,0);
-		"and "
+		(true, "and ")
 	);
 
-	fun print_definer (let_clause : TERM list) : unit = (
-		revfold aux let_clause "let ";
-		beginb(2, true);
+	fun print_definer (let_clause : TERM list, env) : unit = (
+		beginb(2, false);
+		beginb(0, true);
+		pr_list_revfold_with_env aux let_clause (false, "let ") env;
+		endb();
+		space(1, ~2);
 		addstring "in "
 	);
 in(
-	if br then (addstring "(" (*=)=*); beginb(0, true)) else beginb(0, true);
+	beginb(0, true);
+	if br then addstring "(" (*=)=*) else ();
 
-	map print_definer let_clauses;
-	tm_p pc_h_if_let_bind_last tm;
+	pr_list_with_env print_definer let_clauses (set_prec PcLowest cur_env);
+
+	beginb(0, true);
+	main_term_pp (set_prec pc_h_if_let_bind_last cur_env) tm;
+	endb();
+
 	map (fn _ => endb()) let_clauses;
 
 	if br then (*=(=*) addstring ")" else ();
@@ -1115,29 +1241,29 @@ let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
-	fun tm_p p t = (
-		beginb(2, false);
-		main_term_pp (set_prec p cur_env) t;
+	fun tm_p env b t = (
+		beginb(2, true);
+		main_term_pp (set_prec(pc_h_oper(comma_prec, b)) env) t;
 		endb()
 	);
 
-	val pc_comma = pc_h_oper(comma_prec, true);
-
-	fun pr_el_comma t = (
-		tm_p pc_comma t;
+	fun pr_comma_el ((b, t), env) = (
 		addstring ",";
-		space(1,0)
+		space(1,0);
+		tm_p env b t
 	);
 
 	val br = prec gt_prec (PcVeryLow(10, 0, true));
 
 	val (head_val, last) = strip_pair a2;
+
+	val tail_tms = map (fn x => (true, x)) head_val @ [(false, last)];
 in(
 	beginb(2, false);
 	if br then addstring "(" (*=)=*) else ();
 
-	map pr_el_comma (a1 :: head_val);
-	tm_p (pc_h_oper(comma_prec, false)) last;
+	tm_p cur_env true a1;
+	pr_list_with_env pr_comma_el tail_tms (decrement_depth cur_env);
 
 	if br then (*=(=*) addstring ")" else ();
 	endb();
