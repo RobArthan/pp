@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2004/11/19 15:58:06 $ $Revision: 2.40 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2004/11/22 14:17:12 $ $Revision: 2.41 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -80,7 +80,6 @@ XmString format_msg(char *msg, NAT line_len)
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * help_dialog: put up an information window without grabbing control
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void help_cb(CALLBACK_ARGS);
 void help_dialog(Widget w, char *str)
 {
 	Widget form, widget;
@@ -96,7 +95,7 @@ void help_dialog(Widget w, char *str)
 #ifdef EDITRES
 		add_edit_res_handler(dialog);
 #endif
-		common_dialog_setup(dialog, help_cb, dialog);
+		common_dialog_setup(dialog, popdown_cb, dialog);
 		pane = XtVaCreateWidget("pane", xmPanedWindowWidgetClass, dialog,
 			XmNsashWidth,  1, /* PanedWindow won't let us set these to 0! */
 			XmNsashHeight, 1, /* Make small so user doesn't try to resize */
@@ -126,7 +125,7 @@ void help_dialog(Widget w, char *str)
 			XmNshowAsDefault,        True,
 			XmNdefaultButtonShadowThickness, 1,
 			NULL);
-		XtAddCallback(widget, XmNactivateCallback, help_cb, dialog);
+		XtAddCallback(widget, XmNactivateCallback, popdown_cb, dialog);
 		XtManageChild(form);
 		XtVaGetValues(widget, XmNheight, &h, NULL);
 		XtVaSetValues(form, XmNpaneMaximum, h, XmNpaneMinimum, h, NULL);
@@ -138,15 +137,6 @@ void help_dialog(Widget w, char *str)
 	XtManageChild(pane);
 	XtPopup(dialog, XtGrabNone);
 }
-
-static void help_cb(
-		Widget		widget,
-		XtPointer	shell,
-		XtPointer	cbs)
-{
-	XtPopdown((Widget)shell);
-}
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * poll: poll for and process events; used for modal dialogs
  * in functions that are expected to return a result. We arrange

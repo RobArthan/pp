@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.26 2004/06/30 16:42:46 rda Exp rda $
+ * $Id: options.c,v 2.27 2004/11/23 16:06:26 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -103,9 +103,7 @@ static char file_type_mirror; /* mirrors value of the file type menu  */
  */
 static void	apply_cb(CALLBACK_ARGS),
 		reset_cb(CALLBACK_ARGS),
-		dismiss_cb(CALLBACK_ARGS),
 		add_new_line_cb(CALLBACK_ARGS),
-		help_cb(CALLBACK_ARGS),
 		file_type_cb(CALLBACK_ARGS);
 
 void init_options(Widget owner_w)
@@ -127,7 +125,7 @@ void init_options(Widget owner_w)
 #ifdef EDITRES
 	add_edit_res_handler(shell);
 #endif
-	common_dialog_setup(shell, dismiss_cb, 0);
+	common_dialog_setup(shell, popdown_cb, shell);
 	shell_row_col = XtVaCreateWidget("shell-row-col",
 		xmRowColumnWidgetClass, 	shell,
 		NULL);
@@ -367,10 +365,10 @@ if(!global_options.edit_only) {
 			reset_cb, (XtPointer)&orig_global_options);
 
 	XtAddCallback(dismiss_btn, XmNactivateCallback,
-			dismiss_cb, (XtPointer)NULL);
+			popdown_cb, shell);
 
 	XtAddCallback(help_btn, XmNactivateCallback,
-			help_cb, (XtPointer)NULL);
+			help_cb, (XtPointer)Help_Options_Tool);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set up initial values of global_options which have not
  * been done already in xpp.c; these are the ones which the user
@@ -616,18 +614,6 @@ static void reset_cb(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * dismiss callback.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void dismiss_cb(
-	Widget		u1,
-	XtPointer	u2,
-	XtPointer	u3)
-{
-	XtPopdown(shell);
-}
-
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
  * add-new-line radio buttons callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void add_new_line_cb(
@@ -637,18 +623,6 @@ static void add_new_line_cb(
 {
 	add_new_line_mode_mirror = (int) cbd;
 }
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * help callback.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void help_cb(
-	Widget		w,
-	XtPointer	cbdata,
-	XtPointer	cbs)
-{
-	help_dialog(root, Help_Options_Tool);
-}
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * File type callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */

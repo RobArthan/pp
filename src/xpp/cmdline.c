@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.27 2004/11/20 12:53:17 rda Exp rda $
+ * $Id: cmdline.c,v 2.28 2004/11/23 15:52:51 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -41,9 +41,7 @@ static void
 	cmd_modify_cb(CALLBACK_ARGS),
 	add_cb(CALLBACK_ARGS),
 	delete_cb(CALLBACK_ARGS),
-	dismiss_cb(CALLBACK_ARGS),
 	focus_cb(CALLBACK_ARGS),
-	help_cb(CALLBACK_ARGS),
 	cmd_set_cb(CALLBACK_ARGS),
 	empty_cmd_cb(CALLBACK_ARGS);
 
@@ -137,6 +135,7 @@ void add_command_line_tool(Widget text_w)
 	if((cmd_line_data.shell_w) != NULL) {
 		XtManageChild(cmd_line_data.manager_w);
 		XtPopup(cmd_line_data.shell_w, XtGrabNone);
+		XmProcessTraversal(cmd_line_data.cmd_w, XmTRAVERSE_CURRENT);
 		XmTextSetSelection(cmd_line_data.cmd_w,
 			0, XmTextGetLastPosition(cmd_line_data.cmd_w),
 			CurrentTime);
@@ -151,7 +150,7 @@ void add_command_line_tool(Widget text_w)
 #ifdef EDITRES
 	add_edit_res_handler(shell);
 #endif
-	common_dialog_setup(shell, dismiss_cb, (XtPointer)(&cmd_line_data));
+	common_dialog_setup(shell, popdown_cb, shell);
 	paned = XtVaCreateWidget("command-paned",
 		xmPanedWindowWidgetClass, 	shell,
 		NULL);
@@ -284,10 +283,10 @@ void add_command_line_tool(Widget text_w)
 		delete_cb, (XtPointer)(&cmd_line_data));
 
 	XtAddCallback(dismiss_btn, XmNactivateCallback,
-		dismiss_cb, (XtPointer)(&cmd_line_data));
+		popdown_cb, shell);
 
 	XtAddCallback(help_btn, XmNactivateCallback,
-		help_cb, (XtPointer)(&cmd_line_data));
+		help_cb, (XtPointer)Help_Command_Line_Tool);
 
 	XtAddCallback(list_w, XmNdefaultActionCallback,
 		list_select_cb, (XtPointer)(&cmd_line_data));
@@ -589,32 +588,6 @@ static void delete_cb(
 	}
 }
 
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * dismiss callback.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void dismiss_cb(
-	Widget		w,
-	XtPointer	cbd,
-	XtPointer	cbs)
-{
-	CmdLineData *cbdata = cbd;
-	XmProcessTraversal(cbdata->cmd_w, XmTRAVERSE_CURRENT);
-	XtPopdown(cbdata->shell_w);
-}
-
-
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * help callback.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void help_cb(
-	Widget		w,
-	XtPointer	cbd,
-	XtPointer	cbs)
-{
-	CmdLineData *cbdata = cbd;
-	help_dialog(root, Help_Command_Line_Tool);
-}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * command text setting callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */

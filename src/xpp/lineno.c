@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: lineno.c,v 1.7 2004/11/20 12:53:17 rda Exp rda $ 
+ * $Id: lineno.c,v 1.8 2004/11/23 15:52:51 rda Exp rda $ 
  *
  * lineno.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -76,9 +76,7 @@ static LineNoData line_no_data;
  * Forward declarations for callbacks etc.
  */
 static void	line_no_set_cb(CALLBACK_ARGS),
-		goto_line_no_cb(CALLBACK_ARGS),
-		dismiss_cb(CALLBACK_ARGS),
-		help_cb(CALLBACK_ARGS);
+		goto_line_no_cb(CALLBACK_ARGS);
 
 static void line_no_set(LineNoData*);
 
@@ -154,7 +152,7 @@ Boolean add_line_no_tool(Widget text_w)
 #ifdef EDITRES
 	add_edit_res_handler(shell);
 #endif
-	common_dialog_setup(shell, dismiss_cb,  (XtPointer)(&line_no_data));
+	common_dialog_setup(shell, popdown_cb, shell);
 
 	paned = XtVaCreateWidget("paned",
 		xmPanedWindowWidgetClass, 		shell,
@@ -265,10 +263,10 @@ Boolean add_line_no_tool(Widget text_w)
 		goto_line_no_cb, (XtPointer)(&line_no_data));
 
 	XtAddCallback(dismiss_btn, XmNactivateCallback,
-		dismiss_cb, (XtPointer)(&line_no_data));
+		popdown_cb, shell);
 
 	XtAddCallback(help_btn, XmNactivateCallback,
-		help_cb, (XtPointer)NULL);
+		help_cb, (XtPointer)Help_Line_Number_Tool);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Set up popup edit menus.
@@ -340,31 +338,6 @@ Boolean add_line_no_tool(Widget text_w)
 
 	return True;
 }
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * dismiss callback.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void dismiss_cb(
-	Widget		w,
-	XtPointer	cbd,
-	XtPointer	cbs)
-{
-	LineNoData *cbdata = cbd;
-	XtPopdown(cbdata->shell_w);
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * help callback.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void help_cb(
-	Widget		w,
-	XtPointer	cbd,
-	XtPointer	cbs)
-{
-	help_dialog(root, Help_Line_Number_Tool);
-}
-
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * line number setting callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */

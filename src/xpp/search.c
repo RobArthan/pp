@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.59 2004/11/23 15:52:51 rda Exp rda $ 
+ * $Id: search.c,v 2.60 2004/11/30 15:38:26 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -124,9 +124,7 @@ static void	toggle_button_cb(CALLBACK_ARGS),
 		replace_all_cb(CALLBACK_ARGS),
 		replace_set_cb(CALLBACK_ARGS),
 		replace_search_backwards_cb(CALLBACK_ARGS),
-		replace_search_forwards_cb(CALLBACK_ARGS),
-		dismiss_cb(CALLBACK_ARGS),
-		help_cb(CALLBACK_ARGS);
+		replace_search_forwards_cb(CALLBACK_ARGS);
 
 static void line_no_set(SearchData*);
 
@@ -243,7 +241,7 @@ Boolean add_search_tool(Widget text_w)
 #ifdef EDITRES
 	add_edit_res_handler(shell);
 #endif
-	common_dialog_setup(shell, dismiss_cb,  (XtPointer)(&search_data));
+	common_dialog_setup(shell, popdown_cb, shell);
 	paned = XtVaCreateWidget("search-replace-paned",
 		xmPanedWindowWidgetClass, 	shell,
 		NULL);
@@ -498,10 +496,10 @@ Boolean add_search_tool(Widget text_w)
 		replace_search_forwards_cb, (XtPointer)(&search_data));
 
 	XtAddCallback(dismiss_btn, XmNactivateCallback,
-		dismiss_cb, (XtPointer)(&search_data));
+		popdown_cb, shell);
 
 	XtAddCallback(help_btn, XmNactivateCallback,
-		help_cb, (XtPointer)NULL);
+		help_cb, (XtPointer)Help_Search_and_Replace_Tool);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set up initial values of search-replace options which the user
@@ -585,7 +583,6 @@ Boolean add_search_tool(Widget text_w)
 
 	return True;
 }
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Toggle button callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -597,30 +594,6 @@ static void toggle_button_cb(
 	Boolean *flag = cbd;
 	*flag = XmToggleButtonGetState(w);
 }
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * dismiss callback.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void dismiss_cb(
-	Widget		w,
-	XtPointer	cbd,
-	XtPointer	cbs)
-{
-	SearchData *cbdata = cbd;
-	XtPopdown(cbdata->shell_w);
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * help callback.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void help_cb(
-	Widget		w,
-	XtPointer	cbd,
-	XtPointer	cbs)
-{
-	help_dialog(root, Help_Search_and_Replace_Tool);
-}
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * search forwards callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
