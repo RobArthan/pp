@@ -93,14 +93,18 @@ lasp -s -u imp025.OKwords imp025.doc > zz1
 
 \item[10 July 1991, issue 1.4 ] First issue of the real pretty printer.
 
-\item[\FormatDate{$Date$%
-}, issue \SCCSissue~]
+\item[\FormatDate{91/07/30}, issue 1.7 ]
 	Rename $format_theorem$ to $format_thm$. {}
 	Omit the language start and finish symbols around terms in
 	theorems and also around terms and types shown by the
 	``$format_\ldots$'' functions.
 	Reduce indentation of theorems.
 	Do not allow exceptions to pass out of the $show_\ldots$ functions.
+
+\item[\FormatDate{$Date$%
+}, issue \SCCSissue~]
+	More control on including or excluding language start and finish symbols.
+
 \end{description}
 
 %********************************************************************
@@ -126,11 +130,11 @@ in~\cite{DS/FMU/IED/DTD025}.
 
 %--------------------------------------------------------------------
 
-%\subsection{Purpose and Background}
+%\subsubsection{Purpose and Background}
 
 %--------------------------------------------------------------------
 
-\subsection{Dependencies}
+\subsubsection{Dependencies}
 
 This is last of the four structures that together form the HOL pretty
 printer.  This document depends upon the other three structures:
@@ -141,17 +145,17 @@ HOL pretty printer functions~\cite{DS/FMU/IED/IMP032}.
 
 %--------------------------------------------------------------------
 
-%\subsection{Interface}
-%\subsection{Algorithms}
-%\subsection{Possible Enhancements}
+%\subsubsection{Interface}
+%\subsubsection{Algorithms}
+%\subsubsection{Possible Enhancements}
 
 %--------------------------------------------------------------------
 
-%\subsection{Deficiencies}
+%\subsubsection{Deficiencies}
 
 %--------------------------------------------------------------------
 
-%\subsection{Terminology}
+%\subsubsection{Terminology}
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -211,6 +215,20 @@ use.  A simple algorithm is used here: if the outermost construct in
 the term is a constant applied to a list of arguments then the language
 of that constant is chosen, in all other cases ``HOL'' is chosen.
 
+{\hfuzz 1pt
+=SML
+fun âshow_term_iná (lang:string) (add_language:bool) (oppen_funs:OPPEN_FUNS) (tm:TERM) = (
+	let
+		val env = initial_env lang oppen_funs;
+	in
+		if add_language then start_new_language env lang else ();
+		main_term_pp env tm;
+		if add_language then conclude_new_language env lang else ()
+	end
+);
+=TEX
+}
+
 =SML
 fun âshow_termá (add_language:bool) (oppen_funs:OPPEN_FUNS) (tm:TERM) = (
 	let
@@ -218,11 +236,9 @@ fun âshow_termá (add_language:bool) (oppen_funs:OPPEN_FUNS) (tm:TERM) = (
 				of Value name => get_const_language name
 				| Nil => "HOL";
 
-		val env = initial_env lang oppen_funs;
+		val enclose = add_language orelse (get_current_language()) <> lang;
 	in
-		if add_language then start_new_language env lang else ();
-		main_term_pp env tm;
-		if add_language then conclude_new_language env lang else ()
+		show_term_in lang enclose oppen_funs tm
 	end
 );
 =TEX
@@ -235,9 +251,9 @@ Theorems are considered to be a series of terms, each of which is
 printed in isolation but without any language start and end symbols.
 The complexity here comes from getting the correct spacing and
 indentation.  Assumptions and conclusions should be consistently
-spaced, but the turnstyle with the conclusion, all the terms being
-lined up and the turnstyle sticking out to the left.  With no
-assumptions there should be no spaces before the turnstyle (function
+spaced, but the turnstile with the conclusion, all the terms being
+lined up and the turnstile sticking out to the left.  With no
+assumptions there should be no spaces before the turnstile (function
 $pr_assumptions$ achieves this).
 
 =SML
@@ -245,8 +261,12 @@ fun âshow_theoremá(o_funs as (addstring, beginb, space, endb):OPPEN_FUNS) (th : 
 let
 	val (assumptions, conclusion) = dest_thm th;
 
+	val lang =	case get_first_const conclusion
+			of Value name => get_const_language name
+			| Nil => "HOL";
+
 	fun aux t s = (	beginb(2, false);
-			show_term false o_funs t;
+			show_term_in lang false o_funs t;
 			addstring s;
 			endb()
 	);
@@ -262,7 +282,7 @@ in
 	pr_assumptions assumptions ;
 	beginb(2, false);
 	addstring "… ";
-	show_term false o_funs conclusion;
+	show_term_in lang false o_funs conclusion;
 	endb();
 	endb()
 end
@@ -298,9 +318,9 @@ local
 	);
 in
 
-val side_effect = PolyML.âinstall_pp  (interpose (show_term true) "show_term")á;
-val side_effect = PolyML.âinstall_pp  (interpose (show_type true) "show_type")á;
-val side_effect = PolyML.âinstall_pp  (interpose show_theorem "show_theorem")á;
+val side_effect = PolyML.install_pp  (interpose (show_term true) "show_term");
+val side_effect = PolyML.install_pp  (interpose (show_type true) "show_type");
+val side_effect = PolyML.install_pp  (interpose show_theorem "show_theorem");
 
 end;
 =TEX
@@ -310,26 +330,26 @@ end;
 \subsection{Pretty Printing Interface}
 
 =SML
-fun âformat_termá(t : TERM) : string list = (
-	oppen_format get_line_length (show_term false) t
+fun âformat_termá (b : bool) (t : TERM) : string list = (
+	oppen_format get_line_length (show_term b) t
 );
 
-fun âformat_typeá(t : TYPE) : string list = (
-	oppen_format get_line_length (show_type false) t
+fun âformat_typeá (b : bool) (t : TYPE) : string list = (
+	oppen_format get_line_length (show_type b) t
 );
 
-fun âformat_thmá(t : THM) : string list = (
+fun âformat_thmá (t : THM) : string list = (
 	oppen_format get_line_length show_theorem t
 );
 =TEX
 
 =SML
-fun âformat_term1á (l : int) (t : TERM) : string list = (
-	oppen_format (fn () => l) (show_term false) t
+fun âformat_term1á (b : bool) (l : int) (t : TERM) : string list = (
+	oppen_format (fn () => l) (show_term b) t
 );
 
-fun âformat_type1á (l : int) (t : TYPE) : string list = (
-	oppen_format (fn () => l) (show_type false) t
+fun âformat_type1á (b : bool) (l : int) (t : TYPE) : string list = (
+	oppen_format (fn () => l) (show_type b) t
 );
 
 fun âformat_thm1á (l : int) (t : THM) : string list = (
