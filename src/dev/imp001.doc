@@ -8,10 +8,10 @@
 \TPPtitle{Implementation of Standard ML Utilities}  %% Mandatory field
 \def\TPPheadtitle{Implementation of Standard ML Utilities}
 \TPPref{DS/FMU/IED/IMP001}  %% Mandatory field
-\def\SCCSversion{$Revision$%
+\def\SCCSversion{2.16%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date$%
+\TPPdate{\FormatDate{99/03/06%
 }}
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -71,7 +71,7 @@ Changed default of ``profiling'' flag.
 Improving known space hogs: mem, drop and lassoc5.
 \item [Issue 2.13 (6th February 1998)]
 Made implementation of length SML97-compatible.
-\item [Issues 2.14-2.16 (6th March 1999)] Added $Integer$ structure.
+\item [Issues 2.14-2.17 (6th March 1999)] Added $Integer$ structure.
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -1499,40 +1499,54 @@ as decimal literal strings is recommended, since that will avoid the
 conversion overheads in the intended use to support object language
 arithmetic (where natural numbers are represented as constants whose
 names are decimal numeric strings).
+
+In any case, we hide the representation inside a datatype so that
+we can define a pretty-printer for it.
 =NJML
-	type INTEGER = IntInf.int;
+	datatype INTEGER = Integer of IntInf.int;
 =TEX
 For $idiv$ and $imod$ we have to map the basis library exception
 onto the {\Product} one.
 =NJML
-	fun (x : INTEGER) €idiv› (y : INTEGER) = (
-		IntInf.div(x, y)
+	fun (Integer x : INTEGER) €idiv› (Integer y : INTEGER) : INTEGER = (
+		Integer (IntInf.div(x, y))
 		handle Div => fail "idiv" 1201 []
 	);
-	fun (x : INTEGER) €imod› (y : INTEGER) = (
-		IntInf.mod(x, y)
+	fun (Integer x : INTEGER) €imod› (Integer y : INTEGER) : INTEGER = (
+		Integer (IntInf.mod(x, y))
 		handle Div => fail "idiv" 1201 []
 	);
 =TEX
-The remaining arithmetic operators are just renamings of the
+The remaining arithmetic operators are essentially just renamings of the
 basis library ones.
 =NJML
-	val op €@*› : INTEGER * INTEGER -> INTEGER = IntInf.*;
-	val op €@+› : INTEGER * INTEGER -> INTEGER = IntInf.+;
-	val op €@-› : INTEGER * INTEGER -> INTEGER = IntInf.-;
-	val op €@~› : INTEGER -> INTEGER = IntInf.~;
-	val op €iabs› : INTEGER -> INTEGER = IntInf.abs;
-	val op €@<› : INTEGER * INTEGER -> bool = IntInf.<;
-	val op €@>› : INTEGER * INTEGER -> bool = IntInf.>;
-	val op €@<=› : INTEGER * INTEGER -> bool = IntInf.<=;
-	val op €@>=› : INTEGER * INTEGER -> bool = IntInf.>=;
+	fun mk_dyop (f : IntInf.int * IntInf.int -> IntInf.int) :
+		INTEGER * INTEGER -> INTEGER = (
+			fn(Integer x, Integer y) => Integer (f(x, y))
+	);
+	val op €@*› : INTEGER * INTEGER -> INTEGER = mk_dyop IntInf.*;
+	val op €@+› : INTEGER * INTEGER -> INTEGER = mk_dyop IntInf.+;
+	val op €@-› : INTEGER * INTEGER -> INTEGER = mk_dyop IntInf.-;
+	fun mk_monop (f : IntInf.int -> IntInf.int) : INTEGER -> INTEGER = (
+			fn(Integer x) => Integer (f x)
+	);
+	val op €@~› : INTEGER -> INTEGER = mk_monop IntInf.~;
+	val op €iabs› : INTEGER -> INTEGER = mk_monop IntInf.abs;
+	fun mk_dypred (f : IntInf.int * IntInf.int -> bool) :
+		INTEGER * INTEGER -> bool = (
+			fn(Integer x, Integer y) => f(x, y)
+	);
+	val op €@<› : INTEGER * INTEGER -> bool = mk_dypred IntInf.<;
+	val op €@>› : INTEGER * INTEGER -> bool = mk_dypred IntInf.>;
+	val op €@<=› : INTEGER * INTEGER -> bool = mk_dypred IntInf.<=;
+	val op €@>=› : INTEGER * INTEGER -> bool = mk_dypred IntInf.>=;
 =TEX
 The interface to convert from a string requires a bit of glue
 for the result value and error-handling.
 =NJML
 	fun €integer_of_string› (s : string) : INTEGER = (
 		case IntInf.fromString s of
-			SOME x => x
+			SOME x => Integer x
 		|	NONE =>
 				if	s = ""
 				then	fail "integer_of_string" 1202 []
@@ -1543,26 +1557,23 @@ for the result value and error-handling.
 The opposite conversion requires adjustment of the signs to our preferred
 form.
 =NJML
-local
 	val zero = integer_of_string "0";
-in
-	fun €string_of_integer› (x : INTEGER) : string = (
+	fun €string_of_integer› (x as Integer i : INTEGER) : string = (
 		if	x @< zero
-		then	"-" ^ IntInf.toString (@~ x)
-		else	IntInf.toString x
+		then	"-" ^ string_of_integer (@~ x)
+		else	IntInf.toString i
 	);
-end;
 =TEX
 Conversion to ints requires glue for error-handling.
 =NJML
-	fun €int_of_integer› (i : INTEGER) : int = (
-		IntInf.toInt i
+	fun €int_of_integer› (Integer x : INTEGER) : int = (
+		IntInf.toInt x
 		handle Overflow => fail "int_of_integer" 1204 []
 	);
 =TEX
 And again the opposite conversion is just a renaming:
 =NJML
-	val €integer_of_int› : int -> INTEGER = IntInf.fromInt;
+	val €integer_of_int› : int -> INTEGER = Integer o IntInf.fromInt;
 =TEX
 The error path in the following is a bit odd for an empty string: we
 call $fromString$ and let it fail.
@@ -1570,14 +1581,23 @@ call $fromString$ and let it fail.
 	fun €natural_of_string› (s : string) : INTEGER = (
 		if	s = "" orelse is_all_decimal s
 		then	case IntInf.fromString s of
-				SOME x => x
+				SOME x => Integer x
 			|	NONE => fail "natural_of_string" 1013 []
 		else	fail "natural_of_string" 1012 [fn _ => s]
 	);
 =NJML
-	val €zero› : INTEGER = @@"0";
 	val €one› : INTEGER = @@"1";
 end (* of structure Integer *);
+val _ =
+let	fun integer_pp (addstring, beginb, _, endb) (x : Integer.INTEGER) = (
+		beginb(0, false);
+			addstring("@@\"" ^ Integer.string_of_integer x ^ "\"");
+		endb()
+	);
+in
+=INSTALLPP
+		(PPCompiler.make_pp ["Integer", "INTEGER"] integer_pp)
+end;
 open Integer;
 =TEX
 \twocolumn[\section{INDEX}]
