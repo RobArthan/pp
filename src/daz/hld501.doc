@@ -82,8 +82,6 @@ This document gives an overview high level design for the Compliance Notation To
 The document is the top level of a suite of documents which form the response to the product definition \cite{ISS/HAT/DAZ/DEF501}.
 It is intended to conform to all relevant local standards for designs identified in cite{ISS/HAT/DAZ/PLN003}.
 
-\Note{List of references to DRA specs moved to `Background and Requirements'.
-Scope sections should just reflect document hierarchy.}
 
 \subsection{Introduction}
 A Compliance Tool for processing Compliance Notation is required by DRA as part of the contract MAL 1a/0493 \cite{MAL1A/0493}.
@@ -101,7 +99,6 @@ As stated in \cite{ISS/HAT/DAZ/DEF501} a key algorithm to be implemented by the 
 \subsubsection{Dependencies}
 The system whose design is described here is self-contained.
 
-\Note{This section is intended for internal interdependencies in the design.}
 
 \section{SYSTEM DECOMPOSITION}
 The organisation of the Compliance Tool as perceived by the user is shown in \cite[table 1]{ISS/HAT/DAZ/PLN003} and is reproduced in this document for the reader's convenience as Table \ref{SystemStructure}.
@@ -192,7 +189,7 @@ This grouping allows commonality between the functions to be exploited in the de
 The Basic HCI subsystem is to be a simple customisation of the {\Product} X/Motif interface to cater for the new languages to be processed.
 	
 \subsubsection{Custom HCI}
-TBS
+TBS (this aspect of the design work is scheduled for later in the development and this document will then be updated).
 
 \subsection{Compliance Notation Processing}\label{ComplianceNotationProcessing}
 
@@ -235,9 +232,6 @@ The set-up for the Z paragraph alternative for a web clause can be the same as t
 Other sorts of clause are handled by a markup sequence defined for the purpose.
 
 
-\Note{I changed ``delimited with .. symbols'' to ``markup'' because that's a word which is bandied around a lot in Z standards circles and DRA should be comfortable with it.}
-
-
 \item[\bf Lexical Analysis]
 Web clauses are lexically analysed using the Compliance Notation lexical analyser. This provides a lexical representation based on Compliance Notation lexical classes for input into the Compliance Notation parser.
 
@@ -264,7 +258,8 @@ The Z Toolkit Extensions of \cite{DRA/CIS/CSE3/SWI/WP/6} comprise Z definitions 
 
 
 \subsection{Custom Proof Facilities}\label{CustomProofFacilities}
-TBS
+TBS (this aspect of the design work is scheduled for later in the development and this document will then be updated).
+
 \section{DATA STORAGE AND FORMATS}
 \subsection{Input Files}
 Compliance Notation literate scripts are represented as {\Product} literate scripts.
@@ -279,13 +274,113 @@ The Z document is a {\Product} literate script.
 
 The SPARK program is a text file and contains no special markup.
 
-\subsection{Intermediate Representation of Compliance Notation}
+\subsection{Compliance Notation}
 
+\subsubsection{Background: the {\Product} Theory Hierarchy}
+
+In {\Product}, the axioms, definitions and (proved) theorems which represent the results of specification and proof work are organised into a hierarchy of named {\em theories}.
+This theory hierarchy is a directed acyclic graph with root a theory $min$ which introduces the primitive constants of the {\ProductHOL} logic.
+The theory hierarchy determines the scope of the axioms, definitions and theorems in each theory: a definition in a theory $t$, say, is only in scope in theories which can be reached from $t$ in the directed graph.
+The {\ProductZ} support provides a particular theory hierarchy culminating in a theory $z\_library$ which supplies a scope in which all of the Z toolkit is available.
+
+The organisation of a specification within the theory hierarchy is defined by metalanguage commands which name the theories introduced and define their place in the hierarchy.
+The system maintains a notion of {\em current theory}:
+during specification work the current theory is the one in which new definitions and axioms are stored;
+during proof work, the current theory defines the definitions and axioms which are available for reasoning;
+when a new theory is introduced it becomes the current theory and it has one parent which is the previous current theory.
+
+For example, the following sets up a typical lozenge-shaped organisation within the theory hierarchy.
+
+{\small
+=SML
+open_theory"z_library";		(* current theory now z_library *)
+new_theory"A";			(* introduces A; parents(A) = {z_library} *)
+¹Z
+a ¦ [x, y: ú]			(* schema definition stored in A *)
+°
+=SML
+new_theory"B";			(* introduces B; parents(B) = {A}; current theory now B *)
+¹Z
+b ¦ [a; z: ú]			(* schema definition stored in B *)
+°
+=SML
+open_theory"A";		(* current theory becomes A *)
+new_theory"C";			(* introduces C; parents(B) = {A}; current theory now C *)
+¹Z
+c ¦ [a; w: ú]			(* schema definition stored in C *)
+°
+=SML
+new_theory"D";			(* introduces D; parents(D) = {C}; current theory now D *)
+new_parent"B";			(* parents(D) = {B, C} *)
+¹Z
+d ¦ [b; c]			(* schema definition stored in D *)
+°
+}
+In order to facilitate experimentation with the contents of a theory which has children, {\Product} provides a function $duplicate\_theory$ which creates a new theory which is a copy of an existing theory except with no children.
+This feature can also be used to take a checkpoint on the state of a theory under development.
+
+=TEX
+\subsubsection{Representing the Compliance Notation}
 As a Compliance Notation literate script is processed, an intermediate representation of it is built up within {\Product}.
+From time to time at the user's request, this intermediate representation is used to write out the SPARK program or the Z document to a file.
+It is convenient to have the intermediate representation mapped into the {\Product} theory hierarchy so as to reflect the modular structure of the SPARK program.
+The DRA specifications \cite{DRA/CIS/CSE3/SWI/WP/2,DRA/CIS/CSE3/SWI/WP/4} presuppose that the Z documents will be organised into ``modules'' and the use made of these suggests that each module should correspond to a {\Product} theory.
+
+In addition to its logical content, a {\Product} theory provides programmable storage for so-called user data.
+Despite the name, this is intended for use in {\Product} applications for storing application-specific information.
+For example, it is used for information such as operator fixity whose form is specific to a particular object language (such as {\ProductZ}).
+For the Compliance Tool, the user data component of the theory provides a natural  home for the various environments used in generating the Z and SPARK documents.
+
+The mapping of the intermediate representation onto the {\Product} hierarchy is best described in terms of the Compliance Notation language constructs which cause new theories to be introduced.
+Table \ref{IntermediateRepresentation} summarises the mapping.
+The various environments referred to in the table are those defined in \cite{DRA/CIS/CSE3/SWI/WP/4}.
+In order to give a clearer structure to the design a theory is allocated for each Ada compilation unit.
+A theory is also allocated for each literate script, this contains the Z paragraphs in the script together with the VCs and other Z fragments produced by the algorithm of \cite{DRA/CIS/CSE3/SWI/WP/4}.
+In the table, the names of the theories is indicated using, for example, ``{\em package}'' to stand for the name of the package in question.
+``{\em script}'' refers to a name to be associated with the literate script itself.
+
+In table \ref{IntermediateRepresentation}, the phrase ``Z fragments generated'' by a compilation unit is used to refer to VCs and the Z paragraphs corresponding to constant and type declarations.
+These are stored in the theory corresponding to the compilation unit and are copied to the output Z document as appropriate.
+Some economies of space could be made by making more use of $new\_parent$  than is implied by \cite{DRA/CIS/CSE3/SWI/WP/4} (which only asks for import/export features to be used in the implementation of subunits).
+
+\def\Stack#1{\begin{tabular}[t]{@{}l@{}}#1\end{tabular}}
+
+\begin{table}
+\begin{center}
+\begin{tabular}{|l|l|p{3.75in}|}\hline
+Construct & Theory Name & Discussion \\\hline\hline
+\Stack{Literate\\script} & \Stack{\em script} &
+This is the theory containing the Z document for this literate script.
+It also contains the information enabling all the theories produced by the script to be located and processed in the correct order when the SPARK program is extracted.
+\\\hline
+
+\Stack{Package\\declaration} & \Stack{{\em package}{\tt \_\_spec}} &
+This holds the relevant part of the package specification environment.
+It is also used to hold abstract syntax of the package declaration and the Z representation of the package generated when a {\tt with} clause is encountered (see \cite[section 16]{DRA/CIS/CSE3/SWI/WP/4}).
+Following \cite{DRA/CIS/CSE3/SWI/WP/4}, the latter is also copied to the Z document (i.e. into the theory $script$).
+\\\hline
+
+\Stack{Main\\program} & \Stack{\em subprogram} &
+This holds the relevant parts of the dec label and spec label environments for the subprogram as well as the abstract syntax for the subprogram and any Z fragments it generates.
+\\\hline
+
+\Stack{Package\\body} & \Stack{{\em package}{\tt \_\_body}} &
+This holds the relevant parts of the dec label and spec label environments for the package body as well as the abstract syntax for the package body and any Z fragments it generates.
+\\\hline
+
+\Stack{Body\\stub} & \Stack{{\em unit}{\tt \_\_}{\em subunit}{\tt \_\_stub}} &
+This holds the Z representing the point in the Z document where the stub was encountered (see \cite[section 17]{DRA/CIS/CSE3/SWI/WP/4}).
+It also contains the relevant part of the subunit environment.
+When the corresponding subunit is processed this theory is used to hold the abstract syntax for the subunit and any Z fragments it generates.
+\\\hline
+%
+\end{tabular}
+\end{center}
+\caption{Intermediate Representation and Theory Hierarchy}\label{IntermediateRepresentation}
+\end{table}
 
 \section{TEST SPECIFICATION}
-Testing is to be carried out according to the criteria identified
-in \cite{ISS/HAT/DAZ/PLN003}.
+Testing is to be carried out according to the criteria identified in \cite{ISS/HAT/DAZ/PLN003}.
 
 \end{document}
 
