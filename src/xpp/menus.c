@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: menus.c,v 2.2 1998/03/13 17:04:00 rda Rel rda $
+ * $Id: menus.c,v 2.3 2000/06/15 17:10:42 rda Exp rda $
  *
  * menus.c -  creation of menus for the X/Motif ProofPower
  * Interface
@@ -159,3 +159,22 @@ Widget setup_menu(
 	}
 }
 
+void resetup_menu(
+	Widget		menu,
+	int		type,
+	MenuItem	*items)
+{
+	Widget *btns;
+	NAT num_btns;
+	Bool sens;
+	int i;
+
+	XtVaGetValues(menu, XmNchildren, &btns,
+		XmNnumChildren, &num_btns, NULL);
+
+	for(i = 0; i < num_btns; ++i) {
+		XtDestroyWidget(btns[i]);
+	}
+
+	setup_menu_items(menu, type, items);	
+}

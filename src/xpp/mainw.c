@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.6 1999/04/20 13:13:46 xpp Rel rda $
+ * $Id: mainw.c,v 2.7 2000/05/25 08:21:10 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -125,16 +125,21 @@ static Widget
 XtPointer undo_ptr;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Forward declarations of menu item and other callback routines.
+ * Forward declarations of menu item callback and other routines.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void
-	file_menu_cb(),
-	tools_menu_cb(),
-	edit_menu_cb(),
 	cmd_menu_cb(),
+	edit_menu_cb(),
+	file_menu_cb(),
 	help_menu_cb(),
-	script_modify_cb();
+	reopen_cb(),
+	script_modify_cb(),
+	tools_menu_cb();
+
+static void setup_reopen_menu(char *filename);
+static void post_popupeditmenu();
+static Bool execute_command();
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu descriptions:
@@ -152,8 +157,19 @@ static void
 #define FILE_MENU_INCLUDE		5
 #define FILE_MENU_REVERT		6
 #define FILE_MENU_EMPTY_FILE		7
-/* Item 8 is a separator */
-#define FILE_MENU_QUIT			9
+#define FILE_MENU_REOPEN		8
+/* Item 9 is a separator */
+#define FILE_MENU_QUIT			10
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * The items for the pull-right menu attached to Reopen in the
+ * file menu are set up dynamically;
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+#define MAX_REOPEN_MENU_ITEMS		16
+
+static MenuItem reopen_menu_items[MAX_REOPEN_MENU_ITEMS+1] = {
+	NULL
+};
 
 static MenuItem file_menu_items[] = {
     { "Save", &xmPushButtonGadgetClass, 'S', "Ctrl<Key>s", "Ctrl-S",
@@ -171,10 +187,12 @@ static MenuItem file_menu_items[] = {
         file_menu_cb, (XtPointer)FILE_MENU_REVERT, (MenuItem *)NULL, False },
      { "Empty File",  &xmPushButtonGadgetClass, 'E', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_EMPTY_FILE, (MenuItem *)NULL, False },
+     { "Reopen ",  &xmPushButtonGadgetClass, 'e', NULL, NULL,
+        file_menu_cb, (XtPointer)FILE_MENU_REOPEN, reopen_menu_items, False },
    MENU_ITEM_SEPARATOR,
     { "Quit",  &xmPushButtonGadgetClass, 'Q', "Ctrl<Key>q", "Ctrl-Q",
         file_menu_cb, (XtPointer)FILE_MENU_QUIT, (MenuItem *)NULL, False },
-    NULL,
+    NULL
 };
 /*
  * In the following, entries after and including
@@ -406,7 +424,6 @@ static setup_main_window(
 	XmString s1, s2, s3, s4, s5, s6, s7, s8;
 	Atom WM_DELETE_WINDOW;
 	void check_quit_cb();
-	void post_popupeditmenu();
 	Widget *wp;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -449,6 +466,7 @@ static setup_main_window(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	filemenu = setup_menu(
 		menubar, XmMENU_PULLDOWN, "File", 'F', False, file_menu_items);
+	setup_reopen_menu(NULL);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Tools menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -640,7 +658,7 @@ if( !global_options.edit_only ) {
  * MENU PROCESSING
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-void post_popupeditmenu(Widget w, XtPointer x, XButtonPressedEvent *event)
+static void post_popupeditmenu(Widget w, XtPointer x, XButtonPressedEvent *event)
 {
 	if (event->button == 3) {
 		XmMenuPosition(popupeditmenu, event);
@@ -648,9 +666,9 @@ void post_popupeditmenu(Widget w, XtPointer x, XButtonPressedEvent *event)
 	}
 }
 
-void file_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
+static void file_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
 {
-	char *fname;
+	char *fname, *oldfname;
 	char *buf;
 	void check_quit_cb();
 
@@ -669,10 +687,16 @@ void file_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
 		if(fname != NULL) {XtFree(fname);};
 		break;
 	case FILE_MENU_SAVE_AS:
+		oldfname = XmTextGetString(namestring);
 		fname = file_dialog(frame, "Save");
 		if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 		} else if(save_file_as(script, fname)) {
+			if(!oldfname || !*oldfname || *oldfname == '*') {
+				if(oldfname) {XtFree(oldfname);}
+			} else {
+				setup_reopen_menu(oldfname);
+			}
 			flash_file_name(fname);
 			set_icon_name();
 			reinit_changed();
@@ -696,11 +720,17 @@ void file_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
 		};
 		break;
 	case FILE_MENU_OPEN:
+		oldfname = XmTextGetString(namestring);
 		if(!changed || yes_no_dialog(root, changed_message)) {
 			fname = file_dialog(frame, "Open");
 			if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 			} else if(open_file(script, fname)) {
+				if(!oldfname || !*oldfname || *oldfname == '*') {
+					if(oldfname) {XtFree(oldfname);}
+				} else {
+					setup_reopen_menu(oldfname);
+				}
 				flash_file_name(fname);
 				set_icon_name();
 				reinit_changed();
@@ -737,9 +767,15 @@ void file_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
 		};
 		break;
 	case FILE_MENU_EMPTY_FILE:
+		oldfname = XmTextGetString(namestring);
 		if(!changed || yes_no_dialog(root, revert_message)) {
 			XmTextFieldSetString(namestring, no_file_message);
 			XmTextSetString(script, "");
+			if(!oldfname || !*oldfname || *oldfname == '*') {
+				if(oldfname) {XtFree(oldfname);}
+			} else {
+				setup_reopen_menu(oldfname);
+			}
 			flash_file_name(no_file_message);
 			set_icon_name();
 			reinit_changed();
@@ -753,6 +789,79 @@ void file_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
 	default:
 		break;
 	};
+}
+
+/*
+ * setup_reopen_menu is used to set up the pull-right menu
+ * attached to the Reopen item in the file menu.
+ * At start-up it is called with name == NULL to disable the
+ * Reopen item. When the user opens a new file it is called
+ * with name == old file name (if there was an old file name);
+ * it then rebuilds the pull-right menu. Note that the file
+ * names are held as the labels in the array reopen_menu_items.
+ * This array is managed as a "lifo-set", i.e., there are no
+ * duplicates in the array, and when an entry is inserted it
+ * is always at the top. The initial call with name == NULL
+ * initialises this array so that only the labels need changing
+ * later.
+ */
+static void setup_reopen_menu(char *filename)
+{
+	Widget pull_right_menu, *btns;
+	static MenuItem item_template =
+		{ NULL, &xmPushButtonGadgetClass, '\0', NULL, NULL,
+        	  reopen_cb, (XtPointer)0, (MenuItem *)NULL, False };
+	int i;
+	char *t, *p;
+	if(filename == NULL) {
+		set_menu_item_sensitivity(filemenu, FILE_MENU_REOPEN, False);
+		for(i = 0; i < MAX_REOPEN_MENU_ITEMS; i += 1) {
+			reopen_menu_items[i] = item_template;
+			reopen_menu_items[i].callback_data = (XtPointer) i;
+		}
+		return;
+	} /* else ... */
+	XtVaGetValues(filemenu, XmNchildren, &btns, NULL);
+	XtVaGetValues(btns[FILE_MENU_REOPEN],
+		XmNsubMenuId, &pull_right_menu, NULL);
+	for(	p = filename, i = 0;
+		i < MAX_REOPEN_MENU_ITEMS-1 && p != NULL;
+		i += 1 ) {
+		t = reopen_menu_items[i].label;
+		reopen_menu_items[i].label = p;
+		p = t;
+		if(p != NULL && !strcmp(p, filename)) {
+			t = NULL;
+			break;
+		}
+	}
+	if(t != NULL) {
+		 XtFree(t);
+	}
+	resetup_menu(pull_right_menu, XmMENU_PULLDOWN, reopen_menu_items);
+	set_menu_item_sensitivity(filemenu, FILE_MENU_REOPEN, True);
+}
+
+static void reopen_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
+{
+	char *oldfname, *fname;
+	oldfname = XmTextGetString(namestring);
+	fname = reopen_menu_items[i].label;
+printf("fname = %s\n", fname);
+	if(!changed || yes_no_dialog(root, changed_message)) {
+		if(open_file(script, fname)) {
+			if(!oldfname || !*oldfname || *oldfname == '*') {
+				if(oldfname) {XtFree(oldfname);}
+			} else {
+				setup_reopen_menu(oldfname);
+			}
+			flash_file_name(fname);
+			set_icon_name();
+			reinit_changed();
+			set_menu_item_sensitivity(filemenu,
+				FILE_MENU_SAVE, True);
+		};
+	}
 }
 
 static void tools_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
@@ -829,7 +938,6 @@ static void edit_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
 static void cmd_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
 {
 	char *cmd;
-	Bool execute_command();
 	Boolean application_alive();
 	
 	if(!application_alive() && i != CMD_MENU_RESTART) {
@@ -928,7 +1036,7 @@ void check_quit_cb (Widget w, XtPointer cd, XmAnyCallbackStruct cbs)
  * Executing text from the selection in a text window.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-Bool execute_command(void)
+static Bool execute_command(void)
 {
 	char *cmd;
 	NAT len;

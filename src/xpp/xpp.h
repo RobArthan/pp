@@ -131,11 +131,15 @@ typedef struct menu_item {
 #endif
 #ifndef _menus
 	extern	Widget setup_menu(
-		Widget	parent,
-		int	type,
-		char	*menu_title,
-		char	menu_mnemonic,
-		Bool	tear_off_enabled,
+		Widget		parent,
+		int		type,
+		char		*menu_title,
+		char		menu_mnemonic,
+		Bool		tear_off_enabled,
+		MenuItem	*items);
+	extern void resetup_menu(
+		Widget		menu,
+		int		type,
 		MenuItem	*items);
 #endif
 #ifndef _msg
