@@ -93,9 +93,18 @@ typedef struct menu_item {
 		char	*s1,	/* title: ... */
 		char	*s2	/* ...: message */);
 /* Module: files */
+	/* what to do if the file's not there, or has funny permisions */
+	typedef enum {
+		NoAction,
+		QuitNow,
+		NewFile,
+		EmptyFile
+	} FileOpenAction;
 	extern Boolean open_file(
 		Widget	text,
-		char	*name);
+		char	*name,
+		Boolean cmdLine,
+		FileOpenAction *foAction);
 	extern Boolean save_file(
 		Widget	text,
 		char	*name);

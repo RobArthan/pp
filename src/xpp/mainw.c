@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.19 2002/01/21 22:42:47 rda Exp rda $
+ * $Id: mainw.c,v 2.20 2002/01/25 00:34:39 rda Exp phil $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -94,6 +94,7 @@ XtAppContext app; /* global because needed in msg.c */
  * filelabel    filename  label for name of file being edited
  * namestring   filename  displays name of file being edited
  * modified     filename  label indicating that the file has changed
+ * newfile      filename  label indicating that the file is new
  * logo         infobar   ProofPower logo
  * mainpanes    work      paned window for the script and journal window
  * script       mainpanes the script being edited
@@ -116,7 +117,7 @@ Widget  script,
 	journal;	/* global because needed in pterm.c */
 
 static Widget
-	frame, work, infobar, filename, filelabel, modified,
+	frame, work, infobar, filename, filelabel, modified, newfile,
 	namestring, logo,
 	mainpanes,
 	menubar, filemenu, toolsmenu, popupeditmenu, editmenu, cmdmenu, helpmenu;
@@ -427,7 +428,7 @@ static void reinit_changed(Boolean saving)
  * X initialisation:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static void setup_main_window(
+static Boolean setup_main_window(
 	char	*file_name)
 {
 	Arg args[12];
@@ -437,6 +438,8 @@ static void setup_main_window(
 	void check_quit_cb(CALLBACK_ARGS);
 	Widget *wp;
 	XtActionsRec action;
+	FileOpenAction foAction = NoAction;
+	Boolean isNewFile = False;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Main window setup:  (root is created in main in xpp.c)
@@ -482,9 +485,9 @@ static void setup_main_window(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Tools menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-if(global_options.edit_only) {
-	tools_menu_items[TOOLS_MENU_CMD_LINE].label = NULL;
-}
+	if(global_options.edit_only) {
+		tools_menu_items[TOOLS_MENU_CMD_LINE].label = NULL;
+	}
 	toolsmenu = setup_menu(
 		menubar, XmMENU_PULLDOWN, "Tools", 'T', False, tools_menu_items);
 
@@ -499,14 +502,15 @@ if(global_options.edit_only) {
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Command menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-if( !global_options.edit_only ) {
-	cmdmenu = setup_menu(
-		menubar, XmMENU_PULLDOWN, "Command", 'C', False, cmd_menu_items);
-	if(!global_options.interrupt_prompt || !*global_options.interrupt_prompt) {
-		/* no interrupt prompt; disable abandon menu item */
-		set_menu_item_sensitivity(cmdmenu, CMD_MENU_ABANDON, False);
+	if( !global_options.edit_only ) {
+		cmdmenu = setup_menu(
+			menubar, XmMENU_PULLDOWN, "Command", 'C', False, cmd_menu_items);
+		if(!global_options.interrupt_prompt ||
+		   !*global_options.interrupt_prompt) {
+			/* no interrupt prompt; disable abandon menu item */
+			set_menu_item_sensitivity(cmdmenu, CMD_MENU_ABANDON, False);
+		}
 	}
-}
 /*
  * Users have complained that the "Execute Selection" item in the command menu
  * does not work when the caps lock modifier is present; however, Motif
@@ -521,9 +525,9 @@ if( !global_options.edit_only ) {
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Help menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-if(global_options.edit_only) {
-	help_menu_items[HELP_MENU_COMMAND_MENU].label = NULL;
-}
+	if(global_options.edit_only) {
+		help_menu_items[HELP_MENU_COMMAND_MENU].label = NULL;
+	}
 	helpmenu = setup_menu(
 		menubar, XmMENU_PULLDOWN, "Help", 'H', False, help_menu_items);
 
@@ -573,6 +577,13 @@ if(global_options.edit_only) {
 
 	s1 = XmStringCreateSimple("(Modified)");
 	modified = XtVaCreateManagedWidget("filelabel",
+		xmLabelWidgetClass, filename,
+		XmNlabelString,	s1,
+		NULL);
+	XmStringFree(s1);
+
+	s1 = XmStringCreateSimple("(New)");
+	newfile = XtVaCreateManagedWidget("filelabel",
 		xmLabelWidgetClass, filename,
 		XmNlabelString,	s1,
 		NULL);
@@ -637,29 +648,53 @@ if(global_options.edit_only) {
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Journal window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-if( !global_options.edit_only ) {
-	i = 0;
-	XtSetArg(args[i], XmNeditable, 			False); ++i;
-	XtSetArg(args[i], XmNeditMode,	 		XmMULTI_LINE_EDIT); ++i;
-	XtSetArg(args[i], XmNautoShowCursorPosition, 	False); ++i;
-	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
+	if( !global_options.edit_only ) {
+		i = 0;
+		XtSetArg(args[i], XmNeditable, 			False); ++i;
+		XtSetArg(args[i], XmNeditMode,	 		XmMULTI_LINE_EDIT); ++i;
+		XtSetArg(args[i], XmNautoShowCursorPosition, 	False); ++i;
+		XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
 
-	journal = XmCreateScrolledText(mainpanes, "journal", args, i);
-	attach_ro_edit_popup(journal);
-	register_selection_source(journal);
-	copy_font_list(journal, script);
-}
+		journal = XmCreateScrolledText(mainpanes, "journal", args, i);
+		attach_ro_edit_popup(journal);
+		register_selection_source(journal);
+		copy_font_list(journal, script);
+	}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Open file if file_name not NULL
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-	if(open_file(script, file_name)) {
+	if(open_file(script, file_name, True, &foAction)) {
 		XmTextFieldSetString(namestring, file_name);
 		XmTextFieldShowPosition(namestring, strlen(file_name));
 		set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
 	} else {
-		XmTextFieldSetString(namestring, no_file_message);
-		set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, False);
+		switch(foAction) {
+			case EmptyFile:
+				XmTextFieldSetString(namestring, no_file_message);
+				set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, False);
+				break;
+			case NewFile:
+				XmTextFieldSetString(namestring, file_name);
+				XmTextFieldShowPosition(namestring, strlen(file_name));
+				set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
+				isNewFile = True;
+				break;
+			default:	/* QuitNow */
+				return False;
+				break;
+		}
+/*
+		if(!(file_name && *file_name)) { *//* NULL or empty *//*
+			XmTextFieldSetString(namestring, no_file_message);
+			set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, False);
+		} else {
+			XmTextFieldSetString(namestring, file_name);
+			XmTextFieldShowPosition(namestring, strlen(file_name));
+			set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
+			isNewFile = True;
+		}
+*/
 	};
 	reinit_changed(False);
 	set_icon_name();
@@ -679,11 +714,14 @@ if( !global_options.edit_only ) {
 	XtManageChild(filename);
 	XtManageChild(infobar);
 	XtUnmanageChild(modified);
+	if(!isNewFile) {
+		XtUnmanageChild(newfile);
+	}
 	XtManageChild(menubar);
 	XtManageChild(script);
-if( !global_options.edit_only ) {
-	XtManageChild(journal);
-}
+	if( !global_options.edit_only ) {
+		XtManageChild(journal);
+	}
 	XtManageChild(mainpanes);
 	XtManageChild(work);
 	XtManageChild(frame);
@@ -692,6 +730,7 @@ if( !global_options.edit_only ) {
 
 	fix_pane_height(infobar, infobar);
 
+	return True;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -773,7 +812,7 @@ static void file_menu_cb(
 			fname = file_dialog(frame, "Open");
 			if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
-			} else if(open_file(script, fname)) {
+			} else if(open_file(script, fname, False, (FileOpenAction *) NULL)){
 				if(!oldfname ||
 				   !*oldfname ||
 				   *oldfname == '*' ||
@@ -806,7 +845,7 @@ static void file_menu_cb(
 			if(!fname || !*fname || *fname == '*') {
 /* No file name: get an empty file */
 				XmTextSetString(script, "");
-			} else if(!open_file(script, fname)) {
+			} else if(!open_file(script, fname, False,(FileOpenAction *) NULL)){
 /* Can't open it; */
 				XtFree(fname);
 				break;
@@ -903,7 +942,7 @@ static void reopen_cb(
 	oldfname = XmTextGetString(namestring);
 	fname = reopen_menu_items[i].label;
 	if(!changed || yes_no_dialog(root, changed_message)) {
-		if(open_file(script, fname)) {
+		if(open_file(script, fname, False, (FileOpenAction *) NULL)) {
 			if(!oldfname || !*oldfname || *oldfname == '*') {
 				if(oldfname) {XtFree(oldfname);}
 			} else {
@@ -1075,6 +1114,7 @@ static void script_modify_cb(
 {
 	if(!changed) {	/* Only do this when change from !changed to changed */
 		XtManageChild(modified);
+		XtUnmanageChild(newfile);
 	}
 	changed = True;
 }
@@ -1162,11 +1202,12 @@ static void execute_action(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void main_window_go(char *file_name)
 {
-	setup_main_window(file_name);
-if( !global_options.edit_only ) {
-	get_pty();
-}
-	handle_sigs();
-	XtRealizeWidget(root);
-	XtAppMainLoop(app);
+	if (setup_main_window(file_name)) {
+		if( !global_options.edit_only ) {
+			get_pty();
+		}
+		handle_sigs();
+		XtRealizeWidget(root);
+		XtAppMainLoop(app);
+	}
 }

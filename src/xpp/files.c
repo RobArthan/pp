@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.2 2000/08/21 13:49:34 rda Rel rda $
+ * $Id: files.c,v 2.3 2001/11/16 17:18:36 rda Exp phil $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -28,7 +28,8 @@
 
 
 static char *cant_read_message =
-	 "The file \"%s\" cannot be opened for reading";
+	 "The file \"%s\" cannot be opened for reading: "
+     "edit a new buffer or quit?";
 
 static char *cant_write_message =
 	 "The file \"%s\" cannot be opened for writing";
@@ -53,6 +54,9 @@ static char *cant_open_backup_message =
 
 static char *cant_stat_message =
 	 "The file \"%s\" does not seem to exist";
+
+static char *cant_stat_message2 =
+	 "The file \"%s\" does not seem to exist: edit a new empty buffer or quit?";
 
 static char *contains_nulls_message =
 	" The file \"%s\" contains binary data and cannot be edited";
@@ -104,16 +108,39 @@ static void file_error_dialog(
 	char	*fmt,
 	char	*fname)
 {
-	char	*msg;
+	char *msg;
+	/* Not - 2 because need room for the null-padding */
 	if((msg = XtMalloc(strlen(fmt) + strlen(fname) - 1)) == NULL) {
-/* Not - 2 because need room for the null-padding */
 		ok_dialog(w, no_message_space_message);
 		return;
-	};
+	}
 	sprintf(msg, fmt, fname);
 	ok_dialog(w, msg);
 	XtFree(msg);
 }
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * file_quit_new_dialog: quit/new confirmation for the file operations
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static Boolean file_quit_new_dialog(
+	Widget	w,
+	char	*fmt,
+	char	*fname)
+{
+	char *msg;
+	Boolean reply;
+	/* Not - 2 because need room for the null-padding */
+	if((msg = XtMalloc(strlen(fmt) + strlen(fname) - 1)) == NULL) {
+		ok_dialog(w, no_message_space_message);
+		return False;
+	}
+	sprintf(msg, fmt, fname);
+	reply = quit_new_dialog(w, msg);
+	XtFree(msg);
+	return reply;
+}
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * file_yes_no_dialog: yes/no confirmation for the file operations
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -122,13 +149,13 @@ static Boolean file_yes_no_dialog(
 	char	*fmt,
 	char	*fname)
 {
-	char	*msg;
+	char *msg;
 	Boolean reply;
+	/* Not - 2 because need room for the null-padding */
 	if((msg = XtMalloc(strlen(fmt) + strlen(fname) - 1)) == NULL) {
-/* Not - 2 because need room for the null-padding */
 		ok_dialog(w, no_message_space_message);
 		return False;
-	};
+	}
 	sprintf(msg, fmt, fname);
 	reply = yes_no_dialog(w, msg);
 	XtFree(msg);
@@ -152,7 +179,9 @@ static Boolean file_yes_no_dialog(
 
 static char *get_file_contents(
 	Widget	w,
-	char	*name)
+	char	*name,
+	Boolean cmdLine,
+	FileOpenAction *foAction)
 {
 	struct stat status;
 	NAT siz;
@@ -160,8 +189,23 @@ static char *get_file_contents(
 	char *buf;
 
 	if(stat(name, &status) != 0) {
-		file_error_dialog(w, cant_stat_message, name);
-		return NULL;
+		if (cmdLine) {
+			if (file_quit_new_dialog(w, cant_stat_message2, name)) {
+				if (foAction != (FileOpenAction *) NULL) {
+					*foAction = NewFile;
+				}
+			}
+			else {
+				if (foAction != (FileOpenAction *) NULL) {
+					*foAction = QuitNow;
+				}
+			}
+			return NULL;
+		}
+		else {
+			file_error_dialog(w, cant_stat_message, name);
+			return NULL;
+		}
 	};
 	if(!S_ISREG(status.st_mode)) {
 		file_error_dialog(w, load_not_reg_message, name);
@@ -173,7 +217,16 @@ static char *get_file_contents(
 		return NULL;
 	};
 	if((fp = fopen(name, "r")) == NULL) {
-		file_error_dialog(w, cant_read_message, name);
+		if (file_quit_new_dialog(w, cant_read_message, name)) {
+			if (foAction != (FileOpenAction *) NULL) {
+				*foAction = EmptyFile;
+			}
+		}
+		else {
+			if (foAction != (FileOpenAction *) NULL) {
+				*foAction = QuitNow;
+			}
+		}
 		XtFree(buf);
 		return NULL;
 	};
@@ -219,7 +272,8 @@ static Boolean backup_file(
 	if(stat(name, &status) == 0) { /* file exists */
 		if((fp = fopen(name, "r")) == NULL) {
 			return file_yes_no_dialog(w,
-					cant_open_file_to_backup_message, name);
+			                          cant_open_file_to_backup_message,
+			                          name);
 		};
 	} else { /* else file doesn't exist so no backup needed */
 		return True;
@@ -227,8 +281,7 @@ static Boolean backup_file(
 
 	siz = strlen(name);
 	if((*backup_name = XtMalloc(siz + strlen(suffix) + 1)) == NULL) {
-		file_error_dialog(w,
-			no_backup_name_space_message, name);
+		file_error_dialog(w, no_backup_name_space_message, name);
 		return False;
 	};
 	strcpy(*backup_name, name);
@@ -415,15 +468,20 @@ Boolean save_string_as(
 
 Boolean open_file(
 		Widget	text,
-		char	*name)
+		char	*name,
+        Boolean cmdLine,
+        FileOpenAction *foAction)
 {
 	char *buf;
 
 	if(!(name && *name)) { /* NULL or empty */
 		XmTextSetString(text, "");
+		if (foAction != (FileOpenAction *) NULL) {
+			*foAction = EmptyFile;
+		}
 		return False;
 	};
-	if((buf = get_file_contents(text, name)) != NULL) {
+	if((buf = get_file_contents(text, name, cmdLine, foAction)) != NULL) {
 		XmTextDisableRedisplay(text);
 		XmTextSetString(text, buf);
 		XtFree(buf);
@@ -447,7 +505,10 @@ Boolean include_file(
 	char *buf;
 	XmTextPosition pos;
 
-	if((buf = get_file_contents(text, name)) != NULL) {
+	if((buf = get_file_contents(text,
+	                            name,
+	                            False,
+	                            (FileOpenAction *) NULL)) != NULL) {
 		XmTextDisableRedisplay(text);
 		pos = XmTextGetInsertionPosition(text);
 		XmTextClearSelection(text, CurrentTime);

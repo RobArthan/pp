@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2001/11/16 17:19:15 $ $Revision: 2.6 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2002/01/21 22:42:47 $ $Revision: 2.7 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -193,6 +193,59 @@ Boolean yes_no_dialog(Widget w, char *question)
 			&reply);
 		XmStringFree(yes);
 		XmStringFree(no);
+		XmStringFree(confirm);
+	}
+	text = format_msg(question, MSG_LINE_LEN);
+	XtVaSetValues(dialog, XmNmessageString, text, NULL);
+	XmStringFree(text);
+	XtManageChild(dialog);
+	XtPopup(XtParent(dialog), XtGrabNone);
+	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
+	XBell(XtDisplay(root), 50);
+	while (!reply) {
+		poll();
+	};
+	XtPopdown(XtParent(dialog));
+	return reply == YES;
+}
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * quit_new_dialog: ask a question with a mandatory quit/new answer
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+Boolean quit_new_dialog(Widget w, char *question)
+{
+	static Widget dialog;
+	XmString text, new, quit, confirm;
+	Atom WM_DELETE_WINDOW;
+	static int reply;
+	/* 0 = not replied; otherwise YES/NO */
+	reply = 0;
+	if (!dialog) {
+		dialog  = XmCreateQuestionDialog(w, "quit_new", NULL, 0);
+		new     = XmStringCreateSimple("   New   ");
+		quit    = XmStringCreateSimple("   Quit   ");
+		confirm = XmStringCreateSimple("Confirm");
+		XtVaSetValues(dialog,
+			XmNdialogStyle,       XmDIALOG_FULL_APPLICATION_MODAL,
+			XmNokLabelString,     new,
+			XmNcancelLabelString, quit,
+			XmNdialogTitle,       confirm,
+			XmNdialogType,        XmDIALOG_QUESTION,
+			NULL);
+		XtUnmanageChild(
+			XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON));
+		XtAddCallback(dialog, XmNokCallback, yes_no_cb, &reply);
+		XtAddCallback(dialog, XmNcancelCallback, yes_no_cb, &reply);
+		WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
+			"WM_DELETE_WINDOW",
+			False);
+		XmAddWMProtocolCallback(XtParent(dialog),
+			WM_DELETE_WINDOW,
+			yes_no_destroy_cb,
+			&reply);
+		XmStringFree(quit);
+		XmStringFree(new);
 		XmStringFree(confirm);
 	}
 	text = format_msg(question, MSG_LINE_LEN);
