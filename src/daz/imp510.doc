@@ -1,4 +1,4 @@
-% $Header: /home/rda/daz/RCS/imp510.doc,v 1.98 2002/04/09 15:30:36 rda Exp rda $
+% $Header: /home/rda/daz/RCS/imp510.doc,v 1.99 2002/05/02 16:29:28 rda Exp rda $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: SPARK Output Function}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP510}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.98 $%
+\def\SCCSversion{$Revision: 1.99 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/04/09 15:30:36 $%
+\TPPdate{\FormatDate{$Date: 2002/05/02 16:29:28 $%
 }}
 \TPPstatus{Draft}	    %% Mandatory field
 \TPPtype{Specification}
@@ -168,6 +168,10 @@ program has been printed.
 made during lexical analysis (annotations and arbitrary Ada). Added calls
 that were missing for refinement and replacement symbols. Also completed R0061:
 new symbol for statement replacement.
+\item[Issue 1.96-1.98] Various fixes plus R0061: new syntax for statement replacement.
+\item [Issue 1.99] First go at new syntax for interim Spring 2002 release.
+\item [Issue 1.100] More new syntax plus R0063: unexpanded specification statements
+are now handled by printing a comment and then the specification statement.
 
 \end{description}
 
@@ -369,10 +373,11 @@ In the following type, {\it outf} is the function to output some
 formatted text and {\it fmt\_repl} is the optional function that
 deals with a label, either by recursively formatting
 and printing the replacement for the label or by printing a place-holder.
+The optional function returns {\tt true} iff. the label had a replacement.
 =SML
 type ÛPP_FMT_INFOÝ = {
     outf : string -> unit,
-    fmt_repl : (LABEL -> unit) OPT
+    fmt_repl : (LABEL -> bool) OPT
     };
 =TEX
 =TEX
@@ -1121,7 +1126,7 @@ in strings print correctly.
 fun Ûfmt_annÝ (fmtinfo as {outf,fmt_repl} : PP_FMT_INFO)
 	(anks as ANKSlot {content, label} : ANN) = (
     case fmt_repl of
-    Value f => (f label)
+    Value f => (f label; ())
     | Nil => (outf (translate_for_output ("§ " ^ content^" ¢    "));
 	(fmt_label fmtinfo label);
 	outf "\n"
@@ -1141,16 +1146,18 @@ fun Ûfmt_expansionÝ (fmtinfo as {fmt_repl, ...} : PP_FMT_INFO)
 	(label : LABEL) : unit = (
 	case fmt_repl of
 		Nil => ()
-	|	Value f => f label
+	|	Value f => (f label; ())
 );
 =IGN
 =TEX
 =SML
 fun Ûfmt_spec_no_ivarsÝ (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO) (s as
 		{spec, label} : SPEC_NO_IVARS) = (
-	case fmt_repl of
-		Value f => (f label)
-	|	Nil => (
+	if	(case fmt_repl of
+			Value f => (f label)
+		|	Nil => false)
+	then	()
+	else	(
 		fmt_spec fmtinfo spec;
 		outf "    ";
 		(fmt_label fmtinfo label);
@@ -1203,7 +1210,7 @@ fun Ûfmt_proc_call_no_ivarsÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
 
 fun Ûfmt_k_slotÝ (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO) ({content, label} : K_SLOT) = (
     case fmt_repl of
-    Value f =>    (f label)
+    Value f =>    (f label; ())
     |Nil =>    (
 	outf "§";
 	outf (translate_for_output content);
@@ -2359,7 +2366,16 @@ fun Ûfmt_representation_clauseÝ (fmtinfo : PP_FMT_INFO)
   | fmt_representation_clause (fmtinfo : PP_FMT_INFO)
 	(RCAddress x : REPRESENTATION_CLAUSE) =
     (fmt_address_clause fmtinfo x);
+=TEX
 
+Use clauses.
+
+=SML
+fun Ûfmt_use_clauseÝ (fmtinfo as {outf, ...} : PP_FMT_INFO) (UCUse ids : USE_CLAUSE) = (
+	outf (kw"USE"); fmt_id_list fmtinfo ids; outf ";"; outf "\n"
+) | fmt_use_clause (fmtinfo as {outf, ...}) (UCUseType ids : USE_CLAUSE) = (
+	outf (kw2"USE""TYPE"); fmt_id_list fmtinfo ids; outf ";"; outf "\n"
+);
 =TEX
 
 Subprogram declarations.
@@ -2635,6 +2651,9 @@ fun Ûfmt_declarationÝ (fmtinfo : PP_FMT_INFO)
 	(DRepresentationClause x : DECLARATION) =
     (fmt_representation_clause fmtinfo x)
   | fmt_declaration (fmtinfo : PP_FMT_INFO)
+	(DUseClause x : DECLARATION) =
+    (fmt_use_clause fmtinfo x)
+  | fmt_declaration (fmtinfo : PP_FMT_INFO)
 	(DProperBody x : DECLARATION) =
     (fmt_proper_body fmt_declaration_list fmtinfo x)
   | fmt_declaration (fmtinfo : PP_FMT_INFO)
@@ -2678,9 +2697,13 @@ Compilation units.
 
 =SML
 
-fun Ûfmt_context_clauseÝ (fmtinfo as {outf,...} : PP_FMT_INFO) ([] : ID list) = ()
-  | fmt_context_clause (fmtinfo as {outf,...} : PP_FMT_INFO) (x : ID list) = (
+fun Ûfmt_context_itemÝ (fmtinfo as {outf,...} : PP_FMT_INFO)
+	(CIWith x : CONTEXT_ITEM) = (
 	outf (kw"WITH"); fmt_id_list fmtinfo x; outf ";"; outf "\n"
+) | fmt_context_item fmtinfo (CIUse uc) = (
+	fmt_use_clause fmtinfo uc
+) | fmt_context_item fmtinfo (CIPragma p) = (
+	fmt_pragma fmtinfo p
 );
 
 fun Ûfmt_compilation_unitÝ (fmtinfo : PP_FMT_INFO)
@@ -2699,16 +2722,11 @@ Note that the references clause, if any, does not get put in the Ada document.
 =SML
 *)
 fun Ûfmt_context_compilation_unitÝ (fmtinfo : PP_FMT_INFO)
-	({context=ipl, references=r, comp_unit=c, annotation=ann}
+	({context=cil, references=r, comp_unit=c, annotation=ann}
 		: CONTEXT_COMPILATION_UNIT) = (
-	let	fun aux (idl, pl) = (
-			fmt_context_clause fmtinfo idl;
-			map (fmt_pragma fmtinfo) pl; ()
-		);
-	in	map aux ipl;
-		fmt_annotation fmtinfo ann;
-		fmt_compilation_unit fmtinfo c 
-	end
+	map (fmt_context_item fmtinfo) cil;
+	fmt_annotation fmtinfo ann;
+	fmt_compilation_unit fmtinfo c 
 );
 
 fun Ûfmt_kslot_compilation_unitÝ (fmtinfo : PP_FMT_INFO)
@@ -2886,25 +2904,25 @@ outf "12345";outf "12345";outf "12345";outf "\n");
 fun Ûmk_fmt_replÝ
 	(outf : string -> unit)
 	(repl_fun : LABEL -> REPLACEMENT OPT)
-	: LABEL -> unit = (fn label =>
+	: LABEL -> bool = (fn label =>
 let    val fmtinfo = {outf = outf, fmt_repl = Value(mk_fmt_repl outf repl_fun)};
 in
     case repl_fun label of
     Value repl => (
 	case repl of
-	    ReplaceComp {comp, ...} =>    
-		fmt_kslot_compilation_unit_list fmtinfo comp
-	|    ReplacePPart {private, ...} =>
-		fmt_declaration_list fmtinfo private
-	|    ReplaceVPart {visible, ...} =>
-		fmt_declaration_list fmtinfo visible
-	|    ReplaceDecl {decls, ...} =>
-		fmt_declaration_list fmtinfo decls
-	|    RefineStat {statement, ...}    =>
-		fmt_statement fmtinfo statement
-	|    ReplaceStat {statement, ...}    =>
-		fmt_statement fmtinfo statement
-	|    ReplaceArbitrary {replacement, ...}    =>
+	       ReplaceComp {comp, ...} => (    
+		fmt_kslot_compilation_unit_list fmtinfo comp; true
+	) |    ReplacePPart {private, ...} => (
+		fmt_declaration_list fmtinfo private; true
+	) |    ReplaceVPart {visible, ...} => (
+		fmt_declaration_list fmtinfo visible; true
+	) |    ReplaceDecl {decls, ...} => (
+		fmt_declaration_list fmtinfo decls; true
+	) |    RefineStat {statement, ...}    => (
+		fmt_statement fmtinfo statement; true
+	) |    ReplaceStat {statement, ...}    => (
+		fmt_statement fmtinfo statement; true
+	) |    ReplaceArbitrary {replacement, ...} => (
 		(let val tabs = get_tabs();
 		in
 			(reset_tabs();
@@ -2912,42 +2930,42 @@ in
 			outf "\n";
 			set_tabs (tabs)
 			)
-		end)
-	|    ReplaceAnnotation {replacement, ...}    =>
-		fmt_annotation fmtinfo replacement
-	|    UnReplaced (RSCompilation, s) => (
+		end); true
+	) |    ReplaceAnnotation {replacement, ...} => (
+		fmt_annotation fmtinfo replacement; true
+	) |    UnReplaced (RSCompilation, s) => (
 	    outf ("-- unexpanded compilation k-slot: " ^
 			 translate_for_output label);
-		outf "\n"
+		outf "\n"; false
 	) |    UnReplaced (RSSpecStatement, s) => (
 	    outf (kw"NULL" ^ "; -- unexpanded specification statement: " ^
 			 translate_for_output label);
-		outf "\n"
+		outf "\n"; false
 	) |    UnReplaced (RSStatement, s) => (
 	    outf (kw"NULL" ^ "; -- unexpanded statement k-slot: " ^
 			 translate_for_output label);
-		outf "\n"	
+		outf "\n"; false	
 	) |    UnReplaced (RSDeclaration, s) => (
 	    outf ("-- unexpanded declaration k-slot " ^
 			 translate_for_output label);
-		outf "\n"
+		outf "\n"; false
 	) |    UnReplaced (RSPrivatePart, s) => (
 	    outf ("-- unexpanded private part k-slot " ^
 			 translate_for_output label);
-		outf "\n"
+		outf "\n"; false
 	) |    UnReplaced (RSVisiblePart, s) => (
 	    outf ("-- unexpanded visible part k-slot " ^
 			 translate_for_output label);
-		outf "\n"
+		outf "\n"; false
 	) |    UnReplaced (RSAnnotation, s) => (
 	    outf ("-- unexpanded annotation k-slot " ^
 			 translate_for_output label);
-		outf "\n"
+		outf "\n"; false
 	)
     ) |    Nil =>    (
 		outf ("-- Unrecognised label: " ^
 			 translate_for_output label);
-		outf "\n"
+		outf "\n"; false
 	)  
 end);
 =TEX
