@@ -83,6 +83,8 @@ and ``definition(s)'' to ``defn(s)''.
 Corrected result of $get\_con\_env\ ""$.
 \item [Issue 1.15]
 	Change the flag character used for character literals.
+\item [Issue 1.16]
+Corrected a flaw in $icl'open\_theory$ concerniong scopes.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -1223,45 +1225,58 @@ but does help to ensure consistency by using a single assignment.
 =SML
 	val chierarchy as hier{lookup=clookup, ...} = copy_hierarchy hierarchy;
 =TEX
-The following auxiliary function sets all the inscope fields to
-their correct value,
-and gets the new values for the current $ty\_env$ and $con\_env$.
+The following auxiliary function takes everything necessary out of scope,  sets all the inscope fields to
+their correct value.
 =SML
-	fun aux ~1 into_scope out_of_scope tece = (into_scope, out_of_scope, tece)
-	| aux n into_scope out_of_scope tece = (
+	fun aux_out ~1 out_of_scope tece = (out_of_scope, tece)
+	| aux_out n out_of_scope tece = (
 		let val ThyInfo{status = status1,
 			inscope = inscope1,
 			contents = contents1,
 			children = children1,
 			name = name1} = sub_ia(clookup,n)
 		in
-		if n mem allp
-		then (if inscope1
-			then aux (n - 1) into_scope out_of_scope tece
-			else (update_ia(clookup,n,
-				ThyInfo{status = status1,
-				inscope = true,
-				contents = contents1,
-				children = children1,
-				name = name1});
-				aux (n-1) (n :: into_scope) out_of_scope 
-					(add_thy_env (!contents1) tece)))
-		else (if not inscope1
-			then aux (n - 1) into_scope out_of_scope tece
-			else (update_ia(clookup,n,
-				ThyInfo{status = status1,
+		(if (n mem allp) orelse (not inscope1)
+		then (aux_out (n - 1) out_of_scope tece)
+		else (update_ia(clookup,n,
+			ThyInfo{status = status1,
 				inscope = false,
 				contents = contents1,
 				children = children1,
 				name = name1});
-				aux (n-1) into_scope (n :: out_of_scope)
-					(del_thy_env (!contents1) tece)))
+			aux_out (n-1) (n :: out_of_scope)
+				(del_thy_env (!contents1) tece)))
 		end);
 =TEX
-Now use this auxiliary function to gain the theories moved in and out of scope and the
-new type and constructor environments, after the opening.
+The following auxiliary function takes everything necessary in to scope,  sets all the inscope fields to
+their correct value.
 =SML
-	val (ins, outs, (te,ce)) = aux top_theory [] [] (ty_env, con_env);
+	fun aux_in ~1 into_scope tece = (into_scope, tece)
+	| aux_in n into_scope tece = (
+		let val ThyInfo{status = status1,
+			inscope = inscope1,
+			contents = contents1,
+			children = children1,
+			name = name1} = sub_ia(clookup,n)
+		in
+		(if (n mem allp) andalso (not inscope1)
+		then (update_ia(clookup,n,
+			ThyInfo{status = status1,
+				inscope = true,
+				contents = contents1,
+				children = children1,
+				name = name1});
+			aux_in (n-1) (n :: into_scope) 
+				(add_thy_env (!contents1) tece))
+		else (aux_in (n - 1) into_scope tece))
+		end);
+=TEX
+Now use these auxiliary functions to gain the theories moved in and out of scope and the
+new type and constructor environments, after the opening.
+Notice we must take everything necessary out of scope before we put anything into scope.
+=SML
+	val (outs, tece) = aux_out top_theory [] (ty_env, con_env);
+	val (ins, (te,ce)) = aux_in top_theory [] tece;
 =TEX
 Then we can do a single assignment modification of the state:
 =SML
