@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.19 2003/07/18 13:25:25 rda Exp $ 
+ * $Id: templates.c,v 2.20 2003/07/18 16:05:11 rda Exp rda $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -67,8 +67,8 @@ static NAT template_table_bitmaps_size;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static Widget	shell,
-		template_pane,
-		template_form,
+		outer_form,
+		inner_form,
 		other_btn_area,
 		dismiss_btn,
 		help_btn,
@@ -248,13 +248,18 @@ Boolean init_templates_tool(Widget w)
 	add_edit_res_handler(shell);
 #endif
 	common_dialog_setup(shell);
-	template_pane = XtVaCreateWidget("template-pane",
-		xmPanedWindowWidgetClass, 	shell,
+	outer_form = XtVaCreateWidget("outer-form",
+		xmFormWidgetClass, 	shell,
+			XmNfractionBase, 	25,
+			XmNautoUnmanage,	False,
 		NULL);
 
-	template_form = XtVaCreateWidget("template_form",
-			xmFormWidgetClass,	template_pane,
+	inner_form = XtVaCreateWidget("inner-form",
+			xmFormWidgetClass,	outer_form,
 			XmNfractionBase, 	fbase,
+			XmNleftAttachment,	XmATTACH_FORM,
+			XmNrightAttachment,	XmATTACH_FORM,
+			XmNtopAttachment,	XmATTACH_FORM,
 			XmNautoUnmanage,	False,
 		NULL);
 
@@ -265,7 +270,7 @@ Boolean init_templates_tool(Widget w)
 		y = 2 * (i / 2);
 
 		template_btn = XtVaCreateManagedWidget("template_btn",
-			xmPushButtonGadgetClass, template_form,
+			xmPushButtonGadgetClass, inner_form,
 			XmNlabelPixmap,	get_pixmap(w,
 			                           template_table[i].bitmap_file,
 			                           i < template_table_size - 1),
@@ -288,18 +293,16 @@ Boolean init_templates_tool(Widget w)
 	};
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * set up help button in the middle of the lower part of tool:
+ * set up help and dismiss buttons in the lower part of tool:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-	other_btn_area = XtVaCreateWidget("help-form",
-		xmFormWidgetClass, 		template_pane,
-		XmNfractionBase, 		25,
-		NULL);
-
 	dismiss_btn = XtVaCreateManagedWidget("Dismiss",
-		xmPushButtonWidgetClass,	other_btn_area,
-		XmNtopAttachment,		XmATTACH_FORM,
+		xmPushButtonWidgetClass,	outer_form,
+		XmNtopAttachment,		XmATTACH_WIDGET,
+		XmNtopWidget,			inner_form,
+		XmNtopOffset,		4,
 		XmNbottomAttachment,		XmATTACH_FORM,
+		XmNbottomOffset,		4,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
 		XmNleftPosition,		2,
@@ -307,11 +310,17 @@ Boolean init_templates_tool(Widget w)
 		XmNtraversalOn,		False,
 		NULL);
 
+	XtVaSetValues(outer_form,
+		XmNcancelButton,	dismiss_btn,
+		NULL);
 
 	help_btn = XtVaCreateManagedWidget("Help",
-		xmPushButtonWidgetClass,	other_btn_area,
-		XmNtopAttachment,		XmATTACH_FORM,
+		xmPushButtonWidgetClass,	outer_form,
+		XmNtopAttachment,		XmATTACH_WIDGET,
+		XmNtopWidget,			inner_form,
+		XmNtopOffset,		4,
 		XmNbottomAttachment,		XmATTACH_FORM,
+		XmNbottomOffset,		4,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
 		XmNleftPosition,		13,
@@ -335,13 +344,10 @@ Boolean init_templates_tool(Widget w)
 
 void add_templates_tool(Widget w)
 {
-	if(template_form != NULL) {
-		XtManageChild(template_form);
-		XtManageChild(other_btn_area);
-		XtManageChild(template_pane);
+	if(inner_form != NULL) {
+		XtManageChild(inner_form);
+		XtManageChild(outer_form);
 		XtPopup(shell, XtGrabNone);
-		fix_pane_height(template_form, template_form);
-		fix_pane_height(other_btn_area, other_btn_area);
 	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
