@@ -1,0 +1,167 @@
+=TEX
+% TQtemplate.tex
+\documentstyle[hol,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Tests for System Control and Basic Error Reporting}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP002}  %% Mandatory field
+\def\SCCSversion{$Revision$
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}  %% Mandatory field (with sensible default)
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.D.~Arthan & FST Team Leader}
+\TPPabstract{
+This document contains the tests for the
+system control and basic
+error reporting subsystem for the ICL HOL system.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+      Library\\ R.D. Arthan\\ K. Blackburn}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history}  % to get section number `0.3'
+\begin{description}
+\item[Issue 1.1]
+First draft containing initial test set.
+\end{description}
+\subsection{Changes forecast}
+\section{GENERAL}
+\subsection{Scope}
+This document contains module tests for parts of
+the ICL HOL system.
+
+\subsection{Introduction}
+The tests are to be run in the standard way.
+No special utilities are set up.
+
+The coverage of the system control structure is sketchy.
+
+\section{THE TESTS}
+\subsection{Minimal Error Reporting}
+=SML
+new_error_message {id=100, text="?0 not expected here"};
+fail "foo" 100 [];
+fail "foo" 200 [];
+fail "foo" 100 [fn()=>(output(std_out, "Boo!\n"); "BLAH")];
+new_error_message {id=101, text="?0 not expected after ?1?. ??"};
+fail "foo" 101 [(fn()=>"BLAH"), (fn ()=>"BAH")];
+error "foo" 101 [(fn()=>"B"), (fn ()=>"BAH")];
+=TEX
+It is important that the following text agrees with the error message
+2002, since the test will usually be run in an environment in which
+this message has already been allocated
+=SML
+new_error_message {id=2002, text="The error number ?0 does not identify an entry in the error message database"};
+
+fail "foo" 2002 [fn()=>"42"];
+
+=TEX
+The next three look at the treatment of the type $MESSAGE$
+=SML
+val msg1 = (fail "foo" 2002 [fn()=>"99"]) handle Fail x => x;
+val msg2 = (fail "foo" 999 []) handle Fail x => x;
+get_message msg1;
+=TEX
+Thee next block look at the facility for changing the messages:
+=SML
+get_error_message 12 []; (* Not there; should raise an exception *)
+get_error_message 2002 ["ABC"];
+get_error_message 2002 [];
+get_error_message 2002 ["ABC", "DEF", "GHI"];
+val old_messages = get_error_messages ();
+icl'change_error_message {id=2002, text = "Test message ?0 ?1"};
+get_error_message 2002 ["ABC", "DEF", "GHI"];
+icl'change_error_message {id=2002, text="The error number ?0 does not identify an entry in the error message database"};
+old_messages = get_error_messages(); (* Should return true *)
+=TEX
+The following checks the deferred evaluation of inserter arguments.
+=SML
+(
+    fail "foo" 100 [fn () => (output(std_out, "this test has failed\n"); "BLAH")]
+)   handle X => divert X "foo" "goo" 2002 [fn () => (output(std_out, "this test may have worked\n"); "BLAH")];
+
+(
+    fail "foo" 100 [fn () => (output(std_out, "this test has failed\n"); "BLAH")]
+)   handle X => list_divert X "goo" 
+        [("foo", 100, [fn () => (output(std_out, "this test may have worked\n"); "BLAH")]),
+        ("foo", 200, [fn () => (output(std_out, "this test has failed\n"); "BLAH")]),
+        ("koo", 100, [fn () => (output(std_out, "this test has failed\n"); "BLAH")])];
+
+(
+    fail "foo" 100 [fn () => (output(std_out, "this test may have worked\n"); "BLAH")]
+)   handle X => list_divert X "goo" [];
+
+
+=TEX
+=SML
+(
+    fail "foo" 100 [fn () => (output(std_out, "this test has failed\n"); "BLAH")]
+)   handle X => area_of X;
+
+(
+    fail "foo" 100 [fn () => "BLAH"]
+)   handle X => (output(std_out, "about to reraise exception \n"); reraise X "goo");
+
+(
+    error "foo" 100 [fn () => "BLAH"]
+)   handle X => (output(std_out, "about to reraise exception \n"); reraise X "goo");
+
+=TEX
+\subsection{System Control}
+=SML
+var testing : int ref = ref 40;
+
+new_int_control{name="testing",
+	control=testing,
+	default=(fn()=>80),
+	check=(fn n=> n >= 20)};
+
+get_int_control"testing";
+set_int_control("testing", 19); (* Out of range *)
+set_int_control("testing", 0); (* Out of range *)
+set_int_control("testing", 20); (* OK *)
+set_int_control("testing", 80); (* OK *)
+
+=TEX
+\end{document}
