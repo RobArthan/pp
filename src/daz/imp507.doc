@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.195 $ $RCSfile: imp507.doc,v $ $Date: 2002/05/10 12:59:36 $
+% imp507.doc %Z% $Revision: 1.196 $ $RCSfile: imp507.doc,v $ $Date: 2002/05/10 16:13:12 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.195 $%
+\def\SCCSversion{$Revision: 1.196 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/05/10 12:59:36 $%
+\TPPdate{\FormatDate{$Date: 2002/05/10 16:13:12 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -143,6 +143,7 @@ statements in stubs.
 \item[Issue 1.191] Spring 2002 enhancements: subprogram renaming.
 \item[Issue 1.192] Spring 2002 enhancements: object renaming.
 \item[Issues 1.193-1.197] Spring 2002 enhancements: package renaming and use clauses.
+\item[Issue 1.198] Spring 2002 enhancements: more on named loops.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -3081,14 +3082,19 @@ fun €spec_stmt_otherwise› ({spec : SPEC, label : LABEL}) : unit = (
 			current_formal_fun = formal_fun1 as
 					{informal_fun = fun_header,
 					spec = spec1 as {post = return, ...}, ...},
+			current_loop_name = current_loop_name1,
 			...} = block1;
+		val named_tills1 =
+			if	till_flag
+			then	[(current_loop_name1, till)]
+			else	[];
 		val in_scope1 : IN_SCOPE = subprog_flatten_env(!blocks);
 		val side = set_in_scope_ti_context in_scope1;
 		val env = cn_env_of_in_scope in_scope1;
 		val wp_env1 :WP_ENV = {
 			env = env,
 			till = till,
-			named_tills = [],
+			named_tills =  named_tills1,
 			return = z_pred_of_z_tm env return,
 			fun_header = fun_header,
 			formal_procs = []
@@ -3168,7 +3174,7 @@ fun €remove_log_con_env› (() : unit) : unit = (
 \section{LOOPS}\label{LOOPS}
 \subsection{The SID function new\_scope\_loop}
 =SML
-fun €new_scope_loop› (() : unit) : unit = (
+fun €new_scope_loop› (loop_name  :  ID OPT) : unit = (
 	let	val block1 = block 1;
 		val {declab as {flags as 
 			{fun_flag, formal_body_flag, speclabel_flag, ...},
@@ -3187,11 +3193,13 @@ fun €new_scope_loop› (() : unit) : unit = (
 			body_flag = false
 		};
 		val block = block_declab(block1, {
-				block_name = block_name,
-				flags = flags,
-				in_scope = in_scope});
-
-	in	blocks := block :: !blocks
+					block_name = block_name,
+					flags = flags,
+					in_scope = in_scope});
+		val block1 = case loop_name of
+				Nil => block
+			|	Value name => block_current_loop_name(block, name);
+	in	blocks := block1 :: !blocks
 	end		
 );
 =TEX
@@ -6293,9 +6301,9 @@ in the abstract syntax.
 It returns the inner statement of the loop (with frames expanded).
 =SML
 fun €do_for_loop› (t : Z_TM OPT, i : ID, stmt : STATEMENT,
-			tmark : TMARK OPT, dir : LOOP_DIRECTION)
+			tmark : TMARK OPT, dir : LOOP_DIRECTION, loop_name : ID OPT)
 		: STATEMENT = (
-	new_scope_loop();
+	new_scope_loop loop_name;
 	for_param (i, case tmark of Value t => t | _ => universal_discrete_type);
 	(case t of Value till => till_pred till | Nil => ());
 	let val res = do_statement stmt; in end_scope(); res end
@@ -6338,21 +6346,21 @@ and €do_statement› (y as STNull : STATEMENT) : STATEMENT = (y
 	in	STCase{s = expanded_s, others = expanded_others, e = e}
 	end
 ) | do_statement (y as (STLoop {t= t, stmt}) : STATEMENT) = (
-	new_scope_loop();
+	new_scope_loop Nil;
 	(case t of Value till => till_pred till | Nil => ());
 	let	val expanded_stmt = do_statement stmt;
 	in	end_scope();
 		STLoop{t = t, stmt = expanded_stmt}
 	end
 ) | do_statement (y as (STNamedLoop {t, stmt, name}) : STATEMENT) = (
-	new_scope_loop();
+	new_scope_loop (Value name);
 	(case t of Value till => till_pred till | Nil => ());
 	let	val expanded_stmt = do_statement stmt;
 	in	end_scope();
 		STNamedLoop{t = t, stmt = expanded_stmt, name = name}
 	end
 ) | do_statement (y as (STWhile {loop as {t, stmt}, name, g}) : STATEMENT) = (
-	new_scope_loop();
+	new_scope_loop name;
 	(case t of Value till => till_pred till | Nil => ());
 	let	val expanded_stmt = do_statement stmt;
 	in	end_scope();
@@ -6360,13 +6368,13 @@ and €do_statement› (y as STNull : STATEMENT) : STATEMENT = (y
 	end
 ) | do_statement
 	(y as (STForStatic {name, i, tmark, range, dir, loop as {stmt, t}}) : STATEMENT) = (
-	let	val expanded_stmt = do_for_loop(t, i, stmt, tmark, dir);
+	let	val expanded_stmt = do_for_loop(t, i, stmt, tmark, dir, name);
 	in	STForStatic {name = name, i = i, tmark = tmark, range = range, dir = dir,
 			loop= {stmt=expanded_stmt, t = t}}
 	end
 ) | do_statement
 	(y as (STForTmark {name, i, tmark, dir, loop as {stmt, t}}) : STATEMENT) = (
-	let	val expanded_stmt = do_for_loop(t, i, stmt, Value tmark, dir);
+	let	val expanded_stmt = do_for_loop(t, i, stmt, Value tmark, dir, name);
 	in	STForTmark {name = name, i = i, tmark = tmark, dir = dir,
 			loop= {stmt=expanded_stmt, t = t}}
 	end
