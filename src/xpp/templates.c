@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.17 2003/07/17 11:37:16 rda Exp rda $ 
+ * $Id: templates.c,v 2.18 2003/07/18 12:18:47 rda Exp rda $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -247,7 +247,7 @@ Boolean init_templates_tool(Widget w)
 #ifdef EDITRES
 	add_edit_res_handler(shell);
 #endif
-	XtAddCallback(shell, XmNpopupCallback, centre_popup_cb, 0);
+	common_dialog_setup(shell);
 	template_pane = XtVaCreateWidget("template-pane",
 		xmPanedWindowWidgetClass, 	shell,
 		NULL);
@@ -410,7 +410,7 @@ static void templates_help_dialog(Widget w)
 #ifdef EDITRES
 	add_edit_res_handler(shell);
 #endif
-	XtAddCallback(shell, XmNpopupCallback, centre_popup_cb, 0);
+	common_dialog_setup(shell);
 	help_pane = XtVaCreateWidget("help-pane",
 		xmPanedWindowWidgetClass,	shell,
 		XmNsashWidth,			1,

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.20 2003/06/26 13:45:00 rda Exp rda $
+ * $Id: options.c,v 2.21 2003/07/17 11:37:16 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -130,7 +130,7 @@ void init_options(Widget owner_w)
 #ifdef EDITRES
 	add_edit_res_handler(shell);
 #endif
-	XtAddCallback(shell, XmNpopupCallback, centre_popup_cb, 0);
+	common_dialog_setup(shell);
 	shell_row_col = XtVaCreateWidget("shell-row-col",
 		xmRowColumnWidgetClass, 	shell,
 		NULL);

@@ -252,6 +252,7 @@ typedef struct menu_item {
 /* Module: xmisc */
 	extern void beep(void);
 	extern int get_map_state(Widget w); /* From XGetWindowAttributes */
+	Widget get_top_shell(Widget w);
 	extern void set_menu_item_sensitivity(
 		Widget	w,	/* menu widget */
 		NAT	i,	/* i-th menu entry */
@@ -278,7 +279,7 @@ typedef struct menu_item {
 	extern void blink_owner_cb(CALLBACK_ARGS);
 	extern	void number_verify_cb(CALLBACK_ARGS);
 	extern	void text_verify_cb(CALLBACK_ARGS);
-	extern	void centre_popup_cb(CALLBACK_ARGS);
+	extern	void common_dialog_setup(Widget shell);
 	extern	void attach_rw_edit_popup(Widget text_w);
 	extern	void attach_ro_edit_popup(Widget text_w);
 	extern	void register_selection_source(

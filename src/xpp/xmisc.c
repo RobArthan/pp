@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.20 2003/07/17 11:37:16 rda Exp rda $
+ * $Id: xmisc.c,v 2.21 2003/07/17 11:46:07 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -79,6 +79,16 @@ int get_map_state(Widget w)
 	XWindowAttributes attrs;
 	(void) XGetWindowAttributes(XtDisplay(w), XtWindow(w), &attrs);
 	return attrs.map_state;
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * get_top_shell - find the window manager shell containing a widget.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+Widget get_top_shell(Widget w)
+{
+	while (w && !XtIsWMShell(w)) {
+		w = XtParent(w);
+	}
+	return w;
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * toggle_menu_item_sensitivity: given a menu w toggle the
@@ -315,7 +325,7 @@ void text_verify_cb(
  * the pop-up after it has first been seen, then we don't want to
  * interfere.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void  centre_popup_cb(
+static void  centre_popup_cb(
 	Widget		popup,
 	XtPointer		unused1,
 	XtPointer		unused2)
@@ -348,6 +358,13 @@ void  centre_popup_cb(
 		XmNy,	popup_abs_y,
 		NULL);
 	XtRemoveCallback(popup, XmNpopupCallback, centre_popup_cb, 0);
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Interface to the common dialog set-up
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void common_dialog_setup(Widget shell)
+{
+	XtAddCallback(shell, XmNpopupCallback, centre_popup_cb, 0);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * text_show_position: like XmTextShowPosition but centres the

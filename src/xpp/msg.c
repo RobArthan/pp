@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2003/06/27 11:44:39 $ $Revision: 2.31 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2003/07/17 11:37:16 $ $Revision: 2.32 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -31,17 +31,6 @@
 #define MSG_LINE_LEN 40
 #define HELP_LINE_LEN 70
 #define HELP_SCREEN_HEIGHT 24
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Private functions:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static Widget get_top_shell(Widget w)
-{
-	while (w && !XtIsWMShell(w)) {
-		w = XtParent(w);
-	}
-	return w;
-}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * The following put's copies msg to buf putting new-lines in
@@ -107,7 +96,7 @@ void help_dialog(Widget w, char *str)
 #ifdef EDITRES
 		add_edit_res_handler(dialog);
 #endif
-		XtAddCallback(dialog, XmNpopupCallback, centre_popup_cb, 0);
+		common_dialog_setup(dialog);
 		pane = XtVaCreateWidget("pane", xmPanedWindowWidgetClass, dialog,
 			XmNsashWidth,  1, /* PanedWindow won't let us set these to 0! */
 			XmNsashHeight, 1, /* Make small so user doesn't try to resize */
