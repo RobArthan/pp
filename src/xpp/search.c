@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.21 2003/02/09 17:43:37 rda Exp rda $ 
+ * $Id: search.c,v 2.22 2003/02/09 19:02:10 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -689,7 +689,11 @@ static Boolean search_either(
 	} else {
 		start_point = XmTextGetInsertionPosition(search_data.text_w);
 	}
-	ss = search_string(pattern, text_buf, start_point, dir);
+	if(*pattern) {
+		ss = search_string(pattern, text_buf, start_point, dir);
+	} else { /* bypass the much slower detection of this case by re_search_exec */
+		ss.offset = -1;
+	}
 	if(ss.offset >= 0) {
 		text_show_position(
 			search_data.text_w,
@@ -748,10 +752,10 @@ static Boolean replace_selection(
 			long int text_len =right - left, rep_len;
 			char *text_buf = XtMalloc(text_len+1), *rep_buf;
 			Substring ss;
-			if(text_buf == 0 
+			if(	text_buf == 0 
 			||	XmTextGetSubstring(cbdata->text_w, left, text_len,
 					text_len + 1, text_buf)
-				== XmCOPY_FAILED ) {
+					== XmCOPY_FAILED ) {
 				XtFree(rep_pattern);
 				if(text_buf != 0) {
 					XtFree(text_buf);
@@ -815,7 +819,11 @@ static void replace_all_cb(
 	pattern = XmTextGetString(cbdata->search_w);
 	text_buf = XmTextGetString(cbdata->text_w);
 	start_point = XmTextGetInsertionPosition(cbdata->text_w);
-	ss = search_string(pattern, text_buf, start_point, FORWARDS);
+	if(*pattern) {
+		ss = search_string(pattern, text_buf, start_point, FORWARDS);
+	} else { /* bypass the much slower detection of this case by re_search_exec */
+		ss.offset = -1;
+	}
 	if(ss.offset >= 0) {
 		replacement = XmTextGetString(
 				cbdata->replace_w);
@@ -1093,6 +1101,12 @@ static Substring bm_search_exec(bm_search_t *bm, char *text)
 }
 /*
  * Pre-processing for regular expression searching.
+ * The regular expression could contain a syntax error in which case
+ * re_error_text will point to a malloc-ed buffer containing the
+ * error message text from regerror and the returned regex_t * will
+ * be 0. Someone up the calling chain
+ * is expected to call re_report_error (see below) to check for
+ * this and report the error (and free re_error_text).
  */
 static char *re_error_text = 0;
 static regex_t *re_search_comp(char *pattern)
@@ -1110,9 +1124,6 @@ static regex_t *re_search_comp(char *pattern)
 		char *errbuf;
 		int errbufsize = regerror(error_code, &preg, 0, 0);
 		errbuf = XtMalloc(errbufsize);
-		if(re_error_text) { /* shouldn't happen, if caller obeys protocols */
-			XtFree(re_error_text);
-		}
 		if(errbuf == 0) {
 			ok_dialog(root, no_room_for_search_op);
 		} else {
@@ -1124,7 +1135,7 @@ static regex_t *re_search_comp(char *pattern)
 }
 
 /*
- * The regular expression search algorithm:
+ * The regular expression search algorithm. The loop is looking for a non-empty match.
  */
 static Substring re_search_exec(regex_t *preg, char *text, Boolean bol)
 {
@@ -1223,8 +1234,8 @@ static long int re_replacement_text(
  * from the previous call, if any.  If the text to be
  * searched is 0, just set up static data for future use.
  * If both pattern and text are 0, reset static data and free any malloced space;
- * make sure to reset before returning control to the user, else they might
- * change the value of global_options.use_reg_exps.
+ * Make sure to reset before returning control to the user, else they might
+ * change the value of global_options.use_reg_exps or global_options.ignore_case.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static Substring search_forwards(
 	char		*pattern,
@@ -1261,7 +1272,7 @@ static Substring search_forwards(
 		}
 		result.offset = -1;
 		last_comp = 0;
-	} else if (text == 0 || comp == 0) {
+	} else if (text == 0 || comp == 0) { /* this is were syntax errors in reg. exps. show up */
 		result.offset = -1;
 	} else {
 		if(global_options.use_reg_exps) {
