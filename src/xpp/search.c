@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.41 2004/02/08 11:00:57 rda Exp $ 
+ * $Id: search.c,v 2.43 2004/02/09 16:41:37 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -390,7 +390,7 @@ Boolean add_search_tool(Widget text_w)
 		NULL);
 
 	s = XmStringCreateSimple("Replace");
-	replace_btn = XtVaCreateManagedWidget("replace-text",
+	replace_btn = XtVaCreateManagedWidget("replace",
 		xmPushButtonWidgetClass,	replace_form,
 		XmNlabelString,		s,
 		XmNleftAttachment,		XmATTACH_FORM,
@@ -481,7 +481,7 @@ Boolean add_search_tool(Widget text_w)
 		children_before[i] = children[i];
 	}
 
-	replace_text = XtVaCreateManagedWidget("replace",
+	replace_text = XtVaCreateManagedWidget("replace-text",
 		xmTextWidgetClass,		paned,
 		XmNeditMode,			XmMULTI_LINE_EDIT,
 		NULL);
