@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.10 2000/06/21 11:54:19 rda Exp rda $
+ * $Id: mainw.c,v 2.11 2000/06/29 15:38:03 rda Rel rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -192,7 +192,7 @@ static MenuItem file_menu_items[] = {
         file_menu_cb, (XtPointer)FILE_MENU_REVERT, (MenuItem *)NULL, False },
      { "Empty File",  &xmPushButtonGadgetClass, 'E', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_EMPTY_FILE, (MenuItem *)NULL, False },
-     { "Reopen ",  &xmPushButtonGadgetClass, 'e', NULL, NULL,
+     { "Reopen ",  &xmPushButtonGadgetClass, 'p', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_REOPEN, reopen_menu_items, False },
    MENU_ITEM_SEPARATOR,
     { "Quit",  &xmPushButtonGadgetClass, 'Q', "Ctrl<Key>q", "Ctrl-Q",
