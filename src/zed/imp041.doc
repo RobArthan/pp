@@ -89,6 +89,8 @@ $z\_µ\_intro(1)$ made less flexible.
 Bug fixing issue 1.26.
 \item [Issue 1.28 (1st December 1992)]
 Changed treatment of $€$ in proof contexts.
+\item [Issue 1.29 (1st December 1992)]
+Changed treatment of ill-formed schemas as predicates in $dec\_pred\_conv$.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -912,6 +914,19 @@ in
 	else fail "" 0 []
 end);
 =TEX
+=SML
+fun Ûfull_dest_z_tupleÝ (tm: TERM) : TERM list = (
+let	val tml = dest_z_tuple tm;
+	val (cons,rest) = strip_app tm;
+	val (rt,nl,anil) = dest_z_name(fst(dest_const cons));
+in
+	if (rt = "Z'Mk_T") andalso length nl = 1
+		andalso length (hd nl) = 1
+		andalso nat_of_string (hd(hd nl)) = length rest
+	then tml
+	else fail "" 0 []
+end);
+=TEX
 \subsubsection{Bringing it Together}
 =SML
 fun Ûfull_dest_z_termÝ (tm : TERM) : Z_TERM = (
@@ -932,6 +947,7 @@ ZSchemaDec(sch,d) => (full_dest_z_decsexp tm; dzt)
 | ZÍ(d,p,v) => (full_dest_z_Í tm; dzt)
 | Z‰s(d,p) => (full_dest_z_‰s tm; dzt)
 | ZDec(d,p) => (full_dest_z_dec tm; dzt)
+| ZTuple tml => (full_dest_z_tuple tm; dzt)
 | _ => dzt
 end
 handle (Fail _) =>
@@ -943,7 +959,7 @@ have been given types incompatible with their generated forms
 from \cite{DS/FMU/IED/DTD047}.
 =GFT
 ZDecl, ZEq, Z, ZTrue, ZFalse, Z³, Z±, Z², Z´,
-Z¤, ZLVar, ZGVar, ZInt, ZString, Z§¢, ZSetd, Zð, ZTuple,
+Z¤, ZLVar, ZGVar, ZInt, ZString, Z§¢, ZSetd, Zð,
 ZBinding, Z¸, ZSel‰s, ZSel‰t, ZApp, ZDecor‰s, ZPre‰s, 
 Z³‰s, Z±‰s, Z²‰s, Z´‰s, Z¤‰s, Zù‰s, ZHide‰s, Z„‰s, 
 Z˜‰s, Z»‰s, ZRename‰s
@@ -1489,13 +1505,26 @@ val Ûpredsexp_decsexp_thmÝ = eqn_sym_rule decsexp_predsexp_thm;
 =TEX
 \subsection{Functions}
 =SML
+local
+val cnv1 = simple_eq_match_conv1 z'schemapred_def;
+val cnv2 = simple_eq_match_conv1 decsexp_predsexp_thm;
+val cnv3 = simple_eq_match_conv1 many_dec_thm;
+val cnv4 = simple_eq_match_conv1 single_dec_thm;
+val dp_schemapred_conv = (fn tm =>
+let	val s1 = cnv2 tm;
+in
+	(full_dest_z_predsexp (snd(dest_eq(concl s1))); s1)
+	handle (Fail _) =>
+	conv_rule (RAND_C(RATOR_C(RATOR_C cnv1))) s1
+end);
+in
 val Ûdec_pred_convÝ :CONV = (fn tm => (
-	(simple_eq_match_conv single_dec_thm ORELSE_C
-	simple_eq_match_conv many_dec_thm ORELSE_C
-	simple_eq_match_conv decsexp_predsexp_thm ORELSE_C
+	(cnv4 ORELSE_C cnv3 ORELSE_C
+	dp_schemapred_conv ORELSE_C
 	(fn tm1 => term_fail "dec_pred_conv" 41010 [tm1])
 	) tm)
 );
+end;
 =TEX
 =SML
 local
@@ -1520,6 +1549,9 @@ end;
 =TEX
 =SML
 local
+	val cnv2 = simple_eq_match_conv1 sym_many_dec_thm;
+	val cnv3 = simple_eq_match_conv1 sym_single_dec_thm;
+	val cnv4 = simple_eq_match_conv1 predsexp_decsexp_thm;
 	val ec = [(ñ¬Z'Setd y® € x®, (fn tm =>
 			let val (yx,ss) = dest_z_ tm;
 				val (y,x) = (case dest_z_tuple yx of
@@ -1528,7 +1560,7 @@ local
 				val ys = dest_z_setd y;
 			in
 				if (all (snd ys) is_var) andalso (length (snd ys) > 1)
-				then simple_eq_match_conv1 sym_many_dec_thm tm
+				then cnv2 tm
 				else term_fail "pred_dec_conv" 41011 [tm]
 			end)),
 		(ñ¬Z'Ê x®  y®, Ê_s__s_conv),
@@ -1536,10 +1568,10 @@ local
 			let val (y,x) = dest_z_ tm;
 			in
 				if is_var y
-				then simple_eq_match_conv1 sym_single_dec_thm tm
+				then cnv3 tm
 				else term_fail "pred_dec_conv" 41011 [tm]
 			end)),
-		(¬Z'SchemaPred x y®, simple_eq_match_conv1 predsexp_decsexp_thm)];
+		(¬Z'SchemaPred x y®, cnv4)];
 	val cnv1 = eqn_cxt_conv ec;
 in
 val Ûpred_dec_convÝ : CONV = (cnv1 ORELSE_C 
@@ -3100,16 +3132,21 @@ end;
 	 (asm_rule ñµ x,y :X;z:Y | x = z · x = y®); (* fail - no change *)
 =TEX
 =SML
+local
+	val cnv1 = simple_eq_match_conv ³_²_thm;
+	val cnv2 = simple_eq_match_conv ³_thm1;
+in
 fun Ûz_³_rewrite_canonÝ (thm : THM) : THM list = (
 	(dest_z_³(concl thm);
 	[conv_rule (FIRST_C[
-		simple_eq_match_conv ³_²_thm,
+		cnv1,
 		z_³_¶_conv,
 		³_³_conv,
-		simple_eq_match_conv ³_thm1])thm])
+		cnv2])thm])
 	handle complaint =>
 	fail_canon thm
 );
+end;
 =TEX
 \subsection{Set Displays and Membership}
 =SML
