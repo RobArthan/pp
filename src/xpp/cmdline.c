@@ -47,7 +47,7 @@ static CmdLineData cmd_line_data;
  * and font for the text widget can be borrowed.
  *
  * Because we want to borrow the translations from a multi-line text
- *  widget, it seems that we cannot make the text area here a
+ * widget, it seems that we cannot make the text area here a
  * text field or single-line text widget. However, we do want
  * carriage return in the text area to cause the command to be
  * executed. The solution is: (a) to use a multi-line text widget
@@ -74,20 +74,18 @@ void add_cmd_line(Widget text_w)
 	};
 
 	shell = XtVaCreatePopupShell("xpp_Command_Line",
-		xmDialogShellWidgetClass, text_w,
+		xmDialogShellWidgetClass, root,
 		NULL); 
 
 
 	cmd_form = XtVaCreateWidget("command_line_form",
 		xmFormWidgetClass, 		shell,
 		XmNautoUnmanage,			False,
-		XmNtraversalOn,			True,
 		XmNfractionBase,		12,
 		NULL);
 
 	cmd_btn = XtVaCreateManagedWidget("Command:",
 		xmPushButtonWidgetClass,		cmd_form,
-		XmNtraversalOn,			False,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_FORM,
@@ -96,9 +94,8 @@ void add_cmd_line(Widget text_w)
 		XmNalignment,			XmALIGNMENT_BEGINNING,
 		NULL);
 
-	cmd_text = XtVaCreateManagedWidget("pp_text",
+	cmd_text = XtVaCreateManagedWidget("cmd_text",
 		xmTextWidgetClass,		cmd_form,
-		XmNtraversalOn,		True,
 		XmNeditMode,			XmMULTI_LINE_EDIT,
 		XmNrows,			1,
 		XmNcolumns,			40,
@@ -118,6 +115,27 @@ void add_cmd_line(Widget text_w)
 	cmd_line_data.manager_w = cmd_form;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * copy various aspects of argument text widget behaviour
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+	XtVaGetValues(text_w, XmNtranslations, &translations, NULL);
+	if(translations != NULL) {
+		XtUninstallTranslations(cmd_text);
+		XtVaSetValues(cmd_text, XmNtranslations, translations, NULL);
+	}
+
+	XtVaGetValues(text_w, XmNfontList, &fontlist, NULL);
+	if(fontlist != NULL) {
+		XtVaSetValues(cmd_text, XmNfontList, fontlist, NULL);
+	}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Make return in the text widget activate it
+ **** **** **** **** **** **** **** **** **** **** **** **** */
+	XtOverrideTranslations(cmd_text,
+		XtParseTranslationTable("<Key>Return: activate()"));
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * add callbacks.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
@@ -127,24 +145,6 @@ void add_cmd_line(Widget text_w)
 	XtAddCallback(cmd_text, XmNactivateCallback,
 		cmd_line_cb, (XtPointer)(&cmd_line_data));
 
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * copy various aspects of argument text widget behaviour
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-	XtVaGetValues(text_w, XmNtranslations, &translations, NULL);
-	if(translations != NULL) {
-		XtOverrideTranslations(cmd_text, translations);
-	}
-
-	XtVaGetValues(text_w, XmNfontList, &fontlist, NULL);
-	if(fontlist != NULL) {
-		XtVaSetValues(cmd_text, XmNfontList, fontlist, NULL);
-	}
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Make return in the text widget activate ie
- **** **** **** **** **** **** **** **** **** **** **** **** */
-	XtOverrideTranslations(cmd_text,
-		XtParseTranslationTable("<Key>Return: activate()"));
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Manage everything:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
