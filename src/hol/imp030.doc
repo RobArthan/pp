@@ -45,7 +45,11 @@
 \subsection{Changes History}
 \begin{description}
 \item [Issue 1.1]
-First version.
+First version, working but untested.
+\item [Issue 1.2]
+Changes during testing.
+Added a local $nat\_of\_string$.
+Corrected errors.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -73,11 +77,32 @@ type âLABELá = int list;
 fun âstring_of_labelá (lab : LABEL) : string = (
 	format_list string_of_int lab "."
 );
-
+=TEX
+As $nat\_of\_string$ initially explodes and reverses its
+string, and we already have an exploded, reversed list of
+characters, we give a local version of that function,
+using the same error numbers as the original
+=SML
 local
+	val ord0 = ord "0";
+
+	fun exr_nat_of_string (s : string list) : int = (
+	let	fun aux (dig :: digs) = (
+			let	val n = ord dig - ord0;
+			in	if n >= 0 andalso n <= 9
+				then n + (10 * aux digs)
+				else fail "label_of_string" 1012 [(fn (():unit) => implode(rev s))]
+			end
+		) | aux [] = 0;
+	in	case s of
+			[] => fail "label_of_string" 1013 []
+		|	_ => aux s
+	end
+	);
+
 	fun aux acc ("." :: x) = (
 	let
-		val n = nat_of_string (implode (rev acc))
+		val n = exr_nat_of_string acc
 	in
 		if n = 0
 		then fail "label_of_string" 30042 []
@@ -86,12 +111,10 @@ local
 	) | aux acc (a :: x) = (
 		aux (a :: acc) x
 	) | aux [] [] = []
-	| aux acc [] = [nat_of_string (implode (rev acc))];
+	| aux acc [] = [exr_nat_of_string acc];
 in
 fun âlabel_of_stringá (st : string) : LABEL = (
 	aux [] (explode st)
-	handle complaint =>
-	pass_on complaint "nat_of_string" "label_of_string"
 );
 end;
 =TEX
@@ -124,7 +147,8 @@ let	fun lab_eq (a1 :: x1) (a2 :: x2) =
 		(a1 = a2) andalso
 		lab_eq x1 x2
 	| lab_eq [] (a2 :: x2) = fail caller 30041 [fn () => string_of_label lab]
-	| lab_eq _ [] = true;
+	| lab_eq (a1 :: x1) [] = fail caller 30017 [fn () => string_of_label lab]
+	| lab_eq [] [] = true;
 
 in
 	snd(find assoc (fn (x,_) => lab_eq lab x))
@@ -253,7 +277,8 @@ end);
 First introduce $icl'TS$:
 =SML
 val âicl'ts_defá = simple_new_defn("icl'TS","icl'TS",» x : BOOL Ž x¼);
-val âicl'ts_thmá = all_ƒ_intro(simple_all_%beta%_rule (ap_arg_rule »x : BOOL¼ icl'ts_def));
+val âicl'ts_thmá = save_thm("icl'ts_thm",
+	all_ƒ_intro(simple_all_%beta%_rule (ap_arg_rule »x : BOOL¼ icl'ts_def)));
 val âicl'tsá = »icl'TS¼;
 val âicl'ts_rev_thmá = all_ƒ_intro(eq_sym_rule(
 	simple_all_%beta%_rule (ap_arg_rule »x : BOOL¼ icl'ts_def)));
@@ -304,7 +329,7 @@ in
 	then (asms,conc)
 	else term_fail "mk_goal_from_term" 30023 [tm]
 end
-handle complaint =>
+handle (Fail _) =>
 term_fail "mk_goal_from_term" 30023 [tm]
 );
 end;
@@ -431,10 +456,6 @@ in
 	())
 end);
 end;
-=IGN
-Nasty:
-val big = »ƒ x y z p q r Ž (x € y € z) (x € y € z) (x € y € z) (x € y € z) (x € y € z) (x € y € z) (x € y € z) (x € y € z) (x € y € z) (x € y € z) (x € y € z) (x € y € z)¼;
-print_goal([big,big],big);
 =TEX
 We presume 3052 contains that ``?0'' precedes ``?1'' in message 3052,
 and we obey the detailed design in setting ``?0'' to ``\\n''..
@@ -489,7 +510,9 @@ in
 fun âpush_goalá (goal as (asms,conc) : GOAL) : unit = (
 let	val {main_goal_stack = main_goal_stack, ...} = !current;
 	val side_effect = two_aconv asms;
-	val tm_goal = mk_term_form_goal goal;
+	val tm_goal = mk_term_form_goal goal
+		handle complaint =>
+		pass_on complaint "mk_term_form_goal" "push_goal";
 	val lg = ([(top_label,tm_goal)],[]);
 	val cg = Value top_label;
 	val gst = asm_rule tm_goal;
@@ -504,8 +527,6 @@ in
 	())
 end);
 end;
-=IGN
-push_goal ([mk_t, mk_f],mk_t);
 =TEX
 =SML
 fun âpush_goal_state_thmá (goal_state_thm : THM) : unit = (
@@ -541,13 +562,6 @@ in
 		print_goals_labelled(map (fn x => [x]) (rev(interval 1 (length hys)))));
 	())
 end);
-=IGN
-push_goal_state_thm t_thm; (* fail *)
-push_goal_state_thm (asm_rule »icl'TS T¼);
-push_goal_state_thm (‚_t_elim(simple_ƒ_elim »T¼ icl'ts_thm));
-push_goal_state_thm (asm_intro »ƒ y Ž y Š icl'TS y¼ (asm_rule »icl'TS T¼));
-push_goal_state_thm (asm_intro »ƒ z Ž (z  z) Š icl'TS z¼
-	 (asm_intro »ƒ y Ž y Š icl'TS y¼ (asm_rule »icl'TS T¼)));
 =TEX
 \subsection{Applying Tactics}
 Create a theorem whose conclusion is the conclusion of a goal,
@@ -863,7 +877,7 @@ let	val {main_goal_stack = main_goal_stack,...} = !current;
 	val res = top_thm_rule goal_state_thm;
 	val res' = save_thm(key,res)
 		handle complaint =>
-		pass_on complaint "save_save_thm" "save_pop_thm";
+		pass_on complaint "save_thm" "save_pop_thm";
 
 	val new_mgs = tl main_goal_stack;
 	val lnew_mgs = length new_mgs;
@@ -903,6 +917,7 @@ let	val {main_goal_stack = main_goal_stack,...} = !current;
 		| [] =>  fail "top_goal_state_thm" 30010 []);
 in
 	(if mgst then diag_line(get_error_message 30024 []) else ();
+	if is_nil(hyps goal_state_thm) then diag_line(get_error_message 30028 []) else ();
 	goal_state_thm)
 end);
 =TEX
@@ -920,19 +935,25 @@ let	val hys = hyps thm;
 			val s1 = asm_rule gl;
 			val s2 = simple_all_ƒ_elim s1;
 			val s3 = strip_n_Š (length asms) s2;
-			val s4 = term_form_goal_rule [] asms s3;
+			val s4 = term_form_goal_rule [gl] asms s3;
 		in
 			s4
 		end)
 		hys;
-	val replace_hyps = fold (uncurry prove_asm_rule) hgoals thm;
+	val replace_hyps = fold (uncurry prove_asm_rule) (rev hgoals) thm;
 	val mf_s1 = simple_all_ƒ_elim replace_hyps;
 	val mf_s2 = strip_Š_rule mf_s1;
-	val mf_s3 = simple_ƒ_elim (snd(dest_comb(concl mf_s2))) icl'ts_thm;
+	val mf_s3 = simple_ƒ_elim (snd(dest_comb(concl mf_s2))) icl'ts_thm
 	val mf_s4 = ‚_mp_rule mf_s3 mf_s2;
 in
 	mf_s4
-end);
+end
+handle complaint =>
+list_divert complaint "simplify_goal_state_thm" [
+	("mk_goal_from_term",30005,[]),
+	("dest_comb",30005,[]),
+	("‚_mp_rule",30005,[])]
+);
 end;
 =TEX
 =SML
@@ -1132,10 +1153,10 @@ let	val {main_goal_stack = main_goal_stack,...} = !current;
 		current_goal = current_goal,...} = 
 		(case main_goal_stack of
 		(a :: _) => a
-		| [] =>  fail "top_current_goal" 30026 []);
+		| [] =>  fail "top_current_label" 30026 []);
 	val cg = case current_goal of
 		Value v => v
-		| Nil => fail "top_current_goal" 30026 [];
+		| Nil => fail "top_current_label" 30026 [];
 in
 	string_of_label cg
 end);
@@ -1149,7 +1170,7 @@ let	val nlabel = label_of_string label
 	val GS{labelling = labelling,...} = 
 		(case main_goal_stack of
 		(a :: _) => a
-		| [] =>  fail "top_current_goal" 30026 []);
+		| [] =>  fail "top_labelled_goal" 30026 []);
 	val gterm = lookup_in_labelled "top_labelled_goal" nlabel labelling;
 in
 	 mk_goal_from_term gterm
@@ -1162,11 +1183,11 @@ let	val {main_goal_stack = main_goal_stack,...} = !current;
 		current_goal = current_goal,...} = 
 		(case main_goal_stack of
 		(a :: _) => a
-		| [] =>  fail "top_current_goal" 30026 []);
+		| [] =>  fail "get_asm" 30026 []);
 	val cg = case current_goal of
 		Value v => v
-		| Nil => fail "top_current_goal" 30026 [];
-	val cg_term = lookup_in_labelled "top_current_goal" cg labelling;
+		| Nil => fail "get_asm" 30026 [];
+	val cg_term = lookup_in_labelled "get_asm" cg labelling;
 	val cg_term' = snd(simple_strip_ƒ cg_term);
 	val hys_plus_conc = (strip_Š cg_term');
 	val sideeffect = if (n >= length hys_plus_conc) orelse (n < 1)
@@ -1194,7 +1215,7 @@ let	val {main_goal_stack = main_goal_stack,...} = !current;
 	val GS{labelling = labelling,...} = 
 		(case main_goal_stack of
 		(a :: _) => a
-		| [] =>  fail "top_current_goal" 30026 []);
+		| [] =>  fail "top_goals" 30010 []);
 in
 	map (fn (x,y) => (map string_of_label x, 
 			mk_goal_from_term y))
@@ -1213,6 +1234,7 @@ fun âprint_goal_stateá (gs as GS{labelling = labelling,
 	| Value v => (
 		diag_line(get_error_message 30050 []);
 		map (uncurry print_goal_with_label) (fst labelling);
+		diag_line "";
 		diag_line(get_error_message 30047 []);
 		print_goal_with_label v (lookup_in_labelled "print_goal_state" 
 			v labelling)
@@ -1332,15 +1354,3 @@ fun comp_stats (s1,n1) (s2,n2) = (
 );
 
 sort comp_stats (get_stats ());
-
-
-(* 10 *)  »P_1_1¼
-....
-(*  6 *)  »P_1_1¼
-(*  5 *)  »P_2_2¼
-(*  4 *)  »P_3_2¼
-(*  3 *)  »Œ P_2_1¼
-(*  2 *)  »Œ P_1_2¼
-(*  1 *)  »Œ P_3_1¼
-
-(* ?… *)  »P_2_2 € P_3_2¼
