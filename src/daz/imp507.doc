@@ -4080,6 +4080,7 @@ fun Ûprefix_formal_procsÝ (ident : ID)
 
 =TEX
 The following function does the prefixing of the given set paragraphs and returns a list of paragraph infos representing the prefixed paragraphs, together with a substitution list for use in prefixing appearances of type names in terms.
+It does not touch defining axioms for these given sets.
 =SML
 fun Ûprefix_given_setsÝ  (ident : ID) (newids : ID list) (names : ID list)
 	: (string * string) list * PARAINFO list = (
@@ -4090,54 +4091,132 @@ fun Ûprefix_given_setsÝ  (ident : ID) (newids : ID list) (names : ID list)
 );
 
 =TEX
-The following function does the prefixing of the paragraphs defining global variables other than given sets and returns a list representing the prefixed paragraphs.
-(N.B. it is important that this function skips over paragraphs other than axiomatic boxes and abbreviation definition) since the earlier processing will not have filtered out given set definitions).
+The following function does the prefixing and storing of the paragraphs defining global variables other than given sets and returns a list representing the prefixed paragraphs.
 =SML
-fun Ûprefix_const_thmsÝ (ident : ID)
+fun Ûstore_prefix_const_thmsÝ (ident : ID)
 		(tysubs : (string * string) list)
 		(newids : ID list)
 		(const_thms : (TERM * THM OPT) list)
-		: PARAINFO list = (
-	let	val ty_ty = (fn ty => (type_subst_type tysubs ty 
-			handle (Fail _) => ty));
-		fun aux ((const, Nil) :: more) = (
-			let	val (name, ty, _) = dest_z_gvar const;
-			in
-				new_const
-				((z_id_of_id o prefix_package_id ident newids)
-					name,
-					ty_ty ty);
-				aux more
-			end
-		) | aux ((const, Value thm) :: more) = (
-			let	val (pty, tm1) = (dest_app o snd o dest_thm) thm;
-				val (name, ty1, _) = dest_z_gvar const;
-				val lvar = (mk_z_lvar o dest_z_gvar) const;
-				val prename = prefix_package_id ident newids name;
-				val tm = (prefix_term ident tysubs newids o 
-						subst [(lvar, const)]) tm1;
-				val ty = ty_ty ty1;
-			in
-			   	case (fst o dest_const) pty handle Fail _ => "" of
-				"Z'AxDes" => (
-					let val (decl, vp) =
-					((Combinators.I ** Value) o dest_±) tm
-							handle Fail _ => (tm, Nil);
+		: unit = (
+let	val ty_ty = (fn ty => (type_subst_type tysubs ty 
+		handle (Fail _) => ty));
+	fun collapse (consts : TERM list) (othm : THM OPT) ([] : (TERM * THM OPT) list) = (
+		if is_nil consts
+		then []
+		else [(consts, othm)]
+	) | collapse consts Nil ((const, othm) :: more) = (
+		if is_nil consts
+		then collapse [const] othm more
+		else (consts, Nil) :: collapse [const] othm more
+	) | collapse consts othm ((const, Nil) :: more) = (
+		if is_nil consts
+		then collapse [const] Nil more
+		else (consts, othm) :: collapse [const] Nil more
+	) | collapse consts (Value thm) ((const, (Value thm1)) :: more) = (
+		if (thm =|- thm1)
+		then collapse (const :: consts) (Value thm) more
+		else (consts, (Value thm)) :: collapse [const] (Value thm1) more
+	);
+	fun aux ((consts, Nil) :: more) = (map (fn const =>
+		let	val (name, ty, _) = dest_z_gvar const;
+		in
+			new_const
+			((z_id_of_id o prefix_package_id ident newids)
+				name,
+				ty_ty ty)
+		end
+		handle (Fail _) => 		
+		let	val (name, ty) = dest_const const;
+		in
+			new_const
+			((prefix_package_id ident newids)
+				name,
+				ty_ty ty)
+		end) consts;
+		aux more
+	) | aux ((consts, Value thm) :: more) = (
+	let	val (pty, tm1) = (dest_app o snd o dest_thm) thm;
+		val lvars = map (mk_z_lvar o dest_z_gvar) consts;
+		val plvars = map (prefix_term ident tysubs newids) lvars;
+		val tm = (prefix_term ident tysubs newids o 
+				subst (combine lvars consts)) tm1;
+		val pntys = map (fn l => (let val (pn, pty, _) = dest_z_lvar l; 
 					in
-						AxDesInfo ([],
-							decl, vp,
-							 [(prename, ty)])
-					end :: aux more
-				) |"Z'AbbDef" => (
-					AbbDefInfo (prename, [], (snd o dest_eq) tm)
-							 :: aux more
-				) | _ => aux more
-			end
-		) | aux [] = [];
-	in	aux const_thms
+						(pn, pty)
+					end))
+				plvars;
+		val name_strings = format_list string_of_term consts ", ";
+	in
+		case (fst o dest_const) pty handle Fail _ => "" of
+		"Z'AxDes" => (
+			(let val (decl, vp) =
+				((Combinators.I ** Value) o dest_±) tm
+					handle Fail _ => (tm, Nil);
+			in
+				store_para(AxDesInfo ([], decl, vp, pntys))
+			end);
+			aux more
+		) |"Z'AbbDef" => (
+			store_para(AbbDefInfo (fst(hd pntys), [], (snd o dest_eq) tm));
+				 aux more
+		) |"Z'SchBox" => (
+			store_para(SchBoxInfo (fst(hd pntys), [], (snd o dest_eq) tm));
+				 aux more
+		) | _ => (if (length consts = 1)
+			then ((let val (lhs, rhs) = dest_eq (concl thm);
+			 in
+				if lhs =$ hd(consts)
+				then (simple_new_defn ([fst(hd pntys)],
+					z_id_of_id (fst(dest_var (hd plvars))), 
+					(prefix_term ident tysubs newids rhs));
+					())
+				else comment "z_prefix" 507057 
+					[fn () => name_strings]
+			 end)
+			 handle (Fail _) => comment "z_prefix" 507057 
+				[fn () => name_strings])
+			else comment "z_prefix" 507057 
+				[fn () => name_strings];
+			aux more
+		)
 	end
-);
+	) | aux [] = ();
+in	aux (collapse [] Nil const_thms)
+end);
 =TEX 
+
+=SML
+fun Ûstore_prefix_types_and_constsÝ (ident : ID)
+		(newids : ID list)
+		(internal_thy : string) 
+		(thyname : string) : (string * string) list = (
+let	val old_thy = get_current_theory_name();
+	val dummy1 = open_theory internal_thy;
+	val itypes = rev(get_types internal_thy);
+	val iconsts = rev(get_consts internal_thy);
+	val iconst_thms = map (fn x => (x, (Value (get_spec x)
+					handle Fail _=> Nil))) 
+				iconsts;
+	val type_names = map (fst o dest_ctype) itypes;
+	val pfxd_names = map (prefix_package_id ident newids) type_names;
+	val tysubs = (combine pfxd_names type_names) drop (fn (x,y) => (x = y));
+	val dummy2 = open_theory thyname;
+	fun do_type (ty : TYPE) = (
+	let 	val (s,args) = dest_ctype ty;
+		val n = length args;
+		val prefixed_s = rassoc1 tysubs s;
+	in
+		new_type(prefixed_s, n)
+	end);
+	val ptypes = map do_type itypes;
+	val dummy3 = store_prefix_const_thms ident tysubs newids
+		iconst_thms;
+	val dummy4 = open_theory old_thy;
+in
+	tysubs
+end);
+=TEX
+
 The following removes the characters ``vc'' from the start of an ID,
 if they happen to be present.
 =SML
@@ -4211,7 +4290,6 @@ fun Ûcreate_prefixed_spec_from_internal_theoryÝ
 		val side = open_theory internal_name handle (Fail _) =>
 			fail "create_prefixed_spec_from_internal_theory" 507038
 			[fn () => ident];
-		val (tys, const_thms) = internal_theory_types_and_const_thms internal_name;
 		val conjectures = get_conjectures internal_name;
 		val newids = new_ids package;
 		val pinformal_funs = map (prefix_informal_fun ident newids)
@@ -4220,10 +4298,8 @@ fun Ûcreate_prefixed_spec_from_internal_theoryÝ
 			(map #informal_fun (#formal_funs package));
 		val side = new_package_spec_theory context ident
 				handle Fail _ => open_package_spec_theory ident;
-		val (tysubs, paras1) = prefix_given_sets ident newids tys;
-		val dummy1 = map store_para paras1;
-		val paras2 = prefix_const_thms ident tysubs newids const_thms;
-		val dummy2 = map store_para paras2;
+		val tysubs = store_prefix_types_and_consts ident newids
+			internal_name (pack_spec_name ident);
 		val paras3 = prefix_conjectures ident tysubs newids conjectures;
 		val dummy3 =	map store_para paras3;
 		val thychange1 = open_theory internal_name;
