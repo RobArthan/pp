@@ -1,0 +1,567 @@
+=TEX
+% TQtemplate.tex
+\documentstyle[hol,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{HOL PDS: Theory Management}  %% Mandatory field
+\TPPref{DS/FMU/IED/SPC005}  %% Mandatory field
+\def\SCCSversion{$Revision$
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+%\TPPdate{}  %% Mandatory field (with sensible default)
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthors{R.D.~Arthan & WIN01 \\ K. Blackburn & WIN01}  %% Mandatory field
+\TPPauthorisation{R.D.~Arthan & FST Team Leader}
+\TPPabstract{This document contains a formal specification,
+in HOL, of
+an abstract model of the theory management subsystem of the
+abstract data type used to represent theorems in the ICL HOL system.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+      Library}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents list}
+\tableofcontents
+\pagebreak
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history}  % to get section number `0.3'
+\begin{description}
+\item[Issue \SCCSversion (\FormatDate{$Date$%
+})]
+First draft.
+\end{description}
+\subsection{Changes forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document gives a formal specification, at an abstract
+level of parts of the HOL proof development system.
+The subsystem to which it relates is described
+in  \cite{DS/FMU/IED/HLD007}.
+
+
+
+\subsection{Introduction}
+\subsection{Background and Requirements}
+The high level design document, \cite{DS/FMU/IED/HLD007}
+identifies a division of the abstract data type used
+to represent theorems into two sybsystems:
+Theory Management and Inference Rules.
+This document is concerned with the theory management
+subsystem.
+
+We give
+a model of the main data structures
+on which the abstract data type operates. This is most clearly
+done by giving Standard ML type definitions.
+We stress that the
+definitions are intended to describe a simplified model of 
+the actual system, and the actual details of the internal
+databypes may be implementation dependent.
+
+
+\subsection{Dependencies}
+This document depends on the suite of documents formalising
+HOL, overviewed in \cite{DS/FMU/IED/SPC001}.
+
+\section{PREAMBLE}
+Â
+close_theory();
+load_theory"spc004";
+new_theory"spc005";
+Ê
+\section{PRELIMINARIES}
+\subsection{Utilities}
+Should go in SML027.
+»
+	‚distinct· : (*)list ã bool
+…
+		distinct [] = T
+	Ä	Éx tédistinct (CONS x t) Ç x ∆ t Ä distinct t
+À
+\subsection{Dictionaries}
+Axioms, definitions and the like are held in the
+implementation in tables indexed by names.
+We refer to such tables as dictionaries.
+
+We model dictionaries as sets of pairs representing
+partial functions in the usual set-theoretic manner.
+In the implementation these will actually be finite
+partial functions represented by a concrete data structure
+such as a list of pairs, but the finiteness is not
+relevant here.
+Â
+TypeInference.new_type_abbrev "‚DICT·" ª:(string â *X) ã boolº;
+Ê
+Dictionaries are formed starting with an initial, empty, dictionary:
+
+»
+	‚initial_dict· : (*X)DICT
+…
+	initial_dict = §
+À
+
+Entries are added to a dictionary using the function
+$enter$, which is an overwriting operation:
+»
+	‚enter· : string ã *X ã (*X)DICT ã (*X)DICT
+…
+	Ékey item dict k ié
+		(k, i) ù enter key item dict
+	Ç	(k = key => i = item | (k, i) ù dict)
+À
+We look things up in a dictionary using $lookup$:
+
+»
+	‚lookup· : string ã (*X)DICT ã *X ã bool
+…
+	Ékey dict itemé
+		lookup key dict item Ç (key, item) ù dict
+À
+
+We may also delete things from a dictionary using $delete$:
+»
+	‚delete· : string ã (*X)DICT ã (*X)DICT
+…
+	Ékey dict k ié
+		(k, i) ù delete key dict Ç (k, i) ù dict Ä k à key
+À
+
+\subsection{Stores}
+The state of the proof development system will be
+held in assignable metalanguage variables of various types.
+To model these we use a polymorphic notion of a store.
+
+The addresses for our stores come from the following
+countably infinite type, $ADDR$:
+Â
+val ‚ADDR_DEF· = new_type_definition "ADDR_DEF" "‚ADDR·" []
+	(TAC_PROOF(([], ªÑn:Üé(çxéT) nº), REWRITE_TAC[])) NORMAL;
+Ê
+A store is a partial function from addresses to values,
+represented as a set of pairs:
+Â
+TypeInference.new_type_abbrev "‚STORE·" ª:(ADDR â *X) ã boolº;
+Ê
+The operations on stores are assignment, dereferencing
+and allocation.
+
+$<-$ is the assignment operation:
+Á
+	‚<-· : ADDR ã *X ã (*X)STORE ã (*X)STORE ã bool
+…
+	É addr value st1 st2é
+		$<- addr value st1 st2 Ç
+			(Ñvé(addr, v) ù st1)
+		Ä	(Éa vé(a,v) ù st2 Ç (a = addr => v = value | (a, v) ù st1))
+À
+
+$fetch$ is the dereferencing operation:
+»
+	‚fetch· : ADDR ã (*X)STORE ã *X ã bool
+…
+	É addr st valueé fetch addr st value Ç (addr, value) ù st
+À
+
+$new$ is the allocation operation:
+»
+	‚new· : *X ã (*X)STORE ã ((*X)STORE â ADDR) ã bool
+…
+	É value st1 st2 addré
+		new value st1 (st2, addr) Ç
+			(Éa vé(a, v) ù st1 ä a à addr)
+		Ä	(Éa vé(a,v) ù st2 Ç (a = addr => v = value | (a, v) ù st1))
+À
+
+Stores are constructed using $new$ from an intial empty
+store:
+»
+	‚initial_store· : (*X)STORE
+…
+	initial_store = §
+À
+
+\section{THE SYSTEM STATE}
+\subsection{Discussion}
+In the sequel we define a model of a proof development system for HOL.
+This is a more implementation-oriented model than the abstract one used
+in \cite{DS/FMU/IED/SPC004}. Where confusion might otherwise arise we
+use the terms {\em concrete} and {\em abstract} to distinguish notions
+in the present model from related notions in the more abstract treatment.
+
+The main features of the implementation which we are modelling are
+as follows:
+
+\begin{enumerate}
+\item
+the representation of the theory hierarchy within
+the store of a machine;
+\item
+the mechanisms whereby use of a theorem is restricted to contexts
+which include the context in which it was proved
+\item
+the commands which manipulate the theory hierarchy or modify the
+context in which proof is carried out
+\end{enumerate}
+
+However, the model is still quite abstract in a number of ways.
+For example, there is no commitment here as to whether the theory
+hierarchy is held entirely in main store or whether it is a main store
+data structure used to access the contents of a theory in backing store.
+Nor do we define a number of mechanisms which will be necessary in the
+interests of efficiency, e.g. the use of a symbol table to give fast access to
+the context.
+
+\subsection{User-Defined Data}
+Theories will be record types containing a field in which essentially
+arbitrary user-defined data can be stored.
+This will be used to 
+support the concrete syntax of HOL, e.g. by allowing the syntactic
+properties of identifiers to be stored in a theory,
+and may be used for similar purposes for other languages.
+The presence of this field is not critical to the
+integrity of the system. Our model will be polymorphic
+over the type of this information, for which we will
+systematically use the type variable ${*}USER\_DATA$.
+
+\subsection{Concrete Theories}
+It is useful to have
+a representation for the contents of a theory.
+This serves for the internal representation in our
+simplified model (and would be available for general
+use, e.g by the theory lister).
+«"‚THEORY_CONTENTS·" "tc"ﬂ
+	name			: string,
+	ty_env			: Ü DICT,
+	con_env 		: TYPE DICT,
+	parents			: string list,
+	axiom_dict		: (SEQ â Ü) DICT,
+	definition_dict		: (SEQ â Ü) DICT,
+	theorem_dict		: (SEQ â Ü) DICT,
+	current_level		: Ü,
+	deleted_levels		: Ü ã bool,
+	user_data		: *USER_DATA
+…
+	T
+ 
+
+Here the fields have the following significance:
+
+\begin{tabular}{|l|p{4in}|}\hline
+Field & Description \\ \hline
+$name$ & This gives the name of the theory.
+\\ \hline
+$ty\_env$ & This represents a type environment assigning arities
+to type operator names. It corresponds to the $TY\_ENV$ component of a theory
+as specified in \cite{DS/FMU/IED/SPC001}.
+\\ \hline
+$con\_env$ & This represents a constant environment assigning types  
+to constant names. It corresponds to the $CON\_ENV$ component of a theory
+as specified in \cite{DS/FMU/IED/SPC001}.
+\\ \hline
+$parents$ & This is the set of names of parents of this theory.
+\\ \hline
+$axiom\_dict$ & This contains the non-definitional axioms of the theory.
+Each axiom is marked with the level number which was current
+when the axioms was introduced.
+\\ \hline
+$definition\_dict$ & This contains the definitional axioms of the theory.
+Like the axioms, these are marked with a level number.
+\\ \hline
+$theorem\_dict$ & This contains the theorems which have been saved on the theory.
+Again, these are marked with a level number.
+\\ \hline
+$user\_data$ & This contains the user-defined data stored in the theory
+\\ \hline
+$current\_level$ & This is the current level number. It is
+0 when a theory is first created. It is incremented whenever
+a definition or an axiom is introduced.
+\\ \hline
+$deleted\_levels$ & This is the set of level numbers
+corresponding to definitions or axioms which have been
+deleted.
+\\ \hline
+\end{tabular}
+
+Note that a theory can be used without
+modifying any of the above information.
+Moreover this information does not depend on the hierarchy containing
+the theory.
+
+
+\subsection{Concrete Theory Hierarchies} \label{TheoryHierarchies}
+A theory hierarchy is essentially a set of records each comprising
+a theory contents together
+with information about the theory which is local to the hierarchy
+(or to the proof context).
+
+The local information comprises a status indicator (which indicates
+a fairly permanent property of the theory) and a scope flag which is
+set true when the theory in question is the current theory or one
+of its ancestors.
+The scope flag is discussed in more detail
+in section \ref{SystemState} below.
+
+We take the status indicator as a number, although in
+an implementation it would more likely have an enumeration
+type. For present purposes, we recognise the following values
+for the status indicator. An implementation might well
+recognise more values (as a somewhat bizarre example,
+a theory might be password protected).
+
+»
+	‚TSNormal·	: Ü,
+	‚TSLocked·	: Ü,
+	‚TSInAncestor·	: Ü,
+	‚TSDeleted·	: Ü
+…
+	distinct [TSNormal, TSLocked, TSInAncestor, TSDeleted]
+À
+
+The significance of the theory status values is as follows:
+
+\begin{tabular}{|l|p{4in}|} \hline
+Value & Description \\ \hline
+$TSNormal$ &
+A theory which can be modified while this theory hierarchy is current
+\\ \hline
+$TSLocked$ &
+A theory which cannot be modified while this theory hierarchy
+is current because the user has asked for it to be locked.
+(The user may however unlock it in order to modify it).
+\\ \hline
+$TSInAncestor$ &
+A theory which cannot be modified while this theory hierarchy is
+current since it belongs to an ancestor of the corresponding
+database.
+\\ \hline
+$TSDeleted$ &
+A theory which has been deleted.
+\\ \hline
+\end{tabular}
+
+
+The information about a theory held in a theory hierarchy
+then has the following type:
+
+«"‚THEORY_INFO·" "ti"ﬂ
+	status		: Ü,
+	inscope		: bool,
+	contents	: ADDR
+…
+	T
+ 
+Here the address
+will reference a $THEORY\_INFO$ held in a store of same.
+
+A theory hierarchy will then comprise a list of
+$THEORY\_INFO$s:
+Â
+TypeInference.new_type_abbrev "‚HIERARCHY·" ª:(THEORY_INFO)listº;
+Ê
+
+\subsection{Concrete Theorems} \label{Theorems}
+A theorem is represented by the following data type:
+
+«"‚PDS_THM·" "pt"ﬂ
+	theory		: ADDR,
+	level		: Ü,
+	sequent		: SEQ
+…
+	T
+ 
+The $pt\_theory$ component here gives the address of
+the (contents of the) theory to which the theorem belongs (with respect to
+a store of theory contents held in the state of the system).
+The level number is that which was current when the
+theorem was proved.
+
+\subsection{The System State} \label{SystemState}
+The state of our model of the proof development
+system has the following type:
+
+«"‚PDS_STATE·" "ps"ﬂ
+	current_theory		: ADDR,
+	current_hierarchy	: ADDR,
+	theory_store		: ((*USER_DATA) THEORY_CONTENTS)STORE,
+	hierarchy_store		: (HIERARCHY) STORE,
+	theorems_proved		: (PDS_THM) ã bool
+…
+	T
+ 
+The initial state of the system is given
+by the following values, which are parameterised by
+the initial user-defined data.
+
+The initial theory information comes supplied with a store
+containing the contents of a suitable initial theory:
+»
+	‚initial_theory·		: *USER_DATA ã
+		(((*USER_DATA)THEORY_CONTENTS)STORE) â THEORY_INFO
+…
+	Éudéinitial_theory ud =
+		let contents = ABS_THEORY_CONTENTS (
+			`MIN`,
+			initial_dict,	initial_dict,
+			[],
+			initial_dict,	initial_dict,	initial_dict,
+			0,		§,
+			ud)
+		in let (st, addr) = á(st, addr)énew contents initial_store (st, addr)
+		in (st, ABS_THEORY_INFO (TSNormal, T, addr))
+À
+The initial state is then as follows:
+
+»
+	‚initial_state·	: *USER_DATA ã (*USER_DATA)PDS_STATE
+…
+	Éudéinitial_state ud = 
+		let (thy_st, thy_info) = initial_theory ud
+		in let (hier_st, hier_addr) = á(st, addr)énew [thy_info] initial_store (st, addr)
+		in ABS_PDS_STATE(ti_contents thy_info, hier_addr, thy_st, hier_st, §)
+			
+
+À
+\subsection{Interpretation Mapping for the State}
+In this section we define an interpretation function
+from $PDS\_STATE$s to the more abstract notion of a
+theory hierarchy defined in \cite{DS/FMU/IED/SPC004}.
+To do this requires a number of auxiliary definitions:
+
+$get\_contents$ returns the theory contents associated
+with a theory name in a state.
+
+»
+	‚theory_contents·	: (*USER_DATA)PDS_STATE ã string ã
+					(*USER_DATA)THEORY_CONTENTS ã bool
+…
+	Éstate name thy_cétheory_contents state name thy_c Ç 
+		let thy_st = ps_theory_store state
+		in let hier_st = ps_hierarchy_store state
+		in let cur_hier = ps_current_hierarchy state
+		in let infos = áxéfetch cur_hier hier_st x
+		in let thys = map((çaddréáxéfetch addr thy_st x) o ti_contents) infos
+		in Ñthyé thy ≈ thys Ä tc_name thy = name
+À
+
+The following function returns the names of the theories
+in a state:
+
+»
+	‚theory_names· : (*USER_DATA)PDS_STATE ã string ã bool
+…
+	Éstate nameéname ù theory_names state Ç
+		Ñthy_cétheory_contents state name thy_c
+À
+
+$theory\_ancestors$ returns the names of the ancestors
+of a given theory (which we take to include the theory
+itself, if it is in the state):
+»
+	‚theory_ancestors· : (*USER_DATA)PDS_STATE ã string ã string ã bool
+…
+	Éstate nameétheory_ancestors state name = ¢(çP:stringã boolé
+		(name ù theory_names state ä name ù P)
+	Ä	(Éanc1 thy_c anc2é
+			(anc1 ù P Ä theory_contents state anc1 thy_c Ä anc2 ≈ tc_parents thy_c)
+		ä	anc2 ù P))
+À
+
+Given a set of theory contents, $interpret_theory_contents$ constructs
+a $THEORY$ in the sense of \cite{DS/FMU/IED/SPC001}, together with the definitional axiom and saved theorem
+sets which are used in the definition of the abstract notion of  theory hierarchy in
+\cite{DS/FMU/IED/SPC004}:
+
+»
+	‚interpret_theory_contents· : ((*USER_DATA)THEORY_CONTENTS  ã bool) ã
+					(THEORY â (SEQ ã bool) â (SEQ ã bool))
+…
+	Éthy_cséinterpret_theory_contents thy_cs = (ABS_THEORY(
+		(çtyn arityéÑthy_céthy_c ù thy_cs Ä lookup tyn (tc_ty_env thy_c) arity),
+		(çcn tyéÑthy_céthy_c ù thy_cs Ä lookup cn (tc_con_env thy_c) ty),
+		(çseqéÑthy_c thmn levéthy_c ù thy_cs Ä
+				(lookup thmn (tc_axiom_dict thy_c) (seq, lev)
+			Å	 lookup thmn (tc_definition_dict thy_c) (seq, lev)))
+		),
+		(çseqéÑthy_c thmn levéthy_c ù thy_cs Ä
+			lookup thmn (tc_definition_dict thy_c) (seq, lev)),
+		(çseqéÑthy_c thmn levéthy_c ù thy_cs Ä
+			lookup thmn (tc_theorem_dict thy_c) (seq, lev)))
+À
+
+Our interpretation mapping for a state is now easy to define (note that the definition
+results in abstract theory hierarchies in which undefined theory names are sent to
+the theory all of whose components are empty).
+
+»
+	‚interpret_state· : (*USER_DATA)PDS_STATE ã THEORY_HIERARCHY
+…
+	Éstateéinterpret_state state = ABS_THEORY_HIERARCHY(
+		interpret_theory_contents o theory_contents state)
+À
+
+\section{OPERATIONS}
+\subsection{Discussion}
+We can now define the operations on states which are of concern to us.
+\subsection{$new\_hierarchy$}
+\subsection{$open\_theory$}
+\subsection{$close\_theory$}
+\subsection{$delete\_theory$}
+\subsection{$lock\_theory$}
+\subsection{$unlock\_theory$}
+\subsection{$save\_thm$}
+\subsection{$delete\_definition$}
+\subsection{$delete\_type\_definition$}
+\subsection{Definitional Mechanisms}
+\subsection{Inference}
+
+\pagebreak
+\section{THEORY LISTING}
+{\catcode`\_=\active
+\gdef\underscoreoff{% make _ a normal char
+        \catcode`\_=\active \let_=\_}}
+{\underscoreoff
+\def\Xref#1#2{\hbox to \hsize{$#1$\leaders\hbox to1em{\hss.\hss}\hfill $#2$}}
+
+\input{\jobname.thp}}
+
+\twocolumn[\section{INDEX}] \label{Index}
+\printindex
+\onecolumn
+
+\end{document}
