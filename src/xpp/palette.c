@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.2 1997/12/03 17:19:57 rda Rel rda $ 
+ * $Id: palette.c,v 2.3 2000/11/20 11:49:20 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -33,7 +33,7 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * static data:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char prettychars[] = {
+static unsigned char prettychars[] = {
 0xb1, 0xb2, 0xb3, 0xb5, 0xb6, 0xb7, 0xb8, 0xbc, 
 0xbd, 0xbe, 0x8d, 0x8e, 0xa4, 0xb4, 0xad, 0x8f, 
 0x9e, 0x9f, 0xaa, 0xcf, 0xdf, 0xe0, 0xed, 0xef, 
@@ -61,8 +61,8 @@ static PaletteData palette_info[MAX_PALETTES];
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * add_palette: attach a palette to a text widget
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-Bool add_palette(w)
+static void type_char_cb(CALLBACK_ARGS);
+Boolean add_palette(w)
 Widget w;
 {
 	XmString lab;
@@ -70,7 +70,6 @@ Widget w;
 	NAT i, n_chars, x, y, twi;
 	NAT cbdata;
 	Widget shell, form, button;
-	void type_char_cb();
 
 	for(	twi= 0;
 		twi< MAX_PALETTES &&
@@ -91,7 +90,7 @@ Widget w;
 		return True;
 	};
 
-	n_chars = strlen(prettychars);
+	n_chars = strlen((char*)prettychars);
 
 	shell = XtVaCreatePopupShell("xpp-Palette",
 		xmDialogShellWidgetClass, w,
@@ -144,11 +143,12 @@ Widget w;
  * type_char_cb: simulate typing of a character into a text widget
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-void type_char_cb(w, cbdata, cbs)
-Widget w;
-NAT cbdata;
-XmPushButtonCallbackStruct *cbs;
+static void type_char_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	NAT cbdata = (NAT) cbd;
 	char buf[2];
 	NAT text_index = cbdata >> 8;
 	XmTextPosition start, end;

@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$
+ * $Id: undo.c,v 2.2 1998/03/13 17:04:02 rda Rel rda $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -50,8 +50,9 @@ static char *undo_redo[2] = {"Undo", "Redo"};
  * clear_undo: unset changed flag and do other re-initialisations
  * when a file is saved, loaded or whatever
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void clear_undo(UndoBuffer *ub)
+void clear_undo(XtPointer xtp)
 {
+	UndoBuffer *ub = xtp;
 	Widget *wp;
 	ub->can_undo = False;
 	ub->moved_away = True;
@@ -112,9 +113,9 @@ XtPointer add_undo(
  * Monitor cursor motions:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void undo_motion_cb(
-	Widget				text_w,
-	UndoBuffer			*ub,
-	XmTextVerifyCallbackStruct	cbs)
+	Widget		text_w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
 	/* ub->moved_away = True; */
 }
@@ -143,14 +144,16 @@ static void reinit_undo_buffer (
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Monitor typed input:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static char *prefix(char,char*), *affix(char,char*);
 void undo_modify_cb(
-	Widget				text_w,
-	UndoBuffer			*ub,
-	XmTextVerifyCallbackStruct	*cbs)
+	Widget		text_w,
+	XtPointer	cbd,
+	XtPointer	xtp_cbs)
 {
+	UndoBuffer *ub = cbd;
+	XmTextVerifyCallbackStruct *cbs = xtp_cbs;
 	NAT len;
 	char *cut_chars;
-	static char *prefix(), *affix();
 	Widget *wp;
 
 	if(	!cbs->text->length &&
@@ -246,10 +249,11 @@ void undo_modify_cb(
  * inserted) is manoeuvred into view in the window.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void undo_cb(
-	Widget			text_w,
-	UndoBuffer		*ub,
-	XmAnyCallbackStruct	cbs)
+	Widget		text_w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	UndoBuffer *ub = cbd;
 	XmTextPosition fst, lst;
 	NAT len;
 	char *str;

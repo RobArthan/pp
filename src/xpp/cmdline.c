@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$
+ * $Id: cmdline.c,v 2.3 1999/04/19 15:52:09 rda Rel rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -34,6 +34,17 @@ char *no_command_to_add_msg =
 
 char *nothing_to_delete_msg =
 "No item in the list has been selected.";
+/*
+ * Forward declarations:
+ */
+static void
+	get_initial_command_line_list(Widget list_w),
+	list_select_cb(CALLBACK_ARGS),
+	exec_cb(CALLBACK_ARGS),
+	add_cb(CALLBACK_ARGS),
+	delete_cb(CALLBACK_ARGS),
+	dismiss_cb(CALLBACK_ARGS),
+	help_cb(CALLBACK_ARGS);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * add_cmd_line: attach a tool allowing entry of single line
@@ -78,15 +89,6 @@ void add_cmd_line(Widget text_w)
 	int i;
 
 	XmFontList fontlist;
-
-	static void
-		get_initial_command_line_list(Widget list_w),
-		list_select_cb(),
-		exec_cb(),
-		add_cb(),
-		delete_cb(),
-		dismiss_cb(),
-		help_cb();
 
 
 	if((cmd_line_data.shell_w) != NULL) {
@@ -284,10 +286,11 @@ static void get_initial_command_line_list(Widget list_w)
  * many one line commands in a hurry.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void exec_cb(
-	Widget				w,
-	CmdLineData			*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	CmdLineData *cbdata = cbd;
 	char *cmd;
 	static char *nl = "\n";
 	if((cmd = XmTextGetString(cbdata->cmd_w)) != NULL) {
@@ -306,12 +309,14 @@ static void exec_cb(
  * replaces the command line with the selected item.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void list_select_cb(
-	Widget				w,
-	CmdLineData			*cbdata,
-	XmListCallbackStruct		*cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	XmListCallbackStruct *lcbs = cbs;
+	CmdLineData *cbdata = cbd;
 	char *cmd = NULL;
-	XmStringGetLtoR(cbs->item, XmSTRING_DEFAULT_CHARSET, &cmd);
+	XmStringGetLtoR(lcbs->item, XmSTRING_DEFAULT_CHARSET, &cmd);
 	if(cmd) {
 		XmTextSetString(cbdata->cmd_w, cmd);
 		XtFree(cmd);
@@ -323,10 +328,11 @@ static void list_select_cb(
  * adds the contents of the command line to the list.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void add_cb(
-	Widget				w,
-	CmdLineData			*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	CmdLineData *cbdata = cbd;
 	char *cmd;
 	XmString item;
 	if((cmd = XmTextGetString(cbdata->cmd_w)) != NULL && *cmd) {
@@ -344,10 +350,11 @@ static void add_cb(
  * deletes the selected item.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void delete_cb(
-	Widget				w,
-	CmdLineData			*cbdata,
-	XmAnyCallbackStruct		*cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	CmdLineData *cbdata = cbd;
 	int *posns;
 	int num_posns;
 	if(	XmListGetSelectedPos(cbdata->list_w, &posns, &num_posns)
@@ -363,10 +370,11 @@ static void delete_cb(
  * dismiss callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void dismiss_cb(
-	Widget				w,
-	CmdLineData			*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	CmdLineData *cbdata = cbd;
 	XtPopdown(cbdata->shell_w);
 }
 
@@ -376,10 +384,11 @@ static void dismiss_cb(
  * help callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void help_cb(
-	Widget				w,
-	CmdLineData			*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	CmdLineData *cbdata = cbd;
 	help_dialog(root, Help_Command_Line_Tool);
 }
 

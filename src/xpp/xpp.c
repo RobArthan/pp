@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.2 1994/08/31 12:04:35 ach Rel rda $
+ * $Id: xpp.c,v 2.3 2000/05/25 08:21:10 rda Rel rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -163,7 +163,7 @@ void usage (void)
 {
 	msg( "xpp",
 "usage: xpp [standard X Toolkit options] [-file fname] [-commmand command-line]");
-};
+}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Check whether the -command or -file command-line option is there
@@ -239,7 +239,11 @@ static char *get_command_line(int argc, char **argv)
 		p[len] = ' ';
 		p += len + 1;
 	};
-	(skip < argc ? *(p - 1) : *p) = '\0';
+	if (skip < argc) {
+		 *(p - 1) = '\0';
+	} else {
+		 *p = '\0';
+	}
 	return res;
 }
 

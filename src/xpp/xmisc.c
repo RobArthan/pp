@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$
+ * $Id: xmisc.c,v 2.1 1994/08/30 12:07:53 djk Rel rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -20,6 +20,7 @@
 
 
 #include <stdio.h>
+#include <ctype.h>
 #include <X11/Xatom.h>
 #include <X11/Intrinsic.h>
 #include <X11/Shell.h>
@@ -34,13 +35,10 @@
  * toggle_menu_item_sensitivity: given a menu w toggle the
  * sensitivity of the i-th item in the menu.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void toggle_menu_item_sensitivity(w, i)
-Widget w;
-NAT i;
+void toggle_menu_item_sensitivity(Widget w, NAT i)
 {
 	Widget *btns;
 	NAT num_btns;
-	Bool sens;
 
 	XtVaGetValues(w, XmNchildren, &btns,
 		XmNnumChildren, &num_btns, NULL);
@@ -53,14 +51,10 @@ NAT i;
  * set_menu_item_sensitivity: given a menu w set the
  * sensitivity of the i-th item in the menu to a given value.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void set_menu_item_sensitivity(w, i, b)
-Widget w;
-NAT i;
-Bool b;
+void set_menu_item_sensitivity(Widget w, NAT i, Boolean b)
 {
 	Widget *btns;
 	NAT num_btns;
-	Bool sens;
 
 	XtVaGetValues(w, XmNchildren, &btns,
 		XmNnumChildren, &num_btns, NULL);
@@ -72,15 +66,11 @@ Bool b;
  * set_menu_item_label: given a menu w change the
  * label of the i-th item in the menu.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void set_menu_item_label(w, i, lab)
-Widget w;
-NAT i;
-char *lab;
+void set_menu_item_label(Widget w, NAT i, char *lab)
 {
 	Widget *btns;
 	NAT num_btns;
 	XmString str;
-	Bool sens;
 
 	XtVaGetValues(w, XmNchildren, &btns,
 		XmNnumChildren, &num_btns, NULL);
@@ -101,9 +91,7 @@ char *lab;
  * done without deleting more than 10%. Expects to be called *after*
  * the new text has been inserted.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void check_text_window_limit(w, max)
-Widget w;
-NAT max;
+void check_text_window_limit(Widget w, NAT max)
 {
 	XmTextPosition siz;
 	NAT bytes_to_go;
@@ -163,12 +151,12 @@ void copy_font_list (
  * be a text widget. It arranges for the text widget to blink for
  * a while.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void unhighlight(Widget,XtIntervalId*);
 void blink_owner_cb(
 	Widget					w,
 	Widget					text_w,
 	XmPushButtonCallbackStruct		*unused)
 {
-	static void unhighlight();
 	XmTextSetHighlight(text_w,
 		0,
 		XmTextGetLastPosition(text_w),

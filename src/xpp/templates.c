@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$ 
+ * $Id: templates.c,v 2.5 1997/12/03 16:09:40 rda Rel rda $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -83,7 +83,7 @@ static char *bad_pixmap_msg =
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 
-static void get_templates_data()
+static void get_templates_data(void)
 {
 	char *ptr = templates;
 	NAT i;
@@ -153,15 +153,15 @@ static Pixmap get_pixmap (Widget w, char *name)
  * template resources, the menu item won't be enabled. Also can
  * notify user of errors in the template resource early.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void	help_cb(CALLBACK_ARGS),
+		dismiss_cb(CALLBACK_ARGS),
+		templates_cb(CALLBACK_ARGS);
 
-Bool init_templates_tool(Widget w)
+
+Boolean init_templates_tool(Widget w)
 {
 	NAT i, x, y, fbase;
 	Widget template_btn;
-
-	static void	help_cb(),
-			dismiss_cb(),
-			templates_cb();
 
 	if(!templates || !*templates) {
 		/* resource not set up */
@@ -280,16 +280,17 @@ void add_templates_tool(Widget w)
  * templates_cb: simulate typing of a character into a text widget
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static void templates_cb(w, cbdata, cbs)
-Widget w;
-TemplateCallbackData * cbdata;
-XmPushButtonCallbackStruct *cbs;
+static void templates_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	TemplateCallbackData *cbdata = cbd;
 	XmTextPosition start, end, after;
 
 	if(!text_w) {
-		char *m = "unexpected argument 0xXXXXXXXX";
-		sprintf(m, "unexpected argument 0x%x", cbdata);
+		char m[80];
+		sprintf(m, "unexpected argument %p", cbdata);
 		msg("template handler", m);
 		return;
 	};
@@ -311,6 +312,7 @@ XmPushButtonCallbackStruct *cbs;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * templates_help_dialog: put up an information window without grabbing control
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void dismiss_cb(CALLBACK_ARGS);
 static void templates_help_dialog(Widget w)
 {
 	Widget dismiss_btn_area, dismiss_btn;
@@ -319,10 +321,8 @@ static void templates_help_dialog(Widget w)
 	Widget		row_col,
 			help_item,
 			introduction,
-			separator,
 			template_icon,
 			template_text;
-	static void dismiss_cb();
 	Dimension h;
 	int i;
 	if(!help_shell) {
@@ -440,16 +440,19 @@ static void templates_help_dialog(Widget w)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void help_cb(
-	Widget				w,
-	TemplateCallbackData		*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
 	templates_help_dialog(root);
 }
 
-static void dismiss_cb(Widget widget, Widget shell)
+static void dismiss_cb(
+	Widget		w,
+	XtPointer	shell,
+	XtPointer	cbs)
 {
-	XtPopdown(shell);
+	XtPopdown((Widget)shell);
 }
 
 

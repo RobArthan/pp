@@ -16,6 +16,10 @@
 #include <X11/Intrinsic.h>
 #include <Xm/XmAll.h>
 
+#define CALLBACK_ARGS Widget,XtPointer,XtPointer
+#define EVENT_HANDLER_ARGS Widget,XtPointer,XEvent*,Boolean*
+#define INPUT_CALLBACK_ARGS XtPointer,int*,XtInputId*
+
 /* See the typedef for MenuItem for the following */
 
 #define MENU_ITEM_SEPARATOR	\
@@ -53,11 +57,11 @@ typedef struct menu_item {
 	char		mnemonic;	/* '\0' if no mnemonic */
 	char		*accelerator;	/* NULL if no accelerator */
 	char		*accelerator_text;
-	void		(*callback)();	/* NULL if no callback */
+	XtCallbackProc	callback;	/* NULL if no callback */
 	XtPointer	callback_data;
 	struct menu_item
 			*pullright;	/* NULL if not submenu */
-	Bool		pullright_tear_off_enabled;}
+	Boolean		pullright_tear_off_enabled;}
 					/* Ignored if not submenu */
 		MenuItem;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -79,44 +83,35 @@ typedef struct menu_item {
  * exception of `main' in xpp.c).
  * N.B. the sections below are in alphabetical order of module name.
  */
-#ifndef _cmdline
+/* Module: cmdline */
 	extern void add_cmd_line(
 		Widget	text_w);
-#endif
-#ifndef _diag
+/* Module: diag */
 	extern void msg(
 		char	*s1,	/* title: ... */
 		char	*s2	/* ...: message */);
-#endif
-#ifndef _edit
-	extern void *setup_edit(
-		Widget	owner,
-		char	*name,
-		void	(*exec)());
-#endif
-#ifndef _files
-	extern Boolean *open_file(
+/* Module: files */
+	extern Boolean open_file(
 		Widget	text,
 		char	*name);
-	extern Boolean *save_file(
+	extern Boolean save_file(
 		Widget	text,
 		char	*name);
-	extern Boolean *save_file_as(
+	extern Boolean save_file_as(
 		Widget	text,
 		char	*name);
 	extern Boolean save_string_as(
 		Widget	w,
 		char	*data,
 		char	*name);
-	extern Boolean *include_file(
+	extern Boolean include_file(
 		Widget	text,
 		char	*name);
-	extern void panic_save(Widget text);
-#endif
-#ifndef _help
+	extern void panic_save(
+		Widget text);
+/* Module: help.c (automatically generated during build) */
 	#include "help.h"
-#endif
-#ifndef _mainw
+/* Module: mainw */
 	extern void main_window_go(
 		char	*file_name);
 	extern XtAppContext app;
@@ -125,24 +120,22 @@ typedef struct menu_item {
 	extern Widget journal;
 	extern void check_quit_cb (
 		Widget w,
-		XtPointer cd,
-		XmAnyCallbackStruct cbs);
+		XtPointer cbd,
+		XtPointer cbs);
 	extern void scroll_out(char *buf, NAT ct, Boolean ignored);
-#endif
-#ifndef _menus
+/* Module: menus */
 	extern	Widget setup_menu(
 		Widget		parent,
 		int		type,
 		char		*menu_title,
 		char		menu_mnemonic,
-		Bool		tear_off_enabled,
+		Boolean		tear_off_enabled,
 		MenuItem	*items);
 	extern void resetup_menu(
 		Widget		menu,
 		int		type,
 		MenuItem	*items);
-#endif
-#ifndef _msg
+/* Module: msg */
 	extern XmString format_msg(
 		char *msg,
 		NAT line_len);
@@ -161,54 +154,46 @@ typedef struct menu_item {
 	extern char *file_dialog(
 		Widget	w,
 		char	*opn	/* Save/Open/... */);
-#endif
-#ifndef _options
+/* Module: options */
 	extern void init_options(
 		Widget	owner_w);
-	extern void add_option_tool();
-	extern char **get_arg_list();
-#endif
-#ifndef _palette
+	extern void add_option_tool(void);
+	extern char **get_arg_list(void);
+/* Module: palette */
 	extern Boolean add_palette(
 		Widget	w);
-#endif
-#ifndef _pixmaps
-	extern Pixmap get_pp_pixmap();
-#endif
-#ifndef _pterm
-	extern void get_pty();
-	extern Boolean application_alive();
-	extern void handle_sigs();
-	extern void interrupt_and_abandon();
-	extern void interrupt_application();
-	extern void kill_application();
-	extern void restart_application();
-	extern void send_nl();
+/* Module: pixmaps */
+	extern Pixmap get_pp_pixmap(void);
+/* Module: pterm */
+	extern void get_pty(void);
+	extern Boolean application_alive(void);
+	extern void handle_sigs(void);
+	extern void interrupt_and_abandon(void);
+	extern void interrupt_application(void);
+	extern void kill_application(void);
+	extern void restart_application(void);
+	extern void send_nl(void);
 	extern void send_to_application(
 		char	*buf,
 		NAT	siz);
-#endif
-#ifndef _search
+/* Module: search */
 	extern Boolean add_search_tool(
 		Widget	w);
-#endif
-#ifndef _templates
+/* Module: templates */
 	extern Boolean init_templates_tool(
 		Widget	w);
-	extern void add_templates_tool();
-#endif
-#ifndef _undo
+	extern void add_templates_tool(Widget w);
+/* Module: undo */
 	extern void clear_undo(
 		XtPointer undo_ptr);
 	extern XtPointer add_undo(
 		Widget	text_w,
 		Widget	*menu_w,
 		NAT	menu_entry_offset);
-	extern void undo_motion_cb();
-	extern void undo_modify_cb();
-	extern void undo_cb();
-#endif
-#ifndef _xmisc
+	extern void undo_motion_cb(CALLBACK_ARGS);
+	extern void undo_modify_cb(CALLBACK_ARGS);
+	extern void undo_cb(CALLBACK_ARGS);
+/* Module: xmisc */
 	extern void set_menu_item_sensitivity(
 		Widget	w,	/* menu widget */
 		NAT	i,	/* i-th menu entry */
@@ -240,9 +225,16 @@ typedef struct menu_item {
 		Widget				unused1,
 		XtPointer			unused2,
 		XmTextVerifyCallbackStruct	*cbs);
-#endif
+/* Module: xpp */
 #ifndef _xpp
-	extern XtTranslations text_translations;
-	extern char *templates;
-	extern char *command_line_list;
+	extern
 #endif
+	XtTranslations text_translations;
+#ifndef _xpp
+	extern
+#endif
+	char *templates;
+#ifndef _xpp
+	extern
+#endif
+	char *command_line_list;

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.2 1999/04/19 15:52:10 rda Exp xpp $
+ * $Id: options.c,v 2.3 1999/04/20 13:13:46 xpp Rel rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -18,6 +18,7 @@
 
 
 #include <stdio.h>
+#include <ctype.h>
 
 #include "xpp.h"
 
@@ -84,18 +85,16 @@ static Widget
  * We use a variable to record the state of the radio buttons:
  */
 static char	add_new_line_button_state;
+static void	apply_cb(CALLBACK_ARGS),
+		reset_cb(CALLBACK_ARGS),
+		dismiss_cb(CALLBACK_ARGS),
+		add_new_line_cb(CALLBACK_ARGS),
+		help_cb(CALLBACK_ARGS);
 
 void init_options(Widget owner_w)
 {
 	XmString lab;
 
-	static void
-		apply_cb(),
-		reset_cb(),
-		dismiss_cb(),
-		journal_max_cb(),
-		add_new_line_cb(),
-		help_cb();
 
 	XmString s1, s2, s3;
 
@@ -308,7 +307,7 @@ if(!global_options.edit_only) {
 		char	*journal_max_buf;
 		long unsigned m;
 		journal_max_buf = XmTextGetString(journal_max_text);
-		sscanf(journal_max_buf, "%ul", &m);
+		sscanf(journal_max_buf, "%lu", &m);
 		global_options.journal_max = (m >= 2000 ? m : 2000);
 	};
 
@@ -340,7 +339,7 @@ if(!global_options.edit_only) {
  *	state = 0	- looking for next word.
  *	state = 1	- in word looking for next space.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-char **get_arg_list() {
+char **get_arg_list(void) {
 	static char **argv;
 	static char *buf;
 	char *p;
@@ -391,7 +390,7 @@ char **get_arg_list() {
 	argv[argc] = NULL;
 	return argv;
 }
-void add_option_tool()
+void add_option_tool(void)
 {
 	if(shell) {
 		XtManageChild(button_form);
@@ -413,9 +412,9 @@ void add_option_tool()
  * apply callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void apply_cb(
-	Widget				u1,
-	XtPointer			u2,
-	XmPushButtonCallbackStruct	u3)
+	Widget		u1,
+	XtPointer	u2,
+	XtPointer	u3)
 {
 	global_options.backup_before_save =
 		XmToggleButtonGetState(backup_toggle);
@@ -434,9 +433,10 @@ static void apply_cb(
 		char buf[20];
 		long unsigned m;
 		journal_max_buf = XmTextGetString(journal_max_text);
-		sscanf(journal_max_buf, "%ul", &m);
-		global_options.journal_max = (m >= 2000 ? m : 2000);
-		sprintf(buf, "%ul", global_options.journal_max);
+		sscanf(journal_max_buf, "%lu", &m);
+		if (m < 2000) {m = 2000;}
+		global_options.journal_max = m;
+		sprintf(buf, "%lu", m);
 		XmTextSetString(journal_max_text, buf);
 	};
 
@@ -447,9 +447,9 @@ static void apply_cb(
  * reset callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void reset_cb(
-	Widget				u1,
-	XtPointer			u2,
-	XmPushButtonCallbackStruct	u3)
+	Widget		u1,
+	XtPointer	u2,
+	XtPointer	u3)
 {
 	Widget *btns;
 
@@ -473,7 +473,8 @@ static void reset_cb(
 	}
 	if(journal_max_text) {
 		char buf[20];
-		sprintf(buf, "%ul", global_options.journal_max);
+		unsigned long m = global_options.journal_max;
+		sprintf(buf, "%lu", m);
 		XmTextSetString(journal_max_text, buf);
 	}
 
@@ -490,9 +491,9 @@ static void reset_cb(
  * dismiss callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void dismiss_cb(
-	Widget				u1,
-	XtPointer			u2,
-	XmPushButtonCallbackStruct	u3)
+	Widget		u1,
+	XtPointer	u2,
+	XtPointer	u3)
 {
 	XtPopdown(shell);
 }
@@ -502,10 +503,11 @@ static void dismiss_cb(
  * dismiss callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void add_new_line_cb(
-	Widget				w,
-	int				btn_n,
-	XmAnyCallbackStruct		cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	int btn_n = (int) cbd,
 	add_new_line_button_state = btn_n;
 }
 
@@ -513,9 +515,9 @@ static void add_new_line_cb(
  * help callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void help_cb(
-	Widget				w,
-	XtPointer			*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbdata,
+	XtPointer	cbs)
 {
 	help_dialog(root, Help_Options_Tool);
 }

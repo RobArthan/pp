@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.1 1994/08/30 12:07:25 djk Rel rda $
+ * $Id: files.c,v 2.2 2000/08/21 13:49:34 rda Rel rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -20,6 +20,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <stdio.h>
 
@@ -307,7 +308,7 @@ static Boolean store_file_contents(
 		return False;
 	};
 	if(fwrite(buf, sizeof(char), siz, fp) != siz) {
-		file_error_dialog(w, read_error_message, name);
+		file_error_dialog(w, write_error_message, name);
 		fclose(fp);
 		if(backup_name) {XtFree(backup_name);}
 		return False;
@@ -333,7 +334,6 @@ Boolean save_file(
 	Widget	text,
 	char	*name)
 {
-	FILE *fp;
 	char *buf;
 	Boolean success;
 	buf = XmTextGetString(text);
@@ -352,7 +352,6 @@ Boolean save_file_as(
 	Widget	text,
 	char	*name)
 {
-	FILE *fp;
 	char *buf;
 	Boolean success;
 	struct stat status;
@@ -386,7 +385,6 @@ Boolean save_string_as(
 	char	*data,
 	char	*name)
 {
-	FILE *fp;
 	Boolean success;
 	struct stat status;
 
@@ -512,4 +510,4 @@ void panic_save(
 		fprintf(stderr, panic_file_error, name);
 	}
 	fclose(fp);
-};
+}

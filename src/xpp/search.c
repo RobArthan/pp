@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.4 1999/03/07 16:20:21 rda Rel rda $ 
+ * $Id: search.c,v 2.5 2000/05/25 08:21:10 rda Rel rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -80,6 +80,26 @@ typedef struct {
 		line_no_w;} SearchData;
 	
 static SearchData search_data;
+/*
+ * Forward declarations for callbacks etc.
+ */
+static void	search_backwards_cb(CALLBACK_ARGS),
+		search_forwards_cb(CALLBACK_ARGS),
+		search_set_cb(CALLBACK_ARGS),
+		search_backwards_replace_cb(CALLBACK_ARGS),
+		search_forwards_replace_cb(CALLBACK_ARGS),
+		clear_cb(CALLBACK_ARGS),
+		replace_cb(CALLBACK_ARGS),
+		replace_all_cb(CALLBACK_ARGS),
+		replace_set_cb(CALLBACK_ARGS),
+		replace_search_backwards_cb(CALLBACK_ARGS),
+		replace_search_forwards_cb(CALLBACK_ARGS),
+		line_no_set_cb(CALLBACK_ARGS),
+		goto_line_no_cb(CALLBACK_ARGS),
+		dismiss_cb(CALLBACK_ARGS),
+		help_cb(CALLBACK_ARGS);
+
+static void line_no_set(SearchData*);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * add_search_tool: attach a search & replace tool to a text widget
@@ -104,7 +124,7 @@ static SearchData search_data;
  * The other push-buttons actually initiate searches etc.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-Bool add_search_tool(Widget text_w)
+Boolean add_search_tool(Widget text_w)
 {
 	NAT cbdata;
 	Widget shell, paned, search_form, replace_form, line_no_form,
@@ -130,24 +150,6 @@ Bool add_search_tool(Widget text_w)
 		dismiss_btn;
 
 	char	*pattern;
-
-	static void
-		search_backwards_cb(),
-		search_forwards_cb(),
-		search_set_cb(),
-		search_backwards_replace_cb(),
-		search_forwards_replace_cb(),
-		clear_cb(),
-		replace_cb(),
-		replace_all_cb(),
-		replace_set_cb(),
-		replace_search_backwards_cb(),
-		replace_search_forwards_cb(),
-		line_no_set(),
-		line_no_set_cb(),
-		goto_line_no_cb(),
-		dismiss_cb(),
-		help_cb();
 
 
 	if((search_data.shell_w) != NULL) {
@@ -534,10 +536,11 @@ Bool add_search_tool(Widget text_w)
  * dismiss callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void dismiss_cb(
-	Widget				w,
-	SearchData			*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	SearchData *cbdata = cbd;
 	XtPopdown(cbdata->shell_w);
 }
 
@@ -545,9 +548,9 @@ static void dismiss_cb(
  * help callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void help_cb(
-	Widget				w,
-	XtPointer			*p,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
 	help_dialog(root, Help_Search_Tool);
 }
@@ -555,29 +558,31 @@ static void help_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * search forwards callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static Boolean search_either(Widget,SearchData*,NAT);
 static void search_forwards_cb(
-	Widget				w,
-	SearchData			*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
-	static Boolean search_either();
+	SearchData *cbdata = cbd;
 	(void) search_either(w, cbdata, FORWARDS);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * search backwards callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void search_backwards_cb(
-	Widget				w,
-	SearchData			*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
-	static Boolean search_either();
+	SearchData *cbdata = cbd;
 	(void) search_either(w, cbdata, BACKWARDS);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Support for search callbacks.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void search_string(char*,char*,long int,long int*,long int*,NAT);
 static Boolean search_either(
 	Widget				w,
 	SearchData			*cbdata,
@@ -585,7 +590,6 @@ static Boolean search_either(
 {
 	long int left, len;
 	NAT start_point;
-	static void search_string();
 	char *pattern, *text_buf;
 	Boolean result;
 	XmTextPosition pl, pr;
@@ -625,12 +629,13 @@ static Boolean search_either(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * replace callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static Boolean replace_selection(Widget,SearchData*);
 static void replace_cb(
-	Widget				w,
-	SearchData			*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
-	static Boolean replace_selection();
+	SearchData *cbdata = cbd;
 	(void) replace_selection(w, cbdata);
 }
 
@@ -669,20 +674,20 @@ static Boolean replace_selection(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * replace all callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void replace_all(char*,char*,char*,char**,NAT*);
 static void replace_all_cb(
-	Widget				w,
-	SearchData			*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	SearchData *cbdata = cbd;
 	long int left, len;
 	NAT start_point;
-	static void search_string();
-	static void replace_all();
 	char *pattern, *text_buf, *replacement, *all_replaced;
 	pattern = XmTextGetString(cbdata->search_w);
 	text_buf = XmTextGetString(cbdata->text_w);
 	start_point = XmTextGetInsertionPosition(cbdata->text_w);
-	search_string(pattern, text_buf, start_point, &left, &len);
+	search_string(pattern, text_buf, start_point, &left, &len,FORWARDS);
 	if(left >= 0) {
 		replacement = XmTextGetString(
 				cbdata->replace_w);
@@ -730,10 +735,11 @@ static void replace_all_cb(
  * search backwards & replace callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void search_backwards_replace_cb(
-	Widget				w,
-	SearchData			*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	SearchData *cbdata = cbd;
 	if(search_either(w, cbdata, BACKWARDS)) {
 		(void) replace_selection(w, cbdata);
 	}
@@ -743,10 +749,11 @@ static void search_backwards_replace_cb(
  * search forwards & replace callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void search_forwards_replace_cb(
-	Widget				w,
-	SearchData			*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	SearchData *cbdata = cbd;
 	if(search_either(w, cbdata, FORWARDS)) {
 		(void) replace_selection(w, cbdata);
 	}
@@ -756,10 +763,11 @@ static void search_forwards_replace_cb(
  * replace & search backwards callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void replace_search_backwards_cb(
-	Widget				w,
-	SearchData			*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	SearchData *cbdata = cbd;
 	if(replace_selection(w, cbdata)) {
 		(void) search_either(w, cbdata, BACKWARDS);
 	}
@@ -769,10 +777,11 @@ static void replace_search_backwards_cb(
  * replace & search forwards callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void replace_search_forwards_cb(
-	Widget				w,
-	SearchData			*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	SearchData *cbdata = cbd;
 	if(replace_selection(w, cbdata)) {
 		(void) search_either(w, cbdata, FORWARDS);
 	}
@@ -782,10 +791,11 @@ static void replace_search_forwards_cb(
  * search field setting callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void search_set_cb(
-	Widget				w,
-	SearchData			*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	SearchData *cbdata = cbd;
 	char *sel;
 	if((sel = XmTextGetSelection(cbdata->text_w)) == NULL) {
 		ok_dialog(cbdata->shell_w, no_selection_search);
@@ -799,10 +809,11 @@ static void search_set_cb(
  * replacement field setting callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void replace_set_cb(
-	Widget				w,
-	SearchData			*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	SearchData *cbdata = cbd;
 	char *sel;
 	if((sel = XmTextGetSelection(cbdata->text_w)) == NULL) {
 		ok_dialog(cbdata->shell_w, no_selection_replace);
@@ -816,10 +827,11 @@ static void replace_set_cb(
  * text field clear callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void clear_cb(
-	Widget				w,
-	Widget				text_w,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
+	Widget text_w = cbd;
 	XmTextSetString(text_w, "");
 }
 
@@ -827,23 +839,24 @@ static void clear_cb(
  * line number setting callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void line_no_set_cb(
-	Widget				w,
-	SearchData			*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
-	static void line_no_set();
+	SearchData *cbdata = cbd;
 	line_no_set(cbdata);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * go to line number callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void line_no_to_offset(Widget,NAT,long int*,long int*);
 static void goto_line_no_cb(
-	Widget				w,
-	SearchData			*cbdata,
-	XmPushButtonCallbackStruct	cbs)
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
 {
-	static void line_no_to_offset();
+	SearchData *cbdata = cbd;
 	long int left, right;
 	long int line_no = 0;
 	short nrows;
@@ -954,7 +967,7 @@ static void search_string(
  * and replace function
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static char * replace_all(
+static void replace_all(
 	char	*pattern,
 	char	*text_buf,
 	char	*replacement,
@@ -1036,7 +1049,7 @@ static long int get_line_no(Widget text_w)
  * first is set to NO_MEMORY if not enough memory to do the job.
  * last is unchanged in these two error cases.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void line_no_to_offset (
+static void line_no_to_offset(
 	Widget		text_w,
 	NAT		line_no,
 	long int	*first,
@@ -1079,7 +1092,7 @@ static void line_no_set(SearchData *cbdata)
 		ok_dialog(cbdata->shell_w, cant_get_line_no);
 		return;
 	}
-	sprintf(line_no_string, "%d", get_line_no(cbdata->text_w));
+	sprintf(line_no_string, "%ld", get_line_no(cbdata->text_w));
 	XmTextSetString(cbdata->line_no_w, line_no_string);
 }
 

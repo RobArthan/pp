@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.11 2001/07/27 14:16:20 rda Exp rda $
+ * $Id: pterm.c,v 2.12 2001/07/27 14:21:40 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -64,8 +64,6 @@
  * global, static and external data:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-extern int errno;
-
 static int control_fd;
 
 static pid_t child_pid;
@@ -109,6 +107,7 @@ static char* carry_on_waiting_message =
  * against signals.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+static void get_from_application(INPUT_CALLBACK_ARGS);
 #define	LISTEN	10
 #define	IGNORE	20
 #define	QUERY	30
@@ -117,8 +116,6 @@ Boolean listening_state(int req)
 {
 	static Boolean listening = False;
 	sigset_t now, before;
-	static void get_from_application();
-	static Boolean application_alive();
 	sigfillset(&now);
 	sigprocmask(SIG_BLOCK, &now, &before);
 	switch(req) {
@@ -147,16 +144,16 @@ Boolean listening_state(int req)
  * Pseudo-terminal initialisation:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+static void default_sigs(void);
 
-void get_pty()
+void get_pty(void)
 {
 	char c;
 	int one = 1;
 	int slave_fd;
 	char *slavename;
-	char *ptsname();
+	char *ptsname(int);
 	int i;
-	static void get_from_application(), default_sigs();
 	struct termios tio;
 #ifndef LINUX
 /* On non-Linux (i.e., SVR4) we use the grantpt/lockpt interfaces */
@@ -318,7 +315,7 @@ void get_pty()
  *	3) close the control and slave file descriptors.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-Boolean application_alive()
+Boolean application_alive(void)
 {
 	if(child_pid) {
 		waitpid(child_pid, NULL, WNOHANG);
@@ -338,6 +335,8 @@ Boolean application_alive()
  * Data transfer from application:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+static Boolean get_from_app_work_proc(XtPointer);
+
 static void get_from_application(
 	XtPointer	unused_p,
 	int		*unused_source,
@@ -345,7 +344,6 @@ static void get_from_application(
 {
 	int ct;
 	char buf[XFER_SIZE + 1]; /* allow for null-termination in scroll_out */
-	static Boolean get_from_app_work_proc();
 	if((ct = read(control_fd, buf, XFER_SIZE)) > 0) {
 		scroll_out(buf, ct, False);
 	}
@@ -386,7 +384,7 @@ static Boolean get_from_app_work_proc(XtPointer unused_p)
  * the line is taken to end at that boundary.
  * It returns true iff. it reduced the size of the queue.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static Boolean dequeue()
+static Boolean dequeue(void)
 {
 	long int bytes_written, line_len, i, top;
 	Boolean sent_something = False;
@@ -447,9 +445,7 @@ static Boolean dequeue()
  * it attempts to dequeue things.
  * It returns true if it got its argument onto the queue.
  * **** **** **** **** **** ***. **** **** **** **** **** **** */
-static Boolean enqueue(buf, siz)
-char *buf;
-NAT siz;
+static Boolean enqueue(char *buf, NAT siz)
 {
 	NAT buf_i, q_i;
 /* Make room, if we can: */
@@ -492,8 +488,7 @@ NAT siz;
  * be emptied immediately by enqueue
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static void try_drain_queue(w)
-Widget w;
+static void try_drain_queue(Widget w)
 {
 /* If there's something in the queue try to process it */
 	if(q_length) {
@@ -514,7 +509,7 @@ Widget w;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * clear_queue clears out the queue by reinitialising q_length.
  * **** **** **** **** **** ***. **** **** **** **** **** **** */
-static void clear_queue ()
+static void clear_queue (void)
 {
 	q_length = 0;
 }
@@ -554,7 +549,7 @@ NAT siz;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Interrupt the applications (as with Cntl-C): 
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void interrupt_application ()
+void interrupt_application (void)
 {
 	clear_queue();
 	if(application_alive()) {
@@ -570,9 +565,9 @@ void interrupt_application ()
  * for the interrupt prompt and send the reply set up for
  * abandoning command execution. 
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void interrupt_and_abandon ()
+static Boolean wait_for_prompt(void);
+void interrupt_and_abandon (void)
 {
-	static Boolean wait_for_prompt();
 	interrupt_application();
 	if(	application_alive()
 	&&	*(global_options.abandon_reply)
@@ -591,7 +586,7 @@ void interrupt_and_abandon ()
  * Returns True if the prompt is found; False if the user says to
  * give up trying.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static Boolean wait_for_prompt()
+static Boolean wait_for_prompt(void)
 {
 	int ct, prompt_len, tries, delay;
 	Boolean got_prompt, result;
@@ -647,7 +642,7 @@ static Boolean wait_for_prompt()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Send new line to the application
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void send_nl ()
+void send_nl (void)
 {
 	char *buf = "\n";
 
@@ -658,7 +653,7 @@ void send_nl ()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Kill the application:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void kill_application ()
+void kill_application (void)
 {
 	clear_queue();
 	if(application_alive()) {
@@ -673,7 +668,7 @@ void kill_application ()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Restart the application
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void restart_application () {
+void restart_application (void) {
 	kill_application();
 	get_pty();
 }
@@ -738,7 +733,7 @@ static void xt_error_handler(char * m)
  * catch SIGSYS on Solaris, but this has been removed since it's not
  * portable and there is no evidence that the SIGSYS signal ever occurred.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void handle_sigs()
+void handle_sigs(void)
 {
 	struct sigaction acts;
 	acts.sa_handler = sigint_handler;
@@ -757,7 +752,7 @@ void handle_sigs()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * restore signal handling to defaults:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void default_sigs()
+static void default_sigs(void)
 {
 	struct sigaction acts;
 	acts.sa_handler = SIG_DFL;
