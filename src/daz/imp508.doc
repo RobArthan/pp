@@ -1,4 +1,4 @@
-% imp508.doc   %Z% $Date: 2002/06/01 11:29:07 $ $Revision: 1.101 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2002/07/09 13:57:54 $ $Revision: 1.102 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.101 $%
+\def\SCCSversion{$Revision: 1.102 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/06/01 11:29:07 $%
+\TPPdate{\FormatDate{$Date: 2002/07/09 13:57:54 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -120,6 +120,7 @@ to avoid possible clash with an Ada name.
 are now automatically used to qualify the initial expression.
 \item[Issue 1.101] Fixed bugs in {\it z\_predexp\_of\_z\_tm}.
 \item[Issue 1.102] R0078: ada constant declarations now translated into axiomatic descriptions.
+\item[Issue 1.103] R0054: reworked treatment of use clauses.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -791,10 +792,15 @@ fun €z_predexp_of_z_tm› (sub : Z_PRED -> Z_PRED)  (z_tm : Z_TM) : Z_PRED = (
 		res
 	 end
 );
+=TEX
+=SML
 fun €z_predexp_of_z_tm1› (env : CN_ENV)  (z_tm : Z_TM) : Z_PRED = (
-	let	fun subs_pair n n' ty = (
+	let	fun lvar_subs_pair n n' ty = (
 			[(mk_var(n', ty), mk_var(n, ty)),
 			 (mk_var(n' ^init_var_suffix, ty), mk_var(n ^ init_var_suffix, ty))]
+		);
+		fun gvar_subs_pair n n' ty = (
+			(mk_z_gvar(n', ty, []), mk_var(n, ty))
 		);
 		fun rename tm = (
 			let	val ntys = (map dest_var o frees) tm;
@@ -802,9 +808,18 @@ fun €z_predexp_of_z_tm1› (env : CN_ENV)  (z_tm : Z_TM) : Z_PRED = (
 				|    aux acc ((vn, ty)::more) = (
 					let	val n = base_var_name vn;
 					in	case env n of
-						Value (_, EIEnvVar(_, Value n')) =>
-						aux (subs_pair n n' ty @ acc) more
-					| 	_ => aux acc more
+						Value (_, EIEnvVar(_, Value n')) => (
+						aux (lvar_subs_pair n n' ty @ acc) more
+					) | 	Value(_, EIEnvRetry n') => (
+						case env n' of
+							Value(ty, EIEnvVar _) => (
+							aux(lvar_subs_pair n n' ty @ acc) more
+						) |	Value(ty, EIEnvAuxVar _) => (
+							aux(lvar_subs_pair n n' ty @ acc) more
+						) |	Value(ty, _) => (
+							aux(gvar_subs_pair n n' ty :: acc) more
+						) |	_ => aux acc more
+					) | 	_ => aux acc more
 					end
 				);
 				val subs = aux [] ntys;
@@ -2094,6 +2109,7 @@ fun €adjust_id› (env : CN_ENV) (id : ID)  = (
 			if	(fst(dest_ctype ty) <> informal_function)
 			then	EFunCall{fun_name=id, args=[]}
 			else	fail "adjust_id" 508049 [fn()=>id]
+	|	Value(_, EIEnvRetry ex) => adjust_id env ex
 	| _ => EId id
 )
 and €adjust_rangelohi› (env : CN_ENV) ({lo=l, hi=h} : EXP RANGELOHI) = (
@@ -2211,9 +2227,13 @@ and €adjust_attribute› (env : CN_ENV) ({prefix=p, attribute_desig=a} :
 )
 and €adjust_indexed_comp›	(env : CN_ENV)
 				({prefix=p, index=i} : EXP INDEXED_COMP) = (
-let	val prename = name_to_tmark p;
+let	val n = name_to_tmark p;
+	val (prename, env_prename) = 
+		case env n of
+			Value (_, EIEnvRetry ex) => (ex, env ex)
+		|	other => (n, other);
 in
-	case (env prename, i) of
+	case (env_prename, i) of
 =TEX
 Is it a function call?
 =SML

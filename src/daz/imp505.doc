@@ -1,4 +1,4 @@
-% %Z% $Date: 2002/05/27 15:29:48 $ $Revision: 1.105 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2002/07/09 10:22:48 $ $Revision: 1.106 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -16,7 +16,7 @@
 \TPPtitle{Implementation: Verification Condition Generator}  %% Mandatory field
 \def\TPPheadtitle{Verification Condition Generator}
 \TPPref{ISS/HAT/DAZ/IMP505}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.105 $%
+\def\SCCSversion{$Revision: 1.106 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 \TPPdate{\FormatDate{97/07/18%
@@ -127,6 +127,7 @@ procedure calls.
 \item[Issue 1.105] Fixed bug in check on statements that must come first in their sequence of statements.
 \item[Issue 1.106] Fixed bug in the anti-aliasing checks (which were applying {\it adjust\_exp} twice to
 some expressions which is not appropriate in general).
+\item[Issue 1.107] R0054: reworked treatment of use clauses.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -444,6 +445,7 @@ fun Ûsimple_assignÝ ({wp_env={env,...}, a, ...} : WP_PARS)
 	let	val zx = trans_id x;
 		val orig = case env zx of
 			Value(_, EIEnvVar(_, Value orig)) => orig
+		|	Value(_, EIEnvRetry ex) => ex
 		|	_ => zx;
 	in	{wp = add_domain_conds env ([ze], subseq(a, orig, ze)), side = []}
 	end
@@ -1101,16 +1103,29 @@ in
 end
 );
 =TEX
+The following function, common to either kind of procedure call, looks for the formal specification
+of a procedure taking into account the possibility that its name may be the unexpanded form
+of a procedure in a used package.
+=SML
+fun Ûget_proc_specÝ (caller : string)  (env : CN_ENV)
+	(fps : FORMAL_PROC list) (name : ID)  : FORMAL_PROC= (
+let	val	zname = 
+		case env name of
+			Value (_, EIEnvRetry n') =>  n'
+		|	_ => trans_id name;
+	fun is_it ({name = n, ...} : FORMAL_PROC) : bool = (zname = trans_id n);
+in	find fps is_it
+	handle Fail _ =>
+	fail caller 505031 [fn()=>name]
+end
+);
+=TEX
 In the following, we call $spec\_no\_ivars\_either$ directly rather than call $wp$ because the pre- and post-conditions have already been converted to $Z\_PRED$s. 
 =SML
 fun Ûproc_call_no_ivarsÝ ({wp, a, wp_env as {formal_procs, env, ...}} : WP_PARS)
 		(pc as {name, actuals} : (AGG_CHOICE,EXP) PROC_CALL)
-	
-		: RESULT = (
-let	fun is_it ({name = n, ...} : FORMAL_PROC) : bool = (name = n);
-	val fp as {spec = {w, ...}, ...} = find formal_procs is_it
-		handle Fail _ =>
-		fail "proc_call_no_ivars" 505031 [fn()=>name];
+			: RESULT = (
+let	val fp as {spec = {w, ...}, ...} = get_proc_spec "proc_call_no_ivars" env formal_procs name;
 	val (pre, post, asgns, dc_preds, vc_preds) = proc_call_spec env pc fp;
 	val xform = STSemicolon(
 			STSpecNoIvars{spec = {w = [], w0=[],
@@ -1125,13 +1140,6 @@ let	fun is_it ({name = n, ...} : FORMAL_PROC) : bool = (name = n);
 in	{wp = add_hyps(dc_preds, sr_wp1), side = add_hyps(dc_preds, sr_side1@side2)}
 end
 );
-=TEX
-=IGN
-val {formal_procs, env, ...} = wp_env;
-val SStmt (STProcNoIvars (pc as {name, actuals})) = exp;
-fun is_it ({name = n, ...} : FORMAL_PROC) : bool = (name = n);
-
-
 =TEX
 \subsection{Specification Statement (with Initial Variables)}\label{wp-spec-ivars}
 =SML
@@ -1255,10 +1263,7 @@ end);
 fun Ûproc_call_ivarsÝ ({wp, a, wp_env as {formal_procs, env, ...}} : WP_PARS)
 	(pc as {name, actuals} : (AGG_CHOICE, EXP) PROC_CALL)
 					: RESULT = (
-let	fun is_it ({name = n, ...} : FORMAL_PROC) : bool = (name = n);
-	val fp = find formal_procs is_it
-		handle Fail _ =>
-		fail "proc_call_ivars" 505031 [fn()=>name];
+let	val fp as {spec = {w, ...}, ...} = get_proc_spec "proc_call_ivars" env formal_procs name;
 	val (pre, post, asgns, dc_preds, vc_preds) = proc_call_spec env pc fp;
 	val xform = STSemicolon(
 			SSpecIvars{spec = {w = [], w0=[],
@@ -1358,11 +1363,10 @@ in
 						}
 				else	fail "adjust_statement" 505092 []
 	) |	STProcNoIvars piv =>
-		let	fun find_formal_proc id ((fproc::rest) : FORMAL_PROC list) = (
-				if (#name fproc) = id
-				then	Value fproc
-				else	find_formal_proc id rest
-			) | find_formal_proc id [] = Nil;
+		let	fun find_formal_proc id fps= (
+				Value(get_proc_spec "adj_stmt_aux" env fps id)
+				handle Fail _ => Nil
+			);
 		in
 			case find_formal_proc (#name piv) (#formal_procs wp) of
 			Value fp => (
@@ -1507,11 +1511,9 @@ fun Ûcheck_1_cÝ (speclab : SPECLAB) = (
 );
 =TEX
 =SML
-fun Ûcheck_1_dÝ (p : ID, speclab : SPECLAB) = (
-	if any ((#formal_procs o #in_scope) speclab)
-			(fn fp => p = #name fp) 
-	then ()
-	else checking_error "check_1_d" 505063 [fn () => p]
+fun Ûcheck_1_dÝ (p : ID, speclab as {wp_env = {env, ...}, in_scope ={formal_procs, ...}, ...}: SPECLAB) = (
+	(get_proc_spec "check_1_d" env formal_procs p; ())
+	handle Fail _ => checking_error "check_1_d" 505063 [fn () => p]
 );
 =TEX
 The following check, we also check 
@@ -1521,6 +1523,7 @@ let	fun aux v = (
 		case env v of
 			Value (_, EIEnvVar _) => ()
 		|	Value (_, EIEnvAuxVar _) => ()
+		|	Value (_, EIEnvRetry v') => aux v'
 		|	Value _ => fail "check_19" 505083 [fn()=> v]
 		|	Nil => fail "check_19" 505082 [fn()=> v]
 	);
@@ -1548,19 +1551,11 @@ fun Ûname_to_entire_variable_nameÝ (cn_env : CN_ENV) (e : EXP) : Z_ID = (
 	let	val zx = trans_id (entire_var_exp cn_env e);
 		val orig = case cn_env zx of
 			Value(_, EIEnvVar(_, Value orig)) => orig
+		|	Value(_, EIEnvRetry ex) => ex
 		|	_ => zx;
 	in	orig
 	end	handle exn => reraise exn "name_to_entire_variable_name"
 
-);
-=TEX
-=SML
-fun Ûfind_formal_procÝ (speclab : SPECLAB) (name : ID) : FORMAL_PROC = (
-	find 
-	((#formal_procs o #in_scope) speclab)
-		(fn p => #name p = name)
-		handle Fail _ => checking_error "find_formal_proc" 505067
-						[fn () => name]
 );
 =TEX
 =SML
@@ -1756,9 +1751,9 @@ fun Ûproc_frameÝ (env : CN_ENV)
 );
 =TEX
 =SML
-fun Ûanti_aliasing_checkÝ (env : CN_ENV) (speclab : SPECLAB,
-				proc : (AGG_CHOICE,EXP)PROC_CALL) = (
-	let	val formal_proc = find_formal_proc speclab (#name proc);
+fun Ûanti_aliasing_checkÝ (speclab as {wp_env as {formal_procs, env, ...}, ...}: SPECLAB,
+				proc as {name, ...}: (AGG_CHOICE,EXP)PROC_CALL) = (
+	let	val formal_proc = get_proc_spec "anti_aliasing_check" env formal_procs name;
 		val actuals_modes =
 			anti_aliasing_actuals_modes env formal_proc proc
 			handle Fail _ =>
@@ -1818,7 +1813,7 @@ let	fun pass_over_statement (st : STATEMENT) = (
 				check_1_b speclab
 		)|	STProcNoIvars (proc as {name,actuals}) => (
 				check_1_d (name, speclab);
-				anti_aliasing_check  env (speclab, proc)
+				anti_aliasing_check (speclab, proc)
 		)|	STKSlot {content,label} => (
 		)|	STPragma _ => (
 		)|	STAnnotation _ => (
@@ -1828,7 +1823,7 @@ let	fun pass_over_statement (st : STATEMENT) = (
 				pass_over_statement (#stmt loop)
 		)|	SProcIvars (proc as {name,actuals}) => (
 				check_1_d (name, speclab);
-				anti_aliasing_check env (speclab, proc)
+				anti_aliasing_check (speclab, proc)
 		)
 	);
 	in	pass_over_statement statement
@@ -1895,6 +1890,7 @@ fun Ûvar_sigÝ (env : CN_ENV) (zn : Z_ID) : Z_EXP = (
 	case env zn of
 		Value (_, EIEnvVar (tmark, _)) => zid env(trans_id tmark)
 	|	Value (_, EIEnvAuxVar (ztm, _)) => ztm
+	|	Value (_, EIEnvRetry zn') => var_sig env zn'
 	|	_ => fail "var_sig" 505041 [fn()=>zn]
 );
 =TEX
