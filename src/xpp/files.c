@@ -40,6 +40,14 @@ static char *cant_read_message =
 static char *cant_write_message =
 	 "The file \"%s\" cannot be opened for writing";
 
+static char *cant_write_backup_message =
+	"An error has occurred while taking a backup. "
+	"Do you want the file \"%s\" to be overwritten anyway?";
+
+static char *cant_open_backup_message =
+	"Cannot open a backup file. "
+	"Do you want the file \"%s\" to be overwritten anyway?";
+
 static char *cant_stat_message =
 	 "The file \"%s\" does not seem to exist";
 
@@ -49,11 +57,17 @@ static char *contains_nulls_message =
 static char *load_not_reg_message =
 	 "The file \"%s\" is not an ordinary file";
 
+static char *no_backup_name_space_message =
+	 "Running out of memory! "
+	"Not enough memory is available to create the backup file name";
+
 static char *no_space_message =
-	 "Not enough memory is available to read the file \"%s\"";
+	 "Running out of memory! "
+	"Not enough memory is available to read the file \"%s\"";
 
 static char *no_message_space_message =
-	 "Not enough memory is available to report a file error";
+	 "Running out of memory! "
+	"Not enough memory is available to report a file error";
 
 static char *overwrite_message =
 	 "The file \"%s\" exists. Do you want to overwrite it?";
@@ -87,6 +101,26 @@ static void file_error_dialog(
 	sprintf(msg, fmt, fname);
 	ok_dialog(w, msg);
 	XtFree(msg);
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * file_yes_no_dialog: yes/no confirmation for the file operations
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static Boolean file_yes_no_dialog(
+	Widget	w,
+	char	*fmt,
+	char	*fname)
+{
+	char	*msg;
+	Boolean reply;
+	if((msg = XtMalloc(strlen(fmt) + strlen(fname) - 1)) == NULL) {
+/* Not - 2 because need room for the null-padding */
+		ok_dialog(w, no_message_space_message);
+		return False;
+	};
+	sprintf(msg, fmt, fname);
+	reply = yes_no_dialog(w, msg);
+	XtFree(msg);
+	return reply;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -146,6 +180,62 @@ static char *get_file_contents(
 	}
 	return buf;
 }
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * backup_file: copy a file XXX into XXX.old
+ * The first parameter is the name of a widget to own any error
+ * message dialogues.
+ * The second parameter is a pointer to the file name.
+ * False is returned if anything goes wrong (and if False is
+ * returned, the user will have been presented with an error
+ * message dialogue).
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static Boolean backup_file(
+	Widget	w,
+	char	*name)
+{
+	struct stat status;
+	NAT siz;
+	FILE *fp, *backup_fp;
+	char *backup_name;
+
+	siz = strlen(name);
+	if((fp = fopen(name, "r")) == NULL) {
+			/* presumably no previous file */
+		return True;
+	};
+	if((backup_name = XtMalloc(siz + 5)) == NULL) {
+		file_error_dialog(w,
+			no_backup_name_space_message, name);
+		return False;
+	};
+	strcpy(backup_name, name);
+	strcpy(backup_name + siz, ".old");
+	if((backup_fp = fopen(backup_name, "w")) == NULL) {
+		fclose(fp);
+		return file_yes_no_dialog(w,
+				cant_open_backup_message, name);
+	} else {
+		char buf[BUFSIZ];
+		size_t bytes_read;
+		while(bytes_read = fread(buf, 1, BUFSIZ, fp)) {
+			if(fwrite(buf, 1, bytes_read, backup_fp)
+					!= bytes_read) {
+				Boolean reply;
+				reply = file_yes_no_dialog(w,
+					cant_write_backup_message, name);
+				fclose(backup_fp);
+				fclose(fp);
+				unlink(backup_name);
+				return reply;
+			}
+		}
+	};
+	XtFree(backup_name);
+	fclose(fp);
+	fclose(backup_fp);
+	return True;
+}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * store_file_contents: store a buffer into a file.
@@ -154,7 +244,7 @@ static char *get_file_contents(
  * The second parameter is a pointer to the file name.
  * The third parameter is a pointer to the data as a null-terminated
  * string.
- * False is returned if anything goes wrong (and if NULL is
+ * False is returned if anything goes wrong (and if False is
  * returned, the user will have been presented with an error
  * message dialogue).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -169,6 +259,9 @@ static Boolean store_file_contents(
 	FILE *fp;
 
 	siz = strlen(buf);
+	if(!backup_file(w, name)) {
+		return False;
+	};
 	if((fp = fopen(name, "w")) == NULL) {
 		file_error_dialog(w, cant_write_message, name);
 		return False;
