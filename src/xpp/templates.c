@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.6 2001/11/16 17:19:56 rda Exp phil $ 
+ * $Id: templates.c,v 2.7 2002/03/18 07:30:52 phil Exp phil $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -157,14 +157,21 @@ static Pixmap get_pixmap (Widget   w,
 			}
 		}
 		else {
-			char newNames[template_table_bitmaps_size +
-			              (template_table_size * 4) + 4];
-			sprintf(newNames,
-			        "\"%s\"%s %s",
-			        name,
-			        (nFailures == 2) ? " and" : ",",
-			        names);
-			strcpy(names, newNames);
+			char *newNames;
+			newNames = XtMalloc(template_table_bitmaps_size +
+			                    (template_table_size * 4) + 4);
+			if (newNames) {
+				sprintf(newNames,
+				        "\"%s\"%s %s",
+				        name,
+				        (nFailures == 2) ? " and" : ",",
+				        names);
+				strcpy(names, newNames);
+				XtFree(newNames);
+			}
+			else {
+				nFailures--;
+			}
 		}
 	}
 	if (! notLast && nFailures > 0) {
