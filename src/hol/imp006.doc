@@ -1,4 +1,4 @@
-%  imp006.doc  %Z% $Date: 2002/05/29 23:29:00 $ $Revision: 1.51 $ $RCSfile: imp006.doc,v $
+%  imp006.doc  %Z% $Date: 2002/06/01 15:46:09 $ $Revision: 1.52 $ $RCSfile: imp006.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -7,10 +7,10 @@
 \TPPtitle{Implementation for Abstract Data Type $THM$}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Abstract Data Type $THM$}
 \TPPref{DS/FMU/IED/IMP006}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.51 $
+\def\SCCSversion{$Revision: 1.52 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/05/29 23:29:00 $ %
+\TPPdate{\FormatDate{$Date: 2002/06/01 15:46:09 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -147,8 +147,8 @@ Update for SML'97.
 \item[Issue 1.48] Performance improvement in {\it icl'inst\_term\_rule}.
 \item[Issue 1.49] Performance improvement when checking new constant and type names: removed
 redundant linear search of current theory.
-\item[Issues 1.49-1.52] Performance improvement when checking additions to the the theory: removed
-redundant linear search of current theory for constant names and type names and introduced
+\item[Issues 1.49-1.53] Performance improvement when checking additions to the the theory: removed
+redundant linear search of current theory for constant names and type names and introduced ordered
 efficient dictionaries for axiom, definiition and theorem keys. (Note: issue 1.50 involved an experiment
 that was backed out at issue 1.51.)
 \end{description}
@@ -385,42 +385,6 @@ We will use the sparse array material of \cite{DS/FMU/IED/DTD001}
 =SML
 open SparseArray;
 =TEX
-We will use a type which combines a simple dictionary (to preserve ordering) with an
-efficient one (to avoid linear search).
-This could perhaps usefully be added to the ML utilities module (as a general purpose abstract data type).
-For now we simply implement the access functoins that are needed here.
-=SML
-abstype 'a ÛSE_DICTÝ = SEDict of ('a S_DICT * 'a E_DICT)
-with
-(*
-=TEX
-=SML
-*)
-val Ûinitial_se_dictÝ : 'a SE_DICT =SEDict (initial_s_dict, initial_e_dict);
-fun Ûse_extendÝ  (key : string) (item : 'a)  (SEDict(sd, ed): 'a SE_DICT) : 'a SE_DICT = (
-	case e_lookup key ed of
-		Nil =>  SEDict ((key, item)::sd, e_enter key item ed)
-	|	Value _ =>  fail "se_extend" 1014 [fn _ => key]
-);
-fun Ûse_lookupÝ  (key : string)  (SEDict(_, ed): 'a SE_DICT) : 'a  OPT = (
-	e_lookup key ed
-);
-fun Ûse_deleteÝ  (key : string)  (SEDict(sd, ed): 'a SE_DICT) : 'a  SE_DICT = (
-	SEDict(s_delete key sd, e_delete key ed)
-	handle ex => reraise ex "se_delete"
-);
-fun Ûse_flattenÝ (SEDict(sd, _) : 'a SE_DICT) : 'a S_DICT = (
-	sd
-);
-fun Ûlist_se_mergeÝ (sed : 'a SE_DICT)  (new : 'a S_DICT) : 'a SE_DICT = (
-	fold (fn ((k,x), d) => se_extend k x d) new sed
-);
-(*
-=TEX
-=SML
-*)
-end (* of abstype 'a SE_DICT *);
-=TEX
 \subsection{Types of the ADT $THM$}
 A fragment of some user data, and a collection of such
 fragments:
@@ -450,13 +414,13 @@ abstype ÛTHMÝ = ÛThmÝ of {
 and
 	Ûicl'THEORYÝ = ÛThyÝ of {
 		name : int,
-		ty_env : {arity:int, level:int} SE_DICT,
-		con_env : {ty:TYPE, level:int} SE_DICT,
+		ty_env : {arity:int, level:int} OE_DICT,
+		con_env : {ty:TYPE, level:int} OE_DICT,
 		parents : int list,
 		del_levels : (int * int) list,
-		axiom_dict : THM SE_DICT,
-		defn_dict : THM SE_DICT,
-		thm_dict : THM SE_DICT,
+		axiom_dict : THM OE_DICT,
+		defn_dict : THM OE_DICT,
+		thm_dict : THM OE_DICT,
 		current_level : int,
 		user_data : USER_DATA ref}
 and
@@ -605,13 +569,13 @@ The $pnts$ (for ``parents'') are given as a list type to give a simple ``optiona
 =SML
 fun Ûempty_theoryÝ (nm: int) (pnts : int list) : icl'THEORY = (
 	Thy{name = nm,
-	 ty_env = initial_se_dict,
-	 con_env = initial_se_dict,
+	 ty_env = initial_oe_dict,
+	 con_env = initial_oe_dict,
 	 parents = pnts,
 	 del_levels = [],
-	 axiom_dict = initial_se_dict,
-	 defn_dict = initial_se_dict,
-	 thm_dict = initial_se_dict,
+	 axiom_dict = initial_oe_dict,
+	 defn_dict = initial_oe_dict,
+	 thm_dict = initial_oe_dict,
 	 current_level = 0,
 	 user_data = ref initial_s_dict}
 );
@@ -680,15 +644,6 @@ in
 fun Ûget_con_envÝ (nm : string): {ty:TYPE, level:int} OPT = (
 let	val {in_scope, hierarchy = hier(_, lookup), ...} = !current;
 	val ordnm = ord nm handle Ord => 0;
-	fun aux [] = Nil
-	|    aux (thyn::more) = (
-		let	val ThyInfo {contents = ref thy, ...} = sub(lookup, thyn);
-			val Thy {con_env, ...} = thy;
-		in	case se_lookup nm con_env of
-				Nil => aux more
-			|	got_it => got_it
-		end
-	);
 in
 	if (ordnm = ordquote) andalso (size nm = 2)
 	then Value {ty=CHAR, level = 0}
@@ -697,18 +652,30 @@ in
 	else if	(ord0 <= ordnm andalso ordnm <= ord9 andalso
 		(is_all_decimal nm))
 	then Value {ty = î, level = 0}
-	else aux in_scope
+	else 	let	val k = e_get_key nm;
+			fun aux [] = Nil
+			|    aux (thyn::more) = (
+				let	val ThyInfo {contents = ref thy, ...} = sub(lookup, thyn);
+				val Thy {con_env, ...} = thy;
+				in	case oe_key_lookup k con_env of
+						Nil => aux more
+					|	got_it => got_it
+				end
+			);
+		in	aux in_scope
+		end
 end
 );
 end;
 
 fun Ûget_ty_envÝ (nm : string):{arity:int, level:int} OPT = (
 let	val {in_scope, hierarchy = hier(_, lookup), ...} = !current;
+	val k = e_get_key nm;
 	fun aux [] = Nil
 	|    aux (thyn::more) = (
 		let	val ThyInfo {contents = ref thy, ...} = sub(lookup, thyn);
 			val Thy {ty_env, ...} = thy;
-		in	case se_lookup nm ty_env of
+		in	case oe_key_lookup k ty_env of
 				Nil => aux more
 			|	got_it => got_it
 		end
@@ -987,19 +954,21 @@ let	val iname =icl'get_current_theory_name();
 	
 	val hier (inconsistent,lookup) = current_hierarchy();
 
-	fun const_in_thy (nm : string) (thry : int) : bool = (
+	fun const_in_thy (k : E_KEY) (thry : int) : bool = (
 	let val ThyInfo{contents = contents,...} = sub(lookup, thry);
 		val Thy{con_env=con_env,...} = !contents;
 	in
-		not(is_Nil(se_lookup nm con_env))
+		not(is_Nil(oe_key_lookup k con_env))
 	end);
 in	
-	if is_Nil(get_con_env nm)
-	then (if (any (theory_descendants iname less iname) 
-		(fn thry => const_in_thy nm thry))
-		then InDescendant
-		else NotPresent)
-	else InScope
+	if	is_Nil(get_con_env nm)
+	then	let	val k = e_get_key nm;
+		in	if	any (theory_descendants iname less iname) 
+					(fn thry => const_in_thy k thry)
+			then	InDescendant
+			else	NotPresent
+		end
+	else	InScope
 end);
 =TEX
 Is a given type constructor name used in any ancestor or descendant of the
@@ -1010,19 +979,21 @@ let	val iname = icl'get_current_theory_name();
 	
 	val hier (inconsistent,lookup) = current_hierarchy();
 
-	fun type_in_thy (nm : string) (thry : int) : bool = (
+	fun type_in_thy (k : E_KEY) (thry : int) : bool = (
 	let	val ThyInfo{contents = contents,...} = sub(lookup, thry);
 		val Thy{ty_env=ty_env,...} = !contents;
 	in
-		not(is_Nil(se_lookup nm ty_env))
+		not(is_Nil(oe_key_lookup k ty_env))
 	end);
 in	
-	if is_Nil(get_ty_env nm)
-	then (if (any (theory_descendants iname less iname) 
-		(fn thry => type_in_thy nm thry))
-		then InDescendant
-		else NotPresent)
-	else InScope
+	if	is_Nil(get_ty_env nm)
+	then	let	val k = e_get_key nm;
+		in	if	any (theory_descendants iname less iname) 
+					(fn thry => type_in_thy k thry)
+			then	InDescendant
+			else	NotPresent
+		end
+	else	InScope
 end);
 =TEX
 =SML
@@ -1043,7 +1014,7 @@ fun Ûcheck_con_envÝ (thys : int list) : string OPT = (
 		|   aux2  (thyn::more) = (
 			let	val ThyInfo {contents = ref thy, ...} = sub(lookup, thyn);
 				val Thy {con_env = con_env, ...} = thy;
-			in	case aux1 (se_flatten con_env) of
+			in	case aux1 (oe_flatten con_env) of
 					clash as Value _ => clash
 				|	Nil => aux2 more
 			end
@@ -1067,7 +1038,7 @@ fun Ûcheck_ty_envÝ (thys : int list) : string OPT = (
 		|   aux2  (thyn::more) = (
 			let	val ThyInfo {contents = ref thy, ...} = sub(lookup, thyn);
 				val Thy {ty_env = ty_env, ...} = thy;
-			in	case aux1 (se_flatten ty_env) of
+			in	case aux1 (oe_flatten ty_env) of
 					clash as Value _ => clash
 				|	Nil => aux2 more
 			end
@@ -1350,13 +1321,13 @@ fun Ûtheory_of_icl'theoryÝ ( Thy{
 		current_level,
 		user_data} : icl'THEORY ) : THEORY = (
 	{	name = name,
-		ty_env = se_flatten ty_env,
-		con_env = se_flatten con_env,
+		ty_env = oe_flatten ty_env,
+		con_env = oe_flatten con_env,
 		parents = parents,
 		del_levels = del_levels,
-		axiom_dict = se_flatten axiom_dict,
-		defn_dict = se_flatten defn_dict,
-		thm_dict = se_flatten thm_dict,
+		axiom_dict = oe_flatten axiom_dict,
+		defn_dict = oe_flatten defn_dict,
+		thm_dict = oe_flatten thm_dict,
 		current_level = current_level,
 		user_data = user_data}
 );
@@ -1862,11 +1833,11 @@ let	val {hierarchy = hierarchy as hier (inconsistent,lookup),
 	fun new_dict_entries_aux acc []  = (acc
 	)   | new_dict_entries_aux acc ((k, Thm {level, theory, sequent}) ::more) = (
 		new_dict_entries_aux
-		(se_extend k (Thm {level = level, theory = tothy, sequent = sequent}) acc) more
+		(oe_extend k (Thm {level = level, theory = tothy, sequent = sequent}) acc) more
 	);
 
 	fun new_dict_entries dict = (
-		new_dict_entries_aux initial_se_dict (rev (se_flatten dict))
+		new_dict_entries_aux initial_oe_dict (rev (oe_flatten dict))
 	);
 
 	val side = (
@@ -1978,9 +1949,9 @@ adding new entries to the dictionary, by using $se\_extend$
 =SML
 	val new_thm_dict = (fold (fn (x,y) => x y)
 		(map (fn key => fn dct =>
-			se_extend key new_thm dct
+			oe_extend key new_thm dct
 			handle complaint =>
-			divert complaint "se_extend" "icl'list_save_thm" 6039
+			divert complaint "e_extend" "icl'list_save_thm" 6039
 		 [(fn () => key),
 		  (fn () => get_current_theory_name())])
 		keys)
@@ -2036,25 +2007,25 @@ as it may save theorems from other theories at level 0.
 
 In the following $ll\_def$ should always be less than or equal $ll\_con$, but we check, just in case.
 =SML
-	val fty_env = se_flatten ty_env;
+	val fty_env = oe_flatten ty_env;
 
 	val ll_type = case fty_env of
 		[] => 0
 		| ((_,{level=llt,...})::_) => llt;
 
-	val fcon_env = se_flatten con_env;
+	val fcon_env = oe_flatten con_env;
 
 	val ll_con = case fcon_env of
 		[] => 0
 		| ((_,{level=llc,...})::_) => llc;
 
-	val fdefn_dict = se_flatten defn_dict;
+	val fdefn_dict = oe_flatten defn_dict;
 
 	val ll_def = case fdefn_dict of
 		[] => 0
 		| ((_,Thm{level=lld,...})::_) => lld;
 
-	val faxiom_dict = se_flatten axiom_dict;
+	val faxiom_dict = oe_flatten axiom_dict;
 
 	val ll_axiom = case faxiom_dict of
 		[] => 0
@@ -2062,7 +2033,7 @@ In the following $ll\_def$ should always be less than or equal $ll\_con$, but we
 
 	val last_level = list_max[ll_type, ll_con, ll_def, ll_axiom];
 
-	val fthm_dict = se_flatten thm_dict;
+	val fthm_dict = oe_flatten thm_dict;
 
 	val dummy = (
 		if last_level = 0
@@ -2085,16 +2056,16 @@ We delete anything made between $last\_level$ and $current\_level$
 (there should only be things {\bf at} the current level,
 but we are very cautious).
 =SML
-	val new_ty_env= list_se_merge initial_se_dict
+	val new_ty_env= list_oe_merge initial_oe_dict
 		(fty_env drop (fn (_,{level=ll,...}) => ll >= last_level));
 
-	val new_con_env= list_se_merge initial_se_dict
+	val new_con_env= list_oe_merge initial_oe_dict
 		(fcon_env drop (fn (_,{level=ll,...}) => ll >= last_level));
 
-	val new_axiom_dict =  list_se_merge initial_se_dict
+	val new_axiom_dict =  list_oe_merge initial_oe_dict
 		(faxiom_dict drop  (fn (_,Thm{level=ll,...}) => ll >= last_level));
 
-	val new_defn_dict =  list_se_merge initial_se_dict
+	val new_defn_dict =  list_oe_merge initial_oe_dict
 		(fdefn_dict drop (fn (_,Thm{level=ll,...}) => ll >= last_level));
 
 	val new_thy = Thy{name = iname,
@@ -2139,13 +2110,13 @@ let	val {theory=theory, ...} = !current;
 
 	val dummy = check_c_writable "icl'delete_thm"; (* spec. step 1 *)
 
-	val dthm = (force_value(se_lookup key thm_dict)
+	val dthm = (force_value(oe_lookup key thm_dict)
 		handle complaint =>
 		divert complaint "force_value" "icl'delete_thm" 6046 [
 				fn x => key,
 				fn x => get_current_theory_name()]);
 
-	val new_thm_dict = se_delete key thm_dict; (* spec step 2 *)
+	val new_thm_dict = oe_delete key thm_dict; (* spec step 2 *)
 
 	val new_thy = Thy{name = iname,
 		ty_env = ty_env,
@@ -2195,9 +2166,9 @@ We both check for an unused key (part of specification step 1 *), and insert a n
 =SML
 	val new_axiom_dict = (fold (fn (x,y) => x y)
 		(map (fn key => fn dct =>
-			se_extend key new_axiom dct
+			oe_extend key new_axiom dct
 			handle complaint =>
-			divert complaint "se_extend" "icl'new_axiom" 6047 
+			divert complaint "e_extend" "icl'new_axiom" 6047 
 			[(fn () => key), 
 			 (fn () => get_current_theory_name ())])
 		keys)
@@ -2254,7 +2225,7 @@ let	val {hierarchy=hierarchy as hier(inconsistent,lookup), theory=theory,
 
 	val con_decl = {ty=ty,level=current_level+1};
 
-	val new_con_env = se_extend nm con_decl con_env;
+	val new_con_env = oe_extend nm con_decl con_env;
 
 	val new_thy = Thy{name = iname,
 		ty_env = ty_env,
@@ -2309,7 +2280,7 @@ let	val {hierarchy=hierarchy as hier(inconsistent,lookup),
 
 	val type_decl = {arity=arity,level=current_level+1};
 
-	val new_ty_env = se_extend nm type_decl ty_env;
+	val new_ty_env = oe_extend nm type_decl ty_env;
 
 	val new_thy = Thy{name = iname,
 		ty_env = new_ty_env,
@@ -2384,7 +2355,7 @@ Now build up the new material:
 
 	val con_decl = {ty=ctype,level=current_level+1};
 
-	val new_con_env = se_extend cnm con_decl con_env;
+	val new_con_env = oe_extend cnm con_decl con_env;
 
 	val new_defn = Thm{level = current_level+1, 
 		theory=theory, 
@@ -2392,9 +2363,9 @@ Now build up the new material:
 
 	val new_defn_dict = (fold (fn (x,y) => x y)
 		(map (fn key => fn dct =>
-			se_extend key new_defn dct
+			oe_extend key new_defn dct
 			handle complaint =>
-			divert complaint "se_extend" "icl'new_defn" 6051 
+			divert complaint "e_extend" "icl'new_defn" 6051 
 			[(fn () => key), 
 			 (fn () => get_current_theory_name())])
 		keys)
@@ -2509,13 +2480,13 @@ Now build up the new material:
 
 	val ty_decl = {arity = arity,level=current_level+1};
 
-	val new_ty_env = se_extend tnm ty_decl ty_env;
+	val new_ty_env = oe_extend tnm ty_decl ty_env;
 
 	val new_defn_dict = (fold (fn (x,y) => x y)
 		(map (fn key => fn dct =>
-			se_extend key new_type_defn dct
+			oe_extend key new_type_defn dct
 			handle complaint =>
-			divert complaint "se_extend" 
+			divert complaint "e_extend" 
 				"icl'new_type_defn" 6051
 				 [(fn () => key),
 				 (fn () => get_current_theory_name())])
@@ -2646,7 +2617,7 @@ Check the results of picking apart the theorem:
 		xlist;
 
 	val new_con_env = fold 
-		(fn ((cnm,entry),edict) => se_extend cnm entry edict)
+		(fn ((cnm,entry),edict) => oe_extend cnm entry edict)
 		 con_decl con_env;
 
 	val new_concl = subst(combine new_consts xlist) bdt;
@@ -2659,9 +2630,9 @@ Now put everything in the correct place:
 
 	val new_defn_dict = (fold (fn (x,y) => x y)
 		(map (fn key => fn dct =>
-			se_extend key new_defn dct
+			oe_extend key new_defn dct
 			handle complaint =>
-			divert complaint "se_extend" "icl'new_spec" 6051 
+			divert complaint "e_extend" "icl'new_spec" 6051 
 				[(fn () => key),
 				(fn () => get_current_theory_name())])
 
