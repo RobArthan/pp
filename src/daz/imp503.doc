@@ -116,6 +116,7 @@ This removes the need for various special cases and type conversion functions.
 \item[Issue 1.115, 1.116] DAZ-specific updates to banner for open source release
 \item[Issue 1.117] Uniform treatment of block statements.
 \item[Issue 1.118] Package initialization now optional even when there are using declarations.
+\item[Issue 1.119] Improved coverage of checks against ranges as expressions.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -536,6 +537,8 @@ fun €exp_to_loop_params› (EDiscreteRange (DRConstrained{tmark, range}) : EXP)
   	else	(Value (mk_type_mark e), Nil)
 );
 =TEX
+The following is the identity function combined with a check that an expression is not one of
+the types that is allowed in our extended grammar but is not valid Ada.
 =SML
 fun €mk_exp_of_exp› (e : EXP) : EXP = (
     case e of
@@ -544,6 +547,17 @@ fun €mk_exp_of_exp› (e : EXP) : EXP = (
 		503001 "a RANGE or CONSTRAINED SUBTYPE INDICATION is not permitted here"
     ) |	EArrayAggPos{tmark = tm,comps = es} => (
 		EArrayAggPos{tmark = tm, comps = map mk_exp_of_exp es}
+     ) |	EIndexedComp{
+		index = EArrayAggPos{tmark = tm,comps = [EDiscreteRange _]},
+		prefix = _} => (
+        		parse_error
+		503001 "ARRAY SLICES are not supported"
+     ) |	EIndexedComp{
+		index = EArrayAggPos{tmark = tm,comps = es},
+		prefix = pfx} => (
+		EIndexedComp{
+		index = EArrayAggPos{tmark = tm,comps =map mk_exp_of_exp  es},
+		prefix = mk_exp_of_exp pfx} 
     ) | _ => e
 );
 =TEX
@@ -827,13 +841,13 @@ val €red_object_declaration2› = red_accept;
 =SML
 fun €red_constant_declaration1
         (Parsed(PPIds ids)) _ _ (Parsed(PPSubtypeIndication si)) _ (Parsed(PPExp e)) _ = (
-    PPBasicDecls[SIConstDecl{consts=ids, t=Value (mk_sub_ind si), expr=e}])
+    PPBasicDecls[SIConstDecl{consts=ids, t=Value (mk_sub_ind si), expr=mk_exp_of_exp e}])
 |   red_constant_declaration1 _ _ _ _ _ _ _ =
         stack_error "red_constant_declaration1";
 
 fun €red_constant_declaration2
         (Parsed(PPIds ids)) _ _ _ (Parsed(PPExp e)) _ = (
-    PPBasicDecls[SIConstDecl{consts=ids, t=Nil, expr=e}])
+    PPBasicDecls[SIConstDecl{consts=ids, t=Nil, expr=mk_exp_of_exp e}])
 |   red_constant_declaration2 _ _ _ _ _ _ =
         stack_error "red_constant_declaration2";
 
@@ -844,7 +858,7 @@ fun €red_variable_declaration› (Parsed(PPIds ids)) _ (Parsed(PPSubtypeIndication
 
 fun €red_variable_declaration2› (Parsed(PPIds ids)) _ (Parsed(PPSubtypeIndication si)) _ 
 	(Parsed(PPExp init)) _ = (
-    PPBasicDecls[SIVarDeclInit({vars=ids, t=mk_sub_ind si}, init)])
+    PPBasicDecls[SIVarDeclInit({vars=ids, t=mk_sub_ind si}, mk_exp_of_exp init)])
 |   red_variable_declaration2 _ _ _ _ _ _ =
         stack_error "red_variable_declaration2";
 
@@ -955,13 +969,13 @@ fun €red_real_type_definition2› (Parsed(PPConstraint (SIFixedCon c))) = (
 SPARK manual 3.5.7:
 =SML
 fun €red_floating_point_constraint1› (Parsed(PPExp e)) = (
-    PPConstraint(SIFloatingCon{exp=e, range=Nil}))
+    PPConstraint(SIFloatingCon{exp=mk_exp_of_exp e, range=Nil}))
 |   red_floating_point_constraint1 _ =
         stack_error "red_floating_point_constraint1";
 
 fun €red_floating_point_constraint2
         (Parsed(PPExp e)) (Parsed (PPExp re)) = (
-    PPConstraint(SIFloatingCon{exp=e, range=Value (exp_to_range re)}))
+    PPConstraint(SIFloatingCon{exp=mk_exp_of_exp e, range=Value (exp_to_range re)}))
 |   red_floating_point_constraint2 _ _ =
         stack_error "red_floating_point_constraint2";
 
@@ -972,12 +986,12 @@ fun €red_floating_accuracy_definition› _ (Parsed p) = (p)
 
 =SML
 fun €red_fixed_point_constraint1› (Parsed(PPExp e)) = (
-    PPConstraint(SIFixedCon{exp=e, range=Nil}))
+    PPConstraint(SIFixedCon{exp=mk_exp_of_exp e, range=Nil}))
 |   red_fixed_point_constraint1 _ =
         stack_error "red_fixed_point_constraint1";
 
 fun €red_fixed_point_constraint2› (Parsed(PPExp e)) (Parsed(PPExp re)) = (
-        PPConstraint(SIFixedCon{exp=e, range=Value (exp_to_range re)}))
+        PPConstraint(SIFixedCon{exp=mk_exp_of_exp e, range=Value (exp_to_range re)}))
 |   red_fixed_point_constraint2 _ _ =
         stack_error "red_fixed_point_constraint2";
 
@@ -1157,7 +1171,7 @@ fun €red_indexed_component› (Parsed(PPExp n)) (Parsed(PPExp index)) = (
     ) |  (_, EArrayAggOthers _) => (
         parse_error 503001 "OTHERS is not allowed here"
     ) |_ => (
-        PPExp(EIndexedComp{prefix=n, index=index})
+        PPExp(EIndexedComp{prefix=mk_exp_of_exp n, index=index})
     ))
 |   red_indexed_component _ _ =
         stack_error "red_indexed_component";
@@ -1166,7 +1180,7 @@ fun €red_indexed_component› (Parsed(PPExp n)) (Parsed(PPExp index)) = (
 SPARK manual 4.1.3:
 =SML
 fun €red_selected_component› (Parsed(PPExp n)) _ (Parsed(PPId id)) = (
-    PPExp(ESelectedComp{prefix=n, selector=id}))
+    PPExp(ESelectedComp{prefix=mk_exp_of_exp n, selector=id}))
 |   red_selected_component _ _ _ =
         stack_error "red_selected_component";
 
@@ -1191,7 +1205,7 @@ fun €red_expression_list2› (Parsed(PPExps es)) _ (Parsed(PPExp e)) = (
 
 =SML
 fun €red_attribute1› (Parsed(PPExp n)) (Token ((_,CNText primedid), _)) = (
-    PPExp(EAttribute{prefix=n, attribute_desig=ADAttrib
+    PPExp(EAttribute{prefix=mk_exp_of_exp n, attribute_desig=ADAttrib
     ((implode o tl o explode) primedid)}))
 |   red_attribute1 _ _ =
         stack_error "red_attribute1";
@@ -1230,7 +1244,7 @@ val €red_component_association2› = red_accept;
 =SML
 fun €red_named_association1› (Parsed(PPAggregateChoices v)) _ (Parsed(PPExp e)) = (
     case v 
-    of ([],true) => PPAgg{tm=Nil, named_assocs=[], others=Value e}
+    of ([],true) => PPAgg{tm=Nil, named_assocs=[], others=Value (mk_exp_of_exp e)}
     |(c, false) => PPAgg{tm=Nil, named_assocs =[{choice=c, comp=e}],others=Nil}
     |_ => parse_error 503001 "OTHERS is not allowed here")
 |   red_named_association1 _ _ _ =
@@ -1240,7 +1254,7 @@ fun €red_named_association2› (Parsed(PPAggregateChoices v)) _
     (Parsed(PPExp e)) _ (Parsed(PPAgg {named_assocs=na,others=ot,...})) = (
     case v 
     of (c as _::_, false) =>
-        PPAgg{tm=Nil,named_assocs={choice=c,comp=e}::na,others=ot}
+        PPAgg{tm=Nil,named_assocs={choice=c,comp=mk_exp_of_exp e}::na,others=ot}
     |_ => parse_error 503001 "OTHERS is not allowed here")
 |   red_named_association2 _ _ _ _ _ =
         stack_error "red_named_association2";
@@ -1279,7 +1293,7 @@ fun €red_aggregate_choice› (Parsed(PPExp e)) = (
             PPAggregateChoices([ACAggChoiceRange
                 (DRRange(exp_to_range e))],false)
         else
-            PPAggregateChoices([ACAggChoiceSingle e],false)
+            PPAggregateChoices([ACAggChoiceSingle (mk_exp_of_exp e)],false)
     )
 ) |   red_aggregate_choice _ =
         stack_error "red_aggregate_choice";
@@ -1310,9 +1324,8 @@ fun €red_ranged_expression2› (Parsed (PPExp e)) (Parsed (PPExp re)) = (
 val €red_expression1› = red_accept;
 
 fun €red_expr› (Parsed (PPExp exp1)) (Parsed (PPReltail(binop, exp2))) = (
-    PPExp (EBinExp {bop = binop, left = exp1, right = exp2}))
-|   red_expr _ _ =
-        stack_error "red_expr";
+	PPExp (EBinExp {bop = binop, left = mk_exp_of_exp exp1, right = mk_exp_of_exp exp2})
+) |   red_expr _ _ = stack_error "red_expr";
 
 val €red_expression2› = red_expr;
 val €red_expression3› = red_expr;
@@ -1323,7 +1336,7 @@ val €red_expression6› = red_expr;
 
 =SML
 fun €red_logrel1› binop (Parsed(PPExp exp)) = (
-    PPReltail(binop, exp))
+    PPReltail(binop, mk_exp_of_exp exp))
 |   red_logrel1 _ _ =
         stack_error "red_logrel1";
 
@@ -1417,7 +1430,7 @@ fun €red_binoptail2› (Parsed(PPBinaryOp b)) (Parsed(PPExp e))
 val €red_term1› = red_accept;
 
 fun €red_term2› (Parsed(PPExp e1)) (Parsed(PPBinaryOp m)) (Parsed(PPExp e2)) = (
-    PPExp(EBinExp{left=e1,bop=m,right=e2}))
+    PPExp(EBinExp{left=mk_exp_of_exp e1,bop=m,right=mk_exp_of_exp e2}))
 |   red_term2 _ _ _ =
         stack_error "red_term2";
 =TEX
@@ -1425,17 +1438,17 @@ fun €red_term2› (Parsed(PPExp e1)) (Parsed(PPBinaryOp m)) (Parsed(PPExp e2)) = (
 =SML
 val €red_factor1› = red_accept;
 fun €red_factor2› (Parsed(PPExp e1)) _ (Parsed(PPExp e2)) = (
-    PPExp(EBinExp{left=e1,bop=BOSparkExpon,right=e2}))
+    PPExp(EBinExp{left=mk_exp_of_exp e1,bop=BOSparkExpon,right=mk_exp_of_exp e2}))
 |   red_factor2 _ _ _ =
         stack_error "red_factor2";
 
 fun €red_factor3› _ (Parsed(PPExp e)) = (
-    PPExp(EUnaryExp{uop=UOSparkAbs, right=e}))
+    PPExp(EUnaryExp{uop=UOSparkAbs, right=mk_exp_of_exp e}))
 |   red_factor3 _ _ =
         stack_error "red_factor3";
 
 fun €red_factor4› _ (Parsed(PPExp e)) = (
-    PPExp(EUnaryExp{uop=UOSparkNot, right=e}))
+    PPExp(EUnaryExp{uop=UOSparkNot, right=mk_exp_of_exp e}))
 |   red_factor4 _ _ =
         stack_error "red_factor4";
 =TEX
@@ -1459,7 +1472,7 @@ fun €red_primary3› (Token ((LCStringLiteral,CNString s), _)) = (
 val €red_primary4› = red_accept;
 val €red_primary5› = red_accept;
 fun €red_primary6› (Parsed (PPExp (EArrayAggPos{tmark=Nil,comps = [e]}))) = (
-    PPExp (EBracketed e))
+    PPExp (EBracketed (mk_exp_of_exp e)))
 |   red_primary6 (Parsed pagg) = pagg
 |   red_primary6 _ = stack_error "red_primary6";
 
@@ -1489,7 +1502,7 @@ fun €red_multiplying_operator4› x1 = PPBinaryOp BOSparkRem;
 
 =SML
 fun €red_qualified_expression› (Parsed(PPExp n)) _ (Parsed(PPExp e)) = (
-    PPExp(EQualifiedExp{tmark=mk_type_mark n, exp=e}))
+    PPExp(EQualifiedExp{tmark=mk_type_mark n, exp=mk_exp_of_exp e}))
 |   red_qualified_expression _ _ _ =
         stack_error "red_qualified_expression";
 =TEX
@@ -1658,7 +1671,7 @@ val €red_compound_statement4› = red_accept;
 fun €red_null_statement› _ _ = PPStatement STNull;
 
 fun €red_assignment_statement› (Parsed(PPExp n)) _ (Parsed(PPExp e)) _ = (
-    PPStatement(STAssign{name=n, e=e}))
+    PPStatement(STAssign{name=mk_exp_of_exp n, e=mk_exp_of_exp e}))
 |   red_assignment_statement _ _ _ _ =
         stack_error "red_assignment_statement";
 =TEX
@@ -1666,7 +1679,7 @@ fun €red_assignment_statement› (Parsed(PPExp n)) _ (Parsed(PPExp e)) _ = (
 =SML
 fun €red_if_statement› _ (Parsed(PPExp exp)) _ (Parsed(PPStatement st)) 
     (Parsed(PPElsIf ei)) (Parsed(PPStatement el)) _ _ _ = (
-let val css = (exp, st)::ei;
+let val css = (mk_exp_of_exp exp, st)::ei;
     fun aux ((c,s)::(rest as (_::_))) = (
         (STIfThenElse{g=c,p=s,q=aux rest,elsif=true})
     ) |  aux [(c,s)] = (
@@ -1683,7 +1696,7 @@ end)
 val €red_elsif_part1› = PPElsIf [];
 fun €red_elsif_part2› _ (Parsed (PPExp exp)) _ (Parsed(PPStatement st))
     (Parsed(PPElsIf ei)) = (
-    PPElsIf ((exp, st)::ei))
+    PPElsIf ((mk_exp_of_exp exp, st)::ei))
 |   red_elsif_part2 _ _ _ _ _ =
         stack_error "red_elsif_part2";
 =TEX
@@ -1701,7 +1714,7 @@ val €red_condition› = red_accept;
 =SML
 fun €red_case_statement› _ (Parsed(PPExp e)) _ (Parsed(PPCaseAlternatives cs))
     (Parsed(PPStatement others)) _ _ _ = (
-    PPStatement(STCase{e=e, s=cs, others=others}))
+    PPStatement(STCase{e=mk_exp_of_exp e, s=cs, others=others}))
 |   red_case_statement _ _ _ _ _ _ _ _ =
         stack_error "red_case_statement";
 
@@ -1897,9 +1910,9 @@ fun €red_exit_statement1› _ (Parsed(PPIds [])) _ = (
     stack_error "red_exit_statement1";
 
 fun €red_exit_statement2› _ (Parsed(PPIds [])) _ (Parsed(PPExp exp)) _ = (
-    PPStatement(STExitWhen{ g = exp, n = Nil })
+    PPStatement(STExitWhen{ g = mk_exp_of_exp exp, n = Nil })
 ) | red_exit_statement2 _ (Parsed(PPIds [id])) _ (Parsed(PPExp exp)) _ = (
-    PPStatement(STExitWhen{ g = exp, n = Value id })
+    PPStatement(STExitWhen{ g = mk_exp_of_exp exp, n = Value id })
 ) | red_exit_statement2 _ _ _ _ _ =
         stack_error "red_exit_statement2";
 =TEX
@@ -1909,7 +1922,7 @@ fun €red_return_statement1› _ _ = (
 );
 
 fun €red_return_statement2› _ (Parsed(PPExp exp)) _ = (
-    PPStatement (STRet{ e = Value exp }))
+    PPStatement (STRet{ e = Value (mk_exp_of_exp exp) }))
 |   red_return_statement2 _ _ _ =
         stack_error "red_return_statement2";
 =TEX
@@ -2699,7 +2712,7 @@ val €red_type_representation_clause2› = red_accept;
 val €red_type_representation_clause3› = red_accept;
 
 fun €red_length_clause› _ (Parsed(PPExp a)) _ (Parsed(PPExp e)) _ = (
-    PPRepresentationClause(RCLength{attribute=a, exp=e}))
+    PPRepresentationClause(RCLength{attribute=a, exp=mk_exp_of_exp e}))
 |   red_length_clause _ _ _ _ _ =
         stack_error "red_length_clause";
 =TEX
@@ -2708,7 +2721,7 @@ SPARK manual 13.3:
 =SML
 fun €red_enumeration_representation_clause› _ (Token ((_,CNText id), _)) _
     (Parsed(PPExp e)) _ = (
-    PPRepresentationClause(RCEnumeration{name=id, exp=e}))
+    PPRepresentationClause(RCEnumeration{name=id, exp=mk_exp_of_exp e}))
 |   red_enumeration_representation_clause _ _ _ _ _ =
         stack_error "red_enumeration_representation_clause";
 =TEX
@@ -2717,7 +2730,7 @@ SPARK manual 13.4:
 =SML
 fun €red_record_representation_clause› _ (Token ((_,CNText id), _)) _ _
     (Parsed(PPExps [e])) (Parsed(PPComponentClauses c)) _ _ _ = (
-    PPRepresentationClause(RCRecord{name=id, alignment_opt=Value e,
+    PPRepresentationClause(RCRecord{name=id, alignment_opt=Value (mk_exp_of_exp e),
     component_pack=c}))
 |   red_record_representation_clause _ (Token ((_,CNText id), _)) _ _
     (Parsed(PPExps [])) (Parsed(PPComponentClauses c)) _ _ _ = (
@@ -2731,7 +2744,7 @@ SPARK manual 13.4:
 =SML
 val €red_alignment_opt1› = PPExps [];
 fun €red_alignment_opt2› _ _ (Parsed(PPExp e)) _ = (
-    PPExps [e])
+    PPExps [mk_exp_of_exp e])
 |   red_alignment_opt2 _ _ _ _ =
         stack_error "red_alignment_opt2";
 
@@ -2748,7 +2761,7 @@ SPARK manual 13.4:
 =SML
 fun €red_component_clause› (Parsed(PPExp n)) _ (Parsed(PPExp e)) _
     (Parsed(PPExp sr)) _ = (
-    PPComponentClauses[{name=mk_type_mark n, exp=e,
+    PPComponentClauses[{name=mk_type_mark n, exp=mk_exp_of_exp e,
         range=exp_to_range sr}])
 |   red_component_clause _ _ _ _ _ _ =
         stack_error "red_component_clause";
@@ -2758,7 +2771,7 @@ SPARK manual 13.5:
 =SML
 fun €red_address_clause› _ (Token ((_,CNText id), _)) _ _
     (Parsed (PPExp exp)) _ = (
-    PPRepresentationClause(RCAddress {name=id, exp=exp}))
+    PPRepresentationClause(RCAddress {name=id, exp=mk_exp_of_exp exp}))
 |   red_address_clause _ _ _ _ _ _ =
         stack_error "red_address_clause";
 =TEX
