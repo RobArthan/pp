@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.4 2001/11/16 17:19:56 rda Exp rda $
+ * $Id: options.c,v 2.5 2001/12/15 19:17:00 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -84,7 +84,6 @@ static Widget
 /*
  * We use a variable to record the state of the radio buttons:
  */
-static char	add_new_line_button_state;
 static void	apply_cb(CALLBACK_ARGS),
 		reset_cb(CALLBACK_ARGS),
 		dismiss_cb(CALLBACK_ARGS),
@@ -212,12 +211,10 @@ if(!global_options.edit_only) {
 	s2 = XmStringCreateSimple("`Execute' prompts for new-lines");
 	s3 = XmStringCreateSimple("`Execute' ignores missing new-lines");
 
-	add_new_line_button_state = global_options.add_new_line_mode;
-
 	add_new_line_radio_buttons = XmVaCreateSimpleRadioBox(
 		shell_row_col,
 		"execute-new-line-frame",
-		add_new_line_button_state,
+		global_options.add_new_line_mode,
 		add_new_line_cb,
 		XmVaRADIOBUTTON, s1, NULL, NULL, NULL,
 		XmVaRADIOBUTTON, s2, NULL, NULL, NULL,
@@ -445,7 +442,6 @@ static void apply_cb(
 		XmTextSetString(journal_max_text, buf);
 	};
 
-	global_options.add_new_line_mode = add_new_line_button_state;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -512,8 +508,7 @@ static void add_new_line_cb(
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
-	int btn_n = (int) cbd,
-	add_new_line_button_state = btn_n;
+	global_options.add_new_line_mode = (int) cbd;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****

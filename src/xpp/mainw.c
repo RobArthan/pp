@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.16 2001/12/15 16:37:49 rda Exp rda $
+ * $Id: mainw.c,v 2.17 2001/12/15 19:17:00 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -1104,27 +1104,28 @@ static Bool execute_command(void)
 	char *cmd;
 	NAT len;
 	XmTextPosition dontcare;
-	int add_nl;
 
 	if(	XmTextGetSelectionPosition(script, &dontcare, &dontcare)
 	&&	(cmd = XmTextGetSelection(script))) {
 		len = strlen(cmd);
-		add_nl =	len && cmd[len-1] == '\n'
-			?	0
-			:	global_options.add_new_line_mode
-					== EXECUTE_ADD_NEW_LINES
-			?	1
-			:	global_options.add_new_line_mode
-						== EXECUTE_PROMPT_NEW_LINES
-			?	yes_no_cancel_dialog(root, add_new_line_message)
-			:	0;
-				
-		if(add_nl >= 0) { /* don't cancel */
-				send_to_application(cmd, len);
-				if(add_nl) {
-					send_to_application("\n", 1);
-				}
+		if(len == 0) {
+			return False;
+		} else if (cmd[len-1] == '\n') {
+			send_to_application(cmd, len);
+		} else if (global_options.add_new_line_mode
+				== EXECUTE_ADD_NEW_LINES) {
+			send_to_application(cmd, len);
+			send_to_application("\n", 1);
+		} else if (global_options.add_new_line_mode
+				== EXECUTE_IGNORE_NEW_LINES) {
+			send_to_application(cmd, len);
+		} else if (global_options.add_new_line_mode
+					== EXECUTE_PROMPT_NEW_LINES &&
+			yes_no_cancel_dialog(root, add_new_line_message)) {
+			send_to_application(cmd, len);
+			send_to_application("\n", 1);
 		}
+				
 		XtFree(cmd);
 		return True;
 	} else {
