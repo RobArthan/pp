@@ -375,6 +375,8 @@ fun Ûname_to_tmarkÝ (e : EXP) : TMARK = (
 	case e of
 	EId id =>
 		id
+	|ESelectedComp {prefix, selector} =>
+		(name_to_tmark prefix)^"."^selector
 	|_ => "__invalid"
 );
 =TEX
@@ -420,6 +422,47 @@ fun Ûstatement_to_stmtÝ (st : STATEMENT) : STMT = (
 	|_ => stack_error "statement_to_stmt"
 );
 =TEX
+
+\subsection{Support for Unlabelled KSlots and Specification Statements}
+
+The following reference variable keeps a note of the last unlabelled kslot or specification statement.
+
+=SML
+val Ûunlabelled_stackÝ : string OPT ref = ref Nil;
+val Ûunlabelled_counterÝ : int ref = ref 1;
+=TEX
+=SML
+fun Ûinitialise_unlabelled_counterÝ (() : unit) : unit = (
+	unlabelled_counter := 1
+);
+=TEX
+=SML
+fun Ûpush_labelÝ (() : unit) : string = (
+if !unlabelled_stack = Nil
+then
+	let	val label = "(a"^string_of_int (!unlabelled_counter)^")";
+		val side1 = unlabelled_stack := Value label;
+		val side2 = unlabelled_counter := (!unlabelled_counter) + 1;
+	in
+		label
+	end
+else
+	parse_error 503001 "there is already an unlabelled, unexpanded k-slot or specification statement in the script"
+);
+=TEX
+=SML
+fun Ûpop_labelÝ (() : unit) : string = (
+case !unlabelled_stack of
+	Nil => parse_error 503001
+		"there is no unlabelled k-slot or specification statement to expand"
+	|Value label => (
+		unlabelled_stack := Nil;
+		label
+	)
+);
+=TEX
+
+\subsection{Reduction Functions}
 =SML
 fun red_accept (Parsed pp) = (pp
 ) | red_accept (Token ((l,CNText t),_)) = (
@@ -436,39 +479,39 @@ fun red_web_clause1 (Parsed (PPKSlotCUList cul)) = (
 ) | red_web_clause1 _ = stack_error "red_web_clause1";
 
 fun red_web_clause2 (Token ((_, CNText lab), _)) _ (Parsed (PPKSlotCUList cul)) = (
-	PPWebClause (WCReplacedByCompilation {label=LExplicit lab,comp=cul})
+	PPWebClause (WCReplacedByCompilation {label= lab,comp=cul})
 ) | red_web_clause2 _ _ _ = stack_error "red_web_clause2";
 
 fun red_web_clause3 (Token ((_,CNText lab), _)) _ (Parsed (PPDeclarations d)) = (
-	PPWebClause (WCReplacedByPrivatePart {label=LExplicit lab, private=d})
+	PPWebClause (WCReplacedByPrivatePart {label= lab, private=d})
 ) | red_web_clause3 _ _ _ = stack_error "red_web_clause3";
 
 fun red_web_clause4 (Token ((_,CNText lab), _)) _ (Parsed (PPDeclarations d)) = (
-	PPWebClause (WCReplacedByVisiblePart {label=LExplicit lab, visible=d})
+	PPWebClause (WCReplacedByVisiblePart {label= lab, visible=d})
 ) | red_web_clause4 _ _ _ = stack_error "red_web_clause4";
 
 fun red_web_clause5 (Token ((_,CNText lab), _)) _ (Parsed (PPDeclarations d)) = (
-	PPWebClause (WCReplacedByDecl {label=LExplicit lab, decls=d})
+	PPWebClause (WCReplacedByDecl {label= lab, decls=d})
 ) | red_web_clause5 _ _ _ = stack_error "red_web_clause5";
 
 fun red_web_clause6 (Token ((_,CNText lab), _)) _ (Parsed (PPStatement s)) = (
-	PPWebClause (WCReplacedBy {label=LExplicit lab, statement=s})
+	PPWebClause (WCReplacedBy {label= lab, statement=s})
 ) | red_web_clause6 _ _ _ = stack_error "red_web_clause6";
 
 fun red_web_clause7 (Token ((_,CNText lab), _)) _ (Parsed (PPStatement s)) = (
-	PPWebClause (WCRefinedBy {label=LExplicit lab, statement=s})
+	PPWebClause (WCRefinedBy {label= lab, statement=s})
 ) | red_web_clause7 _ _ _ = stack_error "red_web_clause7";
 
 fun red_web_clause8 _ (Parsed (PPStatement s)) = (
-	PPWebClause (WCRefinedBy {label=LImplicit, statement=s})
+	PPWebClause (WCRefinedBy {label=pop_label(), statement=s})
 ) | red_web_clause8 _ _ = stack_error "red_web_clause8";
 
 fun red_web_clause9 (Token ((_,CNText lab), _)) _ (Parsed (PPStatement s)) = (
-	PPWebClause (WCReplacedBy {label=LExplicit lab, statement=s})
+	PPWebClause (WCReplacedBy {label= lab, statement=s})
 ) | red_web_clause9 _ _ _ = stack_error "red_web_clause9";
 
 fun red_web_clause10  _ (Parsed (PPStatement s)) = (
-	PPWebClause (WCReplacedBy {label=LImplicit, statement=s})
+	PPWebClause (WCReplacedBy {label=pop_label(), statement=s})
 ) | red_web_clause10 _ _ = stack_error "red_web_clause10";
 =TEX
 =SML
@@ -709,7 +752,7 @@ fun red_declarative_part2 (Parsed (PPDeclarations d1)) (Parsed (PPDeclarations d
 =TEX
 =SML
 fun red_dec1 (Parsed(PPKSlot k)) = (
-	PPDeclarations [DDeclarationKSlot k]
+	PPDeclarations [DDeclarationKSlot (k, DKDeclaration)]
 ) | red_dec1 _ = stack_error "red_dec1";
 
 val red_dec2 = red_accept;
@@ -1054,14 +1097,14 @@ let	val (pre, post) =
 		|(Nil, post') => (z_tm_true, post');
 in
 	PPStmt(STSpecNoIvars{w=process_frame z1,
-		 w0=[], pre=pre, post=post, label=LImplicit})
+		 w0=[], pre=pre, post=post, label=push_label()})
 end
 ) | red_specification_statement1 _ _ _ _ _ = stack_error "red_specification_statement1";
 
 fun red_specification_statement2 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ = (
 let	val (pre, post) = (process_pre_condition z2, z_tm_true);
 in
-	PPStmt(STSpecNoIvars{w=process_frame z1, w0=[],pre=pre,post=post,label=LImplicit})
+	PPStmt(STSpecNoIvars{w=process_frame z1, w0=[],pre=pre,post=post,label=push_label()})
 end
 ) | red_specification_statement2 _ _ _ _ _ = stack_error "red_specification_statement2";
 
@@ -1071,14 +1114,14 @@ let	val (pre, post) =
 		(Value pre', post') => (pre', post')
 		|(Nil, post') => (z_tm_true, post');
 in
-	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=pre,post=post, label=LExplicit lab})
+	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=pre,post=post, label= lab})
 end
 ) | red_specification_statement3 _ _ _ _ _ _ = stack_error "red_specification_statement3";
 
 fun red_specification_statement4 _ (Token ((LCZ,CNZ z1), _)) _ (Token ((LCZ,CNZ z2), _)) _ (Parsed(PPId lab))= (
 let	val (pre, post) = (process_pre_condition z2, z_tm_true);
 in
-	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=pre,post=post,label=LExplicit lab})
+	PPStmt(STSpecNoIvars{w=process_frame z1,w0=[],pre=pre,post=post,label= lab})
 end
 ) | red_specification_statement4 _ _ _ _ _ _ = stack_error "red_specification_statement4";
 =TEX
@@ -1092,11 +1135,11 @@ fun red_label _ (Token ((LCNumericLiteral,CNText n), _)) _ = (
 ) | red_label _ _ _ = stack_error "red_label";
 
 fun red_k_slot1 (Token ((LCKSlot,CNKSlot lx), _)) = (
-	PPKSlot{content=format_input_items lx, label=LImplicit}
+	PPKSlot{content=format_input_items lx, label=push_label()}
 ) | red_k_slot1 _ = stack_error "red_k_slot1";
 
 fun red_k_slot2 (Token ((LCKSlot,CNKSlot lx), _)) (Parsed(PPId lab)) = (
-	PPKSlot{content=format_input_items lx, label=LExplicit lab}
+	PPKSlot{content=format_input_items lx, label= lab}
 ) | red_k_slot2 _ _ = stack_error "red_k_slot2";
 =TEX
 =SML
@@ -1488,7 +1531,7 @@ fun red_visible_part2 (Parsed (PPDeclarations d1)) (Parsed (PPDeclarations d2)) 
 SPARK manual 7.1:
 =SML
 fun red_visdec1 (Parsed (PPKSlot k)) = (
-	PPDeclarations [DDeclarationKSlot k]
+	PPDeclarations [DDeclarationKSlot (k, DKVisible)]
 ) | red_visdec1 _ = stack_error "red_visdec1";
 
 val red_visdec2 = red_accept;
@@ -1502,7 +1545,7 @@ fun red_private_part2 (Parsed (PPDeclarations d1)) (Parsed (PPDeclarations d2)) 
 ) | red_private_part2 _ _ = stack_error "red_private_part2";
 
 fun red_pdec1 (Parsed (PPKSlot k)) = (
-	PPDeclarations [DDeclarationKSlot k]
+	PPDeclarations [DDeclarationKSlot (k, DKPrivate)]
 ) | red_pdec1 _ = stack_error "red_pdec1";
 
 val red_pdec2 = red_accept;
@@ -1618,7 +1661,7 @@ fun red_body_stub3 _ _ (Token ((_,CNText id), _)) _ _ _ = (
 ) | red_body_stub3 _ _ _ _ _ _ = stack_error "red_body_stub3";
 
 fun red_subunit _ _ (Parsed(PPExp n)) _ (Parsed (PPProperBody p)) = (
-	PPCompilationUnit([], CUSubUnit{name=n, proper_body=p})
+	PPCompilationUnit([], CUSubUnit{name=name_to_tmark n, proper_body=p})
 ) | red_subunit _ _ _ _ _ = stack_error "red_subunit";
 =TEX
 =SML
@@ -1665,7 +1708,8 @@ fun red_component_pack2 (Parsed(PPComponentClauses [c])) (Parsed(PPComponentClau
 SPARK manual 13.4:
 =SML
 fun red_component_clause (Parsed(PPExp n)) _ (Parsed(PPExp e)) _ (Parsed(PPSRExpression sr)) _ = (
-	PPComponentClauses[{name=n, exp=e, range=sr_expression_to_range sr}]
+	PPComponentClauses[{name=name_to_tmark n, exp=e,
+		range=sr_expression_to_range sr}]
 ) | red_component_clause _ _ _ _ _ _ = stack_error "red_component_clause";
 =TEX
 
@@ -1699,7 +1743,12 @@ in
 \subsection{Conversion of Names to Type Marks}
 The implementation of this function is at the beginning of section \ref{REDUCTION FUNCTIONS}.
 =SML
-val Ûname_to_tmarkÝ :EXP -> TMARK = name_to_tmark;
+val Ûname_to_tmarkÝ : EXP -> TMARK = name_to_tmark;
+=TEX
+
+=SML
+val Ûinitialise_unlabelled_counterÝ : unit -> unit =
+				initialise_unlabelled_counter;
 =TEX
 \subsection{Conversion of $Z\_TM$s to Z Predicates and Expressions}
 Z predicates and expressions are both mapped onto HOL terms and so one function will provide the translation of parsed Z terms which occur in contexts where predicates or expressions are expected.
