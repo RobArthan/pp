@@ -495,7 +495,15 @@ XmAnyCallbackStruct *cbs;
 		}
 		break;
 	case FILE_MENU_SAVE_AS:
-		fname = file_dialog(frame, "Save As");
+		fname = file_dialog(frame, "Save");
+		if(!fname || !*fname || *fname == '*') {
+/* No file name: just do nothing for now */
+			break;
+		} else if(save_file_as(script, fname)) {
+			XmTextFieldSetString(namestring, fname);
+			XmTextFieldShowPosition(namestring, strlen(fname));
+		};
+		if(fname != NULL) {XtFree(fname);};
 		break;
 	case FILE_MENU_OPEN:
 		fname = file_dialog(frame, "Open");
@@ -517,9 +525,6 @@ XmAnyCallbackStruct *cbs;
 	default:
 		break;
 	};
-
-
-
 }
 
 static void tools_menu_cb(w, i, cbs)

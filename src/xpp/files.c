@@ -1,5 +1,4 @@
 
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * $Id$
  *
@@ -35,32 +34,38 @@
 #include "xpp.h"
 
 
-static char *cant_stat_message =
-	 "The file \"%s\" does not seem to exist";
-
-static char *not_text_message =
-	 "The file \"%s\" is not a text file";
-
-static char *no_space_message =
-	 "Not enough memory is available to read the file \"%s\"";
-
 static char *cant_read_message =
 	 "The file \"%s\" cannot be opened for reading";
 
 static char *cant_write_message =
 	 "The file \"%s\" cannot be opened for writing";
 
-static char *read_error_message =
-	 "Error reading the file \"%s\"";
-
-static char *write_error_message =
-	 "Error writing the file \"%s\"";
+static char *cant_stat_message =
+	 "The file \"%s\" does not seem to exist";
 
 static char *contains_nulls_message =
 	" The file \"%s\" contains binary data and cannot be edited";
 
+static char *load_not_reg_message =
+	 "The file \"%s\" is not an ordinary file";
+
+static char *no_space_message =
+	 "Not enough memory is available to read the file \"%s\"";
+
 static char *no_message_space_message =
 	 "Not enough memory is available to report a file error";
+
+static char *overwrite_message =
+	 "The file %s exists. Do you want to overwrite it?";
+
+static char *read_error_message =
+	 "Error reading the file \"%s\"";
+
+static char *save_not_reg_message =
+	 "The file \"%s\" is not an ordinary file";
+
+static char *write_error_message =
+	 "Error writing the file \"%s\"";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Private functions:
@@ -113,7 +118,7 @@ static char *get_file_contents(
 		return NULL;
 	};
 	if(!S_ISREG(status.st_mode)) {
-		file_error_dialog(w, not_text_message, name);
+		file_error_dialog(w, load_not_reg_message, name);
 		return NULL;
 	};
 	siz = status.st_size;
@@ -163,14 +168,6 @@ static Boolean store_file_contents(
 	NAT siz;
 	FILE *fp;
 
-	if(stat(name, &status) != 0) {
-		file_error_dialog(w, cant_stat_message, name);
-		return False;
-	};
-	if(!S_ISREG(status.st_mode)) {
-		file_error_dialog(w, not_text_message, name);
-		return False;
-	};
 	siz = strlen(buf);
 	if((fp = fopen(name, "w")) == NULL) {
 		file_error_dialog(w, cant_write_message, name);
@@ -227,8 +224,42 @@ Boolean save_file(
 {
 	FILE *fp;
 	char *buf;
+	Boolean success;
 	buf = XmTextGetString(text);
-	store_file_contents(text, name, buf);
+	success = store_file_contents(text, name, buf);
 	XtFree(buf);
+	return success;
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * save_file_as: store contents of a text widget into a named file
+ * asks for confirmation if the file already exists.
+ * Implements `save as' as opposed to `save' in a file menu
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+Boolean save_file_as(
+	Widget	text,
+	char	*name)
+{
+	FILE *fp;
+	char *buf;
+	Boolean success;
+	struct stat status;
+
+	if(stat(name, &status) == 0) { /* file exists */
+		char msg_buf[200];
+		if(!S_ISREG(status.st_mode)) {
+			file_error_dialog(text, save_not_reg_message, name);
+			return False;
+		};
+		sprintf(msg_buf, overwrite_message, name);
+		if(!yes_no_dialog(text, msg_buf)) {
+			return False;
+		}
+	}; /* else file doesn't exist so no checks needed */
+	buf = XmTextGetString(text);
+	success = store_file_contents(text, name, buf);
+	XtFree(buf);
+	return success;
 }
 
