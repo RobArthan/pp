@@ -8,13 +8,13 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp047.doc  %Z% $Date: 2002/10/17 15:10:58 $ $Revision: 1.50 $ $RCSfile: imp047.doc,v $
+% imp047.doc  %Z% $Date: 2002/10/17 16:26:32 $ $Revision: 1.51 $ $RCSfile: imp047.doc,v $
 
 doctex imp047 ; texdvi imp047
 bibtex imp047
 
 =TEX
-% imp047.doc  %Z% $Date: 2002/10/17 15:10:58 $ $Revision: 1.50 $ $RCSfile: imp047.doc,v $
+% imp047.doc  %Z% $Date: 2002/10/17 16:26:32 $ $Revision: 1.51 $ $RCSfile: imp047.doc,v $
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
 \makeindex
@@ -24,10 +24,10 @@ bibtex imp047
 \TPPtitle{Implementation for Z Types and Terms}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Z Types and Terms}
 \TPPref{DS/FMU/IED/IMP047}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.50 $%
+\def\SCCSversion{$Revision: 1.51 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 15:10:58 $%
+\TPPdate{\FormatDate{$Date: 2002/10/17 16:26:32 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -98,6 +98,9 @@ $basic\_dest\_z\_term$ checks schema predicates more carefully now.
 \item[Issue 1.49] Update for new INTEGER type.
 \item[Issue 1.50] Copyright and banner updates for open source release.
 \item[Issue 1.51] PPZed-specific updates for open source release
+\item[Issue 1.52] Made it follow the parser (term generator) in allowing  -terms
+and schemas-as-predicates in which a signature variable is bound to a global variable.
+The destructor for  -terms now checks the operand more carefully.
 \end{description}
 %\subsection{Changes Forecast}
 \newpage
@@ -613,9 +616,9 @@ fun	€mk_binding› ((sch,d):TERM * string) :TERM =
 	handle Fail _ => term_fail "mk_binding" 47940 [sch];
 end;
 =TEX
-\subsection{Making Z Schemas as Predicates}
-This is given out of order to allow a thorough check of the rather fragile
-destruction of Z Schemas as Predicates.
+\subsection{Making Z Schemas as Predicates and  -Terms}
+These are given out of order to allow a thorough check of the otherwise rather fragile
+destruction of Z Schemas as Predicates and of  -terms.
 =SML
 fun	€mk_z_schema_pred› ((sch,d):TERM * string) :TERM = 
 	let	val bind = mk_binding(sch,d);
@@ -623,6 +626,17 @@ fun	€mk_z_schema_pred› ((sch,d):TERM * string) :TERM =
 		val sty = type_of sch;
 		val cty = list_mk_≠_type[bty,sty,BOOL];
 		val con = mk_const("Z'SchemaPred",cty);
+	in
+		list_mk_app(con,[bind,sch])
+	end;
+=TEX
+=SML
+fun	€mk_z_ › ((sch,d):TERM * string) :TERM = 
+	let	val bind = mk_binding(sch,d);
+		val bty = type_of bind;
+		val sty = type_of sch;
+		val cty = list_mk_≠_type[bty,sty,bty];
+		val con = mk_const("Z' ",cty);
 	in
 		list_mk_app(con,[bind,sch])
 	end;
@@ -641,6 +655,13 @@ immedaitely following block of code.
 
 =SML
 fun €basic_dest_z_term› (hdterm:TERM, args:TERM list) : BDZ = (
+let	fun gvar_to_lvar v = (
+		case basic_dest_z_term (strip_app v) of
+			BdzOk(ZGVar (n, ty, _)) =>  mk_var(n, ty)
+		|	BdzOk(ZLVar _) =>  v
+		|	_ => fail "" 0 [] (* must be caught by caller *)
+	);
+in
 	case dest_simple_term hdterm
 	of App _ => BdzNotZ 47900
 	| SimpleÃ _ => BdzNotZ 47900
@@ -692,7 +713,8 @@ of "Z'Dec" => (
 	| _ => BdzFail{BdzFCode=47910, BdzFCompc=0, BdzFArgc=1}
 )
 =TEX
-Then schema declarations.
+Then schema declarations. Note that unlike  -terms and schemas-as-predicates
+it would not be valid to have a global variable in the binding.
 =SML
 | "Z'SchemaDec" => (
 	case (comp_list, args)
@@ -803,13 +825,15 @@ types of their operands.  Equivalence has both arguments of type $BOOL$.
 | "Z'SchemaPred" => (
 	case (comp_list, args)
 	of ([],[bind, sch]) => (
-		let	val btym = map dest_var (snd(strip_app bind));
+		let	val vars = snd (strip_app bind);
+			val lvars = map gvar_to_lvar vars;
+			val btym = map dest_var lvars;
 			val stym = dest_z_schema_type(dest_z_power_type(type_of sch));
 			val d = implode(
-					(explode(fst(hd btym))) from 
+					(explode(fst (hd btym))) from 
 					(length(explode(fst(hd stym)))));
 			val orig_term = list_mk_app(hdterm, args);
-			val reverse_term = mk_z_schema_pred(sch, d);
+			val reverse_term = subst(combine vars lvars) (mk_z_schema_pred(sch, d));
 			val dummy = if (orig_term =$ reverse_term)
 				then ()
 				else fail "" 0 [];
@@ -901,11 +925,18 @@ constant part.
 | "Z' " => (
 	case (comp_list, args)
 	of ([],[bind,sch]) => (
-		let	val btym = map dest_var (snd(strip_app bind));
+		let	val vars = snd(strip_app bind);
+			val lvars =map gvar_to_lvar vars;
+			val btym = map dest_var lvars;
 			val stym = dest_z_schema_type(dest_z_power_type(type_of sch));
 			val d = implode(
-					(explode(fst(hd btym))) from 
+					(explode(fst (hd btym))) from 
 					(length(explode(fst(hd stym)))));
+			val orig_term = list_mk_app(hdterm, args);
+			val reverse_term = subst(combine vars lvars) (mk_z_ (sch, d));
+			val dummy = if (orig_term =$ reverse_term)
+				then ()
+				else fail "" 0 [];
 		in
 			BdzOk(Z (sch,d))
 		end
@@ -1049,6 +1080,7 @@ constant part.
 	) (* end of case Const (name, ty) => ... *)
 	(* end of case dest_simple_term hdterm ... *)
 	handle (Fail _) => BdzNotZ 47100 
+end
 ) (* end of function basic_dest_z_term *);
 =TEX
 
@@ -1863,16 +1895,6 @@ fun	€mk_z_∏› (tml:TERM list) :TERM =
 	let	val tyl = map (dest_z_power_type o type_of) tml;
 	in
 		list_mk_app(prod_cterm tyl,tml)
-	end;
-
-fun	€mk_z_ › ((sch,d):TERM * string) :TERM = 
-	let	val bind = mk_binding(sch,d);
-		val bty = type_of bind;
-		val sty = type_of sch;
-		val cty = list_mk_≠_type[bty,sty,bty];
-		val con = mk_const("Z' ",cty);
-	in
-		list_mk_app(con,[bind,sch])
 	end;
 
 fun	€mk_z_selâs› ((tm,s):TERM * string) :TERM = 
