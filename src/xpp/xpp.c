@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.22 2004/02/02 11:35:41 rda Exp rda $
+ * $Id: xpp.c,v 2.23 2004/02/02 14:30:03 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -85,34 +85,16 @@ static Boolean synchronous, havefonts;
  * options for the command-line. The resource name is irrelevant.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static XrmOptionDescRec options [] = {
+	{"-blocking", "*commandLine",  XrmoptionSkipLine, NULL},
 	{"-command", "*commandLine",  XrmoptionSkipLine, NULL},
 	{"-file", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-a", "*commandLine",  XrmoptionSkipLine, NULL},
+	{"-havefonts", "*commandLine",  XrmoptionSkipLine, NULL},
+	{"-readonly", "*commandLine",  XrmoptionSkipLine, NULL},
 	{"-b", "*commandLine",  XrmoptionSkipLine, NULL},
 	{"-c", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-d", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-e", "*commandLine",  XrmoptionSkipLine, NULL},
 	{"-f", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-g", "*commandLine",  XrmoptionSkipLine, NULL},
 	{"-h", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-i", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-j", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-k", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-l", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-m", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-n", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-o", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-p", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-q", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-r", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-s", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-t", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-u", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-v", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-w", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-x", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-y", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-z", "*commandLine",  XrmoptionSkipLine, NULL}
+	{"-r", "*commandLine",  XrmoptionSkipLine, NULL}
 };
 
 typedef struct {
