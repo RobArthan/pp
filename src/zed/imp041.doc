@@ -40,7 +40,7 @@ of the derived rules of inference, conversions and tactics for the ProofPower Z 
 
 \subsection{Changes History} 
 \begin{description}
-\item [Issues 1.1 - 1.4] 
+\item [Issues 1.1 - 1.5] 
 First versions.
 \end{description}
 \subsection{Changes Forecast}
@@ -61,12 +61,17 @@ initial set of rules, conversions and tactics for the predicate calculus of the 
 \subsubsection{Dependencies}
 This document takes its signature from \cite{DS/FMU/IED/DTD041}.
 \subsubsection{Deficiencies}
-None known.
+Could give knowledge of $U.lab$.
+
+$inst$ (and perhaps others) do renaming even without a list
+of type instantiations. These renamings have been prevented
+when the list is empty, but not when the renamings are irrelevant to the type instantiation.
+This can lead to terms outside of Z.
 \subsubsection{Possible Enhancements}
 None known.
 
 \section{PREAMBLE}
-=SML
+=IGN
 structure ÛZPredicateCalculusÝ : ZPredicateCalculus = struct
 local
 open ZTypesAndTermsSupport;
@@ -74,7 +79,7 @@ open ZGeneratedConstants;
 open Resolution;
 in
 =TEX
-=IGN
+=SML
 delete_pc "'z_predicate_calculus_build" handle _ => ();
 open Resolution;
 open ZTypesAndTermsSupport;
@@ -82,11 +87,12 @@ open ZGeneratedConstants;
 =SML
 val lthy = get_current_theory_name();
 val _ = open_theory "z_library";
-val _ = delete_theory "z_predicate_calculus" handle _ => ();
+val _ = delete_theory "z_predicate_calculus" handle Fail _ => ();
 val _ = new_theory "z_predicate_calculus";
 val _ = push_pc "hol";
 val _ = set_flag("z_type_check_only",false);
 val _ = push_pc "hol1";
+val _ = delete_pc "'z_predicate_calculus_build" handle Fail _ => ();
 val _ = new_pc "'z_predicate_calculus_build";
 val _ = set_pr_tac basic_prove_tac "'z_predicate_calculus_build";
 val _ = set_pr_conv basic_prove_conv "'z_predicate_calculus_build";
@@ -2013,9 +2019,9 @@ handle (Fail _) =>
 =TEX
 Single variable in declaration:
 =SML
-	case dbinds of
+	(case dbinds of
 	[(nm,ty)] => ([(nm,tm)],type_match (type_of tm) ty)
-	| _ => fail "" 0 []
+	| _ => fail "" 0 [])
 handle (Fail _) =>
 =TEX
 Term has a binding type:
@@ -2518,15 +2524,22 @@ Conventional binding:
 	val tys = map aux dbinds;
 	val ctys = compose_tyi tys;
 in
-	map (fn (nm,tm) => (nm, inst [] ctys tm)) tbinds
+	if is_nil ctys
+	then tbinds
+	else map (fn (nm,tm) => (nm, inst [] ctys tm)) tbinds
 end
 handle (Fail _) =>
 =TEX
 Single variable in declaration:
 =SML
-	case dbinds of
-	[(nm,ty)] => ([(nm,inst [] (type_match ty (type_of tm)) tm)])
-	| _ => fail "" 0 []
+	(case dbinds of
+	[(nm,ty)] => (let val tyms = (type_match ty (type_of tm))
+		in
+			if is_nil tyms
+			then [(nm,tm)]
+			else [(nm,inst [] tyms tm)]
+		end)
+	| _ => fail "" 0 [])
 handle (Fail _) =>
 =TEX
 Term has a binding type:
@@ -2548,7 +2561,9 @@ let	val to_tm = type_of tm;
 	val tys = map aux dbinds;
 	val ctys = compose_tyi tys;
 in
-	map (fn (nm,tm) => (nm, inst [] ctys tm)) tbinds
+	if is_nil ctys
+	then tbinds
+	else map (fn (nm,tm) => (nm, inst [] ctys tm)) tbinds
 end
 handle (Fail _) =>
 term_fail caller 41021 [tm,decl]
@@ -2566,14 +2581,11 @@ map aux (match_tm_decl "hello" d1 ñ1®);
 =TEX
 =SML
 fun Û¶_by_template_tacÝ (template : (string * TERM)list) :TACTIC = (
-let	fun aux (asms,conc) = (
-	let	val (x,bdy) = dest_simple_¶ conc;
-		val wit = lassoc3 template (fst(dest_var x));
-	in
-		simple_¶_tac wit (asms,conc)
-	end);
+fn (asms,conc) =>
+let	val (xs,bdy) = strip_simple_¶ conc;
+	val wits = map (fn x => lassoc3 template (fst(dest_var x))) xs;
 in
-	REPEAT aux
+	MAP_EVERY simple_¶_tac wits (asms,conc)
 end);
 =SML
 local
@@ -2766,7 +2778,8 @@ z_Í_rule ñÍ x,y:X;z:Y;p:X | z · p(x = y)®;
 \subsection{Concerning Function Application}
 =SML
 val Ûz_app_thmÝ = (
-push_goal([],¬µ f a · ñf a = (Í f_a :U | (a,f_a)  f · f_a)®®);
+push_goal([],¬µ (f:('a, 'b) $"Z'T[2]" SET) (a:'a) · 
+	ñf a = (Í f_a :U | (a,f_a)  f · f_a)®®);
 a(REPEAT µ_tac);
 let val (lhs,rhs) = dest_eq(snd(top_goal()));
 in
@@ -2783,6 +2796,9 @@ pop_thm());
 val Ûz_app_convÝ :CONV = simple_eq_match_conv1 z_app_thm
 	ORELSE_C (fn tm => term_fail "z_app_conv" 47190 [tm]);
 =TEX
+=GFT Example
+z_app_conv ñ1 + 2®;
+
 =SML
 val Ûz'app_defÝ = get_spec ñf a®;
 local
@@ -2825,14 +2841,14 @@ local
 	val cnv1 = simple_eq_match_conv1 thm1;
 in
 fun (Ûz_app_tacÝ : TACTIC) ((asms,conc):GOAL) = (
-	if not(is_z_eq conc) andalso is_z_app conc
+	if not(is_z_eq conc orelse is_z_¤ conc) andalso is_z_app conc
 	then (conv_tac cnv1 THEN z_app_tac)(asms,conc)
 	else
 let	val (fa,v) = dest_z_eq conc
 		handle complaint as (Fail _) =>
-		dest_z_¤ conc
+		(dest_z_¤ conc
 		handle complaint as (Fail _) =>
-		(divert complaint "dest_eq" "z_app_tac" 41090 []);
+		(divert complaint "dest_z_¤" "z_app_tac" 41090 []));
 in
 	if is_z_app fa
 	then ´_thm_tac (simple_µ_elim v (z_app_rule fa))(asms,conc)
@@ -3165,8 +3181,8 @@ let	val (d,p,v) = dest_z_¶‰1 tm;
 	val was_sig = fst(strip_Ì(snd(dest_app tm)));
 	val was_sig' = list_variant_same_dec (frees tm @ was_sig) was_sig;	 
 	val s1 = ((eq_match_conv1 (get_spec tm)) THEN_C 
-		¶‰1_conv THEN_C ¶_uncurry_conv THEN_C
-		ALL_SIMPLE_¶_C (RIGHT_C µ_uncurry_conv)
+		(¶‰1_conv THEN_TRY_C ¶_uncurry_conv) THEN_C
+		ALL_SIMPLE_¶_C (RIGHT_C (TRY_C µ_uncurry_conv))
 		)tm;
 	val s2 = conv_rule(RIGHT_C(ALL_SIMPLE_¶_C(
 		APP_C(RAND_C(
@@ -3193,9 +3209,8 @@ in
 end);
 end;
 =GFT Example
+z_¶‰1_conv ñ ¶‰1 x : X | x = y · z = f x®;
 z_¶‰1_conv ñ ¶‰1 x,y : X; z:Y | x = y · z = f x®;
-z_¶‰1_conv ñ ¶‰1 [x,y : X; z:Y] | x = y · z = f x®;
-z_¶‰1_conv ñ ¶‰1 [x,y : X; z:Y] | x = x' y · z = f x®;
 z_¶‰1_conv ñ ¶‰1 [x,y : X; z:Y] | x = x' y y'' · z = f x®;
 =TEX
 \subsection{Concerning Assumptions}
@@ -3319,7 +3334,9 @@ local
 	fun cnv2 tm = ((cnv1 THEN_C cnv2) ORELSE_C 
 		(RIGHT_C cnv2) ORELSE_C
 		id_conv) tm;
-	val cnv3 = simple_eq_match_conv1 (taut_rule¬µ x · x ± T ¤ x®);
+	val cnv3 = simple_eq_match_conv1 (taut_rule¬µ x · x ± T ¤ x®)
+		ORELSE_C
+		(simple_eq_match_conv1 (taut_rule¬µ x · T ± x ¤ x®));
 	val cnv4 = simple_eq_match_conv1 (taut_rule¬µ x · T ´ x ¤ x®);	
 in
 fun Ûz_µ_rewrite_canonÝ (thm : THM) : THM list = (
@@ -3353,6 +3370,7 @@ fun Ûz_³_rewrite_canonÝ (thm : THM) : THM list = (
 =TEX
 \subsection{Proof Contexts}
 =SML
+val _ = delete_pc "z_predicates" handle Fail _ => ();
 val _ = new_pc "z_predicates";
 val _ =set_rw_eqn_cxt [(¬p q®,u_conv), 
 	(¬$"Z'µ" x®,z_µ_inv_conv),
@@ -3413,7 +3431,7 @@ push_goal([],ñµ x, y:U · (x ± y) = (y ± x)®);
 a(step_strip_tac);
 =TEX
 \section{EPILOGUE}
-=SML
+=IGN
 end; (* local open ... *)
 end; (* of structure ZPredicateCalculus *)
 open ZPredicateCalculus;
