@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.46 2003/01/29 16:31:43 rda Exp rda $
+ * $Id: mainw.c,v 2.47 2003/02/07 17:06:17 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -1464,6 +1464,9 @@ static Bool execute_command(void)
 	NAT len;
 	XmTextPosition dontcare;
 
+	if(global_options.edit_only) {
+		return False;
+	}
 	if(	XmTextGetSelectionPosition(script, &dontcare, &dontcare)
 	&&	(cmd = XmTextGetSelection(script))) {
 		len = strlen(cmd);
