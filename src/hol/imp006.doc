@@ -16,7 +16,7 @@
 \TPPkeywords{}
 \TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
 %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
-\TPPauthorisation{R.D.Arthan & FMU Manager}
+\TPPauthorisation{R.D.Arthan & FST Team Leader}
 \TPPabstract{}
 \TPPdistribution{\parbox[t]{4.0in}{%
 	    Project Library
@@ -46,6 +46,8 @@
 \begin{description}
 \item [Issue 1.1]
 First version.
+\item [Issue 1.2]
+Still being created.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -82,6 +84,75 @@ rel001 makefile.
 =SML
 (* structure âicl'Theoremsá : icl'Theorems = struct *)
 =TEX
+\subsection{Utilities}
+Give the maximum of a list of numbers.
+The maximum of n empty list is $0$ (could be made a fail).
+=SML
+fun âlist_maxá ([]: int list): int = 0
+| list_max (a :: x) = (
+let fun aux (sf:int) ((p :: q):int list) : int = (
+	if sf <= p
+	then aux p q
+	else aux sf q
+	) | aux sf [] = sf;
+in
+	aux a x
+end);
+=TEX
+Give a list of HOL type variables $'1, '2,\ldots$:
+=SML
+fun ântyvarsá (n : int) = (
+	map (fn x=> mk_vartype("'"^string_of_int x))
+		(interval 1 n)
+);
+=TEX
+\subsubsection{Ranges}
+We are interested in supporting ranges of deleted levels,
+but the code can be given in isolation from
+the type of theories.
+
+We are interested in a list of numbers,
+\[ [ (a_{1},\ b_{1}),\ (a_{2},\ b_{2}),\ ...,\ (a_n,\ b_n)]\]
+where $b_{i-1}$ is always less than $a_i$,
+$0\ <\ a_1$, 
+and $a_i$ is always less than or equal to $b_i$.
+
+First, we wish to check whether a number fails inside any of the ranges $a_i$ to $b_i$.
+=SML
+fun ârange_memá (v : int, [] : (int * int)list) = false
+| range_mem (v, ((a,b) :: x)) = (
+	(v >= a) andalso 
+	((v <= b) orelse range_mem(v, x))
+);
+=TEX
+Second, we wish to extend the range by adding (a,b), which may enclose other ranges.
+=SML
+fun âextend_rangeá (a:int,b:int) ([]:(int * int)list): (int * int)list= (
+	[(a,b)]
+) | extend_range (a,b) (lst as ((a1,b1) :: x)) = (
+let
+	fun fixb lw (lst1 as ((a2,b2) :: x1)) = (
+		if b + 1 < a2
+		then ((lw,b) :: lst1)
+		else if b <= b2
+		then ((lw,b2) :: x1)
+		else fixb lw x1
+	) | fixb lw [] = [(lw,b)];
+in
+	if a < a1 
+	then fixb a lst
+	else if b1+1 < a
+	then ((a1,b1) :: extend_range (a,b) x)	
+	else fixb a1 lst
+end);
+=IGN
+val p = [(1,2), (6,8), (10,10), (12,13)];
+extend_range (0,3) p;
+extend_range (4,4) p;
+extend_range (5,5) p;
+extend_range (11,15) p;
+extend_range (11,11) p;
+=TEX
 \subsection{Infinite Arrays}
 =SML
 signature âInfiniteArrayá = sig
@@ -97,13 +168,13 @@ structure âInfiniteArrayá : InfiniteArray = struct
 Array redefines $length$, so:
 =SML
 local
-	val len = length
+	val temp_len = length
 in
 	open Array;
-	val length = len
+	val length = temp_len
 end;
 =TEX
-Infinite arrays are made of $size$ lists - an index picks of the list by indexing the array by $index\ mod\ size$,
+Infinite arrays are made of $size$ lists - an index picks from the list by indexing the array by $index\ mod\ size$,
 and then takes the $index\ div\ size$'th member of the list
 (0 being the foirst element of the list).
 =SML
@@ -122,17 +193,17 @@ fun âcreate_iaá (x:unit): '_a INFINITE_ARRAY = (
 Place the value at index given in array.
 The function can ignore some ``gaps'' in the array, but not
 others. 
-We don't expect our use of the package to see any gaps,
+We don't expect our use of the package to produce any gaps,
 but it is easier to allow gaps to exist than detect this fact.
-The fourth clause of $aux$ could be modified to
+The final $else$ of $aux$ could be modified to
 pad with $vl$ to allow all gaps to be ignored
 at the cost of some spurious values within the array.
-This is excess to our needs.
+This is in excess to our needs.
 =SML
 fun âupdate_iaá ((arr : '_a INFINITE_ARRAY), 
 		(index: int), 
 		(vl : '_a)) = (
-let fun aux n (ax: ('_a ref)list) = (
+let fun aux (n:int) (ax: ('_a ref)list) : ('_a ref)list = (
 	let 
 		val switch = length ax - n 
 	in
@@ -186,12 +257,13 @@ type âUSER_DATAá = (USER_DATUM ref) S_DICT;
 The type of sequents:
 =SML
 type âSEQá = TERM list * TERM;
-
+=TEX
+The type of the theory status:
+=SML
 datatype âTHEORY_STATUSá =
 	âTSNormalá | âTSLockedá | âTSAncestorá | âTSDeletedá;
-
 =TEX
-Make the following an $abstype$ in the end.
+We will make the following an $abstype$ in the end.
 =SML
 datatype âTHMá = âthmá of {
 		level : int,
@@ -218,7 +290,7 @@ and
 		name : string}
 and
 =TEX
-In a hierarchy there will be theories with names $0$ to $top\_theory$.
+In a hierarchy there will be theories with internal names $0$ to $top\_theory$, though some may have the status ``deleted''.
 =SML
 	âicl'HIERARCHYá = âhierá of {
 		lookup : icl'THEORY_INFO INFINITE_ARRAY,
@@ -226,8 +298,9 @@ In a hierarchy there will be theories with names $0$ to $top\_theory$.
 (* with *)
 =TEX
 \subsection{The State Type}
+We could later choose to add $ty\_scope$ and $con\_scope$ to this.
 =SML
-type STATE = {hierarchy : icl'HIERARCHY ref,
+type âSTATEá = {hierarchy : icl'HIERARCHY ref,
 	theory : THEORY ref};
 =TEX
 \subsection{Interface Types}
@@ -241,9 +314,12 @@ type âTHEORY_INFOá = {
 
 type âHIERARCHYá = (string * THEORY_INFO) list;
 =TEX
-\subsection{Initial State}
+\subsection{The Initial State}
+Give an empty theory, for initialisation
+or deletion purposes.
+The parents are a list as a simple ``optional'' value method.
 =SML
-fun empty_theory (nm: int) (pnts : int list) : THEORY = (
+fun âempty_theoryá (nm: int) (pnts : int list) : THEORY = (
 	thy {name = nm,
 	 ty_env = initial_s_dict,
 	 con_env = initial_s_dict,
@@ -256,6 +332,7 @@ fun empty_theory (nm: int) (pnts : int list) : THEORY = (
 	 user_data = ref initial_s_dict}
 );
 =TEX
+Initialisation of the ICL State (other than scope material):
 =SML
 local
 	val min = ref (empty_theory 0 []);
@@ -289,7 +366,15 @@ in
 end);
 
 =TEX
-Provide a global constant and type scope.
+\subsection{The Scope of Types and Constants}
+We will need  to be able to rapidly check where HOL terms, types
+and their derivatives are well-formed.
+Well-formedness is just that the HOL type constructors and constants are in scope, with the right usage.
+To do this efficiently we need a fast lookup facility for
+type constructors and constants in scope.
+
+To provide a global constant and type scope we give the following.
+This could be done as part of $STATE$.
 =SML
 local
 	open EfficientDictionary;
@@ -300,7 +385,7 @@ local
 in
 =TEX
 Remove a simple dictionaries worth of constructor
-information to a scope.
+information from a scope.
 =SML
 	fun âdel_con_scopeá (lst:{ty:TYPE, level:int} S_DICT) : unit = (
 		con_scope := 
@@ -331,7 +416,9 @@ information to a scope.
 		divert complaint "e_extend" "add_ty_scope" 6073 []
 	);
 =TEX
-Look up a named entry in the value constructur or type constructor scopes.
+Look up a named entry in the value constructor or type constructor scopes.
+These two functions could be made available to the user or interface
+document, to allow, if nothing else, a ``what caused the well-formedness check to fail'' function to be written.
 =SML
 	fun âget_con_scopeá (nm : string): {ty:TYPE, level:int} OPT = (
 	e_lookup nm (!con_scope)
@@ -351,6 +438,8 @@ This function allows the starting state to be restored.
 
 end (* local for scope *);
 =TEX
+\subsection{Utilities Depending on ADT State and Types}
+\subsubsection{Handling Scopes}
 Bring a theory into scope:
 =SML
 fun âadd_thy_scopeá(thy{ty_env = ty_env, con_env = con_env,...}:THEORY) : unit = (
@@ -365,7 +454,25 @@ fun âdel_thy_scopeá(thy{ty_env = ty_env, con_env = con_env,...}:THEORY) : unit =
 	del_ty_scope ty_env
 );
 =TEX
-Check whether a term or sequent is well-formed within the current scope
+A function that (re)builds the scope from scratch:
+=SML
+fun âbuild_scopesá (x : unit) : unit = (
+let val hier{lookup=lookup, top_theory=top_theory} = 
+		current_hierarchy();
+	fun aux (ti{contents = contents,...}) = add_thy_scope (!contents)
+in
+	reset_scopes ();
+	map (fn n => aux(sub_ia(lookup, n)))(interval 0 top_theory);
+	()
+end);
+=TEX
+\subsubsection{Well-formedness}
+Check whether a type, term or sequent is well-formed within the current scope.
+The type matching in $auxcon$ is a bit clumsy for such a critical job.
+
+We choose to make a set of all types and constants to be checked,
+and then check each set member, rather than check all generated
+items, as this is judged superior in speed.
 =SML
 local
 	fun auxty [] = true
@@ -383,8 +490,10 @@ local
 		let val res = get_con_scope cnm
 		in
 		case res of
-		Value{ty=ty1,...} => (typ = ty1)
-			andalso auxcon x
+		Value{ty=ty1,...} => (
+			(is_nil (type_match typ ty1)
+			handle complaint => false)
+			andalso auxcon x)
 		| Nil => false
 		end);
 in
@@ -413,153 +522,43 @@ in
 	end;
 end (* end local *);
 =TEX
-\subsection{Operations on Hierarchies}
-The following function maps $f$ over each of the theory information cells in the hierarchy.
-As it is working through references it is misleading to
-return any value.
+Check that a theorem is valid, fail if not.
+=SML
+fun âcheck_thmá (caller: string)
+	(thm {level = level, theory = theory, sequent = sequent} : THM) : unit = (
+let val hier{lookup=lookup, top_theory=top_theory} = current_hierarchy();
+	val thy {name = iname,
+		del_levels = del_levels,
+		...} = !theory;
+	
+	val dummy = if (0 <= iname) andalso (iname <= top_theory)
+		then ()
+		else error caller 6072 [fn x => "Internal "^string_of_int iname];
 
-Note that when creating new hierarchies me must move from 0 to number of hierarchies.
-=SML
-fun âmap_hierarchyá (f: icl'THEORY_INFO -> icl'THEORY_INFO) 
-	(hir : icl'HIERARCHY) : unit = (
-let val hier{lookup=lookup, top_theory=top_theory} = 
-		hir;
-	fun aux	n = (if n <= top_theory
-		then (
-		let val old_ti = sub_ia(lookup, n)
-		in
-			update_ia(lookup,n,f old_ti);
-			aux (n+1)
-		end) else ());
+	val ti{status = status,
+		inscope = inscope,
+		contents = contents,
+		children = children,
+		name = ename}
+		= sub_ia(lookup,iname);
 in
-	aux 0
+	if status = TSDeleted
+	then fail caller 6036 [fn x => ename]
+	else if theory <> contents
+	then error caller 6072 [fn x => "Internal "^string_of_int iname]
+	else if not inscope
+	then fail caller 6066 [fn x => ename]
+	else if range_mem(level, del_levels)
+	then fail caller 6065 []
+	else ()
 end);
 =TEX
-Now a function to copy a hierarchy into a new one.
-=SML
-fun âcopy_hierarchyá (old : icl'HIERARCHY) : icl'HIERARCHY = (
-let val hier{lookup=old_lookup, top_theory=old_top_theory} = 
-		old;
-	val new_lookup = create_ia (); 
-	fun aux	n = (if n <= old_top_theory
-		then (
-		let val old_ti = sub_ia(old_lookup, n);
-		in
-			update_ia(new_lookup,n,old_ti);
-			aux (n+1)
-		end) else ());
-in
-	(aux 0;
-	hier{lookup=new_lookup, top_theory=old_top_theory})
-end);
-=TEX
-Now a function that (re)builds the scope from scratch:
-=SML
-fun âbuild_scopesá (x : unit) : unit = (
-let val hier{lookup=lookup, top_theory=top_theory} = 
-		current_hierarchy();
-	fun aux (ti{contents = contents,...}) = add_thy_scope (!contents)
-in
-	reset_scopes ();
-	map (fn n => aux(sub_ia(lookup, n)))(interval 0 top_theory);
-	()
-end);
-=TEX
-Now to implement the process of creating a new hierarchy.
-=SML
-fun âicl'new_hierarchyá (x: unit) : icl'HIERARCHY = (
-let fun make_anc (ti {status = status,
-				inscope = inscope,
-				contents = contents,
-				children = children,
-				name = name})
-		=
-		( ti {status = (if status = TSDeleted
-					then TSDeleted
-					else TSAncestor),
-				inscope = inscope,
-				contents = contents,
-				children = children,
-				name = name})
-in
-	map_hierarchy make_anc (current_hierarchy());
-	copy_hierarchy (current_hierarchy())
-end);
-=TEX
-We need a test to see if $hir1$ hierarchy is an ``ancestor'' of $hir2$.
-According to the specification, this is so if the child possesses all the ancestors theories (by address comparison),
-with the same theory information for each,
-except that the children theories field may be different.
-As new theories are always added to the ``tail'' of the theory hierarchy array we need only test up to the top theory of the ``ancestor''
-hierarchy.
-=SML
-fun âhierarchy_ancestoryá (hir1 : icl'HIERARCHY)
-	(hir2 : icl'HIERARCHY) : bool = (
-let val hier{lookup=lookup1, top_theory=top_theory1} = 
-		hir1;
-	val hier{lookup=lookup2, top_theory=top_theory2} = 
-		hir2;
-	fun aux ~1 = true
-	| aux n = let val (ti {status = status1,
-		inscope = inscope1,
-		contents = contents1,
-		children = children1,
-		name = name1})
-		= sub_ia(lookup1,n) 
-		and
-		(ti {status = status2,
-		inscope = inscope2,
-		contents = contents2,
-		children = children2,
-		name = name2})
-		= sub_ia(lookup2,n) 
-	in
-		(status1 = status2) andalso
-		(inscope1 = inscope2) andalso
-		(contents1 = contents2) andalso
-		(name1 = name2) andalso
-		aux (n-1)
-	end
-in
-	(top_theory1 <= top_theory2) andalso
-	aux top_theory1
-end);
-=TEX
-Now we can give a load hierarchy, as demanded by the specification.
-=SML
-fun âicl'load_hierarchyá (hir : icl'HIERARCHY) : unit = (
-let val {hierarchy = hierarchy, theory = theory} = !current
-in
-	if hierarchy_ancestory (!hierarchy) hir
-	then current := {hierarchy = ref hir, theory = theory}
-	else fail "icl'load_hierarchy" 6033 [];
-	build_scopes()
-end
-);
-=TEX
-=SML
-fun âicl'get_hierarchyá (x:unit) : HIERARCHY = (
-let val hier{lookup=lookup, top_theory=top_theory} = 
-		current_hierarchy();
-	fun aux ~1 = [] 
-	| aux n = (let val (ti {status = status,
-			inscope = inscope,
-			contents = contents,
-			children = children,
-			name = name}) = sub_ia(lookup,n)
-		in
-			(name, {status = status,
-				inscope = inscope,
-				contents = !contents,
-				children = children,
-				name = name}) 
-			:: aux (n-1)
-		end)
-in
-	aux top_theory
-end);
-=TEX
-Get the current theories name as an integer
+
+\subsubsection{Theory Names}
+$icl'get\_current\_theory\_name$ is part of the ADT interface,
+but it is useful in defining utilities.
+
+Get the current theories name as an integer:
 =SML
 fun âicl'get_current_theory_nameá (x : unit) : int = (
 let val thy{name = name,...} = current_theory();
@@ -567,10 +566,10 @@ in
 	name
 end);
 =TEX
-Given a theory name as an string, return it as a int.
+Given a theory name as an string, return its internal name as an integer.
 The error raised should be diverted for each caller.
 =SML
-fun internal_theory_name (nm : string) : int = (
+fun âinternal_theory_nameá (nm : string) : int = (
 let val hier{lookup=lookup, top_theory=top_theory} = 
 		current_hierarchy();
 	fun aux ~1 = fail "internal_theory_name" 6035 [fn x => nm]
@@ -589,46 +588,23 @@ in
 	else aux top_theory
 end);
 =TEX
-Return an interface presentation of a theory, based on a string.
-=SML
-fun âicl'get_theory_infoá (nm : string) : THEORY_INFO = (
-let val hier{lookup=lookup, top_theory=top_theory} = 
-		current_hierarchy();
-
-	val iname = (internal_theory_name nm
-		handle complaint => 
-		divert complaint "internal_theory_name" "icl'get_theory_info" 6042 [fn x => nm]);
-
-	val (ti {status = status,
-			inscope = inscope,
-			contents = contents,
-			children = children,
-			name = name}) = sub_ia(lookup,iname);
-in
-	{status = status,
-	inscope = inscope,
-	contents = !contents,
-	children = children,
-	name = name}
-end);
-=TEX
-Given a theory name as an integer, return it as a string.
-=SML
-fun icl'get_theory_name (nm : int) : string = (
-let val hier{lookup=lookup, top_theory=top_theory} = 
-		current_hierarchy();
-in
-	if (0 <= nm) andalso (nm <= top_theory)
-	then (let val (ti {name=name,...}) = sub_ia(lookup, nm)
-		in
-			name
-		end)
-	else fail "icl'get_theory_name" 6043 [fn x => "Internal " ^ string_of_int nm]
-end);
-=TEX
 Is the given theory name present at all?
+There is always a current theory, ``-''.
 =SML
-fun is_theory_name (nm : string) : bool = (
+fun âis_theory_nameá (nm : string) : bool = (
+let val hier{lookup=lookup, top_theory=top_theory} = 
+		current_hierarchy();
+	fun aux ~1 = false
+	| aux n = (let val (ti {name=sname,contents=contents,...}) = sub_ia(lookup, n);
+		in
+			(sname = nm)
+			orelse aux (n-1)
+		end)
+in
+	(nm = "-")
+	orelse aux top_theory
+end);
+
 	(internal_theory_name nm;true)
 	handle complaint => 
 	(if area_of complaint = "internal_theory_name"
@@ -636,7 +612,7 @@ fun is_theory_name (nm : string) : bool = (
 	else reraise complaint (area_of complaint))
 );
 =TEX
-\subsection{Operations of Theory Attributes}
+\subsubsection{Ancestors and Dependants}
 A function to return all of a theories ancestors
 (including itself):
 =SML
@@ -678,20 +654,260 @@ let val hier{lookup=lookup, top_theory=top_theory} = current_hierarchy();
 		else allchildren ((lchildren a) cup x) (a :: acc));
 in
 	if (0 <= nm) andalso (nm <= top_theory)
-	then tl(rev(allchildren [nm] []))
+	then allchildren (lchildren nm) []
 	else fail "theory_children" 6035 [fn x => "Internal " ^ string_of_int nm]
 end);
 =TEX
+Is a given constant name used in any ancestor or descendant of the
+current theory?
+
+\begin{tabular}{| l | l |}\hline
+Result & Meaning \\ \hline
+0 & Not present \\
+1 & In scope(current theory or ancestor) \\
+2 & In descendant \\ \hline
+\end{tabular}
+=SML
+fun âconst_in_anc_or_desá (nm : string) : int = (
+let val iname =icl'get_current_theory_name();
+	
+	val hier{lookup=lookup, ...} = current_hierarchy();
+
+	fun const_in_thy (nm : string) (thry : int) : bool = (
+	let val ti {contents = contents,...} = sub_ia(lookup, thry);
+		val thy {con_env = con_env,...} = !contents;
+	in
+		not(is_Nil(s_lookup nm con_env))
+	end);
+in	
+	if is_Nil(get_con_scope nm)
+	then (if (any (theory_descendants iname) 
+		(fn thry => const_in_thy nm thry))
+		then 2
+		else 0)
+	else 1
+end);
+=TEX
+Is a given type constructor name used in any ancestor or descendant of the
+current theory?
+
+\begin{tabular}{| l | l |}\hline
+Result & Meaning \\ \hline
+0 & Not present \\
+1 & In scope(current theory or ancestor) \\
+2 & In descendant \\ \hline
+\end{tabular}
+=SML
+fun âtype_in_anc_or_desá (nm : string) : int = (
+let val iname =icl'get_current_theory_name();
+	
+	val hier{lookup=lookup, ...} = current_hierarchy();
+
+	fun type_in_thy (nm : string) (thry : int) : bool = (
+	let val ti {contents = contents,...} = sub_ia(lookup, thry);
+		val thy {ty_env = ty_env,...} = !contents;
+	in
+		not(is_Nil(s_lookup nm ty_env))
+	end);
+in	
+	if is_Nil(get_ty_scope nm)
+	then (if (any (theory_descendants iname) 
+		(fn thry => type_in_thy nm thry))
+		then 2
+		else 0)
+	else 1
+end);
+=TEX
+\subsubsection{Hierarchies}
+The following function maps $f$ over each of the theory information cells in the hierarchy.
+As it is working through references it is misleading to
+return any value.
+=SML
+fun âmap_hierarchyá (f: icl'THEORY_INFO -> icl'THEORY_INFO) 
+	(hir : icl'HIERARCHY) : unit = (
+let val hier{lookup=lookup, top_theory=top_theory} = 
+		hir;
+	fun aux	n = (if n <= top_theory
+		then (
+		let val old_ti = sub_ia(lookup, n)
+		in
+			update_ia(lookup,n,f old_ti);
+			aux (n+1)
+		end) else ());
+in
+	aux 0
+end);
+=TEX
+Now a function to copy a hierarchy into a new one.
+Note that when creating new hierarchies we must move from 0 to number of hierarchies.
+=SML
+fun âcopy_hierarchyá (old : icl'HIERARCHY) : icl'HIERARCHY = (
+let val hier{lookup=old_lookup, top_theory=old_top_theory} = 
+		old;
+	val new_lookup = create_ia (); 
+	fun aux	n = (if n <= old_top_theory
+		then (
+		let val old_ti = sub_ia(old_lookup, n);
+		in
+			update_ia(new_lookup,n,old_ti);
+			aux (n+1)
+		end) else ());
+in
+	(aux 0;
+	hier{lookup=new_lookup, top_theory=old_top_theory})
+end);
+=TEX
+We need a test to see if $hir1$ hierarchy is an ``ancestor'' of $hir2$.
+According to the specification, this is so if the child possesses all the ancestors theories (by address comparison),
+with the same theory information for each,
+except that the children theories field may be different.
+As new theories are always added to the ``tail'' of the theory hierarchy array we need only test up to the top theory of the ``ancestor''
+hierarchy.
+=SML
+fun âhierarchy_ancestoryá (hir1 : icl'HIERARCHY)
+	(hir2 : icl'HIERARCHY) : bool = (
+let val hier{lookup=lookup1, top_theory=top_theory1} = 
+		hir1;
+	val hier{lookup=lookup2, top_theory=top_theory2} = 
+		hir2;
+	fun aux ~1 = true
+	| aux n = let val (ti {status = status1,
+		inscope = inscope1,
+		contents = contents1,
+		children = children1,
+		name = name1})
+		= sub_ia(lookup1,n) 
+		and
+		(ti {status = status2,
+		inscope = inscope2,
+		contents = contents2,
+		children = children2,
+		name = name2})
+		= sub_ia(lookup2,n) 
+	in
+		(status1 = status2) andalso
+		(inscope1 = inscope2) andalso
+		(contents1 = contents2) andalso
+		(name1 = name2) andalso
+		aux (n-1)
+	end
+in
+	(top_theory1 <= top_theory2) andalso
+	aux top_theory1
+end);
+=TEX
+\section{INTERFACE FUNCTIONS OF ADT THM}
+\subsection{Operations on Hierarchies}
+The process of creating a new hierarchy from the current one.
+=SML
+fun âicl'new_hierarchyá (x: unit) : icl'HIERARCHY = (
+let fun make_anc (ti {status = status,
+				inscope = inscope,
+				contents = contents,
+				children = children,
+				name = name})
+		=
+		( ti {status = (if status = TSDeleted
+					then TSDeleted
+					else TSAncestor),
+				inscope = inscope,
+				contents = contents,
+				children = children,
+				name = name})
+in
+	map_hierarchy make_anc (current_hierarchy());
+	copy_hierarchy (current_hierarchy())
+end);
+=TEX
+Now we can give a load hierarchy, as demanded by the specification.
+Interrupting the body of the main $let$ could cause inconsistencies.
+=SML
+fun âicl'load_hierarchyá (hir : icl'HIERARCHY) : unit = (
+let val {hierarchy = hierarchy, theory = theory} = !current
+in
+	if hierarchy_ancestory (!hierarchy) hir
+	then current := {hierarchy = ref hir, theory = theory}
+	else fail "icl'load_hierarchy" 6033 [];
+	build_scopes()
+end
+);
+=TEX
+=SML
+fun âicl'get_hierarchyá (x:unit) : HIERARCHY = (
+let val hier{lookup=lookup, top_theory=top_theory} = 
+		current_hierarchy();
+	fun aux ~1 = [] 
+	| aux n = (let val (ti {status = status,
+			inscope = inscope,
+			contents = contents,
+			children = children,
+			name = name}) = sub_ia(lookup,n)
+		in
+			(name, {status = status,
+				inscope = inscope,
+				contents = !contents,
+				children = children,
+				name = name}) 
+			:: aux (n-1)
+		end)
+in
+	aux top_theory
+end);
+=TEX
+In the sequence suggested by \cite{DS/FMU/IED/DTD006}
+we would only now give $icl'get\_current\_theory\_name$,
+but it is useful in defining utilities.
+
+Return an interface presentation of a theory, based on a string.
+=SML
+fun âicl'get_theory_infoá (nm : string) : THEORY_INFO = (
+let val hier{lookup=lookup, top_theory=top_theory} = 
+		current_hierarchy();
+
+	val iname = (internal_theory_name nm
+		handle complaint => 
+		divert complaint "internal_theory_name" "icl'get_theory_info" 6042 [fn x => nm]);
+
+	val (ti {status = status,
+			inscope = inscope,
+			contents = contents,
+			children = children,
+			name = name}) = sub_ia(lookup,iname);
+in
+	{status = status,
+	inscope = inscope,
+	contents = !contents,
+	children = children,
+	name = name}
+end);
+=TEX
+Given a theory name as an integer, return it as a string.
+=SML
+fun icl'get_theory_name (nm : int) : string = (
+let val hier{lookup=lookup, top_theory=top_theory} = 
+		current_hierarchy();
+in
+	if (0 <= nm) andalso (nm <= top_theory)
+	then (let val (ti {name=name,...}) = sub_ia(lookup, nm)
+		in
+			name
+		end)
+	else fail "icl'get_theory_name" 6043 [fn x => "Internal " ^ string_of_int nm]
+end);
+=TEX
+\subsection{Operations of Theory Attributes}
 Make some theory the current theory.
 The material in the body of the outer $let$ would lead to an inconsistent state if interrupted.
 =SML
 fun âicl'open_theoryá (nm : string) : (int list * int list) = (
 let val {hierarchy=hierarchy,theory=theory} = !current;
+
     val thyn = (internal_theory_name nm 
 	handle complaint =>
 	divert complaint "internal_theory_name" "icl'open_theory" 6035 [fn x => nm]);
 
-	val allp = theory_ancestors thyn
+	val allp = theory_ancestors thyn;
+
 	val hier{lookup=lookup, top_theory=top_theory} = !hierarchy;
 
 	val ti {status = status,
@@ -808,21 +1024,28 @@ fun âicl'new_theoryá (nm : string) :  int = (
 	if (is_theory_name nm)	(* spec. step 1 *)
 	then fail "icl'new_theory" 6040 [fn x => nm]
 	else let val {hierarchy=hierarchy,theory=theory} = !current;
+
 	val hier{lookup=lookup, top_theory=top_theory} = !hierarchy;
+
 	val cthy = icl'get_current_theory_name();
+
 	val ntop_theory = top_theory+1;
+
 	val nthy = ref (empty_theory ntop_theory [cthy]); (* spec. step 2 *)
+
 	val nti = (ti {status = TSNormal, 
 		inscope = false,
 		contents = nthy,
 		children = [],
 		name = nm});
+
 	val (ti {status = status1,
 		inscope = inscope1,
 		contents = contents1,
 		children = children1,
 		name = name1})
 		= sub_ia(lookup,cthy);
+
 	val cnti = (ti {status = status1,
 		inscope = inscope1,
 		contents = contents1,
@@ -837,6 +1060,7 @@ fun âicl'new_theoryá (nm : string) :  int = (
 	end
 );
 =TEX
+Lock a theory, to make it read-only.
 =SML
 fun âicl'lock_theoryá (nm : string): unit = (
 let val thyn = (internal_theory_name nm 
@@ -864,6 +1088,7 @@ in
 		name = name})
 end);
 =TEX
+Unlock a locked theory, allowing to to be written to once more.
 =SML
 fun âicl'unlock_theoryá (nm : string): unit = (
 let val thyn = (internal_theory_name nm 
@@ -956,7 +1181,7 @@ let
 		name = tonm});
 
 =TEX
-An auxiliary function to add thge new theory as a child to 
+An auxiliary function to add the new theory as a child to 
 each of its parents.
 =SML
 	fun add_child (a :: x) = (
@@ -991,97 +1216,12 @@ fun âdest_thmá (thm{sequent=sequent,...} : THM) : SEQ = sequent;
 =TEX
 Give a user presentation of a theorem:
 =SML
-fun âicl'dest_thmá (thm{level = level, theory = theory, sequent = sequent}) = (
+fun âicl'dest_thmá (thm{level = level, theory = theory, sequent = sequent}) :
+	{{level : int, theory : THEORY, sequent : SEQ} = (
 	{level=level, theory = !theory, sequent = sequent}
 );
 =TEX
-Assuming we have a list of numbers,
-\[ [ (a_{1},\ b_{1};\ (a_{2},\ b_{2});\ ...;\ (a_n,\ b_n)]\]
-where $b_{i-1}$ is always less than $a_i$,
-$0\ <\ a_1$, 
-and $a_i$ is always less than or equal to $b_i$,
-we wish to check whether a number fails inside any of the ranges $a_i$ to $b_i$.
-=SML
-fun ârange_memá (v : int, [] : (int * int)list) = false
-| range_mem (v, ((a,b) :: x)) = (
-	(v >= a) andalso 
-	((v <= b) orelse range_mem(v, x))
-);
-=TEX
-Similarly, find what is the largest number outside the ranges that is less that some other number.
-=SML
-fun âget_last_levelá (lim: int) ([]:(int * int)list): int = (
-	if lim <= 0
-	then 0
-	else (lim -1)
-) | get_last_level lim lst = (
-	let val rlst = rev lst;
-	fun aux lm [] = (
-		if lm <= 0
-		then 0
-		else (lm - 1)
-	) | aux lm ((a,b) :: x) = (
-		if b + 1 < lm
-		then lm -1
-		else aux a x);
-in
-	aux lim rlst
-end);
-=TEX
-Extend the range by one item (assuming not in range already, and
-properly compact).
-=SML
-fun âextend_rangeá (vl:int) ([]:(int * int)list): (int * int)list= (
-	[(vl,vl)]
-) | extend_range vl (lst as ((a,b) :: x)) = (
-	if vl+1 < a
-	then ((vl,vl) :: lst)
-	else if vl+1 = a
-	then ((vl,b) :: x)
-	else if vl = b+1
-	then (if (x <> []) andalso (fst(hd x) = vl+1)
-		then ((a,snd(hd x)) :: tl x)
-		else ((a, vl) :: x)
-	) else ((a,b) :: extend_range vl x)	
-);
-=TEX
 
-Check that a theorem is valid, fail if not.
-=SML
-fun check_thm (caller: string)
-	(thm {level = level, theory = theory, sequent = sequent} : THM) : unit = (
-let val hier{lookup=lookup, top_theory=top_theory} = current_hierarchy();
-	val thy {name = iname,
-		ty_env = ty_env,
-		con_env = con_env,
-		parents = parents,
-		del_levels = del_levels,
-		axiom_dict = axiom_dict,
-		definition_dict = definition_dict,
-		theorem_dict = theorem_dict,
-		current_level = current_level,
-		user_data = user_data} = !theory;
-	
-	val dummy = if (0 <= iname) andalso (iname <= top_theory)
-		then ()
-		else error caller 6072 [fn x => "Internal "^string_of_int iname];
-
-	val ti{status = status,
-		inscope = inscope,
-		contents = contents,
-		children = children,
-		name = ename}
-		= sub_ia(lookup,iname);
-in
-	if theory <> contents
-	then error caller 6072 [fn x => "Internal "^string_of_int iname]
-	else if not inscope
-	then fail caller 6066 [fn x => ename]
-	else if range_mem(level, del_levels)
-	then fail caller 6065 []
-	else ()
-end);
-=TEX
 Save a theorem under a list of keys:
 =SML
 fun âicl'list_save_thmá (keys : string list, 
@@ -1119,7 +1259,7 @@ let val dummy = check_thm "icl'list_save_thm" theorem;
 		| _ => ();
 
 	val new_theorem = thm{level = if (theory = ctheory)
-			then level
+			then current_level
 			else 0,
 		theory = ctheory,
 		sequent = sequent};
@@ -1181,34 +1321,60 @@ let val {hierarchy = hierarchy, theory = theory} = !current;
 		if children <> []
 		then fail "icl'delete_extension" 6076 [fn x=>ename]
 		else ());
-
-	val last_level = get_last_level current_level del_levels;
-
-	val dummy = if last_level = 0
-		then fail "icl'delete_extension" 6050 [fn x => ename]
-		else ();
-
-	val new_del_levels = extend_range last_level del_levels;
 =TEX
-The following deletion depends upon ther implementation of simple
-dictionaries.
+We want the last level at which something was defined.
+All the following lists are always manipulated such that their head
+will be the last declaration of their kind.
+N.B. this does not hold true of $theorem\_dict$,
+as it may save theorems from other theories at level 0.
 =SML
-	val deleted_ty = ty_env drop (fn (_,{level=ll,...}) => ll <> last_level);
+	val ll_type = case ty_env of
+		[] => 0
+		| ((_,{level=llt,...})::_) => llt;
+	val ll_con = case con_env of
+		[] => 0
+		| ((_,{level=llc,...})::_) => llc;
+	val ll_def = case definition_dict of
+		[] => 0
+		| ((_,thm {level=lld,...})::_) => lld;
+	val ll_axiom = case axiom_dict of
+		[] => 0
+		| ((_,thm {level=lla,...})::_) => lla;
 
-	val new_ty_env = ty_env drop (fn (_,{level=ll,...}) => ll = last_level);
+	val last_level = list_max[ll_type, ll_con, ll_def, ll_axiom];
 
-	val deleted_con = con_env drop (fn (_,{level=ll,...}) => ll <> last_level);
+	val dummy = (
+		if last_level = 0
+		then fail "icl'delete_extension" 6050 [fn x => ename]
+		else if (any theorem_dict (fn (_,thm{level=ll,...}) => 
+			ll >= last_level))
+		then fail "icl'delete_extension" 6077 
+			[(fn x => ename),
+			(fn x => let val (key,_) = (find theorem_dict 
+				(fn (_,thm{level=ll,...}) =>
+				 ll >= last_level))
+				in key end)]
+		else ());
 
-	val new_con_env = con_env drop (fn (_,{level=ll,...}) => ll = last_level);
+	val new_del_levels = extend_range (last_level, current_level) del_levels;
+=TEX
+The following deletion depends upon the implementation of simple
+dictionaries.
+We delete anything made between $last\_level$ and $current\_level$.
+=SML
+	val deleted_ty = ty_env drop (fn (_,{level=ll,...}) => ll < last_level);
+
+	val new_ty_env = ty_env drop (fn (_,{level=ll,...}) => ll >= last_level);
+
+	val deleted_con = con_env drop (fn (_,{level=ll,...}) => ll < last_level);
+
+	val new_con_env = con_env drop (fn (_,{level=ll,...}) => ll >= last_level);
 
 	val new_axiom_dict = axiom_dict drop 
-		(fn (_,thm{level=ll,...}) => ll = last_level);
-
-	val new_theorem_dict = theorem_dict drop 
-		(fn (_,thm{level=ll,...}) => ll = last_level);
+		(fn (_,thm{level=ll,...}) => ll >= last_level);
 
 	val new_definition_dict = definition_dict drop 
-		(fn (_,thm{level=ll,...}) => ll = last_level);
+		(fn (_,thm{level=ll,...}) => ll >= last_level);
 
 	val new_thy = thy {name = iname,
 		ty_env = new_ty_env,
@@ -1217,9 +1383,9 @@ dictionaries.
 		del_levels = new_del_levels,
 		axiom_dict = new_axiom_dict,
 		definition_dict = new_definition_dict,
-		theorem_dict = new_theorem_dict,
-		current_level = current_level,
-		user_data = user_data}
+		theorem_dict = theorem_dict,
+		current_level = current_level+1,
+		user_data = user_data};
 in
 	del_ty_scope deleted_ty;
 	del_con_scope deleted_con;
@@ -1344,64 +1510,6 @@ in
 end);
 
 =TEX
-Is a given constant name used in any ancestor or descendant of the
-current theory?
-\begin{tabular}{| l | l |}\hline
-Result & Meaning \\ \hline
-0 & Not present \\
-1 & In scope(current theory or ancestor) \\
-2 & In descendant \\ \hline
-\end{tabular}
-=SML
-fun âconst_in_anc_or_desá (nm : string) : int = (
-let val iname =icl'get_current_theory_name();
-	
-	val hier{lookup=lookup, ...} = current_hierarchy();
-
-	fun const_in_thy (nm : string) (thry : int) : bool = (
-	let val ti {contents = contents,...} = sub_ia(lookup, thry);
-		val thy {con_env = con_env,...} = !contents;
-	in
-		not(is_Nil(s_lookup nm con_env))
-	end);
-in	
-	if is_Nil(get_con_scope nm)
-	then (if (any (theory_descendants iname) 
-		(fn thry => const_in_thy nm thry))
-		then 2
-		else 0)
-	else 1
-end);
-=TEX
-Is a given type constructor name used in any ancestor or descendant of the
-current theory?
-\begin{tabular}{| l | l |}\hline
-Result & Meaning \\ \hline
-0 & Not present \\
-1 & In scope(current theory or ancestor) \\
-2 & In descendant \\ \hline
-\end{tabular}
-=SML
-fun âtype_in_anc_or_desá (nm : string) : int = (
-let val iname =icl'get_current_theory_name();
-	
-	val hier{lookup=lookup, ...} = current_hierarchy();
-
-	fun type_in_thy (nm : string) (thry : int) : bool = (
-	let val ti {contents = contents,...} = sub_ia(lookup, thry);
-		val thy {ty_env = ty_env,...} = !contents;
-	in
-		not(is_Nil(s_lookup nm ty_env))
-	end);
-in	
-	if is_Nil(get_ty_scope nm)
-	then (if (any (theory_descendants iname) 
-		(fn thry => type_in_thy nm thry))
-		then 2
-		else 0)
-	else 1
-end);
-=TEX
 Add a new constant to the theory:
 =SML
 fun âicl'new_constá (nm : string, ty : TYPE) : TERM = (
@@ -1460,16 +1568,6 @@ in
 	theory := new_thy;
 	add_con_scope [ (nm,con_decl)];
 	new_const
-end);
-=TEX
-Give a list of HOL type variables $'1, '2,\ldots$:
-=SML
-fun ântyvarsá (0 : int) : TYPE list = []
-| ntyvars n = (
-let fun aux 1 = [mk_vartype("'"^string_of_int 1)]
-| aux n = mk_vartype("'"^string_of_int n) :: aux (n-1);
-in
-	rev(aux n)
 end);
 =TEX
 Add a new type to the theory:
@@ -1703,49 +1801,79 @@ print_hierarchy ();
 icl'new_type("BOOL",0);
 print_ti(icl'get_theory_info "next");
 val † = icl'new_type ("†",0);
+print_ti(icl'get_theory_info "next");
+val n1 = icl'list_save_thm(["n1"], mk_thm "block" 1 1);
+val n2 = icl'list_save_thm(["n2"], mk_thm "block2" 1 1);
 icl'new_type("‰",2);
 icl'new_type("‹",2);
 val Zero = icl'new_const("0",†);
 val One = icl'new_const("1",†);
 val T = icl'new_const("T",BOOL);
 val F = icl'new_const("F",BOOL);
+print_ti(icl'get_theory_info "next");
 icl'open_theory "min";
 val UNIT = icl'new_type ("UNIT",0);
 val Unit = icl'new_const("Unit",UNIT);
+print_ti(icl'get_theory_info "min");
 icl'open_theory "next";
 val AlsoUnit = icl'new_const("AlsoUnit",UNIT);
 icl'open_theory "min";
+val AlsoUnit2 = icl'new_const("AlsoUnit",UNIT); (* fails *)
 icl'open_theory "another";
 icl'new_type("BOOL",0);
 val T = icl'new_const("T",BOOL);
 val F = icl'new_const("F",BOOL);
 
-print_hierarchy ();
 print_ti(icl'get_theory_info "another");
 icl'delete_extension();
 print_ti(icl'get_theory_info "another");
+val s1 = icl'list_save_thm(["s1"], mk_thm "from_min" 0 3);
+val s2 = icl'list_save_thm(["s2"], mk_thm "from_here" 2 5);
 wf_term F;
 wf_term T;
-val F = icl'new_const("F",BOOL);
+icl'new_const("F",BOOL);
 print_ti(icl'get_theory_info "another");
 wf_term F;
 wf_term T;
 icl'delete_extension();
+icl'delete_extension(); (* fails *)
+icl'delete_thm "s2";
+icl'delete_extension();
+print_ti(icl'get_theory_info "another");
 val TorF = icl'new_const("TorF",BOOL);
 print_ti(icl'get_theory_info "another");
 wf_term TorF;
+wf_term T;
 wf_term F;
 icl'delete_extension();
 print_ti(icl'get_theory_info "another");
 icl'delete_extension();
 print_ti(icl'get_theory_info "another");
-icl'delete_extension();
-val T = icl'new_const("T",BOOL);
-val F = icl'new_const("F",BOOL);
-val s1 = icl'list_save_thm(["s1"], mk_thm "from_min" 0 3);
-val s2 = icl'list_save_thm(["s2"], mk_thm "from_here" 2 5);
-print_ti(icl'get_theory_info "another");
-icl'delete_extension();
+icl'delete_extension(); (* fails *)
 
 icl'open_theory "yet_again";
 icl'new_axiom(["truth_axiom"],T);
+print_ti(icl'get_theory_info "yet_again");
+icl'new_axiom(["truth_axiom"],T); (* fails *)
+icl'new_axiom(["not so", "No way!"],F);
+icl'new_axiom(["testing"],mk_const("rubbish",BOOL)); (* fails *)
+icl'new_axiom(["testing"],mk_comb(mk_var("f",mk_fun(BOOL,BOOL)), T)); 
+print_ti(icl'get_theory_info "yet_again");
+icl'open_theory "another";
+icl'new_axiom(["testing2"],mk_comb(mk_var("f",mk_fun(BOOL,BOOL)), T)); (* fails *)
+icl'open_theory "yet_again";
+icl'new_axiom(["testing2"],mk_comb(mk_const("f",mk_fun(BOOL,BOOL)), T)); (* fails *)
+let val t = mk_type("rubbish",[])
+in
+icl'new_axiom(["testing2"],mk_comb(mk_var("f",mk_fun(t,BOOL)), mk_var("x",t)))
+end; (* fails *)
+icl'lock_theory "yet_again";
+icl'new_axiom(["Truth_axiom"],T); (* fails *)
+icl'new_const("ForT",BOOL); (* fails *)
+icl'new_type("SOMETHING",3); (* fails *)
+icl'unlock_theory "yet_again";
+icl'new_axiom(["Truth_axiom"],T); 
+icl'new_const("ForT",BOOL); 
+icl'new_type("SOMETHING",3); 
+print_ti(icl'get_theory_info "yet_again");
+
