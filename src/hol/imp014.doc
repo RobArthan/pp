@@ -1,0 +1,396 @@
+=TEX
+% TQtemplate.tex
+\documentstyle[hol,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation of Unification}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP014}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}  %% Mandatory field (with sensible default)
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.D.~Arthan & FST Team Leader}
+\TPPabstract{
+This contains the Standard ML implementation of the unification function}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+      Library \\ R.D. Arthan\\ D.J. King}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history}  % to get section number `0.3'
+\begin{description}
+\item[Issue 1.1]
+First version, based on \cite{DS/FMU/IED/DTD014}.
+\end{description}
+\subsection{Changes forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+
+This document contains the Standard ML code for implementing
+Unification. It corresponds to the
+detailed design of Unification as specified in \cite{DS/FMU/IED/DTD014}.
+
+\subsection{Introduction}
+
+\subsubsection{Background and Purpose}
+
+The function $Unification$ is required by the type
+inferer to identify all the types in a partially typed
+term. This document contains the Standard ML code
+for implementing this function and its supporting functions
+and is produced in response to the specification
+of $Unification$ provided in \cite{DS/FMU/IED/DTD014}.
+
+\subsubsection{Dependencies}
+
+The Standard ML code in this document depends on the literate script
+contained in \cite{DS/FMU/IED/DTD014} for the signature of Unification.
+
+\subsubsection{Possible Enhancements}
+
+This document and the Standard ML code contained within it is
+subject to change. The document will be inspected in due
+course according to project standards and procedures. Also,
+the Standard ML code will be tested using the tests specified in
+the document \cite{DS/FMU/IED/MDT014}.
+
+\subsubsection{Deficiencies}
+
+At present, there are no known deficiencies in this document.
+
+\section{THE STRUCTURE $Unification$}
+
+The $Unification$ structure binds together the function
+unify and various subsidiary functions which are used
+to define unify. The structure has the signature $Unification$
+defined in \cite{DS/FMU/IED/DTD014}.
+
+We now start the structure $Unification$ which contains
+the unification algorithm and some associated data types
+and utilities.
+=SML
+structure Unification : Unification = struct
+=TEX
+\subsection{The type $EXTYPE$}
+The type of extended types (i.e. types containing type unknowns) is
+the following type $EXTYPE$.
+=SML
+datatype âEXVARá = Known of string | Unknown of int;
+
+datatype âEXTYPEá = Ex_vartype of EXVAR | Ex_type of string * (EXTYPE list);
+=TEX
+The following function is needed to detect an error
+case during unification.
+=SML
+fun âtyvars_setá (Ex_vartype(Known _)) (tvn : int) = false
+|   tyvars_set (Ex_vartype(Unknown tvn')) (tvn : int) = tvn = tvn'
+|   tyvars_set (Ex_type(_, tyl)) (tvn : int) = any tyl (fn ty => tyvars_set ty tvn);
+=TEX
+\subsection{Substitutions}
+The unification algorithm works using so-called
+substitutions. These are functions from
+type unknowns to (extended) types.
+They have the property that they differ from
+the identity function (on the set of all type unknowns)
+in only finitely many places.
+For efficiency, we use binary trees with
+integer keys to represent the substitutions.
+=SML
+datatype âSUBSá = Leaf | Node of (int * EXTYPE * SUBS * SUBS);
+=TEX
+$apply\_subs$ applies a substitution to a type
+unknown (represented as an integer).
+=SML
+fun âapply_subsá (phi : SUBS) (what : int) : EXTYPE = (
+	case phi of
+		Leaf => Ex_vartype(Unknown what)
+	|	Node(i, tty, l, r) => (
+			if i < what
+			then	apply_subs r what
+			else if i = what
+			then	tty
+			else apply_subs l what
+		)
+);
+=TEX
+When the type inference process is complete (and also
+for formatting error messages), we need to be able
+to convert extended types back into types using the
+most general typing which has been computed as a
+substitution.
+=SML
+fun âextype_to_typeá (phi : SUBS) (ign_fail : bool) (Ex_vartype(Known X)) = (
+	mk_vartype X
+) | extype_to_type phi ign_fail (Ex_vartype(Unknown X)) = (
+	if ign_fail
+	then
+		case apply_subs phi X of
+			Ex_vartype(Unknown Y) =>
+				mk_vartype ("*?" ^ string_of_int Y)
+		|	Other => extype_to_type phi ign_fail Other
+	else
+		case apply_subs phi X of
+			Ex_vartype(Unknown Y) =>
+				raise fail "extype_to_type" 14004 []
+		|	Other => extype_to_type phi ign_fail Other
+) | extype_to_type phi ign_fail (Ex_type(s, l)) = mk_type(s, map (extype_to_type phi ign_fail) l);
+=TEX
+$insert$ inserts an entry into a substitution (overwriting
+any existing entry with the same key).
+=SML
+fun insert ((n, tty) : int * EXTYPE) (phi : SUBS) : SUBS = (
+	case phi of
+		Leaf => Node(n, tty, Leaf, Leaf)
+	|	Node(i, tty', l, r) => (
+			if i < n
+			then	Node(i, tty', l, insert(n, tty)r)
+			else if i = n
+			then	Node(i, tty, l, r)
+			else Node(i, tty', insert(n, tty)l, r)
+		)
+);
+=TEX
+$sub\_type$ applies a substitution to a type.
+=SML
+fun âsub_typeá (phi : SUBS) (Ex_vartype(Known ty)) = Ex_vartype(Known ty)
+|   sub_type (phi : SUBS) (Ex_vartype(Unknown tvn)) = apply_subs phi tvn
+|   sub_type (phi : SUBS) (Ex_type(s, tyl)) = Ex_type(s, map (sub_type phi) tyl);
+=TEX
+$scomp\,sub2\,sub1$ is the composition of the
+substitutions $sub2$ and $sub1$. This is just the functional
+composition, $sub2\,o\,sub1$.
+In terms of our representation of the functions as
+trees this amounts to merging the trees but replacing
+each extended type in $sub1$ by its instance under
+$sub2$.
+=SML
+fun âscompá (sub2: SUBS) (sub1 : SUBS) : SUBS =  (
+	case sub1 of
+		Leaf => sub2
+	|	Node(i, tty, l, r) => (
+			let	val s1 = insert (i, sub_type sub2 tty) sub2;
+			in	scomp(scomp s1 l) r
+			end
+	)
+);
+=TEX
+$id\_subs$ is the identity substitution.
+=SML
+val âid_subsá : SUBS = Leaf;
+=TEX
+$delta\,tvn\,ty$ is the substitution which acts as the
+identity on all type unknowns other than $tvn$ and
+sends that to $ty$.
+=SML
+fun âdeltaá (tvn : int) (ty : EXTYPE) : SUBS = Node(tvn, ty, Leaf, Leaf);
+=TEX
+$extend\,\phi\,tvn\,ty$ is $\phi$ modified to send
+$tvn$ to $ty$. Provided $\phi$ is an {\em idempotent}
+substitution (i.e $\phi\,o\phi = \phi$),
+the resulting substitution must also be idempotent
+and an exception is raised if this would not be so.
+This error condition occurs in solving equations
+of the form $?1‹?1=?1$ which arise from
+terms like ``$f f$'' (for $f$ a variable).
+=SML
+fun âextendá (phi : SUBS) (tvn : int) (ty : EXTYPE) : SUBS = (
+	case ty of
+		Ex_vartype(Unknown tvn') => (
+			if tvn = tvn'
+			then phi
+			else scomp (delta tvn ty) phi
+	) |	Ex_type(s, tyl) => (
+			if tyvars_set ty tvn
+			then fail "extend" 14002 []
+			else scomp (delta tvn ty) phi
+	) |	Ex_vartype(Known _) => (
+			scomp (delta tvn ty) phi
+	)
+);
+=TEX
+\subsection{The Unification Algorithm}
+=TEX
+The work of unification is done by the function
+$unify$ below.
+Given a substitution, $\phi$, which is an idempotent
+substitution giving the most general solution
+of some system, $S$, of type equations,
+and a pair of types, $ty$ and $ty'$, $unify$ computes
+an idempotent substitution
+which is the most general solution of
+$S\,¡\,\{ty = ty'\}$, provided such a solution exists.
+
+The algorithm is fairly straightforward.
+If either type argument is a type unknown then if that unknown is not
+changed by $\phi$ we simply extend $\phi$ to send
+that type unknown to the other type argument.
+If one of the arguments is a type unknown and it is
+changed by $\phi$ we must recursively unify its
+image under $\phi$ with the other argument.
+If neither argument is a type unknown then they must
+both have the same top-level structure and we
+recursively examine the corresponding
+subtypes of the two arguments (if any) to find
+the solution.
+
+If the types cannot be unified, fail is called which
+raises an exception with the contructor ``Fail''.
+=SML
+
+
+fun âunifyá (phi : SUBS) (ty, ty') : SUBS = (
+	case ty of
+		Ex_vartype(Unknown tvn) => (
+			case apply_subs phi tvn of
+				Ex_vartype(Unknown tvn') => (
+					if tvn = tvn'
+					then extend phi tvn (sub_type phi ty')
+					else unify phi (Ex_vartype(Unknown tvn'), sub_type phi ty')
+			) |	phitvn => unify phi (phitvn, sub_type phi ty')
+	) |	Ex_vartype(Known kty) => (
+			case ty' of
+				Ex_vartype(Known kty') => (
+					if kty = kty'
+					then phi
+					else fail "unify" 14001 [fn () => kty,
+								 fn () => kty']
+			) |	Ex_vartype(Unknown _ ) => unify phi (ty', ty)
+			|	Ex_type(_, _) => fail "unify" 14001 []
+	) |	Ex_type(s, tyl) => (
+			case ty' of
+				Ex_vartype _ => unify phi (ty', ty)
+			|	Ex_type(s', tyl') => (
+					if s = s' andalso length tyl = length tyl'
+					then (fold o uncurry o switch) unify (combine tyl tyl') phi
+					else fail "unify" 14001 [fn () => s,
+								 fn () => s']
+			)
+	)
+);
+=TEX
+
+The function $list\_unify$ applied to a list $[t1,t2,...,tn]$
+finds the unification $t1$ and $t2$, the unification of
+$t2$ with $t3$, and so on, folding in the substitution.
+At the end of the process, the substitution function
+yielded is the unification of all the types in the list.
+
+=SML
+fun âlist_unifyá (phi : SUBS) (nil : EXTYPE list) : SUBS = phi
+  | list_unify phi [ty] = phi
+  | list_unify phi (x1::x2::xs) = (
+	list_unify (unify phi (x1, x2)) (x2::xs)
+);
+=TEX
+\subsection{Further Utilities}
+
+The following two utilities support a supply of unique names.
+
+=SML
+local
+	val name_supply : int ref = ref 0;
+in
+	fun âstart_againá() = name_supply := 0;
+	fun ânext_nameá () = (
+		let	val x = !name_supply
+		in	(name_supply := x+1; x)
+		end
+	);
+end;
+=TEX
+
+=SML
+fun ânew_nameá (names : 'a list) : ('a * int) list = (
+	map (fn x => (x, next_name())) names
+);
+=TEX
+
+The function $replaced$ below has the same functionality
+as the function $replaced$ in the HOL prototype
+\cite{DS/FMU/IED/SML007}, but has been recoded. The
+value constructors in the prototype version are
+now pure functions and cannot be used for pattern
+matching. Hence we require the test $is\_vartype$ here.
+This makes the implementation of the function look quite
+different from the prototype, although it does the same
+thing.
+ 
+=SML
+fun âreplacedá (ty : TYPE) : EXTYPE = (
+	if is_vartype ty
+	then
+		let	val rename = lassoc3(new_name (type_tyvars ty));
+			val X = dest_vartype ty;
+		in
+			Ex_vartype(Unknown(rename X))
+		end
+	else
+		let	val	(s,tyl) = dest_type ty;
+		in
+			Ex_type(s, map replaced tyl)
+		end
+);
+=TEX
+$funt$ constructs extended function types.
+=SML
+fun âfuntá (ty1 : EXTYPE) (ty2 : EXTYPE) : EXTYPE = (
+	Ex_type("->", [ty1, ty2])
+);
+=TEX
+That concludes the structure:
+=SML
+end; (* of structure Unification *)
+=TEX
+
+Finally, we make sure that the Unification structure
+is available directly to the world.
+=SML
+open Unification;
+=TEX
+
+\twocolumn[\section{INDEX OF DEFINED TERMS}]
+\printindex
+\end{document}
