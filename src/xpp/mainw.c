@@ -223,7 +223,7 @@ static MenuItem file_menu_items[] = {
     { "Save Selection as ...",  &xmPushButtonGadgetClass, 'l', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_SAVE_SELECTION, (MenuItem *)NULL, False },
     MENU_ITEM_SEPARATOR,
-    { "Open ...",  &xmPushButtonGadgetClass, 'O', NULL, NULL,
+    { "Open ...",  &xmPushButtonGadgetClass, 'O', "Ctrl<Key>o", "Ctrl-O",
         file_menu_cb, (XtPointer)FILE_MENU_OPEN, (MenuItem *)NULL, False },
     { "Include ...",  &xmPushButtonGadgetClass, 'I', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_INCLUDE, (MenuItem *)NULL, False },
@@ -1043,18 +1043,36 @@ Boolean application_alive()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Data transfer from application:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static NAT bytes_since_last_pause;
+#define PAUSE_AFTER 200
+#define PAUSE_FOR 20
+
 static void get_from_application(unused_w, unused_p)
 Widget unused_w;
 XtPointer unused_p;
 {
 	NAT ct;
 	static	char buf[1001]; /* allow for null-termination in scroll_out */
-	if(application_alive() &&
-			(ct = read(control_fd, buf, 1000)) > 0) {
+	static void start_listening_again();
+	while(application_alive()
+	&&	(ct = read(control_fd, buf, 1000)) > 0
+	&&	bytes_since_last_pause < PAUSE_AFTER) {
 		scroll_out(buf, ct, False);
-	};
+		bytes_since_last_pause += ct;
+	}
+	if(bytes_since_last_pause > PAUSE_AFTER) {
+		bytes_since_last_pause = 0;
+		XtRemoveInput(app_ip_req);
+		XtAppAddTimeOut(app, PAUSE_FOR, start_listening_again, NULL);
+	}		
 }
 
+static void start_listening_again()
+{
+	app_ip_req = XtAppAddInput(app,
+		control_fd, (XtPointer) XtInputReadMask,
+		get_from_application, NULL);
+}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Data transfer to application:
  * To cope with executing long command line sequences, this
@@ -1253,6 +1271,10 @@ static void sigint_handler(NAT sig)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void panic_exit(char * m, NAT code)
 {
+	static void kill_application();
+	if(application_alive()) {
+		kill_application();
+	}
 	if(script) {
 		msg(m, signal_handled_message2);
 		panic_save(script);
@@ -1299,6 +1321,7 @@ static void handle_sigs()
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void interrupt_application ()
 {
+	clear_queue();
 	if(application_alive()) {
 		kill((pid_t)(-child_pgrp), SIGINT);
 	}
@@ -1320,14 +1343,16 @@ static void send_nl ()
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void kill_application ()
 {
+	clear_queue();
 	if(application_alive()) {
 		if(listening) {
 			XtRemoveInput(app_ip_req);
 			listening = False;
 		};
+		kill((pid_t)(-child_pid), SIGKILL);
 		kill(child_pid, SIGKILL);
-		close(control_fd);
 		waitpid(child_pid, NULL, WUNTRACED);
+		close(control_fd);
 	}
 }
 
