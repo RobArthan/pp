@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.280 $ $RCSfile: imp507.doc,v $ $Date: 2004/10/07 15:56:09 $
+% imp507.doc %Z% $Revision: 1.281 $ $RCSfile: imp507.doc,v $ $Date: 2004/10/07 16:40:00 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.280 $%
+\def\SCCSversion{$Revision: 1.281 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/10/07 15:56:09 $%
+\TPPdate{\FormatDate{$Date: 2004/10/07 16:40:00 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -218,6 +218,7 @@ by doing all the work of checking and generating the VC terms in {\it call\_vcs}
 \item[Issue 1.278] Variable renamings no longer propagate into frames.
 \item[Issue 1.279] Data refinement for global dependencies of procedures now supported.
 \item[Issue 1.280] Fixed error in propagation of formal functions into the environments.
+\item[Issue 1.281] Using clauses now allowed anywhere in package body.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -623,7 +624,7 @@ fun €in_scope_vc_pars›
 			val new_dict = add_to_env_dict dict pars_infos
 		in	in_scope_dict(in_scope, new_dict)
 		end
-) | in_scope_vc_pars (Value dict) ({dict = _, dec_labels} , new_vc_pars)= (
+) | in_scope_vc_pars (Value dict) ({dict = _,  dec_labels} , new_vc_pars)= (
 	in_scope_vc_pars Nil ({dict = dict, dec_labels = dec_labels}, new_vc_pars)
 );
 =TEX
@@ -759,8 +760,8 @@ fun €subunit_dec_labels›  (
 		specif_flag	=	specif_flag,
 		specif		=	specif,
 		in_scope		= {
-			dict	=	dict,
-			dec_labels	=	new_dec_labels
+			dict		=	dict,
+			dec_labels		=	new_dec_labels
 		},
 		globs		=	globs
 	}
@@ -773,6 +774,7 @@ fun €declab_declabel_flag›  (
 			{pack_spec_flag, pack_body_flag, stub_flag,
 			subunit_flag, formal_body_flag, fun_flag,
 			declabel_flag, speclabel_flag, till_flag, body_flag},
+		using_decs,
 		in_scope
 	} : DECLAB,
 	new_declabel_flag : FLAG) : DECLAB = (
@@ -789,6 +791,7 @@ fun €declab_declabel_flag›  (
 			till_flag		=	till_flag,
 			body_flag		=	body_flag
 		},
+	 	using_decs = using_decs,
 		in_scope	=	in_scope
 	}
 );
@@ -797,11 +800,13 @@ fun €declab_declabel_flag›  (
 fun €declab_in_scope›
 	({	block_name,
 		flags,
+		using_decs,
 		in_scope
 	} : DECLAB,
 	new_in_scope : IN_SCOPE) : DECLAB = (
 	{	block_name	=	block_name,
 		flags		=	flags,
+		using_decs	=	using_decs,
 		in_scope	= new_in_scope
 	}
 );
@@ -830,17 +835,28 @@ fun €declab_formal_procs›
 );
 =TEX
 =SML
-fun €declab_dec_labels›  (
+fun €declab_dec_labels› 
+	(declab as {in_scope as {dict, dec_labels}, ...} : DECLAB,
+	new_dec_labels : LABEL list) : DECLAB = (
+	declab_in_scope(declab,  {
+			dict			=	dict,
+			dec_labels		=	new_dec_labels})
+);
+=TEX
+=SML
+fun €declab_using_dec›  (
 	{	block_name,
 		flags,
+		using_decs,
 		in_scope as {dict, dec_labels}
 	} : DECLAB,
-	new_dec_labels : LABEL list) : DECLAB = (
+	extra_using_dec : Z_ID * (VAR_DECL list * Z_PRED)) : DECLAB = (
 	{	block_name	=	block_name,
 		flags		=	flags,
+		using_decs	=	using_decs @ [extra_using_dec],
 		in_scope		= {
 			dict			=	dict,
-			dec_labels		=	new_dec_labels
+			dec_labels		=	dec_labels
 		}
 	}
 );
@@ -998,7 +1014,6 @@ fun €block_declab›  (
 	dec_lab,
 	spec_lab,
 	till,
-	using_decs,
 	var_inits
 	} : BLOCK,
 	new_declab : DECLAB) : BLOCK = (
@@ -1011,7 +1026,6 @@ fun €block_declab›  (
 	dec_lab = dec_lab,
 	spec_lab = spec_lab,
 	till = till,
-	using_decs = using_decs,
 	var_inits = var_inits
 	}
 );
@@ -1021,6 +1035,7 @@ fun €block_flags›  (blk as
 	{
 	declab as {block_name,
 		flags,
+		using_decs,
 		in_scope},
 	...
 	} : BLOCK,
@@ -1028,6 +1043,7 @@ fun €block_flags›  (blk as
 	block_declab(blk, 
 		{block_name = block_name,
 		flags = new_flags,
+		using_decs = using_decs,
 		in_scope = in_scope})
 );
 =TEX
@@ -1111,18 +1127,10 @@ fun €block_till_flag›  (blk as
 );
 =TEX
 =SML
-fun €block_in_scope›  (blk as
-	{
-	declab as {block_name,
-		flags,
-		in_scope},
-	...
-	} : BLOCK,
+fun €block_in_scope›
+	(blk as {declab, ...} : BLOCK,
 	new_in_scope : IN_SCOPE) : BLOCK = (
-	block_declab(blk, 
-		{block_name = block_name,
-				flags = flags,
-				in_scope = new_in_scope})
+	block_declab(blk,  declab_in_scope(declab, new_in_scope))
 );
 =TEX
 =SML
@@ -1149,55 +1157,36 @@ fun €block_vc_vars›
 =SML
 fun €block_vc_pars›
 	 (dicto : ENV_DICT OPT)
-	 (blk as {declab as {block_name, flags, in_scope, ...}, ...} : BLOCK,
+	 (blk as {declab as {in_scope, ...}, ...} : BLOCK,
 		new_vc_pars : PARAM_SPEC list) : BLOCK = (
 	block_declab(blk, 
-		{block_name = block_name,
-				flags = flags,
-				in_scope = in_scope_vc_pars dicto (in_scope, new_vc_pars)})
+		declab_in_scope(declab, in_scope_vc_pars dicto (in_scope, new_vc_pars)))
 );
 =TEX
 =SML
 fun €block_vc_aux_vars›
 	 (dicto : ENV_DICT OPT)
-	 (blk as {declab as {block_name, flags, in_scope }, ...} : BLOCK,
+	 (blk as {declab as {in_scope, ... }, ...} : BLOCK,
 		new_vc_aux_vars : TERM list) : BLOCK = (
 	block_declab(blk, 
-		{block_name = block_name,
-				flags = flags,
-				in_scope = in_scope_vc_aux_vars dicto (in_scope, new_vc_aux_vars)})
+		declab_in_scope(declab, in_scope_vc_aux_vars dicto (in_scope, new_vc_aux_vars)))
 );
 =TEX
 =SML
 fun €block_vc_log_cons›
 	 (dicto : ENV_DICT OPT)
-	 (blk as {declab as {block_name, flags, in_scope }, ...} : BLOCK,
+	 (blk as {declab as { in_scope, ... }, ...} : BLOCK,
 		new_vc_log_cons : TERM list) : BLOCK = (
 	block_declab(blk, 
-		{block_name = block_name,
-				flags = flags,
-				in_scope = in_scope_vc_log_cons dicto (in_scope, new_vc_log_cons)})
+		declab_in_scope(declab, in_scope_vc_log_cons dicto (in_scope, new_vc_log_cons)))
 );
 =TEX
 =SML
 fun €block_renamings› 
-	 (blk as {declab as {block_name, flags, in_scope }, ...} : BLOCK,
+	 (blk as {declab as {in_scope, ... }, ...} : BLOCK,
 		new_renamings : (Z_ID *Z_ID) list) : BLOCK = (
 	block_declab(blk, 
-		{block_name = block_name,
-				flags = flags,
-				in_scope = in_scope_renamings(in_scope, new_renamings)})
-);
-=TEX
-=SML
-fun €block_vc_aux_vars›
-	 (dicto : ENV_DICT OPT)
-	 (blk as {declab as {block_name, flags, in_scope }, ...} : BLOCK,
-		new_vc_aux_vars : TERM list) : BLOCK = (
-	block_declab(blk, 
-		{block_name = block_name,
-				flags = flags,
-				in_scope = in_scope_vc_aux_vars dicto (in_scope, new_vc_aux_vars)})
+		declab_in_scope(declab, in_scope_renamings (in_scope, new_renamings)))
 );
 =TEX
 =SML
@@ -1211,7 +1200,6 @@ fun €block_current_formal_proc›  (
 	dec_lab,
 	spec_lab,
 	till,
-	using_decs,
 	var_inits} : BLOCK,
 	new_current_formal_proc : FORMAL_PROC) : BLOCK = (
 	{declab	 = declab,
@@ -1223,7 +1211,6 @@ fun €block_current_formal_proc›  (
 	dec_lab = dec_lab,
 	spec_lab = spec_lab,
 	till = till,
-	using_decs = using_decs,
 	var_inits = var_inits
 	}
 );
@@ -1239,7 +1226,6 @@ fun €block_current_formal_fun›  (
 	dec_lab,
 	spec_lab,
 	till,
-	using_decs,
 	var_inits} : BLOCK,
 	new_current_formal_fun : FORMAL_FUN) : BLOCK = (
 	{declab	 = declab,
@@ -1251,7 +1237,6 @@ fun €block_current_formal_fun›  (
 	dec_lab = dec_lab,
 	spec_lab = spec_lab,
 	till = till,
-	using_decs = using_decs,
 	var_inits = var_inits
 	}
 );
@@ -1267,7 +1252,6 @@ fun €block_till›  (
 	dec_lab,
 	spec_lab,
 	till,
-	using_decs,
 	var_inits} : BLOCK,
 	new_till : Z_PRED) : BLOCK = (
 	{declab	 = declab,
@@ -1279,13 +1263,13 @@ fun €block_till›  (
 	dec_lab = dec_lab,
 	spec_lab = spec_lab,
 	till = new_till,
-	using_decs = using_decs,
 	var_inits = var_inits
 	}
 );
 =TEX
+The following just supports what is actually needed: adding an extra using declaration to the existing list.
 =SML
-fun €block_using_decs›  (
+fun €block_using_dec›  (
 	{declab,
 	current_formal_proc,
 	current_formal_fun,
@@ -1295,10 +1279,9 @@ fun €block_using_decs›  (
 	dec_lab,
 	spec_lab,
 	till,
-	using_decs,
 	var_inits} : BLOCK,
-	new_using_decs : (Z_ID * (VAR_DECL list * Z_PRED)) list) : BLOCK = (
-	{declab	 = declab,
+	extra_using_dec : Z_ID * (VAR_DECL list * Z_PRED)) : BLOCK = (
+	{declab	 = declab_using_dec(declab, extra_using_dec),
 	current_formal_proc = current_formal_proc,
 	current_formal_fun = current_formal_fun,
 	current_for_vars = current_for_vars,
@@ -1307,7 +1290,6 @@ fun €block_using_decs›  (
 	dec_lab = dec_lab,
 	spec_lab = spec_lab,
 	till = till,
-	using_decs = new_using_decs,
 	var_inits = var_inits
 	}
 );
@@ -1323,7 +1305,6 @@ fun €block_var_inits›  (
 	dec_lab,
 	spec_lab,
 	till,
-	using_decs,
 	var_inits} : BLOCK,
 	new_var_inits : (EXP * TMARK) S_DICT) : BLOCK = (
 	{declab	 = declab,
@@ -1335,7 +1316,6 @@ fun €block_var_inits›  (
 	dec_lab = dec_lab,
 	spec_lab = spec_lab,
 	till = till,
-	using_decs = using_decs,
 	var_inits = new_var_inits
 	}
 );
@@ -1352,7 +1332,6 @@ fun €block_spec_lab›  (
 	dec_lab,
 	spec_lab,
 	till,
-	using_decs,
 	var_inits
 	} : BLOCK,
 	new_spec_lab : LABEL) : BLOCK = (
@@ -1365,7 +1344,6 @@ fun €block_spec_lab›  (
 	dec_lab = dec_lab,
 	spec_lab = new_spec_lab,
 	till = till,
-	using_decs = using_decs,
 	var_inits = var_inits
 	}
 );
@@ -1375,6 +1353,7 @@ fun €block_block_name›  (blk as
 	{
 	declab as {block_name,
 		flags,
+		using_decs,
 		in_scope},
 	...
 	} : BLOCK,
@@ -1382,6 +1361,7 @@ fun €block_block_name›  (blk as
 	block_declab(blk, 
 		{block_name = new_block_name,
 				flags = flags,
+				using_decs = using_decs,
 				in_scope = in_scope})
 );
 =TEX
@@ -1390,6 +1370,7 @@ fun €block_dec_labels›  (blk as
 	{
 	declab as {block_name,
 		flags,
+		using_decs,
 		in_scope as {dict, dec_labels}},
 	...
 	} : BLOCK,
@@ -1397,6 +1378,7 @@ fun €block_dec_labels›  (blk as
 	block_declab(blk,
 		{block_name = block_name,
 				flags = flags,
+				using_decs = using_decs,
 				in_scope = {
 			dict		=	dict,
 			dec_labels	=	new_dec_labels
@@ -1415,7 +1397,6 @@ fun €block_current_for_vars›  (
 	dec_lab,
 	spec_lab,
 	till,
-	using_decs,
 	var_inits
 	} : BLOCK,
 	new_current_for_vars : PARAM_SPEC list) : BLOCK = (
@@ -1428,7 +1409,6 @@ fun €block_current_for_vars›  (
 	dec_lab = dec_lab,
 	spec_lab = spec_lab,
 	till = till,
-	using_decs = using_decs,
 	var_inits = var_inits
 	}
 );
@@ -1445,7 +1425,6 @@ fun €block_current_log_cons›  (
 	dec_lab,
 	spec_lab,
 	till,
-	using_decs,
 	var_inits
 	} : BLOCK,
 	new_current_log_cons : Z_DECL list) : BLOCK = (
@@ -1458,7 +1437,6 @@ fun €block_current_log_cons›  (
 	dec_lab = dec_lab,
 	spec_lab = spec_lab,
 	till = till,
-	using_decs = using_decs,
 	var_inits = var_inits
 	}
 );
@@ -1475,7 +1453,6 @@ fun €block_current_loop_name›  (
 	dec_lab,
 	spec_lab,
 	till,
-	using_decs,
 	var_inits
 	} : BLOCK,
 	new_current_loop_name : ID OPT) : BLOCK = (
@@ -1488,7 +1465,6 @@ fun €block_current_loop_name›  (
 	dec_lab = dec_lab,
 	spec_lab = spec_lab,
 	till = till,
-	using_decs = using_decs,
 	var_inits = var_inits
 	}
 );
@@ -1545,6 +1521,7 @@ val €false_flags› : FLAGS = {
 val €dummy_declab› : DECLAB = {
 		block_name	=	"*empty block*",
 		flags		=	false_flags,
+		using_decs	=	[],
 		in_scope	=	empty_in_scope};
 =TEX
 =SML
@@ -1558,7 +1535,6 @@ val €empty_block› : BLOCK = 	{
 	dec_lab = "",
 	spec_lab = "",
 	till = mk_z_true,
-	using_decs = [],
 	var_inits = []
 };
 =TEX
@@ -1597,6 +1573,7 @@ SInce the environment dictionaries in the top-most block of the running environm
 
 To restrict the scope of frame widening, the block names are also passed in and $dec\_labels$ are not taken from the second $IN\_SCOPE$ when the two block names are different.
 
+The treatment of the using declarations is the obvious one, but this is not relevant in the current usage of this function.
 =SML
 fun €merge_declabs›
 	(block_name1 : ID)
@@ -3544,7 +3521,6 @@ fun €update_subunit_env_basic_decl› (bd : BASIC_DECL) : unit = (
 	end
 );
 =TEX
-label.
 =SML
 fun €update_dec_env_basic_decl› (bd : BASIC_DECL) : unit = (
 	let	val dec_lab1 = #dec_lab (block 1);
@@ -3791,7 +3767,11 @@ fun €add_var_init_env› (var_decl as {vars, tmark}: VAR_DECL, init : EXP) : unit 
 =TEX
 \section{DECLARATIONS}\label{DECLARATIONS}
 In the following, $block2$ is bound first to catch possible errors with a corrupt environment.
-
+=SML
+fun €current_using_decs› (() : unit) = (
+	flat (map (#using_decs o #declab) (!blocks))
+);
+=TEX
 =SML
 fun €k_slot_dec› (label : LABEL) : unit = (
 	let	val block2 = block 2
@@ -3805,7 +3785,8 @@ fun €k_slot_dec› (label : LABEL) : unit = (
 						then	block_name2 dot block_name1
 						else	block_name1,
 			flags		=	#flags(#declab block1),
-			in_scope	= 	flatten_env (!blocks)			
+			using_decs 	=	current_using_decs(),
+			in_scope		= 	flatten_env (!blocks)			
 		};
 		val dec_labels1 = #dec_labels (#in_scope (#declab block1));
 	in	(dec_env := s_extend label declab (!dec_env)
@@ -4090,6 +4071,7 @@ fun €new_scope_loop› (loop_name  :  ID OPT) : unit = (
 		val block = block_declab(block1, {
 					block_name = block_name,
 					flags = flags,
+					using_decs = [],
 					in_scope = in_scope});
 		val block1 = block_current_loop_name(block, loop_name);
 	in	blocks := new_scope_common(block1 :: !blocks)
@@ -4158,6 +4140,7 @@ fun €new_block› ((): unit) : unit = (
 );
 =TEX
 \subsection{The SID function update\_spec\_env\_block}
+In the intended uses of merge\_in\_scopes, we are in an inner scope and using declarations are neither allowed nor relevant.
 =SML
 fun €merge_in_scopes›
 	({	dict=dict1,
@@ -4405,6 +4388,7 @@ let
 	(* pretend to be in a package body *)
 	val {block_name = block_name2,
 		flags = flags2,
+		using_decs = using_decs2,
 		in_scope = in_scope2}  = #declab block2;
 	val new_flags2 = {
 			pack_spec_flag = false,
@@ -4425,6 +4409,7 @@ let
 	val new_in_scope2 = in_scope_vc_aux_vars Nil (in_scope2,  #aux_vars package);
 	val new_declab2 =  {block_name = block_name2,
 		flags = new_flags2,
+		using_decs = using_decs2,
 		in_scope = new_in_scope2};
 	val new_block2 = block_declab (block2, new_declab2);
 	val dummy2 = (blocks := (block 1 :: (new_block2 :: tl(tl (!blocks)))));
@@ -4561,7 +4546,9 @@ fun €form_proc_pack_body_common› (form_proc: FORMAL_PROC)
 			find 
 			formal_procs4
 			(fn p => #name p = block_name1);
-		val _ = check_globals_proc block_name1 (#using_decs block2) form_proc (#globals formal_proc3);
+		val _ = check_globals_proc block_name1
+			(#using_decs (#declab block2))
+			form_proc (#globals formal_proc3);
 		val dict2 = #dict(#in_scope(#declab block2));
 		val vc_vars2 = map (var_of_env_dict dict2) (#vc_vars(get_local_vars dict2));
 		val vc_vars4 = #vc_vars package4;
@@ -4669,7 +4656,7 @@ fun €form_proc_pack_body_aux›
 		val aux_vars0 = map (fn (lv,ty) => mk_z_dec([mk_z_lvar lv], ty))
 					aux_vars_tab0;
 		val seq_aux = aux_vars0;
-		val using_decs2 = #using_decs block2;
+		val using_decs2 = #using_decs(#declab block2);
 		val ud2_rel_image = (using_decs2 drop
 						(fn n => not (fst n mem w6)));
 		val conc_vars = (list_cup o map fst o map snd) ud2_rel_image;
@@ -5329,7 +5316,7 @@ fun €form_fun_pack_body_aux›
 					(fn ((s, _, _), _) => not(s mem glob_vars));
 		val aux_vars = map (fn (lv,ty) => mk_z_dec([mk_z_lvar lv], ty))
 					aux_vars_tab1;
-		val using_decs2 = #using_decs block2;
+		val using_decs2 = #using_decs(#declab block2);
 		val ud2_rel_image = (using_decs2 drop
 						(fn n => not (fst n mem glob_vars)));
 		val invs = (map snd o map snd) ud2_rel_image;
@@ -6898,20 +6885,38 @@ fun €ud_fun_of_using_dec› (ud : USING_DEC)
 );
 =TEX
 =SML
-fun €using_dec› (ud: USING_DEC) : unit = (
-	let	val block1 = block 1
-			handle Fail _ => error "using_dec" 507006 [];
-		val using_decs1 = #using_decs block1;
-		val ud_fn as (id, _) = ud_fun_of_using_dec ud;
-		fun ud_fun_match (id1, (bd1, tm1)) (id2, (bd2, tm2)) = (
-			id1 = id2 andalso bd1 = bd2
-				andalso tm1 =$ tm2
+fun €update_dec_env_using_dec› (ud_fn : Z_ID * (VAR_DECL list * Z_PRED)) : unit = (
+	let	val dec_lab1 = #dec_lab (block 1);
+		fun do1_dec_label
+			(dec_label_s as
+				(dec_label, declab as {in_scope = {dec_labels, ...}, ...})
+					: string * DECLAB) = (
+			if	dec_lab1 mem dec_labels
+			then	(dec_label, declab_using_dec (declab, ud_fn))
+			else	dec_label_s
 		);
-		val using_decs2 = using_decs1 drop
-			(fn u => ud_fun_match ud_fn u);			
-	in	blocks :=
-		block_using_decs(block1, using_decs2 @ [ud_fn]):: tl (!blocks)
+	in	dec_env := map do1_dec_label (!dec_env)
 	end
+);
+=TEX
+=SML
+fun €using_dec› (ud: USING_DEC) : unit = (
+	if	test_flag #pack_body_flag 1
+	then	let	val block1 = block 1
+				handle Fail _ => error "using_dec" 507006 [];
+			val using_decs1 = #using_decs(#declab block1);
+			val ud_fn as (id, _) = ud_fun_of_using_dec ud;
+			fun ud_fun_check (id1, (bd1, tm1)) (id2, (bd2, tm2)) = (
+				if	id1 = id2
+				then	fail "using_dec" 507031 [fn () => id1]
+				else	()
+			);
+			val _ = map (ud_fun_check ud_fn) using_decs1;			
+		in	blocks :=
+			block_using_dec(block1, ud_fn):: tl (!blocks);
+			update_dec_env_using_dec ud_fn
+		end
+	else	fail "using_dec" 507037 []
 );
 =TEX
 \subsection{The SID function vcs\_aux\_initial}
@@ -6927,7 +6932,7 @@ fun €vcs_aux_initial› (st : STATEMENT) : SPEC = (
 		val w = vc_vars1;
 		val in_scope = flatten_env (!blocks);
 		val vc_vars = #vc_vars(get_local_vars(#dict in_scope));
-		val using_decs1 = #using_decs block1;
+		val using_decs1 = #using_decs(#declab block1);
 		val vc_inits1 = #var_inits block1;
 		val in_scope' = in_scope_dict(in_scope, set_cn_scope (#dict in_scope) vc_vars);
 		val wp_env :WP_ENV = {
@@ -7777,7 +7782,6 @@ fun €new_scope_dec_replace› ({label, decls} : REPLACED_BY_DECL) : unit = (
 		dec_lab = label,
 		spec_lab = #spec_lab empty_block,
 		till = #till empty_block,
-		using_decs = #using_decs empty_block,
 		var_inits = #var_inits empty_block};
 			in	blocks := new_scope_common(block :: !blocks);
 				dec_env := s_delete label (!dec_env)
