@@ -8,18 +8,18 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp032.doc   %Z% $Date: 2002/10/17 15:10:58 $ $Revision: 2.14 $ $RCSfile: imp032.doc,v $
+% imp032.doc   %Z% $Date: 2002/10/17 16:20:01 $ $Revision: 2.15 $ $RCSfile: imp032.doc,v $
 
 =TEX
-% imp032.doc   %Z% $Date: 2002/10/17 15:10:58 $ $Revision: 2.14 $ $RCSfile: imp032.doc,v $
+% imp032.doc   %Z% $Date: 2002/10/17 16:20:01 $ $Revision: 2.15 $ $RCSfile: imp032.doc,v $
 \documentstyle[hol1,11pt,TQ]{article}
 
 \TPPtitle{Implementation of the HOL Pretty Printer}
 \TPPref{DS/FMU/IED/IMP032}
-\def\SCCSissue{$Revision: 2.14 $%
+\def\SCCSissue{$Revision: 2.15 $%
 }
 \TPPissue{\SCCSissue}
-\TPPdate{\FormatDate{$Date: 2002/10/17 15:10:58 $%
+\TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $%
 }}
 \TPPproject{FST PROJECT}
 
@@ -105,7 +105,7 @@ lasp -s -u imp032.OKwords imp032.doc > zz1
 \item[9 April 1992, issue 2.3, ] Changes required by CR0016.
 \item[14 April 1992, issue 2.4 ] Changes due to CR0017.
 
-\item[\FormatDate{$Date: 2002/10/17 15:10:58 $%
+\item[\FormatDate{$Date: 2002/10/17 16:20:01 $%
 }, issue \SCCSissue~]
 	Many detailed changes to spacing, line breaking and Oppen
 		blocks used in the printing.
@@ -122,11 +122,12 @@ lasp -s -u imp032.OKwords imp032.doc > zz1
 
 \item[Issues 2.12, 2.13]
 	Fixed a mismatch of beginb/endb in treatment of HOL lets.
-%\item[\FormatDate{$Date: 2002/10/17 15:10:58 $%
+%\item[\FormatDate{$Date: 2002/10/17 16:20:01 $%
 %}, issue \SCCSissue~]
 
 \item[Issue 2.14] Copyright and banner updates for open source release.
 \item[Issue 2.15] PPHol-specific updates for open source release
+\item[Issue 2.16] Aliases are now handled here, not in DTD031.
 \end{description}
 
 %********************************************************************
@@ -268,6 +269,14 @@ new_flag {name = "€pp_show_HOL_types›",  control=pp_show_HOL_types,
 =IGN
 set_flag("pp_show_HOL_types", true);
 set_flag("pp_show_HOL_types", false);
+=TEX
+Alias processing is optional, controlled by a boolean flag;
+
+=SML
+val pp_use_alias : bool ref = ref true;
+val _ =
+new_flag {name = "€pp_use_alias›",  control=pp_use_alias,
+		check=fun_true, default=fun_true};
 =TEX
 
 Additional controls are anticipated so that finer control may be placed
@@ -644,17 +653,22 @@ it to be recognised as a $mk_const$ term.
 
 {\ftlinepenalty=9999
 =SML
-fun €HOL_do_const› (cur_env:PP_ENV) (orig:TERM) (name:string)
+fun €HOL_do_const› (cur_env:PP_ENV) (orig:TERM) (const_name:string)
 		(ty:TYPE) : PFUN_ANS = (
 let
 	val PpEnv{pe_addstring=addstring, ...} = cur_env;
 
 	fun check_type tyx : bool = (
-		case explode name
+		case explode const_name
 		of "\"" :: _ => STRING =: tyx
 		| "`" :: _ => CHAR =: tyx
-		| _ => is_all_decimal name andalso (Ó =: tyx)
+		| _ => is_all_decimal const_name andalso (Ó =: tyx)
 	);
+
+	val name = 	if !pp_use_alias
+			then	SymbolTable.get_alias(const_name, ty)
+			else	const_name;
+
 in
 	if is_char orig 
 	then
@@ -1322,7 +1336,7 @@ fun €strip_pair› (tm : TERM) : (TERM list * TERM) = (
 =TEX
 
 =SML
-fun €HOL_comma› (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
+fun €HOL_comma› (cur_env:PP_ENV) (orig:TERM) (_ : string) (ty:TYPE)
 		([a1, a2]:TERM list) : PFUN_ANS = (
 case get_fixity ","
 of Lex.Infix comma_prec =>
@@ -1627,7 +1641,7 @@ fun €do_fixity› (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 
 in
 
-fun €HOL_fun_const› (cur_env:PP_ENV) (orig:TERM) (alias:string) (name:string) (ty:TYPE)
+fun €HOL_fun_const› (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 		(args:TERM list) : PFUN_ANS = (
 	case
 		case name
@@ -1641,8 +1655,15 @@ fun €HOL_fun_const› (cur_env:PP_ENV) (orig:TERM) (alias:string) (name:string) (t
 		| "Uncurry"	=> Value HOL_uncurry
 		| ","		=> Value HOL_comma
 		| _		=> Nil
-	of Value printer => printer cur_env orig alias ty args
-	| Nil => do_fixity cur_env orig alias ty args
+	of Value printer => printer cur_env orig name ty args
+	| Nil =>  (
+		let
+			val alias = 	if !pp_use_alias
+					then	SymbolTable.get_alias(name, ty)
+					else	name;
+		in	do_fixity cur_env orig alias ty args
+		end
+	)
 );
 =TEX
 
@@ -1650,7 +1671,7 @@ fun €HOL_fun_const› (cur_env:PP_ENV) (orig:TERM) (alias:string) (name:string) (t
 fun €HOL_fun_var› (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 		(args:TERM list) : PFUN_ANS = (
 	do_fixity cur_env orig name ty args
-)
+);
 
 end;
 =TEX
