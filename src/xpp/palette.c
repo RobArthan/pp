@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.8 2002/12/12 14:06:50 rda Exp rda $ 
+ * $Id: palette.c,v 2.9 2003/03/03 15:23:41 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -176,6 +176,7 @@ static void type_char_cb(
 	Boolean editable;
 
 	if(get_map_state(text_w) != IsViewable) {
+		XBell(XtDisplay(root), 50);
 		return;
 	}
 	if( !text_w ) {
