@@ -69,14 +69,14 @@ The detailed design may be found in
 \subsubsection{Dependencies}
 The functions in this document are dependent on the Release 1 HOL System.
 \subsubsection{Deficiencies}
-\section{STRUCTURE}
+\section{STRUCTURE FOR GENERATED CONSTANTS SUPPORT}
 =SML
-structure €ZGeneratedConstants› = struct
+structure €ZGeneratedConstantsSupport› : ZGeneratedConstantsSupport = struct
 local
 	open	Unification;
 in
 =TEX
-\section{AUXILIARY FUNCTIONS}
+\subsection{Auxiliary Functions}
 
 =SML
 fun (€int_to_tyvl› : int -> TYPE list) 1 = [mk_z_var_t (string_of_int 1)]
@@ -193,7 +193,7 @@ in
 	(cnam,pnaml)
 end;
 =TEX
-\section{STORING Z CONSTANTS}
+\subsection{Storing Z Constants}
 =SML
 fun €local_const_spec› (caller:string) ((nam, var, defn) : string * TERM * TERM) : THM = (
 let	val curr_theory = get_current_theory_name();
@@ -242,7 +242,7 @@ end);
 =TEX
 
 =TEX
-\section{BINDING TYPES}
+\subsection{Binding Types}
 Everything stored in current theory for now.
 =SML
 fun €binding_type_spec› (ty : TYPE) : THM =
@@ -283,7 +283,7 @@ in
 	| _ => fail "get_binding_info" 50001 [fn () => cnam]
 end;
 =TEX
-\section{TUPLE TYPES}
+\subsection{Tuple Types}
 =SML
 fun €tuple_type_spec›(ty : TYPE) : THM =
 let 	
@@ -321,8 +321,8 @@ in
 	end		| _ => fail "get_tuple_info" 50002 [fn () => cnam]
 end;
 =TEX
-\section{RETRIEVING TYPE INFORMATION}
-\subsection{Retrieving from Some Cache theory}
+\subsection{Retrieving Type Information}
+\subsubsection{Retrieving from Some Cache theory}
 =SML
 fun €get_cached_defn› (nm:string):THM = (
 let	val cs = current_cache_theories();
@@ -333,7 +333,7 @@ in
 	aux cs
 end);
 =TEX
-\subsection{Specific Cases}
+\subsubsection{Specific Cases}
 These don't work - $µ\_±\_conv$ requires theory $combin$ as parent.
 =SML
 fun €get_constructor_defn› (ty : TYPE) : THM =
@@ -368,10 +368,20 @@ in
 end;
 =TEX
 
-\section{Z CONSTANT DEFINITION GENERATION}
+=SML
+end (* of local ... in ... *);
+end (* of structure ZGeneratedConstantsSupport *);
+=TEX
 
-\subsection{Temporary Stub for Generated Constants}
+\section{Z CONSTANT DEFINITION GENERATION}\label{ZCONST}
 
+=SML
+structure €ZGeneratedConstants› : ZGeneratedConstants = struct
+local
+	open Unification ZGeneratedConstantsSupport;
+in
+=TEX
+\subsection{Introducing Semantic Constants without Definitions}
 =SML
 fun	€types_in_zcon_spec› (ty : TYPE) : unit = 	
 	if 	is_z_given_t ty then ()
@@ -391,24 +401,8 @@ fun	€types_in_zcon_spec› (ty : TYPE) : unit =
 			end
 	else 	fail "types_in_zcon_spec" 50006 [fn () => string_of_type ty];
 =TEX
-=IGN
-fun €local_new_const› (caller : string) ((nam, ty) : string * TYPE) : unit = (
-let	val curr_theory = get_current_theory_name();
-in
-	let	val side = open_theory (current_cache_theory());
-		val side = case get_const_info nam of
-				Nil => (new_const (nam, ty);())
-				|Value _ => ();
-		val side = open_theory curr_theory;
-	in
-		()
-	end
-	handle ex => (open_theory curr_theory; reraise ex caller)
-end);
-=TEX
-
 =SML
-fun €stub_const_spec› (tm : TERM) : unit = (
+fun €general_gen_const› (tm : TERM) : unit = (
 let	val (name, ty) = (dest_const o fst o strip_app) tm;
 	val side = types_in_zcon_spec ty;
 	val side = (new_const (name, ty); ()) handle Fail _ => ();
@@ -416,13 +410,9 @@ in
 	()
 end);
 =TEX
-
-
-=TEX
 \subsection{Set Abstraction}
-
 =SML
-fun €seta_const_spec› (tm : TERM) : THM = (
+fun €seta_gen_semantic_const› (tm : TERM) : THM = (
 let	val nam = fst (dest_const (fst (dest_app tm)));
 in
 	case dest_z_name nam of
@@ -450,15 +440,14 @@ in
 			val body = mk_eq(lhs,setcomp);
 			val defn = mk_µ (pack, body);
 		in
-			local_const_spec "seta_const_spec" (nam, cvar, defn)
+			local_const_spec "seta_gen_semantic_const" (nam, cvar, defn)
 		end))
-	| _ => error "seta_const_spec" 50100 []
+	| _ => error "seta_gen_semantic_const" 50100 []
 end);
 =TEX
 \subsection{Ã Abstraction}
-
 =SML
-fun	€Ã_const_spec› (tm : TERM) : THM = (
+fun	€Ã_gen_semantic_const› (tm : TERM) : THM = (
 let	val nam = fst(dest_const (fst (dest_app tm)));
 in
 	case dest_z_name nam of
@@ -494,52 +483,111 @@ in
 			val body = mk_eq(lhs,setcomp);
 			val defn = mk_µ (pack, body);
 		in
-			local_const_spec "Ã_const_spec" (nam, cvar, defn)
+			local_const_spec "Ã_gen_semantic_const" (nam, cvar, defn)
 		end))
-	| _ => error "Ã_const_spec" 50100 []
+	| _ => error "Ã_gen_semantic_const" 50100 []
 end);
 =IGN
-fun €∏_const_spec› (tm:TERM) : THM = (
-let	val nam = fst(dest_const (fst (dest_app tm)));
+fun €∏_gen_semantic_const› (tm:TERM) : THM = (
+let	val nam = fst(dest_const(fst(dest_app (fst (dest_app tm)))));
 in
 	case dest_z_name nam of
 	("Z'∏",[[sn]], Nil) => (get_cached_defn (nam ^ "_def")
 		handle Fail _ => (
 		let	val aty = hd(snd(dest_ctype(type_of tm)));
-
-	(*		val tyvl = mk_vartype(dest_z_tuple_t aty); *)
-			val tyvl = [mk_vartype"A"];
+			val tyvl = dest_z_tuple_t aty;
 			val argty = mk_z_tuple_t(map mk_z_power_t tyvl);
-			val side = binding_type_spec(mk_z_tuple_t tyvl);
-			val (con,projs) = get_binding_info (mk_z_tuple_t tyvl);
-			val resty = mk_z_power_t bty;
+			val side = tuple_type_spec(mk_z_tuple_t tyvl);
+			val (con,projs) = get_tuple_info (mk_z_tuple_t tyvl);
+			val resty = mk_z_power_t aty;
 			val cvar = mk_var(nam, mk_≠_type (argty,resty));
 			val arg = mk_var("A",argty);
-			val t = mk_var("t",bty);
-			val conjl = map	(fn proj => mk_z_ç(	match_mk_app(proj,t),
-								match_mk_app(proj,arg))) 
-					projs;
+			val t = mk_var("t",aty);
+			val conjl = map	(fn proj => mk_z_ç(
+				match_mk_app(proj,t),
+				match_mk_app(proj,arg)))
+				projs;
 			val conj = list_mk_± conjl;
 			val setcomp = mk_set_comp (t, conj);
 			val lhs = mk_app(cvar, arg);
 			val body = mk_eq(lhs, setcomp);
 			val defn = mk_µ (arg, body);
 		in
-			local_const_spec "∏_const_spec" (nam, cvar, defn)
+			local_const_spec "∏_gen_semantic_const" (nam, cvar, defn)
 		end))
-	| _ => error "∏_const_spec" 50100 []
+	| _ => error "∏_gen_semantic_const" 50100 []
 end);
 =TEX
 \subsection{Binding Display}
 =SML
-fun €binding_const_spec› (tm : TERM) : THM = (
+fun €binding_gen_semantic_const› (tm : TERM) : THM = (
 	((binding_type_spec o hd o rev o strip_≠_type
 	o type_of o fst o strip_app) tm)
-	handle Fail _ => fail "binding_const_spec" 50111 []
+	handle Fail _ => fail "binding_gen_semantic_const" 50111 []
 );
-=IGN
-
 =TEX
+\subsection{Renaming Z Schemas}
+=SML
+fun €renameâs_gen_semantic_const› (tm : TERM) : THM = (
+let	val (s,rnl) = dest_z_renameâs tm
+		handle complaint =>
+		pass_on complaint "dest_z_renameâs" "renameâs_gen_semantic_const";
+	val nam = fst(dest_const (fst (dest_app tm)));
+in
+	get_cached_defn (nam ^ "_def")
+	handle Fail _ => (
+let
+	val tyfrom = dest_z_power_t(type_of s);
+	val tyto = dest_z_power_t(type_of tm);
+=TEX
+The following two may be redundant, but ...
+=SML
+	val side = binding_type_spec tyto;
+	val side = binding_type_spec tyfrom;
+	val from_comp = map fst (dest_z_schema_t tyfrom);
+	val to_comp = map fst (dest_z_schema_t tyto);
+	val ty_insts =(map (fn (a,b) => 
+		(mk_vartype ("'"^a),
+		mk_vartype ("'"^b))) rnl);
+	val ty_inst = inst_type ty_insts;
+	val tm_inst = inst [] ty_insts;
+	val tyfrom_generic = ty_inst (mk_ctype
+			(fst(dest_ctype tyfrom),
+			map (mk_vartype o (fn y => "'" ^ y)) from_comp));
+	val p_tyfrom_generic = mk_z_power_t tyfrom_generic;
+	val tyto_generic = ty_inst(mk_ctype
+			(fst(dest_ctype tyto),
+			map (mk_vartype o (fn y => "'" ^ y)) to_comp));
+	val p_tyto_generic = mk_z_power_t tyto_generic;
+	val const_generic = mk_var(nam,
+		mk_≠_type(p_tyfrom_generic, p_tyto_generic));
+	val argS = mk_var("S",p_tyfrom_generic);
+	val args = mk_var("s",tyto_generic);
+	val args' = mk_var("s'",tyfrom_generic);
+	val (to_con,_) = get_binding_info tyto_generic;
+	val (_,from_projs) = get_binding_info tyfrom_generic;
+	val from_projs' = map tm_inst from_projs;
+ 	val from_bits = map (fn x => mk_app(x,args')) from_projs';
+	val from_bits_assoc = combine from_comp from_bits;
+	fun aux tb = lassoc3 from_bits_assoc (lassoc1 rnl tb);
+	val to_bits = map aux to_comp;
+	val inner_rhs = list_mk_app(to_con, to_bits);
+	val inner_ç = list_mk_app(
+		mk_const("ç",list_mk_≠_type[type_of args',
+			type_of argS, BOOL]),
+		[args', argS]);	
+	val inner_∂ = mk_∂(args',
+		mk_±(inner_ç ,
+		mk_eq(args,inner_rhs)));
+	val rhs = mk_set_comp(args, inner_∂);
+	val lhs = mk_app(const_generic, argS);
+	val def_tm = mk_µ(argS, mk_eq(lhs,rhs));
+in
+	local_const_spec "renameâs_gen_semantic_const" (nam, const_generic, def_tm)
+end)
+end);
+=TEX	 
+=IGN
 \subsection{Constants for Schema Calculus}
 
 First, we will need the schema type $Z'S[d,p]$, type instantiated to $BOOL$, and the``d'' and ``p'' projections of the schema type $Z'S[d,p]$, type instantiated to $BOOL$:
@@ -753,67 +801,6 @@ in
 	(schquantm,list_mk_µ([p,q],mk_eq(lhs,rhs)))
 end;
 =TEX
-\subsection{Renaming Z Schemas}
-=SML
-fun €renameâs_const_spec› (tm : TERM) : THM = (
-let	val (s,rnl) = dest_z_renameâs tm
-		handle complaint =>
-		pass_on complaint "dest_z_renameâs" "renameâs_const_spec";
-	val nam = fst(dest_const (fst (dest_app tm)));
-in
-	get_cached_defn (nam ^ "_def")
-	handle Fail _ => (
-let
-	val tyfrom = dest_z_power_t(type_of s);
-	val tyto = dest_z_power_t(type_of tm);
-=TEX
-The following two may be redundant, but ...
-=SML
-	val side = binding_type_spec tyto;
-	val side = binding_type_spec tyfrom;
-	val from_comp = map fst (dest_z_schema_t tyfrom);
-	val to_comp = map fst (dest_z_schema_t tyto);
-	val ty_insts =(map (fn (a,b) => 
-		(mk_vartype ("'"^a),
-		mk_vartype ("'"^b))) rnl);
-	val ty_inst = inst_type ty_insts;
-	val tm_inst = inst [] ty_insts;
-	val tyfrom_generic = ty_inst (mk_ctype
-			(fst(dest_ctype tyfrom),
-			map (mk_vartype o (fn y => "'" ^ y)) from_comp));
-	val p_tyfrom_generic = mk_z_power_t tyfrom_generic;
-	val tyto_generic = ty_inst(mk_ctype
-			(fst(dest_ctype tyto),
-			map (mk_vartype o (fn y => "'" ^ y)) to_comp));
-	val p_tyto_generic = mk_z_power_t tyto_generic;
-	val const_generic = mk_var(nam,
-		mk_≠_type(p_tyfrom_generic, p_tyto_generic));
-	val argS = mk_var("S",p_tyfrom_generic);
-	val args = mk_var("s",tyto_generic);
-	val args' = mk_var("s'",tyfrom_generic);
-	val (to_con,_) = get_binding_info tyto_generic;
-	val (_,from_projs) = get_binding_info tyfrom_generic;
-	val from_projs' = map tm_inst from_projs;
- 	val from_bits = map (fn x => mk_app(x,args')) from_projs';
-	val from_bits_assoc = combine from_comp from_bits;
-	fun aux tb = lassoc3 from_bits_assoc (lassoc1 rnl tb);
-	val to_bits = map aux to_comp;
-	val inner_rhs = list_mk_app(to_con, to_bits);
-	val inner_ç = list_mk_app(
-		mk_const("ç",list_mk_≠_type[type_of args',
-			type_of argS, BOOL]),
-		[args', argS]);	
-	val inner_∂ = mk_∂(args',
-		mk_±(inner_ç ,
-		mk_eq(args,inner_rhs)));
-	val rhs = mk_set_comp(args, inner_∂);
-	val lhs = mk_app(const_generic, argS);
-	val def_tm = mk_µ(argS, mk_eq(lhs,rhs));
-in
-	local_const_spec "renameâs_const_spec" (nam, const_generic, def_tm)
-end)
-end);
-=TEX	 
 \section{END OF STRUCTURE}
 The structure is left closed.
 =SML
