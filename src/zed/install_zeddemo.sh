@@ -1,7 +1,7 @@
 #! /bin/sh
 #
 # File: install_zeddemo
-# Derived from: $Header: /home/gill/wrk/RCS/install_zeddemos.sh,v 1.1 2000/08/08 11:38:39 gill Exp $
+# Derived from: $Header: /home/rda/zed/RCS/install_zeddemo.sh,v 1.1 2000/08/09 12:05:01 gill Exp rda $
 #
 # Running this script sets up example database in the directory ./bin
 #
@@ -26,6 +26,9 @@ cd $tmp_build
 cp $doc/wrk050.doc $doc/wrk051.doc .
 cp $doc/usr011* .
 cp $doc/usr023_slides.doc .
+cp $doc/usr023S.doc .
+sieve sml <usr023S.doc >/dev/null
+mv zed_course_work.doc zed_course_solutions.doc $doc
 sieve sml < wrk051.doc
 make -f wrk051.mkf all_zed
 
