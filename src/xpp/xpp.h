@@ -31,7 +31,9 @@ typedef struct {
 	Boolean			delete_backup_after_save;
 	char			execute_new_line_mode;
 	NAT			journal_max;
-	String			command_line;}
+	String			command_line;
+	String			interrupt_prompt;
+	String			interrupt_abandon_reply;}
 		GlobalOptions;	
 /*
  * The following are the values of execute_new_line_mode:
@@ -168,6 +170,7 @@ typedef struct menu_item {
 	extern void get_pty();
 	extern Boolean application_alive();
 	extern void handle_sigs();
+	extern void interrupt_and_abandon();
 	extern void interrupt_application();
 	extern void kill_application();
 	extern void restart_application();
