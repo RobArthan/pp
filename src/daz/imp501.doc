@@ -73,6 +73,7 @@ parser.}
 of identifier recognition to make it fit for purpose and minor
 rework of delimiter identification).
 \item[Issue 1.44-1.45] IUCT WP 4 changes.
+\item[Issue 1.46] Optimising lexer.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -899,18 +900,17 @@ fun Ûfind_in_inputÝ (terml : CN_LEX_CLASS list)
 =TEX
 $read\_until$ give the interface to the previous functions.
 It extracts a single Z fragment from the input stream (say an
-auxiliary expression) and then recursively invokes lexical analysis
-of the remaining input.
+auxiliary expression) and returns the remaining input.
 =SML
 fun Ûread_untilÝ (classification : CN_LEX_CLASS,
 				cn_fun : Lex.INPUT list -> CN_TOKEN)
-			(terml : CN_LEX_CLASS list) (iplist : INPUT list)
+			(terml : CN_LEX_CLASS list) (clist : string list, iplist : INPUT list)
 			(new_socket_needed : bool)		 
-		: CN_LEX_ITEM list = (
+		: (CN_LEX_ITEM list * INPUT list) = (
 let	val (found, ih') = find_in_input terml
 			{	left_input=[],
 				left_text=[],
-				right_text=[],
+				right_text=clist,
 				right_input=iplist,
 				bracket_depth = 0};
 	val lt = skip_space_chars(#left_text ih');
@@ -932,10 +932,10 @@ let	val (found, ih') = find_in_input terml
 in
 	if found
 	then
-		left_cxt@spark_lex right_inp
+		(left_cxt, right_inp)
 
 	else
-		left_cxt
+		(left_cxt, [])
 end)
 =TEX
 $spark\_xtext$ acts a dispatcher for the earlier functions which apply when
@@ -952,24 +952,40 @@ and Ûspark_xtextÝ (slist : string list) (rest : INPUT list) : CN_LEX_ITEM list  
 			in case (class, lassoc5 z_delimiters class) of
 				(LCLChevron, Value terml) => (
 					res
-					::(read_until (LCKSlot, CNKSlot) terml
-						(Lex.Text (implode srest)::rest)
-						true	)
+					::(let val (read, rrest) = read_until
+						(LCKSlot, CNKSlot) terml
+						(srest, rest)
+						true;
+					in
+						read @ spark_lex rrest
+					end)
 				)|(LCLSqBrack, Value terml) => (
 					res
-					::(read_until (LCZ, CNZ o ZLex.z_lex)terml
-						(Lex.Text (implode srest)::rest)
-						true	)
+					::(let val (read, rrest) = read_until
+						(LCZ, CNZ o ZLex.z_lex) terml
+						(srest, rest)
+						true;
+					in
+						read @ spark_lex rrest
+					end)
 				)|(LCLBrace, Value terml) => (
 					res
-					::(read_until (LCZ, CNZ o ZLex.z_lex)terml
-						(Lex.Text (implode srest)::rest)
-						true	)
+					::(let val (read, rrest) = read_until
+						(LCZ, CNZ o ZLex.z_lex) terml
+						(srest, rest)
+						true;
+					in
+						read @ spark_lex rrest
+					end)
 				)|(_, Value terml) => (
 					res
-					::(read_until (LCZ, CNZ o ZLex.z_lex)terml
-						(Lex.Text (implode srest)::rest)
-						false	)
+					::(let val (read, rrest) = read_until
+						(LCZ, CNZ o ZLex.z_lex) terml
+						(srest, rest)
+						false;
+					in
+						read @ spark_lex rrest
+					end)
 				)|(LCCharacterLiteral, Nil) => (
 					(class, (CNString o implode o tl
 							o rev o tl o explode) s)
