@@ -237,7 +237,7 @@ static MenuItem cmd_menu_items[] = {
     MENU_ITEM_SEPARATOR,
     { "Abandon", &xmPushButtonGadgetClass, 'A', "Ctrl<Key>a", "Ctrl-A",
         cmd_menu_cb, (XtPointer)CMD_MENU_ABANDON, (MenuItem *)NULL, False },
-    { "Interrupt", &xmPushButtonGadgetClass, 'I', "Ctrl<Key>c", "Ctrl-C",
+    { "Interrupt", &xmPushButtonGadgetClass, 'I', NULL, NULL,
         cmd_menu_cb, (XtPointer)CMD_MENU_INTERRUPT, (MenuItem *)NULL, False },
     MENU_ITEM_SEPARATOR,
     { "Kill", &xmPushButtonGadgetClass, 'K', NULL, NULL,
