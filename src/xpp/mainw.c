@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.7 2000/05/25 08:21:10 rda Exp rda $
+ * $Id: mainw.c,v 2.8 2000/06/16 10:12:42 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -726,7 +726,10 @@ static void file_menu_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
 			if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 			} else if(open_file(script, fname)) {
-				if(!oldfname || !*oldfname || *oldfname == '*') {
+				if(!oldfname ||
+				   !*oldfname ||
+				   *oldfname == '*' ||
+				   !strcmp(fname, oldfname)) {
 					if(oldfname) {XtFree(oldfname);}
 				} else {
 					setup_reopen_menu(oldfname);
@@ -847,7 +850,6 @@ static void reopen_cb(Widget w, NAT i, XmAnyCallbackStruct *cbs)
 	char *oldfname, *fname;
 	oldfname = XmTextGetString(namestring);
 	fname = reopen_menu_items[i].label;
-printf("fname = %s\n", fname);
 	if(!changed || yes_no_dialog(root, changed_message)) {
 		if(open_file(script, fname)) {
 			if(!oldfname || !*oldfname || *oldfname == '*') {
