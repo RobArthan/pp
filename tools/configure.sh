@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.36 2005/02/27 15:18:41 rda Exp rda $
+# $Id: configure.sh,v 1.37 2005/02/27 15:27:04 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -79,9 +79,7 @@ warn(){
 }
 #
 check_bin(){
-	if	! which $1 >/dev/null 2>&1
-	then	warn $2
-	fi
+	which $1 >/dev/null 2>&1 || warn $2
 }
 #
 # Set locale to C (i.e., turn off all localisations so that things text-processing is 8-bit clean
