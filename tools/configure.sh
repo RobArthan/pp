@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.6 2002/10/21 13:37:24 rda Exp rda $
+# $Id: configure.sh,v 1.7 2002/10/22 15:10:24 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -181,6 +181,7 @@ then	if	[ ! -f $PPPOLYDBASE ]
 	fi
 	export_it PPPOLYDBASE
 fi
+out "echo \"Moving to directory $CWD/src\""
 out "cd $CWD/src"
 out 'OLD_PATH=$PATH'
 out "PATH=.:"'$PATH'
@@ -192,20 +193,25 @@ out "export PATH"
 # 
 # Output the make command to build the packages
 #
-out "make -f install.mkf $ACTTARGETS"
+out "echo \"Installing the packages: $ACTTARGETS\""
+out "echo \"See $CWD/install.log for messages\""
+out "make -f install.mkf $ACTTARGETS >$CWD/install.log 2>&1"
 #
 # Now go to the target directory, build the demos (and freeze the
 # databases, en passant).
 #
+out "echo \"Moving to directory $PPTARGETDIR for post-installation set-up\""
+out "echo \"See $PPTARGETDIR/<package>.log for messages\""
 out "cd $PPTARGETDIR"
 out "PATH=$PPTARGETDIR/bin:"'$OLD_PATH'
 out "export PATH"
 if	[ "$hol" = y ]
-then	out "./install_holdemo >holdemo.log 2>&1"
+then	out "./install_holdemo >hol.log 2>&1"
 fi
 if	[ "$zed" = y ]
-then	out "./install_zeddemo >zeddemo.log 2>&1"
+then	out "./install_zeddemo >zed.log 2>&1"
 fi
 if	[ "$daz" = y -a $PPCOMPILER=POLYML ]
-then	out '( pp_make_database -f -p daz junk$$; rm junk$$.polydb ) >dazinit.log 2>&1'
+then	out '( pp_make_database -f -p daz junk$$; rm junk$$.polydb ) >daz.log 2>&1'
 fi
+out "echo Done"
