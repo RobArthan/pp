@@ -74,6 +74,7 @@ Made implementation of length SML97-compatible.
 \item [Issues 2.14-2.17 (6th March 1999)] Added $Integer$ structure.
 \item [Issue 2.18 (16th July 2001)] Added $DynamicArray$ structure.
 \item [Issue 2.19 (30th July 2001)] New slicker hash function in $EfficientDictionary$ structure.
+\item [Issue 2.20 (3rd August 2001)] Even slicker hash function!
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -1025,12 +1026,6 @@ using the hashing approach rather than binary search trees with
 one node per dictionary entry is to avoid string comparisons and to avoid partially
 sorted input data causing the trees to degenerate into lists.
 
-(For a typical access in a dictionary with $N$ entries,
-with $N >> R$,
-we are performing approximately $\log R$ integer comparisons plus
-$N / 2 R$ string equality tests, rather than $\log N$
-string comparisons. 
-
 The code for the more efficient dictionaries is quite
 straightforward except, perhaps for the hashing function.
 We use the prefix $e\_$ to distinguish
@@ -1048,50 +1043,123 @@ abstype 'a €E_DICT›	=	€Leaf›
 with
 =TEX
 The hashing function, $hash$ is local to the abstract
-data type. The function chosen treats each string of
-bytes as a binary number with the bits in reverse order.
-Since we do not wish to do multiple precision arithmetic here,
-we reduce the number modulo $n$ for $n$ a prime number close
-to a power of 2.
-For $n$, we use $2^{22}-3$, which is the
-largest prime number that can safely be multiplied by 256
-on a system where the maximum integer is $2^{30}-1$.
-This will work for Standard ML of New Jersey and any other
-reasonable ML compiler and is believed to give reasonably balanced
-trees for most likely input data.
+data type. The basic method is what Knuth \cite[pp. 508ff.]{Knuth73}
+calls the division method: one treats the string value as a number
+and reduces it modulo $N$ for suitable $N$. However, on its own this
+gives bad results on partially sorted data (runs in the data will give
+runs in the hashed key values). To remedy this, we first pass each byte of
+the string through a fixed random permutation of the 256 byte values (see assumptions
+below). We also take the bytes of the string from right-to-left which will give
+better results with input of the form ``XXX1'', ``XXX2'' \ldots.
+Experimentation shows that this gives a very worthwhile improvement in
+the balance of the trees.
 
-To handle the bit reversal efficiently we use a lookup vector
-indexed by the bytes of the string being hashed.
+The chosen value $N$ is the prime number $2^{22}-3$. This has some pleasant
+properties: firstly, it is the largest prime number, $p$, such that $256\times p < 2^{30}-1$
+(which is the maximum integer on Standard ML of New Jersey, and is certainly representable
+as an integer on other common ML implementations). This permits a simple byte-by-byte
+implementation of the hash function. This choice of $N$ also seems to give
+a very good spread of hash values in testing on large data sets.
+
+However, the simple implementation involves some avoidable overhead in terms of
+recursive function calls and arithmetic operations (one each per byte of:
+recursive call, multiplication, addition and modulo).
+The coding below reduces this to one recursive call, one multiplication, one modulo
+and three additions for every three bytes and this seems to result in a 10\% or
+more improvement in average access times on large tables .
+This reduction is achieved by precomputing
+tables giving the values $2^{8}\times r$ and
+$2^{16}\times r$ for each entry $r$ in the table giving the random permutation.
+This means that the string can be treated as a base $2^24$ number
+with each three bytes supplying one base $2^24$ digit in three table lookups and two additions.
+The hash value being accumulated is in the range $0 \ldots 2^{22}-4$.
+Multiplying such a value by $2^{24}$ could clearly overflow on a system such as Standard ML of
+New Jersey, but as $2^24$ is congruent to $12$ modulo $2^{22}-3$, we can multiply by $12$
+instead and this will not overflow, even when we add in the next base $2^24$ digit.
+As a final improvement, the {\tt rem} function in Standard ML is rumoured
+to be more efficient than {\tt mod} on may processors --- as all the arithmetic
+is with non-negative numbers, we use {\tt rem} in place of {\tt mod} (which
+seemed to make a tiny improvement on an Intel Pentium processor).
+
+The performance of the efficient dictionaries has been tested on tables
+with 4,000 to 40,000 entries comprising a variety of near sorted data and
+on real-life data extracted from the {\ProductZ} system.
+The current hash function gives a large improvement in the average access
+compared with earlier versions (which used a much smaller prime number resulting
+in decay into linear search on quite small data sets).
+On all the data sets tested, the current hash function gives very few
+collisions (e.g., 2 or 3 in tables with 4,000 entries and less than 100
+in a table with just over 18,000 real-life keys).
+The optimisations to the hash function result in a more than 10\% improvement
+on average access time on all data sets tested.
+
+The following assumptions about the compiler and the basis library are
+recorded for future reference. The code below may overflow or give bad
+results if these assumptions are not satisfied.
+\begin{itemize}
+\item The maximum positive integer must be at least $2^{30}-1$.
+\item {\it Char.ord} must not return negative values (this is implicit in
+the basis library documentation which says that the values range from $0$
+up to {\it maxOrd}).
+\item {\it maxOrd} must be at most $255$.
+\end{itemize}
+
+
 =SML
 local
 	open SimpleDictionary;
-	val bit_rev_table = (
-		PPVector.vector
-		let
-			fun bit_rev (nbits : int) (what : int) : int = (
-				if	what = 0
-				then	what
-				else	let	fun two_to_the 0 = 1
-						|   two_to_the n = 2 * two_to_the (n-1);
-						val this_power = two_to_the (nbits-1)
-					in	(if what mod 2 = 0 then 0 else this_power) +
-						bit_rev (nbits-1) (what div 2)
-					end
-			);
-		in	map (bit_rev 8) (interval 0 255)
-		end
+	val €prime› = 4194301;
+	val €H› = 256;
+	val €Hsq› = H*H;
+	val €Hcubed_mod_prime› = (H*H*H) mod prime (* 12 *);
+	val €permutation› =
+	[93,84,24,165,149,68,97,20,37,187,222,52,96,106,77,173,53,138,116,143,6,124,
+	 88,101,232,123,239,131,110,213,61,141,230,155,47,31,95,89,14,172,188,74,157,
+	 5,180,9,58,177,32,152,75,113,185,78,220,191,231,50,128,179,112,91,254,161,
+	 71,156,125,167,15,92,201,190,10,218,164,51,133,145,108,57,82,33,200,66,229,
+	 181,8,219,80,174,224,183,150,199,40,208,34,105,63,26,109,7,134,39,104,238,
+	 194,184,62,94,210,178,46,147,41,67,246,211,252,79,43,221,182,103,197,235,
+	 237,119,171,18,148,2,243,76,240,195,250,83,30,192,198,170,111,227,35,19,132,
+	 204,244,118,255,140,64,17,4,29,225,12,212,28,163,73,146,196,169,206,27,23,
+	 245,117,217,203,48,242,216,205,159,86,228,249,45,99,215,22,54,135,214,241,
+	 49,42,186,100,56,36,102,247,44,85,69,114,160,81,175,136,233,162,168,126,16,
+	 13,25,202,90,209,115,60,87,153,130,122,11,127,158,248,1,144,236,166,226,223,
+	 176,70,207,72,253,121,189,3,142,137,107,98,0,154,38,234,59,139,55,120,129,
+	 65,193,251,151,21];
+	val €table0› = PPVector.vector (map (fn i => Hsq * i) permutation);
+	val €table1› = PPVector.vector (map (fn i => H * i) permutation);
+	val €table2› = PPVector.vector permutation;
+	fun €get_byte0› (s, i) = (
+		PPVector.sub(table0, SML97BasisLibrary.Char.ord(String.sub(s, i)))
 	);
-	val prime = 4194301;
-	val H = 256;
-	fun get_byte (s, i) = (
-		PPVector.sub(bit_rev_table, SML97BasisLibrary.Char.ord(String.sub(s, i)))
+	fun €get_byte1› (s, i) = (
+		PPVector.sub(table1, SML97BasisLibrary.Char.ord(String.sub(s, i)))
 	);
-	fun hash (s : string) : int = (
+	fun €get_byte2› (s, i) = (
+		PPVector.sub(table2, SML97BasisLibrary.Char.ord(String.sub(s, i)))
+	);
+	fun €hash› ("" : string) : int = 0
+	|   hash (s : string) : int = (
 		let	val len = size s;
 			fun aux acc i = (
-				if	i < 0
-				then	acc
-				else	aux ((acc * H + get_byte(s, i)) mod prime) (i-1)
+				case i of
+					0 => (
+					(acc * H + get_byte2(s, 0)) mod prime
+				) |	1 => (
+					(((acc * Hsq + get_byte1(s, 1)) mod prime)
+						+ get_byte2(s, 0)) mod prime
+				) |	_ => (
+					let	val w = get_byte0(s, i) +
+							get_byte1(s, i-1) +
+							get_byte2(s, i-2);
+						val acc' = (Hcubed_mod_prime * acc + w)
+							mod prime;
+						val i' = i - 3;
+					in	if	i' < 0
+						then	acc
+						else	aux acc' (i-3)
+					end
+				)
 			);
 		in	aux 0 (len-1)
 		end
@@ -1203,6 +1271,44 @@ two dictionaries have elements in common.
 	fun €e_merge› (dict1 : 'a E_DICT) (dict2 : 'a E_DICT) : 'a E_DICT = (
 		list_e_merge dict1 (e_flatten dict2)
 	);
+=TEX
+The following function may be useful to anyone wanting to do further work
+on the performance of the efficient dictionaries. It is commented out here.
+=SML
+(*
+	fun e_stats (dict : 'a E_DICT) : 
+		{height : int, nentries : int, nnodes : int, sumweights : int} = (
+		let	fun aux 
+			{height, nentries, nnodes, sumweights}
+			h Leaf = (
+				{height = if h < height then height else h,
+				 nentries = nentries,
+				 nnodes = nnodes,
+				 sumweights = sumweights}
+			) |   aux
+			{height, nentries, nnodes, sumweights}
+		  	h (Node(k', pairs, l, r)) = (
+				let	val npairs = length pairs;
+					val acc =
+						{height = height,
+						 nentries = nentries + npairs,
+						 nnodes = nnodes + 1,
+						 sumweights = sumweights + (h+1)*npairs};
+					val acc' = aux acc (h+1) l
+				in	aux acc' (h+1) r
+				end
+			);
+		in	aux
+			{height = 0,
+			 nentries = 0,
+			 nnodes = 0,
+			 sumweights = 0}
+			0 dict 
+		end
+	);
+*)
+=SML
+(end of commented out code).
 =TEX
 The final item declared in the abstract data type for
 efficient dictionaries is an empty dictionary, which
