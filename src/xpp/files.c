@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.25 2003/10/29 14:15:51 rda Exp rda $
+ * $Id: files.c,v 2.26 2004/02/08 11:17:28 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -695,10 +695,8 @@ static Boolean store_file_contents(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * save_file: store contents of a text widget into a named file
- * which will presumably already exist and may be overwritten
- * without confirmation.
- * Implements `save' as opposed to `save as' in a file menu
+ * check_file_status: check current status of file against last
+ * time we took it.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 file_status check_file_status(char *name)
@@ -741,9 +739,8 @@ Boolean save_file(
 	char *buf;
 	Boolean success;
 	static struct stat status;
-	struct stat new_status;
 	char *msg;
-	if(access(name, W_OK) != 0) {
+	if(current_file_status != NULL && access(name, W_OK) != 0) {
 		file_error_dialog(text, cant_write_message, name);
 		return False;
 	}
