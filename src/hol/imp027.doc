@@ -86,6 +86,9 @@ mostly proof context name changes.
 The $?\_reorder\_conv$ and $Ì\_varstruct\_conv$ functions are improved to notice ``no change''.
 \item[Issue 1.25 (3rd July 1992)]
 Changed some uses of $subst$ to $var\_subst$.
+\item [Issue \SCCSversion\ (\FormatDate{$Date$%
+})] Added forward chaining rules and minor mods to matching modus
+ponens (to accomodate changes to the simple versions).
 \end{description}
 \subsection{Changes Forecast}
 More detailed descriptions of the tricky algorithms.
@@ -999,9 +1002,124 @@ let	val thm1' = all_µ_uncurry_rule thm1;
 in
 	(fn (thm2 : THM) =>
 	r' thm2
-	handle complaint =>
-	thm_fail "´_match_mp_rule1" 7044 [thm1, thm2])
+	handle complaint => reraise complaint "´_match_mp_rule1")
 end);
+=TEX
+=SML
+fun Ûforward_chain_ruleÝ (imps : THM list) (ants : THM list) : THM list = (
+let	fun aux1 acc _ [] = (acc
+	) | aux1 acc (i :: il) (al as (a :: _)) = (
+		(aux1 ((´_match_mp_rule1 i a)::acc) il al)
+		handle Fail _ => aux1 acc il al
+	) | aux1 acc [] (_ :: al) = (aux1 acc imps al
+	);
+in	aux1 [] imps ants
+end);
+val Ûfc_ruleÝ : THM list -> THM list -> THM list = forward_chain_rule;
+=TEX
+=SML
+fun CHANGED_CAN (can : CANON) : CANON = (fn thm =>
+	case can thm of
+		[thm1] => (
+			if	dest_thm thm ~=# dest_thm thm1
+			then	fail_canon thm
+			else	[thm1]
+	) |	[]	=> []
+	|	more	=> more
+);
+=TEX
+Note that
+=INLINEFT
+µ_rewrite_canon
+=TEX
+\ is not available when this document is compiled so we cannot
+use it in $cans$ below.
+=SML
+fun Ûforward_chain_canonÝ (thm : THM) : THM list = (
+let	fun aux_canon thm = (
+	let	val st = current_ad_st_conv();
+		val sc = current_ad_sc_conv();
+		fun fc_disch_rule tm th = (
+			let	val th1 = disch_rule tm th;
+			in	(conv_rule (LEFT_C st) th1)
+				handle Fail _ => th1
+			end	handle Fail _ => th
+		);
+		fun µ_fc_canon th = (dest_µ(concl th); [all_µ_elim th]);
+		fun ±_fc_canon th = (
+			let	val (ant, _) = dest_´ (concl th);
+				val (a, _) = dest_± ant;
+				val th1 = ±_´_rule th;
+				val th2 = undisch_rule th1;
+			in	map (fc_disch_rule a) (aux_canon th2)
+			end
+		);
+		fun ²_fc_canon th = (
+			let	val (ant, _) = dest_´ (concl th);
+				val (a, b) = dest_² ant;
+				val th1 = ²_left_intro a (asm_rule b);
+				val th2 = ²_right_intro b (asm_rule a);
+				val th3 = disch_rule b (´_elim th th1);
+				val th4 = disch_rule a (´_elim th th2);
+			in	[th3, th4]
+			end
+		);
+		fun ¶_fc_canon th = (
+			let	val c = concl th;
+				val (ant, _) = dest_´ c;
+				val (x, b) = dest_¶ ant;
+				val x' = varstruct_variant
+					(flat(map frees(c::asms th))) x;
+				val b' = subst[(x',x)]b;
+				val th1 = ¶_intro ant (asm_rule b');
+				val th2 = disch_rule b' (´_elim th th1);
+			in	[th2]
+			end
+		);
+		fun ´_fc_canon th = (
+			let	val (ant, _) = dest_´ (concl th);
+			in	case dest_term ant of
+					DT => [´_elim th t_thm]
+				|	DF => []
+				|	_	=>
+					if (is_³ ant
+					andalso dest_³ ant term_mem asms th)
+					orelse (mk_³ ant term_mem asms th)
+					then	[]
+					else
+			let
+				val th1 = undisch_rule th;
+			in	map (fc_disch_rule ant) (aux_canon th1)
+			end
+			end
+		);
+		fun ¤_fc_canon th =[fst(¤_elim th)];
+		fun sc_canon th = [conv_rule sc th];
+		fun other_canon th = (
+			let	val c = concl th;
+			in	case dest_term c of
+				D´ _ => fail_canon th
+			|	DF => fail_canon th
+			|	DT => []
+			|	_ =>
+				let	val ³_c = mk_³ c;
+					val th1 = ³_elim mk_f (asm_rule ³_c) th;
+					val th2 = ´_intro ³_c th1;
+				in	[th2]
+				end
+			end
+		);
+	in	REPEAT_CAN(CHANGED_CAN(FIRST_CAN[
+			±_rewrite_canon, µ_fc_canon, ±_fc_canon,
+			²_fc_canon, ¶_fc_canon,
+			´_fc_canon,
+			¤_fc_canon, sc_canon, other_canon])) thm
+	end
+);
+in	(REWRITE_CAN aux_canon) thm
+end
+);
+val Ûfc_canonÝ = forward_chain_canon;
 =TEX
 \subsection{Concerning ¤}
 =SML
@@ -1022,8 +1140,7 @@ let	val thm1' = all_µ_uncurry_rule thm1;
 in
 	(fn (thm2 : THM) =>
 	r' thm2
-	handle complaint =>
-	thm_fail "¤_match_mp_rule1" 7044 [thm1, thm2])
+	handle complaint => reraise complaint "¤_match_mp_rule1")
 end);
 =TEX
 \subsection{Concerning =}
