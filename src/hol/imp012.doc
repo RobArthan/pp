@@ -6,10 +6,10 @@
 \TPPtitle{Implementation for the Interface to the Abstract Data Type $THM$}  %% Mandatory field
 \def\TPPheadtitle{Implementation for the \cr Interface to the Abstract Data Type $THM$}
 \TPPref{DS/FMU/IED/IMP012}  %% Mandatory field
-\def\SCCSversion{$Revision$
+\def\SCCSversion{$Revision: 2.13 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date$ %
+\TPPdate{\FormatDate{$Date: 1993/12/09 11:12:57 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -73,6 +73,8 @@ $delete\_const$ will now delete constant at head of application.
 Added type, term and theorem compactification.
 \item [Issue 2.13 (8th December 1993)]
 Added $get\_theory\_names$.
+\item [Issue 2.14 (9th August 2001)]
+Implemented caching for {\it get\_defn}, {\it get\_thm} and {\it get\_axiom}.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -877,8 +879,13 @@ handle complaint => pass_on complaint "icl'new_spec" "new_spec");
 \subsection{Theory Access Functions}
 
 \subsubsection{Accessing Individual Theorems}
+The functions in this section become time-critical in applications like
+{\ProductZ} where definition and axiom schemata are implemented by
+demand-driven introduction of types and constants. To make them efficient
+the definitions, theorems and axioms are cached. If the theorem being sought
+is not in the cache, the following uncached versions of the functions are used.
 =SML
-fun Ûget_defnÝ (thynm : string) ( key : string) : THM = (
+fun Ûuncached_get_defnÝ (thynm : string) ( key : string) : THM = (
 let	val {defn_dict = defn_dict,...} = icl'get_theory thynm
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_defn";
@@ -897,7 +904,7 @@ in
 end);
 =TEX
 =SML
-fun Ûget_axiomÝ (thynm : string) ( key : string) : THM = (
+fun Ûuncached_get_axiomÝ (thynm : string) ( key : string) : THM = (
 let	val {axiom_dict = axiom_dict,...} = icl'get_theory thynm
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_axiom";
@@ -916,7 +923,7 @@ in
 end);
 =TEX
 =SML
-fun Ûget_thmÝ (thynm : string) ( key : string) : THM = (
+fun Ûuncached_get_thmÝ (thynm : string) ( key : string) : THM = (
 let	val {thm_dict = thm_dict,...} = icl'get_theory thynm
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_thm";
@@ -933,6 +940,87 @@ in
 	Value thm => thm
 	| _ => fail "get_thm" 12006 [(fn () => thynm),(fn () => key)]
 end);
+=TEX
+Now for the caching. Because the signatures of the three {\it get\_XXX} functions
+are the same, we can do most of the work generically. The caches are efficient
+dictionaries indexed by the definition, theorem or axiom keys whose entries
+are simple look-up tables mapping theory names to the definitions, theorems
+or axioms in question. In typical use, it will be rare for the same key to
+be used for a definition (or whatever) in two different theories, so the simple
+look-up tables will usually have just one entry.
+=SML
+type ÛTHM_CACHEÝ = THM S_DICT E_DICT;
+type ÛGETTERÝ = string -> string -> THM;
+=TEX
+{\it cached\_get} does the look-up. It is parameterised by a {\it GETTER}, which
+will be the uncached version of the look-up function. The uncached getter is
+intended to have made all necessary checks on the validity of the theorem it returns.
+However, the cached copies of the theorems could be invalid because of an
+unnotified change of theory, or because a constant or a type has been deleted. In this
+case, the entry for this key is cleared from the cache and we try again --- the
+uncached getter function will then either fail or, in the case of a definition that
+has been deleted and then remade, fix the problem.
+This case is expected to be rare, so we do not optimise for it.
+=SML
+fun Ûcached_getÝ (ug : GETTER) (cache : THM_CACHE ref) : GETTER = (fn thynm => fn key =>
+	let	fun cache_it sd = (
+			let	val thm = ug thynm key;
+				val sd' = (thynm, thm) :: sd;
+				val cache' = e_enter key sd' (!cache);
+			in	cache := cache'; thm
+			end
+		);
+		fun uncache_and_retry() = (
+			cache := e_delete key (!cache);
+			cached_get ug cache thynm key 
+		);
+	in	case e_lookup key (!cache) of
+			Value sd => (
+				case s_lookup thynm sd of
+					Nil => cache_it sd
+				|	Value thm =>
+						if	valid_thm thm
+						then	thm
+						else	uncache_and_retry()
+		) |	Nil => cache_it []
+	end
+);
+=TEX
+The cache is rebuilt when an {\it open\_theory} is notified.
+Based on the (currently true) assumption that {\it valid\_thm} is a fast function
+the cache is rebuilt simply by removing theorems that are no longer valid.
+Note that according to the above algorithm, this is not functionally necessary,
+but it will reclaim space.
+=SML
+fun Ûrebuild_cacheÝ (cache : THM_CACHE) : THM_CACHE = (
+	let	val entries = e_flatten cache;
+		val unwanted1 = not o valid_thm o snd;
+		val unwanted2 = is_nil o snd;
+		val entries' = map (fn (k, e) => (k, e drop unwanted1)) entries drop unwanted2;
+	in	list_e_merge initial_e_dict entries'
+	end
+);
+=TEX
+Now we can define the caches and the notify function:
+=SML
+val Ûget_defn_cacheÝ : THM_CACHE ref = ref initial_e_dict;
+val Ûget_axiom_cacheÝ : THM_CACHE ref = ref initial_e_dict;
+val Ûget_thm_cacheÝ : THM_CACHE ref = ref initial_e_dict;
+=TEX
+=SML
+fun Ûrebuild_caches_on_open_theoryÝ (OpenTheory _) = (
+	get_defn_cache := rebuild_cache (!get_defn_cache);
+	get_axiom_cache := rebuild_cache (!get_axiom_cache);
+	get_thm_cache := rebuild_cache (!get_thm_cache)
+) | rebuild_caches_on_open_theory _ = ();
+
+val _ = on_kernel_state_change rebuild_caches_on_open_theory;
+=TEX
+Finally, we can define the interface functions:
+=SML
+val Ûget_defnÝ : string -> string -> THM = cached_get uncached_get_defn get_defn_cache;
+val Ûget_axiomÝ : string -> string -> THM = cached_get uncached_get_axiom get_axiom_cache;
+val Ûget_thmÝ : string -> string -> THM = cached_get uncached_get_thm get_thm_cache;
 =TEX
 \subsubsection{Theory Names and Ancestry}
 =SML
