@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.5 1999/04/20 13:15:10 xpp Exp rda $
+ * $Id: pterm.c,v 2.6 1999/05/04 18:18:01 rda Rel rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -119,8 +119,10 @@ void get_pty()
 	struct termios tio;
 
 #ifndef LINUX
+/* On non-Linux (i.e., SVR4) we use the grantpt/lockpt interfaces */
+/* and do the termio set-up in the child process */
 	if ((control_fd = open("/dev/ptmx", O_RDWR)) < 0) {
-		msg("system error", "no pseudo-terminal devices available");
+		msg("system error", "no pseudo-terminal devices available (1)");
 		perror("xpp");
 		exit(1);
 	};
@@ -128,11 +130,13 @@ void get_pty()
 	||	unlockpt(control_fd) < 0
 	||	(slavename = ptsname(control_fd)) == NULL
 	||	(slave_fd = open(slavename, O_RDWR)) < 0 ) {
-		msg("system error", "cannot access pseudo-terminal slave device");
+		msg("system error", "cannot access pseudo-terminal slave device (2)");
 		perror("xpp");
 		exit(2);
 	};
 #else 
+/* On Linux we have to look for a pseudo-terminal ourselves */
+/* We do the termio set-up prior to the fork. */
 	char line[32];
 	for(control_fd = -1, c = 'p'; control_fd < 0 && c <= 's'; c++) {
 		for(i = 0; control_fd < 0 && i < 16; i++) {
@@ -152,13 +156,13 @@ void get_pty()
 	}
 
 	if( control_fd < 0) {
-		msg("system error", "no pseudo-terminal devices available");
+		msg("system error", "no pseudo-terminal devices available (1)");
 		perror("xpp");
 		exit(1);
 	}
 
 	if(ioctl(slave_fd, TCGETS, &tio) < 0 ) {
-		msg("system error", "ioctl on slave fd failed");
+		msg("system error", "ioctl on slave fd failed (11)");
 		perror("xpp");
 		exit(11);
 	}
@@ -174,9 +178,9 @@ void get_pty()
 	tio.c_oflag |= OCRNL;
 	tio.c_cc[VINTR] = CINTR;
 	if(ioctl(slave_fd, TCSETS, &tio) < 0 ) {
-		msg("system error", "ioctl on slave fd failed");
+		msg("system error", "ioctl on slave fd failed (12)");
 		perror("xpp");
-		exit(11);
+		exit(12);
 	}
 #endif
 
@@ -231,11 +235,14 @@ void get_pty()
 		};
 		read(STDIN, &buf, 1);		/* Wait until told */
 #ifndef LINUX
-		if(ioctl(STDIN, TCGETS, &tio) < 0 ) {
+		if(	ioctl(STDIN, I_PUSH, "ptem") < 0
+		||	ioctl(STDIN, I_PUSH, "ldterm") < 0 
+		||	ioctl(STDIN, I_PUSH, "ttcompat") < 0
+		||	ioctl(STDIN, TCGETS, &tio) < 0 ) {
 			msg("system error", "ioctl on slave fd failed");
 			perror("xpp");
-			exit(11);
-		}
+			exit(10);
+		};
 		tio.c_lflag |= ISIG;
 		tio.c_lflag |= ICANON;
 		tio.c_lflag &= ~ECHO;
@@ -247,14 +254,11 @@ void get_pty()
 		tio.c_oflag &= ~XTABS;
 		tio.c_oflag |= OCRNL;
 		tio.c_cc[VINTR] = CINTR;
-		if(	ioctl(STDIN, I_PUSH, "ptem") < 0
-		||	ioctl(STDIN, I_PUSH, "ldterm") < 0 
-		||	ioctl(STDIN, I_PUSH, "ttcompat") < 0
-		||	ioctl(STDIN, TCGETS, &tio) < 0 ) {
+		if(ioctl(STDIN, TCSETS, &tio) < 0 ) {
 			msg("system error", "ioctl on slave fd failed");
 			perror("xpp");
-			exit(10);
-		};
+			exit(11);
+		}
 #endif
 
 		arglist = get_arg_list();
