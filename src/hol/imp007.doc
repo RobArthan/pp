@@ -78,6 +78,10 @@ $prove\_asm\_rule$ doesn't worry about missing assumptions.
 Corrected $\_match$ functions.
 \item [Issue 1.13]
 Corrected a use of $all\_simple\_É\_elim$.
+\item [Issue 1.14]
+Corrected $apply\_matches\_rule$.
+Corrected various error messages.
+Corrected $å\_intro$ and $å\_elim$.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -944,6 +948,7 @@ in
 end
 handle complaint =>
 list_divert complaint "c_contr_rule" [
+	("ä_elim", 7001, []),
 	("simple_É_elim", 7002, []),
 	("disch_rule", 7003, [])]
 );
@@ -963,6 +968,11 @@ local
 in
 fun ‚å_elim· (tm : TERM) (thm1 : THM) (thm2 : THM) : THM = (
 let
+	val sideeffect = if type_of tm <> BOOL
+		then fail "å_elim" 7002 []
+		else ();
+in
+(let
 	val s2 = simple_É_elim (concl thm1) s1;
 	val s3 = Ç_mp_rule s2 thm2;
 	val s4 = ä_elim s3 thm1;
@@ -971,11 +981,23 @@ in
 	(prof "å_elim";
 	s5)
 end
+handle (Fail _) =>
+let
+	val s2 = simple_É_elim (concl thm2) s1;
+	val s3 = Ç_mp_rule s2 thm1;
+	val s4 = ä_elim s3 thm2;
+	val s5 = simple_É_elim tm s4
+in
+	(prof "å_elim";
+	s5)
+end
 handle complaint =>
 list_divert complaint "å_elim" [
-	("Ç_mp_elim",7060,[]),
-	("simple_É_elim",7002,[])
+	("Ç_mp_rule",7004,[]),
+	("ä_elim",7004,[])
 	]
+)
+end
 );
 end;
 =TEX
@@ -1009,17 +1031,30 @@ fun ‚å_intro· (t : TERM) (thm1 : THM) (thm2 : THM) : THM = (
 let
 	val mf_s1 = ä_intro t thm1;
 	val mf_s2 = ä_intro t thm2;
+in
+((let
 	val mf_s3 = simple_list_É_elim [t, concl thm1] s13;
 	val mf_s4 = ä_elim mf_s3 mf_s1;
 	val mf_s5 = ä_elim mf_s4 mf_s2
 in
 	(prof "å_intro";
 	mf_s5)
+end)
+handle (Fail _) => 
+(let
+	val mf_s3 = simple_list_É_elim [t, concl thm2] s13;
+	val mf_s4 = ä_elim mf_s3 mf_s2;
+	val mf_s5 = ä_elim mf_s4 mf_s1
+in
+	(prof "å_intro";
+	mf_s5)
+end))
 end
 handle complaint =>
 list_divert complaint "å_intro" [
 	("ä_elim", 7004, []),
-	("simple_É_elim", 7002, [])]
+	("simple_É_elim", 7002, []),
+	("ä_intro", 7002, [])]
 );
 end;
 =TEX
@@ -1216,7 +1251,7 @@ end;
 =TEX
 =SML
 fun ‚list_Ä_intro· ([] : THM list) : THM = (
-	fail "list_Ä_intro" 0000 []
+	fail "list_Ä_intro" 7107 []
 ) | list_Ä_intro thm_lst = (
 let
 	fun aux [thm] = thm
@@ -1246,8 +1281,6 @@ in
 	s1)
 end);
 =TEX
-Leave $Ä\_ä\_rule$ and $ä\_Ä\_rule$ until
-later as of minor import, and tautology proving makes them simple.
 \subsection{Concerning Å}
 As \cite{DS/FMU/IED/SML009} 5.13.
 We prove the local theorem:
@@ -1420,10 +1453,6 @@ in
 	(prof "all_ä_intro";
 	s1)
 end);
-=IGN
-val t1 = Ä_intro (asm_rule mk_T)(asm_rule mk_F);
-all_ä_intro t1;
-all_ä_intro(strip_ä_rule(Ä_intro(asm_rule mk_T)(asm_rule mk_F)));
 =TEX
 Local theorem:
 Û
@@ -1649,7 +1678,11 @@ simple_list_É_intro
 ˆ Ö É x1 ... xn é t[x1, ..., xn]
 =TEX
 =SML
-val ‚simple_list_É_intro· = fold (uncurry simple_É_intro);
+fun ‚simple_list_É_intro· (tml : TERM list) (thm :THM) : THM = (
+	fold (uncurry simple_É_intro) tml thm
+	handle complaint =>
+	pass_on complaint "simple_É_intro" "simple_list_É_intro"
+);
 =TEX
 =SML
 fun ‚all_É_intro· (thm : THM) : THM = (
@@ -1702,11 +1735,12 @@ divert complaint "dest_comb" "á_intro_rule" 7016 []
 =SML
 fun ‚á_elim_rule· (tm : TERM) (thm1 : THM) (thm2 : THM) : THM = (
 let
+	val sideeffect = if is_var tm
+		then ()
+		else fail "á_elim_rule" 7017 [];
 	val (tm1, ctm1) = dest_comb (concl thm1);
 	val tm1tm = mk_comb (tm1, tm)
-		handle complaint =>
-		divert complaint "mk_comb" "á_elim_rule" 7005 [];
-	val s1 = ä_intro tm1tm thm2;
+	val s1 = disch_rule tm1tm thm2;
 	val s2 = simple_É_intro tm s1;
 	val s3 = simple_É_elim ctm1 s2;
 	val s4 = ä_elim s3 thm1;
@@ -1716,8 +1750,10 @@ in
 end
 handle complaint =>
 list_divert complaint "á_elim_rule" [
-	("term_match",3054,[]),
-	("Ç_mp_rule",6024,[])
+	("simple_É_intro",7018,[fn () => fst(dest_var tm)]),
+	("dest_comb",7019,[]),
+	("mk_comb",7054,[]),
+	("disch_rule",7108,[fn () => fst(dest_var tm)])
 	]
 );
 =IGN
@@ -1757,9 +1793,6 @@ list_divert complaint "simple_Ñ_intro" [
 	("term_match", 7047, [])
 	]
 );
-=IGN
-simple_Ñ_intro ªÑ p:BOOL é p Ç ((ç x:BOOL é x) = (ç x:BOOL é x))º t_def;
-
 =TEX
 
 =SML
@@ -1782,7 +1815,7 @@ let
 	val v = case term_match asm tx of
 		(_, [(ltm, _)]) => ltm
 		|(_, []) => x
-		|Other	  => fail "simple_Ñ_elim" 7047 [];
+		|Other	  => fail "simple_Ñ_elim" 7014 [];
 	val s6 = mk_comb (t1, v);
 	val s7 = simple_%beta%_conv s6;
 	val s8 = eq_sym_rule s7;
@@ -1797,8 +1830,8 @@ in
 end
 handle complaint =>
 list_divert complaint "simple_Ñ_elim" [
-	("term_match",7109,[]),
-	("mk_comb",7002,[]),
+	("simple_dest_Ñ",7109,[]),
+	("term_match",7014,[]),
 	("Ç_mp_rule",7014,[])
 	]
 );
@@ -1859,7 +1892,15 @@ in
 	val cond_thm = save_thm("‚cond_thm·", s7);
 end;
 =TEX
-We prove the local theorem:
+A local function:
+=RULE
+if_intro_rule
+ªaº
+…
+ˆ1, a Ö x = tt ;  ˆ2, åa' Ö x = et
+…
+ˆ1 ° ˆ2 Ö x = if a then tt else et
+=TEX
 Û
 s35 Ö É x a t1 t2 é (a ä (x = t1)) ä (å a ä (x = t2)) ä 
 	(x = if a then t1 else t2)
@@ -1914,7 +1955,7 @@ local
 	val s34 = ä_intro ªa ä ((x:'a) = t1)º s33;
 	val s35 = simple_list_É_intro[ªx : 'aº, ªa : BOOLº, ªt1 : 'aº, ªt2 : 'aº] s34;
 in
-fun ‚if_intro· (a : TERM) (thm1 : THM) (thm2 : THM) : THM = (
+fun ‚if_intro_rule· (a : TERM) (thm1 : THM) (thm2 : THM) : THM = (
 let
 	val (x,t1) = dest_eq(concl thm1);
 	val (x',t2) = dest_eq(concl thm2);
@@ -1926,24 +1967,31 @@ let
 	val mf_s5 = ä_elim mf_s4 mf_s1;
 	val mf_s6 = ä_elim mf_s5 mf_s2;
 in
-	(prof "if_intro";
+	(prof "if_intro_rule";
 	mf_s6)
 end
 handle complaint =>
-list_divert complaint "if_intro" [
+list_divert complaint "if_intro_rule" [
 	("dest_eq",7065,[]),
 	("ä_intro",7002,[])]
 );
 end; (* of local val s1 ... *)
 =IGN
 Tests:
-if_intro ªa : BOOLº (asm_rule ªx  = p1º)(asm_rule ªx = p2º);
-if_intro  ªb  : BOOLº (undisch_rule(asm_rule ªb ä x = p1º))
+if_intro_rule ªa : BOOLº (asm_rule ªx  = p1º)(asm_rule ªx = p2º);
+if_intro_rule  ªb  : BOOLº (undisch_rule(asm_rule ªb ä x = p1º))
 	(undisch_rule (asm_rule ªå b ä x = p2º));
+=TEX
+=RULE
+if_then_elim_rule
+…
+ˆ Ö x = if tc then tt else te
+…
+ˆ Ö tc ä x = tt
 =TEX
 Prove the local theorem:
 Û
-s Ö É x a t1 t2 é (x = if a then t1 else t2) ä (a ä x = t1)
+s28 Ö É x a t1 t2 é (x = if a then t1 else t2) ä (a ä x = t1)
 Ê
 =SML
 local
@@ -1981,7 +2029,7 @@ local
 	val s27 = ä_intro ª(x:'a) = if a then t1 else t2º s26;
 	val s28 = simple_list_É_intro[ªx : 'aº, ªa : BOOLº, ªt1 : 'aº, ªt2 : 'aº] s27;
 in
-fun ‚if_then_elim· (thm : THM) = (
+fun ‚if_then_elim_rule· (thm : THM) = (
 let
 	val (x,ifa)= dest_eq(concl thm);
 	val (a,t1,t2) = dest_if ifa;
@@ -1989,17 +2037,24 @@ let
 	val mf_s2 = simple_list_É_elim[x,a,t1,t2] mf_s1;
 	val mf_s3 = ä_elim mf_s2 thm;
 in
-	(prof "if_then_elim";
+	(prof "if_then_elim_rule";
 	mf_s3)
 end
 handle complaint =>
-list_divert complaint "if_then_elim" [
+list_divert complaint "if_then_elim_rule" [
 	("dest_eq",7012,[]),
 	("dest_if",7012,[])]
 );
 end; (* of local val s1 = ... *)
 =IGN
-if_then_elim (asm_rule ª5 = if T then 5 else 6º);
+if_then_elim_rule (asm_rule ª5 = if T then 5 else 6º);
+=TEX
+=RULE
+if_else_elim_rule
+…
+ˆ Ö x = if tc then tt else te
+…
+ˆ Ö å tc ä x = te
 =TEX
 Û
 s29 Ö É x a t1 t2 é x = (if a then t1 else t2) ä å a ä x = t2
@@ -2040,7 +2095,7 @@ local
 	val s28 = ä_intro ª(x:'a) = if a then t1 else t2º s27;
 	val s29 = simple_list_É_intro[ªx : 'aº, ªa : BOOLº, ªt1 : 'aº, ªt2 : 'aº] s28;
 in
-fun ‚if_else_elim· (thm : THM) = (
+fun ‚if_else_elim_rule· (thm : THM) = (
 let
 	val (x,ifa)= dest_eq(concl thm);
 	val (a,t1,t2) = dest_if ifa;
@@ -2048,11 +2103,11 @@ let
 	val mf_s2 = simple_list_É_elim[x,a,t1,t2] mf_s1;
 	val mf_s3 = ä_elim mf_s2 thm;
 in
-	(prof "if_else_elim";
+	(prof "if_else_elim_rule";
 	mf_s3)
 end
 handle complaint =>
-list_divert complaint "if_else_elim" [
+list_divert complaint "if_else_elim_rule" [
 	("dest_eq",7012,[]),
 	("dest_if",7012,[])]
 );
@@ -2061,20 +2116,24 @@ end; (* of local val s1 = ... *)
 if_else_elim (asm_rule ª5 = if T then 5 else 6º);
 =TEX
 Û
-s Ö É f a t1 t2 é f(if a then t1 else t2) =
+s9 Ö É f a t1 t2 é f(if a then t1 else t2) =
 	if a then (f t1) else (f t2)
+s11 Ö É f a t1 t2 é if a then (f t1) else (f t2) =
+	f(if a then t1 else t2)
 Ê
 =SML
 local
 	val s1 = refl_conv ªif a then (t1:'a) else t2º;
-	val s2 = if_then_elim s1;
+	val s2 = if_then_elim_rule s1;
 	val s3 = undisch_rule s2;
 	val s4 = ap_fun_rule ªf : 'a ã 'bº s3;
-	val s5 = if_else_elim s1;
+	val s5 = if_else_elim_rule s1;
 	val s6 = undisch_rule s5;
 	val s7 = ap_fun_rule ªf : 'a ã 'bº s6;
-	val s8 = if_intro ªa : BOOLº s4 s7;
+	val s8 = if_intro_rule ªa : BOOLº s4 s7;
 	val s9 = simple_list_É_intro[ªf : 'a ã 'bº, ªa : BOOLº, ªt1 : 'aº, ªt2 : 'aº] s8;
+	val s10 = eq_sym_rule s8;
+	val s11 = simple_list_É_intro[ªf : 'a ã 'bº, ªa : BOOLº, ªt1 : 'aº, ªt2 : 'aº] s10;
 in
 val ‚fun_if_conv· : CONV = (fn (tm:TERM) =>
 let
@@ -2092,40 +2151,149 @@ list_divert complaint "fun_if_conv" [
 	("dest_comb",7098,[]),
 	("dest_if",7098,[])]
 );
+val ‚if_fun_conv· : CONV = (fn (tm:TERM) =>
+let
+	val (a,ft1,ft2) = dest_if tm;
+	val (f,t1) = dest_comb ft1;
+	val (f',t2) = dest_comb ft2;
+	val (aty,bty) = dest_funtype(type_of f);
+	val mf_s1 = inst_type_rule[(aty,mk_vartype"'a"),(bty,mk_vartype"'b")]s11;
+	val mf_s2 = simple_list_É_elim[f,a,t1,t2] mf_s1;
+	val mf_s3 = refl_conv tm;
+	val mf_s4 = eq_trans_rule mf_s3 mf_s2;
+in
+	(prof "if_fun_conv";
+	mf_s4)
+end
+handle complaint =>
+list_divert complaint "if_fun_conv" [
+	("dest_comb",7037,[]),
+	("dest_if",7037,[]),
+	("eq_trans_rule",7038,[])]
+);
 end; (* local val s1 = ... *)
 =IGN
 fun_if_conv ª(ç x é x = 1)(if T then 3 else 4)º;
+if_fun_conv ª(if T then (ç x é x = 1)3 else (ç y é y = 1)4)º;
+if_fun_conv ª(if T then (ç x é x = 1)3 else (ç y é y = 2)4)º;
 =TEX
+We prove the local theorem:
+Û
+s12 Ö É a t1 t2 é (a ä t1) ä (å a ä t2) ä 
+	(if a then t1 else t2)
+Ê
 =SML
-fun ‚fun_if_rule· (thm : THM) : THM = (
-	conv_rule fun_if_conv thm
-	handle complaint =>
-	divert complaint "fun_if_conv" "fun_if_rule" 7053 []
-);
-=TEX
-=SML
-fun ‚if_fun_rule· (thm : THM) : THM = (
-let
-	val (a,ft1,ft2) = dest_if(concl thm);
-	val (f,t1) = dest_comb ft1;
-	val (f',t2) = dest_comb ft2;
-	val s1 = fun_if_conv (mk_comb(f,mk_if(a,t1,t2)));
-	val s2 = eq_sym_rule s1;
-	val s3 = Ç_mp_rule s2 thm;
+local
+	val s1 = asm_rule ªa ä t1º;
+	val s2 = undisch_rule s1;
+	val s3 = Ç_t_intro s2;
+	val s4 = eq_sym_rule s3;
+
+	val s5 = asm_rule ªå a ä t2º;
+	val s6 = undisch_rule s5;
+	val s7 = Ç_t_intro s6;
+	val s8 = eq_sym_rule s7;
+
+	val s9 = if_intro_rule ªa:BOOLº s4 s8;
+	val s10 = eq_sym_rule s9;
+	val s11 = Ç_t_elim s10;
+	val s12 = ä_intro ªå a ä t2º s11;
+	val s13 = ä_intro ªa ä t1º s12;
+	val s14= simple_list_É_intro[ªa : BOOLº, ªt1 : BOOLº, ªt2 : BOOLº] s13;
 in
-	(prof "if_fun_rule";
-	s3)
+fun ‚if_intro· (a : TERM) (thm1 : THM) (thm2 : THM) : THM = (
+let
+	val mf_s1 = ä_intro a thm1;
+	val mf_s2 = ä_intro (mk_å a) thm2;
+	val mf_s3 = simple_list_É_elim[a,concl thm1, concl thm2]s14;
+	val mf_s4 = ä_elim mf_s3 mf_s1;
+	val mf_s5 = ä_elim mf_s4 mf_s2;
+in
+	(prof "if_intro";
+	mf_s5)
 end
 handle complaint =>
-list_divert complaint "if_fun_rule" [
-	("dest_if",7012,[]),
-	("dest_comb",7052,[]),
-	("Ç_mp_rule",7052,[])]
+list_divert complaint "if_intro" [
+	("ä_intro",7002,[])
+	]
 );
+end; (* of local val s1 ... *)
 =IGN
-if_fun_rule (asm_rule ªif a then ((ç x é x = 1) 2) else ((ç x é x = 1) 3)º);
-if_fun_rule (asm_rule ªif a then ((ç x é x = 1) 2) else ((ç x é x = 2) 3)º); (* fails *)
-if_fun_rule (asm_rule ªif a then T else å Fº); (* fails *)
+Tests:
+if_intro ªa : BOOLº (asm_rule ªx  = p1º)(asm_rule ªx = p2º);
+if_intro ªb  : BOOLº (undisch_rule(asm_rule ªb ä x = p1º))
+	(undisch_rule (asm_rule ªå b ä x = p2º));
+=TEX
+Prove the local theorem:
+Û
+s10 Ö É a t1 t2 é (if a then t1 else t2) ä (a ä t1)
+Ê
+=SML
+local
+	val s1 = asm_rule ªif a then (t1:BOOL) else t2º;
+	val s2 = Ç_t_intro s1;
+	val s3 = eq_sym_rule s2;
+	val s4 = if_then_elim_rule s3;
+	val s5 = undisch_rule s4;
+	val s6 = eq_sym_rule s5;
+	val s7 = Ç_t_elim s6;
+	val s8 = ä_intro ªa : BOOLº s7;
+	val s9 = ä_intro ªif a then (t1:BOOL) else t2º s8;
+	val s10 = simple_list_É_intro[ªa : BOOLº, ªt1 : BOOLº, ªt2 : BOOLº] s9;
+in
+fun ‚if_then_elim· (thm : THM) = (
+let
+	val ifa = concl thm;
+	val (a,t1,t2) = dest_if ifa;
+	val mf_s2 = simple_list_É_elim[a,t1,t2] s10;
+	val mf_s3 = ä_elim mf_s2 thm;
+in
+	(prof "if_then_elim";
+	mf_s3)
+end
+handle complaint =>
+list_divert complaint "if_then_elim" [
+	("dest_if",7012,[])]
+);
+end; (* of local val s1 = ... *)
+=IGN
+if_then_elim (asm_rule ªif T then (x= 5) else (x =6)º);
+=TEX
+Û
+s10 Ö É a t1 t2 é (if a then t1 else t2) ä å a ä t2
+Ê
+=SML
+local
+	val s1 = asm_rule ªif a then (t1:BOOL) else t2º;
+	val s2 = Ç_t_intro s1;
+	val s3 = eq_sym_rule s2;
+	val s4 = if_else_elim_rule s3;
+	val s5 = undisch_rule s4;
+	val s6 = eq_sym_rule s5;
+	val s7 = Ç_t_elim s6;
+	val s8 = ä_intro ªå aº s7;
+	val s9 = ä_intro ªif a then (t1:BOOL) else t2º s8;
+	val s10 = simple_list_É_intro[ªa : BOOLº, ªt1 : BOOLº, ªt2 : BOOLº] s9;
+in
+fun ‚if_else_elim· (thm : THM) = (
+let
+	val ifa= concl thm;
+	val (a,t1,t2) = dest_if ifa;
+	val mf_s2 = simple_list_É_elim[a,t1,t2] s10;
+	val mf_s3 = ä_elim mf_s2 thm;
+in
+	(prof "if_else_elim";
+	mf_s3)
+end
+handle complaint =>
+list_divert complaint "if_else_elim" [
+	("dest_eq",7012,[]),
+	("dest_if",7012,[])]
+);
+end; (* of local val s1 = ... *)
+=IGN
+if_else_elim (asm_rule ªif T then (5 = 5) else (5 = 6)º);
+=TEX
 =TEX
 \subsection{Concerning Functional Application}
 =SML
@@ -2198,6 +2366,7 @@ in
 end
 handle complaint =>
 list_divert complaint "asm_elim" [
+	("simple_list_É_elim", 7002, []),
 	("simple_É_intro", 7002, []),
 	("ä_elim",7029,[])]
 );
@@ -2246,6 +2415,9 @@ term_tyvars (concl t2);
 \subsection{Concerning Matching Functions}
 The function $apply\_matches\_rule$ encodes the matching attempt, should
 a simple use of the rule fail.
+It is given a term to match against,
+a method of extracting the part to match,and the theorem
+that is to be instantiated.
 It presumes that the theorem it is passed is stripped
 of all outer universal quanitifers.
 It brings up to the conclusion all the hypotheses.
@@ -2257,38 +2429,53 @@ and then returns are the hypotheses to the assumption list.
 
 Note that $term\_match$ is not infallible.
 =SML
+local
+	fun strip_n_ä 0 tm = tm
+	| strip_n_ä n tm = strip_n_ä (n-1) (snd(dest_ä tm));
+in
 fun ‚apply_matches_rule· (caller : string) 
-	(tym : (TYPE * TYPE)list)
-	(tmm : (TERM * TERM)list) 
+	(match_against : TERM)
+	(extract : TERM -> TERM)
 	(thm : THM) : THM = (
 let
-	val c = concl thm;
+	val cnc = concl thm;
+	val cfrees = frees cnc;
+	val all_frees = cfrees cup (list_cup (map frees (hyps thm)));
+	val qvs = fst(strip_É cnc);
+	val subs_for = qvs @ all_frees;
+	val subs_with = list_variant [] subs_for;
+	val length_qvs = length qvs;
+	val qvs' = subs_with to (length_qvs -1);
+	val all_frees' = subs_with from length_qvs;
+	val s1 = simple_list_É_elim qvs' thm;
+	val c = concl s1;
 	val nhyps = length(strip_ä c);
-	val s1 = all_ä_intro thm;
-	val nhyps1 = length(strip_ä (concl s1));
-	val s2 = inst_type_rule tym s1;
-	val s3 = inst_term_rule tmm s2;
-	val s4 = fold (fn (_,x) => undisch_rule x)
-		(interval 1 (nhyps1 - nhyps)) s3;
+	val s2 = all_ä_intro s1;
+	val nhyps1 = length(strip_ä (concl s2));
+	val s3 = inst_term_rule(combine all_frees' all_frees) s2;
+	val t1 = extract (strip_n_ä (nhyps1 - nhyps)(concl s3));
+	val (tym,tmm) = term_match match_against t1;
+	val s4 = inst_type_rule tym s3;
+	val s5 = inst_term_rule tmm s4;
+	val s6 = fold (fn (_,x) => undisch_rule x)
+		(interval 1 (nhyps1 - nhyps)) s5;
 in
-	s4
+	s6
 end
 handle (Fail _) => fail caller 7044 []
 );
+end;
 =TEX
 Now we use the above in the various forms of matching.
 =SML
 local
 fun aux (thm1 : THM) (thm2 : THM) : THM = (
 let
-	val s1 = all_simple_É_elim thm1;
-	val (t1,_) = dest_ä (concl s1);
-	val (tym,tmm) = term_match (concl thm2) t1;
-	val s2 = apply_matches_rule "simple_ä_match_mp_rule" tym tmm s1;
-	val s3 = ä_elim s2 thm2;
+	val s1 = apply_matches_rule "simple_ä_match_mp_rule" (concl thm2) (fst o dest_ä) thm1;
+	val s2 = ä_elim s1 thm2;
 in
 	(prof "simple_ä_match_mp_rule";
-	s3)
+	s2)
 end
 handle complaint =>
 list_divert complaint "simple_ä_match_mp_rule" [
@@ -2308,25 +2495,33 @@ end
 );
 end;
 =IGN
-val thm1 = simple_É_elim ªx : 'aº (asm_rule ªÉ x y é f x y ä bº);
-val thm2 = asm_rule ªf 1 2 : BOOLº;
+val x1 = ªx : 'aº;
+val x2 = ªx : 'bº;
+val tm1 = list_simple_mk_É([x1,x2],
+	mk_ä(
+	list_mk_comb(mk_var("f",mk_fun(mk_vartype"'a",
+		mk_fun(mk_vartype"'b",BOOL))),
+		[x1,x2]),
+	ªb:BOOLº));
+val tm2 = mk_ä(
+	list_mk_comb(mk_var("f",mk_fun(mk_vartype"'a",
+		mk_fun(mk_vartype"'b",BOOL))),
+		[x1,x2]),
+	ªb:BOOLº);
+val thm1 = (asm_rule tm1);
 simple_ä_match_mp_rule thm1 thm2;
-val thm1 = simple_É_elim ªx : 'aº (asm_rule ªÉ x y é f x y ä b ä cº);
-val thm2 = asm_rule ªf 1 2 : BOOLº;
-simple_ä_match_mp_rule thm1 thm2;
+val thm1 = (asm_rule tm2);
+simple_ä_match_mp_rule thm1 thm2; (* would previously fail *)
 =TEX
 =SML
 local
 fun aux (thm1 : THM) (thm2 : THM) : THM = (
 let
-	val s1 = all_simple_É_elim thm1;
-	val (t1,_) = dest_Ç (concl s1);
-	val (tym,tmm) = term_match (concl thm2) t1;
-	val s2 = apply_matches_rule "simple_Ç_match_mp_rule" tym tmm s1;
-	val s3 = Ç_mp_rule s2 thm2;
+	val s1 = apply_matches_rule "simple_Ç_match_mp_rule" (concl thm2) (fst o dest_Ç) thm1;
+	val s2 = Ç_mp_rule s1 thm2;
 in
 	(prof "simple_Ç_match_mp_rule";
-	s3)
+	s2)
 end
 handle complaint =>
 list_divert complaint "simple_Ç_match_mp_rule" [
@@ -2356,14 +2551,11 @@ simple_Ç_match_mp_rule t_def t_thm;
 local
 fun aux (thm : THM) : CONV = (fn (tm :TERM) =>
 let
-	val s1 = all_simple_É_elim thm;
-	val (t1,_) = dest_eq (concl s1);
-	val (tym,tmm) = term_match tm t1;
-	val s2 = apply_matches_rule "simple_Ç_match_mp_rule" tym tmm s1;
-	val s3 = eq_trans_rule (refl_conv tm) s2;
+	val s1 = apply_matches_rule "simple_eq_match_conv" tm (fst o dest_eq) thm;
+	val s2 = eq_trans_rule (refl_conv tm) s1;
 in
 	(prof "simple_eq_match_conv";
-	s3)
+	s2)
 end
 handle complaint =>
 list_divert complaint "simple_eq_match_conv" [
@@ -2515,13 +2707,6 @@ in
 		Value red => red
 		| Nil => fail "all_simple_%beta%_conv" 7020 [])
 end);
-=IGN
-all_simple_%beta%_conv ª 1 º; (* fails *)
-all_simple_%beta%_conv ª (ç x é (plus x y)) 1º;
-all_simple_%beta%_conv ª (ç x é (plus x x)) 1º;
-all_simple_%beta%_conv ª (ç f x é (f x x)) (ç y z é aplus y z) 1º;
-all_simple_%beta%_conv ª(ç f x y é (f x Ä y) Ä (ç p é p) q)(ç x é å x) T ((ç p é p) q)º;
-all_simple_%beta%_conv ª (ç y x : BOOL é x  Ä y)(plus(x :Ü) 1 ) º;
 =TEX
 =SML
 fun ‚all_simple_%beta%_rule· (thm : THM) =(
@@ -2776,9 +2961,6 @@ list_divert complaint "Ä_ä_rule" [
 	("dest_ä",7009,[])]
 );
 end;
-=IGN
-ä_Ä_rule (asm_rule ªa ä b ä cº);
-Ä_ä_rule (asm_rule ª(a Ä b) ä cº);
 =TEX
 \subsection{Concerning Ñ$_1$}
 =SML
@@ -2797,14 +2979,10 @@ let
 	val (Px,(x',t)) = (Combinators.I ** dest_eq)(dest_ä rest);
 	val sideeffect = if x = x'
 		then ()
-		else fail "simple_Ñ%down%1_intro" 7067 [];
-	val (tym, tmm) = term_match (concl thm1) Px;
-	val sideeffect = if is_nil tym 
-		then ()
-		else fail "simple_Ñ%down%1_intro" 7067 [];
-	val witness = case tmm of
-		[(w,_)] => w
-		| [] => t
+		else fail "simple_Ñ%down%1_intro" 7066 [];
+	val witness = case (term_match (concl thm1) Px) of
+		([],[(w,_)]) => w
+		| ([],[]) => t
 		| _ => fail "simple_Ñ%down%1_intro" 7067 [];
 	val abs = simple_mk_abs(x,Px);
 	val P_t = mk_comb(abs, witness);
@@ -2836,15 +3014,14 @@ let
 in
 	(prof "simple_Ñ%down%1_intro";
 	s15)
-end);
-=IGN
-val e1 = %alpha%_conv ª(ç x : Ü é x)º ª(ç y : Ü é y)º;
-val e2 = asm_rule ªÉ tt é (tt = (ç y : Ü é y)) ä (tt = (ç z : Ü é z))º;
-simple_Ñ%down%1_intro e1 e2;
-val e3 = asm_rule ªq 3 (y:'a) :BOOLº;
-val e4 = asm_rule ªÉ tt : Ü é q tt (y : 'a) ä tt = 3º;
-simple_Ñ%down%1_intro e3 e4;
-
+end
+handle complaint =>
+list_divert complaint "simple_Ñ%down%1_intro" [
+	("term_match",7067,[]),
+	("simple_dest_É",7066,[]),
+	("dest_ä",7066,[])
+]
+);
 =TEX
 =SML
 fun ‚simple_Ñ%down%1_elim· (thm : THM) : THM = (
@@ -2871,8 +3048,6 @@ list_divert complaint "simple_Ñ%down%1_elim" [
 	("dest_fun",7015,[]),
 	("Ç_mp_rule",7015,[])]
 );
-=IGN
-simple_Ñ%down%1_elim (simple_Ñ%down%1_intro e3 e4);
 =TEX
 \section{END OF THE STRUCTURE}
 =SML
