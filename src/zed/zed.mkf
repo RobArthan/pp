@@ -1,6 +1,6 @@
 ######################################################################
 #
-#	zed.mkf from %Z% $Date: 2001/07/18 16:06:10 $ $Revision: 1.15 $ $RCSfile: zed.mkf,v $
+#	zed.mkf from %Z% $Date: 2001/08/30 07:01:35 $ $Revision: 1.16 $ $RCSfile: zed.mkf,v $
 #
 #	makefile for the ZED database for ProofPower
 #
@@ -24,7 +24,7 @@ default:
 	@echo "make -f zed.mkf src            - makes the Z source files"
 	@echo "make -f zed.mkf bin            - makes binaries plus what is needed to use them"
 	@echo "make -f zed.mkf doc            - makes Z documents "
-	@echo "make -f zed.mkf zed_test       - runs the tests"
+	@echo "make -f zed.mkf test       - runs the tests"
 
 ######################################################################
 #
@@ -36,8 +36,28 @@ PRODUCT=$(PRODNAME)-$(PPVER)
 CWD=$(shell pwd)
 RELEASE=$(shell echo $(PPVER) | sed -e /-/s/-//)
 
-# Architecture type (used as file-name suffix for images by NJML)
+# Compiler specifics:
+ifeq ($(PPCOMPILER), POLYML)
+# Architecture type (used as a file-name suffix for images)
+HEAP_SUFFIX=		"polydb"
+# Command to run ML
+RUNML="poly"
+MLDBPFX=""
+# Command to garbage-collect the database
+DBGC="poly"
+DBGCARG="-d"
+else
+ifeq ($(PPCOMPILER), SMLNJ)
+# Architecture type (used as a file-name suffix for images by NJML)
 HEAP_SUFFIX=		$(shell eval `.arch-n-opsys`; echo $$HEAP_SUFFIX)
+# Command to run ML
+RUNML="sml"
+MLDBPFX="@SMLload="
+# Command to garbage-collect the database
+DBGC="echo"
+DBGCARG="database garbage collection not needed with SML/NJ"
+endif
+endif
 
 # database names
 ZEDDBNAME=	zed
@@ -860,10 +880,10 @@ dtd087.ldd: imp106.ldd
 dtd088.ldd: imp087.ldd
 dtd107.ldd: imp088.ldd
 
-dtd061.sml dtd061.grm.sml: dtd061.doc
+dtd061.sml dtd061.grm.sml: dtd061.doc hol.svf
 	docsml -f hol.svf dtd061
 
-imp061.sml: imp061.doc imp018.sml dtd061.grm.sml
+imp061.sml: imp061.doc imp018.sml dtd061.grm.sml hol.svf
 	docsml -f hol.svf imp061
 
 mdt035.ttd: dtd035.sml imp035.sml
@@ -900,14 +920,14 @@ zedbuilt.ldd: $(ZEDDBLDD) $(ZEDLDDFILES)
 zed zedbuild: zed.ldd
 
 zcachecmd:
-	echo $(ZCACHECMD) | sml @SMLload=$(ZEDDB)
+	echo $(ZCACHECMD) | $(RUNML) $(MLDBPFX)$(ZEDDB)
 ztheoriescmd:
-#	discgarb -c $(ZEDDB)
-	echo $(ZSETTHEORIESCMD) | sml @SMLload=$(ZEDDB) > zcache.ldd
-#	discgarb -c $(ZEDDB) > zedtheories.discgarb.ldd
+	$(DBGC) $(DBGCARG) $(ZEDDB)
+	echo $(ZSETTHEORIESCMD) | $(RUNML) $(MLDBPFX)$(ZEDDB) > zcache.ldd
+	$(DBGC) $(DBGCARG) -c $(ZEDDB) > zedtheories.discgarb.ldd
 
 zbannercmd:
-	echo $(ZEDBANNERCMD) | sml @SMLload=$(ZEDDB) $(ZEDDB)
+	echo $(ZEDBANNERCMD) | $(RUNML) $(MLDBPFX)$(ZEDDB) $(ZEDDB)
 
 $(ZEDDB) $(ZEDDBLDD):
 		rm -f $(ZEDDB)
@@ -935,7 +955,7 @@ $(SHELLSCRIPTS): imp111.doc
 $(TESTTOOLS): imp100.doc
 	docsml imp100
 
-zed_test: $(ZEDDBLDD) $(ZEDMDTTTDS)
+test: $(ZEDDBLDD) $(ZEDMDTTTDS)
 	@grep 'module' $(ZEDMDTTTDS)
 	@-grep 'abandoning file' $(ZEDMDTTTDS)
 
@@ -1186,7 +1206,7 @@ veryclean: clean
 %.ttd: %.sml $(IEDTESTSMLS) $(TESTTOOLS)
 	@rm -f $@ $.err 2>/dev/null
 	@echo "Compiling (test)" $<
-	@echo "use_file \"$<\"; quit();" | sml $(MLFLAGS) @SMLload=$(ZEDDB) > $*.err
+	@echo "use_file \"$<\"; quit();" | $(RUNML) $(MLFLAGS) $(MLDBPFX)$(ZEDDB) > $*.err
 	@mv $*.err $@
 
 %.sml: %.doc hol.svf
