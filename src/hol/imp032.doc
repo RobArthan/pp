@@ -18,14 +18,14 @@
 Commands to process this document in various ways.
 
 make -f rel001.mkf imp032.dvi
-doc4tex imp032
-tex4dvi imp032
+doctex imp032
+texdvi imp032
 bibtex imp032
-doc4tex imp032 ; tex4dvi imp032
-doc4tex imp032 ; tex4dvi imp032 ; bibtex imp032
+doctex imp032 ; texdvi imp032
+doctex imp032 ; texdvi imp032 ; bibtex imp032
 dvipage imp032 &
 
-doc4errors imp032
+docsml imp032
 use_file "imp032.sml";
 
 lasp -s imp032.doc > zz1
@@ -38,7 +38,8 @@ lasp -s -u imp032.OKwords imp032.doc > zz1
 \TPPkeywords{HOL}
 \TPPauthor{A.J. Hammon & WIN01}  %% Mandatory field
 \TPPauthorisation{R.D.~Arthan & FST Team Leader}
-\TPPabstract{This document contains the HOL pretty printing functions.}
+\TPPabstract{This document contains the HOL pretty
+	printing functions.}
 \TPPdistribution{\parbox[t]{4.0in}{%
 	Library
 }}
@@ -91,10 +92,15 @@ lasp -s -u imp032.OKwords imp032.doc > zz1
 \item[\FormatDate{91/09/12}, issue 2.1 ] First approved version.
 
 \item[Issue 2.2, \FormatDate{92/01/20} ] Updated to use new fonts.
-\item [Issue 2.3 (1st April 1992)]
-Changes required by CR0016.
-\item [Issue 2.4 (13th April 1992)]
-Changes due to CR0017.
+\item[9 April 1992, issue 2.3, ] Changes required by CR0016.
+\item[14 April 1992, issue 2.4 ] Changes due to CR0017.
+
+\item[\FormatDate{$Date$%
+}, issue \SCCSissue~]
+	Many detailed changes to spacing, line breaking and Oppen
+		blocks used in the printing.
+	Fix non-terminating loop in printing non-standard let clauses.
+	Changes forecast moved into~\cite{DS/FMU/IED/DTD032}.
 
 %\item[\FormatDate{$Date$%
 %}, issue \SCCSissue~]
@@ -105,30 +111,7 @@ Changes due to CR0017.
 
 \subsection{Changes Forecast} \label{ChangesForecast}
 
-Showing the types of variables and constants in terms.  There are
-several usages of variables and constants where it would be useful to
-add type information.
-
-\begin{itemize}
-
-\item Defining instances of variables in binder terms.
-\item Defining instances of variables in let terms.
-\item Uses of constants as functions.
-\item Uses of constants as operands of other constructs.
-\item Uses of constants as prefix, infix or postfix operators.
-\item Uses of free variables.
-
-\end{itemize}
-
-Some of these are relatively easy to achieve, however a constraint of
-`give the minimal typing necessary to read back the term' is difficult
-to achieve.  One way of approaching minimal typing would be to have a
-prepass which marked uses of constants and free variables which require
-typing together with the pretty printer always typing defining
-instances of variables.
-
-Add the correct body to function $print_identifier$ in
-section~\ref{PrintingIdentifiers}.
+See~\cite{DS/FMU/IED/DTD032}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \newpage
@@ -169,9 +152,9 @@ by other routines in this document.
 \subsection{Dependencies}
 
 Basic output mechanisms are provided by the Oppen style printing
-routines in~\cite{DS/FMU/IED/IMP024} and by the PolyML function
+routines in~\cite{DS/FMU/IED/DTD024} and by the PolyML function
 $PolyML.install_pp$, although they are provided via the pretty printer
-in~\cite{DS/FMU/IED/IMP025}.
+in~\cite{DS/FMU/IED/DTD025}.
 
 %********************************************************************
 
@@ -181,7 +164,7 @@ There is only one visible interfaces to this structure, namely that for
 formatting HOL types.
 
 Most of this structure is concerned with installing functions into the
-pretty printer of~\cite{DS/FMU/IED/IMP031}.  These functions are
+pretty printer of~\cite{DS/FMU/IED/DTD031}.  These functions are
 thereafter are only called by that pretty printer.
 
 %********************************************************************
@@ -226,6 +209,26 @@ val €pc_h_if_let_bind_last›		: PREC_CONTEXT = PcNormal(20, 0, false);
 val €pc_h_typing›			: PREC_CONTEXT = PcNormal(10, 0, false);
 =TEX
 
+When processing infix, prefix and postfix operators we need to see
+whether precedences are equal when the boolean associativity flag is
+ignored.
+
+=SML
+local
+	fun aux ((l1, l2, _), (r1, r2, _)) =
+		l1 = r1 andalso l2 = r2;
+
+	fun	aux2 (PcHighest, PcHighest)	= true
+	|	aux2 (PcNormal l, PcNormal r)	= aux (l, r)
+	|	aux2 (PcLowest, PcLowest)	= true
+	|	aux2 (PcVeryLow l, PcVeryLow r)	= aux (l, r)
+	|	aux2 (_, _)			= false;
+in
+	fun €similar_prec› (lr : PREC_CONTEXT * PREC_CONTEXT) : bool = 
+		aux2 lr;
+end
+=TEX
+
 %********************************************************************
 
 \subsection{Controls}
@@ -251,6 +254,46 @@ to type $PP_ENV$.
 
 %********************************************************************
 
+\subsection{Printing String and Character Literals}
+
+Strings and character literals may contain a variety of strange
+characters.  They may arise from two sources: first from string and
+character literals.  Second from the strings used in the primitive HOL
+constant and variable constructors.  In each case they must be printed
+in a fashion which preserves their meaning.
+
+=SML
+fun €print_string› (addstring:string -> unit) (s:string) : unit = (
+let
+	val es = explode s;
+
+	fun pr nil = ()
+	| pr ("\\" :: rest) = (addstring "\\\\"; pr rest)
+	| pr ("\"" :: rest) = (addstring "\\\""; pr rest)
+	| pr (ch :: rest) = (addstring ch; pr rest);
+in
+	pr es
+end
+);
+=TEX
+
+=SML
+fun €print_char› (addstring:string -> unit) (s:string) : unit = (
+let
+	val es = explode s;
+
+	fun pr nil = ()
+	| pr ("\\" :: rest) = (addstring "\\\\"; pr rest)
+	| pr ("'" :: rest) = (addstring "\\'"; pr rest)
+	| pr (ch :: rest) = (addstring ch; pr rest);
+in
+	pr es
+end
+);
+=TEX
+
+%********************************************************************
+
 \subsection{Printing Identifiers}
 \label{PrintingIdentifiers}
 
@@ -261,9 +304,30 @@ trailing string quote.  The symbol table~\cite{DS/FMU/IED/DTD020}
 prevents the complex form of identifiers from being used as binder or
 operator names.
 
+A name can be printed as itself if it can be lexically analysed
+into a single token, namely itself.  To determine this the lexical
+analyser~\cite{DS/FMU/IED/DTD015} is used.  Several error conditions
+are detected by the lexical analyser, all of these denote that the
+identifier is not simple.
+
 =SML
-fun €print_identifier› (addstring:string -> unit) (identifier:string) : unit = (
-	addstring identifier
+fun €is_simple_name› (identifier:string) : bool = (
+let
+	val lex_input = [Lex.Text identifier];
+	val terminators = SymbolTable.get_current_terminators();
+	fun fixity_classifier (_:string) = Lex.Nonfix;
+
+	val lex_ans =	Lex.lex
+			terminators
+			fixity_classifier
+			lex_input;
+in
+	case lex_ans
+	of [Lex.HTName n, Lex.HTEos] => n = identifier
+	| _ => false
+end
+handle Fail _ => false
+| Error _ => false
 );
 =TEX
 
@@ -279,12 +343,21 @@ let
 		pe_endb = endb, pe_space = space, ...} = cur_env;
 
 	fun ty_p prec t = main_type_pp (set_prec prec cur_env) t;
-	fun name_p n = print_identifier addstring n;
+	fun name_p n = (
+		if is_simple_name n
+		then
+			addstring n
+		else(
+			addstring "$\"";
+			print_string addstring n;
+			addstring "\""
+		)
+	);
 
 	fun print_list name t rest = (
 		beginb(0, false);
 		addstring "("; (*=)=*)
-		beginb(2, false);
+		beginb(2, true);
 		ty_p PcLowest t;
 		map	(fn tx => (	addstring ",";
 					space(1,0);
@@ -307,22 +380,35 @@ in
 						space(1,0);
 						name_p name)
 		| (name, t1 :: t2 :: nil) => (
+			if is_simple_name name
+			then
 			case get_fixity name
 			of Lex.Infix op_prec =>
 				let
-					val br = prec gt_prec (pc_h_oper(op_prec, true))
+					val pc_op_prec = pc_h_oper(op_prec, true);
+					val br = prec gt_prec pc_op_prec;
+					val blk = similar_prec(prec, pc_op_prec);
 				in(
-					if br then (beginb(0, false); addstring "("; (*=)=*)
-						beginb(2, false)) else ();
-					ty_p (pc_h_oper(op_prec, true)) t1;
+					if br
+					then	(addstring "(" (*=)=*); beginb(2, true))
+					else	if blk
+						then ()
+						else beginb(2, true);
+
+					ty_p pc_op_prec t1;
 					space(1,0);
-					name_p name;
-					space(1,0);
+					addstring name;
+					addstring " ";
 					ty_p (pc_h_oper(op_prec, false)) t2;
-					if br then (endb(); (*=(=*) addstring ")"; space(0, 0);
-						endb()) else ()
+
+					if br
+					then	(endb(); (*=(=*) addstring ")")
+					else	if blk
+						then ()
+						else endb()
 				)end
 			| _ => print_list name t1 [t2]
+			else print_list name t1 [t2]
 			)
 		| (name, t1 :: rest) => print_list name t1 rest
 end
@@ -339,6 +425,20 @@ end
 \subsection{Variables and Constants}
 
 =SML
+fun €pr_mk_var_or_const› (cur_env:PP_ENV) (constr:string) (name:string) (ty:TYPE) : unit = (
+let
+	val PpEnv{pe_addstring=addstring, ...} = cur_env;
+in
+	addstring("ë" ^ constr ^ "(\"" (*=")=*));
+	print_string addstring name;
+	addstring "\", î" (*="=*);
+	main_type_pp cur_env ty;
+	addstring (*=(=*)"Æ)Æ"
+end
+);
+=TEX
+
+=SML
 fun €do_var_const› (cur_env:PP_ENV) (name:string) (ty:TYPE) : unit = (
 let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
@@ -346,13 +446,22 @@ let
 
 	val br = !pp_show_HOL_types andalso prec gt_prec pc_h_typing;
 in
-	if br then (addstring "("; (*=)=*) beginb(2, true)) else ();
-	if get_fixity name <> Lex.Nonfix then addstring "$" else ();
-	print_identifier addstring name;
+	if br then (addstring "(" (*=)=*); beginb(2, true)) else ();
+	if is_simple_name name
+	then(
+		if get_fixity name <> Lex.Nonfix
+		then addstring "$"
+		else ();
+		addstring name
+	)else(
+		addstring "$\"";
+		print_string addstring name;
+		addstring "\""
+	);
 	if !pp_show_HOL_types
 	then (
-		addstring " :";
 		space(1, 2);
+		addstring ": ";
 		main_type_pp cur_env ty;
 		if br then (endb(); (*=(=*) addstring ")") else ()
 	) else ()
@@ -360,32 +469,80 @@ end
 );
 =TEX
 
+Variables may have the same name as declared or aliased constants, they
+must be printed in a manner that allows them to be recognised as a
+$mk_var$ term.
+
 =SML
-fun €HOL_do_var› (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE) : unit =
-	do_var_const cur_env name ty;
+fun €HOL_do_var› (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE) : unit = (
+let
+	val PpEnv{pe_addstring=addstring, ...} = cur_env;
+in
+	case(get_const_info name, get_const_type name)
+	of (Nil, Nil) =>
+			do_var_const cur_env name ty
+	| (_, _) =>
+			pr_mk_var_or_const cur_env "mk_var" name ty
+end
+);
 =TEX
 
 HOL constants representing strings and character literals include
 the leading quote character.
+The arguments are such that ``$orig = mk_const(n, ty)$'' where $n$
+is the constant derived from the alias name $name$, thus we might
+have ``$n="="$'' and ``$name="§"$''. {}  We must be careful to
+print out $mk_const$ terms where the constant is not declared, or
+is an alias for a not declared constant, in a manner that allows
+it to be recognised as a $mk_const$ term.
 
 =SML
 fun €HOL_do_const› (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE) : unit = (
 let
-	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
-		pe_space=space, pe_endb=endb, ...} = cur_env;
+	val PpEnv{pe_addstring=addstring, ...} = cur_env;
+
+	fun check_type tyx : bool = (
+		case explode name
+		of "\"" :: _ => STRING =: tyx
+		| "`" :: _ => CHAR =: tyx
+		| _ => is_all_decimal name andalso (¨:ÓÆ =: tyx)
+	);
 in
 	if is_char orig 
 	then
-		if name = "`" ^ (dest_char orig)
-		then	(addstring name; addstring "`")
-		else	do_var_const cur_env name ty
+		let
+			val ch = dest_char orig;
+		in
+			if name = "`" ^ ch
+			then	(addstring "`"; print_char addstring ch; addstring "`")
+			else	do_var_const cur_env name ty
+		end
 	else if is_string orig
 	then
-		if name = "\"" ^ (dest_string orig)
-		then	(addstring name; addstring "\"")
-		else	do_var_const cur_env name ty
+		let
+			val ch = dest_string orig;
+		in
+			if name = "\"" ^ ch
+			then	(addstring "\""; print_string addstring ch; addstring "\"")
+			else	do_var_const cur_env name ty
+		end
+	else if is_Ó orig
+	then
+		case dest_term orig
+		of DConst (str, _) =>
+			if name = str
+			then	addstring str
+			else	do_var_const cur_env name ty
+		| _ => do_var_const cur_env name ty
 	else
-		do_var_const cur_env name ty
+		if	case (get_const_info name, get_const_type name)
+			of (Nil, Nil) => true
+			| (Value(ty1, _), _) => check_type ty1
+			| (_, Value ty2) => check_type ty2
+		then
+			pr_mk_var_or_const cur_env "mk_const" name ty
+		else
+			do_var_const cur_env name ty
 end
 );
 =TEX
@@ -411,7 +568,7 @@ wanted.
 
 If this application were required to be produced with all the brackets
 added (i.e., perhaps when flag $pp_add_brackets$
-of~\cite{DS/FMU/IED/IMP031} is set) then one opening bracket would need
+of~\cite{DS/FMU/IED/DTD031} is set) then one opening bracket would need
 to be output for each argument before outputting any of the arguments
 and one closing bracket after each argument.
 
@@ -425,6 +582,7 @@ let
 	val br = prec gt_prec pc_h_apply_later;
 
 	val head_env = set_prec pc_h_apply_first cur_env;
+	val arg_env = set_prec pc_h_apply_later cur_env;
 
 	fun print_head tm = (
 		case  dest_simple_term tm
@@ -432,21 +590,25 @@ let
 		|	Const(str, ty) =>	do_const head_env tm str ty
 		|	_  =>			main_term_pp head_env tm
 	);
+
+	fun print_arg tm = (
+		endb();
+		space(1, 0);
+		beginb(2, true);
+		main_term_pp arg_env tm
+	);
 in
 	case args
 	of nil =>	print_head head_fn
-	| _ => 		let
-				val arg_env = set_prec pc_h_apply_later cur_env;
-
-				fun print_arg tm = main_term_pp arg_env tm;
-			in
-				beginb(0, false);
-				if br then (addstring "("; (*=)=*) beginb(2, true)) else ();
+	| _ => 		(	if br then addstring "(" (*=)=*) else ();
+				beginb(2, false);
+				beginb(0, true);
 				print_head head_fn;
-				map (fn t => (space(1, 0); print_arg t)) args;
-				if br then (endb(); (*=(=*) addstring ")") else ();
-				endb()
-			end
+				map print_arg args;
+				endb();
+				endb();
+				if br then (*=(=*) addstring ")" else ()
+			)
 end
 );
 =TEX
@@ -509,48 +671,66 @@ end
 );
 =TEX
 
+The caller of $display_binder$ is responsible for ensuring that the
+name may be printed as a binder.
+
 =SML
 fun €display_binder› (cur_env:PP_ENV) (name:string) (decls:TERM list) (body:TERM) : unit = (
 let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
-	fun tm_p p t : unit = main_term_pp (set_prec p cur_env) t;
+	fun tm_p p t : unit = (
+		beginb(2, true);
+		main_term_pp (set_prec p cur_env) t;
+		endb()
+	);
 
 	fun vs_printer vs : unit = (space(1, 0); tm_p PcLowest vs);
 
 	fun pr_decls (decs, ty) : unit = (
 		beginb(0, false);
 		map vs_printer decs;
-		addstring ":";
 		space(1, 0);
+		addstring ": ";
 		main_type_pp cur_env ty;
-		space(0, 0);
 		endb()
+	);
+
+	fun pr_semi_decls dec = (
+		addstring ";";
+		space(0, 0);
+		endb();
+		beginb(2, true);
+		pr_decls dec
 	);
 
 	val br = prec gt_prec pc_h_if_let_bind;
 in
-	if br then (beginb(0, false); addstring "(" (*=)=*) ) else ();
-	beginb(2, false);
-	print_identifier addstring name;
+	beginb(0, true);
+	if br then addstring "(" (*=)=*) else ();
+	addstring name;
+
 	if !pp_types_on_binders
-	then	(	beginb(2, false);
+	then	(	beginb(2, true);
 			case group_declarations decls
 			of nil => ()
 			| h::nil => pr_decls h
-			| h::t => (pr_decls h; map (fn gp => (addstring ";"; pr_decls gp)) t; ())
+			| h::t => (pr_decls h; map pr_semi_decls t; ())
 			;
-			space(0, 0);
-			endb()
+			()
 		)
-	else	(map vs_printer decls; ())
+	else	(
+		beginb(2, false);
+		map vs_printer decls;
+		())
 	;
-	addstring "∑";
 	endb();
-	space(1, 0);
-	tm_p pc_h_if_let_bind_last body;
-	if br then ( (*=(=*) addstring ")"; space(0, 0); endb()) else ()
+	space(0, 2);
+	addstring "∑ ";
+	main_term_pp (set_prec pc_h_if_let_bind_last cur_env) body;
+	if br then (*=(=*) addstring ")" else ();
+	endb()
 end
 );
 =TEX
@@ -585,18 +765,19 @@ fun €HOL_conditional› (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 			val br = prec gt_prec pc_h_if_let_bind;
 
 			fun aux str inner_prec tm = (
-				beginb(2, false);
+				beginb(0, false);
 				addstring str;
-				space(1, 2);
+				space(1, 0);
+				beginb(2, true);
 				main_term_pp (set_prec inner_prec cur_env) tm;
+				endb();
 				endb()
 			);
 		in
-			if br then addstring "(" (*=)=*) else ();
-			beginb(2, true);
+			if br then (addstring "(" (*=)=*); beginb(2, true)) else beginb(0, true);
 			aux "if"	PcLowest		cond;		space(1, 0);
 			aux "then"	PcLowest		then_part;	space(1, 0);
-			aux "else"	pc_h_if_let_bind_last	else_part;	space(0, 0);
+			aux "else"	pc_h_if_let_bind_last	else_part;
 			endb();
 			if br then (*=(=*) addstring ")" else ();
 			PfOk
@@ -647,14 +828,22 @@ let
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
 	fun tm_p t = main_term_pp (set_prec PcLowest cur_env) t;
+
+	fun later_elem t = (
+		addstring ";";
+		endb();
+		space(1, 2);
+		beginb(2, true);
+		tm_p t
+	);
 in(
 	beginb(0, false);
 	addstring opener;
-	beginb(2, false);
+	beginb(2, true);
 	case body
 	of one_tm::nil =>	tm_p one_tm
 	| hd_tm::rest => (	tm_p hd_tm;
-				map (fn tm => (addstring ";"; space(1, 0); tm_p tm)) rest; ())
+				map later_elem rest; ())
 	| nil => ();
 	endb();
 	addstring closer;
@@ -712,10 +901,12 @@ let
 in(
 	beginb(0, false);
 	addstring "{";
-	beginb(2, false);
+	beginb(2, true);
 	tm_p decs;
-	space(0,0);
+	endb();
+	space(0, 0);
 	addstring"|";
+	beginb(2, true);
 	tm_p pred;
 	endb();
 	addstring "}";
@@ -742,7 +933,6 @@ the let term is broken open into the component pieces for printing.
 This includes rebuilding the components into a form
 compatible with the syntax shown above.
 Function $print_list_of_lets$ prints the individual let terms.
-Function $print_definer$ prints the defining terms.
 
 Breaking open local definitions to get their constituents works as
 follows.
@@ -767,6 +957,7 @@ strip_let ¨let af (a1,(a2,a3)) ((b1,b2),b3) (c1,c2,c3) = d in eÆ
 strip_let ¨let ff a b c d = e in fÆ
 		= ([[(¨ffÆ, ¨Ã a b c d∑ eÆ)]], ¨fÆ)
 strip_let ¨let a = b and c = d and e = f in gÆ
+		= ([[(¨aÆ, ¨bÆ), (¨cÆ, ¨dÆ), (¨eÆ, ¨fÆ)]], ¨gÆ)
 =TEX
 
 The last three examples above show local function definitions.  They
@@ -835,36 +1026,43 @@ end
 =TEX
 
 =SML
-fun €print_definer› (cur_env:PP_ENV) (let_clause : TERM list) : unit = (
+fun €print_list_of_lets› (cur_env:PP_ENV) (let_clauses : TERM list list, tm : TERM) : unit = (
 let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
-	fun tm_p p t = main_term_pp (set_prec p cur_env) t;
+	val br = prec gt_prec (PcLowest);
+
+	fun tm_p p t = (
+		beginb(2, true);
+		main_term_pp (set_prec p cur_env) t;
+		endb()
+	);
 
 	fun aux(definer, prefix) = (
+		beginb(2, false);
 		addstring prefix;
-		space(1, 0);
 		tm_p PcLowest definer;
+		endb();
 		space(1,0);
-		"and"
+		"and "
 	);
-in
-	revfold aux let_clause "let";
-	addstring "in";
-	space(1,2)
-end
-);
-=TEX
 
-=SML
-fun €print_list_of_lets› (cur_env:PP_ENV) (let_clauses : TERM list list, tm : TERM) : unit = (
-	case let_clauses
-	of nil => main_term_pp (set_prec pc_h_if_let_bind_last cur_env) tm
-	| first::rest => (
-			print_definer cur_env first;
-			print_list_of_lets cur_env (rest, tm)
-		)
+	fun print_definer (let_clause : TERM list) : unit = (
+		revfold aux let_clause "let ";
+		beginb(2, true);
+		addstring "in "
+	);
+in(
+	if br then (addstring "(" (*=)=*); beginb(0, true)) else beginb(0, true);
+
+	map print_definer let_clauses;
+	tm_p pc_h_if_let_bind_last tm;
+	map (fn _ => endb()) let_clauses;
+
+	if br then (*=(=*) addstring ")" else ();
+	endb()
+)end
 );
 =TEX
 
@@ -877,22 +1075,15 @@ whole term.  The components of the term are found.
 fun €HOL_let› (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 		([a1, a2]:TERM list) : PFUN_ANS = (
 let
-	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
-		pe_endb=endb, ...} = cur_env;
-
-	fun tm_p p t = main_term_pp (set_prec p cur_env) t;
-
-	val br = prec gt_prec (PcLowest);
-
 	val orig_tm = mk_app(mk_app(orig, a1), a2);
-
-	val let_term = get_let_pieces orig_tm;
-in(
-	if br then (beginb(2, false); addstring "(" (*=)=*)) else ();
-	print_list_of_lets cur_env let_term;
-	if br then ((*=(=*) addstring ")"; endb()) else ();
-	PfOk
-)end
+in
+	case get_let_pieces orig_tm
+	of (nil, _) => PfNotPossible
+	| let_term => (
+		print_list_of_lets cur_env let_term;
+		PfOk
+	)
+end
 )
 | HOL_let _ _ _ _ args = if length args > 2 then PfFewer 2 else PfNotPossible;
 =TEX
@@ -901,25 +1092,58 @@ in(
 \newpage
 \subsection{Pairs}
 
+This routine should be provided by dtd004.
+
+=SML
+fun €strip_pair› (tm : TERM) : (TERM list * TERM) = (
+	let
+		val (t1, rhs) = dest_pair tm;
+		val (t2l, t3) = strip_pair rhs;
+	in
+		(t1 :: t2l, t3)
+	end
+	handle (Fail _) => (nil, tm)
+);
+=TEX
+
 =SML
 fun €HOL_comma› (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 		([a1, a2]:TERM list) : PFUN_ANS = (
+case get_fixity ","
+of Lex.Infix comma_prec =>
 let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
-	fun tm_p p t = main_term_pp (set_prec p cur_env) t;
+	fun tm_p p t = (
+		beginb(2, false);
+		main_term_pp (set_prec p cur_env) t;
+		endb()
+	);
+
+	val pc_comma = pc_h_oper(comma_prec, true);
+
+	fun pr_el_comma t = (
+		tm_p pc_comma t;
+		addstring ",";
+		space(1,0)
+	);
 
 	val br = prec gt_prec (PcVeryLow(10, 0, true));
+
+	val (head_val, last) = strip_pair a2;
 in(
-	if br then (beginb(2, false); addstring "(" (*=)=*)) else ();
-	tm_p (PcVeryLow(10, 0, true)) a1;
-	addstring ",";
-	space(1,0);
-	tm_p (PcVeryLow(10, 0, false)) a2;
-	if br then ((*=(=*) addstring ")"; endb()) else ();
+	beginb(2, false);
+	if br then addstring "(" (*=)=*) else ();
+
+	map pr_el_comma (a1 :: head_val);
+	tm_p (pc_h_oper(comma_prec, false)) last;
+
+	if br then (*=(=*) addstring ")" else ();
+	endb();
 	PfOk
 )end
+| _ => PfNotPossible
 )
 | HOL_comma _ _ _ _ args = if length args > 2 then PfFewer 2 else PfNotPossible;
 =TEX
@@ -941,6 +1165,51 @@ fun €HOL_uncurry› (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 \newpage
 \section{OPERATORS: PREFIX, INFIX AND POSTFIX}
 
+=IGN
+fun string_of_prec (p:PREC_CONTEXT) : string = (
+let
+	fun aux (a, b, c) = (
+			(string_of_int a)
+		^	","
+		^	(string_of_int b)
+		^	(if c then "T" else "F")
+		^	" "
+	);
+in
+	case p
+	of PcHighest => "H"
+	| PcNormal x => "N" ^ (aux x)
+	| PcLowest => "L"
+	| PcVeryLow x => "V" ^ (aux x)
+end
+);
+
+=IGN
+addstring	(	"(*do_prefix: context="
+		^	(string_of_prec prec)
+		^	"  this="
+		^	(string_of_prec pc_op_prec)
+		^	"  brackets="
+		^	(if br then "Y" else "N")
+		^	"  block="
+		^	(if blk then "Y" else "N")
+		^	"*)"
+		);
+space(1, 0);
+
+addstring "(*do_prefix*)";
+space(1, 0);
+
+=TEX
+
+All infix, prefix and postfix operators are very similar, the
+distinction being the presence or absence of the arguments.  In each
+case the operator has the given $name$ and $op_prec$ gives its
+precedence.
+
+The caller of each of these routines is responsible for
+ensuring that the name may be printed as an operator.
+
 =SML
 fun €do_prefix› (cur_env:PP_ENV) (name:string) (op_prec:int)
 		((a1::nil):TERM list) : PFUN_ANS = (
@@ -950,13 +1219,19 @@ let
 
 	fun tm_p p t = main_term_pp (set_prec p cur_env) t;
 
-	val br = prec gt_prec (pc_h_oper(op_prec, true));
+	val pc_op_prec = pc_h_oper(op_prec, false);
+	val br = prec gt_prec pc_op_prec;
+	val blk = similar_prec(prec, pc_op_prec);
 in(
-	if br then (beginb(2, false); addstring "(" (*=)=*)) else ();
-	print_identifier addstring name;
-	space(1,0);
-	tm_p (pc_h_oper(op_prec, false)) a1;
-	if br then ((*=(=*) addstring ")"; endb()) else ();
+	if blk then () else beginb(2, true);
+	if br then addstring "(" (*=)=*) else ();
+
+	addstring name;
+	if blk then space(1, 0) else addstring " ";
+	tm_p pc_op_prec a1;
+
+	if br then (*=(=*) addstring ")" else ();
+	if blk then () else endb();
 	PfOk
 )end
 )
@@ -974,19 +1249,33 @@ let
 
 	fun tm_p p t = main_term_pp (set_prec p cur_env) t;
 
-	val br = prec gt_prec (pc_h_oper(op_prec, true));
+	val pc_op_prec = pc_h_oper(op_prec, false);
+	val br = prec gt_prec pc_op_prec;
+	val blk = similar_prec(prec, pc_op_prec);
 in(
-	if br then (beginb(2, false); addstring "(" (*=)=*)) else ();
-	tm_p (pc_h_oper(op_prec, true)) a1;
-	space(1,0);
-	print_identifier addstring name;
-	if br then ((*=(=*) addstring ")"; endb()) else ();
+	if blk then () else beginb(2, true);
+	if br then addstring "(" (*=)=*) else ();
+
+	tm_p pc_op_prec a1;
+	if blk then space(1, 0) else addstring " ";
+	addstring name;
+
+	if br then (*=(=*) addstring ")" else ();
+	if blk then () else endb();
 	PfOk
 )end
 )
 | do_postfix _ _ _ nil = PfNotPossible
 | do_postfix _ _ _ _ = PfFewer 1
 ;
+=TEX
+
+HOL infix operators are right associative thus the following
+terms are equivalent.
+
+=GFT
+¨(a ± b) ± (c ± d)Æ
+¨(a ± b) ± c ± dÆ
 =TEX
 
 =SML
@@ -998,15 +1287,27 @@ let
 
 	fun tm_p p t = main_term_pp (set_prec p cur_env) t;
 
-	val br = prec gt_prec (pc_h_oper(op_prec, true));
+	val pc_op_prec = pc_h_oper(op_prec, true);
+	val br = prec gt_prec pc_op_prec;
+	val blk = similar_prec(prec, pc_op_prec);
 in(
-	if br then (beginb(2, false); addstring "(" (*=)=*)) else ();
-	tm_p (pc_h_oper(op_prec, true)) a1;
+	if br
+	then	(addstring "(" (*=)=*); beginb(2, true))
+	else	if blk
+		then ()
+		else beginb(2, true);
+
+	tm_p pc_op_prec a1;
 	space(1,0);
-	print_identifier addstring name;
-	space(1,0);
+	addstring name;
+	addstring " ";
 	tm_p (pc_h_oper(op_prec, false)) a2;
-	if br then ((*=(=*) addstring ")"; endb()) else ();
+
+	if br
+	then	(endb(); (*=(=*) addstring ")")
+	else	if blk
+		then ()
+		else endb();
 	PfOk
 )end
 )
@@ -1018,6 +1319,9 @@ in(
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \newpage
 \subsection{Binders}
+
+The caller of $do_binder$ is responsible for ensuring that the
+name may be printed as a binder.
 
 =SML
 fun €do_binder› (cur_env:PP_ENV) (name:string) (ty:TYPE)
@@ -1075,6 +1379,8 @@ open Lex;
 
 fun €do_fixity› (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 		(args:TERM list) : PFUN_ANS = (
+    if is_simple_name name
+    then
 	case get_fixity name
 	of Nonfix => (
 			HOL_do_app cur_env orig args;
@@ -1084,6 +1390,8 @@ fun €do_fixity› (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 	| Infix op_prec		=> do_infix	cur_env name op_prec args
 	| Postfix op_prec	=> do_postfix	cur_env name op_prec args
 	| Binder		=> do_binder	cur_env name ty args
+    else
+	PfNotPossible
 );
 
 in
