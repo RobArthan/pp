@@ -12,8 +12,7 @@
  * macros:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #define _palette
-#define MAX_PALETTES 32
-#define N_COLS 8
+#define MAX_PALETTES 4
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files: 
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -49,13 +48,15 @@ static char prettychars[] = {
 0x99, 0xc1, 0xc2, 0xc4, 0xc5, 0xc6, 0xc7, 0xc8, 
 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xd0, 0xd1, 
 0xd2, 0xd3, 0xd4, 0xd5, 0xd7, 0xd8, 0xd9, 0xda, 
-/* 0x83, 0x85,0x96, 0xaf, 0xbf, 0xc3, 0xd6, 0xe3, 
-0xe4, 0xe5, 0xe9, 0xec, 0xf3, 0xf5, 0xf6, 0xf8, */
+0x83, 0x85, 0x96, 0xaf, 0xbf, 0xc3, 0xd6, 0xe3, 
+0xe4, 0xe5, 0xe9, 0xec, 0xf3, 0xf5, 0xf6, 0xf8,
 0x00} ;
 
-static Widget text_widgets[MAX_PALETTES];
+typedef struct {
+	Widget text_w, palette_w
+} PaletteData;
 
-static int spare = 0;
+static PaletteData palette_info[MAX_PALETTES];
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * add_palette: attach a palette to a text widget
@@ -66,17 +67,28 @@ Widget w;
 {
 	XmString lab;
 	char buf[2];
-	int i, n_chars;
-	unsigned int cbdata;
-	Widget shell, row_col, button;
-	void type_char();
+	long i, n_chars, x, y, twi;
+	unsigned long cbdata;
+	Widget shell, form, button;
+	void type_char_cb();
 
-fprintf(stderr, "add_palette\n");
-fflush(stderr);
+	for(	twi= 0;
+		twi< MAX_PALETTES &&
+		palette_info[twi].text_w != w &&
+		palette_info[twi].palette_w != NULL ;
+		++twi) {
+		continue;
+	};
 
-	if(spare >= MAX_PALETTES) {
+	if(twi>= MAX_PALETTES) {
 		msg("palette creation", "no more space for palettes");
 		return(False);
+	};
+
+	if((form = palette_info[twi].palette_w) != NULL) {
+		XtManageChild(form);
+		XtPopup(XtParent(form), XtGrabNone);
+		return;
 	};
 
 	n_chars = strlen(prettychars);
@@ -85,14 +97,14 @@ fflush(stderr);
 		xmDialogShellWidgetClass, w,
 		NULL); 
 
-	row_col = XtVaCreateManagedWidget("row_col",
-		xmRowColumnWidgetClass, shell,
-		XmNpacking, 		XmPACK_COLUMN,
-		XmNnumColumns,		N_COLS,
-		XmNorientation,		XmHORIZONTAL,
-		XmNresizeHeight,	True,
-		XmNresizeWidth,		True,
+	form = XtVaCreateManagedWidget("form",
+		xmFormWidgetClass, shell,
+		XmNfractionBase, 	16,
+		XmNautoUnmanage,	False,
 		NULL);
+
+	palette_info[twi].text_w = w;
+	palette_info[twi].palette_w = form;
 
 	buf[1] = '\0';
 
@@ -100,29 +112,38 @@ fflush(stderr);
 
 		buf[0] = prettychars[i];
 		lab = XmStringCreateSimple(buf);
+		x = 2 * (i % 8);
+		y = i / 8;
 		button = XtVaCreateManagedWidget("button",
-			xmPushButtonGadgetClass, row_col,
-			XmNlabelString, lab, NULL);
+			xmPushButtonGadgetClass, form,
+			XmNlabelString, lab,
+			XmNleftAttachment,	XmATTACH_POSITION,
+			XmNleftPosition,	x,
+			XmNrightAttachment,	XmATTACH_POSITION,
+			XmNrightPosition,	x + 2,
+			XmNtopAttachment,	XmATTACH_POSITION,
+			XmNtopPosition,		y,
+			XmNbottomAttachment,	XmATTACH_POSITION,
+			XmNbottomPosition,	y + 1,
+			NULL);
 		XmStringFree(lab);
-		cbdata = (spare << 8) | (prettychars[i] & 0xff);
-		XtAddCallback(button, XmNactivateCallback, type_char,
+		cbdata = (twi << 8) | (prettychars[i] & 0xff);
+		XtAddCallback(button, XmNactivateCallback, type_char_cb,
 			cbdata);
 	};
 
-	/*XtManageChild(row_col);*/
 	XtPopup(shell, XtGrabNone);
 
-	text_widgets[spare++] = w;
 	return(True);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * type_char: simulate typing of a character into a text widget
+ * type_char_cb: simulate typing of a character into a text widget
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-void type_char(w, cbdata, cbs)
+void type_char_cb(w, cbdata, cbs)
 Widget w;
-unsigned int cbdata;
+unsigned long cbdata;
 XmPushButtonCallbackStruct *cbs;
 {
 	char buf[2];
@@ -131,7 +152,7 @@ XmPushButtonCallbackStruct *cbs;
 	Widget text_w;
 
 	if(text_index >= MAX_PALETTES ||
-		!(text_w = text_widgets[text_index])) {
+		!(text_w = palette_info[text_index].text_w)) {
 		char *m = "unexpected argument 0xXXXXXXXX";
 		sprintf(m, "unexpected argument 0x%x", cbdata);
 		msg("palette handler", m);
@@ -153,3 +174,6 @@ XmPushButtonCallbackStruct *cbs;
 	XmTextShowPosition(text_w, start);
 
 }
+
+
+
