@@ -1,0 +1,1538 @@
+=TEX
+% TQtemplate.tex
+\documentstyle[hol,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{SLR Parser Generator}  %% Mandatory field
+\TPPref{DS/FMU/IED/??}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+%\TPPdate{}  %% Mandatory field (with sensible default)
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.D.~Arthan & FST Team Leader}
+\TPPabstract{
+A simple SLR parser generator is implemented.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+      Library}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history}  % to get section number `0.3'
+\begin{description}
+\item[Issue \SCCSversion (\FormatDate{$Date$%
+})]
+First draft for comment.
+\end{description}
+\subsection{Changes forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+
+\subsection{Introduction}
+\section{UTILITIES}
+=TEX
+=SML
+open EfficientDictionary;
+=TEX
+=SML
+exception SLRP_ERROR of string;
+=TEX
+=SML
+val my_nth : 'a list -> int -> 'a = switch nth;
+=TEX
+=SML
+val alpha_sort = Sort.sort Sort.stringorder;
+=TEX
+=SML
+fun bound list = length list - 1;
+=TEX
+=SML
+fun chat msg = (diag_line msg);
+=TEX
+=SML
+fun indices (list : ''a list) (what : ''a) = (
+	let	fun aux n (a :: more) = (
+			if a = what
+			then n :: aux (n+1) more
+			else aux (n+1) more
+		) | aux _ _ = [];
+	in	aux 0 list
+	end
+);
+=TEX
+=SML
+fun listofarray Xs = (
+	let	open Array;
+		val len = length Xs;
+	in	map (fn i => sub (Xs, i)) (interval 0 (len-1))
+	end
+);
+=TEX
+=SML
+fun so_many (0 : int) (thing : string) : string = "0 " ^ thing ^ "s"
+|   so_many 1 (thing : string) : string = "1 " ^ thing 
+|   so_many n (thing : string) : string = string_of_int n ^ " " ^ thing ^ "s";
+=TEX
+=SML
+fun read_file (file : string) = (
+	let	val ip = open_in file;
+		fun aux () = (
+			let	val whatgot = input(ip, 512)
+			in	if size whatgot = 512
+				then whatgot :: aux ()
+				else [whatgot]
+			end
+		);
+		val res = implode(aux());
+	in	close_in ip; res
+	end	handle Io msg =>  raise SLRP_ERROR("read_file: i/o failure:" ^ msg)
+);
+=TEST
+read_file "AARDVARK" (* FAILS *);
+read_file "/etc/passwd";
+let val str = read_file "slr.doc" in chat str end;
+=TEX
+\section{THE SETS OF ITEMS CONSTRUCTION}
+The following types are used to represent grammars etc.:
+=SML
+datatype ''a SYMBOL = Terminal of ''a | NonTerminal of string;
+type ''a PRODUCTION = string * (''a SYMBOL list list);
+type ''a GRAMMAR = ''a PRODUCTION list;
+datatype SYM_CLASS = VarClass of string | PuncClass of string;
+=TEX
+=SML
+fun expand (g : ''a GRAMMAR) (sym as (NonTerminal name) : ''a SYMBOL) : ''a SYMBOL list list = (
+	lassoc2 g (fn _ => nil) name
+) | expand _ _ = nil;
+=TEX
+=SML
+fun give_terms (g : ''a GRAMMAR) : ''a list = (
+	let	fun f(Terminal a :: rest) = a :: f rest
+		|   f (_ :: rest) = f rest
+		|   f nil = nil;
+	in	list_cup(map (fn (x, y) => (list_cup (map f y))) g)
+	end
+);
+=TEX
+We represent an item by giving the name of the associated non-terminal
+the index of the alternative for that non-terminal and the index within
+that alternative:
+=SML
+type ''a item = ''a SYMBOL * int * int;
+=TEX
+$follower\,g\,x$ returns the symbol immediately after the dot in the item $x$
+for the grammar $g$
+=SML
+fun	follower (g : ''a GRAMMAR) ((sym, alt, dot): ''a item) : ''a SYMBOL = (
+	my_nth (my_nth (expand g sym) alt) dot
+);
+=TEX
+=SML
+fun show_item (g : ''a GRAMMAR) (sym, alt, dot) = (
+	let	val x = my_nth (expand g sym) alt;
+	in	(x to (dot-1), "DOT", x from dot)
+	end
+);
+=TEX
+=SML
+fun set_eq (xs : ''a list) (ys : ''a list) : bool = (
+	all xs (fn x => x mem ys) andalso all ys (fn y => y mem xs)
+);
+=TEX
+The function $closure$ is just as in \cite{Aho86}.
+=SML
+fun closure (g : ''a GRAMMAR) (items : ''a item list) : ''a item list = (
+	let	fun aux1 res symB = (
+			res cup map (fn i => (symB, i, 0)) (interval 0 (bound (expand g symB)))
+		);
+		fun aux2 res (item::more) = (
+			(aux2 (aux1 res (follower g item)) more)
+			handle Fail _ => aux2 res more
+		) | aux2 res _ = res;
+		val res = aux2 items items;
+	in	if length res > length items
+		then closure g res
+		else res
+	end
+);
+=TEX
+The function $goto$ is just as in \cite{Aho86}.
+=SML
+fun goto (g: ''a GRAMMAR) (items : ''a item list) (sym : ''a SYMBOL) : ''a item list = (
+	let	fun aux ((item  as (symA, alt, dot)):: more) = (
+			(if sym = follower g item
+				then (symA, alt, dot+1) :: aux more
+				else aux more)
+			handle Fail _ => aux more
+		) | aux [] = [];
+	in	closure g (aux items)
+	end
+);
+=SML
+=TEX
+Again $items$ is as in \cite{Aho86}. We assume the grammar is already
+augmented. The sentence symbol is supplied as an additional parameter.
+=SML
+fun items  (g : ''a GRAMMAR) (sen : string) : ''a item list list = (
+	let	fun aux1 (item :: more) = (
+			((follower g item) :: aux1 more) handle Fail _ => aux1 more
+		) | aux1 [] = [];
+		fun aux2 res (items :: more) = (
+			case aux1 items of
+				[] => aux2 res more
+			|	xs => aux2 (res cup map (goto g items) xs) more
+		) | aux2 res [] = res;
+		fun aux3 items = (
+			let	val newitems = aux2 items items
+			in	if length newitems > length items
+				then aux3 newitems
+				else items
+			end
+		);
+	in	aux3 [closure g [(NonTerminal sen, 0, 0)]]
+	end
+);
+=TEX
+\section{DATA TYPES FOR THE DRIVER}
+We differ slightly from \cite{Aho86} in that we work with two stacks, one
+for states and one for partially parsed input.
+The state stack is just a list of numbers.
+=SML
+type STATE = int;
+type STATE_STACK = STATE list;
+=TEX
+The partially parsed input stack contains entries of the following
+type, $'tok$ being the type of the input token stream,
+$'lc$ being the type of the lexical classes used, and $'pp$ being
+the type preduced when a phrase is reduced.
+=SML
+datatype ('tok, 'lc, 'pp) INPUT_STACK_ITEM = Token of 'tok * 'lc | Parsed of 'pp;
+=TEX
+An $INPUT\_STACK$ is just a list of $INPUT\_STACK\_ITEM$s.
+=SML
+type('tok, 'lc, 'pp) INPUT_STACK = ('tok, 'lc, 'pp) INPUT_STACK_ITEM list;
+=TEX
+As in \cite{Aho86}, an action takes one of the following four options:
+
+\begin{enumerate}
+\item
+Shift into a given state, $s$
+\item
+Reduce by some alternative, $\beta$, for the nonterminal $A$. This means
+that the top most $n$ items, where $n$ is the length of the alternative $\beta$
+have been recognised as an $A$. In our case this means that $n$ items
+are popped from the input stack and some user-defined
+code is invoked to compute a $'pp$, say $A$, from them, which is then
+pushed (as $Parsed\,A$) back on the stack.
+\item
+Accept. I.e. Parsing has finished.
+The input stack now contains a single $'pp$ which is the desired result.
+\item
+Error. The input to be parsed is invalid.
+\end{enumerate}
+
+Actions are encoded in the following datatype, in which we assume that the
+user-defined reduction code may be accessed by the name of the non-terminal, $A$,
+together with the index of the alternative, $\beta$ and in which we also
+record the number of symbols to reduce by in the reduce case.
+Note that as in \cite{Aho83} the parts of the goto tables concerned
+with terminal symbols (i.e. lexical classes) are held in the shift
+actions.
+The ``dynamic'' option is for a shift/reduce conflict which is to be
+resolved during parsing by a user-defined routine.
+=SML
+datatype ACTION	= Shift of STATE
+		| Reduce of ((string * int) * int)
+		| Dynamic of STATE * ((string * int) * int)
+		| Accept
+		| Error;
+=TEX
+The action tables described in \cite{Aho83} are two-dimensional arrays
+indexed by states and lexical classes.
+The action tables with which we work are held as one-dimensional
+arrays of lists of lexical class-(action-state pair) pairs.
+If the state index for these tables is out of range it is a design error.
+User error entries correspond to valid state indices for which the
+lexical class in question is not represented.
+=SML
+type ('lc)ACTION_TABLE =  ('lc * ACTION) list Array.array;
+=TEX
+Similarly the goto tables (for the non-terminal symbols) are held
+in a one-dimensional array of pairs each comprising a non-terminal name and a
+state.
+It is a design error if an invalid index pair is supplied for these tables.
+=SML
+type GOTO_TABLE = (string * STATE) list Array.array;
+=TEX
+We assume that the user-defined reduction code (indexed by non-terminal
+names and alternative indices) is held in a table of the following type.
+(This could be made more efficient if we represented non-terminals as
+numeric offsets rather than by there names.)
+=SML
+type ('tok, 'lc, 'pp)REDUCTION_TABLE =
+	(('tok, 'lc, 'pp)INPUT_STACK -> 'pp) list E_DICT;
+=TEX
+The user-defined dynamic conflict resolver takes an input stack and the
+reduction information
+contained in the dynamic action and returns a value 
+of the following type indicating
+whether the parser should shift, reduce or report an error:
+=SML
+datatype RESOLUTION	= DoShift
+			| DoReduce
+			| DoError;
+=TEX
+Thus the resolver has the following type.
+=SML
+type ('tok, 'lc, 'pp)RESOLVER =
+	('tok * 'lc) * ('tok, 'lc, 'pp)INPUT_STACK * ((string * int) * int) -> RESOLUTION;
+=TEX
+Finally, we assume that a functions of the following types are available
+to give the lexical class of an input token and to handle errors.
+=SML
+type ('tok, 'lc)CLASSIFIER = 'tok -> 'lc;
+type ('tok, 'lc, 'pp)ERROR_ROUTINE = 'tok * ('tok, 'lc, 'pp)INPUT_STACK * STATE_STACK -> unit;
+=TEX
+\section{THE DRIVER}
+The following two exceptions may be raised by the driver. $SYNTAX\_ERROR$
+is raised if an error in the input has been detected and passed to the
+error routine and the error routine has not raised an exception.
+$PARSER\_ERROR$ ``should not happen'': it indicates an error in the driver
+or its tables.
+=SML
+exception SYNTAX_ERROR;
+exception PARSER_ERROR of string;
+=SML
+local
+	fun get_action (actions : (''lc)ACTION_TABLE) (s:STATE) (lc:''lc) : ACTION = (
+	(let	open Array
+	in	lassoc3 (sub(actions, s)) lc
+	end	handle Fail _ => Error)
+	handle Array.Subscript => raise PARSER_ERROR "invalid state"
+	);
+in	fun lookup_action
+		(resolver : ('tok, ''lc, 'pp)RESOLVER)
+		(actions : (''lc)ACTION_TABLE)
+		(tok : 'tok)
+		(stk : ('tok, ''lc, 'pp)INPUT_STACK)
+		(s : STATE)
+		(lc : ''lc) : ACTION = (
+		case get_action actions s lc of
+			Dynamic (s', altsymn) => (
+				case resolver((tok, lc), stk, altsymn) of
+					DoShift => Shift s'
+				|	DoReduce => Reduce altsymn
+				|	DoError => Error
+			) |	easy => easy
+	);
+end;
+=TEX
+=SML
+fun lookup_goto (gotos : GOTO_TABLE) (s:STATE) (nt : string) = (
+	(let	open Array
+	in	lassoc3 (sub(gotos, s)) nt
+	end	handle Fail _ => raise PARSER_ERROR "invalid non-terminal")
+	handle Array.Subscript => raise PARSER_ERROR "invalid state"
+
+);
+=TEX
+=SML
+fun lookup_reducer (reducers : (''tok, ''lc, 'pp)REDUCTION_TABLE)
+		(nt:string) (alt : int) = (
+	case e_lookup nt reducers of
+		Value tab => my_nth tab alt
+	|	Nil  => raise PARSER_ERROR "invalid non-terminal/alternative"
+);
+=TEX
+=SML
+fun slrp'parse
+	(s0 : STATE)
+	(actions : (''lc)ACTION_TABLE)
+	(gotos : GOTO_TABLE)
+	(reducers : (''tok, ''lc, 'pp)REDUCTION_TABLE)
+	(resolver : (''tok, ''lc, 'pp) RESOLVER)
+	(classify : (''tok, ''lc)CLASSIFIER)
+	(error : (''tok, ''lc, 'pp)ERROR_ROUTINE) : (unit -> ''tok) ->'pp = (
+	let	open Array;
+		val init_ss = [s0];
+		val init_is = [];
+		val fetch_action = lookup_action resolver actions;
+		val fetch_reducer = lookup_reducer reducers;
+		val fetch_goto = lookup_goto gotos;
+		fun go reader tok = (fn (ss, is) =>
+			let	val lc = classify tok;
+				val s = hd ss;
+			in	case fetch_action tok is s lc of 
+					Shift s' => go reader (reader())((s' :: ss), Token(tok, lc) :: is)
+				|	Reduce((nt, alt), r) => (
+						let	val reducer = fetch_reducer nt alt;
+							val A = reducer is;
+							val ss' = ss from r;
+							val is' = is from r;
+							val s' = fetch_goto (hd ss') nt;
+						in go reader tok (s' :: ss', Parsed A :: is')
+						end
+				) |	Accept => ((ss, is)
+				) |	Error =>(
+					error (tok, is, ss);
+					raise SYNTAX_ERROR
+				) |	Dynamic _ => raise PARSER_ERROR "conflict resolution error"
+			end
+		);
+	in
+		(fn reader => (
+			case go reader (reader()) (init_ss, init_is)of
+				(_, [Parsed res]) => res
+			|	_ => raise PARSER_ERROR "stacks corrupt at end of parse"))
+	end
+);
+=TEX
+\section{SLR TABLE COMPUTATION}
+The following computes the $first$ function of \cite{Aho83}.
+=SML
+fun first (g : ''a GRAMMAR) : (''a SYMBOL * (''a OPT list)) list = (
+	let	val step1 = map (fn s => (Terminal s, [Value s])) (give_terms g);
+		fun step2_aux1 alts = (
+			case alts of
+				(Terminal a :: _)  :: more => step2_aux1 more grab (Value a)
+			|	[] :: more=> step2_aux1 more grab Nil
+			|	_ :: more=> step2_aux1 more
+			|	[] => []
+		);
+		fun step2_aux2 ((nt, alts) :: more) = (
+			(NonTerminal nt, step2_aux1 alts) :: step2_aux2 more
+		) | step2_aux2 [] = step1;
+		val step2 = step2_aux2 g
+		fun step3_aux1 tab alts = (
+			case alts of
+				((nt as (NonTerminal _)) :: alt')  :: more => (
+					let	val new = lassoc3 tab nt
+					in	if Nil mem new
+						then (new less Nil)cup step3_aux1 tab (alt' :: more)
+						else new cup step3_aux1 tab more
+					end
+			) |	[] :: more => [Nil] cup step3_aux1 tab more
+			|	_ :: more => step3_aux1 tab more
+			|	[] => []
+		);
+ 		fun step3_aux2 tab ((nt, alts) :: more) = (
+			let	val old = lassoc3 tab(NonTerminal nt);
+				val new = step3_aux1 tab alts;
+				val tab' = tab overwrite (NonTerminal nt, old cup new);
+			in	step3_aux2 tab' more
+			end
+		) | step3_aux2 tab [] = tab;
+		fun step3_aux3 tab = (
+			let	val tab' = step3_aux2 tab g;
+			in	if tab' = tab
+				then tab
+				else step3_aux3 tab'
+			end
+		);
+	in	step3_aux3 step2
+	end
+);
+=TEX
+The following computes the $FOLLOW$ function of \cite{Aho83}.
+=SML
+fun follow (g : ''lc GRAMMAR) (sen : string) (eos : ''lc): (string * (''lc list)) list = (
+	let	val first_tab = first g;
+		fun first_syms (sym :: more) = (
+			let	val firsts = lassoc3 first_tab sym;
+			in	if Nil mem firsts
+				then (firsts less Nil) cup first_syms more
+				else firsts
+			end
+		) | first_syms [] = [Nil];
+		fun doalt a tab alt = (
+			(case alt of 
+				(NonTerminal b :: more) => (
+					let	val oldb = lassoc3 tab b;
+						val firstmore = first_syms more;
+						val newb = oldb cup 
+							(if Nil mem firstmore
+							then lassoc3 tab a cup map force_value(firstmore less Nil)
+							else map force_value firstmore);
+					in	doalt a (tab overwrite (b, newb)) more
+					end
+			) |	(_ :: more) => (doalt a tab more
+			) |	[] => tab)
+		);
+		fun doprod tab (nt, alt :: more) = (
+			doprod (doalt nt tab alt) (nt, more)
+		) | doprod tab (_, []) = tab;
+		fun again (prod :: more) tab = (
+			again more (doprod tab prod)
+		) | again [] tab = tab;
+		fun go tab = (
+			let	val tab' = again g tab;
+			in	if tab' = tab
+				then tab
+				else go tab'
+			end
+		);
+	in	go (map (fn (nt, _) => (nt, if nt = sen then [eos] else [])) g)
+	end 
+);
+
+=TEX
+=SML
+fun slr_tables (g : ''_lc GRAMMAR) (eos : ''_lc) (sen : string) 
+	: (''_lc)ACTION_TABLE * GOTO_TABLE * ((''_lc)item list * int) list * STATE = (
+	let	open Array;
+		val C = items g sen;
+		val n = bound C;
+		val js = interval 0 n
+		val Ijs = combine C js;
+		val actions = array (n+1, []:(''_lc * ACTION)list);
+		val gotos = array (n+1, []: (string * STATE)list);
+		fun my_follower item = (
+			(Value (follower g item)) handle Fail _ => Nil
+		);
+		fun item_index items = (
+			snd(find Ijs (fn (items', _) => set_eq items items'))
+		);
+		fun make_actions items ((item as (NonTerminal nt, alt, dot)) :: more) = (
+			case my_follower item of
+				Value(a as (Terminal lc)) => (
+					make_actions items more grab
+					(lc, Shift(item_index(goto g items a)))
+			) |	Value _ => (make_actions items more
+			) |	Nil => (
+					if nt <> sen
+					then let	fun f lc = (lc, Reduce((nt, alt), dot));
+							val lcs = lassoc3 (follow g sen eos) nt;
+					in	make_actions items more cup map f lcs
+					end else make_actions items more grab (eos, Accept) 
+			)
+		) | make_actions _ _ = [];
+		val non_terms = map fst g;
+		fun make_gotos items = (
+			let	fun aux (nt :: more) = (
+					case goto g items (NonTerminal nt) of
+						[] => aux more
+					|	items' => (nt, item_index items') :: aux more
+				) | aux [] = [];
+			in	aux non_terms
+			end
+		);
+		val SideEffect1 = map (fn (items, j) => update(actions, j, make_actions items items)) Ijs;
+		val SideEffect2 = map (fn (items, j) => update(gotos, j, make_gotos items)) Ijs;
+		val init_state = snd (find Ijs (fn (items, _) => any items (fn (nt, _, _) => nt = NonTerminal sen)))
+		handle Fail _ =>
+		raise SLRP_ERROR
+		"the sentence symbol is not in the list of items";
+	in	(actions, gotos, Ijs, init_state)
+	end
+);
+
+=TEX
+=SML
+fun conflicts  (actions : (''_lc) ACTION_TABLE) : (''_lc * STATE * (ACTION list)) list = (
+	let	open Array;
+		fun aux i ((lc, act) :: more) = (
+			if any more (fn (lc', _) => lc' = lc)
+			then (lc, i, act :: map snd (more drop (fn (lc', _) => lc' <> lc)))
+				:: aux i (more drop (fn (lc', _) => lc' = lc)) 
+			else aux i more
+		) | aux _ [] = [];
+	in	flat(map (fn i => aux i (sub(actions, i)))(interval 0 (length actions - 1)))
+	end
+);
+=TEX
+\section{DIAGNOSTICS}
+It is helpful to have code which attempts to explain the conflicts which
+arise.
+
+Most things here are parametrised by a grammar
+and/or a function to print out lexical classes.
+=SML
+fun format_symbol (p : ''lc -> string) (Terminal x : (''lc) SYMBOL) = p x
+|   format_symbol _ (NonTerminal s) = s;
+=TEX
+=SML
+fun format_alt (g: ''lc GRAMMAR, p : ''lc -> string) (alt : string, i : int) : string = (
+	if all g (fn (s,_) => s <> alt)
+	then "*** INTERNAL ERROR: invalid alternative: " ^ alt ^ " ***"
+	else	let	val alts = expand g (NonTerminal alt);
+			val len = length alts;
+			val dots1 = if i > 0 then "... | " else "";
+			val dots2 = if i < len-1 then " | ..." else "";
+		in	if i < 0 orelse i >= len
+			then "*** INTERNAL ERROR: invalid index ***"
+			else alt ^ " = " ^ dots1 ^ format_list (format_symbol p)(my_nth alts i) ", " ^ dots2
+		end
+);
+=TEX
+=SML
+fun format_item (g : ''lc GRAMMAR, p : ''lc -> string) ((NonTerminal sym, alt, dot):''a item) = (
+	if all g (fn (s,_) => s <> sym)
+	then "*** INTERNAL ERROR: invalid alternative: " ^ sym ^ " ***"
+	else	let	val alts = expand g (NonTerminal sym);
+			val len = length alts;
+		in	if alt < 0 orelse alt >= len
+			then "*** INTERNAL ERROR: invalid item ***"
+			else let	val syms = my_nth alts alt;
+					val slen = length syms;
+			in	if dot < 0 orelse dot > slen
+				then "*** INTERNAL ERROR: invalid index in item ***"
+				else	sym ^ " = "
+					^ format_list (format_symbol p)(syms to (dot-1)) ", "
+					^ (if dot = 0 then "." else if dot = slen then "." else "., ")
+					^ format_list (format_symbol p)(syms from dot) ", "
+			end
+		end
+) | format_item _ _ = "*** INTERNAL ERROR: invalid item ***";
+=SML
+fun format_state(gp : ''lc GRAMMAR * (''lc -> string))
+		((items, i) : (''lc) item list * int) : string list = (
+	case items of
+		[] => [string_of_int i ^ ":"]
+	|	[item] => [string_of_int i ^ ":\t" ^ format_item gp item]
+	|	item :: more => string_of_int i ^ ":\t" ^ format_item gp item
+			:: map (fn item => "\t" ^ format_item gp item) more
+);
+=TEX
+=SML
+fun print_grammar (p : ''lc -> string)(g : ''lc GRAMMAR) : unit = (
+	let	fun fmt_alt alt = (
+			format_list (format_symbol p) alt ", "
+		);
+		fun fmt_prod (nt, alts) = (
+			case alts of
+				[] => [nt ^ "\t="]
+			|	[alt] => [nt ^ "\t= " ^ fmt_alt alt]
+			|	alt :: more => nt ^ "\t= " ^ fmt_alt alt ^ ""
+					:: map (fn alt => "\t| " ^ fmt_alt alt) more
+		);
+		fun add_semi list = (
+			let	val r = rev list;
+			in	rev(hd r ^ ";" :: tl r)
+			end
+		);
+		fun do_prod prod = map chat (add_semi(fmt_prod prod));
+	in	map do_prod g; ()
+	end 
+);
+=TEX
+=SML
+fun print_states (gp : ''lc GRAMMAR * (''lc -> string))
+		(states : (''lc item list * int) list): unit = (
+	let	fun do1 state = map chat (format_state gp state);
+	in	map do1 states; ()
+	end 
+);
+=TEX
+\section{AUXILIARIES FOR USER CODE}
+In this section we define functions which support the user in defining
+error handling and conflict resolution functions.
+=SML
+fun format_stack (do_tok : 'tok -> string)(stk : ('tok, 'lc, 'pp)INPUT_STACK) : string = (
+	format_list (fn Token (tk, _) => do_tok tk | _ => "...") (rev stk) " "
+);
+=TEX
+The default error routine is parameterised by functions to print input
+tokens:
+=SML
+fun default_error
+	(do_tok : 'tok -> string)
+	(tok: 'tok, stk : ('tok, 'lc, 'pp)INPUT_STACK, _ : STATE_STACK) : unit = (
+	diag_line("*** ERROR Syntax error ***");
+	diag_line(do_tok tok ^ " not expected after:");
+	diag_line(format_stack do_tok stk)
+);
+=TEX
+The default resolver is one which raises $PARSER\_ERROR$ if it is called.
+It is intended for use when there are no conflicts.
+=SML
+val (default_resolver : ('tok, 'lc, 'pp)RESOLVER) = (fn _ =>
+	raise PARSER_ERROR "shift/reduce conflict"
+);
+=TEX
+For grammars which do contain shift/reduce conflicts the commonest form of
+conflict resolution simply compares the latest input token with the topmost
+token on the stack. $simple\_resolver$ helps the user define such a
+resolver. Its argument is a function which compares two tokens (which
+are given as a pair in input order, i.e. the latest input token comes second).
+=SML
+fun simple_resolver (prec : (('tok * 'lc) * ('tok * 'lc)) -> RESOLUTION)
+		: ('tok, 'lc, 'pp)RESOLVER = (fn (toklc, stk, ignored) =>
+	case stk of
+		Token toklc' :: _ => prec (toklc', toklc)
+	|	_ :: more => simple_resolver prec (toklc, more, ignored)
+	|	[] => raise PARSER_ERROR "shift/reduce conflict"
+);
+=TEX
+\section{BNF Parser}
+\subsection{Action Grammars}
+We need a parser for BNF.
+The BNF dialect used for this
+parser is an extension of a subset of the British Standard (\cite{BS6154}),
+which allows fragments of ML code to be given with any alternative.
+The subset is the one in which the only operators are concatenation
+and alternation and in which grouping with parentheses is not allowed.
+Empty alternatives are allowed.
+We refer to such a grammar as an action grammar.
+
+The concrete syntax
+for action grammars is as follows:
+=TEX
+ó
+	Grammar	=		Prod, `;`
+			|	Prod, `;`, Grammar;
+
+	Prod		=	Var, `=`, Def;
+
+	Def		=	OptAlt, OptAction | OptAlt, OptAction, `|`, Def;
+
+	OptAlt		=	Alt |;
+
+	Alt		=	Symbol | Symbol, `,`, Alt;
+
+	Symbol		=	Var | Con;
+
+	OptAction	=	Action | ;
+æ
+=TEX 
+The result of parsing an action grammar with actions of type $'act$ has
+the following type:
+=SML
+type ('lc, 'act) ACTION_GRAMMAR = (string * ((('lc)SYMBOL list * 'act)list)) list;
+=TEX
+We derive an ordinary grammar from an action grammar as follows:
+=SML
+val strip_action : ('lc, 'act) ACTION_GRAMMAR ->  ('lc) GRAMMAR = map (Combinators.I ** map fst);
+=TEX
+We derive a $'a$-valued reduction table
+from an action grammar as follows:
+=SML
+type ('act) GEN_REDUCTION_TABLE = ('act) list E_DICT;
+=TEX
+=SML
+fun make_reduction_table (ag:('lc, 'act) ACTION_GRAMMAR) : ('act) GEN_REDUCTION_TABLE = (
+	list_e_merge initial_E_DICT (map (Combinators.I ** map snd) ag)
+);
+=TEX
+\subsection{Implementing Action Grammars}
+=TEX
+The lexical categories are as follows:
+=SML
+datatype âBNF_lex_classá	=	BNF_var
+			|	BNF_con
+			|	BNF_eq
+			|	BNF_semi
+			|	BNF_vert
+			|	BNF_comma
+			|	BNF_action
+			|	BNF_eos;
+=TEX
+=SML
+type âBNF_lex_itemá = BNF_lex_class * string;
+=TEX
+=SML
+val format_BNF_lex_item : BNF_lex_item -> string = snd;
+=TEX
+We use the following datatype for the partially parsed inputs when we parse
+an action grammar. (Note we use "()" as the default action value. This corresponds
+to a parser with the partially parsed input having type unit.)
+=SML
+datatype P_GRAMMAR	= PG_Grammar of (string * ((SYM_CLASS list * string)list)) list
+			| PG_Prod of string * ((SYM_CLASS list * string)list)
+			| PG_Def of(SYM_CLASS list * string) list
+			| PG_OptAlt of SYM_CLASS list
+			| PG_Symbol of SYM_CLASS
+			| PG_OptAction of string;
+
+type RT_ENTRY = (BNF_lex_item, BNF_lex_class, P_GRAMMAR)INPUT_STACK->P_GRAMMAR;
+=TEX
+The reduction functions are as follows:
+=SML
+fun pdiag stk area = (
+	raise PARSER_ERROR
+	("invalid reduction (stack=" ^ (format_stack format_BNF_lex_item stk) ^ ")")
+);
+
+fun (grammar'0:RT_ENTRY) stk = pdiag stk "grammar'0";
+
+fun (grammar0:RT_ENTRY) (_ :: Parsed(PG_Prod P) :: _) = PG_Grammar [P]
+|   grammar0 stk = pdiag stk "grammar0";
+
+fun (grammar1:RT_ENTRY) (Parsed(PG_Grammar G) :: _ :: Parsed(PG_Prod P) :: _) = PG_Grammar (P::G)
+|   grammar1 stk = pdiag stk "grammar1";
+
+fun (prod0:RT_ENTRY) (Parsed(PG_Def D)::_::Token((_, V), _)::_) = PG_Prod(V, D)
+|   prod0 stk = pdiag stk "prod0";
+
+fun (def0:RT_ENTRY) (Parsed(PG_OptAction act)::Parsed(PG_OptAlt alt)::_) = PG_Def[(alt, act)]
+|   def0 stk = pdiag stk "def0";
+
+fun (def1:RT_ENTRY) (Parsed(PG_Def D)::_::Parsed(PG_OptAction act)::Parsed(PG_OptAlt alt)::_) = PG_Def((alt, act)::D)
+|   def1 stk = pdiag stk "def1";
+
+fun (optalt0:RT_ENTRY) (Parsed alt::_) = alt
+|   optalt0 stk = pdiag stk "optalt0";
+
+fun (optalt1:RT_ENTRY) _ = PG_OptAlt [];
+
+fun (alt0:RT_ENTRY) (Parsed(PG_Symbol S)::_) = PG_OptAlt [S]
+|   alt0 stk = pdiag stk "alt0";
+
+fun (alt1:RT_ENTRY) (Parsed(PG_OptAlt alt)::_::Parsed(PG_Symbol S)::_) = PG_OptAlt (S::alt)
+|   alt1 stk = pdiag stk "alt1";
+
+fun (symbol0:RT_ENTRY) (Token((_, V), _)::_) = PG_Symbol(VarClass V)
+|   symbol0 stk = pdiag stk "symbol0";
+
+fun (symbol1:RT_ENTRY) (Token((_, V), _)::_) = PG_Symbol(PuncClass V)
+|   symbol1 stk = pdiag stk "symbol1";
+
+fun (optaction0:RT_ENTRY) (Token((_, V), _)::_) = PG_OptAction V
+|   optaction0 stk = pdiag stk "optaction0";
+
+fun (optaction1:RT_ENTRY) (_) = PG_OptAction "()";
+
+=TEX
+The following value bindings help to abbreviate the
+description of the grammar. We think of the
+terminals $NonTerminal$ and $Terminal$ as variables
+and constants in the notation below.
+=SML
+local
+val âGrammará = NonTerminal "Grammar";
+val âProdná = NonTerminal "Prod";
+val âVará = Terminal BNF_var;
+val âDefá = NonTerminal "Def";
+val âAltá = NonTerminal "Alt";
+val âSymbolá = NonTerminal "Symbol";
+val âConá = Terminal BNF_con;
+val âOptActioná = NonTerminal "OptAction";
+val âOptAltá = NonTerminal "OptAlt";
+val âActioná = Terminal BNF_action;
+=TEX
+We can now write down the agumented grammar for our BNF subset together with the
+reduction table entries:
+=SML
+in
+val âBNF_action_grammará : (BNF_lex_class, RT_ENTRY) ACTION_GRAMMAR = [
+	("Grammar'", ([Grammar], grammar'0) :: nil),
+	("Grammar", ([Prodn, Terminal BNF_semi], grammar0)
+			:: ([Prodn, Terminal BNF_semi, Grammar], grammar1) :: nil),
+	("Prod", ([Var, Terminal BNF_eq, Def], prod0) :: nil),
+	("Def", ([OptAlt, OptAction], def0) ::
+		([OptAlt, OptAction, Terminal BNF_vert, Def], def1) :: nil),
+	("OptAlt", ([Alt], optalt0) :: ([], optalt1):: nil),
+	("Alt", ([Symbol], alt0) :: ([Symbol, Terminal BNF_comma, Alt], alt1):: nil),
+	("Symbol", ([Var], symbol0) :: ([Con], symbol1) :: nil),
+	("OptAction", ([Action], optaction0) :: ([], optaction1) :: nil)
+];
+val BNF_reduction_table : (BNF_lex_item, BNF_lex_class, P_GRAMMAR) REDUCTION_TABLE
+		= make_reduction_table BNF_action_grammar;
+val BNF_grammar : (BNF_lex_class)GRAMMAR = strip_action BNF_action_grammar;
+end;
+=TEX
+Once we have coded the lexical analyser for our action grammar concrete syntax
+it will be easy to use the above functions to make an SLR(1) parser for
+the input to our parser generator.
+We adopt the convention that the first production in the grammar gives
+the sentence symbol.
+The resulting parser will compute
+a value of type $P\_GRAMMAR$. Such a value may be used to compute a
+grammar and a reduction table as follows (where from now on we
+use a standard ``impossible'' nonterminal as a sentence symbol to augment
+the grammar):
+=SML
+val sentence_symbol ="*Start*";
+val sentence_action ="(raise PARSER_ERROR\"invalid control\")";
+=TEX
+=SML
+fun make_grammar_and_reduction_table (PG_Grammar(G as ((sen,_)::_)) : P_GRAMMAR) : SYM_CLASS GRAMMAR * string GEN_REDUCTION_TABLE = (
+	let	val G' =  (sentence_symbol, [([VarClass sen], sentence_action)])::G;
+		val nts = map fst G';
+		fun make_sym(PuncClass s) = Terminal (PuncClass s)
+		|   make_sym(VarClass s) =
+			if s mem nts
+			then NonTerminal s
+			else Terminal(VarClass s);
+		val Y = map (fn(x, y) => (x, map (fn (a,b) =>(map make_sym a, b)) y)) G';
+		fun folder((def, alts), g) = g overwrite (def, lassoc4 g nil def cup alts);
+		val AG = revfold folder Y nil;
+	in	(strip_action AG, make_reduction_table AG)
+	end
+) | make_grammar_and_reduction_table _ = raise SLRP_ERROR "invalid argument";
+=TEX
+\subsection{Lexical Analyser}
+=TEX
+The lexical analyser is very much a one-off.
+It is called by the parser \cite{DS/FMU/IED/SML005}.
+=TEX
+subsection{Local Definitions}
+Most of the lexical analyser is declared within this local block.
+=SML
+local
+
+    exception âLEX_FAILá of string;
+
+    val âord0á	= ord "0";
+    val âord9á	= ord "9";
+    val âordaá	= ord "a";
+    val âordAá	= ord "A";
+    val âordzá	= ord "z";
+    val âordZá	= ord "Z";
+
+    fun âchar_is_digitá(_, false) =  false
+    |   char_is_digit(d, true) = (
+	let	val ordd = ord d
+	in	(ordd >= ord0) andalso (ordd <= ord9)
+	end
+    );
+=TEX
+A state, $lex\_state$, is used by most of the lexical analysis
+functions, it is in two parts.  First the characters not yet tokenised,
+actually a list of strings of single characters produced by exploding
+the input text.  Second the token immediately preceeding the first
+part.  The token may not be recognised (yet) so the token part of the
+state carries a success indicator.  On entry to an analysis function
+the state will be ``$(chars, (UNKNOWN, \hbox{``''}))$''.
+=SML
+    datatype âsuccessá = âKNOWNá of BNF_lex_class | âUNKNOWNá;
+
+    type âtokená = success * string;
+
+    type âlex_stateá  = (string list) * token;
+=TEX
+$collect$ adds the first character of the untokenised input text into the current token.
+=SML
+    fun âcollectá ( (cs, (cl, tk)) : lex_state ) : lex_state = (
+        (tl cs, (cl, tk ^ (hd cs)))
+    );
+=TEX
+The terminator characters for BNF are the following:
+=SML
+    val âterminatorsá : (string * BNF_lex_class) list =
+	[(";", BNF_semi), ("=", BNF_eq), ("|", BNF_vert), (",", BNF_comma)];
+=TEX
+Quotes are introduced by the backquote character, \verb"`":
+=SML
+    val âquoterá : string = "`";
+
+    fun ânext_is_termá (ch :: _) = any terminators (fn (c,_) => c = ch)
+    |   next_is_term _ = false;
+
+    fun ânext_is_quoterá (ch :: _) = ch = quoter
+    |   next_is_quoter _ = false;
+
+    fun ânext_is_spaceá (" " :: _) = true
+    |   next_is_space ("\t" :: _) = true
+    |   next_is_space ("\n" :: _) = true
+    |   next_is_space _ = false;
+
+    fun ânext_is_lbracká ("(" :: _) = true
+    |   next_is_lbracká _ = false;
+ 
+    fun ânext_is_rbracká (")" :: _) = true
+    |   next_is_rbracká _ = false;
+ 
+    fun âskip_spaceá (cs : string list) : string list = (
+        if next_is_space cs
+        then skip_space (tl cs)
+        else cs
+    );
+
+    fun ânext_is_digitá ((ch :: _): string list) = (
+        let
+            val code = ord ch
+        in
+            (code >= ord0) andalso (code <= ord9)
+        end
+    ) | next_is_digit nil = false;
+=TEX
+We allow underscores and primes in names by treating them as letters:
+=SML
+    fun ânext_is_alphaá ((ch :: _): string list) = (
+        let
+            val code = ord ch
+        in
+            ((code >= orda) andalso (code <= ordz)) orelse
+            ((code >= ordA) andalso (code <= ordZ)) orelse
+            (ch = "_") orelse (ch = "'")
+        end
+    ) | next_is_alpha nil = false;
+
+     fun ânext_is_otherá (cs as (_ :: _) : string list) = (
+        (not (next_is_term cs)) andalso
+        (not (next_is_space cs)) andalso
+        (not (next_is_digit cs)) andalso
+        (not (next_is_alpha cs)) andalso
+        (not (next_is_quoter cs))
+    ) | next_is_other nil = false;
+=TEX
+To perform the analysis a number of recognisers of tokens are provided,
+they are tried in turn on the input characters until one of them
+recognises one of more of the input characters as a token.  Those
+characters are then removed, classified and added to the output list of
+tokens.  Then the recognisers are applied to the remaining input, and
+so on until there is no more input.
+
+Function $rec_alphanum_rest$ recognises a list of alpha numerics, it is
+an auxiliary for the other recognisers.
+=SML
+    fun ârec_alphanum_restá (cs, tok) = (
+	if next_is_alpha cs orelse next_is_digit cs
+	then rec_alphanum_rest (collect (cs, tok))
+	else (cs, tok)
+    );
+
+    fun ârec_terminatorá ( (cs, tk) : lex_state ) : lex_state = (
+        if next_is_term cs
+        then (tl cs, (KNOWN(lassoc3 terminators (hd cs)), hd cs))
+        else (cs, (UNKNOWN, ""))
+    );
+=TEX
+=SML
+    fun ârec_identifierá( (cs, tok) : lex_state ) : lex_state = (
+	if next_is_alpha cs 
+	then rec_alphanum_rest (tl cs, (KNOWN BNF_var, hd cs))
+	else (cs, tok)
+    );
+=TEX
+A string starts and finishes with $quoter$.
+Within a string the escape character `$\backslash$' may be used to
+provide characters not normally available.  The input to this lexical
+analyser is an SML string.  All character in an SML string between the
+HOL start and end quote characters will be reguarded as the HOL string,
+so the SML escape sequences may be used for most characters.  The HOL
+escape character `$\backslash$' is therefore only needed for itself and
+the start quote character.
+=SML
+    fun ârec_quoteá ( (cs, (_, tk)) : lex_state ) : lex_state = (
+        let
+            fun rec_quote_rest qtch (cs, tok) = (
+		case cs of
+		("\\" :: _ :: rest) =>
+			rec_quote_rest qtch (collect (tl cs, tok))
+		| ("\\" :: _) =>
+			raise (LEX_FAIL "escaped character at end of string")
+		| (ch :: rest) =>
+			if (ch = qtch)
+			then (rest, tok)
+			else rec_quote_rest qtch (collect (cs, tok))
+		| _ => raise (LEX_FAIL "unmatched quote")
+            );
+        in
+            if next_is_quoter cs
+            then rec_quote_rest(hd cs) (tl cs, (KNOWN BNF_con, ""))
+            else (cs, (UNKNOWN, ""))
+        end
+    );
+=TEX
+Actions are distinguished by their starting with a left bracket and are
+finished by the matching right bracket.
+=SML
+    fun ârec_action_restá i (cs, tok) = (
+	if next_is_lbrack cs
+	then rec_action_rest (i+1) (collect (cs, tok))
+	else if next_is_rbrack cs
+	then	if i <= 0
+		then (collect (cs, tok))
+		else rec_action_rest (i-1) (collect (cs, tok))
+	else if not (is_nil cs)
+	then rec_action_rest i (collect(cs, tok))
+	else raise (LEX_FAIL "unmatched left bracket")
+    );
+=TEX
+=SML
+    fun ârec_actioná (cs, tok) = (
+	if next_is_lbrack cs
+	then rec_action_rest 0 (tl cs, (KNOWN BNF_action, hd cs))
+	else (cs, (UNKNOWN, ""))
+    );
+=TEX
+Function $next\_token$ applies recogniser functions to the input
+characters, returning the results of the first successful recogniser,
+or an indicator of token unknown.
+=SML
+    fun ânext_tokená (recognisers : (lex_state -> lex_state) list)
+                   (chars       : string list) : lex_state = (
+        let
+            fun try (recogniser : lex_state -> lex_state,
+                     (cs, (cl, tk)) : lex_state) : lex_state = (case cl of
+            UNKNOWN => recogniser(cs, (cl, tk))
+          | KNOWN _ => (cs, (cl, tk))
+    );
+        in
+            revfold try recognisers (chars, (UNKNOWN, ""))
+        end
+    );
+=TEX
+Function $tokenise$ converts the input characters into tokens by
+repeatedly using $next\_token$ to identify the start of the remaining
+part of the input.
+=SML
+    fun âtokeniseá (recognisers : (lex_state -> lex_state) list)
+                 (chars       : string list) : BNF_lex_item list = (
+       case skip_space chars
+       of
+           nil => nil
+       |   cs as (_::_) => (
+           let
+               val (cs', tk) = next_token recognisers cs;
+           in
+               case tk of
+                   (KNOWN cls, tk) => (cls, tk):: tokenise recognisers cs'
+              |    (UNKNOWN, tk) =>  raise LEX_FAIL (": did not recognise: " ^ tk)
+           end
+       )
+    );
+=TEX
+The various recognisers are gathered together in their order of application.
+=SML
+    val ârecognisersá = [rec_terminator,
+                       rec_quote,
+                       rec_identifier,
+			rec_action];
+in
+=TEX
+\subsection{Declared Functions} \label{Declared Functions}
+The public interface to the lexical analyser in through three
+functions.  The first two allow the characters used as terminators and
+for quoting strings in the language to be altered.  The third is the
+main interface to the lexical analyser, it is the function $lex$.
+=SML
+
+    fun âBNF_lex_stringá (text : string) : BNF_lex_item list = (
+	(tokenise recognisers (explode text))
+	handle (LEX_FAIL msg) => (
+            output(std_out, "Lexical analysis error:" ^ msg ^ "\n");
+            nil
+        )
+    );
+
+end;
+=TEST
+BNF_lex_string "";
+BNF_lex_string "a|,b";
+BNF_lex_string "=|,`abc`";
+BNF_lex_string "=|,`abc\\``";
+BNF_lex_string "(=|,)`abc\\``";
+BNF_lex_string "(=|,`abc\\``";
+BNF_lex_string "(=|,`abc\\``) (((b(((a)))b)))";
+=TEX
+\subsection{Parser Auxiliaries}
+=SML
+val BNF_classify : BNF_lex_item -> BNF_lex_class = fst;
+=TEX
+=SML
+val BNF_error : (BNF_lex_item, BNF_lex_class, 'a) ERROR_ROUTINE = default_error format_BNF_lex_item;
+=TEX
+=SML
+val BNF_end_of_string : BNF_lex_item = (BNF_eos, "<End-of-Input>");
+=TEX
+=SML
+local
+val buff : BNF_lex_item list ref = ref [];
+in
+fun BNF_lex (s : string) : unit -> BNF_lex_item = (
+	let	val SideEffect = buff := BNF_lex_string s
+	in	(fn () =>
+		let	val(res, rest) = (
+				case !buff of
+				x::rest => (x, rest)
+			|	[] => (BNF_end_of_string, []));
+		in 	buff := rest; res
+		end)
+	end
+);
+end;
+=TEX
+=SML
+val (BNF_actions, BNF_gotos, BNF_Ijs, BNF_init) = slr_tables BNF_grammar BNF_eos "Grammar'";
+=TEX
+The grammar has no conflicts so we may safely use the default
+resolver to form a parser, which we set up to take its input from a file:
+=SML
+fun BNF_parse (file : string) : SYM_CLASS GRAMMAR * string GEN_REDUCTION_TABLE =
+	make_grammar_and_reduction_table(
+		slrp'parse
+		BNF_init BNF_actions BNF_gotos BNF_reduction_table default_resolver
+		BNF_classify BNF_error (BNF_lex(read_file file)));
+=TEX
+The formatter for $sym\_class$ values is the following:
+=SML
+fun format_sym_class (VarClass V) = V
+|   format_sym_class (PuncClass P) = "`" ^ P ^ "`";
+=TEST
+dump_string "slr.tst""E = E, `+`, T | T; T = T, `*`, F | F; F = `(`, E, `)` | id;";
+
+val (test_grm1, test_rt1) = BNF_parse "slr.tst";
+val (actions1, gotos1, Ijs, init) = slr_tables test_grm1 (PuncClass "$") sentence_symbol;
+
+print_states (test_grm1, format_sym_class) Ijs;
+listofarray actions1;
+listofarray gotos1;
+conflicts actions1 (* shouldn't be any *);
+
+dump_string "slr.tst""E = A | B; A = x | x, A; B = | x, B;";
+val (test_grm2, test_rt2) = BNF_parse "slr.tst";
+
+val (actions2, gotos2, Ijs2, init2) = slr_tables test_grm2 (PuncClass "$") sentence_symbol;
+print_states (test_grm2, format_sym_class) Ijs2;
+
+conflicts actions2;
+
+dump_string "slr.tst"(
+"E	= E, `Plus`, T (add x1 x3)			\n" ^
+"	| T (fetch x1);			\n" ^
+"T	= T, `Times`, F (mul x1 x3)		\n	" ^
+"	| F (fetch x1);\n" ^
+"F	= `Lbrack`, E, `Rbrack` (fetch x2)	\n		" ^
+"	| Num (conv x1);			\n");
+
+val (test_grm3, test_rt3) = BNF_parse "slr.tst";
+
+val (actions3, gotos3, Ijs3, init3) = slr_tables test_grm3 (PuncClass "Eos") sentence_symbol;
+print_states (test_grm3, format_sym_class) Ijs3;
+
+datatype LC3 = Plus | Times | Lbrack | Rbrack | Num | Eos | Wrong;
+
+val (test_grm4, test_rt4) = BNF_parse "ty.grm";
+
+val (actions4, gotos4, Ijs4, init4) = slr_tables test_grm4 (PuncClass "$") sentence_symbol;
+print_states (test_grm4, format_sym_class) Ijs4;
+
+conflicts actions3;
+
+fun add (Parsed (x:int)) (Parsed (y:int)) = x + y
+|   add _ _ = raise PARSER_ERROR "corrupt stack";
+fun mul (Parsed (x:int)) (Parsed (y:int)) = x * y
+|   mul _ _ = raise PARSER_ERROR "corrupt stack";
+fun fetch (Parsed (x:int)) = x
+|   fetch _= raise PARSER_ERROR "corrupt stack";
+fun conv (Token (n:string, _)) = nat_of_string n
+|   conv _ = raise PARSER_ERROR "corrupt stack";
+
+=TEX
+\section{CONFLICT RESOLUTION}
+=TEX
+To resolve a reduce/reduce conflict we need to choose an alternative in
+the list of possible alternatives by which to reduce. We choose
+the one which appears earliest in the grammar.
+=SML
+fun resolve_reduce_reduce (g : ('lc)GRAMMAR) (acts : ACTION list) : ACTION list = (
+	let	fun folder
+			(x2 as Reduce(((nt2, alt2), _)), x1 as Reduce(((nt1, alt1), _))) = (
+			let	fun index nt i ((nt', _)::more) = (
+					if nt = nt'
+					then i
+					else index nt (i+1) more
+				) | index _ _ [] = raise SLRP_ERROR "invalid non-terminal";
+				val (i1, i2) = (index nt1 0 g, index nt2 0 g);
+			in	if i1 = i2
+				then	if alt1 <= alt2
+					then x1
+					else x2
+				else if i1 <= i2
+				then x1
+				else x2
+			end
+		) | folder (x1, _) = x1;
+		val winner = fold folder acts (find acts (fn Reduce _ => true | _ => false));
+	in	acts drop (fn (x as (Reduce _)) => x <> winner | _ => false)
+	end	handle Fail _  => acts
+);
+=TEX
+After resolving reduce/reduce conflicts only shift/reduce conflicts
+with a single shift and a single reduce will remain (the SLR(1) algorithm
+cannot produce shift/shift conflicts).
+The shift/reduce conflicts are replaced by dynamic actions
+and we shout loudly when we do this.
+
+The following functions are used to do the shouting:
+=SML
+fun format_action (gp : (''lc) GRAMMAR * (''lc -> string)) (act : ACTION) : string = (
+	case act of
+		Accept => "Accept"
+	|	Error => "Error"
+	|	Shift i => "Shift to " ^ string_of_int i
+	|	Reduce(alt, _) => "Reduce by " ^ format_alt gp alt
+	|	Dynamic (i, (alt, _)) => "Either shift to " ^ string_of_int i
+					^ " or reduce by " ^ format_alt gp alt
+);
+=TEX
+=SML
+fun print_actions (gp as (_, p) : (''lc) GRAMMAR * (''lc -> string)) (lc : ''lc, s : STATE, acts : ACTION list) : unit = (
+	chat("State " ^ string_of_int s ^ " on symbol " ^ p lc);
+	map chat (alpha_sort(map(fn act => ("\t" ^ format_action gp act)) acts));
+	()
+);
+=TEX
+=SML
+fun has_rr (Reduce _ :: more : ACTION list) : bool = (
+	any more (fn Reduce _ => true |_ =>  false)
+) | has_rr (_ :: more ) = has_rr more
+|   has_rr [] = false;
+=TEX
+=SML
+fun has_sr (Reduce _ :: more : ACTION list) : bool = (
+	any more (fn Shift _ => true |_ =>  false)
+) | has_sr (Shift _ :: more : ACTION list) : bool = (
+	any more (fn Reduce _ => true |_ =>  false)
+) | has_sr (_ :: more ) = has_sr more
+|   has_sr [] = false;
+=TEX
+=SML
+fun resolve_either(g : ('lc)GRAMMAR) (acts : ACTION list) : ACTION = (
+	let	val acts' = if has_rr acts then resolve_reduce_reduce g acts else acts;
+	in	case acts of
+			[(act1 as Reduce x), (act2 as Shift s)] => Dynamic(s, x)
+		|	[(act1 as Shift s), (act2 as Reduce x)] => Dynamic(s, x)
+		|	[act] => act
+		|	other => raise SLRP_ERROR "failure in conflict resolution"
+	end
+);
+=TEX
+=SML
+fun resolve_conflicts (g : (''_lc)GRAMMAR) (actions : (''_lc)ACTION_TABLE) : unit = (
+	let	fun aux(lc, s, acts) = (
+			let	val old = Array.sub(actions, s);
+				val act = resolve_either g acts;
+				val new = old drop (fn (lc', _) => lc = lc');
+			in	Array.update(actions, s, new overwrite (lc, act))
+			end
+		);
+	in	case conflicts actions of
+			[] => ()
+		|	todo => (map aux todo; ())
+	end 
+);
+=TEX
+\section{OUTPUT ROUTINES}
+=SML
+val parser_file : outstream ref = ref std_out;
+=TEX
+=SML
+local
+	val cursor : int ref = ref 0;
+in
+fun put_string (s:string):unit = (
+	let	val len = size s;
+		val next = !cursor + len;
+	in	if next <= 80
+		then (
+			output(!parser_file, s);
+			cursor := next
+		) else (
+			output(!parser_file, "\n");
+			output(!parser_file, s);
+			cursor := size s
+		)
+	end
+);
+fun put_line (s:string):unit = (
+	output(!parser_file, s);
+	output(!parser_file,"\n");
+	cursor := 0
+);
+end;
+fun put_list (sep : string) (s : string list) = (
+	case s of
+		x :: [] => put_string x
+	|	x :: more => (put_string x; put_string sep; put_list sep more)
+	|	[] => ()
+);
+=TEX
+\subsection{Action Table}
+=SML
+fun format_action_entry (p : ''lc -> string) (lc : ''lc, act : ACTION) : string = (
+	"(" ^ p lc ^ "," ^ (
+		case act of
+			Shift s => (
+				"Shift " ^ string_of_int s
+		) |	Reduce ((nt, alt), n) => (
+				"Reduce((\"" ^ nt ^ "\"," ^ string_of_int alt ^ "),"^string_of_int n ^ ")"
+		) |	Dynamic (s, ((nt, alt), n)) => (
+				"Dynamic(" ^ string_of_int s ^ "," ^
+				"((\"" ^ nt ^ "\"," ^ string_of_int alt ^ "),"^string_of_int s ^ "))"
+		) |	Error => ("Error"
+		) |	Accept => ("Accept"
+		)
+	) ^ ")"
+);
+=TEX
+=SML
+fun print_action_entry_list(p : ''lc -> string) (entries : (''lc * ACTION) list) : unit = (
+	put_string "[";
+	put_list "," (map (format_action_entry p) entries);
+	put_string "]"
+);
+=TEX
+=SML
+fun print_action_table (p : ''lc -> string) (actions : (''lc)ACTION_TABLE) : unit = (
+	let	val tab = listofarray actions;
+		fun aux (x :: []) = print_action_entry_list p x
+		| aux (x :: more) = (print_action_entry_list p x; put_string ","; aux more)
+		| aux [] = ();
+	in	put_line "val slrp'actions = Array.arrayoflist[";
+		aux tab;
+		put_line "];"
+	end
+);
+=TEX
+=SML
+fun do_sym_class(VarClass x : SYM_CLASS) : string = x
+|   do_sym_class(PuncClass x) = x;
+=TEST
+print_action_table do_sym_class actions3;
+=TEX
+\subsection{Reduction Table}
+=SML
+fun format_reducer (body : string) (n : int) : string = (
+	let	val is = map string_of_int(rev (interval 1 n));
+		fun do1 i = "x" ^ i;
+		val xs = format_list do1 is "::";
+	in	if n = 0
+		then "(fn _ =>" ^ body ^ ")"
+		else "(fn(" ^ xs ^ "::_)=>" ^ body ^ "|_=>raise PARSER_ERROR\"invalid reduction\")"
+	end
+);
+=TEX
+=SML
+fun put_reduction_table
+	(g: (''lc) GRAMMAR)
+	(tab : string GEN_REDUCTION_TABLE) : unit = (
+	let	fun aux1 nt i (act :: more) = (
+			let	val n = length(my_nth(expand g (NonTerminal nt)) i);
+				val func = format_reducer act n;
+			in	if is_nil more
+				then put_string func
+				else (put_string(func ^ ","); aux1 nt (i+1) more)
+			end
+		) | aux1 _ _ [] = ();
+		fun aux2 last (nt, acts) = (
+			put_string("(\"" ^ nt ^ "\",[");
+			aux1 nt 0 acts;
+			put_string(if last then "])" else "]),")
+		);
+		fun aux3 (row :: more) = (
+			if is_nil more
+			then aux2 true row
+			else(aux2 false row; aux3 more)
+		) | aux3 [] = ();
+	in	put_string "val slrp'reducers = list_e_merge initial_E_DICT";
+		put_line "["; aux3 (e_flatten tab); put_line "];"
+	end
+);
+=TEST
+put_reduction_table test_grm3 test_rt3;
+=TEX
+\subsection{Goto Table}
+=SML
+fun format_goto_entry (nt : string, s : STATE) : string = (
+	"(\"" ^ nt ^ "\"," ^ string_of_int s ^ ")"
+);
+=TEX
+=SML
+fun print_goto_entry_list ( entries : (string * STATE) list) : unit = (
+	put_string "[";
+	put_string (format_list format_goto_entry entries ",");
+	put_string "]"
+);
+=TEX
+=SML
+fun print_goto_table (gotos : GOTO_TABLE) : unit = (
+	let	val tab = listofarray gotos;
+		fun aux (x :: []) = print_goto_entry_list x
+		| aux (x :: more) = (print_goto_entry_list x; put_string ","; aux more)
+		| aux [] = ();
+	in	put_line "val slrp'gotos = Array.arrayoflist[";
+		aux tab;
+		put_line "];"
+	end
+);
+=TEX
+=TEST
+print_goto_table gotos3;
+=TEX
+\subsection{Driver Function}
+=SML
+fun print_driver () = (
+	put_line
+	"val slrp'gen_parser = slrp'parse init3 slrp'actions slrp'gotos slrp'reducers;"
+);
+=TEST
+val resolver3 = default_resolver;
+val error3 = default_error Combinators.I;
+local
+val buff : string list ref = ref [];
+in
+fun lex3 (s : string) : unit -> string = (
+	let	val SideEffect = buff := explode s;
+		fun get_rest (x :: more) = (
+			if is_all_decimal x
+			then (buff := more; x :: get_rest more)
+			else []
+		)  | get_rest [] = [];
+		fun get_tok (x :: more) = (
+			if is_all_decimal x
+			then (buff := more; implode (x :: get_rest more))
+			else (buff := more; x)
+		) | get_tok [] = "$"
+	in	(fn () => get_tok(!buff))
+	end
+);
+end;
+fun classify3 "*" = Times
+|   classify3 "+" = Plus
+|   classify3 "(" = Lbrack
+|   classify3 ")" = Rbrack
+|   classify3 "$" = Eos
+|   classify3 Other = if is_all_decimal Other then Num else Wrong;
+fun parser3 s = slrp'gen_parser resolver3 classify3 error3 (lex3 s);
+
+\section{INTERFACE} 
+
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+
+\end{document}
