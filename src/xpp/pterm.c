@@ -241,7 +241,7 @@ static void get_from_application(
 
 static Boolean get_from_app_work_proc(XtPointer unused_p)
 {
-	NAT ct;
+	int ct;
 	char buf[BUFSIZ+1]; /* allow for null-termination in scroll_out */
 	if((ct = read(control_fd, buf, 1000)) > 0) {
 		scroll_out(buf, ct, False);
@@ -457,11 +457,11 @@ void interrupt_and_abandon ()
 	static Boolean wait_for_prompt();
 	interrupt_application();
 	if(	application_alive()
-	&&	*(global_options.interrupt_abandon_reply)
+	&&	*(global_options.abandon_reply)
 	&&	wait_for_prompt()) {
 		send_to_application(
-			global_options.interrupt_abandon_reply,
-			strlen(global_options.interrupt_abandon_reply));
+			global_options.abandon_reply,
+			strlen(global_options.abandon_reply));
 		send_to_application("\n", 1);
 	}
 }
