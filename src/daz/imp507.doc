@@ -84,7 +84,8 @@ Because the implementations of the component update functions are rather long-wi
 \section{PREAMBLE AND AUXILIARIES}\ref{PREAMBLE}
 =SML
 structure €CNZGenerator› (* : CNZGenerator *) = struct
-open CNTypes CNTypes1 CNTypes2 CNBasicDeclsAndExprs ZParagraphs;
+open CNTypes CNTypes1 CNTypes2 CNBasicDeclsAndExprs ZParagraphs
+	CNVCGenerator;
 =TEX
 \subsection{TBS}
 The following gets around the use of a separate data type for labels.
@@ -675,6 +676,51 @@ fun €block_till›  (
 	}
 );
 =TEX
+In the implementation, the following are useful additions to the component update functions defined in the Z spec.
+=SML
+fun €block_flags›  (
+	{
+	declab as {block_name,
+		flags,
+		in_scope},
+	current_formal_proc,
+	current_formal_fun,
+	dec_lab,
+	spec_lab,
+	till
+	} : BLOCK,
+	new_flags : FLAGS) : BLOCK = (
+	{declab		=	{block_name = block_name,
+				flags = new_flags,
+				in_scope = in_scope},
+	current_formal_proc = current_formal_proc,
+	current_formal_fun = current_formal_fun,
+	dec_lab = dec_lab,
+	spec_lab = spec_lab,
+	till = till
+	}
+);
+=TEX
+=SML
+fun €block_spec_lab›  (
+	{
+	declab,
+	current_formal_proc,
+	current_formal_fun,
+	dec_lab,
+	spec_lab,
+	till
+	} : BLOCK,
+	new_spec_lab : LABEL) : BLOCK = (
+	{declab		=	declab,
+	current_formal_proc = current_formal_proc,
+	current_formal_fun = current_formal_fun,
+	dec_lab = dec_lab,
+	spec_lab = new_spec_lab,
+	till = till
+	}
+);
+=TEX
 \subsection{Initial Values}
 
 =TEX
@@ -965,7 +1011,34 @@ fun €current_cn_env› (n : ID) : (TYPE * ENV_INFO) OPT = (
 	)
 );
 =TEX
+\subsection{Updating the Z Theory Database}
+=SML
+fun €store_vc_term› (tm : TERM) : unit = (
+	let	fun aux i = (
+			let val vc_name = "VC_" ^ string_of_int i;
+			in	if (get_thm "-" vc_name; false)
+						handle Fail _ => true
+				then	(save_thm (vc_name, asm_rule tm); ())
+				else	aux (i + 1)
+			end
+		);
+	in	aux 1
+	end
+);
+=TEX
+fun €term_of_vc› (vc as (decs, (asms, conc)) : VC) : TERM = (
+	mk_z_µ(mk_z_decl decs, list_mk_± asms, conc)
+);
+=SML
+fun 
+=SML
+fun €store_vcs› (vcs: VC list) : unit = (
+	map (store_vc_term o term_of_vc) vcs;
+	()
+);
+=TEX
 \section{BASIC DECLARATIONS}\label{BASICDECLARATIONS}
+\subsection{The SID Function $basic\_declaration$}
 The decision about which function to call is made in $basic\_declaration$ itself.
 =SML
 fun €basic_decl_pack_spec› (basic_decl : BASIC_DECL) : unit = (
@@ -1011,6 +1084,7 @@ fun €var_pack_spec› (var_decl : VAR_DECL) : unit = (
 	end
 );
 =TEX
+\subsection{The SID Function $update\_envs\_var$}
 In the following, the local function, $do1\_subunit$ does the work specified in the Z spec for one unit-name-subunit-name pair.
 =SML
 fun €update_subunit_env_var› (var_decl : VAR_DECL) : unit = (
@@ -1091,6 +1165,13 @@ trans_basic_decl env d5;
 \section{DECLARATIONS}\label{DECLARATIONS}
 \section{STATEMENTS}\label{STATEMENTS}
 \section{LOOPS}\label{LOOPS}
+\subsection{The SID function end\_scope}
+=SML
+fun €end_scope› (():unit) : unit = (
+	(blocks := tl (! blocks))
+	handle Fail _ => error "end_scope" 507006 []
+);
+=TEX
 \section{SUBPROGRAM DECLARATIONS}\label{SUBPROGRAMDECLARATIONS}
 \section{PROCEDURES}\label{PROCEDURES}
 \section{FUNCTIONS}\label{FUNCTIONS}
@@ -1100,6 +1181,7 @@ trans_basic_decl env d5;
 \section{STUBS AND SUBUNITS}\label{STUBSANDSUBUNITS}
 \section{WEB CLAUSES}\label{WEBCLAUSES}
 =TEX
+\subsection{THE SID function new\_scope\_dec\_replace}
 In the following, those fields for the new block which are left undefined in the Z specification are borrowed from the empty block value.
 =SML
 fun €new_scope_dec_replace› ({label, decls} : REPLACED_BY_DECL) : unit = (
@@ -1122,6 +1204,7 @@ fun €new_scope_dec_replace› ({label, decls} : REPLACED_BY_DECL) : unit = (
 	end
 );
 =TEX
+\subsection{THE SID function update\_envs\_remove\_declabel}
 In the following, the local function, $do1\_subunit$ does the work specified in the Z spec for one unit-name-subunit-name pair.
 =SML
 fun €update_subunit_env_remove_declabel› ({label, decls} : REPLACED_BY_DECL) : unit = (
@@ -1171,6 +1254,58 @@ fun €update_envs_remove_declabel› (label_decls : REPLACED_BY_DECL) : unit = (
 	update_spec_env_remove_declabel label_decls
 );
 =TEX
+\subsection{THE SID function new\_scope\_speclabel}
+=SML
+fun €new_scope_speclabel› (label : LABEL) : unit = (
+	let	val lab = string_of_label label;
+		val spec_env_lab = force_value( s_lookup lab (!spec_env) )
+			handle Fail _ => fail "new_scope_speclabel" 507003
+				[fn () => lab];
+		val till_flag = #till_flag spec_env_lab;
+		val till = #till (#wp_env (spec_env_lab));
+		val flags = {
+			pack_spec_flag = false,
+			pack_body_flag = false,
+			stub_flag = false,
+			subunit_flag = false,
++			formal_body_flag = false,
+			fun_flag = false,
+			declabel_flag = false,
+			speclabel_flag = true,
+			till_flag = till_flag
+		};
+		val block =	block_till(
+					block_spec_lab(
+						block_flags(empty_block, flags),
+					label),
+				till);
+	in	blocks := block :: !blocks
+	end
+);
+=TEX
+\subsection{THE SID function vcs\_speclabel}
+The following follows the specification in fishing the label out of the environment (although it will be the same as the label in the argument).
+=SML
+fun €vcs_speclabel› ({label = unused, statement} :REFINED_BY) : unit = (
+	let	val lab = string_of_label (#spec_lab(hd (!blocks)));
+		val spec_env_lab = force_value( s_lookup lab (!spec_env) )
+			handle Fail _ => fail "vcs_speclabel" 507003
+				[fn () => lab];
+	in	store_vcs (vcs (spec_env_lab, statement))
+	end
+);
+=TEX
+\subsection{THE SID function end\_scope\_speclabel}
+=SML
+fun €end_scope_speclabel› (():unit) : unit = (
+	let	val lab = string_of_label (#spec_lab(hd (!blocks)));
+	in	end_scope();
+		spec_env := s_delete lab (!spec_env)
+	end
+);
+=TEX
+\subsection{THE SID functions new\_scope\_stmtlabel and end\_scope\_stmt\_label}
+\subsection{Replacement Environment Manipulation}
 TBS - the error reporting here could usefully be made more sophisticated.
 (By checking that $repl$ and the replacement environment entry are of the same sort.)
 =SML
@@ -1195,8 +1330,11 @@ fun €update_spark_prog› (comp : KSLOT_COMPILATION_UNIT list) : unit = (
 );
 =TEX
 =SML
-fun €new_k_slot› (lab : LABEL, sort : REPL_SORT) : unit = (
-	()
+fun €new_k_slot› (label : LABEL, sort : REPL_SORT, theory : string) : unit = (
+	let	val lab = string_of_label label;
+	in	(repl_env := s_enter lab (UnReplaced (sort, theory)) (!repl_env))
+			handle Fail _ => fail "new_k_slot" 507005 [fn () => lab]
+	end
 );
 =TEX
 \section{INTERFACE}
@@ -1286,7 +1424,7 @@ fun €do_proper_body› (y as (PBProcedure x) : PROPER_BODY) = (y
 =SML
 fun €do_kslot_compilation_unit›
 	(y as (KCUKSlot {label, content}) : KSLOT_COMPILATION_UNIT) : unit = (
-	new_k_slot (label, RSCompilation)
+	new_k_slot (label, RSCompilation, get_current_theory_name())
 ) | do_kslot_compilation_unit
 	(y as (KCUUnit x) : KSLOT_COMPILATION_UNIT) = (
 );
@@ -1298,34 +1436,59 @@ fun €do_web_clause› (y as (WCCompilation x) : WEB_CLAUSE) : unit = (
 	()
 ) | do_web_clause (y as (WCReplacedByCompilation x) : WEB_CLAUSE) = (
 let	val {label=label, comp=comp} = x;
-in	update_replacement_env(label, ReplaceComp x)
+in	update_replacement_env(label, ReplaceComp x);
+	map do_kslot_compilation_unit (#comp x);
+	()
 end
 ) | do_web_clause (y as (WCReplacedByPrivatePart x) : WEB_CLAUSE) = (
 let	val {label=label, private=private} = x;
-in	update_replacement_env(label, ReplacePPart x)
+in	update_replacement_env(label, ReplacePPart x);
+	map do_declaration (#private x);
+	()
 end
 ) | do_web_clause (y as (WCReplacedByVisiblePart x) : WEB_CLAUSE) = (
 let	val {label=label,visible=visible} = x;
-in	update_replacement_env(label, ReplaceVPart x)
+in	update_replacement_env(label, ReplaceVPart x);
+	map do_declaration (#visible x);
+	()
 end
 ) | do_web_clause (y as (WCReplacedByDecl x) : WEB_CLAUSE) = (
 let	val {label=label,decls=decls} = x;
-in	update_replacement_env(label, ReplaceDecl x)
+in	update_replacement_env(label, ReplaceDecl x);
+	new_scope_dec_replace x;
+	map do_declaration decls;
+	update_envs_remove_declabel x;
+	end_scope()
 end
 ) | do_web_clause (y as (WCRefinedBy x) : WEB_CLAUSE) = (
 let	val {label=label,statement=statement} = x;
-in	update_replacement_env(label, ReplaceStat x)
+in	update_replacement_env(label, ReplaceStat x);
+	new_scope_speclabel label;
+	do_statement statement;
+	vcs_speclabel x;
+	end_scope_speclabel()
 end
 ) | do_web_clause (y as (WCReplacedBy x) : WEB_CLAUSE) = (
 let	val {label=label,statement=statement} = x;
-in	update_replacement_env(label, ReplaceStat x)
+in	update_replacement_env(label, ReplaceStat x);
+	new_scope_speclabel label;
+	do_statement statement;
+	end_scope_speclabel()
 end
 );
-
 =TEX
 =SML
 fun cn_z_generator (w : WEB_CLAUSE) : unit = (
 ()
+);
+=TEX
+=IGN
+fun get_spark_prog ((): unit) : string = (
+	let	fun expand (label : LABEL) : WEB
+	diag_line (
+		"Start of Web Clause\n"^
+		(fmt_info_string_list (fmt_web_clause FmtInfo x ))^
+		"End of Web Clause");
 );
 =TEX
 \section{EPILOGUE}
