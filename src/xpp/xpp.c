@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.28 2004/02/10 21:47:07 rda Exp rda $
+ * $Id: xpp.c,v 2.29 2004/02/12 17:31:49 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -89,11 +89,6 @@ static Boolean synchronous, havefonts;
  * options for the command-line. The resource name is irrelevant.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static XrmOptionDescRec options [] = {
-	{"-blocking", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-command", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-file", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-havefonts", "*commandLine",  XrmoptionSkipLine, NULL},
-	{"-readonly", "*commandLine",  XrmoptionSkipLine, NULL},
 	{"-a", "*commandLine",  XrmoptionSkipLine, NULL},
 	{"-b", "*commandLine",  XrmoptionSkipLine, NULL},
 	{"-c", "*commandLine",  XrmoptionSkipLine, NULL},
@@ -219,7 +214,7 @@ static XtResource resources[] = {
 void usage (void)
 {
 	msg( "usage",
-"xpp [standard X Toolkit options] [-blocking] [-readonly] [-filename fname] -havefonts [-commmand command-line]");
+"xpp [X Toolkit options] [Xpp Options | Command Options ...]");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -432,13 +427,13 @@ static char *get_command_line(int argc, char **argv, Boolean *use_default_comman
 	for (i = 1; i < argc; i += 1) {
 		if(just_collect) {
 			res = append_arg(res, argv[i]);
-		} else if(check_option(argv[i], "blocking")) {
+		} else if(check_option(argv[i], "b")) {
 			synchronous = True;
-		} else if(check_option(argv[i], "havefonts")) {
+		} else if(check_option(argv[i], "h")) {
 			havefonts = True;
-		} else if (check_option(argv[i], "readonly")) {
+		} else if (check_option(argv[i], "r")) {
 			global_options.read_only = True;
-		} else if (check_option(argv[i], "filename")) {
+		} else if (check_option(argv[i], "f")) {
 			if(file_name != NULL) {
 				usage();
 				exit(53);
@@ -449,7 +444,7 @@ static char *get_command_line(int argc, char **argv, Boolean *use_default_comman
 			} else {
 				file_name = "";
 			}
-		} else if (check_option(argv[i], "command")) {
+		} else if (check_option(argv[i], "c")) {
 			if(have_non_xpp_arg) {
 				usage();
 				exit(55);
