@@ -1,0 +1,265 @@
+% imp512.doc   %Z% $Date$ $Revision$ $RCSfile$
+=TEX
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{DAZ PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation of the Compliance Notation Reader/Writer}  %% Mandatory field
+\TPPref{ISS/HAT/DAZ/IMP512}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{D.J.~King & DAZ Team Leader}
+\TPPabstract{
+This document contains the implementation for the SPARK paragraph processor.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	Library}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+
+\item[Issue \SCCSversion, \FormatDate{$Date$%
+} ] Initial Draft.
+
+\end{description}
+\subsection{Changes Forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains the implementation for the parser for
+HOL/Z.
+The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD512}.
+\subsection{Introduction}
+\subsection{Purpose and Background}
+\subsection{Algorithms}
+\subsection{Dependencies}
+\subsection{Known Deficencies}
+\subsection{Possible Enhancements}
+=TEX
+=TEX
+=TEX
+\section{PREAMBLE}
+\section{SPARK READER WRITER}
+
+=SMLPLAIN SML
+structure ÛSPARKReaderWriterÝ : SPARKReaderWriter = struct
+
+open ReaderWriterSupport;
+=TEX
+
+%********************************************************************
+
+\subsection{Warning Messages}
+
+Faults detected in the embedded text are reported via $local_error$ as
+they occur, they are also noted in the generated output using these
+two functions.
+
+=SMLPLAIN SML
+fun Ûlex_error_codeÝ (id : int, prev:string list) : string list = (
+	", Lex.Text\"" :: (*="=*)
+	"Lex.Error " ^ (string_of_int id) ::
+	"\", " :: (*="=*)
+	prev
+);
+
+fun	Ûlex_error_codesÝ (nil : int list, prev:string list) : string list =
+		prev
+|	lex_error_codes (errnos, prev) =
+		fold lex_error_code errnos prev
+;
+=TEX
+
+%********************************************************************
+
+\subsection{Recursive SPARK Parser}
+
+Brackets within SPARK text need only be examined to see if they relate to
+comments, all the other forms of bracket can simple be passed on for
+the SPARK lexical analyser and parser to deal with.
+
+{\ftlinepenalty=9999
+=SMLPLAIN SML
+fun Ûget_SPARK_anyÝ (R:READER_ENV) (prevA:string list) : string list= (
+let
+	open PrettyNames;
+
+	fun	do_keyword _ (_,Value ch,Simple) p =
+			get_SPARK_any R ((to_ML_string ch) :: p)
+	|	do_keyword _ (names,Nil,Simple) p =
+			get_SPARK_any R ("%" ^ (hd names) ^ "%" :: p)
+	|	do_keyword k (info as (_,_, (Starting(proc, str)))) p =
+			get_SPARK_any R (proc R k str false p)
+	|	do_keyword _ (_,_,Middle str) p =
+			get_SPARK_any R (str :: p)
+	|	do_keyword (k, _) (_,ch_opt,Ending str) p =
+			((*=[(("=*)	"\"))" :: k :: "\"], \"" :: str :: p)
+	|	do_keyword _ (_,_,Ignore) p =
+			get_SPARK_any R p
+	|	do_keyword (k, is_keyword) (names,_,Invalid) p = (
+			local_error "get_SPARK_any" 5007
+				[fn () => if is_keyword then "%" ^ k ^ "%" else k];
+			get_SPARK_any R (lex_error_code(5007, p)));
+
+	fun do_string ML_string = (
+		let	val (read_string, ol_name) =
+				if ML_string
+				then	(get_ML_string, "Lex.String")
+				else	(get_primed_string, "Lex.Char");
+			val (str, errnos) = read_string R (ol_name :: "\", " :: prevA); (*="=*)
+			val text_so_far = ", Lex.Text\"" (*="=*) :: str;
+		in
+			get_SPARK_any R (lex_error_codes(errnos, text_so_far))
+		end
+	);
+
+	val next = #look_at_next R ()
+in
+	case read_symbol R
+	of	SymCharacter ch => (
+			case ch
+			of "("	=>	(	if #look_at_next R () = "*"
+						then
+							(skip_comment R;
+							get_SPARK_any R (" " :: prevA))
+						else
+							get_SPARK_any R ( "(" ::  prevA))
+			|  "\""	=>	do_string true (*="=*)
+			|  "`"	=>	do_string false
+			|  "\^D" =>	prevA
+			|  "Q"	=>	get_SPARK_any R ("QQQQ" :: prevA)
+			|  "\\"	=>	get_SPARK_any R ("\\\\" :: prevA)
+			|  _ => 	get_SPARK_any R (ch :: prevA)
+		)
+	|	SymWhite _ => get_SPARK_any R (" " :: prevA)
+	|	SymKnown(sym, is_keyword, info) => do_keyword (sym, is_keyword) info prevA
+	|	SymDoublePercent => get_SPARK_any R ("%%" :: prevA)
+	|	SymUnknownKw(sym, is_closed) => (
+			local_error "get_SPARK_any" 5003 [fn () => sym, fn () =>
+							implode(rev(" ... " :: (prevA to 20)))];
+			get_SPARK_any R (lex_error_code(5003, prevA))
+		)
+	|	SymUnknownChar ch => (
+			local_error "get_SPARK_any" 5005
+						[fn () => ch,
+						fn () => string_of_int(ord ch),
+						fn () => implode(" ... " :: (rev(prevA to 20)))];
+				get_SPARK_any R (lex_error_code(5005, prevA))
+		)
+end);
+=TEX
+}
+
+%********************************************************************
+
+\subsection{Outer Level of the SPARK Reader}
+
+SPARK text is to be read, the opening symbol and language name are
+given.  Produce Standard~ML text as follows to add onto the left
+hand context.
+
+=GFT SML
+( recogniser ( "starting symbol", "language name", quoted_text, "closing symbol" ))
+=TEX
+
+When the $add_semi$ argument is true then add, additionaly, a semi-colon
+to indicate the end of an outermost Standard~ML expression.
+
+Where the $quoted_text$ is a list of values of type $Lex.INPUT$, see
+section\ref{DatatypeForParserInterface}.  Function $SPARK_reader$ is
+responsible for building the opening part of the Standard~ML text,
+function $get_SPARK_any$ reads and assembles the quoted text (i.e., the
+body of the quotation) and the closing text.
+
+=SMLPLAIN SML
+fun ÛSPARK_readerÝ (recogniser:string) (add_semi:bool)
+		(R:READER_ENV) (start:string, is_keyword:bool)
+		(lang:string) (opening:string) (prevA:string list) : string list = (
+let
+	val prevB =
+		opening ::
+		"\", [Lex.Text\"" ::
+		lang ::
+		"\", \"" ::
+		start ::
+		"(\"" (*=")=*) ::
+		recogniser ::
+		"(" ::
+		prevA;
+
+	val read_text = get_SPARK_any R prevB;
+in
+	if add_semi
+	then
+		";" :: read_text
+	else
+		read_text
+end
+);
+=TEX
+
+%********************************************************************
+
+\subsection{Installing the SPARK Reader}
+
+=SMLLITERAL
+val _ = add_named_reader(
+			"¹",
+			"SPARK",
+			"Lex.Term",
+			SPARK_reader "SPARK_recogniser" true
+	)
+	handle Fail _ => ();
+=TEX
+
+\section{EPILOGUE}
+=SML
+end (* of structure SPARKReaderWriter *);
+=TEX
+\small
+\twocolumn[\section{INDEX}]
+\printindex
+\end{document}
