@@ -41,6 +41,8 @@ typedef struct {
 		GlobalOptions;	
 /*
  * The following are the values of execute_new_line_mode:
+ * (they are in the order that the buttons appear in the
+ * radio box in the options tool).
  */
 #define EXECUTE_ADD_NEW_LINES 0
 #define EXECUTE_PROMPT_NEW_LINES 1
@@ -179,6 +181,8 @@ typedef struct menu_item {
 /* Module: search */
 	extern Boolean add_search_tool(
 		Widget	w);
+	extern void register_selection_source(
+		Widget w);
 /* Module: templates */
 	extern Boolean init_templates_tool(
 		Widget	w);

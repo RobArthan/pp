@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.17 2001/12/15 19:17:00 rda Exp rda $
+ * $Id: mainw.c,v 2.18 2002/01/21 21:49:13 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -569,6 +569,7 @@ if(global_options.edit_only) {
 		NULL);
 
 	attach_ro_edit_popup(namestring);
+	register_selection_source(namestring);
 
 	s1 = XmStringCreateSimple("(Modified)");
 	modified = XtVaCreateManagedWidget("filelabel",
@@ -631,6 +632,8 @@ if(global_options.edit_only) {
 
 	XtAddEventHandler(script, ButtonPressMask, False, post_popupeditmenu, NULL);
 
+	register_selection_source(script);
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Journal window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -643,6 +646,7 @@ if( !global_options.edit_only ) {
 
 	journal = XmCreateScrolledText(mainpanes, "journal", args, i);
 	attach_ro_edit_popup(journal);
+	register_selection_source(journal);
 	copy_font_list(journal, script);
 }
 

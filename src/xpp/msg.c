@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 1998/03/16 10:46:16 $ $Revision: 2.5 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2001/11/16 17:19:15 $ $Revision: 2.6 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -130,6 +130,8 @@ void help_dialog(Widget w, char *str)
 		XtManageChild(form);
 		XtVaGetValues(widget, XmNheight, &h, NULL);
 		XtVaSetValues(form, XmNpaneMaximum, h, XmNpaneMinimum, h, NULL);
+		attach_ro_edit_popup(help_text);
+		register_selection_source(help_text);
 	}
 	XmTextSetString(help_text, str);
 	XtManageChild(pane);

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.4 2001/11/16 17:18:36 rda Exp rda $
+ * $Id: cmdline.c,v 2.5 2001/12/15 19:17:00 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -126,6 +126,7 @@ void add_cmd_line(Widget text_w)
 		NULL);
 
 	attach_rw_edit_popup(cmd_text);
+	register_selection_source(cmd_text);
 
 	btn_form = XtVaCreateWidget("command_line_form",
 		xmFormWidgetClass, 		paned,
