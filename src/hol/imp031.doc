@@ -103,6 +103,9 @@ Changes due to CR0017.
 }, issue \SCCSissue~]
 	Add $pe_depth$ field to type $PP_ENV$ plus routines to support it.
 	Change characters used for language changes.
+	Let all printing functions in $PP_ENV$ have an answer but
+	make sure that the HOL printers only return the
+		success value.
 
 %\item[\FormatDate{$Date$%
 %}, issue \SCCSissue~]
@@ -563,6 +566,9 @@ For patterns of type $PFunConst$ and $PFunVar$ we have a table of functions inde
 by language name.  The indicated function is called with the arguments
 of the constructor.  These printing functions return a value of the
 following type.
+This datatype is also used for the $PApp$ and $P$ patterns but in this
+case $PfFewer$ has no meaning, it and $PfNotPossible$ are treated
+identically.
 
 =SML
 datatype ÛPFUN_ANSÝ
@@ -695,13 +701,15 @@ datatype ÛPP_ENVÝ = PpEnv of {
 withtype ÛFUN_APP_PRÝ	= PP_ENV -> TERM -> string -> TYPE
 					-> TERM list -> PFUN_ANS
 
-and ÛÌ_PRÝ			= PP_ENV -> TERM -> TERM -> unit
-and ÛAPP_PRÝ			= PP_ENV -> TERM -> TERM list -> unit
-and ÛVAR_CONST_PRÝ	= PP_ENV -> TERM -> string -> TYPE -> unit;
+and ÛÌ_PRÝ			= PP_ENV -> TERM -> TERM -> PFUN_ANS
+and ÛAPP_PRÝ			= PP_ENV -> TERM -> TERM list -> PFUN_ANS
+and ÛVAR_CONST_PRÝ	= PP_ENV -> TERM -> string -> TYPE -> PFUN_ANS;
 
 type ÛPRIM_PRSÝ		= (Ì_PR * APP_PR * VAR_CONST_PR
 					* FUN_APP_PR * FUN_APP_PR * VAR_CONST_PR);
 =TEX
+
+The values in this datatype are discussed in detail in the detailed design.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %\newpage
@@ -779,9 +787,9 @@ An initial environment is required, it does not do anything useful.
 =SML
 local
 	fun (dummy_fun_cv : FUN_APP_PR) _ _ _ _ _ = PfOk;
-	fun (dummy_abs : Ì_PR) _ _ _ = ();
-	fun (dummy_app : APP_PR) _ _ _ = ();
-	fun (dummy_var_const : VAR_CONST_PR) _ _ _ _ = ();
+	fun (dummy_abs : Ì_PR) _ _ _ = PfOk;
+	fun (dummy_app : APP_PR) _ _ _ = PfOk;
+	fun (dummy_var_const : VAR_CONST_PR) _ _ _ _ = PfOk;
 in
 	fun Ûinitial_envÝ (lang:string) 
 			(depth :int OPT)
@@ -927,6 +935,45 @@ fun Ûconclude_new_languageÝ (PpEnv{pe_addstring=addstring, ...}:PP_ENV)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+\section{CHOOSING LANGUAGES}
+
+These functions select the language to be used for printing terms.
+
+=SML
+local (* for choose_..._language *)
+
+fun select (tml : string list, pr_h::pr_t : string list, def : string) : string =
+	if contains tml pr_h then pr_h else select(tml, pr_t, def)
+| select(tml as (tml_h::_), nil, def) =
+	if contains tml def then def else tml_h
+| select (_, _, def:string) = def
+;
+
+in
+=TEX
+
+=SML
+fun Ûchoose_const_languageÝ (const:string, prefs : string list) : string = (
+	select(
+		get_const_language const,
+		prefs,
+		get_current_language()
+	)
+);
+=TEX
+
+=SML
+fun Ûchoose_term_languageÝ (tm:TERM, prefs : string list) : string = (
+	case get_first_const tm
+	of Nil => get_current_language ()
+	| Value l => choose_const_language(l, prefs)
+);
+
+end (* of local for choose_..._language *);
+=TEX
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 \section{BASIC HOL TERM PRINTER}
 
 %********************************************************************
@@ -968,8 +1015,9 @@ new_flag {name = "Ûpp_use_aliasÝ",  control=pp_use_alias,
 =TEX
 
 =SML
-fun Ûhandle_fun_constÝ (cur_env:PP_ENV) (orig:TERM) (const:string) (const_ty:TYPE)
-		(args:TERM list) : unit = (
+fun Ûhandle_fun_constÝ (cur_env:PP_ENV) (orig:TERM) (hdtm:TERM)
+		(const:string) (const_ty:TYPE)
+		(args:TERM list) : PFUN_ANS = (
 let
 	val PpEnv{pe_fun_const = do_fun_const, pe_app=do_app,
 		pe_const=do_const, ...} = cur_env;
@@ -978,24 +1026,24 @@ let
 			then	SymbolTable.get_alias(const, const_ty)
 			else	const;
 in
-	case do_fun_const cur_env orig alias const_ty args
+	case do_fun_const cur_env hdtm alias const_ty args
 	of PfNotPossible => (
 		if length args = 0
 		then
-			do_const cur_env orig alias const_ty
+			do_const cur_env hdtm alias const_ty
 		else
-			do_app cur_env orig args
+			do_app cur_env hdtm args
 		)
-	| PfOk => ()
+	| PfOk => PfOk
 	| PfFewer num => (
 		if length args <= num
 		then
-			do_app cur_env orig args
+			do_app cur_env hdtm args
 		else
 			do_app cur_env
 				(revfold	(fn(el, prev) => mk_app(prev, el))
 						(args to (num-1))
-						orig
+						hdtm
 				)
 				(args from num)
 		)
@@ -1006,30 +1054,31 @@ end
 Note that aliases are not allowed for variables.
 
 =SML
-fun Ûhandle_fun_varÝ (cur_env:PP_ENV) (orig:TERM) (var:string) (var_ty:TYPE)
-		(args:TERM list) : unit = (
+fun Ûhandle_fun_varÝ (cur_env:PP_ENV) (orig:TERM) (hdtm:TERM)
+		(var:string) (var_ty:TYPE)
+		(args:TERM list) : PFUN_ANS = (
 let
 	val PpEnv{pe_fun_var = do_fun_var, pe_app=do_app,
 		pe_var=do_var, ...} = cur_env;
 in
-	case do_fun_var cur_env orig var var_ty args
+	case do_fun_var cur_env hdtm var var_ty args
 	of PfNotPossible => (
 		if length args = 0
 		then
-			do_var cur_env orig var var_ty
+			do_var cur_env hdtm var var_ty
 		else
-			do_app cur_env orig args
+			do_app cur_env hdtm args
 		)
-	| PfOk => ()
+	| PfOk => PfOk
 	| PfFewer num => (
 		if length args <= num
 		then
-			do_app cur_env orig args
+			do_app cur_env hdtm args
 		else
 			do_app cur_env
 				(revfold	(fn(el, prev) => mk_app(prev, el))
 						(args to (num-1))
-						orig
+						hdtm
 				)
 				(args from num)
 		)
@@ -1057,26 +1106,71 @@ in
 	if (case cur_depth of Nil => true | Value d => d > 0)
 	then
 	case open_up tm
-	of PFunConst(orig, const, const_ty, args) =>
+	of PFunConst(hdtm, const, const_ty, args) =>
 		let
-			val lang = get_const_language const;
+			val lang = choose_const_language(const, cur_lang :: nil);
+			val lang_change = cur_lang <> lang;
+			val env =	if lang_change
+					then set_env_for_language lang new_env
+					else new_env;
 		in
-			if cur_lang = lang
-			then
-				handle_fun_const new_env orig const const_ty args
-			else (
-				start_new_language new_env lang;
-				handle_fun_const (set_env_for_language lang new_env)
-					orig const const_ty args;
-				conclude_new_language new_env lang
-			)
-		end
-	| PFunVar(orig, const, const_ty, args) =>
-		handle_fun_var new_env orig const const_ty args
-	| PApp(head_fn, args)	=> do_app	new_env head_fn args
-	| PÌ(tm1, tm2)		=> do_abs	new_env tm1 tm2
+			if lang_change then start_new_language new_env lang else ();
 
+			case handle_fun_const env tm hdtm const const_ty args
+			of PfOk => ()
+			| _ => hol_term_pp cur_env tm;
+
+			if lang_change then conclude_new_language new_env lang else ()
+		end
+	| PFunVar(hdtm, const, const_ty, args) => (
+		case handle_fun_var new_env tm hdtm const const_ty args
+		of PfOk => ()
+		| _ => hol_term_pp cur_env tm
+	)
+	| PApp(head_fn, args) => (
+		case do_app new_env head_fn args
+		of PfOk => ()
+		| _ => hol_term_pp cur_env tm
+	)
+	| PÌ(tm1, tm2) => (
+		case do_abs new_env tm1 tm2
+		of PfOk => ()
+		| _ => hol_term_pp cur_env tm
+	)
 	else (addstring "..."; space(1, 0))
+end
+)
+=TEX
+
+Function $hol_term_pp$ is like $main_term_pp$ but prints its argument
+using the HOL printing routines.  This function is used in those cases
+where the previously called routine failed, i.e., a value other than
+$PfOk$ was returned.
+
+=SML
+and Ûhol_term_ppÝ (cur_env:PP_ENV) (tm:TERM) : unit = (
+let
+	val PpEnv{pe_app=do_app, pe_Ì=do_abs,
+		pe_addstring = addstring,
+		pe_space = space,
+		pe_lang=cur_lang, pe_beginb=beginb, pe_endb=endb, ...} = cur_env;
+	val new_env = set_env_for_language "HOL" (decrement_depth cur_env);
+in
+	start_new_language cur_env "HOL";
+
+	case	case open_up tm
+		of PFunConst(hdtm, const, const_ty, args) =>
+				handle_fun_const new_env tm hdtm const const_ty args
+		| PFunVar(hdtm, const, const_ty, args) =>
+			handle_fun_var new_env tm hdtm const const_ty args
+		| PApp(head_fn, args) =>
+			do_app new_env head_fn args
+		| PÌ(tm1, tm2) =>
+			do_abs new_env tm1 tm2
+	of PfOk => ()
+	| _ => error "pretty_printer" 31003 nil
+	;
+	conclude_new_language cur_env "HOL"
 end
 );
 =TEX
