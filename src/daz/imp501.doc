@@ -186,12 +186,11 @@ structure €SPARKLex› : SPARKLex = struct
 =TEX
 =SML
 local
+
 open CaseIndependence;
 open Lex ZLex ZParser ZUserInterfaceSupport;
+
 in
-=TEX
-\subsection{Abstract Syntax for SPARK}
-=SML
 =TEX
 \subsection{Types for Lexical Analysis}
 The following data type represents the lexical classes which are the
@@ -303,7 +302,7 @@ $SpecificationStatement$ is not a terminal and the syntax of a specification sta
 =TEX
 The following is used in the type of the tokens produced by the SAL lexical analyser.
 =SML
-datatype €SPARK_TOKEN›	=	€SPARKZ› of ZUserInterfaceSupport.Z_TM
+datatype €SPARK_TOKEN›	=	€SPARKZ› of ZLex.Z_TOKEN list
 			|	€SPARKText› of string
 			|	€SPARKString› of string
 			|	€SPARKEos›;
@@ -623,7 +622,7 @@ fun €lex_string› (ip : string list) : LEX_ITEM list  = (
 =SML
 fun €SPARK_lex› (ip : INPUT list) : LEX_ITEM list = (
 	case ip of
-		Text s :: more => (
+		Lex.Text s :: more => (
 			lex_string (explode (to_lower s)) @
 			SPARK_lex more
 	) |	Lex.String s :: more => (
@@ -638,82 +637,123 @@ fun €SPARK_lex› (ip : INPUT list) : LEX_ITEM list = (
 	) |	Lex.Separator s :: _ => (
 			fail "SPARK-Parser" 501011  [fn () => s]
 	) |	Lex.Error n :: more => (fail "lexical analyser" 15006 [fn () => string_of_int n]
-	) |	[] => [(Eos, SPARKEos)]
+	) |	[] => []
 );
 =TEX
 \subsection{Pre-Processor for Compliance Notation}
 =SML
-fun €extract_pre_post› (s:string) : (Z_TM * Z_TM) OPT = (
-let	val zgen = z_parser {is_quot=true} (z_lex ([Lex.Text ("SpecificationStatement["^s^"]")]));
+fun €srch_symbol› (sym : string) (old : string list, new:string list)
+	: (string list * string list) OPT = (
+let	fun aux (s, next::rest) = (
+	let	val s' = s@[next];
+	in
+		if next = sym
+		then
+			Value (s',rest)
+		else
+			aux (s', rest)
+	end)
+	  | aux (s, [])	= Nil;
 in
-	case zgen of
-	ZParaTerm ([], ZTmLVar (_, _, [pre, post]), _)
-		=> Value (pre, post)
-	|_ => Nil
-
+	aux (old, new)
 end);
 =TEX
 =SML
-fun €srch_lsqbrack› (s : string list, []:string list) : (string list * string list)
-	 = (s, [])
-  | srch_lsqbrack (s, s1::rest) = (
-let	val s' = s@[s1];
+fun €srch_matching_rsqbrack› (count : int, old : string list, (s1::rest) : string list)
+		: (string list * string list) OPT = (
+let	val s' = old@[s1];
 in
 	if s1 = "["
 	then
-		(s',rest)
-	else
-		srch_lsqbrack (s', rest)
-end);
-=TEX
-=SML
-fun €srch_rsqbrack› (_ : int) (s : string list, [] : string list)
-		: (string list * string list) = (s, [])
-  | srch_rsqbrack count (s, s1::rest) = (
-let	val s' = s@[s1];
-in
-	if s1 = "["
-	then
-		srch_rsqbrack (count+1) (s', rest)
+		srch_matching_rsqbrack (count+1, s', rest)
 	else if s1 = "]"
 	then
 		if count = 0
 		then
-			(s, s1::rest)
+			Value (old, s1::rest)
 		else
-			srch_rsqbrack (count-1) (s', rest)
+			srch_matching_rsqbrack (count-1, s', rest)
 	else
-		srch_rsqbrack count (s', rest)
-end);
+		srch_matching_rsqbrack (count, s', rest)
+end)
+  | srch_matching_rsqbrack (count, old, []) = Nil;
 =TEX
-Still need to add error message in the following function?
 =SML
-fun €lex_spec_stmt› (s : string) : LEX_ITEM list OPT = (
-let	val ss = explode s;
-in
-	if hd(ss) = "Ñ"
-	then let
-		val (left,right) = srch_lsqbrack ([],ss);
-		val (zpart,rbrack) = srch_rsqbrack 0 ([],right);
-		val llex = SPARK_lex [Text (implode left)];
-		val (pre, post) = case (extract_pre_post o implode) zpart of
-			Value (pre, post) => (pre, post)
-			|Nil => fail "" 0 [];
-		val rlex = SPARK_lex [Text (implode rbrack)];
-		val zprelex = (Z, SPARKZ pre);
-		val zpostlex = (Z, SPARKZ post);
-	in
-		Value (llex@(zprelex::zpostlex::rlex))
-	end
-	else Nil
-end);
-
-fun €compliance_notation_lex› (ip as (Text s::more) : INPUT list) : LEX_ITEM list = (
-	case lex_spec_stmt s of
-	Value lex_items => lex_items@(SPARK_lex more)
-	|Nil => SPARK_lex ip
-) | compliance_notation_lex other = SPARK_lex other;
+datatype €CN_INPUT› =	€SparkInput› of INPUT list
+		|	€ZInput› of INPUT list;
 =TEX
+=SML
+fun €do_upto_matching_rbrack› ((ip::rest) : INPUT list) : CN_INPUT list = (
+	case ip of
+	Lex.Text s => (
+		case srch_matching_rsqbrack (0, [], explode s) of
+		Value (left, right) => (
+			ZInput [Lex.Text (implode left)]
+				::do_upto_Ñ (Text (implode right)::rest)
+		)| Nil => (ZInput[Lex.Text s])::do_upto_matching_rbrack rest
+	) |other => (ZInput [other])::do_upto_matching_rbrack rest
+) | do_upto_matching_rbrack []  = []
+=TEX
+=SML
+and €do_upto_lbrack› ((ip::rest) : INPUT list) : CN_INPUT list = (
+	case ip of
+	Lex.Text s => (
+		case srch_symbol "[" ([], explode s) of
+		Value (left, right) => (
+			(SparkInput [Lex.Text (implode left)]
+				::do_upto_matching_rbrack (Text (implode right)::rest)
+			)
+		)| Nil => (SparkInput[Lex.Text s])::do_upto_lbrack rest
+	) |other => (SparkInput [other])::do_upto_lbrack rest
+)
+  | do_upto_lbrack []  = []
+=TEX
+=SML
+and €do_upto_Ñ› ((ip::rest) : INPUT list) : CN_INPUT list = (
+	case ip of
+	Lex.Text s => (
+		case srch_symbol "Ñ" ([], explode s) of
+		Value (left, right) => (
+			(SparkInput [Lex.Text (implode left)]
+				::do_upto_lbrack (Text (implode right)::rest)
+			)
+		)| Nil => (SparkInput[Lex.Text s])::do_upto_Ñ rest
+	) |other => (SparkInput [other])::do_upto_Ñ rest
+)
+  | do_upto_Ñ []  = [];
+=TEX
+=SML
+fun €classify_inputs› (ips : INPUT list) : CN_INPUT list = (
+let	val classified = do_upto_Ñ ips;
+	fun sort ((SparkInput i1)::(SparkInput i2)::rest) = (
+		(SparkInput (i1@i2))::sort rest
+	) | sort ((ZInput i1)::(ZInput i2)::rest) = (
+		(ZInput (i1@i2))::sort rest
+	) | sort other = other;
+in
+	sort classified
+end);
+=TEX
+=SML
+fun €choose_lexer› (lex_items : CN_INPUT list) : LEX_ITEM list = (
+let	fun aux (ip::more) = (
+		case ip of
+		SparkInput ip' => (SPARK_lex ip')@aux more
+		|ZInput ip' => (Z,SPARKZ (z_lex ip'))::aux more
+	) | aux [] = [];
+in
+	(aux lex_items)@[(Eos, SPARKEos)]
+end);
+=TEX
+=SML
+val €compliance_notation_lex› : INPUT list -> LEX_ITEM list =
+	(choose_lexer o classify_inputs);
+=TEX
+
+πSPARK
+a Ñ b [c,d e f] g
+∞
+
 \subsection{Miscellanea}
 =SML
 fun €format_lex_item›  ((_, tok) : LEX_ITEM) : string = (
