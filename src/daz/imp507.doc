@@ -1302,17 +1302,8 @@ fun (x : ID) €dot› (y : ID) = x ^ "." ^ y;
 See \cite{ISS/HAT/DAZ/HLD501} for further information on the reasons for having the following functions which are invoked when compilation units are processed and when a new script is started.
 =SML
 fun €new_script_theory› (name : string) : unit = (
-	let	val thy = trans_id name;
+	let	val thy = (trans_id name) ^ "__SCRIPT";
 	in	new_theory thy
-	end
-);
-=TEX
-=SML
-fun €new_package_spec_theory› (name : string) : unit = (
-	let	val thy = trans_id (name ^ "__spec");
-	in	new_theory thy
-		handle Fail _ =>
-		fail "new_package_spec_theory" 507023 [fn()=>thy, fn()=>name]
 	end
 );
 =TEX
@@ -1325,6 +1316,15 @@ fun €pack_spec_name› (name : string) : string = (
 =SML
 fun €pack_body_name› (name : string) : string = (
 	(trans_id name) ^ "__BODY"
+);
+=TEX
+=SML
+fun €new_package_spec_theory› (name : string) : unit = (
+	let	val thy = pack_spec_name name;
+	in	new_theory thy
+		handle Fail _ =>
+		fail "new_package_spec_theory" 507023 [fn()=>thy, fn()=>name]
+	end
 );
 =TEX
 =SML
@@ -1345,7 +1345,7 @@ fun €new_package_body_theory› (name : string) : unit = (
 =TEX
 =SML
 fun €open_package_body_theory› (name : string) : unit = (
-	let	val thy = trans_id (name ^ "__body");
+	let	val thy = pack_body_name name;
 	in	open_theory thy
 		handle Fail _ => 
 		fail "open_package_body_theory" 507028 [fn()=>thy, fn()=>name]
@@ -2613,11 +2613,37 @@ fun €new_scope_pack_spec› (ident : ID) : unit = (
 =TEX
 \subsection{The SID function new\_scope\_pack\_body}
 =SML
+fun €populate_theory_with_types_consts› (ident : ID) : unit = (
+	let	val package1 = force_value(s_lookup ident (!pack_env));
+		val consts_types1 = #consts_types package1;
+	in
+		map basic_decl_otherwise consts_types1
+			handle ex => reraise ex
+					 "populate_theory_with_types_consts";
+		()
+	end
+);
+=TEX
+=SML
+fun €populate_theory_with_functions› (ident : ID) : unit = (
+	let	val package1 = force_value(s_lookup ident (!pack_env));
+		val informal_funs = #informal_funs package1;
+		val informal_fun_paras = map trans_informal_fun informal_funs;
+		val formal_funs = #formal_funs package1;
+		val formal_fun_paras = map trans_formal_fun formal_funs;
+	in
+		map update_theory_db_with_parainfo informal_fun_paras;
+		map update_theory_db_with_parainfo formal_fun_paras;
+		()
+	end
+);
+=TEX
+=SML
 fun €new_scope_pack_body› (ident : ID) : unit = (
 	let	val package1 = force_value(s_lookup ident (!pack_env));
 		val flags = {
-			pack_spec_flag = true,
-			pack_body_flag = false,
+			pack_spec_flag = false,
+			pack_body_flag = true,
 			stub_flag = false,
 			subunit_flag = false,
 			formal_body_flag = false,
@@ -2628,7 +2654,8 @@ fun €new_scope_pack_body› (ident : ID) : unit = (
 		};
 		val vc_vars1 = #vc_vars package1;
 		val block = block_vc_vars(empty_block, vc_vars1);
-	in	
+	in
+		populate_theory_with_types_consts ident;
 		blocks := block :: !blocks
 	end	
 );
@@ -2636,20 +2663,20 @@ fun €new_scope_pack_body› (ident : ID) : unit = (
 
 \subsection{The SID function new\_scope\_with}
 =SML
-fun €update_spec_theory_with_consts_types› (ident : ID) = (
+fun €generate_spec_theory› (ident : ID) = (
 	let	val side = open_package_body_theory ident;
 		fun prefix n = trans_id (ident dot "")^n;
 		fun mk_subs_pair (tm : TERM) : (TERM * TERM) = (
 			let val (id, ty, _) = dest_z_gvar tm
-				handle ex => reraise ex "prefix_consts_types";
+				handle ex => reraise ex
+					"generate_spec_theory";
 			in
 				(mk_z_gvar (prefix id, ty, []), tm)
 			end
 		);
 		val consts = get_consts "-";
 		val const_subs = map mk_subs_pair consts;
-		fun do_subst tm = subst const_subs tm;
-		val new_consts = map do_subst consts;
+		fun do_const_subst tm = subst const_subs tm;
 		
 		val defs =
 			map (fn (names, thm) =>
@@ -2659,11 +2686,45 @@ fun €update_spec_theory_with_consts_types› (ident : ID) = (
 			) ((rev o get_defns) "-");
 		val new_defs =
 			map (fn (names, tm) =>
-				(map prefix names, do_subst tm)) defs;
-		fun do_para (names, defn) = (
+				(map prefix names, do_const_subst tm)) defs;
+
+		fun do_abbdef_para (names, defn) = (
 			map (fn n => AbbDefInfo (n, [], defn)) names
 		);
-		val paras = flat (map do_para new_defs);
+		val abbdef_paras = flat (map do_abbdef_para new_defs);
+
+		val axioms =
+			map (fn (names, thm) =>
+				let val (decls, tm) = (dest_±
+						o snd o dest_app
+						o snd o dest_thm) thm;
+				in
+					(names, decls, tm)
+				end
+			) ((rev o get_axioms) "-");
+		fun axiom_subs  (names,decls,tm) = (
+			let	val freevars = frees tm;
+				val freevartab = map dest_z_lvar (frees tm);
+				val definedhere = flat((map (fn n => freevartab
+							drop (fn (s,_,_) => s <> n)))
+							names);
+			in
+				map (fn (n, ty, fmls) =>
+					(mk_z_lvar(prefix n, ty, fmls),
+					mk_z_lvar(n, ty, fmls))) definedhere
+			end);
+		fun do_ax_subst ax tm = subst (axiom_subs ax) tm;
+		val new_axioms =
+			map (fn (ax as (names, decls, tm)) =>
+				(	map prefix names,
+					do_const_subst decls,
+					do_ax_subst ax tm)) axioms;
+		fun do_ax_para (names, decls, defn) = (
+			map (fn n => AxDesInfo ([n], decls, Value defn, [])) names
+		);
+		val ax_paras = flat (map do_ax_para new_axioms);
+
+		val paras = ax_paras @ abbdef_paras;
 		
 	in
 		open_package_spec_theory ident;
@@ -2672,60 +2733,37 @@ fun €update_spec_theory_with_consts_types› (ident : ID) = (
 );
 =TEX
 =SML
-fun €populate_package_spec_theory› (ident : ID) : unit = (
+fun €populate_package_spec_theory› (with_context : ID list)
+			(ident : ID) : unit = (
 	let	val thy = get_current_theory_name();
-		val parents_of_pack = (rev o get_parents o pack_body_name) ident;
+		val parents_of_pack = (rev o get_parents) thy;
+		val father = hd parents_of_pack;
+		val parents_of_package_body = map pack_spec_name with_context;
 	in
-		(open_theory o hd) parents_of_pack;
-		new_package_spec_theory ident
-			handle Fail _ => open_package_spec_theory ident;
-		(map new_parent o tl) parents_of_pack handle _ => [];
-		update_spec_theory_with_consts_types ident;
 
-		open_theory thy
-	end
-);
-=TEX
-=SML
-fun €populate_package_body_theory› (with_context : ID list) (ident : ID) : unit = (
-	let	val package1 = force_value(s_lookup ident (!pack_env));
-		val consts_types1 = #consts_types package1;
-		val parents_of_pack = map pack_spec_name with_context;
-	in
-		map new_parent parents_of_pack handle _ => [];
-		map basic_decl_otherwise consts_types1
-			handle ex => reraise ex "populate_package_body_theory";
-		()
-	end
-);
-=TEX
-=IGN
-fun €new_package_theories› (with_context : ID list) (ident : ID) : unit = (
-	let	val package1 = force_value(s_lookup ident (!pack_env));
-		val consts_types1 = #consts_types package1;
-		val thy = get_current_theory_name();
-		val pack_spec_names = map pack_spec_name with_context;
-	in
+		open_theory father;
 		new_package_body_theory ident
-			handle Fail _ =>
-			open_package_body_theory ident;
-		map new_parent pack_spec_names handle _ => [];
-		map basic_decl_otherwise consts_types1
-			handle ex => reraise ex "new_package_theories";
+			handle Fail _ => open_package_body_theory ident;
+		map new_parent parents_of_package_body handle _ => [];
 
-		(open_theory o hd o rev o get_parents) "-";
+		populate_theory_with_types_consts ident;
+		populate_theory_with_functions ident;
+
+		open_theory father;
 		new_package_spec_theory ident
 			handle Fail _ => open_package_spec_theory ident;
-		map new_parent pack_spec_names handle _ => [];
-		update_spec_theory_with_consts_types ident;
+		map new_parent parents_of_pack handle _ => [];
+		generate_spec_theory ident;
 
-		open_theory thy;
-
-		diag_line "**** TBS - new_package_theories not yet complete ****"
+(*		open_theory father;
+		force_delete_theory (pack_body_name ident)
+			handle _ => ();
+*)		open_theory thy
 
 	end
 );
 =TEX
+$do\_pack\_spec$ updates the specification theory rather than $new\_scope\_with$. When $new\_scope\_with$ is called, the specification theory will have already been populated with the appropriate constants, types and functions.
 =SML
 fun €new_scope_with› (ident : ID) : unit = (
 	let	val package1 = force_value(s_lookup ident (!pack_env));
@@ -3199,7 +3237,7 @@ and €do_package_spec› (with_context : ID list) (
 	map (do_declaration with_context) visible_decs;
 	map (do_declaration with_context) private_decs;
 	end_scope();
-	populate_package_body_theory with_context name
+	populate_package_spec_theory with_context name
 )
 (*
 =TEX
@@ -3265,13 +3303,8 @@ The following reflects the SID functions for $subunit$.
 =SML
 fun €do_compilation_unit› (with_context : ID list)
 	(y as (CUPackageDeclaration (x as {name, ...})) : COMPILATION_UNIT) : unit = (
-	new_package_body_theory name;
 	do_declaration with_context (DPackageDeclaration x)
 ) | do_compilation_unit with_context (y as (CUProperBody x)) = (
-	(case x of
-		PBPackage {name, ...} => (
-			open_package_body_theory name
-	) | _ 	=> ());
 	do_declaration with_context (DProperBody x)
 ) | do_compilation_unit with_context (y as (CUSubUnit {name, proper_body})) = (
 	open_subunit_theory (name, proper_body);
@@ -3285,7 +3318,6 @@ The following reflects the SID functions for the productions $compilation\_unit$
 =SML
 fun €do_context_compilation_unit›
 	({context, comp_unit} : CONTEXT_COMPILATION_UNIT) : unit = (
-	map populate_package_spec_theory context;
 	map new_scope_with context;
 	do_compilation_unit context comp_unit;
 	end_scope_comp_unit()
@@ -3424,7 +3456,7 @@ fun init_cn_z_generator (script_name : string) : unit = (
 );
 =TEX
 =SML
-fun new_cn_script (script_name : string) : unit = (
+fun €new_literate_script› (script_name : string) : unit = (
 	open_theory "daz_toolkit_extensions";
 	new_theory script_name;
 	init_cn_z_generator script_name
