@@ -10,7 +10,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: distclean.sh,v 1.7 2004/02/15 12:13:54 rda Exp rda $
+# $Id: distclean.sh,v 1.8 2004/02/23 13:58:12 rda Exp rda $
 #
 give_up(){
 	echo configure: $*
@@ -28,7 +28,7 @@ fi
 # Find the make files and start building the list of files to keep
 #
 MAKEFILES=
-TOKEEP="version install.mkf index.html.src lemma1.gif newpplogo.gif"
+TOKEEP="version clawz_version install.mkf index.html.src lemma1.gif newpplogo.gif"
 for f in pptex dev xpp hol zed daz clawz
 do	if	[ -f $f.mkf ]
 	then	MAKEFILES="$MAKEFILES $f.mkf"
