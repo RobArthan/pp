@@ -86,6 +86,8 @@ New efficient dictionary functions and new stopwatch timer functions.
 New type of order-preserving efficient dictionaries.
 \item[Issue 2.29]
 Performance tweak to {\it format\_list}.
+\item[Issue 2.30]
+Replaced tree sort with a merge sort.
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -1617,10 +1619,14 @@ fun ÛlexicographicÝ (order : 'a -> 'a -> int) : ('a list) -> ('a list) -> int = 
 This function gives a more civilised ordering on
 strings than the one given by the ASCII codes.
 It first does a lexicographic (q.v) case-insensitive ordering, 
-with alphabetics before the rest, but otherwise in ASCII order, on exploded strings.
+with alphabetics before the rest, but otherwise in ASCII order.
 If two strings are otherwise equal then a case-sensitive
 comparison is made, with the string having the first unmatched capitalisation being ordered as first.
 The integer result is appropriate for use in $sort$ (q.v.).
+
+The original implementation exploded the strings and used {\it lexicographic}; the coding now
+uses indexing and is a lot faster. It could probably be made even faster using a table to encode
+the required ordering.
 =SML
 local
 	val orda = ord "a";
@@ -1638,7 +1644,7 @@ local
 		then Lcase
 		else Other
 	);
-	fun charorder (x : int) (y : int) : int = (
+	fun charorder (x : int, y : int) : int = (
 		case (classify x, classify y) of
 			(Ucase, Ucase) => x - y
 		|	(Lcase, Lcase) => x - y
@@ -1650,41 +1656,76 @@ local
 		|	(Other, Lcase) => 1
 		|	(Other, Other) => x - y
 	);
+	fun Ûstring_lex_orderÝ (char_comp : int * int -> int) (s1 : string) (s2 : string) : int = (
+		let	val sz1 = size s1;
+			val sz2 = size s2;
+			val ascii_code = SML97BasisLibrary.Char.ord;
+			fun first_diff i = (
+				if	i = sz1
+				then	if	i = sz2
+					then	0	(* equal *)
+					else	~1	(* s1 proper substring of s2 - in order *)
+				else if	i = sz2
+				then	1		(* s2 proper substring of s1 - out of order *)
+				else 	let	val c1 = ascii_code(String.sub(s1, i));
+						val c2 = ascii_code(String.sub(s2, i));
+					in	case char_comp (c1, c2) of
+							0 => first_diff (i+1)
+						|	x => x
+					end
+			);
+		in	first_diff 0
+		end
+	);
 in
 	fun Ûstring_orderÝ (s1 : string) (s2 : string) : int = (
-let	val es1 = map ord (explode s1);
-	val es2 = map ord (explode s2);
-	val case_ins = lexicographic charorder es1 es2;
+let	val case_ins = string_lex_order charorder s1 s2;
 in
 	if case_ins = 0
 	then  (	if s1 = s2
 		then 0
-		else lexicographic (curry(op -)) es1 es2
+		else string_lex_order (op-) s1 s2
 	) else case_ins
 end);
 end;
 =TEX
 \subsection{$sort$}
-The sorting algorithm is a common one: insert
-everything into a binary tree and then flatten the tree.
+The sorting algorithm is a binary merge sort.
 =SML
-fun ÛsortÝ (order : 'a -> 'a -> int) (what : 'a list) : 'a list = (
-	let	datatype 'a TREE	= SLeaf
-					| SNode of 'a * ('a TREE) * ('a TREE);
-		fun enter (item, SLeaf) = SNode(item, SLeaf, SLeaf)
-		|   enter (item, n as (SNode(x, l, r))) = (
-			let	val rel = order item x;
-			in	if rel > 0
-				then SNode(x, l, enter(item, r))
-				else if rel < 0
-				then SNode(x, enter(item, l), r)
-				else n
+fun ÛsortÝ  (order : 'a -> 'a -> int)  (xs : 'a list) : 'a list = (
+	let	fun deal lr [] = lr
+		|   deal (l, r) (x::y::more) = deal (x::l, y::r) more
+		|   deal (l, r) [x] = (x::l, r);
+		fun merge acc [] [] = rev acc
+		|   merge acc (x::xs) [] = merge (x::acc) xs []
+		|   merge acc [] (y::ys) = merge (y::acc) [] ys
+		|   merge acc (xs as (x::more_xs)) (ys as (y::more_ys)) = (
+			let	val t = order x y;
+			in	if	t < 0	(* x < y *)
+				then	merge (x::acc) more_xs ys
+				else if	t > 0 	(* x >  y *)
+				then	merge (y::acc) xs more_ys
+				else	merge (x::acc) more_xs more_ys (* x = y *)
 			end
 		);
-		fun flatten SLeaf = []
-		|   flatten (SNode(x, l, r)) = flatten l @ (x :: flatten r);
-
-	in	flatten (fold enter what SLeaf)
+	in	case xs of
+			[] => []
+		|	[_] => xs
+		|	[x, y] =>
+			let	val t = order x y;
+			in	if	t < 0	(* x < y *)
+				then	xs
+				else if	t > 0	(* x > y *)
+				then	[y, x]
+				else	[x]	(* x = y *)
+			end
+		|	_::_ => (
+			let	val (l, r) = deal ([], []) xs;
+				val sl = sort order l;
+				val sr = sort order r;
+			in	merge [] sl sr
+			end
+		)
 	end
 );
 =TEX
