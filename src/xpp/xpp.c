@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.8 2002/12/03 23:39:50 rda Exp rda $
+ * $Id: xpp.c,v 2.9 2003/05/07 16:32:20 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -186,6 +186,7 @@ int check_sep(int argc, char **argv)
 	int l, acc, ro;
 	if(	argc > 1
 	&&	(l = strlen(argv[1])) <= strlen("-readonly")
+	&&	l > 1
 	&&	!strncmp(argv[1], "-readonly", l) ) {
 		global_options.read_only = True;
 		--argc;
@@ -205,11 +206,13 @@ int check_sep(int argc, char **argv)
 		return argc + ro;
 	};
 	if(	(l = strlen(argv[1])) <= strlen("-file")
+	&&	l > 1
 	&&	!strncmp(argv[1], "-file", l) ) {
 		file_name = argv[2];
 		acc = 2;
 	} else if ( (l = strlen(argv[1])) <= strlen("-command")
-	       && !strncmp(argv[1], "-command", l) ) {
+	&&	l > 1
+	&&	!strncmp(argv[1], "-command", l) ) {
 		file_name = NULL;
 		acc = 1;
 	} else {
@@ -218,7 +221,8 @@ int check_sep(int argc, char **argv)
 	}
 	if(	argc > acc + 1
 	&&	(l = strlen(argv[acc + 1])) <= strlen("-command")
-	&&	!strncmp(argv[acc + 1], "-command", l) ) {
+	&&	!strncmp(argv[acc + 1], "-command", l)
+	&&	l > 1 ) {
 		return acc + ro + 2;
 	} else {
 		global_options.edit_only = (argc == acc + 1);
