@@ -553,6 +553,8 @@ if( !global_options.edit_only ) {
 
 	script = XmCreateScrolledText(work, "script", args, i);
 
+	XtOverrideTranslations(script, text_translations);
+
 	undo_ptr = add_undo(script, editmenu, EDIT_MENU_UNDO);
 
 	XtAddCallback(script,
