@@ -75,6 +75,9 @@ Made implementation of length SML97-compatible.
 \item [Issue 2.18 (16th July 2001)] Added $DynamicArray$ structure.
 \item [Issue 2.19 (30th July 2001)] New slicker hash function in $EfficientDictionary$ structure.
 \item [Issues 2.21-2.23 (3rd August 2001)] Even slicker hash function!
+\item [Issues 2.24 (7th August 2001)] {\it e\_delete} now reclaims space when possible (to
+support the pattern of use in the abstract data type of theorems better).
+{\it e\_lookup} tests for an empty tree before doing anything else.
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -1172,9 +1175,12 @@ In each case we precompute the hash key of the string
 argument then apply an auxiliary function to perform
 the desired operation.
 
-Like $s\_lookup$, $e\_lookup$ implements application:
+Like $s\_lookup$, $e\_lookup$ implements application.
+The test for an empty tree is made first to avoid having to compute the hash
+key in a case where it is not needed.
 =SML
-	fun €e_lookup› (s : string) (dict : 'a E_DICT) : 'a OPT = (
+	fun €e_lookup› (_ : string) (Leaf : 'a E_DICT) : 'a OPT = Nil
+	|   e_lookup s dict = (
 		let	val k = hash s;
 			fun aux Leaf = Nil
 			| aux (Node(k', pairs, l, r)) = (
@@ -1186,7 +1192,7 @@ Like $s\_lookup$, $e\_lookup$ implements application:
 			);
 		in	aux dict
 		end
-);
+	);
 =TEX
 Like $s\_enter$,
 $e\_enter$ implements overwriting by a singleton function:
@@ -1226,16 +1232,40 @@ $e\_extend$ implements extension by a singleton function:
 	);
 =TEX
 Like $s\_delete$, $e\_delete$ deletes an element from
-the domain of a dictionary:
+the domain of a dictionary.
+Some modules make heavy use of deletion and as the hashing function gives
+a good spread of values, it is important both for space and speed to
+reclaim nodes whose data components have become empty.
+This is done by lifting up the left-most leaf of the right hand subtree
+to fill in for a node that is to be deleted from the tree.
+The resulting tree is at most no deeper than the original.
 =SML
 	fun €e_delete› (s : string) (dict : 'a E_DICT) : 'a E_DICT = (
 		let	val k = hash s;
+			fun del_left_most (Node (k', pairs, l, r)) = (
+				case l of
+					Node(_, _, Node _, _) => (
+					let	val (l', kpairs) = del_left_most l;
+					in	(Node (k', pairs, l', r), kpairs)
+					end	
+				) | 	Node (lk, lpairs, Leaf, lr) => (
+					(Node(k', pairs, lr, r), (lk, lpairs))
+				) | 	Leaf => (
+					(r, (k', pairs))
+				)
+			) | del_left_most Leaf = (Leaf, (0, []));
 			fun aux Leaf = Leaf
 			|   aux (Node(k', pairs, l, r)) = (
 				if k < k'
 				then Node(k', pairs, aux l, r)
 				else if k = k'
-				then Node(k', pairs drop (fn (s',_) => s' = s), l, r)
+				then	case pairs drop (fn (s',_) => s' = s) of
+						[] => (
+						case del_left_most r of
+							(r', (k'', pairs'' as _::_)) => (
+								Node(k'', pairs'', l, r')
+							) | (_, (_, [])) => l
+					) | pairs' => Node(k', pairs', l, r)
 				else Node(k', pairs, l, aux r)
 			);
 		in	aux dict
@@ -1314,13 +1344,6 @@ The final item declared in the abstract data type for
 efficient dictionaries is an empty dictionary, which
 gives a starting point for the use of the above functions.
 
-Arguably, $initial\_e\_dict$ should be given as a tree
-containing all the possible hash keys each with an empty
-simple dictionary. This can easily be done so that
-the tree is balanced. The hashing function we have used
-gives rise to reasonably well-balanced trees on all the
-sample data sets tried, so this speed-for-space
-optimisation has not been made.
 =SML
 	val €initial_e_dict› : 'a E_DICT = Leaf;
 
