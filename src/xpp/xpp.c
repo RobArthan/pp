@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.13 2003/05/21 10:54:00 rda Exp rda $
+ * $Id: xpp.c,v 2.14 2003/05/21 11:29:51 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -274,12 +274,15 @@ int main(int argc, char **argv)
 {
 	argv0 = argv[0];
 
-	root = XtVaAppInitialize(&app,
-		"Xpp",
+	root = XtOpenApplication(&app,
+		APP_CLASS,
 		options,
 		XtNumber(options),
 		&argc,
-		argv, NULL, NULL);
+		argv,
+		NULL, /* no fallback resources */
+		applicationShellWidgetClass,
+		NULL, 0); /* default all resources for the application shell */
 	
 	(void) fcntl(ConnectionNumber(XtDisplay(root)), F_SETFD, 1);
 
