@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp063.doc	%Z% $Date: 2002/10/17 16:26:32 $ $Revision: 1.25 $ $RCSfile: imp063.doc,v $
+% imp063.doc	%Z% 2004/01/19 12:44:00 1.26 imp063.doc,v
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -21,10 +21,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of the Z Term Generator}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP063}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.25 $%
+\def\SCCSversion{1.26%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 16:26:32 $%
+\TPPdate{\FormatDate{2004/01/19 12:44:00%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -98,6 +98,7 @@ fruit :  (ƒ º ð[apple, banana, crabapple : ú])
 \item[Issue 1.24] Copyright and banner updates for open source release.
 \item[Issue 1.25] PPZed-specific updates for open source release
 \item[Issue 1.26] The Z universal set is now called ƒ.
+\item[Issue 1.27] Performance enhancements.
 \end{description}
 \subsection{Changes Forecast}
 The function $do\_in\_theory$ will be moved into the
@@ -293,9 +294,14 @@ end);
 
 
 =SML
-val Ûtype_defn_of_z_extypeÝ : EXTYPE -> TYPE = (
-	gen_z_semantic_types o type_of_z_extype
-);
+fun Ûtype_defn_of_z_extypeÝ (ExType(tycon, args) : EXTYPE) : unit = (
+	let	val tyargs = map (fn _ => mk_vartype "'a") args;
+		val ty = mk_ctype(tycon, tyargs);
+	in	gen_z_semantic_type ty;
+		map type_defn_of_z_extype args;
+		()
+	end
+) | type_defn_of_z_extype _ = ();
 =TEX
 
 \section{GENERATING HOL TERMS}
@@ -307,8 +313,10 @@ fun Ûtm_of_z_decÝ (dec : Z_DEC) : TERM = (
 	case dec of
 	ZDDec (idl, tm, Value ty) =>
 		let	val set = tm_of_z_tm tm;
+			val side = type_defn_of_z_extype ty;
+			val holty = type_of_z_extype ty;
 			val vars = map (fn id =>
-				mk_z_lvar (string_of_ident id, type_defn_of_z_extype ty, [])) idl;
+				mk_z_lvar (string_of_ident id, holty, [])) idl;
 		in
 			mk_z_dec (vars, set)
 		end
@@ -341,14 +349,14 @@ and Ûtm_of_z_schtextÝ (sch as (dec, Value pred, Value ty)
 
 =SML
 and Ûtm_of_z_tmÝ ((term as ZTm§¢ (Value ty, tml)) : Z_TM) : TERM = (
-let	val elty = hd (tl (dest_z_tuple_type (type_defn_of_z_extype ty)));
+let	val elty = hd (tl (dest_z_tuple_type (type_of_z_extype ty)));
 in
 	mk_z_§¢ (elty, list_tm_of_z_tm tml)
 end
 ) | tm_of_z_tm (ZTm§¢ (Nil, _)) = (
 		fail "tm_of_z_tm" 63001 []
 ) | tm_of_z_tm (term as ZTmSetd (Value ty, tml)) = (
-let	val elty = type_defn_of_z_extype ty;
+let	val elty = type_of_z_extype ty;
 in
 	mk_z_setd (elty, list_tm_of_z_tm tml)
 end
@@ -509,12 +517,13 @@ end
 ) | tm_of_z_tm (term as ZTmString s) = (
 	mk_z_string s
 ) | tm_of_z_tm (term as ZTmLVar (id, Value ty, tml)) = (
-	mk_z_lvar (string_of_ident id, type_defn_of_z_extype ty, list_tm_of_z_tm tml)
+	type_defn_of_z_extype ty;
+	mk_z_lvar (string_of_ident id, type_of_z_extype ty, list_tm_of_z_tm tml)
 ) | tm_of_z_tm (ZTmLVar (_, Nil, _)) = (
 		fail "tm_of_z_tm" 63001 []
 ) | tm_of_z_tm (term as ZTmGVar (id, Value ty, tml)) = (
 let	val gv = string_of_ident id;
-	val ty' = type_defn_of_z_extype ty;
+	val ty' = type_of_z_extype ty;
 in
 	case gv of
 	"Totality" => mk_const (gv, ty')
@@ -536,7 +545,7 @@ end
 	tm_of_z_tm tm
 ) | tm_of_z_tm (term as (ZTmQuotation (tm, Value exty))) = (
 	let	val nltyl = map dest_var (frees tm);
-		val ty' = type_defn_of_z_extype exty;
+		val ty' = type_of_z_extype exty;
 		val tyl = map snd nltyl;
 		val ty = mk_ctype("", type_of tm :: tyl);
 		val tm' = inst [] (type_match ty' ty) tm
@@ -560,15 +569,19 @@ fun Ûdo_gvar_substÝ (tm : TERM) : TERM = (
 =TEX
 \section{INTERFACES}
 =SML
-val Ûterm_of_z_decÝ : Z_DEC -> TERM = do_gvar_subst o tm_of_z_dec;
-val Ûlist_term_of_z_decÝ : Z_DEC list -> TERM = do_gvar_subst o list_tm_of_z_dec;
+fun Ûdo_types_to_defineÝ (x : 'a) : 'a = (
+	map type_defn_of_z_extype (get_types_to_define());
+	x
+);
+val Ûterm_of_z_decÝ : Z_DEC -> TERM = do_gvar_subst o tm_of_z_dec o do_types_to_define;
+val Ûlist_term_of_z_decÝ : Z_DEC list -> TERM = do_gvar_subst o list_tm_of_z_dec o do_types_to_define;
 val Ûterm_of_z_schtextÝ : Z_SCH_TEXT -> TERM * TERM OPT = (fn tm =>
 	case tm_of_z_schtext tm of
 		(t1, Nil) => (do_gvar_subst t1, Nil)
 	|	(t1, Value t2) => (do_gvar_subst t1, Value(do_gvar_subst t2))
-);
-val Ûterm_of_z_tmÝ : Z_TM -> TERM = do_gvar_subst o tm_of_z_tm;
-val Ûlist_term_of_z_tmÝ : Z_TM list -> TERM list = map do_gvar_subst o list_tm_of_z_tm;
+) o do_types_to_define;
+val Ûterm_of_z_tmÝ : Z_TM -> TERM = do_gvar_subst o tm_of_z_tm o do_types_to_define;
+val Ûlist_term_of_z_tmÝ : Z_TM list -> TERM list = map do_gvar_subst o list_tm_of_z_tm o do_types_to_define;
 =TEX
 
 \section{EPILOGUE}
