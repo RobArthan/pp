@@ -1,4 +1,4 @@
-% $Header: /home/rda/daz/RCS/imp510.doc,v 1.90 2002/01/26 14:49:47 rda Exp rda $
+% $Header: /home/rda/daz/RCS/imp510.doc,v 1.91 2002/03/13 12:50:50 rda Exp rda $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: SPARK Output Function}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP510}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.90 $%
+\def\SCCSversion{$Revision: 1.91 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{{$Date: 2002/01/26 14:49:47 $%
+\TPPdate{\FormatDate{{$Date: 2002/03/13 12:50:50 $%
 }}
 \TPPstatus{Draft}	    %% Mandatory field
 \TPPtype{Specification}
@@ -155,6 +155,8 @@ in a format that can more often be re-entered.
 and ranges; also involved a fairly extensive overhaul to remove the enormous
 mutual recursions.
 \item[Issue 1.91] R0056: default parameter modes supported properly.
+\item[Issue 1.92] Fixed bugs in output of loop statements; tidied various statement forms
+which were producing newlines inconsistently.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -1161,7 +1163,7 @@ fun €fmt_elsif›
 	outf (kw"THEN"); outf "\n";
 	inc_tabs(); fmt_stat fmtinfo p; dec_tabs();
 	(case q
-	of STImplicitNull => outf "\n"
+	of STImplicitNull => ()
 	| z => (
 		outf (kw"ELSE"); outf "\n";
 		inc_tabs();
@@ -1189,8 +1191,8 @@ fun €fmt_if_then_else›
 	(fmt_stat fmtinfo p);
 	dec_tabs();
 	(case q
-	of STImplicitNull => outf "\n"
-	| z => (
+	of STImplicitNull => ()
+	| _ => (
 		outf (kw"ELSE"); outf "\n";
 		inc_tabs();
 		(fmt_stat fmtinfo q);
@@ -1231,7 +1233,7 @@ fun €fmt_case_alt›
 	outf (kw"WHEN");
 	(fmt_case_choice_list fmtinfo c);
 	outf "=>";
-	outf "\n";
+	outf"\n";
 	inc_tabs();
 	(fmt_stat fmtinfo s);
 	dec_tabs(); outf "\n"
@@ -1261,10 +1263,10 @@ fun €fmt_case›
 	    case oth
 	    of STImplicitNull => ()
 	    | _ => (outf (kw2"WHEN""OTHERS" ^ " =>");
+			outf"\n";
 			inc_tabs();
 			fmt_stat fmtinfo oth;
-			dec_tabs();
-			outf "\n"
+			dec_tabs()
 		)
 	);
 	outf (kw2"END""CASE"^";");
@@ -1290,7 +1292,9 @@ fun €fmt_unnamed_loop›
 	outf (kw"LOOP"); outf "\n";
 	inc_tabs();
 	(fmt_stat fmtinfo s);
-	dec_tabs(); outf "\n"
+	dec_tabs();
+	outf (kw2"END""LOOP"^";");
+	outf "\n"
    );
 
 fun €fmt_named_loop›
@@ -1327,10 +1331,8 @@ fun €fmt_loop_body›
     Value _  => (outf "-- TILL statement"; outf "\n")
     | Nil =>  (outf "TILL ˚"; (fmt_z_tm fmtinfo t); outf "˝"; outf "\n")
     );
-    outf (kw"LOOP"); outf "\n";
     (inc_tabs(); fmt_stat fmtinfo s; dec_tabs())
    )  | fmt_loop_body fmt_stat (fmtinfo as {outf,...} : PP_FMT_INFO) ({t=Nil, stmt=s} : STATEMENT LOOP) = (
-	outf (kw"LOOP"); outf "\n";
 	(inc_tabs(); fmt_stat fmtinfo s; dec_tabs())
    );
 
@@ -1340,12 +1342,14 @@ fun €fmt_while›
 	({name=Value n, g=g, loop=l} : STATEMENT WHILE) = (
 	(fmt_id fmtinfo n); outf ":"; outf "\n";
 	outf  (kw"WHILE"); (fmt_cond fmtinfo g); outf "\n";
+	outf (kw"LOOP"); outf "\n";
 	(fmt_loop_body fmt_stat fmtinfo l);
 	outf (kw2"END""LOOP"); (fmt_id fmtinfo n); outf ";"; outf "\n"
   )
   | fmt_while fmt_stat (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({name=Nil, g=g, loop=l} : STATEMENT WHILE) = (
 	outf (kw"WHILE"); (fmt_cond fmtinfo g); outf "\n";
+	outf (kw"LOOP"); outf "\n";
 	(fmt_loop_body fmt_stat fmtinfo l);
 	outf (kw2"END""LOOP"^";"); outf "\n"
    );
@@ -1362,6 +1366,7 @@ fun €fmt_for_static›
 	fmt_loop_direction fmtinfo d;
 	(case t of Value tm => (fmt_tmark fmtinfo tm; outf (kw"RANGE")) | Nil => ());
 	(fmt_range fmtinfo r); outf"\n";
+	outf (kw"LOOP"); outf "\n";
 	(fmt_loop_body fmt_stat fmtinfo loop);
 	outf (kw2"END""LOOP");(fmt_id fmtinfo n); outf ";"; outf "\n"
 )))
@@ -1375,8 +1380,8 @@ fun €fmt_for_static›
 	outf (kw"IN");
 	(fmt_loop_direction fmtinfo d);
 	(case t of Value tm => (fmt_tmark fmtinfo tm; outf (kw"RANGE")) | Nil => ());
-	outf (kw"RANGE");
 	(fmt_range fmtinfo r); outf "\n";
+	outf (kw"LOOP"); outf "\n";
 	(fmt_loop_body fmt_stat fmtinfo loop);
 	outf (kw2"END""LOOP"^";"); outf "\n"
 )));
@@ -1391,6 +1396,7 @@ fun €fmt_for_tmark›
 	(fmt_id fmtinfo n); outf ":"; outf "\n";
 	outf (kw"FOR"); fmt_id fmtinfo i; outf (kw"IN");
 	(fmt_loop_direction fmtinfo d);(fmt_tmark fmtinfo t); outf "\n";
+	outf (kw"LOOP"); outf "\n";
 	(fmt_loop_body fmt_stat fmtinfo loop);
 	outf (kw2"END""LOOP"); (fmt_id fmtinfo n); outf ";"; outf "\n"
 )))
@@ -1402,6 +1408,7 @@ fun €fmt_for_tmark›
     outf (kw"FOR"); fmt_id fmtinfo i; outf (kw"IN"); 
     (fmt_loop_direction fmtinfo d);
 	(fmt_tmark fmtinfo t); outf "\n";
+    outf (kw"LOOP"); outf "\n";
     (fmt_loop_body fmt_stat fmtinfo loop);
     outf (kw2"END""LOOP"^";"); outf "\n"
 )));
