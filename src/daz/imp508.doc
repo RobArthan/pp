@@ -64,6 +64,8 @@ This document contains the implementation for the Basic Declaration and Expressi
 \item[Issue 1.1-1.15] Initial Drafts.
 \item[Issue 1.16 (16th June 1994)] First draft for review.
 \item[Issue 1.27 (31 October 1994)] Added $z\_true$ and $z\_exists$ as per version 1.1 of Volume 3 of DRA's specification.
+\item[Issue 1.30 (9th November 1994)]
+Adjusted $ENV\_INFO$ and allowed for type conversions.
 
 \end{description}
 \subsection{Changes Forecast}
@@ -100,7 +102,9 @@ structure €CNBasicDeclsAndExprs› : CNBasicDeclsAndExprs = struct
 datatype €ENV_INFO› =
 			€EIEnvFunction› of ID list
 		|	€EIEnvVar› of TMARK
+		|	€EIEnvAuxVar›
 		|	€EIEnvRecordType›
+		|	€EIEnvOtherType›
 		|	€EIEnvOther›;
 =TEX
 =SML
@@ -194,6 +198,7 @@ val €zsucc› : Z_EXP = ÒsuccÆ;
 fun €zid› (env : CN_ENV) (id : Z_ID) : Z_EXP = (
 	case env id of
 	Value (ty, EIEnvVar _) => mk_z_lvar(id, ty, [])
+	|Value (ty, EIEnvAuxVar) => mk_z_lvar(id, ty, [])
 	|Value (ty, _) => mk_z_gvar(id, ty, [])
 	|Nil => fail "zid" 508021 [fn()=>id]
 );
@@ -984,6 +989,7 @@ and €trans_exp› (env : CN_ENV) ((EId id) : EXP) : Z_EXP = exp_id env id
   | trans_exp env (EFunCall fc) = exp_fun_call env fc
   | trans_exp env (EAuxiliaryExp ae) = exp_auxiliary_exp ae
   | trans_exp env (EQualifiedExp qe) = fail "trans_exp" 508032 []
+  | trans_exp env (ETypeConversion tc) = fail "trans_exp" 508036 []
   | trans_exp env (EBracketed e) = trans_exp env e
   | trans_exp env (EStringLiteral c) = go_informal "trans_exp" 508033 []
   | trans_exp env (ECharacterLiteral c) = go_informal "trans_exp" 508034 []
@@ -1368,7 +1374,7 @@ let	val prename = name_to_tmark p;
 in
 	case (env prename, i) of
 =TEX
-Is it a function?
+Is it a function call?
 =SML
 	(Value (_, EIEnvFunction _), EArrayAggPos{comps,...}) => (
 		EFunCall{fun_name=prename, args=map (adjust_exp env) comps}
@@ -1377,6 +1383,13 @@ Is it a function?
 	in
 		EFunCall{fun_name=prename, args=map (adjust_exp env) args}
 	end
+=TEX
+Is it a type conversion?
+=SML
+	) |(Value (_, EIEnvRecordType), EArrayAggPos{comps=[comp],...}) => (
+		ETypeConversion{tmark=prename, exp= (adjust_exp env) comp}
+	) |(Value (_, EIEnvOtherType), EArrayAggPos{comps=[comp],...}) => (
+		ETypeConversion{tmark=prename, exp= (adjust_exp env) comp}
 =TEX
 No... It must be an indexed component for real. So check for errors...
 =SML
@@ -1391,7 +1404,7 @@ No... It must be an indexed component for real. So check for errors...
 		fail "adjust_indexed_comp" 508047 [fn()=>name_to_tmark p]
 
 	) |_ => (
-		fail "adjust_indexed_comp" 508021 [fn()=>prename]
+		fail "adjust_indexed_comp" 508048 [fn()=>prename]
 
 	)
 end
@@ -1474,6 +1487,8 @@ and €adjust_exp› (env : CN_ENV) (exp as (EId id : EXP)) = (
 	exp
 ) | adjust_exp env (exp as (EQualifiedExp x)) = (
 	adjust_qualified_expression env x
+) | adjust_exp env (exp as (ETypeConversion _)) = (
+	exp
 ) | adjust_exp env (exp as (EBracketed x)) = (
 	adjust_exp env x
 ) | adjust_exp env (exp as (EStringLiteral _)) = (
