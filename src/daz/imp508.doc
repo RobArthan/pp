@@ -1,4 +1,4 @@
-% imp508.doc   %Z% $Date: 2002/05/03 16:48:02 $ $Revision: 1.92 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2002/05/04 13:48:39 $ $Revision: 1.93 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.92 $%
+\def\SCCSversion{$Revision: 1.93 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/05/03 16:48:02 $%
+\TPPdate{\FormatDate{$Date: 2002/05/04 13:48:39 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -112,6 +112,7 @@ generate a domain condition for a $\Xi$ argument to a function.
 to avoid possible clash with an Ada name.
 \item[Issues 1.90] Sliding now handled properly in aggregates.
 \item[Issues 1.91-1.93] Spring 2002 enhancements: allowing for new syntax for interim release.
+\item[Issues 1.94] R0050: discriminants now working.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -2410,6 +2411,22 @@ fun Ûrecord_update_defsÝ (zname : Z_ID, zcomps : Z_ID list list) : PARAINFO = (
 );
 end;
 =TEX
+=SML
+fun Ûindex_con_set_compÝ (env : CN_ENV) (tmark : TMARK) (domain : Z_EXP) : Z_EXP = (
+	let	val zexp = zid env (trans_id tmark);
+		val zvar_ty = dest_z_power_type(type_of zexp)
+			handle Fail _ => fail "index_con_set_comp" 508051 [fn () => tmark];
+		val var =  "array";
+		fun env' id = (
+			if	id = "array"
+			then	Value (zvar_ty, EIEnvVar tmark)
+			else	env id
+		); 
+		val zp = z_eq (z_dom (zid env' var), domain);
+	in	z_set_comp (trans_decl env' {vars=[var],tmark=tmark}, zp)
+	end
+);
+=TEX
 In the following, {\it disc} is the list of formal discriminants for the record
 type we are introducing; if the constraint on the component declaration is
 a discriminant constraint, {\it exps} is the list of actual discriminants in
@@ -2437,19 +2454,22 @@ fun Ûtrans_comp_declÝ (env : CN_ENV) (disc : VAR_DECL list)
 			in	map trans1 vars
 			end
 		);
-		fun mk_index_constraint ranges = (
-			z_many_cross(map (trans_exp env) ranges)
+		fun mk_set_comp ranges = (
+			index_con_set_comp
+			env'
+			tmark
+			(z_many_cross(map (trans_exp env') ranges))			
 		);
-		fun do_index_constraint prod acc [] = rev acc
-		|   do_index_constraint prod acc (v::more) = (
-			do_index_constraint prod
-			(z_mem(v, prod)::acc)
+		fun do_index_constraint setcmp acc [] = rev acc
+		|   do_index_constraint setcmp acc (v::more) = (
+			do_index_constraint setcmp
+			(z_mem(v, setcmp)::acc)
 			more
 		);
 		fun do_disc_constraint _ acc [] _ = rev acc
 		|   do_disc_constraint ses acc (vs as (v::_)) ((sel, ze)::more) = (
-			do_disc_constraint ses vs
-			(z_eq(z_selection(v, sel), ze)::acc)
+			do_disc_constraint ses
+			(z_eq(z_selection(v, sel), ze)::acc) vs
 			more
 		) | do_disc_constraint ses acc (_::vs) [] = (
 			do_disc_constraint ses acc vs ses
@@ -2457,8 +2477,8 @@ fun Ûtrans_comp_declÝ (env : CN_ENV) (disc : VAR_DECL list)
 	in	case con of
 			CCNoCon => []
 		|	CCIndexCon ranges => (
-			let	val prod = mk_index_constraint ranges;
-			in	do_index_constraint prod [] (trans_comps comps)
+			let	val setcmp = mk_set_comp ranges;
+			in	do_index_constraint setcmp [] (trans_comps comps)
 			end
 		) |	CCDiscCon exps => (
 			case env tmark of
@@ -2696,20 +2716,15 @@ val Ûbasic_decl_subtype_floating_conÝ : CN_ENV -> ID
 fun Ûbasic_decl_subtype_index_conÝ (env : CN_ENV) (name : ID) (tmark : TMARK)
 		(ci : EXP list) : PARAINFO list = (
 let	val zname = trans_id name;
-	val zexp = zid env (trans_id tmark);
-	val zvar_ty = dest_z_power_type(type_of zexp)
-		handle Fail _ => fail "trans_basic_decl" 508051 [fn () => tmark];
-	val var =  "array";
-	val env' = fn id => if id = "array" then Value (zvar_ty, EIEnvVar tmark)
-					else env id; 
 	val index = map name_to_tmark ci;
 	val zindex = map trans_id index;
-	val zp = z_eq (z_dom (zid env' var), z_many_cross(map (zid env) zindex));
-	val set_comp = z_set_comp (trans_decl env' {vars=[var],tmark=tmark}, zp)
+	val domain = z_many_cross(map (zid env) zindex);
+	val set_comp = index_con_set_comp env tmark domain;
 	val abb_def = z_eq_eq (zname, set_comp);
 in	abb_def :: array_attrib env (zname, zindex)
 end
 );
+=TEX
 =SML
 fun Ûbasic_decl_subtype_disc_conÝ (env : CN_ENV) (name : ID) (tmark : TMARK)
 	(disc : EXP list)
@@ -3302,6 +3317,9 @@ fun Ûadjust_comp_declÝ (env : CN_ENV) (disc : DISCRIMINANT_SPECIFICATION list)
 		) | adjust_range (SIDiscreteRangeSubInd{
 			con = CRange rng, ...}) = (
 			EDiscreteRange(DRRange rng)
+		) | adjust_range (SIDiscreteRangeSubInd{
+			con = CNoCon, tmark}) = (
+			EId tmark
 		) | adjust_range _ = fail "adjust_comp_decl" 508105 [fn _ => hd vars];
 	in	case resolve_constraint env tmark con of
 			SIIndexCon ranges => (
