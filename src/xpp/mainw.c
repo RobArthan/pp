@@ -168,7 +168,7 @@ static BOOL listening;
  * the display window text is left where it is.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-void scroll_out(buf, ct, ignored)
+static void scroll_out(buf, ct, ignored)
 char *buf;
 int ct;
 BOOL ignored;
@@ -415,7 +415,7 @@ setup_cmdwin()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * MENU PROCESSING
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void tools_menu_cb(w, i, cbs)
+static void tools_menu_cb(w, i, cbs)
 Widget w;
 int i;
 XmAnyCallbackStruct *cbs;
@@ -431,7 +431,7 @@ XmAnyCallbackStruct *cbs;
 	}
 }
 
-void edit_menu_cb(w, i, cbs)
+static void edit_menu_cb(w, i, cbs)
 Widget w;
 int i;
 XmAnyCallbackStruct *cbs;
@@ -466,7 +466,7 @@ XmAnyCallbackStruct *cbs;
    selection to cut, copy or paste. */
 }
 
-void cmd_menu_cb(w, i, cbs)
+static void cmd_menu_cb(w, i, cbs)
 Widget w;
 int i;
 XmAnyCallbackStruct *cbs;
@@ -512,7 +512,7 @@ XmAnyCallbackStruct *cbs;
 	}
 }
 
-void help_menu_cb(w, i, cbs)
+static void help_menu_cb(w, i, cbs)
 Widget w;
 int i;
 XmAnyCallbackStruct *cbs;
@@ -534,7 +534,7 @@ XmAnyCallbackStruct *cbs;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Monitor cursor motions:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void command_motion_cb(w, d, cbs)
+static void command_motion_cb(w, d, cbs)
 Widget w;
 XtPointer d;
 XmTextVerifyCallbackStruct *cbs;
@@ -547,7 +547,7 @@ XmTextVerifyCallbackStruct *cbs;
  * component almost always has to be reassigned. Following gives
  * an undo which would not change the text.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void reinit_undo_buffer (cbs, cu)
+static void reinit_undo_buffer (cbs, cu)
 XmTextVerifyCallbackStruct *cbs;
 BOOL cu;
 {
@@ -564,7 +564,7 @@ BOOL cu;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Monitor typed input:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void command_modify_cb(w, d, cbs)
+static void command_modify_cb(w, d, cbs)
 Widget w;
 XtPointer d;
 XmTextVerifyCallbackStruct *cbs;
@@ -621,7 +621,7 @@ XmTextVerifyCallbackStruct *cbs;
  * of the new selection (or the insertion point if no text was
  * inserted) is manoeuvred into view in the window.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void do_undo(w)
+static void do_undo(w)
 Widget w;
 {
 	XmTextPosition fst, lst;
@@ -664,7 +664,7 @@ Widget w;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 
-void get_pty()
+static void get_pty()
 {
 	int slave_fd, tty_fd;
 	char c;
@@ -750,7 +750,7 @@ BOOL application_alive()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Data transfer from application:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void get_from_application(unused_w, unused_p)
+static void get_from_application(unused_w, unused_p)
 Widget unused_w;
 XtPointer unused_p;
 {
@@ -954,7 +954,7 @@ int siz;
  * on the controller process causes SIGINT to the application
  * if it's running.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void sig_handler(sig, code, scp, addr)
+static void sig_handler(sig, code, scp, addr)
 int sig, code;
 struct sigcontext *scp;
 char *addr;
@@ -965,7 +965,7 @@ char *addr;
 	}
 }
 
-void handle_sigs()
+static void handle_sigs()
 {
 	signal(SIGINT, sig_handler);
 }
@@ -973,7 +973,7 @@ void handle_sigs()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Interrupt the applications (as with Cntl-C): 
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void interrupt_application ()
+static void interrupt_application ()
 {
 	if(application_alive()) {
 		killpg(child_pgrp, SIGINT);
@@ -983,7 +983,7 @@ void interrupt_application ()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Send new line to the application
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void send_nl ()
+static void send_nl ()
 {
 	char *buf = "\n";
 
@@ -994,7 +994,7 @@ void send_nl ()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Tidy up if the application is dead
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void post_mortem_tidy_up ()
+static void post_mortem_tidy_up ()
 {
 	if(listening && !application_alive()) {
 		XtRemoveInput(app_ip_req);
@@ -1005,7 +1005,7 @@ void post_mortem_tidy_up ()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Kill the application:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void kill_application ()
+static void kill_application ()
 {
 	if(application_alive()) {
 		if(listening) {
@@ -1021,7 +1021,7 @@ void kill_application ()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Restart the application
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void restart_application () {
+static void restart_application () {
 	kill_application();
 	get_pty();
 }
@@ -1030,7 +1030,7 @@ void restart_application () {
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * See if the user really wants to quit, and if so do so:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void close_down_cb (w, cd, cbs)
+static void close_down_cb (w, cd, cbs)
 Widget w;
 XtPointer cd;
 XmAnyCallbackStruct cbs;
