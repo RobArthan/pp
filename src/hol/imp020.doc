@@ -67,7 +67,8 @@ Corrected a use of $get\_const\_type$.
 \item [Issue 1.5]
 The name atom  ``definition(s)'' changed to ``defn(s)'', and
 ``constant(s)'' to ``const(s)''.
-
+\item [Issue \SCCSversion (\FormatDate{$Date$%
+})] Added $get\_alias$. Corrected handling of languages.
 \end{description}
 \subsection{Changes forecast}
 \pagebreak
@@ -95,7 +96,7 @@ already stored in the theory database).
 For the purposes of parsing, type inferring and pretty printing, the interrogative
 functions:
 $get\_terminators$, $get\_fixity$, $get\_const\_info$,
-$get\_const\_type$, $resolve\_alias$, $get\_type\_info$,
+$get\_const\_type$, $resolve\_alias$, $get\_alias$, $get\_type\_info$,
 $expand\_type\_abbrev$, $get\_language$ 
 and, perhaps, $get\_sym\_tab\_info$, need to be quite fast.
 Consequently, we maintain caches containing the 
@@ -111,10 +112,10 @@ have been made in the context of that theory.
 Then, in essence, corresponding to each
 declarative operation we define an operation on the cache and an operation
 on the current theory. Thus a context change is effected by replaying
-a sequence of operations on the cache which correspond to the declarations
+a sequence of operations on the caches which correspond to the declarations
 which apply in that context. The declarative operations performed by the
 user are implemented by performing the corresponding operations on both
-the current theory and the cache,
+the current theory and the caches,
 
 \subsection{Possible Enhancements}
 It is not yet known whether the encoding of symbol table information
@@ -124,8 +125,6 @@ It would be desirable for the symbol table module to check before
 a type or constant was deleted whether or not there was an abbreviation
 or alias in force relating to the type or constant. Implementing this would
 require extensions to dtd012.
-
-The treatment of languages is simply wrong at the moment.
 
 \section{PREAMBLE}
 =SML
@@ -207,12 +206,20 @@ to the current context is stored for rapid access. We also define the
 functions which read and write these caches (the read functions are part of
 the visible interface).
 
-
+The type information cache contains entries as suggested by the
+discussion of $get\_type\_info$ in the detailed design.
 =SML
 val âty_info_cacheá : (int * (((string list) * TYPE)OPT)) E_DICT ref = ref initial_e_dict;
 =TEX
+The constant information cache contains a field for each
+name which gives the
+information returned by $get\_const\_info$
+(this is the field used by $resolve\_alias$)
+and in a field giving any aliases which may resolve to the name
+(this is the field used by $get\_alias$).
 =SML
-val âconst_info_cacheá : (TYPE * ((string * TYPE)list)) E_DICT ref = ref initial_e_dict;
+val âconst_info_cacheá : ((TYPE * ((string * TYPE)list)) * ((string * TYPE)list))E_DICT ref
+					= ref initial_e_dict;
 =TEX
 =SML
 val âfixity_cacheá : FIXITY E_DICT ref = ref initial_e_dict;
@@ -225,14 +232,17 @@ For uniformity, the current language is held in an assignable variable
 =SML
 val âlanguageá : string ref = ref "HOL";
 =TEX
-The remaining caches are unlike the others in that their values are not
+The remaining two caches are unlike the others in that their values are not
 set by declarations but instead are calculated from the theory database
 as theories are loaded.
+They give for each constant and type which is in scope the name 
+and language of theory to
+which it belongs.
 =SML
-val âconst_theory_cacheá : string E_DICT ref = ref initial_e_dict;
+val âconst_theory_cacheá : (string * string) E_DICT ref = ref initial_e_dict;
 =TEX
 =SML
-val âty_theory_cacheá : string E_DICT ref = ref initial_e_dict;
+val âty_theory_cacheá : (string * string) E_DICT ref = ref initial_e_dict;
 =TEX
 The following function restores the caches to their initial state:
 =SML
@@ -280,16 +290,31 @@ fun âcache_fixityá (s : string, fix : FIXITY) = (
 =TEX
 =SML
 fun âcache_aliasá (a : string, (s:string, ty : TYPE)) : unit = (
-	const_info_cache :=
+	let
+val cache1 = 
 	e_enter
 	a
 	(case e_lookup a (!const_info_cache) of
-		Value(ty', alinfs) => (
-			 (Antiunify.antiunify(ty, ty'), (s, ty) :: alinfs)
+		Value((ty', alinfs), atys) => (
+			 ((Antiunify.antiunify(ty, ty'), (s, ty) :: alinfs), atys)
 	) |	Nil => (
-			 (ty, [(s, ty)])
+			 ((ty, [(s, ty)]), [])
 	))
-	(!const_info_cache)
+	(!const_info_cache);
+val cache2 =
+	e_enter
+	s
+	(case e_lookup s (!const_info_cache) of
+		Value((ty', alinfs), atys) => (
+			 ((ty', alinfs), (a, ty) :: atys)
+	) |	Nil => (
+			case get_const_type s of
+				Value ty' => ((ty', [(s, ty')]), [(a, ty)])
+			|	Nil => fail "cache_alias" 20001 [fn()=>s]
+	))
+	cache1;
+	in	const_info_cache := cache2
+	end
 );
 =TEX
 We need to antiunify lists of types when aliases are deleted:
@@ -300,15 +325,32 @@ fun âlist_antiunifyá ([] : TYPE list) : TYPE = mk_vartype "'a"
 =TEX
 =SML
 fun âuncache_aliasá (a : string, (s:string, ty : TYPE)) : unit = (
+	let
+val cache1 =
 	case e_lookup a (!const_info_cache) of
-		Value(_, alinfs) => const_info_cache := (
+		Value((_, alinfs), atys) => (
 			case alinfs drop 
 					(fn(s', ty') => s = s' andalso is_same_type ty ty')
 			of
 				[] => e_delete a (!const_info_cache)
-			|	some => e_enter a(list_antiunify (map snd some) , some)(!const_info_cache)
-	) |	Nil => ( ()
-	)
+			|	some => e_enter
+					a
+					((list_antiunify (map snd some) , some), atys)
+					(!const_info_cache)
+	) |	Nil => ( !const_info_cache
+	);
+val cache2 =
+	case e_lookup s cache1 of
+		Value((ty', alinfs), atys) => (
+			e_enter
+			s
+			((ty', alinfs), atys drop 
+				(fn(a', ty') => a = a' andalso is_same_type ty ty'))
+			cache1
+	) |	Nil => ( cache1
+	);
+	in	const_info_cache := cache2
+	end
 );
 =TEX
 =SML
@@ -324,13 +366,20 @@ fun âuncache_type_abbrevá(a : string) : unit = (
 );
 =TEX
 =SML
-fun âcache_languageá (lang : string) = (
-	language := lang
+fun âcache_languageá (thy : string) (lang : string) = (
+	let	val conids = map (fst o dest_const) (get_consts thy)
+		val tyids = map (fst o dest_type) (get_types thy);
+		fun aux dict [] = dict
+		|   aux dict (id :: more) = aux (e_enter id (thy, lang) dict) more;
+	in	const_theory_cache := aux (!const_theory_cache) conids;
+		ty_theory_cache := aux (!ty_theory_cache) tyids;
+		language := lang
+	end
 );
 =TEX
 =SML
 in
-fun âcache_declá (dec : DECL) : unit = (
+fun âcache_declá (thy : string) (dec : DECL) : unit = (
 	case dec of
 		DeclTerminator t => cache_terminator t
 	|	UnDeclTerminator t => uncache_terminator t
@@ -339,7 +388,7 @@ fun âcache_declá (dec : DECL) : unit = (
 	|	UnDeclAlias asty => uncache_alias asty
 	|	DeclTypeAbbrev aargsty => cache_type_abbrev aargsty
 	|	UnDeclTypeAbbrev  a => uncache_type_abbrev a
-	|	SetLanguage lang => cache_language lang
+	|	SetLanguage lang => cache_language thy lang
 );
 end; (* of local ... in ... end *)
 =TEX
@@ -584,7 +633,7 @@ fun âstore_declá (area : string) (dec : DECL) : unit = (
 				|	DeclTypeAbbrev aargsty => store_type_abbrev thy aargsty
 				|	UnDeclTypeAbbrev  a => unstore_type_abbrev thy a
 				|	SetLanguage lang => store_language thy lang);
-				cache_decl dec
+				cache_decl thy dec
 		) |	_ => fail area 20002 [fn () => thy]
 	end
 );
@@ -677,14 +726,17 @@ fun âget_const_infoá (c : string) : (TYPE * ((string * TYPE)list)) OPT = (
 			case get_const_type c of
 				Value ty => Value(ty, [(c, ty)])
 			|	Nil => Nil
-	) |	v => v
+	) |	Value (v, _) => Value v
 );
+=TEX
 =SML
 fun âdeclare_aliasá (s : string, tm : TERM) : unit = (
 	if not (is_const tm)
-	then fail "declare_alias" 20301 []
+	then term_fail "declare_alias" 20301 [tm]
 	else	let	val (c, ty) = dest_const tm
-		in	case get_const_info s of
+		in	if is_Nil(get_const_type c)
+			then term_fail "declare_alias" 20305 [tm]
+			else case get_const_info s of
 				Nil => store_decl"declare_alias"(DeclAlias(s, (c, ty)))
 			|	Value (_, stys) => (
 					if any stys (fn (c', ty') => c = c' andalso is_same_type ty ty')
@@ -710,13 +762,22 @@ fun âundeclare_aliasá (s : string, tm : TERM) : unit = (
 );
 =TEX
 =SML
-fun âresolve_aliasá (s : string, ty : TYPE) = (
+fun âresolve_aliasá (s : string, ty : TYPE) : TERM = (
 	case get_const_info s of
 		Nil => fail "resolve_alias" 20304 [fn()=>s]
 	|	Value (_, stys) => (
 			(mk_const(fst(find stys (fn(s', ty') => is_type_instance ty ty')), ty))
 			handle Fail _ => fail "resolve_alias" 20304 [fn()=>s]
 	)
+);
+=TEX
+=SML
+fun âget_aliasá (s : string, ty : TYPE) : string = (
+	case e_lookup s (!const_info_cache) of
+		Value (_, atys) => (
+			(fst(find atys (fn(a, ty') => is_type_instance ty ty')))
+			handle Fail _ => s
+		) |	Nil => s
 );
 =TEX
 \subsection{Types and Type Abbreviations}
@@ -789,29 +850,15 @@ fun âget_current_languageá (() : unit) : string = (
 =SML
 fun âget_const_languageá (s : string) : string = (
 	case e_lookup s (!const_theory_cache) of
-		Value thy => (
-			let	fun aux (ud :: more) = (
-					case decode_decl thy ud of
-						SetLanguage lang => lang
-					|	_ => aux more
-				) | aux [] = "HOL";
-			in	aux(fetch_sym_tab_data thy)
-			end
-	) |	Nil => get_current_language()
+		Value (_, lang) => lang
+	|	Nil => get_current_language()
 );
 =TEX
 =SML
 fun âget_type_languageá (s : string) : string = (
 	case e_lookup s (!ty_theory_cache) of
-		Value thy => (
-			let	fun aux (ud :: more) = (
-					case decode_decl thy ud of
-						SetLanguage lang => lang
-					|	_ => aux more
-				) | aux [] = "HOL";
-			in	aux(fetch_sym_tab_data thy)
-			end
-	) |	Nil => get_current_language()
+		Value (_, lang) => lang
+	|	Nil => get_current_language()
 );
 =TEX
 \subsection{Miscellaneous Functions}
@@ -911,14 +958,14 @@ fun âget_undeclared_aliasesá (thy : string) : string list = (
 =SML
 fun âget_const_theoryá (c : string) : string = (
 	case e_lookup c (!const_theory_cache) of
-		Value thy => thy
+		Value (thy, _) => thy
 	|	Nil => fail "get_const_theory" 20603 [fn()=>c]
 );
 =TEX
 =SML
 fun âget_type_theoryá (ty : string) : string = (
-	case e_lookup ty (!const_theory_cache) of
-		Value thy => thy
+	case e_lookup ty (!ty_theory_cache) of
+		Value (thy, _) => thy
 	|	Nil => fail "get_type_theory" 20604 [fn()=>ty]
 );
 =SML
@@ -943,21 +990,28 @@ in $thy2$, then when we change context from $thy1$ to $thy2$ we must
 undo the nonfix declaration.
 =TEX
 =SML
-fun âbuild_theory_cachesá (thy : string) = (
-	let	val conids = map (fst o dest_const) (get_consts thy)
-		val tyids = map (fst o dest_type) (get_types thy);
-		fun aux dict [] = dict
-		|   aux dict (id :: more) = aux (e_enter id thy dict) more;
-	in	const_theory_cache := aux (!const_theory_cache) conids;
-		ty_theory_cache := aux (!ty_theory_cache) tyids
+fun get_theory_language (thy : string) : string = (
+	let	fun aux (ud :: more) = (
+			case decode_decl thy ud of
+				SetLanguage lang => lang
+			|	_ => aux more
+		) | aux [] = "HOL";
+	in	aux(fetch_sym_tab_data thy)
 	end
 );
 =TEX
 =SML
+fun âbuild_theory_cachesá (thy : string) = (
+	cache_decl thy (SetLanguage(get_theory_language thy))
+);
+=TEX
+=SML
 fun âcache_constsá (cs : string list) : unit = (
-	let	fun do1 c = (
+	let	val curthy = get_current_theory_name();
+		val curlang = get_theory_language curthy
+		fun do1 c = (
 			const_theory_cache :=
-			e_enter c(get_current_theory_name())(!const_theory_cache)
+			e_enter c(curthy, curlang)(!const_theory_cache)
 		);
 	in	map do1 cs; ()
 	end
@@ -965,7 +1019,18 @@ fun âcache_constsá (cs : string list) : unit = (
 =TEX
 =SML
 fun âuncache_constá (t : TERM) : unit = (
-	const_theory_cache := e_delete (fst(dest_const t))(!const_theory_cache)
+	let	val s = fst(dest_const t);
+		val aliases = (
+			case get_const_info s of
+				Value (_, atys) => atys
+			|	Nil => []);
+		fun aux ((a, ty) :: more) = (
+			undeclare_alias (a, mk_const(s, ty));
+			aux more
+		) | aux [] = ();
+	in	(aux aliases;
+		const_theory_cache := e_delete s (!const_theory_cache))
+	end
 	handle Fail X => error "uncache_const" 20002 [fn()=>get_message X]
 );
 =TEX
@@ -976,9 +1041,11 @@ fun âuncache_tyá (ty : string) : unit = (
 =TEX
 =SML
 fun âcache_tysá (tys : string list) : unit = (
-	let	fun do1 ty = (
+	let	val curthy = get_current_theory_name();
+		val curlang = get_theory_language curthy
+		fun do1 ty = (
 			ty_theory_cache :=
-			e_enter ty(get_current_theory_name())(!ty_theory_cache)
+			e_enter ty(curthy, curlang)(!ty_theory_cache)
 		);
 	in	map do1 tys; ()
 	end
@@ -990,7 +1057,7 @@ contained in a theory and all its ancestors into the caches:
 fun cache_theory (current : string) : unit = (
 	clear_caches();
 	map
-	(fn thy => ((map (cache_decl o decode_decl thy) (fetch_sym_tab_data thy));
+	(fn thy => ((map (cache_decl thy o decode_decl thy) (fetch_sym_tab_data thy));
 		build_theory_caches thy))
 	(get_ancestors current);
 	()
