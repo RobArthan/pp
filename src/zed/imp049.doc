@@ -100,6 +100,13 @@ interface has been implemented.
 
 None known.
 
+=SML
+local open ZUserInterfaceSupport ZTypeInference in
+val debug : Z_INFERRED ref = ref (ZInferred (
+	ZParaFixity(ZClRel, [template_of_string " _ = _"])
+));
+end;
+=TEX
 
 \section{Z READER WRITER}
 
@@ -498,10 +505,7 @@ fun Ûconsts_in_z_paraİ (p : Z_PARA) : (string * TYPE) list = (
 
 	|ZParaFreeType ftl =>
 	let	fun do_branch aty (id, Value fty, _) =
-		let	val fty' = case fty of
-					ExType ("SET", [fty']) => fty'
-					| _ => fail "consts_in_zinferred" 62901 [];
-			val ty' = ExType ("SET", [tuple_extype [fty', aty]]);
+		let	val ty' = ExType ("SET", [tuple_extype [fty, aty]]);
 		in
 			(string_of_ident id, type_of_z_extype ty')
 		end
@@ -644,6 +648,7 @@ fun Ûparainfo_of_z_paraİ ((ZParaFixity pbody) : Z_PARA) : PARAINFO = (
 	fail "parainfo_of_z_para" 49999 []
 );
 
+=SML
 end (* of local ... in *);
 end (* of structure ZProofModeSupport *);
 =TEX
@@ -657,6 +662,81 @@ local
 	open ZGeneratedConstants;
 in
 =TEX
+=SML
+fun Ûabbdef_defnİ (flag : bool) ((name, gen_formals, tm) : string * string list * TERM) : unit = (
+let	val wrap = if flag then ¬$"Z'SchBox"® else ¬$"Z'AbbDef"®;
+	val name' = bind_gvar_name name;
+	val ty = type_of tm;
+in
+	case map (mk_z_power_t o mk_z_var_t) gen_formals of
+	[] => (
+		let	val var = mk_var(name, ty);
+			val var' = mk_var(name', ty) ;
+			val tm' = subst [(var', var)] tm;
+			val defn1 = mk_eq(var', tm');
+			val defn2 = mk_app (wrap, defn1);
+			val side = paragraph_const_spec ([name, name'],[var'], defn2);
+		in
+			()
+		end)
+	| gftyl => (
+		let	val ty' = mk_­_type(mk_z_tuple_t gftyl,ty);
+			val var = mk_var(name, ty');
+			val var' = mk_var (name', ty');
+			val tm' = subst [(var', var)] tm;
+			val gfl = map mk_var (combine gen_formals gftyl);
+			val arg = mk_z_tuple gfl;
+			val side = stub_const_spec arg;
+			val defn1 = mk_eq(mk_app(var', arg), tm');
+			val defn2 = list_mk_µ (gfl, defn1);
+			val defn3 = mk_app (wrap, defn2);
+			val side = paragraph_const_spec ([name, name'], [var'], defn3);
+		in
+			()
+		end)
+end
+
+);
+
+=TEX
+=SML
+fun Ûaxdes_defnİ ((gen_formals, tm1, otm, idtyl) : string list * TERM * TERM OPT * (string * TYPE) list) : unit = (
+let	val def_tm = case otm of
+		Value tm2 => mk_± (tm1, tm2)
+		|Nil => tm1;
+	val gens = map (fn id => mk_var (id, (mk_z_power_t o mk_z_var_t) id)) gen_formals;
+	val vars = map mk_var idtyl;
+	val zidtyl = map (fn (id, ty) => (bind_gvar_name id, ty)) idtyl;
+	val zconsts = map mk_const zidtyl;
+	val generify = (
+		case gens of
+		[] => Combinators.I
+		|_ => (
+			let	val pval = mk_z_tuple gens;
+				val side = stub_const_spec pval;
+				val ptype = type_of pval;
+			in	(fn v =>
+					let	val (s, ty) = dest_const v;
+						val v' = mk_const(s, mk_­_type (ptype, ty));
+					in
+						mk_app(v', pval)
+					end)
+			end
+			)
+	);
+
+	val constsubs = map (fn (v1, v2) => (generify v1, v2)) (combine zconsts vars);
+	val newconsts = map (fst o strip_app o fst) constsubs;
+	val def_tm' = subst constsubs def_tm;
+	val defn1 = list_mk_µ (gens, def_tm');
+	val defn2 = mk_app(¬$"Z'AxDes"®, defn1);
+	val side = map (new_const o dest_const) newconsts;
+	val side = new_axiom ((map fst idtyl)@(map fst zidtyl), defn2);
+in
+	()
+end);
+=TEX
+
 =SML
 fun Ûnext_axiom_nameİ (s : string) : string = (
 let	val axiom_names = flat (map fst (get_axioms "-"));
@@ -687,100 +767,35 @@ fun Ûnames_of_axiomİ (tm : TERM) : string list =
 =TEX
 
 =SML
-fun Ûznew_typeİ (s : string) : THM = (
+fun Ûsimple_new_z_typeİ (s : string) : THM = (
 let	val ty = new_type (s, 0);
 	val zs = bind_gvar_name s;
-	val var = mk_var (zs, mk_z_power_t (mk_ctype (s, [])));
-	val set = mk_set_comp (mk_var ("x", ty), mk_t);
+	val var = mk_var (zs, mk_z_power_t ty);
+	val tm = mk_eq (var, mk_set_comp (mk_var ("x", ty), mk_t));
 in
-	const_spec ([zs], [var], mk_eq (var, set))
+	paragraph_const_spec ([s, zs], [var], tm)
 end);
 =TEX
+
 =SML
-fun Ûabbdef_defnİ (flag : bool) ((name, gen_formals, tm) : string * string list * TERM) : unit = (
-let	val wrap = if flag then ¬$"Z'SchBox"® else ¬$"Z'AbbDef"®;
-	val name' = bind_gvar_name name;
+fun Ûnew_z_typeİ (sl : string list) (tm : TERM) : THM = (
+let	val tyl = map (fn s => new_type (s, 0)) sl;
+	val zsl = map bind_gvar_name sl;
 in
-	case map (mk_z_power_t o mk_z_var_t) gen_formals of
-	[] => (
-		let	val ty = type_of tm;
-			val var = mk_var(name, ty);
-			val var' = mk_var(name', ty);
-			val tm' = subst [(var', var)] tm;
-			val defn1 = mk_eq(var', tm');
-			val defn2 = mk_app (wrap, defn1);
-			val side = const_spec ([name, name'],[var'], defn2);
-		in
-			()
-		end)
-	| gftyl => (
-		let	val ty = mk_­_type(mk_z_tuple_t gftyl,type_of tm);
-			val var = mk_var(name, ty);
-			val var' = mk_var(name', ty);
-			val tm' = subst [(var', var)] tm;
-			val gfl = map mk_var (combine gen_formals gftyl);
-			val arg = mk_z_tuple gfl;
-			val defn1 = mk_eq(mk_app(var', arg), tm');
-			val defn2 = list_mk_µ (gfl, defn1);
-			val defn3 = mk_app (wrap, defn2);
-			val side = (new_const o dest_var) var';
-			val side = new_axiom ([name, name'], defn3);
-		in
-			()
-		end)
-end
-
-);
-
+	new_axiom (sl@zsl, tm)
+end);
 =TEX
-=SML
-fun Ûaxdes_defnİ ((gen_formals, tm1, otm, idtyl) : string list * TERM * TERM OPT * (string * TYPE) list) : unit = (
-let	val def_tm = case otm of
-		Value tm2 => mk_± (tm1, tm2)
-		|Nil => tm1;
-	val gens = map (fn id => mk_var (id, (mk_z_power_t o mk_z_var_t) id)) gen_formals;
-	val vars = map mk_var idtyl;
-	val zidtyl = map (fn (id, ty) => (bind_gvar_name id, ty)) idtyl;
-	val zvars = map mk_var zidtyl;
-	val generify = (
-		case gens of
-		[] => Combinators.I
-		|_ => (
-			let	val pval = mk_z_tuple gens;
-				val ptype = type_of pval;
-			in	(fn v =>
-					let	val (s, ty) = dest_var v;
-						val v' = mk_var(s, mk_­_type (ptype, ty));
-					in
-						mk_app(v', pval)
-					end)
-			end
-			)
-	);
 
-	val varsubs = map (fn (v1, v2) => (generify v1, v2)) (combine zvars vars);
-	val newvars = map (fst o strip_app o fst) varsubs;
-	val def_tm' = subst varsubs def_tm;
-	val defn1 = list_mk_µ (gens, def_tm');
-	val defn2 = mk_app(¬$"Z'AxDes"®, defn1);
-	val side = map (new_const o dest_var) newvars;
-	val side = new_axiom ((map fst idtyl)@(map fst zidtyl), defn2);
+=SML
+fun Ûgivenset_defnİ ((idl, Nil) : string list * (string list * TERM) OPT) : unit = (
+	map simple_new_z_type idl; ()
+) | givenset_defn (idl, Value (idl', tm)) = (
+let	val frees = (map (fst o dest_var) (frees tm)) drop ((switch o curry) (op mem) idl');
+	val simplesets = idl drop ((switch o curry) (op mem) frees);
+	val side = map simple_new_z_type simplesets;
+	val side = new_z_type (idl diff simplesets) tm;
 in
 	()
-end);
-=TEX
-
-=SML
-fun Ûgivenset_defnİ ((idl, oidltm) : string list * (string list * TERM) OPT) : unit = (
-let	val side = map znew_type idl;
-in
-	case oidltm of
-	Nil => ()
-	|Value (idl', tm) => (
-		let	val side = new_axiom (names_of_axiom tm, tm);
-		in
-			()
-		end)
 end);
 =TEX
 =SML
@@ -811,38 +826,37 @@ in
 fun Ûabbdef_defnİ (flag : bool) ((name, gen_formals, tm) : string * string list * TERM) : unit = (
 let	val wrap = if flag then ¬$"Z'SchBox"® else ¬$"Z'AbbDef"®;
 	val name' = bind_gvar_name name;
+	val ty = type_of tm;
 in
 	case map (mk_z_power_t o mk_z_var_t) gen_formals of
 	[] => (
-		let	val ty = type_of tm;
-			val var = mk_var(name, ty);
-			val var' = mk_var(name', ty);
+		let	val var = mk_var(name, ty);
+			val var' = mk_var(name', ty) ;
 			val tm' = subst [(var', var)] tm;
 			val defn1 = mk_eq(var', tm');
 			val defn2 = mk_app (wrap, defn1);
-			val side = const_spec ([name, name'],[var'], defn2);
+			val side = paragraph_const_spec ([name, name'],[var'], defn2);
 		in
 			()
 		end)
 	| gftyl => (
-		let	val ty = mk_­_type(mk_z_tuple_t gftyl,type_of tm);
-			val var = mk_var(name, ty);
-			val var' = mk_var(name', ty);
+		let	val ty' = mk_­_type(mk_z_tuple_t gftyl,ty);
+			val var = mk_var(name, ty');
+			val var' = mk_var (name', ty');
 			val tm' = subst [(var', var)] tm;
 			val gfl = map mk_var (combine gen_formals gftyl);
 			val arg = mk_z_tuple gfl;
+			val side = stub_const_spec arg;
 			val defn1 = mk_eq(mk_app(var', arg), tm');
 			val defn2 = list_mk_µ (gfl, defn1);
 			val defn3 = mk_app (wrap, defn2);
-			val side = const_spec ([name, name'],[var'], defn3);
+			val side = paragraph_const_spec ([name, name'], [var'], defn3);
 		in
 			()
 		end)
-end
-
-);
-
+end);
 =TEX
+
 =SML
 fun Ûaxdes_defnİ ((gen_formals, tm1, otm, idtyl) : string list * TERM * TERM OPT * (string * TYPE) list) : unit = (
 let	val def_tm = case otm of
@@ -857,6 +871,7 @@ let	val def_tm = case otm of
 		[] => Combinators.I
 		|_ => (
 			let	val pval = mk_z_tuple gens;
+				val side = stub_const_spec pval;
 				val ptype = type_of pval;
 			in	(fn v =>
 					let	val (s, ty) = dest_var v;
@@ -923,6 +938,28 @@ val _ = if contains (map fst (get_flags()))
 	then	()
 	else	new_flag{name = "z_use_axioms",
 			control = z_use_axioms,
+			default = fun_true,
+			check = fun_true
+	};
+
+val Ûz_standard_z_paragraphsİ = ref true;
+
+val _ = if contains (map fst (get_flags()))
+			"z_standard_z_paragraphs"
+	then	()
+	else	new_flag{name = "z_standard_z_paragraphs",
+			control = z_standard_z_paragraphs,
+			default = fun_true,
+			check = fun_true
+	};
+
+val Ûz_extended_z_termsİ = ref true;
+
+val _ = if contains (map fst (get_flags()))
+			"z_extended_z_terms"
+	then	()
+	else	new_flag{name = "z_extended_z_terms",
+			control = z_extended_z_terms,
 			default = fun_true,
 			check = fun_true
 	};
@@ -1001,10 +1038,12 @@ let	val side_effect =
 			fail "z_axbox_recogniser" 49001 [
 				fn () => start,
 				fn () => lang,
-				fn () => finish]
+				fn () => finish];
+	val standard = get_flag "z_standard_z_paragraphs";
 	val tokens = ZTAx::(z_lex value);
-	val parsed = ZParser.z_parser {is_quot = false, standard = true} tokens;
-	val type_checked = type_check_z_para {standard=true} parsed;
+	val parsed = z_parser {is_quot = false, standard = standard} tokens;
+	val type_checked = type_check_z_para {standard = standard} parsed;
+	val side = (debug := type_checked);
 	val para = z_para_of_zinferred type_checked;
 in
 	if get_flag "z_type_check_only"
@@ -1029,10 +1068,12 @@ let	val side_effect =
 			fail "z_genbox_recogniser" 49002 [
 				fn () => start,
 				fn () => lang,
-				fn () => finish]
+				fn () => finish];
+	val standard = get_flag "z_standard_z_paragraphs";
 	val tokens = ZTAx::(z_lex value);
-	val parsed = ZParser.z_parser {is_quot = false, standard = true} tokens;
-	val type_checked = type_check_z_para {standard=true} parsed;
+	val parsed = z_parser {is_quot = false, standard = standard} tokens;
+	val type_checked = type_check_z_para {standard = standard} parsed;
+	val side = (debug := type_checked);
 	val para = z_para_of_zinferred type_checked;
 in
 	if get_flag "z_type_check_only"
@@ -1057,10 +1098,12 @@ let	val side_effect =
 			fail "z_schbox_recogniser" 49003 [
 				fn () => start,
 				fn () => lang,
-				fn () => finish]
+				fn () => finish];
+	val standard = get_flag "z_standard_z_paragraphs";
 	val tokens = ZTSch::(z_lex value);
-	val parsed = ZParser.z_parser {is_quot = false, standard = true} tokens;
-	val type_checked = type_check_z_para {standard=true} parsed;
+	val parsed = z_parser {is_quot = false, standard = standard} tokens;
+	val type_checked = type_check_z_para {standard = standard} parsed;
+	val side = (debug := type_checked);
 	val para = z_para_of_zinferred type_checked;
 in
 	if get_flag "z_type_check_only"
@@ -1084,10 +1127,12 @@ let	val side_effect =
 			fail "z_other_recogniser" 49004 [
 				fn () => start,
 				fn () => lang,
-				fn () => finish]
+				fn () => finish];
+	val standard = get_flag "z_standard_z_paragraphs";
 	val tokens = z_lex value;
-	val parsed = ZParser.z_parser {is_quot = false, standard = true} tokens;
-	val type_checked = type_check_z_para {standard=true} parsed;
+	val parsed = z_parser {is_quot = false, standard = standard} tokens;
+	val type_checked = type_check_z_para {standard = standard} parsed;
+	val side = (debug := type_checked);
 	val para = z_para_of_zinferred type_checked;
 in
 	if get_flag "z_type_check_only"
@@ -1113,12 +1158,14 @@ let	val side_effect =
 				fn () => start,
 				fn () => lang,
 				fn () => finish];
+	val standard = not (get_flag "z_extended_z_terms");
 	val tokens = z_lex value;
-	val parsed = ZParser.z_parser {is_quot = true, standard = false} tokens;
+	val parsed = z_parser {is_quot = true, standard = standard} tokens;
 	val side = case parsed of
 		ZParaTerm _ => ()
 		|_ => fail "z_term_recogniser" 49001 [];
-	val type_checked = type_check_z_para {standard=false} parsed;
+	val type_checked = type_check_z_para {standard = standard} parsed;
+	val side = (debug := type_checked);
 	val para = z_para_of_zinferred type_checked;
 in	term_of_z_para para
 end);
@@ -1148,3 +1195,8 @@ val x= mk_z_app (ñ{(a,b)}®, ñy®);
 
 new_axiom(["thing"],x);
 
+
+
+
+
+°

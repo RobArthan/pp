@@ -51,6 +51,8 @@ Added schema renaming definition mechanism.
 Used all in-scope caches for look-up, rather than just current one.
 \item [Issue 1.12 (21st July 1992)]
 Correction to schema renaming definition mechanism.
+\item [Issue 1.14 (27th July 1992)]
+Critical code is now protected by interrupt handling.
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -195,15 +197,18 @@ end;
 =SML
 fun Ûlocal_const_specİ (caller:string) ((nam, var, defn) : string * TERM * TERM) : THM = (
 let	val curr_theory = get_current_theory_name();
-	val side = open_theory (current_cache_theory());
-	val thm = get_defn  "-" nam
-		handle  Fail _ =>
-		pc_rule "hol" const_spec ([nam], [var], defn)
-			handle ex => (open_theory curr_theory;
-				reraise ex caller);
-	val side = open_theory curr_theory;
 in
-	thm
+	let	val side = open_theory (current_cache_theory());
+		val thm = get_defn  "-" nam
+			handle  Fail _ =>
+			pc_rule "hol" const_spec ([nam], [var], defn)
+				handle ex => (open_theory curr_theory;
+					reraise ex caller);
+		val side = open_theory curr_theory;
+	in
+		thm
+	end
+	handle ex => (open_theory curr_theory; reraise ex caller)
 end);
 =TEX
 $pc\_rule$ could be replaced by $pending\_push\_pc$ plus wrapping
@@ -211,25 +216,29 @@ for more safety.
 =TEX
 The signature for the next function is the same as that for $labelled\_product\_spec$.
 =SML
-fun Ûlocal_labelled_product_specİ caller {tykey: string, labels: (string * TYPE) list, tyname: string,
+fun Ûlocal_labelled_product_specİ (caller : string) {tykey: string, labels: (string * TYPE) list, tyname: string,
   tyvars: TYPE list OPT, conname: string, constkeys: string list} : THM = (
 let	val curr_theory = get_current_theory_name();
-	val side = open_theory (current_cache_theory());
-	val thm = get_defn  "-" tyname
-		handle  Fail _ =>
-			(labelled_product_spec{
-					tykey = tykey,
-					labels = labels,
-					tyname= tyname,
-					tyvars = tyvars,
-					conname = conname,
-					constkeys = constkeys}
-				handle ex => (open_theory curr_theory;
-					reraise ex caller));
-	val side = open_theory curr_theory;
 in
-	thm
+	let	val side = open_theory (current_cache_theory());
+		val thm = get_defn  "-" tyname
+			handle  Fail _ =>
+				(labelled_product_spec{
+						tykey = tykey,
+						labels = labels,
+						tyname= tyname,
+						tyvars = tyvars,
+						conname = conname,
+						constkeys = constkeys}
+					handle ex => (open_theory curr_theory;
+						reraise ex caller));
+		val side = open_theory curr_theory;
+	in
+		thm
+	end
+	handle ex => (open_theory curr_theory; reraise ex caller)
 end);
+
 =TEX
 
 =TEX
@@ -382,25 +391,27 @@ fun	Ûtypes_in_zcon_specİ (ty : TYPE) : unit =
 			end
 	else 	fail "types_in_zcon_spec" 50006 [fn () => string_of_type ty];
 =TEX
-=SML
-fun Ûlocal_new_constİ ((nam, ty) : string * TYPE) : unit = (
+=IGN
+fun Ûlocal_new_constİ (caller : string) ((nam, ty) : string * TYPE) : unit = (
 let	val curr_theory = get_current_theory_name();
-	val side = open_theory (current_cache_theory());
-	val side = case get_const_info nam of
-			Nil => (new_const (nam, ty);())
-			|Value _ => ();
-	val side = open_theory curr_theory;
 in
-	()
+	let	val side = open_theory (current_cache_theory());
+		val side = case get_const_info nam of
+				Nil => (new_const (nam, ty);())
+				|Value _ => ();
+		val side = open_theory curr_theory;
+	in
+		()
+	end
+	handle ex => (open_theory curr_theory; reraise ex caller)
 end);
-
 =TEX
 
 =SML
 fun Ûstub_const_specİ (tm : TERM) : unit = (
 let	val (name, ty) = (dest_const o fst o strip_app) tm;
 	val side = types_in_zcon_spec ty;
-	val side = local_new_const (name, ty); 
+	val side = (new_const (name, ty); ()) handle Fail _ => ();
 in
 	()
 end);
