@@ -629,6 +629,8 @@ if( !global_options.edit_only ) {
 
 	XtRealizeWidget(root);
 
+	fix_pane_height(infobar, infobar);
+
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
