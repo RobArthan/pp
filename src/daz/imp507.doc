@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.267 $ $RCSfile: imp507.doc,v $ $Date: 2004/07/13 17:50:08 $
+% imp507.doc %Z% $Revision: 1.268 $ $RCSfile: imp507.doc,v $ $Date: 2004/07/14 16:52:30 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.267 $%
+\def\SCCSversion{$Revision: 1.268 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/07/13 17:50:08 $%
+\TPPdate{\FormatDate{$Date: 2004/07/14 16:52:30 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -207,7 +207,7 @@ by doing all the work of checking and generating the VC terms in {\it call\_vcs}
 \item[Issue 1.255] Fixed bug in {\it combine\_param\_specs}.
 \item[Issue 1.256] Fixed bug in {\it renames\_object\_common}.
 \item[Issue 1.257] Now allows duplicates in a use clause.
-\item[Issues 1.258-1.264] Reform of the Environments.
+\item[Issues 1.258-1.269] Reform of the Environments.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -6361,7 +6361,7 @@ fun €store_prefix_types_and_consts›
 		(ident : ID)
 		(newids : ID list)
 		(spec_script_thy : string) 
-		(target_thy : string) : (string * string) list = (
+		(target_thy : string) : (string * string) list * ENV_INFO S_DICT = (
 let	val old_thy = get_current_theory_name();
 	val dummy1 = open_theory spec_script_thy;
 	val ifixities = rev(ZUserInterfaceSupport.get_zfixity_infos
@@ -6384,20 +6384,54 @@ let	val old_thy = get_current_theory_name();
 	val dummyfixities = map 
 		(fn (c, t) => ZUserInterfaceSupport.set_zfixity_info(c, [t]))
 		ifixities;
-
-	fun do_type (ty : TYPE) = (
+	fun do_type  (ty : TYPE) = (
 	let 	val (s,args) = dest_ctype ty;
 		val n = length args;
-		val prefixed_s = rassoc1 tysubs s;
+		val prefixed_s = rassoc1 tysubs s
 	in
 		new_type(prefixed_s, n)
 	end);
+	fun get_const_name t = (
+		let	val (n, _, _) = dest_z_gvar t;
+		in	n
+		end
+	);
+	val const_names = map get_const_name iconsts;
 	val ptypes = map do_type itypes;
 	val dummy3 = store_prefix_const_thms ident tysubs newids
 		iconst_thms;
+	fun prefix_type_opt Nil = Nil
+	|   prefix_type_opt (Value ty) = Value (type_map do_type ty);
+	fun prefix_env_entries acc (zn::more) = (
+		case current_cn_env zn of
+			ei as (Value {tipe, canon_name, info}) => (
+				case info of
+					EIEnvConstant {tmark} => (
+					prefix_env_entries
+					((prefix_package_id ident newids zn,
+					{	tipe = prefix_type_opt tipe,
+						canon_name = prefix_package_id ident newids canon_name,
+						info = EIEnvConstant{tmark = prefix_package_id ident newids tmark}})::acc) more
+				) | 	EIEnvRecordType rec_ty_inf => (
+					prefix_env_entries
+					((prefix_package_id ident newids zn,
+					{	tipe = prefix_type_opt tipe,
+						canon_name = prefix_package_id ident newids canon_name,
+						info = info})::acc) more
+				) | 	EIEnvOtherType  => (
+					prefix_env_entries
+					((prefix_package_id ident newids zn,
+					{	tipe = prefix_type_opt tipe,
+						canon_name = prefix_package_id ident newids canon_name,
+						info = info})::acc) more			
+				) | 	_ => (
+					prefix_env_entries acc more
+				)
+		) |	Nil => prefix_env_entries acc more
+	) | prefix_env_entries acc [] = acc;
 	val dummy4 = open_theory old_thy;
 in
-	tysubs
+	(tysubs, prefix_env_entries (prefix_env_entries [] type_names) const_names)
 end);
 =TEX
 
@@ -6480,16 +6514,16 @@ fun €create_prefixed_spec›
 			then	[]
 			else	get_conjectures spec_script_name;
 		val newids = new_ids package;
+		val block1 = block_vc_vars (Value(#local_dict package))
+				(empty_block, #vc_vars package);
+		val block2 = block_vc_aux_vars Nil (block1, #aux_vars package);
 		val side =
 			if	nested_package
 			then	()
 			else	(new_package_spec_theory parents ident
 				handle Fail _ => open_package_spec_theory ident);
-		val block1 = block_vc_vars (Value(#local_dict package))
-				(empty_block, #vc_vars package);
-		val block2 = block_vc_aux_vars Nil (block1, #aux_vars package);
 		val side = (blocks := new_scope_common(block2 :: !blocks));
-		val tysubs =
+		val (tysubs, types_consts_env) =
 			store_prefix_types_and_consts nested_package ident newids
 			spec_script_name
 			(if nested_package
@@ -6506,7 +6540,8 @@ fun €create_prefixed_spec›
 			(#formal_funs package);
 		val side = (blocks := tl (!blocks));
 		val vc_vars1 = map (prefix_vardecl ident newids)(#vc_vars package);
-		val block = block_vc_vars Nil (empty_block, vc_vars1);
+		val dict1 = add_to_env_dict initial_env_dict types_consts_env;
+		val block = block_vc_vars Nil (block_dict(empty_block, dict1), vc_vars1);
 		val aux_vars = map (prefix_aux_vars ident tysubs newids)
 					(#aux_vars package);
 		val block = block_vc_aux_vars Nil (block, aux_vars);
