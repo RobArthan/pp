@@ -1,4 +1,4 @@
-% imp507.doc   %Z% $Date$ $Revision$ $RCSfile$
+% imp507.doc   @(#) 94/11/09 1.57 imp507.doc
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision$%
+\def\SCCSversion{1.57%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date$%
+\TPPdate{\FormatDate{94/11/09%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -139,6 +139,18 @@ fun €k_slot_compilation_unit_name› (kcu : KSLOT_COMPILATION_UNIT) : string = (
 	case kcu of
 		KCUKSlot ks => k_slot_name ks
 	|	KCUUnit ccu => context_compilation_unit_name ccu
+);
+=TEX
+\subsection{Making Z Precicates}
+In some places, we need to form the HOL term corresponding to a Z predicate.
+This may require coercion of a schema into a predicate:
+=SML
+fun €z_pred_of_z_tm› (zt : Z_TM) : Z_PRED = (
+	let	val tm = z_predexp_of_z_tm zt;
+	in	if	type_of tm =: BOOL
+		then	tm
+		else	mk_z_schema_pred (tm, "")
+	end
 );
 =TEX
 \subsection{Component Update Functions}
@@ -1518,6 +1530,16 @@ fun €current_ti_context› (() : unit) : TERM list = (
 	flat (map (ti_context_of_in_scope o #in_scope o #declab) (!blocks))
 );
 =TEX
+=SML
+fun €set_current_ti_context› (ts : TERM list) : unit = (
+	TypeInference.set_ti_context(ts @ current_ti_context())
+);
+=TEX
+=SML
+fun €set_in_scope_ti_context› (in_scope : IN_SCOPE) : unit = (
+	TypeInference.set_ti_context(ti_context_of_in_scope in_scope)
+);
+=TEX
 \subsection{Updating the Z Theory Database}
 =SML
 fun €store_vc_term› (label : LABEL) (tm : TERM) : unit = (
@@ -1688,8 +1710,7 @@ fun €call_vcs› ((sl, st) : SPECLAB * STATEMENT) : VC list = (
 	let	val sl1 = add_init_vars_speclab sl;
 		val sl1_st = (add_formal_procs_wp_env sl1, st);
 	in	diag_vc_args := sl1_st :: !diag_vc_args;
-		TypeInference.set_ti_context
-			(ti_context_of_in_scope (#in_scope sl));
+		set_in_scope_ti_context (#in_scope sl);
 		vcs sl1_st
 	end
 );
@@ -1714,7 +1735,7 @@ fun €basic_decl_pack_spec› (basic_decl : BASIC_DECL) : unit = (
 =TEX
 =SML
 fun €basic_decl_otherwise› (basic_decl : BASIC_DECL) : unit = (
-	let	val side = TypeInference.set_ti_context (current_ti_context ());
+	let	val side = set_current_ti_context [];
 		val para_info_opt = trans_basic_decl1 current_cn_env basic_decl;
 	in
 		case para_info_opt of
@@ -1925,8 +1946,7 @@ fun €spec_stmt_speclabel› ({spec : SPEC, label : LABEL}) : unit = (
 			wp_env = wp_env1,
 			in_scope = in_scope1			
 		};
-		val side = TypeInference.set_ti_context
-					(ti_context_of_in_scope in_scope1);
+		val side = set_in_scope_ti_context in_scope1;
 	in	spec_env := s_extend label speclab (!spec_env)
 		handle Fail _ =>
 		fail "spec_stmt_speclabel" 507015 [fn ()=> label]
@@ -1946,10 +1966,11 @@ fun €spec_stmt_otherwise› ({spec : SPEC, label : LABEL}) : unit = (
 					spec = spec1 as {post = return, ...}},
 			...} = block1;
 		val in_scope1 : IN_SCOPE = flatten_env(!blocks);
+		val side = set_in_scope_ti_context in_scope1;
 		val wp_env1 :WP_ENV = {
 			env = cn_env_of_in_scope in_scope1,
 			till = till,
-			return = z_predexp_of_z_tm return,
+			return = z_pred_of_z_tm return,
 			fun_header = fun_header,
 			formal_procs = []
 		};
@@ -1986,6 +2007,7 @@ fun €k_slot_stmt› (label : LABEL) : unit = (
 =SML
 fun €add_log_con_env› (logical_con as {x, t, ...}: LOG_CON) : unit = (
 	let	val block1 = block 1;
+		val side = set_current_ti_context[];
 		val zt = z_predexp_of_z_tm t;
 		val zvar = mk_z_lvar(x, (dest_z_power_type o type_of) zt, []);
 		val zdecl = mk_z_dec([zvar], zt);
@@ -2079,7 +2101,8 @@ fun €for_param› (i : ID) : unit = (
 =SML
 fun €till_pred› (t : Z_TM) : unit = (
 	let	val block1 = block 1;
-		val till = z_predexp_of_z_tm t;
+		val side = set_current_ti_context[];
+		val till = z_pred_of_z_tm t;
 	in	blocks := block_till (block_till_flag(block1, true), till)
 		:: !blocks
 	end
@@ -2315,34 +2338,37 @@ fun €form_proc_pack_body_common› (form_proc: FORMAL_PROC)
 =TEX
 The default values for the $speclab$ in the following function are set up by the common function above. 
 =SML
-fun €form_proc_pack_body› (form_proc: FORMAL_PROC) : unit = (
-	case form_proc_pack_body_common form_proc of
-	Value (_, formal_proc3, _, speclab5) => (
-		let	val st = SStmt(STSpecNoIvars{spec= #spec form_proc,
+fun €form_proc_pack_body›
+	(block2 : BLOCK, formal_proc3 : FORMAL_PROC,
+			package4 : PACKAGE, speclab5 : SPECLAB)
+	(form_proc: FORMAL_PROC) : unit = (
+	let	val st = SStmt(STSpecNoIvars{spec= #spec form_proc,
 					label=""});
-		in	store_vcs (#name formal_proc3, call_vcs(speclab5, st))
-		end
-	) |Nil => ()
+	in	store_vcs (#name formal_proc3, call_vcs(speclab5, st))
+	end
 );
 =TEX
+In the following, the first parameter tuple is the information returned from $form\_proc\_pack\_body\_common$;
+the second parameter is the list of auxiliary variables (as HOL terms) returned by $aux\_vars\_in\_fp\_frame$.
 =SML
-fun €form_proc_pack_body_aux› (frees : Z_ID list, aux_vars : Z_ID list)
-			(form_proc: FORMAL_PROC) : unit = (
-	case form_proc_pack_body_common form_proc of
-	Value (block2, formal_proc3, package4, speclab5) => (
-
+fun €form_proc_pack_body_aux›
+	(block2 : BLOCK, formal_proc3 : FORMAL_PROC,
+			package4 : PACKAGE, speclab5 : SPECLAB)
+	(avs : TERM list)
+	(form_proc: FORMAL_PROC) : unit = (
 	let	val block1 = block 1;
 		val spec3 = #spec formal_proc3;
 		val w3 = #w spec3;
-		val add_aux = aux_vars diff (#w o #spec) formal_proc3;
-		val w6 = w3 cup add_aux;
+		val add_aux = avs drop (fn v => fst(dest_var v) mem w3);
+		val w6 = w3 cup map (fst o dest_var) add_aux;
 		val pre6 = #pre spec3;
 		val post3 = #post spec3;
-		val add_aux0 = map (fn s => s^"â0") add_aux;
-		val post6 = ZTmQuotation (z_many_and ([z_predexp_of_z_tm post3] @
-				 (map (fn a => z_eq (zid current_cn_env a,
-					subs_exp (zid current_cn_env a, add_aux,
-					add_aux0))) add_aux)),
+		val add_aux0 = map ((fn (n, ty) => mk_var(n^"â0", ty)) o dest_var)
+					add_aux;
+		val side = set_current_ti_context add_aux;
+		val post6 = ZTmQuotation (z_many_and
+						([z_pred_of_z_tm post3] @
+						 map z_eq (combine add_aux add_aux0)),
 				Nil);
 		val aux_vars4 = #aux_vars package4;
 		val aux_vars_decs = map dest_z_dec aux_vars4;
@@ -2352,7 +2378,7 @@ fun €form_proc_pack_body_aux› (frees : Z_ID list, aux_vars : Z_ID list)
 		val aux_vars_tab = map (fn (tm, ty) => (dest_z_lvar tm, ty))
 								aux_vars_newdecs;
 		val aux_vars_tab1 = aux_vars_tab drop
-					(fn ((s, _, _), _) => s mem w6);
+					(fn ((s, _, _), _) => not(s mem w6));
 		val aux_vars = map (fn (lv,ty) => mk_z_dec([mk_z_lvar lv], ty))
 					aux_vars_tab1;
 		val aux_vars_tab0 = map (fn ((s,y,z),t) => ((s^"â0",y,z),t))
@@ -2368,18 +2394,17 @@ fun €form_proc_pack_body_aux› (frees : Z_ID list, aux_vars : Z_ID list)
 		val frame_aux_conc = w6 cup (list_cup (
 					map (map trans_id o #vars) conc_vars));
 		val frame_aux_conc0 = map (fn s => s^"â0") frame_aux_conc;
-		val seq_aux = aux_vars0;
 
 		val w5 = frame_aux_conc cup (#w (#spec speclab5));
 		
 		val pre5 = ZTmQuotation (z_exists (aux_vars,
-				z_many_and(z_predexp_of_z_tm pre6::invs)),
+				z_many_and(z_pred_of_z_tm pre6::invs)),
 				Nil);
 		val post5 = ZTmQuotation (z_forall (seq_aux, z_imp (subs_pred (
-			  z_many_and (z_predexp_of_z_tm pre6::invs),
+			  z_many_and (z_pred_of_z_tm pre6::invs),
 					frame_aux_conc, frame_aux_conc0),
 			    z_exists (aux_vars,
-				z_many_and(z_predexp_of_z_tm post6::invs)))),
+				z_many_and(z_pred_of_z_tm post6::invs)))),
 			Nil);
 
 		val in_scope5 = #in_scope speclab5;
@@ -2419,12 +2444,8 @@ fun €form_proc_pack_body_aux› (frees : Z_ID list, aux_vars : Z_ID list)
 		blocks :=
 		block_vc_vars(block1, vc_vars1 cup conc_vars):: tl (!blocks);
 		store_vcs (#name formal_proc3, call_vcs(speclab5a, st));
-(* **** **** Commented out comment: 
-		comment "form_proc_pack_body_aux" 503001
-			[fn()=>"is being called here"] (* TBS *)
-*)		()
+		()
 	end
-	) | Nil => ()
 );
 =TEX
 =SML
@@ -2475,43 +2496,55 @@ fun €form_proc_subunit› (form_proc: FORMAL_PROC) : unit = (
 	end
 );
 =TEX
-The following function is required to determine whether $form\_proc$ should call $form\_proc\_pack\_body$ or $form\_proc\_pack\_body\_aux$.
 =SML
-fun €aux_vars_in_fp_frame› (formal_proc3 : FORMAL_PROC)
-			(package4 : PACKAGE) : (Z_ID list * Z_ID list) = (
-	let	val free_fn = map ((fn (n, _, _) => n) o dest_z_lvar) o frees
-					o z_predexp_of_z_tm;
+fun €z_decls› (par_specs : PARAM_SPEC list) : Z_DECL list = (
+	let	fun aux1 ({vars, tmark} : VAR_DECL) : Z_DECL = (
+			let	val e = (zid current_cn_env o trans_id) tmark;
+				val ty = (dest_z_power_type o type_of) e;
+				fun v var = mk_z_lvar(var, ty, []);
+			in	mk_z_dec(map v vars, e)
+			end
+		);
+	in	map (aux1 o #var_decl) par_specs
+	end
+);
+=TEX
+The following function is required to determine whether $form\_proc$ should call $form\_proc\_pack\_body$ or $form\_proc\_pack\_body\_aux$.
+It computes a list of HOL terms representing the set of variables which is tested in the first clause in the predicate part of the corresponding Z schemas in the specification.
+=SML
+fun €aux_vars_in_fp_frame› (formal_proc3 as {formal_ids, ...} : FORMAL_PROC)
+			(package4 : PACKAGE) : TERM list = (
+	let	val f = map (fst o dest_var) o frees o z_predexp_of_z_tm;
 		val spec3 = #spec formal_proc3;
-		val free = (free_fn o #pre) spec3 cup (free_fn o #post) spec3;
+		val pardecs = z_decls formal_ids;
+		val new_ti_cxt = flat (map frees pardecs);
+		val side = set_current_ti_context new_ti_cxt;
+		val free = (f o #pre) spec3 cup (f o #post) spec3;
 		val w3 = #w (#spec formal_proc3);
 		val w3free = w3 cup free;
 		val aux_vars4 = #aux_vars package4;
-		val aux_vars4z = (flat o map fst o map dest_z_dec) aux_vars4;
-		val aux_vars4_names = map ((fn (n, _, _) => n) o dest_z_lvar)
-						aux_vars4z;
+		val aux_vars4_tms = (flat o map fst o map dest_z_dec) aux_vars4;
 	in
-		(free, aux_vars4_names drop (fn n => not (n mem w3free)))
+		aux_vars4_tms drop (fn v => not (fst (dest_var v) mem w3free))
 	end
 );
 =TEX
 =SML
-fun €form_proc› (form_proc: FORMAL_PROC) : unit = (
+fun €form_proc› (frm_prc: FORMAL_PROC) : unit = (
 	(if		test_flag #pack_spec_flag 2
 	then		form_proc_pack_spec
 	else if		test_flag #pack_body_flag 2
 	then
-		case form_proc_pack_body_common form_proc of
-		Value (_, formal_proc3, package4, _) => (
+		case form_proc_pack_body_common frm_prc of
+		Value (info as (_, formal_proc3, package4, _)) => (
 			case aux_vars_in_fp_frame formal_proc3 package4 of
-			(_, []) =>
-					form_proc_pack_body
-			|freeinfo =>
-					form_proc_pack_body_aux freeinfo
+				[]	 => form_proc_pack_body info
+			|	auxvars => form_proc_pack_body_aux info auxvars
 		) | Nil =>
 			(fn _ => ())
 	else if		test_flag #subunit_flag 2
 	then		form_proc_subunit
-	else		(fn _ => ())) form_proc
+	else		(fn _ => ())) frm_prc
 );
 =TEX
 \subsection{The SID function curr\_form\_proc}
@@ -2640,31 +2673,15 @@ fun €form_fun_pack_spec› (form_fun: FORMAL_FUN) : unit = (
 );
 =TEX
 =SML
-fun €z_decls› (par_specs : PARAM_SPEC list) : Z_DECL list = (
-	let	fun aux1 ({vars, tmark} : VAR_DECL) : Z_DECL = (
-			let	val e = (zid current_cn_env o trans_id) tmark;
-				val ty = (dest_z_power_type o type_of) e;
-				fun v var = mk_z_lvar(var, ty, []);
-			in	mk_z_dec(map v vars, e)
-			end
-		);
-	in	map (aux1 o #var_decl) par_specs
-	end
-);
-=TEX
-=SML
 fun €trans_formal_fun› ({spec as {pre, post, ...},
 			informal_fun as {formal_pars, ...}} : FORMAL_FUN)
 				: PARAINFO = (
 	let	val dec = fun_decl1 informal_fun;
 		val pardecs = z_decls formal_pars;
 		val ntys = (map dest_var o fst o dest_z_dec) dec;
-		val save_ti_cxt = TypeInference.get_ti_context();
-		val new_ti_cxt = frees dec term_union flat (map frees pardecs)
-					term_union save_ti_cxt;
-		val old_cxt = TypeInference.set_ti_context new_ti_cxt;
-		val imp = z_imp(z_predexp_of_z_tm pre, z_predexp_of_z_tm post);
-		val old_cxt = TypeInference.set_ti_context save_ti_cxt;
+		val new_ti_cxt = frees dec term_union flat (map frees pardecs);
+		val side = set_current_ti_context new_ti_cxt;
+		val imp = z_imp(z_pred_of_z_tm pre, z_pred_of_z_tm post);
 		val pred = (
 			case formal_pars of
 				[] => imp
@@ -2991,10 +3008,11 @@ fun €vcs_body_fun› (st : STATEMENT) : unit = (
 			formal_procs = #formal_procs in_scope,
 			dec_labels = #dec_labels in_scope
 		};
+		val side = set_in_scope_ti_context in_scope1;
 		val wp_env :WP_ENV = {
 			env = cn_env_of_in_scope in_scope1,
 			till = mk_z_true,
-			return = z_predexp_of_z_tm post1,
+			return = z_pred_of_z_tm post1,
 			fun_header = #informal_fun current_formal_fun1,
 			formal_procs = formal_procs
 		};
@@ -3269,14 +3287,6 @@ fun €end_scope_comp_unit› ((): unit) : unit = (
 =TEX
 \subsection{The SID function aux\_var}
 =SML
-fun €z_decl_of_aux› ({aux, t} : AUX_VAR) : Z_DECL = (
-	let	val zt = z_predexp_of_z_tm t;
-		val zvar = mk_z_lvar(aux, (dest_z_power_type o type_of) zt, []);
-	in	mk_z_dec([zvar], zt)
-	end
-);
-=TEX
-=SML
 fun €aux_var› (av : AUX_VAR) : unit = (
 	let	val block1 = block 1
 			handle Fail _ => error "aux_var" 507006 [];
@@ -3285,6 +3295,7 @@ fun €aux_var› (av : AUX_VAR) : unit = (
 			Value p => p
 		|	Nil => error "aux_var" 507001 [];
 		val {aux, t} = av;
+		val side = set_current_ti_context[];
 		val zt = z_predexp_of_z_tm t;
 		val zvar = mk_z_lvar(aux, (dest_z_power_type o type_of) zt, []);
 		val zdecl = mk_z_dec([zvar], zt);
@@ -3306,8 +3317,9 @@ fun €ud_fun_of_using_dec› (ud : USING_DEC)
 	let	val {	aux,
 			concrete_vars,
 			invariant, ...}		= ud;
+		val side = set_current_ti_context[];
 		val (id, _, _) = (dest_z_lvar o z_predexp_of_z_tm) aux;
-	in	(id, (concrete_vars, z_predexp_of_z_tm invariant))
+	in	(id, (concrete_vars, z_pred_of_z_tm invariant))
 	end
 );
 =TEX
