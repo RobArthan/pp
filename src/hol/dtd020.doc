@@ -70,10 +70,12 @@ First draft for comment.
 \subsection{Scope}
 This document contains the detailed design for the symbol table module for ICL HOL.
 The high level design for this material is given in \cite{DS/FMU/IED/HLD008}.
+Some of what is specified here implements facilities required explicitly in
+\cite{DS/FMU/IED/DEF001}.
 \subsection{Introduction}
 In order to give the parser, type inferrer and pretty printer a uniform
 interface to determine the properties of identifiers we have a symbol table
-module whose main purpose is to supply a function mapping identifiers onto
+module which, in effect, supplies a mapping of identifiers onto
 records encoding the properties of interest. The symbol table module
 also contains the interfaces whereby the user sets certain properties of
 identifiers (namely the interfaces for fixity, terminator, binder and type
@@ -89,13 +91,14 @@ All updates affect the current theory.
 \item
 All special properties of an identifier in one context can be suppressed
 in any descendant context. This sometimes requires the use of undeclaration
-records in the underlying theory $USER\_DATA$.
+records in the underlying $USER\_DATA$ value which is stored in the theory.
 \item
 The validity of identifiers is only checked when it is necessary to avoid
-the user tying himself in serious knots (e.g. by declaring space as a terminator).
+the user tying himself in serious knots (e.g. by declaring a space character
+as a terminator).
 Such things as infixes, type abbreviations etc. are completely unrestricted,
 and since the lexis of \cite{DS/FMU/IED/DEF001} allows arbitrary strings
-to be used as identifiers this is a feature not a bug, since, e.g., it allows
+to be used as identifiers this is a feature not a bug, because, e.g., it allows the
 HOL parser to interface with any other language embedded in HOL.
 \item
 Operations with a side effect are curried, so that there is less risk
@@ -124,14 +127,11 @@ Symbol table records are held for the following sorts of identifier:
 identifiers of types and constants
 introduced with the interfaces defined in \cite{DS/FMU/IED/DTD012};
 \item
-identifiers which have been declared as type abbreviations (using
-$new\_type\_abbrev$ defined below);
+identifiers which have been declared as type abbreviations;
 \item
-identifiers which have been declared as binders, postfixes, infixes or prefixes (using
-the interfaces defined below);
+identifiers which have been declared as binders, postfixes, infixes or prefixes;
 \item
-identifiers which have been declared as terminators (using
-the interfaces defined below);
+identifiers which have been declared as terminators.
 \end{enumerate}
 
 In addition, the symbol table provides the lexical analyser with the
@@ -142,6 +142,14 @@ signature SymbolTable = sig
 =DESCRIBE
 This is the signature for the structure which contains the symbol
 table and its access functions.
+This structure contains private functions which are invoked as one
+navigates around the theory database.
+These private functions may give rise to the following errors if the
+theory database user data has been corrupted (e.g. by explicit and incorrect use
+of the lower level interfaces).
+=FAILURE
+20001	A symbol table entry corrupt for ?0 is corrupt (use restore_defaults to correct)
+20002	Terminator entry ?0 is corrupt (use undeclare_terminator to correct)
 =ENDDOC
 \section{DATA TYPES}\label{DATATYPES}
 In this section we give the Standard ML types used in the symbol table module.
@@ -165,7 +173,8 @@ See DS/FMU/IED/DTD020
 =ENDDOC
 $ST\_INFO$ is a record type with fields as follows:
 
-{\center\begin{tabular}{|l|p{4in}|}\hline
+\begin{centering}
+\begin{tabular}{|l|p{5in}|}\hline
 
 $ty\_info$	& {\bf Type:} $int * ((TYPE * (string list)) OPT)$ $OPT$ \\
 & {\bf Description:}
@@ -197,10 +206,11 @@ $fixity$		& {\bf Type:} $FIXITY$ \\
  & {\bf Description:}
 this gives the fixity associated with the identifier.
 \\\hline
-\end{tabular}}
+\end{tabular}
+\end{centering}
 
 Note that a name may be both an alias and an actual constant name.
-For example in the supplied system the conjunction
+For example, in the supplied system the conjunction
 symbol `€' will have a symbol table
 entry something like:
 óExample
@@ -234,6 +244,8 @@ is to make the symbol table entry for  `€' something like:
 
 Thus to determine the actual type of a constant the correct procedure
 would be to access the second component of the $const\_info$ field, not the first.
+The access function $get\_const\_type$ is supplied to perform this particular
+calculation.
 \section{ACCESS FUNCTIONS}
 \subsection{Terminators}
 % Errors in this subsection start with 201
@@ -266,6 +278,8 @@ in the current context.
 =ENDDOC
 \subsection{Fixity}
 % Errors in this subsection should start with 202
+Note that there are not undeclare operations in this section. A fixity
+declaration may be suppressed by a nonfix declaration. 
 =DOC
 	val âdeclare_binderá : string -> unit;
 =DESCRIBE
@@ -277,7 +291,7 @@ No checks are made on the form of $s$
 =DOC
 	val âdeclare_infixá : string -> unit;
 =DESCRIBE
-$declare\_infixpre\,(s, p)$ declares $s$ to have the syntactic status of an
+$declare\_infix\,(s, p)$ declares $s$ to have the syntactic status of an
 infix operator with precedence $p$
 in the current context.
 No checks are made on the form of $s$
@@ -314,16 +328,27 @@ $get\_fixity\,s$ returns the syntactic status of $s$ in the current context.
 =ENDDOC
 \subsection{Constants and Aliases}
 % Errors in this subsection start with 203
+$get\_const\_info\,s$ is the interface which the type inferrer will use to
+give the type associated with a name in a parsed term. The type it should use
+is the first element of the pair.
 =DOC
 	val âget_const_infoá : string -> (TYPE * (string * TYPE list)) OPT;
 =DESCRIBE
-$get\_alias\_info\,s$ returns the information associated with
-the name $s$ used as a constant name, if any, associated
-with $s$.
+$get\_const\_info\,s$ returns the information associated with
+the name $s$ used as a constant name, if any.
+See DS/FMU/IED/DTD020 for more information.
+=ENDDOC
+$get\_const\_type\,s$ is for use, e.g. in the theory lister, to find the type
+associated with an actual constant (not an alias).
+=DOC
+	val âget_const_typeá : string -> TYPE OPT;
+=DESCRIBE
+$get\_const\_type\,s$ returns an instance of the most general type associated with
+the constant $s$ , if any.
 See DS/FMU/IED/DTD020 for more information.
 =ENDDOC
 The format of the alias information is described as part of
-the description of $ST\_INFO$ ins section \ref{DATATYPES} above
+the description of $ST\_INFO$ in section \ref{DATATYPES} above
 =DOC
 	val âdeclare_aliasá : (string * TERM) -> unit;
 =DESCRIBE
@@ -343,7 +368,7 @@ of a declaration of $s$ as an alias for the constant $c$ in the current context.
 =DOC
 	val âresolve_aliasá : (string * TYPE) -> TERM;
 =DESCRIBE
-$resolve_alias(s, \tau)$ returns a term of the form $mk\_const(c, \tau)$ where
+$resolve\_alias(s, \tau)$ returns a term of the form $mk\_const(c, \tau)$ where
 $c$ is the ``best' resolution for the identifier $s$. This best resolution
 will be $s$ if $s$ has been introduced as a constant of type $\tau'$
 where $\tau'$ is an instance of $\tau$.
@@ -409,24 +434,24 @@ in that theory. The language indicator for a new theory is initially taken
 from its (first) parent. The language indicator for the initial theory
 $MIN$ is set to ``$HOL$''.
 =DOC
+	val âset_current_languageá : string -> unit;
+=DESCRIBE
+$set\_current\_language\,s$ sets the language indicator associated with
+the current theory to $s$.
+=ENDDOC
+=DOC
 	val âget_current_languageá : unit -> string;
 =DESCRIBE
-$set\_current\_language()$ returns the language indicator associated with
+$get\_current\_language()$ returns the language indicator associated with
 the current theory.
-=FAILURE
-20403	The identifier ?0 is not declared as a type abbreviation
-20404	The type abbreviation ?0 should have ?1 argument not ?2
-20405	The type abbreviation ?0 should have ?1 arguments not ?2
 =ENDDOC
 =DOC
 	val âget_languageá : string -> string;
 =DESCRIBE
-$set\_current\_language\,s$ returns the language associated with
-the name $s$ in the current context.
-=FAILURE
-20403	The identifier ?0 is not declared as a type abbreviation
-20404	The type abbreviation ?0 should have ?1 argument not ?2
-20405	The type abbreviation ?0 should have ?1 arguments not ?2
+$get\_language\,s$ returns the language indicator associated with
+the name $s$ in the current context. If there is no symbol table record
+associated with $s$ $get\_language\,s$ the language indicator associated
+with the current theory is returned
 =ENDDOC
 
 \subsection{General Access Functions}
