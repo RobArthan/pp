@@ -100,6 +100,7 @@ This removes the need for various special cases and type conversion functions.
 \item[Issue 1.108] fixed bug in reduction function for exit when statements.
 \item[Issue 1.109] fixed bug in reduction function for use type clauses.
 \item[Issue 1.110, 1.111] R0079: assertions (added new reduction functions and accommodated changed data types).
+\item[Issue 1.112] R0051/R0052: default parameters and block statements.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -396,6 +397,7 @@ datatype €PPARSED› =
 	|	€PPBasicDecls› of SI_BASIC_DECL list
 	|	€PPBinaryOp› of BIN_OP
 	|	€PPBinOpTail› of (BIN_OP * EXP) list
+	|	€PPBlock› of BLOCK_STATEMENT
 	|	€PPCaseAlternatives› of STATEMENT CASE_ALTERNATIVE list
 	|	€PPCaseChoices› of CASE_CHOICE list
 	|	€PPCompilationUnit› of COMPILATION_UNIT
@@ -555,12 +557,16 @@ fun €mk_sub_ind› ((e, con) : EXP * SI_CONSTRAINT) : SI_SUB_IND =(
 );
 =TEX
 =SML
-fun €par_spec_to_disc_spec› ({idlist, mode, name} : PARAMETER_SPECIFICATION)
+fun €par_spec_to_disc_spec›
+	({idlist, mode as MSparkIn false, name, default as Nil} : PARAMETER_SPECIFICATION)
 	: DISCRIMINANT_SPECIFICATION = (
-	case mode of
-		MSparkIn false => {vars = idlist, tmark = name}
-	|	_ => parse_error 503001
-			"a parameter mode is not allowed in a discriminant specification"
+	{vars = idlist, tmark = name}
+) | par_spec_to_disc_spec {mode as _,  default as Nil, ...} = (
+	parse_error 503001
+		"a parameter mode is not allowed in a discriminant specification"
+) | par_spec_to_disc_spec {default as Value _, ...} = (
+	parse_error 503001
+		"default expressions for discriminants are not supported"
 );
 =TEX
 \subsection{Support for Unlabelled KSlots and Specification Statements}
@@ -721,43 +727,67 @@ fun €red_web_clause5
 |   red_web_clause5 _ _ _ =
         stack_error "red_web_clause5";
 
-fun €red_web_clause6
+fun €red_web_clause6›
         (Token ((_,CNText lab), _)) _ (Parsed (PPStatement s)) = (
     update_unlabelled_stack();
-    PPWebClause (WCReplacedBy {label=lab, statement=s}))
-|   red_web_clause6 _ _ _ =
+    PPWebClause (WCReplacedBy {label=lab, statement=SOBStatement s})
+) | red_web_clause6
+        (Token ((_,CNText lab), _)) _ (Parsed (PPBlock b)) = (
+    update_unlabelled_stack();
+    PPWebClause (WCReplacedBy {label=lab, statement=SOBBlock b})
+) |   red_web_clause6 _ _ _ =
         stack_error "red_web_clause6";
 
-fun €red_web_clause7
+fun €red_web_clause7›
         (Token ((_,CNText lab), _)) _ (Parsed (PPStatement s)) = (
     update_unlabelled_stack();
-    PPWebClause (WCRefinedBy {label=lab, statement=s}))
-|   red_web_clause7 _ _ _ =
+    PPWebClause (WCRefinedBy {label=lab, statement=SOBStatement s})
+) | red_web_clause7
+        (Token ((_,CNText lab), _)) _ (Parsed (PPBlock b)) = (
+    update_unlabelled_stack();
+    PPWebClause (WCRefinedBy {label=lab, statement=SOBBlock b})
+) |   red_web_clause7 _ _ _ =
         stack_error "red_web_clause7";
 
 fun €red_web_clause8› _ (Parsed (PPStatement s)) = (
 let val lab = pop_label();
     val side = update_unlabelled_stack();
 in
-    PPWebClause (WCRefinedBy {label=lab, statement=s})
-end)
-|   red_web_clause8 _ _ =
+    PPWebClause (WCRefinedBy {label=lab, statement=SOBStatement s})
+end
+) | red_web_clause8 _ (Parsed (PPBlock b)) = (
+let val lab = pop_label();
+    val side = update_unlabelled_stack();
+in
+    PPWebClause (WCRefinedBy {label=lab, statement=SOBBlock b})
+end
+) |   red_web_clause8 _ _ =
         stack_error "red_web_clause8";
 
-fun €red_web_clause9
+fun €red_web_clause9›
         (Token ((_,CNText lab), _)) _ (Parsed (PPStatement s)) = (
     update_unlabelled_stack();
-    PPWebClause (WCReplacedBy {label=lab, statement=s}))
-|   red_web_clause9 _ _ _ =
+    PPWebClause (WCReplacedBy {label=lab, statement=SOBStatement s})
+) | red_web_clause9
+        (Token ((_,CNText lab), _)) _ (Parsed (PPBlock b)) = (
+    update_unlabelled_stack();
+    PPWebClause (WCReplacedBy {label=lab, statement=SOBBlock b})
+) |   red_web_clause9 _ _ _ =
         stack_error "red_web_clause9";
 
 fun €red_web_clause10›  _ (Parsed (PPStatement s)) = (
 let val lab = pop_label();
     val side = update_unlabelled_stack();
 in
-    PPWebClause (WCReplacedBy {label=lab, statement=s})
-end)
-|   red_web_clause10 _ _ =
+    PPWebClause (WCReplacedBy {label=lab, statement=SOBStatement s})
+end
+) | red_web_clause10  _ (Parsed (PPBlock b)) = (
+let val lab = pop_label();
+    val side = update_unlabelled_stack();
+in
+    PPWebClause (WCReplacedBy {label=lab, statement=SOBBlock b})
+end
+) |   red_web_clause10 _ _ =
         stack_error "red_web_clause10";
 
 fun €red_web_clause11› (Parsed(PPId lab)) (Token ((LCArbitraryAda,CNText aa), _)) = (
@@ -775,7 +805,7 @@ end
 )|   red_web_clause12 _ =
         stack_error "red_web_clause12";
 
-fun €red_web_clause13
+fun €red_web_clause13›
         (Token ((_,CNText lab), _))  _ (Parsed (PPAnnotation ann)) = (
     update_unlabelled_stack();
     PPWebClause (WCReplacedByAnnotation {label=lab, replacement=ann})
@@ -785,6 +815,10 @@ fun €red_web_clause13
 fun €red_any_label› (Token ((_,CNText lab), _)) =
     PPId lab
 |   red_any_label _ = stack_error "red_any_label";
+=TEX
+=SML
+val €red_sequence_of_statements_or_block1›  = red_accept;
+val €red_sequence_of_statements_or_block2›  = red_accept;
 =TEX
 
 =SML
@@ -1839,6 +1873,35 @@ fun €red_auxiliary_expression› _ (Token ((LCZ,CNZ z), _)) _ = (
     PPExp(EAuxiliaryExp (z_tm_of_z_tokens z )))
 |   red_auxiliary_expression _ _ _ =
         stack_error "red_auxiliary_expression";
+=TEX
+=SML
+fun €red_block_statement1› (Parsed (PPIds nameo1)) _ (Parsed (PPDeclarations decls))
+	_ (Parsed(PPStatement s)) _ (Parsed (PPIds nameo2)) _ = (
+	if nameo1 <> nameo2
+	then	parse_error 503001
+		"in a block statement the block names must either both be present and be the same or both be absent"
+	else	let	val name = case nameo1 of [n] => Value n | _ => Nil;
+		in	PPBlock {name = name, declarative_part = Value decls, statement = s}
+		end
+) | red_block_statement1 _ _ _ _ _ _ _ _= 
+	stack_error "red_block_statement1";
+
+fun €red_block_statement2› (Parsed (PPIds nameo1)) 
+	_ (Parsed(PPStatement s)) _ (Parsed (PPIds nameo2)) _ = (
+	if nameo1 <> nameo2
+	then	parse_error 503001
+		"in a block statement the block names must either both be present and be the same or both be absent"
+	else	let	val name = case nameo1 of [n] => Value n | _ => Nil;
+		in	PPBlock {name = name, declarative_part = Nil, statement = s}
+		end
+) | red_block_statement2 _ _ _ _ _  _= 
+	stack_error "red_block_statement2";
+
+=SML
+
+=TEX
+
+=SML
 
 fun €red_exit_statement1› _ (Parsed(PPIds [])) _ = (
     PPStatement (STExit { n = Nil })
@@ -2042,13 +2105,20 @@ fun €red_parlist2› (Parsed (PPFormals f1)) _ (Parsed(PPFormals f2)) = (
     PPFormals (f1@f2))
 |   red_parlist2 _ _ _ =
         stack_error "red_parlist2";
-
-fun €red_parameter_specification› (Parsed(PPIds ids)) _ (Parsed(PPMode m)) 
+=TEX
+=SML
+fun €red_parameter_specification1› (Parsed(PPIds ids)) _ (Parsed(PPMode m)) 
     (Parsed(PPExp n)) = (
-    PPFormals[{idlist=ids,mode=m,name=mk_type_mark n}])
-|   red_parameter_specification _ _ _ _ =
-        stack_error "red_parameter_specification";
-;
+    PPFormals[{idlist=ids,mode=m,name=mk_type_mark n, default = Nil}])
+|   red_parameter_specification1 _ _ _ _ =
+        stack_error "red_parameter_specification1";
+
+fun €red_parameter_specification2› (Parsed(PPIds ids)) _ (Parsed(PPMode m)) 
+    (Parsed(PPExp n)) _ (Parsed(PPExp e)) = (
+    PPFormals[{idlist=ids,mode=m,name=mk_type_mark n, default = Value e}])
+|   red_parameter_specification2 _ _ _ _ _ _ =
+        stack_error "red_parameter_specification2";
+
 val €red_mode1› = PPMode (MSparkIn false);
 fun €red_mode2› _ = PPMode (MSparkIn true);
 fun €red_mode3› _ = PPMode MSparkOut;
@@ -2256,9 +2326,16 @@ fun €red_package_implementation2› (Parsed (PPDeclarations d)) _
 |   red_package_implementation2 _ _ _ =
         stack_error "red_package_implementation2";
 
+fun is_k_slot (DDeclarationKSlot _ : DECLARATION) : bool = true
+|   is_k_slot _ = false;
+
+
 fun €red_package_implementation3› (Parsed (PPDeclarations using))
 		(Parsed (PPDeclarations d)) _ (Parsed(PPStatement s)) = (
-    PPSubprogram (using@d, s, ""))
+	if      any d is_k_slot
+	then    parse_error 503001
+		"a k-slot is not allowed after the using declarations"
+	else    PPSubprogram (using@d, s, ""))
 |   red_package_implementation3 _ _ _ _ =
         stack_error "red_package_implementation3";
 
@@ -2310,21 +2387,6 @@ fun €red_basic_dec_list2› (Parsed(PPBasicDecls bds1))
 
 =TEX
 =SML
-fun is_k_slot (DDeclarationKSlot _ : DECLARATION) : bool = true
-|   is_k_slot _ = false;
-
-fun €red_declarative_part_1_1› (Parsed (PPDeclarations d1)) = (
-	if	any d1 is_k_slot
-	then	parse_error 503001
-       "a k-slot is not allowed after the using declarations"
-	else	PPDeclarations d1
-) | red_declarative_part_1_1 _ =
-        stack_error "red_declarative_part_1_1";
-
-fun €red_declarative_part_1_2› (Parsed (PPDeclarations d1)) (Parsed (PPDeclarations d2)) = (
-    PPDeclarations (d1@d2))
-|   red_declarative_part_1_2 _ _ =
-        stack_error "red_declarative_part_1_2";
 =TEX
 SPARK manual 7.4:
 =SML
