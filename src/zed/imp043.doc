@@ -75,6 +75,8 @@ Added new conversion for massaging ill-formed schemas-as-declarations back into 
 Bug fix (signature variable ordering).
 \item[Issue 1.22]
 Added notes where $dest\_z\_term1$ not appropriate.
+\item[Issue 1.23]
+Fixing renaming conversion.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -676,6 +678,54 @@ local
 in
 val Ûlz_sets_ext_convÝ :CONV = simple_eq_match_conv1  thm1;
 end;
+=TEX
+Local variant of $z\_sel‰s\_conv$, that is given the body of the selection
+before hand. 
+If  $z\_sel‰s\_conv$ is going to be used alot, with the same term
+selected from, this will be much faster.
+=SML
+fun  Ûz_sel‰s_1_convÝ (body: TERM) : CONV = (
+let
+	val bits = dest_z_binding body;
+	val spec = binding_gen_semantic_const body
+		handle (Fail _) =>
+		(diag_string "binding_gen_semantic_const fail - z_sel‰s_1_conv";
+		get_spec body);
+	val cmps = tl(fst(strip_simple_µ(concl spec)));
+	val thm1 = all_simple_µ_elim spec;
+	val conjuncts = strip_±_rule thm1;
+	val tagged_conjuncts = mapfilter (fn thm => 
+		(snd(dest_z_sel‰s(fst(dest_eq(concl thm)))), thm))
+		conjuncts;
+	val cmpvals = map snd bits;
+	val cmpvaltys = map type_of cmpvals
+	val tym = combine cmpvaltys (map type_of cmps);
+	val instcmps = map mk_var (combine (map (fst o dest_var) cmps) cmpvaltys);
+	val tmm = combine cmpvals instcmps;
+in
+(fn tm => (
+let	val (_,s) = dest_z_sel‰s tm;
+	fun get_conjunct ((tag,cnj) :: rest) = (
+		if tag = s
+		then cnj
+		else get_conjunct rest
+	) | get_conjunct _ = term_fail "z_sel‰s_1_conv" 43000 [];
+	val thm2 = get_conjunct tagged_conjuncts
+		handle Fail _ => term_fail "z_sel‰s_1_conv" 43000 [];
+in
+	check_is_z_conv_result "z_sel‰s_1_conv"
+	(eq_trans_rule (refl_conv tm)
+	(inst_term_rule tmm (inst_type_rule tym thm2)))
+end
+)
+handle complaint =>
+list_divert complaint "z_sel‰s_1_conv"
+	[("dest_z_sel‰s", 42014, [fn () => string_of_term tm]),
+	("dest_z_binding", 42014, [fn () => string_of_term tm]),
+	("get_spec", 42014, [fn () => string_of_term tm]),
+	("eq_trans_rule", 43000, [fn () => string_of_term tm])]
+)
+end);
 =TEX
 =SML
 local
@@ -1427,22 +1477,28 @@ let	val (x,st) = dest_z_ tm
 		mk_z_(wit,s))),
 		¤_T2
 		(fn ¶_thm => SIMPLE_¶_THEN 
-			(fn thm => asm_tac (±_left_elim thm)
-			THEN pure_rewrite_thm_tac (conv_rule 
-		(z_binding_eq_conv THEN_C
-		(±_C (RIGHT_C z_sel‰s_conv)))
-		(±_right_elim thm)))
-			¶_thm
-		THEN conv_tac(LEFT_C z_binding_elim_conv)
-		THEN concl_in_asms_tac)
+		  (fn thm => 
+			asm_tac (±_left_elim thm)
+			THEN (let 	val rtm = 
+					 (snd o dest_eq o snd o dest_± o concl) thm;
+					val l_sel_conv = z_sel‰s_1_conv rtm;
+					val rwthm = (conv_rule 
+		 	  		 (z_binding_eq_conv THEN_C
+		 	   		 (±_C (RIGHT_C l_sel_conv)))(±_right_elim thm));
+				in
+				pure_rewrite_thm_tac rwthm
+				end)
+		  )
+		 ¶_thm
+	       	 THEN conv_tac(LEFT_C z_binding_elim_conv)
+		 THEN concl_in_asms_tac)
 		(fn res_thm =>
-		simple_¶_tac wit THEN
-		±_tac THEN_LIST [
-		accept_tac res_thm,
-		conv_tac(RIGHT_C(ONCE_MAP_C z_sel‰s_conv)
+		simple_¶_tac wit THEN ±_tac THEN_LIST
+		[accept_tac res_thm,
+		 conv_tac(RIGHT_C(ONCE_MAP_C (z_sel‰s_1_conv wit))
 			THEN_C RIGHT_C z_binding_elim_conv)
-		THEN rwt])
-		);
+  	   	   THEN rwt]
+		));
 	val s3 = conv_rule(RIGHT_C(LEFT_C(BINDING_C
 		(TRY_C z_sel‰s_conv)))) s2;
 	val s4 = eq_trans_rule s1 s3;
