@@ -52,8 +52,10 @@ typedef struct menu_item {
  * extern declarations for its external interfaces (with the
  * exception of `main' in xpp.c).
  */
-#ifndef _cmdwin
-	extern void setup_cmdwin(Bool edit_only);
+#ifndef _mainw
+	extern void main_window_go(
+		Bool edit_only,
+		char	*file_name);
 	extern XtAppContext app;
 	extern Widget root;
 	extern void send_to_application(
@@ -118,7 +120,10 @@ typedef struct menu_item {
 		void	(*exec)());
 #endif
 #ifndef _files
-	extern void *load_file(
+	extern Boolean *open_file(
+		Widget	text,
+		char	*name);
+	extern Boolean *save_file(
 		Widget	text,
 		char	*name);
 #endif
