@@ -66,13 +66,14 @@ None known.
 None known.
 
 \section{PREAMBLE}
-=SML
+=IGN
 structure ÛResolutionÝ : Resolution = struct
 =TEX
 =SML
 val lthy = get_current_theory_name();
 val _ = open_theory "basic_hol";
 val _ = push_proof_context prove_¶_epc;
+open Unification;
 =TEX
 \section{THE CODE}
 Using $rewrite\_rule$ as a simplifier is crude!
@@ -132,7 +133,7 @@ in
 end);
 end; (* of local simp_rewrites_thm *)
 =TEX
-=SML
+=IGN
 fun Ûbasic_resolve_tacÝ (subterm : TERM) 
 	(asm1 : TERM, subs1 : TERM list) 
 
@@ -153,60 +154,6 @@ fun Ûbasic_resolve_tacÝ (subterm : TERM)
 );
 =TEX
 \subsection{Term Unification}
-An algorithm for type unification:
-\begin{enumerate}
-\item
-Substitute type variables not found at all in either term
-for the specialisable type variables in either term.
-(Not necessary if known to be done already).
-\item
-Initialise the type substitution maps to send the instantiable type variables to $Nil$.
-We can then merge the test for instantiable to what it is
-instantiated to.
-\item
-Consider what the first type is is:
-\begin{description}
-\item[Type Variable]
-\begin{description}
-\item{If already instantiated}
-Then unify the second type with the instantiation.
-\item{Else if instantiable}
-(i.e. recorded as instantiated to $Nil$)
-Then check for its occurrence in the second type,
-if equal, then no change in unifcation map,
-if contained in then fail, 
-and if not then record the first type instantiated to the $Value$ of the second.
-\item{Else}
-(i.e. not in instantiation list)
-The second type must either be
-\begin{itemize}
-\item
-an instantiable type variable, 
-either uninstantiated,
-in which case it should be recorded as instantiated to $Value$ of the
-first type,
-or instantiated in which case its instantiation should
-be unified with the first type,
-\item
-or an uninstantiable type variable, equal in name to the first.
-\end{itemize}
-\end{description}
-\item[Compound Type]
-Consider what the second type is is:
-\begin{description}
-\item[Type Variable]
-This must be an instantiable type variable, 
-either uninstantiated,
-in which case it should be recorded as instantiated to the
-first type,
-or instantiated in which case its instantiation should
-be unified with the first type.
-\item[Compound Type]
-In whichcase thetype constructor names must be equal, and the type 
-arguments unifiable.
-\end{description}
-\end{description}
-\end{enumerate}
 
 An algorithm for term unification:
 \begin{enumerate}
@@ -219,7 +166,8 @@ for the specialisable type variables in either term.
 (This prevents having to do this for the individual type unifications).
 \item
 Initialise the bound variable matching, to empty,
-specialisation and instantiation to mapping the variables to $Nil$.
+specialisation to mapping the variables to $Nil$,
+and initialise the type unification scatchpad.
 \item
 Consider what the first term is:
 \begin{description}
@@ -347,7 +295,7 @@ let	fun aux _ (App (f, a)) = (
 		((tv1 cup tv2), (ty1 cup ty2))
 	end
 	) | aux _ (Const (_, ty)) = ([],type_tyvars ty)
-	  | aux tm (Var (nm,ty)) = ([tm],type_tyvars ty)
+	  | aux tm (Var (_,ty)) = ([tm],type_tyvars ty)
 	  | aux _ (SimpleÌ (v, b)) = (
 	let val (tv1,ty1) = aux b (dest_simple_term b);
 	in
@@ -363,7 +311,7 @@ To make the specialisable term and instantiable type variables unique in two ter
 =SML
 fun ÛuniquifyÝ (avty : TYPE list) (avtm : TERM list) (((tm1:TERM) ,(ms1: TERM list), (mi1:TYPE list)),
 	((tm2:TERM), (ms2:TERM list), (mi2:TYPE list))) :
-	((TERM * TERM list * TYPE list) * (TERM * TERM list * TYPE list)) = (
+	((TERM * TERM list) * (TERM * TERM list) * (int * string) list) = (
 let	val (tv_tm1, ty_tm1) = term_tytm_vars tm1;
 	val (tv_tm2, ty_tm2) = term_tytm_vars tm2;
 	val tv1_fixed = tv_tm1 diff ms1;
@@ -383,111 +331,100 @@ let	val (tv_tm1, ty_tm1) = term_tytm_vars tm1;
 	val mi1' = map mk_vartype mi1s';
 	val ty1_insts = (combine mi1' mi1);
 	val ty2_avoid = ty1_avoid @ mi1s';
-	val mi2' = map mk_vartype (list_string_variant ty2_avoid nm_mi2);
+	val mi2s' = list_string_variant ty2_avoid nm_mi2;
+	val mi2' = map mk_vartype mi2s'
+	val mi1mi2s = mi1s' @ mi2s';
+	val esubs = combine (interval 1 (length mi1mi2s)) mi1mi2s;
 	val ty2_insts = (combine mi2' mi2);
 	val tm1'' = inst [] ty1_insts tm1';
 	val tm2'' = inst [] ty2_insts tm2';
 	val ms1' = map (inst [] ty1_insts) tv1';
 	val ms2' = map (inst [] ty2_insts) tv2';
 in
-	((tm1'',ms1',mi1'),(tm2'',ms2',mi2'))
-end);
+	((tm1'',ms1'),(tm2'',ms2'), esubs)
+end
+handle complaint =>
+case (area_of complaint) of
+"dest_vartype" => reraise complaint "term_unify"
+| "dest_var" => reraise complaint "term_unify"
+| other => reraise complaint other
+);
 =IGN
 uniquify [] [] ¬a ± (µ b:'a· f b ² c) ² g (b:'a) ± h (d:'d)® [¬a:BOOL®,¬b:'a®,¬c:BOOL®] [¬:'a®,¬:'d®]
 ¬a ± (µ b:'a· f b ² c) ² g (b:'a) ± h (d:'d)® [¬a:BOOL®,¬d:'d®] [¬:'a®,¬:'d®];
-
-
 =TEX
-Expand out a type, checking for the presence of an instantiable (but not yet instantiated) type
-variable as you go (an ``occurs'' check).
-It is OK for the result to equal $ty1$, but not to contain it.
+Local form of converting a type to an extended type:
 =SML
-fun Ûexpand_check_typeÝ (match:(TYPE * TYPE OPT)list) (ty1:TYPE)
-	(ty2: TYPE): TYPE = (
-let	fun aux inside ty =
-	if is_vartype ty
-	then (case lassoc5 match ty of
-	Nil => ty (* not instantiable, so not ty1 *)
-	| Value Nil => if inside andalso ty1 = ty
-		then type_fail "type_unify" 67012 [ty1,ty2]
-		else ty
-	| Value (Value ty') => 
-		if ty' = ty
-		then error "expand_check_type" 67013 [
-			(fn () => string_of_type ty)]
-		else aux inside ty'
-	)
-	else (let val (nm,tys) = dest_ctype ty
-	in
-		mk_ctype(nm,map (aux true) tys)
-	end)
+fun Ûltype_to_extypeÝ (esubs: (int * string)list) (ty:TYPE):EXTYPE = (
+let	fun aux (Ctype (nm,tys)) = ExType(nm,map (aux o dest_simple_type) tys)
+	| aux (Vartype nm) = (
+		case rassoc5 esubs nm of
+		Value n => ExVartype (Unknown n)
+		| _ => ExVartype (Known nm)
+	);
 in
-	aux false ty2
+	aux (dest_simple_type ty)
 end);
 =TEX
 =SML
-fun Ûexpand_typeÝ (match:(TYPE * TYPE OPT)list) (ty2: TYPE): TYPE = (
-let	fun aux ty =
-	if is_vartype ty
-	then (case lassoc5 match ty of
-	Nil => ty 
-	| Value Nil => ty
-	| Value (Value ty') => 
-		if ty = ty'
-		then error "expand_type" 67013 [
-			(fn () => string_of_type ty)]
-		else aux ty')
-	else (let val (nm,tys) = dest_ctype ty
-	in
-		mk_ctype(nm,map aux tys)
-	end)
+fun Ûexpand_typeÝ (subs:SUBS)
+	(esubs:(int * string)list)
+	(ty: TYPE): TYPE = (
+let	fun aux (Ctype (nm,tys)) = mk_ctype(nm,map (aux o dest_simple_type) tys)
+	| aux (Vartype nm) = (
+		case rassoc5 esubs nm of
+		Value n => extype_to_type subs esubs (ExVartype (Unknown n))
+		| _ => mk_vartype nm
+	);
 in
-	aux ty2
+	aux (dest_simple_type ty)
 end);
 =TEX
 We do a very cheap and cheerful bound variable hider in the 
 following.
 =SML
-fun Ûexpand_termÝ (tymatch:(TYPE * TYPE OPT)list) 
-	(fvmatch: (TERM * TERM OPT)list)
+fun Ûexpand_termÝ (subs:SUBS)
+	(esubs:(int * string)list)
+	(ifvmatch: (TERM * TERM OPT)list)
 	(tm:TERM):TERM = (
-let	fun aux _ (App(f,a)) = mk_app(
-		aux f (dest_simple_term f), 
-		aux a (dest_simple_term a))
-	| aux _ (Const(nm,ty)) = mk_const(nm, expand_type tymatch ty)
-	| aux v (Var (nm,ty)) = (case lassoc5 fvmatch v of
-		Nil => mk_var(nm, expand_type tymatch ty)
-		| Value Nil => mk_var(nm, expand_type tymatch ty)
+let	fun aux fvmatch _ (App(f,a)) = mk_app(
+		aux fvmatch f (dest_simple_term f), 
+		aux fvmatch a (dest_simple_term a))
+	| aux fvmatch _ (Const(nm,ty)) = mk_const(nm, expand_type subs esubs ty)
+	| aux fvmatch v (Var (nm,ty)) = (case lassoc5 fvmatch v of
+		Nil => mk_var(nm, expand_type subs esubs ty)
+		| Value Nil => mk_var(nm, expand_type subs esubs ty)
 		| Value(Value tm') => 
 			if v = tm'
-			then error "expand_type" 67013 [
+			then error "expand_term" 67013 [
 				(fn () => string_of_term v)]
-			else aux tm' (dest_simple_term tm')
-	) | aux _ (SimpleÌ(v,bdy)) = mk_simple_Ì (
+			else aux fvmatch tm' (dest_simple_term tm')
+	) | aux fvmatch _ (SimpleÌ(v,bdy)) = mk_simple_Ì (
 		let val (nm,ty) = dest_var v
 		in
-		mk_var(nm, expand_type tymatch ty)
+		mk_var(nm, expand_type subs esubs ty)
 		end,
-		expand_term tymatch (fvmatch drop (fn(x,_)=> x=v)) bdy)
+		aux (fvmatch drop (fn(x,_)=> x=v)) bdy (dest_simple_term bdy))
 in
-	aux tm (dest_simple_term tm)
+	aux ifvmatch tm (dest_simple_term tm)
 end);
 =TEX
 Expand out a term, checking for the presence of an instantiable (but not yet instantiated) term
 variable as you go (an ``occurs'' check).
 It is OK for the result to equal $mv$, but not to contain it.
 =SML
-fun Ûexpand_check_termÝ (tymatch:(TYPE * TYPE OPT)list) 
+fun Ûexpand_check_termÝ (subs:SUBS) 
+	(esubs:(int * string)list) 
 	(ifvmatch: (TERM * TERM OPT)list)
 	(mv:TERM) 
 	(tm:TERM):TERM = (
 let	fun aux _ _ fvmatch (App(f,a)) = mk_app(
 		aux true f fvmatch (dest_simple_term f), 
 		aux true a fvmatch (dest_simple_term a))
-	| aux _ _  fvmatch (Const(nm,ty)) = mk_const(nm, expand_type tymatch ty)
+	| aux _ _  fvmatch (Const(nm,ty)) = mk_const(nm, expand_type subs esubs ty)
 	| aux inside v fvmatch (Var (nm,ty)) = (case lassoc5 fvmatch v of
-		Nil => mk_var(nm, expand_type tymatch ty)
-		| Value Nil => (let val nv = mk_var(nm, expand_type tymatch ty);
+		Nil => mk_var(nm, expand_type subs esubs ty)
+		| Value Nil => (let val nv = mk_var(nm, expand_type subs esubs ty);
 			in
 			if inside andalso mv = v
 			then term_fail "term_unify" 67012 [mv, tm]
@@ -501,76 +438,24 @@ let	fun aux _ _ fvmatch (App(f,a)) = mk_app(
 	) | aux _  _ fvmatch (SimpleÌ(v,bdy)) = (mk_simple_Ì (
 		let val (nm,ty) = dest_var v
 		in
-		mk_var(nm, expand_type tymatch ty)
+		mk_var(nm, expand_type subs esubs ty)
 		end,
 		aux true bdy (fvmatch drop (fn (x,_)=> x=v)) (dest_simple_term bdy)))
 in
 	aux false tm ifvmatch (dest_simple_term tm)
 end);
 =TEX
-Unify two types: $aux$ cummulatively unifies two lists of types.
+Unify two types using material from \cite{DS/FMU/IED/DTD014}.
 =SML
-fun Ûtype_unifyÝ (match:(TYPE * TYPE OPT)list) (ty1:TYPE)
-	(ty2: TYPE): (TYPE * TYPE OPT)list = (
-let	fun aux mth [] [] = mth
-	| aux mth (t1 :: rest1) (t2 :: rest2) = (
-		aux (type_unify mth t1 t2) rest1 rest2
-	) | aux _ _ _ = type_fail "type_unify" 67005 [ty1,ty2];
+fun Ûtype_unifyÝ (subs:SUBS) (esubs: (int * string)list) (ty1:TYPE) (ty2: TYPE): unit = (
+let	val ty1' = ltype_to_extype esubs ty1;
+	val ty2' = ltype_to_extype esubs ty2;
 in
-	if is_vartype ty1
-	then (case lassoc5 match ty1 of
-	Nil => ((* fixed type variable *)
-		if is_vartype ty2
-		then (case lassoc5 match ty2 of
-		Nil => ( if ty1 = ty2
-			then match
-			else type_fail "type_unify" 67007 [ty1,ty2,ty1]
-		) | Value Nil => (
-			match overwrite (ty2,Value ty1)
-		) | Value(Value ty2') => (
-			type_unify match ty1 ty2'
-		)) else
-		(type_fail "type_unify" 67005 [ty1,ty2]
-		)
-	) | Value Nil => ((* as yet uninstantiated *)
-	let	val ty2' = expand_check_type match ty1 ty2;
-	in
-		if ty1 = ty2'
-		then match
-		else match overwrite (ty1,Value ty2')
-	end
-	) | Value(Value ty1') => (* instantiated *)
-		type_unify match ty1' ty2
-	)
-	else ((* a compound type *)
-		if is_vartype ty2
-		then (case (lassoc5 match ty2) of
-		Nil => type_fail "type_unify" 67005 [ty1,ty2]
-		| Value Nil => (
-			match overwrite (ty2,Value ty1)
-		) | Value(Value ty2') => (
-			type_unify match ty1 ty2'
-		))
-		else (
-		let	val (nm1,tys1) = dest_ctype ty1;
-			val (nm2,tys2) = dest_ctype ty2;
-		in
-			if (nm1 = nm2)
-			then aux match tys1 tys2
-			else type_fail "type_unify" 67005 [ty1,ty2]
-		end)
-	)
-end);
-=IGN
-type_unify [(¬:'a®,Nil),(¬:'c®,Nil),(¬:'d®,Nil)]
-	¬:'a ­ 'b ­ BOOL ­ ('c ¸ 'd)®
-	¬:'c ­ 'c ­ 'd ­ ('a ¸ BOOL)®;
-type_unify [(¬:'a®,Nil),(¬:'c®,Nil),(¬:'d®,Nil)]
-	¬:'a ­ 'b ­ BOOL ­ ('c ¸ 'd)®
-	¬:'c ­ 'c ­ 'd ­ (BOOL ¸ BOOL)®; (* fails *)
-type_unify [(¬:'a®,Nil),(¬:'c®,Nil),(¬:'d®,Nil)]
-	¬:'a ®
-	¬: ('a ¸ 'd)®;
+	unify subs (ty1',ty2')
+end
+handle complaint =>
+pass_on complaint "unify" "type_unify"
+);
 =TEX
 =IGN
 term_unify ((¬a ± (µ b:'a· f b ² c) ² g (b:'a) ± h (d:'d)®,
@@ -580,7 +465,8 @@ term_unify ((¬a ± (µ b:'a· f b ² c) ² g (b:'a) ± h (d:'d)®,
 Unify two terms:
 note that because of bound variable matching we cannot swap the two terms about to exploit symmetry.
 =SML
-fun  Ûterm_unifyÝ (avty : TYPE list) (avtm: TERM list) 
+fun  Ûterm_unifyÝ (subs:SUBS) 
+	(avty : TYPE list) (avtm: TERM list) 
 	((itm1: TERM, ims1: TERM list, imi1: TYPE list),
 	(itm2: TERM, ims2: TERM list, imi2: TYPE list))
 	: 
@@ -590,42 +476,38 @@ let
 =TEX
 Initialisation:
 =SML
-	val ((tm1,ms1,mi1),(tm2,ms2,mi2)) = (
+	val ((tm1,ms1),(tm2,ms2),esubs) = (
 		uniquify avty avtm ((itm1, ims1, imi1), (itm2, ims2, imi2))
 	);
-	val itymatch = map (fn ty => (ty,Nil)) (mi1 @ mi2);
+	val dummy = init_subs subs;
 	val ifvmatch = map (fn tm => (tm,Nil)) (ms1 @ ms2);
-	val trans_mi1 = combine(imi1)(mi1);
-	val trans_ms1 = combine(ims1)(ms1);
-	val trans_mi2 = combine(imi2)(mi2);
-	val trans_ms2 = combine(ims2)(ms2);
-
+	val trans_ms1 = combine ims1 ms1;
+	val trans_ms2 = combine ims2 ms2;
 =TEX
 =SML
-	fun tmaux2 (tymatch, fvmatch) bvmatch (App(f1, a1)) (App(f2, a2)) = (
-		tmaux2 (tmaux2 (tymatch, fvmatch) bvmatch 
+	fun tmaux2 fvmatch bvmatch (App(f1, a1)) (App(f2, a2)) = (
+		tmaux2 (tmaux2 fvmatch bvmatch 
 				(dest_simple_term a1) (dest_simple_term a2))
 			bvmatch 
 			(dest_simple_term f1) 
 			(dest_simple_term f2)
-	) | tmaux2 (tymatch, fvmatch) bvmatch (Const(s1,ty1))(Const(s2,ty2)) = (
+	) | tmaux2 fvmatch bvmatch (Const(s1,ty1))(Const(s2,ty2)) = (
 		if (s1 = s2)
-		then (type_unify tymatch ty1 ty2, fvmatch)
+		then (type_unify subs esubs ty1 ty2; fvmatch)
 		else term_fail "term_unify" 67005 [itm1,itm2]
-	) | tmaux2 (tymatch, fvmatch) bvmatch (SimpleÌ(v1,b1))(SimpleÌ(v2,b2)) = (
+	) | tmaux2 fvmatch bvmatch (SimpleÌ(v1,b1))(SimpleÌ(v2,b2)) = (
 		
 		let	val bvmatch' = (v1, v2) :: bvmatch;
-			val tymatch' = type_unify tymatch (type_of v1) (type_of v2);
-		in	tmaux2 (tymatch', fvmatch) bvmatch' 
+			val dummy = type_unify subs esubs (type_of v1) (type_of v2);
+		in	tmaux2 fvmatch bvmatch' 
 			(dest_simple_term b1) (dest_simple_term b2)
 		end
-	) | tmaux2 (tymatch, fvmatch) bvmatch stm1 stm2 = (
+	) | tmaux2 fvmatch bvmatch stm1 stm2 = (
 let
 =TEX
 Auxiliary functions handling variables:
 =SML
-	fun tmaux0 (tymatch:(TYPE * TYPE OPT)list, 
-			(fvmatch:(TERM * TERM OPT)list))
+	fun tmaux0 (fvmatch:(TERM * TERM OPT)list)
 			bvmatch (tm1:TERM) (v2: TERM) = (
 		case rassoc5 bvmatch v2 of
 		Nil => (
@@ -634,38 +516,37 @@ Auxiliary functions handling variables:
 
 			else case lassoc5 fvmatch v2 of
 			Value(Value tm1') => (
-				tmaux2 (tymatch, fvmatch) bvmatch 
+				tmaux2 fvmatch bvmatch 
 					(dest_simple_term tm1) 
 					(dest_simple_term tm1')
 			) | Value Nil => (
-				let	val tymatch' =
-					type_unify tymatch (type_of tm1) (type_of v2);
+				let	val dummy =
+					type_unify subs esubs (type_of tm1) (type_of v2);
 					val tm1' = expand_check_term 
-					 tymatch fvmatch v2 tm1;
-				in	(tymatch', 
-					if v2 = tm1'
+					 subs esubs fvmatch v2 tm1;
+				in	if v2 = tm1'
 					then fvmatch
 					else fvmatch overwrite 
-					(v2, Value tm1'))
+					(v2, Value tm1')
 				end
 			) | Nil => (
 			if is_var tm1
 			then (case lassoc5 fvmatch tm1 of
 			Value(Value tm1') => (
-				tmaux2 (tymatch, fvmatch) bvmatch
+				tmaux2 fvmatch bvmatch
 				(dest_simple_term tm1) 
 				(dest_simple_term tm1')
 			) | Value Nil => (
-				let	val tymatch' =
-					type_unify tymatch (type_of tm1) (type_of v2);
-				in	(tymatch', fvmatch overwrite (tm1, Value v2))
+				let	val dummy =
+					type_unify subs esubs (type_of tm1) (type_of v2);
+				in	fvmatch overwrite (tm1, Value v2)
 				end
 			) | Nil => (
 			let	val (nm1,vty1) = dest_var tm1;
 				val (nm2,vty2) = dest_var v2;
 			in
 				(if nm1 = nm2
-				then (type_unify tymatch vty1 vty2, fvmatch)
+				then (type_unify subs esubs vty1 vty2; fvmatch)
 				else term_fail "term_unify" 67005 [itm1,itm2])
 			end
 			))
@@ -674,24 +555,23 @@ Auxiliary functions handling variables:
 	);
 =TEX
 =SML
-	fun tmaux1 (tymatch, fvmatch) (bvmatch : (TERM * TERM) list) 
+	fun tmaux1 fvmatch (bvmatch : (TERM * TERM) list) 
 			tm1 v2 = (
 		if is_var tm1
 		then	(case lassoc5 bvmatch tm1 of
 				Value v2' => (
 					if v2' = v2 andalso rassoc5 bvmatch v2' = Value tm1
-					then (tymatch, fvmatch)
+					then fvmatch
 					else term_fail "term_unify" 67005 [itm1,itm2]
-			) |	Nil => tmaux0 (tymatch, fvmatch) bvmatch tm1 v2
+			) |	Nil => tmaux0 fvmatch bvmatch tm1 v2
 			)
-		else 	tmaux0 (tymatch, fvmatch) bvmatch tm1 v2
+		else 	tmaux0 fvmatch bvmatch tm1 v2
 	);
 
 =TEX
 Now the analogues to the above two, except the variable is the first term (done to keep bound variables straight)
 =SML
-	fun tmaux0' (tymatch:(TYPE * TYPE OPT)list, 
-			(fvmatch:(TERM * TERM OPT)list))
+	fun tmaux0' (fvmatch:(TERM * TERM OPT)list)
 			bvmatch (tm2:TERM) (v1: TERM) = (
 		case lassoc5 bvmatch v1 of
 		Nil => (
@@ -700,38 +580,38 @@ Now the analogues to the above two, except the variable is the first term (done 
 
 			else case lassoc5 fvmatch v1 of
 			Value(Value tm1') => (
-				tmaux2 (tymatch, fvmatch) bvmatch 
+				tmaux2 fvmatch bvmatch 
 				(dest_simple_term tm1')
 				(dest_simple_term tm2) 
 			) | Value Nil => (
-				let	val tymatch' =
-					type_unify tymatch (type_of v1) (type_of tm2);
+				let	val dummy =
+					type_unify subs esubs (type_of v1) (type_of tm2);
 					val tm2' = expand_check_term 
-						 tymatch fvmatch v1 tm2;
-					in	(tymatch', 
+						 subs esubs fvmatch v1 tm2;
+					in	 
 						if v1 = tm2' 
 						then fvmatch 
 						else fvmatch overwrite 
-						(v1, Value tm2'))
+						(v1, Value tm2')
 					end
 			) | Nil => (
 			if is_var tm2
 			then (case lassoc5 fvmatch tm2 of
 			Value(Value tm2') => (
-				tmaux2 (tymatch, fvmatch) bvmatch
+				tmaux2 fvmatch bvmatch
 				(dest_simple_term v1) 
 				(dest_simple_term tm2')
 			) | Value Nil => (
-				let	val tymatch' =
-					type_unify tymatch (type_of v1) (type_of tm2);
-				in	(tymatch', fvmatch overwrite (tm2, Value v1))
+				let	val dummy =
+					type_unify subs esubs (type_of v1) (type_of tm2);
+				in	fvmatch overwrite (tm2, Value v1)
 				end
 			) | Nil => (
 			let	val (nm1,vty1) = dest_var tm2;
 				val (nm2,vty2) = dest_var v1;
 			in
 				(if nm1 = nm2
-				then (type_unify tymatch vty1 vty2, fvmatch)
+				then (type_unify subs esubs vty1 vty2; fvmatch)
 				else term_fail "term_unify" 67005 [itm1,itm2])
 			end
 			))
@@ -740,17 +620,17 @@ Now the analogues to the above two, except the variable is the first term (done 
 	);
 =TEX
 =SML
-	fun tmaux1' (tymatch, fvmatch) (bvmatch : (TERM * TERM) list) 
+	fun tmaux1' fvmatch (bvmatch : (TERM * TERM) list) 
 			tm2 v1 = (
 		if is_var tm2
 		then	(case rassoc5 bvmatch tm2 of
 				Value v1' => (
 					if v1' = v1 andalso lassoc5 bvmatch v1' = Value tm2
-					then (tymatch, fvmatch)
+					then fvmatch
 					else term_fail "term_unify" 67005 [itm1,itm2]
-			) |	Nil => tmaux0' (tymatch, fvmatch) bvmatch tm2 v1
+			) |	Nil => tmaux0' fvmatch bvmatch tm2 v1
 			)
-		else 	tmaux0' (tymatch, fvmatch) bvmatch tm2 v1
+		else 	tmaux0' fvmatch bvmatch tm2 v1
 	);
 
 =TEX
@@ -759,30 +639,29 @@ Back to the body of tmaux2
 in
 		case stm1 of
 		(Var v1) =>
-		tmaux1' (tymatch, fvmatch) bvmatch (mk_simple_term stm2) (mk_var v1) 
+		tmaux1' fvmatch bvmatch (mk_simple_term stm2) (mk_var v1) 
 		| _ => case stm2 of
 		(Var v2) =>
-		tmaux1 (tymatch, fvmatch) bvmatch (mk_simple_term stm1) (mk_var v2)
+		tmaux1 fvmatch bvmatch (mk_simple_term stm1) (mk_var v2)
 		| _ => term_fail "term_unify" 67005 [itm1,itm2]
 end);
 =TEX
 =SML
-	val (otymatch,ofvmatch) = tmaux2 (itymatch, ifvmatch) [] 
+	val ofvmatch = tmaux2 ifvmatch [] 
 		(dest_simple_term tm1)
 		(dest_simple_term tm2);
-	fun get_ty_inst trans_mi ty = (
-	let	val used_ty = lassoc3 trans_mi ty;
-		val sendto = expand_type otymatch used_ty;
+	fun get_ty_inst ty = (
+	let	val sendto = expand_type subs esubs ty;
 	in
 		if sendto = ty
 		then fail "get_ty_inst" 0 []
 		else (sendto, ty)
 	end); 
-	val omi1 = mapfilter (get_ty_inst trans_mi1) imi1;
-	val omi2 = mapfilter (get_ty_inst trans_mi2) imi2;
+	val omi1 = mapfilter (get_ty_inst) imi1;
+	val omi2 = mapfilter (get_ty_inst) imi2;
 	fun get_tm_subst trans_ms tm = (
 	let	val used_tm = lassoc3 trans_ms tm;
-		val sendto = expand_term otymatch ofvmatch used_tm;
+		val sendto = expand_term subs esubs ofvmatch used_tm;
 	in
 		(sendto, tm)
 	end); 
@@ -870,45 +749,47 @@ local
 		any fs (fn x => x mem inlst)
 	end);
 
-	fun aux (pos:bool) (bd:TERM list) (tm:TERM) (D´(a,b) : DEST_TERM) : (TERM * bool * TERM list) list = (
-		aux (not pos) bd a (dest_term a) @ aux pos bd b (dest_term b)
-	) | aux pos bd tm DT = if pos then [] else [(mk_t,false,bd)]
-	| aux pos bd tm DF = if pos then [(mk_f,true,bd)] else []
-	| aux pos bd tm (D³ a) = aux (not pos) bd a (dest_term a)
-	| aux pos bd tm (D±(a,b)) = (
+	fun aux (pos:bool) (bd:TERM list) (tm:TERM) (dtm : DEST_TERM) : (TERM * bool * TERM list) list = (
+	case dtm of
+	D´(a,b) => (
+		aux (not pos) bd a (dest_term a) @ aux pos bd b (dest_term b)) 
+	| (D³ a) => aux (not pos) bd a (dest_term a)
+	| (D±(a,b)) => (
 		aux pos bd a (dest_term a) @ aux pos bd b (dest_term b)
-	) | aux pos bd tm (D²(a,b)) = (
+	) | (D²(a,b)) => (
 		aux pos bd a (dest_term a) @ aux pos bd b (dest_term b)
-	) | aux pos bd tm (D¤(a,b)) = (
+	) | (D¤(a,b)) => (
 		let 	val a' = aux pos bd a (dest_term a);
 			val b' = aux pos bd b (dest_term b);
 		in
 			a' @ b' @ map rev_pos a' @ map rev_pos b'
 		end
-	) | aux pos bd tm (Dµ (x,t)) = (
+	) | DT => if pos then [] else [(mk_t,false,bd)]
+	| DF => if pos then [(mk_f,true,bd)] else []
+	| (Dµ (x,t)) => (
 		if list_is_free_in bd tm
 		then aux pos (strip_pair x @ bd) t (dest_term t)
 		else (tm, pos, bd) :: aux pos (strip_pair x @ bd) t (dest_term t)
-	) | aux pos bd tm (D¶ (x,t)) = (
+	) | (D¶ (x,t)) => (
 		if list_is_free_in bd tm
 		then aux pos (strip_pair x @ bd) t (dest_term t)
 		else (tm, pos, bd) :: aux pos (strip_pair x @ bd) t (dest_term t)
-	) | aux pos bd tm (D¶‰1 (x,t)) = (
+	) | (D¶‰1 (x,t)) => (
 		if list_is_free_in bd tm
 		then aux pos (strip_pair x @ bd) t (dest_term t)
 		else (tm, pos, bd) :: aux pos (strip_pair x @ bd) t (dest_term t)
-	) | aux pos bd tm (DIf(cnd,th,el)) = (
+	) | (DIf(cnd,th,el)) => (
 	let	val cnd' = aux pos bd cnd (dest_term cnd);
 	in
 		cnd' @ map rev_pos cnd' @
 		aux pos bd th (dest_term th) @
 		aux pos bd el (dest_term el)
 	end
-	) | aux pos bd tm _ = (
+	) | _ => (
 		if list_is_free_in bd tm
 		then []
 		else [(tm, pos, bd)]
-	);
+	));
 in
 fun Ûfragment_termÝ (tm : TERM) : (TERM * bool * TERM list) list * TERM list = (
 let	val (vs,tm') =strip_µ tm;
@@ -1054,12 +935,13 @@ in
 end);
 =TEX
 =SML
-fun Ûbasic_res_resolverÝ ((frag1,pos1,vs1,tyvars1,thm1,nsvs1,nivs1):BASIC_RES_TYPE)
+fun Ûbasic_res_resolverÝ (subs:SUBS) 
+	((frag1,pos1,vs1,tyvars1,thm1,nsvs1,nivs1):BASIC_RES_TYPE)
 	((frag2,pos2,vs2,tyvars2,thm2,nsvs2,nivs2):BASIC_RES_TYPE) : THM list = (
 	if pos1 = pos2
 	then []
 	else ((
-	let	val ((ti1,ts1),(ti2,ts2)) = term_unify
+	let	val ((ti1,ts1),(ti2,ts2)) = term_unify subs
 		(nivs1 @ nivs2) (nsvs1 @ nsvs2)
 		((frag1,vs1,tyvars1),(frag2,vs2,tyvars2));
 		val thm1' = local_specialise_rule ts1
@@ -1196,7 +1078,7 @@ end);
 fun Ûbasic_resolution_ruleÝ (limit:int) (sos:THM list) (rest:THM list) : THM list = 
 	prim_resolution_rule 
 		basic_res_pre
-		basic_res_resolver
+		(basic_res_resolver (new_subs 100))
 		(basic_res_post basic_res_subsumption)
 		basic_res_extract
 		limit
@@ -1293,11 +1175,17 @@ local
 	val thm = tac_proof(([],¬µ a · a ¤ (³ a ´ a)®),
 		REPEAT strip_tac);
 in
-val Ûc_contr_tac1Ý: TACTIC = (
+val rec Ûall_³_¶_convÝ = (fn tm =>
+	(³_¶_conv FURTHER_C 
+	BINDER_C all_³_¶_conv) tm
+);
+
+val Ûc_contr_tac1Ý : TACTIC = (
 	conv_tac(fn a => simple_µ_elim a thm)
 	THEN
-	strip_tac
+	´_T (strip_asm_tac o conv_rule (TRY_C all_³_¶_conv))
 );
+
 fun ÛC_CONTR_T1Ý (thmtac: THM -> TACTIC): TACTIC = (
 	conv_tac(fn a => simple_µ_elim a thm)
 	THEN
@@ -1323,7 +1211,7 @@ let	val (sgs,prf) = C_CONTR_T1 thmtac1 (asms,gl);
 		if any res_thms (fn thm => concl thm = mk_f)
 		then f_thm_tac (find res_thms (fn thm => concl thm = mk_f)) (asms',gl')
 		else 
-		(GET_ASMS_T(fn _ => MAP_EVERY thmtac2 res_thms') (asms',gl'))
+		(MAP_EVERY thmtac2 res_thms') (asms',gl')
 	end);
 	val sgs2pfs2 = map aux sgs;
 in
@@ -1334,12 +1222,13 @@ end);
 =TEX
 =SML
 fun Ûbasic_resolution_tacÝ (limit:int) (thml:THM list) : TACTIC = (
-	BASIC_RESOLUTION_T limit thml strip_asm_tac strip_asm_tac
+	BASIC_RESOLUTION_T limit thml (strip_asm_tac o conv_rule (TRY_C all_³_¶_conv))
+ 	strip_asm_tac
 );
 =TEX
 =SML
 fun Ûbasic_resolution_tac2Ý (limit:int) (thml:THM list) : TACTIC = (
-	BASIC_RESOLUTION_T limit thml strip_asm_tac 
+	BASIC_RESOLUTION_T limit thml (strip_asm_tac o conv_rule (TRY_C all_³_¶_conv))
 	(fn _ => fail_with_tac "basic_resolution_tac2" 67014 [])
 );
 =TEX
@@ -1369,12 +1258,8 @@ fun Ûbasic_resolution_tac3Ý (limit:int) (thml:THM list) : TACTIC = (
 	(fn _ => fail_with_tac "basic_resolution_tac3" 67014[])
 );
 =TEX
-
-
-
-=TEX
 \section{EPILOGUE}
-=SML
+=IGN
 val _ = open_theory lthy;
 val _ = pop_proof_context();
 end; (* of structure Resolution *)
