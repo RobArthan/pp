@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.155 $ $RCSfile: imp507.doc,v $ $Date: 1997/08/19 09:20:45 $
+% imp507.doc %Z% $Revision: 1.156 $ $RCSfile: imp507.doc,v $ $Date: 2000/05/24 18:52:32 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.155 $%
+\def\SCCSversion{$Revision: 1.156 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 1997/08/19 09:20:45 $%
+\TPPdate{\FormatDate{$Date: 2000/05/24 18:52:32 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -113,7 +113,8 @@ of $pack\_spec\_with\_modules$ for WP 3).
 \item[Issue 1.153] Adding calls to do check 16.
 \item[Issue 1.154] Included check 16 calls for specification statements as statements (to catch cases where formality has been broken).
 \item[Issue 1.155] Typo revealed by LaTeX.
-\item[Issue 1.155] Prototyping enhancement R5 --- Initial Variables in Conditionals.
+\item[Issue 1.155] Prototyping enhancement R5: Initial Variables in Conditionals.
+\item[Issue 1.156] Prototyping enhancement R4: Frame Abbreviations.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -2064,7 +2065,8 @@ and returns a $Z\_TM$, as that is what a $SPEC$ wants.
 local
 	val bool_extype = Unification.type_to_extype ”BOOL®;
 in
-fun Ûvar_inits_preÝ (opre : Z_TM OPT) ([] : EXP S_DICT) (cn_env : CN_ENV) : Z_TM  = (
+fun Ûvar_inits_preÝ
+	(opre : Z_TM OPT) ([] : EXP S_DICT) (cn_env : CN_ENV) : Z_TM  = (
 	case opre of 
 	Value pre => pre
 	| Nil => ZTmTruth true
@@ -4320,7 +4322,8 @@ fun Ûstore_prefix_const_thmsÝ (ident : ID)
 		: unit = (
 let	val ty_ty = (fn ty => (type_subst_type tysubs ty 
 		handle (Fail _) => ty));
-	fun collapse (consts : TERM list) (othm : THM OPT) ([] : (TERM * THM OPT) list) = (
+	fun collapse (consts : TERM list)
+			(othm : THM OPT) ([] : (TERM * THM OPT) list) = (
 		if is_nil consts
 		then []
 		else [(rev consts, othm)]
@@ -4604,8 +4607,8 @@ fun Ûz_prefixÝ (ident : ID) (newids : ID list) (package : PACKAGE)
 		val (tysubs, aux_vars) = 
 			if	spec_already_created
 			then	let 	val (tys, _) =
-						internal_theory_types_and_const_thms internal_name;
-
+						internal_theory_types_and_const_thms
+						internal_name;
 					val (tysubs, _) = prefix_given_sets ident newids tys;
 				in	(tysubs,
 					map (prefix_aux_vars ident tysubs newids)
@@ -5236,6 +5239,22 @@ fun Ûdo_annotationÝ (anns : ANNOTATION) : unit = (
 	end
 );
 =TEX
+{\it expand\_spec} looks for schema names appearing in frames and expands them
+into the corresponding list of signature variables.
+When the frame is expanded, it makes the list {\it w0} of initial variables.
+It is applied to any {\it SPEC} before passing it into the SID functions.
+=SML
+fun Ûexpand_specÝ ({w, w0, pre, post} : SPEC) : SPEC = (
+	let	fun expand1 n = (
+		((map fst o dest_z_schema_type o dest_z_power_type o force_value o get_const_type) ("z'" ^ n))
+			handle Fail _ => [n]
+		);
+		val new_w = flat (map expand1 w);
+		val new_w0 = (map (fn s => s ^ "‰0")) new_w;
+	in	{w = new_w, w0 = new_w0, pre = pre, post = post}
+	end
+);
+=TEX
 The abstract syntax separates two forms of for-loop which are processed identically here.
 The following function does the common processing.
 =SML
@@ -5265,9 +5284,9 @@ The $STATEMENT$ alternatives are produced where necessary in the VC generator.
 and Ûdo_statementÝ (y as STNull : STATEMENT) = (
 ) | do_statement (y as STImplicitNull : STATEMENT) = (
 ) | do_statement (y as (STAssign x) : STATEMENT) = (
-) | do_statement (y as (STSpecNoIvars x) : STATEMENT) = (
-	new_k_slot(#label x, RSSpecStatement, get_current_theory_name());
-	spec_stmt x
+) | do_statement (y as (STSpecNoIvars {spec, label}) : STATEMENT) = (
+	new_k_slot(label, RSSpecStatement, get_current_theory_name());
+	spec_stmt {spec = expand_spec spec, label = label}
 ) | do_statement (y as (STSemicolon (x1, x2)) : STATEMENT) = (
 	do_statement x1;
 	do_statement x2
@@ -5290,9 +5309,11 @@ and Ûdo_statementÝ (y as STNull : STATEMENT) = (
 	do_statement (STLoop {t = t, stmt = stmt})
 ) | do_statement (y as (STWhile {loop as {t, stmt}, ...}) : STATEMENT) = (
 	do_statement (STLoop {t = t , stmt = stmt})
-) | do_statement (y as (STForStatic {i, loop as {stmt, t, ...}, tmark, dir, ...}) : STATEMENT) = (
+) | do_statement
+	(y as (STForStatic {i, loop as {stmt, t, ...}, tmark, dir, ...}) : STATEMENT) = (
 	do_for_loop(t, i, stmt, tmark, dir)
-) | do_statement (y as (STForTmark {i, loop as {stmt, t, ...}, tmark, dir, ...}) : STATEMENT) = (
+) | do_statement
+	(y as (STForTmark {i, loop as {stmt, t, ...}, tmark, dir, ...}) : STATEMENT) = (
 	do_for_loop(t, i, stmt, tmark, dir)
 ) | do_statement (y as (STExitWhen x) : STATEMENT) = (
 ) | do_statement (y as STExit : STATEMENT) = (
@@ -5397,7 +5418,7 @@ and Ûdo_procedure_specÝ (
 	{name, formal_part, spec as Value sp, annotation}
 		: PROCEDURE_SPECIFICATION) = (
 	let	val formal_proc : FORMAL_PROC =
-		{name=name, spec=sp, formal_ids = map mk_param_spec formal_part};
+		{name=name, spec=expand_spec sp, formal_ids = map mk_param_spec formal_part};
 	in	subunit_form name;
 		new_scope_proc_form name;
 		do_annotation annotation;
@@ -5430,7 +5451,7 @@ and Ûdo_function_specÝ (
 		formal_pars = map mk_param_spec formal_part,
 		return_type = return};
 		val formal_fun : FORMAL_FUN =
-		{spec = sp, informal_fun = informal_fun, globals = globals};
+		{spec = expand_spec sp, informal_fun = informal_fun, globals = globals};
 	in	subunit_form designator;
 		new_scope_fun_form designator;
 		do_annotation annotation;
@@ -5525,7 +5546,8 @@ package\_body\\
 =SML
 *)
 and Ûdo_proper_bodyÝ (y as (PBProcedure 
-	{procedure_spec as {name,...}, declarative_part, statement}) : PROPER_BODY) : unit = (
+	{procedure_spec as {name,...}, declarative_part, statement}) : PROPER_BODY)
+	: unit = (
 	do_procedure_spec procedure_spec;
 	map do_declaration declarative_part;
 	do_statement statement;
@@ -5577,7 +5599,7 @@ fun Ûdo_compilation_unitÝ
 =TEX
 The following reflects the SID functions for the productions $compilation\_unit$ and $simple\_name\_list$ (occuring in a $with\_clause$). Note that the package specification theory and the package body theory are created when the package specification is processed and not when the $with$ or $references$ clause is encountered; i.e., $new\_scope\_with$ is called in those places.
 
-Also note that a missing with clause pacage name only raises a comment,
+Also note that a missing with clause package name only raises a comment,
 whereas a references clause raises a failure.
 =SML
 fun Ûcontext_clause_checkÝ (ws : ID list) (rfs : ID list) = (
@@ -5597,7 +5619,8 @@ in
 end);
 
 fun Ûdo_context_compilation_unitÝ
-	({context, references, comp_unit, annotation, ...} : CONTEXT_COMPILATION_UNIT) : unit = (
+	({context, references, comp_unit, annotation, ...}
+		: CONTEXT_COMPILATION_UNIT) : unit = (
 	context_clause_check context references;
 	map new_scope_with context;
 	map new_scope_with references;
@@ -5820,7 +5843,8 @@ abstype ÛCN_STATEÝ = CNState of Z_GENERATOR_STATE with
 			init_cn_z_generator name;
 			(map (fn t => new_parent_aux false t
 				handle (Fail m) =>
-				fail "new_script1" 507042 [fn ()=> t, fn () => get_message_text m])
+				fail "new_script1"
+				507042 [fn ()=> t, fn () => get_message_text m])
 				 library_theories);
 			map add_library_theory library_theories;
 			()
