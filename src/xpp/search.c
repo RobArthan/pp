@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.16 2003/01/30 17:57:06 rda Exp rda $ 
+ * $Id: search.c,v 2.17 2003/02/07 17:06:17 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -612,7 +612,7 @@ static void help_cb(
 	XtPointer	cbd,
 	XtPointer	cbs)
 {
-	help_dialog(root, Help_Search_Tool);
+	help_dialog(root, Help_Search_and_Replace_Tool);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
