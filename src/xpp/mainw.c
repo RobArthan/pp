@@ -208,10 +208,12 @@ static void
 #define FILE_MENU_SAVE			0
 #define FILE_MENU_SAVE_AS		1
 #define FILE_MENU_SAVE_SELECTION	2
-#define FILE_MENU_OPEN			3
-#define FILE_MENU_INCLUDE		4
-#define FILE_MENU_EMPTY_FILE		5
-#define FILE_MENU_QUIT			6
+/* Item 3 is a separator */
+#define FILE_MENU_OPEN			4
+#define FILE_MENU_INCLUDE		5
+#define FILE_MENU_EMPTY_FILE		6
+/* Item 7 is a separator */
+#define FILE_MENU_QUIT			8
 
 static MenuItem file_menu_items[] = {
     { "Save", &xmPushButtonGadgetClass, 'S', NULL, NULL,
@@ -220,29 +222,37 @@ static MenuItem file_menu_items[] = {
         file_menu_cb, (XtPointer)FILE_MENU_SAVE_AS, (MenuItem *)NULL, False },
     { "Save Selection as ...",  &xmPushButtonGadgetClass, 'l', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_SAVE_SELECTION, (MenuItem *)NULL, False },
+    MENU_ITEM_SEPARATOR,
     { "Open ...",  &xmPushButtonGadgetClass, 'O', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_OPEN, (MenuItem *)NULL, False },
     { "Include ...",  &xmPushButtonGadgetClass, 'I', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_INCLUDE, (MenuItem *)NULL, False },
     { "Empty File",  &xmPushButtonGadgetClass, 'N', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_EMPTY_FILE, (MenuItem *)NULL, False },
+    MENU_ITEM_SEPARATOR,
     { "Quit",  &xmPushButtonGadgetClass, 'Q', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_QUIT, (MenuItem *)NULL, False },
     NULL,
 };
 /*
  * In the following, entries after and including
- * TOOLS_MENU_CMD_LINE are zero-ed out in an edit-only session.
+ * TOOLS_MENU_JOURNAL_VIEWER are zero-ed out in an edit-only session.
  */
-#define TOOLS_MENU_SEARCH_REPLACE	0
-#define TOOLS_MENU_PALETTE		1
-#define TOOLS_MENU_CMD_LINE		2
+#define TOOLS_MENU_SEARCH_REPLACE		0
+#define TOOLS_MENU_PALETTE			1
+#define TOOLS_MENU_SCRIPT_VIEWER		2
+#define TOOLS_MENU_JOURNAL_VIEWER		3
+#define TOOLS_MENU_CMD_LINE			4
 
 static MenuItem tools_menu_items[] = {
     { "Search and Replace", &xmPushButtonGadgetClass, 'S', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_SEARCH_REPLACE, (MenuItem *)NULL, False },
     { "Palette", &xmPushButtonGadgetClass, 'P', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_PALETTE, (MenuItem *)NULL, False },
+    { "Script Viewer", &xmPushButtonGadgetClass, 'V', NULL, NULL,
+        tools_menu_cb, (XtPointer)TOOLS_MENU_SCRIPT_VIEWER, (MenuItem *)NULL, False },
+    { "Journal Viewer", &xmPushButtonGadgetClass, 'J', NULL, NULL,
+        tools_menu_cb, (XtPointer)TOOLS_MENU_JOURNAL_VIEWER, (MenuItem *)NULL, False },
     { "Command Line", &xmPushButtonGadgetClass, 'C', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_CMD_LINE, (MenuItem *)NULL, False },
     NULL,
@@ -498,7 +508,7 @@ if( !edit_only ) {
  * Tools menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 if(edit_only) {
-	tools_menu_items[TOOLS_MENU_CMD_LINE].label = NULL;
+	tools_menu_items[TOOLS_MENU_JOURNAL_VIEWER].label = NULL;
 }
 	toolsmenu = setup_pulldown_menu(
 		menubar, "Tools", '\0', False, tools_menu_items);
@@ -703,6 +713,12 @@ XmAnyCallbackStruct *cbs;
 	case TOOLS_MENU_SEARCH_REPLACE:
 		add_search_tool(script);
 		break;
+	case TOOLS_MENU_SCRIPT_VIEWER:
+		add_viewer(script);
+		break;
+	case TOOLS_MENU_JOURNAL_VIEWER:
+		add_viewer(journal);
+		break;
 	case TOOLS_MENU_CMD_LINE:
 		add_cmd_line(script);
 		break;
@@ -768,9 +784,16 @@ XmAnyCallbackStruct *cbs;
  * !!! End of commenting out */
 
 /* !!! */	if(cut_paste_buf != NULL) {
-/* !!! */	XmTextInsert(script,
-/* !!! */			XmTextGetInsertionPosition(script),
-/* !!! */			cut_paste_buf);
+/* !!! */		XmTextPosition left, right;
+/* !!! */		if(XmTextGetSelectionPosition(script,
+/* !!! */				&left, &right)) {
+/* !!! */			XmTextReplace(script,
+/* !!! */				left, right, cut_paste_buf);
+/* !!! */		} else {
+/* !!! */			XmTextInsert(script,
+/* !!! */				XmTextGetInsertionPosition(script),
+/* !!! */				cut_paste_buf);
+/* !!! */		}
 /* !!! */	};
 
 		break;

@@ -20,12 +20,19 @@
 
 #include <X11/Intrinsic.h>
 #include <Xm/XmAll.h>
+
+/* See the typedef for MenuItem for the following */
+
+#define MENU_ITEM_SEPARATOR	\
+	{ "", &xmSeparatorGadgetClass, \
+		'\0', NULL, NULL, NULL, NULL, NULL, False}
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * TYPE DEFS
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * The following is based on the ideas in Heller's
- * `Motif Programming Manual'.
+ * `Motif Programming Manual'. See menus.c for the implementation.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 typedef struct menu_item {
 	char		*label;		/* label for this item */
