@@ -64,6 +64,7 @@ parser.}
 
 \item[Issues 1.1-1.28] Initial Versions.
 \item[Issue 1.29-1.31] Annotations and pragmas enhancements.
+\item[Issue 1.34] Added support for Hypertext linking 
 
 \end{description}
 \subsection{Changes Forecast}
@@ -186,6 +187,7 @@ end; (* of structure CaseIndependence *)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
+
 \section{LEXICAL ANALYSER}
 =SML
 structure €CNLex› : CNLex = struct
@@ -208,6 +210,71 @@ datatype €SUCCESS› = €Known› of string | €Unknown›;
 
 type €LEX_STATE›  = (string list) * SUCCESS;
 =TEX
+
+\subsection{Keeping Track of the Input}
+
+It is necessary for the Compliance Tool to be able to annotate the a Compliance Script with hypertext link macros (as defined in the $hyperbasics.sty$ style).
+
+
+A counter for the line number, is defined. It is incremented when a newline is read, and reset each time the lexical analyser ($cn\_lex$) is called.
+
+=SML
+val €line_count› : int ref = ref 1;
+=TEX
+
+=SML
+fun €reset_line_count› () = (
+	line_count := 1
+);
+fun €inc_line_count› () = (
+	line_count := !line_count + 1
+);
+=TEX
+
+The data structure $hyperlinks$ accumulates information about the script as the lexical analyser processes it. 
+=SML
+type €SOCKET› = {id : ID OPT, offset : int};
+type €HYPERLINK_RECORD› = {
+	is_plug : bool,
+	plug_id : ID OPT,
+	sockets : SOCKET list};
+
+val €hyperlinks› : HYPERLINK_RECORD list ref = ref [];
+=TEX
+
+=SML
+fun €new_hyperlink_record› () =
+	hyperlinks := {	is_plug = false,
+				plug_id = Nil,
+				sockets = []}::(!hyperlinks);
+=TEX
+
+=SML
+fun €new_socket› () =
+let	val {is_plug, plug_id, sockets} = hd (!hyperlinks)
+	val rest = tl (!hyperlinks);
+in
+	hyperlinks := {	is_plug = is_plug,
+			plug_id = plug_id,
+			sockets=sockets@
+				[{	id = Nil,
+					offset = !line_count}]
+			}::rest
+end;
+
+fun €found_a_plug› () =
+let	val {is_plug, plug_id, sockets} = hd (!hyperlinks)
+	val rest = tl (!hyperlinks);
+in
+	hyperlinks := {	is_plug = true,
+			plug_id = plug_id,
+			sockets = sockets}::rest
+end;
+
+=TEX
+
+
+
 \subsection{Utilities}
 $collect$ adds the first character of the untokenised input text into the current token.
 =SML
@@ -222,6 +289,7 @@ We need various character classifying functions:
 =SML
 =TEX
 =SML
+val €chrNL›	= chr 10;
 val €ord0›	= ord "0";
 val €ord9›	= ord "9";
 val €orda›	= ord "a";
@@ -230,6 +298,7 @@ val €ordz›	= ord "z";
 val €ordZ›	= ord "Z";
 =TEX
 =SMLPLAIN
+fun €is_newline› (c : string) = c = chrNL;
 fun €is_percent› (c : string) = c = "%%";
 fun €is_prime› (c : string) = c = "'";
 fun €is_us› (c : string) = c = "_";
@@ -238,7 +307,6 @@ fun €is_plusminus› (c : string) = c = "+" orelse c = "-";
 fun €is_dot› (c : string) = c = ".";
 fun €is_hash› (c : string) = c = "#";
 fun €is_space› c = c <= " ";
-fun €is_horiz_space› c = c = " " orelse c = "\t";
 =TEX
 =SML
 fun €is_digit›  (d : string) = (
@@ -306,17 +374,15 @@ fun next_is_delimiter (cs : string list) = (
 =SML
 fun €skip_space› (st as (cs as (c :: more), tk) : LEX_STATE) : LEX_STATE = (
 	if is_space c
-	then skip_space (more, tk)
+	then	(if is_newline c
+		then	inc_line_count ()
+		else	();
+		skip_space (more, tk)
+		)
 	else st
 ) | skip_space (st as ([], _)) = st;
 =TEX
-=SML
-fun €skip_horiz_space› (st as (cs as (c :: more), tk) : LEX_STATE) : LEX_STATE = (
-	if is_horiz_space c
-	then skip_horiz_space (more, tk)
-	else st
-) | skip_horiz_space (st as ([], _)) = st;
-=TEX
+
 $next$ is used to apply a classifier function such as $is\_digit$
 to the first character in the input part of a state. It returns false
 if the input part is empty.
@@ -898,8 +964,15 @@ in
 			let	val res as (class, _) = classify true s;
 			in case (class, lassoc5 z_delimiters class) of
 				(LCLChevron, Value terml) => (
+					new_socket ();
 					res
 					::(read_until (LCKSlot, CNKSlot) terml
+						(Lex.Text (implode srest)::rest)
+							)
+				)|(LCGrkDelta, Value terml) => (
+					new_socket ();
+					res
+					::(read_until (LCZ, CNZ o ZLex.z_lex)terml
 						(Lex.Text (implode srest)::rest)
 							)
 				)|(_, Value terml) => (
@@ -922,10 +995,17 @@ in
 					in	tok :: spark_xtext srest' rest'
 					end
 				)|(LCArbitraryAda, Nil) => (
+					found_a_plug ();
 					let val (tok, srest', rest') =
 						spark_arbitrary (fst unskipped)rest;
 					in	tok :: spark_xtext srest' rest'
 					end
+				)|(LCRefinedBy, Nil) => (
+					found_a_plug ();
+					res::spark_xtext srest rest
+				)|(LCReplacedBy, Nil) => (
+					found_a_plug ();
+					res::spark_xtext srest rest
 				)|(_, Nil) => 	
 					res::spark_xtext srest rest
 			end
@@ -957,8 +1037,37 @@ Finally $cn\_lex$ is the external interface for the lexical analyser:
 =SML
 fun €cn_lex› (classify_label : CN_LEX_ITEM list -> CN_LEX_ITEM list) (inp : INPUT list) 
 		: CN_LEX_ITEM list = (
+	reset_line_count ();
+	new_hyperlink_record ();
 	(classify_label o spark_lex) inp
 );
+=TEX
+
+\subsection{Getting and Setting the Lexer State}
+=SML
+type €CN_LEXER_STATE› = {
+	hyperlinks : HYPERLINK_RECORD list
+	};
+=TEX
+=SML
+fun €get_cn_lexer_state› (() : unit) : CN_LEXER_STATE = (
+    {
+	hyperlinks = rev (!hyperlinks)
+    }
+    );
+=TEX
+
+=SML
+fun €set_cn_lexer_state› (cnls : CN_LEXER_STATE) : unit = (
+	hyperlinks := rev (#hyperlinks cnls)
+    );
+=TEX
+=SML
+fun €reset_cn_lexer_state› () : unit = (
+    hyperlinks := []
+    );
+=TEX
+
 =TEX
 \section{EPILOGUE}
 =SML
@@ -1032,3 +1141,39 @@ spark_lex [Lex.String "a\"\"bcd"];
 spark_lex [Lex.Text "pragma foo ; "];
 spark_lex [Lex.Text "pragma foo -- \n-- (( 9   ; "];
 spark_lex [Lex.Text "(1) !È any \n", Lex.Text " old ", Lex.String "rubbish"];
+
+open CNLex;
+
+reset_cn_lexer_state();
+ πCN
+√
+line 2
+ Ñ [true] (100)
+line 4
+Ñ [true] (110)
+ ∞
+
+ πCN
+√
+line 2
+ß  some arbitrary text ¢ (100)
+
+ß  some arbitrary text ¢ (100)
+ ∞
+
+
+CNLex.get_cn_lexer_state();
+
+
+use_file"dtd501";
+use_file"imp501";
+use_file"x";
+use_file"y";
+
+
+
+
+
+
+
+
