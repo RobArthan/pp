@@ -1,4 +1,4 @@
-% imp508.doc   %Z% $Date: 2000/10/18 15:57:13 $ $Revision: 1.64 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2000/10/19 16:05:54 $ $Revision: 1.65 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.64 $%
+\def\SCCSversion{$Revision: 1.65 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2000/10/18 15:57:13 $%
+\TPPdate{\FormatDate{$Date: 2000/10/19 16:05:54 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -92,6 +92,7 @@ Adjusted $ENV\_INFO$ and allowed for type conversions.
 \item[Issues 1.62] Enhancement CTLE R1/2 --- ``Others'' in case statements.
 \item[Issues 1.63] Enhancement CTLE R1/4 --- logical operators on arrays of booleans, including all the basics of overload resolution.
 \item[Issues 1.64, 1.65] Enhancement CTLE R1/8 --- characters and strings
+\item[Issues 1.66] Enhancement CTLE R1/5 --- range attributes as ranges
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -150,7 +151,15 @@ fun zid1 €^^› zid2 = (
 =SML
 fun €dest_range› ((RRange range) : EXP RANGE) : EXP RANGELOHI = (
 	range
-) | dest_range _ = fail "dest_range" 508020 [];
+) | dest_range (RRangeAttr (EAttribute {prefix,
+		attribute_desig = ADAttrib "RANGE"})) = (
+	{lo = EAttribute {prefix = prefix, attribute_desig = ADAttrib "FIRST"},
+	 hi = EAttribute {prefix = prefix, attribute_desig = ADAttrib "LAST"} }
+) | dest_range (RRangeAttr (EAttribute {prefix,
+		attribute_desig = ADAttribArg("RANGE", e)})) = (
+	{lo = EAttribute {prefix = prefix, attribute_desig = ADAttribArg("FIRST", e)},
+	 hi = EAttribute {prefix = prefix, attribute_desig = ADAttribArg("LAST", e)} }
+) | dest_range _  = fail "dest_range" 508020 [];
 =TEX
 =TEX
 
@@ -1140,14 +1149,14 @@ and €trans_named_assoc›	(env : CN_ENV) (aa_env as {this, max, tname} : ARRAY_AGG
 					: Z_EXP = (
 let	fun aux_range (ch::rest) = (
 		case ch of
-		ACAggChoiceRange (DRRange(RRange{lo,hi})) =>
-			z_rng(trans_exp env lo, trans_exp env hi)::aux_range rest
-		|ACAggChoiceRange (DRRange _) =>
-			fail "trans_named_assoc" 508020 []
-		|ACAggChoiceRange (DRConstrained{range=RRange{lo,hi},...}) =>
-			z_rng(trans_exp env lo, trans_exp env hi)::aux_range rest
-		|ACAggChoiceRange (DRConstrained _) =>
-			fail "trans_named_assoc" 508020 []
+		ACAggChoiceRange (DRRange range) =>
+			let	val {lo, hi} = dest_range range;
+			in	z_rng(trans_exp env lo, trans_exp env hi)::aux_range rest
+			end
+		|ACAggChoiceRange (DRConstrained{range=range,...}) =>
+			let	val {lo, hi} = dest_range range;
+			in	z_rng(trans_exp env lo, trans_exp env hi)::aux_range rest
+			end
 		|_ => aux_range rest
 	) | aux_range _ = [];
 	fun aux_singles (ch::rest) = (
@@ -1250,10 +1259,16 @@ and €exp_bin_exp› (env : CN_ENV) ({left, bop, right} : EXP BIN_EXP) : Z_EXP = (
 =TEX
 \subsection{Translating Membership of a Range}
 =SML
-and €exp_mem_range› (env : CN_ENV) ({left, mop, range} : EXP MEM_RANGE)
+and €exp_mem_range› (env : CN_ENV) ({left, mop, range as RRange _} : EXP MEM_RANGE)
 		: Z_EXP = (
 let	val {lo=lo, hi=hi} = dest_range range;
 	val zright = z_rng(trans_exp env lo, trans_exp env hi);
+in
+	trans_bin_op(mop, trans_exp env left, zright)
+end
+) | exp_mem_range (env : CN_ENV) ({left, mop, range as RRangeAttr e} : EXP MEM_RANGE)
+		: Z_EXP = (
+let	val  zright = trans_exp env e;
 in
 	trans_bin_op(mop, trans_exp env left, zright)
 end
