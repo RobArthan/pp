@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.30 2003/05/21 11:01:06 rda Exp $
+ * $Id: pterm.c,v 2.31 2003/06/13 11:20:28 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -38,7 +38,8 @@ Data transfer from xpp to application: send_to_application, send_nl
 Control of the application: application_alive (test), interrupt_and_abandon, 
 interrupt_application, restart_application.
 
-Starting a new editor session: new_editor fork and exec a  new xpp edit-only session.
+To localise 
+Starting a new xpp session: new_editor, new_command_session fork and exec a  new xpp session.
 
 The initialisation step (also used to re-initialise in restart_application) has several
 OS-dependent aspects. Data transfer from and to the application as coded here
@@ -48,8 +49,12 @@ control functions are less problematic but they do interact with data transfer. 
 data transfer and the control functions have to be careful about the possibility
 of signals.
 
-Starting a new editor is straightforward,  it is done here to localise a possible
-platform-dependency.
+To localise the potential system dependencies, this file also provides the following services
+which are required in both edit-only and command sessions:
+
+Starting a new xpp session: new_editor, new_command_session - fork and exec a  new xpp session.
+
+Handling signals: handle_sigs - set up signal handlers to help preserve the user's work.
 
 INITIALISATION
 
@@ -68,8 +73,9 @@ and slave.
 on the control file descriptor and arranges to listen for input from it. Subsequent
 data transfers to the application are writes to the control file descriptor.
 
-3b) Child (the application-to-be) closes the control file descriptor, duplicates the slave
-file descriptor to become its standard input, output and error channels and then
+3b) Child (the application-to-be) sets the signal handling back to the defaults,
+then closes the control file descriptor, then duplicates the slave file descriptor to
+become the standard input, output and error channels and finally
 execs the application.
 
 There are several complications. The main one is that to to avoid the application starting
@@ -124,12 +130,55 @@ to make room before trying to realloc; and, finally, if the work procedure
 succeeds in draining the queue, it reallocs it back to its initial size The performance
 characteristics of this algorithm seem to be very good in practice..
 
+STARTING NEW XPP SESSIONS
+
+This is straightforward. We arrange to do the exec in a grand-child of a suicidal
+child so that the new session ends up being owned by init and so will be reaped
+when it dies.
+
+SIGNAL HANDLING
+
+We adopt a table-driven approach: sig_infos defined below is a table of
+signal numbers and corresponding actions. See below. We also allow for the
+SUS V3 real-time signals. We check for the existence of the SIGxxx macros
+before using them.
+
+
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #define _pterm
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * include files:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+#include <errno.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <string.h>
+#include <sys/ioctl.h>
+
+#ifdef USE_STREAMS
+#include <stropts.h>
+#include <sys/filio.h>
+#include <sys/termio.h>
+#else
+#include <termios.h>
+#endif
+
+#include <signal.h>
+
+#include <sys/termios.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <stdlib.h>
+
+#include "X11/cursorfont.h"
+#include "xpp.h"
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -145,7 +194,8 @@ characteristics of this algorithm seem to be very good in practice..
  * When to set termio attributes:
  *	SET_ATTRS_IN_PARENT 
  *	else do it in the child
- *
+ * Whether this OS has the SUS V3 real-time signals:
+ *	HAS_RTSIGNALS (defined if it does)
  * We now define the combinations to be used for the supported OSs.
  * We make no claim that other combinations will work or that these
  * combinations will work on other OSs even if they compile OK. 
@@ -178,6 +228,11 @@ characteristics of this algorithm seem to be very good in practice..
 #define OLCUC (0)
 #define OCRNL (0)
 #endif
+#if defined(SIGRTMIN) && defined(SIGRTMAX)
+#define HAS_RTSIGNALS
+#else
+#undef HAS_RTSIGNALS
+#endif
 /*
  * Macro to push required modules onto the pseudo-terminal device stack if
  * if we're using STREAMS. It's an expression evaluating to 0 if all is OK.
@@ -201,36 +256,6 @@ characteristics of this algorithm seem to be very good in practice..
 #define GET_ATTRS(FD, TIO) (ioctl(FD, TCGETS, TIO) < 0)
 #define SET_ATTRS(FD, TIO) (ioctl(FD, TCSETS, TIO) < 0)
 #endif
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * include files:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-
-#include <errno.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <string.h>
-#include <sys/ioctl.h>
-
-#ifdef USE_STREAMS
-#include <stropts.h>
-#include <sys/filio.h>
-#include <sys/termio.h>
-#else
-#include <termios.h>
-#endif
-
-#include <signal.h>
-
-#include <sys/termios.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
-#include <stdlib.h>
-
-#include "X11/cursorfont.h"
-#include "xpp.h"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macro definitions:
@@ -275,8 +300,6 @@ static pid_t child_pid;
 
 static XtInputId app_ip_req;
 
-static XtSignalId sigid;
-
 /* For the following see "Data transfer to application" below */
 static char *queue = 0;
 static int q_size, q_head, q_tail;
@@ -287,7 +310,7 @@ static char *queue_malloc_failed_message =
 "Could not allocate memory for application transfer queue.";
 
 static char* signal_handled_message1 =
-"system error reported";
+"fatal error: signal %d: %s";
 
 static char* signal_handled_message2 =
 "attempting to save the editor text";
@@ -302,7 +325,125 @@ static char* carry_on_waiting_message =
 "The application does not seem to have responded to the interrupt."
 " Do you want to continue waiting for a response?";
 
+/*
+ * The following data types are used to define our disposition of the various signals in a table.
+ */
+typedef enum {
+	H_DEFAULT,	/* default using SIG_DFL */
+	H_ASK,		/* sig_ask_handler -  ask the user what to do */
+	H_FATAL,	/* sig_panic_handler - attempt to save the editor text and die */
+	H_IGNORE	/* ignore it using SIG_IGN */
+} handler_info;
 
+typedef struct  {
+	char		*desc;
+	int		number;
+	handler_info	disposition;
+	XtSignalId	signal_id;} sig_info;
+/*
+ * Now the table covering all the signals defined by SUS V3 or common
+ * in the supported operating systems that can be caught or ignored.
+ * Some of these are guaranteed  to be defined by ANSI C, but by no means all,
+ * so we defend ourselves against them not being defined (but not against against an
+ * implementation which uses an enum to define them, which would be very unusual).
+ * We attempt to handle or ignore all catchable signals that are default to terminating the process.
+ *
+ * SIGHUP has to be ignored because if this xpp is running detached (i.e., it has
+ * been started from the New Command Session menu item in another instance
+ * of xpp) the close of the control file descriptor which occurs when the user
+ * kills or restarts the application will cause the kernel to send a SIGHUP).
+ */
+static sig_info	sig_infos []  = {
+#ifdef SIGABRT
+	{"abort",			SIGABRT,		H_FATAL},
+#endif
+#ifdef SIGALRM
+	{"alarm clock",		SIGALRM,	H_FATAL},
+#endif
+#ifdef SIGBUS
+	{"bus error",		SIGBUS,		H_FATAL},
+#endif
+#ifdef SIGCHLD
+	{"child stopped or exited",	SIGCHLD,	H_DEFAULT},
+#endif
+#ifdef SIGCONT
+	{"continue",		SIGCONT,	H_DEFAULT},
+#endif
+#ifdef SIGFPE
+	{"floating point exception",	SIGFPE,		H_FATAL},
+#endif
+#ifdef SIGHUP
+	{"hangup",		SIGHUP,		H_IGNORE},
+#endif
+#ifdef SIGILL
+	{"illegal instruction",		SIGILL,		H_FATAL},
+#endif
+#ifdef SIGINT
+	{"interrupt",		SIGINT,		H_ASK},
+#endif
+/* SIGKILL cannot be caught or ignored */
+#ifdef SIGPIPE
+	{"broken pipe",		SIGPIPE,		H_FATAL},
+#endif
+#ifdef SIGQUIT
+	{"quit",			SIGQUIT,		H_FATAL},
+#endif
+#ifdef SIGSEGV
+	{"memory fault",		SIGSEGV,	H_FATAL},
+#endif
+/* SIGSTOP cannot be caught or ignored */
+#ifdef SIGTERM
+	{"terminated",		SIGTERM,	H_FATAL},
+#endif
+#ifdef SIGTSTP
+	{"stopped",		SIGTSTP,		H_DEFAULT},
+#endif
+#ifdef SIGTTIN
+	{"stopped (tty input)",	SIGTTIN,		H_DEFAULT},
+#endif
+#ifdef SIGTTOU
+	{"stopped (tty output)",	SIGTTOU,		H_DEFAULT},
+#endif
+#ifdef SIGUSR1
+	{"user-defined signal 1",	SIGUSR1,	H_FATAL},
+#endif
+#ifdef SIGUSR2
+	{"user-defined signal 2",	SIGUSR2,	H_FATAL},
+#endif
+#ifdef SIGPOLL
+	{"pollable event",		SIGPOLL,	H_FATAL},
+#endif
+#ifdef SIGPROF
+	{"profiling time expired",	SIGPROF,	H_FATAL},
+#endif
+#ifdef SIGSYS
+	{"bad system call",		SIGSYS,		H_FATAL},
+#endif
+#ifdef SIGTRAP
+	{"trace trap",		SIGTRAP,		H_FATAL},
+#endif
+#ifdef SIGURG
+	{"urgent i/o condition",	SIGURG,		H_DEFAULT},
+#endif
+#ifdef SIGVTALRM
+	{"virtual timer expired",	SIGVTALRM,	H_FATAL},
+#endif
+#ifdef SIGXCPU
+	{"CPU time limit exceeded",	SIGXCPU,	H_FATAL},
+#endif
+#ifdef SIGXFSZ
+	{"file size limit exceeded",	SIGXFSZ,	H_FATAL},
+#endif
+#ifdef SIGSTKFLT
+	{"stack fault",		SIGSTKFLT,	H_FATAL},
+#endif
+#ifdef SIGEMT
+	{"emulation trap",	SIGXFSZ,	H_FATAL}
+#endif
+#ifdef SIGLOST
+	{"resource lost",	SIGXFSZ,	H_FATAL}
+#endif
+};
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Pseudo-terminal initialisation:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -970,25 +1111,54 @@ void restart_application (void) {
 	get_pty();
 }
 
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Ctrl-C Signal handling for the controller process.
- * Following treats Ctrl-C similarly to window close
- * or selection of quit from the command menu.
- * We use the new X11R6 signal handling functions.
+ * get_sig_desc: give the description of a signal as stored
+ * in the table sig_infos:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void sigint_handler(int sig)
+static char *sig_desc(int sig)
 {
-	XtNoticeSignal(sigid);
+	int i;
+	for(i = 0; i < XtNumber(sig_infos); i += 1) {
+		if(sig_infos[i].number == sig) {
+			return sig_infos[i].desc;
+		}
+	}
+	return
+#ifdef	HAS_RTSIGNALS
+	SIGRTMIN <= sig && sig <= SIGRTMAX ? "real-time signal"  :
+#endif
+	"unknown signal";
 }
 
-static void sigint_callback(XtPointer c_ignored, XtSignalId *s_ignored)
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Signal handling for the controller process:
+ * We define two handlers:
+ * sig_ask_handler uses the new X11R6 signal handling functions
+ * to arrange to ask the user what to do:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void sig_ask_handler(int sig)
+{
+	int i;
+	for(i = 0; i < XtNumber(sig_infos); i += 1) {
+		if(sig_infos[i].number == sig && sig_infos[i].disposition == H_ASK) {
+			XtNoticeSignal(sig_infos[i].signal_id);
+			break;
+		}
+	}
+}
+
+static void sig_ask_callback(XtPointer cbd_ignored, XtSignalId *s_ignored)
 {
 	XtAppAddTimeOut(app, 0, (XtTimerCallbackProc) check_quit_cb, root);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * panic_exit: 
+ * sig_panic_handler:
+ * use panic_exit to save the editor text if the widget's there then bomb out.
+ * This does no X windows work, so the Xt signal handling functions
+ * does not need to be used (and we trust that the panic_save function
+ * and the Motif functions it calls don't do anything silly).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void panic_exit(char * m, NAT code)
 {
@@ -1005,23 +1175,19 @@ static void panic_exit(char * m, NAT code)
 }
 
 
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Other signal handling for the controller process.
- * Try to save the editor text if the widget's there then bomb out.
- * This does no X windows work, so the Xt signal handling functions
- * do not need to be used.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void sigother_handler(int sig)
+static void sig_panic_handler(int sig)
 {
-	panic_exit(signal_handled_message1, (NAT)sig);
+	char msg_buf[80];
+	sprintf(msg_buf, signal_handled_message1, sig, sig_desc(sig)); 
+	panic_exit(msg_buf, 15);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * xt_error_handler
+ * The xt_error_handler also calls panic_exit.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void xt_error_handler(char * m)
 {
-	panic_exit(m, 2);
+	panic_exit(m, 16);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * handle signals and Xt errors: the derivation of the following list
@@ -1029,27 +1195,43 @@ static void xt_error_handler(char * m)
  * the common problems. Earlier versions of this code also used to
  * catch SIGSYS on Solaris, but this has been removed since it's not
  * portable and there is no evidence that the SIGSYS signal ever occurred.
- *
- * SIGHUP is ignored because if this xpp is running detached (i.e., it has
- * been started from the New Command Session menu item in another instance
- * of xpp) the close of the control file descriptor which occurs when the user
- * kills or restarts the application will cause the kernel to send a SIGHUP).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void handle_sigs(void)
 {
 	struct sigaction acts;
-	acts.sa_handler = sigint_handler;
-	sigemptyset(&acts.sa_mask);
-	acts.sa_flags = 0;
-	sigaction(SIGINT, &acts, 0);
-	sigid = XtAppAddSignal(app, sigint_callback, (XtPointer) SIGINT);
-	acts.sa_handler = sigother_handler;
-	sigaction(SIGSEGV, &acts, 0);
-	sigaction(SIGBUS, &acts, 0);
-	sigaction(SIGFPE, &acts, 0);
-	acts.sa_handler = SIG_IGN;
-	sigaction(SIGHUP, &acts, 0);
+	int i;
+	sigfillset(&acts.sa_mask);
+	acts.sa_flags = SA_RESTART;
+	for (i = 0; i < XtNumber(sig_infos); i += 1) {
+		switch(sig_infos[i].disposition) {
+			case H_DEFAULT:
+				acts.sa_handler = SIG_DFL;
+				sigaction(sig_infos[i].number, &acts, 0);
+				break;
+				break;
+			case H_ASK:
+				acts.sa_handler = sig_ask_handler;
+				sigaction(sig_infos[i].number, &acts, 0);
+				sig_infos[i].signal_id = XtAppAddSignal(app,
+					sig_ask_callback, (XtPointer) 0);
+				break;
+			case H_FATAL:
+				acts.sa_handler = sig_panic_handler;
+				sigaction(sig_infos[i].number, &acts, 0);
+				break;
+			case H_IGNORE:
+				acts.sa_handler = SIG_IGN;
+				sigaction(sig_infos[i].number, &acts, 0);
+				break;
+		}
+	}
 	XtAppSetErrorHandler(app, xt_error_handler);
+#ifdef HAS_RTSIGNALS
+	acts.sa_handler = sig_panic_handler;
+	for(i = SIGRTMIN; i <= SIGRTMAX; i += 1) {
+		sigaction(i, &acts, 0);
+	}
+#endif		
 }
 
 
@@ -1059,14 +1241,18 @@ void handle_sigs(void)
 static void default_sigs(void)
 {
 	struct sigaction acts;
+	int i;
 	acts.sa_handler = SIG_DFL;
-	sigfillset(&acts.sa_mask);
+	sigemptyset(&acts.sa_mask);
 	acts.sa_flags = 0;
-	sigaction(SIGINT, &acts, 0);
-	sigaction(SIGSEGV, &acts, 0);
-	sigaction(SIGBUS, &acts, 0);
-	sigaction(SIGFPE, &acts, 0);
-	sigaction(SIGHUP, &acts, 0);
+	for (i = 0; i < XtNumber(sig_infos); i += 1) {
+		sigaction(sig_infos[i].number, &acts, 0);
+	}
+#ifdef HAS_RTSIGNALS
+	for(i = SIGRTMIN; i <= SIGRTMAX; i += 1) {
+		sigaction(sig_infos[i].number, &acts, 0);
+	}
+#endif		
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
