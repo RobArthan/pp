@@ -99,8 +99,17 @@ local
 in
 =TEX
 \section{SUPPORTING FUNCTIONS}
+When a construct is found for which is not supported formally, we choose to continue processing informally rather that halt the processing of the literate script. The local exception $VCInformal$ is raised if this condition is detected. This is caught by $vcs$ which returns an dummy VC is the exception has been raised. 
 =SML
 exception ÛVCInformalÝ;
+
+fun Ûvc_go_informalÝ
+		(s : string)
+		(i : int)
+		(fns : (unit -> string) list) : 'a = (
+	comment s i fns;
+	raise VCInformal
+);
 =TEX
 $trans\_exp2$ catches the case where an attempt to translate an expression has failed due to a language feature being unsupported.
 =SML
@@ -214,7 +223,7 @@ let	val tmark = name_to_tmark exp;
 in
 	case env tmark of
 	Value (_, EIEnvVar tmark') => tmark'
-	|_ => fail "retrieve_type_mark" 505001 [fn()=>tmark^" is not a variable"] 
+	|_ => fail "retrieve_type_mark" 505028 [fn()=>tmark] 
 end
 )
 =TEX
@@ -224,7 +233,7 @@ and Ûrecord_assignÝ	({wp, a, wp_env as {env, ...}} : WP_PARS)
 let	val name' = prefix;
 	val tmark = retrieve_type_mark env prefix;
 	val record_components = retrieve_record_components env tmark
-		handle _ => fail "record_assign" 505001 [];
+		handle _ => fail "record_assign" 505027 [fn()=>tmark];
 	fun do_comps sel = if sel = selector 
 				then ze
 				else trans_exp2 env 
@@ -243,7 +252,7 @@ and ÛassignÝ (wp_pars as {wp_env as {env, ...}, ...} : WP_PARS) ((name, ze) : EX
 	EId id => simple_assign wp_pars id ze
 	|EIndexedComp ic => array_assign wp_pars ic ze
 	|ESelectedComp sc => record_assign wp_pars sc ze
-	|_ => fail "assign" 505001 [fn()=>"weird lhs of an assignment"]
+	|_ => fail "assign" 505029 []
 );
 =TEX
 \subsection{Specification Statement (No initial variables)}\label{wp-specification-no-ivars}
@@ -278,6 +287,12 @@ in
 end
 );
 =TEX
+=IGN
+val SStmt(STSemicolon (p,q)) = exp;
+val {wp = wp2, side = side2} = wp (SStmt q, a, wp_env);
+val save_exp1 = exp;
+val exp= SStmt q;
+=TEX
 \subsection{If Statement}\label{wp-if-then-else}
 =SML
 fun Ûif_then_elseÝ	({wp, a, wp_env as {env,...}} : WP_PARS)
@@ -301,13 +316,11 @@ let	val adjust_and_trans = (trans_exp2 env) o (adjust_exp2 env);
 		CCCaseRange (DRRange(RRange{lo,hi})) =>
 			z_rng(adjust_and_trans lo, adjust_and_trans hi)::aux_range rest
 		|CCCaseRange (DRRange _) =>
-			fail "trans_named_assoc" 508001
-				[fn()=>"range attributes not supported"] 
+			vc_go_informal "trans_case_choices" 508020 [] 
 		|CCCaseRange (DRConstrained{range=RRange{lo,hi},...}) =>
 			z_rng(adjust_and_trans lo, adjust_and_trans hi)::aux_range rest
 		|CCCaseRange (DRConstrained _) =>
-			fail "trans_named_assoc" 508001
-				[fn()=>"range attributes not supported"] 
+			vc_go_informal "trans_case_choices" 508020 []
 		|_ => aux_range rest
 	) | aux_range _ = [];
 	fun aux_singles (ch::rest) = (
@@ -339,7 +352,7 @@ fun Ûcase_stepÝ (pars as {wp, a, wp_env as {env,...}} : WP_PARS)
 		({e, s, others as STImplicitNull} : STMT CASE) : RESULT = (
 	case s of
 	[] =>
-		fail "case_step" 505001 [fn()=>"detected in VC generation"]
+		fail "case_step" 505030 []
 	| [alt] =>
 		case_base pars e alt
 	| ({choices, p} :: s') => (
@@ -349,7 +362,7 @@ fun Ûcase_stepÝ (pars as {wp, a, wp_env as {env,...}} : WP_PARS)
 		in	{wp = (elm %Longrightarrow% wp1) @ wp2 , side = side1 @ side2}
 		end)
 ) | case_step _ _ = (
-	fail "case_step" 505001 [fn()=>"cannot proceed formally: OTHERS part present in Case statement not supported"]
+	vc_go_informal "case_step" 505021 []
 );
 =TEX
 Note that $case\_step$ is recursive and does the full job. 
@@ -367,8 +380,7 @@ fun ÛloopÝ ({a, ...} : WP_PARS) ({t, stmt} : STMT LOOP)
 let	val (pre1, post1) = case stmt of
 		STSpecNoIvars {pre, post, ...} => (
 			(z_predexp_of_z_tm pre,z_predexp_of_z_tm post)
-		) |_ => fail "loop" 505001 [fn()=>
-			"cannot proceed formally: LOOP body must be a specification statement"];
+		) |_ => vc_go_informal "loop" 505022 [];
 	val wp = [[] ô pre1];
 	val side = case t of
 			Value till => [[post1] ô pre1] @
@@ -391,8 +403,7 @@ fun Ûcn_whileÝ	({a, wp_env={env, ...}, ...} : WP_PARS)
 		({g, loop={t,stmt}, ...} : STMT WHILE) : RESULT = (
 let	val {w, w0, pre, post, ...} = case stmt of
 		STSpecNoIvars spec => spec
-		|_ => fail "loop" 505001 [fn()=>
-			"cannot proceed formally: LOOP body must be a specification statement"];
+		|_ => vc_go_informal "loop" 505022 [];
 	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
 	val wp = ([z_eq(trans_exp2 env g, zid env "TRUE")] ô pre1) ::
@@ -413,15 +424,14 @@ fun Ûfor_staticÝ ({a, wp_env={env, ...}, ...} : WP_PARS)
 	({i, tmark, range, dir, loop = {t, stmt}, ...} : STMT FOR_STATIC) : RESULT = (
 let	val side = if dir = LDForwards
 			then ()
-			else fail "for_static" 505001 [fn()=>"cannot proeed formally: REVERSE not supported"];
+			else vc_go_informal "for_static" 505023 [];
 	val {lo, hi} = case range of
 			RRange {lo, hi} => {lo=adjust_exp2 env lo, hi=adjust_exp2 env hi}
 			|RRangeAttr _ =>
-				fail "for_static" 505001 [fn()=>"range attributes not supported"];
+				vc_go_informal "for_static" 505020 [];
 	val {pre, post, ...} = case stmt of
 		STSpecNoIvars spec => spec
-		|_ => fail "for_static" 505001 [fn()=>
-			"cannot proceed formally: LOOP body must be a specification statement"];
+		|_ => vc_go_informal "for_static" 505022 [];
 	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
 	val zi = trans_id i;
@@ -453,11 +463,10 @@ fun Ûfor_tmarkÝ ({a, wp_env={env, ...}, ...} : WP_PARS)
 	({i, tmark, dir, loop = {t, stmt}, ...} : STMT FOR_TMARK) : RESULT = (
 let	val side = if dir = LDForwards
 			then ()
-			else fail "for_static" 505001 [fn()=>"reverse not supported"];
+			else vc_go_informal "for_tmark" 505023 [];
 	val {pre, post, ...} = case stmt of
 		STSpecNoIvars spec => spec
-		|_ => fail "for_static" 505001 [fn()=>
-			"cannot proceed formally: LOOP body must be a specification statement"];
+		|_ => vc_go_informal "for_tmark" 505022 [];
 	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
 	val zi = trans_id i;
@@ -523,26 +532,44 @@ end
 =SML
 fun Ûproc_call_specÝ (env : CN_ENV)
 		({actuals, ...} : (AGG_CHOICE,EXP) PROC_CALL)
-		({formal_ids, spec as {w, w0, pre, post, label}, ...} : FORMAL_PROC)
+		({name, formal_ids, spec as {w, w0, pre, post, label}, ...} : FORMAL_PROC)
 			: (Z_EXP * Z_EXP) = (
 let	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
 	val var_decls = map (fn {var_decl, ...} => var_decl) formal_ids;
-	val names = flat (map (fn {vars, ...} => vars) var_decls);
+	val names = ((map trans_id) o flat
+				o (map (fn {vars, ...} => vars))) var_decls;
 	val exps = case actuals of
-			APositional exps => exps
-			|ANamed nas => named_assocs_to_exps names nas;
+			APositional exps => map (adjust_exp2 env) exps
+			|ANamed nas => map (adjust_exp2 env)
+					(named_assocs_to_exps names nas);
 	fun subs (actual : EXP,	name : ID)
 			: (Z_ID * Z_EXP) = (name, trans_exp2 env actual);
-	val subs_list = map subs (combine exps names)
-		handle Fail _ =>
-		fail "proc_call_spec" 505001 [fn()=>"parameter list mismatch"];
+	val exp_names = combine exps names
+		handle _ => fail "proc_call_spec" 505026 [fn()=>name];
+	val subs_list = map subs exp_names;
 in
 	(list_sub(pre1, subs_list),list_sub(post1, subs_list))
 end
 );
 =TEX
+=IGN
 
+val {formal_ids, spec as {w, w0, pre, post, label}, ...}=fp;
+val pre1 = z_predexp_of_z_tm pre;
+val post1 = z_predexp_of_z_tm post;
+val var_decls = map (fn {var_decl, ...} => var_decl) formal_ids;
+val names = flat (map (fn {vars, ...} => vars) var_decls);
+val exps = case actuals of
+			APositional exps => map (adjust_exp2 env) exps
+			|ANamed nas => map (adjust_exp2 env) (named_assocs_to_exps names nas);
+fun subs (actual : EXP,	name : ID)
+			: (Z_ID * Z_EXP) = (name, trans_exp2 env actual);
+val exp_names = combine exps names
+		handle _ => fail "proc_call_spec" 505026 [fn()=>name];
+val subs_list = map subs exp_names;
+
+=TEX
 In the following, we call $spec\_no\_ivars\_either$ directly rather than call $wp$ because the pre- and post-conditions have already been converted to $Z\PRED$s. 
 =SML
 fun Ûproc_call_no_ivarsÝ ({wp, a, wp_env as {formal_procs, env, ...}} : WP_PARS)
@@ -552,12 +579,19 @@ fun Ûproc_call_no_ivarsÝ ({wp, a, wp_env as {formal_procs, env, ...}} : WP_PARS)
 let	fun is_it ({name = n, ...} : FORMAL_PROC) : bool = (name = n);
 	val fp as {spec = {w, ...}, ...} = find formal_procs is_it
 		handle Fail _ =>
-		fail "proc_call_no_ivars" 505001 [fn()=>"formal procedure not found"];
+		fail "proc_call_no_ivars" 505031 [fn()=>name];
 in
 	spec_no_ivars_either {wp = wp, a = a, wp_env = wp_env}
 		w (proc_call_spec env pc fp)
 end
 );
+=TEX
+=IGN
+val {formal_procs, env, ...} = wp_env;
+val SStmt (STProcNoIvars (pc as {name, actuals})) = exp;
+fun is_it ({name = n, ...} : FORMAL_PROC) : bool = (name = n);
+
+
 =TEX
 \subsection{Specification Statement (with Initial Variables)}\label{wp-spec-ivars}
 =SML
@@ -579,12 +613,10 @@ fun Ûfor_non_staticÝ (pars as {wp, a, wp_env as {env, ...}} : WP_PARS)
 let	val {lo, hi} = case range of
 			RRange {lo, hi} => {lo=adjust_exp2 env lo, hi=adjust_exp2 env hi}
 			|RRangeAttr _ =>
-				fail "for_static" 505001
-					[fn()=>"range attributes not supported"];
+				vc_go_informal "for_non_static" 505020 []
 	val {pre, post, w, w0, ...} = case stmt of
 		STSpecNoIvars spec => spec
-		|_ => fail "for_static" 505001 [fn()=>
-			"cannot proceed formally: LOOP body must be a specification statement"];
+		|_ => vc_go_informal "for_non_static" 505022 [];
 	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
 	val zi = trans_id i;
@@ -621,7 +653,7 @@ let	val (eqtm, pre1) = dest_z_± pre handle Fail _ => (pre, mk_z_true);
 in
 	(e, pre1)
 end
-handle _ => fail "analyse_log_con" 505001 [fn()=>"logical constant not of form CON X : T · „ w [X = E ± pre1, post]"]
+handle _ => fail "analyse_log_con" 505024 []
 );
 =TEX
 =SML
@@ -649,7 +681,7 @@ fun Ûproc_call_ivarsÝ ({wp, a, wp_env as {formal_procs, env, ...}} : WP_PARS)
 let	fun is_it ({name = n, ...} : FORMAL_PROC) : bool = (name = n);
 	val fp = find formal_procs is_it
 		handle Fail _ =>
-		fail "proc_call_ivars" 505001 [fn()=>"formal procedure not found"];
+		fail "proc_call_ivars" 505031 [fn()=>name];
 in
 	spec_ivars {wp = wp, a = a, wp_env = wp_env}
 			(proc_call_spec env pc fp, q)
@@ -707,10 +739,10 @@ fun Ûadjust_statementÝ (wp : WP_ENV) (st as SStmt s : STATEMENT)
 	|	STProcNoIvars piv => (
 		let	fun find_spec id ((fproc::rest) : FORMAL_PROC list) = (
 				if (#name fproc) = id
-				then	(#spec fproc)
+				then	#spec fproc
 				else	find_spec id rest
-			) | find_spec _ _ = fail "adjust_statement" 505001
-				[fn()=>"cannot proceed formally"];
+			) | find_spec id _ = vc_go_informal
+					"adjust_statement" 505025 [fn()=>id];
 		in
 			if	any_initial_variables (#post (find_spec
 								(#name piv)
@@ -730,7 +762,9 @@ fun Ûadjust_statementÝ (wp : WP_ENV) (st as SStmt s : STATEMENT)
 
 ) | adjust_statement _ other = other;
 =TEX
-
+=IGN
+val fp= #formal_procs(#in_scope((fst (hd(!CNZGenerator.diag_vc_args)))));
+=TEX
 \subsection{$wp$}\label{wp}
 
 =SML
@@ -806,7 +840,7 @@ Add the logical constants (no initial versions).
 	val decls = vc_log_cons @ decls;
 =TEX
 If $formal\_body\_flag$ and $fun\_flag$ are $true$, add a declaration of the function (obtained from $fun\_header$). \footnote{When the type mark is "\_\_function", it is replaced in $trans\_decl$ with the appropriate function type from the environment.}
-
+(* TBS - work out the tmark for a function *)
 =SML
 	val decls =	if	formal_body_flag andalso fun_flag
 			then	(trans_decl env
@@ -860,6 +894,26 @@ end
 	handle VCInformal =>
 		[([], vc_dummy_seq)]
 );
+=TEX
+=IGN
+val (sl as 	{	spec as {w, w0, pre, post, ...},
+			wp_env,
+			in_scope,...},
+		st)= hd(! CNZGenerator.diag_vc_args);
+
+val pre1 = z_predexp_of_z_tm pre;
+val post1 = z_predexp_of_z_tm post;
+val a = [[] ô post1];
+wp (st, a, wp_env);
+(* assignments in wp *)
+val pars as {wp_env as {env, ...}, ...} : WP_PARS =
+			{wp = wp, a = a, wp_env = wp_env};
+val adjust_and_trans = (trans_exp2 env) o (adjust_exp2 env);
+val adjust = adjust_exp2 env;
+val exp = adjust_statement wp_env st;
+(* now goto the appropriate function *)
+val fp= #formal_procs(#in_scope((fst (hd(!CNZGenerator.diag_vc_args)))));
+
 =TEX
 \section{EPILOGUE}
 =SML
