@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.51 2004/07/03 10:23:36 rda Exp rda $ 
+ * $Id: search.c,v 2.52 2004/07/13 16:28:59 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -557,6 +557,7 @@ Boolean add_search_tool(Widget text_w)
 
 	fix_pane_height(search_form, search_form);
 	fix_pane_height(replace_form, replace_form);
+	fix_pane_height(toggle_form, action_form);
 	fix_pane_height(action_form, action_form);
 /*
  * Now remove any sashes introduced while or since the replacement text pane
