@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.34 2002/11/27 22:23:22 rda Exp $
+ * $Id: mainw.c,v 2.33 2002/11/28 14:32:26 rda Exp $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -147,6 +147,7 @@ static void
 static void setup_reopen_menu(char *filename);
 static void post_popupeditmenu(EVENT_HANDLER_ARGS);
 static void post_ln_popup_menu(EVENT_HANDLER_ARGS);
+static void defer_resize (EVENT_HANDLER_ARGS);
 static Bool execute_command(void);
 static void execute_action(
     Widget 		/* widget */,
@@ -509,6 +510,13 @@ static Boolean setup_main_window(
 		WM_DELETE_WINDOW,
 		check_quit_cb,
 		root);
+
+	XtInsertEventHandler(root,
+		StructureNotifyMask,
+		False,
+		defer_resize,
+		NULL,
+		XtListHead);
 
 	frame = XtVaCreateWidget("frame",
 		xmMainWindowWidgetClass,
@@ -1275,6 +1283,54 @@ static void ln_popup_cb (
 	if(!line_number_stopped) {
 		line_number_cb(script, NULL, NULL);
 	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * HANDLING RESIZES
+ *
+ * The Motif text widget is rather slow at resizing when it contains
+ * a lot of text. To speed things up, when the root widget receives
+ * a ConfigureNotify event, we stop it being dispatched immediately
+ * to the Motif handlers. If a sequence of ConfigureNotify events arrive
+ * in quick succession we try only to let Motif see the last of the sequence.
+ *
+ * Even on quite small files, this reduces the amount of flicker if the
+ * user is changing the window size continuously and rapidly. For large
+ * files it greatly reduces the time taken to resize the window.
+ *
+ * We implement this by looking ahead in the X event queue for
+ * more events of the same type and dispatching the last one found
+ * (or the one passed as a parameter, if no more in the queue).
+ * The variable deferring is set to make the recursive call
+ * that happens indirectly as a result of XtDispatchEvent take
+ * the right action (namely, just to do nothing and let Motif
+ * get at the event). The outer (non-recursive) call can
+ * then just suppress further processing of this event, because
+ * all that needs to be done has been done already inside
+ * the call of XtDispatchEvent.
+ *
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void defer_resize(
+	Widget		w,
+	XtPointer	x,
+	XEvent		*evp,
+	Boolean		*continue_dispatch)
+{
+	static Boolean deferring = True;
+	XEvent event;
+	if(evp->type == ConfigureNotify && deferring) {
+		Display *d = XtDisplay(root);
+		Window w = XtWindow(root);
+		event = *evp;
+		while(XCheckTypedWindowEvent(d, w, ConfigureNotify, &event)) {
+			; /* got one, go round for another */
+		}
+		deferring = False;
+		XtDispatchEvent(&event);
+		deferring = True;
+		*continue_dispatch = False; /* keep Motif out */
+	} /* else, let Motif in */
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
