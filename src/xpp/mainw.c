@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.25 2002/08/09 10:54:31 rda Exp rda $
+ * $Id: mainw.c,v 2.26 2002/08/14 13:13:37 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -11,7 +11,7 @@
  * the user interface for interacting with the interactive program.
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char rcsid[] = "$Id: mainw.c,v 2.25 2002/08/09 10:54:31 rda Exp rda $";
+static char rcsid[] = "$Id: mainw.c,v 2.26 2002/08/14 13:13:37 rda Exp rda $";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:
@@ -1189,13 +1189,19 @@ static Boolean line_number_work_proc(
 		XtPointer	cbd)
 {
 	long int line_num;
+	static long int last_line_num = -1;
 	char buf[20];
 	XmString s;
+
 	line_num = get_line_no((Widget) cbd);
-	sprintf(buf, "Line: %6ld", line_num);
-	s = XmStringCreateSimple(buf);
-	XtVaSetValues(linenumber, XmNlabelString, s, NULL);
-	XmStringFree(s);
+
+	if(line_num != last_line_num) {
+		sprintf(buf, "Line: %6ld", line_num);
+		s = XmStringCreateSimple(buf);
+		XtVaSetValues(linenumber, XmNlabelString, s, NULL);
+		XmStringFree(s);
+		last_line_num = line_num;
+	}
 	line_number_req_pending = False;
 	return True;
 }
@@ -1205,7 +1211,9 @@ static void line_number_cb(
 		XtPointer	cbs)
 {
 	if(!line_number_req_pending) {
-		XtAppAddWorkProc(app, line_number_work_proc, (XtPointer) w);
+		//XtAppAddWorkProc(app, line_number_work_proc, (XtPointer) w);
+		XtAppAddTimeOut(app, 40,
+			(XtTimerCallbackProc)line_number_work_proc, w);
 		line_number_req_pending = True;
 	}
 }
