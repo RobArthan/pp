@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.24 2003/03/18 17:11:48 rda Exp rda $
+ * $Id: pterm.c,v 2.25 2003/05/07 16:32:20 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -1063,8 +1063,13 @@ static void default_sigs(void)
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * new_editor: fork and exec another edit-only xpp session.
+ * We actually fork a child which then forks again and
+ * the grand-child becomes the new xpp process. The
+ * child then exits, which makes init rather than this xpp
+ * be the parent of the new xpp process. This saves us having
+ * to look after its funeral arrangements if it predeceases us,
+ * without which we would be spawning a generation of zombies.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-
 
 void new_editor(void)
 {
@@ -1080,13 +1085,14 @@ void new_editor(void)
 			msg("system error", "fork failed");
 			perror("xpp");
 		} else if (new_pid == 0) { 
-			 /* Grandchild - become session leader exec the new edit-only sessio. */
+			 /* Grandchild */
+			 /* become session leader */
 			if(setsid() < 0) {
 				msg("system error", "setsid failed");
 				perror("xpp");
 				exit(9);
 			}
-			close(ConnectionNumber(XtDisplay(root)));
+			/* exec argv[0] -file "" */
 			execlp(argv0, argv0, "-file", "", NULL);
 			/* **** error if reach here **** */
 			msg("system error", "could not exec");

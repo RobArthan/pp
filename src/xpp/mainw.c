@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.54 2003/04/11 10:55:34 rda Exp $
+ * $Id: mainw.c,v 2.55 2003/05/07 16:32:20 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -161,20 +161,18 @@ static void line_number_cb(CALLBACK_ARGS);
  * in the middle of a menu, macros for later entries should
  * be incremented accordingly.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-#define FILE_MENU_NEW_EDITOR          0
-/* Item 1 is a separator */
-#define FILE_MENU_SAVE            2
-#define FILE_MENU_SAVE_AS         3
-#define FILE_MENU_SAVE_SELECTION  4
-/* Item 5 is a separator */
-#define FILE_MENU_OPEN            6
-#define FILE_MENU_INCLUDE         7
-#define FILE_MENU_REVERT          8
-#define FILE_MENU_EMPTY_FILE      9
-#define FILE_MENU_REOPEN          10
-/* Item 11 is a separator */
-#define FILE_MENU_QUIT           12
-/* The next one is for the direct call of the callback from code, not from a menu button */
+#define FILE_MENU_SAVE            0
+#define FILE_MENU_SAVE_AS         1
+#define FILE_MENU_SAVE_SELECTION  2
+/* Item 3 is a separator */
+#define FILE_MENU_OPEN            4
+#define FILE_MENU_INCLUDE         5
+#define FILE_MENU_REVERT          6
+#define FILE_MENU_EMPTY_FILE      7
+#define FILE_MENU_REOPEN          8
+/* Item 9 is a separator */
+#define FILE_MENU_QUIT           10
+
 #define FILE_MENU_INIT_OPEN          13
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -188,10 +186,6 @@ static MenuItem reopen_menu_items[MAX_REOPEN_MENU_ITEMS+1] = {
 };
 
 static MenuItem file_menu_items[] = {
-   /* The next one looks to the user like a ..., even though the parent carries on */
-     { "New Editor ...",  &xmPushButtonGadgetClass, 'N', NULL, NULL,
-        file_menu_cb, (XtPointer)FILE_MENU_NEW_EDITOR, (MenuItem *)NULL, False },
-   MENU_ITEM_SEPARATOR,
     { "Save", &xmPushButtonGadgetClass, 'S', "Ctrl<Key>s", "Ctrl-S",
         file_menu_cb, (XtPointer)FILE_MENU_SAVE, (MenuItem *)NULL, False },
     { "Save as ...",  &xmPushButtonGadgetClass, 'a', NULL, NULL,
@@ -209,7 +203,7 @@ static MenuItem file_menu_items[] = {
         file_menu_cb, (XtPointer)FILE_MENU_EMPTY_FILE, (MenuItem *)NULL, False },
      { "Reopen ",  &xmPushButtonGadgetClass, 'p', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_REOPEN, reopen_menu_items, False },
-   MENU_ITEM_SEPARATOR, 
+   MENU_ITEM_SEPARATOR,
     { "Quit",  &xmPushButtonGadgetClass, 'Q', "Ctrl<Key>q", "Ctrl-Q",
         file_menu_cb, (XtPointer)FILE_MENU_QUIT, (MenuItem *)NULL, False },
     {NULL}
@@ -222,7 +216,8 @@ static MenuItem file_menu_items[] = {
 #define TOOLS_MENU_PALETTE         1
 #define TOOLS_MENU_TEMPLATES       2
 #define TOOLS_MENU_OPTIONS         3
-#define TOOLS_MENU_CMD_LINE        4
+#define TOOLS_MENU_NEW_EDITOR         4
+#define TOOLS_MENU_CMD_LINE        5
 
 static MenuItem tools_menu_items[] = {
     { "Search and Replace", &xmPushButtonGadgetClass, 'S', NULL, NULL,
@@ -233,6 +228,8 @@ static MenuItem tools_menu_items[] = {
         tools_menu_cb, (XtPointer)TOOLS_MENU_TEMPLATES, (MenuItem *)NULL, False },
     { "Options", &xmPushButtonGadgetClass, 'O', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_OPTIONS, (MenuItem *)NULL, False },
+    { "New Editor", &xmPushButtonGadgetClass, 'N', NULL, NULL,
+        tools_menu_cb, (XtPointer)TOOLS_MENU_NEW_EDITOR, (MenuItem *)NULL, False },
     { "Command Line", &xmPushButtonGadgetClass, 'C', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_CMD_LINE, (MenuItem *)NULL, False },
     {NULL}
@@ -890,6 +887,28 @@ static Boolean setup_main_window(
 	}
 
 
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Management and Realisation:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+	XtManageChild(infobar);
+	XtManageChild(filename);
+	XtManageChild(infolabel);
+	XtManageChild(linenumber);
+	show_file_info();
+	XtManageChild(menubar);
+	XtManageChild(script);
+	if( !global_options.edit_only ) {
+		XtManageChild(journal);
+	}
+	XtManageChild(mainpanes);
+	XtManageChild(scriptpanes);
+	XtManageChild(frame);
+
+	XtRealizeWidget(root);
+
+	fix_pane_height(infobar, infobar);
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Open file if file_name not NULL
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -924,27 +943,6 @@ static Boolean setup_main_window(
 
 	set_menu_item_sensitivity(filemenu,
 		FILE_MENU_REVERT, !file_info.new);
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Management and Realisation:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-	XtManageChild(infobar);
-	XtManageChild(filename);
-	XtManageChild(infolabel);
-	XtManageChild(linenumber);
-	show_file_info();
-	XtManageChild(menubar);
-	XtManageChild(script);
-	if( !global_options.edit_only ) {
-		XtManageChild(journal);
-	}
-	XtManageChild(mainpanes);
-	XtManageChild(scriptpanes);
-	XtManageChild(frame);
-
-	XtRealizeWidget(root);
-
-	fix_pane_height(infobar, infobar);
 
 	return True;
 }
@@ -991,9 +989,6 @@ static void file_menu_cb(
 	void check_quit_cb(CALLBACK_ARGS);
 
 	switch(i) {
-	case FILE_MENU_NEW_EDITOR:
-		new_editor();
-		break; /* actually it's not reached unless the fork-exec inside new_editor failed */
 	case FILE_MENU_SAVE:
 		fname = XmTextGetString(namestring);
 		if(!fname || !*fname || *fname == '*') {
@@ -1237,6 +1232,9 @@ static void tools_menu_cb(
 		break;
 	case TOOLS_MENU_OPTIONS:
 		add_options_tool();
+		break;
+	case TOOLS_MENU_NEW_EDITOR:
+		new_editor();
 		break;
 	default:
 		break;
