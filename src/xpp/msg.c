@@ -1,10 +1,10 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * msg.c 1.12 94/07/21 
+ * %Z% $Date$ $Revision$ $RCSfile$
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
- * (c) ICL 1993
+ * (c) ICL 1994
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
@@ -66,7 +66,8 @@ static void c_format_msg(char *buf, char *msg, NAT line_len)
 		}
 	}
 }
-static XmString format_msg(char *msg, NAT line_len)
+
+XmString format_msg(char *msg, NAT line_len)
 {
 	char *buf;
 	char *p1, *p2, *pm;
