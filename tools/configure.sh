@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.4 2002/10/20 20:29:19 rda Exp rda $
+# $Id: configure.sh,v 1.5 2002/10/20 21:10:08 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -25,6 +25,9 @@
 # PPTARGETS        - a space separated list of packages to include
 #                   (default: whichever of pptex hol zed daz xpp are there)
 #
+# PPPOLYDBASE      - name of file containing the initial Poly/ML database
+#                   (default: /usr/lib/poly/ML_dbase)
+#
 # If any of these is an empty string, it is treated as if it were unset.
 #
 # PPTARGETDIR is for developers who may want to test this script while
@@ -38,6 +41,9 @@
 # contains the compiled code for any packages that are needed by the specified
 # packages (hol, zed and daz need dev and pptex, dev needs pptex). The packages
 # are compiled in the order specified by the user.
+#
+# PPPOLYDBASE is not relevant if PPCOMPILER is SMLNJ. The default is
+# appropriate for Poly/ML installed on Linux from the RPM.
 #
 # This is done by creating a shell script, install, which captures the decisions.
 # Makes some sanity checks on the source directory (but not many).
@@ -107,7 +113,7 @@ then	( mkdir $PPTARGETDIR; rmdir $PPTARGETDIR ) || \
 elif	[ -d "$PPTARGETDIR" -a ! -w "$PPTARGETDIR" ]
 then	give_up "cannot write to the directory $PPTARGETDIR"
 fi
-if	[ `expr index "$PPTARGETDIR" "/"` != 1 ]
+if	[ `expr "$PPTARGETDIR" : '/'` != 1 ]
 then	give_up "the target directory must be an absolute path name (i.e., begin with \"/\")"
 fi
 echo "Using $PPTARGETDIR as the installation target directory"
@@ -135,7 +141,7 @@ then	give_up "the directory $CWD/src does not exist"
 fi
 SOMETODO=n
 for f in $PPTARGETS
-do	if	[ -e src/$f.mkf ]
+do	if	[ -f src/$f.mkf ]
 	then	eval $f=y
 		SOMETODO=y
 	elif	[ "$USERDEFINEDTARGETS" = y ]
@@ -171,6 +177,12 @@ out "# Edit it at your own risk!"
 export_it PPCOMPILER
 export_it PPMOTIFLINKING
 export_it PPTARGETDIR
+if	[ "${PPPOLYDBASE:-}" != "" ]
+then	if	[ ! -f $PPPOLYDBASE ]
+	then	give_up "The file $PPPOLYDBASE does not exist"
+	fi
+	export_it PPPOLYDBASE
+fi
 out "cd $CWD/src"
 out 'OLD_PATH=$PATH'
 out "PATH=.:"'$PATH'
