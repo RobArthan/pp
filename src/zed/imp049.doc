@@ -269,7 +269,7 @@ end (* of structure ZReaderWriter *);
 =SML
 structure ÛZTypeCheckOnlyModeÝ : ZTypeCheckOnlyMode = struct
 open ZUserInterfaceSupport  ZTypeInference ZTermGenerator;
-open ZTypesAndTermsSupport;
+open ZTypesAndTermsSupport icl'Kernel;
 =TEX
 =SML
 fun Ûstring_of_identÝ ((tmpl, dec) : IDENT) : string = (
@@ -279,13 +279,183 @@ fun Ûstring_of_identÝ ((tmpl, dec) : IDENT) : string = (
 
 \subsection{Saving Types and Constants in the Theory}
 
+=SML
+fun Ûnew_type_clashesÝ ((tyname, arity) : (string * int)) : (string * int) list = (
+	case get_type_arity tyname of
+	Nil => []
+	|Value arity' => if (arity = arity')
+			then	[]
+			else	[(tyname, arity)]
+);
 
+fun Ûnew_type_nofailÝ ((tyname, arity) : (string * int)) : unit = (
+	case get_type_arity tyname of
+	Nil => (new_type (tyname, arity);())
+	|Value arity' =>
+		if arity = arity'
+		then ()
+		else fail "new_type_nofail" 62998 []
+);
+=TEX
+=TEX
+For the following $delete\_$ functions we need an auxiliary ``tco\_delete\_to\_level'' function.
+This will find out what is to be deleted, and do all the
+kernel and user notification required.
+=SML
+fun Ûtco_delete_to_levelÝ (caller : string) (target : string) (level : int)
+			: (string * int) list * (string * TYPE) list = (
+let	val dummy = case (get_current_theory_status()) of
+		TSNormal => ()
+		| TSDeleted => error caller 6008 
+			[fn () => get_current_theory_name()]
+		| TSLocked => fail caller 6037
+			[fn () => get_current_theory_name()]
+		| TSAncestor => fail caller 6071
+			[fn () => get_current_theory_name()];
+
+	val {children = children,...} = icl'get_theory_info "-";
+
+	val dummy = if children <> [] 
+		then fail caller 6076 [fn () => get_current_theory_name()]
+		else ();
+
+	val {con_env = con_env,ty_env = ty_env,
+		axiom_dict = axiom_dict, thm_dict = thm_dict,
+		defn_dict = defn_dict,...} = icl'get_theory "-";
+
+	val (del_con,del_lev1) = split (map (fn (name,{ty = ty,level = lev,...}) => 
+			((name, ty),lev))
+		(con_env drop (fn (_,{level = lev,...}) => lev < level)));
+
+	val (del_type,del_lev2) = split(map (fn (name,{level = lev,...}) => (name,lev))
+		(ty_env drop (fn (_,{level = lev,...}) => lev < level)));
+
+	val del_type_arities = map (fn ty =>
+		case get_type_info ty of
+		Nil => error "tco_delete_to_level" 49999 []
+		|Value (ar, _) => (ty, ar)) del_type;
+
+	val del_thms = map (fn (key,_) => key)
+		(thm_dict drop (fn (_,thm) => 
+			let val {level = lev,...} = icl'dest_thm thm
+			in lev < level end));
+
+	val (del_axioms, del_lev3) = split(map (fn (key,thm) => (key,
+			let val {level = lev,...} = icl'dest_thm thm
+			in lev end))
+		(axiom_dict drop (fn (_,thm) => 
+			let val {level = lev,...} = icl'dest_thm thm
+			in lev < level end)));
+
+	val (del_defns, del_lev4) = split(map (fn (key,thm) => (key,
+			let val {level = lev,...} = icl'dest_thm thm
+			in lev end))
+		(defn_dict drop (fn (_,thm) => 
+			let val {level = lev,...} = icl'dest_thm thm
+			in lev < level end)));
+
+
+	val I = Combinators.I;
+
+	val to_be_d = (
+		format_list Combinators.I 
+		(flat [
+		if is_nil del_thms
+		then []
+		else [get_error_message 12102 
+			[if length del_thms = 1 then "" else "s"] ^ 
+			(format_list I del_thms ", ")],
+		if is_nil del_axioms
+		then []
+		else [get_error_message 12103 
+			[if length del_axioms = 1 then "" else "s"] ^ 
+			(format_list I del_axioms ", ")],
+		if is_nil del_defns
+		then []
+		else [get_error_message 12104 
+			[if length del_defns = 1 then "" else "s"] ^ 
+			(format_list I del_defns ", ")]])
+		) "; ";
+=TEX
+We now ask the interactive user whether he wishes everything
+necessary to be deleted.
+=SML
+	val dummy = case to_be_d of
+		"" => ()
+		|_ => warn caller 12012 [(fn () => target),(fn () => to_be_d)];
+=TEX
+We now have permission to proceed:
+=SML
+	val dl = list_cup[del_lev1, del_lev2, del_lev3, del_lev4];
+
+	val dummy = map icl'delete_thm del_thms;
+	val dummy = map (fn x => icl'delete_extension ()) dl;
+	val dummy = open_theory"-";
+in
+	(del_type_arities, del_con)
+end);
+=TEX
+We can now give the deletion functions:
+=SML
+fun Ûtco_delete_constÝ (cnt : TERM) : (string * int) list * (string * TYPE) list = (
+let	val (cnm, cty) = dest_const cnt
+		handle complaint =>
+		pass_on complaint "dest_const" "delete_const";
+
+	val {con_env = con_env,...} = icl'get_theory "-";
+
+	val {level = level, ty = ty} = force_value(s_lookup cnm con_env)
+		handle complaint =>
+		divert complaint "force_value" "delete_const" 12001 
+			[fn () => get_current_theory_name (),
+			 fn () => cnm];
+
+	val dummy = if not(is_type_instance ty cty andalso 
+			is_type_instance cty ty)
+		then fail "delete_const" 12001 
+			[fn () => get_current_theory_name (),
+			 fn () => cnm]
+		else ();
+in
+	tco_delete_to_level "delete_const" cnm level
+end);
+=TEX
+=SML
+fun Ûtco_replace_constÝ ((name, ty) : (string * TYPE)) : TERM = (
+	case get_const_info name of
+	Nil => new_const (name, ty)
+	|Value (ty', _) => (
+		if ty' =: ty
+		then	mk_const (name,ty)
+		else	let
+				val (tylist, clist) = tco_delete_const (mk_const (name, ty'));
+				val side = map new_type (tylist drop (fn(n,_) => n=name));
+				val side = map new_const (clist drop (fn(n,_) => n=name));
+
+			in
+				new_const (name,ty)
+			end
+	)
+);
+=TEX
+=SML
+fun Ûz_replace_constsÝ (idtyl : (string * TYPE) list) : unit = (
+let	val idtyl' = map (fn (n, ty) => (bind_gvar_name n, ty)) idtyl;
+	val side = map tco_replace_const idtyl';
+in
+	()
+end);
+=TEX
 =SML
 fun Ûtype_of_formalÝ (id : IDENT) : TYPE = (
 	mk_vartype ("'"^(string_of_ident id))
 );
 =TEX
 =SML
+fun	Ûtuple_exnameÝ (tyl: EXTYPE list) : string =
+	tuple_tname (map type_of_zextype tyl);
+fun	Ûtuple_extypeÝ (tyl: EXTYPE list) :EXTYPE = ExType(tuple_exname tyl,tyl);
+
 fun Ûconsts_in_zparaÝ (p : Z_PARA) : (string * TYPE) list = (
 	case p of
 	ZParaAbbDef (id, [], _, Value ty) =>
@@ -335,8 +505,7 @@ fun Ûconsts_in_zparaÝ (p : Z_PARA) : (string * TYPE) list = (
 		let	val fty' = case fty of
 					ExType ("SET", [fty']) => fty'
 					| _ => fail "consts_in_zinferred" 62901 [];
-			val ty' = (* ex_set (tuple_extype [fty', aty]); *)
-				fail "do_branch" 80201 [fn()=>"free types not implemented"]
+			val ty' = ExType ("SET", [tuple_extype [fty', aty]]);
 		in
 			(string_of_ident id, type_of_zextype ty')
 		end
@@ -362,43 +531,6 @@ fun Ûconsts_in_zparaÝ (p : Z_PARA) : (string * TYPE) list = (
 );
 =TEX
 =SML
-fun Ûnew_type_clashesÝ ((tyname, arity) : (string * int)) : (string * int) list = (
-	case get_type_arity tyname of
-	Nil => []
-	|Value arity' => if (arity = arity')
-			then	[]
-			else	[(tyname, arity)]
-);
-
-fun Ûnew_type_nofailÝ ((tyname, arity) : (string * int)) : unit = (
-	case get_type_arity tyname of
-	Nil => (new_type (tyname, arity);())
-	|Value arity' =>
-		if arity = arity'
-		then ()
-		else fail "new_type_nofail" 62998 []
-);
-
-fun Ûnew_const_clashesÝ ((cname, ty) : (string * TYPE)) : (string * TYPE) list = (
-	case (get_const_info o bind_gvar_name)cname of
-	Nil => []
-	|Value (ty', _) => if (ty =: ty')
-			then	[]
-			else	[(cname, ty)]
-);
-
-fun Ûnew_const_nofailÝ ((cname, ty) : (string * TYPE)) : unit = (
-let	val bname = bind_gvar_name cname;
-in
-	case get_const_info bname of
-	Nil => (new_const (bname, ty);())
-	|Value (ty', _) =>
-		if ty =: ty'
-		then ()
-		else fail "new_const_nofail" 62998 []
-end);
-=TEX
-=SML
 fun Ûupdate_theory_dbÝ ((ZParaFixity fixinfo) : Z_PARA) : unit = (
 	set_zfixity_info fixinfo
 ) | update_theory_db p =
@@ -408,11 +540,7 @@ let	val consts = consts_in_zpara p;
 		case list_cup (map (fn ty => new_type_clashes ty) tys) of
 		[] => map new_type_nofail tys
 		|failures => fail "update_theory_db" 62998 [fn ()=>PolyML.makestring failures];
-	val side =
-		case flat (map (fn const => new_const_clashes const) consts) of
-		[] => map new_const_nofail consts
-		|failures => fail "update_theory_db" 62998 [fn ()=>PolyML.makestring failures];
-
+	val side = z_replace_consts consts;
 in
 	()
 end;
