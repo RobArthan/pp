@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.28 2003/05/08 14:57:53 rda Exp rda $
+ * $Id: pterm.c,v 2.29 2003/05/20 15:16:13 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -1113,7 +1113,7 @@ void new_session(char *argv[])
 
 void new_editor_session(void)
 {
-	static char *argv[] = {"", "-f", "", 0};
+	static char *argv[] = {"", "-b", "", 0};
 	argv[0] = argv0;
 	new_session(argv);
 }
@@ -1123,7 +1123,7 @@ void new_editor_session(void)
 
 void new_command_session(void)
 {
-	static char *argv[] = {"", "-f", "", "-c", "", 0};
+	static char *argv[] = {"", "-b", "", "", 0};
 	argv[0] = argv0;
 	new_session(argv);
 }
