@@ -39,7 +39,7 @@
  */
 
 #define MSG_LINE_LEN 40
-#define HELP_LINE_LEN 70
+#define HELP_LINE_LEN 80
 #define HELP_SCREEN_HEIGHT 24
 
 typedef struct {
@@ -309,14 +309,14 @@ XmPushButtonCallbackStruct *cbs;
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * help_dialog: put up an information window without grabbing control
+ * templates_help_dialog: put up an information window without grabbing control
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void help_dialog1(Widget w)
+static void templates_help_dialog(Widget w)
 {
 	Widget dismiss_btn_area, dismiss_btn;
 	static Widget	help_shell,
-			help_pane,
-			help_form,
+			help_pane;
+	Widget		row_col,
 			help_item,
 			introduction,
 			separator,
@@ -340,37 +340,34 @@ void help_dialog1(Widget w)
 				/* Make small so user doesn't try to resize */
 			NULL);
 
-		help_form = XtVaCreateWidget("help-form",
-			xmFormWidgetClass,	help_pane,
-			NULL);
-
-		help_item = XtVaCreateWidget("help-item",
-			xmFormWidgetClass,	help_form,
-			NULL);
-
 		introduction = XtVaCreateManagedWidget("introduction",
-				xmLabelGadgetClass,		help_item,
-				XmNlabelString,
-					format_msg (Help_Templates_Tool,
-								HELP_LINE_LEN),
-				XmNalignment,
-							XmALIGNMENT_BEGINNING,
-				XmNtopAttachment,		XmATTACH_FORM,
-				XmNbottomAttachment,		XmATTACH_FORM,
-				XmNleftAttachment,		XmATTACH_FORM,
-				XmNrightAttachment,		XmATTACH_FORM,
-				NULL);
+			xmLabelGadgetClass,	help_pane,
+			XmNlabelString,		format_msg(Help_Templates_Tool,
+							HELP_LINE_LEN),
+			XmNalignment,		XmALIGNMENT_CENTER,
+			NULL);
 
-		XtManageChild(help_item);
+		XtManageChild(introduction);
+
+		XtVaGetValues(introduction, XmNheight, &h, NULL);
+
+		XtVaSetValues(introduction,
+			XmNpaneMaximum,	h,
+			XmNpaneMinimum,	h,
+			NULL);
+
+		row_col = XtVaCreateWidget("help-form",
+			xmRowColumnWidgetClass,	help_pane,
+			XmNorientation,		XmVERTICAL,
+			XmNpacking,		XmPACK_TIGHT,
+			NULL);
 
 		for (i=0; i < template_table_size; i++) {
 
 			help_item = XtVaCreateWidget("help-item",
-				xmFormWidgetClass,		help_form,
-				XmNtopAttachment,		XmATTACH_WIDGET,
-				XmNtopWidget,			help_item,
-				XmNleftAttachment,		XmATTACH_FORM,
-				XmNrightAttachment,		XmATTACH_FORM,
+				xmRowColumnWidgetClass,		row_col,
+				XmNorientation,			XmHORIZONTAL,
+				XmNpacking,			XmPACK_TIGHT,
 				NULL);
 
 			template_icon = XtVaCreateManagedWidget("template-icon",
@@ -379,9 +376,6 @@ void help_dialog1(Widget w)
 					get_pixmap(w,
 						template_table[i].bitmap_file),
 				XmNlabelType,			XmPIXMAP,
-				XmNtopAttachment,		XmATTACH_FORM,
-				XmNbottomAttachment,		XmATTACH_FORM,
-				XmNleftAttachment,		XmATTACH_FORM,
 				NULL);
 
 			template_text = XtVaCreateManagedWidget("template-text",
@@ -389,18 +383,23 @@ void help_dialog1(Widget w)
 				XmNlabelString,		
 					format_msg (template_table[i].help_text,
 									MSG_LINE_LEN),
-				XmNtopAttachment,		XmATTACH_FORM,
-				XmNbottomAttachment,		XmATTACH_FORM,
-				XmNleftAttachment,		XmATTACH_WIDGET,
-				XmNleftWidget,			template_icon,
-				XmNrightAttachment,		XmATTACH_FORM,
 				NULL);
 
 			XtManageChild(help_item);
 
-		};
+		}
 
-		XtManageChild(help_form);
+		XtVaSetValues(help_item,
+			XmNbottomAttachment,	XmATTACH_FORM,
+			NULL);
+
+		XtManageChild(row_col);
+
+		XtVaGetValues(row_col, XmNheight, &h, NULL);
+
+		XtVaSetValues(row_col,
+			XmNpaneMinimum,	h,
+			NULL);
 
 		dismiss_btn_area = XtVaCreateWidget("dismiss_btn_area",
 				xmFormWidgetClass,	help_pane,
@@ -436,10 +435,6 @@ void help_dialog1(Widget w)
 	XtPopup(help_shell, XtGrabNone);
 }
 
-
-
-
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * help callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -449,7 +444,7 @@ static void help_cb(
 	TemplateCallbackData		*cbdata,
 	XmPushButtonCallbackStruct	cbs)
 {
-	help_dialog1(shell);
+	templates_help_dialog(root);
 }
 
 static void dismiss_cb(Widget widget, Widget shell)
