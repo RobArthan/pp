@@ -50,7 +50,7 @@ First version.
 Based on the first part of DS/FMU/IED/SML002.
 \item [Issue 1.2]
 Many changes while deciding upon a format.
-\item [Issue 1.3]
+\item [Issues 1.3, 1.4]
 Changes made during writing implementation.
 \end{description}
 \subsection{Changes forecast}
@@ -113,6 +113,7 @@ val ‚dest_type· : TYPE -> string * TYPE list;
 Extract the arguments to $mk\_type$ by function rather than pattern-matching.
 =FAILURE
 3001	Argument is not of form: mk_type(<string>,<type list>)
+	but mk_vartype ?0
 =ENDDOC
 =DOC
 val ‚mk_fun· : (TYPE * TYPE) -> TYPE;
@@ -387,6 +388,21 @@ val ‚is_bin_op· : (TERM -> 'a) -> TERM -> bool;
 $is\_bin\_op$ $dest$ $term$ is true iff. $dest$ can be applied to $term$ without a catchable exception being raised.
 =ENDDOC
 =DOC
+val ‚list_mk_bin_op· : string -> int -> 
+	(TYPE -> TYPE -> TERM) -> TERM list -> TERM;
+=DESCRIBE
+This function combines a list of terms using the given operator.
+Notice the bracketing in the example.
+=EXAMPLE
+list_mk_bin_op "Ä" [a, (b Ä c), d] = (a Ä ((b Ä c) Ä d))
+=FAILURE
+3017	An empty list argument is not allowed
+=FAILUREC
+\paragraph{Failure}
+The failure message for failing to combine its arguments will be from area $area$, and will have the text indexed by $msg$.
+If given an empty list the error will be from area $area$, but with message 3017.
+=ENDDOC
+=DOC
 val ‚strip_bin_op· : string -> TERM -> TERM list
 =DESCRIBE
 This function strips a binary operator, attempting to destroy its term argument, and recursively stripping to the right.
@@ -494,22 +510,26 @@ val ‚is_imp· : TERM -> bool;
 =DESCRIBE
 A derived term test for implications.
 =ENDDOC
+The following could alternatively have the signature $:(TERM\ list) * TERM -> TERM$.
 =DOC
 val ‚list_mk_imp· : TERM list -> TERM;
 =DESCRIBE
 ÛDefinition
 list_mk_imp ["a","b","c",...] = "a ä b ä c ..."
 Ê
+Note that giving a singleton list containing a non-boolean term will return that term, rather than fail.
 =FAILURE
 3017	An empty list argument is not allowed
 3018	Argument list must be of boolean terms
 =ENDDOC
+The following could alternatively have the signature $:TERM\ ->\ (TERM\ list) * TERM$
 =DOC
 val ‚strip_imp· : TERM -> TERM list;
 =DESCRIBE
 ÛDefinition
 strip_imp  "a ä b ä c ..." = ["a","b","c",...]
 Ê
+Note that stripping a non-boolean term will result in that term, not a fail.
 =ENDDOC
 =DOC
 val ‚quantifier· : string -> TYPE -> TYPE -> TERM;
@@ -549,6 +569,7 @@ val ‚list_mk_simple_forall· : TERM list * TERM -> TERM;
 list_mk_simple_forall ["a","b","c",...] body = "É a b c ... é body"
 Ê
 This uses $mk\_simple\_forall$ to generate its result.
+Note that giving an empty list paired with a non-boolean term will return that term, rather than fail.
 =FAILUREC
 \paragraph{Failure}
 This may give $mk\_simple\_forall$ error messages.
@@ -588,10 +609,11 @@ val ‚list_mk_simple_exist· : TERM list * TERM -> TERM;
 list_mk_simple_exist ["a","b","c",...] body = "Ñ a b c ... é body"
 Ê
 This uses $mk\_simple\_exist$ to generate its result.
+Note that giving an empty list paired with a non-boolean term will return that term, rather than fail.
 =FAILUREC
 \paragraph{Failure}
 This may give $mk\_simple\_exist$ error messages.
-g=ENDDOC
+=ENDDOC
 \subsection{Other Term Functions}
 =DOC
 val ‚aconv· : TERM -> TERM -> bool;
@@ -615,20 +637,24 @@ val ‚icl'subst· : (TERM * (string * TYPE)) list -> TERM -> TERM;
 $icl'subst$ $alist$ $term$ returns a term based on $term$, but with with any term variable that may be found in the association list (second of a pair,
 in a destroyed form) 
 being replaced with the associated term(first of the pair).
+
+Note that the destroyed term variables must have the same types as the term that is to replace them.
+=SEEALSO
+$var\_subst$, $subst$
 =FAILURE
 3052	Invalid types in term substitution
 =ENDDOC
 =DOC
 val ‚rename· : (string * TYPE) -> string -> TERM -> TERM;
 =DESCRIBE
-$rename$ $(cname,\ type)$ $oname$ $term$ returns a term based on $term$, but with any variables with name $oname$ renamed to $cname$.
+$rename$ $(oname,\ type)$ $cname$ $term$ returns a term based on $term$, but with any free variables with name $oname$, and type $type$ renamed to $cname$.
 =ENDDOC
 =DOC
 val ‚icl'inst· : (string * TYPE) list -> (TYPE * string) list -> TERM -> TERM;
 =DESCRIBE
-$icl'inst$ $alist$ $slist$ $term$ instantiates the type variables of $term$ with the associated types found in $slist$ (which is indexed by the type variables name, not the type variables themselves).
+$icl'inst$ $alist$ $slist$ $term$ instantiates the type variables of $term$ with the associated types found in $slist$ (which is indexed by the type variable's name, not the type variables themselves).
 It will rename bound variables as necessary to prevent name capture problems.
-It will also not allow variables to become the same as those in the avoidance list, $alist$.
+It will also rename variables to avoid them becoming the same as those in the avoidance list, $alist$.
 =USES
 Somewhat faster than $inst$ if type variables are already destroyed.
 =SEEALSO
@@ -666,7 +692,7 @@ val ‚term_match· : TERM -> TERM -> (TYPE * TYPE) list * (TERM * TERM)list;
 $term\_match$ $tm_1$ $tm_2$ attempts to find if $tm_1$ is an instance of $tm_2$.
 If so, then it returns two list.
 The first gives the correspondence between types in $tm_1$ with type variables in $tm_2$.
-The second gives the correspondence between terms in $tm_1$ with free variables in $tm_2$.
+The second gives the correspondence between (type instantiated) terms in $tm_1$ with free variables in $tm_2$.
 Trivial (i.e. (x,x)) correspondences are not noted.
 =FAILURE
 3054	The first term is not an instance of the second
@@ -690,7 +716,8 @@ val ‚mk_var· : (string * TYPE) -> TERM;
 =DESCRIBE
 If the string is non-empty, and doesn't contain spaces, then a HOL term variable is formed in the obvious way from the argument.
 =FAILURE
-3055	Variable name ?0 must be non-empty and must not contain spaces or control characters
+3055	Variable name `?0' must be non-empty and must not contain 
+	spaces or control characters
 =ENDDOC
 =DOC
 val ‚variant· : TERM list -> TERM -> TERM;
@@ -704,12 +731,12 @@ The variants are generated by sufficient priming.
 $icl'variant$
 =ENDDOC
 =DOC
-val ‚list_variant· : TERM list -> TERM list -> TERM;
+val ‚list_variant· : TERM list -> TERM list -> TERM list;
 =DESCRIBE
 $list\_variant$ $stoplist$ $vlist$ returns a list of variants that are not present in the $stoplist$, nor contain any duplicates, one for each member of $vlist$.
 The variants are generated by sufficient priming.
 =FAILUREC
-\begin{paragraph}
+\paragraph{Failure}
 The function may give rise to errors from $variant$.
 =ENDDOC
 =DOC
@@ -727,19 +754,19 @@ Lists the free variables of a term.
 val ‚var_subst· : (TERM * TERM) list -> TERM -> TERM;
 =DESCRIBE
 $var\_subst$ $alist$ $term$ returns the term formed by, for each pair in $alist$, substituting in $term$ all instances of the term variable which is the second of the pair with the first of the pair.
-=USES
 
+Note that the term variables must have the same types as the term that is to replace them.
 =FAILURE
 3060	The second of each pair in the substitution list must be a term variable
 =SEEALSO
-$subst$
+$icl'subst$, $subst$
 =ENDDOC
 =DOC
 val ‚subst· : (TERM * TERM) list -> TERM -> TERM;
 =DESCRIBE
 $subst$ $alist$ $term$ returns the term formed by, for each pair in $alist$, substituting in $term$ all instances of the term which is the first of the pair with the second of the pair.
 =SEEALSO
-$var\_subst$
+$icl'subst$, $var\_subst$
 =ENDDOC
 =DOC
 val ‚TERM_map· : ((TERM list) -> TERM -> TERM) -> TERM -> TERM;
@@ -755,16 +782,247 @@ It does not attempt to apply $tmfun$ to a bound variable of an abstraction.
 val ‚inst· : TERM list -> (TYPE * TYPE) list -> TERM -> TERM;
 =DESCRIBE
 $inst$ $alist$ $slist$ $term$ instantiates the type variables of $term$ with the associated types found in $slist$.
+An element of $slist$ will be ($return$, $tv$),
+where $tv$ is a type variable that is to be instantiated to $return$.
 It will rename bound variables as necessary to prevent name capture problems.
 It will also not allow variables to become the same as those in the avoidance list, $alist$.
 =FAILURE
 3061	First argument must be a list of term variables
+3062	Second argument must be a list of (TYPE * type variables)
 =ENDDOC
 =SML
 end(* signature of icl'TypesAndTerms *);
 =TEX
 \section{TESTING}
-???
+
+=IGN
+Minimum printing:
+=IGN
+fun flat_strings ss = implode(flat (map explode ss));
+
+fun print_TYPE t = 
+let
+	fun aux (mk_vartype s) = " " ^ s
+	| aux (mk_type ("->",[t1,t2])) = (
+		"(" ^ aux t1 ^ "ã" ^ aux t2 ^")"
+	) | aux (mk_type (c,tl)) = "((" ^ flat_strings (map ((fn x => x ^", ") o aux) tl)^ ")" ^ c ^ ")"
+in
+	":" ^ aux t
+end;
+
+fun print_TERM (tm: TERM) =
+let fun print_DEST_TERM (Comb(t1,t2)) = (
+	"Comb (" ^ print_DEST_TERM(dest_TERM t1) ^", " ^
+		print_DEST_TERM(dest_TERM t2) ^ ")"
+) | print_DEST_TERM (Const(s,ty)) = s ^ print_TYPE ty
+| print_DEST_TERM (Var(s,ty)) = s ^ print_TYPE ty
+| print_DEST_TERM (Abs(v,b)) = (
+	let val (vs,vt) = dest_var v
+	in
+	"ç " ^ vs ^ print_TYPE vt ^ " é " ^ print_DEST_TERM (dest_TERM b)
+	end);
+in
+	print_DEST_TERM (dest_TERM tm)
+end;
+=IGN
+infix 6 cross;
+fun t1 cross t2 = mk_type("â",[t1,t2]);
+val BB = BOOL cross BOOL;
+print_TYPE BB;
+val BtoB = mk_fun(BOOL, BOOL);
+print_TYPE BtoB;
+dest_type BB;
+mk_type(dest_type BB) = BB;
+val tv1 = mk_vartype "'tv1";
+val tv2 = mk_vartype "'tv2";
+val tv3 = mk_vartype "'tv3";
+print_TYPE tv1;
+dest_type tv1;
+infix 6 comma;
+fun t1 comma t2 = mk_const(",", (mk_fun(t1,mk_fun(t2,(t1 cross t2)))));
+val Comma = tv1 comma tv2;
+mk_TERM (Comb(mk_var("v",BB),vtv1));
+mk_TERM (Comb(mk_var("v",BtoB),vtv1));
+print_TERM Comma;
+print_TYPE(type_of Comma);
+val ist = icl'inst_type [(BOOL, "'tv1"),(BB,"'tv3")];
+print_TYPE(ist tv1);
+print_TYPE(ist tv2);
+print_TYPE(ist tv3);
+print_TYPE(ist (tv1 cross tv2));
+print_TYPE(ist (tv3 cross tv2));
+type_tycons(type_of Comma);
+type_tycons (ist (tv1 cross tv2));
+type_tyvars(type_of Comma);
+type_tyvars (ist (tv1 cross tv2));
+dest_TERM Comma;
+val c1 = mk_const("c1",BOOL);
+val c2 = mk_const("c2",mk_type("triple",[tv1,tv2,tv3]));
+val c3 = mk_const("c3",mk_type("triple",[tv3,BOOL,tv1]));
+val c4 = mk_const("c4",mk_fun(BOOL,mk_fun(tv2,tv3)));
+val c5 = mk_const("c5",mk_fun(tv1,mk_fun(tv2,BOOL)));
+val c6 = mk_const("c6",mk_fun(tv1,mk_fun(tv2,mk_fun(tv3,
+	mk_type("triple",[tv1,tv2,tv3])))));
+mk_const(" wrong",BOOL);
+map print_TERM [c1, c2, c3, c4, c5, c6];
+val v1 = mk_var("v1",BOOL);
+val v2 = mk_var("v2",mk_type("triple",[tv1,tv2,tv3]));
+val v3 = mk_var("v2",mk_type("triple",[tv3,BOOL,tv1]));
+val iv1 = icl'mk_var(" a b c = F",tv1);
+val iv2 = icl'mk_var(" a b c = T",BOOL);
+map print_TERM [iv1, iv2];
+mk_var(" a b c = F",tv1);
+mk_var(" a b c = T",BOOL);
+
+val vtv1 = mk_var("vtv1",tv1);
+val vtv2 = mk_var("vtv2",tv2);
+val vtv3 = mk_var("vtv3",tv3);
+val cm1 = mk_comb(c6,vtv1);
+val cm2 = mk_comb(cm1,vtv2);
+val cm3 = mk_comb(cm2,vtv3);
+mk_comb(mk_var("v",BB),vtv1);
+mk_comb(mk_var("v",BtoB),vtv1);
+map print_TERM [cm1, cm2, cm3];
+val a1 = mk_simple_abs(v1, cm3);
+val a2 = mk_simple_abs(v2,v2);
+val a3 = mk_simple_abs(genvar tv1, c2);
+val a4 = mk_simple_abs(iv1, c2);
+map print_TERM [a1, a2, a3, a4];
+mk_simple_abs(c1, c1);
+type_of cm3;
+dest_const(c3);
+dest_TERM c3;
+dest_const vtv1;
+dest_comb cm3;
+dest_TERM cm3;
+fun DEST_TERM_id x = ((mk_TERM (dest_TERM x)) TERM_eq x);
+map DEST_TERM_id [c1, c2, c3, c4, c5, c6, v1, v2, v3,
+	cm1, cm2, cm3, a1, a2, a3, iv1, iv2, a4];
+dest_var iv1; dest_var v1; dest_var c1; 
+is_var iv1; is_var v1; is_var c1; is_var cm1; is_var a1;
+dest_const c1; dest_const v1;
+is_const c1; is_const v1;
+dest_comb v1;
+list_mk_comb (c6, [vtv1, vtv2, vtv3]) TERM_eq cm3;
+list_mk_comb (c6,[]) TERM_eq c6;
+strip_comb cm3;
+dest_simple_abs a1; dest_simple_abs a4; dest_simple_abs v1;
+is_simple_abs a1; is_simple_abs v1;
+print_TERM (list_mk_simple_abs ([vtv1, vtv2, vtv3], c6));
+list_mk_simple_abs ([],c6) TERM_eq c6;
+icl'frees cm3;
+icl'frees (mk_simple_abs(vtv2, cm3));
+map (op TERM_eq) (combine (frees cm3) (map mk_var (icl'frees cm3)));
+is_free_var_in (dest_var vtv1) cm3; 
+is_free_var_in (dest_var vtv1)
+	(list_mk_simple_abs ([vtv1, vtv2, vtv3], c6));
+val eq1 = mk_eq(c1,c1); 
+mk_eq(c1, c2);
+dest_eq c1;
+(dest_const ** dest_const)(dest_eq eq1);
+is_eq eq1; is_eq c1;
+val T = mk_const("T",BOOL); val F = mk_const("F",BOOL);
+val imp1 = (mk_imp(F,T));
+mk_imp(c2,c3);
+dest_imp c1;
+is_imp imp1;
+(dest_const ** dest_const)(dest_imp imp1);
+list_mk_imp[];
+list_mk_imp[vtv1, vtv2];
+strip_imp(list_mk_imp[T,F,T,F]);
+print_TERM (mk_simple_forall(vtv1, c1));
+(print_TERM ** print_TERM) (dest_simple_forall(mk_simple_forall(vtv1, c1)));
+mk_simple_forall(c1,c1);
+dest_simple_forall c1;
+is_simple_forall(mk_simple_forall(vtv1, c1));
+is_simple_forall c1;
+print_TERM(list_mk_simple_forall([vtv1, vtv2], c1));
+(print_TERM ** print_TERM) (dest_simple_exist(mk_simple_exist(vtv1,c1)));
+print_TERM(list_mk_simple_exist([vtv1, vtv2], c1));
+dest_simple_exist c1;
+aconv vtv1 c1;
+aconv vtv1 vtv1;
+aconv (mk_simple_abs(mk_var ("A",BOOL),c1)) 
+	(mk_simple_abs(mk_var ("B",BOOL),c1)); 
+aconv (mk_simple_abs(vtv1, vtv1) )
+	(mk_simple_abs(mk_var ("'ntv1",tv1),vtv1)); 
+icl'variant [] (dest_var vtv1);
+icl'variant [(dest_var vtv1)] (dest_var vtv1);
+icl'variant [(dest_var vtv1),(("vtv1'",tv1))] (dest_var vtv1);
+icl'variant [("vtv1",tv2)] (dest_var vtv1);
+(icl'subst [(T,("vtv1",tv2))] c1);
+print_TERM (icl'subst [(T,("v1",BOOL))] c1);
+print_TERM (icl'subst [(T,("v1",BOOL)),(F,("v2",BOOL))] (v1));
+print_TERM (icl'subst [(T,("v1",BOOL)),(F,("v2",BOOL))] (mk_var("v2",BOOL)));
+print_TERM (icl'subst [(T,("v1",BOOL)),(F,("v2",BOOL))] (mk_simple_exist(mk_var("v2",BOOL), mk_var("v2",BOOL))));
+print_TERM (icl'subst [(T,("v1",BOOL)),(F,("v2",BOOL))] (mk_simple_forall(mk_var("v2",BOOL), v1)));
+print_TERM(rename ("v1",BOOL) "renamed_v1"
+	(mk_simple_exist(v1, mk_var("v2",BOOL))));
+print_TERM(rename ("v1",BOOL) "renamed_v1"
+	(mk_simple_exist(mk_var("v2",BOOL), v1)));
+print_TERM(rename ("v1",tv1) "renamed_v1"
+	(mk_simple_exist(mk_var("v2",BOOL), v1)));
+print_TERM (icl'inst [("av1",tv1),("av2",tv2)]
+	[(BOOL,"'tv1"),(tv1,"'tv2")]
+	cm3);
+print_TERM (icl'inst [("av1",tv1),("av2",tv2)]
+	[(BOOL,"'tv1"),(tv1,"'tv2")]
+	(rename ("vtv2",tv2) "av1" cm3));
+map print_TYPE (term_types cm3);
+(term_tyvars cm3);
+term_constants cm3;
+type_match BOOL tv1;
+type_match BOOL BB;
+type_match (mk_fun(tv1,mk_fun(tv2,tv1))) (mk_fun(tv2,mk_fun(tv1,tv2)));
+type_match (mk_fun(tv2,mk_fun(tv2,tv2))) (mk_fun(tv1,mk_fun(tv2,tv1))) ;
+type_match (mk_fun(BOOL,mk_fun(tv2,BB))) (mk_fun(tv1,mk_fun(tv2,tv1))) ;
+(map (print_TYPE ** print_TYPE) ** map (print_TERM ** print_TERM)) (term_match v1 v1);
+(map (print_TYPE ** print_TYPE) ** map (print_TERM ** print_TERM)) (term_match v2 vtv1);
+(map (print_TYPE ** print_TYPE) ** map (print_TERM ** print_TERM)) (term_match 
+	(list_mk_comb ((mk_const("trio",mk_fun(BOOL,mk_fun(tv2,mk_fun(tv3, (BOOL cross tv2)))))) ,
+	[v1, vtv2,vtv3]))
+	(list_mk_comb ((mk_const("trio",mk_fun(tv1,mk_fun(tv2,mk_fun(tv3, (tv1 cross tv2)))))),
+	[vtv1, vtv2,vtv3])));
+(map (print_TYPE ** print_TYPE) ** map (print_TERM ** print_TERM)) (term_match 
+	(list_mk_comb ((mk_const("trio",mk_fun(BOOL,mk_fun(tv2,mk_fun(tv3, (BB cross tv2)))))) ,
+	[v1, vtv2,vtv3]))
+	(list_mk_comb ((mk_const("trio",mk_fun(tv1,mk_fun(tv2,mk_fun(tv3, (tv1 cross tv2)))))),
+	[vtv1, vtv2,vtv3])));
+print_TERM (genvar BOOL);print_TERM (genvar BOOL);print_TERM (genvar BOOL);
+mk_var(dest_var (genvar BOOL));
+(variant[c1]vtv1);
+print_TERM(variant [] vtv1);
+print_TERM(variant [] c1);
+print_TERM(variant [vtv1] vtv1);
+print_TERM(variant [vtv1,(mk_var("vtv1'",tv1))] vtv1);
+print_TERM(variant [mk_var("vtv1",tv2)] vtv1);
+print_TERM(variant [mk_var("vtv1",tv2)] vtv1);
+map print_TERM(list_variant[vtv1,(mk_var("vtv1'",tv1))]
+	[(mk_var("vtv1'",tv1)), vtv1]);
+is_free_in vtv1 vtv1;
+is_free_in vtv1 (mk_simple_abs(vtv1, vtv1));
+map print_TERM (frees cm3);
+map print_TERM (frees (mk_simple_abs(vtv2, cm3)));
+(var_subst [(T,c1)] c1);
+print_TERM (var_subst [(T,v1)] c1);
+print_TERM (var_subst [(T,v1),(F,mk_var("v2",BOOL))] (v1));
+print_TERM (var_subst [(T,v1),(F,mk_var("v2",BOOL))] (mk_var("v2",BOOL)));
+print_TERM (var_subst [(T,v1),(F,mk_var("v2",BOOL))] (mk_simple_exist(mk_var("v2",BOOL), mk_var("v2",BOOL))));
+print_TERM (var_subst [(T,v1),(F,mk_var("v2",BOOL))] (mk_simple_forall(mk_var("v2",BOOL), v1)));
+print_TERM (subst [(v1,mk_imp(T,F))] (list_mk_imp[T,F,T,F]));
+print_TERM (inst [mk_var("av1",tv1),mk_var("av2",tv2)]
+	[(BOOL,tv1),(tv1,tv2)]
+	cm3);
+print_TERM (inst [mk_var("av1",tv1),mk_var("av2",tv2)]
+	[(BOOL,tv1),(tv1,tv2)]
+	(rename ("vtv2",tv2) "av1" cm3));
+print_TERM (inst [c1,mk_var("av2",tv2)]
+	[(BOOL,tv1),(tv1,tv2)]
+	(rename ("vtv2",tv2) "av1" cm3));
+print_TERM (inst [mk_var("av1",tv1),mk_var("av2",tv2)]
+	[(BOOL,BB),(tv1,tv2)]
+	(rename ("vtv2",tv2) "av1" cm3));
+=TEX
 \twocolumn[\section{INDEX}]
 \small
 \printindex
