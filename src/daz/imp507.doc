@@ -86,6 +86,7 @@ Also implemented remedies for issues 1 and 4 (V0.6).
 \item[Issue 1.116] Fixed wrong error message in $do\_stmt$..
 \item[Issue 1.117] Syntax changes.
 \item[Issue 1.118] Fixed bug 2 (V0.7).
+\item[Issue 1.119] Correcting IUCT project WP8, bug 1.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1226,6 +1227,7 @@ val €script_name0› : string = "-";
 \subsection{$flatten\_env$}
 To implement $flatten\_env$, we first need a function to merge two $IN\_SCOPE$s.
 =SML
+
 fun €merge_in_scopes›
 	({	vc_vars = vc_vars1,
 		vc_pars = vc_pars1,
@@ -1241,9 +1243,10 @@ fun €merge_in_scopes›
 		dec_labels = dec_labels2} : IN_SCOPE) : IN_SCOPE = (
 	{	vc_vars = vc_vars1 cup vc_vars2,
 		vc_pars = vc_pars1 cup vc_pars2,
-		vc_log_cons = vc_log_cons1 @ vc_log_cons2,
-		vc_aux_vars = vc_aux_vars1 @ vc_aux_vars2,
-		formal_procs = formal_procs1 @  formal_procs2,
+		vc_log_cons = union (op =$) vc_log_cons1 vc_log_cons2,
+		vc_aux_vars = union (op =$) vc_aux_vars1 vc_aux_vars2,
+		formal_procs = formal_procs1 @ formal_procs2,
+		(* an equality test for formal procedure lists is non-trival *)
 		dec_labels = dec_labels1 cup dec_labels2}
 );
 =TEX
@@ -3460,21 +3463,55 @@ fun €new_ids› (p : PACKAGE) : ID list = (
 );
 =TEX
 The following function returns true if $id$ or any of its attributes are in the set of $newids$, or any of its initial variables.
+
+$is\_id\_in\_package$ $names$ $ident$ will return true if either:
+\begin{enumerate}
+\item
+$ident$, regardless of content is a member of $names$;
+\item
+$ident$ is of the form $AAAvBBB$, where the case of $AAA$ must contain no
+case, and must not be the empty string, and $AAA$ is in $names$.
+\item
+$ident$ is of the form $AAAâ0BBB$, where the case of $AAA$ must contain no
+lower case, and must not be the empty string, ($BBB$ may well be an
+empty string), and $AAA$ is in $names$.
+\end{enumerate}
+
+Note that the function will not give the desired result if
+$ident$ is an auxiliary variable
+of the form $AAAvBBB$ or $AAAâ0BBB$, where $AAA$ and $BBB$ contains no lower case
+letters (and may be empty for $â0$), and $AAA$ is in $names$, but $ident$ is not.
 =SMLPLAIN
+local
+	val orda = ord("a");
+	val ordz = ord("z");
+	fun is_lcase (c:string) : bool = (
+		ord c <= ordz andalso orda <= ord c
+	);
+in		
 fun €is_id_in_package› (newids : ID list) (id : ID) = (
 	let	fun remove_tail (lhs, "â"::"0"::rest) = (
-			(implode o rev) lhs
+			(* if rest is non-empty it is probably "v<ATTRIBUTE>" *)
+			if (is_nil lhs orelse any rest is_lcase)
+			then [id]
+			else [(implode o rev) lhs, id]
 		) | remove_tail (lhs, "v"::rest) = (
-			(implode o rev) lhs
+			if (is_nil lhs orelse is_nil rest 
+				orelse any rest is_lcase)
+			then [id]
+			else [(implode o rev) lhs, id]
 		) | remove_tail (lhs, c::rest) = (
-			remove_tail (c::lhs, rest)
+			if is_lcase c
+			then [id]
+			else remove_tail (c::lhs, rest)
 		) | remove_tail (lhs, []) = (
-			(implode o rev) lhs
+			[id]
 		);
 	in
-		remove_tail ([], explode id) mem newids
+		any (remove_tail ([], explode id)) (fn anid => anid mem newids)
 	end
 );
+end;
 =TEX
 The following function extracts from the temporary theory the types (corresponding to given sets) and the constants (corresponding to global variables) together with their definitions if any.
 =SML
