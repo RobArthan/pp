@@ -1045,7 +1045,7 @@ Boolean application_alive()
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static NAT bytes_since_last_pause;
 #define PAUSE_AFTER 200
-#define PAUSE_FOR 20
+#define PAUSE_FOR 50
 
 static void get_from_application(unused_w, unused_p)
 Widget unused_w;
@@ -1056,9 +1056,9 @@ XtPointer unused_p;
 	static void start_listening_again();
 	while(application_alive()
 	&&	(ct = read(control_fd, buf, 1000)) > 0
-	&&	bytes_since_last_pause < PAUSE_AFTER) {
-		scroll_out(buf, ct, False);
-		bytes_since_last_pause += ct;
+	&&	(scroll_out(buf, ct, False),
+			(bytes_since_last_pause += ct) < PAUSE_AFTER)) {
+		;
 	}
 	if(bytes_since_last_pause > PAUSE_AFTER) {
 		bytes_since_last_pause = 0;
