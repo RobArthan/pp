@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.210 $ $RCSfile: imp507.doc,v $ $Date: 2002/07/09 14:10:33 $
+% imp507.doc %Z% $Revision: 1.211 $ $RCSfile: imp507.doc,v $ $Date: 2002/07/13 11:12:32 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.210 $%
+\def\SCCSversion{$Revision: 1.211 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/07/09 14:10:33 $%
+\TPPdate{\FormatDate{$Date: 2002/07/13 11:12:32 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -157,6 +157,9 @@ in the same package.
 \item[Issue 1.209] Allowed for changes to the type THEORY.
 \item[Issue 1.210] R0076: residual global variable unsoundness fixed.
 \item[Issue 1.211] R0054: reworked treatment of use clauses.
+\item[Issue 1.212] Got {\it renames\_fun} and {renames\_proc} to work in
+a package specification when the subprogram
+being renamed is defined in the same package specification.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -2896,6 +2899,16 @@ fun €basic_declaration› (basic_decl : BASIC_DECL) : unit = (
 );
 =TEX
 =SML
+fun €expand_var_decl› ({vars, tmark} : VAR_DECL) : VAR_DECL = (
+	let	val tmark' =
+			case current_cn_env tmark of
+				Value(_, EIEnvRetry ex) => ex
+			|	_ => tmark;
+	in	{vars = vars, tmark = tmark'}
+	end
+);
+=TEX
+=SML
 fun €var_pack_spec› (var_decl : VAR_DECL) : unit = (
 	if	test_flag #pack_spec_flag 1
 	then	let	val block_name1 = #block_name(#declab (block 1));
@@ -2906,7 +2919,7 @@ fun €var_pack_spec› (var_decl : VAR_DECL) : unit = (
 			s_enter
 			block_name1
 			(package_vc_vars(package,
-					#vc_vars package @ [var_decl]))
+					#vc_vars package @ [expand_var_decl var_decl]))
 			(!pack_env)
 		end
 	else
@@ -5809,6 +5822,7 @@ fun €get_name_and_par_names›  (ss :  SUBPROGRAM_SPECIFICATION) : ID * ID list = 
 );
 =SML
 fun €renames_proc_common›
+	(_ : FORMAL_PROC list)
 	({subprogram_specification = ss, name1 = Value pack, name2=old}
 		: SUBPROGRAM_RENAMING)
 	 : FORMAL_PROC OPT = (
@@ -5818,9 +5832,10 @@ fun €renames_proc_common›
 		   Value package => (
 			let	val spec_script_name = (#zmod package);
 				val formal_proc2  =
-					find
+					get_proc_spec "renames_proc_common"
+						current_cn_env
 						(#formal_procs package)
-						(fn p => #name p = old);
+						old;
 
 				val (tys, _) =
 					spec_script_theory_types_and_const_thms spec_script_name;
@@ -5829,7 +5844,7 @@ fun €renames_proc_common›
 				val oldthy = get_current_theory_name();
 				val changethy = open_theory spec_script_name;
 				val old_fp as {name=pname, formal_ids=pformal_ids, globals=g,
-					par_names=_,  spec=pspec} : FORMAL_PROC = (
+					par_names=_, spec=pspec} = (
 					prefix_formal_proc
 						pack
 						tysubs
@@ -5848,20 +5863,18 @@ fun €renames_proc_common›
 						spec = pspec};
 				val fps = #formal_procs (flatten_env(!blocks));
 				val new_fp  =
-					Value( find fps (fn {name, ...}  =>  name = new) )
+					Value( get_proc_spec "renames_proc_common"
+						current_cn_env fps new)
 					handle Fail _ =>  Nil;
 			in	case new_fp of
 					Nil => Value formal_proc3
-				|	Value fp =>  (
-					if	conformant_specs old_fp fp
-					andalso	pformal_ids = #formal_ids fp
-					then	Nil
-					else	fail "renames_proc_common" 507059
+				|	Value fp => (
+					fail "renames_proc_common" 507059
 					[fn _ => old, fn _ => new]
 				)
 			end	handle (exn as Fail f) =>
 				(if (area_of exn = "find")
-				then comment "renames_proc" 507036
+				then comment "renames_proc_common" 507036
 					[fn () => pack dot old]
 				else comment "renames_proc" 507044
 					[fn () => pack dot old,
@@ -5870,16 +5883,19 @@ fun €renames_proc_common›
 		) |	Nil => (comment "renames_proc" 507038 [fn()=>pack];
 				Nil)
 	) |	_ => Nil
-) | renames_proc_common
+) | renames_proc_common pack_fps
 	({subprogram_specification = ss, name1 = Nil, name2=old}) = (
 	let	val fps = #formal_procs (flatten_env(!blocks));
 		val (new, par_names) = get_name_and_par_names ss;
-		val old_fp  as {formal_ids, globals, spec, ...} =
-			find fps (fn {name, ...}  =>  name = old) 
-			handle Fail _ =>  fail "renames_proc_common" 507059
-				[fn _ => old, fn _ => new];
+		val old_fp  as {formal_ids, globals, spec, par_names = _, ...} =
+			get_proc_spec "renames_proc_common" current_cn_env  fps old
+			handle Fail _ => (
+				get_proc_spec "renames_proc_common" current_cn_env  pack_fps old
+				handle Fail _ =>  fail "renames_proc_common" 507059
+					[fn _ => old, fn _ => new]
+			);
 		val new_fp  =
-			Value( find fps (fn {name, ...}  =>  name = new) )
+			Value( get_proc_spec "renames_proc_common" current_cn_env fps new )
 			handle Fail _ =>  Nil;
 	in	case new_fp of
 				Nil  => (
@@ -5889,11 +5905,8 @@ fun €renames_proc_common›
 						globals = globals,
 						spec = spec}
 		) |	Value fp =>  (
-				if	conformant_specs old_fp fp
-				andalso	formal_ids = #formal_ids fp
-				then	Nil
-				else	fail "renames_proc_common" 507059
-					[fn _ => old, fn _ => new]
+				fail "renames_proc_common" 507059
+				[fn _ => old, fn _ => new]
 		)
 	end
 );
@@ -5903,30 +5916,21 @@ fun €renames_proc_pack_spec›
 	(sr as {subprogram_specification = ss, name1 =opack, name2=old}
 		: SUBPROGRAM_RENAMING)
 	: unit = (
-let 	val oformal_proc3 = renames_proc_common sr;
+let	val {declab = {block_name = block_name1, ...}, ...} =	block 1;
+	val package2 = force_value(
+		s_lookup block_name1 (!pack_env))
+		handle _ => fail "renames_proc_pack_spec" 507012 [fn ()=> block_name1];
+	val fps = #formal_procs package2;
+ 	val oformal_proc3 = renames_proc_common fps sr;
 in
 	case oformal_proc3 of
 	Nil => ()
 	| Value formal_proc3 =>  (
-			let	val block1 as
-					{declab = declab as
-						{in_scope as {formal_procs, ...},
-						block_name = block_name1,
-						 ...},
-					...} =	block 1;
-				val package2 = force_value(
-					s_lookup block_name1 (!pack_env))
-					handle _ => fail "renames_proc_pack_spec"
-						507012 [fn ()=> block_name1];
-			in	pack_env :=
-					s_enter
-					block_name1
-					(package_formal_procs(package2,
-						(#formal_procs package2) @
-						[formal_proc3]))
-					(!pack_env)
-			end	handle (exn as Fail f) =>
-				() (* done in common *)
+		pack_env :=
+		s_enter
+		block_name1
+		(package_formal_procs(package2, fps @ [formal_proc3]))
+		(!pack_env)
 	)
 end
 );
@@ -5936,7 +5940,7 @@ fun €renames_proc_otherwise›
 	(sr as {subprogram_specification = ss, name1 = opack, name2=old}
 		: SUBPROGRAM_RENAMING)
 	: unit = (
-let	val oformal_proc3 = renames_proc_common sr;
+let	val oformal_proc3 = renames_proc_common [] sr;
 in
 	case oformal_proc3 of
 	Nil => ()
@@ -5961,8 +5965,100 @@ fun €renames_proc› (sr : SUBPROGRAM_RENAMING)
 );
 =TEX
 \subsection{The SID function renames\_fun}
+=TEX
 =SML
-fun €renames_fun›
+fun €combine_param_specs› (old : PARAM_SPEC list) (new : PARAM_SPEC list) : PARAM_SPEC list OPT = (
+	let	fun flat_param_spec acc [] =acc
+		|    flat_param_spec acc  ({var_decl = {vars = v::vs, tmark}, mode} :: more)  = (
+			flat_param_spec
+			((v, tmark, mode)::acc)
+			 ({var_decl = {vars = vs, tmark = tmark}, mode = mode} :: more)
+		)  |  flat_param_spec acc ({var_decl = {vars=[], ...}, ...}::more) = flat_param_spec acc more;
+		fun merge acc [] = rev acc
+		|   merge acc (((_, tm1, m1), (v2, _, _))::more) = (
+			merge ({var_decl = {vars =[v2], tmark = tm1}, mode = m1}::acc) more
+		);
+		val old' = flat_param_spec [] old;
+		val new' = flat_param_spec [] new;
+	in	Value (merge [] (combine old' new'))
+	end	handle Fail _ => Nil
+);
+=TEX
+=SML
+fun €mk_fun_eq_spec› (ty : TYPE)  (old : ID) (new : ID) : SPEC =(
+	let	val old_tm = mk_z_gvar(old, ty, []);
+		val new_tm = mk_z_lvar(new, ty, []);
+		val post = mk_eq(new_tm, old_tm);
+	in	{
+		w 		= 	[],
+		w0		=	[],
+		pre		=	ZTmTruth true,
+		post		=	ZTmQuotation (post, Nil) }
+	end
+);
+=SML
+fun €renames_fun_pack_spec›
+	({subprogram_specification = ss as SSFunction {formal_part, designator, ...},
+		name1 = opack, name2=old}
+		: SUBPROGRAM_RENAMING)
+	: unit = (
+	let	val {declab = {block_name = block_name1, ...}, ...} =	block 1;
+		val package2 = force_value(
+			s_lookup block_name1 (!pack_env))
+			handle _ => fail "renames_proc_pack_spec" 507012 [fn ()=> block_name1];
+		val ffs = #formal_funs package2;
+		val old_name = (case opack of  Value pack => pack dot old | Nil => old);
+		val old_zname =  trans_id old_name;
+		val new_zname  = trans_id designator;
+		val ffo = Value (find ffs (fn {informal_fun = {name, ...},...} => name = old_name))
+			handle Fail _ => Nil;
+		val new_pars = map mk_param_spec formal_part;
+		fun get_env_info n = (
+			case current_cn_env n of
+				Value (_, EIEnvRetry ex) => (ex, current_cn_env ex)
+			|	other => (n, other)
+		);
+	in	 case ffo of
+			Value (ff as {informal_fun = {formal_pars, return_type, ...}, globals, ...}) => (
+			let	val zn = trans_id (block_name1 dot old);
+				val new_formal_pars = force_value (
+					combine_param_specs formal_pars new_pars);
+				val ty = type_of (hd (frees (fun_decl current_cn_env ff)));
+				val new_ff = {
+					informal_fun = {
+						name = designator,
+						formal_pars = new_formal_pars,
+						return_type = return_type},
+					spec = mk_fun_eq_spec ty zn new_zname,
+					globals = globals};					
+			in	pack_env :=
+				s_enter
+				block_name1
+				(package_formal_funs(package2, ffs @ [new_ff]))
+				(!pack_env)
+			end
+		) |	Nil =>  (
+			case get_env_info old_zname of 
+				(zn, Value(_, EIEnvFunction (globals,  pars_tmarks, res_tmark))) => (
+				let	val old_zname =  trans_id old_name;
+					val (_, par_names) = get_name_and_par_names ss;
+					val tm = zid current_cn_env zn;
+					val new_pars_tmarks = combine
+						par_names (map snd pars_tmarks);
+					val _ =add_globs_pars_return
+						globals designator new_pars_tmarks res_tmark;
+					val parainfo = AbbDefInfo(new_zname, [], tm);
+				in	bd_store_para parainfo; ()
+			end
+			) |	_ => fail "" 0 [] (* caught immediately *)
+		)
+	end	handle Fail msg =>
+			fail "renames_fun_pack_spec" 507064
+			[fn _ => old, fn _ => designator]
+) | renames_fun_pack_spec _ = () (* Caller willl never make this happen *); 
+=TEX
+=SML
+fun €renames_fun_otherwise›
 	({subprogram_specification = ss, name1 = opack, name2=old}
 		: SUBPROGRAM_RENAMING)
 	: unit = (
@@ -5977,9 +6073,17 @@ fun €renames_fun›
 		val parainfo = AbbDefInfo(new_zname, [], tm);
 	in	bd_store_para parainfo; ()
 	end	handle Fail msg =>
-			fail "renames_fun" 507064
+			fail "renames_fun_otherwise" 507064
 			[fn _ => old_name, fn _ => new]
 	end
+);
+=TEX
+=SML
+fun €renames_fun› (sr : SUBPROGRAM_RENAMING)
+	: unit = (
+	if	test_flag #pack_spec_flag 1
+	then	renames_fun_pack_spec sr
+	else	renames_fun_otherwise sr
 );
 =TEX
 \subsection{The SID function renames\_opsym}
@@ -6518,7 +6622,12 @@ or global dependency lists and expands them
 into the corresponding list of signature variables.
 =SML
 fun expand_names (ns : ID list) : Z_ID list = (
-	let	fun aux n = (
+	let	fun real_name n = (
+			case current_cn_env n of
+				Value (_, EIEnvRetry ex) => ex
+			|	_ => n
+		);
+		fun aux n = (
 			((map fst o dest_z_schema_type o dest_z_power_type o
 				force_value o get_const_type) (z_id_of_id n))
 			handle Fail _ => [n]
@@ -6528,7 +6637,7 @@ fun expand_names (ns : ID list) : Z_ID list = (
 			in	zn'
 			end	handle Fail _ => zn
 		);
-	in	map undo_var_renamings(flat (map aux ns))
+	in	map undo_var_renamings(flat (map (aux o real_name) ns))
 	end
 );
 =TEX
@@ -6787,9 +6896,10 @@ and €do_procedure_spec› (
 	fformal_part formal_part;
 	let	val esp = expand_frame sp;
 		val eg = #w esp @ expand_names globals @ flat (map #idlist formal_part);
+		val par_names = snd(get_name_and_par_names(SSProcedure proc_spec));
 		val formal_proc : FORMAL_PROC =
 		{name=name, spec=esp, globals = eg, formal_ids = map mk_param_spec formal_part,
-			par_names = snd(get_name_and_par_names(SSProcedure proc_spec))};
+			par_names = par_names};
 	in	check_19 current_cn_env esp;
 		curr_form_proc formal_proc;
 		form_proc formal_proc;
