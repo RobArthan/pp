@@ -64,6 +64,11 @@ and the types $†$, $CHAR$ and $STRING$.
 Corrected $aconv$.
 \item [Issue 1.8]
 Fixed bugs in $is\_free\_var\_in$, $dest\_string$ and $aconv$.
+\item [Issue 1.9]
+Added $set\_variant\_string$; 
+modified $icl'variant$ by this, and ignoring types.
+$variant$ and $list\_variant$ improved.
+added $term\_fail$ and $type\_fail$.
 \end{description}
 \subsection{Changes forecast}
 \section{GENERAL}
@@ -302,6 +307,11 @@ end; (* of local defining TERM *)
 end; (* of local defining TYPE *)
 =TEX
 \subsection{Functions derived from Abstract Data Type $TYPE$ Part}
+=SML
+fun âtype_failá (area : string) (msg : int) (tyl : TYPE list) : 'a = (
+	fail area msg (map (fn ty => (fn () => PolyML.makestring ty)) tyl)
+);
+=TEX
 $icl'inst\_type$ $alist$ $type$ recursively descends through $type$, replacing any type variables by whatever the association list $alist$ associates with them.
 If the association list does not contain a type variable found in $type$, then that type variable will not be changed.
 Replaced types are {\bf not} recursively processed by this function.
@@ -363,8 +373,12 @@ end);
 =SML
 val âBOOLá : TYPE = mk_type("BOOL", []);
 =TEX
-
 \subsection{Functions derived from Abstract Data Type $TERM$ Part}
+=SML
+fun âterm_failá (area : string) (msg : int) (tml : TERM list) : 'a = (
+	fail area msg (map (fn ty => (fn () => PolyML.makestring ty)) tml)
+);
+=TEX
 =SML
 fun âis_free_var_iná (vsvty as (vs, vty): string * TYPE) (tm : TERM) : bool = (
 let
@@ -689,18 +703,29 @@ fun âaconvá (tm1 : TERM) (tm2 : TERM) : bool = (
 \subsubsection{Substitution}
 A destroyed variable renaming function, used in substitution:
 =SML
-fun âicl'variantá (vars : (string * TYPE) list) ((s, ty) : string * TYPE) : string = (
-	if not (any vars (fn (s1, _) => s = s1))
-	then s
-	else	let val vars2 = map fst (vars drop (fn (_, ty1) => ty <> ty1))
-		    fun aux n = (
-			if contains vars2 n
-			then aux (n ^ "'")
-			else n
-		    )
-		in aux s
-		end
+local
+	val âvariant_stringá : string ref = ref "'";
+	val side_effect = (
+		new_string_control
+		{name="variant_string", 
+		control=variant_string, 
+		default = (fn () => "'"), 
+		check = (fn s => s <> "")}
+	);
+
+in
+fun âset_variant_stringá (s : string) : string = (
+	set_string_control("variant_string",s)
+	handle complaint =>
+	divert complaint "set_string_control" "set_variant_string" 3028 []
 );
+
+fun âicl'variantá (vars : string list) (s : string) : string = (
+	if s mem vars
+	then icl'variant vars (s ^ (!variant_string))
+	else s
+);
+end;
 =TEX
 =IGN
 $new\_frees$ in the below, determines the free variables in the abstraction, changes those found in $R$ to their substitution, finds the frees in the results, and flattens these to gain a single list of resulting frees.
@@ -717,7 +742,7 @@ fun âicl'substá (R : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = (
 				flat (map
 				(icl'frees o rassoc2 R mk_var)
 				(icl'frees b less (s, ty)));
-			val s' = icl'variant new_frees (s, ty)
+			val s' = icl'variant (map fst new_frees) s;
 			val vty' = mk_var (s', ty)
 			val RR = (vty', (s, ty)) :: R;
 			val b' = aux RR (simple_dest_term b);
@@ -738,12 +763,13 @@ fun ârenameá ((v, ty) : string * TYPE) (w : string) (tm : TERM) : TERM = (
 );
 =TEX
 \subsubsection{Instantiation of Types and Terms}
+The use of $icl'variant$ in $rename\_dups$ is untidy.
 =SML
 local
 	fun	inst_loc1 
 		(tysubs : (TYPE * string) list)
 		(Comb(f, a) : SIMPLE_DEST_TERM)
-		(vars : (string * TYPE) list)
+		(vars : string list)
 		(varmap : ((string * TYPE) * (string * TYPE)) list)
 		: TERM = (
 			mk_comb(inst_loc1 tysubs (simple_dest_term f) vars varmap,
@@ -753,14 +779,15 @@ local
 	) | inst_loc1 tysubs (Var(s,ty)) vars varmap = (
 		mk_var(lassoc3 varmap (s,ty))
 	) | inst_loc1 tysubs (Abs(v, b)) vars varmap = (
-		let	val sty as (s, ty) = dest_var v
-			val ty' = icl'inst_type tysubs ty
-			val sty' = (icl'variant vars (s, ty'), ty')
+		let	val sty as (s, ty) = dest_var v;
+			val ty' = icl'inst_type tysubs ty;
+			val s' = icl'variant vars s;
+			val sty' = (s', ty')
 		in simple_mk_abs(mk_var sty',
 			inst_loc1
 			tysubs
 			(simple_dest_term b)
-			(sty' :: vars)
+			(s' :: vars)
 			((sty, sty') :: varmap))
 		end
 	);
@@ -772,7 +799,9 @@ local
 		in	if ty = ty'
 			then (s, ty) :: rename_dups tysubs av rest
 			else
-				let val sty' = (icl'variant av (s, ty'), ty')
+				let val s' = icl'variant 
+					(map fst(av less (s,ty))) s;
+					val sty' = (s' , ty')
 				in sty' :: rename_dups tysubs (sty' :: av) rest
 				end
 		end);
@@ -798,7 +827,7 @@ in
 		inst_loc1
 		tysubs
 		(simple_dest_term tm)
-		nil
+		[]
 		(inst_loc2 avoid tysubs (icl'frees tm))
 	);
 end; (* of local ... in ... end *)
@@ -1068,29 +1097,38 @@ fun âis_type_instanceá (ty1 : TYPE) (ty2 : TYPE) : bool = (
 \subsubsection{Functions Concerning Term Variables}
 =SML
 fun âvariantá (vs : TERM list) (v : TERM) : TERM = (
-	(if is_var v
-	then (let val (s, ty) = dest_var v;
-	in
-		if not (any vs (fn v1 => s = fst(dest_var v1)))
-		then v
-		else	let val vs2 = map fst ((map dest_var vs) drop (fn (_, ty1) => ty <> ty1))
-			    fun aux n = (
-				if contains vs2 n
-				then aux (n ^ "'")
-				else n
-			    )
-			in mk_var(aux s, ty)
-			end
-	end)
-	else fail "variant" 3056 [])
-handle complaint => divert complaint "dest_var" "variant" 3057 []);
+let val (s, ty) = dest_var v
+		handle complaint =>
+		divert complaint "dest_var" "variant" 3056 [];
+	val vss = map (fst o dest_var) vs
+		handle complaint => 
+		divert complaint "dest_var" "variant" 3057 [];
+	
+in
+	mk_var(icl'variant vss s,ty)
+end);
 
-fun âlist_variantá (av : TERM list) ([]: TERM list) : TERM list = []
-|   list_variant (av : TERM list) ((tm :: tms) : TERM list) : TERM list = (
-	let	val tm' = variant av tm
-	in	tm' :: list_variant (tm' :: av) tms
+fun âlist_variantá (av : TERM list) (tml: TERM list) : TERM list = (
+let
+	val av_vars = map (fst o dest_var) av
+		handle complaint =>
+		divert complaint "dest_var" "list_variant" 3057 [];
+
+	val tm_vars = map dest_var tml
+		handle complaint => 
+		divert complaint "dest_var" "list_variant" 3029 [];
+	
+	fun aux avs ((s,ty) :: rest) = (
+	let
+		val s' = icl'variant avs s;
+	in
+		(mk_var(s',ty) :: aux (s' :: avs) rest)	
 	end
-);
+	) | aux _ [] = [];
+in
+	aux av_vars tm_vars
+end);
+
 =TEX
 The following is a function to create a list of
 machine generated variables known to be different
