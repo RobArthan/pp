@@ -1,4 +1,4 @@
-% imp508.doc   %Z% $Date: 2002/05/04 13:48:39 $ $Revision: 1.93 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2002/05/04 15:44:40 $ $Revision: 1.94 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.93 $%
+\def\SCCSversion{$Revision: 1.94 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/05/04 13:48:39 $%
+\TPPdate{\FormatDate{$Date: 2002/05/04 15:44:40 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -113,6 +113,7 @@ to avoid possible clash with an Ada name.
 \item[Issues 1.90] Sliding now handled properly in aggregates.
 \item[Issues 1.91-1.93] Spring 2002 enhancements: allowing for new syntax for interim release.
 \item[Issues 1.94] R0050: discriminants now working.
+\item[Issue 1.95]  Support for R0047: renaming.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -839,7 +840,7 @@ fun €tmark_of_prefix› (env : CN_ENV) (zpfx : Z_EXP) : Z_ID = (
 		);
 		val (var, sels) = strip_prefix [] zpfx;
 		val (base_tmark, sels') = case env var of
-			Value(_, EIEnvVar x) => (x, sels)
+			Value(_, EIEnvVar (x, _)) => (x, sels)
 		|	Value(_, EIEnvConstant x) => (x, sels)
 		|	Value(_, EIEnvFunction (_, _, x)) => (
 				(x, tl sels)
@@ -1824,7 +1825,71 @@ fun €trans_exp1› (env : CN_ENV) (exp : EXP) : Z_EXP OPT = (
 	)
 );
 =TEX
-
+\subsection{External Interface to Overload Resolution}
+=TEX
+To handle renaming of an operator symbol by an ordinary function designator,
+we need to map the operator symbols into abstract syntax and then carry
+out overload resolution.
+=SML
+val unary_op_table : (OPERATOR_SYMBOL * UNARY_OP) list = [
+	("+", UOSparkUnaryAdd),
+	("-", UOSparkUnaryMinus),
+	("NOT", UOSparkNot),
+	("ABS", UOSparkAbs)
+];
+val €binary_op_table› : (OPERATOR_SYMBOL * BIN_OP) list = [
+	("AND", BOSparkAnd),
+	("AND THEN", BOSparkAndThen),
+	("OR", BOSparkOr),
+	("OR ELSE", BOSparkOrElse),
+	("XOR", BOSparkXor),
+	("=", BOSparkEq),
+	("/", BOSparkNotEq),
+	("<", BOSparkLess),
+	("<=", BOSparkLessEq),
+	(">", BOSparkGreater),
+	(">=", BOSparkGreaterEq),
+	("+", BOSparkAdd),
+	("-", BOSparkMinus),
+	("*", BOSparkTimes),
+	("/", BOSparkDiv),
+	("MOD", BOSparkMod),
+	("REM", BOSparkRem),
+	("**", BOSparkExpon),
+	("IN", BOSparkMem),
+	("NOT IN", BOSparkNotMem),
+	("&", BOSparkConcat)
+];
+=TEX
+=SML
+fun €resolve_opsym›
+	(cn_env : CN_ENV)
+	 (name : OPERATOR_SYMBOL)
+	(fp : PARAMETER_SPECIFICATION list)
+	 (tmark : TMARK) : (Z_EXP * TMARK list * TMARK) OPT = (
+	let	fun get_ops n = case fp of
+			[{idlist = [_, _], name, ...}] =>  
+				(bin_ops(force_value(s_lookup n binary_op_table)), [name, name])
+		|	[{idlist = [_], name = tmk1, ...}, {idlist = [_], name = tmk2, ...}] =>  
+				(bin_ops(force_value(s_lookup n binary_op_table)), [tmk1, tmk2])
+		|	[{idlist = [_], name, ...}] =>  
+				(unary_ops (force_value(s_lookup n unary_op_table)), [name])
+		|	_ => ([], []);
+		val (ops, tmks) = get_ops name handle Fail _ => ([], []);
+		fun elem_type tmk = dest_z_power_type(type_of(zid cn_env(trans_id tmk)));
+		val req_res_ty =elem_type tmark;
+		val req_par_tys = map elem_type tmks;
+		fun offered_res_ty tm = (hd o tl o dest_z_tuple_type o dest_z_power_type o type_of) tm;
+		fun offered_par_tys tm = (dest_z_tuple_type o hd o
+				dest_z_tuple_type o dest_z_power_type o type_of) tm;
+		fun wanted tm = (
+			offered_res_ty tm =: req_res_ty andalso
+			all  (combine (offered_par_tys tm) req_par_tys)  (op =:)
+		);
+	in	Value (find ops wanted, tmks, tmark)
+	end	handle Fail _ => Nil
+);
+=TEX
 \section{ADJUSTMENT OF ABSTRACT SYNTAX FOR EXPRESSIONS}
 
 =SML
@@ -2419,7 +2484,7 @@ fun €index_con_set_comp› (env : CN_ENV) (tmark : TMARK) (domain : Z_EXP) : Z_EXP
 		val var =  "array";
 		fun env' id = (
 			if	id = "array"
-			then	Value (zvar_ty, EIEnvVar tmark)
+			then	Value (zvar_ty, EIEnvVar (tmark, Nil))
 			else	env id
 		); 
 		val zp = z_eq (z_dom (zid env' var), domain);
@@ -2443,7 +2508,7 @@ fun €trans_comp_decl› (env : CN_ENV) (disc : VAR_DECL list)
 			if	d mem (map trans_id ds)
 			then	Value(
 			(dest_z_power_type o type_of o zid env o trans_id) tm,
-			 EIEnvVar tm)
+			 EIEnvVar (tm, Nil))
 			else	env_aux more d
 		);
 		val env' = env_aux disc;
