@@ -2151,31 +2151,10 @@ fun Ûstub_spec_funÝ (form_fun : FORMAL_FUN) : unit = (
 =TEX
 \subsection{The SID function inf\_fun}
 =SML
-fun Ûcart_prodÝ (par_specs : PARAM_SPEC list) : Z_EXP = (
-	let	fun aux (par_spec : PARAM_SPEC) = (
-			(zid current_cn_env o trans_id o #tmark o #var_decl)
-			par_spec
-		);
-	in	case par_specs of
-			[]	=>	error "cart_prod" 507009 []
-		|	[ps]	=>	aux ps
-		|	several =>	mk_z_¸ (map aux par_specs)
-	end
-);
+val Ûcart_prod1Ý = CNVCGenerator.cart_prod current_cn_env;
 =TEX
 =SML
-fun Ûfun_declÝ ({name, formal_pars, return_type} : INFORMAL_FUN) : Z_DECL = (
-	let	val zn = trans_id name;
-		val z_ret_ty = zid current_cn_env (trans_id return_type);
-		val zexp = (
-			case formal_pars of
-				[] => z_ret_ty
-			|	non_empty => z_tfun(cart_prod formal_pars,
-						 z_ret_ty));
-		val zvar = mk_z_lvar(zn, (dest_z_power_type o type_of) zexp, []);
-	in	mk_z_dec([zvar], zexp)
-	end
-);
+val Ûfun_decl1Ý = CNVCGenerator.fun_decl current_cn_env;
 =TEX
 The decision of which of the following two functions to call is made in $inf\_fun$
 =SML
@@ -2198,7 +2177,7 @@ fun Ûinf_fun_pack_specÝ (inf_fun: INFORMAL_FUN) : unit = (
 =TEX
 =SML
 fun Ûtrans_informal_funÝ (f: INFORMAL_FUN) : PARAINFO = (
-	let	val dec = fun_decl f;
+	let	val dec = fun_decl1 f;
 		val ntys = (map dest_var o fst o dest_z_dec) dec;
 	in	AxDesInfo([], mk_z_decl[dec], Nil, ntys)
 	end
@@ -2253,7 +2232,7 @@ fun Ûz_declsÝ (par_specs : PARAM_SPEC list) : Z_DECL list = (
 fun Ûtrans_formal_funÝ ({spec as {pre, post, ...},
 			informal_fun as {formal_pars, ...}} : FORMAL_FUN)
 				: PARAINFO = (
-	let	val dec = fun_decl informal_fun;
+	let	val dec = fun_decl1 informal_fun;
 		val ntys = (map dest_var o fst o dest_z_dec) dec;
 		val imp = z_imp(z_predexp_of_z_tm pre, z_predexp_of_z_tm post);
 		val pred = (
@@ -2630,6 +2609,7 @@ fun Ûnew_scope_pack_specÝ (ident : ID) : unit = (
 );
 =TEX
 \subsection{The SID function new\_scope\_pack\_body}
+In the following, $basic\_decl\_otherwise$ is used to update the theory database with the constants and types.
 =SML
 fun Ûnew_scope_pack_bodyÝ (ident : ID) : unit = (
 	let	val package1 = force_value(s_lookup ident (!pack_env));
@@ -2645,15 +2625,20 @@ fun Ûnew_scope_pack_bodyÝ (ident : ID) : unit = (
 			till_flag = false
 		};
 		val vc_vars1 = #vc_vars package1;
+		val consts_types1 = #consts_types package1;
 		val block = block_vc_vars(empty_block, vc_vars1);
-	in	open_package_body_theory ident;
+	in	open_package_body_theory ident
+			handle Fail _ =>
+			fail "new_scope_pack_body" 507008 [fn () => ident];
+		map basic_decl_otherwise consts_types1
+			handle ex => reraise ex "new_scope_pack_body";
 		blocks := block :: !blocks
-	end	handle Fail _ => fail "new_scope_pack_body" 507008 [fn () => ident]	
+	end	
 );
 =TEX
 \subsection{The SID function new\_scope\_with}
-=SML
-fun Ûnew_idsÝ (id : ID, p : PACKAGE) : ID list = (
+=IGN
+fun Ûnew_idsÝ (p : PACKAGE) : ID list = (
 	let	val {vc_vars, consts_types, formal_procs,
 			informal_funs, formal_funs} = p;
 		val v = flat (map #vars vc_vars);
@@ -2693,6 +2678,42 @@ fun Ûprefix_varÝ (ident : ID) (bds : BASIC_DECL list)
 );
 =TEX
 =SML
+fun Ûupdate_spec_theory_with_consts_typesÝ (ident : ID) = (
+	let	val side = open_package_body_theory ident;
+		fun prefix n = trans_id (ident dot "")^n;
+		fun mk_subs_pair (tm : TERM) : (TERM * TERM) = (
+			let val (id, ty, _) = dest_z_gvar tm
+				handle ex => reraise ex "prefix_consts_types";
+			in
+				(mk_z_gvar (prefix id, ty, []), tm)
+			end
+		);
+		val consts = get_consts "-";
+		val const_subs = map mk_subs_pair consts;
+		fun do_subst tm = subst const_subs tm;
+		val new_consts = map do_subst consts;
+		
+		val defs =
+			map (fn (names, thm) =>
+				(names, (	snd o dest_eq
+						o snd o dest_app
+						o snd o dest_thm) thm)
+			) (get_defns "-");
+		val new_defs =
+			map (fn (names, tm) =>
+				(map prefix names, do_subst tm)) defs;
+		fun do_para (names, defn) = (
+			map (fn n => AbbDefInfo (n, [], defn)) names
+		);
+		val paras = flat (map do_para new_defs);
+		
+	in
+		open_package_spec_theory ident;
+		map update_theory_db_with_parainfo paras; ()
+	end
+);
+=TEX
+=SML
 fun Ûnew_scope_withÝ (ident : ID) : unit = (
 	let	val package1 = force_value(s_lookup ident (!pack_env));
 		val flags = {
@@ -2711,12 +2732,11 @@ fun Ûnew_scope_withÝ (ident : ID) : unit = (
 		val block = block_vc_vars(empty_block, vc_vars1);
 		val block = block_formal_procs(block, formal_procs1);
 	in	open_package_spec_theory ident
-		handle Fail _ => (
-			new_package_spec_theory ident;
-diag_line "**** TBS - new_scope_with not yet complete ****"
-		);
+			handle Fail _ => new_package_spec_theory ident;
+		update_spec_theory_with_consts_types ident;
+		diag_line "**** TBS - new_scope_with not yet complete ****";
 		blocks := block :: !blocks
-	end	handle Fail _ => fail "new_scope_with" 507008 [fn () => ident]	
+	end	
 );
 =TEX
 \subsection{The SID function end\_scope\_comp\_unit}
