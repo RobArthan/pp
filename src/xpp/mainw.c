@@ -170,15 +170,13 @@ static MenuItem file_menu_items[] = {
 };
 /*
  * In the following, entries after and including
- * TOOLS_MENU_JOURNAL_VIEWER are zero-ed out in an edit-only session.
+ * TOOLS_MENU_CMD_LINE are zero-ed out in an edit-only session.
  */
 #define TOOLS_MENU_SEARCH_REPLACE		0
 #define TOOLS_MENU_PALETTE			1
 #define TOOLS_MENU_TEMPLATES			2
 #define TOOLS_MENU_CONTROLS			3
-#define TOOLS_MENU_SCRIPT_VIEWER		4
-#define TOOLS_MENU_JOURNAL_VIEWER		5
-#define TOOLS_MENU_CMD_LINE			6
+#define TOOLS_MENU_CMD_LINE			4
 
 static MenuItem tools_menu_items[] = {
     { "Search and Replace", &xmPushButtonGadgetClass, 'S', NULL, NULL,
@@ -189,10 +187,6 @@ static MenuItem tools_menu_items[] = {
         tools_menu_cb, (XtPointer)TOOLS_MENU_TEMPLATES, (MenuItem *)NULL, False },
     { "Options", &xmPushButtonGadgetClass, 'O', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_CONTROLS, (MenuItem *)NULL, False },
-    { "Viewer", &xmPushButtonGadgetClass, 'V', NULL, NULL,
-        tools_menu_cb, (XtPointer)TOOLS_MENU_SCRIPT_VIEWER, (MenuItem *)NULL, False },
-    { "Viewer (Journal)", &xmPushButtonGadgetClass, 'J', NULL, NULL,
-        tools_menu_cb, (XtPointer)TOOLS_MENU_JOURNAL_VIEWER, (MenuItem *)NULL, False },
     { "Command Line", &xmPushButtonGadgetClass, 'C', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_CMD_LINE, (MenuItem *)NULL, False },
     NULL,
@@ -402,7 +396,7 @@ static setup_main_window(
  * Tools menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 if(global_options.edit_only) {
-	tools_menu_items[TOOLS_MENU_JOURNAL_VIEWER].label = NULL;
+	tools_menu_items[TOOLS_MENU_CMD_LINE].label = NULL;
 }
 	toolsmenu = setup_pulldown_menu(
 		menubar, "Tools", 'T', False, tools_menu_items);
@@ -685,12 +679,6 @@ XmAnyCallbackStruct *cbs;
 		break;
 	case TOOLS_MENU_SEARCH_REPLACE:
 		add_search_tool(script);
-		break;
-	case TOOLS_MENU_SCRIPT_VIEWER:
-		add_viewer(script);
-		break;
-	case TOOLS_MENU_JOURNAL_VIEWER:
-		add_viewer(journal);
 		break;
 	case TOOLS_MENU_CMD_LINE:
 		add_cmd_line(script);
