@@ -6,8 +6,9 @@
 
 \TPPtitle{Implementation of Pretty Printer}
 \TPPref{DS/FMU/IED/IMP025}
-\TPPissue{$Revision$%
+\def\SCCSissue{$Revision$%
 }
+\TPPissue{\SCCSissue}
 \TPPdate{\FormatDate{$Date$%
 }}
 \TPPproject{FST PROJECT}
@@ -89,6 +90,9 @@ lasp -s -u imp025.OKwords imp025.doc > zz1
 \begin{description}
 
 \item[31 May 1991, issue 1.1 ] This issue is an authors draft.
+
+\item[\FormatDate{$Date$%
+}, issue \SCCSissue ] Corrections to printing algorithm.
 
 \end{description}
 
@@ -215,7 +219,9 @@ $Vars_Ty$) are handled outside of the precedence structure.
 	derived.  Infix, postfix and prefix operators are treated at
 	the same level with constructor $pc_oper$, operator precedence
 	and associativity is handled by carrying extra information in
-	its arguments.  Functional application is left associative.
+	its arguments.  Functional application is left associative,
+	pairing is right associative, these are treated by having
+	distinct left and right precedences.
 
 \item Types and terms both have infix operators, a common constructor
 	is used.  Postfix type operators have higher precedence than
@@ -232,6 +238,10 @@ $Vars_Ty$) are handled outside of the precedence structure.
 
 Common high and low precedences are used, otherwise the three
 orderings do not interact.
+Two further precedence levels are added for forcing brackets around
+paired values, these have lower precedence than the common low value.
+The pairing precedences are only used in conjunction with rules from
+concrete syntax production $Tm$. 
 
 Infix operators interact with {\tt if}, {\tt let} and binder terms.  As
 the left hand argument no bracket is required, as the right hand
@@ -258,13 +268,24 @@ datatype âPrec_Contextá
 	|	âpc_typed_varstructá
 
 	|	âpc_post_typeá
+
+	|	âpc_pair_rightá
+	|	âpc_pair_leftá
 	;
 =TEX
 
-Function $ge_prec$  compares integers derived from the constructors.
+Function $ge_prec$ works mainly by comparing integers derived from the
+constructors.  The exception relates to operators where there is a
+second level of precedences.
 This coding style was chosen because it is because that is easier to
 understand and easier to produce than the full pattern match between
 all precedence pairs.
+
+The printing precedences are changed from the parsing ones to
+accommodate the rule that {\tt if}, {\tt let} and binder terms 
+extend as far as possible to the right.  We arrange that these three
+term forms are always bracketed if they occur as the argument of an
+operator or as the left or right arguments of function application.
 
 A simple mechanism is used to produce a fully bracketed form, namely by
 getting virtually all precedence comparisons to indicate that brackets
@@ -285,20 +306,24 @@ set_flag("pp_fully_bracketed", false);
 =SML
 local
 	fun	âpc_ordá	pc_highest		= 80
-	|	pc_ord		pc_if_let_bind		= 70
 	|	pc_ord		(pc_oper _)		= 50
 	|	pc_ord		pc_apply_right		= 40
 	|	pc_ord		pc_apply_left		= 30
+	|	pc_ord		pc_if_let_bind		= 26
 	|	pc_ord		pc_if_let_bind_last	= 25
 	|	pc_ord		pc_typing		= 20
 	|	pc_ord		pc_lowest		= 10
 
+	|	pc_ord		pc_pair_right		= 7
+	|	pc_ord		pc_pair_left		= 6
+
 	|	pc_ord		pc_varstruct_list	= 70
 	|	pc_ord		pc_typed_varstruct	= 60
 
-	|	pc_ord		pc_post_type		= 60;
+	|	pc_ord		pc_post_type		= 60
+	;
 
-	val assoc_side = lr_left;
+	val infix_assoc_side = lr_left;
 in
 	infix ge_prec;
 
@@ -310,9 +335,7 @@ in
 			case (outer, inner)
 			of	(pc_oper(pri_outer, side), pc_oper(pri_inner, _)) =>
 						pri_outer > pri_inner
-					orelse	(pri_outer = pri_inner andalso side = assoc_side)
-			|	(pc_oper(_, lr_left), pc_if_let_bind) => true
-			|	(pc_oper(_, lr_right), pc_if_let_bind) => false
+					orelse	(pri_outer = pri_inner andalso side = infix_assoc_side)
 			|	_ => (pc_ord outer) >= (pc_ord inner)
 	);
 
@@ -359,6 +382,7 @@ fun âprec_ofá oper usage = (
 );
 =TEX
 
+=IGN
 Precedence levels are based upon the HOL concrete
 syntax~\cite{DS/FMU/IED/DEF001}, the values chosen are selected as
 follows.
@@ -506,6 +530,7 @@ follows.
 
 \end{description}
 }
+=TEX
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -721,7 +746,17 @@ in
 				tm_p op_prec tm;
 				close_br br
 			)end
-	|	DPair	two => show_two prec "," two
+	|	DPair	(tm1, tm2) =>
+			let
+				val br = prec ge_prec pc_pair_left
+			in(
+				open_br false br;
+				tm_p pc_pair_left tm1;
+				addstring ",";
+				space(1,0);
+				tm_p pc_pair_right tm2;
+				close_br br
+			)end
 	|	D€	two => show_two prec "€" two
 	|	D	two => show_two prec "" two
 	|	D‚	two => show_two prec "‚" two
@@ -730,11 +765,10 @@ in
 				val br = prec ge_prec pc_if_let_bind
 			in(
 				open_br true br;
-				fold	(fn ((lhs, rhs), prefix) => (
+				revfold	(fn ((lhs, rhs), prefix) => (
 						addstring prefix;
 						tm_p pc_lowest lhs;
-						space(1,0);
-						addstring "= ";
+						addstring " = ";
 						tm_p pc_lowest  rhs;
 						space(1,0);
 						"and ")
