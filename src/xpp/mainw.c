@@ -26,23 +26,18 @@
  * include files:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-#include <string.h>
-#include <sys/types.h>
 #include <errno.h>
-#include <unistd.h>
 #include <fcntl.h>
+#include <signal.h>
+#include <stdio.h>
+#include <string.h>
+#include <stropts.h>
+#include <sys/filio.h>
 #include <sys/termio.h>
 #include <sys/termios.h>
+#include <sys/types.h>
 #include <sys/wait.h>
-#include <stropts.h>
-
-#include <signal.h>
-#include <errno.h>
-
-#include <stdio.h>
-#include <X11/Xatom.h>
-#include <X11/Intrinsic.h>
-#include <X11/Shell.h>
+#include <unistd.h>
 
 #include "xpp.h"
 
@@ -177,8 +172,6 @@ XtPointer undo_ptr;
 static int control_fd;
 
 static pid_t child_pid;
-
-static pid_t child_pgrp;
 
 static XtInputId app_ip_req;
 
@@ -919,32 +912,26 @@ XmTextVerifyCallbackStruct *cbs;
 
 static void get_pty()
 {
-	int slave_fd, tty_fd;
 	char c;
-	NAT i;
-	char line[20];
+	int one = 1;
+	int slave_fd;
+	char *slavename;
+	char *ptsname();
 	static void get_from_application();
-	for (c = 'p'; c <= 's'; c++) {
-		for(i = 0; i < 16; i++) {
-			sprintf(line, "/dev/pty%c%x", c, i);
-			control_fd = open(line, O_RDWR);
-			if (control_fd >= 0) {
-				goto gotpty;
-			}
-		}
-	}
-nopty:
-	msg("system error", "no pseudo-terminal devices available");
-	perror("xpp");
-	exit(1);
-gotpty:
-	line[sizeof "/dev/" - 1] = 't';
-	slave_fd = open(line, O_RDWR);
-	if(slave_fd < 0) {
-		msg("system error", "Pseudo-terminal slave device not available");
+	if ((control_fd = open("/dev/ptmx", O_RDWR)) < 0) {
+		msg("system error", "no pseudo-terminal devices available");
 		perror("xpp");
-		exit(4);
+		exit(1);
 	};
+	if(	grantpt(control_fd) < 0
+	||	unlockpt(control_fd) < 0
+	||	(slavename = ptsname(control_fd)) == NULL
+	||	(slave_fd = open(slavename, O_RDWR)) < 0 ) {
+		msg("system error", "cannot access pseudo-terminal slave device");
+		perror("xpp");
+		exit(2);
+	};
+
 	child_pid = fork();
 	if (child_pid < 0) { /* Cannot do */
 		msg("system error", "fork failed");
@@ -957,17 +944,10 @@ gotpty:
 			perror("xpp");
 			exit(7);
 		};
-		i = 1;
-		if(ioctl(control_fd, TIOCREMOTE, &i) < 0) {
-			msg("system error", "ioctl on application failed");
+		if(	ioctl(control_fd, FIONBIO, &one) < 0) {
+			msg("system error", "ioctl on control fd failed");
 			perror("xpp");
 			exit(8);
-		};
-		child_pgrp = child_pid;
-		if(setpgid(child_pid, child_pid) != 0) {
-			msg("system error", " setpgid failed");
-			perror("xpp");
-			exit(9);
 		};
 		app_ip_req = XtAppAddInput(app,
 			control_fd, (XtPointer) XtInputReadMask,
@@ -977,6 +957,7 @@ gotpty:
 	} else { /* Child */
 		char	buf;
 		char **arglist;
+		struct termios tio;
 		close(control_fd);
 		dup2(slave_fd, 0);
 		dup2(slave_fd, 1);
@@ -984,7 +965,38 @@ gotpty:
 		if (slave_fd > 2) {
 			close(slave_fd);
 		};
+		if(setsid() < 0) {
+			msg("system error", " setsid failed");
+			perror("xpp");
+			exit(9);
+		};
+
 		read(0, &buf, 1);		/* Wait until told */
+		if(	ioctl(0, I_PUSH, "ptem") < 0
+		||	ioctl(0, I_PUSH, "ldterm") < 0 
+		||	ioctl(0, I_PUSH, "ttcompat") < 0 
+		||	ioctl(0, TCGETS, &tio) < 0 ) {
+			msg("system error", "ioctl on slave fd failed");
+			perror("xpp");
+			exit(10);
+		};
+
+		tio.c_lflag |= ISIG;
+		tio.c_lflag |= ICANON;
+		tio.c_lflag &= ~ECHO;
+		tio.c_lflag &= ~PENDIN;
+		tio.c_lflag &= ~NOFLSH;
+		tio.c_lflag &= ~TOSTOP;
+
+		tio.c_cc[VINTR] = CINTR;
+
+		if(ioctl(0, TCSETS, &tio) < 0 ) {
+			msg("system error", "ioctl on slave fd failed");
+			perror("xpp");
+			exit(11);
+		};
+
+
 		arglist = get_arg_list();
 		execvp(arglist[0], arglist);
 	/* **** error if reach here **** */
@@ -999,7 +1011,7 @@ gotpty:
  *	1) non-blocking wait to reap child if it has died.
  *	2) if child has died, and Xt is still listening for it
  *	   then tell it to stop.
- *	3) close the control_fd file descriptor.
+ *	3) close the control and slave file descriptors.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 Boolean application_alive()
@@ -1074,7 +1086,7 @@ static Boolean get_from_app_work_proc(XtPointer unused_p)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static Boolean dequeue()
 {
-	NAT bytes_written, line_len, i, top;
+	long int bytes_written, line_len, i, top;
 	Boolean sent_something = False;
 	Boolean sys_error = False;
 
@@ -1202,9 +1214,7 @@ Widget w;
  * **** **** **** **** **** ***. **** **** **** **** **** **** */
 static void clear_queue ()
 {
-	if(q_length) {
-		q_length = 0;
-	}
+	q_length = 0;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1306,9 +1316,10 @@ static void handle_sigs()
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void interrupt_application ()
 {
+	char cintr = CINTR;
 	clear_queue();
 	if(application_alive()) {
-		kill((pid_t)(-child_pgrp), SIGINT);
+		write(control_fd, &cintr, 1);
 	}
 }
 
