@@ -1,4 +1,4 @@
-%  imp003.doc  %Z% $Date$ $Revision$ $RCSfile$
+%  imp003.doc  %Z% $Date: 1999/03/06 14:28:00 $ $Revision: 2.16 $ $RCSfile: imp003.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -7,10 +7,10 @@
 \TPPtitle{Implementation for Types and Terms}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Types and Terms}
 \TPPref{DS/FMU/IED/IMP003}  %% Mandatory field
-\def\SCCSversion{$Revision$
+\def\SCCSversion{$Revision: 2.16 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date$%
+\TPPdate{\FormatDate{$Date: 1999/03/06 14:28:00 $%
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -73,6 +73,9 @@ Removed incorrect description of $TYPE$.
 \item [Issue 2.15 (11th February 1996)]
 \item [Issue 2.16] Use of new INTEGER type.
 Updates for SML'97.
+\item [Issue 2.17] Optimised instantiation and substitution operations in cases where
+the instantiation or substitution lists are effectively empty (as happens surprisingly
+often, e.g., in the conversions that move negation through quantifiers).
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
@@ -104,7 +107,7 @@ values at need.
 Its use (by $raise$ $just\_fail$) breaks the conventions for error handling described in
 \cite{DS/FMU/IED/IMP002}, which would have errors only raised by $fail$, $error$, etc.
 The conventions are broken to assist in efficiently implementing, e.g., $icl'inst$
-by propogating exceptions in the cases of ``no change'',
+by propagating exceptions in the cases of ``no change'',
 where we wish to raise an exception will be always be caught,
 but are unbothered by the contents.
 If we used $fail$ then time and store would be spent in creating an exception
@@ -888,11 +891,31 @@ end; (* of abstype defining TYPE *)
 Some of these functions could be improved by being placed within
 the abstract data type.
 
+The following function is used in {\it inst\_type} and {\it inst}
+to process the type instantiation lists supplied as their
+first argument. The purpose of the function is to convert to
+the format needed by the {\it icl'\ldots} functions, dropping
+superfluous entries but checking that each entry does indeed
+have a type variable as its second component. If an error
+is detected, the exception raised by {\it dest\_vartype}
+will be raise.
+
+=SML
+fun €mk_inst_type_args› (f : (TYPE * TYPE) list) : (TYPE * string) list = (
+	let	fun aux acc ((ty1, ty2)::more) = (
+			let	val	tyv2 = dest_vartype ty2;
+			in	if	ty1 =: ty2
+				then	aux acc more
+				else	aux ((ty1, tyv2)::acc) more
+			end
+		) | aux acc [] = rev acc;
+	in	aux [] f
+	end
+);
+=TEX
 =SML
 fun €inst_type› (f : (TYPE * TYPE) list) (ty : TYPE) : TYPE = (
-	icl'inst_type 
-		(map (fn (ty,tyv) => (ty,dest_vartype tyv)) f)
-		ty
+	icl'inst_type (mk_inst_type_args f) ty
 	handle complaint =>
 	if area_of complaint = "dest_vartype"
 	then pass_on complaint "dest_vartype" "inst_type"
@@ -1350,7 +1373,9 @@ fun €list_term_union› (lists : TERM list list) : TERM list = (
 \subsubsection{Renaming}
 =SML
 fun €rename› ((v, ty) : string * TYPE) (w : string) (tm : TERM) : TERM = (
-	icl'subst[(mk_var(w, ty), (v, ty))]tm
+	if	v <> w
+	then	icl'subst[(mk_var(w, ty), (v, ty))]tm
+	else	tm
 );
 =TEX
 \subsection{Viewing Functions}
@@ -1559,7 +1584,7 @@ substituting for subterms of a term which are variables.
 fun €var_subst›
 	(subs : (TERM * TERM) list)
 	(tm : TERM) = (
-	((icl'subst o map (Combinators.I ** dest_var)) subs tm)
+	((icl'subst o map (Combinators.I ** dest_var)) (subs drop (op =$)) tm)
 	handle complaint =>
 	pass_on complaint "dest_var" "var_subst"
 	handle complaint =>
@@ -1619,10 +1644,10 @@ in
 fun €subst›
 	(subs : (TERM * TERM) list)
 	(tm : TERM) = (
-	if is_nil subs
-	then tm
-	else
-	let	val (xs, ys) = split subs;
+	case subs drop (op =$) of
+		[] => tm
+	|	subs' =>
+	let	val (xs, ys) = split subs';
 		val terms = tm :: (xs @ ys); 
 		val Xs = gen_vars (map type_of ys) terms;
 =TEX
@@ -1657,19 +1682,14 @@ fun	 €inst›
 	(avoid : TERM list)
 	(tysubs : (TYPE * TYPE) list)
 	: TERM -> TERM = (
-let	val vs = ((map dest_var avoid)
+let	val vs = (map dest_var avoid)
 		handle complaint => 
-		pass_on complaint "dest_var" "inst");
-	val tys = ((map (Combinators.I ** dest_vartype) tysubs)
+		pass_on complaint "dest_var" "inst";
+	val tys = (mk_inst_type_args tysubs)
 		handle complaint => 
-		pass_on complaint "dest_vartype" "inst");
+		pass_on complaint "dest_vartype" "inst";
 in
-	(fn tm =>
-	icl'inst
-	vs
-	tys
-	tm
-	handle (Fail _) => tm)
+	fn tm => (icl'inst vs tys tm) handle (Fail _) => tm
 end);
 =TEX
 \subsection{Simple Diagnostic Printing}
