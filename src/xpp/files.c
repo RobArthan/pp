@@ -294,179 +294,160 @@ static char *get_file_contents(
 		return NULL;
 	};
 	p = buf;
-	ft_state = FT_ANY;
 /*
  * Now the FSM that reads the file and copies it into the buffer mapping DOS and Mac line terminators
  * onto Unix ones. Exit from the loop is either the return in the error case where binary data is detected
- * or when end-of-file or read-error occurs. In those cases, the last value of whatgot to be read will be
+ * or when end-of-file or read-error occurs. In those latter cases, the last value of whatgot to be read will be
  * EOF, and ft_state will be one of FT_UNIX, FT_DOS, FT_MAC or FT_MIXED enabling the file type
  * to be set up accordingly.
  */
-	while( !feof(fp) && !ferror(fp) ) {
+	ft_state = FT_ANY;
+	while( True ) {
 		whatgot = getc(fp);
-		if(whatgot != EOF && whatgot >= 0 && whatgot < ' '
-		&& whatgot != '\t' && whatgot != '\n' && whatgot != '\r') {
+		if(whatgot != EOF && control_chars[whatgot & 0xff]) {
 			file_error_dialog(w, contains_binary_message, name);
 			XtFree(buf);
 			return NULL;
 
 		}
-		switch(ft_state) {
-			case FT_ANY:
-				switch(whatgot) {
-					case '\r':
-						ft_state = FT_DOS_OR_MAC;
-						break;
-					case '\n':
-						ft_state = FT_UNIX;
-						*p++ = whatgot;
-						break;
-					case EOF:
-						ft_state = FT_UNIX;
-						break;
-					default:
-						*p++ = whatgot;
-						break;
-				}
-				break;
-			case FT_UNIX:
-				switch(whatgot) {
-					case '\r':
-						ft_state = FT_MIXED;
-						*p++ = '\n';
-						break;
-					case EOF:
-						break;
-					default:
-						*p++ = whatgot;
-						break;
-				}
-				break;
-			case FT_DOS_OR_MAC:
-				switch(whatgot) {
-					case '\r':
-						ft_state = FT_MAC_CR;
-						*p++ = '\n';
-						break;
-					case '\n':
-						ft_state = FT_DOS; 
-						*p++ = whatgot;
-						break;
-					case EOF:
-						ft_state = FT_MAC;
-						break;
-					default:
-						ft_state = FT_MAC;
-						*p++ = '\n';
-						*p++ = whatgot;
-						break;
-				}
-				break;
-			case FT_DOS:
-				switch(whatgot) {
-					case '\r':
-						ft_state = FT_DOS_CR;
-						break;
-					case '\n':
-						ft_state = FT_MIXED; 
-						*p++ = whatgot;
-						break;
-					case EOF:
-						break;
-					default:
-						*p++ = whatgot;
-						break;
-				}
-				break;
-			case FT_MAC:
-				switch(whatgot) {
-					case '\r':
-						*p++ = '\n';
-						break;
-					case '\n':
-						ft_state = FT_MIXED;
-						*p++ = whatgot;
-						break;
-					case EOF:
-						break;
-					default:
-						*p++ = whatgot;
-						break;
-				}
-				break;
-			case FT_MIXED:
-				switch(whatgot) {
-					case '\r':
-						ft_state = FT_MIXED_CR;
-						break;
-					case EOF:
-						break;
-					default:
-						*p++ = whatgot;
-						break;
-				}
-				break;
-			case FT_DOS_CR:
-				switch(whatgot) {
-					case '\r':
-						ft_state = FT_MIXED_CR;
-						*p++ = '\n';
-						break;
-					case '\n': /* CR/LF */
-						ft_state = FT_DOS;
-						*p++ = '\n';
-						break;
-					case EOF:
-						ft_state = FT_MIXED;
-						*p++ = '\n';
-						break;
-					default:
-						ft_state = FT_MIXED;
-						*p++ = '\n';
-						*p++ = whatgot;
-						break;
-				}
-				break;
-			case FT_MAC_CR:
-				switch(whatgot) {
-					case '\r':
-						*p++ = '\n';
-						break;
-					case '\n': /* CR/LF */
-						ft_state = FT_MIXED;
-						*p++ = '\n';
-						break;
-					case EOF:
-						ft_state = FT_MAC;
-						*p++ = '\n';
-						break;
-					default:
-						ft_state = FT_MAC;
-						*p++ = '\n';
-						*p++ = whatgot;
-						break;
-				}
-				break;
-			case FT_MIXED_CR:
-				switch(whatgot) {
-					case '\r':
-						*p++ = '\n';
-						break;
-					case '\n': /* CR/LF */
-						ft_state = FT_MIXED;
-						*p++ = '\n';
-						break;
-					case EOF:
-						ft_state = FT_MIXED;
-						*p++ = '\n';
-						break;
-					default:
-						ft_state = FT_MIXED;
-						*p++ = '\n';
-						*p++ = whatgot;
-						break;
-				}
-				break;
+		if(whatgot == '\r') {
+			switch(ft_state) {
+				case FT_ANY:
+					ft_state = FT_DOS_OR_MAC;
+					break;
+				case FT_UNIX:
+					ft_state = FT_MIXED;
+					*p++ = '\n';
+					break;
+				case FT_DOS_OR_MAC:
+					ft_state = FT_MAC_CR;
+					*p++ = '\n';
+					break;
+				case FT_DOS:
+					ft_state = FT_DOS_CR;
+					break;
+				case FT_MAC:
+					ft_state = FT_MAC_CR;
+					break;
+				case FT_MIXED:
+					ft_state = FT_MIXED_CR;
+					break;
+				case FT_DOS_CR:
+					ft_state = FT_MIXED_CR;
+					*p++ = '\n';
+					break;
+				case FT_MAC_CR:
+					*p++ = '\n';
+					break;
+				case FT_MIXED_CR:
+					*p++ = '\n';
+					break;
+			}
+		} else if (whatgot == '\n') {
+			switch(ft_state) {
+				case FT_ANY:
+					ft_state = FT_UNIX;
+					*p++ = '\n';
+					break;
+				case FT_UNIX:
+					*p++ = '\n';
+					break;
+				case FT_DOS_OR_MAC:
+					ft_state = FT_DOS; 
+					*p++ = '\n';
+					break;
+				case FT_DOS:
+					ft_state = FT_MIXED; 
+					*p++ = '\n';
+					break;
+				case FT_MAC:
+					ft_state = FT_MIXED;
+					*p++ = '\n';
+					break;
+				case FT_MIXED:
+					*p++ = '\n';
+					break;
+				case FT_DOS_CR:
+					ft_state = FT_DOS;
+					*p++ = '\n';
+					break;
+				case FT_MAC_CR:
+					ft_state = FT_MIXED;
+					*p++ = '\n';
+					break;
+				case FT_MIXED_CR:
+					ft_state = FT_MIXED;
+					*p++ = '\n';
+					break;
+			}
+		} else if (whatgot == EOF) {
+			switch(ft_state) {
+				case FT_ANY:
+					ft_state = FT_UNIX;
+					break;
+				case FT_UNIX:
+					break;
+				case FT_DOS_OR_MAC:
+					ft_state = FT_MAC;
+					break;
+				case FT_DOS:
+					break;
+				case FT_MAC:
+					break;
+				case FT_MIXED:
+					break;
+				case FT_DOS_CR:
+					ft_state = FT_MIXED;
+					*p++ = '\n';
+					break;
+				case FT_MAC_CR:
+					ft_state = FT_MAC;
+					*p++ = '\n';
+					break;
+				case FT_MIXED_CR:
+					ft_state = FT_MIXED;
+					*p++ = '\n';
+					break;
+			}
+			break; /* out of the while (True) */
+		} else {
+			switch(ft_state) {
+				case FT_ANY:
+					*p++ = whatgot;
+					break;
+				case FT_UNIX:
+					*p++ = whatgot;
+					break;
+				case FT_DOS_OR_MAC:
+					ft_state = FT_MAC;
+					*p++ = '\n';
+					*p++ = whatgot;
+					break;
+				case FT_DOS:
+					*p++ = whatgot;
+					break;
+				case FT_MAC:
+					*p++ = whatgot;
+					break;
+				case FT_MIXED:
+					*p++ = whatgot;
+					break;
+				case FT_DOS_CR:
+					ft_state = FT_MIXED;
+					*p++ = '\n';
+					*p++ = whatgot;
+					break;
+				case FT_MAC_CR:
+					ft_state = FT_MAC;
+					*p++ = '\n';
+					*p++ = whatgot;
+					break;
+				case FT_MIXED_CR:
+					ft_state = FT_MIXED;
+					*p++ = '\n';
+					*p++ = whatgot;
+					break;
+			}
 		}
 	}
 	if(ferror(fp)) {
