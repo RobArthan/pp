@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.243 $ $RCSfile: imp507.doc,v $ $Date: 2002/12/17 10:46:36 $
+% imp507.doc %Z% $Revision: 1.244 $ $RCSfile: imp507.doc,v $ $Date: 2002/12/17 16:11:31 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.243 $%
+\def\SCCSversion{$Revision: 1.244 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/12/17 10:46:36 $%
+\TPPdate{\FormatDate{$Date: 2002/12/17 16:11:31 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -191,7 +191,7 @@ being renamed is defined in the same package specification.
 \item[Issue 1.241] Now takes a theory checkpoint before each web clause and rolls back if an exception is raised.
 \item[Issue 1.242] Added exception logging.
 \item[Issue 1.243] Fixed {\LaTeX} errors.
-\item[Issue 1.244] Rationalised error reporting: now can continue after failure in declaration, statement etc.
+\item[Issue 1.244, 1.245] Rationalised error reporting: now can continue after failure in declaration, statement etc.
 Soundness warnings now distinctive,more systematic and logged.
 \end{description}
 \subsection{Changes Forecast}
@@ -1738,6 +1738,7 @@ val _ = new_flag{
 	default=fun_true} handle Fail _ => ();
 type ÛCN_EXCEPTION_LOGÝ = string list S_DICT;
 val Ûexception_logÝ : CN_EXCEPTION_LOG ref = ref initial_s_dict;
+val Ûexception_handledÝ : bool ref = ref false;
 =TEX
 In the following, the special first two clauses are for SML/NJ (for which {\it string\_of\_exn} loses information).
 =SML
@@ -1766,13 +1767,19 @@ fun Ûlog_exceptionÝ (ex : exn)  : string = (
 =TEX
 =SML
 fun Ûcheck_failÝ  (default : 'b) (f : 'a -> 'b) (x  : 'a) = (
-	f x handle ex as Fail _ => (
-		let	val msg = log_exception ex;
-		in	if	!cn_stop_on_exceptions
-			then	raise ex
-			else	(diag_line msg; default)
-		end
-	)
+	let	val saved_env = !blocks;
+	in	f x handle ex as Fail _ => (
+			let	val msg = log_exception ex;
+			in	if	!cn_stop_on_exceptions
+				then	raise ex
+				else	(
+					exception_handled := true;
+					diag_line msg;
+					blocks := saved_env;
+					default)
+			end
+		)
+	end
 );
 =TEX
 =SML
@@ -8682,21 +8689,28 @@ It is now important not to save the state if an exception is raised.
 		let	val save_zg_state = get_z_generator_state();
 			val pp_state = checkpoint "cn";
 			val save_ti_cxt = get_ti_context();
+			fun reset () = (
+				diag_z_generator_state := get_z_generator_state();
+				set_z_generator_state save_zg_state;
+				set_ti_context save_ti_cxt;
+				exception_handled := false;
+				let	val thy = get_current_theory_name ();
+				in	rollback pp_state;
+					open_theory thy handle Fail _ => ()
+				end
+			);
 		in	diag_vc_args := [];
 			diag_basic_decl_list := [];
 			diag_web_clause := w;
 			((if sco then sco_web_clause else do_web_clause) w)
 			handle ex => (
-				diag_z_generator_state := get_z_generator_state();
-				set_z_generator_state save_zg_state;
-				set_ti_context save_ti_cxt;
-				let	val thy = get_current_theory_name ();
-				in	rollback pp_state;
-					open_theory thy handle Fail _ => ();
-					log_exception ex
-				end;
+				reset();
+				log_exception ex;
 				raise ex
 			);
+			(if	!exception_handled
+			then	reset()
+			else	());
 			save_z_generator_state();
 			set_ti_context save_ti_cxt
 		end

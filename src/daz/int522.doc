@@ -51,9 +51,9 @@ under the enhancements programme carried out inspring 2002.}
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.33 $%
+\def\Version{$Revision: 1.34 $%
 }
-\def\Date{\FormatDate{$Date: 2002/12/10 15:36:54 $%
+\def\Date{\FormatDate{$Date: 2002/12/16 16:08:40 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -113,6 +113,7 @@ more tests for renaming (distributed through the document).
 \item[Issue 1.31] Added tests for schemas in function $\Xi$-lists.
 \item[Issue 1.32] Added tests for auxiliary variables in function $\Xi$-lists.
 \item[Issue 1.33] No longer get non-SPARK warning for named number declarations.
+\item[Issue 1.34] Tests for new error reporting and error recovery.
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -155,8 +156,10 @@ Function to clean up before doing a test.
 fun clean_up () = (
         let     val thys = (get_descendants "cn" less "cn"
                                         diff get_cache_theories())
-                fun del_thy thy = (force_delete_theory thy handle Fail _ => ())
+                fun del_thy thy = (force_delete_theory thy handle Fail _ => ());
+	val err_scrs =map fst (CNZGenerator.get_exception_logs());
         in      map del_thy thys;
+	map delete_exception_log err_scrs;
 	open_theory"cn";
 	set_pc "cn1"
         end;    ()
@@ -1764,24 +1767,167 @@ a(z_spec_nth_asm_tac 6 ñx® THEN REPEAT strip_tac);
 store_mt_results
 mt_run
  [("r13.3.3", fun_true o pop_thm , (), true)];
-
-
-
-
-
-
-
-
-
-
 =TEX
 \subsection{R0059: Enhanced syntax-check-only mode} \label{RFourteen}
-\subsection{R0060/R0064: Rationalised error reporting} \label{RFifteen}
-\subsection{R0061: Change symbol for statement replacement} \label{RSixteen}
-\subsection{R0062: Origin of VCs} \label{RSeventeen}
-\subsection{R0063: Unexpanded specification statements} \label{REighteen}
-\subsection{R0065: Duplicated names in context clauses} \label{RNineteen}
+Tested in INT511.
 
+\subsection{R0060/R0064: Rationalised error reporting} \label{RFifteen}
+The checks on the exception log print-out are mostly interactive.
+=SML
+clean_up();
+new_script{name = "r15.1", state = initial_cn_state};
+print_exception_log"-";
+store_mt_results
+mt_run
+ [("r15.1.1", CNZGenerator.get_exception_logs , (), [])];
+
+¹CN
+procedure p
+is
+pragma MEMORY_SIZE(16#FFFF#);
+sensor : integer;
+for sensor use at 16#FFFE#;
+ §xxx ¢			( 1 )
+begin
+null;
+end p;
+°
+¹CN
+ (1)  !é task handler is entry done; for done use at 16#40#; end handler;
+°
+=SML
+fun exn_count () = (
+	(length o force_value o s_lookup (get_current_theory_name() )  o CNZGenerator.get_exception_logs) ()
+	handle Fail _ => 0
+);
+store_mt_results
+mt_run
+ [("r15.1.2", exn_count , (), 3)];
+print_exception_log "-";
+delete_script"r15.1";
+mt_run
+ [("r15.1.1", CNZGenerator.get_exception_logs , (), [])];
+=TEX
+=SML
+set_flag("cn_stop_on_exceptions", false);
+clean_up();
+new_script{name = "r15.2", state = initial_cn_state};
+store_mt_results
+mt_run
+ [("r15.2.1", print_exception_log , "-", false)];
+
+¹CN
+procedure p
+is
+c : constant integer := 99;
+c : constant integer := 99;
+v, v : integer;
+pragma LIST(ON);
+begin
+„ X [ X = Y] (1)
+„ Y [ Y = 1] (2)
+end p;
+°
+=SML
+store_mt_results
+mt_run
+ [("r15.2.2", exn_count , (), 5)];
+store_mt_results
+mt_run
+ [("r15.2.3", print_exception_log , "-", true)];
+delete_exception_log "r15.2";
+store_mt_results
+mt_run
+ [("r15.2.4", print_exception_log , "-", false)];
+¹CN
+procedure p
+is
+c : constant integer := 99;
+begin
+ null;
+end p;
+°
+=TEX
+=SML
+clean_up();
+new_script{name = "r15.3.1", state = initial_cn_state};
+¹CN
+package p
+is
+v :  integer := 99;
+end p;
+°
+=TEX
+=SML
+new_script{name = "r15.3.2", state = get_cn_state()};
+=TEX
+Want to demonstrate that error recovery allows the package to be referenced in an erroneous
+procedure and then in a fixed version.
+There is a similar test involving package bodies in section~\ref{RTwentyThree}.
+¹CN
+with p;
+procedure q
+„ V [ V= 0] -- error should be PoV
+is
+begin
+ p.v := 0;
+end q;
+°
+=SML
+=SML
+store_mt_results
+mt_run
+ [("r15.3.1", print_exception_log , "-", true)];
+delete_exception_log "r15.3.2";
+
+¹CN
+with p;
+procedure q
+„ PoV [ PoV= 0]
+is
+begin
+ p.v := 0;
+end q;
+°
+=SML
+store_mt_results
+mt_run
+ [("r15.3.2", print_exception_log , "-", false)];
+
+=TEX
+=SML
+reset_flag("cn_stop_on_exceptions");
+=TEX
+
+\subsection{R0061: Change symbol for statement replacement} \label{RSixteen}
+Tested in MDT503 and elsewhere.
+\subsection{R0062: Origin of VCs} \label{RSeventeen}
+Interactive tests for VC Browser carried out informally.
+\subsection{R0063: Unexpanded specification statements} \label{REighteen}
+=SML
+clean_up();
+new_script{name = "r18", state = initial_cn_state};
+
+¹CN
+procedure p
+is
+begin
+ „ [true]
+end p;
+°
+=SML
+print_spark_program();
+output_spark_program{out_file = "int522.tmp"};
+store_mt_results
+mt_run
+ [(	"r18.1", 
+	ExtendedIO.system,
+	"test  `egrep \"„\" int522.tmp | wc -l `  = 1",
+	true)];
+ExtendedIO.system "rm int522.tmp";
+=TEX
+\subsection{R0065: Duplicated names in context clauses} \label{RNineteen}
+Explicitly tested here.
 =SML
 clean_up();
 new_script{name = "r19.1", state = initial_cn_state};
@@ -2116,8 +2262,11 @@ Tested in the module tests for PPZed.
 =TEX
 \subsection{R0076: Residual Global Variable Unsoundness}\label{RTwentyThree}
 Explicitly tested here using a test based on an example From Alf Smith.
+This also exposed a bug in a development version of the rationalised error reporting
+so we reproduce the conditions for that bug.
 =SML
 clean_up();
+set_flag("cn_stop_on_exceptions", false);
 new_script{name = "stack.ads", state = initial_cn_state};
 ¹CN
 package Stack is
@@ -2129,7 +2278,6 @@ end Stack;
 =SML
 val state = get_cn_state();
 new_script{name = "stack.adb", state = state};
-fun do_it() =
 ¹CN
 package body Stack is
   using V : Integer; implement v by V = v;
@@ -2145,11 +2293,23 @@ end Stack;
 °
 =SML
 store_mt_results
-mt_run_fail
-[
-	("r0076.1", do_it, (), gen_fail_msg "zid"  508021 ["V"])
-];
-
+mt_run
+ [("r0076.1", exn_count , (), 1)];
+¹CN
+package body Stack is
+  using V : Integer; implement v by V = v;
+  procedure Pop (X : out Integer)  
+  „ X, V [ X = V ± V = V‰0 ]
+  is
+  begin
+    X := V;
+  end Pop;
+begin
+  null;
+end Stack;
+°
+=SML
+reset_flag("cn_stop_on_exceptions");
 =TEX
 \subsubsection{pp2.5.9-bug0}
 Explicitly tested here.
