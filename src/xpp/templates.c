@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.18 2003/07/18 12:18:47 rda Exp rda $ 
+ * $Id: templates.c,v 2.19 2003/07/18 13:25:25 rda Exp $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -278,7 +278,6 @@ Boolean init_templates_tool(Widget w)
 			XmNtopPosition,	y,
 			XmNbottomAttachment,	XmATTACH_POSITION,
 			XmNbottomPosition,	y + 2,
-			XmNtraversalOn,	False,
 			NULL);
 
 
@@ -305,6 +304,7 @@ Boolean init_templates_tool(Widget w)
 		XmNrightAttachment,		XmATTACH_POSITION,
 		XmNleftPosition,		2,
 		XmNrightPosition,		12,
+		XmNtraversalOn,		False,
 		NULL);
 
 
@@ -316,6 +316,7 @@ Boolean init_templates_tool(Widget w)
 		XmNrightAttachment,		XmATTACH_POSITION,
 		XmNleftPosition,		13,
 		XmNrightPosition,		23,
+		XmNtraversalOn,		False,
 		NULL);
 
 	XtAddCallback(help_btn, XmNactivateCallback,
