@@ -63,6 +63,8 @@ void clear_undo(UndoBuffer *ub)
 	if(ub->menu_w) {
 		set_menu_item_sensitivity(ub->menu_w,
 				ub->menu_entry_offset, False);
+		set_menu_item_label(ub->menu_w,
+			ub->menu_entry_offset, undo_redo[0]);
 	}
 }
 
@@ -186,7 +188,7 @@ void undo_modify_cb(
 		if(!ub->undoing) {
 			ub->undo_redo_index = 0;
 			set_menu_item_label(ub->menu_w,
-			ub->menu_entry_offset, undo_redo[0]);
+				ub->menu_entry_offset, undo_redo[0]);
 		}
 	}
 }

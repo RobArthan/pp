@@ -174,9 +174,22 @@ void number_verify_cb(
 	extern void add_cmd_line(
 		Widget	text_w);
 #endif
-#ifndef __options
+#ifndef _options
 	extern void init_options(
 		Widget	owner_w);
 	extern void add_option_tool();
 	extern char **get_arg_list();
 #endif
+#ifndef _undo
+	extern void clear_undo(
+		XtPointer undo_ptr);
+	extern XtPointer add_undo(
+		Widget	text_w,
+		Widget	menu_w,
+		NAT	menu_entry_offset);
+	extern void undo_motion_cb();
+	extern void undo_modify_cb();
+	extern void undo_cb();
+#endif
+
+

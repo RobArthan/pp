@@ -70,19 +70,6 @@ static char queue[MAX_Q_LEN];
 static NAT q_length = 0;
 static NAT q_head = 0;
 
-/* The following is used to implement undo in the edit menu */
-
-struct undo_details {
-	Boolean can_undo;	/* true iff. can do an undo */
-	Boolean moved_away;	/* true if the change is complete */
-	NAT first, last;
-	char *oldtext;
-} undo_buffer = {False, True, 0, 0, NULL};
-
-static Boolean undoing;
-
-static NAT undo_redo_index;
-
 static Boolean changed = False;
 
 /* The following is used to circumvent the fact that cut/paste *
@@ -94,7 +81,6 @@ static char *cut_paste_buf = NULL;
 
 /* Messages for various purposes */
 
-static char *undo_redo[2] = {"Undo", "Redo"};
 
 static char* changed_message =
 "The text has been edited. Do you want to throw away the changes?";
@@ -181,6 +167,8 @@ static Widget
 	frame, work, journal, filename, filelabel, modified, namestring, script,
 	menubar, filemenu, toolsmenu, editmenu, cmdmenu, helpmenu;
 
+XtPointer undo_ptr;
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * limits on text window sizes in the main window:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -206,8 +194,7 @@ static void
 	cmd_menu_cb(),
 	help_menu_cb(),
 	close_down_cb(),
-	script_modify_cb(),
-	script_motion_cb();
+	script_modify_cb();
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu descriptions:
@@ -405,15 +392,7 @@ static void flash_file_name(char *fname)
 static void reinit_changed()
 {
 	changed = False;
-	undo_buffer.can_undo = False;
-	undo_buffer.moved_away = True;
-	undo_buffer.first = 0;
-	undo_buffer.last = 0;
-	if(undo_buffer.oldtext != NULL) {
-		XtFree(undo_buffer.oldtext);
-		undo_buffer.oldtext = NULL;
-	}
-	set_menu_item_sensitivity(editmenu, EDIT_MENU_UNDO, False);
+	clear_undo(undo_ptr);
 	XtUnmanageChild(modified);
 }
 
@@ -458,70 +437,6 @@ static setup_main_window(
 		xmPanedWindowWidgetClass,
 		frame, NULL);
 
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * File-name area:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-	filename = XtVaCreateWidget("filename",
-		xmRowColumnWidgetClass, work,
-		XmNorientation,	XmHORIZONTAL,
-		XmNpacking,	XmPACK_TIGHT,
-		NULL);
-
-
-	s1 = XmStringCreateSimple("File Name:");
-	filelabel = XtVaCreateManagedWidget("filelabel",
-		xmLabelWidgetClass, filename,
-		XmNlabelString,	s1,
-		NULL);
-	XmStringFree(s1);
-
-	namestring = XtVaCreateManagedWidget("namestring",
-		xmTextFieldWidgetClass, filename,
-		XmNeditable,			False,
-		XmNcursorPositionVisible,	False,
-		NULL);
-
-	s1 = XmStringCreateSimple("(Modified)");
-	modified = XtVaCreateManagedWidget("filelabel",
-		xmLabelWidgetClass, filename,
-		XmNlabelString,	s1,
-		NULL);
-	XmStringFree(s1);
-
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Script window:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-	i = 0;
-	XtSetArg(args[i], XmNeditable, 			True); ++i;
-	XtSetArg(args[i], XmNeditMode, 			XmMULTI_LINE_EDIT); ++i;
-	XtSetArg(args[i], XmNautoShowCursorPosition, 	True); ++i;
-	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
-	XtSetArg(args[i], XmNselectionArrayCount, 		3); ++i;
-
-	script = XmCreateScrolledText(work, "script", args, i);
-
-	XtAddCallback(script,
-		XmNmodifyVerifyCallback, script_modify_cb, NULL);
-
-	XtAddCallback(script,
-		XmNmotionVerifyCallback, script_motion_cb, NULL);
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Journal window:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-if( !global_options.edit_only ) {
-	i = 0;
-	XtSetArg(args[i], XmNeditable, 			False); ++i;
-	XtSetArg(args[i], XmNeditMode,	 		XmMULTI_LINE_EDIT); ++i;
-	XtSetArg(args[i], XmNautoShowCursorPosition, 	False); ++i;
-	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
-
-	journal = XmCreateScrolledText(work, "journal", args, i);
-	copy_font_list(journal, script);
-}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu bar:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -572,6 +487,74 @@ if( !global_options.edit_only ) {
 			XmNmenuHelpWidget, btns[num_btns-1], NULL);
 	}
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * File-name area:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+	filename = XtVaCreateWidget("filename",
+		xmRowColumnWidgetClass, work,
+		XmNorientation,	XmHORIZONTAL,
+		XmNpacking,	XmPACK_TIGHT,
+		NULL);
+
+
+	s1 = XmStringCreateSimple("File Name:");
+	filelabel = XtVaCreateManagedWidget("filelabel",
+		xmLabelWidgetClass, filename,
+		XmNlabelString,	s1,
+		NULL);
+	XmStringFree(s1);
+
+	namestring = XtVaCreateManagedWidget("namestring",
+		xmTextFieldWidgetClass, filename,
+		XmNeditable,			False,
+		XmNcursorPositionVisible,	False,
+		NULL);
+
+	s1 = XmStringCreateSimple("(Modified)");
+	modified = XtVaCreateManagedWidget("filelabel",
+		xmLabelWidgetClass, filename,
+		XmNlabelString,	s1,
+		NULL);
+	XmStringFree(s1);
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Script window:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+	i = 0;
+	XtSetArg(args[i], XmNeditable, 			True); ++i;
+	XtSetArg(args[i], XmNeditMode, 			XmMULTI_LINE_EDIT); ++i;
+	XtSetArg(args[i], XmNautoShowCursorPosition, 	True); ++i;
+	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
+	XtSetArg(args[i], XmNselectionArrayCount, 		3); ++i;
+
+	script = XmCreateScrolledText(work, "script", args, i);
+
+	undo_ptr = add_undo(script, editmenu, EDIT_MENU_UNDO);
+
+	XtAddCallback(script,
+		XmNmodifyVerifyCallback, undo_modify_cb, undo_ptr);
+
+	XtAddCallback(script,
+		XmNmodifyVerifyCallback, script_modify_cb, undo_ptr);
+
+	XtAddCallback(script,
+		XmNmotionVerifyCallback, undo_motion_cb, undo_ptr);
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Journal window:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+if( !global_options.edit_only ) {
+	i = 0;
+	XtSetArg(args[i], XmNeditable, 			False); ++i;
+	XtSetArg(args[i], XmNeditMode,	 		XmMULTI_LINE_EDIT); ++i;
+	XtSetArg(args[i], XmNautoShowCursorPosition, 	False); ++i;
+	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
+
+	journal = XmCreateScrolledText(work, "journal", args, i);
+	copy_font_list(journal, script);
+}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Open file if file_name not NULL
@@ -856,7 +839,7 @@ XmAnyCallbackStruct *cbs;
 		break;
 
 	case EDIT_MENU_UNDO:
-		do_undo(script);
+		undo_cb(script, undo_ptr, cbs);
 		break;
 
 	default:
@@ -924,52 +907,6 @@ XmAnyCallbackStruct *cbs;
 		break;
 	}
 }
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * MONITORING CHANGES FOR THE UNDO COMMAND
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-/*
- * What follows implements a very simple undo/redo facility.
- * Undoable actions are:
- *
- *	typing a single character (possibly overstriking many others)
- *	cut
- *	paste (possibly overstriking some chars)
- *	undo/redo
- *
- * Only the last action is undoable
- */
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Monitor cursor motions:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void script_motion_cb(w, d, cbs)
-Widget w;
-XtPointer d;
-XmTextVerifyCallbackStruct *cbs;
-{
-	XmTextPosition dontcare;
-	undo_buffer.moved_away = True;
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Reinitialise the undo buffer. N.b. initialisation of the `last'
- * component almost always has to be reassigned. Following gives
- * an undo which would not change the text.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void reinit_undo_buffer (cbs, cu)
-XmTextVerifyCallbackStruct *cbs;
-Boolean cu;
-{
-	undo_buffer.can_undo = cu;
-	undo_buffer.moved_away = False;
-	undo_buffer.first = cbs->startPos;
-	undo_buffer.last = cbs->startPos;
-	if(undo_buffer.oldtext != NULL) {
-		XtFree(undo_buffer.oldtext);
-		undo_buffer.oldtext = NULL;
-	}
-}
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Monitor typed input:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -978,94 +915,12 @@ Widget w;
 XtPointer d;
 XmTextVerifyCallbackStruct *cbs;
 {
-	Boolean restart = undo_buffer.moved_away;
-	NAT len;
-	char *cut_chars;
-
 	if(!changed) {	/* Only do this when change from !changed to changed */
 		XtManageChild(modified);
 	}
 	changed = True;
-
-/* XmGetSelection doesn't seem to work as one might like in a 
- * callback like this. However XmTextGetSubstring is just the job
- */
-
-	if(cbs->startPos < cbs->endPos) {
-		len = cbs->endPos - cbs->startPos;
-		cut_chars = XtMalloc(len + 1);
-		if(XmTextGetSubstring(w, cbs->startPos, len, len+1, cut_chars)
-			!= XmCOPY_SUCCEEDED) {
-			reinit_undo_buffer(cbs, False);
-		} else {
-			cut_chars[len] = '\0';
-			reinit_undo_buffer(cbs, True); /* for the XtFreee */
-			undo_buffer.moved_away = False;
-			undo_buffer.first = cbs->startPos;
-			undo_buffer.last = cbs->startPos + cbs->text->length;	
-			undo_buffer.oldtext = cut_chars;
-		}
-	} else if (restart) {
-		reinit_undo_buffer(cbs, True);
-		undo_buffer.last = cbs->startPos + cbs->text->length;
-	} else {
-		undo_buffer.last += cbs->text->length;
-	}
-	set_menu_item_sensitivity(editmenu, EDIT_MENU_UNDO, undo_buffer.can_undo);
-/* If this isn't the call invoked by the XmReplace in do_undo */
-/* The menu label should revert to "Undo": */
-	if(!undoing) {
-		undo_redo_index = 0;
-		set_menu_item_label(editmenu, EDIT_MENU_UNDO, undo_redo[0]);
-	}
 }
 
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Do an undo. Note that the text replacement will cause
- * the modify/verify call back script_modify_cb to be invoked
- * so that the next undo will undo the undo (i.e. undo + undo = redo).
- * Since this will change the undo buffer we must copy the relevant
- * fields. We must set the moved_away field to indicate that we're
- * script_modify_cb is to stop accumulating changes.
- * Any text inserted by the undo is selected and the insertion
- * position is set to the end of the undo point. The beginning
- * of the new selection (or the insertion point if no text was
- * inserted) is manoeuvred into view in the window.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void do_undo(w)
-Widget w;
-{
-	XmTextPosition fst, lst;
-	NAT len;
-	char *str;
-	if(undo_buffer.can_undo) {
-		undoing = True;
-		undo_buffer.moved_away = True;
-		if(undo_buffer.oldtext == NULL) {
-			len = 0;
-			str = XtMalloc(len + 1);
-			strcpy(str, "");
-		} else {
-			len = strlen(undo_buffer.oldtext);
-			str = XtMalloc(len + 1);
-			strcpy(str, undo_buffer.oldtext);
-		};
-		fst = undo_buffer.first;
-		lst = undo_buffer.last;
-		XmTextReplace(w, fst, lst, str);
-		undo_redo_index = 1 - undo_redo_index;
-		set_menu_item_label(editmenu, EDIT_MENU_UNDO,
-				undo_redo[undo_redo_index]);
-		if(len) {
-			XmTextSetSelection(w, fst, fst+len, CurrentTime);
-		} else {
-			XmTextSetInsertionPosition(w, fst);
-		}
-		XmTextShowPosition(w, fst);
-		XtFree(str);
-		undoing = False;
-	}
-}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * MANAGING THE APPLICATION
