@@ -1,4 +1,4 @@
-% imp507.doc %Z% $Revision: 1.171 $ $RCSfile: imp507.doc,v $ $Date: 2000/10/26 17:05:11 $
+% imp507.doc %Z% $Revision: 1.172 $ $RCSfile: imp507.doc,v $ $Date: 2000/10/27 16:02:21 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.171 $%
+\def\SCCSversion{$Revision: 1.172 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2000/10/26 17:05:11 $%
+\TPPdate{\FormatDate{$Date: 2000/10/27 16:02:21 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -130,6 +130,7 @@ statements in stubs.
 \item[Issue 1.168] CTLE II R1/9: SPARK 83 attributes.
 \item[Issues 1.169,1.170] CTLE II R2/1: global variable unsoundness.
 \item[Issue 1.171,1.172] CTLE II R1/11: nested packages.
+\item[Issue 1.173] Perfomance enhancement for type-checking of specification statements.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -2420,7 +2421,7 @@ fun Ûadd_formal_procs_wp_envÝ
 =TEX
 =SML
 fun Ûcall_vcsÝ
-	((sl, st) : SPECLAB * STATEMENT) : VC list = (
+	((sl, st) : SPECLAB * STATEMENT) : VC list * SPEC = (
 	let	val sl1 = add_init_vars_speclab sl;
 		val sl1_st = (add_formal_procs_wp_env sl1, st);
 	in	diag_vc_args := sl1_st :: !diag_vc_args;
@@ -2708,7 +2709,7 @@ generates VCs and can be chosen by caller in the call that just makes checks).
 The speclab is augmented by any variables brought into scope by a for-loop.
 
 =SML
-fun Ûvcs_speclabel_auxÝ (just_checking : bool) ({label, statement} : REFINED_BY) : unit = (
+fun Ûvcs_speclabel_auxÝ (just_checking : bool) ({label, statement} : REFINED_BY) : SPEC = (
 	let	val block1 = block 1;
 		val spec_env_lab = force_value( s_lookup label (!spec_env) )
 			handle Fail _ => fail "vcs_speclabel" 507003
@@ -2741,8 +2742,9 @@ fun Ûvcs_speclabel_auxÝ (just_checking : bool) ({label, statement} : REFINED_BY)
 			wp_env = wp_env1,
 			in_scope = in_scope1
 		};
-		val vcs = call_vcs (speclab, statement)
-	in	if just_checking then () else store_vcs (label, vcs)
+		val (vcs, spec) = call_vcs (speclab, statement)
+	in	if just_checking then () else store_vcs (label, vcs);
+		spec
 	end
 );
 =TEX
@@ -2846,7 +2848,7 @@ fun Ûspec_stmt_otherwiseÝ ({spec : SPEC, label : LABEL}) : unit = (
 After doing the work prescribed by the specification, we call {\it vcs\_spec\_label\_aux}
 to check the specification statement for free variables or other oddities. 
 =SML
-fun Ûspec_stmtÝ (specstmt as {spec : SPEC, label : LABEL}) : unit = (
+fun Ûspec_stmtÝ (specstmt as {spec : SPEC, label : LABEL}) : SPEC = (
 	(if	test_flag #speclabel_flag 1
 	then	spec_stmt_speclabel
 	else	spec_stmt_otherwise) specstmt;
@@ -2855,7 +2857,7 @@ fun Ûspec_stmtÝ (specstmt as {spec : SPEC, label : LABEL}) : unit = (
 =TEX
 \subsection{The SID function k\_slot\_stmt}
 =SML
-fun Ûk_slot_stmtÝ (label : LABEL) : unit = (
+fun Ûk_slot_stmtÝ (label : LABEL) : SPEC = (
 	spec_stmt {	spec=
 			{w = [], w0 = [], pre = z_tm_true, post = z_tm_true},
 			label = label}
@@ -2864,8 +2866,11 @@ fun Ûk_slot_stmtÝ (label : LABEL) : unit = (
 \subsection{The SID function add\_log\_con\_env}
 We reverse the list below because that makes the declarations in the
 VCs come out in the original order.
+Note that (fortunately!), this function makes no use of the pre- and post-conditions
+in the logical constant statement. Thus it does not interfere with the
+strategy for efficient, early, type-checking.
 =SML
-fun Ûadd_log_con_envÝ (logical_con as {defs, ...}: LOG_CON) : unit = (
+fun Ûadd_log_con_envÝ (defs : LOG_CON_DEF list) : unit = (
 	let	val xs_ts = map (fn {x, t, e} => (x, t)) defs;
 		val block1 = block 1;
 		val side = set_current_ti_context[];
@@ -3129,7 +3134,7 @@ The following is the meat of $vcs\_body\_proc$, placed here to allow
 a check to be made of the VCs of a procedure specification in a package
 specification.
 =SML
-fun Ûvcs_body_proc_auxÝ (st : STATEMENT) : (LABEL * VC list) = (
+fun Ûvcs_body_proc_auxÝ (st : STATEMENT) : (LABEL * (VC list * SPEC)) = (
 	let	val block1 = block 1;
 		val block2 = block 2;
 		val pack_body_flag2 = #pack_body_flag (#flags (#declab block2));
@@ -3192,7 +3197,7 @@ fun Ûvcs_body_proc_auxÝ (st : STATEMENT) : (LABEL * VC list) = (
 =TEX
 
 =SML
-fun Ûcheck_formal_procÝ (formal_proc : FORMAL_PROC) : unit = (
+fun Ûcheck_formal_procÝ (formal_proc : FORMAL_PROC) : SPEC = (
 let
 	(* mimic curr_form_proc & mimic being in proc body *)
 	val block1 = block 1;
@@ -3228,7 +3233,8 @@ let
 	val new_block2 = block_declab (block2, new_declab2);
 	val dummy2 = (blocks := (block 1 :: (new_block2 :: tl(tl (!blocks)))));
 	(* create the vcs for a null statement *)
-	val vcs = map term_of_vc (snd (vcs_body_proc_aux STNull))
+	val (_, (vcs, spec)) = vcs_body_proc_aux STNull;
+	val vcs = map term_of_vc vcs
 		handle (exn as Fail _) =>
 		(blocks :=
 		block1 :: block2 :: tl(tl(!blocks));
@@ -3236,8 +3242,7 @@ let
 	(* undo mimic of curr_form_proc & flag2 changes *)
 	val dummyu1 = (blocks :=
 		block1 :: block2 :: tl(tl(!blocks)));
-in
-	()
+in	spec
 end);
 =TEX
 =SML
@@ -3354,13 +3359,15 @@ The default values for the $speclab$ in the following function are set up by the
 fun Ûform_proc_pack_bodyÝ
 	(block2 : BLOCK, formal_proc3 : FORMAL_PROC,
 			package4 : PACKAGE, speclab5 : SPECLAB)
-	(form_proc: FORMAL_PROC) : unit = (
+	(form_proc: FORMAL_PROC) : SPEC = (
 	let	val vc_vars5a = #vc_vars (flatten_env(!blocks));
 		val speclab5a = speclab_wp_env_from_in_scope 
 			(speclab_vc_vars(speclab5, vc_vars5a));
 		val st = STSpecNoIvars{spec= #spec form_proc,
 					label=""};
-	in	store_vcs (#name formal_proc3, call_vcs (speclab5a, st))
+		val (vcs, spec) = call_vcs (speclab5a, st);
+	in	store_vcs (#name formal_proc3, vcs);
+		spec
 	end
 );
 =TEX
@@ -3372,7 +3379,7 @@ fun Ûform_proc_pack_body_auxÝ
 	(block2 : BLOCK, formal_proc3 : FORMAL_PROC,
 			package4 : PACKAGE, speclab5 : SPECLAB)
 	(avs : TERM list)
-	(form_proc: FORMAL_PROC) : unit = (
+	(form_proc: FORMAL_PROC) : SPEC = (
 	let	val block1 = block 1;
 		val spec3 = #spec formal_proc3;
 		val w3 = #w spec3;
@@ -3450,11 +3457,11 @@ fun Ûform_proc_pack_body_auxÝ
 			in_scope = in_scope5a
 		};
 		val st = STSpecNoIvars{spec= #spec form_proc, label=""};
-	in	
-		blocks :=
-		block_vc_vars(block1, vc_vars1 cup conc_vars):: tl (!blocks);
-		store_vcs (#name formal_proc3, call_vcs (speclab5a, st));
-		()
+		val _ = blocks :=
+			block_vc_vars(block1, vc_vars1 cup conc_vars):: tl (!blocks);
+		val (vcs, spec) = call_vcs (speclab5a, st);
+	in	store_vcs (#name formal_proc3, vcs);
+		spec
 	end
 );
 =TEX
@@ -3501,7 +3508,7 @@ fun Ûform_proc_subunitÝ (form_proc: FORMAL_PROC) : unit = (
 			wp_env = wp_env4,
 			in_scope = in_scope4
 		};
-		val resulting_vcs = call_vcs (speclab4, st)
+		val (resulting_vcs, _) = call_vcs (speclab4, st)
 	in	store_vcs (block_name1, resulting_vcs)
 	end
 		else	()
@@ -3567,20 +3574,19 @@ fun Ûaux_vars_in_fp_frameÝ (formal_proc3 as {formal_ids, ...} : FORMAL_PROC)
 =TEX
 =SML
 fun Ûform_procÝ (frm_prc: FORMAL_PROC) : unit = (
-	(if		test_flag #pack_spec_flag 2
-	then		form_proc_pack_spec
+	if		test_flag #pack_spec_flag 2
+	then		form_proc_pack_spec frm_prc
 	else if		test_flag #pack_body_flag 2
 	then
 		case form_proc_pack_body_common frm_prc of
 		Value (info as (_, formal_proc3, package4, _)) => (
 			case aux_vars_in_fp_frame formal_proc3 package4 of
-				[]	 => form_proc_pack_body info
-			|	auxvars => form_proc_pack_body_aux info auxvars
-		) | Nil =>
-			(fn _ => ())
+				[]	 => (form_proc_pack_body info frm_prc; ())
+			|	auxvars => (form_proc_pack_body_aux info auxvars frm_prc; ())
+		) | Nil =>	()
 	else if		test_flag #subunit_flag 2
-	then		form_proc_subunit
-	else		(fn _ => ())) frm_prc
+	then		form_proc_subunit frm_prc
+	else		()
 );
 =TEX
 \subsection{The SID function curr\_form\_proc}
@@ -3804,7 +3810,9 @@ fun Ûform_fun_pack_bodyÝ (form_fun: FORMAL_FUN) : unit = (
 		val globals = #globals form_fun;
 		val globals3 = #globals formal_fun3;
 	in	if	globals = globals3
-		then	store_vcs (block_name2, call_vcs (speclab5, st))
+		then	let	val (vcs, _) = call_vcs (speclab5, st);
+			in	store_vcs (block_name2, vcs)
+			end
 		else	let	fun fmt_strs [] () = (
 					"empty list of global dependencies"
 				) | fmt_strs strs () = (
@@ -3874,7 +3882,8 @@ fun Ûform_fun_subunitÝ (form_fun: FORMAL_FUN) : unit = (
 		val globals = #globals form_fun;
 		val globals3 = #globs subunit3;
 		val _ = check_globals_fun block_name1 globals globals3;
-	in	store_vcs (block_name2, call_vcs (speclab4, st))
+		val (vcs, _) = call_vcs(speclab4, st);
+	in	store_vcs (block_name2, vcs) 
 	end
 		else	()
 	end
@@ -4029,12 +4038,15 @@ fun Ûsubprogram_implementationÝ ((): unit) : unit = (
 The decision about which support function to call (if any) is made in $vcs\_body$ itself.
 
 =SML
-fun Ûvcs_body_procÝ (st : STATEMENT) : unit = (
-	store_vcs(vcs_body_proc_aux st)
+fun Ûvcs_body_procÝ (st : STATEMENT) : SPEC = (
+	let	val (lab, (vcs, spec)) = vcs_body_proc_aux st;
+	in	store_vcs (lab, vcs);
+		spec
+	end
 );
 =TEX
 =SML
-fun Ûvcs_body_funÝ (st : STATEMENT) : unit = (
+fun Ûvcs_body_funÝ (st : STATEMENT) : SPEC = (
 	let	val block1 = block 1;
 		val current_formal_fun1 = #current_formal_fun block1;
 		val vc_vars1 = #vc_vars(#in_scope(#declab block1));
@@ -4084,8 +4096,9 @@ fun Ûvcs_body_funÝ (st : STATEMENT) : unit = (
 			wp_env = wp_env,
 			in_scope = in_scope1
 		};
-	in	store_vcs((#name o #informal_fun) current_formal_fun1,
-			call_vcs (speclab, st))
+		val (vcs, spec) = call_vcs (speclab, st);
+	in	store_vcs((#name o #informal_fun) current_formal_fun1, vcs);
+		spec
 	end	
 );
 =TEX
@@ -4093,8 +4106,8 @@ fun Ûvcs_body_funÝ (st : STATEMENT) : unit = (
 fun Ûvcs_bodyÝ (st : STATEMENT) : unit = (
 	if	test_flag #formal_body_flag 1
 	then	if	test_flag #fun_flag 1
-		then	vcs_body_fun st
-		else	vcs_body_proc st
+		then	(vcs_body_fun st; ())
+		else	(vcs_body_proc st; ())
 	else	()
 );
 =TEX
@@ -5165,7 +5178,7 @@ fun Ûadd_conc_vars_envÝ ((): unit) : unit = (
 =TEX
 \subsection{The SID function vcs\_aux\_initial}
 =SML
-fun Ûvcs_aux_initialÝ (st : STATEMENT) : unit = (
+fun Ûvcs_aux_initialÝ (st : STATEMENT) : SPEC = (
 	let	val block1 = block 1;
 		val block_name1 = #block_name(#declab (block1));
 		val package = case (s_lookup block_name1 (!pack_env)) of
@@ -5213,8 +5226,9 @@ fun Ûvcs_aux_initialÝ (st : STATEMENT) : unit = (
 			wp_env = wp_env,
 			in_scope = in_scope1
 		};
-	in	store_vcs(block_name1,
-			call_vcs (speclab, st))
+		val (vcs, res_spec) = call_vcs (speclab, st)
+	in	store_vcs(block_name1, vcs);
+		res_spec
 	end
 );
 =TEX
@@ -5532,7 +5546,7 @@ fun Ûnew_scope_speclabelÝ (label : LABEL) : unit = (
 \subsection{THE SID function vcs\_speclabel}
 All the work of this SID function is done in {\it vcs\_speclabel\_aux} (see above).
 =SML
-val Ûvcs_speclabelÝ : REFINED_BY -> unit = vcs_speclabel_aux false;
+val Ûvcs_speclabelÝ : REFINED_BY -> SPEC = vcs_speclabel_aux false;
 =TEX
 \subsection{THE SID function end\_scope\_speclabel}
 =SML
@@ -5663,9 +5677,9 @@ and Ûdo_statementÝ (y as STNull : STATEMENT) : STATEMENT = (y
 ) | do_statement (y as (STAssign x) : STATEMENT) = (y
 ) | do_statement (y as (STSpecNoIvars {spec, label}) : STATEMENT) = (
 	let	val expanded = {spec = expand_frame spec, label = label};
-	in	new_k_slot(label, RSSpecStatement, get_current_theory_name());
-		spec_stmt expanded;
-		STSpecNoIvars expanded
+		val _ = new_k_slot(label, RSSpecStatement, get_current_theory_name());
+		val spec' = spec_stmt expanded;
+	in	STSpecNoIvars {spec = spec', label = label}
 	end
 ) | do_statement (y as (STSemicolon (x1, x2)) : STATEMENT) = (
 	let	val expanded1 = do_statement x1;
@@ -5732,13 +5746,11 @@ and Ûdo_statementÝ (y as STNull : STATEMENT) : STATEMENT = (y
 	error "do_statement" 507019 []
 ) | do_statement (y as (SLogCon (log_con as {defs, spec, pre1, label})) : STATEMENT) = (
 	let	val expanded_spec = expand_frame spec;
-		val expanded_log_con = {defs = defs,
-			spec = expanded_spec, pre1 = pre1, label = label};
-	in	new_k_slot(label, RSSpecStatement, get_current_theory_name());
-		add_log_con_env expanded_log_con;
-		spec_stmt {spec = expanded_spec, label = label};
-		remove_log_con_env();
-		SLogCon expanded_log_con
+		val _ = new_k_slot(label, RSSpecStatement, get_current_theory_name());
+		val _ = add_log_con_env defs;
+		val spec' = spec_stmt {spec = expanded_spec, label = label};
+		val _ = remove_log_con_env();
+	in	SLogCon {defs = defs, spec = spec', pre1 = pre1, label = label}
 	end
 ) | do_statement (y as (SProcIvars x) : STATEMENT) = (
 	error "do_statement" 507019 []
@@ -5983,7 +5995,7 @@ and Ûdo_proper_bodyÝ (y as (PBProcedure
 	do_annotation annotation;
 	map do_declaration decls;
 	(if any decls (fn d => case d of DUsing _ => true |_ => false)
-	then	vcs_aux_initial(do_statement statement)
+	then	(vcs_aux_initial(do_statement statement); ())
 	else	(do_statement statement; ()));
 	end_scope()
 );
