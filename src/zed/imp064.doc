@@ -90,16 +90,19 @@ lasp -s -u imp064.OKwords imp064.doc > zz1
 \item[Issues 1.1 to 1.12 ]
 	Initial drafts.
 
-\item[\FormatDate{$Date$%
-}, issue \SCCSissue~]
+\item[\FormatDate{92/08/24
+}, issue 1.14]
 	Bring precedences into line with~\cite{DS/FMU/IED/DEF007}.
 	Omit references to $Totality$ and $U[Totality]$ as generic arguments.
 	Omit the `$|true$' in schema texts.
 	Output correct Z term quotation symbol.
 
-%\item[\FormatDate{$Date$%
-%}, issue \SCCSissue~]
-
+\item[\FormatDate{92/10/30
+}, issue 1.16]
+	Reissue after basic testing.
+\item[\FormatDate{$Date$%
+}, issue \SCCSversion]
+	Corrected treatment of fancyfix forms.
 
 \end{description}
 
@@ -277,8 +280,10 @@ $pc_decor_op$ is the context for the operand of a decoration operation.
 $pc_decor$ is the context for the decoration operation itself.
 
 =SML
-val pc_decor : PREC_CONTEXT = PcNormal(300, 0, false);
-val pc_decor_op : PREC_CONTEXT = PcNormal(300, 1, false);
+val pc_decor : PREC_CONTEXT = PcNormal(250, 0, false);
+val pc_decor_op : PREC_CONTEXT = PcNormal(250, 1, false);
+=TEX
+=SML
 val pc_schema_name : PREC_CONTEXT = PcNormal(300, 10, false);
 val pc_dec_name : PREC_CONTEXT = PcNormal(300, 20, false);
 val pc_dec_var_name : PREC_CONTEXT = PcNormal(300, 30, false);
@@ -374,12 +379,25 @@ fun Ûdo_dec_var_nameÝ (cur_env:PP_ENV, name:string, enclosed_prec:PREC_CONTEXT) 
 	let
 		val PpEnv{pe_addstring=addstring, ...} = cur_env;
 
-		val (n, _) = unpack_ident name;
+		val (n, d) = unpack_ident name;
+
+		val tmpl = template_of_string n;
+
+		fun decorate ts = (
+			case d of
+				"" => ts
+			|	_ => (
+				case rev (explode ts) of
+					("_" ::  more) => implode(rev more @ [d ^ " _"])
+				|	_ => ts ^ d
+			)
+		);
 	in
-		if (n = first_tmpl_id(template_of_string n)) handle Fail _ => true
+		if (n = first_tmpl_id tmpl) handle Fail _ => true
 		then(	addstring name;
 			PfOk
-		)else	bracket(cur_env, enclosed_prec, false, fn e => addstring name)
+		)else	bracket(cur_env, enclosed_prec, false, fn e => 
+				addstring (decorate (format_template tmpl)))
 	end
 );
 =TEX
@@ -441,7 +459,7 @@ end
 There are several variations on lists.
 
 Some lists (typically those separated by commas or semicolons)
-have the separator plus a space token come between value.
+have the separator plus a space token come between values.
 Others lists have the space token before the separator.
 
 =SML
@@ -479,12 +497,22 @@ end
 =TEX
 \section{Decoration}
 An oddity about decoration is that you must put brackets around a decorated
-expression which is itself decorated. Since this needs to be done in
-several different contexts we common up the code to do it:
+expression which is itself decorated, and you must not put unnecessary
+brackets around it when it appears as a declaration.
+Since this needs to be done in
+several different contexts we common up the code to do it.
+The precedence should be set to $PcLowest$ on entry in declaration
+processing to ensure that
+the outermost decoration is not bracketed.
 =SML
 fun Ûdo_decorÝ (tm : TERM, d : string) (cur_env:PP_ENV) : PFUN_ANS = (
-	let	val PpEnv{pe_addstring=addstring, ...} = cur_env;
-	in	bracket(set_prec pc_decor_op cur_env, pc_decor, false,
+	let	val PpEnv{pe_addstring=addstring, pe_prec, ...} = cur_env;
+		val new_env = (
+			if pe_prec = PcLowest
+			then cur_env
+			else set_prec pc_decor_op cur_env
+		);
+	in	bracket(new_env, pc_decor, false,
 			(fn e =>
 				(main_term_pp e tm;
 				addstring d)))
@@ -518,21 +546,22 @@ The check to be made on the declaration is that it is a non-empty
 list of things which are either schemas-as-declarations or variable
 declarations in which the variables are Z local variables (i.e. HOL variables).
 =SML
-datatype ÛA_DECÝ = ÛColonÝ of TERM list * TERM | ÛSchemaÝ of TERM * string;
+datatype ÛA_DECÝ = ÛColonÝ of string list * TERM | ÛSchemaÝ of TERM * string;
 local
 	exception ÛNotADeclÝ;
-	fun Ûok_varsÝ ([] : TERM list) : unit = ()
-	|   ok_vars (t :: more) = (
+	fun Ûdo_varsÝ ([] : TERM list) : string list = []
+	|   do_vars (t :: more) = (
 		(case dest_z_term t of
-			ZLVar _ => t
-		|	ZGVar _ => t
-		|	_ => raise NotADecl);
-		ok_vars more
+			ZLVar (s, _, _) => s
+		|	ZGVar (s, _, _) => s
+		|	_ => raise NotADecl) ::
+		do_vars more
 	);
 	fun Ûmake_a_decÝ (t : TERM) : A_DEC = (
 		case dest_z_term t of
 			ZSchemaDec ts => Schema ts
-		|	ZDec (ts, t) => Colon ((ok_vars ts; ts), t)
+		|	ZDec ([], t) => raise NotADecl
+		|	ZDec (ts, t) => Colon (do_vars ts, t)
 		|	_ => raise NotADecl
 	);
 =TEX
@@ -549,14 +578,22 @@ fun Ûdo_declÝ (decl : A_DEC list)
 	let	val PpEnv{pe_prec=prec, pe_addstring=addstring,
 			pe_beginb=beginb, pe_space=space, pe_endb=endb, ...}
 			= cur_env;
+		fun aux [] = ()
+		| aux (s::[]) = (do_dec_var_name (cur_env, s, prec); ())
+		| aux (s::more) = (
+			do_dec_var_name (cur_env, s, prec);
+			addstring ",";
+			space(1, 0);
+			aux more
+		);
 		fun print_a_dec (Schema (s, "")) = (
-			main_term_pp cur_env s; ()
+			main_term_pp (set_prec pc_decor_op cur_env) s; ()
 		) | print_a_dec (Schema sd) = (
 			do_decor sd cur_env; ()
 		) | print_a_dec (Colon (ts, t)) = (
 			beginb(2, false);
 			beginb(0, false);
-			do_list(true, ",", ts) (set_prec pc_dec_name cur_env);
+			aux ts;
 			endb();
 			space(1, 2);
 			addstring ": ";
@@ -585,7 +622,11 @@ declaration (in which case it can be elided). The following makes the test:
 =SML
 fun Ûis_chartupleÝ (tm : TERM) (decs : A_DEC list) : bool = (
 let	fun chk (tm :: tms) (Colon(v :: vs, t) :: decl) = (
-		tm =$ v andalso chk tms (Colon(vs, t) :: decl)
+		(case dest_z_term tm of
+			ZLVar (s, _, _) => s = v
+		|	ZGVar (s, _, _) => s = v
+		|	_ => false)
+		andalso chk tms (Colon(vs, t) :: decl)
 	) | chk tms (Colon([], _) :: decl) = (chk tms decl
 	) | chk (tm :: tms) (Schema (s, d) :: decl) = (
 		let	val (t, e) = dest_z_Ê tm;
@@ -674,9 +715,9 @@ formatting and so the expression cannot be shown in a fancy fix form.
 
 =SML
 datatype ÛZ_PIECEÝ
-	=	Ûzp_termÝ	of TERM * PREC_CONTEXT
-	|	Ûzp_stringÝ	of string * ZFIXITY
-	;
+	=	ÛZpTermÝ	of TERM
+	|	ÛZpTermsÝ	of TERM list
+	|	ÛZpStringÝ	of string * ZFIXITY;
 =TEX
 
 After the pieces have been assembled we must decide upon how to format
@@ -689,12 +730,12 @@ by converting lists of $Z_PIECE$s into $PRINT_TOKEN$s.
 
 =SML
 datatype ÛPRINT_TOKENÝ
-	=	Ûpt_termÝ	of TERM * PREC_CONTEXT
-	|	Ûpt_stringÝ	of string
-	|	Ûpt_spaceÝ	of int * int
-	|	Ûpt_beginbÝ	of int * bool
-	|	Ûpt_endbÝ
-	;
+	=	ÛPtTermÝ	of TERM
+	|	ÛPtTermsÝ	of TERM list
+	|	ÛPtStringÝ	of string
+	|	ÛPtSpaceÝ	of int * int
+	|	ÛPtBeginbÝ	of int * bool
+	|	ÛPtEndbÝ;
 =TEX
 
 %********************************************************************
@@ -718,28 +759,35 @@ fun Ûformat_fancy_fixÝ
 	(decor : string)
 	(args : TERM list)
 	: Z_PIECE list OPT = (
-let
-	val rids = rev(tmpl_ids tmpl class);
-
+let	val rids = rev(tmpl_ids tmpl class);
 	val ids = rev(case rids of (i, f) :: t => (i^decor, f) :: t | _ => rids);
-
+	val stubs = tmpl_stubs tmpl;
+	
 	fun aux1 names tms = (
-		fold	(fn ((n, t), prev) => (zp_string n) :: (zp_term(t, PcLowest)) :: prev)
+		fold	(fn ((n, t), prev) => (ZpString n) :: t :: prev)
 			(combine names tms)
 			[]
 	);
 
 	fun aux2 names tms = (
-		fold	(fn ((t, n), prev) => (zp_term(t, PcLowest)) :: (zp_string n) :: prev)
+		fold	(fn ((t, n), prev) => t :: (ZpString n) :: prev)
 			(combine tms names)
 			[]
 	);
+
+	fun aux3 stubs tms = (
+		map (fn (StubUS, t) => ZpTerm t
+			| (StubEll, t) => ZpTerms (snd (dest_z_§¢ t)))
+			(combine stubs tms)
+	);
+
+	val args' = aux3 stubs args;
 in
 	Value(	case tmpl
-		of TmplNon _ => (zp_string(hd ids)) :: (aux2 (tl ids) args)
-		| TmplIn _ => (zp_term(hd args, PcLowest)) :: (aux1 ids (tl args))
-		| TmplPre _ => aux1 ids args
-		| TmplPost _ => aux2 ids args
+		of TmplNon _ => (ZpString(hd ids)) :: (aux2 (tl ids) args')
+		| TmplIn _ => hd args' :: (aux1 ids (tl args'))
+		| TmplPre _ => aux1 ids args'
+		| TmplPost _ => aux2 ids args'
 	)
 end
 handle Fail _ => Nil
@@ -787,7 +835,7 @@ end
 Some analysis and modification must be done to the $Z_PIECE$s before
 printing.
 
-Function $analyse_prec$ determines the precedence of the pieces of the
+Function $analyse_prec$ determines the precedence of the fancy-fix
 term.  This is the enclosed precedence of the term which will be used
 as the right hand argument of $gt_prec$ when the need for brackets is
 being determined.
@@ -799,48 +847,26 @@ local
 	| class_p(ZClGen p) = pc_expr1_gen p
 	;
 
-	fun get_p(zp_term(_, p)) = p
-	| get_p(zp_string(_, (ff, cl))) = (
+	fun  get_p(ZpString(_, (ff, cl))) = (
 		case ff
-		of ZFFBeginOp		=> PcLowest
-		| ZFFEndOp		=> PcLowest
+		of ZFFBeginOp		=> PcHighest
+		| ZFFEndOp		=> PcHighest
 		| ZFFInOp		=> class_p cl
 		| ZFFPostBeginOp	=> class_p cl
-		| ZFFThenOp		=> PcLowest
+		| ZFFThenOp		=> PcHighest
 		| ZFFPostOp		=> class_p cl
 		| ZFFPreEndOp		=> class_p cl
 		| ZFFPreOp		=> class_p cl
-	);
+	) | get_p _ = PcHighest;
 
-	fun aux(p, prev) = if p gt_prec prev then p else prev;
+	fun aux(p, prev) = if p <> PcHighest then p else prev;
 in
 
 fun Ûanalyse_precÝ (pieces:Z_PIECE list) : PREC_CONTEXT =(
-	fold aux (map get_p pieces) PcLowest
+	fold aux (map get_p pieces) PcHighest
 );
 
 end;
-=TEX
-
-Function $set_end_precs$ sets the precedences of the first and last
-terms of the $Z_PIECE$s to the appropriate value  and the intermediate terms
-to have lowest precedence.
-
-=SML
-fun Ûset_end_precsÝ (tm_prec:PREC_CONTEXT) (pieces:Z_PIECE list) : Z_PIECE list = (
-let
-	val left_prec = set_prec_flag(tm_prec, true);
-	val right_prec = set_prec_flag(tm_prec, false);
-	fun aux1 [(zp_term(t, _))] = [zp_term(t, right_prec)]
-	|   aux1 ((zp_term(t, _))::more) = (zp_term(t, PcLowest)) :: aux1 more
-	|   aux1 (str::more) = str :: aux1 more
-	|   aux1 [] = [];
-	fun aux2 ((zp_term(t, _))::more) = (zp_term(t, left_prec)) :: aux1 more
-	|   aux2 other = aux1 other;
-in
-	aux2 pieces
-end
-);
 =TEX
 
 Function $make_print_tokens$ decides how to format various types of
@@ -850,38 +876,42 @@ is responsible for adding Oppen begin and end tokens at the ends.
 
 =SML
 local
-	val hsp = pt_string " ";
-	val ssp = pt_space(1, 2);
+	val hsp = PtString " ";
+	val ssp = PtSpace(1, 2);
 
 	fun aux [] = []
-	| aux (zp_term t1 :: zp_string(s1, _) :: []) =
-		ssp :: pt_term t1 :: hsp :: pt_string s1 :: []
-	| aux (zp_string(s1, _) :: []) = hsp :: pt_string s1 :: []
-	| aux (zp_term t1 :: []) = ssp :: pt_term t1 :: []
-	| aux (zp_string(s1, _) :: more) = hsp :: pt_string s1 :: aux more
-	| aux (zp_term t1 :: more) = ssp :: pt_term t1 :: ssp :: aux more
+	| aux (ZpTerm t1 :: ZpString(s1, _) :: []) =
+		ssp :: PtTerm t1 :: hsp :: PtString s1 :: []
+	| aux (ZpString(s1, _) :: []) = hsp :: PtString s1 :: []
+	| aux (ZpTerm t1 :: []) = ssp :: PtTerm t1 :: []
+	| aux (ZpString(s1, _) :: more) = hsp :: PtString s1 :: aux more
+	| aux (ZpTerm t1 :: more) = ssp :: PtTerm t1 :: aux more
+	| aux (ZpTerms t1 :: more) = ssp :: PtTerms t1 :: aux more
 	;
 in
 
 fun Ûmake_print_tokensÝ (pieces:Z_PIECE list) : PRINT_TOKEN list = (
 	case pieces
-	of (zp_term t1 :: zp_string(s1, _) :: zp_term t2 :: []) => (
+	of (ZpTerm t1 :: ZpString(s1, _) :: ZpTerm t2 :: []) => (
 		(* Infix *)
-		pt_term t1 :: ssp :: pt_string s1 :: hsp :: pt_term t2 :: []
+		PtTerm t1 :: ssp :: PtString s1 :: hsp :: PtTerm t2 :: []
 		)
-	| (zp_term t1 :: zp_string(s1, _) :: []) => (
+	| (ZpTerm t1 :: ZpString(s1, _) :: []) => (
 		(* Postfix *)
-		pt_term t1 :: hsp :: pt_string s1 :: []
+		PtTerm t1 :: hsp :: PtString s1 :: []
 		)
-	| (zp_string(s1, _) :: zp_term t2 :: []) => (
+	| (ZpString(s1, _) :: ZpTerm t2 :: []) => (
 		(* Prefix *)
-		pt_string s1 :: hsp :: pt_term t2 :: []
+		PtString s1 :: hsp :: PtTerm t2 :: []
 		)
-	| (zp_term t1 :: more) => (
-		pt_term t1 :: aux more
+	| (ZpTerm t1 :: more) => (
+		PtTerm t1 :: aux more
 		)
-	| (zp_string(s1, _) :: more) => (
-		pt_string s1 :: aux more
+	| (ZpTerms t1 :: more) => (
+		PtTerms t1 :: aux more
+		)
+	| (ZpString(s1, _) :: more) => (
+		PtString s1 :: aux more
 		)
 	| [] => []
 );
@@ -899,23 +929,28 @@ will be printed in a fancy fix fashion.
 =SML
 fun Ûprint_piecesÝ (cur_env:PP_ENV) (pieces:Z_PIECE list) : PFUN_ANS = (
 let
-	val PpEnv{pe_prec=prec, pe_addstring=addstring,
-		pe_beginb=beginb, pe_space=space, pe_endb=endb, ...} = cur_env;
-
 	val tm_prec = analyse_prec pieces;
-	val pieces1 = make_print_tokens(set_end_precs tm_prec pieces);
-in
-	bracket(cur_env, tm_prec, true,
-		fn e => (map(	fn pt_term(t, p) => main_term_pp (set_prec p e) t
-				| pt_string s => addstring s
-				| pt_space ss => space ss
-				| pt_beginb ss => beginb ss
-				| pt_endb => endb()
-				)
-				pieces1
-			; ()
-			)
-	)
+	fun do_tok tok prec env = (
+		let	val PpEnv{pe_addstring=addstring,
+				pe_beginb=beginb, pe_space=space,
+				pe_endb=endb, ...} = env;
+		in	case tok of
+			PtTerm t => main_term_pp (set_prec prec env) t
+		|	PtTerms ts => do_list (true, ",", ts) (set_prec prec env)
+		|	PtString s => addstring s
+		|	PtSpace ss => space ss
+		|	PtBeginb ss => beginb ss
+		|	PtEndb => endb()
+		end
+	);
+	fun do_rest [] _ = ()
+	|   do_rest ((tok as (PtTerm _)) :: []) env = (
+		do_tok tok (set_prec_flag(tm_prec, false)) env
+	) | do_rest (tok :: more) env = (do_tok tok PcLowest env; do_rest more env);
+	fun do_start ((tok as (PtTerm _)) :: more) env = (
+		(do_tok tok (set_prec_flag(tm_prec, true)) env; do_rest more env)
+	) | do_start other env = do_rest other env;
+in	bracket(cur_env, tm_prec, true, do_start (make_print_tokens pieces))
 end
 );
 =TEX
@@ -1016,13 +1051,15 @@ in
 				Nil
 		)
 	of Value pieces => print_pieces cur_env pieces
-	| Nil => bracket(cur_env, pc_expr4_gvar, true,
-		fn e => (
-			do_dec_var_name(set_prec pc_var_name cur_env, name, pc_dec_var_name);
-			if not_all_u
-			then do_wrapped_list("[", ",", "]", tms) e
-			else ()
-		))
+	| Nil => (
+		if not_all_u
+		then	bracket(cur_env, pc_expr4_gvar, true,
+			fn e => (
+				do_dec_var_name(set_prec pc_var_name cur_env, name, pc_dec_var_name);
+				do_wrapped_list("[", ",", "]", tms) e
+			))
+		else do_dec_var_name(set_prec pc_var_name cur_env, name, pc_dec_var_name)
+	)
 end
 );
 =TEX
@@ -1121,7 +1158,7 @@ Local variables, $ZLVar$. These aren't Z if there are generic parameters
 
 =SML
 | ZLVar(name, var_ty, []) => (
-	do_dec_var_name(cur_env, name, pc_dec_var_name)
+	do_dec_var_name(set_prec pc_var_name cur_env, name, pc_dec_var_name)
 )
 | ZLVar(name, var_ty, tms) => (
 	PfNotPossible
@@ -1135,7 +1172,7 @@ generic parameter is suppressed.
 =SML
 | ZGVar (name_args as (name, var_ty, args)) => (
 	if is_nil args orelse ((is_u(mk_z_gvar name_args)) handle Fail _ => false)
-	then	do_dec_var_name(cur_env, name, pc_dec_var_name)
+	then	do_dec_var_name(set_prec pc_var_name cur_env, name, pc_dec_var_name)
 	else	do_generic cur_env name_args
 )
 =TEX
@@ -1474,3 +1511,11 @@ val my_oppen_funs :OppenFormatting.OPPEN_FUNS = (
 );
 
 val my_env = PrettyPrinterSupport.initial_env "Z" Nil my_oppen_funs;
+	fun Ûdo_varsÝ ([] : TERM list) : string = ()
+	|   do_vars (t :: more) = (
+		(case dest_z_term t of
+			ZLVar (s, _, _) => s
+		|	ZGVar (s, _, _) => s
+		|	_ => raise NotADecl);
+		do_vars more
+	);
