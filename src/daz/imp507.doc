@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.242 $ $RCSfile: imp507.doc,v $ $Date: 2002/12/15 16:29:16 $
+% imp507.doc %Z% $Revision: 1.243 $ $RCSfile: imp507.doc,v $ $Date: 2002/12/17 10:46:36 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.242 $%
+\def\SCCSversion{$Revision: 1.243 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/12/15 16:29:16 $%
+\TPPdate{\FormatDate{$Date: 2002/12/17 10:46:36 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -191,6 +191,8 @@ being renamed is defined in the same package specification.
 \item[Issue 1.241] Now takes a theory checkpoint before each web clause and rolls back if an exception is raised.
 \item[Issue 1.242] Added exception logging.
 \item[Issue 1.243] Fixed {\LaTeX} errors.
+\item[Issue 1.244] Rationalised error reporting: now can continue after failure in declaration, statement etc.
+Soundness warnings now distinctive,more systematic and logged.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -209,7 +211,6 @@ structure ÛCNZGeneratorÝ : CNZGenerator = struct
 open CNTypes CNTypes1 CNTypes2 CNBasicDeclsAndExprs ZParagraphs
 	CNVCGenerator ZUserInterfaceSupport TypeInference CNParser;
 =TEX
-
 The following function returns the current level for the specified theory.  This is used as an index to order objects being added to the theory.
 
 =SML
@@ -1727,6 +1728,70 @@ fun Ûget_saved_z_generator_stateÝ (s : string) : Z_GENERATOR_STATE = (
 	end
 );
 =TEX
+\subsection{Error Management}
+=SML
+val Ûcn_stop_on_exceptionsÝ : bool ref = ref true;
+val _ = new_flag{
+	name="cn_stop_on_exceptions",
+	check=fun_true,
+	control=cn_stop_on_exceptions,
+	default=fun_true} handle Fail _ => ();
+type ÛCN_EXCEPTION_LOGÝ = string list S_DICT;
+val Ûexception_logÝ : CN_EXCEPTION_LOG ref = ref initial_s_dict;
+=TEX
+In the following, the special first two clauses are for SML/NJ (for which {\it string\_of\_exn} loses information).
+=SML
+fun Ûtext_of_exnÝ (Fail msg : exn) : string = get_message msg
+|   text_of_exn (Error msg) = get_message msg
+|  text_of_exn ex = string_of_exn ex;
+=TEX
+=SML
+fun Ûlog_messageÝ (msg : string)  : unit = (
+	exception_log :=
+	s_enter (!script_name)
+	(case s_lookup (!script_name) (!exception_log) of
+		Value msgs => msg::msgs
+	|	Nil => [msg])
+	(!exception_log)
+);
+=TEX
+=SML
+fun Ûlog_exceptionÝ (ex : exn)  : string = (
+	let	val msg1 = text_of_exn ex;
+		val msg2 = get_error_message 507101 [ msg1];
+	in	log_message msg2;
+		msg2
+	end
+);
+=TEX
+=SML
+fun Ûcheck_failÝ  (default : 'b) (f : 'a -> 'b) (x  : 'a) = (
+	f x handle ex as Fail _ => (
+		let	val msg = log_exception ex;
+		in	if	!cn_stop_on_exceptions
+			then	raise ex
+			else	(diag_line msg; default)
+		end
+	)
+);
+=TEX
+=SML
+fun Ûcn_soundness_warningÝ (area : string) (msg_no : int) (inserters : (unit -> string) list) : unit = (
+	let	val msg1 = get_error_message msg_no (map (fn f => f()) inserters);
+		val msg2 = get_error_message 507100 [string_of_int msg_no, area, msg1];
+	in	log_message msg2;
+		diag_line msg2
+	end
+);
+=TEX
+=SML
+fun Ûget_exception_logsÝ (() : unit) : CN_EXCEPTION_LOG = !exception_log;
+=TEX
+=SML
+fun Ûdelete_exception_logÝ (script : string) : unit = (
+	exception_log := !exception_log drop (fn (k, _) => k = script)
+);
+=TEX
 \subsection{Accessing the Running Environment}
 The function $block$ below implements the 1-based indexing of the running environment which is such a common feature of the Z spec.
 =SML
@@ -3182,20 +3247,6 @@ fun Ûstore_vcsÝ (	label : LABEL, vcs: VC list, osl : SPECLAB OPT,
 			map (#block_name o #declab) (!blocks), vcg_ctxt )
 	end
 );
-=TEX
-The following function is used to put a warning message in the Z document (as an unprovable VC).
-=SML
-local
-val warning_vc_term = ñ("WARNING" = (x º seq CHAR))º BOOL®;
-val x = ñx º seq CHAR®;
-in
-fun store_message_vc (msg : int) (inserts : string list) = (
-	set_bottom_block_name "MESSAGE_VC";
-	store_vc_term 
-	"MESSAGE_VC"
-	(subst [(mk_z_string(get_error_message msg inserts), x)] warning_vc_term)
-);
-end;
 =TEX
 The processing of declarations can give rise to VCs.
 These are delivered as conjecture paragraphs.
@@ -7725,7 +7776,7 @@ fun Ûdo_annotationÝ (anns : ANNOTATION) : unit = (
 		|   do_ann (ANKSlot {content, label}) = (
 			new_k_slot(label, RSAnnotation, get_current_theory_name())
 		);
-	in	map do_ann anns; ()
+	in	map (check_fail () do_ann) anns; ()
 	end
 );
 =TEX
@@ -7774,9 +7825,19 @@ fun Ûextract_vardeclsÝ ((bd::more) : BASIC_DECL list) : VAR_DECL list = (
 ) | extract_vardecls _ = [];
 =TEX
 =SML
+fun Ûcheck_adjust_basic_declsÝ (bds : SI_BASIC_DECL list) : BASIC_DECL list = (
+	let	fun check1 (SIPragma _) = (
+			cn_soundness_warning "check_adjust_basic_decls" 507018 []
+		)  | check1 _ = ();
+	in	map check1 bds;
+		adjust_basic_decls current_cn_env bds
+	end
+);
+=TEX
+=SML
 fun Ûadjust_using_decÝ ({aux, basic_decls, invariant} : SI_USING_DEC)
 	: USING_DEC = (
-	let	val basic_decls' = adjust_basic_decls current_cn_env basic_decls;
+	let	val basic_decls' = check_adjust_basic_decls basic_decls;
 	in	{aux = aux,
 		 concrete_vars = extract_vardecls basic_decls',
 		 basic_decls = basic_decls',
@@ -7794,7 +7855,7 @@ fun Ûdo_for_loopÝ (t : Z_TM OPT, i : ID, stmt : STATEMENT,
 	new_scope_loop loop_name;
 	for_param (i, case tmark of Value t => t | _ => universal_discrete_type);
 	(case t of Value till => till_pred till | Nil => ());
-	let val res = do_statement stmt; in end_scope(); res end
+	let val res = check_fail STImplicitNull do_statement stmt; in end_scope(); res end
 )
 (*
 =TEX
@@ -7823,39 +7884,39 @@ and Ûdo_statementÝ (y as STNull : STATEMENT) : STATEMENT = (y
 		then	y
 		else	fail "do_statement" 507077 []
 ) | do_statement (y as (STSemicolon (x1, x2)) : STATEMENT) = (
-	let	val expanded1 = do_statement x1;
-		val expanded2 = do_statement x2;
+	let	val expanded1 = check_fail STImplicitNull do_statement x1;
+		val expanded2 =  check_fail STImplicitNull do_statement x2;
 	in	STSemicolon(expanded1, expanded2)
 	end
 ) | do_statement (y as (STIfThenElse {p, q, g, elsif}) : STATEMENT) = (
-	let	val expanded_p = do_statement p;
-		val expanded_q = do_statement q;
+	let	val expanded_p = check_fail STImplicitNull  do_statement p;
+		val expanded_q =  check_fail STImplicitNull do_statement q;
 	in	STIfThenElse {p = expanded_p, q = expanded_q, g = g, elsif = elsif}
 	end
 ) | do_statement (y as (STCase {s, others, e}) : STATEMENT) = (
-	let	fun expand_s {choices, p} = {choices = choices, p = do_statement p};
+	let	fun expand_s {choices, p} = {choices = choices, p =  check_fail STImplicitNull do_statement p};
 		val expanded_s = map expand_s s;
-		val expanded_others = do_statement others;
+		val expanded_others =  check_fail STImplicitNull do_statement others;
 	in	STCase{s = expanded_s, others = expanded_others, e = e}
 	end
 ) | do_statement (y as (STLoop {t= t, stmt}) : STATEMENT) = (
 	new_scope_loop Nil;
 	(case t of Value till => till_pred till | Nil => ());
-	let	val expanded_stmt = do_statement stmt;
+	let	val expanded_stmt = check_fail STImplicitNull  do_statement stmt;
 	in	end_scope();
 		STLoop{t = t, stmt = expanded_stmt}
 	end
 ) | do_statement (y as (STNamedLoop {t, stmt, name}) : STATEMENT) = (
 	new_scope_loop (Value name);
 	(case t of Value till => till_pred till | Nil => ());
-	let	val expanded_stmt = do_statement stmt;
+	let	val expanded_stmt =  check_fail STImplicitNull do_statement stmt;
 	in	end_scope();
 		STNamedLoop{t = t, stmt = expanded_stmt, name = name}
 	end
 ) | do_statement (y as (STWhile {loop as {t, stmt}, name, g}) : STATEMENT) = (
 	new_scope_loop name;
 	(case t of Value till => till_pred till | Nil => ());
-	let	val expanded_stmt = do_statement stmt;
+	let	val expanded_stmt =  check_fail STImplicitNull do_statement stmt;
 	in	end_scope();
 		STWhile{loop = {t = t, stmt = expanded_stmt}, name = name, g = g}
 	end
@@ -7879,7 +7940,9 @@ and Ûdo_statementÝ (y as STNull : STATEMENT) : STATEMENT = (y
 	new_k_slot(label, RSStatement, get_current_theory_name());
 	k_slot_stmt label;
 	y
-) | do_statement (y as (STPragma _) : STATEMENT) = (y
+) | do_statement (y as (STPragma _) : STATEMENT) = (
+	cn_soundness_warning "do_statement" 507018 [];
+	y
 ) | do_statement (y as (STAnnotation _) : STATEMENT) = (y
 ) | do_statement (y as (SSpecIvars x) : STATEMENT) = (
 	error "do_statement" 507019 []
@@ -7896,10 +7959,12 @@ and Ûdo_statementÝ (y as STNull : STATEMENT) : STATEMENT = (y
 ) | do_statement (y as (SProcIvars x) : STATEMENT) = (
 	error "do_statement" 507019 []
 ) | do_statement (SBlockStatement {declarative_part = Nil, statement = s, name}) = (
-	SBlockStatement{declarative_part = Nil, statement = do_statement s, name = name}
+	SBlockStatement{declarative_part = Nil,
+		statement = check_fail STImplicitNull do_statement s, name = name}
 ) | do_statement (SBlockStatement {declarative_part = dp as Value decs, statement = s, name}) = (
 	comment "do_statement" 507089 [];	(* NOT: map do_declaration decs; *)
-	SBlockStatement{declarative_part = dp, statement = do_statement s, name  = name}
+	SBlockStatement{declarative_part = dp, 
+		statement = check_fail STImplicitNull do_statement s, name  = name}
 )
 (*
 =TEX
@@ -7921,10 +7986,13 @@ and Ûdo_basic_declarationÝ (x : BASIC_DECL) : unit = (
 			update_envs_var v;
 			add_var_init_env (v, e);
 			add_var_env (v)
-	) |	BDDeferredConstDecl _ => (comment "do_declaration" 507021 []
+	) |	BDDeferredConstDecl _ => 
+			(comment "do_declaration" 507021 []
 	) |	BDPrivateTypeDecl _ => (
 	) |	BDPragma _ => (
+			cn_soundness_warning "do_basic_declaration" 507018 []
 	) |	BDAnnotation _ => (
+			cn_soundness_warning "do_basic_declaration" 507017 []
 	)
 )
 (*
@@ -7966,9 +8034,9 @@ and Ûdo_declarationÝ (y as (DDeclarationKSlot (
 			renames_pack (old_name, new_name)
 	)
 ) | do_declaration (y as (DBasicDecl x) : DECLARATION) = (
-	map do_basic_declaration (adjust_basic_decls current_cn_env [x]); ()
+	map (check_fail () do_basic_declaration) (check_adjust_basic_decls [x]); ()
 ) | do_declaration (y as (DRepresentationClause x) : DECLARATION) = (
-	comment "do_declaration" 507017 []
+	cn_soundness_warning "do_declaration" 507017 []
 ) | do_declaration (y as (DUseClause x) : DECLARATION) = (
 	use_clause x
 ) | do_declaration (y as (DProperBody x) : DECLARATION) = (
@@ -7995,7 +8063,7 @@ and Ûdo_declarationÝ (y as (DDeclarationKSlot (
 	aux_var x
 ) | do_declaration (y as (DUsing x) : DECLARATION) = (
 	let	val z as {basic_decls, ...} = adjust_using_dec x;
-	in	map do_basic_declaration basic_decls;
+	in	map (check_fail () do_basic_declaration) basic_decls;
 		using_dec z
 	end
 )
@@ -8090,8 +8158,8 @@ and Ûdo_package_specÝ (decl as {name, visible_decs, private_decs, annotation}
 	in	if	not (thy_name mem get_theory_names())
 		then (	new_scope_pack_spec name (Value decl);
 			do_annotation annotation;
-			map do_declaration visible_decs;
-			map do_declaration private_decs;
+			map (check_fail () do_declaration) visible_decs;
+			map (check_fail () do_declaration) private_decs;
 			end_scope();
 			update_envs_pack_spec name )
 		else	fail "do_package_name" 507040
@@ -8156,26 +8224,26 @@ and Ûdo_proper_bodyÝ (y as (PBProcedure
 	do_procedure_spec procedure_spec;
 	add_proc_env();
 	subprogram_implementation();
-	map do_declaration declarative_part;
-	vcs_body (do_statement statement);
+	map (check_fail () do_declaration) declarative_part;
+	vcs_body (check_fail STImplicitNull do_statement statement);
 	update_envs_proc();
 	end_scope()
 ) | do_proper_body (y as (PBFunction 
 	{function_spec as {designator,...}, declarative_part, statement}) : PROPER_BODY) = (
 	do_function_spec function_spec;
 	subprogram_implementation();
-	map do_declaration declarative_part;
-	vcs_body (do_statement statement);
+	map (check_fail () do_declaration) declarative_part;
+	vcs_body (check_fail STImplicitNull do_statement statement);
 	end_scope()
 ) | do_proper_body (y as (PBPackage 
 	{name, decls, statement, annotation}) : PROPER_BODY) = (
 	new_scope_pack_body name;
 	set_body_name (trans_id name);
 	do_annotation annotation;
-	map do_declaration decls;
+	map (check_fail () do_declaration) decls;
 	(if any decls (fn d => case d of DUsing _ => true |_ => false)
-	then	(vcs_aux_initial(do_statement statement); ())
-	else	(do_statement statement; ()));
+	then	(vcs_aux_initial(check_fail STImplicitNull do_statement statement); ())
+	else	(check_fail STImplicitNull do_statement statement; ()));
 	end_scope()
 );
 =TEX
@@ -8185,18 +8253,18 @@ fun Ûdo_compilation_unitÝ
 	(y as (CUPackageDeclaration (x as {name, ...})) : COMPILATION_UNIT)
 	: unit = (
 	set_cu(spec_script_desc name);
-	do_declaration (DPackageDeclaration x)
+	(check_fail () do_declaration) (DPackageDeclaration x)
 ) | do_compilation_unit (y as (CUProperBody x)) = (
 	case x of
 	PBProcedure _ => set_cu(subprogram_desc (compilation_unit_name true y))
 	| PBFunction _ => set_cu(subprogram_desc (compilation_unit_name true y))
 	| PBPackage _ => set_cu(pack_body_desc (compilation_unit_name true y));
-	do_declaration (DProperBody x)
+	(check_fail () do_declaration) (DProperBody x)
 ) | do_compilation_unit (y as (CUSubUnit {name, proper_body})) = (
 	set_cu (subunit_desc (compilation_unit_name true y));
 	new_parent_subunit_theory (name, proper_body);
 	new_scope_subunit name;
-	do_declaration (DProperBody proper_body);
+	(check_fail () do_declaration) (DProperBody proper_body);
 	end_scope()
 );
 =TEX
@@ -8233,7 +8301,10 @@ fun Ûdo_context_compilation_unitÝ
 			get_withs_uses (ids::wacc, uacc) more
 		|   get_withs_uses (wacc, uacc) (CIUse u::more) = (
 			get_withs_uses (wacc, u::uacc) more
-		) |   get_withs_uses accs (CIPragma _::more) = get_withs_uses accs more;
+		) |   get_withs_uses accs (CIPragma _::more) = (
+			cn_soundness_warning "do_contexxt_compilation_unit" 507018 [];
+			get_withs_uses accs more
+		);
 		val (withed_packs, use_clauses) = get_withs_uses ([], []) context;
 		val packs_to_with = context_clause_check withed_packs references;
 	in	map new_scope_with packs_to_with;
@@ -8256,6 +8327,7 @@ fun Ûdo_kslot_compilation_unitÝ
 	do_context_compilation_unit x
 ) | do_kslot_compilation_unit
 	(KCUPragma _ : KSLOT_COMPILATION_UNIT) = (
+	cn_soundness_warning "do_kslot_compilation_unit" 507018 []
 );
 =TEX
 The following checks whether a statement appearing in a refinement or replacement step
@@ -8265,10 +8337,11 @@ fun Ûdo_refinement_rhsÝ
 	(SBlockStatement {declarative_part = dp as Value decs, statement = s, name} : STATEMENT)
 	: STATEMENT  = (
 	new_block();
-	map do_declaration decs;
+	map (check_fail () do_declaration) decs;
 	update_spec_env_block();
-	SBlockStatement{declarative_part = dp, statement = do_statement s, name  = name}
-) | Ûdo_refinement_rhsÝ s = do_statement s;
+	SBlockStatement{declarative_part = dp, statement =
+		check_fail STImplicitNull do_statement s, name  = name}
+) | Ûdo_refinement_rhsÝ s = check_fail STImplicitNull do_statement s;
 =TEX
 The following reflects the SID functions for the production $web\_clause$.
 (Note that we set up the label on the bottom block for possible use in generating VC names except in the first two cases, where the processing of the constituent k-slots or compilations units will do this.)
@@ -8276,7 +8349,7 @@ The following reflects the SID functions for the production $web\_clause$.
 fun Ûdo_web_clauseÝ (y as (WCCompilation x) : WEB_CLAUSE) : unit = (
 let	val current_theory = get_current_theory_name ();
 in	update_spark_prog x;
-	map do_kslot_compilation_unit x;
+	map (check_fail () do_kslot_compilation_unit) x;
 	lazy_open_theory current_theory
 end
 ) | do_web_clause (y as (WCReplacedByCompilation x) : WEB_CLAUSE) = (
@@ -8286,7 +8359,7 @@ in	case (s_lookup label (!repl_env), comp) of
 		let	val current_theory = get_current_theory_name ();
 		in	open_label_theory label;
 			update_replacement_env(label, ReplaceComp x);
-			map do_kslot_compilation_unit (#comp x);
+			map (check_fail () do_kslot_compilation_unit) (#comp x);
 			lazy_open_theory current_theory
 		end
 	) |	(Nil, [KCUUnit {comp_unit = CUProperBody (pb as PBPackage {name, ...}),
@@ -8308,7 +8381,7 @@ in	open_label_theory label;
 	set_bottom_block_name label;
 	new_scope_dec_replace 
 		((fn {label,private} => {label=label, decls=private}) x);
-	map do_declaration (#private x);
+	map (check_fail () do_declaration) (#private x);
 	update_envs_remove_declabel 
 		((fn {label,private} => {label=label, decls=private}) x);
 	end_scope();
@@ -8322,7 +8395,7 @@ in	open_label_theory label;
 	set_bottom_block_name label;
 	new_scope_dec_replace  
 		((fn {label,visible} => {label=label, decls=visible}) x);
-	map do_declaration (#visible x);
+	map (check_fail () do_declaration) (#visible x);
 	update_envs_remove_declabel 
 		((fn {label,visible} => {label=label, decls=visible}) x);
 	end_scope();
@@ -8335,7 +8408,7 @@ in	open_label_theory label;
 	update_replacement_env(label, ReplaceDecl x);
 	set_bottom_block_name label;
 	new_scope_dec_replace x;
-	map do_declaration decls;
+	map (check_fail () do_declaration) decls;
 	update_envs_remove_declabel x;
 	end_scope();
 	lazy_open_theory current_theory
@@ -8369,8 +8442,7 @@ in	open_label_theory label;
 end
 ) | do_web_clause (y as (WCReplacedByArbitraryAda x) : WEB_CLAUSE) = (
 let	val {label=label, ...} = x;
-in	comment "do_web_clause" 507039 [];
-	store_message_vc 507039 [];
+in	cn_soundness_warning "do_web_clause" 507039 [];
 	update_replacement_env(label, ReplaceArbitrary x)
 end
 ) | do_web_clause (y as (WCReplacedByAnnotation x) : WEB_CLAUSE) = (
@@ -8590,7 +8662,6 @@ fun Ûget_replacementÝ (lab : string) : REPLACEMENT OPT = (
 );
 =TEX
 =SML
-type ÛCN_EXCEPTION_LOGÝ = string list S_DICT;
 abstype ÛCN_STATEÝ =
 	CNState of Z_GENERATOR_STATE *
 	Z_GENERATOR_STATE E_DICT *
@@ -8601,35 +8672,6 @@ with
 =SML
 *)
 	val Ûinitial_cn_stateÝ : CN_STATE = CNState (init_z_generator_state, initial_e_dict, initial_s_dict);
-(*
-=TEX
-
-=SML
-*)
-	val Ûexception_logÝ : CN_EXCEPTION_LOG ref = ref initial_s_dict;
-(*
-=TEX
-In the following, the special first two clauses are for SML/NJ (for which {\it string\_of\_exn} loses information).
-=SML
-*)
-	fun Ûtext_of_exnÝ (Fail msg : exn) : string = get_message msg
-	|   text_of_exn (Error msg) = get_message msg
-	|  text_of_exn ex = string_of_exn ex;
-
-	fun Ûadd_exception_log_entryÝ (ex : exn) = (
-		exception_log :=
-		s_enter (!script_name)
-		(case s_lookup (!script_name) (!exception_log) of
-			Value msgs => text_of_exn ex::msgs
-		|	Nil => [text_of_exn ex])
-		(!exception_log)
-	);
-
-	fun Ûget_exception_logsÝ (() : unit) : CN_EXCEPTION_LOG = !exception_log;
-
-	fun Ûdelete_exception_logÝ (script : string) : unit = (
-		exception_log := !exception_log drop (fn (k, _) => k = script)
-	);
 (*
 =TEX
 It is now important not to save the state if an exception is raised. 
@@ -8651,7 +8693,7 @@ It is now important not to save the state if an exception is raised.
 				let	val thy = get_current_theory_name ();
 				in	rollback pp_state;
 					open_theory thy handle Fail _ => ();
-					add_exception_log_entry ex
+					log_exception ex
 				end;
 				raise ex
 			);
