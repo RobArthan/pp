@@ -1,4 +1,4 @@
-% imp002.doc   %Z% $Date: 1999/02/06 13:13:26 $ $Revision: 1.20 $ $RCSfile: imp002.doc,v $
+% imp002.doc   %Z% $Date: 2002/03/19 22:22:04 $ $Revision: 1.21 $ $RCSfile: imp002.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -10,10 +10,10 @@
 %\TPPpart{}
 \TPPtitle{Implementation of System Control and Basic Error Reporting}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP002}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.20 $
+\def\SCCSversion{$Revision: 1.21 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 1999/02/06 13:13:26 $%
+\TPPdate{\FormatDate{$Date: 2002/03/19 22:22:04 $%
 }}  %% Mandatory field (with sensible default)
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -373,13 +373,16 @@ val _ = icl'error_init();
 =TEX
 \section{SYSTEM CONTROL}
 =SML
-structure €SystemControl› : SystemControl = struct
+structure €SystemControl›  = struct
 =TEX
+As discussed in the detailed the signature constraint is applied in IMP010.
 \subsection{Support Functions}
 By including a check function even for the flags we
 can handle all of the functions polymorphically.
 =SML
 type 'a €CONTROL_REC› = {name:string, control:'a ref, default:unit->'a, check:'a -> bool};
+=SML
+val €sc_warn› : (string -> int -> (unit -> string) list -> unit) ref = ref fail;
 =TEX
 These functions are not performance critical, so we use
 very simple table access algorithms:
@@ -393,12 +396,36 @@ fun €lookup› (func_name : string) (table : 'a CONTROL_REC list)
 			else lookup func_name rest what
 		) | [] => fail func_name 2011 [fn()=>what]
 );
+=TEX
+Caller of the following should always arrange for the error case not to happen.
+=SML
+fun €rename› (func_name : string)
+	(table :'a CONTROL_REC list) (what : string)  : 'a CONTROL_REC list = (
+	let	fun decorate w = (
+			let	val w' = w ^ "'";
+			in	(lookup func_name table w'; decorate w')
+				handle Fail _ => w'
+			end
+		);
+		val what' = decorate what;
+		fun update acc ((record as {name, control, default, check})::rest) = (
+			if name = what
+			then	rev acc @
+				({name = what', control = control,
+				 default = default, check = check} :: rest)
+			else	update (record::acc) rest
+		)  | update acc [] = error func_name 2011 [fn () => what];
+	in	update [] table
+	end
+);
 fun €new_control›
 	(func_name : string)
 	(var : 'a CONTROL_REC list ref)
 	(record as {name, ...}:'a CONTROL_REC) : unit = (
 	if ((lookup "" (!var) name; true) handle Fail _ => false) 
-	then	fail func_name 2010 [fn()=>name]
+	then	(!sc_warn func_name 2010 [fn()=>name];
+		 var := rename func_name (!var) name;
+		new_control func_name var record)
 	else	(var := record :: (!var))
 );
 fun €set_control›
