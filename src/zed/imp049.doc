@@ -92,6 +92,7 @@ Now saves conjectures in the theory database.
 \item[Issue 1.41] $z\_type\_check\_only$ mode now defaults to false.
 \item[Issue 1.42] Some buffoon set the check function for the type check only flag to $fun\_false$ which prevents the flag being changed.
 \item[Issue 1.43] Escaped character must be 3 digits in PolyML 3.0 (and Standard ML Standard).
+\item[Issue 1.44] Preventing free variables in axioms saved by this documents tools.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -716,7 +717,18 @@ fun check_gvar_name (s : string) : unit = (
 );
 =TEX
 \section{DEFINITIONS BY AXIOM} 
-
+=SML
+val Ûz_allow_free_vars_in_axiomsÝ = ref false;
+ 
+val _ = if contains (map fst (get_flags()))
+			"z_allow_free_vars_in_axioms"
+	then	()
+	else	new_flag{name = "z_allow_free_vars_in_axioms",
+			control = z_allow_free_vars_in_axioms,
+			default = fun_false,
+			check = fun_true
+	};
+=TEX
 =SML
 fun Ûabbdef_defnÝ (flag : bool) ((name, gen_formals, tm) : string * string list * TERM) : unit = (
 let	val wrap = if flag then ¬$"Z'SchBox"® else ¬$"Z'AbbDef"®;
@@ -789,6 +801,17 @@ let	val def_tm = case otm of
 	val defn1 = list_mk_µ (gens, def_tm');
 	val defn2 = mk_app(¬$"Z'AxDes"®, defn1);
 	val side = map (new_const o dest_const) newconsts;
+	val dummy = (if (get_flag "z_allow_free_vars_in_axioms")
+		then () 
+		else (let	val fs = frees (defn2);
+			in 
+				if (is_nil fs)
+				then ()
+				else fail "update_theory_db_with_parainfo" 49006
+				 [fn () => format_list (fst) idtyl ", ",
+				  fn () => format_list (fst o dest_var) fs ", "]
+			end
+		));
 	val side = new_axiom ((map fst idtyl), defn2);
 in
 	()
@@ -851,7 +874,21 @@ end);
 
 =SML
 fun Ûnew_z_typeÝ (sl : string list) (tm : TERM) : THM = (
-let	val tyl = map (fn s => (check_gset_name s; new_type (s, 0))) sl;
+let	val dummy = if (is_nil sl)
+		then fail "new_z_type" 49008 [fn ()=> string_of_term tm]
+		else ();
+	val tyl = map (fn s => (check_gset_name s; new_type (s, 0))) sl;
+	val dummy = (if (get_flag "z_allow_free_vars_in_axioms")
+		then () 
+		else (let	val fs = frees (tm);
+			in 
+				if (is_nil fs)
+				then ()
+				else fail "update_theory_db_with_parainfo" 49006
+				 [fn () => format_list (Combinators.I) sl ", ",
+				  fn () => format_list (fst o dest_var) fs ", "]
+			end
+		));
 in
 	new_axiom (sl, tm)
 end);
@@ -1152,7 +1189,20 @@ end);
 =SML
 fun Ûconstraint_defnÝ  ((gpars, tm) : string list * TERM) : unit = (
 let	val vs = map (fn n => mk_var(n, mk_z_power_type(mk_vartype("'" ^ n)))) gpars;
-in	new_axiom([next_axiom_name "Constraint "], list_mk_µ(vs, tm)); ()
+	val tm1 = list_mk_µ(vs, tm);
+	val con_nm = next_axiom_name "Constraint ";
+	val dummy = (if (get_flag "z_allow_free_vars_in_axioms")
+		then () 
+		else (let	val fs = frees (tm1);
+			in 
+				if (is_nil fs)
+				then ()
+				else fail "update_theory_db_with_parainfo" 49006
+				 [fn () => con_nm,
+				  fn () => format_list (fst o dest_var) fs ", "]
+			end
+		));
+in	new_axiom([con_nm], tm1); ()
 end);
 =TEX
 =SML
@@ -1172,9 +1222,22 @@ end);
 fun Ûconjecture_defnÝ  ((nopt, gpars, tm) : string OPT * string list * TERM) : unit = (
 let	val vs = map (fn n => mk_var(n, mk_z_power_type(mk_vartype("'" ^ n)))) gpars;
 	val gtm = list_mk_µ(vs, tm);
-in	case nopt of
-		Value n => new_conjecture([n], gtm)
-	|	Nil => new_conjecture([next_conjecture_name "Conjecture "], gtm)
+	val conj_nm = case nopt of
+		Value n => n
+	|	Nil => next_conjecture_name "Conjecture ";
+	val dummy = (if (get_flag "z_allow_free_vars_in_axioms")
+		then () 
+		else (let	val fs = frees (gtm);
+			in 
+				if (is_nil fs)
+				then ()
+				else fail "update_theory_db_with_parainfo" 49006
+				 [fn () => conj_nm,
+				  fn () => format_list (fst o dest_var) fs ", "]
+			end
+		));	
+in	
+	new_conjecture([conj_nm], gtm)
 end);
 =TEX
 =SML
@@ -1219,12 +1282,93 @@ fun Ûcons_update_theory_dbÝ (para : PARAINFO) : unit = (
 	|TypeCheckInfo t => typecheck_info_defn t
 );
 =TEX
+The following function returns the current level for the specified theory.  
+This is used to undo partial theory updates.
+
+=SML
+val Ûcurrent_levelÝ : unit -> int =
+	(#current_level o #contents o icl'Kernel.icl'get_theory_info o
+		get_current_theory_name);
+=TEX
+Delete anything in the current theory with a level greater the given
+value, assuming deletion is possible.
+=SML
+fun Ûdelete_top_theory_past_levelÝ  (level : int) : unit = (
+let	val dummy = case (get_current_theory_status()) of
+		TSNormal => ()
+		| TSDeleted => error "update_theory_db_with_parainfo" 6008 
+			[fn () => get_current_theory_name()]
+		| TSLocked => fail "update_theory_db_with_parainfo" 6037
+			[fn () => get_current_theory_name()]
+		| TSAncestor => fail "update_theory_db_with_parainfo" 6071
+			[fn () => get_current_theory_name()];
+
+	val {children = children,...} = icl'get_theory_info "-";
+
+	val {con_env = con_env,ty_env = ty_env,
+		axiom_dict = axiom_dict, thm_dict = thm_dict,
+		defn_dict = defn_dict,...} = icl'get_theory "-";
+
+	val (del_con,del_lev1) = split (map (fn (name,{ty = ty,level = lev,...}) => 
+			((name, ty),lev))
+		(con_env drop (fn (_,{level = lev,...}) => lev <= level)));
+
+	val (del_type,del_lev2) = split(map (fn (name,{level = lev,...}) => (name,lev))
+		(ty_env drop (fn (_,{level = lev,...}) => lev <= level)));
+
+	val del_type_arities = map (fn ty =>
+		case get_type_info ty of
+		Nil => error "update_theory_db_with_parainfo" 49999 []
+		|Value (ar, _) => (ty, ar)) del_type;
+
+	val del_thms = map (fn (key,_) => key)
+		(thm_dict drop (fn (_,thm) => 
+			let val {level = lev,...} = icl'dest_thm thm
+			in lev <= level end));
+
+	val (del_axioms, del_lev3) = split(map (fn (key,thm) => (key,
+			let val {level = lev,...} = icl'dest_thm thm
+			in lev end))
+		(axiom_dict drop (fn (_,thm) => 
+			let val {level = lev,...} = icl'dest_thm thm
+			in lev <= level end)));
+
+	val (del_defns, del_lev4) = split(map (fn (key,thm) => (key,
+			let val {level = lev,...} = icl'dest_thm thm
+			in lev end))
+		(defn_dict drop (fn (_,thm) => 
+			let val {level = lev,...} = icl'dest_thm thm
+			in lev <= level end)));
+
+	val dl = list_cup[del_lev1, del_lev2, del_lev3, del_lev4];
+	val dummy = map icl'delete_thm del_thms;
+in
+	if (is_nil dl)
+	then ()
+	else if children <> [] 
+	then fail "update_theory_db_with_parainfo"
+		 6076 [fn () => get_current_theory_name()]
+	else ( map (fn x => icl'delete_extension ()) dl; 
+		open_theory"-"; 
+		())
+end);
+=TEX
+
 =SML
 fun Ûupdate_theory_db_with_parainfoÝ (para : PARAINFO) : unit = (
-	(if get_flag "z_use_axioms"
+let val curr_level = current_level ();
+in
+	((if get_flag "z_use_axioms"
 	then ax_update_theory_db
 	else cons_update_theory_db) para
-);
+	handle (exn as Fail f) =>
+	(
+        delete_top_theory_past_level curr_level
+	 handle (exn1 as Fail f) => 
+	  (diag_line (get_error_message 49007 [get_message f]));
+	 raise exn
+	))
+end);
 =TEX
 =SML
 val Ûupdate_theory_dbÝ : Z_PARA -> unit = (
