@@ -49,6 +49,8 @@ Based on the first part of DS/FMU/IED/SML002.
 \item [Issue 1.3]
 Modified for changes in issue 1.8 of \cite{DS/FMU/IED/DTD003},
 and issue 1.5 of \cite{DS/FMU/IED/DTD004}
+\item [Issue 1.4]
+Modified for changes in issue 1.6 of \cite{DS/FMU/IED/DTD004}
 \end{description}
 \subsection{Changes forecast}
 \section{GENERAL}
@@ -71,9 +73,10 @@ It relies on those files indicated by the ICL HOL release 001 makefile.
 =TEX
 \section{DERIVED TERMS}
 =SML
-structure ‚DerivedTerms· : DerivedTerms = struct
+structure ‚TypesAndTerms· : TypesAndTerms = struct
 =TEX
-First gain the items from $icl'TermsAndTypes$, to allow a seamless movement of items between them.
+First gain the items implemented in $icl'TypesAndTerms$.
+Opening that structure here allows a seamless (at the user interface level) movement of items between them.
 =SML
 open icl'TypesAndTerms;
 =TEX
@@ -90,8 +93,8 @@ end);
 fun ‚strip_binder· (selector : TERM -> bool) (destroyer : TERM -> (TERM * TERM)) 
 	(tm : TERM) : TERM list * TERM = (
 let fun aux tm1 =
-	if selector tm
-	then	let	val (v, tm2) = destroyer tm;
+	if selector tm1
+	then	let	val (v, tm2) = destroyer tm1;
 			val (vs, b) = aux tm2;
 		in	(v :: vs, b)
 		end
@@ -139,14 +142,14 @@ fun ‚mk_abs· ((x, y): TERM * TERM) : TERM = (
 		mk_comb(uncurry ta tb (type_of y),
 			mk_abs(a, mk_abs(b, y)))
 	end)
-	else mk_simple_abs(x, y))
-	handle complaint => divert complaint "mk_simple_abs" "mk_abs" 4001 []);
+	else simple_mk_abs(x, y))
+	handle complaint => divert complaint "simple_mk_abs" "mk_abs" 4001 []);
 end;
 =TEX
 =SML
 fun ‚dest_abs· (ab : TERM) : TERM * TERM = (
-	(if is_simple_abs ab
-	then dest_simple_abs ab
+	(if simple_is_abs ab
+	then simple_dest_abs ab
 	else let val (a,b) = dest_comb ab
 	in
 		if is_const a andalso (fst(dest_const a) = "Uncurry")
@@ -226,14 +229,14 @@ end);
 val ‚is_Ç· : TERM -> bool = is_bin_op dest_Ç;
 =TEX
 =SML
-fun ‚mk_If· (c : TERM, y : TERM, n : TERM) : TERM = (
+fun ‚mk_if· (c : TERM, y : TERM, n : TERM) : TERM = (
 let	val cty = type_of c;
 	val yty = type_of y
 in
 	if cty <> BOOL
-	then fail "mk_If" 4004 []
+	then fail "mk_if" 4004 []
 	else if yty <> type_of n
-	then fail "mk_If" 4005 []
+	then fail "mk_if" 4005 []
 	else	let	val If = mk_const("Cond", 
 			mk_fun (BOOL,(mk_fun (yty,(mk_fun(yty, yty))))));
 		in	mk_comb(mk_comb(mk_comb(If, c), y), n)
@@ -241,7 +244,7 @@ in
 end);
 =TEX
 =SML
-fun ‚is_If· (tm : TERM) : bool = (
+fun ‚is_if· (tm : TERM) : bool = (
 	let	val rand = (fst o dest_comb);
 		val name = fst(dest_const(rand(rand(rand tm))));
 	in	name = "Cond"
@@ -249,11 +252,11 @@ fun ‚is_If· (tm : TERM) : bool = (
 );
 =TEX
 =SML
-fun ‚dest_If· (tm : TERM) : (TERM * TERM * TERM) = (
+fun ‚dest_if· (tm : TERM) : (TERM * TERM * TERM) = (
 	(case ((fst o dest_const) ** Combinators.I)(strip_comb tm) of
 		("Cond", [c, y, n]) => (c, y, n)
-	|	_ => fail "dest_If" 4006 [])
-	handle complaint => divert complaint "dest_const" "dest_If" 4006 []
+	|	_ => fail "dest_if" 4006 [])
+	handle complaint => divert complaint "dest_const" "dest_if" 4006 []
 );
 =TEX
 We implement $mk\_let$ to carry out three steps:
@@ -298,7 +301,7 @@ let
 		 end
 		) | aux1 _ = fail "mk_let" 4007 []
 	in
-		aux1 (dest_TERM t1)
+		aux1 (simple_dest_term t1)
 	end
 	) | process_bindings [] = [];
 	
@@ -331,7 +334,7 @@ fun ‚dest_let· (tm : TERM) : (TERM * TERM)list * TERM = (
 		in
 			get_values bd (vl :: value_list)
 		end
-		handle _ => (value_list, trm));
+		handle (Fail _) => (value_list, trm));
 
 	fun get_vstructs trm value_list = (
 		let val (rev_vslist,bdy) = (
@@ -371,7 +374,7 @@ let
 		in
 			aux bdy (binding :: bindings)
 		end
-		handle _ => (rev bindings, tm)
+		handle (Fail _) => (rev bindings, tm)
 	);
 in
 	aux trm []
@@ -404,12 +407,12 @@ let
 			val (cns, _) = dest_const f1
 		in
 			if cns = "Cons"
-			then (f2 :: aux (dest_TERM a))
+			then (f2 :: aux (simple_dest_term a))
 			else fail "dest_list" 4015 []
 		end
 	) | aux _ = fail "dest_list" 4015 [];
 in
-	aux (dest_TERM tm)
+	aux (simple_dest_term tm)
 end)
 handle complaint => list_divert complaint "dest_list"
 	[("dest_comb", 4015, []),
@@ -448,12 +451,12 @@ let
 			val (ins, _) = dest_const f1
 		in
 			if ins = "Insert"
-			then (f2 :: aux (dest_TERM a))
+			then (f2 :: aux (simple_dest_term a))
 			else fail "dest_enum_set" 4011 []
 		end
 	) | aux _ = fail "dest_enum_set" 4011 [];
 in
-	aux (dest_TERM tm)
+	aux (simple_dest_term tm)
 end)
 handle complaint => list_divert complaint "dest_enum_set"
 	[("dest_comb", 4011, []),
@@ -525,34 +528,34 @@ end (* local Exists *);
 =TEX
 =SML
 local 
-	fun Select t1 _ = mk_const("Select", mk_fun(mk_fun(
+	fun Select t1 _ = mk_const("á", mk_fun(mk_fun(
 		t1, BOOL), t1))
 in
-val ‚mk_select· : TERM * TERM -> TERM = mk_binder "mk_select" 4016 Select;
+val ‚mk_á· : TERM * TERM -> TERM = mk_binder "mk_á" 4016 Select;
 
-val ‚dest_select· : TERM -> TERM * TERM = dest_binder "dest_select" 4023 "Select";
+val ‚dest_á· : TERM -> TERM * TERM = dest_binder "dest_á" 4023 "á";
 
-val ‚is_select· : TERM -> bool = is_binder dest_select;
+val ‚is_á· : TERM -> bool = is_binder dest_á;
 
-val ‚list_mk_select· : (TERM list * TERM) -> TERM = list_mk_binder mk_select;
+val ‚list_mk_á· : (TERM list * TERM) -> TERM = list_mk_binder mk_á;
  
-val ‚strip_select· : TERM -> (TERM list * TERM) = strip_binder is_select dest_select;
+val ‚strip_á· : TERM -> (TERM list * TERM) = strip_binder is_á dest_á;
 
 end (* local Select *);
 =TEX
 =SML
-fun ‚list_mk_simple_É· ((tml,tm): TERM list * TERM): TERM = fold mk_simple_É tml tm;
+fun ‚list_simple_mk_É· ((tml,tm): TERM list * TERM): TERM = fold simple_mk_É tml tm;
 
-fun ‚list_mk_simple_Ñ· ((tml,tm): TERM list * TERM): TERM = fold mk_simple_Ñ tml tm;
+fun ‚list_simple_mk_Ñ· ((tml,tm): TERM list * TERM): TERM = fold simple_mk_Ñ tml tm;
 =TEX
 =SML
-val ‚strip_simple_É· : TERM -> (TERM list * TERM) = strip_binder is_simple_É dest_simple_É;
+val ‚strip_simple_É· : TERM -> (TERM list * TERM) = strip_binder simple_is_É simple_dest_É;
 
-val ‚strip_simple_Ñ· : TERM -> (TERM list * TERM) = strip_binder is_simple_Ñ dest_simple_Ñ;
+val ‚strip_simple_Ñ· : TERM -> (TERM list * TERM) = strip_binder simple_is_Ñ simple_dest_Ñ;
 =TEX
 \subsection{The Type of Destroyed Derived Terms}
 =SML
-datatype ‚DERIV_TERM· = ‚DVar· of string * TYPE |
+datatype ‚DEST_TERM· = ‚DVar· of string * TYPE |
 	‚DConst· of string * TYPE |
 	‚DComb· of TERM * TERM |
 	‚DAbs· of TERM * TERM |
@@ -575,68 +578,73 @@ datatype ‚DERIV_TERM· = ‚DVar· of string * TYPE |
 The $is\_\ldots$ followed by $dest\_\ldots$ in the following
 is known to be redundant effort in some cases, but
 there will only one such pair used in each call of this function.
+A faster coding might be via failures, handled by $divert$.
 =SML
-local 
+local
 	val BtoBtoB = mk_fun(BOOL,mk_fun(BOOL,BOOL))
 in
-fun ‚mk_DERIV_TERM· (tm : TERM ) : DERIV_TERM = (
+fun ‚dest_term· (tm : TERM ) : DEST_TERM = (
 let
 	fun aux2 (Comb(f11, f12)) f1 f2 f a = (
-		if is_If tm
+		if is_if tm
 		then DIf(f12, f2, a)
 		else DComb(f, a)
 	) | aux2(Var _) f1 f2 f a = DComb(f, a)
 	| aux2(Abs _) f1 f2 f a = DComb(f, a)
-	| aux2(Const ("ä",ty)) f1 f2 f a = Dä (f2, a)
-	| aux2(Const ("=",ty)) f1 f2 f a = (
-		if ty = mk_fun(BOOL,mk_fun(BOOL,BOOL))
-		then DÇ (f2, a)
-		else DEq (f2, a)
-	) | aux2(Const ("Ä",ty)) f1 f2 f a = DÄ (f2, a)
-	| aux2(Const ("Å",ty)) f1 f2 f a = DÅ (f2, a)
-	| aux2(Const (",",ty)) f1 f2 f a = DPair (f2, a)
-	| aux2(Const ("Let",ty)) f1 f2 f a = (
-		if is_let tm
-		then DLet(dest_let tm)
-		else DComb(f, a)
-	) | aux2(Const ("Insert",ty)) f1 f2 f a = (
-		if is_enum_set tm
-		then DEnumSet(dest_enum_set tm, type_of f2)
-		else DComb(f, a)
-	) | aux2(Const ("Cons",ty)) f1 f2 f a = (
-		if is_list tm
-		then DList(dest_list tm, type_of f2)
-		else DComb(f, a)
-	) | aux2 _ f1 f2 f a = DComb(f, a);
+	| aux2(Const(co,ty)) f1 f2 f a = (
+		case co
+		of "ä" => Dä (f2, a)
+		| "=" => (
+			if ty = BtoBtoB
+			then DÇ (f2, a)
+			else DEq (f2, a)
+		) | "Ä" => DÄ (f2, a)
+		| "Å" => DÅ (f2, a)
+		| "," => DPair (f2, a)
+		| "Let" => (
+			if is_let tm
+			then DLet(dest_let tm)
+			else DComb(f, a)
+		) | "Insert" => (
+			if is_enum_set tm
+			then DEnumSet(dest_enum_set tm, type_of f2)
+			else DComb(f, a)
+		) | "Cons" => (
+			if is_list tm
+			then DList(dest_list tm, type_of f2)
+			else DComb(f, a)
+		) | _ => DComb(f, a));
 
 	fun aux1 (Comb(f1, f2)) f a = (
-		aux2(dest_TERM f1) f1 f2 f a
+		aux2(simple_dest_term f1) f1 f2 f a
 	) | aux1(Var v) f a = DComb(f, a)
 	| aux1 (Abs c) f a = DComb (f, a)
-	| aux1 (Const("Uncurry", ty)) f a = (
-		if is_abs tm
-		then DAbs(dest_abs tm)
-		else DComb(f, a)
-	) | aux1 (Const("É",_)) f a = (
-		if is_É tm
-		then DÉ(dest_É tm)
-		else DComb(f, a)
-	) | aux1 (Const("Ñ",_)) f a = (
-		if is_Ñ tm
-		then DÑ(dest_Ñ tm)
-		else DComb(f, a)
-	) | aux1 (Const("Select",_)) f a = (
-		if is_select tm
-		then Dá(dest_select tm)
-		else DComb(f, a)
-	) | aux1 (Const("SetComp",_)) f a = (
-		if is_set tm
-		then DSet(dest_set tm)
-		else DComb(f, a)
-	) | aux1 (Const("å", ty)) f a = Då a
-	| aux1 _ f a = DComb(f, a);
+	| aux1 (Const(co,ty)) f a = (
+		case co
+		of "Uncurry" => (
+			if is_abs tm
+			then DAbs(dest_abs tm)
+			else DComb(f, a)
+		) | "É" => (
+			if is_É tm
+			then DÉ(dest_É tm)
+			else DComb(f, a)
+		) | "Ñ" => (
+			if is_Ñ tm
+			then DÑ(dest_Ñ tm)
+			else DComb(f, a)
+		) | "á" => (
+			if is_á tm
+			then Dá(dest_á tm)
+			else DComb(f, a)
+		) | "SetComp" => (
+			if is_set tm
+			then DSet(dest_set tm)
+			else DComb(f, a)
+		) | "å" => Då a
+		| _ => DComb(f, a));
 		
-	fun aux (Comb (f, a)) = (aux1 (dest_TERM f) f a)
+	fun aux (Comb (f, a)) = (aux1 (simple_dest_term f) f a)
 	| aux (Var v) = DVar v
 	| aux (Abs a) = DAbs a
 	| aux (Const ("Nil",ty)) = (
@@ -659,43 +667,43 @@ let
 		else DConst("Empty",ty)
 	) | aux (Const c) = DConst c;
 in
-	aux (dest_TERM tm)
+	aux (simple_dest_term tm)
 end (* let *));
 end (* local *);
 =TEX
 =SML
-fun ‚dest_DERIV_TERM· ((DVar v) : DERIV_TERM) : TERM = mk_var v
-| dest_DERIV_TERM (DConst c) = mk_const c
-| dest_DERIV_TERM (DComb fa) = mk_comb fa
-| dest_DERIV_TERM (DAbs ab) = mk_abs ab
-| dest_DERIV_TERM (DEq ee) = mk_eq ee
-| dest_DERIV_TERM (Dä imp) = mk_ä imp
-| dest_DERIV_TERM (Då n) = mk_å n
-| dest_DERIV_TERM (DPair p) = mk_pair p
-| dest_DERIV_TERM (DÄ cc) = mk_Ä cc
-| dest_DERIV_TERM (DÅ dd) = mk_Å dd
-| dest_DERIV_TERM (DÇ ee) = mk_Ç ee
-| dest_DERIV_TERM (DLet ll) = mk_let ll
-| dest_DERIV_TERM (DEnumSet (ttl,ty)) = (
+fun ‚mk_term· ((DVar v) : DEST_TERM) : TERM = mk_var v
+| mk_term (DConst c) = mk_const c
+| mk_term (DComb fa) = mk_comb fa
+| mk_term (DAbs ab) = mk_abs ab
+| mk_term (DEq ee) = mk_eq ee
+| mk_term (Dä imp) = mk_ä imp
+| mk_term (Då n) = mk_å n
+| mk_term (DPair p) = mk_pair p
+| mk_term (DÄ cc) = mk_Ä cc
+| mk_term (DÅ dd) = mk_Å dd
+| mk_term (DÇ ee) = mk_Ç ee
+| mk_term (DLet ll) = mk_let ll
+| mk_term (DEnumSet (ttl,ty)) = (
 	if is_nil ttl
 	then mk_const("Empty",mk_type("SET",[ty]))
 	else mk_enum_set ttl
-) | dest_DERIV_TERM (DSet s) = mk_set s
-| dest_DERIV_TERM (DList (ttl,ty)) = (
+) | mk_term (DSet s) = mk_set s
+| mk_term (DList (ttl,ty)) = (
 	if is_nil ttl
 	then mk_const("Nil",mk_type("LIST",[ty]))
 	else mk_list ttl
-) | dest_DERIV_TERM (DÉ f) = mk_É f
-| dest_DERIV_TERM (DÑ e) = mk_Ñ e
-| dest_DERIV_TERM (Dá s) = mk_select s
-| dest_DERIV_TERM (DIf ii) = mk_If ii;
+) | mk_term (DÉ f) = mk_É f
+| mk_term (DÑ e) = mk_Ñ e
+| mk_term (Dá s) = mk_á s
+| mk_term (DIf ii) = mk_if ii;
 =TEX
  
 =SML
-end; (* of DerivedTerms signature *)
+end; (* of TypesAndTerms signature *)
 =TEX
 =SML
-open DerivedTerms;
+open TypesAndTerms;
 =TEX
 \twocolumn[\section{INDEX}]
 \small
