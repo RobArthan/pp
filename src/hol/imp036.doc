@@ -1,4 +1,4 @@
-% %Z% $Date: 1999/03/15 15:39:22 $ $Revision: 1.34 $ $RCSfile: imp036.doc,v $
+% %Z% $Date: 2000/06/30 07:53:13 $ $Revision: 1.35 $ $RCSfile: imp036.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -11,10 +11,10 @@
 %\TPPpart{}
 \TPPtitle{HOL PDS System Initialisation}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP036}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.34 $%
+\def\SCCSversion{$Revision: 1.35 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 1999/03/15 15:39:22 $%
+\TPPdate{\FormatDate{$Date: 2000/06/30 07:53:13 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{ML Literate Script}
@@ -117,6 +117,8 @@ Added the function $save()$ and recoded $save\_and\_quit$ and $save\_and\_exit$ 
 Basic update for NJML.
 \item [Issue 1.33,1.34]
 Fixed bug in sanitize function.
+\item [Issue 1.35]
+Rationalised treatment of line lengths, environment variables and initialisation errors.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -410,49 +412,9 @@ fun Ûprint_statusÝ () : unit = (
 );
 =TEX
 
-Noting that $ExtendedIO.execute$ will return its first
-string will ``$\backslash n$'' at the end,
-extract the value of an UNIX shell variable:
 =SML
-fun Ûget_shell_varÝ (var : string) : string = (
-let	val (is,os) = ExtendedIO.execute("/bin/echo $"^var^"  2> /dev/null");
-	val aline = ExtendedIO.input_line is;
-	val ealine = explode aline;
-	val ealine' =  rev(tl(rev ealine));
-in
-	implode ealine'
-end
-handle _ => "");
+val Ûget_shell_varÝ : string -> string = ExtendedIO.get_env;
 =TEX
-Note that we deliberately catch any exceptions in the above.
-
-Noting that {\tt /bin/stty size} returns output of the form
-=GFTSHOW
-<number of rows> <some space characters> <number of columns>
-=TEX
-extract the terminal's line length:
-=SML
-local
-	fun aux1 (" " :: rest) = aux1 rest
-	| aux1 x = x;
-
-	fun aux (" " :: rest) = aux1 rest
-	| aux (a :: rest) = aux rest
-	| aux [] = [];
-in
-fun Ûget_terminal_line_lengthÝ () : int = (
-let	val (is,os) = ExtendedIO.execute("/bin/stty size 2> /dev/null");
-	val aline = ExtendedIO.input_line is;
-	val ealine = explode aline;
-	val ealine' = rev(tl(rev (aux ealine)));
-in
-	nat_of_string(implode ealine')
-end
-handle _ => fail "get_terminal_line_length" 36013 []);
-end;
-=TEX
-Note that we deliberately catch any exceptions in the above.
-
 
 \subsection{Initialisation Steps}
 \subsubsection{Theory Hierarchy}
@@ -470,19 +432,7 @@ val initial1 = Initialisation.new_init_fun init_theory_hierarchy;
 Note that we deliberately catch any exceptions in the above.
 
 \subsubsection{Current State}
-First a function to write a list of strings to
-the initialisation error file:
 =SML
-fun Ûicl'write_to_initialisation_error_fileÝ (sl : string list) : unit = (
-	case (get_shell_var "hol_initialisation_error_file") of
-	"" => diag_line (get_error_message 36004 [])
-	| nm => (let val oo = open_out nm;
-		in
-		(map (fn s => (output(oo,s);output(oo,"\n"))) sl;
-		close_out oo;
-		())
-		end)
-);
 =TEX
 Then the function proper:
 =SML
@@ -498,9 +448,9 @@ Current theory:
 		open_theory hct
 		handle (Fail msg) =>
 		(diag_line(get_message msg);
-		icl'write_to_initialisation_error_file [
-		get_error_message 36002 [hct]];
-		PPCompiler.exit 0)
+		output(ExtendedIO.std_err,
+			get_error_message 36002 [hct] ^ "\n");
+		PPCompiler.exit 1)
 	));
 	sos_emdb := get_error_messages();
 	(use_string("( \
@@ -568,18 +518,15 @@ Some things such as rs232 lines often claim their line length is 0.
 If this happens wie pick 80 rather than 20 as the sensible guess.
 =SML
 fun Ûinit_line_lengthÝ () : unit = (
-let	val ll = get_terminal_line_length () - 2;
+let	val ll = nat_of_string(get_shell_var "PPLINELENGTH")
+		handle Fail _ => 80;
 in
 	((if ll = 0
 	then set_line_length 80
 	else if ll < 20
 	then set_line_length 20
 	else set_line_length ll);())
-end
-handle complaint =>
-if area_of complaint = "get_terminal_line_length"
-then ()
-else raise complaint);
+end);
 
 val initial3 = Initialisation.new_init_fun init_line_length;
 =TEX
