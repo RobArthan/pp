@@ -22,7 +22,7 @@
 %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
 \TPPauthorisation{D.J.~King & DAZ Team Leader}
 \TPPabstract{
-This document contains the implementation for the SPARK paragraph processor.}
+This document contains the implementation for the CN paragraph processor.}
 %\TPPabstractB{}
 %\TPPabstractC{}
 %\TPPabstractD{}
@@ -81,7 +81,7 @@ The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD502}.
 =TEX
 \section{PREAMBLE}
 =SML
-structure €CNTypes› = struct
+structure €CNTypes› : CNTypes = struct
 =TEX
 
 \section{LEXIS}
@@ -89,7 +89,7 @@ The following data type represents the lexical classes which are the
 terminals of the grammar:
 $SpecificationStatement$ is not a terminal and the syntax of a specification statement is part of the grammar. The Z predicates for pre- and post-condition are terminals and are captured by the $Z$ type constructor. Other terminals required are:
 =SML
-datatype €SPARK_LEX_CLASS›
+datatype €CN_LEX_CLASS›
 			=	€AbstractExpression›
 			|	€Abs›
 			|	€Ampersand›
@@ -152,6 +152,7 @@ datatype €SPARK_LEX_CLASS›
 			|	€Plus›
 			|	€PPartLabel›
 			|	€Prime›
+			|	€PrimedIdentifier›
 			|	€Private›
 			|	€ProcedureName›
 			|	€Procedure›
@@ -182,7 +183,6 @@ datatype €SPARK_LEX_CLASS›
 			|	€While›
 			|	€With›
 			|	€Xor›
-			|	€ZDecl›
 			|	€Eos›
 			|	€Z›
 			|	€GrkDelta›
@@ -190,20 +190,250 @@ datatype €SPARK_LEX_CLASS›
 			|	€RSqBrack›
 			|	€LBrace›
 			|	€RBrace›
-			|	€PrimedIdentifier›;
+			|	€LStrachey›
+			|	€RStrachey›
+			|	€LChevron›
+			|	€RChevron›;
 =TEX
 =SML
-datatype €SPARK_TOKEN›	=	€SPARKZ› of ZLex.Z_TOKEN list
-			|	€SPARKText› of string
-			|	€SPARKString› of string
-			|	€SPARKKSlot› of Lex.INPUT list
-			|	€SPARKEos›;
+datatype €CN_TOKEN›	=	€CNZ› of ZLex.Z_TOKEN list
+			|	€CNText› of string
+			|	€CNString› of string
+			|	€CNKSlot› of Lex.INPUT list
+			|	€CNEos›;
 =TEX
 =SML
-type €LEX_ITEM› = SPARK_LEX_CLASS * SPARK_TOKEN;
+type €CN_LEX_ITEM› = CN_LEX_CLASS * CN_TOKEN;
 =TEX
 
+\section{ABSTRACT SYNTAX}
 
+\subsection{Basic Declarations}
+
+=SML
+type €ID› = string;
+=TEX
+=SML
+type €Enum_Type_Def› = {vals : ID list};
+=TEX
+=SML
+type €TMARK› = ID list;
+=TEX
+=SML
+type €Array_Def› = {index : TMARK, comp : TMARK};
+=TEX
+=SML
+type €Var_Decl› = {var : ID, tmark : TMARK};
+=TEX
+=SML
+type €Record_Type_Def› = {decl : Var_Decl list};
+=TEX
+=SML
+type ('EXP) €Range'› = {lo : 'EXP, hi : 'EXP};
+=TEX
+=SML
+type ('TYPE_DEF) €Type_Decl'› = {name : ID, type_def : 'TYPE_DEF};
+=TEX
+
+=SML
+type ('CONSTRAINT) €Sub_Ind'› = {tmark : TMARK, con : 'CONSTRAINT};
+=TEX
+=SML
+type ('CONSTRAINT) €Subtype_Decl'› = {name : ID, sub_ind : ('CONSTRAINT) Sub_Ind'};
+=TEX
+=SML
+type ('EXP) €Const_Decl'› = {const : ID, tm : TMARK, expr : 'EXP};
+=TEX
+=SML
+type ('EXP) €Agg_Pos'› = {tmark : TMARK, comps : 'EXP list};
+=TEX
+=SML
+type ('EXP) €Others'› = {others : 'EXP};
+=TEX
+=SML
+type ('EXP) €Agg_Pos_Others'›
+		= {agg_pos : ('EXP) Agg_Pos', others : ('EXP) Others'};
+=TEX
+=SML
+type ('EXP) €Agg_Others'› = {tmark : TMARK, others : ('EXP) Others'};
+=TEX
+=SML
+type ('AGG_CHOICE, 'EXP) €Named_Assoc'› = {choice : 'AGG_CHOICE list, comp : 'EXP};
+=TEX
+=SML
+type ('AGG_CHOICE, 'EXP) €Agg_Named'› = {named_assocs : ('AGG_CHOICE, 'EXP) Named_Assoc' list};
+=TEX
+=SML
+type ('AGG_CHOICE, 'EXP) €Agg_Named_Others'›
+		= {tmark : TMARK, agg_named : ('AGG_CHOICE, 'EXP) Agg_Named', 
+			others : ('EXP) Others'};
+=TEX
+=SML
+type ('EXP) €Rec_Agg_Named'›
+		= {tmark : TMARK, named_assocs : (ID * 'EXP) list};
+=TEX
+=SML
+datatype €UNARY_OP› =
+			€spark_unary_add›
+		|	€spark_unary_minus›
+		|	€spark_not›
+		|	€spark_abs›;
+=TEX
+=SML
+type ('EXP) €Unary_Exp'› = {Op : UNARY_OP, right : 'EXP};
+=TEX
+=SML
+datatype €BIN_OP› =
+			€spark_and›
+		|	€spark_or›
+		|	€spark_xor›
+		|	€spark_eq›
+		|	€spark_noteq›
+		|	€spark_less›
+		|	€spark_less_eq›
+		|	€spark_greater›
+		|	€spark_greater_eq›
+		|	€spark_add›
+		|	€spark_minus›
+		|	€spark_times›
+		|	€spark_intdiv›
+		|	€spark_mod›
+		|	€spark_rem›
+		|	€spark_expon›
+		|	€spark_mem›
+		|	€spark_notmem›;
+=TEX
+=SML
+type ('EXP) €Bin_Exp'› = {Op : BIN_OP, left : 'EXP, right : 'EXP};
+=TEX
+=SML
+type €MEM_OP› = BIN_OP;
+=TEX
+=SML
+type ('EXP) €Mem_Range'› = {left : 'EXP, Op : MEM_OP, range : ('EXP) Range'};
+=TEX
+=SML
+type €ATTRIB› = ID list;
+=TEX
+=SML
+type ('ATTRIB_DESIG) €Attribute'›
+	= {prefix : ID, attribute_desig : 'ATTRIB_DESIG};
+=TEX
+=SML
+type ('EXP) €Indexed_Comp'›
+	= {prefix : 'EXP, index : 'EXP};
+=TEX
+=SML
+type ('EXP) €Selected_Comp'›
+	= {prefix : 'EXP, selector : ID};
+=TEX
+=SML
+type ('EXP) €Fun_Call'›
+	= {fun_name : ID, args : 'EXP list};
+=TEX
+=SML
+type €INT_LIT› = string;
+=TEX
+=SML
+type Z_EXP = TERM;
+=TEX
+=SML
+datatype €TYPE_DEF› =
+			€enum_type_def› of Enum_Type_Def
+		|	€int_type_def› of (EXP) Range'
+		|	€uncon_array_def› of Array_Def
+		|	€con_array_def› of Array_Def
+		|	€record_type_def› of Record_Type_Def
+=TEX
+=SML
+and €CONSTRAINT› =
+			€range_con› of (EXP) Range'
+		|	€index_con› of TMARK
+=TEX
+=SML
+and €BASIC_DECL› =
+			€const_decl› of (EXP) Const_Decl'
+		|	€type_decl› of (TYPE_DEF) Type_Decl'
+		|	€subtype_decl› of (CONSTRAINT) Subtype_Decl'
+=TEX
+=SML
+and €AGG_CHOICE› =
+			€agg_choice_range› of (EXP) Range'
+		|	€agg_choice_single› of EXP
+=TEX
+=SML
+and €ATTRIB_DESIG› =
+			€attrib› of ATTRIB
+		|	€attrib_arg› of (ATTRIB * EXP)
+=TEX
+=SML
+and €EXP› =
+		€Id› of ID | €int› of INT_LIT | €array_agg_pos› of (EXP) Agg_Pos' |
+		€array_agg_pos_others› of (EXP) Agg_Pos_Others' |
+		€array_agg_others› of (EXP) Agg_Others' |
+		€array_agg_named› of (AGG_CHOICE, EXP) Agg_Named' |
+		€array_agg_named_others› of (AGG_CHOICE, EXP) Agg_Named_Others' |
+		€rec_agg_pos› of (EXP) Agg_Pos' | €rec_agg_named› of (EXP) Rec_Agg_Named' |
+		€unary_exp› of (EXP) Unary_Exp' | €bin_exp› of (EXP) Bin_Exp' |
+		€mem_range› of (EXP) Mem_Range' | €attribute› of (ATTRIB_DESIG) Attribute' |
+		€indexed_comp› of (EXP) Indexed_Comp' |
+		€selected_comp› of (EXP) Selected_Comp' |
+		€fun_call› of (EXP) Fun_Call' |
+		€auxiliary_exp› of Z_EXP;
+=TEX
+
+\subsection{Statements}
+
+SML
+type Assign = {name : EXP, E : EXP};
+type Z_PRED0 = Z_PRED;
+type Spec = {w : ID list, w0 : ID list, pre : Z_PRED, post : Z_PRED};
+type Spec_No_Ivars = Spec;
+type COND = EXP;
+type ('STMT) If_Then_Else = {G : COND, P : 'STMT, Q : 'STMT};
+type ('STMT) Case_Alternative = {choices : CASE_CHOICE, P : 'STMT};
+type ('STMT) Case = {E : EXP, s : ('STMT) Case_Alternative list};
+exception Empty_Case_Statement of string;
+type Loop = {T : Z_PRED, spec : Spec_No_Ivars};
+type While = {G : COND, loop : Loop};
+type STATIC_EXP = EXP;
+type For_Static = {i : ID, lo : STATIC_EXP, hi : STATIC_EXP, loop : Loop};
+type For_Tmark = {i : ID, tmark : TMARK, loop : Loop};
+type Exit_When = {G : COND};
+type Return = {E : EXP};
+type Proc_Call = {name : ID, actuals : EXP list};
+type Proc_Call_No_Ivars = Proc_Call;
+datatype Stmt	= 	null
+		|	assign of (Assign)
+		|	spec_no_ivars of (Spec_No_Ivars)
+		|	semicolon of (Stmt * Stmt)
+		|	if_then_else of ((Stmt)If_Then_Else)
+		|	kase of ((Stmt)Case)
+		|	loop of (Loop)
+		|	whyle of (While)
+		|	for_static of (For_Static)
+		|	for_tmark of (For_Tmark)
+		|	exit_when of (Exit_When)
+		|	exit
+		|	ret of (Return)
+		|	proc_no_ivars of (Proc_Call_No_Ivars);
+type Spec_Ivars = Spec;
+type For_Non_Static = {i : ID, lo : STATIC_EXP, hi : STATIC_EXP, loop : Loop};
+=TEX
+SML
+fun €free_ids› (ze : Z_EXP) : ID list = (map (fst o dest_var) (frees ze));
+=TEX
+SML
+type Log_Con = {X : Z_ID, E : Z_EXP, spec : Spec, pre1 : Z_PRED};
+type Proc_Call_Ivars = Proc_Call;
+datatype Statement =
+		 	stmt of (Stmt)
+		|	spec_ivars of (Spec_Ivars * Stmt)
+		|	for_non_static of (For_Non_Static * Stmt)
+		|	log_con of (Log_Con * Stmt)
+		|	proc_ivars of (Proc_Call_Ivars * Stmt);
+
+=TEX
 \section{EPILOGUE}
 =SML
 end (* of structure CNTypes *);
