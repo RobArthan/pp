@@ -1,4 +1,4 @@
-% %Z% $Date: 2001/11/07 09:19:54 $ $Revision: 1.78 $ $RCSfile: imp505.doc,v $
+% %Z% $Date: 2001/11/07 11:47:23 $ $Revision: 1.79 $ $RCSfile: imp505.doc,v $
 =TEX
 % pp -i zed505 -d zplay
 % pp_list -d zplay vc_gen >zed505.th.doc
@@ -106,7 +106,7 @@
 \item[Issue 1.75] Perfomance enhancement for type-checking of specification statements.
 \item[Issue 1.76] Added option to compactify pre- and post-conditions.
 \item[Issues 1.77,1.78] Enhancement R0003 --- record and array components as exported parameters.
-\item[Issue 1.79] Fixed {\it var\_sig} and the use of {\it adjust\_exp} in the anti-aliasing checks.
+\item[Issues 1.79,1.80] Fixed {\it var\_sig} and the use of {\it adjust\_exp} in the anti-aliasing checks.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1253,20 +1253,18 @@ fun Ûfree_vars_zpredÝ (zp : Z_PRED) : Z_ID list = (
 );
 =TEX
 =SML
-fun Ûentire_var_expÝ (e : EXP) : ID = (
-	case e of
-		EId id => (
-			id
-	) |	ESelectedComp {prefix, selector} => (
-			entire_var_exp prefix
-	) |	EIndexedComp{prefix, index} => (
-			entire_var_exp prefix
-	) |	_ => fail "entire_var_exp" 505080 []
+fun Ûentire_var_expÝ (cn_env : CN_ENV) (e : EXP) : ID = (
+	let	fun aux (EId id) = id
+		|   aux (ESelectedComp {prefix, selector}) = aux prefix
+		|   aux (EIndexedComp{prefix, index}) = aux prefix
+		|   aux _ = fail "entire_var_exp" 505080 [];
+	in	aux (adjust_exp cn_env e)
+	end
 );
 =TEX
 =SML
-fun Ûname_to_entire_variable_nameÝ (e : EXP) : Z_ID = (
-	trans_id (entire_var_exp e)
+fun Ûname_to_entire_variable_nameÝ (cn_env : CN_ENV) (e : EXP) : Z_ID = (
+	trans_id (entire_var_exp cn_env e)
 	handle exn => reraise exn "name_to_entire_variable_name"
 );
 =TEX
@@ -1297,18 +1295,14 @@ We can therefore happily let {\it other\_vars\_exp} fail on
 expressions that are not of this form.
 =SML
 fun Ûother_vars_expÝ (cn_env : CN_ENV) (e : EXP) : ID list = (
-	let	fun get_index_exps acc e = (
-			case e of
-				EId id => (
-					acc
-			) |	ESelectedComp {prefix, selector} => (
-					get_index_exps acc prefix
-			) |	EIndexedComp{prefix, index} => (
-					get_index_exps (index::acc) prefix
-			) |	_ => fail "other_vars_exp" 505080 []
-		);
-		val tm = mk_z_tuple(map (trans_exp cn_env o adjust_exp cn_env)
-				(get_index_exps [] e));
+	let	fun get_index_exps acc (EId id) = acc
+		|   get_index_exps acc (ESelectedComp {prefix, selector}) =
+			get_index_exps acc prefix
+		|   get_index_exps acc (EIndexedComp{prefix, index}) =
+			get_index_exps (index::acc) prefix
+		|   get_index_exps acc _ = fail "other_vars_exp" 505080 [];
+		val tm = mk_z_tuple(map (trans_exp cn_env)
+				(get_index_exps [] (adjust_exp cn_env e)));
 	in	(free_var_names o frees) tm
 	end
 );
@@ -1374,16 +1368,18 @@ fun Ûanti_aliasing_actuals_modesÝ (env : CN_ENV) (formal_proc : FORMAL_PROC)
 
 =TEX
 =SML
-fun Ûanti_aliasing_check_1Ý (formal_proc : FORMAL_PROC)
+fun Ûanti_aliasing_check_1Ý  (speclab : SPECLAB)
+				(formal_proc : FORMAL_PROC)
 				(proc : (AGG_CHOICE,EXP)PROC_CALL)
 				(actuals_modes : (EXP * MODE) list) : unit = (
 	let	val name = #name proc;
+		val cn_env = (#env o #wp_env) speclab;
 		val (formals, trans_globals) = anti_aliasing_pars formal_proc proc;
 		val set = map fst (actuals_modes drop
 				(fn am => not (	snd am = MSparkInOut orelse
 							snd am = MSparkOut)));
 		val trans_set = map (fn
-				e => entire_var_exp e
+				e => entire_var_exp cn_env e
 				handle Fail _ =>
 				fail "anti_aliasing_check_1" 505070
 				[fn()=>name]) set;
@@ -1434,7 +1430,7 @@ fun Ûanti_aliasing_check_3Ý (speclab : SPECLAB)
 		fun do_check bef (((act, MSparkIn), vars)::aft) = (
 			do_check (vars::bef) aft
 		) | do_check bef (((act, _), vars)::aft) = (
-				let	val ent_var = entire_var_exp act;
+				let	val ent_var = entire_var_exp cn_env act;
 				val other_vars = other_vars_exp cn_env act;
 			in	if	not (ent_var mem other_vars)
 				andalso	not (any bef (fn vs => ent_var mem vs))
@@ -1463,7 +1459,7 @@ fun Ûproc_frameÝ (env : CN_ENV)
 			(case lassoc5 table v of
 				Nil => v
 			|	Value e =>
-				name_to_entire_variable_name (adjust_exp env e))
+				name_to_entire_variable_name env e)
 			:: aux vs
 		) | aux [] = [];
 	in	aux w
@@ -1479,7 +1475,7 @@ fun Ûanti_aliasing_checkÝ (env : CN_ENV) (speclab : SPECLAB,
 			handle Fail _ =>
 			fail "anti_aliasing_check" 505068 [fn()=> #name proc];
 	in
-		anti_aliasing_check_1 formal_proc proc actuals_modes;
+		anti_aliasing_check_1 speclab formal_proc proc actuals_modes;
 		anti_aliasing_check_2 speclab formal_proc proc actuals_modes;
 		anti_aliasing_check_3 speclab formal_proc proc actuals_modes;
 		check_1_a(proc_frame env formal_proc actuals_modes, speclab)
@@ -1499,8 +1495,7 @@ let	fun pass_over_statement (st : STATEMENT) = (
 		)| 	STImplicitNull => (
 		)|	STAssign {name,e} => (
 				check_1_a
-				([name_to_entire_variable_name
-						(adjust_exp env name)],
+				([name_to_entire_variable_name env name],
 					speclab)
 		)|	STSpecNoIvars {spec as {w,w0,pre,post},label} => (
 				check_1_a (w, speclab);
