@@ -445,8 +445,39 @@ val Ûunlabelled_provisionalÝ : string OPT ref = ref Nil;
 val Ûunlabelled_counterÝ : int ref = ref 1;
 =TEX
 =SML
-fun Ûinitialise_unlabelled_counterÝ (() : unit) : unit = (
-	unlabelled_counter := 1
+type ÛCN_PARSER_STATEÝ = {
+	unlabelled_stack : string OPT,
+	unlabelled_provisional : string OPT,
+	unlabelled_counter : int
+	};
+=TEX
+=SML
+fun Ûimplicit_label_of_intÝ (i : int) = (
+	"$"^ string_of_int i
+);
+
+fun Ûint_of_implicit_labelÝ (s : string) = (
+	(
+	case explode s of
+		("$"::ns) => (nat_of_string o implode) ns
+	|	_ =>		0
+	) handle _ => 0
+);
+=TEX
+=SML
+fun Ûget_cn_parser_stateÝ (() : unit) : CN_PARSER_STATE = (
+	{
+		unlabelled_stack = !unlabelled_stack,
+		unlabelled_provisional = !unlabelled_provisional,
+		unlabelled_counter = !unlabelled_counter
+	}
+);
+=TEX
+=SML
+fun Ûset_cn_parser_stateÝ (cnps : CN_PARSER_STATE) : unit = (
+	unlabelled_stack := #unlabelled_stack cnps;
+	unlabelled_provisional := #unlabelled_provisional cnps;
+	unlabelled_counter := #unlabelled_counter cnps
 );
 =TEX
 When we encounter a k-slot or a specification statement with no label on the rhs, we give it a provisional label. The check that there is no outstanding unlabelled k-slot or specification statement happens later, at which point if all is OK, the provisional label becomes the actual label for expansion.
@@ -454,7 +485,7 @@ When we encounter a k-slot or a specification statement with no label on the rhs
 fun Ûpush_labelÝ (() : unit) : string = (
 if !unlabelled_provisional = Nil
 then
-	let	val label = "(a"^string_of_int (!unlabelled_counter)^")";
+	let	val label = implicit_label_of_int (!unlabelled_counter);
 		val side = unlabelled_counter := (!unlabelled_counter) + 1;
 		val side = unlabelled_provisional := Value label;
 	in
@@ -1814,19 +1845,15 @@ in
 \subsection{Conversion of Names to Type Marks}
 The implementation of this function is at the beginning of section \ref{REDUCTION FUNCTIONS}.
 =SML
-val Ûname_to_tmarkÝ : EXP -> TMARK = name_to_tmark;
+type ÛCN_PARSER_STATEÝ = CN_PARSER_STATE;
+val Ûset_cn_parser_stateÝ = set_cn_parser_state;
+val Ûget_cn_parser_stateÝ = get_cn_parser_state;
+val Ûname_to_tmarkÝ  = name_to_tmark;
+val Ûz_predexp_of_z_tmÝ  = z_predexp_of_z_tm;
 =TEX
 
-=SML
-val Ûinitialise_unlabelled_counterÝ : unit -> unit =
-				initialise_unlabelled_counter;
-=TEX
-\subsection{Conversion of $Z\_TM$s to Z Predicates and Expressions}
-Z predicates and expressions are both mapped onto HOL terms and so one function will provide the translation of parsed Z terms which occur in contexts where predicates or expressions are expected.
 =SML
 val Ûz_tm_trueÝ : Z_TM = z_tm_true;
-
-val Ûz_predexp_of_z_tmÝ : Z_TM -> Z_PRED = z_predexp_of_z_tm;
 =TEX
 \subsection{The Parser Function Proper}
 
@@ -1850,18 +1877,22 @@ for explanation.
 =SML
 fun Ûcn_parserÝ (ip : CN_LEX_ITEM list) : WEB_CLAUSE  = (
 	let	val se1 = (input_toks := ip; cur_tok := ~1);
+		val save_cn_parser_state = get_cn_parser_state();
 		val res = (slrp'gen_parser
 				default_resolver
 				fst
 				cn_error
-				cn_reader) ip;
+				cn_reader) ip
+			handle ex => (
+				set_cn_parser_state save_cn_parser_state;
+				raise ex
+			);
 		val se2 = (input_toks := []);
 	in	case res of
 		PPWebClause wc => wc
-		|_ => fail "cn_parser" 503201 []
+		|_ => stack_error "cn_parser - weird result from parser"
 	end
 );
-=TEX
 =TEX
 \section{EPILOGUE}
 =SML
