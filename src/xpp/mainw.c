@@ -18,8 +18,6 @@
  * include files:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-#include "xpp.h"
-
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -41,6 +39,8 @@
 #include<Xm/PanedW.h>
 #include<varargs.h>
 
+#include "xpp.h"
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macro definitions:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -51,7 +51,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * static and external data:
+ * global, static and external data:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 
@@ -59,11 +59,14 @@ extern char *environ[];
 
 static char* help_message =
 "\
- This is a test help message which should presently be\
- replaced by a message amongst many introduced by\
+ This is a test help message which should presently be\n\
+ replaced by a message amongst many introduced by\n\
  a more general mechanism";
 
-static XtAppContext app;
+static char* quit_message =
+"Do you really want to quit?";
+
+XtAppContext app; /* global because needed in msg.c */
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Widget	Parent	Purpose
@@ -78,12 +81,12 @@ static XtAppContext app;
  * cmdmenu	menubar	the command menu
  * helpmenu	menubar	the help menu
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+
 static Widget
 	root, frame, work, display, command,
 	menubar, filemenu, editmenu, cmdmenu, helpmenu;
 
 static int display_cursor = 0;
-
 
 static char *arglist[10];
 
@@ -97,10 +100,11 @@ static int control_fd;
  * the display in w is left where it is.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-void scroll_out(buf, ct, w)
+void scroll_out(buf, ct, w, highlight)
 char *buf;
 int ct;
 Widget w;
+BOOL highlight;
 {
 	XmTextPosition ins_pos;
 	Position dontcare;
@@ -117,13 +121,17 @@ Widget w;
 			XmTextScroll(w, 1);
 			ins_pos = XmTextGetInsertionPosition(w);
 		};
-		display_cursor += ct;
 		XtVaSetValues(w, XmNcursorPosition, display_cursor, NULL);
-	/*	XmTextShowPosition(w, display_cursor); */
+		XmTextScroll(w, 1);
 	} else {
 		XmTextInsert(w, display_cursor, buf);
-		display_cursor += ct;
 	}
+	if(highlight && ct) {
+		XmTextSetHighlight(w, display_cursor,
+			display_cursor+ct-1,
+			XmHIGHLIGHT_SELECTED);
+	};
+	display_cursor += ct;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -207,7 +215,7 @@ char **argv;
 		XmVaCASCADEBUTTON, s1, 'F',
 		XmVaCASCADEBUTTON, s2, 'E',
 		XmVaCASCADEBUTTON, s3, 'C',
-		XmVaCASCADEBUTTON, s4, 'H');
+		XmVaCASCADEBUTTON, s4, 'H', NULL);
 
 	XmStringFree(s1);
 	XmStringFree(s2);
@@ -241,6 +249,7 @@ char **argv;
 	s2 = XmStringCreateSimple("Copy");
 	s3 = XmStringCreateSimple("Clear");
 	s4 = XmStringCreateSimple("Paste");
+	s5 = XmStringCreateSimple("Palette");
 
 	editmenu = XmVaCreateSimplePulldownMenu(
 		menubar, "edit_menu", 1, edit_menu_cb,
@@ -248,12 +257,14 @@ char **argv;
 		XmVaPUSHBUTTON, s2, 'o', NULL, NULL,
 		XmVaPUSHBUTTON, s3, 'l', NULL, NULL,
 		XmVaPUSHBUTTON, s4, 'a', NULL, NULL,
+		XmVaPUSHBUTTON, s5, 'p', NULL, NULL,
 		NULL);
 
 	XmStringFree(s1);
 	XmStringFree(s2);
 	XmStringFree(s3);
 	XmStringFree(s4);
+	XmStringFree(s5);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Command menu:
@@ -326,6 +337,13 @@ int i;
 XmAnyCallbackStruct *cbs;
 {
 	dummy_menu_cb(w, i, cbs, "file menu item");
+	switch(i) {
+	case 2:
+		yes_no_dialog(root, quit_message);
+		break;
+	default:
+		break;
+	}
 }
 
 void edit_menu_cb(w, i, cbs)
@@ -334,6 +352,14 @@ int i;
 XmAnyCallbackStruct *cbs;
 {
 	dummy_menu_cb(w, i, cbs, "edit menu item");
+	switch(i) {
+	case 4:
+		add_palette(command);
+/* Should test for success and make this menu item insensitive */
+		break;
+	default:
+		break;
+	}
 }
 
 void cmd_menu_cb(w, i, cbs)
@@ -367,7 +393,7 @@ XmAnyCallbackStruct *cbs;
 	dummy_menu_cb(w, i, cbs, "help menu item");
 	switch(i) {
 	case 0:
-		msg_dialog(w, help_message);
+		help_dialog(w, help_message);
 		break;
 	default:
 		break;
@@ -465,7 +491,7 @@ XtPointer unused;
 	int ct;
 	static	char buf[257];
 	while((ct = read(control_fd, buf, 256)) > 0) {
-		scroll_out(buf, ct, display);
+		scroll_out(buf, ct, display, FALSE);
 		diag("get_from_application", buf);
 	};
 }
@@ -480,9 +506,9 @@ void send_to_application (buf, siz)
 char *buf;
 int siz;
 {
-/*
-	scroll_out(buf, siz, display);
-*/
+
+	scroll_out(buf, siz, display, TRUE);
+
 	if(write(control_fd, buf, siz) != siz) {
 		diag("system error", "write to application failed");
 		perror("xpp");

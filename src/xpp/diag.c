@@ -2,7 +2,7 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * $Id$ 
  *
- * diag.h - debuggin tools for the X/Motif ProofPower Interface
+ * diag.c - debugging tools for the X/Motif ProofPower Interface
  *
  * (c) ICL 1993
  *
@@ -15,8 +15,9 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files: 
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-#include "xpp.h"
 #include <stdio.h>
+
+#include "xpp.h"
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * global data
  * **** **** **** **** **** **** **** **** **** **** **** **** */

@@ -12,12 +12,11 @@
  * macros:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #define _msg
-
+#define YES 1
+#define NO 2
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files: 
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-#include "xpp.h"
-
 #include <stdio.h>
 #include <ctype.h>
 #include <Xm/DialogS.h>
@@ -27,11 +26,13 @@
 #include <Xm/PushBG.h>
 #include <Xm/Form.h>
 #include <Xm/LabelG.h>
+#include <Xm/MessageB.h>
 #include <Xm/PanedW.h>
 
 
-Widget
-GetTopShell(w)
+#include "xpp.h"
+
+Widget get_top_shell(w)
 Widget w;
 {
 	while (w && !XtIsWMShell(w)) {
@@ -42,32 +43,22 @@ Widget w;
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * msg_dialog: general message dialogue routine
+ * help_dialog: put up an information window without grabbing control
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void msg_dialog(w, str)
+void help_dialog(w, str)
 Widget w;
 char *str;
 {
-	Widget help_dialog, pane, help_text, form, sep, widget, label;
-	extern void DestroyShell();
-	Pixmap pixmap;
-	Pixel fg, bg;
+	Widget help_dialog, pane, help_text, form, widget;
+	extern void ok_reply();
 	Arg args[9];
-	int i;
-	char *p, buf[BUFSIZ];
+	char buf[BUFSIZ];
 
-	/* Set up a DialogShell as a popup window.  Set the delete
-	 * window protocol response to XmDESTROY to make sure that
-	 * the window goes away appropriately.  Otherwise, it's XmUNMAP
-	 * which means it'd be lost forever, since we're not storing
-	 * the widget globally or statically to this function.
-	 */
 	help_dialog = XtVaCreatePopupShell("Help",
-		xmDialogShellWidgetClass, GetTopShell(w),
+		xmDialogShellWidgetClass, get_top_shell(w),
 		XmNdeleteResponse, XmDESTROY,
 		NULL);
 
-	/* Create a PanedWindow to manage the stuff in this dialog. */
 	pane = XtVaCreateWidget("pane", xmPanedWindowWidgetClass, help_dialog,
 		/* XmNsashWidth,  1, /* PanedWindow won't let us set these to 0! */
 		/* XmNsashHeight, 1, /* Make small so user doesn't try to resize */
@@ -86,7 +77,6 @@ char *str;
 
 	XtManageChild(help_text);
 
-/* Create form to act as the action area for the dialog */
 	form = XtVaCreateWidget("form", xmFormWidgetClass, pane,
 		XmNfractionBase,    3,
 		NULL);
@@ -102,9 +92,8 @@ char *str;
 		XmNshowAsDefault,        True,
 		XmNdefaultButtonShadowThickness, 1,
 		NULL);
-	XtAddCallback(widget, XmNactivateCallback, DestroyShell, help_dialog);
+	XtAddCallback(widget, XmNactivateCallback, ok_reply, help_dialog);
 
-	/* Fix the action area pane to its current height -- never let it resize */
 	XtManageChild(form);
 	{
 		Dimension h;
@@ -117,9 +106,67 @@ char *str;
 	XtPopup(help_dialog, XtGrabNone);
 }
 
-void
-DestroyShell(widget, shell)
+void ok_reply(widget, shell)
 Widget widget, shell;
 {
 	XtDestroyWidget(shell);
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * yes_no_dialog: ask a question with a mandatory yes/no answer
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+BOOL yes_no_dialog(w, question)
+Widget w;
+char *question;
+{
+	static Widget dialog;
+	XmString text, yes, no;
+	int reply = 0;
+	/* 0 = not replied; otherwise YES/NO */
+	extern void yes_no_cb();
+
+	if (!dialog) {
+		dialog = XmCreateQuestionDialog(w, "dialog", NULL, 0);
+		yes = XmStringCreateSimple("Yes");
+		no = XmStringCreateSimple("No");
+		XtVaSetValues(dialog,
+			XmNdialogStyle,		XmDIALOG_FULL_APPLICATION_MODAL,
+			XmNokLabelString,	yes,
+			XmNcancelLabelString,	no,
+			NULL);
+		XtSetSensitive(
+			XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON), False);
+		XtAddCallback(dialog, XmNokCallback, yes_no_cb, &reply);
+		XtAddCallback(dialog, XmNcancelCallback, yes_no_cb, &reply);
+	}
+	text = XmStringCreateSimple(question);
+	XtVaSetValues(dialog, XmNmessageString, text, NULL);
+	XmStringFree(text);
+	XtManageChild(dialog);
+	XtPopup(XtParent(dialog), XtGrabNone);
+
+	while (!reply) {
+		if(XtAppPending(app)) {
+			XtAppProcessEvent(app, XtIMAll);
+		}
+	};
+	XtPopdown(XtParent(dialog));
+	return (reply == YES);
+}
+
+void yes_no_cb(w, reply, cbs)
+Widget w;
+BOOL *reply;
+XmAnyCallbackStruct *cbs;
+{
+	switch (cbs->reason) {
+		case XmCR_OK:
+			*reply = YES;
+			break;
+		case XmCR_CANCEL:
+			*reply = NO;
+			break;
+		default:
+			return;
+	}
 }
