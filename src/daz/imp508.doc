@@ -180,7 +180,7 @@ val 		€z_bool_and› =		Ò(_ and _)Æ
 =TEX
 
 \subsection{Z Expressions}
-The following function allows the Z constructor functions to be presented in a way which is visually appealing.
+The following function allows many of the Z constructor functions to be presented in a way which is visually appealing.
 =SML
 fun €cn_subst› (ts : (TERM * string) list) (tm : TERM) : TERM = (
 let	val freevars = frees tm;
@@ -314,6 +314,9 @@ fun €z_cross› (exp1 : Z_EXP, exp2 : Z_EXP) : Z_EXP = (
 );
 =TEX
 =SML
+val €z_many_cross› : Z_EXP list -> Z_EXP = mk_z_∏;
+=TEX
+=SML
 val €z_override_term› : TERM = Òa ´ bÆ;
 fun €z_override› (exp1 : Z_EXP, exp2 : Z_EXP) : Z_EXP = (
 	cn_subst [(exp1, "a"), (exp2, "b")] z_override_term
@@ -390,6 +393,9 @@ fun €z_maplet› (exp1 : Z_EXP, exp2 : Z_EXP) : Z_EXP = (
 );
 =TEX
 =SML
+val €z_powerset› : Z_EXP -> Z_EXP = mk_z_;
+=TEX
+=SML
 fun €other_z_exp› (exp : Z_EXP) : Z_EXP = exp;
 =TEX
 
@@ -456,11 +462,26 @@ fun €other_z_pred› (z_pred : Z_PRED) : Z_PRED = z_pred;
 
 \subsection{Z Paragraphs}
 =SML
+fun €z_ax› (id : Z_ID, exp : Z_EXP, preds : Z_PRED list) : PARAINFO = (
+	let	val ty = dest_z_power_type (type_of exp);
+		val decl = mk_z_decl[mk_z_dec([mk_var(id, ty)], exp)];
+		val pred = case preds of
+				[] => Nil
+			|	_ => Value (list_mk_± preds);
+	in	AxDesInfo([], decl, pred, [(id, ty)])
+	end
+);
+=TEX
+=SML
 fun €z_eq_eq› (id : Z_ID, exp : Z_EXP) : PARAINFO = (
 	AbbDefInfo (id, [], exp)
 );
 =TEX
-
+=SML
+fun €z_given› (id : Z_ID) : PARAINFO = (
+	GivenSetInfo ([id], Nil)
+);
+=TEX
 =SML
 
 fun €z_schema› (name : Z_ID, decls : Z_DECL list) : PARAINFO = (
@@ -1255,8 +1276,21 @@ fun €adjust_exp1› (env : CN_ENV) (exp : EXP) : EXP OPT = (
 =SML
 fun €basic_decl_const›
 		(env : CN_ENV)
-		({consts=consts, tm=tm, expr=expr} : EXP CONST_DECL) = (
-	map (fn c => z_eq_eq(trans_id c, trans_exp env expr)) consts
+		({consts=consts, tm=tm, expr=expr} : EXP CONST_DECL)
+		: PARAINFO list= (
+	case trans_exp1 env expr of
+		Value te =>
+			map (fn const => z_eq_eq(trans_id const, te)) consts
+	|	Nil => (
+			let	fun do1 const = (
+					let	val zexp = zid env (trans_id tm);
+						val zvar = trans_id const;
+					in	z_ax(zvar, zexp, [])
+					end
+				);
+			in	map do1 consts
+			end		
+	)
 );
 =TEX
 \subsection{Translating Enumeration Types}
@@ -1315,31 +1349,47 @@ fun €array_attrib› (env : CN_ENV) (zidâ1 : Z_ID, zidâ2 : Z_ID) : PARAINFO list =
 );
 =TEX
 =SML
-fun €basic_decl_con_array› (env : CN_ENV) (name : ID) (td : ARRAY_DEF) = (
-let	val {index=index, comp=comp} = td;
-	val ind = case index of
-			[ind] => ind
-			|_ => go_informal "basic_decl_con_array" 508035 [];
-	val zname = trans_id name;
-	val zindex = trans_id ind;
-	val zcomp = trans_id comp;
-in
-	[z_eq_eq(zname, z_tfun(zid env zindex, zid env zcomp))] @
-		array_attrib env (zname, zindex)
-end);
+fun €basic_decl_con_array› (env : CN_ENV) (name : ID)
+		({index=[head_index], comp=comp} : ARRAY_DEF) : PARAINFO list = (
+	let	val zname = trans_id name;
+		val zindex = trans_id head_index;
+		val zcomp = trans_id comp;
+	in
+		[z_eq_eq(zname, z_tfun(zid env zindex, zid env zcomp))] @
+			array_attrib env (zname, zindex)
+	end
+) | basic_decl_con_array env name
+	({index=index, comp=comp} : ARRAY_DEF) = (
+	let	val zname = trans_id name;
+		val zindex = z_many_cross (map (zid env o trans_id) index);
+		val zcomp = trans_id comp;
+	in
+		[z_eq_eq(zname, z_tfun(zindex, zid env zcomp))]
+	end
+);
 =TEX
 =SML
-fun €basic_decl_uncon_array› (env : CN_ENV) (name : ID) (td : ARRAY_DEF) = (
-let	val {index=index, comp=comp} = td;
-	val ind = case index of
-			[ind] => ind
-			|_ => go_informal "basic_decl_uncon_array" 508035 []
-	val zname = trans_id name;
-	val zindex = trans_id ind;
-	val zcomp = trans_id comp;
-in
-	[z_eq_eq(zname, z_pfun(zid env zindex, zid env zcomp))]
-end);
+=TEX
+=SML
+fun €basic_decl_uncon_array› (env : CN_ENV) (name : ID)
+		({index=[head_index], comp=comp} : ARRAY_DEF) : PARAINFO list = (
+	let	val zname = trans_id name;
+		val zindex = trans_id head_index;
+		val zcomp = trans_id comp;
+		val zexp = z_powerset(z_pfun(zid env zindex, zid env zcomp));
+	in
+		[z_ax(zname, zexp, [])]
+	end
+) | basic_decl_uncon_array env name
+	({index=index, comp=comp} : ARRAY_DEF) = (
+	let	val zname = trans_id name;
+		val zindex = z_many_cross (map (zid env o trans_id) index);
+		val zcomp = trans_id comp;
+		val zexp = z_powerset(z_pfun(zindex, zid env zcomp));
+	in
+		[z_ax(zname, zexp, [])]
+	end
+);
 =TEX
 
 \subsection{Translating Record Types}
@@ -1362,7 +1412,7 @@ end);
 =TEX
 =SML
 fun €basic_decl_record› (env : CN_ENV) (name : ID)
-		({decl} : RECORD_TYPE_DEF) = (
+		({decl} : RECORD_TYPE_DEF) : PARAINFO list = (
 let	val z_sname = trans_id name;
 	val z_decls = map (trans_decl env) decl;
 in
@@ -1370,23 +1420,48 @@ in
 end);
 =TEX
 \subsection{Translating Integer Types}
+
 =SML
-fun €int_type_attrib› (env : CN_ENV) (zidâ1, range) = (
-let	val {lo, hi} = trans_range range;
+local
+	val zid_zints = Ò˙Æ;
+	val z_exp = z_pfun(zid_zints, zid_zints);
 in
-	[z_eq_eq(zidâ1 ^^ zfst, trans_exp env lo),
-	z_eq_eq(zidâ1 ^^ zlst, trans_exp env hi)]
-end
+fun €int_type_attrib› (env : CN_ENV) (zid1, range) = (
+	let	val {lo, hi} = trans_range range;
+		val zvar1 = zid1 ^^ zsuc;
+		val zvar2 = zid1 ^^ zpred;
+		val zvar3 = zid1 ^^ zpos;
+		val zvar4 = zid1 ^^ zval;
+	in
+		[z_eq_eq(zid1 ^^ zfst, trans_exp env lo),
+		z_eq_eq(zid1 ^^ zlst, trans_exp env hi),
+		z_ax(zvar1, z_exp, []),
+		z_ax(zvar2, z_exp, []),
+		z_ax(zvar3, z_exp, []),
+		z_ax(zvar4, z_exp, [])]
+	end
 );
+end;
 =TEX
 =SML
-fun €basic_decl_int_type› (env : CN_ENV) (name : ID) (range : EXP RANGE) = (
-let	val {lo, hi} = trans_range range;
-	val zname = trans_id name;
-in
-	[z_eq_eq(zname, z_rng(trans_exp env lo, trans_exp env hi))] @
-		int_type_attrib env (zname, RRange{lo=lo,hi=hi})
-end
+fun €basic_decl_int_type› (env : CN_ENV) (name : ID) (range : EXP RANGE)
+	: PARAINFO list = (
+	let	val {lo, hi} = trans_range range;
+		val zname = trans_id name;
+	in
+		[z_eq_eq(zname, z_rng(trans_exp env lo, trans_exp env hi))] @
+			int_type_attrib env (zname, RRange{lo=lo,hi=hi})
+	end
+);
+=TEX
+\subsection{Translating Real Types}
+
+=TEX
+=SML
+fun €basic_decl_real_type› (name : ID) : PARAINFO list = (
+	let	val zname = trans_id name;
+	in	[z_given zname]
+	end
 );
 =TEX
 
@@ -1405,17 +1480,17 @@ fun €range_con_attrib› (env : CN_ENV) (zidâ1 : Z_ID, zidâ2 : Z_ID, {lo,hi}
 
 =SML
 fun €basic_decl_subtype_range_con› (env : CN_ENV) (name : ID) (tmark : TMARK)
-		(range : EXP RANGE) = (
-let	val (lo, hi) =
-		case range of
-		RRange{lo,hi} => (lo, hi)
-		|_ => go_informal "basic_decl_subtype_range_con" 508020 [];
-	val zname = trans_id name;
-	val ztmark = trans_id tmark;
-in
-	[z_eq_eq(zname, z_rng(trans_exp env lo, trans_exp env hi))] @
-		range_con_attrib env (zname, ztmark, {lo=lo,hi=hi})
-end
+		(range : EXP RANGE) : PARAINFO list = (
+	let	val (lo, hi) =
+			case range of
+			RRange{lo,hi} => (lo, hi)
+			|_ => go_informal "basic_decl_subtype_range_con" 508020 [];
+		val zname = trans_id name;
+		val ztmark = trans_id tmark;
+	in
+		[z_eq_eq(zname, z_rng(trans_exp env lo, trans_exp env hi))] @
+			range_con_attrib env (zname, ztmark, {lo=lo,hi=hi})
+	end
 );
 =TEX
 
@@ -1464,10 +1539,10 @@ fun €trans_basic_decl› (env : CN_ENV) ((BDConstDecl {consts,tm,expr}) : BASIC_DE
 	go_informal "trans_basic_decl" 508037 []
 ) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CFixed _},...}) = (
 	go_informal "trans_basic_decl" 508038 []
-) | trans_basic_decl env (BDTypeDecl {type_def=TDFloatingTypeDef _,...}) = (
-	go_informal "trans_basic_decl" 508037 []
-) | trans_basic_decl env (BDTypeDecl {type_def=TDFixedTypeDef _,...}) = (
-	go_informal "trans_basic_decl" 508038 []
+) | trans_basic_decl env (BDTypeDecl {name, type_def as TDFloatingTypeDef _}) = (
+	basic_decl_real_type name
+) | trans_basic_decl env (BDTypeDecl {name, type_def as TDFixedTypeDef _}) = (
+	basic_decl_real_type name
 ) | trans_basic_decl env (BDDeferredConstDecl _) = (
 	go_informal "trans_basic_decl" 508039 []
 ) | trans_basic_decl env (BDVarDecl _) = (
