@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.262 $ $RCSfile: imp507.doc,v $ $Date: 2004/07/06 16:44:39 $
+% imp507.doc %Z% $Revision: 1.263 $ $RCSfile: imp507.doc,v $ $Date: 2004/07/10 14:29:12 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.262 $%
+\def\SCCSversion{$Revision: 1.263 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/07/06 16:44:39 $%
+\TPPdate{\FormatDate{$Date: 2004/07/10 14:29:12 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -207,7 +207,7 @@ by doing all the work of checking and generating the VC terms in {\it call\_vcs}
 \item[Issue 1.255] Fixed bug in {\it combine\_param\_specs}.
 \item[Issue 1.256] Fixed bug in {\it renames\_object\_common}.
 \item[Issue 1.257] Now allows duplicates in a use clause.
-\item[Issues 1.258-1.259] Reform of the Environments (in progress).
+\item[Issues 1.258-1.264] Reform of the Environments.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -5172,9 +5172,11 @@ fun €curr_form_fun› (formal_fun : FORMAL_FUN) : unit = (
 =TEX
 =SML
 fun €curr_real_name› (n : ID) : Z_ID = (
-	case current_cn_env (trans_id n) of
-		Value {canon_name, ...} =>  canon_name
-	|	_ => n
+	let	val zn = trans_id n;
+	in	case current_cn_env zn of
+			Value {canon_name, ...} =>  canon_name
+		|	_ => zn
+	end
 );
 =TEX
 =SML
@@ -6950,26 +6952,19 @@ fun €renames_object_common›
 	in	bd_store_para parainfo; Nil
 	end	handle Fail msg => (
 		let
-			val real_old_zname = curr_real_name old_name;
-			val renaming as (new_zname, orig)  =
-			case current_cn_env real_old_zname of 
-				Value(_, EIEnvVar(_,  Nil)) =>  (new_zname, real_old_zname)
-			|	Value(_, EIEnvVar(_, Value orig)) => (new_zname, orig)
-			|	Value(_, EIEnvAuxVar (_,  Nil)) => (new_zname, real_old_zname)
-			|	Value(_, EIEnvAuxVar (_, Value orig)) => (new_zname, orig)
+			val _  =
+			case current_cn_env old_zname of 
+				Value {info = EIEnvVar _ , ...}=> ()
+			|	Value {info = EIEnvAuxVar _, ...} => ()
 			|	_ => fail "" 0 [] (* caught immediately *);
 		in	case current_cn_env new_zname of
-				Value(_, EIEnvVar(_, Value orig')) => (
-					if	orig' = orig
-					then	Nil
-					else	fail "" 0 [] (* caught immediately *)
-			) |	Value(_, EIEnvAuxVar (_, Value orig')) =>  (
-					if	orig' = orig
+				Value{canon_name = orig', info = EIEnvVar _, ...} => (
+					if	orig' = old_zname
 					then	Nil
 					else	fail "" 0 [] (* caught immediately *)
 			) |	Value _ => fail "" 0 [] (* caught immediately *)
 			|	Nil =>
-		let
+		let	val renaming = (new_zname, old_zname);
 			val block1 = block 1
 			handle Fail _ => error "add_var_env" 507006 [];
 			val block_name1 = #block_name(#declab block1);
@@ -6977,12 +6972,11 @@ fun €renames_object_common›
 				force_value(s_lookup block_name1 (!pack_env)))
 				handle Fail _ => [];
 			val av_names = flat (map z_names_of_z_dec avs);
-			val var_renamings1 = #var_renamings(#in_scope(#declab block1));
 			val zids_in_scope = (current_cn_env, av_names);
 		in	map (check_new_z_id zids_in_scope) [new_zname];
 			check_new_spark_ids current_cn_env [new_zname];
 			blocks :=
-			block_renamings(block1, var_renamings1 @ [renaming]):: tl (!blocks);
+			block_renamings(block1, [renaming]):: tl (!blocks);
 			Value renaming
 		end
 		end
@@ -7074,7 +7068,7 @@ fun €renames_pack› (old_name : ID , new_name : ID)  : unit = (
 					[fn _ => old_name, fn _ => new_name];
 		val _ = check_pack_complete pack;
 		val {vc_vars, consts_types, formal_procs, informal_funs, formal_funs, var_renamings,
-			aux_vars, zmod, decl} = pack;
+			aux_vars, zmod, decl, with_dict = _} = pack;
 		val newids = new_ids pack;
 		fun const_def id = (
 			BDConstDecl{
@@ -7171,13 +7165,12 @@ fun €use_pack› (name : ID)  : unit = (
 			|	Nil  => fail "use_pack" 507063 [fn _ => name];
 		val _ = check_pack_complete pack;
 		val {vc_vars, consts_types, formal_procs, informal_funs, formal_funs, var_renamings,
-			aux_vars, zmod, decl} = pack;
+			aux_vars, zmod, decl, with_dict = _} = pack;
 		val newids = new_ids pack;
 		fun do_id id = (trans_id id, prefix_id name id);
 		val new_subs = map do_id newids;
 		val block1 = block 1
 			handle Fail _ => error "add_var_env" 507006 [];
-		val use_clause_subs1 = #use_clause_subs(#in_scope(#declab block1));
 		val block_name1 = #block_name(#declab block1);
 		val avs = #aux_vars (
 			force_value(s_lookup block_name1 (!pack_env)))
@@ -7187,7 +7180,7 @@ fun €use_pack› (name : ID)  : unit = (
 	in	map (check_new_z_id zids_in_scope) newids;
 		check_new_spark_ids current_cn_env newids;
 		blocks :=
-			block_renamings(block1, new_subs @ use_clause_subs1):: tl (!blocks)
+			block_renamings(block1, new_subs):: tl (!blocks)
 	end
 );
 =TEX
