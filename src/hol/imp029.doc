@@ -205,6 +205,153 @@ val €≥_IN_THEN› : THM_TACTICAL = (fn ttac => fn thm =>
 	handle Fail _ => thm_fail "≥_IN_THEN" 29010 [thm]
 );
 =TEX
+\subsection{Concerning ¥ and §}
+=SML
+fun €¥_thm_tac› (th : THM) : TACTIC = (fn (gl as (asms, conc)) =>
+	let	val (ant, suc) = (dest_¥ (concl th))
+			handle ex => reraise ex "¥_thm_tac";
+	in	if suc ~=$ conc
+		then	([(asms, ant)],
+		 	(fn [thm] => ¥_mp_rule th thm
+			| _ => bad_proof "¥_thm_tac"))
+		else	term_fail "¥_thm_tac" 29013 [suc]
+	end
+);
+=TEX
+Given a theorem of the form
+=INLINEFT
+á Ù a ¥ b
+=TEX
+\ the following rule returns one of the form
+=INLINEFT
+á Ù a' ¥ b
+=TEX
+\ where $a'$ is obtained from $a$ by existentially quantifying over
+all its free variables which do not appear free in $b$ or
+=INLINEFT
+á
+=TEX
+.
+=SML
+fun €bc_rule› (th : THM) : THM = (
+	let	val (ant, suc) = dest_¥ (concl th);
+		fun aux (v :: vs) a th = (
+			let	val (a', th') = aux vs a th;
+				val a'' = mk_simple_∂ (v, a');
+				val th1 = asm_rule a'';
+				val th2 = simple_∂_elim v th1 th';
+			in	(a'', th2)
+			end
+		) | aux [] a th = (a, th);
+	in	case frees ant term_diff
+		(flat(map frees(suc :: asms th))) of
+		[] => th
+		|	vs => (
+			let	val (a,th1) = aux vs ant (undisch_rule th);
+				val th2 = ¥_intro a th1;
+			in	th2
+			end
+		)
+	end
+);
+=TEX
+=SML
+fun €bc_thm_tac› (thm : THM) : TACTIC = ( 
+	let	val thm0 = all_µ_elim thm;
+		val thm1 = (
+			if	is_¥(concl thm0)
+			then	thm0
+			else	fst (§_elim thm0));
+		val (_, suc) = dest_¥(concl thm1);
+	in
+	(fn gl as (_, conc) =>
+	let	val (tym, tmm) = term_match conc suc;
+		val thm2 = asm_inst_term_rule tmm (asm_inst_type_rule tym thm1);
+		val thm3 = bc_rule thm2;
+	in	¥_thm_tac thm3 gl
+	end
+	handle ex => (
+		if area_of ex = "term_match"
+		then term_fail "bc_thm_tac" 29011 [suc]
+		else raise ex
+	))
+	end
+	handle ex => (
+		if area_of ex = "§_elim"
+		then thm_fail "bc_thm_tac" 29012 [thm]
+		else raise ex
+	)
+);
+val €back_chain_thm_tac› = bc_thm_tac;
+=TEX
+=SML
+local
+	fun AUX_T acc ([]:TACTIC list) : TACTIC = id_tac
+	|   AUX_T acc (tac :: more) = (fn gl =>
+		(tac THEN AUX_T [] (rev acc @ more)) gl
+		handle Fail _ => (AUX_T (tac :: acc) more) gl
+	);
+in	fun €TRY_ALL_T› (tacs : TACTIC list) : TACTIC = AUX_T [] tacs;
+end;
+=TEX
+=SML
+fun €bc_tac› (thms : THM list) : TACTIC = (
+	(TRY_ALL_T(map(fn t => bc_thm_tac t THEN REPEAT(µ_tac ORELSE ±_tac))thms))
+	handle ex => reraise ex "bc_tac"
+);
+=TEX
+=SML
+val €back_chain_tac› = bc_tac;
+=TEX
+=SML
+fun €fc_tac_rule› (thms : THM list) : THM list -> THM list = (
+	map all_µ_intro o fc_rule thms
+);
+=TEX
+=SML
+fun €FC_T1›
+	(can : THM -> THM list)
+	(ttac : THM list -> TACTIC)
+	(thms : THM list)
+	: TACTIC = (fn gl as (asms, _) =>
+	let	val asmthms = map asm_rule asms;
+	in	ttac(fc_tac_rule(flat(map can thms)) asmthms) gl
+	end
+);
+=TEX
+=SML
+fun €ASM_FC_T1›
+	(can : THM -> THM list)
+	(ttac : THM list -> TACTIC)
+	(thms : THM list)
+	: TACTIC = (fn gl as (asms, _) =>
+	let	val asmthms = map asm_rule asms;
+	in	ttac(fc_tac_rule(flat(map can (thms@asmthms))) asmthms) gl
+	end
+);
+=TEX
+=SML
+val €FC_T› = FC_T1 fc_canon;
+=TEX
+=SML
+val €ASM_FC_T› = ASM_FC_T1 fc_canon;
+=TEX
+=SML
+val €fc_tac› : THM list -> TACTIC = FC_T (MAP_EVERY strip_asm_tac);
+=TEX
+=SML
+val €asm_fc_tac› : THM list -> TACTIC = ASM_FC_T (MAP_EVERY strip_asm_tac);
+=TEX
+For the types of the following see the definitions of the aliases
+above. The long names will not be used in this document.
+=SML
+val €FORWARD_CHAIN_T1› = FC_T1;
+val €ASM_FORWARD_CHAIN_T1› = ASM_FC_T1;
+val €FORWARD_CHAIN_T› = FC_T;
+val €ASM_FORWARD_CHAIN_T› = ASM_FC_T;
+val €forward_chain_tac› = fc_tac;
+val €asm_forward_chain_tac› = asm_fc_tac;
+=TEX
 \subsection{Concerning µ}
 =SML
 val €µ_tac› : TACTIC = (fn (seqasms, conc) =>
@@ -489,6 +636,185 @@ val €step_strip_tac› : TACTIC = (fn gl =>
 	gl
 );
 =TEX
+\subsection{Induction Tactics}
+The following function is used to rename appearances of the induction
+variable in the antecedent part of the induction theorem.
+=SML
+infix starts_with;
+fun (s1 : string) €starts_with› (s2 : string) : bool = (
+	let	fun aux (c1 :: more1) (c2 :: more2) = (
+			if c1 = c2 then aux more1 more2 else false
+		) | aux [] [] = true
+		|   aux [] _ = false
+		|   aux _ [] = true;
+	in	aux (explode s1) (explode s2)
+	end
+);
+=SML
+fun €induction_rename› (old : string) (new : string) (tm : TERM) : TERM = (
+	let	val sn = size new;
+		fun aux t = (
+		case dest_simple_term t of
+				App(f, a) => (
+				mk_app(aux f, aux a)
+		) |	SimpleÃ (v, b) => (
+			let	val (n, ty) = dest_var v;
+			in	if	n starts_with old
+			then	let	val n' = new^(implode(explode n from sn));
+					val v' = mk_var(n', ty);
+					val b' = subst[(v', v)]b;						in	mk_simple_Ã (v', aux b')
+				end
+			else	mk_simple_Ã (v, aux b)
+			end
+		) |	_ => t
+		);
+	in	aux tm
+	end
+);
+=TEX
+In the following the term argument is the antecedent of the implication
+in an induction principle. The tactic returned is the combination
+of
+=INLINEFT
+±_tac
+=TEX
+,
+=INLINEFT
+µ_tac
+=TEX
+\ and
+=INLINEFT
+¥_tac
+=TEX
+\ mentioned in the detailed design.
+=SML
+fun €induction_strip_tac› (ttac : THM -> TACTIC) (tm : TERM) : TACTIC = (
+	let	fun tac t = (
+			case dest_term t of
+				D± (t1, t2) => ±_tac THEN_LIST [tac t1, tac t2]
+			|	Dµ (_, b) => µ_tac THEN tac b
+			|	D¥ _	=> ¥_T ttac
+			|	_	=> id_tac
+		);
+	in	tac tm
+	end
+);
+=TEX
+=SML
+fun €GEN_INDUCTION_T› (thm : THM) (ttac : THM -> TACTIC) : TERM -> TACTIC = (
+	let	fun bad_thm thm = thm_fail "GEN_INDUCTION_T" 29021 [thm];
+		val (p, body) = (dest_simple_µ (concl thm))
+			handle Fail _ => bad_thm thm;
+		val (ant, suc) = (dest_¥ body)
+			handle Fail _ => bad_thm thm;
+		val (x, px) = (dest_simple_µ suc)
+			handle Fail _ => bad_thm thm;
+		val (xn, xty) = dest_var x;
+		val tac = induction_strip_tac ttac ant;
+	in	if not (px ~=$ (mk_app(p, x))handle Fail _ => true)
+		orelse not(is_nil(asms thm))
+		then bad_thm thm
+		else 
+	fn t =>
+	let	val (tn, tty) = (dest_var t)
+			handle Fail _ => term_fail "GEN_INDUCTION_T" 29024 [t];
+		val tym = (type_match tty xty)
+			handle Fail _ => fail "GEN_INDUCTION_T" 29023
+			[fn()=>string_of_term t, fn()=>string_of_type xty];
+		val thm1 = inst_type_rule tym thm;
+	in
+	fn (gl as (asms, conc)) =>
+		if not (is_free_in t conc)
+		then term_fail "GEN_INDUCTION_T" 29026 [t]
+		else if any asms (is_free_in t)
+		then term_fail "GEN_INDUCTION_T" 29025 [t]
+		else
+	let	val actp = mk_simple_Ã(t, conc);
+		val is_actp = 
+			(fn t => is_app t andalso fst(dest_app t) ~=$ actp);
+		val conv = (ONCE_MAP_C(COND_C is_actp simple_¬_conv fail_conv));
+		val thm2 = conv_rule conv (simple_µ_elim actp thm1);
+		val new_conc = induction_rename xn tn (concl thm2);
+		val thm3 = §_mp_rule (refl_conv new_conc) thm2;
+	in	(intro_µ_tac(t,t) THEN ¥_thm_tac thm3 THEN tac) gl
+	end
+	end
+	end
+);
+=TEX
+=SML
+fun €gen_induction_tac› (thm : THM) : TERM -> TACTIC = (
+	let	val ttac = (GEN_INDUCTION_T thm strip_asm_tac)
+			handle ex => reraise ex "gen_induction_tac";
+	in
+	fn tm =>
+	let	val tac = (ttac tm) handle ex => reraise ex "gen_induction_tac";
+	in	fn gl => ((tac gl) handle ex => reraise ex "gen_induction_tac")
+	end
+	end
+);
+=TEX
+=SML
+fun €lrassoc1› ((x, y) :: rest : (TERM * TERM) list) (what : TERM) : TERM = (
+	if y =$ what
+	then x
+	else lrassoc1 rest what
+) | lrassoc1 [] what = what;
+=SML
+fun €GEN_INDUCTION_T1› (thm : THM) (ttac : THM -> TACTIC) : TACTIC = (
+	let	fun bad_thm thm = thm_fail "GEN_INDUCTION_T1" 29007 [thm];
+		val (p, body) = (dest_simple_µ (concl thm))
+			handle Fail _ => bad_thm thm;
+		val (ant, suc) = (dest_¥ body)
+			handle Fail _ => bad_thm thm;
+		val (x, tpx) = (dest_simple_µ suc)
+			handle Fail _ => bad_thm thm;
+		val (xn, _) = dest_var x;
+		val px = (mk_app(p, x))
+			handle Fail _ => bad_thm thm;
+		val b = hd(gen_vars[BOOL] (x::p::frees body));
+		val pat = (subst[(b, px)] tpx)
+			handle Fail _ => bad_thm thm;
+		val abs = mk_simple_Ã(p, tpx);
+	in	if not (is_free_in b pat) orelse not (is_free_in x pat)
+		then	bad_thm thm
+		else
+	let	val tac = induction_strip_tac ttac ant;
+	in	if not(is_nil(asms thm))
+		then bad_thm thm
+		else 
+	fn (gl as (asms, conc)) =>
+	let	val (tym, tmm) = (term_match conc pat)
+			handle Fail _ => term_fail "GEN_INDUCTION_T1" 29009
+			[mk_app(abs, mk_var("t", type_of p))];
+		val actx = lrassoc1 tmm (inst [] tym x);
+	in	if not (is_var actx)
+		then term_fail "GEN_INDUCTION_T1" 29014 [actx]
+		else
+	let	val actb = lrassoc1 tmm (inst [] tym b);
+		val actp = mk_simple_Ã(actx, actb);
+		val is_actp = 
+			(fn t => is_app t andalso fst(dest_app t) ~=$ actp);
+		val conv = (ONCE_MAP_C(COND_C is_actp simple_¬_conv fail_conv));
+		val thm1 = inst_type_rule tym thm;
+		val thm2 = conv_rule conv (simple_µ_elim actp thm1);
+		val new_conc = induction_rename xn (fst(dest_var actx)) (concl thm2);
+		val thm3 = §_mp_rule (refl_conv new_conc) thm2;
+	in	(intro_µ_tac(actx,actx) THEN ¥_thm_tac thm3 THEN tac) gl
+	end
+	end
+	end
+	end
+);
+=TEX
+=SML
+fun €gen_induction_tac1› (thm : THM) : TACTIC = (
+	let	val tac = (GEN_INDUCTION_T1 thm strip_asm_tac)
+			handle ex => reraise ex "gen_induction_tac1";
+	in	fn gl => ((tac gl) handle ex => reraise ex "gen_induction_tac1")
+	end
+);
+=TEX
 \section{TACTICALS}
 =SML
 fun ((tac1 : TACTIC) €THEN_T1› (tac2 : TACTIC)) : TACTIC = (fn gl =>
@@ -548,7 +874,7 @@ val €l≤_thm› = sprove ¨µ t1 t2 ∑ (t1 ≤ t2) § (≥ t1 ¥ t2)Æ;
 Now create a build proof contexts (which will be completed and commited in 
 \cite{DS/FMU/IED/IMP076}).
 =SML
-val _ = new_pc "€'paired_abstractions›";
+val _ = new_pc €"'paired_abstractions"›;
 val _ = set_st_eqn_cxt [
 		 (¨≥ xÆ, ≥_in_conv),
 		 (¨$∂â1(Uncurry f)Æ, ∂â1_conv),
