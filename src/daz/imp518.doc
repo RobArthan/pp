@@ -86,7 +86,544 @@ See \cite{SS/HAT/DAZ/DTD518}.
 
 =TEX
 \pagebreak
-\section{TACTICS}\label{TACTICS}
+\section{HOL TACTICS}\label{HT}
+=SML
+structure €CNHOLTactics› : CNHOLTactics = struct
+=TEX
+=SML
+val _ = open_theory "basic_hol" handle Fail _ => ();
+val _ = set_pc"basic_hol";
+open Unification Resolution;
+=TEX
+A frequent phenomenon in Z is that we have facts of the form:
+=GFT
+f ç X ≠ Y
+x ç X
+=TEX
+and we need a theorem of the form:
+=GFT
+f x ç Y
+=TEX
+Such a theorem is easy enough to solve in simple cases by forward chaining.
+However, in more complex examples forward chaining can produce too many irrelevant results and still fail to find what we're looking for.
+In such cases the resolution theorem prover (i.e., the $prove\_tac$ in most proof contexts) will also tend to follow far too many blind alleys.
+An approach which works backwards from the desired theorem has a good chance of being more successful.
+
+A goal-directed approach which promises to have the right characteristics is the horn clause proof procedure used in the pure prolog execution model.
+This approach uses a database of horn clauses, i.e., predicates of the form
+=INLINEFT
+µxâ1 .. xâk∑ Râ1 ± ... ± Râk ¥ R
+=TEX
+.
+In what follows we will call the members of this database the {\em facts}.
+The horn clauses are used to prove queries of the general form
+=INLINEFT
+∂yâ1 .. yâm∑ Q
+=TEX
+\ essentially by systematically searching for witnesses.
+This search is carried out using a set, $S$, of intermediate queries.
+At each stage in the search, $S$ will contain a set of predicates of the form
+=INLINEFT
+µzâ1 .. zâj∑ Qâ1 ± ... ± Qâj ¥ Q'
+=TEX
+\ where $Q'$ is an instance of $Q$ obtained by specialising zero or more of the existentially quantified variables
+=INLINEFT
+yâ1 .. yâk
+=TEX
+.
+If some member of $S$ has $j = 0$, i.e. if the antecedent of one of the implications in $S$ becomes true, then we have found a true instance of $Q$, which provides witnesses to the truth of the original existentially quantified query.
+The (non-deterministic) algorithm to carry out the search is as follows:
+
+\begin{enumerate}
+\item
+Set
+=INLINEFT
+S = {µâ1 .. yâm∑ Q ¥ Q}
+=TEX
+.
+This makes the only member of $S$ a (universally quantified) tautology, which is certainly a consequence of the facts.
+\item
+Now make three choices:
+{\em(i)} pick a member of $S$, say
+=INLINEFT
+µzâ1 .. zâa∑ Qâ1 ± ... ± Qâb ¥ Q'
+=TEX
+; {\em(ii)} pick a fact, say
+=INLINEFT
+µxâ1 .. xâk∑ Râ1 ± ... ± Râm ¥ R
+=TEX
+; {\em(iii)} pick some $Q_j$.
+\item
+Attempt to unify $Q_j$ and $R$.
+If there is no unifier then go back to step 2.
+\item
+We now have a unifier for $Q_j$ and $R$.
+Specialise the $R_i$, giving $R'_i$ say, using this unifier and replace $Q_j$ 
+by
+=INLINEFT
+R'â1 ± ... ± R'âk
+=TEX
+.
+\item
+If $a = 1$ and $m = 0$, we are done, the element of $S$ made in the previous step is the desired instance of $Q$.
+Otherwise go back to step 2.
+\end{enumerate}
+
+The following type is used for the implicative facts we use in the prolog-like search.
+The implication
+=INLINEFT
+µx1 .. xk∑ R1 ± ... ± Rk ¥ R
+=TEX
+\ is represented as a theorem with assumptions:
+=INLINEFT
+R1, ..., Rk Ù R
+=TEX
+. The free variables of this theorem (including the $xi$) are remembered since they are needed when we do unification.
+
+The same type is used for the queries we are trying to solve in the prolog-like search.
+A query is represented as a theorem with assumptions:
+=INLINEFT
+Q1, ..., Qk Ù Q
+=TEX
+. 
+=SML
+type €MARKED_THM› = {fvs : TERM list, fts : TYPE list, thm : THM};
+=TEX
+=SML
+=TEX
+=SML
+infix 4 type_mem;
+infix 4 type_diff;
+fun (ty : TYPE) €type_mem› (tyl : TYPE list) : bool = (
+let	fun test (h :: t) =  (ty =: h) orelse test t
+	| test [] = false
+in
+	test tyl
+end);
+=TEX
+=SML
+fun ([] : TYPE list) €type_diff› (tyl2 : TYPE list) : TYPE list = []
+| (ty :: rest) type_diff tyl2 = (if ty type_mem tyl2
+	then rest type_diff tyl2
+	else( ty :: (rest type_diff tyl2))
+);
+=TEX
+=SML
+fun €thm_frees› (th : THM) : TERM list = (
+	list_term_union (map frees (concl th :: asms th)) 
+);
+=TEX
+=SML
+infix 4 type_union;
+val op €type_union› : TYPE list * TYPE list -> TYPE list =
+	uncurry (union (op =:));
+val €list_type_union› : TYPE list list -> TYPE list = list_union (op =:);
+
+=TEX
+=SML
+fun €thm_tyvars› (th : THM) : TYPE list = (
+	list_type_union
+	(map (map mk_vartype o term_tyvars)
+	(concl th :: asms th)) 
+);
+=TEX
+=SML
+fun €list_string_variant› (avoid : string list) ([] : string list) = []
+|    list_string_variant avoid (x :: more) = (
+	let	val x' = string_variant avoid x;
+	in	x' :: list_string_variant (x' :: avoid) more
+	end
+);
+=TEX
+=SML
+fun €list_type_variant› (avoid : TYPE list) (tyvs : TYPE list) : TYPE list = (
+	let	val avns = list_cup (map type_tyvars avoid);
+		val ns = map dest_vartype tyvs;
+	in	map mk_vartype (list_string_variant avns ns)
+	end
+);
+=IGN
+list_type_variant [î'1 ≠ 'b ≠ ('c ∏ '2)Æ] [î'bÆ, î'cÆ, î'3Æ];
+=TEX
+\newpage
+The rule $asm\_spec\_rule$ is intended to meet the following requirements:
+\begin{enumerate}
+\item
+$tysubs$ and $tmsubs$ are type and term substitutions which unify the conclusion of $thm$ with some term of interest $t$, say.
+The theorem returned by $asm\_spec\_rule$ must have the same conclusion as would be obtained by instantiating the conclusion of $thm$ using these substitutions.
+\item
+The type and term variables given by the ``hyp'' parameters should not be renamed.
+\item
+$tysubs$ and $tmsubs$ are as returned by $term\_unify$; in particular, the  variables in the second components of the pairs in $tmsubs$ have the same types as in $thm$ --- they have not yet been instantiated according to $tysubs$.
+\item
+The theorem returned by $asm\_spec\_rule$ should be as general as possible as regards the names of type and term variables, subject to requirements 1 and 2.
+\item
+The type and term variables given by the ``avoid'' parameters should not appear in the resulting theorem, except where this is dictated by requirements 1 and 2.
+\end{enumerate}
+=SML
+fun €asm_spec_rule›
+	(hyp_tyvars : TYPE list)
+	(hyp_tmvars : TERM list)
+	(avoid_tys : TYPE list)
+	(avoid_tms : TERM list)
+	(tysubs : (TYPE*TYPE) list)
+	(tmsubs : (TERM * TERM) list) 
+	(thm : THM) : THM = (
+	let	val tyvs = map mk_vartype (term_tyvars (concl thm));
+		val avoid_tys' = map fst tysubs type_union avoid_tys;
+		val rename_tys = (thm_tyvars thm drop (fn ty => ty type_mem tyvs))
+						type_diff hyp_tyvars;
+		val rename_tys' = list_type_variant avoid_tys' rename_tys;
+		val ty_rename_subs = combine rename_tys' rename_tys drop (op =:);
+		val tysubs' = ty_rename_subs @ tysubs;
+		val thm' = asm_inst_type_rule tysubs' thm;
+		val tmvs = frees (concl thm);
+		val avoid_tms' = list_term_union(avoid_tms::map(frees o fst) tmsubs);
+		val rename_tms = (thm_frees thm drop (fn tm => tm term_mem tmvs))
+					term_diff hyp_tmvars;
+		val rename_tms' = map (inst[]ty_rename_subs)
+					(list_variant avoid_tms' rename_tms);
+		val tm_rename_subs = combine rename_tms' rename_tms drop (op =$);
+		val tmsubs' = map (fn (t1, t2) => (t1, inst[]tysubs' t2)) 
+					(tmsubs @ tm_rename_subs);
+	in	asm_inst_term_rule tmsubs' thm'
+	end
+);
+=IGN
+asm_spec_rule[î'b'Æ] [¨b:'bÆ] [(î'a ≠ 'b ≠ 'cÆ, î'aÆ)] []
+	(asm_intro ¨(b:'b) = bÆ
+		(asm_intro ¨(c:'c) = cÆ(prove_rule[]¨(a:'a) = aÆ)));
+asm_spec_rule [î'cÆ] [¨dÆ] [] [(¨a + bÆ, ¨a:ÓÆ)]
+	(asm_intro ¨(d:'b≠'c) = dÆ(prove_rule[]¨(a:Ó) = a ± (b:Ó)=b ± (c:Ó) = cÆ));
+asm_spec_rule [] [¨YÆ] [] [](asm_rule¨y ç YÆ);
+=TEX
+=SML
+fun €all_undisch_rule› (thm : THM) : THM = (
+	let	val thm' = undisch_rule thm;
+	in	all_undisch_rule thm'
+	end	handle	Fail _ => thm
+);
+val €res_subs› = new_subs 100;
+=TEX
+The following is the resolution part of the prolog-like search.
+=SML
+fun €thm_resolve›
+	(hyp_tyvars : TYPE list)
+	(hyp_tmvars : TERM list)
+	(query as {fvs=q_fvs, fts=q_fts, thm=q_thm}: MARKED_THM)
+	(asm : TERM)
+	(fact as {fvs=f_fvs, fts=f_fts, thm=f_thm}: MARKED_THM)
+	: MARKED_THM = (
+	let	val side = init_subs res_subs;
+		val avvs = frees (concl q_thm)
+				term_union hyp_tmvars;
+		val avts = map mk_vartype(term_tyvars (concl q_thm))
+				type_union hyp_tyvars;
+		val q_uvs = q_fvs term_diff avvs;
+		val q_uts = q_fts type_diff avts;
+		val ((f_tysubs, f_tmsubs), (q_tysubs, q_tmsubs)) =
+			term_unify res_subs (f_fts @ q_fts) (f_fvs @ q_fvs)
+			((concl f_thm, f_fvs, f_fts), (asm, q_uvs, q_uts));
+		val q_thm' = asm_spec_rule hyp_tyvars hyp_tmvars [] []
+				q_tysubs q_tmsubs q_thm;
+		val asravtms = thm_frees q_thm';
+		val asravtys = thm_tyvars q_thm';
+		val f_thm' = asm_spec_rule hyp_tyvars hyp_tmvars asravtys asravtms
+					f_tysubs f_tmsubs f_thm;
+		val r_thm = prove_asm_rule f_thm' q_thm';
+		val r_fvs = thm_frees r_thm;
+		val r_fts = thm_tyvars r_thm;
+	in	{fvs = r_fvs, fts = r_fts, thm = r_thm}
+	end
+);
+=TEX
+The following functions uses a rule which given a term $tm$ is expected either to fail or to prove zero or more theorems of the form
+=INLINEFT
+Ñ Ù tm
+=TEX
+. Such a rule can be used in much the same way as a fact theorem.
+=SML
+fun €rule_resolve›
+	(hyp_tyvars : TYPE list)
+	(hyp_tmvars : TERM list)
+	(query as
+	{fvs=q_fvs, fts=q_fts, thm=q_thm}: MARKED_THM)
+	(asm : TERM)
+	(rule : TERM -> THM list)
+	: MARKED_THM list = (
+	let	val f_thms = rule asm;
+		fun freshen f_thm = (
+			let	val avtms = thm_frees q_thm;
+				val avtys = thm_tyvars q_thm;
+			in	asm_spec_rule hyp_tyvars hyp_tmvars
+						avtys avtms [] [] f_thm
+			end
+		);
+		val r_thms = map (switch prove_asm_rule q_thm o freshen) f_thms;
+		fun aux r_thm = (
+			let	val r_fvs = thm_frees r_thm;
+				val r_fts = thm_tyvars r_thm;
+			in	{fvs = r_fvs, fts = r_fts, thm = r_thm}
+			end
+		);
+	in	map aux r_thms
+	end
+);
+=TEX
+=SML
+fun €make_fact›
+	(thm : THM) : MARKED_THM = (
+	let	val asm_tyvars = list_cup (map term_tyvars (asms thm));
+		val asm_vars = list_term_union (map frees (asms thm));
+		val thm1 = all_µ_arb_elim thm;
+		val thm2 = all_undisch_rule thm1;
+	in	{fvs = thm_frees thm2 term_diff asm_vars,
+		fts = thm_tyvars thm2 type_diff map mk_vartype asm_tyvars,
+		thm = thm2}
+	end
+);
+=TEX
+=SML
+fun €make_query› (tm : TERM) : MARKED_THM = (
+	let	val thm = asm_rule tm;
+	in	{fvs = thm_frees thm, fts = thm_tyvars thm, thm = thm}
+	end
+);
+=SML
+fun €map_fail› (f : 'a -> 'b) ([] : 'a list) : 'b list = []
+|   map_fail f (x::xs) = (
+	((f x) :: map_fail f xs) handle Fail _ => map_fail f xs
+);
+fun €hc_diag› (msg : string OPT) (pass : int) (thms : THM list) : unit = (
+	(case msg of 
+		Nil => diag_line
+		("Horn clause prover - resolution pass " ^ string_of_int pass)
+	|	Value x => diag_line("Horn clause prover - " ^ x));
+	map (map diag_line o PrettyPrinter.format_thm) thms;
+	()
+);
+=TEX
+=SML
+local
+exception GotIt of THM;
+fun €hc_aux› (diag : bool)
+	(hyps : TERM list)
+	(hyp_tyvars : TYPE list)
+	(hyp_tmvars : TERM list)
+	(fact_rules : (TERM -> THM list) list)
+	(fact_thms : MARKED_THM list)
+	(limit : int)
+	(pass : int)
+	(queries : MARKED_THM list) : THM = (
+	let	val recur = hc_aux diag hyps hyp_tyvars hyp_tmvars
+					fact_rules fact_thms limit (pass+1);
+		fun	chk (mthm as {thm, fvs, fts}:MARKED_THM) : MARKED_THM = (
+			let	val thm' = prove_asm_rule t_thm thm
+						handle Fail _ => thm;
+			in	if	all (asms thm') (fn t => t term_mem hyps)
+				then	raise GotIt thm'
+				else	{thm=thm', fvs=fvs, fts=fts}
+			end
+		);
+		fun do_rules_facts (q : MARKED_THM): MARKED_THM list = (
+			(case asms (#thm q) term_diff hyps of
+			t::_ => (
+					flat
+				(map_fail
+				(map chk o rule_resolve hyp_tyvars hyp_tmvars q t)
+				fact_rules) @
+				map_fail
+				(chk o thm_resolve hyp_tyvars hyp_tmvars q t)
+					fact_thms
+			) | 	[] => [])
+			drop (fn mthm => (mk_f term_mem asms (#thm mthm)))
+		);
+		val new_queries = flat(map do_rules_facts queries);
+		val side = if diag then hc_diag Nil pass (map #thm new_queries) else();
+	in	case new_queries of
+		[] => (
+			let	fun rpt() = (
+					(if	not diag
+					then	hc_diag Nil pass (map #thm queries)
+					else	());
+					string_of_term (concl (#thm(hd (queries))))
+				);
+			in	fail "hc_tac" 518002	[rpt]
+			end
+		) | _ => (
+			if	pass >= limit
+			then	let	fun rpt() = (
+					(if	not diag
+					then	hc_diag Nil pass (map #thm queries)
+					else	());
+					string_of_int limit
+				);
+				in	fail "hc_tac" 518001
+					[rpt, fn _ =>
+					string_of_term (concl (#thm(hd (queries))))]
+				end
+			else	recur new_queries
+		)
+	end
+);
+in
+fun €hc_rule› (diag : bool) (limit : int) (hyps : TERM list)
+	(fact_rules : (TERM -> THM list) list)
+	(facts : THM list)
+	(query : TERM) : THM = (
+	let	val q = [make_query query];
+		val hyp_vars = list_term_union (map frees hyps);
+		val hyp_tyvars = map mk_vartype(list_cup(map term_tyvars hyps)); 
+		val fs = map make_fact facts;
+	in	
+		(if diag then hc_diag (Value "query:") 0 (map #thm q) else());
+		(if diag then hc_diag (Value "facts:") 0 (map #thm fs) else());
+		(if diag then hc_diag (Value "hypotheses:") 0 (map asm_rule hyps) else());
+		hc_aux diag hyps hyp_tyvars hyp_vars fact_rules fs limit 1 q
+	end	handle GotIt thm => thm
+);
+end;
+=TEX
+=SML
+fun €basic_hc_tac›
+	(diag : bool) (limit : int) 
+	(can : THM -> THM list)
+	(rules : (TERM -> THM list) list)
+	(thms : THM list)
+	: TACTIC = (fn gl as (asms, cnc) =>
+	let	val asmthms = map asm_rule asms;
+	in	accept_tac(hc_rule diag limit asms
+			rules (flat(map can (asmthms @ thms))) cnc) gl
+	end
+);
+=TEX
+=SML
+val ≥_¥_f_thm = pc_rule1"predicates"prove_rule[]¨µp∑(≥p ¥ F) § pÆ;
+val ≥_¥_f_conv = TRY_C (ONCE_MAP_C (simple_eq_match_conv ≥_¥_f_thm));
+=TEX
+=SML
+fun €hc_rule_of_conv› (conv : CONV) : TERM -> THM list = (fn tm =>
+	let	val th = conv tm;
+	in	[§_t_elim th
+		handle Fail _ => (undisch_rule o snd o §_elim) th]
+	end
+);
+=TEX
+=SML
+val €hc_±_rule› : TERM -> THM list = (fn tm =>
+	let	val (p, q) = dest_± tm;
+	in	[±_intro (asm_rule p) (asm_rule q)]
+	end
+);
+=TEX
+=SML
+val €hc_≤_rule› : TERM -> THM list = (fn tm =>
+	let	val (p, q) = dest_≤ tm;
+	in	[≤_left_intro p (asm_rule q),
+		≤_right_intro q (asm_rule p)]
+	end
+);
+=TEX
+=SML
+fun HC_CAN (can : THM -> THM list) (thm : THM) : THM list = (
+	case (map (conv_rule ≥_¥_f_conv) o can) thm of
+		[] => [thm]
+	|	some => some
+);
+=TEX
+=SML
+val €hc_canon› = HC_CAN fc_canon1;
+val €hc_tac› : THM list -> TACTIC = (fn ths =>
+	basic_hc_tac false 100 hc_canon
+		[hc_rule_of_conv (current_ad_st_conv()), hc_±_rule, hc_≤_rule]
+		ths
+);
+val €hc_tac1› : THM list -> TACTIC = (fn ths =>
+	basic_hc_tac true 100 hc_canon
+		[hc_rule_of_conv (current_ad_st_conv()), hc_±_rule, hc_≤_rule]
+		ths
+);
+=TEX
+=SML
+fun €conv_then_hc_rule› (conv : CONV) (rule : TERM -> THM list)
+		: TERM -> THM list = (
+	fn tm =>
+	let	val thm = eq_sym_rule (conv tm);
+		val lhs = fst(dest_eq (concl thm));
+		val thms = rule lhs;
+	in	map (§_mp_rule thm) thms
+	end	handle Fail _ => rule tm
+);
+=TEX
+=SML
+end (* of structure CNHOLTactics *);
+open CNHOLTactics;
+=TEX
+\section{Z TACTICS}\label{ZT}
+=SML
+structure €CNZTactics› : CNZTactics = struct
+=TEX
+=SML
+val _ = open_theory"z_library" handle Fail _ => ();
+=SML
+fun €z_selâs_ç_rule› (tm : TERM) : THM = (
+	let	val (lhs, rhs) = dest_z_ç tm;
+		val (bdg, cmp) = dest_z_selâs lhs;
+	in	if is_z_binding bdg
+		then	undisch_rule(snd(§_elim(LEFT_C z_selâs_conv tm)))
+		else
+	let	val styl = dest_z_schema_type(type_of bdg);
+		val gvl = gen_vars (map (mk_z_power_type o snd) styl) (frees tm);		
+		val stygvl = combine styl gvl;
+		val decs = map (fn(vty, s) => mk_z_dec([mk_var vty], s)) stygvl;
+		val bdgmem = mk_z_ç (bdg, mk_z_h_schema(mk_z_decl decs, mk_t));
+		val thm1 = z_ç_h_schema_conv bdgmem;
+		val thm2 = ±_left_elim(undisch_rule(fst(§_elim thm1)));
+		fun aux_rule th = (
+			if (snd o dest_z_selâs o fst o
+				dest_z_ç o fst o dest_± o concl) th = cmp
+			then	±_left_elim th
+			else	aux_rule (±_right_elim th)
+		) handle Fail _ => th;
+		val thm3 = aux_rule thm2;
+		val v = (snd o dest_z_ç o concl) thm3;
+	in	asm_inst_term_rule[(rhs, v)] thm3
+	end
+	end	handle ex => reraise ex "z_selâs_ç_rule"
+);
+=TEX
+=SML
+fun €z_selât_ç_rule› (tm : TERM) : THM = (
+	let	val (lhs, rhs) = dest_z_ç tm;
+		val (tpl, cmp) = dest_z_selât lhs;
+	in	if is_z_tuple tpl
+		then	undisch_rule(snd(§_elim(LEFT_C z_selât_conv tm)))
+		else
+	let	val tyl = dest_z_tuple_type(type_of tpl);
+		val gvl = gen_vars (map mk_z_power_type tyl) (frees tm);		
+		val tplmem = mk_z_ç (tpl, mk_z_∏ gvl);
+		val thm1 = z_ç_∏_conv tplmem;
+		val thm2 = undisch_rule(fst(§_elim thm1));
+		fun aux_rule th = (
+			if (snd o dest_z_selât o fst o
+				dest_z_ç o fst o dest_± o concl) th = cmp
+			then	±_left_elim th
+			else	aux_rule (±_right_elim th)
+		) handle Fail _ => th;
+		val thm3 = aux_rule thm2;
+		val v = (snd o dest_z_ç o concl) thm3;
+	in	asm_inst_term_rule[(rhs, v)] thm3
+	end
+	end	handle ex => reraise ex "z_selâs_ç_rule"
+);
+=TEX
+=SML
+end (* of structure CNHOLTactics *);
+open CNZTactics;
+=TEX
+
+
+\section{COMPLIANCE NOTATION TACTICS}\label{CNT}
 \subsection{Preamble}
 =DOC
 structure €CNTactics› : CNTactics = struct
