@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.23 2003/04/30 12:05:34 rda Exp rda $
+# $Id: configure.sh,v 1.24 2003/08/01 16:24:24 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -31,7 +31,8 @@
 #
 # PPTARGETDIR      - as PPINSTALLDIR, overrides PPINSTALLDIR if set and non-empty.
 #
-# PPTARGETS        - a space separated list of packages to include
+# PPTARGETS        - a space separated list of packages to include or "all" for
+#                  everything in the src directory.
 #                   (default: whichever of pptex hol zed daz xpp are there).
 #
 # PPPOLYDBASE      - name of file containing the initial Poly/ML database
