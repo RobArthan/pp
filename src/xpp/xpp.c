@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.33 2004/02/19 18:41:40 rda Exp rda $
+ * $Id: xpp.c,v 2.34 2004/02/19 20:44:51 rda Exp $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -453,6 +453,10 @@ static char *get_command_line(int argc, char **argv, Boolean *use_default_comman
 			if(optind < argc && file_name == NULL) {
 				file_name = argv[optind];
 				optind += 1;
+				if(optind < argc) {
+	/* For Solaris and Free BSD there may be some more options to do */
+					option_ch = '?';
+				}
 			}
 		} else {
 			switch(option_ch) {
