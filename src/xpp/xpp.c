@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.18 2004/01/25 15:42:16 rda Exp rda $
+ * $Id: xpp.c,v 2.19 2004/01/25 15:52:10 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -447,9 +447,10 @@ static char *get_command_line(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
-	char *argv0 = argv[0];
 	char **retry_args;
 	int i;
+
+	argv0 = argv[0];
 	retry_args = (char **) XtMalloc((argc+2)*(sizeof(char*)));
 	retry_args[0] = argv0;
 	retry_args[1] = "-havefonts";
