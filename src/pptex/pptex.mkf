@@ -1,6 +1,6 @@
 ######################################################################
 #
-#	pptex.mkf $Header: /home/rda/bld/pptex/src/RCS/pptex.mkf,v 1.18 2001/12/13 16:04:01 rda Exp rda $
+#	pptex.mkf $Header: /home/rda/pptex/RCS/pptex.mkf,v 1.19 2001/12/16 15:39:16 rda Exp rda $
 #
 #	makefile for the PPTEX directory for ProofPower
 #
@@ -13,11 +13,21 @@
 default:
 	@echo "The following are some of the more useful make commands:"
 	@echo " "
+	@echo "make -f pptex.mkf inst        - builds and installs the pptex files"
+	@echo "make -f pptex.mkf srcrel      - makes the pptex source release"
 	@echo "make -f pptex.mkf src         - makes the pptex source files"
-	@echo "make -f pptex.mkf doc         - makes pptex documents"
+	@echo "make -f pptex.mkf doc         - makes the pptex documents"
 	@echo "make -f pptex.mkf bin         - makes binaries plus what is needed to use them"
 	@echo "make -f pptex.mkf test        - runs some tests"
 	@echo "make -f pptex.mkf packinglist - lists the pptex source file names"
+	@echo " "
+	@echo "Various environment variables influence the behaviour:"
+	@echo " "
+	@echo "    PPCOMPILER  - compiler to use (POLYML or SMLNJ)"
+	@echo "    PPTARGETDIR - target installation directory"
+	@echo "                  (creates a clean directory called release if not set)"
+	@echo "    PPVER       - product version"
+	@echo "                  (taken from file version if not set)"
 
 
 ######################################################################
@@ -27,9 +37,13 @@ default:
 ######################################################################
 
 PRODNAME=PPTex
-PRODUCT=$(PRODNAME)-$(PPVER)
+SHORTNAME=pptex
+VERSION=$(shell echo $${PPVER:-`cat version  2>/dev/null || echo XXX.YYY.ZZZ`})
+RELDIR=$(shell echo $${PPTARGETDIR:-release})
+PRODUCT=$(PRODNAME)-$(VERSION)
 CWD=$(shell pwd)
 OS=$(shell uname -s | dd conv=lcase 2>/dev/null)
+HAVERCS=$(shell (test -d RCS && echo y ) || echo n)
 # Distinctive tag for binary distribution file
 BINTAG=$(shell eval `.arch-n-opsys`; echo $$ARCH-$$OPSYS | dd conv=lcase 2>/dev/null)
 
@@ -42,7 +56,7 @@ endif
 # Makefiles
 PPTEXMKF = pptex.mkf
 
-# contents of the pptex release
+# contents of the pptex bin directory
 PPTEXBINRELEASE =  conv_ascii
 PPTEXBINRELEASE += conv_extended
 PPTEXBINRELEASE += docdvi
@@ -68,7 +82,7 @@ PPTEXTEXRELEASE += hyperbasics.sty
 
 PPTEXDOCRELEASE = usr001.dvi spc001.doc
 
-# packing list for the source release (target src).
+# packing list for the developer source release (target src).
 PACKINGLIST=
 PACKINGLIST+= A4.sty
 PACKINGLIST+= Lemma1.sty
@@ -91,6 +105,9 @@ PACKINGLIST+= usr001.doc
 PACKINGLIST+= usr001A.doc
 PACKINGLIST+= usr024.doc
 PACKINGLIST+= usr024_data.txt
+
+# packing list for user source release (they get the computed README file not the master)
+DISTPACKINGLIST=$(subst README.$(SHORTNAME).src,README.$(SHORTNAME), $(PACKINGLIST))
 
 ######################################################################
 #
@@ -167,74 +184,91 @@ test:	usr001.dvi int006.dvi int007.dvi
 #	Making the README file
 #
 ######################################################################
-
+ifeq ($(HAVERCS), y)
 README.pptex: README.pptex.src
-	sed -e '/$$PPVER/s/$$PPVER/'"$$PPVER/g" \
+	sed -e '/$$PPVER/s/$$PPVER/'"$(VERSION)/g" \
 			< README.pptex.src > README.pptex
+endif
 
 #####################################################################
 #
-#	Constructing release directories
+#	Constructing release or installation directories
 #
 ######################################################################
 
 reldir:
-	rm -rf release
-	mkdir release
+	if [ "$${PPTARGETDIR:-\"\"}" = "" ]; \
+	then \
+		rm -rf $(RELDIR); \
+	fi
+	-mkdir $(RELDIR)
 	
 
 bindir: reldir
-	mkdir release/bin
-	mkdir release/tex
+	-mkdir $(RELDIR)/bin
+	-mkdir $(RELDIR)/tex
 
 docdir: reldir
-	mkdir release/doc
+	-mkdir $(RELDIR)/doc
 
 srcdir : reldir
-	mkdir release/src
-	mkdir release/src/RCS
-	
+	-mkdir $(RELDIR)/src
+
 binrel	: bindir  $(PPTEXBINRELEASE) $(PPTEXTEXRELEASE)  README.pptex
-	cp $(PPTEXBINRELEASE) release/bin
-	cp $(PPTEXTEXRELEASE) release/tex
-	cp README.pptex release
-	chmod -R a-w release
-	chmod -R g-w release
-	chmod -R u+w release
+	cp $(PPTEXBINRELEASE) $(RELDIR)/bin
+	cp $(PPTEXTEXRELEASE) $(RELDIR)/tex
+	cp README.pptex $(RELDIR)
+	chmod -R a-w $(RELDIR)
+	chmod -R g-w $(RELDIR)
+	chmod -R u+w $(RELDIR)
 
 docrel	:  docdir 	$(PPTEXDOCRELEASE) 
-	cp $(PPTEXDOCRELEASE) release/doc
-	chmod -R a-w release
-	chmod -R g-w release
-	chmod -R u+w release
+	cp $(PPTEXDOCRELEASE) $(RELDIR)/doc
+	chmod -R a-w $(RELDIR)
+	chmod -R g-w $(RELDIR)
+	chmod -R u+w $(RELDIR)
+
+inst:	binrel docrel
 
 # useful target to print out the names of all the files in the source release
 packinglist:
 	@echo $(PACKINGLIST)
 
-srcrel:	srcdir
+rcsrel:	srcdir
+	-mkdir $(RELDIR)/src/RCS
 	@for f in $(PACKINGLIST); \
 	do \
-		cp RCS/$$f,v release/src/RCS/$$f,v; \
+		cp RCS/$$f,v $(RELDIR)/src/RCS/$$f,v; \
 	done
-	chmod -R a-w release
-	chmod -R g-w release
-	chmod -R u+w release
+	chmod -R a-w $(RELDIR)
+	chmod -R g-w $(RELDIR)
+	chmod -R u+w $(RELDIR)
 
 bin	: binrel
-	cd release && tar cvf $(CWD)/$(PRODUCT).bin.tar ./*
+	cd $(RELDIR) && tar cvf $(CWD)/$(PRODUCT).bin.tar ./*
 	cd $(CWD) && gzip $(PRODUCT).bin.tar && \
 	mv $(PRODUCT).bin.tar.gz $(PRODUCT).$(BINTAG).bin.tgz
 
 doc	: docrel
-	cd release && tar cvf $(CWD)/$(PRODUCT).doc.tar ./*
+	cd $(RELDIR) && tar cvf $(CWD)/$(PRODUCT).doc.tar ./*
 	cd $(CWD) && gzip $(PRODUCT).doc.tar && \
 	mv $(PRODUCT).doc.tar.gz $(PRODUCT).doc.tgz
 
-src	: srcrel
-	cd release && tar cvf $(CWD)/$(PRODUCT).src.tar ./*
+src	: rcsrel
+	cd $(RELDIR) && tar cvf $(CWD)/$(PRODUCT).src.tar ./*
 	cd $(CWD) && gzip $(PRODUCT).src.tar && \
 	mv $(PRODUCT).src.tar.gz $(PRODUCT).src.tgz
+
+srcrel: srcdir $(DISTPACKINGLIST)
+	echo $(DISTPACKINGLIST)
+	@for f in $(DISTPACKINGLIST); \
+	do \
+		cp $$f $(RELDIR)/src/$$f; \
+	done
+	echo $(VERSION) > $(RELDIR)/src/version
+	chmod -R a-w $(RELDIR)
+	chmod -R g-w $(RELDIR)
+	chmod -R u+w $(RELDIR)
 
 ######################################################################
 #

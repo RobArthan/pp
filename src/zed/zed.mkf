@@ -1,6 +1,6 @@
 ######################################################################
 #
-#	zed.mkf from %Z% $Date: 2002/10/16 15:45:23 $ $Revision: 1.27 $ $RCSfile: zed.mkf,v $
+#	zed.mkf from %Z% $Date: 2002/10/16 16:48:00 $ $Revision: 1.28 $ $RCSfile: zed.mkf,v $
 #
 #	makefile for the ZED database for ProofPower
 #
@@ -17,15 +17,25 @@
 COFLAGS=-kv
 
 # default make target.  displays a list of more useful targets
-PRODNAME=PPZed
+
 default:
 	@echo "The following are some of the more useful make commands:"
 	@echo " "
+	@echo "make -f hol.mkf inst           - builds and installs the hol files"
+	@echo "make -f hol.mkf srcrel         - makes the hol source release"
 	@echo "make -f zed.mkf src            - makes the Z source files"
 	@echo "make -f zed.mkf bin            - makes binaries plus what is needed to use them"
 	@echo "make -f zed.mkf doc            - makes Z documents "
 	@echo "make -f zed.mkf test           - runs the tests"
 	@echo "make -f zed.mkf packinglist    - list the Z source file names"
+	@echo " "
+	@echo "Various environment variables influence the behaviour:"
+	@echo " "
+	@echo "    PPCOMPILER  - compiler to use (POLYML or SMLNJ)"
+	@echo "    PPTARGETDIR - target installation directory"
+	@echo "                  (creates a clean directory called release if not set)"
+	@echo "    PPVER       - product version"
+	@echo "                  (taken from file version if not set)"
 
 ######################################################################
 #
@@ -33,9 +43,13 @@ default:
 #
 ######################################################################
 
+PRODNAME=PPZed
+SHORTNAME=zed
 PRODUCT=$(PRODNAME)-$(PPVER)
+VERSION=$(shell echo $${PPVER:-`cat version  2>/dev/null || echo XXX.YYY.ZZZ`})
+RELDIR=$(shell echo $${PPTARGETDIR:-release})
 CWD=$(shell pwd)
-RELEASE=$(shell echo $(PPVER) | sed -e /-/s/-//)
+HAVERCS=$(shell (test -d RCS && echo y ) || echo n)
 
 # Compiler specifics:
 ifeq ($(PPCOMPILER), POLYML)
@@ -354,6 +368,9 @@ PACKINGLIST+= usr030.doc
 PACKINGLIST+= wrk050.doc
 PACKINGLIST+= wrk051.doc
 PACKINGLIST+= zed.mkf
+
+# packing list for user source release (they get the computed README file not the master)
+DISTPACKINGLIST=$(subst README.$(SHORTNAME).src,README.$(SHORTNAME), $(PACKINGLIST))
 
 ######################################################################
 #
@@ -912,7 +929,7 @@ usr015.dvi: hol1.sty USR.sty $(USR015DOCS) usr024_data.tex fmu.bib
 	chmod a+x usr015.sh
 	sed -e 's/^/	/' -e '/^	=KE/s/	//' -e '/^	=CO/s/	//' \
 		<usr015a.doc | \
-		RELEASE=$(RELEASE) sieve -f usr015.svf tex | \
+		RELEASE=$(VERSION) sieve -f usr015.svf tex | \
 		sieve tex > usr015.KEL
 	texdvi usr015 > usr015.dvi.ldd1 </dev/null
 	- bibtex usr015
@@ -1110,9 +1127,11 @@ test: $(ZEDDBLDD) $(ZEDMDTTTDS)
 #
 ######################################################################
 
+ifeq ($(HAVERCS), y)
 README.zed: README.zed.src
 	sed -e '/$$PPVER/s/$$PPVER/'"$$PPVER/g" \
 			< README.zed.src > README.zed
+endif
 
 ######################################################################
 #
@@ -1121,63 +1140,78 @@ README.zed: README.zed.src
 ######################################################################
 
 reldir:
-	rm -rf release
-	mkdir release
+	if [ "$${PPTARGETDIR:-\"\"}" = "" ]; \
+	then \
+		rm -rf $(RELDIR); \
+	fi
+	-mkdir $(RELDIR)
 	
 bindir:	reldir
-	mkdir release/bin
+	-mkdir $(RELDIR)/bin
 
 docdir:	reldir
-	mkdir release/doc
+	-mkdir $(RELDIR)/doc
 
 srcdir:	reldir
-	mkdir release/src
-	mkdir release/src/RCS
+	-mkdir $(RELDIR)/src
 
 
 binrel: bindir zedbuilt.ldd $(SHELLSCRIPTS) README.zed
-	cp zed.$(HEAP_SUFFIX) release/bin
-	cp $(SHELLSCRIPTS) release/bin
-	cp README.zed release
-	chmod -R a-w release
-	chmod -R g-w release
-	chmod -R u+w release
+	cp zed.$(HEAP_SUFFIX) $(RELDIR)/bin
+	cp $(SHELLSCRIPTS) $(RELDIR)/bin
+	cp README.zed $(RELDIR)
+	chmod -R a-w $(RELDIR)
+	chmod -R g-w $(RELDIR)
+	chmod -R u+w $(RELDIR)
 
 docrel: docdir  $(RELEASEDOCFILES) $(RELEASESCRIPTS) README.zed
-	cp $(RELEASEDOCFILES) release/doc
-	cp $(RELEASESCRIPTS) release
-	cp README.zed release
-	chmod -R a-w release
-	chmod -R g-w release
-	chmod -R u+w release
+	cp $(RELEASEDOCFILES) $(RELDIR)/doc
+	cp $(RELEASESCRIPTS) $(RELDIR)
+	cp README.zed $(RELDIR)
+	chmod -R a-w $(RELDIR)
+	chmod -R g-w $(RELDIR)
+	chmod -R u+w $(RELDIR)
 
-# useful target to print out the names of all the files in the source release
+# useful target to print out the names of all the files in the source $(RELDIR)
 packinglist:
 	@echo $(PACKINGLIST)
 
-srcrel:	srcdir
+rcsrel:	srcdir
+	-mkdir $(RELDIR)/src/RCS
 	@for f in $(PACKINGLIST); \
 	do \
-		cp RCS/$$f,v release/src/RCS/$$f,v; \
+		cp RCS/$$f,v $(RELDIR)/src/RCS/$$f,v; \
 	done
-	chmod -R a-w release
-	chmod -R g-w release
-	chmod -R u+w release
+	chmod -R a-w $(RELDIR)
+	chmod -R g-w $(RELDIR)
+	chmod -R u+w $(RELDIR)
 
 bin:	binrel
-	cd release && tar cvf $(CWD)/$(PRODUCT).bin.tar ./*
+	cd $(RELDIR) && tar cvf $(CWD)/$(PRODUCT).bin.tar ./*
 	cd $(CWD) && gzip $(PRODUCT).bin.tar && \
 	mv $(PRODUCT).bin.tar.gz $(PRODUCT).$(BINTAG).bin.tgz
 
 doc:	docrel
-	cd release && tar cvf $(CWD)/$(PRODUCT).doc.tar ./*
+	cd $(RELDIR) && tar cvf $(CWD)/$(PRODUCT).doc.tar ./*
 	cd $(CWD) && gzip $(PRODUCT).doc.tar && \
 	mv $(PRODUCT).doc.tar.gz $(PRODUCT).doc.tgz
 
-src:	srcrel
-	cd release && tar cvf $(CWD)/$(PRODUCT).src.tar ./*
+inst:	binrel docrel
+
+src:	rcsrel
+	cd $(RELDIR) && tar cvf $(CWD)/$(PRODUCT).src.tar ./*
 	cd $(CWD) && gzip $(PRODUCT).src.tar && \
 	mv $(PRODUCT).src.tar.gz $(PRODUCT).src.tgz
+
+srcrel: srcdir $(DISTPACKINGLIST)
+	@for f in $(DISTPACKINGLIST); \
+	do \
+		cp $$f $(RELDIR)/src/$$f; \
+	done
+	echo $(VERSION) > $(RELDIR)/src/version
+	chmod -R a-w $(RELDIR)
+	chmod -R g-w $(RELDIR)
+	chmod -R u+w $(RELDIR)
 
 ######################################################################
 #
