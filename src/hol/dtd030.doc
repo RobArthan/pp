@@ -48,7 +48,8 @@ This allows tactics to be used in a backward proof mechanism.}
 \begin{description}
 \item [Issue 1.1]
 First version.
-
+\item [Issue 1.2]
+Major changes after RDA comments.
 \end{description}
 \subsection{Changes forecast}
 Most of the text outside the documentation boxes is a discussion
@@ -57,7 +58,7 @@ It will thus be removed or rephrased in later issues.
 \section{GENERAL}
 \subsection{Scope}
 This document contains a detailed design for the 
-derived rules of inference.
+subgoaling package.
 This is called for in section ??? of ???.
 The design is
 implemented in \cite{DS/FMU/IED/IMP030}.
@@ -77,9 +78,11 @@ not necessarily reflect the order of implementation in
 \subsubsection{Dependencies}
 Loading this document is dependent on those
 files indicated as preceding it in the ICL HOL release 001 makefile.
-
-The type abbreviations $TACTIC$, $GOAL$ and $PROOF$ are defined in \cite{DS/FMU/IED/DTD009}.
+In particular it depends on \cite{DS/FMU/IED/IMP009},
+in which
+the type abbreviations $TACTIC$, $GOAL$ and $PROOF$ are defined.
 \subsubsection{Deficiencies}
+\subsubsection{Possible Enhancements}
 The subgoal package as stated provides no direct link to 
 whatever conversion package becomes available.
 It may be that the interface already provided is sufficient to
@@ -93,9 +96,10 @@ package.
 If the help system was to maintain, for instance, a window
 offering tactic suggestions based on the current goal,
 then this, or some notification mechanism, would need to be embedded within the system.
-\subsubsection{Possible Enhancements}
 \newpage
 \section{TERMINOLOGY}
+Some of the following is originally covered in \cite{DS/FMU/IED/DTD009}.
+
 A {\em tactic} is a function which attempts to {\em achieve}, or progress the achievement of, a goal. 
 Here a {\em goal} is just a sequent (of type $SEQ$),
 and achievement would be providing a theorem which achieves the goal.
@@ -109,26 +113,38 @@ the {\em subgoals}), together with a {\em proof}, i.e. a function
 value which given theorems achieving the subgoals can compute a theorem
 matching the original goal. 
 
-A user starts the subgoal package by setting a {\em main goal}, 
-producing an initial {\em goal state}.
-If there is a pre-existing goal state, it will be pushed onto
-the {\em main goal stack}.
-The user may ``pop'' main goals from this stack to the limit of the stack.
+A {\em goal state} contains the state of a proof within the subgoal package, 
+in particular what goals are yet to be achieved,
+and a theorem embedding the inference work so far.
+A user invokes the subgoal package by setting a {\em main goal}:
+the sequent they wish to achieve by a theorem.
+This produces an initial {\em goal state}, that is 
+pushed onto 
+the {\em main goal stack}:
+the {\em current goal state} is always the top of the main goal stack.
+It is a finite stack, that will refuse
+user attempts to push more goal states onto it than it 
+can contain.
+The user may ``pop'' main goals from this stack either by achieving or abandoning (dropping) the current main goal.
 
-A goal state has a {\em current goal}, to which the
-user will {\em apply} tactics.
+A goal state has a {\em current goal}, 
+and the user will {\em apply} tactics to the current goal of the
+current goal state.
 If the tactic returns some subgoals then the ``first'' of these
 will become the new current goal, and if it produces a theorem
 that achieves the current goal
 (i.e. the list of subgoals is empty), then the {\em next goal}
 will become the current one
-(the next goal to a goal of a given label is defined in $set\_next\_goal$).
+(the next goal to a goal of a given label is defined in \ref{NextGoal}).
 The successful application of a tactic and of most other commands that affect the goal state will result in the
-current goal state being pushed onto the {\em undo stack},
-and a new goal state based on the tactics application becomes the current one.
-The user may then {\em undo} such commands by popping from the undo stack to the limit of the stack.
+current goal state being pushed onto the {\em undo buffer},
+and a new goal state based on the tactics application becomes the current one
+(replacing the top of the main goal stack).
+The user may then {\em undo} such commands by retriving past
+goal states from the undo buffer to the limit of the buffer.
+If the buffer fills then it will discard the oldest goal states to make room for new ones.
 
-Each goal within the current goal state will have one or more {\em labels},
+Each goal within a goal state will have one or more {\em labels},
 by which the goal may be referred to.
 The labels will be presented and input from the user as strings, consisting of natural numbers, separated by dots.
 The numbers indicate a subgoal of the goal indicated to the
@@ -142,77 +158,81 @@ If the main goal has been achieved then the goal state's {\em achieved theorem} 
 When discussing the internal handling of goals we need to refer to a {\em term form} of our ({\em sequent form}) goals.
 These two forms are semantically equivalent.
 The term form uses the constant $icl'TS$ as a place marker for the sequent's turnstile.
-\section{INFIX DIRECTIVES}
-A Standard ML $infix$ command must be given at the ``top level''.
-Thus we give the commands here for those functions declared in the following signatures.
-=SML
-=TEX
-(The priorities given are probably not appropriate)
-Temporary types:
-=SML
-type GOAL = (TERM list) * TERM;
-type TACTIC = GOAL -> (GOAL list * (THM list -> THM));
-=TEX
 \section{THE SUBGOAL PACKAGE}
 =DOC
 signature âSubgoalPackageá = sig
 =DESCRIBE
-This provides the subgoal package, that provides an interactive backward proof mechanism, based on the application of
+This provides the subgoal package, which provides an interactive backward proof mechanism, based on the application of
 tactics.
 =ENDDOC
 \subsection{Type of Goal State}
 =DOC
 type âGOAL_STATEá;
 =DESCRIBE
-This is an abstract data type that embodies the information of a goal state.
-It may only be manipulated and examined by the functions noted(or derived from those noted) in this document.
+This is an abstract data type that embodies a goal state,
+in particular it contain what goals are yet to be achieved
+and a theorem embedding the inference work so far.
+The subgoal package has a current goal state, a stack of
+goal states for different main goals, and a buffer of goal states to allow some operations to be undone.
 =SEEALSO
 $print\_goal\_state$
 =ENDDOC
 \subsection{Starting the Subgoal Package}
 =DOC
-val âset_goalá : GOAL -> unit;
+val âpush_goalá : GOAL -> unit;
 =DESCRIBE
-Sets the current main goal, pushing any previous goal state
+Sets a new current main goal, pushing it
 onto the main goal stack.
 The current (and only) goal will be the main goal, with label ``1''.
 The current subgoal will be displayed.
-
-It will warn the user before proceeding if there is a previous goal state, but no main goal stack
-(its size has been set to 0 by $set\_main\_goal\_stack\_lengths$, q.v.).
 =FAILURE
-30001	there is no main goal stack: current main goal will be lost
+30001	the main goal stack is full
 30002	the conclusion of the goal, ?0, is not of type BOOL
 30003	an assumption of the goal, ?0, is not of type BOOL
 30004	two assumption of the goal (?0 and ?1) are %alpha%-convertible
 =ENDDOC
 =DOC
-val âset_goal_state_thm_as_goalá : THM -> unit;
+val âpush_goal_state_thmá : THM -> unit;
 =DESCRIBE
 Given a theorem that is of the form of a goal state theorem
-(e.g. gained by $get\_goal\_state\_thm$, q.v.),
-set the main goal to be the conclusion of the input theorem
-(viewed as a term form goal), pushing any previous goal state
-onto the main goal stack.
+(e.g. gained by $top\_goal\_state\_thm$, q.v.),
+set a new current main goal to be the conclusion of the input theorem
+(viewed as a term form goal).
 The current goal will be the first assumption of the input theorem, viewed as a term form goal, with label ``1''.
 The other assumptions of the theorem will become subsequent goals with labels ``2'',``3'',...
-
-It will warn the user before proceeding if there is a previous goal state, but no main goal stack
-(its size has been set to 0 by $set\_main\_goal\_stack\_lengths$, q.v.).
+This new goal state is pushed onto the main goal stack.
 =USES
 For the advanced user, interested in partial proof.
 =FAILURE
-30001	there is no main goal stack: current main goal will be lost
+30001	the main goal stack is full
 30005	theorem cannot be viewed as a goal state theorem
 =ENDDOC
 \subsection{Applying Tactics}
+\label{NextGoal}
+In discussing the following we need the concept of the {\em next goal}.
+The next goal of a goal labelled ``label.n'' is:
+\begin{itemize}
+\item
+If there are yet-to-be-achieved goals labelled ``label.m$<...>$'', where $n\ <\ m$,
+then the goal of these labelled with the ``smallest'' suffix will be the next goal.
+\item
+Otherwise, if there are yet-to-be-achieved goals labelled ``label.m$<...>$'', where $m\ <\ n$,
+then the goal of these labelled with the ``smallest'' suffix will be the next goal.
+\item
+Otherwise the next goal to label ``label.n'' is recursively defined as the ``next'' goal to the label ``label''.
+\end{itemize}
+Thus is we have the labels ``1.2'',``1.3.1'',``1.3.2'',``2.2'',``3'', and ``4.1'' in a goal state,
+then the next label to ``1.3.1'' is ``1.3.2'',
+the next to ``1.3.2'' is ``1.3.1'',
+the next to ``2.2'' is ``3'',
+and the next to ``4.1'' is ``1.2'.
 =DOC
 val âapply_tacticá : TACTIC -> unit;
 val âaá : TACTIC -> unit;
 =DESCRIBE
-$apply\_tactic$ applies a tactic to the current subgoal,
+$apply\_tactic$ applies a tactic to the current goal,
 and $a$ is an alias for it.
-If successful, the previous goal state will be pushed onto the undo stack, and the new goal state, current goal, etc,
+If successful, the previous goal state will be put in the undo buffer, and the new goal state, current goal, etc,
 will be based on the tactic's application.
 If the tactic returns some subgoals then the ``first'' of these
 will become the new current goal.
@@ -224,39 +244,28 @@ that achieves the current goal
 will become the current one,
 (the next goal to a goal of a given label is defined in $set\_next\_goal$)
 and the previous goal's label will be noted as achieved.
-
-Applying a tactic can give rise to various informational messages:
-\begin{description}
-\item[tactic introduced the new assumption $<TERM>$]
-The tactic's proof introduced an assumption not already in the assumption list: it will be set as an additional goal.
-\item[the subgoal for the above assumption is a duplicate]
-This message will only ever immediately follow the above one.
-It indicates that a subgoal has already been set that is equivalent to the subgoal required for the assumption.
-In this case, the goal will only be attempted at the point where it was originally introduced.
-\item [tactic produced $<n>$ duplicated subgoal(s)$<labels>$]
-This indicates that some of the subgoals produced by the tactic duplicate others produced by the same tactic.
-Duplicates will not require separate proofs to their matches,
-though they will receive individual labels.
-\item [the following subgoal(s) replace(s) some previous goal(s) $<label>$]\ 
-
-The indicated subgoal has already been introduced by some previous tactic.
-The goal may be achieved either locally or at its original point of
-introduction, and the achievement will be reflected in both
-places.
-\item [tactic produced the following unnecessary subgoal(s): $<goals>$]
-Though the tactic requested that the stated subgoals should be achieved, in fact the tactic's proof did not use the resulting theorems.
-Thus the subgoals in question are not set to be achieved,
-nor are they given labels.
-\item [tactic did not change the goal state]
-Unless the tactic had some side effect other than operations on the subgoal state, then its application had no effect.
-\end{description}
 =FAILURE
 30007	there is no current goal
-30008	conclusion of the applied proof did not match current goal
+30008	result of tactic did not match current goal
+30029	tactic introduced the new assumption ?0 not already in
+	the assumption list: the resulting additional goal is:
+30030	tactic introduced the new assumption ?0, but the 
+	resulting goal is duplicated elsewhere, so not added
+30031	tactic produced ?0 duplicate subgoals of the following
+	subgoal, labelled : ?2
+30032	the following subgoal duplicates some previous goal?0 labelled ?1:
+30033	tactic requested the following unnecessary (and unadded) subgoal?0:  ?1
+30034	tactic did not change the goal state
+30035	current goal achieved, next goal is:
+30036	current and main goal achieved
+30037	tactic produced ?0 subgoals:
+=FAILUREC
+Messages 30029 to 30037 are for the users information, and are
+not failures.
 =ENDDOC
 \subsection{The Results of the Package}
 =DOC
-val âget_top_thmá : unit -> THM;
+val âpop_thmá : unit -> THM;
 =DESCRIBE
 If available, this returns the top achieved theorem
 (i.e. the theorem whose sequent is the main goal),
@@ -265,16 +274,16 @@ restoring its current goal and labelling.
 If there is no top achieved theorem the function fails, having no effect.
 
 If the user wishes to examine the top achieved theorem, without
-popping the main goal stack they should use $get\_goal\_state\_thm$ and $simplify\_goal\_state\_thm$ (q.v.).
+popping the main goal stack they should use $top\_goal\_state\_thm$ and $simplify\_goal\_state\_thm$ (q.v.).
 =SEEALSO
-$save\_top\_thm$
+$save\_pop\_thm$
 =FAILURE
 30010	there is no current goal state
 30011	there is no top achieved theorem
-30024	modify_goal_state_theorem has been used on current main goal
+30024	modify_goal_state_thm has been used on current main goal
 =ENDDOC
 =DOC
-val âsave_top_thmá : string -> THM;
+val âsave_pop_thmá : string -> THM;
 =DESCRIBE
 If available, this returns the top achieved theorem
 (i.e. the theorem whose sequent is the main goal)
@@ -286,34 +295,37 @@ If there is no top achieved theorem, or the key is already used in the current t
 30010	there is no current goal state
 30011	there is no top achieved theorem
 30023	the key ?0 is already used in theory ?1
-30024	modify_goal_state_theorem has been used on current main goal
+30024	modify_goal_state_thm has been used on current main goal
 =ENDDOC
 =DOC
-val âget_goal_state_thmá : unit -> THM;
+val âtop_goal_state_thmá : unit -> THM;
 =DESCRIBE
 This returns the goal state theorem of the current goal state.
 It is a partial proof of the main goal, though in a somewhat unwieldy form,
 as it encodes the main goal, and its other goals in a term form.
 It may be simplified by using $simplify\_goal\_state\_thm$(q.v).
-The theorem is suitable for setting a new main goal, by using $set\_goal\_state\_thm\_as\_goal$(q.v).
+The theorem is suitable for setting a new main goal, by using $push\_goal\_state\_thm\_as\_goal$(q.v).
 =USES
 For the advanced user, interested in partial proofs.
 =FAILURE
 30010	there is no current goal state
-30024	modify_goal_state_theorem has been used on current main goal
+30024	modify_goal_state_thm has been used on current main goal
+30038	goal state has achieved its theorem
+=FAILUREC
+Message 30038 is for the users information, and is not a failure.
 =ENDDOC
 =DOC
 val âsimplify_goal_state_thmá : THM -> THM;
 =DESCRIBE
 This will simplify a goal state theorem
-(e.g from $get\_goal\_state\_thm$, q.v.), stripping off assumptions from the conclusion of the theorem up to the turnstile place marker, then removing the place marker itself in both conclusion and assumptions.
+(e.g from $top\_goal\_state\_thm$, q.v.), stripping off assumptions from the conclusion of the theorem up to the turnstile place marker, then removing the place marker itself in both conclusion and assumptions.
 =USES
 For the advanced user, interested in partial proofs.
 =FAILURE
 30005	theorem cannot be viewed as a goal state theorem
 =ENDDOC
 =DOC
-val âabandon_main_goalá : unit -> unit;
+val âdrop_main_goalá : unit -> unit;
 =DESCRIBE
 Pop the previous goal state (if any) from the main goal stack,
 throwing away any work on the current main goal.
@@ -324,37 +336,26 @@ throwing away any work on the current main goal.
 =DOC
 val âundoá : int -> unit;
 =DESCRIBE
-$undo$ $n$ will pop $n$ entries, if there are sufficient,
-from the undo stack, setting the top of the resulting stack as the 
-current goal state.
+$undo$ $n$ will take the $n$th entry from the undo buffer, if there are sufficient,
+as the current goal state.
 $undo$ $0$ has no effect.
-Attempting to pop past the end of the stack will cause a failure, rather than a partial undoing.
-A single $undo$ can itself be undone by $redo$(q.v)
+Attempting to go past the end of the buffer will cause a failure, rather than a partial undoing.
+A single $undo$ can itself be undone by $redo$(q.v),
+but otherwise entries on the undo buffer between its start and the $n$th entry will be discarded.
 =FAILURE
 30010	there is no current goal state
-30012	attempted to undo ?0 times when there are only ?1 entries in the undo stack
+30012	attempted to undo ?0 times when there are only ?1 entries in the undo buffer
 30013	cannot undo a negative number of times
 =ENDDOC
 =DOC
 val âredoá : unit -> unit;
 =DESCRIBE
 If the last command to affect the goal state was an $undo$(q.v)
-then this command with undo its effect
-(including leaving the undo stack in its previous form,
+then this command will undo its effect
+(including leaving the undo buffer in its previous form,
 without mention of the $undo$ or $redo$).
 =FAILURE
 30014	the last command to affect the goal state was not an undo
-=ENDDOC
-=DOC
-val âget_nth_undoá : int -> GOAL_STATE;
-=DESCRIBE
-$get\_nth\_undo$ $n$ returns the goal state that would become the current goal state if $undo$ $n$ was executed.
-$get\_nth\_undo$ $0$ is equivalent to $get\_goal\_state$(q.v).
-=USES
-In combination with $set\_goal\_state$(q.v).
-=FAILURE
-30028	attempted to access ?0 'th undo stack entry when there are only ?1 entries
-30015	cannot access a negative undo stack entry
 =ENDDOC
 \subsection{Navigation}
 =DOC
@@ -366,66 +367,35 @@ and then display it.
 =FAILURE
 30016	?0 is not of the form "n1.n2....nm"
 30017	label ?0 has no corresponding goal
-30018	the goal of label ?0 is superseded by its subgoals ?1
-30019	the goal of label ?0 has been achieved
-=ENDDOC
-=DOC
-val âset_next_goalá : unit -> unit;
-=DESCRIBE
-If it exists, this function will set the ``next'' goal as the current subgoal,
-and display it.
-If there are no other goals then the function fails.
-The ``next'' goal of a goal labelled ``label.n'' is:
-\begin{itemize}
-\item
-If there are yet-to-be-achieved goals labelled ``label.m<...>'', where $n\ <\ m$,
-then the goal of these labelled with the ``smallest'' suffix will be the next goal.
-\item
-Otherwise, if there are yet-to-be-achieved goals labelled ``label.m<...>'', where $m\ <\ n$,
-then the goal of these labelled with the ``smallest'' suffix will be the next goal.
-\item
-Otherwise the next goal to label ``label.n'' is recursively defined as the ``next'' goal to the label ``label''.
-\end{itemize}
-=FAILURE
-30020	there is no next goal to be achieved
-=ENDDOC
-=DOC
-val âset_previous_goalá : unit -> unit;
-=DESCRIBE
-If it exists, this function will set the ``previous'' goal as the current subgoal,
-and display it.
-If there are no other goals then the function fails.
-The previous subgoal is that goal that would have the current goal as ``next'' (see $set\_next\_goal$).
-=FAILURE
-30021	there is no previous goal to be achieved
+30018	the goal labelled ?0 has been reduced to its subgoals ?1
+30019	the goal labelled ?0 has been achieved
 =ENDDOC
 \subsection{Changing Goal States}
 =DOC
-val âget_goal_stateá : unit -> GOAL_STATE;
+val âtop_goal_stateá : unit -> GOAL_STATE;
 =DESCRIBE
 This provides the current goal state as a value.
 =SEEALSO
-$set\_goal\_state$
+$push\_goal\_state$
 =FAILURE
 30010	there is no current goal state
 =ENDDOC
 =DOC
-val âset_goal_stateá : GOAL_STATE -> unit;
+val âpush_goal_stateá : GOAL_STATE -> unit;
 =DESCRIBE
-If the value given is well-formed, then this function pushes the current goal state onto the main goal stack,
+If the value given is ``well-formed'', then this function pushes the current goal state onto the main goal stack,
 and sets the given value as the current goal state.
-
-It will warn the user before proceeding if there is a previous goal state, but no main goal stack
-(its size has been set to 0 by $set\_main\_goal\_stack\_lengths$, q.v.).
+The most likely reason that a goal state value is ill-formed
+is that it is not being pushed in the same context as it was formed, e.g. it was formed in a theory that is now out of scope.
 =SEEALSO
-$get\_goal\_state$, $get\_nth\_undo$.
+$top\_goal\_state$
 =FAILURE
-30001	there is no main goal stack: current main goal will be lost
+30001	the main goal stack is full
 30022	goal state is ill-formed
 =ENDDOC
 \subsection{Modifying the Goal State Theorem}
 =DOC
-val âmodify_goal_state_theoremá : (THM -> THM) -> unit;
+val âmodify_goal_state_thmá : (THM -> THM) -> unit;
 =DESCRIBE
 A rather drastic hook into the subgoal package that works as follows:
 \begin{enumerate}
@@ -434,17 +404,18 @@ Extract the goal state theorem
 \item
 Apply a user-supplied inference rule to the theorem.
 \item
-Set the resulting theorem as if by $set\_goal\_state\_thm$,
+Set the resulting theorem as if by $push\_goal\_state\_thm$,
 Thus the goals will be relabelled as all being
 ``top level'' ones.
 \item
 Keep the old undo list, so this hook's effect can be undone.
+This step could not be mimicked by other functions available to the user.
 \end{enumerate}
 
 This will issue a warning on its use, and on attempting to extract 
 an achieved, or goal state, theorem from a goal state that
 is derived from the modified one,
-as it may alter the original main goal, so that the result of an apparently successful $get\_top\_thm$ might not be
+as it may alter the original main goal, so that the result of an apparently successful $pop\_thm$ might not be
 an achievement of the original main goal.
 =USES
 Two example uses of it are:
@@ -465,41 +436,40 @@ into a single  term form goal.
 This is intended for system builders wishing to write extensions to the
 subgoal package.
 =FAILURE
-30024	modify_goal_state_theorem has been used on current main goal
+30024	modify_goal_state_thm has been used on current main goal
 =ENDDOC
 \subsection{Information Requests}
 =DOC
-val âget_main_goalá : unit -> GOAL;
+val âtop_main_goalá : unit -> GOAL;
 =DESCRIBE
-Return the current main goal, that is the objective of the
-current invocation of the subgoal package.
+Return the current main goal: the objective of the current proof attempt.
 =FAILURE
 30025	there is no current main goal
 =ENDDOC
 =DOC
-val âget_current_goalá : unit -> GOAL;
+val âtop_current_goalá : unit -> GOAL;
 =DESCRIBE
 Returns the current goal: the goal to which a tactic will be applied.
 =FAILURE
 30026	there is no current goal
 =ENDDOC
 =DOC
-val âget_current_labelá : unit -> string;
+val âtop_current_labelá : unit -> string;
 =DESCRIBE
 Returns the label of the current goal: the goal to which a tactic will be applied.
 =FAILURE
 30026	there is no current goal
 =ENDDOC
 =DOC
-val âget_labelled_goalá : string -> GOAL;
+val âtop_labelled_goalá : string -> GOAL;
 =DESCRIBE
 Returns the goal with the given label, should it exist in the current goal state.
 Note that superseded and achieved goals are not available from the goal state.
 =FAILURE
 30016	?0 is not of the form "n1.n2....nm"
 30017	label ?0 has no corresponding goal
-30018	the goal of label ?0 is superseded by its subgoals ?1
-30019	the goal of label ?0 has been achieved
+30018	the goal labelled ?0 has been reduced to its subgoals ?1
+30019	the goal labelled ?0 has been achieved
 =ENDDOC
 =DOC
 val âget_asmá : int -> TERM;
@@ -510,46 +480,41 @@ $get\_asm$ $n$ returns the $n$th assumption of the current goal.
 30027	there is no ?0 th assumption in the current goal
 =ENDDOC
 =DOC
-val âget_goal_labelsá : unit -> string list;
+val âtop_goalsá : unit -> (string list * GOAL)list;
 =DESCRIBE
-Returns all the labels of goals yet to be achieved in the current goal state.
-Remember that one goal may have more than one label in the same goal state.
-=FAILURE
-30010	there is no current goal state
-=ENDDOC
-=DOC
-val âget_goalsá : unit -> (string list * GOAL)list;
-=DESCRIBE
-Returns all the goals yet to be achieved , and their associated labels, in the current goal state.
+Returns all the goals yet to be achieved, and their associated labels, in the current goal state.
+=USES
+To determine what goals are left to achieve.
 =FAILURE
 30010	there is no current goal state
 =ENDDOC
 =DOC
 val âprint_goal_stateá : GOAL_STATE -> unit;
 =DESCRIBE
-Give a presentable display of the given goal state.
+Print out user-orientated details of the given goal state.
 =FAILURE
 =ENDDOC
-\subsection{Parameterising the subgoal Package}
+\subsection{Parameterising the Subgoal Package}
 =DOC
-val âset_main_goal_stack_lengthá : int -> int;
+(* âmain_goal_stack_lengthá : int *)
 =DESCRIBE
-This sets the maximum number of entries that can be held on
-the main goal stack: i.e. how many $set\_goal$ calls may be stacked before information is lost.
-It returns the previous value of the setting.
-If it is set to zero (or less) then $set\_goal$ et al will
-issue a warning message if there is already a current goal state:
-this is because $set\_goal$ will irrevocably throw away all the
-incomplete proof work to date.
-It is initially set at 2.
+This is a system control, handled by $set\_int\_control$, etc,
+which sets the maximum number of entries that can be held on
+the main goal stack: i.e. how many $push\_goal$ calls may be stacked before failure.
+This value includes counting the current goal state, that is
+at the top of the stack.
+It is initially set at 4.
+The control can neither be set to less than 1, nor to less than the current
+number of entries currently on the stack.
 =ENDDOC
 =DOC
-val âset_undo_stack_lengthá : int -> int;
+(* âundo_buffer_lengthá : int *)
 =DESCRIBE
-This sets the maximum number of entries that can be held on
-the undo stack: i.e. how many tactic applications, etc, may be undone
-It is initially set to 12.
-=FAILURE
+This is a system control, handled by $set\_int\_control$, etc,
+which sets the maximum number of entries that can be held on
+the undo buffer: i.e. how many tactic applications, etc, may be undone
+It is initially set to 12,
+and cannot be made negative.
 =ENDDOC
 
 \section{END OF THE SIGNATURE}
@@ -557,7 +522,7 @@ It is initially set to 12.
 end; (* signature of SubgoalPackage *)
 =TEX
 \section{TEST POLICY}
-The functions in this document should be tested as described in
+The functions in this document should be tested according to the criteria given in
 \cite{DS/FMU/IED/PLN008}.
 =TEX
 \twocolumn[\section{INDEX}]
