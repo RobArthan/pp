@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.18 2002/08/13 07:35:50 rda Exp $
+ * $Id: pterm.c,v 2.19 2002/10/17 17:09:34 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -191,7 +191,7 @@ void get_pty(void)
 /* and do the termio set-up in the child process */
 	child_pid = 0; 
 	if ((control_fd = open("/dev/ptmx", O_RDWR)) < 0) {
-		msg("system error", "no pseudo-terminal devices available (1)");
+		msg("system error", "no pseudo-terminal devices available");
 		perror("xpp");
 		exit(1);
 	};
@@ -199,7 +199,7 @@ void get_pty(void)
 	||	unlockpt(control_fd) < 0
 	||	(slavename = ptsname(control_fd)) == NULL
 	||	(slave_fd = open(slavename, O_RDWR)) < 0 ) {
-		msg("system error", "cannot access pseudo-terminal slave device (2)");
+		msg("system error", "cannot access pseudo-terminal slave device");
 		perror("xpp");
 		exit(2);
 	};
@@ -226,16 +226,17 @@ void get_pty(void)
 	}
 
 	if( control_fd < 0) {
-		msg("system error", "no pseudo-terminal devices available (1)");
+		msg("system error", "no pseudo-terminal devices available");
 		perror("xpp");
 		exit(1);
 	}
 
 	if(ioctl(slave_fd, TCGETS, &tio) < 0 ) {
-		msg("system error", "ioctl on slave fd failed (11)");
+		msg("system error", "ioctl (TCGETS in parent) on slave fd failed");
 		perror("xpp");
 		exit(11);
 	}
+
 	tio.c_lflag |= ISIG;
 	tio.c_lflag |= ICANON;
 	tio.c_lflag &= ~ECHO;
@@ -247,8 +248,9 @@ void get_pty(void)
 	tio.c_oflag &= ~XTABS;
 	tio.c_oflag |= OCRNL;
 	tio.c_cc[VINTR] = CINTR;
+
 	if(ioctl(slave_fd, TCSETS, &tio) < 0 ) {
-		msg("system error", "ioctl on slave fd failed (12)");
+		msg("system error", "ioctl (TCSETS in parent) on slave fd failed");
 		perror("xpp");
 		exit(12);
 	}
@@ -271,7 +273,7 @@ void get_pty(void)
  */
 	child_pid = fork();
 
-	if (child_pid < 0) { /* Cannot do */
+	if (child_pid < 0) { /* Cannot fork */
 		msg("system error", "fork failed");
 		perror("xpp");
 		exit(5);
@@ -280,18 +282,22 @@ void get_pty(void)
  /* Parent */
  /******************************************************************/
 		close(slave_fd);
+
 		if(fcntl(control_fd, F_SETFL, O_NDELAY) < 0) {
 			msg("system error", "fcntl on application would not permit non-blocking i/o");
 			perror("xpp");
 			exit(7);
 		};
+
 		if(ioctl(control_fd, FIONBIO, &one) < 0) {
 			msg("system error", "ioctl on control fd failed");
 			perror("xpp");
 			exit(8);
 		};
+
 		listening_state(LISTEN);
-		write(control_fd, "\n", 1);	/* Tell child to exec */
+
+		(void) write(control_fd, "\n", 1); /* Tell child to exec */
 
 	} else { 
  /******************************************************************/
@@ -300,30 +306,36 @@ void get_pty(void)
 		char	buf;
 		char **arglist;
 		int tty_fd;
+
 		default_sigs();
 		close(control_fd);
 		dup2(slave_fd, STDIN);
 		dup2(slave_fd, STDOUT);
 		dup2(slave_fd, STDERR);
+
+		read(STDIN, &buf, 1);	/* Wait until told */
+
 		if (slave_fd > 2) {
 			close(slave_fd);
 		};
+
+		if(setsid() < 0) {
+			msg("system error", "setsid failed");
+			perror("xpp");
+			exit(9);
+		};
+
 		if((tty_fd = open("/dev/tty", O_RDWR)) >= 0){
 		    ioctl(tty_fd, TIOCNOTTY, 0);
 		    close(tty_fd);
 		}
-		if(setsid() < 0) {
-			msg("system error", " setsid failed");
-			perror("xpp");
-			exit(9);
-		};
-		read(STDIN, &buf, 1);		/* Wait until told */
+
 #ifndef LINUX
 		if(	ioctl(STDIN, I_PUSH, "ptem") < 0
 		||	ioctl(STDIN, I_PUSH, "ldterm") < 0 
 		||	ioctl(STDIN, I_PUSH, "ttcompat") < 0
 		||	ioctl(STDIN, TCGETS, &tio) < 0 ) {
-			msg("system error", "ioctl on slave fd failed");
+			msg("system error", "ioctl (TCGETS in child) on slave fd failed");
 			perror("xpp");
 			exit(10);
 		};
@@ -339,7 +351,7 @@ void get_pty(void)
 		tio.c_oflag |= OCRNL;
 		tio.c_cc[VINTR] = CINTR;
 		if(ioctl(STDIN, TCSETS, &tio) < 0 ) {
-			msg("system error", "ioctl on slave fd failed");
+			msg("system error", "ioctl (TCSETS in child) on slave fd failed");
 			perror("xpp");
 			exit(11);
 		}
