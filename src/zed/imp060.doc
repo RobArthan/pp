@@ -279,6 +279,15 @@ val €undersc› : string list =
 fun €is_undersc› c = contains undersc c;
 =TEX
 =SML
+val €invalid_symbol› : string list =
+=TEX
+=SMLLITERAL
+	["â", "Ë", "õ"];
+=TEX
+=SML
+fun €is_invalid_symbol› c = contains invalid_symbol c;
+=TEX
+=SML
 val €superscriptor› : string list =
 =TEX
 =SMLLITERAL
@@ -288,13 +297,8 @@ val €superscriptor› : string list =
 fun €is_superscriptor› c = contains superscriptor c;
 =TEX
 =SML
-val €subscriptor› : string list =
-=TEX
-=SMLLITERAL
-	["â"];
-=TEX
 =SML
-fun €is_subscriptor› c = contains subscriptor c;
+fun €is_subscriptor› c = (c = "â");
 =TEX
 =SML
 val €punctuation› : string list =
@@ -326,6 +330,16 @@ val €greek_dict› = mk_lex_dict initial_e_dict greek;
 fun €is_greek› c = (e_lookup c greek_dict = Value true);
 =TEX
 =SML
+fun €is_space› c = c <= " ";
+=TEX
+=SML
+ fun €skip_space› (st as (cs as (c :: more), tk) : LEX_STATE) : LEX_STATE = (
+	if is_space c
+	then skip_space (more, tk)
+	else st
+) | skip_space (st as ([], _)) = st;
+=TEX
+=SML
 val €symbol› : string list =
 	["Á", "Í", "¿", "°", "ﬁ", "•", "Ä", "†", "ö",
 	"é", "®", "©", "·", "Å", "Ú", "í", "Ù", "∫",
@@ -340,20 +354,12 @@ val €symbol_dict› = mk_lex_dict initial_e_dict symbol;
 fun €is_symbol› c = (e_lookup c symbol_dict = Value true);
 =SML
 fun €is_symbol› c =
+	not (is_space c) andalso
 	not (is_alnum c) andalso
-	not (is_decor c) andalso
 	not (is_punctuation c) andalso
+	not (is_decor c) andalso
+	not (is_invalid_symbol c) andalso
 	not (is_greek c);
-=TEX
-=SML
-fun €is_space› c = c <= " ";
-=TEX
-=SML
- fun €skip_space› (st as (cs as (c :: more), tk) : LEX_STATE) : LEX_STATE = (
-	if is_space c
-	then skip_space (more, tk)
-	else st
-) | skip_space (st as ([], _)) = st;
 =TEX
 =SML
 fun €is_macro› (c : string) = c = "%%";
@@ -504,16 +510,6 @@ fun €rec_subscriptor› (st : LEX_STATE) : LEX_STATE = (
 	else raise Unrecognised
 );
 =TEX
-\subsection{Recognition of the Subscript Character}
-=SML
-fun €rec_subscr› (st : LEX_STATE) : LEX_STATE = (
-	if next is_superscriptor st
-	then fail "Z Lexical Analyser" 60007 []
-	else case st of
-		([], _) => raise Unrecognised
-		|st => collect st
-);
-=TEX
 \subsection{Recognition of Underscore}
 =SML
 fun €rec_undersc› (st : LEX_STATE) : LEX_STATE = (
@@ -611,24 +607,46 @@ in
 		else raise Unrecognised
 end);
 =TEX
+\subsection{Recognition of a Subscripted Character}
+=SML
+=TEX
 The following recognises a character in subscript mode.
 =SML
 fun €rec_subscript› (st : LEX_STATE) : LEX_STATE = (
-let	val (st1, flag1) = (rec_subscriptor st, true)
+let	fun aux st = (
+		if next is_superscriptor st
+		then fail "Z Lexical Analyser" 60007 []
+		else case st of
+			([], _) => raise Unrecognised
+			|st => collect st
+	);
+	val (st1, flag1) = (rec_subscriptor st, true)
 		handle Unrecognised => (st, false);
+
 in
-	if flag1 then rec_subscr st1
+	if flag1 then aux st1
 	else raise Unrecognised
 end);
 =TEX
 The following recognises a (possibly empty) sequence of
-subscripts.
+subscripted characters.
 =SML
 fun €rec_subscripteseq› (st : LEX_STATE) : LEX_STATE = (
 let	val (st1, flag1) = (rec_subscript st, true)
 			handle Unrecognised => (st, false);
 in
 	if flag1 then rec_subscripteseq st1
+	else st1
+end);
+=TEX
+The following recognises a (possibly empty) sequence of
+symbols (excluding the subscript symbol).
+=SML
+fun €rec_symboleseq› (st : LEX_STATE) : LEX_STATE = (
+let	val (st1, flag1) = (rec_symbol st, true)
+		handle Unrecognised => (st, false);
+in
+	if flag1 then rec_symboleseq st1
 	else st1
 end);
 =TEX
@@ -659,9 +677,10 @@ end);
 fun €rec_symbol_id› (st : LEX_STATE) : LEX_STATE = (
 let	val (st1, flag1) = (rec_symbol st, true)
 			handle Unrecognised => (st, false);
-	val st2 = rec_subscripteseq st1;
+	val st2 = rec_symboleseq st1;
+	val st3 = rec_subscripteseq st2;
 in
-	if flag1  then st2
+	if flag1 then st3
 	else raise Unrecognised
 end);
 =TEX
