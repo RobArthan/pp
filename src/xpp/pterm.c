@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.10 2001/07/27 09:40:51 rda Exp rda $
+ * $Id: pterm.c,v 2.11 2001/07/27 14:16:20 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -745,7 +745,7 @@ void handle_sigs()
 	sigemptyset(&acts.sa_mask);
 	acts.sa_flags = 0;
 	sigaction(SIGINT, &acts, 0);
-	sigid = XtAppAddSignal(&app, sigint_callback, (XtPointer) SIGINT);
+	sigid = XtAppAddSignal(app, sigint_callback, (XtPointer) SIGINT);
 	acts.sa_handler = sigother_handler;
 	sigaction(SIGSEGV, &acts, 0);
 	sigaction(SIGBUS, &acts, 0);
