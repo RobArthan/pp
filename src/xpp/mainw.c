@@ -71,13 +71,18 @@ struct undo_details {
 	char *oldtext;
 } undo_buffer = {False, True, 0, 0, NULL};
 
+static Boolean undoing;
+
+static NAT undo_redo_index;
+
+static Boolean changed = False;
+
 /* Messages for various purposes */
 
 static char *undo_redo[2] = {"Undo", "Redo"};
 
-static NAT undo_redo_index;
-
-static Boolean undoing;
+static char* changed_message =
+"The contents of the script editor have changed. Do you want to throw away the changes?";
 
 static char* help_message =
 "\
@@ -103,7 +108,7 @@ static char *send_error_message =
 
 static char *no_file_message =
 	/* This message just displayed instead of the file name */
-"* NO FILE NAME SELECTED *";
+"* NO FILE NAME *";
 
 XtAppContext app; /* global because needed in msg.c */
 
@@ -204,6 +209,48 @@ Boolean ignored;
 	check_text_window_limit(journal,  journal_max);
 
 
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * show_new_file_name: update the file name displayed in
+ * the script editor namestring label.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void show_new_file_name(char *fname)
+{
+	if(fname) { /* not NULL; i.e. not the time-out call */ 
+		XmTextFieldSetString(namestring, fname);
+		XmTextFieldShowPosition(namestring, strlen(fname));
+		XmTextFieldSetHighlight(namestring,
+			0,
+			XmTextFieldGetLastPosition(namestring),
+			XmHIGHLIGHT_SELECTED);
+		XtAppAddTimeOut(app,
+			500,
+			(XtTimerCallbackProc)show_new_file_name,
+			NULL);
+	} else { 
+		XmTextFieldSetHighlight(namestring,
+			0,
+			XmTextFieldGetLastPosition(namestring),
+			XmHIGHLIGHT_NORMAL);
+	}
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * reinit_changed: unset changed flag and do other re-initialisations
+ * when a file is saved, loaded or whatever
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void reinit_changed()
+{
+	changed = False;
+	undo_buffer.can_undo = False;
+	undo_buffer.moved_away = True;
+	undo_buffer.first = 0;
+	undo_buffer.last = 0;
+	if(undo_buffer.oldtext != NULL) {
+		XtFree(undo_buffer.oldtext);
+		undo_buffer.oldtext = NULL;
+	}
+	set_menu_item_sensitivity(editmenu, 4, False);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -492,6 +539,7 @@ XmAnyCallbackStruct *cbs;
 			break;
 		} else {
 			save_file(script, fname);
+			reinit_changed();
 		}
 		break;
 	case FILE_MENU_SAVE_AS:
@@ -500,24 +548,38 @@ XmAnyCallbackStruct *cbs;
 /* No file name: just do nothing for now */
 			break;
 		} else if(save_file_as(script, fname)) {
-			XmTextFieldSetString(namestring, fname);
-			XmTextFieldShowPosition(namestring, strlen(fname));
+			show_new_file_name(fname);
+			reinit_changed();
 		};
 		if(fname != NULL) {XtFree(fname);};
 		break;
 	case FILE_MENU_OPEN:
-		fname = file_dialog(frame, "Open");
-		if(open_file(script, fname)) {
-			XmTextFieldSetString(namestring, fname);
-			XmTextFieldShowPosition(namestring, strlen(fname));
-		};
-		if(fname != NULL) {XtFree(fname);};
+		if(!changed || yes_no_dialog(root, changed_message)) {
+			fname = file_dialog(frame, "Open");
+			if(!fname || !*fname || *fname == '*') {
+/* No file name: just do nothing for now */
+			} else if(open_file(script, fname)) {
+				show_new_file_name(fname);
+				reinit_changed();
+			};
+			if(fname != NULL) {XtFree(fname);};
+		}
 		break;
 	case FILE_MENU_INCLUDE:
 		fname = file_dialog(frame, "Include");
+		if(!fname || !*fname || *fname == '*') {
+/* No file name: just do nothing for now */
+			break;
+		};
+		include_file(script, fname);
+		if(fname != NULL) {XtFree(fname);};
 		break;
 	case FILE_MENU_NEW:
-		fname = file_dialog(frame, "New");
+		if(!changed || yes_no_dialog(root, changed_message)) {
+			XmTextFieldSetString(namestring, no_file_message);
+			XmTextSetString(script, "");
+			reinit_changed();
+		}
 		break;
 	case FILE_MENU_QUIT:
 		close_down_cb(root, NULL, NULL);
@@ -690,6 +752,9 @@ XmTextVerifyCallbackStruct *cbs;
 	Boolean restart = undo_buffer.moved_away;
 	NAT len;
 	char *cut_chars;
+fprintf(stderr, "script_modify_cb\n"); fflush(stderr);
+	changed = True;
+
 /* XmGetSelection doesn't seem to work as one might like in a 
  * callback like this. However XmTextGetSubstring is just the job
  */
@@ -1010,7 +1075,8 @@ Widget w;
 /* If there's still something in the queue ask to be called again: */
 
 	if(q_length) {
-		XtAppAddTimeOut(app, 25, try_drain_queue, w);
+		XtAppAddTimeOut(app, 25,
+			(XtTimerCallbackProc)try_drain_queue, w);
 	};
 }
 
