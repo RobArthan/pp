@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.230 $ $RCSfile: imp507.doc,v $ $Date: 2002/11/15 12:09:21 $
+% imp507.doc %Z% $Revision: 1.231 $ $RCSfile: imp507.doc,v $ $Date: 2002/11/15 16:26:02 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.230 $%
+\def\SCCSversion{$Revision: 1.231 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/11/15 12:09:21 $%
+\TPPdate{\FormatDate{$Date: 2002/11/15 16:26:02 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -183,6 +183,7 @@ being renamed is defined in the same package specification.
 \item[Issues 1.226--1.228] Uniform treatment of block statements.
 \item[Issue 1.229] Fixed wrong sequencing in {\it do\_refinement\_rhs}.
 \item[Issue 1.230] Fixing problem with subtypes of record types with discriminants.
+\item[Issues 1.230, 1.231] Script deletion.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1474,10 +1475,12 @@ We also require initial values for the SPARK program and replacement environment
 val Ûrepl_env0Ý : REPL_ENV = initial_s_dict;
 val Ûspark_prog0Ý : SPARK_PROG = [];
 =TEX
-For uniformity, we give the initial value for the theory name component of the global state here.
-We use the string ``-'' which by convention in {\Product} means the current theory.
+For uniformity, we give the initial value for the theory name and deletion
+information components of the global state here.
+We use the string ``-'' for the script name which by convention in {\Product} means the current theory.
 =SML
 val Ûscript_name0Ý : string = "-";
+val Ûdeletion_info0Ý : SUBUNIT_ENV = [];
 =TEX
 =SML
 val Ûinit_z_generator_stateÝ : Z_GENERATOR_STATE = (
@@ -1488,7 +1491,8 @@ val Ûinit_z_generator_stateÝ : Z_GENERATOR_STATE = (
 		blocks = env0,
 		repl_env = repl_env0,
 		spark_prog = spark_prog0,
-		script_name = ""}
+		script_name = script_name0,
+		deletion_info = deletion_info0}
 );
 =TEX
 \subsection{$flatten\_env$}
@@ -1637,6 +1641,7 @@ val ÛblocksÝ : ENV ref = ref env0;
 val Ûrepl_envÝ : REPL_ENV ref = ref repl_env0;
 val Ûspark_progÝ : SPARK_PROG ref = ref spark_prog0;
 val Ûscript_nameÝ : string ref = ref script_name0;
+val Ûdeletion_infoÝ : SUBUNIT_ENV ref = ref deletion_info0;
 =TEX
 The global state may be set from a given value of type $CN\_STATE$ using the following function:
 =SML
@@ -1648,7 +1653,8 @@ fun Ûset_z_generator_stateÝ ({
 		blocks = new_blocks,
 		repl_env = new_repl_env,
 		spark_prog = new_spark_prog,
-		script_name = new_script_name
+		script_name = new_script_name,
+		deletion_info = new_deletion_info
 	} : Z_GENERATOR_STATE) : unit = (
 		pack_env := new_pack_env;
 		subunit_env := new_subunit_env;
@@ -1657,7 +1663,8 @@ fun Ûset_z_generator_stateÝ ({
 		blocks := new_blocks;
 		repl_env := new_repl_env;
 		spark_prog := new_spark_prog;
-		script_name := new_script_name
+		script_name := new_script_name;
+		deletion_info := new_deletion_info
 );
 =TEX
 =SML
@@ -1669,14 +1676,15 @@ fun Ûget_z_generator_stateÝ (() : unit) : Z_GENERATOR_STATE = (
 		blocks = !blocks,
 		repl_env = !repl_env,
 		spark_prog = !spark_prog,
-		script_name = !script_name}
+		script_name = !script_name,
+		deletion_info = !deletion_info}
 );
 =TEX
-In addition to the above, we keep a database mapping script names to tjhe corresponding
-states:
+In addition to the above, we keep a database mapping script names to the corresponding
+states.
 =SML
 val Ûstate_dbÝ : Z_GENERATOR_STATE E_DICT ref = 
-	ref (e_enter "" init_z_generator_state initial_e_dict);
+	ref initial_e_dict;
 =TEX
 =SML
 fun Ûsave_z_generator_stateÝ (() : unit) : unit = (
@@ -1748,6 +1756,7 @@ val Ûcn_compilation_unit_ud_keyÝ = "CN'compilation_unit";
 val Ûcn_body_name_ud_keyÝ = "CN'body_name";
 val Ûcn_vc_context_and_origin_keyÝ = "CN'vc_context_origin";
 val Ûcn_stub_script_name_keyÝ = "CN'cn_stub_script_name";
+val Ûcn_continuation_script_keyÝ = "CN'cn_continuation_script_key";
 =TEX
 
 The following functions to open out theory user data
@@ -1781,7 +1790,7 @@ end;
 =TEX
 The following sets a user data flag to indicate that the theory
 was created by the compliance notation tool (e.g. by $new\_script$,
-or perhaps as a stub theory).
+or perhaps as a stub or other supporting theory).
 =SML
 fun Ûset_cn_createdÝ () : unit = (
 	set_user_datum (cn_created_ud_key, UD_String("CN created",[]))
@@ -1789,8 +1798,8 @@ fun Ûset_cn_createdÝ () : unit = (
 =TEX
 And the following checks for the flag:
 =SML
-fun Ûget_cn_createdÝ () : bool = (
-	(get_user_datum "-" cn_created_ud_key; true) 
+fun Ûget_cn_createdÝ (thy : string) : bool = (
+	(get_user_datum thy cn_created_ud_key; true) 
 	handle (Fail _) => false
 );
 =TEX
@@ -1822,7 +1831,7 @@ The name is stored for the purposes of this check and to use
 in the error message.
 =SML
 fun Ûset_cuÝ (cu_name: string) : unit = (
-let	val dummy = if (get_cn_created())
+let	val dummy = if (get_cn_created "-")
 			then ()
 			else fail "check17" 507056 [fn () => cu_name,
 				fn () => get_current_theory_name()];	
@@ -1854,6 +1863,17 @@ fun Ûset_duplicate_keysÝ (cu_name: string, stub_script_name) : unit = (
 fun Ûget_stub_script_nameÝ (thy: string) : string OPT = (
 	Value(fst(dest_ud_string(get_user_datum thy cn_stub_script_name_key)))
 	handle Fail _ => Nil
+);
+=TEX
+=SML
+fun Ûset_continuation_flagÝ (flag : bool) : unit = (
+	set_user_datum(cn_continuation_script_key, UD_Int (if flag then 1 else 0, []))
+);
+=TEX
+=SML
+fun Ûget_continuation_flagÝ (thy: string) : bool = (
+	fst(dest_ud_int(get_user_datum thy cn_continuation_script_key)) = 1
+	handle Fail _ => false
 );
 =TEX
 he following should be used when a package body is encountered.
@@ -4189,7 +4209,8 @@ fun Ûsubunit_form_infÝ (ident : ID, is_inf : bool) : unit = (
 			val block' = block_in_scope(block, in_scope');
 		in	blocks := block' :: tl (!blocks);
 			if	is_inf
-			then	subunit_env := s_delete tbn_id (!subunit_env)
+			then	(subunit_env := s_delete tbn_id (!subunit_env);
+				deletion_info := s_enter tbn_id subunit1 (!deletion_info))
 			else	()
 		end
 	else	()
@@ -4721,6 +4742,7 @@ fun Ûform_proc_subunitÝ (form_proc: FORMAL_PROC) : unit = (
 			handle Fail _ => fail "form_proc_subunit" 507011
 					[fn()=>block_name2, fn()=>block_name1];
 	in	subunit_env := s_delete tbn1_bn2 (!subunit_env);
+		deletion_info := s_enter tbn1_bn2 subunit3 (!deletion_info);
 		if	#specif_flag subunit3
 		then	
 	let
@@ -5161,6 +5183,7 @@ fun Ûform_fun_subunitÝ (form_fun: FORMAL_FUN) : unit = (
 	in	store_trans_formal_fun current_cn_env form_fun;
 		add_spark_function_info (#globals form_fun) (#informal_fun form_fun);
 		subunit_env := s_delete tbn1_bn2 (!subunit_env);
+		deletion_info := s_enter tbn1_bn2 subunit3 (!deletion_info);
 		if	#specif_flag subunit3
 		then	
 	let
@@ -8402,6 +8425,9 @@ if an exception is raised. The current approach is to save.
 	);
 (*
 =TEX
+The following initialisation function is called to set up the state when a new script is introduced.
+This reflects the rules for initialising the environments stated informally at the end of
+each section of chapter 3 of the specification.
 =SML
 *)
 	fun Ûinit_cn_z_generatorÝ 
@@ -8417,7 +8443,8 @@ if an exception is raised. The current approach is to save.
 					blocks = env0,
 					repl_env = repl_env,
 					spark_prog = spark_prog,
-					script_name = script_name}
+					script_name = script_name,
+					deletion_info = deletion_info0}
 			end
 		else	{	pack_env = !pack_env,
 				subunit_env = !subunit_env,
@@ -8426,7 +8453,8 @@ if an exception is raised. The current approach is to save.
 				blocks = env0,
 				repl_env = repl_env0,
 				spark_prog = spark_prog0,
-				script_name = script_name});
+				script_name = script_name,
+				deletion_info = deletion_info0});
 		save_z_generator_state();
 		reset_cn_parser_state()
 	);
@@ -8448,6 +8476,7 @@ expected to see in the following.
 			open_theory "cn";
 			new_theory_aux [] name;
 			set_cn_created();
+			set_continuation_flag continue;
 			CaseIndependence.reset_names ();
 			init_cn_z_generator continue name
 		) handle ex => (
@@ -8477,6 +8506,7 @@ expected to see in the following.
 			open_theory "cn";
 			new_theory_aux [] name;
 			set_cn_created();
+			set_continuation_flag continue;
 			CaseIndependence.reset_names ();
 			init_cn_z_generator continue name;
 			(map (fn t => new_parent_aux false t
@@ -8558,6 +8588,7 @@ fun Ûcomp_unit_of_scriptÝ (script : string) : COMPILATION_UNIT  OPT= (
 fun ÛundotÝ (name : string) : string list = (
 	let	fun aux acc [] = rev(map (implode o rev) acc)
 		|   aux acc ("." :: more) = aux ([]::acc) more
+		|   aux acc ("o" :: more) = aux ([]::acc) more
 		|   aux [] (ch :: more) = aux [[ch]] more
 		|   aux (x::xs) (ch::more) = aux ((ch::x) :: xs) more;
 	in	aux [] (explode name)
@@ -8571,7 +8602,9 @@ fun Ûsubunits_and_packages_to_deleteÝ (cu : COMPILATION_UNIT) : ID list * ID lis
 	let	val cu_name = compilation_unit_name false cu;
 		val name_elems = undot cu_name;
 		val n_elems = length name_elems;
-		val all_packs = map fst (!pack_env);
+		fun is_pack name = (
+			(force_value (s_lookup name (!pack_env)); true) handle Fail _ => false
+		);
 		fun do_sus accs [] = accs
 		|   do_sus (accs as (sus, packs)) ((key, _)::more)  = (
 			let	val key_elems = undot key;
@@ -8579,47 +8612,149 @@ fun Ûsubunits_and_packages_to_deleteÝ (cu : COMPILATION_UNIT) : ID list * ID lis
 					if	key_elems to (n_elems - 1) = name_elems
 					then	(
 						key :: sus,
-						let	val pack = 
-							implode (key_elems from n_elems);
-						in	if	pack mem all_packs
-							then	pack::packs
+						case (key_elems from n_elems) of
+							[n] => (
+							if	is_pack n
+							then	n::packs
 							else	packs
-						end
+						) | _ => packs
 						)
 					else	accs;
 			in	do_sus accs' more
 			end
 		);
-	in	if	cu_name mem all_packs
-		then	do_sus ([], [cu_name]) (!subunit_env)
-		else	do_sus ([], []) (!subunit_env)
+	in	case cu of
+			CUPackageDeclaration _ => do_sus ([], [cu_name]) (!subunit_env)
+		|	_ =>  do_sus ([], []) (!subunit_env)
+	end
+);
+=TEX
+GIven a compiliation unit containing a package declaration, the following function finds the name of the
+script if any containing the corresponding package body.  For convenience where this is used
+the return value is a list of length 0 or 1.
+=SML
+fun Ûpackage_body_scriptÝ (cu : COMPILATION_UNIT) : ID list = (
+	let	fun aux pack_name [] = []
+		|     aux pack_name ((key, _) ::more) = (
+			case comp_unit_of_script key of
+				Value (cu' as (CUProperBody _) ) => (
+					if	compilation_unit_name false cu' = pack_name
+					then	[key]
+					else	aux pack_name more
+			) |	_ => aux pack_name more
+		);
+	in	case cu of
+			CUPackageDeclaration _ => aux (compilation_unit_name false cu)
+						(e_flatten (!state_db))
+		|	_ =>  []
+	end
+);
+=TEX
+The following works out what needs to be deleted when a script is deleted. The quadruple returned
+comprises the theory names, subunit environment keys and package environments keys that
+need to be deleted.
+=SML
+fun Ûdelete_script_auxÝ (script : string) : string list * string list * string list = (
+	let	val cn_thys = get_descendants "cn" less "cn" drop (not o get_cn_created);
+		fun get_continuation_script_parents scr = (
+			if	get_continuation_flag scr
+			then	let	fun aux p = (
+						case get_stub_script_name p of
+							Value ss => [ss, p]
+						|	_ => []
+					);
+				in	flat (map aux (get_parents scr))
+				end
+			else	[]
+		);
+		fun get_extras scr = (
+		let	val subunit_thys = cn_thys drop (fn s => get_stub_script_name s <>  Value scr);
+			val continue_thys = get_continuation_script_parents scr;
+			val ((sus, packs), pack_body_scripts) =
+				case comp_unit_of_script scr of
+					Value cu =>  (subunits_and_packages_to_delete cu,
+							package_body_script cu)
+				|	_ => (([], []), []);
+			val pack_thy_names = map (fn p =>  p ^ "spec") packs
+					drop (fn n => not (n mem cn_thys));
+			val desc_thys = get_descendants scr less scr;
+		in	(pack_thy_names cup pack_body_scripts cup 
+				continue_thys cup subunit_thys cup desc_thys,
+			(sus, packs))
+		end);
+		fun closure ts ss ps scrs = (
+			let	val tsps = map get_extras scrs;
+				val thys = flat (map fst tsps) diff ts;
+				val sus = flat (map (fst o snd) tsps);
+				val packs = flat(map (snd o snd) tsps);
+			in	case thys of
+					[] => (ts,sus cup ss, packs cup ps)
+				|	_ => closure (thys @ ts) (sus cup ss) (packs cup ps) thys
+			end
+		);
+	in	closure [script] [] [] [script]
+	end	handle ex as (Fail _)  => reraise ex "delete_script"
+);
+=TEX
+Caller of the following function must ensure that the current theory is not one of the
+ones to be deleted.
+=SML
+fun Ûdelete_theoriesÝ (thys : string list) : unit= (
+	let	fun check thy = (
+			(case get_theory_status thy of
+				TSNormal => (
+					map check (get_descendants thy less thy); ()
+			) |	_ => (
+				fail "delete_script" 507090 [fn _ => thy]
+			)) handle Fail _ => ()
+		);
+		fun delete thy = (
+			map delete (get_descendants thy less thy) handle Fail _ => [];
+			(delete_theory thy handle Fail _ => ())
+		);
+	in	map check thys;
+		map delete thys; ()
 	end
 );
 =TEX
 =SML
-fun Ûdelete_scriptÝ (script : string) : unit = (
-	let	val scripts = get_descendants "cn" less "cn";
-		fun get_extras scr = (
-		let	val subunit_thys = scripts drop (fn s => get_stub_script_name s <>  Value scr);
-			val (sus, packs) =
-				case comp_unit_of_script scr of
-					Value cu =>  subunits_and_packages_to_delete cu
-				|	_ => ([], []);
-			val pack_thy_names = map (fn p =>  p ^ "spec") packs
-					drop (fn n => not (n mem scripts));
-		in	(pack_thy_names @subunit_thys, (sus, packs))
-		end);
-		fun closure ts ss ps scrs = (
-			let	val tsps = map get_extras scrs;
-				val thys = flat (map fst tsps);
-				val sus = flat (map (fst o snd) tsps);
-				val packs = flat(map (snd o snd) tsps);
-			in	case thys of
-					[] => (ts,sus @ ss, packs @ ps)
-				|	_ => closure (thys @ ss) (sus @ ss) (packs @ ps) thys
-			end
+fun Ûdelete_scriptÝ (scr : string) : unit = (
+	let	val (thys, sus, packs) = delete_script_aux scr;
+		fun restore_subunit_entry (k, x) = (
+			subunit_env := s_enter k x (!subunit_env)
 		);
-	in	() (* TBS *)
+		fun restore_subunit_env [] = ()
+		|    restore_subunit_env (thy::more) = (
+			(case e_lookup thy (!state_db) of
+				Value {deletion_info, ...} =>  (
+					map restore_subunit_entry deletion_info; ()
+			) |	Nil => ());
+			restore_subunit_env more
+		);
+		fun fmt_strs [] = "\n" ^ "(none)"  ^ "\n"
+		|   fmt_strs ss = "\n" ^ format_list Combinators.I ss ", " ^ "\n";
+		val scrs = Sort.sort Sort.string_order (thys drop
+			(fn t => case e_lookup t (!state_db) of Value _ => false | _ => true));
+		val other_thys = Sort.sort Sort.string_order (thys diff scrs);
+		val sus = Sort.sort Sort.string_order sus;
+		val packs = Sort.sort Sort.string_order packs;
+	in	set_z_generator_state
+		{	pack_env =  !pack_env drop (fn (k, _) => k mem packs),
+			subunit_env = !subunit_env drop (fn (k, _) => k mem sus),
+			dec_env = dec_env0,
+			spec_env = spec_env0,
+			blocks = env0,
+			repl_env = repl_env0,
+			spark_prog = spark_prog0,
+			script_name = !script_name,
+			deletion_info = !deletion_info};
+		restore_subunit_env thys;
+		state_db := list_e_merge initial_e_dict
+			(e_flatten (!state_db) drop (fn (k, _) => k mem scrs));
+		open_theory "cn";
+		delete_theories thys;
+		comment "delete_script" 507091 [fn _ => scr];
+		diag_line (get_error_message 507092 (map fmt_strs [scrs, other_thys, sus, packs]))
 	end
 );
 =TEX
