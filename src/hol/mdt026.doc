@@ -31,14 +31,14 @@ the abstract data type $THM$.}
 \bf Copyright \copyright\ : International Computers Ltd \number\year
 \end{centering}
 \pagebreak
-\section{Document control}
-\subsection{Contents list}
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
 \tableofcontents
-\subsection{Document cross references}
+\subsection{Document Cross References}
 \bibliographystyle{fmu}
 \bibliography{fmu}
 
-\subsection{Changes history} 
+\subsection{Changes History} 
 \begin{description}
 \item [Issue 1.1]
 First version.
@@ -46,8 +46,10 @@ First version.
 Reacted to issue 1.3 of \cite{DS/FMU/IED/DTD026}.
 \item [Issue 1.3]
 Changed $TRAVERSE$ to $MAP$.
+\item [Issue 1.4]
+Re-implementation to follow ideas of \cite{DS/FMU/IED/DTD051}.
 \end{description}
-\subsection{Changes forecast}
+\subsection{Changes Forecast}
 \section{GENERAL}
 \subsection{Scope}
 This document contains the module testing of the Rewriting Rules of Inference, required by ???.
@@ -76,10 +78,20 @@ usefile "dtd013.sml";
 usefile "imp013.sml";
 init_mt_results();
 =TEX
-Initialising the rewriting parameters:
+Initialising the rewriting context:
 =SML
-set_rewrite_canons [];
-set_basic_rewrites [];
+val just_beta_net = make_net 
+	[(»( x Ž y) z¼,simple_%beta%_conv)];
+
+val {rw_canon = initial_rw_canon, 
+	rw_net = initial_rw_net,
+	sa_conv = sa_conv,
+	sg_conv = sg_conv} = einitial_rewrite_proof_context;
+val empty_rw_proof_context = {rw_canon = id_canon, 
+	rw_net = just_beta_net,
+	sa_conv = sa_conv,
+	sg_conv = sg_conv};
+val _ = push_proof_context empty_rw_proof_context;
 =TEX
 
 \section{VALUE BINDINGS}
@@ -157,9 +169,62 @@ val thm48r = €_right_elim (€_right_elim thm48);
 val thm48r = €_right_elim (€_right_elim thm48);
 val thm49 = asm_rule»Œp¼;
 val thm49a = tac_proof(([»Œp¼], »p‚F¼), all_undisch_tac THEN taut_tac);
+val thm50c = »ƒ p q r Ž p € q € r¼;
+val thm50 = simple_ƒ_elim »p:BOOL¼ (asm_rule »ƒ p q r Ž p € q € r¼);
+
+=TEX
+A simple canonicalisation:
+=SML
+val simple_canon = REWRITE_CAN (REPEAT_CAN €_rewrite_canon);
+=TEX
+Some proof contexts (all of them will have $simple\_\beta\_conv$ in their rewriting nets):
+=SML
+fun thms_to_net canon thms = (
+	make_net 
+	((»( x Ž y)z¼, simple_%beta%_conv) ::
+	(flat(map (cthm_for_eqn_cxt canon) thms)))
+);
+
+val rw_proof_context1: EPROOF_CONTEXT = {rw_canon = id_canon, 
+	rw_net = thms_to_net id_canon [Œ_t_thm, 
+	f_first_thm,
+	(‚_t_intro f_thm), 
+	all_ƒ_intro(‚_t_intro (refl_conv »x:'a¼))
+	],
+	sa_conv = sa_conv,
+	sg_conv = sg_conv};
+
+val rw_proof_context2: EPROOF_CONTEXT = {rw_canon = simple_canon, 
+	rw_net = thms_to_net (simple_canon) [Œ_t_thm, 
+	f_first_thm,
+	(‚_t_intro f_thm), 
+	all_ƒ_intro(‚_t_intro (refl_conv »x:'a¼))
+	],
+	sa_conv = sa_conv,
+	sg_conv = sg_conv};
+
+val rw_proof_context3: EPROOF_CONTEXT = {rw_canon = id_canon, 
+	rw_net = thms_to_net id_canon [Œ_t_thm, 
+	all_ƒ_intro(‚_t_intro (refl_conv »x:'a¼))
+	],
+	sa_conv = sa_conv,
+	sg_conv = sg_conv};
+
+val rw_proof_context4: EPROOF_CONTEXT = {rw_canon = simple_canon, 
+	rw_net = thms_to_net (simple_canon)  [Œ_t_thm, 
+	all_ƒ_intro(‚_t_intro (refl_conv »x:'a¼))
+	],
+	sa_conv = sa_conv,
+	sg_conv = sg_conv};
+
+val rw_proof_context5: EPROOF_CONTEXT = {rw_canon = simple_canon, 
+	rw_net = just_beta_net,
+	sa_conv = sa_conv,
+	sg_conv = sg_conv};
+
 =TEX
 \section{THE TESTS}
-We will test the assorted dervied rewrite functions,
+We will test the assorted derived rewrite functions,
 and these will serve as the primary test of $prim\_rewrite\_conv$.
 \subsection{Testing the Conversions}
 First check that having no effect causes a failure:
@@ -236,11 +301,7 @@ store_mt_results mt_run_fail [
 =TEX
 \subsection{Setting the basic rewrites}
 =SML	
-set_basic_rewrites[Œ_t_thm, 
-	f_first_thm,
-	(‚_t_intro f_thm), 
-	all_ƒ_intro(‚_t_intro (refl_conv »x:'a¼))
-	];
+val _ = push_proof_context rw_proof_context1;
 =TEX
 =SML
 store_mt_results mt_run[
@@ -308,7 +369,7 @@ store_mt_results mt_run[
 =TEX
 \subsection{Setting the Canonicalisation}
 =SML
-set_rewrite_canons [("fred", €_rewrite_canon)];
+val _ = push_proof_context rw_proof_context2;
 =TEX
 =SML
 store_mt_results mt_run[
@@ -377,11 +438,7 @@ store_mt_results mt_run[
 \subsection{Rewriting with theorems}
 Get parameters right:
 =SML
-set_rewrite_canons [];
-set_basic_rewrites[Œ_t_thm, 
-	all_ƒ_intro(‚_t_intro (refl_conv »x:'a¼))
-	];
-
+val _ = push_proof_context rw_proof_context3;
 =TEX
 =SML
 store_mt_results mt_run[
@@ -475,7 +532,7 @@ store_mt_results mt_run[
 \subsection{Rewriting with theorems}
 Get parameters right:
 =SML
-set_rewrite_canons[("jim", €_rewrite_canon)];
+val _ = push_proof_context rw_proof_context4;
 =TEX
 =SML
 store_mt_results mt_run[
@@ -567,9 +624,9 @@ store_mt_results mt_run[
 \subsection{Distinguishing $pure\_$ and $pure\_once\_$}
 The above tests don't manage to distinguish the behaviour
 of all the functions.
-The folowing ad-hoc test completes the separation of behaviour.
+The following ad-hoc test completes the separation of behaviour.
 =SML
-set_basic_rewrites [];
+val _ = push_proof_context rw_proof_context5;
 =TEX
 =SML
 store_mt_results mt_run[
@@ -663,63 +720,75 @@ store_mt_results mt_run[
 store_mt_results mt_run [
 	("prim_rewrite_rule 1",
 	dest_thm o (prim_rewrite_rule 
-		[(»( x Ž f) y¼,simple_%beta%_conv)]
-		(id_canon)
-		[]
+		(just_beta_net)
+		id_canon
 		TOP_MAP_C
+		[(»( x Ž f) y¼,simple_%beta%_conv)]
 		[]),
 	sample_thm,
 	([sample],»((Œ T) € q) € q¼)),
 	("prim_rewrite_rule 2",
 	dest_thm o (prim_rewrite_rule 
-		[(»( x Ž f) y¼,simple_%beta%_conv)]
-		(id_canon)
-		[]
+		(just_beta_net)
+		id_canon
 		ONCE_MAP_C
+		[(»( x Ž f) y¼,simple_%beta%_conv)]
 		[]),
 	sample_thm,
 	([sample],»( x y Ž (( x Ž Œ x) x € y) € ( p Ž p) q) T q¼)),
 	("prim_rewrite_rule 3",
 	dest_thm o (prim_rewrite_rule 
-		[(»( x Ž f) y¼,simple_%beta%_conv)]
-		(id_canon)
+		(thms_to_net 
+		id_canon
 		[Œ_t_thm, 
 		 f_first_thm,
 		 (‚_t_intro f_thm), 
-		 all_ƒ_intro(‚_t_intro (refl_conv »x:'a¼))]
+		 all_ƒ_intro(‚_t_intro (refl_conv »x:'a¼))])
+		id_canon
 		TOP_MAP_C
+		[]
 		[]),
 	sample2_thm,
 	([sample2],res1)),
 	("prim_rewrite_rule 4",
 	dest_thm o (prim_rewrite_rule 
-		[(»( x Ž f) y¼,simple_%beta%_conv)]
+		(thms_to_net 
 		(€_rewrite_canon ORELSE_CAN id_canon)
 		[Œ_t_thm, 
 		 f_first_thm,
 		 (‚_t_intro f_thm), 
-		 all_ƒ_intro(‚_t_intro (refl_conv »x:'a¼))]
+		 all_ƒ_intro(‚_t_intro (refl_conv »x:'a¼))])
+		(€_rewrite_canon ORELSE_CAN id_canon)
 		TOP_MAP_C
+		[]
 		[]),
 	sample2_thm,
 	([sample2],res4)),
 	("prim_rewrite_rule 5",
 	dest_thm o (prim_rewrite_rule 
-		[(»( x Ž f) y¼,simple_%beta%_conv)]
-		(id_canon)
+		(thms_to_net 
+		id_canon
 		[Œ_t_thm, 
-		 all_ƒ_intro(‚_t_intro (refl_conv »x:'a¼))]
+		 f_first_thm,
+		 (‚_t_intro f_thm), 
+		 all_ƒ_intro(‚_t_intro (refl_conv »x:'a¼))])
+		id_canon
 		TOP_MAP_C
+		[]
 		[f_first_thm, (‚_t_intro f_thm)]),
 	sample2_thm,
 	([sample2],res1)),
 	("prim_rewrite_rule 6",
 	dest_thm o (prim_rewrite_rule 
-		[(»( x Ž f) y¼,simple_%beta%_conv)]
+		(thms_to_net 
 		(€_rewrite_canon ORELSE_CAN id_canon)
 		[Œ_t_thm, 
-		 all_ƒ_intro(‚_t_intro (refl_conv »x:'a¼))]
+		 f_first_thm,
+		 (‚_t_intro f_thm), 
+		 all_ƒ_intro(‚_t_intro (refl_conv »x:'a¼))])
+		(€_rewrite_canon ORELSE_CAN id_canon)
 		TOP_MAP_C
+		[]
 		[f_first_thm, (‚_t_intro f_thm)]),
 	sample2_thm,
 	([sample2],res4))
@@ -742,6 +811,21 @@ mt_run [
 	map dest_thm o (€_rewrite_canon ORELSE_CAN ‚_t_rewrite_canon),
 	thm41,	[dest_thm thm41p, dest_thm thm41q])
 ];
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("THEN_LIST_CAN",
+	map dest_thm o (€_rewrite_canon THEN_LIST_CAN [‚_t_rewrite_canon, id_canon]),
+	thm41,	[dest_thm thm41pT, dest_thm thm41q])];
+
+store_mt_results
+mt_run_fail [
+	("THEN_LIST_CAN 26204",
+	(€_rewrite_canon THEN_LIST_CAN [‚_t_rewrite_canon]),
+	thm41,
+	gen_fail_msg "THEN_LIST_CAN" 26204 [])];
+
 =TEX
 =SML
 store_mt_results
@@ -802,9 +886,223 @@ mt_run_fail [
 	thm46,	gen_fail_msg "fred" 26202 [])
 ];
 =TEX
+=SML
+store_mt_results
+mt_run [
+	("REWRITE_CAN",
+	map dest_thm o REWRITE_CAN  ((REPEAT_CAN(FIRST_CAN [
+		simple_ƒ_rewrite_canon,
+		€_rewrite_canon]))),
+	thm50,
+	[([thm50c],»p:BOOL¼),([thm50c],»ƒ q Ž q¼),([thm50c],»ƒ r Ž r¼)])];
+=TEX
+\section{TACTICS}
+We are pretty cursory in the following, doing little more than just demonstrating
+their presence and error message origin.
+=SML
+val _ = push_proof_context einitial_rewrite_proof_context;
+set_flag("subgoal_package_quiet",true);
+fun tac_res tac goal = (push_goal([],goal);
+		a tac;
+		let val (asms,gl) = top_goal()
+		in
+			(drop_main_goal();
+			gl)
+		end);
+fun tac_res1 tac asms goal = (
+		push_goal(asms,goal);
+		a tac;
+		let val (asms,gl) = top_goal()
+		in
+			(drop_main_goal();
+			gl)
+		end);
+val s_thm = asm_rule »s = Œ T¼;
+=TEX
+=SML
+store_mt_results
+mt_run [
+	("rewrite_tac",
+	tac_res (rewrite_tac[]),
+	»T € ( x Ž x) p¼,
+	»p:BOOL¼),
+	("pure_rewrite_tac",
+	tac_res(pure_rewrite_tac[s_thm]),
+	»s € T¼,
+	»Œ T € T¼),
+	("once_rewrite_tac",
+	tac_res(once_rewrite_tac[]),
+	»T € (T € p)¼,
+	»(T € p)¼),
+	("pure_once_rewrite_tac",
+	tac_res(pure_once_rewrite_tac[€_thm]),
+	»t1 € t2¼,
+	»ƒ bŽ (t1 Š t2 Š b) Š b¼),
+	("rewrite_thm_tac",
+	tac_res(rewrite_thm_tac s_thm),
+	»p € f (T € s)¼,
+	»p € f F¼),
+	("pure_rewrite_thm_tac",
+	tac_res(pure_rewrite_thm_tac s_thm),
+	»s € p¼,
+	»Œ T € p¼),
+	("once_rewrite_thm_tac",
+	tac_res(once_rewrite_thm_tac s_thm),
+	»p s € f (T € s)¼,
+	»p (Œ T) € f (s:BOOL)¼),
+	("pure_once_rewrite_thm_tac",
+	tac_res(pure_once_rewrite_thm_tac s_thm),
+	»p s € f (T € s)¼,
+	»p (Œ T) € f (T € Œ T)¼),
+	("asm_rewrite_thm_tac",
+	tac_res1(asm_rewrite_thm_tac s_thm) [»p:BOOL = q¼],
+	»p € T¼,
+	»q:BOOL¼),
+	("pure_asm_rewrite_thm_tac",
+	tac_res1(pure_asm_rewrite_thm_tac s_thm) 
+		[»p:BOOL = q¼,»q:BOOL = r¼],
+	»s € p € T¼,
+	»Œ T € r € T¼),
+	("once_asm_rewrite_thm_tac",
+	tac_res1(once_asm_rewrite_thm_tac s_thm) 
+		[»p:BOOL = q¼,»q:BOOL = r¼],
+	»p:BOOL¼,
+	»q:BOOL¼),
+	("pure_once_asm_rewrite_thm_tac",
+	tac_res1(pure_once_asm_rewrite_thm_tac s_thm) 
+		[»p:BOOL = q¼,»q:BOOL = r¼],
+	»T € p¼,
+	»T € q¼),
+	("fasm_rewrite_thm_tac",
+	tac_res1(fasm_rewrite_thm_tac (fn x => »p:BOOL¼ mem (frees x)) s_thm)
+		 [»p:BOOL = q¼,»q:BOOL = r¼],
+	»p:BOOL¼,
+	»q:BOOL¼),
+	("pure_fasm_rewrite_thm_tac",
+	tac_res1(pure_fasm_rewrite_thm_tac (fn x => »p:BOOL¼ mem (frees x)) s_thm) 
+		[»p:BOOL = q¼,»q:BOOL = r¼],
+	»p € T¼,
+	»q € T¼),
+	("once_fasm_rewrite_thm_tac",
+	tac_res1(once_fasm_rewrite_thm_tac (fn x => »p:BOOL¼ mem (frees x)) s_thm) 
+		[»p:BOOL = q¼,»q:BOOL = r¼],
+	»p € q € (T  s)¼,
+	»q € q € T¼),
+	("pure_once_fasm_rewrite_thm_tac",
+	tac_res1(pure_once_fasm_rewrite_thm_tac (fn x => »p:BOOL¼ mem (frees x)) s_thm) 
+		[»p:BOOL = q¼,»q:BOOL = r¼],
+	»p € q € T¼,
+	»q € q € T¼)
+	];
+set_flag("subgoal_package_quiet",false);
+=TEX
+=SML
+push_goal([],»F¼);
+store_mt_results
+mt_run_fail [
+	("rewrite_tac 26001",
+	a,
+	(rewrite_tac[]),
+	gen_fail_msg "rewrite_tac" 26001 []),
+	("pure_rewrite_tac 26001",
+	a,
+	(pure_rewrite_tac[]),
+	gen_fail_msg "pure_rewrite_tac" 26001 []),
+	("once_rewrite_tac 26001",
+	a,
+	(once_rewrite_tac[]),
+	gen_fail_msg "once_rewrite_tac" 26001 []),
+	("pure_once_rewrite_tac 26001",
+	a,
+	(pure_once_rewrite_tac[]),
+	gen_fail_msg "pure_once_rewrite_tac" 26001 []),
+	("asm_rewrite_tac 26001",
+	a,
+	(asm_rewrite_tac[]),
+	gen_fail_msg "asm_rewrite_tac" 26001 []),
+	("pure_asm_rewrite_tac 26001",
+	a,
+	(pure_asm_rewrite_tac[]),
+	gen_fail_msg "pure_asm_rewrite_tac" 26001 []),
+	("once_asm_rewrite_tac 26001",
+	a,
+	(once_asm_rewrite_tac[]),
+	gen_fail_msg "once_asm_rewrite_tac" 26001 []),
+	("pure_once_asm_rewrite_tac 26001",
+	a,
+	(pure_once_asm_rewrite_tac[]),
+	gen_fail_msg "pure_once_asm_rewrite_tac" 26001 []),
+	("fasm_rewrite_tac 26001",
+	a,
+	(fasm_rewrite_tac [] (fn x => true)),
+	gen_fail_msg "fasm_rewrite_tac" 26001 []),
+	("pure_fasm_rewrite_tac 26001",
+	a,
+	(pure_fasm_rewrite_tac [] (fn x => true)),
+	gen_fail_msg "pure_fasm_rewrite_tac" 26001 []),
+	("once_fasm_rewrite_tac 26001",
+	a,
+	(once_fasm_rewrite_tac [] (fn x => true)),
+	gen_fail_msg "once_fasm_rewrite_tac" 26001 []),
+	("pure_once_fasm_rewrite_tac 26001",
+	a,
+	(pure_once_fasm_rewrite_tac [] (fn x => true)),
+	gen_fail_msg "pure_once_fasm_rewrite_tac" 26001 []),
+	("rewrite_thm_tac 26001",
+	a,
+	(rewrite_thm_tac t_thm),
+	gen_fail_msg "rewrite_tac" 26001 []),
+	("pure_rewrite_thm_tac 26001",
+	a,
+	(pure_rewrite_thm_tac t_thm),
+	gen_fail_msg "pure_rewrite_tac" 26001 []),
+	("once_rewrite_thm_tac 26001",
+	a,
+	(once_rewrite_thm_tac t_thm),
+	gen_fail_msg "once_rewrite_tac" 26001 []),
+	("pure_once_rewrite_thm_tac 26001",
+	a,
+	(pure_once_rewrite_thm_tac t_thm),
+	gen_fail_msg "pure_once_rewrite_tac" 26001 []),
+	("asm_rewrite_thm_tac 26001",
+	a,
+	(asm_rewrite_thm_tac t_thm),
+	gen_fail_msg "asm_rewrite_tac" 26001 []),
+	("pure_asm_rewrite_thm_tac 26001",
+	a,
+	(pure_asm_rewrite_thm_tac t_thm),
+	gen_fail_msg "pure_asm_rewrite_tac" 26001 []),
+	("once_asm_rewrite_thm_tac 26001",
+	a,
+	(once_asm_rewrite_thm_tac t_thm),
+	gen_fail_msg "once_asm_rewrite_tac" 26001 []),
+	("pure_once_asm_rewrite_thm_tac 26001",
+	a,
+	(pure_once_asm_rewrite_thm_tac t_thm),
+	gen_fail_msg "pure_once_asm_rewrite_tac" 26001 []),
+	("fasm_rewrite_thm_tac 26001",
+	a,
+	(fasm_rewrite_thm_tac (fn x => true) t_thm),
+	gen_fail_msg "fasm_rewrite_tac" 26001 []),
+	("pure_fasm_rewrite_thm_tac 26001",
+	a,
+	(pure_fasm_rewrite_thm_tac (fn x => true) t_thm),
+	gen_fail_msg "pure_fasm_rewrite_tac" 26001 []),
+	("once_fasm_rewrite_thm_tac 26001",
+	a,
+	(once_fasm_rewrite_thm_tac (fn x => true) t_thm),
+	gen_fail_msg "once_fasm_rewrite_tac" 26001 []),
+	("pure_once_fasm_rewrite_thm_tac 26001",
+	a,
+	(pure_once_fasm_rewrite_thm_tac (fn x => true) t_thm),
+	gen_fail_msg "pure_once_fasm_rewrite_tac" 26001 [])];
+=TEX
+\section{UNTESTED MATERIAL}
+We do not directly test: $initial\_rw\_canon$ (as tested by system build), $prim\_rewrite\_conv$ and $prim\_rewrite\_tac$ (as tested indirectly),
+
 \section{END OF TESTS}
 =SML
-summarize_mt_results();
+diag_string(summarize_mt_results());
 =TEX
 \twocolumn[\section{INDEX}]
 \small
