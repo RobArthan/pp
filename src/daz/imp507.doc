@@ -110,6 +110,7 @@ failure (not comment) is raised).
 of $pack\_spec\_with\_modules$ for WP 3).
 \item[Issue 1.151] Fixed bug in $vcs\_aux\_initial$.
 \item[Issue 1.152] Addressing frame widening issue (issue 4, v0.7.3).
+\item[Issue 1.153] Adding calls to do check 16.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1634,11 +1635,11 @@ fun Ûget_tmark_from_inscopeİ (n : Z_ID) (inscope : IN_SCOPE)
 			else	do_pars more
 		);
 		fun do_aux_vars [] = Nil
-		|  do_aux_vars (decl :: more) = (
-			case s_lookup n (map dest_var (frees decl)) of
+		|  do_aux_vars (dec :: more) = (
+			case s_lookup n (map dest_var (frees dec)) of
 				Nil => do_aux_vars more
 			|	Value ty =>
-				Value(ty, snd(dest_z_dec(hd(dest_z_decl decl))))
+				Value(ty, snd(dest_z_dec dec))
 		);
 	in	case do_vars (#vc_vars inscope) of
 			Value tmk	=> Value(type_of_tmark tmk, EIEnvVar tmk)
@@ -4700,13 +4701,17 @@ fun Ûaux_varİ (av : AUX_VAR) : unit = (
 		val aux_vars1 = #aux_vars package drop (fn x => zdecl =$ x);
 		val zids_in_scope = (z_names_of_in_scope o #in_scope o #declab)
 				 block1;
+		val vc_aux_vars1 = #vc_aux_vars(#in_scope(#declab block1));
 	in	check_new_z_id zids_in_scope aux;
 		check_new_spark_ids current_cn_env [aux];
 		pack_env :=
 		s_enter
 		block_name1
 		(package_aux_vars(package, aux_vars1 @ [zdecl]))
-		(!pack_env)
+		(!pack_env);
+		blocks :=
+		block_vc_aux_vars(block1, vc_aux_vars1 @ [zdecl]):: tl (!blocks)
+
 	end
 );
 =TEX
@@ -5378,11 +5383,7 @@ fun Ûdo_declarationİ (y as (DDeclarationKSlot (
 ) | do_declaration (y as (DAuxiliary x) : DECLARATION) = (
 	aux_var x
 ) | do_declaration (y as (DUsing (x as {basic_decls, ...})) : DECLARATION) = (
-	map (fn d => case d of
-		BDVarDecl _ => ()
-		| BDVarDeclInit (v, e) => add_var_init_env (v, e)
-		| _ => basic_declaration d)
-	    basic_decls;
+	map (do_declaration o DBasicDecl) basic_decls;
 	using_dec x
 )
 (*
@@ -5400,6 +5401,7 @@ and Ûdo_procedure_specİ (
 		do_annotation annotation;
 		stub();
 		fformal_part formal_part;
+		check_16 current_cn_env sp;
 		stub_spec_proc formal_proc;
 		form_proc formal_proc;
 		curr_form_proc formal_proc
@@ -5432,8 +5434,8 @@ and Ûdo_function_specİ (
 		do_annotation annotation;
 		stub();
 		fformal_part formal_part;
-		stub_spec_fun formal_fun;
 		curr_form_fun formal_fun;
+		stub_spec_fun formal_fun;
 		form_fun formal_fun
 	end
 ) | Ûdo_function_specİ (
@@ -5542,8 +5544,7 @@ and Ûdo_proper_bodyİ (y as (PBProcedure
 	do_annotation annotation;
 	map do_declaration decls;
 	if any decls (fn d => case d of DUsing _ => true |_ => false)
-	then	(add_conc_vars_env();
-		do_statement statement;
+	then	(do_statement statement;
 		vcs_aux_initial statement)
 	else	do_statement statement;
 	end_scope()
