@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.37 2005/02/27 15:27:04 rda Exp rda $
+# $Id: configure.sh,v 1.38 2005/02/27 15:30:13 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -67,7 +67,7 @@
 # This is done by creating a shell script, install, which captures the decisions.
 # Makes some sanity checks on the source directory (but not many).
 #
-# Here we go ...
+# We begin with some handy shell functions:
 #
 give_up(){
 	echo ERROR: $* 1>&2
@@ -78,11 +78,32 @@ warn(){
 	echo WARNING: $* 1>&2
 }
 #
-check_bin(){
-	which $1 >/dev/null 2>&1 || warn $2
+# The following is a substitute for "which" needed on systems like BSD
+# and Solaris where "which" is a grotty C-shell-script.
+#
+split_path(){
+	IFS=: eval "echo \$PATH"
+}
+find_in_path(){
+	for DIR in `split_path`
+	do	FILE=$DIR/$1
+		if	[ -x $FILE -a -f $FILE ]
+		then	echo $FILE
+			return 0
+		fi
+	done
+	return 1
 }
 #
-# Set locale to C (i.e., turn off all localisations so that things text-processing is 8-bit clean
+# THe following is used to check for dependencies on executables (ed etc.)
+#
+check_bin(){
+	find_in_path $1 >/dev/null 2>&1 || warn $2
+}
+#
+# Now here we go ...
+#
+# Set locale to C, i.e., turn off localisation so that text-processing is 8-bit clean
 #
 LC_ALL=C
 export LC_ALL
@@ -93,9 +114,8 @@ if	[ "${PPTARGETDIR:-}" = "" ]
 then	PPTARGETDIR=$PPHOME
 fi
 if	[ "${PPTARGETDIR:-}" = "" ]
-then	for parent in /usr/local /usr/share /opt /sw $HOME
-	do
-		if	[ -d $parent ]
+then	for parent in /usr/local /opt /sw /usr/share $HOME
+	do	if	[ -d $parent ]
 		then	if	[ -d $parent/pp -a -w $parent/pp ]
 			then	PPTARGETDIR=$parent/pp
 				break
@@ -146,12 +166,10 @@ then	give_up "the directory $CWD/src does not exist"
 fi
 SOMETODO=n
 for f in $SUPPORTEDTARGETS
-do
-	eval $f=n
+do	eval $f=n
 done
 for f in $PPTARGETS
-do	
-	if	[ -f src/$f.mkf ]
+do	if	[ -f src/$f.mkf ]
 	then	eval $f=y
 		SOMETODO=y
 	elif	[ "$USERDEFINEDTARGETS" = y ]
@@ -163,8 +181,7 @@ then	give_up "cannot find any packages to build in $CWD/src"
 fi
 ACTTARGETS=
 for f in $SUPPORTEDTARGETS
-do
-	if	eval [  \$$f = y  ]
+do	if	eval [  \$$f = y  ]
 	then	ACTTARGETS="$ACTTARGETS $f"
 	fi
 done
@@ -180,16 +197,16 @@ then	if	[ "${PPCOMPILER:-}" != "" ]
 		esac
 		echo "Using $T as specified"
 		check_bin "$C" "$C not found; $T must be installed if you specify PPCOMPILER=$PPCOMPILER"
-	elif	which poly >/dev/null 2>&1
+	elif	find_in_path poly >/dev/null 2>&1
 	then	echo "Using Poly/ML"
 		PPCOMPILER=POLYML
-	elif	which sml >/dev/null 2>&1
+	elif	find_in_path sml >/dev/null 2>&1
 	then	echo "Using Standard ML of New Jersey"
 		PPCOMPILER=SMLNJ
 	else	give_up "cannot find a Standard ML compiler"
 	fi
 	if	[ "$PPCOMPILER" = SMLNJ ]
-	then	if	! which .arch-n-opsys >/dev/null 2>&1
+	then	if	! find_in_path .arch-n-opsys >/dev/null 2>&1
 		then	give_up ".arch-n-opsys not found: to build with SML/NJ the installation bin directory must be on your path"
 		fi
 	fi
@@ -209,11 +226,17 @@ then	if	[ "${PPCOMPILER:-}" != "" ]
 fi
 #
 # Check for various tbings we need:
-# C compiler. It has to be gcc at the moment.
+#
+# C compiler (has to be gcc):
+#
 check_bin "gcc" "gcc not found"
-# TeX and LaTeX.
+#
+# TeX and LaTeX:
+#
 check_bin "latex" "TeX and LaTeX software not found"
+#
 # A representative sample of the text utilities we need
+#
 check_bin "nl" "nl text line-numbering utility not found"
 check_bin "ed" "ed line editor not found"
 check_bin "nroff" "nroff text formatting program not found"
@@ -261,12 +284,12 @@ case "${PPDOCFORMAT:-}" in
 	*)	give_up "unsupported document format \"$PPDOCFORMAT\" (not one of PDF or PS)"
 esac
 if	[ "$DOPDF" = y ]
-then	if	which dvipdfm >/dev/null 2>&1
+then	if	find_in_path dvipdfm >/dev/null 2>&1
 	then	echo "Generating code to produce PDF versions of the documents"
 	else	give_up "dvipdfm does not seem to be available and is needed if you specify PPDOCFORMAT=PDF"
 	fi
 elif	[ "$DOPS" = y ]
-then	if	which dvips >/dev/null 2>&1
+then	if	find_in_path dvips >/dev/null 2>&1
 	then	echo "Generating code to produce PostScript versions of the documents"
 	else	give_up "dvips does not seem to be available and is needed if you specify PPDOCFORMAT=PS"
 	fi
