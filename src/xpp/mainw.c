@@ -995,12 +995,12 @@ static void get_from_application(
 	XtInputId	*unused_id)
 {
 	NAT ct;
-	char buf[1001]; /* allow for null-termination in scroll_out */
+	char buf[BUFSIZ + 1]; /* allow for null-termination in scroll_out */
 	static Boolean get_from_app_work_proc();
-	if((ct = read(control_fd, buf, 1000)) > 0) {
+	if((ct = read(control_fd, buf, BUFSIZ)) > 0) {
 		scroll_out(buf, ct, False);
 	}
-	if(ct == 1000) { /* Probably more to do */
+	if(ct == BUFSIZ) { /* Probably more to do */
 		XtRemoveInput(app_ip_req);
 		XtAppAddWorkProc(app, get_from_app_work_proc, (XtPointer) NULL);
 	}		
@@ -1009,11 +1009,11 @@ static void get_from_application(
 static Boolean get_from_app_work_proc(XtPointer unused_p)
 {
 	NAT ct;
-	char buf[1001]; /* allow for null-termination in scroll_out */
+	char buf[BUFSIZ+1]; /* allow for null-termination in scroll_out */
 	if((ct = read(control_fd, buf, 1000)) > 0) {
 		scroll_out(buf, ct, False);
 	}
-	if(ct == 1000) { /* Probably more to do */
+	if(ct == BUFSIZ) { /* Probably more to do */
 		return False;	/* arrange to be called again */ 
 	} else	{
 		app_ip_req = XtAppAddInput(app,
