@@ -1,10 +1,16 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.6 2002/01/21 21:49:13 rda Exp rda $
+ * $Id: options.c,v 2.7 2002/01/21 22:42:47 rda Exp $
  *
  * options.c -  tools for setting up global option variables
  *
- * (c) ICL 1994
+ * options.c: this file is part of the PPTex system
+ *
+ * Copyright (c) 2002 Lemma 1 Ltd.
+ * 
+ * See the file LICENSE for your rights to use and change this file.
+ *
+ * Contact: Rob Arthan < rda@lemma-one.com >
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 

@@ -4,12 +4,15 @@
  *
  * xpp.h - main include file for the X/Motif ProofPower Interface
  *
- * (c) ICL 1993, 1994
+ * xpp.h: this file is part of the PPTex system
+ *
+ * Copyright (c) 2002 Lemma 1 Ltd.
+ * 
+ * See the file LICENSE for your rights to use and change this file.
+ *
+ * Contact: Rob Arthan < rda@lemma-one.com >
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-#ifdef _xpp
-static char rcsid_h[] = "$Id: xpp.h,v 2.13 2002/08/09 10:54:31 rda Exp rda $";
-#endif
 
 
 /* Build switches */

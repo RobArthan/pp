@@ -1,17 +1,22 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.28 2002/08/14 14:41:12 rda Exp rda $
+ * $Id: mainw.c,v 2.29 2002/08/14 14:46:29 rda Exp $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
  *
- * (c) ICL 1993, 1994
+ * mainw.c: this file is part of the PPTex system
+ *
+ * Copyright (c) 2002 Lemma 1 Ltd.
+ * 
+ * See the file LICENSE for your rights to use and change this file.
+ *
+ * Contact: Rob Arthan < rda@lemma-one.com >
  * 
  * This implements the script editor, in which typically the user is building
  * a command script for an interactive program such as ProofPower, and
  * the user interface for interacting with the interactive program.
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char rcsid[] = "$Id: mainw.c,v 2.28 2002/08/14 14:41:12 rda Exp rda $";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:

@@ -1,9 +1,15 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.5 2002/03/12 14:48:20 phil Exp rda $
+ * $Id: xpp.c,v 2.6 2002/08/09 10:54:31 rda Exp $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
- * (c) ICL 1993, 1994
+ * xpp.c: this file is part of the PPTex system
+ *
+ * Copyright (c) 2002 Lemma 1 Ltd.
+ * 
+ * See the file LICENSE for your rights to use and change this file.
+ *
+ * Contact: Rob Arthan < rda@lemma-one.com >
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 

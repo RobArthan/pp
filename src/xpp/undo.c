@@ -1,14 +1,19 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.10 2002/05/15 11:02:48 phil Exp phil $
+ * $Id: undo.c,v 2.11 2002/05/17 09:53:10 phil Exp $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
  *
- * (c) ICL 1993, 1994
+ * undo.c: this file is part of the PPTex system
+ *
+ * Copyright (c) 2002 Lemma 1 Ltd.
+ * 
+ * See the file LICENSE for your rights to use and change this file.
+ *
+ * Contact: Rob Arthan < rda@lemma-one.com >
  *
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char rcsid[] = "$Id: undo.c,v 2.10 2002/05/15 11:02:48 phil Exp phil $";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:

@@ -1,10 +1,16 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.3 2001/11/16 17:18:36 rda Exp phil $
+ * $Id: files.c,v 2.4 2002/03/18 19:14:49 phil Exp $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
- * (c) ICL 1993
+ * files.c: this file is part of the PPTex system
+ *
+ * Copyright (c) 2002 Lemma 1 Ltd.
+ * 
+ * See the file LICENSE for your rights to use and change this file.
+ *
+ * Contact: Rob Arthan < rda@lemma-one.com >
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 

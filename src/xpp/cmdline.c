@@ -1,11 +1,17 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.5 2001/12/15 19:17:00 rda Exp rda $
+ * $Id: cmdline.c,v 2.6 2002/01/21 22:42:47 rda Exp $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
  *
- * (c) ICL 1994
+ * cmdline.c: this file is part of the PPTex system
+ *
+ * Copyright (c) 2002 Lemma 1 Ltd.
+ * 
+ * See the file LICENSE for your rights to use and change this file.
+ *
+ * Contact: Rob Arthan < rda@lemma-one.com >
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 

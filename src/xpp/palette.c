@@ -1,10 +1,16 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.3 2000/11/20 11:49:20 rda Exp rda $ 
+ * $Id: palette.c,v 2.4 2001/11/16 17:19:56 rda Exp $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
- * (c) ICL 1993
+ * palette.c: this file is part of the PPTex system
+ *
+ * Copyright (c) 2002 Lemma 1 Ltd.
+ * 
+ * See the file LICENSE for your rights to use and change this file.
+ *
+ * Contact: Rob Arthan < rda@lemma-one.com >
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 

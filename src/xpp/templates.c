@@ -1,13 +1,18 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.8 2002/03/18 19:13:59 phil Exp phil $ 
+ * $Id: templates.c,v 2.9 2002/05/21 14:49:51 phil Exp $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
- * (c) ICL 1994
+ * templates.c: this file is part of the PPTex system
+ *
+ * Copyright (c) 2002 Lemma 1 Ltd.
+ * 
+ * See the file LICENSE for your rights to use and change this file.
+ *
+ * Contact: Rob Arthan < rda@lemma-one.com >
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char rcssid[] = "$Id: templates.c,v 2.9 2002/03/21 16:36:43 phil Exp $";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:

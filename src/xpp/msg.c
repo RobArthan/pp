@@ -1,10 +1,16 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2002/03/18 19:14:49 $ $Revision: 2.8 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2002/05/15 11:02:48 $ $Revision: 2.9 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
- * (c) ICL 1994
+ * msg.c: this file is part of the PPTex system
+ *
+ * Copyright (c) 2002 Lemma 1 Ltd.
+ * 
+ * See the file LICENSE for your rights to use and change this file.
+ *
+ * Contact: Rob Arthan < rda@lemma-one.com >
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 

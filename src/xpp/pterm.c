@@ -1,10 +1,16 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.17 2002/08/11 10:58:36 rda Exp rda $
+ * $Id: pterm.c,v 2.18 2002/08/13 07:35:50 rda Exp $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
  *
- * (c) ICL 1993, 1994
+ * pterm.c: this file is part of the PPTex system
+ *
+ * Copyright (c) 2002 Lemma 1 Ltd.
+ * 
+ * See the file LICENSE for your rights to use and change this file.
+ *
+ * Contact: Rob Arthan < rda@lemma-one.com >
  * 
  * This implements the  pseudo-terminal in which the interactive program is
  * run.

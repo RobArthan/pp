@@ -1,10 +1,16 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id$ 
+ * $Id: diag.c,v 2.1 1994/08/30 12:07:23 djk Rel $ 
  *
  * diag.c - debugging tools for the X/Motif ProofPower Interface
  *
- * (c) ICL 1993
+ * diag.c: this file is part of the PPTex system
+ *
+ * Copyright (c) 2002 Lemma 1 Ltd.
+ * 
+ * See the file LICENSE for your rights to use and change this file.
+ *
+ * Contact: Rob Arthan < rda@lemma-one.com >
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
