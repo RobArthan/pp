@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.29 2004/02/08 17:14:36 rda Exp rda $
+ * $Id: xmisc.c,v 2.30 2004/02/11 21:45:31 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -537,7 +537,7 @@ void fix_pane_height(
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set_input_focus: try to set the input focus to a given
- * widget without falling over if it can't be done.
+ * widget trying not to fall over if it can't be done.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static int ignore_error_handler(Display *d, XErrorEvent *ev)
 {
@@ -546,6 +546,9 @@ static int ignore_error_handler(Display *d, XErrorEvent *ev)
 void set_input_focus(Widget w)
 {
 	XErrorHandler oldhandler;
+	if(get_map_state(w) != IsViewable) {
+		return;
+	}
 	oldhandler = XSetErrorHandler(ignore_error_handler);
 	XSetInputFocus(XtDisplay(w), XtWindow(w), RevertToParent, CurrentTime);
 	(void) XSetErrorHandler(oldhandler);

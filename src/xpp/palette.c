@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.26 2004/08/21 10:53:44 rda Exp rda $ 
+ * $Id: palette.c,v 2.27 2004/10/26 15:41:18 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -195,6 +195,7 @@ void popup_palette(Widget w)
 	if((paned = palette_info.palette_w) != NULL) {
 		XtManageChild(paned);
 		XtPopup(XtParent(paned), XtGrabNone);
+		set_input_focus(paned);
 		return;
 	} /* else ... */
 

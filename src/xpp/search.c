@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.57 2004/11/19 15:30:17 rda Exp rda $ 
+ * $Id: search.c,v 2.58 2004/11/19 15:59:00 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -232,6 +232,7 @@ Boolean add_search_tool(Widget text_w)
 		last_pos = XmTextGetLastPosition(search_data.search_w);
 		XmTextSetInsertionPosition(search_data.search_w, last_pos);
 		XmTextShowPosition(search_data.search_w, last_pos);
+		set_input_focus(search_data.search_w);
 		return True;
 	}
 

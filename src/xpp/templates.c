@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.25 2004/01/29 16:18:50 rda Exp rda $ 
+ * $Id: templates.c,v 2.26 2004/08/08 11:06:01 rda Exp rda $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -382,6 +382,7 @@ void add_templates_tool(Widget w)
 		XtManageChild(paned);
 		XtPopup(shell, XtGrabNone);
 		fix_pane_height(bottom_form, bottom_form);
+		set_input_focus(paned);
 	}
 }
 

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.26 2004/07/05 16:57:02 rda Exp rda $
+ * $Id: cmdline.c,v 2.27 2004/11/20 12:53:17 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -140,6 +140,7 @@ void add_command_line_tool(Widget text_w)
 		XmTextSetSelection(cmd_line_data.cmd_w,
 			0, XmTextGetLastPosition(cmd_line_data.cmd_w),
 			CurrentTime);
+		set_input_focus(cmd_line_data.cmd_w);
 		return;
 	}
 

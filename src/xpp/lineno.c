@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: lineno.c,v 1.6 2004/11/20 12:11:32 rda Exp rda $ 
+ * $Id: lineno.c,v 1.7 2004/11/20 12:53:17 rda Exp rda $ 
  *
  * lineno.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -143,6 +143,7 @@ Boolean add_line_no_tool(Widget text_w)
 		XmTextSetInsertionPosition(line_no_text, last_pos);
 		XmTextShowPosition(line_no_text, last_pos);
 		XmTextSetSelection(line_no_text, 0, last_pos, CurrentTime);
+		set_input_focus(line_no_text);
 		return True;
 	}
 
