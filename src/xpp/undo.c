@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.16 2003/01/30 17:51:46 rda Exp $
+ * $Id: undo.c,v 2.17 2003/08/01 11:13:13 rda Exp rda $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -933,10 +933,8 @@ void undo_modify_cb(
  * inserted) is manoeuvred into view in the window.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static Boolean undoRedo(
-	Widget		text_w,
 	UndoBuffer *ub,
-	XtPointer	cbs,
-    Boolean     amUndoing)
+    	Boolean     amUndoing)
 {
 	XmTextPosition fst, lst;
 	NAT len;
@@ -944,7 +942,7 @@ static Boolean undoRedo(
 	if(canUnRedo(ub)) {
 		if(changes_saved(ub) &&
 		   amUndoing &&
-		   !yes_no_dialog(text_w, changes_saved_warning, "Confirm Undo")) {
+		   !yes_no_dialog(ub->text_w, changes_saved_warning, "Confirm Undo")) {
 			return False;
 		}
 		ub->undoing = True;
@@ -973,29 +971,29 @@ static Boolean undoRedo(
 }
 
 
-void undo_cb(Widget text_w, XtPointer cbd, XtPointer cbs)
+void undo(XtPointer undo_ptr)
 {
-	UndoBuffer *ub = cbd;
+	UndoBuffer *ub = undo_ptr;
 	if(!ub->enabled) {
 		return;
 	}
 
-	if(undoRedo(text_w, ub, cbs, True)) {
-    	backtrack(ub);
+	if(undoRedo(ub, True)) {
+    		backtrack(ub);
 		setUndoRedo(ub);
 	}
 }
 
 
-void redo_cb(Widget text_w, XtPointer cbd, XtPointer cbs)
+void redo(XtPointer undo_ptr)
 {
-	UndoBuffer *ub = cbd;
+	UndoBuffer *ub = undo_ptr;
 	if(!ub->enabled) {
 		return;
 	}
 
 	retrack(ub);
-	if(undoRedo(text_w, ub, cbs, False)) {
+	if(undoRedo(ub, False)) {
 		setUndoRedo(ub);
 	} else {
 		backtrack(ub);

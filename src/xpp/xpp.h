@@ -278,8 +278,8 @@ typedef enum {
 		NAT	undo_menu_entry_offset,
 		NAT	redo_menu_entry_offset);
 	extern void undo_modify_cb(CALLBACK_ARGS);
-	extern void undo_cb(CALLBACK_ARGS);
-	extern void redo_cb(CALLBACK_ARGS);
+	extern void undo(XtPointer undo_ptr);
+	extern void redo(XtPointer undo_ptr);
 /* Module: xmisc */
 	extern void beep(void);
 	extern int get_map_state(Widget w); /* From XGetWindowAttributes */

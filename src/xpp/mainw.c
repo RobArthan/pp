@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.83 2004/06/30 16:42:46 rda Exp rda $
+ * $Id: mainw.c,v 2.84 2004/07/05 16:57:02 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -154,7 +154,7 @@ static Widget
 XtPointer undo_ptr;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Forward declarations of menu item callback and other routines.
+ * Forward declarations of callbacks and other routines.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static void
@@ -164,6 +164,7 @@ static void
 	file_menu_cb(CALLBACK_ARGS),
 	help_menu_cb(CALLBACK_ARGS),
 	reopen_cb(CALLBACK_ARGS),
+	line_number_cb(CALLBACK_ARGS),
 	ln_popup_cb(CALLBACK_ARGS),
 	journal_modify_cb(CALLBACK_ARGS),
 	popup_search_tool_cb(CALLBACK_ARGS),
@@ -179,9 +180,18 @@ static void setup_reopen_menu(char *filename);
 static void defer_resize (EVENT_HANDLER_ARGS);
 static void journal_resize_handler (EVENT_HANDLER_ARGS);
 static Bool execute_command(void);
-static void execute_action(ACTION_PROC_ARGS);
+static void file_menu_op(int op);
 
-static void line_number_cb(CALLBACK_ARGS);
+static void abandon_action(ACTION_PROC_ARGS);
+static void execute_action(ACTION_PROC_ARGS);
+static void goto_line_action(ACTION_PROC_ARGS);
+static void interrupt_action(ACTION_PROC_ARGS);
+static void quit_action(ACTION_PROC_ARGS);
+static void script_open_action(ACTION_PROC_ARGS);
+static void script_redo_action(ACTION_PROC_ARGS);
+static void script_save_action(ACTION_PROC_ARGS);
+static void script_undo_action(ACTION_PROC_ARGS);
+static void search_action(ACTION_PROC_ARGS);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu descriptions:
@@ -224,14 +234,14 @@ static MenuItem new_session_menu_items[MAX_REOPEN_MENU_ITEMS+1] = {
 };
 
 static MenuItem file_menu_items[] = {
-    { "Save", &xmPushButtonGadgetClass, 'S', "Ctrl<Key>s", "Ctrl-S",
+    { "Save", &xmPushButtonGadgetClass, 'S', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_SAVE, (MenuItem *)NULL, False },
     { "Save as ...",  &xmPushButtonGadgetClass, 'a', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_SAVE_AS, (MenuItem *)NULL, False },
     { "Save Selection as ...",  &xmPushButtonGadgetClass, 'l', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_SAVE_SELECTION, (MenuItem *)NULL, False },
     MENU_ITEM_SEPARATOR,
-    { "Open ...",  &xmPushButtonGadgetClass, 'O', "Ctrl<Key>o", "Ctrl-O",
+    { "Open ...",  &xmPushButtonGadgetClass, 'O', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_OPEN, (MenuItem *)NULL, False },
     { "Include ...",  &xmPushButtonGadgetClass, 'I', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_INCLUDE, (MenuItem *)NULL, False },
@@ -245,7 +255,7 @@ static MenuItem file_menu_items[] = {
      { "New Session",  &xmPushButtonGadgetClass, 'N', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_NEW_SESSION, new_session_menu_items, False },
    MENU_ITEM_SEPARATOR,
-    { "Quit",  &xmPushButtonGadgetClass, 'Q', "Ctrl<Key>q", "Ctrl-Q",
+    { "Quit",  &xmPushButtonGadgetClass, 'Q', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_QUIT, (MenuItem *)NULL, False },
     {NULL}
 };
@@ -271,9 +281,9 @@ static MenuItem edit_menu_items[] = {
     { "Redo", &xmPushButtonGadgetClass, 'R', NULL, NULL,
         script_redo_cb, (XtPointer)0, (MenuItem *)NULL, False },
     MENU_ITEM_SEPARATOR,
-    { "Search and Replace ...", &xmPushButtonGadgetClass, 'S', "Ctrl<Key>f", "Ctrl-F",
+    { "Search and Replace ...", &xmPushButtonGadgetClass, 'S', NULL, NULL,
         popup_search_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
-    { "Goto Line ...", &xmPushButtonGadgetClass, 'G', "Ctrl<Key>l", "Ctrl-L",
+    { "Goto Line ...", &xmPushButtonGadgetClass, 'G', NULL, NULL,
         popup_line_no_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
     {NULL}
 };
@@ -307,16 +317,16 @@ static MenuItem cmd_menu_items[] = {
     { "Command Line ...", &xmPushButtonGadgetClass, 'C', NULL, NULL,
         popup_command_line_tool_cb, (XtPointer)0, (MenuItem *)NULL, False },
     MENU_ITEM_SEPARATOR,
-    { "Execute Selection", &xmPushButtonGadgetClass, 'x', "Ctrl<Key>x", "Ctrl-X",
+    { "Execute Selection", &xmPushButtonGadgetClass, 'x', NULL, NULL,
         cmd_menu_cb, (XtPointer)CMD_MENU_EXECUTE, (MenuItem *)NULL, False },
-    { "Return", &xmPushButtonGadgetClass, 'e', "Ctrl<Key>m", "Ctrl-M",
+    { "Return", &xmPushButtonGadgetClass, 'e', NULL, NULL,
         cmd_menu_cb, (XtPointer)CMD_MENU_RETURN, (MenuItem *)NULL, False },
-    { "Semicolon", &xmPushButtonGadgetClass, 'S', "Ctrl<Key>semicolon", "Ctrl-;",
+    { "Semicolon", &xmPushButtonGadgetClass, 'S', NULL, NULL,
         cmd_menu_cb, (XtPointer)CMD_MENU_SEMICOLON, (MenuItem *)NULL, False },
     MENU_ITEM_SEPARATOR,
-    { "Abandon", &xmPushButtonGadgetClass, 'A', "Ctrl<Key>a", "Ctrl-A",
+    { "Abandon", &xmPushButtonGadgetClass, 'A', NULL, NULL,
         cmd_menu_cb, (XtPointer)CMD_MENU_ABANDON, (MenuItem *)NULL, False },
-    { "Interrupt", &xmPushButtonGadgetClass, 'I', "Ctrl<Key>i", "Ctrl-I", 
+    { "Interrupt", &xmPushButtonGadgetClass, 'I', NULL, NULL, 
         cmd_menu_cb, (XtPointer)CMD_MENU_INTERRUPT, (MenuItem *)NULL, False },
     MENU_ITEM_SEPARATOR,
     { "Kill", &xmPushButtonGadgetClass, 'K', NULL, NULL,
@@ -363,9 +373,18 @@ static MenuItem ln_popup_menu_items[] = {
 };
 
 static XtActionsRec actions[] = {
-	{ "execute", execute_action },
+	{ "abandon", abandon_action },
 	{ "command-history-up", command_history_up },
-	{ "command-history-down", command_history_down}
+	{ "command-history-down", command_history_down},
+	{ "execute", execute_action },
+	{ "goto-line", goto_line_action },
+	{ "interrupt", interrupt_action },
+	{ "quit", quit_action },
+	{ "script-open", script_open_action },
+	{ "script-redo", script_redo_action },
+	{ "script-save", script_save_action },
+	{ "script-undo", script_undo_action },
+	{ "search", search_action }
 };
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1023,17 +1042,13 @@ static Boolean setup_main_window(
  * MENU PROCESSING
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-static void file_menu_cb(
-		Widget		w,
-		XtPointer	cbd,
-		XtPointer	cbs)
+static void file_menu_op(int op)
 {
 	char *fname, *oldfname;
 	char *buf;
-	NAT i = (NAT) cbd;
 	void check_quit_cb(CALLBACK_ARGS);
 
-	switch(i) {
+	switch(op) {
 	case FILE_MENU_SAVE:
 		fname = get_file_name();
 		if(!fname) {
@@ -1181,6 +1196,14 @@ static void file_menu_cb(
 	default:
 		break;
 	};
+}
+
+static void file_menu_cb(
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	cbs)
+{
+	file_menu_op( (int) cbd );
 }
 
 /*
@@ -1344,7 +1367,7 @@ static void script_undo_cb(
 		XtPointer	cbd,
 		XtPointer	cbs)
 {
-	undo_cb(script, undo_ptr, cbs);
+	undo(undo_ptr);
 }
 
 static void script_redo_cb(
@@ -1352,7 +1375,7 @@ static void script_redo_cb(
 		XtPointer	cbd,
 		XtPointer	cbs)
 {
-	redo_cb(script, undo_ptr, cbs);
+	redo(undo_ptr);
 }
 
 static void cmd_menu_cb(
@@ -1651,6 +1674,23 @@ static Bool execute_command(void)
 	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * abandon action function; call interrupt_and_abandon if the interrupt prompt
+ * has been set up, otherwise just do nothing.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void abandon_action(
+    Widget 		unused_widget,
+    XEvent*	unused_event,
+    String*		unused_params,
+    Cardinal*	unused_num_params)
+{
+	if(	global_options.interrupt_prompt
+	&&	*global_options.interrupt_prompt) {
+		interrupt_and_abandon();
+	}
+}
+			
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * execute action function; if no params does execute_command
  * to execute selection; else params give strings to execute;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -1671,6 +1711,110 @@ static void execute_action(
 	}
 }
 			
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * goto-line action function; pop-up goto-line tool.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void goto_line_action(
+    Widget 		unused_widget,
+    XEvent*	unused_event,
+    String*		unused_params,
+    Cardinal*	unused_num_params)
+{
+		add_line_no_tool(script);
+}
+			
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * interrupt action function; call interrupt_application
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void interrupt_action(
+    Widget 		unused_widget,
+    XEvent*	unused_event,
+    String*		unused_params,
+    Cardinal*	unused_num_params)
+{
+	interrupt_application();
+}
+			
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * quit action function; emulate file-menu quit
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void quit_action(
+    Widget 		unused_widget,
+    XEvent*	unused_event,
+    String*		unused_params,
+    Cardinal*	unused_num_params)
+{
+	file_menu_op(FILE_MENU_QUIT);
+}
+			
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * script-open action function; emulate file-menu open
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void script_open_action(
+    Widget 		unused_widget,
+    XEvent*	unused_event,
+    String*		unused_params,
+    Cardinal*	unused_num_params)
+{
+	file_menu_op(FILE_MENU_OPEN);
+}
+			
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * script-redo action function; cause a script window undo
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void script_redo_action(
+    Widget 		unused_widget,
+    XEvent*	unused_event,
+    String*		unused_params,
+    Cardinal*	unused_num_params)
+{
+	redo(undo_ptr);
+}
+		
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * script-save action function; emulate file-menu save
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void script_save_action(
+    Widget 		unused_widget,
+    XEvent*	unused_event,
+    String*		unused_params,
+    Cardinal*	unused_num_params)
+{
+	file_menu_op(FILE_MENU_SAVE);
+}
+			
+			
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * script-undo action function; cause a script window undo
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void script_undo_action(
+    Widget 		unused_widget,
+    XEvent*	unused_event,
+    String*		unused_params,
+    Cardinal*	unused_num_params)
+{
+	undo(undo_ptr);
+}
+			
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * search action function; pop-up search tool.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void search_action(
+    Widget 		unused_widget,
+    XEvent*	unused_event,
+    String*		unused_params,
+    Cardinal*	unused_num_params)
+{
+	add_search_tool(script);
+}
 		
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * main entry point:
