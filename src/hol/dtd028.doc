@@ -8,15 +8,15 @@
 \def\SCCSversion{$Revision$
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{91/03/11 %
+\TPPdate{\FormatDate{$Date$%
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
-\TPPtype{SML Literate Script}
+\TPPtype{Design}
 \TPPkeywords{}
 \TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
 %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
 \TPPauthorisation{R.D.Arthan & FST Team Leader}
-\TPPabstract{This document gives a detailed design for the 
+\TPPabstract{This document gives the detailed design for the 
 second group of tactics and tacticals in ICL HOL.}
 \TPPdistribution{\parbox[t]{4.0in}{%
 	    Project Library
@@ -73,7 +73,7 @@ which are not covered here.
 
 This document contains first of all a general discussion of some of
 the design issues and decisions concerning the tactics and tacticals
-(section \ref{GENERALREMARKS}.
+(section \ref{GENERALREMARKS}).
 Section \ref{THETACTICSANDTACTICALS} then contains the specifications
 of the tactics and tacticals, starting with the important tactics
 which relate to stripping goals and theorems and then giving those
@@ -104,7 +104,7 @@ predicate calculus connective we mean one of the following:
 
 It would be perfectly feasible to handle boolean $let$-expressions
 as well. However, it is considered more appropriate to let the
-user explicitly control the expansiom of local definitions rather than
+user explicitly control the expansion of local definitions rather than
 make the general purpose predicate calculus tactics expand them automatically
 (and thereby run a risk of making the user's goal large and incomprehensible) 
 
@@ -116,8 +116,8 @@ connectives, e.g. $‚\_T$), we supply:
 a tactical, $con\_T$, which takes one or more theorem tactic arguments,
 and which may be used to attack a goal whose principal connective is
 $con$ by inverting the introduction rule for $con$ to give one or more
-subgoals. The theorem tactic arguments are then applied to the new assumptions
-introduced in the subgoals in an attempt to further simplify them.
+subgoals. The theorem tactic arguments are then applied to any extra assumptions
+in the antecedents of the rule, in an attempt to further simplify the goal.
 E.g. $Š\_T\,thmtac$ is a tactic which works on a goal with conclusion of the
 form $t1Št2$ by applying $thmtac(t1…t1)$ to a goal with the same assumptions
 and with conclusion $t2$;
@@ -129,7 +129,9 @@ E.g. $„\_THEN\,thmtac$ is a theorem tactic which uses a theorem
 of the form $…„xŽt$ by applying $thmtac(t … t)$ to the goal and composing
 the resulting proof with the existential elimination rule;
 \item
-a tactic, $con\_tac$, which is $con\_T\,strip\_asm\_tac$.
+a tactic, $con\_tac$, which inverts the introduction rule for $con$ and
+applies the standard stripping tactic to any extra assumptions in the antecedents
+of the rule.
 \end{enumerate}
 
 Every connective has a $con\_tac$ but
@@ -138,11 +140,12 @@ supplied for connectives for which the introduction rule eliminates some
 assumptions (i.e. introduces assumptions when inverted), so, for instance, $ƒ\_T$
 is not needed.
 
-N.B. $con\_tac$ or $con\_T$, may well not be the best way of handling a
+N.B. $con\_tac$ or $con\_T$, may well not be the best or most
+common way of handling a
 goal whose principal connective is $con$. E.g. negation is usually best
-handled by moving the negation inside other connectives rather than by
-attempting a proof inverting negation introduction (which amounts to the
-variant of proof by contradiction in which one $… Œa$ by demonstrating
+handled by moving the negation inside other connectives when possible rather
+than by attempting a proof inverting negation introduction (which latter amounts
+to the variant of proof by contradiction in which one proves $… Œa$ by demonstrating
 that $a … b$ and $a … Œb$ for some suitable choice of $b$).
 
 \subsection{Strengthening}
@@ -150,9 +153,9 @@ The phrase ``N.B. loses information.'' in a tactic description
 indicates that the tactic strengthens the goal to be proved,
 by losing some information that \underline{might} have been necessary
 to complete the proof.
-This is, of course, a standard proof approach, but it is worth knowing when
-such tactics have been used to correctly interpret the state of
-having reached an unprovable goal - does it indicate that the main
+This is, of course, a common proof approach, but it is worth knowing when
+such tactics have been used in case one generates an unprovable goal
+--- which may indicate either that the main
 goal is unprovable, or just that an incorrect choice of proof has been made.
 All information-losing tactics will be noted.
 
@@ -163,14 +166,14 @@ supply the tacticals which are used to strip goals
 and theorems. These tacticals support some common
 techniques for proving goals or using theorems within
 tactic proofs in a uniform fashion.
-For example, if a goal of the form $\{ö\}a € b$ is almost always
+For example, a goal of the form $\{ö\}a € b$ is almost always
 proved by reducing it to $\{ö\}a$ and $\{ö\}b$, and, dually, a theorem of
 the form $… a  b$ is almost always used to do a case split.
 
 Very commonly the theorem stripping techniques are used to strip up theorems
 corresponding to new assumptions introduced by a tactic. For example,
 the obvious way of proving a goal of the form $\{ö\}(a  b) Š c$
-is to reduce it to two subgoals  $\{ö\}a Š c$ and $\{ö\}b Š c$. A uniform
+is to reduce it to two subgoals  $\{a, ö\}c$ and $\{b, ö\}c$. A uniform
 means of performing this type of reduction is to have the tactic which strips
 a goal of the form $\{ö\}t1 Š t2$ pass the theorem $t1 … t1$ to the theorem
 stripper which then decomposes $t1 … t1$ into primitive constituents, performs any
@@ -189,37 +192,45 @@ given goal or a theorem. This allows applications specific transformations
 to be handled in a uniform manner with the predicate calculus transformations
 dealt with here.
 
+The following subsections describe in outline the stripping facilities
+supplied. The actual detailed design adds some extra detail. For example,
+it often turns out to be appropriate to supply a general theorem tactical
+combinator, say $con\_THEN2$ which takes two arguments and obtain the more usual
+$con\_THEN$ as a special case. The discussion below is not
+concerned with these refinements.
+
 \subsubsection{Stripping Goals}
 Schematically, the effect on a goal of the goal stripping capabilities
 supplied here is as follows:
 
 ó
-ƒ_tac		({ö}, ƒxŽt)			‹	({ö}, t)
+ƒ_tac			({ö}, ƒxŽt)			‹	({ö}, t)
 
-€_tac 		({ö}, t1 € t2)			‹	({ö}, t1) ; ({ö}, t2)
+€_tac 			({ö}, t1 € t2)			‹	({ö}, t1) ; ({ö}, t2)
 
-_tac		({ö}, t1  Œt2)			‹	({ö}, t2 Š t1)
-_tac		({ö}, t1  t2)			‹	({ö}, Œt1 Š t2)
+_tac			({ö}, t1  Œt2)		‹	({ö}, t2 Š t1)
+_tac			({ö}, t1  t2)			‹	({ö}, Œt1 Š t2)
 
 
-Š_T ttac	({ö}, t1 Š t2)			‹	ttac(t1 … t1) ({ö}, t)
+Š_T ttac		({ö}, t1 Š t2)			‹	ttac(t1 … t1) ({ö}, t)
 
-‚_T ttac	({ö}, t1 ‚ t2)			‹	ttac(t1 … t1) ({ö}, t2);
+‚_T ttac		({ö}, t1 ‚ t2)			‹	ttac(t1 … t1) ({ö}, t2);
 							ttac(t2 … t2) ({ö}, t1)
 
-IF_T ttac	({ö}, if a then t1 else t2)	‹	ttac(a … a)({ö}, t1) ;
+IF_T ttac		({ö}, if a then t1 else t2)	‹	ttac(a … a)({ö}, t1) ;
 						 	ttac(Œa … Œa)({ö}, t2)
 
-Œ_tac		({ö}, Œt)			‹	({ö}, rhs(Œ_conv(Œt)))
+Œ_tac			({ö}, Œt)			‹	({ö}, rhs(Œ_conv(Œt)))
 
-t_tac		({ö}, T)			‹	[]
+t_tac			({ö}, T)			‹	[]
 
 goal_in_asms_tac	({ö, t}, t)		‹	[]
 æ
-where $[]$ denotes an empty list of subgoals, i.e. the tactic
+where $[]$ denotes an empty list of subgoals, i.e.that the tactic
 proves the goal, 
 and where $Œ\_conv$ is a conversion which moves negations over the
-other connectives, i.e. it proves theorems of the following forms:
+other connectives, i.e. it proves theorems of the following forms
+(and fails if none of them applies):
 
 ó
 	…	ŒŒt		= t
@@ -234,7 +245,7 @@ other connectives, i.e. it proves theorems of the following forms:
 	…	ŒF		= T
 æ
 
-(Note also that in the present document we do not deal with paired abstractions
+(Note that in the present document we do not deal with paired abstractions
 so that $„\_tac$ and $Œ\_tac$ are supplied as $simple\_„\_tac$ and $simple\_Œ\_tac$.)
 
 $STRIP\_GOAL\_T\,ttac$ (as set up here) is a tactic which applies
@@ -250,11 +261,7 @@ and result in a conclusion of one of the following forms (which we will
 call {\em conclusion literals} in the discussion in this document):
 
 ó
-	„xŽt
-	„°xŽt
-	F
-	Œa
-	a
+	„xŽt	„°xŽt	F	Œa	a
 æ
 
 where the principal connective of $a$ is not one of our predicate calculus
@@ -279,7 +286,7 @@ IF_THEN ttac (ñ … if a then b else c)
 where $a[x'/x]$ denotes $a$ with $x'$ substituted for $x$ with $x'$ a
 variable which does not appear free anywhere in the theorem or the goal.
 
-(The negation and existence theorem tacticals defined here are
+(The negation and existence theorem tacticals defined here are actually
 $SIMPLE\_$ versions since we do not handle paired abstractions here.)
 
 $STRIP\_THM\_THEN$ (as set up here) is a theorem tactical which applies
@@ -295,11 +302,7 @@ one of the following forms (which we will call {\em assumption literals}
 in the discussion below):
 
 ó
-	ƒxŽt
-	T
-	F
-	Œa
-	a
+	ƒxŽt	T	F	Œa	a
 æ
 where the principal connective of $a$ is not one of our predicate
 calculus connectives.
@@ -318,7 +321,7 @@ check_asm_tac (ñ … a) ({ö, Œa} t)		‹ []
 check_asm_tac (ñ … a) ({ö} t)			‹ ({a, ö}, t)
 æ
 
-where $[]$ denotes an empty list of subgoals, i.e. the tactic proves
+where $[]$ denotes an empty list of subgoals, i.e. that the tactic proves
 the goal.
 
 \subsubsection{$strip\_tac$}
@@ -349,8 +352,9 @@ without rendering the goal incomprehensible to the interactive user.
 A resolution-style tactic could sensibly start from a goal in this form, either
 by continuing to reduce to clausal form (for a fully automatic proof) or
 by just doing some propositional calculus normalisations
-of the assumptions to derive obvious immediate consequences of the assumptions
-in a form which was still comprehensible.
+inside the assumptions to 
+allow derivation of obvious immediate consequences of the assumptions
+in a form which is still comprehensible to the user.
 
 \subsubsection{$taut\_tac$}
 By using a subset of the stripping techniques discussed in the
@@ -392,6 +396,8 @@ false and so makes the subgoal false.
 It follows that as the original goal had a tautology as its conclusion
 then the stripping process of the previous paragraph must result in an
 empty collection of subgoals, i.e. it will prove the original goal. 
+
+(The above is a straightforward adaptation of a standard argument see, e.g. \cite{wang60}).
 
 \subsection{Introduction of New Assumptions}
 Many of the tactics $con\_tac$ (where $con$ stands for some predicate calculus
@@ -437,7 +443,7 @@ IF_T ttac,	Œ_tac		t_tac		goal_in_asms_tac
 æ
 
 Any new assumptions generated by the tactic are processed using
-$strip\_asm\_tac$. Thus $strip\_tac$ may produce large numbers of
+$strip\_asm\_tac$. Thus $strip\_tac$ may produce several new
 subgoals or may prove the goal. 
 
 The usual setup for $strip\_tac$ implies that it will prove most
@@ -519,7 +525,7 @@ $ö … t$ & proves goal if $Œt$ in assumptions, else as $asm\_tac$\\ \hline
 \end{tabular}}
 
 =USES
-Specialised tactic programming.
+Tactic programming.
 =SEEALSO
 $strip\_asm\_tac$, $strip\_tac$.
 =ENDDOC
@@ -531,14 +537,14 @@ stripping theorems into primitive constituents before
 using them in a tactic proof.
 It is equivalent to $FIRST\_TTCL$ $ttcls$ where
 $ttcls$ is the list of theorem tacticals maintained
-by $set\_strip\_thm\_thens$ and $get\_strip\_thm\_thens$ q.v.. In the supplied
-system this list comprises at least the following theorem tacticals:
+by $set\_strip\_thm\_thens$ and $get\_strip\_thm\_thens$ q.v.
+This list normally comprises at least the following theorem tacticals:
 ó
 €_THEN,		Š_THEN,		 _THEN,	Œ_THEN,		‚_THEN,
 „_THEN,		„%down%1_THEN, 	IF_THEN
 æ
 =USES
-Specialised tactic programming.
+Tactic programming.
 =SEEALSO
 $strip\_asm\_tac$, $strip\_tac$.
 =ENDDOC
@@ -559,7 +565,7 @@ tactic in a list of tactics including at least the following:
 goal_in_asms_tac
 æ
 =USES
-Specialised tactic programming.
+Tactic programming.
 =SEEALSO
 $strip\_asm\_tac$, $strip\_tac$.
 =ENDDOC
@@ -580,12 +586,11 @@ otherwise.
 Extending the system.
 =ENDDOC
 
-
 =DOC 
-val âset_strip_goal_tsá : THM_TACTICAL list -> unit;
-val âget_strip_goal_tsá : unit -> THM_TACTICAL list;
+val âset_strip_goal_tsá : (THM_TACTIC -> TACTIC) list -> unit;
+val âget_strip_goal_tsá : unit -> (THM_TACTIC -> TACTIC) list;
 =DESCRIBE
-$set\_strip\_goal\_ts$ and $get\_strip\_goal\_tns$ are used to
+$set\_strip\_goal\_ts$ and $get\_strip\_goal\_ts$ are used to
 access the list of theorem tacticals which control the behaviour
 of $STRIP\_GOAL\_T$. The default list is held
 in the variable $basic\_strip\_goal\_ts$.
@@ -618,7 +623,7 @@ the goal is also in the assumptions, and if so proves the goal.
 =DOC
 val ât_tacá :  TACTIC;
 =DESCRIBE
-A subgoal that is just `$T$' is immediately provable.
+Prove a goal with conclusion `$T$'.
 =TACTIC
 t_tac
 É
@@ -674,8 +679,8 @@ contr_tac
 { ö } F
 =TEX
 =USES
-If a proof is to be gained by showing the assumptions inconsistent,
-then the conclusion of the subgoal is only ``clutter'', and may be removed.
+If a proof is to be cariied out by showing the assumptions inconsistent,
+then the conclusion of the subgoal is irrelevant and may be removed.
 =ENDDOC
 =DOC
 val âf_thm_tacá : THM -> TACTIC;
@@ -699,7 +704,10 @@ $strip\_asm\_tac$.
 =DOC
 val âc_contr_tacá : TACTIC;
 =DESCRIBE
-Classical contradiction as a tactic: $t$ holds if $Œt … F$.
+A form of proof by contradiction: $t$ holds if $Œt … F$.
+
+(The name stands for classical contradiction, as opposed to the
+intuitonistic contradiction proof of $contr\_tac$.)
 =TACTIC
 c_contr_tac
 É
@@ -715,7 +723,7 @@ $strip\_tac$, $Œ_tac$.
 =DOC
 val âC_CONTR_Tá : (THM -> TACTIC) -> TACTIC;
 =DESCRIBE
-Classical contradiction as a tactical.
+A form of proof by contradiction as a tactical.
 $C\_CONTR\_T\,thmtac$ is a tactic which attempts to solve a goal $(ö, t)$,
 by applying $thmtac(t … t)$ to the goal $(ö, F)$.
 =TACTIC
@@ -736,7 +744,7 @@ $c\_contr\_tac$, $Œ\_T$.
 =DOC
 val âŒ_tacá : TERM -> TACTIC;
 =DESCRIBE
-Reductio ad absurdum as a tactic: $Œt2$  holds if $t2 … t1$ and
+A form of proof by contradiction as a tactic: $Œt2$  holds if $t2 … t1$ and
 $t2 … Œt1$ for some term $t1$.
 
 Note that $strip\_tac$ may be used to push a negation inside other logical connectives,
@@ -777,7 +785,9 @@ In tactic programming.
 If an assumption has its negation also in the assumption list
 this will make for a rapid proof.
 $undisch\_tac\,t1\,THEN\,strip\_tac$ is a more memorable idiom for handling
-such a case in interactive use but is a little slower. 
+such a case in interactive use but is a little slower.
+=SEEALSO
+$strip\_tac$
 =FAILURE
 28002	Term is not boolean
 =ENDDOC
@@ -786,7 +796,7 @@ such a case in interactive use but is a little slower.
 =DOC
 val â€_tacá : TACTIC;
 =DESCRIBE
-Split a goal into its conjuncts.
+Reduce the proof of a conjunction to the proof of its conjuncts.
 =TACTIC
 €_tac
 É
@@ -794,6 +804,8 @@ Split a goal into its conjuncts.
 É
 { ö } t1; { ö } t2
 =TEX
+=SEEALSO
+$strip\_tac$
 =FAILURE
 28004	the goal is not of the form: `{ ö } t1 € t2`
 =ENDDOC
@@ -803,8 +815,10 @@ val â€_THENá : (THM -> TACTIC) -> (THM -> TACTIC);
 A theorem tactic to apply a given theorem tactic to the conjuncts of 
 a theorem of the form $ö … t1 € t2$.
 ó
-€_THEN1 thmtac (ö … t1 € t2) = thmtac (ö … t1) THEN thmtac (ö … t2)
+€_THEN thmtac (ö … t1 € t2) = thmtac (ö … t1) THEN thmtac (ö … t2)
 æ
+=SEEALSO
+€\_THEN2$, $STRIP\_THM\_THEN$
 =FAILURE
 28005	the theorem is not of the form: `ö … t1 € t2`
 =ENDDOC
@@ -816,6 +830,8 @@ a theorem of the form $ö … t1 € t2$.
 ó
 €_THEN2 thmtac1 thmtac2 (ö … t1 € t2) = thmtac1 (ö … t1) THEN thmtac2 (ö … t2)
 æ
+=SEEALSO
+$€\_THEN$, $STRIP\_THM\_THEN$
 =FAILURE
 28005	the theorem is not of the form: `ö … t1 € t2`
 =ENDDOC
@@ -835,7 +851,7 @@ N.B. loses information.
 { ö } a
 =TEX
 =SEEALSO
-$\_left\_intro$, $\_left\_tac1$
+$\_left\_tac$, $swap\_\_tac$, $strip\_tac$
 =FAILURE
 28008	the goal is not of the form: `{ ö } a  b`
 =ENDDOC
@@ -855,7 +871,7 @@ N.B. loses information.
 { ö } b
 =TEX
 =SEEALSO
-$\_right\_intro$, $\_right\_tac1$
+$\_right\_tac$, $swap\_\_tac$, $strip\_tac$
 =FAILURE
 28008	the goal is not of the form: `{ ö } a  b`
 =ENDDOC
@@ -870,32 +886,13 @@ swap__tac
 É
 { ö } b  a
 =TEX
-=FAILURE
-28008	the goal is not of the form: `{ ö } a  b`
 =USES
 For use in conjunction with $strip\_tac$ (q.v.) when the reduction
 of $\{ ö \} a  b$ to $\{ Œa, ö \} b$ is inappropriate.
-=ENDDOC
-=DOC
-val â_elim_tacá : THM -> TACTIC;
-val â_cases_tacá : THM -> TACTIC;
-=DESCRIBE
-Given a disjunctive theorem, prove the subgoal assuming the left
-disjunct, then assuming the right, and so prove the original goal.
-$\_cases\_tac$ is an alias for $\_elim\_tac$.
-=TACTIC
-_elim_tac
-ö1 … t1  t2
-É
-{ ö2 } t
-É
-strip{t1, ö1 ¡ ö2 } t; 
-strip{t2, ö1 ¡ ö2 } t; 
-=TEX
 =SEEALSO
-$strip\_asm\_tac$, $\_THEN$
+$\_left\_tac$, $\_right\_tac$, $swap\_\_tac$, $strip\_tac$
 =FAILURE
-28009	Theorem is not of the form: `ö … t1  t2`
+28008	the goal is not of the form: `{ ö } a  b`
 =ENDDOC
 =DOC
 val â_THENá : (THM -> TACTIC) -> (THM -> TACTIC);
@@ -903,7 +900,7 @@ val â_THENá : (THM -> TACTIC) -> (THM -> TACTIC);
 A theorem tactic to perform a case split on a given disjunctive theorem
 applying a tactic generating function to the extra assumption in each branch.
 ó
-_THEN2 ttac (ñ … t1  t2) ({ö} t) = ttac (t1 … t1) ({ö} t); ttac (t2 … t2)({ö} t)
+_THEN ttac (ñ … t1  t2) ({ö} t) = ttac (t1 … t1) ({ö} t); ttac (t2 … t2)({ö} t)
 æ
 =TEX
 =SEEALSO
@@ -939,6 +936,8 @@ cases_tac
 É
 strip{ t1, ö } t2; strip{ Œt1, ö } t2
 =TEX
+=SEEALSO
+$CASES\_T$, $\_THEN$
 =FAILURE
 28002	Term is not boolean
 =ENDDOC
@@ -950,6 +949,8 @@ Do a case split on a given boolean term using a tactic generating function:
 ó
 CASES_T t1 ttac ({ö} t2) = ttac(t1 … t1)({ö} t2) ; ttac(Œt1 … Œt1)({ö} t2)
 æ
+=SEEALSO
+$cases\_tac$, $\_THEN$, $CASES\_T2$
 =FAILURE
 28002	Term is not boolean
 =ENDDOC
@@ -961,6 +962,8 @@ Do a case split on a given boolean term using two tactic generating functions:
 ó
 CASES_T2 t1 ttac1 ttac2 ({ö} t2) = ttac1(t1 … t1)({ö} t2) ; ttac2(Œt1 … Œt1)({ö} t2)
 æ
+=SEEALSO
+$cases\_tac$, $\_THEN$, $CASES\_T$
 =FAILURE
 28002	Term is not boolean
 =ENDDOC
@@ -978,8 +981,7 @@ Strip the antecedent of an implicative goal into the assumption list.
 strip{ t1, ö } t2
 =TEX
 =FAILURE
-28010	g
-oal is not of form: `{ ö } t1 Š t2`
+28010	goal is not of form: `{ ö } t1 Š t2`
 =ENDDOC
 
 =DOC
@@ -1014,11 +1016,11 @@ undisch_tac
 =TEX
 where $t1$ and $t1'$ are $\alpha$-convertible.
 Note that all assumptions $\alpha$-convertible with $t1$ are removed.
-=SEEALSO
-$list\_undisch\_tac$, $all\_undisch\_tac$, $pop\_tac$
 =USES
-To make the assumption amenable to manipulation, e.g. by
+Typically to make the assumption amenable to manipulation, e.g. by
 a rewriting tactic.
+=SEEALSO
+$list\_undisch\_tac$, $all\_undisch\_tac$
 =FAILURE
 28011	the term ?0 is not in the assumptions
 =ENDDOC
@@ -1035,6 +1037,10 @@ list_undisch_tac
 É
 { ö } t1 Š ... Š tn Š t
 =TEX
+$\alpha$-equivalent assumptions will only appear once in the resulting
+goal.
+=SEEALSO
+$undisch\_tac$, $all\_undisch\_tac$
 =FAILURE
 28011	the term ?0 is not in the assumptions
 =ENDDOC
@@ -1044,7 +1050,7 @@ val âall_undisch_tacá : TACTIC;
 =DESCRIBE
 Apply $undisch\_tac$ to every assumption in turn:
 =TACTIC
-list_undisch_tac
+all_undisch_tac
 É
 { t1, ..., tn } t
 É
@@ -1052,6 +1058,8 @@ list_undisch_tac
 =TEX
 $\alpha$-equivalent assumptions will only appear once in the resulting
 goal.
+=SEEALSO
+$undisch\_tac$, $list\_undisch\_tac$
 =ENDDOC
 
 \subsection{Concerning ‚}
@@ -1066,10 +1074,10 @@ Reduce a bi-implication to two subgoals.
 É
 strip{ t1, ö } … t2; strip{ t2, ö } … t1
 =TEX
+=SEEALSO
+$strip\_tac$, $‚_T$
 =FAILURE
 28016	goal is not of the form: `ö … t1 ‚ t2`
-=ENDDOC
-($EQ\_TAC$ and $IFF\_TAC$ in Cambridge HOL)
 =ENDDOC
 
 =DOC
@@ -1085,6 +1093,8 @@ ttac
 É
 ttac{ t1, ö } … t2; ttac{ t2, ö } … t1
 =TEX
+=SEEALSO
+$‚\_T2$, $STRIP\_GOAL\_T$
 =FAILURE
 28017	the goal is not of the form: `ö … t1 ‚ t2`
 =ENDDOC
@@ -1102,6 +1112,8 @@ ttac1 ttac2
 É
 ttac1{ t1, ö } … t2; ttac2{ t2, ö } … t1
 =TEX
+=SEEALSO
+$‚\_T$, $STRIP\_GOAL\_T$
 =FAILURE
 28017	the goal is not of the form: `ö … t1 ‚ t2`
 =ENDDOC
@@ -1112,8 +1124,10 @@ val â‚_THENá : (THM -> TACTIC) -> (THM -> TACTIC) -> (THM -> TACTIC);
 A theorem tactic to apply a given theorem tactic to the result
 of eliminating $‚$ from a theorem of the form $ö … t1 ‚ t2$.
 ó
-‚_THEN1 thmtac (ö … t1 ‚ t2) = thmtac (ö … t1 Š t2) THEN thmtac (ö … t2 Š t1)
+‚_THEN thmtac (ö … t1 ‚ t2) = thmtac (ö … t1 Š t2) THEN thmtac (ö … t2 Š t1)
 æ
+=SEEALSO
+$‚\_THEN2$, $STRIP\_THM\_THEN$
 =FAILURE
 28017	the theorem is not of the form: `ö … t1 ‚ t2`
 =ENDDOC
@@ -1124,8 +1138,10 @@ val â‚_THEN2á : (THM -> TACTIC) -> (THM -> TACTIC) -> (THM -> TACTIC);
 A theorem tactic to apply given theorem tactics to the the result
 of eliminating $‚$ from a theorem of the form $ö … t1 ‚ t2$.
 ó
-‚_THEN2 ttac1 ttac2(ö … t1 € t2) = ttac1(ö … t1 Š t2) THEN ttac2(ö … t2 Š t1)
+‚_THEN2 ttac1 ttac2(ö … t1 ‚ t2) = ttac1(ö … t1 Š t2) THEN ttac2(ö … t2 Š t1)
 æ
+=SEEALSO
+$‚\_THEN$, $STRIP\_THM\_THEN$
 =FAILURE
 28017	the theorem is not of the form: `ö … t1 ‚ t2`
 =ENDDOC
@@ -1152,6 +1168,75 @@ $strip\_tac$
 =ENDDOC
 
 
+=DOC
+val âIF_Tá : (THM -> TACTIC) -> TACTIC;
+=DESCRIBE
+Reduce a conditional by applying a tactic generating function to the
+two cases for the selector.
+=TACTIC
+IF_T
+ttac
+É
+{ ö } if a then tt else et
+É
+ttac{ a, ö } … tt; ttac{ Œa, ö } … et
+=TEX
+=SEEALSO
+$‚\_T2$, $STRIP\_GOAL\_T$
+=FAILURE
+28017	the goal is not of the form: `ö … if a then tt else et`
+=ENDDOC
+
+=DOC
+val âIF_T2á : (THM -> TACTIC) -> (THM -> TACTIC) -> (THM -> TACTIC);
+=DESCRIBE
+Reduce a conditional by applying tactic generating functions to the
+two cases for the selector.
+=TACTIC
+IF_T2
+ttac1 ttac2
+É
+{ ö } if a then tt else et
+É
+ttac1{ a, ö } … tt; ttac2{ Œa, ö } … et
+=TEX
+=SEEALSO
+$‚\_T$, $STRIP\_GOAL\_T$
+=FAILURE
+28017	the goal is not of the form: `ö … if a then tt else et`
+=ENDDOC
+
+=DOC
+val âIF_THENá : (THM -> TACTIC) -> (THM -> TACTIC);
+=DESCRIBE
+A theorem tactic to apply a given theorem tactic to the result
+of eliminating the conditional from a theorem with a conditional as its
+conclusion.
+ó
+IF_THEN ttac (ö … if a then tt else et) = ttac (a, ö … tt) THEN ttac (Œa, ö … et)
+æ
+=SEEALSO
+$IF\_THEN2$, $STRIP\_THM\_THEN$
+=FAILURE
+28017	the theorem is not of the form: `ö … if a then tt else et`
+=ENDDOC
+
+=DOC
+val âIF_THEN2á : (THM -> TACTIC) -> (THM -> TACTIC) -> (THM -> TACTIC);
+=DESCRIBE
+=DESCRIBE
+A theorem tactic to apply given theorem tactics to the result
+of eliminating the conditional from a theorem with a conditional as its
+conclusion.
+ó
+IF_THEN ttac (ö … if a then tt else et) = ttac1 (a, ö … tt) THEN ttac2 (Œa, ö … et)
+æ
+=SEEALSO
+$IF\_THEN$, $STRIP\_THM\_THEN$
+=FAILURE
+28017	the theorem is not of the form: `ö … if a then tt else et`
+=ENDDOC
+
 \subsection{Concerning ƒ}
 =DOC
 val âsimple_ƒ_tacá : TACTIC;
@@ -1168,7 +1253,7 @@ simple_ƒ_tac
 where $x'$ is a variant name of $x$, different from any 
 variable in $ö$ or $t$.
 =USES
-Specialised tactic programming.
+Tactic programming.
 The more general $ƒ\_tac$ is just as efficient as $simple\_ƒ\_tac$.
 =SEEALSO
 $ƒ\_tac$
@@ -1195,7 +1280,7 @@ N.B. loses information.
 =TEX
 where »x¼ may be instantiated to the structure of »t1¼.
 =USES
-Specialised tactic programming.
+Tactic programming.
 The more general $„\_tac$ is just as efficient as $simple\_„\_tac$.
 =FAILURE
 28027	goal is not of the form: `{ ö } „ x Ž t2[x]` 
@@ -1246,7 +1331,7 @@ simple_„%down%1_tac1
 =TEX
 where $x'$ is a variant of $x$ which does not occur free in $t$.
 =USES
-Specialised tactic programming.
+Tactic programming.
 The more general $„°\_tac$ is just as efficient as $simple\_„°\_tac$.
 =FAILURE
 28029	goal is not of the form: `{ ö } „%down%1 x Ž P[x]`
@@ -1265,7 +1350,7 @@ SIMPLE_„°_THEN thmtac (ö … „°xŽt) = thmtac (ö … t[x'/x] € ƒx''ŽP[x''] Š x'' = x)
 where »x'¼ and »x''¼ are distinct variants of »x¼ which do not appear free in $ö$ or in
 the assumptions or conclusion of the goal.
 =USES
-Specialised tactic programming.
+Tactic programming.
 The more general $„°\_THEN$ is just as efficient as $SIMPLE\_„°\_THEN$.
 =FAILURE
 28048	thoerem is not of the form: `ö … „ x Ž t` 
