@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.11 2002/12/03 15:25:38 rda Exp rda $ 
+ * $Id: templates.c,v 2.12 2002/12/12 14:06:50 rda Exp rda $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -360,6 +360,11 @@ static void templates_cb(
 		msg("template handler", m);
 		return;
 	};
+
+	if(get_map_state(text_w) != IsViewable) {
+		XBell(XtDisplay(root), 50);
+		return;
+	}
 
 	if(XmTextGetSelectionPosition(text_w, &start, &end)) {
 		XmTextReplace(text_w, start, end, *cbdata);
