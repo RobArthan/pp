@@ -92,7 +92,7 @@ Also implemented remedies for issues 1 and 4 (V0.6).
 \item[Issue 1.123] Fixing bug 6.1 of INT502.
 \item[Issue 1.124] Fixing $is\_id\_in\_package$.
 \item[Issue 1.125-126] Improved prefixing functions.
-\item[Issue 1.127] IUCT WP7 changes.
+\item[Issue 1.127-1.128] IUCT WP7 changes.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -1896,7 +1896,9 @@ fun Ûterm_of_vcÝ (vc as (decs, (asms, conc)) : VC) : TERM = (
 		|	(_, _) => mk_z_µ(mk_z_decl decs, list_mk_± asms, conc));
 	in	case frees tm of
 			[] => tm
-		|	(t :: _) => term_fail "store_vcs" 507051 [tm, t]
+		|	[t] => term_fail "store_vcs" 507051 [tm, t]
+		|	fs => fail "store_vcs" 507052 [fn () => string_of_term tm,
+				fn () =>  format_list string_of_term fs ", "]
 	end
 );
 =TEX
@@ -4457,31 +4459,44 @@ fun Ûrenames_proc_commonÝ
 	: unit = (
 	case ss of
 		SSProcedure {name = new, ... } => (
-			case s_lookup pack (!pack_env) of
-				Value package => (
-					let	val formal_proc2 as
-							{name, formal_ids, spec} =
-							find
-							(#formal_procs package)
-							(fn p => #name p = old);
-						val formal_proc3 =
-							{name = new,
-							formal_ids = formal_ids,
-							spec = spec};
-						val block1 as
-						{declab as
+		   case s_lookup pack (!pack_env) of
+		   Value package => (
+			let	val formal_proc2  =
+					find
+						(#formal_procs package)
+						(fn p => #name p = old);
+(* !!! temporary fix starts here until WP 2 in place !!! *)
+(* need PP internal theory of pack to be present, and type_names correct *)
+				val type_names = [];
+				val (tysubs, _) = do_given_sets pack type_names;
+				val {name=pname, formal_ids=pformal_ids,
+					 spec=pspec} : FORMAL_PROC = 
+					prefix_formal_proc
+						pack
+						tysubs
+						(new_ids package)
+						formal_proc2;
+				val formal_proc3 =
+						{name = new,
+						formal_ids = pformal_ids,
+						spec = pspec};
+				val block1 as
+					{declab as
 						{in_scope as {formal_procs, ...},
 								...},
-						...} =	block 1;
-					in	blocks :=
-						(block_formal_procs
+					...} =	block 1;
+			in	blocks :=
+					(block_formal_procs
 						(block1, formal_proc3::formal_procs)
 						:: tl (!blocks))
-					end	handle Fail _ =>
-						comment "renames_proc" 507036
-						[fn () => pack dot old]
-			) |	Nil =>
-					comment "renames_proc" 507038 [fn()=>pack]
+			end	handle (exn as Fail f) =>
+				if (area_of exn = "find")
+				then comment "renames_proc" 507036
+					[fn () => pack dot old]
+				else comment "renames_proc" 507044
+					[fn () => pack dot old,
+					fn () => get_message f]
+		) |	Nil => comment "renames_proc" 507038 [fn()=>pack]
 	) |	_ => ()
 );
 =TEX
