@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.8 2002/12/03 15:25:38 rda Exp rda $
+ * $Id: cmdline.c,v 2.9 2002/12/12 14:06:50 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -233,9 +233,6 @@ void add_cmd_line(Widget text_w)
 	XtAddCallback(cmd_text, XmNactivateCallback,
 		exec_cb, (XtPointer)(&cmd_line_data));
 
-	XtAddCallback(cmd_text, XmNfocusCallback,
-		focus_cb, (XtPointer)(&cmd_line_data));
-
 	XtAddCallback(add_btn, XmNactivateCallback,
 		add_cb, (XtPointer)(&cmd_line_data));
 
@@ -405,15 +402,4 @@ static void help_cb(
 {
 	CmdLineData *cbdata = cbd;
 	help_dialog(root, Help_Command_Line_Tool);
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * focus callback.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void focus_cb(
-	Widget		w,
-	XtPointer	cbd,
-	XtPointer	cbs)
-{
-	fprintf(stderr, "cmdline gets focus\n");
 }
