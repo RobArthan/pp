@@ -2,7 +2,7 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * $Id$ 
  *
- * msg.h - support for message dialogues for the X/Motif ProofPower Interface
+ * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
  * (c) ICL 1993
  *
@@ -120,24 +120,31 @@ Widget w;
 char *question;
 {
 	static Widget dialog;
-	XmString text, yes, no;
-	int reply = 0;
+	XmString text, yes, no, confirm;
+	static int reply;
 	/* 0 = not replied; otherwise YES/NO */
 	extern void yes_no_cb();
 
+	reply = 0;
+
 	if (!dialog) {
-		dialog = XmCreateQuestionDialog(w, "dialog", NULL, 0);
+		dialog = XmCreateQuestionDialog(w, "yes_no", NULL, 0);
 		yes = XmStringCreateSimple("Yes");
 		no = XmStringCreateSimple("No");
+		confirm = XmStringCreateSimple("Confirm");
 		XtVaSetValues(dialog,
 			XmNdialogStyle,		XmDIALOG_FULL_APPLICATION_MODAL,
 			XmNokLabelString,	yes,
 			XmNcancelLabelString,	no,
+			XmNdialogTitle, 	confirm,
 			NULL);
 		XtSetSensitive(
 			XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON), False);
 		XtAddCallback(dialog, XmNokCallback, yes_no_cb, &reply);
 		XtAddCallback(dialog, XmNcancelCallback, yes_no_cb, &reply);
+		XmStringFree(yes);
+		XmStringFree(no);
+		XmStringFree(confirm);
 	}
 	text = XmStringCreateSimple(question);
 	XtVaSetValues(dialog, XmNmessageString, text, NULL);
@@ -156,7 +163,7 @@ char *question;
 
 void yes_no_cb(w, reply, cbs)
 Widget w;
-BOOL *reply;
+int *reply;
 XmAnyCallbackStruct *cbs;
 {
 	switch (cbs->reason) {
@@ -169,4 +176,51 @@ XmAnyCallbackStruct *cbs;
 		default:
 			return;
 	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * ok_dialog: error message which the user must confirm
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void ok_dialog(w, msg)
+Widget w;
+char *msg;
+{
+	static Widget dialog;
+	XmString text, ok, error;
+	static int reply;
+	/* 0 = not replied; */
+
+	reply = 0;
+
+	if (!dialog) {
+		dialog = XmCreateQuestionDialog(w, "ok", NULL, 0);
+		ok = XmStringCreateSimple("OK");
+		error = XmStringCreateSimple("Error");
+		XtVaSetValues(dialog,
+			XmNdialogStyle,		XmDIALOG_FULL_APPLICATION_MODAL,
+			XmNokLabelString,	ok,
+			XmNdialogTitle, 	error,
+			NULL);
+		XtSetSensitive(
+			XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON), False);
+		XtSetSensitive(
+			XmMessageBoxGetChild(dialog, XmDIALOG_CANCEL_BUTTON), False);
+		XtAddCallback(dialog, XmNokCallback, yes_no_cb, &reply);
+		XmStringFree(ok);
+		XmStringFree(error);
+	}
+	text = XmStringCreateSimple(msg);
+	XtVaSetValues(dialog, XmNmessageString, text, NULL);
+	XmStringFree(text);
+	XtManageChild(dialog);
+	XtPopup(XtParent(dialog), XtGrabNone);
+
+	XBell(XtDisplay(w), 50);
+
+	while (!reply) {
+		if(XtAppPending(app)) {
+			XtAppProcessEvent(app, XtIMAll);
+		}
+	};
+	XtPopdown(XtParent(dialog));
 }

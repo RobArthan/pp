@@ -3,7 +3,7 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * $Id$
  *
- * cmdwin.h -  main window operations for the X/Motif ProofPower
+ * cmdwin.c -  main window operations for the X/Motif ProofPower
  * Interface
  *
  * (c) ICL 1993
@@ -20,9 +20,12 @@
 
 #include <string.h>
 #include <sys/types.h>
+#include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/termio.h>
+#include <sys/termios.h>
+#include <sys/wait.h>
 
 #include <signal.h>
 #include <errno.h>
@@ -49,13 +52,38 @@
 #define STDOUT 1
 #define STDERR 2
 
+/* For the following see "Data transfer to application" below */
+#define MAX_Q_LEN 40000		/* see "Data transfer to application" below */
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * global, static and external data:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+extern int errno;
 
 extern char *environ[];
+
+/* For the following three see "Data transfer to application" below */
+static char queue[MAX_Q_LEN];
+static long q_length = 0;
+static int q_head = 0;
+
+/* The following is used to implement undo in the edit menu */
+
+struct undo_details {
+	BOOL can_undo;		/* true iff. can do an undo */
+	BOOL moved_away;	/* true if the change is complete */
+	long first, last;
+	char *oldtext
+} undo_buffer = {FALSE, TRUE, 0, NULL};
+
+/* Messages for various purposes */
+
+static char *undo_redo[2] = {"Undo", "Redo"};
+
+static long undo_redo_index;
+
+static BOOL undoing;
 
 static char* help_message =
 "\
@@ -65,6 +93,19 @@ static char* help_message =
 
 static char* quit_message =
 "Do you really want to quit?";
+
+static char* kill_message =
+"Do you really want to kill the application?";
+
+static char* restart_message =
+"The application is running. \
+Do you want to kill it and then restart it?";
+
+static char *cmd_too_long_message = 
+"The command is too long (%d bytes supplied; max. %d bytes).";
+
+static char *send_error_message = 
+"A system error occurred writing to the application.";
 
 XtAppContext app; /* global because needed in msg.c */
 
@@ -76,7 +117,7 @@ XtAppContext app; /* global because needed in msg.c */
  * display	work	displays application output
  * command	work	command line input
  * menubar	frame	the menu bar at the top of the main window
- * filemenu	menubar	the file menu
+ * toolsmenu	menubar	the tools menu
  * editmenu	menubar	the edit menu
  * cmdmenu	menubar	the command menu
  * helpmenu	menubar	the help menu
@@ -84,43 +125,73 @@ XtAppContext app; /* global because needed in msg.c */
 
 static Widget
 	root, frame, work, display, command,
-	menubar, filemenu, editmenu, cmdmenu, helpmenu;
+	menubar, toolsmenu, editmenu, cmdmenu, helpmenu;
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * limits on text window sizes in the main window:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static long display_max = 2000;
+
+static long command_max = 2000;
 
 static char *arglist[10];
 
 static int control_fd;
 
+static int child_pid;
+
+static int child_pgrp;
+
+static XtInputId app_ip_req;
+
+static int orig_argc;
+
+static char **orig_argv;
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * scroll_out: given a buffer, buf, containing ct characters
- * of interest, write them to the (scrolled text) window w.
- * If the insertion position of w is visible, then w is scrolled,
- * otherwise the new characters are written out of sight and
- * the display in w is left where it is.
+ * X MANAGEMENT OF THE MAIN WINDOW
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-void scroll_out(buf, ct, w, ignored)
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * scroll_out: given a buffer, buf, containing ct characters
+ * of interest, write them to the display window, display.
+ * If the insertion position is visible, then the window is scrolled,
+ * otherwise the new characters are written out of sight and
+ * the display window text is left where it is.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+void scroll_out(buf, ct, ignored)
 char *buf;
 int ct;
-Widget w;
 BOOL ignored;
 {
 	XmTextPosition ins_pos, last_pos;
 	Position dontcare;
 	char *p;
+	char overwritten;
+
+	ins_pos = XmTextGetLastPosition(display);
+
+/* need to temporarily null-terminate the buffer: */
+
+	overwritten = buf[ct];
 	buf[ct] = '\0';
 
-	ins_pos = XmTextGetLastPosition(w);
+	XmTextInsert(display, ins_pos, buf);
 
-	XmTextInsert(w, ins_pos, buf);
+	buf[ct] = overwritten;
 
-	last_pos = XmTextGetLastPosition(w);
+	last_pos = XmTextGetLastPosition(display);
 
-	if(XmTextPosToXY(w, ins_pos, &dontcare, &dontcare)) {
+	if(XmTextPosToXY(display, ins_pos, &dontcare, &dontcare)) {
 		/* insertion position is visible: scroll */
-		while(!XmTextPosToXY(w, last_pos, &dontcare, &dontcare)) {
-			XmTextScroll(w, 1);
+		while(!XmTextPosToXY(display, last_pos, &dontcare, &dontcare)) {
+			XmTextScroll(display, 1);
 		};
 	};
+
+	check_text_window_limit(display,  display_max);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -135,9 +206,12 @@ char **argv;
 	Arg args[12];
 	int i;
 	XmString s1, s2, s3, s4, s5, s6;
-	void file_menu_cb(), edit_menu_cb(), cmd_menu_cb(), help_menu_cb();
-
-	diag("cmdwin", "X initialisation");
+	void 	tools_menu_cb(),
+		edit_menu_cb(),
+		cmd_menu_cb(),
+		help_menu_cb(),
+		command_modify_cb(),
+		command_motion_cb();
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Top level and main windows:
@@ -158,22 +232,6 @@ char **argv;
 		xmPanedWindowWidgetClass,
 		frame, NULL);
 
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Display window:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-	i = 0;
-	XtSetArg(args[i], XmNrows,	 		24); ++i;
-	XtSetArg(args[i], XmNcolumns, 			80); ++i;
-	XtSetArg(args[i], XmNeditable, 			False); ++i;
-	XtSetArg(args[i], XmNeditMode,	 		XmMULTI_LINE_EDIT); ++i;
-	XtSetArg(args[i], XmNwordWrap, 			True); ++i;
-	XtSetArg(args[i], XmNscrollHorizontal,		False); ++i;
-	XtSetArg(args[i], XmNscrollVertical, 		True); ++i;
-	XtSetArg(args[i], XmNautoShowCursorPosition, 	False); ++i;
-	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
-
-	display = XmCreateScrolledText(work, "display", args, i);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Command window:
@@ -184,24 +242,41 @@ char **argv;
 	XtSetArg(args[i], XmNcolumns, 			80); ++i;
 	XtSetArg(args[i], XmNeditable, 			True); ++i;
 	XtSetArg(args[i], XmNeditMode, 			XmMULTI_LINE_EDIT); ++i;
-	XtSetArg(args[i], XmNwordWrap, 			True); ++i;
-	XtSetArg(args[i], XmNscrollHorizontal,		False); ++i;
-	XtSetArg(args[i], XmNscrollVertical, 		True); ++i;
 	XtSetArg(args[i], XmNautoShowCursorPosition, 	True); ++i;
 	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
 
-
 	command = XmCreateScrolledText(work, "command", args, i);
+
+	XtAddCallback(command,
+		XmNmodifyVerifyCallback, command_modify_cb, NULL);
+
+	XtAddCallback(command,
+		XmNmotionVerifyCallback, command_motion_cb, NULL);
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Display window:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+	i = 0;
+	XtSetArg(args[i], XmNrows,	 		24); ++i;
+	XtSetArg(args[i], XmNcolumns, 			80); ++i;
+	XtSetArg(args[i], XmNeditable, 			False); ++i;
+	XtSetArg(args[i], XmNeditMode,	 		XmMULTI_LINE_EDIT); ++i;
+	XtSetArg(args[i], XmNautoShowCursorPosition, 	False); ++i;
+	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
+
+	display = XmCreateScrolledText(work, "display", args, i);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu bar:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-	s1 = XmStringCreateSimple("File");
+	s1 = XmStringCreateSimple("Tools");
 	s2 = XmStringCreateSimple("Edit");
 	s3 = XmStringCreateSimple("Command");
 	s4 = XmStringCreateSimple("Help");
 	menubar = XmVaCreateSimpleMenuBar(frame, "menubar",
-		XmVaCASCADEBUTTON, s1, 'F',
+		XmVaCASCADEBUTTON, s1, 'T',
 		XmVaCASCADEBUTTON, s2, 'E',
 		XmVaCASCADEBUTTON, s3, 'C',
 		XmVaCASCADEBUTTON, s4, 'H', NULL);
@@ -212,33 +287,27 @@ char **argv;
 	XmStringFree(s4);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * File menu:
+ * Tools menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-	s1 = XmStringCreateSimple("New");
-	s2 = XmStringCreateSimple("Save");
-	s3 = XmStringCreateSimple("Quit");
-	s4 = XmStringCreateSimple("Ctrl-C");
+	s1 = XmStringCreateSimple("Palette");
 
-	filemenu = XmVaCreateSimplePulldownMenu(
-		menubar, "file_menu", 0, file_menu_cb,
-		XmVaPUSHBUTTON, s1, 'N', NULL, NULL,
-		XmVaPUSHBUTTON, s2, 'S', NULL, NULL,
-		XmVaPUSHBUTTON, s3, 'Q', "Ctrl<Key>c", s4,
+	toolsmenu = XmVaCreateSimplePulldownMenu(
+		menubar, "tools_menu", 0, tools_menu_cb,
+		XmVaPUSHBUTTON, s1, 'P', NULL, NULL,
 		NULL);
 
 	XmStringFree(s1);
-	XmStringFree(s2);
-	XmStringFree(s3);
-	XmStringFree(s4);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Edit menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	s1 = XmStringCreateSimple("Cut");
 	s2 = XmStringCreateSimple("Copy");
-	s3 = XmStringCreateSimple("Clear");
-	s4 = XmStringCreateSimple("Paste");
-	s5 = XmStringCreateSimple("Palette");
+	s3 = XmStringCreateSimple("Paste");
+	s4 = XmStringCreateSimple("Clear");
+	s5 = XmStringCreateSimple(undo_redo[0]);
+	undo_redo_index = 0;
+	undoing = FALSE;
 
 	editmenu = XmVaCreateSimplePulldownMenu(
 		menubar, "edit_menu", 1, edit_menu_cb,
@@ -246,7 +315,7 @@ char **argv;
 		XmVaPUSHBUTTON, s2, 'o', NULL, NULL,
 		XmVaPUSHBUTTON, s3, 'P', NULL, NULL,
 		XmVaPUSHBUTTON, s4, 'l', NULL, NULL,
-		XmVaPUSHBUTTON, s5, 'p', NULL, NULL,
+		XmVaPUSHBUTTON, s5, NULL, NULL, NULL,
 		NULL);
 
 	XmStringFree(s1);
@@ -255,19 +324,34 @@ char **argv;
 	XmStringFree(s4);
 	XmStringFree(s5);
 
+	set_menu_item_sensitivity(editmenu, 4, False);
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Command menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	s1 = XmStringCreateSimple("Execute");
 	s2 = XmStringCreateSimple("Ctrl-X");
+	s3 = XmStringCreateSimple("Interrupt Application");
+	s4 = XmStringCreateSimple("Kill Application");
+	s5 = XmStringCreateSimple("Restart Application");
+	s6 = XmStringCreateSimple("Quit");
 
 	cmdmenu = XmVaCreateSimplePulldownMenu(
 		menubar, "command_menu", 2, cmd_menu_cb,
 		XmVaPUSHBUTTON, s1, 'x', "Ctrl<Key>x", s2,
+		XmVaSEPARATOR,
+		XmVaPUSHBUTTON, s3, 'I', NULL, NULL,
+		XmVaPUSHBUTTON, s4, 'K', NULL, NULL,
+		XmVaPUSHBUTTON, s5, 'R', NULL, NULL,
+		XmVaPUSHBUTTON, s6, 'Q', NULL, NULL,
 		NULL);
 
 	XmStringFree(s1);
 	XmStringFree(s2);
+	XmStringFree(s3);
+	XmStringFree(s4);
+	XmStringFree(s5);
+	XmStringFree(s6);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Help menu:
@@ -307,8 +391,9 @@ char **argv;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Menu processing:
+ * MENU PROCESSING
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+
 void dummy_menu_cb(w, i, cbs, s)
 Widget w;
 int i;
@@ -317,18 +402,19 @@ char *s;
 {
 	char buf[4];
 	sprintf(buf, "%d", i);
-	diag(s, buf);
 }
 
-void file_menu_cb(w, i, cbs)
+void tools_menu_cb(w, i, cbs)
 Widget w;
 int i;
 XmAnyCallbackStruct *cbs;
 {
-	dummy_menu_cb(w, i, cbs, "file menu item");
+
+	dummy_menu_cb(w, i, cbs, "tools menu item");
 	switch(i) {
-	case 2:
-		yes_no_dialog(root, quit_message);
+	case 0:
+		add_palette(command);
+/* Perhaps should test for success and make this menu item insensitive */
 		break;
 	default:
 		break;
@@ -340,6 +426,8 @@ Widget w;
 int i;
 XmAnyCallbackStruct *cbs;
 {
+	void do_undo();
+
 	Boolean result = True;
 
 	dummy_menu_cb(w, i, cbs, "edit menu item");
@@ -349,6 +437,9 @@ XmAnyCallbackStruct *cbs;
 		break;
 	case 1:
 		result = XmTextCopy(command, CurrentTime);
+		if(!result) {
+			result = XmTextCopy(display, CurrentTime);
+		};
 		break;
 	case 2:
 		result = XmTextPaste(command);
@@ -357,8 +448,7 @@ XmAnyCallbackStruct *cbs;
 		XmTextClearSelection(command, CurrentTime);
 		break;
 	case 4:
-		add_palette(command);
-/* Should test for success and make this menu item insensitive */
+		do_undo(command);
 		break;
 	default:
 		break;
@@ -373,17 +463,36 @@ int i;
 XmAnyCallbackStruct *cbs;
 {
 	char *cmd;
-	int len;
-	void send_to_application();
+	Bool execute_command();
+	BOOL application_alive();
+	void kill_application();
+	void restart_application();
+	void interrupt_application();
+
 	dummy_menu_cb(w, i, cbs, "command menu item");
 	switch(i) {
 	case 0:
-		cmd = XmTextGetString(command);
-		len = strlen(cmd);
-/* **** complain if len = 0? **** */
-		send_to_application(cmd, len);
-		XmTextSetHighlight(command, 0, len, XmHIGHLIGHT_SELECTED);
-		XmTextSetSelection(command, 0, len, CurrentTime);
+		execute_command();
+		break;
+	case 1:
+		interrupt_application();
+		break;
+	case 2:
+		if(yes_no_dialog(root, kill_message)) {
+			kill_application();
+		};
+		break;
+	case 3:
+		if(!application_alive()
+			|| yes_no_dialog(root, restart_message)) {
+			restart_application();
+		};
+		break;
+	case 4:
+		if(yes_no_dialog(root, quit_message)) {
+			kill_application();
+			exit(0);
+		};
 		break;
 	default:
 		break;
@@ -398,12 +507,145 @@ XmAnyCallbackStruct *cbs;
 	dummy_menu_cb(w, i, cbs, "help menu item");
 	switch(i) {
 	case 0:
+		toggle_menu_item_sensitivity(helpmenu, 1);
 		help_dialog(w, help_message);
 		break;
 	default:
 		break;
 	}
 }
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * MONITORING CHANGES FOR THE UNDO COMMAND
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Monitor cursor motions:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void command_motion_cb(w, d, cbs)
+Widget w;
+XtPointer d;
+XmTextVerifyCallbackStruct *cbs;
+{
+	undo_buffer.moved_away = TRUE;
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Reinitialise the undo buffer. N.b. initialisation of the `last'
+ * component almost always has to be reassigned. Following gives
+ * an undo which would not change the text.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void reinit_undo_buffer (cbs, cu)
+XmTextVerifyCallbackStruct *cbs;
+BOOL cu;
+{
+	undo_buffer.can_undo = cu;
+	undo_buffer.moved_away = FALSE;
+	undo_buffer.first = cbs->startPos;
+	undo_buffer.last = cbs->startPos;
+	if(undo_buffer.oldtext != NULL) {
+		XtFree(undo_buffer.oldtext);
+		undo_buffer.oldtext = NULL;
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Monitor typed input:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void command_modify_cb(w, d, cbs)
+Widget w;
+XtPointer d;
+XmTextVerifyCallbackStruct *cbs;
+{
+	BOOL restart = undo_buffer.moved_away;
+	long len;
+	char *text, *cut_chars;
+
+/* XmGetSelection doesn't seem to work as one would like in a 
+ * callback like this. Therefore, if a block delete is being done,
+ * we have to get the entire contents of the text window to find out
+ * what's being deleted */
+
+	if(cbs->startPos < cbs->endPos) {
+		text = XmTextGetString(w);
+		len = cbs->endPos - cbs->startPos;
+		cut_chars = XtMalloc(len + 1);
+		if(text == NULL || cut_chars == NULL) {
+			reinit_undo_buffer(cbs, FALSE);
+		} else {
+			strncpy(cut_chars, text + (cbs->startPos), len);
+			cut_chars[len] = '\0';
+			reinit_undo_buffer(cbs, TRUE); /* for the XtFreee */
+			undo_buffer.moved_away = FALSE;
+			undo_buffer.first = cbs->startPos;
+			undo_buffer.last = cbs->startPos + cbs->text->length;	
+			undo_buffer.oldtext = cut_chars;
+			XtFree(text);
+		}
+	} else if (restart) {
+		reinit_undo_buffer(cbs, TRUE);
+		undo_buffer.last = cbs->startPos + cbs->text->length;
+	} else {
+		undo_buffer.last += cbs->text->length;
+	}
+	set_menu_item_sensitivity(editmenu, 4, undo_buffer.can_undo);
+/* If this isn't the call invoked byt he XmReplace in do_undo */
+/* The menu label should revert to "Undo": */
+	if(!undoing) {
+		undo_redo_index = 0;
+		set_menu_item_label(editmenu, 4, undo_redo[0]);
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Do an undo. Note that the text replacement will cause
+ * the modify/verify call back monitor_typing to be invoked
+ * so that the next undo will undo the undo (i.e. undo + undo = redo).
+ * Since this will change the undo buffer we must copy the relevant
+ * fields. We must set the moved_away field to indicate that we're
+ * monitor_typing is to stop accumulating changes.
+ * Any text inserted by the undo is selected and the insertion
+ * position is set to the end of the undo point. The beginning
+ * of the new selection (or the insertion point if no text was
+ * inserted) is manoeuvred into view in the window.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void do_undo(w)
+Widget w;
+{
+	XmTextPosition fst, lst;
+	long len;
+	char *str;
+	if(undo_buffer.can_undo) {
+		undoing = TRUE;
+		undo_buffer.moved_away = TRUE;
+		if(undo_buffer.oldtext == NULL) {
+			len = 0;
+			str = "";
+		} else {
+			len = strlen(undo_buffer.oldtext);
+			str = XtMalloc(len + 1);
+			strcpy(str, undo_buffer.oldtext);
+		};
+		fst = undo_buffer.first;
+		lst = undo_buffer.last;
+		XmTextReplace(w, fst, lst, str);
+		undo_redo_index = 1 - undo_redo_index;
+		set_menu_item_label(editmenu, 4,
+				undo_redo[undo_redo_index]);
+		if(len) {
+			XmTextSetSelection(w, fst, fst+len, CurrentTime);
+		} else {
+			XmTextSetInsertionPosition(w, fst);
+		}
+		XmTextShowPosition(w, fst);
+		XtFree(str);
+		undoing = FALSE;
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * MANAGING THE APPLICATION
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Pseudo-terminal initialisation:
@@ -416,7 +658,7 @@ char **argv;
 {
 	int slave_fd, tty_fd;
 	char c;
-	int i, fork_success;
+	int i;
 	char line[20];
 	void get_from_application();
 
@@ -425,7 +667,6 @@ char **argv;
 		exit(10);
 	};
 	for(i = 0; i + 1 < argc && i < 8; ++i) {
-		diag("argument", argv[i+1]);
 		arglist[i] = argv[i+1];
 	};
 	arglist[i] = NULL;
@@ -444,7 +685,6 @@ nopty:
 	perror("xpp");
 	exit(1);
 gotpty:
-	diag("get_pty", "pseudo-terminal acquired");
 	line[sizeof "/dev/" - 1] = 't';
 	slave_fd = open(line, O_RDWR);
 	if(slave_fd < 0) {
@@ -452,23 +692,33 @@ gotpty:
 		perror("xpp");
 		exit(4);
 	};
-	fork_success = fork();
-	if (fork_success < 0) { /* Cannot do */
+	child_pid = fork();
+	if (child_pid < 0) { /* Cannot do */
 		msg("system error", "fork failed");
 		perror("xpp");
 		exit(5);
-	} else if (fork_success > 0) { /* Parent */
-		diag("get_pty", "parent: forked ok");
+	} else if (child_pid > 0) { /* Parent */
 		close(slave_fd);
 		if(fcntl(control_fd, F_SETFL, FNDELAY) < 0) {
 			msg("system error", "fcntl on application would not permit non-blocking i/o");
 			perror("xpp");
 			exit(7);
 		};
-		XtAppAddInput(app, control_fd, XtInputReadMask,
+		i = 1;
+		if(ioctl(control_fd, TIOCREMOTE, &i) < 0) {
+			msg("system error", "ioctl on application failed");
+			perror("xpp");
+			exit(8);
+		};
+		child_pgrp = child_pid;
+		if(setpgrp(child_pid, child_pid) != 0) {
+			msg("system error", " setpgrp failed");
+			perror("xpp");
+			exit(9);
+		};
+		app_ip_req = XtAppAddInput(app, control_fd, XtInputReadMask,
 			get_from_application, NULL);
 	} else { /* Child */
-		diag("get_pty", "child: forked ok");
 		close(control_fd);
 		dup2(slave_fd, 0);
 		dup2(slave_fd, 1);
@@ -478,7 +728,7 @@ gotpty:
 		};
 		if((tty_fd = open("/dev/tty", O_RDWR)) >= 0) {
 			ioctl(tty_fd, TIOCNOTTY, 0);
-		}
+		};
 		execvp(arglist[0], arglist);
 	/* **** error if reach here **** */
 		msg("system error", "could not exec");
@@ -487,50 +737,305 @@ gotpty:
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Test whether the application is alive
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+BOOL application_alive()
+{
+	return(!kill(child_pid, 0));
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * Data transfer from application:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void get_from_application(w, unused)
-Widget w;
-XtPointer unused;
+void get_from_application(unused_w, unused_p)
+Widget unused_w;
+XtPointer unused_p;
 {
 	int ct;
-	static	char buf[257];
-	while((ct = read(control_fd, buf, 256)) > 0) {
-		scroll_out(buf, ct, display, FALSE);
-		diag("get_from_application", buf);
+	static	char buf[1001];
+	while((ct = read(control_fd, buf, 1000)) > 0) {
+		scroll_out(buf, ct, FALSE);
+	};
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Data transfer to application:
+ * To cope with executing long command line sequences, this
+ * is done using a (currently fixed size) queue.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * dequeue tries to write out the command line at the head of the
+ * queue. To simplify the coding and particularly the memory
+ * management, if the line to be written out cross the boundary
+ * at the end of the cyclic buffer containing the queue data,
+ * the line is taken to end at that boundary.
+ * It returns true iff. it reduced the size of the queue.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static BOOL dequeue()
+{
+	long bytes_written, line_len, i, top;
+	BOOL sent_something = FALSE;
+	BOOL sys_error = FALSE;
+
+/* nothing to do if the queue is empty */
+
+	if(q_length == 0) {
+		return(FALSE);
+	};
+
+/* no way of emptying the queue if there's no application running: */
+
+	if(!application_alive()) {
+		return(FALSE);
+	};
+
+/* something to do; find the next command line:*/
+
+	top = ((i = q_head + q_length) > MAX_Q_LEN ? MAX_Q_LEN : i);
+
+	for(i = q_head; i < top && queue[i] != '\n'; ++i) {
+		continue;
+	};
+
+	line_len = (i < top ? i - q_head + 1 : i - q_head);
+
+/* try to send the command line: */
+	while(!sent_something && !sys_error && line_len) {
+		bytes_written = write(control_fd, queue + q_head, line_len);
+		sent_something = bytes_written > 0;
+
+		if(bytes_written < 0) {
+			if(errno = EWOULDBLOCK) {
+/* try to send a bit less */
+				--line_len;
+			} else {
+				perror("xpp");
+				sys_error = TRUE;
+				ok_dialog(root, send_error_message);
+			}
+		}
+	};
+
+/* display what was sent, if anything: */
+
+	if(sent_something)  {
+		scroll_out(queue + q_head, bytes_written, TRUE);
+		q_head = (q_head + bytes_written) % MAX_Q_LEN;
+		q_length -= bytes_written;
+	};
+
+	return(sent_something);
+}
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * enqueue tries to add its argument text to the queue. First
+ * it attempts to dequeue things. If it succeeds in making room here
+ * the text to the queue it attempts, here and now, to dequeue as
+ * much as it can.
+ * It returns true if it got its argument onto the queue.
+ * **** **** **** **** **** ***. **** **** **** **** **** **** */
+static BOOL enqueue(buf, siz)
+char *buf;
+int siz;
+{
+	int buf_i, q_i;
+
+/* Make room, if we can: */
+
+	while(dequeue()) {
+		continue;
+	};
+/* If no room now, there's no hope: */
+
+	if(siz > MAX_Q_LEN - q_length) {
+		return(FALSE);
+	};
+
+	q_i = (q_head + q_length) % MAX_Q_LEN;
+
+/* Put data onto the queue: */
+
+	for(buf_i = 0; buf_i < siz && q_i < MAX_Q_LEN; ++buf_i) {
+		queue[q_i++] = buf[buf_i];
+	};
+
+	for(q_i = 0; buf_i < siz; ++q_i) {
+		queue[q_i] = buf[buf_i++];
+	};
+
+	q_length += siz;
+
+/* Have a go at flushing the queue: */
+
+	while(dequeue()) {
+		continue;
+	}
+}
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Time-out function for draining the queue when it can't
+ * be emptied immediately by enqueue
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void try_drain_queue(w)
+Widget w;
+{
+/* If there's something in the queue try to process it */
+	if(q_length) {
+		while(dequeue()) {
+			continue;
+		}
+	};
+
+/* If there's still something in the queue ask to be called again: */
+
+	if(q_length) {
+		XtAppAddTimeOut(app, 25, try_drain_queue, w);
 	};
 }
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Data transfer to application:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
+ * clear_queue clears out the queue by reinitialising q_length.
+ * **** **** **** **** **** ***. **** **** **** **** **** **** */
+static void clear_queue ()
+{
+	if(q_length) {
+		q_length = 0;
+	}
+}
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Send commands to the application via the queue
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 void send_to_application (buf, siz)
 char *buf;
 int siz;
 {
-/*
-	scroll_out(buf, siz, display, TRUE);
-*/
-	if(write(control_fd, buf, siz) != siz) {
-		diag("system error", "write to application failed");
-		perror("xpp");
-		exit(6);
+	int bytes_written;
+
+/* Check there's something listening: */
+
+	if(!application_alive()) {
+		return;
 	};
-	diag("send_to_application", buf);
+
+/* Check if the command could never fit in the queue: */
+
+	if(siz > MAX_Q_LEN) {
+		char msg[256];
+		sprintf(msg, cmd_too_long_message, siz, MAX_Q_LEN);
+		ok_dialog(root, msg);
+		return;
+	};
+
+/* Send it off: */
+
+	enqueue(buf, siz);
+
+/* Call the timeout function to arrange to drain the queue if needed: */
+
+	try_drain_queue(root);
+
 }
 
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Signal handling for the controller process. SIGINT (Cntl-C)
+ * on the controller process causes SIGINT to the application
+ * if it's running.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void sig_handler(sig, code, scp, addr)
+int sig, code;
+struct sigcontext *scp;
+char *addr;
+{
+	if(application_alive()) {
+		clear_queue();
+		killpg(child_pgrp, sig);
+	}
+}
+
+void handle_sigs()
+{
+	signal(SIGINT, sig_handler);
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Interrupt the applications (as with Cntl-C): 
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void interrupt_application ()
+{
+	if(application_alive()) {
+		killpg(child_pgrp, SIGINT);
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Kill the application:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void kill_application ()
+{
+	if(application_alive()) {
+		XtRemoveInput(app_ip_req);
+		kill(child_pid, SIGKILL);
+		waitpid(child_pid, NULL, WNOHANG);
+		close(control_fd);
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Restart the application
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void restart_application () {
+	kill_application();
+	get_pty(orig_argc, orig_argv);
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Executing text from the selection in a text window:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+Bool execute_command()
+{
+	char *cmd;
+	long len;
+	XmTextPosition dontcare;
+	Widget w = command;
+/*
+	if(XmTextGetSelectionPosition(w, &dontcare, &dontcare)) {
+		w = display;
+	}
+*/
+	if(XmTextGetSelectionPosition(w, &dontcare, &dontcare)) {
+		cmd = XmTextGetSelection(w);
+		len = strlen(cmd);
+		send_to_application(cmd, len);
+		XtFree(cmd);
+		return(True);
+	} else {
+		return(False);
+	}
+}
+		
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * main entry point:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
 void cmdwin(argc, argv)
 int argc;
 char *argv[];
 {
-	diag("cmdwin", "starting");
+	orig_argc = argc;
+	orig_argv = argv;
+
 	setup_cmdwin(argc, argv);
-	diag("cmdwin", "Pseudo-terminal initialisation");
 	get_pty(argc, argv);
-	diag("cmdwin", "X display start-up");
+	handle_sigs();
 	XtRealizeWidget(root);
 	XtAppMainLoop(app);
 }

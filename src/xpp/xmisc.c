@@ -41,7 +41,6 @@ int i;
 	Widget *btns;
 	int num_btns;
 	Bool sens;
-	diag("toggle_menu_item_sensitivity", "");
 	XtVaGetValues(w, XmNchildren, &btns,
 		XmNnumChildren, &num_btns, NULL);
 	if (0 <= i && i < num_btns) {
@@ -49,6 +48,47 @@ int i;
 	}
 }
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * set_menu_item_sensitivity: given a menu w set the
+ * sensitivity of the i-th item in the menu to a given value.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void set_menu_item_sensitivity(w, i, b)
+Widget w;
+int i;
+Bool b;
+{
+	Widget *btns;
+	int num_btns;
+	Bool sens;
+	XtVaGetValues(w, XmNchildren, &btns,
+		XmNnumChildren, &num_btns, NULL);
+	if (0 <= i && i < num_btns) {
+		XtSetSensitive(btns[i], b);
+	}
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * set_menu_item_label: given a menu w change the
+ * label of the i-th item in the menu.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void set_menu_item_label(w, i, lab)
+Widget w;
+int i;
+char *lab;
+{
+	Widget *btns;
+	int num_btns;
+	XmString str;
+	Bool sens;
+	XtVaGetValues(w, XmNchildren, &btns,
+		XmNnumChildren, &num_btns, NULL);
+	if (0 <= i && i < num_btns) {
+		str = XmStringCreateSimple(lab);
+		XtVaSetValues(btns[i], 
+			XmNlabelString, str,
+			NULL);
+		XmStringFree(str);
+	}
+}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * check_text_window_limit: helps to manage the text windows
  * which may have a size limit. Limits less than 1000 are

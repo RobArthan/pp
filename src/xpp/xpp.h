@@ -35,9 +35,19 @@
 	extern void msg();
 #endif
 #ifndef _msg
-	extern void msg_inform();
-	extern BOOL msg_confirm();
+	extern void help_dialog();
+	extern BOOL yes_no_dialog();
+	extern void ok_dialog();
 #endif
 #ifndef _palette
 	extern BOOL add_palette();
+#endif
+#ifndef _palette
+	extern BOOL add_palette();
+#endif
+#ifndef _xmisc
+	extern void set_menu_item_sensitivity();
+	extern void toggle_menu_item_sensitivity();
+	extern void set_menu_item_label();
+	extern void check_text_window_limit();
 #endif

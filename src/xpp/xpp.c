@@ -20,6 +20,5 @@ int argc;
 char *argv[];
 {
 	debug = TRUE;
-	diag("main", "starting");
 	cmdwin(argc, argv);
 }
