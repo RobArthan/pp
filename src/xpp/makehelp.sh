@@ -10,12 +10,29 @@
 # const String Help_A_Help_Title =
 # "==== A Help Title ===="
 # ...
-# It replaces multiple new lines by single ones
+# It replaces sequences of > 2 new lines by sequences of 2
+# 
 rm -f help.c
 rm -f help.h
 ex -s <<\!
 r ! nroff -ms help.txt 
 1,/^\*/-1d
+g/^$/j|s/./\
+&/
+g/^$/j|s/./\
+&/
+g/^$/j|s/./\
+&/
+g/^$/j|s/./\
+&/
+g/^$/j|s/./\
+&/
+g/^$/j|s/./\
+&/
+g/^$/j|s/./\
+&/
+g/^$/j|s/./\
+&/
 g/^$/j|s/./\
 &/
 %s/ *$//
