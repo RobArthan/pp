@@ -85,8 +85,10 @@ None known.
 \section{THE THEORY ``sets''}
 =SML
 structure ÛSetsTheoryÝ : SetsTheory = struct
-val lsubgoal_package_quiet = set_flag("subgoal_package_quiet",true);
+val _ = push_pc "pair";
 val _ = open_theory "basic_hol";
+val _ = (delete_theory "hol" handle ? => ());
+val _ = (delete_theory "sets" handle ? => ());
 val _ = new_theory "sets";
 =TEX
 =SML
@@ -108,14 +110,14 @@ val _ = declare_infix (230,"");
 val Ûset_comp_defÝ = new_specification(["SetComp","","set_comp_def"],2,(
 push_goal([],¬¶ ($SetComp:('a ­ BOOL) ­ 'a SET)
 	($ : 'a ­ 'a SET ­ BOOL) ·
-	µ (x : 'a) (p:'a ­ BOOL) (S1: 'a SET) (S2 : 'a SET)·
+	µ (x : 'a) (p:'a ­ BOOL) (a: 'a SET) (b : 'a SET)·
 	(x  (SetComp v ·p v) ¤ p x) ±
-	(S1 = S2 ¤ (µ x:'a· x  S1 ¤ x  S2))®);
+	(a = b ¤ (µ x:'a· x  a ¤ x  b))®);
 a (strip_asm_tac (rewrite_rule [is_set_rep_def]
 	(simple_´_match_mp_rule type_lemmas_thm set_def)));
 a(MAP_EVERY simple_¶_tac
 	[¬Ì x · abs x®,
-	¬Ì x S · (rep S) x®]);
+	¬Ì x a · (rep a) x®]);
 a(asm_rewrite_tac[]);
 a(rewrite_tac[all_µ_intro(eq_sym_rule(all_simple_µ_elim ext_thm))]);
 a(REPEAT simple_µ_tac THEN ¤_tac);
@@ -127,17 +129,20 @@ a(asm_rewrite_tac[]);
 pop_thm()));
 =TEX
 =SML
-val Ûinsert_defÝ = new_specification(["Empty","Insert","insert_def"],2,(
-push_goal([],¬¶ (Empty : 'a SET) (Insert: 'a ­ 'a SET ­ 'a SET)·
-	µ (x : 'a) (y : 'a) (S: 'a SET) ·
-	³ x  Empty ±
-	(x  Insert y S ¤ x = y ² x  S)®);
+val Ûinsert_defÝ = new_specification(["Empty","Universe","Insert","insert_def"],3,(
+push_goal([],¬
+¶ (Empty : 'a SET) (Universe : 'a SET) (Insert: 'a ­ 'a SET ­ 'a SET)·
+	µ (x : 'a) (y : 'a) (a: 'a SET) ·
+		³ x  Empty
+	±	(x  Universe)
+	±	(x  Insert y a ¤ (x = y ² x  a))®);
 a(MAP_EVERY simple_¶_tac
 	[¬{v:'a | (Ì x · F) v}®, 
-	¬Ì y S · {x | x = y ² x  S}®]);
+	¬{v:'a | (Ì x · T) v}®, 
+	¬Ì y a · {x | x = y ² x  a}®]);
 a(rewrite_tac[set_comp_def]);
 a(REPEAT simple_µ_tac);
-a(LEMMA_T ¬{x:'a | x = y ² x  S} = {x:'a | (Ì x · x = y ² x  S) x}®
+a(LEMMA_T ¬{x:'a | x = y ² x  a} = {x:'a | (Ì x · x = y ² x  a) x}®
 	(fn x => pure_rewrite_tac[x]));
 (* *** Goal "1" *** *)
 a(rewrite_tac[]);
@@ -146,14 +151,22 @@ a(rewrite_tac[set_comp_def]);
 pop_thm()));
 =TEX
 =SML
-val Ûset_clausesÝ = save_thm("set_clauses",(
-push_goal([],¬µ (x : 'a) (y : 'a) (p:'a ­ BOOL) (q : BOOL) (S1: 'a SET) (S2 : 'a SET)·
-	³ x  {} ±
-	(x  {v | q} ¤ q) ±
+
+val Ûsets_ext_thmÝ = (
+push_goal([],¬	µ (a : 'a SET) (b : 'a SET)·
+	a = b ¤ µ (x : 'a)· x  a ¤ x  b®);
+a (rewrite_tac [set_comp_def]);
+pop_thm());
+
+val Ûsets_clausesÝ = save_thm("sets_clauses",(
+push_goal([],¬
+	µ (x : 'a) (y : 'a) (p:'a ­ BOOL) (q : BOOL)·
+	(x  {} ¤ F) ±
+	(x  Universe ¤ T) ±
+	((x  {v | q}) ¤ q) ±
 	(x  {v | p v} ¤ p x) ±
 	(x  {v | v = y} ¤ (x = y)) ±
-	(x  {y} ¤ (x = y)) ±
-	(S1 = S2 ¤ (µ x:'a· x  S1 ¤ x  S2))®);
+	(x  {y} ¤ (x = y))®);
 a(rewrite_tac[set_comp_def, insert_def]);
 a(REPEAT simple_µ_tac);
 a(LEMMA_T ¬{v|q} = {v|(Ìs · q) v}® (fn x => pure_rewrite_tac[x]));
@@ -174,15 +187,15 @@ local
 		µ x : 'a ·
 		µ p : 'a ­ BOOL ·
 		x  {v | p v} ¤ p x®),
-		rewrite_tac[set_clauses]);
+		rewrite_tac[sets_clauses]);
 	val tva = ¬:'a®;
 in
-val Ûsimple__convÝ : CONV = (fn tm:TERM =>
-let	val (x,S) = dest_bin_op "simple__conv" 44001 "" tm;
+val Ûsimple__comp_convÝ : CONV = (fn tm:TERM =>
+let	val (x,S) = dest_bin_op "simple__comp_conv" 44001 "" tm;
 	val (v,pv) = dest_set_comp S;
 	val sideeffect = (if is_var v
 		then ()
-		else term_fail "simple__conv" 44001 [tm]);
+		else term_fail "simple__comp_conv" 44001 [tm]);
 	val s1 = inst_type_rule [(type_of x, tva)] aux_thm;
 	val s2 = list_simple_µ_elim[x, 
 		mk_simple_Ì(v,pv)] s1;
@@ -199,122 +212,380 @@ end;
 =TEX
 \subsection{Derived Definitions}
 =SML
+val Ûcomplement_defÝ = new_specification(["~","complement_def"],1,(
+push_goal([],¬¶(~ : 'a SET ­ 'a SET)·
+	µ (x : 'a) (a: 'a SET) ·
+	(x  ~ a ¤ ³ x  a)®);
+a(simple_¶_tac ¬Ì a : 'a SET · {x : 'a | ³ x  a}®
+	THEN rewrite_tac[]);
+a(conv_tac(ONCE_MAP_C simple__comp_conv) THEN rewrite_tac[]);
+pop_thm()));
+
+val Ûcomplement_clausesÝ = save_thm("complement_clauses",(
+push_goal([], ¬
+	(µ (x : 'a) (a: 'a SET) ·(x  ~ a ¤ ³ x  a)) ±
+		(~ Universe = {})
+	±	(~ {} = Universe)®);
+a (rewrite_tac [sets_ext_thm, sets_clauses, complement_def, insert_def]);
+pop_thm()));
+
 val _ = declare_infix (260,"À");
 val ÛÀ_defÝ = new_specification(["À","À_def"],1,(
 push_goal([],¬¶ $À: 'a SET ­ 'a SET ­ 'a SET ·
-	µ (x:'a) (S1 : 'a SET) (S2 : 'a SET) · 
-	x  S1 À S2 ¤ x  S1 ² x  S2®);
-a(simple_¶_tac ¬Ì S1 S2 · {x : 'a | x  S1 ² x  S2}®
+	µ (x:'a) (a : 'a SET) (b : 'a SET) · 
+	x  a À b ¤ x  a ² x  b®);
+a(simple_¶_tac ¬Ì a b · {x : 'a | x  a ² x  b}®
 	THEN rewrite_tac[]);
-a(conv_tac(ONCE_MAP_C simple__conv) THEN rewrite_tac[]);
+a(conv_tac(ONCE_MAP_C simple__comp_conv) THEN rewrite_tac[]);
+pop_thm()));
+=TEX
+=SML
+val ÛÀ_clausesÝ = save_thm("À_clauses",(
+push_goal([], ¬
+	µ (a: 'a SET)·
+		(a À {} = a)
+	±	({} À a = a)
+	±	(a À Universe = Universe)
+	±	(Universe À a = Universe)
+	±	(a À a = a)®);
+a (rewrite_tac [sets_ext_thm, set_comp_def, insert_def, À_def]);
 pop_thm()));
 =TEX
 =SML
 val _ = declare_infix (270,"¡");
 val Û¡_defÝ = new_specification(["¡","¡_def"],1,(
 push_goal([],¬¶ $¡: 'a SET ­ 'a SET ­ 'a SET ·
-	µ (x:'a) (S1 : 'a SET) (S2 : 'a SET) · 
-	x  S1 ¡ S2 ¤ x  S1 ± x  S2®);
-a(simple_¶_tac ¬Ì S1 S2 · {x : 'a | x  S1 ± x  S2}®
+	µ (x:'a) (a : 'a SET) (b : 'a SET) · 
+	x  a ¡ b ¤ x  a ± x  b®);
+a(simple_¶_tac ¬Ì a b · {x : 'a | x  a ± x  b}®
 	THEN rewrite_tac[]);
-a(conv_tac(ONCE_MAP_C simple__conv) THEN rewrite_tac[]);
+a(conv_tac(ONCE_MAP_C simple__comp_conv) THEN rewrite_tac[]);
+pop_thm()));
+=TEX
+=SML
+val Û¡_clausesÝ = save_thm("¡_clauses",(
+push_goal([], ¬
+	µ (a: 'a SET)·
+		(a ¡ {} = {})
+	±	({} ¡ a = {})
+	±	(a ¡ Universe = a)
+	±	(Universe ¡ a = a)
+	±	(a ¡ a = a)®);
+a (rewrite_tac [sets_ext_thm, set_comp_def, insert_def, ¡_def]);
 pop_thm()));
 =TEX
 =SML
 val _ = declare_infix (250,"\\");
-val Ûset_sub_defÝ = new_specification(["\\","set_sub_def"],1,(
+val Ûset_dif_defÝ = new_specification(["\\","set_dif_def"],1,(
 push_goal([],¬¶ $\: 'a SET ­ 'a SET ­ 'a SET ·
-	µ (x:'a) (S1 : 'a SET) (S2 : 'a SET) · 
-	x  S1 \ S2 ¤ x  S1 ± ³ x  S2®);
-a(simple_¶_tac ¬Ì S1 S2 · {x : 'a | x  S1 ± ³ x  S2}®
+	µ (x:'a) (a : 'a SET) (b : 'a SET) · 
+	x  a \ b ¤ x  a ± ³ x  b®);
+a(simple_¶_tac ¬Ì a b · {x : 'a | x  a ± ³ x  b}®
 	THEN rewrite_tac[]);
-a(conv_tac(ONCE_MAP_C simple__conv) THEN rewrite_tac[]);
+a(conv_tac(ONCE_MAP_C simple__comp_conv) THEN rewrite_tac[]);
+pop_thm()));
+=TEX
+=SML
+val Ûset_dif_clausesÝ = save_thm("set_dif_clauses",(
+push_goal([], ¬
+	µ (a: 'a SET)·
+		(a \ {} = a)
+	±	({} \ a = {})
+	±	(a \ Universe = {})
+	±	(Universe \ a = ~ a)
+	±	(a \ a = {})®);
+a (rewrite_tac [set_comp_def, insert_def, set_dif_def, complement_def]);
+a c_contr_tac;
 pop_thm()));
 =TEX
 =SML
 val _ = declare_infix (230,"€");
 val Û€_defÝ = new_specification(["€","€_def"],1,(
 push_goal([],¬¶ $€ : 'a SET ­ 'a SET ­ BOOL ·
-	µ S1 S2 : 'a SET · 
-	S1 € S2 ¤ µ x · x  S1 ´ x  S2®);
-a(simple_¶_tac ¬Ì S1 S2 · µ x · x  S1 ´ x  S2®
+	µ a b : 'a SET · 
+	a € b ¤ µ x · x  a ´ x  b®);
+a(simple_¶_tac ¬Ì a b · µ x · x  a ´ x  b®
 	THEN rewrite_tac[]);
+pop_thm()));
+=TEX
+=SML
+val Û€_clausesÝ = save_thm("€_clauses",(
+push_goal([], ¬
+	µ (a: 'a SET)·
+		(a € a)
+	±	({} € a)
+	±	(a € Universe)®);
+a (rewrite_tac [€_def, insert_def]);
 pop_thm()));
 =TEX
 =SML
 val _ = declare_infix (230," ");
 val Û _defÝ = new_specification([" "," _def"],1,(
 push_goal([],¬¶ $  : 'a SET ­ 'a SET ­ BOOL ·
-	µ S1 S2 : 'a SET · 
-	S1   S2 ¤ (S1 € S2 ± (¶ x · ³ x  S1 ± x  S2))®);
-a(simple_¶_tac ¬Ì S1 S2 · (S1 € S2 ± (¶ x · ³ x  S1 ± x  S2))®
+	µ a b : 'a SET · 
+	a   b ¤ (a € b ± (¶ x · ³ x  a ± x  b))®);
+a(simple_¶_tac ¬Ì a b · (a € b ± (¶ x · ³ x  a ± x  b))®
 	THEN rewrite_tac[]);
+pop_thm()));
+=TEX
+=SML
+val Û _clausesÝ = save_thm(" _clauses",(
+push_goal([], ¬
+	µ (a: 'a SET)·
+		³ (a   a)
+	±	³ (a   {})
+	±	({}   Universe)®);
+a (rewrite_tac [ _def, €_def, insert_def]);
+a c_contr_tac;
 pop_thm()));
 =TEX
 =SML
 val ÛÞ_defÝ = new_specification(["Þ","Þ_def"],1,(
 push_goal([],¬¶ Þ : ('a SET) SET ­ 'a SET · 
-	µ (x: 'a) (S: ('a SET) SET) · 
-	x  Þ S ¤ ¶ s · x  s ± s  S®);
-a(simple_¶_tac ¬Ì S · {x | ¶ s · x  s ± s  S}®
+	µ (x: 'a) (a: ('a SET) SET) · 
+	x  Þ a ¤ ¶ s · x  s ± s  a®);
+a(simple_¶_tac ¬Ì a · {x | ¶ s · x  s ± s  a}®
 	THEN rewrite_tac[]);
-a(conv_tac(ONCE_MAP_C simple__conv) THEN rewrite_tac[]);
+a(conv_tac(ONCE_MAP_C simple__comp_conv) THEN rewrite_tac[]);
+pop_thm()));
+=TEX
+=SML
+val ÛÞ_clausesÝ = save_thm("Þ_clauses",(
+push_goal([], ¬
+		(Þ ({}:'a SET SET) = {})
+	±	(Þ (Universe: 'a SET SET) = Universe)®);
+a (rewrite_tac [sets_ext_thm, Þ_def, insert_def]);
+a µ_tac;
+a (simple_¶_tac ¬{x}®);
+a (rewrite_tac [insert_def]);
 pop_thm()));
 =TEX
 =SML
 val Û¥_defÝ = new_specification(["¥","¥_def"],1,(
 push_goal([],¬¶ ¥ : ('a SET) SET ­ 'a SET · 
-	µ (x: 'a) (S: ('a SET) SET) · 
-	(x  ¥ S) ¤ µ s · s  S ´ x  s®);
-a(simple_¶_tac ¬Ì S · {x | µ s · s  S ´ x  s}®
+	µ (x: 'a) (a: ('a SET) SET) · 
+	(x  ¥ a) ¤ µ s · s  a ´ x  s®);
+a(simple_¶_tac ¬Ì a · {x | µ s · s  a ´ x  s}®
 	THEN rewrite_tac[]);
-a(conv_tac(ONCE_MAP_C simple__conv) THEN rewrite_tac[]);
+a(conv_tac(ONCE_MAP_C simple__comp_conv) THEN rewrite_tac[]);
+pop_thm()));
+=TEX
+=SML
+val Û¥_clausesÝ = save_thm("¥_clauses",(
+push_goal([], ¬
+	(¥ ({}: 'a SET SET) = Universe)
+	±	(¥ Universe = ({}:'a SET SET))®);
+a (rewrite_tac [sets_ext_thm, ¥_def, insert_def]);
+a (REPEAT strip_tac);
+a (simple_¶_tac ¬{}:'a SET SET®);
+a (rewrite_tac [insert_def]);
 pop_thm()));
 =TEX
 =SML
 val Ûð_defÝ = new_specification(["ð","ð_def"],1,(
 push_goal([],¬¶ ð:'a SET ­ ('a SET) SET ·
-	µ (x : 'a SET) (S: 'a SET) · 
-	x  ð S ¤ x € S®);
-a(simple_¶_tac ¬Ì S · {x | x € S}®
+	µ (x : 'a SET) (a: 'a SET) · 
+	x  ð a ¤ x € a®);
+a(simple_¶_tac ¬Ì a · {x | x € a}®
 	THEN rewrite_tac[]);
-a(conv_tac(ONCE_MAP_C simple__conv) THEN rewrite_tac[]);
+a(conv_tac(ONCE_MAP_C simple__comp_conv) THEN rewrite_tac[]);
+pop_thm()));
+=TEX
+=SML
+val Ûð_clausesÝ = save_thm("ð_clauses",(
+push_goal([], ¬
+	µ (a:'a SET)·
+		(ð {} = {{}})
+	±	(ð Universe = Universe)
+	±	a  ð a
+	±	{}  ð a®);
+a (rewrite_tac [sets_ext_thm, insert_def, ð_def, €_def]);
 pop_thm()));
 =TEX
 =SML
 val Ûš_clausesÝ = save_thm("š_clauses",(
-push_goal([], ¬µ (x : 'a) (S:'a SET) ·
+push_goal([], ¬µ (x : 'a) (a:'a SET) ·
 	{x | F} = {} ±
 	³ x  {} ±
-	{} À S = S ±
-	S À {} = S ±
-	{} ¡ S = {} ±
-	S ¡ {} = {} ±
-	S \ {} = S ±
-	{} \ S = {} ±
-	{} € S ±
-	(S € {} ¤ S = {}) ±
-	({}   S ¤ ³ S = {}) ±
-	³ S   {} ±
+	{} À a = a ±
+	a À {} = a ±
+	{} ¡ a = {} ±
+	a ¡ {} = {} ±
+	a \ {} = a ±
+	{} \ a = {} ±
+	{} € a ±
+	(a € {} ¤ a = {}) ±
+	({}   a ¤ ³ a = {}) ±
+	³ a   {} ±
 	³ x  Þ {} ±
 	x  ¥ {} ±
-	{}  ð S ±
+	{}  ð a ±
 	(ð {} = {{}})®);
-a(REPEAT simple_µ_tac THEN rewrite_tac[set_clauses,
-	À_def, ¡_def, set_sub_def, €_def,  _def, Þ_def, ¥_def, ð_def]);
+a(REPEAT simple_µ_tac THEN rewrite_tac[sets_clauses, sets_ext_thm,
+	À_def, ¡_def, set_dif_def, €_def,  _def, Þ_def, ¥_def, ð_def]);
 a(conv_tac(MAP_C simple_³_in_conv) THEN rewrite_tac[]);
+pop_thm()));
+=TEX
+=SML
+val Û_in_clausesÝ = save_thm("_in_clauses",(
+push_goal([], ¬
+	(µ (x : 'a) (y : 'a) (a: 'a SET) ·
+		(x  {} ¤ F)
+	±	(x  Insert y a ¤ (x = y ² x  a)))
+±	(µ (x:'a) (a : 'a SET) (b : 'a SET) ·
+		(x  a À b ¤ x  a ² x  b)
+	±	(x  a ¡ b ¤ x  a ± x  b)
+	±	(x  a \ b ¤ x  a ± ³ x  b))
+±	(µ (x:'a) (a : 'a SET SET) ·
+		(x  Þ a ¤ ¶ s · x  s ± s  a)
+	±	((x  ¥ a) ¤ µ s · s  a ´ x  s)
+±	(µ (x : 'a SET) (a : 'a SET) ·(x  ð a ¤ x € a)))®);
+a(rewrite_tac[sets_clauses, sets_ext_thm, insert_def, À_def, ¡_def, set_dif_def, €_def,
+	 _def, Þ_def, ¥_def, ð_def]
+	THEN REPEAT strip_tac);
+pop_thm()));
+=TEX
+=SML
+val Ûsets_ext_clausesÝ = save_thm("sets_ext_clauses",(
+push_goal([], ¬µ(a : 'a SET) (b : 'a SET) ·
+	((a   b) ¤ ((µ x · x  a ´ x  b) ± (¶ x · ³(x  a) ± (x  b))))
+±	((a € b) ¤ µ x · x  a ´ x  b)
+±	((a = b) ¤ (µ x:'a· x  a ¤ x  b))®);
+a(rewrite_tac[sets_clauses, sets_ext_thm, insert_def, À_def, ¡_def, set_dif_def, €_def,
+	 _def, Þ_def, ¥_def, ð_def]
+	THEN REPEAT strip_tac);
 pop_thm()));
 =TEX
 \subsection{End of Theory ``sets''}
 We wish to make the pre-existing theory ``hol''
 have this theory as a parent:
 =SML
-val _ = open_theory "hol";
-val _ = new_parent "sets";
+(*val _ = open_theory "hol";
+val _ = new_parent "sets";*)
+=TEX
+\section{CONVERSIONS}
+=SML
+local
+	val ÛtvaÝ = ¬:'a®;
+	val aux_thm = tac_proof(([],¬
+		µ x : 'a ·
+		µ p : 'a ­ BOOL ·
+		x  {v | p v} ¤ p x®),
+		rewrite_tac[sets_clauses]);
+in
+val Û_comp_convÝ : CONV = (fn tm:TERM =>
+let	val (x,S) = dest_bin_op "_comp_conv" 27002 "" tm;
+	val (v,pv) = dest_set_comp S;
+	val s1 = inst_type_rule [(type_of x, tva)] aux_thm;
+	val s2 = list_µ_elim[x, mk_Ì(v,pv)] s1;
+in
+if is_var v
+then (let val s3 =  conv_rule (APP_C
+		((RAND_C o RAND_C o BINDER_C) simple_Â_conv,
+		simple_Â_conv))s2;
+	val s4 = eq_trans_rule (Á_conv 
+		(fst(dest_¤(concl s3))) tm)
+		s3;
+in
+	s4
+end)
+else (let val s3 = conv_rule (RATOR_C(RAND_C(RAND_C (RAND_C
+	(Ì_varstruct_conv (mk_Ì(v,mk_app(mk_Ì(v,pv),v)))))))) s2;
+	val s4 = conv_rule (APP_C
+		((RAND_C o RAND_C o CBINDER_C) Â_conv,
+		Â_conv))s3;
+	val s5 = eq_trans_rule (refl_conv tm) s4;
+in
+	s5
+end)
+end
+handle (Fail _) =>
+term_fail "_comp_conv" 27002 [tm])
+end;
 =TEX
 =SML
-val lsubgoal_package_quiet = set_flag("subgoal_package_quiet",
-	lsubgoal_package_quiet);
+local
+	val prc = pure_rewrite_conv[insert_def, ²_rewrite_thm, 
+		eq_rewrite_thm];
+in
+fun Û_enum_set_ruleÝ (tm : TERM) (tml : TERM list): THM = (
+	if not(tm term_mem tml)
+	then term_fail "_enum_set_rule" 27001 [tm]
+	else 
+(let	val es = mk_enum_set tml
+		handle complaint =>
+		pass_on complaint "mk_enum_set" "_enum_set_rule" ;
+	val ttm = type_of tm;
+	val tes = type_of es;
+	val conc = list_mk_app(mk_const("",mk_­_type(ttm,
+		mk_­_type(tes,BOOL))),
+		[tm,es]);
+	val s1 = prc conc;
+	val s2 = eq_sym_rule s1;
+	val s3 = ¤_mp_rule s2 t_thm;
+in
+	s3
+end));
+end;
+val Û_enum_set_convÝ : CONV = (fn tm =>
+let	val (x,s) = dest_bin_op "_enum_set_conv" 27006 "" tm;
+	val ss = dest_enum_set s;
+in
+	¤_t_intro (_enum_set_rule x ss)
+	handle complaint =>
+	if area_of complaint = "_enum_set_rule"
+	then term_fail "_enum_set_conv" 27005 [x,s]
+	else reraise complaint(area_of complaint)
+end);
+=TEX
+\section{PROOF CONTEXTS}
+The extensional context is good for proving results involving the operators introduced in this theory.
+=SML
+val pos_bits = 
+	[(¬x  $SetComp y®, _comp_conv),
+	(¬x  $Insert y z®, _enum_set_conv)] @
+	(cthm_eqn_cxt initial_rw_canon _in_clauses) @
+	(cthm_eqn_cxt initial_rw_canon sets_ext_clauses);
+val neg_bits = map (mk_³ ** RAND_C) pos_bits;
+val new_bits = pos_bits @ neg_bits;
+val rw_eqn_cxt =
+	(¬x  $SetComp y®, _comp_conv) ::
+	(¬x  $Insert y z®, _enum_set_conv) ::
+	(flat(map (cthm_eqn_cxt initial_rw_canon) [_in_clauses,sets_ext_clauses]));
+val dummy = (delete_pc "sets_ext" handle ? => ());
+val dummy = new_pc "sets_ext";
+val dummy = merge_pcs ["pair"] "sets_ext";
+val dummy = ((set_st_eqn_cxt new_bits "sets_ext");
+		(set_sg_eqn_cxt new_bits "sets_ext");
+		(set_rw_eqn_cxt rw_eqn_cxt "sets_ext"));
+=TEX
+The algebraic context is for more general use where obvious simplifications are required.
+=SML
+val pos_bits = 
+	[(¬x  $SetComp y®, _comp_conv),
+	(¬x  $Insert y z®, _enum_set_conv)] @
+	(cthm_eqn_cxt initial_rw_canon _in_clauses);
+val neg_strips = map (mk_³ ** RAND_C) pos_bits;
+val new_strips = pos_bits @ neg_strips;
+val new_rw =
+	(¬x  $SetComp y®, _comp_conv) ::
+	(¬x  $Insert y z®, _enum_set_conv) ::
+	(flat(map (cthm_eqn_cxt initial_rw_canon)
+	[complement_clauses, À_clauses, ¡_clauses, set_dif_clauses,
+	€_clauses,  _clauses, Þ_clauses, ¥_clauses, ð_clauses]));
+val dummy = (delete_pc "sets_alg" handle ? => ());
+val dummy = new_pc "sets_alg";
+val dummy = merge_pcs ["pair"] "sets_alg";
+val dummy = ((set_st_eqn_cxt new_strips "sets_alg");
+		(set_sg_eqn_cxt new_strips "sets_alg");
+		(set_rw_eqn_cxt new_rw "sets_alg"));
+=TEX
+=SML
+val dummy = pop_pc();
+val dummy = open_theory "sum";
+val dummy = (new_theory"hol";
+		new_parent"one";
+		new_parent"sets") handle ? => ();
 end; (* of structure SetsTheory *)
 open SetsTheory;
 =TEX
