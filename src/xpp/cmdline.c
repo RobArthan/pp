@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.23 2004/02/09 16:41:37 rda Exp $
+ * $Id: cmdline.c,v 2.24 2004/02/18 16:37:37 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -30,6 +30,23 @@ enum { MAX_HISTORY = 40};
 #include <stdio.h>
 
 #include "xpp.h"
+
+/*
+ * Forward declarations:
+ */
+static void
+	get_initial_command_line_list(Widget list_w),
+	list_select_cb(CALLBACK_ARGS),
+	exec_cb(CALLBACK_ARGS),
+	cmd_modify_cb(CALLBACK_ARGS),
+	add_cb(CALLBACK_ARGS),
+	delete_cb(CALLBACK_ARGS),
+	dismiss_cb(CALLBACK_ARGS),
+	focus_cb(CALLBACK_ARGS),
+	help_cb(CALLBACK_ARGS),
+	cmd_set_cb(CALLBACK_ARGS),
+	empty_cmd_cb(CALLBACK_ARGS);
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * static data 
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -48,19 +65,29 @@ char *no_command_to_add_msg =
 char *nothing_to_delete_msg =
 "No item in the list has been selected.";
 
+static char *no_selection_cmd = 
+	"No text selection is available "
+	"to be copied into the command field.";
+
 /*
- * Forward declarations:
+ * Popup menu for the search, replace and line number text widgets:
  */
-static void
-	get_initial_command_line_list(Widget list_w),
-	list_select_cb(CALLBACK_ARGS),
-	exec_cb(CALLBACK_ARGS),
-	cmd_modify_cb(CALLBACK_ARGS),
-	add_cb(CALLBACK_ARGS),
-	delete_cb(CALLBACK_ARGS),
-	dismiss_cb(CALLBACK_ARGS),
-	focus_cb(CALLBACK_ARGS),
-	help_cb(CALLBACK_ARGS);
+#define TEXT_EDIT_OPS 4		/* including the separator */
+#define TEXT_SPECIAL_OPS 2
+static MenuItem cmd_text_edit_menu_items[] = {
+    { "Cut", &xmPushButtonGadgetClass, '\0', NULL, NULL,
+        edit_cut_cb, NULL, (MenuItem *)NULL, False },
+    { "Copy", &xmPushButtonGadgetClass, '\0', NULL, NULL,
+        edit_copy_cb, NULL, (MenuItem *)NULL, False },
+    { "Paste", &xmPushButtonGadgetClass, '\0', NULL, NULL,
+        edit_paste_cb, NULL, (MenuItem *)NULL, False },
+    MENU_ITEM_SEPARATOR,
+    { ":= Selection", &xmPushButtonGadgetClass, '\0', NULL, NULL,
+        cmd_set_cb, NULL, (MenuItem *)NULL, False },
+    { "Empty", &xmPushButtonGadgetClass, '\0', NULL, NULL,
+        empty_cmd_cb, NULL, (MenuItem *)NULL, False },
+    {NULL}
+};
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * add_command_line_tool: attach a tool allowing entry of single line
@@ -102,7 +129,7 @@ void add_command_line_tool(Widget text_w)
 	Widget shell, paned, list_w, cmd_text,
 		btn_form, exec_btn, add_btn, delete_btn, dismiss_btn, help_btn;
 	Arg args[12];
-	int i;
+	int i, j;
 
 	XmFontList fontlist;
 
@@ -145,7 +172,6 @@ void add_command_line_tool(Widget text_w)
 		NULL);
 
 	XtAddCallback(cmd_text, XmNmodifyVerifyCallback, text_field_verify_cb, NULL);
-	attach_rw_edit_popup(cmd_text);
 	register_selection_source(cmd_text);
 	register_palette_client(cmd_text);
 
@@ -261,6 +287,17 @@ void add_command_line_tool(Widget text_w)
 
 	XtAddCallback(list_w, XmNdefaultActionCallback,
 		list_select_cb, (XtPointer)(&cmd_line_data));
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Set up popup edit menus.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+	for(i = 0; i < TEXT_EDIT_OPS; i += 1) {
+		cmd_text_edit_menu_items[i].callback_data =(XtPointer) cmd_text;
+	}
+	for(j = 0; j < TEXT_SPECIAL_OPS; j += 1) {
+		cmd_text_edit_menu_items[i+j].callback_data = (XtPointer)(&cmd_line_data);
+	}
+	attach_edit_popup(cmd_text, cmd_text_edit_menu_items);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Manage everything:
@@ -569,4 +606,31 @@ static void help_cb(
 {
 	CmdLineData *cbdata = cbd;
 	help_dialog(root, Help_Command_Line_Tool);
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * command text setting callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void cmd_set_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
+{
+	CmdLineData *cbdata = cbd;
+	char *sel;
+	if ((sel = get_selection(cbdata->shell_w, no_selection_cmd)) == NULL) {
+		return;
+	}
+	XmTextSetString(cbdata->cmd_w, sel);
+	XtFree(sel);
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * command text empty callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void empty_cmd_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
+{
+	CmdLineData *cbdata = cbd;
+	XmTextSetString(cbdata->cmd_w, "");
 }
