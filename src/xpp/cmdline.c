@@ -272,7 +272,7 @@ static void get_initial_command_line_list(Widget list_w)
 			last = True;
 		}
 		XmListAddItem(list_w, s = XmStringCreateSimple(p), 0);
-		XtFree(s);
+		XmStringFree(s);
 	}
 	XtFree(list_items);
 }

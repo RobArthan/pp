@@ -128,7 +128,7 @@ void init_options(Widget owner_w)
 		XmNlabelString,		lab,
 		NULL);
 
-	XtFree(lab);
+	XmStringFree(lab);
 
 	lab = XmStringCreateSimple("Delete backup after a successful write");
 

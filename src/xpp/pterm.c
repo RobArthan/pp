@@ -1,5 +1,3 @@
-
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * $Id$
  *
@@ -22,13 +20,22 @@
  * include files:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+
 #include <errno.h>
 #include <fcntl.h>
-#include <signal.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/ioctl.h>
+
+#ifndef LINUX
 #include <stropts.h>
 #include <sys/filio.h>
+#include <signal.h>
+#else
+#include <bsd/signal.h>
+#endif
+
+
 #include <sys/termio.h>
 #include <sys/termios.h>
 #include <sys/types.h>
@@ -45,6 +52,12 @@
 #define STDIN 0
 #define STDOUT 1
 #define STDERR 2
+
+#ifdef LINUX
+#define CTRL(c) ((c)&037)
+#define CINTR CTRL('c')
+#define sigset signal
+#endif
 
 /* For the following see "Data transfer to application" below */
 #define MAX_Q_LEN 40000		/* see "Data transfer to application" below */
@@ -103,7 +116,12 @@ void get_pty()
 	int slave_fd;
 	char *slavename;
 	char *ptsname();
+	int i;
+	char line[32];
 	static void get_from_application();
+	struct termios tio;
+
+#ifndef LINUX
 	if ((control_fd = open("/dev/ptmx", O_RDWR)) < 0) {
 		msg("system error", "no pseudo-terminal devices available");
 		perror("xpp");
@@ -117,13 +135,60 @@ void get_pty()
 		perror("xpp");
 		exit(2);
 	};
+#else 
+	for(control_fd = -1, c = 'p'; control_fd < 0 && c <= 's'; c++)
+	{  for(i = 0; control_fd < 0 && i < 16; i++)
+	   {
+	      sprintf(line, "/dev/pty%c%x", c, i );
+	      control_fd = open(line, O_RDWR);
+	   }
+	}
+
+	if( control_fd < 0) {
+		msg("system error", "no pseudo-terminal devices available");
+		perror("xpp");
+		exit(1);
+	}
+
+	line[sizeof "/dev/" -1] = 't';
+	slave_fd = open(line, O_RDWR);
+	if(slave_fd < 0){
+	    msg("system error", "Pseudo-terminal slave device not available");
+	    perror("xpp");
+	    exit(4);
+	}
+#endif
+	tio.c_lflag |= ISIG;
+	tio.c_lflag |= ICANON;
+	tio.c_lflag &= ~ECHO;
+	tio.c_lflag &= ~PENDIN;
+	tio.c_lflag &= ~NOFLSH;
+	tio.c_lflag &= ~TOSTOP;
+
+	tio.c_oflag &= ~OLCUC;
+	tio.c_oflag &= ~ONLCR;
+	tio.c_oflag &= ~XTABS;
+	tio.c_oflag |= OCRNL;
+
+	tio.c_cc[VINTR] = CINTR;
+
+#ifdef LINUX
+	if(ioctl(slave_fd, TCSETS, &tio) < 0 ) {
+		msg("system error", "ioctl on slave fd failed");
+		perror("xpp");
+		exit(11);
+	}
+#endif
 
 	child_pid = fork();
 	if (child_pid < 0) { /* Cannot do */
 		msg("system error", "fork failed");
 		perror("xpp");
 		exit(5);
-	} else if (child_pid > 0) { /* Parent */
+	} else if (child_pid > 0) { 
+ /******************************************************************/
+ /* Parent */
+ /******************************************************************/
 		close(slave_fd);
 		if(fcntl(control_fd, F_SETFL, O_NDELAY) < 0) {
 			msg("system error", "fcntl on application would not permit non-blocking i/o");
@@ -139,11 +204,15 @@ void get_pty()
 			control_fd, (XtPointer) XtInputReadMask,
 			get_from_application, NULL);
 		listening = True;
-		write(control_fd, " ", 1);	/* Tell child to exec */
-	} else { /* Child */
+		write(control_fd, "\n", 1);	/* Tell child to exec */
+
+	} else { 
+ /******************************************************************/
+ /* Child */
+ /******************************************************************/
 		char	buf;
 		char **arglist;
-		struct termios tio;
+		int tty_fd;
 		close(control_fd);
 		dup2(slave_fd, STDIN);
 		dup2(slave_fd, STDOUT);
@@ -151,13 +220,17 @@ void get_pty()
 		if (slave_fd > 2) {
 			close(slave_fd);
 		};
+		if((tty_fd = open("/dev/tty", O_RDWR)) >= 0){
+		    ioctl(tty_fd, TIOCNOTTY, 0);
+		    close(tty_fd);
+		}
 		if(setsid() < 0) {
 			msg("system error", " setsid failed");
 			perror("xpp");
 			exit(9);
 		};
-
 		read(0, &buf, 1);		/* Wait until told */
+#ifndef LINUX
 		if(	ioctl(0, I_PUSH, "ptem") < 0
 		||	ioctl(0, I_PUSH, "ldterm") < 0 
 		||	ioctl(0, I_PUSH, "ttcompat") < 0
@@ -166,28 +239,12 @@ void get_pty()
 			perror("xpp");
 			exit(10);
 		};
-
-		tio.c_lflag |= ISIG;
-		tio.c_lflag |= ICANON;
-		tio.c_lflag &= ~ECHO;
-		tio.c_lflag &= ~PENDIN;
-		tio.c_lflag &= ~NOFLSH;
-		tio.c_lflag &= ~TOSTOP;
-
-		tio.c_oflag &= ~OLCUC;
-		tio.c_oflag &= ~ONLCR;
-		tio.c_oflag &= ~XTABS;
-		tio.c_oflag |= OCRNL;
-
-		tio.c_cc[VINTR] = CINTR;
-
 		if(ioctl(0, TCSETS, &tio) < 0 ) {
 			msg("system error", "ioctl on slave fd failed");
 			perror("xpp");
 			exit(11);
-		};
-
-
+		}
+#endif
 		arglist = get_arg_list();
 		execvp(arglist[0], arglist);
 	/* **** error if reach here **** */
@@ -209,7 +266,12 @@ Boolean application_alive()
 {
 	if(child_pid) {
 		waitpid(child_pid, NULL, WNOHANG);
+#ifdef LINUX
+		if(errno == ECHILD)
+		{
+#else
 		if(kill(child_pid, 0)) { /* != 0; it's died */
+#endif
 			if(listening) {
 				XtRemoveInput(app_ip_req);
 				listening = False;
@@ -233,7 +295,7 @@ static void get_from_application(
 	int		*unused_source,
 	XtInputId	*unused_id)
 {
-	NAT ct;
+	int ct;
 	char buf[BUFSIZ + 1]; /* allow for null-termination in scroll_out */
 	static Boolean get_from_app_work_proc();
 	if((ct = read(control_fd, buf, BUFSIZ)) > 0) {
@@ -416,7 +478,6 @@ void send_to_application (buf, siz)
 char *buf;
 NAT siz;
 {
-	NAT bytes_written;
 
 /* Check there's something listening: */
 	if(!application_alive()) {
@@ -448,7 +509,9 @@ void interrupt_application ()
 {
 	clear_queue();
 	if(application_alive()) {
+#ifndef LINUX
 		ioctl(control_fd, I_FLUSH, FLUSHW);
+#endif
 		kill((pid_t)(-child_pid), SIGINT);
 	}
 }
@@ -575,7 +638,7 @@ void restart_application () {
  * Following treats Ctrl-C similarly to window close
  * or selection of quit from the command menu.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void sigint_handler(NAT sig)
+static void sigint_handler(int sig)
 {
 	XtAppAddTimeOut(app, 0, (XtTimerCallbackProc) check_quit_cb, root);
 }
@@ -602,9 +665,9 @@ static void panic_exit(char * m, NAT code)
  * Other signal handling for the controller process.
  * Try to save the editor text if the widget's there then bomb out.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void sigother_handler(NAT sig)
+static void sigother_handler(int sig)
 {
-	panic_exit(signal_handled_message1, sig);
+	panic_exit(signal_handled_message1, (NAT)sig);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -625,7 +688,9 @@ void handle_sigs()
 	sigset(SIGSEGV, sigother_handler);
 	sigset(SIGBUS, sigother_handler);
 	sigset(SIGFPE, sigother_handler);
+#ifndef LINUX
 	sigset(SIGSYS, sigother_handler);
+#endif
 	XtAppSetErrorHandler(app, xt_error_handler);
 }
 
