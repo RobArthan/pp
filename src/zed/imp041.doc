@@ -81,6 +81,10 @@ added $z\_µ\_tac$, etc, replaced $z\_defn\_conv$ by $z\_para\_pred\_conv$, etc, 
 Correcting error message numbers.
 \item [Issue 1.25 (17th Novemember 1992)]
 Added $z\_term\_of\_type$
+\item [Issue 1.26 (17th Novemember 1992)]
+Added $z\_type\_of$
+Changes after comments, includes: $pred\_dec\_conv$ checks more carefuly,
+$z\_µ\_intro(1)$ made less flexible.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -891,6 +895,19 @@ in	if all (combine itym stym)
 end);
 
 =TEX
+=SML
+fun €full_dest_z_dec› (tm: TERM) : TERM list * TERM = (
+let	val (tml,s) = dest_z_dec tm;
+	val tye = case tml of
+		[] => fail "" 0 []
+		| (a :: x) =>  type_of a;
+	val tys = dest_power_t(type_of s);
+in
+	if (tye =: tys) andalso all tml is_var
+	then (tml,s)
+	else fail "" 0 []
+end);
+=TEX
 \subsubsection{Bringing it Together}
 =SML
 fun €full_dest_z_term› (tm : TERM) : Z_TERM = (
@@ -910,6 +927,7 @@ ZSchemaDec(sch,d) => (full_dest_z_decsexp tm; dzt)
 | ZÃ(d,p,v) => (full_dest_z_Ã tm; dzt)
 | ZÕ(d,p,v) => (full_dest_z_Õ tm; dzt)
 | Zâs(d,p) => (full_dest_z_âs tm; dzt)
+| ZDec(d,p) => (full_dest_z_dec tm; dzt)
 | _ => dzt
 end
 handle (Fail _) =>
@@ -920,7 +938,7 @@ The following cannot ``cheat'' $dest\_z\_term$, unless the constants
 have been given types incompatible with their generated forms
 from \cite{DS/FMU/IED/DTD047}.
 =GFT
-ZDec, ZDecl, ZEq, Zç, ZTrue, ZFalse, Z≥, Z±, Z≤, Z¥,
+ZDecl, ZEq, Zç, ZTrue, ZFalse, Z≥, Z±, Z≤, Z¥,
 Z§, ZLVar, ZGVar, ZInt, ZString, Zß¢, ZSetd, Z, ZTuple,
 ZBinding, Z∏, ZSelâs, ZSelât, ZApp, ZDecorâs, ZPreâs, 
 Z≥âs, Z±âs, Z≤âs, Z¥âs, Z§âs, Z˘âs, ZHideâs, ZÑâs, 
@@ -1223,7 +1241,7 @@ in
 		check = fun_true,
 		control = check_is_z,
 		default = (fn () => false)}
-	handle (Fail _) => ();
+	handle (Fail _) => (set_flag("check_is_z",true);())
 end;
 =TEX
 =SML
@@ -1497,12 +1515,32 @@ end);
 end;
 =TEX
 =SML
-val €pred_dec_conv› : CONV = 
-	(simple_eq_match_conv1 sym_many_dec_thm ORELSE_C
-	 _s_ç_s_conv ORELSE_C
-	simple_eq_match_conv1 sym_single_dec_thm ORELSE_C
-	simple_eq_match_conv1 predsexp_decsexp_thm ORELSE_C
+local
+	val ec = [(Ò¨Z'Setd yÆ Ä xÆ, (fn tm =>
+			let val (yx,ss) = dest_z_ç tm;
+				val (y,x) = (case dest_z_tuple yx of
+					[y,x] => (y,x)
+					| _ => fail "" 0 []);
+				val ys = dest_z_setd y;
+			in
+				if (all (snd ys) is_var) andalso (length (snd ys) > 1)
+				then simple_eq_match_conv1 sym_many_dec_thm tm
+				else term_fail "pred_dec_conv" 41011 [tm]
+			end)),
+		(Ò¨Z'  xÆ ç yÆ,  _s_ç_s_conv),
+		(Òx ç yÆ, (fn tm =>
+			let val (y,x) = dest_z_ç tm;
+			in
+				if is_var y
+				then simple_eq_match_conv1 sym_single_dec_thm tm
+				else term_fail "pred_dec_conv" 41011 [tm]
+			end)),
+		(¨Z'SchemaPred x yÆ, simple_eq_match_conv1 predsexp_decsexp_thm)];
+	val cnv1 = eqn_cxt_conv ec;
+in
+val €pred_dec_conv› : CONV = (cnv1 ORELSE_C 
 	(fn tm => term_fail "pred_dec_conv" 41011 [tm]));
+end;
 =TEX
 =GFT Examples
 val p = fst(dest_±(Ò[a,b:X| a = b] ± trueÆ));
@@ -2107,11 +2145,6 @@ let	val (dp,v) = dest_¥ (concl thm)
 		handle complaint =>
 		divert complaint "dest_¥" "z_µ_intro"
 			41026 [fn () => string_of_thm thm];
-in
-	if ((DECL_INTRO_C pred_dec_conv dp;true)handle (Fail _) => false)
-	then z_µ_intro (conv_rule cnv1 thm)
-	else (
-let
 	val (d,p) = dest_± dp
 		handle complaint =>
 		divert complaint "dest_±" "z_µ_intro"
@@ -2131,7 +2164,6 @@ let
 	val s4 = §_mp_rule  (simple_µ_elim(concl s3) sym_z'µ_def) s3;
 in
 	check_is_z_thm "z_µ_intro" s4
-end)
 end)
 end;
 =TEX
@@ -2167,50 +2199,32 @@ let 	val cthm = concl thm;
 	val dummy = map dest_var tml
 		handle complaint =>
 		pass_on complaint "dest_var" "z_µ_intro1";
-	val tml_ç1 = if is_nil tml
-		then Nil
-		else Value(list_mk_±(map mk_ç_u tml));
+	val tml_ç = if is_nil tml
+		then thm_fail "z_µ_intro1" 41028 [thm]
+		else (list_mk_±(map mk_ç_u tml));
 in
 	if is_¥ cthm
 	then (let val (dp,v) = dest_¥ cthm;
 	in
-		if is_± dp
-		then (let val (d,p) = dest_± dp;
-		in
-		case tml_ç1 of
-		Nil => z_µ_intro thm
-		| Value tml_ç => z_µ_intro 
-			(¥_elim(list_µ_elim[d,tml_ç,p,v] thm1) thm)
-		end)
-		else (
-		case tml_ç1 of
-		Nil => thm_fail "z_µ_intro1" 41028 [thm]
-		| Value tml_ç => z_µ_intro
-			(¥_elim(list_µ_elim[dp,tml_ç,v] thm2) thm)
-		)
+		z_µ_intro (¥_elim(list_µ_elim[dp,tml_ç,v] thm2) thm)	
 	end)
 	else
-	case tml_ç1 of
-	Nil => thm_fail "z_µ_intro1" 41028 [thm]
-	| Value tml_ç => (z_µ_intro (¥_elim(list_µ_elim[tml_ç,cthm] thm3) thm))
+	(z_µ_intro (¥_elim(list_µ_elim[tml_ç,cthm] thm3) thm))
 end)
 handle complaint =>
 pass_on complaint "z_µ_intro" "z_µ_intro1");
 end;
 =TEX
 =GFT
-z_µ_intro1 [] (all_µ_elim (asm_rule
-	¨µ w x y z ∑
-	((x ç W ± y ç X) ± (w ç Y) ± (z ç Z)) ± f x ¥ g w y zÆ));
 z_µ_intro1 [Òx1Æ,ÒpÆ] (all_µ_elim (asm_rule
-	¨µ w x y z ∑
-	((x ç W ± y ç X) ± (w ç Y) ± (z ç Z)) ± f x ¥ g w y zÆ));
+	¨µ w x1 y z p ∑
+	((x1 ç W ± y ç X) ± (w ç Y) ± (z ç Z)) ± f p x ¥ g w y zÆ));
 z_µ_intro1 [Òx1Æ,ÒpÆ] (all_µ_elim (asm_rule
 	¨µ w x y z ∑
 	f x ¥ g w y zÆ));
 z_µ_intro1 [Òx1Æ,ÒpÆ] (all_µ_elim (asm_rule
-	¨µ w y z ∑
-	g w y zÆ));
+	¨µ x1 w y z p ∑
+	g x1 w y z pÆ));
 =TEX
 In the following we know we drop out of Z temporarily, and protect
 against warnings of such.
@@ -2334,19 +2348,26 @@ local
 		res
 	end);	
 in
-fun €z_intro_µ_tac› (d: TERM) : TACTIC = (
+fun €z_intro_µ_tac› (d: TERM) : TACTIC = (fn (asms,cnc) =>
 let	val binds = (dest_z_binding d);
+	val new_vars = gen_vars (map (type_of o snd) binds)
+		(cnc :: asms);
+	val proper_vars = map (fn (nm,bd) => mk_var(nm,type_of bd)) binds;
 	val decl_as_pred_thm = list_±_intro
-		(map (fn (y,x) => µ_elim x ç_u_thm) binds);
+		(map (fn x => µ_elim x ç_u_thm) new_vars);
 	val decl_as_pred_thm' = conv_rule(DECL_INTRO_C pred_dec_conv) 
-		decl_as_pred_thm;	
+		decl_as_pred_thm;
 	val decl_as_pred_thm'' = ±_intro decl_as_pred_thm' t_thm;
-	val iµ_arg = map (fn (x,y) => (y,mk_var(x,type_of y))) binds;
+	val iµ_arg = map (fn ((x,y),b) => (y,b)) (combine binds new_vars);
+	val iµ_arg1 = combine new_vars proper_vars;
 in
 	CHECK_IS_Z_T "z_intro_µ_tac" 
-	(ante_tac decl_as_pred_thm'' THEN
-	MAP_EVERY intro_µ_tac iµ_arg THEN
+	(MAP_EVERY intro_µ_tac iµ_arg THEN
+	MAP_EVERY (fn _ => simple_µ_tac) iµ_arg THEN
+	ante_tac decl_as_pred_thm'' THEN
+	MAP_EVERY intro_µ_tac iµ_arg1 THEN
 	ct)
+	(asms,cnc)
 end
 handle complaint =>
 if area_of complaint = "dest_z_binding"
@@ -2357,12 +2378,41 @@ end;
 =GFT Examples
 push_goal([],Òa ± b ± cÆ);
 a(z_intro_µ_tac Ò(d ¶ ¨b:BOOLÆ, e ¶ ¨a:BOOLÆ)Æ);
+undo 1;
+a(z_intro_µ_tac Ò(c ¶ ¨b:BOOLÆ, b ¶ ¨c:BOOLÆ)Æ);
 drop_main_goal();
 (* To demonstrate wrecking a binding *)
-push_goal([],Òa ± b ± [p,q:X| p = q]Æ);
-a(z_intro_µ_tac Ò(c ¶ ¨b:BOOLÆ, d ¶ ¨p:'aÆ)Æ);
+push_goal([],Ò[X] a ± b ± [p,q:X| p = q]Æ);
+a(z_intro_µ_tac Ò[X] (c ¶ b, d ¶ (p∫X))Æ);
 drop_main_goal();
 =TEX
+=SML
+local
+	val t_±_t_thm = taut_rule ¨T ± T § TÆ;
+	val cnv1 = pure_rewrite_conv [t_±_t_thm];
+in
+val €z_µ_intro_conv1› : CONV = (fn tm =>
+let	val (xs,bdy) = strip_simple_µ tm;
+	val dummy = if is_nil xs
+		then term_fail "z_µ_intro_conv1" 41047 [tm]
+		else ();
+	val Us = map (fn x => inst [] [(type_of x,î'aÆ)] Ua) xs;
+	val decls = mk_z_decl(map (fn (x,y) => mk_z_dec([x],y))(combine xs Us));
+	val s1 = (DECL_C(dec_pred_conv THEN_C ç_u_lang_conv) THEN_C
+		TRY_C cnv1) decls;
+	val s2 = taut_rule (mk_eq(bdy,(mk_¥(mk_±(mk_t,mk_t),bdy))));
+	val s3 = conv_rule(RIGHT_C(LEFT_C(LEFT_C(fn _ => eq_sym_rule s1)))) s2;
+	val s4 = ALL_SIMPLE_µ_C(fn _ => s3) tm;
+	val s5 = conv_rule (RIGHT_C z_µ_intro_conv) s4;
+in
+	check_is_z_conv_result "z_µ_intro_conv1" 
+	(eq_trans_rule (refl_conv tm) s5)
+end);
+end;
+=IGN
+z_µ_intro_conv1 ¨µ a b c ∑Òp a b cÆÆ;
+=TEX
+
 \section{Concerning Z Existential Quantification}
 =SML
 local
@@ -2769,6 +2819,50 @@ z_∂â1_conv Ò ∂â1 x : X | x = y ∑ z = f xÆ;
 z_∂â1_conv Ò ∂â1 x,y : X; z:Y | x = y ∑ z = f xÆ;
 z_∂â1_conv Ò ∂â1 [x,y : X; z:Y] | x = x' y y'' ∑ z = f xÆ;
 =TEX
+=SML
+local
+	val cnv1 = simple_eq_match_conv1 (taut_rule ¨µ x ∑ (T ± x) § xÆ);
+	val cnv2 = BINDER_C (simple_eq_match_conv1 
+	(taut_rule ¨µ x y z ∑ ((x ± T) ¥ y ¥ z)§ ((x ± y) ¥ z)Æ));
+	val cnv3 = BINDER_C (simple_eq_match_conv1 
+	(taut_rule ¨µ x y z ∑ (x ± T ± y ± z)§ (x ± y ± z)Æ));
+in
+val €z_∂â1_intro_conv› : CONV = (fn tm =>(
+let	val (x,bdy) = dest_∂â1 tm;
+	val s1 = ∂â1_conv tm;
+	val s2 = conv_rule(RAND_C(BINDER_C(RIGHT_C z_µ_intro_conv1)
+		THEN_C z_∂_intro_conv1)) s1;
+	val res = mk_z_∂â1(mk_z_decl[mk_z_dec([x],mk_u(mk_z_power_t(type_of x)))],
+			mk_t,
+			bdy);
+	val s3 = (z_∂â1_conv THEN_C 
+			RAND_C(BINDER_C(
+			(LEFT_C cnv1 THEN_C RAND_C (RAND_C(BINDER_C
+			(LEFT_C cnv1))))))) res;
+	val s2µ = snd(dest_±(#3(dest_z_∂ (snd(dest_eq(concl s2))))));
+	val s3µ = #3(dest_z_∂ (snd(dest_eq(concl s3))));
+	val s4 = eq_trans_rule(z_µ_elim_conv s3µ)
+		(eq_sym_rule((z_µ_elim_conv THEN_C cnv2)s2µ));
+	val s5 = conv_rule(RIGHT_C(RAND_C(BINDER_C(RAND_C (fn _ => s4))))) s3;
+	val s5∂ = snd(dest_eq(concl s5));
+	val s2∂ = snd(dest_eq(concl s2));
+	val s6 = eq_trans_rule(z_∂_elim_conv s5∂)
+		(eq_sym_rule((z_∂_elim_conv THEN_C cnv3)s2∂));
+	val s7 = eq_sym_rule(eq_trans_rule(eq_trans_rule s5 s6) (eq_sym_rule s2));
+in
+	check_is_z_conv_result "z_∂â1_intro_conv"
+		(eq_trans_rule(refl_conv tm) s7)
+end)
+handle complaint =>
+list_divert complaint "z_∂â1_intro_conv" 
+	[("dest_∂â1",41048,[fn () => string_of_term tm])]
+);
+end;
+
+
+=IGN
+z_∂â1_intro_conv ¨∂â1 y ∑ Òq yÆÆ;
+=TEX
 \subsection{Concerning Assumptions}
 =SML
 fun €z_spec_asm_tac› (asm:TERM) (bind:TERM):TACTIC = 
@@ -2939,7 +3033,7 @@ fun €z_term_of_type› (ty : TYPE) : TERM = (
 		);
 		val decl = mk_z_decl (map do_dec (get_batches component_names_types));
 	in	mk_z_âs (decl, mk_z_true)
-	end	handle Fail _ => (
+	end	handle Fail _ => ((
 			case dest_ctype ty of
 				(s, []) => (
 				let	val tm = mk_z_gvar(s, mk_z_power_t ty, []);
@@ -2949,8 +3043,13 @@ fun €z_term_of_type› (ty : TYPE) : TERM = (
 					else	mk_u (mk_z_power_t ty)
 				end
 			) |	_ => mk_u (mk_z_power_t ty)
-		)
+		) handle Fail _ => (
+			mk_u (mk_z_power_t ty)
+		))
 );
+=TEX
+=SML
+val €z_type_of› : TERM -> TERM = z_term_of_type o type_of;
 =TEX
 =SML
 fun €z_µ_rewrite_canon› (thm : THM) : THM list = (
