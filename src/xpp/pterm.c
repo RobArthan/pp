@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.7 2000/01/04 16:04:24 rda Exp rda $
+ * $Id: pterm.c,v 2.8 2000/05/25 09:47:38 rda Rel $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -57,8 +57,12 @@
 #define sigset signal
 #endif
 
+/* For the following see "Data transfer from application" below */
+#define XFER_SIZE 8
+
+
 /* For the following see "Data transfer to application" below */
-#define MAX_Q_LEN 40000		/* see "Data transfer to application" below */
+#define MAX_Q_LEN 40000
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * global, static and external data:
@@ -307,13 +311,14 @@ static void get_from_application(
 	XtInputId	*unused_id)
 {
 	int ct;
-	char buf[BUFSIZ + 1]; /* allow for null-termination in scroll_out */
+	char buf[XFER_SIZE + 1]; /* allow for null-termination in scroll_out */
 	static Boolean get_from_app_work_proc();
-	if((ct = read(control_fd, buf, BUFSIZ)) > 0) {
+	if((ct = read(control_fd, buf, XFER_SIZE)) > 0) {
 		scroll_out(buf, ct, False);
 	}
-	if(ct == BUFSIZ) { /* Probably more to do */
+	if(ct == XFER_SIZE) { /* Probably more to do */
 		XtRemoveInput(app_ip_req);
+		listening = False;
 		XtAppAddWorkProc(app, get_from_app_work_proc, (XtPointer) NULL);
 	}		
 }
@@ -321,16 +326,20 @@ static void get_from_application(
 static Boolean get_from_app_work_proc(XtPointer unused_p)
 {
 	int ct;
-	char buf[BUFSIZ+1]; /* allow for null-termination in scroll_out */
-	if((ct = read(control_fd, buf, BUFSIZ)) > 0) {
+	char buf[XFER_SIZE+1]; /* allow for null-termination in scroll_out */
+	if(!application_alive()) { /* application has died since work proc was set up */
+		return True;
+	}
+	if((ct = read(control_fd, buf, XFER_SIZE)) > 0) {
 		scroll_out(buf, ct, False);
 	}
-	if(ct == BUFSIZ) { /* Probably more to do */
+	if(ct == XFER_SIZE) { /* Probably more to do */
 		return False;	/* arrange to be called again */ 
 	} else	{
 		app_ip_req = XtAppAddInput(app,
 			control_fd, (XtPointer) XtInputReadMask,
 			get_from_application, NULL);
+		listening = True;
 		return True;
 	}
 }
@@ -558,7 +567,7 @@ static Boolean wait_for_prompt()
 	int ct, prompt_len, tries, delay;
 	Boolean got_prompt, result;
 	XmTextPosition last;
-	char buf[BUFSIZ + 1]; /* allow for null-termination in scroll_out */
+	char buf[XFER_SIZE + 1]; /* allow for null-termination in scroll_out */
 	char * prompt_buf;
 
 	prompt_len = strlen(global_options.interrupt_prompt);
@@ -573,7 +582,7 @@ static Boolean wait_for_prompt()
 	tries = 0;
 	delay = 10;
 	while(True) {
-		if((ct = read(control_fd, buf, BUFSIZ)) > 0) {
+		if((ct = read(control_fd, buf, XFER_SIZE)) > 0) {
 			scroll_out(buf, ct, False);
 			last = XmTextGetLastPosition(journal);
 			got_prompt =
@@ -693,8 +702,9 @@ static void xt_error_handler(char * m)
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * handle signals and Xt errors: the derivation of the following list
- * of OS signals to handle not very scientific, but seems to catch
+ * of OS signals to handle is not very scientific, but seems to catch
  * the common problems.
+ * IT WOULD BE A GOOD IDEA TO MOVE TO USING THE POSIX SIGNAL HANDLING FUNCTIONS.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void handle_sigs()
 {
