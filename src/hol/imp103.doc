@@ -62,8 +62,10 @@ facilities for managing conjectures.}
 
 \subsection{Changes History}  % to get section number `0.3'
 \begin{description}
-\item[Issue 1.1]
-First draft.
+\item[Issues 1.1-1.3]
+First drafts.
+\item[Issue 1.4]
+Level numbers now stored with the conjectures.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -95,25 +97,38 @@ Simple algorithms have therefore been used throughout.
 structure ÛConjecturesÝ : Conjectures = struct
 =TEX
 =SML
-fun Ûencode_conjectureÝ (keys : string list, t : TERM) : USER_DATUM = (
-	let	fun aux [] = UD_Term (t, [])
+val Ûcurrent_levelÝ : unit -> int = (
+	#current_level o
+	#contents o
+	icl'Kernel.icl'get_theory_info o
+	get_current_theory_name
+);
+=TEX
+=SML
+fun Ûencode_conjectureÝ (keys : string list, (lv : int, t : TERM))
+			: USER_DATUM = (
+	let	fun aux [] = UD_Int(lv, [UD_Term (t, [])])
 		|   aux (k :: ks) = UD_String(k, [aux ks]);
 	in	aux keys
 	end
 );
-fun Ûdecode_conjectureÝ (caller : string) (thyn : string) (ud : USER_DATUM) : string list * TERM = (
+=TEX
+=SML
+fun Ûdecode_conjectureÝ (caller : string) (thyn : string) (ud : USER_DATUM)
+		: string list * (int * TERM) = (
 	case ud of
-		UD_Term (t, _) => ([], t)
+		UD_Int(lv, [UD_Term (t, _)]) => ([], (lv, t))
 	|	UD_String (k, [ud']) => (
-			let	val (ks, t) = decode_conjecture caller thyn ud'
-			in	(k :: ks, t)
+			let	val (ks, lvt) = decode_conjecture caller thyn ud'
+			in	(k :: ks, lvt)
 			end
 	) |	_ => fail caller 103803 [fn () => thyn]
 );
+=TEX
+=SML
 fun Ûconjecture_key_checkÝ (key : string) (ud : USER_DATUM) : bool = (
 	case ud of
-		UD_Term (t, _) => false
-	|	UD_String (k, [ud']) => (
+		UD_String (k, [ud']) => (
 			k = key orelse conjecture_key_check key ud'
 	) |	_ => false
 );
@@ -154,7 +169,8 @@ fun Ûnew_conjectureÝ ([] : string list, tm : TERM) : unit = (
 			else	chk ks
 		);	
 		val side_effect = chk keys;
-		val new_uds = encode_conjecture (keys, tm) :: uds
+		val lv = current_level();
+		val new_uds = encode_conjecture (keys, (lv, tm)) :: uds
 	in	set_conjecture_uds "new_conjecture" new_uds
 	end
 );
@@ -168,13 +184,13 @@ fun Ûget_conjectureÝ (thy : string) (key : string) : TERM = (
 				[fn()=>key, fn()=>
 						if thy = "-"
 						then get_current_theory_name()
-						else thy]
-	in	snd(decode_conjecture "get_conjecture" thy ud)
+						else thy];
+	in	snd(snd(decode_conjecture "get_conjecture" thy ud))
 	end
 );
 =TEX
 =SML
-fun Ûget_conjecturesÝ (thy : string) : (string list * TERM) list = (
+fun Ûget_conjecturesÝ (thy : string) : (string list * (int * TERM)) list = (
 	let	val uds = get_conjecture_uds "get_conjectures" thy;
 	in	map (decode_conjecture "get_conjectures" thy) uds
 	end
@@ -195,9 +211,9 @@ fun Ûdelete_conjectureÝ (key : string) : TERM = (
 		);
 		val (ud, pruned) = prune uds;
 	in	set_conjecture_uds "delete_conjecture" pruned;
-		snd
+		snd(snd
 		(decode_conjecture "delete_conjecture"
-				(get_current_theory_name()) ud)
+				(get_current_theory_name()) ud))
 	end
 );
 =TEX
@@ -207,12 +223,12 @@ fun Ûdelete_all_conjecturesÝ (() : unit) : unit = (
 );
 =TEX
 =SML
-fun Ûcull_conjecturesÝ (what : string) (p : TERM -> bool) : unit = (
+fun Ûcull_conjecturesÝ (what : string) (p : (int * TERM) -> bool) : unit = (
 	let	val uds = get_conjecture_uds "cull_conjectures" "-";
 		fun prune [] = ([], [])
 		  | prune (ud :: more) = (
 			let	val (keys, tm) =
-					decode_conjecture "delete_conjecture"
+					decode_conjecture "cull_conjectures"
 						(get_current_theory_name()) ud;
 				val (togo, tostay) = prune more;
 			in	if	p tm
@@ -239,11 +255,11 @@ fun Ûconjecture_kernel_state_change_trapÝ
 	case ksc of
 		DeleteConst c => (
 			let	val n = fst (dest_const c);
-				fun p t = n mem (map fst (term_consts t));
+				fun p (_, t) = n mem (map fst (term_consts t));
 			in	cull_conjectures "constant" p
 			end
 	) |	DeleteType n => (
-			let	fun p t = n mem (map fst (term_tycons t));
+			let	fun p (_, t) = n mem (map fst (term_tycons t));
 			in	cull_conjectures "type" p
 			end
 	) |	_ => ()
