@@ -122,7 +122,14 @@ XtAppContext app; /* global because needed in msg.c */
  * editmenu	menubar	the edit menu
  * cmdmenu	menubar	the command menu
  * helpmenu	menubar	the help menu
+ *
+ * All widgets except command have the same name in the
+ * widget hierarchy as their C name above except command.
+ * command is called "pp_text" in the Widget hierarchy
+ * to allow keyboard translation resources to be set up
+ * for all the text input windows at one go.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+
 
 Widget root;	/* global because needed in xpp.c */
 
@@ -239,7 +246,7 @@ setup_cmdwin()
 	XtSetArg(args[i], XmNautoShowCursorPosition, 	True); ++i;
 	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
 
-	command = XmCreateScrolledText(work, "command", args, i);
+	command = XmCreateScrolledText(work, "pp_text", args, i);
 
 	XtAddCallback(command,
 		XmNmodifyVerifyCallback, command_modify_cb, NULL);
@@ -456,9 +463,9 @@ XmAnyCallbackStruct *cbs;
 	void restart_application();
 	void interrupt_application();
 	void post_mortem_tidy_up();
-/*
+
 	post_mortem_tidy_up();
-*/
+
 	switch(i) {
 	case 0:
 		execute_command();
