@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.13 2002/10/28 14:09:14 rda Exp rda $
+ * $Id: undo.c,v 2.14 2002/10/28 15:58:48 rda Exp rda $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -28,10 +28,13 @@
 #include "xpp.h"
 
 /* Messages for various purposes: */
-static char* changes_saved_warning = "The file has been saved since "
+static char *changes_saved_warning = "The file has been saved since "
                                      "you last changed it.  Do you "
                                      "really want to undo the last change?";
 
+static char *read_only_warning = "The read-only option is turned on. "
+				 "Do you really want to turn this option off "
+				 "and edit the text?";
 
 /* The following is used to implement undo/redo in the edit menu */
 static NAT next_debug_no = 0;
@@ -899,7 +902,15 @@ void undo_modify_cb(
 	if(!ub->enabled) {
 		return;
 	}
-
+	if(global_options.read_only){
+		if(yes_no_dialog(text_w, read_only_warning) ) {
+			set_read_only(False);
+		} else {
+			((XmTextVerifyCallbackStruct *)xtp_cbs)-> doit = False;
+			return;
+		}
+	}
+	show_modified();
 	if(!undoModifyCB(text_w, ub, xtp_cbs, &noMemoryAnswer)) {
 	}
 }

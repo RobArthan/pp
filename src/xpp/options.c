@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.8 2002/10/17 17:09:34 rda Exp rda $
+ * $Id: options.c,v 2.9 2002/12/03 15:25:38 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -31,7 +31,7 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * When init_options is called (towards the beginning of a session)
  * from mainw.c, it sets up the values of the global options variable
- * whcih have not yet been fixed and stashes a copy of the result in
+ * which have not yet been fixed and stashes a copy of the result in
  * the following variable, which is used if the user wants to
  * rest the values.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -56,6 +56,7 @@ GlobalOptions	orig_global_options;
  * Editor Controls
  *	 [] Take backup before writing file 
  *	 [] Delete backup after successful write
+ *	 [] Read only
  * Application Controls
  *	Command Line:		pp -d foo	
  *	Journal Length:	10000
@@ -70,12 +71,13 @@ GlobalOptions	orig_global_options;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static Widget
-	shell,
+	shell = NULL,
 	shell_row_col,
 		edit_frame,
 			edit_row_col,
 				backup_toggle,
 				delete_backup_toggle,
+				read_only_toggle,
 		app_frame,
 			app_row_col,
 				command_form,
@@ -88,7 +90,7 @@ static Widget
 			button_form,
 				apply_btn, reset_btn, dismiss_btn, help_btn;
 /*
- * We use a variable to record the state of the radio buttons:
+ * Call-backs:
  */
 static void	apply_cb(CALLBACK_ARGS),
 		reset_cb(CALLBACK_ARGS),
@@ -102,6 +104,10 @@ void init_options(Widget owner_w)
 
 
 	XmString s1, s2, s3;
+
+	if(shell) { /* defend against being called twice */
+		return;
+	}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Else ... have to create a new one 
@@ -144,6 +150,19 @@ void init_options(Widget owner_w)
 		NULL);
 
 	XmStringFree(lab);
+
+	lab = XmStringCreateSimple("Read only");
+
+	read_only_toggle = XtVaCreateManagedWidget("read-only",
+		xmToggleButtonWidgetClass,	edit_row_col,
+		XmNlabelString,		lab,
+		NULL);
+
+	XmStringFree(lab);
+
+	if(global_options.read_only) {
+		XmToggleButtonSetState(read_only_toggle,True, False);
+	}
 
 if(!global_options.edit_only) {
 	app_frame = XtVaCreateManagedWidget("app-frame",
@@ -306,7 +325,7 @@ if(!global_options.edit_only) {
 			help_cb, (XtPointer)NULL);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set up initial values of global_options which have not
- * been done already in xpp.c); these are the ones which the user
+ * been done already in xpp.c; these are the ones which the user
  * sets in the resource file by initialising option tool widgets.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	global_options.backup_before_save =
@@ -314,6 +333,9 @@ if(!global_options.edit_only) {
 
 	global_options.delete_backup_after_save =
 		XmToggleButtonGetState(delete_backup_toggle);
+
+	global_options.read_only =
+		XmToggleButtonGetState(read_only_toggle);
 
 	if(journal_max_text) {
 		char	*journal_max_buf;
@@ -421,6 +443,14 @@ void add_option_tool(void)
 	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * unset the read-only flag:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void set_read_only(Boolean read_only)
+{
+	global_options.read_only = read_only;
+	XmToggleButtonSetState(read_only_toggle, read_only, False);
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * apply callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void apply_cb(
@@ -433,6 +463,9 @@ static void apply_cb(
 
 	global_options.delete_backup_after_save =
 		XmToggleButtonGetState(delete_backup_toggle);
+
+	global_options.read_only =
+		XmToggleButtonGetState(read_only_toggle);
 
 	if(command_text) {
 		XtFree(global_options.command_line);
@@ -476,8 +509,13 @@ static void reset_cb(
 
 	XmToggleButtonSetState(backup_toggle,
 		global_options.backup_before_save, False);
+
 	XmToggleButtonSetState(delete_backup_toggle,
 		global_options.delete_backup_after_save, False);
+
+	XmToggleButtonSetState(read_only_toggle,
+		global_options.read_only, False);
+
 	if(command_text) {
 		XmTextSetString(command_text,
 			global_options.command_line);

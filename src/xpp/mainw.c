@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.36 2002/12/03 00:29:29 rda Exp rda $
+ * $Id: mainw.c,v 2.37 2002/12/03 15:25:38 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -140,7 +140,6 @@ static void
 	file_menu_cb(CALLBACK_ARGS),
 	help_menu_cb(CALLBACK_ARGS),
 	reopen_cb(CALLBACK_ARGS),
-	script_modify_cb(CALLBACK_ARGS),
 	tools_menu_cb(CALLBACK_ARGS),
 	ln_popup_cb(CALLBACK_ARGS);
 
@@ -761,9 +760,6 @@ static Boolean setup_main_window(
 		XmNmodifyVerifyCallback, undo_modify_cb, undo_ptr);
 
 	XtAddCallback(script,
-		XmNmodifyVerifyCallback, script_modify_cb, undo_ptr);
-
-	XtAddCallback(script,
 		XmNmotionVerifyCallback, line_number_cb, NULL);
 
 	XtAddEventHandler(script, ButtonPressMask, False, post_popupeditmenu, NULL);
@@ -810,6 +806,15 @@ static Boolean setup_main_window(
 			XtListHead);
 
 	}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Initialise options and templates packages
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+	init_options(script);
+
+	if(!init_templates_tool(script)) {
+		set_menu_item_sensitivity(toolsmenu, TOOLS_MENU_TEMPLATES, False);
+	}
+
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Open file if file_name not NULL
@@ -839,15 +844,6 @@ static Boolean setup_main_window(
 
 	reinit_changed(False);
 	set_icon_name_and_title();
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Initialise options and templates packages
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-	init_options(script);
-
-	if(!init_templates_tool(script)) {
-		set_menu_item_sensitivity(toolsmenu, TOOLS_MENU_TEMPLATES, False);
-	}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Management and Realisation:
@@ -1279,12 +1275,9 @@ static void help_menu_cb(
 	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Monitor typed input:
+ * Tell user the file has been modified
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void script_modify_cb(
-		Widget		w,
-		XtPointer	cbd,
-		XtPointer	cbs)
+void show_modified(void)
 {
 	if(!changed) {	/* Only do this when change from !changed to changed */
 		XtManageChild(modified);

@@ -44,6 +44,7 @@ typedef struct {
 	Boolean			edit_only;
 	Boolean			backup_before_save;
 	Boolean			delete_backup_after_save;
+	Boolean			read_only;
 	char			add_new_line_mode;
 	NAT			journal_max;
 	String			command_line;
@@ -145,6 +146,7 @@ typedef struct menu_item {
 		XtPointer cbd,
 		XtPointer cbs);
 	extern void scroll_out(char *buf, NAT ct, Boolean ignored);
+	extern void show_modified(void);
 /* Module: menus */
 	extern	Widget setup_menu(
 		Widget		parent,
@@ -188,6 +190,8 @@ typedef struct menu_item {
 		Widget	owner_w);
 	extern void add_option_tool(void);
 	extern char **get_arg_list(void);
+	extern void set_read_only(Boolean read_only);
+	extern GlobalOptions orig_global_options;
 /* Module: palette */
 	extern Boolean add_palette(
 		Widget	w);

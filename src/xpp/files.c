@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.7 2002/12/02 23:41:45 rda Exp rda $
+ * $Id: files.c,v 2.8 2002/12/03 00:30:26 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -100,6 +100,10 @@ static char *panic_file_written =
 
 static char *read_error_message =
 	 "Error reading the file \"%s\"";
+
+static char *read_only_message =
+	 "The file \"%s\" is read-only. "
+	 "Do you want to open it?";
 
 static char *save_not_reg_message =
 	 "The file \"%s\" is not an ordinary file";
@@ -506,7 +510,7 @@ Boolean save_file_as(
 	XtFree(buf);
 	if(success && stat(name, &status) == 0) {
 		current_file_status = &status;
-	} else { /* give up on file status checks for now */
+	} else { /* bad news, give up on file status checks for now */
 		current_file_status = NULL;
 	}
 	return success;
@@ -550,6 +554,9 @@ Boolean save_string_as(
  * contents of the text window and returns False.
  * E.g., this is done when opening the file named on the
  * command line.
+ * If the file is read-only, the read-only option must be set and
+ * unless the command-line/resource file setting and the current setting
+ * of the read-only option are on, we ask the user whether to do this.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 Boolean open_file(
@@ -569,6 +576,19 @@ Boolean open_file(
 		return False;
 	};
 	if((buf = get_file_contents(text, name, cmdLine, foAction, &status)) != NULL) {
+		if(access(name, W_OK) != 0) { /* read-only (or worse?) */
+			char msg_buf[PATH_MAX + 200];
+			sprintf(msg_buf, read_only_message, name);
+			if(	(	orig_global_options.read_only
+				&&	global_options.read_only)
+			||	yes_no_dialog(text, msg_buf)) {
+				set_read_only(True);
+			} else {
+				return False;
+			}
+		} else if (!orig_global_options.read_only) {
+			set_read_only(False);
+		} /* else leave the user's setting of the read-only option */
 		XmTextDisableRedisplay(text);
 		XmTextSetString(text, buf);
 		XtFree(buf);
@@ -576,7 +596,6 @@ Boolean open_file(
 		current_file_status = &status;
 		return True;
 	} else {
-		current_file_status = NULL;
 		return False;
 	}
 }

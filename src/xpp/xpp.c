@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.6 2002/08/09 10:54:31 rda Exp $
+ * $Id: xpp.c,v 2.7 2002/10/17 17:09:34 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -168,20 +168,30 @@ static XtResource resources[] = {
 void usage (void)
 {
 	msg( "xpp",
-"usage: xpp [standard X Toolkit options] [-file fname] [-commmand command-line]");
+"usage: xpp [standard X Toolkit options] [-readonly] [-file fname] [-commmand command-line]");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Check whether the -command or -file command-line option is there
  * And set up static data accordingly.
- * Returns number of argv items to skip ((1 or 2)
+ * Returns number of argv items to skip
  * Error message and exit if no command line at all.
  * Note can omit -command if there are no X options 
  * THIS AREA IS NOT VERY GOOD YET AND NEEDS A BIT MORE DESIGN THOUGHT
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 int check_sep(int argc, char **argv)
 {
-	int l, acc;
+	int l, acc, ro;
+	if(	argc > 1
+	&&	(l = strlen(argv[1])) <= strlen("-readonly")
+	&&	!strncmp(argv[1], "-readonly", l) ) {
+		global_options.read_only = True;
+		--argc;
+		++argv;
+		ro = 1;
+	} else {
+		ro = 0;
+	}
 	if(argc == 1) {
 		file_name = NULL;
 		global_options.edit_only = True;
@@ -190,15 +200,10 @@ int check_sep(int argc, char **argv)
 	if(argc == 2) {
 		file_name = argv[1];
 		global_options.edit_only = True;
-		return argc;
+		return argc + ro;
 	};
 	if(	(l = strlen(argv[1])) <= strlen("-file")
 	&&	!strncmp(argv[1], "-file", l) ) {
-		if(argc < 3) {
-			/* it's not possible to get here!  PG. 12/3/2002 */
-			usage();
-			exit(60);
-		}
 		file_name = argv[2];
 		acc = 2;
 	} else if ( (l = strlen(argv[1])) <= strlen("-command")
@@ -212,10 +217,10 @@ int check_sep(int argc, char **argv)
 	if(	argc > acc + 1
 	&&	(l = strlen(argv[acc + 1])) <= strlen("-command")
 	&&	!strncmp(argv[acc + 1], "-command", l) ) {
-		return acc + 2;
+		return acc + ro + 2;
 	} else {
 		global_options.edit_only = (argc == acc + 1);
-		return acc + 1;
+		return acc + ro + 1;
 	}
 }
 
