@@ -91,6 +91,8 @@ static SearchData search_data;
  * | Replace      |  Replace All  | := Selection |
  * |   <text to replace with >                   |
  * | Go to line:  | <line number> | := Cursor    |
+ * -----------------------
+ * | Dismiss    |  Help  |
  *
  * Each `<...>' here is a text field
  * The `:= ...' push-buttons can be used to
@@ -103,7 +105,7 @@ static SearchData search_data;
 Bool add_search_tool(Widget text_w)
 {
 	NAT cbdata;
-	Widget shell, form,
+	Widget shell, paned, form, action,
 		search_text,
 		search_set_btn,
 		replace_text,
@@ -114,7 +116,9 @@ Bool add_search_tool(Widget text_w)
 		search_forwards_btn,
 		replace_btn,
 		replace_all_btn,
-		goto_line_no_btn;
+		goto_line_no_btn,
+		help_btn,
+		dismiss_btn;
 
 	char	*pattern;
 
@@ -127,7 +131,9 @@ Bool add_search_tool(Widget text_w)
 		replace_set_cb(),
 		line_no_set(),
 		line_no_set_cb(),
-		goto_line_no_cb();
+		goto_line_no_cb(),
+		dismiss_cb(),
+		help_cb();
 
 
 	if((search_data.shell_w) != NULL) {
@@ -141,9 +147,14 @@ Bool add_search_tool(Widget text_w)
 		XmNdeleteResponse,		XmUNMAP,
 		NULL); 
 
+	paned = XtVaCreateWidget("search-replace-paned",
+		xmPanedWindowWidgetClass, 	shell,
+		XmNsashWidth,			1,
+		XmNsashHeight,			1,
+		NULL);
+
 	form = XtVaCreateWidget("search-replace-form",
-		xmFormWidgetClass, 		shell,
-		XmNtraversalOn,		True,
+		xmFormWidgetClass, 		paned,
 		XmNfractionBase,		24,
 		NULL);
 
@@ -155,7 +166,6 @@ Bool add_search_tool(Widget text_w)
 
 	search_backwards_btn = XtVaCreateManagedWidget("<= Search",
 		xmPushButtonWidgetClass,	form,
-		XmNtraversalOn,		True,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_FORM,
 		XmNrightAttachment,		XmATTACH_POSITION,
@@ -164,7 +174,6 @@ Bool add_search_tool(Widget text_w)
 
 	search_forwards_btn = XtVaCreateManagedWidget("Search =>",
 		xmPushButtonWidgetClass,	form,
-		XmNtraversalOn,			True,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
@@ -174,7 +183,6 @@ Bool add_search_tool(Widget text_w)
 
 	search_set_btn = XtVaCreateManagedWidget(":= Selection",
 		xmPushButtonWidgetClass,	form,
-		XmNtraversalOn,		True,
 		XmNtopAttachment,		XmATTACH_FORM,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_FORM,
@@ -183,7 +191,6 @@ Bool add_search_tool(Widget text_w)
 
 	search_text = XtVaCreateManagedWidget("search",
 		xmTextWidgetClass,		form,
-		XmNtraversalOn,		True,
 		XmNeditMode,			XmMULTI_LINE_EDIT,
 		XmNrows,			2,
 		XmNcolumns,			32,
@@ -201,7 +208,6 @@ Bool add_search_tool(Widget text_w)
 
 	replace_btn = XtVaCreateManagedWidget("Replace",
 		xmPushButtonWidgetClass,	form,
-		XmNtraversalOn,		True,
 		XmNtopAttachment,		XmATTACH_WIDGET,
 		XmNtopWidget,			search_text,
 		XmNleftAttachment,		XmATTACH_FORM,
@@ -211,7 +217,6 @@ Bool add_search_tool(Widget text_w)
 
 	replace_all_btn = XtVaCreateManagedWidget("Replace All",
 		xmPushButtonWidgetClass,	form,
-		XmNtraversalOn,		True,
 		XmNtopAttachment,		XmATTACH_WIDGET,
 		XmNtopWidget,			search_text,
 		XmNleftAttachment,		XmATTACH_POSITION,
@@ -222,7 +227,6 @@ Bool add_search_tool(Widget text_w)
 
 	replace_set_btn = XtVaCreateManagedWidget(":= Selection",
 		xmPushButtonWidgetClass,	form,
-		XmNtraversalOn,		True,
 		XmNtopAttachment,		XmATTACH_WIDGET,
 		XmNtopWidget,			search_text,
 		XmNleftAttachment,		XmATTACH_POSITION,
@@ -232,7 +236,6 @@ Bool add_search_tool(Widget text_w)
 
 	replace_text = XtVaCreateManagedWidget("replace",
 		xmTextWidgetClass,		form,
-		XmNtraversalOn,		True,
 		XmNeditMode,			XmMULTI_LINE_EDIT,
 		XmNrows,			2,
 		XmNcolumns,			32,
@@ -252,11 +255,11 @@ Bool add_search_tool(Widget text_w)
 
 	line_no_text = XtVaCreateManagedWidget("line-number",
 		xmTextWidgetClass,		form,
-		XmNtraversalOn,		True,
 		XmNtopAttachment,		XmATTACH_WIDGET,
 		XmNtopWidget,			replace_text,
 		XmNleftAttachment,		XmATTACH_POSITION,
 		XmNrightAttachment,		XmATTACH_POSITION,
+		XmNbottomAttachment,		XmATTACH_FORM,
 		XmNleftPosition,		8,
 		XmNrightPosition,		16,
 		XmNcolumns,			6,
@@ -264,7 +267,6 @@ Bool add_search_tool(Widget text_w)
 
 	goto_line_no_btn = XtVaCreateManagedWidget("Go to line:",
 		xmPushButtonWidgetClass,	form,
-		XmNtraversalOn,		True,
 		XmNtopAttachment,		XmATTACH_WIDGET,
 		XmNtopWidget,			replace_text,
 		XmNleftAttachment,		XmATTACH_FORM,
@@ -276,7 +278,6 @@ Bool add_search_tool(Widget text_w)
 
 	line_no_set_btn = XtVaCreateManagedWidget(":= Cursor",
 		xmPushButtonWidgetClass,	form,
-		XmNtraversalOn,		True,
 		XmNtopAttachment,		XmATTACH_WIDGET,
 		XmNtopWidget,			replace_text,
 		XmNleftAttachment,		XmATTACH_POSITION,
@@ -286,6 +287,37 @@ Bool add_search_tool(Widget text_w)
 		XmNbottomWidget,		line_no_text,
 		NULL);
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Part 5:
+ * -----------------------
+ * | Dismiss    |  Help  |
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+	action = XtVaCreateWidget("search-replace-action",
+		xmFormWidgetClass, 		paned,
+		XmNfractionBase,		24,
+		NULL);
+
+	dismiss_btn = XtVaCreateManagedWidget("Dismiss",
+		xmPushButtonWidgetClass,	action,
+		XmNtopAttachment,		XmATTACH_FORM,
+		XmNbottomAttachment,		XmATTACH_FORM,
+		XmNleftAttachment,		XmATTACH_POSITION,
+		XmNrightAttachment,		XmATTACH_POSITION,
+		XmNleftPosition,		5,
+		XmNrightPosition,		11,
+		NULL);
+
+
+	help_btn = XtVaCreateManagedWidget("Help",
+		xmPushButtonWidgetClass,	action,
+		XmNtopAttachment,		XmATTACH_FORM,
+		XmNbottomAttachment,		XmATTACH_FORM,
+		XmNleftAttachment,		XmATTACH_POSITION,
+		XmNrightAttachment,		XmATTACH_POSITION,
+		XmNleftPosition,		13,
+		XmNrightPosition,		19,
+		NULL);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set up static data to contain necessary widget handles:
@@ -329,6 +361,12 @@ Bool add_search_tool(Widget text_w)
 	XtAddCallback(goto_line_no_btn, XmNactivateCallback,
 		goto_line_no_cb, (XtPointer)(&search_data));
 
+	XtAddCallback(dismiss_btn, XmNactivateCallback,
+		dismiss_cb, (XtPointer)(&search_data));
+
+	XtAddCallback(help_btn, XmNactivateCallback,
+		help_cb, (XtPointer)(&search_data));
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Initialise search string and line number:
  * Don't use callback for search string, since there
@@ -360,9 +398,33 @@ Bool add_search_tool(Widget text_w)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	XtManageChild(form);
+	XtManageChild(action);
+	XtManageChild(paned);
 	XtPopup(shell, XtGrabNone);
 
 	return True;
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * dismiss callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void dismiss_cb(
+	Widget				w,
+	SearchData			*cbdata,
+	XmPushButtonCallbackStruct	cbs)
+{
+	XtPopdown(cbdata->shell_w);
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * help callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void help_cb(
+	Widget				w,
+	SearchData			*cbdata,
+	XmPushButtonCallbackStruct	cbs)
+{
+	help_dialog(cbdata->shell_w, Help_Search_Tool);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -376,7 +438,6 @@ static void search_forwards_cb(
 	static void search_either();
 	search_either(w, cbdata, FORWARDS);
 }
-
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * search backwards callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -643,7 +704,7 @@ static long int substr(
 static void search_string(
 	char		*pattern,
 	char		*text_buf,
-	NAT		start_point,
+	long int 	start_point,
 	long int 	*offset,
 	long int 	*length,
 	NAT		direction)

@@ -203,4 +203,6 @@ void number_verify_cb(
 #ifndef _pixmaps
 	extern Pixmap get_pp_pixmap();
 #endif
-
+#ifndef _help
+	#include "help.h"
+#endif
