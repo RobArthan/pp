@@ -22,7 +22,7 @@ Don't worry about this!
 %\TPPpart{}
 \TPPtitle{SLR Parser Generator}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP017}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.41 $%
+\def\SCCSversion{$Revision: 1.42 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 %\TPPdate{}  %% Mandatory field (with sensible default)
@@ -131,6 +131,7 @@ of the printing code.
 (and they are output as valid ML strings now).
 \item[Issue 1.41] Implemented execution timings.
 \item[Issue 1.42] It can now tell you how many conflicts the LALR(1) step removed.
+\item[Issue 1.43] Tidied up error-handling and the treatment of MS-DOS and Macintosh format text files.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -815,6 +816,34 @@ fun €print_lr0_automaton_graph›
 		);
 	in	log "\n"; log (burst "LR(0) automaton"); log "\n";
 		map print1 graph; ()
+	end
+);
+=TEX
+The following function is used for formatting quoted terminal symbols in the ML output and in lexical
+analysis error messages.
+=SML
+fun €ml_escapify›  (x : string) : string = (
+	let	val chars = explode x;
+		fun digits n = (
+			let	val ds = string_of_int n;
+				val s = size ds;
+			in	if	s = 1
+				then	"00" ^ ds
+				else if	s = 2
+				then	"0" ^ ds
+				else	ds
+			end
+		);
+		fun aux acc [] = implode(rev acc)
+		|   aux acc (ch :: chs) = (
+			if	ch = "\\" orelse ch = "\""
+			then	aux (ch::"\\"::acc) chs
+			else if	ord ch < ord " "
+			orelse	ord ch > 126
+			then	aux (digits (ord ch)::"\\"::acc) chs
+			else	aux (ch::acc) chs
+		);
+	in	aux [] chars
 	end
 );
 =TEX
@@ -1575,7 +1604,10 @@ Most of the lexical analyser is declared within this local block.
 local
 
     exception €LexFail› of string;
-
+=TEX
+We maintain by side-effect a line counter for use in syntax error reports:
+=SML
+	val line_number : int ref = ref 1;
 =TEX
 A state, $lex\_state$, is used by most of the lexical analysis
 functions, it is in two parts.  First the characters not yet tokenised,
@@ -1649,12 +1681,21 @@ We allow underscores and primes in names by treating them as letters:
  
     fun €next_is_rbrack› (")" :: _) = true
     |   next_is_rbrack _ = false;
- 
-    fun €skip_space› (cs : string list) : string list = (
-        if next_is_space cs
-        then skip_space (tl cs)
-        else cs
-    );
+
+    fun €check_eoln›  ("\n"::cs : string list) : string list = (
+	line_number := !line_number + 1;
+	cs
+    ) | check_eoln cs = cs;
+=TEX
+=SML
+fun €skip_space› ("\n":: cs : string list) : string list = (
+	line_number := !line_number + 1;
+	skip_space cs
+) | skip_space (cs : string list) : string list = (
+	if next_is_space cs
+	then (skip_space (tl cs))
+	else cs
+);
 =TEX
 Comments are enclosed in ``(*'' and ``*)''
 =SML
@@ -1704,26 +1745,26 @@ an auxiliary for the other recognisers.
     );
 =TEX
 A string starts and finishes with $quoter$.
+
 Within a string the escape character `$\backslash$' may be used to
-provide characters not normally available.  The input to this lexical
-analyser is an SML string.  All character in an SML string between the
-HOL start and end quote characters will be reguarded as the HOL string,
-so the SML escape sequences may be used for most characters.  The HOL
-escape character `$\backslash$' is therefore only needed for itself and
-the start quote character.
+provide characters not normally available. 
+Unescaped newlines  in strings are ignored.
+The escape character `$\backslash$' is therefore only needed for itself and
+the start quote character and for newlines.
 =SML
     fun €rec_quote› ( (cs, (_, tk)) : lex_state ) : lex_state = (
         let
             fun rec_quote_rest qtch (cs, tok) = (
-		case cs of
-		("\\" :: _ :: rest) =>
-			rec_quote_rest qtch (collect (tl cs, tok))
-		| ("\\" :: _) =>
+		case check_eoln cs of
+		("\\" :: (t as (_ :: rest))) => (
+			check_eoln t; (* just for side-effect *)
+			rec_quote_rest qtch (collect (t, tok))
+		) | ("\\" :: _) =>
 			raise (LexFail "escaped character at end of string")
-		| (ch :: rest) =>
+		| cs' as (ch :: rest) =>
 			if (ch = qtch)
 			then (rest, tok)
-			else rec_quote_rest qtch (collect (cs, tok))
+			else rec_quote_rest qtch (collect (cs', tok))
 		| _ => raise (LexFail "unmatched quote")
             );
         in
@@ -1737,6 +1778,7 @@ Actions are distinguished by their starting with a left bracket and are
 finished by the matching right bracket.
 =SML
     fun €rec_action_rest› i (cs, tok) = (
+	check_eoln cs; (* just for the line-numbering side-effect *)
 	if next_is_lbrack cs
 	then rec_action_rest (i+1) (collect (cs, tok))
 	else if next_is_rbrack cs
@@ -1759,15 +1801,17 @@ finished by the matching right bracket.
 Left and right comment symbols must balance. $rec\_comment\_rest$ arranges for this:
 =SML
    fun €rec_comment_rest› i cs = (
-	if next_is_lcomment cs
-	then rec_comment_rest (i+1) (tl(tl cs))
-	else if next_is_rcomment cs
-	then	if i <= 0
-		then (tl(tl cs), (COMMENT, ""))
-		else rec_comment_rest (i-1) (tl(tl cs))
-	else if not (is_nil cs)
-	then rec_comment_rest i (tl cs)
-	else raise (LexFail "unmatched comment symbol")
+	let	val cs' = skip_space cs;
+	in	if next_is_lcomment cs'
+		then rec_comment_rest (i+1) (tl(tl cs'))
+		else if next_is_rcomment cs'
+		then	if i <= 0
+			then (tl(tl cs'), (COMMENT, ""))
+			else rec_comment_rest (i-1) (tl(tl cs'))
+		else if not (is_nil cs')
+		then rec_comment_rest i (tl cs')
+		else raise (LexFail "unmatched comment symbol")
+	end
     );
 =TEX
 =SML
@@ -1811,7 +1855,7 @@ part of the input.
                    (KNOWN cls, tk) => (cls, tk):: tokenise recognisers cs'
 	      |	   (COMMENT, _) => tokenise recognisers cs'
               |    (UNKNOWN, tk) =>  raise LexFail 
-			("did not recognise: " ^ (hd cs'))
+			("did not recognise: \"" ^ ml_escapify (hd cs') ^ "\"")
            end
        )
     );
@@ -1823,15 +1867,24 @@ The various recognisers are gathered together in their order of application.
                        rec_identifier,
 			rec_comment,
 			rec_action];
+=TEX
+We allow for MS-DOS and Macintosh input by mapping to UNIX line-endings:
+=SML
+fun €unix_eolns› (acc:string list) ([] : string list) : string list = rev acc
+|   unix_eolns acc ("\r" :: "\n" ::more) = unix_eolns ("\n"::acc) more
+|   unix_eolns acc ("\r"  ::more) = unix_eolns ("\n"::acc) more
+|   unix_eolns acc (ch::more) = unix_eolns (ch::acc) more;
+=SML
 in
 =TEX
 The interface to the lexical analyser is the following function.
 =SML
 
     fun €BNF_lex_string› (text : string) : BNF_lex_item list = (
-	(tokenise recognisers (explode text))
+	(tokenise recognisers (unix_eolns [] (explode text)))
 	handle (LexFail msg) => (
-            raise SlrpError ("Lexical analysis error: " ^ msg)
+            raise SlrpError
+	("Lexical analysis error on or near line number " ^ string_of_int (!line_number) ^ ": " ^ msg)
         )
     );
 =TEX
@@ -2204,33 +2257,6 @@ in	output_table tabs aux "slrp'a" "slrp'actions"
 end
 );
 =TEX
-The following function is used for formatting quoted terminal symbols in the ML output:
-=SML
-fun €ml_escapify›  (x : string) : string = (
-	let	val chars = explode x;
-		fun digits n = (
-			let	val ds = string_of_int n;
-				val s = size ds;
-			in	if	s = 1
-				then	"00" ^ ds
-				else if	s = 2
-				then	"0" ^ ds
-				else	ds
-			end
-		);
-		fun aux acc [] = implode(rev acc)
-		|   aux acc (ch :: chs) = (
-			if	ch = "\\" orelse ch = "\""
-			then	aux (ch::"\\"::acc) chs
-			else if	ord ch < ord " "
-			orelse	ord ch > 126
-			then	aux (digits (ord ch)::"\\"::acc) chs
-			else	aux (ch::acc) chs
-		);
-	in	aux [] chars
-	end
-);
-=TEX
 =SML
 fun €do_sym_class› (_ : string OPT)  (VarClass x : SYM_CLASS) : string = x
 |  do_sym_class _ (EosClass e) = e
@@ -2481,7 +2507,7 @@ end; (* of structure Slrp *)
 \subsection{Shell Interface}
 =DUMP slrp
 #!/bin/sh
-# slrp From: $Id: imp017.doc,v 1.41 2003/02/23 14:48:48 rda Exp rda $
+# slrp From: $Id: imp017.doc,v 1.42 2003/02/23 15:19:29 rda Exp rda $
 # Shell script to run the SLRP Parser Generator
 if test -z "$PROGNAME"
 then
