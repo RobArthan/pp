@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp016.doc   %Z% $Date: 2002/10/17 15:10:58 $ $Revision: 2.21 $ $RCSfile: imp016.doc,v $
+% imp016.doc   %Z% $Date: 2002/10/17 16:20:01 $ $Revision: 2.22 $ $RCSfile: imp016.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of Type Inference}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP016}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.21 $%
+\def\SCCSversion{$Revision: 2.22 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 15:10:58 $%
+\TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $%
 }}  %% Mandatory field (with sensible default)
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -125,6 +125,7 @@ type inference.
 
 \item[Issue 2.21] Copyright and banner updates for open source release.
 \item[Issue 2.22] PPHol-specific updates for open source release
+\item[Issue 2.23] Type inference contexts are now implemented as efficient dictionaries.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -324,22 +325,28 @@ fun €sub_ty› (env : ENV) : ENV = (
 The variable reference $ti\_context\_info$ is used to store the context.
 
 =SML
-val €ti_context_info› : (string*TYPE) list ref = ref [];
-
+val €ti_context_info› : TYPE E_DICT ref = ref initial_e_dict;
+=TEX
+=SML
+fun €e_set_ti_context› (dict : TYPE E_DICT) : unit = (
+	ti_context_info := dict
+);
+=TEX
+In the following, the only possible failure is for the flattened list of free variables to contain two variables with the same name but different types (which will be flagged by the $list\_e\_merge$ call).
+=SML
 fun €set_ti_context› (tml : TERM list) : unit = (
-let	val allterms = list_term_union (map frees tml);
-	val di = all_different (map (fst o dest_var) allterms);
-in
-	if di
-	then
-		ti_context_info := map dest_var allterms
-	else
-		fail "HOL-Parser" 16040 []
-end);
-
-fun €get_ti_context› (() : unit) : TERM list =
-	(map mk_var (!ti_context_info));
-
+	let	val all_terms = list_term_union (map frees tml);
+		val names_types = map dest_var all_terms;
+		val dict = list_e_merge initial_e_dict names_types;
+	in	e_set_ti_context dict
+	end	handle Fail _ => fail "HOL-Parser" 16040 []
+);
+=TEX
+=SML
+fun €e_get_ti_context› (() : unit) : TYPE E_DICT = !ti_context_info;
+=TEX
+=SML
+fun €get_ti_context› (() : unit) : TERM list = map mk_var (e_flatten (e_get_ti_context()));
 =TEX
 =SML
 fun €fv_set› ((Binder (s, a, b)) : 'a TM) : string list  = fv_set b diff fv_set a
@@ -379,8 +386,9 @@ fun €init_env› (tm : 'a TM) : ENV = (
 				contains_overloaded_aliases := true;
 				(replaced t, false)
 			)| _ => (
-				(type_to_extype (lassoc3
-				  (!ti_context_info) s), true)
+				(type_to_extype (
+					force_value(e_lookup
+					  s (!ti_context_info))), true)
 				handle (Fail msg) =>
 				(ExVartype(Unknown(lassoc3 freemap s)), false)
 			)
@@ -1172,7 +1180,7 @@ in
 end);
 =TEX
 Note that the only binder left is Ã when we get to resolve overloading so
-only the $Id: imp016.doc,v 2.21 2002/10/17 15:10:58 rda Exp rda $ case is interesting below (see how $ti$ handles binders above).
+only the $Id: imp016.doc,v 2.22 2002/10/17 16:20:01 rda Exp $ case is interesting below (see how $ti$ handles binders above).
 =SML
 fun €resolve_overloading› (term : EXTYPE TM) : EXTYPE TM = (
 let	fun €res_ovl› (term as (TmTyped (Id s, ty))) = (
