@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.4 2001/11/16 17:19:56 rda Exp $ 
+ * $Id: palette.c,v 2.5 2002/10/17 17:09:34 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -182,11 +182,13 @@ static void type_char_cb(
 	XmTextSetInsertionPosition(text_w, start + 1);
 	XmTextShowPosition(text_w, start);
 /*
- * Next line works OK with keyboarFocusPolicy EXPLICIT, but not with POINTER
- * (with POINTER it makes the text window gets the keyboard focus regardless of where
- * the pointer is).
-	XSetInputFocus(XtDisplay(text_w), XtWindow(text_w), RevertToParent, CurrentTime);
+ * On early versions of Motif, the next line worked OK with keyboardFocusPolicy
+ * EXPLICIT (i.e., click-to-type), but not with POINTER (i.e., focus follows mouse)
+ * (with POINTER it made the the keyboard focus stick in the text window regardless
+ * of where the pointer was moved to). It seems to work OK in 21st century versions
+ * of Motif (although there are a lot of OS/Window manager combinations to test).
  */
+	XSetInputFocus(XtDisplay(text_w), XtWindow(text_w), RevertToParent, CurrentTime);
 
 }
 
