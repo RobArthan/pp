@@ -87,6 +87,10 @@ Added support for Type Constraints.
 \item[Issue 1.36 (3rd September 1992)]
 Corrected a bug in the processing of free type definitions.
 
+\item[Issue 1.37 (22nd October 1992)]
+Made the initial type environment sensitive to the type context;
+Fixed problem in treatment of the predicate part of a schema text.
+
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -747,11 +751,19 @@ local
 in
 fun Ûinit_z_envÝ (ftdef : bool) (genformals : IDENT list) : Z_ENV = (
 let	val dummy = start_again();
-	val side = if ftdef
-		then
-			table := (map freety genformals)
-		else
-			table := (map formal genformals);
+	fun z_ti_context [] = []
+	|   z_ti_context (t :: more : TERM list) : (IDENT * Z_VAR_TYPE) list = (
+		let	val (n, ty) = dest_var t;
+			val bty = BoundVar(type_to_extype ty)
+		in	((template_of_string n, ""), bty)
+			:: z_ti_context more
+		end	handle Fail _ => z_ti_context more
+	);
+	val side = table :=
+		(if ftdef
+		then	(map freety genformals)
+		else	(map formal genformals))
+		@ z_ti_context (TypeInference.get_ti_context());
 in
 	fn id => (
 		case lassoc5 (!table) id of
@@ -1168,11 +1180,18 @@ in
 	Nil =>		((ds', Nil, Nil), env', idtyl)
 	|Value tm => (
 		let	val (tm', ty') = ti_z_tm env' tm;
-			val side = unify zti_subs (ty', ex_bool)
+ 			val (tm'', ty'') = (
+				case manifest ty' of
+				SchemaType idtyl =>	(
+					bind_zenv env tm tm' idtyl;
+					(ZTmSchemaPred tm', ex_bool))
+				|_ => (tm', ty')
+			);
+			val side = unify zti_subs (ty'', ex_bool)
 				handle Fail msg =>
-				raise ZExn (FailedZSchText (schtext, env, tm', ty'));
+				raise ZExn (FailedZSchText (schtext, env, tm'', ty''));
 		in
-			((ds', Value tm', Value ty'), env', idtyl)
+			((ds', Value tm'', Value ty''), env', idtyl)
 		end)
 end)
 =TEX
@@ -1926,7 +1945,11 @@ end)
 
 \subsection{Type Constraints}
 
-This section is obsolete.
+(HISTORICAL)
+
+This section is a placeholder to ensure the correspondence between error
+numbers and subsection numbers.
+
 \subsection{Local Variables}
 =SML
  | ti_z_tm env (ZTmLVar ((TmplNon ("true", Nil), ""), Nil, tml)) = (
