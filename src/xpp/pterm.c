@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.6 1999/05/04 18:18:01 rda Rel rda $
+ * $Id: pterm.c,v 2.7 2000/01/04 16:04:24 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -282,12 +282,7 @@ Boolean application_alive()
 {
 	if(child_pid) {
 		waitpid(child_pid, NULL, WNOHANG);
-#ifdef LINUX
-		if(errno == ECHILD)
-		{
-#else
-		if(kill(child_pid, 0)) { /* != 0; it's died */
-#endif
+		if( kill(child_pid, 0) < 0 ) {
 			if(listening) {
 				XtRemoveInput(app_ip_req);
 				listening = False;
