@@ -89,9 +89,13 @@ fun Ûrhs_thmÝ (thm: THM): TERM = (snd(dest_eq(snd(strip_µ(concl thm)))));
 We sometimes wish to string conversion-like effects together in situations where we cannot use $THEN_C$.
 The following function takes a theorem of the form $ô a = b$, and a conversion, which, if given $b$, returns $ô b = c$.
 In this case the function returns $ô a = c$.
+If the conversion fails then $ô a = b$ is returned (thus the function
+should only be called in cases where it is known that failure of the
+conversion should not lead to overall failure).
 =SML
 fun  Ûconv_rhs_ruleÝ (thm : THM) (conv : CONV) : THM = (
-	eq_trans_rule thm (conv (rhs_thm thm))
+	(eq_trans_rule thm (conv (rhs_thm thm)))
+	handle Fail _ => thm
 );
 =TEX
 Given a term and a equality theorem, use $\alpha$-conversion to make the LHS of the theorem match the term.
@@ -400,6 +404,17 @@ In the latter case one would use an ordering for
 terms which ensured that any term was the immediate
 predecessor of its negation (or vice versa).
 
+Finally, we wish to make the conversion fail if the input is already
+sorted and if the conversions supplied as parameters failed every time
+they were applied. Thus, the cases marked with $(*)$ must result in
+failure and we must use $AND\_OR\_C$ to compose the recursive calls
+of merging with the conversions supplied as parameters.
+In addition, when make the two recursive calls before each merge phase
+if one of the calls fails but not both we must treat the failing call
+if $id\_conv$ had been used instead; and if both calls fail then we
+must just apply the merge operation to the original input.
+
+
 \subsection{The Merge Conversion}
 For reasons of efficiency the merge conversion
 expects the three theorems to have been precomputed.
@@ -421,14 +436,14 @@ fun Ûmerge_convÝ
 let	fun case_1_1 As Bs = (
 		if order As Bs > 0
 		then (conv_i, false)
-		else (id_conv, false)
+		else (fail_conv, false)
 	);
 	fun case_m_1 _ _ = (conv_i, true);
 	fun case_1_n As Bs = (
 		let	val (B1, _) = dest Bs
 		in	if order As B1 > 0
 			then (conv_ii, false)
-			else  (id_conv, false)
+			else  (fail_conv, false)
 		end
 	);
 	fun case_m_n As Bs = (
@@ -447,7 +462,7 @@ let	fun case_1_1 As Bs = (
 		|	(true, false) => (case_m_1 As Bs)
 		|	(false, true) => (case_1_n As Bs)
 		|	(true, true) => (case_m_n As Bs));
-	in	(conv THEN_C (if again then Combinators.I else RAND_C)
+	in	(conv AND_OR_C (if again then Combinators.I else RAND_C)
 			(merge_conv sel dest order conv_i conv_ii conv_iii 
 			op_extra_conv base_extra_conv)) tm
 	end;
@@ -456,10 +471,10 @@ in
 	then (let val thm1 = base_extra_conv tm
 		in
 		if sel (rhs_thm thm1)
-		then conv_rhs_rule thm1 (convert_op_conv THEN_TRY_C op_extra_conv)
+		then conv_rhs_rule thm1 (convert_op_conv AND_OR_C op_extra_conv)
 		else thm1
-		end handle Fail _ => id_conv tm)
-	else (convert_op_conv THEN_TRY_C op_extra_conv) tm
+		end handle Fail _ => fail_conv tm)
+	else (convert_op_conv AND_OR_C op_extra_conv) tm
 end
 );
 =TEX
@@ -554,9 +569,30 @@ fun Ûthm_iiiÝ (rator : TERM) (comm : THM) (assoc : THM) : THM = (
 (* ?0 does not have the form ô (A op B) op C = A op (B op C)" *)
 );
 =TEX
-Once again, we provide two conversions, one that applies to any normalised sub-term constructed by the operator, and the other applied to any literal, before further processing by $sort\_conv$.
+The following function is used to do the failure processing when
+the sorting conversion is called recursively. It fails only if both
+recursive calls do.
+=SML
+fun Ûsort_recÝ
+	(sorter : CONV)
+	((a, b) : TERM * TERM) : THM * THM = (
+	let	val a_thm = sorter a;
+	in	let	val b_thm = sorter b;
+		in	(a_thm, b_thm)
+		end	handle Fail _ =>  (a_thm, id_conv b)	(* b failed *)
+	end	handle Fail _ => (				(* a failed *)
+		let	val b_thm = sorter b;
+		in	(id_conv a, b_thm)
+		end
+	)
+);
+=TEX
+The main bulk of the processing is done by $sort\_conv\_aux$.
+$sort\_conv$ itself is just a front end which mops up after failures.
+
+Once again, we provide two conversions, one that applies to any normalised sub-term constructed by the operator, and the other applied to any literal, before further processing by $sort\_conv\_aux$.
 =SML 
-fun Ûsort_convÝ (order : TERM -> TERM -> int) (comm : THM)
+fun Ûsort_conv_auxÝ (order : TERM -> TERM -> int) (comm : THM)
 	(assoc : THM) : CONV -> CONV -> CONV = (
 	let	val Scomm = all_µ_elim comm;
 		val Sassoc = all_µ_elim assoc;
@@ -578,11 +614,11 @@ fun Ûsort_convÝ (order : TERM -> TERM -> int) (comm : THM)
 		fun sorter tm = (
 		let
 			fun convert_op_conv tm' =
-			(let	val (lthm, rthm) = (sorter ** sorter) (dest tm');
-			val thm1 = mk_app_rule(app_fun_rule rator lthm) rthm
+			(let	val (lthm, rthm) = sort_rec sorter (dest tm');
+				val thm1 = mk_app_rule(app_fun_rule rator lthm) rthm;
 			in	
-			conv_rhs_rule thm1 merger
-			end);
+				conv_rhs_rule thm1 merger
+			end handle Fail _ => merger tm');
 		in
 			if not(sel tm)
 			then (let val thm1 = base_extra_conv tm
@@ -590,12 +626,23 @@ fun Ûsort_convÝ (order : TERM -> TERM -> int) (comm : THM)
 				if sel(rhs_thm thm1)
 				then (conv_rhs_rule thm1 convert_op_conv)
 				else thm1
-				end handle Fail _ => id_conv tm)
+				end handle Fail _ => fail_conv tm)
 			else convert_op_conv tm
 		end);
 
 	in	sorter
 	end
+	end
+);
+=TEX
+=SML
+fun Ûsort_convÝ (order : TERM -> TERM -> int) (comm : THM)
+	(assoc : THM) : CONV -> CONV -> CONV = (
+	let val sorter = sort_conv_aux order comm assoc;
+	in	fn (op_extra_conv : CONV) => 
+		fn (base_extra_conv : CONV) =>
+		(fn tm => (sorter op_extra_conv base_extra_conv tm)
+			handle Fail _ => term_fail "sort_conv" 81025 [tm])
 	end
 );
 =TEX
@@ -733,11 +780,12 @@ in
 end
 );
 =TEX
-We might well consider breaking the below into a one-off initialiser for $poly\_conv$, and a caller which looked up the initialisation material.
+As with monomial sorting an auxiliary function does all the work except for the
+outer exception handling.
 
 Here we want three conversions: one for normalised sub-terms constructed with the add operator, one for those constructed with the multiply operator, and one for literals, which, as with $sort\_CONV$, is to be applied and the result checked to see if it can now be processed.
 =SML 
-fun Ûpoly_convÝ (order: TERM -> TERM -> int)
+fun Ûpoly_conv_auxÝ (order: TERM -> TERM -> int)
 	(add_comm: THM) (add_assoc: THM) 
 	(mult_comm: THM) (mult_assoc: THM)
 	(left_distrib: THM)
@@ -776,7 +824,7 @@ let
 	val mult_dest = destructor mult_op;
 in	fn add_extra_conv => fn mult_extra_conv => fn base_extra_conv =>
 let
-	val add_sort_conv = sort_conv order Sadd_comm Sadd_assoc 
+	val add_sort_conv = sort_conv_aux order Sadd_comm Sadd_assoc 
 		add_extra_conv fail_conv;
 	val add_merge_conv = merge_conv add_sel add_dest order 
 		add_conv_i add_conv_ii add_conv_iii
@@ -800,16 +848,16 @@ Notice also that the $ONCE\_MAP\_C$'s will always ``catch'' on redexes after tra
 		mult_merge_conv tm
 	| (false, true) => 
 		(conv_vi 
-		THEN_C (ONCE_MAP_C mult_normal_conv)
-		THEN_C add_sort_conv) tm
+		AND_OR_C (ONCE_MAP_C mult_normal_conv)
+		AND_OR_C add_sort_conv) tm
 	| (true, false) => 
 		(conv_v
-		THEN_C (ONCE_MAP_C mult_normal_conv)
-		THEN_C add_sort_conv) tm
+		AND_OR_C (ONCE_MAP_C mult_normal_conv)
+		AND_OR_C add_sort_conv) tm
 	| (true, true) => 
 		(conv_iv 
-		THEN_C (ONCE_MAP_C mult_normal_conv)
-		THEN_C add_sort_conv) tm
+		AND_OR_C (ONCE_MAP_C mult_normal_conv)
+		AND_OR_C add_sort_conv) tm
 	end));
 =TEX
 The core of the conversion:
@@ -818,33 +866,49 @@ The core of the conversion:
 	(fn  (tm: TERM) =>
 	if add_sel tm (* tm = A + B *)
 	then (let
-			val (sorted_A, sorted_B) = (poly_sort ** poly_sort) (add_dest tm);
+			val (sorted_A, sorted_B) = sort_rec poly_sort (add_dest tm);
 			val thm1 = mk_app_rule (app_fun_rule add_op sorted_A) sorted_B;
 		in
 			conv_rhs_rule thm1 add_merge_conv
-		end)
+		end	handle Fail _ => add_merge_conv tm)
 	else if mult_sel tm (* tm = A * B *)
 	then (let
-		val (sorted_A, sorted_B) = (poly_sort ** poly_sort) (mult_dest tm);
+		val (sorted_A, sorted_B) = sort_rec poly_sort (mult_dest tm);
 		val thm1 = mk_app_rule (app_fun_rule mult_op sorted_A) sorted_B
 	in
 		conv_rhs_rule thm1 mult_normal_conv
-	end)
+	end	handle Fail _ => mult_normal_conv tm)
 	else (let val thm1 = base_extra_conv tm;
 		val rhs_thm1 = rhs_thm thm1
 		in
 		if (add_sel rhs_thm1) orelse (mult_sel rhs_thm1)
 		then conv_rhs_rule thm1 poly_sort
 		else thm1
-		end handle Fail _ => id_conv tm))
+		end handle Fail _ => fail_conv tm))
 in
 	poly_sort
 end
 end
-handle ex =>
-	if area_of ex = "sort_conv"
-	then reraise ex "poly_conv"
-	else raise ex
+);
+=TEX
+=SML
+fun Ûpoly_convÝ (order: TERM -> TERM -> int)
+	(add_comm: THM) (add_assoc: THM) 
+	(mult_comm: THM) (mult_assoc: THM)
+	(left_distrib: THM)
+	: CONV -> CONV -> CONV -> CONV = (
+	let val sorter = (poly_conv_aux order add_comm add_assoc
+				mult_comm mult_assoc left_distrib)
+		handle ex => (
+			if area_of ex = "sort_conv"
+			then reraise ex "poly_conv"
+			else raise ex
+		);
+	in	fn add_extra_conv => fn mult_extra_conv => fn base_extra_conv =>
+		(fn tm => (sorter add_extra_conv mult_extra_conv
+				base_extra_conv tm)
+			handle Fail _ => term_fail "poly_conv" 81025 [tm])
+	end
 );
 =TEX
 \section{DNF and CNF}
@@ -905,15 +969,26 @@ fun Û²_CÝ c = REPEAT_C1(c ORELSE_C (simple_eq_match_conv ²_assoc_thm1 THEN_C LEF
 =TEX
 Now the external interfaces:
 =SML
-val Ûcnf_convÝ =
+local
+val Ûcnf_conv_aux : CONVÝ =
 	poly_conv term_order
 	±_comm_thm ±_assoc_thm ²_comm_thm ²_assoc_thm ²_±_distrib_thm
 	(±_C ±_simp_conv) (²_C ²_simp_conv) prop_lit_conv;
 
-val Ûdnf_convÝ =
+val Ûdnf_conv_auxÝ =
 	poly_conv term_order
 	²_comm_thm ²_assoc_thm ±_comm_thm ±_assoc_thm ±_²_distrib_thm
 	(²_C ²_simp_conv) (±_C ±_simp_conv) prop_lit_conv;
+in
+val cnf_conv : CONV = (fn tm =>
+	(cnf_conv_aux tm)
+	handle Fail _ => term_fail "cnf_conv" 81030 [tm]
+);
+val dnf_conv : CONV = (fn tm =>
+	(dnf_conv_aux tm)
+	handle Fail _ => term_fail "dnf_conv" 81031 [tm]
+);
+end;
 =TEX
 \section{ANF}
 We need conversions and supporting theorems which do collection of
@@ -1006,7 +1081,8 @@ val Ûleft_times_plus_distrib_thmÝ =
 =TEX
 Now we can define the external interfaces:
 =SML
-fun  ÛANF_CÝ (conv : CONV) : CONV = (
+local
+val  ÛANF_C_AUXÝ : CONV -> CONV = (
 	poly_conv
 	term_order
 	plus_comm_thm
@@ -1016,11 +1092,21 @@ fun  ÛANF_CÝ (conv : CONV) : CONV = (
 	left_times_plus_distrib_thm
 	add_simp_conv
 	times_simp_conv
-	conv
 );
-=TEX
-=SML
-val Ûanf_convÝ = ANF_C fail_conv;
+in
+fun  ÛANF_CÝ (conv : CONV) : CONV = (fn tm =>
+	(ANF_C_AUX conv tm)
+	handle Fail _ => term_fail "ANF_C" 81032 [tm]
+);
+val Ûanf_convÝ : CONV = (fn tm =>
+	(ANF_C fail_conv tm)
+		handle ex => (
+			if area_of ex = "ANF_C"
+			then reraise ex "anf_conv"
+			else raise ex
+	)
+);
+end;
 =TEX
 \section{EPILOGUE}
 =SML
