@@ -742,7 +742,32 @@ FUNCTION {sort.format.title}
 
 FUNCTION {presort}
 {
-  key field.or.null sortify
+  type$
+  "projdoc"
+  =
+  { "zzzzzzzzzzzzzzzz"
+    identity missing$
+      { cite$ sortify    }
+      { identity sortify }
+    if$
+    *
+  }
+  {
+    author missing$
+      { editor missing$
+          { key field.or.null sortify }
+	  { editor sort.format.names }
+        if$
+      }
+      { author sort.format.names }
+    if$
+  }
+  if$
+  "    "
+  *
+  title field.or.null
+  sort.format.title
+  *
   #1 entry.string.max substring$
   'sort.key$ swap$ :=
 }
