@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.229 $ $RCSfile: imp507.doc,v $ $Date: 2002/11/11 16:31:59 $
+% imp507.doc %Z% $Revision: 1.230 $ $RCSfile: imp507.doc,v $ $Date: 2002/11/15 12:09:21 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.229 $%
+\def\SCCSversion{$Revision: 1.230 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/11/11 16:31:59 $%
+\TPPdate{\FormatDate{$Date: 2002/11/15 12:09:21 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -215,9 +215,10 @@ The following functions are used to identify names for web clauses and are used 
 =SML
 fun Ûk_slot_nameÝ ({content, label} : K_SLOT) : string = "kslot"^label;
 fun Ûpackage_declaration_nameÝ
+	(in_z : bool)
 	({name, ...} : DECLARATION PACKAGE_DECLARATION)
 	: string = (
-	name ^ "spec"
+	if in_z then name ^ "spec" else name
 );
 fun Ûprocedure_specification_nameÝ
 	({name, ...} : PROCEDURE_SPECIFICATION) : string = (
@@ -236,30 +237,34 @@ fun Ûfunction_body_nameÝ ({function_spec,...} :  FUNCTION_BODY)
 	: string = (
 	function_specification_name function_spec
 );
-fun Ûpackage_body_nameÝ ({name, ...} : PACKAGE_BODY) : string = (
-	name ^ "body"
+fun Ûpackage_body_nameÝ (in_z : bool) ({name, ...} : PACKAGE_BODY) : string = (
+	if in_z then name ^ "body" else name
 );
 =TEX
+The {\it in\_z} flag on those functions that have it below allows them to be reused
+to calculate indexes into the package and subunit environments.
 =SML
-fun Ûproper_body_nameÝ (pb : PROPER_BODY) : string = (
+fun Ûproper_body_nameÝ(in_z : bool)  (pb : PROPER_BODY) : string = (
 	case pb of
 		PBProcedure prc => procedure_body_name prc
 	|	PBFunction fnc =>  function_body_name fnc
-	|	PBPackage pck => package_body_name pck
+	|	PBPackage pck => package_body_name in_z pck
 );
-fun Ûsubunit_nameÝ ({name, proper_body} : COMP_SUBUNIT) : string = (
-	name ^ "o" ^ proper_body_name proper_body
+fun Ûsubunit_nameÝ (in_z : bool) ({name, proper_body} : COMP_SUBUNIT) : string = (
+	if	in_z
+	then	name ^ "o" ^ proper_body_name in_z proper_body
+	else	name ^ "." ^ proper_body_name in_z proper_body
 );
-fun Ûcompilation_unit_nameÝ (cu : COMPILATION_UNIT) : string = (
+fun Ûcompilation_unit_nameÝ (in_z : bool) (cu : COMPILATION_UNIT) : string = (
 	case cu of
-		CUPackageDeclaration d => package_declaration_name d
-	|	CUProperBody b => proper_body_name b
-	|	CUSubUnit s => subunit_name s
+		CUPackageDeclaration d => package_declaration_name in_z d
+	|	CUProperBody b => proper_body_name in_z b
+	|	CUSubUnit s => subunit_name in_z s
 );
 
 fun Ûcontext_compilation_unit_nameÝ
 	({comp_unit, ...} : CONTEXT_COMPILATION_UNIT) = (
-	compilation_unit_name comp_unit
+	compilation_unit_name true comp_unit
 );
 fun Ûkslot_compilation_unit_nameÝ (kcu : KSLOT_COMPILATION_UNIT) : string = (
 	case kcu of
@@ -1742,6 +1747,7 @@ val Ûcn_created_ud_keyÝ = "CN'created";
 val Ûcn_compilation_unit_ud_keyÝ = "CN'compilation_unit";
 val Ûcn_body_name_ud_keyÝ = "CN'body_name";
 val Ûcn_vc_context_and_origin_keyÝ = "CN'vc_context_origin";
+val Ûcn_stub_script_name_keyÝ = "CN'cn_stub_script_name";
 =TEX
 
 The following functions to open out theory user data
@@ -1836,12 +1842,21 @@ end);
 The following is necessary when the key has been set incorrectly.
 In particular, $duplicate\_theory$ copies keys, which is not helpful
 in this case.
+To support script deletion, we remember the name of the theory in which the stub which
+gave rise to the duplicate came from.
 =SML
-fun Ûforce_set_cuÝ (cu_name: string) : unit = (
-	set_user_datum(cn_compilation_unit_ud_key, UD_String (cu_name,[]))
+fun Ûset_duplicate_keysÝ (cu_name: string, stub_script_name) : unit = (
+	set_user_datum(cn_compilation_unit_ud_key, UD_String (cu_name,[]));
+	set_user_datum(cn_stub_script_name_key, UD_String (stub_script_name,[]))
 );
 =TEX
-The following should be used when a package body is encountered.
+=SML
+fun Ûget_stub_script_nameÝ (thy: string) : string OPT = (
+	Value(fst(dest_ud_string(get_user_datum thy cn_stub_script_name_key)))
+	handle Fail _ => Nil
+);
+=TEX
+he following should be used when a package body is encountered.
 =SML
 fun Ûset_body_nameÝ (name: ID) : unit = (
 	set_user_datum(cn_body_name_ud_key, UD_String (name,[]))
@@ -3389,7 +3404,7 @@ fun Ûmake_moduleÝ (thy : Z_ID) : unit = (
 		val dummy7 = set_cn_created();
 		val dummy3 = add_script_theory thy;
 		val dummy4 = open_theory thy;
-		val dummy2 = force_set_cu (stub_theory_desc thy);
+		val dummy2 = set_duplicate_keys (stub_theory_desc thy, !script_name);
 		val dummy5 = (map delete_vc o flat o map fst o get_conjectures) thy;
 		val thy_level = current_level();
 		val dummy6 = open_theory (!script_name);
@@ -7938,12 +7953,12 @@ fun Ûdo_compilation_unitÝ
 	do_declaration (DPackageDeclaration x)
 ) | do_compilation_unit (y as (CUProperBody x)) = (
 	case x of
-	PBProcedure _ => set_cu(subprogram_desc (compilation_unit_name y))
-	| PBFunction _ => set_cu(subprogram_desc (compilation_unit_name y))
-	| PBPackage _ => set_cu(pack_body_desc (compilation_unit_name y));
+	PBProcedure _ => set_cu(subprogram_desc (compilation_unit_name true y))
+	| PBFunction _ => set_cu(subprogram_desc (compilation_unit_name true y))
+	| PBPackage _ => set_cu(pack_body_desc (compilation_unit_name true y));
 	do_declaration (DProperBody x)
 ) | do_compilation_unit (y as (CUSubUnit {name, proper_body})) = (
-	set_cu (subunit_desc (compilation_unit_name y));
+	set_cu (subunit_desc (compilation_unit_name true y));
 	new_parent_subunit_theory (name, proper_body);
 	new_scope_subunit name;
 	do_declaration (DProperBody proper_body);
@@ -8515,6 +8530,98 @@ expected to see in the following.
 =SML
 *)
 end (* ... abstype *);
+=TEX
+The following returns the compilation unit (if any) associated with a given script.
+In the case of a script containing the body of a nested package, this is correctly
+given as the name of the containing compilation unit.
+=SML
+fun Ûcomp_unit_of_scriptÝ (script : string) : COMPILATION_UNIT  OPT= (
+	let	val {repl_env, spark_prog, ...} = get_saved_z_generator_state script;
+		fun aux1 (KCUKSlot {label, ...}) = (
+			case s_lookup label repl_env of
+				Value(ReplaceComp {comp = comp::_, ...}) => aux1 comp
+			|	_ => Nil
+		) | aux1 (KCUUnit {comp_unit, ...}) = (
+			Value  comp_unit
+		) | aux1 (KCUPragma _) = Nil;
+		fun aux2 [] = Nil
+		|   aux2 (kcu :: more) = (
+			case aux1 kcu of
+				Nil => aux2 more
+			|	value_n => value_n
+		);
+	in	aux2 spark_prog
+	end	handle Fail _ => Nil
+);
+=TEX
+=SML
+fun ÛundotÝ (name : string) : string list = (
+	let	fun aux acc [] = rev(map (implode o rev) acc)
+		|   aux acc ("." :: more) = aux ([]::acc) more
+		|   aux [] (ch :: more) = aux [[ch]] more
+		|   aux (x::xs) (ch::more) = aux ((ch::x) :: xs) more;
+	in	aux [] (explode name)
+	end
+);
+=TEX
+GIven a compiliation unit, the following function calculates the keys for the subunit
+and package environments which need to be deleted if that compilation unit is being deleted.
+=SML
+fun Ûsubunits_and_packages_to_deleteÝ (cu : COMPILATION_UNIT) : ID list * ID list = (
+	let	val cu_name = compilation_unit_name false cu;
+		val name_elems = undot cu_name;
+		val n_elems = length name_elems;
+		val all_packs = map fst (!pack_env);
+		fun do_sus accs [] = accs
+		|   do_sus (accs as (sus, packs)) ((key, _)::more)  = (
+			let	val key_elems = undot key;
+				val accs' = 
+					if	key_elems to (n_elems - 1) = name_elems
+					then	(
+						key :: sus,
+						let	val pack = 
+							implode (key_elems from n_elems);
+						in	if	pack mem all_packs
+							then	pack::packs
+							else	packs
+						end
+						)
+					else	accs;
+			in	do_sus accs' more
+			end
+		);
+	in	if	cu_name mem all_packs
+		then	do_sus ([], [cu_name]) (!subunit_env)
+		else	do_sus ([], []) (!subunit_env)
+	end
+);
+=TEX
+=SML
+fun Ûdelete_scriptÝ (script : string) : unit = (
+	let	val scripts = get_descendants "cn" less "cn";
+		fun get_extras scr = (
+		let	val subunit_thys = scripts drop (fn s => get_stub_script_name s <>  Value scr);
+			val (sus, packs) =
+				case comp_unit_of_script scr of
+					Value cu =>  subunits_and_packages_to_delete cu
+				|	_ => ([], []);
+			val pack_thy_names = map (fn p =>  p ^ "spec") packs
+					drop (fn n => not (n mem scripts));
+		in	(pack_thy_names @subunit_thys, (sus, packs))
+		end);
+		fun closure ts ss ps scrs = (
+			let	val tsps = map get_extras scrs;
+				val thys = flat (map fst tsps);
+				val sus = flat (map (fst o snd) tsps);
+				val packs = flat(map (snd o snd) tsps);
+			in	case thys of
+					[] => (ts,sus @ ss, packs @ ps)
+				|	_ => closure (thys @ ss) (sus @ ss) (packs @ ps) thys
+			end
+		);
+	in	() (* TBS *)
+	end
+);
 =TEX
 \section{EPILOGUE}
 =SML
