@@ -1477,35 +1477,38 @@ fun €check_new_z_id› (z_ids : Z_ID list) (z_id : Z_ID) : unit = (
 $cart\_prod$ and $fun\_decl$ are specified in
 \cite[volume 1]{DRA/CIS/CSE3/TR/94/27/2.1}.
 =SML
-fun €cart_prod› (env : CN_ENV) (par_specs : PARAM_SPEC list) : Z_EXP = (
-	let	fun aux ({var_decl as {vars, tmark}, ...} : PARAM_SPEC) = (
-			let	val ze = (zid env o trans_id) tmark;
-			in	map (Combinators.K ze) vars
-			end
-		);
-	in	case flat (map aux par_specs) of
-			[]	=>	error "cart_prod" 505009 []
-		|	[ze]	=>	ze
-		|	several =>	(
-				let	val res = mk_z_∏ several;
-					val side = ∏_gen_semantic_const res;
-				in	res
-				end
-		)
+fun €fun_sig› (zpars : Z_EXP list, zret : Z_EXP) : Z_EXP= (
+	case zpars of
+		[] => zret
+	|	_ => z_tfun(z_many_cross zpars, zret)
+);
+=TEX
+=SML
+fun €par_tmark› (env : CN_ENV)
+	({var_decl = {vars, tmark, ...}, ...} : PARAM_SPEC) : Z_ID list = (
+	let	val zi = trans_id tmark;
+	in	map (Combinators.K zi) vars
 	end
 );
 =TEX
 =SML
+fun €var_sig› (env : CN_ENV) (zn : Z_ID) : Z_EXP = (
+	case env zn of
+		Value (_, EIEnvVar tmark) => zid env(trans_id tmark)
+	|	Value (_, EIEnvAuxVar zdec) => snd(dest_z_dec zdec)
+	|	_ => fail "var_sig" 505041 [fn()=>zn]
+);
+=TEX
+=SML
 fun €fun_decl_aux›
-	((env, {name, formal_pars, return_type})
-	: CN_ENV * INFORMAL_FUN) : Z_DECL * TERM * TERM = (
+	((env, {name, formal_pars, return_type}, globals)
+	: CN_ENV * INFORMAL_FUN * Z_ID list) : Z_DECL * TERM * TERM = (
 	let	val zn = trans_id name;
 		val z_ret_ty = zid env (trans_id return_type);
-		val zexp = (
-			case formal_pars of
-				[] => z_ret_ty
-			|	non_empty => z_tfun(cart_prod env formal_pars,
-						 z_ret_ty));
+		val gdecs = map (var_sig env) globals;
+		val tmarks = flat (map (par_tmark env) formal_pars);
+		val pdecs = map (zid env) tmarks;
+		val zexp = fun_sig(gdecs, fun_sig(pdecs, z_ret_ty));
 		val t_zexp = (dest_z_power_type o type_of) zexp;
 		val lvar = mk_z_lvar(zn, t_zexp, []);
 		val gvar = mk_z_gvar(zn, t_zexp, []);
@@ -1515,7 +1518,12 @@ fun €fun_decl_aux›
 =TEX
 We can defined $fun\_decl$ in terms of $fun\_decl\_aux$ by throwing away the second and third parts of the result value and currying the function.
 =SML
-val €fun_decl› = curry ((fn (d, _, _) => d) o fun_decl_aux);
+fun €fun_decl›
+	(env : CN_ENV)	({informal_fun, globals, ...} : FORMAL_FUN) : Z_DECL = (
+	let	val (d, _, _) = fun_decl_aux(env, informal_fun, globals);
+	in	d
+	end
+);
 =TEX
 =SML
 fun €vc_local_decls› (seqs : SEQUENT list,
@@ -1581,7 +1589,7 @@ Add the auxiliary variables (with initial versions).
 	val (decls, subs_fn) =
 		if	formal_body_flag andalso fun_flag
 			then	let 	val (d, l, g) = fun_decl_aux
-								(env,fun_header);
+		(env,fun_header, fun_globals env (#name fun_header));
 				in	(d :: decls, subst [(l, g)])
 				end
 			else	(decls, Combinators.I);

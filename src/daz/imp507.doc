@@ -346,13 +346,15 @@ fun €subunit_vc_vars›  (
 	{	zmod,
 		specif_flag,
 		specif,
-		in_scope
+		in_scope,
+		globs
 	} : SUBUNIT,
 	new_vc_vars : VAR_DECL list) : SUBUNIT = (
 	{	zmod		=	zmod,
 		specif_flag	=	specif_flag,
 		specif		=	specif,
-		in_scope		= in_scope_vc_vars(in_scope, new_vc_vars)
+		in_scope	=	in_scope_vc_vars(in_scope, new_vc_vars),
+		globs		=	globs
 	}
 );
 =TEX
@@ -363,7 +365,8 @@ fun €subunit_formal_procs›  (
 		specif,
 		in_scope as
 			{vc_vars, vc_pars, vc_log_cons,
-					vc_aux_vars, formal_procs, dec_labels}
+					vc_aux_vars, formal_procs, dec_labels},
+		globs
 	} : SUBUNIT,
 	new_formal_procs : FORMAL_PROC list) : SUBUNIT = (
 	{	zmod		=	zmod,
@@ -376,7 +379,8 @@ fun €subunit_formal_procs›  (
 			vc_aux_vars	=	vc_aux_vars,
 			formal_procs	=	new_formal_procs,
 			dec_labels	=	dec_labels
-		}
+		},
+		globs		=	globs
 	}
 );
 =TEX
@@ -387,7 +391,8 @@ fun €subunit_dec_labels›  (
 		specif,
 		in_scope as
 			{vc_vars, vc_pars, vc_log_cons,
-					vc_aux_vars, formal_procs, dec_labels}
+					vc_aux_vars, formal_procs, dec_labels},
+		globs
 	} : SUBUNIT,
 	new_dec_labels : LABEL list) : SUBUNIT = (
 	{	zmod		=	zmod,
@@ -400,7 +405,8 @@ fun €subunit_dec_labels›  (
 			vc_aux_vars	=	vc_aux_vars,
 			formal_procs	=	formal_procs,
 			dec_labels	=	new_dec_labels
-		}
+		},
+		globs		=	globs
 	}
 );
 =TEX
@@ -1189,6 +1195,72 @@ fun €flatten_env› ([] : ENV) : IN_SCOPE = (
 	#in_scope(#declab blk)
 ) |  flatten_env (blk :: blks) = (
 	merge_in_scopes (#in_scope(#declab blk)) (flatten_env blks)
+);
+=TEX
+Now we define $check\_fun\_flatten\_env$: the $filter\_XXX$ functions implement
+the set comprehensions in the specification, with $filter_env$ fitting
+the results together into an $IN\_SCOPE$.
+=SML
+fun €check_fun_flatten_env› ([] : ENV) : IN_SCOPE = (
+	empty_in_scope
+) |  check_fun_flatten_env (blocks : ENV) = (
+	let	val block1 = hd blocks;
+		val flags = #flags (#declab block1);
+	in	if	not(#fun_flag flags) orelse not(#formal_body_flag flags)
+		then	flatten_env blocks
+		else	let	val formal_fun = #current_formal_fun block1;
+				val name = #name (#informal_fun(formal_fun));
+				val blocks2 = blocks drop
+					(fn b => #block_name (#declab b) <> name);
+				val globals = #globals formal_fun;
+				fun filter_vars ([] : VAR_DECL list) = []
+				|   filter_vars (vardec :: vardecs) = (
+					case #vars vardec drop
+						(fn n => not(trans_id n mem globals))
+					of [] => filter_vars vardecs
+					| vars => {vars=vars, tmark= #tmark vardec}
+						:: filter_vars vardecs
+				);
+				fun filter_pars ([] : PARAM_SPEC list) = []
+				|   filter_pars ({mode,var_decl ={vars, tmark}}
+					 :: parspecs) = (
+					case vars drop
+						(fn n => not(trans_id n mem globals))
+					of [] => filter_pars parspecs
+					| vars =>
+						{mode= mode,
+						 var_decl={ vars=vars, tmark= tmark}}
+						:: filter_pars parspecs
+				);
+				fun filter_aux_vars ([] : Z_DECL list) = []
+				|   filter_aux_vars (auxvar :: auxvars) = (
+					let	val (vs, t) = dest_z_dec auxvar;
+					in	case vs drop
+					(fn v => not(fst(dest_var v) mem globals))
+					of [] => filter_aux_vars auxvars
+					| vars => mk_z_dec (vars, t)
+						:: filter_aux_vars auxvars
+					end
+				);
+				fun filter_env ([] : ENV) : IN_SCOPE = (
+					empty_in_scope
+				) | filter_env (blk :: blks) = (
+					let	val in_scope = #in_scope(#declab blk);
+					in	merge_in_scopes{
+		vc_vars = filter_vars(#vc_vars in_scope),
+		vc_pars = filter_pars(#vc_pars in_scope),
+		vc_log_cons = [],
+		vc_aux_vars = filter_aux_vars(#vc_aux_vars in_scope),
+		formal_procs = [],
+		dec_labels = []		} 
+						(filter_env blks)
+					end
+				);
+			in	merge_in_scopes
+				(flatten_env blocks2)
+				(filter_env blocks)
+			end
+	end
 );
 =TEX
 \subsection{The Global State}
@@ -2549,7 +2621,7 @@ fun €spec_stmt_otherwise› ({spec : SPEC, label : LABEL}) : unit = (
 					{informal_fun = fun_header,
 					spec = spec1 as {post = return, ...}, ...},
 			...} = block1;
-		val in_scope1 : IN_SCOPE = flatten_env(!blocks);
+		val in_scope1 : IN_SCOPE = check_fun_flatten_env(!blocks);
 		val side = set_in_scope_ti_context in_scope1;
 		val wp_env1 :WP_ENV = {
 			env = cn_env_of_in_scope in_scope1,
@@ -2623,7 +2695,7 @@ fun €new_scope_loop› (() : unit) : unit = (
 	let	val block1 = block 1;
 		val {declab as {flags as 
 			{fun_flag, formal_body_flag, speclabel_flag, ...},
-			in_scope, ...},
+			in_scope, block_name, ...},
 			... } = block1;
 		val flags = {
 			pack_spec_flag = false,
@@ -2637,7 +2709,7 @@ fun €new_scope_loop› (() : unit) : unit = (
 			till_flag = false
 		};
 		val block = block_declab(block1, {
-				block_name = "",
+				block_name = block_name,
 				flags = flags,
 				in_scope = in_scope});
 
@@ -2793,7 +2865,8 @@ fun €stub› (() : unit) : unit = (
 				in_scope	=	flatten_env(!blocks),
 				specif		=	dummy_spec,
 				specif_flag	=	false,			
-				zmod		=	id1_id2
+				zmod		=	id1_id2,
+				globs		=	[]
 			};
 		in	make_module(trans_subunit_name(id1, id2));
 			subunit_env := s_enter tid1_id2 subunit (!subunit_env)
@@ -2803,7 +2876,8 @@ fun €stub› (() : unit) : unit = (
 =TEX
 The following does the main work for $stub\_spec\_proc$ and $stub\_spec\_fun$.
 =SML
-fun €stub_spec_proc_fun› (spec : SPEC) : unit = (
+fun €stub_spec_proc_fun› (is_fun : bool)
+		(spec : SPEC) (globs : Z_ID list) : unit = (
 	if	test_flag #stub_flag 2
 	then	let	val block1 = block 1;
 			val block2 = block 2;
@@ -2821,12 +2895,16 @@ fun €stub_spec_proc_fun› (spec : SPEC) : unit = (
 				handle Fail _ =>
 				fail "stub_spec_proc_fun" 507011
 						[fn()=>id1, fn()=>id2];
-
+			val in_scope' =
+				if is_fun
+				then check_fun_flatten_env (!blocks)
+				else #in_scope subunit;
 			val subunit' = {
-				in_scope	=	#in_scope subunit,
-				specif		=	spec,
-				specif_flag	=	true,			
-				zmod		=	#zmod subunit
+				in_scope	= in_scope',
+				specif		= spec,
+				specif_flag	= true,			
+				zmod		= #zmod subunit,
+				globs		= globs
 			};
 		in	subunit_env := s_enter tid1_id2 subunit' (!subunit_env)
 		end
@@ -2835,7 +2913,7 @@ fun €stub_spec_proc_fun› (spec : SPEC) : unit = (
 =TEX
 =SML
 fun €stub_spec_proc› (form_proc : FORMAL_PROC) : unit = (
-	stub_spec_proc_fun (#spec form_proc)
+	stub_spec_proc_fun false (#spec form_proc) []
 );
 =TEX
 \subsection{The SID function form\_proc}
@@ -3308,7 +3386,7 @@ fun €new_scope_fun_form› (ident : ID) : unit = (
 \subsection{The SID function stub\_spec\_fun}
 =SML
 fun €stub_spec_fun› (form_fun : FORMAL_FUN) : unit = (
-	stub_spec_proc_fun (#spec form_fun)
+	stub_spec_proc_fun true (#spec form_fun) (#globals form_fun)
 );
 =TEX
 \subsection{The SID function inf\_fun}
@@ -3475,7 +3553,17 @@ fun €form_fun_pack_body› (form_fun: FORMAL_FUN) : unit = (
 			in_scope = in_scope5
 		};
 		val st = SStmt(STSpecNoIvars{spec= #spec form_fun, label=""});
-	in	store_vcs (block_name2, call_vcs (speclab5, st))
+		val globals = #globals form_fun;
+		val globals3 = #globals formal_fun3;
+	in	if	globals = globals3
+		then	store_vcs (block_name2, call_vcs (speclab5, st))
+		else	let	fun fmt_strs strs () = (
+					format_list Combinators.I strs ", "
+				);
+			in	fail "form_fun_pack_body" 507050
+				[fmt_strs globals, fmt_strs globals3,
+				fn()=>block_name2]
+			end
 	end
 		else	()
 	end
@@ -3524,7 +3612,17 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 			wp_env = wp_env4,
 			in_scope = in_scope4
 		};
-	in	store_vcs (block_name2, call_vcs (speclab4, st))
+		val globals = #globals form_fun;
+		val globals3 = #globs subunit3;
+	in	if	globals = globals3
+		then	store_vcs (block_name2, call_vcs (speclab4, st))
+		else	let	fun fmt_strs strs () = (
+					format_list Combinators.I strs ", "
+				);
+			in	fail "form_fun_pack_body" 507050
+				[fmt_strs globals, fmt_strs globals3,
+				fn()=>block_name2]
+			end
 	end
 		else	()
 	end
@@ -3683,7 +3781,7 @@ fun €vcs_body_fun› (st : STATEMENT) : unit = (
 		val vc_inits1 = #var_inits block1;
 		val post1 = #post(#spec current_formal_fun1);
 		val w = flat (map (map trans_id o #vars) vc_vars1);
-		val in_scope = flatten_env (!blocks);
+		val in_scope = check_fun_flatten_env (!blocks);
 		val formal_procs = #formal_procs in_scope;
 		val current_for_vars1 = #current_for_vars block1;
 		val current_log_cons1 = #current_log_cons block1;

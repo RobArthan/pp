@@ -113,9 +113,9 @@ structure €CNBasicDeclsAndExprs› : CNBasicDeclsAndExprs = struct
 
 =SML
 datatype €ENV_INFO› =
-			€EIEnvFunction› of ID list
+			€EIEnvFunction› of Z_ID list * ID list
 		|	€EIEnvVar› of TMARK
-		|	€EIEnvAuxVar›
+		|	€EIEnvAuxVar› of Z_DECL
 		|	€EIEnvRecordType› of ID list
 		|	€EIEnvOtherType›
 		|	€EIEnvOther›;
@@ -205,7 +205,7 @@ fun €zid› (env : CN_ENV) (id : Z_ID) : Z_EXP = (
 	handle Fail _ => 
 	case env id of
 	Value (ty, EIEnvVar _) => mk_z_lvar(id, ty, [])
-	|Value (ty, EIEnvAuxVar) => mk_z_lvar(id, ty, [])
+	|Value (ty, EIEnvAuxVar _) => mk_z_lvar(id, ty, [])
 	|Value (ty, _) => mk_z_gvar(id, ty, [])
 	|Nil => fail "zid" 508021 [fn()=>id]
 );
@@ -720,6 +720,7 @@ fun €trans_int› (i : INT_LIT) : int = (
 =SML
 end (* of local ... in *);
 =TEX
+=TEX
 
 \section{TRANSLATING SPARK EXPRESSIONS}
 
@@ -965,8 +966,25 @@ and €exp_selected_comp› (env : CN_ENV) ({prefix, selector} : EXP SELECTED_COMP)
 =TEX
 \subsection{Translating Functions Calls}
 =SML
+and €fun_globals› (env : CN_ENV) (n : ID) : Z_ID list = (
+	case env n of
+		Value(_, EIEnvFunction (gs, _)) => gs
+	| _=>	fail "fun_globals" 508081 [fn()=>n]
+)
+=TEX
+=SML
+and €trans_fun_name› (env : CN_ENV) (n : ID) : Z_EXP = (
+	case fun_globals env n of
+		[] => zid env (trans_id n)
+	|	gs => z_fun_call (zid env (trans_id n), map (zid env) gs)
+)
+=TEX
+=SML
 and €exp_fun_call› (env : CN_ENV) ({fun_name, args} : EXP FUN_CALL) : Z_EXP = (
-	z_fun_call (zid env (trans_id fun_name), map (trans_exp env) args)
+	case args of
+		[] => trans_fun_name env fun_name
+	|	_ => 
+	z_fun_call (trans_fun_name env fun_name, map (trans_exp env) args)
 )
 =TEX
 \subsection{Translating Qualified Expressions}
@@ -1081,7 +1099,16 @@ end);
 =TEX
 
 =SML
-fun €adjust_rangelohi› (env : CN_ENV) ({lo=l, hi=h} : EXP RANGELOHI) = (
+val €informal_function› : Z_ID = "INFORMAL_FUNCTION";
+fun €adjust_id› (env : CN_ENV) (id : ID)  = (
+	case (env id) of
+		Value (ty, EIEnvFunction _) => 
+			if	(fst(dest_ctype ty) <> informal_function)
+			then	EFunCall{fun_name=id, args=[]}
+			else	fail "adjust_id" 508049 [fn()=>id]
+	| _ => EId id
+)
+and €adjust_rangelohi› (env : CN_ENV) ({lo=l, hi=h} : EXP RANGELOHI) = (
 	{lo=adjust_exp env l, hi=adjust_exp env h}
 )
 and €adjust_range› (env : CN_ENV) (RRange x : EXP RANGE) = (
@@ -1183,12 +1210,16 @@ in
 =TEX
 Is it a function call?
 =SML
-	(Value (_, EIEnvFunction _), EArrayAggPos{comps,...}) => (
-		EFunCall{fun_name=prename, args=map (adjust_exp env) comps}
-	) |(Value (_, EIEnvFunction names), EArrayAggNamed{named_assocs, ...}) => (
+	(Value (ty, EIEnvFunction _), EArrayAggPos{comps,...}) => (
+		if	(fst(dest_ctype ty) <> informal_function)
+		then	EFunCall{fun_name=prename, args=map (adjust_exp env) comps}
+		else	fail "adjust_id" 508049 [fn()=>prename]
+	) |(Value (ty, EIEnvFunction (_, names)), EArrayAggNamed{named_assocs, ...}) => (
 	let	val args = named_assocs_to_exps names named_assocs;
-	in
-		EFunCall{fun_name=prename, args=map (adjust_exp env) args}
+	in	if	(fst(dest_ctype ty) <> informal_function)
+		then	EFunCall
+			{fun_name=prename, args=map (adjust_exp env) args}
+		else	fail "adjust_id" 508049 [fn()=>prename]
 	end
 =TEX
 Is it a type conversion?
@@ -1261,7 +1292,7 @@ If they occur in the input then it adjust\_exp will already have been called
 and need not be called again.
 =SML
 and €adjust_exp› (env : CN_ENV) (exp as (EId id : EXP)) = (
-	EId id
+	adjust_id env id
 ) | adjust_exp env (exp as (EInt _)) = (
 	exp
 ) | adjust_exp env (exp as (EArrayAggPos x)) = (
