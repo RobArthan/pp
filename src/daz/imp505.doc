@@ -89,12 +89,14 @@ None.
 =SML
 infix 3 ô;
 infix 4 %Longrightarrow%;
+infix 5 cap;
 =TEX
 =SML
 structure ÛCNVCGeneratorÝ : CNVCGenerator = struct
 local
 	open CaseIndependence;
 	open CNTypes2 CNParser CNTypes CNBasicDeclsAndExprs;
+	open CNSparkOutput;
 	open ZUserInterfaceSupport;
 in
 =TEX
@@ -855,6 +857,7 @@ fun Ûcheck_1_dÝ (p : ID, speclab : SPECLAB) = (
 datatype ÛSTMT_STATEÝ = Top | InLoop | InCase | OKToExit | InIfThenElse;
 =TEX
 =SML
+(* TBS - The following is never called - it should be! *)
 fun Ûcheck_3Ý (state : STMT_STATE, st : STMT) = (
 	case  st of
 		STExitWhen _ => (
@@ -871,6 +874,9 @@ fun Ûcheck_3Ý (state : STMT_STATE, st : STMT) = (
 
 \subsection{Anti-Aliasing Checks}
 
+=SML
+fun ÛcapÝ (a, b) = (a cup b) diff (a diff b) diff (b diff a);
+=TEX
 
 =SML
 fun Ûfree_vars_zpredÝ (zp : Z_PRED) : Z_ID list = (
@@ -885,7 +891,7 @@ fun Ûfind_formal_procÝ (speclab : SPECLAB) (name : ID) : FORMAL_PROC = (
 		handle Fail _ => checking_error "find_formal_proc" 505067
 						[fn () => name]
 );
-=TEX
+=TEX	
 =SML
 fun Ûanti_aliasing_parsÝ (fp : FORMAL_PROC) (pc : (AGG_CHOICE,EXP)PROC_CALL)
 				: ID list * ID list = (
@@ -902,9 +908,10 @@ fun Ûanti_aliasing_parsÝ (fp : FORMAL_PROC) (pc : (AGG_CHOICE,EXP)PROC_CALL)
 	end
 );
 =TEX
+The following function makes a pair-wise list of actual parameters (EXPs) with their modes (which are extracted from the corresponding $formal\_proc$).
 =SML
-fun Ûanti_aliasing_actuals_modesÝ (speclab : SPECLAB,
-				proc : (AGG_CHOICE, EXP) PROC_CALL) :
+fun Ûanti_aliasing_actuals_modesÝ (speclab : SPECLAB)
+				(proc : (AGG_CHOICE, EXP) PROC_CALL) :
 			(EXP * MODE) list = (
 	let	val name = #name proc;
 		val formal_proc = find_formal_proc speclab (#name proc);
@@ -932,31 +939,36 @@ fun Ûanti_aliasing_actuals_modesÝ (speclab : SPECLAB,
 );
 =TEX
 =SML
-fun Ûanti_aliasing_check_1Ý (speclab : SPECLAB,
-				proc : (AGG_CHOICE, EXP) PROC_CALL) = (
-	let	val actuals_modes = anti_aliasing_actuals_modes (speclab, proc)
-			handle Fail _ =>
-			fail "anti_aliasing_check_1" 505068 [fn() => #name proc];
-		val set = map fst (actuals_modes drop
-				(fn am =>	snd am = MSparkInOut orelse
-						snd am = MSparkOut));
+fun Ûanti_aliasing_check_1Ý (proc : (AGG_CHOICE,EXP)PROC_CALL)
+				(actuals_modes : (EXP * MODE) list) : unit = (
+	let	val set = map fst (actuals_modes drop
+				(fn am => not (snd am = MSparkInOut orelse
+						 snd am = MSparkOut)));
 	in
-		if any set (fn x => case x of EId _ => false | _ => true)
-		then checking_error "anti_aliasing_check_1" 505069
-				[fn() => #name proc]
+		if any set (fn EId x => false | _ => true)
+		then
+		let	val exprs = set drop (fn EId x => true | _ => false);
+			val plural = if length exprs > 1 then "s" else "";
+		in
+			checking_error "anti_aliasing_check_1" 505069
+				[	fn()=>plural,
+					fn() => #name proc,
+					fn()=> fmt_exp_list exprs]
+		end
 		else (* OK *) ()
 	end
 );
 =TEX
 =SML
-fun Ûanti_aliasing_check_2Ý (speclab : SPECLAB,
-				proc : (AGG_CHOICE, EXP) PROC_CALL) = (
+
+=TEX
+=SML
+fun Ûanti_aliasing_check_2Ý (speclab : SPECLAB)
+				(proc : (AGG_CHOICE,EXP)PROC_CALL)
+				(actuals_modes : (EXP * MODE) list) : unit = (
 	let	val name = #name proc;
 		val formal_proc = find_formal_proc speclab name;
 		val (_, trans_globals) = anti_aliasing_pars formal_proc proc;
-		val actuals_modes = anti_aliasing_actuals_modes (speclab, proc)
-			handle Fail _ =>
-			fail "anti_aliasing_check_2" 505068 [fn()=>name];
 		val set = map fst (actuals_modes drop
 				(fn am => not (	snd am = MSparkInOut orelse
 							snd am = MSparkOut)));
@@ -964,10 +976,15 @@ fun Ûanti_aliasing_check_2Ý (speclab : SPECLAB,
 				EId id => trans_id id
 				|_	=> fail "anti_aliasing_check_2" 505070
 						[fn()=>name]) set;
-	in	if trans_set diff trans_globals = trans_set
+		val inter_set = trans_set cap trans_globals;
+		val plural = if length inter_set > 1 then "s" else "";
+	in
+		if inter_set = []
 		then (* OK *) ()
-		else checking_error "anti_aliasing_check_2" 505071
-					[fn()=>name, fn()=>name]
+		else	checking_error "anti_aliasing_check_2" 505071
+				[	fn()=>plural,
+					fn()=>name,
+					fn()=>fmt_id_list inter_set]
 	end
 );
 =TEX
@@ -987,50 +1004,54 @@ fun Ûvars_expÝ (cn_env : CN_ENV) (exp : EXP) : ID list = (
 end (* local ... in *);
 =TEX
 =SML
-fun Ûanti_aliasing_check_3Ý (speclab : SPECLAB,
-				proc : (AGG_CHOICE,EXP)PROC_CALL) = (
+fun Ûanti_aliasing_check_3Ý (speclab : SPECLAB)
+				(proc : (AGG_CHOICE,EXP)PROC_CALL)
+				(actuals_modes : (EXP * MODE) list) : unit = (
 	let	val name = #name proc;
 		val formal_proc = find_formal_proc speclab name;
 		val (_, trans_globals) = anti_aliasing_pars formal_proc proc;
 		val w = (#w o #spec) formal_proc;
-		val actuals = (map fst o anti_aliasing_actuals_modes)
-					(speclab, proc)
-			handle Fail _ =>
-			fail "anti_aliasing_check_3" 505068 [fn()=>name];
+		val actuals = map fst actuals_modes;
 		val ids = list_cup (map (vars_exp ((#env o #wp_env) speclab))
 					actuals);
 		val trans_ids = map trans_id ids;
-		val set1 = trans_globals diff w;
-		val set2 = trans_globals diff trans_ids;
-	in	if trans_globals = set1 andalso trans_globals = set2
+		val inter_set = trans_globals cap w cap trans_ids;
+		val plural = if length inter_set > 1 then "s" else "";
+	in	if inter_set = []
 		then (* OK *) ()
 		else checking_error "anti_aliasing_check_3" 505072
-					[fn()=>name, fn()=>name]
+				[	fn()=>plural,
+					fn()=>name,
+					fn()=>fmt_id_list inter_set]
 	end
 );
 =TEX
 =SML
-fun Ûanti_aliasing_check_4Ý (speclab : SPECLAB,
-				proc : (AGG_CHOICE,EXP)PROC_CALL) = (
+fun Ûanti_aliasing_check_4Ý (speclab : SPECLAB)
+				(proc : (AGG_CHOICE,EXP)PROC_CALL)
+				(actuals_modes : (EXP * MODE) list) : unit = (
 	let	val name = #name proc;
 		val formal_proc = find_formal_proc speclab (#name proc);
 		val (_, trans_globals) = anti_aliasing_pars formal_proc proc;
-		val actuals_modes = anti_aliasing_actuals_modes (speclab, proc)
-			handle Fail _ =>
-			fail "anti_aliasing_check_4" 505068 [fn()=>name];
 		val cn_env = (#env o #wp_env) speclab;
 		fun pair_wise (a_m_1::a_m_2::rest) = (
 		let	val (actual1, mode1) = a_m_1;
 			val (actual2, mode2) = a_m_2;
 			val ve1 = vars_exp cn_env actual1;
 			val ve2 = vars_exp cn_env actual2;
+			val inter_set = ve1 cap ve2;
 		in
-			if ve1 diff ve2 = ve1
-			then	if mode1 = MSparkIn
-				andalso mode2 = MSparkIn
+			if not (inter_set = [])
+			then	if mode1 = MSparkIn andalso mode2 = MSparkIn
 				then (* OK *) ()
-				else checking_error "anti_aliasing_check_4"
-					505073 [fn()=>name]
+				else let val plural = if length inter_set > 1
+							then "s" else "";
+				     in
+					checking_error "anti_aliasing_check_4"
+					505073 [	fn()=>plural,
+							fn()=>name,
+							fn()=>fmt_id_list inter_set]
+				     end
 			else	(* OK *) ()
 		end
 		) | pair_wise _ = ();
@@ -1042,11 +1063,17 @@ fun Ûanti_aliasing_check_4Ý (speclab : SPECLAB,
 =SML
 fun Ûanti_aliasing_checkÝ (speclab : SPECLAB,
 				proc : (AGG_CHOICE,EXP)PROC_CALL) = (
-	anti_aliasing_check_1 (speclab, proc);
-	anti_aliasing_check_2 (speclab, proc);
-	anti_aliasing_check_3 (speclab, proc);
-	anti_aliasing_check_4 (speclab, proc)
+	let	val actuals_modes = anti_aliasing_actuals_modes speclab proc
+			handle Fail _ =>
+			fail "anti_aliasing_check" 505068 [fn()=> #name proc];
+	in
+		anti_aliasing_check_1 proc actuals_modes;
+		anti_aliasing_check_2 speclab proc actuals_modes;
+		anti_aliasing_check_3 speclab proc actuals_modes;
+		anti_aliasing_check_4 speclab proc actuals_modes
+	end
 );
+=TEX
 =SML
 fun Ûcn_checkÝ ((speclab, statement): SPECLAB * STATEMENT) : unit = (
 
@@ -1087,10 +1114,8 @@ let	fun pass_over_stmt (state : STMT_STATE) (st : STMT) = (
 		)|	STForTmark {name,i,tmark,dir,loop} => (
 				pass_over_stmt InLoop (#stmt loop)
 		)|	STExitWhen {g} => (
-				check_3 (state, st)
 		)|	STExit => (
-				check_1_c speclab;
-				check_3 (state, st)
+				check_1_c speclab
 		)|	STRet {e} => (
 				check_1_b speclab
 		)|	STProcNoIvars (proc as {name,actuals}) => (
@@ -1119,9 +1144,42 @@ let	fun pass_over_stmt (state : STMT_STATE) (st : STMT) = (
 	in	pass_over_statement statement
 	end
 );
-
-
 =TEX
+
+\subsection{Variable Capture Checks}
+
+The following function is called from $add\_var\_env$ in \cite{ISS/HAT/DAZ/IMP507}.
+
+=SML
+fun Ûcheck_new_spark_idsÝ (cn_env : CN_ENV) (ids : ID list) = (
+	let	fun aux (id::rest) = (
+			case cn_env id of
+				Value _ =>
+					fail "check_new_spark_ids" 505074 [fn()=>id]
+			|	Nil => aux rest
+		) | aux [] = ();
+	in
+		if all_different ids
+		then
+			aux ids
+		else
+			fail "check_new_spark_ids" 505075 []
+	end
+);
+=TEX
+=SML
+fun Ûcheck_new_z_idÝ (ti_context : TERM list) (z_id : Z_ID) : unit = (
+	if any ti_context (fn tm => z_id = (fst o dest_var) tm)
+	then
+		fail "check_new_z_id" 505074 [fn()=>z_id]
+	else	case (get_const_type o fst o dest_const o mk_z_gvar)
+			(z_id, BOOL, []) of
+				Value _ =>
+					fail "check_new_z_id" 505074 [fn()=>z_id]
+			|	Nil => ()
+);
+=TEX
+
 
 \section{VERIFICATION CONDITIONS}
 $cart\_prod$ and $fun\_decl$ are specified in
