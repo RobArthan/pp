@@ -154,6 +154,8 @@ datatype €LOG_IN_OP›	= €And› | €Or› | €Implies› | €Iff›;
 datatype €SCH_IN_OP›	= €Pipe› | €Filter› | €Comp›;
 
 datatype €SCH_PRE_OP›	= €Pre› | €Delta› | €Xi›;
+
+datatype €QUANT›	= €ForAll› | €Exists› | €ExistsUnique›;
 =TEX
 Most of the complexity of the parsing process arises in the treatment of
 predicates, schemas and expressions. These are all mapped onto the
@@ -166,34 +168,36 @@ where one alternative may be obtained from another by omitting part of it,
 the data type has a single constructor with optional components in its
 operand type.
 =SML
-datatype €PRED›		= €Semi› of PRED list
-			| €Quantifier› of DECL * (PRED OPT) * PRED
-			| €Let› of EQ_DEF list * PRED
-			| €LogInOp› of PRED * LOG_IN_OP * PRED
-			| €Not› of PRED
-			| €SchInOp› of PRED * SCH_IN_OP * PRED
-			| €SchPreOp› of SCH_PRE_OP * PRED
-			| €SchemaHiding› of PRED * (PRED list)
-			| €Mu› of DECL * (PRED OPT) * (PRED OPT)
-			| €Lambda› of DECL * (PRED OPT) * (PRED OPT)
-			| €FancyFix› of TEMPLATE * DECOR * (PRED list)
-			| €CrossProduct› of PRED list
-			| €Pow› of PRED
-			| €Application› of PRED * PRED
-			| €Theta› of PRED
-			| €Selection› of PRED * PRED
-			| €IdDec› of ID * DECOR
-			| €PlaceHolder› of STUB
-			| €Number› of int
-			| €String› of string
-			| €Tuple› of PRED list
-			| €SetDisplay› of PRED list
-			| €SetComp› of DECL * (PRED OPT) * (PRED OPT)
-			| €HorizSchema› of  DECL * (PRED OPT)
-			| €GenInst› of PRED list
-			| €RenameList› of (PRED * PRED) list
-			| €Bracketed› of PRED * DECOR
-			| €Error› of PRED
+datatype €PRED›		= €PredSemi› of PRED * PRED
+			| €PredQuantifier› of QUANT * DECL * (PRED OPT) * PRED
+			| €PredLet› of EQ_DEF list * PRED
+			| €PredLogInOp› of PRED * LOG_IN_OP * PRED
+			| €PredNot› of PRED
+			| €PredSchInOp› of PRED * SCH_IN_OP * PRED
+			| €PredSchPreOp› of SCH_PRE_OP * PRED
+			| €PredSchemaHiding› of PRED * (PRED list)
+			| €PredMu› of DECL * (PRED OPT) * (PRED OPT)
+			| €PredLambda› of DECL * (PRED OPT) * (PRED OPT)
+			| €PredFancyFix› of TEMPLATE * DECOR * ((PRED list) list)
+			| €PredCrossProduct› of PRED list
+			| €PredPow› of PRED
+			| €PredApplication› of PRED * PRED
+			| €PredTheta› of PRED
+			| €PredSelection› of PRED * PRED
+			| €PredIdDec› of ID * DECOR
+			| €PredQuotation› of TERM
+			| €PredPlaceHolder› of STUB
+			| €PredNumber› of int
+			| €PredString› of string
+			| €PredTuple› of PRED list
+			| €PredSetDisplay› of PRED list
+			| €PredSeqDisplay› of PRED list
+			| €PredSetComp› of DECL * (PRED OPT) * (PRED OPT)
+			| €PredHorizSchema› of  DECL * (PRED OPT)
+			| €PredGenInst› of PRED list
+			| €PredRenameList› of (PRED * PRED) list
+			| €PredBracketed› of PRED * DECOR
+			| €PredError› of PRED
 =TEX
 The above definition uses the following type abbreviations which correspond
 to the non-terminals $Decl$ and $EqDef$ in the grammar. Note that
@@ -201,7 +205,7 @@ a declaration is much simpler here than in the grammar (which is
 complicated by a need to single out declarations consisting of a single
 schema expression as a special case).
 =SML
-withtype €DECL›		= (PRED * PRED OPT) list
+withtype €DECL›		= (PRED list * PRED OPT) list
 and €EQ_DEF›		= PRED * PRED;
 =TEX
 The following type abbreviations and data types correspond to the
@@ -241,6 +245,7 @@ datatype €PP›		= PPParagraph of PARAGRAPH
 			| PPTemplates of TEMPLATE list
 			| PPTemplate of TEMPLATE
 			| PPEqDef of EQ_DEF
+			| PPEqDefs of EQ_DEF list
 			| PPPred of PRED
 			| PPDecl of DECL
 			| PPCoreExpr of CORE_EXPR
@@ -351,6 +356,11 @@ fun €format_sch_pre_op› (Pre : SCH_PRE_OP) = "pre"
 |   format_sch_pre_op (Xi : SCH_PRE_OP) = "ò";
 =TEX
 =SML
+fun €format_quant› (ForAll : QUANT) = "µ"
+|   format_quant (Exists : QUANT) = "∂"
+|   format_quant (ExistsUnique : QUANT) = "∂â1";
+=TEX
+=SML
 fun €format_fancy_fix›
 	(format_item : 'a -> string)
 	(tmpl : TEMPLATE)
@@ -388,54 +398,60 @@ fun €format_fancy_fix›
 =SML
 fun €format_pred› (pred : PRED) : string = (
 	case pred of
-		Semi preds => format_list format_pred preds "; "
-	|	Quantifier (decl, Value pred1, pred2) =>
-			format_decl decl ^ " | " ^ format_pred pred1 ^ " ∑ " ^ format_pred pred2
-	|	Quantifier (decl, Nil, pred2) =>
-			format_decl decl ^ " ∑ " ^ format_pred pred2
-	|	Let (eqdefs, pred) =>
+		PredSemi (pred1, pred2) => format_pred pred1 ^ "; " ^ format_pred pred2
+	|	PredQuantifier (q, decl, Value pred1, pred2) =>
+			format_quant q ^ format_decl decl ^ " | " ^ format_pred pred1 ^ " ∑ " ^ format_pred pred2
+	|	PredQuantifier (q, decl, Nil, pred2) =>
+			format_quant q ^ format_decl decl ^ " ∑ " ^ format_pred pred2
+	|	PredLet (eqdefs, pred) =>
 			format_list format_eq_def eqdefs "," ^ format_pred pred
-	|	LogInOp (pred1, rator, pred2) =>
+	|	PredLogInOp (pred1, rator, pred2) =>
 			format_pred pred1 ^ format_log_in_op rator ^ format_pred pred2
-	|	Not pred => "≥ " ^ format_pred pred
-	|	SchInOp (pred1, rator, pred2) =>
+	|	PredNot pred => "≥ " ^ format_pred pred
+	|	PredSchInOp (pred1, rator, pred2) =>
 			format_pred pred1 ^ format_sch_in_op rator ^ format_pred pred2
-	|	SchPreOp (rator, pred) =>
+	|	PredSchPreOp (rator, pred) =>
 			format_sch_pre_op rator ^ format_pred pred
-	|	SchemaHiding (pred, preds) =>
+	|	PredSchemaHiding (pred, preds) =>
 			format_pred pred ^ "\\[" ^ format_list format_pred preds ", " ^ "]"
-	|	Mu body => "Õ " ^ format_decl_bar_pred_dot_pred body
-	|	Lambda body => "Ã " ^ format_decl_bar_pred_dot_pred body
-	|	FancyFix (tmpl, decor, preds) => format_fancy_fix format_pred tmpl decor preds
-	|	CrossProduct preds => format_list format_pred preds " ∏ "
-	|	Pow pred => " " ^ format_pred pred
-	|	Application (pred1, pred2) =>  format_pred pred1 ^ " " ^ format_pred pred2
-	|	Theta pred => "  " ^ format_pred pred
-	|	Selection (pred1, pred2) =>  format_pred pred1 ^ "." ^ format_pred pred2
-	|	IdDec (id, decor) => id ^ " " ^ decor
-	|	PlaceHolder st => format_stub st
-	|	Number n => string_of_int n
-	|	String s => "\"" ^ s ^ "\""
-	|	Tuple preds => "(" ^ format_list format_pred preds ", " ^ ")"
-	|	SetDisplay preds  => "{" ^ format_list format_pred preds ", " ^ "}"
-	|	SetComp body => "{" ^ format_decl_bar_pred_dot_pred body ^ "}"
-	|	HorizSchema (decl, predopt) =>
+	|	PredMu body => "Õ " ^ format_decl_bar_pred_dot_pred body
+	|	PredLambda body => "Ã " ^ format_decl_bar_pred_dot_pred body
+	|	PredFancyFix (tmpl, decor, args) =>
+			format_fancy_fix
+			(fn ps => format_list format_pred ps ", ")
+			 tmpl decor args
+	|	PredCrossProduct preds => format_list format_pred preds " ∏ "
+	|	PredPow pred => " " ^ format_pred pred
+	|	PredApplication (pred1, pred2) =>  format_pred pred1 ^ " " ^ format_pred pred2
+	|	PredTheta pred => "  " ^ format_pred pred
+	|	PredSelection (pred1, pred2) =>  format_pred pred1 ^ "." ^ format_pred pred2
+	|	PredIdDec (id, decor) => id ^ " " ^ decor
+	|	PredQuotation _ => "<term-quotation>"
+	|	PredPlaceHolder st => format_stub st
+	|	PredNumber n => string_of_int n
+	|	PredString s => "\"" ^ s ^ "\""
+	|	PredTuple preds => "(" ^ format_list format_pred preds ", " ^ ")"
+	|	PredSetDisplay preds  => "{" ^ format_list format_pred preds ", " ^ "}"
+	|	PredSeqDisplay preds  => "ß" ^ format_list format_pred preds ", " ^ "¢"
+	|	PredSetComp body => "{" ^ format_decl_bar_pred_dot_pred body ^ "}"
+	|	PredHorizSchema (decl, predopt) =>
 			"[" ^ format_decl_bar_pred_dot_pred(decl, predopt, Nil) ^ "]"
-	|	GenInst preds => "[" ^ format_list format_pred preds ", " ^ "]"
-	|	RenameList renames =>
+	|	PredGenInst preds => "[" ^ format_list format_pred preds ", " ^ "]"
+	|	PredRenameList renames =>
 			"["
 		^	format_list
 			(fn (pred1, pred2) => format_pred pred1 ^ " / " ^ format_pred pred2)
 			renames
 			", "
 		^	"]"
-	|	Bracketed (pred, decor) => "(" ^ format_pred pred ^ ")" ^ decor
-	|	Error pred => "<?>" ^ format_pred pred
+	|	PredBracketed (pred, decor) => "(" ^ format_pred pred ^ ")" ^ decor
+	|	PredError pred => "<?>" ^ format_pred pred
 )
 and €format_decl› (decs : DECL) : string = (
-	let	fun format_dec (pred, Nil) =  format_pred pred
-		|   format_dec (pred1, Value pred2) =
-			format_pred pred1 ^ " : " ^ format_pred pred2;
+	let	fun format_dec (preds, Nil) =  format_list format_pred preds ", "
+		|   format_dec (preds, Value pred2) =
+			format_list format_pred preds ", "
+			 ^ " : " ^ format_pred pred2;
 	in	format_list format_dec decs "; "
 	end
 )
@@ -542,6 +558,7 @@ fun €format_pp› (pp : PP) : string = (
 	|	PPTemplates tmpls => format_list format_template tmpls ", "
 	|	PPTemplate tmpl => format_template tmpl
 	|	PPEqDef eqdef => format_eq_def eqdef
+	|	PPEqDefs eqdefs => format_list format_eq_def eqdefs ", "
 	|	PPPred pred => format_pred pred
 	|	PPDecl decl => format_decl decl
 	|	PPCoreExpr ce =>  format_core_expr ce
@@ -689,7 +706,7 @@ fun €classify2›  (tok : ZTOKEN) : Z_LEX_CLASS = (
 \section{ERROR HANDLING}
 =SML
 fun €format_z_token›  (tok : ZTOKEN) : string = (
-=SMLLITERAL
+=SML
 	case tok of
 		ZTAqTm _	=>	"<term-quotation>"
 	|	ZTId s		=> 	s
@@ -801,17 +818,18 @@ We give the reduction functions in the order of their appearance
 in the grammar of \cite{DS/FMU/IED/DTD061}. When several reduction
 functions would be the same, we use $val$ bindings for the various
 instances.
-=SML
-fun €red_para› (Parsed para) _ = (para
-) | red_para _ _ = stack_error "red_para";
 =TEX
 =SML
-val €red_fixity› = red_para;
-val €red_general_term› = red_para;
-val €red_abb_def› = red_para;
-val €red_free_type_def› = red_para;
-val €red_ax_box› = red_para;
-val €red_conjecture› = red_para;
+fun €red_accept› (Parsed x) _ = (x
+) | red_accept _ _ = stack_error "red_accept";
+=TEX
+=SML
+val €red_fixity› = red_accept;
+val €red_general_term› = red_accept;
+val €red_abb_def› = red_accept;
+val €red_free_type_def› = red_accept;
+val €red_ax_box› = red_accept;
+val €red_conjecture› = red_accept;
 =TEX
 =SML
 fun €red_templates› (Token (tk, _)) (Parsed (PPTemplates tmpls)) _ = (
@@ -916,368 +934,563 @@ fun red_id_stub_id_stubs (Token((ZTId nm1), _)) (Token(st1, _))
 ) | red_id_stub_id_stubs _ _ _ _ = stack_error "red_id_stub_id_stubs";
 =TEX
 =SML
-fun €red_pred› _ = (raise PARSER_ERROR "not implemented"
-) | red_pred _ = stack_error "red_pred";
+fun €red_pred› (Parsed (PPPred p)) _ = (
+	PPParagraph(ParGeneralTerm (p, Nil))
+) | red_pred _ _ = stack_error "red_pred";
 =TEX
 =SML
-fun €red_pred_constraint› _ = (raise PARSER_ERROR "not implemented"
-) | red_pred_constraint _ = stack_error "red_pred_constraint";
+fun €red_pred_constraint› (Parsed (PPPred p1)) _ (Parsed (PPPred p2)) _ = (
+	PPParagraph(ParGeneralTerm (p1, Value p2))
+) | red_pred_constraint _ _ _ _ = stack_error "red_pred_constraint";
 =TEX
 =SML
-fun €red_eq_def› _ = (raise PARSER_ERROR "not implemented"
-) | red_eq_def _ = stack_error "red_eq_def";
+fun €red_eq_def› (Parsed (PPEqDef d)) _ = (
+	PPParagraph(ParAbbDef(ADEqDef d))
+) | red_eq_def _ _ = stack_error "red_eq_def";
 =TEX
 =SML
-fun €red_schema› _ = (raise PARSER_ERROR "not implemented"
-) | red_schema _ = stack_error "red_schema";
+fun €red_schema›
+	_ (Parsed (PPPred s))
+	_ (Parsed (PPDecl d))
+	_ (Parsed (PPPred p)) _ = (
+	PPParagraph(ParAbbDef(ADSchemaBox(s, d, Value p)))
+) | red_schema _ _ _ _ _ _ _ = stack_error "red_schema";
 =TEX
 =SML
-fun €red_schema_no_pred› _ = (raise PARSER_ERROR "not implemented"
-) | red_schema_no_pred _ = stack_error "red_schema_no_pred";
+fun €red_schema_no_pred›
+	_ (Parsed (PPPred s))
+	_ (Parsed (PPDecl d)) _= (
+	PPParagraph(ParAbbDef(ADSchemaBox(s, d, Nil)))
+) | red_schema_no_pred _ _ _ _ _ = stack_error "red_schema_no_pred";
 =TEX
 =SML
-fun €red_deflhs_pred› _ = (raise PARSER_ERROR "not implemented"
-) | red_deflhs_pred _ = stack_error "red_deflhs_pred";
+fun €red_deflhs_pred› (Parsed (PPPred d)) _ (Parsed (PPPred p)) _ = (
+	PPEqDef(d, p)
+) | red_deflhs_pred _ _ _ _ = stack_error "red_deflhs_pred";
 =TEX
 =SML
-fun €red_expr1_as_def_lhs› _ = (raise PARSER_ERROR "not implemented"
-) | red_expr1_as_def_lhs _ = stack_error "red_expr1as_def_lhs";
+val €red_expr1_as_def_lhs› = red_accept;
 =TEX
 =SML
-fun €red_a_free_type› _ = (raise PARSER_ERROR "not implemented"
-) | red_a_free_type _ = stack_error "red_a_free_type";
+fun €red_a_free_type› (Parsed (PPPred t)) _ (Parsed (PPSomeExprs bs)) _ = (
+	PPParagraph(ParFreeTypeDef[(t, bs)])
+) | red_a_free_type _ _ _ _ = stack_error "red_a_free_type";
 =TEX
 =SML
-fun €red_free_types› _ = (raise PARSER_ERROR "not implemented"
-) | red_free_types _ = stack_error "red_free_types";
+fun €red_free_types›
+	(Parsed (PPPred t)) _
+	(Parsed (PPSomeExprs bs)) _
+	(Parsed (PPParagraph(ParFreeTypeDef fts))) _ = (
+	PPParagraph(ParFreeTypeDef((t, bs) :: fts))
+) | red_free_types _ _ _ _ _ _ = stack_error "red_free_types";
 =TEX
 =SML
-fun €red_pred_as_branch› _ = (raise PARSER_ERROR "not implemented"
-) | red_pred_as_branch _ = stack_error "red_pred_as_branch";
+fun €red_accept_pred_as_list › (Parsed (PPPred p)) _ = (
+	PPSomeExprs [p]
+) | red_accept_pred_as_list _ _ = stack_error "red_accept_pred_as_list";
 =TEX
 =SML
-fun €red_branches› _ = (raise PARSER_ERROR "not implemented"
-) | red_branches _ = stack_error "red_branches";
+val €red_pred_as_branch› = red_accept_pred_as_list;
 =TEX
+The following auxiliary is not itself ever used directly as a reduction
+function (since constructs giving rise to predicate lists in the abstract
+syntax have a variety of styles for separating the predicates)
 =SML
-fun €red_ax_box_no_pred› _ = (raise PARSER_ERROR "not implemented"
-) | red_ax_box_no_pred _ = stack_error "red_ax_box_no_pred";
+fun €add_pred_to_list_aux› (Parsed (PPPred p)) (Parsed (PPSomeExprs ps)) = (
+	PPSomeExprs (p :: ps)
+) | add_pred_to_list_aux _ _ = stack_error "add_pred_to_list_aux";
 =TEX
 =SML
-fun €red_gen_ax_box_no_pred› _ = (raise PARSER_ERROR "not implemented"
-) | red_gen_ax_box_no_pred _ = stack_error "red_gen_ax_box_no_pred";
+fun €red_branches› pp _ pb _  = (
+	add_pred_to_list_aux pp pb
+);
 =TEX
 =SML
-fun €red_ax_box_pred› _ = (raise PARSER_ERROR "not implemented"
-) | red_ax_box_pred _ = stack_error "red_ax_box_pred";
+fun €red_ax_box_no_pred› _ (Parsed (PPDecl d)) _ = (
+	PPParagraph(ParAxBox([], d, Nil))
+) | red_ax_box_no_pred _ _ _ = stack_error "red_ax_box_no_pred";
 =TEX
 =SML
-fun €red_gen_ax_box› _ = (raise PARSER_ERROR "not implemented"
-) | red_gen_ax_box _ = stack_error "red_gen_ax_box";
+fun €red_gen_ax_box_no_pred› 
+	_ _ (Parsed (PPSomeExprs ps))
+	_ _ (Parsed (PPDecl d)) _ = (
+	PPParagraph(ParAxBox(ps, d, Nil))
+) | red_gen_ax_box_no_pred _ _ _ _ _ _ _ = stack_error "red_gen_ax_box_no_pred";
 =TEX
 =SML
-fun €red_conjecture› _ = (raise PARSER_ERROR "not implemented"
-) | red_conjecture _ = stack_error "red_conjecture";
+fun €red_ax_box_pred› 
+	_ (Parsed (PPDecl d))
+	_ (Parsed (PPPred p)) _ = (
+	PPParagraph(ParAxBox([], d, Value p))
+) | red_ax_box_pred _ _ _ _ _= stack_error "red_ax_box_pred";
 =TEX
 =SML
-fun €red_id_conjecture› _ = (raise PARSER_ERROR "not implemented"
-) | red_id_conjecture _ = stack_error "red_id_conjecture";
+fun €red_gen_ax_box› 
+	_ _ (Parsed (PPSomeExprs ps))
+	_ _ (Parsed (PPDecl d))
+	_ (Parsed (PPPred p)) _ = (
+	PPParagraph(ParAxBox(ps, d, Value p))
+) | red_gen_ax_box _ _ _ _ _ _ _ _ _ = stack_error "red_gen_ax_box";
 =TEX
 =SML
-fun €red_pred1_as_pred› _ = (raise PARSER_ERROR "not implemented"
-) | red_pred1_as_pred _ = stack_error "red_pred1_as_pred";
+fun €red_no_id_conjecture› _ (Parsed(PPPred p)) _ = (
+	PPParagraph(ParConjecture(Nil, p))
+) | red_no_id_conjecture _ _ _ = stack_error "red_no_id_conjecture";
 =TEX
 =SML
-fun €red_pred_semi_pred› _ = (raise PARSER_ERROR "not implemented"
-) | red_pred_semi_pred _ = stack_error "red_pred_semi_pred";
+fun €red_id_conjecture› (Token(ZTId i, _)) _ (Parsed(PPPred p)) _ = (
+	PPParagraph(ParConjecture(Value i, p))
+) | red_id_conjecture _ _ _ _ = stack_error "red_id_conjecture";
 =TEX
 =SML
-fun €red_pred2_as_pred1› _ = (raise PARSER_ERROR "not implemented"
-) | red_pred2_as_pred1 _ = stack_error "red_pred2_as_pred1";
+val €red_pred1_as_pred› = red_accept;
 =TEX
 =SML
-fun €red_quant› _ = (raise PARSER_ERROR "not implemented"
-) | red_quant _ = stack_error "red_quant";
+fun €red_pred_semi_pred› (Parsed(PPPred p1)) _ (Parsed(PPPred p2)) _ = (
+	PPPred (PredSemi (p1, p2))
+) | red_pred_semi_pred _ _ _ _ = stack_error "red_pred_semi_pred";
 =TEX
 =SML
-fun €red_quant_no_bar› _ = (raise PARSER_ERROR "not implemented"
-) | red_quant_no_bar _ = stack_error "red_quant_no_bar";
+val €red_pred2_as_pred1› = red_accept;
 =TEX
 =SML
-fun €red_let› _ = (raise PARSER_ERROR "not implemented"
-) | red_let _ = stack_error "red_let";
+fun €quant_aux› (Token (ZTµ, _)) = ForAll
+|   quant_aux (Token (ZT∂, _)) = Exists
+|   quant_aux (Token (ZT∂â1, _)) = ExistsUnique
+|   quant_aux _ = stack_error "quant_aux";
 =TEX
 =SML
-fun €red_pred3_as_pred2› _ = (raise PARSER_ERROR "not implemented"
-) | red_pred3_as_pred2 _ = stack_error "red_pred3_as_pred2";
+fun €red_quant›
+	q (Parsed(PPDecl d))
+	_ (Parsed(PPPred p1))
+	_ (Parsed(PPPred p2)) _ = (
+	PPPred(PredQuantifier(quant_aux q, d, Value p1, p2))
+) | red_quant _ _ _ _ _ _ _ = stack_error "red_quant";
 =TEX
 =SML
-fun €red_log_in_op› _ = (raise PARSER_ERROR "not implemented"
-) | red_log_in_op _ = stack_error "red_log_in_op";
+fun €red_quant_no_bar›
+	q (Parsed(PPDecl d))
+	_ (Parsed(PPPred p)) _ = (
+	PPPred(PredQuantifier(quant_aux q, d, Nil, p))
+) | red_quant_no_bar _ _ _ _ _ = stack_error "red_quant_no_bar";
 =TEX
 =SML
-fun €red_schema2_as_pred3› _ = (raise PARSER_ERROR "not implemented"
-) | red_schema2_as_pred3 _ = stack_error "red_schema2_as_pred3";
+fun €red_let› _  (Parsed(PPEqDefs e)) _ (Parsed(PPPred p)) _ = (
+	PPPred(PredLet(e, p))
+) | red_let _ _ _ _ _ = stack_error "red_let";
 =TEX
 =SML
-fun €red_neg› _ = (raise PARSER_ERROR "not implemented"
-) | red_neg _ = stack_error "red_neg";
+val €red_pred3_as_pred2› = red_accept;
 =TEX
 =SML
-fun €red_schema3_as_schema2› _ = (raise PARSER_ERROR "not implemented"
-) | red_schema3_as_schema2 _ = stack_error "red_schema3_as_schema2";
+fun €log_in_op_aux› (Token (ZT±, _)) = And
+|   log_in_op_aux (Token (ZT≤, _)) = Or
+|   log_in_op_aux (Token (ZT¥, _)) = Implies
+|   log_in_op_aux (Token (ZT§, _)) = Iff
+|   log_in_op_aux _ = stack_error "log_in_op_aux";
 =TEX
 =SML
-fun €red_sch_in_op› _ = (raise PARSER_ERROR "not implemented"
-) | red_sch_in_op _ = stack_error "red_sch_in_op";
+fun €red_log_in_op› (Parsed(PPPred p1)) lop (Parsed(PPPred p2)) _ = (
+	PPPred (PredLogInOp (p1, log_in_op_aux lop, p2))
+) | red_log_in_op _ _ _ _ = stack_error "red_log_in_op";
 =TEX
 =SML
-fun €red_schema4_as_schema3› _ = (raise PARSER_ERROR "not implemented"
-) | red_schema4_as_schema3 _ = stack_error "red_schema4_as_schema3";
+val €red_schema2_as_pred3› = red_accept;
 =TEX
 =SML
-fun €red_sch_pre_op› _ = (raise PARSER_ERROR "not implemented"
-) | red_sch_pre_op _ = stack_error "red_sch_pre_op";
+fun €red_neg› _ (Parsed(PPPred p)) _ = (
+	PPPred(PredNot p)
+) | red_neg _ _ _  = stack_error "red_neg";
 =TEX
 =SML
-fun €red_expr0_as_schema4› _ = (raise PARSER_ERROR "not implemented"
-) | red_expr0_as_schema4 _ = stack_error "red_expr0_as_schema4";
+val €red_schema3_as_schema2› = red_accept;
 =TEX
 =SML
-fun €red_schema_hiding› _ = (raise PARSER_ERROR "not implemented"
-) | red_schema_hiding _ = stack_error "red_schema_hiding";
+fun €sch_in_op_aux› (Token (ZTPipe, _)) = Pipe
+|   sch_in_op_aux (Token (ZT˘, _)) = Filter
+|   sch_in_op_aux (Token (ZTª, _)) = Comp
+|   sch_in_op_aux _ = stack_error "sch_in_op_aux";
 =TEX
 =SML
-fun €red_rename_list› _ = (raise PARSER_ERROR "not implemented"
-) | red_rename_list _ = stack_error "red_rename_list";
+fun €red_sch_in_op› (Parsed(PPPred p1)) sop (Parsed(PPPred p2)) _ = (
+	PPPred (PredSchInOp (p1, sch_in_op_aux sop, p2))
+) | red_sch_in_op _ _ _ _ = stack_error "red_sch_in_op";
 =TEX
 =SML
-fun €red_rename› _ = (raise PARSER_ERROR "not implemented"
-) | red_rename _ = stack_error "red_rename";
+val €red_schema4_as_schema3› = red_accept;
 =TEX
 =SML
-fun €red_renames› _ = (raise PARSER_ERROR "not implemented"
-) | red_renames _ = stack_error "red_renames";
+fun €sch_pre_op_aux› (Token (ZTPre, _)) = Pre
+|   sch_pre_op_aux (Token (ZTÑ, _)) = Delta
+|   sch_pre_op_aux (Token (ZTò, _)) = Xi
+|   sch_pre_op_aux _ = stack_error "sch_pre_op_aux";
 =TEX
 =SML
-fun €red_decl_minus_pred› _ = (raise PARSER_ERROR "not implemented"
-) | red_decl_minus_pred _ = stack_error "red_decl_minus_pred";
+fun €red_sch_pre_op› pop (Parsed(PPPred p)) _ = (
+	PPPred (PredSchPreOp (sch_pre_op_aux pop, p))
+) | red_sch_pre_op _ _ _ = stack_error "red_sch_pre_op";
 =TEX
 =SML
-fun €red_pred1_as_decl› _ = (raise PARSER_ERROR "not implemented"
-) | red_pred1_as_decl _ = stack_error "red_pred1_as_decl";
+val €red_expr0_as_schema4› = red_accept;
 =TEX
 =SML
-fun €red_decl_semi_var_decs_pred1› _ = (raise PARSER_ERROR "not implemented"
-) | red_decl_semi_var_decs_pred1 _ = stack_error "red_decl_semi_var_decs_pred1";
+fun €red_schema_hiding› (Parsed(PPPred p)) _ _ (Parsed(PPSomeExprs ps)) _ _ = (
+	PPPred (PredSchemaHiding (p, ps))
+) | red_schema_hiding _ _ _ _ _ _ = stack_error "red_schema_hiding";
 =TEX
 =SML
-fun €red_decl_semi_pred1› _ = (raise PARSER_ERROR "not implemented"
-) | red_decl_semi_pred1 _ = stack_error "red_decl_semi_pred1";
+fun €red_rename_list› _ (Parsed r) _ _= (
+	r
+) | red_rename_list _ _ _ _ = stack_error "red_rename_list";
 =TEX
 =SML
-fun €red_var_decs_pred1› _ = (raise PARSER_ERROR "not implemented"
-) | red_var_decs_pred1 _ = stack_error "red_var_decs_pred1";
+fun €red_rename› (Parsed(PPPred p1)) _ (Parsed(PPPred p2)) _ = (
+	PPPred (PredRenameList[(p1, p2)])
+) | red_rename _ _ _ _ = stack_error "red_rename";
 =TEX
 =SML
-fun €red_var_decs_pred1› _ = (raise PARSER_ERROR "not implemented"
-) | red_var_decs_pred1 _ = stack_error "red_var_decs_pred1";
+fun €red_renames›
+	(Parsed(PPPred p1)) _
+	(Parsed(PPPred p2)) _
+	(Parsed(PPPred(PredRenameList rs))) _ = (
+	PPPred (PredRenameList((p1, p2)::rs))
+) | red_renames _ _ _ _ _ _= stack_error "red_renames";
 =TEX
+As a minor efficiency improvement we accumulate declarations backwards
+and reverse the list when the entire declaration has been recognised:
 =SML
-fun €red_pred1_as_decl› _ = (raise PARSER_ERROR "not implemented"
-) | red_pred1_as_decl _ = stack_error "red_pred1_as_decl";
+fun €red_decl_minus_pred› (Parsed(PPDecl rd)) _ = (
+	PPDecl (rev rd)
+) | red_decl_minus_pred _ _ = stack_error "red_decl_minus_pred";
 =TEX
 =SML
-fun €red_decl_semi_var_decs_pred1› _ = (raise PARSER_ERROR "not implemented"
-) | red_decl_semi_var_decs_pred1 _ = stack_error "red_decl_semi_var_decs_pred1";
+val €red_pred1_as_decl› = red_accept;
 =TEX
 =SML
-fun €red_decl_semi_pred1_semi› _ = (raise PARSER_ERROR "not implemented"
-) | red_decl_semi_pred1_semi _ = stack_error "red_decl_semi_pred1_semi";
+fun €red_decl_semi_var_decs_pred1›
+	(Parsed(PPDecl rd))
+	(Parsed(PPSomeExprs es)) _
+	(Parsed(PPPred p)) _ = (
+	PPDecl ((es, Value p) :: rd)
+) | red_decl_semi_var_decs_pred1 _ _ _ _ _ = stack_error "red_decl_semi_var_decs_pred1";
 =TEX
 =SML
-fun €red_expr1_as_expr0› _ = (raise PARSER_ERROR "not implemented"
-) | red_expr1_as_expr0 _ = stack_error "red_expr1_as_expr0";
+fun €red_decl_semi_pred1›
+	(Parsed(PPDecl rd))
+	(Parsed(PPSomeExprs es)) _ = (
+	PPDecl ((es, Nil) :: rd)
+) | red_decl_semi_pred1 _ _ _ = stack_error "red_decl_semi_pred1";
 =TEX
 =SML
-fun €red_mu_lambda_no_pred› _ = (raise PARSER_ERROR "not implemented"
-) | red_mu_lambda_no_pred _ = stack_error "red_mu_lambda_no_pred";
+fun €red_var_decs_pred1›
+	(Parsed(PPSomeExprs es)) _
+	(Parsed(PPPred p)) _ = (
+	PPDecl [(es, Value p)]
+) | red_var_decs_pred1 _ _ _ _ = stack_error "red_var_decs_pred1";
 =TEX
 =SML
-fun €red_mu_lambda› _ = (raise PARSER_ERROR "not implemented"
-) | red_mu_lambda _ = stack_error "red_mu_lambda";
+fun €red_var_decs_pred1_semi› x1 x2 x3 _ stk = (
+	red_var_decs_pred1 x1 x2 x3 stk
+);
 =TEX
 =SML
-fun €red_eq_def_as_eq_defs› _ = (raise PARSER_ERROR "not implemented"
-) | red_eq_def_as_eq_defs _ = stack_error "red_eq_def_as_eq_defs";
+fun €red_pred1_as_decl_semi› (Parsed(PPSomeExprs es)) _ _ = (
+		PPDecl [(es, Nil)]
+) | red_pred1_as_decl_semi _ _ _ = stack_error "red_pred1_as_decl_semi";
 =TEX
 =SML
-fun €red_eq_defs› _ = (raise PARSER_ERROR "not implemented"
-) | red_eq_defs _ = stack_error "red_eq_defs";
+=SML
+fun €red_decl_semi_var_decs_pred1_semi› x1 x2 x3 x4 _ stk= (
+	red_decl_semi_var_decs_pred1 x1 x2 x3 x4 stk
+);
+=TEX
+=SML
+fun €red_decl_semi_pred1_semi› x1 x2 _ stk = (
+	red_decl_semi_pred1 x1 x2 stk
+);
+=TEX
+=SML
+val €red_expr1_as_expr0› = red_accept;
+=TEX
+=SML
+fun €mu_lambda_aux› (Token (ZTÕ, _)) = PredMu
+|   mu_lambda_aux (Token (ZTÃ, _)) = PredLambda
+|   mu_lambda_aux _ = stack_error "mu_lambda_aux";;
+=TEX
+=SML
+fun €red_mu_lambda_no_pred›
+	mu_lambda
+	(Parsed(PPDecl dec)) _
+	(Parsed(PPPred p)) _ = (
+	 PPPred(mu_lambda_aux mu_lambda (dec, Nil, Value p))
+) | red_mu_lambda_no_pred _ _ _ _ _ = stack_error "red_mu_lambda_no_pred";
+=TEX
+=SML
+fun €red_mu_lambda›
+	mu_lambda
+	(Parsed(PPDecl dec)) _
+	(Parsed(PPPred p1)) _
+	(Parsed(PPPred p2)) _ = (
+	 PPPred(mu_lambda_aux mu_lambda (dec, Value p1, Value p2))
+) | red_mu_lambda _ _ _ _ _ _ _ = stack_error "red_mu_lambda";
+=TEX
+=SML
+fun €red_eq_def_as_eq_defs› (Parsed(PPEqDef ed)) _ = (
+	PPEqDefs [ed]
+) | red_eq_def_as_eq_defs _ _ = stack_error "red_eq_def_as_eq_defs";
+=TEX
+=SML
+fun €red_eq_defs› (Parsed(PPEqDef ed)) _ (Parsed(PPEqDefs eds)) _ = (
+	PPEqDefs (ed :: eds)
+) | red_eq_defs _ _ _ _ = stack_error "red_eq_defs";
+=TEX
+=SML
+val €red_expr2_as_expr1› = red_accept;
+=TEX
+This phase fills in all stubs in templates as underscores. It is left to
+the second phase to check the templates and fill in the correct stubs.
+=SML
+fun €red_pre_op› (Token (ZTPreOp (i,_), _)) (Parsed(PPPred p)) _ = (
+	PPPred(PredFancyFix(TmplPre((i,Nil), StubUS), "", [[p]]))
+) | red_pre_op _ _ _ = stack_error "red_pre_op";
+=TEX
+=SML
+fun €red_post_op› (Parsed(PPPred p)) (Token (ZTPostOp (i,_), _)) _ = (
+	PPPred(PredFancyFix(TmplPost(StubUS, (i,Nil)), "", [[p]]))
+) | red_post_op _ _ _ = stack_error "red_post_op";
 =TEX
 =SML
-fun €red_expr2_as_expr1› _ = (raise PARSER_ERROR "not implemented"
-) | red_expr2_as_expr1 _ = stack_error "red_expr2_as_expr1";
 =TEX
 =SML
-fun €red_pre_op› _ = (raise PARSER_ERROR "not implemented"
-) | red_pre_op _ = stack_error "red_pre_op";
+fun €red_in_op› (Parsed(PPPred p1)) (Token (ZTInOp (i,_), _))
+		(Parsed(PPPred p2)) _ = (
+	PPPred(PredFancyFix(TmplIn(StubUS, (i,Nil), StubUS), "", [[p1], [p2]]))
+) | red_in_op _ _ _ _ = stack_error "red_in_op";
 =TEX
 =SML
-fun €red_post_op› _ = (raise PARSER_ERROR "not implemented"
-) | red_post_op _ = stack_error "red_post_op";
+fun €core_aux› (i1 : ID) ((arg1, rest) : CORE_EXPR) (i2 : ID)
+	: CORE * ((PRED list) list) = (
+	(	(i1, Value (map (fn (i, _) => (StubUS, i)) rest, (StubUS, i2))),
+		arg1 :: map (fn (_, arg) => arg)  rest)
+);
 =TEX
 =SML
-fun €red_in_op› _ = (raise PARSER_ERROR "not implemented"
-) | red_in_op _ = stack_error "red_in_op";
+fun €red_bo_ce_eo› (Token (ZTBeginOp (b,_), _))
+		(Parsed(PPCoreExpr ce)) (Token (ZTEndOp (e,_), _)) _ = (
+	let	val (c, args) = core_aux b ce e;
+	in	PPPred(PredFancyFix(TmplNon c, "", args))
+	end
+) | red_bo_ce_eo _ _ _ _ = stack_error "red_bo_ce_eo";
 =TEX
 =SML
-fun €red_bo_ce_eo› _ = (raise PARSER_ERROR "not implemented"
-) | red_bo_ce_eo _ = stack_error "red_bo_ce_eo";
+fun €red_bo_ce_peo› (Token (ZTBeginOp (b,_), _))
+		(Parsed(PPCoreExpr ce))
+		(Token (ZTPreEndOp (e,_), _))
+		(Parsed(PPPred p)) _ = (
+	let	val (c, args) = core_aux b ce e;
+	in	PPPred(PredFancyFix(TmplPre(c, StubUS), "", args @ [[p]]))
+	end
+) | red_bo_ce_peo _ _ _ _ _ = stack_error "red_bo_ce_peo";
 =TEX
 =SML
-fun €red_bo_ce_peo› _ = (raise PARSER_ERROR "not implemented"
-) | red_bo_ce_peo _ = stack_error "red_bo_ce_peo";
+fun €red_pbo_ce_eo› (Parsed(PPPred p))
+		(Token (ZTPostBeginOp (b,_), _))
+		(Parsed(PPCoreExpr ce))
+		(Token (ZTEndOp (e,_), _)) _ = (
+	let	val (c, args) = core_aux b ce e;
+	in	PPPred(PredFancyFix(TmplPost(StubUS, c), "", [p] :: args))
+	end
+) | red_pbo_ce_eo _ _ _ _ _ = stack_error "red_pbo_ce_eo";
 =TEX
 =SML
-fun €red_pbo_ce_eo› _ = (raise PARSER_ERROR "not implemented"
-) | red_pbo_ce_eo _ = stack_error "red_pbo_ce_eo";
+fun €red_pbo_ce_peo› (Parsed(PPPred p1))
+		(Token (ZTPostBeginOp (b,_), _))
+		(Parsed(PPCoreExpr ce))
+		(Token (ZTPreEndOp (e,_), _))
+		(Parsed(PPPred p2)) _ = (
+	let	val (c, args) = core_aux b ce e;
+	in	PPPred(PredFancyFix(TmplIn(StubUS, c, StubUS), "", [p1]::args@[[p2]]))
+	end
+) | red_pbo_ce_peo _ _ _ _ _ _ = stack_error "red_pbo_ce_peo";
 =TEX
 =SML
-fun €red_pbo_ce_peo› _ = (raise PARSER_ERROR "not implemented"
-) | red_pbo_ce_peo _ = stack_error "red_pbo_ce_peo";
+fun €red_cross› (Parsed(PPPred p1)) _ (Parsed(PPPred p2)) _ = (
+	PPPred(PredCrossProduct(
+		case (p1, p2) of
+			(PredCrossProduct ps1, PredCrossProduct ps2) => ps1 @ ps2
+		|	(PredCrossProduct ps1, _) => ps1 @ [p2]
+		|	(_, PredCrossProduct ps2) => p1 :: ps2
+		|	(_, _) => [p1, p2]))
+) | red_cross _ _ _ _ = stack_error "red_cross";
 =TEX
 =SML
-fun €red_cross› _ = (raise PARSER_ERROR "not implemented"
-) | red_cross _ = stack_error "red_cross";
+fun €red_exprs› (Parsed (PPSomeExprs ps)) _ = (
+	PPCoreExpr(ps, [])
+) | red_exprs _ _ = stack_error "red_exprs";
 =TEX
 =SML
-fun €red_exprs› _ = (raise PARSER_ERROR "not implemented"
-) | red_exprs _ = stack_error "red_exprs";
+fun €red_es_to_ce›
+		(Parsed (PPSomeExprs ps))
+		(Token (ZTThenOp (e,_), _))
+		(Parsed (PPCoreExpr (a, r))) _ = (
+	PPCoreExpr(ps, (e, a) :: r)
+) | red_es_to_ce _ _ _ _ = stack_error "red_es_to_ce";
 =TEX
 =SML
-fun €red_es_to_ce› _ = (raise PARSER_ERROR "not implemented"
-) | red_es_to_ce _ = stack_error "red_es_to_ce";
+fun €red_no_exprs› _ = (
+	PPSomeExprs []
+);
 =TEX
 =SML
-fun €red_no_exprs› _ = (raise PARSER_ERROR "not implemented"
-) | red_no_exprs _ = stack_error "red_no_exprs";
+val €red_some_exprs› = red_accept;
 =TEX
 =SML
-fun €red_some_exprs› _ = (raise PARSER_ERROR "not implemented"
-) | red_some_exprs _ = stack_error "red_some_exprs";
+val €red_pred1_as_some_exprs› = red_accept_pred_as_list;
 =TEX
 =SML
-fun €red_pred1_as_some_exprs› _ = (raise PARSER_ERROR "not implemented"
-) | red_pred1_as_some_exprs _ = stack_error "red_pred1_as_some_exprs";
+fun €red_pred1_comma_some_exprs› p _ ps _ = (
+	add_pred_to_list_aux p ps
+);
 =TEX
 =SML
-fun €red_some_exprs› _ = (raise PARSER_ERROR "not implemented"
-) | red_some_exprs _ = stack_error "red_some_exprs";
+val €red_expr3_as_expr2› = red_accept;
 =TEX
 =SML
-fun €red_expr2_as_expr3› _ = (raise PARSER_ERROR "not implemented"
-) | red_expr2_as_expr3 _ = stack_error "red_expr2_as_expr3";
+fun €red_pow› _ (Parsed (PPPred p)) _ = (
+	PPPred(PredPow p)
+) | red_pow _ _ _ = stack_error "red_pow";
 =TEX
 =SML
-fun €red_pow› _ = (raise PARSER_ERROR "not implemented"
-) | red_pow _ = stack_error "red_pow";
+val €red_expr4_as_expr3› = red_accept;
 =TEX
 =SML
-fun €red_expr4_as_expr3› _ = (raise PARSER_ERROR "not implemented"
-) | red_expr4_as_expr3 _ = stack_error "red_expr4_as_expr3";
+fun €red_expr3_expr4› (Parsed(PPPred p1)) (Parsed(PPPred p2)) _ = (
+	PPPred(PredApplication(p1, p2))
+) | red_expr3_expr4 _ _ _ = stack_error "red_expr3_expr4";
 =TEX
 =SML
-fun €red_expr3_expr4› _ = (raise PARSER_ERROR "not implemented"
-) | red_expr3_expr4 _ = stack_error "red_expr3_expr4";
+fun €red_theta› _ (Parsed(PPPred p)) _ = (
+	PPPred(PredTheta p)
+) | red_theta _ _ _ = stack_error "red_theta";
 =TEX
 =SML
-fun €red_theta› _ = (raise PARSER_ERROR "not implemented"
-) | red_theta _ = stack_error "red_theta";
+fun €red_expr3_dot_expr4› (Parsed(PPPred p1)) _ (Parsed(PPPred p2)) _ = (
+	PPPred(PredSelection(p1, p2))
+) | red_expr3_dot_expr4 _ _ _ _ = stack_error "red_expr3_dot_expr4";
 =TEX
 =SML
-fun €red_expr3_dot_expr4› _ = (raise PARSER_ERROR "not implemented"
-) | red_expr3_dot_expr4 _ = stack_error "red_expr3_dot_expr4";
+fun €red_id_dec_as_exp› (Parsed(PPIdDec id)) _ = (
+	PPPred(PredIdDec id)
+) | red_id_dec_as_exp _ _ = stack_error "red_id_dec_as_exp";
 =TEX
 =SML
-fun €red_id_dec_as_exp› _ = (raise PARSER_ERROR "not implemented"
-) | red_id_dec_as_exp _ = stack_error "red_id_dec_as_exp";
+fun €red_quotation› (Token(ZTAqTm tm, _)) _  = (
+	PPPred(PredQuotation tm)
+) | red_quotation _ _ = stack_error "red_quotation";
 =TEX
 =SML
-fun €red_quotation› _ = (raise PARSER_ERROR "not implemented"
-) | red_quotation _ = stack_error "red_quotation";
+fun €stub_aux› (Token (ZTId "_", _)) = StubUS
+|   stub_aux (Token (ZTDots, _)) = StubEll
+|   stub_aux _ = stack_error "stub_aux";
 =TEX
 =SML
-fun €red_stub› _ = (raise PARSER_ERROR "not implemented"
-) | red_stub _ = stack_error "red_stub";
+fun €red_stub› tk _ = (
+	PPPred(PredPlaceHolder(stub_aux tk))
+);
 =TEX
 =SML
-fun €red_number› _ = (raise PARSER_ERROR "not implemented"
-) | red_number _ = stack_error "red_number";
+fun €red_number› (Token (ZTNumber n, _)) _  = (
+	PPPred(PredNumber n)
+) | red_number _ _ = stack_error "red_number";
 =TEX
 =SML
-fun €red_string› _ = (raise PARSER_ERROR "not implemented"
-) | red_string _ = stack_error "red_string";
+fun €red_string› (Token (ZTString s, _)) _  = (
+	PPPred(PredString s)
+) | red_string _ _ = stack_error "red_string";
 =TEX
 =SML
-fun €red_tuple› _ = (raise PARSER_ERROR "not implemented"
-) | red_tuple _ = stack_error "red_tuple";
+fun €red_tuple› _ (Parsed(PPPred p)) _ (Parsed(PPSomeExprs ps)) _ _ = (
+	PPPred(PredTuple(p :: ps))
+) | red_tuple _ _ _ _ _ _ = stack_error "red_tuple";
 =TEX
 =SML
-fun €red_set_display› _ = (raise PARSER_ERROR "not implemented"
-) | red_set_display _ = stack_error "red_set_display";
+fun €red_set_display› _ (Parsed(PPSomeExprs ps)) _ _ = (
+	PPPred(PredSetDisplay ps)
+) | red_set_display _ _ _ _ = stack_error "red_set_display";
 =TEX
 =SML
-fun €red_sequence_brk› _ = (raise PARSER_ERROR "not implemented"
-) | red_sequence_brk _ = stack_error "red_sequence_brk";
+fun €red_sequence_brk› _ (Parsed(PPSomeExprs ps)) _ _ = (
+	PPPred(PredSeqDisplay ps)
+) | red_sequence_brk _ _ _ _ = stack_error "red_sequence_brk";
 =TEX
 =SML
-fun €red_set_comp_no_spot› _ = (raise PARSER_ERROR "not implemented"
-) | red_set_comp_no_spot _ = stack_error "red_set_comp_no_spot";
+fun €red_set_comp_no_spot›
+	_ (Parsed(PPDecl d))
+	_ (Parsed(PPPred p)) _ _ = (
+	PPPred(PredSetComp(d, Value p, Nil))
+) | red_set_comp_no_spot _ _ _ _ _ _ = stack_error "red_set_comp_no_spot";
 =TEX
 =SML
-fun €red_set_comp_no_pred› _ = (raise PARSER_ERROR "not implemented"
-) | red_set_comp_no_pred _ = stack_error "red_set_comp_no_pred";
+fun €red_set_comp_no_pred›
+	_ (Parsed(PPDecl d)) _ _ = (
+	PPPred(PredSetComp(d, Nil, Nil))
+) | red_set_comp_no_pred _ _ _ _ = stack_error "red_set_comp_no_pred";
 =TEX
 =SML
-fun €red_set_comp› _ = (raise PARSER_ERROR "not implemented"
-) | red_set_comp _ = stack_error "red_set_comp";
+fun €red_set_comp›
+	_ (Parsed(PPDecl d))
+	_ (Parsed(PPPred p1))
+	_ (Parsed(PPPred p2)) _ _ = (
+	PPPred(PredSetComp(d, Value p1, Value p2))
+) | red_set_comp _ _ _ _ _ _ _ _ = stack_error "red_set_comp";
 =TEX
 =SML
-fun €red_set_comp_no_bar› _ = (raise PARSER_ERROR "not implemented"
-) | red_set_comp_no_bar _ = stack_error "red_set_comp_no_bar";
+fun €red_set_comp_no_bar›
+	_ (Parsed(PPDecl d))
+	_ (Parsed(PPPred p)) _ _ = (
+	PPPred(PredSetComp(d, Nil, Value p))
+) | red_set_comp_no_bar _ _ _ _ _ _ = stack_error "red_set_comp_no_bar";
 =TEX
 =SML
-fun €red_horiz_schema› _ = (raise PARSER_ERROR "not implemented"
-) | red_horiz_schema _ = stack_error "red_horiz_schema";
+fun €red_horiz_schema›
+	_ (Parsed(PPDecl d))
+	_ (Parsed(PPPred p)) _ _ = (
+	PPPred(PredHorizSchema(d, Value p))
+) | red_horiz_schema _ _ _ _ _ _ = stack_error "red_horiz_schema";
 =TEX
 =SML
-fun €red_horiz_schema_no_pred› _ = (raise PARSER_ERROR "not implemented"
-) | red_horiz_schema_no_pred _ = stack_error "red_horiz_schema_no_pred";
+fun €red_horiz_schema_no_pred›
+	_ (Parsed(PPDecl d)) _ _ = (
+	PPPred(PredHorizSchema(d, Nil))
+) | red_horiz_schema_no_pred _ _ _ _ = stack_error "red_horiz_schema_no_pred";
 =TEX
 =SML
-fun €red_gen_inst› _ = (raise PARSER_ERROR "not implemented"
-) | red_gen_inst _ = stack_error "red_gen_inst";
+fun €red_gen_inst› _ (Parsed(PPSomeExprs ps)) _ _ = (
+	PPPred(PredGenInst ps)
+) | red_gen_inst _ _ _ _ = stack_error "red_gen_inst";
 =TEX
 =SML
-fun €red_rename_list_as_expr› _ = (raise PARSER_ERROR "not implemented"
-) | red_rename_list_as_expr _ = stack_error "red_rename_list_as_expr";
+val €red_rename_list_as_expr› = red_accept;
 =TEX
 =SML
-fun €red_brk_pred› _ = (raise PARSER_ERROR "not implemented"
-) | red_brk_pred _ = stack_error "red_brk_pred";
+fun €red_brk_pred› _ (Parsed(PPPred p)) _ _ = (
+	PPPred(PredBracketed (p, ""))
+) | red_brk_pred _ _ _ _ = stack_error "red_brk_pred";
 =TEX
 =SML
-fun €red_pred_decor› _ = (raise PARSER_ERROR "not implemented"
-) | red_pred_decor _ = stack_error "red_pred_decor";
+fun €red_pred_decor› _ (Parsed(PPPred p)) _ (Token (ZTDecor d, _)) _ = (
+	PPPred(PredBracketed (p, d))
+) | red_pred_decor _ _ _ _ _ = stack_error "red_pred_decor";
 =TEX
 =SML
-fun €red_id› _ = (raise PARSER_ERROR "not implemented"
-) | red_id _ = stack_error "red_id";
+fun €red_id› (Token (ZTId i, _)) _ = (
+	PPIdDec (i, "")
+) | red_id _ _ = stack_error "red_id";
 =TEX
 =SML
-fun €red_id_dec› _ = (raise PARSER_ERROR "not implemented"
-) | red_id_dec _ = stack_error "red_id_dec";
+fun €red_id_dec› (Token (ZTId i, _)) (Token (ZTDecor d, _)) _ = (
+	PPIdDec (i, d)
+) | red_id_dec _ _ _ = stack_error "red_id_dec";
 =TEX
 
 =TEX
