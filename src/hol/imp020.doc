@@ -53,13 +53,13 @@ symbol table module for ICL HOL.}
 
 \newpage
 \section{DOCUMENT CONTROL}
-\subsection{Contents list}
+\subsection{Contents List}
 \tableofcontents
-\subsection{Document cross references}
+\subsection{Document Cross References}
 \bibliographystyle{fmu}
 \bibliography{fmu}
 
-\subsection{Changes history}  % to get section number `0.3'
+\subsection{Changes History}
 \begin{description}
 \item[Issue 1.3]
 First draft for comment.
@@ -70,8 +70,10 @@ The name atom  ``definition(s)'' changed to ``defn(s)'', and
 ``constant(s)'' to ``const(s)''.
 \item [Issue 1.7 (22 May 1991)]
 Added $get\_alias$. Corrected handling of languages.
-\item [Issue 1.8 (25 July 1991)] Added $get\_language$. $get\_terminators$ renamed as
-$get\-\_current\-\_terminators$ and $get\-\_terminators$ added as theory
+\item [Issue 1.8 (25 July 1991)] Added $get\-\_language$. {}
+Function $get\-\_terminators$ renamed to become
+$get\-\_current\-\_terminators$ then function
+$get\-\_terminators$ added as theory
 access function. Slight reorganisation of last part of document.
 \item [Issue 1.9 (25 July 1991)]
 Delete $FIXITY$ (moved to lexical analyser~\cite{DS/FMU/IED/DTD015}).
@@ -88,8 +90,12 @@ Changes required by CR0016.
 \item [Issue 1.19 (26th May 1992)]
 Renamings from version 1.5 of DS/FMU/IED/WRK038.
 
+\item[Issue \SCCSversion~(\FormatDate{$Date$%
+}) ]
+	Allow multiple languages per constant.
+
 \end{description}
-\subsection{Changes forecast}
+\subsection{Changes Forecast}
 \pagebreak
 \section{GENERAL}
 \subsection{Scope}
@@ -112,6 +118,7 @@ and would also consume unnecessary space (since ``most'' identifiers do
 not have any special properties, all we need to know about them is
 already stored in the theory database). 
 
+{\sloppy
 For the purposes of parsing, type inferring and pretty printing, the interrogative
 functions:
 $get\-\_terminators$, $get\-\_fixity$, $get\-\_const\-\_info$,
@@ -121,9 +128,11 @@ and, perhaps, $get\-\_sym\-\_tab\-\_info$, need to be quite fast.
 Consequently, we maintain caches containing the 
 information required to compute these functions
 in the current context. As an optimisation (to the space usage) we do
-not keep records for identifers with no special properties. The relevant
+not keep records for identifiers with no special properties. The relevant
 symbol table information for such an identifier may readily be computed
 from the theory database as necessary.
+
+}
 
 We store in each theory an encoding of the
 declarative operations ($declare\_terminator$, $declare\_infix$ etc.) which
@@ -184,7 +193,153 @@ datatype ÛDECLÝ	=	ÛDeclTerminatorÝ of string
 			|	ÛUnDeclAliasÝ of string * (string * TYPE)
 			|	ÛDeclTypeAbbrevÝ of string * (string list * TYPE)
 			|	ÛUnDeclTypeAbbrevÝ of string
-			|	ÛSetLanguageÝ of string;
+			|	ÛSetLanguageÝ of string
+			|	ÛDeclConstLanguageÝ of string * string
+			;
+=TEX
+\section{THEORY DATABASE ACCESS FUNCTIONS}
+\label{ThyDb1}
+
+There are two groups of functions for accessing the theory database,
+they are split to allow for the proper declare before use requirements
+of Standard~ML.  The other group is in section~\ref{ThyDb2}.
+
+The symbol table module uses a single slot in the theory user data 
+under the key ``icl'st'' to hold the declarations which apply
+to the theory. The declarations are held as a fairly direct encoding
+of a list of $DECL$s.
+
+\subsection{Utilities For Accessing the User Data}
+In this section we define the functions we use to fetch and store the
+lists of $USER\_DATUM$s belonging to the symbol table held in theories.
+=SML
+val Ûud_keyÝ = "icl'st";
+=TEX
+The following function is the only place at which we pass an unknown
+theory name to the kernel interface.
+=SML
+fun Ûfetch_sym_tab_dataÝ (thy : string) : USER_DATUM list = (
+	if thy mem theory_names () orelse thy = "-"
+	then	case get_user_datum thy ud_key handle Fail _ => UD_Int(0, []) of
+			(UD_Int(0, uds)) => uds
+		|	_ => fail "fetch_sym_tab_data" 20001 [fn()=>thy]
+	else	fail "fetch_sym_tab_data" 20601 [fn()=>thy]
+);
+=TEX
+The theory name argument to $store\_sym\_tab\_datum$ and
+$delete\_sym\_tab\_datum$ are only used in error messages.
+=SML
+fun Ûstore_sym_tab_datumÝ (ud : USER_DATUM) : unit = (
+	let	val uds = (
+			case get_user_datum "-" ud_key handle Fail _ => UD_Int(0, []) of
+				(UD_Int(0, uds)) => uds
+			|	_ => fail "fetch_sym_tab_data" 20001 [fn()=>"-"]);
+	in 	set_user_datum(ud_key, UD_Int(0, ud :: uds))
+	end
+);
+=TEX
+We sometimes need to delete entries. $delete\_sym\_tab\_datum$
+does this (and does nothing if the entry to be deleted is not there).
+=SML
+local
+
+fun Ûlist_eqÝ eq (a :: x) (b :: y) = eq (a,b) andalso list_eq eq x y
+| list_eq eq [] [] = true
+| list_eq eq _ _ = false;
+
+fun Ûud_equalsÝ (UD_Term (tm,udl):USER_DATUM) : USER_DATUM -> bool = (fn ud2 =>
+	case ud2 of
+	UD_Term (tm1,udl1) => (tm =$ tm1) andalso list_eq (uncurry ud_equals) udl udl1
+	| _ => false
+) | ud_equals (UD_Type(ty,udl)) = (fn ud2 =>
+	case ud2 of
+	UD_Type (ty1,udl1) => (ty =: ty1) andalso list_eq (uncurry ud_equals) udl udl1
+	| _ => false
+) | ud_equals (UD_String(st,udl)) = (fn ud2 =>
+	case ud2 of
+	UD_String (st1,udl1) => (st = st1) andalso list_eq (uncurry ud_equals) udl udl1
+	| _ => false
+) | ud_equals (UD_Int(n,udl)) = (fn ud2 =>
+	case ud2 of
+	UD_Int (n1,udl1) => (n = n1) andalso list_eq (uncurry ud_equals) udl udl1
+	| _ => false
+);
+in
+fun Ûdelete_sym_tab_datumÝ (ud : USER_DATUM) : unit = (
+	let	val uds = (
+			case get_user_datum "-" ud_key handle Fail _ => UD_Int(0, []) of
+				(UD_Int(0, uds)) => uds
+			|	_ => fail "fetch_sym_tab_data" 20001 [fn()=>"-"]);
+		val ud_equals_ud = ud_equals ud;
+	in 	set_user_datum(ud_key, UD_Int(0, uds drop ud_equals_ud))
+	end
+);
+end;
+=TEX
+\subsection{Encoding and Decoding Functions}
+First of all we give an encoding for $FIXITY$ values.
+We encode constructors as small numbers, since on most Standard ML compilers
+these are held in a single word of storage.
+=SML
+fun Ûencode_fixityÝ (fix : FIXITY) : USER_DATUM = (
+	case fix of
+		Nonfix => UD_Int(0, [])
+	|	Binder => UD_Int(1, [])
+	|	Infix p => UD_Int(2, [UD_Int(p, [])])
+	|	Prefix p => UD_Int(3, [UD_Int(p, [])])
+	|	Postfix p => UD_Int(4, [UD_Int(p, [])])
+);
+=TEX
+=SML
+fun Ûdecode_fixityÝ (ud : USER_DATUM) : FIXITY = (
+	case ud of
+		UD_Int(0, []) => Nonfix
+	|	UD_Int(1, []) => Binder
+	|	UD_Int(2, [UD_Int(p, [])]) => Infix p
+	|	UD_Int(3, [UD_Int(p, [])]) => Prefix p
+	|	UD_Int(4, [UD_Int(p, [])]) => Postfix p
+	|	_ => fail "decode_fixity" 20001 []
+);
+=TEX
+=SML
+fun Ûencode_declÝ (dec : DECL) : USER_DATUM = (
+	case dec of
+		DeclTerminator t => UD_Int(0, [UD_String(t, [])])
+	|	UnDeclTerminator t => UD_Int(1, [UD_String(t, [])])
+	|	DeclFixity (s, fix)  => UD_Int(2, [UD_String(s, [encode_fixity fix])])
+	|	DeclAlias (a, (s, ty)) =>
+			UD_Int(3, [UD_String(a, [UD_String(s, [UD_Type(ty, [])])])])
+	|	UnDeclAlias (a, (s, ty)) =>
+			UD_Int(4, [UD_String(a, [UD_String(s, [UD_Type(ty, [])])])])
+	|	DeclTypeAbbrev (a, (args, ty)) =>
+			UD_Int(5, [UD_String(a, [UD_Type(ty, map
+			 ((switch(curry UD_String))[]) args)])])
+	|	UnDeclTypeAbbrev a => UD_Int(6, [UD_String(a, [])])
+	|	SetLanguage lang => UD_Int(7, [UD_String(lang, [])])
+	|	DeclConstLanguage (const, lang) =>
+			UD_Int(8, [UD_String(const, [UD_String(lang, [])])])
+);
+=TEX
+=SML
+fun Ûdecode_declÝ (thy : string) (ud : USER_DATUM) : DECL = (
+	case ud of
+		UD_Int(0, [UD_String(t, [])]) => DeclTerminator t
+	|	UD_Int(1, [UD_String(t, [])]) => UnDeclTerminator t
+	|	UD_Int(2, [UD_String(s, [fix])]) => DeclFixity (s, decode_fixity fix)
+	|	UD_Int(3, [UD_String(a, [UD_String(s, [UD_Type(ty, [])])])]) => 
+				DeclAlias (a, (s, ty))
+	|	UD_Int(4, [UD_String(a, [UD_String(s, [UD_Type(ty, [])])])]) => 
+				UnDeclAlias (a, (s, ty))
+	|	UD_Int(5, [UD_String(a, [UD_Type(ty, args)])]) =>
+			DeclTypeAbbrev (a, (map
+				(fn UD_String(arg, []) => arg
+				| _ => fail "decode_decl" 20001 [fn()=> thy]) args, ty))
+	|	UD_Int(6, [UD_String(a, [])]) => UnDeclTypeAbbrev a
+	|	UD_Int(7, [UD_String(lang, [])]) => SetLanguage lang
+	|	UD_Int(8, [UD_String(const, [UD_String(lang, [])])]) =>
+			DeclConstLanguage (const, lang)
+	|	_ => fail "decode_decl" 20001 [fn()=> thy]
+);
 =TEX
 \section{THE CACHES AND THEIR ACCESS FUNCTIONS}
 In this section we define the caches in which symbol table information relating
@@ -219,14 +374,16 @@ For uniformity, the current language is held in an assignable variable
 =SML
 val ÛlanguageÝ : string ref = ref "HOL";
 =TEX
-The remaining two caches are unlike the others in that their values are not
-set by declarations but instead are calculated from the theory database
+The remaining two caches are unlike the others in that their
+values are partially calculated from the theory database
 as theories are loaded.
 They give for each constant and type which is in scope the name 
 and language of theory to
 which it belongs.
+Additionally, for constants, they hold any other language names
+declared for the constant.
 =SML
-val Ûconst_theory_cacheÝ : (string * string) E_DICT ref = ref initial_e_dict;
+val Ûconst_theory_cacheÝ : (string * string list) E_DICT ref = ref initial_e_dict;
 =TEX
 =SML
 val Ûty_theory_cacheÝ : (string * string) E_DICT ref = ref initial_e_dict;
@@ -353,14 +510,39 @@ fun Ûuncache_type_abbrevÝ(a : string) : unit = (
 );
 =TEX
 =SML
-fun Ûcache_languageÝ (thy : string) (lang : string) = (
+fun Ûcache_const_languageÝ (s : string, newlang : string) = (
+	case e_lookup s (!const_theory_cache)
+	of Value(thy, langs) => (
+		if contains langs newlang
+		then ()
+		else
+			const_theory_cache :=
+				e_enter s (thy, langs @ [newlang]) (!const_theory_cache)
+	)
+	| Nil => (
+		fail "cache_const_language" 20501 [fn()=>s]
+	)
+);
+=TEX
+=SML
+fun Ûcache_languageÝ (thy : string) (lang : string) : unit = (
 	let	val conids = map (fst o dest_const) (get_consts thy)
 		val tyids = map (fst o dest_ctype) (get_types thy);
-		fun aux dict [] = dict
-		|   aux dict (id :: more) = aux (e_enter id (thy, lang) dict) more;
-	in	const_theory_cache := aux (!const_theory_cache) conids;
-		ty_theory_cache := aux (!ty_theory_cache) tyids;
-		language := lang
+		fun aux_c dict [] = dict
+		|   aux_c dict (id :: more) = aux_c (e_enter id (thy, [lang]) dict) more;
+		fun aux_t dict [] = dict
+		|   aux_t dict (id :: more) = aux_t (e_enter id (thy, lang) dict) more;
+		fun get_aux nil = nil
+		| get_aux(h::more) = (
+			case decode_decl thy h
+			of DeclConstLanguage x => x :: (get_aux more)
+			| _ => get_aux more
+		);
+	in	const_theory_cache := aux_c (!const_theory_cache) conids;
+		ty_theory_cache := aux_t (!ty_theory_cache) tyids;
+		language := lang;
+		map cache_const_language (get_aux(fetch_sym_tab_data thy));
+		()
 	end
 );
 =TEX
@@ -376,143 +558,17 @@ fun Ûcache_declÝ (thy : string) (dec : DECL) : unit = (
 	|	DeclTypeAbbrev aargsty => cache_type_abbrev aargsty
 	|	UnDeclTypeAbbrev  a => uncache_type_abbrev a
 	|	SetLanguage lang => cache_language thy lang
+	|	DeclConstLanguage const_lang => cache_const_language const_lang
 );
 end; (* of local ... in ... end *)
 =TEX
 \section{THEORY DATABASE ACCESS FUNCTIONS}
-The symbol table module uses a single slot in the theory user data 
-under the key ``icl'st'' to hold the declarations which apply
-to the theory. The declarations are held as a fairly direct encoding
-of a list of $DECL$s.
+\label{ThyDb2}
 
-\subsection{Utilities For Accessing the User Data}
-In this section we define the functions we use to fetch and store the
-lists of $USER\_DATUM$s belonging to the symbol table held in theories.
-=SML
-val ud_key = "icl'st";
-=TEX
-The following function is the only place at which we pass an unknown
-theory name to the kernel interface.
-=SML
-fun fetch_sym_tab_data (thy : string) : USER_DATUM list = (
-	if thy mem theory_names () orelse thy = "-"
-	then	case get_user_datum thy ud_key handle Fail _ => UD_Int(0, []) of
-			(UD_Int(0, uds)) => uds
-		|	_ => fail "fetch_sym_tab_data" 20001 [fn()=>thy]
-	else	fail "fetch_sym_tab_data" 20601 [fn()=>thy]
-);
-=TEX
-The theory name argument to $store\_sym\_tab\_datum$ and
-$delete\_sym\_tab\_datum$ are only used in error messages.
-=SML
-fun store_sym_tab_datum (ud : USER_DATUM) : unit = (
-	let	val uds = (
-			case get_user_datum "-" ud_key handle Fail _ => UD_Int(0, []) of
-				(UD_Int(0, uds)) => uds
-			|	_ => fail "fetch_sym_tab_data" 20001 [fn()=>"-"]);
-	in 	set_user_datum(ud_key, UD_Int(0, ud :: uds))
-	end
-);
-=TEX
-We sometimes need to delete entries. $delete\_sym\_tab\_datum$
-does this (and does nothing if the entry to be deleted is not there).
-=SML
-local
+This is the second group of theory database access functions,
+the first group was given in section~\ref{ThyDb1}.
 
-fun list_eq eq (a :: x) (b :: y) = eq (a,b) andalso list_eq eq x y
-| list_eq eq [] [] = true
-| list_eq eq _ _ = false;
-
-fun ud_equals (UD_Term (tm,udl):USER_DATUM) : USER_DATUM -> bool = (fn ud2 =>
-	case ud2 of
-	UD_Term (tm1,udl1) => (tm =$ tm1) andalso list_eq (uncurry ud_equals) udl udl1
-	| _ => false
-) | ud_equals (UD_Type(ty,udl)) = (fn ud2 =>
-	case ud2 of
-	UD_Type (ty1,udl1) => (ty =: ty1) andalso list_eq (uncurry ud_equals) udl udl1
-	| _ => false
-) | ud_equals (UD_String(st,udl)) = (fn ud2 =>
-	case ud2 of
-	UD_String (st1,udl1) => (st = st1) andalso list_eq (uncurry ud_equals) udl udl1
-	| _ => false
-) | ud_equals (UD_Int(n,udl)) = (fn ud2 =>
-	case ud2 of
-	UD_Int (n1,udl1) => (n = n1) andalso list_eq (uncurry ud_equals) udl udl1
-	| _ => false
-);
-in
-fun delete_sym_tab_datum (ud : USER_DATUM) : unit = (
-	let	val uds = (
-			case get_user_datum "-" ud_key handle Fail _ => UD_Int(0, []) of
-				(UD_Int(0, uds)) => uds
-			|	_ => fail "fetch_sym_tab_data" 20001 [fn()=>"-"]);
-		val ud_equals_ud = ud_equals ud;
-	in 	set_user_datum(ud_key, UD_Int(0, uds drop ud_equals_ud))
-	end
-);
-end;
-=TEX
-\subsection{Encoding and Decoding Functions}
-First of all we give an encoding for $FIXITY$ values.
-We encode constructors as small numbers, since on most Standard ML compilers
-these are held in a single word of storage.
-=SML
-fun Ûencode_fixityÝ (fix : FIXITY) : USER_DATUM = (
-	case fix of
-		Nonfix => UD_Int(0, [])
-	|	Binder => UD_Int(1, [])
-	|	Infix p => UD_Int(2, [UD_Int(p, [])])
-	|	Prefix p => UD_Int(3, [UD_Int(p, [])])
-	|	Postfix p => UD_Int(4, [UD_Int(p, [])])
-);
-=TEX
-=SML
-fun Ûdecode_fixityÝ (ud : USER_DATUM) : FIXITY = (
-	case ud of
-		UD_Int(0, []) => Nonfix
-	|	UD_Int(1, []) => Binder
-	|	UD_Int(2, [UD_Int(p, [])]) => Infix p
-	|	UD_Int(3, [UD_Int(p, [])]) => Prefix p
-	|	UD_Int(4, [UD_Int(p, [])]) => Postfix p
-	|	_ => fail "decode_fixity" 20001 []
-);
-=TEX
-=SML
-fun Ûencode_declÝ (dec : DECL) : USER_DATUM = (
-	case dec of
-		DeclTerminator t => UD_Int(0, [UD_String(t, [])])
-	|	UnDeclTerminator t => UD_Int(1, [UD_String(t, [])])
-	|	DeclFixity (s, fix)  => UD_Int(2, [UD_String(s, [encode_fixity fix])])
-	|	DeclAlias (a, (s, ty)) =>
-			UD_Int(3, [UD_String(a, [UD_String(s, [UD_Type(ty, [])])])])
-	|	UnDeclAlias (a, (s, ty)) =>
-			UD_Int(4, [UD_String(a, [UD_String(s, [UD_Type(ty, [])])])])
-	|	DeclTypeAbbrev (a, (args, ty)) =>
-			UD_Int(5, [UD_String(a, [UD_Type(ty, map
-			 ((switch(curry UD_String))[]) args)])])
-	|	UnDeclTypeAbbrev a => UD_Int(6, [UD_String(a, [])])
-	|	SetLanguage lang => UD_Int(7, [UD_String(lang, [])])
-);
-=TEX
-=SML
-fun Ûdecode_declÝ (thy : string) (ud : USER_DATUM) : DECL = (
-	case ud of
-		UD_Int(0, [UD_String(t, [])]) => DeclTerminator t
-	|	UD_Int(1, [UD_String(t, [])]) => UnDeclTerminator t
-	|	UD_Int(2, [UD_String(s, [fix])]) => DeclFixity (s, decode_fixity fix)
-	|	UD_Int(3, [UD_String(a, [UD_String(s, [UD_Type(ty, [])])])]) => 
-				DeclAlias (a, (s, ty))
-	|	UD_Int(4, [UD_String(a, [UD_String(s, [UD_Type(ty, [])])])]) => 
-				UnDeclAlias (a, (s, ty))
-	|	UD_Int(5, [UD_String(a, [UD_Type(ty, args)])]) =>
-			DeclTypeAbbrev (a, (map
-				(fn UD_String(arg, []) => arg
-				| _ => fail "decode_decl" 20001 [fn()=> thy]) args, ty))
-	|	UD_Int(6, [UD_String(a, [])]) => UnDeclTypeAbbrev a
-	|	UD_Int(7, [UD_String(lang, [])]) => SetLanguage lang
-	|	_ => fail "decode_decl" 20001 [fn()=> thy]
-);
-=TEX
+\subsection{Extracting Data}
 Occasionally we need to extract from a theory the
 declarations relating to a particular name.
 =SML
@@ -549,6 +605,7 @@ fun Ûrecache_theoryÝ (current : string) (sel : DECL -> bool) : unit = (
 	()
 );
 =TEX
+
 \subsection{Update Functions}
 As with the cache update functions, it is convenient to have a single update
 function parameterised by the type of declaration being made.
@@ -662,6 +719,21 @@ fun Ûstore_languageÝ (thy : string) (lang : string) : unit = (
 );
 =TEX
 =SML
+fun Ûstore_const_languageÝ (thy : string) (const_lang : string * string) : unit = (
+	let	val uds = fetch_sym_tab_data thy;
+		fun aux ud = (
+			case decode_decl thy ud of
+				DeclConstLanguage x => x = const_lang
+			|	_ => false
+		);
+	in	if any uds aux
+		then	delete_sym_tab_datum (find uds aux)
+		else	()
+	end;
+	store_sym_tab_datum (encode_decl(DeclConstLanguage const_lang))
+);
+=TEX
+=SML
 in
 fun Ûstore_declÝ (area : string) (dec : DECL) : unit = (
 	let	val thy = get_current_theory_name();
@@ -676,7 +748,10 @@ fun Ûstore_declÝ (area : string) (dec : DECL) : unit = (
 				|	UnDeclAlias asty => unstore_alias thy asty
 				|	DeclTypeAbbrev aargsty => store_type_abbrev thy aargsty
 				|	UnDeclTypeAbbrev  a => unstore_type_abbrev thy a
-				|	SetLanguage lang => store_language thy lang);
+				|	SetLanguage lang => store_language thy lang
+				|	DeclConstLanguage const_lang =>
+						store_const_language thy const_lang
+				);
 				cache_decl thy dec
 		) |	_ => fail area 20002 [fn () => thy]
 	end
@@ -959,11 +1034,39 @@ fun Ûget_current_languageÝ (() : unit) : string = (
 	!language
 );
 =TEX
+
+Certain constants are always HOL.  Note that in the uses of $ord$ below we
+do not need to explode the string to get the first character since ord is
+defined to look at the first of the string.  Note further that $ord$ of an
+empty string yeilds an exception but the tests of $size$ will protect it.
+
 =SML
-fun Ûget_const_languageÝ (s : string) : string = (
+local
+	val ordquote = ord "`";
+	val orddquote = ord "\"";
+in
+
+fun Ûget_const_languageÝ (s : string) : string list = (
 	case e_lookup s (!const_theory_cache) of
 		Value (_, lang) => lang
-	|	Nil => get_current_language()
+	|	Nil => [
+			if is_all_decimal s
+			orelse (size s = 2 andalso ordquote = ord s)
+			orelse (size s > 1 andalso orddquote = ord s)
+			then "HOL"
+			else get_current_language()
+		]
+);
+
+end (* of local *);
+=TEX
+=SML
+fun Ûdeclare_const_languageÝ (const_lang as (s : string, l : string)) : unit = (
+	case e_lookup s (!const_theory_cache)
+	of	Nil => fail "declare_const_language" 20502 [fn() => s, fn() => l]
+	|	Value(tys, langs) => (
+			store_decl "declare_const_language" (DeclConstLanguage const_lang)
+	)
 );
 =TEX
 =SML
@@ -1116,7 +1219,7 @@ fun Ûget_theory_languageÝ (thy : string) : string = (
 );
 =TEX
 =SML
-fun Ûbuild_theory_cachesÝ (thy : string) = (
+fun Ûbuild_theory_cachesÝ (thy : string) : unit = (
 	cache_decl thy (SetLanguage(get_theory_language thy))
 );
 =TEX
@@ -1126,7 +1229,7 @@ fun Ûcache_constsÝ (cs : string list) : unit = (
 		val curlang = get_theory_language curthy
 		fun do1 c = (
 			const_theory_cache :=
-			e_enter c(curthy, curlang)(!const_theory_cache)
+			e_enter c(curthy, [curlang])(!const_theory_cache)
 		);
 	in	map do1 cs; ()
 	end
@@ -1178,15 +1281,27 @@ fun Ûcache_tysÝ (tys : string list) : unit = (
 	end
 );
 =TEX
-$cache\_ancestry$ loads the symbol table information
-contained in a theory and all its ancestors into the caches:
+$cache\_theory$ loads the symbol table information contained in a
+theory and all its ancestors into the caches.  The order of events is
+important.  Function $build_theory_caches$ sets up cache entries for
+all of the constants based upon the theory's language then the
+$cache_decl$ adds further information for some of the constants.  Note
+that the theory's language should only be processed once, this is so
+that the original ordering of actions is properly maintained.
 =SML
 fun Ûcache_theoryÝ (current : string) : unit = (
 	clear_caches();
 	map
-	(fn thy => ((map (cache_decl thy o decode_decl thy) (fetch_sym_tab_data thy));
-		build_theory_caches thy))
-	(get_ancestors current);
+		(fn thy => (
+				build_theory_caches thy
+				;
+				map	(cache_decl thy)
+					(get_selected_decls thy
+						(fn (SetLanguage _) => false | _ => true)
+					)
+			)
+		)
+		(get_ancestors current);
 	()
 );
 =TEX
@@ -1198,7 +1313,7 @@ to the symbol table module.
 We declare our interest in kernel state changes using
 the interface defined in \cite{DS/FMU/IED/DTD012}:
 =SML
-val _ = on_kernel_state_change
+val ÛOn_kernel_state_changeÝ = on_kernel_state_change
 	(fn	OpenTheory (current, (_, _)) => cache_theory current
 	|	NewParent _ => cache_theory(get_current_theory_name())
 	|	NewConst (c, _) => cache_consts [c]
