@@ -7,15 +7,15 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 *******************************************************************************/
-/* $Id: imp096.doc,v 1.14 2003/06/11 15:04:28 rda Exp $
+/* $Id: imp096.doc,v 1.15 2003/07/28 16:21:50 rda Exp $
 
 =TEX
-% $Id: imp096.doc,v 1.14 2003/06/11 15:04:28 rda Exp $
+% $Id: imp096.doc,v 1.15 2003/07/28 16:21:50 rda Exp $
 \documentstyle[11pt,TQ,hol1]{article}
 
 \TPPtitle{Sieve and Findfile Utilities}
 \TPPref{DS/FMU/IED/IMP096}
-\def\SCCSissue{$Revision: 1.14 $
+\def\SCCSissue{$Revision: 1.15 $
 }
 
 =IGNORE
@@ -127,6 +127,9 @@ concludes whichever symbol was the real second start of comment.
 equals sign followed by a space.
 \item[Issue 1.11] Copyright and banner updates for open source release.
 \item[Issue 1.12] PPTex-specific updates for open source release
+\item[Issue 1.13] Removed use of {\tt sys\_nerr} (not in FreeBSD).
+\item[Issue 1.14] Changes to allow dynamic linking.
+\item[Issue 1.15, 1.16] Can now specify regular expressions defining {\TeX} arguments.
 \end{description}
 
 %********************************************************************
@@ -947,6 +950,9 @@ struct keyword_information{
 	char *name;		/* The keyword */
 	char *macro;		/* Equivalent macro, or NULL */
 	regex_t *tex_arg;		/* R.E. defining the TeX argument of this keyword, if non-null */
+	char tex_arg_sense;	/* How to interpret the R.E. */
+#define KW_RE_MATCH 0	/* The argument must match the R.E. */
+#define KW_RE_DELIMITER 1	/* The argument is delimited by something that matches the R.E. */
 };
 /*
 =TEX
@@ -999,7 +1005,8 @@ add_new_keyword(
 	int code,
 	int kind,
 	char *macro,
-	regex_t * tex_arg)
+	regex_t * tex_arg,
+	char tex_arg_sense)
 {
 	struct keyword_information *ki;
 	int len = strlen(name);
@@ -1036,6 +1043,7 @@ add_new_keyword(
 	ki->act_kind = kind;
 	ki->macro = macro;
 	ki-> tex_arg = tex_arg;
+	ki-> tex_arg_sense = tex_arg_sense;
 
 	if(kwi.num_keywords>1 && strcmp(kwi.keyword[kwi.num_keywords-1].name,
 				name) < 0) {
@@ -2429,7 +2437,7 @@ initialize(void)
 	for(i=0; i<256; i++)
 		kwi.char_code[i] = NULL;
 
-	add_new_keyword("%%", -1, KW_SIMPLE, "\\%", NULL);
+	add_new_keyword("%%", -1, KW_SIMPLE, "\\%", NULL, 0);
 
 	SET_DIRECTIVE_CHAR('%');
 	SET_DIRECTIVE_CHAR('=');
@@ -3120,12 +3128,11 @@ value is a pointer to the compiled regular expression or null, if there is no {\
 \HOLindexEntry{get_tex_arg}
 =SIEVE_PROG
 */
-regex_t
-*get_tex_arg(char *macro)
+void
+get_tex_arg(char *macro, regex_t **tex_arg, char *tex_arg_sense)
 {
 	char *p = macro;
 	char escaped = false;
-	regex_t *result = NULL;
 	int error_code;
 	int cflags = REG_EXTENDED;
 	while(*p) {
@@ -3141,21 +3148,28 @@ regex_t
 	if(*p == '#') {
 		*p = '\0';
 		p += 1;
-		result = malloc_and_check(sizeof(*result), 108);
-		error_code = regcomp(result, p, cflags);
+		if(*p == '-') {
+			*tex_arg_sense = KW_RE_DELIMITER;
+			p += 1;
+		} else {
+			*tex_arg_sense = KW_RE_MATCH;
+		}
+		*tex_arg = malloc_and_check(sizeof(regex_t), 108);
+		error_code = regcomp(*tex_arg, p, cflags);
 		if(error_code != 0) {
 			char *errbuf;
-			int errbufsize = regerror(error_code, result, 0, 0);
+			int errbufsize = regerror(error_code, *tex_arg, 0, 0);
 			errbuf = malloc_and_check(errbufsize, 109);
-			(void) regerror(error_code, result, errbuf, errbufsize);
+			(void) regerror(error_code, *tex_arg, errbuf, errbufsize);
 			grumble(" error in regular expression: %s", errbuf,
 				&keyword_F, true);
 			free(errbuf);
-			free(result);
-			result = 0;
+			free(*tex_arg);
+			*tex_arg = 0;
 		}
-	}
-	return result;		
+	} else {
+		*tex_arg =0;
+	}	
 }
 /*
 =TEX
@@ -3195,6 +3209,7 @@ read_keyword_file(char *name)
 		int code;
 		char * macro;
 		regex_t * tex_arg;
+		char tex_arg_sense;
 
 		read_steering_line(line, &keyword_F);
 
@@ -3271,7 +3286,7 @@ read_keyword_file(char *name)
 			}
 
 			add_new_keyword(strdup(def_kw), -1, KW_SAMEAS_UNKNOWN,
-				strdup(code_kw_str), NULL);
+				strdup(code_kw_str), NULL, 0);
 		} else {
 
 			if(!get_char_code(code_kw_str, &code)) {
@@ -3291,13 +3306,14 @@ read_keyword_file(char *name)
 				continue;					/* CONTINUE */
 			}
 
-			tex_arg = get_tex_arg(macro);
+			get_tex_arg(macro, &tex_arg, &tex_arg_sense);
 
 			add_new_keyword(strdup(def_kw), code, kind,
 				macro != NULL && macro[0] != '\0'
 			?	strdup(macro)
 			:	(char*)NULL,
-				tex_arg);
+				tex_arg,
+				tex_arg_sense);
 		}
 	}
 
@@ -3876,6 +3892,7 @@ main_convert(
 	while((ch = (in_line[inp] & 0xFF)) != '\0' && outp < lenout_line) {
 		int top_inp = inp;  /* To test that the code below increments "inp" */
 		regex_t *tex_arg = NULL;
+		char tex_arg_sense;
 
 		if(debug & D_MAIN_CONVERT_CH)
 			(void)printf("main_convert: inp=%d  ch=%d:%c  outp=%d\n",
@@ -3916,6 +3933,7 @@ main_convert(
 						outp += copy_string(curkw->macro,
 							&out_line[outp], lenout_line-outp);
 						tex_arg = curkw->tex_arg;
+						tex_arg_sense = curkw->tex_arg_sense;
 					} else if(opt_do_latex && curkw->ech != -1) {
 						/* Convert to LaTeX form */
 						outp += copy_PrNN(&out_line[outp],
@@ -3925,6 +3943,7 @@ main_convert(
 						outp += copy_PrNN(&out_line[outp],
 							curkw->ech);
 						tex_arg = curkw->tex_arg;
+						tex_arg_sense = curkw->tex_arg_sense;
 					} else if(opt_conv_kw && curkw->ech != -1) {
 						/* Replace with the extended character */
 						out_line[outp++] = curkw->ech;
@@ -4047,6 +4066,7 @@ main_convert(
 					}
 					if(curkw != NULL) {
 						tex_arg = curkw->tex_arg;
+						tex_arg_sense = curkw->tex_arg_sense;
 					}
 				} else if (opt_do_conv_ext) {
 					if(curkw != NULL && curkw->name != NULL) {
@@ -4096,10 +4116,18 @@ main_convert(
 			error_code = regexec(tex_arg, &in_line[inp], 1, &pmatch, eflags);
 			out_line[outp++] = '{';
 			tex_arg_stack_head += 1;
-			if(error_code == 0 && pmatch.rm_so == 0) {
-				tex_arg_stack[tex_arg_stack_head] = inp + pmatch.rm_eo;
+			if(tex_arg_sense == KW_RE_MATCH) {
+				if(error_code == 0 && pmatch.rm_so == 0) {
+					tex_arg_stack[tex_arg_stack_head] = inp + pmatch.rm_eo;
+				} else {
+					tex_arg_stack[tex_arg_stack_head] = inp;
+				}
 			} else {
-				tex_arg_stack[tex_arg_stack_head] = inp;
+				if(error_code == 0) {
+					tex_arg_stack[tex_arg_stack_head] = inp + pmatch.rm_so;
+				} else {
+					tex_arg_stack[tex_arg_stack_head] = strlen(in_line);
+				}
 			}
 		} else if (tex_arg != NULL) {
 			grumble1("TeX argument stack overflow", file_F, true);
@@ -5224,7 +5252,7 @@ the {\tt findfile_prog} view of the document is obtained.
 
 #ifndef SIEVE_PROG
 
-char *coprlemma1_ff = "$Id: imp096.doc,v 1.14 2003/06/11 15:04:28 rda Exp $ Copyright (C) Lemma 1 Ltd. 1992-2001";
+char *coprlemma1_ff = "$Id: imp096.doc,v 1.15 2003/07/28 16:21:50 rda Exp $ Copyright (C) Lemma 1 Ltd. 1992-2001";
 extern char *find_file(char *name, char *dirs);
 
 #include<stdio.h>
