@@ -17,14 +17,6 @@
 
 /* Build switches */
 
-/* If defined this will enable a more advanced *
- * way to deal with a lack of memory.          */
-/*#define HANDLE_NO_MEMORY*/
-
-/* If HANDLE_NO_MEMORY isn't defined defining  this *
- * will disable undo/redo if memory does run out.   */
-#define HANDLE_NO_MEMORY_DISABLE
-
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * MACROS
@@ -187,19 +179,10 @@ typedef struct menu_item {
 	extern void memory_warning_dialog(
 		Widget  w,
 		Boolean show);     /* Used when memory's very low */
-#	ifdef HANDLE_NO_MEMORY
-		extern Boolean ok_cancel_dialog(
-			Widget	w,
-			Boolean show);     /* Used when memory's run out */
-		extern Boolean ok_cancel_dialog1(
-			Widget	w,
-			Boolean show);     /*              "             */
-#	else
-		extern void nomemory_dialog(
-			Widget  w,
-			Boolean show);     /* Also for lack of memory, but nothing's *
-			                    * going to be done about it              */
-#	endif
+	extern void nomemory_dialog(
+		Widget  w,
+		Boolean show);     /* Also for lack of memory, but nothing's *
+		                    * going to be done about it              */
 /* Module: options */
 	extern void init_options(
 		Widget	owner_w);

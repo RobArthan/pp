@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2002/05/15 11:02:48 $ $Revision: 2.9 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2002/10/17 17:09:34 $ $Revision: 2.10 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -327,131 +327,8 @@ int yes_no_cancel_dialog(Widget w, char *question)
 }
 
 
-#ifdef HANDLE_NO_MEMORY
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * ok_cancel_dialog2 & 3: ask a question with a mandatory ok cancel
- * these dialogs are different from the others as they are used when
- * memory's run out, so they cannot do any mallocs when they are
- * actually needed.  The only difference between the two dialogues is
- * the question asked.
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-Boolean ok_cancel_dialog(Widget w, Boolean show)
-{
-	static Widget dialog;
-	char question[] = "This action cannot be undone because the "
-	                  "system has run out of memory.  You are "
-	                  "advised to cancel, save and restart, or "
-	                  "you may continue (press ok) but undo/redo "
-	                  "will be disabled.";
-	XmString text, ok, cancel, confirm;
-	Atom WM_DELETE_WINDOW;
-	static int reply;
-	/* 0 = not replied; otherwise YES/NO */
-	reply = 0;
-	if (!dialog) {
-		dialog  = XmCreateQuestionDialog(w, "ok_cancel", NULL, 0);
-		ok      = XmStringCreateSimple("   Ok   ");
-		cancel  = XmStringCreateSimple("   Cancel   ");
-		confirm = XmStringCreateSimple("Confirm");
-		XtVaSetValues(dialog,
-			XmNdialogStyle,       XmDIALOG_FULL_APPLICATION_MODAL,
-			XmNokLabelString,     cancel,
-			XmNcancelLabelString, ok,
-			XmNdialogTitle,       confirm,
-			XmNdialogType,        XmDIALOG_QUESTION,
-			NULL);
-		XtUnmanageChild(
-			XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON));
-		XtAddCallback(dialog, XmNokCallback, yes_no_cb, &reply);
-		XtAddCallback(dialog, XmNcancelCallback, yes_no_cb, &reply);
-		WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
-			"WM_DELETE_WINDOW",
-			False);
-		XmAddWMProtocolCallback(XtParent(dialog),
-			WM_DELETE_WINDOW,
-			yes_no_destroy_cb,
-			&reply);
-		XmStringFree(ok);
-		XmStringFree(cancel);
-		XmStringFree(confirm);
-		text = format_msg(question, MSG_LINE_LEN);
-		XtVaSetValues(dialog, XmNmessageString, text, NULL);
-		XmStringFree(text);
-	}
-	if(!show) {
-		return True;
-	}
-	XtManageChild(dialog);
-	XtPopup(XtParent(dialog), XtGrabNone);
-	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
-	XBell(XtDisplay(root), 50);
-	while (!reply) {
-		poll();
-	};
-	XtPopdown(XtParent(dialog));
-	return reply == YES;
-}
-
-Boolean ok_cancel_dialog1(Widget w, Boolean show)
-{
-	static Widget dialog;
-	char question[] = "This undo/redo action cannot be undone because the "
-	                  "system has run out of memory.  You are "
-	                  "advised to cancel, save and restart, or "
-	                  "you may continue (press ok) but undo/redo "
-	                  "will be disabled.";
-	XmString text, ok, cancel, confirm;
-	Atom WM_DELETE_WINDOW;
-	static int reply;
-	/* 0 = not replied; otherwise YES/NO */
-	reply = 0;
-	if (!dialog) {
-		dialog  = XmCreateQuestionDialog(w, "ok_cancel", NULL, 0);
-		ok      = XmStringCreateSimple("   Ok   ");
-		cancel  = XmStringCreateSimple("   Cancel   ");
-		confirm = XmStringCreateSimple("Confirm");
-		XtVaSetValues(dialog,
-			XmNdialogStyle,       XmDIALOG_FULL_APPLICATION_MODAL,
-			XmNokLabelString,     cancel,
-			XmNcancelLabelString, ok,
-			XmNdialogTitle,       confirm,
-			XmNdialogType,        XmDIALOG_QUESTION,
-			NULL);
-		XtUnmanageChild(
-			XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON));
-		XtAddCallback(dialog, XmNokCallback, yes_no_cb, &reply);
-		XtAddCallback(dialog, XmNcancelCallback, yes_no_cb, &reply);
-		WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
-			"WM_DELETE_WINDOW",
-			False);
-		XmAddWMProtocolCallback(XtParent(dialog),
-			WM_DELETE_WINDOW,
-			yes_no_destroy_cb,
-			&reply);
-		XmStringFree(ok);
-		XmStringFree(cancel);
-		XmStringFree(confirm);
-		text = format_msg(question, MSG_LINE_LEN);
-		XtVaSetValues(dialog, XmNmessageString, text, NULL);
-		XmStringFree(text);
-	}
-	if(!show) {
-		return True;
-	}
-	XtManageChild(dialog);
-	XtPopup(XtParent(dialog), XtGrabNone);
-	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
-	XBell(XtDisplay(root), 50);
-	while (!reply) {
-		poll();
-	};
-	XtPopdown(XtParent(dialog));
-	return reply == YES;
-}
-#endif /* HANDLE_NO_MEMORY */
-
 /*
- * Call-backs for the above four.
+ * Call-backs for the above.
  */
 static void yes_no_cb(
 	Widget		w,
@@ -597,19 +474,11 @@ void memory_warning_dialog(Widget w, Boolean show)
 	XtPopdown(XtParent(dialog));
 }
 
-#ifndef HANDLE_NO_MEMORY
 void nomemory_dialog(Widget w, Boolean show)
 {
 	static Widget dialog;
-	char msg[] = "Memory has run out.  If you can, you are strongly "
-	             "advised to save your work and restart."
-#	             ifdef HANDLE_NO_MEMORY_DISABLE
-	                 "  Undo and Redo have been disabled"
-#	             else
-	                 "  Undo and Redo remain enabled but their effects cannot "
-	                 "be guaranteed"
-#	             endif
-	             ".";
+	char msg[] = "Memory has run out. You are strongly "
+	             "advised to try to save your work and to restart.";
 	XmString text, ok, error;
 	Atom WM_DELETE_WINDOW;
 	static Bool confirmed;
@@ -657,7 +526,6 @@ void nomemory_dialog(Widget w, Boolean show)
 	};
 	XtPopdown(XtParent(dialog));
 }
-#endif /* !HANDLE_NO_MEMORY */
 
 
 static void ok_cb(
