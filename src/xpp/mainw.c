@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.50 2003/02/13 13:16:22 rda Exp robarthan $
+ * $Id: mainw.c,v 2.51 2003/03/18 14:08:33 robarthan Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -383,7 +383,7 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 		if(buf[j] == '\r') {
 			last_was_cr = True;
 			buf[i] = '\n';
-		} else  if(last_was_cr && buf[i] == '\n') {
+		} else  if(last_was_cr && buf[j] == '\n') {
 			last_was_cr = False;
 			j += 1;
 			if(j < ct) {
