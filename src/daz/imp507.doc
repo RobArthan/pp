@@ -75,6 +75,8 @@
 \item[Issue 1.96] Fixed bug 18 (batch 2).
 \item[Issue 1.97] Enhancement 13.
 \item[Issue 1.98] Fixed error in $till\_pred$.
+\item[Issue 1.99] Now resets lexer state.
+\item[Issue 1.100] Fixed bug 23.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -90,7 +92,7 @@ See \cite{ISS/HAT/DAZ/DTD507}.
 =SML
 structure ÛCNZGeneratorÝ : CNZGenerator = struct
 open CNTypes CNTypes1 CNTypes2 CNBasicDeclsAndExprs ZParagraphs
-	CNVCGenerator CNLex CNParser ZUserInterfaceSupport;
+	CNVCGenerator CNLex CNParser ZUserInterfaceSupport TypeInference;
 =TEX
 
 The following function returns the current level for the specified theory.  This is used as an index to order objects being added to the theory.
@@ -1685,19 +1687,30 @@ fun Ûti_context_of_blockÝ (block : BLOCK) : TERM list = (
 );
 =TEX
 =SML
+fun ti_context_of_parsÝ (pars : PARAM_SPEC list) : TERM list = (
+	ti_context_of_in_scope {
+		vc_pars = pars,
+		vc_vars = [],
+		dec_labels = [],
+		vc_aux_vars = [],
+		vc_log_cons = [],
+		formal_procs = []}
+);
+=TEX
+=SML
 fun Ûcurrent_ti_contextÝ (() : unit) : TERM list = (
 	flat (map (ti_context_of_block) (!blocks))
 );
 =TEX
 =SML
 fun Ûset_current_ti_contextÝ (ts : TERM list) : unit = (
-	TypeInference.set_ti_context(ts @ current_ti_context())
+	set_ti_context(ts @ current_ti_context())
 );
 =TEX
 =SML
 fun Ûset_in_scope_ti_contextÝ (in_scope : IN_SCOPE) : TERM list = (
-	TypeInference.set_ti_context(ti_context_of_in_scope in_scope);
-	TypeInference.get_ti_context()
+	set_ti_context(ti_context_of_in_scope in_scope);
+	get_ti_context()
 );
 =TEX
 =SML
@@ -1940,8 +1953,8 @@ fun Ûcall_vcsÝ
 		val sl1_st = (add_formal_procs_wp_env sl1, st);
 	in	diag_vc_args := sl1_st :: !diag_vc_args;
 		set_in_scope_ti_context (#in_scope sl1);
-		TypeInference.set_ti_context
-			(extra_context @ TypeInference.get_ti_context());
+		set_ti_context
+			(extra_context @ get_ti_context());
 		vcs sl1_st
 	end
 );
@@ -3250,8 +3263,8 @@ fun Ûvcs_body_funÝ (st : STATEMENT) : unit = (
 		};
 		val fun_dec = fun_decl1 (#informal_fun current_formal_fun1);
 		val side1 = set_in_scope_ti_context in_scope1;
-		val side2 = TypeInference.set_ti_context
-			(frees fun_dec @ TypeInference.get_ti_context());
+		val side2 = set_ti_context
+			(frees fun_dec @ get_ti_context());
 		val wp_env : WP_ENV = {
 			env = cn_env_of_in_scope in_scope1,
 			till = mk_z_true,
@@ -3443,10 +3456,17 @@ fun Ûprefix_spec_stmtÝ (ident : ID) (newids : ID list) (spec : SPEC) : SPEC = (
 fun Ûprefix_formal_procÝ (ident : ID) (newids : ID list)
 		({name, formal_ids, spec} : FORMAL_PROC)
 			: FORMAL_PROC = (
-	{	name = prefix_id ident name,
-		formal_ids = formal_ids,
-		spec = prefix_spec_stmt ident newids spec
-	}
+	let	val old_ti_context = get_ti_context();
+		val extra_context = ti_context_of_pars formal_ids;
+		val new_context = set_ti_context(extra_context @ old_ti_context);
+		val result = 	{
+			name = prefix_id ident name,
+			formal_ids = formal_ids,
+			spec = prefix_spec_stmt ident newids spec
+		};
+	in	set_ti_context old_ti_context;
+		result
+	end
 );
 =TEX
 =SML
@@ -3640,13 +3660,15 @@ The following function creates the temporary body theory and returns the formal 
 If the package specification theory has not already been created it creates it.
 Finally, it deletes the temporary body theory.
 =SML
-fun Ûcreate_pack_spec_z_docÝ
+fun Ûcreate_pack_spec_z_docÝ (package : PACKAGE)
 	(context : ID list) (ident : ID) (newids : ID list)
-		(fps : FORMAL_PROC list) : FORMAL_PROC list = (
+			: FORMAL_PROC list = (
 	let	val parent = get_parent_name ();
-	in let	val cur_thy = get_current_theory_name();
-		val se1 = create_tmpbody_theory context parent ident;
-		val res = prefix_formal_procs ident newids fps;
+		val cur_thy = get_current_theory_name();
+	in let	val se1 = create_tmpbody_theory context parent ident;
+		val ti_cxt = set_package_ti_context package;
+		val res = prefix_formal_procs
+				ident newids (#formal_procs package);
 		val se2 = open_theory cur_thy;
 	in	(if pack_spec_name ident mem (get_descendants parent)
 		then	delete_tmpbody_theory parent ident
@@ -3659,6 +3681,7 @@ fun Ûcreate_pack_spec_z_docÝ
 		));
 		res
 	end	handle ex => (
+			open_theory cur_thy;
 			delete_tmpbody_theory parent ident;
 			reraise ex "create_pack_spec_z_doc")
 	end
@@ -3684,15 +3707,14 @@ fun Ûnew_scope_withÝ (ident : ID) : unit = (
 				speclabel_flag = false,
 				till_flag = false
 			};
-			val ti_cxt = set_package_ti_context package;
 			val newids = new_ids package;
 			val vc_vars1 = map (prefix_vardecl ident newids)
 							(#vc_vars package);
 			val vc_aux_vars1 = map (prefix_aux_vars ident newids)
 					(#aux_vars package);
 			val formal_procs1 =
-				create_pack_spec_z_doc context ident newids
-					(#formal_procs package);
+				create_pack_spec_z_doc
+				package context ident newids;
 			val block = block_flags(empty_block, flags);
 			val block = block_vc_vars(block, vc_vars1);
 			val block = block_vc_aux_vars(block, vc_aux_vars1);
@@ -4639,17 +4661,17 @@ In order to avoid a potential infinite loop (e.g., if the current theory is not 
 =SML
 fun Ûcn_z_generatorÝ (w : WEB_CLAUSE) : unit = (
 	let	val save_zg_state = get_z_generator_state();
-		val save_ti_cxt = TypeInference.get_ti_context();
+		val save_ti_cxt = get_ti_context();
 	in	diag_vc_args := [];
 		diag_web_clause := w;
 		(do_web_clause w)
 		handle ex => (
 			diag_z_generator_state := get_z_generator_state();
 			set_z_generator_state save_zg_state;
-			TypeInference.set_ti_context save_ti_cxt;
+			set_ti_context save_ti_cxt;
 			raise ex
 		);
-		TypeInference.set_ti_context save_ti_cxt
+		set_ti_context save_ti_cxt
 	end
 );
 =TEX
