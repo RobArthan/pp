@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2003/06/26 11:40:03 $ $Revision: 2.29 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2003/06/26 13:45:00 $ $Revision: 2.30 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -812,8 +812,11 @@ void startup_dialog(Widget w, char **cmd_line, char **file_name)
 			}
 		}
 	}
-
+#ifndef LISTWIDGETS
 	XtDestroyWidget(XtParent(dialog));
+#else
+	XtPopdown(XtParent(dialog));
+#endif
 
 }
 /*
