@@ -223,7 +223,7 @@ static void
 #define FILE_MENU_QUIT			9
 
 static MenuItem file_menu_items[] = {
-    { "Save", &xmPushButtonGadgetClass, 'S', NULL, NULL,
+    { "Save", &xmPushButtonGadgetClass, 'S', "Ctrl<Key>s", "Ctrl-S",
         file_menu_cb, (XtPointer)FILE_MENU_SAVE, (MenuItem *)NULL, False },
     { "Save as ...",  &xmPushButtonGadgetClass, 'a', NULL, NULL,
         file_menu_cb, (XtPointer)FILE_MENU_SAVE_AS, (MenuItem *)NULL, False },
@@ -258,9 +258,9 @@ static MenuItem tools_menu_items[] = {
         tools_menu_cb, (XtPointer)TOOLS_MENU_SEARCH_REPLACE, (MenuItem *)NULL, False },
     { "Palette", &xmPushButtonGadgetClass, 'P', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_PALETTE, (MenuItem *)NULL, False },
-    { "Script Viewer", &xmPushButtonGadgetClass, 'V', NULL, NULL,
+    { "Viewer", &xmPushButtonGadgetClass, 'V', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_SCRIPT_VIEWER, (MenuItem *)NULL, False },
-    { "Journal Viewer", &xmPushButtonGadgetClass, 'J', NULL, NULL,
+    { "Viewer (Journal)", &xmPushButtonGadgetClass, 'J', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_JOURNAL_VIEWER, (MenuItem *)NULL, False },
     { "Command Line", &xmPushButtonGadgetClass, 'C', NULL, NULL,
         tools_menu_cb, (XtPointer)TOOLS_MENU_CMD_LINE, (MenuItem *)NULL, False },
@@ -511,7 +511,7 @@ if( !edit_only ) {
  * File menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	filemenu = setup_pulldown_menu(
-		menubar, "File", '\0', False, file_menu_items);
+		menubar, "File", 'F', False, file_menu_items);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Tools menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -519,13 +519,13 @@ if(edit_only) {
 	tools_menu_items[TOOLS_MENU_JOURNAL_VIEWER].label = NULL;
 }
 	toolsmenu = setup_pulldown_menu(
-		menubar, "Tools", '\0', False, tools_menu_items);
+		menubar, "Tools", 'T', False, tools_menu_items);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Edit menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	editmenu = setup_pulldown_menu(
-		menubar, "Edit", '\0', False, edit_menu_items);
+		menubar, "Edit", 'E', False, edit_menu_items);
 	set_menu_item_sensitivity(editmenu, EDIT_MENU_UNDO, False);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -533,7 +533,7 @@ if(edit_only) {
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 if( !edit_only ) {
 	cmdmenu = setup_pulldown_menu(
-		menubar, "Command", '\0', False, cmd_menu_items);
+		menubar, "Command", 'C', False, cmd_menu_items);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Help menu:
