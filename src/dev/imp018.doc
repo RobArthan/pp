@@ -60,9 +60,13 @@ detailed design of which is given in DS/FMU/IED/DTD018.}
 
 \subsection{Changes history}  % to get section number `0.3'
 \begin{description}
-\item[Issue 1.9, \FormatDate{91/05/16} ] First draft for comment.
+\item[Issue 1.9-1.10, \FormatDate{91/05/16} ] First drafts for comment.
 
-\item[Issue \SCCSversion, \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 1.10, \FormatDate{92/01/20} ] Updated to use new fonts.
+\item[Issue 1.11, \FormatDate{92/02/04} ] Changed
+the error handling to enable error recovery to be
+attempted in error handlers. Also changed $diag\_line$ to
+$raw\_diag\_line$.
 
 \end{description}
 \subsection{Changes forecast}
@@ -82,7 +86,7 @@ The code depends on the utilities defined in \cite{DS/FMU/IED/DTD001}.
 None known.
 \section{UTILITIES}
 =SML
-structure ÛSlrpDriverÝ (* : SlrpDriver *) = struct
+structure ÛSlrpDriverÝ  : SlrpDriver = struct
 =TEX
 We use (a very few) functions from the functional
 toolkit defined in \cite{DS/FMU/IED/DTD002}. 
@@ -194,8 +198,8 @@ to give the lexical class of an input token, to handle errors
 and to generate the input stream.
 =SML
 type ('tok, 'lc)ÛCLASSIFIERÝ = 'tok -> 'lc;
-type ('tok, 'lc, 'pp)ÛERROR_ROUTINEÝ =
-	'tok * ('tok, 'lc, 'pp)INPUT_STACK * STATE_STACK -> unit;
+type ('tok, 'lc, 'pp, 'st)ÛERROR_ROUTINEÝ =
+	'tok * ('tok, 'lc, 'pp)INPUT_STACK * STATE_STACK * 'st -> ('tok*'st);
 type ('tok, 'st)ÛREADERÝ = 'st -> ('tok * 'st);
 =TEX
 \section{THE DRIVER}
@@ -256,7 +260,7 @@ fun Ûslrp'parseÝ
 	(reducers : (''tok, ''lc, 'pp)REDUCTION_TABLE)
 	(resolver : (''tok, ''lc, 'pp) RESOLVER)
 	(classify : (''tok, ''lc)CLASSIFIER)
-	(error : (''tok, ''lc, 'pp)ERROR_ROUTINE)
+	(error : (''tok, ''lc, 'pp, 'st)ERROR_ROUTINE)
 	(reader : (''tok, 'st) READER) : 'st -> 'pp = (
 	let	open Array;
 		val init_ss = [s0];
@@ -279,8 +283,7 @@ fun Ûslrp'parseÝ
 						end
 				) |	Accept => ((ss, is)
 				) |	Error =>(
-					error (tok, is, ss);
-					raise SYNTAX_ERROR
+					go (error (tok, is, ss, st)) (ss, is)
 				) |	Dynamic _ => (
 					raise PARSER_ERROR "conflict resolution error"
 				)
@@ -307,11 +310,12 @@ tokens:
 =SML
 fun Ûdefault_errorÝ
 	(do_tok : 'tok -> string)
-	(tok: 'tok, stk : ('tok, 'lc, 'pp)INPUT_STACK, _ : STATE_STACK) : unit = (
-	diag_line("*** ERROR Syntax error ***");
+	(tok: 'tok, stk : ('tok, 'lc, 'pp)INPUT_STACK, _ : STATE_STACK, st : 'st) : ('tok*'st) = (
+	raw_diag_line("*** ERROR Syntax error ***");
 	if any stk (fn Token _ => true | _ => false)
-	then diag_line(do_tok tok ^ " not expected after: " ^ format_stack do_tok stk)
-	else diag_line(do_tok tok ^ " not expected here")
+	then raw_diag_line(do_tok tok ^ " not expected after: " ^ format_stack do_tok stk)
+	else raw_diag_line(do_tok tok ^ " not expected here");
+	raise SYNTAX_ERROR; (tok, st)
 );
 =TEX
 The default resolver is one which raises $PARSER\_ERROR$ if it is called.
