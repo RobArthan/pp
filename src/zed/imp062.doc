@@ -123,7 +123,7 @@ with the type of the defined constant.
 \section{PREAMBLE}
 First we introduce the structure for Z type inference.
 
-SML
+=SML
 structure ÛZTypeInferenceÝ : ZTypeInference = struct
 =TEX
 =SML
@@ -295,7 +295,17 @@ val Ûex_charÝ = ExType ("CHAR",[]);
 fun Ûex_­Ý (f, a) = ExType ("­", [f, a]);
 val Ûex_boolÝ = ExType ("BOOL", []);
 =TEX
-
+=SML
+fun Ûget_repeatsÝ (idl : ''a list) : ''a list = (
+let	fun aux (id::rest) = (
+		if id mem rest
+		then [id]::(aux rest)
+		else aux rest
+	) | aux [] = [];
+in
+	list_cup (aux idl)
+end);
+=TEX
 \section{ERROR HANDLING AND REPORTING}
 
 =SML
@@ -351,6 +361,7 @@ datatype ÛZ_DETAILSÝ	=
 	|	FailedRename1 of Z_TM * EXTYPE
 	|	FailedRename2 of IDENT list
 	|	FailedRename3 of IDENT list
+	|	FailedBinding of IDENT list
 	|	FailedFreeVar of IDENT
 	|	FailedEnv of Z_TM * IDENT * EXTYPE * EXTYPE;
 
@@ -610,6 +621,13 @@ fun Ûprint_z_errorÝ ((FailedZTm (term, env, details)) : Z_ERROR_INFO) = (
 		()
 	) | FailedRename3 idl => (
 		report 62272 []; report 62274 [];
+		(case idl of
+		[_] => report 62916 []
+		|_ => report 62917 []);
+		map (fn id => report 62901 [format_ident id]) idl;
+		()
+	) | FailedBinding idl => (
+		report 62051 []; report 62052 [];
 		(case idl of
 		[_] => report 62916 []
 		|_ => report 62917 []);
@@ -1169,13 +1187,26 @@ end)
   | ti_z_tm env (ZTmTuple tml) = (
 let	val tmlist = list_ti_z_tm env tml;
 	val (tml', tyl') = split tmlist;
-	val unkl = map (fn x => ExVartype (Unknown(next_name()))) tml';
-	val side = map (unify zti_subs) (combine unkl tyl')
-		handle Fail msg =>
-		error "ti_z_tm" 62998 [fn()=>"ZTmTuple (Unification error)"];
-	val ty = tuple_extype (map (sub_type zti_subs) unkl);
+	val ty = tuple_extype (map (sub_type zti_subs) tyl');
 in
 	(ZTmTuple tml', ty)
+end)
+=TEX
+\subsection{Binding Display}
+=SML
+  | ti_z_tm env (ZTmBinding []) = error "ti_z_tm" 62998
+		[fn()=>"ZTmBinding (Zero length binding)"]
+  | ti_z_tm env (term as (ZTmBinding eds)) = (
+let	val (idl, tml) = split eds;
+	val rep = get_repeats idl;
+	val side = case rep of
+		[] => ()
+		| _ =>	raise ZExn (FailedZTm (term, env, FailedBinding rep));
+	val (tml', tyl') = split(list_ti_z_tm env tml);
+	val ty = bind_extype (combine idl tyl');
+	val eds' = combine idl tml';
+in
+	(ZTmBinding eds', ty)
 end)
 =TEX
 \subsection{Product}
@@ -1973,19 +2004,9 @@ end
 =SML
  | ti_z_tm env (term as ZTmRename (tm, ididl)) = (
 let	val (tm', ty') = ti_z_tm env tm;
-	fun get_repeats idl = (
-	let	fun aux (id::rest) = (
-			if id mem rest
-			then [id]::(aux rest)
-			else aux rest
-		) | aux [] = [];
-	in
-		list_cup (aux idl)
-	end);
 	val (idnewl, idoldl) = split ididl;
 	val rep1 = get_repeats idnewl;
 	val rep2 = get_repeats idoldl;
-
 	val side = case rep1 of
 		[] => ()
 		|_ =>	raise ZExn (FailedZTm (term, env, FailedRename2 rep1));
