@@ -761,24 +761,36 @@ in
 end
 );
 =TEX
+In the following, most of the work is done in $adj\_stmt\_aux$.
+Note that, $adj\_stmt\_aux$ always returns a statement which is just $SStmt\,s$ unless $is\_first$ is true.
+$adj\_stmt\_aux$ calls itself recursively (via $check\_inner$) just to check the form of constituents of the various compound statement forms.
 =SML
-fun Ûadjust_statementÝ (wp : WP_ENV) (st as SStmt s : STATEMENT)
-		: STATEMENT = (
-
+local
+fun Ûadj_stmt_auxÝ (wp : WP_ENV)
+			(is_first : bool)
+				(s : STMT)
+					: STATEMENT = (
+let	fun check_inner s = adj_stmt_aux wp false;
+in
 	case s of
 		STSpecNoIvars sni =>
 			if	any_initial_variables (#post (#spec sni))
-			then	SSpecIvars (sni, STImplicitNull)
-			else	st
-	|	STForStatic (fs as {name,i,range,loop, ...}) =>
+			then	if	is_first
+				then	SSpecIvars (sni, STImplicitNull)
+				else	fail "adjust_statement" 505091 []
+			else	SStmt s
+	|	STForStatic (fs as {name,i,range,loop, ...}) => (
+			check_inner loop;
 			if	is_static_for_loop wp fs
-			then	st
-			else	SForNonStatic ({	name=name,
+			then	SStmt s
+			else	if	is_first
+				then	SForNonStatic ({	name=name,
 							i=i,
 							range=range,
 							loop=loop
 						}, STImplicitNull)
-	|	STProcNoIvars piv => (
+				else	fail "adjust_statement" 505092 []
+	) |	STProcNoIvars piv =>
 		let	fun find_spec id ((fproc::rest) : FORMAL_PROC list) = (
 				if (#name fproc) = id
 				then	Value (#spec fproc)
@@ -788,21 +800,66 @@ fun Ûadjust_statementÝ (wp : WP_ENV) (st as SStmt s : STATEMENT)
 			case find_spec (#name piv) (#formal_procs wp) of
 			Value sp => (
 				if	any_initial_variables (#post sp)
-				then	SProcIvars (piv, STImplicitNull)
-				else	st
-			) |	Nil => st
+				then	if	is_first
+					then	SProcIvars (piv, STImplicitNull)
+					else	fail "adjust_statement" 505093 []
+				else	SStmt s
+			) |	Nil => SStmt s
 		end
-	) |	STSemicolon (st1, st2) => (
-			case adjust_statement wp (SStmt st1) of
-				SStmt st1' => SStmt s
-			|	SSpecIvars (si, _) => SSpecIvars (si, st2)
-			|	SForNonStatic (fns, _) => SForNonStatic (fns, st2)
-			|	SProcIvars (piv, _) => SProcIvars (piv, st2)
-			|	SLogCon lc => SLogCon lc
-			)
-	|	_ => st
-
-) | adjust_statement _ other = other;
+	|	STSemicolon (st1, st2) =>
+		let	val side = check_inner st2;
+		in	case adj_stmt_aux wp true st1 of
+				SStmt st1' => SStmt(STSemicolon (st1', st2))
+			|	SSpecIvars (si, STImplicitNull) =>
+					SSpecIvars (si, st2)
+			|	SSpecIvars (si, st) =>
+					SSpecIvars (si, STSemicolon(st, st2))
+			|	SForNonStatic (fns, STImplicitNull) =>
+					SForNonStatic (fns, st2)
+			|	SForNonStatic (fns, st) =>
+					SForNonStatic (fns, STSemicolon(st, st2))
+			|	SProcIvars (piv, STImplicitNull) =>
+					SProcIvars (piv, st2)
+			|	SProcIvars (piv, st) =>
+					SProcIvars (piv, STSemicolon(st, st2))
+			|	_ => fail "adjust_statement" 505094 []
+		end
+	|	STIfThenElse {p, q, ...} => (
+			check_inner p;
+			check_inner q;
+			SStmt s
+	) |	STCase {s = alts, others = others, ...} => (
+			map (fn {choices, p} => check_inner p) alts;
+			check_inner others;
+			SStmt s
+	) |	STLoop {stmt, ...} => (
+			check_inner stmt;
+			SStmt s
+	) |	STNamedLoop {stmt, ...} => (
+			check_inner stmt;
+			SStmt s
+	) |	STWhile {loop, ...} => (	
+			check_inner loop;
+			SStmt s
+	) |	STForTmark {loop, ...} => (
+			check_inner loop;
+			SStmt s
+	) |	_ => SStmt s
+end
+);
+in
+fun Ûadjust_statementÝ (wp : WP_ENV) (st : STATEMENT)
+		: STATEMENT = (
+	case st of
+		SStmt s =>
+			adj_stmt_aux wp true s
+	|	SLogCon (lc, st) => (
+			case adj_stmt_aux wp false st of
+				SStmt s => SLogCon (lc, s)
+			|	_ => fail "adjust_statement" 505094 []
+	) | 	_ => fail "adjust_statement" 505094 []
+);
+end
 =TEX
 =IGN
 val fp= #formal_procs(#in_scope((fst (hd(!CNZGenerator.diag_vc_args)))));
