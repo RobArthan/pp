@@ -812,6 +812,317 @@ end
 );
 =TEX
 \pagebreak
+\section{APPLICATION OF CHECKS}
+
+=SML
+fun Ûchecking_errorÝ (msg : string) (n : int) (ins) = (
+	diag_line (get_error_message 505050 []);
+	fail msg n ins
+);
+=TEX
+=SML
+fun Ûcheck_1_aÝ (id : ID list, speclab : SPECLAB) = (
+	if id diff #w (#spec speclab) = []
+	then ()
+	else checking_error "check_1_a" 505064 []
+);
+=TEX
+=SML
+fun Ûcheck_1_bÝ (speclab : SPECLAB) = (
+	if #formal_body_flag speclab
+	then ()
+	else checking_error "check_1_b" 505061 []
+);
+=TEX
+=SML
+fun Ûcheck_1_cÝ (speclab : SPECLAB) = (
+	if #till_flag speclab
+	then ()
+	else checking_error "check_1_c" 505062 []
+);
+=TEX
+=SML
+fun Ûcheck_1_dÝ (p : ID, speclab : SPECLAB) = (
+	if any ((#formal_procs o #in_scope) speclab)
+			(fn fp => p = #name fp) 
+	then ()
+	else checking_error "check_1_d" 505063 []
+);
+=TEX
+
+
+=SML
+datatype ÛSTMT_STATEÝ = Top | InLoop | InCase | OKToExit | InIfThenElse;
+=TEX
+=SML
+fun Ûcheck_3Ý (state : STMT_STATE, st : STMT) = (
+	case  st of
+		STExitWhen _ => (
+			if state = InLoop
+			then ()
+			else checking_error "check_3" 505065 []
+	) |	StExit => (
+			if state = OKToExit
+			then ()
+			else checking_error "check_3" 505066 []
+	)
+);
+=TEX
+
+\subsection{Anti-Aliasing Checks}
+
+
+=SML
+fun Ûfree_vars_zpredÝ (zp : Z_PRED) : Z_ID list = (
+	 (map ((fn (n,_,_) => n) o dest_z_lvar) o frees) zp
+);
+=TEX
+=SML
+fun Ûfind_formal_procÝ (speclab : SPECLAB) (name : ID) : FORMAL_PROC = (
+	find 
+	((#formal_procs o #in_scope) speclab)
+		(fn p => #name p = name)
+		handle Fail _ => checking_error "find_formal_proc" 505067
+						[fn () => name]
+);
+=TEX
+=SML
+fun Ûanti_aliasing_parsÝ (fp : FORMAL_PROC) (pc : (AGG_CHOICE,EXP)PROC_CALL)
+				: ID list * ID list = (
+	let	val formal_ids = #formal_ids fp;
+		val var_decls = map (fn {var_decl, ...} => var_decl) formal_ids;
+		val formals = flat (map (fn {vars, ...} => vars) var_decls);
+		val pre = (z_predexp_of_z_tm o #pre o #spec) fp;
+		val post = (z_predexp_of_z_tm o #post o #spec) fp;
+		val trans_formals = map trans_id formals;
+		val trans_globals = (free_vars_zpred pre cup
+				free_vars_zpred post) diff trans_formals;
+	in
+		(formals, trans_globals)
+	end
+);
+=TEX
+=SML
+fun Ûanti_aliasing_actuals_modesÝ (speclab : SPECLAB,
+				proc : (AGG_CHOICE, EXP) PROC_CALL) :
+			(EXP * MODE) list = (
+	let	val name = #name proc;
+		val formal_proc = find_formal_proc speclab (#name proc);
+		val formal_ids = #formal_ids formal_proc;
+		val var_decls_modes = map (fn {var_decl, mode,...}
+					=> (var_decl,mode)) formal_ids;
+		val vars_modes = map
+				(fn ({vars, ...},mode) => (vars,mode))
+				 var_decls_modes;
+		fun do_formals_modes (id::rest, m) = (
+			(id, m)::do_formals_modes (rest, m)
+		) | do_formals_modes _ = [];
+		val (formals,modes) = (split o flat o map do_formals_modes)
+						vars_modes;
+		val actuals = (case #actuals proc of
+				APositional exps => exps
+			|	ANamed nas => named_assocs_to_exps formals nas)
+			handle Fail _ => fail "anti_aliasing_check_1" 505068
+						[fn() => name];
+		val actuals_modes = combine actuals modes
+			handle Fail _ => fail "anti_aliasing_check_1" 505068
+						[fn() => name];
+	in	combine actuals modes
+	end
+);
+=TEX
+=SML
+fun Ûanti_aliasing_check_1Ý (speclab : SPECLAB,
+				proc : (AGG_CHOICE, EXP) PROC_CALL) = (
+	let	val actuals_modes = anti_aliasing_actuals_modes (speclab, proc)
+			handle Fail _ =>
+			fail "anti_aliasing_check_1" 505068 [fn() => #name proc];
+		val set = map fst (actuals_modes drop
+				(fn am =>	snd am = MSparkInOut orelse
+						snd am = MSparkOut));
+	in
+		if any set (fn x => case x of EId _ => false | _ => true)
+		then checking_error "anti_aliasing_check_1" 505069
+				[fn() => #name proc]
+		else (* OK *) ()
+	end
+);
+=TEX
+=SML
+fun Ûanti_aliasing_check_2Ý (speclab : SPECLAB,
+				proc : (AGG_CHOICE, EXP) PROC_CALL) = (
+	let	val name = #name proc;
+		val formal_proc = find_formal_proc speclab name;
+		val (_, trans_globals) = anti_aliasing_pars formal_proc proc;
+		val actuals_modes = anti_aliasing_actuals_modes (speclab, proc)
+			handle Fail _ =>
+			fail "anti_aliasing_check_2" 505068 [fn()=>name];
+		val set = map fst (actuals_modes drop
+				(fn am => not (	snd am = MSparkInOut orelse
+							snd am = MSparkOut)));
+		val trans_set = map (fn
+				EId id => trans_id id
+				|_	=> fail "anti_aliasing_check_2" 505070
+						[fn()=>name]) set;
+	in	if trans_set diff trans_globals = trans_set
+		then (* OK *) ()
+		else checking_error "anti_aliasing_check_2" 505071
+					[fn()=>name, fn()=>name]
+	end
+);
+=TEX
+=SML
+local
+	fun aux (fv::rest) = (
+		if is_z_lvar fv
+		then
+			((fn (n,_, _) => n) o dest_z_lvar) fv::aux rest
+		else
+			aux rest
+	) | aux _ = [];
+in
+fun Ûvars_expÝ (cn_env : CN_ENV) (exp : EXP) : ID list = (
+	(aux o frees o trans_exp cn_env) exp
+);
+end (* local ... in *);
+=TEX
+=SML
+fun Ûanti_aliasing_check_3Ý (speclab : SPECLAB,
+				proc : (AGG_CHOICE,EXP)PROC_CALL) = (
+	let	val name = #name proc;
+		val formal_proc = find_formal_proc speclab name;
+		val (_, trans_globals) = anti_aliasing_pars formal_proc proc;
+		val w = (#w o #spec) formal_proc;
+		val actuals = (map fst o anti_aliasing_actuals_modes)
+					(speclab, proc)
+			handle Fail _ =>
+			fail "anti_aliasing_check_3" 505068 [fn()=>name];
+		val ids = list_cup (map (vars_exp ((#env o #wp_env) speclab))
+					actuals);
+		val trans_ids = map trans_id ids;
+		val set1 = trans_globals diff w;
+		val set2 = trans_globals diff trans_ids;
+	in	if trans_globals = set1 andalso trans_globals = set2
+		then (* OK *) ()
+		else checking_error "anti_aliasing_check_3" 505072
+					[fn()=>name, fn()=>name]
+	end
+);
+=TEX
+=SML
+fun Ûanti_aliasing_check_4Ý (speclab : SPECLAB,
+				proc : (AGG_CHOICE,EXP)PROC_CALL) = (
+	let	val name = #name proc;
+		val formal_proc = find_formal_proc speclab (#name proc);
+		val (_, trans_globals) = anti_aliasing_pars formal_proc proc;
+		val actuals_modes = anti_aliasing_actuals_modes (speclab, proc)
+			handle Fail _ =>
+			fail "anti_aliasing_check_4" 505068 [fn()=>name];
+		val cn_env = (#env o #wp_env) speclab;
+		fun pair_wise (a_m_1::a_m_2::rest) = (
+		let	val (actual1, mode1) = a_m_1;
+			val (actual2, mode2) = a_m_2;
+			val ve1 = vars_exp cn_env actual1;
+			val ve2 = vars_exp cn_env actual2;
+		in
+			if ve1 diff ve2 = ve1
+			then	if mode1 = MSparkIn
+				andalso mode2 = MSparkIn
+				then (* OK *) ()
+				else checking_error "anti_aliasing_check_4"
+					505073 [fn()=>name]
+			else	(* OK *) ()
+		end
+		) | pair_wise _ = ();
+	in	 pair_wise actuals_modes
+	end
+);
+
+=TEX
+=SML
+fun Ûanti_aliasing_checkÝ (speclab : SPECLAB,
+				proc : (AGG_CHOICE,EXP)PROC_CALL) = (
+	anti_aliasing_check_1 (speclab, proc);
+	anti_aliasing_check_2 (speclab, proc);
+	anti_aliasing_check_3 (speclab, proc);
+	anti_aliasing_check_4 (speclab, proc)
+);
+=SML
+fun Ûcn_checkÝ ((speclab, statement): SPECLAB * STATEMENT) : unit = (
+
+let	fun pass_over_stmt (state : STMT_STATE) (st : STMT) = (
+
+	case st of
+			STNull => (
+		)| 	STImplicitNull => (
+		)|	STAssign {name,e} => (
+				check_1_a ([name_to_tmark name], speclab)
+		)|	STSpecNoIvars {spec={w,w0,pre,post},label} => (
+				check_1_a (w, speclab)
+		)|	STSemicolon (s1,s2) => (
+				if state = OKToExit
+				then
+					(pass_over_stmt InIfThenElse s1;
+					pass_over_stmt state s2)
+				else
+					(pass_over_stmt state s1;
+					pass_over_stmt state s2)
+		)|	STIfThenElse  {g,p,q,elsif} => (
+				if not elsif andalso state = InLoop
+				then	(pass_over_stmt OKToExit p;
+					pass_over_stmt OKToExit q)
+				else	(pass_over_stmt InIfThenElse p;
+					pass_over_stmt InIfThenElse q)
+		)|	STCase {e,s,others} => (
+				map (fn st1 => pass_over_stmt InCase (#p st1)) s;
+				pass_over_stmt InCase others
+		)|	STLoop {t,stmt} => (
+				pass_over_stmt InLoop stmt
+		)|	STNamedLoop {name,t,stmt} => (
+				pass_over_stmt InLoop stmt
+		)|	STWhile {name,g,loop} => (
+				pass_over_stmt InLoop (#stmt loop)
+		)|	STForStatic {name,i,tmark,range,dir,loop} => (
+				pass_over_stmt InLoop (#stmt loop)
+		)|	STForTmark {name,i,tmark,dir,loop} => (
+				pass_over_stmt InLoop (#stmt loop)
+		)|	STExitWhen {g} => (
+				check_3 (state, st)
+		)|	STExit => (
+				check_1_c speclab;
+				check_3 (state, st)
+		)|	STRet {e} => (
+				check_1_b speclab
+		)|	STProcNoIvars (proc as {name,actuals}) => (
+				check_1_d (name, speclab);
+				anti_aliasing_check (speclab, proc)
+		)|	STKSlot {content,label} => (
+		)
+	);
+	fun pass_over_statement (statement : STATEMENT) = (
+		case statement of
+			SStmt s => (
+				pass_over_stmt Top s
+		) |	SSpecIvars (si, st2) => (
+				pass_over_stmt Top st2
+		) |	SLogCon (lc, st2) => (
+				pass_over_stmt Top st2
+		) |	SForNonStatic ({name,i,range,loop}, st2) => (
+				pass_over_stmt InLoop (#stmt loop);
+				pass_over_stmt Top st2
+		) |	SProcIvars (proc as {name,actuals}, st2) => (
+				check_1_d (name, speclab);
+				anti_aliasing_check (speclab, proc);
+				pass_over_stmt Top st2
+		)
+	);
+	in	pass_over_statement statement
+	end
+);
+
+
+=TEX
+
 \section{VERIFICATION CONDITIONS}
 $cart\_prod$ and $fun\_decl$ are specified in
 \cite[volume 1]{DRA/CIS/CSE3/TR/94/27/1.0}.
@@ -923,6 +1234,7 @@ let	val pre1 = z_predexp_of_z_tm pre;
 	val s = (pre1 %Longrightarrow% wp1) @
 		(subs_pred(pre1, w, w0) %Longrightarrow% side);
 in
+	cn_check (sl, st);
 	vc_local_decls(s, sl)
 end
 	handle VCInformal =>
