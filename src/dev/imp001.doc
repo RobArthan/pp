@@ -1410,8 +1410,14 @@ structure €Timing› : Timing = struct
 =SML
 datatype €TIMER_UNITS› = €Microseconds› | €Milliseconds› | €Seconds›;
 type 'b €TIMED› = {result : 'b, time : int, units : TIMER_UNITS};
+structure TimeInt =
+=NJML
+	Int32;
+=POLYML
+	Int;
+=SML
 fun €time_app› (units : TIMER_UNITS) : ('a -> 'b) -> 'a -> 'b TIMED = (
-	let	val time_conv = Int32.toInt o (
+	let	val time_conv = TimeInt.toInt o (
 			case units of
 				Microseconds => Time.toMicroseconds
 			|	Milliseconds => Time.toMilliseconds
@@ -1769,17 +1775,21 @@ end; (* of structure DynamicArray *)
 =SML
 structure €Integer› : Integer = struct
 =TEX
-We give the code using the basis library's $IntInf$ structure.
+For SML/NJ, we give the code using the basis library's $IntInf$ structure.
 Reimplementation using a custom representation of natural numbers
 as decimal literal strings is recommended, since that will avoid the
 conversion overheads in the intended use to support object language
 arithmetic (where natural numbers are represented as constants whose
 names are decimal numeric strings).
-
 In any case, we hide the representation inside a datatype so that
 we can define a pretty-printer for it.
 =NJML
 	datatype INTEGER = Integer of IntInf.int;
+=TEX
+For Poly/ML, life is much simpler --- the built-in integers will do
+and the compiler's pretty-printer will do us fine.
+=POLYML
+	type INTEGER = int;
 =TEX
 For $idiv$ and $imod$ we have to map the basis library exception
 onto the {\Product} one.
@@ -1790,10 +1800,19 @@ onto the {\Product} one.
 	);
 	fun (Integer x : INTEGER) €imod› (Integer y : INTEGER) : INTEGER = (
 		Integer (IntInf.mod(x, y))
+		handle Div => fail "imod" 1201 []
+	);
+=POLYML
+	fun (x : INTEGER) €idiv› (y : INTEGER) : INTEGER = (
+		x div y
 		handle Div => fail "idiv" 1201 []
 	);
+	fun (x : INTEGER) €imod› (y : INTEGER) : INTEGER = (
+		x mod y
+		handle Div => fail "imod" 1201 []
+	);
 =TEX
-The remaining arithmetic operators are essentially just renamings of the
+For SML/NJ, the remaining arithmetic operators are not much more than renamings of the
 basis library ones.
 =NJML
 	fun mk_dyop (f : IntInf.int * IntInf.int -> IntInf.int) :
@@ -1817,12 +1836,35 @@ basis library ones.
 	val op €@<=› : INTEGER * INTEGER -> bool = mk_dypred IntInf.<=;
 	val op €@>=› : INTEGER * INTEGER -> bool = mk_dypred IntInf.>=;
 =TEX
+For Poly/ML, the remaining operators really are just renamings of the
+existing ones:
+=POLYML
+	val op €@*› : INTEGER * INTEGER -> INTEGER = Int.*;
+	val op €@+› : INTEGER * INTEGER -> INTEGER = Int.+;
+	val op €@-› : INTEGER * INTEGER -> INTEGER = Int.-;
+	val op €@~› : INTEGER -> INTEGER = Int.~;
+	val op €iabs› : INTEGER -> INTEGER = Int.abs;
+	val op €@<› : INTEGER * INTEGER -> bool = Int.<;
+	val op €@>› : INTEGER * INTEGER -> bool = Int.>;
+	val op €@<=› : INTEGER * INTEGER -> bool = Int.<=;
+	val op €@>=› : INTEGER * INTEGER -> bool = Int.>=;
+=TEX
 The interface to convert from a string requires a bit of glue
 for the result value and error-handling.
-=NJML
+=SML
 	fun €integer_of_string› (s : string) : INTEGER = (
-		case IntInf.fromString s of
-			SOME x => Integer x
+		case
+=NJML
+		IntInf.fromString
+=POLYML
+		Int.fromString
+=SML
+			s of
+			SOME x =>
+=NJML
+				Integer
+=SML
+					x
 		|	NONE =>
 				if	s = ""
 				then	fail "integer_of_string" 1202 []
@@ -1832,38 +1874,71 @@ for the result value and error-handling.
 =TEX
 The opposite conversion requires adjustment of the signs to our preferred
 form.
-=NJML
+=SML
 	val zero = integer_of_string "0";
-	fun €string_of_integer› (x as Integer i : INTEGER) : string = (
+	fun €string_of_integer› (x as
+=NJML
+		Integer
+=SML
+			i : INTEGER) : string = (
 		if	x @< zero
 		then	"-" ^ string_of_integer (@~ x)
-		else	IntInf.toString i
+		else
+=NJML
+			IntInf.toString i
+=POLYML
+			Int.toString i
+=SML
 	);
 =TEX
 Conversion to ints requires glue for error-handling.
+=SML
+	fun €int_of_integer› (
 =NJML
-	fun €int_of_integer› (Integer x : INTEGER) : int = (
+			Integer
+=SML
+				x : INTEGER) : int = (
+=NJML
 		IntInf.toInt x
+=POLYML
+		Int.toInt x
+=SML
 		handle Overflow => fail "int_of_integer" 1204 []
 	);
 =TEX
 And again the opposite conversion is just a renaming:
+=SML
+	val €integer_of_int› : int -> INTEGER = 
 =NJML
-	val €integer_of_int› : int -> INTEGER = Integer o IntInf.fromInt;
+		 Integer o IntInf.fromInt;
+=POLYML
+		Int.fromInt;
 =TEX
 The error path in the following is a bit odd for an empty string: we
 call $fromString$ and let it fail.
-=NJML
+=SML
 	fun €natural_of_string› (s : string) : INTEGER = (
 		if	s = "" orelse is_all_decimal s
-		then	case IntInf.fromString s of
+		then
+=NJML
+			case IntInf.fromString s of
 				SOME x => Integer x
+=POLYML
+			case Int.fromString s of
+				SOME x => x
+=SML
 			|	NONE => fail "natural_of_string" 1013 []
 		else	fail "natural_of_string" 1012 [fn _ => s]
 	);
-=NJML
+=SML
 	val €one› : INTEGER = @@"1";
 end (* of structure Integer *);
+=TEX
+Poly/ML doesn't need us to give a pretty-printer for integers, it already has one and so,
+since the INSTALLPP category will generate some code, we comment it out for Poly/ML:
+=POLYML
+(*
+=SML
 val _ =
 let	fun integer_pp (addstring, beginb, _, endb) (x : Integer.INTEGER) = (
 		beginb(0, false);
@@ -1874,6 +1949,9 @@ in
 =INSTALLPP
 		(PPCompiler.make_pp ["Integer", "INTEGER"] integer_pp)
 end;
+=POLYML
+*)
+=SML
 open Integer;
 =TEX
 \twocolumn[\section{INDEX}]

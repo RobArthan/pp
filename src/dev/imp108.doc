@@ -1,4 +1,4 @@
-%  %Z% $Date: 2000/06/30 07:53:13 $ $Revision: 1.12 $ $RCSfile: imp108.doc,v $
+%  %Z% $Date: 2000/12/13 11:51:19 $ $Revision: 1.13 $ $RCSfile: imp108.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -11,10 +11,10 @@
 %\TPPpart{}
 \TPPtitle{Portability Infrastructure Implementation}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP108}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.12 $%
+\def\SCCSversion{$Revision: 1.13 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2000/06/30 07:53:13 $%
+\TPPdate{\FormatDate{$Date: 2000/12/13 11:51:19 $%
 }}
 %\TPPstatus{Draft}
 \TPPstatus{Draft}
@@ -65,6 +65,8 @@
 Initial versions.
 \item[Issue 1.12]
 Added function to control garbage collector messages.
+\item[Issue 1.13]
+Port back to Poly/ML.
 \end{description}
 \subsection{Changes Forecast}
 As determined by experience during the porting process.
@@ -127,17 +129,21 @@ structure €ExtendedIO› : ExtendedIO = struct
 	);
 	fun €is_term_in› (instream : instream) = (
 		let 	val (rd as TextPrimIO.RD{ioDesc,...},buf) =
-			TextIO.StreamIO.getReader(TextIO.getInstream instream)
-		in	TextIO.setInstream
-			(instream, TextIO.StreamIO.mkInstream(rd, SOME buf));
-			case ioDesc of
-			NONE => false
+			TextIO.StreamIO.getReader(TextIO.getInstream instream);
+			val _ = TextIO.setInstream
+			(instream, TextIO.StreamIO.mkInstream(rd,
+=NJML
+				SOME
+=SML
+				buf));
+		in	case ioDesc of
+				NONE => false
 			|	SOME desc => (OS.IO.kind desc = OS.IO.Kind.tty)
 		end
 	);
 	fun €is_term_out› (outstream : outstream) = (
 		let 	val (wr as TextPrimIO.WR{ioDesc,...},buf) =
-			TextIO.StreamIO.getWriter(TextIO.getOutstream outstream)
+			TextIO.StreamIO.getWriter(TextIO.getOutstream outstream);
 		in	TextIO.setOutstream
 			(outstream, TextIO.StreamIO.mkOutstream(wr, buf));
 			case ioDesc of
@@ -163,7 +169,7 @@ structure €PPCompiler› : PPCompiler = struct
 	type €HANDLER› = exn -> unit;
 	type €instream› = BasicIO.instream;
 =TEX
-First some fairly low-level stuff to turn a $TEXT\_SOURCE$ into an
+For SML/NJ we must first do some fairly low-level stuff to turn a $TEXT\_SOURCE$ into an
 input stream.
 To get the compiler's read-eval-print loop to work properly with input
 from a terminal, we need to copy the I/O descriptor out of the
@@ -174,7 +180,7 @@ The following function gets the descriptor and name out for us.
 The $setInstream$ call is there because getting the Reader out of the
 file ``truncates'' it, i.e., in effect it really does ``get it out'' and
 we have to put it back again or the file will in effect be closed.
-=SML
+=NJML
 fun €get_io_desc› (instrm : TextIO.instream) : OS.IO.iodesc option * string = (
 	let	val (rdr, bfr) =
 		TextIO.StreamIO.getReader(TextIO.getInstream instrm);
@@ -188,7 +194,7 @@ fun €get_io_desc› (instrm : TextIO.instream) : OS.IO.iodesc option * string = (
 The following function creates a primitive I/O reader from the information
 supplied by either of the two compiler functions. The $name$ parameter
 is ignored if the input stream parameter is supplied (when the name is taken from $get\_io\_desc$).
-=SML
+=NJML
 fun €mk_text_reader› (
 	f : TEXT_SOURCE,
 	name : string,
@@ -248,7 +254,7 @@ end
 The next function underpins the two interface functions.
 It's parameterisation is like that of $mk\_text\_reader$:
 the name parameter is ignored if a stream is supplied.
-=SML
+=NJML
 fun €compile_either› (
 	f : TEXT_SOURCE,
 	name : string,
@@ -269,7 +275,7 @@ fun €compile_either› (
 =TEX
 The two interface functions are now just a question of assembling
 the pieces:
-=SML
+=NJML
 fun €compile1› (name : string, f : TEXT_SOURCE, g : TEXT_FILTER, h : HANDLER)
 				: unit = (
 	let	fun say s = TextIO.output(std_out, g s);
@@ -291,21 +297,53 @@ fun €compile2› (strm : instream, f : TEXT_SOURCE, g : TEXT_FILTER, h : HANDLER)
 	end
 );
 =TEX
-The rest of the compiler interface functions are just renamings of existing functions:
+This is all very much easier for Poly/ML (which can't make any use of the
+name or input stream supplied as the first component of the argument,
+and doesn't need the handler, since Poly/ML prints exception values for us):
+=POLYML
+fun compile1 (_ : string, f : TEXT_SOURCE, g : TEXT_FILTER, _ : HANDLER)
+				: unit = (
+	let	fun say s = (TextIO.output(std_out, g s); TextIO.flushOut std_out);
+	in	PolyML.compiler (f, say) ()
+	end
+);
+fun compile2 (_ : instream, f : TEXT_SOURCE, g : TEXT_FILTER, _ : HANDLER)
+				: unit = (
+	let	fun say s = (TextIO.output(std_out, g s); TextIO.flushOut std_out);
+	in	PolyML.compiler (f, say) ()
+	end
+);
+=TEX
+The rest of the compiler interface functions are little more than renamings of existing functions:
 =SML
-val €exit› : int -> unit = OS.Process.exit;
+val €exit› : int -> unit =
+=NJML
+		OS.Process.exit;
+=POLYML
+	(fn res => 
+		OS.Process.exit
+		(if res = 0 then OS.Process.success else OS.Process.failure)
+);
 =TEX
 =SML
-val €print_depth› : int -> unit = fn d => (
+val €print_depth› : int -> unit = 
+=NJML
+	fn d => (
 	Compiler.Control.Print.printDepth := d;
 	Compiler.Control.Print.printLength := d;
 	Compiler.Control.Print.stringDepth := d
 );
+=POLYML
+	PolyML.print_depth;
 =TEX
-=SML
+=NJML
 type 'a €PP_SPEC› = string list * (Compiler.PrettyPrint.ppstream -> 'a -> unit); 
+=POLYML
+type 'a PP_SPEC =
+	(string -> unit) * (int * bool -> unit) * (int * int -> unit) * (unit -> unit)
+		-> int -> unit -> 'a -> unit;
 =TEX
-=SML
+=NJML
 fun €install_pp› ((path, pp) : 'a PP_SPEC) : unit = (
 	Compiler.PPTable.install_pp path pp
 );
@@ -315,8 +353,9 @@ fun €make_pp› (path : string list)
 		(pprint :
 			(string -> unit) * (int * bool -> unit)
 			* (int * int -> unit) * (unit -> unit) -> 'a -> unit) :
-		'a PP_SPEC = (
-	let	open Compiler.PrettyPrint;
+		'a PP_SPEC =
+=NJML
+(	let	open Compiler.PrettyPrint;
 		fun pp pps = (
 			pprint 
 			(add_string pps,
@@ -327,9 +366,15 @@ fun €make_pp› (path : string list)
       (path, pp)
     end
 );
+=POLYML
+(fn funs => fn _ => fn _ => fn obj => pprint funs obj);
 =SML
-val €gc_messages› : bool -> unit = SMLofNJ.Internals.GC.messages;
-
+val €gc_messages› : bool -> unit = 
+=NJML
+SMLofNJ.Internals.GC.messages;
+=POLYML
+fn _ => ();
+=SML
 val _ = gc_messages false;
 =TEX
 =SML
@@ -382,9 +427,12 @@ structure €PPBuild› : PPBuild = struct
 			old
 		end
 	);
-	fun €pp'save› () : bool = (
-		not(SMLofNJ.exportML (!pp'save_name))
-	);
+	fun €pp'save› () : bool =
+=NJML
+	(not(SMLofNJ.exportML (!pp'save_name)));
+=POLYML
+	(PolyML.commit ());
+=SML
 	val €loaded_files› : string list ref = ref ["dtd108.sml", "imp108.sml"];
 	fun €pp'use› (file_name : string) : unit = (
 		! pp'use_function file_name;
