@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.8 2000/06/16 10:12:42 rda Exp rda $
+ * $Id: mainw.c,v 2.9 2000/06/16 10:46:56 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -139,7 +139,7 @@ static void
 
 static void setup_reopen_menu(char *filename);
 static void post_popupeditmenu();
-static Bool execute_command();
+static Bool execute_command(void);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Menu descriptions:
@@ -425,6 +425,7 @@ static setup_main_window(
 	Atom WM_DELETE_WINDOW;
 	void check_quit_cb();
 	Widget *wp;
+	XtActionsRec action;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Main window setup:  (root is created in main in xpp.c)
@@ -495,6 +496,17 @@ if( !global_options.edit_only ) {
 		set_menu_item_sensitivity(cmdmenu, CMD_MENU_ABANDON, False);
 	}
 }
+/*
+ * Users complain that the "Execute Selection" item in the command menu
+ * does not work when the caps lock modifier is present; however, Motif
+ * pushbuttons don't support multiple accelerators and there is no
+ * syntax to say we care about Ctrl but not Lock modifiers. We therefore
+ * add execute_command in as an action function that can be accessed via
+ * our translation table resource.
+ */
+	action.string = "execute";
+	action.proc = (XtActionProc)execute_command;
+	XtAppAddActions(app, &action, 1);
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Help menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
