@@ -8,7 +8,7 @@
 \TPPproject{DAZ PROJECT}  %% Mandatory field
 %\TPPvolume{}
 %\TPPpart{}
-\TPPtitle{Implementation of the Specification Database}  %% Mandatory field
+\TPPtitle{Implementation: VC Browser}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP506}  %% Mandatory field
 \def\SCCSversion{$Revision$%
 }
@@ -17,11 +17,10 @@
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
-\TPPkeywords{HOL}
-\TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
 %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
 \TPPauthorisation{D.J.~King & DAZ Team Leader}
-\raggedright{\TPPabstract{This document contains the implementation for the SPARK paragraph processor.}}
+\raggedright{\TPPabstract{This document contains the implementation for the navigation tools.}}
 %\TPPabstractB{}
 %\TPPabstractC{}
 %\TPPabstractD{}
@@ -60,77 +59,424 @@
 \subsection{Changes History}  % to get section number `0.3'
 \begin{description}
 
-\item[Issue 1.1,1.2,1.3 \FormatDate{94/03/24}] Initial Draft
-\item[Issue 1.4 \FormatDate{94/07/14}] Minor typographical corrections.
-
+\item[1.5] First draft.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
 \section{GENERAL}
 \subsection{Scope}
-This document contains the implementation for the parser for
-HOL/Z.
+This document contains the implementation for the VC Browser.
 The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD506}.
 \subsection{Introduction}
+See \cite{ISS/HAT/DAZ/DTD506}.
 \subsection{Purpose and Background}
+See \cite{ISS/HAT/DAZ/DTD506}.
 \subsection{Algorithms}
+The code is a straightforward application of the PolyML Motif interface.
 \subsection{Dependencies}
+See \cite{ISS/HAT/DAZ/DTD506}.
 \subsection{Known Deficencies}
+None known.
 \subsection{Possible Enhancements}
+Various more or less cosmetic adjustments could doubtless to be made.
 =TEX
 =TEX
 =TEX
-\section{PREAMBLE}
-SML
-structure ÛCNSpecificationDatabaseÝ : CNSpecificationDatabase = struct
-open CNTypes CNEnvironmentTypes;
-=TEX
-\section{INTERFACE}
+\section{Supporting Tools}
 =SML
-type ÛREFINEMENT_STEPÝ = {
-	spec : SPEC_LAB,
-	refinedby : STATEMENT OPT
-	};
-
-val Ûrefinement_stepsÝ : REFINEMENT_STEP E_DICT ref = ref (initial_e_dict);
+structure ÛCNBrowserFrontEndÝ (* : CNBrowserFrontEnd *) = struct
+local
+open  XWindows Motif;
 =TEX
 =SML
-fun Ûrstep_add_specificationÝ (index : string) (sp : SPEC_LAB) : unit = (
-	refinement_steps := e_enter index {spec=sp, refinedby=Nil, vconds=[]}
-		(!refinement_steps)
+val words : string -> string list = (
+	let	fun aux (done, "") [] = done
+		|   aux (done, acc) [] = acc :: done
+		|   aux (done, "") (" " :: more) = aux (done, "") more
+		|   aux (done, acc) (" " :: more) = aux (acc :: done, "") more
+		|   aux (done, acc) (ch :: more) = aux (done, acc ^ ch) more;
+	in	(rev o aux ([], "") o explode)
+	end
+);
+fun format_string (i : int) : string -> string list = (
+	let	fun aux (done, acc, crsr) [] = acc :: done
+		|   aux (done, acc, crsr) (w :: more) = (
+			let	val l = size w;
+				val crsr' = crsr + l + 1;
+			in	if	crsr' > i
+				then	aux
+					(if acc = "" then done else acc :: done,
+					w,
+					l) more
+				else	aux
+					(done,
+					if acc = "" then w else acc ^ " " ^ w,
+					 crsr') more
+			end
+		);
+	in	rev o aux ([], "", 0) o words
+	end
 );
 =TEX
 =SML
-fun Ûrstep_refine_specificationÝ (index : string) (rb : STATEMENT) : VC list = (
-let	val rstep = case e_lookup index (!refinement_steps) of
-			Value r => r
-			|_ => fail "rstep_refine_specification" 99999 [];
-	val spec = #spec rstep;
-	val side = refinement_steps := e_enter index
-		{spec= spec, refinedby=Value rb}
-		(!refinement_steps);
+val destroy_cb : Widget * 'a XEvent * unit -> unit = (fn (w, _, _) =>
+	XtDestroyWidget w
+);
+=TEX
+=SML
+fun help_widget (owner_w : Widget) (text : string list) : Widget = (
+	let	val fmtd_txt = format_list Combinators.I
+				(flat (map (format_string 60) text)) "\n";
+		val help_w = XmCreateInformationDialog owner_w "help-dialog" [
+			XmNmessageString fmtd_txt,
+			XmNokLabelString " Dismiss ",
+			XmNdialogTitle "ProofPower-Help"
+		];
+		val se1 = XtDestroyWidget(XmMessageBoxGetChild help_w
+					XmDIALOG_CANCEL_BUTTON);
+		val se2 = XtDestroyWidget(XmMessageBoxGetChild help_w
+					XmDIALOG_HELP_BUTTON);
+		val se3 = XtSetCallbacks help_w [(XmNokCallback, destroy_cb)];
+		val se4 = XtManageChild help_w;
+	in	help_w
+	end
+);
+=TEX
+=SML
+fun gen_correlator_tool_widgets {
+	left_keys : unit -> string list,
+	right_keys : unit -> string list} = (
+let
+	val shell = XtAppInitialise "" "Xpp" "Xpp" [] [];
+	val side_effect = XtSetValues shell [
+		XmNdeleteResponse	XmDO_NOTHING
+	];
+	val outer_paned = XmCreatePanedWindow shell "outer-paned" [
+		XmNsashHeight		1,
+		XmNsashWidth		1
+	];
+	val top_form = XmCreateForm outer_paned "top-form" [
+		XmNfractionBase	2
+	];
+	val left_paned = XmCreatePanedWindow top_form "left-paned" [
+		XmNtopAttachment	XmATTACH_FORM,
+		XmNleftAttachment	XmATTACH_FORM,
+		XmNrightAttachment	XmATTACH_POSITION,
+		XmNrightPosition	1,
+		XmNbottomAttachment	XmATTACH_FORM
+	];	
+	val vert_sep = XmCreateSeparator top_form "vert-sep"[
+		XmNorientation 	XmVERTICAL,
+		XmNtopAttachment	XmATTACH_FORM,
+		XmNbottomAttachment	XmATTACH_OPPOSITE_WIDGET,
+		XmNbottomWidget	left_paned,
+		XmNleftAttachment	XmATTACH_WIDGET,
+		XmNleftWidget		left_paned
+	];
+	val right_paned = XmCreatePanedWindow top_form "right-paned" [
+		XmNtopAttachment	XmATTACH_FORM,
+		XmNleftAttachment	XmATTACH_POSITION,
+		XmNleftPosition	1,
+		XmNrightAttachment	XmATTACH_FORM,
+		XmNbottomAttachment	XmATTACH_FORM
+	];
+	val left_text = XmCreateScrolledText left_paned "script" [
+		XmNrows		12,
+		XmNcolumns	40,
+		XmNeditMode	XmMULTI_LINE_EDIT,
+		XmNeditable	false
+	];
+	val left_items = left_keys();
+	val left_list = XmCreateScrolledList left_paned "script" [
+		XmNvisibleItemCount	4,
+		XmNitems	left_items,
+		XmNscrollBarDisplayPolicy XmSTATIC,
+		XmNselectionPolicy	XmBROWSE_SELECT,
+		XmNselectedItems	([hd left_items] handle Fail _ => [])
+	];
+	val right_text = XmCreateScrolledText right_paned "script" [
+		XmNrows		12,
+		XmNcolumns	40,
+		XmNeditMode	XmMULTI_LINE_EDIT,
+		XmNeditable	false
+	];
+	val right_items = right_keys();
+	val right_list = XmCreateScrolledList right_paned "script" [
+		XmNvisibleItemCount	4,
+		XmNitems		right_items,
+		XmNscrollBarDisplayPolicy XmSTATIC,
+		XmNselectionPolicy	XmBROWSE_SELECT,
+		XmNselectedItems	([hd right_items] handle Fail _ => [])
+	];
+	val button_form = XmCreateForm outer_paned "button-form" [
+		XmNfractionBase	8
+	];
+	val left_filter_btn = XmCreatePushButton button_form "left-filter-btn" [
+		XmNlabelString		"Filter",
+		XmNtopAttachment	XmATTACH_FORM,
+		XmNbottomAttachment	XmATTACH_POSITION,
+		XmNbottomPosition	4,
+		XmNleftAttachment	XmATTACH_POSITION,
+		XmNleftPosition	0,
+		XmNrightAttachment	XmATTACH_POSITION,
+		XmNrightPosition	2
+	];
+	val left_reset_btn = XmCreatePushButton button_form "left-reset-btn" [
+		XmNlabelString		"Reset",
+		XmNtopAttachment	XmATTACH_FORM,
+		XmNbottomAttachment	XmATTACH_POSITION,
+		XmNbottomPosition	4,
+		XmNleftAttachment	XmATTACH_POSITION,
+		XmNleftPosition	2,
+		XmNrightAttachment	XmATTACH_POSITION,
+		XmNrightPosition	4
+	];
+	val right_filter_btn = XmCreatePushButton button_form "right-filter-btn" [
+		XmNlabelString		"Filter",
+		XmNtopAttachment	XmATTACH_FORM,
+		XmNbottomAttachment	XmATTACH_POSITION,
+		XmNbottomPosition	4,
+		XmNleftAttachment	XmATTACH_POSITION,
+		XmNleftPosition	4,
+		XmNrightAttachment	XmATTACH_POSITION,
+		XmNrightPosition	6
+	];
+	val right_reset_btn = XmCreatePushButton button_form "right-reset-btn" [
+		XmNlabelString		"Reset",
+		XmNtopAttachment	XmATTACH_FORM,
+		XmNbottomAttachment	XmATTACH_POSITION,
+		XmNbottomPosition	4,
+		XmNleftAttachment	XmATTACH_POSITION,
+		XmNleftPosition	6,
+		XmNrightAttachment	XmATTACH_POSITION,
+		XmNrightPosition	8
+	];
+	val done_btn = XmCreatePushButton button_form "done-btn" [
+		XmNlabelString		"Done",
+		XmNtopAttachment	XmATTACH_POSITION,
+		XmNtopPosition		4,
+		XmNbottomAttachment	XmATTACH_FORM,
+		XmNleftAttachment	XmATTACH_POSITION,
+		XmNleftPosition	1,
+		XmNrightAttachment	XmATTACH_POSITION,
+		XmNrightPosition	3
+	];
+	val help_btn = XmCreatePushButton button_form "help-btn" [
+		XmNlabelString		"Help",
+		XmNtopAttachment	XmATTACH_POSITION,
+		XmNtopPosition		4,
+		XmNbottomAttachment	XmATTACH_FORM,
+		XmNleftAttachment	XmATTACH_POSITION,
+		XmNleftPosition	5,
+		XmNrightAttachment	XmATTACH_POSITION,
+		XmNrightPosition	7
+	];
+	val side_effect = map XtManageChild [
+		done_btn,
+		left_filter_btn,
+		left_reset_btn,
+		help_btn,
+		right_filter_btn,
+		right_reset_btn,
+		button_form,
+		left_list,
+		left_text,
+		left_paned,
+		vert_sep,
+		right_list,
+		right_text,
+		right_paned,
+		top_form,
+		outer_paned
+	];
+	val side_effect = XtRealizeWidget shell;
+	val side_effect = (
+		case XtGetValue button_form "height" of
+			XmNheight h => (
+				XtSetValues button_form
+				[(XmNpaneMaximum h), (XmNpaneMinimum h)]
+		) |	_ => ());
+in {	left_filter_btn = left_filter_btn,
+	left_reset_btn = left_reset_btn,
+	right_filter_btn = right_filter_btn,
+	right_reset_btn = right_reset_btn,
+	done_btn = done_btn,
+	help_btn = help_btn,
+	left_list = left_list,
+	left_text = left_text,
+	right_list = right_list,
+	right_text = right_text,
+	shell = shell }
+end
+)	(* end of function gen_correlator_tool_widgets *);
+=TEX
+=SML
+fun simple_cb (cmd : unit -> unit) :
+	Widget * 'a XEvent * unit -> unit = (fn _ => cmd()
+);
+=TEX
+=SML
 in
-	vconds
+fun gen_correlator_tool {
+	left_keys : unit -> string list,
+	right_keys : unit -> string list,
+	left_filter	: string -> string list,
+	right_filter : string -> string list,
+	left_key_to_text : string -> string,
+	right_key_to_text : string -> string,
+	help_text : unit -> string list} : Widget = (
+let	val {shell, left_list, left_text, right_list, right_text,
+		left_filter_btn, right_filter_btn, left_reset_btn,
+		right_reset_btn, help_btn, done_btn} =
+			gen_correlator_tool_widgets
+			{left_keys = left_keys, right_keys = right_keys};
+	fun set list_w keys = (
+		if	not(is_nil keys)
+		then	XtSetValues list_w
+			[XmNitems	keys,
+			XmNselectedItems	[hd keys],
+			XmNtopItemPosition	1]
+		else	XtSetValues list_w [XmNitems	keys]
+	);
+	fun filter from_list_w to_list_w f = (fn () =>
+		let	val keys = (
+				case XtGetValue from_list_w "selectedItems" of
+					XmNselectedItems (x::_) => (
+						f x
+				) |	_ => []
+			);
+		in	set to_list_w keys
+		end
+	);
+	fun reset list_w f = (fn () =>
+		set list_w (f())
+	);
+	fun select list_w text_w f = (fn () =>
+		case XtGetValue list_w "selectedItems" of
+			XmNselectedItems (x::_) => (
+				XmTextSetString text_w "Please wait.";
+				XmTextSetString text_w (f x)
+		) |	_ => XmTextSetString text_w ""
+	);
+	fun destroy shell_w = (fn () =>
+		XtDestroyWidget shell_w
+	);
+	fun help () = (
+		help_widget shell (help_text ());
+		()
+	);
+in	XtSetCallbacks left_list
+	[(XmNdefaultActionCallback, simple_cb
+		(select left_list left_text left_key_to_text))] ();
+	XtSetCallbacks right_list
+	[(XmNdefaultActionCallback, simple_cb
+		(select right_list right_text right_key_to_text))] ();
+	XtSetCallbacks left_filter_btn
+	[(XmNactivateCallback, simple_cb
+		(filter right_list left_list left_filter))] ();
+	XtSetCallbacks right_filter_btn
+	[(XmNactivateCallback, simple_cb
+		(filter left_list right_list right_filter))] ();
+	XtSetCallbacks left_reset_btn
+	[(XmNactivateCallback, simple_cb
+		(reset left_list left_keys))] ();
+	XtSetCallbacks right_reset_btn
+	[(XmNactivateCallback, simple_cb
+		(reset right_list right_keys))] ();
+	XtSetCallbacks help_btn
+	[(XmNactivateCallback, simple_cb help)] ();
+	XtSetCallbacks done_btn
+	[(XmNactivateCallback, simple_cb
+		(destroy shell))] ();
+	select left_list left_text left_key_to_text ();
+	select right_list right_text right_key_to_text ();
+	shell
 end
 );
-=SML
+end (* of local .. in .. end *);
 =TEX
-\section{EPILOGUE}
 =SML
-end (* of structure CNSpecificationDatabase *);
+end (* of structure CNBrowserFrontEnd *);
 =TEX
 \small
 \twocolumn[\section{INDEX}]
 \printindex
 \end{document}
 
-val Ûspeclab2Ý : Speclab = simple_speclab(ñtrue®, ñc  {a‰0, b‰0} ± a‰0 ¼ c ± b‰0 ¼ c®);
-
-rstep_add_specification "(1)" speclab1;
-rstep_refine_specification "(1)" stmt1;
-
-
-rstep_add_specification "(2)" speclab2;
-rstep_refine_specification "(2)" stmt2;
-
-
+=IGN
+val left_keys = Sort.sort Sort.string_order o theory_names;
+val right_keys = Sort.sort Sort.string_order o
+	(fn () => flat(map fst(flat (map get_thms (theory_names())))));
+val left_filter = fn n => Sort.sort Sort.string_order (theory_names());
+val right_filter = Sort.sort Sort.string_order o
+	(fn n => flat(map fst(get_thms n)));
+fun string_of_theory (thyn : string) : string = (
+	let	val cur_thy = get_current_theory_name();
+	in let val se1 = open_theory thyn
+			handle Fail _ => open_theory"basic_hol";
+		val p = case get_language "-" of
+			"Z" => z_output_theory1 | _ => output_theory1;
+		val file_name = "/tmp/pp_temp";
+		val se2 = p {theory = thyn, out_file = "/tmp/pp_temp"};
+		val instrm = open_in file_name;
+		val res = input(instrm, 10000000);
+		val se3 = close_in instrm;
+		val se4 = open_theory cur_thy;
+	in	res
+	end	handle Fail _ => (open_theory cur_thy ; "")
+	end
+);
+val left_key_to_text = string_of_theory;
+val right_key_to_text = (fn n =>
+	let	val names = theory_names();
+		val cur_thy = get_current_theory_name();
+		fun aux [] = t_thm
+		|   aux (thy :: thys) = (
+			(open_theory thy; get_thm thy n) handle Fail _ => aux thys
+		);
+		val res = format_list
+			Combinators.I
+			(PrettyPrinter.format_thm1 40 (aux names)) "\n";
+	in	open_theory cur_thy; res
+	end
+);
+val help_text = Combinators.K [
+"*** This is the Compliance Notation VC Browser ***",
+"",
+"Compliance notation clauses are listed on the left and VCs on the right.",
+"",
+"Double-click on the name of a clause or a VC to see it.",
+"",
+"Pressing a `Select' button makes the list above the button" ^
+" only show the items which correspond to the selection in the other list.",
+"",
+"Pressing a `Reset' button makes the list above the button show everything again."
+];
+val shell = CNBrowserFrontEnd.gen_correlator_tool{
+	left_keys = left_keys,
+	right_keys = right_keys,
+	left_filter = left_filter,
+	right_filter = right_filter,
+	left_key_to_text = left_key_to_text,
+	right_key_to_text =right_key_to_text,
+	help_text =help_text};
+(*
+print_status();
+open_theory"z_library";
+XtDestroyWidget shell;
+XtDestroyWidget h;
+XmNdefaultActionCallback;
+help_widget shell text;
+val iconBitmap = (
+	case XReadBitmapFile (XtWindow shell) "pp_bitmap.h" of
+		BitmapSuccess (x,_,_) => x
+	|	_ => fail "setting_up_bitmap" 99999 []
+);
+XtSetValue shell (XmNiconPixmap iconBitmap);
+XtSetValue shell (XmNiconName "VC Browser");
+XtSetValues shell [XmNdeleteResponse XmUNMAP];
+XtSetValues shell [XmNmappedWhenManaged false];
+val XmNchildren cs = XtGetValue shell "children";
+XtSetValues (hd cs) [XmNmappedWhenManaged true];
+XmNeditable;
+*)
