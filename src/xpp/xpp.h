@@ -147,6 +147,7 @@ void number_verify_cb(
 	XmTextVerifyCallbackStruct	*cbs);
 #endif
 #ifndef _xpp
+	extern XtTranslations text_translations;
 #endif
 #ifndef _edit
 	extern void *setup_edit(
