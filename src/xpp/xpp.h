@@ -29,6 +29,7 @@
 	extern void cmdwin();
 	extern XtAppContext app;
 	extern Widget root;
+	extern void send_to_application();
 #endif
 #ifndef _diag
 	extern void diag();
@@ -53,6 +54,9 @@
 	extern void check_text_window_limit();
 #endif
 #ifndef _xpp
-	extern char *cmd_buf, *arg_buf;
+	extern char *cmd_buf;
 	extern char *arglist[];
+#endif
+#ifndef _edit
+	extern void *setup_edit();
 #endif
