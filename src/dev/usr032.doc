@@ -20,6 +20,8 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \usepackage{Lemma1}
 \usepackage{ProofPower}
 \usepackage{epsf}
+\usepackage{float}
+
 \def\SLRP{{\sf SLRP}}
 \def\Slrp{{\tt slrp}}
 
@@ -74,9 +76,9 @@ Contact: Rob Arthan < rda@lemma-one.com >
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.2 $%
+\def\Version{$Revision: 1.3 $%
 }
-\def\Date{\FormatDate{$Date: 2003/03/09 16:53:24 $%
+\def\Date{\FormatDate{$Date: 2003/03/09 21:28:28 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -264,28 +266,6 @@ it parses the sequence of terminal symbols in the specified file and prints out 
 An example input file for it is shown in figure~\ref{usr032a.grm.tst}
 
 
-\begin{Fig}{Compiling the Generated Parser}{usr032a.grm.sml}
-=SML
-map use [
-	"dtd108.sml",	(* Portability infrastructure *)
-	"imp108.sml",
-	"dtd002.sml",	(* System control and error reporting *)
-	"imp002.sml",
-	"dtd001.sml",	(* Standard ML utilities *)
-	"imp001.sml",
-	"dtd018.sml",	(* SLRP parser driver *)
-	"imp018.sml",
-	"dtd118.sml",	(* Generic SLRP parser support *)
-	"imp118.sml"
-	];
-open GenericSlrpParser;
-use"usr032a.grm.sml";		(* The generated parser code *)
-val my_parse_file : string -> unit =
-	print_tree o parse_file slrp'gen_parser;
-=TEX
-\end{Fig}
-=TEX
-
 
 \begin{Fig}[ht]{Generic Parser Input}{usr032a.grm.tst}
 =DUMP usr032a.grm.tst
@@ -296,12 +276,6 @@ val my_parse_file : string -> unit =
 	`)`
 =TEX
 \end{Fig}
-
-\Hide{
-=SML
- my_parse_file "usr032a.grm.tst";
-=TEX
-}
 
 If you now execute \verb!my_parse_file "usr032a.grm.tst"!, you will see the print-out of the parse tree shown
 in figure~\ref{usr032a.grm.out} (in which the number in brackets after
@@ -406,30 +380,6 @@ The ML definitions given
 in figure~\ref{lex.values} reflect  some of these design decisions.
 
 
-\begin{Fig}{Constructing Lexical Values}{lex.values}
-=SML
-type AE_LEX_VALUE = LEX_CLASS LEX_VALUE;
-type AE_LEX_STATE = LEX_CLASS LEX_STATE;
-fun lv_identifier (s : string) : AE_LEX_VALUE = (
-	(LCIdentifier "identifier", (s, get_line_number()))
-);
-fun lv_literal (s : string) : AE_LEX_VALUE = (
-	(LCIdentifier "literal", (s, get_line_number()))
-);
-fun lv_punctuation c = (LCString c, (c, get_line_number()));
-val lv_left_bracket : AE_LEX_VALUE = lv_punctuation "(";
-val lv_right_bracket : LEX_CLASS LEX_VALUE = lv_punctuation ")";
-val lv_times : AE_LEX_VALUE = lv_punctuation "*";
-val lv_plus : AE_LEX_VALUE = lv_punctuation "+";
-val lv_minus : AE_LEX_VALUE = lv_punctuation "-";
-val lv_over : AE_LEX_VALUE = lv_punctuation "/";
-val lv_equals : AE_LEX_VALUE = lv_punctuation "=";
-val lv_semicolon : AE_LEX_VALUE = (LCEos, (";", get_line_number()));
-val lv_end_of_input : AE_LEX_VALUE =
-	(LCEos, ("<end-of-input>", get_line_number()));
-=TEX
-\end{Fig}
-
 The tools in the structure {\it GenericSlrpParser} provide a framework in which you
 can conveniently define useful lexical
 analyser. In this framework you write what we call recogniser functions for the various
@@ -474,131 +424,9 @@ semicolon to the end of sentence symbol.
 
 TBS --- description of the rest of the lexical analyser.
 
-\begin{Fig}{Recognising Punctuation Symbols}{lex.punctuation}
-=SML
-fun rec_punctuation (("(" :: more, _)  : AE_LEX_STATE)
-	: AE_LEX_STATE
-	= (more, Known  lv_left_bracket)
-|   rec_punctuation ( ")" :: more, _ ) =
-	(more, Known lv_right_bracket)
-|   rec_punctuation ( "*" :: more, _ ) =
-	(more, Known lv_times)
-|   rec_punctuation ( "+" :: more, _ ) =
-	(more, Known lv_plus)
-|   rec_punctuation ( "-" :: more, _ ) =
-	(more, Known lv_minus)
-|   rec_punctuation ( "/" :: more, _ ) =
-	(more, Known lv_over)
-|   rec_punctuation ( ";" :: more, _ ) = 
-	(more, Known lv_semicolon)
-|   rec_punctuation ( "=" :: more, _ ) = 
-	(more, Known lv_equals)
-|   rec_punctuation ( "#" :: _, _ ) = 
-	([], Comment)
-|   rec_punctuation (chs, _) = (chs, Unknown);
-=TEX
-\end{Fig}
-
-
-\begin{Fig}{Recognising an Identifier}{lex.identifier}
-=SML
-fun is_alph_or_us ch = (
-		"a" <= ch andalso ch <= "z"
-	orelse	"A" <= ch andalso ch <= "Z"
-	orelse	ch = "_"
-);
-fun is_digit ch = "0" <= ch andalso ch <= "9";
-val is_alnum = is_alph_or_us fun_or is_digit;
-fun rec_identifier (([], _) : AE_LEX_STATE) : AE_LEX_STATE = (
-	([], Unknown)
-) | rec_identifier (chs as (ch :: more), _) = (
-	let	fun aux acc [] = (implode (rev acc), [])
-		|   aux acc (cs as (c::more)) = (
-			if	is_alnum c
-			then	aux (c::acc) more
-			else	(implode(rev acc), cs)
-		);
-	in	if	is_alph_or_us ch
-		then	let	val (name, rest) = aux [ch] more;
-			in	(rest, Known (lv_identifier name))
-			end
-		else	(chs, Unknown)
-	end
-);
-=TEX
-\end{Fig}
-
-\begin{Fig}{Recognising a Literal}{lex.literal}
-=SML
-fun rec_literal (([], _) : AE_LEX_STATE)
-	: AE_LEX_STATE = (
-	([], Unknown)
-) | rec_literal (chs as (ch :: more), _) = (
-	let	fun aux acc [] = (implode (rev acc), [])
-		|   aux acc (cs as (c::more)) = (
-			if	is_digit c
-			then	aux (c::acc) more
-			else	(implode(rev acc), cs)
-		);
-	in	if	is_digit ch
-		then	let	val (digits, rest) = aux [ch] more;
-			in	(rest, Known (lv_literal digits))
-			end
-		else	(chs, Unknown)
-	end
-);
-=TEX
-\end{Fig}
-
-\begin{Fig}{Dealing with Lexical Errors}{lex.unknown}
-=SML
-fun rec_unknown (( ch :: more, _ ) : AE_LEX_STATE)
-	: AE_LEX_STATE = (
-	output(std_out, "Unrecognised input character \"" ^ ch ^ "\"\n");
-	(more, Comment)
-) | rec_unknown ([], _) = ([], Unknown);
-=TEX
-\end{Fig}
-
-\begin{Fig}{Constructing the Reader}{lex.reader}
-=SML
-val rec_token : AE_LEX_STATE -> AE_LEX_STATE =
-	rec_first[rec_punctuation, rec_identifier, rec_literal, rec_unknown];
-val reader_state : (string list * bool) ref = ref ([], true);
-fun reader (strm : IN_CHAR_STREAM) 
-	: (AE_LEX_VALUE, string list * bool) READER = (
-	let	val do_read = gen_reader LCEos rec_token strm
-	in	fn state =>
-		let	val (tok, state') = do_read state;
-		in	reader_state := state';
-			(tok, state')
-		end
-	end
-);
-=TEX
-\end{Fig}
-
-\begin{Fig}{Constructing the Parser}{lex.parser}
-=SML
-use"usr032a.grm.sml";
-fun parse_string
-	(s : string)  : unit -> LEX_CLASS GEN_PARSE_TREE = (
-	let	val do_parse =
-			slrp'gen_parser
-			default_resolver
-			classifier
-			(default_error string_of_lex_value)
-			(reader(in_char_stream_of_string s));
-		val _ = reader_state := ([], true);
-	in	fn () => do_parse (!reader_state)
-	end
-	
-);
-=TEX
-\end{Fig}
 To test the parser, we can execute the following code which will print out the parse trees for
 the two expressions in the string.
-=SML
+=GFT
 let	val p = parse_string "1 + 2; 3 * 4";
 in	print_tree(p());
 	print_tree(p())
@@ -651,87 +479,14 @@ Sum =		Product			(red_sum1 x1)
 =SH
 slrp -g -l 2 -f  usr032b.grm.txt >usr032b.grm.run 2>&1
 =TEX
-\begin{Fig}{The Reduction Functions for Commands}{actions.commands}
-=SML
-val named_numbers : int S_DICT ref = ref [];
-fun red_command1 (Parsed i) = (
-	named_numbers := s_enter "it" i (!named_numbers);
-	output(std_out, "it = ");
-	i
-);
-fun red_command2 (Token ((_, (s, _)), _)) (Parsed i) = (
-	named_numbers := s_enter s i (!named_numbers);
-	output(std_out, s ^ " = ");
-	i
-);
-=TEX
-\end{Fig}
 
-\begin{Fig}{The Reduction Functions for Expressions}{actions.expressions}
-=SML
-fun red_accept (Parsed i) = i;
-val red_expression = red_accept;
-fun red_atom1 (Token ((_, (s, _)), _)) = nat_of_string s; 
-fun red_atom2 (Token ((_, (s, _)), _)) = (
-	case s_lookup s (!named_numbers) of
-		Value i => i
-	|	Nil => (
-		output(std_out, "Undefined name \"" ^ s ^ "\"\n");
-		raise SYNTAX_ERROR
-	)
-);		
-val red_atom3 = red_accept;
-val red_application1 = red_accept;
-fun red_application2 (Parsed i) =  ~i;
-val red_application3 = red_accept;
-fun red_application4 (Token((_, (s, _)), _)) (Parsed i) = (
-	case s of
-		"abs" => if i < 0 then ~i else i
-	|	"sgn" => if i > 0 then 1 else if i = 0 then 0 else ~1
-	|	_ => (
-		output(std_out, "Unsupported function \"" ^ s ^ "\"\n");
-		raise SYNTAX_ERROR
-	)
-);
-val red_product1 = red_accept;
-fun red_product2 (Parsed i) (Parsed j) = i * j;
-fun red_product3 (Parsed i) (Parsed j) = i div j handle Div => (
-	output(std_out, "Zero divisor\n");
-	raise SYNTAX_ERROR
-);
-val red_sum1 = red_accept;
-fun red_sum2 (Parsed i) (Parsed j) = i + j;
-fun red_sum3 (Parsed i) (Parsed j) = i - j;
-=TEX
-\end{Fig}
-
-\begin{Fig}{Constructing the Parser}{actions.parser}
-=SML
-use"usr032b.grm.sml";
-fun parse_stream
-	(s : instream)  : unit = (
-	let	val do_parse =
-			slrp'gen_parser
-			default_resolver
-			classifier
-			(default_error string_of_lex_value)
-			(reader(in_char_stream_of_instream s));
-		val _ = reader_state := ([], true);
-	in	while snd (!reader_state) do
-			let	val res = do_parse (!reader_state);
-			in	output(std_out, string_of_int res  ^"\n")
-			end	handle SYNTAX_ERROR =>  ()
-	end
-);
-=TEX
-\end{Fig}
-
-If you compile the above code and run the following ML command, you will
+If you compile the code in the figures in sections~ref{Compiling}
+to~\ref{ActionCode} and run the following ML command, you will
 begin an interactive session with our simple calculator program.
 =GFT
 parse_stream std_in;
 =TEX
-If you put a semicolon-separated list of commands in a file and 
+
 \Hide{
 =DUMP usr032b.grm.tst
 # One of everything for the calculator program:
@@ -747,12 +502,13 @@ three = two + - sgn(neg);
 four = twelve/three
 =TEX
 } %\Hide
-If you put a semicolon-separated list of commands in a file say {\tt usr032b.grm.tst},
+
+If you put a semicolon-separated list of commands in a file, say {\tt usr032b.grm.tst},
 then the following command will execute the commands. Note that the calculator
-will not allow the file to end with a semicolon. We suggest as an exercise redesigning
+will not allow the file to end with a semicolon. You may find it a useful exercise to try redesigning
 the calculator to treat semicolons as terminators rather than separators --- there
 are many ways of going about it. One way is discussed in section~\ref{CHECKS} below.
-=SML
+=GFT
 parse_stream (open_in "usr032b.grm.tst");
 =TEX
 \newpage
@@ -800,7 +556,7 @@ InitDecl	= var, `:`, type, `:=`, expr;
 =TEX
 \end{Fig}
 
-\begin{Fig}[ht]{A non-LALR(1) Grammar}{usr032g.grm.txt}
+\begin{Fig}[p]{A non-LALR(1) Grammar}{usr032g.grm.txt}
 =DUMP usr032g.grm.txt
 Command =		Expression
 		|	identifier, `(`, FormalParams, `)`, `=`,  Expression;
@@ -836,7 +592,7 @@ sed -e '/^ExpressionList/,/;/d' \
 	-e '/^Application/,/;/d' \
 	< usr032g.grm.txt > usr032h.grm.txt
 =TEX
-\begin{Fig}[ht]{Making a Grammar LALR(1)}{usr032h.grm.txt}
+\begin{Fig}[p]{Making a Grammar LALR(1)}{usr032h.grm.txt}
 =DUMPMORE usr032h.grm.txt
 Application =	Atom
 		|	`-`, Application
@@ -861,16 +617,302 @@ NonIdExpression =		`(`, Expression, `)`
 \end{Fig}
 
 
+\newpage
 \section{OTHER CHECKS MADE BY \SLRP}\label{CHECKS}
+\begin{Fig}[p]{A Grammar for a Stream Parser}{usr032i.grm.txt}
 =DUMP usr032i.grm.txt
 CommandStream =		GotCommand, `;`, CommandStream	(0);
 
 GotCommand =		Command		(red_got_command x1);
 =TEX
+\end{Fig}
 =SH
 cat usr032b.grm.txt >>usr032i.grm.txt
 =TEX
-\begin{Fig}{Recognising Punctuation Symbols for the Stream Parser}{stream.punctuation}
+=IGN
+stream_parse_stream std_in;
+1+2;
+x = 99;
+y = x;
+stream_parse_stream (open_in "usr032b.grm.tst");
+=TEX
+\section{ERROR HANDLING}\label{ERRORS}
+
+TBS
+
+\newpage
+\appendix
+\section{STANDARD ML CODE EXAMPLES}
+\subsection{Compiling {\SLRP} Parsers}\label{Compiling}
+TBS
+
+\begin{Fig}[h]{Compiling the Generated Parser}{usr032a.grm.sml}
+=SML
+map use [
+	"dtd108.sml",	(* Portability infrastructure *)
+	"imp108.sml",
+	"dtd002.sml",	(* System control and error reporting *)
+	"imp002.sml",
+	"dtd001.sml",	(* Standard ML utilities *)
+	"imp001.sml",
+	"dtd018.sml",	(* SLRP parser driver *)
+	"imp018.sml",
+	"dtd118.sml",	(* Generic SLRP parser support *)
+	"imp118.sml"
+	];
+open GenericSlrpParser;
+use"usr032a.grm.sml";		(* The generated parser code *)
+val my_parse_file : string -> unit =
+	print_tree o parse_file slrp'gen_parser;
+=TEX
+\end{Fig}
+=TEX
+
+\Hide{
+=SML
+ my_parse_file "usr032a.grm.tst";
+=TEX
+}
+
+\newpage
+\subsection{A Lexical Analyser}\label{LexAnCode}
+TBS
+
+\begin{Fig}[h]{Constructing Lexical Values}{lex.values}
+=SML
+type AE_LEX_VALUE = LEX_CLASS LEX_VALUE;
+type AE_LEX_STATE = LEX_CLASS LEX_STATE;
+fun lv_identifier (s : string) : AE_LEX_VALUE = (
+	(LCIdentifier "identifier", (s, get_line_number()))
+);
+fun lv_literal (s : string) : AE_LEX_VALUE = (
+	(LCIdentifier "literal", (s, get_line_number()))
+);
+fun lv_punctuation c = (LCString c, (c, get_line_number()));
+val lv_left_bracket : AE_LEX_VALUE = lv_punctuation "(";
+val lv_right_bracket : LEX_CLASS LEX_VALUE = lv_punctuation ")";
+val lv_times : AE_LEX_VALUE = lv_punctuation "*";
+val lv_plus : AE_LEX_VALUE = lv_punctuation "+";
+val lv_minus : AE_LEX_VALUE = lv_punctuation "-";
+val lv_over : AE_LEX_VALUE = lv_punctuation "/";
+val lv_equals : AE_LEX_VALUE = lv_punctuation "=";
+val lv_semicolon : AE_LEX_VALUE = (LCEos, (";", get_line_number()));
+val lv_end_of_input : AE_LEX_VALUE =
+	(LCEos, ("<end-of-input>", get_line_number()));
+=TEX
+\end{Fig}
+
+
+\begin{Fig}[p]{Recognising Punctuation Symbols}{lex.punctuation}
+=SML
+fun rec_punctuation (("(" :: more, _)  : AE_LEX_STATE)
+	: AE_LEX_STATE
+	= (more, Known  lv_left_bracket)
+|   rec_punctuation ( ")" :: more, _ ) =
+	(more, Known lv_right_bracket)
+|   rec_punctuation ( "*" :: more, _ ) =
+	(more, Known lv_times)
+|   rec_punctuation ( "+" :: more, _ ) =
+	(more, Known lv_plus)
+|   rec_punctuation ( "-" :: more, _ ) =
+	(more, Known lv_minus)
+|   rec_punctuation ( "/" :: more, _ ) =
+	(more, Known lv_over)
+|   rec_punctuation ( ";" :: more, _ ) = 
+	(more, Known lv_semicolon)
+|   rec_punctuation ( "=" :: more, _ ) = 
+	(more, Known lv_equals)
+|   rec_punctuation ( "#" :: _, _ ) = 
+	([], Comment)
+|   rec_punctuation (chs, _) = (chs, Unknown);
+=TEX
+\end{Fig}
+
+
+\begin{Fig}[p]{Recognising an Identifier}{lex.identifier}
+=SML
+fun is_alph_or_us ch = (
+		"a" <= ch andalso ch <= "z"
+	orelse	"A" <= ch andalso ch <= "Z"
+	orelse	ch = "_"
+);
+fun is_digit ch = "0" <= ch andalso ch <= "9";
+val is_alnum = is_alph_or_us fun_or is_digit;
+fun rec_identifier (([], _) : AE_LEX_STATE) : AE_LEX_STATE = (
+	([], Unknown)
+) | rec_identifier (chs as (ch :: more), _) = (
+	let	fun aux acc [] = (implode (rev acc), [])
+		|   aux acc (cs as (c::more)) = (
+			if	is_alnum c
+			then	aux (c::acc) more
+			else	(implode(rev acc), cs)
+		);
+	in	if	is_alph_or_us ch
+		then	let	val (name, rest) = aux [ch] more;
+			in	(rest, Known (lv_identifier name))
+			end
+		else	(chs, Unknown)
+	end
+);
+=TEX
+\end{Fig}
+
+\begin{Fig}[p]{Recognising a Literal}{lex.literal}
+=SML
+fun rec_literal (([], _) : AE_LEX_STATE)
+	: AE_LEX_STATE = (
+	([], Unknown)
+) | rec_literal (chs as (ch :: more), _) = (
+	let	fun aux acc [] = (implode (rev acc), [])
+		|   aux acc (cs as (c::more)) = (
+			if	is_digit c
+			then	aux (c::acc) more
+			else	(implode(rev acc), cs)
+		);
+	in	if	is_digit ch
+		then	let	val (digits, rest) = aux [ch] more;
+			in	(rest, Known (lv_literal digits))
+			end
+		else	(chs, Unknown)
+	end
+);
+=TEX
+\end{Fig}
+
+\begin{Fig}[p]{Dealing with Lexical Errors}{lex.unknown}
+=SML
+fun rec_unknown (( ch :: more, _ ) : AE_LEX_STATE)
+	: AE_LEX_STATE = (
+	output(std_out, "Unrecognised input character \"" ^ ch ^ "\"\n");
+	(more, Comment)
+) | rec_unknown ([], _) = ([], Unknown);
+=TEX
+\end{Fig}
+
+\begin{Fig}[p]{Constructing the Reader}{lex.reader}
+=SML
+val rec_token : AE_LEX_STATE -> AE_LEX_STATE =
+	rec_first[rec_punctuation, rec_identifier, rec_literal, rec_unknown];
+val reader_state : (string list * bool) ref = ref ([], true);
+fun reader (strm : IN_CHAR_STREAM) 
+	: (AE_LEX_VALUE, string list * bool) READER = (
+	let	val do_read = gen_reader LCEos rec_token strm
+	in	fn state =>
+		let	val (tok, state') = do_read state;
+		in	reader_state := state';
+			(tok, state')
+		end
+	end
+);
+=TEX
+\end{Fig}
+
+\begin{Fig}[p]{Constructing the Parser}{lex.parser}
+=SML
+use"usr032a.grm.sml";
+fun parse_string
+	(s : string)  : unit -> LEX_CLASS GEN_PARSE_TREE = (
+	let	val do_parse =
+			slrp'gen_parser
+			default_resolver
+			classifier
+			(default_error string_of_lex_value)
+			(reader(in_char_stream_of_string s));
+		val _ = reader_state := ([], true);
+	in	fn () => do_parse (!reader_state)
+	end
+	
+);
+=TEX
+\end{Fig}
+
+\newpage
+\subsection{Adding Actions}\label{ActionCode}
+
+TBS
+
+\begin{Fig}[h]{The Reduction Functions for Commands}{actions.commands}
+=SML
+val named_numbers : int S_DICT ref = ref [];
+fun red_command1 (Parsed i) = (
+	named_numbers := s_enter "it" i (!named_numbers);
+	output(std_out, "it = ");
+	i
+);
+fun red_command2 (Token ((_, (s, _)), _)) (Parsed i) = (
+	named_numbers := s_enter s i (!named_numbers);
+	output(std_out, s ^ " = ");
+	i
+);
+=TEX
+\end{Fig}
+
+
+\begin{Fig}[p]{The Reduction Functions for Expressions}{actions.expressions}
+=SML
+fun red_accept (Parsed i) = i;
+val red_expression = red_accept;
+fun red_atom1 (Token ((_, (s, _)), _)) = nat_of_string s; 
+fun red_atom2 (Token ((_, (s, _)), _)) = (
+	case s_lookup s (!named_numbers) of
+		Value i => i
+	|	Nil => (
+		output(std_out, "Undefined name \"" ^ s ^ "\"\n");
+		raise SYNTAX_ERROR
+	)
+);		
+val red_atom3 = red_accept;
+val red_application1 = red_accept;
+fun red_application2 (Parsed i) =  ~i;
+val red_application3 = red_accept;
+fun red_application4 (Token((_, (s, _)), _)) (Parsed i) = (
+	case s of
+		"abs" => if i < 0 then ~i else i
+	|	"sgn" => if i > 0 then 1 else if i = 0 then 0 else ~1
+	|	_ => (
+		output(std_out, "Unsupported function \"" ^ s ^ "\"\n");
+		raise SYNTAX_ERROR
+	)
+);
+val red_product1 = red_accept;
+fun red_product2 (Parsed i) (Parsed j) = i * j;
+fun red_product3 (Parsed i) (Parsed j) = i div j handle Div => (
+	output(std_out, "Zero divisor\n");
+	raise SYNTAX_ERROR
+);
+val red_sum1 = red_accept;
+fun red_sum2 (Parsed i) (Parsed j) = i + j;
+fun red_sum3 (Parsed i) (Parsed j) = i - j;
+=TEX
+\end{Fig}
+
+\begin{Fig}[p]{Constructing the Parser}{actions.parser}
+=SML
+use"usr032b.grm.sml";
+fun parse_stream
+	(s : instream)  : unit = (
+	let	val do_parse =
+			slrp'gen_parser
+			default_resolver
+			classifier
+			(default_error string_of_lex_value)
+			(reader(in_char_stream_of_instream s));
+		val _ = reader_state := ([], true);
+	in	while snd (!reader_state) do
+			let	val res = do_parse (!reader_state);
+			in	output(std_out, string_of_int res  ^"\n")
+			end	handle SYNTAX_ERROR =>  ()
+	end
+);
+=TEX
+\end{Fig}
+
+
+\newpage
+\subsection{Stream Parser}
+TBS
+
+\begin{Fig}[h]{Recognising Punctuation Symbols for the Stream Parser}{stream.punctuation}
 =SML
 val lv_semicolon : AE_LEX_VALUE = lv_punctuation ";";
 fun rec_punctuation (("(" :: more, _)  : AE_LEX_STATE)
@@ -895,7 +937,8 @@ fun rec_punctuation (("(" :: more, _)  : AE_LEX_STATE)
 |   rec_punctuation (chs, _) = (chs, Unknown);
 =TEX
 \end{Fig}
-\begin{Fig}{Constructing the Stream Parser}{stream.parser}
+
+\begin{Fig}[p]{Constructing the Stream Parser}{stream.parser}
 =SML
 val rec_token : AE_LEX_STATE -> AE_LEX_STATE =
 	rec_first[rec_punctuation, rec_identifier, rec_literal, rec_unknown];
@@ -927,26 +970,23 @@ fun stream_parse_stream
 );
 =TEX
 \end{Fig}
-TBS - add an error handle to the above to exit cleanly on end of input.
-=IGN
-stream_parse_stream std_in;
-1+2;
-x = 99;
-y = x;
-stream_parse_stream (open_in "usr032b.grm.tst");
-=TEX
-\section{ERROR HANDLING}\label{ERRORS}
 
-\appendix
-
+TBS - add an error handler to the above to exit cleanly on end of input.
+\newpage
 \section{COMMAND LINE INTERFACE}\label{COMMAND}
+TBS
 
+\newpage
 \section{SLRP INPUT FORMAT}\label{INPUTFORMAT}
+TBS
 
+\newpage
 \section{STANDARD ML  LIBRARY}\label{LIBRARY}
+TBS
 
+\newpage
 \section{PARSER DRIVER INTERFACE}\label{DRIVERINTERFACE}
-
+TBS
 \Hide{
 =SH
 for c in d e f g h i
