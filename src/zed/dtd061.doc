@@ -20,8 +20,8 @@
 \TPPstatus{Draft}
 \TPPtype{Specification}
 \TPPkeywords{HOL}
-\TPPauthor{D.J.~King & WIN01}  %% Mandatory field
-%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+%\TPPauthor{D.J.~King & WIN01}  %% Mandatory field
+\TPPauthors{R.D.~Arthan&WIN01\\D.J.~King&WIN01}
 \TPPauthorisation{R.D.~Arthan & HAT Manager}
 \TPPabstract{
 This document contains the detailed design for the
@@ -120,13 +120,13 @@ before a reduction function is called which prints an error.
 \subsection{Templates}
 
 A function applied to an argument is represented either as a template
-e.g., Ò(_ + _) (1, 2)Æ, or with the fixity rule applied; thus
+e.g., Ò(\_ + \_) (1, 2)Æ, or with the fixity rule applied; thus
 Ò1 + 2Æ. It is necessary that diagnostic messages reproduce
 the user's input verbatim. There are at least two ways of achieving
 this.
 
 \begin{itemize}
-\itemize[1.]
+\item[1.]
 A count of the number of characters read is maintained, and used to
 print out the user's input upto the point where an error occurred.
 Since it is intended that post-processing in the reduction functions
@@ -134,7 +134,7 @@ is carried out, it is necessary to maintain an up-to-date
 record of the number of characters read at each point a
 reduction is applied.
 
-\itemize[2.]
+\item[2.]
 The structural information necessary to reproduce the user's input
 needs to be maintained in the data structure which represents a
 parsed Z paragraph.
@@ -144,9 +144,456 @@ information might be lost, and that information be recorded in the data
 structure for parsed paragraphs.
 \end{itemize}
 
+\section{GRAMMAR}
 
+The grammar of  \cite{DS/FMU/IED/DEF007} requires some recasting
+for use in the parser. This section contains the actual form
+for processing with $SLRP$ and inclusion in the implementation.
 
+The main differences in the grammar is the  widening of the grammar for
+$Expr1$ to allow its re-use (possibly with some extra checks) in
+all places in the grammar where applied use
+of something approximately like a fancy-fix expression is called for.
+In more detail this works out as follows.
+
+\begin{enumerate}
+\item
+We identify 8 lexical classes for identifiers used to form
+fancy-fix expressions, as follows (where \ldots\ stands for
+a non-empty part of the expression)
+
+\begin{tabular}{|l|l|}\hline
+Class & Position in Expression \\\hline
+$InOp$		&	\_ $Id$ \_			\\\hline
+$PostOp$	&	\_ $Id$				\\\hline
+$PreOp$		&	$Id$ \_				\\\hline
+$BeginOp$	&	$Id$ \_ \ldots			\\\hline
+$PostBeginOp$	&	\_ $Id$ \_ \ldots		\\\hline
+$ThenOp$	&	\ldots\ \_ $Id$ \_ \ldots	\\\hline
+$EndOp$		&	\ldots\ \_ $Id$			\\\hline
+$PreEndOp$	&	\ldots\ \_ $Id$ \_		\\\hline
+\end{tabular}
+
+\item
+In the fixity paragraph, we give a simple SLR(1) grammar for templates
+equivalent to that of \cite{DS/FMU/IED/DEF007}. This grammar just
+uses the terminal $Id$ for the constituent identifiers. The parser
+suppresses the classification of identifiers as $InOp$ etc. while it
+is processing fixity paragraphs and then after making the required
+uniqueness checks uses the information in the fixity paragraphs
+to update the tables in which the classification information is held.
+\item
+The six places in the grammar of \cite{DS/FMU/IED/DEF007} in which
+fancy-fix forms occur, namely $DefLhs$, $Branch$, $Pred4$, $Expr1$,
+$VarName$ and $DecName$.
+are handled uniformly by re-using the $Expr1$ syntax, widened to
+allow both argument place-holders and actual arguments to appear.
+The parser then checks at the point of use whether the $Expr1$ has
+the correct form.
+\end{enumerate}
+
+\subsection{Paragraphs}
+We map the terms, given sets and constraints of \cite{DS/FMU/IED/DEF007}
+onto a single nonterminal, $GeneralTerm$. This is done because of
+SLR(1) problems right at the other end of the grammar in
+$Expr4$.
+This enables one parser to handle all of the requirements for parsing Z.
+=DUMP dtd061.grm.txt
+€Paragraph›		= Fixity
+			| GeneralTerm
+			| AbbDef
+			| FreeTypeDef
+			| AxBox
+			| Conjecture;
 =TEX
+\subsubsection{Fixity Paragraph}
+
+Several points are to be noted in these productions.
+\begin{enumerate}
+\item
+The generic template $GTemplate$ and $Template$ of \cite{DS/FMU/IED/DEF007}
+are
+commoned up in this production.
+\item
+The $rel$ option does not have numeric parameter. This
+is not the case in the production, and a subsequent
+check is required.
+\item
+We anticipate that early on in the parsing process the parser will
+look at the first token of the paragraph and, if it is `$fun$',
+`$gen$' or `$rel$', the parser will arrange for all non-reserved identifiers
+to be classified as $Id$ (rather than $PreOp$ etc.).
+The parser will then check after parsing that the uniqueness rules
+for each template are satisfied.
+\item
+The forms of template containing decoration are not allowed in
+a fixity paragraph.
+\end{enumerate}
+
+=DUMPMORE dtd061.grm.txt
+€Fixity›			= FixityClass, Templates
+			| FixityClass, Number, Templates;
+
+€FixityClass›		= `fun` | `gen` | `rel`;
+=TEX
+=DUMPMORE dtd061.grm.txt
+€Templates›		= Template
+			| Template, `,`, Templates;
+
+€Template›		= StubIds
+			| IdStubs;
+
+€StubIds›			= Stub, Id
+			| Stub, Id, Stub
+			| Stub, Id, StubIds;
+
+€IdStubs›			= Id, Stub
+			| Id, Stub, Id
+			| Id, Stub, IdStubs;
+=TEX
+
+\subsubsection{Given Set Definition, Constraint and Term}
+$Expr4$ q.v. has been widened to allow a $Pred$ to begin
+with a generic formal parameter list. This should only be allowed at
+the outermost level, and then the resulting $Pred$ is either a generic one
+or if it consists of a single generic formal parameter list it must
+be a given set definition.
+
+=DUMPMORE dtd061.grm.txt
+€GeneralTerm›	= Pred
+			| Pred, `&`, AxBox
+			| Pred, `&`, Pred;
+=TEX
+Note that in the second two forms the first $Pred$ has to be a given
+set definition and that these forms are only allowed when the
+$GeneralTerm$ is serving as a constraint.
+
+A $GeneralTerm$ used as a term is distinguished by the use of 
+the Z Quine corners to delimit it.
+=TEX
+\subsubsection{Abbreviation Definition}
+=DUMPMORE dtd061.grm.txt
+€AbbDef›		= EqDef
+			| `SCH`, DefLhs, `IS`, Decl, `ST`, Pred, `END`
+			| `SCH`, DefLhs, `IS`, Decl, `END`;
+
+€EqDef›			= DefLhs, `¶`, Pred;
+=TEX
+We take the meat of a $DefLhs$ just as $Expr1$. It is required that the expression
+be a simple variable or a possibly fancy-fix
+generic instantiation thereof.
+=DUMPMORE dtd061.grm.txt
+€DefLhs›		= Expr1;
+=TEX
+\subsubsection{FreeType Definition}
+We take $Branches$ to be a `$\vert$' separated list of $Expr1$s.
+This is the {\em only} place in the grammar where an $Expr1$ containing
+`...' is permitted.
+
+Here the $Expr1$s on the left of
+the `$::=$' are the $DecName$s of \cite{DS/FMU/IED/DEF007}.
+=DUMPMORE dtd061.grm.txt
+€FreeTypeDef›		= Expr1, `::=`, Branches
+			| Expr1, `::=`, Branches, `&`, FreeTypeDef;
+
+€Branches›		= Pred
+			| Pred, `|`, Branches;
+=TEX
+\subsection{Axiomatic box}
+=DUMPMORE dtd061.grm.txt
+€AxBox›		= `AX`, Decl, `END`
+			| `AX`, `[`, SomeExprs, `]`, Decl, `END`
+			| `AX`, Decl, `ST`, Pred, `END`
+			| `AX`, `[`, SomeExprs, `]`, Decl, `ST`, Pred, `END`;
+=TEX
+\subsection{Conjecture}
+As with constraint we just use $Pred$ for the notion of a possibly generic term:
+=DUMPMORE dtd061.grm.txt
+€Conjecture›		= `Ù`, Pred
+			| Id, `Ù`, Pred;
+=TEX
+\section{PREDICATES, SCHEMAS AND EXPRESSIONS}
+\subsection{Discussion}
+The constructs containing quantifiers or logical
+operators create a problem because with them the context
+determines whether they are schema forms or predicate forms.
+
+The issue here is that some contexts require predicates, some require
+expressions and others may permit either depending on outer context.
+A schema expression will serve as either a predicate or an expression.
+However, a construct formed with quantifiers or logical operators (which we
+assume is taken to be a predicate by default) needs recasting
+where an expression is required.
+Wherever relevant in the grammar which follows we state what the
+contextual rules which enable these distinctions to be made.
+
+The main difference between Z and extended Z is that extended Z also permits
+predicates as expressions and vice versa.
+Thus the contextual rules mentioned in the previous paragraph are not
+enforced for extended Z.
+Since the contextual distinction evaporates,
+some way is needed to provide a context
+in which a schema expression formed with quantifiers or logical operators
+is required. Such a context is supplied by the `∫' operator, for which
+the left-hand operator is taken to be in a context in which the rules
+of standard Z apply (to the quantifiers and/or logical operations at
+the top levels). 
+For example, in standard Z:
+
+=GFT Standard Z Examples
+ÒA ± BÆ					is a predicate conjunction
+ÒµA | a = a ∑ BÆ				is a predicate quantifier
+Ò[x:A ± B | x.c = 1]Æ				contains a schema conjunction
+=TEX
+
+However, in extended Z:
+
+=GFT Extended Z Examples
+Ò(A ± B) ç {true}Æ				contains a predicate conjunction
+Ò(µA | a = a ∑ B) ∫ [A; B]Æ			contains a schema quantifier
+Ò(A ± B ≤ C § D] ∫ [A; B; C; D]Æ		contains no predicate logical operators
+Ò(A ± [B | C ± D] ∫ [A; B]Æ			contains both sorts of conjunction
+=TEX
+The point in the last example is that the local reversion to standard
+Z to the left of the `∫' does not apply to the conjunction nested inside
+the horizontal schema but only to the outermost logical operators and/or
+quantifiers.
+\subsection{Predicate}
+In a $Pred$ the $Pred1$s are contexts requiring predicates.
+=DUMPMORE dtd061.grm.txt
+€Pred›			= Pred1
+			| Pred1, `;`, Pred;
+=TEX
+$Pred1$, $Pred2$ and $Pred2$ cater for both schemas and predicates.
+
+In a $Pred1$, the constituent $Pred1$s and $Pred2$ are contexts
+where either expressions or predicates are allowed.
+
+=DUMPMORE dtd061.grm.txt
+€Pred1›			= Pred2
+			| Quant, Decl, `|`, Pred, `∑`, Pred1
+			| Quant, Decl, `∑`, Pred1
+			| `let`, EqDefs, `∑`, Pred1
+			| `open`, Expr, `∑`, Pred1;
+=TEX
+In a $Pred2$, the constituent $Pred2$s and $Pred3$ are contexts
+where either expressions or predicates are allowed.
+=DUMPMORE dtd061.grm.txt
+€Pred2›			= Pred3
+			| Pred2, LogInOp, Pred2;
+=TEX
+In a $Pred3$, the constituent $Schema2$s and $Pred3$ are contexts
+where either expressions or predicates are allowed.
+
+=DUMPMORE dtd061.grm.txt
+€Pred3›			= Schema2
+			| `≥`, Pred3;
+=TEX
+
+As in \cite{DS/FMU/IED/DEF007},
+we assume that equality and membership are classified as $InRel$s, so that
+they do not need a production of their own but just fall under the
+appropriate alternative of $Expr1$, q.v.
+\subsection{Schemas}
+
+\subsection{Schema}
+In the first sort of $Schema2$, the constituent $Schema3$ is a context where an
+expression or predicate is allowed. In the second sort of $Schema2$
+the constituent $Schema2$s are contexts where only an expression is allowed.
+=DUMPMORE dtd061.grm.txt
+€Schema2›		= Schema3
+			| Schema2, SchInOp, Schema2;
+=TEX
+In the first sort of $Schema3$, the constituent $Schema4$ is a context where an
+expression or predicate is allowed. In the second sort of $Schema3$
+the constituent $Schema3$s are contexts where only an expression is allowed.
+=DUMPMORE dtd061.grm.txt
+€Schema3›		= Schema4
+			| SchPreOp, Schema3;
+=TEX
+$SchPreOp$ comprises the prefix special purpose schema operators:
+
+In the first sort of $Schema4$, the constituent $Expr$ is a context where an
+expression or predicate is allowed. In the other sorts of $Schema4$
+the constituent $Schema4$s are contexts where only an expression is allowed.
+
+The renaming operation is another source of SLR(1) parsing problems
+(which arise from the use of square brackets for lots of different
+purposes).
+It is handled here by taking $RenameList$ as one of the options for
+$Expr4$. The parser must check that the position in the expression
+of any $RenameList$s agrees with the grammar of \cite{DS/FMU/IED/DEF007}
+and then move them out to their proper position.
+=DUMPMORE dtd061.grm.txt
+€Schema4›		= Expr0
+			| Schema4, `\\`, `(`, SomeExprs, `)` ;
+
+€RenameList›		= `[`, Renames, `]`;
+
+€Renames›		= Expr1, `/`, Expr1
+			| Expr1, `/`, Expr1, `,`, Renames;
+=TEX
+\subsection{Declaration}
+In order to allow a declaration which does not
+comprise just one schema-as-declaration
+to be detected (e.g. in set comprehensions), we rework
+the grammar of $Decl$.
+=DUMPMORE def007.grm.txt
+€Decl›			= DeclMinusPred
+			| Pred1;
+=TEX
+=DUMPMORE def007.grm.txt
+€DeclMinusPred›	= DeclSemi, VarDecs, Pred1
+			| DeclSemi, Pred1
+			| VarDecs, Pred1;
+
+€VarDecs›		= DecName, `:`
+			| DecName, `,`, VarDecs;
+
+€DeclSemi›		= VarDecs, Pred1, `;`
+			| Pred1, `;`
+			| DeclSemi, VarDecs, Pred1, `;`
+			| DeclSemi, Pred1, `;`;
+=TEX
+\subsection{Expressions}
+In the first sort of $Expr0$, the constituent $Expr1$ is a context where an
+expression or predicate is allowed. In the other sorts of $Expr0$
+the constituent $Expr0$s are contexts where only an expression is allowed.
+
+=DUMPMORE dtd061.grm.txt
+€Expr0›			= Expr1
+			| MuLambda, Decl, `∑`, Expr0
+			| MuLambda, Decl, `|`, Pred, `∑`, Expr0;
+=TEX
+=DUMPMORE dtd061.grm.txt
+€EqDefs›		= EqDef
+			| EqDef, `,`, EqDefs;
+=TEX
+
+Note that while cartesian product looks like a binary operator here,
+it is actually a family of $n$-ary operations. one for each $n æ 2$.
+
+In the first sort of $Expr1$, the constituent $Expr2$ is a context where an
+expression or predicate is allowed. In the other sorts of $Schema4$
+the constituent $Expr1$s are contexts where only an expression is allowed.
+The resulting $Expr1$ is an expression unless the template matching
+the $Expr1$ comes from a `$rel$' fixity paragraph in which case it
+is a predicate. 
+=DUMPMORE dtd061.grm.txt
+€Expr1›			= Expr2
+			| PreOp, Expr1
+			| Expr1, PostOp
+			| Expr1, InOp, Expr1
+			| BeginOp, CoreExpr, EndOp
+			| BeginOp, CoreExpr, PreEndOp, Expr1
+			| Expr1, PostBeginOp, CoreExpr, EndOp
+			| Expr1, PostBeginOp, CoreExpr, PreEndOp, Expr1
+			| Expr1, `∏`, Expr1;
+=TEX
+The above reformulation requires the following auxiliary productions
+(in which the third form is only permitted on the right-hand side
+of a free type definition):
+=DUMPMORE dtd061.grm.txt
+
+€CoreExpr›		= Exprs
+			| Exprs, ThenOp, CoreExpr
+			| Exprs, `...`, ThenOp, CoreExpr;
+=TEX
+=DUMPMORE dtd061.grm.txt
+€Exprs›			=
+			| SomeExprs;
+=TEX
+In both sorts of $SomeExprs$, the constituent $Pred1$s are contexts where
+only expressions are allowed. 
+=DUMPMORE dtd061.grm.txt
+€SomeExprs›		= Pred1
+			| Pred1, `,`, SomeExprs;
+=TEX
+In the first sort of $Expr2$, the constituent $Expr3$ is a context where an
+expression or predicate is allowed. In the other sort of $Expr2$
+the constituent $Expr3$ is a context where only an expression is allowed.
+=DUMPMORE dtd061.grm.txt
+€Expr2›			= Expr3
+			| ``, Expr2;
+=TEX
+In the first sort of $Expr3$, the constituent $Expr4$ is a context where an
+expression or predicate is allowed. In the other sort of $Expr3$
+the constituent $Expr3$s and $Expr4$s are contexts
+where only an expression is allowed.
+
+The parser is expected to move decoration at the end of the  -form
+out into the abstract  -construct. Note it must distinguish
+=INLINEFT
+ (x')
+=TEX
+\ from
+=INLINEFT
+ (x)'
+=TEX
+\ etc.
+We have to expand the rule for $VarName$ to get an LR(1) grammar.
+=DUMPMORE dtd061.grm.txt
+€Expr3›			= Expr4
+			| Expr3, Expr4
+			| ` `, Expr4
+			| Expr3, `.`, IdDec
+			| Expr3, `.`, `(`, Template, `)`
+			| Expr3, `.`, Number;
+=TEX
+In an $Expr4$, any constituent $Pred1$s are contexts in which
+only an expression is allowed.
+The $Pred$ in the third sort of $Expr4$ is a context where an expression
+or a predicate is allowed.
+Any $Pred$s immediately after `$\vert'$s in an $Expr4$ are contexts
+where only a predicate is allowed.
+
+The form comprising an expression list in square brackets is intended
+for generic parameter lists (which also serve for generic constraints
+and conjectures and for given set definitions).
+
+In the form which covers $Pred$ in brackets and tuple displays,
+the initial $Pred$ must actually be a $Pred1$ if it is a tuple display.
+=DUMPMORE dtd061.grm.txt
+€Expr4›			= IdDec
+			| `_`
+			| Number
+			| String
+			| `(`, Pred, `,`, Exprs, `)`
+			| `(`, EqDefs, `)`
+			| `ß`, Exprs, `¢`
+			| `{`, SomeExprs, `}`
+			| `{`, Decl, `|`, Pred, `}`
+			| `{`, DeclMinusPred, `}`
+			| `{`, Decl, `|`, Pred, `∑`, Pred1, `}`
+			| `{`, Decl, `∑`, Pred1, `}`
+			| `[`, Decl, `|`, Pred, `]`
+			| `[`, DeclMinusPred, `]`
+			| `[`, SomeExprs, `]`
+			| RenameList
+			| `(`, Pred, `)`, Decor;
+=TEX
+\subsection{Names}
+=TEX
+=DUMPMORE dtd061.grm.txt
+€IdDec›			= Id
+			| Id, Decor;
+=TEX
+
+
+=SH
+(poly `arch`slrp.db <<!
+Slrp.slrp{
+	infile="dtd061.grm.txt",
+	outfile="dtd061.grm.sml",
+	logfile="dtd061.grm.log",
+	eos="ZLEos",
+	loglevel=2};
+PolyML.quit();
+!
+)  1>&2
+# )  | tee dtd061.grm.run 1>&2
+=TEX
+
 \section{DATA TYPES}
 The first phase of the parser will return a value of type $ZTM$ defined
 in \cite{DS/FMU/IED/DTD062}.
