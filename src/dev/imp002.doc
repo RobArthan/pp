@@ -70,9 +70,10 @@ $set\_flag$ and associated functions changed, to return previous value of contro
 Modified $new\_error\_message$ to only give an error if given a duplicate $id$, but also a differing $text$.
 \item [Issue 1.11]
 Added $pass\_on$.
-\item [Isse \SCCSversion (\FormatDate{$Date$%
-})]
+\item [Issue 1.12 (4 July 1991)]
 $new\_error\_message$ no longer raises exceptions.
+\item [Issue \SCCSversion (\FormatDate{$Date$%
+})] Rework after inspection (ID0019) of DTD002.
 \end{description}
 \subsection{Changes forecast}
 \section{GENERAL}
@@ -216,12 +217,20 @@ fun âerrorá (area : string) (id : int) (inserters : (unit -> string) list) : 'a 
 \subsection{Printing Errors}
 
 =SML
-fun âget_messageá (Message msg:MESSAGE) : string = (
+fun âget_message_textá (Message msg:MESSAGE) : string = (
 	let	val {area:string, id:int, inserters:(unit->string)list} = msg;
 		val inserts = map (fn f=> f())inserters;
+	in	(get_error_message id inserts)
+		handle Error _ => ("ERROR 2002 raised by get_message: " ^
+			get_error_message 2002 [PolyML.makestring id])
+	end
+);
+=SML
+fun âget_messageá ((arg as (Message msg)):MESSAGE) : string = (
+	let	val {area:string, id:int, ...} = msg;
+		val text = get_message_text arg;
 		val number = PolyML.makestring id;
-	in	"ERROR " ^ number ^ " raised by " ^ area ^ ": " ^
-		(get_error_message id inserts)
+	in	(get_error_message 2003 [number, area, text])
 		handle Error _ => ("ERROR 2002 raised by get_message: " ^
 			get_error_message 2002 [PolyML.makestring id])
 	end
@@ -230,7 +239,8 @@ fun âget_messageá (Message msg:MESSAGE) : string = (
 We arrange for PolyML automatically to format error reports
 using the following function.
 =SML
-val _ = let
+fun âsetup_ppá (():unit) : unit = (
+	let
 		fun error_pp (addstring, beginb, space, endb) (msg:MESSAGE) = (
 			let	fun aux [] = (endb())
 				|   aux (ch :: chs) = (
@@ -247,7 +257,8 @@ val _ = let
 		);
 	in
 		PolyML.install_pp error_pp
-	end;
+	end
+);
 =TEX
 \subsection{Support for Error Handling}
 =SML
@@ -295,6 +306,14 @@ in
 	then reraise e tonm
 	else reraise e efrom
 end);
+=TEX
+\subsection{Initialisation}
+=SML
+val _ = setup_pp();
+=TEX
+=SML
+val âicl'error_initá : unit -> unit = setup_pp;
+=TEX
 =SML
 end; (* Of structure BasicError *)
 =SML
@@ -327,9 +346,9 @@ fun ânew_controlá
 	(func_name : string)
 	(var : 'a CONTROL_REC list ref)
 	(record as {name, ...}:'a CONTROL_REC) : unit = (
-	let	val SideEffect = lookup "" (!var) name
-	in	fail func_name 2010 [fn()=>name]
-	end	handle Fail _ => (var := record :: (!var))
+	if ((lookup "" (!var) name; true) handle Fail _ => false) 
+	then	fail func_name 2010 [fn()=>name]
+	else	(var := record :: (!var))
 );
 =SML
 fun âset_controlá
@@ -384,11 +403,10 @@ fun âget_controlsá
 The function for introducing flags is the odd man out,
 in that its parameter record does not have the $check$ field.
 =SML
-fun ânew_flagá {name:string, control:bool ref, default:unit->bool} : unit = (
+val ânew_flagá : {name:string, control:bool ref, default:unit->bool, check:bool->bool} -> unit = (
 	new_control
 	"new_flag"
 	flags
-	{name=name, control=control, default=default, check=(fn _=>true)}
 );
 =SML
 val ânew_int_controlá : {name:string, control:int ref, default:unit->int, check:int->bool} -> unit
@@ -424,6 +442,13 @@ val âget_int_controlsá : unit -> (string * int) list
 	= get_controls "get_int_control" int_controls;
 val âget_string_controlsá : unit -> (string * string) list
 	= get_controls "get_string_control" string_controls;
+=SML
+fun âget_controlsá ((): unit)
+	:	((string * bool) list *
+		(string * int) list *
+		(string * string) list) = (
+	(get_flags(), get_int_controls(), get_string_controls())
+);
 =TEX
 That completes the structure:
 =SML
