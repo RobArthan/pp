@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.287 $ $RCSfile: imp507.doc,v $ $Date: 2004/11/03 16:43:52 $
+% imp507.doc %Z% $Revision: 1.288 $ $RCSfile: imp507.doc,v $ $Date: 2004/11/17 16:29:20 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.287 $%
+\def\SCCSversion{$Revision: 1.288 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/11/03 16:43:52 $%
+\TPPdate{\FormatDate{$Date: 2004/11/17 16:29:20 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -225,6 +225,7 @@ by doing all the work of checking and generating the VC terms in {\it call\_vcs}
 \item[Issue 1.286] Fix to informal procedure unsoundness problem. Informal procedures are tracked in the environments so that an informal procedure and a formal procedure of the same name cannot happen.
 \item[Issue 1.287] Made it allow renaming of informal functions in package specifications.
 \item[Issue 1.288] Informal functions that have been forward declared no longer give rise to an error.
+Use clauses in package specifications now propage into the package body.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -500,6 +501,27 @@ fun €package_decl› (
 );
 =TEX
 =SML
+fun €package_local_dict› (
+	{vc_vars, consts_types, formal_procs, informal_procs, informal_funs,
+		formal_funs, aux_vars, var_renamings, zmod, decl, local_dict, with_dict}
+	: PACKAGE,
+	new_local_dict : ENV_DICT) : PACKAGE = (
+	{	vc_vars				=	vc_vars,
+		consts_types			=	consts_types,
+		formal_procs			=	formal_procs,
+		informal_procs			=	informal_procs,
+		informal_funs			=	informal_funs,
+		formal_funs			=	formal_funs,
+		aux_vars			=	aux_vars,	
+		var_renamings			= var_renamings,
+		zmod				=	zmod,
+		decl				=	decl,
+		local_dict				=	new_local_dict,
+		with_dict				=	with_dict
+	}	
+);
+=TEX
+=SML
 fun €package_with_dict› (
 	{vc_vars, consts_types, formal_procs, informal_procs, informal_funs,
 		formal_funs, aux_vars, var_renamings, zmod, decl, local_dict, with_dict}
@@ -665,11 +687,9 @@ fun €in_scope_vc_pars›
 =TEX
 The additional optional environment dictionary does not make sense for the following update function:
 =SML
-fun €in_scope_renamings›
-	(in_scope as {
-		dict = dict,
-		dec_labels = _} : IN_SCOPE, 
-	renamings : (Z_ID * Z_ID) list) : IN_SCOPE = (
+fun €dict_renamings›
+	(dict : ENV_DICT, 
+	renamings : (Z_ID * Z_ID) list) : ENV_DICT = (
 		let	fun mk_renamed_info (new, orig) = (
 				(new,
 				case env_of_env_dict dict orig of
@@ -678,7 +698,18 @@ fun €in_scope_renamings›
 					[fn _ => orig])				
 			);
 			val names_infos = map mk_renamed_info renamings;
-			val new_dict = add_to_env_dict dict names_infos
+		in	add_to_env_dict dict names_infos
+		end
+);
+=TEX
+The additional optional environment dictionary does not make sense for the following update function:
+=SML
+fun €in_scope_renamings›
+	(in_scope as {
+		dict = dict,
+		dec_labels = _} : IN_SCOPE, 
+	renamings : (Z_ID * Z_ID) list) : IN_SCOPE = (
+		let			val new_dict = dict_renamings(dict, renamings);
 		in	in_scope_dict(in_scope, new_dict)
 		end
 );
@@ -1614,7 +1645,8 @@ val €dummy_informal_fun› : INFORMAL_FUN = {
 val €dummy_formal_fun› : FORMAL_FUN = {
 		informal_fun	=	dummy_informal_fun,
 		spec		=	dummy_spec,
-		globals		=	[]};
+		globals		=	[],
+		renames		=	Nil};
 val €dummy_formal_proc› : FORMAL_PROC = {
 		name		=	"*dummy formal proc*",
 		formal_ids	=	[],
@@ -2455,7 +2487,8 @@ fun €ti_context_of_speclab› (speclab : SPECLAB) : TYPE E_DICT = (
 				case env (trans_id (#name inf_fun)) of
 					Value{info =EIEnvFunction {deps = gs, ...}, ...} => gs
 				|	_ =>
-					fail "ti_context_of_speclab" 508081 [fn()=> #name inf_fun]};
+					fail "ti_context_of_speclab" 508081 [fn()=> #name inf_fun],
+			renames = Nil};
 		in	list_e_enter cxt (map dest_var(frees(fun_decl env form_fun)))
 		end
 	else	ti_context_of_in_scope (#in_scope speclab)
@@ -5294,7 +5327,8 @@ fun €trans_formal_fun› (cnenv : CN_ENV)
 			(form_fun as {
 			spec as {pre, post, ...},
 			informal_fun as {formal_pars, ...},
-			globals} : FORMAL_FUN)
+			globals,
+			renames = Nil} : FORMAL_FUN)
 				: PARAINFO * Z_PRED * Z_PRED= (
 	let	val dec = fun_decl cnenv form_fun;
 		val pardecs = map z_par_decl formal_pars
@@ -5310,6 +5344,11 @@ fun €trans_formal_fun› (cnenv : CN_ENV)
 		val imp = z_imp(z_pre, z_post);
 		val pred = z_forall_opt(globdecs, z_forall_opt(pardecs, imp));
 	in	(AxDesInfo([], mk_z_decl[dec], Value pred, ntys), z_pre, z_post)
+	end
+) | trans_formal_fun cnenv {informal_fun as {name = new_name, ...}, renames = Value old_z_name, ...} = (
+	let	val tm = zid cnenv old_z_name;
+		val new_z_name = trans_id new_name;
+	in	(AbbDefInfo(new_z_name, [], tm), mk_t, mk_t)
 	end
 );
 =TEX
@@ -5380,7 +5419,8 @@ fun €store_trans_formal_fun› (cnenv : CN_ENV)
 fun €form_fun_pack_spec› (form_fun as {
 	informal_fun,
 	spec = {w, w0, pre, post},
-	globals} : FORMAL_FUN) : unit = (
+	globals,
+	renames = zno} : FORMAL_FUN) : unit = (
 	let	val (z_para, z_pre, z_post) =
 			(trans_formal_fun current_cn_env form_fun);
 		val _ = test_store_para z_para;
@@ -5391,7 +5431,8 @@ fun €form_fun_pack_spec› (form_fun as {
 				w0 = w0,
 				pre = z_quote (z_pre, Nil),
 				post = z_quote (z_post, Nil)},
-			globals = globals};
+			globals = globals,
+			renames = zno};
 		val block2 = block 2;
 		val block_name2 = #block_name(#declab block2);
 		val package =
@@ -6546,7 +6587,8 @@ fun €prefix_formal_fun› (ident : ID) (tysubs : (string * string) list)
 	(form_fun as {
 		spec : SPEC, 
 		informal_fun  as {formal_pars, ...} : INFORMAL_FUN, 
-		globals} : FORMAL_FUN) : 
+		globals,
+		renames = zno} : FORMAL_FUN) : 
 		FORMAL_FUN = (
 let		val dec = fun_decl current_cn_env form_fun;
 		val pardecs = map z_par_decl formal_pars handle exn => [];
@@ -6556,10 +6598,14 @@ let		val dec = fun_decl current_cn_env form_fun;
 		val spec1 = prefix_spec_stmt ident tysubs newids spec;
 		val globals1 = map (prefix_package_id ident newids) globals;
 		val side1 = e_set_ti_context old_ti_cxt;
+		val zno1 = case zno of
+			Value zn => Value (prefix_package_id ident newids zn)
+		|	Nil => Nil;
 in
 	{spec = spec1,
 	 informal_fun = prefix_informal_fun ident tysubs newids informal_fun,
-	 globals = globals1}
+	 globals = globals1,
+	 renames = zno1}
 end);
 =TEX
 When the following is called it is important that the specification script
@@ -6958,13 +7004,12 @@ fun €create_prefixed_spec›
 			map store_para informal_fun_paras);
 		(* need to do other store_paras first to get right env *)
 		val formal_fun_paras =
-			map ((fn (p, _, _) => p) o trans_formal_fun current_cn_env) pformal_funs;
+			map ((fn (p, _, _) => 
+				(store_para p; p)) o trans_formal_fun current_cn_env) pformal_funs;
 		val dummy1 = check_ff_xref pfx_funs formal_fun_paras;
 		val dict = #dict(#in_scope(#declab(hd(!blocks))));
 		val side = (blocks := tl (!blocks));
-	in	
-		map store_para formal_fun_paras;
-		(tysubs, aux_vars, dict)
+	in	(tysubs, aux_vars, dict)
 	end	handle ex => (
 			open_theory (!script_name);
 			reraise ex "create_prefixed_spec"
@@ -7115,17 +7160,17 @@ N.B. this section has been moved after $new\_scope\_with$ so that that function 
 =TEX
 =SML
 fun €init_pack_body_dict› (dict : ENV_DICT, pack_vc_vars : VAR_DECL list) : ENV_DICT = (
-	let	fun unwanted (zn, {canon_name, info, ...} : ENV_INFO)  = (
+	let	fun wanted (zn, {canon_name, info, ...} : ENV_INFO)  = (
 			(case  info of
-				EIEnvFunction _ => false
-			|	EIEnvRecordType _ => false
-			|	EIEnvOtherType => false
-			|	EIEnvConstant _ => false
-			|	_ => true)
+				EIEnvFunction _ => true
+			|	EIEnvRecordType _ => true
+			|	EIEnvOtherType => true
+			|	EIEnvConstant _ => true
+			|	_ => false)
 			orelse
 			(zn <> canon_name andalso not("o" mem explode zn))
 		);
-		val wanted_entries = flatten_env_dict dict drop unwanted;
+		val wanted_entries = flatten_env_dict dict drop (not o wanted);
 	in	dict_vc_vars(add_to_env_dict initial_env_dict wanted_entries, pack_vc_vars)
 	end
 );
@@ -7467,19 +7512,6 @@ fun €combine_param_specs› (old : PARAM_SPEC list) (new : PARAM_SPEC list) : PARA
 	in	Value (merge [] (combine old' new'))
 	end	handle Fail _ => Nil
 );
-=TEX
-=SML
-fun €mk_fun_eq_spec› (ty : TYPE)  (old : ID) (new : ID) : SPEC =(
-	let	val old_tm = mk_z_gvar(old, ty, []);
-		val new_tm = mk_z_lvar(new, ty, []);
-		val post = mk_eq(new_tm, old_tm);
-	in	{
-		w 		= 	[],
-		w0		=	[],
-		pre		=	ZTmTruth true,
-		post		=	ZTmQuotation (post, Nil) }
-	end
-);
 =SML
 fun €renames_fun_pack_spec›
 	({subprogram_specification = ss as SSFunction {formal_part, designator, return, ...},
@@ -7503,15 +7535,15 @@ fun €renames_fun_pack_spec›
 			let	val zn = trans_id (block_name1 dot old);
 				val new_formal_pars = force_value (
 					combine_param_specs formal_pars new_pars);
-				val ty = type_of (hd (frees (fun_decl current_cn_env ff)));
 				val new_ff = {
 					informal_fun = {
 						name = designator,
 						formal_pars = new_formal_pars,
 						par_names_defs = new_par_names_defs,
 						return_type = return_type},
-					spec = mk_fun_eq_spec ty zn new_zname,
-					globals = globals};					
+					spec = dummy_spec,
+					globals = globals,
+					renames = Value zn};					
 			in	pack_env :=
 				s_enter
 				block_name1
@@ -8006,7 +8038,8 @@ fun €update_envs_used_package› (name : ID)  : unit = (
 the running environment for every type, object and subprogram in the package, where
 $unex$ is the unexpanded name for the entity and $ex$ is the expanded name.
 These entries are also propagated into the subunit, dec and spec environments if the
-use clause appears in the expansion of a declaration label.
+use clause appears in the expansion of a declaration label and into the local dictionary
+of the package if we are in a package specification (so that the use clause is propagated to the package body).
 =SML
 fun €use_pack› (name : ID)  : unit = (
 	if	name mem get_used_packages (#dict(#in_scope(#declab(block 1))))
@@ -8024,9 +8057,8 @@ fun €use_pack› (name : ID)  : unit = (
 		val block1 = block 1
 			handle Fail _ => error "add_var_env" 507006 [];
 		val block_name1 = #block_name(#declab block1);
-		val avs = #aux_vars (
-			force_value(s_lookup block_name1 (!pack_env)))
-			handle Fail _ => [];
+		val package_opt = s_lookup block_name1 (!pack_env);
+		val avs = #aux_vars (force_value package_opt) handle Fail _ => [];
 		val av_names = flat (map z_names_of_z_dec avs);
 		val zids_in_scope = (current_cn_env, av_names);
 		val block1' = block_renamings(block1, new_subs);
@@ -8037,7 +8069,18 @@ fun €use_pack› (name : ID)  : unit = (
 		check_new_spark_ids current_cn_env newidl;
 		blocks := block1'':: tl (!blocks);
 		update_envs_renamings new_subs;
-		update_envs_used_package name
+		update_envs_used_package name;
+		(if	test_flag #pack_spec_flag 1
+		 then	case package_opt of
+				Value (package as {local_dict, ...}) => (
+					pack_env :=
+					s_enter block_name1
+					(package_local_dict(
+						package,
+						dict_renamings(local_dict, new_subs)))
+					(!pack_env)
+			) |	_ => ()
+		else	())
 	end
 );
 =TEX
@@ -8651,7 +8694,7 @@ and €do_function_spec› (
 		return_type = curr_real_name return};
 		val spec = expand_frame sp;
 		val formal_fun : FORMAL_FUN =
-		{spec = spec, informal_fun = informal_fun, globals = globals};
+		{spec = spec, informal_fun = informal_fun, globals = globals, renames = Nil};
 	in	curr_form_fun formal_fun;
 		stub_spec_fun formal_fun;
 		check_19 current_cn_env (Value (expand_names globals)) spec;
