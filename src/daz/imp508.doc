@@ -73,6 +73,7 @@ Adjusted $ENV\_INFO$ and allowed for type conversions.
 \item[Issue 1.36] Enhancement 11 (and bug 9 (batch 2)).
 \item[Issue 1.37] Enhancements 13 and 14.
 \item[Issue 1.38] Enhancement 15.
+\item[Issue 1.39-1.41] Enhancements to basic declarations.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -130,9 +131,9 @@ fun zid1 €^^› zid2 = (
 );
 =TEX
 =SML
-fun €trans_range› ((RRange range) : EXP RANGE) : EXP RANGELOHI = (
+fun €dest_range› ((RRange range) : EXP RANGE) : EXP RANGELOHI = (
 	range
-) | trans_range _ = fail "trans_range" 508020 [];
+) | dest_range _ = fail "dest_range" 508020 [];
 =TEX
 =SML
 val €head› = hd
@@ -831,7 +832,7 @@ let	fun named_assoc_to_ids_exp {choice, comp} = (
 			ACAggChoiceSingle exp => (
 					(name_to_tmark exp, 
 					 trans_exp env comp)::aux rest comp
-			) |_ => fail "exp_rec_agg_named" 508020 []
+			) |_ => fail "exp_rec_agg_named" 508052 []
 		) | aux _ _ = [];
 	in
 		aux choice comp 
@@ -896,7 +897,7 @@ and €exp_bin_exp› (env : CN_ENV) ({left, bop, right} : EXP BIN_EXP) : Z_EXP = (
 =SML
 and €exp_mem_range› (env : CN_ENV) ({left, mop, range} : EXP MEM_RANGE)
 		: Z_EXP = (
-let	val {lo=lo, hi=hi} = trans_range range;
+let	val {lo=lo, hi=hi} = dest_range range;
 	val zright = z_rng(trans_exp env lo, trans_exp env hi);
 in
 	z_bin_exp (trans_exp env left, trans_bin_op mop, zright)
@@ -1426,7 +1427,7 @@ local
 	val z_exp = z_pfun(zid_zints, zid_zints);
 in
 fun €int_type_attrib› (env : CN_ENV) (zid1, range) = (
-	let	val {lo, hi} = trans_range range;
+	let	val {lo, hi} = dest_range (adjust_range env range);
 		val zvar1 = zid1 ^^ zsuc;
 		val zvar2 = zid1 ^^ zpred;
 		val zvar3 = zid1 ^^ zpos;
@@ -1445,7 +1446,7 @@ end;
 =SML
 fun €basic_decl_int_type› (env : CN_ENV) (name : ID) (range : EXP RANGE)
 	: PARAINFO list = (
-	let	val {lo, hi} = trans_range range;
+	let	val {lo, hi} = dest_range (adjust_range env range);
 		val zname = trans_id name;
 	in
 		[z_eq_eq(zname, z_rng(trans_exp env lo, trans_exp env hi))] @
@@ -1476,41 +1477,73 @@ fun €range_con_attrib› (env : CN_ENV) (zidâ1 : Z_ID, zidâ2 : Z_ID, {lo,hi}
 	z_eq_eq (zidâ1 ^^ zval, zid env (zidâ2 ^^ zval))]
 );
 =TEX
-
+The following function does the processing which is commont to cases of
+a subtype which gives rise to an axiomatic description rather than an abbreviation definition.
 =SML
-fun €basic_decl_subtype_range_con› (env : CN_ENV) (name : ID) (tmark : TMARK)
-		(range : EXP RANGE) : PARAINFO list = (
-	let	val (lo, hi) =
-			case range of
-			RRange{lo,hi} => (lo, hi)
-			|_ => fail "basic_decl_subtype_range_con" 508020 [];
-		val zname = trans_id name;
+fun €basic_decl_subtype_axdes› (env : CN_ENV) (name : ID) (tmark : TMARK)
+	: PARAINFO list = (
+	let	val zvar = trans_id name;
 		val ztmark = trans_id tmark;
-	in
-		[z_eq_eq(zname, z_rng(trans_exp env lo, trans_exp env hi))] @
-			range_con_attrib env (zname, ztmark, {lo=lo,hi=hi})
+		val zexp = z_powerset (zid env tmark)
+			handle Fail _ =>
+			fail "trans_basic_decl" 508051 [fn () => tmark];
+	in	[z_ax(zvar, zexp, [])]
 	end
 );
 =TEX
-
+In the following, the first cases alternative implements
+=INLINEFT
+Basic_Decl_Range_Con_1
+=TEX
+\ and the second implements
+=INLINEFT
+Basic_Decl_Range_Con_2
+=TEX
+.
+=SML
+fun €basic_decl_subtype_range_con› (env : CN_ENV) (name : ID) (tmark : TMARK)
+		(range : EXP RANGE) : PARAINFO list = (
+	let	val {lo, hi} = dest_range (adjust_range env range);
+		val zname = trans_id name;
+		val ztmark = trans_id tmark;
+		val ztype = type_of(zid env ztmark
+			handle Fail _ =>
+			fail "trans_basic_decl" 508051 [fn () => tmark]);
+		val te_lo = trans_exp1 env lo;
+		val te_hi = trans_exp1 env hi;
+	in	case (ztype =: ˙_ty, te_lo, te_hi) of
+			(true, Value l, Value h) =>
+				[z_eq_eq(zname, z_rng(l, h))] @
+				range_con_attrib env (zname, ztmark, {lo=lo,hi=hi})
+		|	_ =>	basic_decl_subtype_axdes env name tmark
+	end
+);
+=TEX
+=SML
+val €basic_decl_subtype_floating_fixed_con› : CN_ENV -> ID
+	-> TMARK -> PARAINFO list = basic_decl_subtype_axdes;
 =SML
 fun €basic_decl_subtype_index_con› (env : CN_ENV) (name : ID) (tmark : TMARK)
-		(ci : EXP list) = (
+		(ci : EXP list) : PARAINFO list = (
 let	val zname = trans_id name;
-	val index = map name_to_tmark ci;
-	val ind = case index of
-			[ind] => ind
-			|_ => fail "basic_decl_subtype_index_con" 508035 []
-	val zindex = trans_id ind;
 	val zexp = zid env (trans_id tmark);
-	val var =  "UNC";
-	val zvar_ty = dest_z_power_type(type_of zexp);
-	val env' = fn id => if id = "UNC" then Value (zvar_ty, EIEnvVar tmark)
+	val zvar_ty = dest_z_power_type(type_of zexp)
+		handle Fail _ => fail "trans_basic_decl" 508051 [fn () => tmark];
+	val var =  "array";
+	val env' = fn id => if id = "array" then Value (zvar_ty, EIEnvVar tmark)
 					else env id; 
-	val zp = z_eq (z_dom (zid env' var), zid env' zindex);
-in
-	[z_eq_eq (zname, z_set_comp (trans_decl env' {vars=[var],tmark=tmark}, zp))] @
-	array_attrib env' (zname, zindex)
+	val index = map name_to_tmark ci;
+	val (zindex, attribs) = case index of
+		[ind]	=> 
+			let	val ti = trans_id ind;
+			in	(zid env' ti, array_attrib env' (zname, ti))
+			end
+	|	[]	=> fail "basic_decl_subtype_index_con" 508035 []
+	|	inds	=> (z_many_cross (map (zid env o trans_id) index), []);
+	val zp = z_eq (z_dom (zid env' var), zindex);
+	val set_comp = z_set_comp (trans_decl env' {vars=[var],tmark=tmark}, zp)
+	val abb_def = z_eq_eq (zname, set_comp);
+in	abb_def :: attribs
 end
 );
 =TEX
@@ -1535,9 +1568,9 @@ fun €trans_basic_decl› (env : CN_ENV) ((BDConstDecl {consts,tm,expr}) : BASIC_DE
 ) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CIndex ci},...}) = (
 	basic_decl_subtype_index_con env name tmark ci
 ) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CFloating _},...}) = (
-	fail "trans_basic_decl" 508037 []
+	basic_decl_subtype_floating_fixed_con env name tmark
 ) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CFixed _},...}) = (
-	fail "trans_basic_decl" 508038 []
+	basic_decl_subtype_floating_fixed_con env name tmark
 ) | trans_basic_decl env (BDTypeDecl {name, type_def as TDFloatingTypeDef _}) = (
 	basic_decl_real_type name
 ) | trans_basic_decl env (BDTypeDecl {name, type_def as TDFixedTypeDef _}) = (
