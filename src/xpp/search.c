@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.19 2003/02/08 18:12:27 rda Exp rda $ 
+ * $Id: search.c,v 2.20 2003/02/09 15:32:52 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -23,6 +23,8 @@
 enum {FORWARDS, BACKWARDS};
 #include <stdio.h>
 #include <ctype.h>
+#include <sys/types.h>
+#include <regex.h>
 
 #include "xpp.h"
 
@@ -78,9 +80,9 @@ static char *cant_goto_line_no =
 static char *no_line_no = 
 	"Line number to go to is missing or zero";
 
-static char *no_room_for_global = 
+static char *no_room_for_search_op = 
 	"Running out of memory! "
-	"Not enough memory is left to perform the global replacement";
+	"Not enough memory is left to perform this search operation";
 
 static char *no_search_string = 
 	"There is nothing in the search field";
@@ -98,6 +100,9 @@ static char *no_selection_to_replace =
 
 static char *not_found = 
 	"Search pattern \"%s\" not found";
+
+static char *re_error = 
+	"Error in regular expression \"%s\": %s";
 
 static char *line_no_too_big1 =
 	"There is only 1 line in the file";
@@ -666,6 +671,7 @@ static void search_backwards_cb(
  * Support for search callbacks.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static Substring search_string(char*,char*,long int,NAT);
+static Boolean report_re_error(Widget, char*);
 static Boolean search_either(
 	Widget				w,
 	SearchData			*cbdata,
@@ -697,11 +703,12 @@ static Boolean search_either(
 	} else if (!(*pattern)){
 		ok_dialog(search_data.shell_w, no_search_string);
 		result = False;
-	} else {
+	} else if(!report_re_error(search_data.shell_w, pattern)) {
 		char *msg_buf = XtMalloc(strlen(pattern) +
 					strlen(not_found) + 1);
 		sprintf(msg_buf, not_found, pattern);
 		ok_dialog(search_data.shell_w, msg_buf);
+		XtFree(msg_buf);
 		result = False;
 	}
 	XtFree(pattern);
@@ -725,16 +732,54 @@ static void replace_cb(
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * support for replace callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static long int re_replacement_text(char*, char*,Substring*,char*);
 static Boolean replace_selection(
 	Widget				w,
 	SearchData			*cbdata)
 {
 	XmTextPosition left, right;
-	char *replacement;
+	char *replacement, *rep_pattern;
 	if(XmTextGetSelectionPosition(cbdata->text_w, &left, &right)
 		&& left != right ) {
-		replacement = XmTextGetString(
-				cbdata->replace_w);
+		rep_pattern  = XmTextGetString(cbdata->replace_w);
+		if(!global_options.use_reg_exps) {
+			replacement = rep_pattern;
+		} else {
+			long int text_len =right - left, rep_len;
+			char *text_buf = XtMalloc(text_len+1), *rep_buf;
+			Substring ss;
+			if(text_buf == 0 
+			||	XmTextGetSubstring(cbdata->text_w, left, text_len,
+					text_len + 1, text_buf)
+				== XmCOPY_FAILED ) {
+				XtFree(rep_pattern);
+				if(text_buf != 0) {
+					XtFree(text_buf);
+				}
+				ok_dialog( cbdata->shell_w,
+					no_room_for_search_op);
+				return False;
+			}
+			ss.offset = 0;
+			ss.length = text_len;
+			rep_len = re_replacement_text(rep_pattern,
+					text_buf, &ss, 0);
+			rep_buf = XtMalloc(rep_len + 1);
+			if(rep_buf == 0) {
+				XtFree(rep_pattern);
+				if(text_buf != 0) {
+					XtFree(text_buf);
+				}
+				ok_dialog( cbdata->shell_w,
+					no_room_for_search_op);
+				return False;
+			}
+			(void) re_replacement_text(rep_pattern, text_buf, &ss, rep_buf);
+			rep_buf[rep_len] = '\0';
+			XtFree(rep_pattern);
+			XtFree(text_buf);
+			replacement  = rep_buf;
+		}
 		text_show_position(cbdata->text_w, left);
 		XmTextReplace(
 			cbdata->text_w,
@@ -783,7 +828,7 @@ static void replace_all_cb(
 		if(all_replaced == NULL) {
 			ok_dialog(
 				cbdata->shell_w,
-				no_room_for_global);
+				no_room_for_search_op);
 			XtFree(replacement);
 		} else {
 			XmTextReplace(
@@ -804,11 +849,12 @@ static void replace_all_cb(
 		}
 	} else if (!(*pattern)){
 		ok_dialog(cbdata->shell_w, no_search_string);
-	} else {
+	} else if (!report_re_error(search_data.shell_w, pattern)) {
 		char *msg_buf = XtMalloc(strlen(pattern) +
 					strlen(not_found) + 1);
 		sprintf(msg_buf, not_found, pattern);
 		ok_dialog(cbdata->shell_w, msg_buf);
+		XtFree(msg_buf);
 	}
 	XtFree(pattern);
 	XtFree(text_buf);
@@ -1016,7 +1062,7 @@ static bm_search_t *bm_search_comp(char *pattern)
 /*
  * The Boyer-Moore search algorithm:
  */
-static Substring bm_search(bm_search_t *bm, char *text)
+static Substring bm_search_exec(bm_search_t *bm, char *text)
 {
 	int cursor, i, next;
 	Substring result;
@@ -1045,37 +1091,177 @@ static Substring bm_search(bm_search_t *bm, char *text)
 	}
 	return result;
 }
+/*
+ * Pre-processing for regular expression searching.
+ */
+static char *re_error_text = 0;
+static regex_t *re_search_comp(char *pattern)
+{
+	static regex_t preg;
+	int cflags = REG_EXTENDED | REG_NEWLINE;
+	int error_code;
+	if(global_options.ignore_case) {
+		cflags |= REG_ICASE;
+	}
+	error_code = regcomp(&preg, pattern, cflags);
+	if(error_code == 0) {
+		return &preg;
+	} else {
+		char *errbuf;
+		int errbufsize = regerror(error_code, &preg, 0, 0);
+		errbuf = XtMalloc(errbufsize);
+		if(re_error_text) { /* shouldn't happen, if caller obeys protocols */
+			XtFree(re_error_text);
+		}
+		if(errbuf == 0) {
+			ok_dialog(root, no_room_for_search_op);
+		} else {
+			(void) regerror(error_code, &preg, errbuf, errbufsize);
+			re_error_text = errbuf;
+		}
+		return 0;
+	}
+}
+
+/*
+ * The regular expression search algorithm:
+ */
+static Substring re_search_exec(regex_t *preg, char *text, Boolean bol)
+{
+	Substring result;
+	regmatch_t pmatch[1];
+	int eflags = bol ? 0 : REG_NOTBOL;
+	int error_code;
+	error_code = regexec(preg, text, 1, pmatch, eflags);
+	if(error_code == 0) {
+		result.offset = pmatch[0].rm_so;
+		result.length = pmatch[0].rm_eo - pmatch[0].rm_so;
+	} else {
+		result.offset = -1;
+	}
+	return result;
+}
+/*
+ * Error reporting for regular expression searching:
+ */
+static Boolean report_re_error(Widget shell_w, char *pattern)
+{
+	if(re_error_text == 0) {
+		return False;
+	} else {
+		char *msg_buf = XtMalloc(strlen(re_error) +
+					strlen(pattern) +
+					strlen(re_error_text) + 1);
+		sprintf(msg_buf, re_error, pattern, re_error_text);
+		ok_dialog(shell_w, msg_buf);
+		XtFree(msg_buf);
+		XtFree(re_error_text);
+		re_error_text = 0;
+		return True;
+	}	
+}
+
+/*
+ * Calculating replacement for regular expression searching.
+ * If buf is 0 it just returns the length of the
+ * the replacement string (without a null-terminator). If  buf is not 0 the replacement
+ * string is copied into it (not null-terminated).
+ */
+static long int re_replacement_text(
+	char		*rep_pattern,
+	char		*text,
+	Substring		*match,
+	char		*buf)
+{
+	char	*p, *q;
+	Boolean	escaped = False;
+	long int result;
+	for(p = rep_pattern, q = buf, result = 0; *p; p += 1) {
+		if(!escaped) {
+			if(*p == '\\') { /* backslash - escape */
+				escaped = True;
+			} else if (*p == '&') { /*ampersand - insert copy of match */
+				result += match->length;
+				if(buf) {
+					strncpy(q, text + match->offset, match->length);
+					q += match->length;
+				}
+			} else { /* anything else - just copy */
+				result += 1;
+				if(buf) {
+					*q++ = *p;
+				}
+			}
+		} else { /* anything escaped - just copy */
+			result += 1;
+			if(buf) {
+				*q++ = *p;
+			}
+			escaped = False;
+		}
+	}
+	if(escaped) { /* ends in unescaped backslash - treat as backslash */
+		result += 1;
+		if(buf) {
+			*q++ = '\\';
+		}
+	}
+	return result;
+}
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * search_forwards: search a substring matching a pattern
- * in a string. If pattern is 0, then use the pattern
+ * in a string starting at a given offset. If pattern is 0, then use the pattern
  * from the previous call, if any.  If the text to be
  * searched is 0, just set up static data for future use.
- * If both are 0, it will reset static data and free any malloced space.
+ * If both pattern and text are 0, reset static data and free any malloced space;
+ * make sure to reset before returning control to the user, else they might
+ * change the value of global_options.use_reg_exps.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static Substring search_forwards(
 	char		*pattern,
-	char		*text)
+	char		*text,
+	long int		offset)
 {
-	static bm_search_t  *last_bm = 0;
-	bm_search_t * bm;
+	static void  *last_comp = 0;
+	void * comp;
 	Substring result;
 	if(pattern == 0) {
-		bm = last_bm;
+		comp = last_comp;
 	} else {
-		if(last_bm != 0) {
- 			XtFree((char*)last_bm);
+		if(last_comp != 0) {
+			if(global_options.use_reg_exps) {
+				regfree((regex_t *)comp);
+			} else {
+	 			XtFree((char*)last_comp);
+			}
 		}
-		last_bm = bm = bm_search_comp(pattern);
+		if (global_options.use_reg_exps) {
+			comp = re_search_comp(pattern);
+		} else {
+			comp = bm_search_comp(pattern);
+		}
+		last_comp = comp;
 	}
 	if(pattern == 0 && text == 0) {
-		if(last_bm != 0) {
-			XtFree((char*)last_bm);
+		if(last_comp != 0) {
+			if(global_options.use_reg_exps) {
+				regfree((regex_t *)comp);
+			} else {
+	 			XtFree((char*)last_comp);
+			}
 		}
-		last_bm = 0;
-	} else if (text == 0 || bm == 0) {
+		result.offset = -1;
+		last_comp = 0;
+	} else if (text == 0 || comp == 0) {
 		result.offset = -1;
 	} else {
-		result = bm_search(bm, text);
+		if(global_options.use_reg_exps) {
+			result = re_search_exec(comp, text + offset,
+				offset == 0 || text[offset-1] == '\n');
+		} else {
+			result = bm_search_exec(comp, text + offset);
+		}
 	}
 	return result;
 }
@@ -1092,16 +1278,16 @@ static Substring search_string(
 {
 	Substring ss;
 	if(direction == FORWARDS) {
-		ss = search_forwards(pattern, text_buf + start_point);
+		ss = search_forwards(pattern, text_buf, start_point);
 		if(ss.offset < 0) {
-			ss = search_forwards(0, text_buf);
+			ss = search_forwards(0, text_buf, 0);
 		} else {
 			ss.offset += start_point;
 		}
 	} else { /* Do binary chop to search backwards: */
 		int upb, i;
 		Substring t;
-		ss = search_forwards(pattern, text_buf);
+		ss = search_forwards(pattern, text_buf, 0);
 		if(ss.offset >=  0) {
 			if(ss.offset < start_point) {
 				upb = start_point;
@@ -1109,7 +1295,7 @@ static Substring search_string(
 				upb = strlen(text_buf);
 			}
 			for(i = (upb - ss.offset) / 2; i > 0; i = (upb - ss.offset) / 2) {
-				t = search_forwards(0, text_buf + ss.offset + i);
+				t = search_forwards(0, text_buf, ss.offset + i);
 				if(t.offset >= 0 && t.offset + ss.offset + i <  upb) {
 					ss.offset = t.offset + ss.offset + i;
 					ss.length = t.length;
@@ -1119,7 +1305,7 @@ static Substring search_string(
 			}
 		}
 	}
-	search_forwards(0, 0);
+	search_forwards(0, 0, 0);
 	return ss;
 }
 
@@ -1131,48 +1317,62 @@ static Substring search_string(
 static void replace_all(
 	char	*pattern,
 	char	*text_buf,
-	char	*replacement,
+	char	*rep_pattern,
 	char	**result,
 	NAT	*start_point)
 {
-	long int text_buf_len, replacement_len, extra;
+	long int text_buf_len, rep_pattern_len, rep_len, rep_len_max, extra;
 	Substring ss;
 	char	*p, *q, *next_p, *sp;
 	text_buf_len = strlen(text_buf);
-	replacement_len = strlen(replacement);
+	rep_pattern_len = strlen(rep_pattern);
 
 	p = text_buf;
 	extra = 0;
-	(void) search_forwards(pattern, 0);
+	rep_len_max = rep_pattern_len;
+	(void) search_forwards(pattern, 0, 0);
 	while(*p) {
-		ss = search_forwards(0, p);
+		ss = search_forwards(0, text_buf, p - text_buf);
 		if(ss.offset >= 0) {
-			extra += replacement_len - ss.length;
+			if(global_options.use_reg_exps) {
+				rep_len = re_replacement_text(rep_pattern, p, &ss, 0);
+				extra += rep_len - ss.length;
+				if(rep_len > rep_len_max) {
+					rep_len_max = rep_len;
+				}
+			} else {
+				extra += rep_pattern_len - ss.length;
+			}
 			p += ss.offset + ss.length;
 		} else {
 			break;
 		}
 	}
 	if((*result = XtMalloc(text_buf_len + extra + 1)) == NULL) {
-		search_forwards(0, 0);
+		search_forwards(0, 0, 0); /* it _might_ help! */
 		return;
 	}
 	p = text_buf;
 	q = *result;
 	sp = q + *start_point;
 	while(*p) {
-		ss = search_forwards(0, p);
+		ss = search_forwards(0, text_buf, p - text_buf);
 		if(ss.offset >= 0) {
 			strncpy(q, p, ss.offset);
-			strncpy(q + ss.offset, replacement, replacement_len);
+			if(global_options.use_reg_exps) {
+				rep_len = re_replacement_text(rep_pattern, p, &ss, q+ss.offset);
+			} else {
+				strncpy(q + ss.offset, rep_pattern, rep_pattern_len);
+				rep_len = rep_pattern_len;
+			}
 			next_p = p + ss.offset + ss.length;
 			if(next_p - text_buf <= *start_point) {
-				sp += replacement_len - ss.length;
+				sp += rep_len - ss.length;
 			} else if (p + ss.offset - text_buf <= *start_point) {
 				sp = q + ss.offset;
 			}
 			p = next_p;
-			q += ss.offset + replacement_len;
+			q += ss.offset + rep_len;
 		} else {
 			strcpy(q, p);
 			q += strlen(p);
@@ -1181,7 +1381,7 @@ static void replace_all(
 	}
 	*q = '\0'; /* in case last match reached to end of text_buf */
 	*start_point = sp - *result;
-	search_forwards(0, 0);
+	search_forwards(0, 0, 0);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****

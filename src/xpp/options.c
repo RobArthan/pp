@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.14 2003/01/29 16:31:43 rda Exp rda $
+ * $Id: options.c,v 2.15 2003/02/07 17:06:17 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -85,6 +85,7 @@ static Widget
 		search_replace_frame,
 			search_replace_row_col,
 				ignore_case_toggle,
+				use_reg_exps_toggle,
 		app_frame,
 			app_row_col,
 				command_form,
@@ -207,6 +208,15 @@ void init_options(Widget owner_w)
 	lab = XmStringCreateSimple("Ignore case in searches");
 
 	ignore_case_toggle = XtVaCreateManagedWidget("ignore-case",
+		xmToggleButtonWidgetClass,	search_replace_row_col,
+		XmNlabelString,			lab,
+		NULL);
+
+	XmStringFree(lab);
+
+	lab = XmStringCreateSimple("Treat search strings as regular expressions");
+
+	use_reg_exps_toggle = XtVaCreateManagedWidget("use-regular-expressions",
 		xmToggleButtonWidgetClass,	search_replace_row_col,
 		XmNlabelString,			lab,
 		NULL);
@@ -404,6 +414,9 @@ if(!global_options.edit_only) {
 	global_options.ignore_case =
 		XmToggleButtonGetState(ignore_case_toggle);
 
+	global_options.use_reg_exps =
+		XmToggleButtonGetState(use_reg_exps_toggle);
+
 	if(journal_max_text) {
 		char	*journal_max_buf;
 		long unsigned m;
@@ -554,6 +567,9 @@ static void apply_cb(
 	global_options.ignore_case =
 		XmToggleButtonGetState(ignore_case_toggle);
 
+	global_options.use_reg_exps =
+		XmToggleButtonGetState(use_reg_exps_toggle);
+
 	global_options.add_new_line_mode = add_new_line_mode_mirror;
 
 	if(journal_max_text) {
@@ -602,6 +618,9 @@ static void reset_cb(
 
 	XmToggleButtonSetState(ignore_case_toggle,
 		options->ignore_case, False);
+
+	XmToggleButtonSetState(use_reg_exps_toggle,
+		options->use_reg_exps, False);
 
 	if(command_text) {
 		XmTextSetString(command_text,
