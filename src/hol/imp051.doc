@@ -72,6 +72,9 @@ Reorganised after RBJ comments.
 Changed some names.
 \item [Issue 1.18,1.19 (26th May 1992)]
 Renamings from version 1.5 of DS/FMU/IED/WRK038.
+\item [Issue 1.20 (28th May 1992)]
+Corrected merging of $pr\_conv$ and $pr\_tac$,
+added $prove\-\_tac$ and $prove\-\_¶\-\_tac$.
 \end{description}
 \subsection{Changes Forecast}
 As detailed design.
@@ -1047,7 +1050,7 @@ o evaluate_proof_context)
 );
 =TEX
 N.B. the second of the pair is ``the master'', to which the first is added in.
-The added in form is the source for $pr\_tac$ and $pr\_conv$.
+The additional ``override''arguments are the source for $pr\_tac$ and $pr\_conv$.
 =SML
 local
 fun list_eq (a :: x) (b :: y) = a =$ b andalso list_eq x y
@@ -1057,7 +1060,10 @@ fun list_eq (a :: x) (b :: y) = a =$ b andalso list_eq x y
 val union_bits = union (fn ((str1,(tml1,thm1)) ,(str2,(tml2,thm2))) =>
 	str1 = str2 andalso (list_eq tml1 tml2) andalso (thm1 =|- thm2));
 in
-fun Ûlocal_merge_pcÝ (caller:string) (test_committed:bool) (({
+fun Ûlocal_merge_pcÝ (caller:string) (test_committed:bool) 
+	(opr_conv : THM list -> CONV)
+	(opr_tac : THM list -> TACTIC)
+	(({
 	rw_eqn_cxt = rw_eqn_cxt, rw_canons = rw_canons,
 	st_eqn_cxt = st_eqn_cxt, sc_eqn_cxt = sc_eqn_cxt,
 	cs_¶_convs = cs_¶_convs, ¶_cd_thms = ¶_cd_thms,
@@ -1092,8 +1098,8 @@ fun Ûlocal_merge_pcÝ (caller:string) (test_committed:bool) (({
 	cs_¶_convs = list_roverwrite1 cs_¶_convs cs_¶_convs1,
 	¶_cd_thms = thm_union ¶_cd_thms ¶_cd_thms1,
 	¶_vs_thms = union_bits ¶_vs_thms ¶_vs_thms1,
-	pr_tac = pr_tac,
-	pr_conv = pr_conv,
+	pr_tac = opr_tac,
+	pr_conv = opr_conv,
 	rw_net = rw_net1,
 	rw_canon = rw_canon1,
 	st_conv = st_conv1,
@@ -1111,9 +1117,14 @@ end;
 =SML
 fun Ûmerge_pcsÝ (keys:string list) (key : string) : unit = (
 let	val pcs = map (get_pc "merge_pcs") keys;
+	val opc = case pcs of
+		[] => get_pc "merge_pcs" key
+		| _ => hd(rev pcs);
 in
 	change_pc "merge_pcs" key 
-	(fn pc => fold (local_merge_pc "merge_pcs" true) pcs pc)
+	(fn pc => fold (local_merge_pc "merge_pcs" true
+		(#pr_conv opc)
+		(#pr_tac opc)) pcs pc)
 end);
 =TEX
 The following empties all but selected fields of proof contexts.
@@ -1175,9 +1186,21 @@ in
 fun Ûmerge_pc_fieldsÝ (lst : {context:string,fields:string list}list) 
 	(key :string) : unit = (
 let	val pcs = map get_stuff lst;
+	val lastpc = case (lst drop (fn {fields=fs,...} =>
+		not("pr_conv" mem fs))) of
+		[] => key
+		| lst1 => (#context (hd(rev lst1)));
+	val lastpt = case (lst drop (fn {fields=fs,...} =>
+		not("pr_tac" mem fs))) of
+		[] => key
+		| lst1 => (#context (hd(rev lst1)));
+	val opc = #pr_conv (get_pc "merge_pc_fields" lastpc);
+	val opt = #pr_tac (get_pc "merge_pc_fields" lastpt);
+
+
 in
 	change_pc "merge_pc_fields" key 
-	(fn pc => fold (local_merge_pc "merge_pc_fields" true) pcs pc)
+	(fn pc => fold (local_merge_pc "merge_pc_fields" true opc opt) pcs pc)
 end);
 end;
 =TEX
@@ -1238,7 +1261,10 @@ end);
 fun Ûpush_merge_pcsÝ ([]: string list): unit = fail "push_merge_pcs" 51020 []
 | push_merge_pcs (keys) = (
 let	val pc = empty_pc false keys;
-	val fullpc = fold (local_merge_pc "push_merge_pcs" false) 
+	val opc = (#pr_conv (get_pc "push_merge_pcs" (hd(rev keys))));
+	val opt = (#pr_tac (get_pc "push_merge_pcs" (hd(rev keys))));
+
+	val fullpc = fold (local_merge_pc "push_merge_pcs" false opc opt) 
 		(map (get_pc "push_merge_pcs") keys) pc;
 	val epc = evaluate_proof_context fullpc;
 in
@@ -1251,7 +1277,9 @@ fun Ûpending_push_merge_pcsÝ ([]: string list): unit -> unit =
 	fail "pending_push_merge_pcs" 51020 []
 | pending_push_merge_pcs (keys) = (
 let	val pc = empty_pc false keys;
-	val fullpc = fold (local_merge_pc "pending_push_merge_pcs" false) 
+	val opc = (#pr_conv (get_pc "pending_push_merge_pcs" (hd(rev keys))));
+	val opt = (#pr_tac (get_pc "pending_push_merge_pcs" (hd(rev keys))));
+	val fullpc = fold (local_merge_pc "pending_push_merge_pcs" false opc opt) 
 		(map (get_pc "pending_push_merge_pcs") keys) pc;
 	val epc = evaluate_proof_context fullpc;
 in
@@ -1269,7 +1297,9 @@ end);
 fun Ûset_merge_pcsÝ ([]: string list): unit = fail "set_merge_pcs" 51020 []
 | set_merge_pcs (keys) = (
 let	val pc = empty_pc false keys;
-	val fullpc = fold (local_merge_pc "set_merge_pcs" false) 
+	val opc = (#pr_conv (get_pc "set_merge_pcs" (hd(rev keys))));
+	val opt = (#pr_tac (get_pc "set_merge_pcs" (hd(rev keys))));
+	val fullpc = fold (local_merge_pc "set_merge_pcs" false opc opt) 
 		(map (get_pc "set_merge_pcs") keys) pc;
 	val epc = evaluate_proof_context fullpc;
 in
@@ -1396,6 +1426,17 @@ fun Ûasm_prove_tacÝ (thms: THM list) :  TACTIC = (
 );
 =TEX
 =SML
+fun Ûprove_tacÝ (thms: THM list) :  TACTIC = (
+let	val ct = current_ad_pr_tac () thms
+		handle complaint => 
+		pass_on complaint "current_ad_pr_tac" "prove_tac";
+in
+	DROP_ASMS_T(fn asms =>
+	ct
+	THEN MAP_EVERY check_asm_tac asms)
+end);
+=TEX
+=SML
 fun Ûprove_convÝ (thms: THM list) :  CONV = (
 	current_ad_pr_conv () thms
 	handle complaint => 
@@ -1435,6 +1476,15 @@ val Ûasm_prove_¶_tacÝ : TACTIC = (fn gl =>
 	conv_tac(current_ad_cs_¶_conv ()) gl
 	handle complaint => 
 	pass_on complaint "current_ad_cs_¶_conv" "asm_prove_¶_tac"
+);
+=TEX
+=SML
+val Ûprove_¶_tacÝ : TACTIC = (fn gl =>
+	DROP_ASMS_T(fn asms =>
+	conv_tac(current_ad_cs_¶_conv ())
+	THEN MAP_EVERY check_asm_tac asms) gl
+	handle complaint => 
+	pass_on complaint "current_ad_cs_¶_conv" "prove_¶_tac"
 );
 =TEX
 =SML
