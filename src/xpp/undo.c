@@ -32,9 +32,11 @@ typedef struct undo_details {
 	Boolean can_undo;			/* true iff. can do an undo */
 	Boolean moved_away;			/* true if the change is complete */
 	Boolean undoing;			/* true while undo in progress */
+	Boolean in_business;			/* true if first & last are valid */
 	unsigned char undo_redo_index; 	/* 0 means undo ; 1 means redo */
-	NAT first, last;
-	char *oldtext;
+	NAT first, last;			/* position in text of chars to */
+						/* be replaced by an undo */
+	char *oldtext;				/* deleted characters to put in */
 } UndoBuffer;
 
 
@@ -52,6 +54,7 @@ void clear_undo(UndoBuffer *ub)
 {
 	ub->can_undo = False;
 	ub->moved_away = True;
+	ub->in_business = False;
 	ub->first = 0;
 	ub->last = 0;
 	ub->undoing = False;
@@ -83,17 +86,8 @@ XtPointer add_undo(
 	ub->text_w = text_w;
 	ub->menu_w = menu_w;
 	ub->menu_entry_offset = menu_entry_offset;
-		ub->can_undo = False;
-	ub->moved_away = True;
-	ub->undoing = False;
-	ub->undo_redo_index = 0;
-	ub->first = 0;
-	ub->last = 0;
 	ub->oldtext = NULL;
-	if(menu_w) {
-		set_menu_item_sensitivity(menu_w, menu_entry_offset, False);
-		set_menu_item_label(menu_w, menu_entry_offset, undo_redo[0]);
-	}
+	clear_undo(ub);	/* rest of initialisation etc. */
 	return (XtPointer) ub;
 }
 
@@ -136,6 +130,7 @@ static void reinit_undo_buffer (
 	ub->moved_away = False;
 	ub->first = cbs->startPos;
 	ub->last = cbs->startPos;
+	ub->in_business = True;
 	if(ub->oldtext != NULL) {
 		XtFree(ub->oldtext);
 		ub->oldtext = NULL;
@@ -152,17 +147,47 @@ void undo_modify_cb(
 {
 	NAT len;
 	char *cut_chars;
+	static char *prefix(), *affix();
 
-
-/* XmGetSelection doesn't seem to work as one might like in a 
- * callback like this. However XmTextGetSubstring is just the job
- */
-	if(	!ub->undoing &&
+	if(	!cbs->text->length &&
+		!ub->undoing &&
 		cbs->endPos == cbs->startPos + 1 &&
-		cbs->endPos == ub->last &&
-		ub->last > ub-> first) {
-				/* deleting last character of current typing */
-		--ub->last;
+		(cbs->endPos == ub->last || cbs->startPos == ub->last) &&
+		ub->in_business) {
+				/* deleting single character at end of 
+					 current typing thread */
+		if(cbs->endPos == ub->last) {
+				/* deleting last char of current thread */
+			if(ub->last > ub-> first) {
+				--ub->last;
+			} else {
+				/* deleting char before start of current thread */
+				char buf[2];
+				if(XmTextGetSubstring(ub->text_w,
+						cbs->startPos, 1, 2, buf)
+					!= XmCOPY_SUCCEEDED) {
+						reinit_undo_buffer(ub, cbs, False);
+				} else {
+					ub->can_undo = True;
+					ub->moved_away = False;
+					ub->first = cbs->startPos;
+					ub->last = cbs->startPos;	
+					ub->oldtext = prefix(buf[0], ub->oldtext);
+				}
+			}
+		} else {	/* deleting char after start of current thread */
+			char buf[2];
+			if(XmTextGetSubstring(ub->text_w,
+					cbs->startPos, 1, 2, buf)
+				!= XmCOPY_SUCCEEDED) {
+					reinit_undo_buffer(ub, cbs, False);
+			} else {
+				ub->can_undo = True;
+				ub->moved_away = False;
+				ub->last = cbs->startPos;	
+				ub->oldtext = affix(buf[0], ub->oldtext);
+			}
+		}
 	} else if(cbs->startPos < cbs->endPos) {
 				/* deleted something else */
 		len = cbs->endPos - cbs->startPos;
@@ -173,7 +198,7 @@ void undo_modify_cb(
 			reinit_undo_buffer(ub, cbs, False);
 		} else {
 			cut_chars[len] = '\0';
-			reinit_undo_buffer(ub, cbs, True); /* for the XtFreee */
+			reinit_undo_buffer(ub, cbs, True); /* for the XtFree */
 			ub->moved_away = False;
 			ub->first = cbs->startPos;
 			ub->last = cbs->startPos + cbs->text->length;	
@@ -248,4 +273,41 @@ void undo_cb(
 		ub->undoing = False;
 	}
 }
-
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * string manipulating utilities:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static char *prefix(char ch, char *str)
+{
+	if(str) {
+		char *p;
+		char this, prev;
+		str = XtRealloc(str, strlen(str) + 2);
+		for(p = str, prev = ch; prev; ++p) {
+			this = *p;
+			*p = prev;
+			prev = this;
+		}
+		*p = '\0';
+	} else {
+		str = XtMalloc(2);
+		str[0] = ch;
+		str[1] = '\0';
+	}
+	return str;
+}
+static char *affix(char ch, char *str)
+{
+	if(str) {
+		char *p;
+		NAT len;
+		len = strlen(str);
+		str = XtRealloc(str, len + 2);
+		str[len] = ch;
+		str[len+1] = '\0';
+	} else {
+		str = XtMalloc(2);
+		str[0] = ch;
+		str[1] = '\0';
+	}
+	return str;
+}
