@@ -63,7 +63,7 @@ parser.}
 \begin{description}
 
 \item[Issues 1.1-1.28] Initial Versions.
-\item[Issue 1.29] Annotations and pragmas enhancements.
+\item[Issue 1.29,1.30] Annotations and pragmas enhancements.
 
 \end{description}
 \subsection{Changes Forecast}
@@ -294,9 +294,9 @@ this.
 =SML
 val ÛdelimiterÝ : string list list =
 	(Sort.sort (switch(Sort.lexicographic Sort.string_order)) o map explode)
-	["&", "'", "(", ")", "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", 
-	">", "|", "=>", "..", "**", ":=", "/=", ">=", "<=", "<<", ">>", "<>",
-	"„", "[", "]", "{","}", "·", "û", "ý", "§","¢", "Ã", "é", "--", "--#"];
+["&", "'", "(", ")", "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", 
+ ">", "|", "=>", "..", "**", ":=", "/=", ">=", "<=", "<<", ">>", "<>",
+ "„", "[", "]", "{","}", "·", "û", "ý", "§","¢", "Ã", "é", "!é", "--", "--#"];
 =TEX
 =SML
 fun next_is_delimiter (cs : string list) = (
@@ -391,6 +391,7 @@ val Ûclass_tableÝ = list_e_merge initial_e_dict [
 	("REM",		LCRem),
 	("RENAMES",	LCRenames),
 	("é",		LCReplacedBy),
+	("!é",		LCArbitraryAda),
 	("RETURN",	LCReturn),
 	("REVERSE",	LCReverse),
 	("RANGE",	LCRRange),
@@ -631,9 +632,10 @@ The following constitute some essential requirements of this lexical analyser.
 The function $rec\_next\_token$ allows us to recognise the next lexeme
 in an input stream according to the SPARK (and Compliance Notation) lexis.
 We must now put this to use in constructing the overall lexical analyser.
-To do this we must handle embedded Z and also annotations and comments.
+To do this we must handle embedded Z and also annotations, comments and pragmas.
 To handle embedded Z we need to be able to recognise the end of the Z fragment while using the Z lexical analyser to process the Z lexemes.
 To handle comments and annotations is just a question of scanning to the end of line (or in the case of the hide annotation to the end marker for the annotation).
+Similarly, we take a pragma to be any text after the pragma keyword up to a semi-colon.
 
 \subsection{Comments}
 In the following, we often have a list of strings which is the exploded form of the unread part of the current $INPUT$ fragment, and a list of subsequent unread $INPUT$s.
@@ -655,67 +657,23 @@ fun Ûignore_commentÝ (slist : string list) (rest : INPUT list)
 =TEX
 \subsection{Annotations}
 The function $spark\_annotation$ assumes an annotation symbol has just been read.
-It returns a $CN\_LEX\_ITEM$ containing the text of the annotation (without the start symbol or final new-line_) together with
+It returns a $CN\_LEX\_ITEM$ containing the text of the annotation (without the start symbol or final new-line) together with
 two lists giving the unread part of the input (cf. $ignore\_comment$).
-To define this function we use separate auxiliaries for the case of a hide directive and for the other (simpler) annotations.
 =SML
-fun Ûsimple_annotationÝ (acc : string)
+fun Ûspark_annotation_auxÝ (acc : string)
 		(slist : string list) (rest : INPUT list)
 	: (CN_LEX_ITEM * string list * INPUT list)  = (
 	case slist of 
 		("\n" :: more) => ((LCAnnotation, (CNText acc)), more, rest)
-	|	(ch :: more) => simple_annotation (acc ^ ch) more rest
+	|	(ch :: more) => spark_annotation_aux (acc ^ ch) more rest
 	|	[] => (
 		case rest of
 			Lex.Text s :: inputs =>
-				simple_annotation acc (explode s) inputs
+				spark_annotation_aux acc (explode s) inputs
 		|	Lex.String s :: inputs =>
-				simple_annotation (acc ^ "\"" ^ s ^ "\"") [] inputs
+				spark_annotation_aux (acc ^ "\"" ^ s ^ "\"") [] inputs
 		|	_ :: inputs => ((LCAnnotation, (CNText acc)), [], rest)
 		|	[] => ((LCAnnotation, (CNText acc)), [], [])
-	)
-);
-=TEX
-=SML
-fun Ûhide_annotationÝ (desig : string) (penult : string) (ult : string)
-		(acc : string)
-		(slist : string list) (rest : INPUT list)
-	: (CN_LEX_ITEM * string list * INPUT list)  = (
-	case slist of 
-		("\n" :: more) =>
-			hide_annotation desig penult ult (acc ^ "\n") more rest
-	|	[] => (
-		case rest of
-			Lex.Text s :: inputs =>
-				hide_annotation desig penult ult acc (explode s) inputs
-		|	Lex.String s :: inputs =>
-				hide_annotation desig "" ""
-				(acc ^ "\"" ^ s ^ "\"") [] inputs
-		|	_ :: inputs => ((LCHiddenPart, (CNText acc)), [], rest)
-		|	[] => ((LCHiddenPart, (CNText acc)), [], [])
-	) |	_ => (
-		let	val st as (chs1, _) = skip_horiz_space(slist, Unknown);
-			val (chs, suc) = rec_next_token st;
-		in	case suc of
-				Known tok => (
-		let val last = (implode (slist to (length slist - length chs - 1)));
-		in	if	penult = "END" andalso ult = desig
-			then	if	tok = ";"
-				then	
-	((LCHiddenPart, (CNText (acc ^ last))), chs, rest)
-				else
-	fail "CN-Parser" 501004  [fn () => desig]
-			else
-	hide_annotation desig ult (to_upper tok) (acc^last) chs rest
-		end
-			) | _ => (
-				case chs1 of
-				"\n" :: more =>
-	hide_annotation desig penult ult (acc^"\n") more rest
-				| _ => (* give up *)
-	fail "CN-Parser" 501005  [fn () => desig]
-			)
-		end
 	)
 );
 =TEX
@@ -723,23 +681,64 @@ fun Ûhide_annotationÝ (desig : string) (penult : string) (ult : string)
 fun Ûspark_annotationÝ 
 		(slist : string list) (rest : INPUT list)
 	: (CN_LEX_ITEM * string list * INPUT list)  = (
-	let val st = skip_horiz_space(slist, Unknown);
-	in	case rec_next_token(st) of
-			st' as (chs, Known h) => (
-				if to_upper h = "HIDE"
-				then	case rec_next_token(skip_horiz_space (chs, Unknown)) of
-					(chs, Known desig) => (
-	let	val d = to_upper desig;
-	in	hide_annotation
-		d "" ""
-		(implode (slist to (length slist - length chs - 1))) chs rest
-	end
-					) | _=> simple_annotation "" slist rest
-				else	simple_annotation "" slist rest
-			) | _ => simple_annotation "" slist rest
-	end
+	spark_annotation_aux "" slist rest
 );
 =TEX
+\subsection{Pragmas}
+The function $spark\_pragma$ assumes the pragma keyword has just been read.
+It returns a $CN\_LEX\_ITEM$ containing the text of the pragma (without the pragma keyword) together with
+two lists giving the unread part of the input (cf. $ignore\_comment$).
+=SML
+fun Ûspark_pragma_auxÝ (acc : string)
+		(slist : string list) (rest : INPUT list)
+	: (CN_LEX_ITEM * string list * INPUT list)  = (
+	case slist of 
+		(";" :: more) => ((LCPragma, (CNText (acc^";"))), more, rest)
+	|	(ch :: more) => spark_pragma_aux (acc ^ ch) more rest
+	|	[] => (
+		case rest of
+			Lex.Text s :: inputs =>
+				spark_pragma_aux acc (explode s) inputs
+		|	Lex.String s :: inputs =>
+				spark_pragma_aux (acc ^ "\"" ^ s ^ "\"") [] inputs
+		|	_  => fail "CN-Parser" 501004  []
+	)
+);
+=TEX
+=SML
+fun Ûspark_pragmaÝ 
+		(slist : string list) (rest : INPUT list)
+	: (CN_LEX_ITEM * string list * INPUT list)  = (
+	spark_pragma_aux "" slist rest
+);
+=TEX
+\subsection{Arbitrary Ada}
+The function $spark\_arbitrary$ assumes the symbol introducing an arbitrary Ada insert has just been read.
+It returns a $CN\_LEX\_ITEM$ containing the text of the insert (without the introducing symbol) together with
+two lists giving the unread part of the input (cf. $ignore\_comment$).
+In fact, everything should have been read here, and the $spark\_lex$ will eventually complain if something like a HOL type is encountered.
+=SML
+fun Ûspark_arbitrary_auxÝ (acc : string)
+		(rest : INPUT list)
+	: (CN_LEX_ITEM * string list * INPUT list)  = (
+	case rest of 
+		Lex.Text s :: more =>
+				spark_arbitrary_aux (acc ^ s) more
+	|	Lex.String s :: more =>
+			spark_arbitrary_aux (acc ^ "\"" ^ s ^ "\"") more
+	|	_  => ((LCArbitraryAda, (CNText acc)), [], rest)
+);
+=TEX
+=SML
+fun Ûspark_arbitraryÝ 
+		(slist : string list) (rest : INPUT list)
+	: (CN_LEX_ITEM * string list * INPUT list)  = (
+	spark_arbitrary_aux (implode slist) rest
+);
+=TEX
+\subsection{Z Fragments}
+First we define a table showing the symbols which can delimit a Z fragment.
+The table gives each symbol which can begin a Z fragment together with each symbol which can mark the end of a fragment begun by that symbol.
 =SML
 val Ûz_delimitersÝ = [
 	(LCGrkDelta, [LCLSqBrack, LCLBrace]),
@@ -751,11 +750,17 @@ val Ûz_delimitersÝ = [
 	(LCAuxiliary, [LCSemi]),
 	(LCImplement, [LCBy]),
 	(LCBy, [LCSemi])];
-
+=TEX
+Some of the above symbols can also be used in Z, so we need tables showing the brackets used in Z.
+=SML
 val Ûz_open_bracketsÝ = ["(", "§", "[", "{"];
 val Ûz_close_bracketsÝ = [")", "¢", "]", "}"];
 =TEX
-
+The algorithm for finding the Z fragments is a little complicated by
+the structure of the as stream (as a list of $INPUT$s, some of which
+are themselves text-strings to be processed character by character).
+The following type is used to communicate between the functions which
+search for the end marker.
 =SML
 type ÛINPUT_HANDLEÝ = {
 	left_input : Lex.INPUT list,
@@ -765,6 +770,9 @@ type ÛINPUT_HANDLEÝ = {
 	bracket_depth : int
 	};
 =TEX
+$find\_in\_text$ looks for an end marker in a text-string in the input
+and keeps track of bracket nesting in case the actual end-marker is in
+one of the later $INPUT$s.
 =SML
 fun Ûfind_in_textÝ (terml : CN_LEX_CLASS list)
 	({left_input, left_text, right_text, right_input, bracket_depth}
@@ -810,6 +818,7 @@ fun Ûfind_in_textÝ (terml : CN_LEX_CLASS list)
 	end
 );
 =TEX
+Assuming $find\_in\_text$ hasn't found the end marker, $find\_in\_input$ continues the search in the next $INPUT$ in the list.
 =SML
 fun Ûfind_in_inputÝ (terml : CN_LEX_CLASS list)
 	(ih as {left_input, left_text, right_text, right_input, bracket_depth}
@@ -854,7 +863,10 @@ fun Ûfind_in_inputÝ (terml : CN_LEX_CLASS list)
 );
 
 =TEX
-
+$read\_until$ give the interface to the previous functions.
+It extracts a single Z fragment from the input stream (say an
+auxiliary expression) and then recursively invokes lexical analysis
+of the remaining input.
 =SML
 fun Ûread_untilÝ (classification : CN_LEX_CLASS,
 				cn_fun : Lex.INPUT list -> CN_TOKEN)
@@ -888,6 +900,9 @@ in
 		left_cxt
 end)
 =TEX
+$spark\_xtext$ acts a dispatcher for the earlier functions which apply when
+a text string in the input is being processed, it analyses the
+next spark token in the input and takes action accordingly.
 =SML
 and Ûspark_xtextÝ (slist : string list) (rest : INPUT list) : CN_LEX_ITEM list  = (
 let	val st = skip_space (slist, Unknown);
@@ -925,6 +940,16 @@ in
 						spark_annotation (fst unskipped)rest;
 					in	tok :: spark_xtext srest' rest'
 					end
+				)|(LCPragma, Nil) => (
+					let val (tok, srest', rest') =
+						spark_pragma (fst unskipped)rest;
+					in	tok :: spark_xtext srest' rest'
+					end
+				)|(LCArbitraryAda, Nil) => (
+					let val (tok, srest', rest') =
+						spark_arbitrary (fst unskipped)rest;
+					in	tok :: spark_xtext srest' rest'
+					end
 				)|(_, Nil) => 	
 					res::spark_xtext srest rest
 			end
@@ -933,6 +958,7 @@ in
 	end)
 end)
 =TEX
+$spark\_lex$ is the dispatcher for an arbitrary $INPUT$.
 =SML
 and Ûspark_lexÝ ((ip::more) : INPUT list) : CN_LEX_ITEM list = (
 	case ip of
@@ -951,6 +977,7 @@ and Ûspark_lexÝ ((ip::more) : INPUT list) : CN_LEX_ITEM list = (
 	) |	Lex.Error n => (fail "CN-Parser (Lexer)" 501003 [fn () => string_of_int n])
 ) | spark_lex _ = [];
 =TEX
+Finally $cn\_lex$ is the external interface for the lexical analyser:
 =SML
 fun Ûcn_lexÝ (classify_label : CN_LEX_ITEM list -> CN_LEX_ITEM list) (inp : INPUT list) 
 		: CN_LEX_ITEM list = (
@@ -1014,8 +1041,7 @@ read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc]"];
 read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc]"];
 read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc]"];
 =IGN
-open CNLex;
-val spark_lex = cn_lex (Combinators.I);
+val spark_lex = CNLex.cn_lex (Combinators.I);
 spark_lex [Lex.Text "abcd def (12)"];
 spark_lex [Lex.Text "-- abcd def (12) \n xyz (10);"];
 spark_lex [Lex.Text "foo(); \n -- abcd def (12) \n xyz (10);"];
@@ -1024,10 +1050,8 @@ spark_lex [Lex.Text "foo(); \n -- abcd def (12)", Lex.String "str",
 spark_lex [Lex.Text "--#       X"];
 spark_lex [Lex.Text "--# abcdef", Lex.String "boo"];
 spark_lex [Lex.Text "--# abcdef", Lex.String "boo", Lex.Text"def\n\n\nf();"];
-spark_lex [Lex.Text "--# hide FRED \n begin \n do_something; \n end FRED ;",
 	Lex.Text "\n more "];
-spark_lex [Lex.Text "--# hide FRED X end FRED ; \n BOO "];
-spark_lex [Lex.Text "--# hide FRED \n begin \n do_something; \n f(",
-	Lex.String "abcd", Lex.Text "); \n end FRED ;",
-	Lex.Text "\n more "];
+spark_lex [Lex.String "a\"\"bcd"];
 spark_lex [Lex.Text "pragma foo ; "];
+spark_lex [Lex.Text "pragma foo -- \n-- (( 9   ; "];
+spark_lex [Lex.Text "(1) !é any \n", Lex.Text " old ", Lex.String "rubbish"];
