@@ -7,15 +7,15 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 *******************************************************************************/
-/* $Id: imp096.doc,v 1.17 2003/07/29 11:17:15 rda Exp rda $
+/* $Id: imp096.doc,v 1.18 2003/07/29 11:18:50 rda Exp robarthan $
 
 =TEX
-% $Id: imp096.doc,v 1.17 2003/07/29 11:17:15 rda Exp rda $
+% $Id: imp096.doc,v 1.18 2003/07/29 11:18:50 rda Exp robarthan $
 \documentstyle[11pt,TQ,hol1]{article}
 
 \TPPtitle{Sieve and Findfile Utilities}
 \TPPref{DS/FMU/IED/IMP096}
-\def\SCCSissue{$Revision: 1.17 $
+\def\SCCSissue{$Revision: 1.18 $
 }
 
 =IGNORE
@@ -420,7 +420,7 @@ contains all of the introductory material in this document.
 =SIEVE_PROG
 */
 char *program_name = "sieve";
-char *coprlemma1 = "$Id$" " Copyright Lemma 1 Ltd. 2003";
+char *coprlemma1 = "$Id: imp096.doc,v 1.18 2003/07/29 11:18:50 rda Exp robarthan $" " Copyright Lemma 1 Ltd. 2003";
 /*
 =TEX
 
@@ -5070,15 +5070,16 @@ First some useful general declarations.
 =FIND_FILE_FUN
 */
 #ifndef SIEVE_PROG
-char *coprlemma1 = "$Id$" " Copyright Lemma 1 Ltd. 2003";
+char *coprlemma1 = "$Id: imp096.doc,v 1.18 2003/07/29 11:18:50 rda Exp robarthan $" " Copyright Lemma 1 Ltd. 2003";
 #endif
 #include <pwd.h>
 #include <stdio.h>
-/*#include <stdlib.h>*/
-extern char *	getenv(const char *name);
+#include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/param.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #define VoidStrcpy(a,b) { if(a != NULL) (void)strcpy(a, b); }
 #define Strcpy(a,b) ((a != NULL) ? strcpy(a, b) : NULL)
@@ -5247,13 +5248,172 @@ means that it will be treated as comment when compiling to create the
 program {\tt sieve} and it will be extracted without any comments when
 the {\tt findfile_prog} view of the document is obtained.
 
+/*
+=TEX
+
+\HOLindexEntry{is_sym_link}
+{\tt is_sym_link} : Returns 0 if the file name does not refer to a symbolic link or if
+name is a {\tt NULL} pointer, 1 otherwise.
+
+=FINDFILE_PROG
+*/
+#ifndef SIEVE_PROG
+int
+is_sym_link(char *name)
+{
+	struct stat st;
+	if(name == NULL || lstat(name, &st)) {
+		return 0;
+	}
+	return S_ISLNK(st.st_mode);
+}
+/*
+=TEX
+\HOLindexEntry{split_file_name}
+{\tt split_file_name} : split a file name into directory name and base name.
+=FINDFILE_PROG
+*/
+
+void
+split_file_name(char *name, char **dir, char **base)
+{
+	int name_len, dir_len;
+	if (name == NULL) {
+		*dir == NULL;
+		*base == NULL;
+		return;
+	}
+	name_len = strlen(name);
+	for(dir_len = name_len - 1; dir_len >= 0; dir_len -= 1) {
+		if(name[dir_len] == '/') {
+			*dir = (char*) malloc(dir_len + 1);
+			*base = (char*) malloc(name_len - dir_len);
+			strncpy(*dir, name, dir_len);
+			(*dir)[dir_len] = 0;
+			strcpy(*base, &name[dir_len+1]);
+			return;
+		}
+	}
+	*dir = (char*) malloc(1);
+	(*dir)[0] = 0;
+	*base = (char*) malloc(name_len + 1);
+	strcpy(*base, name);
+}
+/*
+=TEX
+\HOLindexEntry{read_link}
+{\tt read_link} : like the system call readlink, but handling the memory allocation.
+=FINDFILE_PROG
+*/
+char *
+read_link(char *name)
+{
+	char *buf;
+	int count, bufsiz;
+	bufsiz = 20;
+	buf = (char*) malloc(bufsiz);
+	do {
+		bufsiz *= 2;
+		buf = (char*)realloc(buf, bufsiz);
+		count = readlink(name, buf, bufsiz - 1);
+		if(count < 0) {
+			free(buf);
+			return NULL;
+		}
+	} while(count == bufsiz - 1);
+	buf[count] = 0;
+	return buf;
+}
+/*
+=TEX
+\HOLindexEntry{get_real_parent}
+{\tt get_real_parent} : from a file name potentially containing symbolic links find the real name of the parent directory of the file;
+if {\tt base_name} is not NULL return the real file base name in it too.
+Apparently there are portability problems with the MAXPATHLEN symbol (it can in principle be much too large to use as an array size).
+=FINDFILE_PROG
+*/
+#define MAX_LINKS 100
+#define MAX_FILE_NAME_LEN 50000
+char *
+get_real_parent (char * name, char **base_name)
+{
+	struct stat st;
+	char *dir, *base, *cur_name, buf[MAX_FILE_NAME_LEN];
+	int orig_cwd;
+	int loops;
+	orig_cwd = open(".", 0, 0);
+	if(orig_cwd < 0) {
+		return NULL;
+	}
+	cur_name = (char*) malloc(strlen(name) + 1);
+	strcpy(cur_name, name);
+	for(loops = 0; loops < MAX_LINKS; loops += 1) {
+		split_file_name(cur_name, &dir, &base);
+		free(cur_name);
+		cur_name = NULL;
+		if(dir == NULL) {
+			return NULL;
+		}
+		if(*dir) {
+			if(chdir(dir)) {
+				perror("findfile");
+				fchdir(orig_cwd);
+				close(orig_cwd);
+				free(dir);
+				free(base);
+				return NULL;
+			}
+		}
+		if(!is_sym_link(base)) {
+			free(dir);
+			dir = NULL;
+			break;
+		}
+		cur_name = read_link(base);
+		if(cur_name == NULL) {
+			free(dir);
+			free(base);
+			return NULL;
+		}
+	}
+	if(cur_name != NULL) {
+		free(cur_name);
+	}
+	if(loops == MAX_LINKS) {
+		if(dir) {
+			free(dir);
+		}
+		if(base) {
+			free(base);
+		}
+		fchdir(orig_cwd);
+		close(orig_cwd);
+		return NULL;
+	}
+	if(getcwd(buf, MAX_FILE_NAME_LEN) == NULL) {
+		fchdir(orig_cwd);
+		close(orig_cwd);
+		return NULL;
+	}
+	dir = (char*) malloc(strlen(buf) + 1);
+	strcpy(dir, buf);
+	if(base_name != NULL) {
+		*base_name = base;
+	} else {
+		free(base);
+		base = NULL;
+	}
+	fchdir(orig_cwd);
+	close(orig_cwd);
+	return dir;
+}
+/*
 \HOLindexEntry{main}
 =FINDFILE_PROG
 */
 
-#ifndef SIEVE_PROG
 
-char *coprlemma1_ff = "$Id$" " Copyright Lemma 1 Ltd. 2003";
+char *coprlemma1_ff = "$Id: imp096.doc,v 1.18 2003/07/29 11:18:50 rda Exp robarthan $" " Copyright Lemma 1 Ltd. 2003";
 extern char *find_file(char *name, char *dirs);
 
 #include<stdio.h>
@@ -5268,13 +5428,43 @@ main(int argc, char **argv)
 	char * program_name = argv[0];
 
 	if(argc < 3) {
-		FPRINTF(stderr, "usage: %s name path ...\n", program_name);
+		FPRINTF(stderr,
+			"usage: %s (name path ... | -r name ...)\n",
+					program_name);
 		FPRINTF(stderr, "%s version: %s\n", program_name, coprlemma1_ff);
 		exit(2);
 	}
 	name = *(argv+1);
-	ans = NULL;
-	for(ind = 2; ind < argc && ans == NULL; ++ind) {
+	if(!strcmp(name, "-r")) {
+		char *buf, *base;
+		for(ind = 2; ind < argc; ++ind) {
+			name = tilde_expand(*(argv+ind));
+			buf = get_real_parent(name, &base);
+			free(name);
+			if(buf) {
+				(void)printf("%s/%s\n", buf, base);
+				free(buf);
+				free(base);
+			} else {
+				exit(1);
+			}
+		}
+		exit(0);
+	}
+	if(!strcmp(name, "--")) {
+		if(argc < 4) {
+			FPRINTF(stderr,
+			"usage: %s (name path ... | -r name ...)\n",
+					program_name);
+			FPRINTF(stderr, "%s version: %s\n", program_name, coprlemma1_ff);
+			exit(2);
+		}
+		name = *(argv+2);
+		ind = 3;
+	} else {
+		ind = 2;
+	}
+	for(ans = NULL; ind < argc && ans == NULL; ++ind) {
 		ans = find_file(name, *(argv+ind));
 	}
 	if(ans == NULL) ans = name;
