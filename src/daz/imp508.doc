@@ -78,7 +78,7 @@ The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD504}.
 \subsection{Possible Enhancements}
 =TEX
 
-\subsection{PREAMBLE}
+\section{PREAMBLE}
 
 =SML
 structure ÛCNBasicDeclsAndExprsÝ (*: CNBasicDeclsAndExprs *)  = struct
@@ -87,23 +87,15 @@ local
 in
 =TEX
 
-\subsection{Environments}
+\section{MISCELLANEOUS SUPPORTING FUNCTIONS}
 
 =SML
-type CN_ENV = Z_ID -> TYPE;
-=IGN
-val Ûcn_envÝ = (
-let	val (id', _) = dest_const (mk_z_gvar(id, blip_a, []));
-in
-	case get_const_type id' of
-	Value ty => (
-		mk_z_gvar(id, ty, [])
-	)| Nil => (
-		fail "init_cn_env" 508001 [fn()=
-	)
-end
-);
-
+datatype ÛENV_INFOÝ =
+			ÛEIEnvFunctionÝ
+		|	ÛEIEnvRecordAggÝ
+		|	ÛEIEnvVarÝ
+		|	ÛEIEnvOtherÝ;
+type CN_ENV = Z_ID -> TYPE * ENV_INFO;
 =TEX
 
 =SML
@@ -220,17 +212,10 @@ end);
 val ÛzsuccÝ : Z_EXP = ñsucc®;
 =TEX
 =SML
-val Ûblip_aÝ = ”'a®;
 fun ÛzidÝ (env : CN_ENV) (id :Z_ID) : Z_EXP = (
-let	val (id', _) = dest_const (mk_z_gvar(id, blip_a, []));
-in
-	case get_const_type id' of
-	Value ty => (
-		mk_z_gvar(id, ty, [])
-	)| Nil => (
-		mk_z_lvar (id, blip_a, [])
-	)
-end
+	case env id of
+	(ty, EIEnvVar) => mk_z_lvar(id, ty, [])
+	|(ty, _) => mk_z_gvar(id, ty, [])
 );
 =TEX
 =SML
@@ -344,7 +329,7 @@ fun Ûz_many_unionÝ ((exps as e1::e2::rest) : Z_EXP list) : Z_EXP = (
 =TEX
 =SML
 fun Ûz_muÝ (id : Z_ID, p : Z_PRED) : Z_EXP = (
-let	val name = (fst o dest_const)(mk_z_gvar(id, blip_a, []));
+let	val name = (fst o dest_const)(mk_z_gvar(id, mk_vartype "'a", []));
 	val ty = case get_const_type name of
 		Value ty => ty
 		|Nil => fail "z_mu" 508001 [];
@@ -401,9 +386,220 @@ fun Ûz_eq_eqÝ (id : Z_ID, exp : Z_EXP) : PARAINFO = (
 =TEX
 
 =SML
+val Ûz_trueÝ = ñtrue®;
+
 fun Ûz_schemaÝ (name : Z_ID, decls : Z_DECL list) : PARAINFO = (
-	AbbDefInfo (name, [], z_decls_to_exp decls)
+	AbbDefInfo (name, [], mk_z_h_schema(z_decls_to_exp decls, z_true))
 );
+=TEX
+
+\section{INTEGER LITERALS}\label{INTEGERLITERALS}
+
+The translation of integer literals is non-trivial and several supporting functions for the translation of integer literals are introduced in this section. The function $trans\_int$ is introduced at the end of this section.
+=SML
+local
+=TEX
+\subsection{Support for $trans\_int$}
+
+=SML
+open	CaseIndependence;
+open	Lex;
+open	PolyML.Alternative_Div_and_Mod
+
+type ÛNUMBERSÝ = string list;
+type ÛNUMERICÝ = {base : NUMBERS, m : NUMBERS, n : NUMBERS, expon : NUMBERS};
+=TEX
+
+\subsubsection{Phase 1: Recognising Numeric Literals}
+
+In the exponent part when there is a sign, it is just copied into the number. The parser has already ensured that $+$ and $-$ can only appear at the start of an exponent, so a further check is not required here.
+=SML
+fun Ûrecog_exponent_partÝ (dec as {base,m,n,expon} : NUMERIC, (c::rest) : NUMBERS) : (NUMERIC * NUMBERS) = (
+	if is_digit c
+	then	recog_exponent_part ({base=base,m=m, n=n, expon=expon@[c]}, rest)
+	else case c of
+
+		"_" =>	recog_exponent_part (dec, rest)
+		|"+" => recog_exponent_part ({base=base,m=m, n=n, expon=expon@[c]}, rest)
+		|"-" => recog_exponent_part ({base=base,m=m, n=n, expon=expon@[c]}, rest)
+		|_ =>	(dec, c::rest)
+
+) | recog_exponent_part (other, []) = (
+	(other, [])
+);
+=TEX
+=SML
+fun Ûrecog_decimal_partÝ (dec as {base,m,n,expon} : NUMERIC, (c::rest) : NUMBERS) : (NUMERIC * NUMBERS) = (
+	if is_digit c
+	then	recog_decimal_part ({base=base,m=m, n=n@[c], expon=expon}, rest)
+	else case c of
+
+		"_" =>	recog_decimal_part (dec, rest)
+		|"e" => recog_exponent_part (dec, rest)
+		|"E" => recog_exponent_part (dec, rest)
+		|_ =>	(dec, c::rest)
+
+) | recog_decimal_part (other, []) = (
+	(other, [])
+);
+=TEX
+=SML
+fun Ûrecog_based_dec_partÝ (nb as {base,m,n,expon} : NUMERIC, (c::rest) : NUMBERS) : (NUMERIC * NUMBERS) = (
+	if is_alnum c
+	then	recog_based_dec_part ({base=base,m=m, n=n@[c], expon=expon}, rest)
+	else case c of
+
+		"_" =>	recog_based_dec_part (nb, rest)
+		|"#" => recog_numeric (nb, rest)
+		|_ =>	(nb, c::rest)
+
+) | recog_based_dec_part (other, []) = (
+	fail "recog_based_dec_part" 508001 [fn()=>"incomplete based integer"]
+)
+=TEX
+
+=SML
+and Ûrecog_basedÝ (nb as {base,m,n,expon} : NUMERIC, (c::rest) : NUMBERS) : (NUMERIC * NUMBERS) = (
+	if is_alnum c
+	then	recog_based ({base=base,m=m@[c], n=n, expon=expon}, rest)
+	else case c of
+
+		"_" =>	recog_based (nb, rest)
+		|"." => recog_based_dec_part (nb, rest)
+		|"#" => recog_numeric (nb, rest)
+		|_ =>	(nb, c::rest)
+
+) | recog_based (other, []) = (
+	fail "recog_based" 508001 [fn()=>"incomplete based integer"]
+)
+=TEX
+
+=TEX
+=SML
+and Ûrecog_numericÝ (num as {base,m,n,expon} : NUMERIC, (c::rest) : NUMBERS) : (NUMERIC * NUMBERS) = (
+	if is_digit c
+	then	recog_numeric ({base=base,m=m@[c], n=n, expon=expon}, rest)
+	else case c of
+
+		"_" =>	recog_numeric (num, rest)
+		|"." =>	recog_decimal_part (num, rest)
+		|"e" => recog_exponent_part (num, rest)
+		|"E" => recog_exponent_part (num, rest)
+		|"#" => recog_based ({base=m,m=[],n=n,expon=expon}, rest)
+		|_ =>	(num, c::rest)
+) | recog_numeric other = other;
+=TEX
+\subsubsection{Phase 2 : Generating Integer Literals}
+
+The following gives a lookup table for extended digits to values upto 16.
+
+i.e., $[("0", 0), ("1", 1),...("F", 15)]$.
+=SML
+val Ûextended_digitsÝ : (string * int) list = (
+	combine
+		(map string_of_int (interval 0 9)@["A","B","C","D","E","F"])
+		(interval 0 15)
+);
+=TEX
+=SML
+fun Ûbased_to_intÝ (base : int) (sl : NUMBERS) = (
+let	val valid = extended_digits to (base-1);
+	val sl' = map to_upper sl;
+	val f = lassoc3 valid;
+	fun aux (c::rest) = (
+		f c + base * aux rest
+	) | aux _ = 0;
+in
+	(aux o rev) sl' handle _ =>
+			fail "based_to_int" 508001 [fn()=>"invalid base digit"]
+end);
+=TEX
+=SML
+fun Ûsigned_nat_of_numbersÝ (sl : NUMBERS) : int = (
+let	val f = nat_of_string o implode;
+in
+	case sl of
+	("+"::n) => f n
+	|("-"::n) => ~(f n)
+	|_ => f sl
+end);
+=TEX
+=SML
+fun ÛbasepowÝ (_ : int) (0 : int) : int = 1
+  | basepow base n = base * basepow base (n-1);
+=TEX
+=SML
+fun Ûconvert_base_expÝ ((base, m, expon) : (int*int*int)) : int = (
+	if expon > 0
+	then	m * basepow base expon
+	else	let	val d = basepow base (~expon);
+			val res = m div d;
+		in
+			if res * d = m
+			then
+				res
+			else
+				fail "convert_base_exp" 508001 [fn()=>"cannot convert"]
+		end
+);
+=TEX
+=SML
+fun Ûno_of_digits_inÝ (base : int) (n : int) : int = (
+	if quot (n, base) > 0
+	then
+		1 + no_of_digits_in base (n div base)
+	else
+		1
+);
+=TEX
+=SML
+fun Ûconvert_base_dec_expÝ ((base, m, n, expon) : (int*int*int*int)) : int = (
+let	val nd = (no_of_digits_in base n) - 1;
+	val df = expon - nd;
+	val offset = basepow base nd;
+in
+	if df >= 0
+	then
+		 convert_base_exp (base, (m * offset + n - offset), df)
+	else
+		fail "nil_aux" 508001 [fn()=>"cannot convert"]
+end);
+=TEX
+In the following, ``1'' is prefixed to the decimal part in order to preserve leadnig zeros when converting to an integer. It is removed in $convert\_base\_dec\_exp$.
+=SML
+fun Ûnumeric_to_int_litÝ ({base,m,n,expon} : NUMERIC) : int = (
+let	val nbase = (nat_of_string o implode) base handle _ => 10;
+	val f = if nbase = 10
+		then
+			fn a => (case a of
+				(_::_) => (nat_of_string o implode) a
+				| _ => 0
+			)
+		else
+			based_to_int nbase;
+	val nm = f m;
+	val nn = f ("1"::n);
+	val nexpon = signed_nat_of_numbers expon handle _ => 0;
+in
+	case (nbase,nm,nn,nexpon) of
+	(10, _, 0, 0) => nm
+	|(_, _, 0, _) => convert_base_exp (nbase,nm,nexpon)
+	|_ => convert_base_dec_exp (nbase,nm,nn,nexpon)
+
+end);
+=TEX
+\subsection{The Function $trans\_int$}
+=SML
+in (* of local ... in *)
+=TEX
+=SML
+fun Ûtrans_intÝ (i : INT_LIT) : int = (
+	(numeric_to_int_lit o fst o recog_numeric)
+		({base=[],m=[],n=[],expon=[]}, explode i)
+);
+=TEX
+=SML
+end (* of local ... in *);
 =TEX
 
 \section{TRANSLATING SPARK EXPRESSIONS}
@@ -670,12 +866,7 @@ and Ûexp_fun_callÝ (env : CN_ENV) ({fun_name, args} : EXP FUN_CALL) : Z_EXP = (
 )
 =TEX
 \subsection{Translating Integer Literals}
-TBS - trans_int needs to translate ada integers.
-=SML
-and Ûtrans_intÝ (n : INT_LIT) : int = (
-	nat_of_string n
-)
-=TEX
+The function $trans\_int$ is defined in section \ref{INTEGERLITERALS}.
 =SML
 and Ûexp_int_litÝ (n : INT_LIT) : Z_EXP = (
 	z_num (trans_int n)
@@ -747,15 +938,26 @@ fun Ûbasic_decl_constÝ (env : CN_ENV) {consts=consts, tm=tm, expr=expr} = (
 =TEX
 \subsection{Translating Enumeration Types}
 =SML
+val Ûú_tyÝ = ”ú®;
+val Ûðú_tyÝ = type_of ñú®;
+val Ûúú_tyÝ = type_of ñú ¸ ú®;
+=TEX
+=SML
 fun Ûenum_attribÝ (env : CN_ENV) (zid‰1, zid‰2, zid‰3) = (
-let	val zexp = z_set_minus (zid env zid‰1, z_set[zid env (zid‰1^^zlst)]);
+let	fun env' id = 
+		if id = (zid‰1 ^^ zlst)
+		then	(ú_ty, EIEnvOther)
+		else if id mem [zid‰1 ^^ zsuc, zid‰1 ^^ zpos]
+		then	(úú_ty,EIEnvOther)
+		else	env id;
+	val zexp = z_set_minus (zid env' zid‰1, z_set[zid env' (zid‰1^^zlst)]);
 in
-	[z_eq_eq (zid‰1 ^^ zfst, zid env zid‰2),
-	z_eq_eq (zid‰1 ^^ zlst, zid env zid‰3),
+	[z_eq_eq (zid‰1 ^^ zfst, zid env' zid‰2),
+	z_eq_eq (zid‰1 ^^ zlst, zid env' zid‰3),
 	z_eq_eq (zid‰1 ^^ zsuc, z_dom_res (zexp, zsucc)),
-	z_eq_eq(zid‰1 ^^ zpred, z_inv(zid env (zid‰1 ^^ zsuc))),
-	z_eq_eq(zid‰1 ^^ zpos, z_id_rel (zid env zid‰1)),
-	z_eq_eq(zid‰1 ^^ zval, z_inv(zid env (zid‰1 ^^ zpos)))]
+	z_eq_eq(zid‰1 ^^ zpred, z_inv(zid env' (zid‰1 ^^ zsuc))),
+	z_eq_eq(zid‰1 ^^ zpos, z_id_rel (zid env' zid‰1)),
+	z_eq_eq(zid‰1 ^^ zval, z_inv(zid env' (zid‰1 ^^ zpos)))]
 end);
 =TEX
 =SML
@@ -764,10 +966,20 @@ let	val {vals} = td;
 	val zname = trans_id name;
 	val zvals = map trans_id vals;
 	val znums = map z_num (interval 0 ((length vals)-1));
+	fun env' id = (
+		if id mem zvals
+		then
+			(ú_ty, EIEnvOther)
+		else if id = zname
+		then
+			(ðú_ty, EIEnvOther)
+		else
+			env id
+	);
 in
 	map (fn j => z_eq_eq j) (combine zvals znums) @
-	[z_eq_eq(zname, z_rng(zid env (head zvals), zid env (last zvals)))] @
-	enum_attrib env (zname, head zvals, last zvals)
+	[z_eq_eq(zname, z_rng(zid env' (head zvals), zid env' (last zvals)))] @
+	enum_attrib env' (zname, head zvals, last zvals)
 end);
 =TEX
 \subsection{Translating Array Types}
