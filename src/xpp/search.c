@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.8 2002/01/21 22:42:47 rda Exp rda $ 
+ * $Id: search.c,v 2.9 2002/01/25 00:34:39 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -1031,7 +1031,7 @@ static void replace_all(
  * in the text widget passed as an argument. It returns NO_MEMORY
  * if it could not allocate enough memory to do the calculation.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static long int get_line_no(Widget text_w)
+long int get_line_no(Widget text_w)
 {
 	XmTextPosition ins_pos;
 	char *data, *p;

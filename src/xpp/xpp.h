@@ -8,7 +8,7 @@
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #ifdef _xpp
-static char rcsid_h[] = "$Id: xpp.h,v 2.12 2002/05/15 11:02:48 phil Exp rda $";
+static char rcsid_h[] = "$Id: xpp.h,v 2.13 2002/08/09 10:54:31 rda Exp rda $";
 #endif
 
 
@@ -222,6 +222,8 @@ typedef struct menu_item {
 /* Module: search */
 	extern Boolean add_search_tool(
 		Widget	w);
+	extern long int get_line_no(
+		Widget text_w);
 /* Module: templates */
 	extern Boolean init_templates_tool(
 		Widget	w);
