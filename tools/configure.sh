@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.30 2004/03/08 21:52:54 rda Exp rda $
+# $Id: configure.sh,v 1.31 2004/07/18 13:11:39 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -288,6 +288,12 @@ out "export PPDATABASEPATH"
 if	[ "$PPCOMPILER" = POLYML ]
 then	export_it PPPOLYDBASE
 fi
+out 'TEXINPUTS=.:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$TEXINPUTS:'
+out "export TEXINPUTS"
+out 'BIBINPUTS=.:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$BIBINPUTS:'
+out "export BIBINPUTS"
+out 'BSTINPUTS=.:$PPTARGETDIR/tex:$PPTARGETDIR/doc:$BSTINPUTS:'
+out "export BSTINPUTS"
 out 'give_up(){'
 out '	echo "install: installation failed; see $1 for more details"'
 out '	exit 1'
