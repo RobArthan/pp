@@ -6,7 +6,15 @@
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
  *
- * (c) ICL 1993
+ * (c) ICL 1993, 1994
+ * 
+ * This implements two main functions:
+ *
+ *	1) A text editor (in which typically the user is building
+ *	a command script for an interactive program such as ProofPower.
+ *	2) A pseudo-teletype in which the interactive program can
+ *	be run.
+ *
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
@@ -103,9 +111,12 @@ static char* quit_message =
 static char* kill_message =
 "Do you really want to kill the application?";
 
+static char* not_running_message =
+"The application is not running";
+
 static char* restart_message =
-"The application is running. \
-Do you want to kill it and then restart it?";
+"The application is running. "
+"Do you want to kill it and then restart it?";
 
 static char *cmd_too_long_message = 
 "The command is too long (%d bytes supplied; max. %d bytes).";
@@ -228,7 +239,7 @@ static MenuItem tools_menu_items[] = {
     NULL,
 };
 
-#define EDIT_MENU_CUT		0
+#define EDIT_MENU_CUT			0
 #define EDIT_MENU_COPY		1
 #define EDIT_MENU_PASTE		2
 #define EDIT_MENU_CLEAR		3
@@ -249,7 +260,7 @@ static MenuItem edit_menu_items[] = {
 };
 
 #define CMD_MENU_EXECUTE	0
-#define CMD_MENU_RETURN		1
+#define CMD_MENU_RETURN	1
 #define CMD_MENU_INTERRUPT	2
 #define CMD_MENU_KILL		3
 #define CMD_MENU_RESTART	4
@@ -775,10 +786,12 @@ XmAnyCallbackStruct *cbs;
 		kill_application(),
 		send_nl(),
 		restart_application(),
-		interrupt_application(),
-		post_mortem_tidy_up();
-
-	post_mortem_tidy_up();
+		interrupt_application();
+	
+	if(!application_alive() && i != CMD_MENU_RESTART) {
+		ok_dialog(root, not_running_message);
+		return;
+	};
 
 	switch(i) {
 	case CMD_MENU_EXECUTE:
@@ -1024,7 +1037,9 @@ gotpty:
 			control_fd, (XtPointer) XtInputReadMask,
 			get_from_application, NULL);
 		listening = True;
+		write(control_fd, " ", 1);	/* Tell child to exec */
 	} else { /* Child */
+		char	buf;
 		close(control_fd);
 		dup2(slave_fd, 0);
 		dup2(slave_fd, 1);
@@ -1035,6 +1050,7 @@ gotpty:
 		if((tty_fd = open("/dev/tty", O_RDWR)) >= 0) {
 			ioctl(tty_fd, TIOCNOTTY, 0);
 		};
+		read(0, &buf, 1);		/* Wait until told */
 		execvp(arglist[0], arglist);
 	/* **** error if reach here **** */
 		msg("system error", "could not exec");
@@ -1043,12 +1059,31 @@ gotpty:
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Test whether the application is alive
+ * Test whether the application is alive.
+ * Also does some tidy-up:
+ *	1) non-blocking wait to reap child if it has died.
+ *	2) if child has died, and Xt is still listening for it
+ *	   then tell it to stop.
+ *	3) close the control_fd file descriptor.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 Boolean application_alive()
 {
-	return (child_pid ? !kill(child_pid, 0) : False);
+	if(child_pid) {
+		waitpid(child_pid, NULL, WNOHANG);
+		if(kill(child_pid, 0)) { /* != 0; it's died */
+			if(listening) {
+				XtRemoveInput(app_ip_req);
+				listening = False;
+			};
+			close(control_fd);
+			return False;
+		} else {
+			return True;
+		}
+	} else {
+		return False;
+	}
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1060,7 +1095,8 @@ XtPointer unused_p;
 {
 	NAT ct;
 	static	char buf[1001];
-	while((ct = read(control_fd, buf, 1000)) > 0) {
+	while(application_alive() &&
+			(ct = read(control_fd, buf, 1000)) > 0) {
 		scroll_out(buf, ct, False);
 	};
 }
@@ -1277,7 +1313,7 @@ static void interrupt_application ()
 {
 	if(application_alive()) {
 		kill((pid_t)-child_pgrp, SIGINT);
-	} 
+	}
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1292,17 +1328,6 @@ static void send_nl ()
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Tidy up if the application is dead
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void post_mortem_tidy_up ()
-{
-	if(listening && !application_alive()) {
-		XtRemoveInput(app_ip_req);
-		listening = False;
-	}
-}
-
-/* **** **** **** **** **** **** **** **** **** **** **** ****
  * Kill the application:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void kill_application ()
@@ -1313,8 +1338,8 @@ static void kill_application ()
 			listening = False;
 		};
 		kill(child_pid, SIGKILL);
-		waitpid(child_pid, NULL, WNOHANG);
 		close(control_fd);
+		waitpid(child_pid, NULL, WUNTRACED);
 	}
 }
 
