@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.21 2003/07/17 11:46:07 rda Exp rda $
+ * $Id: xmisc.c,v 2.22 2003/07/18 13:25:25 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -314,8 +314,69 @@ void text_verify_cb(
 	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * centre_popup_cb: XmNpopupCallback callback that
- * attempts to centre a popup-shell relative to the root
+ * Common set-up for custom dialogues:
+ * Deals with initial positioning of the dialogues and with
+ * mimicking Motif's behaviour for subclasses of bulletin
+ * board when the user types osfCancel
+ * in a dialogue whose outermost container widget is not
+ * subclassed from bulletin board (e.g.,  a paned
+ * window).
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+typedef struct {
+	void	(*cancel_cb)(CALLBACK_ARGS);
+	XtPointer	cancel_cbd;
+} cancel_info;
+
+static void cancel_handler (
+	Widget		w,
+	XtPointer	x,
+	XEvent		*evp,
+	Boolean		*continue_dispatch)
+{
+	KeySym keysym;
+	Modifiers modifiers;
+	XKeyPressedEvent *kpe;
+	cancel_info *info = x;
+	char *str;
+	if(evp->type != KeyRelease) {
+		return;
+	} /* else */
+	kpe = &(evp->xkey);
+	XmTranslateKey(XtDisplay(root),
+		kpe->keycode,
+		kpe->state,
+		&modifiers,
+		&keysym);
+	if(keysym ==  osfXK_Cancel) {
+		info->cancel_cb(w, info->cancel_cbd, 0);
+		*continue_dispatch = False;
+	}
+}
+static void add_cancel_handlers(Widget w, XtPointer cbd)
+{
+	Widget *children;
+	int i, num_children;
+	if(XtIsComposite(w)) {
+		XtVaGetValues(w,
+			XmNchildren,		&children,
+			XmNnumChildren,		&num_children,
+			NULL);
+		for(i = 0; i < num_children; i += 1) {
+			add_cancel_handlers(children[i], cbd);
+		}
+	} else if (XtIsWidget(w)) {
+		XtInsertEventHandler(w,
+			KeyReleaseMask,
+			False,
+			cancel_handler,
+			cbd,
+			XtListHead);
+	}
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * setup_popup_cb: XmNpopupCallback callback that
+ * sets up a popup-shell. Most of the code is concerned
+ * with attempt to centre a popup-shell relative to the root
  * window. If this would come within 10 pixels of
  * obscuring the root window, it places the top left-hand
  * corner of the popup 10 pixels south and west of
@@ -324,10 +385,13 @@ void text_verify_cb(
  * The callback removes itself from the list - if the user moves
  * the pop-up after it has first been seen, then we don't want to
  * interfere.
+ * Finally, if the caller of common_setup_dialog has asked for it
+ * the cancel event handler is registered for each valid widget
+ * in the widget hierarchy under the popup-shell.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void  centre_popup_cb(
+static void  setup_popup_cb(
 	Widget		popup,
-	XtPointer		unused1,
+	XtPointer		cbd,
 	XtPointer		unused2)
 {
 	Position popup_rel_x, popup_rel_y, popup_abs_x, popup_abs_y;
@@ -357,14 +421,28 @@ static void  centre_popup_cb(
 		XmNx,	popup_abs_x,
 		XmNy,	popup_abs_y,
 		NULL);
-	XtRemoveCallback(popup, XmNpopupCallback, centre_popup_cb, 0);
+	XtRemoveCallback(popup, XmNpopupCallback, setup_popup_cb, cbd);
+	if(cbd != 0) {
+		add_cancel_handlers(popup, cbd);
+	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Interface to the common dialog set-up
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void common_dialog_setup(Widget shell)
+void common_dialog_setup(
+	Widget shell,
+	void cancel_cb(CALLBACK_ARGS),
+	XtPointer cancel_cbd)
 {
-	XtAddCallback(shell, XmNpopupCallback, centre_popup_cb, 0);
+	cancel_info *cbd;
+	if(cancel_cb != 0) {
+		cbd = (cancel_info*)XtMalloc(sizeof(*cbd));
+		cbd -> cancel_cb = cancel_cb;
+		cbd -> cancel_cbd = cancel_cbd;
+	} else {
+		cbd = (cancel_info*) 0;
+	}
+	XtAddCallback(shell, XmNpopupCallback, setup_popup_cb, cbd);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * text_show_position: like XmTextShowPosition but centres the
