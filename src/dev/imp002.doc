@@ -1,0 +1,368 @@
+=TEX
+% TQtemplate.tex
+\documentstyle[hol,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation of System Control and Basic Error Handling}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP001}  %% Mandatory field
+\def\SCCSversion{$Revision$
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+%\TPPdate{}  %% Mandatory field (with sensible default)
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{Specification}
+\TPPkeywords{HOL}
+\TPPauthor{R.D.~Arthan & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.D.~Arthan & FST Team Leader}
+\TPPabstract{
+This document contains the implementation of the
+system control and basic
+error reporting subsystem for the ICL HOL system.}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+      Library}}
+
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history}  % to get section number `0.3'
+\begin{description}
+\item[Issue \SCCSversion (\FormatDate{$Date$%
+})]
+First draft for comment.
+\end{description}
+\subsection{Changes forecast}
+\section{GENERAL}
+\subsection{Scope}
+This document contains part of the implementation of
+the ICL HOL system.
+\subsection{Introduction}
+\subsubsection{Background and Purpose}
+This document contains the implementation of the
+material whose detailed design may be found in
+\cite{DS/FMU/IED/DTD002}.
+\subsection{Dependencies}
+Some of the code contained here is compiler dependent.
+\subsection{Interface}
+See \cite{DS/FMU/IED/DTD002}.
+\subsection{Algorithms}
+There are no complex algorithms in this document.
+The most difficult problem is finding an interleaving
+of the system control and error functions compatible
+with declaration before use.
+Since this structure is compiled before the utilities
+defined in \cite{DS/FMU/IED/DTD001} it has to be self-sufficient
+as regards table lookup algorithms etc.
+
+\subsection{Possible Enhancements}
+\subsection{Deficiencies}
+\section{MINIMAL ERROR REPORTING}
+\subsection{Preamble}
+=SML
+structure âBasicErrorá : BasicError = struct
+=TEX
+\subsection{Types}
+=SML
+datatype âMESSAGEá = âMessageá of unit -> {area:string, id:int, inserts:string list};
+=TEX
+\subsection{Exceptions}
+=SML
+exception âFailá of MESSAGE;
+exception âErrorá of MESSAGE;
+=TEX
+\subsection{Error Message Database}
+The database is represented by an assignable variable
+holding a table of identifier-entry pairs .
+(Experiments show an average access time of 2msecs. (on a 
+SPARC 1) to
+do a look up in a table of 1000 entries. This seems
+acceptable for an operation which is only performed when
+an error message is actually printed.)
+=SML
+val âmessage_dbá : {id:int, text:string} list ref = ref [];
+=TEX
+Some of the database access functions
+can give rise to errors. None of these errors is recoverable
+or trappable.
+We therefore need the following simple function to raise errors.
+=SML
+fun âscreamá (area : string) (msg : int) : 'a = (
+	raise (Error(Message(fn () => {area=area, id=msg, inserts=[]})))
+);
+=SML
+fun ânew_error_messageá (arg as {id:int, text: string}) : unit = (
+	let	fun aux ((arg' as {id=id', text=text'}) :: rest) = (
+			if id' = id
+			then scream "new_error_message" 2001
+			else arg' :: aux rest
+		) | aux [] = [arg]
+	in	message_db := aux(!message_db)
+	end
+);
+=SML
+fun âgive_error_messageá (id:int) : string = (
+	let	fun aux ({id=id', text=text'} :: rest) = (
+			if id' = id
+			then text'
+			else aux rest
+		) | aux [] = scream "give_error_message" 2002
+	in	aux (!message_db)
+	end
+);
+=SML
+fun âgive_error_messagesá () : {id:int, text:string} list = (
+	!message_db
+);
+=SML
+fun âicl'change_error_messageá (arg as {id:int, text: string}) : unit = (
+	let	fun aux ((arg' as {id=id', text=text'}) :: rest) = (
+			if id' = id
+			then arg :: rest
+			else arg' :: aux rest
+		) | aux [] = [arg]
+	in	message_db := aux(!message_db)
+	end
+);
+=TEX
+\subsection{Simple Error Reporting 1}
+=SML
+fun âreportá (area : string) (id : int) (inserters : (unit -> string) list) : MESSAGE = (
+	Message (fn () => {
+		area=area,
+		id=id,
+		inserts = map (fn f => f())inserters})
+);
+=SML
+fun âfailá (area : string) (id : int) (inserters : (unit -> string) list) : 'a = (
+	raise Fail(report area id inserters)
+);
+=SML
+fun âerrorá (area : string) (id : int) (inserters : (unit -> string) list) : 'a = (
+	raise Error(report area id inserters)
+);
+=TEX
+\subsection{Printing Errors}
+=SML
+fun âgive_messageá (Message msg:MESSAGE) : string = (
+	let	val {area:string, id:int, inserts:string list} = msg();
+		fun aux1 [] _ = "?"
+		|   aux1 (h::t) i = (if i <= 0 then h else aux1 t (i-1));
+		fun aux2 chs = (
+			case chs of
+				("?"::c::cs) => (
+					if c = "?"
+					then "?" :: aux2 cs
+					else	let val num = ord c - ord "0"
+						in	if num >= 0 andalso num <= 9
+							then aux1 inserts num :: aux2 cs
+							else "?" :: c :: aux2 cs
+						end
+			) |	c :: cs => (c :: aux2 cs
+			) |	[] => []
+		);
+	in	"Error raised by" ^ area ^ ":\n" ^ implode(aux2(explode(give_error_message id)))
+	end
+);
+=TEX
+We arrange for PolyML automatically to format error reports
+using the following function.
+=SML
+val _ = let
+		fun error_pp (addstring, beginb, space, endb) (msg:MESSAGE) = (
+			addstring (give_message msg)
+		);
+	in
+		PolyML.install_pp error_pp
+	end;
+=TEX
+\subsection{Support for Error Handling}
+=SML
+fun âdivertá (exn : exn) (from : string) (to: string) (new_id:int) (inserters:(unit->string)list): 'a = (
+	case exn of
+		Fail (Message msg) => (
+			raise Fail (Message(fn () =>
+	let val {area, id, inserts} = msg ()
+	in	if area = from
+		then {area=to, id=new_id, inserts = map(fn f => f())inserters}
+		else {area=area, id=id, inserts=inserts}
+	end		))
+		) | Other => raise Other
+);
+=SML
+fun âlist_divertá (exn : exn) (to : string)
+	(triples :(string * int * (unit -> string) list)list): 'a = (
+	case exn of
+		Fail (Message msg) => (
+			raise Fail (Message(fn () =>
+	let val {area, id, inserts} = msg ()
+		fun aux [] = {area=area, id=id, inserts=inserts}
+		|  aux ((from, new_id, inserters)::rest) = (
+			if area = from
+			then {area=to, id=new_id, inserts = map(fn f => f())inserters}
+			else aux rest
+		);
+	in	aux triples
+	end		))
+		) | Other => raise Other
+);
+end; (* Of structure BasicError *)
+=SML
+open BasicError;
+=TEX
+\section{SYSTEM CONTROL}
+=SML
+structure âSystemControlá : SystemControl = struct
+=TEX
+\subsection{Support Functions}
+By including a check function even for the flags we
+can handle all of the functions polymorphically.
+=SML
+type 'a âCONTROL_RECá = {name:string, control:'a ref, default:unit->'a, check:'a -> bool};
+=TEX
+These functions are not performance critical, so we use
+very simple table access algorithms:
+=SML
+fun âlookupá (func_name : string) (table : 'a CONTROL_REC list) (what : string) : 'a CONTROL_REC = (
+	case table of
+		(record as {name, ...}) :: rest => (
+			if name = what
+			then record
+			else lookup func_name rest what
+		) | [] => fail func_name 2011 [fn()=>what]
+);
+=SML
+fun ânew_controlá
+	(func_name : string)
+	(var : 'a CONTROL_REC list ref)
+	(record as {name, ...}:'a CONTROL_REC) : unit = (
+	let	val SideEffect = lookup "" (!var) name
+	in	fail func_name 2010 [fn()=>name]
+	end	handle Fail _ => (var := record :: (!var))
+);
+=SML
+fun âset_controlá
+	(func_name : string)
+	(var : 'a CONTROL_REC list ref)
+	(name : string)
+	(value : 'a) : unit = (
+	let	val {name, control, check, ...} = lookup "set_control" (!var) name
+	in	if (check value)
+		then control := value
+		else fail func_name 2012 [fn()=>name]
+	end
+);
+=SML
+fun âreset_controlá
+	(func_name : string)
+	(var : 'a CONTROL_REC list ref)
+	(name : string)
+	: unit = (
+	let	val {name, control, default, ...} = lookup "set_control" (!var) name
+	in	control := default()
+	end
+);
+=SML
+fun âget_controlá
+	(func_name : string)
+	(var : 'a CONTROL_REC list ref)
+	(name : string)
+	: 'a = (
+	let	val {control,...} = lookup "set_control" (!var) name
+	in	!control
+	end
+);
+=SML
+fun âget_controlsá
+	(func_name : string)
+	(var : 'a CONTROL_REC list ref)
+	(():unit) : (string * 'a) list = (
+	map (fn {name, control, ...} => (name, !control)) (!var)
+);
+=TEX
+\subsection{State Variables}
+=SML
+	val âflagsá : bool CONTROL_REC list ref = ref[];
+	val âint_controlsá : int CONTROL_REC list ref = ref[];
+	val âstring_controlsá : string CONTROL_REC list ref = ref[];
+=TEX
+\subsection{Visible Functions}
+The function for introducing flags is the odd man out,
+in that its parameter record does not have the $check$ field.
+=SML
+fun ânew_flagá {name:string, control:bool ref, default:unit->bool} : unit = (
+	new_control
+	"new_flag"
+	flags
+	{name=name, control=control, default=default, check=(fn _=>true)}
+);
+=SML
+val ânew_int_controlá = new_control "new_int_control" int_controls;
+val ânew_string_controlá = new_control "new_string_control" string_controls;
+=SML
+val âset_flagá = set_control "set_flag" flags;
+val âset_int_controlá = set_control "set_int_control" int_controls;
+val âset_string_controlá = set_control "set_string_control" string_controls;
+=SML
+val âreset_flagá = reset_control "reset_flag" flags;
+val âreset_int_controlá = reset_control "reset_int_control" int_controls;
+val âreset_string_controlá = reset_control "reset_string_control" string_controls;
+=SML
+val âget_flagá = get_control "get_flag" flags;
+val âget_int_controlá = get_control "get_int_control" int_controls;
+val âget_string_controlá = get_control "get_string_control" string_controls;
+=SML
+val âget_flagsá = get_controls "get_flag" flags;
+val âget_int_controlsá = get_controls "get_int_control" int_controls;
+val âget_string_controlsá = get_controls "get_string_control" string_controls;
+=TEX
+That completes the structure:
+=SML
+end; (* of structure SystemControl *)
+=TEX
+\twocolumn[\section{INDEX OF DEFINED TERMS}]
+\printindex
+\end{document}
+
+=IGN
+
+
+new_error_message {id=100, text="?0 not expected here"};
+fail "foo" 100 [];
+fail "foo" 100 [fn()=>"BLAH"];
+new_error_message {id=101, text="?0 not expected after ?1?. ??"};
+fail "foo" 101 [(fn()=>"BLAH"), (fn ()=>"BAH")];
+reset_string_control
