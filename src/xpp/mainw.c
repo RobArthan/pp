@@ -217,19 +217,27 @@ static MenuItem edit_menu_items[] = {
     NULL,
 };
 
-#define CMD_MENU_EXECUTE	0
-#define CMD_MENU_RETURN	1
-#define CMD_MENU_ABANDON	2
-#define CMD_MENU_INTERRUPT	3
+#define CMD_MENU_EXECUTE		0
+#define CMD_MENU_RETURN		1
+#define CMD_MENU_SEMICOLON		2
+#define CMD_MENU_RIGHT_BRACKET	3
 /* Item 4 is a separator */
-#define CMD_MENU_KILL		5
-#define CMD_MENU_RESTART	6
+#define CMD_MENU_ABANDON		5
+#define CMD_MENU_INTERRUPT		6
+/* Item 7 is a separator */
+#define CMD_MENU_KILL			8
+#define CMD_MENU_RESTART		9
 
 static MenuItem cmd_menu_items[] = {
-    { "Execute", &xmPushButtonGadgetClass, 'x', "Ctrl<Key>x", "Ctrl-X",
+    { "Execute Selection", &xmPushButtonGadgetClass, 'x', "Ctrl<Key>x", "Ctrl-X",
         cmd_menu_cb, (XtPointer)CMD_MENU_EXECUTE, (MenuItem *)NULL, False },
     { "Return", &xmPushButtonGadgetClass, 'e', "Ctrl<Key>m", "Ctrl-M",
         cmd_menu_cb, (XtPointer)CMD_MENU_RETURN, (MenuItem *)NULL, False },
+    { "Semicolon", &xmPushButtonGadgetClass, 'S', "Ctrl<Key>semicolon", "Ctrl-;",
+        cmd_menu_cb, (XtPointer)CMD_MENU_SEMICOLON, (MenuItem *)NULL, False },
+    { "Right Bracket", &xmPushButtonGadgetClass, 'B', "Ctrl<Key>0", "Ctrl-0",
+        cmd_menu_cb, (XtPointer)CMD_MENU_RIGHT_BRACKET, (MenuItem *)NULL, False },
+    MENU_ITEM_SEPARATOR,
     { "Abandon", &xmPushButtonGadgetClass, 'A', "Ctrl<Key>a", "Ctrl-A",
         cmd_menu_cb, (XtPointer)CMD_MENU_ABANDON, (MenuItem *)NULL, False },
     { "Interrupt", &xmPushButtonGadgetClass, 'I', "Ctrl<Key>c", "Ctrl-C",
@@ -771,6 +779,12 @@ XmAnyCallbackStruct *cbs;
 		break;
 	case CMD_MENU_RETURN:
 		send_nl();
+		break;
+	case CMD_MENU_SEMICOLON:
+		send_to_application(";\n", 2);
+		break;
+	case CMD_MENU_RIGHT_BRACKET:
+		send_to_application(")\n", 2);
 		break;
 	case CMD_MENU_ABANDON:
 		interrupt_and_abandon();
