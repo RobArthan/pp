@@ -93,6 +93,7 @@ Now saves conjectures in the theory database.
 \item[Issue 1.42] Some buffoon set the check function for the type check only flag to $fun\_false$ which prevents the flag being changed.
 \item[Issue 1.43] Escaped character must be 3 digits in PolyML 3.0 (and Standard ML Standard).
 \item[Issue 1.44-45] Preventing free variables in axioms saved by this documents tools.
+\item[Issue 1.46] Fixing treatment of mutually recursive free types.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -1009,26 +1010,110 @@ We need to be able to construct terms formed with $ran$ ...
 		end
 	);
 =TEX
+=TEX
 Now we can define functions to compute the bits of the defining property.
-In the following
+The incoming free type definition has the form:
+=GFT
+T›i ::= B›i‰1 | B›i‰2 | ...(1 ¼ i ¼ r)
+=TEX
+where each branch
+=INLINEFT
+B›i‰j
+=TEX
+\ is either a nullary constructor,
+=INLINEFT
+C›i‰j
+=TEX
+, or a unary constructor with its argument set:
+=INLINEFT
+D›i‰j (E›i‰j)
+=TEX
+The defining property has $r + 1$ parts.
+The first $r$ parts assert that the ranges of the constructors for each
+=INLINEFT
+T›i
+=TEX
+\ are disjoint:
+=GFT
+	disjoint§R›i‰1, R›i‰1, ...¢
+=TEX
+, where
+=INLINEFT
+R›i‰j
+=TEX
+\ is either
+=INLINEFT
+{C›i‰j}
+=TEX
+or
+=INLINEFT
+ran D›i‰j
+=TEX
+\ according to the form of the corresponding constructor.
+The final part of the defining property is the induction principle and
+has (essentially) the form:
+=GFT
+µ	W›1:ðT›1; W›2:ðT›2; ....
+|	S›1‰1[W›1/T›1] À S›1‰1[W›1/T›1] À ... € W›1
+±	S›2‰1[W›1/T›1] À S›2‰1[W›1/T›1] À ... € W›2
+±	...
+·	T›1 € W›1 ± T›2 € W›2 ± ...
+=TEX
+, where
+=INLINEFT
+S›i‰j
+=TEX
+\ is either
+=INLINEFT
+{C›i‰j}
+=TEX
+or
+=INLINEFT
+D›i‰j ¨E›i‰j©
+=TEX
+\ according to the form of the corresponding constructor.
+
+In fact, to abbreviate this, we collect together the nullary constructors
+for each row in the hypothesis into a set display.
+
+In the following, as we generate parts of the predicate:
+
 \begin{description}
-\item[$ty$] is the type of the free type
-\item[$tyn$] is the name of the free type
-\item[$fty$] is the global variable (HOL constant) which is the set of all
-elements of the free type
+\item[$ty$] is the type of the constituent free type being processed
+\item[$tyn$] is the name of the constituent free type being processed
+\item[$fty$] is the global variable formed from $ty$ and $tyn$
 \item[$bs$] is the branches of the free type, with the constructors as
-local variables (HOL variables) of the appropriate type, and the domains
-of the constructors with instances of $fty$ as global variables (not the
-local variables which the type inferrer will have planted).
-\item[$w$] is the local variable to appear in the universal quantification
+local variables (HOL variables) of the appropriate type, and the argument sets
+of the constructors with instances of the free types being  the
+local variables which the type inferrer will have planted
+\item[$gsubs$] is the substitution which replaces the local variable for each constituent free type with the corresponding global variable.
+\item[$wsubs$] is the substitution which replaces the local variable for each constituent free type with the corresponding bound variable in the induction principle.
 \end{description}
+
+The two substitutions must be free of repetitions and in the same order
+as the constituents of the free type definition.
 
 
 Note that the constructor names need to be local variables here
 not globals, (since they will be passed on to $axdes\_defn$, which expects
 the variables to be defined to be local).
 
-First a function to construct the set display ...
+First a function to construct the disjointness assertions ...
+=SML
+	fun Ûmake_ft_disjointÝ
+		(gsubs : (TERM * TERM) list)
+		((ty : TYPE), (bs : (TERM * TERM OPT) list)) : TERM = (
+		let	fun aux [] = []
+			|   aux ((f, Value t) :: more) = (
+				make_ran f :: aux more
+			) | aux ((c, Nil) :: more) = (
+				mk_z_setd (ty, [c]) :: aux more
+			);
+		in	subst gsubs (mk_disjoint ty (aux bs))
+		end
+	);
+=TEX
+... then the set displays
 =SML
 	fun Ûmake_ft_setdÝ (ty : TYPE) (bs : (TERM * TERM OPT) list) : TERM OPT = (
 		case map fst (bs drop (not o is_Nil o snd)) of
@@ -1040,10 +1125,10 @@ First a function to construct the set display ...
 ... then the union ...
 =SML
 	fun Ûmake_ft_ÀÝ (ty : TYPE) (bs : (TERM * TERM OPT) list)
-			(w : TERM) (fty : TERM) : TERM = (
+			(wsubs : (TERM * TERM) list) : TERM = (
 		let	fun aux [] = []
 			|   aux ((f, Value t) :: more) = (
-				let	val t' = subst [(w, fty)] t;
+				let	val t' = subst wsubs t;
 				in	make_rel_image f t'
 				end :: aux more
 			) | aux (_ :: more) = aux more;
@@ -1053,36 +1138,39 @@ First a function to construct the set display ...
 		end
 	);
 =TEX
-... then the disjointness assertion ...
+... and to form the induction principle ...
 =SML
-	fun Ûmake_ft_disjointÝ (ty : TYPE) (bs : (TERM * TERM OPT) list) : TERM = (
-		let	fun aux [] = []
-			|   aux ((f, Value t) :: more) = (
-				make_ran f :: aux more
-			) | aux ((c, Nil) :: more) = (
-				mk_z_setd (ty, [c]) :: aux more
+	fun Ûmake_ft_ind_predÝ
+			(ftys : TERM list)
+			(tys : TYPE list)
+			(wsubs : (TERM * TERM) list)
+			(bss : (TERM * TERM OPT) list list) : TERM = (
+		let	val portmanteau =
+				combine ftys
+					(combine tys
+						(combine wsubs bss));
+			fun make_hyp_€ (_, (ty, ((w, _), bs))) = (
+				make_€ ty (make_ft_À ty bs wsubs) w
 			);
-		in	mk_disjoint ty (aux bs)
+			fun make_conc_€ (fty, (ty, ((w, _), _))) = (
+				make_€ ty fty w
+			);
+			fun make_dec (fty, (_, ((w, _), _))) = (
+				mk_z_dec([w], mk_z_ð fty)
+			);
+			val decl = mk_z_decl(map make_dec portmanteau);
+			val hyp = list_mk_± (map make_hyp_€ portmanteau);
+			val conc = list_mk_± (map make_conc_€ portmanteau);
+		in	mk_z_µ(decl, hyp, conc)
 		end
 	);
 =TEX
-... then put these together to form the predicate part of the definition ...
+... and, finally, form the declaration part of the definition (the substitution
+of globals for locals is not done here).
 =SML
-	fun Ûmake_ft_predÝ
-			(fty : TERM)
-			(ty : TYPE) (bs : (TERM * TERM OPT) list) : TERM = (
-		let	val w = mk_z_lvar("W", mk_z_power_type ty, []);
-			val disj = make_ft_disjoint ty bs;
-			val €1 = make_€ ty (make_ft_À ty bs w fty) w;
-			val €2 = make_€ ty fty w;
-			val decl = mk_z_decl[mk_z_dec([w], mk_z_ð fty)];
-		in	mk_±(disj, mk_z_µ(decl, €1, €2))
-		end
-	);
-=TEX
-... and, finally, form the declaration part of the definition.
-=SML
-	fun Ûmake_ft_decsÝ (fty : TERM) (ty : TYPE) (bs : (TERM * TERM OPT) list) : TERM list = (
+	fun Ûmake_ft_decsÝ 
+		(fty : TERM, (ty : TYPE, bs : (TERM * TERM OPT) list))
+		: TERM list = (
 		let	val cs = map fst (bs drop (not o is_Nil o snd));
 			val ds = map (Combinators.I ** force_value)
 						(bs drop (is_Nil o snd));
@@ -1099,7 +1187,7 @@ First a function to construct the set display ...
 			);
 		in	case cs of
 				[] =>  (aux ds)
-			|	_ =>  (mk_z_dec(cs, fty) :: aux ds)
+			|	_ =>  ((mk_z_dec(cs, fty)) :: aux ds)
 		end
 	);
 =TEX
@@ -1107,19 +1195,18 @@ Now a function to construct the constructors from the information
 passed on by the type inferrer.
 =SML
 	fun Ûmake_constructorsÝ
-		(tyn : string)
-		(ty : TYPE)
-		(fty : TERM)
-		(pars : (string * TERM OPT) list)
+		(tyn : string, (ty : TYPE, (fty : TERM,
+		(pars : (string * TERM OPT) list))))
 		: (TERM * TERM OPT) list = (
 		let	fun make_con_ty t = (
-				mk_z_power_type(mk_z_tuple_type[dest_z_power_type(type_of t),ty])
+				mk_z_power_type(
+					mk_z_tuple_type[
+						dest_z_power_type(type_of t),ty])
 			);
 			fun aux (n, Nil) = (mk_var(n, ty), Nil)
 			|   aux (n, Value t) = (
 					(mk_var(n, make_con_ty t),
-					Value (subst
-					[(fty, mk_var(tyn, mk_z_power_type ty))] t))
+					Value t)
 			);
 		in	map aux pars
 		end
@@ -1165,27 +1252,30 @@ in
 fun Ûfreetype_defnÝ ([] : (string * ((string * TERM OPT)list))list) : unit = (
 	error "freetype_defn" 49004 [fn()=>"unexpected empty list"]
 ) | Ûfreetype_defnÝ ftyl : unit = (
-let	val tynames = map fst ftyl;
+let	val (tynames, parss) = split ftyl;
 	val side_effect = fty_scope_check();
-	val side_effect = map (map (check_gvar_name o fst)) (map snd ftyl);
-	fun do1 (tyn, pars) = (
-		let	val ty = mk_ctype(tyn, []);
-			val fty = mk_z_gvar(tyn, mk_z_power_type ty, []);
-			val bs = make_constructors tyn ty fty pars;
-		in	(make_ft_decs fty ty bs, (make_ft_pred fty ty bs, bs))
-		end
-	);
-	fun do_all ftyl = (
-		let	val (decs, predsbs) = split (map do1 ftyl);
-			val preds = map fst predsbs;
-			val vs = map fst(flat (map snd predsbs));
-			val decl = mk_z_decl (flat decs);
-			val pred = list_mk_± preds;
-		in	([], decl, Value pred, map dest_var vs)
-		end
-	);
+	val side_effect = map (map (check_gvar_name o fst)) parss;
+	val tys = map (fn tyn => mk_ctype(tyn, [])) tynames;
+	val ptys = (map mk_z_power_type) tys;
+	val nptys = combine tynames ptys;
+	val ftys = map (fn (n, t) => mk_z_gvar(n, t, [])) nptys;
+	val lvs = map mk_var nptys;
+	val wns = map (fn s => "W"^s)
+		(case ftyl of [_] => [""]
+		| _ => map string_of_int (interval 1 (length ftyl)));
+	val ws = list_variant lvs (map mk_var (combine wns ptys));
+	val wsubs = combine ws lvs;
+	val gsubs = combine ftys lvs;
+	val bss = map make_constructors
+		(combine tynames (combine tys (combine ftys parss)));
+	val decs = flat (map make_ft_decs (combine ftys (combine tys bss)));
+	val disjs = map (make_ft_disjoint gsubs) (combine tys bss);
+	val ind_pred = make_ft_ind_pred ftys tys wsubs bss;
+	val decl = subst gsubs (mk_z_decl decs);
+	val pred = list_mk_± (disjs @ [ind_pred]);
+	val vs = map (dest_var o fst) (flat bss);
 in	givenset_defn (tynames, Nil);
-	ax_axdes_defn (do_all ftyl)
+	ax_axdes_defn ([], decl, Value pred, vs)
 end);
 end (* of local ... in ... end *)
 =TEX
