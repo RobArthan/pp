@@ -1,9 +1,9 @@
 #! /bin/sh
 #
 # File: install_holdemo
-# Derived from: $Header: /home/rda/hol/RCS/install_holdemo.sh,v 1.2 2000/09/11 14:00:01 rda Rel rda $
+# Derived from: $Header: /home/rda/hol/RCS/install_holdemo.sh,v 1.3 2001/12/14 11:03:19 rda Exp rda $
 #
-# Running this script sets up example database in the directory ./bin
+# Running this script sets up example database in the directory ./db
 #
 # exit immediately on none zero code
 set -e
@@ -11,7 +11,7 @@ set -e
 dir=`pwd`
 PPINSTALLDIR=$dir
 doc=$dir/doc
-bin=$dir/bin
+db=$dir/db
 tmp_build=$dir/tmp_build
 deletebuilddir="y"
 export PPINSTALLDIR
@@ -34,7 +34,7 @@ mv hol_course_work.doc $doc
 sieve sml < wrk051.doc
 make -f wrk051.mkf all_hol
 
-mv example_hol.* $bin
+mv example_hol.* $db
 
 # Tidy up neatly, deleting all unnecessary files
 if test "x$deletebuilddir" = "xy"
