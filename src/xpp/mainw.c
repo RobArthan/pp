@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.84 2004/07/05 16:57:02 rda Exp rda $
+ * $Id: mainw.c,v 2.85 2004/08/27 15:54:39 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -634,15 +634,15 @@ void show_file_info(void)
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * reinit_changed: unset changed flag and clear the modified label;
- * Also either clear the undo buffer or notify the undo packaged
- * that the file has been saved.
+ * reinit_changed: unset changed flag and set up file_info.new as requested by caller (new).
+ * Also either clear the undo buffer or notify the undo packaged that the file has been saved
+ * (according to caller's value for saving)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void reinit_changed(Boolean saving)
+static void reinit_changed(Boolean saving, Boolean new)
 {
 	file_info.changed = False;
+	file_info.new = new;
 	if(saving) {
-		file_info.new = False;
 		notify_save(undo_ptr);
 	} else {
 		clear_undo(undo_ptr);
@@ -1010,6 +1010,7 @@ static Boolean setup_main_window(
 		XmTextFieldSetString(namestring, file_name);
 		XmTextFieldShowPosition(namestring, strlen(file_name));
 		set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
+		file_info.new = False;
 	} else {
 		switch(foAction) {
 			case EmptyFile:
@@ -1028,7 +1029,7 @@ static Boolean setup_main_window(
 		}
 	}
 
-	reinit_changed(False);
+	reinit_changed(False, file_info.new);
 	set_icon_name_and_title();
 
 	set_menu_item_sensitivity(filemenu,
@@ -1057,7 +1058,7 @@ static void file_menu_op(int op)
 			if(save_file(script, fname)) {
 				flash_file_name(fname);
 				set_icon_name_and_title();
-				reinit_changed(True);
+				reinit_changed(True, False);
 				set_menu_item_sensitivity(filemenu,
 					FILE_MENU_REVERT, True);
 			}
@@ -1081,7 +1082,7 @@ static void file_menu_op(int op)
 				}
 				flash_file_name(fname);
 				set_icon_name_and_title();
-				reinit_changed(True);
+				reinit_changed(True, False);
 				set_menu_item_sensitivity(filemenu,
 					FILE_MENU_SAVE, True);
 				set_menu_item_sensitivity(filemenu,
@@ -1123,7 +1124,7 @@ static void file_menu_op(int op)
 					}
 					flash_file_name(fname);
 					set_icon_name_and_title();
-					reinit_changed(False);
+					reinit_changed(False, False);
 					set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
 				} else {
 					unpause_undo(undo_ptr);
@@ -1158,7 +1159,7 @@ static void file_menu_op(int op)
 			} else if(open_file(script, fname, False,(FileOpenAction *) NULL)){
 				set_icon_name_and_title();
 				flash_file_name(fname);
-				reinit_changed(False);
+				reinit_changed(False, file_info.new);
 			} else  {/* Can't open it; */
 				unpause_undo(undo_ptr);
 			}
@@ -1181,7 +1182,7 @@ static void file_menu_op(int op)
 				}
 				flash_file_name(no_file_name);
 				set_icon_name_and_title();
-				reinit_changed(False);
+				reinit_changed(False, False);
 				set_menu_item_sensitivity(filemenu,
 					FILE_MENU_SAVE, False);
 			} else { /* Can't do it (very odd!) */
@@ -1293,7 +1294,7 @@ static void reopen_cb(
 				setup_reopen_menu(oldfname);
 			}
 			set_icon_name_and_title();
-			reinit_changed(False);
+			reinit_changed(False, False);
 			set_menu_item_sensitivity(filemenu,
 				FILE_MENU_SAVE, True);
 		} else {
