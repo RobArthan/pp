@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.12 2003/05/20 15:16:13 rda Exp rda $
+ * $Id: xpp.c,v 2.13 2003/05/21 10:54:00 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -172,7 +172,7 @@ static XtResource resources[] = {
 void usage (void)
 {
 	msg( "xpp",
-"usage: xpp [standard X Toolkit options] [-readonly] [-file fname] [-commmand command-line]");
+"usage: xpp [standard X Toolkit options] [-blocking] [-readonly] [-filename fname] [-commmand command-line]");
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -194,29 +194,34 @@ int check_sep(int argc, char **argv)
 	int i;
 	synchronous = False;
 	file_name = NULL;
+	global_options.edit_only = True;
 	for (i = 1; i < argc; i += 1) {
 		if(check_option(argv[i], "blocking")) {
 			synchronous = True;
 		} else if (check_option(argv[i], "readonly")) {
 			global_options.read_only = True;
 		} else if (check_option(argv[i], "filename")) {
+			if(file_name != NULL) {
+				usage();
+				exit(53);
+			}
 			if(i + 1 < argc) {
 				file_name = argv[i+1];
-				i += (i + 2 < argc && check_option(argv[i+2], "command")) ? 3 : 2;
-				break;
+				i += 1;
 			} else {
 				file_name = "";
 			}
 		} else if (check_option(argv[i], "command")) {
+			global_options.edit_only = False;
 			i += 1;
 			break;
-		} else {
+		} else if(file_name == NULL) {
 			file_name = argv[i];
-			i += 1;
+		} else {
 			break;
 		}
 	}
-	global_options.edit_only = i == argc && !check_option(argv[argc-1], "command");
+	global_options.edit_only = global_options.edit_only && i == argc;
 	return i;
 }
 
