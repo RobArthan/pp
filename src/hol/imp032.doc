@@ -110,6 +110,8 @@ lasp -s -u imp032.OKwords imp032.doc > zz1
 	Improve alias handling.
 	Include index characters at top level of terms and types.
 
+\item[Issue 2.12]
+	Fixed a mismatch of beginb/endb in treatment of HOL lets.
 %\item[\FormatDate{$Date$%
 %}, issue \SCCSissue~]
 
@@ -359,13 +361,17 @@ We commonly need to print a list of objects but want to truncate
 the printing at the print depth.
 
 Function $pr_list_with_env$ does much like a $map$ over the list, but
-the $env$ changes as the list is traversed.  Function
+the $env$ changes as the list is traversed. The second argument 
+is for when the first argument has a side effect(such as an unbalanced
+beginb or endb), but cannot be used because it does printing
+(this apparently only happens when handling lets).
+Function
 $pr_list_revfold_with_env$ is much like a $revfold$ over the list, but
 in this case both the $env$ and the supplied value (of type ``~$'b$~'')
 change.
 
 =IGN
-pr_list_with_env : ('a * PP_ENV -> unit) -> 'a list -> PP_ENV -> unit
+pr_list_with_env : ('a * PP_ENV -> unit) -> (unit -> unit) -> 'a list -> PP_ENV -> unit
 pr_list_revfold_with_env : ('a * 'b * PP_ENV -> 'b) -> 'a list -> 'b -> PP_ENV -> 'b
 =TEX
 
@@ -396,25 +402,30 @@ end
 =SML
 fun Ûpr_list_with_envÝ
 			(what:('a * PP_ENV) -> unit)
+			(do_side_effect :unit -> unit)
 			(nil:'a list)
 			(env:PP_ENV)
 		:	unit = ()
-| pr_list_with_env what (h::t) env = (
+| pr_list_with_env what do_side_effect (h::t) env = (
 let
 	val PpEnv{pe_depth = depth, pe_addstring = addstring, pe_space = space, ...} = env;
 in
 	if case depth of Nil => true | Value d => d >= 0
 	then(
 		what(h, env);
-		pr_list_with_env what t (decrement_depth env)
+		pr_list_with_env what do_side_effect t (decrement_depth env)
 	) else(
+		do_side_effect ();
 		addstring "...";
 		space(1,0)
 	)
 end
 );
 =TEX
-
+As a generic ``no effect'' for the above:
+=SML
+fun Ûno_side_effectÝ () : unit = ();
+=TEX
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \newpage
 \section{PRINTING TYPES}
@@ -464,8 +475,9 @@ let
 			addstring "("; (*=)=*)
 			beginb(2, true);
 			ty_p PcLowest t;
-			pr_list_with_env print_list_aux rest
-				(set_show_index false(set_prec PcLowest (decrement_depth new_env)));
+			pr_list_with_env print_list_aux no_side_effect rest
+				(set_show_index false(set_prec PcLowest
+				(decrement_depth new_env)));
 			endb();
 			(*=(=*) addstring ")"
 		);
@@ -582,7 +594,7 @@ in
 		addstring ": ";
 		main_type_pp (set_show_index false(set_prec PcLowest cur_env)) ty;
 		if br then (endb(); (*=(=*) addstring ")") else ()
-	) else ()
+	) else () (* br = !pp_show_HOL_types and ... so beginb always matched *)
 end
 );
 =TEX
@@ -722,6 +734,7 @@ let
 		beginb(2, true);
 		main_term_pp env tm
 	);
+
 in
 	case args
 	of nil =>	print_head prec head_fn
@@ -729,7 +742,8 @@ in
 				beginb(2, true);
 				beginb(0, true);
 				print_head pc_h_apply_first head_fn;
-				pr_list_with_env print_args args arg_env;
+				pr_list_with_env print_args no_side_effect 
+					args arg_env;
 				endb();
 				endb();
 				if br then (*=(=*) addstring ")" else ()
@@ -821,7 +835,7 @@ let
 
 	fun pr_decls (decs:TERM list, ty:TYPE) (env:PP_ENV) : unit = (
 		beginb(0, false);
-		pr_list_with_env vs_printer decs env;
+		pr_list_with_env vs_printer no_side_effect decs env;
 		space(1, 0);
 		addstring ": ";
 		main_type_pp env ty;
@@ -851,7 +865,7 @@ in
 			| h::nil => pr_decls h new_env
 			| h::t => (
 				pr_decls h new_env;
-				pr_list_with_env pr_semi_decls t
+				pr_list_with_env pr_semi_decls no_side_effect t
 					(decrement_depth new_env);
 				())
 			;
@@ -859,7 +873,7 @@ in
 		)
 	else	(
 		beginb(2, false);
-		pr_list_with_env vs_printer decls new_env;
+		pr_list_with_env vs_printer no_side_effect decls new_env;
 		())
 	;
 	endb();
@@ -951,7 +965,8 @@ fun ÛHOL_conditionalÝ (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 					else_part;
 		in
 			if br then (addstring "(" (*=)=*); beginb(2, true)) else beginb(0, true);
-			pr_list_with_env aux2 (rev if_clause) cur_env;
+			pr_list_with_env aux2 no_side_effect (rev if_clause)
+				cur_env;
 			endb();
 			if br then (*=(=*) addstring ")" else ();
 			PfOk
@@ -1017,7 +1032,8 @@ in(
 	case body
 	of one_tm::nil =>	main_term_pp new_env one_tm
 	| hd_tm::rest => (	main_term_pp new_env hd_tm;
-				pr_list_with_env later_elem rest
+				pr_list_with_env later_elem no_side_effect 
+					rest
 					(decrement_depth new_env);
 				())
 	| nil => ();
@@ -1221,24 +1237,30 @@ let
 	);
 
 	fun print_definer (let_clause : TERM list, env) : unit = (
-		beginb(2, false);
+		beginb(2, false); (* matched in main body of fn *)
 		beginb(0, true);
 		pr_list_revfold_with_env aux let_clause (false, "let ") env;
 		endb();
 		space(1, ~2);
 		addstring "in "
 	);
+
+	fun no_print_definer  () : unit = (
+		beginb(0, false) (* matched in main body of fn *)
+	);
+
 in(
 	beginb(0, true);
 	if br then addstring "(" (*=)=*) else ();
 
-	pr_list_with_env print_definer let_clauses (set_prec PcLowest cur_env);
+	pr_list_with_env print_definer no_print_definer let_clauses 
+		(set_prec PcLowest cur_env);
 
 	beginb(0, true);
 	main_term_pp (set_prec pc_h_if_let_bind_last cur_env) tm;
 	endb();
 
-	map (fn _ => endb()) let_clauses;
+	map (fn _ => endb()) let_clauses; (* matching from (no_)print_definer *)
 
 	if br then (*=(=*) addstring ")" else ();
 	endb()
@@ -1317,7 +1339,8 @@ in(
 	if br then addstring "(" (*=)=*) else ();
 
 	tm_p cur_env true a1;
-	pr_list_with_env pr_comma_el tail_tms (decrement_depth cur_env);
+	pr_list_with_env pr_comma_el no_side_effect 
+		tail_tms (decrement_depth cur_env);
 
 	if br then (*=(=*) addstring ")" else ();
 	endb();
