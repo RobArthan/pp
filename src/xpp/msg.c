@@ -23,7 +23,7 @@
 #include "xpp.h"
 
 #define MSG_LINE_LEN 40
-#define HELP_LINE_LEN 60
+#define HELP_LINE_LEN 70
 #define HELP_SCREEN_HEIGHT 24
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
