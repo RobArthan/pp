@@ -34,29 +34,40 @@
  * static data:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+/*
+ * The following definitions are based on those in msg.c
+ */
 
-typedef struct {
-	Widget text_w; Widget templates_w;
-} TemplatesData;
-
-static TemplatesData templates_data[MAX_TEMPLATES_FORMS];
+#define MSG_LINE_LEN 40
+#define HELP_LINE_LEN 70
+#define HELP_SCREEN_HEIGHT 24
 
 typedef struct {
 	char * bitmap_file;
 	char * expansion;
+	char * help_text;
 } TemplateEntry;
 
-typedef struct {
-	NAT text_index;
-	char * expansion;
-} TemplateCallbackData;
+typedef char * TemplateCallbackData;
 
 #define MAX_TEMPLATES 100
 
-static TemplateCallbackData template_callback_data[MAX_TEMPLATES];
-
 static TemplateEntry template_table[MAX_TEMPLATES];
 static NAT template_table_size;
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * the static Widgets for the template tool
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static Widget	shell,
+		template_pane,
+		template_form,
+		other_btn_area,
+		dismiss_btn,
+		help_btn,
+		text_w;
+
+
 
 static char *bad_templates_msg =
 "An error was detected while setting up the templates tool. "
@@ -87,6 +98,7 @@ static void get_templates_data()
 		i++) {
 			++template_table_size;
 			template_table[i].bitmap_file = ptr;
+
 			while (*ptr != '/' && *ptr) ptr++;
 			if (*ptr == '/') {
 				*ptr = '\0';
@@ -99,14 +111,23 @@ static void get_templates_data()
 			if (*ptr == '/') {
 				*ptr = '\0';
 			} else {
+				template_table[i].help_text = "";
+				return;
+			};
+			template_table[i].help_text = *++ptr ? ptr : "";
+
+			while (*ptr != '/' && *ptr) ptr++;
+			if (*ptr == '/') {
+				*ptr = '\0';
+			} else {
 				return;
 			};
 	};
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * get_pixmap: get pixmap to use as a label on one of the push-buttons
- * inform the user if something goes wrong.
+ * get_pixmap: get pixmap to use as a label on one of the
+ * push-buttons inform the user if something goes wrong.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 static Pixmap get_pixmap (Widget w, char *name)
@@ -135,24 +156,15 @@ static Pixmap get_pixmap (Widget w, char *name)
 
 Bool init_templates_tool(Widget w)
 {
-	NAT i, x, y, twi, fbase;
-	Widget shell, form, button;
-	static void templates_cb();
+	NAT i, x, y, fbase;
+	Widget template_btn;
 
-	if(!templates || !*templates) { /* resource not set up */
-		return False;
-	};
+	static void	help_cb(),
+			dismiss_cb(),
+			templates_cb();
 
-	for(	twi= 0;
-		twi< MAX_TEMPLATES_FORMS &&
-		templates_data[twi].text_w != w &&
-		templates_data[twi].templates_w != NULL ;
-		++twi) {
-		continue;
-	};
-
-	if(twi>= MAX_TEMPLATES_FORMS) {
-		msg("templates creation", "no more space for templates");
+	if(!templates || !*templates) {
+		/* resource not set up */
 		return False;
 	};
 
@@ -169,22 +181,25 @@ Bool init_templates_tool(Widget w)
 			xmDialogShellWidgetClass, w,
 		NULL); 
 
-	form = XtVaCreateWidget("form",
-			xmFormWidgetClass,	shell,
+	template_pane = XtVaCreateWidget("template-pane",
+		xmPanedWindowWidgetClass, 	shell,
+		NULL);
+
+	template_form = XtVaCreateWidget("template_form",
+			xmFormWidgetClass,	template_pane,
 			XmNfractionBase, 	fbase,
 			XmNautoUnmanage,	False,
 		NULL);
 
-	templates_data[twi].text_w = w;
-	templates_data[twi].templates_w = form;
+	text_w = w;
 
 	for(i = 0; i < template_table_size; ++i) {
 
 		x = (fbase / 2) * (i % 2);
 		y = 2 * (i / 2);
 
-		button = XtVaCreateManagedWidget("button",
-			xmPushButtonGadgetClass, form,
+		template_btn = XtVaCreateManagedWidget("template_btn",
+			xmPushButtonGadgetClass, template_form,
 			XmNlabelPixmap,	get_pixmap(w,
 						   template_table[i].bitmap_file),
 			XmNlabelType,		XmPIXMAP,
@@ -198,12 +213,49 @@ Bool init_templates_tool(Widget w)
 			XmNbottomPosition,	y + 2,
 			XmNtraversalOn,	False,
 			NULL);
-		template_callback_data[i].text_index = twi;
-		template_callback_data[i].expansion =
-						template_table[i].expansion;
-		XtAddCallback(button, XmNactivateCallback, templates_cb,
-			(XtPointer) &(template_callback_data[i]) );
+
+
+		XtAddCallback(template_btn, XmNactivateCallback,
+			templates_cb,
+			(XtPointer) &(template_table[i].expansion) );
+
 	};
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * set up help button in the middle of the lower part of tool:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+	other_btn_area = XtVaCreateWidget("help-form",
+		xmFormWidgetClass, 		template_pane,
+		XmNfractionBase, 		25,
+		NULL);
+
+	dismiss_btn = XtVaCreateManagedWidget("Dismiss",
+		xmPushButtonWidgetClass,	other_btn_area,
+		XmNtopAttachment,		XmATTACH_FORM,
+		XmNbottomAttachment,		XmATTACH_FORM,
+		XmNleftAttachment,		XmATTACH_POSITION,
+		XmNrightAttachment,		XmATTACH_POSITION,
+		XmNleftPosition,		2,
+		XmNrightPosition,		12,
+		NULL);
+
+
+	help_btn = XtVaCreateManagedWidget("Help",
+		xmPushButtonWidgetClass,	other_btn_area,
+		XmNtopAttachment,		XmATTACH_FORM,
+		XmNbottomAttachment,		XmATTACH_FORM,
+		XmNleftAttachment,		XmATTACH_POSITION,
+		XmNrightAttachment,		XmATTACH_POSITION,
+		XmNleftPosition,		13,
+		XmNrightPosition,		23,
+		NULL);
+
+	XtAddCallback(help_btn, XmNactivateCallback,
+		help_cb, (XtPointer) &template_table);
+
+	XtAddCallback(dismiss_btn, XmNactivateCallback,
+		dismiss_cb, shell);
 
 	return True;
 }
@@ -215,21 +267,13 @@ Bool init_templates_tool(Widget w)
 
 void add_templates_tool(Widget w)
 {
-	NAT twi;
-	Widget form;
-
-	for(	twi= 0;
-		twi< MAX_TEMPLATES_FORMS &&
-		templates_data[twi].text_w != w &&
-		templates_data[twi].templates_w != NULL ;
-		++twi) {
-		continue;
-	};
-
-	if(	twi < MAX_TEMPLATES_FORMS
-	&&	(form = templates_data[twi].templates_w) != NULL) {
-		XtManageChild(form);
-		XtPopup(XtParent(form), XtGrabNone);
+	if(template_form != NULL) {
+		XtManageChild(template_form);
+		XtManageChild(other_btn_area);
+		XtManageChild(template_pane);
+		XtPopup(shell, XtGrabNone);
+		fix_pane_height(template_form, template_form);
+		fix_pane_height(other_btn_area, other_btn_area);
 	};
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -241,12 +285,9 @@ Widget w;
 TemplateCallbackData * cbdata;
 XmPushButtonCallbackStruct *cbs;
 {
-	NAT text_index = cbdata->text_index;
 	XmTextPosition start, end, after;
-	Widget text_w;
 
-	if(text_index >= MAX_TEMPLATES_FORMS ||
-		!(text_w = templates_data[text_index].text_w)) {
+	if(!text_w) {
 		char *m = "unexpected argument 0xXXXXXXXX";
 		sprintf(m, "unexpected argument 0x%x", cbdata);
 		msg("template handler", m);
@@ -254,16 +295,169 @@ XmPushButtonCallbackStruct *cbs;
 	};
 
 	if(XmTextGetSelectionPosition(text_w, &start, &end)) {
-		XmTextReplace(text_w, start, end, cbdata->expansion);
+		XmTextReplace(text_w, start, end, *cbdata);
 		XmTextClearSelection(text_w, CurrentTime);
 	} else {
 		start = XmTextGetInsertionPosition(text_w);
-		XmTextInsert(text_w, start, cbdata->expansion);
+		XmTextInsert(text_w, start, *cbdata);
 	};
 
-	after = start + strlen (cbdata->expansion);
+	after = start + strlen (*cbdata);
 	XmTextSetInsertionPosition(text_w, after);
 	XmTextShowPosition(text_w, after);
 }
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * help_dialog: put up an information window without grabbing control
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void help_dialog1(Widget w)
+{
+	Widget dismiss_btn_area, dismiss_btn;
+	static Widget	help_shell,
+			help_pane,
+			help_form,
+			help_item,
+			introduction,
+			separator,
+			template_icon,
+			template_text;
+	static void dismiss_cb();
+	Dimension h;
+	int i;
+	if(!help_shell) {
+
+		help_shell = XtVaCreatePopupShell("xpp-Help",
+			xmDialogShellWidgetClass,	w,
+			XmNdeleteResponse,		XmUNMAP,
+			NULL);
+
+		help_pane = XtVaCreateWidget("help-pane",
+			xmPanedWindowWidgetClass,	help_shell,
+			XmNsashWidth,			1,
+				/* PanedWindow won't let us set these to 0! */
+			XmNsashHeight,			1,
+				/* Make small so user doesn't try to resize */
+			NULL);
+
+		help_form = XtVaCreateWidget("help-form",
+			xmFormWidgetClass,	help_pane,
+			NULL);
+
+		help_item = XtVaCreateWidget("help-item",
+			xmFormWidgetClass,	help_form,
+			NULL);
+
+		introduction = XtVaCreateManagedWidget("introduction",
+				xmLabelGadgetClass,		help_item,
+				XmNlabelString,
+					format_msg (Help_Templates_Tool,
+								HELP_LINE_LEN),
+				XmNalignment,
+							XmALIGNMENT_BEGINNING,
+				XmNtopAttachment,		XmATTACH_FORM,
+				XmNbottomAttachment,		XmATTACH_FORM,
+				XmNleftAttachment,		XmATTACH_FORM,
+				XmNrightAttachment,		XmATTACH_FORM,
+				NULL);
+
+		XtManageChild(help_item);
+
+		for (i=0; i < template_table_size; i++) {
+
+			help_item = XtVaCreateWidget("help-item",
+				xmFormWidgetClass,		help_form,
+				XmNtopAttachment,		XmATTACH_WIDGET,
+				XmNtopWidget,			help_item,
+				XmNleftAttachment,		XmATTACH_FORM,
+				XmNrightAttachment,		XmATTACH_FORM,
+				NULL);
+
+			template_icon = XtVaCreateManagedWidget("template-icon",
+				xmLabelWidgetClass,		help_item,
+				XmNlabelPixmap,
+					get_pixmap(w,
+						template_table[i].bitmap_file),
+				XmNlabelType,			XmPIXMAP,
+				XmNtopAttachment,		XmATTACH_FORM,
+				XmNbottomAttachment,		XmATTACH_FORM,
+				XmNleftAttachment,		XmATTACH_FORM,
+				NULL);
+
+			template_text = XtVaCreateManagedWidget("template-text",
+				xmLabelGadgetClass,		help_item,
+				XmNlabelString,		
+					format_msg (template_table[i].help_text,
+									MSG_LINE_LEN),
+				XmNtopAttachment,		XmATTACH_FORM,
+				XmNbottomAttachment,		XmATTACH_FORM,
+				XmNleftAttachment,		XmATTACH_WIDGET,
+				XmNleftWidget,			template_icon,
+				XmNrightAttachment,		XmATTACH_FORM,
+				NULL);
+
+			XtManageChild(help_item);
+
+		};
+
+		XtDestroyWidget (help_item);
+
+		XtManageChild(help_form);
+
+		dismiss_btn_area = XtVaCreateWidget("dismiss_btn_area",
+				xmFormWidgetClass,	help_pane,
+				XmNfractionBase,	30,
+				NULL);
+
+		dismiss_btn = XtVaCreateManagedWidget("Dismiss",
+			xmPushButtonGadgetClass, dismiss_btn_area,
+			XmNtopAttachment,		XmATTACH_FORM,
+			XmNbottomAttachment,		XmATTACH_FORM,
+			XmNleftAttachment,		XmATTACH_POSITION,
+			XmNleftPosition,		10,
+			XmNrightAttachment,		XmATTACH_POSITION,
+			XmNrightPosition,		20,
+			XmNshowAsDefault,		True,
+			XmNdefaultButtonShadowThickness, 1,
+			NULL);
+
+		XtAddCallback(dismiss_btn, XmNactivateCallback,
+				dismiss_cb, help_shell);
+
+		XtManageChild(dismiss_btn_area);
+
+		XtVaGetValues(dismiss_btn, XmNheight, &h, NULL);
+
+		XtVaSetValues(dismiss_btn_area,
+			XmNpaneMaximum,	h,
+			XmNpaneMinimum,	h,
+			NULL);
+	}
+
+	XtManageChild(help_pane);
+	XtPopup(help_shell, XtGrabNone);
+}
+
+
+
+
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * help callback.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static void help_cb(
+	Widget				w,
+	TemplateCallbackData		*cbdata,
+	XmPushButtonCallbackStruct	cbs)
+{
+	help_dialog1(shell);
+}
+
+static void dismiss_cb(Widget widget, Widget shell)
+{
+	XtPopdown(shell);
+}
+
 
 
