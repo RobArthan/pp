@@ -2,7 +2,7 @@
 \documentstyle[hol,11pt,TQ]{article}
 \ftlinepenalty=9999
 \makeindex
-\TPPproject{IED 1563}  %% Mandatory field
+\TPPproject{FST PROJECT}  %% Mandatory field
 \TPPtitle{Implementation for Derived Terms}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP004}  %% Mandatory field
 \def\SCCSversion{$Revision$
@@ -57,22 +57,24 @@ Added $mk\_empty\_$ for $enum\_set$ and $list$.
 Corrected $strip\_binder$.
 \item [Issue 1.7]
 Added constructors, etc, for $Ñ_1$, $T$ and $F$.
-\item [Issue 1.8
+\item [Issue 1.8]
 Reimplemented $strip\_binder$ and $strip\_abs$,
 added $simple\_strip\_binder$,
 changed $?\_T$ and $?\_F$ to $?\_t$ and $\_f$.
+\item [Issue 1.9]
+Changes in response to inspection IR0017.
 \end{description}
 \subsection{Changes forecast}
 \section{GENERAL}
 \subsection{Scope}
-This document contains an implementation of some functions for derived terms of ICL HOL, and utilities to handle them, called for by section 4.2 of the Release 1 ICL HOL Product Requirement Specification \cite{DS/FMU/IED/DEF004}.
+This document contains an implementation of some functions for derived terms of ICL HOL, and functions to handle them, called for by section 4.2 of the Release 1 ICL HOL Product Requirement Specification \cite{DS/FMU/IED/DEF004}.
 They are not required for the implementation of type $THM$, such derived functions may be found in \cite{DS/FMU/IED/DTD003}.
 The high-level specification for the code may be considered
 to be given in \cite{DS/FMU/IED/SPC001}.
 The design is in \cite{DS/FMU/IED/DTD004}.
 \subsection{Introduction}
 \subsubsection{Purpose and Background}
-This document contains an implementation of functions for derived terms of ICL HOL, and utilities to handle them.
+This document contains an implementation of functions for derived terms of ICL HOL, and functions to handle them.
 \subsubsection{Dependencies}
 This document's signature is given in \cite{DS/FMU/IED/DTD004}.
 It relies on those files indicated by the ICL HOL release 001 makefile.
@@ -112,24 +114,39 @@ end);
 =TEX
 Pairing:
 =SML
-fun ‚mk_pair_type· ((t1, t2) : TYPE * TYPE): TYPE = mk_type("â", [t1, t2]);
+fun ‚mk_â_type· ((t1, t2) : TYPE * TYPE): TYPE = mk_ctype("â", [t1, t2]);
+
+fun ‚dest_â_type· (ty : TYPE): TYPE * TYPE =  (
+	case simple_dest_type ty of
+	Ctype ("â",[t1,t2]) => (t1,t2)
+	| _ => type_fail "dest_â_type" 4018 [ty]
+);
+fun ‚is_â_type· (ty : TYPE): bool =  (
+	case simple_dest_type ty of
+	Ctype ("â",[t1,t2]) => true
+	| _ => false
+);
 
 local
 	fun comma (ty1: TYPE) (ty2: TYPE): TERM = (
-	mk_const(",", mk_fun (ty1, mk_fun (ty2, mk_pair_type (ty1,ty2))))
+	mk_const(",", mk_ã_type (ty1, mk_ã_type (ty2, mk_â_type (ty1,ty2))))
 );
 in
-fun  ‚mk_pair· (xy: TERM * TERM) : TERM = (mk_bin_op "mk_pair" 4033 comma xy);
+fun  ‚mk_pair· (xy: TERM * TERM) : TERM = (
+	(mk_bin_op "mk_pair" 4033 4033 comma xy)
+	handle (Fail _) =>
+	error "mk_pair" 4033 [fn () => PolyML.makestring (fst xy),	
+		fn () => PolyML.makestring (snd xy)]);
 end;
 
 val ‚dest_pair· : TERM -> (TERM * TERM) = dest_bin_op "dest_pair" 4003 ",";
 
-val ‚is_pair· : TERM -> bool = is_bin_op dest_pair;
+val ‚is_pair· : TERM -> bool = is_bin_op ",";
 =TEX
 =SML
 fun ‚uncurry· (t1:TYPE) (t2:TYPE) (t3:TYPE):TERM = (
 	mk_const("Uncurry",
-	mk_fun(mk_fun(t1,mk_fun(t2, t3)), mk_fun(mk_pair_type(t1, t2), t3)))
+	mk_ã_type(mk_ã_type(t1,mk_ã_type(t2, t3)), mk_ã_type(mk_â_type(t1, t2), t3)))
 );
 =TEX
 The following function can handle an arbitrarily nested paired abstraction.
@@ -137,47 +154,52 @@ The following function can handle an arbitrarily nested paired abstraction.
 local
 	fun uncurry (t1:TYPE) (t2:TYPE) (t3:TYPE):TERM = (
 	mk_const("Uncurry",
-	mk_fun(mk_fun(t1,mk_fun(t2, t3)), mk_fun(mk_pair_type(t1, t2), t3)))
+	mk_ã_type(mk_ã_type(t1,mk_ã_type(t2, t3)), mk_ã_type(mk_â_type(t1, t2), t3)))
 );
 in
-fun ‚mk_abs· ((x, y): TERM * TERM) : TERM = (
+fun ‚mk_ç· ((x, y): TERM * TERM) : TERM = (
 	(if is_pair x
 	then (let val (a,b) = dest_pair x;
 		val ta = type_of a and
 		    tb = type_of b
 	in
-		mk_comb(uncurry ta tb (type_of y),
-			mk_abs(a, mk_abs(b, y)))
+		mk_app(uncurry ta tb (type_of y),
+			mk_ç(a, mk_ç(b, y)))
 	end)
-	else simple_mk_abs(x, y))
-	handle complaint => divert complaint "simple_mk_abs" "mk_abs" 4001 []);
+	else simple_mk_ç(x, y))
+	handle complaint => 
+	case area_of complaint of
+	"simple_mk_ç" => term_fail "mk_ç" 4016 [x]
+	| anm => reraise complaint anm
+);
 end;
 =TEX
 =SML
-fun ‚dest_abs· (ab : TERM) : TERM * TERM = (
-	(if simple_is_abs ab
-	then simple_dest_abs ab
-	else let val (a,b) = dest_comb ab
+fun ‚dest_ç· (ab : TERM) : TERM * TERM = (
+	(if simple_is_ç ab
+	then simple_dest_ç ab
+	else let val (a,b) = dest_app ab
 	in
 		if is_const a andalso (fst(dest_const a) = "Uncurry")
-		then (let val (b1, b2) = dest_abs b;
-			val (b21, b22) = dest_abs b2
+		then (let val (b1, b2) = dest_ç b;
+			val (b21, b22) = dest_ç b2
 		in
 			(mk_pair(b1,b21), b22)
 		end)
-		else fail "dest_abs" 4002 []
+		else fail "dest_ç" 4002 []
 	end)
-	handle complaint => divert complaint "dest_comb" "dest_abs" 4002 []
+	handle (Fail _) => 
+	term_fail "dest_ç" 4002 [ab]
 );
 =TEX
 =SML
-fun ‚is_abs· (tm : TERM) : bool = (dest_abs tm; true) handle (Fail _) => false;
+fun ‚is_ç· (tm : TERM) : bool = (dest_ç tm; true) handle (Fail _) => false;
 
-val ‚list_mk_abs· : (TERM list * TERM) -> TERM = list_mk_binder mk_abs;
+val ‚list_mk_ç· : (TERM list * TERM) -> TERM = list_mk_binder mk_ç;
 
-fun ‚strip_abs· (tm : TERM ) : (TERM list * TERM) = (
-let	val (var, body) = dest_abs tm;
-in	(let val (vs,bd) = strip_abs body;
+fun ‚strip_ç· (tm : TERM ) : (TERM list * TERM) = (
+let	val (var, body) = dest_ç tm;
+in	(let val (vs,bd) = strip_ç body;
 	in
 		((var :: vs) , bd)
 	end)
@@ -188,17 +210,19 @@ handle (Fail _) => ([],tm)
 =SML
 fun ‚mk_binder· (area : string) (msg : int) (binder:TYPE -> TYPE -> TERM) 
 	((v, b) : TERM * TERM) : TERM = (
-	(mk_comb (binder (type_of v) (type_of b), 
-		mk_abs(v, b)))
-	handle complaint => list_divert complaint area
-		[("mk_abs", msg, []),
-		("mk_comb", msg, [])]
+	
+	(mk_app (binder (type_of v) (type_of b), 
+		mk_ç(v, b)))
+	handle complaint => 
+	case area_of complaint of
+	"mk_ç" => pass_on complaint "mk_ç" area
+	| _ => term_fail area msg [v,b]
 );
 
 fun ‚dest_binder· (area_name : string) (msg : int) (op_name : string)
 	(tm : TERM) : TERM * TERM = (
-	let	val (binder, abs) = dest_comb tm;
-		val (var, body) = dest_abs abs;
+	let	val (binder, abs) = dest_app tm;
+		val (var, body) = dest_ç abs;
 	in	if fst (dest_const binder) = op_name
 		then (var, body)
 		else fail area_name msg []
@@ -206,12 +230,19 @@ fun ‚dest_binder· (area_name : string) (msg : int) (op_name : string)
 	handle (Fail _) => fail area_name msg []
 );
 
-val ‚is_binder·: (TERM -> 'a) -> TERM -> bool = is_bin_op;
+fun ‚is_binder· (op_name : string) (tm : TERM) : bool  = (
+	let	val (binder, bdy) = dest_app tm;
+	in	is_ç bdy
+		andalso
+		(fst (dest_const binder) = op_name)
+	end
+	handle (Fail _) => false
+);
 
 fun ‚strip_binder· (op_name : string) (tm : TERM) : TERM list * TERM = (
 let fun aux (tm1:TERM) : (TERM list * TERM) = (
-	let	val (binder, abs) = dest_comb tm1;
-		val (var, body) = dest_abs abs;
+	let	val (binder, abs) = dest_app tm1;
+		val (var, body) = dest_ç abs;
 	in	if fst (dest_const binder) = op_name
 		then (let val (vs,bd) = aux body;
 		in
@@ -226,8 +257,8 @@ in
 end);
 fun ‚simple_strip_binder· (op_name : string) (tm : TERM) : TERM list * TERM = (
 let fun aux (tm1:TERM) : (TERM list * TERM) = (
-	let	val (binder, abs) = dest_comb tm1;
-		val (var, body) = simple_dest_abs abs;
+	let	val (binder, abs) = dest_app tm1;
+		val (var, body) = simple_dest_ç abs;
 	in	if fst (dest_const binder) = op_name
 		then (let val (vs,bd) = aux body;
 		in
@@ -242,39 +273,44 @@ in
 end);
 =TEX
 =SML
-val ‚mk_Ä· : (TERM * TERM) -> TERM = mk_bin_op "mk_Ä" 4022 (bin_bool_op "Ä");
+val ‚mk_Ä· : (TERM * TERM) -> TERM = mk_bin_op "mk_Ä" 3031 3015 (bin_bool_op "Ä");
 
 val ‚dest_Ä· : TERM -> (TERM * TERM) = dest_bin_op "dest_Ä" 4032 "Ä";
 
-val ‚is_Ä· : TERM -> bool = is_bin_op dest_Ä;
+val ‚is_Ä· : TERM -> bool = is_bin_op "Ä";
 
-val ‚list_mk_Ä· : TERM list -> TERM = list_mk_bin_op "list_mk_Ä" 4025 (bin_bool_op "Ä");
+val ‚list_mk_Ä· : TERM list -> TERM = list_mk_bin_op "list_mk_Ä" 3031 3015 (bin_bool_op "Ä");
 
 val ‚strip_Ä· : TERM -> TERM list = strip_bin_op "Ä";
 =TEX
 =SML
-val ‚mk_Å· : (TERM * TERM) -> TERM = mk_bin_op "mk_Å" 4026 (bin_bool_op "Å");
+val ‚mk_Å· : (TERM * TERM) -> TERM = mk_bin_op "mk_Å" 3031 3015 (bin_bool_op "Å");
 
 val ‚dest_Å· : TERM -> (TERM * TERM) = dest_bin_op "dest_Å" 4027 "Å";
 
-val ‚is_Å· : TERM -> bool = is_bin_op dest_Å;
+val ‚is_Å· : TERM -> bool = is_bin_op "Å";
 
-val ‚list_mk_Å· : TERM list -> TERM = list_mk_bin_op "list_mk_Å" 4025 (bin_bool_op "Å");
+val ‚list_mk_Å· : TERM list -> TERM = list_mk_bin_op "list_mk_Å" 3031 3015 (bin_bool_op "Å");
 
 val ‚strip_Å· : TERM -> TERM list = strip_bin_op "Å";
 =TEX
 =SML
-val ‚mk_Ç· : (TERM * TERM) -> TERM = mk_bin_op "mk_Ç" 4030 (bin_bool_op "=");
+val ‚mk_Ç· : (TERM * TERM) -> TERM = mk_bin_op "mk_Ç" 3031 3015 (bin_bool_op "=");
 
 fun ‚dest_Ç· (tm : TERM) : (TERM * TERM) = (
 let val (tm1, tm2) = dest_bin_op "dest_Ç" 4031 "=" tm
 in
 	if (type_of tm1 = BOOL)
 	then (tm1, tm2)
-	else fail "dest_Ç" 4031 []
+	else term_fail "dest_Ç" 4031 [tm]
 end);
 
-val ‚is_Ç· : TERM -> bool = is_bin_op dest_Ç;
+fun ‚is_Ç· (tm : TERM) : bool = (
+let val (tm1, tm2) = dest_eq tm
+in
+	(type_of tm1 = BOOL)
+end
+handle (Fail _) => false);
 =TEX
 =SML
 fun ‚mk_if· (c : TERM, y : TERM, n : TERM) : TERM = (
@@ -282,18 +318,18 @@ let	val cty = type_of c;
 	val yty = type_of y
 in
 	if cty <> BOOL
-	then fail "mk_if" 4004 []
+	then term_fail "mk_if" 4004 [c]
 	else if yty <> type_of n
-	then fail "mk_if" 4005 []
+	then term_fail "mk_if" 4005 [y,n]
 	else	let	val If = mk_const("Cond", 
-			mk_fun (BOOL,(mk_fun (yty,(mk_fun(yty, yty))))));
-		in	mk_comb(mk_comb(mk_comb(If, c), y), n)
+			mk_ã_type (BOOL,(mk_ã_type (yty,(mk_ã_type(yty, yty))))));
+		in	mk_app(mk_app(mk_app(If, c), y), n)
 		end
 end);
 =TEX
 =SML
 fun ‚is_if· (tm : TERM) : bool = (
-	let	val rand = (fst o dest_comb);
+	let	val rand = (fst o dest_app);
 		val name = fst(dest_const(rand(rand(rand tm))));
 	in	name = "Cond"
 	end handle (Fail _) => false
@@ -301,10 +337,11 @@ fun ‚is_if· (tm : TERM) : bool = (
 =TEX
 =SML
 fun ‚dest_if· (tm : TERM) : (TERM * TERM * TERM) = (
-	(case ((fst o dest_const) ** Combinators.I)(strip_comb tm) of
+	(case ((fst o dest_const) ** Combinators.I)(strip_app tm) of
 		("Cond", [c, y, n]) => (c, y, n)
 	|	_ => fail "dest_if" 4006 [])
-	handle complaint => divert complaint "dest_const" "dest_if" 4006 []
+	handle (Fail _) => 
+	term_fail "dest_if" 4006 [tm]
 );
 =TEX
 We implement $mk\_let$ to carry out three steps:
@@ -313,24 +350,24 @@ We implement $mk\_let$ to carry out three steps:
 Given a list of local bindings, $bindings$, process them with $process\_bindings$, to replace bindings of local functions, e.g. $f\ x\ =\ y$, with bindings of variable structures (actually the replacement will always be with variables) to abstractions, e.g. $f\ =\ ç\ x\ é\ y$.
 This gives us $bindings'$.
 Bindings to variable structures will be left unchanged in this step.
-\item
-Abstract, as a list, the variable structures of $bindings'$ from the body of the local definition, $bdy$, using $list\_mk\_abs$.
+\itemDSim
+Abstract, as a list, the variable structures of $bindings'$ from the body of the local definition, $bdy$, using $list\_mk\_ç$.
 \item
 Apply the abstracted body to the values of $bindings'$,
 using the marker function $Let$ to indicate the presence of a local definition construct.
 This is done in $aux$ by repeatedly calling $l\_mk\_let$.
 \end{enumerate}
 =SML
-fun ‚mk_let· ((bindings, bdy): (TERM * TERM)list * TERM) : TERM = ((
+fun ‚mk_let· ((bindings, bdy): (TERM * TERM)list * TERM) : TERM = (
 let
 	fun l_mk_let (t2, t3) = (
 		let val tt2 = type_of t2 and
 		 	tt3 = type_of t3;
-			val (tt31,tt32) = dest_funtype tt3
+			val (tt31,tt32) = dest_ã_type tt3
 		in
-			mk_comb(mk_comb(
+			mk_app(mk_app(
 			 mk_const("Let",
-			 mk_fun(tt3,mk_fun(tt2,tt32))),
+			 mk_ã_type(tt3,mk_ã_type(tt2,tt32))),
 			 t3), t2)
 		end);
 
@@ -339,32 +376,33 @@ let
 
 	fun process_bindings ((t1, t2) :: blist) = (
 	if type_of t1 <> type_of t2
-	then fail "mk_let" 4008 []
-	else let fun aux1 (Var v) = ((t1, t2) :: process_bindings blist)
-		| aux1 (Comb cc) = (
+	then term_fail "mk_let" 3012 [t1,t2]
+	else (let fun aux1 (Var v) = ((t1, t2) :: process_bindings blist)
+		| aux1 (App cc) = (
 		 if is_pair t1
 		 then ((t1, t2) :: process_bindings blist)
-		 else let val (f,alist) = strip_comb t1 in
-			(f, list_mk_abs (alist, t2)) :: process_bindings blist
+		 else (let val (f,alist) = strip_app t1 in
+			(f, list_mk_ç (alist, t2)) :: process_bindings blist
 		 end
-		) | aux1 _ = fail "mk_let" 4007 []
+		 handle complaint =>
+		 (case area_of complaint of
+		 "mk_ç" => term_fail "mk_let" 4007 [t1]
+		 | anm => reraise complaint anm))
+		) | aux1 _ = term_fail "mk_let" 4007 [t1]
+		;
 	in
 		aux1 (simple_dest_term t1)
 	end
-	) | process_bindings [] = [];
+	)) | process_bindings [] = [];
 	
 	val bindings' = process_bindings bindings;
 in
-	aux bindings' (list_mk_abs(map fst bindings', bdy))
-end)
-handle complaint => list_divert complaint "mk_let" 
-	[("mk_abs", 4007, []),
-	 ("mk_comb", 4008, [])]
-);
+	aux bindings' (list_mk_ç(map fst bindings', bdy))
+end);
 =TEX
 To destroy a $let\ldots in$, we first strip off as many $Let$'s as
 possible, saving the arguments as they are the values bound to.
-We then strip off an equal number of abstractions, using $dest\_abs$, and the varstruct's are the things that the values are bound to.
+We then strip off an equal number of abstractions, using $dest\_ç$, and the varstruct's are the things that the values are bound to.
 The remaining term is the body of the local definition.
 
 The function will fail entirely if it attempts to destroy, e.g.
@@ -375,10 +413,12 @@ In this case, for instance, it would not return
 $([(x,\ 1)],\ (Let\ p\ q))$.
 =SML
 fun ‚dest_let· (tm : TERM) : (TERM * TERM)list * TERM = (
-	if is_bin_op (dest_bin_op "" 0 "Let") tm
+	(if is_bin_op "Let" tm
 	then (let
+	val ldest_let = dest_bin_op "" 0 "Let";
+
 	fun get_values trm value_list = (
-		let val (bd, vl) = dest_bin_op "" 0 "Let" trm
+		let val (bd, vl) = ldest_let trm
 		in
 			get_values bd (vl :: value_list)
 		end
@@ -387,7 +427,7 @@ fun ‚dest_let· (tm : TERM) : (TERM * TERM)list * TERM = (
 	fun get_vstructs trm value_list = (
 		let val (rev_vslist,bdy) = (
 		 fold (fn (_,(vslist, bd)) => ( 
-			let val (vs, bd') = dest_abs bd
+			let val (vs, bd') = dest_ç bd
 			in
 				((vs :: vslist), bd')
 			end))
@@ -405,11 +445,14 @@ fun ‚dest_let· (tm : TERM) : (TERM * TERM)list * TERM = (
 		(combine vstructs values, body)
 	end)
 	else fail "dest_let" 4009 [])
-handle complaint => list_divert complaint "dest_let" 
-	[("dest_abs", 4009, [])];
+handle (Fail _) => 
+term_fail "dest_let" 4009 [tm]
+);
 =TEX
 =SML
-val ‚is_let· : TERM -> bool = is_bin_op dest_let; 
+fun ‚is_let· (tm : TERM) : bool = (
+	(dest_let tm; true) handle (Fail _) => false
+);
 
 fun ‚list_mk_let· ((bindings, bdy):((TERM * TERM)list)list * TERM) : TERM = (
 	fold mk_let bindings bdy
@@ -430,21 +473,24 @@ end);
 =TEX
 =SML
 local
-	fun mk_LIST ty = mk_type("LIST",[ty])
+	fun mk_LIST ty = mk_ctype("LIST",[ty])
 in
 fun ‚mk_list· (tml : TERM list): TERM = ((
 	if is_nil tml
 	then fail "mk_list" 3017 []
 	else let
 		val tt = type_of(hd tml);
-		val cons = mk_const("Cons",mk_fun(tt, mk_fun(mk_LIST tt, mk_LIST tt)));
-		fun aux (el :: els) = list_mk_comb (cons, [el, aux els])
-		| aux [] = mk_const("Nil", mk_LIST tt);
+		val cons = mk_const("Cons",mk_ã_type(tt, mk_ã_type(mk_LIST tt, mk_LIST tt)));
+		fun aux (el :: els) = (
+			if tt = type_of el
+			then list_mk_app (cons, [el, aux els])
+			else term_fail "mk_list" 3012 [hd tml, el]
+		) | aux [] = mk_const("Nil", mk_LIST tt);
 	in
 		aux tml
 	end
 )
-handle complaint => divert complaint "mk_comb" "mk_list" 4010 []);
+handle complaint => divert complaint "mk_app" "mk_list" 4010 []);
 =TEX
 =SML
 fun ‚mk_empty_list· (ty : TYPE) : TERM = mk_const("Nil", mk_LIST ty);
@@ -453,8 +499,8 @@ fun ‚mk_empty_list· (ty : TYPE) : TERM = mk_const("Nil", mk_LIST ty);
 fun ‚dest_list· (tm : TERM) : TERM list = ((
 let
 	fun aux (Const ("Nil", _)) = []
-	| aux (Comb (f, a)) = (
-		let val (f1, f2) = dest_comb f;
+	| aux (App (f, a)) = (
+		let val (f1, f2) = dest_app f;
 			val (cns, _) = dest_const f1
 		in
 			if cns = "Cons"
@@ -465,43 +511,46 @@ let
 in
 	aux (simple_dest_term tm)
 end)
-handle complaint => list_divert complaint "dest_list"
-	[("dest_comb", 4015, []),
-	 ("dest_const", 4015, [])]
+handle (Fail _) => 
+term_fail "dest_list" 4015 [tm]
 );
 =TEX
 =SML
-val ‚is_list· : TERM -> bool = is_bin_op dest_list;
+fun ‚is_list· (tm : TERM) : bool = (
+	(dest_list tm;true) handle (Fail _) => false
+);
 end (* local mk_LIST *);
 =TEX
 =SML
 local
-	fun mk_SET ty = mk_type("SET",[ty])
+	fun mk_SET ty = mk_ctype("SET",[ty])
 in
 fun ‚mk_enum_set· (tml : TERM list): TERM = ((
 	if is_nil tml
 	then fail "mk_enum_set" 3017 []
 	else let
 		val tt = type_of(hd tml);
-		val insert = mk_const("Insert",mk_fun(tt, mk_fun(mk_SET tt, mk_SET tt)));
+		val insert = mk_const("Insert",mk_ã_type(tt, mk_ã_type(mk_SET tt, mk_SET tt)));
 		val empty = mk_const("Empty", mk_SET tt);
-		fun aux (el :: els) = list_mk_comb (insert, [el, aux els])
-		| aux [] = empty;
+		fun aux (el :: els) = (if type_of el = tt
+			then list_mk_app (insert, [el, aux els])
+			else term_fail "mk_enum_set" 3017 [hd tml, el]
+		) | aux [] = empty;
 	in
 		aux tml
 	end
 )
-handle complaint => divert complaint "mk_comb" "mk_enum_set" 4010 []);
+handle complaint => divert complaint "mk_app" "mk_enum_set" 4010 []);
 =TEX
 =SML
-fun ‚mk_empty_enum_set· (ty : TYPE) : TERM = mk_const("Empty", mk_SET ty);;
+fun ‚mk_§· (ty : TYPE) : TERM = mk_const("Empty", mk_SET ty);
 =TEX
 =SML
 fun ‚dest_enum_set· (tm : TERM) : TERM list = ((
 let
 	fun aux (Const ("Empty", _)) = []
-	| aux (Comb (f, a)) = (
-		let val (f1, f2) = dest_comb f;
+	| aux (App (f, a)) = (
+		let val (f1, f2) = dest_app f;
 			val (ins, _) = dest_const f1
 		in
 			if ins = "Insert"
@@ -512,50 +561,67 @@ let
 in
 	aux (simple_dest_term tm)
 end)
-handle complaint => list_divert complaint "dest_enum_set"
-	[("dest_comb", 4011, []),
-	 ("dest_const", 4011, [])]
+handle (Fail _) => 
+term_fail "dest_enum_set" 4011 [tm]
 );
 =TEX
 =SML
-val ‚is_enum_set· : TERM -> bool = is_bin_op dest_enum_set;
+fun ‚is_enum_set· (tm : TERM) : bool = (
+	(dest_enum_set tm;true) handle (Fail _) => false
+);
 =TEX
 =SML
 local 
-	fun lmk_set t1 _ = mk_const("SetComp", mk_fun(mk_fun(
+	fun lmk_set_comp t1 _ = mk_const("SetComp", mk_ã_type(mk_ã_type(
 		t1, BOOL), mk_SET t1))
 in
-	val ‚mk_set· : TERM * TERM -> TERM = mk_binder "mk_set" 4012 lmk_set;
+	val ‚mk_set_comp· : TERM * TERM -> TERM = mk_binder "mk_set_comp" 3015 lmk_set_comp;
 
-	val ‚dest_set· : TERM -> TERM * TERM = dest_binder "dest_set" 4013 "SetComp";
+	val ‚dest_set_comp· : TERM -> TERM * TERM = dest_binder "dest_set_comp" 4013 "SetComp";
 
-	val ‚is_set· : TERM -> bool = is_binder dest_set;
+	val ‚is_set_comp· : TERM -> bool = is_binder "SetComp";
 
-end (* local lmk_set *);
+end (* local lmk_set_comp *);
 
 end (* local mk_SET *);
 =TEX
 =SML
 local 
-	fun Negate _ = mk_const("å", mk_fun (BOOL, BOOL));
+	fun Negate _ = mk_const("å", mk_ã_type (BOOL, BOOL));
 in
-	val ‚mk_å·: TERM -> TERM = mk_mon_op "mk_å" 4028 Negate
+	val ‚mk_å·: TERM -> TERM = mk_mon_op "mk_å" 3031 Negate;
 end;
+
+fun ‚mk_multi_å· (n : int, tm : TERM) : TERM = (
+let	fun aux (0,tm) = tm
+	| aux (n,tm) = aux (n-1,  mk_å tm);
+in
+	if n < 0
+	then fail "mk_multi_å" 4030 [fn()=>string_of_int n]
+	else aux(n,tm)
+end);
+
 val ‚dest_å· : TERM -> TERM = dest_mon_op "dest_å" 4029 "å";
 
-val ‚is_å· : TERM -> bool = is_mon_op dest_å;
+val ‚is_å· : TERM -> bool = is_mon_op "å";
+
+fun ‚dest_multi_å· (tm : TERM) : (int * TERM) = (
+let	fun aux n tm = if is_å tm
+		then aux (n+1) (dest_å tm)
+		else (n, tm);
+in
+	aux 0 tm
+end);
 =TEX
 =SML
-=SML
 local 
-	fun Forall t1 _ = mk_const("É", mk_fun(mk_fun(
-		t1, BOOL), BOOL))
+	fun Forall t1 _ = quantifier "É" t1 BOOL;
 in
-val ‚mk_É· : TERM * TERM -> TERM = mk_binder "mk_É" 4016 Forall;
+val ‚mk_É· : TERM * TERM -> TERM = mk_binder "mk_É" 3015 Forall;
 
 val ‚dest_É· : TERM -> TERM * TERM = dest_binder "dest_É" 4017 "É";
 
-val ‚is_É· : TERM -> bool = is_binder dest_É;
+val ‚is_É· : TERM -> bool = is_binder "É";
 
 val ‚list_mk_É· : (TERM list * TERM) -> TERM = list_mk_binder mk_É;
  
@@ -565,14 +631,13 @@ end (* local Forall *);
 =TEX
 =SML
 local
-	fun Exists t1 _ = mk_const("Ñ", mk_fun(mk_fun(
-		t1, BOOL), BOOL))
+	fun Exists t1 _ = quantifier "Ñ" t1 BOOL;
 in
-val ‚mk_Ñ· : TERM * TERM -> TERM = mk_binder "mk_Ñ" 4016 Exists;
+val ‚mk_Ñ· : TERM * TERM -> TERM = mk_binder "mk_Ñ" 3015 Exists;
 
 val ‚dest_Ñ· : TERM -> TERM * TERM = dest_binder "dest_Ñ" 4020 "Ñ";
 
-val ‚is_Ñ· : TERM -> bool = is_binder dest_Ñ;
+val ‚is_Ñ· : TERM -> bool = is_binder "Ñ";
 
 val ‚list_mk_Ñ· : (TERM list * TERM) -> TERM = list_mk_binder mk_Ñ;
  
@@ -582,32 +647,31 @@ end (* local Exists *);
 =TEX
 =SML
 local
-	fun Exists1 t1 _ = mk_const("Ñ%down%1", mk_fun(mk_fun(
-		t1, BOOL), BOOL))
+	fun Exists1 t1 _ = quantifier "Ñ%down%1" t1 BOOL;
 in
-val ‚simple_mk_Ñ%down%1· : TERM * TERM -> TERM = simple_mk_binder "simple_mk_Ñ%down%1" 4018 Exists1;
+val ‚simple_mk_Ñ%down%1· : TERM * TERM -> TERM = simple_mk_binder "simple_mk_Ñ%down%1" 3015 Exists1;
 
 val ‚simple_dest_Ñ%down%1· : TERM -> TERM * TERM = simple_dest_binder "simple_dest_Ñ%down%1" 4019 "Ñ%down%1";
 
-val ‚simple_is_Ñ%down%1· : TERM -> bool = simple_is_binder simple_dest_Ñ%down%1;
+val ‚simple_is_Ñ%down%1· : TERM -> bool = simple_is_binder "Ñ%down%1";
 
-val ‚mk_Ñ%down%1· : TERM * TERM -> TERM = mk_binder "mk_Ñ%down%1" 4016 Exists1;
+val ‚mk_Ñ%down%1· : TERM * TERM -> TERM = mk_binder "mk_Ñ%down%1" 3015 Exists1;
 
 val ‚dest_Ñ%down%1· : TERM -> TERM * TERM = dest_binder "dest_Ñ%down%1" 4021 "Ñ%down%1";
 
-val ‚is_Ñ%down%1· : TERM -> bool = is_binder dest_Ñ%down%1;
+val ‚is_Ñ%down%1· : TERM -> bool = is_binder "Ñ%down%1";
 end (* local Exists1 *);
 =TEX
 =SML
 local 
-	fun Select t1 _ = mk_const("á", mk_fun(mk_fun(
+	fun Select t1 _ = mk_const("á", mk_ã_type(mk_ã_type(
 		t1, BOOL), t1))
 in
-val ‚mk_á· : TERM * TERM -> TERM = mk_binder "mk_á" 4016 Select;
+val ‚mk_á· : TERM * TERM -> TERM = mk_binder "mk_á" 3015 Select;
 
 val ‚dest_á· : TERM -> TERM * TERM = dest_binder "dest_á" 4023 "á";
 
-val ‚is_á· : TERM -> bool = is_binder dest_á;
+val ‚is_á· : TERM -> bool = is_binder "á";
 
 val ‚list_mk_á· : (TERM list * TERM) -> TERM = list_mk_binder mk_á;
  
@@ -624,40 +688,69 @@ val ‚simple_strip_Ñ· : TERM -> (TERM list * TERM) = simple_strip_binder "Ñ";
 =SML
 datatype ‚DEST_TERM· = ‚DVar· of string * TYPE |
 	‚DConst· of string * TYPE |
-	‚DComb· of TERM * TERM |
-	‚DAbs· of TERM * TERM |
+	‚DApp· of TERM * TERM |
+	‚Dç· of TERM * TERM |
 	‚DEq· of TERM * TERM |
 	‚Dä· of TERM * TERM |
+ 	‚DT· |
+ 	‚DF· |
 	‚Då· of TERM |
 	‚DPair· of TERM * TERM |
 	‚DÄ· of TERM * TERM |
 	‚DÅ· of TERM * TERM |
 	‚DÇ· of TERM * TERM |
 	‚DLet· of ((TERM * TERM)list * TERM) |
-	‚DEnumSet· of (TERM list * TYPE) |
+	‚DEnumSet· of TERM list |
+ 	‚D§· of TYPE |
 	‚DSet· of TERM * TERM |
-	‚DList· of (TERM list * TYPE) |
+	‚DList· of TERM list |
+ 	‚DEmptyList· of TYPE |
 	‚DÉ· of TERM * TERM |
 	‚DÑ· of TERM * TERM |
+ 	‚DÑ%down%1· of TERM * TERM |
 	‚Dá· of TERM * TERM |
 	‚DIf· of (TERM * TERM * TERM);
 =TEX
-The $is\_\ldots$ followed by $dest\_\ldots$ in the following
-is known to be redundant effort in some cases, but
-there will only one such pair used in each call of this function.
-A faster coding might be via failures, handled by $divert$.
 =SML
 local
-	val BtoBtoB = mk_fun(BOOL,mk_fun(BOOL,BOOL))
+	val BtoBtoB = mk_ã_type(BOOL,mk_ã_type(BOOL,BOOL));
 in
 fun ‚dest_term· (tm : TERM ) : DEST_TERM = (
 let
-	fun aux2 (Comb(f11, f12)) f1 f2 f a = (
-		if is_if tm
+	fun aux3 "Nil" ty = (
+		if is_ctype ty
+		then (let val (s,tyl) = dest_ctype ty
+			in
+			if (s = "LIST" andalso length tyl = 1)
+			then DEmptyList(hd tyl)
+			else DConst("Nil",ty)
+			end)
+		else DConst("Nil",ty)
+	) | aux3 "Empty" ty = (
+		if is_ctype ty
+		then (let val (s,tyl) = dest_ctype ty
+			in
+			if (s = "SET" andalso length tyl = 1)
+			then D§(hd tyl)
+			else DConst("Empty",ty)
+			end)
+		else DConst("Empty",ty)
+	) | aux3 "T" ty = (
+		if ty = BOOL
+		then DT
+		else DConst("T",ty)
+	) | aux3 "F" ty = (
+		if ty = BOOL
+		then DF
+		else DConst("F",ty)
+	) | aux3 nm ty = DConst (nm,ty);
+
+	fun aux2 (App(f11, f12)) f1 f2 f a = (
+		if is_const f11 andalso (fst(dest_const f11) = "Cond")
 		then DIf(f12, f2, a)
-		else DComb(f, a)
-	) | aux2(Var _) f1 f2 f a = DComb(f, a)
-	| aux2(Abs _) f1 f2 f a = DComb(f, a)
+		else DApp(f, a)
+	) | aux2(Var _) f1 f2 f a = DApp(f, a)
+	| aux2(Simpleç _) f1 f2 f a = DApp(f, a)
 	| aux2(Const(co,ty)) f1 f2 f a = (
 		case co
 		of "ä" => Dä (f2, a)
@@ -669,70 +762,56 @@ let
 		| "Å" => DÅ (f2, a)
 		| "," => DPair (f2, a)
 		| "Let" => (
-			if is_let tm
-			then DLet(dest_let tm)
-			else DComb(f, a)
+			DLet(dest_let tm)
+			handle (Fail _) =>
+			DApp(f, a)
 		) | "Insert" => (
-			if is_enum_set tm
-			then DEnumSet(dest_enum_set tm, type_of f2)
-			else DComb(f, a)
+			DEnumSet(dest_enum_set tm)
+			handle (Fail _) =>
+			DApp(f, a)
 		) | "Cons" => (
-			if is_list tm
-			then DList(dest_list tm, type_of f2)
-			else DComb(f, a)
-		) | _ => DComb(f, a));
+			DList(dest_list tm)
+			handle (Fail _) =>
+			DApp(f, a)
+		) | _ => DApp(f, a));
 
-	fun aux1 (Comb(f1, f2)) f a = (
+	fun aux1 (App(f1, f2)) f a = (
 		aux2(simple_dest_term f1) f1 f2 f a
-	) | aux1(Var v) f a = DComb(f, a)
-	| aux1 (Abs c) f a = DComb (f, a)
+	) | aux1(Var v) f a = DApp(f, a)
+	| aux1 (Simpleç c) f a = DApp (f, a)
 	| aux1 (Const(co,ty)) f a = (
 		case co
 		of "Uncurry" => (
-			if is_abs tm
-			then DAbs(dest_abs tm)
-			else DComb(f, a)
+			Dç(dest_ç tm)
+			handle (Fail _) =>
+			DApp(f, a)
 		) | "É" => (
-			if is_É tm
-			then DÉ(dest_É tm)
-			else DComb(f, a)
+			DÉ(dest_É tm)
+			handle (Fail _) =>
+			DApp(f, a)
 		) | "Ñ" => (
-			if is_Ñ tm
-			then DÑ(dest_Ñ tm)
-			else DComb(f, a)
+			DÑ(dest_Ñ tm)
+			handle (Fail _) =>
+			DApp(f, a)
+		) | "Ñ%down%1" => (
+			DÑ(dest_Ñ%down%1 tm)
+			handle (Fail _) =>
+			DApp(f, a)
 		) | "á" => (
-			if is_á tm
-			then Dá(dest_á tm)
-			else DComb(f, a)
+			Dá(dest_á tm)
+			handle (Fail _) =>
+			DApp(f, a)
 		) | "SetComp" => (
-			if is_set tm
-			then DSet(dest_set tm)
-			else DComb(f, a)
+			DSet(dest_set_comp tm)
+			handle (Fail _) =>
+			DApp(f, a)
 		) | "å" => Då a
-		| _ => DComb(f, a));
+		| _ => DApp(f, a));
 		
-	fun aux (Comb (f, a)) = (aux1 (simple_dest_term f) f a)
+	fun aux (App (f, a)) = (aux1 (simple_dest_term f) f a)
 	| aux (Var v) = DVar v
-	| aux (Abs a) = DAbs a
-	| aux (Const ("Nil",ty)) = (
-		if is_type ty
-		then (let val (s,tyl) = dest_type ty
-			in
-			if (s = "LIST" andalso length tyl = 1)
-			then DList([],hd tyl)
-			else DConst("Nil",ty)
-			end)
-		else DConst("Nil",ty)
-	) | aux (Const ("Empty", ty)) = (
-		if is_type ty
-		then (let val (s,tyl) = dest_type ty
-			in
-			if (s = "SET" andalso length tyl = 1)
-			then DEnumSet([],hd tyl)
-			else DConst("Empty",ty)
-			end)
-		else DConst("Empty",ty)
-	) | aux (Const c) = DConst c;
+	| aux (Simpleç a) = Dç a
+	| aux (Const (nm,ty)) = aux3 nm ty;
 in
 	aux (simple_dest_term tm)
 end (* let *));
@@ -741,8 +820,10 @@ end (* local *);
 =SML
 fun ‚mk_term· ((DVar v) : DEST_TERM) : TERM = mk_var v
 | mk_term (DConst c) = mk_const c
-| mk_term (DComb fa) = mk_comb fa
-| mk_term (DAbs ab) = mk_abs ab
+| mk_term (DApp fa) = mk_app fa
+| mk_term (Dç ab) = mk_ç ab
+| mk_term (DT) = mk_t
+| mk_term (DF) = mk_f
 | mk_term (DEq ee) = mk_eq ee
 | mk_term (Dä imp) = mk_ä imp
 | mk_term (Då n) = mk_å n
@@ -751,17 +832,14 @@ fun ‚mk_term· ((DVar v) : DEST_TERM) : TERM = mk_var v
 | mk_term (DÅ dd) = mk_Å dd
 | mk_term (DÇ ee) = mk_Ç ee
 | mk_term (DLet ll) = mk_let ll
-| mk_term (DEnumSet (ttl,ty)) = (
-	if is_nil ttl
-	then mk_const("Empty",mk_type("SET",[ty]))
-	else mk_enum_set ttl
-) | mk_term (DSet s) = mk_set s
-| mk_term (DList (ttl,ty)) = (
-	if is_nil ttl
-	then mk_const("Nil",mk_type("LIST",[ty]))
-	else mk_list ttl
-) | mk_term (DÉ f) = mk_É f
+| mk_term (DEnumSet ttl) = mk_enum_set ttl
+| mk_term (D§ ty) = mk_§ ty
+| mk_term (DSet s) = mk_set_comp s
+| mk_term (DList ttl) = mk_list ttl
+| mk_term (DEmptyList ty) = mk_empty_list ty
+| mk_term (DÉ f) = mk_É f
 | mk_term (DÑ e) = mk_Ñ e
+| mk_term (DÑ%down%1 e) = mk_Ñ%down%1 e
 | mk_term (Dá s) = mk_á s
 | mk_term (DIf ii) = mk_if ii;
 =TEX
@@ -775,4 +853,4 @@ open TypesAndTerms;
 \twocolumn[\section{INDEX}]
 \small
 \printindex
-\end{document}
+\end{document})
