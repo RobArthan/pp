@@ -18,29 +18,30 @@
 Commands to process this document in various ways.
 
 make -f rel001.mkf dtd032.dvi
-doc4tex dtd032
-tex4dvi dtd032
+doctex dtd032
+texdvi dtd032
 bibtex dtd032
-doc4tex dtd032 ; tex4dvi dtd032
-doc4tex dtd032 ; tex4dvi dtd032 ; bibtex dtd032
+doctex dtd032 ; texdvi dtd032
+doctex dtd032 ; texdvi dtd032 ; bibtex dtd032
 dvipage dtd032 &
 
 
-doc4errors dtd032
+docsml dtd032
 use_file "dtd032.sml";
 
 lasp -s dtd032.doc > zz1
-lasp -s -u dtd032.OKwords dtd032.doc > zz1
+lasp -s -U dtd032.doc > zz1
 
 =TEX
 %\TPPstatus{Approved}
 \TPPstatus{Draft}
-\TPPtype{Standard}
+\TPPtype{Specification}
 \TPPkeywords{HOL}
 \TPPauthor{A.J. Hammon & WIN01}  %% Mandatory field
 \TPPauthorisation{R.D.~Arthan & FST Team Leader}
-\TPPabstract{This document contains the HOL pretty
-	printing functions.}
+\TPPabstract{This document defines the HOL pretty
+	printing functions and the format of their
+	output.}
 \TPPdistribution{\parbox[t]{4.0in}{%
 	Library
 }}
@@ -93,8 +94,12 @@ lasp -s -u dtd032.OKwords dtd032.doc > zz1
 \item[28 August 1991, issue 2.1 ] First approved issue.
 
 \item[20 January 1992, issue 2.2~] Updated to use new fonts.
-\item [Issue 2.3 (13th April 1992)]
-Changes due to CR0017.
+\item[13 April 1992, issue 2.3 ] Changes due to CR0017.
+
+\item[\FormatDate{$Date$%
+}, issue \SCCSissue~]
+	Add specification of control flags.
+	Add details of formatting rules for HOL.
 
 %\item[\FormatDate{$Date$%
 %}, issue \SCCSissue~]
@@ -105,10 +110,31 @@ Changes due to CR0017.
 
 \subsection{Changes Forecast}
 
-None.
+Showing the types of variables and constants in terms.  There are
+several usages of variables and constants where it would be useful to
+add type information.
+
+\begin{itemize}
+
+\item Defining instances of variables in let terms.
+\item Uses of constants as functions.
+\item Uses of constants as operands of other constructs.
+\item Uses of constants as prefix, infix or postfix operators.
+\item Uses of free variables.
+
+\end{itemize}
+
+Some of these are relatively easy to achieve, however constraining the
+output to
+`give the minimal typing necessary to read back the term' is difficult
+to achieve.  One way of approaching minimal typing would be to have a
+prepass which marked uses of constants and free variables which require
+typing together with the pretty printer always typing defining
+instances of variables.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+\newpage
 \section{GENERAL}
 
 %********************************************************************
@@ -117,6 +143,7 @@ None.
 
 This document contains the HOL pretty printing routines for the ICL HOL
 system.  The high-level design for this document
+is
 in~\cite{DS/FMU/IED/HLD008}.
 
 %********************************************************************
@@ -131,26 +158,30 @@ The desired attributes of the pretty printer subsystem are defined in
 \cite{DS/FMU/IED/HLD002} and further elaborated in
 \cite{DS/FMU/IED/HLD008}.  This document contains the pretty printing
 functions that are specific to the HOL concrete syntax
-defined in~cite{DS/FMU/IED/DEF001}.
+defined in~\cite{DS/FMU/IED/DEF001}.
 
 %********************************************************************
 
 \subsubsection{Dependencies}
 
 Basic output mechanisms are provided by the Oppen style printing
-routines in~\cite{DS/FMU/IED/IMP024} and by the PolyML function
+routines in~\cite{DS/FMU/IED/DTD024} and by the PolyML function
 $PolyML.install_pp$, although they are provided via the pretty printer
-in~\cite{DS/FMU/IED/IMP025}.
+in~\cite{DS/FMU/IED/DTD025}.
 
 %********************************************************************
 
 \subsubsection{Interface}
 
+A major interface to the HOL pretty printer is the format of the
+terms that are printed.  This information is presented in
+section~\ref{Printing}.
+
 There is only one visible interface to this structure, namely that for
 formatting HOL types.
 
 Most of this structure is concerned with installing functions into the
-pretty printer of~\cite{DS/FMU/IED/IMP031}.  These functions are
+pretty printer of~\cite{DS/FMU/IED/DTD031}.  These functions are
 thereafter are only called by that pretty printer.
 
 %********************************************************************
@@ -181,7 +212,7 @@ signature ÛHOLPrettyPrinterÝ = sig
 =DOC
 val Ûmain_type_ppÝ : PrettyPrinterSupport.PP_ENV -> TYPE -> unit;
 =DESCRIBE
-Print the given type using the Oppen routiner in the given pretty
+Print the given type using the Oppen routine in the given pretty
 printer environment.
 =ENDDOC
 %--------------------------------------------------------------------
@@ -191,7 +222,29 @@ printer environment.
 (* Flag Ûpp_show_HOL_typesÝ : boolean control, default false *)
 =DESCRIBE
 Controls whether HOL types are shown.  The default (namely $false$) is to
+not
 show the types of all variables and constants.
+=ENDDOC
+%--------------------------------------------------------------------
+
+%--------------------------------------------------------------------
+=DOC
+(* Flag Ûpp_types_on_bindersÝ : boolean control, default false *)
+=DESCRIBE
+Controls whether HOL types are shown for groups of declarations in
+binders.  The default (namely $false$) is to not show these types.
+=ENDDOC
+%--------------------------------------------------------------------
+
+%--------------------------------------------------------------------
+=DOC
+(* Flag Ûpp_let_as_lambdaÝ : boolean control, default false *)
+=DESCRIBE
+Controls how function declarations in let terms are shown.  The default
+(namely $false$) is to show these declarations with the function name
+and its arguments equated to an expression which is the function's
+body.  The alternative shown them with the function name equated to a
+lambda term.
 =ENDDOC
 %--------------------------------------------------------------------
 
@@ -201,6 +254,588 @@ end (* of signature HOLPrettyPrinter *);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+\section{LAYOUT OF HOL TYPES AND TERMS}
+\label{Printing}
+
+HOL types and terms are formatted according to the following rules.
+First some general principals are given, then details for each of the
+concrete syntax forms from the HOL grammar given
+in~\cite{DS/FMU/IED/DEF001}.
+
+Section~\ref{OtherPossibilities} below discusses some aspects of
+formatting HOL types and terms and in particular why certain other
+approaches are not taken.
+
+%********************************************************************
+
+\subsection{General Rules}
+
+Line breaking is only used on sub expressions that cannot fit
+completely on a line, allowing for the indentation used.
+
+Line breaks are preferred before keywords and operators rather than
+afterwards.  Keywords here include: `$if$', `$then$', `$else$',
+`$let$', `$and$', `$in$', `$|$', etc.
+
+Indentation is used to show expression nesting, the indentation step
+interval is two characters.
+
+The text of an expression will be printed in a rectangular area with
+its first symbol normally in the top left hand corner.  In some cases
+the first symbol may not be on the left hand edge of the rectangle,
+this may occur when the preceding symbol is printed on the same line.
+(It may also occur when the outermost part of the expression is printed
+as a top-level Standard~ML expression --- this is a consequence of the
+way that PolyML top-level expressions are printed.)
+
+%********************************************************************
+
+\subsection{Introduction to the Concrete Syntax}
+
+In most cases an extract from the concrete syntax
+in~\cite{DS/FMU/IED/DEF001} is shown.  This is followed by a variation
+of that concrete syntax that shows how the term or type (or part
+thereof) is printed.  The variation is in several forms.
+
+\begin{itemize}
+
+\item Additional grammar productions.
+
+\item Simplification of some productions.
+
+\item Addition of meta-identifiers showing where the
+	Oppen~\label{DS/FMU/IED/DTD024} blocks and possible line breaks
+	are placed.
+
+\end{itemize}
+
+The extra meta-identifiers are as follows.
+
+\begin{description}
+\def\ITEM#1{\item[$#1$ ] }
+
+\ITEM{BC_{\cal N} } Start a block where line breaks are consistently
+	taken.  Add $\cal N$ spaces of extra indentation for the line
+	breaks in this block.
+
+\ITEM{BI_{\cal N} } Start a block where line breaks are inconsistently
+	taken.  Add $\cal N$ spaces of extra indentation for the line
+	breaks in this block.
+
+\ITEM{END } Complete a block.
+
+\ITEM{BREAK } A position where a line break may occur.
+
+\end{description}
+
+Line breaking and `$BREAK$'s are only relevant when an expression will
+not fit in its entirity in the space left on the line where it is to
+start being printed.  If the expression will fit then `$BREAK$'s are
+ignored.  Line breaking is consistent when all `$BREAK$'s at the
+outermost level of a block are converted to line breaks plus
+appropriate indentation.  Inconsistent line breaking is when only some
+of the `$BREAK$'s are converted to line breaks, in this case as much as
+possible of the expression is added to the line being printed.  The
+indentation inserted at a line break is the sum of the indentation
+outside of the enclosing block plus the extra indentation for the
+current block.
+
+\bigskip
+
+To illustrate the nature of consistent versus inconsistent line
+breaking, consider the following term.
+
+=GFT Example term
+	a ± b ± c ± d ± e ± f
+=TEX
+
+Now suppose that this term is to be printed where there is insufficient
+space to fit it on a single line and hence some line breaking is
+necessary.  If this term were printed with inconsistent line breaks then
+as much of it as can fit onto a line is printed on that line, then a
+line break is made.  Following the rules given for infix operators (see
+section~\ref{PrintingOperators} below) the line breaks are only made
+before the infix operator symbol, thus the term might be formatted as
+follows.
+
+=GFT Inconsistent line breaks
+	a ± b ± c ± d
+	± e ± f
+=TEX
+
+However, the rules given for infix operators also state that consistent
+line breaking is performed so the actual output would be as follows.
+
+=GFT Consistent line breaks
+	a
+	± b
+	± c
+	± d
+	± e
+	± f
+=TEX
+
+%********************************************************************
+
+\subsection{Omitted Concrete Syntax Items}
+
+Some parts of the concrete syntax of~\cite{DS/FMU/IED/DEF001} are not
+shown in the sections below.  These items are covered by the bracket
+insertion and elimination rules, see section~\ref{PrintingBrackets},
+or the following paragraphs.
+
+All of the terminal symbols in the HOL grammar which used for
+identifiers are covered under identifiers in
+section~\ref{PrintingTypedIdentifiers} below.
+
+Quotations of types and terms (HOL grammar terminal symbols `$AqTm$'
+and `$AqTy$') in the input to the HOL system are not remembered in the
+whole term, rather the quoted term is included directly.  Hence there
+is nothing in the pretty print for printing them.  However, quotations
+are generated by the pretty printer for certain uses of identifiers,
+see section~\ref{PrintingTypedIdentifiers}.
+
+Grammar non terminal `$OTm$' is provided to help disambiguate the grammar.
+For pretty printing it only affects the bracket insertion and elimination
+rules, see section~\ref{PrintingBrackets}.
+
+Variable structures (also called varstructs) have a syntax which is a
+restricted form of term, namely nested applications of the infix comma
+operator.  Hence varstructs are printed as terms.
+
+%********************************************************************
+
+\subsection{Typed Identifiers}
+\label{PrintingTypedIdentifiers}
+
+This section covers the terminal symbols used for identifiers in HOL:
+`$InTmOp$', `$InTyOp$', `$Name$', `$PreOp$' and `$PostOp$'. {} Also
+covered is the explicit typing of these identifiers.
+
+=GFT BNF Concrete syntax
+Tm		=	Tm, `:`, Ty;
+=TEX
+
+=GFT BNF Printing
+Tm		=	BC_2, Tm, BREAK, `:`, Ty, END;
+=TEX
+
+String and character literals are printed with the appropriate
+quotation marks.
+
+Complex names, those that do not obey the rules for simple HOL
+identifiers are printed in the escaped string form.
+
+To preserve the original term, names from a `$mk_const$' expression for
+which no constant has been declared are printed as ML quotations of a
+`$mk_const$'.  Similarly, names from a `$mk_var$' expression for which
+a constant has been declared are printed as ML quotations of a
+`$mk_var$'.  In both cases the arguments are the name and a HOL
+quotation of its type.
+
+%********************************************************************
+
+\subsection{Types}
+
+=GFT BNF Concrete syntax
+Ty		=	Name
+		|	AqTy
+		|	Typars, Name
+		|	Ty, InTyOp, Ty
+		|	`(`, Ty, `)`;
+Typars		=	Ty
+		|	`(`, Ty, { `,`, Ty }, `)`;
+=TEX
+
+There is no correspondence to `$AqTy$', the type quotation.  The
+bracketting option to `$Ty$' is handled by the bracket insertion and
+elimination rules, see section~\ref{PrintingBrackets}.  Infix type
+constructors are discussed in section~\ref{PrintingOperators}. Postfix
+type constructors with one argument are printed differently from those
+with several arguments.
+
+=GFT BNF Printing
+Ty		=	Name
+		|	Typars;
+
+Typars		=	Ty, BREAK, Name
+		|	BI_0, `(`, BC_2, Ty, { `,`, BREAK, Ty },
+				END, `)`, BREAK, Name, END;
+=TEX
+
+For details of the bracketing and line breaking rules for nested infix
+type operators see section~\ref{PrintingBrackets}.
+
+%********************************************************************
+\newpage
+\subsection{Binders}
+
+=GFT BNF Concrete syntax
+Tm		=	Binder, BndVars, `·`, Tm;
+
+BndVars	=	Block, {`;`, Block };
+Block		=	V1, { V1 }, [ `:`, Ty ];
+
+V1		= 	Name	|	`(`, V, { `,`, V }, `)`;
+=TEX
+
+Nested binders with the same identifier are elided so that all the
+bound variables are printed in a single `$BndVars$'.
+
+=GFT BNF Printing
+Tm		=	BC_0, Binder, BndVars, BREAK, `·`, Tm, END;
+=TEX
+
+If control flag $pp_types_on_binders$ indicates that types are to be
+shown on the bound varstructs (the `$V1$' in the grammar) then these
+varstructs are gathered into blocks having the same type.  Each of
+these blocks is printed followed by its type.  Blocks are separated by
+semicolons.  In this case the grammar used is:
+
+=GFT BNF Printing
+BndVars	=	BC_2, BlockAA, {`;`, BREAK, END, BC_2, BlockAA }, END;
+BlockAA	=	BI_0, Block, END;
+=TEX
+
+If types are not to be shown then the varstructs are printed
+separated by spaces.  In this case the grammar used is:
+
+=GFT BNF Printing
+BndVars	=	BI_2, Block, END;
+=TEX
+
+The `$Block$' is common to both binder styles.
+
+=GFT BNF Printing
+Block		=	V1, { V1 }, BREAK, `:`, Ty;
+
+V1		= 	BREAK, BC_2, Tm, END;
+=TEX
+
+Each varstruct is printed as a term rather than having specific
+rules to match the `$V1$' concrete syntax production.
+
+%********************************************************************
+\newpage
+\subsection{Let Clauses}
+
+The syntax of let clauses in~\cite{DS/FMU/IED/DEF001} is more
+restrictive than that allowed by the implementation which additionally
+allows local infix, prefix and postfix operators to be declared using
+their infix, prefix and postfix forms.  For example, the following is
+an excerpt from a run of the HOL system:
+
+=GFT HOL Example
+:> declare_infix(300, "e");
+val it = () : unit   
+:> ¬let a e b = c in d e f®;
+val it = ¬let a e b = c in d e f® : TERM   
+:> strip_let it;
+val it = ([[(¬$e®, ¬Ì a b· c®)]], ¬d e f®) : (TERM * TERM) list list * TERM
+:> dest_simple_term(snd it);
+val it = App (¬$e d®, ¬f®) : DEST_SIMPLE_TERM   
+=TEX
+
+\bigskip
+
+=GFT BNF Concrete syntax
+Tm		=	`let`, L, { `and`, L }, `in`, Tm;
+L		=	Vs `=`, Tm;
+Vs		=	V
+		|	Name, V1s;
+V1s		=	V1
+		|	V1s, V1;
+=TEX
+
+The components of the `$L$' clause are assembled into a term for
+printing.  The form of this term depends on `$pp_let_as_lambda$', a
+boolean control flag.  When false, the default, local functions are
+printed with their arguments on the left hand of the equality (in this
+case the non terminal `$Vs$' is treated as a term denoting functional
+application or operator application.  When true, local functions are
+printed as lambda expressions.
+
+=GFT BNF Printing
+Tm		=	BC_0, TmLetLet, { TmLetAnd }, BI_2,
+				`in`, TmLetTm, END, END;
+TmLetLet	=	BI_2, `let`, TmLetTm, END, BREAK;
+TmLetAnd	=	BI_2, `and`, TmLetTm, END, BREAK;
+TmLetTm	=	BC_2, Tm, END;
+=TEX
+
+The aim here is that if the let expression does not fit on a line then
+a line break is placed before the `$in$' keyword.  If the defining
+clauses do not all fit on a line then additional line breaks are made
+between the defining clauses, before the word `$and$'.
+
+If this let clause is immediately nested within another let clause
+then the first `$BC_0$' is changed to a `$BC_2$'.
+
+%********************************************************************
+\newpage
+\subsection{Conditionals}
+
+=GFT BNF Concrete syntax
+Tm		=	`if`, Tm, `then`, Tm, `else`, Tm;
+=TEX
+
+=GFT BNF Printing
+Tm		=	BC_0,
+			BI_0, `if`,	BREAK, BC_2, Tm, END, END, BREAK,
+			BI_0, `then`,	BREAK, BC_2, Tm, END, END, BREAK,
+			BI_0, `else`,	BREAK, BC_2, Tm, END, END,
+			END;
+=TEX
+
+Here the intention is that if the conditional does not fit on one line
+then the three component terms, each with its leading keyword, are on
+separate lines.
+
+If brackets are required around the conditional then the first
+`$BC_0$' is changed to a `$BC_2$'.
+
+%********************************************************************
+
+\subsection{Functional Application}
+
+=GFT BNF Concrete syntax
+Tm		=	Tm, Tm
+=TEX
+
+In functional applications the whole set of curried arguments are
+gathered together, rather than treating it recursively through the left
+hand argument.  Thus in the term `$f\;a\;b\;c\;d$' (which is the same
+as `$(((f\;a)\;b)\;c)\;d$') the three argument `$a$', `$b$' and `$c$'
+are gathered and the four terms are considered to be the arguments of
+the functional application.  Thus the effective concrete syntax is as
+follows.
+
+=GFT BNF Effective Concrete syntax
+Tm		=	Tm, Tm, { Tm };
+=TEX
+
+=GFT BNF Printing
+Tm		=	BI_2, BC_0, Tm, { END, BREAK, BC_2, Tm }, END, END;
+=TEX
+
+%********************************************************************
+\newpage
+\subsection{Lists and Set}
+
+=GFT BNF Concrete syntax
+Tm		=	`[`, OptTms, `]`;
+
+Tm		=	`{`, OptTms, `}`;
+Tm		=	`{`, V, `|`, Tm, `}`;
+
+OptTms 	=	[ Tm, { `;`, Tm } ];
+=TEX
+
+The varstruct in the set comprehension is printed as a term.
+
+=GFT BNF Printing
+Tm		=	BI_0, `[`, OptTms, `]`, END;
+
+Tm		=	BI_0, `{`, OptTms, `}`, END;
+Tm		=	BI_0, `{`, BC_2,  Tm, END, BREAK, `|`,
+				BC_2,  Tm, END, `}`, END;
+
+OptTms 	=	[ BC_2, Tm, { `;`, END, BREAK, BC_2, Tm }, END ];
+=TEX
+
+Enumerated lists and sets are printed fitting as much as
+possible onto each line.
+
+%********************************************************************
+
+\subsection{Infix, Prefix and Postfix Operators}
+\label{PrintingOperators}
+
+These operators are right associative thus, for example,
+the following terms are equivalent.
+
+=GFT
+¬(a ± b) ± (c ± d)®
+¬(a ± b) ± c ± d®
+=TEX
+
+Prefix and postfix operators associate in a similar manner.
+
+=GFT BNF Concrete syntax
+OTm		=	Tm, InTmOp, Tm
+		|	PreOp, Tm
+		|	Tm, PostOp;
+
+Ty		=	Ty, InTyOp, Ty;
+=TEX
+
+When pretty printing a term containing several uses of the same
+operator the intention is to avoid indenting for each sub expression.
+In the following term all of the brackets may be omitted (because the
+operators are right associative).
+
+=GFT
+¬a ± (b ± (c ± (d ± (e ± f))))®
+=TEX
+
+\label{AboutOperChain}
+However, each pair of brackets indicates a sub expression of the whole
+term.  A chain of infix operator applications like this example will be
+printed according to the repetition infix operator rules in the
+BNF-printing grammar below --- note that the repetition will have at
+least one occurrence.  The rule for detection of these chains is as
+follows.  Check for: (1)~the outermost structure of a sub expression is
+an infix operator application; (2)~this sub expression is the operand
+of an infix operator application; (3)~the two operators have the same
+precedence; and, (4)~brackets are not required because of the
+associativity of these operators.  When these four conditions all hold
+a chain is formed.
+
+Similar rules are used for forming chains of prefix plus postfix
+operator applications --- this means there are two chain forms, one for
+infix, one for prefix and postfix.
+
+Operators in a chain all have the same precedence, but not necessarily
+the same name.
+
+=GFT BNF Printing
+OTm		=	BC_2, Tm, { BREAK, InTmOp, Tm }, END
+		|	BC_2, PrePostChain, END;
+
+PrePostChain 	=	PreOp, BREAK, PrePostChain
+		|	PrePostChain, BREAK, PostOp
+		|	PreOp, Tm
+		|	Tm, PostOp;
+
+Ty		=	BC_2, Ty, { BREAK, InTyOp, Ty }, END;
+=TEX
+
+%********************************************************************
+
+\subsection{Pairs and Tuples}
+
+Printing pairs and tuples is mostly about getting the brackets
+correct.  Pairs and tuples are formed by applications of the infix
+comma `$,$' operator, however they are not printed according to the
+rules in section~\ref{PrintingOperators} for other infix operators.
+
+=GFT BNF Printing
+OTm		=	BI_2, `(`, TmComma, { `,`, BREAK, TmComma }, `)`, END;
+TmComma	=	BC_2, Tm, END;
+=TEX
+
+%********************************************************************
+
+\subsection{Printing Brackets}
+\label{PrintingBrackets}
+
+Bracket insertion and elimination uses a scheme based upon precedence
+levels which are determined from the HOL concrete
+syntax~\cite{DS/FMU/IED/DEF001}.  The precedences of infix, prefix and
+postfix operators forms only part of the full range of precedence
+levels used.  Precedence levels are encoded in type $PREC_CONTEXT$ 
+of~\cite{DS/FMU/IED/DTD031}.
+
+Each production in the concrete syntax construct for a HOL type or term
+is given a precedence level, each position where a term or type may
+occur with the syntax is also given a precedence level.  Brackets are
+output only when a comparison of these precedence levels shows that
+they are needed.  The precedence levels are chosen so that most of the
+unnecessary brackets are eliminated.  The word `most' is correct in the
+previous sentence, brackets are inserted in a small number of cases
+where, strictly speaking, they are not necessary.  This is done partly
+to present output which is easier to read and partly because a much
+more complex algorithm would be needed to determine when some brackets
+were unnecessary.
+
+As an example of a case which requires a complex algorithm to determine
+whether brackets are necessary, all but one pair of brackets may be
+removed from the following HOL term, it does not matter which pair is
+retained.  If the binder term were replaced with a variable then all of
+the brackets may be removed.  The distinction may only be found when
+the binder is recognised.  Note that the operator `$\land$' binds more
+tightly than the `$=$' in this term.
+
+=GFT HOL example
+	¬ (a ± (b ± (c ± (d ± (e ± (µ f · g)))))) = h ®
+=TEX
+
+The problem comes from the HOL syntax rule that binder terms extend as
+far to the right as possible.  Similar problems occur with `{\tt if}'
+and `{\tt let}' terms.  The solution adopted is to set the precedences
+so that binder terms (also `{\tt if}' and `{\tt let}' terms, for the
+same reason) are always bracketed when used as arguments to infix
+operators.  Thus, brackets are always printed in the following terms,
+even though they are unnecessary in the second term.
+
+=GFT Examples
+(if a1 then a2 else a3) = b
+a = (if b1 then b2 else b3)
+(if a1 then a2 else a3) = b ± c
+a = (if b1 then b2 else b3) ± c
+=TEX
+
+Precedences are ordered in the same way as in the concrete
+syntax.  ``High'' precedences bind more tightly than ``low''
+precedences.  Each concrete syntax production (not the actual concrete
+syntax of~\cite{DS/FMU/IED/DEF001}, rather an idealised syntax that
+allows for the extra brackets that are inserted) is given a particular
+precedence level, if it is used in a higher precedence context then it
+must be enclosed in round brackets.  The round brackets themselves
+require the highest precedence level, thus round brackets never need to
+be enclosed in round brackets.  The context within round brackets is
+the lowest precedence level allowing any other concrete syntax
+production to be used without brackets.
+
+Precedences of the other concrete syntax productions are
+generally simple to decide.  All the self-bracketing forms require
+highest precedence and enclose the lowest.
+
+An extra-low precedence is needed for HOL pairs and tuples where
+brackets are always required.  These values are formed using the infix
+comma as an operator, tuples may be formed by nesting pairs, the comma
+is right associative allowing some brackets to be eliminated.  Having
+an extra precedence below the normal lowest level allows the general
+bracket elimination mechanism to be used to insert only those brackets
+that are necessary.
+
+%********************************************************************
+
+\subsection{Other Possibilities}
+\label{OtherPossibilities}
+
+There are many possibly variations on the above formatting rules, this
+section explains a small number of them and why they are not used.
+
+\begin{itemize}
+
+\item Operators, primarily infix ones, might have consistent versus
+	inconsistent line breaking selected based on the operator's
+	precedence, the high precedence (tightly binding) operators
+	having inconsistent line breaking.  The problem here is that a
+	term formed from a chain (see section~\ref{AboutOperChain} for
+	details of chains) of a high precedence operator where many of
+	the operands are themselves complex terms will be printed in a
+	way that hides the chain structure of the term.   Contrast this
+	with a chain of a low precedence operator with complex operands
+	when the operands each start on separate lines.
+
+\item The first symbol of an expression might be forced to occupy the
+	top left hand corner of a rectangular area of the output.  This
+	area might be formed by remembering the horizontal position of
+	the start symbol and using this of subsequent lines of the
+	rectangular area.  Unfortunately, the the Oppen formatting
+	system does not provide any way of remembering an indentation
+	point.  Alternatively, we might force a line break at the start
+	of each rectangular area.  However this would mean that the
+	formatted terms occupy an excessive number of lines, many of
+	which contain a single symbol.
+
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
 \section{TEST POLICY}
 
 The HOL pretty printing functions functions are to be tested according
