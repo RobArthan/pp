@@ -1,0 +1,1573 @@
+=TEX
+% TQtemplatetex
+\documentstyle[hol1,11pt,TQ]{article}
+\makeindex
+% The following macro is used to insert temporary notes
+% in the document.
+\def\TempNote#1{{\tiny#1}}
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation of Z Type Inferrer}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP062}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPstatus{Draft}                    %% Mandatory field
+\TPPtype{SML Literate Script}
+\TPPkeywords{Z, HOL}
+\TPPauthor{D.J.~King&WIN01}
+%\TPPauthors{R.D.~Arthan&WIN01\\D.J.~King&WIN01\\G.T.~Scullard&MAN05}
+\TPPauthorisation{R.D.~Arthan & FMU Manager}
+\TPPabstract{A type inference mechanism for Z}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	  R.D.~Arthan \\ R.B.~Jones \\ G.T. Scullard
+}}
+ 
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List} \tableofcontents
+\subsection{Document Cross References}\bibliographystyle{fmu}
+\bibliography{fmu}
+\subsection{Changes History}
+\begin{description}
+\item[\SCCSversion (3 March 1992)] Initial version.
+
+\end{description}
+\subsection{Changes Forecast}
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+\subsubsection{Dependencies}
+\subsubsection{Interface}
+\subsubsection{Algorithms}
+\subsubsection{Possible Enhancements}
+\subsubsection{Deficiencies}
+\section{PREAMBLE}
+=SML
+structure €ZTypeInference› : ZTypeInference = struct
+	open Unification;
+	open TypeInference;
+	open ZTypesAndTerms;
+=TEX
+\subsection{FLAGS AND SWITCHES FOR TYPE INFERENCE}
+=SML
+val €check_paras_with_extended_z› = ref true;
+val €check_terms_with_extended_z› = ref true;
+val €type_check_only_mode› = ref true;
+
+val _ =
+new_flag {name = "check_paras_with_extended_z", control=check_paras_with_extended_z,
+	check=fun_true, default = fun_true};
+
+val _ =
+new_flag {name = "check_terms_with_extended_z", control=check_terms_with_extended_z,
+	check=fun_true, default = fun_true};
+
+val _ =
+new_flag {name = "type_check_only_mode", control=type_check_only_mode,
+	check=fun_true, default = fun_true};
+
+=TEX
+=SML
+val €zarray_size› = 100;
+val €zti_subs› = new_subs zarray_size;
+=TEX
+
+\section{VISIBLE DATA TYPES AND STRUCTURES}
+
+=SML
+type €DECOR›	=	string;
+type €IDENT›	=	string*DECOR;
+datatype €ZTM›	= €Ztß¢› of ZTM list
+		|€Ztsetd› of ZTM list
+		|€Ztseta1› of ZSCHTEXT
+		|€Ztseta2› of ZSCHTEXT * ZTM
+		|€Zt› of ZTM
+		|€Zttuple› of ZTM list
+		|€Zt∏› of ZTM list
+		|€Zt › of ZTM * DECOR
+		|€Ztsel› of ZTM * IDENT
+		|€Ztapp› of ZTM * ZTM
+		|€ZtÃ› of ZSCHTEXT * ZTM
+		|€ZtÕ1› of ZSCHTEXT
+		|€ZtÕ2› of ZSCHTEXT * ZTM
+		|€Ztschema› of ZSCHTEXT
+		|€Ztdec› of ZTM * DECOR
+		|€Ztpre› of ZTM
+		|€Zt≥› of ZTM
+		|€Zt±› of ZTM * ZTM
+		|€Zt≤› of ZTM * ZTM
+		|€Zt¥› of ZTM * ZTM
+		|€Zt§› of ZTM * ZTM
+		|€Zt˘› of ZTM * ZTM
+		|€Zthide› of (ZTM * IDENT list)
+		|€Ztµ› of ZSCHTEXT * ZTM
+		|€Zt∂› of ZSCHTEXT * ZTM
+		|€Zt∂â1› of ZSCHTEXT * ZTM
+		|€ZtÑ› of ZTM
+		|€Ztò› of ZTM
+		|€Zttrue›
+		|€Ztfalse›
+		|€Zteq› of ZTM * ZTM
+		|€Ztç› of ZTM * ZTM
+		|€Ztª› of ZTM * ZTM
+		|€Zt˚˝› of ZTM * ZTM
+		|€Ztconstrained› of (ZTM * ZTM)
+		|€Ztlvar› of IDENT*EXTYPE*ZTM list
+		|€Ztgvar› of IDENT*EXTYPE*ZTM list
+=TEX
+=SML
+and €ZDEC›	= €ZdDec› of IDENT list * ZTM
+		|€ZdDecsexp› of ZTM * DECOR
+=TEX
+=SML
+withtype €ZSCHTEXT›	=	ZDEC list * ZTM;
+=TEX
+
+\subsection{Error Handling}
+
+=SML
+datatype €TIERROR_INFO›	= ZError of int;
+type €ERROR_INFO› = TIERROR_INFO;
+=TEX
+
+\section{THE ENVIRONMENT}
+
+=SML
+type €ENV› = IDENT -> (bool * EXTYPE);
+=TEX
+=SML
+local	val table:(IDENT * EXTYPE) list ref = ref [];
+in
+fun €init_env› (genformals : IDENT list) : ENV = (
+let	val dummy = start_again()
+in	(
+	table := (map (fn x => (x,ExType("",[ExVartype(Known("*"^(fst x)))]))) genformals);
+	fn id as (s,d) => (
+	case lassoc5 (!table) id of
+		Nil => (case get_const_info s of
+			Nil =>	(
+				let val x = ExVartype(Unknown(next_name()))
+				in
+					((table := (id,x) :: !table);
+					(false,x))
+				end
+							)
+			| Value(ty,_) => (true,replaced ty))
+		|Value tty => (false,tty))
+		)
+end
+)
+=TEX
+=SML
+and	€env_formals› () : IDENT list =
+let	fun 	f [] = []
+	|	f (h::t) = (
+			case h of 	(x,ExType("",[ExVartype(Known(_))])) => (x::(f t))
+			|		_ => (f t))
+in
+	f (!table)
+end
+=TEX
+=SML
+and	€show_env› () : (IDENT * EXTYPE)list = !table
+end;
+=TEX
+
+\section{GENERICS}
+=SML
+fun 	€setup_generics› (genformals:IDENT list) (compl:IDENT list) (Ztlvar(id,ztml):ZTM) : ZTM = 
+	let	val gfs = map (fn x => Ztlvar(x,[])) genformals
+	in
+		case ztml of [] => (
+			if id mem compl then Ztlvar(id,gfs)
+			else  Ztlvar(id,[]))
+		| _ => scream "setup_generics" "Generic formals may only be explicit in constants"
+	end
+=TEX
+=SML
+|	setup_generics genformals compl (Ztgvar(id,ztml)) = (Ztgvar(id,ztml))
+=TEX
+=SML
+|	setup_generics genformals compl (Ztß¢(ztml)) = 
+		Ztß¢(map (setup_generics genformals compl) ztml)
+=TEX
+=SML
+|	setup_generics genformals compl (Zt˚˝(ztml)) = 
+		Zt˚˝(map (setup_generics genformals compl) ztml)
+=TEX
+=SML
+|	setup_generics genformals compl (Ztsetd(ztml)) = 
+		Ztsetd(map (setup_generics genformals compl) ztml)
+=TEX
+=SML
+|	setup_generics genformals compl (Ztseta1(zdecl,zpred)) = 
+		Ztseta1(zdecl,setup_generics genformals compl zpred)
+=TEX
+=SML
+|	setup_generics genformals compl (Ztseta2((zdecl,zpred),ztm)) = 
+		Ztseta2(	(zdecl,setup_generics genformals compl zpred),
+				setup_generics genformals compl ztm)
+=TEX
+=SML
+|	setup_generics genformals compl (Zt ztm) = 
+		Zt (setup_generics genformals compl ztm)
+=TEX
+=SML
+|	setup_generics genformals compl (Zttuple(ztml)) = 
+		Zttuple(map (setup_generics genformals compl) ztml)
+=TEX
+=SML
+|	setup_generics genformals compl (Zt∏(ztml)) = 
+		Zt∏(map (setup_generics genformals compl) ztml)
+=TEX
+=SML
+|	setup_generics genformals compl (Zt (ztm,d)) = 
+		Zt (setup_generics genformals compl ztm,d)
+=TEX
+=SML
+|	setup_generics genformals compl (Ztsel(ztm,id)) = 
+		Ztsel(setup_generics genformals compl ztm,id)
+=TEX
+=SML
+|	setup_generics genformals compl (Ztapp(ztm1,ztm2)) = 
+		Ztapp(	setup_generics genformals compl ztm1,
+			setup_generics genformals compl ztm2)
+=TEX
+=SML
+|	setup_generics genformals compl (ZtÃ((zdecl,zpred),ztm)) = 
+		ZtÃ(	(zdecl,setup_generics genformals compl zpred),
+			setup_generics genformals compl ztm)
+=TEX
+=SML
+|	setup_generics genformals compl (ZtÕ1(zdecl,zpred)) = 
+		ZtÕ1(zdecl,setup_generics genformals compl zpred)
+=TEX
+=SML
+|	setup_generics genformals compl (ZtÕ2((zdecl,zpred),ztm)) = 
+		ZtÕ2(	(zdecl,setup_generics genformals compl zpred),
+			setup_generics genformals compl ztm)
+=TEX
+=SML
+|	setup_generics genformals compl (Ztschema(zdecl,zpred)) = 
+		Ztschema(zdecl,setup_generics genformals compl zpred)
+=TEX
+=SML
+|	setup_generics genformals compl (Ztdec(ztm,d)) = 
+		Ztdec(setup_generics genformals compl ztm,d)
+=TEX
+=SML
+|	setup_generics genformals compl (Ztpre(ztm)) = 
+		Ztpre(setup_generics genformals compl ztm)
+=TEX
+=SML
+|	setup_generics genformals compl (Zt≥(ztm)) = 
+		Zt≥(setup_generics genformals compl ztm)
+=TEX
+=SML
+|	setup_generics genformals compl (Zt±(ztm1,ztm2)) = 
+		Zt±(	setup_generics genformals compl ztm1,
+			setup_generics genformals compl ztm2)
+=TEX
+=SML
+|	setup_generics genformals compl (Zt≤(ztm1,ztm2)) = 
+		Zt≤(	setup_generics genformals compl ztm1,
+			setup_generics genformals compl ztm2)
+=TEX
+=SML
+|	setup_generics genformals compl (Zt¥(ztm1,ztm2)) = 
+		Zt¥(	setup_generics genformals compl ztm1,
+			setup_generics genformals compl ztm2)
+=TEX
+=SML
+|	setup_generics genformals compl (Zt§(ztm1,ztm2)) = 
+		Zt§(	setup_generics genformals compl ztm1,
+			setup_generics genformals compl ztm2)
+=TEX
+=SML
+|	setup_generics genformals compl (Zt˘(ztm1,ztm2)) = 
+		Zt˘(	setup_generics genformals compl ztm1,
+			setup_generics genformals compl ztm2)
+=TEX
+=SML
+|	setup_generics genformals compl (Zthide(ztm,idl)) = 
+		Zthide(setup_generics genformals compl ztm,idl)
+=TEX
+=SML
+|	setup_generics genformals compl (Zt∂((zdecl,zpred),ztm)) = 
+		Zt∂(	(zdecl,setup_generics genformals compl zpred),
+			setup_generics genformals compl ztm)
+=TEX
+=SML
+|	setup_generics genformals compl (Zt∂â1((zdecl,zpred),ztm)) = 
+		Zt∂â1(	(zdecl,setup_generics genformals compl zpred),
+				setup_generics genformals compl ztm)
+=TEX
+=SML
+|	setup_generics genformals compl (Ztµ((zdecl,zpred),ztm)) = 
+		Ztµ(	(zdecl,setup_generics genformals compl zpred),
+			setup_generics genformals compl ztm)
+=TEX
+=SML
+|	setup_generics genformals compl (ZtÑ(ztm)) = 
+		ZtÑ(setup_generics genformals compl ztm)
+=TEX
+=SML
+|	setup_generics genformals compl (Ztò(ztm)) = 
+		Ztò(setup_generics genformals compl ztm)
+=TEX
+=SML
+|	setup_generics genformals compl (Ztª(ztm1,ztm2)) = 
+		Ztª(	setup_generics genformals compl ztm1,
+			setup_generics genformals compl ztm2)
+=TEX
+=SML
+|	setup_generics genformals compl (Ztconstrained(ztm1,ztm2)) = 
+		Ztconstrained(	setup_generics genformals compl ztm1,
+				setup_generics genformals compl ztm2)
+=TEX
+=SML
+|	setup_generics genformals compl (Zttrue) = Zttrue
+=TEX
+=SML
+|	setup_generics genformals compl (Ztfalse) = Ztfalse
+=TEX
+=SML
+|	setup_generics genformals compl (Zteq(ztm1,ztm2)) = 
+		Zteq(	setup_generics genformals compl ztm1,
+			setup_generics genformals compl ztm2)
+=TEX
+=SML
+|	setup_generics genformals compl (Ztç(ztm1,ztm2)) = 
+		Ztç(	setup_generics genformals compl ztm1,
+			setup_generics genformals compl ztm2)
+;
+=TEX
+\section{TYPE INFERENCE}
+\subsection{Auxiliary Functions}
+=SML
+exception UNIFICATION=Fail;
+datatype Z_UNIF_MSG = ZUmsg of string | ZUtrm of ZTM*SUBS | ZUtyp of EXTYPE*SUBS;
+exception Z_TYPE_INF of Z_UNIF_MSG list;
+
+fun	€z_unify› (msg:Z_UNIF_MSG list) ((tty1,tty2):(EXTYPE * EXTYPE)) : unit = (
+		unify zti_subs (tty1,tty2)
+		handle UNIFICATION _ => (
+			raise Z_TYPE_INF msg
+		)
+	);
+=TEX
+=SML
+fun	€list_z_unify› (msg:Z_UNIF_MSG list) ((tyn,ttyl):EXTYPE * EXTYPE list) : unit = ( 
+	let	fun	f [] = ()
+		|	f (h::t) = ((unify zti_subs(tyn,h)) ; f t)
+	in
+		f ttyl
+	end
+	handle UNIFICATION _ => (
+		raise Z_TYPE_INF msg
+	));
+=TEX
+=SML
+fun	€sub_ty› (env:ENV) : ENV = (
+	fn id =>
+		let	val (flag,tty) = env id
+		in
+			(flag, sub_type zti_subs tty)
+		end
+); 
+=TEX
+=SML
+fun	€get_type› tm = ExVartype(Unknown 1111);
+=TEX
+=SML
+fun €zitymfunseq› (itm:(IDENT * EXTYPE)list) =
+	map (lassoc3 itm) (idsetseq(dom itm));
+fun €bind_ttype› itm = ExType(bind_tname(dom itm),zitymfunseq itm);
+fun €tuple_ttype› ttyl =
+	let	fun 	f n [] = []
+		|	f n (h::t) = ((number n),"") :: (f (n+1) t)
+	in
+		bind_ttype (combine (f 1 ttyl) ttyl)
+	end;
+=TEX
+=SML
+datatype €MANIFEST_EXTYPE› = 	NOT_MANIFEST 
+| 				BINDING_TYPE of string list * EXTYPE list
+|				SCHEMA_TYPE of string list * EXTYPE list;
+fun 	€manifest› (ty:EXTYPE) : MANIFEST_EXTYPE = 
+	case ty of	ExType("",[ExType(s,tyl)]) => (
+			let val ((n,cl),_) = dest_schop_name s
+			in
+				if n = "S_" then SCHEMA_TYPE(cl,tyl) else NOT_MANIFEST
+			end)
+	|		ExType(s,tyl) => (
+			let val ((n,cl),_) = dest_schop_name s
+			in
+				if n = "S_" then BINDING_TYPE(cl,tyl) else NOT_MANIFEST
+			end)
+	|		_ => NOT_MANIFEST;
+=TEX
+=SML
+fun	€chartuple› (zsch:ZSCHTEXT) : ZTM = (
+	let	fun 	f (ZdDec(_,id,_,_)) = Ztlvar(id,[])
+		|	f (ZdDecsexp(ztm,d)) = Zt (ztm,d)
+	in
+		case fst zsch of
+			[] => scream "chartuple" "Empty declaration"
+		|	[dec] => f dec
+		|	decl => Zttuple(map f decl)
+	end);
+=TEX
+=SML
+fun	€make_chartuple› (zsch:ZSCHTEXT) : ZTM = (
+	let	fun 	f (ZdDec(_,id,ztm,_)) = Ztlvar(id,[])
+		|	f (ZdDecsexp(ztm,d)) = Zt (ztm,d)
+	in
+		case fst zsch of
+			[] => scream "make_chartuple" "Design error"
+		|	[dec] => f dec
+		|	decl =>	Zttuple(map f decl)
+	end);
+=TEX
+=SML
+local
+fun	f [] tym1 tym2 = Value []
+|	f (c::cl) tym1 tym2 = (
+		case f cl tym1 tym2 of 
+			Nil => Nil
+		|	Value tym => (
+				case (lassoc5 tym1 c,lassoc5 tym2 c) of
+					(Nil,Value ty) => Value((c,ty)::tym)
+				|	(Value ty,Nil) => Value((c,ty)::tym)
+				|	(Value ty1,Value ty2) => (
+					let	val msg = [ZUmsg "compatible or includes"]
+						val side = z_unify msg (ty1,ty2)
+					in
+						Value((c,ty1)::tym)
+					end
+					handle Z_TYPE_INF _ => Nil)
+				|	_ => Nil
+			)
+	)
+in
+fun	€compatible› ((tty1,tty2):EXTYPE * EXTYPE) : EXTYPE OPT = (
+	case (tty1,tty2) of (ExType(s1,tyl1),ExType(s2,tyl2)) => (
+		case (dest_schop_name s1,dest_schop_name s2) of ((("S_",cl1),[]),(("S_",cl2),[])) => (
+			let 	val cl = cl1 cup cl2
+			in
+				case f cl (combine cl1 tyl1) (combine cl2 tyl2) of
+					Nil => Nil
+				|	Value tym => (
+					let	val idtym = map (fn (s,ty) => (unpack_IDENT s,ty)) tym
+					in
+						Value(bind_ttype idtym)
+					end)
+			end)
+		| _ => Nil)
+	| _ => Nil)
+=TEX
+=SML
+and	€includes› ((tty1,tty2):EXTYPE * EXTYPE) : EXTYPE OPT = (
+	case (tty1,tty2) of (ExType(s1,tyl1),ExType(s2,tyl2)) => (
+		case (dest_schop_name s1,dest_schop_name s2) of ((("S_",cl1),[]),(("S_",cl2),[])) => (
+			if cl1 = (cl1 cup cl2)
+			then
+				case f cl1 (combine cl1 tyl1) (combine cl2 tyl2) of
+					Nil => Nil
+				|	Value tym => (
+					let	val tym' = tym drop (fn (s,_) => s mem cl2)
+						val idtym = map (fn (s,ty) => (unpack_IDENT s,ty)) tym'
+					in
+						Value(bind_ttype idtym)
+					end)
+			else Nil)
+		| _ => Nil)
+	| _ => Nil)
+end;
+=TEX
+\subsection{Processing Of Declarations}
+=SML
+fun	€ti_ZD_aux› (env : ENV) (ZdDec X : ZDEC) :
+	ZDEC * ENV * (IDENT * ZOPCLASS) list =
+		ti_ZdDec env X
+|	ti_ZD_aux env (ZdDecsexp X) = ti_ZdDecsexp env X
+=TEX
+=SML
+and	€list_ti_ZD_aux› (env:ENV) ([]:ZDEC list) : ZDEC list * ENV * (IDENT * ZOPCLASS) list =
+		([],env,[])
+|	list_ti_ZD_aux env (zd::zdl) = (
+	let	val (zd',env',idzopl') = ti_ZD_aux env zd
+		val (zdl'',env'',idzopl'') = list_ti_ZD_aux (sub_ty env') zdl
+	in
+		(zd'::zdl'',sub_ty env'',idzopl' @ idzopl'')
+	end)
+=TEX
+\subsubsection{Variable Declarations}
+=SML
+and	€ti_ZdDec› 	(env:ENV) 
+			((zop,id,ztm,[]):ZOPCLASS * IDENT * ZTM * ZTM list) 
+			: ZDEC * ENV * (IDENT * ZOPCLASS) list = (
+	let	val tsettm = ti_ZT_aux env ztm
+		val setty = sub_type zti_subs (get_type tsettm)
+		val tvn = next_name()
+		val ty = ExVartype(Unknown tvn)
+		val msg = [	ZUmsg ("declaration of " ^ (pack_IDENT id)),
+				ZUtrm(tsettm,zti_subs),
+				ZUmsg "any set",
+				ZUmsg "unify"]
+		val side = z_unify msg (setty,ExType("",[ty]))
+		val idty = apply_subs zti_subs tvn
+		val env' = sub_ty env
+		fun env'' id' = (if id' = id then (false,idty) else env' id')
+	in
+		(ZdDec(zop,id,tsettm,[]),env'',[(id,zop)])
+	end)
+|	ti_ZdDec env (_,id,ztm,ztml) = (
+		raise Z_TYPE_INF [	ZUmsg ("declaration of " ^ (pack_IDENT id)),
+					ZUmsg "generic parameters not expected here"]
+)
+=TEX
+\subsubsection{Schemas as Declarations}
+=SML
+and	€ti_ZdDecsexp› (env:ENV) ((ztm,d):ZTM * DECOR) :
+	ZDEC * ENV * (IDENT * ZOPCLASS) list = (
+	let	val tztm = ti_ZT_aux env ztm
+		val schty = sub_type zti_subs (get_type tztm)
+	in
+		case manifest schty of
+			SCHEMA_TYPE(cl,tyl) => (
+			let	val idl = map (fn s => (s,d)) cl
+				val tymap = combine idl tyl
+				fun env' id = (
+					case lassoc5 tymap id of	Nil => env id
+					|				Value x => (false,x)
+				)
+			in
+				(ZdDecsexp(tztm,d),env',map (fn id => (id,ZNormal)) idl)
+			end)
+		|	_ => raise Z_TYPE_INF [	ZUmsg "declaration",
+						ZUtrm (tztm,zti_subs),
+						ZUmsg "manifest"]
+	end)
+=TEX
+\subsection{Processing of Schema Texts}
+=SML
+and 	€ti_ZS_aux› (env : ENV) (schtext : ZSCHTEXT as (zdecl,ztm))
+		: ZSCHTEXT * ENV * (IDENT * ZOPCLASS) list = (
+	let	val (tzdl,env',idzopl) = list_ti_ZD_aux env zdecl
+		val ttm = ti_ZT_aux (sub_ty env') ztm
+	in
+		((tzdl,ttm),sub_ty env',idzopl)
+	end)
+=TEX
+\subsection{Processing of Terms}
+=SML
+and 	€ti_ZT_aux› (env : ENV) (Ztlvar X) : ZTM = ti_Ztlvar env X
+| 	ti_ZT_aux (env : ENV) (Ztgvar X) : ZTM = ti_Ztgvar env X
+| 	ti_ZT_aux (env : ENV) (Ztß¢ X) : ZTM = ti_Ztß¢ env X
+| 	ti_ZT_aux (env : ENV) (Zt˚˝ X) : ZTM = 
+		scream "ti_ZT_aux" "Bags should be dealt with by the parser"
+| 	ti_ZT_aux (env : ENV) (Ztsetd X) : ZTM = ti_Ztsetd env X
+| 	ti_ZT_aux (env : ENV) (Ztseta1 X) : ZTM = ti_Ztseta1 env X
+| 	ti_ZT_aux (env : ENV) (Ztseta2 X) : ZTM = ti_Ztseta2 env X
+| 	ti_ZT_aux (env : ENV) (Zt X) : ZTM = ti_Zt env X
+| 	ti_ZT_aux (env : ENV) (Zttuple X) : ZTM = ti_Zttuple env X
+| 	ti_ZT_aux (env : ENV) (Zt∏ X) : ZTM = ti_Zt∏ env X
+| 	ti_ZT_aux (env : ENV) (Zt  X) : ZTM = ti_Zt  env X
+| 	ti_ZT_aux (env : ENV) (Ztsel X) : ZTM = ti_Ztsel env X
+| 	ti_ZT_aux (env : ENV) (Ztapp X) : ZTM = ti_Ztapp env X
+| 	ti_ZT_aux (env : ENV) (ZtÃ X) : ZTM = ti_ZtÃ env X
+| 	ti_ZT_aux (env : ENV) (ZtÕ1 X) : ZTM = ti_ZtÕ1 env X
+| 	ti_ZT_aux (env : ENV) (ZtÕ2 X) : ZTM = ti_ZtÕ2 env X
+=TEX
+=SML
+| 	ti_ZT_aux (env : ENV) (Ztschema X) : ZTM = ti_Ztschema env X
+| 	ti_ZT_aux (env : ENV) (Ztdec X) : ZTM = ti_Ztdec env X
+| 	ti_ZT_aux (env : ENV) (Ztpre X) : ZTM = ti_Ztpre env X
+| 	ti_ZT_aux (env : ENV) (Zt≥ X) : ZTM = ti_Zt≥ env X
+| 	ti_ZT_aux (env : ENV) (Zt± X) : ZTM = ti_Zt± env X
+| 	ti_ZT_aux (env : ENV) (Zt≤ X) : ZTM = ti_Zt≤ env X
+| 	ti_ZT_aux (env : ENV) (Zt¥ X) : ZTM = ti_Zt¥ env X
+| 	ti_ZT_aux (env : ENV) (Zt§ X) : ZTM = ti_Zt§ env X
+| 	ti_ZT_aux (env : ENV) (Zt˘ X) : ZTM = ti_Zt˘ env X
+| 	ti_ZT_aux (env : ENV) (Zthide X) : ZTM = ti_Zthide env X
+| 	ti_ZT_aux (env : ENV) (Zt∂ X) : ZTM = ti_Zt∂ env X
+| 	ti_ZT_aux (env : ENV) (Zt∂â1 X) : ZTM = ti_Zt∂â1 env X
+| 	ti_ZT_aux (env : ENV) (Ztµ X) : ZTM = ti_Ztµ env X
+| 	ti_ZT_aux (env : ENV) (ZtÑ X) : ZTM = ti_ZtÑ env X
+| 	ti_ZT_aux (env : ENV) (Ztò X) : ZTM = ti_Ztò env X
+| 	ti_ZT_aux (env : ENV) (Ztª X) : ZTM = ti_Ztª env X
+| 	ti_ZT_aux (env : ENV) (Zttrue) : ZTM = ti_Zttrue env
+| 	ti_ZT_aux (env : ENV) (Ztfalse) : ZTM = ti_Ztfalse env
+| 	ti_ZT_aux (env : ENV) (Zteq X) : ZTM = ti_Zteq env X
+| 	ti_ZT_aux (env : ENV) (Ztç X) : ZTM = ti_Ztç env X
+| 	ti_ZT_aux (env : ENV) (Ztconstrained X) : ZTM = ti_Ztconstrained env X
+=TEX
+=SML
+and	€list_ti_ZT_aux› (env:ENV) ([]:ZTM list) : ZTM list = []
+|	list_ti_ZT_aux env (ztm::ztml) = (
+		let 	val ttml = list_ti_ZT_aux env ztml
+			val ttm = ti_ZT_aux (sub_ty env) ztm
+		in
+			(ttm::ttml)
+		end
+)
+=TEX
+\subsubsection{Variables}
+=SML
+and	€ti_Ztlvar› (env:ENV) (id as (n, d):IDENT, ztml:ZTM list) : ZTM = (
+	let	val (is_con, ty) = env id
+	in
+	if is_con andalso d <> "" andalso (case manifest ty of
+				SCHEMA_TYPE _ => true
+			|	_ => false)
+	then	ti_Ztdec env (Ztlvar((n, ""), ztml), d)
+	else if is_con
+	then  ti_Ztgvar env (id,ztml)
+	else (
+			case ztml of	[] => (
+				Ztlvar(id,[])
+			)|		_ =>
+			let	val ttml = list_ti_ZT_aux env ztml
+				val tyl = map ((sub_type zti_subs) o get_type) ttml
+				val argty = tuple_ttype tyl
+				val tvn = next_name()
+				val resty = ExVartype(Unknown tvn)
+				val msg = [	ZUmsg "generic variable",
+						ZUmsg(pack_IDENT id),
+						ZUmsg "signature and generic actuals cannot be unified"]
+				val side = z_unify msg (ty,Funt argty resty)
+			in
+				Ztlvar(id,ttml)
+			end)
+	end
+)
+=TEX
+\subsubsection{Constants}
+=SML
+and	€ti_Ztgvar› (env:ENV) (id:IDENT, ztml:ZTM list) : ZTM = (
+	case (env id,ztml,id) of 
+		((true,ExType("≠",[domty,ranty])),[],("U","")) => 
+			let	val (bnam,gentyl) = (	case domty of ExType(b,l) => (b,l)
+							| _ => scream "ti_Ztgvar" "Bad generic constant")
+				val ztml' = map (fn x => Ztgvar(("totality",""),[])) gentyl
+			in
+				ti_Ztgvar env (id,ztml')
+			end
+	|	((true,ExType("≠",[domty,ranty])),[],_) => 
+			let	val (bnam,gentyl) = (	case domty of ExType(b,l) => (b,l)
+							| _ => scream "ti_Ztgvar" "Bad generic constant")
+				val ztml' = map (fn x => Ztgvar(("U",""),[])) gentyl
+			in
+				ti_Ztgvar env (id,ztml')
+			end
+	|	((true,ExType("≠",[domty,ranty])),_,_) =>
+			let	val ttml = list_ti_ZT_aux env ztml
+				val tyl = map ((sub_type zti_subs) o get_type) ttml
+				val argty = tuple_ttype tyl
+				val tvn = next_name()
+				val resty = ExVartype(Unknown tvn)
+				val msg = [	ZUmsg ("generic constant "),
+						ZUmsg (	"the previously defined type of " ^ 
+							(pack_IDENT id) ^ 
+							" is a mapping from"),
+						ZUtyp (domty,zti_subs),
+						ZUmsg ("to"),
+						ZUtyp (ranty,zti_subs),
+						ZUmsg ("which cannot be unified with"),
+						ZUtyp (argty,zti_subs),
+						ZUmsg ("to"),
+						ZUtyp (resty,zti_subs)]
+				val side = z_unify msg (Funt domty ranty,Funt argty resty)
+			in
+				Ztgvar(id,ttml)
+			end
+	|	((true,ty),[],_) =>
+			Ztgvar(id,[])
+	|	_ => raise Z_TYPE_INF [	ZUmsg ("constant" ^ (pack_IDENT id))]
+)
+=TEX
+\subsubsection{Sequence Display}\label{Notation}
+=SML
+and	€ti_Ztß¢› (env:ENV) (ztml:ZTM list) = (
+	let	val ttml = list_ti_ZT_aux env ztml
+		val tyl = map get_type ttml
+		val tvn = next_name()
+		val elty = ExVartype(Unknown tvn)
+		val msg = 	[ZUmsg "sequence display"] @
+				(map (fn t => ZUtrm(t,zti_subs)) ttml) @
+				[ZUmsg "unify"]
+		val side = list_z_unify msg (elty,tyl)
+	in
+		Ztß¢ ttml
+	end
+)
+=TEX
+\subsubsection{Set Display}
+=SML
+and	€ti_Ztsetd› (env:ENV) (ztml:ZTM list) = (
+	let	val ttml = list_ti_ZT_aux env ztml
+		val tyl = map get_type ttml
+		val tvn = next_name()
+		val elty = ExVartype(Unknown tvn)
+		val msg = 	[ZUmsg "set display"] @
+				(map (fn t => ZUtrm(t,zti_subs)) ttml) @
+				[ZUmsg "unify"]
+		val side = list_z_unify msg (elty,tyl)
+	in
+		Ztsetd ttml
+	end
+)
+=TEX
+\subsubsection{Set Abstraction}
+=SML
+and	€ti_Ztseta1› (env:ENV) ((zschtext):ZSCHTEXT) : ZTM = (
+	let	val ztm = chartuple zschtext
+		val (tsch,env',_) = ti_ZS_aux env zschtext
+		val ttm = ti_ZT_aux (sub_ty env') ztm
+	in
+		Ztseta1(tsch)
+	end)
+=TEX
+=SML
+and	€ti_Ztseta2› (env:ENV) ((zschtext,ztm):ZSCHTEXT * ZTM) : ZTM = (
+	let	val (tsch,env',_) = ti_ZS_aux env zschtext
+		val ttm = ti_ZT_aux (sub_ty env') ztm
+	in
+		Ztseta2(tsch,ttm)
+	end)
+=TEX
+\subsubsection{Powerset}
+=SML
+and	€ti_Zt› (env:ENV) (ztm:ZTM) : ZTM = (
+	let	val ttm = ti_ZT_aux env ztm
+	in
+		Zt ttm
+	end)
+=TEX
+\subsubsection{Tuple Display}
+=SML
+and	€ti_Zttuple› (env:ENV) ([]:ZTM list) = scream "ZParser" "DESIGN ERROR - Zero length tuple"
+|	ti_Zttuple env [ztm] = scream "ZParser" "DESIGN ERROR - Unit length tuple"
+|	ti_Zttuple env (ztml) = (
+	let	val ttml = list_ti_ZT_aux env ztml
+		val tvnl = map (fn x => next_name()) ztml
+		val eltyl = map (ExVartype o Unknown) tvnl
+		val tyl = map get_type ttml
+		val msg = 	[ZUmsg "tuple display"] @
+				(map (fn t => ZUtrm(t,zti_subs)) ttml) @
+				[ZUmsg "unify"]
+		val side = map (z_unify msg) (combine eltyl tyl)
+	in
+		Zttuple ttml
+	end
+)
+=TEX
+\subsubsection{Product}
+=SML
+and	€ti_Zt∏› (env:ENV) ([]:ZTM list) = scream "ZParser" "DESIGN ERROR - Zero length product"
+|	ti_Zt∏ env [ztm] = scream "ZParser" "DESIGN ERROR - Unit length product"
+|	ti_Zt∏ env (ztml) = (
+	let	val ttml = list_ti_ZT_aux env ztml
+		val tvnl = map (fn x => next_name()) ztml
+		val eltyl = map (fn x => ExType("",[x]))(map (ExVartype o Unknown) tvnl)
+		val tyl = map get_type ttml
+		val msg = 	[ZUmsg "∏"] @
+				(map (fn t => ZUtrm(t,zti_subs)) ttml) @
+				[ZUmsg "unify"]
+		val side = map (z_unify msg) (combine eltyl tyl)
+	in
+		Zt∏ ttml
+	end
+)
+=TEX
+\subsubsection{Theta}
+=SML
+and	€ti_Zt › (env:ENV) ((ztm,decor):ZTM * DECOR) : ZTM = (
+	let	val tztm = ti_ZT_aux env ztm
+		val ty = sub_type zti_subs (get_type tztm)
+	in
+		case manifest ty of
+			SCHEMA_TYPE _ => Zt (tztm,decor)
+		|	_ => raise Z_TYPE_INF [	ZUmsg " ",
+						ZUtrm (tztm,zti_subs),
+						ZUmsg "manifest"]
+	end)
+=TEX
+\subsubsection{Selection}
+=SML
+and	€ti_Ztsel› (env:ENV) ((ztm,id):ZTM * IDENT) : ZTM = (
+	let	val tztm = ti_ZT_aux env ztm
+		val ty = sub_type zti_subs (get_type tztm)
+	in
+		case manifest ty of
+			BINDING_TYPE(cl,tyl) => (
+			let	val tym = combine (map unpack_IDENT cl) tyl
+			in
+				case lassoc5 tym id of
+					Nil => raise Z_TYPE_INF [	ZUmsg "selection",
+									ZUtrm (tztm,zti_subs),
+									ZUmsg("does not contain " ^
+										(pack_IDENT id))]
+				|	Value ty' =>
+						Ztsel(tztm,id)
+			end)
+		|	_ => raise Z_TYPE_INF [	ZUmsg "selection",
+						ZUtrm (tztm,zti_subs),
+						ZUmsg "manifest"]
+	end)
+=TEX
+\subsubsection{Application}
+=SML
+and	€ti_Ztapp› (env:ENV) ((tmf,tma):ZTM * ZTM) : ZTM = (
+	let	val gen_args = ( 
+			case tmf of Ztlvar(id as (s,d),_) =>(
+				case get_fixity s of
+					Lex.Infix ~3 => 2
+				|	Lex.Infix ~5 => 1
+				|	_ => 0)
+			| _ => 0)
+	in
+		case gen_args of 
+			0 => (
+		let	val ttmf = ti_ZT_aux env tmf
+			val ttma = ti_ZT_aux (sub_ty env) tma
+			val tyf = sub_type zti_subs (get_type ttmf)
+			val tya = sub_type zti_subs (get_type ttma)
+			val tvn = next_name()
+			val tyr = ExVartype(Unknown tvn)
+			val msg = []
+			val side = z_unify msg (tyf,ExType("",[tuple_ttype([tya,tyr])]))
+		in
+			case ttmf of Ztgvar(id as (s,d),tml) => (
+				case get_fixity s of 
+					Lex.Infix ~2 => raise Z_TYPE_INF []
+				|	_ => Ztapp(ttmf,ttma)
+			)
+			| _ => Ztapp(ttmf,ttma)
+		end
+=TEX
+=SML
+		handle Z_TYPE_INF _ => (
+		let	val ttmf = ti_ZT_aux env tmf
+			val ttma = ti_ZT_aux (sub_ty env) tma
+			val tyf = sub_type zti_subs (get_type ttmf)
+			val tya = get_type ttma
+			val tyr = ExType("bool",[])
+			val msg = [	ZUmsg "function application",
+					ZUtrm(ttmf,zti_subs),
+					ZUtrm(ttma,zti_subs),
+					ZUmsg "unify"]
+			val side = z_unify msg (tyf,ExType("",[tya]))
+		in
+			Ztapp(ttmf,ttma)
+		end))
+		|	1 => (
+		let	val tmf' = (	case (tmf,tma) of (Ztlvar(s,_),_) =>
+						Ztlvar(s,[tma])
+					| _ => scream "ti_Ztapp" "This should be impossible")
+			val ttma = ti_ZT_aux env tma
+			val ttmf = ti_ZT_aux (sub_ty env) tmf'
+		in
+			ttmf
+		end)
+		|	_ => (
+		let	val tmf' = (	case (tmf,tma) of (Ztlvar(s,_),Zttuple tml) =>
+						Ztlvar(s,tml)
+					| _ => scream "ti_Ztapp" "This should be impossible")
+			val ttma = ti_ZT_aux env tma
+			val ttmf = ti_ZT_aux (sub_ty env) tmf'
+		in
+			ttmf
+		end)
+	end)
+=TEX
+\subsubsection{$\lambda$-abstraction}
+=SML
+and	€ti_ZtÃ› (env:ENV) ((zsch,ztm):ZSCHTEXT * ZTM) : ZTM = (
+	let	val ctpl = chartuple zsch
+		val (tzsch,env',_) = ti_ZS_aux env zsch
+		val tztm = ti_ZT_aux (sub_ty env') ztm
+		val tpltm = ti_ZT_aux (sub_ty env') ctpl
+	in
+		ZtÃ(tzsch,tztm)
+	end)
+=TEX
+\subsubsection{Definite Description}
+=SML
+and	€ti_ZtÕ1› (env:ENV) (zschtext:ZSCHTEXT) : ZTM = (
+	let	val ztm = chartuple zschtext
+		val (tsch,env',_) = ti_ZS_aux env zschtext
+		val ttm = ti_ZT_aux (sub_ty env') ztm
+	in
+		ZtÕ1 tsch
+	end)
+=TEX
+=SML
+and	€ti_ZtÕ2› (env:ENV) ((zschtext,ztm):ZSCHTEXT * ZTM) : ZTM = (
+	let	val (tsch,env',_) = ti_ZS_aux env zschtext
+		val ttm = ti_ZT_aux (sub_ty env') ztm
+	in
+		ZtÕ2(tsch,ttm)
+	end)
+=TEX
+\subsection{Schema Text as a Term}
+=SML
+and	€ti_Ztschema› (env:ENV) (zsch:ZSCHTEXT) : ZTM = (
+	let	val ((decl,ztm),_,_) = ti_ZS_aux env zsch
+	in
+		Ztschema(decl,ztm)
+	end)
+=TEX
+\subsubsection{Decoration}
+=SML
+and	€ti_Ztdec› (env:ENV) (ztm:ZTM,d:DECOR) : ZTM = (
+	let	val ttm = ti_ZT_aux env ztm
+		val ty = sub_type zti_subs (get_type ttm)
+	in
+		case manifest ty of
+			SCHEMA_TYPE(cl,ttyl) => Ztdec(ttm,d)
+		| _ => raise Z_TYPE_INF [	ZUmsg "schema decoration",
+						ZUtrm (ttm,zti_subs),
+						ZUmsg "manifest"]
+	end)
+=TEX
+\subsubsection{Precondition}
+=SML
+and	€ti_Ztpre› (env:ENV) (ztm:ZTM) : ZTM = (
+	let	val ttm = ti_ZT_aux env ztm
+		val ty = sub_type zti_subs (get_type ttm)
+	in
+		case manifest ty of
+			SCHEMA_TYPE(cl,ttyl) => (
+			let	val cmap = (combine cl ttyl) drop (fn(c,tty) => (
+					(hd(rev(explode c)) = "'") orelse
+					(hd(rev(explode c)) = "!")))
+			in
+				Ztpre ttm
+			end)
+		| _ => raise Z_TYPE_INF [	ZUmsg "pre",
+						ZUtrm (ttm,zti_subs),
+						ZUmsg "manifest"]
+	end)
+=TEX
+\subsubsection{Negation}
+=SML
+and	€ti_Zt≥› (env:ENV) (ztm:ZTM) : ZTM = (
+	let	val tztm = ti_ZT_aux env ztm
+		val tty = sub_type zti_subs (get_type tztm)
+		val side = (	case manifest tty of
+					SCHEMA_TYPE _ 	=> ()
+				| 	_ 		=> (
+					let	val msg = [	ZUmsg "≥" ,
+								ZUtrm (tztm,zti_subs),
+								ZUmsg "bool",
+								ZUmsg "unify"]
+					in
+						z_unify msg (tty,ExType("bool",[]))
+					end)
+		)
+	in
+		Zt≥ tztm
+	end)
+=TEX
+\subsubsection{Propositional Calculus}
+=SML
+and	€ti_Zt±› (env:ENV) ((ztm1,ztm2):ZTM * ZTM) : ZTM = (
+	let	val ttm1 = ti_ZT_aux env ztm1
+		val ttm2 = ti_ZT_aux (sub_ty env) ztm2
+		val tty1 = sub_type zti_subs (get_type ttm1)
+		val tty2 = sub_type zti_subs (get_type ttm2)
+	in
+		case (manifest tty1,manifest tty2) of
+			(SCHEMA_TYPE _, SCHEMA_TYPE _) => (
+			let	val bty1 = (	case tty1 of ExType("",[ty]) => ty
+						| _ => scream "ti_Zt±" "Design error")
+				val bty2 = (	case tty2 of ExType("",[ty]) => ty
+						| _ => scream "ti_Zt±" "Design error")
+			in
+				case compatible (bty1,bty2) of
+					Nil => raise Z_TYPE_INF [	ZUmsg "±",
+									ZUtrm(ttm1,zti_subs),
+									ZUtrm(ttm2,zti_subs),
+									ZUmsg "compatible"]
+				|	Value tty => Zt±(ttm1,ttm2)
+			end
+			handle Z_TYPE_INF _ => (
+				raise Z_TYPE_INF [	ZUmsg "±",
+							ZUtrm(ttm1,zti_subs),
+							ZUtrm(ttm2,zti_subs),
+							ZUmsg "unify"]
+			))
+		|	(SCHEMA_TYPE _,_) => (
+			let	val msg = [	ZUmsg "±",
+						ZUtrm(ttm2,zti_subs),
+						ZUmsg "bool",
+						ZUmsg "unify"]
+				val side = z_unify msg (tty2,ExType("bool",[]))
+			in
+				Zt±(ttm1,ttm2)
+			end)
+=TEX
+=SML
+		|	(_,SCHEMA_TYPE _) => (
+			let	val msg = [	ZUmsg "±",
+						ZUtrm(ttm1,zti_subs),
+						ZUmsg "bool",
+						ZUmsg "unify"]
+				val side = z_unify msg (tty1,ExType("bool",[]))
+			in
+				Zt±(ttm1,ttm2)
+			end)
+		|	_ => (
+			let	val msg = [	ZUmsg "±",
+						ZUtrm(ttm1,zti_subs),
+						ZUmsg "bool",
+						ZUmsg "unify"]
+				val side = z_unify msg (tty1,ExType("bool",[]))
+				val msg = [	ZUmsg "±",
+						ZUtrm(ttm2,zti_subs),
+						ZUmsg "bool",
+						ZUmsg "unify"]
+				val side = z_unify msg (tty2,ExType("bool",[]))
+			in
+				Zt±(ttm1,ttm2)
+			end)
+	end)
+=TEX
+=SML
+and	€ti_Zt≤› (env:ENV) ((ztm1,ztm2):ZTM * ZTM) : ZTM = (
+	let	val ttm1 = ti_ZT_aux env ztm1
+		val ttm2 = ti_ZT_aux (sub_ty env) ztm2
+		val tty1 = sub_type zti_subs (get_type ttm1)
+		val tty2 = sub_type zti_subs (get_type ttm2)
+	in
+		case (manifest tty1,manifest tty2) of
+			(SCHEMA_TYPE _, SCHEMA_TYPE _) => (
+			let	val bty1 = (	case tty1 of ExType("",[ty]) => ty
+						| _ => scream "ti_Zt≤" "Design error")
+				val bty2 = (	case tty2 of ExType("",[ty]) => ty
+						| _ => scream "ti_Zt≤" "Design error")
+			in
+				case compatible (bty1,bty2) of
+					Nil => raise Z_TYPE_INF [	ZUmsg "≤",
+									ZUtrm (ttm1,zti_subs),
+									ZUtrm (ttm2,zti_subs),
+									ZUmsg "compatible"]
+				|	Value tty => Zt≤(ttm1,ttm2)
+			end
+=TEX
+=SML
+			handle Z_TYPE_INF _ => (
+				raise Z_TYPE_INF [	ZUmsg "≤",
+							ZUtrm (ttm1,zti_subs),
+							ZUtrm (ttm2,zti_subs),
+							ZUmsg "unify"]
+			))
+		|	(SCHEMA_TYPE _,_) => (
+			let	val msg = [	ZUmsg "≤",
+						ZUtrm (ttm2,zti_subs),
+						ZUmsg "bool",
+						ZUmsg "unify"]
+				val side = z_unify msg (tty2,ExType("bool",[]))
+			in
+				Zt≤(ttm1,ttm2)
+			end)
+		|	(_,SCHEMA_TYPE _) => (
+			let	val msg = [	ZUmsg "≤",
+						ZUtrm (ttm1,zti_subs),
+						ZUmsg "bool",
+						ZUmsg "unify"]
+				val side = z_unify msg (tty1,ExType("bool",[]))
+			in
+				Zt≤(ttm1,ttm2)
+			end)
+=TEX
+=SML
+		|	_ => (
+			let	val msg = [	ZUmsg "≤",
+						ZUtrm (ttm1,zti_subs),
+						ZUmsg "bool",
+						ZUmsg "unify"]
+				val side = z_unify msg (tty1,ExType("bool",[]))
+				val msg = [	ZUmsg "≤",
+						ZUtrm (ttm2,zti_subs),
+						ZUmsg "bool",
+						ZUmsg "unify"]
+				val side = z_unify msg (tty2,ExType("bool",[]))
+			in
+				Zt≤(ttm1,ttm2)
+			end)
+	end)
+=TEX
+=SML
+and	€ti_Zt¥› (env:ENV) ((ztm1,ztm2):ZTM * ZTM) : ZTM = (
+	let	val ttm1 = ti_ZT_aux env ztm1
+		val ttm2 = ti_ZT_aux (sub_ty env) ztm2
+		val tty1 = sub_type zti_subs (get_type ttm1)
+		val tty2 = sub_type zti_subs (get_type ttm2)
+	in
+		case (manifest tty1,manifest tty2) of
+			(SCHEMA_TYPE _, SCHEMA_TYPE _) => (
+			let	val bty1 = (	case tty1 of ExType("",[ty]) => ty
+						| _ => scream "ti_Zt¥" "Design error")
+				val bty2 = (	case tty2 of ExType("",[ty]) => ty
+						| _ => scream "ti_Zt¥" "Design error")
+			in
+				case compatible (bty1,bty2) of
+					Nil => raise Z_TYPE_INF [	ZUmsg "¥",
+									ZUtrm (ttm1,zti_subs),
+									ZUtrm (ttm2,zti_subs),
+									ZUmsg "compatible"]
+				|	Value tty => Zt¥(ttm1,ttm2)
+			end
+=TEX
+=SML
+			handle Z_TYPE_INF _ => (
+				raise Z_TYPE_INF [	ZUmsg "¥",
+							ZUtrm (ttm1,zti_subs),
+							ZUtrm (ttm2,zti_subs),
+							ZUmsg "unify"]
+			))
+		|	(SCHEMA_TYPE _,_) => (
+			let	val msg = [	ZUmsg "¥",
+						ZUtrm (ttm2,zti_subs),
+						ZUmsg "bool",
+						ZUmsg "unify"]
+				val side = z_unify msg (tty2,ExType("bool",[]))
+			in
+				Zt¥(ttm1,ttm2)
+			end)
+		|	(_,SCHEMA_TYPE _) => (
+			let	val msg = [	ZUmsg "¥",
+						ZUtrm (ttm1,zti_subs),
+						ZUmsg "bool",
+						ZUmsg "unify"]
+				val side = z_unify msg (tty1,ExType("bool",[]))
+			in
+				Zt¥(ttm1,ttm2)
+			end)
+=TEX
+=SML
+		|	_ => (
+			let	val msg = [	ZUmsg "¥",
+						ZUtrm (ttm1,zti_subs),
+						ZUmsg "bool",
+						ZUmsg "unify"]
+				val side = z_unify msg (tty1,ExType("bool",[]))
+				val msg = [	ZUmsg "¥",
+						ZUtrm (ttm2,zti_subs),
+						ZUmsg "bool",
+						ZUmsg "unify"]
+				val side = z_unify msg (tty2,ExType("bool",[]))
+			in
+				Zt¥(ttm1,ttm2)
+			end)
+	end)
+=TEX
+=SML
+and	€ti_Zt§› (env:ENV) ((ztm1,ztm2):ZTM * ZTM) : ZTM = (
+	let	val ttm1 = ti_ZT_aux env ztm1
+		val ttm2 = ti_ZT_aux (sub_ty env) ztm2
+		val tty1 = sub_type zti_subs (get_type ttm1)
+		val tty2 = sub_type zti_subs (get_type ttm2)
+	in
+		case (manifest tty1,manifest tty2) of
+			(SCHEMA_TYPE _, SCHEMA_TYPE _) => (
+			let	val bty1 = (	case tty1 of ExType("",[ty]) => ty
+						| _ => scream "ti_Zt§" "Design error")
+				val bty2 = (	case tty2 of ExType("",[ty]) => ty
+						| _ => scream "ti_Zt§" "Design error")
+			in
+				case compatible (bty1,bty2) of
+					Nil => raise Z_TYPE_INF [	ZUmsg "§",
+									ZUtrm (ttm1,zti_subs),
+									ZUtrm (ttm2,zti_subs),
+									ZUmsg "compatible"]
+				|	Value tty => Zt§(ttm1,ttm2)
+			end
+=TEX
+=SML
+			handle Z_TYPE_INF _ => (
+				raise Z_TYPE_INF [	ZUmsg "§",
+							ZUtrm (ttm1,zti_subs),
+							ZUtrm (ttm2,zti_subs),
+							ZUmsg "unify"]
+			))
+		|	(SCHEMA_TYPE _,_) => (
+			let	val msg = [	ZUmsg "§",
+						ZUtrm (ttm2,zti_subs),
+						ZUmsg "bool",
+						ZUmsg "unify"]
+				val side = z_unify msg (tty2,ExType("bool",[]))
+			in
+				Zt§(ttm1,ttm2)
+			end)
+		|	(_,SCHEMA_TYPE _) => (
+			let	val msg = [	ZUmsg "§",
+						ZUtrm (ttm1,zti_subs),
+						ZUmsg "bool",
+						ZUmsg "unify"]
+				val side = z_unify msg (tty1,ExType("bool",[]))
+			in
+				Zt§(ttm1,ttm2)
+			end)
+=TEX
+=SML
+		|	_ => (
+			let	val msg = [	ZUmsg "§",
+						ZUtrm (ttm1,zti_subs),
+						ZUmsg "bool",
+						ZUmsg "unify"]
+				val side = z_unify msg (tty1,ExType("bool",[]))
+				val msg = [	ZUmsg "§",
+						ZUtrm (ttm2,zti_subs),
+						ZUmsg "bool",
+						ZUmsg "unify"]
+				val side = z_unify msg (tty2,ExType("bool",[]))
+			in
+				Zt§(ttm1,ttm2)
+			end)
+	end)
+=TEX
+\subsubsection{Projection}
+=SML
+and	€ti_Zt˘› (env:ENV) (ztm1:ZTM,ztm2:ZTM) : ZTM = (
+	let	val ttm1 = ti_ZT_aux env ztm1
+		val ttm2 = ti_ZT_aux (sub_ty env) ztm2
+		val ty1 = sub_type zti_subs (get_type ttm1)
+		val ty2 = sub_type zti_subs (get_type ttm2)
+	in
+	case (manifest ty1,manifest ty2) of
+		(SCHEMA_TYPE(cl1,ttyl1),SCHEMA_TYPE(cl2,ttyl2)) => (
+			let	val idl1 = map (fn s => (s,"")) cl1
+				val idl2 = map (fn s => (s,"")) cl2
+				val bty1 = bind_ttype(combine idl1 ttyl1)
+				val bty2 = bind_ttype(combine idl2 ttyl2)
+			in
+				case compatible (bty1,bty2) of
+					Value ty =>
+						Zt˘(ttm1,ttm2)
+				| _ => raise Z_TYPE_INF [	ZUmsg "˘",
+								ZUtrm (ttm1,zti_subs),
+								ZUtrm (ttm2,zti_subs),
+								ZUmsg "compatible"]
+			end
+=TEX
+=SML
+			handle Z_TYPE_INF _ => (
+				raise Z_TYPE_INF [	ZUmsg "˘",
+							ZUtrm (ttm1,zti_subs),
+							ZUtrm (ttm2,zti_subs),
+							ZUmsg "unify"]
+			))
+		| _ => raise Z_TYPE_INF [	ZUmsg "˘",
+						ZUtrm (ttm1,zti_subs),
+						ZUtrm (ttm2,zti_subs),
+						ZUmsg "manifest"]
+	end)
+=TEX
+\subsubsection{Hiding}
+=SML
+and	€ti_Zthide› (env:ENV) (ztm:ZTM,idl:IDENT list) : ZTM = (
+	let	val ttm = ti_ZT_aux env ztm
+		val ty = sub_type zti_subs (get_type ttm)
+	in
+		case manifest ty of
+			SCHEMA_TYPE(cl,ttyl) => (
+			let	val cl' = map (fn s => (s,"")) cl
+				val idm = (combine cl' ttyl) drop (fn(c,ty) => (c mem idl))
+			in
+				Zthide(ttm,idl)
+			end)
+		| _ => raise Z_TYPE_INF [	ZUmsg "\",
+						ZUtrm (ttm,zti_subs),
+						ZUmsg "manifest"]
+	end)
+=TEX
+\subsubsection{Quantification}
+=SML
+and	€ti_Zt∂› (env:ENV) ((zsch,ztm):ZSCHTEXT * ZTM) : ZTM = (
+	let	val (tsch,env',_) = ti_ZS_aux env zsch
+		val ttm = ti_ZT_aux (sub_ty env') ztm
+	in
+		case sub_type zti_subs (get_type ttm) of
+			ExType("bool",[]) => (
+				Zt∂(tsch,ttm)			)
+		|	_ => (
+			let	val tschtm = ti_ZT_aux (sub_ty env') (Ztschema tsch)
+				val ty1 = (	case sub_type zti_subs (get_type ttm) of 
+							ExType("",[ty]) => ty
+						| _ => raise Z_TYPE_INF [	ZUmsg "∂",
+										ZUtrm (tschtm,zti_subs),
+										ZUmsg "not bool or schema"])
+				val ty2 = (	case sub_type zti_subs (get_type tschtm) of 
+							ExType("",[ty]) => ty
+						| _ => raise Z_TYPE_INF [	ZUmsg "∂",
+										ZUtrm (tschtm,zti_subs),
+										ZUmsg "not schema text"])
+			in
+				case includes (ty1,ty2) of
+					Nil => raise Z_TYPE_INF [	ZUmsg "∂",
+									ZUtrm (tschtm,zti_subs),
+									ZUtrm (ttm,zti_subs),
+									ZUmsg "bound variable not in schema"]
+				|	Value tty => 
+						Zt∂(tsch,ttm)
+			end)
+	end)
+=TEX
+=SML
+and	€ti_Zt∂â1› (env:ENV) ((zsch,ztm):ZSCHTEXT * ZTM) : ZTM = (
+	let	val (tsch,env',_) = ti_ZS_aux env zsch
+		val ttm = ti_ZT_aux (sub_ty env') ztm
+	in
+		case sub_type zti_subs (get_type ttm) of
+			ExType("bool",[]) => (
+				Zt∂â1(tsch,ttm)			)
+		|	_ => (
+			let	val tschtm = ti_ZT_aux (sub_ty env') (Ztschema tsch)
+				val ty1 = (	case sub_type zti_subs (get_type ttm) of 
+							ExType("",[ty]) => ty
+						| _ => raise Z_TYPE_INF [	ZUmsg "∂â1",
+										ZUtrm (tschtm,zti_subs),
+										ZUmsg "not bool or schema"])
+				val ty2 = (	case sub_type zti_subs (get_type tschtm) of 
+							ExType("",[ty]) => ty
+						| _ => raise Z_TYPE_INF [	ZUmsg "∂â1",
+										ZUtrm (tschtm,zti_subs),
+										ZUmsg "not schema text"])
+			in
+				case includes (ty1,ty2) of
+					Nil => raise Z_TYPE_INF [	ZUmsg "∂â1",
+									ZUtrm (tschtm,zti_subs),
+									ZUtrm (ttm,zti_subs),
+									ZUmsg "bound variable not in schema"]
+				|	Value tty => 
+						Zt∂â1(tsch,ttm)
+			end)
+	end)
+=TEX
+=SML
+and	€ti_Ztµ› (env:ENV) ((zsch,ztm):ZSCHTEXT * ZTM) : ZTM = (
+	let	val (tsch,env',_) = ti_ZS_aux env zsch
+		val ttm = ti_ZT_aux (sub_ty env') ztm
+	in
+		case sub_type zti_subs (get_type ttm) of
+			ExType("bool",[]) => (
+				Ztµ(tsch,ttm)			)
+		|	_ => (
+			let	val tschtm = ti_ZT_aux (sub_ty env') (Ztschema tsch)
+				val ty1 = (	case sub_type zti_subs (get_type ttm) of 
+							ExType("",[ty]) => ty
+						| _ => raise Z_TYPE_INF [	ZUmsg "µ",
+										ZUtrm (tschtm,zti_subs),
+										ZUmsg "not bool or schema"])
+				val ty2 = (	case sub_type zti_subs (get_type tschtm) of 
+							ExType("",[ty]) => ty
+						| _ => raise Z_TYPE_INF [	ZUmsg "µ",
+										ZUtrm (tschtm,zti_subs),
+										ZUmsg "not schema text"])
+			in
+				case includes  (ty1,ty2) of
+					Nil => raise Z_TYPE_INF [	ZUmsg "µ",
+									ZUtrm (tschtm,zti_subs),
+									ZUtrm (ttm,zti_subs),
+									ZUmsg "bound variable not in schema"]
+				|	Value tty => 
+						Ztµ(tsch,ttm)
+			end)
+	end)
+=TEX
+\subsubsection{Ñ and ò}
+=SML
+and	€ti_ZtÑ› (env:ENV) (ztm:ZTM) : ZTM =
+	let	val ttm = ti_ZT_aux env ztm
+		val tty = sub_type zti_subs (get_type ttm)
+	in
+		case manifest tty of
+			SCHEMA_TYPE(compl,tyl) => ZtÑ ttm
+		|	_ => raise Z_TYPE_INF [	ZUmsg "Ñ", ZUtrm (ttm,zti_subs), ZUmsg "manifest"]
+	end
+=TEX
+=SML
+and	€ti_Ztò› (env:ENV) (ztm:ZTM) : ZTM =
+	let	val ttm = ti_ZT_aux env ztm
+		val tty = sub_type zti_subs (get_type ttm)
+	in
+		case manifest tty of
+			SCHEMA_TYPE(compl,tyl) => Ztò ttm
+		|	_ => raise Z_TYPE_INF [	ZUmsg "ò", ZUtrm (ttm,zti_subs), ZUmsg "manifest"]
+	end
+=TEX
+\subsubsection{Schema Composition}
+=SML
+and	€ti_Ztª› (env:ENV) (ztm1:ZTM,ztm2:ZTM) : ZTM = (
+	let	fun	f msg [] [] _ = []
+		|	f msg [] (h::t) tym1 = (
+				case h of ((s,""),ty2) => (
+					case lassoc5 tym1 (s,"'") of
+						Value ty1 => (
+						let	val dl = f msg [] t tym1
+							val side = z_unify msg (ty1,ty2)
+						in
+							dl
+						end)
+					|	Nil => raise Z_TYPE_INF msg)
+				| _ => f msg [] t tym1)
+		|	f msg (h::t) tym2 tym1 = (
+				case h of ((s,"'"),ty1) => (
+					case lassoc5 tym2 (s,"") of
+						Value ty2 => (
+						let	val dl = f msg t tym2 tym1
+							val side = z_unify msg (ty1,ty2)
+						in
+							(s,"")::dl
+						end)
+					|	Nil => raise Z_TYPE_INF msg)
+				| _ => f msg t tym2 tym1)
+		val ttm1 = ti_ZT_aux env ztm1
+		val ttm2 = ti_ZT_aux (sub_ty env) ztm2
+		val tty1 = sub_type zti_subs (get_type ttm1)
+		val tty2 = sub_type zti_subs (get_type ttm2)
+=TEX
+=SML
+	in
+		case (manifest tty1,manifest tty2) of
+			(SCHEMA_TYPE(cl1,tyl1),SCHEMA_TYPE(cl2,tyl2)) => (
+			let	val idl1 = map unpack_IDENT cl1
+				val idl2 = map unpack_IDENT cl2
+				val idtym1 = combine idl1 tyl1
+				val idtym2 = combine idl2 tyl2
+				val msg = [	ZUmsg "ª",
+						ZUtrm (ttm1,zti_subs), ZUtrm (ttm2,zti_subs),
+						ZUmsg "compatible"]
+				val dropl = f msg idtym1 idtym2 idtym1
+				val idtym1' = idtym1 drop (fn ((s,d),ty) => (d = "'") andalso (s,"") mem dropl)
+				val idtym2' = idtym2 drop (fn ((s,d),ty) => (d = "") andalso (s,"") mem dropl)
+				val idtym = idtym1' cup idtym2'
+			in
+				Ztª(ttm1,ttm2)
+			end)
+		| _ => raise Z_TYPE_INF [	ZUmsg "ª",
+						ZUtrm (ttm1,zti_subs), ZUtrm (ttm2,zti_subs),
+						ZUmsg "manifest"]
+	end)
+=TEX
+\subsubsection{Predicates}
+=SML
+and	€ti_Zttrue› (env:ENV) : ZTM = Zttrue
+and	€ti_Ztfalse› (env:ENV) : ZTM = Ztfalse
+and	€ti_Zteq› (env:ENV) (ztm1:ZTM, ztm2:ZTM) : ZTM = (
+	let	val ttm1 = ti_ZT_aux env ztm1
+		val ttm2 = ti_ZT_aux (sub_ty env) ztm2
+		val ty1 = sub_type zti_subs (get_type ttm1)
+		val ty2 = sub_type zti_subs (get_type ttm2)
+		val msg = [ZUmsg "=",ZUtrm (ttm1,zti_subs),ZUtrm (ttm2,zti_subs),ZUmsg "unify"]
+		val side = z_unify msg (ty1,ty2)
+	in
+		Zteq(ttm1,ttm2)
+	end
+)
+and	€ti_Ztç› (env:ENV) (ztm1:ZTM, ztm2:ZTM) : ZTM = (
+	let	val ttm1 = ti_ZT_aux env ztm1
+		val ttm2 = ti_ZT_aux (sub_ty env) ztm2
+		val ty1 = sub_type zti_subs (get_type ttm1)
+		val ty2 = sub_type zti_subs (get_type ttm2)
+		val msg = [ZUmsg "ç",ZUtrm (ttm1,zti_subs),ZUtrm (ttm2,zti_subs),ZUmsg "unify"]
+		val side = z_unify msg (ExType("",[ty1]),ty2)
+	in
+		Ztç(ttm1,ttm2)
+	end
+)
+=TEX
+\subsubsection{Type Constraints}
+=SML
+and	€ti_Ztconstrained› (env:ENV) ((ztm1,ztm2):ZTM * ZTM) : ZTM = (
+	let	val ttm1 = ti_ZT_aux env ztm1
+		val ttm2 = ti_ZT_aux (sub_ty env) ztm2
+		val ty1 = sub_type zti_subs (get_type ttm1)
+		val ty2 = sub_type zti_subs (get_type ttm2)
+	in
+		case (manifest ty1,ty2) of
+			(SCHEMA_TYPE _,ExType("",[ExType("bool",[])])) => (
+			let	val ty = ExType("bool",[])
+			in
+				Ztconstrained(ttm1,ttm2)
+			end)
+		|	_ => (
+			let	val msg = [	ZUmsg "∫",
+						ZUtrm (ttm1,zti_subs),
+						ZUtrm (ttm2,zti_subs),
+						ZUmsg "unify"]
+				val side = z_unify msg (ExType("",[ty1]),ty2)
+			in
+				Ztconstrained(ttm1,ttm2)
+			end)
+	end)
+=TEX
+=SML
+;
+=TEX
+\section{TOP LEVEL TYPE INFERENCE FUNCTIONS}
+=SML
+fun	€ti_ZTM› (env:ENV) (ztm:ZTM) : ZTM =
+		ti_ZT_aux env ztm;
+=TEX
+=SML
+val	€list_ti_ZTM›  : ENV -> ZTM list -> (ZTM list) = 
+		list_ti_ZT_aux;
+=TEX
+=SML
+fun	€ti_ZDEC› (env:ENV) (zd:ZDEC) : ZDEC * ENV * (IDENT * ZOPCLASS) list =
+		ti_ZD_aux env zd;
+=TEX
+=SML
+val	€list_ti_ZDEC›  : ENV -> ZDEC list -> (ZDEC list * ENV * (IDENT * ZOPCLASS) list) = 
+		list_ti_ZD_aux;
+=TEX
+=SML
+fun	€ti_ZSCHTEXT› (env:ENV) (zsch:ZSCHTEXT) : ZSCHTEXT * ENV * (IDENT * ZOPCLASS) list =
+		ti_ZS_aux env zsch;
+=TEX
+\section{EPILOGUE}
+=SML
+end (* of structure ZTypeInference *);
+=TEX
+\pagebreak
+\section{BACKEND}
+To be supplied.
+
+\end{document}
+
+
