@@ -73,7 +73,9 @@ parser.}
 of identifier recognition to make it fit for purpose and minor
 rework of delimiter identification).
 \item[Issue 1.44-1.45] IUCT WP 4 changes.
-\item[Issue 1.46] Optimising lexer.
+\item[Issue 1.46-1.47] Optimising lexer, by untangling recursive calls, and
+eliminataing explode/implode pairs.
+This has fixed one reason for ``Running out of store - interrupting console process'' messages.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -906,7 +908,7 @@ fun Ûread_untilÝ (classification : CN_LEX_CLASS,
 				cn_fun : Lex.INPUT list -> CN_TOKEN)
 			(terml : CN_LEX_CLASS list) (clist : string list, iplist : INPUT list)
 			(new_socket_needed : bool)		 
-		: (CN_LEX_ITEM list * INPUT list) = (
+		: (CN_LEX_ITEM list * string list * INPUT list) = (
 let	val (found, ih') = find_in_input terml
 			{	left_input=[],
 				left_text=[],
@@ -923,26 +925,23 @@ let	val (found, ih') = find_in_input terml
 				[] => []
 				| li' => [(classification,
 						cn_fun li)];
-	val right_inp = case rt of
-				[] => ri
-				| rt' => (Lex.Text o implode) rt::ri;
 	val side =	if new_socket_needed
 			then	new_socket()
 			else	();
 in
 	if found
 	then
-		(left_cxt, right_inp)
+		(left_cxt, rt, ri)
 
 	else
-		(left_cxt, [])
-end)
+		(left_cxt, [], [])
+end);
 =TEX
 $spark\_xtext$ acts a dispatcher for the earlier functions which apply when
 a text string in the input is being processed, it analyses the
 next spark token in the input and takes action accordingly.
 =SML
-and Ûspark_xtextÝ (slist : string list) (rest : INPUT list) : CN_LEX_ITEM list  = (
+fun Ûspark_xtextÝ (slist : string list) (rest : INPUT list) : CN_LEX_ITEM list  = (
 	case skip_space (slist, Unknown) of
 	([], _) => spark_lex rest
 	| other => (
@@ -952,39 +951,43 @@ and Ûspark_xtextÝ (slist : string list) (rest : INPUT list) : CN_LEX_ITEM list  
 			in case (class, lassoc5 z_delimiters class) of
 				(LCLChevron, Value terml) => (
 					res
-					::(let val (read, rrest) = read_until
+					::(let val (read, srest', rest') =
+					       read_until
 						(LCKSlot, CNKSlot) terml
 						(srest, rest)
 						true;
 					in
-						read @ spark_lex rrest
+						read @ spark_xtext srest' rest'
 					end)
 				)|(LCLSqBrack, Value terml) => (
 					res
-					::(let val (read, rrest) = read_until
+					::(let val (read, srest', rest') =
+						 read_until
 						(LCZ, CNZ o ZLex.z_lex) terml
 						(srest, rest)
 						true;
 					in
-						read @ spark_lex rrest
+						read @ spark_xtext srest' rest'
 					end)
 				)|(LCLBrace, Value terml) => (
 					res
-					::(let val (read, rrest) = read_until
+					::(let val (read, srest', rest') =
+						 read_until
 						(LCZ, CNZ o ZLex.z_lex) terml
 						(srest, rest)
 						true;
 					in
-						read @ spark_lex rrest
+						read @ spark_xtext srest' rest'
 					end)
 				)|(_, Value terml) => (
 					res
-					::(let val (read, rrest) = read_until
+					::(let val (read, srest', rest') =
+						read_until
 						(LCZ, CNZ o ZLex.z_lex) terml
 						(srest, rest)
 						false;
 					in
-						read @ spark_lex rrest
+						read @ spark_xtext srest' rest'
 					end)
 				)|(LCCharacterLiteral, Nil) => (
 					(class, (CNString o implode o tl
