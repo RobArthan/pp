@@ -1,0 +1,430 @@
+=TEX
+\documentstyle[hol,11pt,TQ]{article}
+\ftlinepenalty=9999
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+\TPPtitle{Implementation of Tactics I}
+\TPPref{DS/FMU/IED/DTD009}  %% Mandatory field
+\def\SCCSversion{$Revision$
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{91/03/11 %
+}}  %% Mandatory field
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{SML Literate Script}
+\TPPkeywords{}
+\TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.D.Arthan & FST Team Leader}
+\TPPabstract{This document gives a detailed design for the 
+first group of tactics and tacticals in ICL HOL.}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	    Project Library
+}}
+%\TPPclass{CLASSIFICATION}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+\begin{document}
+\makeTPPfrontpage
+\vfill
+\begin{centering}
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+\end{centering}
+\pagebreak
+\section{Document control}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history}
+\begin{description}
+\item [Issue 1.1]
+First version.
+\end{description}
+\subsection{Changes forecast}
+Most of the text outside the documentation boxes is a discussion
+of the design process, rather than being part of the final design.
+It will thus be removed or rephrased in later issues.
+\section{GENERAL}
+\subsection{Scope}
+This document contains the implementation for material
+whose detailed design is given in in \cite{DS/FMU/IED/DTD009}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+
+\subsubsection{Dependencies}
+
+\subsubsection{Deficiencies}
+\section{PREAMBLE}
+=SML
+structure âTactics1á : Tactics1 = struct
+=TEX
+=SML
+open PrettyPrinter;
+=TEX
+\section{TYPE ABBREVIATIONS}
+=SML
+type GOAL		=	SEQ;
+type PROOF		=	THM list -> THM;
+type TACTIC		=	GOAL -> (GOAL list * PROOF);
+=TEX
+\section{UTILITIES}
+\[mapshape\,[(f_1, n_1),(f_2, n_2) \ldots]\,[a_1,a_2 \ldots]\]
+is \[[f_1[a_1,\ldots, a_{n_1}], f_2[a_{n_1+1},\ldots, a_{n_1+n_2}], \ldots]\].
+It is used to combine proofs.
+=SML
+fun âmapshapeá (fns : (('a list -> 'b) * int) list)(args : 'a  list) : 'b list = (
+	case fns of
+		((f, n) :: morefns) => (
+			f (args to (n-1)) :: mapshape morefns (args from n)
+	) |	[] => []
+);
+=TEX
+=SML
+fun âbad_proofá (name : string) = (
+	error name 9001 []
+);
+=TEX
+=SML
+fun âterm_failá (name : string) (msg : int) (tms : TERM list) = (
+	fail name msg 
+	(map (fn tm => (fn () => format_list Combinators.I (format_term tm) "")) tms)
+);
+=TEX
+=SML
+val âhyp_memá  : TERM -> TERM list -> bool = present (uncurry aconv);
+=TEX
+=SML
+fun âseq_eqá ((asms1, conc1) : GOAL) ((asms2, conc2) : GOAL) : bool = (
+	let	fun	aux (t1 :: more1) (t2 :: more2) = aconv t1 t2 andalso aux more1 more2
+		|	aux [] [] = true
+		|	aux _ _ = false;
+	in	aconv conc1 conc2 andalso aux asms1 asms2
+	end
+);
+=TEX
+\subsection{BASIC TACTICS 1}
+=SML
+val âalways_tacá : TACTIC = (fn gl =>
+	([gl], (fn [x] => x | _ => bad_proof "always_tac"))
+);
+=TEX
+=SML
+val âfail_tacá : TACTIC = (fn gl =>
+	fail "fail_tac" 9201 []
+);
+=TEX
+=SML
+fun âfail_with_tacá (area : string) (msg : int) (inserts : (unit -> string) list): TACTIC = (fn gl =>
+	fail area msg inserts
+);
+=TEX
+=SML
+val âlist_prove_asm_ruleá : THM list -> THM -> THM = revfold(uncurry prove_asm_rule);
+=TEX
+\section{ELEMENTARY TACTICALS}
+=SML
+fun ((tac1 : TACTIC) âTHEN_Tá (tac2 : TACTIC)) : TACTIC = (fn gl =>
+	let	val (sgs1, pf) = tac1 gl;
+		val (sgs2pfs2) = (map tac2 sgs1);
+	in	(flat (map fst sgs2pfs2),
+		pf o mapshape (map (fn (sgs, pf) => (pf, length sgs))sgs2pfs2))
+	end
+);
+=TEX
+=SML
+val op âTHENá : (TACTIC * TACTIC) -> TACTIC = op THEN_T;
+=TEX
+=SML
+fun (tac : TACTIC) âTHEN_LIST_Tá (tacs : TACTIC list) : TACTIC = (fn gl =>
+	let	val (sgs1, pf) = tac gl;
+	in	if length tacs = length sgs1
+		then	let	val sgs2pfs2 = (map (fn (f, a) => f a) (combine tacs sgs1));
+			in	(flat (map fst sgs2pfs2),
+				pf o mapshape (map (fn (sgs, pf) => (pf, length sgs))sgs2pfs2))
+			end
+		else	fail "THEN_LIST_T" 9101 []
+	end
+);
+=SML
+val op âTHEN_Lá : (TACTIC * TACTIC list) -> TACTIC = op THEN_LIST_T;
+=TEX
+=SML
+fun âLIST_THEN_Tá (tacs : TACTIC list) :  TACTIC = (fn gl =>
+	(fold (op THEN_T) tacs always_tac) gl
+);
+=TEX
+=SML
+val âEVERYá : TACTIC list -> TACTIC = LIST_THEN_T;
+=TEX
+=SML
+fun âMAP_THEN_Tá (tacf : 'a -> TACTIC) (things : 'a list) : TACTIC = (
+	LIST_THEN_T (map tacf things)
+);
+=TEX
+=SML
+val âMAP_EVERYá : ('a -> TACTIC) -> 'a list -> TACTIC = MAP_THEN_T;
+=TEX
+=SML
+fun ((tac1 : TACTIC) âORELSE_Tá (tac2 : TACTIC)) : TACTIC = (fn gl =>
+	(tac1 gl) handle (Fail _) => tac2 gl
+);
+=TEX
+=SML
+val op âORELSEá : (TACTIC * TACTIC) -> TACTIC = op ORELSE_T;
+=TEX
+=SML
+fun âLIST_ORELSE_Tá (tacs : TACTIC list) : TACTIC = (fn gl => 
+	(fold (op ORELSE_T) tacs (fail_with_tac "LIST_ORELSE_T" 9005 [])) gl
+);
+=TEX
+=SML
+val âFIRSTá : TACTIC list -> TACTIC = LIST_ORELSE_T;
+=TEX
+=SML
+fun âMAP_ORELSE_Tá (tacf : 'a -> TACTIC) (things : 'a list) : TACTIC = (
+	LIST_ORELSE_T (map tacf things)
+);
+=TEX
+=SML
+val âMAP_FIRSTá : ('a -> TACTIC) -> 'a list -> TACTIC = MAP_ORELSE_T;
+=TEX
+=SML
+fun âREPEAT_Tá (tac : TACTIC) : TACTIC = (fn g =>
+	((tac THEN REPEAT_T tac) ORELSE_T always_tac) g
+);
+=TEX
+=SML
+val âREPEATá : TACTIC -> TACTIC = REPEAT_T;
+=TEX
+\section{BASIC THEOREM TACTICALS AND COMBINATORS}
+=SML
+type âTHM_TACTICá = THM -> TACTIC;
+
+type âTHM_TACTICALá = THM_TACTIC -> THM_TACTIC;
+=TEX
+=SML
+val op âTHEN_TTCLá : (THM_TACTICAL * THM_TACTICAL) -> THM_TACTICAL = op o;
+=TEX
+=SML
+fun  (ttcl1 : THM_TACTICAL) âORELSE_TTCLá (ttcl2 : THM_TACTICAL)
+				: THM_TACTICAL = (fn ttac => fn th =>
+	(ttcl1 ttac th) handle (Fail _) => (ttcl2 ttac th)
+);
+=TEX
+=SML
+val âalways_ttclá : THM_TACTICAL = Combinators.I;
+=TEX
+=SML
+fun âfail_with_ttclá (area : string) (msg : int) (inserts : (unit -> string) list)
+						: THM_TACTICAL = (fn _ =>
+	fail area msg inserts
+);
+=TEX
+=SML
+val âfail_ttclá : THM_TACTICAL = (fn _ =>
+	fail "fail_ttcl" 9401 []
+);
+=TEX
+=SML
+fun âREPEAT_TTCLá (ttcl : THM_TACTICAL) : THM_TACTICAL= (fn ttac => fn th =>
+	((ttcl THEN_TTCL (REPEAT_TTCL ttcl)) ORELSE_TTCL always_ttcl) ttac th
+);
+=TEX
+=SML
+fun âEVERY_TTCLá (ttcls : THM_TACTICAL list) : THM_TACTICAL = (
+	fold op THEN_TTCL ttcls always_ttcl
+);
+=TEX
+=SML
+fun âFIRST_TTCLá (ttcls : THM_TACTICAL list) : THM_TACTICAL= (
+	fold op ORELSE_TTCL ttcls (fail_with_ttcl "FIRST_TTCL" 9402 [])
+);
+=TEX
+\section{BASIC TACTICALS}
+=TEX
+=SML
+fun âMAP_ASM_Tá (thmstac : (THM list -> TACTIC)) : TACTIC = (fn gl as (asms, _) =>
+	thmstac (map asm_rule asms) gl
+);
+=TEX
+=SML
+fun âROTATE_Tá (i : int) (tac : TACTIC) : TACTIC = (fn gl =>
+	case tac gl of
+		sgp as ([], _) => sgp
+	|	(sgs, pf) => (
+		let	val n = (length sgs);
+			val i' = i mod n;
+			val r' = n - i';
+			val sgs' = (sgs from i') @ (sgs to (i'-1));
+			fun pf' ths = (
+				if length ths <> n
+				then bad_proof "ROTATE_T"
+				else pf ((ths from r') @ (ths to (r'-1)))
+			);
+		in	(sgs', pf')
+		end
+	)	
+);
+=TEX
+=SML
+fun âLEMMA_Tá (newsg : TERM) (thmtac : THM -> TACTIC) : TACTIC = (fn gl as (asms, _) =>
+	let	val (sgs, pf) = thmtac (asm_rule newsg) gl;
+	in	((asms, newsg) :: sgs,
+		(fn (thm :: thms) => prove_asm_rule thm (pf thms) |
+		[] => bad_proof "LEMMA_T"))
+	end
+);
+=TEX
+=SML
+fun âLIST_CHECK_THM_Tá (thms : THM list) (tac : TACTIC)
+					: TACTIC = (fn gl as (asms, _) =>
+	let	fun aux1 acc (tm :: more) = (
+			if hyp_mem tm asms
+			then aux1 acc more
+			else aux1 (acc grab tm) more
+		) | aux1 acc [] = acc;
+		fun aux2 acc (thm :: more) = (
+			aux2 (aux1 acc (hyps thm)) more
+		) | aux2 acc [] = acc;
+		val extras = aux2 [] thms;
+		fun asm_tac thm = (fn (asms, conc) =>
+			([(concl thm :: asms, conc)],
+			(fn [thm1] => prove_asm_rule thm thm1
+			 | _ => bad_proof "LIST_CHECK_THM_T"))
+		);
+		fun aux3 (tm :: more) = (
+			LEMMA_T tm asm_tac THEN_L [always_tac, aux3 more]
+		) | aux3 [] = tac;
+	in	(ROTATE_T (length extras) (aux3 extras)) gl
+	end
+);
+=TEX
+=SML
+fun âCHECK_THM_Tá (thm : THM) : TACTIC -> TACTIC = LIST_CHECK_THM_T [thm];
+=TEX
+=SML
+fun âTRY_Tá (tac : TACTIC) : TACTIC = tac ORELSE always_tac;
+=TEX
+=SML
+fun âCHANGED_Tá (tac : TACTIC) : TACTIC = (fn gl =>
+	case tac gl of
+		sgp as ([gl'], _) => (
+			if seq_eq gl gl'
+			then	fail "CHANGED_T" 9302 []
+			else sgp
+	) |	sgp => sgp
+);
+=TEX
+=TEX
+=SML
+fun âCHECK_ASM_Tá (tm : TERM) (thmtac : (THM -> TACTIC))
+						: TACTIC = (fn gl as (asms, _) =>
+	if hyp_mem tm asms
+	then thmtac (asm_rule tm) gl
+	else term_fail "CHECK_ASM_T" 9301 [tm]
+);
+=TEX
+\section{BASIC TACTICS 2}
+=IGN
+fun  âlemma_tacá (lemma : TERM) : TACTIC = (
+	let	fun ttac thm (asms, conc) = (
+			([(concl thm :: asms, conc)],
+			(fn [thm1] => prove_asm_rule thm thm1 | _ => bad_proof "lemma_tac"))
+		);
+	in	LEMMA_T lemma ttac
+	end
+);
+=TEX
+=SML
+local
+fun âaux_accept_tacá (thm : THM) : TACTIC = (fn (asms, conc) =>
+	if aconv conc (concl thm) 
+	then	([], (fn [] => thm | _ => bad_proof "accept_tac"))
+	else	fail "accept_tac" 9102 []
+);
+in
+fun âaccept_tacá (thm : THM) : TACTIC = CHECK_THM_T thm (aux_accept_tac thm);
+end;
+=TEX
+\section{USING TACTICS}
+=SML
+fun simple_tac_proof (gl : GOAL, tac : TACTIC) : THM = (
+	case (tac gl)
+		handle Fail msg => fail "simple_tac_proof" 9502 [fn()=>get_message msg]
+	 of
+		([], pf) => ((pf [])
+		handle Fail msg => fail "simple_tac_proof" 9503 [fn()=>get_message msg])
+	|	_ => fail "simple_tac_proof" 9501 []
+);
+=TEX
+$tac\_proof$ is surprisingly complicated. First of all we check that
+the goal contains no duplicated assumptions and that all the terms in the
+goal are boolean. we then use $simple\_tac\_proof$ to attempt to
+prove the goal; this will either fail, in which case
+$tac\_proof$ fails, or it will result in a theorem, $thm$ say.
+Assume that the original goal was $([t1, \ldots, tk], c)$ and that the
+$thm$ is $t1', \ldots, tm' … c'$. We discharge each $t_i$ from $thm$ which
+should produce a theorem of the form $…t1 Š \ldots Š tk Š c'$.
+We check this by using $‚\_mp\_rule$ to attempt to derive
+$…t1 Š \ldots Š tk Š c$ from it. If this succeeds and gives a theorem
+with no assumptions then we can undischarge the $t_i$ to give the desired
+theorem, otherwise the tactic has not achieved the desired goal and we report
+an error.
+=SML
+fun tac_proof (gl as (asms, conc) : GOAL, tac : TACTIC) : THM = (
+	let	fun chk_asms (asm :: more) = (
+			if any more (aconv asm)
+			then term_fail "tac_proof" 9505 [asm, find more (aconv asm)]
+			else if type_of asm <> BOOL
+			then term_fail "tac_proof" 9506 [asm]
+			else chk_asms more
+		) | chk_asms [] = ();
+		val side_effect1 = chk_asms asms;
+		val side_effect2 = (
+			if type_of conc <> BOOL
+			then term_fail  "tac_proof" 9507 [conc]
+			else ());
+		val thm = (simple_tac_proof(gl, tac))
+			handle exn => reraise exn "tac_proof";
+		fun aux1 (asm :: more) thm = Š_intro asm (aux1 more thm)
+		| aux1 [] thm = thm;
+		val thm' = ‚_mp_rule(refl_conv(list_mk_Š(asms@[conc])))(aux1 asms thm);
+		fun aux2 (_ :: more) thm = undisch_rule (aux2 more thm)
+		|   aux2 [] thm = thm;
+	in	case hyps thm' of
+			[] => aux2 asms thm'
+		|	_ => fail "tac_proof" 9504 []
+	end
+);
+=TEX
+=SML
+end; (* of structure Tactics1 *)
+open Tactics1;
+=TEX
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+=IGN
+val a = asm_rule»a:BOOL¼;
+val b = asm_rule»b:BOOL¼;
+val c = asm_rule»c:BOOL¼;
+val ab = €_intro a b;
+val abc = €_intro ab c;
+
+val t = list_prove_asm_rule [c, b, a] abc;
+
+
+val gl : GOAL =  ([»b:BOOL¼, »a:BOOL¼], »a € b:BOOL¼);
+
+accept_tac ab gl;
+
