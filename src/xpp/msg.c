@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2003/05/20 15:16:13 $ $Revision: 2.19 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2003/05/20 16:03:16 $ $Revision: 2.20 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -443,88 +443,6 @@ void ok_dialog(Widget w, char *msg)
 	XtPopdown(XtParent(dialog));
 }
 
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * string_input_dialog: ask a question whose answer is a string
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-static void
-	string_input_ok_cb(CALLBACK_ARGS),
-	string_input_cancel_cb(CALLBACK_ARGS);
-Boolean string_input_dialog(Widget w, char *question, char *cancel, char **answer)
-{
-	static Widget dialog, text_field;
-	XmString text, ok, cncl, title;
-	Atom WM_DELETE_WINDOW;
-	static int reply;
-	/* 0 = not replied; otherwise YES/NO */
-	reply = 0;
-	if (!dialog) {
-		dialog = XmCreateQuestionDialog(w, "string-input", NULL, 0);
-#ifdef EDITRES
-		add_edit_res_handler(dialog);
-#endif
-		ok = XmStringCreateSimple("   OK   ");
-		cncl = XmStringCreateSimple(cancel);
-		title = XmStringCreateSimple("Enter a string");
-		XtVaSetValues(dialog,
-			XmNdialogStyle,		XmDIALOG_FULL_APPLICATION_MODAL,
-			XmNokLabelString,	ok,
-			XmNcancelLabelString,	cncl,
-			XmNdialogTitle, 	title,
-			XmNdialogType,		XmDIALOG_QUESTION,
-			NULL);
-		XtUnmanageChild(
-			XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON));
-		XtAddCallback(dialog, XmNokCallback, string_input_ok_cb, &reply);
-		XtAddCallback(dialog, XmNcancelCallback, string_input_cancel_cb, &reply);
-		WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
-			"WM_DELETE_WINDOW",
-			False);
-		XmAddWMProtocolCallback(XtParent(dialog),
-			WM_DELETE_WINDOW,
-			string_input_cancel_cb,
-			&reply);
-		text_field = XtVaCreateManagedWidget("answer",
-			xmTextFieldWidgetClass,		dialog,
-			XmNcolumns,			30,
-			NULL);
-		XtAddCallback(text_field, XmNactivateCallback,
-			string_input_ok_cb, &reply);
-		XmStringFree(ok);
-		XmStringFree(cncl);
-		XmStringFree(title);
-	}
-	text = format_msg(question, MSG_LINE_LEN);
-	XtVaSetValues(dialog, XmNmessageString, text, NULL);
-	XmStringFree(text);
-	XtManageChild(dialog);
-	XtPopup(XtParent(dialog), XtGrabNone);
-	XmProcessTraversal(text_field, XmTRAVERSE_CURRENT);
-	poll(&reply);
-	XtPopdown(XtParent(dialog));
-	if(reply == YES) {
-		*answer = XmTextFieldGetString(text_field);
-	}
-	return reply == YES;
-}
-/*
- * Call-backs for the above.
- */
-static void string_input_ok_cb(
-	Widget		w,
-	XtPointer	cbd,
-	XtPointer	cbs)
-{
-	NAT *reply = cbd;
-	*reply = YES;
-}
-static void string_input_cancel_cb(
-	Widget		w,
-	XtPointer	cbd,
-	XtPointer	cbs)
-{
-	NAT *reply = cbd;
-	*reply = NO;
-}
 
 /* Similar to ok_dialog, but used when memory's
  * low, so everything's pre allocated */
@@ -650,23 +568,19 @@ static void ok_cb(
  * file_dialog: dialog to get a file name, via a FileSelectionDialog.
  * `opn' is the label to us on the ``OK'' button (i.e. it's
  * ``Save'' or ``Open'' or whatever. 
- * if start_up is true, the dialog is the one for use on start-up. For
- * thjis one, cancel is labelled quit and their is an extra Empty File
- * button.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static char *file_name;
 static void	file_cancel_cb(CALLBACK_ARGS),
 		file_ok_cb(CALLBACK_ARGS),
 		file_quit_cb(CALLBACK_ARGS),
 		file_help_cb(CALLBACK_ARGS);
 
-char *file_dialog(Widget w, char *opn,Boolean start_up)
+char *file_dialog(Widget w, char *opn)
 {
 	static Widget dialog;
 	XmString s, title;
 	Atom WM_DELETE_WINDOW;
-	static int reply;
-	/* 0 = not replied; */
+	static int reply;	/* 0 = not replied/YES/NO*/
+	char *file_name;
 
 	reply = 0;
 
@@ -677,15 +591,13 @@ char *file_dialog(Widget w, char *opn,Boolean start_up)
 		add_edit_res_handler(dialog);
 #endif
 		XtAddCallback(dialog, XmNokCallback, file_ok_cb, &reply);
-		XtAddCallback(dialog, XmNcancelCallback,
-			start_up ? file_quit_cb : file_cancel_cb, &reply);
+		XtAddCallback(dialog, XmNcancelCallback, file_cancel_cb, &reply);
 		XtAddCallback(dialog, XmNhelpCallback, file_help_cb, NULL);
 		WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
 			"WM_DELETE_WINDOW",
 			False);
 		XmAddWMProtocolCallback(XtParent(dialog),
-			WM_DELETE_WINDOW,
-			start_up ? file_quit_cb : file_cancel_cb,
+			WM_DELETE_WINDOW, file_cancel_cb,
 			&reply);
 		title = XmStringCreateSimple("Select A File");
 		XtVaSetValues(dialog,
@@ -694,7 +606,7 @@ char *file_dialog(Widget w, char *opn,Boolean start_up)
 			NULL);
 		XmStringFree(title);
 
-	};
+	}
 
 	s = XmStringCreateSimple(opn);
 
@@ -704,23 +616,6 @@ char *file_dialog(Widget w, char *opn,Boolean start_up)
 
 	XmStringFree(s);
 
-	if(start_up) {
-		Widget empty_file, dummy;
-		s = XmStringCreateSimple("Quit");
-		XtVaSetValues(dialog,
-			XmNcancelLabelString,	s,
-			NULL);
-		XmStringFree(s);
-		dummy = XtVaCreateWidget("dummy",
-			xmPushButtonWidgetClass,
-			dialog,
-			NULL);
-		empty_file = XtVaCreateManagedWidget("Empty File",
-			xmPushButtonWidgetClass,
-			dialog,
-			NULL);
-		XtAddCallback(empty_file, XmNactivateCallback, file_cancel_cb, &reply);
-	}
 	XtManageChild(dialog);
 
 	XtPopup(XtParent(dialog), XtGrabNone);
@@ -728,18 +623,19 @@ char *file_dialog(Widget w, char *opn,Boolean start_up)
 
 	while (!reply) {
 		poll(&reply);
-		if(reply == YES && (!file_name || !*file_name)) {
-			beep();
-			reply = 0;
+		if(reply == YES) {
+			Widget t = XmFileSelectionBoxGetChild(dialog, XmDIALOG_TEXT);
+			file_name = XmTextFieldGetString(t);
+			if(	!*file_name
+			||	file_name[strlen(file_name) - 1] == '/') {
+				beep();
+				reply = 0;
+				continue;
+			}
 		}
-	};
+	}
 
 	XtPopdown(XtParent(dialog));
-
-	if(start_up) {
-		XtDestroyWidget(dialog);
-		dialog = 0;
-	}
 
 	if(reply == YES) {
 		return file_name;
@@ -748,7 +644,170 @@ char *file_dialog(Widget w, char *opn,Boolean start_up)
 	}
 
 }
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * startup_dialog: dialog to get the command line to run and a file name to edit
+ * interactively if required. Note that the widget cmd_form
+ * is needed even if we have a command line - it becomes the unmanaged work are
+ * for the file selection box which makes the Empty File button go in the right place.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+	
+void startup_dialog(Widget w, char **cmd_line, char **file_name)
+{
+	Widget dialog;
+	Widget empty_file, cmd_form, cmd_label, cmd_text;
+	XmString s;
+	Atom WM_DELETE_WINDOW;
+	static int reply;	/* 0 = not replied/YES/NO*/
+	Boolean need_cmd_line = False, need_file_name = False;
+	if(!global_options.edit_only && !**cmd_line) {/* explicit empty command line - put-up dialog */
+		if(*cmd_line) {
+			XtFree(*cmd_line);
+		}
+		need_cmd_line = True;
+	}
+	if(*file_name && !**file_name) { /* explicit empty filename - put-up file dialog */
+		need_file_name = True;
+	}
 
+	if(!need_cmd_line && !need_file_name) {
+		return;
+	}
+
+	reply = 0;
+
+	if(need_file_name) {
+		dialog =XmCreateFileSelectionDialog(w, "xpp-Start-up-Options", NULL, 0);
+		s = XmStringCreateSimple("Please select a file to open:");
+		XtVaSetValues(dialog,
+			XmNselectionLabelString, 	s,
+			NULL);
+		XmStringFree(s);
+	} else {
+		dialog = XmCreateQuestionDialog(w, "startup-dialog", NULL, 0);
+		XtUnmanageChild(
+			XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON));
+	}
+#ifdef EDITRES
+	add_edit_res_handler(dialog);
+#endif
+	XtVaSetValues(dialog,
+		XmNdialogStyle,	XmDIALOG_FULL_APPLICATION_MODAL,
+		NULL);
+
+
+	XtAddCallback(dialog, XmNokCallback, file_ok_cb, &reply);
+	XtAddCallback(dialog, XmNcancelCallback,  file_quit_cb, &reply);
+	XtAddCallback(dialog, XmNhelpCallback, file_help_cb, NULL);
+	WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
+		"WM_DELETE_WINDOW",
+		False);
+	XmAddWMProtocolCallback(XtParent(dialog),
+		WM_DELETE_WINDOW, file_cancel_cb,
+		&reply);
+	
+	s = XmStringCreateSimple("Quit");
+
+	XtVaSetValues(dialog,
+			XmNcancelLabelString,	s,
+			NULL);
+	XmStringFree(s);
+
+	cmd_form = XtVaCreateManagedWidget("command-line-form",
+			xmFormWidgetClass,
+			dialog,
+			NULL);
+
+	if(need_cmd_line) {
+
+		s =XmStringCreateSimple("Please enter the command line you wish to run:");
+		cmd_label =  XtVaCreateManagedWidget("command-line-label:",
+			xmLabelWidgetClass,		cmd_form,
+			XmNtopAttachment,		XmATTACH_FORM,
+			XmNleftAttachment,			XmATTACH_FORM,
+			XmNrightAttachment,		XmATTACH_FORM,
+			XmNlabelString,			s,
+			XmNalignment,			XmALIGNMENT_BEGINNING,
+			NULL);
+
+		if(need_file_name) {
+			XtVaSetValues(dialog,
+				XmNchildPlacement,		XmPLACE_BELOW_SELECTION,
+				NULL);
+		} else {
+			XtUnmanageChild(cmd_label);
+			XtVaSetValues(dialog,
+				XmNmessageString,		s,
+				NULL);
+		}
+
+		XmStringFree(s);
+
+		cmd_text =  XtVaCreateManagedWidget("command-line-text:",
+			xmTextFieldWidgetClass,		cmd_form,
+			XmNtopAttachment,		XmATTACH_WIDGET,
+			XmNtopWidget,			cmd_label,
+			XmNbottomAttachment,		XmATTACH_FORM,
+			XmNleftAttachment,			XmATTACH_FORM,
+			XmNrightAttachment,		XmATTACH_FORM,
+			XmNcolumns,			30,
+			NULL);
+
+		XtAddCallback(cmd_text, XmNactivateCallback, file_ok_cb, &reply);
+
+	} else {
+		XtUnmanageChild(cmd_form);
+	}
+
+	if(need_file_name) {
+		empty_file = XtVaCreateManagedWidget("Empty File",
+			xmPushButtonWidgetClass,
+			dialog,
+			NULL);
+		XtAddCallback(empty_file, XmNactivateCallback, file_cancel_cb, &reply);
+	}
+
+	XtManageChild(dialog);
+
+	XtPopup(XtParent(dialog), XtGrabNone);
+	if(need_cmd_line) {
+		XmProcessTraversal(cmd_text, XmTRAVERSE_CURRENT);
+	} else {
+		XmProcessTraversal(dialog, XmTRAVERSE_HOME);
+	}
+
+	while (!reply) {
+		poll(&reply);
+		if(reply == YES && need_file_name)  {
+			Widget t = XmFileSelectionBoxGetChild(dialog, XmDIALOG_TEXT);
+			*file_name = XmTextFieldGetString(t);
+			if(	!**file_name
+			||	(*file_name)[strlen(*file_name) - 1] == '/') {
+				beep();
+				XmProcessTraversal(dialog, XmTRAVERSE_HOME);
+				reply = 0;
+				continue;
+			}
+		} else if (need_file_name) { /* REPLY = NO - user wants an empty file */
+			*file_name = 0;
+		}
+		if(need_cmd_line) {
+			*cmd_line = XmTextFieldGetString(cmd_text);
+			if(!**cmd_line) {
+				beep();
+				reply = 0;
+				XtManageChild(dialog);
+				XmProcessTraversal(cmd_text, XmTRAVERSE_CURRENT);
+				continue;
+			}
+		}
+	}
+
+	XtDestroyWidget(XtParent(dialog));
+
+}
+/*
+ * Callbacks for the file and start-up dialogs:
+ */
 
 static void file_ok_cb(
 	Widget		w,
@@ -756,10 +815,6 @@ static void file_ok_cb(
 	XtPointer	cbs)
 {
 	NAT *reply = cbd;
-	XmFileSelectionBoxCallbackStruct *fsbcbs = cbs;
-	(void) XmStringGetLtoR(fsbcbs->value,
-			XmSTRING_DEFAULT_CHARSET,
-			&file_name);
 	*reply = YES;
 }
 

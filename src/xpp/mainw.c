@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.57 2003/05/20 15:16:13 rda Exp rda $
+ * $Id: mainw.c,v 2.58 2003/05/20 16:03:16 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -172,8 +172,6 @@ static void line_number_cb(CALLBACK_ARGS);
 #define FILE_MENU_REOPEN          8
 /* Item 9 is a separator */
 #define FILE_MENU_QUIT           10
-
-#define FILE_MENU_INIT_OPEN          13
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * The items for the pull-right menu attached to Reopen in the
@@ -913,27 +911,16 @@ static Boolean setup_main_window(
 	fix_pane_height(infobar, infobar);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * If this is a command session and there is no command line put up
- * dialogue for user to enter one
+ * Put up the start-up dialog, if necessary to get the command line and file name
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-	if(!global_options.edit_only
-	&& !*global_options.command_line) { /* explicit empty string; ask the user: */
-		if(!string_input_dialog(root, 
-			"Please enter the command you wish to run",
-			"Quit",
-			&global_options.command_line)) {
-			exit(0);
-		}
-	}
+	startup_dialog(root, &global_options.command_line, &file_name);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Open file if file_name not NULL
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	pause_undo(undo_ptr);
 
-	if(file_name && !*file_name) { /* explicit empty string; put up file open dialogue */
-		file_menu_cb(root, (XtPointer)(FILE_MENU_INIT_OPEN), NULL);
-	} else if(open_file(script, file_name, True, &foAction)) {
+	if(open_file(script, file_name, True, &foAction)) {
 		XmTextFieldSetString(namestring, file_name);
 		XmTextFieldShowPosition(namestring, strlen(file_name));
 		set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
@@ -1023,7 +1010,7 @@ static void file_menu_cb(
 		break;
 	case FILE_MENU_SAVE_AS:
 		oldfname = XmTextGetString(namestring);
-		fname = file_dialog(frame, "Save", False);
+		fname = file_dialog(frame, "Save");
 		if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 		} else if(save_file_as(script, fname)) {
@@ -1044,7 +1031,7 @@ static void file_menu_cb(
 	case FILE_MENU_SAVE_SELECTION:
 		if((buf = get_selection(script, no_selection_message))
 			!= NULL) {
-			fname = file_dialog(frame, "Save Selection", False);
+			fname = file_dialog(frame, "Save Selection");
 			if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 			} else {
@@ -1055,10 +1042,9 @@ static void file_menu_cb(
 		};
 		break;
 	case FILE_MENU_OPEN:
-	case FILE_MENU_INIT_OPEN:
 		oldfname = XmTextGetString(namestring);
 		if(!file_info.changed || yes_no_dialog(root, changed_message)) {
-			fname = file_dialog(frame, "Open", i == FILE_MENU_INIT_OPEN);
+			fname = file_dialog(frame, "Open");
 			if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 			} else {
@@ -1083,7 +1069,7 @@ static void file_menu_cb(
 		if(oldfname) {XtFree(oldfname);}
 		break;
 	case FILE_MENU_INCLUDE:
-		fname = file_dialog(frame, "Include", False);
+		fname = file_dialog(frame, "Include");
 		if(!fname || !*fname || *fname == '*') {
 /* No file name: just do nothing */
 			break;

@@ -176,15 +176,13 @@ typedef struct menu_item {
 	extern void ok_dialog(
 		Widget	w,
 		char	*msg);
-	extern Boolean string_input_dialog(
-		Widget w,
-		char *question,
-		char *cancel,
-		char **answer);
 	extern char *file_dialog(
 		Widget	w,
-		char	*opn,    /* Save/Open/... */
-		Boolean	start_up);
+		char	*opn);
+	extern void startup_dialog(
+		Widget	w,
+		char	**cmd_line,
+		char	**file_name);
 	extern void memory_warning_dialog(
 		Widget  w,
 		Boolean show);     /* Used when memory's very low */
