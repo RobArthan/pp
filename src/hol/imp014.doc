@@ -73,6 +73,9 @@ Changed the representation of the substitution function
 from a binary tree to sparse array. This increases
 the speed significantly.
 
+\item[Issue 2.4 28 November 1991]
+Fixed bug in $extend$.
+
 \end{description}
 \subsection{Changes forecast}
 None.
@@ -157,7 +160,7 @@ true or false.
 =SML
 fun âtyvars_setá (phi:SUBS) (ExVartype(Known _)) (tvn : int) = false
 |   tyvars_set phi (ExVartype(Unknown tvn')) (tvn : int) = (
-	case sub_opt (phi, tvn) of
+	case sub_opt (phi, tvn') of
 		Nil => (tvn = tvn')
 	|	Value ty => tyvars_set phi ty tvn
 ) | tyvars_set phi (ExType(_, tyl)) (tvn : int) = any tyl (fn ty => tyvars_set phi ty tvn);
@@ -253,7 +256,7 @@ without structure sharing (which was the case in the previous
 version of this algorithm and the HOL prototype), the
 substitution was represented as:\\
 \ \\
-$\{?1 \mapsto (?4‹?5‹?6), ?2 \mapsto (?4‹?5‹?6)\}$.
+$\{?1 \mapsto (?4‹?5‹?6), ?2 \mapsto (?4‹?5‹?6)\}$.\\
 \ \\
 Each occurrence of the unknown is substituted during unification.
 With structure sharing, the substitution is deferred.
@@ -263,12 +266,42 @@ $?3$, the second, $(?4‹?5‹?6)$. Further look-ups using
 $?4$, $?5$, and $?6$ will fail (yielding Nil). This gives
 $(?4‹?5‹?6)$ as the type which $?1$ maps to.
 
+In the prototype, it was possible and valid to have the
+substitution $\{?1 \mapsto ?2, ?2 \mapsto ?1\}$. This
+situation is undesirable since loop detection is difficult.
+A solution is to represent type unknowns which are equivalent
+by an equivalence class. The nominated
+representative of an equivalence
+class is the terminal of the the graph. e.g., the representative
+of\\
+\ \\
+$\{?1 \mapsto ?2, ?2 \mapsto ?3\}$\\
+\ \\
+is $?3$. So the extension of this substitution by 
+$\{?4 \mapsto ?1\}$, is represented as\\
+\ \\
+$\{?1 \mapsto ?2, ?2 \mapsto ?3, ?4 \mapsto ?3\}$.\\
+\ \\
+Note that the substitution is not extended when the type unknown is
+the same as the equivalence class representative.
+Note also that if a type variable name appears in an
+equivalence class of equivalent type variable names, then
+it must appear as the chosen representative for that class;
+
+
+=SML
+fun âlook_up_eq_classá (phi : SUBS) (tvn : int) : int OPT =
+	case sub_opt (phi, tvn) of 
+		Value (ExVartype(Unknown tvn')) =>
+			look_up_eq_class phi tvn'
+		|Value Other => Nil
+		|Nil => Value tvn;
+=TEX
 $extend\,\phi\,tvn\,ty$ is $\phi$ modified to send
 $tvn$ to $ty$.
 An exception is raised when solving equations
 of the form $?1‹?1=?1$ which arise from
 terms like ``$f f$'' (for $f$ a variable).
-
 This is the so-called ``occurs check''. Note that it guarantees
 that the substitution array contains no loops. i.e., that if
 $R : † \leftrightarrow †$ denotes the relation between
@@ -277,22 +310,24 @@ in $sub\_opt (\phi,\  x)$, then the transitive closure $R^+$ of $R$
 is irreflexive, i.e., $Œ x\  R^+\  x$ for all x.
 To see this note that $extend\  \phi\  tvn$ is never called when
 tvn already has an entry in $\phi$. (See the use of
-$extend$ in $unify$). 
+$extend$ in $unify$).
 
 =SML
 fun âextendá (phi : SUBS) (tvn : int) (ty : EXTYPE) : unit = (
 	case ty of
 	ExVartype(Unknown tvn') => (
-		if tvn = tvn'
-		then
-			()
-		else	if tyvars_set phi ty tvn
+		case look_up_eq_class phi tvn' of
+		Value tvn'' =>
+			if tvn = tvn'' then ()
+			else update (phi, tvn, ExVartype(Unknown tvn''))
+		|Nil =>	if tyvars_set phi ty tvn
 			then fail "unify" 14002 []
 			else update (phi, tvn, ty))
-	| Other =>
+	| ExVartype(Known s) => (update (phi, tvn, ty))
+	| ExType (ty', tyl) => (
 		if tyvars_set phi ty tvn
 		then fail "unify" 14002 []
-		else update (phi, tvn, ty)
+		else update (phi, tvn, ty))
 );
 =TEX
 \subsection{The Unification Algorithm}
@@ -434,3 +469,53 @@ end; (* of structure Unification *)
 \twocolumn[\section{INDEX OF DEFINED TERMS}]
 \printindex
 \end{document}
+
+=IGN
+The following code is provided for diagnostic purposes:
+
+fun âpsubá()  =
+let	fun aux lwr upr pos =
+		if pos > upr then nil
+		else (sub_opt(ti_subs, pos))::(aux lwr upr (pos+1))
+	val lwr = lindex ti_subs;
+	val upr = uindex ti_subs;
+in
+	aux lwr upr lwr
+end;
+
+fun âshowsubsá() =
+let	val sublist = psub();
+	fun aux ((Nil)::sl) i = (i, Nil)::(aux sl (i+1))
+	  | aux ((Value x)::sl) i = (i, Value x)::(aux sl (i+1))
+	  | aux nil _ = nil
+in
+	aux sublist 0
+end;
+
+fun âtyvars_setá (phi:SUBS) (ExVartype(Known _)) (tvn : int) = false
+|   tyvars_set phi (ExVartype(Unknown tvn')) (tvn : int) = (
+	case sub_opt (phi, tvn) of
+		Nil => (tvn = tvn')
+	|	Value ty => tyvars_set phi ty tvn
+) | tyvars_set phi (ExType(_, tyl)) (tvn : int) = any tyl (fn ty => tyvars_set phi ty tvn);
+
+fun âgsubá id =
+let	val sublist = psub();
+	fun aux ((Nil)::sl) i = if i = id
+		then (i, Nil)::(aux sl (i+1))
+		else (aux sl (i+1))
+	  | aux ((Value x)::sl) i = if i = id
+		then (i, Value x)::(aux sl (i+1))
+		else	if tyvars_set ti_subs x id
+			then (i, Value x)::(aux sl (i+1))
+			else (aux sl (i+1))
+	  | aux nil _ = nil
+in
+	aux sublist 0
+end;
+
+
+fun âfrá tm = let val f = frees tm in (f, map type_of f, type_of tm) end;
+
+
+
