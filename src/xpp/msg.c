@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2003/07/23 14:02:14 $ $Revision: 2.35 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2003/08/01 11:13:13 $ $Revision: 2.36 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -608,6 +608,8 @@ char *file_dialog(Widget w, char *opn)
 	XmStringFree(s);
 
 	XtManageChild(dialog);
+
+	XmFileSelectionDoSearch(dialog, NULL);
 
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
