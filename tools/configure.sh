@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.34 2004/12/20 17:16:01 rda Exp rda $
+# $Id: configure.sh,v 1.35 2005/02/27 15:12:12 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -180,7 +180,7 @@ then	if	[ "${PPCOMPILER:-}" != "" ]
 			*)	give_up "PPCOMPILER must be one of POLYML or SMLNJ";;
 		esac
 		echo "Using $T as specified"
-		check_bin "$C$" "$C not found; $T must be installed if you specify PPCOMPILER=$PPCOMPILER"
+		check_bin "$C" "$C not found; $T must be installed if you specify PPCOMPILER=$PPCOMPILER"
 	elif	which poly >/dev/null 2>&1
 	then	echo "Using Poly/ML"
 		PPCOMPILER=POLYML
