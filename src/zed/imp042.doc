@@ -61,6 +61,8 @@ Changes to $z\-\_ç\-\_seta\-\_conv$.
 Fixed bug in Z bindings proof context.
 \item[Issue 1.14 (2nd December 1992)]
 Improved $U$ simplification.
+\item [Issue 1.15 (3rd December 1992)]
+Gained $ç\_C$, and $Z\-\_ç\-\_ELIM\-\_C$, handling of literals, sequences and $ç\_Ã\_conv$.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -269,7 +271,36 @@ fun €all_undisch_rule› (thm:THM) : THM = (
 	else thm
 );
 =TEX
+\subsection{New Names}
+Return a ``pleasant'' name, so far unused in a term.
+=SML
+local
+	val ordx = ord"x";
+	fun xnames (nm,ty) = (if ord nm = ordx
+		then nm
+		else fail "" 0 []);
+	fun lgive_n_name lst = (
+	let	fun nextn n = (let val poss = "x" ^ string_of_int n
+			in
+			if poss mem lst
+			then nextn (n+1)
+			else poss
+			end);
+	in
+		nextn 1
+	end);
+in
+fun €give_n_name› (tm:TERM) : string = (
+let	val names = mapfilter xnames (term_vars tm);
+in
+	lgive_n_name names
+end)
+end;
+=TEX
+\subsection{Conversionals for ç}
+
 \section{THE IMPLEMENTATION}
+
 \subsection{Definite Description}
 =FRULE 1 Conversion
 ante_∂_¥_conv
@@ -1657,6 +1688,120 @@ z_defn_simp_rule
 	(RAND_C(LEFT_C (DECL_INTRO_C pred_dec_conv)))
 (asm_rule ¨Z'AbbDef Òp ç (X ∏ Y) ± (µ q : X ∏ Y ∑ q ç p § first q = q.1)ÆÆ));
 =TEX
+\subsection{Sequence Displays}
+=SML
+val €z_ß¢_conv› :CONV = fail_with_conv "z_ß¢_conv - not yet implemented";
+=TEX
+\subsection{Conversionals}
+=SML
+local
+	val c1 = simple_eq_match_conv1 (prove_rule []¨µ x ∑ (x = x) § TÆ);
+	val c2 = simple_eq_match_conv1 (prove_rule []¨µ x ∑ T ± x § xÆ);
+	val c3 = simple_eq_match_conv1 (prove_rule []¨µ x ∑ x ± T § xÆ);
+	val ¥_thm = tac_proof(([],¨µ x ∑ x ¥ xÆ),REPEAT strip_tac);
+	fun local_rule thm gl = (
+	let 	val (a,b) = dest_¥ gl;
+		val (x,bdy) = dest_eq(concl thm);
+		val ithm = simple_µ_elim b ¥_thm;
+	in
+		subst_rule[(eq_sym_rule thm,x)] gl ithm
+	end);
+	val rw_tac2_thm = tac_proof(([],
+		¨µ t∑ ≥ (F ± t) ± ≥ (t ± F) ±
+		((∂ x ∑ F) § F) ± ≥(µ x ∑ F) ±
+		(µ x∑ x = x § T) ± (F ¥ t) ±
+		(≥ T § F) ± (≥ F § T)Æ),
+		PC_T1 "hol1" rewrite_tac[]);
+	val rw_tac2 = (prim_rewrite_tac	
+		(make_net(flat(map (cthm_eqn_cxt initial_rw_canon)
+			[rw_tac2_thm])))
+		initial_rw_canon 
+		TOP_MAP_C
+		[]);
+in
+fun €local_prove_∂_conv› (wit : TERM) : CONV = (fn tm =>
+let	val (x,bdy) = dest_simple_∂ tm;
+	val res = var_subst [(wit,x)] bdy;
+	val s1 = ALL_SIMPLE_∂_C (RIGHT_C(RIGHT_C (c1 ORELSE_C (LEFT_C c1 THEN_C c2)))) res;
+	val new_term = snd(dest_eq(concl s1));
+	val s2 = tac_proof(([],mk_eq(tm, new_term)),
+		§_T2
+		(fn thm =>
+		t_tac ORELSE
+		conv_tac(fn ag => eq_sym_rule s1)
+		THEN
+		SIMPLE_∂_THEN ante_tac thm
+		THEN (
+			let val x' = variant (frees(concl thm) @ frees (concl s1)) x;
+			in
+			CASES_T2 (mk_eq(x',wit))
+			(fn thm1 => fn (seqasms,gl) =>
+			accept_tac (local_rule thm1 gl)(seqasms,gl))
+			(fn thm1 => rw_tac2[
+				thm1])
+			end)			
+		)
+		(fn thm =>
+		simple_∂_tac wit THEN accept_tac 
+			(§_mp_rule (eq_sym_rule s1) thm)
+		));
+in
+	s2
+end);
+end;
+=TEX
+=SML
+fun €ç_C› (cnv:CONV) : CONV = (fn tm =>
+	if is_bin_op "ç" tm
+	then RAND_C cnv tm
+	else term_fail "ç_C" 42028 [tm]
+);
+=TEX 
+=SML
+local
+	val cnv1 = simple_eq_match_conv1
+		(all_µ_intro
+		(prove_rule [] Ò(x ç U ± y ± true) § yÆ));
+	fun mk_a_ç_conv x tm = (
+		eq_trans_rule (refl_conv tm)
+		(eq_sym_rule(
+		(z_ç_seta_conv THEN_C z_∂_elim_conv2
+		THEN_C local_prove_∂_conv x
+		THEN_C cnv1)
+		(mk_z_ç(x, mk_z_seta(mk_z_decl[mk_z_dec([x],mk_u(mk_z_power_t (type_of x)))],
+			tm,x)))))
+		handle (Fail _) =>
+		term_fail "Z_ç_ELIM_C-mk_a_ç_conv" 42026 [tm]);
+	val cnv2 = simple_eq_match_conv1
+		(all_µ_intro
+		(pc_rule1 "hol1" prove_rule [] 
+		¨f = g § (µ x ∑ x ç f § x ç g)Æ));
+
+in
+fun €Z_ç_ELIM_C›  (cnv:CONV) : CONV = (fn tm =>
+let	val vty = type_of tm;
+	val elem_ty = case dest_ctype vty of
+		("SET",[elem_ty]) => elem_ty
+		| _ => term_fail "Z_ç_ELIM_C" 42027 [tm];
+	val xnm = give_n_name tm;
+	val xvar = mk_var(xnm,elem_ty);
+	val tm' = mk_z_ç(xvar,tm);
+	val s1 = cnv tm';
+	val s2 = (conv_rule (RAND_C (mk_a_ç_conv xvar)) s1);
+	val (lhs,rhs) = ((snd o dest_z_ç) ** (snd o dest_z_ç))
+		(dest_eq(concl s2));
+	val s3 = eq_sym_rule (cnv2 (mk_eq(lhs,rhs)));
+	val s4 = §_mp_rule s3 (µ_intro xvar s2);
+in
+	eq_trans_rule (refl_conv tm) s4
+end);
+end;
+=TEX
+Now we can do:
+=SML
+val €z_ç_Ã_conv› :CONV = ç_C z_Ã_conv;
+val €z_ç_ß¢_conv› :CONV = ç_C z_ß¢_conv;
+=TEX
 \section{PROOF CONTEXTS}
 \subsection{Utilities}
 =SML
@@ -1683,12 +1828,14 @@ val _ = set_rw_eqn_cxt [(Òx ç ¨y (Ã w:'c ∑ z):'b SETÆÆ,z_ç_seta_conv1),
 	(Òx ç ¨Z'Seta[0] y:'a SETÆÆ,z_ç_seta_conv1),
 	(Òx ç ¨y (Cons (p:'b) q):'b SETÆÆ,z_ç_setd_conv),
 	(Òx ç ¨y Nil:'b SETÆÆ,z_ç_setd_conv),
+	(Òx ç ¨y (Ã p ∑ q)ÆÆ,z_ç_Ã_conv),
 	(Ò(Ã x : U | true ∑ y) zÆ,limited_z_¬_conv)]
 		"'z_ç_set_lang";
 val _ = add_rw_thms [] "'z_ç_set_lang";
 
 val pos = (thms_to_eqn_cxt [])
 	@ [(Òx ç ¨y (Ã w ∑ z):'b SETÆÆ,z_ç_seta_conv1),
+	(Òx ç ¨y (Ã p ∑ q)ÆÆ,z_ç_Ã_conv),
 	(Òx ç ¨Z'Seta[0] y:'a SETÆÆ,z_ç_seta_conv1),
 	(Òx ç ¨y (Cons (p:'b) q):'b SETÆÆ,z_ç_setd_conv),
 	(Òx ç ¨y Nil:'b SETÆÆ,z_ç_setd_conv)];
