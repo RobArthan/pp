@@ -1,0 +1,1081 @@
+\showboxbreadth=999 \showboxdepth=999
+\documentstyle[FM,hol]{article}
+\makeindex
+\ftlinepenalty=1000
+\def\Hide#1{}
+\pagestyle{FM}
+\setcounter{section}{-1}
+\FMtitle{HOL in HOL}
+\FMidentity{DS/FMU/RBJ/150}
+\FMissue{0.1}
+\FMclass{}
+\FMdate{\today}
+\FMauthor{Roger Bishop Jones}
+\FMstatus{Draft}
+\FMtype{}
+\FMauthority{}
+\FMsummary{ }
+\FMdistribution{}
+\begin{document}
+\makeFMfrontpage
+\section{Document control}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+
+\subsection{Changes history}  % to get section number `0.3'
+
+First version.
+
+\subsection{Changes forecast}
+
+Under development, highly incomplete, totally volatile.
+
+\subsection{Abbreviations and notation}
+\begin{tabular}{ll}
+HOL & Higher Order Logic\\
+\end{tabular}
+\section{INTRODUCTION}
+\subsection{}
+\subsection{Introducing the new theory}
+
+\Hide{
+extend_theory`ppf150`;;
+map loadf [`TAUT`;`infra`];;
+lemmas_on := false;;
+garbage_collection_diags false;;
+}
+We intoduce the new theory with parents certain
+library theories which we will use later.
+We set some controls for the infrastructure which
+supports the Z-like definition mechanism and for the
+ML system.
+Â
+new_theory`ppf150`;;
+map new_parent [`string`; `infra`; `set`];;
+map loadf [`infra`];;
+lemmas_on := false;;
+garbage_collection_diags false;;
+Ê
+\section{THE SYNTAX OF TYPES AND TERMS}
+
+In this section we define the abstract syntax of HOL terms
+and of the types which they contain.
+The terms will be given as that subtype of a type of ``free
+terms'' which comprises the terms which are well-formed
+(i.e. well-typed) in a sense we will define.
+The well-formedness check does not consider
+context-sensitive issues such as the arity of type
+constructors or the agreement of the type of a
+constant with that of its definition ---
+such considerations are deferred until we have defined the
+notion of a theory. 
+
+To define types for the various syntactic classes
+we use {\tt new\_type}. To populate them we use
+{\tt new\_constant}. To lend verisimilitude to our
+account we formulate as an axiom for each new type,
+a principle of definition by structural recursion, which
+might be used to justify the functions we will later
+define on the types.
+The consistency of the specification
+could, we hope, be demonstrated using T.~Melham's
+system for defining recursive types.
+We are using HOL in the spirit of Z or VDM here.
+
+\subsection{Types}
+As a consequence of our approach,
+the well-formed HOL types constitute a free algebra.
+It is only in the context of the type definitions within
+a hierarchy of theories that a type can be ill-formed.
+
+Â
+new_type 0 `TYPE`;;
+
+new_constant (`‚mk_vartype·`,":string ã TYPE");;
+
+new_constant (`‚mk_type·`,":string â TYPE list ã TYPE");;
+
+let ‚TYPE_axiom· = new_axiom(`TYPE_axiom`,"
+	É(f0:string ã *) (f1: string â TYPE list ã * list ã *)é
+        ¿ (fn:TYPE ã *)é
+         (Ésé fn(mk_vartype s) = f0 s) Ä
+         (És tlé fn(mk_type (s,tl)) = f1 (s, tl) (map fn tl))
+");;
+Ê
+
+\subsection{Free Terms}
+
+The type {\it FTERM} is the syntactic class for what we
+will call free terms, i.e.
+``HOL terms which are well-formed enough to parse, but
+which may not be well-typed''.
+
+Â
+new_type 0 `FTERM`;;
+
+new_constant (`‚mk_fvar·`,":string â TYPE ã FTERM");;
+
+new_constant (`‚mk_fconst·`,":string â TYPE ã FTERM");;
+
+new_constant (`‚mk_fcomb·`,":FTERM â FTERM  ã FTERM");;
+
+new_constant (`‚mk_fabs·`,":string â TYPE â FTERM  ã FTERM");;
+
+let ‚FTERM_axiom· = new_axiom(`FTERM_axiom`,"
+	É
+	(f0:string â TYPE ã *)
+	(f1:string â TYPE ã *)
+	(f2: FTERM â FTERM ã * â * ã *)
+	(f3: string â TYPE â FTERM ã * ã *)é
+        ¿ (fn:FTERM ã *)é
+         (És tyé	fn (mk_fvar (s, ty))
+			= f0 (s, ty))
+	Ä  (És tyé	fn(mk_fconst (s, ty))
+			= f1 (s, ty))
+	Ä  (Éf aé	fn(mk_fcomb (f, a))
+			= f2 (f, a) (fn f, fn a))
+	Ä  (Év ty bé	fn(mk_fabs (v, ty, b))
+			= f3 (v, ty, b) (fn b))
+");;
+Ê
+
+We now define the destructor functions which are
+left inverse to the constructor functions
+{\it mk\_fvar} etc. We avoid the pragmatic issue
+of how the functions should handle invalid arguments.
+
+»
+	‚dest_fvar·: FTERM ã string â TYPE
+…
+		dest_fvar o mk_fvar = I
+À
+»
+	‚dest_fconst·: FTERM ã string â TYPE
+…
+		dest_fconst o mk_fconst = I
+À
+»
+	‚dest_fcomb·: FTERM ã FTERM â FTERM
+…
+		dest_fcomb o mk_fcomb = I
+À
+»
+	‚dest_fabs·: FTERM ã string â TYPE â FTERM
+…
+		dest_fabs o mk_fabs = I
+À
+
+\subsection{Free Variables}
+To illustrate how the principle of definition
+by structural recursion for the type {\it FTERM}
+might be used, we define some simple functions
+which are useful later and which could be defined
+using it.
+
+{\it freevars\_fset} returns the set of free variables
+of a term.
+We use it in cases where the order of appearance
+of the free variables in the term is immaterial.
+
+»
+	‚freevars_fset·: FTERM ã (string â TYPE ã bool)
+…
+	É(s : string) (t : TYPE) (f : FTERM)
+	(a : FTERM) (v : string) (b : FTERM) é
+	(freevars_fset (mk_fvar(s,t)) = çxé x = (s,t))
+Ä	(freevars_fset (mk_fconst(s,t)) = çxé F)
+Ä	(freevars_fset (mk_fcomb(f, a)) =
+			(freevars_fset f) ° (freevars_fset a))
+Ä	(freevars_fset (mk_fabs(v, t, b)) =
+			(freevars_fset b) ƒ çxé x = (v,t))
+À
+
+{\it freevars\_flist} returns the free variables of a term
+listed in order of first appearance (from left to
+right in the usual concrete syntax).
+
+»
+	‚freevars_flist·: FTERM ã ((string â TYPE)list)
+…
+	É(s : string) (t : TYPE) (f : FTERM)
+	(a : FTERM) (v : string) (b : FTERM) é
+	(freevars_flist (mk_fvar(s,t)) = [(s,t)])
+Ä	(freevars_flist (mk_fconst(s,t)) = [])
+Ä	(freevars_flist (mk_fcomb(f, a)) =
+			freevars_flist f µ
+			(freevars_flist a ¡ çxéx ∆ freevars_flist f))
+Ä	(freevars_flist (mk_fabs(v, t, b)) =
+			freevars_flist b ¡ çxé x à (v,t))
+À
+
+\subsection{Typing Terms}
+
+We now give the relation which relates a free term
+to its type, if it has one.
+
+Note that two variables
+with the same name but different types are simply
+considered as different --- this agrees with both
+the HOL logic and the HOL system (except that a term
+containing two such names in the same scope cannot
+be entered via the parser --- the constructor functions 
+must be used).
+
+We do not check here that the type assigned to
+a constant is an instance of the type with which it
+is declared. Indeed, we have not yet defined the
+mechanisms required to do this. 
+
+»
+	‚type_of_term·: FTERM ã TYPE ã bool
+…
+	É(s : string) (t : TYPE) (ty: TYPE)
+	 (f : FTERM) (a : FTERM) (v : string)
+	 (b : FTERM) é
+	(type_of_term (mk_fvar(s,t)) ty = (t = ty))
+Ä	(type_of_term (mk_fconst(s,t)) ty = (t = ty))
+Ä	(type_of_term (mk_fcomb(f, a)) ty = 
+		Ñ(t1 : TYPE)é
+			(type_of_term f (mk_type(`ã`, [t1; ty])))
+		Ä	(type_of_term a t1))
+Ä	(type_of_term (mk_fabs(v, t, b)) ty = 
+		Ñ(t1 : TYPE)é
+			(type_of_term b t1)
+		Ä	(mk_type(`ã`, [t; t1]) = ty))
+À
+
+\subsection{Well-Formedness And The Type of Well-Formed Terms}
+
+A term is well-formed if it has a type:
+
+»
+	‚is_wf_term· : FTERM ã bool
+…
+	Éterm:FTERMé
+	is_wf_term term = Ñtype:TYPEé type_of_term term type
+À
+
+We now define the type {\it TERM} of well-formed terms
+as a subtype of the type {\it FTERM} of free terms.
+
+Â
+sim_type_def `‚TERM·` ("x:FTERM, is_wf_term x");;
+Ê
+
+The constructor functions for the type {\it TERM}
+are easily defined as composites in terms of
+the constructor functions for {\it FTERM} and
+the abstraction and representation functions for
+{\it TERM}:
+
+»
+	‚mk_var· : string â TYPE ã TERM
+…
+	mk_var = ABS_TERM o mk_fvar 
+À
+»
+	‚mk_const· : string â TYPE ã TERM
+…
+	mk_const = ABS_TERM o mk_fconst 
+À
+»
+	‚mk_comb· : TERM â TERM ã TERM
+…
+	mk_comb = (ABS_TERM o mk_fcomb) o ç(x,y)é (REP_TERM x, REP_TERM y)
+À
+»
+	‚mk_abs· : TERM â TERM ã TERM
+…
+	mk_abs = (ABS_TERM o mk_fabs) o
+			ç(x,y)é (	FST(dest_var x),
+					SND(dest_var x),
+					REP_TERM y)
+À
+As for {\it FTERM} the destructor functions are
+specified as left inverses of the corresponding
+constructor functions:
+
+»
+	‚dest_var·: TERM ã string â TYPE
+…
+		dest_var o mk_var = I
+À
+»
+	‚dest_const·: TERM ã string â TYPE
+…
+		dest_const o mk_const = I
+À
+»
+	‚dest_comb·: TERM ã TERM â TERM
+…
+		dest_comb o mk_comb = I
+À
+»
+	‚dest_abs·: TERM ã TERM â TERM
+…
+		dest_abs o mk_abs = I
+À
+
+We can also define functions for extracting
+free variables using the ones we have already defined
+for free terms:
+
+»
+	‚freevars_set· : TERM ã (string â TYPE ã bool)
+…
+	freevars_set = freevars_fset o REP_TERM 
+À
+»
+	‚freevars_list· : TERM ã ((string â TYPE) list)
+…
+	freevars_list = freevars_flist o REP_TERM 
+À
+\section{SYNTAX OF SEQUENTS AND PROOF TREES}
+A sequent is simply a finite set of assumptions (for
+which we use a list) and a conclusion. Assumptions
+and conclusion alike are just terms:
+
+Â
+new_type_abbrev(`‚SEQ·`, ":(TERM) list â TERM");;
+Ê
+
+The type {\it FPROOF} is the type of free (i.e. not
+necessarily valid) proof trees.
+The structure of the tree is specific to the particular
+collection of axiom schemata and inference rules.
+A more general treatment is quite feasible and probably
+pointless in the present context.
+
+The trees have four sorts of leaves  (the first four
+constructors below): one for individual axioms and the
+rest for the three axiom schemata.
+Â
+new_type 0 `‚FPROOF·`;;
+new_constant (`‚mk_fAXp·`,":SEQ ã FPROOF");;
+new_constant (`‚mk_fASSUMEp·`,":TERM ã FPROOF");;
+new_constant (`‚mk_fREFLp·`,":TERM ã FPROOF");;
+new_constant (`‚mk_fBETA_CONVp·`,":TERM ã FPROOF");;
+new_constant (`‚mk_fSUBSTp·`,
+	":(FPROOF â TERM)list ã TERM ã FPROOF ã FPROOF");;
+new_constant (`‚mk_fABSp·`,":TERM ã FPROOF ã FPROOF");;
+new_constant (`‚mk_fINST_TYPEp·`,
+	":(TYPE â TYPE)list ã FPROOF ã FPROOF");;
+new_constant (`‚mk_fDISCHp·`,":TERM ã FPROOF ã FPROOF");;
+new_constant (`‚mk_fMPp·`,":FPROOF ã FPROOF ã FPROOF");;
+Ê
+
+The principle of definition by structural recursion
+on proof trees is rather long:
+
+Â
+let ‚FPROOF_axiom· = new_axiom(`FPROOF_axiom`,"
+	É
+	(fAXf:SEQ ã *)
+	(fASSUMEf:TERM ã *)
+	(fREFLf:TERM ã *)
+	(fBETA_CONVf:TERM ã *)
+	(fSUBSTf:(FPROOF â TERM)list ã TERM ã FPROOF ã (*)list ã * ã *)
+	(fABSf:TERM ã FPROOF ã * ã *)
+	(fINST_TYPEf:(TYPE â TYPE)list ã FPROOF ã * ã *)
+	(fDISCHf:TERM ã FPROOF ã * ã *)
+	(fMPf:FPROOF ã FPROOF ã * ã * ã *)é
+        ¿ (fn:FPROOF ã *)é
+         (Éseqé	fn (mk_fAXp seq)
+			= fAXf s)
+	Ä  (Étermé	fn(mk_fASSUMEp term)
+			= fASSUMEf term)
+	Ä  (Étermé	fn(mk_fREFLp term)
+			= fREFLf term)
+	Ä  (Étermé	fn(mk_fBETA_CONVp term)
+			= fBETA_CONVf term)
+	Ä  (Éfptl term fproofé
+		fn(mk_fSUBSTp fptl term fproof)
+			= fSUBSTf fptl term fproof
+				(map (fn o FST) fptl) (fn fproof))
+	Ä  (Éterm fproofé
+		fn(mk_fABSp term fproof)
+			= fABSf term fproof (fn fproof))
+	Ä  (Éttl fproofé
+		fn(mk_fINST_TYPEp ttl fproof)
+			= fINST_TYPEf ttl fproof (fn fproof))
+	Ä  (Éterm fproofé
+		fn(mk_fDISCHp term fproof)
+			= fDISCHf term fproof (fn fproof))
+	Ä  (Éfproof1 fproof2é
+		fn(mk_fMPp fproof1 fproof2)
+			= fMPf fproof1 fproof2 (fn fproof1) (fn fproof2))
+");;
+Ê
+
+\section{THE RULES OF INFERENCE}
+
+In this section we treat the syntax manipulating
+functions required to define the various rules of
+inference. We consider each inference rule in turn.
+We assume familiarity with the definitions of the
+various rules.
+
+\subsection{The Axiom Schemata: ASSUME, REFL, and BETA\_CONV}
+These require no special functions. $\beta$-conversion
+requires the notion of substituting a term for a
+free variable in a term avoiding problems with
+capture of bound variables. All this is covered in our
+discussion of {\it SUBST} below.
+
+\subsection{Substitution: SUBST}
+
+In this section we define the functions needed to
+define the inference rule {\it SUBST}.
+
+In essence, {\it SUBST} says that given a
+theorem whose conclusions is an equation ${\cal A} = {\cal B}$, where
+$\cal A$ and $\cal B$ are arbitrary terms of the same
+type, and given any other theorem with conclusion
+$\cal C$ say, we may obtain a new theorem by substituting
+$\cal B$ for 
+any subterm of $\cal C$ which is identical with $\cal A$. This is subject to the proviso that no variable
+capture problems arise, i.e. no
+free variables of $\cal B$ should become bound in the
+conclusion of the new theorem. (The assumption set of the
+consequent theorem is the union of the assumption sets of
+the antecedent theorems.)
+
+The inference rule is, in fact, formulated slightly more
+generally. It allows one to use a whole list of theorems
+whose conclusions are equations to perform (simultaneous)
+substitutions for many subterms of $\cal C$. Moreover,
+it is implemented as a functional relation, effectively by
+renaming any bound variables of $\cal C$ which would
+give rise to the capture problem.
+
+The inference rule is parametrised by a template term
+and a list of some of its free variables, one for each equation.
+The actual statement of the rule is, essentially, that, 
+if the result of substituting the left hand sides
+of the equations for the corresponding variables
+in the template term
+is equal to $\cal C$ ({\it modulo} renaming bound
+variables), then we may infer the result of substituting
+the right hand sides of the equations for the
+corresponding template variables in the template term
+(providing we rename bound variables to avoid the capture
+problem).
+
+
+The notions we must formalise are therefore: (i) renaming a variable in a term; (ii) testing equivalence of
+terms {\it modulo} renaming of bound variables (aka.
+$\alpha$-conversion); (iii) substituting terms for
+free variables in a term according to a given mapping
+of variables to terms avoiding variable capture.
+
+
+\subsubsection{Renaming}
+$\it rename (v, ty) w e$ is the result of changing
+the name in every instance of the
+variable with name {\it v} and type {\it ty} in the
+term {\it e} to {\it w}.
+
+»
+	‚rename· : (string â TYPE) ã string ã TERM ã TERM
+…
+	É
+	(v : string) (ty : TYPE) (w: string)
+	(vv :string) (tty : TYPE) (cc : string)
+	(ff : TERM) (aa : TERM) (bb : TERM)
+	é
+	(rename (v, ty) w (mk_var(vv, tty)) =
+		((v = vv) Ä (ty = tty)) =>
+			mk_var(w, ty) | mk_var(vv, tty))
+	Ä
+	(rename (v, ty) w (mk_const(cc, tty)) =
+		mk_const(cc, tty))
+	Ä
+	(rename (v, ty) w (mk_comb(ff, aa)) =
+		mk_comb(rename (v, ty) w ff, rename (v, ty) w aa))
+	Ä
+	(rename (v, ty) w (mk_abs(mk_var(vv, tty), bb)) =
+		((v = vv) Ä (ty = tty)) =>
+			mk_abs(mk_var(vv, tty), bb) |
+			mk_abs(mk_var(vv, tty), rename (v, ty) w bb))
+À
+
+\subsubsection{$\alpha$-conversion}
+
+»
+	‚aconv· : TERM ã TERM ã bool
+…
+	É(t1 : TERM) (t2 : TERM)é
+	aconv t1 t2 =
+		(t1 = t2)
+	Å	(Ñt1f t1a t2f t2aé
+			(t1 = mk_comb(t1f, t1a))
+		Ä	(t2 = mk_comb(t2f, t2a))
+		Ä	(aconv t1f t2f Ä aconv t1a t2a))
+	Å	(Ñv1 v2 ty b1 b2é
+			(t1 = mk_abs(mk_var(v1, ty), b1))
+		Ä	(t2 = mk_abs(mk_var(v2, ty), b2))
+		Ä	aconv t1 (mk_abs(mk_var(v1, ty), rename (v2, ty) v1 b2)))
+
+À
+
+\subsubsection{Substitution}
+
+We will need to choose new names for variables. As things
+stand the function {\it variant} below makes no
+use of the first component of its first parameter.
+In practice we may need to assist that the new name
+is derived from the old one in a specified way.
+
+»
+	‚variant· : (string â TYPE ã bool) ã (string â TYPE) ã string
+…
+	É v ty vs é (variant vs (v, ty), ty) ì vs 
+À
+
+The following function is useful in {\it subst} and
+elsewhere.
+
+»
+›	‚image· :  (* ã **) ã (* ã bool) ã (** ã bool)
+…
+›	Éfunction seté image function set = 
+›		çx:**é Ñy:*é (x = f y) Ä y ù set
+À
+
+Now we can define {\it subst}. {\it subst F t1} gives the
+term resulting from replacing every free variable
+$\it mk\_var(s, t)$
+in {\it t1} by $\it F(mk\_var(s, t))$ with bound
+variables renamed as necessary to avoid capture.
+Variables which are not to be changed correspond
+to pairs $(s, t)$ with $\it F (s, t) =  mk\_fvar (s, t)$.
+
+»
+	‚subst· : (string â TYPE ã TERM) ã TERM ã TERM
+…
+	É
+	(v : string) (ty : TYPE) (c : string)
+	(f : TERM) (a : TERM) (b : TERM)
+	é
+	(subst R (mk_var(v, ty)) = R (v,ty))
+	Ä
+	(subst R (mk_const(c, ty)) = mk_const(c, ty))
+	Ä
+	(subst R (mk_comb(f, a)) =
+		mk_comb(subst R f, subst R a))
+	Ä
+	(subst R (mk_abs(mk_var(v, ty), b)) =
+		let RR = çxé (x = (v, ty)) => (mk_var x) | R x
+		in 	if( Ñwé
+				(w à (v, ty))
+			Ä	((v, ty) ù freevars_set (RR w))
+			Ä	(w ù freevars_set b)
+			)then(	let new_frees =
+	£(image (freevars_set o RR) (freevars_set b))
+				in let v' = variant new_frees (v, ty)
+				in let RRR = çxé (x = (v', ty)) => (mk_var x) | RR x
+				in
+	mk_abs(mk_var(v', ty), subst RRR (rename (v, ty) v' b))
+			)else(
+	mk_abs(mk_var(v, ty), subst RR b)))
+À
+
+\subsection{Abstraction: ABS}
+
+Abstraction says that from a theorem whose conclusion
+is an equation ${\cal A} = {\cal B}$
+one may infer the theorem with the same assumptions
+and with conclusion $(çxé{\cal A}) = (çxé{\cal B})$
+provided $x$ does not appear free in the assumptions.
+The only syntax function required for this is
+{\it freevars\_set}, defined above.
+
+
+\subsection{Type Instantiation: INST\_TYPE}
+
+The ability to prove and use general (polymorphic)
+theorems  is one of the great strengths of the HOL
+system. The feature in the inference system which
+gives this strength is the inference rule {\it INST\_TYPE}
+which allows us to instantiate the type variables
+in the conclusion of a polymorphic theorem.
+
+In essence, the inference rule says that, given a theorem
+with conclusion $\cal A$ say we may infer the theorem
+which has the same assumption set and whose conclusion
+results from instantiating every type in $\cal A$
+according to a given mapping of type variables to types.
+This is subject to two provisos: (i) no type variable may
+be changed which appears in the assumption set for the
+theorem; (ii) no two variables in the assumptions or
+conclusion of the antecedent theorem, which are
+different, by virtue of their type,  should become
+identified in the consequent theorem as a result of
+the transformation.
+
+The first proviso is, we believe, only enforced to preserve
+the natural deduction notion that inference rules
+involve only simple set operations on the assumption
+sets. It would seem to be quite in order for the first
+proviso to be dropped provided we insisted that the
+type instantiation be applied to every term in the sequent
+(we have, of course, not done this yet).
+
+The second proviso cannot be avoided. Consider for
+example: $ç(x:**)éç(x:*)é(x:**)$. If this were type
+instantiated according to $\{:** ó :*, :* ó :**\}$,
+then from:
+$$Ö É(y:**)(z:*)é(ç(x:**)éç(x:*)é(x:**))y z = y$$
+we could infer that:
+$$Ö É(y:*)(z:*)é(ç(x:*)éç(x:*)é(x:*))y z = y$$
+whence, by $\beta$-conversions:
+$$Ö É(y:*)(z:*)éz = y.$$
+This leads to a contradiction whenever $:*$ is instantiated
+to a type with more than one inhabitant.
+
+To permit an implementation which is convenient to use,
+the inference rule is actually formulated without the
+second proviso. Instead, variables (both free and bound,
+in general) in the conclusion of the consequent theorem,
+which would violate the rule are renamed to
+avoid the problem. It is valid to rename free variables
+in these circumstances, given the first proviso, since
+the variables in question cannot occur free in the
+assumption set. Note that it would be invalid to
+rename free variables in $\cal A$
+which are not changed by the type instantiation
+(since these may appear free in the assumption set).
+
+Formalising these notions is a little tricky. We present
+here a highly unconstructive specification, reminiscent
+of $\alpha$-conversion.
+The two notions to be formalised are: (i) the type
+instantiation of a type given by a mapping of
+type variables to types and (ii) the predicate on
+pairs of terms which says that one is a type instance
+of another according to a given mapping of type
+variables to types and with respect to a set of
+variables with which clashes must not occur (this
+will be the set of free variables of the assumptions
+in practice).
+
+It is entertaining and instructive to consider
+algorithms meeting these specifications and we consider
+some possibilities in an appendix.
+
+
+\subsubsection{Instantiation Of Types}
+This is straightforward:
+»
+	‚inst_type· : (string ã TYPE) ã TYPE ã TYPE
+…
+	É(f: string ã TYPE) é
+		(Ésé  inst_type f (mk_vartype s) = f s)
+	Ä	(És tléinst_type f (mk_type(s, tl)) =
+			mk_type(s, map (inst_type f) tl))
+À
+\subsubsection{Instantiation Of Terms}
+
+Instantiation of terms is a little tricky.
+The following two functions should be viewed as
+local to the function {\it inst}.
+{\it inst\_loc1} is very similar to an
+$\alpha$-convertibility test. Indeed {\it aconv} could
+have been defined as $\it inst\_loc1 I$.
+The first {\it TERM} parameter of {\it inst\_loc1}
+and {\it inst\_loc2}
+gives the terms whose types are being instantiated (i.e.
+it is the ``more polymorphic'' term).
+
+»
+	‚inst_loc1· : (string ã TYPE) ã TERM ã TERM ã bool
+…
+	É
+	(tysubs : string ã TYPE)
+	(tm1 : TERM) (tm2 : TERM)é
+	inst_loc1 tysubs tm1 tm2 =
+		(Ñtm1s tm1t tm2s tm2t mk_Xé
+			((mk_X = mk_var) Å (mk_X = mk_const))
+		Ä	(tm1 = mk_X(tm1s, tm1t))
+		Ä	(tm2 = mk_X(tm2s, tm2t))
+		Ä	(tm1s = tm2s)
+		Ä	(tm2t = inst_type tysubs tm1t))
+	Å	(Ñtm1f tm1a tm2f tm2aé
+			(tm1 = mk_comb(tm1f, tm1a))
+		Ä	(tm2 = mk_comb(tm2f, tm2a))
+		Ä	(inst_loc1 tysubs tm1f tm2f Ä
+			inst_loca1 tysubs tm1a tm2a))
+	Å	(Ñv1 v2 ty1 ty2 b1 b2é
+			(tm1 = mk_abs(mk_var(v1, ty1), b1))
+		Ä	(tm2 = mk_abs(mk_var(v2, ty2), b2))
+		Ä	inst_loc1
+			tysubs
+	(mk_abs(mk_var(v1, ty1), rename (v1, ty1) v2 b1))
+			tm2)
+À
+
+
+»
+	‚inst_loc2· : ((string â TYPE) ã bool) ã 
+		(string ã TYPE) ã
+		(((string â TYPE) â (string â TYPE)) list) ã
+		TERM ã TERM ã bool
+…
+	É(avoid : (string â TYPE) ã bool)
+	(tysubs :string ã TYPE)
+	(v1 : string) (ty1 : TYPE)
+	(v2 : string) (ty2 : TYPE)
+	(rest : ((string â TYPE) â (string â TYPE)) list)
+	(tm1 : TERM) (tm2 : TERM)é
+	(inst_loc2 avoid tysubs [] tm1 tm2 =
+		inst_loc1 tysubs tm1 tm2)
+	Ä
+	(inst_loc2 avoid tysubs (CONS ((v1, ty1),(v2, ty2)) rest) tm1 tm2 =
+		((v2, ty2) ù avoid ä ((v1, ty1) = (v2, ty2)))
+	Ä	(ty2 = inst_type tysubs ty1)
+	Ä	inst_loc2 avoid tysubs rest
+		(rename (v1, ty1) v2 tm1) tm2)
+À
+
+The following simple list proccessing function is
+needed:
+
+»
+	‚combine· : (* list) ã (** list) ã ((* â **) list)
+…
+	É hd1 hd2 tl1 tl2é
+	(combine [] [] = [])
+	Ä
+	(combine (CONS hd1 tl1) (CONS hd2 tl2) =
+			CONS (hd1, hd2) (combine tl1 tl2))
+À
+
+With the above prelimaries we can now define {\it inst}.
+
+»
+	‚inst· : ((string â TYPE) ã bool) ã
+		(string ã TYPE) ã TERM ã TERM
+…
+	É((avoid : (string â TYPE) ã bool))
+	(tysubs :string ã TYPE) (tm1 : TERM)é
+	let tm2 = inst avoid tysubs tm1
+	in let fl1 = freevars_list tm1
+	in let fl2 = freevars_list tm2
+	in	(length fl1 = length fl2)
+	Ä	inst_loc2 avoid tysubs (combine fl1 fl2) tm1 tm2
+À
+
+\subsection{Discharging an Assumption: DISCH}
+
+This requires {\it mk\_comb} to assemble an
+implication.
+
+\subsection{Modus Ponens: MP}
+
+This requires {\it dest\_comb} to dismantle an
+implication.
+
+\section{THEOREMS}
+\Hide{Got here in reload. RDA}
+{\it
+Here we will define deducibility.
+This will be a relation between sets of sequents
+and sequents. We will need various notions on proof
+trees: validity, conclusion, assumptions.
+A sequent {\rm X} will be deducible from a set of same
+if there is a valid proof tree with {\rm X}  as conclusion
+and with all the assumptions taken from the set.
+}
+\section{THEORIES}
+
+We have already defined the type environment part of
+a theory. A theory also has both a constant environment
+and a bunch  of axioms:
+
+Â
+new_type_abbrev(`TY_ENV`, ":string ã num ã bool");;
+
+new_type_abbrev(`CON_ENV`, ":string ã TYPE ã bool");;
+
+new_type_abbrev(`SEQS`, ":SEQ ã bool");;
+Ê
+
+«Õ`THEORY``T`ÕÕÕÕÕÕÕÕÕÕﬂ
+›name		:string,
+›parents	:string ã bool,
+›ty_env	:TY_ENV,
+›con_env	:CON_ENV,
+›extensions	:SEQS,
+›axioms	:SEQS,
+›theorems	:SEQS
+…ÕÕÕÕÕÕÕÕÕÕÕÕ
+›T
+ ÕÕÕÕÕÕÕÕÕÕÕÕÕÕÕÕÕ‡
+Â
+new_type_abbrev(`FTHEORIES`, ":THEORY list");;
+Ê
+\section{THE THEORY}
+\section{SEMANTIC DOMAINS}
+\begin{enumerate}
+\item{}
+Mono-types are sets (objects of type SET).
+\item{}
+A type variable assignment is a map from strings to Mono-types (SETS).
+\item{}
+A type constant assignment is a map from (string X SET list) to SET.
+\item{}
+Monomorphic individuals are elements of SET.
+\item{}
+Polmorphic values are maps from type variable assignments to Monomorphic values.
+\item{}
+A variable assignment is a map from string to polymorphic value.
+\item{}
+A constant assignment is a map from string to polymorphic value.
+\end{enumerate}
+
+\section{ISSUES}
+\subsection{Changes to the Language}
+I am strongly tempted to make some adjustments to the language.
+The strongest temptation I have is to outlaw overloading of variable names.
+This might be achieved by insisting that the following
+predicate were satisfied either by the set of
+all variables in a term, or less stringently by
+the free variables of the term and of the body of every
+ç-abstraction within it.
+
+»
+	consistent_vartypes: (string â TYPE ã bool) ã bool
+…
+	consistent_vartypes sts =
+		É(s,t)(s',t')é sts (s,t) Ä sts (s',t') Ä (s = s')
+			ä (t = t')
+À
+
+I am also tempted to have term formation rules which are independent of the theory environment (i.e. allow constants to be used before declaration).
+Also to allow overloading of constants.
+(rules for conservative extension permitting sets of constant definitions provided the types used are pairwise non-unifiable).
+\subsection{Formalisation}
+I would like to avoid having FAILure results on all functions which are not certain to succeed, but am not sure whether they can be avoided.
+The reason is to keep the specification simple.
+Where a function is normally used in circumstances when its arguments are known to be satisfactory, I think it is better to use a version which does not have failure codes in it.
+To make this possible as consistently as possible I think functions with failure results should be used only where absolutely necessary.
+This corresponds to programming in ML by checking with "is\_?" before doing "dest\_?" instead of going ahead regardless and then trapping the exception.
+Trapping exceptions is easier in ML but more complicated in HOL.
+
+\section{FREE VARIABLES}
+
+{\tiny Roger! What's all this stuff for? --- Rob.}
+
+»
+	type_tyvars :  TYPE ã (string ã bool)
+…
+		(És:stringé  type_tyvars (mk_vartype s) = çxéx=s)
+	Ä	(És tlé type_tyvars (mk_type(s, tl)) =
+			£ çxé x ≈ (map term_tyvars tl))
+À
+»
+	term_types :  TERM ã (TYPE ã bool)
+…
+		(És té term_types (mk_var (s,t)) = çxéx=t)
+	Ä	(És té term_types (mk_const (s,t)) = çxéx=t)
+	Ä	(Éf aé term_types (mk_comb (f,a)) =
+			(term_types f) ° (term_types a))
+	Ä	(Év bé term_types (mk_abs(v,b)) =
+			(term_types v) ° (term_types b))
+À
+
+»
+›	types_tyvars :  (TYPE ã bool) ã (string ã bool)
+…
+›	Étypesé types_tyvars types =
+		£ ((image:  (TYPE ã (string ã bool)) ã (TYPE ã bool) ã ((string ã bool) ã bool))
+		type_tvars types)
+›		
+À
+
+»
+	term_tyvars :  TERM ã (string ã bool)
+…
+	term_tyvars = types_tyvars o term_types
+À
+»
+	terms_tyvars :  (TERM ã bool) ã (string ã bool)
+…
+	É terms:(TERM ã bool)é
+	terms_tyvars terms =
+	£ ((image:(TERM ã (string ã bool)) ã (TERM ã bool) ã ((string ã bool) ã bool))
+	term_tvars terms)
+À
+»
+	elems :  (* list) ã (* ã bool)
+…
+	e ù elems s Ç e ≈ s
+À
+
+
+\appendix
+\section{Algorithms for Type Instantiation}
+The problem is to rename variables in such a way as to prevent identification of previously distinct variables and prevent separation of previously identical ones.
+An additional complication arises in the definition
+of the inference rule {\it INST\_TYPE}: we must
+avoid identifications with a set of variables, namely
+the free variables from the assumption list of a theorem,
+supplied as a parameter. 
+The following is one possible formulation. It agrees with
+the current HOL system in many cases.
+
+We first define a function which takes a term
+and renames the free instances of a given list
+of variables so that no
+identifications will occur when their types are instantiated
+according to a given function of type $\it (string ã TYPE)$.
+Note that this could be specified more abstractly.
+»
+	inst_rename_free :
+		(string ã TYPE) ã ((string â TYPE) ã bool) ã
+		(string â TYPE) ã TERM ã
+		((string â TYPE) â TERM)
+		
+…
+	É
+	(tysubs : string ã TYPE) (avoid : (string â TYPE) ã bool)
+	(v: string) (ty : TYPE) (tm : TERM)
+	é
+	inst_rename_free tysubs avoid (v, ty) tm = 
+	let new_ty = inst_type tysubs ty
+	in 
+		(((v, new_ty) ì avoid) Ä (ty à new_ty))
+		=>
+	((v, new_ty), tm)
+		|
+	let dont_clash = (
+		ç(vx, tyx)é
+		Ñvtyé vty ù freevars_set tm
+		Ä (	(vty = (vx, tyx)) Å
+			(vty = (vx, inst_type tysubs tyx)) ))
+	in let new_v = variant (avoid ° dont_clash) (v, ty)
+	in let new_tm = rename (v, ty) new_v tm
+	in ((v, new_ty),  new_tm)
+À
+»
+	inst_rename_frees :
+		(string ã TYPE) ã ((string â TYPE) ã bool) ã
+		((string â TYPE) list) ã TERM ã TERM
+		
+…
+	É
+	(tysubs : string ã TYPE) (avoid : (string â TYPE) ã bool)
+	(v: string) (ty : TYPE)
+	(rest : (string â TYPE) list)(tm : TERM)
+	é
+	(inst_rename_frees tysubs avoid [] tm = tm)
+	Ä
+	(inst_rename_frees tysubs avoid  (CONS (v, ty) rest) tm = 
+	let new_vty_tm =
+		inst_rename_free tysubs avoid (v, ty) tm
+	in
+		inst_rename_frees
+		tysubs
+		(avoid ° singleton_set (FST new_vty_tm))
+		rest
+		(SND new_vty_tm))
+À
+
+The following function does the bulk of the work off
+type instantiating a term. It is intended for use
+on terms whose free variables have already been processed
+by {\it inst\_rename\_frees}.
+
+»
+	inst_aux :
+		(string ã TYPE) ã ((string â TYPE) ã bool) ã
+		TERM ã TERM
+		
+…
+	É
+	(tysubs : string ã TYPE) (avoid : (string â TYPE) ã bool)
+	(v : string) (ty : TYPE) (f 
+	é
+	(inst_aux tysubs avoid (mk_var(v, ty)) =
+		mk_var(v, inst_type tysubs ty))
+	Ä
+	(inst_aux tysubs avoid (mk_const(v, ty)) =
+		mk_const(v, inst_type tysubs ty))
+	Ä
+	(inst_aux tysubs avoid (mk_comb(f, a)) = 
+		mk_comb(inst_aux tysubs avoid f, inst_aux tysubs avoid a))
+	Ä
+	(inst_aux tysubs avoid (mk_abs(mk_var(v, ty), b)) =
+		let new_vty_b = inst_rename_free tysubs avoid (v, ty) b
+		in let new_v = FST (FST new_vty_b)
+		in let new_ty = SND (FST new_vty_b)
+		in let new_b = SND new_vty_b
+		in mk_abs(mk_var(new_v, new_ty), inst_aux tysubs (avoid ° singleton_set (new_v, new_ty)) new_b))
+À
+
+
+»
+	inst_term :
+		(string ã TYPE)
+		% instantiations required %
+	ã	(	(string â TYPE ã bool)
+		% free variables to avoid clashing with %
+		â	((string â TYPE) â (string â TYPE) ã bool)
+		% substitutions to perform %
+		â	TERM)
+	ã	(	(string â TYPE ã bool)
+		â	((string â TYPE) â (string â TYPE) ã bool)
+		â 	TERM)
+…
+	É	(tsubs :string ã TYPE)
+		(fvars :string â TYPE ã bool)
+		(vsubs :(string â TYPE) â (string â TYPE) ã bool)é
+	(És té	
+		inst_termf tsubs (fvars, vsubs, (mk_var (s,t)))
+		=
+		(Ñv'é vsubs ((s,t), v')) =>
+			(fvars,
+			vsubs,
+			mk_var v')
+
+		| (inst_typef tsubs t = t) =>
+			(fvars ° (l_t_s [s,t]),
+			vsubs,
+			mk_var(s,t))
+
+		| fvars (s, inst_typef tsubs t) =>
+			(let nn = s % change to new name for variable %
+			in
+			(fvars ° (l_t_s[nn, inst_typef tsubs t]),
+			vsubs ° (l_t_s[(s,t), (nn,inst_typef tsubs t)]),
+			mk_var(nn,inst_typef tsubs t)))
+
+		| 	(fvars ° (l_t_s[s,inst_typef tsubs t]),
+			vsubs ° (l_t_s[(s,t), (s,inst_typef tsubs t)]),
+			mk_var(s,inst_typef tsubs t)
+		)
+	)
+Ä	(És té	
+		inst_termf tsubs (fvars, vsubs, (mk_const (s,t)))
+		= 	(fvars,
+			vsubs,
+			mk_const(s, inst_typef tsubs t)))
+Ä	(Éf aé	
+		inst_termf tsubs (fvars, vsubs, (mk_comb (f,a)))
+		= 	let lr = inst_termf tsubs (fvars, vsubs, f)
+			in
+			let rr = inst_termf tsubs (FST lr, FST(SND lr), a)
+			in
+			(FST rr,
+			FST(SND rr),
+			mk_comb(SND(SND lr),SND(SND rr))))
+À
+
+\begin{FT}{}
+% \input{/escher/usr2/rbj/ppf/ppf150.th.prt}
+\end{FT}
+\section{Index of Defined Terms}
+\ftlmargin=1in \ftrmargin=1in
+\printindex
+\end{document}
