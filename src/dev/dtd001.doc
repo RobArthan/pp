@@ -32,13 +32,13 @@ system are given a detailed design in this document.}
 \end{centering}
 \pagebreak
 \section{Document control}
-\subsection{Contents list}
+\subsection{Contents List}
 \tableofcontents
-\subsection{Document cross references}
+\subsection{Document Cross References}
 \bibliographystyle{fmu}
 \bibliography{fmu}
 
-\subsection{Changes history} 
+\subsection{Changes History} 
 \begin{description}
 \item [Issue 1.1]
 First draft version.
@@ -56,7 +56,7 @@ Added test material. Noted dependence upon the Product Requirement Specification
 Reformated Error messages.
 \item [Issue 1.6]
 Modified $is\_all\_graphical$ to be true for codes 33-126 and 128+.
-Replaced two instances of "‹" by "->".
+Replaced two instances of $‹$ by $->$.
 \item [Issue 1.7]
 $give\_stats$ renamed as $get\_stats$.
 \item [Issue 1.8]
@@ -65,22 +65,25 @@ Changed error message 1009.
 Added ``Release 1 ICL HOL:'' to document's title.
 $union$ noted not to gain duplicates if they were present in its second list argument.
 Removed $dump\_string$.
-\item [1.9]
+\item [Issue 1.9]
 Improved comments upon $all\_distinct$.
-\item [1.10]
+\item [Issue 1.10]
 Modified the statements of ordering for $grab$, $union$, and $s\_extend$.
 Removed $rel$ and $grel$.
 Added $initial\_s\_dict$, and renamed $initial\_E\_DICT$ to $initial\_e\_dict$.
 Added $present$.
-\item [1.11]
+\item [Issue 1.11]
 Added $set\_eq$.
-\item [1.12]
+\item [Issue 1.12]
 Added $init\_stats$.
+\item [Issue 1.13]
+Changes in response to inspection IR0012.
 \end{description}
-%\subsection{Changes forecast}
+%\subsection{Changes Forecast}
 \section{GENERAL}
 \subsection{Scope}
-This document contains a detailed design of the functional tool-kit, called for by section 4.1.2 of the Release 1 ICL HOL Product Requirement Specification \cite{DS/FMU/IED/DEF004}.
+This document contains a detailed design of the functional tool-kit, called for by section 4.1.2 of the Release 1 ICL HOL Product Requirement Specification \cite{DS/FMU/IED/DEF004},
+and by the high level design \cite{DS/FMU/IED/HLD006}.
 The design is
 implemented in \cite{DS/FMU/IED/IMP001}.
 
@@ -96,18 +99,15 @@ The definitions in this document are self-contained
 and depend only on the Standard ML facilities defined
 in \cite{Harper86}.
 \subsubsection{Deficiencies}
-The treatment of I/O currently supports only output
-of messages to the terminal (i.e. UNIX standard output)
-and a crude facility for dumping string data to a file.
-These facilities may well need revision.
+The treatment of output supports only output
+of messages to the terminal (i.e. UNIX standard output),
+and this document contains no input functions.
+These facilities may need revision.
 \subsubsection{Possible Enhancements}
 Versions of the general functions defined here
 may well be supplied with particular
 Standard ML compilers. It may improve performance if
 the supplied versions are used.
-
-The proposed pretty character set would be useful in giving clearer examples,
-error messages etc.
 \section{INFIX DIRECTIVES}
 A Standard ML $infix$ command must be given at the `top level'.
 Thus we give the commands here for those functions declared in the following signatures.
@@ -119,7 +119,7 @@ infix 4 cup;
 infix 3 mem;
 infix 3 subset;
 infix 3 set_eq;
-infix 2 diff;
+infix 4 diff;
 infix 4 overwrite;
 infix 4 list_overwrite;
 infix 4 roverwrite;
@@ -127,7 +127,30 @@ infix 4 list_roverwrite;
 infix 5 from;
 infix 5 to;
 infix 4 **;
+infix 4 fun_and;
+infix 4 fun_or;
 =TEX
+The binding precedences are chosen reflect ``most likely use''.
+A higher precedence indicates tighter binding.
+Thus we choose higher precedences for functions that construct
+objects (e.g. $cup$) rather than test for properties (e.g. $mem$)
+so that we test ``the largest constructed objects'' rather than
+their constituents.
+
+For comparison Standard ML sets the following precedences:
+
+\begin{tabular}{| c | l |}\hline
+Precedence & Functions \\ \hline
+7 & $/$, $div$, $mod$, $*$ \\
+6 & $+$, $-$, \verb"^" \\
+5 & $::$, $@$ \\
+4 & $=$, $<>$, $<$, $>$, $<=$, $>=$ \\
+3 & $:=$, $o$ \\ \hline
+\end{tabular}
+
+Prefix function application has higher precedence than all infix functions.
+Language keywords (e.g. $andalso$, $orelse$) have a lower precedence than any infix function.
+
 \section{SHARED TYPES IN THIS DOCUMENT}
 =DOC
 signature âUtilitySharedTypesá = sig
@@ -135,17 +158,19 @@ signature âUtilitySharedTypesá = sig
 Any new types in the Utility structures mentioned in more than one signature
 will be declared in this signature.
 =ENDDOC
-The associated structure is also declared in this document.
+The associated structure is also declared in this document,
+as the types involved are required to declare the signatures
+that follow this one.
 =DOC
 datatype 'a âOPTá = âNilá | âValueá of 'a;
 =DESCRIBE
 A type of ``optional'' values.
 =USES
-The datatype $'a\;OPT$ is useful for implementing
+A typical use for the datatype $'a\;OPT$ is  in implementing
 partial functions for which raising an exception
 is not an appropriate action for undefined cases.
 =SEEALSO
-Signature $ListUtilities$.
+$force\_value$, $is\_Nil$
 =ENDDOC
 =DOC
 type 'a âS_DICTá;
@@ -171,41 +196,44 @@ signature âListUtilitiesá = sig
 =DESCRIBE
 Holds a variety of utility Standard ML list functions.
 =ENDDOC
-\subsection{Some Useful Datatypes and Functions upon them}
+\subsection{Functions For Type $'a\ OPT$}
 =DOC
 val âforce_valueá : 'a OPT -> 'a;
 =DESCRIBE
-Force an object of type  $'a\;OPT$ into one of type $'a$:
-$force\_value\ (Value\ x)\ =\ x$
+Force an object of type  $'a\;OPT$ (q.v) into one of type $'a$:
+óDefinition
+force_value (Value x) = x
+æ
 =FAILURE
 1001	Argument may not be Nil
 =ENDDOC
 =DOC
 val âis_Nilá : 'a OPT -> bool
 =DESCRIBE
-Is the argument equal to $Nil$.
+Is the argument equal to $Nil$  (q.v).
+óDefinition
+is_Nil Nil = true 
+| is_Nil _ = false
+æ
 =ENDDOC
-\subsection{List Processing Functions}
-\subsubsection{A Miscellany}
+We choose the unconventional capitalisation of $is\_Nil$ to
+avoid clashing with the name $is\_nil$ (q.v.).
+\subsection{A Miscellany}
 $hd$ and $tl$ are the usual destructor functions for
 lists.
 =DOC
 val âhdá : 'a list -> 'a;
-=DESCRIBE
-Returns first element of a list: $hd(a\ ::\ x)\ =\ a$.
-=FAILURE
-1002	An empty list has no head
-=SEEALSO
-tl
-=ENDDOC
-=DOC
 val âtlá : 'a list -> 'a list;
 =DESCRIBE
-Returns all but the first element of a list: $tl(a\ ::\ x)\ =\ x$.
+$hd$ returns first element of a list,
+$tl$ returns all but the first element of a list.
+óDefinition
+hd (a :: x) = a
+tl (a :: x) = x
+æ
 =FAILURE
+1002	An empty list has no head
 1003	An empty list has no tail
-=SEEALSO
-hd
 =ENDDOC
 =DOC
 val âfoldá : ('a * 'b -> 'b) -> 'a list -> 'b -> 'b;
@@ -231,6 +259,7 @@ fold
 val âlengthá : 'a list -> int;
 =DESCRIBE
 $length$ returns the length of a list.
+Note that the Standard ML function $size$ can be used to find the length of strings.
 =ENDDOC
 \subsection{Lists as Sets}
 $drop$,  $less$ and $grab$ are infix operators with priority 4 (lower than
@@ -243,12 +272,16 @@ val âdropá : 'a list * ('a -> bool) -> 'a list;
 =DESCRIBE
 $list\,drop\,cond$ is the list obtained by deleting all members
 of $list$ for which the boolean function $cond$ is true.
+=SEEALSO
+$less$
 =ENDDOC
 =DOC
 val âlessá : ''a list * ''a -> ''a list;
 =DESCRIBE
 $list\,less\,what$ is the list obtained by deleting all members
 of $list$ which are equal to $what$.
+=SEEALSO
+$drop$
 =ENDDOC
 =DOC
 val âgrabá : ''a list * ''a -> ''a list;
@@ -264,7 +297,7 @@ val âunioná : ('a * 'a -> bool) -> 'a list -> 'a list -> 'a list;
 A prefix binary union operation for lists, with parameterised equality test.
 =DESCRIBE
 $union$ is essentially a binary union operation for lists.
-Since we need it for types such as $TERM$, which are
+Since we need it to work on types which are
 not equality types, it has a parameter giving the relation to be
 used to determine equality of members of the lists.
 In some cases it may be important for the order of members of the union
@@ -273,14 +306,20 @@ the list obtained by prepending those elements of $list1$ not already present in
 Presence for $x$ in the list being created being
 that there is a
 member, $y$, of the list being created with $eq(x,\,y)\,=\,true$.
-If $list1$ contains duplicates then they will be eliminated,
+If $list1$ contains duplicates then all but the rightmost will be eliminated,
 but those in $list2$ will not be.
 Note also that if one of the lists is small it is better
 supplied as the first list argument if efficiency is of
 the essence.
-
+óDefinition
+union eq (list1 @ [a]) list2 = union eq list1 (
+	if present eq a list2
+	then list2 
+	else (a :: list2)
+) | union eq [] list2 = list2
+æ
 =SEEALSO
-$cup$, $list\_union$, $list\_cup$
+$cup$, $list\_union$
 =ENDDOC
 =DOC
 val âcupá : ''a list * ''a list -> ''a list;
@@ -288,14 +327,15 @@ val âcupá : ''a list * ''a list -> ''a list;
 An infix binary union operation for lists, with Standard ML equality test.
 It has the same result ordering as $union$(q.v.).
 =SEEALSO
-$list\_cup$, $list\_union$
+$list\_cup$, $union$
 =ENDDOC
 =DOC
 val âlist_unioná : ('a * 'a -> bool) -> 'a list list -> 'a list;
 =DESCRIBE
 A distributed union operation for lists, with parameterised equality test:
 óDefinition
-list_union eq [list0, list1, ...] = union eq (list0 union eq (list1 ...)).
+list_union eq [list0, list1, ..., listn] = 
+	union eq list0 (union eq list1 (...(union eq listn [])...))
 æ
 =SEEALSO
 $union$, $list\_cup$.
@@ -305,7 +345,8 @@ val âlist_cupá : ''a list list -> ''a list;
 =DESCRIBE
 A distributed union operation for lists, with Standard ML equality test.
 óDefinition
-list_cup [list0, list1, ...] = cup (list0 cup (list1 ...)).
+list_cup [list0, list1, ..., listn] = 
+	list0 cup (list1 cup ...(listn cup [])...))
 æ
 =SEEALSO
 $cup$, $list\_union$
@@ -324,7 +365,7 @@ val âcontainsá : ''a list -> ''a -> bool;
 $contains$ $list$ $x$ searches for a member of
 $list$ equal to $x$ and returns true iff. it finds one.
 =SEEALSO
-$present$
+$present$, $mem$
 =ENDDOC
 =DOC
 val âmemá : ''a * ''a list -> bool;
@@ -332,7 +373,7 @@ val âmemá : ''a * ''a list -> bool;
 $x$ $mem$ $list$ searches for a member of
 $list$ equal to $x$ and returns true iff. it finds one.
 =SEEALSO
-$contains$
+$contains$, $present$
 =ENDDOC
 =DOC
 val âpresentá : (('a * 'a) -> bool) -> 'a -> 'a list -> bool;
@@ -340,7 +381,7 @@ val âpresentá : (('a * 'a) -> bool) -> 'a -> 'a list -> bool;
 $present$ $eq$ $x$ $list$ searches for a member, $y$, of
 $list$ that satisfies $eq(x,y)$  and returns true iff. it finds one.
 =SEEALSO
-$contains$
+$contains$, $mem$
 =ENDDOC
 =DOC
 val âanyá : 'a list -> ('a -> bool) -> bool;
@@ -357,6 +398,8 @@ val âsubsetá : ''a list * ''a list -> bool;
 =DESCRIBE
 $l1\,subset\,l2$ is true iff. all the elements of $l1$
 are  also elements of $l2$
+=SEEALSO
+$set\_eq$
 =ENDDOC
 =DOC
 val âset_eqá : ''a list * ''a list -> bool;
@@ -364,6 +407,8 @@ val âset_eqá : ''a list * ''a list -> bool;
 $l1\,set\_eq\,l2$ is true iff. the members of $set\_eq$ of $l1$ are precisely the members of $l2$.
 Though the two lists are viewed as sets, they may contain
 duplicates, which will not affect the outcome of this test.
+=SEEALSO
+$subset$
 =ENDDOC
 =DOC
 val âdiffá : ''a list * ''a list -> ''a list;
@@ -397,6 +442,7 @@ appropriate member of the list.
 =SEEALSO
 lassoc$\cal N$ and rassoc$\cal N$, where ${\cal N} =\ 1 \ldots 5$.
 =ENDDOC
+
 =DOC
 val âlassoc2á : (''a * 'b) list -> (''a -> 'b) -> ''a -> 'b;
 =DESCRIBE
@@ -417,6 +463,7 @@ appropriate member of the list.
 =SEEALSO
 lassoc$\cal N$ and rassoc$\cal N$, where ${\cal N} =\ 1 \ldots 5$.
 =ENDDOC
+
 =DOC
 val âlassoc3á : (''a * 'b) list -> ''a -> 'b;
 =DESCRIBE
@@ -435,6 +482,7 @@ $rassoc3$ $alist$ $arg$ is $x$, where $(x,\ arg)$ is the first element of $alist
 =SEEALSO
 lassoc$\cal N$ and rassoc$\cal N$, where ${\cal N} =\ 1 \ldots 5$.
 =ENDDOC
+
 =DOC
 val âlassoc4á : (''a * 'b) list -> 'b -> ''a -> 'b;
 =DESCRIBE
@@ -455,6 +503,7 @@ appropriate member of the list.
 =SEEALSO
 lassoc$\cal N$ and rassoc$\cal N$, where ${\cal N} =\ 1 \ldots 5$.
 =ENDDOC
+
 =DOC
 val âlassoc5á : (''a * 'b) list -> ''a -> 'b OPT;
 =DESCRIBE
@@ -478,8 +527,8 @@ lassoc$\cal N$ and rassoc$\cal N$, where ${\cal N} =\ 1 \ldots 5$.
 =DOC
 val âoverwriteá : (''a * 'b) list * (''a * 'b) -> (''a * 'b) list;
 =DESCRIBE
-$alist$ $overwrite$ $(a,b)$ gives the list that replaces the first pair in $alist$ that has the left item $a$ with the pair $(a, b)$.
-If no such pair is found in $alist$ then $(a,b)$ is appended to the tail of $alist$.
+$alist$ $overwrite$ $(a,b)$ gives the list in which the first pair in $alist$ that has the left item $a$ is replaced with the pair $(a, b)$.
+If no such pair is found in $alist$ then it returns the list of $(a,b)$ appended to the tail of $alist$.
 =SEEALSO
 $roverwrite$, $list\_overwrite$
 =ENDDOC
@@ -488,30 +537,31 @@ val âlist_overwriteá : (''a * 'b) list * (''a * 'b) list -> (''a * 'b) list;
 =DESCRIBE
 $alist$ $list\_overwrite$ $olist$ overwrites $alist$ with each element of $olist$, using $overwrite$(q.v).
 =SEEALSO
-$list\_roverwrite$.
+$overwrite$, $list\_roverwrite$.
 =ENDDOC
 =DOC
 val âroverwriteá : ('a * ''b) list * ('a * ''b) -> ('a * ''b) list;
 =DESCRIBE
-$alist$ $roverwrite$ $(a,b)$ gives the list that replaces the first pair in $alist$ that has the right item $b$ with the pair $(a, b)$.
-If no such pair is found in $alist$ then $(a,b)$ is appended to the end of $alist$.
+$alist$ $roverwrite$ $(a,b)$ gives the list that in which the first pair in $alist$ that has the right item $b$ is replaced with the pair $(a, b)$.
+If no such pair is found in $alist$ then it returns the list of $(a,b)$ appended to the end of $alist$.
+=SEEALSO
+$overwrite$, $list\_roverwrite$
 =ENDDOC
 =DOC
 val âlist_roverwriteá : ('a * ''b) list * ('a * ''b) list -> ('a * ''b) list;
 =DESCRIBE
 $alist$ $list\_roverwrite$ $olist$ overwrites $alist$ with each element of $olist$, using $roverwrite$ (q.v.).
 =SEEALSO
-$list\_overwrite$.
+$roverwrite$, $list\_overwrite$.
 =ENDDOC
-\subsection{Another Miscellany}
 
+\subsection{Another Miscellany}
 =DOC
 val âis_nilá : 'a list -> bool;
 =DESCRIBE
 $is\_nil$ tests whether a list is empty([]). It can be
 used for lists of types which do not admit equality.
 =ENDDOC
-An alternative is to call this $is\_empty$.
 =DOC
 val âflatá : 'a list list -> 'a list;
 =DESCRIBE
@@ -543,13 +593,15 @@ $combine$ combines a pair of lists into a list of pairs. It is the left inverse 
 =FAILURE
 1007	Cannot combine unequal length lists
 =SEEALSO
-$split$
+$split$, $zip$
 =ENDDOC
 =DOC
 val âall_differentá : ''a list -> bool;
 =DESCRIBE
 $all\_different$ determines whether a list has any
 repeated entries.
+=SEEALSO
+$all\_distinct$
 =ENDDOC
 =DOC
 val âall_distinctá : ('a * 'a -> bool) -> 'a list -> bool;
@@ -560,6 +612,8 @@ equality.
 Each member, $x$ of the list is tested against all the subsequent
 members of the list, with $x$ being the first argument to
 $eq$.
+=SEEALSO
+$all\_different$
 =ENDDOC
 =DOC
 val âfromá : 'a list * int -> 'a list;
@@ -604,6 +658,13 @@ the result will be
 val âzipá : ('a -> 'b)list -> 'a  list -> 'b list;
 =DESCRIBE
 Given a list of functions, and a list of arguments, of the same length, apply each function to its corresponding argument.
+For the cases when the list of functions induce side effects, 
+note that 
+the functions are applied from the head of their list to the tail, and 
+will be applied until there are insufficient elements of either list to continue.
+If there lists are not of equal length then at that point a failure will be raised.
+=SEEALSO
+$combine$
 =FAILURE
 1008	List lengths differ
 =ENDDOC
@@ -615,11 +676,11 @@ Return the $n$-th element of a list. The head of the list is the $0$-th element.
 1009	Index past ends of list
 =ENDDOC
 =DOC
-val âwhichá : (('a * 'a) -> bool) -> 'a -> 'a list -> int;
+val âwhichá : (('a * 'a) -> bool) -> 'a -> 'a list -> int OPT;
 =DESCRIBE
-$which$ $eq$ $x$ $list$ returns the position of first element, $y$, in $list$ for which $eq\ x\ y$ is true.
+$which$ $eq$ $x$ $list$ returns $Value$ of the position of first element, $y$, in $list$ for which $eq\ x\ y$ is true.
 It uses 0-based indexing.
-If no such $y$ found, return \verb"~1".
+If no such $y$ is found, then it returns $Nil$.
 =ENDDOC
 \subsection{End of ListUtilities}
 =SML
@@ -642,14 +703,14 @@ $snd$
 =DOC
 val âsndá : 'a * 'b -> 'b;
 =DESCRIBE
-$fst$ is the right projection function for pairs: $fst(a,b)\ =\ b$.
+$fst$ is the right projection function for pairs: $snd(a,b)\ =\ b$.
 =SEEALSO
 $fst$
 =ENDDOC
 =DOC
 val âswapá  : 'a * 'b -> 'b * 'a;
 =DESCRIBE
-$swap$ interchanges the elements of a pair: $sway(a,b)\ =\ (b,a)$.
+$swap$ interchanges the elements of a pair: $swap(a,b)\ =\ (b,a)$.
 =ENDDOC
 \subsection{Functionals}
 Certain higher-order functions are very useful.
@@ -658,11 +719,15 @@ Certain higher-order functions are very useful.
 val âcurryá  : ('a * 'b -> 'c) -> 'a -> 'b -> 'c;
 =DESCRIBE
 $curry$ $f$ $a$ $b$ gives $f\ (a,b)$.
+=SEEALSO
+$uncurry$
 =ENDDOC
 =DOC
 val âuncurryá : ('a -> 'b -> 'c) -> 'a * 'b -> 'c;
 =DESCRIBE
-$uncurry$ $f$ $(a,b)$ gives $uncurry$ $f$ $a$ $b$.
+$uncurry$ $f$ $(a,b)$ gives $f$ $a$ $b$.
+=SEEALSO
+$curry$
 =ENDDOC
 =DOC
 val âswitchá  : ('a -> 'b -> 'c) -> 'b -> 'a -> 'c;
@@ -672,10 +737,13 @@ $switch$ $f$ $a$ $b$ gives $f$ $b$ $a$.
 =DOC
 val â**á  : ('a -> 'b) * ('c -> 'd) -> 'a * 'c -> 'b * 'd;
 =DESCRIBE
-The infix operator ``**'', with precedence 4 (higher
+The infix operator $**$, with precedence 4 (higher
 than ``$o$''), gives the function induced by a pair
 of functions from the product of their domains to
 the product of their codomains. 
+óDefinition
+(f ** g) x = (f x, g x)
+æ
 =ENDDOC
 =DOC
 val âfunpowá  : int -> ('a -> 'a) -> 'a -> 'a;
@@ -688,6 +756,37 @@ appears $n$ times.
 =FAILURE
 1010	First argument must not be negative
 =ENDDOC
+=DOC
+val âfun_andá : (('a -> bool) * ('a -> bool)) -> 'a -> bool;
+val âfun_orá : (('a -> bool) * ('a -> bool)) -> 'a -> bool;
+val âfun_notá : ('a -> bool) -> 'a -> bool;
+val âfun_trueá : 'a -> bool;
+val âfun_falseá : 'a -> bool;
+=DESCRIBE
+These functions allow a style of programming that handles predicates rather than booleans.
+óDefinition
+(f fun_and g) x	= f x andalso g x
+(f fun_or g) x 	= f x orelse g x
+(fun_not f) x 	= not(f x)
+fun_true x 	= true
+fun_false x 	= false
+æ
+=ENDDOC
+=DOC
+val ârepeatá : (unit -> 'a) -> unit;
+val âiterateá : ('a -> 'a) -> 'a -> 'a;
+=DESCRIBE
+$repeat$ applies its argument to $()$ until it fails, whereupon it returns $()$.
+$iterate$ $f$ $a$ applies $f$ to $a$.
+If this causes no failure it then calls $iterate$ $f$ on the result.
+If it fails it returns $a$.
+óDefinition
+fun repeat f	= (f (); repeat f) handle (Fail _) => ()
+fun iterate f a	= (iterate f (f a); handle (Fail _) => a)
+æ
+=ENDDOC
+$repeat$ does not return its last successful result, as if it failed on the
+first application there would be none available.
 =SML
 end (* of FunctionUtilities signature *);
 =TEX
@@ -718,11 +817,12 @@ The deletion combinator: $K\ x\ y$ is $x$.
 =SML
 end (* of Combinators signature *);
 =TEX
-\section{INPUT AND OUTPUT}
+\section{SIMPLE OUTPUT}
 =DOC
-signature âInputOutputá = sig
+signature âSimpleOutputá = sig
 =DESCRIBE
-Holds a variety of utility Standard ML functions concerned with input and output.
+Holds a variety of utility Standard ML functions concerned with simple output.
+A package with much greater facilities may be found in the structure $ReaderWriter$.
 =ENDDOC
 The following two functions will be implemented using 
 the functions of structure $SystemControl$.
@@ -738,15 +838,17 @@ val âset_line_lengthá : int -> int
 =DESCRIBE
 Set the output line length, returning the previous line length.
 Default length is 80, minimum length 20.
-=FAILUREC
-If length less than 20 then will gain an error message from 
-$set\_int\_control$: ``Value out of range for control variable line\_length''.
+=SEEALSO
+$get\_line\_length$
+=FAILURE
+1015	line length must be at least 20
 =ENDDOC
 =DOC
 val âget_line_lengthá : unit -> int
 =DESCRIBE
 Returns current output line length.
-
+=SEEALSO
+$set\_line\_length$
 =ENDDOC
 =DOC
 val âdiag_stringá : string -> unit;
@@ -755,6 +857,8 @@ $diag\_string$ outputs
 a string on the standard output stream.
 If the string exceeds the value of {\em get\_line\_length} it attempts to split the string into tokens, to fit within the line length.
 A token is taken to be an initial string of spaces, followed by exclusively non-space characters.
+=SEEALSO
+$list\_diag\_string$, $diag\_line$
 =ENDDOC
 =DOC
 val âlist_diag_stringá : string list -> unit;
@@ -762,7 +866,7 @@ val âlist_diag_stringá : string list -> unit;
 $list\_diag\_string$ outputs a list of strings
 onto the standard output stream. The strings in the list
 are concatenated (with spaces to separate them) and then
-output with $diag\_string$. 
+output with $diag\_string$ (q.v). 
 =ENDDOC
 =DOC
 val âdiag_lineá : string -> unit;
@@ -772,7 +876,9 @@ stream followed by a new line.
 It is intended for use in printing formatted terms,
 theorems and the like (for which the pretty printer
 will have included new lines within the string if
-necessary ).
+necessary).
+=SEEALSO
+$diag\_string$
 =ENDDOC
 =DOC
 val âformat_listá : ('a -> string) -> 'a list -> string -> string;
@@ -783,7 +889,7 @@ and a string to separate elements of a multi-element
 list.
 =ENDDOC
 =SML
-end (* of InputOutput signature *);
+end (* of SimpleOutput signature *);
 =TEX
 \section{CHARACTER UTILITIES}
 =DOC
@@ -792,22 +898,10 @@ signature âCharacterUtilitiesá = sig
 Holds a variety of utility Standard ML functions concerned with character handling.
 =ENDDOC
 =DOC
-val âis_all_graphicalá : string -> bool;
-=DESCRIBE
-$is\_all\_graphical$ checks whether a string consists
-of one or more graphical characters (ASCII code 33 to 126, 128+).
-=ENDDOC
-=DOC
 val âis_all_decimalá : string -> bool;
 =DESCRIBE
 $is\_all\_decimal$ checks whether a string consists
 of one or more decimal digits.
-=ENDDOC
-=DOC
-val âstrip_spacesá : string -> string;
-=DESCRIBE
-$strip\_spaces$ removes space characters from
-a string.
 =ENDDOC
 =DOC
 val âgensymá : unit -> int;
@@ -820,7 +914,9 @@ successive integers.
 val ânat_of_stringá : string -> int;
 =DESCRIBE
 $nat\_of\_string$ converts a string into non-negative
-integer (using decimal notation). 
+integer (using decimal notation).
+=SEEALSO
+$string\_of\_int$
 =FAILURE
 1012	?0 is not a decimal string
 1013	String is empty
@@ -830,6 +926,8 @@ val âstring_of_intá  : int -> string;
 =DESCRIBE
 $string\_of\_int$ converts an integer into a decimal
 string.
+=SEEALSO
+$nat\_of\_string$
 =ENDDOC
 This function is similar to $makestring$ of some implementations of Standard ML.
 =SML
@@ -864,7 +962,7 @@ The implementation will use linear search
 and performs slowly when the data structures become
 large.
  
-Its functions very straightforward. We use the prefix $s\_$ to
+Its functions are straightforward. We use the prefix $s\_$ to
 distinguish the types and functions involved from those
 used for the more efficient technique.
 
@@ -898,6 +996,7 @@ val âs_enterá : string -> 'a -> 'a S_DICT -> 'a S_DICT;
 $s\_enter$ implements overwriting by a singleton function.
 $s\_enter$ $name$ $value$ $dict$ returns the dictionary
 that associates $name$ with $value$, and otherwise associates as $dict$.
+Overwriting is done ``in place'', entries not previously present will be placed at the end of the dictionary viewed as a list.
 =ENDDOC
 =DOC
 val âs_extendá : string -> 'a -> 'a S_DICT -> 'a S_DICT;
@@ -907,6 +1006,7 @@ that is to say it is like $s\_enter$.
 $s\_extend$ $name$ $value$ $dict$ returns the dictionary
 that associates $name$ with $value$, and otherwise associates as $dict$.
 It fails if $name$ is already in the domain of $dict$.
+Entries not previously present will be placed at the head of the dictionary viewed as a list.
 =FAILURE
 1014	?0 is already in dictionary
 =ENDDOC
@@ -927,12 +1027,14 @@ a name with the value that either $dict1$ or $dict2$ associates it with.
 =FAILUREC
 \paragraph{Failure}
 Will get the $s\_extend$ failure message if any element is common to the domains of both dictionaries ($dict1$ and $dict2$).
+Duplicate keys in the first list will also cause an $s\_extend$ error,
+but will be replicated in the result if found in the second list.
 =ENDDOC
 =DOC
 val âinitial_s_dictá : 'a S_DICT;
 =DESCRIBE
 The empty dictionary, which
-gives a starting point for the use of the efficient dictionary functions.
+gives a starting point for the use of the simple dictionary functions.
 It does not associate a value with any name.
 =ENDDOC
 =SML
@@ -1002,6 +1104,7 @@ $e\_delete$ $name$ $dict$ returns a dictionary that does not associate anything 
 val âe_flattená : 'a E_DICT -> 'a S_DICT;
 =DESCRIBE
 $e\_flatten$ converts an efficient dictionary into a simple one.
+The result will contain no duplicates, but will be in no useful order.
 =ENDDOC
 =DOC
 val âlist_e_mergeá : 'a E_DICT -> 'a S_DICT -> 'a E_DICT;
@@ -1051,30 +1154,29 @@ This should be maintained via the functions of structure $SystemControl$.
 =ENDDOC
 =DOC
 val âprofá : string -> unit;
-=DESCRIBE
-Indicates that a call to the named function has been made.
-=USES
-A single call to this function should be made in any function to be profiled.
-=ENDDOC
-=DOC
 val âcountsá : string -> int OPT;
-=DESCRIBE
-Returns the number of calls to $prof$ with the given string.
-=ENDDOC
-=DOC
-val âprint_statsá : unit -> unit;
-=DESCRIBE
-Prints all profiling data currently held.
-=ENDDOC
-=DOC
 val âget_statsá : unit -> int S_DICT;
-=DESCRIBE
-Returns the current profiling data as a simple dictionary.
-=ENDDOC
-=DOC
+val âprint_statsá : int S_DICT -> unit;
 val âinit_statsá : unit -> unit;
 =DESCRIBE
-Initialise the current profiling data.
+These five functions provide a simple database facility, associating
+each name with a count.
+A call to $prof$ $name$ increments the count for $name$.
+A call to $counts$ $name$ returns the value of the current count 
+for $name$.
+A call to $get\_stats$ provides the counting database as an integer dictionary, in order of first name entry into database being first
+in the dictionary viewed as a list.
+The function $print\_stats$ will provide a one line - one entry
+display of an integer dictionary, in particular the kind of dictionary
+provided by $get\_stats$.
+A call to $init\_stats$ initialises all the counts to 0
+(which is also the state in which the database starts).
+
+It is likely that the output of $get\_stats$ would be best sorted
+before being printed by $print\_stats$.
+=USES
+The intended use of this database is to profile function calls,
+with the implementer making one call to $prof$ per profiled function.
 =ENDDOC
 =SML
 end(* of Profiling signature *);
@@ -1090,15 +1192,16 @@ val âsortá : ('a -> 'a -> int) -> 'a list -> 'a list
 =SYNOPSIS
 A parameterised sort of a list.
 =DESCRIBE
-The sorting of items of type $'a$ is parametrised by an
+The sorting of items of type $'a$ is parameterised by an
 ordering function of type $'a -> 'a -> int$.
 The integer, say $n$ returned by an application
 of this function, say $f\ a_1\ a_2$, is interpreted as
 follows: 
 \begin{description}
-\item[$n < 0$] $a_2$ is to come after $a_1$ (i.e. the arguments are in order)
-\item[$n > 0$] $a_2$ is to come before $a_1$ (i.e. the arguments are out of order)
-\item[$n = 0$] $a_2$ is to be taken as equal to $a_1$
+\item[$n < 0$] $a_2$ is to come after $a_1$ (i.e. the arguments are in order).
+\item[$n > 0$] $a_2$ is to come before $a_1$ (i.e. the arguments are out of order).
+\item[$n = 0$] $a_2$ is to be taken as equal to $a_1$:
+all but the first of each set of duplicates in a list will be ignored.
 \end{description}
 Note that the sorting function returns a list with
 no duplicate entries with respect to the equality
@@ -1107,15 +1210,20 @@ relation determined by the ordering function.
 To sort a list of integers, ilist in ascending order:
 
 	sort (curry (op -)) ilist
+=SEEALSO
+For two possible orderings: $stringorder$ and $lexicographic$.
 =ENDDOC
 =DOC
 val âstringorderá : string -> string -> int
 =DESCRIBE
 This function gives a more civilised ordering on
 strings than the one given by the ASCII codes.
-The sequence is: {\it A, a, B, b, \ldots z, Z} followed
-by all the other characters in their ASCII order.
-For multi-character strings the ordering is lexicographic
+It first does a lexicographic (q.v) case-insensitive ordering
+(treating all upper case letters as their corresponding lower case), all alphabetic characters are considered ``before'' the rest,
+but otherwise using ASCII order, on exploded strings.
+If two strings are otherwise equal then a case-sensitive
+comparison is made, with the string having the first unmatched capitalisation being ordered as first.
+The integer result is appropriate for use in $sort$ (q.v.).
 =SEEALSO
 $lexicographic$
 =ENDDOC
@@ -1135,6 +1243,9 @@ If, and only if, either
 \[ n\ <_{int}\ m\ € \ ƒ i : 1 .. n\ Ž\ a_i\ =\ b_i\]
 Or
 \[„ j : 1 .. n\ Ž\ (ƒ i : 1 .. (j-1)\ Ž\ a_i\ =\ b_i)\ €\ (a_j\ <\ b_j)\]
+The integer result is appropriate for use in $sort$ (q.v.).
+=SEEALSO
+$stringorder$
 =ENDDOC
 =SML
 end (* end of Sort signature *);

@@ -31,14 +31,14 @@ system are implemented in this document.}
 \bf Copyright \copyright\ : International Computers Ltd \number\year
 \end{centering}
 \pagebreak
-\section{Document control}
-\subsection{Contents list}
+\section{Document Control}
+\subsection{Contents List}
 \tableofcontents
-\subsection{Document cross references}
+\subsection{Document Cross References}
 \bibliographystyle{fmu}
 \bibliography{fmu}
 
-\subsection{Changes history} 
+\subsection{Changes History} 
 \begin{description}
 \item [Issue 1.1]
 First draft version.
@@ -64,8 +64,10 @@ Added $set\_eq$.
 \item [Issue 1.9]
 Added $init\_stats$,
 replaced $(u:unit)$ with $(():unit)$.
+\item [Issue 1.10]
+Changes in response to inspection IR0012.
 \end{description}
-%\subsection{Changes forecast}
+%\subsection{Changes Forecast}
 \section{GENERAL}
 \subsection{Scope}
 This document contains an implementation
@@ -122,7 +124,6 @@ fun ‚is_Nil· (Nil:'a OPT) : bool = true
 |   is_Nil _ = false;
 =TEX
 \subsection{List Processing Functions}
-\subsubsection{A Miscellany}
 Many of the following functions are supplied as standard with
 some SML compilers. The definitions here could
 be removed if we fix on a compiler with these supplied.
@@ -579,11 +580,13 @@ fun ‚nth· n ((a: 'a) :: al): 'a =
 |	nth n [] = fail "nth" 1009 [];
 =TEX
 =SML
-fun ‚which· (eq: ('a * 'a) -> bool) (v: 'a) (lt: 'a list): int =
+fun ‚which· (eq: ('a * 'a) -> bool) (v: 'a) (lt: 'a list): int OPT =
 (let 
-	fun lwhich (n: int) ((a: 'a) :: al): int = 
-		if eq (v, a) then n else lwhich (n+1) al
-	|	lwhich n [] = ~1
+	fun lwhich (n: int) ((a: 'a) :: al): int OPT = (
+		if eq (v, a) 
+		then Value n 
+		else lwhich (n+1) al
+	) | lwhich n [] = Nil
 in
 	lwhich 0 lt
 end);
@@ -654,6 +657,25 @@ fun ‚funpow· (n:int) (f:'a->'a) (v:'a) : 'a = (
 );
 =TEX
 =SML
+fun ((f: 'a -> bool) ‚fun_and· (g: 'a -> bool)) (x: 'a) : bool = (
+	f x andalso g x
+);
+fun ((f: 'a -> bool) ‚fun_or· (g: 'a -> bool)) (x: 'a) : bool = (
+	f x orelse g x
+);
+fun ‚fun_not· (f: 'a -> bool) (x: 'a) : bool = (
+	not(f x)
+);
+val ‚fun_true· : 'a -> bool = (fn x => true);
+val ‚fun_false· : 'a -> bool = (fn x => false);
+=SML
+fun ‚repeat· (f: unit -> 'a) : unit = (
+	(f (); repeat f) handle (Fail _) => ()
+);
+fun ‚iterate· (f : 'a -> 'a) (a:'a): 'a = (
+	iterate f (f a) handle (Fail _) => a
+);
+=SML
 end (* of FunctionUtilities *);
 open FunctionUtilities;
 =TEX
@@ -671,7 +693,7 @@ end (* of Combinators *);
 =TEX
 \section{I/O}
 =SML
-structure ‚InputOutput· : InputOutput = struct
+structure ‚SimpleOutput· : SimpleOutput = struct
 =TEX
 Currently we offer a very rudimentary output facility
 for messages to the user.
@@ -686,7 +708,9 @@ local
 	val _ = new_int_control{name="line_length",
 		control=line_length,
 		default=(fn u => 80),
-		check = (fn x => 20 <= x)};
+		check = (fn x => if x >= 20
+			then true
+			else fail "set_line_length" 1015 [])};
 in
 fun ‚set_line_length· (n: int): int = set_int_control ("line_length", n);
 fun ‚get_line_length· (():unit): int = get_int_control "line_length";
@@ -778,20 +802,12 @@ fun	‚format_list·
 );
 =TEX
 =SML
-end (* of InputOutput *);
-open InputOutput;
+end (* of SimpleOutput *);
+open SimpleOutput;
 =TEX
 \section{CHARACTER UTILITIES}
 =SML
 structure ‚CharacterUtilities· : CharacterUtilities = struct
-=TEX
-$is\_all\_graphical$ checks whether a string consists
-of one or more graphical characters (ASCII code 33 to 126, 128+).
-=SML
-fun ‚is_all_graphical· (s : string) : bool = (
-	s <> "" andalso
-	all (explode s) ((fn x => x >= 33 andalso x <> 127) o ord)
-);
 =TEX
 $is\_all\_decimal$ checks whether a string consists
 of one or more decimal digits.
@@ -805,13 +821,6 @@ fun ‚is_all_decimal· (s : string) : bool = (
 	all (explode s) ((fn x => x >= ord0 andalso x <= ord9) o ord)
 );
 end;
-=TEX
-$strip\_spaces$ removes space characters from
-a string.
-=SML
-fun ‚strip_spaces· (s : string) : string = (
-	implode ((explode s) less " ")
-);
 =TEX
 Successive applications of $gensym$ return
 successive integers.
@@ -1184,7 +1193,7 @@ local
 	val profiling : bool ref = ref true;
 	val _= new_flag{name="‚profiling·",
 		control = profiling,
-		default = (fn u => true)};
+		default = fun_true};
 in
 fun ‚prof· (name : string) : unit = (
 	if !profiling
@@ -1200,8 +1209,8 @@ fun ‚prof· (name : string) : unit = (
 );
 fun ‚counts· (name: string) : int OPT = e_lookup name (!stats);
 
-fun ‚print_stats· (():unit) : unit = (
-	map (diag_string o (fn (n, i: int) => n ^ ": " ^ string_of_int i)) (e_flatten (!stats));
+fun ‚print_stats· (i_d : int S_DICT) : unit = (
+	map (diag_string o (fn (n, i: int) => n ^ " : " ^ string_of_int i)) i_d;
 	()
 );
 
@@ -1225,7 +1234,7 @@ The structure has the following signature:
 =SML
 structure ‚Sort· : Sort = struct
 =TEX
-The sorting of items of type $'a$ is parametrised by an
+The sorting of items of type $'a$ is parameterised by an
 ordering function of type $'a -> 'a -> int$.
 The integer, say $n$ returned by an application
 of this function, say $f a1 a2$, is interpreted as
@@ -1264,8 +1273,11 @@ fun ‚lexicographic· (order : 'a -> 'a -> int) : ('a list) -> ('a list) -> int = 
 \subsection{$stringorder$}
 This function gives a more civilised ordering on
 strings than the one given by the ASCII codes.
-The sequence is: {\it A, a, B, b, \ldots z, Z} followed
-by all the other characters in their ASCII order.
+It first does a lexicographic (q.v) case-insensitive ordering, 
+with alphabetics before the rest, but otherwise in ASCII order, on exploded strings.
+If two strings are otherwise equal then a case-sensitive
+comparison is made, with the string having the first unmatched capitalisation being ordered as first.
+The integer result is appropriate for use in $sort$ (q.v.).
 =SML
 local
 	val orda = ord "a";
@@ -1273,30 +1285,40 @@ local
 	val ordA = ord "A";
 	val ordZ = ord "Z";
 	val atoA = ordA - orda;
-	fun U (ord : int) : bool = (ordA <= ord) andalso (ord <= ordZ);
-	fun L (ord : int) : bool = (orda <= ord) andalso (ord <= ordz);
+	datatype CASE = Ucase | Lcase | Other;
+	fun classify (x : int) : CASE = (
+		if x < ordA
+		then Other
+		else if x <= ordZ
+		then Ucase
+		else if (orda <= x) andalso (x <= ordz)
+		then Lcase
+		else Other
+	);
 	fun charorder (x : int) (y : int) : int = (
-		case (U x, U y, L x, L y) of
-			(true, true,_ ,_ ) => x - y
-		|	(_, _, true, true) => x - y
-		|	(true, _, _, true) => (
-				case x - (y + atoA) of
-					0 => ~1
-				|	NonZero => NonZero
-		) |	(_, true, true, _) => (
-				case x + atoA - y of
-					0 => 1
-				|	NonZero => NonZero
-		) |	(true, _, _, _) => ~1
-		|	(_, _, true, _) => ~1
-		|	(_, true, _, _) => 1
-		|	(_, _, _, true) => 1
-		|	_ => x - y
+		case (classify x, classify y) of
+			(Ucase, Ucase) => x - y
+		|	(Lcase, Lcase) => x - y
+		|	(Ucase, Lcase) => x - (y + atoA)
+		|	(Lcase, Ucase) => (x + atoA) - y
+		|	(Ucase, Other) => ~1
+		|	(Lcase, Other) => ~1
+		|	(Other, Ucase) => 1
+		|	(Other, Lcase) => 1
+		|	(Other, Other) => x - y
 	);
 in
 	fun ‚stringorder· (s1 : string) (s2 : string) : int = (
-		lexicographic charorder (map ord(explode s1)) (map ord(explode s2)) 
-	);
+let	val es1 = map ord (explode s1);
+	val es2 = map ord (explode s2);
+	val case_ins = lexicographic charorder es1 es2;
+in
+	if case_ins = 0
+	then  (	if s1 = s2
+		then 0
+		else lexicographic (curry(op -)) es1 es2
+	) else case_ins
+end);
 end;
 =TEX
 \subsection{$sort$}
