@@ -72,6 +72,8 @@ Reacting to issue 1.5/6 of \cite{DS/FMU/IED/DTD051}.
 
 \item [Issue 1.18,1.19 (5th February 1992)]
 Modified $strip\_tac$, added $swap\_asm\_concl\_tac$, et al.
+\item [Issue 1.20 (10th February 1992)]
+Minor corrections.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -98,6 +100,8 @@ structure ÛTactics2İ : Tactics2 = struct
 =SML
 val Ûwas_theoryİ = get_current_theory_name ();
 val _ = open_theory "misc";
+val _ = pop_proof_context();
+val _ = push_proof_context initial_epc;
 =TEX
 \section{TACTICALS FOR THE PREDICATE CALCULUS}
 The following contain only those parts used in implementing
@@ -143,7 +147,11 @@ fun Û²_THEN2İ (ttac1 : THM -> TACTIC) (ttac2 : THM -> TACTIC)
 );
 =TEX
 =SML
-fun Û²_THENİ (ttac : THM -> TACTIC) : THM -> TACTIC = ²_THEN2 ttac ttac;
+fun Û²_THENİ (ttac : THM -> TACTIC) (thm : THM) : TACTIC = (
+	²_THEN2 ttac ttac thm
+	handle complaint =>
+	pass_on complaint "²_THEN2" "²_THEN"
+);
 =TEX
 =SML
 =TEX
@@ -295,26 +303,38 @@ fun Ûundisch_tacİ (t1 : TERM) : TACTIC = (fn (asms, conc) =>
 	then ([(asms term_less t1, mk_´(t1, conc))],
 		(fn [thm] => undisch_rule thm | _ => bad_proof "undisch_tac"))
 	else  term_fail "undisch_tac" 28052 [t1])
-	handle ex => divert ex "mk_´" "undisch_tac" 28027 []
+	handle ex => divert ex "mk_´" "undisch_tac" 28055 []
 );
 =TEX
 When we undischarge more than one assumption we need to be careful not
 to fail if the list of assumptions we are discharging contains repeats
 which is allowed with the convention that the repeats are ignored.
 =SML
-fun Ûlist_undisch_tacİ (lasms : TERM list):  TACTIC = (
-fn (asms,gl) =>
-let	val missing = fold (fn (a,b) => b term_less a) asms lasms;
+local
+	fun try_undisch_tac allasms asm : TACTIC = (fn (asms,gl) =>
+	undisch_tac asm (asms,gl)
+	handle complaint =>
+	if asm term_mem allasms andalso type_of asm = BOOL
+		andalso type_of gl = BOOL
+	then id_tac  (asms,gl)
+	else pass_on complaint "undisch_tac" "list_undisch_tac"
+	);
+	fun try_undisch_tac1 asm : TACTIC = (fn (asms,gl) =>
+	undisch_tac asm (asms,gl)
+	handle complaint =>
+	if type_of asm = BOOL andalso type_of gl = BOOL
+	then id_tac  (asms,gl)
+	else pass_on complaint "undisch_tac" "all_undisch_tac"
+	);
 in
-	case missing of
-	[] => MAP_EVERY (TRY_T o undisch_tac) (rev lasms) (asms,gl)
-	| (a :: x) => term_fail "list_undisch_tac" 28052 [a]
-end);
-=TEX
-=SML
-val Ûall_undisch_tacİ :  TACTIC = (
-	GET_ASMS_T (MAP_EVERY((TRY_T o undisch_tac) o concl))
+fun Ûlist_undisch_tacİ (lasms : TERM list):  TACTIC = (fn (asms,gl) =>
+	MAP_EVERY (try_undisch_tac asms) (rev lasms) (asms,gl)
 );
+
+val Ûall_undisch_tacİ :  TACTIC = (fn (asms,gl) =>
+	MAP_EVERY (try_undisch_tac1) asms (asms,gl)
+);
+end;
 =TEX
 =SML
 fun Ûante_tacİ (thm : THM) : TACTIC = (fn (asms, conc) =>
@@ -331,7 +351,7 @@ val Ûsimple_µ_tacİ : TACTIC = (fn (asms, conc) =>
 	in
 		([(asms, var_subst[(x', x)] b)],
 		(fn [thm] => simple_µ_intro x' thm | _ => bad_proof "simple_µ_tac"))
-	end handle ex => divert ex "dest_µ" "simple_µ_tac" 28081 []
+	end handle ex => divert ex "dest_simple_µ" "simple_µ_tac" 28081 []
 );
 =TEX
 \subsection{Concerning ¶}
@@ -345,7 +365,7 @@ fun Ûsimple_¶_tacİ (tm : TERM) : TACTIC = (fn (asms, conc) =>
 	handle ex =>
 	case area_of ex of
 		"var_subst" => term_fail "simple_¶_tac" 28092 [tm]
-	|	"dest_simple_¶ conc" => fail "simple_¶_tac" 28091 []
+	|	"dest_simple_¶" => fail "simple_¶_tac" 28091 []
 	|	_ => raise ex
 );
 =TEX
@@ -627,13 +647,15 @@ end;
 =SML
 val ÛSIMPLE_³_IN_THENİ : THM_TACTICAL = (fn ttac => fn thm =>
 	(ttac(¤_mp_rule(simple_³_in_conv(concl thm))thm))
-	handle Fail _ => fail "simple_³_in_tac" 28026 []
+	handle complaint => 
+	divert complaint "simple_³_in_conv" "SIMPLE_³_IN_THEN" 28026 []
 );
 =TEX
 =SML
 val Ûsimple_³_in_tacİ : TACTIC = (fn gl => 
 	((conv_tac simple_³_in_conv) gl)
-	handle Fail _ => fail "simple_³_in_tac" 28025 []
+	handle complaint => 
+	divert complaint "simple_³_in_conv" "simple_³_in_tac" 28025 []
 );
 =TEX
 \subsubsection{Concerning ´}
@@ -779,7 +801,7 @@ in
 val Ûtaut_tacİ : TACTIC = (fn gl =>
 	case REPEAT taut_strip_tac gl of
 		done as ([], _) => done
-	|	_ => fail "xtaut_tac" 28121 []
+	|	_ => fail "taut_tac" 28121 []
 );
 end;
 =TEX
@@ -958,7 +980,7 @@ fun  Û¤_Tİ (ttac : THM -> TACTIC) : TACTIC = (fn thm =>
 =SML
 val Û¤_tacİ : TACTIC = (fn gl =>
 	(¤_T strip_asm_tac gl)
-	handle ex => pass_on ex "¤_tac" "¤_tac"
+	handle ex => pass_on ex "¤_T" "¤_tac"
 );
 =TEX
 \subsection{Concerning $if \ldots then \ldots else \ldots$}
@@ -1008,16 +1030,18 @@ val Ûif_tacİ : TACTIC = (fn gl =>
 =SML
 fun Ûsimple_¶‰1_tacİ (tm : TERM) : TACTIC = (fn (asms, conc) =>
 	let	val (x, b) = dest_simple_¶‰1 conc;
-		val u = mk_µ(x, mk_´(b, mk_eq(x, tm)))
+		val x' = variant (frees tm) x;
+		val b' = var_subst[(x',x)]b;
+		val u = mk_µ(x', mk_´(b', mk_eq(x', tm)))
 	in
-		([(asms, var_subst[(tm, x)] b), (asms, u)],
+		([(asms, var_subst[(tm, x')] b'), (asms, u)],
 		(fn [th1, th2] => simple_¶‰1_intro th1 th2
 		| _ => bad_proof "simple_¶‰1_tac"))
 	end
 	handle ex =>
 	case area_of ex of
 		"dest_simple_¶‰1" => fail "simple_¶‰1_tac" 28101 []
-	|	"mk_eq conc" => term_fail "simple_¶‰1_tac" 28092 [tm]
+	|	"mk_eq" => term_fail "simple_¶‰1_tac" 28092 [tm]
 	|	_ => raise ex
 );
 
