@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.9 2002/10/23 14:49:11 rda Exp rda $
+# $Id: configure.sh,v 1.10 2002/10/23 16:28:45 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -181,6 +181,10 @@ then	if	[ ! -f $PPPOLYDBASE ]
 	fi
 	export_it PPPOLYDBASE
 fi
+out 'give_up(){'
+out '	echo "install: installation failed; see $1 for more details"'
+out '	exit 1'
+out '}'
 out "echo \"Moving to build directory $CWD/src\""
 out "cd $CWD/src"
 out 'OLD_PATH=$PATH'
@@ -197,29 +201,31 @@ out "echo \"Building $ACTTARGETS\""
 out "echo \"See $CWD/build.log for messages\""
 out "if	make -f install.mkf $ACTTARGETS >$CWD/build.log 2>&1"
 out "then	echo Build complete ..."
-out "else	echo Build failed"
-out "	exit 1"
+out "else	give_up $CWD/build.log"
 out "fi"
 #
 # Now go to the target directory, build the demos (and freeze the
-# databases, en passant).
+# databases, en passant, or explicitly for daz which doesn't have
+# demo scripts at the moment).
 #
 if	[ "$hol" = y -o "$zed" = y -o "$daz" = y ]
 then
 	out "echo \"Moving to installation directory $PPTARGETDIR\" ..."
-	out "Configuring packages"
 	out "echo \"See $PPTARGETDIR/<package>.log for messages\""
 	out "cd $PPTARGETDIR"
 	out "PATH=$PPTARGETDIR/bin:"'$OLD_PATH'
 	out "export PATH"
 	if	[ "$hol" = y ]
-	then	out "./install_holdemo >hol.log 2>&1 || { echo hol configuration failed; exit 1; }"
+	then	out "echo Installing hol demo database"
+		out './install_holdemo >hol.log 2>&1 || give_up $PPTARGETDIR/hol.log'
 	fi
 	if	[ "$zed" = y ]
-	then	out "./install_zeddemo >zed.log 2>&1 || { echo zed configuration failed; exit 1; }"
+	then	out "echo Installing zed demo database"
+		out './install_zeddemo >zed.log 2>&1 || give_up $PPTARGETDIR/zed.log'
 	fi
 	if	[ "$daz" = y -a $PPCOMPILER=POLYML ]
-	then	out '( pp_make_database -f -p daz junk$$; rm junk$$.polydb ) >daz.log 2>&1 || { echo daz configuration failed; exit 1; }'
+	then	out "echo Freezing daz database"
+		out '( pp_make_database -f -p daz junk$$; rm junk$$.polydb ) >daz.log 2>&1 || give_up $PPTARGETDIR/daz.log'
 	fi
 fi
 out "echo Installation complete"
