@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.10 2002/12/12 16:37:39 rda Exp rda $
+ * $Id: cmdline.c,v 2.11 2003/01/30 17:56:28 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -19,6 +19,9 @@
  * macros:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #define _cmdline
+
+enum { MAX_HISTORY = 40};
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -31,7 +34,11 @@
  * static data 
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-typedef struct{Widget shell_w, manager_w, list_w, cmd_w;} CmdLineData;
+typedef struct{
+	Widget shell_w, manager_w, list_w, cmd_w;
+	char	*history[MAX_HISTORY];
+	int	previous;
+} CmdLineData;
 
 static CmdLineData cmd_line_data;
 
@@ -40,6 +47,7 @@ char *no_command_to_add_msg =
 
 char *nothing_to_delete_msg =
 "No item in the list has been selected.";
+
 /*
  * Forward declarations:
  */
@@ -196,13 +204,19 @@ void add_cmd_line(Widget text_w)
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * set up static data to contain necessary widget handles:
+ * set up static data to contain necessary widget handles, etc.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	cmd_line_data.cmd_w = cmd_text;
 	cmd_line_data.shell_w = shell;
 	cmd_line_data.list_w = list_w;
 	cmd_line_data.manager_w = paned;
+
+	for(i = 0; i < XtNumber(cmd_line_data.history); i += 1) {
+		cmd_line_data.history[i] = NULL;
+	}
+
+	cmd_line_data.previous = 0;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set up text widget translations and font
@@ -291,7 +305,106 @@ static void get_initial_command_line_list(Widget list_w)
 	}
 	XtFree(list_items);
 }
-
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * .Add a command string to the history. Caller shouldn't
+ * free the string - that will happen when it rolls off the
+ * end of the history. Note the history is maintained as
+ * a "lifo-set" - i.e., the latest entry is at position 0,
+ * and when an entry is added at the top, it is deleted
+ * if it appears lower down.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void record_command(char *cmd, CmdLineData *cbdata)
+{
+	char *p, *t;
+	int i;
+	for(	p = NULL, i = 0, t = NULL;
+		i < MAX_HISTORY;
+		i += 1 ) {
+		t = cbdata->history[i];
+		cbdata->history[i] = p;
+		p = t;
+		if(p == NULL) {
+			break;
+		} else if (!strcmp(p, cmd)) {
+			cbdata->history[0] = p;
+			t = NULL;
+			break;
+		}
+	}
+	if(t != NULL) {
+		XtFree(t);
+	}
+	if(cbdata->history[0] == NULL) {
+		cbdata->history[0] = XtMalloc(strlen(cmd) + 1);
+		strcpy(cbdata->history[0], cmd);
+	}
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * the action routines for the command history list.
+ * Use direct access to static data for these.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void command_history_either(Boolean go_up)
+{
+	char *cmd, *new_cmd;
+	char **history = cmd_line_data.history;
+	int *previous = &cmd_line_data.previous;
+	if(	(go_up && *previous == MAX_HISTORY)
+	||	(go_up && history[*previous] == NULL)
+	||	(!go_up && *previous <= 1)) {
+		beep();
+		return;
+	}
+	cmd = XmTextGetString(cmd_line_data.cmd_w);
+/*
+ * Now there is something in the history; if the current contents of the command line text widget
+ * is not empty and we're at the top record it in the history.
+ */
+	if(	cmd != NULL
+	&&	*cmd != '\0'
+	&&	*previous == 0) {
+		record_command(cmd, &cmd_line_data);
+	}
+/*
+ * Find the new command line
+ */
+	if(go_up)  {
+		new_cmd = history[*previous];
+		*previous += 1;
+/*
+ * Special case mainly for when the current command line wasn't in history and has just been recorded :
+*/
+		if(	!strcmp(new_cmd, cmd)
+		&&	*previous< MAX_HISTORY
+		&&	history[*previous] != NULL) {
+			new_cmd = history[*previous];
+			*previous += 1;
+		}
+	} else {
+		*previous -= 1;
+		new_cmd = history[*previous-1];
+	}
+/*
+ * Put new command line in the text field and tidy up
+ */
+	XmTextSetString(cmd_line_data.cmd_w, new_cmd);
+	XtFree(cmd);
+}
+void command_history_up(
+	Widget w,
+	XEvent *ev,
+	String *params,
+	Cardinal *num_params)
+{
+	command_history_either(True);
+}
+void command_history_down(
+	Widget w,
+	XEvent *ev,
+	String *params,
+	Cardinal *num_params)
+{
+	command_history_either(False);
+}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * the callback for the execute button.
  * selects the command string after executing it to make it
@@ -309,12 +422,14 @@ static void exec_cb(
 	if((cmd = XmTextGetString(cbdata->cmd_w)) != NULL) {
 		send_to_application(cmd, strlen(cmd));
 		send_to_application(nl, 1);
-		XtFree(cmd);
 		XmTextSetSelection(
 			cbdata->cmd_w,
 			0,
 			XmTextGetLastPosition(cbdata->cmd_w),
 			CurrentTime);
+		record_command(cmd, cbdata);
+		XtFree(cmd);
+		cbdata->previous = 0;
 	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -354,6 +469,7 @@ static void add_cb(
 		XmListSelectPos(cbdata->list_w, 0, False);
 		XmListSetBottomPos(cbdata->list_w, 0);
 		XmStringFree(item);
+		XtFree(cmd);
 	} else {
 		ok_dialog(root, no_command_to_add_msg);
 	}

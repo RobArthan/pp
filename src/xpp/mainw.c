@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.52 2003/03/18 15:39:31 rda Exp rda $
+ * $Id: mainw.c,v 2.53 2003/04/10 22:47:18 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -149,11 +149,7 @@ static void post_ln_popup_menu(EVENT_HANDLER_ARGS);
 static void defer_resize (EVENT_HANDLER_ARGS);
 static void journal_resize_handler (EVENT_HANDLER_ARGS);
 static Bool execute_command(void);
-static void execute_action(
-    Widget 		/* widget */,
-    XEvent*		/* event */,
-    String*		/* params */,
-    Cardinal*		/* num_params */);
+static void execute_action(ACTION_PROC_ARGS);
 
 static void line_number_cb(CALLBACK_ARGS);
 
@@ -328,6 +324,12 @@ static MenuItem ln_popup_menu_items[] = {
     { "Stop", &xmPushButtonGadgetClass, 'S', NULL, NULL,
         ln_popup_cb, (XtPointer)NULL, (MenuItem *)NULL, False },
     {NULL}
+};
+
+static XtActionsRec actions[] = {
+	{ "execute", execute_action },
+	{ "command-history-up", command_history_up },
+	{ "command-history-down", command_history_down}
 };
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -590,7 +592,6 @@ static Boolean setup_main_window(
 	Atom WM_DELETE_WINDOW;
 	void check_quit_cb(CALLBACK_ARGS);
 	Widget *wp;
-	XtActionsRec action;
 	FileOpenAction foAction = NoAction;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -686,9 +687,7 @@ static Boolean setup_main_window(
  * provided an execute action function. With no parameters this is like
  * Execute Selection; with parameters, it executes the parameters.
  */
-	action.string = "execute";
-	action.proc = execute_action;
-	XtAppAddActions(app, &action, 1);
+	XtAppAddActions(app, actions, XtNumber(actions));
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Help menu:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
