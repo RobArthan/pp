@@ -22,7 +22,7 @@ Don't worry about this!
 %\TPPpart{}
 \TPPtitle{SLR Parser Generator}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP017}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.44 $%
+\def\SCCSversion{$Revision: 1.45 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 %\TPPdate{}  %% Mandatory field (with sensible default)
@@ -134,6 +134,7 @@ of the printing code.
 \item[Issue 1.43] Tidied up error-handling and the treatment of MS-DOS and Macintosh format text files.
 \item[Issue 1.44] Made the follow and first functions work with arrays rather than lists.
 \item[Issue 1.45] Fixed bug in print-out of LR(0) automaton.
+\item[Issue 1.46] It can now write the reduction functions for you!
 See HISTORICAL NOTES below for details.
 \end{description}
 \subsection{Changes Forecast}
@@ -301,6 +302,31 @@ val _ = if contains (map fst (get_int_controls()))
 				if x > 0 then true
 				else raise SlrpError
 				  "slrp_break must be a positive number")
+	};
+=TEX
+The following string controls define the format of the names used for the names for
+the generic reduction functions. The given defaults are the ones that work with
+the supplied generic parser code.
+=SML
+val Ûgen_red_prefixÝ : string ref = ref "red_";
+val _ = if contains (map fst (get_string_controls()))
+			"gen_red_prefix"
+	then	()
+	else	new_string_control{name="gen_red_prefix",
+			control=gen_red_prefix,
+			default=(fn x => "red_"),
+			check=fun_true
+	};
+=TEX
+=SML
+val Ûgen_red_suffixÝ : string ref = ref "_";
+val _ = if contains (map fst (get_string_controls()))
+			"gen_red_suffix"
+	then	()
+	else	new_string_control{name="gen_red_suffix",
+			control=gen_red_suffix,
+			default=(fn x => "_"),
+			check=fun_true
 	};
 =TEX
 \section{UTILITIES}\label{UTILITIES}
@@ -1535,8 +1561,8 @@ for action grammars is as follows:
 
 	OptAction	=	Action | ;
 =TEX 
-The result of parsing an action grammar with actions of type $'act$ has
-the following type:
+The result of parsing an action grammar will be a value
+whose type is an instance of the following type.
 =SML
 type ('lc, 'act) ÛACTION_GRAMMARÝ = 
 	(string * ((('lc)SYMBOL list * 'act)list)) list;
@@ -1546,14 +1572,13 @@ We derive an ordinary grammar from an action grammar as follows:
 fun Ûstrip_actionÝ (x : ('lc, 'act) ACTION_GRAMMAR) :  ('lc) GRAMMAR =
 				map (Combinators.I ** map fst) x;
 =TEX
-We derive a $'a$-valued reduction table
-from an action grammar as follows:
+We derive a $'act$-valued reduction table from an action grammar as follows:
 =SML
-type ('act) ÛGEN_REDUCTION_TABLEÝ = ('act) list E_DICT;
+type ('act) ÛREDUCTION_DICTÝ = ('act) list E_DICT;
 =TEX
 =SML
 fun Ûmake_reduction_tableÝ (ag:('lc, 'act) ACTION_GRAMMAR)
-					: ('act) GEN_REDUCTION_TABLE = (
+					: ('act) REDUCTION_DICT = (
 	list_e_merge initial_e_dict (map (Combinators.I ** map snd) ag)
 );
 =TEX
@@ -1577,16 +1602,15 @@ type ÛBNF_lex_itemÝ = BNF_lex_class * string;
 val Ûformat_BNF_lex_itemÝ : BNF_lex_item -> string = snd;
 =TEX
 We use the following datatype for the partially parsed inputs when we parse
-an action grammar. (Note we use "()" as the default action value. This corresponds
-to a parser with the partially parsed input having type unit.)
+an action grammar.
 =SML
 datatype ÛP_GRAMMARÝ	= ÛPG_GrammarÝ of 
-			(string * ((SYM_CLASS list * string)list)) list
-			| ÛPG_ProdÝ of string * ((SYM_CLASS list * string)list)
-			| ÛPG_DefÝ of(SYM_CLASS list * string) list
+			(string * ((SYM_CLASS list * string OPT)list)) list
+			| ÛPG_ProdÝ of string * ((SYM_CLASS list * string OPT)list)
+			| ÛPG_DefÝ of(SYM_CLASS list * string OPT) list
 			| ÛPG_OptAltÝ of SYM_CLASS list
 			| ÛPG_SymbolÝ of SYM_CLASS
-			| ÛPG_OptActionÝ of string;
+			| ÛPG_OptActionÝ of string OPT;
 
 type ÛRT_ENTRYÝ =
 	(BNF_lex_item, BNF_lex_class, P_GRAMMAR)INPUT_STACK->P_GRAMMAR;
@@ -1639,10 +1663,10 @@ fun Ûsymbol0Ý (Token((_, V), _)::_) = PG_Symbol(VarClass V)
 fun Ûsymbol1Ý (Token((_, V), _)::_) = PG_Symbol(PuncClass V)
 |   symbol1 stk = pdiag stk "symbol1";
 
-fun Ûoptaction0Ý (Token((_, V), _)::_) = PG_OptAction V
+fun Ûoptaction0Ý (Token((_, V), _)::_) = PG_OptAction (Value V)
 |   optaction0 stk = pdiag stk "optaction0";
 
-fun Ûoptaction1Ý (_) = PG_OptAction "()";
+fun Ûoptaction1Ý (_) = PG_OptAction Nil;
 
 =TEX
 The following value bindings help to abbreviate the
@@ -1695,13 +1719,13 @@ grammar and a reduction table as follows (where from now on we
 use a standard ``impossible'' non-terminal as a sentence symbol to augment
 the grammar):
 =SML
-val Ûsentence_symbolÝ ="*Start*";
-val Ûsentence_actionÝ ="(raise PARSER_ERROR\"invalid control\")";
+val Ûsentence_symbolÝ : string ="*Start*";
+val Ûsentence_actionÝ : string OPT = Value "(raise PARSER_ERROR\"invalid control\")";
 =TEX
 =SML
 fun Ûmake_grammar_and_reduction_tableÝ
 	(PG_Grammar(G as ((sen,_)::_)) : P_GRAMMAR)
-	: SYM_CLASS GRAMMAR * string GEN_REDUCTION_TABLE = (
+	: SYM_CLASS GRAMMAR * string OPT REDUCTION_DICT = (
 	let	val G' =  (sentence_symbol, [([VarClass sen], sentence_action)])::G;
 		val nts = map fst G';
 		fun make_sym(PuncClass s) = Terminal (PuncClass s)
@@ -2058,7 +2082,7 @@ resolver to form a parser, which we set up to take its input from a file:
 =SML
 fun ÛBNF_parseÝ
 	(file : string)
-	: SYM_CLASS GRAMMAR * string GEN_REDUCTION_TABLE =
+	: SYM_CLASS GRAMMAR * string OPT REDUCTION_DICT =
 	make_grammar_and_reduction_table(
 		slrp'parse
 		BNF_init BNF_actions BNF_gotos BNF_reduction_table default_resolver
@@ -2409,10 +2433,20 @@ end
 );
 =TEX
 =SML
-fun Ûdo_sym_classÝ (_ : string OPT)  (VarClass x : SYM_CLASS) : string = x
-|  do_sym_class _ (EosClass e) = e
-|  do_sym_class Nil (PuncClass x) = x
-|   do_sym_class (Value qc) (PuncClass x) = qc^"\"" ^ ml_escapify x ^ "\"";
+fun Ûdo_sym_classÝ (generic : bool) (qco : string OPT) (nco : string OPT)
+	: SYM_CLASS -> string = (
+	let	fun wrap true Nil def = (fn x => def ^ "\"" ^ ml_escapify x ^ "\"")
+		|   wrap true (Value c) _ = wrap true Nil c
+		|   wrap false Nil _ = (fn x => x)
+		|   wrap false (Value c) _ = wrap true Nil c;
+		val wrap_punc = wrap generic qco "LCQuoted";
+		val wrap_var = wrap generic nco "LCVariable";
+	in	fn
+		EosClass e => e
+	|	PuncClass x => wrap_punc x
+	|	VarClass x => wrap_var x
+	end
+);
 =TEX
 \subsection{Goto Table}
 =SML
@@ -2439,13 +2473,14 @@ end
 =TEX
 \subsection{Reduction Table}
 =SML
-fun Ûformat_reducerÝ (body : string) (n : int) : string = (
-	let	val is = map string_of_int(rev (interval 1 n));
+fun Ûformat_reducerÝ (bodyo : string OPT) (n : int) : string = (
+	let	val body = case bodyo of Value b => b | Nil => "()";
+		val is = map string_of_int(rev (interval 1 n));
 		fun do1 i = "x" ^ i;
 		val xs = format_list do1 is "::";
 	in	if n = 0
 		then
-	"(fn _ =>" ^ body ^ ")"
+	"(fn stk =>" ^ body ^ ")"
 		else
 	"(fn(" ^ xs ^ "::stk)=>" ^ body ^ 
 		"|_=>raise PARSER_ERROR\"invalid reduction\")"
@@ -2455,7 +2490,7 @@ fun Ûformat_reducerÝ (body : string) (n : int) : string = (
 =SML
 fun output_reduction_table
 	(g: (''lc) GRAMMAR)
-	(tab : string GEN_REDUCTION_TABLE) : unit = (
+	(tab : string OPT REDUCTION_DICT) : unit = (
 let	val tabs = listsoflist (e_flatten tab) (get_int_control"slrp_break");
 	fun aux nt i (act :: more) = (
 	let	val n = length(kth(expand g nt) i);
@@ -2502,19 +2537,63 @@ fun Ûoutput_driverÝ (init : STATE) = (
 	^ string_of_int init ^ " slrp'actions slrp'gotos (slrp'reducers()) x;")
 );
 =TEX
+\subsection{Generic Reduction Functions}
+=SML
+fun Ûoutput_gen_red_defnsÝ 
+	(false : bool)
+	(_ : ''lc -> string)
+	(_ : ''lc GRAMMAR)
+	(red_tab : string OPT REDUCTION_DICT)
+	: string OPT REDUCTION_DICT = (
+	red_tab
+) | output_gen_red_defns true p g red_tab = (
+let	fun do_alt a(j, (Value act, syms)) = (Value act)
+	|  do_alt  a (j, (Nil, syms)) = (
+		let	val n = length syms;
+			val f = !gen_red_prefix ^ a ^ !gen_red_suffix ^ string_of_int j;
+			val xs = format_list (fn i => "x"^string_of_int i) (interval 1 n) ",";
+			val fun_def =
+			"fun " ^ f ^" (alt, i) (" ^ xs ^ ") stk = (\n" ^ 
+			"\t(* " ^ a ^ " = " ^ format_list (format_symbol p) syms ", " ^ " *)\n" ^
+				"\tgeneric_reducer (alt, i) [" ^ xs ^ "] stk\n);" 
+			val fun_call = "(" ^ f ^ "(\"" ^ a ^ "\", " ^ string_of_int j ^
+				")(" ^ xs ^")stk)";
+		in	put_line fun_def;
+			Value fun_call
+		end
+	);
+	fun do_prod tab (a, alts) = (
+		let	val acts =force_value (e_lookup a  tab);
+			val act_alts = combine acts alts;
+			val j_act_alts = combine(interval 0 (length acts - 1)) act_alts;
+			val acts' = map (do_alt a) j_act_alts;
+		in	e_enter a acts' tab
+		end	handle Fail _ => raise PARSER_ERROR
+			"invalid entry in the reduction table"
+	);
+	fun do_prods tab [] = tab
+	|   do_prods tab (prod::more) = do_prods (do_prod tab prod) more;
+in	do_prods red_tab g
+end
+);
+=TEX
 \subsection{Interface}
 =SML
 fun Ûoutput_parserÝ
 		(p : ''lc -> string) 
+		(fmt : ''lc -> string) 
 		(g : (''lc) GRAMMAR)
 		(actions : (''lc) ACTION_TABLE)
 		(gotos : GOTO_TABLE)
-		(tab : string GEN_REDUCTION_TABLE)
-		(init : STATE) : unit = (
-	output_action_table p actions;
-	output_goto_table gotos;
-	output_reduction_table g tab;
-	output_driver init
+		(red_tab : string OPT REDUCTION_DICT)
+		(init : STATE)
+		(generic : bool) : unit = (
+	let	val red_tab' = output_gen_red_defns generic fmt g red_tab;
+	in	output_action_table p actions;
+		output_goto_table gotos;
+		output_reduction_table g red_tab';
+		output_driver init
+	end
 );
 =TEX
 \section{INTERFACE} \label{INTERFACE}
@@ -2555,9 +2634,11 @@ val out_file = "t.sml";
 val log_file = "t.log";
 val eos = "eos";
 val quote_con = Nil;
+val name_con = Nil;
 val log_level = 6;
 val slr_only = false;
 val timings = true;
+val generic = true;
 =SML
 fun ÛslrpÝ {
 	in_file : string,
@@ -2565,9 +2646,11 @@ fun ÛslrpÝ {
 	log_file : string,
 	eos:string,
 	quote_con:string OPT,
+	name_con:string OPT,
 	log_level:int,
 	slr_only : bool,
-	timings : bool} : unit = (
+	timings : bool,
+	generic : bool} : unit = (
 	(let	val se00 = if log_level > 0 then open_log_file log_file else ();
 		val _ = reset_exec_times timings;
 		fun my_log msg = (if log_level > 0 then log msg else ());
@@ -2632,8 +2715,8 @@ fun ÛslrpÝ {
 				print_dynamic_actions chat (grm, format_sym_class) actions)
 			else());
 		val _ = reset_stopwatch();
-		val se11 = output_parser (do_sym_class quote_con)
-				grm actions gotos reducers init;
+		val se11 = output_parser (do_sym_class generic quote_con name_con)
+				format_sym_class grm actions gotos reducers init generic;
 		val _ = store_exec_time timings "Writing parsing tables";
 		val se12 =
 			(if log_level >= 4
@@ -2670,7 +2753,7 @@ end; (* of structure Slrp *)
 \subsection{Shell Interface}
 =DUMP slrp
 #!/bin/sh
-# slrp From: $Id: imp017.doc,v 1.44 2003/02/24 16:37:01 rda Exp rda $
+# slrp From: $Id: imp017.doc,v 1.45 2003/02/25 19:29:13 rda Exp $
 # Shell script to run the SLRP Parser Generator
 if test -z "$PROGNAME"
 then
@@ -2681,14 +2764,18 @@ LOGLEVEL=2
 EOS=
 INFILE=
 QUOTECONSUPPLIED=n
+NAMECONSUPPLIED=n
 SLRONLY=false
 TIMINGS=false
-while getopts l:e:f:sc:t arg
+GENERIC=false
+while getopts l:e:f:gsq:tn: arg
 do
 	case $arg in
-		c)	QUOTECONSUPPLIED=y; QUOTECON=$OPTARG ;;
+		q)	QUOTECONSUPPLIED=y; QUOTECON=$OPTARG ;;
 		e)	EOS=$OPTARG ;;
 		f)	INFILE=$OPTARG ;;
+		g)	GENERIC=true ;;
+		n)	NAMECONSUPPLIED=y; NAMECON=$OPTARG ;;
 		l)	LOGLEVEL=$OPTARG ;;
 		s)	SLRONLY=true ;;
 		t)	TIMINGS=true
@@ -2714,27 +2801,58 @@ BASE=`basename $INFILE .txt`
 OUTFILE=$DIR/$BASE.sml
 LOGFILE=$DIR/$BASE.log
 if	test "$QUOTECONSUPPLIED" = n
-then	ML="(Slrp.slrp{\
-		in_file=\"$INFILE\",\
-		out_file=\"$OUTFILE\",\
-		eos=\"$EOS\",\
-		quote_con=Nil,\
-		log_file=\"$LOGFILE\",\
-		log_level=$LOGLEVEL,\
-		slr_only=$SLRONLY,\
-		timings=$TIMINGS}; PPCompiler.exit 0)\
-		handle _ => PPCompiler.exit 1;"
-else	ML="(Slrp.slrp{\
+then	if	test "$NAMECONSUPPLIED" = n
+	then	ML="(Slrp.slrp{\
+			in_file=\"$INFILE\",\
+			out_file=\"$OUTFILE\",\
+			eos=\"$EOS\",\
+			quote_con=Nil,\
+			name_con=Nil,\
+			log_file=\"$LOGFILE\",\
+			log_level=$LOGLEVEL,\
+			slr_only=$SLRONLY,\
+			timings=$TIMINGS,\
+			generic=$GENERIC}; PPCompiler.exit 0)\
+			handle _ => PPCompiler.exit 1;"
+	else	ML="(Slrp.slrp{\
+			in_file=\"$INFILE\",\
+			out_file=\"$OUTFILE\",\
+			eos=\"$EOS\",\
+			quote_con=Nil,\
+			name_con=Value \"$NAMECON\",\
+			log_file=\"$LOGFILE\",\
+			log_level=$LOGLEVEL,\
+			slr_only=$SLRONLY,\
+			timings=$TIMINGS,\
+			generic=$GENERIC}; PPCompiler.exit 0)\
+			handle _ => PPCompiler.exit 1;"
+	fi
+else	if	test "$NAMECONSUPPLIED" = n
+	then	ML="(Slrp.slrp{\
 		in_file=\"$INFILE\",\
 		out_file=\"$OUTFILE\",\
 		eos=\"$EOS\",\
 		quote_con=Value \"$QUOTECON\",\
+		name_con=Nil,\
 		log_file=\"$LOGFILE\",\
 		log_level=$LOGLEVEL,\
 		slr_only=$SLRONLY,\
-		timings=$TIMINGS}; PPCompiler.exit 0)\
+		timings=$TIMINGS,\
+		generic=$GENERIC}; PPCompiler.exit 0)\
 		handle _ => PPCompiler.exit 1;"
-
+	else	ML="(Slrp.slrp{\
+		in_file=\"$INFILE\",\
+		out_file=\"$OUTFILE\",\
+		eos=\"$EOS\",\
+		quote_con=Value \"$QUOTECON\",\
+		name_con=Value \"$NAMECON\",\
+		log_file=\"$LOGFILE\",\
+		log_level=$LOGLEVEL,\
+		slr_only=$SLRONLY,\
+		timings=$TIMINGS,\
+		generic=$GENERIC}; PPCompiler.exit 0)\
+		handle _ => PPCompiler.exit 1;"
+	fi
 fi
 =POLYDUMPMORE slrp
 COMPILER=${PPCOMPILER:-POLYML}
