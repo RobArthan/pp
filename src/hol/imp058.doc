@@ -87,6 +87,8 @@ Tinkering to improve performance.
 Changed some uses of $subst$ to $var\_subst$.
 \item [Issue 1.26 (13th August 1992)]
 Corrected error handling for interrupts.
+\item [Issue 1.26 (7th November 1992)]
+Improved variable structure handling.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -111,7 +113,7 @@ None known.
 None known.
 
 \section{PREAMBLE}
-=IGN
+=SML
 structure ÛExistenceProofsÝ : ExistenceProofs = struct
 =TEX
 =SML
@@ -1179,10 +1181,11 @@ val Ûpair_rewrite_thmÝ = tac_proof(([],¬µ x y p ·
 =TEX
 Process the functions knowledge space:
 =SML
-fun Ûdc_simpsÝ () = (
+fun Ûdc_simpsÝ (foc : string list) = (
 	flat(map (fn (_,(_,thm)) => 
 	initial_rw_canon thm) 
-	(current_ad_¶_vs_thms()))
+	(filter (fn (nm,_) => nm mem foc)
+	(current_ad_¶_vs_thms())))
 );
 =TEX
 This auxiliary function tests that we can handle the argument
@@ -1280,21 +1283,24 @@ that may be embedded in data constructions.
 It results in a substitution list (i.e. for $var\_subst$) for the old variables, in terms
 of the new ones.
 =SML
-fun Ûmatch_f_argsÝ ([]:TERM list) ([]:TERM list):(TERM * TERM) list = []
-| match_f_args (new :: nrest) (old :: orest) = (
+fun Ûmatch_f_argsÝ (tml1:TERM list) (tml2:TERM list):(TERM * TERM) list = (
+let	val cavs = current_ad_¶_vs_thms();
+	fun aux ([]:TERM list) ([]:TERM list):(TERM * TERM) list = []
+	| aux (new :: nrest) (old :: orest) = (
 	if is_var old
-	then (new, old) :: match_f_args nrest orest
+	then (new, old) :: aux nrest orest
 	else (let val (dc,bits) = strip_app old;
-		val (projs,thm) = lassoc3 
-			(current_ad_¶_vs_thms()) 
+		val (projs,thm) = lassoc3 cavs 
 			(fst(dest_const dc));
 	in
-		match_f_args ((map (fn x => match_mk_app(x,new)) projs) 
+		aux ((map (fn x => match_mk_app(x,new)) projs) 
 			@ nrest)
 			(bits @ orest)
 	end)
-)
-| match_f_args _ _ = fail "match_f_args" 0 [];
+	)| aux _ _ = fail "match_f_args" 0 [];
+in
+	aux tml1 tml2
+end);
 =TEX
 The following handles the case of a first argument being a pair that has constants embedded
 in as well.
@@ -1354,9 +1360,11 @@ fun Ûlocal_rearrange_convÝ (f:TERM) (new_term:TERM) : CONV = (fn tm =>
 	if tm ~=$ new_term
 	then Á_conv new_term tm
 	else tac_proof(([],mk_¤(tm,new_term)),
-		let val ldc_simps = dc_simps ();
-			val prwr = pure_rewrite_rule ldc_simps;
-			val prwt = pure_rewrite_tac ldc_simps;
+		let 	val cnsts = ((map fst (term_consts tm)) cup (map fst (term_consts new_term)));
+			val ldc_simps = dc_simps cnsts;
+			val prwc = pure_rewrite_conv ldc_simps;
+			val prwr = conv_rule prwc;
+			val prwt = conv_tac prwc;
 		in
 		¤_T2
 		(fn thm1 =>
@@ -2157,7 +2165,7 @@ val _ = delete_pc "build_predicates";
 val _ = pop_pc();
 val _ = open_theory lthy;
 =TEX
-=TEX
+=SML
 end; (* of structure ExistenceProofs *)
 open ExistenceProofs;
 =TEX
