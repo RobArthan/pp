@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.16 2003/01/30 12:59:01 rda Exp rda $
+ * $Id: files.c,v 2.18 2003/01/30 15:17:24 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -68,9 +68,6 @@ static char *cant_stat_message =
 static char *cant_stat_message2 =
 	 "The file \"%s\" does not seem to exist: edit a new empty buffer or quit?";
 
-static char *contains_binary_message =
-	" The file \"%s\" contains binary data and cannot be edited";
-
 static char *load_not_reg_message =
 	 "The file \"%s\" is not an ordinary file";
 
@@ -127,6 +124,10 @@ static char *file_created_message =
 static char *file_deleted_message =
 	 "The file \"%s\" appears to have been deleted since it was last "
 	 "opened or saved. Do you want to create it?";
+
+static char *contains_binary_message =
+	" The file \"%s\" contains binary data."
+	" Uneditable characters have been replaced by question marks and the read-only option has been set.";
 
 static char *mixed_file_type_message =
 	 "The file \"%s\"  contains a mixture of Unix, MS-DOS or Macintosh line terminators."
@@ -216,7 +217,14 @@ static Boolean file_yes_no_dialog(
  *
  * The fourth parameter, including, should be set true iff. this is the call
  * to open a file to be included in the text window (which affects the
- * behaviour with respect to file type).
+ * behaviour with respect to file type and with respect to binary data in
+ * the file). With including false, file type is set according to what is found
+ * in the file and a warning dialogue is put up and is set if the file
+ * contained binary (the control characters are converted to question marks).
+ * With including true, file type is not set, and we leave it to text_verify_cb to
+ * deal with binary (although we do map nulls to backspaces to avoid potential
+ * confusion with null-termination). Caller is informed  via the binary parameter
+ * if binary data was encountered.
  *
  * The fifth parameter, foAction, tells caller more about what happened (supply
  * NULL if not interested).
@@ -226,6 +234,9 @@ static Boolean file_yes_no_dialog(
  * If all is well the return value is a pointer to a buffer
  * containing the contents of the file as a null-terminated
  * character array.
+ *
+ * The seventh parameter, binary, is set true if the file contained binary data and
+ * false otherwise (supply NULL if not interested).
  *
  * NULL is returned if anything goes wrong (and if NULL is
  * returned, the user will have been presented with an error
@@ -241,7 +252,8 @@ static char *get_file_contents(
 	Boolean	 	cmdLine,
 	Boolean		including,
 	FileOpenAction 	*foAction,
-	struct stat 	*stat_buf)
+	struct stat 	*stat_buf,
+	Boolean		*binary)
 {
 	struct stat status;
 	NAT siz;
@@ -249,7 +261,7 @@ static char *get_file_contents(
 	char *buf, *p;
 	int whatgot;
 	enum {FT_ANY, FT_UNIX, FT_DOS_OR_MAC, FT_DOS,  FT_MAC,
-		FT_MIXED,  FT_DOS_CR, FT_MAC_CR, FT_MIXED_CR} ft_state;
+		FT_MIXED,  FT_DOS_CR, FT_MAC_CR, FT_MIXED_CR, FT_BINARY} ft_state;
 	FileType file_type;
 	if(stat(name, &status) != 0) {
 		if (cmdLine) {
@@ -298,22 +310,30 @@ static char *get_file_contents(
  * Now the FSM that reads the file and copies it into the buffer mapping DOS and Mac line terminators
  * onto Unix ones. Exit from the loop is either the return in the error case where binary data is detected
  * or when end-of-file or read-error occurs. In those latter cases, the last value of whatgot to be read will be
- * EOF, and ft_state will be one of FT_UNIX, FT_DOS, FT_MAC or FT_MIXED enabling the file type
- * to be set up accordingly.
+ * EOF, and ft_state will be one of FT_UNIX, FT_DOS, FT_MAC, FT_MIXED or FT_BINARY enabling the file type
+ * and read-only options to be set up accordingly.
  */
 	ft_state = FT_ANY;
 	while( True ) {
 		whatgot = getc(fp);
 		if(whatgot != EOF && control_chars[whatgot & 0xff]) {
-			file_error_dialog(w, contains_binary_message, name);
-			XtFree(buf);
-			return NULL;
-
+			if(!including) {
+				if(ft_state != FT_BINARY) {
+					file_error_dialog(w, contains_binary_message, name);
+				}
+		 /* recover by mapping to question mark */
+				whatgot = '?';
+			} else {
+		/* recover by mapping to backspace, leaving text_verify_cb to recover that and report */
+				whatgot = '\b';
+			}
+			ft_state = FT_BINARY;
 		}
 		if(whatgot == '\r') {
 			switch(ft_state) {
 				case FT_ANY:
-					ft_state = FT_DOS_OR_MAC;
+		
+			ft_state = FT_DOS_OR_MAC;
 					break;
 				case FT_UNIX:
 					ft_state = FT_MIXED;
@@ -340,6 +360,9 @@ static char *get_file_contents(
 					*p++ = '\n';
 					break;
 				case FT_MIXED_CR:
+					*p++ = '\n';
+					break;
+				case FT_BINARY:
 					*p++ = '\n';
 					break;
 			}
@@ -379,6 +402,9 @@ static char *get_file_contents(
 					ft_state = FT_MIXED;
 					*p++ = '\n';
 					break;
+				case FT_BINARY:
+					*p++ = '\n';
+					break;
 			}
 		} else if (whatgot == EOF) {
 			switch(ft_state) {
@@ -407,6 +433,8 @@ static char *get_file_contents(
 				case FT_MIXED_CR:
 					ft_state = FT_MIXED;
 					*p++ = '\n';
+					break;
+				case FT_BINARY:
 					break;
 			}
 			break; /* out of the while (True) */
@@ -447,6 +475,9 @@ static char *get_file_contents(
 					*p++ = '\n';
 					*p++ = whatgot;
 					break;
+				case FT_BINARY:
+					*p++ = whatgot;
+					break;
 			}
 		}
 	}
@@ -456,6 +487,9 @@ static char *get_file_contents(
 		fclose(fp);
 		return NULL;
 	};
+	if(binary) {
+		*binary = False; /* overwritten if ft_state = FT_BINARY */
+	}
 	switch(ft_state) {
 		case FT_MIXED:
 			if(!including) {
@@ -471,6 +505,12 @@ static char *get_file_contents(
 			break;
 		case FT_DOS:
 			file_type = MSDOS;
+			break;
+		case FT_BINARY:
+			file_type = UNIX;
+			if(binary) {
+				*binary = True;
+			}
 			break;
 	}
 	if(!including) {
@@ -772,6 +812,7 @@ Boolean open_file(
 {
 	char *buf;
 	static struct stat status;
+	Boolean binary;
 
 	if(!(name && *name)) { /* NULL or empty */
 		XmTextSetString(text, "");
@@ -780,7 +821,7 @@ Boolean open_file(
 		}
 		return False;
 	}
-	if((buf = get_file_contents(text, name, cmdLine, False, foAction, &status)) != NULL) {
+	if((buf = get_file_contents(text, name, cmdLine, False, foAction, &status, &binary)) != NULL) {
 		if(access(name, W_OK) != 0) { /* read-only (or worse?) */
 			if(	(	orig_global_options.read_only
 				&&	global_options.read_only)
@@ -790,6 +831,8 @@ Boolean open_file(
 				XtFree(buf);
 				return False;
 			}
+		} else if (binary) {
+			set_read_only(True);
 		} else if (!orig_global_options.read_only) {
 			set_read_only(False);
 		} /* else leave the user's setting of the read-only option */
@@ -819,8 +862,7 @@ Boolean include_file(
 	if((buf = get_file_contents(text,
 	                            name,
 	                            False, True,
-	                            (FileOpenAction *) NULL,
-				    NULL)) != NULL) {
+	                           NULL, NULL, NULL)) != NULL) {
 		XmTextDisableRedisplay(text);
 		pos = XmTextGetInsertionPosition(text);
 		XmTextClearSelection(text, CurrentTime);

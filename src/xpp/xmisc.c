@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.6 2002/12/03 15:25:38 rda Exp rda $
+ * $Id: xmisc.c,v 2.7 2003/01/30 17:51:31 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -55,7 +55,8 @@ static char *too_many_selection_sources =
 static char *no_selection_message =
 	 "No text is selected in this xpp session";
 static char *binary_data_message =
-	 "The text you are trying to enter contains binary data. The unprintable characters have been replaced by spaces.";
+	 "The text you are trying to enter contains binary data."
+	" Uneditable characters have been replaced by question marks.";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * static data
@@ -266,7 +267,7 @@ void text_verify_cb(
 			has_crs = True;
 		} else if(control_chars[p[i]]) {
 			has_controls = True;
-			p[i] = ' ';
+			p[i] = '?';
 		}
 	}
 	if(has_crs) {
