@@ -1,12 +1,13 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.7 2002/03/18 07:30:52 phil Exp phil $ 
+ * $Id: templates.c,v 2.8 2002/03/18 19:13:59 phil Exp phil $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
  * (c) ICL 1994
  *
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static char rcssid[] = "$Id: templates.c,v 2.9 2002/03/21 16:36:43 phil Exp $";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * macros:
@@ -78,6 +79,10 @@ static char *bad_templates_msg =
 static char *bad_pixmap_msg =
 "An error was detected while setting up the templates tool.  "
 "The image name%s %s could not be used to make %slabel%s for %spush-button%s.";
+
+static char *bad_pixmap_nomalloc_msg =
+"An error was detected while setting up the templates tool.  One "
+"or more image files could not be used to make label(s) for push-button(s).";
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * get_templates_data: get template information from the resource
@@ -175,16 +180,22 @@ static Pixmap get_pixmap (Widget   w,
 		}
 	}
 	if (! notLast && nFailures > 0) {
-		char msg[strlen(names) + strlen(bad_pixmap_msg)];
-		sprintf(msg,
-		        bad_pixmap_msg,
-		        (nFailures == 1) ? ""   : "s",
-		        names,
-		        (nFailures == 1) ? "a " : "",
-		        (nFailures == 1) ? ""   : "s",
-		        (nFailures == 1) ? "a " : "",
-		        (nFailures == 1) ? ""   : "s");
-		ok_dialog(w, msg);
+		char *msg;
+		msg = XtMalloc(strlen(names) + strlen(bad_pixmap_msg));
+		if (msg) {
+			sprintf(msg,
+			        bad_pixmap_msg,
+			        (nFailures == 1) ? ""   : "s",
+			        names,
+			        (nFailures == 1) ? "a " : "",
+			        (nFailures == 1) ? ""   : "s",
+			        (nFailures == 1) ? "a " : "",
+			        (nFailures == 1) ? ""   : "s");
+			ok_dialog(w, msg);
+			XtFree(msg);
+		} else {
+			ok_dialog(w, bad_pixmap_nomalloc_msg);
+		}
 
 		XtFree(names);
 		names = (char *) NULL;
