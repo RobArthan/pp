@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.11 2002/05/17 09:53:10 phil Exp $
+ * $Id: undo.c,v 2.12 2002/10/17 17:09:34 rda Exp $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -453,7 +453,7 @@ static Boolean growOldtext(UndoBuffer *ub, Boolean *answer)
 		newSize  = ub->active->oldtextSize;
 		newSize += newSize * OT_GROWTH_FACTOR;
 		if(newSize == ub->active->oldtextSize) {
-			newSize =+ MIN_OT_SIZE;
+			newSize += MIN_OT_SIZE;
 		}
 	}
 	if(ub->active->oldtextSize == 0 || ub->active->oldtext == (char *) NULL) {
@@ -1009,34 +1009,6 @@ XtPointer add_undo(
 }
 
 
-/* **** **** **** **** **** **** **** **** **** *
- * MONITORING CHANGES FOR THE UNDO COMMAND      *
- * **** **** **** **** **** **** **** **** **** */
-/*
- * What follows implements a very simple undo/redo facility.
- * Undoable actions are:
- *
- *	typing a single character (possibly overstriking many others)
- *	cut
- *	paste (possibly overstriking some chars)
- *	undo/redo
- *
- * Only the last action is undoable
- */
-/* **** **** **** **** **** *
- * Monitor cursor motions:  *
- * **** **** **** **** **** */
-void undo_motion_cb(
-	Widget		text_w,
-	XtPointer	cbd,
-	XtPointer	cbs)
-{
-	UndoBuffer *ub = cbd;
-	if(!ub->enabled) {
-		return;
-	}
-	/* setMoved_away(ub, True); */
-}
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** **** **** *
@@ -1067,6 +1039,19 @@ static Boolean reinit_undo_buffer (
 	return True;
 }
 
+
+/* **** **** **** **** **** **** **** **** **** *
+ * MONITORING CHANGES FOR THE UNDO COMMAND      *
+ * **** **** **** **** **** **** **** **** **** */
+/*
+ * The undoable actions are:
+ *
+ *	typing a single character (possibly overstriking many others)
+ *	cut
+ *	paste (possibly overstriking some chars)
+ *	undo/redo
+ *
+ */
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Monitor typed input:
