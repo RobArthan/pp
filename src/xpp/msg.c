@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2004/07/11 11:53:40 $ $Revision: 2.38 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2004/08/16 14:55:50 $ $Revision: 2.39 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -574,6 +574,7 @@ char *file_dialog(Widget w, char *opn)
 	static int reply;	/* 0 = not replied/YES/NO*/
 	char *file_name;
 	XmString dir_mask;
+	XmTextPosition last_pos;
 	reply = 0;
 
 	if (!dialog) {
@@ -622,12 +623,15 @@ char *file_dialog(Widget w, char *opn)
 
 	XmTextFieldSetString(dialog_text, file_name);
 
-	XmTextFieldShowPosition(dialog_text,
-			XmTextFieldGetLastPosition(dialog_text));
+	last_pos = XmTextFieldGetLastPosition(dialog_text);
+	
+	XmTextFieldSetInsertionPosition(dialog_text, last_pos);
+
+	XmTextFieldShowPosition(dialog_text, last_pos);
 
 	XtPopup(XtParent(dialog), XtGrabNone);
 
-	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
+	XmProcessTraversal(dialog_text, XmTRAVERSE_CURRENT);
 
 	while (!reply) {
 		poll(&reply);
@@ -668,6 +672,7 @@ void startup_dialog(Widget w, char **cmd_line, char **file_name)
 	Atom WM_DELETE_WINDOW;
 	static int reply;	/* 0 = not replied/YES/NO*/
 	Boolean need_cmd_line = False, need_file_name = False;
+	XmTextPosition last_pos;
 	if(!global_options.edit_only && !**cmd_line) {/* explicit empty command line - put-up dialog */
 		if(*cmd_line) {
 			XtFree(*cmd_line);
@@ -717,7 +722,7 @@ void startup_dialog(Widget w, char **cmd_line, char **file_name)
 		WM_DELETE_WINDOW, file_cancel_cb,
 		&reply);
 	
-	s = XmStringCreateSimple("Quit");
+	s = XmStringCreateSimple("Cancel");
 
 	XtVaSetValues(dialog,
 			XmNcancelLabelString,	s,
@@ -788,12 +793,18 @@ void startup_dialog(Widget w, char **cmd_line, char **file_name)
 
 	if(need_file_name) {
 		file_text = XmFileSelectionBoxGetChild(dialog, XmDIALOG_TEXT);
+		XmProcessTraversal(file_text, XmTRAVERSE_CURRENT);
+		last_pos = XmTextFieldGetLastPosition(file_text);
+		XmTextFieldSetInsertionPosition(file_text, last_pos);
+		XmTextFieldShowPosition(file_text, last_pos);
+	} else {
+		XmProcessTraversal(cmd_text, XmTRAVERSE_CURRENT);
 	}
 
 	if(need_cmd_line) {
-		XmProcessTraversal(cmd_text, XmTRAVERSE_CURRENT);
-	} else {
-		XmProcessTraversal(file_text, XmTRAVERSE_CURRENT);
+		last_pos = XmTextFieldGetLastPosition(cmd_text);
+		XmTextFieldSetInsertionPosition(cmd_text, last_pos);
+		XmTextFieldShowPosition(cmd_text, last_pos);
 	}
 
 	while (!reply) {
