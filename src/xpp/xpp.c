@@ -27,6 +27,8 @@ char *cmd_buf;
 
 char *arglist[MAX_ARGS + 1];
 
+char *file_name;
+
 Bool edit_only = False;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -35,6 +37,7 @@ Bool edit_only = False;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static XrmOptionDescRec options [] = {
 	{"-command", "*commandLine",  XrmoptionSkipLine, NULL},
+	{"-file", "*commandLine",  XrmoptionSkipLine, NULL},
 	{"-a", "*commandLine",  XrmoptionSkipLine, NULL},
 	{"-b", "*commandLine",  XrmoptionSkipLine, NULL},
 	{"-c", "*commandLine",  XrmoptionSkipLine, NULL},
@@ -73,28 +76,41 @@ void usage ()
 };
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Check whether the -command or -edit command-line option is there
+ * Check whether the -command or -file command-line option is there
+ * And set up static data accordingly.
  * Returns number of argv items to skip ((1 or 2)
  * Error message and exit if no command line at all.
  * Note can omit -command if there are no X options 
- * and pro-tem this gives a stand-alone editor
- * (In real life, need a way of specifying a file for the S.A.E)
+ * THIS AREA IS NOT VERY GOOD YET AND NEEDS A BIT MORE DESIGN THOUGHT
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 int check_sep(argc, argv)
 int argc;
 char **argv;
 {
-	int l;
+	int l, acc;
 	if(argc < 2) {
 		usage();
 		exit(50);
 	};
-	if(	(l = strlen(argv[1])) <= strlen("-command")
-	&&	!strncmp(argv[1], "-command", l) ) {
-		return(2);
+	if(	(l = strlen(argv[1])) <= strlen("-file")
+	&&	!strncmp(argv[1], "-file", l) ) {
+		if(argc < 3) {
+			usage();
+			exit(60);
+		}
+		file_name = argv[2];
+		acc = 2;	
 	} else {
-		edit_only = True;
-		return(1);
+		file_name = NULL;
+		acc = 1;
+	}
+	if(	argc > acc + 1
+	&&	(l = strlen(argv[acc + 1])) <= strlen("-command")
+	&&	!strncmp(argv[acc + 1], "-command", l) ) {
+		return(acc + 2);
+	} else {
+		edit_only = (argc == acc + 1);
+		return(acc + 1);
 	}
 }
 
@@ -160,6 +176,6 @@ char **argv;
 
 	set_up_arglist(argc, argv);
 
-	cmdwin(edit_only);
+	main_window_go(edit_only, file_name);
 	exit(0);
 }
