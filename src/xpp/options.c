@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.3 1999/04/20 13:13:46 xpp Rel rda $
+ * $Id: options.c,v 2.4 2001/11/16 17:19:56 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -172,6 +172,8 @@ if(!global_options.edit_only) {
 		XmNcolumns,			30,
 		NULL);
 
+	attach_rw_edit_popup(command_text);
+
 	journal_max_form = XtVaCreateWidget("journal-form",
 		xmFormWidgetClass, 		app_row_col,
 		XmNfractionBase,		10,
@@ -195,6 +197,9 @@ if(!global_options.edit_only) {
 		XmNleftPosition,		3,
 		XmNcolumns,			30,
 		NULL);
+
+	attach_rw_edit_popup(journal_max_text);
+
 	copy_font_list(command_text, owner_w);
 	copy_font_list(journal_max_text, owner_w);
 

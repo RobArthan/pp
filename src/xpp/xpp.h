@@ -226,6 +226,8 @@ typedef struct menu_item {
 		Widget				unused1,
 		XtPointer			unused2,
 		XmTextVerifyCallbackStruct	*cbs);
+	extern	void attach_rw_edit_popup(Widget text_w);
+	extern	void attach_ro_edit_popup(Widget text_w);
 /* Module: xpp */
 #ifndef _xpp
 	extern

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.5 2000/05/25 08:21:10 rda Rel rda $ 
+ * $Id: search.c,v 2.6 2001/11/16 17:19:56 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -248,6 +248,8 @@ Boolean add_search_tool(Widget text_w)
 		XmNcolumns,			40,
 		NULL);
 
+	attach_rw_edit_popup(search_text);
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Part 2:
  * | Replace      | Replace & <=  | := Selection |
@@ -330,6 +332,7 @@ Boolean add_search_tool(Widget text_w)
 		XmNcolumns,			40,
 		NULL);
 
+	attach_rw_edit_popup(replace_text);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Part 4:
@@ -353,6 +356,8 @@ Boolean add_search_tool(Widget text_w)
 		XmNrightPosition,		16,
 		XmNcolumns,			8,
 		NULL);
+
+	attach_rw_edit_popup(line_no_text);
 
 	goto_line_no_btn = XtVaCreateManagedWidget("Go to line:",
 		xmPushButtonWidgetClass,	line_no_form,

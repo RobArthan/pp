@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.15 2001/11/16 17:19:15 rda Exp rda $
+ * $Id: mainw.c,v 2.16 2001/12/15 16:37:49 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -568,6 +568,8 @@ if(global_options.edit_only) {
 		XmNtraversalOn,			False,
 		NULL);
 
+	attach_ro_edit_popup(namestring);
+
 	s1 = XmStringCreateSimple("(Modified)");
 	modified = XtVaCreateManagedWidget("filelabel",
 		xmLabelWidgetClass, filename,
@@ -640,6 +642,7 @@ if( !global_options.edit_only ) {
 	XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
 
 	journal = XmCreateScrolledText(mainpanes, "journal", args, i);
+	attach_ro_edit_popup(journal);
 	copy_font_list(journal, script);
 }
 
@@ -951,34 +954,31 @@ static void edit_menu_cb(
 	switch(i) {
 	case EDIT_MENU_CUT:
 
-
 		result = XmTextCut(script, CurrentTime);
 		break;
 
 	case EDIT_MENU_COPY:
 
-
-		result = XmTextCopy(script, CurrentTime);
-		if(!result && journal) {
-
-			result = XmTextCopy(journal, CurrentTime);
-		};
+		XmTextCopy(script, CurrentTime);
 		break;
 
 	case EDIT_MENU_PASTE:
+
 		result = XmTextPaste(script);
- 
 		break;
 
 	case EDIT_MENU_CLEAR:
+
 		XmTextClearSelection(script, CurrentTime);
 		break;
 
 	case EDIT_MENU_UNDO:
+
 		undo_cb(script, undo_ptr, cbs);
 		break;
 
 	default:
+
 		break;
 	};
 /* Could also test for result in cases where there is no
