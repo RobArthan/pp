@@ -144,10 +144,7 @@ typedef struct menu_item {
 	extern Widget root;
 	extern Widget script;
 	extern Widget journal;
-	extern void check_quit_cb (
-		Widget w,
-		XtPointer cbd,
-		XtPointer cbs);
+	extern void check_quit_cb(CALLBACK_ARGS);
 	extern void scroll_out(char *buf, NAT ct, Boolean ignored);
 	extern void show_modified(void);
 	extern void show_file_info(void);
@@ -263,14 +260,9 @@ typedef struct menu_item {
 	extern void fix_pane_height(
 			Widget child_w,
 			Widget scale_w);
-	extern void blink_owner_cb(
-		Widget					w,
-		Widget					text_w,
-		XmPushButtonCallbackStruct		*unused);
-	extern	void number_verify_cb(
-		Widget				unused1,
-		XtPointer			unused2,
-		XmTextVerifyCallbackStruct	*cbs);
+	extern void blink_owner_cb(CALLBACK_ARGS);
+	extern	void number_verify_cb(CALLBACK_ARGS);
+	extern	void text_verify_cb(CALLBACK_ARGS);
 	extern	void attach_rw_edit_popup(Widget text_w);
 	extern	void attach_ro_edit_popup(Widget text_w);
 	extern	void register_selection_source(
