@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.4 1999/04/19 15:52:12 rda Exp xpp $
+ * $Id: pterm.c,v 2.5 1999/04/20 13:15:10 xpp Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -115,7 +115,6 @@ void get_pty()
 	char *slavename;
 	char *ptsname();
 	int i;
-	char line[32];
 	static void get_from_application();
 	struct termios tio;
 
@@ -134,12 +133,22 @@ void get_pty()
 		exit(2);
 	};
 #else 
-	for(control_fd = -1, c = 'p'; control_fd < 0 && c <= 's'; c++)
-	{  for(i = 0; control_fd < 0 && i < 16; i++)
-	   {
-	      sprintf(line, "/dev/pty%c%x", c, i );
-	      control_fd = open(line, O_RDWR);
-	   }
+	char line[32];
+	for(control_fd = -1, c = 'p'; control_fd < 0 && c <= 's'; c++) {
+		for(i = 0; control_fd < 0 && i < 16; i++) {
+			sprintf(line, "/dev/pty%c%x", c, i );
+	      		control_fd = open(line, O_RDWR);
+	      		if(control_fd >= 0) {
+	          		line[sizeof "/dev/" - 1] = 't';
+				slave_fd = open(line, O_RDWR);
+				if(slave_fd < 0) {
+/* no good - can't access slave side, go round again */
+	          			line[sizeof "/dev/" - 1] = 'p';
+					close(control_fd);
+					control_fd = -1;
+				}
+			}
+		}
 	}
 
 	if( control_fd < 0) {
@@ -148,13 +157,6 @@ void get_pty()
 		exit(1);
 	}
 
-	line[sizeof "/dev/" -1] = 't';
-	slave_fd = open(line, O_RDWR);
-	if(slave_fd < 0){
-	    msg("system error", "Pseudo-terminal slave device not available");
-	    perror("xpp");
-	    exit(4);
-	}
 	if(ioctl(slave_fd, TCGETS, &tio) < 0 ) {
 		msg("system error", "ioctl on slave fd failed");
 		perror("xpp");
