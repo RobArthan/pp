@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.246 $ $RCSfile: imp507.doc,v $ $Date: 2003/02/05 14:21:27 $
+% imp507.doc %Z% $Revision: 1.247 $ $RCSfile: imp507.doc,v $ $Date: 2003/02/05 17:12:31 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.246 $%
+\def\SCCSversion{$Revision: 1.247 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2003/02/05 14:21:27 $%
+\TPPdate{\FormatDate{$Date: 2003/02/05 17:12:31 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -195,6 +195,8 @@ being renamed is defined in the same package specification.
 Soundness warnings now distinctive,more systematic and logged.
 \item[Issue 1.246] Rationalised {\it vcs\_body\_proc} in line with latest specification.
 \item[Issue 1.247] Tidying as a result of work on the Z specification.
+\item[Issue 1.248] R0091: apply the context clauses for a package specfication to the corresponding
+package body automatically.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -420,6 +422,24 @@ fun Ûpackage_var_renamingsÝ (
 		var_renamings			= new_var_renamings,
 		zmod				=	zmod,
 		decl				=	decl
+	}	
+);
+=TEX
+=SML
+fun Ûpackage_declÝ (
+	{vc_vars, consts_types, formal_procs, informal_funs,
+		formal_funs, aux_vars, var_renamings, zmod, decl}
+	: PACKAGE,
+	new_decl : CONTEXT_COMPILATION_UNIT) : PACKAGE = (
+	{	vc_vars				=	vc_vars,
+		consts_types			=	consts_types,
+		formal_procs			=	formal_procs,
+		informal_funs			=	informal_funs,
+		formal_funs			=	formal_funs,
+		aux_vars			=	aux_vars,	
+		var_renamings			= var_renamings,
+		zmod				=	zmod,
+		decl				=	new_decl
 	}	
 );
 =TEX
@@ -5770,7 +5790,7 @@ fun Ûvcs_bodyÝ (st : STATEMENT) : unit = (
 \section{PACKAGES}\label{PACKAGES}
 \subsection{The SID function new\_scope\_pack\_spec}
 =SML
-fun Ûempty_packageÝ (decl : DECLARATION PACKAGE_DECLARATION OPT) : PACKAGE = 
+fun Ûempty_packageÝ (ccu : CONTEXT_COMPILATION_UNIT) : PACKAGE = 
 	{	vc_vars				=	[],
 		consts_types			=	[],
 		formal_procs			=	[],
@@ -5779,11 +5799,11 @@ fun Ûempty_packageÝ (decl : DECLARATION PACKAGE_DECLARATION OPT) : PACKAGE =
 		aux_vars			=	[],
 		var_renamings			=	[],
 		zmod 				=	(!script_name),
-		decl				=	decl
+		decl				=	ccu
 	};
 =TEX
 =SML
-fun Ûnew_scope_pack_specÝ (ident : ID)  (decl : DECLARATION PACKAGE_DECLARATION OPT): unit = (
+fun Ûnew_scope_pack_specÝ (ident : ID)  (decl : DECLARATION PACKAGE_DECLARATION): unit = (
 	let	val flags = {
 			pack_spec_flag = true,
 			pack_body_flag = false,
@@ -5798,8 +5818,13 @@ fun Ûnew_scope_pack_specÝ (ident : ID)  (decl : DECLARATION PACKAGE_DECLARATION 
 		};
 		val block = block_block_name(
 				block_flags(empty_block, flags), ident);
+		val ccu = {
+			context = [],
+			references = [],
+			comp_unit = CUPackageDeclaration decl,
+			annotation = []};
 	in	blocks := block :: !blocks;
-		pack_env := s_extend ident (empty_package decl) (!pack_env) 
+		pack_env := s_extend ident (empty_package ccu) (!pack_env) 
 	end	handle Fail _ => fail "new_scope_pack_spec" 507007 [fn () => ident]
 );
 =TEX
@@ -7356,8 +7381,8 @@ fun Ûrenames_objectÝ (obj_ren : OBJECT_RENAMING)
 );
 =TEX
 =SML
-fun Ûcheck_pack_completeÝ ({decl = Nil, ...}: PACKAGE) : unit = ()
-|   check_pack_complete ({decl = Value pack_decl,  zmod,...}: PACKAGE) : unit = (
+fun Ûcheck_pack_completeÝ 
+	({decl = {comp_unit = CUPackageDeclaration pack_decl, ...},  zmod,...}: PACKAGE) : unit = (
 	let	val repl_env = 
 			if	zmod = !script_name
 			then	!repl_env
@@ -7385,7 +7410,7 @@ fun Ûcheck_pack_completeÝ ({decl = Nil, ...}: PACKAGE) : unit = ()
 			[fn _ => #name pack_decl, fn _ =>  "s: " ^ format_list (fn s => s) labs ", "]
 			
 	end		
-);
+) | check_pack_complete {zmod, ...} = error "check_pack_complete" 507079 [fn _ => zmod];
 =TEX
 \subsection{The SID function renames\_pack}
 {\it renames\_pack} processes a package effectively by replaying a set of renaming and
@@ -8159,7 +8184,7 @@ and Ûdo_package_specÝ (decl as {name, visible_decs, private_decs, annotation}
 			: DECLARATION PACKAGE_DECLARATION) = (
 	let	val thy_name = pack_spec_name name;
 	in	if	not (thy_name mem get_theory_names())
-		then (	new_scope_pack_spec name (Value decl);
+		then (	new_scope_pack_spec name decl;
 			do_annotation annotation;
 			map (check_fail () do_declaration) visible_decs;
 			map (check_fail () do_declaration) private_decs;
@@ -8252,18 +8277,28 @@ and Ûdo_proper_bodyÝ (y as (PBProcedure
 =TEX
 The following reflects the SID functions for $subunit$ (in its final clause).
 =SML
-fun Ûdo_compilation_unitÝ
+fun Ûdo_compilation_unitÝ (context : CONTEXT_ITEM list) 
 	(y as (CUPackageDeclaration (x as {name, ...})) : COMPILATION_UNIT)
 	: unit = (
 	set_cu(spec_script_desc name);
-	(check_fail () do_declaration) (DPackageDeclaration x)
-) | do_compilation_unit (y as (CUProperBody x)) = (
+	(check_fail () do_declaration) (DPackageDeclaration x);
+	(case s_lookup name (!pack_env) of
+		Value (pack as {decl = {references, comp_unit, annotation, ...}, ...}) =>
+			let	val decl' = {
+					context = context,
+					references = references,
+					comp_unit = comp_unit,
+					annotation = annotation};
+			in	pack_env := s_enter name (package_decl (pack, decl')) (!pack_env)
+			end
+	|	NIl => ())
+) | do_compilation_unit _ (y as (CUProperBody x)) = (
 	case x of
 	PBProcedure _ => set_cu(subprogram_desc (compilation_unit_name true y))
 	| PBFunction _ => set_cu(subprogram_desc (compilation_unit_name true y))
 	| PBPackage _ => set_cu(pack_body_desc (compilation_unit_name true y));
 	(check_fail () do_declaration) (DProperBody x)
-) | do_compilation_unit (y as (CUSubUnit {name, proper_body})) = (
+) | do_compilation_unit _ (y as (CUSubUnit {name, proper_body})) = (
 	set_cu (subunit_desc (compilation_unit_name true y));
 	new_parent_subunit_theory (name, proper_body);
 	new_scope_subunit name;
@@ -8308,12 +8343,34 @@ fun Ûdo_context_compilation_unitÝ
 			cn_soundness_warning "do_contexxt_compilation_unit" 507018 [];
 			get_withs_uses accs more
 		);
-		val (withed_packs, use_clauses) = get_withs_uses ([], []) context;
-		val packs_to_with = context_clause_check withed_packs references;
+		fun get_pack_spec_withs_uses (comp_unit as CUProperBody(PBPackage {name , ...})) = (
+			case s_lookup name (!pack_env) of
+				Value {decl = {context, ...}, ...} =>  get_withs_uses ([], []) context
+			|	Nil => ([], [])
+		) | get_pack_spec_withs_uses _ = ([], []);
+		fun filter_pack_spec_uses xs [] acc = rev acc
+		|    filter_pack_spec_uses xs ((y as UCUse idl) :: more) acc = (
+			let	fun unwanted id = any xs (fn UCUse idl' => id mem idl' | _ => false);
+			in	case idl drop unwanted of
+				[] => filter_pack_spec_uses xs more acc
+			|	some => filter_pack_spec_uses xs more (UCUse some :: acc)
+			end
+		)   | filter_pack_spec_uses xs ((y as UCUseType idl) :: more) acc = (
+			let	fun unwanted id = any xs (fn UCUseType idl' => id mem idl' | _ => false);
+			in	case idl drop unwanted of
+				[] => filter_pack_spec_uses xs more acc
+			|	some => filter_pack_spec_uses xs more (UCUse some :: acc)
+			end
+		);
+		val (withed_packs1, use_clauses1) = get_withs_uses ([], []) context;
+		val (withed_packs2, use_clauses2) = get_pack_spec_withs_uses comp_unit;
+		val withed_packs3 = withed_packs2 cup withed_packs1;
+		val use_clauses3 = filter_pack_spec_uses use_clauses1 use_clauses2 [] @ use_clauses1;
+		val packs_to_with = context_clause_check withed_packs3 references;
 	in	map new_scope_with packs_to_with;
-		map use_clause use_clauses;
+		map use_clause use_clauses3;
 		do_annotation annotation;
-		do_compilation_unit comp_unit;
+		do_compilation_unit context comp_unit;
 		end_scope_comp_unit()
 	end
 );
@@ -8371,7 +8428,7 @@ in	case (s_lookup label (!repl_env), comp) of
 				Value (UnReplaced _) => (
 					update_replacement_env
 						(name, ReplaceComp{label = name, comp=comp});
-					do_compilation_unit
+					do_compilation_unit []
 						(CUSubUnit {name=label, proper_body=pb})
 			) |	_ => (fail "do_web_clause" 507065 [fn _ => label])
 	) | _ => fail "do_web_clause" 507065 [fn _ => label]
