@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.18 2003/01/30 15:17:24 rda Exp rda $
+ * $Id: files.c,v 2.19 2003/01/31 12:54:23 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -100,6 +100,16 @@ static char *read_error_message =
 
 static char *open_read_only_message =
 	 "The file \"%s\" is read-only. "
+	 "Do you want to open it?";
+
+static char *root_read_only_message =
+	 "You are running as the super-user. "
+	"The file \"%s\" does not have owner write-permission and will be opened read-only. "
+	 "Do you want to open it?";
+
+static char *root_not_owner_message =
+	 "You are running as the super-user. "
+	"The file \"%s\"  is not owned by the super-user and will be opened read-only. "
 	 "Do you want to open it?";
 
 static char *save_read_only_message =
@@ -790,7 +800,26 @@ Boolean save_string_as(
 	success = store_file_contents(w, name, (data ? data : ""));
 	return success;
 }
-
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * read_only_access_message: tests for read-only access  being
+ * very careful if running as super-user. Returns
+ * pointer to warning message to use if read-only,
+ * NULL otherwise.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+char * read_only_access_message(
+	char *name,
+	struct stat *status)
+{
+	if((uid_t) 0 != geteuid()) { /* I'm not root */
+		return access(name, W_OK) != 0 ? open_read_only_message : NULL;
+	} else { /* I am root; be more careful: */
+		return	status->st_uid != (uid_t) 0
+		?	root_not_owner_message /* file is not owned by root */
+		:	(status->st_mode & S_IWUSR) == 0
+		?	root_read_only_message  /* owner write access bit is not set */
+		:	NULL;
+	}
+}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * open_file: open a file and load it into a text widget given the
  * widget and the file name 
@@ -813,7 +842,7 @@ Boolean open_file(
 	char *buf;
 	static struct stat status;
 	Boolean binary;
-
+	char *read_only_message;
 	if(!(name && *name)) { /* NULL or empty */
 		XmTextSetString(text, "");
 		if (foAction != (FileOpenAction *) NULL) {
@@ -822,10 +851,11 @@ Boolean open_file(
 		return False;
 	}
 	if((buf = get_file_contents(text, name, cmdLine, False, foAction, &status, &binary)) != NULL) {
-		if(access(name, W_OK) != 0) { /* read-only (or worse?) */
+		read_only_message = read_only_access_message(name, &status);
+		if(read_only_message != NULL) {
 			if(	(	orig_global_options.read_only
 				&&	global_options.read_only)
-			||	file_yes_no_dialog(text, open_read_only_message, name)) {
+			||	file_yes_no_dialog(text, read_only_message, name)) {
 				set_read_only(True);
 			} else {
 				XtFree(buf);
