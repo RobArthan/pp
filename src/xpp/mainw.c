@@ -111,10 +111,11 @@ XtAppContext app; /* global because needed in msg.c */
 
 
 Widget root;	/* global because needed in xpp.c */
-Widget script;	/* global because needed in pterm.c */
+Widget  script,
+	journal;	/* global because needed in pterm.c */
 
 static Widget
-	frame, work, journal, infobar, filename, filelabel, modified,
+	frame, work, infobar, filename, filelabel, modified,
 	namestring, logo,
 	menubar, filemenu, toolsmenu, editmenu, cmdmenu, helpmenu;
 
@@ -218,17 +219,22 @@ static MenuItem edit_menu_items[] = {
 
 #define CMD_MENU_EXECUTE	0
 #define CMD_MENU_RETURN	1
-#define CMD_MENU_INTERRUPT	2
-#define CMD_MENU_KILL		3
-#define CMD_MENU_RESTART	4
+#define CMD_MENU_ABANDON	2
+#define CMD_MENU_INTERRUPT	3
+/* Item 4 is a separator */
+#define CMD_MENU_KILL		5
+#define CMD_MENU_RESTART	6
 
 static MenuItem cmd_menu_items[] = {
     { "Execute", &xmPushButtonGadgetClass, 'x', "Ctrl<Key>x", "Ctrl-X",
         cmd_menu_cb, (XtPointer)CMD_MENU_EXECUTE, (MenuItem *)NULL, False },
     { "Return", &xmPushButtonGadgetClass, 'e', "Ctrl<Key>m", "Ctrl-M",
         cmd_menu_cb, (XtPointer)CMD_MENU_RETURN, (MenuItem *)NULL, False },
+    { "Abandon", &xmPushButtonGadgetClass, 'A', "Ctrl<Key>a", "Ctrl-A",
+        cmd_menu_cb, (XtPointer)CMD_MENU_ABANDON, (MenuItem *)NULL, False },
     { "Interrupt", &xmPushButtonGadgetClass, 'I', "Ctrl<Key>c", "Ctrl-C",
         cmd_menu_cb, (XtPointer)CMD_MENU_INTERRUPT, (MenuItem *)NULL, False },
+    MENU_ITEM_SEPARATOR,
     { "Kill", &xmPushButtonGadgetClass, 'K', NULL, NULL,
         cmd_menu_cb, (XtPointer)CMD_MENU_KILL, (MenuItem *)NULL, False },
     { "Restart", &xmPushButtonGadgetClass, 'R', NULL, NULL,
@@ -765,6 +771,9 @@ XmAnyCallbackStruct *cbs;
 		break;
 	case CMD_MENU_RETURN:
 		send_nl();
+		break;
+	case CMD_MENU_ABANDON:
+		interrupt_and_abandon();
 		break;
 	case CMD_MENU_INTERRUPT:
 		interrupt_application();

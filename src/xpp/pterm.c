@@ -84,6 +84,10 @@ static char* signal_handled_message3 =
 static char* send_error_message = 
 "A system error occurred writing to the application.";
 
+static char* carry_on_waiting_message = 
+"The application does not seem to have responded to the interrupt."
+"Do you want to continue waiting for a response?";
+
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -441,6 +445,84 @@ void interrupt_application ()
 		ioctl(control_fd, I_FLUSH, FLUSHW);
 		kill((pid_t)(-child_pid), SIGINT);
 	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Interrupt the applications (as with Cntl-C) and then poll
+ * for the interrupt prompt and send the reply set up for
+ * abandoning command execution. 
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void interrupt_and_abandon ()
+{
+	static Boolean wait_for_prompt();
+	interrupt_application();
+	if(	application_alive()
+	&&	*(global_options.interrupt_abandon_reply)
+	&&	wait_for_prompt()) {
+		send_to_application(
+			global_options.interrupt_abandon_reply,
+			strlen(global_options.interrupt_abandon_reply));
+		send_to_application("\n", 1);
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Get output from the application looking for the interrupt prompt.
+ * Ask the user what to do if no prompt is found within about 15 seconds.
+ * If the suer wants to carry on waiting,it asks the user what to do about
+ * every 60 seconds after the first try.
+ * Returns True if the prompt is found; False if the user says to
+ * give up trying.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static Boolean wait_for_prompt()
+{
+	int ct, prompt_len, tries, delay;
+	Boolean got_prompt, result;
+	XmTextPosition last;
+	char buf[BUFSIZ + 1]; /* allow for null-termination in scroll_out */
+	char * prompt_buf;
+	prompt_len = strlen(global_options.interrupt_prompt);
+
+	if(prompt_len == 0) {
+		return True;
+	}
+	if( !(prompt_buf = XtMalloc(prompt_len+1)) ) {
+		return False;
+	}
+	got_prompt = result = False;
+	tries = 0;
+	delay = 15;
+	while(True) {
+		if((ct = read(control_fd, buf, BUFSIZ)) > 0) {
+			scroll_out(buf, ct, False);
+			last = XmTextGetLastPosition(journal);
+			got_prompt =
+					last > prompt_len
+				&&	XmTextGetSubstring(journal,
+						last - prompt_len,
+						prompt_len,
+						prompt_len+1,
+						prompt_buf) == XmCOPY_SUCCEEDED
+				&&	!strcmp(prompt_buf,
+						 global_options.interrupt_prompt);
+		}
+		if(got_prompt) {
+			result = True;
+			break;
+		}
+		if(++tries >= delay) {
+			if(!yes_no_dialog(root, carry_on_waiting_message)) {
+				result = False;
+				break;
+			}
+			tries = 0;
+			delay = 60;
+		} else {
+			sleep(1);
+		}
+	}
+	XtFree(prompt_buf);
+	return result;	
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
