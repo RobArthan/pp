@@ -88,8 +88,13 @@ int argc;
 char **argv;
 {
 	int l, acc;
-	if(argc < 2) {
+	if(argc == 1) {
 		file_name = NULL;
+		edit_only = True;
+		return argc;
+	};
+	if(argc == 2) {
+		file_name = argv[1];
 		edit_only = True;
 		return argc;
 	};
