@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.29 2004/03/08 21:33:58 rda Exp rda $
+# $Id: configure.sh,v 1.30 2004/03/08 21:52:54 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -314,6 +314,7 @@ out "if	make -f install.mkf $ACTTARGETS >$CWD/build.log 2>&1"
 out 'then	date +"Build complete [%c] ..."'
 out "else	give_up $CWD/build.log"
 out "fi"
+out "cat $CWD/src/version >$PPTARGETDIR/VERSION"
 #
 # Now go to the target directory, build the demos (and freeze the
 # databases, en passant, or explicitly for daz which doesn't have
