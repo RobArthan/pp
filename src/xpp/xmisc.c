@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.23 2003/07/23 14:02:14 rda Exp $
+ * $Id: xmisc.c,v 2.24 2003/07/24 10:46:50 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -186,7 +186,9 @@ void check_text_window_limit(Widget w, NAT max)
 
 	sprintf(msg, fmt, max);
 
+	journal_editable = True;
 	XmTextReplace(w, 0, bytes_to_go, msg);
+	journal_editable = False;
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * copy_font_list: copy the font list resource from one text
@@ -364,7 +366,7 @@ void text_field_verify_cb(
  * mimicking Motif's behaviour for subclasses of bulletin
  * board when the user types osfCancel
  * in a dialogue whose outermost container widget is not
- * subclassed from bulletin board (e.g.,  a paned
+ * subclassed from bulletin board (e.g., a paned
  * window).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 typedef struct {
@@ -409,14 +411,15 @@ static void add_cancel_handlers(Widget w, XtPointer cbd)
 		for(i = 0; i < num_children; i += 1) {
 			add_cancel_handlers(children[i], cbd);
 		}
-	} else if (XtIsWidget(w)) {
+	}
+	if (XtIsWidget(w)) {
 		XtInsertEventHandler(w,
 			KeyReleaseMask,
 			False,
 			cancel_handler,
 			cbd,
 			XtListHead);
-	}
+	} /* else it's a gadget and they don't handle events - the handler on the container will do the job */
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * setup_popup_cb: XmNpopupCallback callback that

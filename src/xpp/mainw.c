@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.65 2003/07/18 15:52:52 rda Exp rda $
+ * $Id: mainw.c,v 2.66 2003/07/24 10:46:50 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -129,8 +129,6 @@ static Widget
 	menubar, filemenu, toolsmenu, popupeditmenu, editmenu, cmdmenu, helpmenu;
 
 XtPointer undo_ptr;
-
-static Boolean journal_editable;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Forward declarations of menu item callback and other routines.

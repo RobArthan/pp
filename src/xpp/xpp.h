@@ -311,6 +311,7 @@ typedef struct menu_item {
 	extern char *command_line_list;
 	extern char *title;
 	extern char *argv0;
+	extern Boolean journal_editable;
 	extern const char *const file_type_names[]
 #ifdef _xpp
 	= {"Unix", "MS-DOS", "Macintosh" };
