@@ -1,0 +1,1306 @@
+=TEX
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Detailed Design of Linear Arithmetic Proof Procedures}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP082}  %% Mandatory field
+\def\SCCSversion{$Revision$
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{SML Literate Script}
+\TPPkeywords{}
+\TPPauthor{R.D.~Arthan & WIN01}
+\TPPauthorisation{R.B.~Jones & FMU Manager}
+\TPPabstract{This document contains the implementation of proof
+procedures for linear arithmetic.}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	    Library
+}}
+\begin{document}
+\makeTPPfrontpage
+\vfill
+\begin{centering}
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+\end{centering}
+\pagebreak
+\section{Document control}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history} 
+\begin{description}
+\item[\SCCSversion~(\FormatDate{$Date$%
+})] First draft.
+\end{description}
+\subsection{Changes forecast}
+As determined by comment and review.
+\section{GENERAL}
+\subsection{Scope}
+This document contains the implementation of part of the \ProductHOL\ system.
+The document responds to \cite{DS/FMU/IED/DTD082}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+\subsubsection{Dependencies}
+This document depends on the theory $basic\_hol$ defined in
+\cite{DS/FMU/IED/DTD045}, on the conversions in
+\cite{DS/FMU/IED/DTD081}, and on the tactics and rules of
+\cite{DS/FMU/IED/DTD027,DS/FMU/IED/DTD029}.
+\subsubsection{Algorithms}
+\subsubsection{Known Deficiencies}
+\subsubsection{Possible Enhancements}
+
+=TEX
+\section{LINEAR INEQUALITIES}
+A decision procedure for the problem of the non-satisfiability of a finite set
+of {\em linear constraints} over the rationals, i.e. finite
+sets of formulae of the form:
+=GFT
+	a‰1*x‰1 + a‰2*x‰2 + ... a‰k * x‰k R c
+
+=TEX
+in which the constants $a_1$ and $c$ (which we will call {\em coefficients})
+are integers and
+the variables $x_i$ range over the rationals
+and R is one of $=$, $<$, $¼$.
+Note that such a procedure may be used to handle linear systems of
+constraints formed
+using any combination of the relations $=$, $<$, $¼$, $>$ or $¾$ and with
+arbitrary rational coefficients, since
+from such a system we may derive an equivalent system by multiplying
+each equation through by the least common denominator of all its coefficients
+to make all its coefficients integers and then using the following 
+bi-implications to derive an equivalent system of upper bounds:
+=GFT
+	t ¾ c	¤	-t ¼ -c
+	t < c	¤	-t > -c
+=TEX
+The method is similar that of Hodes as sketched in (Boyer-Moore??).
+Using the transformation:
+=GFT
+	t = c	¤	t ¼ c ± -t ¼ -c
+=TEX
+we may assume that all the $R$ are $¼$ or $<$. We may then replace
+the system
+=GFT
+	a‰1‰1*x1 +a1‰2*x‰2 + ... a‰1‰k*x‰k R c‰1
+	a‰2‰1*x1 +a‰2‰2*x‰2 + ... a‰2‰k*x‰k R c‰2
+	.
+	.
+	.
+	a‰m‰1*‰x‰1 +a‰1‰2*x‰2 + ... am‰k*x‰k R c‰m
+=TEX
+by an equivalent system of ground constraints (i.e. ones
+in which no variables appear) by
+repeating the following steps, which
+eliminate $x_j$ from the system, with $j$ running from $1$ to $k$:
+
+\begin{enumerate}
+\item let $N$, $Z$, $P$ be the sets of constraints in which the coefficient of $x_j$ is
+negative, zero, or positive respectively.
+
+\item if $N$ and $P$ are empty, then we are done (for this step) -- no
+constraint mentions $x_j$.
+
+\item if exactly one of $N$ or $P$ is empty, then we may discard all constraints
+involving $x_i$, since the satisfiability of any system of inequalities
+is equivalent to the satisfiability of that system augmented by inequalities
+in which a fresh variable $x$ ($x_j$ in this case) appears always with the same
+sign.
+
+\item Otherwise, replace the system by the union of $Z$ and all new constraints obtainable by taking a pair of inequalities, one from $N$ and one from $P$, and
+cross-multiplying and adding to eliminate $x_j$.
+\end{enumerate}
+
+Note that 4 essentially embraces 1, 2 and 3 if one is careful
+about edge conditions.
+
+The above procedure will work for equations as well if we replace each equation by two inequalities. However, in the case, which is felt likely
+to be fairly common in practice where only equations appear,
+that approach is unnecessarily inefficient.
+Instead, we may use each equation to eliminate one of the variables
+from all of the other equations and then discard the equation. Thus, when all the constraints are equations we use a method amounting to the
+standard linear algebra technique for solving an equation:
+
+=GFT
+	Ax = c
+=TEX
+
+where A is an $m*k$ matrix, $x$ is an vector of $k$ unknowns and $c$ is a vector
+of m constants, by doing row operations on $A$ and corresponding operations
+on $c$ to put $A$ in upper triangular form.
+
+In order that this procedure be useful within the context of \ProductHOL,
+we must arrange to keep track of the derivation of each generated constraint
+as a linear combination of the input constraints, but this is a very
+simple extension to the algorithm. It is here that the
+efficiency of this method for HOL becomes apparent: the extended algorithm
+can work with a compact representation of the problem and can output
+without doing any inference a representation of a linear combination
+of the input constraints which results in an unsatisfiable (i.e. false)
+ground constraint. Thus while the search part of the algorithm involves
+much computation, this can be conducted using
+an efficient representation of the problem and without carrying out any
+inference and the output is an encoding of a relatively
+efficient means for inferring a contradiction.
+=SML
+open Sort;
+=TEX
+\subsection{Representing Constraints}
+=SML
+=TEX
+We represent degree one polynomials in many variables $x_1$, $x_2$, ... 
+(henceforth, just {\em polynomials}) using
+lists of pairs of integers, a pair $(a, i)$ indicating that the $i$-th variable
+has coefficient $a$. We always arrange for the variables to occur in strictly
+increasing order and for pairs with zero coefficients to be omitted.
+=SML
+type ÛPOLYÝ = (int * int) list;
+=TEX
+Equations, inequalities and strict inequalities are distingushed using:
+=SML
+datatype ÛCONSTRAINT_TYPEÝ = Eq | LessEq | Less;
+=TEX
+We assume the input constraint are labelled with variables, given
+as polynomials of the form $x_j$.
+The provenance of a generated constraint is then represented using a polynomial,
+where e.g. $2x_1 + 3x_2$ means add twice the polynomial labelled with
+$x_1$ to thrice that labelled $x_2$.
+=SML
+type ÛORIGINÝ = POLY;
+=TEX
+A constraint is then represented by:
+=SML
+type ÛCONSTRAINTÝ = POLY * CONSTRAINT_TYPE * int * ORIGIN;
+=TEX
+The following functions may be used to ensure that the polynomials in a constraint
+are in increasing order of variable name and have no entries with
+zero coefficients:
+=SML
+fun Ûnormalise_polyÝ (p : POLY) : POLY = (
+	let
+		fun aux [] = []
+		|   aux ((0, _) :: more) = aux more
+		|   aux ((a1, i1)::(more1 as ((a2, i2) :: more2))) = (
+			if i1 = i2
+			then aux ((a1+a2,i1)::more2)
+			else (a1, i1) :: aux more1
+		) | aux nzsingleton = nzsingleton;
+	 fun order ((i1,j1):int*int) (i2,j2) = (
+		if j1 <> j2
+		then j1 -j2
+		else 1
+		);
+	in aux (sort order p)
+	end
+);
+fun Ûnormalise_constraintÝ ((p, ct, c, o1) : CONSTRAINT) : CONSTRAINT = (
+	(normalise_poly p, ct, c, normalise_poly o1)
+);
+=TEX
+\subsection{Formatting Functions}
+=SML
+fun Ûformat_polyÝ (p : POLY) : string = (
+	let
+		fun aux1 (1, i) = "+X" ^ string_of_int i
+		|   aux1(~1, i) = "-X" ^ string_of_int i
+		|   aux1(a, i) = (string_of_int a) ^ "X" ^ string_of_int i;
+	in	case p of 
+			[] => "0"
+		|	_ => format_list aux1 p " "
+	end
+);
+=TEX
+=SML
+fun Ûformat_originÝ (p : ORIGIN) : string = (
+	let
+		fun aux1 (1, i) = "+" ^ string_of_int i ^ "'"
+		|   aux1(~1, i) = "-" ^ string_of_int i  ^ "'"
+		|   aux1(a, i) = (string_of_int a) ^ "*" ^ string_of_int i ^"'";
+	in	format_list aux1 p " "
+	end
+);
+=TEX
+=SML
+fun Ûformat_constraint_typeÝ Eq = "="
+|   format_constraint_type Less = "<"
+|   format_constraint_type LessEq = "<=";
+=TEX
+=SML
+fun Ûformat_constraintÝ ( (p, ty, c, o1) : CONSTRAINT ) : string = (
+	format_origin o1 ^ ": " ^
+	format_poly p ^ " " ^ format_constraint_type ty ^ " " ^ string_of_int c
+);
+=TEX
+\subsection{Cross-multiplication and adding}
+=SML
+fun Ûmult_and_add_polyÝ (b1 : int) (p1 : POLY) (b2 : int) (p2 : POLY) : POLY = (
+	let
+		fun aux (p1 as ((a1, i1) :: more1):POLY) (p2 as ((a2, i2) :: more2):POLY) = (
+			if i1 = i2
+			then case b1*a1 + b2*a2 of
+					0 => aux more1 more2
+				| nz => (nz, i1) :: aux more1 more2
+			else if i1 < i2
+			then (b1*a1, i1) :: aux more1 p2
+			else (b2*a2, i2) :: aux p1 more2
+		) | aux [] ((a2, i2) :: more2) = (
+			(b2*a2, i2) :: aux [] more2
+		) | aux ((a1, i1) :: more1) [] = (
+			(b1*a1, i1) :: aux more1 []
+		) | aux [] [] = [];
+	in	aux p1 p2
+	end
+);
+=TEX
+=SML
+fun Ûmult_and_add_ctÝ
+		(b1 : int) (ct1  : CONSTRAINT_TYPE)
+		(b2 : int) (ct2 : CONSTRAINT_TYPE) : CONSTRAINT_TYPE = (
+	case (ct1, ct2) of
+		(Eq, _) => ct2
+	|	(_, Eq) => ct1
+	|	(Less, _) => Less
+	|	(_, Less) => Less
+	| _ => LessEq
+);
+=TEX
+=SML
+val Ûmult_and_add_oÝ : int -> ORIGIN -> int -> ORIGIN -> ORIGIN = mult_and_add_poly;
+=TEX
+=SML
+fun Ûmult_and_add_constraintÝ
+		(b1 : int) ((p1, ct1, c1, o1) : CONSTRAINT)
+		(b2 : int) ((p2, ct2, c2, o2) : CONSTRAINT) : CONSTRAINT = (
+		(mult_and_add_poly b1 p1 b2 p2,
+		 mult_and_add_ct b1 ct1 b2 ct2,
+		 b1*c1 + b2*c2,
+		 mult_and_add_o b1 o1 b2 o2)
+);
+=TEX
+\subsection{Checking new constraints}
+As new constraints are generated we check whether each constraint is
+ground (i.e. its polynomial is zero). The truth or impossibility of a ground
+constraint may be checked directly. If the ground constraint is true, then
+we may discard it; if false, then we have found the desired contradictory
+consequence of the original set of constraints. To simplify the control
+flow, we raise an exception containing the contradictory ground constraint
+when this latter condition occurs.
+=SML
+exception ÛContradictionÝ of CONSTRAINT;
+=TEX
+The following datatype and function are used to classify constraints
+as ground truths, ground falsehoods or not ground:
+=SML
+datatype ÛCONSTRAINT_VALUEÝ = Truth | Falsehood | NotGround;
+=TEX
+=SML
+fun Ûcheck_constraintÝ (([], ct, c, _) : CONSTRAINT) = (
+	if
+		case ct of
+			Eq => 0 = c
+		|	Less => 0 < c
+		|	LessEq => 0 <= c
+	then Truth
+	else Falsehood
+) | check_constraint _ = NotGround;
+=TEX
+The following function is used to accumulate new constraints as they
+are generated and to raise Contradiction when a contradictory constraint
+is found.
+=SML
+fun Ûacc_constraintÝ (cs : CONSTRAINT) (acc : CONSTRAINT list)
+		: CONSTRAINT list = (
+	case check_constraint cs of
+		NotGround => cs :: acc
+	|	Truth => acc
+	|	Falsehood => raise Contradiction cs
+);
+=TEX
+The following functions are used to compute cross-multipliers.
+=SML
+fun ÛgcdÝ (a1 : int) (a2 : int) : int = (
+	let fun aux x1 x2 = (
+			if x1 < x2
+			then aux x2 x1
+			else if x2 = 0
+			then x1
+			else aux x2 (x1 mod x2)
+		);
+	in
+		if a1 < 0
+		then gcd (~a1) a2
+		else if a2 < 0
+		then gcd a1 (~a2)
+		else aux a1 a2
+	end
+);
+=TEX
+=SML
+fun ÛsgnÝ (i : int) : int = if i < 0 then ~1 else if i > 0 then 1 else 0;
+=TEX
+=SML
+fun Ûx_multipliersÝ (i : int) (j : int) : (int * int) = (
+	let	val d = gcd i j;
+		val m = abs j div d;
+		val n = abs i div d;	 (* so m*abs i = n*abs j *)
+	in
+		if sgn i = sgn j
+		then (m, ~n)
+		else (m, n)
+	end
+);
+=TEX
+=SML
+fun Ûcoeff_ofÝ (i : int) (p : POLY) : int = (
+	case p of
+		[] => 0
+	| (a, j) :: more => if j > i then 0 else if j = i then a else coeff_of i more
+);
+=TEX
+The following function takes a non-ground equational constraint and uses it
+to eliminate a variable from a list of constraints. Note it is coded on the
+assumption that the caller will have checked that the constraint is
+an equation and is not ground.
+=SML
+fun Ûeq_eliminateÝ
+	(cs as (((a, i)::more), _, _, _) : CONSTRAINT) (csl : CONSTRAINT list)
+		: CONSTRAINT list = (
+	case csl of
+		[] => []
+	| ((cs' as (p', _, _, _)) :: more) => (
+			case coeff_of i p' of
+				0 => cs' :: eq_eliminate cs more
+			| b => (
+					let val (m, n) = x_multipliers b a
+					in acc_constraint
+						(mult_and_add_constraint m cs' n cs) (eq_eliminate cs more)
+					end
+			)
+	)
+) | eq_eliminate groundcs csl = acc_constraint groundcs csl;
+=TEX
+If a system of constraints consists solely of equations, the following
+function uses the previous one to eliminate all variables, otherwise
+it replaces all equations by a pair of inequalities.
+=SML
+fun Ûall_eq_eliminateÝ (csl : CONSTRAINT list) : CONSTRAINT list = (
+	let
+		fun aux1 [] = []
+		|   aux1 (cs :: more) = aux1(eq_eliminate cs more);
+		fun aux2 ((cs as (p, Eq, c:int, o1)) :: more) = (
+			(p, LessEq, c, o1) ::
+			(map (fn (i:int, j) => (~i, j)) p,
+			 LessEq,
+			 ~c,
+			 mult_and_add_o ~1 o1 0 [])
+			:: aux2 more
+		) | aux2 (cs :: more) = cs :: aux2 more
+		|  aux2 [] = [];
+	in
+		if all csl (fn (_, ct, _, _) => ct = Eq)
+		then aux1 csl
+		else aux2 csl
+	end
+);
+=TEX
+The following function is assumes that any equations have been eliminated.
+It is given a variable to be eliminated, a list of inequalities in which
+that variable occurs positively and a list of inequalities in which it occurs
+negatively. It returns the list of all non-ground inequalities obtainable
+by taking an inequality from each of the two lists and cross-multiplying
+and adding to eliminate the variable. 
+=SML
+fun Ûineq_eliminateÝ (i : int) (posl : CONSTRAINT list)
+		(negl : CONSTRAINT list) : CONSTRAINT list = (
+	let
+		fun aux1 poscs xma ((negcs as (negp, _, _, _)) :: more) = (
+			let
+				val b = coeff_of i negp;
+				val (m, n) = xma b;
+			in
+				acc_constraint
+				(mult_and_add_constraint m poscs n negcs)
+				(aux1 poscs xma more)
+			end
+		) | aux1 _ _ [] = [];
+		fun aux2 (poscs as (p, _, _, _)) = (
+			aux1 poscs (x_multipliers (coeff_of i p)) negl
+		);
+	in	flat (map aux2 posl)
+	end
+);
+=TEX
+The following functions uses the previous one to eliminate all non-ground
+inequalities from a system (again on the assumption that the equations
+have already been eliminated). Note that the returned value is of no real
+interest: it will always be []. The only interesting ``return'' value  is when
+a ground inequality is found which is contradictory as signalled by the
+raising of the exception Contradiction.
+=SML
+fun Ûall_ineq_eliminateÝ (csl : CONSTRAINT list) : CONSTRAINT list = (
+	let
+		fun group_by_sign i negl zerol posl [] = (rev negl, rev zerol, rev posl)
+		|   group_by_sign i negl zerol posl ((cs as (p, _, _, _)) :: more) = (
+			case sgn (coeff_of i p) of
+				~1 => group_by_sign i (cs::negl) zerol posl more
+			|	0 => group_by_sign i negl (cs::zerol) posl more
+			|	_ => group_by_sign i negl zerol (cs::posl) more
+		);
+	in	case csl of
+			[] => []
+		|	(((_, i)::_, _, _, _) :: _) => (
+				let val (negl, zerol, posl) = group_by_sign i [] [] [] csl;
+				in	all_ineq_eliminate (zerol @ ineq_eliminate i posl negl)
+				end
+		) | (ground :: more) => all_ineq_eliminate (acc_constraint ground more)
+	end
+);
+=TEX
+We now have all the pieces required to code the decision procedure as
+a function to test the unsatisfiability of a system of linear constraints.
+If the system is unsatisfiable, the function returns a ground constraint
+which is contradictory, otherwise an exception is raised. For an
+ unsatisfiable system, the caller may then use the ORIGIN component of
+the return value to derive a contradiction from the input data.
+It is the caller's responsibility to ensure that the input constraints have
+appropriate ORIGIN values. However, the function does arrange for the
+polynomials in the constraints to be in increasing order and to have no
+entries with zero coefficients (as required for the polynomial operations
+to work correctly).
+=SML
+fun Ûlin_arith_contrÝ (csl : CONSTRAINT list) : POLY = (
+	(all_ineq_eliminate (all_eq_eliminate(map normalise_constraint csl));
+	 fail "system is satisfiable" 99999 [])
+	handle Contradiction (cs as (_, _, _, org)) => org
+);
+=TEX
+=SML
+open_theory"basic_hol";
+push_pc"basic_hol";
+=TEX
+=SML
+new_error_message{
+id = 9087, text=
+"?0 and ?1 are not both of the form ô a = b, ô a < b, ô a ¼ b ô a > b or ô a ¾ b"};
+new_error_message{
+id = 9088, text=
+"?0 is not of the form ô a = b, ô a < b, ô a ¼ b ô a > b or ô a ¾ b"};
+new_error_message{
+id = 9089, text=
+"Cannot add an empty list of theorems"};
+=TEX
+\section{RULES}
+=TEX
+We need lots of theorems:
+=SML
+val Û³_eq_thmÝ = tac_proof(([], ¬µm n : î·³m = n ¤ m < n ² n < m®),
+		REPEAT µ_tac THEN rewrite_tac[taut_rule¬µa b·(³a¤b)¤(a¤³b)®]
+		THEN REPEAT strip_tac THEN (asm_rewrite_tac[] ORELSE
+			strip_asm_tac(list_µ_elim[¬m:î®, ¬n:î®]less_cases_thm)));
+
+val Ûadd_eq_eq_thmÝ = tac_proof(([], ¬µm n i j·m = n ± i = j ´ m + i = n + j®),
+	REPEAT strip_tac THEN asm_rewrite_tac[]);
+val Ûadd_eq_¼_thmÝ = tac_proof(([], ¬µm n i j·m = n ± i ¼ j ´ m + i ¼ n + j®),
+	REPEAT strip_tac THEN asm_rewrite_tac[]);
+val Ûadd_¼_¼_thmÝ = tac_proof(
+	([], ¬µm n i j·m ¼ n ± i ¼ j ´ m + i ¼ n + j®),
+	rewrite_tac[less_def, ¼_def] THEN REPEAT strip_tac
+	THEN ¶_tac¬i'+i''® THEN DROP_ASMS_T (rewrite_tac o map eq_sym_rule)
+	THEN rewrite_tac[plus_assoc_thm, µ_elim¬i:î®plus_order_thm]);
+val Ûadd_eq_¾_thmÝ = tac_proof(([], ¬µm n i j·m = n ± i ¾ j ´ m + i ¾ n + j®),
+	REPEAT strip_tac THEN asm_rewrite_tac[]);
+val Ûadd_¾_¾_thmÝ = tac_proof(
+	([], ¬µm n i j·m ¾ n ± i ¾ j ´ m + i ¾ n + j®),
+	rewrite_tac[¾_def] THEN REPEAT strip_tac
+	THEN bc_tac[add_¼_¼_thm] THEN REPEAT strip_tac);
+=TEX
+=SML
+val Ûpos_scale_eq_thmÝ  = tac_proof(
+	([], ¬µi m n·m = n ´ i * m = i * n®),
+	REPEAT strip_tac THEN asm_rewrite_tac[]);
+val Ûneg_scale_eq_thmÝ  = tac_proof(
+	([], ¬µi m n·m = n ´ i * n = i * m®),
+	REPEAT strip_tac THEN asm_rewrite_tac[]);
+val Ûpos_scale_¼_thmÝ = tac_proof(
+	([], ¬µi m n·m ¼ n ´ i * m ¼ i * n®),
+	rewrite_tac[¼_def] THEN REPEAT strip_tac
+	THEN ¶_tac¬i*i'® THEN POP_ASM_T (rewrite_thm_tac o eq_sym_rule)
+	THEN rewrite_tac[times_plus_distrib_thm]);
+val Ûneg_scale_¼_thmÝ = tac_proof(
+	([], ¬µi m n·m ¼ n ´ i * n ¾ i * m®),
+	rewrite_tac[¾_def] THEN rewrite_tac[pos_scale_¼_thm]);
+val Ûpos_scale_¾_thmÝ = tac_proof(
+	([], ¬µi m n·m ¾ n ´ i * m ¾ i * n®),
+	rewrite_tac[¾_def] THEN rewrite_tac[pos_scale_¼_thm]);
+val Ûneg_scale_¾_thmÝ = tac_proof(
+	([], ¬µi m n·m ¾ n ´ i * n ¼ i * m®),
+	rewrite_tac[¾_def] THEN rewrite_tac[pos_scale_¼_thm]);
+=TEX
+=SML
+val Ûeq_cancel_thm1Ý = tac_proof(
+	([], ¬µc d m·c + m = d + m ¤ c = d®),
+	rewrite_tac[plus_clauses]);
+val Ûeq_cancel_thm2Ý = tac_proof(
+	([], ¬µc m·c + m = m ¤ c = 0®),
+	rewrite_tac[plus_clauses]);
+val Ûeq_cancel_thm3Ý = tac_proof(
+	([], ¬µd m·m = d + m ¤ d = 0®),
+	rewrite_tac[plus_clauses]);
+
+
+val Û¼_cancel_thm1Ý = tac_proof(
+	([], ¬µc d m·c + m ¼ d + m ¤ c ¼ d®),
+	rewrite_tac[¼_clauses]);
+val Û¼_cancel_thm2Ý = tac_proof(
+	([], ¬µc d m·c + m ¼ m ¤ c ¼ 0®),
+	rewrite_tac[¼_clauses]);
+val Û¾_cancel_thm1Ý = tac_proof(
+	([], ¬µc d m·c + m ¾ d + m ¤ c ¾ d®),
+	rewrite_tac[¾_def, ¼_clauses]);
+val Û¾_cancel_thm2Ý = tac_proof(
+	([], ¬µc d m·m ¾ d + m ¤ 0 ¾ d®),
+	rewrite_tac[¾_def, ¼_clauses]);
+=TEX
+=SML
+val Ûnon_neg_thmÝ = tac_proof(([],¬µt·0 ¼ t®), REPEAT strip_tac);
+val Ûeq_cancel_conv_thmÝ = tac_proof(
+	([],¬µx a m x b n· x + a = m ´ x + b = n ´ (m = n ¤ a = b)®),
+	REPEAT (µ_tac ORELSE ´_tac) 
+	 THEN DROP_ASMS_T (MAP_EVERY (asm_tac o eq_sym_rule))
+	THEN asm_rewrite_tac[]);
+val Û¼_cancel_conv_thmÝ = tac_proof(
+	([],¬µx a m x · x + a = m ´ µb n·x + b = n ´ (m ¼ n ¤ a ¼ b)®),
+	REPEAT (µ_tac ORELSE ´_tac) 
+	 THEN DROP_ASMS_T (MAP_EVERY (asm_tac o eq_sym_rule))
+	THEN asm_rewrite_tac[]);
+=TEX
+=SML
+val Ûterm_times_thmÝ = (tac_proof(([], ¬
+	(t1 = t2 ´ t*t1 = t*t2)
+±	(t1 ¼ t2 ´ t*t1 ¼ t*t2)
+±	(t1 < t2 ´ t*t1 + t ¼ t*t2)
+±	(t1 ¾ t2 ´ t*t2 ¼ t*t1)
+±	(t1 > t2 ´ t*t2 + t ¼ t*t1)
+
+±	(³t1 = t2 ´ t*t1 + t ¼ t*t2 ² t*t2 + t ¼ t*t1)
+±	(³t1 ¼ t2 ´ t*t2 + t ¼ t*t1)
+±	(³t1 < t2 ´ t*t2 ¼ t*t1)
+±	(³t1 ¾ t2 ´ t*t1 + t ¼ t*t2)
+±	(³t1 > t2 ´ t*t1 ¼ t*t2)
+®),
+	rewrite_tac[greater_def, ¾_def, less_def, ³_¼_thm, ³_eq_thm,
+	prove_rule[times_plus_distrib_thm]¬µt t1·t*t1 + t = t*(t1 + 1)®,
+	pos_scale_eq_thm, pos_scale_¼_thm]
+	THEN REPEAT strip_tac
+	THEN strip_asm_tac(list_µ_elim[¬t:î®, ¬t2+1®, ¬t1:î®]pos_scale_¼_thm)
+	THEN strip_asm_tac(list_µ_elim[¬t:î®, ¬t1+1®, ¬t2:î®]pos_scale_¼_thm)));
+=TEX
+=SML
+val Ûmake_eq_or_¼_thmÝ = (tac_proof(([], ¬
+	(t1 < t2 ¤ t1 + 1 ¼ t2)
+±	(t1 ¾ t2 ¤ t2 ¼ t1)
+±	(t1 > t2 ¤ t2 + 1 ¼ t1)
+
+±	(³t1 = t2 ¤ t1 + 1 ¼ t2 ² t2 + 1 ¼ t1)
+±	(³t1 ¼ t2 ¤ t2 + 1 ¼ t1)
+±	(³t1 < t2 ¤ t2 ¼ t1)
+±	(³t1 ¾ t2 ¤ t1 + 1 ¼ t2)
+±	(³t1 > t2 ¤ t1 ¼ t2)
+®),
+	rewrite_tac[greater_def, ¾_def, less_def, ³_¼_thm, ³_eq_thm]));
+=TEX
+Now $term\_times\_rule$ which we implement using nets:
+=SML
+local
+val Ûterm_times_netÝ = (
+	let	fun entry th = (fst(dest_´(concl th)), th);
+	in	make_net (map entry (strip_±_rule term_times_thm))
+	end
+);
+val ÛtÝ = ¬t:î®;
+in
+fun Ûterm_times_ruleÝ (tm : TERM) : THM -> THM = (
+	if type_of tm =: î
+	then	(fn th =>
+		let	val thm = (case net_lookup term_times_net (concl th) of
+					[th] => th
+				| 	_=> thm_fail"term_times_rule" 82011 [th]
+			);
+		in	(simple_´_match_mp_rule (inst_term_rule [(tm, t)] thm) th)
+			handle Fail _ => thm_fail"term_times_rule" 82011 [th]
+		end)
+	else	term_fail "term_times_rule" 82010 [tm]
+);
+end;
+=TEX
+Now $make_eq_or_¼_rule$ and $make_eq_or_¼_conv$
+which we also implement using nets:
+=SML
+local
+val Ûmake_eq_or_¼_netÝ = (
+	let	fun entry th = (fst(dest_¤(concl th)), th);
+	in	make_net (map entry (strip_±_rule make_eq_or_¼_thm))
+	end
+);
+in
+fun Ûmake_eq_or_¼_ruleÝ (thm : THM) : THM = (
+	let	val cnc = concl thm;
+	in	if (is_eq cnc andalso type_of (fst(dest_eq cnc)) =: î)
+		orelse is_¼ cnc
+		then thm
+		else  (case net_lookup make_eq_or_¼_net cnc of
+				[th] => ((simple_¤_match_mp_rule th thm)
+		handle Fail _ => thm_fail"make_eq_or_¼_rule" 82011 [thm])
+			| 	_=> thm_fail"make_eq_or_¼_rule" 82011 [thm]
+		)
+	end
+);
+val Ûmake_eq_or_¼_convÝ : CONV = (fn tm =>
+	case net_lookup make_eq_or_¼_net tm of
+			[th] => ((simple_eq_match_conv th tm)
+	handle Fail _ => term_fail"make_eq_or_¼_conv" 82011 [tm])
+		| 	_=> term_fail"make_eq_or_¼_conv" 82011 [tm]
+);
+end;
+=TEX
+Note that the following rule needs to cater for ¾, since that
+is what we use to stand for a negated ¼.
+=SML
+fun Ûsum2_rule_auxÝ (th1 : THM) (th2: THM) : THM = (
+	let	val rator1 = (fst o dest_const o fst o strip_app o concl) th1;
+		val rator2 = (fst o dest_const o fst o strip_app o concl) th2;
+		val (add_th, conj_th) = (
+			case (rator1, rator2) of
+				("=", "=") => (add_eq_eq_thm, ±_intro th1 th2)
+			|	("=", "¼") => (add_eq_¼_thm, ±_intro th1 th2)
+			|	("=", "¾") => (add_eq_¾_thm, ±_intro th1 th2)
+			|	("¼", "¼") => (add_¼_¼_thm, ±_intro th1 th2)
+			|	("¼", "=") => (add_eq_¼_thm, ±_intro th2 th1)
+			|	("¾", "¾") => (add_¾_¾_thm, ±_intro th1 th2)
+			|	("¾", "=") => (add_eq_¾_thm, ±_intro th2 th1)
+			|	_ => thm_fail "sum2_rule" 9087 [th1, th2]
+		);
+	in	´_match_mp_rule add_th conj_th
+	end
+	handle Fail _ => thm_fail "sum2_rule" 9087 [th1, th2]
+(* ?0 and ?1 are not both of the form ô a = b, ô a < b, ô a ¼ b ô a > b or ôa ¾ b *)
+);
+=TEX
+=SML
+fun Ûscale_ruleÝ (a : int) (th : THM) : THM = (
+	let	val th1 = make_eq_or_¼_rule th;
+		val scale_th = simple_µ_elim (mk_î(abs a)) (
+			case
+			(a >= 0, (fst o dest_const o fst o strip_app o concl) th1)
+			of	(true, "=") => pos_scale_eq_thm
+			|	(true, "¼") => pos_scale_¼_thm
+			|	(true, "¾") => pos_scale_¾_thm
+			|	(false, "=") => neg_scale_eq_thm
+			|	(false, "¼") => neg_scale_¼_thm
+			|	(false, "¾") => neg_scale_¾_thm
+			|	_ => thm_fail "sum2_rule" 9088 [th]
+		);
+	in	´_match_mp_rule scale_th th1
+	end
+);
+=TEX
+=SML
+fun Ûscale_and_sum2_ruleÝ (a1 : int) (th1 : THM) (th2: THM) : THM = (
+	sum2_rule_aux (scale_rule a1 th1) (make_eq_or_¼_rule th2)
+);
+=TEX
+=SML
+fun Ûscaled_sum_ruleÝ (aths : (int * THM) list) : THM = (
+	conv_rule (RANDS_C (TRY_C anf_conv))
+	(case aths of
+		[] => fail "sum2_rule" 9089 []
+	|	[(a, th)] => scale_rule a th
+	|	(a, th) :: more => scale_and_sum2_rule a th(scaled_sum_rule more))
+);
+=TEX
+=SML
+fun Ûla_ruleÝ (aths : (int * THM) list) : THM = (
+	let	val th = scaled_sum_rule aths;
+	in	conv_rule (
+		FIRST_C (map eq_match_conv
+		[eq_cancel_thm1, eq_cancel_thm2, eq_cancel_thm3,
+		 ¼_cancel_thm1, ¼_cancel_thm2,
+		 ¾_cancel_thm1, ¾_cancel_thm2])
+		AND_OR_C
+		FIRST_C [î_eq_conv, ¼_conv, ¾_conv]
+		) th
+	end
+);
+=TEX
+\section{THE LINEAR ARITHMETIC TACTICS}
+=TEX
+We use the following type to represent a scaled sum of linear arithmetic
+atoms:
+=SML
+type ÛSCALED_SUMÝ = (int * TERM) list;
+=TEX
+=SML
+fun Ûstrip_plusÝ (tm : TERM) : TERM list = (
+	((op :: o (Combinators.I ** strip_plus) o dest_plus) tm)
+	handle Fail _ => [tm]
+);
+=TEX
+Note that the following is intended to operate on a term which is either
+in additive normal form, or otherwise has been deliberately written as
+a scaled sum of things which are not in normal form to gain some special
+effect. If the user generates an assumption which
+contains summands of the form $1*x$ then these will
+not be treated as equal to $x$ (the alternatives would either require a special
+representation for this case or would lead to possible
+circumstances in which the
+contradiction produced by $la\_rule$ has assumptions which are different
+from the assumptions in the original goal). 
+=SML
+fun Ûdest_summandÝ (tm : TERM) : int * TERM = (
+	let val nt = (((dest_î ** Combinators.I) o dest_times) tm);
+	in	if (fst nt) = 1
+		then (1, tm)
+		else nt
+	end	handle Fail _ => (1, tm)
+);
+=TEX
+=SML
+val Ûdest_sumÝ : TERM -> SCALED_SUM = map dest_summand o strip_plus;
+=TEX
+=SML
+val zero = ¬0®;
+fun Ûmk_sumÝ ([] : SCALED_SUM) = zero
+|   mk_sum [(1, t)] = t
+|   mk_sum [(i, t)] = mk_times(mk_î i, t)
+|   mk_sum ((1, t) :: more) = mk_plus(t, mk_sum more)
+|   mk_sum ((i, t) :: more) = mk_plus(mk_times(mk_î i, t), mk_sum more);
+=TEX
+We use the following type to represent a constraint (with HOL terms rather
+than variables as its atoms):
+=SML
+type ÛTERM_CONSTRAINTÝ = SCALED_SUM * TERM * SCALED_SUM;
+=TEX
+The next function extracts a term constraint from an equation
+or a ¼. 
+=SML
+fun Ûdest_constraintÝ (tm : TERM) : TERM_CONSTRAINT OPT = (
+	let	val ((rel, l), r) =
+			((dest_app ** Combinators.I) o dest_app)tm;
+	in	case fst(dest_const rel) of 
+			"=" => (
+				if type_of l =: î
+				then Value (dest_sum l, rel, dest_sum r)
+				else Nil
+		) |	"¼" => (Value (dest_sum l, rel, dest_sum r)
+		) |	_ => Nil
+	end	handle Fail _ => Nil
+);
+=TEX
+Given a term constraint, the following function assigns variables numbers
+for $lin\_arith\_contr$ to the atoms:
+=SML
+fun Ûatom_mapÝ
+	(x : TERM_CONSTRAINT list)
+	: (int * TERM) list = (
+	let	fun aux1 acc [] = acc
+		|   aux1 acc ((i, t) :: more) = (
+			if	i = 1 andalso is_î t
+			then	aux1 acc more
+			else	aux1 (acc term_grab t) more
+		);
+		fun aux2 acc [] = acc
+		|   aux2 acc ((s1, _, s2) :: more) = (
+			aux2 (aux1 (aux1 acc s1) s2) more
+		);
+		val tms = aux2 [] x
+	in	combine (interval 1 (length tms)) tms
+	end
+);
+=TEX
+=SML
+fun Ûterm_rassocÝ
+	((i, t) :: more : ('a * TERM) list)
+	(tm : TERM) : 'a = (
+	if t ~=$ tm then i else term_rassoc more tm
+) | Ûterm_rassocÝ [] _ = (
+	fail "term_rassoc" 9090 []
+);
+=TEX
+=SML
+fun Ûterm_lassocÝ
+	((t, i) :: more : (TERM * 'a) list)
+	(tm : TERM) : 'a = (
+	if t ~=$ tm then i else term_lassoc more tm
+) | Ûterm_lassocÝ [] _ = (
+	fail "term_lassoc" 9090 []
+);
+=TEX
+Given the mapping of variable numbers to HOL terms and
+a scaled sum, the following
+function computes the corresponding polynomial and constant
+right hand side of the constraint for $lin\_arith\_contr$
+=SML
+fun Ûmake_polyÝ (inds : (int * TERM) list) (ss : SCALED_SUM) : POLY * int = (
+	let	fun collect (acc as (p, c)) ((i, tm) :: more) = (
+			(collect (p, c + i*dest_î tm) more)
+			handle Fail _ => collect ((i, term_rassoc inds tm) :: p, c) more
+		) | collect acc [] = acc;
+		val (p, c) = collect ([], 0) ss;
+	in	(normalise_poly p, c)
+	end
+);
+=TEX
+The following function makes a constraint for $lin\_arith\_contr$, 
+given the mapping of variable numbers to HOL terms and
+a term constraint:
+=SML
+fun Ûmake_constraintÝ (inds : (int * TERM) list)
+		((ind, (l, rel, r)) : int * TERM_CONSTRAINT)
+		: CONSTRAINT = (
+	let	val rator = (
+			case fst(dest_const rel) of
+				"=" => Eq
+			|	"¼" => LessEq
+			|	_ => error "make_constraint" 9090 []
+(* Unexpected error *)
+		);
+		val (lp, lc) = make_poly inds l;
+		val (rp, rc) = make_poly inds r;
+	in	(mult_and_add_poly 1 lp (~1) rp, rator,  rc - lc, [(1, ind)])
+	end
+);
+=TEX
+Given a list of terms, the following function extracts all the information
+needed by $lin\_arith\_contr$ and subsequently to process its output.
+Note we generate variable names for each of the linear arithmetic atoms
+to speed up proof of the theorem after a successful call of $lin\_arith\_contr$.
+The flag parameter indicates whether or not we are to add in constraints asserting
+that each atom is non-negative.
+=SML
+val ÛleÝ = ¬$¼®;
+fun Ûmake_problemÝ (addlwbs : bool) (tml : TERM list) :
+		((int * TERM) * TERM) list
+	*	((	CONSTRAINT
+		*	(int * TERM_CONSTRAINT)) list) = (
+	let	fun aux1 [] = []
+		|   aux1 (Nil :: more) = aux1 more
+		|   aux1 (Value v :: more) = v :: aux1 more;
+		val stsl = aux1(map dest_constraint tml);
+		val inds = atom_map stsl;
+		val extras = (
+			if addlwbs
+			then map (fn (i,tm) =>  ([], le, [(1,tm)])) inds
+			else []
+		);
+		val stsl' = stsl @ extras;
+		val istsl = combine (interval 1 (length stsl')) stsl';
+		val ctl = map (make_constraint inds) istsl;
+	in	(map(fn (i, t)=> ((i, mk_var("@_"^string_of_int i, î)), t)) inds,
+			combine ctl istsl)
+	end
+);
+=TEX
+Given the relevant information about variable numbers and generated
+variable names and a scaled sum the following function computes the
+corresponding term:
+=SML
+fun Ûmake_var_sumÝ (ivtl : ((int * TERM) * TERM) list) (ss : SCALED_SUM) : TERM = ( 
+	let	fun name t = (
+			if is_î t
+			then t
+			else snd (term_rassoc ivtl t)
+		);
+		fun aux1 (1, t) = name t
+		|   aux1 (i, t) = mk_times(mk_î i, name t);
+		fun aux2 [] = mk_î 0
+		|   aux2 [s] = aux1 s
+		|   aux2 (s :: more) = mk_plus(aux1 s, aux2 more);
+	in	aux2 ss
+	end
+);
+=TEX
+We are now concerned with
+proving the theorem corresponding to one of the constraints passed
+as input to $lin\_arith\_contr$.
+We must detect theorems of the from $0 ¼ t$, which may have been
+just be planted by $make\_problem$ and so must be proved rather
+than just assumed, since there may be no assumption in the goal
+to justify them.
+=SML
+fun Ûmake_var_thmÝ
+	(ivtl : ((int * TERM) * TERM) list)
+	(l : SCALED_SUM, rel : TERM, r : SCALED_SUM) : THM = (
+	if is_nil l andalso rel =$ le
+	then	simple_µ_elim (make_var_sum ivtl r) non_neg_thm
+	else	asm_rule(mk_app(mk_app(rel, make_var_sum ivtl l),
+			make_var_sum ivtl r))
+);
+=TEX
+The following function uses the results of $lin\_arith\_contr$ and
+the substitution implicit in the results of $make\_problem$ to prove
+the actual theorem that the assumptions entail $F$.
+=SML
+fun Ûmake_actual_thmÝ
+	(ivtl : ((int * TERM) * TERM) list)
+	(p : ORIGIN)
+	(ts : (int * TERM_CONSTRAINT) list)
+	: THM = (
+	let	fun aux (i, t) = (i, make_var_thm ivtl (lassoc3 ts t));
+		val subs = map (fn ((_, v), t) => (t, v)) ivtl;
+	in	asm_inst_term_rule subs (la_rule (map aux p))
+	end
+);
+=TEX
+=SML
+fun Ûlin_arith_ruleÝ (addlwbs : bool) (tml : TERM list) : THM = (
+	let	val (ivtl, ctetcl) = make_problem addlwbs tml;
+		val p = lin_arith_contr (map fst ctetcl);
+	in	make_actual_thm ivtl p (map snd ctetcl)
+	end
+);
+=TEX
+=SML
+val Ûlin_arith_tacÝ : TACTIC = (
+		contr_tac
+	THEN	GET_ASMS_T (f_thm_tac o lin_arith_rule false o map concl)
+);
+=TEX
+=SML
+val Ûlin_arith_tac1Ý : TACTIC = (
+		contr_tac
+	THEN	GET_ASMS_T (f_thm_tac o lin_arith_rule true o map concl)
+);
+=TEX
+=SML
+val Ûlin_arith_fc_canonÝ  : CANON = (fn thm =>
+	let	fun chk1 t = (
+			is_¼ t orelse
+			(type_of (fst (dest_eq t)) =: î)
+			handle Fail _ => false
+		);
+		fun chk2 t = (
+			let	val t1 = 
+				case rev(strip_´ t) of
+					[tm] => tm
+				|	tm1 :: tm2 :: _ => (
+					if is_f tm1 then tm2 else tm1
+				) |	_ => mk_f;
+			in	chk1 t1 orelse (chk1 (dest_³ t1))
+				handle Fail _ => false
+			end
+		);
+	in	fc_canon thm drop (not o chk2 o snd o strip_µ o concl)
+	end
+);
+=TEX
+Now the tactic which is the automatic proof tactic
+=SML
+val Ûlin_arith_prove_tacÝ : THM list -> TACTIC = (fn thl => fn gl =>
+	((	all_asm_ante_tac
+	THEN_TRY 	rewrite_tac thl
+	THEN	contr_tac
+	THEN	ALL_ASM_FC_T1 lin_arith_fc_canon (MAP_EVERY strip_asm_tac) []
+	THEN	GET_ASMS_T (f_thm_tac o lin_arith_rule true o map concl)) gl)
+	handle	Fail _ => term_fail "lin_arith_prove_tac" 76001 [snd gl]
+	
+);
+=TEX
+and the associated conversion:
+=SML
+val Ûlin_arith_prove_convÝ : THM list -> CONV = (fn thl => fn tm =>
+	let	val th = tac_proof(([], tm), lin_arith_prove_tac thl);
+	in	¤_t_intro  th
+	end	handle Fail _ => term_fail "lin_arith_prove_conv" 76001 [tm]
+);
+=TEX
+\section{OTHER RULES}
+We wish to define the cancellation conversions which take terms of
+the formsw $a = b$ or $a ¼ b$, put $a$ and $b$ in additive normal
+form and then cancel like terms.
+
+Given $a$ and $b$ in additive normal form as scaled sums, the following computes
+$x$, $a'$ and $b'$ such that $x + a' = x + b'$ and $a'$ and $b'$ have no
+atoms in common and returns $x + a'$ and $x + b'$. It fails if $x$ would be
+$0$.
+=SML
+fun Ûcancel_part1Ý (a : TERM) (b : TERM) : TERM * TERM= (
+	let	fun aux1 (x, a', b') ((i:int,t)::more) bb = (
+			let	val j = term_rassoc bb t;
+				fun f l = l drop (fn (_, t') => t =$ t');
+			in	if i = j
+				then aux1 ((i, t)::x, a', b') more (f bb)
+				else if i > j
+				then aux1 ((j, t)::x, (i-j,t)::a', b') more (f bb)
+				else aux1 ((i, t)::x, a', (j-i,t)::b') more (f bb)
+			end	handle Fail _ => (
+				aux1 (x, (i, t)::a', b') more bb
+			)
+		) | aux1 (x, a', b') [] bb = ((rev x, rev a', rev b' @ bb));
+		fun aux2 (x, a', b') = (
+			(mk_plus(mk_sum x, mk_sum a'),
+				mk_plus(mk_sum x, mk_sum b'))
+		);
+		val ssa = dest_sum a drop (fn (_, t) => t =$ zero);
+		val ssb = dest_sum b drop (fn (_, t) => t =$ zero);
+	in	aux2(
+		case (ssa, ssb) of
+			([], _) => fail "cancel_part1" 82051 []
+		|	(_, []) => fail "cancel_part1" 82051 []
+		|	((sm as (1, cat))::ssa', (1, cbt)::ssb') => (
+			let	val ca = dest_î cat;
+				val cb = dest_î cbt;
+			in	if ca = cb
+				then aux1 ([sm], [], []) ssa' ssb'
+				else if ca > cb
+				then aux1 ([(1, mk_î cb)],
+						[(1,mk_î (ca - cb))], []) ssa' ssb'
+				else aux1 ([(1, mk_î ca)],
+						[], [(1,mk_î (cb - ca))]) ssa' ssb'
+			end	handle Fail _ =>
+				aux1 ([], [], []) ssa ssb
+		) |	_ =>	aux1 ([], [], []) ssa ssb)
+	end
+);
+=TEX
+
+=TEX
+=SML
+fun Ûgen_cancel_convÝ (rel : TERM) (th : THM) : CONV = (fn tm =>
+	let	val (rela1, b1) = dest_app tm;
+		val (r1, a1) = dest_app rela1;
+	in 	if rel =$ r1
+		then
+	let	val thm1 = Value (
+			let	val thm = app_fun_rule r1(anf_conv a1);
+			in	(mk_app_rule thm (anf_conv b1))
+				handle Fail _ =>
+				(app_arg_rule b1 thm)
+			end	handle Fail _ =>
+				(app_fun_rule rela1 (anf_conv b1))
+		)	handle Fail _ => Nil;
+		val tm1 =
+			case thm1 of 
+				Value thm => snd(dest_app(concl thm))
+			|	Nil => tm;
+		val (rela2, b2) = dest_app tm1;
+		val (r2, a2) = dest_app rela2;
+	in	(let val (xa, xb) = cancel_part1 a2 b2;
+			val thm2 = TRY_C anf_conv xa;
+			val thm3 = TRY_C anf_conv xb;
+			val thm4 = simple_´_match_mp_rule th thm2;
+			val thm5 = (simple_´_match_mp_rule thm4 thm3);
+		in	case thm1 of
+				Value thm => (
+				 Combinators.K thm THEN_C Combinators.K thm5				) |	Nil => Combinators.K thm5
+		end	handle Fail _ => (
+			case thm1 of
+				Value thm => (Combinators.K thm
+			) |	Nil => fail_conv
+		)) tm
+	end	else	fail_conv tm
+	end
+);
+=TEX
+=SML
+val Ûî_eq_cancel_convÝ =
+	gen_cancel_conv ¬$=:î­î­BOOL® eq_cancel_conv_thm;
+=TEX
+=SML
+val Û¼_cancel_convÝ =
+	gen_cancel_conv ¬$¼:î­î­BOOL® ¼_cancel_conv_thm;
+=TEX
+\section{THE PROOF CONTEXTS}
+The equational contexts required are the same for stripping goals and stripping
+theorems. We take numeric $=$ and $¼$ as the atomic
+predicates which we will deal with. The possibilities are:
+{\em(i)} compute the truth value of a ground atomic predicate;
+{\em(ii)} put the operands a ground atomic predicate in A.N.F. and cancel like terms;
+{\em(iii)} convert a negated atomic predicate into an atomic one;
+{\em(iv)} convert a predicate formed with $<$, $¾$ or $>$ into an atomic one;
+and
+{\em(v)} convert the negation of a predicate formed with $<$, $¾$ or $>$ into an atomic one.
+=SML
+val strip_cxt = [
+	(¬x = y®, î_eq_conv),
+	(¬x ¼ y®, ¼_conv),
+
+	(¬x = y®, î_eq_cancel_conv),
+	(¬x ¼ y®, ¼_cancel_conv),
+
+	(¬³x = y®, make_eq_or_¼_conv),
+	(¬³x ¼ y®, make_eq_or_¼_conv),
+
+	(¬x < y®, make_eq_or_¼_conv),
+	(¬x ¾ y®, make_eq_or_¼_conv),
+	(¬x > y®, make_eq_or_¼_conv),
+
+	(¬³x < y®, make_eq_or_¼_conv),
+	(¬³x ¾ y®, make_eq_or_¼_conv),
+	(¬³x > y®, make_eq_or_¼_conv)];
+=TEX
+For rewriting, 
+=SML
+val _ = new_pc Û"'lin_arith"Ý;
+val _ = set_rw_eqn_cxt strip_cxt "'lin_arith";
+val _ = set_st_eqn_cxt strip_cxt "'lin_arith";
+val _ = set_sc_eqn_cxt strip_cxt "'lin_arith";
+val _ = set_pr_tac lin_arith_prove_tac "'lin_arith";
+val _ = set_pr_conv lin_arith_prove_conv "'lin_arith";
+val _ = commit_pc "'lin_arith";
+=TEX
+val _ = new_pc Û"lin_arith"Ý;
+val _ = merge_pcs ["predicates","'lin_arith"] "lin_arith";
+val _ = commit_pc "lin_arith";
+=TEX
+\section{OTHER TACTICS}
+=SML
+fun Ûscale_thm_tacÝ (t : TERM) (th : THM) : TACTIC = (
+	((REPEAT_TTCL STRIP_THM_THEN
+		(check_asm_tac o conv_rule (RANDS_C (TRY_C anf_conv)) o term_times_rule t)
+		o  make_eq_or_¼_rule) th)
+			handle ex => reraise ex "scale_thm_tac"
+);
+=TEX
+=SML
+fun Ûscale_asm_tacÝ (t : TERM) (asm : TERM) : TACTIC = (fn gl =>
+	(DROP_ASM_T asm (scale_thm_tac t) gl)
+	handle ex => reraise ex "scale_asm_tac"
+);
+=TEX
+=SML
+fun Ûscale_nth_asm_tacÝ (n : int) (t : TERM) : TACTIC = (fn gl =>
+	(DROP_NTH_ASM_T n (scale_thm_tac t) gl)
+	handle ex => reraise ex "scale_nth_asm_tac"
+);
+=TEX
+=SML
+fun Ûlist_scale_nth_asm_tacÝ (nts : (int * TERM) list) : TACTIC = (fn gl => 
+	let	val (ns, ts) = split nts;
+	in	LIST_DROP_NTH_ASM_T ns (EVERY o zip (map scale_thm_tac ts)) gl
+	end handle ex => reraise ex "list_scale_nth_asm_tac"
+);
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+
+
+=IGN
+fun qp_rule (tm : TERM) = (
+	¤_t_elim
+	((RANDS_C anf_conv THEN_C PC_C1 "hol1" rewrite_conv []) tm)
+);
+val qp_rule = prove_rule[];
+
+val eq_th1 = qp_rule¬x + 2*y = y + x + y®;
+val eq_th2 = qp_rule¬2*x + 2*y = y + x + y + x®;
+val ¼_th1 = qp_rule¬x + y ¼ z + y + x®;
+val ¼_th2 = qp_rule¬w ¼ 1 + w®;
+val ¾_th1 = qp_rule¬x + 2*y ¾ x®;
+val ¾_th2 = qp_rule¬x + 2*y ¾ 2*y®;
+val less_th1 = qp_rule¬x + y < 1 + y + x®;
+val less_th2 = qp_rule¬w < 1 + w®;
+val greater_th1 = qp_rule¬x + 2 > x®;
+val greater_th2 = qp_rule¬44 + x + y ¾ 10 + y + x®;
+
+
+sum2_rule_aux eq_th1 eq_th2;
+sum2_rule_aux eq_th1 ¼_th1;
+sum2_rule_aux eq_th1 ¾_th1;
+sum2_rule_aux ¼_th1 ¼_th2;
+sum2_rule_aux ¼_th1 eq_th1;
+sum2_rule_aux ¾_th1 ¾_th2;
+sum2_rule_aux ¾_th1 eq_th1;
+
+
+scale_rule 9 eq_th1;
+scale_rule ~42 eq_th1;
+scale_rule 11 ¼_th1;
+scale_rule ~1 ¼_th1;
+scale_rule 1001 ¾_th1;
+scale_rule ~666 ¾_th1;
+
+make_eq_or_¼_rule eq_th1;
+make_eq_or_¼_rule ¼_th1;
+make_eq_or_¼_rule ¾_th1;
+make_eq_or_¼_rule less_th1;
+make_eq_or_¼_rule greater_th1;
+
+
+
+scaled_sum_rule [
+	(1, eq_th1),
+	(~2, eq_th2),
+	(3, ¼_th1),
+	(~4, ¾_th1),
+	(5, less_th1),
+	(~6, greater_th1)
+];
+
+
+
+val th1_1 = asm_rule¬x0 ¼ x1®;
+val th1_2 = asm_rule¬x1 ¼ x0®;
+val th1_3 = asm_rule¬x1 + 2 ¼ x0 + 1®;
+
+
+la_rule[(1, th1_1), (1, th1_3)];
+
+
+val th2_1 = asm_rule ¬x1 + x2 = 1®;
+val th2_2 = asm_rule ¬x1 = 1 + x2®;
+val th2_3 = asm_rule ¬x2 < x3 ®;
+val th2_4 = asm_rule ¬x3 = 0®;
+
+val aths = [(~1, th2_1), (1, th2_2), (2, th2_3), (2, th2_4)];
+
+
+scaled_sum_rule aths;
+
+
+la_rule aths;
+
+
+push_goal([], ¬³¶x1 x2 x3· x1 + x2 = 1 ± x1 = 1 + x2 ± x2 < x3 ± x3 = 0®);
+
+a(contr_tac THEN DROP_ASMS_T (MAP_EVERY (strip_asm_tac o make_eq_or_¼_rule)));
+
+a lin_arith_tac;
+
+pop_thm();
+
+push_goal([], ¬³¶x1 x2 x3·x1 + x2 + x3 ¼ x2 ± x1 > 0®);
+
+a(contr_tac THEN DROP_ASMS_T (MAP_EVERY (strip_asm_tac o make_eq_or_¼_rule)));
+
+a lin_arith_tac1;
+
+pop_thm();
+
+
+a(f_thm_tac (la_rule aths));
+
+
+qp_rule ¬³¶x1 x2 x3· x1 + x2 = 1 ± x1 = 1 + x2 ± x2 < x3 ± x3 = 0®;
+qp_rule ¬³¶x1 x2 x3·x1 + x2 + x3 ¼ x2 ± x1 > 0®;
+
+fail "foo" 19001 [
+	fn _ => (
+		diag_line "";
+		diag_line "Test Diagnostic Print out";
+		diag_line  "";
+		"aardvark")
+];
+
+merge_pcs_rule1 ["sets_ext", "lin_arith"] prove_rule [] ¬{x | x < 0} = {}®;
+
