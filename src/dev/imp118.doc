@@ -48,9 +48,9 @@ Contact: Rob Arthan < rda@lemma-one.com >
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.3 $%
+\def\Version{$Revision: 1.4 $%
 }
-\def\Date{\FormatDate{$Date: 2003/02/27 13:24:05 $%
+\def\Date{\FormatDate{$Date: 2003/02/28 17:21:43 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -82,7 +82,8 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \subsection{Changes History}
 \begin{description}
 
-\item[Issues 1.1 to 1.4 ] First drafts.
+\item[Issues 1.1 to 1.5 ] First drafts.
+\item[ Issue 1.6 ] Improved representation of {\it LEX\_VALUE}.
 
 \end{description}
 
@@ -165,35 +166,24 @@ datatype €LEX_CLASS› =
 	|	€LCString› of string
 	|	€LCEos›;
 =TEX
-For us, lexical values and lexical classes are much the same thing. In a real parser, say involving
-lexical classes such as alphanumeric identifier, the lexical value of an identifier would include the
-actual string of characters making up the identifier, whereas its lexical class would just be
-``Identifier''. Just so there is a distinction here (and because it's useful), we include in each
-lexical value the line number on which it appeared.
+For us, lexical values and lexical classes are much the same thing except that the lexical
+value includes the actual string that made up the value in the input and the line number
+on which it occurred.
 =SML
-datatype €LEX_VALUE› =
-		€LVIdentifier› of (string * int)
-	|	€LVString› of (string * int)
-	|	€LVEos› of int;
+type €LEX_VALUE› = LEX_CLASS * (string * int);
 =TEX
 Now we give the classifier function, which is the {\it CLASSIFIER} argument of the function
 {\it slrp'gen\_parser} defined by the ML code that \Slrp\ generates.
 =SML
-fun €classifier› (LVIdentifier (s, _) : LEX_VALUE) : LEX_CLASS = LCIdentifier s
-|   classifier (LVString (s, _)) = LCString s
-|   classifier (LVEos _) = LCEos;
+val €classifier› : LEX_VALUE -> LEX_CLASS = fst;
 =TEX
 The default ERROR ROUTINE needs a function to format a lexical value as a string:
 =SML
-fun €string_of_lex_value› (LVIdentifier (s, _) : LEX_VALUE) : string = s
-|   string_of_lex_value (LVString (s, _)) = "`" ^ s ^ "`"
-|   string_of_lex_value (LVEos _) = "<end-of-input>";
+fun €string_of_lex_value› ((_, (s, _)) : LEX_VALUE) : string = s;
 =TEX
 It is also useful to have a function to extract the line number.
 =SML
-fun €line_number_of_lex_value› (LVIdentifier (_, ln) : LEX_VALUE) : int = ln
-|   line_number_of_lex_value (LVString (_, ln)) = ln
-|   line_number_of_lex_value (LVEos ln) = ln;
+fun €line_number_of_lex_value› ((_, (_, ln)) : LEX_VALUE) : int = ln;
 =TEX
 \subsection{Tokenising an Input Line}
 In this section we give the specific example of a lexical analyser that is needed for the
@@ -337,10 +327,11 @@ fun €rec_identifier› ((chs, status) : LEX_STATE) : LEX_STATE = (
 	let	fun aux acc chs = (
 			if	check_next is_alnum chs
 			then	aux (hd chs::acc) (tl chs)
-			else	(chs,
-				 Known
-				(LVIdentifier
-				(implode(rev acc), get_line_number())))
+			else	let val ident = implode (rev acc);
+				in	(chs,
+					 Known
+					(LCIdentifier ident, (ident, get_line_number())))
+				end
 		);
 	in	if	check_next is_alpha chs
 		then	aux [hd chs] (tl chs)
@@ -358,9 +349,11 @@ fun €rec_quoted› ((chs, Continuation(_, InComment)) : LEX_STATE) : LEX_STATE =
 					(chs' as (ch :: more)) => aux ln (ch::acc) more
 				|	[] => lex_fail "misplaced escape character"
 			else if	check_next is_quote chs
-			then	(tl chs,
-				 Known(LVString
-				(implode(rev acc), get_line_number())))
+			then	let	val str = implode (rev acc);
+				in	(tl chs,
+					Known(LCString str,
+						(str, get_line_number())))
+				end
 			else	case chs of
 					(ch :: more) => aux ln (ch :: acc) more
 				|	[] => ([], Continuation(ln, InString acc))
@@ -517,8 +510,9 @@ fun €gen_reader› (rec_xxx : LEX_STATE -> LEX_STATE) (strm : IN_CHAR_STREAM)
 				end
 			) |	_ => (
 				case (chs, st) of
-					eof as ([], false) => (LVEos (get_line_number()), eof)
-				|	_ => 
+					eof as ([], false) => (
+					((LCEos, ("", get_line_number())), eof)
+				) |	_ => 
 				let	val sb' as (chs', st') = get_next (chs, st);
 					val (chs'', status) = rec_xxx (chs', Unknown);
 				in	case status of
@@ -544,7 +538,7 @@ that gave rise to this node (counting from 1).
 To help with printing, for assign unique numbers for each leaf and node
 =SML
 datatype €GEN_PARSE_TREE› =
-		€Leaf› of LEX_VALUE * LEX_CLASS
+		€Leaf› of LEX_VALUE
 	|	€Node› of (string * int) * GEN_PARSE_TREE list;
 =TEX
 The type of the generic reduction function is then based on the appropriate instantiation
@@ -557,7 +551,7 @@ fun €generic_reducer› (nti  : string * int)
 	(stk : (LEX_VALUE, LEX_CLASS, GEN_PARSE_TREE)
 		INPUT_STACK_ITEM list) 
 	: GEN_PARSE_TREE = (
-	let	fun aux (Token tok_lc) = Leaf tok_lc
+	let	fun aux (Token (lv, _)) = Leaf lv
 		|   aux (Parsed tree) = tree;
 	in	Node(nti, map aux xs)
 	end
@@ -570,7 +564,7 @@ fun €print_tree› (p : string -> unit) (t : GEN_PARSE_TREE) : unit = (
 	let	fun print_address addr = (
 			p(format_list (fn i => string_of_int i) (rev addr) ".")
 		);
-		fun symbol_of (Leaf (lv, _)) = (
+		fun symbol_of (Leaf lv) = (
 			string_of_lex_value lv ^
 			"(" ^ string_of_int (line_number_of_lex_value lv) ^ ")"
 		) | symbol_of (Node((nt, i), _)) = (
