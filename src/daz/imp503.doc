@@ -92,7 +92,7 @@ This removes the need for various special cases and type conversion functions.
 \item[Issues 1.95,1.96] CTLE II R1/1: real types.
 \item[Issue 1.97] Fixed {\LaTeX} error.
 \item[Issue 1.98] R0037: support for named numbers.
-\item[Issue 1.99--1.101] R0006: free use of subtype indications and ranges.
+\item[Issue 1.99--1.102] R0006: free use of subtype indications and ranges.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -486,6 +486,7 @@ datatype €PPARSED› =
         |  €PPKSlotCUList› of KSLOT_COMPILATION_UNIT list
         |  €PPMode› of MODE
         |  €PPPackageSpecification› of DECLARATION PACKAGE_DECLARATION
+        |  €PPParameterAssociation› of DECLARATION PACKAGE_DECLARATION
         |  €PPPragma› of (AGG_CHOICE, EXP) PRAGMA
         |  €PPPragmaArgs› of (AGG_CHOICE OPT * EXP) list
         |  €PPPragmaList› of (AGG_CHOICE, EXP) PRAGMA list
@@ -496,6 +497,7 @@ datatype €PPARSED› =
         |  €PPReltail› of (BIN_OP * EXP)
         |  €PPRepresentationClause› of REPRESENTATION_CLAUSE
         |  €PPStatement› of STATEMENT
+        |  €PPSubInds› of (EXP * SI_CONSTRAINT) list
         |  €PPSubprogram› of (DECLARATION list * STATEMENT * ID)
         |  €PPSubprogramSpec› of SUBPROGRAM_SPECIFICATION
         |  €PPSubtypeIndication› of (EXP * SI_CONSTRAINT)
@@ -574,6 +576,10 @@ fun €si_to_discrete_range› (e : EXP, con : SI_CONSTRAINT)
 );
 =TEX
 =SML
+val €si_to_constraint› : EXP * SI_CONSTRAINT -> SI_DISCRETE_RANGE =
+	exp_to_discrete_range o si_to_discrete_range;
+=TEX
+=SML
 fun €si_to_tmark› (e : EXP, con : SI_CONSTRAINT) : TMARK = (
 	case con of
 		SINoCon => mk_type_mark e
@@ -610,18 +616,38 @@ fun €exp_to_loop_params› (EDiscreteRange (DRConstrained{tmark, range}) : EXP)
 );
 =TEX
 =SML
-fun €mk_sub_ind› (e : EXP, c : SI_CONSTRAINT) : SI_SUB_IND = (
-    {tmark = mk_type_mark e, con = c}
-);
-=TEX
-
-=SML
-fun €mk_expression› (e : EXP) : EXP = (
+fun €mk_exp_of_exp› (e : EXP) : EXP = (
     case e of
     	EDiscreteRange _ => (
         		parse_error
 		503001 "a RANGE or CONSTRAINED SUBTYPE INDICATION is not permitted here"
+    ) |	EArrayAggPos{tmark = tm,comps = es} => (
+		EArrayAggPos{tmark = tm, comps = map mk_exp_of_exp es}
     ) | _ => e
+);
+=TEX
+=SML
+fun €mk_exp_of_sub_ind› ((e, con) : EXP * SI_CONSTRAINT) : EXP = (
+    case con of
+    	SINoCon => (e
+    ) | _ => (	parse_error
+		503001 "a CONSTRAINED SUBTYPE INDICATION is not permitted here"
+    )
+);
+=TEX
+=SML
+fun €mk_sub_ind› ((e, con) : EXP * SI_CONSTRAINT) : SI_SUB_IND =(
+	let	val (tmark, constr) = (
+		case e of
+			EIndexedComp{prefix=prefix,index=index} => (
+				case (index, con) of
+					(EArrayAggPos{comps=comps,...}, SINoCon) =>
+					(mk_type_mark prefix, (SIIndexCon
+						(map exp_to_discrete_range comps)))
+				| _ => (mk_type_mark e, con)
+		) |  _ => (mk_type_mark e, con));
+	in	{tmark = tmark, con = constr}
+	end
 );
 =TEX
 \subsection{Support for Unlabelled KSlots and Specification Statements}
@@ -868,8 +894,8 @@ val €red_object_declaration2› = red_accept;
 
 =SML
 fun €red_constant_declaration1
-        (Parsed(PPIds ids)) _ _ (Parsed(PPSubtypeIndication (n, c))) _ (Parsed(PPExp e)) _ = (
-    PPBasicDecls[SIConstDecl{consts=ids, t=Value {tmark = mk_type_mark n, con = c}, expr=e}])
+        (Parsed(PPIds ids)) _ _ (Parsed(PPSubtypeIndication si)) _ (Parsed(PPExp e)) _ = (
+    PPBasicDecls[SIConstDecl{consts=ids, t=Value (mk_sub_ind si), expr=e}])
 |   red_constant_declaration1 _ _ _ _ _ _ _ =
         stack_error "red_constant_declaration1";
 
@@ -879,14 +905,14 @@ fun €red_constant_declaration2
 |   red_constant_declaration2 _ _ _ _ _ _ =
         stack_error "red_constant_declaration2";
 
-fun €red_variable_declaration› (Parsed(PPIds ids)) _ (Parsed(PPSubtypeIndication (n, c))) _ = (
-    PPBasicDecls[SIVarDecl{vars=ids, t={tmark = mk_type_mark n, con = c}}])
+fun €red_variable_declaration› (Parsed(PPIds ids)) _ (Parsed(PPSubtypeIndication si)) _ = (
+    PPBasicDecls[SIVarDecl{vars=ids, t=mk_sub_ind si}])
 |   red_variable_declaration _ _ _ _ =
         stack_error "red_variable_declaration";
 
-fun €red_variable_declaration2› (Parsed(PPIds ids)) _ (Parsed(PPSubtypeIndication (n, c))) _ 
+fun €red_variable_declaration2› (Parsed(PPIds ids)) _ (Parsed(PPSubtypeIndication si)) _ 
 	(Parsed(PPExp init)) _ = (
-    PPBasicDecls[SIVarDeclInit({vars=ids, t={tmark = mk_type_mark n, con = c}}, init)])
+    PPBasicDecls[SIVarDeclInit({vars=ids, t=mk_sub_ind si}, init)])
 |   red_variable_declaration2 _ _ _ _ _ _ =
         stack_error "red_variable_declaration2";
 
@@ -925,8 +951,8 @@ val €red_type_definition5› = red_accept;
 
 =SML
 fun €red_subtype_declaration› _ (Token ((_,CNText id), _)) _
-        (Parsed(PPSubtypeIndication (n, c))) _ = (
-    PPBasicDecls[SISubtypeDecl{name=id, type_def={tmark=mk_type_mark n,con=c}}])
+        (Parsed(PPSubtypeIndication si)) _ = (
+    PPBasicDecls[SISubtypeDecl{name=id, type_def=mk_sub_ind si}])
 |   red_subtype_declaration _ _ _ _ _ =
         stack_error "red_subtype_declaration";
 
@@ -936,14 +962,7 @@ fun €red_subtype_indication1› (Parsed(PPExp e)) (Parsed(PPConstraint c)) = (
         stack_error "red_subtype_indication1";
 
 fun €red_subtype_indication2› (Parsed(PPExp n))  = (
-    case n 
-    of EIndexedComp{prefix=prefix,index=index} => (
-        case index 
-    of EArrayAggPos{comps=comps,...} =>
-            PPSubtypeIndication(prefix, (SIIndexCon (map exp_to_discrete_range comps)))
-        |_ => PPSubtypeIndication(n, SINoCon)
-    ) |  _ =>
-        PPSubtypeIndication(n, SINoCon))
+    PPSubtypeIndication(n, SINoCon))
 |   red_subtype_indication2 _ =
         stack_error "red_subtype_indication2";
 =TEX
@@ -1026,18 +1045,18 @@ val €red_array_type_definition2› = red_accept;
 =TEX
 
 =SML
-fun €red_unconstrained_array_definition› _ _ (Parsed(PPExps nl)) _ _
+fun €red_unconstrained_array_definition› _ _ (Parsed(PPSubInds nl)) _ _
 	(Parsed(PPSubtypeIndication si)) = (
     PPTypeDef(SIUnconArrayDef{
-		index=map exp_to_discrete_range nl,
+		index=map si_to_constraint nl,
 		comp=mk_sub_ind si}))
 |   red_unconstrained_array_definition _ _ _ _ _ _ =
         stack_error "red_unconstrained_array_definition";
 
-fun €red_constrained_array_definition› _ (Parsed(PPExps nl)) _
+fun €red_constrained_array_definition› _ (Parsed(PPSubInds nl)) _
 		(Parsed(PPSubtypeIndication si)) = (
     PPTypeDef(SIConArrayDef{
-		index=map exp_to_discrete_range nl,
+		index=map si_to_constraint nl,
 		comp=mk_sub_ind si}))
 |   red_constrained_array_definition _ _ _ _ =
         stack_error "red_constrained_array_definition";
@@ -1045,14 +1064,14 @@ fun €red_constrained_array_definition› _ (Parsed(PPExps nl)) _
 
 =SML
 fun €red_index_subtype_definition_list1› (Parsed(PPExp n)) = (
-    PPExps [n])
+    PPSubInds [(n, SINoCon)])
 |   red_index_subtype_definition_list1 _ =
         stack_error "red_index_subtype_definition_list1";
 =TEX
 
 =SML
-fun €red_index_subtype_definition_list2› (Parsed(PPExp n)) _ (Parsed(PPExps nl)) = (
-    PPExps (n::nl))
+fun €red_index_subtype_definition_list2› (Parsed(PPExp n)) _ (Parsed(PPSubInds nl)) = (
+    PPSubInds ((n, SINoCon)::nl))
 |   red_index_subtype_definition_list2 _ _ _ =
         stack_error "red_index_subtype_definition_list2";
 
@@ -1066,13 +1085,13 @@ fun €red_index_constraint› _ (Parsed p) _ = (
         stack_error "red_index_constraint";
 
 fun €red_discrete_range_list1› (Parsed(PPSubtypeIndication si)) = (
-    PPExps [si_to_discrete_range si])
+    PPSubInds [si])
 |   red_discrete_range_list1 _ =
         stack_error "red_discrete_range_list1";
 
 fun €red_discrete_range_list2› (Parsed(PPSubtypeIndication si)) _
-	(Parsed(PPExps sil)) = (
-    PPExps (si_to_discrete_range si::sil))
+	(Parsed(PPSubInds sil)) = (
+    PPSubInds (si::sil))
 |   red_discrete_range_list2 _ _ _ =
         stack_error "red_discrete_range_list2";
 =TEX
@@ -1208,12 +1227,12 @@ fun €red_selector› (Token ((_,CNText id), _)) = (
 SPARK manual 4.1/4.1.1:
 =SML
 fun €red_expression_list1› (Parsed(PPExp e)) = (
-    PPExps [mk_expression e])
+    PPExps [e])
 |   red_expression_list1 _ =
         stack_error "red_expression_list1";
 
 fun €red_expression_list2› (Parsed(PPExps es)) _ (Parsed(PPExp e)) = (
-    PPExps (es@[mk_expression e]))
+    PPExps (es@[e]))
 |   red_expression_list2 _ _ _ =
         stack_error "red_expression_list2";
 =TEX
@@ -1314,13 +1333,13 @@ fun €red_aggregate_choice› (Parsed(PPExp e)) = (
         stack_error "red_aggregate_choice";
 
 fun €red_positional_association1› (Parsed(PPExps es)) = (
-    PPExp(EArrayAggPos{tmark=Nil,comps = es}))
+    PPExp(EArrayAggPos{tmark=Nil,comps = map mk_exp_of_exp es}))
 |   red_positional_association1 _ =
         stack_error "red_positional_association1";
 
 fun €red_positional_association2› (Parsed(PPExps es)) _ _ _ (Parsed(PPExp e)) = (
-    PPExp(EArrayAggPosOthers{agg_pos={tmark=Nil,comps=map mk_expression es},
-        others={others=e}}))
+    PPExp(EArrayAggPosOthers{agg_pos={tmark=Nil,comps=map mk_exp_of_exp es},
+        others={others=mk_exp_of_exp e}}))
 |   red_positional_association2 _ _ _ _ _ =
         stack_error "red_positional_association2";
 =TEX
@@ -1357,8 +1376,8 @@ fun €red_logrel1› binop (Parsed(PPExp exp)) = (
         stack_error "red_logrel1";
 
 fun €red_logrel2› binop (Parsed(PPExp exp1)) (Parsed(PPReltail(_,exp2))) = (
-    PPReltail(binop, EBinExp{bop=binop, left=mk_expression exp1,
-	right=mk_expression exp2}))
+    PPReltail(binop, EBinExp{bop=binop, left=mk_exp_of_exp exp1,
+	right=mk_exp_of_exp exp2}))
 |   red_logrel2 _ _ _ =
         stack_error "red_logrel2";
 
@@ -1382,28 +1401,28 @@ fun €red_relation1› (Parsed(PPExp sr)) = (
 
 fun €red_relation2› (Parsed(PPExp sr1)) (Parsed(PPBinaryOp b))
     (Parsed(PPExp sr2)) = (
-    PPExp(EBinExp{left=mk_expression sr1,bop=b,
-                right=mk_expression sr2}))
+    PPExp(EBinExp{left=mk_exp_of_exp sr1,bop=b,
+                right=mk_exp_of_exp sr2}))
 |   red_relation2 _ _ _ =
         stack_error "red_relation2";
 
 fun €red_relation3› (Parsed(PPExp sr1)) _
     (Parsed(PPExp sr2)) = (
 	if	is_range sr2
-    	then	PPExp(EMemRange{left=mk_expression sr1, mop=BOSparkMem,
+    	then	PPExp(EMemRange{left=mk_exp_of_exp sr1, mop=BOSparkMem,
                 range=exp_to_range sr2})
-	else	PPExp(EBinExp{left=mk_expression sr1,
-        bop=BOSparkMem, right=mk_expression sr2}))
+	else	PPExp(EBinExp{left=mk_exp_of_exp sr1,
+        bop=BOSparkMem, right=mk_exp_of_exp sr2}))
 |   red_relation3 _ _ _ =
         stack_error "red_relation3";
 
 fun €red_relation4› (Parsed(PPExp sr1)) _ _
     (Parsed(PPExp sr2)) = (
 	if	is_range sr2
-    	then	PPExp(EMemRange{left=mk_expression sr1, mop=BOSparkNotMem,
+    	then	PPExp(EMemRange{left=mk_exp_of_exp sr1, mop=BOSparkNotMem,
                 range=exp_to_range sr2})
-	else	PPExp(EBinExp{left=mk_expression sr1,
-        bop=BOSparkNotMem, right=mk_expression sr2}))
+	else	PPExp(EBinExp{left=mk_exp_of_exp sr1,
+        bop=BOSparkNotMem, right=mk_exp_of_exp sr2}))
 |   red_relation4 _ _ _ _ =
         stack_error "red_relation4";
 =TEX
@@ -1412,16 +1431,16 @@ fun €red_relation4› (Parsed(PPExp sr1)) _ _
 val €red_sr_expression1› = red_accept;
 
 fun €red_sr_expression2› (Parsed(PPExp e1)) _ (Parsed(PPExp e2)) = (
-    PPExp(EDiscreteRange (DRRange (RRange{lo=e1, hi=e2})))
+    PPExp(EDiscreteRange (DRRange (RRange{lo=mk_exp_of_exp e1, hi=mk_exp_of_exp e2})))
 ) | red_sr_expression2 _ _ _ =
         stack_error "red_sr_expression2";
 =TEX
 
 =SML
 fun do_binarytail left ((b,right)::(rest as (_::_))) = (
-   do_binarytail (EBinExp{left=left, bop=b, right=right}) rest)
+   do_binarytail (EBinExp{left=mk_exp_of_exp left, bop=b, right=mk_exp_of_exp right}) rest)
 |   do_binarytail left [(b,right)] = (
-    EBinExp{left=left, bop=b, right=right})
+    EBinExp{left=mk_exp_of_exp left, bop=b, right=mk_exp_of_exp right})
 |   do_binarytail left [] = left;
 
 fun €red_simple_expression1› (Parsed(PPExp e)) (Parsed(PPBinOpTail tl)) = (
@@ -1431,7 +1450,7 @@ fun €red_simple_expression1› (Parsed(PPExp e)) (Parsed(PPBinOpTail tl)) = (
 
 fun €red_simple_expression2› (Parsed(PPUnaryOp uop)) (Parsed(PPExp e))
     (Parsed(PPBinOpTail tl)) = (
-    PPExp (do_binarytail (EUnaryExp{uop=uop,right=e}) tl))
+    PPExp (do_binarytail (EUnaryExp{uop=uop,right=mk_exp_of_exp e}) tl))
 |   red_simple_expression2 _ _ _ =
         stack_error "red_simple_expression2";
 
@@ -1767,7 +1786,7 @@ fun €red_case_choice› (Parsed(PPExp e)) = (
         then
             PPCaseChoices[CCCaseRange(DRRange(exp_to_range e))]
         else
-            PPCaseChoices[CCCaseExp(mk_expression e)]
+            PPCaseChoices[CCCaseExp(mk_exp_of_exp e)]
     ))
 |   red_case_choice _ =
         stack_error "red_case_choice";
@@ -2152,20 +2171,22 @@ fun €red_parameter_association2› (Parsed(PPExps es)) = (
 |   red_parameter_association2 _ =
         stack_error "red_parameter_association2";
 
-fun €red_positional_parameter_association1› (Parsed(PPExp a)) = (
-    PPExps [a])
+fun €red_positional_parameter_association1› (Parsed(PPExp e)) = (
+    PPExps [e])
 |   red_positional_parameter_association1 _ =
         stack_error "red_positional_parameter_association1";
 
-fun €red_positional_parameter_association2› (Parsed(PPExp a)) _
+fun €red_positional_parameter_association2› (Parsed(PPExp e)) _
     (Parsed(PPExps es)) = (
-    PPExps (a::es))
+    PPExps (e::es))
 |   red_positional_parameter_association2  _ _ _ =
         stack_error "red_positional_parameter_association2";
 =TEX
 
 =SML
-val €red_actual_parameter› = red_accept;
+fun red_actual_parameter (Parsed(PPSubtypeIndication si)) = (
+	PPExp (si_to_discrete_range si)
+);
 =TEX
 
 SPARK manual 7.1:
