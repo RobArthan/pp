@@ -771,16 +771,16 @@ fun Ûadjust_statementÝ (wp : WP_ENV) (st as SStmt s : STATEMENT)
 	|	STProcNoIvars piv => (
 		let	fun find_spec id ((fproc::rest) : FORMAL_PROC list) = (
 				if (#name fproc) = id
-				then	#spec fproc
+				then	Value (#spec fproc)
 				else	find_spec id rest
-			) | find_spec id _ = vc_go_informal
-					"adjust_statement" 505025 [fn()=>id];
+			) | find_spec id [] = Nil;
 		in
-			if	any_initial_variables (#post (find_spec
-								(#name piv)
-								(#formal_procs wp)))
-			then	SProcIvars (piv, STImplicitNull)
-			else	st
+			case find_spec (#name piv) (#formal_procs wp) of
+			Value sp => (
+				if	any_initial_variables (#post sp)
+				then	SProcIvars (piv, STImplicitNull)
+				else	st
+			) |	Nil => st
 		end
 	) |	STSemicolon (st1, st2) => (
 			case adjust_statement wp (SStmt st1) of
@@ -855,12 +855,6 @@ fun Ûchecking_errorÝ (msg : string) (n : int) (ins) = (
 	fail msg n ins
 );
 =TEX
-=SML
-fun Ûchecking_warningÝ (msg : string) (n : int) (ins) = (
-	diag_line (get_error_message 505050 []);
-	comment msg n ins
-);
-=TEX
 \subsection{The Checks}
 =SML
 fun Ûcheck_1_aÝ (id : ID list, speclab : SPECLAB) = (
@@ -872,7 +866,7 @@ fun Ûcheck_1_aÝ (id : ID list, speclab : SPECLAB) = (
 =SML
 fun Ûcheck_1_bÝ (speclab : SPECLAB) = (
 	if #formal_body_flag speclab
-	then ()
+	then comment "check_1_b" 505061 []
 	else checking_error "check_1_b" 505061 []
 );
 =TEX
@@ -1190,7 +1184,7 @@ fun Ûcheck_3aÝ	 (state : CHECK_STATE, st : STMT) = (
 		STExitWhen _ => (
 			if state = CSInLoop
 			then ()
-			else checking_warning "check_3a" 505065 []
+			else checking_error "check_3a" 505065 []
 	) |	_ =>	error "check_3a" 505076 []
 );
 =TEX
@@ -1201,7 +1195,7 @@ fun Ûcheck_3bÝ	 (state : CHECK_STATE, st : STMT) = (
 		STExit => (
 			if state = CSOKToExit
 			then ()
-			else checking_warning "check_3a" 505066 []
+			else checking_error "check_3b" 505066 []
 	) |	_ =>	error "check_3b" 505077 []
 );
 =TEX
@@ -1215,7 +1209,7 @@ fun Ûcheck_4aÝ	 (is_function_subprogram : bool) : unit = (
 	then
 		()
 	else
-		checking_warning "check_4a" 505078 []
+		checking_error "check_4a" 505078 []
 );
 
 fun Ûcheck_4bÝ	 (is_function_subprogram : bool,
@@ -1226,7 +1220,7 @@ fun Ûcheck_4bÝ	 (is_function_subprogram : bool,
 		case ends_in_return of
 			EndsInReturn => (
 		) |	EndsInOther =>
-				checking_warning "check_4b" 505079 []
+				checking_error "check_4b" 505079 []
 	else	()
 );
 =TEX
@@ -1363,7 +1357,7 @@ fun Ûcheck_new_z_idÝ (ti_context : TERM list) (z_id : Z_ID) : unit = (
 
 \section{VERIFICATION CONDITIONS}
 $cart\_prod$ and $fun\_decl$ are specified in
-\cite[volume 1]{DRA/CIS/CSE3/TR/94/27/1.0}.
+\cite[volume 1]{DRA/CIS/CSE3/TR/94/27/1.2}.
 =SML
 fun Ûcart_prodÝ (env : CN_ENV) (par_specs : PARAM_SPEC list) : Z_EXP = (
 	let	fun aux (par_spec : PARAM_SPEC) = (
@@ -1409,7 +1403,7 @@ Every variable in $vc\_vars$ and its corresponding initial variable is introduce
 	fun var_decl_decls {vars, tmark} =
 		trans_decl env {vars = (flat o (map do_vars)) vars, tmark=tmark};
 =TEX
-The following function implements the check for input parameters specified in \cite[section 5.5]{DRA/CIS/CSE3/TR/94/27/1.0}.
+The following function implements the check for input parameters specified in \cite[section 5.5]{DRA/CIS/CSE3/TR/94/27/1.2}.
 =SML
 	fun param_spec_decls {var_decl, mode} = (
 		case mode of
@@ -1462,7 +1456,10 @@ end
 fun ÛvcsÝ ((sl as {spec as {w, w0, pre, post},
 			wp_env, ...}, st): SPECLAB * STATEMENT)
 			: VC list = (
-let	val pre1 = z_predexp_of_z_tm pre;
+
+let	val side_effect = do_soundness_checks1 (sl, st);
+
+	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
 	val {wp, side} = wp (st, [[] ô post1], wp_env);
 	fun subs_c (h, c) = (
@@ -1472,7 +1469,6 @@ let	val pre1 = z_predexp_of_z_tm pre;
 	val s = (pre1 %Longrightarrow% wp1) @
 		(subs_pred(pre1, w, w0) %Longrightarrow% side);
 in
-	do_soundness_checks1 (sl, st);
 	vc_local_decls(s, sl)
 end
 	handle VCInformal =>
