@@ -57,7 +57,7 @@ Taken over by KB, and reworked, new fonts.
 Significant changes after RBJ, RDA comments.
 \item [Issue 1.5 (16th July 1992)]
 Changes after RDA comments.
-\item [Issue 1.6]
+\item [Issue 1.6,1.7]
 Changes during implementation.
 \end{description}
 \subsection{Changes Forecast}
@@ -146,7 +146,7 @@ This provides a set of rules of inference, conversions and tactics sufficient fo
 \subsubsection{What is Z}
 Errors start with 4100.
 =DOC
-val Ûfull_dest_z_termİ : TERM -> bool;
+val Ûfull_dest_z_termİ : TERM -> Z_TERM;
 =DESCRIBE
 This function acts exactly as $dest\_z\_term$ on terms
 in the Z language, but checks the exact top-level form of the
@@ -222,6 +222,8 @@ $check\_is\_z\_goal$ and $check\_is\_z\_term$ are analogous.
 =ENDDOC
 
 \subsubsection{Adjustment after Á-conversion}
+Errors start with 4110.
+
 If a substitution via $var\_subst$ is made upon a term in Z (that may be
 part of a theorem or subgoal) by the 
 many important functions that call $var\_subst$
@@ -792,18 +794,29 @@ val Ûz_¶‰1_convİ : CONV;
 Converts a Z unique existential quantification to a Z existential quantification. 
 =FRULE 1 Conversion
 z_¶‰1_conv 
-ñ¶‰1 D[x‰1,...] | P‰1[x‰1,...]· P‰2[x‰1,...]®
+ñ¶‰1 D | P‰1· P‰2®
 ÷
 ÷
-ô (¶‰1 D[x‰1, ... ] | P‰1[x‰1,...]· P‰2[x‰1,...]) 
+ô (¶‰1 D | P‰1· P‰2) 
 ¤ 
-(¶ D[x‰1, ... ] | P‰1[x‰1,...]· P‰2[x‰1,...] ±
-(µ D[x‰1, ... ][y‰1/x‰1,...] | P‰1[y‰1,...] ± 
-	P‰2[y‰1,...]· 
-	x‰1 = y‰1 ± ...))
+(¶ D | P‰1· P‰2 ±
+(µ D' | P‰1' ± P‰2' · 
+     ``characteristic tuples are piecewise equal''))
 =TEX
-where the $y‰i$ are variants of the $x‰i$, not occurring
-in the term being processed.
+where the $P‰i'$ are variants of the $P‰i$, to
+correspond to the difference between $D$ and $D'$.
+
+Additional decoration may be introduced as necessary to 
+avoid free variable names, while maintaining an ``even'' decoration.
+=EXAMPLE
+z_¶‰1_conv ñ ¶‰1 [x,y : X; z:Y] | x = x' y · z = f x®;
+  -->
+ô (¶‰1 [x, y : X; z : Y | true] | x = x' y · z = f x)
+  ¤ (¶ [x, y : X; z : Y | true]
+    | (x = x' y) ± (z = f x)
+    · µ [x, y : X; z : Y | true]''
+      | (x'' = x' y'') ± (z'' = f x'')
+      · (x'' = x) ± (y'' = y) ± (z'' = z))
 =FAILURE
 41122	?0 is not of the form: ñ¶‰1D | P‰1· P‰2®
 =ENDDOC
@@ -899,6 +912,163 @@ $Z\_µ\_inv\_conv$
 41040	?0 is not of the form ñ¶ D | P‰1· P‰2® where at least
 	one of P‰1 or P‰2 are unbound by D
 =ENDDOC
+
+\subsection{Concerning Í}
+=DOC
+val Ûz_Í_ruleİ : TERM -> THM;
+=DESCRIBE
+This rule is given a Z $Í$ term (i.e. a Z definite description), and returns a theorem
+that says if any value that is a member of the $Í$ set
+must equal some particular value,
+and that particular value belongs to the set,
+then the $Í$ term is equal to that value.
+=FRULE 1 Rule
+z_Í_rule
+ñÍ D | P · V®
+÷
+÷
+ô ¬µ x ·
+ ñ (µ D | P · V = x) ±
+   (¶ D | P · V = x)
+   ´
+   (Í D | P · V) = x®®
+=TEX
+=FAILURE
+47210	?0 is not a Z Í term
+=ENDDOC
+\subsection{Concerning Function Application}
+Errors start with 4109
+=DOC
+val Ûz_app_convİ : CONV;
+=DESCRIBE
+A function to convert a Z application into the
+corresponding $Í$ term (i.e. definite description).
+=FRULE Conversion
+z_app_conv
+ñf a®
+÷
+÷
+ô f a = (Í f_a :U | (a,f_a)  f · f_a) 
+=TEX
+=SEEALSO 
+$z\_app\_rule$, $z\_app\_tac$
+=FAILURE
+47190	?0 is not a Z function application
+=ENDDOC
+=DOC
+val Ûz_app_ruleİ : TERM -> THM;
+=DESCRIBE
+A rule that, given a Z application, returns a theorem that states sufficient conditions to prove that the application
+is equal to an arbitrary variable.
+=FRULE 1 Rule
+z_app_rule
+ñf a®
+÷
+÷
+ô ¬µ x · 
+  ñµ f_a : U | (a, f_a)  f · f_a = x ± (a, x)  f
+      ´ f a = x®®
+=TEX
+$x$ will be renamed to be distinct from any variables in the
+supplied term.
+=USES
+In implementing methods of reasoning about applications.
+=SEEALSO
+$z\_app\_conv$, $z\_app\_tac$
+=FAILURE
+47190	?0 is not a Z function application
+=ENDDOC
+=DOC
+val Ûz_app_tacİ : TACTIC;
+=DESCRIBE
+Reduces a subgoal that states a Z application is equal to
+something to sufficient conditions for this to be provable.
+The conditions are not ``necessary'' only because they
+ignore the the fact that in ProofPower Z every term is 
+equal to itself.
+=FRULE 2 Tactic
+z_app_tac
+÷
+{‡} f a = v
+÷
+{‡} (µ f_a : U | (a, f_a)  f · f_a = v) ± (a,v)  f
+=TEX
+If this does not match the pattern of the goal then
+=FRULE 2 Tactic
+z_app_tac
+÷
+{‡} v = f a
+÷
+{‡} (µ f_a : U | (a, f_a)  f · f_a = v) ± (a,v)  f
+=TEX
+will be tried instead.
+In addition an implicit $=\ true$ will be used.
+=FAILURE
+41090	Goal is not of the forms: ñf a = v® or ñv = f a®
+=ENDDOC
+
+\subsection{Concerning Ì}
+Errors begin with 4111
+=DOC
+val Ûz_Ì_convİ : CONV;
+=DESCRIBE
+Convert a Z $Ì$ abstraction into a set abstraction.
+=FRULE 1 Conversion
+z_Ì_conv
+ñÌ D | P · V®
+÷
+÷
+ô (Ì D | P · V) = { D | P · (charD,V)}
+=TEX
+Where $charD$ is the characteristic tuple of $D$.
+=SEEALSO
+$z\_Â\_rule$, $z\_Â\_tac$
+=FAILURE
+47200	?0 is not a Z Ì abstraction
+=ENDDOC
+=DOC
+val Ûz_Â_ruleİ : TERM -> THM;
+=DESCRIBE
+Given a Z $Â$ redex this function will return a theorem
+stating sufficient conditions for this redex
+to be proven equal to some arbitary value.
+=FRULE 1 Rule
+z_Â_rule
+ñ(Ì D | P · V) t®
+÷
+÷
+ô ¬µ x ·
+  ñ(µ f_a :U | (¶ D | P · charD = t ± V = f_a) · f_a = x)
+  ±
+  (¶ D | P · (charD = t) ± V = x)
+  ´
+  (Ì D | P · V) t = x®®
+=TEX
+=FAILURE
+41110	?0 is not of the form ñ(Ì D | P · V) t®
+=ENDDOC
+=DOC
+val Ûz_Â_convİ : CONV;
+=DESCRIBE
+Given a simple Z $Â$ redex this function will return a theorem
+stating sufficient conditions for this redex
+to be proven equal to some arbitary value.
+The $Ì$ must have only a single variable in its declaration
+part. 
+=FRULE 1 Conversion
+z_Â_conv
+ñ(Ì x:X | P[x] · V[x]) t®
+÷
+÷
+t  X,
+P[t]
+ô  (Ì x:X | P[x] · V[x]) t = V[t]
+=TEX
+The assumptions will be eliminated if trivial.
+=FAILURE
+41111	?0 is not of the form ñ(Ì x:X | P · V) t®
+=ENDDOC
+Later releases could make this function more intelligent.
 
 \subsection{Conversions between Z Universal and Existential Quantifications}
 Errors start with 4105
@@ -1130,7 +1300,11 @@ $simple\_³\_rewrite\_canon$, $simple\_µ\_rewrite\_canon$.
 =FAILUREC
 The area given by the failure will be $fail\_canon$.
 =ENDDOC
-
+Should this recognise 
+=INLINEFT
+ô ³ (¶‰1 ...)
+=TEX
+?
 \subsection{Conditional Rewriting}
 This is a yet to be implemented part of the HOL system,
 that may have some Z specific features.
