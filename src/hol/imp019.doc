@@ -149,7 +149,10 @@ The first phase of the parser will return a value of type $TM$ defined
 as follows
 (in which we remember fixity and bracketing solely for the purposes of error messages).
 =SML
-datatype âFIXITYá	=	âInfixá | âPrefixá | âPostfixá | âNonfixá;
+datatype âFIXITYá	=	âInfixá of int
+			|	âPrefixá of int 
+			|	âPostfixá of int
+			|	âNonfixá;
 
 datatype âTYá	=	âTyAtomá of string
 		|	âTyCompoundá of (TY list) * string * FIXITY
@@ -185,7 +188,7 @@ fun âbrktá (s : string) : string = "(" ^ s ^ ")";
 fun âformat_tyá (ty : TY) : string = (
 	case ty of	
 		TyAtom s => s
-	|	TyCompound(tys as [_, _], s, Infix) => (
+	|	TyCompound(tys as [_, _], s, Infix _) => (
 			brkt(format_list format_ty tys (" "^ s ^" "))
 	) |	TyCompound(tys, s, _) => (
 			brkt(format_list format_ty tys ", ") ^ s
@@ -212,11 +215,11 @@ fun âformat_tmá (do_ty : 'ty -> string) (tm :('ty) TM) : string = (
 			^	format_tm do_ty tm2
 			^	" else "
 			^	format_tm do_ty tm3)
-	) |	App (App(Id s, tm1, _), tm2, Infix) => (
+	) |	App (App(Id s, tm1, _), tm2, Infix _) => (
 			brkt(format_tm do_ty tm1 ^ " " ^ s ^ " " ^ format_tm do_ty tm2)
-	) |	App (Id s, tm, Prefix)  => (
+	) |	App (Id s, tm, Prefix _)  => (
 			brkt(s ^ " " ^ format_tm do_ty tm)
-	) |	App (Id s, tm, Postfix)  => (
+	) |	App (Id s, tm, Postfix _)  => (
 			brkt(format_tm do_ty tm ^ " " ^ s)
 	) |	App (tm1, tm2, _)  => (
 			(format_tm do_ty tm1 ^ " " ^format_tm do_ty tm2)
@@ -250,7 +253,7 @@ fun âmk_vá (tm : (TY)TM) :(TY) TM = (
 	case tm of
 		Id s => tm
 	|	TmTyped (tm, ty) => TmTyped(mk_v tm, ty)
-	|	App(App(Id ",", tm1, fix1), tm2, Infix) => App(App(Id ",", mk_v tm1, fix1), mk_v tm2, Infix)
+	|	App(App(Id ",", tm1, fix1), tm2, Infix p) => App(App(Id ",", mk_v tm1, fix1), mk_v tm2, Infix p)
 	|	_ => parse_error 17002 (format_tm format_ty tm)
 );
 =TEX
@@ -271,7 +274,7 @@ in a type context, comma acts as a left associative operator, hence:
 =SML
 fun âmk_tysá (ty : TY) : TY list = (
 	case ty of
-		TyCompound([ty1, ty2], ",", Infix) => (mk_tys ty1 @ [ty2]
+		TyCompound([ty1, ty2], ",", Infix _) => (mk_tys ty1 @ [ty2]
 	) |	_ => [ty]
 );
 =TEX
@@ -289,7 +292,7 @@ $mk\_def$ handles a term considered as a defining equation (in a $let$-term):
 =SML
 fun âmk_defá (tm : (TY)TM) : (TY)TM * (TY)TM = (
 	case tm	 of
-		App(App(Id "=", tm1, _),  tm2, Infix) => (
+		App(App(Id "=", tm1, _),  tm2, Infix _) => (
 			case mk_block tm1 of
 				[v] => (v, tm2)
 			|	Id s :: more => (Id s, mk_binder"" more tm2)
@@ -323,18 +326,18 @@ fun âred_condá  (Parsed(Tm tm1)) (Parsed (Tm tm2)) (Parsed (Tm tm3)) : PP = (
 ) | red_cond _ _ _ = red_error "red_cond";
 =TEX
 =SML
-fun âred_inopá  (Parsed(Tm tm1)) (Token (HTInOp{name, ...}, _)) (Parsed (Tm tm2)) : PP = (
-	Tm(App(App(Id name, tm1, Nonfix), tm2, Infix))
+fun âred_inopá  (Parsed(Tm tm1)) (Token (HTInOp{name, prec, ...}, _)) (Parsed (Tm tm2)) : PP = (
+	Tm(App(App(Id name, tm1, Nonfix), tm2, Infix prec))
 ) | red_inop _ _ _ = red_error "red_inop";
 =TEX
 =SML
-fun âred_preopá  (Token (HTPreOp{name, ...}, _)) (Parsed (Tm tm)) : PP = (
-	Tm(App(Id name, tm, Prefix))
+fun âred_preopá  (Token (HTPreOp{name, prec, ...}, _)) (Parsed (Tm tm)) : PP = (
+	Tm(App(Id name, tm, Prefix prec))
 ) | red_preop  _ _ = red_error "red_preop";
 =TEX
 =SML
-fun âred_postopá  (Parsed (Tm tm)) (Token (HTPostOp{name, ...}, _)) : PP = (
-	Tm(App(Id name, tm, Postfix))
+fun âred_postopá  (Parsed (Tm tm)) (Token (HTPostOp{name, prec, ...}, _)) : PP = (
+	Tm(App(Id name, tm, Postfix prec))
 ) | red_postop  _ _ = red_error "red_postop";
 =TEX
 =SML
@@ -412,8 +415,8 @@ fun âred_tynameá  (Token (HTName s, _)) : PP = (
 ) | red_tyname  _ = red_error "red_tyname";
 =TEX
 =SML
-fun âred_tyinopá  (Parsed(Ty ty1)) (Token (HTInOp{name, ...}, _)) (Parsed(Ty ty2)) : PP = (
-	Ty(TyCompound([ty1, ty2], name, Infix))
+fun âred_tyinopá  (Parsed(Ty ty1)) (Token (HTInOp{name, prec, ...}, _)) (Parsed(Ty ty2)) : PP = (
+	Ty(TyCompound([ty1, ty2], name, Infix prec))
 ) | red_tyinop _ _ _ = red_error "red_tyinop";
 =TEX
 =SML
@@ -490,13 +493,16 @@ end{enumerate}
 =TEX
 The following shell script runs the SLRP parser generator on the grammar:
 
-=SH
+=ISH
 poly `arch`slrp.db >imp019.grm.run <<!
 Slrp.slrp{infile="imp019.grm.txt", outfile="imp019.grm.sml",
 		logfile="imp019.grm.log",  eos="HLEos", loglevel=2};
 PolyML.quit();
 !
-cat imp019.grm.sml
+=TEX
+The above puts the parser code in the file `imp019.grm.sml'
+=INCLUDE
+imp019.grm.sml
 =TEX
 The resulting grammar produces shift/reduce conflicts.
 All conflicts arise when an infix or postfix operator is read and in all cases
