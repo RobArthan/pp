@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: menus.c,v 2.5 2001/11/16 17:19:15 rda Exp $
+ * $Id: menus.c,v 2.6 2002/10/17 17:09:34 rda Exp rda $
  *
  * menus.c -  creation of menus for the X/Motif ProofPower
  * Interface
@@ -180,6 +180,7 @@ void resetup_menu(
 		XmNnumChildren, &num_btns, NULL);
 
 	for(i = 0; i < num_btns; ++i) {
+		XtUnmanageChild(btns[i]);
 		XtDestroyWidget(btns[i]);
 	}
 
