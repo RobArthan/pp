@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.73 2003/07/31 11:03:29 rda Exp $
+ * $Id: mainw.c,v 2.74 2003/08/01 11:13:13 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -684,14 +684,6 @@ static Boolean setup_main_window(
 	filemenu = setup_menu(
 		menubar, XmMENU_PULLDOWN, "File", 'F', False, file_menu_items);
 	setup_reopen_menu(NULL);
-/* **** **** **** **** **** **** **** **** **** **** **** ****
- * Tools menu:
- * **** **** **** **** **** **** **** **** **** **** **** **** */
-	if(global_options.edit_only) {
-		tools_menu_items[TOOLS_MENU_CMD_LINE].label = NULL;
-	}
-	toolsmenu = setup_menu(
-		menubar, XmMENU_PULLDOWN, "Tools", 'T', False, tools_menu_items);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Edit menu:
@@ -704,6 +696,15 @@ static Boolean setup_main_window(
 	editmenu = setup_menu(
 		menubar, XmMENU_PULLDOWN, "Edit", 'E', False, edit_menu_items);
 	set_menu_item_sensitivity(editmenu, EDIT_MENU_UNDO, False);
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Tools menu:
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+	if(global_options.edit_only) {
+		tools_menu_items[TOOLS_MENU_CMD_LINE].label = NULL;
+	}
+	toolsmenu = setup_menu(
+		menubar, XmMENU_PULLDOWN, "Tools", 'T', False, tools_menu_items);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Command menu:
