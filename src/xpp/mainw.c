@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.31 2002/10/24 13:38:40 rda Exp rda $
+ * $Id: mainw.c,v 2.34 2002/11/27 22:23:22 rda Exp $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -340,7 +340,22 @@ static MenuItem ln_popup_menu_items[] = {
  * otherwise the new characters are written out of sight and
  * the journal window text is left where it is. It seems to be important
  * on some systems to check for visibility before inserting the new text.
+ *
+ * It greatly improves performance to do the scrolling as a background
+ * task. (Historical note: earlier versions of this used a more
+ * complicated method to do the scrolling - this was not the performance
+ * problem, using XmTextShowPosition was just as bad. The reason for
+ * the earlier complexity was that XmTextShowPosition didn't work
+ * properly on some ancient implementations of Motif).
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+
+static Boolean scroll_pending = False;
+
+static void scroll_out_timeout_proc (XtPointer unused1, XtIntervalId *unused2)
+{
+	XmTextShowPosition(journal, XmTextGetLastPosition(journal));
+	scroll_pending = False;
+}
 
 void scroll_out(char *buf, NAT ct, Boolean ignored)
 {
@@ -349,13 +364,14 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 	Position dontcare;
 	char overwritten;
 	Boolean visible;
+	static Boolean scroll_scheduled = False;
 
 	ins_pos = XmTextGetLastPosition(journal);
 
 	visible = XmTextPosToXY(journal, (ins_pos ? ins_pos - 1 : 0),
 			&dontcare, &dontcare);
 
-/* need to temporarily null-terminate the buffer: */
+/* temporarily null-terminate the buffer: */
 
 	overwritten = buf[ct];
 	buf[ct] = '\0';
@@ -366,21 +382,14 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 
 	last_pos = XmTextGetLastPosition(journal);
 
-	if(visible) {
-		/* insertion point was visible: scroll */
-		XmTextPosition old_top, new_top;
-		old_top = XmTextGetTopCharacter(journal);
-		while(!XmTextPosToXY(journal, last_pos, &dontcare, &dontcare)
-		&&	old_top != (new_top = (XmTextScroll(journal, 1),
-					 XmTextGetTopCharacter(journal)))) {
-			old_top = new_top;
-		};
+	if(visible && !scroll_pending) {
+		XtAppAddTimeOut(app, 20, scroll_out_timeout_proc, NULL);
+		scroll_pending = True;
 	}
 
 	XmTextSetInsertionPosition(journal, last_pos);
 
 	check_text_window_limit(journal,  global_options.journal_max);
-
 
 }
 
@@ -755,18 +764,8 @@ static Boolean setup_main_window(
 				return False;
 				break;
 		}
-/*
-		if(!(file_name && *file_name)) { *//* NULL or empty *//*
-			XmTextFieldSetString(namestring, no_file_message);
-			set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, False);
-		} else {
-			XmTextFieldSetString(namestring, file_name);
-			XmTextFieldShowPosition(namestring, strlen(file_name));
-			set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
-			isNewFile = True;
-		}
-*/
 	}
+
 	reinit_changed(False);
 	set_icon_name_and_title();
 
@@ -1227,8 +1226,9 @@ static void script_modify_cb(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static Boolean line_number_req_pending = False;
 static Boolean line_number_stopped = False;
-static Boolean line_number_work_proc(
-		XtPointer	cbd)
+static void line_number_timeout_proc(
+		XtPointer	cbd,
+		XtIntervalId	*unused)
 {
 	long int line_num;
 	static long int last_line_num = -1;
@@ -1250,18 +1250,16 @@ static Boolean line_number_work_proc(
 		XmStringFree(s);
 		last_line_num = line_num;
 	}
-
-	return True;
 }
+
 static void line_number_cb(
 		Widget		w,
 		XtPointer	cbd,
 		XtPointer	cbs)
 {
 	if(!line_number_req_pending) {
-		//XtAppAddWorkProc(app, line_number_work_proc, (XtPointer) w);
 		XtAppAddTimeOut(app, 40,
-			(XtTimerCallbackProc)line_number_work_proc, w);
+			line_number_timeout_proc, w);
 		line_number_req_pending = True;
 	}
 }
