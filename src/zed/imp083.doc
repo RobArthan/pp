@@ -1,0 +1,1282 @@
+=TEX
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\makeindex
+\TPPproject{FST PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation of the Z Library Proof Support}  %% Mandatory field
+\TPPref{DS/FMU/IED/IMP083}  %% Mandatory field
+\def\SCCSversion{$Revision$%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$%
+}}
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{SML Literate Script}
+\TPPkeywords{}
+\TPPauthor{K.Blackburn & WIN01}
+\TPPauthorisation{R.D.Arthan & FST Team Leader}
+\TPPabstract{This document contains the implementation
+of the derived rules of inference, conversions and tactics for the ProofPower Z set theory, tuples and cartesian products.}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	    Library
+}}
+\begin{document}
+\makeTPPfrontpage
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+\pagebreak
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes History} 
+\begin{description}
+\item [Issues 1.1] 
+First version, derived from \cite{DS/FMU/IED/IMP042}.
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains a implementation for the 
+derived rules of inference, conversions and tactics for
+the ProofPower Z (see \cite{DS/FMU/IED/HLD015}) set theory, tuples and cartesian products.
+This is called for in \cite{DS/FMU/IED/HLD016}.
+The design is
+given in \cite{DS/FMU/IED/DTD083}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+This document contains an implementation for the 
+initial set of rules, conversions and tactics for the set theory, tuples and cartesian products of the ProofPower Z.
+\subsubsection{Dependencies}
+This document takes its signature from \cite{DS/FMU/IED/DTD083}.
+\subsubsection{Deficiencies}
+$z\_∏\_conv$ is comparatively slow compared to like functions.
+\subsubsection{Possible Enhancements}
+None known.
+
+\section{PREAMBLE}
+=SML
+structure €ZLibraryProofSupport› : ZLibraryProofSupport = struct
+=TEX
+=SML
+open ZGeneratedConstants;
+val lthy = get_current_theory_name();
+val _ = open_theory €"z_library"›;
+val _ = new_theory €"z_library_ps"›;
+val _ = push_merge_pcs ["z_predicates","'z_ç_set_lang","'z_decl", "'propositions", "'z_tuples_lang"];
+val _ = set_flag("z_type_check_only",false);
+=TEX
+
+\section{THE CODE}
+\subsection{Utilities}
+A precaution, lost outside of structure:
+=SML
+fun €save_thm›(a,b) = KernelInterface.save_thm(a, check_is_z_thm "save_thm" b);
+fun €list_save_thm›(a,b) = KernelInterface.list_save_thm(a, check_is_z_thm "list_save_thm" b);
+=SML
+fun €list_eq› (eq : 'a * 'a -> bool) (a :: x) (b :: y) = 
+	eq(a,b) andalso list_eq eq x y
+| list_eq _ [] [] = true
+| list_eq _ _ _ = false;
+=TEX
+Some universes:
+=SML
+val €Ua› = ÒUÆ; (* type = 'a SET *)
+val €Ub› = inst [] [(î'bÆ,î'aÆ)] Ua;
+val €Uc› = inst [] [(î'cÆ,î'aÆ)] Ua;
+=TEX
+\subsubsection{Conversionals}
+Apply through all $Ã$'s.
+=SML
+fun (€ALL_SIMPLE_Ã_C› (cnv:CONV) : CONV) tm = 
+	(SIMPLE_Ã_C (ALL_SIMPLE_Ã_C cnv)
+	ORELSE_C cnv) tm;
+=TEX
+Apply to the last $µ$ in a sequence.
+=SML
+fun €LAST_SIMPLE_µ_C› (conv:CONV): CONV = (fn tm =>
+	if is_simple_µ (snd(dest_simple_µ tm))
+	then (SIMPLE_BINDER_C (LAST_SIMPLE_µ_C conv)) tm
+	else conv tm
+);
+=TEX
+Diagnostic Conversional:
+=SML
+fun €DIAG_C› (caller:string) (conv:CONV):CONV = (fn tm =>
+	(diag_string(caller ^ " " ^ string_of_term tm);
+	conv tm)
+);
+=TEX
+Apply a conversion to all conjuncts:
+=SML
+fun €±_C› (cnv:CONV) :CONV = (fn tm =>
+	if is_± tm
+	then APP_C(RAND_C(±_C cnv),±_C cnv) tm
+	else cnv tm
+);
+=TEX
+Apply a list of conversions, on to each argument of a nested
+sequence of operators:
+=FRULE 1 Conversional
+LIST_OP_C
+[cnv1,cnv2,cnv3,...]
+¨op a1 (op a2 (op a3 ...))Æ
+˜
+˜
+Ù (op a1 (op a2 (op a3 ...))) =
+   op a1' (op a2' (op a3' ...))
+=TEX
+where
+=GFT
+cnv1 a1 = Ù a1 = a1'
+cnv2 a2 = Ù a2 = a2'
+cnv3 a3 = Ù a3 = a3'
+ ...
+=TEX
+=SML
+fun €LIST_OP_C› [cnv] = cnv
+| LIST_OP_C ((cnv:: cnvl):CONV list) :CONV = 
+	APP_C(RAND_C cnv, LIST_OP_C cnvl)
+| LIST_OP_C [] = fail "LIST_±_C" 0 [];
+=TEX
+Rename a sequence of quantified variables:
+=SML
+local
+	fun simple_¡_conv1 nm :CONV= (fn tm =>
+		(simple_¡_conv nm
+		ORELSE_C
+		simple_¡_conv1 (nm ^ get_variant_suffix())) tm);
+in
+fun €seq_binder_simple_¡_conv› [a]:CONV  = (
+let	val nm = fst(dest_var a);
+in
+	RAND_C (simple_¡_conv1 nm)
+end
+) | seq_binder_simple_¡_conv (a::x) = (
+let	val nm = fst(dest_var a);
+in
+	(RAND_C (simple_¡_conv1 nm)) THEN_C BINDER_C (seq_binder_simple_¡_conv x)
+end
+) | seq_binder_simple_¡_conv [] = id_conv;
+end;
+=TEX
+=SML
+fun (€seq_simple_¬_conv›:CONV) (tm:TERM) = (
+	(simple_¬_conv
+	ORELSE_C 
+	(RATOR_C seq_simple_¬_conv THEN_C simple_¬_conv)
+	ORELSE_C
+	(fn tm1 => term_fail "seq_simple_¬_conv" 27008 [tm1]))
+	tm
+);
+=TEX
+Change a free variable name:
+=SML
+fun €change_name_rule› from_nm to_nm thm = (
+let	val fvs = map dest_var (frees(concl thm));
+	val ty = lassoc3 fvs from_nm;
+in
+	simple_µ_elim (mk_var(to_nm, ty))
+	(simple_µ_intro (mk_var(from_nm, ty)) thm)
+end);
+=TEX
+
+\subsubsection{Projection Conversions}
+=SML
+val €dpvt_proj_thm›:THM = all_µ_intro(list_±_intro
+	(strip_±_rule (all_µ_elim (get_spec ¨$"Z'S[d,p,t,v]v"Æ))
+		to 3));
+local
+	val cnjs = strip_±_rule(all_µ_elim dpvt_proj_thm);
+in
+	val (€d_dptv_proj_conv›,€p_dptv_proj_conv›,
+		€t_dptv_proj_conv›, €v_dptv_proj_conv›) = 
+		case (map (fn t => simple_eq_match_conv
+			(all_µ_intro t)) cnjs) of
+		[a,b,c,d] => (a,b,c,d)
+		| _ => fail "" 0 [];
+end;
+=TEX
+=SML
+val €dpv_proj_thm›:THM = all_µ_intro(list_±_intro
+	(strip_±_rule (all_µ_elim (get_spec ¨$"Z'S[d,p,v]v"Æ))
+		to 2));
+local
+	val cnjs = strip_±_rule(all_µ_elim dpv_proj_thm);
+in
+	val €d_dpv_proj_conv› = simple_eq_match_conv1 
+		(all_µ_intro (hd cnjs));
+	val €p_dpv_proj_conv› = simple_eq_match_conv1
+		(all_µ_intro (hd (tl cnjs)));
+	val €v_dpv_proj_conv› = simple_eq_match_conv1
+		(all_µ_intro (hd (tl (tl cnjs))));
+end;
+=TEX
+=SML
+local
+	val cnjs = strip_±_rule(all_µ_elim (get_specÒ(x,y).1Æ));
+in
+val €tuple2_1_proj_conv› = simple_eq_match_conv1 (all_µ_intro (hd cnjs));
+val €tuple2_2_proj_conv› = simple_eq_match_conv1 (all_µ_intro (hd (tl cnjs)));
+;
+end;
+=TEX
+=SML
+fun use_ext_pc () = push_merge_pcs ["z_predicates","'z_ç_set_lang","'z_decl","'z_sets_ext_lang","'propositions", "'z_tuples_lang"];
+=TEX
+\section{THE IMPLEMENTATION}
+\subsection{Set Theorems From the Z Mathematical Toolkit}
+=SML
+local
+	val spec = rewrite_rule[]
+		(list_µ_elim[Ua](conv_rule z_defn_conv
+		(get_spec Ò(_ Ω _)Æ)));
+in
+val €z_Ω_thm› = save_thm("z_Ω_thm",
+	all_z_µ_intro
+	(all_µ_elim(
+	(conv_rule z_µ_elim_conv1
+	(nth 1 (strip_±_rule spec))))));
+val €z_é_thm› = save_thm("z_é_thm",
+	(nth 2 (strip_±_rule spec)));
+end;
+=TEX
+=SML
+fun €local_prove_consistency› tm = (
+let	val c = fst(strip_app tm);
+in
+	(push_consistency_goal c;
+	a(rewrite_tac[] THEN 
+		conv_tac (TRY_C(MAP_C z_µ_elim_conv1)) THEN
+		prove_∂_tac);
+	save_consistency_thm c (pop_thm()))
+end);
+=TEX
+=SML
+local	val _ = use_ext_pc();
+	val spec = 
+		(list_µ_elim[Ua]
+		(rewrite_rule[]
+		(get_spec Ò(ö)Æ)));
+	val _ = pop_pc();
+in
+val €z_ö_thm› = save_thm("z_ö_thm",spec);
+end;
+=TEX
+=SML
+local
+	val spec = rewrite_rule[]
+		(list_µ_elim[Ua]
+		(rewrite_rule[]
+		(get_spec Ò(â1 _)Æ)));
+in
+val €z_â1_thm› = save_thm("z_â1_thm",
+	spec);
+end;
+=TEX
+=SML
+local
+	val spec = rewrite_rule[z_sets_ext_thm]
+		(list_µ_elim[Ua]
+		(rewrite_rule[]
+		(get_spec Ò(_ ¿ _)Æ)));
+	val s1 = list_µ_elim[¨s:'a SETÆ,¨t:'a SETÆ]
+		(conv_rule z_µ_elim_conv1
+		(nth 1 (strip_±_rule spec)));
+	val s2 = conv_rule(MAP_C(z_∂_elim_conv1 THEN_C prove_∂_conv)) s1;
+in
+val €z_¿_thm› = save_thm("z_¿_thm",
+	all_z_µ_intro(all_µ_elim(conv_rule z_µ_elim_conv1(nth 0 (strip_±_rule s2)))));
+val €z_°_thm› = save_thm("z_°_thm",
+	all_z_µ_intro(all_µ_elim(conv_rule z_µ_elim_conv1	(nth 1 (strip_±_rule s2)))));
+val €z_set_dif_thm› = save_thm("z_set_dif_thm",
+	all_z_µ_intro(all_µ_elim(conv_rule z_µ_elim_conv1	(nth 2 (strip_±_rule s2)))));
+end;
+=TEX
+=SML
+local
+	val spec = (rewrite_rule[]
+		(get_spec Ò(x ™ y)Æ));
+in
+val €z_™_thm› = save_thm("z_™_thm",
+	all_z_µ_intro(all_µ_elim 
+	(inst_type_rule[(î'bÆ,î'YÆ),(î'aÆ,î'XÆ)]spec)));
+end;
+=TEX
+=SML
+val €z_Ä_thm1› = save_thm("z_Ä_thm1", (
+set_goal([], ¨µ X:'a SET∑
+	Ò((_ Ä _)[X]) ç ( X ™  X) ±
+	(µ S, T :  X
+            ∑ ((S, T) ç (_ Ä _)[X] § (µ x : X ∑ x ç S ¥ x ç T)))ÆÆ) ;
+use_ext_pc();
+a(rewrite_tac[z'Ä_def, z_™_thm]);
+a(PC_T1 "sets_ext" rewrite_tac[]);
+a(prove_tac[]);
+pop_pc();
+pop_thm()));
+=TEX
+=SML
+local
+	val spec = 
+		(list_µ_elim[Ua]
+		z_Ä_thm1);
+	val s1 = list_µ_elim[¨s:'a SETÆ,¨t:'a SETÆ]
+		(conv_rule z_µ_elim_conv1
+		(nth 1 (strip_±_rule spec)));
+in
+val €z_Ä_thm› = save_thm("z_Ä_thm",
+	all_z_µ_intro s1);
+end;
+=TEX
+=SML
+local
+	val ordx = ord"x";
+	fun xnames (nm,ty) = (if ord nm = ordx
+		then nm
+		else fail "" 0 []);
+	fun give_n_names nn lst = (
+=SMLLITERAL
+	let	fun nextn n = (let val poss = "xâ" ^ string_of_int n
+=SML
+			in
+			if poss mem lst
+			then nextn (n+1)
+			else (n,poss)
+			end);
+		fun nextnm 0 m = []
+		| nextnm n m = (let val (ind,next) = nextn m
+			in
+			(next :: nextnm (n-1) (ind+1))
+			end)
+	in
+		nextnm nn 1
+	end);
+	val cnv1 = simple_eq_match_conv1 (conv_rule z_µ_elim_conv1 z_Ä_thm);
+	fun cnv2 nm = cnv1 THEN_C 
+			z_µ_elim_conv THEN_C
+			RAND_C(simple_¡_conv nm) THEN_C
+			z_µ_intro_conv;
+	val Ua = ÒUÆ;
+	fun uf ty = inst [] [(ty, î'aÆ)] Ua;
+	val a_Ä = Ò(_ Ä _)Æ;
+	val thm1 = taut_rule ¨µ x y ∑ x ¥ ((y ± T) ¥ x)Æ;
+	val thm2 = prove_rule[] ¨µ x y ∑ x ¥ ((y ç ÒUÆ ± T) ¥ x)Æ;
+=TEX
+=SML
+in
+val €z_Ä_conv› : CONV = (fn tm =>
+let	val (vw,Ä) = dest_z_ç tm
+		handle complaint =>
+		divert complaint "dest_z_ç" "z_Ä_conv"
+			83001 [fn () => string_of_term tm];
+	val (v,w) = case dest_z_tuple vw of
+		[v,w] => (v,w)
+		| _ => term_fail "z_Ä_conv" 83001 [tm];
+	val side = term_match Ä a_Ä
+		handle (Fail _) =>
+		term_fail "z_Ä_conv" 83001 [tm];
+	val vty = type_of v;
+	val elem_ty = case dest_ctype vty of
+		("SET",[elem_ty]) => elem_ty
+		| _ => term_fail "z_Ä_conv" 42010 [tm];
+	val names = (mapfilter xnames (term_vars v)) cup (mapfilter xnames (term_vars w));
+	val res =
+	case dest_simple_type elem_ty of
+	Ctype (nm,args) => ((case dest_z_name nm of
+		("Z'T",[[ns]],Nil) => (
+		let 	val n = nat_of_string ns;
+			val xs =map mk_var
+				(combine
+				(give_n_names n names)
+				args);
+			val xs_decl = mk_z_decl
+				(map (fn x => mk_z_dec([x],uf(type_of x))) xs);
+			val xs_tuple = mk_z_tuple xs;
+			val conc_gl = mk_z_µ(xs_decl,
+				mk_t, mk_z_¥(
+				mk_z_ç(xs_tuple, v),
+				mk_z_ç(xs_tuple, w)));
+			val s1 = cnv1 tm;
+			val tm' = snd(dest_eq(concl s1));
+			val s2 = asm_rule tm';
+			val s3 = simple_µ_elim xs_tuple(
+				conv_rule z_µ_elim_conv1 s2);
+			val s4 = list_simple_µ_elim [concl s3, xs_decl] thm1;
+			val s5 = ¥_elim s4 s3;
+			val s6 = conv_rule z_µ_intro_conv 
+				(list_µ_intro xs s5);
+=TEX
+Now back the other way:
+=SML
+			val s7 = asm_rule (concl s6);
+			val xv = variant (frees (concl s7)) (mk_var("x",type_of xs_tuple));
+			val s8 = z_tuple_selection_intro_conv xv;
+			val xparts = dest_z_tuple(snd(dest_eq(concl s8)));
+			val s9 = conv_rule z_µ_elim_conv1 s7;
+			val s10 = list_µ_elim xparts s9;
+			val s11 = conv_rule(RANDS_C (LEFT_C (fn _ => eq_sym_rule s8))) s10;			
+			val s12 =  ¥_elim (list_µ_elim [concl s11, xv] thm2) s11;
+			val s13 = z_µ_intro s12;
+			val s14 = §_intro (all_¥_intro s6) (all_¥_intro s13);	
+		in
+			eq_trans_rule (refl_conv tm) 
+				(eq_trans_rule s1 s14)
+		end)
+=TEX
+=SML
+		| _ => (let val nm = hd(give_n_names 1 names)
+		in
+			cnv2 nm tm
+		end))
+		handle (Fail _) =>
+		(let val nm = hd(give_n_names 1 names)
+		in
+			cnv2 nm tm
+		end))
+	| _ => (let val nm = hd(give_n_names 1 names)
+		in
+			cnv2 nm tm
+		end)
+in
+	check_is_z_conv_result "z_Ä_conv" res
+end);
+end; 
+=IGN
+z_Ä_conv Òp Ä qÆ;
+z_Ä_conv Òp Ä r ∏ s ∏ xâ2Æ;
+=TEX
+=SML
+local
+	val spec = rewrite_rule[]
+		(list_µ_elim[Ua]
+		(conv_rule z_defn_conv
+		(get_spec Ò(_ † _)Æ)));
+	val s1 = list_µ_elim[¨s:'a SETÆ,¨t:'a SETÆ]
+		(conv_rule z_µ_elim_conv1
+		(nth 1 (strip_±_rule spec)));
+in
+val €z_†_thm› = save_thm("z_†_thm",
+	all_z_µ_intro s1);
+end;
+=TEX
+
+=SML
+local
+	val spec = rewrite_rule[]
+		(list_µ_elim[Ua]
+		(rewrite_rule[]
+		(get_spec Ò(ﬁ)Æ)));
+	val s1 = list_µ_elim[¨a:'a SET SETÆ]
+		(conv_rule z_µ_elim_conv1
+		(nth 1 (strip_±_rule spec)));
+	val s2 = rewrite_rule[z_sets_ext_thm] s1;
+	val s3 = conv_rule(MAP_C(z_∂_elim_conv1 THEN_C prove_∂_conv)) s2;
+	val s4 = prove_rule [all_µ_intro s3] Ò(µ z:U; a:U ∑
+		z ç ﬁ a § (∂ S : U ∑ S ç a ± z ç S)) ±
+		(µ z:U; a:U ∑
+		z ç • a § (µ S : U ∑ S ç a ¥ z ç S))Æ;
+		
+in
+val €z_ﬁ_thm› = save_thm("z_ﬁ_thm", ±_left_elim s4);
+val €z_•_thm› = save_thm("z_•_thm", ±_right_elim s4);
+end;
+=TEX
+\section{TUPLES}
+=SML
+local
+	val spec = rewrite_rule[]
+		(list_µ_elim[Ua,Ub]
+		(rewrite_rule[]
+		(get_spec Ò(_ Ì _)Æ)));
+in
+val €z_Ì_thm› = save_thm("z_Ì_thm",
+	(nth 1 (strip_±_rule spec)));
+end;
+=TEX
+=SML
+val €z_Ì_conv› : CONV = simple_eq_match_conv1 (conv_rule
+		z_µ_elim_conv1 z_Ì_thm);
+=TEX
+=SML
+local
+	fun aux thm [] [] = thm
+	| aux thm (a::x)(b::y) = aux (mk_app_rule thm (asm_rule (mk_z_eq (a, b)))) x y
+	| aux _ _ _ = error "z_tuple_eq_conv" 0 [];
+	
+	fun aux1 tm [] [] = tm
+	| aux1 tm (a::x)(b::y) = aux1 (mk_z_±(mk_z_eq (a,b), tm)) x y
+	|aux1 _ _ _ = error "z_tuple_eq_conv" 0 [];
+in
+val €z_tuple_eq_conv› : CONV = (fn tm =>
+let	val (lhs,rhs) = dest_z_eq tm
+		handle (Fail _) =>
+		term_fail "z_tuple_eq_conv" 42003 [tm];
+	val s0 = (if is_z_tuple lhs andalso is_z_tuple rhs
+		then refl_conv tm
+		else 
+		((LEFT_C z_Ì_conv AND_OR_C RIGHT_C z_Ì_conv)
+		tm))
+		handle (Fail _) =>
+		term_fail "z_tuple_eq_conv" 42003 [tm];
+	val tm' = snd(dest_eq(concl s0));
+	val (lhs,rhs) = dest_z_eq tm';
+	val dummy = if is_z_tuple lhs andalso is_z_tuple rhs
+		then ()
+		else term_fail "z_tuple_eq_conv" 42003 [tm];
+	val spec = get_spec lhs;
+	val proj_thms = map all_µ_intro
+		(rev(tl(rev(strip_±_rule(all_µ_elim spec)))));
+	val (tcons,tproj) = get_tuple_info (type_of lhs);
+	val lhs_bits = dest_z_tuple lhs;
+	val rhs_bits = dest_z_tuple rhs;
+	val tcons' = fst(strip_app lhs);
+	val ty_insts = fst(term_match tcons' tcons);
+	val s1 = aux (refl_conv tcons') lhs_bits rhs_bits;
+	val rlhs_bits = rev lhs_bits;
+	val rrhs_bits = rev rhs_bits;
+	val res = aux1 (mk_z_eq(hd rlhs_bits, hd rrhs_bits))
+		(tl rlhs_bits) (tl rrhs_bits);
+	val s2 = strip_±_rule (asm_rule res);
+	val s3 = fold (uncurry prove_asm_rule) s2 s1;
+	val s4 = asm_rule tm';
+	val s5 = map (fn (x,xthm) => 
+		conv_rule(APP_C(RAND_C(simple_eq_match_conv1 xthm),
+			simple_eq_match_conv1 xthm))
+		(app_fun_rule (inst [] ty_insts x) s4)) 
+		(combine tproj proj_thms);
+	val s6 = list_±_intro s5;
+	val s7 = §_intro(all_¥_intro s6) (all_¥_intro s3);
+in
+	check_is_z_conv_result "z_tuple_eq_conv" 
+	(eq_trans_rule s0 s7)
+end);
+end;
+=TEX
+=IGN
+z_tuple_eq_conv Ò(1,2,3) = (p,q,r)Æ;
+z_tuple_eq_conv Ò(1 Ì 2) = (p,q)Æ;
+=SML
+val €z_tuple_selection_conv› : CONV = (fn tm =>
+let	val (bdy,n) = dest_z_selât tm
+		handle complaint =>
+		pass_on complaint "dest_z_selât" "z_tuple_selection_conv";
+	val spec = get_spec tm;
+	val s0 = (if is_z_tuple bdy
+		then refl_conv tm
+		else (RAND_C z_Ì_conv) tm)
+		handle (Fail _) =>
+		term_fail "z_tuple_selection_conv" 42006 [tm];
+	val tm' = snd(dest_eq(concl s0));
+	val (bdy,n) = dest_z_selât tm'; 
+	val xi = dest_z_tuple bdy;
+	val proj_thm = nth (n-1) 
+		(strip_±_rule(list_µ_elim (bdy :: xi) spec));
+in
+	check_is_z_conv_result "z_tuple_selection_conv"
+	(eq_trans_rule s0 proj_thm)
+end);
+=TEX
+=IGN
+z_tuple_selection_conv Ò(1,2,3,4).2Æ;
+z_tuple_selection_conv Ò(1 Ì 2).2Æ;
+=SML
+val €z_tuple_intro_conv› : CONV = (fn tm =>
+let	val s0 = if is_z_tuple tm
+		then refl_conv tm
+		else (z_Ì_conv ORELSE_C
+		(fn _ => term_fail "z_tuple_intro_conv" 42005 [tm])) tm;
+	val tm' = snd(dest_eq(concl s0));
+	val xi = dest_z_tuple tm'
+		handle (Fail _) =>
+		term_fail "z_tuple_intro_conv" 42005 [tm];
+	val tuple= fst(dest_z_selât(hd xi))
+		handle (Fail _) =>
+		term_fail "z_tuple_intro_conv" 42005 [tm];
+	val spec = all_µ_elim (µ_elim tuple (get_spec tm'))		handle (Fail _) =>
+		term_fail "z_tuple_intro_conv" 42005 [tm];
+	val cthm = hd(rev(strip_±_rule spec));
+in
+		check_is_z_conv_result "z_tuple_intro_conv"
+		(eq_trans_rule s0 cthm
+		handle complaint =>
+		divert complaint "eq_trans_rule" "z_tuple_intro_conv" 42005
+			[fn () => string_of_term tm])
+end);
+=TEX
+=IGN
+z_tuple_intro_conv Ò((1,2,3).1,(1,2,3).2,(1,2,3).3)Æ;
+z_tuple_intro_conv Ò((1 Ì 2).1,(1 Ì 2).2)Æ;
+=TEX
+\subsection{Tuple Theorems From the Z Mathematical Toolkit}
+=SML
+local
+	val spec = rewrite_rule[]
+		(list_µ_elim[Ua,Ub]
+		(rewrite_rule[]
+		(get_spec Ò(first)Æ)));
+	val x = mk_var("x",type_of Ò(p,q)Æ);
+	val s1 = rewrite_rule[]
+		(conv_rule(MAP_C z_tuple_intro_conv)
+		(z_µ_elimÒ(x ¶ ÒëxÆ.1Æ, y ¶ ÒëxÆ.2Æ)Æ
+		(nth 1 (strip_±_rule spec))));
+in
+val €z_first_thm› = save_thm("z_first_thm",
+	all_z_µ_intro(±_left_elim s1));
+val €z_second_thm› = save_thm("z_second_thm",
+	all_z_µ_intro(±_right_elim s1));
+end;
+=TEX
+\section{RELATIONS}
+=SML
+val €u_™_u_thm› = prove_rule [get_specÒU ™ UÆ]  ÒU ™ U = UÆ;
+=TEX
+=SML
+local
+	val spec = rewrite_rule[u_™_u_thm]
+		(list_µ_elim[Ua,Ub]
+		(rewrite_rule[]
+		(get_spec Ò(dom)Æ)));
+	val s1 = conv_rule z_µ_elim_conv1(±_right_elim spec);
+	val s2 = rewrite_rule [z_sets_ext_thm] s1;
+	val s3 = conv_rule (ONCE_MAP_C (z_∂_elim_conv1 THEN_C
+			prove_∂_conv THEN_C
+			z_∂_intro_conv1)) s2;
+	val s4 = all_µ_elim s3;
+in
+val €z_dom_thm› = save_thm("z_dom_thm",
+	pure_rewrite_rule[z_Ì_thm]
+	(all_z_µ_intro(all_µ_elim(conv_rule z_µ_elim_conv1(±_left_elim s4)))));
+val €z_ran_thm› = save_thm("z_ran_thm",
+	pure_rewrite_rule[z_Ì_thm]
+	(inst_type_rule [(î'bÆ,î'aÆ),(î'aÆ,î'bÆ)]
+	(all_z_µ_intro(all_µ_elim(conv_rule z_µ_elim_conv1(±_right_elim s4))))));
+end;
+=TEX
+=SML
+local
+	val spec = all_z_µ_intro(all_µ_elim(rewrite_rule[]
+		(get_spec Ò(id _)Æ)));
+in
+val €z_id_thm› = save_thm("z_id_thm",
+	inst_type_rule [(î'aÆ,î'XÆ)] 
+	(pure_rewrite_rule[z_Ì_thm] spec));
+end;
+=TEX
+=SML
+local
+	val spec = rewrite_rule[u_™_u_thm]
+		(list_µ_elim[Ua,Ub,Uc]
+		(rewrite_rule[]
+		(get_spec Ò(_ ª _)Æ)));
+	val s1 = conv_rule z_µ_elim_conv1(±_right_elim spec);
+	val s2 = rewrite_rule [z_sets_ext_thm]
+		(±_right_elim(all_µ_elim s1));
+	val s3 = all_µ_elim(conv_rule z_µ_elim_conv1 s2);
+	val s4 = conv_rule (RIGHT_C 
+		(z_∂_elim_conv1 THEN_C 
+		ALL_SIMPLE_∂_C(
+		RIGHT_C (RIGHT_C z_tuple_selection_intro_conv THEN_C
+			z_tuple_eq_conv))
+		THEN_C prove_∂_conv
+		THEN_C z_∂_intro_conv1)) s3;
+in
+val €z_ª_thm› = save_thm("z_ª_thm",
+	all_z_µ_intro(±_left_elim(all_µ_elim s1)));
+val €z_o_thm› = save_thm("z_o_thm",
+	pure_rewrite_rule[z_Ì_thm]
+	(inst_type_rule[(î'bÆ,î'cÆ),(î'cÆ,î'bÆ)]
+	(all_z_µ_intro (change_name_rule "z" "p" s4))));
+end;
+=TEX
+=SML
+local
+	val spec = rewrite_rule[u_™_u_thm]
+		(list_µ_elim[Ua,Ub]
+		(rewrite_rule[]
+		(get_spec Ò(_ Ú _)Æ)));
+	val s1 = conv_rule(MAP_C z_µ_elim_conv1)
+		(rewrite_rule[z_sets_ext_thm]
+		(±_right_elim spec));
+	val s2 = all_µ_elim(±_left_elim s1);
+	val s3 = conv_rule (RIGHT_C 
+		(z_∂_elim_conv1 THEN_C 
+		ALL_SIMPLE_∂_C(
+		RIGHT_C (RIGHT_C z_tuple_selection_intro_conv
+			THEN_C z_tuple_eq_conv))
+		THEN_C (MAP_C prove_∂_conv))) s2;
+	val s4 = conv_rule(RIGHT_C(RIGHT_C(LEFT_C z_tuple_intro_conv))) s3;
+	val s5 = ±_right_elim s1;
+	val s6 = all_µ_elim (conv_rule (BINDER_C(RAND_C(simple_¡_conv "S"))) s5);
+	val s7 = conv_rule (RIGHT_C 
+		(z_∂_elim_conv1 THEN_C 
+		ALL_SIMPLE_∂_C(
+		RIGHT_C (RIGHT_C z_tuple_selection_intro_conv
+			THEN_C z_tuple_eq_conv))
+		THEN_C (MAP_C prove_∂_conv))) s6;
+	val s8 = conv_rule(RIGHT_C(LEFT_C(LEFT_C z_tuple_intro_conv))) s7;
+
+in
+val €z_Ú_thm› = save_thm("z_Ú_thm",
+	all_z_µ_intro (change_name_rule "z" "p" s4));
+val €z_í_thm› = save_thm("z_í_thm",
+	all_z_µ_intro (change_name_rule "z" "p" s8));
+end;
+=TEX
+=SML
+local
+	val spec = rewrite_rule[u_™_u_thm]
+		(list_µ_elim[Ua,Ub]
+		(rewrite_rule[]
+		(get_spec Ò(_ · _)Æ)));
+	val s1 = conv_rule(MAP_C z_µ_elim_conv1)
+		(rewrite_rule[z_sets_ext_thm]
+		(conv_rule(ONCE_MAP_C z_µ_elim_conv1)
+		(±_right_elim spec)));
+	val s2 = all_µ_elim(±_left_elim s1);
+	val s3 = conv_rule (RIGHT_C 
+		(z_∂_elim_conv1 THEN_C 
+		ALL_SIMPLE_∂_C(
+		RIGHT_C (RIGHT_C z_tuple_selection_intro_conv THEN_C
+			z_tuple_eq_conv))
+		THEN_C (MAP_C prove_∂_conv))) s2;
+	val s4 = conv_rule(RIGHT_C(RIGHT_C(LEFT_C z_tuple_intro_conv))) s3;
+	val s5 = ±_right_elim s1;
+	val s6 = all_µ_elim (conv_rule (BINDER_C(RAND_C(simple_¡_conv "S"))) s5);
+	val s7 = conv_rule (RIGHT_C 
+		(z_∂_elim_conv1 THEN_C 
+		ALL_SIMPLE_∂_C(
+		RIGHT_C (RIGHT_C z_tuple_selection_intro_conv THEN_C
+			z_tuple_eq_conv))
+		THEN_C (MAP_C prove_∂_conv))) s6;
+	val s8 = conv_rule(RIGHT_C(LEFT_C(LEFT_C z_tuple_intro_conv))) s7;
+
+in
+val €z_·_thm› = save_thm("z_·_thm",
+	all_z_µ_intro (change_name_rule "z" "p" s4));
+val €z_Å_thm› = save_thm("z_Å_thm",
+	all_z_µ_intro (change_name_rule "z" "p" s8));
+end;
+=TEX
+
+=SML
+local
+	val spec = rewrite_rule[u_™_u_thm]
+		(list_µ_elim[Ua,Ub]
+		(rewrite_rule[]
+		(get_spec Ò(_ Á~Í)Æ)));
+	val s1 = conv_rule z_µ_elim_conv1 
+		(±_right_elim spec);
+	val p = mk_var("p",type_of Ò(p,q)Æ);
+	val s2 = (pure_rewrite_conv [s1]  THEN_C z_ç_seta_conv)
+		Ò(ëpÆ.1,ëpÆ.2) ç R Á~ÍÆ;
+	val s3 = conv_rule (RIGHT_C 
+		(z_∂_elim_conv1 THEN_C 
+		ALL_SIMPLE_∂_C(
+		RIGHT_C (LEFT_C (rewrite_conv [z_Ì_thm]) THEN_C
+			z_tuple_eq_conv))
+		THEN_C (MAP_C prove_∂_conv))) s2;
+	val s4 = conv_rule(MAP_C z_tuple_intro_conv) s3;
+in
+val €z_rel_inv_thm› = save_thm("z_rel_inv_thm",
+	pure_rewrite_rule[z_Ì_thm]
+	(all_z_µ_intro s4));
+end;
+=TEX
+=SML
+local
+	val spec = rewrite_rule[u_™_u_thm]
+		(list_µ_elim[Ua,Ub]
+		(rewrite_rule[]
+		(get_spec Ò(_ ® _ ©)Æ)));
+	val s1 = all_µ_elim(conv_rule z_µ_elim_conv1 
+		(±_right_elim spec));
+	val s2 = (µ_elim ¨p:'bÆ
+		(conv_rule z_µ_elim_conv1
+		(rewrite_rule[z_sets_ext_thm] s1)));
+	val s3 = conv_rule (RIGHT_C 
+		(z_∂_elim_conv1 THEN_C 
+		prove_∂_conv)) s2;
+	val ±_t_±_thm = taut_rule¨µ x y∑ x ± y § x ± T ± yÆ;
+	val s4 = conv_rule (RIGHT_C (BINDER_C(LEFT_C
+		(DECL_INTRO_C pred_dec_conv) THEN_C 
+		simple_eq_match_conv1 ±_t_±_thm)
+		THEN_C z_∂_intro_conv)) s3;
+in
+val €z_rel_image_thm› = save_thm("z_rel_image_thm",
+	inst_type_rule [(î'bÆ,î'aÆ),(î'aÆ,î'bÆ)]
+	(pure_rewrite_rule[z_Ì_thm]
+	(all_z_µ_intro s4)));
+end;
+=TEX
+=SML
+local
+	val spec = rewrite_rule[u_™_u_thm]
+		(list_µ_elim[Ua]
+		(rewrite_rule[]
+		(get_spec Ò(_ Á+Í)Æ)));
+	val s1 = all_µ_elim(conv_rule z_µ_elim_conv1 
+		(±_right_elim spec));
+in
+val €z_trans_closure_thm› = save_thm("z_trans_closure_thm",
+	all_z_µ_intro(±_left_elim s1));
+val €z_reflex_trans_closure_thm› = 
+	save_thm("z_reflex_trans_closure_thm",
+		all_z_µ_intro(±_right_elim s1));
+end;
+=TEX
+=SML
+local
+	val spec = (rewrite_rule[]
+		(get_spec Ò(_ ﬂ _)Æ));
+	val s1 = rewrite_conv [spec] Òf ç (X ﬂ Y)Æ;
+	val s2 = conv_rule (RIGHT_C
+		(z_∂_elim_conv THEN_C prove_∂_conv
+		THEN_C LEFT_C (DECL_C dec_pred_conv))) s1;
+in
+val €z_ﬂ_thm› = save_thm("z_ﬂ_thm",
+ 	pure_rewrite_rule[z_Ì_thm]
+	(all_z_µ_intro s2));
+end;
+=TEX
+=SML
+local
+	val spec = (rewrite_rule[]
+		(get_spec Ò(_ ≠ _)Æ));
+	val s1 = rewrite_conv [spec] Òf ç (X ≠ Y)Æ;
+	val s2 = conv_rule (RIGHT_C
+		(z_∂_elim_conv THEN_C prove_∂_conv
+		THEN_C LEFT_C (DECL_C dec_pred_conv))) s1;
+	val s3 = (
+push_goal([],Òf ç (X ≠ Y) § f ç (X ﬂ Y) ± dom f = XÆ);
+a(rewrite_tac[z_ﬂ_thm, s2, z_dom_thm, z_sets_ext_thm, z_Ì_thm]);
+a(REPEAT strip_tac);
+(* *** Goal "1" *** *)
+a(z_spec_nth_asm_tac 6 ÒxÆ);
+a(z_spec_nth_asm_tac 1 ¨yâ1Æ);
+a(z_spec_nth_asm_tac 2 ¨yâ2Æ);
+a(asm_rewrite_tac[]);
+(* *** Goal "2" *** *)
+a(DROP_NTH_ASM_T 3 (strip_asm_tac o rewrite_rule[z_™_thm]));
+a(z_spec_nth_asm_tac 1 Ò(xâ1 ¶ z,xâ2 ¶ y)Æ);
+(* *** Goal "3" *** *)
+a(z_spec_nth_asm_tac 2 ¨zÆ);
+a(z_∂_tac ¨yÆ);
+a(asm_rewrite_tac[]);
+(* *** Goal "4" *** *)
+a(z_spec_nth_asm_tac 2 ¨xÆ);
+(* *** Goal "4.1" *** *)
+a(asm_fc_tac[]);
+(* *** Goal "4.2" *** *)
+a(z_∂_tac ¨yÆ);
+a(DROP_NTH_ASM_T 5 (strip_asm_tac o rewrite_rule [z_™_thm]));
+a(z_spec_nth_asm_tac 1 Ò(xâ1 ¶ x, xâ2 ¶ y)Æ);
+a(REPEAT strip_tac);
+a(z_spec_nth_asm_tac 8 Ò(x ¶ ¨xÆ, yâ1 ¶ ¨y'Æ, yâ2 ¶ ¨yÆ)Æ);
+pop_thm());
+in
+val €z_≠_thm› = save_thm("z_≠_thm", all_z_µ_intro s3);
+end;
+=TEX
+=SML
+local
+	val spec = (rewrite_rule[]
+		(get_spec Ò(_ ˛ _)Æ));
+	val s1 = rewrite_conv [spec] Òf ç (X ˛ Y)Æ;
+	val s2 = conv_rule (RIGHT_C
+		(z_∂_elim_conv THEN_C prove_∂_conv
+		THEN_C LEFT_C (DECL_C dec_pred_conv))) s1;
+in
+val €z_˛_thm› = save_thm("z_˛_thm",all_z_µ_intro s2);
+end;
+=TEX
+=SML
+local
+	val spec = (rewrite_rule[]
+		(get_spec Ò(_ ‡ _)Æ));
+	val s1 = rewrite_conv [spec, z_°_thm, z_˛_thm] Òf ç (X ‡ Y)Æ;
+	val s2 = (
+push_goal([], Òf ç (X ‡ Y) § f ç (X ≠ Y) ±
+	(µ xâ1, xâ2 : dom[U, U] f ∑ f xâ1 = f xâ2 ¥ xâ1 = xâ2)Æ);
+a(rewrite_tac[s1, z_≠_thm]);
+a(taut_tac);
+pop_thm());
+in
+val €z_‡_thm› = save_thm("z_‡_thm", all_z_µ_intro s2);
+end;
+=TEX
+=SML
+local
+	val spec = (rewrite_rule[]
+		(get_spec Ò(_ œ _)Æ));
+	val s1 = rewrite_conv [spec] Òf ç (X œ Y)Æ;
+	val s2 = conv_rule (RIGHT_C
+		(z_∂_elim_conv THEN_C prove_∂_conv
+		THEN_C LEFT_C (DECL_C dec_pred_conv))) s1;
+in
+val €z_œ_thm› = save_thm("z_œ_thm", all_z_µ_intro s2);
+end;
+=TEX
+=SML
+local
+	val spec = (rewrite_rule[]
+		(get_spec Ò(_ Ô _)Æ));
+	val s1 = rewrite_conv [spec, z_°_thm, z_œ_thm] Òf ç (X Ô Y)Æ;
+	val s2 = (
+push_goal([],
+	Òf ç (X Ô Y) § f ç (X ≠ Y) ± ran f = YÆ);
+a(rewrite_tac[s1, z_≠_thm]);
+a(taut_tac);
+pop_thm());
+in
+val €z_Ô_thm› = save_thm("z_Ô_thm", all_z_µ_intro s2);
+end;
+=TEX
+=SML
+local
+	val spec = (rewrite_rule[]
+		(get_spec Ò(_ è _)Æ));
+	val s1 = rewrite_conv [spec, z_°_thm, z_Ô_thm, z_‡_thm] Òf ç (X è Y)Æ;
+	val s2 = (
+push_goal([],
+	Òf ç (X è Y) § f ç (X ≠ Y) ± ran f = Y ± 
+	   (µ xâ1, xâ2 : dom f ∑ f xâ1 = f xâ2 ¥ xâ1 = xâ2)Æ);
+a(rewrite_tac[s1]);
+a(taut_tac);
+pop_thm());
+in
+val €z_è_thm› = save_thm("z_è_thm", all_z_µ_intro s2);
+end;
+=TEX
+=SML
+local
+	val spec = rewrite_rule[u_™_u_thm]
+		(list_µ_elim[Ua,Ub]
+		(rewrite_rule[]
+		(get_spec Ò(_ ´ _)Æ)));
+in
+val €z_´_thm› = save_thm("z_´_thm",
+	all_z_µ_intro(all_µ_elim(
+	conv_rule z_µ_elim_conv1
+	(nth 1 (strip_±_rule spec)))));
+end;
+=TEX
+\subsection{Simplifying Universals}
+=SML
+local
+	val cnv1 = simple_eq_match_conv1 u_™_u_thm;
+in
+val €u_lib_conv› : CONV = (fn tm => (
+if fst(dest_ctype(type_of tm)) = "SET"
+then
+(case dest_z_term tm of
+ZGVar ("_ ™ _", _, _) => cnv1 tm
+| _ => term_fail "u_lib_conv" 41060 [tm]
+)
+else term_fail "u_lib_conv" 41060 [tm])
+handle (Fail _) => term_fail "u_lib_conv" 41060 [tm]);
+end;
+=TEX
+Lousy implementation in the following:
+=SML
+local
+	val cnv0 = simple_eq_match_conv1 u_™_u_thm;
+	val cnv2 = simple_eq_match_conv1 (
+		all_µ_intro
+		(ç_u_lang_conv Ò(¨x:'aÆ ç U)Æ));
+	val thm1 = all_µ_intro
+		(ç_u_lang_conv Ò(¨x:'a SETÆ Ä U)Æ);
+	val cnv5 = simple_eq_match_conv1 thm1;
+	val thm2 = prove_rule [get_spec ¨$"Z'SchemaPred"Æ]
+		¨µ x ∑ $"Z'SchemaPred" x ÒUÆ § TÆ;
+	val cnv6 = simple_eq_match_conv1 thm2;
+	
+	fun dest_z_Ä tm = (
+	let 	val (x,y) = dest_z_ç tm;
+		val dummy = case dest_z_term y of
+			ZGVar("_ Ä _",_,_) => ()
+			| _ => term_fail "dest_z_Ä" 0 [tm];
+		val (a1,a2) = case dest_z_term x of
+			ZTuple[a1,a2] => (a1,a2)
+			| _ => term_fail "dest_z_Ä" 0 [tm];
+	in
+		(a1,a2)
+	end);
+	fun ç_u_lang_conv1 tm = (ç_u_lang_conv tm
+		handle complaint => pass_on complaint "ç_u_lang_conv" "ç_u_lib_conv");
+in
+val €ç_u_lib_conv› : CONV = (fn tm =>
+let	val cse = (dest_z_Ä tm; 0)
+		handle (Fail _) =>
+		(dest_z_ç tm; 1)
+		handle (Fail _) =>
+		(dest_z_predsexp tm; 2)
+		handle (Fail _) =>
+		term_fail "ç_u_lib_conv" 41062 [tm];
+	fun aux tm1 = 
+	case dest_z_term tm1 of
+	ZGVar ("_ ™ _", _,_ ) => cnv0 tm
+	| Z _ => ç_u_lang_conv1 tm1
+	| Z∏ _ => ç_u_lang_conv1 tm1
+	| ZSeta _ => ç_u_lang_conv1 tm1
+	| Zâs _ => ç_u_lang_conv1 tm1
+	| ZGVar ("U",_,_) => id_conv tm1
+	| _ => term_fail "ç_u_lib_conv" 41061 [tm];
+in
+	(case cse of
+	0 => (LEFT_C(RAND_C aux) THEN_C cnv5) tm
+	| 1 => (RIGHT_C aux THEN_C cnv2) tm
+	| _ => (RIGHT_C aux THEN_C cnv6) tm)
+	handle (Fail _) =>
+	term_fail "ç_u_lib_conv" 41061 [tm]
+end);
+end;
+=TEX
+\section{PROOF CONTEXTS}
+\subsection{Utilities}
+The following is in recognition of the problems of
+using Z generated constants with discrimination nets.
+=SML
+fun €make_ç_rule› thm = all_µ_intro
+	(conv_rule z_µ_elim_conv1
+	(conv_rule z_sets_ext_conv
+	(all_µ_elim
+	(conv_rule(TRY_C z_µ_elim_conv1) thm))));
+=TEX
+=SML
+fun €make_pair_trio_rule› thm = (
+let	val s1 = all_µ_intro
+		(conv_rule (MAP_C z_tuple_selection_conv)
+		(µ_elim Ò(p1,p2)Æ 
+		(all_µ_intro
+		(all_µ_elim
+		(conv_rule z_µ_elim_conv1 thm)))));
+	val s2 = all_µ_intro
+		(conv_rule (MAP_C z_tuple_selection_conv)
+		(µ_elim Ò(p1 Ì p2)Æ (all_µ_intro
+		(all_µ_elim
+		(conv_rule z_µ_elim_conv1 thm)))));
+in
+	list_±_intro [thm, s1, s2]
+end);
+=TEX
+=SML
+val €ç_operator_clauses› = [
+	z_ﬁ_thm, z_•_thm,
+	z_¿_thm, z_°_thm, z_set_dif_thm, 
+	make_ç_rule z_â1_thm, z_ö_thm]
+=TEX
+And, spuriously for the name,
+=SML
+	@ [z_é_thm, z_Ω_thm];
+=TEX 
+=SML
+val €ç_operator_clauses1› = [
+	make_ç_rule z_´_thm, 
+	make_ç_rule z_trans_closure_thm,
+	make_ç_rule z_reflex_trans_closure_thm,
+	z_rel_image_thm, 
+	make_pair_trio_rule z_·_thm, 
+	make_pair_trio_rule z_Å_thm, 
+	make_pair_trio_rule z_Ú_thm,
+	make_pair_trio_rule z_í_thm, 
+	make_pair_trio_rule z_o_thm, 
+	make_ç_rule z_ª_thm, 
+	make_ç_rule z_id_thm, z_ran_thm, z_dom_thm,
+	make_ç_rule z_™_thm];
+=TEX
+=SML
+val €ç_operator_clauses2› = [
+	z_œ_thm, z_Ô_thm, z_è_thm,
+	z_˛_thm, z_‡_thm, z_ﬂ_thm, z_≠_thm];
+=TEX
+=SML
+fun €thms_to_eqn_cxt› (thms:THM list) : EQN_CXT = (
+	flat(map (cthm_eqn_cxt(current_ad_rw_canon())) thms)
+);
+=TEX	
+\subsection{Treatment of Membership of Sets in Z Library}
+In designing discrimination net indexes we are careful
+to use the knowledge that a tuple must have at least 2 elements.
+=SML
+val _ = delete_pc "'z_ç_set_lib" handle Fail _ => ();
+val _ = new_pc "'z_ç_set_lib";
+val _ = set_rw_eqn_cxt []"'z_ç_set_lib";
+val _ = add_rw_thms 
+	(ç_operator_clauses) "'z_ç_set_lib";
+
+val pos = (thms_to_eqn_cxt ç_operator_clauses)
+	@ [];
+val neg = map (mk_≥ ** RAND_C) pos;
+
+val _ = set_st_eqn_cxt (pos @ neg) "'z_ç_set_lib";
+val _ = set_sc_eqn_cxt (pos @ neg) "'z_ç_set_lib";
+val _ = set_rw_canons [] "'z_ç_set_lib";
+val _ = set_pr_tac z_basic_prove_tac "'z_ç_set_lib";
+val _ = set_pr_conv z_basic_prove_conv "'z_ç_set_lib";
+val _ = set_cs_∂_convs [] "'z_ç_set_lib";
+val _ = set_∂_vs_thms [] "'z_ç_set_lib";
+=TEX
+\subsection{Treatment of Membership of Relations}
+In designing discrimination net indexes we are careful
+to use the knowledge that a tuple must have at least 2 elements.
+=SML
+val _ = delete_pc "'z_ç_rel" handle Fail _ => ();
+val _ = new_pc "'z_ç_rel";
+val _ = set_rw_eqn_cxt []"'z_ç_rel";
+val _ = add_rw_thms 
+	([]
+	@ ç_operator_clauses1) "'z_ç_rel";
+
+val pos = (thms_to_eqn_cxt ç_operator_clauses1)
+	@ [];
+val neg = map (mk_≥ ** RAND_C) pos;
+
+val _ = set_st_eqn_cxt (pos @ neg) "'z_ç_rel";
+val _ = set_sc_eqn_cxt (pos @ neg) "'z_ç_rel";
+val _ = set_rw_canons [] "'z_ç_rel";
+val _ = set_pr_tac z_basic_prove_tac "'z_ç_rel";
+val _ = set_pr_conv z_basic_prove_conv "'z_ç_rel";
+val _ = set_cs_∂_convs [] "'z_ç_rel";
+val _ = set_∂_vs_thms [] "'z_ç_rel";
+=TEX
+\subsection{Treatment of Membership of Functions}
+In designing discrimination net indexes we are careful
+to use the knowledge that a tuple must have at least 2 elements.
+=SML
+val _ = delete_pc "'z_ç_fun" handle Fail _ => ();
+val _ = new_pc "'z_ç_fun";
+val _ = set_rw_eqn_cxt []"'z_ç_fun";
+val _ = add_rw_thms 
+	([]
+	@ ç_operator_clauses2) "'z_ç_fun";
+
+val pos = (thms_to_eqn_cxt ç_operator_clauses2)
+	@ [];
+val neg = map (mk_≥ ** RAND_C) pos;
+
+val _ = set_st_eqn_cxt (pos @ neg) "'z_ç_fun";
+val _ = set_sc_eqn_cxt (pos @ neg) "'z_ç_fun";
+val _ = set_rw_canons [] "'z_ç_fun";
+val _ = set_pr_tac z_basic_prove_tac "'z_ç_fun";
+val _ = set_pr_conv z_basic_prove_conv "'z_ç_fun";
+val _ = set_cs_∂_convs [] "'z_ç_fun";
+val _ = set_∂_vs_thms [] "'z_ç_fun";
+=TEX
+\subsection{Extensionality Treatment of Sets}
+=SML
+val _ = delete_pc "'z_sets_ext_lib" handle Fail _ => ();
+val _ = new_pc "'z_sets_ext_lib";
+val _ = set_rw_eqn_cxt [(Òa Ä bÆ, z_Ä_conv),
+		(Ò¨Z'Setd aÆ Ä bÆ, z_setd_Ä_conv)]
+	"'z_sets_ext_lib";
+val _ = add_rw_thms 
+	[z_†_thm] "'z_sets_ext_lib";
+
+val pos = [(Òa Ä bÆ, z_Ä_conv),
+		(Ò¨Z'Setd aÆ Ä bÆ, z_setd_Ä_conv)]
+	@ thms_to_eqn_cxt [z_†_thm];
+val neg = map (mk_≥ ** RAND_C) pos;
+
+val _ = set_st_eqn_cxt (pos @ neg) "'z_sets_ext_lib";
+val _ = set_sc_eqn_cxt (pos @ neg) "'z_sets_ext_lib";
+val _ = set_rw_canons [] "'z_sets_ext_lib";
+val _ = set_pr_tac z_basic_prove_tac "'z_sets_ext_lib";
+val _ = set_pr_conv z_basic_prove_conv "'z_sets_ext_lib";
+val _ = set_cs_∂_convs [] "'z_sets_ext_lib";
+val _ = set_∂_vs_thms [] "'z_sets_ext_lib";
+=TEX
+=IGN
+set_merge_pcs["z_predicates","'z_ç_set_lang","'z_ç_set_lib","'z_sets_ext_lang","'z_sets_ext_lib"];
+push_goal([],ÒA Ω ö ¥ (• A) \ S = • {T1 : A ∑ T1 \ S}Æ);
+a(REPEAT strip_tac);
+(* *** Goal "1" *** *)
+a(z_spec_nth_asm_tac 1 ¨xâ1'Æ);
+a(z_spec_nth_asm_tac 6 ¨T1Æ);
+(* *** Goal "2" *** *)
+a(z_spec_nth_asm_tac 2 ÒS' \ SÆ);
+a(z_spec_nth_asm_tac 1 ¨S'Æ);
+(* *** Goal "3" *** *)
+a(z_spec_nth_asm_tac 1 Òxâ1 \ SÆ);
+a(z_spec_nth_asm_tac 1 ¨xâ1Æ);
+pop_thm();
+=TEX
+\subsection{Treatment of Tuples and Cartesian Products}
+In designing discrimination net indexes we are careful
+to use the knowledge that a tuple must have at least 2 elements.
+=SML
+val _ = delete_pc "'z_tuples" handle Fail _ => ();
+val _ = new_pc "'z_tuples";
+val _ = set_rw_eqn_cxt [(Òx ç ¨y (z:'c):'b SETÆÆ,z_ç_∏_conv),
+	(¨a1 a2 a3 = b1 b2 b3Æ,z_tuple_eq_conv),
+	(¨f(a1 a2 a3)Æ,z_tuple_selection_conv),
+	(¨f (a1 a2) (b1 b2)Æ,z_tuple_intro_conv)
+	]"'z_tuples";
+val _ = add_rw_thms 
+	([z_second_thm, z_first_thm]) "'z_tuples";
+
+val pos = [(¨a1 a2 a3 = b1 b2 b3Æ,z_tuple_eq_conv),
+	  (Òx ç ¨y (z:'c):'b SETÆÆ,z_ç_∏_conv)];
+val neg = map (mk_≥ ** RAND_C) pos;
+
+val _ = set_st_eqn_cxt (pos @ neg) "'z_tuples";
+val _ = set_sc_eqn_cxt (pos @ neg) "'z_tuples";
+val _ = set_rw_canons [] "'z_tuples";
+val _ = set_pr_tac z_basic_prove_tac "'z_tuples";
+val _ = set_pr_conv z_basic_prove_conv "'z_tuples";
+val _ = set_cs_∂_convs [] "'z_tuples";
+val _ = set_∂_vs_thms [] "'z_tuples";
+=TEX
+=SML
+val _ = set_merge_pcs ["z_predicates","'z_ç_set_lang",
+	"'z_ç_set_lib", "'z_ç_rel", "'z_ç_fun", "'z_tuples", "'z_decl"];
+=TEX
+\section{ADDITIONAL WORK}
+This material relies on the just created proof contexts.
+=SML
+val €z_≠_app_thm› = ( 
+push_merge_pcs ["z_predicates","'z_ç_set_lang",
+	"'z_ç_set_lib", "'z_ç_rel", "'z_ç_fun", "'z_tuples", "'z_decl","'z_sets_ext_lang","'z_sets_ext_lib"];
+set_goal([],Òµ X:U; Y:U; 
+	f: U; x:U∑
+	f ç X ≠ Y ± x ç X ¥ f x ç Y ± (x, f x) ç fÆ);
+a(strip_tac THEN REPEAT µ_tac THEN strip_tac THEN strip_tac);
+a(z_spec_nth_asm_tac 2 ¨xÆ);
+(* *** Goal "1" *** *)
+a(asm_fc_tac[]);
+(* *** Goal "2" *** *)
+a(lemma_tac Òf x = yÆ);
+(* *** Goal "2.1" *** *)
+a(z_app_tac);
+a(REPEAT strip_tac);
+a(z_spec_nth_asm_tac 6  Ò(xâ1 ¶ ¨xÆ, xâ2 ¶ f_a)Æ);
+a(z_spec_nth_asm_tac 7  Ò(xâ1 ¶ ¨xÆ, xâ2 ¶ y)Æ);
+a(asm_prove_tac[]);
+(* *** Goal "2.2" *** *)
+a(asm_rewrite_tac[]);
+a(z_spec_nth_asm_tac 6 Ò(xâ1 ¶ ¨xÆ, xâ2 ¶ y)Æ);
+pop_pc();
+save_thm ("z_≠_app_thm",pop_thm()));
+=TEX
+\section{EPILOGUE}
+=SML
+end; (* of structure ZLibraryProofSupport *)
+open ZLibraryProofSupport;
+pop_pc();
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
+=IGN
