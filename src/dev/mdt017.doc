@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%  mdt017.doc  %Z% $Date: 2003/02/23 14:48:48 $ $Revision: 2.12 $ $RCSfile: mdt017.doc,v $
+%  mdt017.doc  %Z% $Date: 2003/02/25 22:32:19 $ $Revision: 2.13 $ $RCSfile: mdt017.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -22,11 +22,11 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Module Tests for SLR Parser Generator}  %% Mandatory field
 \TPPref{DS/FMU/IED/MDT017}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.12 $%
+\def\SCCSversion{$Revision: 2.13 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 %\TPPdate{}  %% Mandatory field (with sensible default)
-\TPPdate{\FormatDate{$Date: 2003/02/23 14:48:48 $
+\TPPdate{\FormatDate{$Date: 2003/02/25 22:32:19 $
 }}  %% Mandatory field (with sensible default)
 \TPPstatus{Draft}			%% Mandatory field
 %\TPPstatus{Approved}			%% Mandatory field
@@ -93,6 +93,7 @@ in a portable way.
 \item[Issue 2.11] Added tests for {\it quote\_con} feature.
 \item[Issue 2.12] Added a {\it -t} option to check that it works.
 \item[Issue 2.13] {\it -c} option renamed as {\it -q}.
+\item[Issue 2.14] Added test with inherently ambiguous grammar.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -573,6 +574,78 @@ mt_run
  ("SLRP.6a.6", check_6 slrp_6, "2\t3\t6)", "OK"),
  ("SLRP.6a.7", check_6 slrp_6, "2\t((((( (( (( ((((( 3\t6 ))))) ))))) )))))", "OK"),
  ("SLRP.6a.8", check_6 slrp_6, "2\171", "OK")];
+=TEX
+=TEX
+\subsection{SLRP.7}
+=TEX
+=SML
+=DUMP mdt017g.grm.txt
+(* Grammar for an inherently ambigous language, made unambiguous! *)
+(*
+not:
+	S	= AB, C | A, BC;
+	AB	= | a, AB, b;
+	C	= | C, c;
+	A	= | A, a
+	BC	= b, BC, c;
+but rather:
+*)
+	S	= A, B, C		((fn Parsed  m => fn Parsed n => fn Parsed p =>
+					if	m <> n andalso n <> p
+					then	raise SYNTAX_ERROR
+					else	0) x1 x2 x3);
+	A	= 		( 0 )
+		|   A, a		((fn Parsed m => m + 1) x1);
+	B	=		( 0 )
+		|   B, b		((fn Parsed n => n + 1) x1);
+	C	=		( 0 )
+		|   C, c		((fn Parsed p => p + 1) x1);
+
+=TEX
+We use the following datatype for the lexical classes here:
+=SML
+datatype SLRP_7_CLASS = a | b | c | Eos;
+=TEX
+Now we invoke SLRP:
+=SH
+slrp -e Eos -q MkLit -f mdt017g.grm.txt | tee mdt017g.grm.run 1>&2
+cat mdt017g.grm.sml
+=TEX
+=SML
+fun slrp_7_reader (abc::more) = (abc, more)
+|   slrp_7_reader [] = (Eos, []);
+fun fmt_class a = "a"
+| fmt_class b = "b"
+| fmt_class c = "c"
+| fmt_class Eos = "<end-of-input";
+
+fun slrp_7 x = slrp'gen_parser default_resolver
+			Combinators.I (default_error fmt_class) slrp_7_reader x;
+=TEX
+=TEX
+=SML
+=TEX
+=SML
+store_mt_results
+mt_run
+[("SLRP.7.1", slrp_7, [a, b, c], 0),
+ ("SLRP.7.2", slrp_7,[a, b], 0),
+ ("SLRP.7.3", slrp_7,[], 0),
+ ("SLRP.7.4", slrp_7,[b, c], 0),
+ ("SLRP.7.5", slrp_7,[b, b, b, c, c, c], 0)
+];
+=TEX
+=SML
+fun check_7 f s = (f s; "Wrong") handle SYNTAX_ERROR => "OK";
+=TEX
+=SML
+store_mt_results
+mt_run
+[("SLRP.7a.1", check_7 slrp_7, [a, b, b], "OK"),
+ ("SLRP.7a.2", check_7 slrp_7, [b, c, c], "OK"),
+ ("SLRP.7a.3", check_7 slrp_7, [a, c], "OK"),
+ ("SLRP.7a.4", check_7 slrp_7, [a, b, b, c], "OK")
+];
 =TEX
 \subsection{Epilogue}
 =SML
