@@ -43,11 +43,12 @@ lasp -s imp005.doc > zz1
 lasp -s -u imp005.OKwords imp005.doc > zz1
 
 =TEX
+\TPPproject{FST PROJECT}
 \TPPstatus{Draft}			%% Mandatory field
-\TPPtype{Standard}
+\TPPtype{SML Literate Script}
 \TPPkeywords{HOL}
 \TPPauthor{A.J. Hammon & WIN01}  %% Mandatory field
-\TPPauthorisation{R.B.~Jones & FMU Manager}
+\TPPauthorisation{R.D.~Arthan & FST Team Leader}
 \TPPabstract{This document contains the reading and writing functions
 	that form the outermost level of user interface for Release~1
 	of ICL~HOL.  These functions are concerned with the
@@ -167,8 +168,12 @@ lasp -s -u imp005.OKwords imp005.doc > zz1
 	Use strings held by basic error package~\cite{DS/FMU/IED/DTD002}
 		for holding output messages.
 
-\item[21 August 1991, issue 1.8 ] Changes for ID0032.
+\item[21 August 1991, issue 1.14 ] Changes for ID0032.
 	Correct some error reporting code.
+
+\item[12 September 1991, issue 1.15 ] Changes for ID0059.
+	Extend the introduction section and fix an error handling
+	fault in $get_HOL_any$.
 
 %\item[\FormatDate{$Date$%
 %}, issue \SCCSissue~]
@@ -198,6 +203,10 @@ lasp -s -u imp005.OKwords imp005.doc > zz1
 
 \item Allow for user settable prompts in $useterminal$.
 
+\item The character class classification codes which (e.g.{}) test if a
+	character is alphanumeric might be optimised to reduce the
+	number of comparisons.
+
 \end{enumerate}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -210,7 +219,7 @@ lasp -s -u imp005.OKwords imp005.doc > zz1
 \subsection{Scope}
 
 This document contains the reading and writing routines for Release~1 of
-the ICL HOL system.
+the ICL HOL system, their detailed design is in~\cite{DS/FMU/IED/DTD005}.
 
 %********************************************************************
 
@@ -218,20 +227,25 @@ the ICL HOL system.
 
 %--------------------------------------------------------------------
 
-%\subsubsection{Purpose and Background}
+\subsubsection{Purpose and Background}
 
-%A brief description of the
-%purpose of the objects defined in the document together
-%with any references to related material, design notes or
-%the like. Any separate specification document for the
-%code should be referenced here.
+Two groups of routines are required.  First for the reading and writing
+routines to support the extended character set and the embedded
+languages described in~\cite{DS/FMU/IED/DEF002}.  Second, the routines
+to allow new languages to be supported by the reader writer.
 
 %--------------------------------------------------------------------
 
-%\subsubsection{Dependencies}
+\subsubsection{Dependencies}
 
-%An indication of which literate
-%scripts this document is dependent on.
+The implementation of this module is dependant upon the PolyML
+compiler, in particular upon the routine $PolyML.compiler$ which gives
+access to the compiler's read\-evaluate\-print loop.
+
+The parser interface and the reader writer are mutually dependant.  The
+reader writer in its macro processing role generates text that uses
+items declared by the lexical analyser~\cite{ds/fmu/ied/dtd015}.  This
+is further discused in section~\ref{DatatypeForParserInterface} below.
 
 %--------------------------------------------------------------------
 
@@ -326,7 +340,7 @@ backslash.  Function $string_of_int3$ gives a three character with
 leading zeros representation of small positive numbers.
 
 =SML
-fun ‚string_of_int3· n = (
+fun ‚string_of_int3· (n:int) : string = (
 	let
 		val str = if n < 0 then "-****" else string_of_int n
 	in
@@ -346,7 +360,7 @@ must be valid Standard~ML strings.  Function $to_ML_string$ converts
 any string into a valid string.
 
 =SML
-fun ‚to_ML_string· str = (
+fun ‚to_ML_string· (str:string) : string = (
 let
 	fun	aux (ch as " ") = ch
 	|	aux (ch as "\n") = ch
@@ -486,7 +500,7 @@ type $Starting$ and $Ending$ are used (as their name suggests) to start
 and complete sections of embedded text, the strings are included as the
 first and last characters in the generated text.  Type $Middle$ is used within
 a section of embedded text.  Type $Starting$ gives the reader function
-for the embedded language, it will perform a recursive decent analysis
+for the embedded language, it will perform a recursive descent analysis
 (as described in section~\ref{ReaderWriter}) of the
 next characters input.
 
@@ -533,8 +547,6 @@ inspection functions.
 
 =SML
 local (* for add_new_symbols, find_name and find_char *)
-
-open EfficientDictionary;
 
 val ‚name_dict·	: PRETTY_NAME E_DICT ref = ref initial_e_dict;
 val ‚char_dict·		: PRETTY_NAME E_DICT ref = ref initial_e_dict;
@@ -860,7 +872,7 @@ Both may include pretty characters and keywords denoting pretty
 characters or other symbols.  The Standard~ML text is modified
 according to the nature of the pretty characters.
 
-The basis of the reader writer is a recursive decent parser that
+The basis of the reader writer is a recursive descent parser that
 understands part of the structure of Standard~ML, similarly the readers for
 embedded languages need to understand part of the structure of their language.
 At first sight this seems overkill, but it is required so that (for
@@ -870,7 +882,7 @@ string literals and comments, thus the reader must recognise the
 context of use of all characters, it must therefore understand a
 considerable part of both languages.
 
-The rules for the code of the recursive decent parser are as follows.
+The rules for the code of the recursive descent parser are as follows.
 The main recursive function take as an argument the characters parsed
 and processed already, i.e., the characters to the left of the item to
 be matched by the called routine, this is called the ``left hand
@@ -1197,7 +1209,7 @@ and \verb*|"ab"|, they only differ by the use of the formatting
 characters.  Note the \verb*|\"| in the second example which must not
 be interpreted as an escaped double quote.
 
-Within a string an escape followed by one of more formatting characters
+Within a string an escape followed by one or more formatting characters
 and another escape may be ignored.  Non formatting characters are not
 allowed.  The full set of allowed characters is implementation
 dependent, but includes, quoting from~\cite[section~2.1]{Milner90},
@@ -1327,7 +1339,7 @@ text is formed.  Functions $get_\ldots_string$ are called with the opening
 string quote having been read.
 
 =SML
-fun ‚get_any_string· (ML_string:bool) (R:READER_ENV) prev = (
+fun ‚get_any_string· (ML_string:bool) (R:READER_ENV) (prev:string list) : string list * int list = (
 let
 	val (str, errs) = string_body ML_string R (["\"" (*="=*)], nil)
 in
@@ -1336,9 +1348,11 @@ end);
 
 in (* local for get_ML_string and get_primed_string *)
 
-fun ‚get_ML_string· (R:READER_ENV) prev = get_any_string true R prev;
+fun ‚get_ML_string· (R:READER_ENV) (prev:string list) : string list * int list =
+	get_any_string true R prev;
 
-fun ‚get_primed_string· (R:READER_ENV) prev = get_any_string false R prev;
+fun ‚get_primed_string· (R:READER_ENV) (prev:string list) : string list * int list =
+	get_any_string false R prev;
 
 end (* of local for get_ML_string and get_primed_string *);
 =TEX
@@ -1385,7 +1399,7 @@ In the general routine for gathering bracketed text the next character
 is the first character within the bracketed expression.  The opening
 bracket for the expression is $first$, the closing bracket should be
 $term$.  This routine differs from the general rules for the recursive
-decent in that it does not pass $prev$ to the routines it calls, this
+descent in that it does not pass $prev$ to the routines it calls, this
 is needed to allow the detection of terminating braces, when the call
 of $get$ will return an empty list.
 
@@ -1510,7 +1524,7 @@ end);
 \newpage
 \section{LANGUAGE NESTING}
 
-The reader writer is extensible in that support other languages may be
+The reader writer is extensible in that support for other languages may be
 added, the first such extension being for the HOL language.  Other
 languages are allowed by embedding them within Standard~ML text
 surrounded by certain percent-keywords or extended characters.
@@ -1518,7 +1532,7 @@ surrounded by certain percent-keywords or extended characters.
 A ``HOL quotation'' is a HOL term written in the language defined by
 the ICL HOL grammar~\cite{DS/FMU/IED/DEF001} and which is enclosed in
 the HOL term delimiting symbols (which are ``{\tt\%<\%}'' and
-``{\tt\%<\%}'' or their extended character equivalents).  Similarly one
+``{\tt\%>\%}'' or their extended character equivalents).  Similarly one
 may have ``Z quotations'', ``Standard~ML quotations'' and so on.  (ML
 quotations are known as ``anti quotations'' in HOL~88.)
 
@@ -1902,8 +1916,6 @@ the end of the extended Standard~ML topdec.
 =SML
 local (* for holding reader names *)
 
-open EfficientDictionary;
-
 val ‚general_reader· : (READER_FUNCTION * string) E_DICT ref = ref initial_e_dict;
 
 val ‚specific_reader· : (READER_FUNCTION * string) E_DICT ref = ref initial_e_dict;
@@ -2165,10 +2177,10 @@ $usestring$ is allowed, the exception will be propagated out as far as
 possible.
 
 =SML
-exception AbandonReaderWriter;
-val abandoning = ref false;
+exception ‚AbandonReaderWriter·;
+val ‚abandoning· : bool ref = ref false;
 
-fun abandon_reader_writer () : unit = (
+fun ‚abandon_reader_writer· () : unit = (
 	abandoning := true;
 	raise AbandonReaderWriter
 );
@@ -2185,15 +2197,15 @@ This section defines all of the debugging flags used by the reader
 writer.
 
 =SML
-val RWtext_read = ref false;		(* 2 ^^ 0 = 1 *)
-val RWphrases_read = ref false;	(* 2 ^^ 1 = 2 *)
-val RWchars_read = ref false;		(* 2 ^^ 2 = 4 *)
-val RWchars_written = ref false;	(* 2 ^^ 3 = 8 *)
-val RWwriter_convert = ref false;	(* 2 ^^ 4 = 16 *)
+val ‚RWtext_read· : bool ref = ref false;		(* 2 ^^ 0 = 1 *)
+val ‚RWphrases_read· : bool ref = ref false;		(* 2 ^^ 1 = 2 *)
+val ‚RWchars_read· : bool ref = ref false;		(* 2 ^^ 2 = 4 *)
+val ‚RWchars_written· : bool ref = ref false;		(* 2 ^^ 3 = 8 *)
+val ‚RWwriter_convert· : bool ref = ref false;		(* 2 ^^ 4 = 16 *)
 
-val RW_diagnostics : int ref = ref 0;
+val ‚RW_diagnostics· : int ref = ref 0;
 
-fun check_diagnostics(flags) : bool = (
+fun ‚check_diagnostics·(flags:int) : bool = (
 let
 	val flags2 = flags div 2;
 	val flags4 = flags2 div 2;
@@ -2235,7 +2247,7 @@ set_int_control("RW_diagnostics", 16);
 %--------------------------------------------------------------------
 
 =SML
-fun ‚logit· flag proc str = (
+fun ‚logit· (flag:bool ref) (proc:string) (str:string) : string = (
 	if !flag
 	then
 		(output(std_out, proc ^ "   " ^ (string_of_int(size str)) ^ "  <" ^
@@ -2247,7 +2259,7 @@ fun ‚logit· flag proc str = (
 		str
 );
 
-fun ‚logit_list· flag proc (str:string list) = (
+fun ‚logit_list· (flag:bool ref) (proc:string) (str:string list) : string list = (
 	if !flag
 	then
 		(output(std_out, proc ^ "  " ^
@@ -2479,7 +2491,8 @@ To present these interfaces three main routines are identified.
 	startup and should remain in control at all times.  This
 	routine is the primary interface to the ICL HOL system, it
 	should replace the default outermost routine of PolyML.  Some
-	investigation and experimentation\footnote{To be done.} is
+	investigation and experimentation\footnote{Which has not, at the
+	time of writing, been completed.} is
 	required to find a way of doing this.  Having this as the
 	outermost routine means that it is started automatically when
 	PolyML is started, also that breaking in with a control-C and
@@ -2599,7 +2612,7 @@ Translation is not always required,
 Local values within $translate_for_output$ are as follows:
 
 \begin{center}
-\begin{tabular}{rp{4.7in}}
+\begin{tabular}{rp{4in}}
 aux&Main recursion point of $translate_for_output$, examines the
 	head of the string to be output, and selects an appropriate action.\\
 aux_str&Sub function of $aux$ for handling Standard~ML string literals.\\
@@ -3360,7 +3373,7 @@ in
 						[fn () => ch,
 						fn () => string_of_int(ord ch),
 						fn () => implode(" ... " :: (rev(prevA to 20)))];
-				get_ML_any R (lex_error_code(5005, prevA))
+				get_HOL_any R (lex_error_code(5005, prevA))
 		)
 end);
 =TEX
