@@ -52,6 +52,9 @@ GlobalOptions	orig_global_options;
  * Application Controls
  *	Command Line:		pp -d foo	
  *	Journal Length:	10000
+ * <>	`Execute' adds missing new-lines;
+ * <>  `Execute' prompts for new-lines
+ * <>  `Execute' ignores missing new-lines
  * Apply Reset Dismiss
  * The parameter is a widget to be the owner of the
  * popup shell. It should be the text widget from which the source
@@ -192,7 +195,6 @@ if(!global_options.edit_only) {
 		XmNleftPosition,		3,
 		XmNcolumns,			30,
 		NULL);
-
 	copy_font_list(command_text, owner_w);
 	copy_font_list(journal_max_text, owner_w);
 
@@ -293,11 +295,18 @@ if(!global_options.edit_only) {
 		sscanf(journal_max_buf, "%ul", &m);
 		global_options.journal_max = (m >= 2000 ? m : 2000);
 	};
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * save initial setting for later resets
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	orig_global_options = global_options;
+
+	orig_global_options.command_line =
+			XtMalloc(strlen(global_options.command_line) + 1);
+
+	strcpy(orig_global_options.command_line,
+			global_options.command_line);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * use reset as a handy way to store the values in the widgets
@@ -385,23 +394,25 @@ void add_option_tool()
 	}
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * apply callback. Calls reset_cb to tidy up display.
+ * apply callback.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void apply_cb(
 	Widget				u1,
 	XtPointer			u2,
 	XmPushButtonCallbackStruct	u3)
 {
-	static void reset_cb();
 	global_options.backup_before_save =
 		XmToggleButtonGetState(backup_toggle);
+
 	global_options.delete_backup_after_save =
 		XmToggleButtonGetState(delete_backup_toggle);
+
 	if(command_text) {
 		XtFree(global_options.command_line);
 		global_options.command_line =
 			XmTextGetString(command_text);
 	}
+
 	if(journal_max_text) {
 		char	*journal_max_buf;
 		char buf[20];
@@ -412,6 +423,7 @@ static void apply_cb(
 		sprintf(buf, "%ul", global_options.journal_max);
 		XmTextSetString(journal_max_text, buf);
 	};
+
 	global_options.execute_new_line_mode = execute_new_line_button_state;
 }
 
@@ -425,7 +437,16 @@ static void reset_cb(
 {
 	Widget *btns;
 
+	XtFree(global_options.command_line);
+
 	global_options = orig_global_options;
+
+	global_options.command_line =
+			XtMalloc(strlen(orig_global_options.command_line) + 1);
+
+	strcpy(global_options.command_line,
+			orig_global_options.command_line);
+
 	XmToggleButtonSetState(backup_toggle,
 		global_options.backup_before_save, False);
 	XmToggleButtonSetState(delete_backup_toggle,
@@ -439,8 +460,10 @@ static void reset_cb(
 		sprintf(buf, "%ul", global_options.journal_max);
 		XmTextSetString(journal_max_text, buf);
 	}
+
 	XtVaGetValues(execute_new_line_radio_buttons,
 		XmNchildren,		&btns, NULL);
+
 	XmToggleButtonSetState(btns[orig_global_options.execute_new_line_mode],
 			True, True);
 }
