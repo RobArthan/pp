@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.10 2003/02/12 16:34:01 rda Exp rda $
+ * $Id: xmisc.c,v 2.12 2003/02/12 23:06:43 rda Exp $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -471,6 +471,10 @@ char *get_selection(Widget w, char *err_msg)
 	}
 	if(sel == NULL) {
 		sel = get_remote_selection(&timed_out);
+		if(sel != NULL && *sel == '\0') {/* empty selection */
+			XtFree(sel);
+			sel = NULL;
+		}
 	}
 	if(sel == NULL) {
 		if(timed_out) {
@@ -490,25 +494,9 @@ char *get_selection(Widget w, char *err_msg)
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * get_remote_selection: use XtGetSelectionValue to get the selection.
- * It is quite tricky (a) to make this synchronous and (b) to make sure
- * we actually do time-out - Xt does not seem always to call the callback
- * when it times out and it may call it some while after we've decided to
- * cancel the selection.
- * The following data is used for communication between get_remote_selection
- * and the selection callback and time-out proc it uses. The id member is used
- * to check whether the callback is being called as a result of a request that
- * has been timed-out. The cancelled member is used by the time-out proc
- * to tell the callback and get_remote_selection that the request has timed out.
- * The failed member is used by the callback to tell get_remote_selection that
- * the conversion failed.
- * (Pedantic point: the code doesn't quite assume that an unsigned long will fit in an XtPointer.
- * It does assume that any information lost when you cast an unsigned long
- * to in an XtPointer is highly unlikely to cause a problem in what is a very obscure case.)
  * **** **** **** **** **** **** **** **** **** **** **** ****/
 static struct {
-	unsigned long	id;
 	char		*data;
-	Boolean		cancelled;
 	Boolean		failed;}
 	sel_req_info;
 static void selection_cb (
@@ -520,65 +508,38 @@ static void selection_cb (
 	unsigned long*	length,
 	int*		format)
 {
-	if(*format != XT_CONVERT_FAIL) {
+	if(*type != XT_CONVERT_FAIL) {
 		char *buf = XtMalloc(*length + 1);
-		if(!sel_req_info.cancelled && (XtPointer) sel_req_info.id == cbd) {
-			memmove(buf, (char*) value, *length);
-			buf[*length] = '\0';
-			sel_req_info.data = buf;
-		}
+		memmove(buf, (char*) value, *length);
+		buf[*length] = '\0';
+		sel_req_info.data = buf;
 		XtFree(value);
 	} else {
 		sel_req_info.failed = True;
 	}
 }
-static void selection_timeout_proc(XtPointer unused1, XtIntervalId *unused2)
-{
-	sel_req_info.cancelled = True;
-}
 static char *get_remote_selection(Boolean *timed_out)
 {
-	XEvent xev;
-	sel_req_info.id += 1;
+	Boolean timeout_proc_registered;
 	sel_req_info.data = NULL;
-	sel_req_info.cancelled = sel_req_info.failed = False;
+	sel_req_info.failed = False;
 	XtGetSelectionValue(root,
 		XA_PRIMARY,
 		XA_STRING,
 		selection_cb,
-		(XtPointer) sel_req_info.id,
+		0,
 		XtLastTimestampProcessed(XtDisplay(root)));
-	if(sel_req_info.data == 0 && !sel_req_info.cancelled) {
-		long int st = XtAppGetSelectionTimeout(app);
-		if(st <= 0)  {/* work-around Solaris problem */
-			st = 5000;
-		}
-		XtAppAddTimeOut(app, st, selection_timeout_proc, 0);
-	}
-	while(sel_req_info.data == 0 && !sel_req_info.cancelled && !sel_req_info.failed) {
-		if(XtAppPeekEvent(app, &xev)) {
-			XtAppNextEvent(app, &xev); /* consume the event */
-			if(	xev.type != KeyPress
-			&&	xev.type != KeyRelease
-			&&	xev.type != ButtonPress
-			&&	xev.type != ButtonRelease) {
-				XtDispatchEvent(&xev);
-			}
-		} else {
-			XtAppProcessEvent(app, XtIMAll);
-		}		
-	}
-	if(sel_req_info.cancelled || sel_req_info.failed) { /* paranoia */
-		if(sel_req_info.data != NULL) {
-			XtFree(sel_req_info.data);
-			sel_req_info.data = NULL;
+	while(sel_req_info.data == 0 && !sel_req_info.failed) {
+		XEvent xev;
+		XtAppNextEvent(app, &xev);
+		if(	xev.type != KeyPress /* discard things that could interfere with caller */
+		&&	xev.type != KeyRelease
+		&&	xev.type != ButtonPress
+		&&	xev.type != ButtonRelease) {
+			XtDispatchEvent(&xev);
 		}
 	}
-	if(sel_req_info.data != NULL && sel_req_info.data[0] == '\0') { /* empty string */
-		XtFree(sel_req_info.data);
-		sel_req_info.data = NULL;
-	}
-	*timed_out = sel_req_info.cancelled;
+	*timed_out = sel_req_info.failed;
 	return sel_req_info.data;
 }
 
