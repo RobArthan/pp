@@ -1,0 +1,209 @@
+######################################################################
+#
+#	dev.mkf from $Header: /home/rda/dev/RCS/hol.mkf,v 1.6 2000/07/08 12:17:25 rda Exp $
+#
+#	makefile for the for the ProofPower development tools
+#
+######################################################################
+
+
+# suffixes known
+.SUFFIXES: .db .doc .ldd0 .ldd .log .lot .sh .doc .tex .tch
+
+# default make target.  displays a list of more useful targets
+PRODNAME=PPDev
+default:
+	@echo "The following are some of the more useful make commands:"
+	@echo " "
+	@echo "make -f dev.mkf rel                   - makes the release directory"
+	@echo "make -f dev.mkf tgz                   - makes the distribution"
+
+######################################################################
+#
+#	Makefile Definitions
+#
+######################################################################
+
+PRODUCT=$(PRODNAME)$(PPVER)
+CWD=$(shell pwd)
+COPYRIGHT="Copyright Lemma 1 Ltd. 2000"
+
+# Architecture type (used as a file-name suffix for images by NJML)
+HEAP_SUFFIX=		$(shell eval `.arch-n-opsys`; echo $$HEAP_SUFFIX)
+
+# database names
+SLRPDBNAME=	slrp
+SLRPDB=		$(SLRPDBNAME).$(HEAP_SUFFIX)
+SLRPDBLDD=	$(SLRPDBNAME).ldd
+
+TESTTOOLS	 = doctch
+TESTTOOLS	+= doctds
+
+
+SHELLSCRIPTS = slrp $(TESTTOOLS)
+
+
+# SLRP Parser Generator
+SLRPDOCS=     dtd018.doc imp018.doc\
+		dtd017.doc imp017.doc
+
+SLRPSMLFILES=	dtd108.sml imp108.sml \
+		dtd002.sml imp002.sml \
+		dtd001.sml imp001.sml \
+		$(SLRPDOCS:.doc=.sml)
+
+# Detailed Design and implementation of the IED test harness
+TESTHARNESSDOCS=	dtd013.doc imp013.doc
+TESTHARNESSSMLS=	$(TESTHARNESSDOCS:.doc=.sml)
+TESTDOCS=	mdt017.doc
+TESTTTDS=	$(TESTDOCS:.doc=.ttd)
+
+# Flags for ML compiler.  Currently non needed
+MLFLAGS=	
+
+######################################################################
+#
+# Dependencies - determining the order of compilation
+#
+######################################################################
+
+dtd108.ldd: $(SLRPDBLDD)
+imp108.ldd: dtd108.ldd
+dtd002.ldd: imp108.ldd
+imp002.ldd: dtd002.ldd
+dtd001.ldd: imp002.ldd
+imp001.ldd: dtd001.ldd
+dtd018.ldd: imp001.ldd
+imp018.ldd: dtd018.ldd
+dtd017.ldd: imp018.ldd
+imp017.ldd: dtd017.ldd
+
+######################################################################
+#
+#	Building the SLR Parser Generator
+#
+######################################################################
+
+$(SLRPDB): imp017.ldd
+
+$(SLRPDBLDD):
+	rm -f $(SLRPDB)
+	echo	val product_version = \"$(PRODUCT)\"\; \
+		val copyright = \"$(COPYRIGHT)\"\; \
+		SMLofNJ.exportML \"$(SLRPDBNAME)\"\; \
+		| sml
+	chmod u+wr $(SLRPDB)
+	@touch $(SLRPDBLDD)
+
+dtd002.sml \
+imp002.sml : dtd002.doc imp002.doc hol.svf
+	docsml -f hol.svf dtd002
+	docsml  -f hol.svf imp002
+	sed -e '/^[()"\\}; ]*new_error_message/,$$ !d' < dtd002.sml >> imp002.sml
+	sed -e '/^[()"\\}; ]*new_error_message/,$$ d' < dtd002.sml > dtd002.sml.tmp
+	mv dtd002.sml.tmp dtd002.sml
+
+
+######################################################################
+#
+#	Building the shell scripts
+#
+######################################################################
+
+$(TESTTOOLS): imp100.doc
+	docsml imp100.doc
+
+slrp: imp017.sml
+
+######################################################################
+#
+#	Testing the parser generator
+#
+######################################################################
+
+mdt017.sml:	slrp $(SLRPDB)
+
+slrp_test:	$(TESTTTDS) $(SLRPDB)
+	@grep 'module' $(TESTTTDS)
+
+######################################################################
+#
+#	Constructing release directories
+#
+######################################################################
+
+dirs:
+	rm -rf release
+	mkdir release
+	mkdir release/bin
+
+rel: dirs $(SLRPDB) $(SHELLSCRIPTS) README.dev
+	cp $(SLRPDB) release/bin
+	cp $(SHELLSCRIPTS) release/bin
+	cp README.dev release
+	chmod -R a-w release
+	chmod -R g-w release
+	chmod -R u+w release
+
+
+$(PRODUCT).tgz: rel
+	cd release && tar cvf ../$(PRODUCT).tar ./*
+	cd $(CWD) && gzip $(PRODUCT).tar && mv $(PRODUCT).tar.gz $(PRODUCT).tgz
+
+tgz: $(PRODUCT).tgz
+
+######################################################################
+#
+#	Tidying Up
+#
+######################################################################
+
+clean:
+	@rm -f $(SLRPDOCS) $(SLRPSMLFILES)
+
+veryclean: clean
+	@rm -f $(SLRPDB)
+
+######################################################################
+#
+#	Rules for compiling ML
+#		- two specific ones for the portability infrastructure
+#		  then a generic one for the rest.
+#
+######################################################################
+
+dtd108.ldd: dtd108.sml
+	@rm -f $@ $*.err 2>/dev/null
+	@echo "Compiling (code)" $<
+	@echo "use \"$<\"; SMLofNJ.exportML \"$(SLRPDBNAME)\";"\
+	        | sml $(MLFLAGS) @SMLload=$(SLRPDB) > $*.err
+	@echo "+++ Compiled $<: OK (Compilation Run Complete) +++" >> $*.err
+	@mv $*.err $@
+
+imp108.ldd: imp108.sml
+	@rm -f $@ $*.err 2>/dev/null
+	@echo "Compiling (code)" $<
+	@echo "use \"$<\"; PPBuild.pp'save_name := \"$(SLRPDBNAME)\";" \
+		"PPBuild.pp'save();"\
+	        | sml $(MLFLAGS) @SMLload=$(SLRPDB) > $*.err
+	@echo "+++ Compiled $<: OK (Compilation Run Complete) +++" >> $*.err
+	@mv $*.err $@
+
+%.ldd: %.sml
+	@rm -f $@ $*.err 2>/dev/null
+	@echo "Compiling (code)" $<
+	@echo "PPCompiler.gc_messages false; PPBuild.pp'load \"$<\";"\
+	        | sml $(MLFLAGS) @SMLload=$(SLRPDB) > $*.err
+	@echo "+++ Compiled $<: OK (Compilation Run Complete) +++" >> $*.err
+	@mv $*.err $@
+
+%.ttd: %.sml $(TESTHARNESSSMLS)
+	@rm -f $@ $.err 2>/dev/null
+	@echo "Compiling (test)" $<
+	@echo "PPBuild.pp'use \"$<\"; PPCompiler.exit 0;" \
+		| sml $(MLFLAGS) @SMLload=$(SLRPDB) > $*.err
+	@mv $*.err $@
+
+%.sml: %.doc hol.svf
+	docsml -f hol.svf $*
+
