@@ -35,17 +35,6 @@
 #include <X11/Xatom.h>
 #include <X11/Intrinsic.h>
 #include <X11/Shell.h>
-#include <Xm/Protocols.h>
-#include <Xm/Xm.h>
-
-#include <stdio.h>
-#include<Xm/Text.h>
-#include<Xm/TextF.h>
-#include<Xm/RowColumn.h>
-#include<Xm/MainW.h>
-#include<Xm/PanedW.h>
-#include<Xm/Label.h>
-#include<varargs.h>
 
 #include "xpp.h"
 
