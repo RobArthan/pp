@@ -107,6 +107,8 @@ lasp -s -u imp032.OKwords imp032.doc > zz1
 	Removed use of $dest\_term$.
 	Follow changes to~\cite{DS/FMU/IED/DTD031} with changes to
 		some function signatures.
+	Improve alias handling.
+	Include index characters at top level of terms and types.
 
 %\item[\FormatDate{$Date$%
 %}, issue \SCCSissue~]
@@ -257,6 +259,18 @@ set_flag("pp_show_HOL_types", false);
 Additional controls are anticipated so that finer control may be placed
 upon where types are printed.  Such controls may require additions
 to type $PP_ENV$.
+
+\bigskip
+
+Identifiers may need to be enclosed in indexing brackets.
+
+The indexing brackets themselves.
+
+=SML
+val (€index_start_char›, €index_end_char›) =
+=SMLLITERAL
+	("€", "›");
+=TEX
 
 %********************************************************************
 
@@ -411,19 +425,24 @@ fun €main_type_pp› (cur_env:PP_ENV) (ty:TYPE) : unit = (
 let
 	val PpEnv{pe_prec = prec, pe_addstring = addstring, pe_beginb = beginb,
 		pe_depth = cur_depth,
+		pe_show_index = show_index,
 		pe_endb = endb, pe_space = space, ...} = cur_env;
 
 	val new_env = decrement_depth cur_env;
 
-	fun ty_p prec t = main_type_pp (set_prec prec new_env) t;
+	fun ty_p prec t = main_type_pp (set_show_index false(set_prec prec new_env)) t;
 
 	fun name_p n = (
 		if is_simple_name n
-		then
-			addstring n
-		else(
+		then(
+			if show_index then addstring index_start_char else ();
+			addstring n;
+			if show_index then addstring index_end_char else ()
+		)else(
 			addstring "$\"";
+			if show_index then addstring index_start_char else ();
 			print_string addstring n;
+			if show_index then addstring index_end_char else ();
 			addstring "\""
 		)
 	);
@@ -446,7 +465,7 @@ let
 			beginb(2, true);
 			ty_p PcLowest t;
 			pr_list_with_env print_list_aux rest
-				(set_prec PcLowest (decrement_depth new_env));
+				(set_show_index false(set_prec PcLowest (decrement_depth new_env)));
 			endb();
 			(*=(=*) addstring ")"
 		);
@@ -483,7 +502,9 @@ in
 
 					ty_p pc_op_prec t1;
 					space(1,0);
+					if show_index then addstring index_start_char else ();
 					addstring name;
+					if show_index then addstring index_end_char else ();
 					addstring " ";
 					ty_p (pc_h_oper(op_prec, false)) t2;
 
@@ -515,12 +536,16 @@ end
 fun €pr_mk_var_or_const› (cur_env:PP_ENV) (constr:string)
 			(name:string) (ty:TYPE) : unit = (
 let
-	val PpEnv{pe_addstring=addstring, ...} = cur_env;
+	val PpEnv{pe_addstring=addstring,
+		pe_show_index = show_index,
+		...} = cur_env;
 in
 	addstring("ë" ^ constr ^ "(\"" (*=")=*));
+	if show_index then addstring index_start_char else ();
 	print_string addstring name;
+	if show_index then addstring index_end_char else ();
 	addstring "\", î" (*="=*);
-	main_type_pp cur_env ty;
+	main_type_pp (set_show_index false cur_env) ty;
 	addstring (*=(=*)"Æ)Æ"
 end
 );
@@ -530,6 +555,7 @@ end
 fun €do_var_const› (cur_env:PP_ENV) (name:string) (ty:TYPE) : unit = (
 let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
+		pe_show_index = show_index,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
 	val br = !pp_show_HOL_types andalso prec gt_prec pc_h_typing;
@@ -540,17 +566,21 @@ in
 		if get_fixity name <> Lex.Nonfix
 		then addstring "$"
 		else ();
-		addstring name
+		if show_index then addstring index_start_char else ();
+		addstring name;
+		if show_index then addstring index_end_char else ()
 	)else(
 		addstring "$\"";
+		if show_index then addstring index_start_char else ();
 		print_string addstring name;
+		if show_index then addstring index_end_char else ();
 		addstring "\""
 	);
 	if !pp_show_HOL_types
 	then (
 		space(1, 2);
 		addstring ": ";
-		main_type_pp (set_prec PcLowest cur_env) ty;
+		main_type_pp (set_show_index false(set_prec PcLowest cur_env)) ty;
 		if br then (endb(); (*=(=*) addstring ")") else ()
 	) else ()
 end
@@ -777,7 +807,10 @@ fun €display_binder› (cur_env:PP_ENV) (name:string) (decls:TERM list)
 			(body:TERM) : unit = (
 let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
+		pe_show_index = show_index,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
+
+	val new_env = set_show_index false cur_env;
 
 	fun vs_printer(vs:TERM, env:PP_ENV) : unit = (
 		space(1, 0);
@@ -807,31 +840,33 @@ let
 in
 	beginb(0, true);
 	if br then addstring "(" (*=)=*) else ();
+	if show_index then addstring index_start_char else ();
 	addstring name;
+	if show_index then addstring index_end_char else ();
 
 	if !pp_types_on_binders
 	then	(	beginb(2, true);
 			case group_declarations decls
 			of nil => ()
-			| h::nil => pr_decls h cur_env
+			| h::nil => pr_decls h new_env
 			| h::t => (
-				pr_decls h cur_env;
+				pr_decls h new_env;
 				pr_list_with_env pr_semi_decls t
-					(decrement_depth cur_env);
+					(decrement_depth new_env);
 				())
 			;
 			()
 		)
 	else	(
 		beginb(2, false);
-		pr_list_with_env vs_printer decls cur_env;
+		pr_list_with_env vs_printer decls new_env;
 		())
 	;
 	endb();
 	space(0, 0);
 	addstring "∑ ";
 	beginb(2, true);
-	main_term_pp (set_prec pc_h_if_let_bind_last cur_env) body;
+	main_term_pp (set_prec pc_h_if_let_bind_last new_env) body;
 	endb();
 	if br then (*=(=*) addstring ")" else ();
 	endb()
@@ -1360,9 +1395,8 @@ fun €do_prefix› (cur_env:PP_ENV) (name:string) (op_prec:int)
 		((a1::nil):TERM list) : PFUN_ANS = (
 let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
+		pe_show_index = show_index,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
-
-	fun tm_p p t = main_term_pp (set_prec p cur_env) t;
 
 	val pc_op_prec = pc_h_oper(op_prec, false);
 	val br = prec gt_prec pc_op_prec;
@@ -1371,9 +1405,12 @@ in(
 	if blk then () else beginb(2, true);
 	if br then addstring "(" (*=)=*) else ();
 
+	if show_index then addstring index_start_char else ();
 	addstring name;
+	if show_index then addstring index_end_char else ();
 	if blk then space(1, 0) else addstring " ";
-	tm_p pc_op_prec a1;
+
+	main_term_pp (set_show_index false(set_prec pc_op_prec cur_env)) a1;
 
 	if br then (*=(=*) addstring ")" else ();
 	if blk then () else endb();
@@ -1390,9 +1427,8 @@ fun €do_postfix› (cur_env:PP_ENV) (name:string) (op_prec:int)
 		((a1::nil):TERM list) : PFUN_ANS = (
 let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
+		pe_show_index = show_index,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
-
-	fun tm_p p t = main_term_pp (set_prec p cur_env) t;
 
 	val pc_op_prec = pc_h_oper(op_prec, false);
 	val br = prec gt_prec pc_op_prec;
@@ -1401,9 +1437,12 @@ in(
 	if blk then () else beginb(2, true);
 	if br then addstring "(" (*=)=*) else ();
 
-	tm_p pc_op_prec a1;
+	main_term_pp (set_show_index false(set_prec pc_op_prec cur_env)) a1;
+
 	if blk then space(1, 0) else addstring " ";
+	if show_index then addstring index_start_char else ();
 	addstring name;
+	if show_index then addstring index_end_char else ();
 
 	if br then (*=(=*) addstring ")" else ();
 	if blk then () else endb();
@@ -1428,9 +1467,10 @@ fun €do_infix› (cur_env:PP_ENV) (name:string) (op_prec:int)
 		((a1::a2::nil):TERM list) : PFUN_ANS = (
 let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
+		pe_show_index = show_index,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
-	fun tm_p p t = main_term_pp (set_prec p cur_env) t;
+	fun tm_p p t = main_term_pp (set_show_index false(set_prec p cur_env)) t;
 
 	val pc_op_prec = pc_h_oper(op_prec, true);
 	val br = prec gt_prec pc_op_prec;
@@ -1444,7 +1484,9 @@ in(
 
 	tm_p pc_op_prec a1;
 	space(1,0);
+	if show_index then addstring index_start_char else ();
 	addstring name;
+	if show_index then addstring index_end_char else ();
 	addstring " ";
 	tm_p (pc_h_oper(op_prec, false)) a2;
 
@@ -1528,8 +1570,16 @@ fun €do_fixity› (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
     then
 	case get_fixity name
 	of Nonfix => (
-			HOL_do_app cur_env orig args;
+		let
+			val head_tm = (	case dest_simple_term orig
+					of Var _ => mk_var(name, ty)
+					| Const _ => mk_const(name, ty)
+					| _ => orig
+				) handle Fail _ => orig;
+		in
+			HOL_do_app cur_env head_tm args;
 			PfOk
+		end
 		)
 	| Prefix op_prec	=> do_prefix	cur_env name op_prec args
 	| Infix op_prec		=> do_infix	cur_env name op_prec args
@@ -1541,7 +1591,7 @@ fun €do_fixity› (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 
 in
 
-fun €HOL_fun_const› (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
+fun €HOL_fun_const› (cur_env:PP_ENV) (orig:TERM) (alias:string) (name:string) (ty:TYPE)
 		(args:TERM list) : PFUN_ANS = (
 	case
 		case name
@@ -1555,8 +1605,8 @@ fun €HOL_fun_const› (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 		| "Uncurry"	=> Value HOL_uncurry
 		| ","		=> Value HOL_comma
 		| _		=> Nil
-	of Value printer => printer cur_env orig name ty args
-	| Nil => do_fixity cur_env orig name ty args
+	of Value printer => printer cur_env orig alias ty args
+	| Nil => do_fixity cur_env orig alias ty args
 );
 =TEX
 
