@@ -1,0 +1,608 @@
+% %Z% $Date: 2000/06/24 10:34:46 $ $Revision: 1.9 $ $RCSfile: int513.doc,v $
+=TEX
+
+% TQtemplate.tex
+% use_file "daz_init";
+% use_file "int502";
+% z_print_theory"-";
+% open CNZGenerator;
+% print_spark_program();
+\documentstyle[hol1,11pt,TQ]{article}
+\ftlinepenalty=9999
+\def\Hide#1{}
+\def\Bool{``$\it{:}bool\,$''}
+\makeindex
+\TPPproject{DAZ PROJECT}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{June 2000 Language Enhancement Tests}  %% Mandatory field
+\TPPref{ISS/HAT/DAZ/INT513}  %% Mandatory field
+\def\SCCSversion{$Revision: 1.9 $%
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date: 2000/06/24 10:34:46 $%
+}}  %% Mandatory field (with sensible default)
+\TPPstatus{Informal}
+%\TPPstatus{Informal}
+\TPPtype{Technical}
+%\TPPkeywords{HOL}
+\TPPauthor{R.D.~Arthan & BRA01}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{K.Blackburn & BRA01}
+\TPPabstract{%
+This document gives scripts to test the new features implemented under the June 2000 Language
+Enhancements Contract (DERA ref 6085).
+}
+%\TPPabstractB{}
+%\TPPabstractC{}
+%\TPPabstractD{}
+%\TPPabstractE{}
+%\TPPabstractF{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+      Library}}
+
+%\TPPclass{CLASSIFICATION}
+\newfont{\icllogo}{icllogo50}
+\def\TPPheadlhs{$\vcenter{\halign{##\cr\icllogo ICL\cr}}$}
+%\def\TPPheadlhs{}
+%\def\TPPheadcentre{}
+%def\TPPheadrhs{}
+%\def\TPPfootlhs{}
+%\def\TPPfootcentre{}
+%\def\TPPfootrhs{}
+
+\begin{document}
+\TPPsetsizes
+\makeTPPfrontpage
+
+\vfill
+\begin{centering}
+
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+
+\end{centering}
+
+\newpage
+\section{DOCUMENT CONTROL}
+\subsection{Contents List}
+\tableofcontents
+\pagebreak
+\subsection{Document Cross References}
+\bibliographystyle{fmu}
+\bibliography{fmu,daz}
+
+\subsection{Changes History}  % to get section number `0.3'
+\begin{description}
+\item[Issue 1.1] First Draft
+\end{description}
+\subsection{Changes Forecast}
+None.
+\pagebreak
+\section{GENERAL}
+\subsection{Scope}
+This document contains test data for the June 2000 Compliance Tool Language Enhancements
+being undertaken under DERA contract ref. 6085.
+The specification changes for the upgrades are given in \cite{ISS/HAT/DAZ/HLD506}.
+
+\subsection{Introduction}
+This document contains specific tests for each of the 5 changes to the Compliance Tool identified as R1 to R5 in \cite{ISS/HAT/DAZ/HLD506}.
+
+Sections \ref{R1} to \ref{R5} define the tests for changes R1 to R5 respectively.
+
+\newpage
+\subsection{Preliminaries}
+
+=SML
+use_file "dtd013";
+use_file "imp013";
+=TEX
+Function to clean up before doing a test.
+=SML
+fun clean_up () = (
+	let	val thys = get_descendants "z_library"
+					less "cn" less "z_library"
+					diff get_cache_theories();
+		fun del_thy thy = 
+=FULLVERSION
+  (force_delete_theory thy handle Fail _ => ());
+=CUTDOWNVERSION
+   ();
+=SML
+	in	
+  map del_thy thys;
+  open_theory "cn";
+  set_pc"cn1"
+	end
+);
+=TEX
+Sometimes the success of a test just depends on whether or not
+a computation fails:
+=SML
+fun check_fail (f: unit -> 'a) : bool = (
+		(f (); false)
+	handle Fail msg => (
+		diag_line (get_message_text msg);
+		true
+	)
+);
+(*val check_ok : (unit -> 'a) -> bool = not o check_fail;*)
+fun check_ok(f) = not (check_fail f);
+=TEX
+% #### #### #### #### #### #### #### #### #### #### #### #### #### ####
+\section{Multidimensional Arrays}\label{R1}
+\subsection{Test Plan}
+There are four areas to test:
+\begin{enumerate}
+\item Indexed selections
+\item Array type declarations
+\item Translation of attributes
+\item Array aggregates
+\end{enumerate}
+
+\subsection{The Tests}
+\subsubsection{Indexed selections}
+=SML
+clean_up();
+new_script{name="R1A1", state=initial_cn_state};
+¹CN
+procedure main
+is
+ type day is range 1 .. 7;
+ type week is range 1 .. 52;
+ type d is array(day) of day;
+ type dw is array(day, week) of day;
+ type dwd is array(day, week, day) of day;
+ a, b : d;
+ x : dw;
+ y : dwd;
+begin
+  „A, B, X, Y[A(1) = B(1), A(1) = B(1) = X(1, 26) = Y(3, 26, 7) = 0]
+end main;
+°
+¹CN
+  Ã x(1, 26) := a(1) - b(1); y(3, 26, 7) := x(1, 26); a(1) := 0; b(1) := 0;
+°
+
+=SML
+val _ = cn_make_script_support"-""R1A1";
+set_pc"R1A1";
+set_goal([], get_conjecture"-""vc_1_1");
+a(rewrite_tac[z_«_í_app_thm]);
+a(REPEAT strip_tac THEN asm_rewrite_tac[]);
+store_mt_results
+mt_run [
+    ("int518.R1A1", check_ok, pop_thm, true)
+];
+=TEX
+\subsubsection{Array type declarations}
+We continue investigating the example from the previous section:
+=SML
+
+val trues =
+	map (rewrite_rule[] o z_get_spec) [
+	ñDWDvFIRST®,ñDWDvLAST®,
+	   ñDWDvLENGTH®,ñDWDvRANGE®,ñDWDvFIRSTv1®,ñDWDvLASTv1®,ñDWDvLENGTHv1®,
+	   ñDWDvRANGEv1®,ñDWDvFIRSTv2®,ñDWDvLASTv2®,ñDWDvLENGTHv2®,ñDWDvRANGEv2®,
+	   ñDWDvFIRSTv3®,ñDWDvLASTv3®,ñDWDvLENGTHv3®,ñDWDvRANGEv3®];
+fun test_r2a1 th = (
+	case dest_thm th of
+		([], conc) => is_z_true conc
+	|	_ => false
+);
+
+store_mt_results
+mt_run [
+    ("int518.R1B1", switch all test_r2a1, trues, true)
+];
+=TEX
+=SML
+set_goal([], ñDWDvFIRSTv3 = 1 ± DWDvLAST = DWDvLASTv1 = 7®);
+a(rewrite_tac[]);
+store_mt_results
+mt_run [
+    ("int518.R1B2", check_ok, pop_thm, true)
+];
+=TEX
+\subsubsection{Translation of attributes}
+=SML
+clean_up();
+new_script{name="R1C1", state=initial_cn_state};
+¹CN
+procedure main
+is
+ type day is range 1 .. 7;
+ type week is range 0 .. 51;
+ type d is array(day) of day;
+ type dw is array(day, week) of day;
+ type dwd is array(day, week, day) of day;
+ a, b : day;
+ x, y : week;
+begin
+  „A, B, X, Y[A = 1 ± B = 7 ± X = 0 ± Y = 51]
+end main;
+°
+¹CN
+  Ã
+    a := dwd'first;
+    b := d'last(1);
+    x := dw'first(2);
+    y := dwd'last(2);
+°
+=SML
+val _ = cn_make_script_support"-""R1C1";
+set_pc"R1C1";
+set_goal([], get_conjecture"-""vc_1_1");
+a(rewrite_tac[]);
+store_mt_results
+mt_run [
+    ("int518.R1C1", check_ok, pop_thm, true)
+];
+=TEX
+\subsubsection{Array aggregates}
+=SML
+clean_up();
+new_script{name="R1D1", state=initial_cn_state};
+¹CN
+procedure main
+is
+ type bit is range 1 .. 2;
+ type trit is range 1 .. 3;
+ type b is array(bit) of integer;
+ type t is array(trit) of integer;
+ type bt is array(bit, trit) of integer;
+ type bbt is array(bit, bit, trit) of integer;
+ xb : constant b := b'(5, 6);
+ xbt : constant bt := bt'( (1, 2, 3), (4, 5, 6) );
+ xbbt : constant bt := bbt'( ((1, 2, 3), (4, 5, 6)), ((7, 8, 9), (10, 11, 12)));
+ yt : constant t := t'(42, others => 99);
+ ybt : constant bt := bt'( (1, 2, 3), others => (4, 5, 6) );
+ ybbt : constant bbt := bbt'( others => (others => (others => 1)));
+ zt : constant t := t'(1 | 3 => 9, 2 => 10);
+ zbt : constant bt := bt'(1 => (1 => 9, 2 => 10, 3 => 11), 2 => (4, 5, 6));
+ wbt : constant bt := bt'(1 => (1 => 9, others => 11), others => (4, 5, 6));
+begin
+   „ [true]
+end main;
+°
+=SML
+set_goal([],
+ ñ WBT =
+ array_agg2
+     ((BTvRANGEv1 ¸ {succ ç 1 - BTvFIRSTv2 ê » §4, 5, 6¢})
+       « ({1} ¸ {(BTvRANGEv2 ¸ {11}) « ({1} ¸ {9})}))®);
+a(accept_tac (z_get_specñWBT®));
+store_mt_results
+mt_run [
+    ("int518.R1D1", check_ok, pop_thm, true)
+];
+=TEX
+=SML
+set_goal([], ñ YBBT = array_agg3 (BBTvRANGEv1 ¸ {BBTvRANGEv2 ¸ {BBTvRANGEv3 ¸ {1}}})®);
+a(accept_tac (z_get_specñYBBT®));
+store_mt_results
+mt_run [
+    ("int518.R1D2", check_ok, pop_thm, true)
+];
+=TEX
+=SML
+set_goal([],  ñYBT =
+  array_agg2
+      ((BTvRANGEv1 ¸ {succ ç 1 - BTvFIRSTv2 ê » §4, 5, 6¢})
+          « (succ ç 1 - BTvFIRSTv1 ê » §succ ç 1 - BTvFIRSTv2 ê » §1, 2, 3¢¢))®);
+a(accept_tac (z_get_specñYBT®));
+store_mt_results
+mt_run [
+    ("int518.R1D3", check_ok, pop_thm, true)
+];
+=TEX
+\section{MULTIPLE LOGICAL CONSTANT DEFINITIONS}\label{R2}
+\subsection{Test Plan}
+We need to check that the unsoundness has been resolved and that the new syntax works.
+\subsection{The Tests}
+=SML
+clean_up();
+new_script{name="R2A1", state=initial_cn_state};
+¹CN
+procedure Logcon is
+  type t is (one, two);
+  X : t;
+begin
+  „ X [X = ONE]							(1)
+end Logcon;
+°
+¹CN
+(1) Ã con a : { i : ú | i < i } · „ X [a = 1, X = TWO](2)
+°
+=SML
+set_pc"cn1";
+set_goal([get_conjecture"-""vc1_2"], ñfalse®);
+a(POP_ASM_T strip_asm_tac);
+store_mt_results
+mt_run [
+    ("int518.R2A1", check_ok, pop_thm, true)
+];
+=SML
+clean_up();
+new_script{name="R2B1", state=initial_cn_state};
+¹CN
+procedure Logcon is
+  X : Integer;
+begin
+  „ X [X = 5, X = 10]							(1)
+end Logcon;
+°
+¹CN
+(1) Ã con x, x1, x2, x3 : ú · „ X [x = X ± x1 = 2 ± x2 = x1 + 2 ± x3 = 3*x1 + x2 ± x = 5, X = x3](2)
+°
+¹CN
+(2) Ã X := 7;
+„ X [X = x + x1, X = x + x2 + 1]
+°
+=SML
+val vcs_r2b1 = get_conjectures"-";
+fun tp tac tm = tac_proof(([], tm), tac);
+fun delay_r2b1 () = (
+	map (tp (cn_vc_simp_tac[] THEN PC_T1 "z_lin_arith" prove_tac[]) o snd o snd) vcs_r2b1
+);
+store_mt_results
+mt_run [
+    ("int518.R2B1", check_ok, delay_r2b1, true)
+];
+=TEX
+\section{ASSIGNMENT TO RECORD COMPONENTS}\label{R3}
+\subsection{Test Plan}
+We need to check that the record update functions do get generated and then that
+translations of assignments use them.
+\subsection{The Tests}
+=SML
+clean_up();
+new_script{name="R3A1", state=initial_cn_state};
+¹CN
+procedure recs is
+  type rec1 is record x, y : integer; end record;
+  type rec2 is record r : rec1; x, y:integer; z : rec1; end record;
+  v : rec1;
+  w : rec2;
+begin
+  „ V, W [W.R.X = 1 ± V.X = 4 ± W.X = 9]			(1)
+end recs;
+°
+=SML
+set_pc"cn1";
+val thm3a1 = (z_gen_pred_elim o dest_z_tuple)ñ(U, U, U)®(z_get_specñREC2uR®);
+set_goal([], ñt = REC2uX(X, 4) ´ t.X = 4®);
+a(rewrite_tac[thm3a1] THEN REPEAT strip_tac THEN asm_rewrite_tac[]);
+store_mt_results
+mt_run [
+    ("int518.R3A1", check_ok, pop_thm, true)
+];
+
+¹CN
+ (1) Ã v.x := 1; w.r := v; v.x := 4; w.x := 9;
+°
+=SML
+val thm3a2 = z_gen_pred_elim [ñU®](z_get_specñREC1uX®);
+set_goal([], get_conjecture"-""vc1_1");
+a(rewrite_tac[thm3a1, thm3a2]);
+store_mt_results
+mt_run [
+    ("int518.R3A2", check_ok, pop_thm, true)
+];
+=TEX
+\section{FRAME ABBREVIATIONS}\label{R4}
+
+\subsection{Test Plan}
+We define a few schemas and check for successful and unsuccesful use of them in frames:
+\subsection{The Tests}
+=SML
+clean_up();
+new_script{name="R4A1", state=initial_cn_state};
+ÿ FR1 üüüüüüüüüüü
+Ü A, B, C, D : ú
+ˆüüüüüüüüüüüüüü
+ÿ FR2 üüüüüüüüüüü
+Ü A, B, C : ú
+ˆüüüüüüüüüüüüüü
+ÿ FR3 üüüüüüüüüüü
+Ü A, B, C : ú ¸ ú
+ˆüüüüüüüüüüüüüü
+¹CN
+procedure recs is
+ a, b, c, d : integer;
+begin
+  „ A, B, C [A = B = C = D]			(1)
+end recs;
+°
+=SML
+fun ok4a1 () =
+¹CN
+ (1) Ã „FR2 [A = 1 ± B = C = D = 1]		(2)
+°
+=SML
+fun ok4a2 () =
+¹CN
+ (2) Ã „FR3 [A = 1 ± B = C = D = 1]		(3)
+°
+=SML
+fun not_ok4a3 () =
+¹CN
+ (3) Ã „FR1[A = 1 ± B = C = D = 1]			(4)
+°
+store_mt_results
+mt_run [
+    ("int518.R4A1", check_ok, ok4a1, true),
+    ("int518.R4A2", check_ok, ok4a2, true)
+];
+store_mt_results
+mt_run_fail
+ [    ("int518.R4A2", not_ok4a3, (), gen_fail_msg"check_1_a" 505064 ["a, b, c", "a, b, c, d"])
+];
+=TEX
+\section{INITIAL VARIABLES IN CONDITIONALS}\label{R5}
+\subsection{Test Plan}
+We must test
+\begin{enumerate}
+\item initial variables in positions previously allowed.
+\item initial variables in conditionals now allowed.
+\item initial variables in other positions not allowed
+\item (bugfix) initial variables in pre-conditions not allowed.
+\subsection{The Tests}
+=SML
+clean_up();
+new_script{name="R5A1", state=initial_cn_state};
+fun ok5a1 () = 
+¹CN
+procedure r5a1(a, b : in out integer)
+  „ A, B [A‰0 = B]
+is
+begin
+  „ A, B [A‰0 = B]			(1)
+end r5a1;
+°
+=SML
+store_mt_results
+mt_run [
+    ("int518.R5A1", check_ok, ok5a1, true)
+];
+=TEX
+=SML
+clean_up();
+new_script{name="R5A2", state=initial_cn_state};
+fun ok5a2 () = 
+¹CN
+procedure r5a2(a, b : in out integer)
+  „ A, B [A‰0 = B]
+is
+begin
+  if a = b then
+	„ A, B [A‰0 = B]			(1)
+  end if;
+  if a = b then
+         a := 2;
+  else
+	„ A, B [A‰0 = B]			(2)
+  end if;
+  if a = b then
+	„ A, B [A‰0 = B]			(3)
+  else
+	„ A, B [A‰0 = B]			(4)
+  end if;
+end r5a2;
+°
+=TEX
+=SML
+store_mt_results
+mt_run [
+    ("int518.R5A2", check_ok, ok5a2, true)
+];
+=TEX
+=SML
+clean_up();
+new_script{name="R5A3", state=initial_cn_state};
+fun ok5a3 () = 
+¹CN
+procedure r5a3(a, b : in out integer)
+  „ A, B [A‰0 = B]
+is
+begin
+  if a = b then
+	case a is
+           when 1 =>
+             „ A, B [A‰0 = B]			(1)
+           when 2 =>
+            „ A, B [A‰0 = B]			(2)
+           when 3 =>
+           „ A, B [A‰0 = B]			(3)
+         end case;
+  end if;
+  case a is
+         when 1 =>
+       if a = b then
+         „ A, B [A‰0 = B]			(10)
+       end if;
+      when 2 =>
+       „ A, B [A‰0 = B]			(20)
+      when 3 =>
+       „ A, B [A‰0 = B]			(30)
+  end case;
+end r5a3;
+°
+=TEX
+=SML
+store_mt_results
+mt_run [
+    ("int518.R5A3", check_ok, ok5a3, true)
+];
+=TEX
+(The error cases are also covered in INT503).
+=SML
+clean_up();
+new_script{name="R5A4", state=initial_cn_state};
+fun not_ok5a4 () = 
+¹CN
+procedure r5a4(a, b : in out integer)
+  „ A, B [A‰0 = B]
+is
+begin
+  while a /= b
+  loop
+       „ A, B [A‰0 = B]			(10)
+  end loop;
+end r5a4;
+°
+=TEX
+=SML
+store_mt_results
+mt_run_fail [
+    ("int518.R5A4", not_ok5a4, (), gen_fail_msg "adjust_statement" 505091 [])
+];
+=TEX
+=SML
+clean_up();
+new_script{name="R5A5", state=initial_cn_state};
+fun not_ok5a5 () = 
+¹CN
+procedure r5a5(a, b : in out integer)
+  „ A, B [A‰0 = B]
+is
+begin
+       „ A, B [A‰0 = B]			(10)
+       „ A, B [A‰0 = B]			(20)
+end r5a5;
+°
+=TEX
+=SML
+store_mt_results
+mt_run_fail [
+    ("int518.R5A5", not_ok5a5, (), gen_fail_msg "adjust_statement" 505091 [])
+];
+=TEX
+Finally, the bug fix:
+=SML
+clean_up();
+new_script{name="R5A6", state=initial_cn_state};
+fun not_ok5a6 () = 
+¹CN
+procedure r5a6(a, b : in out integer)
+  „ A, B [A‰0 = B]
+is
+begin
+       „ A, B {A‰0 = B}			(10)
+end r5a6;
+°
+=TEX
+=SML
+store_mt_results
+mt_run_fail [
+    ("int518.R5A6", not_ok5a6, (), gen_fail_msg "adjust_statement" 505095 [])
+];
+
+=TEX
+
+\section{EPILOGUE}
+=SML
+diag_line (summarize_mt_results());
+=TEX
+
+\end{document}
+=IGN
