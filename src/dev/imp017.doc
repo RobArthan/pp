@@ -22,7 +22,7 @@ Don't worry about this!
 %\TPPpart{}
 \TPPtitle{SLR Parser Generator}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP017}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.42 $%
+\def\SCCSversion{$Revision: 1.43 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 %\TPPdate{}  %% Mandatory field (with sensible default)
@@ -132,6 +132,8 @@ of the printing code.
 \item[Issue 1.41] Implemented execution timings.
 \item[Issue 1.42] It can now tell you how many conflicts the LALR(1) step removed.
 \item[Issue 1.43] Tidied up error-handling and the treatment of MS-DOS and Macintosh format text files.
+\item[Issue 1.44] Made the follow and first functions work with arrays rather than lists.
+See HISTORICAL NOTES below for details.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -183,6 +185,79 @@ generator and the {\it slrp} shell script which can be used to call it from make
 The code is dependent on \cite{DS/FMU/IED/DTD018}.
 It also depends on the makefile (or a developer working interactively) to
 define two strings at the ML top level: {\it system\_version} and {\it copyright}.
+
+\section{HISTORICAL NOTE}
+SLRP has had evolved in several stages. The original. implementation in 1991
+was a very simple-minded translation of the SLR(1) technique as descrobed in
+\cite{Aho77} based on representations of sets, functions etc. as lists.
+In 1992, it was realised that representing the grammars as lists was slugging
+the performance on grammars with more than a few dozen productions and
+the representation for grammars was changed to lists.  This produced acceptable
+results for quite big grammars, e.g., the Compliance Notation which has about
+170 non-terminals and generates a parser with about 700 states.
+
+The SLRP black box then remained closed until 1999, when the back-end needed
+to be adjusted to work-around a memory problem in Standard ML of New Jersey
+(which needed 400Mb or so to compile the Compliance Notation parser).
+
+In 2003, a desire to handle more languages with less pain resulted in an extension
+to implement the LALR(1) method in the very neat formulation of
+\cite{Bermudez89}. This only adds about 300 lines to the code below and greatly
+increases the scope. This update was accompanied by a general tidy-up of the
+code and the functionality it provides.
+
+Finally, in the 2003 round of work, the computation of the FIRST and FOLLOW
+functions has been converted to use arrays. Interestingly, the Bermudez-Logothetis
+LALR(1) method tends to hit these functions much harder than the SLR(1) table
+calculations.  Experiments with the grammars for Ada 95, C and Pascal show
+a speed-up for the LALR(1) calculations by a factor of 20 to 30, whereas the SLR(1)
+calculation only goes about 5\% to 10% faster.
+=IGN
+Ada95:
+Parsing grammar: 56ms.
+Building SLR(1) tables: 11601ms.
+Checking for SLR(1) conflicts: 9ms.
+Calculating LALR(1) lookahead sets: 121665ms.
+Writing parsing tables: 57ms.
+
+Parsing grammar: 56ms.
+Building SLR(1) tables: 11114ms.
+Checking for SLR(1) conflicts: 9ms.
+Calculating LALR(1) lookahead sets: 4036ms.
+Writing parsing tables: 60ms.
+
+Pascal:
+Parsing grammar: 19ms.
+Building SLR(1) tables: 1033ms.
+Checking for SLR(1) conflicts: 4ms.
+Calculating LALR(1) lookahead sets: 7257ms.
+Writing parsing tables: 22ms.
+
+Parsing grammar: 19ms.
+Building SLR(1) tables: 923ms.
+Checking for SLR(1) conflicts: 2ms.
+Calculating LALR(1) lookahead sets: 243ms.
+Writing parsing tables: 20ms.
+
+C:
+
+Parsing grammar: 10ms.
+Building SLR(1) tables: 6928ms.
+Checking for SLR(1) conflicts: 5ms.
+Calculating LALR(1) lookahead sets: 23732ms.
+Resolving reduce/reduce conflicts: 5ms.
+Writing parsing tables: 30ms.
+
+Parsing grammar: 10ms.
+Building SLR(1) tables: 6905ms.
+Checking for SLR(1) conflicts: 5ms.
+Calculating LALR(1) lookahead sets: 1285ms.
+Resolving reduce/reduce conflicts: 5ms.
+Writing parsing tables: 26ms.
+=TEX
+\section{ACKNOWLEDGMENT}
+I am grateful to Prof. Manuel Bermudez for very helpful correspondence clarfying
+my reading of \cite{Bermudez89}.
 
 \section{PREAMBLE}\label{PREAMBLE}
 =TEX
@@ -850,93 +925,150 @@ fun Ûml_escapifyÝ  (x : string) : string = (
 \section{SLR TABLE COMPUTATION}\label{SLRTABLECOMPUTATION}
 \subsection{FIRST and FOLLOW}
 The following computes the $first$ function of \cite{Aho77}.
+The result is represented as an array indexed by non-terminals (for a terminal symbol
+$s$ $first(s) = \{s\}$).
 =SML
-fun ÛfirstÝ (g : ''a GRAMMAR) : (''a SYMBOL * (''a OPT list)) list = (
-	let	val step1 = map (fn s => (Terminal s, [Value s])) (give_terms g);
-		fun step2_aux1 alts = (
-			case alts of
-				(Terminal a :: _)  :: more => step2_aux1 more rgrab (Value a)
-			|	[] :: more=> step2_aux1 more rgrab Nil
-			|	_ :: more=> step2_aux1 more
-			|	[] => []
+fun ÛfirstÝ (g : ''a FGRAMMAR) : ''a OPT list array = (
+	let	(* val step1 = map (fn s => (Terminal s, [Value s])) (give_terms g); *)
+		fun step1 s = [Value s];
+		fun step2_aux1 alts acc  j = (
+			if	j = PPArray.length alts 
+			then	acc
+			else	let	val syms = PPArray.sub(alts, j);
+				in	if	PPArray.length syms = 0
+					then	step2_aux1 alts (acc rgrab Nil) (j+1)
+					else	case PPArray.sub(syms, 0) of
+							FTerm a =>
+							step2_aux1 alts (acc rgrab Value a) (j+1)
+						|	_ =>
+							step2_aux1 alts acc (j+1)
+				end
 		);
-		fun step2_aux2 ((nt, alts) :: more) = (
-			(NonTerminal nt, step2_aux1 alts) :: step2_aux2 more
-		) | step2_aux2 [] = step1;
-		val step2 = step2_aux2 g
-		fun step3_aux1 tab alts = (
-			case alts of
-				((nt as (NonTerminal _)) :: alt')  :: more => (
-					let	val new = lassoc3 tab nt
-					in	if Nil mem new
-						then (new less Nil)rcup
-							step3_aux1 tab (alt' :: more)
-						else new rcup step3_aux1 tab more
-					end
-			) |	[] :: more => [Nil] rcup step3_aux1 tab more
-			|	_ :: more => step3_aux1 tab more
-			|	[] => []
+		val num_nts = PPArray.length g;
+		val result = PPArray.array(num_nts, [] : ''a OPT list);
+		fun step2_aux2 i = (
+			if	i = num_nts
+			then	()
+			else (
+				PPArray.update
+				(result, i, step2_aux1(snd(PPArray.sub(g, i))) [] 0);
+				step2_aux2 (i+1)
+			)
 		);
- 		fun step3_aux2 tab ((nt, alts) :: more) = (
-			let	val old = lassoc3 tab(NonTerminal nt);
-				val new = step3_aux1 tab alts;
-				val tab' = tab overwrite (NonTerminal nt, old rcup new);
-			in	step3_aux2 tab' more
+		val step2 = step2_aux2 0;
+		fun step3_aux1 alts acc j k = (
+			if	j = PPArray.length alts 
+			then	acc
+			else	let	val syms = PPArray.sub(alts, j);
+				in	if	k = PPArray.length syms
+					then	step3_aux1 alts (acc rgrab Nil) (j+1) 0
+					else	case PPArray.sub(syms, k) of
+							FNonTerm a =>
+	let	val new = PPArray.sub(result, a);
+	in	if	Nil mem new
+		then	step3_aux1 alts (acc rcup (new less Nil)) j (k+1)
+		else	step3_aux1 alts (acc rcup new) (j+1) 0
+	end
+						|	_ =>
+	step3_aux1 alts acc (j+1) 0
+				end
+
+		);
+ 		fun step3_aux2 changed i = (
+			if	i = num_nts
+			then	changed
+			else (	let	val old = PPArray.sub(result, i);
+					val alts = snd(PPArray.sub(g, i));
+					val new = old rcup step3_aux1 alts [] 0 0;
+				in	PPArray.update(result, i, new);
+					step3_aux2
+					(changed orelse length new <> length old)
+					(i+1)
+				end
+			)
+		);
+		fun step3_aux3 () = (
+			let	val changed = step3_aux2 false 0;
+			in	if	changed
+				then	step3_aux3 ()
+				else	()
 			end
-		) | step3_aux2 tab [] = tab;
-		fun step3_aux3 tab = (
-			let	val tab' = step3_aux2 tab g;
-			in	if tab' = tab
-				then tab
-				else step3_aux3 tab'
-			end
 		);
-	in	step3_aux3 step2
+	in	step3_aux3 (); result
 	end
 );
 =TEX
 The following computes the $FOLLOW$ function of \cite{Aho77}.
+When we're constructing the SLR(1) tables, the table is most conveniently presented as an array:
 =SML
-fun ÛfollowÝ (g : ''lc GRAMMAR) (sen : NONTERMINAL) (eos : ''lc)
-	: ''lc list E_DICT = (
+fun ÛfollowÝ (g : ''lc FGRAMMAR) (sen : FNONTERM) (eos : ''lc)
+	: ''lc list array = (
 	let	val first_tab = first g;
-		fun first_syms (sym :: more) = (
-			let	val firsts = lassoc3 first_tab sym;
-			in	if Nil mem firsts
-				then (firsts less Nil) rcup first_syms more
-				else firsts
-			end
-		) | first_syms [] = [Nil];
-		fun doalt a tab alt = (
-			(case alt of 
-				(NonTerminal b :: more) => (
-					let	val oldb = lassoc3 tab b;
-						val firstmore = first_syms more;
+		fun first_of_sym (FNonTerm nt) = PPArray.sub(first_tab, nt)
+		|   first_of_sym (FTerm lc) = [Value lc];
+		fun first_syms alt k = (
+			if	k =  PPArray.length alt
+			then	[Nil]
+			else	let	val firsts = first_of_sym(PPArray.sub(alt, k));
+				in	if	Nil mem firsts
+					then	(firsts less Nil) rcup first_syms alt (k+1)
+					else	firsts
+				end
+		);
+		val num_nts = PPArray.length g;
+(*
+		val result = PPArray.array(num_nts, [] : BNF_lex_class list);
+*)
+		val result = PPArray.array(num_nts, [] : ''lc list);
+		fun doalt changed a alt k = (
+			if	k = PPArray.length alt
+			then	changed
+			else (case PPArray.sub(alt, k) of 
+				FNonTerm b => (
+					let	val oldb =PPArray.sub(result, b);
+						val firstmore = first_syms alt (k+1);
 						val newb = oldb rcup 
 							(if Nil mem firstmore
-							then	lassoc3 tab a
+							then	PPArray.sub(result, a)
 							rcup map
 							 force_value(firstmore less Nil)
 							else map force_value firstmore);
-					in	doalt a (tab overwrite (b, newb)) more
+						val changed' = length newb <> length oldb;
+					in	PPArray.update(result, b, newb);
+						doalt (changed orelse changed') a alt (k+1)
 					end
-			) |	(_ :: more) => (doalt a tab more
-			) |	[] => tab)
+			) |	FTerm _ =>  doalt changed a alt (k+1)
+			)
 		);
-		fun doprod tab (nt, alt :: more) = (
-			doprod (doalt nt tab alt) (nt, more)
-		) | doprod tab (_, []) = tab;
-		fun again (prod :: more) tab = (
-			again more (doprod tab prod)
-		) | again [] tab = tab;
-		fun go tab = (
-			let	val tab' = again g tab;
-			in	if tab' = tab
-				then tab
-				else go tab'
-			end
+		fun doprod changed a alts j = (
+			if	j = PPArray.length alts
+			then	changed
+			else	doprod(doalt changed a (PPArray.sub(alts, j)) 0) a alts (j+1)
 		);
-		val sd =	go (map (fn (nt, _) => (nt,  if nt = sen then [eos] else [])) g);
+		fun again changed i = (
+			if	i = num_nts
+			then	changed
+			else	again (doprod changed i (snd(PPArray.sub(g, i))) 0) (i+1)
+		);
+		fun go () = (
+			if	again false 0
+			then	go()
+			else	()
+		);
+		val _ = PPArray.update(result, sen, [eos]);
+		val _ = go();
+	in	result
+	end 
+);
+=TEX
+When we're constructing the LALR(1) lookahead sets it turns out to be better to have the
+table as a dictionary:
+=SML
+fun Ûfollow_dictÝ (g : ''lc FGRAMMAR) (sen : FNONTERM) (eos : ''lc)
+	: ''lc list E_DICT = (
+	let	val tab = follow g sen eos;
+		val indices = interval 0 (PPArray.length tab - 1);
+		val sd = map (fn i => (fst(PPArray.sub(g, i)), PPArray.sub(tab, i))) indices;
 	in	list_e_merge initial_e_dict sd
 	end 
 );
@@ -956,7 +1088,7 @@ fun Ûslr_tablesÝ (g : ''lc GRAMMAR) (eos : ''lc) (sen : NONTERMINAL)
 		val Ijs = combine C js;
 		val actions = array (n+1, []:(''lc * ACTION)list);
 		val gotos = array (n+1, []: (NONTERMINAL * STATE)list);
-		val follow_tab = follow g sen eos;
+		val follow_tab = follow g' sent eos;
 		fun my_follower item = (
 			(Value (f_follower g' item)) handle _ => Nil
 		);
@@ -972,7 +1104,7 @@ fun Ûslr_tablesÝ (g : ''lc GRAMMAR) (eos : ''lc) (sen : NONTERMINAL)
 			) |	Nil => (
 				if nt <> sent
 				then let	fun f lc = (lc, Reduce((nt_name g' nt, alt), dot));
-					val lcs = force_value(e_lookup (nt_name g' nt) follow_tab);
+					val lcs = sub(follow_tab, nt);
 				in	make_actions items more rcup map f lcs
 				end else make_actions items more rgrab (eos, Accept) 
 			)
@@ -1334,10 +1466,8 @@ fun Ûlalr_resolve_conflictsÝ
 	let	open PPArray;
 		val (g', st_ed, nt_ed, sen', eos') =
 			make_transition_grammar actions gotos g sen eos init_state;
-		val follow_tab = follow g' sen' eos';
-(*
-		val lc_tab = array(length actions, []: SYM_CLASS list);
-*)
+		val (fg', fsen') = make_grammar sen' g' ;
+		val follow_tab = follow_dict fg' fsen' eos';
 		val lc_tab = array(length actions, []:''lc list);
 		val _ = map (fn (s, lc) => update(lc_tab, s, lc::sub(lc_tab, s))) confs;
 		val la = lalr_lookahead_set actions gotos g st_ed nt_ed follow_tab;
@@ -1587,9 +1717,6 @@ fun Ûmake_grammar_and_reduction_tableÝ
 ) | make_grammar_and_reduction_table _ = raise SlrpError "invalid argument";
 =TEX
 \subsection{Lexical Analyser}
-=TEX
-The lexical analyser is very much a one-off.
-It is called by the parser \cite{DS/FMU/IED/SML005}.
 =TEX
 Quotes in our concrete syntax for BNF are introduced by the backquote character, \verb"`"
 and backslashes serve as escapes. These are needed later on so they are defined here
@@ -1884,7 +2011,9 @@ The interface to the lexical analyser is the following function.
 	(tokenise recognisers (unix_eolns [] (explode text)))
 	handle (LexFail msg) => (
             raise SlrpError
-	("Lexical analysis error on or near line number " ^ string_of_int (!line_number) ^ ": " ^ msg)
+	("Lexical analysis error on or near line number " ^
+	 string_of_int (!line_number) ^
+	 ": " ^ msg)
         )
     );
 =TEX
@@ -2102,6 +2231,27 @@ fun Ûresolve_conflictsÝ (g : (''lc)GRAMMAR) (actions : (''lc)ACTION_TABLE) : uni
 			[] => ()
 		|	todo => (map aux todo; ())
 	end 
+);
+=TEX
+\section{OTHER CHECKS}\label{OTHER CHECKS}
+In addition to the other checks carried out as part of the parser
+generation, we also have a check for non-terminals that aren't
+linked into the grammar. These are ones other than the sentence symbol of
+the augmented grammar that don't appear in the goto table.
+=SML
+fun ÛorphansÝ (g : ''lc GRAMMAR) (gotos : GOTO_TABLE) : NONTERMINAL list = (
+	let
+		fun aux1 d ((nt, s) ::more) = aux1(e_enter nt s d) more
+		|   aux1 d _ = d;
+		fun aux2 d i = (
+			if	i = PPArray.length gotos
+			then	d
+			else	aux2 (aux1 d (PPArray.sub(gotos, i))) (i+1)
+		);
+		val dict = e_enter sentence_symbol 0 (aux2 initial_e_dict 0);
+		val orphan_nts = map fst g drop (fn a => not(is_Nil(e_lookup a dict)));
+	in	Sort.sort Sort.string_order orphan_nts
+	end
 );
 =TEX
 \section{OUTPUT ROUTINES}\label{OUTPUTROUTINES}
@@ -2398,7 +2548,7 @@ end;
 =TEX
 \subsection{ML Interface}
 Se the detailed design for a desciption of the parameter interface.
- =IGN
+=IGN
 val in_file = "t.txt";
 val out_file = "t.sml";
 val log_file = "t.log";
@@ -2485,20 +2635,32 @@ fun ÛslrpÝ {
 				grm actions gotos reducers init;
 		val _ = store_exec_time timings "Writing parsing tables";
 		val se12 =
-			if log_level >= 4
+			(if log_level >= 4
 			then print_lr0_automaton_graph actions gotos init format_sym_class
-			else ();
+			else ());
+		val se13 = (case orphans grm gotos of
+			[] => ()
+		|	nts => (
+			let	val msg1 = "Detected " ^ so_many false (length nts)
+					"unreachable non-terminal";
+				val msg2 = format_list Combinators.I nts "\n\t";
+			in	chat "\n"; chat msg1; chat "\n\n";
+				my_log "\n"; my_log msg1; my_log ":\n\n\t";
+				my_log msg2; my_log "\n"
+			end
+		));
 		val _ = report_exec_times timings;
 		val se14 = (chat (burst "End of Run");
 				my_log "\n"; my_log (burst "End of Run"));
 	in	(close_out_file(); close_log_file())
 	end	handle ex as SlrpError msg =>
 		(my_log "*** ERROR "; my_log msg; my_log "\n"; raise ex)
-	end	handle ex as SlrpError msg =>
+	end
+	handle ex as SlrpError msg =>
 		(chat "*** ERROR "; chat msg; chat "\n"; raise ex))
 	handle ex as PARSER_ERROR msg =>
-	(chat "*** INTERNAL ERROR IN SLRP ";
-	 chat msg; chat "\n"; raise SlrpError msg)
+		(chat "*** INTERNAL ERROR IN SLRP ";
+		 chat msg; chat "\n"; raise SlrpError msg)
 );
 =TEX
 =SML
@@ -2507,7 +2669,7 @@ end; (* of structure Slrp *)
 \subsection{Shell Interface}
 =DUMP slrp
 #!/bin/sh
-# slrp From: $Id: imp017.doc,v 1.42 2003/02/23 15:19:29 rda Exp rda $
+# slrp From: $Id: imp017.doc,v 1.43 2003/02/24 12:27:18 rda Exp rda $
 # Shell script to run the SLRP Parser Generator
 if test -z "$PROGNAME"
 then
