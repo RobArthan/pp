@@ -71,20 +71,56 @@ typedef struct menu_item {
  * For each module there is a section below to generate
  * extern declarations for its external interfaces (with the
  * exception of `main' in xpp.c).
+ * N.B. the sections below are in alphabetical order of module name.
  */
-#ifndef _mainw
-	extern void main_window_go(
-		char	*file_name);
-	extern XtAppContext app;
-	extern Widget root;
-	extern void send_to_application(
-		char	*buf,
-		NAT	siz);
+#ifndef _cmdline
+	extern void add_cmd_line(
+		Widget	text_w);
 #endif
 #ifndef _diag
 	extern void msg(
 		char	*s1,	/* title: ... */
 		char	*s2	/* ...: message */);
+#endif
+#ifndef _edit
+	extern void *setup_edit(
+		Widget	owner,
+		char	*name,
+		void	(*exec)());
+#endif
+#ifndef _files
+	extern Boolean *open_file(
+		Widget	text,
+		char	*name);
+	extern Boolean *save_file(
+		Widget	text,
+		char	*name);
+	extern Boolean *save_file_as(
+		Widget	text,
+		char	*name);
+	extern Boolean save_string_as(
+		Widget	w,
+		char	*data,
+		char	*name);
+	extern Boolean *include_file(
+		Widget	text,
+		char	*name);
+	extern void panic_save(Widget text);
+#endif
+#ifndef _help
+	#include "help.h"
+#endif
+#ifndef _mainw
+	extern void main_window_go(
+		char	*file_name);
+	extern XtAppContext app;
+	extern Widget root;
+	extern Widget script;
+	extern void check_quit_cb (
+		Widget w,
+		XtPointer cd,
+		XmAnyCallbackStruct cbs);
+	extern void scroll_out(char *buf, NAT ct, Boolean ignored);
 #endif
 #ifndef _menus
 	extern	Widget setup_pulldown_menu(
@@ -108,17 +144,49 @@ typedef struct menu_item {
 		Widget	w,
 		char	*opn	/* Save/Open/... */);
 #endif
+#ifndef _options
+	extern void init_options(
+		Widget	owner_w);
+	extern void add_option_tool();
+	extern char **get_arg_list();
+#endif
 #ifndef _palette
 	extern Boolean add_palette(
+		Widget	w);
+#endif
+#ifndef _pixmaps
+	extern Pixmap get_pp_pixmap();
+#endif
+#ifndef _pterm
+	extern void get_pty();
+	extern Boolean application_alive();
+	extern void handle_sigs();
+	extern void interrupt_application();
+	extern void kill_application();
+	extern void restart_application();
+	extern void send_nl();
+	extern void send_to_application(
+		char	*buf,
+		NAT	siz);
+#endif
+#ifndef _search
+	extern Boolean add_search_tool(
 		Widget	w);
 #endif
 #ifndef _templates
 	extern Boolean add_templates(
 		Widget	w);
 #endif
-#ifndef _search
-	extern Boolean add_search_tool(
-		Widget	w);
+#ifndef _undo
+	extern void clear_undo(
+		XtPointer undo_ptr);
+	extern XtPointer add_undo(
+		Widget	text_w,
+		Widget	menu_w,
+		NAT	menu_entry_offset);
+	extern void undo_motion_cb();
+	extern void undo_modify_cb();
+	extern void undo_cb();
 #endif
 #ifndef _xmisc
 	extern void set_menu_item_sensitivity(
@@ -156,56 +224,4 @@ void number_verify_cb(
 #ifndef _xpp
 	extern XtTranslations text_translations;
 	extern char * templates;
-#endif
-#ifndef _edit
-	extern void *setup_edit(
-		Widget	owner,
-		char	*name,
-		void	(*exec)());
-#endif
-#ifndef _files
-	extern Boolean *open_file(
-		Widget	text,
-		char	*name);
-	extern Boolean *save_file(
-		Widget	text,
-		char	*name);
-	extern Boolean *save_file_as(
-		Widget	text,
-		char	*name);
-	extern Boolean save_string_as(
-		Widget	w,
-		char	*data,
-		char	*name);
-	extern Boolean *include_file(
-		Widget	text,
-		char	*name);
-	extern void panic_save(Widget text);
-#endif
-#ifndef _cmdline
-	extern void add_cmd_line(
-		Widget	text_w);
-#endif
-#ifndef _options
-	extern void init_options(
-		Widget	owner_w);
-	extern void add_option_tool();
-	extern char **get_arg_list();
-#endif
-#ifndef _undo
-	extern void clear_undo(
-		XtPointer undo_ptr);
-	extern XtPointer add_undo(
-		Widget	text_w,
-		Widget	menu_w,
-		NAT	menu_entry_offset);
-	extern void undo_motion_cb();
-	extern void undo_modify_cb();
-	extern void undo_cb();
-#endif
-#ifndef _pixmaps
-	extern Pixmap get_pp_pixmap();
-#endif
-#ifndef _help
-	#include "help.h"
 #endif
