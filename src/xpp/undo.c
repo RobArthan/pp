@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: undo.c,v 2.17 2003/08/01 11:13:13 rda Exp rda $
+ * $Id: undo.c,v 2.18 2004/08/27 15:54:39 rda Exp $
  *
  * undo.c -  text window undo facility for the X/Motif ProofPower
  * Interface
@@ -600,17 +600,6 @@ static void setUndoRedo(UndoBuffer *ub)
 }
 
 
-
-/* can an undo/redo actually be done according to the structures? */
-static Boolean canUnRedo(UndoBuffer *ub)
-{
-	if(ub->active == (UndoNode *) NULL) {
-		return False;
-	}
-	return True;
-}
-
-
 /* **** **** **** **** **** **** **** **** **** **** **** **** *
  * clear_undo: put the undo buffer back in a pristine state.   *
  * e.g., used when a file is loaded.                           *
@@ -921,51 +910,47 @@ void undo_modify_cb(
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Do an undo/redo. Note that the text replacement will cause
- * the modify/verify call back undo_modify_cb to be invoked
- * so that the next undo will undo the undo (i.e. undo + undo = redo).
- * Since this will change the undo buffer we must copy the relevant
- * fields. We must set the moved_away field to indicate that
+ * Do an undo/redo. Caller's responsibility to check that the data
+ * structures will allow the operation.
+ * We must set the moved_away field to indicate that
  * undo_modify_cb is to stop accumulating changes.
  * Any text inserted by the undo is selected and the insertion
  * position is set to the end of the undo point. The beginning
  * of the new selection (or the insertion point if no text was
  * inserted) is manoeuvred into view in the window.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-static Boolean undoRedo(
+static Boolean undo_redo(
 	UndoBuffer *ub,
     	Boolean     amUndoing)
 {
 	XmTextPosition fst, lst;
 	NAT len;
 
-	if(canUnRedo(ub)) {
-		if(changes_saved(ub) &&
-		   amUndoing &&
-		   !yes_no_dialog(ub->text_w, changes_saved_warning, "Confirm Undo")) {
-			return False;
-		}
-		ub->undoing = True;
-		setMoved_away(ub, True);
-		len = strlen(oldtext(ub));
-		if(amUndoing) {
-			setWas_null(ub, len == 0);
-		}
-		fst = first(ub);
-		lst = last(ub);
-		text_show_position(ub->text_w, fst);
-		XmTextReplace(ub->text_w, fst, lst, oldtext(ub));
+	if(changes_saved(ub) &&
+	   amUndoing &&
+	   !yes_no_dialog(ub->text_w, changes_saved_warning, "Confirm Undo")) {
+		return False;
+	}
+	ub->undoing = True;
+	setMoved_away(ub, True);
+	len = strlen(oldtext(ub));
+	if(amUndoing) {
+		setWas_null(ub, len == 0);
+	}
+	fst = first(ub);
+	lst = last(ub);
+	text_show_position(ub->text_w, fst);
+	XmTextReplace(ub->text_w, fst, lst, oldtext(ub));
 
-		if(len) {
-			XmTextSetSelection(ub->text_w, fst, fst+len, CurrentTime);
-		} else {
-			XmTextSetInsertionPosition(ub->text_w, fst);
-		}
+	if(len) {
+		XmTextSetSelection(ub->text_w, fst, fst+len, CurrentTime);
+	} else {
+		XmTextSetInsertionPosition(ub->text_w, fst);
+	}
 
-		ub->undoing = False;
-		if(!amUndoing && was_null(ub)) {
-			clearOldtext(ub);
-		}
+	ub->undoing = False;
+	if(!amUndoing && was_null(ub)) {
+		clearOldtext(ub);
 	}
 	return True;
 }
@@ -974,11 +959,11 @@ static Boolean undoRedo(
 void undo(XtPointer undo_ptr)
 {
 	UndoBuffer *ub = undo_ptr;
-	if(!ub->enabled) {
+	if(!ub->enabled || !ub->can_undo) {
 		return;
 	}
 
-	if(undoRedo(ub, True)) {
+	if(undo_redo(ub, True)) {
     		backtrack(ub);
 		setUndoRedo(ub);
 	}
@@ -988,12 +973,12 @@ void undo(XtPointer undo_ptr)
 void redo(XtPointer undo_ptr)
 {
 	UndoBuffer *ub = undo_ptr;
-	if(!ub->enabled) {
+	if(!ub->enabled || !ub->can_redo) {
 		return;
 	}
 
 	retrack(ub);
-	if(undoRedo(ub, False)) {
+	if(undo_redo(ub, False)) {
 		setUndoRedo(ub);
 	} else {
 		backtrack(ub);
