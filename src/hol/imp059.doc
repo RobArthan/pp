@@ -89,6 +89,8 @@ Added error 59018.
 Bug fix.
 \item [Issue 1.26 (13th August 1992)]
 Corrected error handling for interrupts.
+\item [Issue 1.27 (20th November 1992)]
+Make cache mechanisms more robust.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -525,29 +527,13 @@ in
 	(cache_theories := slst;
 	old)
 end);
-fun Ûget_cache_theoriesÝ (():unit) : string list = (!cache_theories);
+fun Ûlocal_get_cache_theoriesÝ (():unit) : string list = (!cache_theories);
 end;
 =TEX
 Now the derived cache theory functions:
 =SML
 local
 	open icl'Kernel;
-
-	fun aux [] = fail "current_cache_theory" 59002 []
-	| aux (a :: x) = ((
-	let	val {status = status, inscope = inscope, ...} = icl'get_theory_info a;
-	in
-		if status = TSNormal andalso inscope
-		then (let val pt = icl'get_pervasive_theory_name();
-			in
-				if (pt = a) orelse not(a mem (get_ancestors pt))
-				then a
-				else aux x
-			end)
-		else aux x
-	end)
-	handle (Fail _) => aux x);
-
 	fun aux1 [] = []
 	| aux1 (a :: x) = ((
 	let	val {inscope = inscope, ...} = icl'get_theory_info a;
@@ -558,13 +544,65 @@ local
 	end)
 	handle (Fail _) => aux1 x);
 in	
-fun Ûcurrent_cache_theoryÝ () = (
-	aux(get_cache_theories ())
-);
-fun Ûcurrent_cache_theoriesÝ () = (
-	aux1(get_cache_theories ())
+fun Ûget_cache_theoriesÝ () = (
+	aux1(local_get_cache_theories ())
 );
 end;
+=TEX
+=SML
+local
+	open icl'Kernel;
+
+	fun aux [] = Nil
+	| aux (a :: x) = ((
+	let	val {status = status, inscope = inscope, ...} = icl'get_theory_info a;
+	in
+		if status = TSNormal andalso inscope
+		then (let val pt = icl'get_pervasive_theory_name();
+			in
+				if (pt = a) orelse not(a mem (get_ancestors pt))
+				then Value a
+				else aux x
+			end)
+		else aux x
+	end)
+	handle (Fail _) => aux x);
+
+	fun aux1 [] = (
+	let	val {status = status,  ...} = icl'get_theory_info (get_current_theory_name());
+	in
+		if status = TSNormal
+		then (get_current_theory_name())
+		else fail "force_get_cache_theory" 59008 []
+	end)	
+	| aux1 (a :: x) = ((
+	let	val {status = status, inscope = inscope, ...} = icl'get_theory_info a;
+	in
+		if status = TSNormal
+		then (let val pt = icl'get_pervasive_theory_name();
+			in
+				if (pt = a) orelse not(a mem (get_ancestors pt))
+				then (new_parent a; a)
+				else aux1 x
+			end)
+		else aux1 x
+	end)
+	handle (Fail _) => aux1 x);
+in	
+fun Ûget_cache_theoryÝ () = (
+	case aux(local_get_cache_theories ()) of
+	Value a => a
+	| _ => fail "get_cache_theory" 59002 []
+);
+
+fun Ûforce_get_cache_theoryÝ () = (
+	case aux(local_get_cache_theories ()) of
+	Value a => a
+	| _ => aux1(local_get_cache_theories ())
+);
+end;
+=TEX
+=SML
 =TEX
 \subsection{Defining n-tuples}
 We will declare the method of getting the two keys 
@@ -623,19 +661,19 @@ let	val key = clp_key n;
 	| aux (thy :: rest) = (Value(get_thm thy key)
 		handle (Fail _) => aux rest);
 in
-		aux (current_cache_theories())
+		aux (get_cache_theories())
 end);
 =TEX
 The following declares a new n-tuple type, knowing that the type isn't
 in scope.
 =SML
 fun Ûdeclare_n_tupleÝ (n:int) :THM = (
-let	val cache_thy = current_cache_theory()
+let	val cache_thy = force_get_cache_theory()
 		handle complaint =>
-		pass_on complaint "current_cache_theory" "cached_labelled_product_rule";
+		pass_on complaint "force_get_cache_theory" "cached_labelled_product_rule";
 	val sideeffect = if is_theory_ancestor cache_thy was_thy
 		then ()
-		else fail "cached_labelled_product_rule" 59002 
+		else error "cached_labelled_product_rule" 59009
 			[fn () => cache_thy];
 	val last_thm = cached_labelled_product_rule (n-1);
 in let
@@ -748,19 +786,19 @@ let	val key = cup_key n;
 	| aux (thy :: rest) = (Value(get_thm thy key)
 		handle (Fail _) => aux rest);
 in
-		aux (current_cache_theories())
+		aux (get_cache_theories())
 end);
 =TEX
 The following declares a new n-tuple type, knowing that the type isn't
 in scope.
 =SML
 fun Ûdeclare_n_tupleÝ (n:int) :THM = (
-let	val cache_thy = current_cache_theory()
+let	val cache_thy = force_get_cache_theory()
 		handle complaint =>
-		pass_on complaint "current_cache_theory" "cached_unlabelled_product_rule";
+		pass_on complaint "force_get_cache_theory" "cached_unlabelled_product_rule";
 	val sideeffect = if is_theory_ancestor cache_thy was_thy
 		then ()
-		else fail "cached_unlabelled_product_rule" 59002 
+		else error "cached_unlabelled_product_rule" 59009 
 			[fn () => cache_thy];
 	val last_thm = cached_unlabelled_product_rule (n-1);
 in let
