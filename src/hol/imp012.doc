@@ -69,6 +69,8 @@ Added $do\_in\_theory$.
 Added $pending\_reset\_ksc\_functions$.
 \item [Issue 2.10 (18th February 1993)]
 $delete\_const$ will now delete constant at head of application.
+\item [Issue 2.11 (16th August 1993)]
+Added type, term and theorem compactification.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -326,7 +328,220 @@ in
 end
 handle complaint => pass_on complaint "icl'duplicate_theory" "duplicate_theory");
 =TEX
+\subsection{Compactification}
+This material is required in $save\_thm$ and thereafter and so is given next.
+=TEX
+Throughout the following we consider type variables just as a distinguished
+sort of nullary constructors. Constructors in general are represented
+as pairs: the name and its arity. The arity is required because deletion
+of types allows the user to define the same constructor with different
+arities at different times and we do not wish to have the extra complexity
+of restructuring the database when a type is deleted. The arities are
+not actually used in the algorithms except when two constructors are
+compared. We may therefore adopt the convention of distinguishing type
+variables from nullary constructors by pretending that their arity is $-1$.
+From now on, the discussion of the algorithm will usually use the term
+``constructor'' to include both type variables and constructors together
+with their arities. The following ML type definition reflects this convention.
+=SML
+type ÛCONÝ = string * int;
+=TEX
+
+We use search trees to represent partial functions from types to
+elements of type $'a$. The search trees are arbitrarily branching finite
+trees whose edges are labelled with constructors and whose nodes are optionally
+labelled with values of type $'a$. 
+
+For any type, $\tau$ consider the list, $c\sb{\tau}$ of constructors
+one encounters in a post-order (a.k.a. reverse Polish) traversal of the
+type. Since we consider constructors with the same name but different
+arities to be different, the function sending $\tau$ to $c\sb{\tau}$ is
+an injection (indeed, there is an obvious ``parsing'' function which is
+a left inverse to it). To look up the value associated with $\tau$ in
+a search tree, $T$, one looks for a path starting at the root of the tree
+whose sequence of edge labels is $c\sb{\tau}$; if there is such a path,
+then it ends at some node of the tree and the value associated
+with $\tau$ is the label on that node, if any; if there is no label, then
+$\tau$ is not in the domain of the function represented by $T$;
+in fact, the trees we will use are so constructed that unlabelled nodes
+only appear in positions which cannot be reached by such a path, so that
+there always will be a label on the node if the path to it exists.
+
+We will frequently need to carry out {\it in situ} updates of
+the children of a node. We therefore use the following ML data type to
+represent the trees.
+
+=SML
+datatype '_a ÛS_TREEÝ = ÛNodeÝ of ('_a OPT * (CON * '_a S_TREE) list) ref;
+=TEX
+Given a constructor and a reference to a node, $follow$ finds the
+edge leading out of the node labelled with the constructor (creating it if
+necessary) and updates the reference to refer to the node which that
+edge points to.
+=SML
+fun	ÛfollowÝ
+	(c : CON)
+	(r as (ref (Node (n as (ref (lab, nodes))))) : '_a S_TREE ref)
+	: unit = (
+	(	r := lassoc3 nodes c
+	)	handle	Fail _ =>
+	let	val new_node = Node (ref(Nil, []));
+	in	n := (lab, (c, new_node) :: nodes);
+		r := new_node
+	end
+);
+=TEX
+Mainly for clarity of exposition and for testing purposes, we have formulated
+the search trees to store an arbitrary imperative type. In practice,
+this type will be the type $TYPE$ of HOL types.
+
+Now we define the function to establish a value in a search tree.  In
+essence, by ``establishing'' a value in a tree, we mean the operation,
+parameterised by a type, $\tau$, and a value, $v$, which computes the
+value associated with $\tau$ in a search tree and returns that value if
+there is one, and otherwise, installs $\tau \mapsto v$ in the tree and
+returns $v$. In fact, we wish to install simultaneously values to
+be associated with $\tau$ and all its subtypes, and so,
+the operation is parameterised by a function
+which computes the values to be installed from a list of values
+retrieved from the tree and a constructor. In practice, this function
+will be essentially the constructor function $mk\_ctype$. For testing purposes, we
+cater for an arbitrary function so that the internals of the algorithm can
+be monitored more easily.
+
+The work of the function, $establish$ is done by an auxiliary function
+$aux$, which has a parameter which is a stack recording the
+nodes in the tree which have been reached for each of the super-types
+of the type, $\tau$, we are working on. Initially this is empty.  The
+root of the tree in which we are establishing values is supplied as a
+parameter.  As we pass through a constructor, a new entry
+referencing the root is pushed onto the stack to allow each recursive
+invocation of $establish$ to push forward the traversal for $\tau$ as
+well as the component type it is working on, so that when the component
+types have been processed by the recursive invocations, we are in the
+right position to find, or install, the value for $\tau$ in the tree.
+=SML
+fun ÛestablishÝ
+	(mk_v : (CON * '_a list) -> '_a) (root : '_a S_TREE) (ty : TYPE) : '_a = (
+let	fun aux (stk : '_a S_TREE ref list) (ty : TYPE) : '_a = (
+		let	val (con, args) = (
+				case dest_simple_type ty of
+					Vartype n => ((n, ~1), [])
+				|	Ctype(n, args) => ((n, length args), args)
+			);
+			val newpath = ref root;
+			val newstk = newpath :: stk;
+			val rs = map (aux newstk) args;
+			val side_effect = map (follow con) newstk;
+			val Node(n as (ref(v, nodes))) = !newpath;
+		in	case v of
+				Value x => x
+			|	Nil => 
+					let	val res = mk_v(con, rs);
+					in	n := (Value res, nodes);
+						res
+					end
+		end
+	);
+in	aux [] ty
+end
+);
+=TEX
+=SML
+val compactification_cache : TYPE S_TREE = Node(ref (Nil, []));
+=TEX
+N.b. the following assumes a check that the cache is an acyclic
+graph, and might loop, if not; this should never happen in practice
+given the way that the trees are constructed by $establish$ and
+by $set\_compatification\_cache$.
+The algorithm only delivers the types stored in the leaf nodes of the tree.
+This is because types stored at internal nodes are necessarily duplicated
+elsewhere in the tree.
+=SML
+fun Ûget_compactification_cacheÝ () : TYPE list = (
+	let	fun aux (Node (ref(_, (cts as (_ :: _))))) = (
+			flat (map (aux o snd) cts)
+		) | aux (Node (ref(Value ty, []))) = [ty]
+		|   aux (Node (ref(Nil, []))) = [];	(* shouldn't happen *)
+	in	aux compactification_cache
+	end
+);
+=TEX
+=SML
+fun Ûmk_tyÝ ((n, i), tys) = (
+	if i = ~1
+	then mk_vartype n
+	else mk_ctype(n, tys)
+);
+=TEX
+=SML
+val Ûcompact_typeÝ : TYPE -> TYPE = establish mk_ty compactification_cache;
+=TEX
+=SML
+fun Ûclear_compactification_cacheÝ () : unit = (
+	let	val Node rv = compactification_cache;
+	in	rv := (Nil, [])
+	end
+);
+=TEX
+=SML
+fun Ûset_compactification_cacheÝ (tys : TYPE list) : unit = (
+	map compact_type tys; ()
+);
+=TEX
+=SML
+fun Ûcompact_termÝ (tm : TERM) = (
+	case dest_simple_term tm of
+		App(f, a) => mk_app(compact_term f, compact_term a)
+	|	Const (n, ty) => mk_const (n, compact_type ty)
+	|	Var (n, ty) => mk_var(n, compact_type ty)
+	|	SimpleÌ(v, b) => mk_simple_Ì(compact_term v, compact_term b)
+);
+=TEX
+Perhaps, the following should profile the inference it does. At the moment
+it does not. It assumes two things about the implementation of the primitive
+rules: {\em(i)} $´\_intro$ must construct the conclusion of its result theorem
+using the argument rather than the eliminated assumption (this is virtually
+guaranteed by its specification); and, {\em(ii)}, $subst\_rule$ should
+take the conclusion of its result theorem to be the template argument
+if the list of substitutions is empty (the current implementation does
+indeed do this).
+=SML
+fun Ûcompact_thmÝ (thm : THM) = (
+	let	val (asms, conc) = dest_thm thm;
+		val newasms = map compact_term asms;
+		val newconc = compact_term conc;
+		val thm2 = fold (uncurry icl'´_intro) newasms thm;
+		fun aux [] th = th
+		|   aux (asm :: more) th = aux more (icl'´_elim th (icl'asm_rule asm));
+		val thm3 = aux newasms thm2;
+		val thm4 = icl'subst_rule [] newconc thm3;
+	in	thm4
+	end
+);
+=TEX
+=SML
+val Ûcompactification_maskÝ : int ref = ref 0;
+val side_effect =
+	(new_int_control{name = "compactification_mask",
+		check = fun_true,
+		control=compactification_mask,
+		default = (fn () => 0)}) handle Fail _ => ();
+=TEX
+=SML
+fun Ûcompactification_mask_bitÝ (i : int) : bool = (
+	(!compactification_mask div i) mod 2 = 1
+);
+=TEX
+=SML
+fun Ûcond_compactÝ (i : int) (f : 'a -> 'a) (x : 'a) : 'a = (
+	if	compactification_mask_bit i
+	then	x
+	else	f x
+);
+=TEX
 \subsection{Operations on Theory Contents}
+
 $dest\_thm$ passes through without problem.
 =SML
 val ÛasmsÝ : THM -> TERM list = fst o dest_thm;
@@ -345,9 +560,10 @@ end);
 =SML
 fun Ûsave_thmÝ (key : string, thm : THM) : THM = (
 let	val sideeffect = notify_before_ksc (SaveThm (key, thm));
-	val saved = icl'list_save_thm ([key], thm);
+	val thm' = cond_compact 16 compact_thm thm;
+	val saved = icl'list_save_thm ([key], thm');
 in
-	notify_on_ksc (SaveThm (key, thm));
+	notify_on_ksc (SaveThm (key, thm'));
 	saved
 end
 handle complaint => pass_on complaint "icl'list_save_thm" "save_thm");
@@ -355,9 +571,10 @@ handle complaint => pass_on complaint "icl'list_save_thm" "save_thm");
 =SML
 fun Ûlist_save_thmÝ (keys : string list, thm : THM) : THM = (
 let	val sideeffect = notify_before_ksc (ListSaveThm (keys, thm));
-	val saved = icl'list_save_thm (keys, thm);
+	val thm' = cond_compact 16 compact_thm thm;
+	val saved = icl'list_save_thm (keys, thm');
 in
-	notify_on_ksc (ListSaveThm (keys, thm));
+	notify_on_ksc (ListSaveThm (keys, thm'));
 	saved
 end
 handle complaint => pass_on complaint "icl'list_save_thm" "list_save_thm");
@@ -554,9 +771,10 @@ end);
 fun Ûnew_axiomÝ (keys : string list, tm : TERM) : THM = (
 let	val sideeffect = notify_before_ksc (NewAxiom ((keys, tm),
 		(icl'Kernel.icl'asm_rule mk_t)));
-	val saved = icl'new_axiom (keys, tm);
+	val tm' = cond_compact 1 compact_term tm;
+	val saved = icl'new_axiom (keys, tm');
 in
-	notify_on_ksc (NewAxiom ((keys, tm),saved));
+	notify_on_ksc (NewAxiom ((keys, tm'),saved));
 	saved
 end
 handle complaint => pass_on complaint "icl'new_axiom" "new_axiom");
@@ -564,9 +782,10 @@ handle complaint => pass_on complaint "icl'new_axiom" "new_axiom");
 =SML
 fun Ûnew_constÝ (cnm : string, ty : TYPE) : TERM = (
 let	val sideeffect = notify_before_ksc (NewConst (cnm, ty));
-	val saved = icl'new_const (cnm, ty);
+	val ty' = cond_compact 4 compact_type ty;
+	val saved = icl'new_const (cnm, ty');
 in
-	notify_on_ksc (NewConst (cnm, ty));
+	notify_on_ksc (NewConst (cnm, ty'));
 	saved
 end
 handle complaint => pass_on complaint "icl'new_const" "new_const");
@@ -620,9 +839,10 @@ end);
 fun Ûsimple_new_defnÝ (keys : string list, cnm : string, tm : TERM) : THM = (
 let	val sideeffect = notify_before_ksc (SimpleNewDefn ((keys, cnm, tm), 
 		(icl'Kernel.icl'asm_rule mk_t)));
-	val saved = icl'new_defn (keys, cnm, tm);
+	val tm' = cond_compact 32 compact_term tm;
+	val saved = icl'new_defn (keys, cnm, tm');
 in
-	notify_on_ksc (SimpleNewDefn ((keys, cnm, tm), saved));
+	notify_on_ksc (SimpleNewDefn ((keys, cnm, tm'), saved));
 	saved
 end
 handle complaint => pass_on complaint "icl'new_defn" "simple_new_defn");
@@ -632,9 +852,10 @@ fun Ûnew_type_defnÝ (keys : string list, name : string,
 	typars : string list, defthm : THM): THM = (
 let	val sideeffect = notify_before_ksc (NewTypeDefn ((keys, name, typars, defthm), 
 		(icl'Kernel.icl'asm_rule mk_t)));
-	val saved = icl'new_type_defn (keys, name, typars, defthm);
+	val defthm' = cond_compact 4 compact_thm defthm;
+	val saved = icl'new_type_defn (keys, name, typars, defthm');
 in
-	notify_on_ksc (NewTypeDefn ((keys, name, typars, defthm), saved));
+	notify_on_ksc (NewTypeDefn ((keys, name, typars, defthm'), saved));
 	saved
 end
 handle complaint => pass_on complaint "icl'new_type_defn" "new_type_defn");
@@ -643,9 +864,10 @@ handle complaint => pass_on complaint "icl'new_type_defn" "new_type_defn");
 fun Ûnew_specÝ (keys : string list, ndef : int, defthm : THM) : THM = (
 let	val sideeffect = notify_before_ksc (NewSpec ((keys, ndef, defthm), 
 		(icl'Kernel.icl'asm_rule mk_t)));
-	val saved = icl'new_spec (keys, ndef, defthm);
+	val defthm' = cond_compact 8 compact_thm defthm;
+	val saved = icl'new_spec (keys, ndef, defthm');
 in
-	notify_on_ksc (NewSpec ((keys, ndef, defthm), saved));
+	notify_on_ksc (NewSpec ((keys, ndef, defthm'), saved));
 	saved
 end
 handle complaint => pass_on complaint "icl'new_spec" "new_spec");
