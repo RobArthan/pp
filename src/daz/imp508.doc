@@ -109,6 +109,19 @@ type ÛCN_ENVÝ = Z_ID -> (TYPE * ENV_INFO) OPT;
 =TEX
 
 \section{MISCELLANEOUS SUPPORTING FUNCTIONS}
+
+When a construct is found for which is not supported formally, we choose to continue processing informally rather that halt the processing of the literate script. The local exception $Informal$ is raised if this condition is detected. This is caught by $trans\_exp1$ which returns an optional value and is $Nil$ if continuing to process informally. 
+=SML
+exception ÛInformalÝ;
+
+fun Ûgo_informalÝ
+		(s : string)
+		(i : int)
+		(fns : (unit -> string) list) : 'a = (
+	comment s i fns;
+	raise Informal
+);
+=TEX
 =SML
 fun zid1 Û^^Ý zid2 = (
 	zid1^"v"^zid2
@@ -117,13 +130,14 @@ fun zid1 Û^^Ý zid2 = (
 =SML
 fun Ûtrans_rangeÝ ((RRange range) : EXP RANGE) : EXP RANGELOHI = (
 	range
-) | trans_range _ = fail "trans_range" 508001
-		[fn()=>"Cannot formally reason about range attributes"];
+) | trans_range _ = go_informal "trans_range" 508020 [];
 =TEX
 =SML
 val ÛheadÝ = hd
 and ÛlastÝ = hd o rev;
 =TEX
+
+
 \section{SUPPORT FOR Z ABSTRACT SYNTAX}
 
 \subsection{Z Unary Expressions}
@@ -182,7 +196,7 @@ fun ÛzidÝ (env : CN_ENV) (id : Z_ID) : Z_EXP = (
 	case env id of
 	Value (ty, EIEnvVar _) => mk_z_lvar(id, ty, [])
 	|Value (ty, _) => mk_z_gvar(id, ty, [])
-	|Nil => fail "zid" 508001 [fn()=>("undeclared variable: "^id)]
+	|Nil => fail "zid" 508021 [fn()=>id]
 );
 =TEX
 =SML
@@ -251,7 +265,8 @@ fun Ûz_set_minusÝ (exp1 : Z_EXP, exp2 : Z_EXP) : Z_EXP = (
 =SML
 fun Ûz_set_compÝ (zdecl : Z_DECL, p : Z_EXP) : Z_EXP = (
 let	val dec = (fst o dest_z_dec) zdecl
-			handle _ => fail "z_set_comp" 505001 [fn()=>"invalid declaration"];
+			handle _ =>
+			  fail "z_set_comp" 505023 [fn()=>string_of_term zdecl];
 	val zdexp = case dec of
 		[dec] => dec
 		|_ => mk_z_tuple dec;
@@ -303,7 +318,7 @@ let	fun non_empty (e::rest) = (
 	fun aux (exps as e1::e2::rest) = (
 		cn_subst [(e1, "a"), (aux (e2::rest), "b")] z_union_term
 	) | aux [e] = e
-	  | aux _ = fail "z_many_union" 508001 [fn()=>"weird error"];
+	  | aux _ = fail "z_many_union" 508024 [];
 in
 	(aux o non_empty) exps
 end
@@ -313,7 +328,7 @@ end
 fun Ûz_muÝ (env : CN_ENV) (id : Z_ID, p : Z_PRED) : Z_EXP = (
 let	val ty = case env id of
 		Value (ty, _) => ty
-		|Nil =>	fail "z_mu" 508001 [fn()=>("undeclared variable: "^id)];
+		|Nil =>	fail "z_mu" 508021 [fn()=>id];
 
 	val dexp = mk_z_gvar(id, ty, []);
 	val decl = mk_z_decl[mk_z_schema_dec (dexp, "")];
@@ -367,7 +382,7 @@ val Ûz_andÝ : (Z_PRED * Z_PRED) -> Z_PRED = mk_z_±;
 fun Ûz_many_andÝ ((exps as e1::e2::rest) : Z_PRED list) : Z_PRED = (
 	mk_z_± (e1, z_many_and (e2::rest))
 ) | z_many_and [e] = e
-  | z_many_and _ = fail "z_many_and" 508001 [fn()=>"weird error"];
+  | z_many_and _ = fail "z_many_and" 508024 [];
 =TEX
 =SML
 val Ûz_elemÝ : (Z_EXP * Z_EXP) -> Z_EXP = mk_z_;
@@ -484,6 +499,7 @@ fun Ûrecog_decimal_partÝ (dec as {base,m,n,expon} : NUMERIC, (c::rest) : NUMBERS
 	(other, [])
 );
 =TEX
+The failure case below is caught by $trans\_int$.
 =SML
 fun Ûrecog_based_dec_partÝ (nb as {base,m,n,expon} : NUMERIC, (c::rest) : NUMBERS)
 		: (NUMERIC * NUMBERS) = (
@@ -496,10 +512,10 @@ fun Ûrecog_based_dec_partÝ (nb as {base,m,n,expon} : NUMERIC, (c::rest) : NUMBER
 		|_ =>	(nb, c::rest)
 
 ) | recog_based_dec_part (other, []) = (
-	fail "recog_based_dec_part" 508001 [fn()=>"incomplete based integer"]
+	fail "trans_int" 0 []
 )
 =TEX
-
+The failure case below is caught by $trans\_int$.
 =SML
 and Ûrecog_basedÝ (nb as {base,m,n,expon} : NUMERIC, (c::rest) : NUMBERS)
 		: (NUMERIC * NUMBERS) = (
@@ -513,7 +529,7 @@ and Ûrecog_basedÝ (nb as {base,m,n,expon} : NUMERIC, (c::rest) : NUMBERS)
 		|_ =>	(nb, c::rest)
 
 ) | recog_based (other, []) = (
-	fail "recog_based" 508001 [fn()=>"incomplete based integer"]
+	fail "recog_based" 0 []
 )
 =TEX
 
@@ -545,6 +561,7 @@ val Ûextended_digitsÝ : (string * int) list = (
 		(interval 0 15)
 );
 =TEX
+The failure case below is caught by $trans\_int$.
 =SML
 fun Ûbased_to_intÝ (10 : int) (sl : NUMBERS) = (
 	(nat_of_string o implode) sl handle _ => 0
@@ -557,7 +574,7 @@ let	val valid = extended_digits to (base-1);
 	) | aux _ = 0;
 in
 	(aux o rev) sl' handle _ =>
-			fail "based_to_int" 508001 [fn()=>"invalid base digit"]
+		fail "based_to_int" 0 []
 end);
 =TEX
 =SML
@@ -574,6 +591,7 @@ end);
 fun ÛbasepowÝ (_ : int) (0 : int) : int = 1
   | basepow base n = base * basepow base (n-1);
 =TEX
+The failure case below is caught by $trans\_int$.
 =SML
 fun Ûconvert_base_expÝ ((base, m, expon) : (int*int*int)) : int = (
 	if expon > 0
@@ -585,7 +603,7 @@ fun Ûconvert_base_expÝ ((base, m, expon) : (int*int*int)) : int = (
 			then
 				res
 			else
-				fail "convert_base_exp" 508001 [fn()=>"cannot convert"]
+				fail "convert_base_exp" 0 []
 		end
 );
 =TEX
@@ -598,6 +616,7 @@ fun Ûno_of_digits_inÝ (base : int) (n : int) : int = (
 		1
 );
 =TEX
+The failure case below is caught by $trans\_int$.
 =SML
 fun Ûconvert_base_dec_expÝ ((base, m, n, expon) : (int*int*int*int)) : int = (
 let	val nd = (no_of_digits_in base n) - 1;
@@ -608,7 +627,7 @@ in
 	then
 		 convert_base_exp (base, (m * offset + n - offset), df)
 	else
-		fail "nil_aux" 508001 [fn()=>"cannot convert"]
+		fail "nil_aux" 0 []
 end);
 =TEX
 In the following, ``1'' is prefixed to the decimal part in order to preserve leadnig zeros when converting to an integer. It is removed in $convert\_base\_dec\_exp$.
@@ -634,8 +653,9 @@ in (* of local ... in *)
 =TEX
 =SML
 fun Ûtrans_intÝ (i : INT_LIT) : int = (
-	(numeric_to_int_lit o fst o recog_numeric)
+	( (numeric_to_int_lit o fst o recog_numeric)
 		({base=[],m=[],n=[],expon=[]}, explode i)
+	) handle Fail _ => fail "trans_int" 508025 [fn()=>i]
 );
 =TEX
 =SML
@@ -711,13 +731,11 @@ let	fun aux_range (ch::rest) = (
 		ACAggChoiceRange (DRRange(RRange{lo,hi})) =>
 			z_rng(trans_exp env lo, trans_exp env hi)::aux_range rest
 		|ACAggChoiceRange (DRRange _) =>
-			fail "trans_named_assoc" 508001
-				[fn()=>"range attributes not supported"] 
+			go_informal "trans_named_assoc" 508020 []
 		|ACAggChoiceRange (DRConstrained{range=RRange{lo,hi},...}) =>
 			z_rng(trans_exp env lo, trans_exp env hi)::aux_range rest
 		|ACAggChoiceRange (DRConstrained _) =>
-			fail "trans_named_assoc" 508001
-				[fn()=>"range attributes not supported"] 
+			go_informal "trans_named_assoc" 508020 []
 		|_ => aux_range rest
 	) | aux_range _ = [];
 	fun aux_singles (ch::rest) = (
@@ -753,8 +771,7 @@ and Ûretrieve_record_componentsÝ (env : CN_ENV) (tmark : TMARK) :
 		(TMARK * TYPE) list = (
 	(dest_z_schema_type o dest_z_power_type o type_of o (zid env))
 	tmark
-	handle _ => fail "retrieve_record_components" 508001
-				[fn()=>tmark^" is not a record type"]
+	handle _ => fail "retrieve_record_components" 508026 [fn()=>tmark]
 )
 =TEX
 =SML
@@ -767,8 +784,7 @@ let	val record_components = retrieve_record_components env tmark;
 		|Nil => env id
 	);
 	val ap_components = combine ((map fst) record_components) comps
-		handle _ => fail "exp_rec_agg_pos" 508001
-			[fn()=>"too few/too many components for record: "^tmark];
+		handle _ => fail "exp_rec_agg_pos" 508027 [fn()=>tmark];
 	val zp = z_many_and (
 		map
 		(fn (decl_i_var, comps_i) =>
@@ -790,8 +806,7 @@ let	fun named_assoc_to_id_exs {choice, comp} = (
 			case ch of
 			ACAggChoiceSingle exp => (
 					(name_to_tmark exp, comp)::aux rest comp
-			) |_ => fail "id_exs_of_named_assocs" 508001
-					[fn()=>"range attributes not supported"]
+			) |_ => go_informal "exp_rec_agg_named" 508020 []
 		) | aux _ _ = [];
 	in
 		aux choice comp 
@@ -828,7 +843,7 @@ and Ûtrans_unary_opÝ (uop : UNARY_OP) = (
 	UOSparkUnaryMinus => z_unary_minus
 	|UOSparkNot => z_bool_not
 	|UOSparkAbs => z_abs
-	|_ => fail "trans_unary_op" 508001 []
+	|USSparkUnaryAdd => fail "trans_unary_op" 508028 []
 )
 =TEX
 =SML
@@ -844,9 +859,11 @@ and Ûexp_unary_expÝ (env : CN_ENV) ({uop, right} : EXP UNARY_EXP) : Z_EXP = (
 and Ûtrans_bin_opÝ (bop : BIN_OP) = (
 	case bop of
 	BOSparkAnd => z_bool_and
-	|BOSparkAndThen => fail "trans_bin_op" 508001 [fn()=>"not supported"]
+	|BOSparkAndThen =>
+		go_informal "trans_bin_op" 508029 []
 	|BOSparkOr => z_bool_or
-	|BOSparkOrElse => fail "trans_bin_op" 508001 [fn()=>"not supported"]
+	|BOSparkOrElse =>
+		go_informal "trans_bin_op" 508030 []
 	|BOSparkXor => z_bool_xor
 	|BOSparkEq => z_bool_eq
 	|BOSparkNotEq => z_bool_noteq
@@ -863,7 +880,7 @@ and Ûtrans_bin_opÝ (bop : BIN_OP) = (
 	|BOSparkExpon => z_expon
 	|BOSparkMem => z_bool_mem
 	|BOSparkNotMem => z_bool_notmem
-	|BOSparkConcat => fail "trans_bin_op" 508001 [fn()=>"not supported"]
+	|BOSparkConcat => go_informal "trans_bin_op" 508031 []
 )
 =TEX
 =SML
@@ -958,16 +975,19 @@ and Ûtrans_expÝ (env : CN_ENV) ((EId id) : EXP) : Z_EXP = exp_id env id
   | trans_exp env (ESelectedComp sc) = exp_selected_comp env sc
   | trans_exp env (EFunCall fc) = exp_fun_call env fc
   | trans_exp env (EAuxiliaryExp ae) = exp_auxiliary_exp ae
-  | trans_exp env (EQualifiedExp qe) = 
-	fail "trans_exp" 508001 [fn()=>"qualified expression syntax not supported here"]
+  | trans_exp env (EQualifiedExp qe) = fail "trans_exp" 508032 []
   | trans_exp env (EBracketed e) = trans_exp env e
-  | trans_exp env (EStringLiteral c) =
-	fail "trans_exp" 508001 [fn()=>"string literals not supported"]
-  | trans_exp env (ECharacterLiteral c) =
-	fail "trans_exp" 508001 [fn()=>"character literals not supported"]
+  | trans_exp env (EStringLiteral c) = go_informal "trans_exp" 508033 []
+  | trans_exp env (ECharacterLiteral c) = go_informal "trans_exp" 508034 []
 ;
 =TEX
-
+The following variant of $trans\_exp$ returns an optional Z expression. If the SPARK expression can only be handled informally then a warning message is printed out and $Nil$ is returned.
+=SML
+fun Ûtrans_exp1Ý (env : CN_ENV) (exp : EXP) : Z_EXP OPT = (
+	Value (trans_exp env exp)
+	handle Informal => Nil
+);
+=TEX
 \section{TRANSLATING SPARK BASIC DECLARATIONS}
 
 \subsection{Translating Constants}
@@ -1039,8 +1059,7 @@ fun Ûbasic_decl_con_arrayÝ (env : CN_ENV) (name : ID) (td : ARRAY_DEF) = (
 let	val {index=index, comp=comp} = td;
 	val ind = case index of
 			[ind] => ind
-			|_ => fail "basic_decl_con_array" 505001
-				[fn()=>"multi-dimensional arrays not yet formalised"];
+			|_ => go_informal "basic_decl_con_array" 508035 [];
 	val zname = trans_id name;
 	val zindex = trans_id ind;
 	val zcomp = trans_id comp;
@@ -1054,8 +1073,7 @@ fun Ûbasic_decl_uncon_arrayÝ (env : CN_ENV) (name : ID) (td : ARRAY_DEF) = (
 let	val {index=index, comp=comp} = td;
 	val ind = case index of
 			[ind] => ind
-			|_ => fail "basic_decl_uncon_array" 505001
-				[fn()=>"multi-dimensional arrays not yet formalised"];
+			|_ => go_informal "basic_decl_uncon_array" 508035 []
 	val zname = trans_id name;
 	val zindex = trans_id ind;
 	val zcomp = trans_id comp;
@@ -1077,7 +1095,7 @@ fun Ûvar_decls_in_rec_type_defÝ ({comps} : COMPONENT RECORD_TYPE_DEF)
 let		fun aux component = (
 		case component of
 			CDeclaration vardecls => vardecls
-		|	_ => fail "rec_vars" 508001 [fn()=>"variant records not supported"]
+		|	_ => fail "var_decls_in_rec_type_def" 508036 []
 	);
 in
 	(flat o (map aux)) comps
@@ -1143,7 +1161,7 @@ fun Ûbasic_decl_subtype_range_conÝ (env : CN_ENV) (name : ID) (tmark : TMARK)
 let	val (lo, hi) =
 		case range of
 		RRange{lo,hi} => (lo, hi)
-		|_ => fail "range_con_attrib" 508001 [fn()=>"range attributes not supported"];
+		|_ => go_informal "basic_decl_subtype_range_con" 508020 [];
 	val zname = trans_id name;
 	val ztmark = trans_id tmark;
 in
@@ -1160,8 +1178,7 @@ let	val zname = trans_id name;
 	val index = map name_to_tmark ci;
 	val ind = case index of
 			[ind] => ind
-			|_ => fail "basic_decl_subtype_index_con" 505001
-				[fn()=>"multi-dimensional arrays not yet formalised"];
+			|_ => go_informal "basic_decl_subtype_index_con" 508035 []
 	val zindex = trans_id ind;
 	val zexp = zid env (trans_id tmark);
 	val var =  "UNC";
@@ -1196,19 +1213,19 @@ fun Ûtrans_basic_declÝ (env : CN_ENV) ((BDConstDecl cd) : BASIC_DECL)
 ) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CIndex ci},...}) = (
 	basic_decl_subtype_index_con env name tmark ci
 ) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CFloating _},...}) = (
-	fail "trans_basic_decl" 508001 [fn()=>"floating point not supported"]
+	go_informal "trans_basic_decl" 508037 []
 ) | trans_basic_decl env (BDSubtypeDecl {name,sub_ind={tmark,con=CFixed _},...}) = (
-	fail "trans_basic_decl" 508001 [fn()=>"fixed point not supported"]
+	go_informal "trans_basic_decl" 508038 []
 ) | trans_basic_decl env (BDTypeDecl {type_def=TDFloatingTypeDef _,...}) = (
-	fail "trans_basic_decl" 508001 [fn()=>"floating point not supported"]
+	go_informal "trans_basic_decl" 508037 []
 ) | trans_basic_decl env (BDTypeDecl {type_def=TDFixedTypeDef _,...}) = (
-	fail "trans_basic_decl" 508001 [fn()=>"fixed point not supported"]
+	go_informal "trans_basic_decl" 508038 []
 ) | trans_basic_decl env (BDDeferredConstDecl _) = (
-	fail "trans_basic_decl" 508001 [fn()=>"deferred constants not supported"]
+	go_informal "trans_basic_decl" 508039 []
 ) | trans_basic_decl env (BDVarDecl _) = (
-	fail "trans_basic_decl" 508001 [fn()=>"unexpected variable declaration"]
+	go_informal "trans_basic_decl" 508040 []
 ) | trans_basic_decl env (BDPrivateTypeDecl _) = (
-	fail "trans_basic_decl" 508001 [fn()=>"private types not supported"]
+	go_informal "trans_basic_decl" 508041 []
 );
 =TEX
 
@@ -1220,15 +1237,14 @@ fun Ûnamed_assocs_to_expsÝ (names : ID list)
 let	val lns = length ns;
 	val table =	if lns = length names
 			then	combine names (interval 0 (length ns - 1))
-			else	fail "named_assocs_to_exps" 508001
-					[fn()=>"missing or duplicate entries"];
+			else	fail "named_assocs_to_exps" 508043 [];
 	fun aux1 ((ACAggChoiceSingle exp)::rest) = (
 		(	lassoc3 table (name_to_tmark exp)
-				handle _ => fail "named_assocs_to_exps" 508001
-				[fn()=>"entry not present in declartion: "^name_to_tmark exp]
+				handle _ => fail "named_assocs_to_exps" 508044
+					[fn()=>name_to_tmark exp]
 		)::aux1 rest
 	) | aux1 ((ACAggChoiceRange _)::_) = (
-		fail "named_assocs_to_exps" 508001 [fn()=>"range not allowed here"]
+		fail "named_assocs_to_exps" 508045 []
 	) | aux1 _ = [];
 	fun aux2 ({choice=cs,comp}::rest) = (
 	let	val chmap = map (fn choice => (choice, comp))(aux1 cs);
@@ -1243,8 +1259,7 @@ let	val lns = length ns;
 		then
 			exp::aux3 (count+1) rest
 		else
-			fail "named_assocs_to_exps" 508001
-				[fn()=>"missing or duplicate entries"]
+			fail "named_assocs_to_exps" 508043 []
 	) | aux3 _ _ = [];
 in
 	aux3 0 nssorted
@@ -1320,8 +1335,7 @@ and Ûadjust_agg_named_othersÝ (env : CN_ENV) ({tmark=t, agg_named=a, others=oth}
 let	val adjagg = case adjust_agg_named1 env t a of
 		EArrayAggNamed ag => (
 			ag
-		) | _ => fail "adjust_agg_named_others" 508001
-				[fn()=>"others part not allowed in a record aggregate"]
+		) | _ => fail "adjust_exp" 508046 []
 in
 	EArrayAggNamedOthers{tmark=t, agg_named=adjagg,others=adjust_others env oth}
 end
@@ -1359,16 +1373,14 @@ in
 	end
 
 	) |(_, EArrayAggNamed _) => (
-		fail "adjust_indexed_comp" 508001
-			[fn()=>"can't index using a named association"]
+		fail "adjust_exp" 508047 [fn()=>name_to_tmark p]
 	) |(Value (_, _), EArrayAggPos{comps=[comp],...}) => (
 		EIndexedComp{prefix=adjust_exp env p, index = adjust_exp env comp}
 	) |(Value (_, _), EArrayAggPos _) => (
-		fail "adjust_indexed_comp" 508001
-			[fn()=>"can't do multi-dimensional arrays yet"]
+		go_informal "adjust_indexed_comp" 508035
+			[]
 	) |_ => (
-		fail "adjust_indexed_comp" 508001
-			[fn()=>"undeclared variable: "^prename]
+		fail "adjust_indexed_comp" 508021 [fn()=>prename]
 
 	)
 end
@@ -1392,8 +1404,7 @@ and Ûadjust_qualified_expressionÝ
 	)| EArrayAggNamedOthers {agg_named, others,...} => (
 		adjust_agg_named_others env 
 			{agg_named=agg_named, others=others, tmark=t}
-	)|_ => fail "adjust_qualified_exp" 508001
-				[fn()=>"badly formed qualified expression"]
+	)|_ => fail "adjust_qualified_exp" 508042 []
 )
 =TEX
 In the following, both named and positional record aggregates and function calls
