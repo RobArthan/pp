@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2003/05/21 11:30:11 $ $Revision: 2.23 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2003/05/21 12:06:21 $ $Revision: 2.24 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -683,7 +683,7 @@ void startup_dialog(Widget w, char **cmd_line, char **file_name)
 			NULL);
 		XmStringFree(s);
 	} else {
-		dialog = XmCreateQuestionDialog(w, "startup-dialog", NULL, 0);
+		dialog = XmCreateMessageDialog(w, "startup-dialog", NULL, 0);
 		s = XmStringCreateSimple("   OK   ");
 		XtVaSetValues(dialog,
 			XmNokLabelString,	s,
