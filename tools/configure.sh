@@ -9,7 +9,13 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.17 2002/10/30 13:03:15 rda Exp rda $
+# $Id: configure.sh,v 1.18 2002/10/31 10:19:57 rda Exp rda $
+#
+# configure has one command line option:
+#
+# -p               - supply this option if you are patching an
+#                    existing installation (prevents it from
+#                    overwriting your documentation index page).
 #
 # Environment variables may be used to force various decisions:
 #
@@ -195,6 +201,17 @@ then	if	which dvips >/dev/null 2>&1
 	fi
 fi
 #
+# Check the command line option:
+#
+if	[ "$1" = "-p" ]
+then	PATCHING=y
+	echo 'The HTML roadmap to the documents will not be re-installed'
+elif	[ "$1" = "" ]
+then	PATCHING=n
+	echo 'The HTML roadmap to the documents will be installed'
+else	give_up 'usage [environment variable settings] ./configure [-p]'
+fi
+#
 # Build the script
 #
 out(){
@@ -284,21 +301,24 @@ then
 		out "done >$PPTARGETDIR/dvips.log 2>&1"
 	fi
 fi
-out "echo Generating HTML roadmap to the documents: $PPTARGETDIR/doc/index.html"
-if	[ "$DOPDF" = y ]
-then	HTMLEDIT='-e /@ext@/s/@ext@/pdf/g'
-elif	[ "$DOPS" = y ]
-then	HTMLEDIT='-e /@ext@/s/@ext@/ps/g'
-else	HTMLEDIT='-e /@ext@/s/@ext@/dvi/g'
-fi
-for f in  $SUPPORTEDTARGETS
-do	
-	if [ "`eval echo '$'$f`" != y ]
-	then	HTMLEDIT="$HTMLEDIT -e /@$f@/d"
-	else	HTMLEDIT="$HTMLEDIT -e /@$f@/s/@$f@//g"
+if	[ "$PATCHING" = n ]
+then
+	out "echo Generating HTML roadmap to the documents: $PPTARGETDIR/doc/index.html"
+	if	[ "$DOPDF" = y ]
+	then	HTMLEDIT='-e /@ext@/s/@ext@/pdf/g'
+	elif	[ "$DOPS" = y ]
+	then	HTMLEDIT='-e /@ext@/s/@ext@/ps/g'
+	else	HTMLEDIT='-e /@ext@/s/@ext@/dvi/g'
 	fi
-done
-out "sed $HTMLEDIT  <$CWD/src/index.html.src > $PPTARGETDIR/doc/index.html"
-out "cp $CWD/src/lemma1.gif $CWD/src/newpplogo.gif $PPTARGETDIR/doc"
+	for f in  $SUPPORTEDTARGETS
+	do	
+		if [ "`eval echo '$'$f`" != y ]
+		then	HTMLEDIT="$HTMLEDIT -e /@$f@/d"
+		else	HTMLEDIT="$HTMLEDIT -e /@$f@/s/@$f@//g"
+		fi
+	done
+	out "sed $HTMLEDIT  <$CWD/src/index.html.src > $PPTARGETDIR/doc/index.html"
+	out "cp $CWD/src/lemma1.gif $CWD/src/newpplogo.gif $PPTARGETDIR/doc"
+fi
 out "echo Installation complete"
 echo "If you are happy with these settings, now run ./install to install ProofPower."
