@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xpp.c,v 2.17 2004/01/25 11:09:57 rda Exp rda $
+ * $Id: xpp.c,v 2.18 2004/01/25 15:42:16 rda Exp rda $
  *
  * xpp.c -  main for the X/Motif ProofPower
  *
@@ -447,7 +447,7 @@ static char *get_command_line(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
-	argv0 = argv[0];
+	char *argv0 = argv[0];
 	char **retry_args;
 	int i;
 	retry_args = (char **) XtMalloc((argc+2)*(sizeof(char*)));
