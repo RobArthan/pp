@@ -100,8 +100,10 @@ Added $z\_schema\_pred\_conv1$.
 Fixed consequence of changes elsewhere.
 \item[Issue 1.33 (10th December 1992)]
 Global rename from wrk038.doc issue 1.9.
-\item[Issue 1.27 (18th December 1992)]
+\item[Issue 1.34 (18th December 1992)]
 Added $z\_pred\_decl\_conv$.
+\item[Issue 1.35 (14th January 1993)]
+Added treatment of generic predicates.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -3436,7 +3438,81 @@ val €z_strip_tac› : TACTIC = (fn gl =>
 	pass_on complaint "strip_tac" "z_strip_tac"
 );
 =TEX
-
+\subsection{Generic Predicates}
+=SML
+fun €mk_var_gen_formal› (caller:string) (tm:TERM) : TERM = (
+let	val (nm,ty) = dest_var tm
+		handle complaint =>
+		pass_on complaint "dest_var" caller;
+	val ty' = mk_z_power_type(mk_vartype("'" ^ nm));
+in
+	mk_var(nm,ty')
+end);
+=TEX
+=SML
+local
+fun aux tm = (≥_simple_µ_conv THEN_TRY_C
+	(BINDER_C aux)) tm;
+in
+val €z_≥_gen_pred_conv› : CONV = (fn tm =>
+	(aux THEN_C
+	z_∂_intro_conv) tm
+	handle (Fail _) => 
+	term_fail "z_≥_gen_pred_conv" 41031 [tm]
+);
+end;
+=TEX
+=SML
+fun €z_gen_pred_intro› (tml : TERM list) (thm:THM) : THM = (
+let	val tml' = map (mk_var_gen_formal "z_gen_pred_intro") tml;
+in
+	list_simple_µ_intro tml' thm
+	handle complaint =>
+	pass_on complaint "list_simple_µ_intro" "z_gen_pred_intro"
+end);
+=TEX
+=SML
+fun €z_gen_pred_elim› (tml : TERM list) (thm : THM):THM = (
+	list_µ_elim tml thm
+	handle (Fail _) =>
+(let	val	nvars = length(fst(strip_µ (concl thm)));
+in
+	if nvars < length tml
+	then thm_fail "z_gen_pred_elim" 41034 [thm]
+	else thm_fail "z_gen_pred_elim" 41033 [thm]
+end)
+);
+=TEX
+=SML
+val €z_gen_pred_tac› :TACTIC = (fn (asms,conc) =>
+	if is_simple_µ conc
+	then REPEAT_T simple_µ_tac (asms,conc)
+	else fail "z_gen_pred_tac" 41035 []
+);
+=TEX
+=SML
+fun €is_gen_formal› tm = (
+let	val (nm,ty) = dest_var tm;
+	val nm' = dest_vartype(dest_z_power_type ty)
+in
+	("'" ^ nm = nm')
+end
+handle (Fail _) => false);
+=TEX
+=SML
+fun €z_intro_gen_pred_tac› (tt : (TERM * TERM) list) : TACTIC = (fn (asms,conc) => 
+let	val dummy = map (fn (res,x) =>
+		if is_gen_formal x
+		then (if type_of res =: type_of x
+			then (res,x)
+			else term_fail "z_intro_gen_pred_tac" 41036 [x,res])
+		else term_fail "z_intro_gen_pred_tac" 41032 [x]) tt;
+in
+	(MAP_EVERY intro_µ_tac (rev tt)(asms,conc))
+	handle complaint =>
+	pass_on complaint "intro_µ_tac" "z_intro_gen_pred_tac"
+end);
+=TEX
 \subsection{Proof Contexts}
 \subsubsection{Contents for Proof Contexts - Automatic Proof a la HOL}
 =SML
@@ -3551,6 +3627,7 @@ val _ = add_rw_thms ([§_rewrite_thm,
 	_u_thm]
 	@ z_para_pred_marker_thms) "'z_predicates";
 val _ = set_st_eqn_cxt [(¨≥ xÆ,z_≥_in_conv),
+	(¨≥ (µ x ∑ y)Æ,z_≥_gen_pred_conv),
 	(¨$"Z'∂" xÆ,z_∂_elim_conv),
 	(¨$"Z'∂â1" xÆ,z_∂â1_conv),
 	(¨x ç yÆ,z_ç_u_conv),
@@ -3567,6 +3644,7 @@ val _ = add_st_thms ([¥_thm,
 val _ = set_sc_eqn_cxt [(¨$"Z'µ" xÆ,z_µ_elim_conv),
 	(¨$"Z'∂â1" xÆ,z_∂â1_conv),
 	(¨≥ xÆ,z_≥_in_conv),
+	(¨≥ (µ x ∑ y)Æ,z_≥_gen_pred_conv),
 	(¨x ç yÆ,z_ç_u_conv),
 	(¨≥(x ç y)Æ, RAND_C z_ç_u_conv),
 	(¨$"Z'µ" xÆ,z_∂_inv_conv),
