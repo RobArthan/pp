@@ -286,8 +286,10 @@ Boolean open_file(
 		return False;
 	};
 	if((buf = get_file_contents(text, name)) != NULL) {
+		XmTextDisableRedisplay(text);
 		XmTextSetString(text, buf);
 		XtFree(buf);
+		XmTextEnableRedisplay(text);
 		return True;
 	} else {
 		return False;
@@ -308,10 +310,12 @@ Boolean include_file(
 	XmTextPosition pos;
 
 	if((buf = get_file_contents(text, name)) != NULL) {
+		XmTextDisableRedisplay(text);
 		pos = XmTextGetInsertionPosition(text);
 		XmTextClearSelection(text, CurrentTime);
 		XmTextInsert(text, pos, buf);
 		XtFree(buf);
+		XmTextEnableRedisplay(text);
 		return True;
 	} else {
 		return False;
