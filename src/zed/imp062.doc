@@ -95,6 +95,8 @@ Fixed problem in treatment of the predicate part of a schema text.
 Amended treatment of term quotations (and a bug fix to same).
 \item[Issue 1.40,1.39 (4 November 1992)]
 Fixed problem in treatment of free variables in $bind\_zenv$.
+\item[Issue 1.41 (2 December 1992)]
+New  treatment of standardness.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -212,6 +214,7 @@ out according to the rules which denote standard (rather than extended) Z.
 
 =SML
 val Ûzti_standard_zÝ = ref true;
+val Ûzti_allow_freesÝ = ref true;
 =TEX
 
 The following declarations define space for the substitution function.
@@ -373,10 +376,13 @@ datatype ÛZ_DETAILSÝ	=
 	|	FailedBinding of IDENT list
 	|	FailedGlobalVar of IDENT
 	|	FailedFreeVar of IDENT
-	|	FailedActual of IDENT * int
+	|	FailedActual1 of IDENT * int
+	|	FailedActual2 of Z_TM list * EXTYPE list
 	|	FailedConstrained of Z_TM * EXTYPE * Z_TM
+	|	FailedPredCast of Z_TM * EXTYPE
 	|	FailedTmQuotation1 of (TERM*string*EXTYPE*EXTYPE)
 	|	FailedTmQuotation2 of (TERM*(string*TYPE) list)
+	|	FailedNonStandardZ of int
 	|	FailedEnv of Z_TM * IDENT * EXTYPE * EXTYPE;
 
 =TEX
@@ -384,7 +390,8 @@ datatype ÛZ_DETAILSÝ	=
 datatype ÛZ_PARA_DETAILSÝ =
 		FailedZPGiven
 	|	FailedZPConstraint
-	|	FailedZPConjecture;
+	|	FailedZPConjecture
+	|	FailedZPGenericTerm;
 =TEX
 The following type definition is visible via the signature
 $ZTypeInference$.
@@ -685,14 +692,23 @@ fun Ûprint_z_errorÝ ((FailedZTm (term, env, details)) : Z_ERROR_INFO) = (
 	) | FailedFreeVar id => (
 		report 62631 []; report 62632 [];
 		report 62004 [format_ident id]
-	) | FailedActual (id, len) => (
+	) | FailedActual1 (id, len) => (
 		report 62342 []; report 62343 [];
 		report 62344 [format_ident id, string_of_int len,
 				if len  >1 then "s" else ""]
+	) | FailedActual2 (tml, tyl) => (
+		report 62345 []; 
+		report 62007 [];
+		map
+		(fn (tm, ty)=>report 62003 [format_z_tm tm, format_z_extype ty])
+		(combine tml tyl); ()
 	) | FailedConstrained (tm1, ty, tm2) => (
 		report 62321 [];
 		report 62322 [format_z_tm tm1, format_z_extype ty];
 		report 62323 [format_z_tm tm2]
+	) | FailedPredCast (tm, ty) => (
+		report 62325 [];
+		report 62326 [format_z_tm tm, format_z_extype ty]
 	) | FailedTmQuotation1 (tm, s, ty1, ty2) => (
 		report 62890 [];
 		report 62891 [string_of_term tm];
@@ -706,6 +722,8 @@ fun Ûprint_z_errorÝ ((FailedZTm (term, env, details)) : Z_ERROR_INFO) = (
 		report 62003 [format_ident id, format_z_extype ty1];
 		report 62603 [];
 		report 62003 [format_ident id, format_z_extype ty2]
+	) | FailedNonStandardZ msg => (
+		report msg []
 	) (* end case *)
 	);
 	fail "Z-Parser" 62000 []
@@ -746,6 +764,7 @@ fun Ûprint_z_errorÝ ((FailedZTm (term, env, details)) : Z_ERROR_INFO) = (
 		FailedZPGiven => (report 62801 []; report 62802 [];())
 		|FailedZPConstraint => (report 62803 [])
 		|FailedZPConjecture => (report 62804 [])
+		|FailedZPGenericTerm => (report 62805 [])
 		);
 	not_a_predicate tm ty;
 	fail "Z-Parser" 62000 []
@@ -816,7 +835,7 @@ end (* of local ... in *);
 fun Ûupdate_zenvÝ (env : Z_ENV) (id : IDENT) : Z_ENV = (
 	case env id of
 	FreeVar Nil =>
-		if (!zti_standard_z)
+		if not (!zti_allow_frees)
 		then
 			raise ZExn (FailedZFreeVar id)
 		else
@@ -1446,14 +1465,37 @@ end)
 =TEX
 =SML
   | ti_z_tm env (term as ZTmFancyApp (id as (TmplIn (StubUS, ("º", Nil), StubUS), ""), ZTmTuple[tm1, tm2])) = (
+if (!zti_standard_z)
+then raise ZExn (FailedZTm (term, env, FailedNonStandardZ 62324))
+else
 let	val (tm1', ty1') = ti_z_tm env tm1;
 	val (tm2', ty2') = ti_z_tm env tm2;
 	val side = unify zti_subs (ex_set ty1', ty2')
 		handle Fail msg =>
 		raise ZExn (FailedZTm (term, env, FailedConstrained
 				(tm1', ty1', tm2')));
-in
-	(tm1', sub_type zti_subs ty1')
+in	(tm1', sub_type zti_subs ty1')
+end
+)
+=TEX
+=SML
+  | ti_z_tm env (term as ZTmFancyApp (id as (TmplPre (("", Nil), StubUS), ""), ZTmTuple[tm])) = (
+if (!zti_standard_z)
+then raise ZExn (FailedZTm (term, env, FailedNonStandardZ 62324))
+else
+let	val (tm', ty') = ti_z_tm env tm;
+	val (tm'', ty'') = (
+		case manifest ty' of
+			SchemaType idtyl =>	(
+			bind_zenv env tm tm' idtyl;
+			(ZTmSchemaPred tm', ex_bool))
+		|_ => (tm', ty')
+	);
+	val side = unify zti_subs (ty'', ex_bool)
+		handle Fail msg =>
+		raise ZExn (FailedZTm (term, env, FailedPredCast
+				(tm', ty')));
+in	(tm'', sub_type zti_subs ty'')
 end
 )
 =TEX
@@ -1486,8 +1528,7 @@ end
 				handle Fail _ =>
 				raise ZExn (FailedZTm (term, env,
 					FailedFancyApp (id, tma'', tyf, tya')));
-	in
-		(ZTmApp(tmf', tma''), sub_type zti_subs tyr)
+	in	(ZTmApp(tmf', tma''), sub_type zti_subs tyr)
 	end)
 =TEX
 =IGN
@@ -2107,8 +2148,12 @@ end
 						TupleType tyl => length tyl
 						| _ => scream
 						  "Generic actual parameter is badly formed";
-				in
-					raise ZExn (FailedZTm (term, env, FailedActual (id, len)))
+				in	if length tml <> len
+					then
+					raise ZExn (FailedZTm (term, env, FailedActual1 (id, len)))
+					else
+					raise ZExn (FailedZTm (term, env, FailedActual2 (tml', tyl')))
+
 				end;
 			val vty = sub_type zti_subs resty;
 			in
@@ -2159,8 +2204,8 @@ let	val (tm', ty') = ti_z_tm env tm;
 in
 	case manifest ty' of
 	SchemaType idtyl =>
-		(ZTmRename(tm', ididl), bind_extype (map (fn (id, ty) =>
-			(rassoc4 ididl id id, ty)) idtyl))
+		(ZTmRename(tm', ididl), ex_set(bind_extype (map (fn (id, ty) =>
+			(rassoc4 ididl id id, ty)) idtyl)))
 	|_ => raise ZExn (FailedZTm (term, env, FailedRename1 (tm', ty')))
 end
 )
@@ -2179,6 +2224,9 @@ end
 \subsection{Term Quotation}
 =SML
   | ti_z_tm env (term as ZTmQuotation (tm, _)) = (
+	if (!zti_standard_z)
+	then	raise ZExn (FailedZTm (term, env, FailedNonStandardZ 62897))
+	else
 	let	val side = (known_term_tyvars :=
 			term_tyvars tm cup (!known_term_tyvars));
 		val nltyl = map dest_var (frees tm);
@@ -2339,6 +2387,12 @@ end
 ) | ti_z_para (p as ZParaTerm (formals, tm, _)) = (
 let	val env = init_z_env false formals;
 	val (tm', ty') = ti_z_tm env tm;
+	val side = case formals of
+		[] => ()
+	|	_ => unify zti_subs (ty', ex_bool)
+		handle Fail msg =>
+		raise ZExn (FailedZPara (tm', ty', FailedZPGenericTerm));
+
 in
 	ZInferred (ZParaTerm (formals, tm', Value ty'))
 end
@@ -2349,13 +2403,13 @@ end
 );
 =TEX
 =SML
-fun Ûtype_check_z_paraÝ {standard : bool} (p:Z_PARA) : Z_INFERRED = (
+fun Ûtype_check_z_paraÝ {standard : bool, allow_frees : bool}
+	(p:Z_PARA) : Z_INFERRED = (
 let	val side = init_subs zti_subs;
 	val side = (zti_standard_z := standard);
+	val side = (zti_allow_frees := allow_frees);
 	val side = reset_freetype_names();
-in
-	ti_z_para p
-		handle ZExn info => ZTypeError(info)
+in	ti_z_para p handle ZExn info => ZTypeError(info)
 end);
 =TEX
 
