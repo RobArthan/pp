@@ -235,5 +235,6 @@ typedef struct menu_item {
 #endif
 #ifndef _xpp
 	extern XtTranslations text_translations;
-	extern char * templates;
+	extern char *templates;
+	extern char *command_line_list;
 #endif

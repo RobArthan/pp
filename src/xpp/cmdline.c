@@ -80,6 +80,7 @@ void add_cmd_line(Widget text_w)
 	XmFontList fontlist;
 
 	static void
+		get_initial_command_line_list(Widget list_w),
 		list_select_cb(),
 		exec_cb(),
 		add_cb(),
@@ -113,15 +114,8 @@ void add_cmd_line(Widget text_w)
 
 	list_w = XmCreateScrolledList(paned, "command-list", args, i);
 
-{
-XmString s;
-	XmListAddItem(list_w, s = XmStringCreateSimple("undo 1;"), 0);
-	XtFree(s);
-	XmListAddItem(list_w, s = XmStringCreateSimple("print_status();"), 0);
-	XtFree(s);
-	XmListAddItem(list_w, s = XmStringCreateSimple("print_current_goal();"), 0);
-	XtFree(s);
-}
+	get_initial_command_line_list(list_w);
+
 	cmd_text = XtVaCreateManagedWidget("cmd_text",
 		xmTextWidgetClass,		paned,
 		XmNeditMode,			XmMULTI_LINE_EDIT,
@@ -254,6 +248,35 @@ XmString s;
 
 }
 
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Set up the initial list (from the commandLineList resource)
+ * which xpp.c has put into command_line_list. Note that the
+ * mallocing for the space here probably cannot be avoided (unless
+ * one knows that the Xt resource converters always return pointers
+ * to writable areas of memory).
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void get_initial_command_line_list(Widget list_w)
+{
+	XmString s;
+	Boolean last;
+	char *list_items, *p, *q;
+	if( !(list_items = XtMalloc(strlen(command_line_list) + 1)) ) {
+		return;
+	}
+	strcpy(list_items, command_line_list);
+	for(p = list_items, last = False; *p; p = last ? q : q + 1) {
+		q = p;
+		while (*q && *q != '\n') ++q;
+		if(*q) {
+			*q = '\0';
+		} else {
+			last = True;
+		}
+		XmListAddItem(list_w, s = XmStringCreateSimple(p), 0);
+		XtFree(s);
+	}
+	XtFree(list_items);
+}
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * the callback for the execute button.

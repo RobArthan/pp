@@ -23,6 +23,8 @@
 #define XtCAbandonReply		"AbandonReply"
 #define XtNaddNewlineMode		"addNewlineMode"
 #define XtCAddNewlineMode		"AddNewlineMode"
+#define XtNcommandLineList		"commandLineList"
+#define XtCCommandLineList		"CommandLineList"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files: 
@@ -38,7 +40,8 @@
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 XtTranslations text_translations;
-char * templates;
+char *templates;
+char *command_line_list;
 
 #ifdef BUILDVERSION
 static char *title = "  xpp    v" BUILDVERSION "  ";
@@ -87,6 +90,7 @@ typedef struct {
 	char *templates;
 	char *interrupt_prompt;
 	char *abandon_reply;
+	char *command_line_list;
 	int  add_new_line_mode;
 } XppResources;
 
@@ -126,6 +130,15 @@ static XtResource resources[] = {
 		XtRString,
 		sizeof(char *),
 		XtOffsetOf(XppResources, abandon_reply),
+		XtRString,
+		""
+	},
+	{
+		XtNcommandLineList,
+		XtCCommandLineList,
+		XtRString,
+		sizeof(char *),
+		XtOffsetOf(XppResources, command_line_list),
 		XtRString,
 		""
 	},
@@ -274,6 +287,8 @@ char **argv;
 	:	xpp_resources.add_new_line_mode < EXECUTE_ADD_NEW_LINES
 	?	EXECUTE_ADD_NEW_LINES
 	:	xpp_resources.add_new_line_mode;
+
+	command_line_list = xpp_resources.command_line_list;
 
 	main_window_go(file_name);
 	exit(0);
