@@ -98,7 +98,7 @@ lists of pairs of integers, a pair $(a, i)$ indicating that the $i$-th variable
 has coefficient $a$. We always arrange for the variables to occur in strictly
 increasing order and for pairs with zero coefficients to be omitted.
 =SML
-type €POLY› = (int * int) list;
+type €POLY› = (INTEGER * int) list;
 =TEX
 Equations, inequalities and strict inequalities are distingushed using:
 =SML
@@ -114,7 +114,7 @@ type €ORIGIN› = POLY;
 =TEX
 A constraint is then represented by:
 =SML
-type €CONSTRAINT› = POLY * CONSTRAINT_TYPE * int * ORIGIN;
+type €CONSTRAINT› = POLY * CONSTRAINT_TYPE * INTEGER * ORIGIN;
 =TEX
 The following functions may be used to ensure that the polynomials in a constraint
 are in increasing order of variable name and have no entries with
@@ -123,16 +123,21 @@ zero coefficients:
 fun €normalise_poly› (p : POLY) : POLY = (
 	let
 		fun aux [] = []
-		|   aux ((0, _) :: more) = aux more
 		|   aux ((a1, i1)::(more1 as ((a2, i2) :: more2))) = (
-			if i1 = i2
-			then aux ((a1+a2,i1)::more2)
+			if a1 = zero
+			then aux more1
+			else if i1 = i2
+			then aux ((a1@+a2,i1)::more2)
 			else (a1, i1) :: aux more1
-		) | aux nzsingleton = nzsingleton;
-	 fun order ((i1,j1):int*int) (i2,j2) = (
-		if j1 <> j2
-		then j1 -j2
-		else 1
+		) | aux (p as [(a, i)]) = (
+			if	a = zero
+			then	[]
+			else	p
+		);
+		 fun order ((i1,j1):INTEGER*int) (i2,j2) = (
+			if j1 <> j2
+			then j1 - j2
+			else 1
 		);
 	in aux (sort order p)
 	end
@@ -145,11 +150,17 @@ fun €normalise_constraint› ((p, ct, c, o1) : CONSTRAINT) : CONSTRAINT = (
 =SML
 fun €format_poly› (p : POLY) : string = (
 	let	fun s i = (
-			if i < 0 then string_of_int i else "+" ^ string_of_int i
+			if i @< zero
+			then string_of_integer i
+			else "+" ^ string_of_integer i
 		);
-		fun aux1 (1, i) = "+X" ^ string_of_int i
-		|   aux1(~1, i) = "-X" ^ string_of_int i
-		|   aux1(a, i) = s a ^ "X" ^ string_of_int i;
+		fun aux1(a, i) = (
+			if a = one
+			then "+X" ^ string_of_int i
+			else if a = @~ one
+			then "-X" ^ string_of_int i
+			else s a ^ "X" ^ string_of_int i
+		);
 	in	case p of 
 			[] => "0"
 		|	_ => format_list aux1 p " "
@@ -159,9 +170,13 @@ fun €format_poly› (p : POLY) : string = (
 =SML
 fun €format_origin› (p : ORIGIN) : string = (
 	let
-		fun aux1 (1, i) = "+" ^ string_of_int i ^ "'"
-		|   aux1(~1, i) = "-" ^ string_of_int i  ^ "'"
-		|   aux1(a, i) = (string_of_int a) ^ "*" ^ string_of_int i ^"'";
+		fun aux1(a, i) = (
+			if a = one
+			then "+" ^ string_of_int i ^ "'"
+			else if a = @~ one
+			then "-" ^ string_of_int i  ^ "'"
+			else (string_of_integer a) ^ "*" ^ string_of_int i ^"'"
+		);
 	in	format_list aux1 p " "
 	end
 );
@@ -172,30 +187,29 @@ fun €format_constraint_type› Eq = "="
 |   format_constraint_type LessEq = "º";
 =TEX
 =SML
-fun €format_constraint› ( (p, ty, c, [(1,i)]) : CONSTRAINT ) : string = (
-	string_of_int i ^ ": " ^
-	format_poly p ^ " " ^ format_constraint_type ty ^ " " ^ string_of_int c
-) | format_constraint ((p, ty, c, o1)) : string = (
+fun €format_constraint› ((p, ty, c, o1): CONSTRAINT) : string = (
 	format_origin o1 ^ ": " ^
-	format_poly p ^ " " ^ format_constraint_type ty ^ " " ^ string_of_int c
+	format_poly p ^ " " ^ format_constraint_type ty ^ " " ^ string_of_integer c
 );
 =TEX
 \subsection{Cross-multiplication and adding}
 =SML
-fun €mult_and_add_poly› (b1 : int) (p1 : POLY) (b2 : int) (p2 : POLY) : POLY = (
+fun €mult_and_add_poly› (b1 : INTEGER) (p1 : POLY) (b2 : INTEGER) (p2 : POLY) : POLY = (
 	let
 		fun aux (p1 as ((a1, i1) :: more1):POLY) (p2 as ((a2, i2) :: more2):POLY) = (
 			if i1 = i2
-			then case b1*a1 + b2*a2 of
-					0 => aux more1 more2
-				| nz => (nz, i1) :: aux more1 more2
+			then	let val x = b1@*a1 @+ b2@*a2;
+				in	if x = zero
+					then aux more1 more2
+					else (x, i1) :: aux more1 more2
+				end
 			else if i1 < i2
-			then (b1*a1, i1) :: aux more1 p2
-			else (b2*a2, i2) :: aux p1 more2
+			then (b1@*a1, i1) :: aux more1 p2
+			else (b2@*a2, i2) :: aux p1 more2
 		) | aux [] ((a2, i2) :: more2) = (
-			(b2*a2, i2) :: aux [] more2
+			(b2@*a2, i2) :: aux [] more2
 		) | aux ((a1, i1) :: more1) [] = (
-			(b1*a1, i1) :: aux more1 []
+			(b1@*a1, i1) :: aux more1 []
 		) | aux [] [] = [];
 	in	aux p1 p2
 	end
@@ -203,8 +217,8 @@ fun €mult_and_add_poly› (b1 : int) (p1 : POLY) (b2 : int) (p2 : POLY) : POLY = (
 =TEX
 =SML
 fun €mult_and_add_ct›
-		(b1 : int) (ct1  : CONSTRAINT_TYPE)
-		(b2 : int) (ct2 : CONSTRAINT_TYPE) : CONSTRAINT_TYPE = (
+		(b1 : INTEGER) (ct1  : CONSTRAINT_TYPE)
+		(b2 : INTEGER) (ct2 : CONSTRAINT_TYPE) : CONSTRAINT_TYPE = (
 	case (ct1, ct2) of
 		(Eq, _) => ct2
 	|	(_, Eq) => ct1
@@ -214,15 +228,15 @@ fun €mult_and_add_ct›
 );
 =TEX
 =SML
-val €mult_and_add_o› : int -> ORIGIN -> int -> ORIGIN -> ORIGIN = mult_and_add_poly;
+val €mult_and_add_o› : INTEGER -> ORIGIN -> INTEGER -> ORIGIN -> ORIGIN = mult_and_add_poly;
 =TEX
 =SML
 fun €mult_and_add_constraint›
-		(b1 : int) ((p1, ct1, c1, o1) : CONSTRAINT)
-		(b2 : int) ((p2, ct2, c2, o2) : CONSTRAINT) : CONSTRAINT = (
+		(b1 : INTEGER) ((p1, ct1, c1, o1) : CONSTRAINT)
+		(b2 : INTEGER) ((p2, ct2, c2, o2) : CONSTRAINT) : CONSTRAINT = (
 		(mult_and_add_poly b1 p1 b2 p2,
 		 mult_and_add_ct b1 ct1 b2 ct2,
-		 b1*c1 + b2*c2,
+		 b1@*c1 @+ b2@*c2,
 		 mult_and_add_o b1 o1 b2 o2)
 );
 =TEX
@@ -246,9 +260,9 @@ datatype €CONSTRAINT_VALUE› = Truth | Falsehood | NotGround;
 fun €check_constraint› (([], ct, c, _) : CONSTRAINT) = (
 	if
 		case ct of
-			Eq => 0 = c
-		|	Less => 0 < c
-		|	LessEq => 0 <= c
+			Eq => zero = c
+		|	Less => zero @< c
+		|	LessEq => zero @<= c
 	then Truth
 	else Falsehood
 ) | check_constraint _ = NotGround;
@@ -267,54 +281,54 @@ fun €acc_constraint› (cs : CONSTRAINT) (acc : CONSTRAINT list)
 =TEX
 The following functions are used to compute cross-multipliers.
 =SML
-fun €gcd› (a1 : int) (a2 : int) : int = (
+fun €gcd› (a1 : INTEGER) (a2 : INTEGER) : INTEGER = (
 	let fun aux x1 x2 = (
-			if x1 < x2
+			if x1 @< x2
 			then aux x2 x1
-			else if x2 = 0
+			else if x2 = zero
 			then x1
-			else aux x2 (x1 mod x2)
+			else aux x2 (x1 imod x2)
 		);
 	in
-		if a1 < 0
-		then gcd (~a1) a2
-		else if a2 < 0
-		then gcd a1 (~a2)
+		if a1 @< zero
+		then gcd (@~a1) a2
+		else if a2 @< zero
+		then gcd a1 (@~a2)
 		else aux a1 a2
 	end
 );
 =TEX
 =SML
-fun €sgn› (i : int) : int = if i < 0 then ~1 else if i > 0 then 1 else 0;
+fun €sgn› (i : INTEGER) : int = if i @< zero then ~1 else if i = zero then 0 else 1;
 =TEX
 =SML
-fun €x_multipliers› (i : int) (j : int) : (int * int) = (
+fun €x_multipliers› (i : INTEGER) (j : INTEGER) : (INTEGER * INTEGER) = (
 	let	val d = gcd i j;
-		val m = abs j div d;
-		val n = abs i div d;	 (* so m*abs i = n*abs j *)
+		val m = iabs j idiv d;
+		val n = iabs i idiv d;	 (* so m*abs i = n*abs j *)
 	in
 		if sgn i = sgn j
-		then (m, ~n)
+		then (m, @~n)
 		else (m, n)
 	end
 );
 =TEX
 =SML
-fun €coeff_of› (i : int) (p : POLY) : int = (
+fun €coeff_of› (i : int) (p : POLY) : INTEGER = (
 	case p of
-		[] => 0
-	| (a, j) :: more => if j > i then 0 else if j = i then a else coeff_of i more
+		[] => zero
+	| (a, j) :: more => if j > i then zero else if j = i then a else coeff_of i more
 );
 =TEX
 The following replaces all equations in a system by a pair of inequalities.
 =SML
 fun €all_eq_eliminate› (csl : CONSTRAINT list) : CONSTRAINT list = (
-	let	fun aux ((cs as (p, Eq, c:int, o1)) :: more) = (
+	let	fun aux ((cs as (p, Eq, c:INTEGER, o1)) :: more) = (
 			(p, LessEq, c, o1) ::
-			(map (fn (i:int, j) => (~i, j)) p,
+			(map (fn (i:INTEGER, j) => (@~i, j)) p,
 			 LessEq,
-			 ~c,
-			 mult_and_add_o ~1 o1 0 [])
+			 @~c,
+			 mult_and_add_o (@~one) o1 zero [])
 			:: aux more
 		) | aux (cs :: more) = cs :: aux more
 		|  aux [] = [];
@@ -599,11 +613,11 @@ fun €sum2_rule_aux› (th1 : THM) (th2: THM) : THM = (
 );
 =TEX
 =SML
-fun €lit_scale_rule› (a : int) (th : THM) : THM = (
+fun €lit_scale_rule› (a : INTEGER) (th : THM) : THM = (
 	let	val th1 = make_º_rule th;
-		val scale_th = simple_µ_elim (mk_Ó(abs a)) (
+		val scale_th = simple_µ_elim (mk_Ó(iabs a)) (
 			case
-			(a >= 0, (fst o dest_const o fst o strip_app o concl) th1)
+			(a @>= zero, (fst o dest_const o fst o strip_app o concl) th1)
 			of	(true, "=") => pos_scale_eq_thm
 			|	(true, "º") => pos_scale_º_thm
 			|	(true, "æ") => pos_scale_æ_thm
@@ -617,12 +631,12 @@ fun €lit_scale_rule› (a : int) (th : THM) : THM = (
 );
 =TEX
 =SML
-fun €scale_and_sum2_rule› (a1 : int) (th1 : THM) (th2: THM) : THM = (
+fun €scale_and_sum2_rule› (a1 : INTEGER) (th1 : THM) (th2: THM) : THM = (
 	sum2_rule_aux (lit_scale_rule a1 th1) (make_º_rule th2)
 );
 =TEX
 =SML
-fun €scaled_sum_rule› (aths : (int * THM) list) : THM = (
+fun €scaled_sum_rule› (aths : (INTEGER * THM) list) : THM = (
 	conv_rule (RANDS_C (TRY_C anf_conv))
 	(case aths of
 		[] => fail "scaled_sum_rule" 82115 []
@@ -631,7 +645,7 @@ fun €scaled_sum_rule› (aths : (int * THM) list) : THM = (
 );
 =TEX
 =SML
-fun €la_rule› (aths : (int * THM) list) : THM = (
+fun €la_rule› (aths : (INTEGER * THM) list) : THM = (
 	let	val th = scaled_sum_rule aths;
 	in	conv_rule (
 		FIRST_C (map eq_match_conv
@@ -649,7 +663,7 @@ fun €la_rule› (aths : (int * THM) list) : THM = (
 We use the following type to represent a scaled sum of linear arithmetic
 atoms:
 =SML
-type €SCALED_SUM› = (int * TERM) list;
+type €SCALED_SUM› = (INTEGER * TERM) list;
 =TEX
 =SML
 fun €strip_plus› (tm : TERM) : TERM list = (
@@ -668,24 +682,25 @@ circumstances in which the
 contradiction produced by $la\_rule$ has assumptions which are different
 from the assumptions in the original goal). 
 =SML
-fun €dest_summand› (tm : TERM) : int * TERM = (
+fun €dest_summand› (tm : TERM) : INTEGER * TERM = (
 	let val nt = (((dest_Ó ** Combinators.I) o dest_times) tm);
-	in	if (fst nt) = 1
-		then (1, tm)
+	in	if (fst nt) = one
+		then (one, tm)
 		else nt
-	end	handle Fail _ => (1, tm)
+	end	handle Fail _ => (one, tm)
 );
 =TEX
 =SML
 val €dest_sum› : TERM -> SCALED_SUM = map dest_summand o strip_plus;
 =TEX
 =SML
-val zero = ¨0Æ;
-fun €mk_sum› ([] : SCALED_SUM) = zero
-|   mk_sum [(1, t)] = t
-|   mk_sum [(i, t)] = mk_times(mk_Ó i, t)
-|   mk_sum ((1, t) :: more) = mk_plus(t, mk_sum more)
-|   mk_sum ((i, t) :: more) = mk_plus(mk_times(mk_Ó i, t), mk_sum more);
+val mk_0 = ¨0Æ;
+fun €mk_sum› ([] : SCALED_SUM) = mk_0
+|   mk_sum [(i, t)] = if i = one then t else mk_times(mk_Ó i, t)
+|   mk_sum ((i, t) :: more) =
+	if i = one
+	then mk_plus(t, mk_sum more)
+	else mk_plus(mk_times(mk_Ó i, t), mk_sum more);
 =TEX
 We use the following type to represent a constraint (with HOL terms rather
 than variables as its atoms):
@@ -716,7 +731,7 @@ fun €atom_map›
 	: (int * TERM) list = (
 	let	fun aux1 acc [] = acc
 		|   aux1 acc ((i, t) :: more) = (
-			if	i = 1 andalso is_Ó t
+			if	i = one andalso is_Ó t
 			then	aux1 acc more
 			else	aux1 (acc term_grab t) more
 		);
@@ -752,12 +767,12 @@ a scaled sum, the following
 function computes the corresponding polynomial and constant
 right hand side of the constraint for $lin\_arith\_contr$
 =SML
-fun €make_poly› (inds : (int * TERM) list) (ss : SCALED_SUM) : POLY * int = (
+fun €make_poly› (inds : (int * TERM) list) (ss : SCALED_SUM) : POLY * INTEGER = (
 	let	fun collect (acc as (p, c)) ((i, tm) :: more) = (
-			(collect (p, c + i*dest_Ó tm) more)
+			(collect (p, c @+ i@*dest_Ó tm) more)
 			handle Fail _ => collect ((i, term_rassoc inds tm) :: p, c) more
 		) | collect acc [] = acc;
-		val (p, c) = collect ([], 0) ss;
+		val (p, c) = collect ([], zero) ss;
 	in	(normalise_poly p, c)
 	end
 );
@@ -778,7 +793,7 @@ fun €make_constraint› (inds : (int * TERM) list)
 		);
 		val (lp, lc) = make_poly inds l;
 		val (rp, rc) = make_poly inds r;
-	in	(mult_and_add_poly 1 lp (~1) rp, rator,  rc - lc, [(1, ind)])
+	in	(mult_and_add_poly one lp (@~one) rp, rator,  rc @- lc, [(one, ind)])
 	end
 );
 =TEX
@@ -801,7 +816,7 @@ fun €make_problem› (addlwbs : bool) (tml : TERM list) :
 		val inds = atom_map stsl;
 		val extras = (
 			if addlwbs
-			then map (fn (i,tm) =>  ([], le, [(1,tm)])) inds
+			then map (fn (i,tm) =>  ([], le, [(one,tm)])) inds
 			else []
 		);
 		val stsl' = stsl @ extras;
@@ -822,9 +837,8 @@ fun €make_var_sum› (ivtl : ((int * TERM) * TERM) list) (ss : SCALED_SUM) : TERM 
 			then t
 			else snd (term_rassoc ivtl t)
 		);
-		fun aux1 (1, t) = name t
-		|   aux1 (i, t) = mk_times(mk_Ó i, name t);
-		fun aux2 [] = mk_Ó 0
+		fun aux1 (i, t) = if i = one then name t else mk_times(mk_Ó i, name t);
+		fun aux2 [] = mk_Ó zero
 		|   aux2 [s] = aux1 s
 		|   aux2 (s :: more) = mk_plus(aux1 s, aux2 more);
 	in	aux2 ss
@@ -948,16 +962,18 @@ atoms in common and returns $x + a'$ and $x + b'$. It fails if $x$ would be
 $0$.
 (Note the error numbers used here do not actually matter, the error is
 always caught.)
+
+GOT HERE
 =SML
 fun €cancel_part1› (a : TERM) (b : TERM) : TERM * TERM= (
-	let	fun aux1 (x, a', b') ((i:int,t)::more) bb = (
+	let	fun aux1 (x, a', b') ((i:INTEGER,t)::more) bb = (
 			let	val j = term_rassoc bb t;
 				fun f l = l drop (fn (_, t') => t =$ t');
 			in	if i = j
 				then aux1 ((i, t)::x, a', b') more (f bb)
-				else if i > j
-				then aux1 ((j, t)::x, (i-j,t)::a', b') more (f bb)
-				else aux1 ((i, t)::x, a', (j-i,t)::b') more (f bb)
+				else if i @> j
+				then aux1 ((j, t)::x, (i@-j,t)::a', b') more (f bb)
+				else aux1 ((i, t)::x, a', (j@-i,t)::b') more (f bb)
 			end	handle Fail _ => (
 				aux1 (x, (i, t)::a', b') more bb
 			)
@@ -968,25 +984,27 @@ fun €cancel_part1› (a : TERM) (b : TERM) : TERM * TERM= (
 			(mk_plus(mk_sum x, mk_sum a'),
 				mk_plus(mk_sum x, mk_sum b'))
 		);
-		val ssa = dest_sum a drop (fn (_, t) => t =$ zero);
-		val ssb = dest_sum b drop (fn (_, t) => t =$ zero);
+		val ssa = dest_sum a drop (fn (_, t) => t =$ mk_0);
+		val ssb = dest_sum b drop (fn (_, t) => t =$ mk_0);
 	in	aux2(
 		case (ssa, ssb) of
 			([], _) => fail "cancel_part1" 82120 []
 		|	(_, []) => fail "cancel_part1" 82120 []
-		|	((sm as (1, cat))::ssa', (1, cbt)::ssb') => (
-			let	val ca = dest_Ó cat;
-				val cb = dest_Ó cbt;
-			in	if ca = cb
-				then aux1 ([sm], [], []) ssa' ssb'
-				else if ca > cb
-				then aux1 ([(1, mk_Ó cb)],
-						[(1,mk_Ó (ca - cb))], []) ssa' ssb'
-				else aux1 ([(1, mk_Ó ca)],
-						[], [(1,mk_Ó (cb - ca))]) ssa' ssb'
-			end	handle Fail _ =>
-				aux1 ([], [], []) ssa ssb
-		) |	_ =>	aux1 ([], [], []) ssa ssb)
+		|	((sm as (x, cat))::ssa', (y, cbt)::ssb') => (
+			if x = one andalso y = one
+			then	let	val ca = dest_Ó cat;
+					val cb = dest_Ó cbt;
+				in	if ca = cb
+					then aux1 ([sm], [], []) ssa' ssb'
+					else if ca @> cb
+					then aux1 ([(one, mk_Ó cb)],
+						[(one,mk_Ó (ca @- cb))], []) ssa' ssb'
+					else aux1 ([(one, mk_Ó ca)],
+						[], [(one,mk_Ó (cb @- ca))]) ssa' ssb'
+				end	handle Fail _ =>
+					aux1 ([], [], []) ssa ssb
+			else	aux1 ([], [], []) ssa ssb
+		))
 	end
 );
 =TEX
@@ -1201,12 +1219,16 @@ a(contr_tac THEN DROP_ASMS_T (MAP_EVERY (strip_asm_tac o make_º_rule)));
 a lin_arith_tac;
 
 pop_thm();
+set_flag("subgoal_package_quiet", false);
 
 set_goal([], ¨≥∂x1 x2 x3∑x1 + x2 + x3 º x2 ± x1 > 0Æ);
+a(contr_tac);
+a(PC_T1"lin_arith"asm_prove_tac[]);
 
-a(contr_tac THEN DROP_ASMS_T (MAP_EVERY (strip_asm_tac o make_º_rule)));
+a(contr_tac);
+ THEN DROP_ASMS_T (MAP_EVERY (strip_asm_tac o make_º_rule)));
 
-a lin_arith_tac1;
+a lin_arith_tac;
 
 pop_thm();
 
