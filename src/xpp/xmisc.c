@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.19 2003/06/26 13:45:00 rda Exp rda $
+ * $Id: xmisc.c,v 2.20 2003/07/17 11:37:16 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -322,6 +322,10 @@ void  centre_popup_cb(
 {
 	Position popup_rel_x, popup_rel_y, popup_abs_x, popup_abs_y;
 	Dimension root_wd, root_ht, popup_wd, popup_ht;
+	if(!XtIsRealized(popup)) {
+	/* XtPopup spec says callback could be called before realization. */
+		XtRealizeWidget(popup);
+	}
 	XtVaGetValues(popup,
 		XmNwidth,	&popup_wd,
 		XmNheight,	&popup_ht,
