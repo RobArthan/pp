@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: palette.c,v 2.20 2004/08/04 16:35:53 rda Exp rda $ 
+ * $Id: palette.c,v 2.21 2004/08/04 20:32:22 rda Exp rda $ 
  *
  * palette.c - support for palettes for the X/Motif ProofPower Interface
  *
@@ -109,6 +109,9 @@ void popup_palette(Widget w)
 
 	for(i = 0; i < NROWS; i += 1) {
 		for(j = 0; prettychars[i][j] != 0 && j < NCOLS; j += 1) {
+			if(prettychars[i][j] == '.') {
+				continue;
+			} /* else */
 			label_buf[0] = prettychars[i][j];
 			sprintf(name_buf, "char%02X", prettychars[i][j]);
 			lab = XmStringCreateSimple(label_buf);
