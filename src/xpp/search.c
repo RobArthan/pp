@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.26 2003/03/19 13:06:37 rda Exp rda $ 
+ * $Id: search.c,v 2.27 2003/04/11 10:58:21 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -47,7 +47,8 @@ typedef struct {
 		manager_w,
 		search_w,
 		replace_w,
-		line_no_w;
+		line_no_w,
+		default_focus_w;
 } SearchData;
 /*
  * The following represents a substring of a C string, e.g.,
@@ -479,6 +480,7 @@ Boolean add_search_tool(Widget text_w)
 	search_data.search_w = search_text;
 	search_data.replace_w = replace_text;
 	search_data.line_no_w = line_no_text;
+	search_data.default_focus_w = search_forwards_btn;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * set up the text windows in the search dialog as selection sources
@@ -610,6 +612,8 @@ Boolean add_search_tool(Widget text_w)
 	fix_pane_height(line_no_form, line_no_form);
 	fix_pane_height(action_form, action_form);
 
+	XmProcessTraversal(search_forwards_btn, XmTRAVERSE_CURRENT);
+
 	return True;
 }
 
@@ -622,6 +626,7 @@ static void dismiss_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
+	XmProcessTraversal(cbdata->default_focus_w, XmTRAVERSE_CURRENT);
 	XtPopdown(cbdata->shell_w);
 }
 

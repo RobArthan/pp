@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.13 2003/04/11 13:25:04 rda Exp rda $
+ * $Id: cmdline.c,v 2.14 2003/04/11 13:37:19 rda Exp $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -277,6 +277,7 @@ void add_cmd_line(Widget text_w)
 	XtPopup(shell, XtGrabNone);
 	/*fix_pane_height(cmd_text, cmd_text);*/
 	fix_pane_height(btn_form, btn_form);
+	XmProcessTraversal(cmd_text, XmTRAVERSE_CURRENT);
 
 }
 
@@ -526,6 +527,7 @@ static void dismiss_cb(
 	XtPointer	cbs)
 {
 	CmdLineData *cbdata = cbd;
+	XmProcessTraversal(cbdata->cmd_w, XmTRAVERSE_CURRENT);
 	XtPopdown(cbdata->shell_w);
 }
 
