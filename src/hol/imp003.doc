@@ -1,4 +1,4 @@
-%  imp003.doc  %Z% $Date: 2001/07/26 14:08:43 $ $Revision: 2.19 $ $RCSfile: imp003.doc,v $
+%  imp003.doc  %Z% $Date: 2001/07/28 15:54:32 $ $Revision: 2.20 $ $RCSfile: imp003.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -7,10 +7,10 @@
 \TPPtitle{Implementation for Types and Terms}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Types and Terms}
 \TPPref{DS/FMU/IED/IMP003}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.19 $
+\def\SCCSversion{$Revision: 2.20 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2001/07/26 14:08:43 $%
+\TPPdate{\FormatDate{$Date: 2001/07/28 15:54:32 $%
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -78,6 +78,8 @@ the instantiation or substitution lists are effectively empty (as happens surpri
 often, e.g., in the conversions that move negation through quantifiers).
 \item [Issues 2.18, 2.19] Addressed performance problem in {\it icl'subst}.
 \item [Issue 2.20] More minor performance upgrades.
+\item [Issue 2.21] Some tidying up and further optimisation of the term matching and
+substitution functions.
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
@@ -141,7 +143,7 @@ fun €set_variant_suffix› (s : string) : string = (
 );
 
 fun €get_variant_suffix› (():unit) : string = (
-	get_string_control "variant_suffix"
+	!variant_suffix
 );
 
 fun €string_variant› (vars : string list) (s : string) : string = (
@@ -340,36 +342,66 @@ fun €dest_var› ((typed (icl'Var s, ty)):TERM) : string * TYPE = (s, ty)
 fun €is_var› ((typed (icl'Var _, _)): TERM) : bool = true
 | is_var _ = false;
 =TEX
+The following relies on the fact that the names of the constants
+for equality, implication, universal quantification and existential
+quantification have single character names. This means that the
+test that these constants have the right types can be done by
+an array (or rather, vector) look-up.
 =SML
-fun €mk_const›((v, ty):string * TYPE): TERM = (
-	case v of
-	"=" => (case ty of
+fun €eq_check› (ty : TYPE) : unit = (
+	case ty of
 		L≠Type(ty1, L≠Type(ty2,ty3)) => (
 			if (ty1 = ty2) andalso (ty3 = BOOL)
-			then typed(icl'Const v, ty)
+			then ()
 			else fail "mk_const" 3002 []
 		) | _ => fail "mk_const" 3002 []
-	) | "¥" => (case ty of
+);
+=TEX
+=SML
+fun €¥_check› (ty : TYPE) : unit = (
+	case ty of
 		L≠Type(ty1, L≠Type(ty2, ty3)) => (
 			if (ty1 = BOOL) andalso (ty2 = BOOL) andalso (ty3 = BOOL)
-			then typed(icl'Const v, ty)
+			then ()
 			else fail "mk_const" 3003 []
 		) | _ => fail "mk_const" 3003 []
-	) | "µ" => (case ty of
-		L≠Type(L≠Type(ty1, ty2),ty3) => (
-			if (ty2 = BOOL) andalso (ty3 = BOOL)
-			then typed(icl'Const v, ty)
-			else fail "mk_const" 3004 [fn ()=>"µ"]
-		) | _ => fail "mk_const" 3004 [fn ()=>"µ"]
-	) | "∂" => (case ty of
-		L≠Type(L≠Type(ty1, ty2),ty3) => (
-			if (ty2 = BOOL) andalso (ty3 = BOOL)
-			then typed(icl'Const v, ty)
-			else fail "mk_const" 3004 [fn ()=>"∂"]
-		) | _ => fail "mk_const" 3004 [fn ()=>"∂"]
-	) | _ => typed (icl'Const v, ty)
 );
-
+=TEX
+=SML
+fun €µ_∂_check› (which : string) (ty : TYPE) : unit = (
+	case ty of
+		L≠Type(L≠Type(ty1, ty2),ty3) => (
+			if (ty2 = BOOL) andalso (ty3 = BOOL)
+			then ()
+			else fail "mk_const" 3004 [fn ()=>which]
+		) | _ => fail "mk_const" 3004 [fn ()=>which]
+);
+=TEX
+=SML
+fun €other_check› (_ : TYPE) : unit = ();
+=TEX
+=SML
+val €mk_const_checks› : (TYPE -> unit) PPVector.vector = (
+	PPVector.vector
+	let	fun the_check "=" = eq_check
+		|   the_check "¥" = ¥_check
+		|   the_check "µ" = µ_∂_check "µ"
+		|   the_check "∂" = µ_∂_check "∂"
+		|   the_check _ = other_check;
+	in	map (the_check o chr) (interval 0 255)
+	end
+);
+=SML
+fun €mk_const›((v, ty):string * TYPE): TERM = (
+	let	val side =
+			if	size v = 1
+			then	PPVector.sub(mk_const_checks, ord v) ty
+			else	();
+	in	typed (icl'Const v, ty)
+	end
+);
+=TEX
+=SML
 fun €dest_const› (tm as (typed (icl'Const s, ty)): TERM):string * TYPE = (s, ty)
 | dest_const tm = term_fail "dest_const" 3009 [tm];
 
@@ -407,7 +439,8 @@ fun €mk_simple_Ã› ((typed(icl'Var v, ty), typed(btm, bty)):TERM * TERM):TERM = (
 	typed(icl'SimpleÃ(v, btm), L≠Type (ty, bty))
 ) | mk_simple_Ã (tm1,_) = term_fail "mk_simple_Ã" 3007 [tm1];
 
-fun €dest_simple_Ã› ((typed(icl'SimpleÃ (s, b), L≠Type(ty1,ty2))): TERM): TERM * TERM = (
+fun €dest_simple_Ã› ((typed(icl'SimpleÃ (s, b), L≠Type(ty1,ty2))): TERM)
+	: TERM * TERM = (
 	(typed(icl'Var s, ty1), typed(b, ty2))
 ) | dest_simple_Ã tm = term_fail "dest_simple_Ã" 3011 [tm];
 
@@ -424,7 +457,7 @@ Thus they become critical for correctness as well!
 
 =SML
 local
-	fun fvaux
+	fun €fvaux›
 		(bvs : (string * TYPE) list)
 		(fvs : (string * TYPE) list)
 		(icl'App(tm1, tm2, ty2) : icl'TERM) 
@@ -449,6 +482,25 @@ in
 		fvaux [] [] tm ty
 	);
 end;
+=TEX
+The following is needed later on in the abstract data type.
+It could possibly be made a little bit more efficient by
+using the internal representation rather than the destructor functions.
+In any case, it is significantly more efficient in space and
+speed than using {\it icl'frees} when it is applicable.
+=SML
+fun €is_free_var_in› (vsvty as (vs, vty): string * TYPE) (tm : TERM) : bool = (
+let	
+	fun ifvi (App (f, a)) = ifvi (dest_simple_term f) orelse ifvi (dest_simple_term a)
+	| ifvi (Const _) = false
+	| ifvi (Var s) = s =$$ vsvty
+	| ifvi (SimpleÃ (av, bdy)) = 
+		not(dest_var av =$$ vsvty)
+		andalso ifvi (dest_simple_term bdy)
+in
+	ifvi (dest_simple_term tm)
+end);
+=TEX
 =TEX
 \subsection{¡-conversion}
 The auxiliary function below can be written more compactly but probably less efficiently
@@ -489,12 +541,10 @@ let	fun aux (App (tm11, tm12)) tm2 = (fn map2to1 =>
 );
 =TEX
 \subsection{Substitution}
-A destroyed variable renaming function, used in substitution:
-
-In $aux$, $R$ is the local substitution, which is the original
-overriden by bound variables being sent to the ``same'' (perhaps renamed) variables.
-The first of each pair is both the term required,
-and the free variable names in that term.
+In the following, $RF$ is the local substitution --- this is the original substitution
+updated as bound variables that need renaming are encountered to record the renamings.
+In addition $RF$ records the precomputed free variables of the substitute terms.
+These free variables are only computed when necessary and this is done imperatively.
 
 Earlier versions of this code called (the predecessor of) {\it blackbox2} which in turn called
 {\it icl'frees} whenever a $\lambda$-abstraction was encountered.
@@ -510,9 +560,9 @@ datatype €FV_MAP› =
 =TEX
 =SML
 local
-	fun	mk_app_node (Leaf, Leaf) = Leaf
+	fun	€mk_app_node› (Leaf : FV_MAP, Leaf : FV_MAP) : FV_MAP = Leaf
 	|	mk_app_node (fvm1, fvm2) = AppNode(fvm1, fvm2);
-	fun fvmaux
+	fun €fvmaux›
 		(icl'App(tm1, tm2, ty2) : icl'TERM) 
 		(ty1 : TYPE) : (string * TYPE) list * FV_MAP = (
 		case tm1 of
@@ -541,9 +591,6 @@ in
 		end
 	);
 end;
-=SML
-fun flat_map f (a :: x) = f a @ flat_map f x
-| flat_map f [] = [];
 =TEX
 The two black boxes are used to avoid variable capture.
 The first black box decides whether or not variable capture
@@ -553,43 +600,71 @@ variable. The idea is that the cost in space and time of generating
 the list in the second black box is avoided in the frequent case
 where no renaming is needed.
 
+The black boxes do the computation of the free variables of the
+substitute terms as necessary.
+The aim is to avoid having to do this computation in the common
+case where the original term is quantifier free. E.g., this will
+happen when {\it inst\_term\_rule} is used to specialise the
+matrix of a rewrite rule such as
+=INLINEFT
+µx y z∑ (x + y) + z = x + (y + z)
+=TEX
+. Equally well, we should avoid computing the free variables more
+than once. For simplicity, we use an imperative approac (i.e., we
+assign to references inside the substitution data structure).
+The applicative alternative would be to have the updated substitution be returned as
+an additional component of the result of {do\_subst} and passed through
+from subterm to subterm, but the additional complexity in the code would be unpleasant.
+
 Another optimisation is that as we have checked that the substituends
 and the substitutes have matching types, there is no need to check
 that the types on applications are correct when they are formed, so
 we use an unchecked version of {\it mk\_app}.
 =SML
 local
-	fun blackbox1
-		(RF : ((TERM * string list) * (string * TYPE)) list)
+	fun €blackbox1›
+		(RF : ((TERM * (string list OPT ref)) * (string * TYPE)) list)
 		(fvs : (string * TYPE) list)
 		(s_ty as (s, _) : string * TYPE) : bool = (
-	let fun bbaux (a :: x) = (
-		if a = s_ty
-		then bbaux x
-		else case rassoc5 RF a of
-			Value (_,fvs) => s mem fvs orelse bbaux x
-			| _ => bbaux x
-	) | bbaux [] = false;
-	in
-		bbaux fvs
-	end);
-	fun blackbox2
-		(RF : ((TERM * string list) * (string * TYPE)) list)
+		let fun bbaux (a :: x) = (
+			if a = s_ty
+			then bbaux x
+			else case rassoc5 RF a of
+				Value (_, ref (Value fvns)) => s mem fvns orelse bbaux x
+			|	Value (tm, r as ref Nil) => (
+					let	val fvns = map fst(icl'frees tm);
+						val _ = r := Value fvns;
+					in	s mem fvns orelse bbaux x
+					end
+			) | 	Nil => bbaux x
+		) | bbaux [] = false;
+		in	bbaux fvs
+		end
+	);
+	fun €blackbox2›
+		(RF : ((TERM * (string list OPT ref)) * (string * TYPE)) list)
 		(fvs : (string * TYPE) list)
 		(s_ty : string * TYPE) : string list = (
-	let fun bbaux (a :: x) = (
-		if a = s_ty
-		then bbaux x
-		else case rassoc5 RF a of
-			Value (_,fvs) => fvs @ bbaux x
-			| _ => (fst a :: bbaux x)
-	) | bbaux [] = [];
-	in
-		bbaux fvs
-	end);
-	fun dest_app_node (AppNode (fvm1, fvm2)) = (fvm1, fvm2)
+		let fun bbaux (a :: x) = (
+			if a = s_ty
+			then bbaux x
+			else case rassoc5 RF a of
+				Value (_, ref (Value fvns)) => fvns @ bbaux x
+			|	Value (tm, r as ref Nil) => (
+					let	val fvns = map fst(icl'frees tm);
+						val _ = r := Value fvns;
+					in	fvns @ bbaux x
+					end
+			) |	Nil => (fst a :: bbaux x)
+		) | bbaux [] = [];
+		in	bbaux fvs
+		end
+	);
+	fun €dest_app_node› (AppNode (fvm1, fvm2)) = (fvm1, fvm2)
 	|   dest_app_node _ = (Leaf, Leaf);
-	fun do_subst RF (App(f, a), fvm) = (
+	fun €do_subst›
+		(RF : ((TERM * (string list OPT ref)) * (string * TYPE)) list)
+		(App(f, a) : DEST_SIMPLE_TERM, fvm : FV_MAP) : TERM = (
 		let	val (fvm1, fvm2) = dest_app_node fvm;
 		in	let	val f' = do_subst RF (dest_simple_term f, fvm1);
 			in
@@ -605,7 +680,7 @@ local
 	| do_subst RF (Var v, _) = fst(rassoc3 RF v)
 	| do_subst RF (tm as SimpleÃ (_, b), Leaf) = (
 		do_subst RF (tm, mk_fv_map b)
-	) |do_subst RF (SimpleÃ(vty, b), åNode(fvs, fvm1)) = (
+	) | do_subst RF (SimpleÃ(vty, b), åNode(fvs, fvm1)) = (
 		let	val (s_ty as (s, ty)) = dest_var vty;
 		in 
 			if 	blackbox1 RF fvs s_ty
@@ -613,7 +688,7 @@ local
 			let	val new_frees = blackbox2 RF fvs s_ty;
 				val s' = string_variant new_frees s;
 				val vty' = mk_var (s', ty);
-				val RRF = (((vty',[s']), s_ty) :: RF);
+				val RRF = (((vty',ref (Value[s'])), s_ty) :: RF);
 			in	let	val b' = do_subst RRF
 						(dest_simple_term b, fvm1);
 				in	mk_simple_Ã(vty', b')
@@ -642,18 +717,17 @@ unchanged.
 in
 fun €icl'subst› ([] : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = tm
 | icl'subst (R : (TERM * (string * TYPE)) list) (tm : TERM) : TERM = (
-let
-	val init_RF = (map 
-		(fn (tm,x as (_,ty)) => 
-			if type_of tm = ty
-			then ((tm, map fst (icl'frees tm)),x)
-			else term_fail "icl'subst" 3012 [tm,mk_var x]) 
-		R);
-in
-	(do_subst init_RF (dest_simple_term tm, Leaf)
-	 handle (Fail _) => tm
-	)
-end);
+	let	val init_RF = (map 
+			(fn (tm,x as (_,ty)) => 
+				if type_of tm = ty
+				then ((tm, ref Nil),x)
+				else term_fail "icl'subst" 3012 [tm,mk_var x]) 
+			R);
+	in
+		do_subst init_RF (dest_simple_term tm, Leaf)
+		handle (Fail _) => tm
+	end
+);
 end;
 =TEX
 
@@ -668,25 +742,21 @@ let	fun aux ty = (
 	else (
 		let	val (s,tyl) = dest_ctype ty;
 			fun aux1 [] = raise just_fail
-			| aux1 (a :: x) = (let	val a' = aux a
-			in
-				a' :: map (fn t => aux t handle (Fail _) => t) x
-			end
-			handle (Fail _) =>
-			a :: aux1 x);
-		in
-			mk_ctype(s, aux1 tyl)
+			| aux1 (a :: x) = (
+				let	val a' = aux a
+				in
+					a' :: map (fn t => aux t handle (Fail _) => t) x
+				end handle (Fail _) => a :: aux1 x
+			);
+		in	mk_ctype(s, aux1 tyl)
 		end)
 	);
-
-in
-	aux mty
+in	aux mty
 end);
 =TEX
-The use of $string\_variant$ in $rename\_dups$ is untidy.
 =SML
 local
-	fun	inst_loc1 
+	fun	€inst_loc1› 
 		(tysubs : (TYPE * string) list)
 		(App(f, a) : DEST_SIMPLE_TERM)
 		(vars : string list)
@@ -738,8 +808,10 @@ local
 		end
 	);
 =TEX
+The following could perhaps be improved by using an accumulating argument and
+perhaps by mor precomputation.
 =SML
-	fun rename_dups _ _ [] = []
+	fun €rename_dups› _ _ [] = []
 	| rename_dups tysubs av ((s, ty) :: rest) = (
 		let	val ty' = icl'inst_type tysubs ty;
 		in	if ty = ty'
@@ -753,7 +825,7 @@ local
 		end
 		handle (Fail _) =>
 		(s, ty) :: rename_dups tysubs av rest);
-	fun	inst_loc2
+	fun	€inst_loc2›
 		(avoid : (string * TYPE) list)
 		(tysubs : (TYPE * string) list)
 		(frees : (string * TYPE) list)
@@ -800,7 +872,7 @@ matching is unsuccessful.
 The main work of the matching is done by
 auxiliary functions ($tyaux1$ and $tmaux2$).
 These
-operate in a fairly straight forward way by a structural
+operate in a fairly straightforward way by a structural
 recursion on their second type (or term) argument building
 up the correspondence between leaves in the structure
 and substructures of the first type (or term) argument.
@@ -812,30 +884,30 @@ local
 $tyaux1$ is quite straightforward. It uses an auxiliary
 $tyaux0$ to handle lists of types:
 =SML
-	fun tyaux1 match t1 t2 = (
-	if is_vartype t2
-	then (
-		let	val s2 = dest_vartype t2
-		in
-		if (rassoc4 match t1 s2 = t1)
-		then match grab (t1, s2)
+	fun €tyaux1› (match : (TYPE * string) list) (t1 : TYPE) (t2 : TYPE)
+		: (TYPE * string) list = (
+		if	is_vartype t2
+		then	let	val s2 = dest_vartype t2
+			in	case rassoc5 match s2 of
+					Value t => (
+						if	t = t1
+						then	match
+						else	fail "type_match" 3053 []
+				) |	Nil => (t1, s2)::match
+			end
+		else if	is_ctype t1
+		then	let	val (s1, tl1) = dest_ctype t1;
+				val (s2, tl2) = dest_ctype t2;
+				fun tyaux0 match [] [] = (match
+				) | tyaux0 match (h1 :: t1) (h2 :: t2) = (
+					tyaux0 (tyaux1 match h1 h2) t1 t2
+				) | tyaux0 _ _ _ = fail "type_match" 3053 []
+			in	if s1 = s2
+				then tyaux0 match tl1 tl2
+				else fail "type_match" 3053 []
+			end
 		else fail "type_match" 3053 []
-		end
-	) else if is_ctype t1
-	then (let val (s1, tl1) = dest_ctype t1;
-		val (s2, tl2) = dest_ctype t2;
-		fun tyaux0 match [] [] = (
-				match
-		) | tyaux0 match (h1 :: t1) (h2 :: t2) = (
-			tyaux0 (tyaux1 match h1 h2) t1 t2
-		) | tyaux0 _ _ _ = fail "type_match" 3053 []
-		in
-			if s1 = s2
-			then tyaux0 match tl1 tl2
-			else fail "type_match" 3053 []
-		end)
-
-	else fail "type_match" 3053 []);
+	);
 =TEX
 The treatment of terms is more complex than that of types
 because of bound variables.
@@ -866,11 +938,34 @@ If we have not encountered $v2$ before,
 there will be no entry in $fvmatch$ for it and now
 is the time to make one, using $tyaux1$ to handle the
 type matching.
+
+This function is optimised for the very common case where no bound variables in $tm1$
+have been encountered yet, as happens, for example, when matching the matrix of
+a rewrite rule such as
+=INLINEFT
+µx y z∑ (x + y) + z = x + (y + z)
+=TEX
+. In this case, there is no need to examine the free variables of $t1$.
+Less importantly, it is also optimised for the case of just one free variable,
+in which case we can use {\it is\_free\_var\_in} rather than {\it icl'frees}.
 =SML
-	fun tmaux0 (tymatch, fvmatch) bvmatch tm1 (v2ty2 : string * TYPE) = (
+	fun €tmaux0›
+		(tymatch : (TYPE * string) list, fvmatch : (TERM * (string * TYPE)) list)
+		(bvmatch : ((string * TYPE) * (string * TYPE)) list)
+		(tm1 : TERM)
+		(v2ty2 : string * TYPE)
+		: (TYPE * string) list * (TERM * (string * TYPE)) list = (
 		case rassoc5 bvmatch v2ty2 of
 			Nil => (
-				if any (icl'frees tm1) (fn x => any bvmatch (fn (x1, _) => (x = x1)))
+				if	case bvmatch of
+						[] => false
+					|	[(x1, _)] => (
+						is_free_var_in x1 tm1
+					) |	_ => (
+						any
+						(icl'frees tm1)
+						(fn x => any bvmatch (fn (x1, _) => (x = x1)))
+					)
 				then fail "term_match" 3054 []
 
 				else case rassoc5 fvmatch v2ty2 of
@@ -895,6 +990,16 @@ it is a bound variable.
 If it is, then all we must do is consult
 $bvmatch$ again to ensure that $v2$ is the corresponding
 bound variable of $tm2$, and fail if it is not.
+The correspondence has to be checked carefully to avoid
+problems with local redeclarations, e.g.,
+=INLINEFT
+Ãx∑Ãy∑x
+=TEX
+\ is not an instance of
+=INLINEFT
+Ãx∑Ãx∑x
+=TEX
+.
 If $t1$ is either a free variable of $tm1$ or some
 other sort of term then we just pass the problem
 on to $tmaux0$.
@@ -905,7 +1010,8 @@ on to $tmaux0$.
 		then	(let	val v1ty1 = dest_var tm1;
 			in case lassoc5 bvmatch v1ty1 of
 				Value vty => (
-					if vty = v2ty2 andalso rassoc5 bvmatch v2ty2 = Value v1ty1
+					if	vty = v2ty2
+					andalso	rassoc5 bvmatch v2ty2 = Value v1ty1
 					then (tymatch, fvmatch)
 					else fail "term_match" 3054 []
 			) |	Nil => tmaux0 (tymatch, fvmatch) bvmatch tm1 v2ty2
@@ -919,9 +1025,9 @@ If $t2$ is a constant then the corresponding subterm
 of $tm2$ must also be a constant with the same
 name and we just use 
 $tyaux1$ to handle the type instantiation.
-If $t2$ is a combination, then the corresponding subterm
+If $t2$ is an application, then the corresponding subterm
 of $tm1$ must be too. The subterms of the
-combinations are examined in turn, with matching information
+application are examined in turn, with matching information
 gleaned from the operator passed on for use in examining
 of the operand.
 If $t2$ is an abstraction, then so must be the corresponding
@@ -1007,7 +1113,7 @@ the format needed by the {\it icl'\ldots} functions, dropping
 superfluous entries but checking that each entry does indeed
 have a type variable as its second component. If an error
 is detected, the exception raised by {\it dest\_vartype}
-will be raise.
+will be raised.
 
 =SML
 fun €mk_inst_type_args› (f : (TYPE * TYPE) list) : (TYPE * string) list = (
@@ -1035,26 +1141,23 @@ This function extracts the type constructors contained
 in a type.
 =SML
 fun €type_tycons› (ty : TYPE) : (string * int) list = (
-	if is_vartype ty
-	then []
-	else	(
-		let	val (s,tyl) = dest_ctype ty
-		in
-		list_cup (map type_tycons tyl) grab (s, length tyl)
-		end)
+	if	is_vartype ty
+	then	[]
+	else	let	val (s,tyl) = dest_ctype ty;
+		in	list_cup (map type_tycons tyl) grab (s, length tyl)
+		end
 );
 =TEX
 This function extracts the type variables contained
 in a type.
 =SML
 fun €type_tyvars› (ty : TYPE) : string list = (
-	if is_vartype ty
-	then [dest_vartype ty]
-	else (
-		let	val (_,tyl) = dest_ctype ty
+	if	is_vartype ty
+	then	[dest_vartype ty]
+	else	let	val (_,tyl) = dest_ctype ty;
 		in
 		list_cup (map type_tyvars tyl)
-		end)
+		end
 );
 =TEX
 =SML
@@ -1102,19 +1205,6 @@ end);
 \subsection{Functions derived from Abstract Data Type $TERM$ Part}
 Some of these functions could be improved by being placed within
 the abstract data type.
-=SML
-fun €is_free_var_in› (vsvty as (vs, vty): string * TYPE) (tm : TERM) : bool = (
-let	
-	fun ifvi (App (f, a)) = ifvi (dest_simple_term f) orelse ifvi (dest_simple_term a)
-	| ifvi (Const _) = false
-	| ifvi (Var s) = s =$$ vsvty
-	| ifvi (SimpleÃ (av, bdy)) = 
-		not(dest_var av =$$ vsvty)
-		andalso ifvi (dest_simple_term bdy)
-in
-	ifvi (dest_simple_term tm)
-end);
-=TEX
 =SML
 fun €list_mk_simple_Ã› ((tml, f):TERM list * TERM): TERM = (
 	fold mk_simple_Ã tml f
@@ -1284,7 +1374,8 @@ val €dest_eq› : TERM -> (TERM * TERM)= dest_bin_op "dest_eq" 3014 "=";
 val €is_eq› : TERM -> bool = is_bin_op "=";
 =TEX
 =SML
-val €mk_¥› : (TERM * TERM) -> TERM = mk_bin_op "mk_¥" 3031 3015 (bin_bool_op "¥");
+val €mk_¥› : (TERM * TERM) -> TERM =
+	mk_bin_op "mk_¥" 3031 3015 (bin_bool_op "¥");
 
 val €dest_¥› : TERM -> (TERM * TERM) = dest_bin_op "dest_¥" 3016 "¥";
 
@@ -1535,7 +1626,8 @@ This function extracts the subterms of a term which
 are constants.
 =SML
 fun €term_consts› (tm : TERM) : (string * TYPE) list = (
-let	fun aux (App(f, a)) = union (op =$$) (aux(dest_simple_term f)) (aux(dest_simple_term a))
+let	fun aux (App(f, a)) =
+		union (op =$$) (aux(dest_simple_term f)) (aux(dest_simple_term a))
 	| aux (Var _) = []
 	| aux (Const c) = [c]
 	| aux (SimpleÃ (v, b)) = aux (dest_simple_term b)
@@ -1547,7 +1639,8 @@ This function extracts the subterms of a term which
 are variables.
 =SML
 fun €term_vars› (tm : TERM) : (string * TYPE) list = (
-let	fun aux (App(f, a)) = union (op =$$) (aux(dest_simple_term f)) (aux(dest_simple_term a))
+let	fun aux (App(f, a)) =
+		union (op =$$) (aux(dest_simple_term f)) (aux(dest_simple_term a))
 	| aux (Var v) = [v]
 	| aux (Const c) = []
 	| aux (SimpleÃ (v, b)) = union (op =$$) [dest_var v] (aux (dest_simple_term b))
@@ -1825,7 +1918,7 @@ fun €pp'string_of_type› (t : TYPE) : string = (
 end; (* of structure icl'TypesAndTerms *)
 end; (* end of local *)
 =TEX
-We now open the structure for system creation, though the user will only see
+We now open the structure for system build. The user will actually see
 the items provided by the structure via the opening of structure
 $TypesAndTerms$, in \cite{DS/FMU/IED/IMP004}.
 =SML
