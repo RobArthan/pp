@@ -66,12 +66,13 @@ None known.
 None known.
 
 \section{PREAMBLE}
-=IGN
+=SML
 structure ÛResolutionÝ : Resolution = struct
 =TEX
-=IGN
-val lthy = open_theory "basic_hol";
-val _ = push_proof_context ();
+=SML
+val lthy = get_current_theory_name();
+val _ = open_theory "basic_hol";
+val _ = push_proof_context prove_¶_epc;
 =TEX
 \section{THE CODE}
 Using $rewrite\_rule$ as a simplifier is crude!
@@ -408,7 +409,7 @@ let	fun aux inside ty =
 	then (case lassoc5 match ty of
 	Nil => ty (* not instantiable, so not ty1 *)
 	| Value Nil => if inside andalso ty1 = ty
-		then type_fail "term_unify" 67012 [ty1,ty2]
+		then type_fail "type_unify" 67012 [ty1,ty2]
 		else ty
 	| Value (Value ty') => 
 		if ty' = ty
@@ -514,7 +515,7 @@ fun Ûtype_unifyÝ (match:(TYPE * TYPE OPT)list) (ty1:TYPE)
 let	fun aux mth [] [] = mth
 	| aux mth (t1 :: rest1) (t2 :: rest2) = (
 		aux (type_unify mth t1 t2) rest1 rest2
-	) | aux _ _ _ = type_fail "term_unify" 67005 [ty1,ty2];
+	) | aux _ _ _ = type_fail "type_unify" 67005 [ty1,ty2];
 in
 	if is_vartype ty1
 	then (case lassoc5 match ty1 of
@@ -523,13 +524,13 @@ in
 		then (case lassoc5 match ty2 of
 		Nil => ( if ty1 = ty2
 			then match
-			else type_fail "term_unify" 67007 [ty1,ty2,ty1]
+			else type_fail "type_unify" 67007 [ty1,ty2,ty1]
 		) | Value Nil => (
 			match overwrite (ty2,Value ty1)
 		) | Value(Value ty2') => (
 			type_unify match ty1 ty2'
 		)) else
-		(type_fail "term_unify" 67005 [ty1,ty2]
+		(type_fail "type_unify" 67005 [ty1,ty2]
 		)
 	) | Value Nil => ((* as yet uninstantiated *)
 	let	val ty2' = expand_check_type match ty1 ty2;
@@ -544,7 +545,7 @@ in
 	else ((* a compound type *)
 		if is_vartype ty2
 		then (case (lassoc5 match ty2) of
-		Nil => type_fail "term_unify" 67005 [ty1,ty2]
+		Nil => type_fail "type_unify" 67005 [ty1,ty2]
 		| Value Nil => (
 			match overwrite (ty2,Value ty1)
 		) | Value(Value ty2') => (
@@ -556,7 +557,7 @@ in
 		in
 			if (nm1 = nm2)
 			then aux match tys1 tys2
-			else type_fail "term_unify" 67005 [ty1,ty2]
+			else type_fail "type_unify" 67005 [ty1,ty2]
 		end)
 	)
 end);
@@ -789,7 +790,9 @@ end);
 	val oms2 = mapfilter (get_tm_subst trans_ms2) ims2;
 in
 	((omi1,oms1),(omi2,oms2))
-end);
+end
+handle complaint =>
+pass_on complaint "type_unify" "term_unify");
 =IGN
 term_unify [] [] ((¬a®,[],[]),(¬a®,[],[]));
 term_unify [] [] ((¬a®,[],[]),(¬b®,[],[])); (* fails *)
@@ -846,6 +849,8 @@ in unifying the fragment
 \end{enumerate}
 =SML
 type BASIC_RES_TYPE = TERM * bool * TERM list * TYPE list * THM * TERM list * TYPE list;
+type RES_DB_TYPE = BASIC_RES_TYPE list * BASIC_RES_TYPE list *
+	BASIC_RES_TYPE list * THM list;
 =TEX
 Why isn't this in DTD004???
 =SML
@@ -1014,11 +1019,13 @@ in
 	aux_basic_res_pre x
 end);
 
-fun Ûbasic_res_preÝ (sos:THM list) (rest:THM list) : int * (BASIC_RES_TYPE list * THM list) = (
+fun Ûbasic_res_preÝ (sos:THM list) (rest:THM list) : RES_DB_TYPE = (
 let	val prest = aux_basic_res_pre rest;
 	val psos = aux_basic_res_pre sos;
 in
-	(length prest + 1,(prest @ psos, rest @ sos))
+	if is_nil psos
+	then (prest, [], psos, rest @ sos)
+	else (prest @ [hd psos], [], psos, rest @ sos)
 end);
 
 =TEX
@@ -1073,91 +1080,116 @@ fun Ûbasic_res_resolverÝ ((frag1,pos1,vs1,tyvars1,thm1,nsvs1,nivs1):BASIC_RES_TY
 
 =TEX
 =SML
-fun int_max (a:int,b) = if a < b then b else a;
+fun Ûint_maxÝ (a:int,b) = if a < b then b else a;
 =TEX
 =SML
-local
-fun remove_frags cthm ([]:BASIC_RES_TYPE list) (pfr:BASIC_RES_TYPE list) atind hwm ind = (rev pfr, hwm, ind)
-| remove_frags cthm ((frag as (_,_,_,_,thm',_,_)) :: rest) pfr atind hwm ind = (
-	if cthm = concl thm'
-	then (remove_frags cthm rest pfr (atind+1) 
-		(if atind < hwm then (hwm-1) else hwm)
-		(if atind <= ind then int_max(ind-1,1) else if atind = hwm then 1 else ind))
-	else remove_frags cthm rest (frag :: pfr) (atind+1) hwm ind
-);
-
-fun aux thm (frags:BASIC_RES_TYPE list) ([]:THM list) (rest:THM list) (hwm:int) (ind:int) 
-	:(BASIC_RES_TYPE list * THM list) * int * int * bool = (
-	((frags @ aux_basic_res_pre [thm], (thm :: rest)),hwm,ind,false)
-) | aux thm frags (a::x) rest hwm ind = (
-	case (basic_res_subsumption thm a) of
-	1 => ((frags,rest),hwm,ind,false)
-	| 2 => (
-	let	val cthm = concl thm;
-		val (frags',hwm',ind') = remove_frags cthm frags [] 1 hwm ind
-	in
-		aux thm frags' x (rest drop (fn athm => concl athm = cthm)) hwm' ind'
-	end)
-	| _  => aux thm frags x rest hwm ind
-);
-
-fun list_aux [] (frags:BASIC_RES_TYPE list) (rest:THM list) (hwm:int) (ind:int) = (
-	((frags,rest),hwm,ind,false)
-) | list_aux (a::x) frags rest hwm ind = (
-let	val ((frags',rest'),hwm',ind',_) = aux a frags rest rest hwm ind
+fun Ûthm_lessÝ thms thm = (
+let	val dthm = dest_thm thm
 in
-	list_aux x frags' rest' hwm' ind'
+	thms drop (fn x => dest_thm x = dthm)
+end);
+=TEX
+=SML
+fun Ûthm_diffÝ thms thms' = (
+let	val dthms' = map dest_thm thms';
+in
+	thms drop (fn x => dest_thm x mem dthms')
+end);
+=SML
+local
+=SML
+fun keep_lose_thms new_thms old_thms = (
+let	fun aux [] added added' lost old old' = (
+		aux_basic_res_pre added,added @ old, lost
+	) | aux (a :: x) added [] lost old [] = (
+		aux x (a :: added) (a :: added) lost old old
+	) | aux (a :: x) added (a' :: x') lost old [] = (
+		case (basic_res_subsumption a a') of
+		1 => aux x added added lost old old
+		| 2 => aux (a :: x) (thm_less added a) x' lost old []
+		| _ => aux (a :: x) added x' lost old []
+	) | aux (a :: x) added added' lost old (a' :: x') = (
+		case (basic_res_subsumption a a') of
+		1 => aux x added added' lost old old
+		| 2 => aux (a :: x) added added' (a' :: lost) (thm_less old a) x'
+		| _ => aux (a :: x) added added' lost old x'
+	);
+in
+	aux new_thms [] [] [] old_thms old_thms
+end);
+=TEX
+Drop any fragments whose theorems are in a given list.
+=SML
+fun frag_drop thml = (
+let	val cthml = map dest_thm thml;
+in
+	(fn fragl =>
+	fragl drop (fn (_,_,_,_,thm,_,_):BASIC_RES_TYPE => (dest_thm thm mem cthml))
+	)
 end);
 
 in
 fun Ûbasic_res_postÝ (subsum:THM -> THM -> int) 
-	((res, (frags, before), hwm, ind):THM list * (BASIC_RES_TYPE list * THM list) * int * int)
-	: ((BASIC_RES_TYPE list * THM list) * int * int * bool) = (
+	((res, (against,tried, toprocess, using_thms)):THM list * RES_DB_TYPE)
+	: (RES_DB_TYPE * bool) = (
 let	val res' = flat(map strip_±_rule res) drop (fn thm =>
 		concl thm = mk_t);
 in
 	if any res' (fn thm => concl thm = mk_f)
-	then ((frags, res' @ before),hwm,ind,true)
-	else list_aux res' frags before hwm ind
+	then ((against, tried, toprocess, res' @ using_thms),true)
+	else (let	val (new_frags, keep_thms, lose_thms) = keep_lose_thms res' using_thms;
+		val fd = frag_drop lose_thms;
+		val against' = fd (tl against);
+		val tried' = fd (hd against :: tried);
+		val hdtoprocess' =  fd [hd toprocess];
+		val tltoprocess' = (fd (tl toprocess)) @ new_frags;
+	in
+		if is_nil hdtoprocess'
+		then (([], rev against' @ tried, tltoprocess', keep_thms), false)
+		else ((against', tried', hdtoprocess' @ tltoprocess', keep_thms), false)
+	end)
 end);
 end;
 =TEX
 =SML
-fun Ûbasic_res_extractÝ ((_,thml):BASIC_RES_TYPE list * THM list) : THM list = thml;
+fun Ûbasic_res_extractÝ ((_,_,_,thml):RES_DB_TYPE) : THM list = thml;
 
 =TEX
 =SML
-fun Ûprim_resolution_ruleÝ (prep : THM list -> THM list -> (int * ('a list * 'b)))
+fun Ûprim_resolution_ruleÝ (prep : THM list -> THM list -> ('a list * 'a list * 'a list * 'b))
 	(reso:'a -> 'a -> THM list)
-	(postp:(THM list * ('a list * 'b) * int * int) -> 
-		(('a list * 'b) * int * int * bool))
-	(extract:'a list * 'b -> THM list)
+	(postp:(THM list * ('a list * 'a list * 'a list * 'b)) -> 
+		(('a list * 'a list * 'a list * 'b) * bool))
+	(extract:('a list * 'a list * 'a list * 'b) -> THM list)
 	(limit : int)
 	(sos : THM list)
 	(rest : THM list) : THM list = (
-let	val (hwm,db) = prep sos rest;
-	fun aux hwm ind (db as (dblist, dbdata)) count = (
-	let	val ldblist = length dblist;
-	in
-		if hwm > ldblist
+	if any (sos @ rest) (fn thm => concl thm = mk_f)
+	then [find (sos @ rest) (fn thm => concl thm = mk_f)]
+	else
+let	val init_db = prep sos rest;
+	fun aux (db as (against, tried, toprocess, dbdata)) count = (
+		if is_nil toprocess
 		then extract db
-		else if ind > hwm
-		then aux (hwm + 1) 1 db count
+		else if is_nil against
+		then (let val toprocess' = tl toprocess;
+		in
+			if is_nil toprocess'
+			then extract db
+			else aux(rev(hd toprocess' :: tried),[],toprocess',dbdata) count
+		end)
 		else (let
-			val hwm_item = nth (hwm-1) dblist;
-			val ind_item = nth (ind-1) dblist;
-			val res_thms = reso hwm_item ind_item;
-			val (db',ind',hwm',halt) = 
-				postp (res_thms,db,ind,hwm);
+			val res_thms = reso (hd toprocess) (hd against);
+			val (db',halt) = postp (res_thms,db);
 			val count' = count + length res_thms;
 		in
 			if halt orelse (count' >= limit)
 			then extract db' 
-			else aux hwm' (ind'+1) db' count'
+			else aux db' count'
 		end)
-	end);
+	);
 in
-	aux hwm 1 db 0
+	aux init_db 0
 end);
 =TEX
 =SML
@@ -1194,7 +1226,11 @@ basic_resolution_rule 1
 	[
 	(asm_rule ¬(µ x y z:'a · R x y ± R y z ´ R x z)®)]
 	[];
-basic_resolution_rule 1
+basic_resolution_rule 10
+	[
+	(asm_rule ¬(µ x y z:'a · R x y ± R y z ´ R x z)®)]
+	[];
+basic_resolution_rule 3
 	[
 	(asm_rule ¬(µ x y z :'a· R x y ± R y z ´ R x z)®),
 	(asm_rule ¬(µ x y :'a· R x y ´ R y x)®)]
@@ -1214,11 +1250,6 @@ basic_resolution_rule 100
 	(asm_rule ¬(³ R (x:'a) x)®)]
 	[];
 basic_resolution_rule 10
-	[(asm_rule ¬(³ R (x:'a) x)®)]
-	[(asm_rule ¬(µ x y z:'a · R x y ± R y z ´ R x z)®),
-	(asm_rule ¬(µ x y :'a· R x y ´ R y x)®),
-	(asm_rule ¬µ x :'a· R x (f x:'a)®)];
-basic_resolution_rule 10
 	[(asm_rule ¬(µ x y :'a · R x y ´ R y x)®),
 	(asm_rule ¬µ x :'a· R x (f x:'a)®)] [] ;
 
@@ -1227,9 +1258,6 @@ basic_resolution_rule 100
 	[(asm_rule ¬(µ x y z:'a · R x y ± R y z ´ R x z)®),
 	(asm_rule ¬(µ x y:'a · R x y ´ R y x)®),
 	(asm_rule ¬µ x :'a· R x (f x:'a)®)];
-basic_resolution_rule 5
-	[(asm_rule ¬µ a b · r a ´ r a ² r b ² r a®)]
-	[];
 
 basic_resolution_rule 10
 	[(asm_rule ¬µ x · p (f x) ± ³ p x®)]
@@ -1244,6 +1272,14 @@ basic_resolution_rule 200 (* 100 is not enough *)
 	(asm_rule ¬µ x y:'box· (green x ± on(x,y)) ´ green y®)
 	]
 	[];
+basic_resolution_rule 200 (* 100 is not enough *)
+	[
+	(asm_rule ¬on(A:'box,B:'box):BOOL®),
+	(asm_rule ¬on(B:'box,C:'box):BOOL®),
+	(asm_rule ¬green(A:'box):BOOL®),
+	(asm_rule ¬³ green(C:'box)®)
+	]
+	[(asm_rule ¬µ x y:'box· (green x ± on(x,y)) ´ green y®)];
 basic_resolution_rule 10
 	[
 	(asm_rule ¬®),
@@ -1251,17 +1287,98 @@ basic_resolution_rule 10
 	[];
 
 =TEX
-=IGN
-val lsubgoal_package_quiet = set_flag("subgoal_package_quiet",true);
+\section{DERIVED RESOLUTION TOOLS}
+=SML
+local
+	val thm = tac_proof(([],¬µ a · a ¤ (³ a ´ a)®),
+		REPEAT strip_tac);
+in
+val Ûc_contr_tac1Ý: TACTIC = (
+	conv_tac(fn a => simple_µ_elim a thm)
+	THEN
+	strip_tac
+);
+fun ÛC_CONTR_T1Ý (thmtac: THM -> TACTIC): TACTIC = (
+	conv_tac(fn a => simple_µ_elim a thm)
+	THEN
+	´_T thmtac
+);
+end;
+=SML
+fun ÛBASIC_RESOLUTION_TÝ (limit:int) (thml:THM list) (thmtac1: THM -> TACTIC) 
+	(thmtac2: THM -> TACTIC) : TACTIC = (fn (asms,gl) => 
+let	val (sgs,prf) = C_CONTR_T1 thmtac1 (asms,gl);
+	val lasms = length asms;
+	fun	aux (asms',gl') = (
+	let	val lasms' = length asms';
+		val new_asms = asms' to (lasms' - (1 + lasms));
+		val old_asms = asms' from (lasms' - (lasms));
+		val new_asm_thms = map asm_rule new_asms;
+		val old_asm_thms = map asm_rule old_asms;
+		val res_thms = basic_resolution_rule limit
+			new_asm_thms
+			(thml @ old_asm_thms);
+		val res_thms' = thm_diff res_thms (thml @ new_asm_thms @ old_asm_thms);
+	in
+		if any res_thms (fn thm => concl thm = mk_f)
+		then f_thm_tac (find res_thms (fn thm => concl thm = mk_f)) (asms',gl')
+		else 
+		(GET_ASMS_T(fn _ => MAP_EVERY thmtac2 res_thms') (asms',gl'))
+	end);
+	val sgs2pfs2 = map aux sgs;
+in
+	(flat (map fst sgs2pfs2),
+	prf o mapshape (map (fn (sgs, pf) => (pf, length sgs))sgs2pfs2))
+end);
+
+=TEX
+=SML
+fun Ûbasic_resolution_tacÝ (limit:int) (thml:THM list) : TACTIC = (
+	BASIC_RESOLUTION_T limit thml strip_asm_tac strip_asm_tac
+);
+=TEX
+=SML
+fun Ûbasic_resolution_tac2Ý (limit:int) (thml:THM list) : TACTIC = (
+	BASIC_RESOLUTION_T limit thml strip_asm_tac 
+	(fn _ => fail_with_tac "basic_resolution_tac2" 67014 [])
+);
+=TEX
+=SML
+fun ÛBASIC_RESOLUTION_T1Ý (limit:int) (thml:THM list) 
+	(thmtac: THM -> TACTIC) : TACTIC = (
+	GET_ASMS_T (fn thms => 
+	let val res_thms = basic_resolution_rule limit thms thml;
+		val res_thms' = thm_diff res_thms (thml @ thms);
+
+	in
+		if any res_thms (fn thm => concl thm = mk_f)
+		then f_thm_tac (find res_thms (fn thm => concl thm = mk_f))
+		else MAP_EVERY thmtac res_thms'
+	end)
+);
+
+=TEX
+=SML
+fun Ûbasic_resolution_tac1Ý (limit:int) (thml:THM list) : TACTIC = (
+	BASIC_RESOLUTION_T1 limit thml strip_asm_tac
+);
+=TEX
+=SML
+fun Ûbasic_resolution_tac3Ý (limit:int) (thml:THM list) : TACTIC = (
+	BASIC_RESOLUTION_T1 limit thml 
+	(fn _ => fail_with_tac "basic_resolution_tac3" 67014[])
+);
+=TEX
+
+
+
 =TEX
 \section{EPILOGUE}
-=IGN
+=SML
 val _ = open_theory lthy;
 val _ = pop_proof_context();
-val lsubgoal_package_quiet = set_flag("subgoal_package_quiet",
-	lsubgoal_package_quiet);
 end; (* of structure Resolution *)
-open ExistenceProofs;
+open Resolution;
 =TEX
 \twocolumn[\section{INDEX}]
 \small
