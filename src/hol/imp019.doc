@@ -89,6 +89,17 @@ The parser accepts a slightly larger language than that specified in
 postfix syntax and type constraints in local function definitions.
 It also allows antiquotation in local definitions and bound variable
 declarations.
+
+The error report for errors in varstructs and local definitions
+does not indicate the position of the error as accurately as one might
+like. The error marker appears immediately after the $let$-term or
+abstraction (or similar) containing the error. To fix this would require
+quite a lot of work (one would probably have to label the $TM$s with
+token numbers so that the code which makes the checks when the
+entire containing phrase has been recognised
+could calculate where the error in the input arose from).
+As the second line of the error report does print out the rogue construct
+in full, the situation as is is not intolerable.
 \subsection{PREAMBLE}
 =SML
 structure ÛParserÝ : Parser = struct
@@ -99,12 +110,74 @@ imp018.sml
 =SML
 open EfficientDictionary Lex SlrpDriver;
 =TEX
-\subsection{Utilities}
+\subsection{Error Handling}
+=SML
+exception QuotationError;
+=TEX
+To give error reports which are closely related to the actual input,
+the following two variables are set up by the functions
+$HOL\_parser$ and $HOL\_reader$. At any time during parsing $input\_toks$
+can be expected to contain the totality of the token stream being parsed
+and $toks\_read$ contains the offset in it of the token most recently
+read (or is =INLINEFT
+~1
+=TEX
+\ if nothing has been read yet).
+=SML
+val input_toks : HOL_TOKEN list ref = ref [];
+val cur_tok : int ref = ref ~1;
+=TEX
+The following function converts a token into a string for use
+in an error report:
+=SML
+fun Ûformat_hol_tokenÝ  (tok : HOL_TOKEN) : string = (
+	case tok of
+		HTAqTm _	=> "¬ ... ®"
+	|	HTAqTy _	=> "¬: ... ®"
+	|	HTBinder  name	=> name 
+	|	HTInOp {name, ...}	=> name
+	|	HTName name	=> name
+	|	HTString s	=> "\"" ^ s ^ "\""
+	|	HTChar c	=> "`" ^ c ^ "`"
+	|	HTPostOp {name, ...}	=> name
+	|	HTPreOp {name, ...}	=> name
+	|	HTAnd 		=> "and" 
+	|	HTBlob		=> "·"
+	|	HTColon		=> ":"
+	|	HTElse		=> "else"
+	|	HTIf		=> "if"
+	|	HTIn		=> "in"
+	|	HTLbrace	=> "{"
+	|	HTLbrack	=> "("
+	|	HTLet		=> "let"
+	|	HTLsqbrack	=> "["
+	|	HTRbrace	=> "}"
+	|	HTRbrack	=> ")"
+	|	HTRsqbrack	=> "]"
+	|	HTSemi		=> ";"
+	|	HTThen		=> "then"
+	|	HTVert		=> "|"
+	|	HTEos		=> "®"
+);
+=TEX
+=SML
+fun Ûparse_error_hdrÝ () : unit = (
+	let	val ok_toks =	format_list
+				format_hol_token
+				((!input_toks) to (!cur_tok-1))
+				" ";
+		val bad_tok =	if !cur_tok >= 0 andalso !cur_tok < length (!input_toks)
+				then " <?> " ^ format_hol_token (nth (!cur_tok) (!input_toks))
+				else "";
+	in	diag_string (get_error_message 17001 [ok_toks ^ bad_tok])
+	end
+);
+=TEX
 =SML
 fun Ûparse_errorÝ (msg : int) (insert : string) : 'a = (
-	diag_line (get_error_message 17001 []);
-	diag_line (get_error_message msg [insert]);
-	fail "HOL parser"  17000 []
+	parse_error_hdr();
+	diag_string (get_error_message msg [insert]);
+	raise SYNTAX_ERROR
 );
 =TEX
 =SML
@@ -720,53 +793,48 @@ fun ÛHOL_classifyÝ  (tok : HOL_TOKEN) : HOL_LEX_CLASS = (
 );
 =TEX
 =SML
-fun Ûformat_hol_tokenÝ  (tok : HOL_TOKEN) : string = (
-	case tok of
-		HTAqTm _	=> "<antiquoted term>"
-	|	HTAqTy _	=> "<antiquoted type>"
-	|	HTBinder  name	=> name 
-	|	HTInOp {name, ...}	=> name
-	|	HTName name	=> name
-	|	HTString s	=> "\"" ^ s ^ "\""
-	|	HTChar c	=> "`" ^ c ^ "`"
-	|	HTPostOp {name, ...}	=> name
-	|	HTPreOp {name, ...}	=> name
-	|	HTAnd 		=> "and" 
-	|	HTBlob		=> "·"
-	|	HTColon		=> ":"
-	|	HTElse		=> "else"
-	|	HTIf		=> "if"
-	|	HTIn		=> "in"
-	|	HTLbrace	=> "{"
-	|	HTLbrack	=> "("
-	|	HTLet		=> "let"
-	|	HTLsqbrack	=> "["
-	|	HTRbrace	=> "}"
-	|	HTRbrack	=> ")"
-	|	HTRsqbrack	=> "]"
-	|	HTSemi		=> ";"
-	|	HTThen		=> "then"
-	|	HTVert		=> "|"
-	|	HTEos		=> "<end of quotation>"
-);
-=TEX
-=SML
 fun ÛHOL_readerÝ (ip : HOL_TOKEN list) : HOL_TOKEN * (HOL_TOKEN list) = (
 	case ip of
-		(h :: more) => (h, more)
+		(h :: more) => (cur_tok := !cur_tok + 1; (h, more))
 	|	[] => (HTEos, [])
 );
 =TEX
 =SML
+val HOL_error : (HOL_TOKEN, 'b, 'c, 'd) ERROR_ROUTINE = (fn (tok, stk, _, _) => (
+	parse_error_hdr();
+	diag_string (get_error_message 17003 [format_hol_token tok,
+				format_stack format_hol_token stk]);
+	raise SYNTAX_ERROR
+));
+=TEX
+Note that to be frugal with store, we take care to set the $input_toks$ variable
+to $[]$ between runs of the parser.
+Note also that the error function $HOL\_error$  raises $SYNTAX_ERROR$
+which $HOL\_parser$ catches so that it can do this tidying up even if
+an error has occurred.
+
+If an internal error occurs this tidying up is suppressed, which could
+help in obscure debugging circumstances (and only costs the user
+a bit of space until the next parser run).
+=SML
 fun ÛHOL_parserÝ (ip : HOL_TOKEN list) : (TY)TM = (
-	(case (slrp'gen_parser
-			HOL_resolver HOL_classify
-			(default_error format_hol_token)
-			HOL_reader) ip of
-		Tm tm => tm
-	|	_ => error "HOL parser" 17006 [])
-	handle	SYNTAX_ERROR => fail "HOL parser" 17000 []
-	|	PARSER_ERROR msg => error "HOL parser" 17007 [fn()=>msg]
+	let	val se1 = (input_toks := ip; cur_tok := ~1);
+		val res =(Value(
+			case (slrp'gen_parser
+				HOL_resolver HOL_classify
+				HOL_error
+				HOL_reader) ip of
+			Tm tm => tm
+			|	_ => error "HOL parser" 17006 []))
+			handle	SYNTAX_ERROR => Nil
+			|	PARSER_ERROR msg => (
+					error "HOL parser" 17007 [fn()=>msg]
+			);
+		val se2 = (input_toks := []);
+	in	case res of
+			Value tm => tm
+		|	Nil => raise QuotationError
+	end
 );
 =TEX
 =SML
