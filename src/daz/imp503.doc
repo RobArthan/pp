@@ -99,7 +99,7 @@ This removes the need for various special cases and type conversion functions.
 \item[Issue1.107] Some functions moved elsewhere for better modularity and ease of system build.
 \item[Issue 1.108] fixed bug in reduction function for exit when statements.
 \item[Issue 1.109] fixed bug in reduction function for use type clauses.
-\item[Issue 1.110] R0079: assertions (added new reduction functions and accommodated changed data types).
+\item[Issue 1.110, 1.111] R0079: assertions (added new reduction functions and accommodated changed data types).
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -618,23 +618,23 @@ fun €reset_cn_parser_state› () : unit = (
 =TEX
 
 When we encounter a k-slot or a specification statement with no label on the rhs, we give it a provisional label. The check that there is no outstanding unlabelled k-slot or specification statement happens later, at which point if all is OK, the provisional label becomes the actual label for expansion.
+For assertions, we just generatea a new label without any checks.
 =SML
-fun €push_label› (() : unit) : string = (
-if !unlabelled_provisional = Nil
-then
-    let val label = implicit_label_of_int (!unlabelled_counter);
-        val side = unlabelled_counter := (!unlabelled_counter) + 1;
-        val side = unlabelled_provisional := Value label;
-    in
-        label
-    end
-else    (
-    unlabelled_provisional := Nil;
-    parse_error 503001
-    "There is already an unlabelled, \
-    \unexpanded K-Slot or Specification Statement in the script"
-    )
-    );
+fun €push_label› (is_assertion : bool) : string = (
+	let	val label = implicit_label_of_int (!unlabelled_counter);
+		val _ = unlabelled_counter := (!unlabelled_counter) + 1;
+	in	if	is_assertion
+		then	label
+		else if	!unlabelled_provisional = Nil
+		then	(unlabelled_provisional := Value label;  label)
+		else    (
+			unlabelled_provisional := Nil;
+			parse_error 503001
+			"There is already an unlabelled, \
+			\unexpanded K-Slot or Specification Statement in the script"
+		)
+	end
+);
 =TEX
 
 The following function should be called when a refinement or replaced-by has been parsed. It updates the label stack with a newly generated label. This caters for a specification statement which is unlabelled, and is itself intended to be expanded with an unlabelled expansion.
@@ -1489,7 +1489,7 @@ fun €red_statement1› (Parsed(PPKSlot k)) = (
         stack_error "red_statement1";
 
 fun €red_statement2› (Parsed(PPStatement(STSpecNoIvars{spec=spec, is_assertion, ...}))) = (
-    PPStatement(STSpecNoIvars{spec=spec, label=push_label(), is_assertion = is_assertion}))
+    PPStatement(STSpecNoIvars{spec=spec, label=push_label is_assertion, is_assertion = is_assertion}))
 |   red_statement2 _ = stack_error "red_statement2";
 
 fun €red_statement3› (Parsed(PPStatement(STSpecNoIvars{spec=spec, is_assertion, ...})))
@@ -1506,7 +1506,7 @@ in
     if is_assertion
    then parse_error 503001 "an assertion is not allowed in a logical constant statement"
    else  PPStatement(SLogCon{defs = map mk_log_con_def ns_ts, spec=s,
-		pre1 = mk_z_true, label=push_label()})
+		pre1 = mk_z_true, label=push_label false})
 end)
 |   red_statement4 _ _ _ _ =
         stack_error "red_statement4";
@@ -1590,7 +1590,7 @@ end)
 
 fun €red_specification_statement5› _ _ (Token ((LCZ,CNZ z1), _)) _ = (
 let val (pre, post) = 
-    (z_tm_true, process_predicate z1);
+    (process_predicate z1, z_tm_true);
 in
     PPStatement(STSpecNoIvars{spec={w=[], w0=[], pre=pre,post=post},
 			label="", is_assertion = true})
@@ -1612,7 +1612,7 @@ fun €red_label2› _ (Parsed (PPExp n)) _ = (
 |   red_label2 _ _ _ = stack_error "red_label2";
 
 fun €red_k_slot1› _ (Token ((LCKSlot,CNKSlot lx), _)) _ = (
-    PPKSlot{content=format_input_items lx, label=push_label()})
+    PPKSlot{content=format_input_items lx, label=push_label false})
 |   red_k_slot1 _ _ _ =
         stack_error "red_k_slot1";
 
