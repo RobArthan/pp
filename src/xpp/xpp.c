@@ -148,7 +148,7 @@ static XtResource resources[] = {
 		XtRInt,
 		sizeof(int),
 		XtOffsetOf(XppResources, add_new_line_mode),
-		XtRInt,
+		XtRImmediate,
 		(XtPointer) 1
 	}
 };
