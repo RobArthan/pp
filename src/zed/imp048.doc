@@ -1,0 +1,1504 @@
+=TEX
+\documentstyle[hol,11pt,TQ]{article}
+\ftlinepenalty=9999
+\makeindex
+\TPPproject{IED 1563}  %% Mandatory field
+%\TPPvolume{}
+%\TPPpart{}
+\TPPtitle{Implementation of Support for Z Types and Terms}  %% Mandatory field
+\def\TPPheadtitle{Implementation of Support for Z Types and Terms}
+\TPPref{DS/FMU/IED/IMP048}  %% Mandatory field
+\def\SCCSversion{$Revision$ %
+}
+\TPPissue{\SCCSversion}  %% Mandatory field
+\TPPdate{\FormatDate{$Date$ %
+}}
+\TPPstatus{Draft}			%% Mandatory field
+\TPPtype{SML Literate Script}
+\TPPkeywords{}
+\TPPauthor{G.T.Scullard & MAN05}  %% Mandatory field
+%\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
+\TPPauthorisation{R.B.Jones & Project Manager}
+\TPPabstract{}
+\TPPdistribution{\parbox[t]{4.0in}{%
+	    Library
+}}
+\begin{document}
+\makeTPPfrontpage
+\vfill
+\begin{centering}
+\bf Copyright \copyright\ : International Computers Ltd \number\year
+\end{centering}
+\pagebreak
+\section{Document control}
+\subsection{Contents list}
+\tableofcontents
+\subsection{Document cross references}
+\bibliographystyle{fmu}
+\bibliography{fmu}
+
+\subsection{Changes history} 
+\begin{description}
+\item [Issue \SCCSversion (\TPPdate{\FormatDate{$Date$
+}})]
+First draft version.
+\end{description}
+%\subsection{Changes forecast}
+\section{GENERAL}
+\subsection{Scope}
+This document provides the implementation of a set of support functions for the construction of HOL representations of Z types and terms.
+The functions defined here are intended for use in \cite{DS/FMU/IED/IMP047}, the user accessible type and term constructors.
+This document is called for in \cite{DS/FMU/IED/HLD017}; the detailed design may be found in \cite{DS/FMU/IED/DTD048}.
+\subsection{Introduction}
+\subsubsection{Purpose and Background}
+\subsubsection{Dependencies}
+The functions in this document are dependent on the Release 1 HOL System.
+\subsubsection{Deficiencies}
+\section{STRUCTURE}
+=SML
+structure ‚icl'ZTypesAndTerms· : icl'ZTypesAndTerms = struct
+=TEX
+\section{DERIVED HOL CONSTRUCTORS}
+The functions defined here are an ad-hoc collection of constructors, destructors and discriminators which, at the time of writing, were not provided by the ICL HOL system.
+If they are added in future, they will be removed from here.
+=SML
+fun	‚list_mk_ã_type· ((tyl,ty):TYPE list * TYPE) :TYPE = fold mk_ã_type tyl ty;
+=TEX
+\section{SCHEMAS} \label{SCHEMAS}
+
+\subsubsection{name formation}
+The following specification is reproduced from \cite{DS/FMU/IED/DTD048}.
+
+Í
+	‚unpack_IDENT·	: string ñ IDENT
+	‚pack_IDENT· 	: IDENT è string
+…
+	pack_IDENT Ø unpack_IDENT = id[IDENT]
+À
+
+As discussed in \cite{DS/FMU/IED/DTD048}, the types $IDENT$, $WORD$ and $DECOR$ are simply implemented as $string$s.
+=SML
+fun	‚pack_IDENT· ((w,d) :string * string) :string = (w ^ d);
+fun	‚unpack_IDENT· (s :string) :string * string =
+	let 	fun 	f _ [] = ([],[])
+		|	f _ ("'"::t) = ([],("'"::(snd(f true t))))
+		|	f _ ("?"::t) = ([],("?"::(snd(f true t))))
+		|	f _ ("!"::t) = ([],("!"::(snd(f true t))))
+		|	f false (h::t) = 
+				let	val (a,b) = f false t
+				in	((h::a),b)
+				end
+		|	f _ _ = fail "unpack_IDENT" 48001 [fn() => s]
+	in
+		(implode ** implode)(f false (explode s)) 
+	end;
+=TEX
+
+In the following definitions {\em idsetseq} is intended to sort a set of identifiers.
+The ordering is immaterial and has not been specified, though it would be odd to make it other than lexicographic.
+{\em flatpack} produces a comma-separated string from a sequence of strings.
+It is required to be used on the empty sequence (since schemas obtained by hiding may have an empty signature).
+
+Í
+	‚idsetseq·		: í IDENT è seq IDENT
+	‚flatpack·		: seq string è string
+…
+		(Éfid: í IDENTé
+			ran (idsetseq fid) = fid)
+	Ä	(Éss:seq string; s1,s2:stringé
+			flatpack (æø) = ``
+		Ä	flatpack (æs1ø) = s1
+		Ä	flatpack (ssµæs1øµæs2ø) = (flatpack (ssµæs1ø))^`,`^s2)
+À
+
+=SML
+fun	‚idsetseq· (sl:string list) : string list = Sort.sort Sort.stringorder sl;
+fun	‚flatpack· ([]:string list) : string 	= ""
+|	flatpack (s::[])			= s
+|	flatpack (s::ss) 			= s ^ "©" ^ (flatpack ss);
+=TEX
+
+Í
+	‚val_setIDENT·	: í IDENT è string
+	‚itymfunseq·		: (IDENT ú TYPE) ã seq TYPE
+	‚bool_type·		: TYPE
+…
+		(Éfid: í IDENTé
+			ran (idsetseq fid) = fid
+		Ä	val_setIDENT fid = `[`^(flatpack((idsetseq fid)Øpack_IDENT))^`]`)
+	Ä	(Éitym:IDENT ú TYPEé
+			itymfunseq itym = (idsetseq (dom itym)) Ø itym)
+	Ä	bool_type	= mk_type (`bool`,æø)
+À
+
+=SML
+fun 	‚val_setIDENT· (sl:string list) :string =
+	"æ" ^ flatpack(idsetseq sl) ^ "ø";
+fun	 ‚itymfunseq· (itym:(string * TYPE)list) :TYPE list =
+	map (lassoc3 itym) (idsetseq(fst(split itym)));
+val	‚bool_type· = BOOL;
+=TEX
+
+{\em number} maps numbers onto numerals.
+Í
+	‚number·	: Ü è string
+	‚val_numeral·	: string ⁄ Ü
+…
+	Éi:Üé val_numeral (number i) = i
+À
+
+=SML
+val	‚number· :(int -> string) = string_of_int;
+val	‚val_numeral· :(string -> int) = nat_of_string;
+=TEX
+
+It is the schema calculus which causes the greatest problems.
+To support schemas it is proposed to introduce infinite families of new HOL type constructors.
+For each of these types various associated constants will also be introduced.
+
+These various types and constants are described as follows:
+
+
+\subsection{Bindings and Tuples}
+
+\subsubsection{binding types}
+
+For each finite set of identifiers a polymorphic type constructor is required which is the type of bindings which bind values to just the identifiers in the set.
+It is necessary to give each of these type constructors a unique name, which we will form by appending to the prefix $`S\_`$ the alphabetically ordered list of identifiers.
+The type constructor will have the same arity as the cardinality of the set of identifiers, and the types assigned to the identifiers will be supplied as parameters to the constructor in alphabetic order of the identifiers to which they are assigned.
+
+The type will be represented by the set of n-tuples (formed in HOL by iteration of the PAIR constructor) having the same number of components.
+A sample representation type predicate is as follows:
+
+ÛML
+let ‚bind_type_[a,b]_pred· = "çt:(*a â *b)é T"
+Ê
+
+The type $(*a,*b)S_{[a,b]}$ will be in bijection with the elements having the above property and an axiom will be needed which asserts that this is the case. 
+
+Functions yielding the type name and the type respectively are as follows:
+Í
+	‚bind_tname·		: í IDENT ã string
+	‚bind_type·		: (IDENT ú TYPE) ã TYPE
+…
+	Éfid:í IDENT; itym:IDENT ú TYPEé
+
+	bind_tname fid		= `S_`^(val_setIDENT fid)
+Ä	bind_type itym		= mk_type (bind_tname(dom itym), itymfunseq itym) 
+À
+
+=SML
+fun	‚bind_tname· (fid :string list) :string = "S_" ^ (val_setIDENT fid);
+fun 	‚bind_type· (itym :(string * TYPE) list) :TYPE = 
+		mk_ctype (bind_tname(fst(split itym)), itymfunseq itym);
+=TEX
+
+\subsubsection{tuple types}
+
+
+Í
+	‚tuple_tname·	: seq TYPE ã string
+	‚tuple_type·	: seq TYPE ã TYPE
+…
+	tuple_tname tyl = `T_`^(number #tyl)
+	tuple_type tyl = mk_type(tuple_tname tyl,tyl)
+À
+
+=SML
+fun	‚tuple_tname· (tyl: TYPE list) :string = "T_" ^ number(length tyl);
+fun	‚tuple_type· (tyl: TYPE list) :TYPE = mk_ctype(tuple_tname tyl,tyl);
+=TEX
+
+\subsubsection{binding constructors}
+
+For every binding type there will be a constant for constructing bindings of that type.
+The name of this constructor will be formed by prefixing $`mk\_`$ to the name of the type of the binding.
+The type of the constructor will be that of a curried function taking parameters whose types are type variables having the same name as the identifiers in the signature of the bindings.
+The result type will be the binding type with type variables similarly named supplied as parameters,
+e.g. `$mk\_S_{[a,b]}:*a ã *b ã (*a,*b)S_{[a,b]}$'.
+
+The element of the representation type corresponding to the entity constructed is simply the tuple formed from the values supplied as arguments.
+A sample definition for the constructor would therefore be:
+
+ÛHOL Constant
+	‚mk_S_[a,b]·: *a ã *b ã (*a,*b)S_[a,b]
+…
+	mk_S_[a,b] a b = ABS_S_[a,b] (a,b)
+Ê
+
+In general type instantiations of these constructors will be required rather than the fully polymorphic types and terms.
+The functions below provide appropriate instantiations.
+
+Í
+	‚bind_cname·		: í IDENT ã string
+	‚bind_ctype·		: (IDENT ú TYPE) ã TYPE
+	‚bind_cterm·		: (IDENT ú TYPE) ã TERM
+…
+	Éfid:í IDENT; itym:IDENT ú TYPEé
+
+	bind_cname fid	= `mk_`^(bind_tname fid)
+Ä	bind_ctype itym	= list_mk_ã_type (itymfunseq itym, bind_type itym)  
+Ä	bind_cterm itym	= mk_const (bind_cname (dom itym), bind_ctype itym)  
+À
+
+These binding constructors are used in theta terms, {\em termtheta}.
+
+=SML
+fun	‚bind_cname· (fid :string list) :string = "mk_" ^ (bind_tname fid);
+fun	‚bind_ctype· (itym :(string * TYPE) list) :TYPE =
+		list_mk_ã_type(itymfunseq itym, bind_type itym);
+fun 	‚bind_cterm· (itym :(string * TYPE) list) :TERM =
+		mk_const (bind_cname (fst(split itym)), bind_ctype itym);
+=TEX
+
+\subsubsection{tuple constructors}
+
+The special case of tuples is also catered for:
+Í
+	‚tuple_cname·	: seq TYPE ã string
+	‚tuple_ctype·	: seq TYPE ã TYPE
+	‚tuple_cterm·	: seq TYPE ã TERM
+…
+	Ésty:seq TYPEé
+
+	tuple_cname sty	= "mk_" ^ (tuple_tname sty)
+	tuple_ctype sty = list_mk_ã_type (sty, tuple_type sty)
+	tuple_cterm sty	= mk_const(tuple_cname sty,tuple_ctype sty)
+À
+
+=SML
+fun	‚tuple_cname· (sty:TYPE list) :string = "mk_" ^ (tuple_tname sty);
+fun	‚tuple_ctype· (sty:TYPE list) :TYPE = list_mk_ã_type (sty, tuple_type sty);
+fun	‚tuple_cterm· (sty:TYPE list) :TERM = mk_const(tuple_cname sty,tuple_ctype sty);
+=TEX
+
+\subsubsection{cartesian products}
+
+Í
+	‚powert·	: TYPE ã TYPE
+…
+	Éty:TYPEé	powert ty = mk_type(`ë`,ætø)
+À
+
+Í
+	‚prod_cname·	: seq TYPE ã string
+	‚prod_ctype·	: seq TYPE ã TYPE
+	‚prod_cterm·	: seq TYPE ã TERM
+…
+	Ésty:seq TYPEé
+
+	prod_cname sty	= `mk_prod`^(number (#sty))
+	prod_ctype sty		= list_mk_ã_type(
+					itymfunseq (pack_IDENT Ø val_numeral Ø sty Ø powert),
+					powert (mk_tuple_type sty))
+	prod_cterm sty		= mk_const(prod_cname sty, prod_ctype sty)
+À
+
+=SML
+fun	‚prod_cname· (sty: TYPE list) :string = "mkprod_" ^ (number(length sty));
+fun	‚prod_ctype· (sty: TYPE list) :TYPE = list_mk_ã_type(sty,mk_ctype("ë",[tuple_type sty]));
+fun	‚prod_cterm· (sty: TYPE list) :TERM = mk_const(prod_cname sty, prod_ctype sty);
+=TEX
+
+\subsubsection{binding projections}
+
+For every binding type there will be a set of projection functions, which select components of the binding.
+These will have names formed by concatenating the identifier of the component to be selected, and the name of the type of the binding.
+The type of the projection will be a function.
+The domain type of the function is the type of the binding with appropriate type variables, the co-domain is then the type variable having the same name as the component to be selected.
+
+The following is an example of how the projection functions will be defined.
+
+ÛHOL Constant
+	‚S_[a,b]_a·:(*a,*b)S_[a,b] ã *a
+	‚S_[a,b]_b·:(*a,*b)S_[a,b] ã *b
+…
+	(S_[a,b]_a x = FST (REP_S_[a,b] x))
+Ä	(S_[a,b]_b x = SND (REP_S_[a,b] x))
+Ê
+
+Once again the functions defined yield type instantiated terms.
+
+Í
+	‚bind_pname·		: í IDENT		ã IDENT ã string
+	‚bind_ptype·		: (IDENT ú TYPE)	ã IDENT ã TYPE
+	‚bind_pterm·		: (IDENT ú TYPE)	ã IDENT ã TERM
+…
+	Éfid:í IDENT; itym:IDENT ú TYPE; i:IDENTé
+
+	bind_pname fid i	= (bind_tname fid)^`_`^(pack_IDENT i)
+Ä	bind_ptype itym i	= mk_funt(bind_type itym, itym i)  
+Ä	bind_pterm itym i	= mk_const (bind_pname (dom itym) i, bind_ptype itym i)  
+À
+
+The projection constants are used for selection notation {\em S.name}, in {\em termsel}
+
+=SML
+fun	‚bind_pname· (fid:string list) (i:string) :string =
+		(bind_tname fid) ^ "_" ^ i;
+fun	‚bind_ptype· (itym:(string * TYPE) list) (i:string) :TYPE =
+		mk_ã_type(bind_type itym,lassoc3 itym i);
+fun	‚bind_pterm· (itym:(string * TYPE) list) (i:string) :TERM =
+		mk_const (bind_pname (fst(split itym)) i, bind_ptype itym i);
+=TEX
+
+\subsubsection{tuple projections}
+\subsection{Schemas}
+
+A schema is a set of bindings.
+First we deal with schema types (which in this document are the types of schemas, but in \cite{spivey89} are the types of bindings), then with various operations on schemas which are available in Z.
+
+As with bindings there is an infinite collection of schema types.
+
+All the operations of the schema calculus require complete families of constants, indexed by the schema types over which they are legal.
+Operations over schemas or schema expression which involve variable binding constructs are deferred to the next section.
+
+\subsubsection{schema types}
+
+A schema is a set of bindings, a schema type is therefore a powerset of a binding type:
+
+Í
+	‚schema_type·		: (IDENT ú TYPE) ã TYPE
+…
+	Éitym:IDENT ú TYPEé
+
+	schema_type itym	= mk_type (`ë`,æbind_type itymø)  
+À
+
+=SML
+fun	‚schema_type· (itym:(string * TYPE) list) :TYPE =
+		mk_ctype("ë",[bind_type itym]);
+=TEX
+
+Names for the operations will be formed in general by decorating the normal operation symbol by the type name of the operand or operands.
+
+The operations are of various kinds as follows, grouped by type similarities (of which there are few!):
+
+\subsubsection{schema negation}
+
+Schema negation (schneg), takes any schema type to the same type.
+It is semantically simply the complement operation on the set, and need not be restricted to sets of bindings.
+
+ÛHOL Constant
+	‚bind_å·	: (*)ë ã (*)ë
+…
+	És:(*)ëé	bind_å s = ABS_ë (çx:*é x ì s)
+Ê
+
+The following definitions serve only to give type instances of the above constant:
+
+Í
+	‚bind_å_type·		: (IDENT ú TYPE) ã TYPE
+	‚bind_å_term·		: (IDENT ú TYPE) ã TERM
+…
+	Éfid:í IDENT; itym:IDENT ú TYPEé
+
+	bind_å_type itym	= mk_funt (schema_type itym, schema_type itym)  
+Ä	bind_å_term itym	= mk_const (`bind_å`, bind_å_type itym)  
+À
+
+=SML
+fun	‚bind_å_type· (itym:(string * TYPE) list) :TYPE =
+		mk_ã_type (schema_type itym, schema_type itym);
+fun	‚bind_å_term· (itym:(string * TYPE) list) :TERM = 
+		mk_const ("bind_å", bind_å_type itym);
+=TEX
+
+\subsubsection{schema precondition}
+
+ÛHOL Constant
+	‚pre_S_[a',b]·:((*a,*b)S_[a',b])ë ã ((*b)S_[b])ë
+…
+	És:((*a,*b)S_[a',b])ë é
+
+	pre_S_[a',b] s = [b:*b|Ña':*aé s]
+Ê
+
+The precondition operator takes a schema and existentially quantifies all the variables which are either outputs or part of the new state.
+The type of the resulting schema is therefore obtained by discarding all components of the type of the constituent bindings which have identifiers ending with ' or !.
+
+We first define separately a function which determines which of the identifiers in a binding type are the identifiers of results of the operation described by the schema.
+{\em There is room for debate about whether this is the correct interpretation of \cite{spivey89}.}
+
+Í
+	‚schema_results·	: (IDENT ú TYPE) ã í IDENT
+…
+	Éitym:IDENT ú TYPEé
+
+	schema_results itym =
+
+	{w:WORD; d,fd:DECOR; s:string
+	|	(fd = `'` Å fd = `!`) Ä (w^d = s^fd)
+	é	(w,d)
+	}	† (dom itym)
+À
+
+The type of the result of the precondition operation is the type of the original schema with the results hidden.
+In fact precondition is definable in terms of hiding, but separate operators are needed to preserve the distinction for the concrete syntax.
+
+Í
+	‚bind_pre_name·	: í IDENT ã string
+	‚bind_pre_type·	: (IDENT ú TYPE) ã TYPE
+	‚bind_pre_term·	: (IDENT ú TYPE) ã TERM
+…
+	Éfid:í IDENT; itym:IDENT ú TYPEé
+
+	bind_pre_name fid	= `pre_`^(bind_tname fid)
+Ä	bind_pre_type itym	= mk_funt
+				(schema_type itym,
+				 schema_type ((schema_results itym)	õ itym)
+				)  
+Ä	bind_pre_term itym	= mk_const (bind_pre_name (dom itym), bind_pre_type itym)  
+À
+
+=SML
+fun	‚bind_pre_name· (fid:string list) :string = "pre_" ^ (bind_tname fid);
+fun	‚bind_pre_type· (itym:(string * TYPE) list) :TYPE =
+	let	fun	sch_res ((_,"'"),_) = true
+		|	sch_res ((_,"!"),_) = true
+		|	sch_res _ = false
+	in
+		mk_ã_type(
+			schema_type itym,
+			schema_type(itym drop (sch_res o (unpack_IDENT ** Combinators.I)))
+		)
+	end;
+fun	‚bind_pre_term· (itym:(string * TYPE) list) :TERM =
+		mk_const (bind_pre_name (fst(split itym)), bind_pre_type itym);
+=TEX
+
+\subsubsection{simple dyadic schema operations}
+
+ÛHOL Constant
+	‚Ä[a,b][b,c]·:((*a,*b)S_[a,b])ë ã ((*b,*c)S_[b,c])ë  ã ((*a,*b,*c)S_[a,b,c])ë
+…
+	Ésc1:((*a,*b)S_[a,b])ë; sc2:((*b,*c)S_[b,c])ëé
+
+	Ä[a,b][b,c] sc1 sc2 = [a:*a; b:*b; c:*c | sc1 Ä sc2]
+Ê
+
+(schand, schor, schimp) taking any compatible pair of schema types to the schema type having the union of the components (with appropriate component types).
+
+Since these operations are so similar they are provided by the same functions which take the particular operation name as a parameter:
+
+Í
+	‚bind_dysc_name·	: string ã í IDENT ã í IDENT ã string
+	‚bind_dysc_type·	: (IDENT ú TYPE) ã (IDENT ú TYPE) ã TYPE
+	‚bind_dysc_term·	: string ã (IDENT ú TYPE) ã (IDENT ú TYPE) ã TERM
+…
+	Éfid1,fid2:í IDENT; itym1,itym2:IDENT ú TYPE; n:stringé
+
+	bind_dysc_name n fid1 fid2	= n^(val_setIDENT fid1)^(val_setIDENT fid2) 
+Ä	bind_dysc_type itym1 itym2	= list_mk_ã_type
+						(æschema_type itym1,schema_type itym2ø,
+						schema_type (itym1 ° itym2))
+Ä	bind_dysc_term n itym1 itym2	= mk_const (bind_dysc_name n (dom itym1) (dom itym2),
+							bind_dysc_type itym1 itym2)  
+À
+
+The following are primarily illustrative of the use of the above, and are not used in the sequel.
+
+Í
+	‚bind_Ä_term·		: (IDENT ú TYPE) ã (IDENT ú TYPE) ã TERM
+	‚bind_Å_term·		: (IDENT ú TYPE) ã (IDENT ú TYPE) ã TERM
+	‚bind_ä_term·	: (IDENT ú TYPE) ã (IDENT ú TYPE) ã TERM
+	‚bind_Ç_term·	: (IDENT ú TYPE) ã (IDENT ú TYPE) ã TERM
+…
+	bind_Ä_term		= bind_dysc_term `Ä` 
+ 	bind_Å_term		= bind_dysc_term `Å`  
+	bind_ä_term		= bind_dysc_term `ä`  
+	bind_Ç_term		= bind_dysc_term `Ç`  
+À
+
+It should be noted that the full generality of these functions will not be available in any implementation.
+Only the identified operations will be supported.
+
+=SML
+fun	‚bind_dysc_name· (n:string) (fid1:string list) (fid2:string list) :string = 
+		n ^ (val_setIDENT fid1) ^ (val_setIDENT fid2);
+fun	‚bind_dysc_type· (itym1:(string * TYPE)list) (itym2:(string * TYPE)list) :TYPE = 
+		list_mk_ã_type(
+			[schema_type itym1,schema_type itym2],
+			schema_type (itym1 cup itym2)
+		);
+fun	‚bind_dysc_term· (n:string) (itym1:(string * TYPE)list) (itym2:(string * TYPE)list) :TERM = 
+		mk_const (	bind_dysc_name n (fst(split itym1)) (fst(split itym2)),
+				bind_dysc_type itym1 itym2);
+val	‚bind_Ä_term· :(string * TYPE) list -> (string * TYPE) list -> TERM =
+		bind_dysc_term "Ä_";
+val	‚bind_Å_term· :(string * TYPE) list -> (string * TYPE) list -> TERM =
+		bind_dysc_term "Å_";
+val	‚bind_ä_term· :(string * TYPE) list -> (string * TYPE) list -> TERM =
+		bind_dysc_term "ä_";
+val	‚bind_Ç_term· :(string * TYPE) list -> (string * TYPE) list -> TERM =
+		bind_dysc_term "Ç_";
+=TEX
+\subsubsection{schema projection}
+
+ÛHOL Constant
+	‚pro[a,b][b,c]·:((*a,*b)S_[a,b])ë ã ((*b,*c)S_[b,c])ë  ã ((*b,*c)S_[b,c])ë
+…
+	Ésc1:((*a,*b)S_[a,b])ë; sc2:((*b,*c)S_[b,c])ëé
+
+	pro[a,b][b,c] sc1 sc2 = (sc1 Ä sc2) ƒ (a)
+Ê
+
+(schpro) takes two schemas of compatible types and yields a schema having the same type as the second
+
+Í
+	‚bind_pro_name·	: í IDENT ã í IDENT ã string
+	‚bind_pro_type·	: (IDENT ú TYPE) ã (IDENT ú TYPE) ã TYPE
+	‚bind_pro_term·	: (IDENT ú TYPE) ã (IDENT ú TYPE) ã TERM
+…
+	Éfid1,fid2:í IDENT; itym1,itym2:IDENT ú TYPEé
+
+	bind_pro_name fid1 fid2	= `pro_`^(val_setIDENT fid1)^(val_setIDENT fid2)
+Ä	bind_pro_type itym1 itym2	= list_mk_ã_type
+				(	æschema_type itym1, schema_type itym2ø,
+					schema_type itym2
+				)  
+Ä	bind_pro_term itym1 itym2
+		= mk_const (bind_pro_name (dom itym1) (dom itym2), bind_pro_type itym1 itym2)  
+À
+
+=SML
+fun	‚bind_¡_name· (fid1:string list) (fid2:string list) :string =
+		"¡_" ^ (val_setIDENT fid1) ^ (val_setIDENT fid2);
+fun	‚bind_¡_type· (itym1:(string * TYPE) list) (itym2:(string * TYPE) list) :TYPE =
+		list_mk_ã_type(
+			[schema_type itym1, schema_type itym2],
+			schema_type itym2
+		);
+
+fun	‚bind_¡_term· (itym1:(string * TYPE) list) (itym2:(string * TYPE) list) :TERM =
+		mk_const (
+			bind_¡_name (fst(split itym1)) (fst(split itym2)),
+			bind_¡_type itym1 itym2);
+=TEX
+
+\subsubsection{schema hiding}
+
+ÛHOL Constant
+	‚hide[a,b][b]·:((*a,*b)S_[a,b])ë ã ((*a)S_[a])ë
+…
+	Ésc:((*a,*b)S_[a,b])ëé
+
+	hide[a,b][b] sc = [a:*a | Ñb:*bé sc]
+Ê
+
+(schide) takes one schema and a list of identifiers and yields a schema whose type is formed from the type of the first parameter by deleting all components whose identifiers are in the list.
+
+Í
+	‚bind_hide_name·	: í IDENT ã í IDENT ã string
+	‚bind_hide_type·	: (IDENT ú TYPE) ã (í IDENT) ã TYPE
+	‚bind_hide_term·	: (IDENT ú TYPE) ã (í IDENT) ã TERM
+…
+	Éfid1,fid2:í IDENT; itym:IDENT ú TYPEé
+
+	bind_hide_name fid1 fid2	= `hide_`^(val_setIDENT fid1)^(val_setIDENT fid2)
+Ä	bind_hide_type itym fid1	= mk_funt
+				(	schema_type itym,
+					schema_type (fid1 õ itym)
+				)  
+Ä	bind_hide_term itym fid1
+		= mk_const (bind_hide_name (dom itym) fid1, bind_hide_type itym fid)  
+À
+
+=SML
+fun	‚bind_ƒ_name· (fid1:string list) (fid2:string list) :string =
+		"ƒ_" ^ (val_setIDENT fid1) ^ (val_setIDENT fid2);
+fun	‚bind_ƒ_type· (itym:(string * TYPE) list) (fid2:string list) :TYPE =
+		mk_ã_type(
+			schema_type itym,
+			schema_type(itym drop (fn(s,_)=> s mem fid2))
+		);
+fun	‚bind_ƒ_term· (itym:(string * TYPE) list) (fid2:string list) :TERM =
+		mk_const (
+			bind_ƒ_name (fst(split itym)) fid2, 
+			bind_ƒ_type itym fid2
+		);
+=TEX
+
+\subsubsection{decoration}
+
+(sdes) when schema designator is used it may be supplied with further decorations.
+The effect is to add the decorations to the identifiers in the bindings.
+ 
+Í
+	‚decor_id·	: string ã IDENT ã IDENT
+	‚decor_idt·	: string ã (IDENT â TYPE) ã (IDENT â TYPE)
+	‚decor_itym·	: string ã (IDENT ú TYPE) ã (IDENT ú TYPE)
+…
+	És:string; w:WORD; d:DECOR; i:IDENT; ty:TYPE; itym:IDENT ú TYPEé 
+
+	decor_id s (w,d)	= (w,d^s)
+Ä 	decor_idt s (i,ty)	= (decor_id s i,ty)
+Ä	decor_itym s itym	= (decor_idt s) —itym“
+À
+Í
+	‚bind_decor_name·	: í IDENT ã string ã string
+	‚bind_decor_type·	: (IDENT ú TYPE) ã string ã TYPE
+	‚bind_decor_term·	: (IDENT ú TYPE) ã string ã TERM
+…
+	Éfid:í IDENT; s:string; itym:IDENT ú TYPEé
+
+	bind_decor_name fid s	= `decor_`^(val_setIDENT fid)^s
+Ä	bind_decor_type itym s	= mk_funt
+				(	schema_type itym,
+					schema_type (decor_itym s itym)
+				)  
+Ä	bind_decor_term itym s
+		= mk_const (bind_decor_name (dom itym) s, bind_decor_type itym s)  
+À
+
+=SML
+fun	‚bind_decor_name· (fid:string list) (s:string) :string =
+		"decor_" ^ (val_setIDENT fid) ^ "æ" ^ s ^ "ø";
+fun	‚bind_decor_type· (itym:(string * TYPE) list) (s:string) :TYPE =
+		mk_ã_type(
+			schema_type itym,
+			schema_type(map(fn(id,ty)=>(id^s,ty))itym)
+		);
+fun	‚bind_decor_term· (itym:(string * TYPE) list) (s:string) :TERM =
+		mk_const (bind_decor_name (fst(split itym)) s, bind_decor_type itym s);
+=TEX
+
+\subsubsection{the delta operation}
+
+The delta operation takes a schema and yields one which is the conjunction of the schema and itself primed (decorated with ').
+
+Í
+	‚bind_delta_name·	: í IDENT ã string
+	‚bind_delta_type·	: (IDENT ú TYPE) ã TYPE
+	‚bind_delta_term·	: (IDENT ú TYPE) ã TERM
+…
+	Éfid:í IDENT; itym:IDENT ú TYPEé
+
+	bind_delta_name fid	= `delta_`^(val_setIDENT fid)
+Ä	bind_delta_type itym	= mk_funt
+				(	schema_type itym,
+					schema_type (itym ° (decor_itym `'` itym))
+				)  
+Ä	bind_delta_term itym
+		= mk_const (bind_delta_name (dom itym), bind_delta_type itym)
+À
+
+=SML
+fun	‚bind_Ò_name· (fid:string list) :string = "Ò_" ^ (val_setIDENT fid);
+fun	‚bind_Ò_type· (itym:(string * TYPE) list) :TYPE =
+		mk_ã_type(
+			schema_type itym,
+			schema_type(itym @ (map (fn(id,ty)=>(id^"'",ty)) itym))
+		);
+fun	‚bind_Ò_term· (itym:(string * TYPE) list) :TERM =
+		mk_const (bind_Ò_name (fst(split itym)), bind_Ò_type itym);
+=TEX
+
+\subsubsection{the $\Xi$ operation}
+
+The $\Xi$ operation takes a schema and yields one which is the conjunction of the schema and itself primed (decorated with '), with the before and after values equated in the predicate.
+The type is the same as that of the $\Delta$ operation.
+
+Í
+	‚bind_xi_name·	: í IDENT ã string
+	‚bind_xi_type·	: (IDENT ú TYPE) ã TYPE
+	‚bind_xi_term·	: (IDENT ú TYPE) ã TERM
+…
+	Éfid:í IDENT; itym:IDENT ú TYPEé
+
+	bind_xi_name fid	= `xi_`^(val_setIDENT fid)
+Ä	bind_xi_type			= bind_delta_type  
+Ä	bind_xi_term itym
+		= mk_const (bind_xi_name (dom itym), bind_xi_type itym)
+À
+
+=SML
+fun	‚bind_Ú_name· (fid:string list) :string = "Ú_" ^ (val_setIDENT fid);
+val	‚bind_Ú_type· :(string * TYPE) list -> TYPE = bind_Ò_type;
+fun	‚bind_Ú_term· (itym:(string * TYPE) list) :TERM =
+		mk_const (bind_Ú_name (fst(split itym)), bind_Ú_type itym);
+=TEX
+
+\subsubsection{schema composition}
+
+Schema composition is an operation which takes two schemas as arguments.
+The schemas must be compatible in the following sense.
+The primed components of the first schema must match in name and type the undecorated components of the second.
+Any other components common to both must have the same type.
+
+The type of the resulting schema is obtained by merging the two signatures hiding the primed components of the first and the undecorated components of the second.
+There is a problem here about exactly what ``primed'' means.
+Is a double primed identifier primed?
+
+Í
+	‚bind_scomp_name·	: í IDENT ã í IDENT ã string
+	‚bind_scomp_type·	: (IDENT ú TYPE) ã TYPE
+	‚bind_scomp_term·	: (IDENT ú TYPE) ã TERM
+…
+	Éfid1, fid2:í IDENT; itym1,itym2:IDENT ú TYPEé
+
+	bind_scomp_name fid1 fid2	= `scomp_`^(val_setIDENT fid1)^(val_setIDENT fid2)
+Ä	bind_scomp_type itym1 itym2	= list_mk_ã_type (
+					æschema_type itym1, schema_type itym2ø,
+					schema_type (
+			£{i,i':IDENT | i' ù dom itym1 Ä i ù dom itym2 
+				Ä (pack_IDENT i)^`'` = (pack_IDENT i') é {i,i'}}
+			õ (itym1 ° itym2))
+Ä	bind_scomp_term itym1 itym2
+		= mk_const (bind_scomp_name (dom itym1) (dom itym2),
+			bind_scomp_type itym1 itym2)
+À
+
+=SML
+fun	‚bind_Ø_name· (fid1:string list) (fid2:string list) :string =
+		"Ø_" ^ (val_setIDENT fid1) ^ (val_setIDENT fid2);
+fun	‚bind_Ø_type· (itym1:(string * TYPE) list) (itym2:(string * TYPE) list) :TYPE =
+	let	val itym2' = map (fn(s,ty)=>(s^"'",ty)) itym2;
+		val itym =	(itym1 drop (fn(s,_) => (s mem (fst(split itym2')))))
+					@
+				(itym2 drop (fn(s,_) => ((s^"'") mem (fst(split itym1)))));
+	in
+		list_mk_ã_type(
+			[schema_type itym1, schema_type itym2],
+			schema_type itym
+		)
+	end;
+fun	‚bind_Ø_term· (itym1:(string * TYPE) list) (itym2:(string * TYPE) list) :TERM =
+		mk_const (
+			bind_Ø_name (fst(split itym1)) (fst(split itym2)),
+			bind_Ø_type itym1 itym2
+		);
+=TEX
+
+\subsection{Variable Binding Constructs}
+
+Take care to avoid confusion between the two distinct uses of the term {\em binding} in this document.
+The {\em binding}s which are members of schemas, bind values to identifiers.
+Such bindings are the values denoted by terms with a binding type (e.g. $S_{[a,b,c...]}$).
+Constructs involving the syntactic category {\em DECL} also effect a binding.
+In this latter case it is variables which are bound within some textual scope, for the purpose, for example, of universal quantification.
+These binding constructs may yield terms, predicates or schema expressions depending on the form of the construct.
+
+There are in Z a variety of binding constructs of this latter kind, in which a DECL occurs and serves to bind variables in following predicates or terms.
+
+The general pattern followed in dealing with these constructs is simply an elaboration of the treatment in HOL of binders.
+
+There is just the one primitive binding construct, viz: lambda abstraction.
+All binding constructs are therefore first translated into lambda abstractions.
+The result of the abstraction is then converted into the value required by the application of a constant which embodies the semantics of the particular binding construct concerned.
+
+The image of the binding construct is therefore formed in the following way:
+\begin{enumerate}
+\item{}
+The constituent expressions are mapped into HOL in the standard way
+(in some cases the {\em characteristic tuple}, while not an explicit constituent of the syntax, must be supplied by the mapping as a component of the resulting HOL term).
+\item{}
+These terms are collected together into a binding.
+The binding constructor will be either $mk\_S_{[d,p]}$ (for $schema$, $Ñ_s$, $Ñ_{1s}$ and $É_s$), $mk\_S_{[d,p,v]}$ (for $Ñ$, $Ñ_1$, $É$, $seta$ and $á$) $mk\_S_{[d,p,t,v]}$ (for $ç$).
+\item{}
+An abstraction is formed by abstracting over each of the variables declared in the constituent DECL.
+\item{}
+A binding operator is applied to the function thus obtained.
+There will be a family of binding operators for each of the eight different binding constructs.
+\end{enumerate}
+The names of the binding operators will be formed from the name of the constructor in the abstract syntax by appending the sequence of names declared in the signature.
+Its type will vary according to the signature and the nature of the binder.
+Details are filled in below for each of the binders in turn.
+
+\subsubsection{binding constructs by group}
+
+Binding constructs fall into three groups, according to the scope of the bindings which take place.
+
+The full list of binding constructs in Z is as follows:
+
+\begin{tabular}{|l|l|l|l|}\hline
+{\bf constructor} & {\bf description} & {\bf category} & {\bf group}\\ \hline
+$schema$ & schema & ZTERM (schema expression) & 1\\
+$Ñ_s$ & schema existential quantification & ZTERM (schema expression) & 1\\
+$Ñ_{1s}$ & schema unique existential quantification & ZTERM (schema expression) & 1\\
+$É_s$ & schema universal quantification & ZTERM (schema expression) & 1\\
+$Ñ$ & existential quantification & PRED & 2\\
+$Ñ_1$ & unique existential quantification & PRED & 2\\
+$É$ & universal quantification & PRED & 2\\
+$seta$ & set abstraction (separation) & ZTERM & 2\\
+$ç$ & lambda abstraction & ZTERM & 3\\
+$á$ & mu operator (description) & ZTERM & 2\\ \hline
+\end{tabular}
+
+In the following descriptions of how these groups of binding constructs are handled the various expressions which fall within the scope of the binding are collected together into a single expression as a schema binding (i.e. a value having a schema product or binding type).
+
+The number of components, and therefore the signature of the binding type, varies between groups, but the significance of the identifiers used is consistently as follows:
+
+\begin{description}
+\item[t]
+This component is the {\em characteristic tuple} extracted from the declaration part (DECL) of the schema.
+\item[d]
+This component is the predicate (a boolean term) implicit in the declaration part (DECL) of the schema.
+\item[p]
+This is the boolean term formed from the predicate (PRED) part of the schema.
+\item[v]
+This term (the value) is formed from the body of the abstraction (ZTERM or PRED).
+In some cases this is defaulted to the characteristic tuple.
+\end{description}
+
+\subsubsection{group 1 packs}
+
+In the simplest case (group 1) the variables are bound only in the immediately following predicate (and even this may be omitted in the concrete syntax).
+i.e. in $schema$, $Ñ_s$, $Ñ_{1s}$, and $É_s$, the variables declared in the DECL are bound only in the following PRED.
+
+The following functions yield schema product or binding constructors which are appropriate for collecting together the elements within the scope of a group 1 construct.
+In group 1 there are just two constituents, the first of which corresponds to the predicate implicit in the DECL, the second corresponding to the explicit predicate (PRED) following the vertical bar.
+These are given component identifiers {\em d} and {\em p} respectively.
+
+Í
+	‚g1_bind_sig·	: string ú TYPE
+	‚g1_bind_ctype·	: TYPE
+	‚g1_bind_cterm·	: TERM
+	‚g1_bind_type·	: TYPE
+…
+		g1_bind_sig		=	{
+					`d`óbool_type,
+					`p`óbool_type}
+
+	Ä	g1_bind_ctype	= bind_ctype g1_bind_sig
+	Ä	g1_bind_cterm	= bind_cterm g1_bind_sig
+	Ä	g1_bind_type	= bind_type g1_bind_sig
+À
+
+=SML
+val	‚g1_bind_sig· :(string * TYPE) list = [
+		("d",bool_type),
+		("p",bool_type)];
+val	‚g1_bind_cterm·	:TERM = bind_cterm g1_bind_sig;
+val	‚g1_bind_type· :TYPE = bind_type g1_bind_sig;
+=TEX
+\subsubsection{group 2 packs}
+
+In the next case (group 2) a predicate or term follows, within which the relevant variables are also bound.
+This is the ZTERM or PRED following the bullet.
+This more complex case includes constructs $Ñ$, $Ñ_1$, $É$, $seta$ and $á$.
+A ZTERM may be omitted in the concrete syntax, in which case the characteristic tuple will be used.
+This substitution we presume at present to be undertaken by the parser/type-inference system.
+
+Í
+	‚g2_bind_sig·	: TYPE ã (string ú TYPE)
+	‚g2_bind_ctype·	: TYPE ã TYPE
+	‚g2_bind_cterm·	: TYPE ã TERM
+	‚g2_bind_type·	: TYPE ã TYPE
+…
+	Éty:TYPEé
+
+		g2_bind_sig ty	=	{
+					`d`óbool_type,
+					`p`óbool_type,
+					`v`óty}
+
+	Ä	g2_bind_ctype ty	= bind_ctype (g2_bind_sig ty)
+	Ä	g2_bind_cterm ty	= bind_cterm (g2_bind_sig ty)
+	Ä	g2_bind_type ty	= bind_type (g2_bind_sig ty)
+À
+
+=SML
+fun	‚g2_bind_sig· (ty:TYPE) :(string * TYPE) list = [
+		("d",bool_type),
+		("p",bool_type),
+		("v",ty)];
+fun	‚g2_bind_cterm· (ty:TYPE) :TERM = bind_cterm (g2_bind_sig ty);
+fun	‚g2_bind_type· (ty:TYPE) :TYPE = bind_type (g2_bind_sig ty);
+=TEX
+\subsubsection{group 3 packs}
+
+The last case is that of the lambda abstraction which forms group 3.
+In this case the characteristic tuple has a role to play even if a term is supplied following the bullet, and is therefore given an identifier of its own.
+
+Í
+	‚g3_bind_sig·	: TYPE ã TYPE ã (string ú TYPE)
+	‚g3_bind_ctype·	: TYPE ã TYPE ã TYPE
+	‚g3_bind_cterm·	: TYPE ã TYPE ã TERM
+	‚g3_bind_type·	: TYPE ã TYPE ã TYPE
+…
+	Éty1,ty2:TYPEé
+
+		g3_bind_sig ty1 ty2	=	{
+					`d`óbool_type,
+					`p`óbool_type,
+					`t`óty1,
+					`v`óty2}
+
+	Ä	g3_bind_ctype ty1 ty2	= bind_ctype (g3_bind_sig ty1 ty2)
+	Ä	g3_bind_cterm ty1 ty2	= bind_cterm (g3_bind_sig ty1 ty2)
+	Ä	g3_bind_type ty1 ty2	= bind_type (g3_bind_sig ty1 ty2)
+À
+
+=SML
+fun	‚g3_bind_sig· (ty1:TYPE) (ty2:TYPE) :(string * TYPE) list = [
+		("d",bool_type),
+		("p",bool_type),
+		("t",ty1),
+		("v",ty2)];
+fun	‚g3_bind_cterm· (ty1:TYPE) (ty2:TYPE) :TERM = bind_cterm (g3_bind_sig ty1 ty2);
+fun	‚g3_bind_type· (ty1:TYPE) (ty2:TYPE) :TYPE = bind_type (g3_bind_sig ty1 ty2);
+=TEX
+In the following sections we supply for each variable binding construct:
+\begin{enumerate}
+\item{}
+a verbal description of how it is mapped into HOL,
+\item{}
+a sample HOL-like definition of one of the binders in each family, showing both the type and the value (as an HOL term) of the binder,
+\item{and}
+a formal Z specification of functions which compute the binding constant.
+\end{enumerate}
+
+In the HOL-like sample definitions the Z dot notation is used as shorthand for the application of the relevant projection function.
+The samples are generic in the types assigned to the identifiers in the signature, but are shown for specific signatures.
+In these examples the schema types $S_{[d,p]}$, $S_{[d,p,v]}$, $S_{[d,p,t,v]}$ are fixed binding types used for packaging the two three or four components over which the abstraction is to be formed.
+
+\subsubsection{bindings yielding schema expressions}
+
+Variable binding in schema expressions occurs in schemas and in existential and universal quantification.
+In its use in quantifiers the schema expression which follows the binding is not within its scope, i.e. the names in the signature are not bound in the schema expression forming the body of the construct.
+For this reason, in contrast to all the other binding constructs, this schema expression is not included in the package over which the variables in the signature have been abstracted.
+It is supplied as a second argument to the binding constant (which is a curried function).
+This can be seen clearly by referring to the type of the binders in the following sections.
+
+\subsubsection{schemas}
+
+The simplest binding construct is that which simply yields a schema.
+The following HOL constant is a sample of the infinite family of constants required: 
+
+ÛHOL Constant
+	‚schema_[a,b]·	: (*a ã *b ã (bool,bool)S_[d,p]) ã ((*a,*b)S_[a,b])ë
+…
+	(schema_[a,b] p
+		=	ABS_ë(çx:S_[a,b]é
+				let	t = p  x.a  x.b
+				in	t.d  Ä  t.p))
+
+Ê
+
+We now specify functions which compute from the elements of the abstract syntax the name, type and term of the binding operators:
+
+Í
+	‚schema_bname·	: (í IDENT) ã string
+	‚schema_btype·	: (IDENT ú TYPE) ã TYPE
+	‚schema_bterm·	: (IDENT ú TYPE) ã TERM
+…
+	Éfid:í IDENT; itym:IDENT ú TYPEé
+
+	schema_bname fid	= `schema_`^(val_setIDENT fid)
+Ä	schema_btype itym	= mk_funt(
+		list_mk_ã_type (itymfunseq itym, g1_bind_type),
+		schema_type itym
+					)
+Ä	schema_bterm itym	= mk_const (schema_bname (dom itym), schema_btype itym)
+À
+
+=SML
+fun	‚schema_bname· (fid:string list) :string =
+		"schema_" ^ (val_setIDENT fid);
+fun	‚schema_btype· (itym:(string * TYPE) list) :TYPE =
+		mk_ã_type(
+			list_mk_ã_type (itymfunseq itym, g1_bind_type),
+			schema_type itym
+		);
+fun	‚schema_bterm· (itym:(string * TYPE) list) :TERM =
+		mk_const (schema_bname (fst(split itym)), schema_btype itym);
+=TEX
+
+\subsubsection{schema existential quantification}
+
+ÛHOL Constant
+	‚Ñ%down%s_[a,b][c,d]·	:
+		(*a ã *b ã (bool,bool)S_[d,p]) ã ((*a,*b,*c,*d)S_[a,b,c,d])ë ã ((*c,*d)S_[c,d])ë
+…
+	(Ñ%down%s_[a,b][c,d] p q
+		= 	ABS_ë(çx:S_[c,d]é Ñy:S_[a,b]é
+				let	t = p  y.a  y.b
+				in	t.d  Ä  t.p
+					Ä (mk_S_[a,b,c,d]  y.a  y.b  x.c  x.d) ù q))
+Ê
+
+Í
+	‚Ñ%down%s_bname·	: (í IDENT) ã (í IDENT) ã string
+	‚Ñ%down%s_btype·		: (IDENT ú TYPE) ã (IDENT ú TYPE) ã TYPE
+	‚Ñ%down%s_bterm·		: (IDENT ú TYPE) ã (IDENT ú TYPE) ã TERM
+…
+	Éfid1,fid2:í IDENT; itym1,itym2:IDENT ú TYPEé
+
+	Ñ%down%s_bname fid1 fid2
+		= `Ñ%down%s_`^(val_setIDENT fid1)^(val_setIDENT (fid2ƒfid1))
+Ä	Ñ%down%s_btype itym1 itym2
+		= list_mk_ã_type
+			(æ list_mk_ã_type (itymfunseq itym1, g1_bind_type),
+				schema_type itym2 ø,
+			(schema_type (itym2ƒitym1)))
+Ä	Ñ%down%s_bterm itym1 itym2
+		= mk_const (Ñ%down%s_bname (dom itym1) (dom itym2),
+				Ñ%down%s_btype itym1 itym2)
+À
+
+=SML
+fun	‚Ñ%down%s_bname· (fid1:string list) (fid2:string list) :string =
+		"Ñ%down%s_" ^
+		(val_setIDENT fid1) ^
+		(val_setIDENT (fid2 diff fid1));
+fun	‚Ñ%down%s_btype· (itym1:(string * TYPE) list) (itym2:(string * TYPE) list) :TYPE =
+		list_mk_ã_type([
+			list_mk_ã_type (itymfunseq itym1, g1_bind_type),
+			schema_type itym2
+			],
+			(schema_type (itym2 diff itym1))
+			);
+fun	‚Ñ%down%s_bterm· (itym1:(string * TYPE) list) (itym2:(string * TYPE) list) :TERM =
+		mk_const (
+			Ñ%down%s_bname (fst(split itym1)) (fst(split itym2)),
+			Ñ%down%s_btype itym1 itym2
+		);
+=TEX
+
+\subsubsection{schema unique existential quantification}
+
+ÛHOL Constant
+	‚Ñ%down%1%down%s_[a,b][c,d]·	:
+		(*a ã *b ã (bool,bool)S_[d,p]) ã ((*a,*b,*c,*d)S_[a,b,c,d])ë ã ((*c,*d)S_[c,d])ë
+…
+	(Ñ%down%1%down%s_[a,b][c,d] p q
+		= 	ABS_ë(çx:S_[c,d]é ¿y:S_[a,b]é
+				let	t = p  y.a  y.b
+				in	t.d  Ä  t.p
+					Ä (mk_S_[a,b,c,d]  y.a  y.b  x.c  x.d) ù q))
+Ê
+
+Í
+	‚Ñ%down%1%down%s_bname·		: (í IDENT) ã (í IDENT) ã string
+	‚Ñ%down%1%down%s_btype·		: (IDENT ú TYPE) ã (IDENT ú TYPE) ã TYPE
+	‚Ñ%down%1%down%s_bterm·		: (IDENT ú TYPE) ã (IDENT ú TYPE) ã TERM
+…
+	Éfid1,fid2:í IDENT; itym1,itym2:IDENT ú TYPEé
+
+	Ñ%down%1%down%s_bname fid1 fid2
+		= `Ñ%down%1%down%s_`^(val_setIDENT fid1)^(val_setIDENT (fid2ƒfid1))
+Ä	Ñ%down%1%down%s_btype 
+		= Ñ%down%s_btype
+Ä	Ñ%down%1%down%s_bterm itym1 itym2
+		= mk_const (Ñ%down%1%down%s_bname (dom itym1) (dom itym2),
+				Ñ%down%1%down%s_btype itym1 itym2)
+À
+
+=SML
+fun	‚Ñ%down%1%down%s_bname· (fid1:string list) (fid2:string list) :string =
+		"Ñ%down%1%down%s_" ^
+		(val_setIDENT fid1) ^
+		(val_setIDENT (fid2 diff fid1));
+fun	‚Ñ%down%1%down%s_btype· (itym1:(string * TYPE) list) (itym2:(string * TYPE) list) :TYPE =
+		Ñ%down%s_btype itym1 itym2;
+fun	‚Ñ%down%1%down%s_bterm· (itym1:(string * TYPE) list) (itym2:(string * TYPE) list) :TERM =
+		mk_const (
+			Ñ%down%1%down%s_bname (fst(split itym1)) (fst(split itym2)),
+			Ñ%down%1%down%s_btype itym1 itym2
+		);
+=TEX
+
+\subsubsection{schema universal quantification}
+
+ÛHOL Constant
+	‚É%down%s_[a,b][c,d]·	:
+		(*a ã *b ã (bool,bool)S_[d,p]) ã ((*a,*b,*c,*d)S_[a,b,c,d])ë ã ((*c,*d)S_[c,d])ë
+…
+	(É%down%s_[a,b][c,d] p q
+		=	ABS_ë(çx:S_[c,d]é Éy:S_[a,b]é
+				let	t = p  y.a  y.b
+				in	t.d  Ä  t.p
+					ä (mk_S_[a,b,c,d] y.a y.b x.c x.d) ù q))
+Ê
+
+Í
+	‚É%down%s_bname·	: (í IDENT) ã (í IDENT) ã string
+	‚É%down%s_btype·		: (IDENT ú TYPE) ã (IDENT ú TYPE) ã TYPE
+	‚É%down%s_bterm·	: (IDENT ú TYPE) ã (IDENT ú TYPE) ã TERM
+…
+	Éfid1,fid2:í IDENT; itym1,itym2:IDENT ú TYPEé
+
+	É%down%s_bname fid1 fid2
+		= `É%down%s_`^(val_setIDENT fid1)^(val_setIDENT (fid2ƒfid1))
+Ä	É%down%s_btype itym1 itym2
+		= list_mk_ã_type
+			(æ list_mk_ã_type (itymfunseq itym1, g1_bind_type),
+				schema_type itym2 ø,
+			(schema_type (itym2ƒitym1)))
+Ä	É%down%s_bterm itym1 itym2
+		= mk_const (É%down%s_bname (dom itym1) (dom itym2),
+				É%down%s_btype itym1 itym2)
+À
+
+=SML
+fun	‚É%down%s_bname· (fid1:string list) (fid2:string list) :string =
+		"É%down%s_" ^
+		(val_setIDENT fid1) ^
+		(val_setIDENT (fid2 diff fid1));
+fun	‚É%down%s_btype· (itym1:(string * TYPE) list) (itym2:(string * TYPE) list) :TYPE =
+		Ñ%down%s_btype itym1 itym2;
+fun	‚É%down%s_bterm· (itym1:(string * TYPE) list) (itym2:(string * TYPE) list) :TERM =
+		mk_const (
+			É%down%s_bname (fst(split itym1)) (fst(split itym2)),
+			É%down%s_btype itym1 itym2
+		);
+=TEX
+
+\subsubsection{existential quantification}
+
+ÛHOL Constant
+	‚Ñ_2·	:
+		(*1 ã *2 ã (bool,bool,bool)S_[d,p,v]) ã bool
+…
+	(Ñ_2 p
+		=	Ñ(x:*1)(y:*2)é let t = p x y in	t.d Ä t.p Ä t.v)
+Ê
+
+Í
+	‚Ñ_bname·	: (í IDENT) ã string
+	‚Ñ_btype·	: (IDENT ú TYPE) ã TYPE
+	‚Ñ_bterm·	: (IDENT ú TYPE) ã TERM
+…
+	Éfid:í IDENT; itym:IDENT ú TYPEé
+
+	Ñ_bname fid
+		= `Ñ_`^(number(length fid))
+Ä	Ñ_btype itym
+		= mk_funt
+			(list_mk_ã_type (itymfunseq itym, g2_bind_type bool_type),
+					bool_type)
+Ä	Ñ_bterm itym
+		= mk_const (Ñ_bname (dom itym), Ñ_btype itym)
+À
+
+=SML
+fun	‚Ñ_bname· (fid:string list) :string = 
+		"Ñ_æ" ^ (number(length fid)) ^ "ø";
+fun	‚Ñ_btype· (itym:(string * TYPE) list) :TYPE =
+		mk_ã_type(
+			list_mk_ã_type(
+				itymfunseq itym,
+				g2_bind_type bool_type
+			),
+			bool_type
+		);
+fun	‚Ñ_bterm· (itym:(string * TYPE) list) :TERM =
+		mk_const (Ñ_bname (fst(split itym)), Ñ_btype itym);
+=TEX
+
+\subsubsection{unique existential quantification}
+
+ÛHOL Constant
+	‚Ñ%down%1_2·	:
+		(*1 ã *2 ã (bool,bool,bool)S_[d,p,v]) ã bool
+…
+	(Ñ%down%1_2 p
+		=	¿(x:*1)(y:*2)é let t = p x y in	t.d Ä t.p Ä t.v)
+Ê
+
+Í
+	‚Ñ%down%1_bname·	: (í IDENT) ã string
+	‚Ñ%down%1_btype·	: (IDENT ú TYPE) ã TYPE
+	‚Ñ%down%1_bterm·	: (IDENT ú TYPE) ã TERM
+…
+	Éfid:í IDENT; itym:IDENT ú TYPEé
+
+	Ñ%down%1_bname fid
+		= `Ñ%down%1_`^(number(length fid))
+Ä	Ñ%down%1_btype
+		= Ñ_btype
+Ä	Ñ%down%1_bterm itym
+		= mk_const (Ñ%down%1_bname (dom itym), Ñ%down%1_btype itym)
+À
+
+=SML
+fun	‚Ñ%down%1_bname· (fid:string list) :string = 
+		"Ñ%down%1_æ" ^ (number(length fid)) ^ "ø";
+fun	‚Ñ%down%1_btype· (itym:(string * TYPE) list) :TYPE =
+		Ñ_btype itym;
+fun	‚Ñ%down%1_bterm· (itym:(string * TYPE) list) :TERM =
+		mk_const (Ñ%down%1_bname (fst(split itym)), Ñ%down%1_btype itym);
+=TEX
+
+\subsubsection{universal quantification}
+
+ÛHOL Constant
+	‚É_2·	:
+		(*1 ã *2 ã (bool,bool,bool)S_[d,p,v]) ã bool
+…
+	(É_2 p
+		=	É(x:*1)(y:*2)é let t = p x y in	t.d Ä t.p ä t.v)
+Ê
+
+Í
+	‚É_bname·	: (í IDENT) ã string
+	‚É_btype·	: (IDENT ú TYPE) ã TYPE
+	‚É_bterm·	: (IDENT ú TYPE) ã TERM
+…
+	Éfid:í IDENT; itym:IDENT ú TYPEé
+
+	É_bname fid
+		= `É_`^(number(length fid))
+Ä	É_btype itym
+		= mk_funt
+			(list_mk_ã_type (itymfunseq itym, g2_bind_type bool_type),
+					bool_type)
+Ä	É_bterm itym
+		= mk_const (É_bname (dom itym), É_btype itym)
+À
+
+=SML
+fun	‚É_bname· (fid:string list) :string = 
+		"É_æ" ^ (number(length fid)) ^ "ø";
+fun	‚É_btype· (itym:(string * TYPE) list) :TYPE =
+		Ñ_btype itym;
+fun	‚É_bterm· (itym:(string * TYPE) list) :TERM =
+		mk_const (É_bname (fst(split itym)), É_btype itym);
+=TEX
+
+\subsubsection{set abstraction}
+
+ÛHOL Constant
+	‚seta_2·	:
+		(*1 ã *2 ã (bool,bool,*v)S_[d,p,v]) ã (*v)ë
+…
+	(seta_2 p
+		=	ABS_ë(çx:*vé Ñ(y:*1) (z:*2)é
+				let t = p y z in	t.d Ä t.p Ä (t.v = x))
+Ê
+
+Í
+	‚seta_bname·	: (í IDENT) ã string
+	‚seta_btype·	: (IDENT ú TYPE) ã TYPE ã TYPE
+	‚seta_bterm·	: (IDENT ú TYPE) ã TYPE ã TERM
+…
+	Éfid:í IDENT; itym:IDENT ú TYPE; ty:TYPEé
+
+	seta_bname fid
+		= `seta_`^(number(length fid))
+Ä	seta_btype itym ty
+		= mk_funt
+			(list_mk_ã_type (itymfunseq itym, g2_bind_type ty),
+					mk_type (`ë`,ætyø))
+Ä	seta_bterm itym ty
+		= mk_const (seta_bname (dom itym), seta_btype itym ty)
+À
+
+=SML
+fun	‚seta_bname· (fid:string list) :string = 
+		"seta_æ" ^ (number(length fid)) ^ "ø";
+fun	‚seta_btype· (itym:(string * TYPE) list) (ty:TYPE) :TYPE =
+		mk_ã_type(
+			list_mk_ã_type(
+				itymfunseq itym,
+				g2_bind_type ty
+			),
+			mk_ctype ("ë",[ty])
+		);
+fun	‚seta_bterm· (itym:(string * TYPE) list) (ty:TYPE) :TERM =
+		mk_const (seta_bname (fst(split itym)), seta_btype itym ty);
+=TEX
+
+\subsubsection{lambda abstraction}
+
+ÛHOL Constant
+	‚ç_2·	:
+		(*1 ã *2 ã (bool,bool,*dv,*cv)S_[d,p,t,v]) ã ((*dv,*cv)S_[1,2])ë
+…
+	(ç_2 p
+		=	ABS_ë(çx:(*dv,*cv)S_[1,2]é Ñ(y:*1) (z:*2)é
+				let	t = p y z
+				in	t.d Ä t.p Ä (t.t = x.1 Ä t.v = x.2))
+Ê
+
+Í
+	‚ç_bname·	: (í IDENT) ã string
+	‚ç_btype·	: (IDENT ú TYPE) ã TYPE ã TYPE ã TYPE
+	‚ç_bterm·	: (IDENT ú TYPE) ã TYPE ã TYPE ã TERM
+…
+	Éfid:í IDENT; itym:IDENT ú TYPE; d_ty,c_ty:TYPEé
+
+	ç_bname fid
+		= `ç_`^(number(length fid))
+Ä	ç_btype itym d_ty c_ty
+		= mk_funt
+			(list_mk_ã_type (itymfunseq itym, g3_bind_type d_ty c_ty),
+					mk_type(`ë`,æmk_tuple_type æd_ty,c_tyøø))
+Ä	ç_bterm itym d_ty c_ty
+		= mk_const (ç_bname (dom itym), ç_btype itym d_ty c_ty)
+À
+
+
+=SML
+fun	‚ç_bname· (fid:string list) :string = 
+		"ç_æ" ^ (number(length fid)) ^ "ø";
+fun	‚ç_btype· (itym:(string * TYPE) list) (t_ty:TYPE) (v_ty:TYPE) :TYPE =
+		mk_ã_type(
+			list_mk_ã_type(
+				itymfunseq itym,
+				g3_bind_type t_ty v_ty
+			),
+			mk_ctype ("ë",[tuple_type [t_ty,v_ty]])
+		);
+fun	‚ç_bterm· (itym:(string * TYPE) list) (t_ty:TYPE) (v_ty:TYPE) :TERM =
+		mk_const (ç_bname (fst(split itym)), ç_btype itym t_ty v_ty);
+=TEX
+\subsubsection{definite description}
+
+ÛHOL Constant
+	‚á_2·		:
+		(*1 ã *2 ã (bool,bool,*cv)S_[d,p,v]) ã *cv
+…
+	(á_2 p
+		=	á(çx:*cvé Ñ(y:*1) (z:*2)é
+				let	t = p y z
+				in	t.d Ä t.p Ä (t.v = x)))
+Ê
+
+Note that the above definition relies upon $á$ being defined as definite description rather than choice in HOL.
+ 
+Í
+	‚á_bname·	: (í IDENT) ã string
+	‚á_btype·	: (IDENT ú TYPE) ã TYPE ã TYPE
+	‚á_bterm·	: (IDENT ú TYPE) ã TYPE ã TERM
+…
+	Éfid:í IDENT; itym:IDENT ú TYPE; ty:TYPEé
+
+	á_bname fid
+		= `á_`^(number(length fid))
+Ä	á_btype itym ty
+		= mk_funt
+			(list_mk_ã_type (itymfunseq itym, g2_bind_type ty),
+					ty)
+Ä	á_bterm itym ty
+		= mk_const (á_bname (dom itym), á_btype itym ty)
+À
+
+=SML
+fun	‚á_bname· (fid:string list) :string = 
+		"á_æ" ^ (number(length fid)) ^ "ø";
+fun	‚á_btype· (itym:(string * TYPE) list) (ty:TYPE) :TYPE =
+		mk_ã_type(
+			list_mk_ã_type(
+				itymfunseq itym,
+				g2_bind_type ty
+			),
+			ty
+		);
+fun	‚á_bterm· (itym:(string * TYPE) list) (ty:TYPE) :TERM =
+		mk_const (á_bname (fst(split itym)), á_btype itym ty);
+=TEX
+
+\subsection{Computing the Abstractions}
+
+For each of the three groups of abstraction we define a function which constructs the abstraction to which the binding operator will be applied.
+The process of abstraction over each of the names in the signature is common to these three functions and is defined first.
+
+Î[A,B]
+	‚zip·		: (seq A) ã (A ú B) ã seq (A â B)
+…
+	Éseqa:seq A; a:A; m:A ú Bé
+
+	zip æø m			= æø
+Ä	zip seqaµæaø m	= (zip seqa m)µæ(a, m a)ø
+À
+
+Í
+	‚schema_abs·	: (IDENT ú TYPE) ã TERM ã TERM
+…
+	Éitym:IDENT ú TYPE; ft:TERMé
+
+	schema_abs itym ft
+		= list_mk_fabs
+				(zip ((idsetseq Ø pack_IDENT)(dom itym)) stym,
+				ft)
+
+		where
+		[stym:string ú TYPE | pack_IDENT Ø stym = itym]
+À
+
+=SML
+fun	‚schema_abs· (itym:(string * TYPE) list) (ft:TERM) :TERM =
+	let	val sl = idsetseq(fst(split itym));
+		val tyl = map (lassoc3 itym) sl;
+	in
+		list_mk_simple_ç (map mk_var (combine sl tyl),ft)
+	end;
+=TEX
+\subsubsection{forming the abstractions}
+
+In the following sections the variable names are using in the following way:
+
+\begin{description}
+\item[ft1]
+characteristic tuple
+\item[ft2]
+declaration
+\item[ft3]
+predicate
+\item[ft4]
+body
+\item[ty1]
+characteristic tuple type
+\item[ty2]
+body type
+\item[itym]
+type map assigning types to identifiers in signature
+\end{description}
+
+\subsubsection{group 1 abstractions}
+Í
+	‚g1_abs·	: (TERM â TERM â (IDENT ú TYPE)) ã TERM
+…
+	Éft2,ft3:TERM; itym:IDENT ú TYPEé
+
+	g1_abs (ft2,ft3,itym)	= schema_abs itym (list_mk_fcomb (g1_bind_cterm,æft2,ft3ø))
+À
+
+=SML
+fun	‚g1_abs· (ft2:TERM,ft3:TERM,itym:(string * TYPE) list)	= 
+		schema_abs itym (list_mk_app (g1_bind_cterm,[ft2,ft3]));
+=TEX
+
+\subsubsection{group 2 abstractions}
+Í
+	‚g2_abs·	: (TERM â TERM â TERM â (IDENT ú TYPE)) ã TERM
+…
+	Éft2, ft3, ft4:TERM; ty2:TYPE; itym:IDENT ú TYPEé
+
+	g2_abs (ft2, ft3, ft4, itym)
+	= schema_abs itym (list_mk_fcomb (g2_bind_cterm (type_of ft4), æft2, ft3, ft4ø))
+À
+
+=SML
+fun	‚g2_abs· (ft2:TERM,ft3:TERM,ft4:TERM,itym:(string * TYPE) list) = 
+		schema_abs 
+			itym 
+			(list_mk_app (g2_bind_cterm (type_of ft4), [ft2, ft3, ft4]));
+=TEX
+\subsubsection{group 3 abstractions}
+Í
+	‚g3_abs·
+	: (TERM â TERM â TERM â TERM â (IDENT ú TYPE)) ã TERM
+…
+	Éft1, ft2, ft3, ft4:TERM; ty1, ty2:TYPE; itym:IDENT ú TYPEé
+
+	g3_abs (ft1, ft2, ft3, ft4, itym)
+	= schema_abs itym (list_mk_fcomb (g3_bind_cterm (type_of ft1) (type_of ft4), æft2, ft3, ft1, ft4ø))
+À
+
+=SML
+fun	‚g3_abs· (ft1:TERM,ft2:TERM,ft3:TERM,ft4:TERM,itym:(string * TYPE) list) = 
+		schema_abs 
+			itym 
+			(list_mk_app (g3_bind_cterm (type_of ft1) (type_of ft4), [ft2, ft3, ft1, ft4]));
+=TEX
+\section{END OF SIGNATURE}
+=SML
+end (* end of structure icl'ZTypesAndTerms *);
+=TEX
+\twocolumn[\section{INDEX}]
+\small
+\printindex
+\end{document}
