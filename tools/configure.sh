@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.11 2002/10/24 11:40:29 rda Exp rda $
+# $Id: configure.sh,v 1.12 2002/10/29 23:19:19 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -125,6 +125,7 @@ echo "Using $PPTARGETDIR as the installation target directory"
 #
 # Check for user-defined target list:
 #
+SUPPORTEDTARGETS="dev pptex xpp hol zed daz"
 if	[ "${PPTARGETS:-}" = "" ]
 then	PPTARGETS="pptex xpp hol zed daz"
 	USERDEFINEDTARGETS=n
@@ -136,26 +137,6 @@ else	for f in $PPTARGETS
 		esac
 	done
 	USERDEFINEDTARGETS=y
-fi
-#
-# Check for document format requirements:
-#
-case "${PPDOCFORMAT:-}" in
-	"")	DOPDF=n; DOPS=n;;
-	PDF)	DOPDF=y; DOPS=n;;
-	PS)	DOPDF=n; DOPS=y;;
-	*)	give_up "unsupported document format \"$PPDOCFORMAT\" (not on of PDF or PS)"
-esac
-if	[ "$DOPDF" = y ]
-then	if	which dvipdfm >/dev/null 2>&1
-	then	echo "Generating code to produce PDF versions of the documents"
-	else	give_up "dvipdfm does not seem to be available and is needed if you specify PPDOCFORMAT=PDF"
-	fi
-elif	[ "$DOPS" = y ]
-then	if	which dvips >/dev/null 2>&1
-	then	echo "Generating code to produce PostScript versions of the documents"
-	else	give_up "dvips does not seem to be available and is needed if you specify PPDOCFORMAT=PS"
-	fi
 fi
 #
 # Look for packages to be installed:
@@ -180,6 +161,26 @@ if	[ $SOMETODO = n ]
 then	give_up "cannot find any packages to build in $CWD/src"
 fi
 echo "Generating code to install the following packages: $ACTTARGETS"
+#
+# Check for document format requirements:
+#
+case "${PPDOCFORMAT:-}" in
+	"")	DOPDF=n; DOPS=n;;
+	PDF)	DOPDF=y; DOPS=n;;
+	PS)	DOPDF=n; DOPS=y;;
+	*)	give_up "unsupported document format \"$PPDOCFORMAT\" (not on of PDF or PS)"
+esac
+if	[ "$DOPDF" = y ]
+then	if	which dvipdfm >/dev/null 2>&1
+	then	echo "Generating code to produce PDF versions of the documents"
+	else	give_up "dvipdfm does not seem to be available and is needed if you specify PPDOCFORMAT=PDF"
+	fi
+elif	[ "$DOPS" = y ]
+then	if	which dvips >/dev/null 2>&1
+	then	echo "Generating code to produce PostScript versions of the documents"
+	else	give_up "dvips does not seem to be available and is needed if you specify PPDOCFORMAT=PS"
+	fi
+fi
 #
 # Build the script
 #
@@ -261,14 +262,31 @@ then
 		out "cd $PPTARGETDIR/doc"
 	fi
 	if	[ "$DOPDF" = y ]
-	then	out 'for f in *.dvi'
+	then	out "echo \"Converting documents to PDF (see $PPTARGETDIR/dvipdfm.log for messages)\""
+		out 'for f in *.dvi'
 		out 'do	dvipdfm $f'
-		out "done"
+		out "done >$PPTARGETDIR/dvipdfm.log 2>&1"
 	fi
 	if	[ "$DOPS" = y ]
-	then	out 'for f in *.dvi'
+	then	out "echo \"Converting documents to PostScript (see $PPTARGETDIR/dvips.log for messages)\""
+		out 'for f in *.dvi'
 		out 'do	dvips -o "" $f'
-		out "done"
+		out "done >$PPTARGETDIR/dvips.log 2>&1"
 	fi
 fi
+out "echo Generating HTML roadmap to the documents: $PPTARGETDIR/doc/index.html"
+if	[ "$DOPDF" = y ]
+then	HTMLEDIT='-e /@ext@/s/@ext@/pdf/g'
+elif	[ "$DOPS" = y ]
+then	HTMLEDIT='-e /@ext@/s/@ext@/ps/g'
+else	HTMLEDIT='-e /@ext@/s/@ext@/dvi/g'
+fi
+for f in  $SUPPORTEDTARGETS
+do	
+	if [ "`eval echo '$'$f`" != y ]
+	then	HTMLEDIT="$HTMLEDIT -e /@$f@/d"
+	else	HTMLEDIT="$HTMLEDIT -e /@$f@/s/@$f@//g"
+	fi
+done
+out "sed $HTMLEDIT  <$CWD/src/index.html.src > $PPTARGETDIR/doc/index.html"
 out "echo Installation complete"
