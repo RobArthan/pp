@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.35 2002/12/02 22:51:50 rda Exp $
+ * $Id: mainw.c,v 2.35 2002/12/02 22:55:14 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -502,6 +502,7 @@ static void reinit_changed(Boolean saving)
 	changed = False;
 	XtUnmanageChild(modified);
 	if(saving) {
+		XtUnmanageChild(newfile);
 		notify_save(undo_ptr);
 	} else {
 		clear_undo(undo_ptr);
