@@ -138,3 +138,7 @@ typedef struct menu_item {
 		Widget	text,
 		char	*name);
 #endif
+#ifndef _cmdline
+	extern void add_cmd_line(
+		Widget	text_w);
+#endif
