@@ -45,6 +45,8 @@ First versions.
 \item [Issue 1.7 (19th August 1992)]
 Strengthened $Â$ reduction test in rewriting,
 fixed a bug introduced by parsing changes.
+\item [Issue 1.8 (19th August 1992)]
+Binding error fixed, improved checks of being Z.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -70,17 +72,17 @@ $inst$ (and perhaps others) do renaming even without a list
 of type instantiations. These renamings have been prevented
 when the list is empty, but not when the renamings are irrelevant to the type instantiation.
 This can lead to terms outside of Z.
+
+$CHECK\_IS\_Z\_T$ and $check\_is\_z\_conv\_result$ are not module tested.
 \subsubsection{Possible Enhancements}
 None known.
 
 \section{PREAMBLE}
 =SML
 structure ÛZPredicateCalculusÝ : ZPredicateCalculus = struct
-local
 open ZTypesAndTermsSupport;
 open ZGeneratedConstants;
 open Resolution;
-in
 =TEX
 =IGN
 delete_pc "'z_predicate_calculus_build" handle _ => ();
@@ -99,87 +101,6 @@ val _ = delete_pc "'z_predicate_calculus_build" handle Fail _ => ();
 val _ = new_pc "'z_predicate_calculus_build";
 val _ = set_pr_tac basic_prove_tac "'z_predicate_calculus_build";
 val _ = set_pr_conv basic_prove_conv "'z_predicate_calculus_build";
-=TEX
-\section{HIJACKED FROM IMP050.DOC}
-These ought to be in the signature of ZGeneratedConstants,
-but are not.
-=SML
-fun Ûbind_con_projÝ(ty:TYPE) =
-let	val (sl,tyl) = split(dest_z_schema_t ty)
-		handle complaint => 
-		divert complaint "dest_z_schema_t" "bind_con_proj" 47050 
-			[fn () => string_of_type ty];
-	val nam = fst(dest_ctype ty);
-	val typart = implode(tl(tl(explode nam)));
-	val cnam = "Z'Mk_"^typart;
-	val pnaml = map (curry (op ^) nam)  sl;
-in
-	(cnam,pnaml)
-end;
-=TEX
-=SML
-fun Ûget_binding_infoÝ(ty : TYPE) : TERM * TERM list =
-let 	val (cnam,pnaml) = bind_con_proj ty
-		handle complaint => 
-		divert complaint "bind_con_proj" "get_binding_info" 47050 
-			[fn () => string_of_type ty];
-	val (sl,tyl) = split(dest_z_schema_t ty);
-in
-	case get_const_type cnam  of Value pty => 
-	let	val 	ctm = mk_const(cnam,pty);
-		val 	tyvl = map mk_z_var_t sl;	
-		val	bty = (hd o rev o strip_­_type) pty;
-		val 	ptyl = map (curry mk_­_type bty) tyvl;
-		val 	ptml = map mk_const(combine pnaml ptyl);	
-	in	(ctm,ptml)
-	end	
-	| _ => fail "get_binding_info" 50001 [fn () => cnam]
-end;
-=TEX
-=SML
-local
-fun (Ûint_to_tyvlÝ : int -> TYPE list) 1 = [mk_z_var_t (string_of_int 1)]
-| int_to_tyvl n = (int_to_tyvl(n - 1)) @ [mk_z_var_t (string_of_int n)];
-=TEX
-=SML
-fun (Ûint_to_slÝ : int -> string list) 1 = [string_of_int 1]
-| int_to_sl n = (int_to_sl(n - 1)) @ [string_of_int n];
-=TEX
-=SML
-fun Ûtuple_con_projÝ(ty:TYPE) =
-let	val tyl = dest_z_tuple_t ty
-		handle complaint => 
-		divert complaint "dest_z_tuple_t" "tuple_con_proj" 47040 
-			[fn () => string_of_type ty];
-	val n = length tyl;
-	val nam = fst(dest_ctype ty);
-	val typart = implode(tl(tl(explode nam)));
-	val cnam = "Z'Mk_"^typart;
-	val isl = int_to_sl n;
-	val pnaml = map (curry (op ^) nam)  isl;
-in	
-	(cnam,pnaml)
-end;
-in
-=TEX
-=SML
-fun Ûget_tuple_infoÝ(ty : TYPE) : TERM * TERM list =
-let 	val (cnam,pnaml) = tuple_con_proj ty
-		handle complaint => 
-		divert complaint "tuple_con_proj" "get_tuple_info" 47040 
-			[fn () => string_of_type ty];
-	val n = length pnaml;
-in
-	case get_const_type cnam  of Value pty => 
-	let	val 	ctm = mk_const(cnam,pty);
-		val 	tyvl = int_to_tyvl n;	
-		val 	bty = mk_z_tuple_t tyvl;
-		val 	ptyl = map (curry mk_­_type bty) tyvl;
-		val 	ptml = map mk_const(combine pnaml ptyl);	
-	in	(ctm,ptml)
-	end		| _ => fail "get_tuple_info" 50002 [fn () => cnam]
-end;
-end;
 =TEX
 
 \section{THE CODE}
@@ -428,12 +349,14 @@ let	val (bcons,argl) = strip_app tm;
 	val args_itym = map dest_var argl;
 	val b_itym = dest_bind_cterm bcons;
 	val d = case b_itym of
-		(a :: x) => implode
- 				((explode(fst (hd args_itym))) from 
-				(length(explode(fst a))))
+		(a :: x) => snd(unpack_ident (fst a))
 		| _ => "";
 in
-	if list_eq (fn ((a,aty),(b,bty)) => a=b ^ d andalso (aty =: bty)) 
+	if list_eq (fn ((a,aty),(b,bty)) => 
+		let	val (anm,ad) = unpack_ident a;
+		in
+		anm=b andalso ad = d andalso (aty =: bty)
+		end) 
 		args_itym b_itym
 	then (b_itym, d)
 	else fail "full_dest_binding" 0 []
@@ -1340,6 +1263,27 @@ in
 end);
 end; (* of local not_z_subterms1 *)
 =TEX
+=SML
+local
+	fun not_z_subterms1 tm = not_z_subterms(snd(strip_simple_µ tm));
+in
+fun Ûcheck_is_z_conv_resultÝ (caller:string) (res:THM):THM = (
+	if not(get_flag("check_is_z"))
+	then res
+	else (
+let	val (lhs,rhs) = dest_eq (concl res)
+		handle (Fail _) => (mk_t,concl res);
+	val nZ = not_z_subterms1 lhs @ not_z_subterms1 rhs @ 
+		flat (map not_z_subterms1 (asms res));
+in
+	case nZ of
+	[] => res
+	| lst => (diag_string (get_error_message 41005
+		[caller,(format_list string_of_term lst ", ")]);
+		res)
+end));
+end;
+=TEX	
 \subsubsection{Adjustment after Á-conversion}
 =SML
 fun ÛÁ_to_zÝ (tm : TERM):TERM = 
@@ -1900,7 +1844,7 @@ let	val cnv1' = (fn t => cnv1 t
 		handle (Fail _) =>
 		term_fail "z_µ_elim_conv1" 41071 [tm]);
 in
-	check_is_z_thm "z_µ_elim_conv1"
+	check_is_z_conv_result "z_µ_elim_conv1"
 	((cnv1' THEN_C ALL_SIMPLE_µ_C (cnv2' THEN_C LEFT_C(LEFT_C
 		((DECL_C (dec_pred_conv THEN_C _u_conv)
 		 ORELSE_C (fn tm1 => term_fail "z_µ_elim_conv1" 41071 [tm]))
@@ -2394,6 +2338,7 @@ let	val (d,p,v) = dest_z_¶ tm
 		pass_on complaint "dest_z_¶" "z_¶_inv_conv";
 	val vs = fst(strip_simple_¶(snd(dest_app tm)));
 in
+	check_is_z_thm "z_¶_inv_conv" (
 	case (any (frees p) (fn x => x term_mem vs) orelse  (is_t p),
 		any (frees v) (fn x => x term_mem vs) orelse (is_t v)) of
  	(true, true) => term_fail "z_¶_inv_conv" 41040 [tm]
@@ -2423,7 +2368,7 @@ in
 		THEN tac1,
 		conv_tac(APP_C(RAND_C(RAND_C(ALL_SIMPLE_¶_C cnv6)), cnv7))
 		THEN tac1
-		])
+		]))
 end);
 end;
 =TEX
@@ -2878,12 +2823,13 @@ let	val (fa,v) = dest_z_eq conc
 		handle complaint as (Fail _) =>
 		(divert complaint "dest_z_¤" "z_app_tac" 41090 []));
 in
-	if is_z_app fa
-	then ´_thm_tac (simple_µ_elim v (z_app_rule fa))(asms,conc)
+	CHECK_IS_Z_T "z_app_tac"
+	(if is_z_app fa
+	then ´_thm_tac (simple_µ_elim v (z_app_rule fa))
 	else if is_z_app v
 	then ´_thm_tac (conv_rule(RIGHT_C eq_sym_conv)
-		(simple_µ_elim fa (z_app_rule v)))(asms,conc)
-	else fail "z_app_tac" 41090 []
+		(simple_µ_elim fa (z_app_rule v)))
+	else fail "z_app_tac" 41090 [])(asms,conc)
 end);
 end;
 =GFT Example
@@ -3285,10 +3231,10 @@ fun (lall_³_simple_¶_conv : CONV) tm = ((³_simple_¶_conv THEN_C
 		cnv4) tm;
 
 in
-val z_³_µ_conv : CONV = ((cnv1 THEN_C 
+val Ûz_³_µ_convÝ : CONV = ((cnv1 THEN_C 
 	(RAND_C lall_³_simple_µ_conv))
 	ORELSE_C (fn tm => term_fail "z_³_µ_conv" 41050 [tm]));
-val z_³_¶_conv : CONV = ((cnv3 THEN_C 
+val Ûz_³_¶_convÝ : CONV = ((cnv3 THEN_C 
 	(RAND_C lall_³_simple_¶_conv))
 	ORELSE_C (fn tm => term_fail "z_³_¶_conv" 41051 [tm]));
 end;
@@ -3314,7 +3260,8 @@ let	val tm' = dest_z_³ tm
 		handle complaint =>
 		pass_on complaint "dest_z_³" "z_³_in_conv";
 in
-	case (dest_z_term tm') of
+	check_is_z_thm "z_³_in_conv"
+	(case (dest_z_term tm') of
 	Z³ tm'' => simple_µ_elim tm'' thm1
 	| Z± (a,b) => list_simple_µ_elim [a,b] thm2
 	| Z² (a,b) => list_simple_µ_elim [a,b] thm3
@@ -3330,7 +3277,7 @@ in
 	| Z¶‰1 _ => ((RAND_C z_¶‰1_conv) THEN_C z_³_¶_conv) tm
 	| ZTrue => thm5
 	| ZFalse => thm6
-	| _ => term_fail "z_³_in_conv" 28131 [tm]
+	| _ => term_fail "z_³_in_conv" 28131 [tm])
 end);
 end;
 =TEX
@@ -3473,7 +3420,6 @@ a(step_strip_tac);
 =TEX
 \section{EPILOGUE}
 =SML
-end; (* local open ... *)
 end; (* of structure ZPredicateCalculus *)
 open ZPredicateCalculus;
 =TEX
