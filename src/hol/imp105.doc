@@ -72,7 +72,7 @@ See \cite{DS/FMU/IED/DTD105}.
 See \cite{DS/FMU/IED/DTD105}.
 \section{PREAMBLE}
 =SML
-structure ÛúLinearArithmeticÝ (* : úLinearArithmetic *) = struct
+structure ÛúArithmeticToolsÝ (* : úArithmeticTools *) = struct
 =TEX
 \section{PREAMBLE}
 =SML
@@ -425,7 +425,7 @@ open LinearArithmeticTools;
 =TEX
 We need lots of theorems:
 =SML
-val Û³_eq_thmÝ = tac_proof(([], ¬µm n : ú·³m = n ¤ m < n ² n < m®),
+val Ûú_³_eq_thmÝ = tac_proof(([], ¬µm n : ú·³m = n ¤ m < n ² n < m®),
 		REPEAT µ_tac THEN rewrite_tac[taut_rule¬µa b·(³a¤b)¤(a¤³b)®]
 		THEN REPEAT strip_tac THEN_LIST
 	[asm_rewrite_tac[],
@@ -557,13 +557,21 @@ fun Ûdest_summandÝ (tm : TERM) : int * TERM = (
 	in	if (fst nt) = 1
 		then (1, tm)
 		else nt
-	end	handle Fail _ => (~1, dest_ú_minus tm)
+	end	handle Fail _ => (
+			let 	val (x, y) = (dest_ú_times tm);
+				val x' = dest_ú_minus x;
+			in	(~1, mk_ú_times(x', y))
+			end
+		)
+		handle Fail _ => (~1, dest_ú_minus tm)
 		handle Fail _ => (1, tm)
 );
 =IGN
 dest_summand¬~(x:ú)®;
 dest_summand¬îú 42 * v®;
 dest_summand¬~(îú 42) * v®;
+dest_summand¬~(îú 42) * v®;
+dest_summand¬~(x:ú) * v®;
 =TEX
 =SML
 val Ûdest_sumÝ : TERM -> SCALED_SUM = map dest_summand o strip_ú_plus;
@@ -802,8 +810,8 @@ val tml = [
 	¬~b ¼ ~(îú 1)®
 ];
 ú_lin_arith_rule [
-	¬a + b = îú 0®,
-	¬~a ¼ ~(îú 1)®,
+	¬a*a + b = îú 0®,
+	¬~a*a ¼ ~(îú 1)®,
 	¬~b ¼ ~(îú 1)®
 ];
 =TEX
@@ -835,14 +843,181 @@ val Ûú_lin_arith_prove_convÝ : THM list -> CONV = (fn thl => fn tm =>
 =TEX
 \section{OTHER RULES}
 =TEX
-
-
-\section{EPILOGUE}
 =SML
-val _ = open_theory old_theory;
+val Ûú_eqÝ = ¬$=:ú­ú­BOOL®;
+val ú_cancel_conv_thm1 = ú_eq_thm;
+val ú_cancel_conv_thm2 = tac_proof(
+	([], ¬µm : î; j k:ú·îú m + j = k ¤ j = k + ~ (îú m)®),
+	REPEAT strip_tac THEN all_var_elim_asm_tac1 THEN
+	rewrite_tac[µ_elim¬k:ú®ú_plus_order_thm, µ_elim¬j:ú®ú_plus_order_thm]);
+val ú_cancel_conv_thm3 = tac_proof(
+	([], ¬µm:î; j k:ú·~(îú m) + j = k ¤ j = k + îú m®),
+	REPEAT strip_tac THEN all_var_elim_asm_tac1 THEN
+	rewrite_tac[µ_elim¬k:ú®ú_plus_order_thm, µ_elim¬j:ú®ú_plus_order_thm]);
+=TEX
+=SML
+val Ûú_¼Ý = ¬$¼:ú­ú­BOOL®;
+val ú_¼_cancel_conv_thm1 = ú_¼_¼_0_thm;
+val ú_¼_cancel_conv_thm2 = tac_proof(
+	([], ¬µm : î; j k:ú·îú m + j ¼ k ¤ j ¼ k + ~ (îú m)®),
+	once_rewrite_tac[ú_¼_¼_0_thm]
+	THEN rewrite_tac[µ_elim¬~k:ú® ú_plus_order_thm]
+	THEN rewrite_tac[µ_elim¬j:ú® ú_plus_order_thm]);
+val ú_¼_cancel_conv_thm3 = tac_proof(
+	([], ¬µm:î; j k:ú·~(îú m) + j ¼ k ¤ j ¼ k + îú m®),
+	once_rewrite_tac[ú_¼_¼_0_thm]
+	THEN rewrite_tac[µ_elim¬~k:ú® ú_plus_order_thm]
+	THEN rewrite_tac[µ_elim¬j:ú® ú_plus_order_thm]);
+=TEX
+=SML
+fun Ûgen_cancel_convÝ (r : TERM) (conv_thm1 : THM) (conv_thm2 : THM) (conv_thm3: THM)
+	: CONV = (fn tm =>
+	let	val (rela, b) = dest_app tm;
+		val (rel, a) = dest_app rela;
+	in 	if rel =$ r
+		then
+	let	val thm1 = (
+			if	is_ú_signed_int b
+			then	Nil
+			else	Value (list_µ_elim[a, b] conv_thm1)
+		);
+		val arb1 =
+			case thm1 of 
+				Value thm => snd(dest_app(concl thm))
+			|	Nil => tm;
+		val thm2 = Value (RATOR_C (RAND_C ú_anf_conv) arb1)
+				handle Fail _ => Nil;
+		val arb2 =
+			case thm2 of
+				Value th => snd(dest_eq (concl th))
+		|	_ => arb1;
+		val (_, a2) = dest_app (fst(dest_app arb2));
+		val thm3 = (
+			let	val c = dest_ú_signed_int(fst (dest_ú_plus a2));
+			in	Value
+				(if	c >= 0
+				then	(simple_eq_match_conv conv_thm2
+					THEN_C RIGHT_C ú_plus_conv) arb2
+				else	(simple_eq_match_conv conv_thm3
+					THEN_C RIGHT_C ú_plus_conv) arb2)
+			end	handle Fail _ => Nil
+		);
+		fun chain (Value th1) (Value th2)= Value(eq_trans_rule th1 th2)
+		|   chain (Value th1) Nil = Value th1 
+		|   chain Nil (Value th2) = Value th2
+		|   chain Nil Nil = Nil;
+	in	case chain thm1 (chain thm2 thm3)of 
+			Value th => th
+		|	Nil => fail_conv tm
+	end	else	fail_conv tm
+	end
+);
+=TEX
+=SML
+val Ûú_eq_cancel_convÝ : CONV = (fn tm =>
+	(gen_cancel_conv
+		ú_eq ú_cancel_conv_thm1 ú_cancel_conv_thm2
+			ú_cancel_conv_thm3 tm)
+	handle Fail _ => term_fail "ú_eq_cancel_conv" 105120 [tm]
+);
+=TEX
+=SML
+val Ûú_¼_cancel_convÝ : CONV = (fn tm =>
+	(gen_cancel_conv
+		ú_¼ ú_¼_cancel_conv_thm1 ú_¼_cancel_conv_thm2
+			ú_¼_cancel_conv_thm3 tm)
+	handle Fail _ => term_fail "ú_eq_cancel_conv" 105121 [tm]
+);
+=IGN
+ú_eq_cancel_conv¬a + b + îú 4 = îú 9 + y®;   
+ú_eq_cancel_conv¬a + b + îú 20 = îú 9 + y®;   
+ú_eq_cancel_conv¬b + a = îú 9 + y®;   
+ú_eq_cancel_conv¬b + a = îú 9®;   
+ú_eq_cancel_conv¬a + b = îú 9®   (* should fail *); 
+ú_eq_cancel_conv¬îú 0 = îú 9®   (* should fail *); 
+ú_eq_cancel_conv¬T = F®   (* should fail *); 
+ú_eq_cancel_conv¬T ² F®   (* should fail *); 
+ú_¼_cancel_conv¬a + b + îú 4 ¼ îú 9 + y®;   
+ú_¼_cancel_conv¬a + b + îú 20 ¼ îú 9 + y®;   
+ú_¼_cancel_conv¬b + a ¼ îú 9 + y®;   
+ú_¼_cancel_conv¬b + a ¼ îú 9®;   
+ú_¼_cancel_conv¬a + b ¼ îú 9®   (* should fail *); 
+ú_¼_cancel_conv¬îú 0 ¼ îú 9®   (* should fail *); 
+ú_¼_cancel_conv¬T = F®   (* should fail *); 
+ú_¼_cancel_conv¬T ² F®   (* should fail *); 
+=TEX
+\section{THE PROOF CONTEXTS}
+The equational contexts required are the same for stripping goals and stripping
+theorems. We take numeric $=$ and $¼$ as the atomic
+predicates which we will deal with. The possibilities are:
+{\em(i)} put the a ground atomic predicate into normal form with the appropriate canncellation conversion;
+{\em(ii)} convert a negated atomic predicate into an atomic one;
+{\em(iii)} convert a predicate formed with $<$, $¾$ or $>$ into an atomic one;
+{\em(iv)} convert the negation of a predicate formed with $<$, $¾$ or $>$ into an atomic one;
+and
+{\em(v)} attempt to evaluate ground inequalities.
+=TEX
+The following is a little bit more leisurely than the natural numbers versions;
+it does the conversion into atomic predicates in easy stages.
+=SML
+val strip_cxt = [
+
+	(¬(x:ú) = y®, ú_eq_conv),
+	(¬(x:ú) ¼ y®, ú_¼_conv),
+
+	(¬³(x:ú) = y®, simple_eq_match_conv ú_³_eq_thm),
+	(¬³(x:ú) ¼ y®, simple_eq_match_conv ú_³_¼_thm),
+
+	(¬(x:ú) < y®, simple_eq_match_conv ú_less_def),
+	(¬(x:ú) ¾ y®, simple_eq_match_conv ú_¾_def),
+	(¬(x:ú) > y®, simple_eq_match_conv ú_greater_def),
+
+	(¬³ (x:ú) < y®, simple_eq_match_conv ú_³_less_thm),
+	(¬³ (x:ú) ¾ y®, RAND_C(simple_eq_match_conv ú_¾_def)),
+	(¬³ (x:ú) > y®, RAND_C(simple_eq_match_conv ú_greater_def)),
+
+
+	(¬(x:ú) = y®, ú_eq_cancel_conv),
+	(¬(x:ú) ¼ y®, ú_¼_cancel_conv)];
+=IGN
+map (fn (t, c) => TRY_C c t) strip_cxt;
+=TEX
+=SML
+val _ = new_pc Û"'ú_lin_arith"Ý;
+val _ = set_rw_eqn_cxt strip_cxt "'ú_lin_arith";
+val _ = set_st_eqn_cxt strip_cxt "'ú_lin_arith";
+val _ = set_sc_eqn_cxt strip_cxt "'ú_lin_arith";
+val _ = set_pr_tac ú_lin_arith_prove_tac "'ú_lin_arith";
+val _ = set_pr_conv ú_lin_arith_prove_conv "'ú_lin_arith";
+val _ = commit_pc "'ú_lin_arith";
+=TEX
+=SML
+val _ = new_pc Û"ú_lin_arith"Ý;
+val _ = merge_pcs ["predicates","'ú_lin_arith"] "ú_lin_arith";
+val _ = commit_pc "ú_lin_arith";
+=TEX
+=IGN
+map (PC_C1 "ú_lin_arith" rewrite_conv[]) [
+	¬îú 1 = îú 2®, ¬îú 3 ¼ îú 2®, ¬îú 2 = îú 2®, ¬îú 1 ¼ îú 2®
+,	¬a + b = b + a + îú 1®, ¬a + îú 20 + b = (a+ îú 10)+(b+ îú 10)®
+,	¬a + b ¼ b + a - îú 1®, ¬a + îú 20 + b ¼ (a+ îú 14)+(b+ îú 10)®
+,	¬³îú 10 = îú 20®, ¬³(a:ú) + b = b + a®
+,	¬³îú 10 ¼ îú 20®, ¬³(a:ú) + b ¼ b + a®
+,	¬îú 10 < îú 20®, ¬(a:ú) + b ¾ b + a®, ¬(a:ú) + b > b + a®
+,	¬³îú 10 < îú 20®, ¬³(a:ú) + b ¾ b + a®, ¬³(a:ú) + b > b + a®
+,	¬(a:ú +b)*(a-b) = a*a - b*b®, ¬(a:ú +b)*(a-b) = a*a - b*b ®
+]; 
+map (PC_C1 "ú_lin_arith" prove_rule[]) [
+	¬a*a ¾ îú 0 ± b*b ¾ îú 0 ´ (a+b)*(a+b) ¾ îú 2 * a * b®
+];
+map (PC_C1 "ú_lin_arith" rewrite_conv[]) [
+	¬a*a ¾ îú 0 ± b*b ¾ îú 0 ´ (a+b)*(a+b) ¾ îú 2 * a * b®
+];
+
+=SML
 val _ = pop_pc();
-end (* of structure úLinearArithmetic *);
-open úLinearArithmetic;
+end (* of structure úArithmeticTools *);
+open úArithmeticTools;
 =TEX
 \twocolumn[\section{INDEX}]
 \small
