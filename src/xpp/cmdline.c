@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.19 2003/07/18 13:25:25 rda Exp rda $
+ * $Id: cmdline.c,v 2.20 2003/07/23 14:02:14 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -63,7 +63,7 @@ static void
 	help_cb(CALLBACK_ARGS);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * add_cmd_line: attach a tool allowing entry of single line
+ * add_command_line_tool: attach a tool allowing entry of single line
  * commands for execution via `send_to_application' in mainw.c.
  *
  * The tool is a popup shell looking something like:
@@ -97,7 +97,7 @@ static void
  * the resulting widget with "<Key>Return: activate()"
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-void add_cmd_line(Widget text_w)
+void add_command_line_tool(Widget text_w)
 {
 	Widget shell, paned, list_w, cmd_text,
 		btn_form, exec_btn, add_btn, delete_btn, dismiss_btn, help_btn;
@@ -136,15 +136,18 @@ void add_cmd_line(Widget text_w)
 	list_w = XmCreateScrolledList(paned, "command-list", args, i);
 
 	get_initial_command_line_list(list_w);
-
+/*
+ * cmd_text is a single line text widget, not a text field, so that it supports the
+ * insert-string action used in the Xpp resource file to bind symbols to keystrokes.
+ */
 	cmd_text = XtVaCreateManagedWidget("command-text",
-		xmTextWidgetClass,		paned,
-		XmNeditMode,			XmMULTI_LINE_EDIT,
-		XmNrows,			1,
+		xmTextWidgetClass,			paned,
 		XmNcolumns,			40,
+		XmNrows,			1,
+		XmNeditMode,			XmSINGLE_LINE_EDIT,
 		NULL);
 
-	XtAddCallback(cmd_text, XmNmodifyVerifyCallback, text_verify_cb, NULL);
+	XtAddCallback(cmd_text, XmNmodifyVerifyCallback, text_field_verify_cb, NULL);
 	attach_rw_edit_popup(cmd_text);
 	register_selection_source(cmd_text);
 	register_palette_client(cmd_text);
@@ -415,7 +418,38 @@ void command_history_down(
 	command_history_either(False);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * the callback for the execute button.
+ * take_command_input: if the user tries to type into
+ * the journal window, divert the input into the command
+ * line tool.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void take_command_input(Widget w, XmTextVerifyCallbackStruct *cbs)
+{
+	char *buf;
+	char *p = cbs->text->ptr;
+	int len = cbs->text->length;
+	Widget cmd_w;
+	if(len == 0 || cbs->text->format != XmFMT_8_BIT) {
+		beep();
+		return;
+	} /* else */
+	if(cmd_line_data.shell_w != NULL) {
+		XtPopup(cmd_line_data.shell_w, XtGrabNone);
+	} else {
+		add_command_line_tool(w);
+	}
+	cmd_w = cmd_line_data.cmd_w;
+	XFlush(XtDisplay(cmd_w));
+	buf = XtMalloc(len+1);
+	strncpy(buf, p, len);
+	buf[len] = '\0';
+	XmTextSetString(cmd_w, buf);
+	XmTextSetInsertionPosition(cmd_w,
+	XmTextGetLastPosition(cmd_w));
+	if(get_map_state(cmd_w) == IsViewable) {
+		XSetInputFocus(XtDisplay(cmd_w), XtWindow(cmd_w), RevertToParent, CurrentTime);
+	}
+}
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * selects the command string after executing it to make it
  * easier to overtype the next command if the user is doing
  * many one line commands in a hurry.

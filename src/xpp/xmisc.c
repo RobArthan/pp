@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.22 2003/07/18 13:25:25 rda Exp rda $
+ * $Id: xmisc.c,v 2.23 2003/07/23 14:02:14 rda Exp $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -273,7 +273,7 @@ void number_verify_cb(
  * text_verify_cb: callback to be used as a modify/verify
  * callback to a text (field) widget to ensure that
  * the text doesn't contain control characters or carriage returns.
- * It maps carriage-returns to new-lines (which is crude, but simple).
+ * It maps DOS and MacOS line terminators to new-lines.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void text_verify_cb(
 	Widget		text_w,
@@ -309,6 +309,51 @@ void text_verify_cb(
 		}
 		cbs->text->length = i;
 	}
+	if(has_controls) {
+		ok_dialog(text_w, binary_data_message);
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * text_field_verify_cb: callback to be used as a modify/verify
+ * callback to a text (field) widget to ensure that
+ * the text doesn't contain control characters and to map
+ * Unix, DOS and MacOS line terminators to spaces.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void text_field_verify_cb(
+	Widget		text_w,
+	XtPointer		unused2,
+	XtPointer		xtp)
+{
+	XmTextVerifyCallbackStruct *cbs = xtp;
+	int i, j;
+	char *p = cbs->text->ptr;
+	Boolean has_crs = False, has_controls = False;
+	if(cbs->text->format != XmFMT_8_BIT) {
+		cbs -> doit = False;
+		return;
+	}
+	for(i = 0; i < cbs->text->length; ++i) {
+		if(p[i] == '\r') {
+			has_crs = True;
+		} else if(control_chars[p[i] & 0xff]) {
+			has_controls = True;
+			p[i] = '?';
+		}
+	}
+	for(i = 0, j = 0; j < cbs->text->length; ++i, ++j) {
+		if(p[j] == '\r') {
+			if(j + 1 < cbs->text->length && p[j+1] == '\n') {
+				j += 1;
+			} else {
+				p[j] = ' ';
+			}
+		} else if (p[j] == '\n') {
+			p[j] = ' ';
+		}
+		p[i] = p[j];
+	}
+	cbs->text->length = i;
 	if(has_controls) {
 		ok_dialog(text_w, binary_data_message);
 	}

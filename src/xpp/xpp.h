@@ -105,10 +105,11 @@ typedef struct menu_item {
  * N.B. the sections below are in alphabetical order of module name.
  */
 /* Module: cmdline */
-	extern void add_cmd_line(
+	extern void add_command_line_tool(
 		Widget	text_w);
 	extern void command_history_up(ACTION_PROC_ARGS);
 	extern void command_history_down(ACTION_PROC_ARGS);
+	extern void take_command_input(Widget w, XmTextVerifyCallbackStruct *cbs);
 /* Module: diag */
 	extern void msg(
 		char	*s1,	/* title: ... */
@@ -279,6 +280,7 @@ typedef struct menu_item {
 	extern void blink_owner_cb(CALLBACK_ARGS);
 	extern	void number_verify_cb(CALLBACK_ARGS);
 	extern	void text_verify_cb(CALLBACK_ARGS);
+	extern	void text_field_verify_cb(CALLBACK_ARGS);
 	extern	void common_dialog_setup(
 			Widget shell,
 			void cancel_cb(CALLBACK_ARGS),

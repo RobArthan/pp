@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.64 2003/06/26 13:45:00 rda Exp rda $
+ * $Id: mainw.c,v 2.65 2003/07/18 15:52:52 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -130,6 +130,8 @@ static Widget
 
 XtPointer undo_ptr;
 
+static Boolean journal_editable;
+
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Forward declarations of menu item callback and other routines.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
@@ -141,7 +143,8 @@ static void
 	help_menu_cb(CALLBACK_ARGS),
 	reopen_cb(CALLBACK_ARGS),
 	tools_menu_cb(CALLBACK_ARGS),
-	ln_popup_cb(CALLBACK_ARGS);
+	ln_popup_cb(CALLBACK_ARGS),
+	journal_modify_cb(CALLBACK_ARGS);
 
 static void setup_reopen_menu(char *filename);
 static void post_popupeditmenu(EVENT_HANDLER_ARGS);
@@ -404,7 +407,9 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 	overwritten = buf[i];
 	buf[i] = '\0';
 /* write it to the journal */
+	journal_editable = True;
 	XmTextInsert(journal, ins_pos, buf);
+	journal_editable = False;
 /* undo null-termination */
 	buf[i] = overwritten;
 /* see where we are: */
@@ -838,11 +843,11 @@ static Boolean setup_main_window(
 		NAT num_children;
 
 		i = 0;
-		XtSetArg(args[i], XmNeditable, 			False); ++i;
+		XtSetArg(args[i], XmNeditable, 			True); ++i;
 		XtSetArg(args[i], XmNeditMode,	 		XmMULTI_LINE_EDIT); ++i;
 		XtSetArg(args[i], XmNautoShowCursorPosition, 	False); ++i;
 		XtSetArg(args[i], XmNcursorPositionVisible, 	True); ++i;
-		XtSetArg(args[i], XmNtraversalOn, 	False); ++i;
+/*		XtSetArg(args[i], XmNtraversalOn, 	False); ++i; */
 
 		journal = XmCreateScrolledText(mainpanes, "journal", args, i);
 		attach_ro_edit_popup(journal);
@@ -870,6 +875,9 @@ static Boolean setup_main_window(
 			journal_resize_handler,
 			NULL,
 			XtListHead);
+
+		journal_editable = False;
+		XtAddCallback(journal, XmNmodifyVerifyCallback, journal_modify_cb, 0);
 
 	}
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1225,7 +1233,7 @@ static void tools_menu_cb(
 		add_search_tool(script);
 		break;
 	case TOOLS_MENU_CMD_LINE:
-		add_cmd_line(script);
+		add_command_line_tool(script);
 		break;
 	case TOOLS_MENU_OPTIONS:
 		add_options_tool();
@@ -1433,6 +1441,19 @@ static void ln_popup_cb (
 	if(!line_number_stopped) {
 		line_number_cb(script, NULL, NULL);
 	}
+}
+
+static void journal_modify_cb (
+		Widget		w,
+		XtPointer	cbd,
+		XtPointer	xtp)
+{
+	XmTextVerifyCallbackStruct *cbs = xtp;
+	if(journal_editable) {
+		return;
+	} /* else */
+	take_command_input(script, cbs);
+	cbs->doit = False;
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
