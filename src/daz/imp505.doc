@@ -74,6 +74,7 @@
 \item[Issue 1.37] Enhancements 1, 6 and 20 (annotations, pragmas and arbitrary replacements catered for).
 \item[Issue 1.38] New treatment of records.
 \item[Issue 1.39] Bug fixing (batch 2 bug 13).
+\item[Issue 1.40] Rationalised error reporting.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -105,36 +106,8 @@ local
 in
 =TEX
 \section{SUPPORTING FUNCTIONS}
-When a construct is found for which is not supported formally, we choose to continue processing informally rather that halt the processing of the literate script. The local exception $VCInformal$ is raised if this condition is detected. This is caught by $vcs$ which returns a dummy VC is the exception has been raised. 
-=SML
-exception ÛVCInformalÝ;
-
-fun Ûvc_go_informalÝ
-		(s : string)
-		(i : int)
-		(fns : (unit -> string) list) : 'a = (
-	comment s i fns;
-	raise VCInformal
-);
-=TEX
-$trans\_exp2$ catches the case where an attempt to translate an expression has failed due to a language feature being unsupported.
-=SML
-fun Ûtrans_exp2Ý (env : CN_ENV) (exp : EXP) : Z_EXP = (
-	case trans_exp1 env exp of
-		Value ze	=> ze
-	|	Nil		=> raise VCInformal
-);
-=TEX
-=SML
-fun Ûadjust_exp2Ý (env : CN_ENV) (exp : EXP) : EXP = (
-	case adjust_exp1 env exp of
-		Value e		=> e
-	|	Nil		=> raise VCInformal
-);
-=TEX
-=SML
-val Ûvc_dummy_seqÝ = ([],
-	ñDummyVC "VC Generator encountered an unsupported language feature"®);
+In version 0.6 and onwards we follow the new policy of not attempting to recover when a construct cannot be handled formally.
+The special exception $VCInformal$ and associated functions are therefore no longer required.
 =TEX
 The following function decorates a string with a subscript ``0'' and is used to give the initial version of a variable name.
 =SML
@@ -245,8 +218,8 @@ and Ûarray_assignÝ ({wp, a, wp_env as {env,...}} : WP_PARS)
 			({prefix, index} : EXP INDEXED_COMP) (ze : Z_EXP) : RESULT = (
 let	val name' = prefix;
 	val e' = (z_override
-			(trans_exp2 env prefix, z_set
-			   [z_maplet (trans_exp2 env index, ze)]));
+			(trans_exp env prefix, z_set
+			   [z_maplet (trans_exp env index, ze)]));
 in
 	assign {wp = wp, a = a, wp_env = wp_env} (name', e')
 end
@@ -255,7 +228,7 @@ end
 =SML
 and  Ûrecord_assignÝ	({wp, a, wp_env as {env, ...}} : WP_PARS)
 	({prefix, selector} : EXP SELECTED_COMP) (ze : Z_EXP) : RESULT = (
-let	val z_prefix = trans_exp2 env prefix;
+let	val z_prefix = trans_exp env prefix;
 	val z_sig = dest_z_schema_type(type_of z_prefix)
 			handle Fail _ => fail "record_assign" 505027 [];
 	val zvars = map fst z_sig;
@@ -263,7 +236,7 @@ let	val z_prefix = trans_exp2 env prefix;
 		if	zvar = selector 
 		then	(zvar, ze)
 		else	(	zvar,
-				trans_exp2 env 
+				trans_exp env 
 				(ESelectedComp{prefix=prefix,selector=zvar})
 			)
 	);
@@ -329,8 +302,8 @@ fun Ûif_then_elseÝ	({wp, a, wp_env as {env,...}} : WP_PARS)
 			({g, p, q,...} : STMT IF_THEN_ELSE) : RESULT = (
 let	val {wp = wp1, side = side1} = wp (SStmt p, a, wp_env);
 	val {wp = wp2, side = side2} = wp (SStmt q, a, wp_env);
-	val wp = (z_eq(trans_exp2 env g, zid env "TRUE") %Longrightarrow% wp1) @
-		(z_eq(trans_exp2 env g, zid env "FALSE") %Longrightarrow% wp2);
+	val wp = (z_eq(trans_exp env g, zid env "TRUE") %Longrightarrow% wp1) @
+		(z_eq(trans_exp env g, zid env "FALSE") %Longrightarrow% wp2);
 	val side = side1 @ side2;
 in
 	{wp = wp, side = side}
@@ -340,23 +313,23 @@ end
 \subsection{Case Statement}\label{wp-case}
 =SML
 fun Ûtrans_case_choicesÝ (env : CN_ENV) (choices : CASE_CHOICE list) : Z_EXP = (
-let	val adjust_and_trans = (trans_exp2 env) o (adjust_exp2 env);
+let	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
 	fun aux_range (ch::rest) = (
 		case ch of
 		CCCaseRange (DRRange(RRange{lo,hi})) =>
 			z_rng(adjust_and_trans lo, adjust_and_trans hi)::aux_range rest
 		|CCCaseRange (DRRange _) =>
-			vc_go_informal "trans_case_choices" 508020 [] 
+			fail "trans_case_choices" 508020 [] 
 		|CCCaseRange (DRConstrained{range=RRange{lo,hi},...}) =>
 			z_rng(adjust_and_trans lo, adjust_and_trans hi)::aux_range rest
 		|CCCaseRange (DRConstrained _) =>
-			vc_go_informal "trans_case_choices" 508020 []
+			fail "trans_case_choices" 508020 []
 		|_ => aux_range rest
 	) | aux_range _ = [];
 	fun aux_singles (ch::rest) = (
 		case ch of
 		CCCaseExp exp =>
-			trans_exp2 env exp::aux_singles rest
+			trans_exp env exp::aux_singles rest
 		|_ => aux_singles rest
 	) | aux_singles _ = [];
 	val zranges = aux_range choices;
@@ -371,7 +344,7 @@ fun Ûcase_baseÝ ({wp, a, wp_env as {env,...}} : WP_PARS) (e : EXP)
 			({choices, p} : STMT CASE_ALTERNATIVE)
 			 : RESULT = (
 let	val {wp = wp1, side = side1} = wp (SStmt p, a, wp_env);
-	val wp' = z_elem (trans_exp2 env e, trans_case_choices env choices)
+	val wp' = z_elem (trans_exp env e, trans_case_choices env choices)
 			%Longrightarrow% wp1;
 in	{wp = wp', side = side1}
 end
@@ -391,11 +364,11 @@ fun Ûcase_stepÝ (pars as {wp, a, wp_env as {env,...}} : WP_PARS)
 			val {wp = wp2, side = side2} =
 				case_step pars {e=e, s=s', others=others};
 			val elm =
-				z_elem (trans_exp2 env e, trans_case_choices env choices)
+				z_elem (trans_exp env e, trans_case_choices env choices)
 		in	{wp = (elm %Longrightarrow% wp1) @ wp2 , side = side1 @ side2}
 		end)
 ) | case_step _ _ = (
-	vc_go_informal "case_step" 505021 []
+	fail "case_step" 505021 []
 );
 =TEX
 Note that $case\_step$ is recursive and does the full job. 
@@ -413,7 +386,7 @@ fun ÛloopÝ ({a, ...} : WP_PARS) ({t, stmt} : STMT LOOP)
 let	val (pre1, post1) = case stmt of
 		STSpecNoIvars {spec={pre, post, ...}, ...} => (
 			(z_predexp_of_z_tm pre,z_predexp_of_z_tm post)
-		) |_ => vc_go_informal "loop" 505022 [];
+		) |_ => fail "loop" 505022 [];
 	val wp = [[] ô pre1];
 	val side = case t of
 			Value till => [[post1] ô pre1] @
@@ -436,11 +409,11 @@ fun Ûcn_whileÝ	({a, wp_env={env, ...}, ...} : WP_PARS)
 		({g, loop={t,stmt}, ...} : STMT WHILE) : RESULT = (
 let	val {w, w0, pre, post} = case stmt of
 		STSpecNoIvars {spec, ...} => spec
-		|_ => vc_go_informal "loop" 505022 [];
+		|_ => fail "loop" 505022 [];
 	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
-	val wp = ([z_eq(trans_exp2 env g, zid env "TRUE")] ô pre1) ::
-			(z_eq(trans_exp2 env g, zid env "FALSE")
+	val wp = ([z_eq(trans_exp env g, zid env "TRUE")] ô pre1) ::
+			(z_eq(trans_exp env g, zid env "FALSE")
 				%Longrightarrow% a);
 	val side = case t of
 			Value till => (post1 %Longrightarrow% wp) @
@@ -457,19 +430,19 @@ fun Ûfor_staticÝ ({a, wp_env={env, ...}, ...} : WP_PARS)
 	({i, tmark, range, dir, loop = {t, stmt}, ...} : STMT FOR_STATIC) : RESULT = (
 let	val side = if dir = LDForwards
 			then ()
-			else vc_go_informal "for_static" 505023 [];
+			else fail "for_static" 505023 [];
 	val {lo, hi} = case range of
-			RRange {lo, hi} => {lo=adjust_exp2 env lo, hi=adjust_exp2 env hi}
+			RRange {lo, hi} => {lo=adjust_exp env lo, hi=adjust_exp env hi}
 			|RRangeAttr _ =>
-				vc_go_informal "for_static" 505020 [];
+				fail "for_static" 505020 [];
 	val {pre, post, ...} = case stmt of
 		STSpecNoIvars {spec, ...} => spec
-		|_ => vc_go_informal "for_static" 505022 [];
+		|_ => fail "for_static" 505022 [];
 	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
 	val zi = trans_id i;
-	val zlo = trans_exp2 env lo;
-	val zhi = trans_exp2 env hi;
+	val zlo = trans_exp env lo;
+	val zhi = trans_exp env hi;
 	val zop = z_add;
 	val zleft = zid env zi;
 	val zright = z_num 1;
@@ -496,10 +469,10 @@ fun Ûfor_tmarkÝ ({a, wp_env={env, ...}, ...} : WP_PARS)
 	({i, tmark, dir, loop = {t, stmt}, ...} : STMT FOR_TMARK) : RESULT = (
 let	val side = if dir = LDForwards
 			then ()
-			else vc_go_informal "for_tmark" 505023 [];
+			else fail "for_tmark" 505023 [];
 	val {pre, post, ...} = case stmt of
 		STSpecNoIvars {spec, ...} => spec
-		|_ => vc_go_informal "for_tmark" 505022 [];
+		|_ => fail "for_tmark" 505022 [];
 	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
 	val zi = trans_id i;
@@ -530,7 +503,7 @@ end
 fun Ûexit_whenÝ ({a, wp_env={till, env, ...}, ...} : WP_PARS)
 		({g} : EXIT_WHEN)
 			 : RESULT = (
-let	val zg = trans_exp2 env g;
+let	val zg = trans_exp env g;
 	val wp = ([z_eq(zg, zid env "TRUE")] ô till) ::
 		(z_eq(zg, zid env "FALSE") %Longrightarrow% a);
 in	{wp = wp, side = []}
@@ -554,7 +527,7 @@ let	val zfun = zid env (trans_id name);
 	val var_decls = map (fn {var_decl, ...} => var_decl) formal_pars;
 	val ids = flat (map (fn {vars, ...} => vars) var_decls);
 	val zargs = map (fn id => zid env (trans_id id)) ids;
-	val wp = [[z_eq(z_fun_call(zfun, zargs), trans_exp2 env e)] ô return];
+	val wp = [[z_eq(z_fun_call(zfun, zargs), trans_exp env e)] ô return];
 	val side = [];
 in
 	{wp = wp, side = side}
@@ -573,12 +546,12 @@ let	val pre1 = z_predexp_of_z_tm pre;
 	val names = ((map trans_id) o flat
 				o (map (fn {vars, ...} => vars))) var_decls;
 	val exps = case actuals of
-			APositional exps => map (adjust_exp2 env) exps
-			|ANamed nas => map (adjust_exp2 env)
+			APositional exps => map (adjust_exp env) exps
+			|ANamed nas => map (adjust_exp env)
 					(named_assocs_to_exps names nas);
 	fun subs (actual : EXP,	name : ID)
 			: (Z_ID * Z_EXP) list = (
-		let 	val ntm as (n, tm) = (name, trans_exp2 env actual);
+		let 	val ntm as (n, tm) = (name, trans_exp env actual);
 		in let	val (v, ty) = dest_var tm;
 		in	[ntm, (init_var n, mk_var(init_var v, ty))]
 		end	handle Fail _ => [ntm]
@@ -600,10 +573,10 @@ val post1 = z_predexp_of_z_tm post;
 val var_decls = map (fn {var_decl, ...} => var_decl) formal_ids;
 val names = flat (map (fn {vars, ...} => vars) var_decls);
 val exps = case actuals of
-			APositional exps => map (adjust_exp2 env) exps
-			|ANamed nas => map (adjust_exp2 env) (named_assocs_to_exps names nas);
+			APositional exps => map (adjust_exp env) exps
+			|ANamed nas => map (adjust_exp env) (named_assocs_to_exps names nas);
 fun subs (actual : EXP,	name : ID)
-			: (Z_ID * Z_EXP) = (name, trans_exp2 env actual);
+			: (Z_ID * Z_EXP) = (name, trans_exp env actual);
 val exp_names = combine exps names
 		handle _ => fail "proc_call_spec" 505026 [fn()=>name];
 val subs_list = map subs exp_names;
@@ -650,17 +623,17 @@ fun Ûfor_non_staticÝ (pars as {wp, a, wp_env as {env, ...}} : WP_PARS)
 			(({i, range, loop = {t, stmt}, ...}, q) : FOR_NON_STATIC * STMT)
 			 : RESULT = (
 let	val {lo, hi} = case range of
-			RRange {lo, hi} => {lo=adjust_exp2 env lo, hi=adjust_exp2 env hi}
+			RRange {lo, hi} => {lo=adjust_exp env lo, hi=adjust_exp env hi}
 			|RRangeAttr _ =>
-				vc_go_informal "for_non_static" 505020 []
+				fail "for_non_static" 505020 []
 	val {pre, post, w, w0, ...} = case stmt of
 		STSpecNoIvars {spec, ...} => spec
-		|_ => vc_go_informal "for_non_static" 505022 [];
+		|_ => fail "for_non_static" 505022 [];
 	val pre1 = z_predexp_of_z_tm pre;
 	val post1 = z_predexp_of_z_tm post;
 	val zi = trans_id i;
-	val zlo = trans_exp2 env lo;
-	val zhi = trans_exp2 env hi;
+	val zlo = trans_exp env lo;
+	val zhi = trans_exp env hi;
 	val zop = z_add;
 	val zleft = zid env zi;
 	val zright = z_num 1;
@@ -749,7 +722,7 @@ end
 =SML
 fun Ûis_static_for_loopÝ (wp : WP_ENV) (fs : STMT FOR_STATIC) : bool = (
 let	fun no_vars_in_exp exp = (
-		case (term_vars o (trans_exp2 (#env wp))) exp of
+		case (term_vars o (trans_exp (#env wp))) exp of
 			[] =>	true
 		|	_ =>	false
 	);
@@ -870,8 +843,8 @@ val fp= #formal_procs(#in_scope((fst (hd(!CNZGenerator.diag_vc_args)))));
 fun ÛwpÝ ((st, a, wp_env) : STATEMENT * SEQUENT list * WP_ENV) : RESULT = (
 let	val pars as {wp_env as {env, ...}, ...} : WP_PARS =
 			{wp = wp, a = a, wp_env = wp_env};
-	val adjust_and_trans = (trans_exp2 env) o (adjust_exp2 env);
-	val adjust = adjust_exp2 env;
+	val adjust_and_trans = (trans_exp env) o (adjust_exp env);
+	val adjust = adjust_exp env;
 in	case adjust_statement wp_env st of
 		SStmt STNull => null pars
 	|	SStmt STImplicitNull => null pars
@@ -895,7 +868,7 @@ in	case adjust_statement wp_env st of
 	|	SStmt (STExit) => cn_exit pars
 	|	SStmt (STRet {e}) => cn_return pars {e=adjust e}
 	|	SStmt (STProcNoIvars x) => proc_call_no_ivars pars x
-	|	SStmt (STKSlot x) => vc_go_informal "wp" 505040 []
+	|	SStmt (STKSlot x) => fail "wp" 505040 []
 	|	SStmt (STPragma _) => null pars
 	|	SStmt (STAnnotation _) => null pars
 	|	SSpecIvars ({spec={pre, post, ...}, ...}, q) =>
@@ -1613,8 +1586,6 @@ let	val side_effect = do_soundness_checks1 (sl, st);
 in
 	vc_local_decls(s, sl)
 end
-	handle VCInformal =>
-		[([], vc_dummy_seq)]
 );
 =TEX
 =IGN
@@ -1630,8 +1601,8 @@ wp (st, a, wp_env);
 (* assignments in wp *)
 val pars as {wp_env as {env, ...}, ...} : WP_PARS =
 			{wp = wp, a = a, wp_env = wp_env};
-val adjust_and_trans = (trans_exp2 env) o (adjust_exp2 env);
-val adjust = adjust_exp2 env;
+val adjust_and_trans = (trans_exp env) o (adjust_exp env);
+val adjust = adjust_exp env;
 val exp = adjust_statement wp_env st;
 (* now goto the appropriate function *)
 val fp= #formal_procs(#in_scope((fst (hd(!CNZGenerator.diag_vc_args)))));
