@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2003/05/21 12:06:21 $ $Revision: 2.24 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2003/05/22 10:15:47 $ $Revision: 2.25 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -571,7 +571,6 @@ static void ok_cb(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void	file_cancel_cb(CALLBACK_ARGS),
 		file_ok_cb(CALLBACK_ARGS),
-		file_quit_cb(CALLBACK_ARGS),
 		file_help_cb(CALLBACK_ARGS);
 
 char *file_dialog(Widget w, char *opn)
@@ -650,6 +649,8 @@ char *file_dialog(Widget w, char *opn)
  * is needed even if we have a command line - it becomes the unmanaged work are
  * for the file selection box which makes the Empty File button go in the right place.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void	startup_quit_cb(CALLBACK_ARGS),
+		startup_help_cb(CALLBACK_ARGS);
 	
 void startup_dialog(Widget w, char **cmd_line, char **file_name)
 {
@@ -688,8 +689,6 @@ void startup_dialog(Widget w, char **cmd_line, char **file_name)
 		XtVaSetValues(dialog,
 			XmNokLabelString,	s,
 			NULL);
-		XtUnmanageChild(
-			XmMessageBoxGetChild(dialog, XmDIALOG_HELP_BUTTON));
 		XmStringFree(s);
 	}
 #ifdef EDITRES
@@ -701,8 +700,8 @@ void startup_dialog(Widget w, char **cmd_line, char **file_name)
 
 
 	XtAddCallback(dialog, XmNokCallback, file_ok_cb, &reply);
-	XtAddCallback(dialog, XmNcancelCallback,  file_quit_cb, &reply);
-	XtAddCallback(dialog, XmNhelpCallback, file_help_cb, NULL);
+	XtAddCallback(dialog, XmNcancelCallback,  startup_quit_cb, &reply);
+	XtAddCallback(dialog, XmNhelpCallback, need_file_name ? file_help_cb : startup_help_cb, NULL);
 	WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
 		"WM_DELETE_WINDOW",
 		False);
@@ -843,7 +842,15 @@ static void file_help_cb(
 	help_dialog(root, Help_File_Selection_Box);
 }
 
-static void file_quit_cb(
+static void startup_help_cb(
+	Widget		w,
+	XtPointer	cbd,
+	XtPointer	cbs)
+{
+	help_dialog(root, Help_Command_Line_Dialogue);
+}
+
+static void startup_quit_cb(
 	Widget		w,
 	XtPointer	cbd,
 	XtPointer	cbs)
