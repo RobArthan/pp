@@ -28,6 +28,7 @@
 #ifndef _cmdwin
 	extern void cmdwin();
 	extern XtAppContext app;
+	extern Widget root;
 #endif
 #ifndef _diag
 	extern void diag();
@@ -50,4 +51,8 @@
 	extern void toggle_menu_item_sensitivity();
 	extern void set_menu_item_label();
 	extern void check_text_window_limit();
+#endif
+#ifndef _xpp
+	extern char *cmd_buf, *arg_buf;
+	extern char *arglist[];
 #endif

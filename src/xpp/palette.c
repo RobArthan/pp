@@ -29,7 +29,6 @@
 #include <Xm/MessageB.h>
 #include <Xm/PushB.h>
 
-
 #include "xpp.h"
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -62,7 +61,7 @@ static int spare = 0;
  * add_palette: attach a palette to a text widget
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
-BOOL add_palette(w)
+Bool add_palette(w)
 Widget w;
 {
 	XmString lab;
@@ -72,9 +71,12 @@ Widget w;
 	Widget shell, row_col, button;
 	void type_char();
 
+fprintf(stderr, "add_palette\n");
+fflush(stderr);
+
 	if(spare >= MAX_PALETTES) {
 		msg("palette creation", "no more space for palettes");
-		return(FALSE);
+		return(False);
 	};
 
 	n_chars = strlen(prettychars);
@@ -88,8 +90,8 @@ Widget w;
 		XmNpacking, 		XmPACK_COLUMN,
 		XmNnumColumns,		N_COLS,
 		XmNorientation,		XmHORIZONTAL,
-		XmNresizeHeight,	False,
-		XmNresizeWidth,		False,
+		XmNresizeHeight,	True,
+		XmNresizeWidth,		True,
 		NULL);
 
 	buf[1] = '\0';
@@ -107,11 +109,11 @@ Widget w;
 			cbdata);
 	};
 
-	XtManageChild(row_col);
+	/*XtManageChild(row_col);*/
 	XtPopup(shell, XtGrabNone);
 
 	text_widgets[spare++] = w;
-	return(TRUE);
+	return(True);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****

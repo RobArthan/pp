@@ -124,8 +124,10 @@ XtAppContext app; /* global because needed in msg.c */
  * helpmenu	menubar	the help menu
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
+Widget root;	/* global because needed in xpp.c */
+
 static Widget
-	root, frame, work, display, command,
+	frame, work, display, command,
 	menubar, toolsmenu, editmenu, cmdmenu, helpmenu;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -136,8 +138,6 @@ static long display_max = 2000;
 
 static long command_max = 2000;
 
-static char *arglist[10];
-
 static int control_fd;
 
 static int child_pid;
@@ -146,9 +146,7 @@ static int child_pgrp;
 
 static XtInputId app_ip_req;
 
-static int orig_argc;
-
-static char **orig_argv;
+static BOOL listening;
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * X MANAGEMENT OF THE MAIN WINDOW
@@ -200,9 +198,7 @@ BOOL ignored;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 
-setup_cmdwin(argc, argv)
-int argc;
-char **argv;
+setup_cmdwin()
 {
 	Arg args[12];
 	int i;
@@ -215,11 +211,8 @@ char **argv;
 		command_motion_cb();
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * Top level and main windows:
+ * Main window setup:  (root is done in main in xpp.c)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-	root = XtVaAppInitialize(&app,  "Xpp", NULL, 0,
-		&argc, argv, NULL, NULL);
 
 	frame = XtVaCreateWidget("frame",
 		xmMainWindowWidgetClass,
@@ -399,24 +392,12 @@ char **argv;
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * MENU PROCESSING
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-
-void dummy_menu_cb(w, i, cbs, s)
-Widget w;
-int i;
-XmAnyCallbackStruct *cbs;
-char *s;
-{
-	char buf[4];
-	sprintf(buf, "%d", i);
-}
-
 void tools_menu_cb(w, i, cbs)
 Widget w;
 int i;
 XmAnyCallbackStruct *cbs;
 {
 
-	dummy_menu_cb(w, i, cbs, "tools menu item");
 	switch(i) {
 	case 0:
 		add_palette(command);
@@ -436,7 +417,6 @@ XmAnyCallbackStruct *cbs;
 
 	Boolean result = True;
 
-	dummy_menu_cb(w, i, cbs, "edit menu item");
 	switch(i) {
 	case 0:
 		result = XmTextCut(command, CurrentTime);
@@ -475,8 +455,10 @@ XmAnyCallbackStruct *cbs;
 	void send_nl();
 	void restart_application();
 	void interrupt_application();
-
-	dummy_menu_cb(w, i, cbs, "command menu item");
+	void post_mortem_tidy_up();
+/*
+	post_mortem_tidy_up();
+*/
 	switch(i) {
 	case 0:
 		execute_command();
@@ -514,7 +496,6 @@ Widget w;
 int i;
 XmAnyCallbackStruct *cbs;
 {
-	dummy_menu_cb(w, i, cbs, "help menu item");
 	switch(i) {
 	case 0:
 		toggle_menu_item_sensitivity(helpmenu, 1);
@@ -662,24 +643,13 @@ Widget w;
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 
-void get_pty(argc, argv)
-int argc;
-char **argv;
+void get_pty()
 {
 	int slave_fd, tty_fd;
 	char c;
 	int i;
 	char line[20];
 	void get_from_application();
-
-	if(argc < 2) {
-		msg("invalid command line", "usage pty prog [args]");
-		exit(10);
-	};
-	for(i = 0; i + 1 < argc && i < 8; ++i) {
-		arglist[i] = argv[i+1];
-	};
-	arglist[i] = NULL;
 
 	for (c = 'p'; c <= 's'; c++) {
 		for(i = 0; i < 16; i++) {
@@ -728,6 +698,7 @@ gotpty:
 		};
 		app_ip_req = XtAppAddInput(app, control_fd, XtInputReadMask,
 			get_from_application, NULL);
+		listening = TRUE;
 	} else { /* Child */
 		close(control_fd);
 		dup2(slave_fd, 0);
@@ -883,6 +854,8 @@ int siz;
 	while(dequeue()) {
 		continue;
 	}
+
+	return(TRUE);
 }
 
 
@@ -998,12 +971,26 @@ void send_nl ()
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
+ * Tidy up if the application is dead
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+void post_mortem_tidy_up ()
+{
+	if(listening && !application_alive()) {
+		XtRemoveInput(app_ip_req);
+		listening = FALSE;
+	}
+}
+
+/* **** **** **** **** **** **** **** **** **** **** **** ****
  * Kill the application:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void kill_application ()
 {
 	if(application_alive()) {
-		XtRemoveInput(app_ip_req);
+		if(listening) {
+			XtRemoveInput(app_ip_req);
+			listening = FALSE;
+		};
 		kill(child_pid, SIGKILL);
 		waitpid(child_pid, NULL, WNOHANG);
 		close(control_fd);
@@ -1015,7 +1002,7 @@ void kill_application ()
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 void restart_application () {
 	kill_application();
-	get_pty(orig_argc, orig_argv);
+	get_pty();
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -1047,15 +1034,10 @@ Bool execute_command()
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * main entry point:
  * **** **** **** **** **** **** **** **** **** **** **** **** */
-void cmdwin(argc, argv)
-int argc;
-char *argv[];
+void cmdwin()
 {
-	orig_argc = argc;
-	orig_argv = argv;
-
-	setup_cmdwin(argc, argv);
-	get_pty(argc, argv);
+	setup_cmdwin();
+	get_pty();
 	handle_sigs();
 	XtRealizeWidget(root);
 	XtAppMainLoop(app);
