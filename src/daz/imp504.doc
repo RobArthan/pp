@@ -66,7 +66,7 @@ This document contains the implementation for the compliance notation web clause
 \item[Issue 1.14 (8th November 1994)] Made it handle errors in Reader/Writer set-up.
 \item[Issue 1.17] Updated to reset the lexer state on error.
 \item[Issue 1.18-1.19] Added support for generating hypertext links.
-
+\item[Issue 1.20] Fixed a bug and improved error handling in hypertext processing. 
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -88,28 +88,16 @@ None.
 \section{THE STRUCTURE $WebClauses$}
 
 =SML
-structure ÛWebClausesÝ : WebClauses  = struct
+structure ÛWebClausesÝ : WebClauses = struct
+local
 	open CNTypes CNTypes1 CNLex CNParser CNZGenerator;
+in
 =TEX
-
 =SML
-fun Ûextract_labels_from_declarationÝ (DDeclarationKSlot ({label,...}, _)) = (
-	[label]
-) | extract_labels_from_declaration (DRenamingDeclaration _) = []
-  | extract_labels_from_declaration (DBasicDecl _) = []
-  | extract_labels_from_declaration (DRepresentationClause _) = []
-  | extract_labels_from_declaration (DProperBody _) = []
-  | extract_labels_from_declaration (DProcedureDeclaration _) = []
-  | extract_labels_from_declaration (DFunctionDeclaration _) = []
-  | extract_labels_from_declaration (DPackageDeclaration _) = []
-  | extract_labels_from_declaration (DProcedureStub _) = []
-  | extract_labels_from_declaration (DFunctionStub _) = []
-  | extract_labels_from_declaration (DPackageStub _) = []
-  | extract_labels_from_declaration (DExternalProcedureStub _) = []
-  | extract_labels_from_declaration (DExternalFunctionStub _) = []
-  | extract_labels_from_declaration (DAuxiliary _) = []
-  | extract_labels_from_declaration (DUsing {basic_decls,...}) = ([]
-);
+val Ûhas_no_labelÝ = "__empty";
+=TEX
+=SML
+val Ûcorrupt_hypertext_infoÝ = "__corrupt";
 =TEX
 =SML
 fun Ûextract_labels_from_stmtÝ (STNull) = ([]
@@ -157,11 +145,76 @@ fun Ûextract_labels_from_statementÝ (SStmt stmt) = (
 	extract_labels_from_stmt stmt
 );
 =TEX
+
 =SML
-fun Ûextract_labels_from_proper_bodyÝ (PBProcedure {declarative_part,statement,...}) = (
+fun Ûmark_place_for_procedure_specificationÝ
+	({spec=Value _,...} : PROCEDURE_SPECIFICATION) : LABEL list = (
+		[has_no_label]
+) | mark_place_for_procedure_specification _ = (
+		[]
+);
+=TEX
+=SML
+fun Ûmark_place_for_function_specificationÝ
+	({spec=Value _,...} : FUNCTION_SPECIFICATION) : LABEL list = (
+		[has_no_label]
+) | mark_place_for_function_specification _ = (
+		[]
+);
+=TEX
+=SML
+fun Ûextract_labels_from_subprog_specÝ (SSProcedure proc_spec) = (
+	mark_place_for_procedure_specification proc_spec
+) | extract_labels_from_subprog_spec (SSFunction fun_spec) = (
+	mark_place_for_function_specification fun_spec
+);
+=TEX
+=SML
+fun Ûextract_labels_from_renaming_declÝ (RDFunction _) = ([]
+) | extract_labels_from_renaming_decl (RDSubprogram
+		{subprogram_specification,...}) = (
+	extract_labels_from_subprog_spec subprogram_specification
+);
+=TEX
+=SML
+fun Ûextract_labels_from_declarationÝ (DDeclarationKSlot ({label,...}, _)) = (
+	[label]
+) | extract_labels_from_declaration (DRenamingDeclaration rd) = (
+	extract_labels_from_renaming_decl rd
+) | extract_labels_from_declaration (DBasicDecl _) = ([]
+) | extract_labels_from_declaration (DRepresentationClause _) = ([]
+) | extract_labels_from_declaration (DProperBody pb) = (
+	extract_labels_from_proper_body pb
+) | extract_labels_from_declaration (DProcedureDeclaration pd) = (
+	mark_place_for_procedure_specification pd
+) | extract_labels_from_declaration (DFunctionDeclaration fd) = (
+	mark_place_for_function_specification fd
+) | extract_labels_from_declaration (DPackageDeclaration
+	{visible_decs,private_decs,...}) = (
+	flat (map extract_labels_from_declaration visible_decs) @
+	flat (map extract_labels_from_declaration private_decs)
+) | extract_labels_from_declaration (DProcedureStub ps) = (
+	mark_place_for_procedure_specification ps
+) | extract_labels_from_declaration (DFunctionStub fs) = (
+	mark_place_for_function_specification fs
+) | extract_labels_from_declaration (DPackageStub _) = ([]
+) | extract_labels_from_declaration (DExternalProcedureStub eps) = (
+	mark_place_for_procedure_specification eps
+) | extract_labels_from_declaration (DExternalFunctionStub efs) = (
+	mark_place_for_function_specification efs
+) | extract_labels_from_declaration (DAuxiliary _) = ([]
+) | extract_labels_from_declaration (DUsing {basic_decls,...}) = ([]
+)
+=TEX
+=SML
+and Ûextract_labels_from_proper_bodyÝ (PBProcedure
+		{procedure_spec,declarative_part,statement}) = (
+	mark_place_for_procedure_specification procedure_spec @
 	flat (map extract_labels_from_declaration declarative_part) @
 	extract_labels_from_statement statement
-) | extract_labels_from_proper_body (PBFunction {declarative_part,statement,...}) = (
+) | extract_labels_from_proper_body (PBFunction
+		{function_spec,declarative_part,statement}) = (
+	mark_place_for_function_specification function_spec @
 	flat (map extract_labels_from_declaration declarative_part) @
 	extract_labels_from_statement statement
 ) | extract_labels_from_proper_body (PBPackage {decls,statement,...}) = (
@@ -255,15 +308,15 @@ fun Ûupdate_hypertext_infoÝ (lhsopt, labels : LABEL list)
 				 (offsets : int list) : unit = (
 let	val newinfo = combine offsets labels
 				handle ex => (
-					[];
-					reraise ex "update_hypertext_info"
+					[(0,corrupt_hypertext_info)]
 				);
-	val newinfo1 = case lhsopt of
-				Value label	=> (~1,label)::newinfo
-				|Nil		=> newinfo;
+	val newinfo1 = newinfo drop (fn (_,lab) => lab = has_no_label);
+	val newinfo2 = case lhsopt of
+				Value label	=> (~1,label)::newinfo1
+				|Nil		=> newinfo1;
 in
-	case newinfo1 of
-	_::_ =>		set_hypertext_info(get_hypertext_info()@[newinfo1])
+	case newinfo2 of
+	_::_ =>		set_hypertext_info(get_hypertext_info()@[newinfo2])
 	|_ =>		()
 end
 );
@@ -272,15 +325,21 @@ end
 fun Ûoutput_hypertext_edit_scriptÝ {
 	out_file : string
 	} : unit = (
-let	val out_stream = open_out out_file;
+let	val info = get_hypertext_info();
+	val side =
+		if any (flat info) (fn (_, lab) => lab = corrupt_hypertext_info)
+		then	fail "output_hypertext_edit_script" 504110 []
+		else	();
+	val out_stream = open_out out_file;
 	val output_string = curry output out_stream;
 	val ed_directives = flat (map
 					(fn hi => (
 						goto_next_web_clause @
 						skip_fwd 1 @
 						flat (map generate_ed_line hi)
-					)
-				    ) (get_hypertext_info ()))
+						)
+				        ) info
+				     );
 	
 in
 	map output_string ed_directives;
@@ -350,6 +409,7 @@ val _ = ReaderWriterSupport.PrettyNames.add_new_symbols [
 
 \subsection{Epilogue}
 =SML
+end (* local ... in *);
 end (* of structure WebClauses *);
 open WebClauses;
 =TEX
@@ -357,3 +417,33 @@ open WebClauses;
 \twocolumn[\section{INDEX}]
 \printindex
 \end{document}
+=IGN
+
+
+get_hypertext_info();
+ ¹CN
+procedure P is
+    A : INTEGER;
+    subtype S is INTEGER range 3 .. 10;
+    procedure Q
+        „ A [ A = S_APOST_FIRST ]
+    is
+        S_APOST_FIRST : INTEGER;
+    begin
+        S_APOST_FIRST := A;
+    end Q;
+begin
+    „ A[A = 5]
+end P;
+ °
+
+
+ ¹CN
+procedure P is
+	§ kslot ¢			(1)
+	procedure proc_with_spec „ [true] is separate;
+begin
+    null;
+end P;
+ °
+output_hypertext_edit_script{out_file="x"};
