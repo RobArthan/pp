@@ -8,18 +8,18 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp031.doc   %Z% $Date: 2002/10/17 16:20:01 $ $Revision: 2.15 $ $RCSfile: imp031.doc,v $
+% imp031.doc   %Z% $Date: 2004/07/09 16:18:51 $ $Revision: 2.16 $ $RCSfile: imp031.doc,v $
 
 =TEX
-% imp031.doc   %Z% $Date: 2002/10/17 16:20:01 $ $Revision: 2.15 $ $RCSfile: imp031.doc,v $
+% imp031.doc   %Z% $Date: 2004/07/09 16:18:51 $ $Revision: 2.16 $ $RCSfile: imp031.doc,v $
 \documentstyle[hol1,11pt,TQ]{article}
 
 \TPPtitle{Implementation of Pretty Printer Support Structure}
 \TPPref{DS/FMU/IED/IMP031}
-\def\SCCSissue{$Revision: 2.15 $%
+\def\SCCSissue{$Revision: 2.16 $%
 }
 \TPPissue{\SCCSissue}
-\TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $%
+\TPPdate{\FormatDate{$Date: 2004/07/09 16:18:51 $%
 }}
 \TPPproject{FST PROJECT}
 
@@ -110,7 +110,7 @@ lasp -s -u imp031.OKwords imp031.doc > zz1
 Changes due to CR0017.
 \item [Issue 2.4] Updates for SML'97.
 
-\item[\FormatDate{$Date: 2002/10/17 16:20:01 $%
+\item[\FormatDate{$Date: 2004/07/09 16:18:51 $%
 }, issue \SCCSissue~]
 	Add $pe_depth$ field to type $PP_ENV$ plus routines to support it.
 	Change characters used for language changes.
@@ -122,12 +122,13 @@ Changes due to CR0017.
 	Add $\ldots _show_index$ function and flag.
 	Improve alias handling.
 
-%\item[\FormatDate{$Date: 2002/10/17 16:20:01 $%
+%\item[\FormatDate{$Date: 2004/07/09 16:18:51 $%
 %}, issue \SCCSissue~]
 
 \item[Issue 2.14] Copyright and banner updates for open source release.
 \item[Issue 2.15] PPHol-specific updates for open source release
 \item[Issue 2.16] Alias handling moved to IMP032, where it belongs (as part of the HOL language not the generic interface).
+\item[Issue 2.17] New data types for operator precedence to support left-associative operators properly.
 \end{description}
 
 %********************************************************************
@@ -427,9 +428,9 @@ only those brackets that are necessary.
 
 \subsection{Data Type for Precedence Levels}
 
-Precedence levels are identified by the constructors of $PREC_CONTEXT$,
+Precedence levels are identified by the constructors of $OP_PREC$,
 they are ordered by the comparison function $gt_prec$ which are
-declared below.  Values of type $PREC_CONTEXT$ form a series of partial
+declared below.  Values of type $OP_PREC$ form a series of partial
 orderings, one for each collection of concrete syntax productions.
 There are three for HOL, for terms, for types and for varstructs.
 Other languages will have their own partial orderings.  In HOL the
@@ -439,12 +440,13 @@ $Block$ and $Vars_Ty$) are handled outside of the precedence
 structure.
 
 =SML
-datatype ÛPREC_CONTEXTÝ
+datatype ÛASSOCÝ = ÛAssocLeftÝ | ÛAssocRightÝ;
+datatype ÛOP_PRECÝ
 	=	ÛPcHighestÝ
-	|	ÛPcNormalÝ		of int * int * bool
+	|	ÛPcNormalÝ		of int * int * ASSOC
 	|	ÛPcLowestÝ
-	|	ÛPcVeryLowÝ		of int * int * bool
 	;
+type	ÛPREC_CONTEXTÝ = OP_PREC * ASSOC;
 =TEX
 
 %********************************************************************
@@ -467,37 +469,39 @@ set_flag("pp_add_brackets", true);
 set_flag("pp_add_brackets", false);
 =TEX
 
-The constructors of type $PREC_CONTEXT$ are ranked by converting them
+The constructors of type $OP_PREC$ are ranked by converting them
 (with local function $pc_ord$) to integers.  This coding style was
 chosen because it is easier to understand than the full pattern match
 between all precedence pairs.
 
 =SML
 local
-	fun	Ûpc_ordÝ	PcHighest			= (4, 0, 0, false)
-	|	pc_ord		(PcNormal(a, b, c))		= (3, a, b, c)
-	|	pc_ord		PcLowest			= (2, 0, 0, false)
-	|	pc_ord		(PcVeryLow(a, b, c))		= (1, a, b, c)
+	fun	Ûpc_ordÝ	PcHighest			= (4, 0, 0)
+	|	pc_ord		(PcNormal(a, b, c))		= (3, a, b)
+	|	pc_ord		PcLowest			= (2, 0, 0)
 	;
 in
 	infix gt_prec;
 
-	fun	(outer:PREC_CONTEXT) Ûgt_precÝ (inner:PREC_CONTEXT) : bool = (
+	fun	((outer, lr):PREC_CONTEXT) Ûgt_precÝ (inner:OP_PREC) : bool = (
 		if !pp_add_brackets
 		then
 			case (outer, inner)
-			of (_, PcVeryLow _) => true
-			| (PcLowest, _) => false
+			of (PcLowest, _) => false
 			| _ => true
 		else
 			let
-				val (o1, o2, o3, ia)	= pc_ord outer;
-				val (i1, i2, i3, ib)	= pc_ord inner;
+				val (o1, o2, o3)	= pc_ord outer;
+				val (i1, i2, i3)	= pc_ord inner;
 			in
 				if	o1 <> i1 then o1 > i1
 				else if	o2 <> i2 then o2 > i2
 				else if	o3 <> i3 then o3 > i3
-				else	ia andalso ib
+				else	case (outer, inner) of
+					(PcNormal(_, _, oa), PcNormal(_, _, ia)) => (
+						oa <> ia orelse
+						oa <> lr
+				) |	_ => false
 			end
 	);
 end;
@@ -843,7 +847,7 @@ let
 in
 	PpEnv{	pe_lang	= lang,
 			pe_depth	= cur_depth,
-			pe_prec		= PcLowest,
+			pe_prec		= (PcLowest, AssocLeft),
 			pe_show_index	= cur_show_index,
 			pe_fun_const	= new_fun_const,
 			pe_fun_var	= new_fun_var,
@@ -877,7 +881,7 @@ in
 		set_env_for_language lang
 			(PpEnv	{	pe_lang	= " -- none -- ",
 						pe_depth	= depth,
-						pe_prec		= PcLowest,
+						pe_prec		= (PcLowest, AssocLeft),
 						pe_show_index	= !pp_show_index,
 						pe_fun_const	= dummy_fun_co,
 						pe_fun_var	= dummy_fun_va,

@@ -8,18 +8,18 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp032.doc   %Z% $Date: 2002/10/17 16:20:01 $ $Revision: 2.15 $ $RCSfile: imp032.doc,v $
+% imp032.doc   %Z% $Date: 2004/07/09 16:18:51 $ $Revision: 2.16 $ $RCSfile: imp032.doc,v $
 
 =TEX
-% imp032.doc   %Z% $Date: 2002/10/17 16:20:01 $ $Revision: 2.15 $ $RCSfile: imp032.doc,v $
+% imp032.doc   %Z% $Date: 2004/07/09 16:18:51 $ $Revision: 2.16 $ $RCSfile: imp032.doc,v $
 \documentstyle[hol1,11pt,TQ]{article}
 
 \TPPtitle{Implementation of the HOL Pretty Printer}
 \TPPref{DS/FMU/IED/IMP032}
-\def\SCCSissue{$Revision: 2.15 $%
+\def\SCCSissue{$Revision: 2.16 $%
 }
 \TPPissue{\SCCSissue}
-\TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $%
+\TPPdate{\FormatDate{$Date: 2004/07/09 16:18:51 $%
 }}
 \TPPproject{FST PROJECT}
 
@@ -105,7 +105,7 @@ lasp -s -u imp032.OKwords imp032.doc > zz1
 \item[9 April 1992, issue 2.3, ] Changes required by CR0016.
 \item[14 April 1992, issue 2.4 ] Changes due to CR0017.
 
-\item[\FormatDate{$Date: 2002/10/17 16:20:01 $%
+\item[\FormatDate{$Date: 2004/07/09 16:18:51 $%
 }, issue \SCCSissue~]
 	Many detailed changes to spacing, line breaking and Oppen
 		blocks used in the printing.
@@ -122,12 +122,13 @@ lasp -s -u imp032.OKwords imp032.doc > zz1
 
 \item[Issues 2.12, 2.13]
 	Fixed a mismatch of beginb/endb in treatment of HOL lets.
-%\item[\FormatDate{$Date: 2002/10/17 16:20:01 $%
+%\item[\FormatDate{$Date: 2004/07/09 16:18:51 $%
 %}, issue \SCCSissue~]
 
 \item[Issue 2.14] Copyright and banner updates for open source release.
 \item[Issue 2.15] PPHol-specific updates for open source release
 \item[Issue 2.16] Aliases are now handled here, not in DTD031.
+\item[Issue 2.17] Accommodated the new data types for operator precedence that support left-associative operators properly.
 \end{description}
 
 %********************************************************************
@@ -223,33 +224,14 @@ the numeric values based $PcNormal$ and $PcVeryLow$ to make the
 allocation of HOL precedences easier to understand.
 
 =SML
-val Ûpc_h_post_typeÝ			: PREC_CONTEXT = PcNormal(60, 0, false);
-val Ûpc_h_apply_firstÝ		: PREC_CONTEXT = PcNormal(50, 0, false);
-val Ûpc_h_apply_laterÝ		: PREC_CONTEXT = PcNormal(50, 0, true);
-fun Ûpc_h_operÝ(op_prec, assoc)	: PREC_CONTEXT = PcNormal(40, op_prec, assoc);
-val Ûpc_h_if_let_bindÝ		: PREC_CONTEXT = PcNormal(30, 0, false);
-val Ûpc_h_if_let_bind_lastÝ		: PREC_CONTEXT = PcNormal(20, 0, false);
-val Ûpc_h_typingÝ			: PREC_CONTEXT = PcNormal(10, 0, false);
+val Ûpc_h_post_typeÝ			: OP_PREC = PcNormal(60, 0, AssocRight);
+val Ûpc_h_applyÝ			: OP_PREC = PcNormal(50, 0, AssocLeft);
+fun Ûpc_h_operÝ(op_prec, assoc)	: OP_PREC = PcNormal(40, op_prec, assoc);
+val Ûpc_h_if_let_bindÝ		: OP_PREC = PcNormal(30, 0, AssocRight);
+val Ûpc_h_if_let_bind_lastÝ		: OP_PREC = PcNormal(20, 0, AssocRight);
+val Ûpc_h_typingÝ			: OP_PREC = PcNormal(10, 0, AssocRight);
 =TEX
 
-When processing infix, prefix and postfix operators we need to see
-whether precedences are equal when the boolean associativity flag is
-ignored.
-
-=SML
-local
-	fun aux ((l1, l2, _), (r1, r2, _)) =
-		l1 = r1 andalso l2 = r2;
-
-	fun	aux2 (PcHighest, PcHighest)	= true
-	|	aux2 (PcNormal l, PcNormal r)	= aux (l, r)
-	|	aux2 (PcLowest, PcLowest)	= true
-	|	aux2 (PcVeryLow l, PcVeryLow r)	= aux (l, r)
-	|	aux2 (_, _)			= false;
-in
-	fun Ûsimilar_precÝ (lr : PREC_CONTEXT * PREC_CONTEXT) : bool = 
-		aux2 lr;
-end
 =TEX
 
 %********************************************************************
@@ -491,14 +473,14 @@ let
 		case rest
 		of nil => (
 			beginb(2, true);
-			ty_p pc_h_post_type t;
+			ty_p (pc_h_post_type, AssocLeft) t;
 			endb()
 		) | _ => (
 			addstring "("; (*=)=*)
 			beginb(2, true);
-			ty_p PcLowest t;
+			ty_p (PcLowest, AssocLeft) t;
 			pr_list_with_env print_list_aux no_side_effect rest
-				(set_show_index false(set_prec PcLowest
+				(set_show_index false(set_prec (PcLowest, AssocLeft)
 				(decrement_depth new_env)));
 			endb();
 			(*=(=*) addstring ")"
@@ -524,9 +506,9 @@ in
 			case get_fixity name
 			of Lex.Infix op_prec =>
 				let
-					val pc_op_prec = pc_h_oper(op_prec, true);
+					val pc_op_prec = pc_h_oper(op_prec, AssocRight);
 					val br = prec gt_prec pc_op_prec;
-					val blk = similar_prec(prec, pc_op_prec);
+					val blk = fst prec = pc_op_prec;
 				in(
 					if br
 					then	(addstring "(" (*=)=*); beginb(2, true))
@@ -534,13 +516,13 @@ in
 						then ()
 						else beginb(2, true);
 
-					ty_p pc_op_prec t1;
+					ty_p (pc_op_prec, AssocLeft) t1;
 					space(1,0);
 					if show_index then addstring index_start_char else ();
 					addstring name;
 					if show_index then addstring index_end_char else ();
 					addstring " ";
-					ty_p (pc_h_oper(op_prec, false)) t2;
+					ty_p (pc_op_prec, AssocRight) t2;
 
 					if br
 					then	(endb(); (*=(=*) addstring ")")
@@ -614,7 +596,7 @@ in
 	then (
 		space(1, 2);
 		addstring ": ";
-		main_type_pp (set_show_index false(set_prec PcLowest cur_env)) ty;
+		main_type_pp (set_show_index false(set_prec (PcLowest, AssocLeft) cur_env)) ty;
 		if br then (endb(); (*=(=*) addstring ")") else ()
 	) else () (* br = !pp_show_HOL_types and ... so beginb always matched *)
 end
@@ -719,9 +701,8 @@ end
 These are applications of the function $head_fn$ to a list
 of arguments in $args$ which may be empty.  Function application is
 left associative, thus the brackets may be omitted in the HOL fragment
-``$((f\;\;a)\;\;b)\;\;c$''.  {} Value $pc_h_apply_first$ is already set
-with this associativity, $pc_h_apply_later$ is set for the arguments to
-indicate that they will need brackets if they are applications.
+``$((f\;\;a)\;\;b)\;\;c$''.  {} Value $pc_h_apply$ is set
+with this associativity,
 
 Bracket elimination works as follows.  On entry to this routine we have
 the function and each of its arguments, we know that function
@@ -744,9 +725,9 @@ let
 		pe_space=space, pe_beginb=beginb, pe_endb=endb, pe_const=do_const,
 		pe_var=do_var, ...} = cur_env;
 
-	val br = prec gt_prec pc_h_apply_later;
+	val br = prec gt_prec pc_h_apply;
 
-	val arg_env = set_prec pc_h_apply_later cur_env;
+	val arg_env = set_prec (pc_h_apply, AssocRight) cur_env;
 
 	fun print_head p tm = (
 		case  dest_simple_term tm
@@ -768,7 +749,7 @@ in
 	| _ => 		(	if br then addstring "(" (*=)=*) else ();
 				beginb(2, true);
 				beginb(0, true);
-				print_head pc_h_apply_first head_fn;
+				print_head (pc_h_apply, AssocLeft) head_fn;
 				pr_list_with_env print_args no_side_effect 
 					args arg_env;
 				endb();
@@ -856,7 +837,7 @@ let
 	fun vs_printer(vs:TERM, env:PP_ENV) : unit = (
 		space(1, 0);
 		beginb(2, true);
-		main_term_pp (set_prec pc_h_post_type env) vs;
+		main_term_pp (set_prec (pc_h_post_type, AssocRight) env) vs;
 		endb()
 	);
 
@@ -907,7 +888,7 @@ in
 	space(0, 0);
 	addstring "· ";
 	beginb(2, true);
-	main_term_pp (set_prec pc_h_if_let_bind_last new_env) body;
+	main_term_pp (set_prec (pc_h_if_let_bind_last, AssocRight) new_env) body;
 	endb();
 	if br then (*=(=*) addstring ")" else ();
 	endb()
@@ -979,11 +960,11 @@ fun ÛHOL_conditionalÝ (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 			);
 
 			fun aux2 ((label, Value if_bit, then_bit), env) = (
-				aux label	(set_prec PcLowest env) if_bit;	space(1, 0);
-				aux "then"	(set_prec PcLowest env) then_bit;	space(1, 0)
+				aux label	(set_prec (PcLowest, AssocRight) env) if_bit;	space(1, 0);
+				aux "then"	(set_prec (PcLowest, AssocRight) env) then_bit;	space(1, 0)
 			)
 			| aux2 ((label, Nil, else_bit), env) = (
-				aux "else"	(set_prec pc_h_if_let_bind_last env) else_bit
+				aux "else"	(set_prec (pc_h_if_let_bind_last, AssocRight) env) else_bit
 			);
 
 			val if_clause =
@@ -1043,7 +1024,7 @@ let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
-	val new_env = set_prec PcLowest cur_env;
+	val new_env = set_prec (PcLowest, AssocRight)  cur_env;
 
 	fun later_elem(t, env) = (
 		addstring ";";
@@ -1114,7 +1095,7 @@ let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
-	val new_env = set_prec PcLowest cur_env;
+	val new_env = set_prec (PcLowest, AssocRight)  cur_env;
 
 	val (decs, pred) = dest_set_comp(mk_app(orig, a1));
 in(
@@ -1252,7 +1233,7 @@ let
 	val PpEnv{pe_prec=prec, pe_addstring=addstring, pe_beginb=beginb,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
-	val br = prec gt_prec (PcLowest);
+	val br = prec gt_prec PcLowest;
 
 	fun aux(definer, (add_space, prefix), env) = (
 		if add_space then space(1,0) else ();
@@ -1281,10 +1262,10 @@ in(
 	if br then addstring "(" (*=)=*) else ();
 
 	pr_list_with_env print_definer no_print_definer let_clauses 
-		(set_prec PcLowest cur_env);
+		(set_prec (PcLowest, AssocRight) cur_env);
 
 	beginb(0, true);
-	main_term_pp (set_prec pc_h_if_let_bind_last cur_env) tm;
+	main_term_pp (set_prec (pc_h_if_let_bind_last, AssocRight) cur_env) tm;
 	endb();
 
 	map (fn _ => endb()) let_clauses; (* matching from (no_)print_definer *)
@@ -1346,7 +1327,7 @@ let
 
 	fun tm_p env b t = (
 		beginb(2, true);
-		main_term_pp (set_prec(pc_h_oper(comma_prec, b)) env) t;
+		main_term_pp (set_prec(pc_h_oper(comma_prec, AssocRight), b) env) t;
 		endb()
 	);
 
@@ -1356,16 +1337,16 @@ let
 		tm_p env b t
 	);
 
-	val br = prec gt_prec (PcVeryLow(10, 0, true));
+	val br = true;
 
 	val (head_val, last) = strip_pair a2;
 
-	val tail_tms = map (fn x => (true, x)) head_val @ [(false, last)];
+	val tail_tms = map (fn x => (AssocLeft, x)) head_val @ [(AssocRight, last)];
 in(
 	beginb(2, false);
 	if br then addstring "(" (*=)=*) else ();
 
-	tm_p cur_env true a1;
+	tm_p cur_env AssocRight a1;
 	pr_list_with_env pr_comma_el no_side_effect 
 		tail_tms (decrement_depth cur_env);
 
@@ -1394,42 +1375,6 @@ fun ÛHOL_uncurryÝ (cur_env:PP_ENV) (orig:TERM) (name:string) (ty:TYPE)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \newpage
 \section{OPERATORS: PREFIX, INFIX AND POSTFIX}
-
-=IGN
-fun string_of_prec (p:PREC_CONTEXT) : string = (
-let
-	fun aux (a, b, c) = (
-			(string_of_int a)
-		^	","
-		^	(string_of_int b)
-		^	(if c then "T" else "F")
-		^	" "
-	);
-in
-	case p
-	of PcHighest => "H"
-	| PcNormal x => "N" ^ (aux x)
-	| PcLowest => "L"
-	| PcVeryLow x => "V" ^ (aux x)
-end
-);
-
-=IGN
-addstring	(	"(*do_prefix: context="
-		^	(string_of_prec prec)
-		^	"  this="
-		^	(string_of_prec pc_op_prec)
-		^	"  brackets="
-		^	(if br then "Y" else "N")
-		^	"  block="
-		^	(if blk then "Y" else "N")
-		^	"*)"
-		);
-space(1, 0);
-
-addstring "(*do_prefix*)";
-space(1, 0);
-
 =TEX
 
 All infix, prefix and postfix operators are very similar, the
@@ -1448,9 +1393,9 @@ let
 		pe_show_index = show_index,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
-	val pc_op_prec = pc_h_oper(op_prec, false);
+	val pc_op_prec = pc_h_oper(op_prec, AssocRight);
 	val br = prec gt_prec pc_op_prec;
-	val blk = similar_prec(prec, pc_op_prec);
+	val blk = fst prec = pc_op_prec;
 in(
 	if blk then () else beginb(2, true);
 	if br then addstring "(" (*=)=*) else ();
@@ -1460,7 +1405,7 @@ in(
 	if show_index then addstring index_end_char else ();
 	if blk then space(1, 0) else addstring " ";
 
-	main_term_pp (set_show_index false(set_prec pc_op_prec cur_env)) a1;
+	main_term_pp (set_show_index false(set_prec (pc_op_prec, AssocRight) cur_env)) a1;
 
 	if br then (*=(=*) addstring ")" else ();
 	if blk then () else endb();
@@ -1480,14 +1425,14 @@ let
 		pe_show_index = show_index,
 		pe_space=space, pe_endb=endb, ...} = cur_env;
 
-	val pc_op_prec = pc_h_oper(op_prec, false);
+	val pc_op_prec = pc_h_oper(op_prec, AssocLeft);
 	val br = prec gt_prec pc_op_prec;
-	val blk = similar_prec(prec, pc_op_prec);
+	val blk = fst prec = pc_op_prec;
 in(
 	if blk then () else beginb(2, true);
 	if br then addstring "(" (*=)=*) else ();
 
-	main_term_pp (set_show_index false(set_prec pc_op_prec cur_env)) a1;
+	main_term_pp (set_show_index false(set_prec (pc_op_prec, AssocLeft) cur_env)) a1;
 
 	if blk then space(1, 0) else addstring " ";
 	if show_index then addstring index_start_char else ();
@@ -1522,9 +1467,9 @@ let
 
 	fun tm_p p t = main_term_pp (set_show_index false(set_prec p cur_env)) t;
 
-	val pc_op_prec = pc_h_oper(op_prec, true);
+	val pc_op_prec = pc_h_oper(op_prec, AssocRight);
 	val br = prec gt_prec pc_op_prec;
-	val blk = similar_prec(prec, pc_op_prec);
+	val blk = fst prec = pc_op_prec;
 in(
 	if br
 	then	(addstring "(" (*=)=*); beginb(2, true))
@@ -1532,13 +1477,13 @@ in(
 		then ()
 		else beginb(2, true);
 
-	tm_p pc_op_prec a1;
+	tm_p (pc_op_prec, AssocLeft) a1;
 	space(1,0);
 	if show_index then addstring index_start_char else ();
 	addstring name;
 	if show_index then addstring index_end_char else ();
 	addstring " ";
-	tm_p (pc_h_oper(op_prec, false)) a2;
+	tm_p (pc_op_prec, AssocRight) a2;
 
 	if br
 	then	(endb(); (*=(=*) addstring ")")
