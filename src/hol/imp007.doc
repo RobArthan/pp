@@ -61,6 +61,8 @@ corrected $simple\_list\_ƒ\_intro$.
 Added up to $asm\_inst\_type\_rule$.
 \item [Issue 1.6]
 Corrected $simple\_„_elim$.
+\item [Issue 1.7]
+Added most of the rest.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -2092,9 +2094,516 @@ term_tyvars (concl t1);
 val t2 = asm_inst_type_rule  [(BOOL,mk_vartype "'a")] t1;
 term_tyvars (concl t2);
 =TEX
+\subsection{Concerning Matching Functions}
+The function $apply\_matches\_rule$ encodes the matching attempt, should
+a simple use of the rule fail.
+It brings up to the conclusion all the hypotheses.
+It instantiates types to the minimum required,
+instantiates free variables to the minimum required
+(notice that we must not instantiate the universally quantified variables of $thm$ that occur free in the assumptions:
+thus $tmm'$)
+and then returns are the hypotheses to the assumption list.
+It then eliminates the universal quantifications either
+to the requirement of the match, or the bound variable
+if none.
 
+Notice that the prototype used $GSPEC$ and $INST$
+to do the same as $aux1$ - I suspect our mixed approach is faster.
+=SML
+fun âapply_matches_ruleá (caller : string) 
+	(tym : (TYPE * TYPE)list)
+	(tmm : (TERM * TERM)list) 
+	(thm : THM) : THM = (
+let
+	val c = concl thm;
+	val nhyps = length(strip_Š c);
+	val s1 = all_Š_intro thm;
+	val nhyps1 = length(strip_Š (concl s1));
+	val s2 = inst_type_rule tym s1;
+	val bvs = fst(strip_ƒ (hd(rev(strip_Š (concl s2)))));
+	val tmm' = tmm drop (fn (_,x) => x mem bvs);
+	val s3 = inst_term_rule tmm' s2;
+	val s4 = fold (fn (_,x) => undisch_rule x)
+		(interval 1 (nhyps1 - nhyps)) s3;
+
+	fun aux1 (athm : THM) : THM = (
+	let
+		val (qv,b) = simple_dest_ƒ(concl athm);
+	in
+		aux1 (simple_ƒ_elim (rassoc1 tmm qv) athm)
+	end
+	handle (Fail _) => athm);
+
+	val s5 = aux1 s4;
+in
+	s5
+end
+handle (Fail _) => fail caller 7044 []
+);
+=TEX
+Now we use the above in the various forms of matching.
+=SML
+local
+fun aux (thm1 : THM) (thm2 : THM) : THM = (
+let
+	val (t1,_) = dest_Š (snd(strip_ƒ (concl thm1)));
+	val (tym,tmm) = term_match (concl thm2) t1;
+	val s1 = apply_matches_rule "simple_Š_match_mp_rule" tym tmm thm1;
+	val s2 = Š_elim s1 thm2;
+in
+	(prof "simple_Š_match_mp_rule";
+	s2)
+end
+handle complaint =>
+list_divert complaint "simple_Š_match_mp_rule" [
+	("dest_Š", 7042, []),
+	("term_match", 7044, [])]
+);
+in
+fun âsimple_Š_match_mp_ruleá (thm1 : THM) (thm2 : THM) : THM = (	
+	let val s1 = Š_elim thm1 thm2;
+	in
+	 	(prof "simple_Š_match_mp_rule";
+		s1)
+	end
+	handle complaint =>
+	aux thm1 thm2
+);
+end;
+=IGN
+val thm1 = simple_ƒ_elim »x : 'a¼ (asm_rule »ƒ x y Ž f x y Š b¼);
+val thm2 = asm_rule »f 1 2 : BOOL¼;
+simple_Š_match_mp_rule thm1 thm2;
+val thm1 = simple_ƒ_elim »x : 'a¼ (asm_rule »ƒ x y Ž f x y Š b Š c¼);
+val thm2 = asm_rule »f 1 2 : BOOL¼;
+simple_Š_match_mp_rule thm1 thm2;
+=TEX
+=SML
+local
+fun aux (thm1 : THM) (thm2 : THM) : THM = (
+let
+	val (t1,_) = dest_‚ (snd(strip_ƒ (concl thm1)));
+	val (tym,tmm) = term_match (concl thm2) t1;
+	val s1 = apply_matches_rule "simple_‚_match_mp_rule" tym tmm thm1;
+	val s2 = ‚_mp_rule s1 thm2;
+in
+	(prof "simple_‚_match_mp_rule";
+	s2)
+end
+handle complaint =>
+list_divert complaint "simple_‚_match_mp_rule" [
+	("dest_‚", 7099, []),
+	("term_match", 7044, [])]
+);
+in
+fun âsimple_‚_match_mp_ruleá (thm1 : THM) (thm2 : THM) : THM = (
+	let val s1 = ‚_mp_rule thm1 thm2;
+	in
+	 	(prof "simple_‚_match_mp_rule";
+		s1)
+	end
+	handle complaint =>
+	aux thm1 thm2
+);
+end;
+=IGN
+val thm1 = simple_ƒ_elim »x : 'a¼ (asm_rule »ƒ x y Ž f x y ‚ b¼);
+val thm2 = asm_rule »f 1 2 : BOOL¼;
+simple_‚_match_mp_rule thm1 thm2;
+simple_‚_match_mp_rule t_def t_thm;
+=TEX
+=SML
+local
+fun aux (thm : THM) : CONV = (fn (tm :TERM) =>
+let
+	val (t1,_) = dest_eq (snd(strip_ƒ (concl thm)));
+	val (tym,tmm) = term_match tm t1;
+	val s1 = apply_matches_rule "simple_‚_match_mp_rule" tym tmm thm;
+	val s2 = eq_trans_rule (refl_conv tm) s1;
+in
+	(prof "simple_eq_match_conv";
+	s2)
+end
+handle complaint =>
+list_divert complaint "simple_eq_match_conv" [
+	("dest_eq", 7095, []),
+	("term_match", 7076, [])]
+);
+in
+fun âsimple_eq_match_convá (thm : THM) : CONV = (fn (tm :TERM) =>
+	let val s1 = eq_trans_rule (refl_conv tm) thm;
+	in
+	 	(prof "simple_eq_match_conv";
+		s1)
+	end
+	handle complaint =>
+	aux thm tm
+);
+end;
+=IGN
+
+val thm = simple_ƒ_elim »x : 'a¼ (asm_rule »ƒ x y Ž f x y ‚ b¼);
+simple_eq_match_conv thm »f 1 2 : BOOL¼;
+=TEX
+In the following we just map all failures bar $dest\_eq$
+onto 7076, without working out whether the error is 
+an ``expected'' one.
+This is because we want this function to fail fast as well are succeed fast.
+=SML
+fun âsimple_eq_match_1_convá (thm : THM) : CONV = (
+let
+	val (t1,_) = dest_eq (snd(strip_ƒ (concl thm)))
+
+	fun aux1 (athm : THM) : THM = (
+	let
+		val (qv,b) = simple_dest_ƒ(concl athm);
+	in
+		aux1 (simple_ƒ_elim (rassoc1 tmm qv) athm)
+	end
+	handle (Fail _) => athm);
+in
+(fn (tm :TERM) =>
+let	val (tym,tmm) = term_match tm t1;
+	val s2 = inst_type_rule tym thm;	
+	val s3 = aux1 s2;
+	val s4 = eq_trans_rule (refl_conv tm) s3;
+in
+	(prof "simple_eq_match_1_conv";
+	s4)
+end
+handle (Fail _) => fail "simple_eq_match_conv" 7076 []
+)
+end
+handle complaint =>
+divert complaint "dest_eq" "simple_eq_match_1_conv" 7095 []
+);
+=IGN
+val thm = simple_ƒ_elim »x : 'a¼ (asm_rule »ƒ x y Ž f x y ‚ b¼);
+val thm1 = simple_ƒ_elim »x : †¼ (asm_rule »ƒ x y :† Ž f x y ‚ b¼);
+val thm2 = (asm_rule »ƒ x y :† Ž f x y ‚ b¼);
+val thm3 = (asm_rule »ƒ x y :† Ž (( f Žf)f) x y ‚ b¼);
+simple_eq_match_1_conv thm »f 1 2 : BOOL¼;
+simple_eq_match_1_conv thm1 »f 1 2 : BOOL¼;
+simple_eq_match_1_conv thm2 »f 1 2 : BOOL¼;
+simple_eq_match_1_conv thm3 »( g Žg)f 1 2 : BOOL¼;
+=TEX
+\subsection{Concerning }
+=SML
+fun â_ruleá (tm : TERM) (thm : THM) : THM = (
+let
+	val mgv = hd(mg_variables [type_of tm] [tm]);
+	val sx = subst [(mgv,tm)] (concl thm);
+	val mgv_sx = mk_comb(simple_mk_abs(mgv,sx),tm)
+	val s1 = simple_%beta%_conv mgv_sx;
+	val s2 = eq_sym_rule s1;
+	val s3 = ‚_mp_rule s2 thm
+in
+	(prof "_rule";
+	s3)
+end);
+=TEX
+In assessing the following, note that requesting, say, $ap\_arg\_rule$
+is equivalent to requesting a $refl\_conv$ and a $mk\_comb\_rule$ as far as efficiency goes.
+In addition, note that the original term, $tm$ is in the sco[pe of $aux2$, saving a $mk\_comb$.
+=SML
+val âall_simple_%beta%_convá  : CONV = (
+let
+fun rhs (thm: THM) : TERM = snd(dest_eq(concl thm));
+fun asbc (tm : TERM) : THM OPT = (
+let 	val dt = simple_dest_term tm;
+
+	fun aux1 thm1 thm2 = (
+	let val s1 = mk_comb_rule thm1 thm2
+	in
+		Value (
+		if not(simple_is_abs(rhs thm1))
+		then s1
+		else (let val s2 = conv_rule (RAND_C simple_%beta%_conv) s1;
+		in
+		if simple_is_abs(rhs thm2)
+		then (
+			case (asbc (rhs s2)) of
+			Nil => s2
+			| Value s3 => eq_trans_rule s2 s3
+		) else s2
+		end)
+		)
+	end);
+
+	fun aux2 (f : TERM) (x : TERM) : THM OPT = (
+	if simple_is_abs f
+	then 	(Value(
+		if simple_is_abs x
+		then ((simple_%beta%_conv FURTHER_C(fn tm1 =>
+			force_value (asbc tm1))) tm)
+		else (simple_%beta%_conv tm)
+		))
+	else Nil);
+
+	fun aux (Comb (f, x)) = (
+	let 	val fr = asbc f;
+		val xr = asbc x;
+	in
+		case (fr,xr) of
+		(Nil, Nil) => aux2 f x
+		| (Value frt,Nil) => aux1 frt (refl_conv x)
+		| (Nil, Value xrt) => aux1 (refl_conv f) xrt
+		| (Value frt, Value xrt) => aux1 frt xrt
+	end
+	) | aux (Abs (x, b)) = (
+	let	val br = asbc b
+	in
+		case br of
+		Nil => Nil
+		| (Value brt) => Value(simple_abs_rule x brt)
+	end
+	) | aux _ = Nil;
+in
+	aux dt
+end);
+in
+	(fn (tm : TERM) => case (asbc tm) of
+		Value red => red
+		| Nil => fail "all_simple_%beta%_conv" 7020 [])
+end);
+=IGN
+all_simple_%beta%_conv » 1 ¼;
+all_simple_%beta%_conv » ( x Ž (plus x y)) 1¼;
+all_simple_%beta%_conv » ( x Ž (plus x x)) 1¼;
+all_simple_%beta%_conv » ( f x Ž (f x x)) ( y z Ž aplus y z) 1¼;
+all_simple_%beta%_conv »( f x y Ž (f x € y) € ( p Ž p) q)( x Ž Œ x) T (( p Ž p) q)¼;
+all_simple_%beta%_conv » ( y x : BOOL Ž x  € y)(plus(x :†) 1 ) ¼;
+=TEX
+=SML
+fun âall_simple_%beta%_ruleá (thm : THM) =(
+	conv_rule all_simple_%beta%_conv thm
+	handle complaint =>
+	divert complaint "all_simple_%beta%_conv"
+		"all_simple_%beta%_rule" 7021 []
+);
+=TEX
+
+\subsection{Concerning ƒ (part II)}
+=SML
+fun âall_ƒ_introá (thm : THM) : THM = (
+let	val cfrees = frees(concl thm);
+	val afrees = list_cup (map frees (hyps thm));
+	val nfrees = cfrees diff afrees;
+	val s1 = simple_list_ƒ_intro nfrees thm;
+in
+	(prof "all_ƒ_intro";
+	s1)
+end);
+=IGN
+all_ƒ_intro(simple_list_ƒ_elim[»x:'b¼, »y:'a¼]
+	(asm_rule » ƒ x : 'b Ž ƒ y :'a Ž ƒ z Ž f x € z € g y¼));
+=TEX
+=SML
+fun âall_simple_ƒ_elimá (thm : THM) : THM = (
+let	val c = concl thm;
+	val cfrees = frees c;
+	val all_frees = cfrees cup (list_cup (map frees (hyps thm)));
+	val qvs = fst(strip_ƒ c);
+	val qvs' = list_variant all_frees qvs;
+	val s1 = simple_list_ƒ_elim qvs' thm;
+in
+	(prof "all_simple_ƒ_elim";
+	s1)
+end);
+=IGN
+all_simple_ƒ_elim (undisch_rule (simple_ƒ_elim »r : BOOL¼ (asm_rule
+	»ƒ r Ž (ƒ x: 'a Ž p x € q € r) Š (ƒ q r : BOOL Ž p x € q € r)¼)));
+=TEX
+\subsection{Concerning $\alpha$-conversion}
+=SML
+val â%alpha%_convá : TERM -> CONV = (
+let val ar = subst_rule [];
+in
+(fn (tm1 : TERM) =>
+ fn (tm2 : TERM) =>
+let
+	val new_template = mk_eq(tm2, tm1);
+	val s2 = refl_conv tm2;
+	val s3 = ar new_template s2;
+in
+	(prof "%alpha%_conv";
+	s3)
+end
+handle complaint =>
+list_divert complaint "%alpha%_conv" [
+	("mk_eq", 7033, []),
+	("subst_rule",7034,[])]
+)
+end);
+=IGN 
+%alpha%_conv » x Žx¼ » y Ž y¼;
+=TEX
+=SML
+val âsimple_%alpha%_convá : string -> CONV = (
+let val ar = subst_rule [];
+in
+(fn (v : string) =>
+ fn (tm : TERM) =>
+let
+	val (x,b) = simple_dest_abs tm
+		
+	val vtm = mk_var(v, type_of x);
+	val abs = simple_mk_abs(vtm,subst[(vtm,x)]b);
+	val new_template = mk_eq(tm, abs);
+	val s2 = refl_conv tm;
+	val s3 = ar new_template s2;
+in
+	(prof "%alpha%_conv";
+	s3)
+end
+handle complaint =>
+list_divert complaint "simple_%alpha%_conv"  [
+	("simple_dest_abs",7030,[]),
+	("subst_rule", 7035, [(fn () => v)])]
+)
+end);
+=IGN
+simple_%alpha%_conv "new" » x Žx¼;
+simple_%alpha%_conv "new" » x new : 'aŽ x¼;
+simple_%alpha%_conv "new" » x : 'aŽ x = new ¼; (* fails *)
+=TEX
+\subsection{Concerning Œ (part II)}
+We prove the local theorem:
+ó
+s8 … ƒ p Ž Œ(Œ p) = p
+æ
+=SML
+local
+	val s1 = asm_rule »p : BOOL¼;
+	val s2 = Œ_Œ_intro s1;
+	val s3 = Š_intro »p : BOOL¼ s2;
+	val s4 = asm_rule »Œ(Œ p)¼;
+	val s5 = Œ_Œ_elim s4;
+	val s6 = Š_intro »Œ(Œ p)¼ s5;
+	val s7 = ‚_intro s6 s3;
+	val s8 = simple_ƒ_intro »p : BOOL¼ s7;
+in
+val Œ_Œ_conv : CONV = (fn (tm : TERM) =>
+let
+	val p = dest_Œ(dest_Œ tm);
+	val mf_s1 = simple_ƒ_elim p s8;
+in
+	(prof "Œ_Œ_conv";
+	mf_s1)
+end
+handle complaint =>
+divert complaint "dest_Œ" "Œ_Œ_conv" 7022 []
+);
+end;
+=IGN
+Œ_Œ_conv »Œ(Œ T)¼;
+=TEX
+Local theorems:
+ó
+s22 … ƒ p Ž Œ („ x Ž Œ (p x)) ‚ (ƒ x Ž p x)
+
+s27 … Œ (ƒ x Ž Œ (p x)) ‚ („ x Ž p x)
+
+s31 … ƒ p Ž Œ (ƒ x Ž p x) ‚ („ x Ž Œ (p x))
+
+s35 … ƒ p Ž Œ („ x Ž p x) ‚ (ƒ x Ž Œ (p x))
+æ
+=SML
+local
+val s1 = asm_rule »( x : 'a Ž Œ(p x)) x¼;
+val s2 = simple_„_intro »„ x : 'a Ž ( x Ž Œ(p x)) x¼ s1;
+val s3 = all_Š_intro s2;
+val s4 = all_simple_%beta%_rule s3;
+val s5 = asm_rule »Œ(„ x Ž Œ (p x))¼;
+val s6 = modus_tollens_rule s4  s5;
+val s7 = Œ_Œ_elim s6;
+val s8 = simple_ƒ_intro »x : 'a¼ s7;
+val s9 =  all_Š_intro s8;
+
+val s10 = asm_rule »ƒ x : 'a Ž p x¼;
+val s11 = all_simple_ƒ_elim s10;
+val s12 = asm_rule »Œ(p (x : 'a))¼;
+val s13 = asm_rule »„ x : 'a Ž Œ(p x)¼;
+val s14 = Œ_elim »F¼ s11 s12;
+val s15 = simple_„_elim  »Œ(p (x : 'a))¼ s13 s14;
+val s16 = Š_intro »„ x : 'a Ž Œ(p x)¼ s15;
+val s17 = simple_ƒ_elim »„ x : 'a Ž Œ(p x)¼ Œ_thm;
+val s18 = eq_sym_rule s17;
+val s19 = ‚_mp_rule s18 s16;
+val s20 = all_Š_intro s19;
+val s21 = ‚_intro s9 s20;
+val s22 = all_ƒ_intro s21;
+
+val s23 = simple_ƒ_elim »( x : 'a Ž Œ(p x))¼ s22;
+val s24 = all_simple_%beta%_rule s23;
+val s25 = ap_fun_rule »$Œ¼ s24;
+val s26 = conv_rule (TOP_TRAVERSE_C Œ_Œ_conv) s25;
+val s27 = eq_sym_rule s26;
+
+val s28 = ap_fun_rule »$Œ¼ s21;
+val s29 = conv_rule (TOP_TRAVERSE_C Œ_Œ_conv) s28;
+val s30 = eq_sym_rule s29;
+val s31 = all_ƒ_intro s30; (* Œ_ƒ_thm *)
+
+val s32 = ap_fun_rule »$Œ¼  s27;
+val s33 = conv_rule (TOP_TRAVERSE_C Œ_Œ_conv) s32;
+val s34 = eq_sym_rule s33;
+val s35 = all_ƒ_intro s34; (* Œ_„_thm *)
 
 =TEX
+Now the main functions:
+=SML
+in
+val âsimple_Œ_ƒ_convá : CONV = (fn (tm : TERM) =>
+let
+	val neg = (dest_Œ tm);
+	val (v,b) = simple_dest_ƒ neg;
+	val vstr = fst(dest_var v);
+	val abs = snd(dest_comb neg);
+	val mf_s1 = inst_type_rule[(type_of v,mk_vartype "'a")] s31;
+	val mf_s2 = simple_ƒ_elim abs mf_s1;
+	val mf_s3 = conv_rule(ONCE_TRAVERSE_C simple_%beta%_conv
+		THEN_C ONCE_TRAVERSE_C (simple_%alpha%_conv vstr)) mf_s2;
+	val mf_s4 = refl_conv tm;
+	val mf_s5 = eq_trans_rule mf_s4 mf_s3;
+in
+	(prof "simple_Œ_ƒ_conv";
+	mf_s5)
+end
+handle complaint =>
+list_divert complaint "simple_Œ_ƒ_conv" [
+	("dest_Œ",7036,[]),
+	("dest_ƒ",7036,[])]
+);
+
+val âsimple_Œ_„_convá : CONV = (fn (tm : TERM) =>
+let
+	val neg = (dest_Œ tm);
+	val (v,b) = simple_dest_„ neg;
+	val vstr = fst(dest_var v);
+	val abs = snd(dest_comb neg);
+	val mf_s1 = inst_type_rule[(type_of v,mk_vartype "'a")] s35;
+	val mf_s2 = simple_ƒ_elim abs mf_s1;
+	val mf_s3 = conv_rule(ONCE_TRAVERSE_C simple_%beta%_conv
+		THEN_C ONCE_TRAVERSE_C (simple_%alpha%_conv vstr)) mf_s2;
+	val mf_s4 = refl_conv tm;
+	val mf_s5 = eq_trans_rule mf_s4 mf_s3;
+in
+	(prof "Œ_„_conv";
+	mf_s5)
+end
+handle complaint =>
+list_divert complaint "simple_Œ_„_conv" [
+	("dest_Œ",7058,[]),
+	("dest_„",7058,[])]
+);
+end; (* of local val s1 = ... *)
+=IGN
+simple_Œ_ƒ_conv »Œ(ƒ z : 'b Ž f z (x:'b))¼;
+simple_Œ_„_conv »Œ(„ z : 'b Ž f z (x:'b))¼;
+=TEX
+
+
 \section{END OF THE STRUCTURE}
 =SML
 (* end; structure DerivedInferenceRules *)
