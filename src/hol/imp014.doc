@@ -68,6 +68,12 @@ Changed the arrow in the function ``funt'' from ``->''
 to ``‹''. Also, changed the names of the value constructors
 for extended types to be in line with the standard.
 
+\item[Issue 1.3]
+Added the function $type\_to\_extype$. In the
+prototype, its equivalent was notionally part of
+the type inference mechanism. Changed the interface
+of $extype\_to\_type$ and added the functions
+$type\_to\_extype$ and $list\_scomp$.
 
 \end{description}
 \subsection{Changes forecast}
@@ -169,26 +175,45 @@ to convert extended types back into types using the
 most general typing which has been computed as a
 substitution.
 =SML
-fun âextype_to_typeá (phi : SUBS) (ign_fail : bool) (ExVartype(Known X)) = (
-	mk_vartype X
-) | extype_to_type phi ign_fail (ExVartype(Unknown X)) = (
-	if ign_fail
-	then
-		case apply_subs phi X of
-			ExVartype(Unknown Y) =>
-				mk_vartype ("*?" ^ string_of_int Y)
-		|	Other => extype_to_type phi ign_fail Other
-	else
-		case apply_subs phi X of
-			ExVartype(Unknown Y) =>
-				raise fail "extype_to_type" 14004 []
-		|	Other => extype_to_type phi ign_fail Other
-) | extype_to_type phi ign_fail (ExType(s, l)) = mk_type(s, map (extype_to_type phi ign_fail) l);
+fun âextype_to_typeá (phi : SUBS) (namemap : (int * string) list)
+	 (ExVartype(Known x)) = (
+	mk_vartype x
+) | extype_to_type phi namemap (ExVartype(Unknown x)) = (
+	case apply_subs phi x of
+		ExVartype(Unknown y) =>
+			(mk_vartype (lassoc3 namemap y)
+			handle Fail msg =>
+				fail "extype_to_type" 14003 [fn () => string_of_int y])
+	|	Other => extype_to_type phi namemap Other
+) | extype_to_type phi namemap (ExType(s, l)) = (
+	mk_type(s, map (extype_to_type phi namemap) l)
+);
+=TEX
+The inverse of this function is $type\_to\_extype$.
+=SML
+fun âtype_to_extypeá (ty : TYPE) : EXTYPE = (
+	let	fun aux ty = (
+		if is_vartype ty
+		then
+			let	val x = dest_vartype ty
+			in
+				ExVartype(Known x)
+			end
+		else
+			let	val (s,tyl) = dest_type ty
+			in
+				 ExType(s, map aux tyl)
+			end
+		)
+	in
+		aux ty
+	end
+);
 =TEX
 $insert$ inserts an entry into a substitution (overwriting
 any existing entry with the same key).
 =SML
-fun insert ((n, tty) : int * EXTYPE) (phi : SUBS) : SUBS = (
+fun âinsertá ((n, tty) : int * EXTYPE) (phi : SUBS) : SUBS = (
 	case phi of
 		Leaf => Node(n, tty, Leaf, Leaf)
 	|	Node(i, tty', l, r) => (
@@ -209,6 +234,10 @@ fun âsub_typeá (phi : SUBS) (ExVartype(Known ty)) = ExVartype(Known ty)
 $scomp\,sub2\,sub1$ is the composition of the
 substitutions $sub2$ and $sub1$. This is just the functional
 composition, $sub2\,o\,sub1$.
+$id\_subs$ is the identity substitution.
+=SML
+val âid_subsá : SUBS = Leaf;
+=TEX
 In terms of our representation of the functions as
 trees this amounts to merging the trees but replacing
 each extended type in $sub1$ by its instance under
@@ -224,9 +253,18 @@ fun âscompá (sub2: SUBS) (sub1 : SUBS) : SUBS =  (
 	)
 );
 =TEX
-$id\_subs$ is the identity substitution.
+$list\_scomp$ takes a list of substitutions an produces
+the composition of the substitutions.
 =SML
-val âid_subsá : SUBS = Leaf;
+fun âlist_scompá (nil : SUBS list) : SUBS = id_subs
+  | list_scomp phi_list = (
+	let	fun aux phi nil = phi
+		  | aux phi (psi::rest) =
+			aux (scomp phi psi) rest;
+	in
+		aux id_subs phi_list
+	end
+);
 =TEX
 $delta\,tvn\,ty$ is the substitution which acts as the
 identity on all type unknowns other than $tvn$ and
@@ -251,7 +289,7 @@ fun âextendá (phi : SUBS) (tvn : int) (ty : EXTYPE) : SUBS = (
 			else scomp (delta tvn ty) phi
 	) |	ExType(s, tyl) => (
 			if tyvars_set ty tvn
-			then fail "extend" 14002 []
+			then fail "unify" 14002 []
 			else scomp (delta tvn ty) phi
 	) |	ExVartype(Known _) => (
 			scomp (delta tvn ty) phi
@@ -367,18 +405,22 @@ thing.
  
 =SML
 fun âreplacedá (ty : TYPE) : EXTYPE = (
-	if is_vartype ty
-	then
-		let	val rename = lassoc3(new_name (type_tyvars ty));
-			val X = dest_vartype ty;
-		in
-			ExVartype(Unknown(rename X))
-		end
-	else
-		let	val	(s,tyl) = dest_type ty;
-		in
-			ExType(s, map replaced tyl)
-		end
+	let	val rename = lassoc3(new_name (type_tyvars ty));
+		fun aux ty = (
+			if is_vartype ty
+			then
+				let	val x = dest_vartype ty;
+				in
+					ExVartype(Unknown(rename x))
+				end
+			else
+				let	val	(s,tyl) = dest_type ty;
+				in
+					ExType(s, map aux tyl)
+				end)
+	in
+		aux ty
+	end
 );
 =TEX
 $funt$ constructs extended function types.
@@ -390,12 +432,6 @@ fun âfuntá (ty1 : EXTYPE) (ty2 : EXTYPE) : EXTYPE = (
 That concludes the structure:
 =SML
 end; (* of structure Unification *)
-=TEX
-
-Finally, we make sure that the Unification structure
-is available directly to the world.
-=SML
-open Unification;
 =TEX
 
 \twocolumn[\section{INDEX OF DEFINED TERMS}]

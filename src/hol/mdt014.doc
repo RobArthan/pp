@@ -69,6 +69,14 @@ Changed the arrow in the function ``funt'' from ``->''
 to ``‹''. Also, changed the names of the value constructors
 for extended types to be in line with the standard.
 
+\item[Issue 1.3]
+Added the function $type\_to\_extype$. In the
+prototype, its equivalent was notionally part of
+the type inference mechanism. Changed the interface
+of $extype\_to\_type$ and added the functions
+$type\_to\_extype$ and $list\_scomp$.
+
+
 \end{description}
 \subsection{Changes forecast}
 None.
@@ -142,10 +150,11 @@ to the substitution tree produced by unification. This
 enables the expected results for unification to be
 expressed concisely.
 
-The function $extype\_to\_type$ is also tested in this
-document. There are two test cases provided to test that
-this function operates correctly.
-
+The functions $extype\_to\_type$ $type\_to\_extype$
+and $list\_scomp$ are also tested in this
+document, since they are not tested indirectly by other
+tests in this document, nor are likely to be tested
+sufficiently in the tests of type inference.
 \begin{description}
 
 \item[unify.1]
@@ -205,34 +214,57 @@ to an unknown type gives a type with a new type name when:
 \begin{enumerate}
 
 \item
-when $ign\_fail$ is set and the substitution is $id\_subs$.
+when the name map contains a mapping for
+that unknown type and the substitution is $id\_subs$.
 
 \item
-when $ign\_fail$ is set and the substitution takes
+when the name map contains a mapping for
+that unknown type and the substitution takes
 the type unknown onto a known type.
 
 \item
-when $ign\_fail$ is not set and the substitution takes
+when name map contains no mapping for
+that unknown type and the substitution takes
 the type unknown onto a known type.
 
 \end{enumerate}
 
 \item[extype\_to\_type.2]
-Test that an exception is raised when $ign\_fail$ is not set.
+
+Test that the function $extype\_to\_type$ applied
+to an known type gives the corresponding type.
+
+\item[extype\_to\_type.3]
+Test that an exception is raised when the name map contains no mapping for
+that unknown type.
+
+\item[extype\_to\_type.4]
+Test that an extended type with more than one unknown
+is correctly translated when those unknowns appear in
+the name map.
+
+\item[type\_to\_extype]
+
+Test that $type\_to\_extype$ correctly converts
+types to extended types for each TYPE value constructor.
+
+\item[list\_scomp]
+
+Test that the function $list\_scomp$ applied to a
+list of substitutions is the same as applying scomp
+to the list taken as a pair at a time.
+
 
 \end{description}
 
 \section{TEST DATA AND TEST CODE}
-
-=SML
-init_mt_results();
-=TEX
 
 The following function is useful for constructing the
 test cases.
 
 =SML
 let
+open Unification;
 fun rep_unify (phi : SUBS) (nil :(EXTYPE * EXTYPE) list) : SUBS = phi
   | rep_unify phi (x::xs) = rep_unify (unify phi x) xs;
 =TEX
@@ -406,25 +438,55 @@ val res6001 = bool;
 val res6002 = int;
 =TEX
 
-\subsection{Test Data for Case $unify.7-11$}
+\subsection{Test Data for Other Cases of $unify$}
 
 =SML
 val in7000 = (int,bool);
 val res7000 = gen_fail_msg "unify" 14001 ["int","bool"];
 
 val in8000 = (unk1,funt unk1 unk1);
-val res8000 = gen_fail_msg "extend" 14002 [];
+val res8000 = gen_fail_msg "unify" 14002 [];
 
-val res9000 = mk_vartype "*?9";
+=TEX
+
+\subsection{Test Data for $extype\_to\_type$ and $type\_to\_extype$}
+
+=SML
+
+val in9000 = ExVartype (Known "ANY");
+val in9001 = ExType ("ANY", [unk0, unk1]);
+val map9000 = [(9, "'a")];
+val map9001 = [(0, "'a"), (1, "'b")];
+
+val res9000 = mk_vartype "'a";
 val res9001 = mk_type ("bool",[]);
+val res9002 = mk_vartype "ANY";
+val res9003 = mk_type ("ANY", [mk_vartype "'a",mk_vartype "'b"]);
 
-val res10000 = gen_fail_msg "extype_to_type" 14004 [];
+val res10000 = gen_fail_msg "extype_to_type" 14003 ["1"];
+
+val in11000 = mk_vartype "ANY";
+val in11001 = mk_type ("ANY",[]);
+val in11002 = mk_type ("ANY",[mk_type ("int",[]), mk_type ("bool",[])]);
+
+val res11000 = ExVartype (Known "ANY");
+val res11001 = ExType ("ANY",[]);
+val res11002 = ExType ("ANY",[int, bool]);
+=TEX
+\subsection{Test Data for $list\_scomp$}
+
+=SML
+val in12000 = [];
+val res12000 = id_subs;
+val in12001 = [newsubs1, newsubs2, newsubs3];
+val res12001 = scomp id_subs (scomp newsubs1 (scomp newsubs2 newsubs3));
 =TEX
 
 \subsection{Running the Tests}
 
 =SML
 in
+init_mt_results();
 store_mt_results mt_run [
 ("unify.1.1",apply_subs newsubs1,1, res1000),
 ("unify.1.2",apply_subs newsubs1,2, res1001),
@@ -455,20 +517,35 @@ store_mt_results mt_run_fail [
 ];
 
 store_mt_results mt_run [
-("extype_to_type.1.1",extype_to_type id_subs true, unk9, res9000),
-("extype_to_type.1.2",extype_to_type newsubs1 true, unk1, res9001),
-("extype_to_type.1.3",extype_to_type newsubs1 false, unk1, res9001)
+("extype_to_type.1.1",extype_to_type id_subs map9000, unk9, res9000),
+("extype_to_type.1.2",extype_to_type newsubs1 [], unk1, res9001),
+("extype_to_type.1.3",extype_to_type newsubs1 [], unk1, res9001),
+("extype_to_type.2.1",extype_to_type id_subs [], in9000, res9002),
+("extype_to_type.2.2",extype_to_type id_subs [], in9000, res9002),
+("extype_to_type.4",extype_to_type id_subs map9001, in9001, res9003)
 ];
 
 store_mt_results mt_run_fail [
-("extype_to_type.2.1",extype_to_type id_subs false, unk1, res10000)
+("extype_to_type.3",extype_to_type id_subs [], unk1, res10000)
+];
+
+store_mt_results mt_run [
+("type_to_extype.1.1",type_to_extype, in11000, res11000),
+("type_to_extype.1.2",type_to_extype, in11001, res11001),
+("type_to_extype.1.3",type_to_extype, in11002, res11002)
+];
+
+store_mt_results mt_run [
+("list_scomp.1.1",list_scomp, in12000, res12000),
+("list_scomp.1.2",list_scomp, in12001, res12001)
 ];
 
 =TEX
 Finally, we print the results out.
 =SML
 	summarize_mt_results()
-end;
+(* end  of let ... in ... *)
+end; (* of local ... in ... *)
 =TEX
 
 %\newpage
