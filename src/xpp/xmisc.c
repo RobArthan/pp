@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.9 2003/02/03 14:30:17 rda Exp rda $
+ * $Id: xmisc.c,v 2.10 2003/02/12 16:34:01 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -549,7 +549,11 @@ static char *get_remote_selection(Boolean *timed_out)
 		(XtPointer) sel_req_info.id,
 		XtLastTimestampProcessed(XtDisplay(root)));
 	if(sel_req_info.data == 0 && !sel_req_info.cancelled) {
-		XtAppAddTimeOut(app, XtAppGetSelectionTimeout(app), selection_timeout_proc, 0);
+		long int st = XtAppGetSelectionTimeout(app);
+		if(st <= 0)  {/* work-around Solaris problem */
+			st = 5000;
+		}
+		XtAppAddTimeOut(app, st, selection_timeout_proc, 0);
 	}
 	while(sel_req_info.data == 0 && !sel_req_info.cancelled && !sel_req_info.failed) {
 		if(XtAppPeekEvent(app, &xev)) {
