@@ -23,8 +23,7 @@
 \TPPauthor{K.~Blackburn & WIN01}  %% Mandatory field
 %\TPPauthors{Name 1&location 1\\Name 2&location 2\\Name 3&location 3}
 \TPPauthorisation{R.D.~Arthan & HAT Team Leader}
-\TPPabstract{This document contains the detailed design of
-the theories $z\_functions1$, $z\_numbers1$, and $z\_sequences1$ and their proof support.}
+\TPPabstract{This document defines the strategy for the port of {\Product} to SML'97 and gives the detailed design of the infrastructure to support the porting exercise.}
 %\TPPabstractB{}
 %\TPPabstractC{}
 %\TPPabstractD{}
@@ -81,29 +80,152 @@ compiler features needed by {\Product}.
 
 \subsection{Introduction}
 
-\subsection{Purpose and Background}
-See the proposal \cite{LEMMA1/DAZ/PLN018}.
+%\subsection{Purpose and Background}
+See the proposal \cite{LEMMA1/DAZ/PLN018} for background and requirements.
 
-\subsection{Dependencies}
+%\subsection{Dependencies}
 
-\subsection{Possible Enhancements}
+%\subsection{Possible Enhancements}
 
-\subsection{Deficiencies}
+%\subsection{Deficiencies}
 
 \section{Strategy}
+\subsection{General Strategy}
+General guidelines for conversion from SML'93 to SML'97 are given
+in the ``SML'97 Conversion Guide'' that is supplied with NJML.
+
+\subsection{Conditional Compilation}
+The {\Product} ML code is packaged in literate scripts.
+The {\tt docsml} shell script is used to extract the ML source from the scripts.
+{\tt docsml} decides which material to include in the source on the basis of a configuration file called the ``sieve view file''.
+
+Where minor adjustments need to be made to the code, alternative sieve view files will be used to distinguish between the Poly/ML and NJML variants.
+The directives used will be ``{\tt =POLYML}'' and ``{\tt =NJML}''' respectively.
+The rules will be that code marked ``{\tt =SML}'' will be common to both
+compilers whereas code marked for a particular compiler will be produced
+for that compiler only.
+
+Where the changes to a module are greater than can be accomodated with
+the sieve view file mechanism, an alternate source file will be derived
+for the NJML compiler. The build process will select the right version
+based on the target compiler.
 
 \section{Portability Infrastructure}
 \subsection{Input/Output}
+The SML'97 I/O features are richer than those of SML'93. Unfortunately,
+the elementary features that are needed for {\tt Product} have been
+renamed. The approach for the port is to implement the SML'93 interface
+in terms of the SML'97 interface.
+=DOC
+signature BasicIO = sig
+	type instream;
+	type outstream;
+	exception Io of {cause:exn, function:string, name:string}
+	val close_in : instream -> unit
+	val close_out : outstream -> unit
+	val end_of_stream : instream -> bool
+	val input : instream * int -> string
+	val lookahead : instream -> string
+	val open_in : string -> instream
+	val open_out : string -> outstream
+	val output : outstream * string -> unit
+	val std_in : instream
+	val std_out : outstream
+end;
+signature ExtendedIO = sig
+	type instream;
+	type outstream;
+	val can_input : instream * int -> bool
+	val flush_out : outstream -> unit
+	val open_append : string -> outstream
+	val is_term_in : instream -> bool
+	val execute : string -> instream * outstream
+	val input_line : instream -> string
+	val is_term_out : outstream -> bool
+end;
+=DESCRIBE
+These are the signatures of the structures that implement SML'93-style I/O.
+=INLINEFT
+BasicIO
+=TEX
+\ is open.
+=INLINEFT
+ExtendedIO
+=TEX
+\ is not.
+=ENDDOC
+
 \subsection{Compiler Reader Interface}
+At V0.8, {\Product} uses the PolyML interface to invoke the compiler.
+=GFT
+	 PolyML.compiler : (unit -> string) * (string -> unit) -> unit -> unit
+=TEX
+The call:
+=GFT
+	 PolyML.compiler (infunc : unit -> string, outfunc : string -> unit)()
+=TEX
+invokes the compiler using $infunc$ to obtain input and $outfunc$ to
+process compiler output. In fact, $PolyML.compiler$ only reads the
+first top-level binding from the input obtained from $infunc$.
+So for example:
+=GFT
+	 PolyML.compiler (fn () => "val x = 1; val y = 2", ...
+=TEX
+will not process the binding for $y$. To resolve this the V0.8 Reader/Writer
+module in \cite{DS/FMU/IED/DTD005} in effect calls PolyML.compiler in
+a while-loop. This approach does not port very well and so must change
+during the present exercise.
+However, in all cases (whether reading source from a string, from a file or
+from a terminal), the Reader/Writer reads all of its input stream.
 
-Need to resolve differences between:
+In NJML, the function giving access to the compiler is:
+=GFT
+	Compiler.Interact.useStream : TextIO.instream -> unit
+=TEX
+This is given an input stream as its parameter and causes the compiler
+to process all the input in the stream. Since that is just what we want
+to do in the Reader/Writer a portability interface based on streams
+could be provided. However, the SML'93 I/O package does not provide a
+means of generating a stream from a string (for example). We therefore
+settle for the following design:
+=DOC
+signature PPCompiler = sig
+	type TEXT_SOURCE (* = unit -> string *);
+	type TEXT_SINK (* = string -> unit *);
+	val compile1 : string * TEXT_SOURCE * TEXT_SINK -> unit;
+	val compile2 : instream * TEXT_SOURCE * TEXT_SINK -> unit;
+end; 
+=DESCRIBE
+This is the structure of a signature that provides an interface to 
+the underlying Standard ML compiler.
+This by-passes the pre- and post-processing carried out by the
+{\Product} Reader/Writer interface and is only intended for use
+by those extending the system in quite radical ways.
 
-	 PolyML.compiler
+The three components of the parameter to
+=INLINEFT
+PPCompiler.compile1
+=TEX
+\ are: a string that may be used to identify the origin of the ML source code
+in compiler error messages, a function to obtain source code, and a function to output compiler messages.
+Source is read repeatedly until the source function returns an empty string.
+It is therefore that function's responsibility to wait if no input is
+available, but input may become available later.
 
-and
-
-	Compiler.Interact.useStream
-
+=INLINEFT
+PPCompiler.compile2
+=TEX
+\ is very similar to
+=INLINEFT
+PPCompiler.compile1
+=TEX
+\ and should be used where the text source is actually associated with
+a file or other input stream. It does not read the data from the stream
+directly, it uses the source function passed as the second component
+of the parameter to do that. However, it does attempt to pass the attributes
+of the input stream into the underlying ML compiler interfaces where they
+may be used to identify the origin of the ML source code in error messages.
+=ENDDOC
 \subsection{Compiler Writer Interface}
 
 Need to resolve differences between:
@@ -115,6 +237,7 @@ and
 	Compiler.Control.Print.out
 
 \subsection{Saving Work Between Sessions}
+SMLofNJ.exportML : string -> unit
 
 \subsection{Arithmetic}
 
