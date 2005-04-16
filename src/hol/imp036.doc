@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% %Z% $Date: 2004/11/11 16:38:15 $ $Revision: 1.42 $ $RCSfile: imp036.doc,v $
+% %Z% $Date: 2005/04/15 16:42:31 $ $Revision: 1.43 $ $RCSfile: imp036.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -21,10 +21,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{HOL PDS System Initialisation}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP036}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.42 $%
+\def\SCCSversion{$Revision: 1.43 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/11/11 16:38:15 $%
+\TPPdate{\FormatDate{$Date: 2005/04/15 16:42:31 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{ML Literate Script}
@@ -139,6 +139,7 @@ Made {\it load\_files} print file names containing `Q' properly.
 \item[Issue 1.40] PPHol-specific updates for open source release
 \item[Issue 1.41,1.42] Fix to problems with `Q' in file names.
 \item[Issue 1.43] Removed restrictions on setting the banner and introduced a single function to restore the state at start of a session.
+\item[Issue 1.44] Now provides {\em get\_init\_funs} and supports {\em new\_init\_fun}  in child databases under Poly/ML).
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -174,38 +175,6 @@ but if in a child database will remain in $error\_messages$
 Because the string comprising a capital Q in between two percent signs
 is an SCCS key word, we resort to knowledge of the ASCII character set here.
 =SML
-local
-
-val Ûsos_emdbÝ : ({id:int, text:string} list) ref = 
-	ref(get_error_messages());
-
-local
-val ordQ = "\\081";
-fun sanitize str = (
-	implode (
-	map (fn c => case c of
-		"\\" => "\\\\"
-		| "\"" => "\\\""
-		| "\n" => "\\n"
-		| "\t" => "\\t"
-		| "\081" => ordQ
-		| _ => c)
-	(explode str)
-	)
-);
-in
-fun Ûget_new_error_messagesÝ () = (
-let	val em = (get_error_messages()) from (length (!sos_emdb));
-	val ems = "[" ^
-		(format_list (fn {id=id, text=text} =>
-		"{id="^string_of_int id^",text=\""^sanitize text^"\"}")
-		em ",") 
-		^ "]";
-in
-	ems
-end);
-end;
-in
 =TEX
 
 \section{SYSTEM INITIALISATION}
@@ -221,26 +190,41 @@ fun Ûnew_init_funÝ (f : unit -> unit) : unit = (
 );
 =TEX
 =SML
-local
-	fun hcomplaint (Fail mess) = (
-		diag_string(get_error_message
-			36014 ["Fail",
-				(get_message mess)])
-	) | hcomplaint (Error mess) = (
-		diag_string(get_error_message
-			36014 ["Error",
-				(get_message mess)])
-	) | hcomplaint other = (
-		diag_string(get_error_message 
-			36014 [string_of_exn other, 
-				""])
-	);
-in
-fun ÛinitÝ (() : unit) : unit = (
-	map (fn f => (f() handle complaint => hcomplaint complaint)) (!init_funs);
-	()
+fun Ûget_init_funsÝ (() : unit) : (unit -> unit) list = (
+	!init_funs
 );
-end;
+=TEX
+=SML
+fun Ûprint_exnÝ (Fail mess) = (
+	diag_string(get_error_message
+		36014 ["Fail",
+			(get_message mess)])
+) | print_exn (Error mess) = (
+	diag_string(get_error_message
+		36014 ["Error",
+			(get_message mess)])
+) | print_exn other = (
+	diag_string(get_error_message 
+		36014 [string_of_exn other, ""])
+);
+=TEX
+The following is allowing for the possibility of the initialisation functions adding extra initialisations to the list.
+This happens, for example, when the initialisation functions are restored in {\em icl'reset\_database\_info}.
+
+=SML
+fun ÛinitÝ (() : unit) : unit = (
+	let	val fs1 = !init_funs;
+		fun go [] = ()
+		|   go (f::fs) = (
+			(f() handle ex => print_exn ex);
+			go fs
+		);
+		val _ = go fs1;
+		val fs2 = !init_funs from length fs1;
+		val _ = go fs2;
+	in	()
+	end
+);
 =TEX
 The following type and associated bindings is not really necessary
 for NJML, but we retain it since there may be useful special
@@ -254,13 +238,14 @@ type ÛICL'DATABASE_INFO_TYPEÝ = {
 	controls : ((string * bool) list * 
 		(string * int) list * 
 		(string * string) list),
-	error_messages : {id:int, text:string} list,
+	error_messages : unit -> unit,
 	stats : int S_DICT,
 	pc_stack : unit -> unit,
 	pc_database : unit -> unit,
 	pc_evaluators : unit -> unit,
 	ksc_functions : unit -> unit,
-	subgoal_package : unit -> unit
+	subgoal_package : unit -> unit,
+	init_fun_state : (unit -> unit) list
 };
 =TEX
 Make a good starting point:
@@ -277,31 +262,33 @@ val Ûicl'database_infoÝ : ICL'DATABASE_INFO_TYPE = {
 	cache_theories = get_cache_theories(),
 	control_state = pending_reset_control_state(),
 	controls = get_controls (), 
-	error_messages = [], 
+	error_messages = pending_reset_error_messages(), 
 	stats = get_stats (), 
 	pc_stack = pending_reset_pc_stack(), 
 	pc_database = pending_reset_pc_database(), 
 	pc_evaluators = pending_reset_pc_evaluators(), 
 	ksc_functions = pending_reset_ksc_functions(), 
-	subgoal_package = pending_reset_subgoal_package() 
-	};
+	subgoal_package = pending_reset_subgoal_package(),
+	init_fun_state = !init_funs 
+};
 =TEX
 =SML
 fun Ûicl'set_database_infoÝ ():unit = (use_string (" \
-\  PPCompiler.print_depth 0; \
+\PPCompiler.print_depth 0; \
 \  val icl'database_info : Initialisation.ICL'DATABASE_INFO_TYPE = { \
 \  theory = get_current_theory_name(), \
 \  language = get_current_language(), \
 \  cache_theories = get_cache_theories(), \
-\  control_state = pending_reset_control_state (), \
-\  controls = get_controls (), \
-\  error_messages = " ^ get_new_error_messages() ^ ", \
-\  stats = get_stats (), \
+\  control_state = pending_reset_control_state(), \
+\  controls = get_controls(), \
+\  error_messages = pending_reset_error_messages(), \
+\  stats = get_stats(), \
 \  pc_stack = pending_reset_pc_stack(), \
 \  pc_database = pending_reset_pc_database(), \
 \  pc_evaluators = pending_reset_pc_evaluators(), \
 \  ksc_functions = pending_reset_ksc_functions(), \
-\  subgoal_package = pending_reset_subgoal_package() \
+\  subgoal_package = pending_reset_subgoal_package(), \
+\  init_fun_state = Initialisation.get_init_funs() \
 \  }; \
 \ PPCompiler.print_depth 999;");
 	()
@@ -321,7 +308,8 @@ fun Ûicl'reset_database_infoÝ
 		pc_database, 
 		pc_evaluators, 
 		ksc_functions, 
-		subgoal_package} : ICL'DATABASE_INFO_TYPE) : unit = (
+		subgoal_package,
+		init_fun_state} : ICL'DATABASE_INFO_TYPE) : unit = (
 	(if	do_current_theory
 	 then	open_theory theory handle Fail _ => ()
 	 else	());
@@ -329,13 +317,14 @@ fun Ûicl'reset_database_infoÝ
 	(set_cache_theories cache_theories; ()) handle _  => ();
 	(control_state () handle _ => ());
 	(set_controls controls handle _ => ());
-	(set_error_messages error_messages handle _ => ());
+	(error_messages () handle _ => ());
 	(set_stats stats handle _ => ());
 	(pc_stack () handle _ => ());
 	(pc_evaluators () handle _ => ());
 	(pc_database () handle _ => ());
 	(ksc_functions () handle _ => ());
 	(subgoal_package () handle _ => ());
+	(init_funs := init_fun_state);
 	()
 );
 =TEX
@@ -494,7 +483,6 @@ Note that we deliberately catch any exceptions in the above.
 Then the function proper:
 =SML
 fun Ûinit_current_stateÝ () : unit = (
-	sos_emdb := get_error_messages();
 	(case get_shell_var "hol_current_theory" of
 	"" => (
 		use_string
@@ -645,7 +633,6 @@ val initial7 = Initialisation.new_init_fun use_terminal;
 =SML
 end (* of structure HOLSystem *);
 open HOLSystem;
-end (* of local defining sos_emdb *);
 =TEX
 
 \small
