@@ -16,10 +16,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for the Interface to the Abstract Data Type $THM$}  %% Mandatory field
 \def\TPPheadtitle{Implementation for the \cr Interface to the Abstract Data Type $THM$}
 \TPPref{DS/FMU/IED/IMP012}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.22 $
+\def\SCCSversion{$Revision: 2.23 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/12/15 14:39:29 $ %
+\TPPdate{\FormatDate{$Date: 2003/01/17 16:11:15 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -92,6 +92,7 @@ Allowed for use of ordered efficient dictionaries in theory data type.
 \item[Issue 2.18] Removed unnecessary level of indirection from the {\it USER\_DATA} data type.
 \item[Issues 2.19--2.21] Introduced checkpointing.
 \item[Issue 2.22] Relaxed restrictions on checkpointing.
+\item[Issue 2.23] Interfaces to the kernel inference rules are now here in the kernel interface module.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -120,7 +121,7 @@ None known.
 \subsubsection{Possible Enhancements}
 None known.
 \newpage
-\section{THEORY MANAGEMENT OPERATIONS}
+\section{PREAMBLE}
 We first start the structure:
 =SML
 structure KernelInterface : KernelInterface = struct
@@ -136,7 +137,7 @@ fun Ûget_current_theory_nameÝ (() : unit) : string = (
 	icl'get_theory_name(icl'get_current_theory_name ())
 );
 =TEX
-\subsection{Kernel State Change Material}
+\section{NOTIFICATION OF STATE CHANGES}
 As any operation that changes the kernel state must notify
 the list of functions managed by the functions $on\_kernel\_state\_change$,
 we need to provide that material first.
@@ -171,40 +172,30 @@ $notify\_before\_ksc$, and the list of
 functions to be notified is hidden, named $on\_ksc\_functions$
 and $before\_ksc\_functions$.
 =SML
-local
-	val Ûon_ksc_functionsÝ : ((KERNEL_STATE_CHANGE -> unit) list) ref = ref [];
-	val Ûbefore_ksc_functionsÝ : ((KERNEL_STATE_CHANGE -> unit) list) ref = ref [];
-in
-	fun Ûon_kernel_state_changeÝ (to_notify : KERNEL_STATE_CHANGE -> unit) 
-		: unit = (
-		on_ksc_functions := (!on_ksc_functions) @ [to_notify]
-	);
-
-	fun Ûnotify_on_kscÝ (ksc : KERNEL_STATE_CHANGE) : unit = (
-		map (fn f => f ksc) (!on_ksc_functions);
-		()
-	);
-
-	fun Ûbefore_kernel_state_changeÝ (to_notify : KERNEL_STATE_CHANGE -> unit) 
-		: unit = (
-		before_ksc_functions := (!before_ksc_functions) @ [to_notify]
-	);
-
-	fun Ûnotify_before_kscÝ (ksc : KERNEL_STATE_CHANGE) : unit = (
-		map (fn f => f ksc) (!before_ksc_functions);
-		()
-	);
-
-fun Ûpending_reset_ksc_functionsÝ () : unit -> unit =(
-let	val f1 = (!on_ksc_functions);
-	val f2 = (!before_ksc_functions);
-in
-	fn () => (
-	on_ksc_functions := f1;
-	before_ksc_functions := f2;
+val Ûon_ksc_functionsÝ : ((KERNEL_STATE_CHANGE -> unit) list) ref = ref [];
+val Ûbefore_ksc_functionsÝ : ((KERNEL_STATE_CHANGE -> unit) list) ref = ref [];
+fun Ûon_kernel_state_changeÝ (to_notify : KERNEL_STATE_CHANGE -> unit) 
+	: unit = (
+	on_ksc_functions := (!on_ksc_functions) @ [to_notify]
+);
+=TEX
+=SML
+fun Ûnotify_on_kscÝ (ksc : KERNEL_STATE_CHANGE) : unit = (
+	map (fn f => f ksc) (!on_ksc_functions);
 	()
-	)
-end);
+);
+=TEX
+=SML
+fun Ûbefore_kernel_state_changeÝ (to_notify : KERNEL_STATE_CHANGE -> unit) 
+	: unit = (
+	before_ksc_functions := (!before_ksc_functions) @ [to_notify]
+);
+=TEX
+=SML
+fun Ûnotify_before_kscÝ (ksc : KERNEL_STATE_CHANGE) : unit = (
+	map (fn f => f ksc) (!before_ksc_functions);
+	()
+);
 =TEX
 \subsection{Temporary Working in Other Theories}
 Note the multiple attempts to catch errors 
@@ -270,11 +261,8 @@ in
 		icl'open_theory curr_theory; 
 		raise ex))
 	end);
-
 =TEX
-=SML
-end; (* local *)
-=TEX
+\section{THEORY MANAGEMENT OPERATIONS}
 \subsection{Operations on Theory Attributes}
 These are generally straight forward:
 =SML
@@ -349,7 +337,244 @@ in
 end
 handle complaint => pass_on complaint "icl'duplicate_theory" "duplicate_theory");
 =TEX
-\subsection{Compactification}
+\section{INFERENCE RULES}
+=SML
+datatype ÛKERNEL_INFERENCEÝ =
+		ÛKISubstRuleÝ of (THM * TERM) list * TERM * THM * THM
+	|	ÛKISimpleÌEqRuleÝ of TERM * THM * THM
+	|	ÛKIInstTypeRuleÝ of (TYPE * TYPE) list * THM * THM
+	|	ÛKI´IntroÝ of TERM * THM * THM
+	|	ÛKI´ElimÝ of THM * THM * THM
+	|	ÛKIAsmRuleÝ of TERM * THM
+	|	ÛKIReflConvÝ of TERM * THM
+	|	ÛKISimpleÂConvÝ of TERM * THM
+	|	ÛKISucConvÝ of TERM * THM
+	|	ÛKIStringConvÝ of TERM * THM
+	|	ÛKICharConvÝ of TERM * THM
+	|	ÛKIEqSymRuleÝ of THM * THM
+	|	ÛKIListSimpleµElimÝ of TERM list * THM * THM
+	|	ÛKIEqTransRuleÝ of THM * THM * THM
+	|	ÛKIMkAppRuleÝ of THM * THM * THM
+	|	ÛKI¤MPRuleÝ of THM * THM * THM
+	|	ÛKISimpleµIntroÝ of TERM * THM * THM
+	|	ÛKIInstTermRuleÝ of (TERM * TERM) list * THM * THM
+	|	ÛKIPlusConvÝ of TERM * THM;
+=TEX
+=SML
+val Ûon_kernel_inference_funsÝ : (KERNEL_INFERENCE -> unit) list ref = ref [];
+fun Ûki_notifyÝ (ki : KERNEL_INFERENCE) : unit = (
+	map (fn f => f ki) (!on_kernel_inference_funs);
+	()
+);
+fun Ûon_kernel_inferenceÝ (f : KERNEL_INFERENCE -> unit) : unit = (
+	on_kernel_inference_funs := !on_kernel_inference_funs @ [f]
+);
+=TEX
+=SML
+val Ûsubst_ruleÝ : (THM * TERM) list -> TERM -> THM -> THM = (
+	fn thm_var_list =>
+	let	val rule = icl'subst_rule thm_var_list
+	in	fn template =>
+		fn ithm =>
+		let	val res = rule template ithm;
+		in	prof "subst_rule";
+			ki_notify(KISubstRule (thm_var_list, template, ithm, res));
+			res
+		end
+	end
+);
+=TEX
+=SML
+val Ûsimple_Ì_eq_ruleÝ : TERM -> THM -> THM = (
+	fn absvar =>
+	fn thrm =>
+	let	val res = icl'simple_Ì_eq_rule absvar thrm;
+	in	prof "simple_Ì_eq_rule";
+		ki_notify(KISimpleÌEqRule(absvar, thrm, res));
+		res
+	end
+);
+=TEX
+=SML
+val Ûinst_type_ruleÝ : (TYPE * TYPE) list -> THM -> THM = (
+	fn talist =>
+	fn thrm =>
+	let	val res = icl'inst_type_rule talist thrm;
+	in	prof "inst_type_rule";
+		ki_notify(KIInstTypeRule(talist, thrm, res));
+		res
+	end
+);
+=TEX
+=SML
+val Û´_introÝ : TERM -> THM -> THM = (
+	fn asm =>
+	fn thrm =>
+	let	val res = icl'´_intro asm thrm;
+	in	prof "´_intro";
+		ki_notify(KI´Intro(asm, thrm, res));
+		res
+	end
+);
+=TEX
+=SML
+val Û´_elimÝ : THM -> THM -> THM = (
+	fn thrm1 =>
+	fn thrm2 =>
+	let	val res = icl'´_elim thrm1 thrm2;
+	in	prof "´_elim";
+		ki_notify(KI´Elim(thrm1, thrm2, res));
+		res
+	end
+);
+=TEX
+=SML
+val Ûasm_ruleÝ : TERM -> THM = (
+	fn tm =>
+	let	val res = icl'asm_rule tm;
+	in	prof "asm_rule";
+		ki_notify(KIAsmRule(tm, res));
+		res
+	end
+);
+=TEX
+=SML
+val Ûrefl_convÝ : CONV = (
+	fn tm =>
+	let	val res = icl'refl_conv tm;
+	in	prof "refl_conv";
+		ki_notify(KIReflConv(tm, res));
+		res
+	end
+);
+=TEX
+=SML
+val Ûsimple_Â_convÝ : CONV = (
+	fn tm =>
+	let	val res = icl'simple_Â_conv tm;
+	in	prof "simple_Â_conv";
+		ki_notify(KISimpleÂConv(tm, res));
+		res
+	end
+);
+=TEX
+=SML
+val Ûprim_suc_convÝ : CONV = (
+	fn tm =>
+	let	val res = icl'suc_conv tm;
+	in	prof "prim_suc_conv";
+		ki_notify(KISucConv(tm, res));
+		res
+	end
+);
+=TEX
+=SML
+val Ûstring_convÝ : CONV = (
+	fn tm =>
+	let	val res = icl'string_conv tm;
+	in	prof "string_conv";
+		ki_notify(KIStringConv(tm, res));
+		res
+	end
+);
+=TEX
+=SML
+val Ûchar_convÝ : CONV = (
+	fn tm =>
+	let	val res = icl'char_conv tm;
+	in	prof "char_conv";
+		ki_notify(KICharConv(tm, res));
+		res
+	end
+);
+=TEX
+=SML
+val Ûeq_sym_ruleÝ : THM -> THM = (
+	fn thrm =>
+	let	val res = icl'eq_sym_rule thrm;
+	in	prof "eq_sym_rule";
+		ki_notify(KIEqSymRule(thrm, res));
+		res
+	end
+);
+=TEX
+=SML
+val Ûlist_simple_µ_elimÝ : TERM list -> THM -> THM = (
+	fn tml =>
+	fn thrm =>
+	let	val res = icl'list_simple_µ_elim tml thrm;
+	in	prof "list_simple_µ_elim";
+		ki_notify(KIListSimpleµElim(tml, thrm, res));
+		res
+	end
+);
+=TEX
+=SML
+val Ûeq_trans_ruleÝ : THM -> THM -> THM = (
+	fn thrm1 =>
+	fn thrm2 =>
+	let	val res = icl'eq_trans_rule thrm1 thrm2;
+	in	prof "eq_trans_rule";
+		ki_notify(KIEqTransRule(thrm1, thrm2, res));
+		res
+	end
+);
+=TEX
+=SML
+val Ûmk_app_ruleÝ : THM -> THM -> THM = (
+	fn thrm1 =>
+	fn thrm2 =>
+	let	val res = icl'mk_app_rule thrm1 thrm2;
+	in	prof "mk_app_rule";
+		ki_notify(KIMkAppRule(thrm1, thrm2, res));
+		res
+	end
+);
+=TEX
+=SML
+val Û¤_mp_ruleÝ : THM -> THM -> THM = (
+	fn thrm1 =>
+	fn thrm2 =>
+	let	val res = icl'¤_mp_rule thrm1 thrm2;
+	in	prof "¤_mp_rule";
+		ki_notify(KI¤MPRule(thrm1, thrm2, res));
+		res
+	end
+);
+=TEX
+=SML
+val Ûsimple_µ_introÝ : TERM -> THM -> THM = (
+	fn tm =>
+	fn thrm =>
+	let	val res = icl'simple_µ_intro tm thrm;
+	in	prof "simple_µ_intro";
+		ki_notify(KISimpleµIntro(tm, thrm, res));
+		res
+	end
+);
+=TEX
+=SML
+val Ûinst_term_ruleÝ : (TERM * TERM) list -> THM -> THM = (
+	fn tvl =>
+	fn thrm =>
+	let	val res = icl'inst_term_rule tvl thrm;
+	in	prof "inst_term_rule";
+		ki_notify(KIInstTermRule(tvl, thrm, res));
+		res
+	end
+);
+=TEX
+=SML
+val Ûplus_convÝ : CONV = (
+	fn tm =>
+	let	val res = icl'plus_conv tm;
+	in	prof "plus_conv";
+		ki_notify(KIPlusConv(tm, res));
+		res
+	end
+);
+=TEX
+\section{COMPACTIFICATION}
 This material is required in $save\_thm$ and thereafter and so is given next.
 =TEX
 Throughout the following we consider type variables just as a distinguished
@@ -561,6 +786,7 @@ fun Ûcond_compactÝ (i : int) (f : 'a -> 'a) (x : 'a) : 'a = (
 	else	f x
 );
 =TEX
+\section{THEORY MANAGEMENT CONTINUED}
 \subsection{Operations on Theory Contents}
 
 $dest\_thm$ passes through without problem.
@@ -1284,7 +1510,7 @@ in
 	status
 end);
 =TEX
-\subsection{Checkpointing}
+\section{CHECKPOINTING}
 =TEX
 The representation of the checkpoint data type is 
 the theory name together with a dictionary mapping
@@ -1399,9 +1625,22 @@ fun ÛrollbackÝ (cp : CHECKPOINT) : unit = (
 	end
 	end
 );
-=SML
 =TEX
-\subsection{End of Structure}
+\section{STATE MANAGEMENT}
+=SML
+fun Ûpending_reset_kernel_interfaceÝ () : unit -> unit =(
+let	val f1 = !on_ksc_functions;
+	val f2 = !before_ksc_functions;
+	val f3 = !on_kernel_inference_funs;
+in	fn () => (
+		on_ksc_functions := f1;
+		before_ksc_functions := f2;
+		on_kernel_inference_funs := f3;
+		()
+	)
+end);
+=TEX
+\section{EPILOGUE}
 =SML
 end; (* structure KernelInterface *)
 
