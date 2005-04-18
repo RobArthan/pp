@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% mdt012.doc   %Z% $Date: 2002/12/14 17:55:51 $ $Revision: 2.34 $ $RCSfile: mdt012.doc,v $
+% mdt012.doc   %Z% $Date: 2003/01/17 16:11:15 $ $Revision: 2.35 $ $RCSfile: mdt012.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -19,10 +19,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Module Tests for the Abstract Data Type $THM$}  %% Mandatory field
 \def\TPPheadtitle{Module Tests for the Interface \cr to the Abstract Data Type $THM$}
 \TPPref{DS/FMU/IED/MDT012}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.34 $ %
+\def\SCCSversion{$Revision: 2.35 $ %
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/12/14 17:55:51 $ %
+\TPPdate{\FormatDate{$Date: 2003/01/17 16:11:15 $ %
 }}
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -103,6 +103,7 @@ Update for new INTEGER type.
 \item[Issue 2.31] PPHol-specific updates for open source release
 \item[Issues 2.32 -- 2.34] Tests for checkpoints.
 \item[Issue 2.35] Relaxed restrictions on checkpointing.
+\item[Issue 2.36] Allowed for changes to kernel inference errors and introduced test for kernel interface monitor functions.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -397,7 +398,7 @@ fun Ûtell_kscÝ (caller : string) ((OpenTheory (ot,(intos,outofs)))
 	diag_string(caller ^ "SetUserDatum:"^nm)
 );
 end;
-val before_tell_ksc = pending_reset_ksc_functions();
+val before_tell_ksc = pending_reset_kernel_interface();
 on_kernel_state_change (tell_ksc "OnKSC:" );
 before_kernel_state_change (tell_ksc "BeforeKSC:");
 =TEX
@@ -1220,7 +1221,7 @@ store_mt_results mt_run_error [
 	("list_save_thm 6036",
 	list_save_thm,
 	(["s2"], thy_deleted_thm),
-	gen_fail_msg "icl'´_intro" 6036 ["v1 ô v1","to_be_deleted",del_thy_name])
+	gen_fail_msg "´_intro" 6036 ["v1 ô v1","to_be_deleted",del_thy_name])
 	];
 =TEX
 Definitional mechanisms:
@@ -1386,7 +1387,7 @@ store_mt_results mt_run_error [
 	("new_type_defn 6036",
 	new_type_defn,
 	( ["rubbish"], "rubbish", [], thy_deleted_thm),
-	gen_fail_msg "icl'´_intro" 6036 ["v1 ô v1","to_be_deleted",del_thy_name])
+	gen_fail_msg "´_intro" 6036 ["v1 ô v1","to_be_deleted",del_thy_name])
 	];
 =TEX
 \subsection{new\_spec}
@@ -1471,7 +1472,7 @@ store_mt_results mt_run_error [
 	("new_spec 6036",
 	new_spec,
 	([],2,thy_deleted_thm),
-	gen_fail_msg "icl'´_intro" 6036 ["v1 ô v1","to_be_deleted",del_thy_name])
+	gen_fail_msg "´_intro" 6036 ["v1 ô v1","to_be_deleted",del_thy_name])
 	];
 =TEX
 \subsection{Theory Functions}
@@ -1977,7 +1978,7 @@ store_mt_results mt_run_fail [
 	];
 =TEX
 =SML
-diag_string"Test reseting of Kernel State Change functions";
+diag_string"Test resetting of Kernel State Change functions";
 diag_string "With";
 new_const("KSC_test1",BOOL);
 diag_string "Without";
@@ -1987,7 +1988,7 @@ new_const("KSC_test2",BOOL);
 diag_string"End of testing resetting of Kernel State Change functions";
 =TEX
 =TEX
-\subsection{Checkpointing}
+\section{CHECKPOINTING}
 =TEX
 First we get the checkpoint failures out of the way:
 =SML
@@ -2069,6 +2070,62 @@ delete_theory"cp4";
 Now roll back. There should be a comment 12017 since we have deleted cp2.
 =SML
 rollback cp2;
+=TEX
+\section{KERNEL INFERENCE RULES}
+The functional tests on the rules themselves is done in \cite{DS/FMU/IED/MDT007}.
+We are just testing the ``On Kernel Inference'' functionality here.
+
+=SML
+val ki_count : int ref = ref 0;
+on_kernel_inference (fn _ => ki_count := !ki_count + 1);
+refl_conv (mk_var("a", BOOL));
+refl_conv (mk_var("a", BOOL));
+refl_conv (mk_var("a", BOOL));
+refl_conv (mk_var("a", BOOL));
+refl_conv (mk_var("a", BOOL));
+store_mt_results
+mt_run [
+	("on_kernel_inference 1",
+	!,
+	ki_count,
+	5)
+];
+=TEX
+=SML
+val prki = pending_reset_kernel_interface();
+val last_refl_conv : (TERM * THM) OPT ref = ref Nil;
+on_kernel_inference (fn
+		KIReflConv tm_thm => last_refl_conv:= Value tm_thm
+	|	_ => ()
+);
+refl_conv (mk_var("a", BOOL));
+store_mt_results
+mt_run [
+	("on_kernel_inference 2",
+	fst o dest_var o fst o force_value o !,
+	last_refl_conv,
+	"a")
+];
+refl_conv (mk_var("abcd", BOOL));
+store_mt_results
+mt_run [
+	("on_kernel_inference 3",
+	fst o dest_var o fst o force_value o !,
+	last_refl_conv,
+	"abcd")
+];
+=TEX
+Now reset:
+=SML
+prki();
+refl_conv (mk_var("a", BOOL));
+store_mt_results
+mt_run [
+	("on_kernel_inference 4",
+	fst o dest_var o fst o force_value o !,
+	last_refl_conv,
+	"abcd")
+];
 =TEX
 \subsection{End of Tests}
 =SML
