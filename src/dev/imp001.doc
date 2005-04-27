@@ -105,6 +105,7 @@ of time and space. Added set inclusion test for lists.
 \item[Issue 2.36] Fixed {\it oe\_key\_enter} and {\it oe\_enter}.
 \item[Issue 2.37] Added {\em list\_e\_enter}.
 \item[Issue 2.38] Added {\em e\_stats} and {\em e\_dict\_of\_oe_dict}.
+\item[Issue 2.39] Tidy-up to improve some of the string and character handling.
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -813,43 +814,34 @@ a string on the standard output stream.
 If the string exceeds the value of {\em get\_line\_length} it attempts to split the string into tokens, to fit within the line length.
 A token is taken to be an initial string of spaces, followed by exclusively non-space characters.
 =SML
-fun €raw_diag_string› ("" : string) : unit = ()
-| raw_diag_string (s : string) : unit = (
-	let val ss = explode s;
-		val line_length = get_line_length();
-		fun to_first_space (" "::rest) = []
-		| to_first_space (a :: rest) = (a:: to_first_space rest)
-		| to_first_space [] = [];
-		fun to_first_space2 (" "::rest) = (" ":: to_first_space2 rest)
-		| to_first_space2 (a :: rest) = (a:: to_first_space rest)
-		| to_first_space2 [] = [];
-
-		fun fill_rest_of_line l_so_far [] = []
-		| fill_rest_of_line l_so_far str =
-		let
-			val next_chunk = to_first_space2 str
-			val l_next_chunk = length next_chunk
-		in
-			if (l_next_chunk + l_so_far) <= line_length
-			then (output(std_out, implode next_chunk);
-				fill_rest_of_line (l_next_chunk + l_so_far) 
-				 (str from l_next_chunk))
-			else (output(std_out, "\n"); str)
-		end;
-		fun first_part_of_line str =
-		let
-			val next_chunk = to_first_space2 str
-			val l_next_chunk = length next_chunk
-		in
-			(output(std_out, implode next_chunk);
-				fill_rest_of_line l_next_chunk (str from l_next_chunk))
-		end;
-		fun print_lines [] = output(std_out, "\n")
-		| print_lines str = print_lines(first_part_of_line str)
-	in
-		if length ss <= line_length
-		then (output(std_out, s); output(std_out, "\n"))
-		else print_lines ss
+fun €raw_diag_string› (s : string) : unit = (
+	let 	val line_length = get_line_length();
+		val len = size s;
+		fun next test i = (
+			if	i >= len
+			orelse	test(String.sub(s, i))
+			then	i
+			else	next test (i+1)
+		);
+		val next_token = next (fn c => c = #" ") o next (fn c => c <> #" ");
+		fun go cursor i = (
+			let	val j = next_token i;
+				val k = j - i;
+			in	if	k = 0
+				then	if	cursor > 0
+					then	output(std_out, "\n")
+					else	()
+				else if	cursor + k > line_length
+				then (	(if	cursor > 0
+					then	output(std_out, "\n")
+					else	());
+					output(std_out, substring(s, i, k));
+					go k j)
+				else (	output(std_out, substring(s, i, k));
+					go (cursor + k) j)
+			end
+		);
+	in	go 0 0
 	end
 );
 =TEX
@@ -908,35 +900,48 @@ $is\_all\_decimal$ checks whether a string consists
 of one or more decimal digits.
 =SML
 local
-	val ord0 = ord "0";
-	val ord9 = ord "9";
+	val chr_ord = SML97BasisLibrary.Char.ord;
+	val ord0 = chr_ord #"0";
+	val ord9 = chr_ord #"9";
 in
 fun €is_all_decimal› (s : string) : bool = (
-	s <> "" andalso
-	all (explode s) ((fn x => x >= ord0 andalso x <= ord9) o ord)
+	let	val len = size s;
+		fun aux i = (
+			i = len
+		orelse	(let	val x = chr_ord(String.sub(s, i));
+			in	x >= ord0 andalso x <= ord9
+			end	andalso aux (i + 1))
+		);
+	in	len <> 0 andalso aux 0
+	end
 );
 end;
 =TEX
 \subsection{Numeric Conversions}
-$nat\_of\_string$ converts a string into non-negative
+$nat\_of\_string$ converts a string into a non-negative
 integer (using decimal notation). It raises an exception
 if that cannot be done.
 =SML
 local
-	val ord0 = ord "0"
+	val chr_ord = SML97BasisLibrary.Char.ord;
+	val ord0 = chr_ord #"0";
 in
 fun €nat_of_string› (s : string) : int = (
-	let	val cs = rev(explode s);
-		fun aux (dig :: digs) = (
-			let	val n = ord dig - ord0;
-			in	if n >= 0 andalso n <= 9
-				then n + (10 * aux digs)
-				else fail "nat_of_string" 1012 [(fn (():unit) => s)]
-			end
-		) | aux [] = 0;
-	in	case cs of
-			[] => fail "nat_of_string" 1013 []
-		|	_ => aux cs
+	let	val len = size s;
+		fun aux acc i = (
+			if	i = len
+			then	acc
+			else	let	val n = chr_ord (String.sub(s, i)) - ord0;
+				in	if	n >= 0 andalso n <= 9
+					then	aux (n + 10*acc) (i+1)
+					else	fail
+						"nat_of_string"
+						1012 [(fn () => s)]
+				end
+		);
+	in	if	len = 0
+		then	fail "nat_of_string" 1013 []
+		else	aux 0 0
 	end
 );
 end;
