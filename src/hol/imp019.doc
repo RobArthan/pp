@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp019.doc   %Z% $Date: 2002/10/17 15:10:58 $ $Revision: 1.27 $ $RCSfile: imp019.doc,v $
+% imp019.doc   %Z% $Date: 2002/10/17 16:20:01 $ $Revision: 1.28 $ $RCSfile: imp019.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation for ICL HOL Parser}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP019}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.27 $%
+\def\SCCSversion{$Revision: 1.28 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 15:10:58 $%
+\TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -86,6 +86,7 @@ Renamings from version 1.5 of DS/FMU/IED/WRK038.
 \item [Issue 1.26] Now uses shell script to run parser generator.
 \item[Issue 1.27] Copyright and banner updates for open source release.
 \item[Issue 1.28] PPHol-specific updates for open source release
+\item[Issue 1.29] HOL now supports left-associative operators.
 \end{description}
 \subsection{Changes forecast}
 \pagebreak
@@ -569,7 +570,7 @@ of what the symbol table says.
 fun Ûred_pairÝ (Parsed(Tm tm1)) (Parsed (Tm tm2)) : PP = (
 	case get_fixity "," of
 		Infix prec => Tm(App(App(Id ",", tm1, Nonfix), tm2, Infix prec))
-	|	_ => Tm(App(App(Id ",", tm1, Nonfix), tm2, Infix 0))
+	|	_ => Tm(App(App(Id ",", tm1, Nonfix), tm2, Infix (RightAssoc, 0)))
 ) | red_pair _ _ = stack_error "red_pair";
 =TEX
 =SML
@@ -710,11 +711,17 @@ fun Ûred_tys2Ý  (Parsed(Ty ty)) (Parsed(Tys tys)) : PP = (
 imp019.grm.sml
 =TEX
 =SML
-fun by_num (Value prec1 : int OPT) (prec2 : int) : RESOLUTION = (
-		if prec1 <= prec2
-		then DoShift
-		else DoReduce
-) | by_num Nil _ = DoShift;
+fun Ûby_precÝ
+	(Value (assoc1, prec1) : (ASSOC OPT * int) OPT)
+	((assoc2, prec2) : ASSOC OPT * int) : RESOLUTION = (
+	if	prec1 < prec2
+	then	DoShift
+	else if	prec1 > prec2
+	then	DoReduce
+	else	case (assoc1, assoc2) of
+			(Value LeftAssoc, Value LeftAssoc) => DoReduce
+		|	_ => DoShift
+) | by_prec Nil _ = DoShift;
 =TEX
 $top\_prec$ is used to when a conflict is to be resolved using the numerical
 precedences. It finds the precedence of the operator on the stack with which
@@ -730,10 +737,11 @@ must be an infix or prefix operator).
 Maintainers should beware the fact that a reworking of the grammar may require
 the algorithm of $top\_prec$ to be changed.
 =SML
-fun Ûtop_precÝ (stk : (HOL_TOKEN, 'lc, 'pp)INPUT_STACK) : int OPT = (
+fun Ûtop_precÝ (stk : (HOL_TOKEN, 'lc, 'pp)INPUT_STACK)
+	: (ASSOC OPT * int) OPT = (
 	case stk of
-		_ :: Token(HTInOp{prec, ...}, _) :: _ => Value prec
-	|	_ :: Token(HTPreOp{prec, ...}, _) :: _ => Value prec
+		_ :: Token(HTInOp{prec=(assoc, n), ...}, _) :: _ => Value (Value assoc, n)
+	|	_ :: Token(HTPreOp{prec, ...}, _) :: _ => Value (Nil, prec)
 	|	_ => Nil
 );
 =TEX
@@ -741,22 +749,22 @@ The following function implements the conflict resolution as discussed
 in section \cite{THEGRAMMAR} above. Note that the case marked
 with a comma occurs when a comma is encountered in an environment in
 which comma is not declared as an infix --- the symbol table is
-expected to prevent this --- the parser just treats it as infix in any case.
+expected to prevent this --- the parser just treats it as right-associative infix in any case.
 =SML
 val rec ÛHOL_resolverÝ : (HOL_TOKEN, HOL_LEX_CLASS, 'pp)RESOLVER = (
 fn ((tok, _), stk, red as ((nonterm, _), _)) =>
 	case nonterm of
 		"Tm" => (
 			case tok of
-				HTInOp{prec, ...} => (
-					by_num (top_prec stk) prec
+				HTInOp{prec = (assoc, n), ...} => (
+					by_prec (top_prec stk) (Value assoc, n)
 			) |	HTPostOp{prec, ...} => (
-					by_num (top_prec stk) prec
-			) |	_ => (by_num (top_prec stk) 0	 (* , *)
+					by_prec (top_prec stk) (Nil, prec)
+			) |	_ => (by_prec (top_prec stk) (Value RightAssoc, 0)  (* , *)
 			)
 	) |	"Tm2" => (
 			case tok of
-				HTInOp {name = s, prec=prec, ...} => (
+				HTInOp {name = s, prec= _, ...} => (
 						case get_type_info s of
 							Value _ => DoShift
 						|	Nil => DoReduce
@@ -767,9 +775,9 @@ fn ((tok, _), stk, red as ((nonterm, _), _)) =>
 					case get_type_info s of
 						Value _ => DoShift
 					|	Nil => DoReduce
-			) |	HTInOp {name = s, prec=prec, ...} => (
+			) |	HTInOp {name = s, prec=(assoc, n), ...} => (
 						case get_type_info s of
-							Value _ => by_num (top_prec stk) prec
+							Value _ => by_prec (top_prec stk) (Value assoc, n)
 						|	Nil => DoReduce
 			) |	_ => stack_error "HOL_resolver(2)"
 	) |	_ => stack_error "HOL_resolver(3)"

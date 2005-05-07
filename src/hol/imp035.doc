@@ -16,10 +16,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for the Theory Design Support Tools}  %% Mandatory field
 \def\TPPheadtitle{Implementation for the Theory Design Support Tools}
 \TPPref{DS/FMU/IED/IMP035}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.19 $
+\def\SCCSversion{$Revision: 1.20 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 15:10:58 $ %
+\TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -91,6 +91,7 @@ Fixed bug in $req\_language$.
 Update for SML97.
 \item[Issue 1.19] Copyright and banner updates for open source release.
 \item[Issue 1.20] PPHol-specific updates for open source release
+\item[Issue 1.21] HOL now supports left-associative operators.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -218,7 +219,8 @@ local
 		"\n\t");
 
 	fun string_fix Binder = "Binder"
-	| string_fix (Infix n) = "Infix "^string_of_int n
+	| string_fix (Infix (LeftAssoc, n)) = "Left Infix "^string_of_int n
+	| string_fix (Infix (RightAssoc, n)) = "Right Infix "^string_of_int n
 	| string_fix Nonfix = "Nonfix"
 	| string_fix (Postfix n) = "Postfix "^string_of_int n
 	| string_fix (Prefix n) = "Prefix "^string_of_int n;
@@ -235,18 +237,22 @@ let	val {name = oname, language = olanguage,
 	val name = case oname of
 		Nil => fail "summarize_td_results" 35001 []
 		| Value name => name;
+(*
 =TEX
 Output a suitable message:
 =SML
+*)
 	val warned : bool ref = ref false;
 	fun om n lst = (
 		if give_mismatch
 		then diag_line(get_error_message n (name :: lst))
 		else ();
 		warned := true);
+(*
 =TEX
 Compare two sets in a standard manner:
 =SML
+*)
 	fun compare s1 s2 ldiff fmt miss add = (
 	let	val sideeffect = (case (ldiff (s1, s2)) of
 		[] => ()
@@ -257,9 +263,11 @@ Compare two sets in a standard manner:
 	in
 		()
 	end);
+(*
 =TEX
 Now do the tests:
 =SML
+*)
 	val sideeffect = (case olanguage of
 		Nil => if get_current_language () = "HOL"
 			then ()
@@ -330,19 +338,23 @@ Now do the tests:
 			fm_ns
 			35014 35015
 			) else ();
-
+(*
 =TEX
 First get a list of all the names we have fixity information for, either in design, or in real theory.
 =SML
+*)
 	val fix_names = list_cup [get_binders name,
 		get_nonfixes name, 
 		map snd (get_prefixes name),
 		map snd (get_postfixes name),
-		map snd (get_infixes name),
+		map snd (get_left_infixes name),
+		map snd (get_right_infixes name),
 		map fst fixity];
+(*
 =TEX
 Now check fixity of each name, note that both $get\_fixity$ and this document default to $Nonfix$.
 =SML
+*)
 	val side_effect = if not (get_flag "tc_thms_only") then (
 			map
 			(fn nm => let val dfix = lassoc4 fixity Nonfix nm;
@@ -399,6 +411,7 @@ let	val {name = oname, language = olanguage,
 in
 	case (!req_flag) of
 	Declare => (case oparent of
+(*
 =TEX
 In declare mode we should be able to open the parent and
 new theory without interference from sealed hierarchies.
@@ -406,6 +419,7 @@ new theory without interference from sealed hierarchies.
 No parents - this means the name should be ``min'', or 
 at least already exists.
 =SML
+*)
 		Nil => (open_theory nm
 			handle complaint =>
 			divert complaint "open_theory" "req_name" 35030 [fn () => nm];
@@ -417,9 +431,11 @@ at least already exists.
 			thms = thms, fixity = fixity, 
 			terminators = terminators, aliases = aliases,
 			type_abbrevs = type_abbrevs})
+(*
 =TEX
 Some parents, the normal mode:
 =SML
+*)
 		| Value parent => (((open_theory parent;
 			new_theory nm)
 			handle complaint =>
@@ -435,17 +451,20 @@ Some parents, the normal mode:
 			terminators = terminators, aliases = aliases,
 			type_abbrevs = type_abbrevs})
 	)
+(*
 =TEX
 Now when $req\_flag$ is $Check$.
 In check mode we may not be able to open the parent and
 new theory without interference from sealed hierarchies.
-
 =SML
+*)
 	| Check => (case oparent of
+(*
 =TEX
 No parents - this means the name should be ``min'', or 
 at least already exists.
 =SML
+*)
 		Nil => ((get_theory_status nm
 			handle complaint =>
 			divert complaint "get_theory_status" "req_name" 35030 [fn () => nm]);
@@ -460,9 +479,11 @@ at least already exists.
 			thms = thms, fixity = fixity, 
 			terminators = terminators, aliases = aliases,
 			type_abbrevs = type_abbrevs})
+(*
 =TEX
 Some parents, the normal mode:
 =SML
+*)
 		| Value parent => ((get_theory_status nm
 			handle complaint =>
 			divert complaint "get_theory_status" "req_name" 35030 [fn () => nm]);
@@ -807,7 +828,7 @@ in
 end);
 =TEX
 =SML
-fun €req_infix› ((prec,nm) : int * string) : unit = (
+fun €req_any_infix› (assoc : ASSOC) ((prec,nm) : int * string) : unit = (
 let	val side_effect = moan35101"req_infix";
 	val {name = oname, language = olanguage, 
 		parents = parents, consts = consts, 
@@ -832,10 +853,15 @@ in
 		parents = parents, consts = consts, 
 		types = types, axioms = axioms,
 		defns = defns,  
-		thms = thms, fixity = ((nm, Infix prec) :: fixity), 
+		thms = thms, fixity = ((nm, Infix (assoc, prec)) :: fixity), 
 		terminators = terminators, aliases = aliases,
 		type_abbrevs = type_abbrevs}
 end);
+=TEX
+=SML
+val €req_left_infix›   : (int * string) -> unit = req_any_infix LeftAssoc;
+val €req_right_infix›   : (int * string) -> unit = req_any_infix RightAssoc;
+val €req_infix›   : (int * string) -> unit = req_right_infix;
 =TEX
 =SML
 fun €req_prefix› ((prec,nm) : int * string) : unit = (

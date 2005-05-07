@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp020.doc   %Z% $Date: 2002/10/17 16:20:01 $ $Revision: 1.26 $ $RCSfile: imp020.doc,v $
+% imp020.doc   %Z% $Date: 2005/04/24 16:01:30 $ $Revision: 1.27 $ $RCSfile: imp020.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation for ICL HOL Symbol Table}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP020}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.26 $%
+\def\SCCSversion{$Revision: 1.27 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $%
+\TPPdate{\FormatDate{$Date: 2005/04/24 16:01:30 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -103,7 +103,7 @@ Renamings from version 1.5 of DS/FMU/IED/WRK038.
 \item[Issue 1.20~(\FormatDate{92/07/07
 }) ]
 	Allow multiple languages per constant.
-\item[Issue \SCCSversion~(\FormatDate{$Date: 2002/10/17 16:20:01 $%
+\item[Issue \SCCSversion~(\FormatDate{$Date: 2005/04/24 16:01:30 $%
 }) ]
 	Made languages of new theories be inherited from the parent.
 	Use error code 20501 in $declare_const_language$, was 20502.
@@ -113,6 +113,7 @@ Fixed {\it undeclare\_alias} and added {\it getz_alias\_info}
 \item[Issue 1.25] Copyright and banner updates for open source release.
 \item[Issue 1.26] PPHol-specific updates for open source release
 \item[Issue 1.27] Now uses {\tt app} rather than {\tt map} when appropriate.
+\item[Issue 1.28] HOL now supports left-associative operators.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -315,9 +316,10 @@ fun Ûencode_fixityÝ (fix : FIXITY) : USER_DATUM = (
 	case fix of
 		Nonfix => UD_Int(0, [])
 	|	Binder => UD_Int(1, [])
-	|	Infix p => UD_Int(2, [UD_Int(p, [])])
-	|	Prefix p => UD_Int(3, [UD_Int(p, [])])
-	|	Postfix p => UD_Int(4, [UD_Int(p, [])])
+	|	Infix (LeftAssoc, n) => UD_Int(2, [UD_Int(n, [])])
+	|	Infix (RightAssoc, n) => UD_Int(3, [UD_Int(n, [])])
+	|	Prefix p => UD_Int(4, [UD_Int(p, [])])
+	|	Postfix p => UD_Int(5, [UD_Int(p, [])])
 );
 =TEX
 =SML
@@ -325,9 +327,10 @@ fun Ûdecode_fixityÝ (ud : USER_DATUM) : FIXITY = (
 	case ud of
 		UD_Int(0, []) => Nonfix
 	|	UD_Int(1, []) => Binder
-	|	UD_Int(2, [UD_Int(p, [])]) => Infix p
-	|	UD_Int(3, [UD_Int(p, [])]) => Prefix p
-	|	UD_Int(4, [UD_Int(p, [])]) => Postfix p
+	|	UD_Int(2, [UD_Int(n, [])]) => Infix (LeftAssoc, n)
+	|	UD_Int(3, [UD_Int(n, [])]) => Infix (RightAssoc, n)
+	|	UD_Int(4, [UD_Int(p, [])]) => Prefix p
+	|	UD_Int(5, [UD_Int(p, [])]) => Postfix p
 	|	_ => fail "decode_fixity" 20001 []
 );
 =TEX
@@ -879,10 +882,19 @@ fun Ûdeclare_binderÝ (s : string) = (
 );
 =TEX
 =SML
-fun Ûdeclare_infixÝ (prec : int, s : string) : unit = (
-	check_id "declare_infix" 20201 s;
-	store_decl "declare_infix" (DeclFixity(s, Infix prec))
+fun Ûdeclare_left_infixÝ (prec : int, s : string) : unit = (
+	check_id "declare_left_infix" 20201 s;
+	store_decl "declare_left_infix" (DeclFixity(s, Infix (LeftAssoc, prec)))
 );
+=TEX
+=SML
+fun Ûdeclare_right_infixÝ (prec : int, s : string) : unit = (
+	check_id "declare_right_infix" 20201 s;
+	store_decl "declare_right_infix" (DeclFixity(s, Infix (RightAssoc, prec)))
+);
+=TEX
+=SML
+val Ûdeclare_infixÝ  : (int * string) -> unit = declare_right_infix;
 =TEX
 =SML
 fun Ûdeclare_prefixÝ (prec : int, s : string) : unit = (
@@ -1148,10 +1160,20 @@ fun Ûget_bindersÝ (thy : string) : string list = (
 );
 =TEX
 =SML
-fun Ûget_infixesÝ (thy : string) : (int * string) list = (
-	let	fun sel (DeclFixity(_, Infix _)) = true
+fun Ûget_left_infixesÝ (thy : string) : (int * string) list = (
+	let	fun sel (DeclFixity(_, Infix (LeftAssoc, _))) = true
 		|   sel _ = false;
-		fun coerce(DeclFixity(s, Infix p)) = (p, s)
+		fun coerce(DeclFixity(s, Infix (_, p))) = (p, s)
+		|   coerce _ = fail "get_infixes" 20003 [fn()=> "coercion failed"];
+	in	map coerce(get_selected_decls thy sel)
+	end	handle X => reraise X "get_infixes"
+);
+=TEX
+=SML
+fun Ûget_right_infixesÝ (thy : string) : (int * string) list = (
+	let	fun sel (DeclFixity(_, Infix (RightAssoc, _))) = true
+		|   sel _ = false;
+		fun coerce(DeclFixity(s, Infix (_, p))) = (p, s)
 		|   coerce _ = fail "get_infixes" 20003 [fn()=> "coercion failed"];
 	in	map coerce(get_selected_decls thy sel)
 	end	handle X => reraise X "get_infixes"
