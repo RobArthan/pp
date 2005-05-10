@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.290 $ $RCSfile: imp507.doc,v $ $Date: 2004/11/18 17:24:02 $
+% imp507.doc %Z% $Revision: 1.291 $ $RCSfile: imp507.doc,v $ $Date: 2004/12/08 16:35:01 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.290 $%
+\def\SCCSversion{$Revision: 1.291 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/11/18 17:24:02 $%
+\TPPdate{\FormatDate{$Date: 2004/12/08 16:35:01 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -227,6 +227,7 @@ by doing all the work of checking and generating the VC terms in {\it call\_vcs}
 \item[Issues 1.288, 1.289] Informal functions that have been forward declared no longer give rise to an error.
 Use clauses in package specifications now propagate into the package body.
 \item[Issue 1.290] Added support for labelled statements and goto statements.
+\item[Issue 1.291] Added {\em create\_package\_spec\_theory}.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -7072,29 +7073,35 @@ fun Ûz_prefixÝ (ident : ID) (newids : NEW_IDS) (package : PACKAGE)
 );
 =TEX
 =SML
+fun Ûnew_scope_with_commonÝ (ident : ID)
+	(package as {with_dict, ...} : PACKAGE) : BLOCK = (
+	let
+		val flags = false_flags;
+		val newids = mk_new_ids(new_ids package);
+		val (tysubs, formal_procs1, informal_procs1, aux_vars1, var_renamings, dict) = 
+			z_prefix ident newids package;
+		val vc_vars1 = map (prefix_vardecl ident newids)
+						(#vc_vars package);
+		val block = block_flags(empty_block, flags);
+		val block = block_vc_vars (Value dict) (block, vc_vars1);
+		val block = block_vc_aux_vars Nil (block, aux_vars1);
+		val block = block_formal_procs Nil (block, formal_procs1);
+		val block = block_informal_procs Nil (block, informal_procs1);
+		val block = block_renamings (block, var_renamings);
+		val dict' = #dict(#in_scope(#declab block));
+		val package' = package_with_dict (package, dict');
+		val _ = pack_env := s_enter ident package' (!pack_env);
+	in	block
+	end
+);
+=TEX
+=SML
 fun Ûnew_scope_withÝ (ident : ID) : unit = (
 	case s_lookup ident (!pack_env) of
 		Nil => ()
-	|	Value (package as {with_dict, ...}) => (
-		
-		let
-			val flags = false_flags;
-			val newids = mk_new_ids(new_ids package);
-			val (tysubs, formal_procs1, informal_procs1, aux_vars1, var_renamings, dict) = 
-				z_prefix ident newids package;
-			val dummy1 = new_parent_aux false (pack_spec_name ident);
-			val vc_vars1 = map (prefix_vardecl ident newids)
-							(#vc_vars package);
-			val block = block_flags(empty_block, flags);
-			val block = block_vc_vars (Value dict) (block, vc_vars1);
-			val block = block_vc_aux_vars Nil (block, aux_vars1);
-			val block = block_formal_procs Nil (block, formal_procs1);
-			val block = block_informal_procs Nil (block, informal_procs1);
-			val block = block_renamings (block, var_renamings);
-			val dict' = #dict(#in_scope(#declab block));
-			val package' = package_with_dict (package, dict');
+	|	Value package => (
+		let	val block = new_scope_with_common ident package;
 		in	new_parent_aux true (pack_spec_name ident);
-			pack_env := s_enter ident package' (!pack_env);
 			blocks := new_scope_common(block :: !blocks)
 		end
 	)
@@ -9502,6 +9509,19 @@ expected to see in the following.
 =SML
 *)
 end (* ... abstype *);
+=TEX
+=SML
+fun Ûcreate_package_spec_theoryÝ (pack_name : string) : unit = (
+	let	val pack_id = CaseIndependence.to_upper pack_name;
+	in	case s_lookup pack_id (!pack_env) of
+			Nil => fail "create_package_spec_theory" 507133 [fn _ => pack_name]
+		|	Value package => (
+				check_pack_complete package;
+				new_scope_with_common pack_id package;
+				()
+		)
+	end
+);
 =TEX
 The following returns the compilation unit (if any) associated with a given script.
 In the case of a script containing the body of a nested package, this is correctly
