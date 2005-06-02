@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% $Header: /home/rda/daz/RCS/imp510.doc,v 1.142 2005/04/22 16:27:13 rda Exp rda $
+% $Header: /home/rda/daz/RCS/imp510.doc,v 1.143 2005/05/28 13:27:14 rda Exp rda $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Ada Output Function}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP510}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.142 $%
+\def\SCCSversion{$Revision: 1.143 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/04/22 16:27:13 $%
+\TPPdate{\FormatDate{$Date: 2005/05/28 13:27:14 $%
 }}
 \TPPstatus{Draft}	    %% Mandatory field
 \TPPtype{Specification}
@@ -221,6 +221,7 @@ used as identifiers are now escaped with a dollar sign (as required if they are 
 \item[Issue 1.139] Support for labelled statements and goto statements.
 \item[Issue 1.140] Support for derived types.
 \item[Issue 1.141] Dollar now required before Compliance Notation reserved words.
+\item[Issue 1.142] Now uses correct syntax for all types of specification statement.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -1283,20 +1284,55 @@ fun €check_range_not_attr› (_ : int) (RRange _ : EXP RANGE) = ()
 =TEX
 \subsection{Statements}
 
-A few auxiliary functions before we do statements.
+A datatype and a few auxiliary functions before we do statements.
 
 =SML
+datatype €SPEC_STATEMENT_TYPE› =
+	€SpecStatement›
+|	€Assertion›
+|	€ProcedureSpecStatement›
+|	€FunctionSpecStatement›;
+=TEX
+=SML
 fun €fmt_spec› (fmtinfo as {outf,...} : PP_FMT_INFO)
-	(is_assertion : bool, {w=w, w0=w0, pre=pre, post=post} : SPEC) = (
-	let	fun out_frame [] = ()
-		|   out_frame [zn] = outf ((sfmt_z_id fmtinfo) (translate_for_output zn))
-		|   out_frame (zn::zns) = (out_frame [zn]; outf ","; out_frame zns);
-	in	outf (translate_for_output (if is_assertion then "á" else "Ñ"));
-		out_frame w;
-		outf(if is_assertion then "{" else "[");
+	(tipe : SPEC_STATEMENT_TYPE,
+		globals : Z_ID list,
+		{w=w, w0=w0, pre=pre, post=post} : SPEC) = (
+	let	fun out_zids [] = ()
+		|   out_zids [zn] = outf ((sfmt_z_id fmtinfo) (translate_for_output zn))
+		|   out_zids (zn::zns) = (out_zids [zn]; outf ","; out_zids zns);
+		fun out_frame () = (
+			case tipe of
+				FunctionSpecStatement => ()
+			|	_ => (
+				outf(translate_for_output 
+		(case tipe of Assertion => "á" | _ => "Ñ"));
+				out_zids w
+			)
+		);
+		fun out_globals () = (
+			(case tipe of
+				FunctionSpecStatement => (
+					outf(translate_for_output "ò")
+				)
+			|	_ => (
+				case globals of
+					[] => ()
+				|	_ => (
+					outf(translate_for_output "ò")
+				)
+			));
+			out_zids globals
+		);
+
+	in	out_frame ();
+		out_globals ();
+		outf(case tipe of Assertion => "{" | _ =>  "[");
 		(fmt_z_tm fmtinfo pre);
-		if is_assertion then () else (outf ","; fmt_z_tm fmtinfo post);
-		outf (if is_assertion then "}" else "]")
+		(case tipe of
+			Assertion => ()
+		|	+ =>  (outf ","; fmt_z_tm fmtinfo post));
+		outf(case tipe of Assertion => "}" | _ =>  "]")
 	end
 );
 
@@ -1377,7 +1413,8 @@ fun €fmt_spec_no_ivars› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO) (s as
 		|	Nil => false)
 	then	()
 	else	(
-		fmt_spec fmtinfo (is_assertion, spec);
+		fmt_spec fmtinfo
+		(if is_assertion then Assertion else SpecStatement, [], spec);
 		outf "    ";
 		(fmt_label fmtinfo false label);
 		outf "\n"
@@ -1774,7 +1811,6 @@ fun €fmt_labelled›
 
 Logical constructs.
 
-We don't print out pre1 since it doesn't come from the user *)
 =SML
 fun €fmt_log_con› (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({defs=defs, spec=s, label, ...} : LOG_CON) = (
@@ -1791,7 +1827,7 @@ fun €fmt_log_con› (fmtinfo as {outf,...} : PP_FMT_INFO)
 		outf "$CON ";
 		outdefs defs;
 		outf "∑";
-		(fmt_spec fmtinfo (false, s));
+		(fmt_spec fmtinfo (SpecStatement, [], s));
 		outf "    ";(fmt_label fmtinfo false label);
 		outf "\n"
 	   end
@@ -2429,7 +2465,7 @@ Note these do a $push\_scope$ which someone on the calling chain will need to po
 This is needed because the name of the procedure or function is visible at this level and needs to be on the stack when a subprogram body is processed.
 =SML
 fun €fmt_procedure_specification› (fmtinfo as {outf,...} : PP_FMT_INFO)
-	({name=n, formal_part=f, spec=Value s, annotation=ann, globals=_} 
+	({name=n, formal_part=f, spec=Value s, annotation=ann, globals=gs} 
 		: PROCEDURE_SPECIFICATION) = (
 	push_scope n;
 	(if is_expansion_selected fmtinfo
@@ -2444,7 +2480,9 @@ fun €fmt_procedure_specification› (fmtinfo as {outf,...} : PP_FMT_INFO)
 		(fmt_id fmtinfo n);
 		(fmt_parameter_specification_list fmtinfo f);
 		outf "\n";
-		inc_tabs(); (fmt_spec fmtinfo (false, s)); dec_tabs(); outf "\n"
+		inc_tabs();
+		(fmt_spec fmtinfo (ProcedureSpecStatement, gs, s));
+		dec_tabs(); outf "\n"
    	);
 	fmt_warnings fmtinfo;
   	fmt_annotation fmtinfo ann)
@@ -2463,7 +2501,7 @@ fun €fmt_procedure_specification› (fmtinfo as {outf,...} : PP_FMT_INFO)
 =SML
 fun €fmt_function_specification› (fmtinfo as {outf,...} : PP_FMT_INFO)
 	({designator=d, return=r, formal_part=f,
-		spec=Value s, annotation=ann, globals=_}
+		spec=Value s, annotation=ann, globals=gs}
 			: FUNCTION_SPECIFICATION) = (
 	push_scope d;
 	(if is_expansion_selected fmtinfo
@@ -2477,7 +2515,9 @@ fun €fmt_function_specification› (fmtinfo as {outf,...} : PP_FMT_INFO)
 		outf (kw"FUNCTION");(fmt_id fmtinfo d);
 		(fmt_parameter_specification_list fmtinfo f); 
 		outf (kw"RETURN"); (fmt_tmark fmtinfo r); outf "\n";
-		inc_tabs(); (fmt_spec fmtinfo (false, s)); dec_tabs(); outf "\n"
+		inc_tabs();
+		(fmt_spec fmtinfo (FunctionSpecStatement, gs, s));
+		dec_tabs(); outf "\n"
 	);
 	fmt_warnings fmtinfo;
 	fmt_annotation fmtinfo ann
@@ -2686,7 +2726,7 @@ Subprogram declarations.
 
 =SML
 fun €fmt_procedure_declaration› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO)
-	({name=n, formal_part=f, spec=Value s, annotation=ann, globals=_}
+	({name=n, formal_part=f, spec=Value s, annotation=ann, globals=gs}
 		: PROCEDURE_DECLARATION) =
     in_new_scope false n (fn () =>
     (case fmt_repl of
@@ -2699,8 +2739,10 @@ fun €fmt_procedure_declaration› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO)
 	outf (kw"PROCEDURE"); 
 	(fmt_id fmtinfo n);
 	(fmt_parameter_specification_list fmtinfo f); outf "\n";
-	inc_tabs(); (fmt_spec fmtinfo (false, s)); outf ";"; 
-	outf "\n"; dec_tabs()
+	inc_tabs();
+	(fmt_spec fmtinfo (ProcedureSpecStatement, gs, s));
+	outf ";"; outf "\n";
+	dec_tabs()
     );
     fmt_warnings fmtinfo;
     fmt_annotation fmtinfo ann
@@ -2717,10 +2759,11 @@ fun €fmt_procedure_declaration› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO)
 	fmt_annotation fmtinfo ann
    )
 );
-
+=TEX
+=SML
 fun €fmt_function_declaration› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO)
 	({designator=d, return=r, formal_part=f,
-		spec=Value s, annotation=ann,globals=_}
+		spec=Value s, annotation=ann,globals=gs}
 		: FUNCTION_DECLARATION) =
     in_new_scope false d (fn () =>
     (case fmt_repl of
@@ -2733,7 +2776,9 @@ fun €fmt_function_declaration› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO)
 	outf (kw"FUNCTION");(fmt_id fmtinfo d);
 	(fmt_parameter_specification_list fmtinfo f); 
 	outf (kw"RETURN"); (fmt_tmark fmtinfo r); outf "\n";
-	inc_tabs(); (fmt_spec fmtinfo (false, s)); outf ";"; outf "\n";
+	inc_tabs();
+	(fmt_spec fmtinfo (FunctionSpecStatement, gs, s));
+	outf ";"; outf "\n";
 	dec_tabs()
     );
    fmt_warnings fmtinfo;
@@ -2751,9 +2796,10 @@ fun €fmt_function_declaration› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO)
 	fmt_annotation fmtinfo ann
     ))
 );
-
+=TEX
+=SML
 fun €fmt_procedure_stub› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO)
-	(x as {spec, name, formal_part, ...} : PROCEDURE_DECLARATION) =
+	(x as {spec, name, formal_part, globals, ...} : PROCEDURE_DECLARATION) =
     in_new_scope true name (fn () =>
     case spec of
     Nil => (
@@ -2774,14 +2820,16 @@ fun €fmt_procedure_stub› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO)
 		outf (kw"PROCEDURE"); (fmt_id fmtinfo name);
 	(fmt_parameter_specification_list fmtinfo formal_part);
 		outf "\n";
-		fmt_spec fmtinfo (false, s); outf "\n";
+		fmt_spec fmtinfo (ProcedureSpecStatement, globals, s);
+		outf "\n";
 		outf (kw2"IS""SEPARATE"^";"); outf "\n";
 		fmt_warnings fmtinfo
 	))
 );
-
+=TEX
+=SML
 fun €fmt_function_stub› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO)
-	(x as {spec, designator, formal_part, return, ...}
+	(x as {spec, designator, formal_part, return, globals, ...}
 			: FUNCTION_DECLARATION) = (
     in_new_scope true designator (fn () =>
     case spec of
@@ -2807,12 +2855,15 @@ fun €fmt_function_stub› (fmtinfo as {outf, fmt_repl} : PP_FMT_INFO)
 		(fmt_parameter_specification_list fmtinfo formal_part); 
 		outf (kw"RETURN"); 
 		(fmt_tmark fmtinfo return); outf "\n";
-		fmt_spec fmtinfo (false, s); outf "\n";
+		fmt_spec fmtinfo (FunctionSpecStatement, globals, s);
+		outf "\n";
 		outf (kw2"IS""SEPARATE"^";"); outf "\n";
 		fmt_warnings fmtinfo
 	)
     ))
 );
+=TEX
+=SML
 fun €fmt_package_stub› (fmtinfo as {outf,...} : PP_FMT_INFO) (n : ID) = (
 	outf (kw2"PACKAGE""BODY");
 	(fmt_id fmtinfo n); outf (kw2"IS""SEPARATE"^";");
