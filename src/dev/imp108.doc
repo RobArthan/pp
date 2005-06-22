@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%  %Z% $Date: 2002/12/16 20:58:04 $ $Revision: 1.22 $ $RCSfile: imp108.doc,v $
+%  %Z% $Date: 2003/08/01 12:43:12 $ $Revision: 1.23 $ $RCSfile: imp108.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -21,10 +21,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Portability Infrastructure Implementation}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP108}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.22 $%
+\def\SCCSversion{$Revision: 1.23 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/12/16 20:58:04 $%
+\TPPdate{\FormatDate{$Date: 2003/08/01 12:43:12 $%
 }}
 %\TPPstatus{Draft}
 \TPPstatus{Draft}
@@ -140,7 +140,15 @@ structure ÛExtendedIOÝ : ExtendedIO = struct
 	open BasicIO;
 	val Ûflush_outÝ : outstream -> unit = TextIO.flushOut;
 	val Ûopen_appendÝ : string -> outstream = TextIO.openAppend;
+=POLYML
 	val Ûinput_lineÝ : instream -> string = TextIO.inputLine;
+=NJML
+	fun input_line (strm : instream) : string = (
+		case TextIO.inputLine strm of
+			SOME s => s
+		|	NONE => ""
+	);
+=SML
 	fun Ûcan_inputÝ (strm : instream, n : int) : bool = (
 		case TextIO.canInput(strm, n) of
 			NONE => false
@@ -151,9 +159,6 @@ structure ÛExtendedIOÝ : ExtendedIO = struct
 			TextIO.StreamIO.getReader(TextIO.getInstream instream);
 			val _ = TextIO.setInstream
 			(instream, TextIO.StreamIO.mkInstream(rd,
-=NJML
-				SOME
-=SML
 				buf));
 		in	case ioDesc of
 				NONE => false
@@ -214,8 +219,7 @@ fun Ûget_io_descÝ (instrm : TextIO.instream) : OS.IO.iodesc option * string = (
 	let	val (rdr, bfr) =
 		TextIO.StreamIO.getReader(TextIO.getInstream instrm);
 		val TextPrimIO.RD {ioDesc = iod, name = name, ... } = rdr;
-		val b = case bfr of "" => NONE | _ => SOME bfr;
-	in	TextIO.setInstream(instrm, TextIO.StreamIO.mkInstream(rdr, b));
+	in	TextIO.setInstream(instrm, TextIO.StreamIO.mkInstream(rdr, bfr));
         	(iod, name)
 	end
 );
@@ -291,9 +295,9 @@ fun Ûcompile_eitherÝ (
 	handler : HANDLER) = (
 	let	val reader = mk_text_reader(f, name, isopt);
 		val strm = TextIO.mkInstream
-			(TextIO.StreamIO.mkInstream(reader, NONE));
+			(TextIO.StreamIO.mkInstream(reader, ""));
 		fun go () = (
-			Compiler.Interact.useStream strm
+			Backend.Interact.useStream strm
 			handle ex => (
 				handler ex
 			)
@@ -309,20 +313,20 @@ fun Ûcompile1Ý (name : string, f : TEXT_SOURCE, g : TEXT_FILTER, h : HANDLER)
 				: unit = (
 	let	fun say s = TextIO.output(std_out, g s);
 		fun flush () = TextIO.flushOut std_out;
-		val old = !Compiler.Control.Print.out;
-	in	Compiler.Control.Print.out := {flush = flush, say = say};
+		val old = !Control.Print.out;
+	in	Control.Print.out := {flush = flush, say = say};
 		compile_either(f, name, NONE, h);
-		Compiler.Control.Print.out := old
+		Control.Print.out := old
 	end
 );
 fun Ûcompile2Ý (strm : instream, f : TEXT_SOURCE, g : TEXT_FILTER, h : HANDLER)
 				: unit = (
 	let	fun say s = TextIO.output(std_out, g s);
 		fun flush () = TextIO.flushOut std_out;
-		val old = !Compiler.Control.Print.out;
-	in	Compiler.Control.Print.out := {flush = flush, say = say};
+		val old = !Control.Print.out;
+	in	Control.Print.out := {flush = flush, say = say};
 		compile_either(f, "", SOME strm, h);
-		Compiler.Control.Print.out := old
+		Control.Print.out := old
 	end
 );
 =TEX
@@ -358,15 +362,15 @@ val ÛexitÝ : int -> unit =
 val Ûprint_depthÝ : int -> unit = 
 =NJML
 	fn d => (
-	Compiler.Control.Print.printDepth := d;
-	Compiler.Control.Print.printLength := d;
-	Compiler.Control.Print.stringDepth := d
+	Control.Print.printDepth := d;
+	Control.Print.printLength := d;
+	Control.Print.stringDepth := d
 );
 =POLYML
 	PolyML.print_depth;
 =TEX
 =NJML
-type 'a ÛPP_SPECÝ = string list * (Compiler.PrettyPrint.ppstream -> 'a -> unit); 
+type 'a ÛPP_SPECÝ = string list * (PrettyPrint.stream -> 'a -> unit); 
 =POLYML
 type 'a PP_SPEC =
 	(string -> unit) * (int * bool -> unit) * (int * int -> unit) * (unit -> unit)
@@ -374,23 +378,22 @@ type 'a PP_SPEC =
 =TEX
 =NJML
 fun Ûinstall_ppÝ ((path, pp) : 'a PP_SPEC) : unit = (
-	Compiler.PPTable.install_pp path pp
+	CompilerPPTable.install_pp path pp
 );
 =TEX
 =SML
-fun Ûmake_ppÝ (path : string list)
+fun make_pp (path : string list)
 		(pprint :
 			(string -> unit) * (int * bool -> unit)
 			* (int * int -> unit) * (unit -> unit) -> 'a -> unit) :
 		'a PP_SPEC =
-=NJML
-(	let	open Compiler.PrettyPrint;
+(	let	open PrettyPrint;
 		fun pp pps = (
 			pprint 
-			(add_string pps,
-			fn (i, f) => begin_block pps (if f then CONSISTENT else INCONSISTENT) i,
-			add_break pps,
-			fn () => end_block pps));
+			(string pps,
+			fn (i, f) => openHOVBox pps (* (if f then CONSISTENT else INCONSISTENT) *) (Rel i),
+			fn (i, j) => break pps {nsp=i, offset=j},
+			fn () => closeBox pps));
     in
       (path, pp)
     end
@@ -417,6 +420,9 @@ end (* of structure PPCompiler *);
 =SML
 structure ÛPPStringÝ : PPString = struct
 	open SML90;
+=NJML
+	val  ord : string ->  int = fn s =>  (ord s handle Subscript =>  raise Ord);
+=SML
 	fun string_of_exn (ex : exn) : string = (
 		let	val nm = exnName ex;
 			val msg = exnMessage ex;
