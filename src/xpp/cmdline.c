@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.28 2004/11/23 15:52:51 rda Exp rda $
+ * $Id: cmdline.c,v 2.29 2005/01/27 17:08:05 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -458,6 +458,7 @@ void take_command_input(Widget w, XmTextVerifyCallbackStruct *cbs)
 	char *buf;
 	char *p = cbs->text->ptr;
 	int len = cbs->text->length;
+	XmTextPosition last_pos;
 	Widget cmd_w;
 	if(len == 0 || cbs->text->format != XmFMT_8_BIT) {
 		beep();
@@ -474,8 +475,8 @@ void take_command_input(Widget w, XmTextVerifyCallbackStruct *cbs)
 	strncpy(buf, p, len);
 	buf[len] = '\0';
 	XmTextSetString(cmd_w, buf);
-	XmTextSetInsertionPosition(cmd_w,
-	XmTextGetLastPosition(cmd_w));
+	last_pos = XmTextGetLastPosition(cmd_w);
+	XmTextSetInsertionPosition(cmd_w, last_pos);
 	if(get_map_state(cmd_w) == IsViewable) {
 		set_input_focus(cmd_w);
 	}
@@ -537,9 +538,13 @@ static void list_select_cb(
 	XmListCallbackStruct *lcbs = cbs;
 	CmdLineData *cbdata = cbd;
 	char *cmd = NULL;
+	XmTextPosition last_pos;
 	XmStringGetLtoR(lcbs->item, XmSTRING_DEFAULT_CHARSET, &cmd);
 	if(cmd) {
 		XmTextSetString(cbdata->cmd_w, cmd);
+		last_pos = XmTextGetLastPosition(cbdata->cmd_w);
+		XmTextSetInsertionPosition(cbdata->cmd_w, last_pos);
+		XmTextShowPosition(cbdata->cmd_w, last_pos);
 		XtFree(cmd);
 	} 
 }
