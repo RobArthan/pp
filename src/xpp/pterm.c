@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.49 2004/11/30 17:24:49 rda Exp rda $
+ * $Id: pterm.c,v 2.50 2005/01/29 17:35:23 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -516,7 +516,7 @@ static sig_info	sig_infos []  = {
 
 static void default_sigs(void);
 static Boolean listening_state(int req);
-static void set_pty_attrs(int fd);
+static void set_pty_attrs(int fd, void die(int));
 
 void get_pty(void)
 {
@@ -577,7 +577,7 @@ void get_pty(void)
 #endif /* ifdef USE_GRANTPT */
 
 #ifdef SET_ATTRS_IN_PARENT
-	set_pty_attrs(slave_fd);
+	set_pty_attrs(slave_fd, exit);
 #endif
 
 /*
@@ -646,7 +646,7 @@ void get_pty(void)
 		if(setsid() < 0) {
 			msg("system error", "setsid failed");
 			perror("xpp");
-			exit(9);
+			_exit(9);
 		}
 
 		if((tty_fd = open("/dev/tty", O_RDWR)) >= 0){
@@ -655,7 +655,7 @@ void get_pty(void)
 		}
 
 #ifndef SET_ATTRS_IN_PARENT
-		set_pty_attrs(STDIN);
+		set_pty_attrs(STDIN, _exit);
 #endif
 
 /*
@@ -677,21 +677,21 @@ void get_pty(void)
 	/* **** error if reach here **** */
 		fprintf(stderr, "xpp: could not exec: \"%s\"\n", global_options.command_line);
 		perror("xpp");
-		exit(12);
+		_exit(12);
 	}
 }
 
 /*
  * Set the terminal attributes in the pseudo-terminal
  */
-static void set_pty_attrs(int fd)
+static void set_pty_attrs(int fd, void die(int))
 {
 	struct termios tio;
 	if(	PUSH_MODULES(fd)
 	||	GET_ATTRS(fd, &tio)) {
 		msg("system error", "I/O control operation on pseudo-terminal failed (GET in parent)");
 		perror("xpp");
-		exit(4);
+		die(4);
 	}
 
 #ifdef USE_CFMAKERAW
@@ -713,7 +713,7 @@ static void set_pty_attrs(int fd)
 	if(SET_ATTRS(fd, &tio)) {
 		msg("system error", "I/O control operation on pseudo-terminal failed (SET in parent)");
 		perror("xpp");
-		exit(5);
+		die(5);
 	}
 #ifdef	USE_TIOCEXCL
 	ioctl(fd, TIOCEXCL, 0);
@@ -1386,7 +1386,7 @@ int new_session(char *argv[], Boolean async)
 				if(setsid() < 0) {
 					msg("system error", "setsid failed");
 					perror("xpp");
-					exit(13);
+					_exit(13);
 				}
 				/* exec argv[0] "" */
 				execvp(argv[0], argv);
@@ -1396,7 +1396,7 @@ int new_session(char *argv[], Boolean async)
 				exit(19);
 			} else {
 				/* Child - exit */
-				exit(0);
+				_exit(0);
 			}
 		} else {
 			/* Parent - wait for the child */
@@ -1421,7 +1421,7 @@ int new_session(char *argv[], Boolean async)
 			/* **** error if reach here **** */
 			msg("system error", "could not exec");
 			perror("xpp");
-			exit(22);
+			_exit(22);
 		} else  {
 			int status;
 			/* Parent - wait for the child */
@@ -1467,8 +1467,8 @@ void  run_in_background(void)
 		msg("system error", "fork failed");
 		perror("xpp");
 		exit(14);
-	} else if (new_pid >  0) { 
-		exit(0);
+	} else if (new_pid > 0) { 
+		_exit(0);
 	}
 }
 
