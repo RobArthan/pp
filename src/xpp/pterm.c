@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: pterm.c,v 2.50 2005/01/29 17:35:23 rda Exp rda $
+ * $Id: pterm.c,v 2.51 2005/07/11 16:35:09 rda Exp rda $
  *
  * pterm.c -  pseudo-terminal operations for the X/Motif ProofPower
  * Interface
@@ -324,8 +324,7 @@ macros before using them.
 /* For the following see "Data transfer to application" below */
 #define INIT_Q_LEN 40000
 
-/* The following is the name of an environment variable used */
-/* in the ProofPower system initialisation. */
+/* Environment variable used in the ProofPower system initialisation. */
 
 #define PPLINELENGTH "PPLINELENGTH"
 
@@ -669,6 +668,10 @@ void get_pty(void)
 			sprintf(txt, PPLINELENGTH "=%d", (int) line_length);
 			putenv(txt);
 		}
+/*
+ * Stop apps that check the TERM environment variable mistreating us:
+ */
+		putenv("TERM=xpp");
 /*
  * Now get the command line options for the command and exec it:
  */
