@@ -1,7 +1,7 @@
 
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: xmisc.c,v 2.31 2004/11/23 15:52:51 rda Exp rda $
+ * $Id: xmisc.c,v 2.32 2005/01/27 17:08:57 rda Exp rda $
  *
  * xmisc.c -  miscellaneous X/Motif routines for the X/Motif ProofPower
  * Interface
@@ -186,9 +186,9 @@ void check_text_window_limit(Widget w, NAT max)
 
 	sprintf(msg, fmt, max);
 
-	journal_editable = True;
+	updating_journal = True;
 	XmTextReplace(w, 0, bytes_to_go, msg);
-	journal_editable = False;
+	updating_journal = False;
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * copy_font_list: copy the font list resource from one text

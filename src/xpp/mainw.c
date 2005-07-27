@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.87 2005/01/27 17:09:26 rda Exp rda $
+ * $Id: mainw.c,v 2.88 2005/02/17 16:15:43 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -462,9 +462,9 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 	overwritten = buf[i];
 	buf[i] = '\0';
 /* write it to the journal */
-	journal_editable = True;
+	updating_journal = True;
 	XmTextInsert(journal, ins_pos, buf);
-	journal_editable = False;
+	updating_journal = False;
 /* undo null-termination */
 	buf[i] = overwritten;
 /* see where we are: */
@@ -828,10 +828,11 @@ static Boolean setup_main_window(
 		register_palette_client(journal);
 
 		XtVaGetValues(journal, XmNeditable, &editable, NULL);
+
 		XtVaSetValues(journal, XmNtraversalOn, editable, NULL);
-		if(editable) {
-			XtOverrideTranslations(script, text_translations);
-		}
+
+		XtOverrideTranslations(journal, text_translations);
+
 		XtVaGetValues(mainpanes, XmNchildren, &children,
 			XmNnumChildren, &num_children, NULL);
 
@@ -853,7 +854,7 @@ static Boolean setup_main_window(
 			NULL,
 			XtListHead);
 
-		journal_editable = False;
+		updating_journal = False;
 		XtAddCallback(journal, XmNmodifyVerifyCallback, journal_modify_cb, 0);
 
 	}
@@ -1535,7 +1536,7 @@ static void journal_modify_cb (
 		XtPointer	xtp)
 {
 	XmTextVerifyCallbackStruct *cbs = xtp;
-	if(journal_editable) {
+	if(updating_journal) {
 		return;
 	} /* else */
 	take_command_input(script, cbs);
