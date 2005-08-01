@@ -34,9 +34,9 @@ for versions 2.7.4 to 2.7.6 of the Compliance Tool during 2004/2005.}
 
 \def\EMail{{\tt rda@lemma-one.com}}
 
-\def\Phone{+44 118 958 4409}
+\def\Phone{+44 118 948 4409}
 
-\def\Fax{+44 118 956 1920}
+\def\Fax{+44 118 946 1920}
 
 %%%%% YOU MAY WANT TO CHANGE THE FOLLOWING TO GET A NICE FRONT PAGE:
 \def\FrontPageTitle{ {\huge \Title } }
@@ -51,9 +51,9 @@ for versions 2.7.4 to 2.7.6 of the Compliance Tool during 2004/2005.}
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.15 $%
+\def\Version{$Revision: 1.16 $%
 }
-\def\Date{\FormatDate{$Date: 2005/06/02 15:05:19 $%
+\def\Date{\FormatDate{$Date: 2005/07/26 16:09:02 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -99,7 +99,7 @@ h{\raggedright
 \item[Issue 1.13] Added tests for QQ74.
 \item[Issue 1.14] Compliance Notation reserved words are now prefixed by a dollar sign.
 \item[Issue 1.15] Added test to show that results of {\em fmt\_web\_clause} can be processed back into the tool.
-\item[Issue 1.16] Added tests for QQ94 and QQ95.
+\item[Issues 1.16, 1.17] Added tests for QQ94 and QQ95.
 \end{description}
 
 %%%%%  CHANGES FORECAST:
@@ -150,6 +150,10 @@ fun clean_up () = (
 For batch use turn off subgoal package output:
 =SML
 set_flag("subgoal_package_quiet", not(ExtendedIO.is_term_in std_in));
+=TEX
+Work in proof context cn1 by default:
+=SML
+set_pc "cn1";
 =TEX
 \section{THE TESTS}
 \subsection{PC61: Data refinement in global dependencies of procedures}
@@ -979,36 +983,16 @@ store_mt_results
 mt_run
  [("qq83.1.1", use_file , "int525.A.ML", ())];
 =TEX
-\subsection{QQ94: Generate Domain Conditions from Type Constraints on Procedure Parameters}
+\subsection{QQ94: Generate Domain Conditions from Subtype Constraints in Procedure Call, Assignment and Return Statements}
 =SML
-clean_up();
-new_script {name = "94.1.ads", state = initial_cn_state};
-πCN
-package B is
-  procedure P;
-end B;
-∞
-=SML
-new_script {name = "94.1.adb", state = get_cn_state ()};
-fun chk94_1() =
-πCN
-package body B is
-   X, Y : Integer;
-   function F (X : Integer) return Integer ò [ true ] is begin return X; end F;
-   procedure P Ñ X [ true ] is begin X := F(Y); end P;
-end B;
-∞
-store_mt_results
-mt_run_fail
-[
-	("94.1.1", chk94_1, (),  gen_fail_msg "zid" 508077 ["Y"])
-];
-=TEX
-\subsection{QQ95: Fix Inappropriate error 508081}
-=SML
-clean_up();
 val old_cdc = set_int_control("cn_domain_conds", cn_standard_domain_conds);
-new_script {name = "95.1", state = initial_cn_state};
+=TEX
+The first example deals with procedure calls.
+In the following, the call to {\tt q} from {\tt p} results in a domain condition asserting that  the array index {\tt i} is in range.
+Without this, the correctness of {\tt p} would not be provable.
+=SML
+clean_up();
+new_script {name = "94.1", state = initial_cn_state};
 πCN
  procedure main
  is
@@ -1031,9 +1015,6 @@ new_script {name = "95.1", state = initial_cn_state};
   Ñ [true]
  end;
 ∞
-=SML
-val _ = set_int_control("cn_domain_conds", old_cdc);
-=TEX
 =SML
 set_pc "cn1";
 set_goal([], get_conjecture "-" "vcMAIN_1");
@@ -1064,7 +1045,138 @@ fun check_conjecture name = (
 );
 store_mt_results
 mt_run
- [("qq95.1.1", all (map (hd o fst) (get_conjectures "-")), check_conjecture, true)];
+ [("qq94.1.1", all (map (hd o fst) (get_conjectures "-")), check_conjecture, true)];
+=TEX
+The second example deals with assignment statements.
+The procedure {\tt p} only achieves its post-condition given the domain condition that asserts that the right-hand side of the assignment statement in the body of {\tt p} lies in the subtype of the left-hand side.
+=SML
+clean_up();
+new_script {name = "94.2.ads", state = initial_cn_state};
+πCN
+package A is
+   type T is range -100 .. 100;
+   subtype ST is T range -10 .. 10;
+   procedure P (U : in ST; V : out ST);
+end A;
+∞
+=TEX
+=SML
+new_script {name = "94.2.adb", state = get_cn_state ()};
+πCN
+package body A is
+   X, Y : T;
+   ß procedure P ¢	(2)
+begin
+   Ñ Y [ Y ç ST ]	(3)
+end A;
+∞
+πCN
+ (2) È
+   procedure P (U : in ST; V : out ST)
+      Ñ V [ V ç ST ]
+   is
+   begin
+      V := U + 1;
+   end P;
+∞
+πCN
+ (3) √
+   P (U => X, V => Y);
+∞
+=TEX
+=SML
+val thms_94_2 = map (fn name =>
+	(set_goal ([], get_conjecture "-"  name);
+	a (cn_vc_simp_tac []);
+	save_pop_thm name))
+	((rev o map (hd o fst) o get_conjectures) "-");
+store_mt_results
+mt_run
+ [("qq94.2.1", all (map (hd o fst) (get_conjectures "-")), check_conjecture, true)];
+=TEX
+The third example deals with return statements.
+It is essentially the same as the second example but using a function in place of a procedure with an {\tt out} mode parameter.
+=SML
+clean_up();
+new_script {name = "94.3.ads", state = initial_cn_state};
+πCN
+package A is
+   type T is range -100 .. 100;
+   subtype ST is T range -10 .. 10;
+   procedure P (U : in ST; V : out ST);
+end A;
+∞
+=TEX
+=SML
+new_script {name = "94.3.adb", state = get_cn_state ()};
+πCN
+package body A is
+   X, Y : T;
+   ß function F ¢	(2)
+begin
+   Ñ Y [ Y ç ST ]	(3)
+end A;
+∞
+πCN
+ (2) È
+   function F (U : in ST) return ST
+      ò [ F U ç ST ]
+   is
+   begin
+      return U + 1;
+   end F;
+∞
+πCN
+ (3) √
+   Y := F(X);
+∞
+=TEX
+=SML
+set_goal([], get_conjecture "-" "vc2_1");
+a(REPEAT strip_tac THEN asm_rewrite_tac[]);
+val _ = save_pop_thm "vc2_1";
+=TEX
+=SML
+set_goal([], get_conjecture "-" "vc3_1");
+a(REPEAT strip_tac);
+a(strip_asm_tac (rewrite_rule[](z_get_specÒFÆ)));
+a(all_fc_tac[z_fun_dom_clauses]);
+a(DROP_NTH_ASM_T 4 ante_tac THEN asm_rewrite_tac[]);
+val _ = save_pop_thm "vc3_1";
+=TEX
+=SML
+store_mt_results
+mt_run
+ [("qq94.3.1", all (map (hd o fst) (get_conjectures "-")), check_conjecture, true)];
+=SML
+val _ = set_int_control("cn_domain_conds", old_cdc);
+=TEX
+=TEX
+\subsection{QQ95: Fix Inappropriate error 508081}
+=SML
+clean_up();
+new_script {name = "95.1.ads", state = initial_cn_state};
+πCN
+package B is
+  procedure P;
+end B;
+∞
+=SML
+new_script {name = "95.1.adb", state = get_cn_state ()};
+fun chk95_1() =
+πCN
+package body B is
+   X, Y : Integer;
+   function F (X : Integer) return Integer ò [ true ] is begin return X; end F;
+   procedure P Ñ X [ true ] is begin X := F(Y); end P;
+end B;
+∞
+=SML
+store_mt_results
+mt_run_fail
+[
+	("95.1.1", chk95_1, (),  gen_fail_msg "zid" 508077 ["Y"])
+];
 =TEX
 \section{EPILOGUE}
 =SML
