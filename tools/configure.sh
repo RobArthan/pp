@@ -9,7 +9,7 @@
 #
 # Contact: Rob Arthan < rda@lemma-one.com >
 #
-# $Id: configure.sh,v 1.38 2005/02/27 15:30:13 rda Exp rda $
+# $Id: configure.sh,v 1.39 2005/03/01 17:18:38 rda Exp rda $
 #
 # Environment variables may be used to force various decisions:
 #
@@ -30,7 +30,7 @@
 #                    (default: dynamic).
 #
 # PPMOTIFHOME      - directory containing the include and lib directories
-#                    for Motif (default: as for X11 on your OS)
+#                    for Motif (default: tries to find it in typical locations).
 #
 # PPTARGETDIR      - as PPHOME, overrides PPHOME if set and non-empty.
 #
@@ -248,7 +248,7 @@ then	if	[ "${PPMOTIFLINKING:-}" != "" ]
 	then	case "$PPMOTIFLINKING" in
 			dynamic) true;;
 			static)  true;;
-			*)	give_up "PPCOMPILER must be one of POLYML or SMLNJ";;
+			*)	give_up "PPMOTIFLINKING must be one of \"default\" or \"static\"";;
 		esac
 		echo "Using $PPMOTIFLINKING linking for Motif as specified"
 	else	PPMOTIFLINKING=dynamic
@@ -260,13 +260,20 @@ then	if	[ "${PPMOTIFLINKING:-}" != "" ]
 	USERCFLAGS=${PPUSERCFLAGS:-}
 	USERCLIBS=${PPUSERCLIBS:-}
 	if	[ "${PPMOTIFHOME:-}" != "" ]
-	then	echo "Using $PPMOTIFHOME for Motif include files and binaries"
+	then	if	[ ! -d $PPMOTIFHOME ]
+		then	give_up "directory \"$PPMOTIFHOME\" does not seem to exist"
+		elif	[ ! -d $PPMOTIFHOME/include/Xm ]
+		then	give_up "directory \"$PPMOTIFHOME\" does not seem to contain the Motif include files"
+		else	echo "Using $PPMOTIFHOME for Motif include files and binaries"
+		fi
 	elif	[ -d /usr/X11R6/include/Xm ]
 	then	PPMOTIFHOME=/usr/X11R6
 	elif	[ -d /usr/openwin/include/Xm ]
 	then	PPMOTIFHOME=/usr/openwin
 	elif	[ -d /usr/include/Xm ]
 	then	PPMOTIFHOME=/usr
+	elif	[ -d /sw/include/Xm ]
+	then	PPMOTIFHOME=/sw
 	fi
 	if	[ "${PPMOTIFHOME:-}" != "" ]
 	then	USERCFLAGS="-I$PPMOTIFHOME/include $USERCFLAGS"
