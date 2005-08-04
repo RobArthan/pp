@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%  mdt050.doc %Z% $Date: 2002/10/17 16:26:32 $ $Revision: 1.10 $ $RCSfile: mdt050.doc,v $
+%  mdt050.doc %Z% $Date: 2005/05/17 16:19:38 $ $Revision: 1.11 $ $RCSfile: mdt050.doc,v $
 
 =TEX
 % TQtemplate.tex
@@ -22,10 +22,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Module Tests for Z Generated Constants}  %% Mandatory field
 \TPPref{DS/FMU/IED/MDT050}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.10 $%
+\def\SCCSversion{$Revision: 1.11 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 16:26:32 $%
+\TPPdate{\FormatDate{$Date: 2005/05/17 16:19:38 $%
 }}  %% Mandatory field (with sensible default)
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -92,6 +92,7 @@ Added tests for cache clashes.
 \item[Issue 1.9] Copyright and banner updates for open source release.
 \item[Issue 1.10] PPZed-specific updates for open source release
 \item[Issue 1.11] Adjustments to allow for tidier error-handling.
+\item[Issue 1.12] Now tests schema projection with operands having same signatures; also changed to work in child database.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -147,10 +148,24 @@ directly available to the tests.
 open_theory"z_language";
 delete_theory"mdt050" handle _ => ();
 new_theory"mdt050";
+val cache_theory = hd(get_cache_theories());
+if cache_theory mem get_ancestors "-"
+then ()
+else new_parent cache_theory;
 =TEX
 
 \section{SUPPORTING TEST FUNCTIONS}
-
+=SML
+fun get_cached_defn thing = (
+	let	fun aux [] = get_defn "-" thing
+		|   aux (thy :: more) = (
+			get_defn thy thing
+			handle Fail _ => aux more
+		);
+	in	aux (get_cache_theories())
+	end
+);
+=TEX
 The functions introduced in this section are using in testing the Z type
 inferrer. Their provision enables the test cases to be implemented in a concise
 (and hopefully readable) form.
@@ -182,7 +197,7 @@ fun Ûz_tm_of_stringÝ  (s : string) : Z_TM = (
 );
 =SML
 val Ûgenerate_termÝ : string -> TERM = 
-	 (do_in_theory "z_language" term_of_z_tm) o z_tm_of_string;
+	 (do_in_theory cache_theory term_of_z_tm) o z_tm_of_string;
 =TEX
 =SML
 fun Ûz_decl_of_stringÝ (s : string)  = (
@@ -229,9 +244,9 @@ fun ÛlabelÝ s = "mdt050."^s
 =SML
 fun Ûapply1Ý ((mapping, cgen, cons1), (cons2, decl)) = (
 let	val tm = mapping decl;
-	val thm = do_in_theory "z_language" cgen tm;
+	val thm = do_in_theory cache_theory cgen tm;
 	val constr = cons1^cons2;
-	val flag = ((get_defn "z_language" constr;true)
+	val flag = ((get_cached_defn constr;true)
 			handle Fail _ => false);
 in
 	(label constr, flag)
@@ -240,9 +255,9 @@ end);
 =SML
 fun Ûapply2Ý v ((mapping, cgen, cons1), (cons2, decl)) = (
 let	val tm = mapping (decl, mk_z_true, v);
-	val thm = do_in_theory "z_language" cgen tm;
+	val thm = do_in_theory cache_theory cgen tm;
 	val constr = cons1^cons2;
-	val flag = (get_defn "z_language" constr;true
+	val flag = (get_cached_defn constr;true
 			handle Fail _ => false);
 in
 	(label constr, flag)
@@ -454,7 +469,7 @@ val grp_10 =
 ];
 val data_10 =
 let
-	val (ns, schs) = split ((rev o tl o rev) data_3);
+	val (ns, schs) = split data_3;
 	val (ss, sch) = (hd o rev) data_3;
 	val sprojnames = map (fn s => ss^s) ns;
 	val sprojs = map (fn s => (sch, s)) schs;
@@ -786,12 +801,12 @@ store_mt_results do_grp_13 ();
 This is an additional set of tests to address caching problems.
 =SML
 open	ZGeneratedConstants;
-open_theory"z_language";
+open_theory cache_theory;
 force_delete_theory "cachetest_mdt050" handle _ => ();
 new_theory "cachetest_mdt050";
 mapfilter lock_theory (get_cache_theories());
 set_cache_theories ("cachetest_mdt050" :: get_cache_theories());
-open_theory"z_language";
+open_theory cache_theory;
 force_delete_theory "cachetest_mdt050_1" handle _ => ();
 new_theory "cachetest_mdt050_1";
 local val decs = mk_z_dec(
@@ -802,9 +817,9 @@ in
 val sch_res = schema_gen_semantic_const schema;
 end;
 val seta_res = seta_gen_semantic_const 
-	(mk_z_seta(ñ‘decl_ofñ[get, cache, theory, test, a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r : X]®®®, 
+	(mk_z_seta(ñ‘decl_ofñ[get, cache, theory, test, a,b,c,d,e,f,g,h,i,j,k,l,m,n,p,q,r : X]®®®, 
 	mk_z_true, mk_z_true));
-open_theory"z_language";
+open_theory cache_theory;
 force_delete_theory "cachetest_mdt050_2" handle _ => ();
 new_theory "cachetest_mdt050_2";
 =TEX
@@ -825,7 +840,7 @@ end;
 store_mt_results_show (mt_runf (op =$)) [(
 	"Cached seta",
 	concl o seta_gen_semantic_const ,
-	(mk_z_seta(ñ‘decl_ofñ[get, cache, theory, test, a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r  : X]®®®, 
+	(mk_z_seta(ñ‘decl_ofñ[get, cache, theory, test, a,b,c,d,e,f,g,h,i,j,k,l,m,n,p,q,r  : X]®®®, 
 	mk_z_true, mk_z_true)),
 	concl seta_res)];
 =IGN
