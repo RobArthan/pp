@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.292 $ $RCSfile: imp507.doc,v $ $Date: 2005/05/10 16:50:23 $
+% imp507.doc %Z% $Revision: 1.293 $ $RCSfile: imp507.doc,v $ $Date: 2005/05/12 16:57:45 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.292 $%
+\def\SCCSversion{$Revision: 1.293 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/05/10 16:50:23 $%
+\TPPdate{\FormatDate{$Date: 2005/05/12 16:57:45 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -228,6 +228,7 @@ by doing all the work of checking and generating the VC terms in {\it call\_vcs}
 Use clauses in package specifications now propagate into the package body.
 \item[Issue 1.290] Added support for labelled statements and goto statements.
 \item[Issues 1.291, 1.292] Added {\em create\_package\_spec\_theory}.
+\item[Issue 1.293] Tidied checking in cases where one subprogram specification statement refines another.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -3585,6 +3586,27 @@ fun €call_vcs›
 	end
 );
 =TEX
+The following is used where one subprogram specification statement refines another.
+The refining specification statement is type-checked first which gives nicer error messages.
+=SML
+fun €call_vcs_spec›
+	(globals : Z_ID list OPT)
+	((sl1, spc) : SPECLAB * SPEC) : TERM list * ROUTE OPT list * SPEC = (
+	let	val sl0 : SPECLAB = {
+			spec = spc,
+			formal_body_flag = #formal_body_flag sl1,
+			fun_flag = #fun_flag sl1,
+			till_flag = #till_flag sl1,
+			wp_env = #wp_env sl1,
+			in_scope = #in_scope sl1
+		};
+		val st0 = STNull SNImplicit;
+		val (_, _, spc1) = call_vcs globals (sl0, st0);
+		val st1 = STSpecNoIvars{spec= spc1, label="", is_assertion = false};
+	in	call_vcs globals (sl1, st1)
+	end
+);
+=TEX
 =SML
 fun €speclab_update_spec›
 	( sl : SPECLAB, s : SPEC ) : SPECLAB = (
@@ -4144,7 +4166,7 @@ fun €spec_stmt› (specstmt as {spec : SPEC, label : LABEL}) : SPEC = (
 	(if	test_flag #speclabel_flag 1
 	then	spec_stmt_speclabel
 	else	spec_stmt_otherwise) specstmt;
-	vcs_speclabel_aux true {label = label, statement = STNull SNNull}
+	vcs_speclabel_aux true {label = label, statement = STNull SNImplicit}
 );
 =TEX
 \subsection{The SID function k\_slot\_stmt}
@@ -4660,7 +4682,7 @@ let
 	val new_block2 = block_declab (block2, new_declab2);
 	val dummy2 = (blocks := (block 1 :: (new_block2 :: tl(tl (!blocks)))));
 	(* create the vcs for a null statement *)
-	val (_, (vcs, routes, spec), _ ) = vcs_body_proc_aux (STNull SNNull)
+	val (_, (vcs, routes, spec), _ ) = vcs_body_proc_aux (STNull SNImplicit)
 		handle (exn as Fail _) =>
 		(blocks :=
 		block1 :: block2 :: tl(tl(!blocks));
@@ -4851,9 +4873,7 @@ fun €form_proc_pack_body›
 	(block2 : BLOCK, formal_proc3 : FORMAL_PROC,
 			package4 : PACKAGE, speclab5 : SPECLAB)
 	(form_proc: FORMAL_PROC) : SPEC = (
-	let	val st = STSpecNoIvars{spec= #spec form_proc,
-					label="", is_assertion = false};
-		val (vcs, routes, spec) = call_vcs (Value(#globals form_proc)) (speclab5, st);
+	let	val (vcs, routes, spec) = call_vcs_spec (Value(#globals form_proc)) (speclab5, #spec form_proc);
 	in	store_vcs (
 			#name formal_proc3, vcs, 
 			Value (speclab_update_spec(speclab5,spec)), routes,
@@ -4945,9 +4965,7 @@ fun €form_proc_pack_body_aux›
 			wp_env = wp_env5a,
 			in_scope = in_scope5a
 		};
-		val st = STSpecNoIvars{spec= #spec form_proc, label="", is_assertion = false};
-
-		val (vcs, routes, spec) = call_vcs (Value(#globals form_proc)) (speclab5a, st);
+		val (vcs, routes, spec) = call_vcs_spec (Value(#globals form_proc)) (speclab5a, #spec form_proc);
 	in	store_vcs (
 			#name formal_proc3, vcs, 
 			Value (speclab_update_spec(speclab5a,spec)), routes,
@@ -4971,10 +4989,7 @@ fun €form_proc_subunit› (form_proc: FORMAL_PROC) : unit = (
 		deletion_info := s_enter tbn1_bn2 subunit3 (!deletion_info);
 		if	#specif_flag subunit3
 		then	
-	let
-		val st = STSpecNoIvars{spec= #spec form_proc,
-			label="", is_assertion = false};
-		val _ = check_globals_proc block_name1 [] form_proc (#globs subunit3);
+	let	val _ = check_globals_proc block_name1 [] form_proc (#globs subunit3);
 		val dict3 = #dict(#in_scope subunit3);
 		val {vc_vars = vc_var_ids3, vc_pars = vc_par_ids3,
 			vc_aux_vars = vc_aux_var_ids3, ...} = get_local_vars dict3;
@@ -5003,7 +5018,7 @@ fun €form_proc_subunit› (form_proc: FORMAL_PROC) : unit = (
 			wp_env = wp_env4,
 			in_scope = in_scope4
 		};
-		val (resulting_vcs, routes, spec) = call_vcs (Value(#globals form_proc)) (speclab4, st)
+		val (resulting_vcs, routes, spec) = call_vcs_spec (Value(#globals form_proc)) (speclab4, #spec form_proc)
 	in	store_vcs (
 			block_name1, resulting_vcs, 
 			Value (speclab_update_spec(speclab4,spec)), routes,
@@ -5033,7 +5048,7 @@ fun €check_stub_spec_proc› (form_proc: FORMAL_PROC) : unit = (
 				wp_env = wp_env,
 				in_scope = in_scope
 			};
-		in	 call_vcs (Value(#globals form_proc)) (speclab, (STNull SNNull)); ()
+		in	 call_vcs (Value(#globals form_proc)) (speclab, (STNull SNImplicit)); ()
 		end
 	else	()
 );
