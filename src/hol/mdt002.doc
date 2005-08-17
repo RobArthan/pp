@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Tests for System Control and Basic Error Reporting}  %% Mandatory field
 \TPPref{DS/FMU/IED/MDT002}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.19 $
+\def\SCCSversion{$Revision: 1.20 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2003/07/17 09:47:17 $%
+\TPPdate{\FormatDate{$Date: 2005/04/16 16:13:31 $%
 }}  %% Mandatory field (with sensible default)
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -97,6 +97,7 @@ Changes to match \cite{DS/FMU/IED/DTD002} issue 2.5.
 \item[Issue 1.18] PPHol-specific updates for open source release
 \item[Issue 1.19] Made it less verbose to suppress confusing messages in test log.
 \item[Issue 1.20] Added test for the pending reset function for the error messages.
+\item[Issue 1.21] Added test for $elaborate$ and improved on tests for $divert$.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -136,7 +137,7 @@ $new\_error\_message$ and $icl'change\_error\_message$ and the
 results are checked using $get\_error\_message$ and
 $get\_error\_messages$.
 \item[Group BE.2]
-This group tests $fail$, $divert$ and $list\_divert$
+This group tests $fail$, $divert$, $elaborate$ and $list\_divert$
 with particular regard to the deferred evaluation
 of the insertion functions
 \item[Group BE.3]
@@ -146,6 +147,9 @@ $fail$ and $error$.
 This group tests $area\_of$, $reraise$ and $pass\_on$.
 \item[Group BE.5]
 Tests for {\it pending\_reset\_error_messages}.
+\item[Group BE.6]
+This group tests $fail$, $divert$, $elaborate$ and $list\_divert$
+with regard to the actual message texts produced.
 \end{description}
 \subsection{$SystemControl$}
 \begin{description}
@@ -263,6 +267,12 @@ fun test2_2() = (
         ("foo", 200, [fn () => (ok := false; "BLAH")]),
         ("koo", 100, [fn () => (ok := false; "BLAH")])]
 );
+fun test2_3 () = (
+(
+    fail "foo" 100 [fn () => (ok := false; "BLAH")]
+)   handle X => elaborate X 100 "goo" 2002
+	[fn () => ("BLAH")]
+);
 =TEX
 =SML
 fun run2 f = (
@@ -273,7 +283,8 @@ fun run2 f = (
 =SML
 store_mt_results_show mt_run
 [("mdt002.BE.2.1", run2, test2_1, true),
- ("mdt002.BE.2.2", run2, test2_2, true)
+ ("mdt002.BE.2.2", run2, test2_2, true),
+ ("mdt002.BE.2.3", run2, test2_3, true)
 ];
 =TEX
 \subsubsection{Group BE.3}
@@ -425,6 +436,84 @@ store_mt_results_show mt_run
 	fn () => 
 	(get_error_message 99999 []; false)
 	handle Error _ => true, (), true)];
+=TEX
+\subsubsection{Group BE.6}
+Add some new texts:
+=SML
+val _ = new_error_message{
+	id = 1234000, text ="YOU CHOULD NEVER SEE THIS ONE!"};
+val _ = new_error_message{
+	id = 4321001, text ="-?0-"};
+val _ = new_error_message{
+	id = 4321002, text ="-?0:?1-"};
+val _ = new_error_message{
+	id = 4321003, text ="-?0:?1:?2-"};
+val _ = new_error_message{
+	id = 4321004, text ="-?0:?1:?2:?3-"};
+val _ = new_error_message{
+	id = 4321005, text ="-?0:?1:?2:?3:?4-"};
+val _ = new_error_message{
+	id = 4321006, text ="-?0:?1:?2:?3:?4:?5-"};
+=TEX
+=SML
+fun test_divert inserters = (
+	let	val text = 
+	(case ((	let	val old = 1234000; 
+			val new = 4321000 + length inserters;
+		in	fail "test_divert1" old []
+			handle ex => divert ex "test_divert1"  "test_divert2" new inserters
+		end;
+		Div) handle ex => ex ) of
+		Fail msg => get_message msg
+	|	ex => string_of_exn ex);
+		val skip_before = size "* ";
+		val skip_after = size " [test_divert2.432100X] *";
+	in	String.substring(text, skip_before,
+			size text - skip_before - skip_after)
+	end
+);
+=TEX
+=SML
+store_mt_results_show mt_run
+[ ("mdt002.BE.6.1", test_divert,
+	[fn () => "ABC"], "-ABC-"),
+  ("mdt002.BE.6.2", test_divert,
+	[fn () => "ABC", fn () => "DEF" ], "-ABC:DEF-"),
+  ("mdt002.BE.6.3", test_divert,
+	[fn () => "ABC", fn () => "DEF" , fn () => "GHI" ], "-ABC:DEF:GHI-")
+];
+=TEX
+=SML
+fun test_elaborate old_inserters new_inserters = (
+	let	val text = 
+	(case ((	let	val old = 1234000; 
+			val new = 4321000 + length old_inserters + length new_inserters;
+		in	fail "test_divert1" old old_inserters
+			handle ex => elaborate ex old  "test_divert2" new new_inserters
+		end;
+		Div) handle ex => ex ) of
+		Fail msg => get_message msg
+	|	ex => string_of_exn ex);
+		val skip_before = size "* ";
+		val skip_after = size " [test_divert2.432100X] *";
+	in	String.substring(text, skip_before,
+			size text - skip_before - skip_after)
+	end
+);
+=TEX
+=SML
+store_mt_results_show mt_run
+[ ("mdt002.BE.6.4", test_elaborate [fn () => "ABC"],
+	[fn () => "DEF"], "-ABC:DEF-"),
+  ("mdt002.BE.6.5", test_elaborate	[fn () => "ABC", fn () => "DEF" ],
+	[fn () => "GHI" ], "-ABC:DEF:GHI-"),
+  ("mdt002.BE.6.6", test_elaborate	[fn () => "ABC", fn () => "DEF" ],
+	[fn () => "GHI", fn () => "JKL", fn () => "MNO" ], "-ABC:DEF:GHI:JKL:MNO-"),
+  ("mdt002.BE.6.7", test_elaborate	[fn () => "ABC", fn () => "DEF", fn () => "GHI" ],
+	[fn () => "JKL", fn () => "MNO", fn () => "PQR" ], "-ABC:DEF:GHI:JKL:MNO:PQR-")
+];
+
+
 =TEX
 \subsection{System Control}
 Before we embark on these tests we save the original state of the controls
@@ -585,25 +674,27 @@ The first three tests in this group will only work in a  batch session. In an in
 the {\it new\_XXX} function will ask the user whether to continue.
 =SML
 set_flag("ignore_warnings", false);
-store_mt_results_show mt_run_fail
+val interactive : bool ref = ref(ExtendedIO.is_term_in std_in);
+if !interactive
+then ()
+else (
+	store_mt_results_show mt_run_fail
 [("mdt002.SC.5.1",  new_flag, {name="testflag",
 	control=testflag,
 	default=(fn()=>true),
 	check=(fn _ => true)}, gen_fail_msg "new_flag" 2010 ["testflag"])];
-=TEX
-=SML
-store_mt_results_show mt_run_fail
+	store_mt_results_show mt_run_fail
 [("mdt002.SC.5.2",  new_int_control, {name="testint",
 	control=testint,
 	default=(fn()=>80),
 	check=(fn n=> n >= 20)}, gen_fail_msg "new_int_control" 2010 ["testint"])];
-=TEX
-=SML
-store_mt_results_show mt_run_fail
+	store_mt_results_show mt_run_fail
 [("mdt002.SC.5.3",  new_string_control, {name="teststring",
 	control=teststring,
 	default=(fn()=>""),
 	check=(fn s=> size s <= 5)}, gen_fail_msg "new_string_control" 2010 ["teststring"])];
+	()
+);
 =TEX
 The remaining tests in this group will work in batch or interactively.
 =SML
@@ -713,6 +804,10 @@ store_mt_results_show mt_run
 \section{EPILOGUE}
 =SML
 raw_diag_string(summarize_mt_results());
+if	!interactive
+then	diag_string
+	"WARNING: not all module tests in mdt002.doc can be run interactively"
+else	();
 =TEX
 \end{document}
 

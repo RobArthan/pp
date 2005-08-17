@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp002.doc   %Z% $Date: 2002/10/17 16:08:07 $ $Revision: 1.24 $ $RCSfile: imp002.doc,v $
+% imp002.doc   %Z% $Date: 2005/04/16 16:13:31 $ $Revision: 1.25 $ $RCSfile: imp002.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of System Control and Basic Error Reporting}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP002}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.24 $
+\def\SCCSversion{$Revision: 1.25 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 16:08:07 $%
+\TPPdate{\FormatDate{$Date: 2005/04/16 16:13:31 $%
 }}  %% Mandatory field (with sensible default)
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -102,6 +102,7 @@ Changed to allow uniform saving of controls and error messages.
 \item[Issue 1.23] Copyright and banner updates for open source release.
 \item[Issue 1.24] PPDev-specific updates for open source release
 \item[Issue 1.25] Added pending reset function for the error messages.
+\item[Issue 1.26] Added $elaborate$.
 \end{description}
 \subsection{Changes Forecast}
 \section{GENERAL}
@@ -335,37 +336,55 @@ fun €setup_pp› (():unit) : unit = (
 =SML
 fun €divert› (exn : exn) (from : string) (to: string) (new_id:int) (new_inserters:(unit->string)list): 'a = (
 	case exn of
-		Fail (Message msg) => (
-			raise Fail (Message(
-	let	val {area, id, inserters} = msg;
-	in	if area = from
-		then {area=to, id=new_id, inserters = new_inserters}
-		else msg
-	end		))
-		) | Other => raise Other
+		Fail (Message {area, ...}) => (
+			raise (
+			if area = from
+			then Fail(Message {area=to, id=new_id, inserters = new_inserters})
+			else exn
+		)) | Other => raise Other
 );
+=TEX
+=SML
 fun €list_divert› (exn : exn) (to : string)
 	(triples :(string * int * ((unit -> string) list))list): 'a = (
 	case exn of
-		Fail (Message msg) => (
-			raise Fail (Message(
-	let	val {area, ...} = msg;
-		fun aux [] = msg
+		Fail (Message {area, ...}) => (
+			raise (
+	let	fun aux [] = exn
 		|  aux ((from, new_id, inserters)::rest) = (
 			if area = from
-			then {area=to, id=new_id, inserters = inserters}
+			then Fail(Message{area=to, id=new_id, inserters = inserters})
 			else aux rest
 		);
 	in	aux triples
-	end		))
+	end		)
 		) | Other => raise Other
 );
+=TEX
+=SML
+fun €elaborate› (exn : exn) (old_id : int)
+	(new_area: string) (new_id:int) (new_inserters:(unit->string)list): 'a = (
+	case exn of
+		Fail (Message {id, inserters, ...}) => (
+			raise (
+			if id = old_id
+			then Fail(Message{area=new_area, id=new_id,
+				inserters = inserters@new_inserters})
+			else exn
+		)) | Other => raise Other
+);
+=TEX
+=SML
 fun €area_of› ((Fail(Message {area, ...})) : exn) : string= area
 |   area_of Other = raise Other;
+=TEX
+=SML
 fun €reraise› ((Fail(Message {area, id, inserters})) : exn) (new_area: string) : 'a = (
 	raise (Fail(Message{area=new_area, id=id, inserters=inserters}))
 )
 |   reraise Other _ = raise Other;
+=TEX
+=SML
 fun €pass_on› (e : exn) (fromnm : string) (tonm : string) : 'a = (
 let 	val efrom = area_of e
 in
