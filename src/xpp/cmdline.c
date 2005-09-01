@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.29 2005/01/27 17:08:05 rda Exp rda $
+ * $Id: cmdline.c,v 2.30 2005/06/29 17:27:26 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -602,11 +602,15 @@ static void cmd_set_cb(
 	XtPointer	cbs)
 {
 	CmdLineData *cbdata = cbd;
+	XmTextPosition last_pos;
 	char *sel;
 	if ((sel = get_selection(cbdata->shell_w, no_selection_cmd)) == NULL) {
 		return;
 	}
 	XmTextSetString(cbdata->cmd_w, sel);
+	last_pos = XmTextGetLastPosition(cbdata->cmd_w);
+	XmTextSetInsertionPosition(cbdata->cmd_w, last_pos);
+	XmTextShowPosition(cbdata->cmd_w, last_pos);
 	XtFree(sel);
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****

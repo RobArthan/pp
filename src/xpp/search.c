@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.60 2004/11/30 15:38:26 rda Exp rda $ 
+ * $Id: search.c,v 2.61 2005/01/27 17:08:05 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -855,11 +855,15 @@ static void search_set_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
+	XmTextPosition last_pos;
 	char *sel;
 	if ((sel = get_selection(cbdata->shell_w, no_selection_search)) == NULL) {
 		return;
 	}
 	XmTextSetString(cbdata->search_w, sel);
+	last_pos = XmTextGetLastPosition(cbdata->search_w);
+	XmTextSetInsertionPosition(cbdata->search_w, last_pos);
+	XmTextShowPosition(cbdata->search_w, last_pos);
 	XtFree(sel);
 }
 
@@ -872,11 +876,15 @@ static void replace_set_cb(
 	XtPointer	cbs)
 {
 	SearchData *cbdata = cbd;
+	XmTextPosition last_pos;
 	char *sel;
 	if ((sel = get_selection(cbdata->shell_w, no_selection_replace)) == NULL) {
 		return;
 	}
 	XmTextSetString(cbdata->replace_w, sel);
+	last_pos = XmTextGetLastPosition(cbdata->replace_w);
+	XmTextSetInsertionPosition(cbdata->replace_w, last_pos);
+	XmTextShowPosition(cbdata->replace_w, last_pos);
 	XtFree(sel);
 }
 
