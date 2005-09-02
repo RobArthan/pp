@@ -16,10 +16,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for the Interface to the Abstract Data Type $THM$}  %% Mandatory field
 \def\TPPheadtitle{Implementation for the \cr Interface to the Abstract Data Type $THM$}
 \TPPref{DS/FMU/IED/IMP012}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.24 $
+\def\SCCSversion{$Revision: 2.25 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/04/18 16:51:36 $ %
+\TPPdate{\FormatDate{$Date: 2005/04/24 16:01:30 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -94,6 +94,8 @@ Allowed for use of ordered efficient dictionaries in theory data type.
 \item[Issue 2.22] Relaxed restrictions on checkpointing.
 \item[Issue 2.23] Interfaces to the kernel inference rules are now here in the kernel interface module.
 \item[Issue 2.24] Now uses {\tt app} rather than {\tt map} when appropriate.
+\item[Issue 2.25] Recoded {\em get\_descendants} along the lines of {\em get\_ancestors} for efficiency.
+Tidied up some aspects of {\em get\_ancestors} and {\em rollback}.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1306,19 +1308,14 @@ in
 end);
 fun Ûtheory_namesÝ ((): unit) : string list = get_theory_names();
 =TEX
-In the following we are really only finding out whether a theory name exists when we do $icl'get\_theory$, but we pick out 
-its parents just to start off the process that $all\_anc$ could do by itself.
 =SML
 fun Ûget_ancestorsÝ (thynm : string) : string list = (
-let	val hier = icl'get_hierarchy();
-
-	fun aux ((nm:string), (sofar:string list)) = (
+let	fun aux ((nm:string), (sofar:string list)) = (
 	if nm mem sofar
 	then sofar
 	else (
-	let	val parents = case (s_lookup nm hier) of
-			Value {contents={parents=pnts,...},...} => pnts
-			| _ => fail "get_ancestors" 6035 [fn () => nm];
+	let	val {contents = {parents,...}, ...} = icl'get_theory_info nm
+			handle Fail _ => fail "get_ancestors" 6035 [fn () => nm];
 	in
 		fold aux (map icl'get_theory_name parents) (nm :: sofar)
 	end));
@@ -1378,27 +1375,19 @@ end);
 =TEX
 =SML
 fun Ûget_descendantsÝ (thynm : string) : string list = (
-let	val hier = icl'get_hierarchy();
-
-	val {children=children,...} = icl'get_theory_info thynm
-		handle complaint =>
-		pass_on complaint "icl'get_theory_info" "get_descendants";
-
-	fun all_des (acc :: rest) sofar = (
-		if acc mem sofar
-		then all_des rest sofar
-		else let val res = case (s_lookup acc hier) of
-			Value {children=chn,...} => chn
-			| _ => error "get_descendants" 6041 []
-		in
-			all_des (rest cup (map icl'get_theory_name res))
-				(acc :: sofar)
-		end
-	) | all_des [] sofar = sofar;
-in
-	if thynm = "-"
-	then all_des (map icl'get_theory_name children) [get_current_theory_name()]
-	else all_des (map icl'get_theory_name children) [thynm]
+let	fun aux ((nm:string), (sofar:string list)) = (
+	if nm mem sofar
+	then sofar
+	else (
+	let	val {children, ...} = icl'get_theory_info nm
+			handle Fail _ => fail "get_descendants" 6035 [fn () => nm];
+	in	fold aux (map icl'get_theory_name children) (nm :: sofar)
+	end));
+in	aux
+	((if thynm = "-"
+	then get_current_theory_name()
+	else thynm),
+	[])
 end);
 =TEX
 \subsection{Accessing Theory Contents}
@@ -1598,7 +1587,12 @@ fun ÛrollbackÝ (cp : CHECKPOINT) : unit = (
 		val new_descs = get_descendants cp_thy
 			handle Fail _ =>
 			(comment "rollback" 12016 [fn  () => cp_thy]; []);
-		val ancs = flat (map get_ancestors old_descs);
+		fun get_ancs thy = (
+			get_ancestors thy
+			handle Fail _ =>
+			(comment "rollback" 12016 [fn () => thy]; [])
+		);
+		val ancs = flat (map get_ancs old_descs);
 	in	case new_descs of
 			[] => ()
 		|	_ =>
