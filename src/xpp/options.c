@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.27 2004/11/23 16:06:26 rda Exp rda $
+ * $Id: options.c,v 2.28 2005/01/27 17:08:05 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -97,6 +97,12 @@ static Widget
 
 static char add_new_line_mode_mirror; /* mirrors value of the radio buttons */
 static char file_type_mirror; /* mirrors value of the file type menu  */
+
+static char *confirm_restart = "Confirm Restart";
+
+static char *restart_message =
+"You have changed the command line. "
+"Do you want to restart the application?";
 
 /*
  * Call-backs:
@@ -553,9 +559,16 @@ static void apply_cb(
 	}
 
 	if(command_text) {
-		XtFree(global_options.command_line);
-		global_options.command_line =
-			XmTextGetString(command_text);
+		char *new_cmd = XmTextGetString(command_text);
+		if(strcmp(new_cmd, global_options.command_line)) {
+			XtFree(global_options.command_line);
+			global_options.command_line = new_cmd;
+			if(yes_no_dialog(root, restart_message, confirm_restart)) {
+				restart_application();
+			}
+		} else {
+			XtFree(new_cmd);
+		}
 	}
 
 	show_file_info();
