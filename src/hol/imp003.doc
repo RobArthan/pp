@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%  imp003.doc  %Z% $Date: 2005/03/20 13:12:57 $ $Revision: 2.25 $ $RCSfile: imp003.doc,v $
+%  imp003.doc  %Z% $Date: 2005/04/27 16:44:57 $ $Revision: 2.26 $ $RCSfile: imp003.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -17,10 +17,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for Types and Terms}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Types and Terms}
 \TPPref{DS/FMU/IED/IMP003}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.25 $
+\def\SCCSversion{$Revision: 2.26 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/03/20 13:12:57 $%
+\TPPdate{\FormatDate{$Date: 2005/04/27 16:44:57 $%
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -96,6 +96,7 @@ initialisation module can hide that from the user.
 \item[Issue 2.24] PPHol-specific updates for open source release
 \item[Issue 2.25] Fixed error in {\em inst}.
 \item[Issue 2.26] Minor tidy-up to string-handling.
+\item[Issue 2.27] Now uses string table for long and short identifiers alike; versions of constructors and destructors for compound types and constants using keys instead of string names are now provided.
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
@@ -171,30 +172,22 @@ end; (* of local *)
 =TEX
 \subsection{Types}
 The local type $ID$ is the internal representation of a type or constant name.
-Short names are represented as strings, long ones as indexes into a string store.
+Names are represented as indexes into a string store.
 =SML
-datatype €ID› = 
-	€Short› of string |
-	€Long› of E_KEY *int;
+type €ID› = E_KEY * int;
 =TEX
-The following is the size of the longest names that we represent as strings.
-What this number should actually be is an interesting tuning issue.
-=SML
-val €max_short_name› = 12;
-=TEX
-Note that the abstract data type for types contains that for terms.
 =SML
 abstype €TYPE› = 
 	€LVartype› of string |
 	€LCtype› of ID * TYPE list |
 	€L≠Type› of (TYPE * TYPE)
 and €TYPES_AND_TERMS_STATE›  =
-	€State› of int S_DICT E_DICT ref
+	€State› of (E_KEY * int) S_DICT E_DICT ref
 with
 =TEX
 Management of the state:
 =SML
-	val €current_state› : int S_DICT E_DICT ref ref = ref (ref initial_e_dict);
+	val €current_state› : (E_KEY * int) S_DICT E_DICT ref ref = ref (ref initial_e_dict);
 	fun €new_types_and_terms_state› (() : unit) : TYPES_AND_TERMS_STATE = (
 		let	val new_ref_dict = ref(!(!current_state));
 		in	State new_ref_dict
@@ -206,14 +199,11 @@ Management of the state:
 =TEX
 Conversion between the internal and external representation of names:
 =SML
-	fun €id_of_string› (s : string)  : ID = (
-		if	size s <= max_short_name
-		then	Short s
-		else	Long (
-		let	val k = e_get_key s;
+	fun €id_of_key› (k : E_KEY)  : ID = (
+		let	val s = string_of_e_key k;
 		in	case e_key_lookup k (!(!current_state)) of 
 				Nil =>  (
-					!current_state := e_key_enter k [(s, 0)] (!(!current_state));
+					!current_state := e_key_enter k [(s, (k, 0))] (!(!current_state));
 					(k, 0)
 			) |	Value sd => (
 					case s_lookup s sd of
@@ -221,21 +211,36 @@ Conversion between the internal and external representation of names:
 						let	val l = length sd;
 						in	!current_state :=
 							e_key_enter k
-							((s, l)::sd) (!(!current_state));
+							((s, (k, l))::sd) (!(!current_state));
 							(k, l)
 						end
-					) |	Value n => (k, n)
+					) |	Value kn => kn
 			)
-		end)
+		end
 	);
-	fun €string_of_id› (Long(k, m)  : ID) : string = (
+	fun €id_of_string› (s : string)  : ID = (
+		id_of_key (e_get_key s)
+	);
+	fun €string_of_id› ((k, m)  : ID) : string = (
 		let	val sd = force_value(e_key_lookup k (!(!current_state)));
-			val (s, _) = find sd (fn (_, n) => m = n);
+			val (s, _) = find sd (fn (_, (_, n)) => m = n);
 		in	s
-		end	handle Fail _ => (
-				error "string_of_id"  3027 []
-		)
-	) | string_of_id (Short s) = s;
+		end	handle Fail _ =>
+			let	val s = string_of_e_key k;
+				val _ = id_of_string s;
+			in	s
+			end
+	);
+	fun €key_of_id› ((k, m)  : ID) : E_KEY = (
+		let	val sd = force_value(e_key_lookup k (!(!current_state)));
+			val (s, (k', _)) = find sd (fn (_, (_, n)) => m = n);
+		in	k'
+		end	handle Fail _ =>
+			let	val s = string_of_e_key k;
+				val _ = id_of_string s;
+			in	k
+			end
+	);
 =TEX
 =SML						
 datatype €DEST_SIMPLE_TYPE› = €Vartype› of string |
@@ -269,6 +274,12 @@ this ensures a single form for equal types.
 =SML
 fun €mk_ctype› (("≠",[t1,t2]): string * TYPE list) : TYPE = L≠Type(t1,t2)
 | mk_ctype (c, tl) = LCtype (id_of_string c, tl);
+=SML
+fun €key_mk_ctype› ((k,tl as [t1,t2]): E_KEY * TYPE list) : TYPE = (
+	if	string_of_e_key k = "≠"
+	then	L≠Type(t1,t2)
+	else	LCtype(id_of_key k, tl)
+) | key_mk_ctype (k, tl) = LCtype (id_of_key k, tl);
 =TEX
 =SML
 val €mk_vartype› : string -> TYPE = LVartype;
@@ -280,6 +291,12 @@ val €mk_≠_type› : (TYPE * TYPE) -> TYPE = L≠Type;
 fun €dest_ctype› (LCtype (i, tl) : TYPE): string * TYPE list = (string_of_id i, tl)
 | dest_ctype (L≠Type (t1, t2)) = ("≠", [t1, t2])
 | dest_ctype varty = type_fail "dest_ctype" 3001 [varty];
+=TEX
+=SML
+val €≠_key› = e_get_key "≠";
+fun €key_dest_ctype› (LCtype (i, tl) : TYPE): E_KEY * TYPE list = (key_of_id i, tl)
+| key_dest_ctype (L≠Type (t1, t2)) = (≠_key, [t1, t2])
+| key_dest_ctype varty = type_fail "key_dest_ctype" 3001 [varty];
 =TEX
 =SML
 fun €dest_vartype› ((LVartype s):TYPE) : string = s
@@ -469,6 +486,7 @@ val €mk_const_checks› : (TYPE -> unit) PPVector.vector = (
 	in	map (the_check o chr) (interval 0 255)
 	end
 );
+=TEX
 =SML
 fun €mk_const›((v, ty):string * TYPE): TERM = (
 	let	val side =
@@ -480,9 +498,25 @@ fun €mk_const›((v, ty):string * TYPE): TERM = (
 );
 =TEX
 =SML
+fun €key_mk_const›((k, ty):E_KEY * TYPE): TERM = (
+	let	val v = string_of_e_key k;
+		val side =
+			if	size v = 1
+			then	PPVector.sub(mk_const_checks, ord v) ty
+			else	();
+	in	typed (icl'Const (id_of_key k), ty)
+	end	handle ex as (Fail _) => reraise ex "key_mk_const" 
+);
+=TEX
+=SML
 fun €dest_const› (tm as (typed (icl'Const id, ty)): TERM):string * TYPE = (string_of_id id, ty)
 | dest_const tm = term_fail "dest_const" 3009 [tm];
-
+=TEX
+=SML
+fun €key_dest_const› (tm as (typed (icl'Const id, ty)): TERM):E_KEY * TYPE = (key_of_id id, ty)
+| key_dest_const tm = term_fail "key_dest_const" 3009 [tm];
+=TEX
+=SML
 fun €is_const› ((typed (icl'Const _, _)): TERM):bool = true
 | is_const _ = false;
 =TEX
