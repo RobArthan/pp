@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp020.doc   %Z% $Date: 2005/04/24 16:01:30 $ $Revision: 1.27 $ $RCSfile: imp020.doc,v $
+% imp020.doc   %Z% $Date: 2005/05/07 12:08:26 $ $Revision: 1.28 $ $RCSfile: imp020.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation for ICL HOL Symbol Table}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP020}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.27 $%
+\def\SCCSversion{$Revision: 1.28 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/04/24 16:01:30 $%
+\TPPdate{\FormatDate{$Date: 2005/05/07 12:08:26 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -103,7 +103,7 @@ Renamings from version 1.5 of DS/FMU/IED/WRK038.
 \item[Issue 1.20~(\FormatDate{92/07/07
 }) ]
 	Allow multiple languages per constant.
-\item[Issue \SCCSversion~(\FormatDate{$Date: 2005/04/24 16:01:30 $%
+\item[Issue \SCCSversion~(\FormatDate{$Date: 2005/05/07 12:08:26 $%
 }) ]
 	Made languages of new theories be inherited from the parent.
 	Use error code 20501 in $declare_const_language$, was 20502.
@@ -114,6 +114,7 @@ Fixed {\it undeclare\_alias} and added {\it getz_alias\_info}
 \item[Issue 1.26] PPHol-specific updates for open source release
 \item[Issue 1.27] Now uses {\tt app} rather than {\tt map} when appropriate.
 \item[Issue 1.28] HOL now supports left-associative operators.
+\item[Issue 1.29] Now uses {\em key\_dest\_const} and {\em key\_dest\_ctype}.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -272,8 +273,6 @@ fun Ûstore_sym_tab_datumÝ (ud : USER_DATUM) : unit = (
 We sometimes need to delete entries. $delete\_sym\_tab\_datum$
 does this (and does nothing if the entry to be deleted is not there).
 =SML
-local
-
 fun Ûlist_eqÝ eq (a :: x) (b :: y) = eq (a,b) andalso list_eq eq x y
 | list_eq eq [] [] = true
 | list_eq eq _ _ = false;
@@ -295,7 +294,8 @@ fun Ûud_equalsÝ (UD_Term (tm,udl):USER_DATUM) : USER_DATUM -> bool = (fn ud2 =>
 	UD_Int (n1,udl1) => (n = n1) andalso list_eq (uncurry ud_equals) udl udl1
 	| _ => false
 );
-in
+=TEX
+=SML
 fun Ûdelete_sym_tab_datumÝ (ud : USER_DATUM) : unit = (
 	let	val uds = (
 			case get_user_datum "-" ud_key handle Fail _ => UD_Int(0, []) of
@@ -305,7 +305,6 @@ fun Ûdelete_sym_tab_datumÝ (ud : USER_DATUM) : unit = (
 	in 	set_user_datum(ud_key, UD_Int(0, uds drop ud_equals_ud))
 	end
 );
-end;
 =TEX
 \subsection{Encoding and Decoding Functions}
 First of all we give an encoding for $FIXITY$ values.
@@ -437,8 +436,6 @@ fun Ûclear_cachesÝ (():unit) : unit = (
 It is actually more convenient to have a single update function
 parameterised by the type of declaration being made. This requires a few
 local utilities to cope with the more complex cases:
-=SML
-local
 =TEX
 =SML
 fun Ûcache_terminatorÝ (t : string) = (
@@ -562,20 +559,20 @@ fun Ûcache_const_languageÝ (s : string, newlang : string) = (
 =TEX
 =SML
 fun Ûcache_languageÝ (thy : string) (lang : string) : unit = (
-	let	val conids = map (fst o dest_const) (get_consts thy)
-		val tyids = map (fst o dest_ctype) (get_types thy);
+	let	val conkeys = map (fst o key_dest_const) (get_consts thy)
+		val tykeys = map (fst o key_dest_ctype) (get_types thy);
 		fun aux_c dict [] = dict
-		|   aux_c dict (id :: more) = aux_c (e_enter id (thy, [lang]) dict) more;
+		|   aux_c dict (key :: more) = aux_c (e_key_enter key (thy, [lang]) dict) more;
 		fun aux_t dict [] = dict
-		|   aux_t dict (id :: more) = aux_t (e_enter id (thy, lang) dict) more;
+		|   aux_t dict (key :: more) = aux_t (e_key_enter key (thy, lang) dict) more;
 		fun get_aux nil = nil
 		| get_aux(h::more) = (
 			case decode_decl thy h
 			of DeclConstLanguage x => x :: (get_aux more)
 			| _ => get_aux more
 		);
-	in	const_theory_cache := aux_c (!const_theory_cache) conids;
-		ty_theory_cache := aux_t (!ty_theory_cache) tyids;
+	in	const_theory_cache := aux_c (!const_theory_cache) conkeys;
+		ty_theory_cache := aux_t (!ty_theory_cache) tykeys;
 		language := lang;
 		map cache_const_language (get_aux(fetch_sym_tab_data thy));
 		()
@@ -583,7 +580,6 @@ fun Ûcache_languageÝ (thy : string) (lang : string) : unit = (
 );
 =TEX
 =SML
-in
 fun Ûcache_declÝ (thy : string) (dec : DECL) : unit = (
 	case dec of
 		DeclTerminator t => cache_terminator t
@@ -596,7 +592,6 @@ fun Ûcache_declÝ (thy : string) (dec : DECL) : unit = (
 	|	SetLanguage lang => cache_language thy lang
 	|	DeclConstLanguage const_lang => cache_const_language const_lang
 );
-end; (* of local ... in ... end *)
 =TEX
 \section{THEORY DATABASE ACCESS FUNCTIONS}
 \label{ThyDb2}
@@ -647,9 +642,7 @@ As with the cache update functions, it is convenient to have a single update
 function parameterised by the type of declaration being made.
 As theory updates are never done without also updating the cache the theory
 update function calls the cache update function when its own work is complete.
-Again we have a section of local utilities to assist:
-=SML
-local
+Again we have a selection of local utilities to assist:
 =TEX
 =SML
 fun Ûstore_terminatorÝ (thy : string) (s : string) : unit = (
@@ -770,7 +763,6 @@ fun Ûstore_const_languageÝ (thy : string) (const_lang : string * string) : unit 
 );
 =TEX
 =SML
-in
 fun Ûstore_declÝ (area : string) (dec : DECL) : unit = (
 	let	val thy = get_current_theory_name();
 	in
@@ -792,7 +784,6 @@ fun Ûstore_declÝ (area : string) (dec : DECL) : unit = (
 		) |	_ => fail area 20002 [fn () => thy]
 	end
 );
-end; (* of local ... in ... end *)
 =TEX
 \section{ACCESS FUNCTIONS}
 \subsection{Terminators}
