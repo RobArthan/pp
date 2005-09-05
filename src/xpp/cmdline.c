@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.31 2005/09/01 11:50:49 rda Exp rda $
+ * $Id: cmdline.c,v 2.32 2005/09/05 16:25:21 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -642,8 +642,7 @@ static void handle_resize(
 	XEvent		*y,
 	Boolean		*z)
 {
-	short num_visible;
-	int top_pos, num_entries;
+	int num_visible, top_pos, num_entries;
 	XtVaGetValues(list_w,
 		XmNitemCount, &num_entries,
 		XmNvisibleItemCount, &num_visible,
