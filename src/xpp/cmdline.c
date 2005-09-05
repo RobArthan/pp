@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.30 2005/06/29 17:27:26 rda Exp rda $
+ * $Id: cmdline.c,v 2.31 2005/09/01 11:50:49 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -44,6 +44,8 @@ static void
 	focus_cb(CALLBACK_ARGS),
 	cmd_set_cb(CALLBACK_ARGS),
 	empty_cmd_cb(CALLBACK_ARGS);
+
+static void handle_resize(EVENT_HANDLER_ARGS);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * static data 
@@ -290,6 +292,13 @@ void add_command_line_tool(Widget text_w)
 
 	XtAddCallback(list_w, XmNdefaultActionCallback,
 		list_select_cb, (XtPointer)(&cmd_line_data));
+
+	XtInsertEventHandler(list_w,
+		StructureNotifyMask,
+		False,
+		handle_resize,
+		NULL,
+		XtListTail);
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * Set up popup edit menus.
@@ -624,3 +633,24 @@ static void empty_cmd_cb(
 	CmdLineData *cbdata = cbd;
 	XmTextSetString(cbdata->cmd_w, "");
 }
+/* **** **** **** **** **** **** **** **** **** **** **** ****
+ * list resize event handler.
+ * **** **** **** **** **** **** **** **** **** **** **** **** */
+static void handle_resize(
+	Widget		list_w,
+	XtPointer	x,
+	XEvent		*y,
+	Boolean		*z)
+{
+	short num_visible;
+	int top_pos, num_entries;
+	XtVaGetValues(list_w,
+		XmNitemCount, &num_entries,
+		XmNvisibleItemCount, &num_visible,
+		XmNtopItemPosition, &top_pos,
+		NULL);
+	if(num_entries - top_pos + 1 < num_visible) {
+		XmListSetBottomPos(list_w, 0);
+	}
+}
+
