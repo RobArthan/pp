@@ -8,13 +8,13 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp047.doc  %Z% $Date: 2004/09/06 16:01:26 $ $Revision: 1.54 $ $RCSfile: imp047.doc,v $
+% imp047.doc  %Z% $Date: 2004/10/06 16:46:56 $ $Revision: 1.55 $ $RCSfile: imp047.doc,v $
 
 doctex imp047 ; texdvi imp047
 bibtex imp047
 
 =TEX
-% imp047.doc  %Z% $Date: 2004/09/06 16:01:26 $ $Revision: 1.54 $ $RCSfile: imp047.doc,v $
+% imp047.doc  %Z% $Date: 2004/10/06 16:46:56 $ $Revision: 1.55 $ $RCSfile: imp047.doc,v $
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
 \makeindex
@@ -24,10 +24,10 @@ bibtex imp047
 \TPPtitle{Implementation for Z Types and Terms}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Z Types and Terms}
 \TPPref{DS/FMU/IED/IMP047}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.54 $%
+\def\SCCSversion{$Revision: 1.55 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/09/06 16:01:26 $%
+\TPPdate{\FormatDate{$Date: 2004/10/06 16:46:56 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -104,6 +104,7 @@ The destructor for  -terms now checks the operand more carefully.
 \item[Issue 1.53] The Z universal set is now called É.
 \item[Issue 1.54] Performance improvements to {\em dest\_z\_name}.
 \item[Issue 1.55] Performance improvements in {\em basic\_dest\_z\_term}.
+\item[Issue 1.56] Added let-expressions.
 \end{description}
 %\subsection{Changes Forecast}
 \newpage
@@ -578,6 +579,7 @@ datatype	€Z_TERM›
 		|		€ZApp› of TERM * TERM
 		|		€ZÃ› of TERM * TERM * TERM
 		|		€ZÕ› of TERM * TERM * TERM
+		|		€ZLet› of (string * TERM) list * TERM
 		|		€ZHSchema› of TERM * TERM
 		|		€ZDecorâs› of TERM * string
 		|		€ZPreâs› of TERM
@@ -1135,6 +1137,37 @@ constant part.
 )
 (*
 =TEX
+=SML
+*)
+| "Z'Let" => (
+	case (comp_list, args)
+	of ([],[mu]) => (
+		case basic_dest_z_term (strip_app mu) of
+			BdzOk(ZÕ(d,p,v)) => (
+		case basic_dest_z_term(strip_app d) of
+
+			BdzOk(ZDecl decs) => (
+			let	fun aux dec = (
+	case basic_dest_z_term (strip_app dec) of
+		BdzOk(ZDec ([i], t)) => (
+	case basic_dest_z_term (strip_app t) of
+		BdzOk(ZSetd(_, [e])) => (fst(dest_var i), e)
+	|	_ => fail "" 0 [])
+	|	_ => fail "" 0 []
+				);
+				val iddefs = map aux decs;
+			in	if	is_t p
+				then	BdzOk(ZLet(iddefs, v))
+				else	fail "" 0 []
+			end
+		) |	_ => fail "" 0 []
+		) |	_ => fail "" 0 []
+		handle Fail _ => BdzNotZ 47937
+	)
+	| _ => BdzFail{BdzFCode=47937, BdzFCompc=0, BdzFArgc=1}
+)
+(*
+=TEX
 \subsubsection{Schemas}
 =SML
 *)
@@ -1604,6 +1637,12 @@ fun	€dest_z_Õ› (t:TERM) :TERM * TERM * TERM =
 		ZÕ d_p_v =>  d_p_v 
 	|	_ => fail "" 0 []) 
 	handle Fail _ => term_fail "dest_z_Õ" 47210 [t];
+
+fun	€dest_z_let› (t:TERM) : (string * TERM) list * TERM = 
+	(case dest_z_term t of 
+		ZLet iddefs_tm =>  iddefs_tm 
+	|	_ => fail "" 0 []) 
+	handle Fail _ => term_fail "dest_z_let" 47211 [t];
 =TEX
 \subsection{Term Discriminators}
 =SML
@@ -1706,6 +1745,12 @@ fun	€is_z_Ã› (t:TERM) :bool =
 fun	€is_z_Õ› (t:TERM) :bool = 
 	(case dest_z_term t of 
 		ZÕ _ => true 
+	|	_ => false) 
+	handle Fail _ => false;
+
+fun	€is_z_let› (t:TERM) :bool = 
+	(case dest_z_term t of 
+		ZLet _ => true 
 	|	_ => false) 
 	handle Fail _ => false;
 =TEX
@@ -2139,6 +2184,24 @@ fun	€mk_z_Õ› ((d,p,v):TERM * TERM * TERM) :TERM =
 	in
 		mk_app(Õ_bterm tym vty,g2_abs(d,p,v,tym))
 	end;
+=TEX
+=SML
+fun	€mk_z_let›
+	(vardefs : (string * TERM) list, tm : TERM) :TERM = (
+	let	fun aux (v, d)  = (
+			let	val ty = type_of d;
+			in	mk_z_dec([mk_var(v, ty)], mk_z_setd(ty, [d]))
+			end
+		);
+		val mu = mk_z_Õ(mk_z_decl(map aux vardefs), mk_z_true, tm);
+		val muty = type_of mu;
+		val cty = mk_≠_type(muty, muty);
+		val con = mk_const("Z'Let", cty);
+	in	mk_app(con, mu)
+	end
+);
+=TEX
+=SML
 
 fun	€mk_z_lvar› ((s,ty,tml):string * TYPE * TERM list) :TERM = 
 		case tml of [] 	=> mk_var(s,ty)
@@ -2390,6 +2453,7 @@ fun	€mk_z_term›	(ZDec(tml:TERM list,tm:TERM) :Z_TERM) :TERM = mk_z_dec(tml,tm)
 |	mk_z_term	(ZApp(tm1:TERM,tm2:TERM)) = mk_z_app(tm1,tm2)
 |	mk_z_term	(ZÃ(tm1:TERM,tm2:TERM,tm3:TERM)) = mk_z_Ã(tm1,tm2,tm3)
 |	mk_z_term	(ZÕ(tm1:TERM,tm2:TERM,tm3:TERM)) = mk_z_Õ(tm1,tm2,tm3)
+|	mk_z_term	(ZLet(iddefs:(string*TERM)list,tm:TERM)) = mk_z_let(iddefs,tm)
 |	mk_z_term	(ZHSchema(tm1:TERM,tm2:TERM)) = mk_z_h_schema(tm1,tm2)
 |	mk_z_term	(ZDecorâs(tm:TERM,s:string)) = mk_z_decâs(tm,s)
 |	mk_z_term	(ZPreâs(tm:TERM)) = mk_z_preâs tm
