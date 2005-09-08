@@ -135,6 +135,8 @@ Enhanced representation of the environment.
 \item[Issues 1.59, 1.60] Fixed bug in treatment of decorated free variables.
 \item[Issue 1.61] Adapted to exploit new efficient type inference contexts.
 \item[Issues 1.62, 1.63] Added interface for term generation performance enhancements.
+\item[Issue 1.64] Type constructors for given sets are now in Z namespace.
+Corrected treatment of given set paragraph with a constraint.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -874,21 +876,18 @@ fun Ûlist_env_enterÝ (env : Z_ENV) (idtys : (IDENT * Z_VAR_TYPE) list) : Z_ENV =
 );
 =TEX
 =SML
-local
-	fun freety id = (id, BoundVar (ex_set (ExType (string_of_ident id, []))));
-	fun formal id = (id, BoundVar (ex_set (ExVartype(Known("'"^(string_of_ident id))))));
-in
-fun Ûinit_z_envÝ (ftdef : bool) (genformals : IDENT list) : Z_ENV = (
+fun Ûinit_z_envÝ 
+	{givensets : IDENT list, genformals : IDENT list} : Z_ENV = (
 let	val dummy = start_again();
-	val entries =
-		(if ftdef
-		then	(map freety genformals)
-		else	(map formal genformals));
-	val _ = freevar_env := list_env_enter initial_e_dict entries;
+	fun givenset id = (id, BoundVar (ex_set (ExType (bind_gvar_name (string_of_ident id), []))));
+	fun formal id = (id, BoundVar (ex_set (ExVartype(Known("'"^(string_of_ident id))))));
+	val gs = map givenset givensets;
+	val fs = map formal genformals;
+	val _ = freevar_env := 
+		list_env_enter (list_env_enter initial_e_dict gs) fs;
 in	initial_e_dict
 end
 );
-end (* of local ... in *);
 =TEX
 =SML
 fun Ûupdate_fv_envÝ (env : Z_ENV) (id : IDENT) : unit = (
@@ -2320,21 +2319,21 @@ fun Ûformat_zinferredÝ inf = (
 =TEX
 =SML
 fun Ûti_z_paraÝ (p as ZParaAbbDef (id, formals, tm, _): Z_PARA) : Z_INFERRED = (
-let	val env = init_z_env false formals;
+let	val env = init_z_env {givensets = [], genformals = formals};
 	val (tm', ty') = ti_z_tm env tm;
 in
 	ZInferred (ZParaAbbDef (id, formals, tm', Value ty'))
 
 end
 ) | ti_z_para (p as ZParaSchBox (id, formals, sch, _)) = (
-let	val env = init_z_env false formals;
+let	val env = init_z_env {givensets = [], genformals = formals};
 	val (sch', env', idtyl) = ti_z_schtext env sch;
 	val ty = ex_set (bind_extype idtyl);
 in
 	ZInferred (ZParaSchBox (id, formals, sch', Value ty))
 end
 ) | ti_z_para  (ZParaAxDes (formals, sch, _)) = (
-let	val env = init_z_env false formals;
+let	val env = init_z_env {givensets = [], genformals = formals};
 	val (sch', env', idtyl) = ti_z_schtext env sch;
 in
 	ZInferred (ZParaAxDes (formals, sch', Value idtyl))
@@ -2342,7 +2341,7 @@ end
 =TEX
 =SML
 ) | ti_z_para (p as ZParaFreeType ftdef) = (
-let	val env = init_z_env true (map fst ftdef);
+let	val env = init_z_env {givensets = map fst ftdef, genformals = []};
 	fun ftbranch ftid (id, _, Nil) = (id, Nil, Nil)
 	  | ftbranch ftid (id, _, Value tm) = (
 	let	fun aux (ZTm§¢ (_, [subtm])) = subtm
@@ -2370,7 +2369,7 @@ end
 ) | ti_z_para (p as ZParaGivenSet (idl, Nil)) = (
 	ZInferred p
 ) | ti_z_para (p as ZParaGivenSet (idl, Value (formals, tm))) = (
-let	val env = init_z_env false (idl@formals);
+let	val env = init_z_env {givensets = idl, genformals = formals};
 	val (tm', ty') = ti_z_tm env tm;
 	val side = unify zti_subs (ty', ex_bool)
 		handle Fail msg =>
@@ -2381,7 +2380,7 @@ end
 =TEX
 =SML
 ) | ti_z_para (p as ZParaConstraint (idl, tm)) = (
-let	val env = init_z_env false idl;
+let	val env = init_z_env {givensets = [], genformals = idl};
 	val (tm', ty') = ti_z_tm env tm;
 	val side = unify zti_subs (ty', ex_bool)
 		handle Fail msg =>
@@ -2392,7 +2391,7 @@ end
 =TEX
 =SML
 ) | ti_z_para (p as ZParaConjecture (id, formals, tm)) = (
-let	val env = init_z_env false formals;
+let	val env = init_z_env {givensets = [], genformals = formals};
 	val (tm', ty') = ti_z_tm env tm;
 	val side = unify zti_subs (ty', ex_bool)
 		handle Fail msg =>
@@ -2403,7 +2402,7 @@ end
 =TEX
 =SML
 ) | ti_z_para (p as ZParaTerm (formals, tm, _)) = (
-let	val env = init_z_env false formals;
+let	val env = init_z_env {givensets = [], genformals = formals};
 	val (tm', ty') = ti_z_tm env tm;
 	val side = case formals of
 		[] => ()
