@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp049.doc   %Z% $Date: 2003/07/17 09:42:13 $ $Revision: 1.55 $ $RCSfile: imp049.doc,v $
+% imp049.doc   %Z% $Date: 2004/01/19 12:44:00 $ $Revision: 1.56 $ $RCSfile: imp049.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of Z Paragraphs}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP049}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.55 $%
+\def\SCCSversion{$Revision: 1.56 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2003/07/17 09:42:13 $%
+\TPPdate{\FormatDate{$Date: 2004/01/19 12:44:00 $%
 }}  %% Mandatory field (with sensible default)
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -116,6 +116,8 @@ generator is supposed to do all that for itself.
 \item[Issue 1.55] Removed unwanted debugging code (it is easier just to recompile a copy
 of the paragraph recognizer code with any required hooks inserted).
 \item[Issue 1.56] The Z universal set is now called ƒ.
+\item[Issue 1.57] Type constructors for given sets are now in Z namespace;
+Corrections to {\em new\_z\_type} and some general tidying up.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -159,7 +161,7 @@ None known.
 =SMLPLAIN SML
 structure ÛZReaderWriterÝ : ZReaderWriter = struct
 local
-open ReaderWriterSupport HOLReaderWriter;
+open ReaderWriterSupport HOLReaderWriter ZTypesAndTermsSupport;
 in
 =TEX
 \subsection{Warning Messages}
@@ -673,14 +675,14 @@ fun Ûtypecheck_info_of_z_paraÝ (p : Z_PARA) : PARAINFO = (
 	end
 	)|ZParaGivenSet (ids, _) => (
 	let	fun aux id = (
-			((id, mk_z_power_type(mk_ctype(id,[]))), (id, 0))
+			((id, mk_z_power_type(mk_ctype(bind_gvar_name id,[]))), (id, 0))
 		);
 	in
 		(TypeCheckInfo o split o map (aux o string_of_ident)) ids
 	end
 	)| ZParaFreeType tdl => (
 	let	fun aux id = (
-			((id, mk_z_power_type(mk_ctype(id,[]))), (id, 0))
+			((id, mk_z_power_type(mk_ctype(bind_gvar_name id,[]))), (id, 0))
 		);
 		fun make_con_ty ty (id, oty, _) = (
 			(string_of_ident id,
@@ -692,7 +694,7 @@ fun Ûtypecheck_info_of_z_paraÝ (p : Z_PARA) : PARAINFO = (
 			)
 		);
 		fun constructors (id, con_tys) = (
-			map (make_con_ty (mk_ctype (string_of_ident id, []))) con_tys
+			map (make_con_ty (mk_ctype (bind_gvar_name(string_of_ident id), []))) con_tys
 		);
 		val (cs, ts) = (split o map (aux o string_of_ident o fst)) tdl
 	in
@@ -735,10 +737,12 @@ name is not in use as a type name and that the z-ified name is
 not in use as a constant name:
 =SML
 fun check_gset_name (s : string) : unit = (
-	case (get_type_arity s, get_const_type (bind_gvar_name s)) of
-		(_, Value _) => fail "check_gset_name" 49003 [fn _ => s]
-	|	(Value _, _) => fail "check_gset_name" 49002 [fn _ => s]
-	|	_ => ()
+	let	val zn = bind_gvar_name s;
+	in	case (get_type_arity zn, get_const_type zn) of
+			(_, Value _) => fail "check_gset_name" 49003 [fn _ => s]
+		|	(Value _, _) => fail "check_gset_name" 49002 [fn _ => s]
+		|	_ => ()
+	end
 );
 =TEX
 For other global variables we only need to check the use of the
@@ -835,28 +839,18 @@ let	val def_tm = case otm of
 	val defn1 = list_mk_µ (gens, def_tm');
 	val defn2 = mk_app(¬$"Z'AxDes"®, defn1);
 	val side = map (new_const o dest_const) newconsts;
-	val dummy = (if (get_flag "z_allow_free_vars_in_axioms")
-		then (let	val fs = frees (defn2);
-			in 
-				if (is_nil fs)
-				then ()
-				else warn "update_theory_db_with_parainfo" 49006
-				 [fn () => format_list (fst) idtyl ", ",
-				  fn () => format_list (fst o dest_var) fs ", "]
-			end
-		) 
-		else (let	val fs = frees (defn2);
-			in 
-				if (is_nil fs)
-				then ()
-				else fail "update_theory_db_with_parainfo" 49006
-				 [fn () => format_list (fst) idtyl ", ",
-				  fn () => format_list (fst o dest_var) fs ", "]
-			end
-		));
-	val side = new_axiom ((map fst idtyl), defn2);
-in
-	()
+	val dummy =
+	let	val fs = frees defn2;
+		val inform = if !z_allow_free_vars_in_axioms then warn else fail;
+	in 	if	is_nil fs
+		then	()
+		else	inform
+			"update_theory_db_with_parainfo" 49006
+			[fn () => format_list (fst) idtyl ", ",
+			 fn () => format_list (fst o dest_var) fs ", "]
+	end;
+	val _ = new_axiom ((map fst idtyl), defn2);
+in	()
 end);
 =TEX
 =SML
@@ -901,8 +895,8 @@ end);
 =SML
 fun Ûsimple_new_z_typeÝ (s : string) : THM = (
 let	val side_effect = check_gset_name s;
-	val ty = new_type (s, 0);
 	val zs = bind_gvar_name s;
+	val ty = new_type (zs, 0);
 	val var = mk_var (zs, mk_z_power_type ty);
 	val totty = mk_z_power_type ty;
 	val tot = mk_const("Totality",totty);
@@ -914,46 +908,35 @@ end);
 =TEX
 
 =SML
-fun Ûnew_z_typeÝ (sl : string list) (tm : TERM) : THM = (
-let	val dummy = if (is_nil sl)
-		then fail "new_z_type" 49008 [fn ()=> string_of_term tm]
-		else ();
-	val tyl = map (fn s => (check_gset_name s; new_type (s, 0))) sl;
-	val dummy = (if (get_flag "z_allow_free_vars_in_axioms")
-		then (let	val fs = frees (tm);
-			in 
-				if (is_nil fs)
-				then ()
-				else warn "update_theory_db_with_parainfo" 49006
-				 [fn () => format_list (Combinators.I) sl ", ",
-				  fn () => format_list (fst o dest_var) fs ", "]
-			end
-		) 
-		else (let	val fs = frees (tm);
-			in 
-				if (is_nil fs)
-				then ()
-				else fail "update_theory_db_with_parainfo" 49006
-				 [fn () => format_list (Combinators.I) sl ", ",
-				  fn () => format_list (fst o dest_var) fs ", "]
-			end
-		));
-in
-	new_axiom (sl, tm)
+fun Ûnew_z_typeÝ (sl : string list) (fmls: string list, tm : TERM) : THM = (
+let	val _ = map check_gset_name sl;
+	val fs1 = map dest_var (frees tm) drop (fn vty => fst vty mem fmls);
+	val xfs = fs1 drop (fn vty => fst vty mem sl);
+	val dummy =
+	let	val inform = if !z_allow_free_vars_in_axioms then warn else fail;
+	in	if	is_nil xfs
+		then	()
+		else	inform
+			"update_theory_db_with_parainfo" 49006
+			 [fn () => format_list (Combinators.I) sl ", ",
+			  fn () => format_list fst xfs ", "]
+	end;
+	val _ = map simple_new_z_type sl;
+	val fs2 = fs1 drop (fn vty => not(fst vty mem sl));
+	val subs = map (fn (v, ty) => (mk_z_gvar(v, ty, []), mk_var (v, ty))) fs2;
+	val gens = map (fn id => mk_var (id, 
+		(mk_z_power_type o mk_z_var_type) id)) fmls;
+	val ax = list_mk_µ (gens, (subst subs tm));
+in	new_axiom (sl, ax)
 end);
 =TEX
 
 =SML
 fun Ûgivenset_defnÝ ((idl, Nil) : string list * (string list * TERM) OPT) : unit = (
 	map simple_new_z_type idl; ()
-) | givenset_defn (idl, Value (idl', tm)) = (
-let	val frees = (map (fst o dest_var) (frees tm)) drop ((switch o curry) (op mem) idl');
-	val simplesets = idl drop ((switch o curry) (op mem) frees);
-	val side = map simple_new_z_type simplesets;
-	val side = new_z_type (idl diff simplesets) tm;
-in
-	()
-end);
+) | givenset_defn (idl, Value (fmls, tm)) = (
+	new_z_type idl (fmls, tm); ()
+);
 =TEX
 Free type definition processing involves rather more messing about than
 the other sorts of paragraph. We have to build apparatus to construct
@@ -1287,7 +1270,7 @@ fun Ûfreetype_defnÝ ([] : (string * ((string * TERM OPT)list))list) : unit = (
 let	val (tynames, parss) = split ftyl;
 	val side_effect = fty_scope_check();
 	val side_effect = map (map (check_gvar_name o fst)) parss;
-	val tys = map (fn tyn => mk_ctype(tyn, [])) tynames;
+	val tys = map (fn tyn => mk_ctype(bind_gvar_name tyn, [])) tynames;
 	val ptys = (map mk_z_power_type) tys;
 	val nptys = combine tynames ptys;
 	val ftys = map (fn (n, t) => mk_z_gvar(n, t, [])) nptys;
@@ -1330,25 +1313,17 @@ fun Ûconstraint_defnÝ  ((gpars, tm) : string list * TERM) : unit = (
 let	val vs = map (fn n => mk_var(n, mk_z_power_type(mk_vartype("'" ^ n)))) gpars;
 	val tm1 = list_mk_µ(vs, tm);
 	val con_nm = next_axiom_name "Constraint ";
-	val dummy = (if (get_flag "z_allow_free_vars_in_axioms")
-		then (let	val fs = frees (tm1);
-			in 
-				if (is_nil fs)
-				then ()
-				else warn "update_theory_db_with_parainfo" 49006
-				 [fn () => con_nm,
-				  fn () => format_list (fst o dest_var) fs ", "]
-			end
-		) 
-		else (let	val fs = frees (tm1);
-			in 
-				if (is_nil fs)
-				then ()
-				else fail "update_theory_db_with_parainfo" 49006
-				 [fn () => con_nm,
-				  fn () => format_list (fst o dest_var) fs ", "]
-			end
-		));
+	val dummy =
+	let	val fs = frees tm1;
+		val inform = if !z_allow_free_vars_in_axioms then warn else fail;
+	in 	if	is_nil fs
+		then	()
+		else	inform
+			"update_theory_db_with_parainfo" 49006
+			[fn () => con_nm,
+			 fn () => format_list (fst o dest_var) fs ", "]
+
+	end;
 in	new_axiom([con_nm], tm1); ()
 end);
 =TEX
@@ -1372,25 +1347,17 @@ let	val vs = map (fn n => mk_var(n, mk_z_power_type(mk_vartype("'" ^ n)))) gpars
 	val conj_nm = case nopt of
 		Value n => n
 	|	Nil => next_conjecture_name "Conjecture ";
-	val dummy = (if (get_flag "z_allow_free_vars_in_axioms")
-		then (let	val fs = frees (gtm);
-			in 
-				if (is_nil fs)
-				then ()
-				else warn "update_theory_db_with_parainfo" 49006
-				 [fn () => conj_nm,
-				  fn () => format_list (fst o dest_var) fs ", "]
-			end
-		) 
-		else (let	val fs = frees (gtm);
-			in 
-				if (is_nil fs)
-				then ()
-				else fail "update_theory_db_with_parainfo" 49006
-				 [fn () => conj_nm,
-				  fn () => format_list (fst o dest_var) fs ", "]
-			end
-		));	
+	val dummy =
+	let	val fs = frees gtm;
+		val inform = if !z_allow_free_vars_in_axioms then warn else fail;
+	in 	if	is_nil fs
+		then	()
+		else	inform
+			"update_theory_db_with_parainfo" 49006
+			[fn () => conj_nm,
+			 fn () => format_list (fst o dest_var) fs ", "]
+
+	end;
 in	
 	new_conjecture([conj_nm], gtm)
 end);
