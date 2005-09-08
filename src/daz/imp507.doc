@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.293 $ $RCSfile: imp507.doc,v $ $Date: 2005/05/12 16:57:45 $
+% imp507.doc %Z% $Revision: 1.294 $ $RCSfile: imp507.doc,v $ $Date: 2005/08/16 16:41:00 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.293 $%
+\def\SCCSversion{$Revision: 1.294 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/05/12 16:57:45 $%
+\TPPdate{\FormatDate{$Date: 2005/08/16 16:41:00 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -229,6 +229,7 @@ Use clauses in package specifications now propagate into the package body.
 \item[Issue 1.290] Added support for labelled statements and goto statements.
 \item[Issues 1.291, 1.292] Added {\em create\_package\_spec\_theory}.
 \item[Issue 1.293] Tidied checking in cases where one subprogram specification statement refines another.
+\item[Issue 1.294] Allowed for new scheme for Z type names.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -245,7 +246,8 @@ See \cite{ISS/HAT/DAZ/DTD507}.
 structure €CNZGenerator› : CNZGenerator = struct
 =SML
 open CNTypes CNTypes1 CNTypes2 CNBasicDeclsAndExprs ZParagraphs ZTermGenerator
-	CNVCGenerator ZUserInterfaceSupport TypeInference CNParser;
+	CNVCGenerator ZUserInterfaceSupport TypeInference CNParser
+	ZTypesAndTermsSupport;
 =TEX
 The following function returns the current level for the specified theory.  This is used as an index to order objects being added to the theory.
 
@@ -5251,9 +5253,8 @@ fun €stub_spec_fun› (form_fun : FORMAL_FUN) : unit = (
 The decision of which of the following two functions to call is made in $inf\_fun$
 =SML
 local
-val €informal_function_ty› : TYPE = mk_ctype(informal_function, []);
-val €informal_function_gvar› : Z_EXP =
-	mk_z_gvar(informal_function, mk_z_power_type informal_function_ty, []);
+val €informal_function_gvar› : Z_EXP = Ò Informal_Function Æ;
+val €informal_function_ty› : TYPE = dest_z_power_type( snd(dest_const(informal_function_gvar)));
 in
 fun €inf_fun_decl› ({name, ...}: INFORMAL_FUN) : (Z_DECL * Z_ID) = (
 	let	val n = trans_id name;
@@ -6321,7 +6322,7 @@ The following function extracts from the specification script theory the types
 =SML
 fun €spec_script_theory_types_and_const_thms› (spec_script_thy : ID)
 	: string list * (TERM * THM OPT) list = (
-	let	val type_names = rev(map (fst o dest_ctype) (get_types spec_script_thy));
+	let	val type_names = rev(mapfilter (unbind_gvar_name o fst o dest_ctype) (get_types spec_script_thy));
 		val consts = get_consts spec_script_thy;
 		val const_thms = rev (map (fn x => (x, (Value (get_spec x)
 						handle Fail _=> Nil))) consts);
@@ -6352,16 +6353,15 @@ let
 	case dest_simple_type aty of
 		Vartype _ => raise just_fail
 	|	Ctype(con, pars) => (
-		   case rassoc5 subs con of
-			(* constructor name changed *)
-			Value con' => 
-			   mk_ctype(con', 
-				map (fn p => aux1 p 
-					       handle _ => p) 
-					pars)
+		let	val con' = rassoc3 subs (unbind_gvar_name con);
+		in	(* constructor name changed *)
+			mk_ctype(bind_gvar_name con', 
+				map (fn p => aux1 p handle Fail _ => p) pars)
+		end	handle Fail _ => (
 			(* no constructor name change, so if pars also
 			   unchanged then fail *)
-		       | Nil => mk_ctype (con, aux false pars)
+			mk_ctype (con, aux false pars)
+		)
 	)
 	end);
 in
@@ -6369,24 +6369,26 @@ in
 end);
 
 =IGN
-let	val b = mk_ctype("b",[]);
-	val c = mk_ctype("c",[]);
-	val d = mk_ctype("d",[]);
+fun mk_zctype(n, args) = mk_ctype(bind_gvar_name n, args);
+let	val b = mk_zctype "b",[]);
+	val c = mk_zctype "c",[]);
+	val d = mk_zctype "d",[]);
 	val av = mk_vartype "a";
 	val big = list_mk_≠_type [
-		mk_ctype("a",[c, d]),
+		mk_zctype "a",[c, d]),
 		b,
-		mk_ctype("e", [av]),
-		mk_ctype("a", [av, b]),
-		mk_ctype("a", [b, av]),
-		mk_ctype("a", [mk_ctype("a", [b, av]), b]),
-		mk_ctype("f", [c,d]),
-		mk_ctype("f", [av, b]),
-		mk_ctype("f", [b, av]),
-		mk_ctype("f", [mk_ctype("a", [b, av]), b])];
+		mk_zctype "e", [av]),
+		mk_zctype "a", [av, b]),
+		mk_zctype "a", [b, av]),
+		mk_zctype "a", [mk_zctype "a", [b, av]), b]),
+		mk_zctype "f", [c,d]),
+		mk_zctype "f", [av, b]),
+		mk_zctype "f", [b, av]),
+		mk_zctype "f", [mk_zctype "a", [b, av]), b])];
+	val subs = [("x","a"),("y","b")] ;
+	val ty = big;
 in		
-type_subst_type [("x","a"),("y","b")] 
-big
+type_subst_type subs ty
 end;
 =TEX
 =SML
@@ -6419,13 +6421,13 @@ fun type_subst_term (subs : (string * string) list) (tm : TERM) : TERM = (
 );
 =IGN
 set_flag("pp_show_HOL_types",true);	
-let	val b = mk_var("b", mk_ctype("bt",[]));
-	val c = mk_const("c", mk_ctype("ct",[]));
-	val d = mk_simple_Ã (mk_var("d", mk_ctype("dt",[])), ¨d1Æ);
-	val e = mk_simple_Ã (mk_var("a", mk_ctype("at",[])), ¨d1Æ);
-	val f = mk_simple_Ã (mk_var("d", mk_ctype("dt",[])), b);
+let	val b = mk_var("b", mk_zctype("bt",[]));
+	val c = mk_const("c", mk_zctype("ct",[]));
+	val d = mk_simple_Ã (mk_var("d", mk_zctype("dt",[])), ¨d1Æ);
+	val e = mk_simple_Ã (mk_var("a", mk_zctype("at",[])), ¨d1Æ);
+	val f = mk_simple_Ã (mk_var("d", mk_zctype("dt",[])), b);
 	val g = mk_app(mk_const("a", 
-		mk_≠_type(mk_ctype("ct",[]), mk_ctype("at",[]))),
+		mk_≠_type(mk_zctype("ct",[]), mk_zctype("at",[]))),
 		c);
 in	
 type_subst_term [("x","at"),("y","bt")] 
@@ -6835,7 +6837,7 @@ let	val old_thy = get_current_theory_name();
 	val iconst_thms = map (fn x => (x, (Value (get_spec x)
 					handle Fail _=> Nil))) 
 				iconsts;
-	val type_names = map (fst o dest_ctype) itypes;
+	val type_names = mapfilter (unbind_gvar_name o fst o dest_ctype) itypes;
 	val pfxd_names = map (prefix_package_id ident newids) type_names;
 	val tysubs = (combine pfxd_names type_names) drop (fn (x,y) => (x = y));
 	val dummy2 = open_theory target_thy;
@@ -7093,7 +7095,7 @@ fun €new_scope_with_common› (ident : ID)
 	let
 		val flags = false_flags;
 		val newids = mk_new_ids(new_ids package);
-		val (tysubs, formal_procs1, informal_procs1, aux_vars1, var_renamings, dict) = 
+		val (_, formal_procs1, informal_procs1, aux_vars1, var_renamings, dict) = 
 			z_prefix ident newids package;
 		val vc_vars1 = map (prefix_vardecl ident newids)
 						(#vc_vars package);
