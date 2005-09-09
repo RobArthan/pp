@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp079.doc   %Z% $Date: 2002/10/17 16:26:32 $ $Revision: 1.22 $ $RCSfile: imp079.doc,v $
+% imp079.doc   %Z% $Date: 2004/01/19 12:44:00 $ $Revision: 1.23 $ $RCSfile: imp079.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation for Z User Interface Support}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP079}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.22 $%
+\def\SCCSversion{$Revision: 1.23 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 16:26:32 $%
+\TPPdate{\FormatDate{$Date: 2004/01/19 12:44:00 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -99,6 +99,7 @@ Removed dependency on PolyML.makestring.
 \item[Issue 1.21] Copyright and banner updates for open source release.
 \item[Issue 1.22] PPZed-specific updates for open source release
 \item[Issue 1.23] The Z universal set is now called É.
+\item[Issue 1.24] Support for new forms of stubs in templates.
 \end{description}
 \subsection{Changes forecast}
 \pagebreak
@@ -172,7 +173,9 @@ The following types are used for the templates which
 record information about fancy-fix operators:
 =SML
 datatype €STUB›		= 	€StubUS›		(* _ *)
-			|	€StubEll›		(* ... *);
+			|	€StubEll›		(* ... *)
+			|	€StubUSQ›		(* _? *)
+			|	€StubUSE›		(* _! *);
 
 type €CORE›		=	ID * ((STUB * ID) list * (STUB * ID)) OPT;
 
@@ -439,7 +442,9 @@ The following functions are used to do this:
 =TEX
 =SML
 fun €format_stub› StubUS = "_"
-|    format_stub StubEll = "...";
+|    format_stub StubEll = "..."
+|    format_stub StubUSQ = "_?"
+|    format_stub StubUSE = "_!";
 =TEX
 =SML
 fun €format_core› ( (first, Value (middle, last)) : CORE ) : string = (
@@ -1100,13 +1105,11 @@ end;
 \subsection{Encoding and Decoding Functions}
 First of all we give the encoding for templates.
 We encode the templates as strings using the template formatting routine
-but discarding the extra spaces that gives at the beginning and end
-and replacing the three dots by semicolons to save a little space.
+using the words function to protect against any extra spacing that might insert.
 =SML
 fun €string_of_template› (tmpl : TEMPLATE) : string = (
 	let	val bits = words (format_template tmpl);
-		val bits' = map (fn "..." => ";" | x => x) bits;
-	in	format_list Combinators.I bits' " "
+	in	format_list Combinators.I bits " "
 	end
 );
 =TEX
@@ -1120,8 +1123,10 @@ fun €string_of_ident› ((tmpl, dec) : IDENT) : string = (
 =SML
 fun €stub_of_string› (s : string) : STUB = (
 	case s of
-		";" => StubEll
+		"..." => StubEll
 	|	"_" => StubUS
+	|	"_?" => StubUSQ
+	|	"_!" => StubUSE
 	|	_ => fail "stub_of_string" 79001 [get_current_theory_name]
 );
 =TEX
@@ -1142,13 +1147,17 @@ fun €core_of_strings› ( (s :: ss) : string list) : CORE = (
 fun €template_of_string› ( s : string) : TEMPLATE = (
 	let	val (h, r) = (
 			case words s of
-				";" :: more => (";", more)
+				"..." :: more => ("...", more)
 			|	"_" :: more => ("_", more)
+			|	"_?" :: more => ("_?", more)
+			|	"_!" :: more => ("_!", more)
 			|	other => ("", other));
 		val (l, c) = (
 			case rev r of
-					";" :: more => (";", rev more)
+					"..." :: more => ("...", rev more)
 			|	"_" :: more => ("_", rev more)
+			|	"_?" :: more => ("_?", rev more)
+			|	"_!" :: more => ("_!", rev more)
 			|	other => ("", r));
 		val core = core_of_strings c;
 	in	case (h, l) of
@@ -1246,7 +1255,7 @@ it returns true iff. the entry is already present.
 than is strictly necessary, however this considerably simplifies the code,
 which is highly unlikely to be critical for performance.)
 =SML
-fun template_check ((cl, tmpl) : CLASS * TEMPLATE) : bool = (
+fun €template_check› ((cl, tmpl) : CLASS * TEMPLATE) : bool = (
 	let	val idfixes = tmpl_ids tmpl cl;
 		val ids = map fst idfixes;
 		val ids_entries = combine idfixes (map get_zfixity_info ids);

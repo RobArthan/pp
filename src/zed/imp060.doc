@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp060.doc   %Z% $Date: 2003/07/29 15:13:19 $ $Revision: 1.23 $ $RCSfile: imp060.doc,v $
+% imp060.doc   %Z% $Date: 2004/01/19 12:44:00 $ $Revision: 1.24 $ $RCSfile: imp060.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -21,10 +21,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of the Z Lexical Analyser}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP060}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.23 $%
+\def\SCCSversion{$Revision: 1.24 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2003/07/29 15:13:19 $%
+\TPPdate{\FormatDate{$Date: 2004/01/19 12:44:00 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -96,7 +96,9 @@ symbols known to the reader/writer.
 \item[Issue 1.20] Copyright and banner updates for open source release.
 \item[Issue 1.21] PPZed-specific updates for open source release
 \item[Issue 1.22] Corrected handling of subscripted symbols given as macros.
+\item[Issue 1.23] Multi-character subscripts now allowd.
 \item[Issue 1.24] The Z universal set is now called ƒ.
+\item[Issue 1.25] New forms of stub in templates.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -169,7 +171,7 @@ forming tokens:
 	|	ÛZT¤Ý 
 	|	ÛZT´Ý
 =TEX
-\subsubsection{Schemas Operations}
+\subsubsection{Schema Operations}
 =SML
 	|	ÛZTPreÝ
 	|	ÛZT„Ý
@@ -203,6 +205,8 @@ forming tokens:
 	|	ÛZTColonÝ
 	|	ÛZTSemiÝ
 	|	ÛZTUnderScoreÝ
+	|	ÛZTUnderScoreQueryÝ
+	|	ÛZTUnderScoreExclamÝ
 	|	ÛZTVertÝ
 	|	ÛZTConjectureÝ
 	|	ÛZT¦Ý
@@ -291,13 +295,13 @@ val ÛdecorÝ : string list =
 fun Ûis_decorÝ c = contains decor c;
 =TEX
 =SML
-val ÛunderscÝ : string list =
-=TEX
-=SMLLITERAL
-	["_"];
+fun Ûis_underscÝ c = c = "_";
 =TEX
 =SML
-fun Ûis_underscÝ c = contains undersc c;
+fun Ûis_queryÝ c = c = "?";
+=TEX
+=SML
+fun Ûis_exclamÝ c = c = "!";
 =TEX
 =SML
 val Ûinvalid_symbolÝ : string list =
@@ -418,6 +422,8 @@ fun ÛclassifyÝ (what : string) : Z_TOKEN = (
 	|	"¢" => ZT¢
 	|	"," => ZTComma
 	|	"_" => ZTUnderScore
+	|	"_?" => ZTUnderScoreQuery
+	|	"_!" => ZTUnderScoreExclam
 	|	"..." => ZTDots
 	|	"." => ZTDot
 	|	"/" => ZTSlash
@@ -522,6 +528,19 @@ fun Ûrec_underscÝ (st : LEX_STATE) : LEX_STATE = (
 	if next is_undersc st
 	then collect st
 	else raise Unrecognised
+);
+=TEX
+\subsection{Recognition of Stubs}
+=SML
+fun Ûrec_stubÝ (st : LEX_STATE) : LEX_STATE = (
+	if	next is_undersc st
+	then	let val st' = collect st;
+		in	if	next is_query st'
+			orelse	next is_exclam st'
+			then	collect st'
+			else	st'
+		end
+	else	raise Unrecognised
 );
 =TEX
 \subsection{Recognition of Alphanumeric Sequences}
@@ -768,7 +787,7 @@ fun Ûrec_ns_lexemeÝ (st : LEX_STATE) : LEX_STATE = (
 		handle Unrecognised => (rec_punctuation st
 		handle Unrecognised => (rec_number st
 		handle Unrecognised => (rec_decor st
-		handle Unrecognised => (rec_undersc st
+		handle Unrecognised => (rec_stub st
 		handle Unrecognised => 
 			fail "Z Lexical Analyser" 60008 []))))
 );
@@ -806,8 +825,16 @@ the signature $ZLex$.
 =SML
 fun Ûz_lexÝ (ip : INPUT list) : Z_TOKEN list = (
 	case ip of
-		Text s :: more => (
-			(lex_string (explode s))@z_lex more
+		Text t :: (more1 as (String s::more2)) => (
+			if	t = ""
+			then	z_lex more1
+			else if	String.sub(t, size t - 1) <> #"$"
+			then	lex_string (explode t)
+				@ z_lex more1
+			else	lex_string (explode (substring(t, 0, size t - 1)))
+				@ [ZTId s] @ z_lex more2
+	) |	Text t :: more => (
+			lex_string (explode t) @ z_lex more
 	) |	String s :: more => (
 			ZTString s :: z_lex more
 	) |	Char s :: more => (

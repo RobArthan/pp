@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp061.doc   %Z% $Date: 2005/08/03 15:12:49 $ $Revision: 1.33 $ $RCSfile: imp061.doc,v $
+% imp061.doc   %Z% $Date: 2005/08/05 12:49:20 $ $Revision: 1.34 $ $RCSfile: imp061.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of the Z Parser}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP061}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.33 $%
+\def\SCCSversion{$Revision: 1.34 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/08/03 15:12:49 $%
+\TPPdate{\FormatDate{$Date: 2005/08/05 12:49:20 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -92,6 +92,7 @@ Relaxed dependency on makestring.
 \item[Issue 1.25] Increased maximum numeric precedence (in line with likely future direction of ISO standard).
 \item[Issue 1.26] Schema projection is now left-associative.
 \item[Issue 1.27] Fixed bug in x\_pred.
+\item[Issue 1.28] New forms of stub in templates.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -369,6 +370,8 @@ fun ÛclassifyÝ  (use_fix_db : bool) (tok : Z_TOKEN) : Z_LEX_CLASS = (
 	|	ZT¢		=>	RSeqBrk
 	|	ZTComma		=>	Comma
 	|	ZTUnderScore	=> 	Stub
+	|	ZTUnderScoreQuery	=> 	Stub
+	|	ZTUnderScoreExclam=> 	Stub
 	|	ZTDots		=>	Stub
 	|	ZTDot		=>	Dot
 	|	ZTSlash		=>	Slash
@@ -437,6 +440,8 @@ fun Ûformat_z_tokenÝ  (tok : Z_TOKEN) : string = (
 	|	ZT¢		=>	"¢"
 	|	ZTComma		=>	","
 	|	ZTUnderScore	=>	"_"
+	|	ZTUnderScoreQuery	=>	"_?"
+	|	ZTUnderScoreExclam=>	"_!"
 	|	ZTDots		=>	"..."
 	|	ZTDot		=>	"."
 	|	ZTSlash		=>	"/"
@@ -621,7 +626,9 @@ val Ûred_id_stubsÝ = red_accept;
 =TEX
 =SML
 fun dest_stub (ZTDots : Z_TOKEN) = StubEll
-|   dest_stub (ZTIUnderScore) = StubUS;
+|   dest_stub (ZTUnderScore) = StubUS
+|   dest_stub (ZTUnderScoreQuery) = StubUSQ
+|   dest_stub (ZTIUnderScoreQuery) = StubUSE;
 =TEX
 =SML
 fun Ûred_stub_idÝ (Token(st, _)) (Token((ZTId nm), _)) _ = (
@@ -1212,6 +1219,8 @@ fun Ûred_quotationÝ (Token(ZTAqTm tm, _)) _ = (
 =SML
 fun Ûstub_auxÝ (Token (ZTUnderScore, _)) = StubUS
 |   stub_aux (Token (ZTDots, _)) = StubEll
+|   stub_aux (Token (ZTUnderScoreQuery, _)) = StubUSQ
+|   stub_aux (Token (ZTUnderScoreExclam, _)) = StubUSE
 |   stub_aux _ = raise PARSER_ERROR "stub_aux";
 =TEX
 =SML
@@ -1509,7 +1518,6 @@ fun Ûphase_1Ý (tokens : Z_TOKEN list) : PP = (
 end (* of local ... in *);
 end (* of structure *);
 structure ZParser = struct
-local
 open ZParser;
 open ZUserInterfaceSupport;
 open ZLex;
@@ -1614,15 +1622,18 @@ fun Ûx_var_nameÝ (act_p as (PredBracketed (p, "")) : PRED) : TEMPLATE * DECOR = 
 =TEX
 =SML
 fun Ûx_fancyfix_argsÝ
-	(xp : PRED -> Z_TM)
+	(expr : bool)
+	(xp : bool -> PRED -> Z_TM)
 	(tmpl : TEMPLATE)
 	(decor : DECOR)
 	(args : PRED list list) : Z_TM = (
 	let	val stored_tmpl = check_template tmpl;
 		val stubs = tmpl_stubs stored_tmpl;
-		fun do1 (StubEll, ps) = ZTm§¢(Nil, map xp ps)
-		|   do1 (StubUS, [p]) = xp p
-		|   do1 (StubUs, ps) = (
+		fun do1 (StubEll, ps) = ZTm§¢(Nil, map (xp true) ps)
+		|   do1 (StubUS, [p]) = xp true p
+		|   do1 (StubUSQ, [p]) = xp false p
+		|   do1 (StubUSE, [p]) = xp expr p
+		|   do1 (_, ps) = (
 			phase_2_error
 			61005
 			[format_list format_pred ps ", ",
@@ -1700,7 +1711,7 @@ fun Ûx_predÝ (expr : bool) (p : PRED) : Z_TM = (
 				else ZTmQuant‰F(q, (xdecl, xp1opt, Nil), xp2)
 			end
 	|	PredLet (eqdefs, p) =>
-			ZTmLet(map x_loc_eq_def eqdefs, x_pred true p)
+			ZTmLet(map x_loc_eq_def eqdefs, x_pred expr p)
 	|	PredLogInOp (p1, rator, p2) => 
 			let	val xp1 = x_pred expr p1;
 				val xp2 = x_pred expr p2;
@@ -1732,11 +1743,8 @@ fun Ûx_predÝ (expr : bool) (p : PRED) : Z_TM = (
 	|	PredLambda (decl, Nil, Value p) =>
 			ZTmÌ ((x_decl decl, Nil, Nil), x_pred true p)
 	|	PredLambda _ => raise PARSER_ERROR "invalid PredLambda arguments"
-	|	PredFancyFix (tmpl as (TmplPre (("", Nil), StubUS)),
-				decor, args) =>
-			x_fancyfix_args (x_pred false) tmpl decor args
 	|	PredFancyFix (tmpl, decor, args) =>
-			x_fancyfix_args (x_pred true) tmpl decor args
+			x_fancyfix_args expr x_pred tmpl decor args
 	|	PredCrossProduct ps => 
 			ZTm¸(map (x_pred true) ps)
 	|	PredPow p => ZTmð (x_pred true p)
@@ -2003,8 +2011,6 @@ fun Ûx_conjectureÝ ((idopt, p) : CONJECTURE) : Z_PARA = (
 =TEX
 \section{PHASE 2 INTERFACE}\label{PHASE2INTERFACE}
 =SML
-in
-open ZParser;
 fun Ûx_paraÝ (is_quot : bool) (para : PARAGRAPH) : Z_PARA = (
 	case para of
 		ParFixity fix => x_fixity fix
@@ -2014,7 +2020,6 @@ fun Ûx_paraÝ (is_quot : bool) (para : PARAGRAPH) : Z_PARA = (
 	|	ParAxBox ab => x_ax_box ab
 	|	ParConjecture c => x_conjecture c
 );
-end (* of local ... in *);
 end (* of structure *);
 =TEX
 =SML
