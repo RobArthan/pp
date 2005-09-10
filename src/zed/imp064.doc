@@ -8,18 +8,18 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp064.doc   %Z% $Date: 2005/09/06 14:21:21 $ $Revision: 1.42 $ $RCSfile: imp064.doc,v $
+% imp064.doc   %Z% $Date: 2005/09/09 17:00:29 $ $Revision: 1.43 $ $RCSfile: imp064.doc,v $
 
 =TEX
-% imp064.doc   %Z% $Date: 2005/09/06 14:21:21 $ $Revision: 1.42 $ $RCSfile: imp064.doc,v $
+% imp064.doc   %Z% $Date: 2005/09/09 17:00:29 $ $Revision: 1.43 $ $RCSfile: imp064.doc,v $
 \documentstyle[hol1,11pt,TQ]{article}
 
 \TPPtitle{Implementation of the Z Pretty Printer}
 \TPPref{DS/FMU/IED/IMP064}
-\def\SCCSissue{$Revision: 1.42 $%
+\def\SCCSissue{$Revision: 1.43 $%
 }
 \TPPissue{\SCCSissue}
-\TPPdate{\FormatDate{$Date: 2005/09/06 14:21:21 $%
+\TPPdate{\FormatDate{$Date: 2005/09/09 17:00:29 $%
 }}
 \TPPproject{FST PROJECT}
 
@@ -140,6 +140,7 @@ lasp -s -u imp064.OKwords imp064.doc > zz1
 \item[Issue 1.40] Schema projection is now left-associative.
 \item[Issue 1.41] Added let-expressions.
 \item[Issue 1.42] Allowed for new forms of stubs in templates.
+\item[Issue 1.43] Allowed for \$-feature (and fixed infelicities in identifying genuine Z variable names).
 \end{description}
 
 %********************************************************************
@@ -444,17 +445,29 @@ end
 \section{AUXILIARY PRINTING FUNCTIONS}
 
 \subsection{Names}
-
+In the following, if the name is not a reasonable Z identifier,
+one or other of {\em template\_of_string}, {\em force_value} or 
 =SML
 fun Ûdo_dec_var_nameÝ (cur_env:PP_ENV, name:string, enclosed_prec: OP_PREC) : PFUN_ANS = (
-	let
-		val PpEnv{pe_addstring=addstring, ...} = cur_env;
-
-		val (n, d) = unpack_ident name;
+	let	val PpEnv{pe_addstring=addstring, ...} = cur_env;
+	in let	val (n, d) = unpack_ident name;
 
 		val tmpl = template_of_string n;
 
-		fun decorate ts = (
+		val fti = first_tmpl_id tmpl handle Fail _ => n;
+
+		fun check_id nm = (
+			case ZLex.z_lex[Lex.Text nm] of
+				[ZLex.ZTId _, ZLex.ZTEos] => true
+			|	_ => false
+		);
+		fun check_tmpl i = (
+			case get_zfixity_info i of
+			Value(_, [t]) => string_of_template t = n
+			|	_ => false
+		);
+
+ 		fun decorate ts = (
 			case d of
 				"" => ts
 			|	_ => (
@@ -464,11 +477,28 @@ fun Ûdo_dec_var_nameÝ (cur_env:PP_ENV, name:string, enclosed_prec: OP_PREC) : PF
 			)
 		);
 	in
-		if (n = first_tmpl_id tmpl) handle Fail _ => true
-		then(	addstring name;
+		if	n = fti	
+		then	((if	check_id n
+			then	addstring name
+			else	(addstring "$\"";
+				 addstring name;
+				 addstring "\""));
+			PfOk)
+		else	if	check_tmpl fti
+			then	bracket(cur_env,
+					enclosed_prec,
+					false,
+		fn e => addstring (decorate (format_template tmpl)))
+			else	(addstring "$\"";
+				 addstring name;
+				 addstring "\"";
+				 PfOk)
+	end	handle Fail _ => ( (* template_of_string failed *)
+			addstring "$\"";
+			addstring name;
+			addstring "\"";
 			PfOk
-		)else	bracket(cur_env, enclosed_prec, false, fn e => 
-				addstring (decorate (format_template tmpl)))
+		)
 	end
 );
 =TEX
