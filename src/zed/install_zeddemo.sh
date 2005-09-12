@@ -1,7 +1,7 @@
 #! /bin/sh
 #
 # File: install_zeddemo
-# Derived from: $Header: /home/rda/zed/RCS/install_zeddemo.sh,v 1.4 2004/02/02 16:38:32 rda Exp $
+# Derived from: $Header: /home/rda/opp/RCS/install_zeddemo.sh,v 1.4 2004/02/02 16:39:25 rda Exp rda $
 #
 # Running this script sets up example database in the directory ./db
 #
@@ -14,7 +14,8 @@ doc=$dir/doc
 db=$dir/db
 tmp_build=$dir/tmp_build
 deletebuilddir="y"
-export PPINSTALLDIR
+PPDATABASEPATH=$dir/tmp_build:$PPDATABASEPATH
+export PPINSTALLDIR PPDATABASEPATH
 
 # tell the user what we are doing
 echo `date`

@@ -1,7 +1,7 @@
 #! /bin/sh
 #
 # File: install_holdemo
-# Derived from: $Header: /home/rda/hol/RCS/install_holdemo.sh,v 1.3 2001/12/14 11:03:19 rda Exp rda $
+# Derived from: $Header: /home/rda/opp/RCS/install_holdemo.sh,v 1.4 2004/02/02 16:33:12 rda Exp rda $
 #
 # Running this script sets up example database in the directory ./db
 #
@@ -14,7 +14,8 @@ doc=$dir/doc
 db=$dir/db
 tmp_build=$dir/tmp_build
 deletebuilddir="y"
-export PPINSTALLDIR
+PPDATABASEPATH=$dir/tmp_build:$PPDATABASEPATH
+export PPINSTALLDIR PPDATABASEPATH
 
 # tell the user what we are doing
 echo `date`
