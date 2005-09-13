@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.294 $ $RCSfile: imp507.doc,v $ $Date: 2005/08/16 16:41:00 $
+% imp507.doc %Z% $Revision: 1.295 $ $RCSfile: imp507.doc,v $ $Date: 2005/09/08 13:32:34 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.294 $%
+\def\SCCSversion{$Revision: 1.295 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/08/16 16:41:00 $%
+\TPPdate{\FormatDate{$Date: 2005/09/08 13:32:34 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -230,6 +230,7 @@ Use clauses in package specifications now propagate into the package body.
 \item[Issues 1.291, 1.292] Added {\em create\_package\_spec\_theory}.
 \item[Issue 1.293] Tidied checking in cases where one subprogram specification statement refines another.
 \item[Issue 1.294] Allowed for new scheme for Z type names.
+\item[Issue 1.295] More enhancements to the error reporting in {\em call\_vcs}.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -3525,6 +3526,7 @@ fun €add_init_vars_speclab› ({spec as {w, pre, post, ...},
 =TEX
 =SML
 fun €terms_of_vcs›
+	(sl : SPECLAB)
 	(acc : TERM list)
 	(gs_pre_post :  Z_ID list OPT * TERM * TERM)
 	(vc as (decs, (asms, conc)) :: more : VC list) : TERM list = (
@@ -3534,25 +3536,45 @@ fun €terms_of_vcs›
 		|	([], _) => mk_z_¥ (list_mk_± asms, conc)
 		|	(_, []) => mk_z_µ(mk_z_decl decs, mk_z_true, conc)
 		|	(_, _) => mk_z_µ(mk_z_decl decs, list_mk_± asms, conc));
-	in	terms_of_vcs (tm :: acc) gs_pre_post more
+		val recur = terms_of_vcs sl;
+	in	recur (tm :: acc) gs_pre_post more
 	end
-) | terms_of_vcs acc (globals, pre, post) [] = (
+) | terms_of_vcs sl acc (globals, pre, post) [] = (
 	let	val all_error_frees = list_term_union (map frees acc);
 	in	case all_error_frees of
 			[] => rev acc
 		|	_ => 
-		let	val pre_frees = frees pre;
+		let	fun not_ada_id v = (
+				case  #env(#wp_env sl) (fst(dest_var v)) of
+				Value {info = EIEnvAuxVar _, ...} => true
+			|	Value {info = EIEnvLogCon _, ...} => true
+			|	Value _ => true
+			|	Nil => false
+			);
+			fun p1 (_::_) () = "s"
+			|  p1 [] () = "";
+			fun p2 (_::_) () = "are"
+			|  p2 [] () = "is";
+			val pre_frees = frees pre;
 			val post_frees = frees post;
 			val pre_post_frees = pre_frees term_union post_frees;
 			val other_error_frees = all_error_frees term_diff pre_post_frees;
 			val pre_post_error_frees = all_error_frees term_diff other_error_frees;
 			val post_error_frees = pre_post_error_frees term_diff pre_frees;
 			val pre_error_frees = pre_post_error_frees term_diff post_error_frees;
-			fun report number (term, [var]) = term_fail "call_vcs" number [term, var]
-			|  report number (term, vars) = (
-				fail "call_vcs" (number+1)
+			fun note vars () = (
+				case vars drop not_ada_id of
+					[] => ""
+				|	vs => 
+					get_error_message 507122 [format_list string_of_term vs ", ", p1 vs (), p2 vs ()]
+			);
+			fun  report number (term, vars) = (
+				fail "call_vcs" number
 				[ fn () => string_of_term term,
-				  fn () => format_list string_of_term vars ", " ]
+				  fn () => format_list string_of_term vars ", ",
+				 p1 vars,
+				 p2 vars,
+				 note vars ]
 			);
 		in	case post_error_frees of
 				_::_ =>  report 507121 (post, post_error_frees)
@@ -3583,7 +3605,7 @@ fun €call_vcs›
 		let 	val (vcs_routes, spc as {pre, post, ...}) = vcs sl1_st;
 			val seqs = map fst vcs_routes;
 			val routes = map snd vcs_routes;
-		in	(terms_of_vcs [] (globals, unquote pre, unquote post) seqs, routes, spc)
+		in	(terms_of_vcs sl [] (globals, unquote pre, unquote post) seqs, routes, spc)
 		end
 	end
 );
