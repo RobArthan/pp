@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp508.doc   %Z% $Date: 2005/07/29 16:42:36 $ $Revision: 1.127 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2005/09/08 13:32:34 $ $Revision: 1.128 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.127 $%
+\def\SCCSversion{$Revision: 1.128 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/07/29 16:42:36 $%
+\TPPdate{\FormatDate{$Date: 2005/09/08 13:32:34 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -152,6 +152,7 @@ the cache theory before calling {\it term\_of\_z\_tm}.
 \item[Issue 1.126] Improved error handling in translation of function calls.
 \item[Issue 1.127] Added interface so the VC generator can find out whether we are generating domain conditions.
 \item[Issue 1.128] Allowed for new scheme for type names in Z.
+\item[Issue 1.129] Enhanced error reporting for free variables in basic declarations.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -908,19 +909,40 @@ fun Ûexp_to_discrete_rangeÝ (EDiscreteRange (DRConstrained{tmark, range}) : EXP)
 
 \subsection{Z Paragraphs}
 =SML
-fun Ûz_axÝ (id : Z_ID, exp : Z_EXP, preds : Z_PRED list) : PARAINFO = (
+fun Ûz_axÝ (construct : string) (id : Z_ID, exp : Z_EXP, preds : Z_PRED list) : PARAINFO = (
 	let	val ty = dest_z_power_type (type_of exp);
+		val var = mk_var(id, ty);
 		val decl = mk_z_decl[mk_z_dec([mk_var(id, ty)], exp)];
 		val pred = case preds of
 				[] => Nil
 			|	_ => Value (list_mk_± preds);
-	in	AxDesInfo([], decl, pred, [(id, ty)])
+		val vs = case pred of
+				Nil => []
+			|	Value p => frees p term_less var;
+	in	case vs of
+			[] => AxDesInfo([], decl, pred, [(id, ty)])
+		|	_::_ =>
+		let	fun s () = case vs of [_] => "" | _ => "s";
+		in	fail "z_ax" 508106
+			[fn () => construct,
+			 fn () => format_list string_of_term vs ", ",
+			 s]
+		end
+
 	end
 );
 =TEX
 =SML
-fun Ûz_eq_eqÝ (id : Z_ID, exp : Z_EXP) : PARAINFO = (
-	AbbDefInfo (id, [], exp)
+fun Ûz_eq_eqÝ (construct : string) (id : Z_ID, exp : Z_EXP) : PARAINFO = (
+	case frees exp of
+		[] => AbbDefInfo (id, [], exp)
+	|	vs =>
+		let	fun s () = case vs of [_] => "" | _ => "s";
+		in	fail "z_eq_eq" 508106
+			[fn () => construct,
+			 fn () => format_list string_of_term vs ", ",
+			 s]
+		end
 );
 =TEX
 =SML
@@ -1871,7 +1893,7 @@ end	handle Fail _ => (
 				handle Fail _ => dest_z_lvar zp;
 			val sfx = fold (op ^^) (map trans_id atts) (trans_id att);
 			val za = zn ^^ sfx;
-		in	update_theory_db_with_parainfo (z_ax(za, attr_ty, []));
+		in	update_theory_db_with_parainfo (z_ax "attribute" (za, attr_ty, []));
 			zid env za
 		end	handle Fail _ =>
 				fail "exp_attrib" 508028 []
@@ -2558,7 +2580,7 @@ fun Ûbasic_decl_constÝ
 				fun zpara const = (
 					let	val zi = trans_id const;
 						val zvar = mk_z_lvar(zi, ty, []);
-					in	z_ax(zi, zexp, [z_eq(zvar, sl_te)])
+					in	z_ax "constant" (zi, zexp, [z_eq(zvar, sl_te)])
 					end
 				);
 			in	if	ty =: tm_ty
@@ -2568,13 +2590,13 @@ fun Ûbasic_decl_constÝ
 					 fn _ => tm]
 			end
 		) |	(Value te, Nil) => (
-			map (fn const => z_eq_eq(trans_id const, te)) consts
+			map (fn const => z_eq_eq "constant" (trans_id const, te)) consts
 		) |	(Nil, _) => (
 			let	fun do1 const = (
 					case tmo of Value tm => (
 						let	val zexp = zid env (trans_id tm);
 							val zvar = trans_id const;
-						in	z_ax(zvar, zexp, [])
+						in	z_ax "constant" (zvar, zexp, [])
 						end
 					) | Nil => (
 						fail "basic_decl_const" 508067 [fn _ =>const]
@@ -2602,13 +2624,14 @@ let	fun env' id =
 			canon_name = id}
 		else	env id;
 	val zexp = z_set_minus (zid env' zid‰1, z_set [zid env' (zid‰1 ^^ zlst)]);
+	val z_e_e = z_eq_eq "type";
 in
-	[z_eq_eq (zid‰1 ^^ zfst, zid env' zid‰2),
-	z_eq_eq (zid‰1 ^^ zlst, zid env' zid‰3),
-	z_eq_eq (zid‰1 ^^ zsuc, z_dom_res (zexp, z_succ)),
-	z_eq_eq(zid‰1 ^^ zpred, z_inv(zid env' (zid‰1 ^^ zsuc))),
-	z_eq_eq(zid‰1 ^^ zpos, z_id_rel (zid env' zid‰1)),
-	z_eq_eq(zid‰1 ^^ zval, z_inv(zid env' (zid‰1 ^^ zpos)))]
+	[z_e_e (zid‰1 ^^ zfst, zid env' zid‰2),
+	z_e_e (zid‰1 ^^ zlst, zid env' zid‰3),
+	z_e_e (zid‰1 ^^ zsuc, z_dom_res (zexp, z_succ)),
+	z_e_e(zid‰1 ^^ zpred, z_inv(zid env' (zid‰1 ^^ zsuc))),
+	z_e_e(zid‰1 ^^ zpos, z_id_rel (zid env' zid‰1)),
+	z_e_e(zid‰1 ^^ zval, z_inv(zid env' (zid‰1 ^^ zpos)))]
 end);
 =TEX
 =SML
@@ -2633,19 +2656,23 @@ let	val {vals} = td;
 		else
 			env id
 	);
+	val z_e_e = z_eq_eq "type";
 in
-	map (fn j => z_eq_eq j) (combine zvals znums) @
-	[z_eq_eq(zname, z_rng(zid env' (hd zvals), zid env' ((hd o rev) zvals)))] @
+	map (fn j => z_e_e j) (combine zvals znums) @
+	[z_e_e(zname, z_rng(zid env' (hd zvals), zid env' ((hd o rev) zvals)))] @
 	enum_attrib env' (zname, hd zvals, (hd o rev) zvals)
 end);
 =TEX
 \subsection{Translating Array Types}
 =SML
 fun Ûarray_attrib_auxÝ (env : CN_ENV) (zid‰1 : Z_ID) (zid‰2 : Z_ID, i : int) : PARAINFO list = (
-	[z_eq_eq(dimen(zid‰1 ^^ zfst, i), zid env (zid‰2 ^^ zfst)),
-	z_eq_eq(dimen(zid‰1 ^^ zlst, i), zid env (zid‰2 ^^ zlst)),
-	z_eq_eq(dimen(zid‰1 ^^ zlength, i), z_size (zid env zid‰2)),
-	z_eq_eq(dimen(zid‰1 ^^ zrange, i), zid env zid‰2)]
+let	val z_e_e = z_eq_eq "type";
+in
+	[z_e_e(dimen(zid‰1 ^^ zfst, i), zid env (zid‰2 ^^ zfst)),
+	z_e_e(dimen(zid‰1 ^^ zlst, i), zid env (zid‰2 ^^ zlst)),
+	z_e_e(dimen(zid‰1 ^^ zlength, i), z_size (zid env zid‰2)),
+	z_e_e(dimen(zid‰1 ^^ zrange, i), zid env zid‰2)]
+end
 );
 =TEX
 The handler below catches failures from {\it hd}.
@@ -2664,8 +2691,9 @@ fun Ûbasic_decl_con_arrayÝ (env : CN_ENV) (name : ID)
 	let	val zname = trans_id name;
 		val zindex = z_many_cross (map (zid env o trans_id) index);
 		val zcomp = trans_id comp;
+		val z_e_e = z_eq_eq "type";
 	in
-		[z_eq_eq(zname, z_tfun(zindex, zid env zcomp))] @
+		[z_e_e(zname, z_tfun(zindex, zid env zcomp))] @
 		array_attrib env (zname, index)
 	end
 );
@@ -2680,7 +2708,7 @@ fun Ûbasic_decl_uncon_arrayÝ (env : CN_ENV) (name : ID)
 		val zcomp = trans_id comp;
 		val zexp = z_powerset(z_pfun(zid env zindex, zid env zcomp));
 	in
-		[z_ax(zname, zexp, [])]
+		[z_ax "type" (zname, zexp, [])]
 	end
 ) | basic_decl_uncon_array env name
 	({index=index, comp=comp} : ARRAY_DEF) = (
@@ -2689,7 +2717,7 @@ fun Ûbasic_decl_uncon_arrayÝ (env : CN_ENV) (name : ID)
 		val zcomp = trans_id comp;
 		val zexp = z_powerset(z_pfun(zindex, zid env zcomp));
 	in
-		[z_ax(zname, zexp, [])]
+		[z_ax "type" (zname, zexp, [])]
 	end
 );
 =TEX
@@ -2910,13 +2938,15 @@ fun Ûint_type_attribÝ (env : CN_ENV) (zid1, range) = (
 		val zvar2 = zid1 ^^ zpred;
 		val zvar3 = zid1 ^^ zpos;
 		val zvar4 = zid1 ^^ zval;
+		val z_e_e = z_eq_eq "type";
+		val z_a = z_ax "type";
 	in
-		[z_eq_eq(zid1 ^^ zfst, trans_exp env lo),
-		z_eq_eq(zid1 ^^ zlst, trans_exp env hi),
-		z_ax(zvar1, z_exp, []),
-		z_ax(zvar2, z_exp, []),
-		z_ax(zvar3, z_exp, []),
-		z_ax(zvar4, z_exp, [])]
+		[z_e_e(zid1 ^^ zfst, trans_exp env lo),
+		z_e_e(zid1 ^^ zlst, trans_exp env hi),
+		z_a(zvar1, z_exp, []),
+		z_a(zvar2, z_exp, []),
+		z_a(zvar3, z_exp, []),
+		z_a(zvar4, z_exp, [])]
 	end
 );
 end;
@@ -2929,11 +2959,12 @@ fun Ûbasic_decl_int_typeÝ (env : CN_ENV) (name : ID) (range : EXP RANGE)
 		val thi = trans_exp env hi;
 		val zname = trans_id name;
 		val vcs = range_check_vcs name tlo thi;
+		val z_e_e = z_eq_eq "type";
 	in	if	not(type_of tlo =: z_int_type)
 		then	term_fail "basic_decl_int_type" 508066 [tlo]
 		else if	not(type_of thi =: z_int_type)
 		then	term_fail "basic_decl_int_type" 508066 [thi]
-		else	((z_eq_eq(zname, z_rng(tlo, thi)) ::
+		else	((z_e_e(zname, z_rng(tlo, thi)) ::
 			  int_type_attrib env (zname, RRange{lo=lo,hi=hi})) @ vcs)
 	end
 );
@@ -2950,11 +2981,12 @@ fun Ûbasic_decl_fixed_typeÝ (env : CN_ENV) (name : ID)
 		val thi = trans_exp env hi;
 		val tdelta = trans_exp env delta;
 		val zname = trans_id name;
+		val z_e_e = z_eq_eq "type";
 		(* val vcs = range_check_vcs name tlo thi; *)
-	in	[ z_eq_eq(zname, z_rng(tlo, thi)),
-		  z_eq_eq(zname ^^ zdelta, tdelta),
-		  z_eq_eq(zname ^^ zfst, tlo),
-		  z_eq_eq(zname ^^ zlst, thi) ]
+	in	[ z_e_e(zname, z_rng(tlo, thi)),
+		  z_e_e(zname ^^ zdelta, tdelta),
+		  z_e_e(zname ^^ zfst, tlo),
+		  z_e_e(zname ^^ zlst, thi) ]
 	end
 ) | basic_decl_fixed_type _ _ _ = fail "basic_decl_fixed_type" 508065 [];
 =TEX
@@ -2967,11 +2999,12 @@ fun Ûbasic_decl_floating_typeÝ (env : CN_ENV) (name : ID)
 		val thi = trans_exp env hi;
 		val tdigits = trans_exp env digits;
 		val zname = trans_id name;
+		val z_e_e = z_eq_eq "type";
 		(* val vcs = range_check_vcs name tlo thi; *)
-	in	[ z_eq_eq(zname, z_rng(tlo, thi)),
-		  z_eq_eq(zname ^^ zdigits, tdigits),
-		  z_eq_eq(zname ^^ zfst, tlo),
-		  z_eq_eq(zname ^^ zlst, thi) ]
+	in	[ z_e_e(zname, z_rng(tlo, thi)),
+		  z_e_e(zname ^^ zdigits, tdigits),
+		  z_e_e(zname ^^ zfst, tlo),
+		  z_e_e(zname ^^ zlst, thi) ]
 	end
 ) | basic_decl_floating_type env name {exp = digits, range = Nil} = (
 	let	val tdigits = trans_exp env digits;
@@ -2981,11 +3014,13 @@ fun Ûbasic_decl_floating_typeÝ (env : CN_ENV) (name : ID)
 		val trng = z_rng(
 			mk_z_gvar(tfst, z_real_type, []),
 			mk_z_gvar(tlst, z_real_type, []));
+		val z_e_e = z_eq_eq "type";
+		val z_a = z_ax "type";
 		(* val vcs = range_check_vcs name tlo thi; *)
-	in	[ z_ax(tfst, ¯_tm, []),
-		  z_ax(tlst, ¯_tm, []),
-		  z_eq_eq(zname, trng),
-		  z_eq_eq(zname ^^ zdigits, tdigits)]
+	in	[ z_a(tfst, ¯_tm, []),
+		  z_a(tlst, ¯_tm, []),
+		  z_e_e(zname, trng),
+		  z_e_e(zname ^^ zdigits, tdigits)]
 	end
 );
 =TEX
@@ -2994,12 +3029,15 @@ fun Ûbasic_decl_floating_typeÝ (env : CN_ENV) (name : ID)
 =SML
 fun Ûrange_con_attribÝ (env : CN_ENV) (zid‰1 : Z_ID, zid‰2 : Z_ID, {lo,hi}
 		: EXP RANGELOHI) : PARAINFO list = (
-	[z_eq_eq (zid‰1 ^^ zfst, trans_exp env lo),
-	z_eq_eq (zid‰1 ^^ zlst, trans_exp env hi),
-	z_eq_eq (zid‰1 ^^ zsuc, zid env (zid‰2 ^^ zsuc)),
-	z_eq_eq (zid‰1 ^^ zpred, zid env (zid‰2 ^^ zpred)),
-	z_eq_eq (zid‰1 ^^ zpos, zid env (zid‰2 ^^ zpos)),
-	z_eq_eq (zid‰1 ^^ zval, zid env (zid‰2 ^^ zval))]
+let	val z_e_e = z_eq_eq "type";
+in
+	[z_e_e (zid‰1 ^^ zfst, trans_exp env lo),
+	z_e_e (zid‰1 ^^ zlst, trans_exp env hi),
+	z_e_e (zid‰1 ^^ zsuc, zid env (zid‰2 ^^ zsuc)),
+	z_e_e (zid‰1 ^^ zpred, zid env (zid‰2 ^^ zpred)),
+	z_e_e (zid‰1 ^^ zpos, zid env (zid‰2 ^^ zpos)),
+	z_e_e (zid‰1 ^^ zval, zid env (zid‰2 ^^ zval))]
+end
 );
 =TEX
 The following function does the processing which is commont to cases of
@@ -3012,7 +3050,8 @@ fun Ûbasic_decl_subtype_axdesÝ (env : CN_ENV) (name : ID) (tmark : TMARK)
 		val zexp = z_powerset (zid env tmark)
 			handle Fail _ =>
 			fail "trans_basic_decl" 508051 [fn () => tmark];
-	in	[z_ax(zvar, zexp, [])]
+		val z_a = z_ax "subtype";
+	in	[z_a(zvar, zexp, [])]
 	end
 );
 =TEX
@@ -3061,11 +3100,12 @@ fun Ûbasic_decl_subtype_range_conÝ (env : CN_ENV) (name : ID) (tmark : TMARK)
 			fail "trans_basic_decl" 508051 [fn () => tmark]);
 		val te_lo = trans_exp1 env lo;
 		val te_hi = trans_exp1 env hi;
+		val z_e_e = z_eq_eq "subtype";
 	in	case (te_lo, te_hi) of
 			(Value l, Value h) =>
 			if	ztype =: z_int_set_type
 			then	let	val vcs = range_check_vcs name l h;
-				in	z_eq_eq(zname, z_rng(l, h)) ::
+				in	z_e_e(zname, z_rng(l, h)) ::
 					range_con_attrib env
 					(zname, ztmark, {lo=lo,hi=hi}) @ vcs
 				end
@@ -3075,12 +3115,12 @@ fun Ûbasic_decl_subtype_range_conÝ (env : CN_ENV) (name : ID) (tmark : TMARK)
 					val tas = type_attrs unwanted tmark;
 					val tas_paras = map
 						(fn attr =>
-						z_eq_eq(zname ^^ attr,
+						z_e_e(zname ^^ attr,
 						 zid env (trans_id tmark ^^ attr))) tas;
-				in	z_eq_eq(zname, z_rng(l, h)) ::
+				in	z_e_e(zname, z_rng(l, h)) ::
 					tas_paras @
-					[ z_eq_eq(zname ^^ zfst, l),
-					  z_eq_eq(zname ^^ zlst, h) ]
+					[ z_e_e(zname ^^ zfst, l),
+					  z_e_e(zname ^^ zlst, h) ]
 				end
 			else	basic_decl_subtype_axdes env name tmark
 		|	_ =>	basic_decl_subtype_axdes env name tmark
@@ -3103,7 +3143,8 @@ let	val zname = trans_id name;
 	val zindex = map trans_id index;
 	val domain = z_many_cross(map (zid env) zindex);
 	val set_comp = index_con_set_comp env tmark domain;
-	val abb_def = z_eq_eq (zname, set_comp);
+	val z_e_e = z_eq_eq "subtype";
+	val abb_def = z_e_e (zname, set_comp);
 in	abb_def :: array_attrib env (zname, zindex)
 end
 );
@@ -3142,9 +3183,10 @@ let	val zname = trans_id name;
 	val zexp = zid env (trans_id tmark);
 	val zvar_ty = dest_z_power_type(type_of zexp)
 		handle Fail _ => fail "trans_basic_decl" 508051 [fn () => tmark];
-	val abb_def = z_eq_eq (zname, zexp);
+	val z_e_e = z_eq_eq "subtype";
+	val abb_def = z_e_e (zname, zexp);
 	val tas = type_attrs [] tmark;
-	val tas_paras = map (fn attr => z_eq_eq(zname ^^ attr, 
+	val tas_paras = map (fn attr => z_e_e(zname ^^ attr, 
 		zid env (trans_id tmark ^^ attr))) tas;
 in	
 	(abb_def :: tas_paras)
@@ -3200,8 +3242,11 @@ fun Ûtrans_basic_declÝ (env : CN_ENV) ((BDConstDecl {consts,tm,expr}) : BASIC_DE
 fun Ûtrans_basic_decl1Ý (env : CN_ENV) (bd : BASIC_DECL)
 			: PARAINFO list OPT = (
 	Value (trans_basic_decl env bd)
-	handle Fail msg  => (
-		comment "trans_basic_decl1" 508050 [fn _ => get_message msg];
+	handle ex as (Fail msg) => (
+		if	area_of ex = "z_eq_eq"
+		orelse	area_of ex = "z_ax"
+		then	raise ex
+		else	comment "trans_basic_decl1" 508050 [fn _ => get_message msg];
 		Nil
 	)
 );
