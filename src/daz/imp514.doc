@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp514.doc   %Z% $Date: 2004/07/18 13:06:40 $ $Revision: 1.17 $ $RCSfile: imp514.doc,v $
+% imp514.doc   %Z% $Date: 2004/09/01 16:50:56 $ $Revision: 1.18 $ $RCSfile: imp514.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Compliance Notation (Volume II) Types}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP514}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.17 $%
+\def\SCCSversion{$Revision: 1.18 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/07/18 13:06:40 $%
+\TPPdate{\FormatDate{$Date: 2004/09/01 16:50:56 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -79,6 +79,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \item[Issue 1.8] DAZ-specific updates to banner for open source release
 \item[Issues 1.9-1.17] Reform of the Environments.
 \item[Issue 1.18] Support for multiple use clauses for the same package.
+\item[Issue 1.19] Fix for type inference of aliases.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -166,6 +167,7 @@ fun Ûadd_to_env_dictÝ
 	(EnvDict{infos, ti_cxt, local_vars, cn_scope, used_packages} : ENV_DICT)
 	(new :ENV_INFO S_DICT) :  ENV_DICT = (
 	let	val infos' = list_e_enter infos new;
+		open ZTypesAndTermsSupport;
 		fun mk_ti_cxt acc [] = acc
 		|    mk_ti_cxt acc ((n, {tipe, info as EIEnvVar _, canon_name}):: more) = (
 			let	val ty = force_value tipe;
@@ -183,7 +185,17 @@ fun Ûadd_to_env_dictÝ
 		) |  mk_ti_cxt acc ((n, {tipe, info as EIEnvOtherVar, canon_name}):: more) = (
 			mk_ti_cxt (e_enter n (force_value tipe) acc) more
 			handle Fail _ => fail "add_to_env_dict" 514001 [fn _ => n]
-		) | mk_ti_cxt acc (_:: more) = mk_ti_cxt acc more;
+		) |  mk_ti_cxt acc ((n, {tipe, info, canon_name}):: more) = (
+			if	n <> canon_name
+			then	case get_const_type (bind_gvar_name canon_name) of
+					Value ty => (
+						mk_ti_cxt (e_enter n ty acc) more
+						handle Fail _ => fail "add_to_env_dict" 514001 [fn _ => n]
+				) | _ => (
+					mk_ti_cxt acc more
+				)
+			else	mk_ti_cxt acc more
+		);
 		fun grow_scope _ Nil = Nil
 		|     grow_scope n (Value dict) = Value (e_enter n () dict);
 		fun add_local_vars scope acc ([] : ENV_INFO S_DICT) = (scope, acc)
@@ -325,18 +337,19 @@ let	fun aux (Value g)  zn = (
 						tipe = tipe}
 		) |	other => other
 	) | aux Nil zn = e_lookup zn infos;
+	open ZTypesAndTermsSupport;
 in	fn zn =>
 	case aux cn_scope zn of
 		res as (Value {tipe = Value _, ...}) => res
 	|	res as (Value {tipe = Nil, canon_name, info}) => (
-		let	val hol_name =  fst(dest_const(mk_z_gvar(zn, BOOL, [])));
+		let	val hol_name =  bind_gvar_name zn;
 		in	Value{
 				tipe = get_const_type hol_name,
 				canon_name = canon_name,
 				info = info}
 		end		
 	) |	Nil => (
-		let	val hol_name =  fst(dest_const(mk_z_gvar(zn, BOOL, [])));
+		let	val hol_name =   bind_gvar_name zn;
 		in	case get_const_type hol_name of
 				Value ty => Value {
 						tipe = Value ty,
