@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.298 $ $RCSfile: imp507.doc,v $ $Date: 2005/09/15 12:14:05 $
+% imp507.doc %Z% $Revision: 1.299 $ $RCSfile: imp507.doc,v $ $Date: 2005/09/15 16:42:00 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.298 $%
+\def\SCCSversion{$Revision: 1.299 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/09/15 12:14:05 $%
+\TPPdate{\FormatDate{$Date: 2005/09/15 16:42:00 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -234,6 +234,7 @@ Use clauses in package specifications now propagate into the package body.
 \item[Issues 1.296, 1.297] More enhancements to the error reporting in {\em call\_vcs}.
 \item[Issue 1.298] Rationalised treatment of prefixed names in package bodies (giving a major performance improvement in environment lookups when the name is not in the environment).
 \item[Issue 1.299] Adjusted error reports after comments from QinetiQ.
+\item[Issue 1.300] Now uses {\em do\_in\_theory} to speed up {\em make\_module} and makes better use of {\em lazy\_open\_theory} throughout.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -2083,13 +2084,8 @@ fun Ûget_script_theoriesÝ (thy : string) : string list = (
 =TEX
 =SML
 fun Ûadd_script_theoryÝ (thy : string) : unit = (
-	let	val old = get_current_theory_name();
-		val side = open_theory (!script_name);
-	in	
-		update_user_datum cn_theories_ud_key (UD_String(thy, []));
-		open_theory old;
-		()
-	end
+	do_in_theory (!script_name)
+	(fn () => update_user_datum cn_theories_ud_key (UD_String(thy, []))) ()
 );
 =TEX
 The following should be used when about to add material for
@@ -2155,14 +2151,9 @@ fun Ûget_library_theoriesÝ (thy : string) : string list = (
 =TEX
 =SML
 fun Ûadd_library_theoryÝ (thy : string) : unit = (
-	let	val old = get_current_theory_name();
-		val side = open_theory (!script_name);
-	in	
-		update_user_datum cn_script_library_theories_ud_key
-			(UD_String(thy, []));
-		open_theory old;
-		()
-	end
+	do_in_theory (!script_name)
+	(fn () => update_user_datum cn_script_library_theories_ud_key
+			(UD_String(thy, []))) ()
 );
 =TEX
 
@@ -2645,6 +2636,15 @@ fun Ûz_names_of_z_decÝ (zd : Z_DECL) : Z_ID list = (
 =TEX
 
 \subsection{Updating the Z Theory Database}
+For various reasons, the command for opening a theory in {\Product} does some work even if the theory being opened is already current.
+We use a more optimal approach here:
+=SML
+fun Ûlazy_open_theoryÝ (thy : string) : unit = (
+	if	thy = "-" orelse thy = get_current_theory_name()
+	then	()
+	else	open_theory thy
+);
+=TEX
 We first describe the addition of context and origin for VCs and then 
 the addition of the VCs themselves.
 
@@ -3473,9 +3473,9 @@ fun Ûnew_package_spec_theoryÝ (pars : string list) (name : string) : unit = (
 			new_theory_aux pars thy;
 			set_cn_created();
 			add_script_theory thy;
-			open_theory thy )
+			lazy_open_theory thy )
 		handle Fail _ => (
-			open_theory (!script_name);
+			lazy_open_theory (!script_name);
 			fail "new_package_spec_theory"
 			507023 [fn()=>thy, fn()=>name]
 		);
@@ -3500,19 +3500,21 @@ The script theory is made the current theory.
 fun Ûmake_moduleÝ (thy : Z_ID) : unit = (
 	let	fun delete_vc n = ((delete_conjecture n; ())
 						handle Fail _ => ());
-		val dummy1 = duplicate_theory (!script_name, thy)
+		val _ = duplicate_theory (!script_name, thy)
 			handle Fail _ => (
-				open_theory (!script_name);
+				lazy_open_theory (!script_name);
 				fail "make_module" 507026
 				[fn()=>thy, fn()=>thy]
 			);
-		val dummy7 = set_cn_created();
-		val dummy3 = add_script_theory thy;
-		val dummy4 = open_theory thy;
-		val dummy2 = set_duplicate_keys (stub_theory_desc thy, !script_name);
-		val dummy5 = (map delete_vc o flat o map fst o get_conjectures) thy;
+		val _ = set_cn_created();
+		val _ = add_script_theory thy;
+		fun make_adjustments () = (
+			set_duplicate_keys (stub_theory_desc thy, !script_name);
+			(map delete_vc o flat o map fst o get_conjectures) thy
+		);
+		val _ = do_in_theory thy make_adjustments ();
+		val _ = lazy_open_theory (!script_name);
 		val thy_level = current_level();
-		val dummy6 = open_theory (!script_name);
 	in	(	
 			update_user_datum cn_subunit_ud_key
 				(UD_String(thy, [UD_Int (current_level(),
@@ -3520,7 +3522,7 @@ fun Ûmake_moduleÝ (thy : Z_ID) : unit = (
 			()
 		)
 		handle Fail _ => (
-			open_theory (!script_name);
+			lazy_open_theory (!script_name);
 			fail "make_module" 507026
 			[fn()=>thy, fn()=>thy]
 		)
@@ -6912,7 +6914,7 @@ fun Ûstore_prefix_types_and_constsÝ
 		(spec_script_thy : string) 
 		(target_thy : string) : (string * string) list * ENV_INFO S_DICT = (
 let	val old_thy = get_current_theory_name();
-	val dummy1 = open_theory spec_script_thy;
+	val _ = open_theory spec_script_thy;
 	val ifixities = rev(ZUserInterfaceSupport.get_zfixity_infos
 		spec_script_thy);
 	val itypes =
@@ -6929,7 +6931,7 @@ let	val old_thy = get_current_theory_name();
 	val type_names = mapfilter (unbind_gvar_name o fst o dest_ctype) itypes;
 	val pfxd_names = map (prefix_package_id ident newids) type_names;
 	val tysubs = (combine pfxd_names type_names) drop (fn (x,y) => (x = y));
-	val dummy2 = open_theory target_thy;
+	val _ = open_theory target_thy;
 	val dummyfixities = map 
 		(fn (c, t) => ZUserInterfaceSupport.set_zfixity_info(c, [t]))
 		ifixities;
@@ -6947,7 +6949,7 @@ let	val old_thy = get_current_theory_name();
 	);
 	val const_names = map get_const_name iconsts;
 	val ptypes = map do_type itypes;
-	val dummy3 = store_prefix_const_thms ident tysubs newids
+	val _ = store_prefix_const_thms ident tysubs newids
 		iconst_thms;
 	fun prefix_type_opt Nil = Nil
 	|   prefix_type_opt (Value ty) = Value (type_map do_type ty);
@@ -6978,7 +6980,7 @@ let	val old_thy = get_current_theory_name();
 				)
 		) |	Nil => prefix_env_entries acc more
 	) | prefix_env_entries acc [] = acc;
-	val dummy4 = open_theory old_thy;
+	val _ = open_theory old_thy;
 in
 	(tysubs, prefix_env_entries (prefix_env_entries [] type_names) const_names)
 end);
@@ -7119,7 +7121,7 @@ fun Ûcreate_prefixed_specÝ
 		val side = (blocks := tl (!blocks));
 	in	(tysubs, aux_vars, dict)
 	end	handle ex => (
-			open_theory (!script_name);
+			lazy_open_theory (!script_name);
 			reraise ex "create_prefixed_spec"
 		)
 );
@@ -7165,7 +7167,7 @@ fun Ûz_prefixÝ (ident : ID) (newids : NEW_IDS) (package : PACKAGE)
 		val fps = prefix_formal_procs ident tysubs newids (#formal_procs package);
 		val infps = prefix_informal_procs ident newids (#informal_procs package);
 		val _ = blocks := tl(!blocks);
-	in	open_theory (!script_name);
+	in	lazy_open_theory (!script_name);
 		(if	not spec_already_created
 		then	update_user_datum cn_spec_ud_key
 				(UD_String(pack_spec_name ident,
@@ -7173,7 +7175,7 @@ fun Ûz_prefixÝ (ident : ID) (newids : NEW_IDS) (package : PACKAGE)
 		else	());
 		(tysubs, fps, infps, aux_vars, prefix_var_renamings ident newids (#var_renamings package), dict)
 	end	handle ex => (
-			open_theory (!script_name);
+			lazy_open_theory (!script_name);
 			reraise ex "z_prefix"
 		)
 );
@@ -8439,14 +8441,6 @@ fun Ûnew_k_slotÝ (label : LABEL, sort : REPL_SORT, theory : string) : unit = (
 );
 =TEX
 \section{INVOKING THE SID FUNCTIONS}
-For various reasons, the command for opening a theory in {\Product} does some work even if the theory being opened is already current.
-We use a more optimal approach here:
-=SML
-fun Ûlazy_open_theoryÝ (thy : string) : unit = (
-	if	thy = "-" orelse thy = get_current_theory_name()
-	then	()
-	else	open_theory thy
-);
 =TEX
 =SML
 fun Ûopen_label_theoryÝ (lab : string) : unit = (
@@ -9436,7 +9430,7 @@ It is now important not to save the state if an exception is raised.
 				exception_handled := false;
 				let	val thy = get_current_theory_name ();
 				in	rollback pp_state;
-					open_theory thy handle Fail _ => ()
+					lazy_open_theory thy handle Fail _ => ()
 				end
 			);
 		in	diag_vc_args := [];
@@ -9523,7 +9517,7 @@ expected to see in the following.
 		(	set_z_generator_state zg_state;
 			state_db := st_db;
 			exception_log := exn_log;
-			open_theory "cn";
+			lazy_open_theory "cn";
 			new_theory_aux [] name;
 			set_cn_created();
 			set_continuation_flag continue;
@@ -9533,7 +9527,7 @@ expected to see in the following.
 			set_z_generator_state old_state;
 			state_db := old_state_db;
 			exception_log := old_exn_log;
-			open_theory thy;
+			lazy_open_theory thy;
 			reraise ex "new_script"
 			)
 		end		
@@ -9556,7 +9550,7 @@ expected to see in the following.
 		(	set_z_generator_state zg_state;
 			state_db := st_db;
 			exception_log := exn_log;
-			open_theory "cn";
+			lazy_open_theory "cn";
 			new_theory_aux [] name;
 			set_cn_created();
 			set_continuation_flag continue;
@@ -9573,7 +9567,7 @@ expected to see in the following.
 			set_z_generator_state old_state;
 			state_db := old_state_db;
 			exception_log := old_exn_log;
-			open_theory thy;
+			lazy_open_theory thy;
 			reraise ex "new_script1"
 			)
 		end		
@@ -9602,8 +9596,8 @@ expected to see in the following.
 		state_db := st_db;
 		exception_log := exn_log;
 		save_z_generator_state();
-		(open_theory o #script_name) zg_state
-			handle Fail _ => open_theory "cn"
+		(lazy_open_theory o #script_name) zg_state
+			handle Fail _ => lazy_open_theory "cn"
 	);
 
 	fun Ûget_saved_cn_stateÝ (script : string) : CN_STATE = (
@@ -9826,7 +9820,7 @@ fun Ûdelete_scriptÝ (scr : string) : unit = (
 		state_db := list_e_merge initial_e_dict
 			(e_flatten (!state_db) drop (fn (k, _) => k mem scrs));
 		map delete_exception_log scrs;
-		open_theory "cn";
+		lazy_open_theory "cn";
 		delete_theories thys;
 		comment "delete_script" 507091 [fn _ => scr];
 		diag_line (get_error_message 507092 (map fmt_strs [scrs, other_thys, sus, packs]))
