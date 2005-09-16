@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.28 2005/01/27 17:08:05 rda Exp rda $
+ * $Id: options.c,v 2.29 2005/09/02 11:57:26 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -362,7 +362,7 @@ if(!global_options.edit_only) {
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 	XtAddCallback(apply_btn, XmNactivateCallback,
-			apply_cb, (XtPointer)NULL);
+			apply_cb, (XtPointer)shell);
 
 	XtAddCallback(current_btn, XmNactivateCallback,
 			reset_cb, (XtPointer)&global_options);
@@ -371,7 +371,7 @@ if(!global_options.edit_only) {
 			reset_cb, (XtPointer)&orig_global_options);
 
 	XtAddCallback(dismiss_btn, XmNactivateCallback,
-			popdown_cb, shell);
+			popdown_cb, (XtPointer)shell);
 
 	XtAddCallback(help_btn, XmNactivateCallback,
 			help_cb, (XtPointer)Help_Options_Tool);
@@ -530,7 +530,7 @@ void set_file_type(FileType file_type)
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void apply_cb(
 	Widget		u1,
-	XtPointer	u2,
+	XtPointer	shell,
 	XtPointer	u3)
 {
 	global_options.backup_before_save =
@@ -570,6 +570,8 @@ static void apply_cb(
 			XtFree(new_cmd);
 		}
 	}
+
+	XtPopdown((Widget)shell);
 
 	show_file_info();
 
