@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.90 2005/08/31 15:09:55 rda Exp $
+ * $Id: mainw.c,v 2.91 2005/09/01 11:32:32 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -432,7 +432,6 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 	char overwritten;
 	Boolean visible;
 	int i, j;
-	static Boolean scroll_scheduled = False;
 	static Boolean last_was_cr = False;
 	ins_pos = XmTextGetLastPosition(journal);
 	visible = XmTextPosToXY(journal, (ins_pos ? ins_pos - 1 : 0),
@@ -471,7 +470,7 @@ void scroll_out(char *buf, NAT ct, Boolean ignored)
 	last_pos = XmTextGetLastPosition(journal);
 /* set up time-out to scroll if insertion position was visible and not already set-up */
 	if(visible && !scroll_pending) {
-		XtAppAddTimeOut(app, 20, scroll_out_timeout_proc, NULL);
+		XtAppAddTimeOut(app, 50, scroll_out_timeout_proc, NULL);
 		scroll_pending = True;
 	}
 /* make sure we're positioned right for the next insertion: */
