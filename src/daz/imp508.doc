@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp508.doc   %Z% $Date: 2005/09/08 13:32:34 $ $Revision: 1.128 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2005/09/14 14:58:39 $ $Revision: 1.129 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.128 $%
+\def\SCCSversion{$Revision: 1.129 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/09/08 13:32:34 $%
+\TPPdate{\FormatDate{$Date: 2005/09/14 14:58:39 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -153,6 +153,7 @@ the cache theory before calling {\it term\_of\_z\_tm}.
 \item[Issue 1.127] Added interface so the VC generator can find out whether we are generating domain conditions.
 \item[Issue 1.128] Allowed for new scheme for type names in Z.
 \item[Issue 1.129] Enhanced error reporting for free variables in basic declarations.
+\item[Issue 1.130] Aggregates inside aggregates no longer need to be in qualified expressions.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1063,8 +1064,6 @@ fun €indexed_type› (base : Z_EXP) (sels : SEL list) : Z_EXP = (
 		end
 	)
 );
-=IGN
-val env = (#env o #wp_env o fst o hd o !)CNZGenerator.diag_vc_args;
 =TEX
 Using {\it indexed\_type} we can now define {\it tmark\_of\_prefix}
 as required by the formal specification.
@@ -1565,11 +1564,56 @@ fun €con_array_range_from_tmark› (tmark : Z_EXP) : Z_EXP OPT = (
 	Value(con_array_range_from_tmarkf tmark)
 	handle Fail _ => Nil
 );
-fun €slide_to_component_tmark› (ze : Z_EXP, tmark : Z_EXP, sel : SEL) : Z_EXP = (
-	(case con_array_range_from_tmark (indexed_type tmark [sel]) of
+fun €slide_to_component_tmark› (ze : Z_EXP, comp_tmark : Z_EXP) : Z_EXP = (
+	(case con_array_range_from_tmark comp_tmark of
 		Nil => ze
 	|	Value r => slide(ze, r))
 	handle Fail _ => ze
+);
+=TEX
+=SML
+fun €add_qualifier› (env : CN_ENV) (e : EXP, t : ID) : EXP = (
+	case e of
+	EArrayAggPos{comps, tmark=Nil} => (
+		case env t of
+		Value {info = EIEnvRecordType _, ...} => (
+			ERecAggPos{comps = comps, tmark = Value t}
+		) | _ =>	EArrayAggPos{comps = comps, tmark = Value t}
+	)| EArrayAggPosOthers{agg_pos={comps, tmark=Nil}, others} => (
+		 EArrayAggPosOthers{agg_pos={comps=comps, tmark=Value t}, others = others}
+	)| EArrayAggOthers{others, tmark=Nil} => (
+		EArrayAggOthers{others=others, tmark=Value t}
+	)| EArrayAggNamed {named_assocs = n, tmark=Nil} => (
+		case env t of
+		Value {info = EIEnvRecordType _, ...} => (
+			ERecAggNamed{named_assocs = n, tmark = Value t}
+		) | _ =>	EArrayAggNamed{named_assocs = n, tmark = Value t}
+	)| EArrayAggNamedOthers
+			{agg_named as {named_assocs = n, tmark =Nil}, others} => (
+	EArrayAggNamedOthers
+			{agg_named = {named_assocs = n, tmark = Value t}, others = others}
+	)| ERecAggPos{comps, tmark=Nil} => (
+		ERecAggPos{comps = comps, tmark = Value t}
+	)| ERecAggNamed {named_assocs = n, tmark=Nil} => (
+		EArrayAggNamed{named_assocs = n, tmark = Value t}
+	)| e => (
+		e
+	)
+);
+=TEX
+=SML
+fun €trans_component›
+	(env : CN_ENV)
+	(te : CN_ENV -> EXP -> Z_EXP)
+	(e : EXP, base_tmark : Z_EXP, sel : SEL) : Z_EXP = (
+	let	val comp_tmark_ze = indexed_type base_tmark [sel];
+		val comp_tmark_id =
+		case dest_z_term comp_tmark_ze of
+			ZGVar(tmark, _, _) => tmark
+		|	_ => fail "trans_component" 508028 [];
+		val ze = te env (add_qualifier env (e, comp_tmark_id));
+	in	slide_to_component_tmark (ze, comp_tmark_ze)
+	end
 );
 =TEX
 \section{TRANSLATING SPARK EXPRESSIONS}
@@ -1760,24 +1804,24 @@ and €exp_array_agg_named_others› (env : CN_ENV) (aa_env : ARRAY_AGG_ENV)
 =TEX
 \subsection{Translating Aggregates (Positional Record)}
 =SML
-and €exp_rec_agg_pos_z›
-		(env : CN_ENV) ((tmark as Value tm, comps) : TMARK OPT * Z_EXP list)
+and €exp_rec_agg_pos›
+		(env : CN_ENV) ((tmark as Value tm, comps) : TMARK OPT * EXP list)
 		: Z_EXP = (
 let	val record_components = (
 		case env tm of
 			Value {info = EIEnvRecordType {comp_names = cmps, ...}, ...} => cmps
-		|	_ => fail "exp_rec_agg_pos_z" 508026 [fn()=>tm]
+		|	_ => fail "exp_rec_agg_pos" 508026 [fn()=>tm]
 	);
 	val comp_name_z_exps = combine record_components comps
 		handle Fail _ => fail "exp_rec_agg_pos" 508027 [fn()=>tm];
 	val tmark_zexp = trans_exp env (EId tm);
 	val zbinds = map
-		(fn (c, ze) => (c, slide_to_component_tmark(ze, tmark_zexp, RecordSel c)))
+		(fn (c, e) => (c, trans_component env trans_exp (e, tmark_zexp, RecordSel c)))
 			comp_name_z_exps;
 in
 	z_binding zbinds
 end
-) | exp_rec_agg_pos_z _ _ = fail "trans_exp" 508054 []
+) | exp_rec_agg_pos _ _ = fail "trans_exp" 508054 []
 =TEX
 \subsection{Translating Aggregates (Named Record)}
 =SML
@@ -1787,8 +1831,8 @@ let	fun named_assoc_to_ids_exp {choice, comp} = (
 	let	fun aux (ch::rest) comp = (
 			case ch of
 			ACAggChoiceSingle exp => (
-					(name_to_tmark exp, 
-					 trans_exp env comp)::aux rest comp
+					(name_to_tmark exp, comp) ::
+					aux rest comp
 			) |_ => fail "exp_rec_agg_named" 508052 []
 		) | aux _ _ = [];
 	in
@@ -1796,7 +1840,7 @@ let	fun named_assoc_to_ids_exp {choice, comp} = (
 	end);
 	val tmark_zexp = trans_exp env (EId tm);
 	val zbinds = map
-		(fn (c, ze) => (c, slide_to_component_tmark(ze, tmark_zexp, RecordSel c)))
+		(fn (c, e) => (c, trans_component env trans_exp (e, tmark_zexp, RecordSel c)))
 			(flat (map named_assoc_to_ids_exp named_assocs));
 in	z_binding zbinds
 end
@@ -1818,7 +1862,7 @@ and €trans_array_agg_exp› (env : CN_ENV)
 	|	EArrayAggNamed an =>  exp_array_agg_named env aa_env an
 	|	EArrayAggNamedOthers ano => exp_array_agg_named_others env aa_env ano
 	|	_ => fail "trans_array_agg_exp" 508062 []
-	else	slide_to_component_tmark(trans_exp env e, trans_exp env (EId tname), ArraySel)
+	else	trans_component env trans_exp (e, trans_exp env (EId tname), ArraySel)
 )
 =TEX
 \subsection{Translating Unary Expressions}
@@ -2048,7 +2092,7 @@ and €trans_exp› (env : CN_ENV) ((EId id) : EXP) : Z_EXP = exp_id env id
   | trans_exp env (e as EArrayAggNamed _) = exp_array_agg env e
   | trans_exp env (e as EArrayAggNamedOthers _) = exp_array_agg env e
   | trans_exp env (ERecAggPos {tmark, comps}) =
-		exp_rec_agg_pos_z env (tmark, map (trans_exp env) comps)
+		exp_rec_agg_pos env (tmark, comps)
   | trans_exp env (ERecAggNamed an) = exp_rec_agg_named env an
   | trans_exp env (EUnaryExp ue) = exp_unary_exp env ue
   | trans_exp env (EBinExp be) = exp_bin_exp env be
