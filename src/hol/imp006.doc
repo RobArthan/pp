@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%  imp006.doc  %Z% $Date: 2005/04/18 16:51:36 $ $Revision: 1.59 $ $RCSfile: imp006.doc,v $
+%  imp006.doc  %Z% $Date: 2005/09/05 13:36:52 $ $Revision: 1.60 $ $RCSfile: imp006.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -17,10 +17,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for Abstract Data Type $THM$}  %% Mandatory field
 \def\TPPheadtitle{Implementation for Abstract Data Type $THM$}
 \TPPref{DS/FMU/IED/IMP006}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.59 $
+\def\SCCSversion{$Revision: 1.60 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/04/18 16:51:36 $ %
+\TPPdate{\FormatDate{$Date: 2005/09/05 13:36:52 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -170,6 +170,7 @@ The inference rules now report error messages without the icl' prefix on the sou
 This saves the need to remap the names in the interface functions.
 \item[Issue 1.60]
 Brought handling of initial state of the abstract data type of types and terms into line with intended design.
+\item[Issue 1.61] Kernel interface and symbol table reform.
 \end{description}
 % \subsection{Changes Forecast}
 \section{GENERAL}
@@ -400,9 +401,9 @@ extend_range (11,15) p;
 extend_range (11,11) p;
 
 =TEX
-We will use the sparse array material of \cite{DS/FMU/IED/DTD001}
+We will use the dynamic array material of \cite{DS/FMU/IED/DTD001}
 =SML
-open SparseArray;
+open DynamicArray;
 =TEX
 \subsection{Types of the ADT $THM$}
 A fragment of some user data, and a collection of such
@@ -465,7 +466,7 @@ A state for the types and terms module.
 \end{itemize}
 =SML
 	€icl'HIERARCHY› =
-	€hier› of bool ref * icl'THEORY_INFO SPARSE_ARRAY * TYPES_AND_TERMS_STATE
+	€hier› of bool ref * icl'THEORY_INFO DYNAMIC_ARRAY * TYPES_AND_TERMS_STATE
 =TEX
 There now follows the body of the $abstype$:
 =SML
@@ -616,7 +617,7 @@ local
 		children = [],
 		name = "€min›"};
 
-	val init_hier_ia : icl'THEORY_INFO SPARSE_ARRAY = array 100;
+	val init_hier_ia : icl'THEORY_INFO DYNAMIC_ARRAY = array 100;
 
 	val dummy = update(init_hier_ia, 0, min_ti);
 
@@ -667,7 +668,8 @@ local
 	val ord0 = ord("0");
 	val ord9 = ord("9");
 in
-fun €get_con_env› (nm : string): {ty:TYPE, level:int} OPT = (
+fun €get_con_env› (opt_thyn : int OPT)
+	(nm : string): {ty:TYPE, level:int} OPT = (
 let	val {in_scope, hierarchy = hier(_, lookup, _), ...} = !current;
 	val ordnm = ord nm handle Ord => 0;
 in
@@ -686,15 +688,18 @@ in
 				in	case oe_key_lookup k con_env of
 						Nil => aux more
 					|	got_it => got_it
-				end
+				end	handle Fail _ => Nil
 			);
-		in	aux in_scope
+		in	case opt_thyn of
+				Nil => aux in_scope
+			|	Value thyn => aux [thyn]
 		end
 end
 );
 end;
 
-fun €get_ty_env› (nm : string):{arity:int, level:int} OPT = (
+fun €get_ty_env› (opt_thyn : int OPT)
+	(nm : string):{arity:int, level:int} OPT = (
 let	val {in_scope, hierarchy = hier(_, lookup, _), ...} = !current;
 	val k = e_get_key nm;
 	fun aux [] = Nil
@@ -704,9 +709,11 @@ let	val {in_scope, hierarchy = hier(_, lookup, _), ...} = !current;
 		in	case oe_key_lookup k ty_env of
 				Nil => aux more
 			|	got_it => got_it
-		end
+		end	handle Fail _ => Nil
 	);
-in	aux in_scope
+in	case opt_thyn of
+		Nil => aux in_scope
+	|	Value thyn => aux [thyn]
 end);
 =TEX
 \subsection{Utilities Depending on ADT State and Types}
@@ -721,7 +728,7 @@ items, as this is judged superior in speed.
 local
 	fun auxty (caller:string) fw [] = ()
 	| auxty caller fw ((tnm,arit) :: x) = (
-		let val res = get_ty_env tnm
+		let val res = get_ty_env Nil tnm
 		in
 		case res of
 		Value{arity=arity,...} => (
@@ -733,7 +740,7 @@ local
 
 	fun auxcon (caller:string) fw [] = ()
 	| auxcon caller fw ((cnm,typ) :: x) = (
-		let val res = get_con_env cnm
+		let val res = get_con_env Nil cnm
 		in
 		case res of
 		Value{ty=ty1,...} => (
@@ -841,29 +848,6 @@ in
 	else fail caller 6043 [fn () => string_of_int nm]
 end);
 =TEX
-Given a theory name as an string, the following function returns its internal name as an integer.
-The error raised is stated to be from the calling function, denoted by $caller$.
-A deleted theory's name cannot be found by these means.
-=SML
-fun €internal_theory_name› (nm : string) (caller : string): int = (
-let	val hier (inconsistent,lookup, _) = current_hierarchy();
-	fun aux ~1 = fail caller 6035 [fn () => nm]
-	| aux n = (let val (ThyInfo{name=sname,contents=contents,status=status,...}) 
-			= sub(lookup, n);
-		in
-			if ((sname = nm) andalso (status <> TSDeleted))
-			then (let val(Thy{name=iname,...}) = !contents
-				in
-					iname
-				end)
-			else aux (n-1)
-		end)
-in
-	if nm = "-"
-	then icl'get_current_theory_name ()
-	else aux (uindex lookup)
-end);
-=TEX
 The following is a test of whether the given theory name present at all.
 A deleted theory will not be noted by this function.
 There is always a current theory, ``-''.
@@ -926,7 +910,7 @@ end);
 A function to return all of a theory's ancestors
 (including itself):
 =SML
-fun €theory_ancestors› (nm : int) : int list = (
+fun €icl'get_ancestors› (nm : int) : int list = (
 let	val hier (inconsistent,lookup, _) = current_hierarchy();
 
 	fun lparents (n : int) = (
@@ -942,14 +926,14 @@ let	val hier (inconsistent,lookup, _) = current_hierarchy();
 		then allparents x acc
 		else allparents ((lparents a) cup x) (a :: acc));
 in
-	check_internal_theory_name nm "theory_ancestors";
+	check_internal_theory_name nm "icl'get_ancestors";
 	allparents [nm] []
 end);
 =TEX
 A function to return all of a theory's descendants
 (but not including itself):
 =SML
-fun €theory_descendants› (nm : int) : int list = (
+fun €icl'get_descendants› (nm : int) : int list = (
 let	val hier (inconsistent,lookup, _) = current_hierarchy();
 
 	fun lchildren (n : int) = (
@@ -964,7 +948,7 @@ let	val hier (inconsistent,lookup, _) = current_hierarchy();
 		then allchildren x acc
 		else allchildren ((lchildren a) cup x) (a :: acc));
 in
-	check_internal_theory_name nm "theory_descendants";
+	check_internal_theory_name nm "icl'get_descendants";
 	allchildren (lchildren nm) []
 end);
 =TEX
@@ -987,9 +971,9 @@ let	val iname =icl'get_current_theory_name();
 		not(is_Nil(oe_key_lookup k con_env))
 	end);
 in	
-	if	is_Nil(get_con_env nm)
+	if	is_Nil(get_con_env Nil nm)
 	then	let	val k = e_get_key nm;
-		in	if	any (theory_descendants iname less iname) 
+		in	if	any (icl'get_descendants iname less iname) 
 					(fn thry => const_in_thy k thry)
 			then	InDescendant
 			else	NotPresent
@@ -1012,9 +996,9 @@ let	val iname = icl'get_current_theory_name();
 		not(is_Nil(oe_key_lookup k ty_env))
 	end);
 in	
-	if	is_Nil(get_ty_env nm)
+	if	is_Nil(get_ty_env Nil nm)
 	then	let	val k = e_get_key nm;
-		in	if	any (theory_descendants iname less iname) 
+		in	if	any (icl'get_descendants iname less iname) 
 					(fn thry => type_in_thy k thry)
 			then	InDescendant
 			else	NotPresent
@@ -1401,8 +1385,8 @@ let	val {hierarchy=hierarchy as hier (inconsistent,lookup, _),
 
 	val cthynm = icl'get_current_theory_name ();
 
-	val c_anc_des = theory_ancestors cthynm cup 
-		theory_descendants cthynm;
+	val c_anc_des = icl'get_ancestors cthynm cup 
+		icl'get_descendants cthynm;
 
 	fun aux	n = (if n > top_theory
 		then ()
@@ -1427,16 +1411,30 @@ in
 end
 );
 =TEX
+Given a theory name as an integer, return it as a string:
+=SML
+fun icl'get_theory_name (nm : int) : string = (
+let	val hier (inconsistent,lookup, _) = current_hierarchy();
+in
+	check_internal_theory_name nm "icl'get_theory_name";
+	(let val (ThyInfo{name=name,status=status,...}) = sub(lookup, nm)
+		in
+			if status <> TSDeleted
+			then name
+			else fail "icl'get_theory_name" 6089 [fn () => string_of_int nm]
+		end)
+end);
+=TEX
 In the sequence suggested by \cite{DS/FMU/IED/DTD006}
 we would only now give $icl'get\_current\_theory\_name$,
 but the function was useful in defining utilities needed before this point.
 
 Return an interface presentation of a theory, based on a string:
 =SML
-fun €icl'get_theory_info› (nm : string) : THEORY_INFO = (
+fun €icl'get_theory_info› (iname : int) : THEORY_INFO = (
 let	val hier (inconsistent,lookup, _) = current_hierarchy();
 
-	val iname = internal_theory_name nm "icl'get_theory_info";
+	val _ = check_internal_theory_name iname "icl'get_theory_info";
 
 	val (ThyInfo{status = status,
 			inscope = inscope,
@@ -1451,20 +1449,6 @@ in
 	contents = theory_of_icl'theory athy,
 	children = children,
 	name = name}
-end);
-=TEX
-Given a theory name as an integer, return it as a string:
-=SML
-fun icl'get_theory_name (nm : int) : string = (
-let	val hier (inconsistent,lookup, _) = current_hierarchy();
-in
-	check_internal_theory_name nm "icl'get_theory_name";
-	(let val (ThyInfo{name=name,status=status,...}) = sub(lookup, nm)
-		in
-			if status <> TSDeleted
-			then name
-			else fail "icl'get_theory_name" 6089 [fn () => string_of_int nm]
-		end)
 end);
 =TEX
 =SML
@@ -1483,18 +1467,19 @@ These functions follow the specification of \cite{DS/FMU/IED/SPC005}.
 We give a function to make some theory the current theory.
 Interrupting the body of the main $let$ statement may leave the state with the $inconsistent$ flag set.
 =SML
-fun €icl'open_theory› (nm : string) : (int list * int list) = (
+fun €icl'open_theory› (thyn : int) : (int list * int list) = (
 let	val {hierarchy = hierarchy as hier (inconsistent,lookup, _),
 		theory=theory, in_scope = in_scope,
 		sealed=sealed} = !current;
 	val top_theory = uindex lookup;
-	val thyn = internal_theory_name nm "icl'open_theory"; (* spec step 1 *)
 
-	val allp = theory_ancestors thyn;
+	val _ = check_internal_theory_name thyn "icl'open_theory"; (* spec step 1 *)
+
+	val allp = icl'get_ancestors thyn;
 
 	val sideeffect = if sealed mem allp
 		then ()
-		else fail "icl'open_theory" 6017 [fn () => nm,
+		else fail "icl'open_theory" 6017 [fn () => icl'get_theory_name thyn,
 			fn () => icl'get_theory_name sealed];
 
 	val ThyInfo{status = status,
@@ -1564,12 +1549,12 @@ The following is a function to delete theories.
 We modify the current hierarchy ``in place'' rather than taking a copy.
 If it is interrupted then the state may be left with the $inconsistent$ flag set.
 =SML
-fun €icl'delete_theory› (nm : string) : unit = (
+fun €icl'delete_theory› (thyn : int) : unit = (
 let	val {hierarchy = hierarchy as hier (inconsistent,lookup, _),
 		theory=theory, in_scope = in_scope,
 		sealed=sealed} = !current;
 
-	val thyn = internal_theory_name nm "icl'delete_theory"; (* spec. step 1 *)
+	val _ = check_internal_theory_name thyn "icl'delete_theory"; (* spec. step 1 *)
 	
 	val ThyInfo{status = status,
 		inscope = inscope,
@@ -1578,16 +1563,16 @@ let	val {hierarchy = hierarchy as hier (inconsistent,lookup, _),
 		name = name} = sub(lookup,thyn);
 
 	val dummy = case status of
-		TSDeleted => error "icl'delete_theory" 6041 [fn () => nm]
-		| TSAncestor => fail "icl'delete_theory" 6071 [fn () => nm]
-		| TSLocked => fail "icl'delete_theory" 6037 [fn () => nm]
+		TSDeleted => error "icl'delete_theory" 6041 [fn () => icl'get_theory_name thyn]
+		| TSAncestor => fail "icl'delete_theory" 6071 [fn () => icl'get_theory_name thyn]
+		| TSLocked => fail "icl'delete_theory" 6037 [fn () => icl'get_theory_name thyn]
 		| TSNormal => 
 		if !inconsistent
 		then error "icl'delete_theory" 6083 []
 		else if not(is_nil children)
-		then fail "icl'delete_theory" 6076 [fn () => nm]
+		then fail "icl'delete_theory" 6076 [fn () => icl'get_theory_name thyn]
 		else if inscope
-		then fail "icl'delete_theory" 6069 [fn () => nm]
+		then fail "icl'delete_theory" 6069 [fn () => icl'get_theory_name thyn]
 		else ();
 
 	val Thy{parents = parents,...} = !contents;
@@ -1644,13 +1629,10 @@ end
 The following adds a new parent to the current theory.
 Interrupting the body of the main $let$ statement may leave the state with the $inconsistent$ flag set.
 =SML
-fun €icl'new_parent› (nm : string) : int list = (
-let	val dummy = (check_c_writable "icl'new_parent";
-	if not(is_theory_name nm)
-	then fail "icl'new_parent" 6035 [fn () => nm]
-	else ());
+fun €icl'new_parent› (pthy : int) : int list = (
+let	val dummy = check_c_writable "icl'new_parent";
 
-	val pthy = internal_theory_name nm "icl'new_parent";
+	val _ = check_internal_theory_name pthy "icl'new_parent";
 
 	val {hierarchy=hierarchy as hier (inconsistent,lookup, _), 
 		theory=theory, in_scope = in_scope, sealed=sealed}
@@ -1678,8 +1660,8 @@ let	val dummy = (check_c_writable "icl'new_parent";
 =TEX
 The ancestors of the current and parent theories:
 =SML
-	val pthy_anc = theory_ancestors pthy;
-	val cthy_anc = theory_ancestors cthy;
+	val pthy_anc = icl'get_ancestors pthy;
+	val cthy_anc = icl'get_ancestors cthy;
 =TEX
 A theory is an ancestor of the current one if and only if it is in scope.
 =SML
@@ -1759,8 +1741,8 @@ end);
 The following is a function to lock a theory, to make it read-only.
 We work by modifying the current hierarchy ``in place''.
 =SML
-fun €icl'lock_theory› (nm : string): unit = (
-let	val thyn = internal_theory_name nm "icl'lock_theory"; (* spec. step 1 *)
+fun €icl'lock_theory› (thyn : int): unit = (
+let	val _ = check_internal_theory_name thyn "icl'lock_theory"; (* spec. step 1 *)
 
 	val hier (inconsistent,lookup, _) = current_hierarchy();
 	val dummy = if !inconsistent
@@ -1775,8 +1757,8 @@ let	val thyn = internal_theory_name nm "icl'lock_theory"; (* spec. step 1 *)
 
 	val dummy = case status of
 		TSDeleted => error "icl'lock_theory" 6041 []
-		| TSAncestor => fail "icl'lock_theory" 6071 [fn () => nm]
-		| TSLocked => fail "icl'lock_theory" 6037 [fn () => nm]
+		| TSAncestor => fail "icl'lock_theory" 6071 [fn () => icl'get_theory_name thyn]
+		| TSLocked => fail "icl'lock_theory" 6037 [fn () => icl'get_theory_name thyn]
 		| TSNormal => ();
 in
 	update(lookup,thyn,ThyInfo{status = TSLocked,
@@ -1789,8 +1771,8 @@ end);
 The following is a function to unlock a locked theory, allowing to to be written to once more.
 We work by modifying the current hierarchy ``in place''.
 =SML
-fun €icl'unlock_theory› (nm : string): unit = (
-let	val thyn = internal_theory_name nm "icl'unlock_theory"; (* spec. step 1 *)
+fun €icl'unlock_theory› (thyn : int): unit = (
+let	val _ = check_internal_theory_name thyn "icl'unlock_theory"; (* spec. step 1 *)
 
 	val hier (inconsistent,lookup, _) = current_hierarchy();
 	val dummy = if !inconsistent
@@ -1805,8 +1787,8 @@ let	val thyn = internal_theory_name nm "icl'unlock_theory"; (* spec. step 1 *)
 
 	val dummy = case status of
 		TSDeleted => error "icl'unlock_theory" 6041 []
-		| TSAncestor => fail "icl'unlock_theory" 6068 [fn () => nm]
-		| TSNormal => fail "icl'unlock_theory" 6068 [fn () => nm]
+		| TSAncestor => fail "icl'unlock_theory" 6068 [fn () => icl'get_theory_name thyn]
+		| TSNormal => fail "icl'unlock_theory" 6068 [fn () => icl'get_theory_name thyn]
 		| TSLocked => ();
 in
 	update(lookup,thyn,ThyInfo{status = TSNormal,
@@ -1819,7 +1801,7 @@ end);
 The following is a function to create a duplicate theory, except it has no children.
 Interrupting the body of the main $let$ statement may leave the state with the $inconsistent$ flag set.
 =SML
-fun €icl'duplicate_theory› (fromnm : string) (tonm : string) : int = (
+fun €icl'duplicate_theory› (fromn : int) (tonm : string) : int = (
 let	val {hierarchy = hierarchy as hier (inconsistent,lookup, _),
 		theory=theory, in_scope = in_scope, 
 		sealed=sealed} = !current;
@@ -1829,13 +1811,13 @@ let	val {hierarchy = hierarchy as hier (inconsistent,lookup, _),
 		then fail "icl'duplicate_theory" 6040 [fn () => tonm]
 		else ();
 
-	val fromn = internal_theory_name fromnm "icl'duplicate_theory";
+	val _ = check_internal_theory_name fromn "icl'duplicate_theory";
 
 	val dummy = if sealed = fromn
-		then fail "icl'duplicate_theory" 6026 [fn () => fromnm]
-		else if sealed mem (theory_ancestors fromn)
+		then fail "icl'duplicate_theory" 6026 [fn () => icl'get_theory_name fromn]
+		else if sealed mem (icl'get_ancestors fromn)
 		then ()
-		else fail "icl'duplicate_theory" 6042 [fn () => fromnm];
+		else fail "icl'duplicate_theory" 6042 [fn () => icl'get_theory_name fromn];
 
 	val ntop_theory = uindex lookup + 1;
 
@@ -1909,10 +1891,10 @@ end);
 The first two functions of this section have no specification.
 The rest of the functions follow the specification of \cite{DS/FMU/IED/SPC005}.
 
-Get a theory's contents, by string name:
+Get a theory's contents, by internal name:
 =SML
-fun €icl'get_theory› (nm : string) : THEORY = (
-let	val iname = internal_theory_name nm "icl'get_theory"
+fun €icl'get_theory› (iname : int) : THEORY = (
+let	val _ = check_internal_theory_name iname "icl'get_theory"
 	val gthy = get_theory_contents iname
 in
 	theory_of_icl'theory gthy
@@ -2692,15 +2674,15 @@ in
 end);
 =TEX
 =SML
-fun €get_const_type› (nm : string) : TYPE OPT = (
-	case (get_con_env nm) of
+fun €icl'get_const_type› (thyn : int) (nm : string) : TYPE OPT = (
+	case (get_con_env (Value thyn) nm) of
 	Value {ty = ty,...} => Value ty
 	| _ => Nil
 );
 =TEX
 =SML
-fun €get_type_arity› (nm : string) : int OPT = (
-	case (get_ty_env nm) of
+fun €icl'get_type_arity› (thyn : int) (nm : string) : int OPT = (
+	case (get_ty_env (Value thyn) nm) of
 	Value {arity=arity,...} => Value arity
 	| _ => Nil
 );

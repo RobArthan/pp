@@ -19,7 +19,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \def\SCCSversion{$Revision: 2.29 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/09/21 12:02:16 $ %
+\TPPdate{\FormatDate{$Date: 2005/09/21 12:20:00 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -99,6 +99,7 @@ Tidied up some aspects of {\em get\_ancestors} and {\em rollback}.
 \item[Issue 2.26] Now exploits new {\em key\_mk\_const} {\em key\_mk\_ctype} functions.
 \item[Issue 2.27] Added functions {\em get\_const\_keys} and {\em get\_type\_keys}.
 \item[Issue 2.28] Adjustments for SML/NJ.
+\item[Issue 2.29] Kernel interface and symbol table reform.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -140,6 +141,222 @@ It is convenient to provide the following function ``out of order'':
 =SML
 fun €get_current_theory_name› (() : unit) : string = (
 	icl'get_theory_name(icl'get_current_theory_name ())
+);
+=TEX
+\subsection{GLOBAL TABLES}
+We maintain several tables that give information about the whole theory hierarchy.
+These must be kept in step with the actual theory hierarchy.
+If operations of various sorts are interrupted, then these tables must be rebuilt.
+The tables comprise the following imperative components:
+\begin{itemize}
+\item a flag indicating whether or not the information is clean, 
+\item a dictionary mapping constant names to the internal names of theories that contain a constant of that name,
+\item a dictionary mapping type names to the internal names of theories that contain a type of that name,
+\item a dictionary mapping theory names to the internal theory numbers,
+\item an array (indexed by internal theory numbers) of flags indicating which theories are in scope.
+\end{itemize}
+
+The clean flag must be set false before a kernel state changing operation is invoked and also before making multiple updates to the tables (including updates to the in-scope array).
+=SML
+type €MASTER_TABLES› = {
+	clean_flag : bool ref,
+	const_thys : int list E_DICT ref,
+	type_thys: int list E_DICT ref,
+	int_thy_names : int E_DICT ref,
+	in_scope : bool DynamicArray.DYNAMIC_ARRAY};
+=TEX
+=SML	
+val €global_tables› : MASTER_TABLES = {
+	clean_flag = ref false,
+	const_thys = ref initial_e_dict,
+	type_thys = ref initial_e_dict,
+	int_thy_names = ref initial_e_dict,
+	in_scope = DynamicArray.array 100};
+=TEX
+=SML
+fun €scratch_global_tables› (():unit) : unit = (
+	#clean_flag global_tables := false;
+	#const_thys global_tables := initial_e_dict;
+	#type_thys global_tables := initial_e_dict;
+	#int_thy_names global_tables := initial_e_dict;
+	DynamicArray.scratch(#in_scope global_tables)
+);
+=TEX
+=SML
+fun €set_clean_flag› (b : bool)  : bool = (
+	let	val old = !(#clean_flag global_tables);
+	in	#clean_flag global_tables := b;
+		old
+	end
+);
+=TEX
+Registering a constant involves a single update:
+=SML
+fun €register_const› (thyn : int) (cname : string) : unit = (
+	#const_thys global_tables :=
+	e_enter cname
+	(case e_lookup cname (!(#const_thys global_tables)) of
+		Value thyns => thyns grab thyn
+	|	Nil => [thyn])
+	(!(#const_thys global_tables))
+);
+=TEX
+=SML
+fun €register_new_const› (cname : string) : unit = (
+	register_const (icl'get_current_theory_name()) cname
+);
+=TEX
+Registering a type involves a single update:
+=SML
+fun €register_type› (thyn : int) (tyname : string) : unit = (
+	#type_thys global_tables :=
+	e_enter tyname
+	(case e_lookup tyname (!(#type_thys global_tables)) of
+		Value thyns => thyns grab thyn
+	|	Nil => [thyn])
+	(!(#type_thys global_tables))
+);
+=TEX
+=SML
+fun €register_new_type› (tyname : string) : unit = (
+	register_type (icl'get_current_theory_name()) tyname
+);
+=TEX
+Registering a theory involves a single update:
+=SML
+fun €register_theory› (name : string, iname : int) : unit = (
+	#int_thy_names global_tables :=
+	e_enter name iname (!(#int_thy_names global_tables))
+);
+=TEX
+Reetting the in-scope array involves a multiple update:
+=SML
+fun €reset_in_scope› (() : unit) : unit = (
+	let	val old  = set_clean_flag false;
+		val top = DynamicArray.uindex (#in_scope global_tables);
+		fun aux1 i = (
+			if	i <= top
+			then	(DynamicArray.update(#in_scope global_tables, i, false);
+				aux1 (i+1))
+			else	()
+		);
+		fun aux2 [] = ()
+		|   aux2 (i::more) = (
+			DynamicArray.update(#in_scope global_tables, i, true);
+			aux2 more
+		);
+		val cur_thy = icl'get_current_theory_name();
+	in	aux1 0;
+		aux2 (icl'get_ancestors cur_thy);
+		set_clean_flag old;
+		()
+	end
+);
+=TEX
+Updating the in-scope array involves a multiple update:
+=SML
+fun €update_in_scope› (inthyl : int list, outthyl : int list)
+	: unit = (
+	let	val old = set_clean_flag false;
+		fun aux _ [] = ()
+		|   aux b (i::more) = (
+			DynamicArray.update(#in_scope global_tables, i, b);
+			aux b more
+		);
+	in	aux true inthyl;
+		aux false outthyl;
+		set_clean_flag old;
+		()
+	end
+);
+=TEX
+=SML
+fun €rebuild_global_tables› (():unit) : unit = (
+	let	val _ = scratch_global_tables();
+		val thys = 0 :: icl'get_descendants 0;
+		fun do_thy thyn = (
+			let	val {con_env, ty_env, ...} = icl'get_theory thyn;
+				val {name, ...} = icl'get_theory_info thyn;
+				val do_const = register_const thyn;
+				val do_type = register_type thyn;
+			in	app (fn (n, _) => do_const n)
+				(oe_flatten con_env);
+				app (fn (n, _) => do_type n)
+				(oe_flatten ty_env);
+				register_theory (name, thyn)
+			end
+		);
+	in	reset_in_scope();
+		app do_thy thys;
+		set_clean_flag true;
+		()
+	end
+);
+=TEX
+=SML
+fun €rebuild_global_tables_from_current_theory› (():unit) : unit = (
+	let	val thyn = icl'get_current_theory_name();
+		val {con_env, ty_env, ...} = icl'get_theory thyn;
+		val {name, ...} = icl'get_theory_info thyn;
+		val do_const = register_const thyn;
+		val do_type = register_type thyn;
+	in	app (fn (n, _) => do_const n)
+		(oe_flatten con_env);
+		app (fn (n, _) => do_type n)
+		(oe_flatten ty_env);
+		register_theory (name, thyn)
+	end
+);
+=TEX
+It is caller's responsibility to manipulate the clean falg appropriately around a call to the following function:
+=SML
+fun €delete_theory_from_global_tables› (thyn : int) : unit = (
+	let	val {con_env, ty_env, ...} = icl'get_theory thyn;
+		val {name, ...} = icl'get_theory_info thyn;
+		val consts = map fst(oe_flatten con_env);
+		val types = map fst(oe_flatten con_env);
+		fun folder (n, dict) = (
+			case e_lookup n dict of
+				Nil => dict
+			|	Value thyns => (
+				case thyns less thyn of
+					[] => (
+					e_delete n dict
+				) |	some => (
+					e_enter n some dict
+				)
+			)
+		);
+	in	#const_thys global_tables :=
+			fold folder consts
+				(!(#const_thys global_tables));
+		#type_thys global_tables :=
+			fold folder consts
+				(!(#type_thys global_tables));
+		#int_thy_names global_tables :=
+			e_delete name (!(#int_thy_names global_tables));
+		()
+	end
+);
+=TEX
+=SML
+fun €check_clean› (caller : string) : unit = (
+	if	! (#clean_flag global_tables)
+	then	()
+	else	(comment caller 12203 [];
+		rebuild_global_tables())
+);
+=TEX
+=SML
+fun €get_internal_theory_name› (_ : string)
+	("-" : string) : int = (
+	icl'get_current_theory_name()
+) | get_internal_theory_name caller thy = (
+	let	val _ = check_clean caller;
+	in	case e_lookup thy (!(#int_thy_names global_tables)) of
+			Value thyn => thyn
+		|	Nil => fail caller 12035 [fn () => thy]
+	end
 );
 =TEX
 \section{NOTIFICATION OF STATE CHANGES}
@@ -207,7 +424,8 @@ Note the multiple attempts to catch errors
 that are not from $fail$ or $error$.
 =SML
 fun €do_in_theory› (thy: string) (f : 'a -> 'b) (arg : 'a) : 'b = (
-let	val curr_theory = get_current_theory_name();
+let	val curr_theory = icl'get_current_theory_name();
+	val thyn = get_internal_theory_name "do_in_theory" thy;
 	val was_before_ksc_functions = (!before_ksc_functions);
 	fun stop_theory_change (OpenTheory _: KERNEL_STATE_CHANGE): unit = (
 		before_ksc_functions := was_before_ksc_functions;
@@ -222,16 +440,24 @@ let	val curr_theory = get_current_theory_name();
 	) | stop_theory_change _ = ();
 
 in
-	let	val side = icl'open_theory thy;
+	let	val _ = check_clean "do_in_theory";
+		val _ = set_clean_flag false;
+		val ot_res1 = icl'open_theory thyn;
+		val _ = update_in_scope ot_res1;
+		val _ = set_clean_flag true;
 		val side = before_kernel_state_change stop_theory_change;
 		val result = f arg;
+		val _ = check_clean "do_in_theory";
 		val side = (before_ksc_functions := was_before_ksc_functions);
-		val side = (icl'open_theory curr_theory
+		val _ = set_clean_flag false;
+		val ot_res2 = (icl'open_theory curr_theory
 			handle (Error _) =>
 			error "do_in_theory" 12013 []
 			handle (Fail _) =>
 			error "do_in_theory" 12013 []
 			);
+		val _ = update_in_scope ot_res2;
+		val _ = set_clean_flag true;
 	in
 		result
 	end
@@ -268,12 +494,18 @@ in
 	end);
 =TEX
 \section{THEORY MANAGEMENT OPERATIONS}
+=TEX
 \subsection{Operations on Theory Attributes}
-These are generally straight forward:
+
 =SML
 fun €open_theory› (nm : string) : unit = (
-let	val sideeffect = notify_before_ksc (OpenTheory (nm, ([],[])));
-	val ot_res = icl'open_theory nm;
+let	val _ = notify_before_ksc (OpenTheory (nm, ([],[])));
+	val thyn = get_internal_theory_name "open_theory" nm;
+	val _ = check_clean "open_theory";
+	val _ = set_clean_flag false;
+	val ot_res = icl'open_theory thyn;
+	val _ = update_in_scope ot_res;
+	val _ = set_clean_flag true;
 	val ot_res' = (map icl'get_theory_name ** map icl'get_theory_name) ot_res;
 in
 	notify_on_ksc (OpenTheory (nm, ot_res'));
@@ -283,8 +515,13 @@ handle complaint => pass_on complaint "icl'open_theory" "open_theory");
 =TEX
 =SML
 fun €delete_theory› (nm : string) : unit = (
-let	val sideeffect = notify_before_ksc (DeleteTheory nm);
-	val dummy = icl'delete_theory nm;
+let	val _ = notify_before_ksc (DeleteTheory nm);
+	val thyn = get_internal_theory_name "delete_theory" nm;
+	val _ = check_clean "delete_theory" ;
+	val _ = set_clean_flag false;
+	val _ = delete_theory_from_global_tables thyn;
+	val _ = icl'delete_theory thyn;
+	val _ = set_clean_flag true;
 in
 	notify_on_ksc (DeleteTheory nm);
 	()
@@ -293,8 +530,14 @@ handle complaint => pass_on complaint "icl'delete_theory" "delete_theory");
 =TEX
 =SML
 fun €new_theory› (nm : string) : unit = (
-let	val sideeffect = notify_before_ksc (NewTheory nm);
-	val dummy = (icl'new_theory nm; icl'open_theory nm);
+let	val _ = notify_before_ksc (NewTheory nm);
+	val _ = check_clean "new_theory";
+	val _ = set_clean_flag false;
+	val thyn = icl'new_theory nm;
+	val _ = register_theory(nm, thyn);
+	val ot_res = icl'open_theory thyn;
+	val _ = update_in_scope ot_res;
+	val _ = set_clean_flag true;
 in
 	notify_on_ksc (NewTheory nm);
 	()
@@ -303,8 +546,13 @@ handle complaint => pass_on complaint "icl'new_theory" "new_theory");
 =TEX
 =SML
 fun €new_parent› (nm : string) : unit = (
-let	val sideeffect = notify_before_ksc (NewParent (nm, []));
-	val np_res = icl'new_parent nm;
+let	val _ = notify_before_ksc (NewParent (nm, []));
+	val thyn = get_internal_theory_name "new_parent" nm;
+	val _ = check_clean "new_parent";
+	val _ = set_clean_flag false;
+	val np_res = icl'new_parent thyn;
+	val _ = update_in_scope(np_res, []);
+	val _ = set_clean_flag true;
 	val np_res' = map icl'get_theory_name np_res;
 in
 	notify_on_ksc (NewParent (nm, np_res'));
@@ -314,8 +562,9 @@ handle complaint => pass_on complaint "icl'new_parent" "new_parent");
 =TEX
 =SML
 fun €lock_theory› (nm : string) : unit = (
-let	val sideeffect = notify_before_ksc (LockTheory nm);
-	val dummy = icl'lock_theory nm;
+let	val _ = notify_before_ksc (LockTheory nm);
+	val thyn = get_internal_theory_name "new_parent" nm;
+	val _ = icl'lock_theory thyn;
 in
 	notify_on_ksc (LockTheory nm);
 	()
@@ -324,8 +573,9 @@ handle complaint => pass_on complaint "icl'lock_theory" "lock_theory");
 =TEX
 =SML
 fun €unlock_theory› (nm : string) : unit = (
-let	val sideeffect = notify_before_ksc (UnlockTheory nm);
-	val dummy = icl'unlock_theory nm;
+let	val _ = notify_before_ksc (UnlockTheory nm);
+	val thyn = get_internal_theory_name "new_parent" nm;
+	val _ = icl'unlock_theory thyn;
 in
 	notify_on_ksc (UnlockTheory nm);
 	()
@@ -334,8 +584,13 @@ handle complaint => pass_on complaint "icl'unlock_theory" "unlock_theory");
 =TEX
 =SML
 fun €duplicate_theory› (fromnm : string, tonm : string) : unit = (
-let	val sideeffect = notify_before_ksc (DuplicateTheory (fromnm, ""));
-	val dummy = icl'duplicate_theory fromnm tonm;
+let	val _ = notify_before_ksc (DuplicateTheory (fromnm, ""));
+	val fromn = get_internal_theory_name "duplicate_theory" fromnm;
+	val _ = check_clean "duplicate_theory";
+	val _ = set_clean_flag false;
+	val ton = icl'duplicate_theory fromn tonm;
+	val _ = register_theory(tonm, ton);
+	val _ = set_clean_flag true;
 in
 	notify_on_ksc (DuplicateTheory (fromnm, tonm));
 	()
@@ -845,7 +1100,7 @@ Given a level, give a list of the levels that need deleting.
 We presume a well-formed $del\_levels$ list.
 =SML
 fun €deleted_levels› (level : int) : int list = (
-let	val {del_levels = del_levels,current_level = current_level, ...} = icl'get_theory "-";
+let	val {del_levels = del_levels,current_level = current_level, ...} = icl'get_theory (icl'get_current_theory_name());
 
 	fun get_levels llevel ((lb,ub) :: lst) = (
 		if llevel < lb
@@ -878,7 +1133,8 @@ let	val dummy = case (get_current_theory_status()) of
 		| TSAncestor => fail caller 6071
 			[fn () => get_current_theory_name()];
 
-	val {children = children,...} = icl'get_theory_info "-";
+	val {children = children,...} =
+		icl'get_theory_info (icl'get_current_theory_name());
 
 	val dummy = if children <> []
 		then fail caller 6076 [fn () => get_current_theory_name()]
@@ -886,7 +1142,8 @@ let	val dummy = case (get_current_theory_status()) of
 
 	val {con_env = oe_con_env,ty_env = oe_ty_env,
 		axiom_dict = oe_axiom_dict, thm_dict = oe_thm_dict,
-		defn_dict = oe_defn_dict,...} = icl'get_theory "-";
+		defn_dict = oe_defn_dict,...} =
+			icl'get_theory (icl'get_current_theory_name());
 
 	val con_env = oe_flatten oe_con_env;
 
@@ -970,6 +1227,10 @@ necessary to be deleted.
 We now have permission to proceed:
 =SML
 *)
+	val _ = check_clean caller;
+	val _ = set_clean_flag false;
+	val _ = delete_theory_from_global_tables (icl'get_current_theory_name());
+
 	val dl = list_cup[del_lev1, del_lev2, del_lev3, del_lev4];
 
 	val dummy = (map (fn xt => notify_before_ksc (DeleteConst (mk_const xt))) del_con;
@@ -986,6 +1247,8 @@ in
 	map (fn t => notify_on_ksc (DeleteType t)) del_type;
 	map (fn ax => notify_on_ksc (DeleteAxiom ax)) del_axioms;
 	map (fn thm => notify_on_ksc (DeleteThm thm)) del_thms;
+	rebuild_global_tables_from_current_theory();
+	set_clean_flag true;
 	()
 end);
 =TEX
@@ -996,7 +1259,8 @@ let	val cnt = fst(strip_app icnt);
 	val (cnm, cty) = dest_const cnt
 		handle complaint =>
 		term_fail "delete_const" 12014 [icnt];
-	val {con_env = con_env,...} = icl'get_theory "-";
+	val {con_env = con_env,...} = icl'get_theory
+		(icl'get_current_theory_name());
 
 	val {level = level, ty = ty} = force_value(oe_lookup cnm con_env)
 		handle complaint =>
@@ -1016,7 +1280,7 @@ end);
 =TEX
 =SML
 fun €delete_type› (tnm : string) : unit = (
-let	val {ty_env = ty_env,...} = icl'get_theory "-";
+let	val {ty_env = ty_env,...} = icl'get_theory (icl'get_current_theory_name());
 
 	val {level = level, ...} = force_value(oe_lookup tnm ty_env)
 		handle complaint =>
@@ -1029,7 +1293,7 @@ end);
 =TEX
 =SML
 fun €delete_axiom› (anm : string) : unit = (
-let	val {axiom_dict = axiom_dict,...} = icl'get_theory "-";
+let	val {axiom_dict = axiom_dict,...} = icl'get_theory (icl'get_current_theory_name());
 
 	val ax = force_value(oe_lookup anm axiom_dict)
 		handle complaint =>
@@ -1044,7 +1308,7 @@ end);
 =TEX
 =SML
 fun €new_axiom› (keys : string list, tm : TERM) : THM = (
-let	val sideeffect = notify_before_ksc (NewAxiom ((keys, tm),
+let	val _ = notify_before_ksc (NewAxiom ((keys, tm),
 		(icl'Kernel.icl'asm_rule mk_t)));
 	val tm' = cond_compact 1 compact_term tm;
 	val saved = icl'new_axiom (keys, tm');
@@ -1056,9 +1320,13 @@ handle complaint => pass_on complaint "icl'new_axiom" "new_axiom");
 =TEX
 =SML
 fun €new_const› (cnm : string, ty : TYPE) : TERM = (
-let	val sideeffect = notify_before_ksc (NewConst (cnm, ty));
+let	val _ = notify_before_ksc (NewConst (cnm, ty));
 	val ty' = cond_compact 4 compact_type ty;
+	val _ = check_clean "new_const";
+	val _ = set_clean_flag false;
 	val saved = icl'new_const (cnm, ty');
+	val _ = register_new_const cnm;
+	val _ = set_clean_flag true;
 in
 	notify_on_ksc (NewConst (cnm, ty'));
 	saved
@@ -1066,11 +1334,15 @@ end
 handle complaint => pass_on complaint "icl'new_const" "new_const");
 =TEX
 =SML
-fun €new_type› (cnm : string, arity : int) : TYPE = (
-let	val sideeffect = notify_before_ksc (NewType (cnm, arity));
-	val saved = icl'new_type (cnm, arity);
+fun €new_type› (tynm : string, arity : int) : TYPE = (
+let	val _ = notify_before_ksc (NewType (tynm, arity));
+	val _ = check_clean "new_type";
+	val _ = set_clean_flag false;
+	val saved = icl'new_type (tynm, arity);
+	val _ = register_new_type tynm;
+	val _ = set_clean_flag true;
 in
-	notify_on_ksc (NewType (cnm, arity));
+	notify_on_ksc (NewType (tynm, arity));
 	saved
 end
 handle complaint => pass_on complaint "icl'new_type" "new_type");
@@ -1078,7 +1350,8 @@ handle complaint => pass_on complaint "icl'new_type" "new_type");
 =SML
 fun €set_user_datum› (key : string, ud : USER_DATUM) : unit = (
 let	val sideeffect = notify_before_ksc (SetUserDatum (key,ud));
-	val {user_data = user_data,...} = icl'get_theory "-";
+	val {user_data = user_data,...} =
+		icl'get_theory (icl'get_current_theory_name());
 
 	val dummy = case (get_current_theory_status()) of
 		TSNormal => ()
@@ -1097,7 +1370,8 @@ end);
 =TEX
 =SML
 fun €get_user_datum› (thynm : string) (key : string) : USER_DATUM = (
-let	val {user_data = user_data,...} = icl'get_theory thynm
+let	val thyn = get_internal_theory_name "get_user_datum" thynm;
+	val {user_data = user_data,...} = icl'get_theory thyn
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_user_datum";
 
@@ -1112,10 +1386,14 @@ end);
 \subsection{Definitional Mechanisms}
 =SML
 fun €simple_new_defn› (keys : string list, cnm : string, tm : TERM) : THM = (
-let	val sideeffect = notify_before_ksc (SimpleNewDefn ((keys, cnm, tm), 
+let	val _ = notify_before_ksc (SimpleNewDefn ((keys, cnm, tm), 
 		(icl'Kernel.icl'asm_rule mk_t)));
 	val tm' = cond_compact 32 compact_term tm;
+	val _ = check_clean "simple_new_defn";
+	val _ = set_clean_flag false;
 	val saved = icl'new_defn (keys, cnm, tm');
+	val _ = register_new_const cnm;
+	val _ = set_clean_flag true;
 in
 	notify_on_ksc (SimpleNewDefn ((keys, cnm, tm'), saved));
 	saved
@@ -1125,10 +1403,14 @@ handle complaint => pass_on complaint "icl'new_defn" "simple_new_defn");
 =SML
 fun €new_type_defn› (keys : string list, name : string, 
 	typars : string list, defthm : THM): THM = (
-let	val sideeffect = notify_before_ksc (NewTypeDefn ((keys, name, typars, defthm), 
+let	val _ = notify_before_ksc (NewTypeDefn ((keys, name, typars, defthm), 
 		(icl'Kernel.icl'asm_rule mk_t)));
+	val _ = check_clean "new_type_defn";
+	val _ = set_clean_flag false;
 	val defthm' = cond_compact 4 compact_thm defthm;
 	val saved = icl'new_type_defn (keys, name, typars, defthm');
+	val _ = register_new_type name;
+	val _ = set_clean_flag true;
 in
 	notify_on_ksc (NewTypeDefn ((keys, name, typars, defthm'), saved));
 	saved
@@ -1137,10 +1419,15 @@ handle complaint => pass_on complaint "icl'new_type_defn" "new_type_defn");
 =TEX
 =SML
 fun €new_spec› (keys : string list, ndef : int, defthm : THM) : THM = (
-let	val sideeffect = notify_before_ksc (NewSpec ((keys, ndef, defthm), 
+let	val _ = notify_before_ksc (NewSpec ((keys, ndef, defthm), 
 		(icl'Kernel.icl'asm_rule mk_t)));
 	val defthm' = cond_compact 8 compact_thm defthm;
+	val _ = check_clean "new_spec";
+	val _ = set_clean_flag false;
 	val saved = icl'new_spec (keys, ndef, defthm');
+	val names = map (fst o dest_var)(fst(strip_∂(concl defthm)));
+	val _ = app register_new_const names;
+	val _ = set_clean_flag true;
 in
 	notify_on_ksc (NewSpec ((keys, ndef, defthm'), saved));
 	saved
@@ -1164,11 +1451,12 @@ If the theorem being sought
 is not in the cache, the following uncached versions of the functions are used.
 =SML
 fun €uncached_get_defn› (thynm : string) ( key : string) : THM = (
-let	val {defn_dict = defn_dict,...} = icl'get_theory thynm
+let	val thyn = get_internal_theory_name "get_defn" thynm;
+	val {defn_dict = defn_dict,...} = icl'get_theory thyn
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_defn";
 
-	val {inscope = inscope,...} = icl'get_theory_info thynm;
+	val {inscope = inscope,...} = icl'get_theory_info thyn;
 
 	val dummy = if not inscope 
 		then fail "get_defn" 12010 [(fn () => thynm)]
@@ -1183,11 +1471,12 @@ end);
 =TEX
 =SML
 fun €uncached_get_axiom› (thynm : string) ( key : string) : THM = (
-let	val {axiom_dict = axiom_dict,...} = icl'get_theory thynm
+let	val thyn = get_internal_theory_name "get_axiom" thynm;
+	val {axiom_dict = axiom_dict,...} = icl'get_theory thyn
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_axiom";
 
-	val {inscope = inscope,...} = icl'get_theory_info thynm;
+	val {inscope = inscope,...} = icl'get_theory_info thyn;
 
 	val dummy = if not inscope 
 		then fail "get_axiom" 12010 [(fn () => thynm)]
@@ -1202,11 +1491,12 @@ end);
 =TEX
 =SML
 fun €uncached_get_thm› (thynm : string) ( key : string) : THM = (
-let	val {thm_dict = thm_dict,...} = icl'get_theory thynm
+let	val thyn = get_internal_theory_name "get_thm" thynm;
+	val {thm_dict = thm_dict,...} = icl'get_theory thyn
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_thm";
 
-	val {inscope = inscope,...} = icl'get_theory_info thynm;
+	val {inscope = inscope,...} = icl'get_theory_info thyn;
 
 	val dummy = if not inscope 
 		then fail "get_thm" 12010 [(fn () => thynm)]
@@ -1300,6 +1590,62 @@ val €get_defn› : string -> string -> THM = cached_get uncached_get_defn get_defn
 val €get_axiom› : string -> string -> THM = cached_get uncached_get_axiom get_axiom_cache;
 val €get_thm› : string -> string -> THM = cached_get uncached_get_thm get_thm_cache;
 =TEX
+=SML
+fun €not_in_scope› (thyn : int) : bool = (
+	case DynamicArray.sub_opt(#in_scope global_tables, thyn) of
+		Value true => false
+	|	_ => true
+);
+=TEX
+=SML
+fun €get_const_theory› (c : string) : string = (
+	let	val _ = check_clean "get_const_theory";
+	in	case e_lookup c (!(#const_thys global_tables)) of
+		Value thyns => (
+		case thyns drop not_in_scope of
+			[thyn] => icl'get_theory_name thyn
+		|	_ => fail "get_const_theory" 12201 [fn()=>c]
+	) |	Nil => fail "get_const_theory" 12201 [fn()=>c]
+	end
+);
+=TEX
+=SML
+fun €get_type_theory› (ty : string) : string = (
+	let	val _ = check_clean "get_type_theory";
+	in	case e_lookup ty (!(#type_thys global_tables)) of
+		Value thyns => (
+		case thyns drop not_in_scope of
+			[thyn] => icl'get_theory_name thyn
+		|	_ => fail "get_type_theory" 12202 [fn()=>ty]
+	) |	Nil => fail "get_type_theory" 12202 [fn()=>ty]
+	end
+);
+=TEX
+In the following, we allow for the constant being a literal by looking for it in the initial theory if it is not in the tables.
+=SML
+fun €get_const_type› (c : string) : TYPE OPT = (
+	let	val _ = check_clean "get_const_type";
+	in	case e_lookup c (!(#const_thys global_tables)) of
+		Value thyns => (
+		case thyns drop not_in_scope of
+			[thyn] => icl'get_const_type thyn c
+		|	_ => icl'get_const_type 0 c
+	) |	Nil => icl'get_const_type 0 c
+	end
+);
+=TEX
+=SML
+fun €get_type_arity› (ty : string) : int OPT = (
+	let	val _ = check_clean "get_type_arity";
+	in	case e_lookup ty (!(#type_thys global_tables)) of
+		Value thyns => (
+		case thyns drop not_in_scope of
+			[thyn] => icl'get_type_arity thyn ty
+		|	_ => Nil
+	) |	Nil => Nil
+	end
+);
+=TEX
 \subsubsection{Theory Names and Ancestry}
 =SML
 fun €get_theory_names› ((): unit) : string list = (
@@ -1312,22 +1658,10 @@ fun €theory_names› ((): unit) : string list = get_theory_names();
 =TEX
 =SML
 fun €get_ancestors› (thynm : string) : string list = (
-let	fun aux ((nm:string), (sofar:string list)) = (
-	if nm mem sofar
-	then sofar
-	else (
-	let	val {contents = {parents,...}, ...} = icl'get_theory_info nm
-			handle Fail _ => fail "get_ancestors" 6035 [fn () => nm];
-	in
-		fold aux (map icl'get_theory_name parents) (nm :: sofar)
-	end));
-in
-	aux 
-	((if thynm = "-"
-	then get_current_theory_name ()
-	else thynm),
-	[])
-end);
+let	val thyn = get_internal_theory_name "get_ancestors" thynm;
+in	map icl'get_theory_name (icl'get_ancestors thyn)
+end
+);
 =TEX
 =SML
 fun €is_theory_ancestor› (thy1 : string) (thy2 : string) : bool = (
@@ -1359,7 +1693,8 @@ end);
 =TEX
 =SML
 fun €get_parents› (thynm : string) : string list = (
-let	val {parents = parents,...} = icl'get_theory thynm
+let	val thyn = get_internal_theory_name "get_parents" thynm;
+	val {parents = parents,...} = icl'get_theory thyn
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_parents";
 in
@@ -1368,7 +1703,8 @@ end);
 =TEX
 =SML
 fun €get_children› (thynm : string) : string list = (
-let	val {children=children,...} = icl'get_theory_info thynm
+let	val thyn = get_internal_theory_name "get_children" thynm;
+	val {children=children,...} = icl'get_theory_info thyn
 		handle complaint =>
 		pass_on complaint "icl'get_theory_info" "get_children";
 in
@@ -1377,20 +1713,11 @@ end);
 =TEX
 =SML
 fun €get_descendants› (thynm : string) : string list = (
-let	fun aux ((nm:string), (sofar:string list)) = (
-	if nm mem sofar
-	then sofar
-	else (
-	let	val {children, ...} = icl'get_theory_info nm
-			handle Fail _ => fail "get_descendants" 6035 [fn () => nm];
-	in	fold aux (map icl'get_theory_name children) (nm :: sofar)
-	end));
-in	aux
-	((if thynm = "-"
-	then get_current_theory_name()
-	else thynm),
-	[])
-end);
+let	val thyn = get_internal_theory_name "get_ancestors" thynm;
+in	map icl'get_theory_name (icl'get_descendants thyn) @
+	[if thynm = "-" then get_current_theory_name() else thynm]
+end
+);
 =TEX
 \subsection{Accessing Theory Contents}
 We want something to compact a dictionary of theorems:
@@ -1412,7 +1739,8 @@ end);
 
 =SML
 fun €get_defns› (thynm : string) : (string list * THM) list = (
-let	val {defn_dict = defn_dict,...} = icl'get_theory thynm
+let	val thyn = get_internal_theory_name "get_defns" thynm;
+	val {defn_dict = defn_dict,...} = icl'get_theory thyn
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_defns";
 
@@ -1422,7 +1750,8 @@ end);
 =TEX
 =SML
 fun €get_defn_dict› (thynm : string) : THM OE_DICT = (
-let	val {defn_dict = defn_dict,...} = icl'get_theory thynm
+let	val thyn = get_internal_theory_name "get_defn_dict" thynm;
+	val {defn_dict = defn_dict,...} = icl'get_theory thyn
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_defn_dict";
 
@@ -1432,8 +1761,8 @@ end);
 =TEX
 =SML
 fun €get_axioms› (thynm : string) : (string list * THM) list = (
-let	val {axiom_dict = axiom_dict,...} = icl'get_theory thynm
-		handle complaint =>
+let	val thyn = get_internal_theory_name "get_axioms" thynm;
+	val {axiom_dict = axiom_dict,...} = icl'get_theory thyn		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_axioms";
 
 in
@@ -1442,7 +1771,8 @@ end);
 =TEX
 =SML
 fun €get_axiom_dict› (thynm : string) : THM OE_DICT = (
-let	val {axiom_dict = axiom_dict,...} = icl'get_theory thynm
+let	val thyn = get_internal_theory_name "get_axiom_dict" thynm;
+	val {axiom_dict = axiom_dict,...} = icl'get_theory thyn
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_axiom_dict";
 
@@ -1452,7 +1782,8 @@ end);
 =TEX
 =SML
 fun €get_thms› (thynm : string) : (string list * THM) list = (
-let	val {thm_dict = thm_dict,...} = icl'get_theory thynm
+let	val thyn = get_internal_theory_name "get_thms" thynm;
+	val {thm_dict = thm_dict,...} = icl'get_theory thyn
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_thms";
 
@@ -1462,7 +1793,8 @@ end);
 =TEX
 =SML
 fun €get_thm_dict› (thynm : string) : THM OE_DICT = (
-let	val {thm_dict = thm_dict,...} = icl'get_theory thynm
+let	val thyn = get_internal_theory_name "get_thm_dict" thynm;
+	val {thm_dict = thm_dict,...} = icl'get_theory thyn
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_thm_dict";
 
@@ -1472,7 +1804,8 @@ end);
 =TEX
 =SML
 fun €get_consts› (thynm : string) : TERM list = (
-let	val {con_env = con_env,...} = icl'get_theory thynm
+let	val thyn = get_internal_theory_name "get_consts" thynm;
+	val {con_env = con_env,...} = icl'get_theory thyn
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_consts";
 
@@ -1482,7 +1815,8 @@ end);
 =TEX
 =SML
 fun €get_const_keys› (thynm : string) : E_KEY list = (
-let	val {con_env = con_env,...} = icl'get_theory thynm
+let	val thyn = get_internal_theory_name "get_const_keys" thynm;
+	val {con_env = con_env,...} = icl'get_theory thyn
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_const_keys";
 
@@ -1491,7 +1825,8 @@ end);
 =TEX
 =SML
 fun €get_types› (thynm : string) : TYPE list = (
-let	val {ty_env = ty_env,...} = icl'get_theory thynm
+let	val thyn = get_internal_theory_name "get_types" thynm;
+	val {ty_env = ty_env,...} = icl'get_theory thyn
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_types";
 
@@ -1502,7 +1837,8 @@ end);
 =TEX
 =SML
 fun €get_type_keys› (thynm : string) : E_KEY list = (
-let	val {ty_env = ty_env,...} = icl'get_theory thynm
+let	val thyn = get_internal_theory_name "get_type_keys" thynm;
+	val {ty_env = ty_env,...} = icl'get_theory thyn
 		handle complaint =>
 		pass_on complaint "icl'get_theory" "get_type_keys";
 in	map (snd o snd) (oe_key_flatten ty_env)
@@ -1510,11 +1846,35 @@ end);
 =TEX
 =SML
 fun €get_theory_status› (thynm : string) : THEORY_STATUS = (
-let	val {status = status,...} = icl'get_theory_info thynm
+let	val thyn = get_internal_theory_name "get_theory_status" thynm;
+	val {status = status,...} = icl'get_theory_info thyn
 		handle complaint =>
 		pass_on complaint "icl'get_theory_info" "get_theory_status";
 in
 	status
+end);
+=TEX
+\subsubsection{Accessing Theory Data Structures}
+=TEX
+=SML
+
+fun €get_theory› (thynm : string) : THEORY = (
+let	val thyn = get_internal_theory_name "get_theory" thynm;
+	val theory = icl'get_theory thyn
+		handle complaint =>
+		pass_on complaint "icl'get_theory_info" "get_theory_status";
+in
+	theory
+end);
+=TEX
+=SML
+fun €get_theory_info› (thynm : string) : THEORY_INFO = (
+let	val thyn = get_internal_theory_name "get_theory_info" thynm;
+	val info = icl'get_theory_info thyn
+		handle complaint =>
+		pass_on complaint "icl'get_theory_info" "get_theory_status";
+in
+	info
 end);
 =TEX
 \section{CHECKPOINTING}
@@ -1551,14 +1911,14 @@ fun €checkpoint› (cp_thy : string) : CHECKPOINT = (
 	let	val thys = get_descendants cp_thy
 			handle ex => pass_on ex "get_descendants" "checkpoint";
 		fun aux t : CP_INFO = (
-			let	val {	contents = {
-						name = int_name,
+			let	val int_name = get_internal_theory_name "checkpoint" t;
+				val {	contents = {
 						current_level = level,
 						user_data = ref user_data,
 						thm_dict = thm_dict,
 						...},
 					children = children,
-					status, ...} = icl'get_theory_info t;
+					status, ...} = icl'get_theory_info int_name;
 				val read_only = children <> [] orelse status = TSAncestor;
 				val thms = if read_only then [] else map fst (oe_flatten thm_dict);
 			in {	name = t,
@@ -1580,8 +1940,7 @@ the theory has already been deleted by an earlier call.
 =SML
 fun €rollback› (cp : CHECKPOINT) : unit = (
 	let	fun check_internal_name ({name, int_name, ...} : CP_INFO) = (
-			let	val  new_int_name =
-					#name(#contents(icl'get_theory_info name))
+			let	val new_int_name = get_internal_theory_name "rollback" name
 					handle Fail _ => int_name;
 			in	if	int_name <>  new_int_name
 				then 	fail "rollback" 12020 [fn () => name]
@@ -1617,10 +1976,10 @@ fun €rollback› (cp : CHECKPOINT) : unit = (
 		val _ = open_theory cp_thy
 			handle ex => pass_on ex "open_theory" "rollback";
 		val _ = map rec_del to_delete;
-		fun restore ({name, level, thms, read_only = false, user_data, ...} : CP_INFO ) = (
+		fun restore ({name, int_name, level, thms, read_only = false, user_data, ...} : CP_INFO ) = (
 			let	val _ = open_theory name;
 				val _ = unlock_theory name handle Fail _ => ();
-				val {user_data = ud,...} = icl'get_theory name;
+				val {user_data = ud,...} = icl'get_theory int_name;
 				val _ = delete_to_level false "rollback" name (level+1);
 				val new_thms = flat (map fst (get_thms name));
 				val thms_to_go = new_thms diff thms;
@@ -1662,5 +2021,27 @@ open KernelInterface;
 \small
 \printindex
 \end{document}
+=IGN
+icl'new_theory "banana";
+rebuild_global_tables();
+icl'new_type("BOOL", 0);
+e_flatten(!(#int_thy_names global_tables));
+e_flatten(!(#type_thys global_tables));
+icl'open_theory 1;
+icl'new_type("NUM", 0);
+rebuild_global_tables();
+e_flatten(!(#type_thys global_tables));
+DynamicArray.sub_opt(#in_scope global_tables, 0);
+DynamicArray.sub_opt(#in_scope global_tables, 1);
+DynamicArray.sub_opt(#in_scope global_tables, 2);
+icl'open_theory 0;
+rebuild_global_tables();
+icl'new_const("abc", mk_ctype("BOOL", []));
+rebuild_global_tables();
+e_flatten(!(#const_thys global_tables));
+icl'open_theory 1;
+icl'new_const("abcd", mk_ctype("NUM", []));
+rebuild_global_tables();
+e_flatten(!(#const_thys global_tables));
 
 

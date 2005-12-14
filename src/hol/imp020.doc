@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp020.doc   %Z% $Date: 2005/09/05 13:38:22 $ $Revision: 1.29 $ $RCSfile: imp020.doc,v $
+% imp020.doc   %Z% $Date: 2005/09/07 09:37:01 $ $Revision: 1.30 $ $RCSfile: imp020.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation for ICL HOL Symbol Table}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP020}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.29 $%
+\def\SCCSversion{$Revision: 1.30 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/09/05 13:38:22 $%
+\TPPdate{\FormatDate{$Date: 2005/09/07 09:37:01 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -103,7 +103,7 @@ Renamings from version 1.5 of DS/FMU/IED/WRK038.
 \item[Issue 1.20~(\FormatDate{92/07/07
 }) ]
 	Allow multiple languages per constant.
-\item[Issue \SCCSversion~(\FormatDate{$Date: 2005/09/05 13:38:22 $%
+\item[Issue \SCCSversion~(\FormatDate{$Date: 2005/09/07 09:37:01 $%
 }) ]
 	Made languages of new theories be inherited from the parent.
 	Use error code 20501 in $declare_const_language$, was 20502.
@@ -116,6 +116,7 @@ Fixed {\it undeclare\_alias} and added {\it getz_alias\_info}
 \item[Issue 1.28] HOL now supports left-associative operators.
 \item[Issue 1.29] Now uses {\em key\_dest\_const} and {\em key\_dest\_ctype}.
 \item[Issue 1.30] Now uses {\em get\_const\_keys} and {\em get\_type\_keys}.
+\item[Issue 1.31] Kernel interface and symbol table reform.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -407,19 +408,11 @@ For uniformity, the current language is held in an assignable variable
 =SML
 val €language› : string ref = ref "HOL";
 =TEX
-The remaining two caches are unlike the others in that their
-values are partially calculated from the theory database
-as theories are loaded.
-They give for each constant and type which is in scope the name 
-and language of theory to
-which it belongs.
-Additionally, for constants, they hold any other language names
-declared for the constant.
-=SML
-val €const_theory_cache› : (string * string list) E_DICT ref = ref initial_e_dict;
 =TEX
+The next cache gives any extra language names that have been
+declared for a constant.
 =SML
-val €ty_theory_cache› : (string * string) E_DICT ref = ref initial_e_dict;
+val €const_language_cache› : string list E_DICT ref = ref initial_e_dict;
 =TEX
 \subsection{The Cache Access Functions}
 The following function restores the caches to their initial state:
@@ -429,9 +422,8 @@ fun €clear_caches› (():unit) : unit = (
 	const_info_cache := initial_e_dict;
 	fixity_cache := initial_e_dict;
 	terminators := [];
-	language := "HOL";
-	const_theory_cache := initial_e_dict;
-	ty_theory_cache := initial_e_dict
+	const_language_cache := initial_e_dict;
+	language := "HOL"
 );
 =TEX
 It is actually more convenient to have a single update function
@@ -537,7 +529,7 @@ fun €cache_type_abbrev›(a : string, (args : string list, ty : TYPE)) : unit = (
 );
 =TEX
 =SML
-fun €uncache_type_abbrev›(a : string) : unit = (
+fun €uncache_type_abbrev› (a : string) : unit = (
 	case get_type_arity a of
 		Nil => ty_info_cache := e_delete a (!ty_info_cache)
 	|	Value ar => ty_info_cache := e_enter a (ar, Nil) (!ty_info_cache)
@@ -545,37 +537,25 @@ fun €uncache_type_abbrev›(a : string) : unit = (
 =TEX
 =SML
 fun €cache_const_language› (s : string, newlang : string) = (
-	case e_lookup s (!const_theory_cache)
-	of Value(thy, langs) => (
-		if contains langs newlang
-		then ()
-		else
-			const_theory_cache :=
-				e_enter s (thy, langs @ [newlang]) (!const_theory_cache)
-	)
-	| Nil => (
-		fail "cache_const_language" 20501 [fn()=>s]
-	)
+	const_language_cache :=
+	e_enter s
+	(case e_lookup s (!const_language_cache) of
+		Value langs => (langs grab newlang
+	) |	Nil => [newlang])
+	(!const_language_cache)
 );
 =TEX
 =SML
 fun €cache_language› (thy : string) (lang : string) : unit = (
-	let	val conkeys = get_const_keys thy;
-		val tykeys = get_type_keys thy;
-		fun aux_c dict [] = dict
-		|   aux_c dict (key :: more) = aux_c (e_key_enter key (thy, [lang]) dict) more;
-		fun aux_t dict [] = dict
-		|   aux_t dict (key :: more) = aux_t (e_key_enter key (thy, lang) dict) more;
-		fun get_aux nil = nil
+	let	fun get_aux nil = nil
 		| get_aux(h::more) = (
 			case decode_decl thy h
 			of DeclConstLanguage x => x :: (get_aux more)
 			| _ => get_aux more
 		);
-	in	const_theory_cache := aux_c (!const_theory_cache) conkeys;
-		ty_theory_cache := aux_t (!ty_theory_cache) tykeys;
-		language := lang;
-		map cache_const_language (get_aux(fetch_sym_tab_data thy));
+	in	language := lang;
+		map cache_const_language
+		(get_aux(fetch_sym_tab_data thy));
 		()
 	end
 );
@@ -1077,6 +1057,16 @@ fun €get_current_language› (() : unit) : string = (
 	!language
 );
 =TEX
+=SML
+fun €get_language› (thy : string) : string = (
+	let	fun sel (SetLanguage _) = true
+		|   sel _ = false;
+	in	case get_selected_decls thy sel of
+			SetLanguage lang :: _ => lang
+		|	_ => "HOL"
+	end	handle X => reraise X "get_language"
+);
+=TEX
 
 Certain constants are always HOL.  Note that in the uses of $ord$ below we
 do not need to explode the string to get the first character since ord is
@@ -1088,35 +1078,32 @@ local
 	val ordquote = ord "`";
 	val orddquote = ord "\"";
 in
-
 fun €get_const_language› (s : string) : string list = (
-	case e_lookup s (!const_theory_cache) of
-		Value (_, lang) => lang
+	case e_lookup s (!const_language_cache) of
+		Value lang => lang
 	|	Nil => [
 			if is_all_decimal s
 			orelse (size s = 2 andalso ordquote = ord s)
 			orelse (size s > 1 andalso orddquote = ord s)
 			then "HOL"
-			else get_current_language()
+			else
+			let	val thy = get_const_theory s;
+				val lang = get_language thy;
+			in	cache_const_language(s, lang);
+				lang
+			end	handle Fail _ =>
+				get_current_language()
 		]
 );
-
 end (* of local *);
 =TEX
 =SML
 fun €declare_const_language› (const_lang as (s : string, l : string)) : unit = (
-	case e_lookup s (!const_theory_cache)
-	of	Nil => fail "declare_const_language" 20501 [fn() => s, fn() => l]
-	|	Value(tys, langs) => (
+	case get_const_type s of
+		Nil => fail "declare_const_language" 20501 [fn() => s]
+	|	Value _ => (
 			store_decl "declare_const_language" (DeclConstLanguage const_lang)
 	)
-);
-=TEX
-=SML
-fun €get_type_language› (s : string) : string = (
-	case e_lookup s (!ty_theory_cache) of
-		Value (_, lang) => lang
-	|	Nil => get_current_language()
 );
 =TEX
 \subsection{Theory Access Functions}
@@ -1242,16 +1229,6 @@ fun €get_undeclared_aliases› (thy : string) : (string * TERM) list = (
 	end	handle X => reraise X "get_undeclared_aliases"
 );
 =TEX
-=SML
-fun €get_language› (thy : string) : string = (
-	let	fun sel (SetLanguage _) = true
-		|   sel _ = false;
-	in	case get_selected_decls thy sel of
-			SetLanguage lang :: _ => lang
-		|	_ => "HOL"
-	end	handle X => reraise X "get_language"
-);
-=TEX
 \section{HANDLING CONTEXT CHANGES}
 When a theory is opened, we rebuild the caches from scratch. Schemes which
 attempted to preserve the information from theories which have not been
@@ -1260,32 +1237,10 @@ need to ``undo undeclarations'' e.g. if theory $thy1$ has $thy2$ as an ancestor
 and $thy1$ contains a nonfix declaration overriding a binder declaration
 in $thy2$, then when we change context from $thy1$ to $thy2$ we must
 undo the nonfix declaration.
-=SML
-fun €get_theory_language› (thy : string) : string = (
-	let	fun aux (ud :: more) = (
-			case decode_decl thy ud of
-				SetLanguage lang => lang
-			|	_ => aux more
-		) | aux [] = "HOL";
-	in	aux(fetch_sym_tab_data thy)
-	end
-);
 =TEX
 =SML
 fun €build_theory_caches› (thy : string) : unit = (
-	cache_decl thy (SetLanguage(get_theory_language thy))
-);
-=TEX
-=SML
-fun €cache_consts› (cs : string list) : unit = (
-	let	val curthy = get_current_theory_name();
-		val curlang = get_theory_language curthy
-		fun do1 c = (
-			const_theory_cache :=
-			e_enter c(curthy, [curlang])(!const_theory_cache)
-		);
-	in	app do1 cs
-	end
+	cache_decl thy (SetLanguage(get_language thy))
 );
 =TEX
 When a constant is deleted we delete all aliases for it.
@@ -1301,7 +1256,7 @@ fun €uncache_const› (t : TERM) : unit = (
 			aux more
 		) | aux [] = ();
 	in	(aux aliases;
-		const_theory_cache := e_delete s (!const_theory_cache))
+		const_language_cache := e_delete s (!const_language_cache))
 	end
 	handle Fail X => error "uncache_const" 20003 [fn()=>get_message X]
 );
@@ -1317,20 +1272,7 @@ fun €uncache_ty›
 		fun nameof(DeclTypeAbbrev (a, _)) = a
 		|   nameof _ = fail "get_type_abbrevs" 20003 [fn()=> "coercion failed"];
 		val to_delete = map nameof(get_selected_decls thy sel);
-	in	map undeclare_type_abbrev to_delete;
-		ty_theory_cache := e_delete tycon (!ty_theory_cache)
-	end
-);
-=TEX
-=SML
-fun €cache_tys› (tys : string list) : unit = (
-	let	val curthy = get_current_theory_name();
-		val curlang = get_theory_language curthy
-		fun do1 ty = (
-			ty_theory_cache :=
-			e_enter ty(curthy, curlang)(!ty_theory_cache)
-		);
-	in	app do1 tys
+	in	app undeclare_type_abbrev to_delete
 	end
 );
 =TEX
@@ -1386,32 +1328,12 @@ val €On_kernel_state_change› = on_kernel_state_change
 	(fn	OpenTheory (current, (_, _)) => cache_theory current
 	|	NewTheory thy => cache_new_theory thy
 	|	NewParent _ => cache_theory(get_current_theory_name())
-	|	NewConst (c, _) => cache_consts [c]
-	|	SimpleNewDefn ((_, c, _), _) => cache_consts[c]
-	|	NewSpec ((_, i, thm), _) => (
-			cache_consts(map(fst o dest_var)
-			((fst(strip_∂((snd o dest_thm) thm))) to (i-1)))
-	) |	NewType (ty, _) => cache_tys [ty]
-	|	NewTypeDefn ((_, ty, _, _), _) => cache_tys [ty]
 	|	DeleteConst c => uncache_const c
 	|	DeleteType ty => uncache_ty ty
 	|	_ => ()
 );
 =TEX
 \section{MISCELLANEOUS}
-=SML
-fun €get_const_theory› (c : string) : string = (
-	case e_lookup c (!const_theory_cache) of
-		Value (thy, _) => thy
-	|	Nil => fail "get_const_theory" 20701 [fn()=>c]
-);
-=TEX
-=SML
-fun €get_type_theory› (ty : string) : string = (
-	case e_lookup ty (!ty_theory_cache) of
-		Value (thy, _) => thy
-	|	Nil => fail "get_type_theory" 20702 [fn()=>ty]
-);
 =TEX
 =SML
 fun €restore_defaults› (():unit) : unit = (
