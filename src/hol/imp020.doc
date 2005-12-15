@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp020.doc   %Z% $Date: 2005/09/07 09:37:01 $ $Revision: 1.30 $ $RCSfile: imp020.doc,v $
+% imp020.doc   %Z% $Date: 2005/12/14 15:11:49 $ $Revision: 1.31 $ $RCSfile: imp020.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation for ICL HOL Symbol Table}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP020}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.30 $%
+\def\SCCSversion{$Revision: 1.31 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/09/07 09:37:01 $%
+\TPPdate{\FormatDate{$Date: 2005/12/14 15:11:49 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -103,7 +103,7 @@ Renamings from version 1.5 of DS/FMU/IED/WRK038.
 \item[Issue 1.20~(\FormatDate{92/07/07
 }) ]
 	Allow multiple languages per constant.
-\item[Issue \SCCSversion~(\FormatDate{$Date: 2005/09/07 09:37:01 $%
+\item[Issue \SCCSversion~(\FormatDate{$Date: 2005/12/14 15:11:49 $%
 }) ]
 	Made languages of new theories be inherited from the parent.
 	Use error code 20501 in $declare_const_language$, was 20502.
@@ -375,6 +375,22 @@ fun Ûdecode_declÝ (thy : string) (ud : USER_DATUM) : DECL = (
 	|	_ => fail "decode_decl" 20001 [fn()=> thy]
 );
 =TEX
+The following function is used to extract selected declarations from
+a theory. 
+=SML
+fun Ûget_selected_declsÝ (thy : string) (sel : DECL -> bool) : DECL list = (
+	let	fun aux [] = []
+		|   aux (ud :: more) = (
+			let	val dec = decode_decl thy ud;
+			in	if sel dec
+				then 	dec :: aux more
+				else aux more
+			end
+		);
+	in	aux (fetch_sym_tab_data thy)
+	end
+);
+=TEX
 \section{THE CACHES AND THEIR ACCESS FUNCTIONS}
 In this section we define the caches in which symbol table information relating
 to the current context is stored for rapid access. We also define the
@@ -409,8 +425,7 @@ For uniformity, the current language is held in an assignable variable
 val ÛlanguageÝ : string ref = ref "HOL";
 =TEX
 =TEX
-The next cache gives any extra language names that have been
-declared for a constant.
+The next cache gives the language or languages associated with a constant.
 =SML
 val Ûconst_language_cacheÝ : string list E_DICT ref = ref initial_e_dict;
 =TEX
@@ -535,29 +550,34 @@ fun Ûuncache_type_abbrevÝ (a : string) : unit = (
 	|	Value ar => ty_info_cache := e_enter a (ar, Nil) (!ty_info_cache)
 );
 =TEX
+The following is required here for use in {\em cache\_const\_language}.
 =SML
-fun Ûcache_const_languageÝ (s : string, newlang : string) = (
+fun Ûget_languageÝ (thy : string) : string = (
+	let	fun sel (SetLanguage _) = true
+		|   sel _ = false;
+	in	case get_selected_decls thy sel of
+			SetLanguage lang :: _ => lang
+		|	_ => "HOL"
+	end	handle X => reraise X "get_language"
+);
+=TEX
+=SML
+fun Ûcache_const_languageÝ (opt_thy : string OPT)
+	(s : string, newlang : string) = (
 	const_language_cache :=
 	e_enter s
 	(case e_lookup s (!const_language_cache) of
 		Value langs => (langs grab newlang
-	) |	Nil => [newlang])
+	) |	Nil => (
+		case opt_thy of
+			Value thy => [newlang] grab get_language thy
+		|	Nil => [newlang]))
 	(!const_language_cache)
 );
 =TEX
 =SML
 fun Ûcache_languageÝ (thy : string) (lang : string) : unit = (
-	let	fun get_aux nil = nil
-		| get_aux(h::more) = (
-			case decode_decl thy h
-			of DeclConstLanguage x => x :: (get_aux more)
-			| _ => get_aux more
-		);
-	in	language := lang;
-		map cache_const_language
-		(get_aux(fetch_sym_tab_data thy));
-		()
-	end
+	language := lang
 );
 =TEX
 =SML
@@ -571,7 +591,7 @@ fun Ûcache_declÝ (thy : string) (dec : DECL) : unit = (
 	|	DeclTypeAbbrev aargsty => cache_type_abbrev aargsty
 	|	UnDeclTypeAbbrev  a => uncache_type_abbrev a
 	|	SetLanguage lang => cache_language thy lang
-	|	DeclConstLanguage const_lang => cache_const_language const_lang
+	|	DeclConstLanguage const_lang => cache_const_language (Value thy) const_lang
 );
 =TEX
 \section{THEORY DATABASE ACCESS FUNCTIONS}
@@ -587,22 +607,6 @@ declarations relating to a particular name.
 fun Ûget_id_dataÝ (id : string) (thy : string) : USER_DATUM list = (
 		fetch_sym_tab_data thy
 	drop	(fn UD_Int(_, [UD_String(s, _)]) => s <> id | _ => true)
-);
-=TEX
-The following function is used to extract selected declarations from
-a theory. 
-=SML
-fun Ûget_selected_declsÝ (thy : string) (sel : DECL -> bool) : DECL list = (
-	let	fun aux [] = []
-		|   aux (ud :: more) = (
-			let	val dec = decode_decl thy ud;
-			in	if sel dec
-				then 	dec :: aux more
-				else aux more
-			end
-		);
-	in	aux (fetch_sym_tab_data thy)
-	end
 );
 =TEX
 When a declaration is undone, we must often adjust the appropriate caches to redo
@@ -1049,22 +1053,18 @@ fun Ûexpand_type_abbrevÝ (a : string, actuals : TYPE list) : TYPE = (
 \subsection{Languages}
 =SML
 fun Ûset_current_languageÝ (lang : string) : unit = (
-	store_decl "set_current_language" (SetLanguage lang)
+	let	fun sel (DeclConstLanguage _) = true
+		|   sel (SetLanguage _) = true
+		|   sel _ = false;
+	in	const_language_cache := initial_e_dict;
+		store_decl "set_current_language" (SetLanguage lang);
+		recache_theory (get_current_theory_name()) sel
+	end
 );
 =TEX
 =SML
 fun Ûget_current_languageÝ (() : unit) : string = (
 	!language
-);
-=TEX
-=SML
-fun Ûget_languageÝ (thy : string) : string = (
-	let	fun sel (SetLanguage _) = true
-		|   sel _ = false;
-	in	case get_selected_decls thy sel of
-			SetLanguage lang :: _ => lang
-		|	_ => "HOL"
-	end	handle X => reraise X "get_language"
 );
 =TEX
 
@@ -1089,7 +1089,7 @@ fun Ûget_const_languageÝ (s : string) : string list = (
 			else
 			let	val thy = get_const_theory s;
 				val lang = get_language thy;
-			in	cache_const_language(s, lang);
+			in	cache_const_language Nil (s, lang);
 				lang
 			end	handle Fail _ =>
 				get_current_language()
