@@ -16,10 +16,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for the Interface to the Abstract Data Type $THM$}  %% Mandatory field
 \def\TPPheadtitle{Implementation for the \cr Interface to the Abstract Data Type $THM$}
 \TPPref{DS/FMU/IED/IMP012}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.35 $
+\def\SCCSversion{$Revision: 2.36 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/12/16 10:34:27 $ %
+\TPPdate{\FormatDate{$Date: 2005/12/16 12:28:32 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -1160,7 +1160,8 @@ fun Ûdelete_to_levelÝ
 	{do_warn : bool,
 	 caller : string,
 	 target : string,
-	 level : int} : unit = (
+	 level : int} :
+	(string * int) list * (string * TYPE) list = (
 let	val dummy = case (get_current_theory_status()) of
 		TSNormal => ()
 		| TSDeleted => error caller 6008 
@@ -1196,7 +1197,7 @@ let	val dummy = case (get_current_theory_status()) of
 			((name, ty),lev))
 		(con_env drop (fn (_,{level = lev,...}) => lev < level)));
 
-	val (del_type,del_lev2) = split(map (fn (name,{level = lev,...}) => (name,lev))
+	val (del_type, del_lev2) = split(map (fn (name,{level = lev, arity = ar}) => ((name, ar),lev))
 		(ty_env drop (fn (_,{level = lev,...}) => lev < level)));
 
 	val del_thms = map (fn (key,_) => key)
@@ -1218,8 +1219,6 @@ let	val dummy = case (get_current_theory_status()) of
 			let val {level = lev,...} = pp'dest_thm thm
 			in lev < level end)));
 
-	val I = Combinators.I;
-
 	val to_be_d = (
 		format_list Combinators.I 
 		(flat [
@@ -1232,22 +1231,22 @@ let	val dummy = case (get_current_theory_status()) of
 		then []
 		else [get_error_message 12101 
 			[if length del_type = 1 then "" else "s"] ^ 
-			(format_list I del_type ", ")],
+			(format_list fst del_type ", ")],
 		if is_nil del_thms
 		then []
 		else [get_error_message 12102 
 			[if length del_thms = 1 then "" else "s"] ^ 
-			(format_list I del_thms ", ")],
+			(format_list Combinators.I del_thms ", ")],
 		if is_nil del_axioms
 		then []
 		else [get_error_message 12103 
 			[if length del_axioms = 1 then "" else "s"] ^ 
-			(format_list I del_axioms ", ")],
+			(format_list Combinators.I del_axioms ", ")],
 		if is_nil del_defns
 		then []
 		else [get_error_message 12104 
 			[if length del_defns = 1 then "" else "s"] ^ 
-			(format_list I del_defns ", ")]])
+			(format_list Combinators.I del_defns ", ")]])
 		) "; ";
 (*
 =TEX
@@ -1267,20 +1266,21 @@ We now have permission to proceed:
 	val dl = list_cup[del_lev1, del_lev2, del_lev3, del_lev4];
 in
 	app (fn xt => notify_before_ksc (DeleteConst (mk_const xt))) del_con;
-	app (fn t => notify_before_ksc (DeleteType t)) del_type;
+	app (fn (t, _) => notify_before_ksc (DeleteType t)) del_type;
 	app (fn ax => notify_before_ksc (DeleteAxiom ax)) del_axioms;
 	app (fn thm => notify_before_ksc (DeleteThm thm)) del_thms;
 	map pp'delete_thm del_thms;
 	check_clean caller;
 	set_clean_flag false;
 	app (fn x => (pp'delete_extension (); ())) dl;
-	app register_delete_const (map fst del_con);
-	app register_delete_type del_type;
+	app (register_delete_const o fst) del_con;
+	app (register_delete_type o fst) del_type;
 	set_clean_flag true;
 	app (fn xt => notify_on_ksc (DeleteConst (mk_const xt))) del_con;
-	app (fn t => notify_on_ksc (DeleteType t)) del_type;
+	app (fn (t, _) => notify_on_ksc (DeleteType t)) del_type;
 	app (fn ax => notify_on_ksc (DeleteAxiom ax)) 			del_axioms;
-	app (fn thm => notify_on_ksc (DeleteThm thm)) del_thms
+	app (fn thm => notify_on_ksc (DeleteThm thm)) del_thms;
+	(del_type, del_con)
 end);
 =TEX
 We can now give the deletion functions:
@@ -1299,18 +1299,18 @@ let	val cnt = fst(strip_app icnt);
 			[fn () => get_current_theory_name (),
 			 fn () => cnm];
 
-	val dummy = if not(is_type_instance ty cty andalso 
+	val _ = if not(is_type_instance ty cty andalso 
 			is_type_instance cty ty)
 		then fail "delete_const" 12001 
 			[fn () => get_current_theory_name (),
 			 fn () => cnm]
 		else ();
-in
-	delete_to_level {
+	val _ =	delete_to_level {
 		do_warn = true,
 		caller = "delete_const",
 		target = cnm,
-		level = level}
+		level = level};
+in	()
 end);
 =TEX
 =SML
@@ -1322,12 +1322,12 @@ let	val {ty_env = ty_env,...} = pp'get_theory (pp'get_current_theory_name());
 		divert complaint "force_value" "delete_type" 12002 
 			[fn () => get_current_theory_name (),
 			 fn () => tnm];
-in
-	delete_to_level  {
+	val _ =	delete_to_level  {
 		do_warn = true,
 		caller = "delete_type",
 		target = tnm,
 		level = level}
+in	()
 end);
 =TEX
 =SML
@@ -1346,12 +1346,12 @@ let	val {axiom_dict = axiom_dict,...} = pp'get_theory (pp'get_current_theory_nam
 			 fn () => anm];
 
 	val level = thm_level ax;
-in
-	delete_to_level  {
+	val _ =	delete_to_level  {
 		do_warn = true,
 		caller = "delete_axiom",
 		target = anm,
 		level = level}
+in	()
 end);
 =TEX
 =SML
