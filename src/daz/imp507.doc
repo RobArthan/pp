@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.303 $ $RCSfile: imp507.doc,v $ $Date: 2005/12/07 12:54:54 $
+% imp507.doc %Z% $Revision: 1.304 $ $RCSfile: imp507.doc,v $ $Date: 2005/12/07 16:37:19 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.303 $%
+\def\SCCSversion{$Revision: 1.304 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/12/07 12:54:54 $%
+\TPPdate{\FormatDate{$Date: 2005/12/07 16:37:19 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -238,6 +238,7 @@ Use clauses in package specifications now propagate into the package body.
 \item[Issue 1.301] Now gives VC soundness warnings for informal development steps.
 \item[Issue 1.302] Fixed problem with object renamings in package specifications.
 \item[Issues 1.303, 1.304] Enhancement 115: support for implicitly declared subprograms.
+\item[Issue 1.305] Allowed for kernel interface reform.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -261,7 +262,7 @@ The following function returns the current level for the specified theory.  This
 
 =SML
 val €current_level› : unit -> int =
-	(#current_level o #contents o icl'Kernel.icl'get_theory_info o
+	(#current_level o #contents o get_theory_info o
 		get_current_theory_name);
 =TEX
 
@@ -3245,17 +3246,24 @@ In order to avoid a potential infinite loop (e.g., if the current theory is not 
 =SML
 fun €store_vcs› (	label : LABEL, vcs: TERM list, osl : SPECLAB OPT, 
 		routes : ROUTE OPT list, vcg_ctxt : VC_GEN_CONTEXT ) 					: unit = (
-	let	fun dummy_decl i = (
+	let	fun del_last_ext () = (
+			delete_to_level {
+				do_warn = false,
+				caller = "store_vcs",
+				target = "<last extension>",
+				level = #current_level(get_theory "-")}
+		);
+		fun dummy_decl i = (
 			if	i < 10000
 			then	let	val tyn = "CN'DUMMY_TYPE" ^ string_of_int i;
-				in	((	(icl'Kernel.icl'new_type(tyn, 0); ())
+				in	((	(new_type(tyn, 0); ())
 						handle Fail _ => dummy_decl (i+1));
-					icl'Kernel.icl'delete_extension();
+					del_last_ext();
 					()	)
 				end	handle Fail _ => ()
 			else	()
 		);
-		val side_effect = dummy_decl 0;
+		val _ = dummy_decl 0;
 		val vc_names = map (store_vc_term label)  vcs;
 	in	
 		store_vc_context_and_origin(osl, vc_names, routes, 
@@ -3292,86 +3300,17 @@ ensure that the pre- and post-conditions are well-typed. As currently coded, the
 would not check that a conjecture has no free variables, but that check is not required in the
 current usage.
 =SML
-local
-open	icl'Kernel;
-fun delete_top_theory_past_level  (level : int) : unit = (
-let	val dummy = case (get_current_theory_status()) of
-		TSNormal => ()
-		| TSDeleted => error "update_theory_db_with_parainfo" 6008 
-			[fn () => get_current_theory_name()]
-		| TSLocked => fail "update_theory_db_with_parainfo" 6037
-			[fn () => get_current_theory_name()]
-		| TSAncestor => fail "update_theory_db_with_parainfo" 6071
-			[fn () => get_current_theory_name()];
-
-	val {children = children,...} = icl'get_theory_info "-";
-
-	val {con_env = oe_con_env,ty_env = oe_ty_env,
-		axiom_dict = oe_axiom_dict, thm_dict = oe_thm_dict,
-		defn_dict = oe_defn_dict,...} = icl'get_theory "-";
-
-	val con_env = oe_flatten oe_con_env;
-
-	val ty_env = oe_flatten oe_ty_env;
-
-	val axiom_dict = oe_flatten oe_axiom_dict;
-
-	val thm_dict = oe_flatten oe_thm_dict;
-
-	val defn_dict = oe_flatten oe_defn_dict;
-
-	val (del_con,del_lev1) = split (map (fn (name,{ty = ty,level = lev,...}) => 
-			((name, ty),lev))
-		(con_env drop (fn (_,{level = lev,...}) => lev <= level)));
-
-	val (del_type,del_lev2) = split(map (fn (name,{level = lev,...}) => (name,lev))
-		(ty_env drop (fn (_,{level = lev,...}) => lev <= level)));
-
-	val del_type_arities = map (fn ty =>
-		case SymbolTable.get_type_info ty of
-		Nil => error "update_theory_db_with_parainfo" 49999 []
-		|Value (ar, _) => (ty, ar)) del_type;
-
-	val del_thms = map (fn (key,_) => key)
-		(thm_dict drop (fn (_,thm) => 
-			let val {level = lev,...} = icl'dest_thm thm
-			in lev <= level end));
-
-	val (del_axioms, del_lev3) = split(map (fn (key,thm) => (key,
-			let val {level = lev,...} = icl'dest_thm thm
-			in lev end))
-		(axiom_dict drop (fn (_,thm) => 
-			let val {level = lev,...} = icl'dest_thm thm
-			in lev <= level end)));
-
-	val (del_defns, del_lev4) = split(map (fn (key,thm) => (key,
-			let val {level = lev,...} = icl'dest_thm thm
-			in lev end))
-		(defn_dict drop (fn (_,thm) => 
-			let val {level = lev,...} = icl'dest_thm thm
-			in lev <= level end)));
-
-	val dl = list_cup[del_lev1, del_lev2, del_lev3, del_lev4];
-	val dummy = map icl'delete_thm del_thms;
-in
-	if (is_nil dl)
-	then ()
-	else if children <> [] 
-	then fail "update_theory_db_with_parainfo"
-		 6076 [fn () => get_current_theory_name()]
-	else ( map (fn x => icl'delete_extension ()) dl; 
-		open_theory"-"; 
-		())
-end);
-in
 fun €test_store_para›  (para : PARAINFO) : unit = (
 	let	val cl = current_level();
 		val dummy = update_theory_db_with_parainfo para;
-		val undo = delete_top_theory_past_level cl;
+		val _ = delete_to_level {
+			do_warn = false,
+			caller = "test_store_para",
+			target = "<last extension>",
+			level = cl + 1};
 	in	()
 	end
 );
-end;
 =TEX
 The following creates a term formed from the variable initialisations and
 the domain conditions for the initialising expressions
