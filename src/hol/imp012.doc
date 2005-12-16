@@ -16,10 +16,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for the Interface to the Abstract Data Type $THM$}  %% Mandatory field
 \def\TPPheadtitle{Implementation for the \cr Interface to the Abstract Data Type $THM$}
 \TPPref{DS/FMU/IED/IMP012}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.31 $
+\def\SCCSversion{$Revision: 2.32 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/12/15 15:31:41 $ %
+\TPPdate{\FormatDate{$Date: 2005/12/15 18:06:33 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -99,7 +99,7 @@ Tidied up some aspects of {\em get\_ancestors} and {\em rollback}.
 \item[Issue 2.27] Now exploits new {\em key\_mk\_const} {\em key\_mk\_ctype} functions.
 \item[Issue 2.28] Added functions {\em get\_const\_keys} and {\em get\_type\_keys}.
 \item[Issue 2.29] Adjustments for SML/NJ.
-\item[Issues 2.30, 2.31] Kernel interface and symbol table reform.
+\item[Issues 2.30--2.32] Kernel interface and symbol table reform.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -420,24 +420,33 @@ fun Ûnotify_before_kscÝ (ksc : KERNEL_STATE_CHANGE) : unit = (
 );
 =TEX
 \subsection{Temporary Working in Other Theories}
-Note the multiple attempts to catch errors 
-that are not from $fail$ or $error$.
+Note the multiple attempts to catch errors that are not from $fail$ or $error$ (e.g., worth trying if tere are several interrupts queued, perhaps).
 =SML
 fun Ûdo_in_theoryÝ (thy: string) (f : 'a -> 'b) (arg : 'a) : 'b = (
 let	val curr_theory = icl'get_current_theory_name();
 	val thyn = get_internal_theory_name "do_in_theory" thy;
 	val was_before_ksc_functions = (!before_ksc_functions);
 	fun stop_theory_change (OpenTheory _: KERNEL_STATE_CHANGE): unit = (
-		before_ksc_functions := was_before_ksc_functions;
-
 		error "do_in_theory" 12011 []
 	) | stop_theory_change (NewTheory _) = (
-		before_ksc_functions := was_before_ksc_functions;
 		error "do_in_theory" 12011 []
 	) | stop_theory_change (DeleteTheory _) = (
-		before_ksc_functions := was_before_ksc_functions;
 		error "do_in_theory" 12011 []
 	) | stop_theory_change _ = ();
+	fun go_back_to_curr_theory () = (
+		let	val _ = check_clean "do_in_theory";
+			val side = (before_ksc_functions := was_before_ksc_functions);
+			val _ = set_clean_flag false;
+			val ot_res2 = (icl'open_theory curr_theory
+				handle (Error _) =>
+				error "do_in_theory" 12013 []
+				handle (Fail _) =>
+				error "do_in_theory" 12013 []);
+			val _ = update_in_scope ot_res2;
+			val _ = set_clean_flag true;
+		in	()
+		end
+	);
 
 in
 	let	val _ = check_clean "do_in_theory";
@@ -447,49 +456,30 @@ in
 		val _ = set_clean_flag true;
 		val side = before_kernel_state_change stop_theory_change;
 		val result = f arg;
-		val _ = check_clean "do_in_theory";
-		val side = (before_ksc_functions := was_before_ksc_functions);
-		val _ = set_clean_flag false;
-		val ot_res2 = (icl'open_theory curr_theory
-			handle (Error _) =>
-			error "do_in_theory" 12013 []
-			handle (Fail _) =>
-			error "do_in_theory" 12013 []
-			);
-		val _ = update_in_scope ot_res2;
-		val _ = set_clean_flag true;
+		val _ = go_back_to_curr_theory ()
 	in
 		result
 	end
 	handle ex => (
-		before_ksc_functions := was_before_ksc_functions;
-		(icl'open_theory curr_theory
-			handle (Error _) =>
-			error "do_in_theory" 12013 []
-			handle (Fail _) =>
-			error "do_in_theory" 12013 []
-		);
+		go_back_to_curr_theory ();
 		raise ex)
 	handle ex => (case ex of
 		(Fail _) => raise ex
 		| (Error _) => raise ex
 		| _ => (
-		before_ksc_functions := was_before_ksc_functions;
-		icl'open_theory curr_theory; 
+		go_back_to_curr_theory (); 
 		raise ex))
 	handle ex => (case ex of
 		(Fail _) => raise ex
 		| (Error _) => raise ex
 		| _ => (
-		before_ksc_functions := was_before_ksc_functions;
-		icl'open_theory curr_theory; 
+		go_back_to_curr_theory (); 
 		raise ex))
 	handle ex => (case ex of
 		(Fail _) => raise ex
 		| (Error _) => raise ex
 		| _ => (
-		before_ksc_functions := was_before_ksc_functions;
-		icl'open_theory curr_theory; 
+		go_back_to_curr_theory (); 
 		raise ex))
 	end);
 =TEX
