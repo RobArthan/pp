@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp049.doc   %Z% $Date: 2005/09/08 11:34:59 $ $Revision: 1.57 $ $RCSfile: imp049.doc,v $
+% imp049.doc   %Z% $Date: 2005/12/16 11:00:45 $ $Revision: 1.58 $ $RCSfile: imp049.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of Z Paragraphs}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP049}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.57 $%
+\def\SCCSversion{$Revision: 1.58 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/09/08 11:34:59 $%
+\TPPdate{\FormatDate{$Date: 2005/12/16 11:00:45 $%
 }}  %% Mandatory field (with sensible default)
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -118,7 +118,7 @@ of the paragraph recognizer code with any required hooks inserted).
 \item[Issue 1.56] The Z universal set is now called ƒ.
 \item[Issue 1.57] Type constructors for given sets are now in Z namespace;
 Corrections to {\em new\_z\_type} and some general tidying up.
-\item[Issue 1.58] Allowed for kernel interface reforms.
+\item[Issues 1.58, 1.59] Allowed for kernel interface reforms.
 \end{description}
 
 \subsection{Changes Forecast}
@@ -360,115 +360,6 @@ fun Ûnew_type_nofailÝ ((tyname, arity) : (string * int)) : unit = (
 		else fail "new_type_nofail" 62998 []
 );
 =TEX
-=TEX
-For the following $delete\_$ functions we need an auxiliary ``tco\_delete\_to\_level'' function.
-This will find out what is to be deleted, and do all the
-kernel and user notification required.
-=SML
-fun Ûtco_delete_to_levelÝ (caller : string) (target : string) (level : int)
-			: (string * int) list * (string * TYPE) list = (
-let	val _ = case (get_current_theory_status()) of
-		TSNormal => ()
-		| TSDeleted => error caller 6008 
-			[fn () => get_current_theory_name()]
-		| TSLocked => fail caller 6037
-			[fn () => get_current_theory_name()]
-		| TSAncestor => fail caller 6071
-			[fn () => get_current_theory_name()];
-
-	val {children = children,...} = get_theory_info "-";
-
-	val _ = if children <> [] 
-		then fail caller 6076 [fn () => get_current_theory_name()]
-		else ();
-
-	val {con_env = oe_con_env,ty_env = oe_ty_env,
-		axiom_dict = oe_axiom_dict, thm_dict = oe_thm_dict,
-		defn_dict = oe_defn_dict,...} = get_theory "-";
-
-	val con_env = oe_flatten oe_con_env;
-
-	val ty_env = oe_flatten oe_ty_env;
-
-	val axiom_dict = oe_flatten oe_axiom_dict;
-
-	val thm_dict = oe_flatten oe_thm_dict;
-
-	val defn_dict = oe_flatten oe_defn_dict;
-
-	val (del_con,del_lev1) = split (map (fn (name,{ty = ty,level = lev,...}) => 
-			((name, ty),lev))
-		(con_env drop (fn (_,{level = lev,...}) => lev < level)));
-
-	val (del_type,del_lev2) = split(map (fn (name,{level = lev,...}) => (name,lev))
-		(ty_env drop (fn (_,{level = lev,...}) => lev < level)));
-
-	val del_type_arities = map (fn ty =>
-		case get_type_info ty of
-		Nil => error "tco_delete_to_level" 49999 []
-		|Value (ar, _) => (ty, ar)) del_type;
-
-	val del_thms = map (fn (key,_) => key)
-		(thm_dict drop (fn (_,thm) => 
-			let val {level = lev,...} = pp'Kernel.pp'dest_thm thm
-			in lev < level end));
-
-	val (del_axioms, del_lev3) = split(map (fn (key,thm) => (key,
-			let val {level = lev,...} = pp'Kernel.pp'dest_thm thm
-			in lev end))
-		(axiom_dict drop (fn (_,thm) => 
-			let val {level = lev,...} = pp'Kernel.pp'dest_thm thm
-			in lev < level end)));
-
-	val (del_defns, del_lev4) = split(map (fn (key,thm) => (key,
-			let val {level = lev,...} = pp'Kernel.pp'dest_thm thm
-			in lev end))
-		(defn_dict drop (fn (_,thm) => 
-			let val {level = lev,...} = pp'Kernel.pp'dest_thm thm
-			in lev < level end)));
-
-
-	val I = Combinators.I;
-
-	val to_be_d = (
-		format_list Combinators.I 
-		(flat [
-		if is_nil del_thms
-		then []
-		else [get_error_message 12102 
-			[if length del_thms = 1 then "" else "s"] ^ 
-			(format_list I del_thms ", ")],
-		if is_nil del_axioms
-		then []
-		else [get_error_message 12103 
-			[if length del_axioms = 1 then "" else "s"] ^ 
-			(format_list I del_axioms ", ")],
-		if is_nil del_defns
-		then []
-		else [get_error_message 12104 
-			[if length del_defns = 1 then "" else "s"] ^ 
-			(format_list I del_defns ", ")]])
-		) "; ";
-=TEX
-We now ask the interactive user whether he wishes everything
-necessary to be deleted.
-=SML
-	val _ = case to_be_d of
-		"" => ()
-		|_ => warn caller 12012 [(fn () => target),(fn () => to_be_d)];
-=TEX
-We now have permission to proceed:
-=SML
-	val dl = list_cup[del_lev1, del_lev2, del_lev3, del_lev4];
-
-	val _ = map delete_thm del_thms;
-	val _ = map (fn x => pp'Kernel.pp'delete_extension ()) dl;
-	val _ = kernel_interface_diagnostics true;
-	val _ = open_theory"-";
-in
-	(del_type_arities, del_con)
-end);
-=TEX
 We can now give the deletion functions:
 =SML
 fun Ûtco_delete_constÝ (cnt : TERM) : (string * int) list * (string * TYPE) list = (
@@ -490,8 +381,11 @@ let	val (cnm, cty) = dest_const cnt
 			[fn () => get_current_theory_name (),
 			 fn () => cnm]
 		else ();
-in
-	tco_delete_to_level "delete_const" cnm level
+in	delete_to_level {
+		do_warn = true,
+		caller = "tco_delete_const",
+		target = cnm,
+		level = level}
 end);
 =TEX
 =SML
