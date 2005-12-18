@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.91 2005/09/01 11:32:32 rda Exp rda $
+ * $Id: mainw.c,v 2.92 2005/10/27 12:24:19 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -1388,7 +1388,6 @@ static void cmd_menu_cb(
 		XtPointer	cbs)
 {
 	NAT i = (NAT) cbd;
-	Boolean application_alive(void);
 	
 	if(!application_alive() && i != CMD_MENU_RESTART) {
 		ok_dialog(root, not_running_message);
@@ -1640,6 +1639,10 @@ static Bool execute_command(void)
 	XmTextPosition dontcare;
 
 	if(global_options.edit_only) {
+		return False;
+	}
+	if(!application_alive()) {
+		beep();
 		return False;
 	}
 	cmd = get_selection(script, no_selection_message);
