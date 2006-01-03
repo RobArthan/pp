@@ -21,10 +21,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of Computational Conversions}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP057}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.16 $%
+\def\SCCSversion{$Revision: 1.17 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2002/10/17 15:10:58 $%
+\TPPdate{\FormatDate{$Date: 2002/10/17 16:20:01 $%
 }}  %% Mandatory field (with sensible default)
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -95,6 +95,7 @@ mostly proof context name changes.
 \item[Issue 1.15] Update for new INTEGER type.
 \item[Issue 1.16] Copyright and banner updates for open source release.
 \item[Issue 1.17] PPHol-specific updates for open source release
+\item[Issue 1.18] Performance tweak in {\em times\_conv}.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -434,7 +435,8 @@ val Ûtimes_0_xÝ = tac_proof(([], ¬µx·0 * x = 0®), rewrite_tac[times_clauses]);
 val Ûtimes_1_xÝ = tac_proof(([], ¬µx·1 * x = x®), rewrite_tac[times_clauses]);
 =TEX
 \subsubsection{The Multiplier}
-We compute $x * y$ where $x > 1$ is even as follows:
+Our algorithm computes $x * y$ by iterated halving of the first operand, so we first interchange $x$ and $y$ if necessary to give $x \le y$ to minimise the number of iterations.
+We then compute $x * y$ where $x > 1$ is even as follows:
 =GFT Example
 1.	ô x = a + a			aux_conv1
 2.	ô x*y = (a + a)*y		1
@@ -444,7 +446,7 @@ We compute $x * y$ where $x > 1$ is even as follows:
 6.	ô u = z + z			aux_conv1
 7.	ô x*y = u			2, 3, 5, 6
 =TEX
-If $x$ is odd we work as follows:
+If $x > 1$ is odd we work as follows:
 =GFT Example
 1.	ô x = b + 1			plus1_conv
 2.	ô b*y = z			recursive call
@@ -482,46 +484,57 @@ pop_thm()
 =TEX
 =SML
 fun Ûtimes_conv_auxÝ (x : INTEGER) (y : INTEGER) = (
-	case string_of_integer x of
-		"0" => µ_elim (mk_î y) times_0_x
-	|	"1" => µ_elim (mk_î y) times_1_x
-	|	_ =>
-		if x imod two = zero
-		then	let	val a = x idiv two;
-				val z = a @* y;
-				val u = z @+ z;
-				val tmx = mk_î x;
-				val tmy = mk_î y;
-				val tma = mk_î a;
-				val tmz = mk_î z;
-				val tmu = mk_î u;
-				val thm1 = aux_conv1 tmx;
-				val thm2 = times_conv_aux a y;
-				val thm3 = aux_conv1 tmu
-			in	list_´_mp_rule [thm1, thm2, thm3]
-				(list_µ_elim[tmx, tmy, tma, tmz, tmu]
-				evenx_times_y_thm)
-		end else let	val b = x @- one;
-				val z = b @* y;
-				val u = z @+ y;
-				val tmx = mk_î x;
-				val tmy = mk_î y;
-				val tmb = mk_î b;
-				val tmz = mk_î z;
-				val tmu = mk_î u;
-				val thm1 = plus1_conv tmx;
-				val thm2 = times_conv_aux b y;
-				val thm3 = plus_conv (mk_plus(tmz, tmy))
-			in	list_´_mp_rule [thm1, thm2, thm3]
-				(list_µ_elim[tmx, tmy, tmb, tmz, tmu]
-				oddx_times_y_thm)
-			end 
+let	val tmy = mk_î y;
+	fun aux x = (
+		case string_of_integer x of
+			"0" => µ_elim tmy times_0_x
+		|	"1" => µ_elim tmy times_1_x
+		|	_ =>
+			if x imod two = zero
+			then	let	val a = x idiv two;
+					val z = a @* y;
+					val u = z @+ z;
+					val tmx = mk_î x;
+					val tma = mk_î a;
+					val tmz = mk_î z;
+					val tmu = mk_î u;
+					val thm1 = aux_conv1 tmx;
+					val thm2 = aux a;
+					val thm3 = aux_conv1 tmu
+				in	list_´_mp_rule [thm1, thm2, thm3]
+					(list_µ_elim[tmx, tmy, tma, tmz, tmu]
+					evenx_times_y_thm)
+			end else let	val b = x @- one;
+					val z = b @* y;
+					val u = z @+ y;
+					val tmx = mk_î x;
+					val tmb = mk_î b;
+					val tmz = mk_î z;
+					val tmu = mk_î u;
+					val thm1 = plus1_conv tmx;
+					val thm2 = aux b;
+					val thm3 = plus_conv (mk_plus(tmz, tmy))
+				in	list_´_mp_rule [thm1, thm2, thm3]
+					(list_µ_elim[tmx, tmy, tmb, tmz, tmu]
+					oddx_times_y_thm)
+				end
+	);
+in	aux x
+end
 );
 =TEX
 =SML
 val Ûtimes_convÝ : CONV = (fn aopb =>
-	let	val (a, b) = dest_bin_op "times_conv" 57009  "*" aopb;
-	in	times_conv_aux  (dest_î a) (dest_î b)
+	let	val (tmx, tmy) = dest_bin_op "times_conv" 57009  "*" aopb;
+		val x = dest_î tmx;
+		val y = dest_î tmy;
+
+	in	if	x @<= y
+		then	times_conv_aux x y
+		else	let	val thm1 = list_µ_elim[tmx, tmy] times_comm_thm;
+				val thm2 = times_conv_aux y x;
+			in	eq_trans_rule thm1 thm2
+			end
 	end	handle ex => term_divert ex "dest_î" "times_conv" 57009 [aopb]
 );
 =IGN
@@ -533,6 +546,7 @@ fun test_times (m : int) (n : int) = (
 	in	map (map times_conv) tab
 	end
 );
+=TEX
 \subsection{DIVISION AND MODULUS}
 \subsubsection{Lemmas}
 =SML
