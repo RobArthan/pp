@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.92 2005/10/27 12:24:19 rda Exp rda $
+ * $Id: mainw.c,v 2.93 2005/12/18 13:59:36 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -1051,12 +1051,15 @@ static void file_menu_op(int op)
 	char *fname, *oldfname;
 	char *buf;
 	void check_quit_cb(CALLBACK_ARGS);
+	Boolean first_go;
 
 	switch(op) {
 	case FILE_MENU_SAVE:
 		fname = get_file_name();
 		if(!fname) {
 /* No file name: just do nothing */
+					if(fname) {XtFree(fname);}
+					break; /* user cancelled! */
 		} else {
 			if(save_file(script, fname)) {
 				flash_file_name(fname);
@@ -1076,37 +1079,48 @@ static void file_menu_op(int op)
 			NULL,
 			want_to_continue,
 			confirm_save_as)) {
-			fname = file_dialog(frame, "Save");
-			if(!fname || !*fname || !strcmp(fname, no_file_name)) {
-/* No file name: just do nothing */
-			} else if(save_file_as(script, fname)) {
-				if(oldfname != NULL) {
-					setup_reopen_menu(oldfname);
+			for(first_go = True; ; first_go = False) {
+				fname = file_dialog(frame, "Save", first_go);
+				if(!fname || !*fname || !strcmp(fname, no_file_name)) {
+					if(fname) {XtFree(fname);}
+					break; /* user cancelled! */
+				} else if(save_file_as(script, fname)) {
+					if(oldfname != NULL) {
+						setup_reopen_menu(oldfname);
+					}
+					flash_file_name(fname);
+					set_icon_name_and_title();
+					reinit_changed(True, False);
+					set_menu_item_sensitivity(filemenu,
+						FILE_MENU_SAVE, True);
+					set_menu_item_sensitivity(filemenu,
+						FILE_MENU_REVERT, True);
+					XtFree(fname);
+					break; /* success! */
 				}
-				flash_file_name(fname);
-				set_icon_name_and_title();
-				reinit_changed(True, False);
-				set_menu_item_sensitivity(filemenu,
-					FILE_MENU_SAVE, True);
-				set_menu_item_sensitivity(filemenu,
-					FILE_MENU_REVERT, True);
+				XtFree(fname);
 			}
-			if(fname != NULL) {XtFree(fname);}
 		}
 		if(oldfname) {XtFree(oldfname);}
 		break;
 	case FILE_MENU_SAVE_SELECTION:
 		if((buf = get_selection(script, no_selection_message))
 			!= NULL) {
-			fname = file_dialog(frame, "Save Selection");
-			if(!fname || !*fname || !strcmp(fname, no_file_name)) {
-/* No file name: just do nothing */
-			} else {
-				save_string_as(script, buf, fname);
+			for(first_go = True; ; first_go = False) {
+				fname = file_dialog(frame, "Save Selection", first_go);
+				if(!fname || !*fname || !strcmp(fname, no_file_name)) {
+	/* No file name: just do nothing */
+					if(fname) {XtFree(fname);}
+					break; /* user cancelled! */
+				} else {
+					if(save_string_as(script, buf, fname)) {
+						XtFree(fname);
+						break; /* success! */
+					}
+				}
 			}
 			XtFree(buf);
-			if(fname != NULL) {XtFree(fname);};
-		};
+		}
 		break;
 	case FILE_MENU_OPEN:
 		oldfname = get_file_name();
@@ -1116,35 +1130,45 @@ static void file_menu_op(int op)
 			file_info.changed ? changed_message : NULL,
 			want_to_continue,
 			confirm_open)) {
-			fname = file_dialog(frame, "Open");
-			if(!fname || !*fname || !strcmp(fname, no_file_name)) {
-/* No file name: just do nothing */
-			} else {
-				pause_undo(undo_ptr);
-				if(open_file(script, fname, False, (FileOpenAction *) NULL)) {
-					if(oldfname && strcmp(fname, oldfname)) {
-						setup_reopen_menu(oldfname);
-					}
-					flash_file_name(fname);
-					set_icon_name_and_title();
-					reinit_changed(False, False);
-					set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
+			pause_undo(undo_ptr);
+			for(first_go = True; ; first_go = False) {
+				fname = file_dialog(frame, "Open", first_go);
+				if(!fname || !*fname || !strcmp(fname, no_file_name)) {
+	/* No file name: just do nothing */
+						if(fname) {XtFree(fname);}
+						break; /* user cancelled! */
 				} else {
-					unpause_undo(undo_ptr);
+					if(open_file(script, fname, False, (FileOpenAction *) NULL)) {
+						if(oldfname && strcmp(fname, oldfname)) {
+							setup_reopen_menu(oldfname);
+						}
+						flash_file_name(fname);
+						set_icon_name_and_title();
+						reinit_changed(False, False);
+						set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
+						XtFree(fname);
+						break;
+					}
 				}
 			}
-			if(fname != NULL) {XtFree(fname);}
+			unpause_undo(undo_ptr);
 		}
 		if(oldfname) {XtFree(oldfname);}
 		break;
 	case FILE_MENU_INCLUDE:
-		fname = file_dialog(frame, "Include");
-		if(!fname || !*fname || !strcmp(fname, no_file_name)) {
-/* No file name: just do nothing */
-			break;
-		};
-		include_file(script, fname);
-		if(fname != NULL) {XtFree(fname);};
+		for(first_go = True; ; first_go = False) {
+			fname = file_dialog(frame, "Include", first_go);
+			if(!fname || !*fname || !strcmp(fname, no_file_name)) {
+	/* No file name: just do nothing */
+				if(fname) {XtFree(fname);}
+				break; /* user cancelled! */
+			} else {
+				if(include_file(script, fname)) {
+					XtFree(fname);
+					break; /* success */
+				}
+			}
+		}
 		break;
 	case FILE_MENU_REVERT:
 		fname = get_file_name();

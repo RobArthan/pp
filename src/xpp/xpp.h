@@ -214,7 +214,8 @@ typedef enum {
 		char	*msg);
 	extern char *file_dialog(
 		Widget	w,
-		char	*opn);
+		char	*opn,
+		Boolean	reset);
 	extern void startup_dialog(
 		Widget	w,
 		char	**cmd_line,
