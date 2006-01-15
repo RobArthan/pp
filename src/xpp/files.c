@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.31 2004/11/20 14:05:04 rda Exp $
+ * $Id: files.c,v 2.32 2004/11/23 16:20:51 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -785,10 +785,13 @@ Boolean save_file(
  * save_file_as: store contents of a text widget into a named file
  * asks for confirmation if the file already exists.
  * Implements `save as' as opposed to `save' in a file menu
+ * The w argument is used as the parent for error messages dialogues
+ * to get the stacking order right.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 Boolean save_file_as(
 	Widget	text,
+	Widget	w,
 	char	*name)
 {
 	char *buf;
@@ -797,19 +800,19 @@ Boolean save_file_as(
 
 	if(stat(name, &status) == 0) { /* file exists */
 		if(!S_ISREG(status.st_mode)) {
-			file_error_dialog(text, save_not_reg_message, name);
+			file_error_dialog(w, save_not_reg_message, name);
 			return False;
 		};
 		if(access(name, W_OK) != 0) {
-			file_error_dialog(text, cant_write_message, name);
+			file_error_dialog(w, cant_write_message, name);
 			return False;
 		}
-		if(!file_yes_no_dialog(text, overwrite_message, name, "Confirm Save As")) {
+		if(!file_yes_no_dialog(w, overwrite_message, name, "Confirm Save As")) {
 			return False;
 		}
 	}; /* else file doesn't exist so no checks needed */
 	buf = XmTextGetString(text);
-	success = store_file_contents(text, name, buf);
+	success = store_file_contents(w, name, buf);
 	XtFree(buf);
 	if(success && stat(name, &status) == 0) {
 		current_file_status = &status;
@@ -827,6 +830,8 @@ Boolean save_file_as(
  * Asks for confirmation if the file already exists.
  * E.g., used to implement `save selection as' in a file menu
  * Treats NULL data same as "" (just a frill).
+ * The w argument is used as the parent for error messages dialogues
+ * to get the stacking order right.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 Boolean save_string_as(
@@ -925,10 +930,13 @@ Boolean old_file_checks(
  * If the file is read-only, the read-only option must be set and
  * unless the command-line/resource file setting and the current setting
  * of the read-only option are on, we ask the user whether to do this.
+ * The w argument is used as the parent for error messages dialogues
+ * to get the stacking order right.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 Boolean open_file(
 		Widget	text,
+		Widget	w,
 		char	*name,
 		Boolean cmdLine,
  		FileOpenAction *foAction)
@@ -953,14 +961,14 @@ Boolean open_file(
 		if(read_only_message && !binary) {
 			if(	(	orig_global_options.read_only
 				&&	global_options.read_only)
-			||	file_yes_no_dialog(text, read_only_message, name, NULL)) {
+			||	file_yes_no_dialog(w, read_only_message, name, NULL)) {
 				set_read_only(True);
 			} else {
 				XtFree(buf);
 				return False;
 			}
 		} else if (binary) {
-			if (file_yes_no_dialog(text,
+			if (file_yes_no_dialog(w,
 					read_only_message ?
 						read_only_binary_message
 					:	writable_binary_message,
@@ -995,15 +1003,18 @@ Boolean open_file(
  * include_file: open a file and include it into a text widget given the
  * widget and the file name 
  * Implements `include' in the file menu.
+ * The w argument is used as the parent for error messages dialogues
+ * to get the stacking order right.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 Boolean include_file(
 		Widget	text,
+		Widget	w,
 		char	*name)
 {
 	char *buf;
 	XmTextPosition pos;
-	if((buf = get_file_contents(text, name, False, True,
+	if((buf = get_file_contents(w, name, False, True,
 			NULL, NULL, NULL, NULL)) != NULL) {
 		XmTextDisableRedisplay(text);
 		pos = XmTextGetInsertionPosition(text);

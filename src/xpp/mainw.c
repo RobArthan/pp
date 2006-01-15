@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.93 2005/12/18 13:59:36 rda Exp rda $
+ * $Id: mainw.c,v 2.94 2006/01/14 15:39:01 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -1009,7 +1009,8 @@ static Boolean setup_main_window(
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 	pause_undo(undo_ptr);
 
-	if(open_file(script, file_name, True, &foAction) && file_name != NULL) {
+	if(open_file(script, script, file_name, True, &foAction)
+	&& file_name != NULL) {
 		XmTextFieldSetString(namestring, file_name);
 		XmTextFieldShowPosition(namestring, strlen(file_name));
 		set_menu_item_sensitivity(filemenu, FILE_MENU_SAVE, True);
@@ -1048,6 +1049,7 @@ static Boolean setup_main_window(
 
 static void file_menu_op(int op)
 {
+	static Widget dialog = NULL;
 	char *fname, *oldfname;
 	char *buf;
 	void check_quit_cb(CALLBACK_ARGS);
@@ -1080,11 +1082,10 @@ static void file_menu_op(int op)
 			want_to_continue,
 			confirm_save_as)) {
 			for(first_go = True; ; first_go = False) {
-				fname = file_dialog(frame, "Save", first_go);
-				if(!fname || !*fname || !strcmp(fname, no_file_name)) {
-					if(fname) {XtFree(fname);}
+				fname = file_dialog(frame, &dialog, "Save", first_go);
+				if(!fname) {
 					break; /* user cancelled! */
-				} else if(save_file_as(script, fname)) {
+				} else if(save_file_as(script, dialog, fname)) {
 					if(oldfname != NULL) {
 						setup_reopen_menu(oldfname);
 					}
@@ -1100,6 +1101,7 @@ static void file_menu_op(int op)
 				}
 				XtFree(fname);
 			}
+			XtPopdown(XtParent(dialog));
 		}
 		if(oldfname) {XtFree(oldfname);}
 		break;
@@ -1107,18 +1109,17 @@ static void file_menu_op(int op)
 		if((buf = get_selection(script, no_selection_message))
 			!= NULL) {
 			for(first_go = True; ; first_go = False) {
-				fname = file_dialog(frame, "Save Selection", first_go);
-				if(!fname || !*fname || !strcmp(fname, no_file_name)) {
-	/* No file name: just do nothing */
-					if(fname) {XtFree(fname);}
+				fname = file_dialog(frame, &dialog, "Save Selection", first_go);
+				if(!fname) {
 					break; /* user cancelled! */
 				} else {
-					if(save_string_as(script, buf, fname)) {
+					if(save_string_as(dialog, buf, fname)) {
 						XtFree(fname);
 						break; /* success! */
 					}
 				}
 			}
+			XtPopdown(XtParent(dialog));
 			XtFree(buf);
 		}
 		break;
@@ -1132,13 +1133,11 @@ static void file_menu_op(int op)
 			confirm_open)) {
 			pause_undo(undo_ptr);
 			for(first_go = True; ; first_go = False) {
-				fname = file_dialog(frame, "Open", first_go);
-				if(!fname || !*fname || !strcmp(fname, no_file_name)) {
-	/* No file name: just do nothing */
-						if(fname) {XtFree(fname);}
+				fname = file_dialog(frame, &dialog, "Open", first_go);
+				if(!fname) {
 						break; /* user cancelled! */
 				} else {
-					if(open_file(script, fname, False, (FileOpenAction *) NULL)) {
+					if(open_file(script, dialog, fname, False, (FileOpenAction *) NULL)) {
 						if(oldfname && strcmp(fname, oldfname)) {
 							setup_reopen_menu(oldfname);
 						}
@@ -1151,24 +1150,24 @@ static void file_menu_op(int op)
 					}
 				}
 			}
+			XtPopdown(XtParent(dialog));
 			unpause_undo(undo_ptr);
 		}
 		if(oldfname) {XtFree(oldfname);}
 		break;
 	case FILE_MENU_INCLUDE:
 		for(first_go = True; ; first_go = False) {
-			fname = file_dialog(frame, "Include", first_go);
-			if(!fname || !*fname || !strcmp(fname, no_file_name)) {
-	/* No file name: just do nothing */
-				if(fname) {XtFree(fname);}
+			fname = file_dialog(frame, &dialog, "Include", first_go);
+			if(!fname) {
 				break; /* user cancelled! */
 			} else {
-				if(include_file(script, fname)) {
+				if(include_file(script, dialog, fname)) {
 					XtFree(fname);
 					break; /* success */
 				}
 			}
 		}
+		XtPopdown(XtParent(dialog));
 		break;
 	case FILE_MENU_REVERT:
 		fname = get_file_name();
@@ -1183,7 +1182,7 @@ static void file_menu_op(int op)
 /* No file name: get an empty file */
 				XmTextSetString(script, "");
 				flash_file_name(no_file_name);
-			} else if(open_file(script, fname, False,(FileOpenAction *) NULL)){
+			} else if(open_file(script, script, fname, False,(FileOpenAction *) NULL)){
 				set_icon_name_and_title();
 				flash_file_name(fname);
 				reinit_changed(False, file_info.new);
@@ -1202,7 +1201,7 @@ static void file_menu_op(int op)
 			want_to_continue,
 			confirm_empty_file)) {
 			pause_undo(undo_ptr);
-			if(open_file(script, NULL, False, (FileOpenAction*)NULL)) {
+			if(open_file(script, script, NULL, False, (FileOpenAction*)NULL)) {
 				XmTextFieldSetString(namestring, no_file_name);
 				if(oldfname != NULL) {
 					setup_reopen_menu(oldfname);
@@ -1315,7 +1314,7 @@ static void reopen_cb(
 		want_to_continue,
 		confirm_reopen)) {
 		pause_undo(undo_ptr);
-		if(open_file(script, fname, False, (FileOpenAction *) NULL)) {
+		if(open_file(script, script, fname, False, (FileOpenAction *) NULL)) {
 			flash_file_name(fname);
 			if(oldfname && *oldfname && strcmp(oldfname, no_file_name)) {
 				setup_reopen_menu(oldfname);

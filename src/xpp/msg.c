@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2005/01/27 17:08:44 $ $Revision: 2.42 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2006/01/14 15:39:01 $ $Revision: 2.43 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -548,17 +548,26 @@ static void ok_cb(
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * file_dialog: dialog to get a file name, via a FileSelectionDialog.
- * `opn' is the label to us on the ``OK'' button (i.e. it's
- * ``Save'' or ``Open'' or whatever. 
+ * file_dialog: pop up a dialog to get a file name.
+ * The dialogue is the infamous Motif FileSelectionDialog.
+ * The file selection widget create/used is returned in `dialog'.
+ * It is caller's responsibility to pop the dialog down.
+ * `opn' is the label to use on the ``OK'' button (i.e. it's
+ * ``Save'' or ``Open'' or whatever.
+ * reset is true if the filename text widget is to be reset
+ * before bringing the dialogue up.
+ * The return value is the user's chosen file name if any or NULL
+ * if the user cancels. The file name will not be an empty string
+ * and will not end in a "/".
+ * This is an application modal dialog.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void	file_cancel_cb(CALLBACK_ARGS),
 		file_ok_cb(CALLBACK_ARGS),
 		file_help_cb(CALLBACK_ARGS);
 
-char *file_dialog(Widget w, char *opn, Boolean reset)
+char *file_dialog(Widget w, Widget *dialog, char *opn, Boolean reset)
 {
-	static Widget dialog, dialog_text;
+	Widget dialog_text;
 	XmString s, title;
 	Atom WM_DELETE_WINDOW;
 	static int reply;	/* 0 = not replied/YES/NO*/
@@ -567,46 +576,47 @@ char *file_dialog(Widget w, char *opn, Boolean reset)
 	XmTextPosition last_pos;
 	reply = 0;
 
-	if (!dialog) {
-		dialog = XmCreateFileSelectionDialog(w, "filesel",
+	if (!*dialog) {
+		*dialog = XmCreateFileSelectionDialog(w, "filesel",
 				NULL, 0);
 #ifdef EDITRES
-		add_edit_res_handler(dialog);
+		add_edit_res_handler(*dialog);
 #endif
-		XtAddCallback(dialog, XmNokCallback, file_ok_cb, &reply);
-		XtAddCallback(dialog, XmNcancelCallback, file_cancel_cb, &reply);
-		XtAddCallback(dialog, XmNhelpCallback, file_help_cb, NULL);
+		XtAddCallback(*dialog, XmNokCallback, file_ok_cb, &reply);
+		XtAddCallback(*dialog, XmNcancelCallback, file_cancel_cb, &reply);
+		XtAddCallback(*dialog, XmNhelpCallback, file_help_cb, NULL);
 		WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
 			"WM_DELETE_WINDOW",
 			False);
-		XmAddWMProtocolCallback(XtParent(dialog),
+		XmAddWMProtocolCallback(XtParent(*dialog),
 			WM_DELETE_WINDOW, file_cancel_cb,
 			&reply);
 		title = XmStringCreateSimple("Select A File");
-		XtVaSetValues(dialog,
+		XtVaSetValues(*dialog,
 			XmNdialogStyle,		XmDIALOG_FULL_APPLICATION_MODAL,
 			XmNdialogTitle, 	title,
 			NULL);
 		XmStringFree(title);
-		dialog_text = XmFileSelectionBoxGetChild(dialog, XmDIALOG_TEXT);
 	}
+
+	dialog_text = XmFileSelectionBoxGetChild(*dialog, XmDIALOG_TEXT);
 
 	s = XmStringCreateSimple(opn);
 
-	XtVaSetValues(dialog,
+	XtVaSetValues(*dialog,
 		XmNokLabelString,	s,
 		NULL);
 
 	XmStringFree(s);
 
-	XtManageChild(dialog);
+	XtManageChild(*dialog);
 
 	if(reset) {
-		XtVaGetValues(dialog,
+		XtVaGetValues(*dialog,
 			XmNdirMask,	&dir_mask,
 			NULL);
 
-		XmFileSelectionDoSearch(dialog, dir_mask);
+		XmFileSelectionDoSearch(*dialog, dir_mask);
 
 		XmStringFree(dir_mask);
 	}
@@ -617,7 +627,7 @@ char *file_dialog(Widget w, char *opn, Boolean reset)
 
 	XmTextFieldShowPosition(dialog_text, last_pos);
 
-	XtPopup(XtParent(dialog), XtGrabNone);
+	XtPopup(XtParent(*dialog), XtGrabNone);
 
 	XmProcessTraversal(dialog_text, XmTRAVERSE_CURRENT);
 
@@ -633,15 +643,11 @@ char *file_dialog(Widget w, char *opn, Boolean reset)
 			}
 		}
 	}
-
-	XtPopdown(XtParent(dialog));
-
 	if(reply == YES) {
 		return file_name;
 	} else {
 		return NULL;
 	}
-
 }
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * startup_dialog: dialog to get the command line to run and a file name to edit

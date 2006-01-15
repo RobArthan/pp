@@ -138,6 +138,7 @@ typedef enum {
 		char	*title);
 	extern Boolean open_file(
 		Widget	text,
+		Widget	dialog,
 		char	*name,
 		Boolean cmdLine,
 		FileOpenAction *foAction);
@@ -148,13 +149,15 @@ typedef enum {
 		char	*name);
 	extern Boolean save_file_as(
 		Widget	text,
+		Widget	dialog,
 		char	*name);
 	extern Boolean save_string_as(
-		Widget	w,
+		Widget	dialog,
 		char	*data,
 		char	*name);
 	extern Boolean include_file(
 		Widget	text,
+		Widget	dialog,
 		char	*name);
 	extern void panic_save(
 		Widget text);
@@ -213,7 +216,8 @@ typedef enum {
 		Widget	w,
 		char	*msg);
 	extern char *file_dialog(
-		Widget	w,
+		Widget	parent_w,
+		Widget	*dialog,
 		char	*opn,
 		Boolean	reset);
 	extern void startup_dialog(
