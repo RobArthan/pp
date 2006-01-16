@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2006/01/14 15:39:01 $ $Revision: 2.43 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2006/01/15 14:11:02 $ $Revision: 2.44 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -405,6 +405,8 @@ void ok_dialog(Widget w, char *msg)
 		XtUnmanageChild(
 			XmMessageBoxGetChild(dialog, XmDIALOG_CANCEL_BUTTON));
 		XtAddCallback(dialog, XmNokCallback, ok_cb, &confirmed);
+		/* still need to handle cancel via ESC key */
+		XtAddCallback(dialog, XmNcancelCallback, ok_cb, &confirmed);
 		WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
 			"WM_DELETE_WINDOW",
 			False);
@@ -459,6 +461,7 @@ void memory_warning_dialog(Widget w, Boolean show)
 		XtUnmanageChild(
 			XmMessageBoxGetChild(dialog, XmDIALOG_CANCEL_BUTTON));
 		XtAddCallback(dialog, XmNokCallback, ok_cb, &confirmed);
+		XtAddCallback(dialog, XmNcancelCallback, ok_cb, &confirmed);
 		WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
 			"WM_DELETE_WINDOW",
 			False);
@@ -513,6 +516,7 @@ void nomemory_dialog(Widget w, Boolean show)
 		XtUnmanageChild(
 			XmMessageBoxGetChild(dialog, XmDIALOG_CANCEL_BUTTON));
 		XtAddCallback(dialog, XmNokCallback, ok_cb, &confirmed);
+		XtAddCallback(dialog, XmNcancelCallback, ok_cb, &confirmed);
 		WM_DELETE_WINDOW = XmInternAtom(XtDisplay(root),
 			"WM_DELETE_WINDOW",
 			False);
