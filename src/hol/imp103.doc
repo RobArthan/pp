@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-%  imp103.doc  %Z% $Date: 2005/12/14 15:11:49 $ $Revision: 1.7 $ $RCSfile: imp103.doc,v $
+%  imp103.doc  %Z% $Date: 2005/12/16 10:34:27 $ $Revision: 1.8 $ $RCSfile: imp103.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation for Conjecture Database}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP103}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.7 $%%
+\def\SCCSversion{$Revision: 1.8 $%%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/12/14 15:11:49 $%
+\TPPdate{\FormatDate{$Date: 2005/12/16 10:34:27 $%
 }}
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -80,6 +80,7 @@ Level numbers now stored with the conjectures.
 \item[Issue 1.6] PPHol-specific updates for open source release
 \item[Issue 1.7] Allowed for kernel interface and symbol table reform.
 \item[Issue 1.8] The prefix for private interfaces is now $pp'$ rather than $icl'$.
+\item[Issue 1.9] Added the new conjecture management facilities.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -166,14 +167,36 @@ fun Ûset_conjecture_udsÝ (caller : string) (uds : USER_DATUM list) : unit = (
 	handle ex => reraise ex caller
 );
 =TEX
+
+=SML
+fun Ûthm_proves_conjectureÝ (thm : THM) (tm : TERM) : bool = (
+	let	val (asms, conc) = dest_thm thm;
+	in	is_nil asms andalso conc =$ tm
+	end
+);
+=TEX
+=SML
+fun Ûcheck_new_conjectureÝ (keys : string list) (tm : TERM) : unit = (
+	let	fun aux [] = Nil
+		|   aux (key::keys) = (
+			(if	thm_proves_conjecture (get_thm "-" key) tm
+			then	aux keys
+			else	Value key)
+			handle Fail _ => aux keys
+		);
+	in	case aux keys of
+			Nil => ()
+		|	Value key => fail "new_conjecture" 103102 [fn()=>key]
+	end
+);
 =SML
 fun Ûnew_conjectureÝ ([] : string list, tm : TERM) : unit = (
 	fail "new_conjecture" 6031 []
 ) | Ûnew_conjectureÝ (keys : string list, tm : TERM) : unit = (
-	let	val side_effect = (
+	let	val _ = (
 			if	not(type_of tm =: BOOL)
 			then	term_fail "new_conjecture" 3031 [tm]
-			else	()
+			else	check_new_conjecture keys tm
 		);
 		val uds = get_conjecture_uds "new_conjecture" "-";
 		fun chk [] = ()
@@ -182,7 +205,7 @@ fun Ûnew_conjectureÝ ([] : string list, tm : TERM) : unit = (
 			then	fail "new_conjecture" 103801 [fn () => k]
 			else	chk ks
 		);	
-		val side_effect = chk keys;
+		val _ = chk keys;
 		val lv = current_level();
 		val new_uds = encode_conjecture (keys, (lv, tm)) :: uds
 	in	set_conjecture_uds "new_conjecture" new_uds
@@ -237,6 +260,77 @@ fun Ûdelete_all_conjecturesÝ (() : unit) : unit = (
 );
 =TEX
 =SML
+fun Ûcheck_proves_okÝ (caller : string) (thy : string) (key : string)
+	(thm : THM) (tm : TERM) : unit = (
+	if	thm_proves_conjecture thm tm
+	then	()
+	else	fail caller 103803
+		[fn () => thy, fn () => key]
+);
+=TEX
+=SML
+fun Ûis_proved_conjectureÝ (thy : string) (key : string) : bool = (
+	let	val tm = get_conjecture thy key
+			handle (ex as Fail _) =>
+				pass_on ex
+				"get_conjecture"
+				"is_proved_conjecture";
+	in	case (Value(get_thm thy key) handle Fail _ => Nil) of
+			Value thm => (
+			check_proves_ok "is_proved_conjecture"
+				thy key thm tm;
+			true
+		) |	Nil => false
+	end
+);
+=TEX
+=SML
+fun Ûget_selected_conjecturesÝ (caller : string)
+		(sel : string -> TERM -> bool)
+		(thy : string) : string list = (
+	let	val triples = get_conjectures thy
+			handle (ex as Fail _) =>
+				pass_on ex
+				"get_conjectures"
+				caller;
+		fun aux acc [] = rev acc
+		|   aux acc (([], _)::more) = aux acc more
+		|   aux acc ((key::keys, (i, tm)) :: more) = (
+			aux
+			(if sel key tm then key::acc else acc)
+			((keys, (i, tm)) :: more)
+		);
+	in	aux [] triples
+	end
+);
+=TEX
+=SML
+fun Ûget_proved_conjecturesÝ (thy : string) : string list = (
+	let	fun sel key tm = (
+			case (Value (get_thm thy key) handle Fail _ => Nil) of
+				Value thm => (
+				check_proves_ok "get_proved_conjectures" thy key thm tm;
+				true
+			) |	Nil => false
+		);
+	in	get_selected_conjectures "get_proved_conjectures" sel thy
+	end
+);
+=TEX
+=SML
+fun Ûget_unproved_conjecturesÝ (thy : string) : string list = (
+	let	fun sel key tm = (
+			case (Value (get_thm thy key) handle Fail _ => Nil) of
+				Value thm => (
+				check_proves_ok "get_unproved_conjectures" thy key thm tm;
+				false
+			) |	Nil => true
+		);
+	in	get_selected_conjectures "get_unproved_conjectures" sel thy
+	end
+);
+=TEX
+=SML
 fun Ûcull_conjecturesÝ (what : string) (p : (int * TERM) -> bool) : unit = (
 	let	val uds = get_conjecture_uds "cull_conjectures" "-";
 		fun prune [] = ([], [])
@@ -264,7 +358,33 @@ fun Ûcull_conjecturesÝ (what : string) (p : (int * TERM) -> bool) : unit = (
 );
 =TEX
 =SML
-fun Ûconjecture_kernel_state_change_trapÝ
+fun Ûcheck_thmÝ (caller : string) (keys : string list) (thm : THM) : unit = (
+	let	fun aux [] = Nil
+		|   aux (key::keys) = (
+			(if	thm_proves_conjecture thm (get_conjecture "-" key)
+			then	aux keys
+			else	Value key)
+			handle Fail _ => aux keys
+		);
+	in	case aux keys of
+			Nil => ()
+		|	Value key => fail caller 103101 [fn()=>key]
+	end
+);
+=TEX
+=SML
+fun Ûcheck_thm_trapÝ
+	(ksc : KERNEL_STATE_CHANGE) : unit = (
+	case ksc of
+		SaveThm (key, thm) => (
+			check_thm "save_thm" [key] thm
+	) |	ListSaveThm (keys, thm) => (
+			check_thm "list_save_thm" keys thm
+	) |	_ => ()
+);
+=TEX
+=SML
+fun Ûconjecture_culling_trapÝ
 	(ksc : KERNEL_STATE_CHANGE) : unit = (
 	case ksc of
 		DeleteConst c => (
@@ -278,7 +398,8 @@ fun Ûconjecture_kernel_state_change_trapÝ
 			end
 	) |	_ => ()
 );
-val side_effect = on_kernel_state_change conjecture_kernel_state_change_trap;
+val _ = before_kernel_state_change check_thm_trap;
+val _ = on_kernel_state_change conjecture_culling_trap;
 =TEX
 =SML
 end	(* of structure Conjectures *);
