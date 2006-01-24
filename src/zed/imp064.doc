@@ -8,18 +8,18 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp064.doc   %Z% $Date: 2006/01/12 13:36:25 $ $Revision: 1.46 $ $RCSfile: imp064.doc,v $
+% imp064.doc   %Z% $Date: 2006/01/23 17:29:07 $ $Revision: 1.47 $ $RCSfile: imp064.doc,v $
 
 =TEX
-% imp064.doc   %Z% $Date: 2006/01/12 13:36:25 $ $Revision: 1.46 $ $RCSfile: imp064.doc,v $
+% imp064.doc   %Z% $Date: 2006/01/23 17:29:07 $ $Revision: 1.47 $ $RCSfile: imp064.doc,v $
 \documentstyle[hol1,11pt,TQ]{article}
 
 \TPPtitle{Implementation of the Z Pretty Printer}
 \TPPref{DS/FMU/IED/IMP064}
-\def\SCCSissue{$Revision: 1.46 $%
+\def\SCCSissue{$Revision: 1.47 $%
 }
 \TPPissue{\SCCSissue}
-\TPPdate{\FormatDate{$Date: 2006/01/12 13:36:25 $%
+\TPPdate{\FormatDate{$Date: 2006/01/23 17:29:07 $%
 }}
 \TPPproject{FST PROJECT}
 
@@ -135,15 +135,17 @@ lasp -s -u imp064.OKwords imp064.doc > zz1
 \item[Issue 1.35] Accomodated new data types for representing precedences and so fixed problem with pretty-printing of the tuple and binding selection operator `.' (which is left-associative).
 \item[Issue 1.36] Fixed precedence of $\theta$-operator relative to application.
 \item[Issue 1.37] Fixed problem with relation symbols like {\it\_partition\_} which should not be treated as infix generics.
-\item[Issue 1.38] Improved bracket-elimination for tuple and binding selection.
-\item[Issue 1.39] Fixed bracket-elimination for curried function application.
-\item[Issue 1.40] Schema projection is now left-associative.
-\item[Issue 1.41] Added let-expressions.
-\item[Issue 1.42] Allowed for new forms of stubs in templates.
-\item[Issue 1.43] Allowed for \$-feature (and fixed infelicities in identifying genuine Z variable names).
-\item[Issue 1.44] Option to require all schema operators to be distinguished with a subscript `s'.
-\item[Issue 1.45] Allowed for correction to let-expression syntax.
-\item[Issue 1.46] Now uses proper SML escape sequences in string displays.
+\item[Issue 1.38] Allowed for changes to fixity datatypes.
+\item[Issue 1.39] Improved bracket-elimination for tuple and binding selection.
+\item[Issue 1.40] Fixed bracket-elimination for curried function application.
+\item[Issue 1.41] Schema projection is now left-associative.
+\item[Issue 1.42] Added let-expressions.
+\item[Issue 1.43] Allowed for new forms of stubs in templates.
+\item[Issue 1.44] Allowed for \$-feature (and fixed infelicities in identifying genuine Z variable names).
+\item[Issue 1.45] Option to require all schema operators to be distinguished with a subscript `s'.
+\item[Issue 1.46] Allowed for correction to let-expression syntax.
+\item[Issue 1.47] Now uses proper SML escape sequences in string displays.
+\item[Issue 1.48] New improved \$-feature; now uses HOL quotations to print invalid variable names.
 \end{description}
 
 %********************************************************************
@@ -454,61 +456,63 @@ end
 \section{AUXILIARY PRINTING FUNCTIONS}
 
 \subsection{Names}
-In the following, if the name is not a reasonable Z identifier,
-one or other of {\em template\_of_string}, {\em force_value} or 
+In the following, the return value is just a convenience for some callers
+and is always $PfOk$.
+The function attempts to recover if passed an ill-formed name by using a nested HOL quotation.
 =SML
 fun Ûdo_dec_var_nameÝ (cur_env:PP_ENV, name:string, enclosed_prec: OP_PREC) : PFUN_ANS = (
 	let	val PpEnv{pe_addstring=addstring, ...} = cur_env;
-	in let	val (n, d) = unpack_ident name;
-
-		val tmpl = template_of_string n;
-
-		val fti = first_tmpl_id tmpl handle Fail _ => n;
-
+	in let
 		fun check_id nm = (
 			case ZLex.z_lex[Lex.Text nm] of
 				[ZLex.ZTId _, ZLex.ZTEos] => true
 			|	_ => false
 		);
-		fun check_tmpl i = (
+		fun check_tmpl n i = (
 			case get_zfixity_info i of
 			Value(_, [t]) => string_of_template t = n
 			|	_ => false
 		);
 
- 		fun decorate ts = (
-			case d of
-				"" => ts
-			|	_ => (
-				case rev (explode ts) of
-					("_" ::  more) => implode(rev more @ [d ^ " _"])
-				|	_ => ts ^ d
-			)
+		val (n, d) = unpack_ident name;
+
+		val szn = size n;
+
+		val is_escaped = szn > 0 andalso String.sub(n, szn-1) = #"\"";
+
+		fun use_hol () = (
+			addstring "¬$\"";
+			addstring (HOLPrettyPrinter.escape_sml_string name);
+			addstring "\"®"
 		);
+
+	in	if	is_escaped
+		then
+	let	val s = String.substring(n, 0, szn - 1);
+		val es = HOLPrettyPrinter.escape_sml_string s;
+	in	addstring "$\"";
+		addstring es;
+		addstring "\""
+	end
+		else
+	let
+		val tmpl = template_of_string n;
+
+		val fti = first_tmpl_id tmpl handle Fail _ => n;
 	in
 		if	n = fti	
-		then	((if	check_id n
+		then	if	check_id n
 			then	addstring name
-			else	(addstring "$\"";
-				 addstring name;
-				 addstring "\""));
-			PfOk)
-		else	if	check_tmpl fti
-			then	bracket(cur_env,
-					enclosed_prec,
-					false,
-		fn e => addstring (decorate (format_template tmpl)))
-			else	(addstring "$\"";
-				 addstring name;
-				 addstring "\"";
-				 PfOk)
-	end	handle Fail _ => ( (* template_of_string failed *)
-			addstring "$\"";
-			addstring name;
-			addstring "\"";
-			PfOk
-		)
+			else	use_hol()
+		else	if	check_tmpl n fti andalso d = ""
+			then	(bracket(cur_env, enclosed_prec, false,
+				fn e => addstring (format_template tmpl));
+				())
+			else	use_hol()
+	end	handle Fail _ => use_hol() (* e.g., template_of_string failed *)
 	end
+	end;
+	PfOk
 );
 =TEX
 
