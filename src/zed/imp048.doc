@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp048.doc %Z% $Date: 2006/01/12 12:42:18 $ $Revision: 1.37 $ $RCSfile: imp048.doc,v $
+% imp048.doc %Z% $Date: 2006/01/23 13:14:20 $ $Revision: 1.38 $ $RCSfile: imp048.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -19,10 +19,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation of Support for Z Types and Terms}  %% Mandatory field
 \def\TPPheadtitle{Implementation of Support for Z Types and Terms}
 \TPPref{DS/FMU/IED/IMP048}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.37 $%
+\def\SCCSversion{$Revision: 1.38 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/01/12 12:42:18 $%
+\TPPdate{\FormatDate{$Date: 2006/01/23 13:14:20 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -84,6 +84,7 @@ Performance tweak to {\it unpack\_ident} and {\it flatpack}.
 \item[Issue 1.35] Fixed error handling in {\em unbind\_gvar\_name}.
 \item[Issue 1.36] Made {\em unpack\_ident} work with new more general templates.
 \item[Issues 1.37, 1.38] {\em unpack\_ident} redesigned.
+\item[Issue 1.39] Now support decoration of fancyfix identifiers.
 \end{description}
 %\subsection{Changes Forecast}
 \section{GENERAL}
@@ -144,13 +145,32 @@ fun (list1 : (string * TYPE) list) €diff'› (list2 : (string * TYPE) list) : (str
 \section{NAME FORMATION}
 As discussed in \cite{DS/FMU/IED/DTD048}, the types $IDENT$, $WORD$ and $DECOR$ are simply implemented as $string$s, but
 we will frequently need to manipulate them as if they were in the more strongly typed form.
-The following functions therefore survive.
+The following functions support this.
+=TEX
+We need to allow for decorated fancyfix operators, such as $\_\,+'\,\_$.
+The following allows for the format with a space and an underscore expected in Z input via the parser and puts on a brave face for things such as a single underscore generated from odd code.
 =SML
-fun	€pack_ident› ((w,d) :string * string) :string = (w ^ d);
+fun €strip_last_stub› (s : string) : string * string = (
+	let	val sz = size s;
+	in	if	sz < 2
+		orelse	String.sub(s, sz - 1) <> #"_"
+		then	(s, "")
+		else if	String.sub(s, sz - 2) = #" "
+		then	(String.extract(s, 0, SOME (sz - 2)), " _")
+		else	(String.extract(s, 0, SOME (sz - 1)), "_")
+	end
+);
+=SML
+fun	€pack_ident› ((w,d) :string * string) :string = (
+	let	val (w1, stub) = strip_last_stub w;
+	in	w1 ^ d ^ stub
+	end
+);
 =TEX
 =SML
-fun	€unpack_ident› (s :string) :string * string = (
-	let	val sz = size s;
+fun	€unpack_ident› (i :string) :string * string = (
+	let	val (s, stub) = strip_last_stub i;
+		val sz = size s;
 		fun is_dec_char #"'" = true
 		|   is_dec_char #"?" = true
 		|   is_dec_char #"!" = true
@@ -166,7 +186,8 @@ fun	€unpack_ident› (s :string) :string * string = (
 			else	(i + 1)
 		);
 		val index = find_index (sz - 1);
-	in	(String.substring(s, 0, index), String.substring(s, index, sz - index))
+	in	(String.substring(s, 0, index) ^ stub,
+		 String.substring(s, index, sz - index))
 	end
 );
 =TEX
@@ -451,12 +472,12 @@ fun	€bind_hide_term› (itym:(string * TYPE) list) (fid2:string list) :TERM =
 
 
 =SML
-fun	€bind_decor_name› (fid:string list) (s:string) :string =
-		"Z'Decâs" ^ (val_set_ident fid) ^ "[" ^ s ^ "]";
-fun	€bind_decor_type› (itym:(string * TYPE) list) (s:string) :TYPE =
+fun	€bind_decor_name› (fid:string list) (d:string) :string =
+		"Z'Decâs" ^ (val_set_ident fid) ^ "[" ^ d ^ "]";
+fun	€bind_decor_type› (itym:(string * TYPE) list) (d:string) :TYPE =
 		mk_≠_type(
 			schema_type itym,
-			schema_type(map(fn(id,ty)=>(id^s,ty))itym)
+			schema_type(map(fn(id,ty)=>(pack_ident(id, d),ty))itym)
 		);
 fun	€bind_decor_term› (itym:(string * TYPE) list) (s:string) :TERM =
 		mk_const (bind_decor_name (map fst itym) s, bind_decor_type itym s);
@@ -493,10 +514,10 @@ fun	€bind_ò_term› (itym:(string * TYPE) list) :TERM =
 fun	€bind_ª_name› (fid1:string list) (fid2:string list) :string =
 		"Z'ªâs" ^ (val_set_ident fid1) ^ (val_set_ident fid2);
 fun	€bind_ª_type› (itym1:(string * TYPE) list) (itym2:(string * TYPE) list) :TYPE =
-	let	val itym2' = map (fn(s,ty)=>(s^"'",ty)) itym2;
+	let	val itym2' = map (fn(s,ty)=>(pack_ident(s, "'"),ty)) itym2;
 		val itym =	(itym1 drop (fn(s,_) => (s mem (fst(split itym2')))))
 					@
-				(itym2 drop (fn(s,_) => ((s^"'") mem (fst(split itym1)))));
+				(itym2 drop (fn(s,_) => ((pack_ident(s, "'")) mem (fst(split itym1)))));
 	in
 		list_mk_≠_type
 			[schema_type itym1, 
