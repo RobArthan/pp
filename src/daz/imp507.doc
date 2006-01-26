@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.305 $ $RCSfile: imp507.doc,v $ $Date: 2005/12/16 13:28:39 $
+% imp507.doc %Z% $Revision: 1.306 $ $RCSfile: imp507.doc,v $ $Date: 2006/01/14 15:01:03 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.305 $%
+\def\SCCSversion{$Revision: 1.306 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/12/16 13:28:39 $%
+\TPPdate{\FormatDate{$Date: 2006/01/14 15:01:03 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -240,6 +240,7 @@ Use clauses in package specifications now propagate into the package body.
 \item[Issues 1.303, 1.304] Enhancement 115: support for implicitly declared subprograms.
 \item[Issue 1.305] Allowed for kernel interface reform.
 \item[Issue 1.306] Fixed foul-up in the analysis of VCs that contain free variables.
+\item[Issue 1.307] Now uses new kernel interface to step the current level rather than introducing a dummy type.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -3241,30 +3242,13 @@ fun €store_vc_term› (label : LABEL) (tm : TERM) : string = (
 	end
 );
 =TEX
-For various (good) reasons, the underlying {\Product} operations of adding new parent or saving a conjecture (e.g., a VC) do not increment the level counter.
-In order for the Z document generator to be able to output the necessary commands in the right place, we make and deletes a dummy type declaration before storing each batch of VCs to force the level counter up.
-In order to avoid a potential infinite loop (e.g., if the current theory is not writable), the attempt to do this dummy declaration is abandoned after 10,000 goes (this protects the code against an extremely unlikely event!)
+For various reasons, the underlying {\Product} operations of adding a new parent or saving a conjecture (e.g., a VC) do not increment the level counter.
+In order for the Z document generator to be able to output the necessary commands in the right place, we step the current level before storing a VC.
+
 =SML
 fun €store_vcs› (	label : LABEL, vcs: TERM list, osl : SPECLAB OPT, 
 		routes : ROUTE OPT list, vcg_ctxt : VC_GEN_CONTEXT ) 					: unit = (
-	let	fun del_last_ext () = (
-			delete_to_level {
-				do_warn = false,
-				caller = "store_vcs",
-				target = "<last extension>",
-				level = #current_level(get_theory "-")}
-		);
-		fun dummy_decl i = (
-			if	i < 10000
-			then	let	val tyn = "CN'DUMMY_TYPE" ^ string_of_int i;
-				in	((	(new_type(tyn, 0); ())
-						handle Fail _ => dummy_decl (i+1));
-					del_last_ext();
-					()	)
-				end	handle Fail _ => ()
-			else	()
-		);
-		val _ = dummy_decl 0;
+	let	val _ = pp'Kernel.pp'step_current_level();
 		val vc_names = map (store_vc_term label)  vcs;
 	in	
 		store_vc_context_and_origin(osl, vc_names, routes, 
