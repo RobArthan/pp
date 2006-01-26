@@ -16,10 +16,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 \TPPtitle{Implementation for the Interface to the Abstract Data Type $THM$}  %% Mandatory field
 \def\TPPheadtitle{Implementation for the \cr Interface to the Abstract Data Type $THM$}
 \TPPref{DS/FMU/IED/IMP012}  %% Mandatory field
-\def\SCCSversion{$Revision: 2.36 $
+\def\SCCSversion{$Revision: 2.37 $
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/12/16 12:28:32 $ %
+\TPPdate{\FormatDate{$Date: 2005/12/16 12:45:02 $ %
 }}  %% Mandatory field
 \TPPstatus{Draft}
 %\TPPstatus{Approved}
@@ -103,6 +103,7 @@ Tidied up some aspects of {\em get\_ancestors} and {\em rollback}.
 \item[Issue 2.33] Now using $pp'$ instead of $pp'$ to prefix private interface names.
 \item[Issues 2,34, 2.35] The prefix for private interfaces is now $pp'$ rather than $icl'$.
 \item[Issue 2.36] Fixed {\em duplicate\_theory} and made {\em delete\_to\_level} available for external use.
+\item[Issue 2.37] Interface tables are now implemented as a list of dictionaries, one for each ancestor.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -163,26 +164,34 @@ The clean flag must be set false before a kernel state changing operation is inv
 =SML
 type €MASTER_TABLES› = {
 	clean_flag : bool ref,
-	const_thys : int list E_DICT ref,
-	type_thys: int list E_DICT ref,
+	const_thys : int list E_DICT list ref,
+	type_thys: int list E_DICT list ref,
 	int_thy_names : int E_DICT ref,
 	in_scope : bool DynamicArray.DYNAMIC_ARRAY};
 =TEX
 =SML	
 val €global_tables› : MASTER_TABLES = {
 	clean_flag = ref false,
-	const_thys = ref initial_e_dict,
-	type_thys = ref initial_e_dict,
+	const_thys = ref [initial_e_dict],
+	type_thys = ref [initial_e_dict],
 	int_thy_names = ref initial_e_dict,
 	in_scope = DynamicArray.array 100};
 =TEX
 =SML
 fun €scratch_global_tables› (():unit) : unit = (
 	#clean_flag global_tables := false;
-	#const_thys global_tables := initial_e_dict;
-	#type_thys global_tables := initial_e_dict;
+	#const_thys global_tables := [];
+	#type_thys global_tables := [];
 	#int_thy_names global_tables := initial_e_dict;
 	DynamicArray.scratch(#in_scope global_tables)
+);
+=TEX
+=SML
+fun €pp'new_kernel_interface_tables› (():unit) : unit = (
+	#const_thys global_tables :=
+		initial_e_dict :: !(#const_thys global_tables);
+	#type_thys global_tables :=
+		initial_e_dict :: !(#type_thys global_tables)
 );
 =TEX
 =SML
@@ -193,12 +202,47 @@ fun €set_clean_flag› (b : bool)  : bool = (
 	end
 );
 =TEX
+=SML
+fun €le_lookup›
+	(key : string)
+	([] : 'a E_DICT list) : 'a OPT = Nil
+|   le_lookup key (dict :: dicts) = (
+	case e_lookup key dict of
+		Nil => le_lookup key dicts
+	|	got_it => got_it
+);
+=TEX
+=SML
+fun €le_enter›
+	(key : string)
+	(what : 'a)
+	(dicts : 'a E_DICT list) : 'a E_DICT list = (
+	case dicts of
+		(dict::more) => e_enter key what dict::more
+	|	[] => [e_enter key what initial_e_dict]
+);
+=TEX
+=SML
+fun €le_delete›
+	(key : string)
+	(dicts : 'a E_DICT list) : 'a E_DICT list = (
+	let	fun check_delete d = (
+			case e_lookup key d of
+				Nil => d
+			|	Value _ => e_delete key d
+		);
+	in	case dicts of
+			(dict::more) => e_delete key dict :: map check_delete more
+		|	_ => []
+	end
+);
+=TEX
 Registering a constant involves a single update:
 =SML
 fun €register_const› (thyn : int) (cname : string) : unit = (
 	#const_thys global_tables :=
-	e_enter cname
-	(case e_lookup cname (!(#const_thys global_tables)) of
+	le_enter cname
+	(case le_lookup cname (!(#const_thys global_tables)) of
 		Value thyns => thyns grab thyn
 	|	Nil => [thyn])
 	(!(#const_thys global_tables))
@@ -213,8 +257,8 @@ Unregistering a constant involves a single update:
 =SML
 fun €unregister_const› (thyn : int) (cname : string) : unit = (
 	#const_thys global_tables :=
-	e_enter cname
-	(case e_lookup cname (!(#const_thys global_tables)) of
+	le_enter cname
+	(case le_lookup cname (!(#const_thys global_tables)) of
 		Value thyns => thyns less thyn
 	|	Nil => [thyn])
 	(!(#const_thys global_tables))
@@ -229,8 +273,8 @@ Registering a type involves a single update:
 =SML
 fun €register_type› (thyn : int) (tyname : string) : unit = (
 	#type_thys global_tables :=
-	e_enter tyname
-	(case e_lookup tyname (!(#type_thys global_tables)) of
+	le_enter tyname
+	(case le_lookup tyname (!(#type_thys global_tables)) of
 		Value thyns => thyns grab thyn
 	|	Nil => [thyn])
 	(!(#type_thys global_tables))
@@ -245,8 +289,8 @@ Unregistering a type involves a single update:
 =SML
 fun €unregister_type› (thyn : int) (tyname : string) : unit = (
 	#type_thys global_tables :=
-	e_enter tyname
-	(case e_lookup tyname (!(#type_thys global_tables)) of
+	le_enter tyname
+	(case le_lookup tyname (!(#type_thys global_tables)) of
 		Value thyns => thyns less thyn
 	|	Nil => [thyn])
 	(!(#type_thys global_tables))
@@ -347,22 +391,22 @@ fun €rebuild_global_tables_from_current_theory› (():unit) : unit = (
 	build_global_tables_from_theory(pp'get_current_theory_name())
 );
 =TEX
-It is caller's responsibility to manipulate the clean falg appropriately around a call to the following function:
+It is caller's responsibility to manipulate the clean flag appropriately around a call to the following function:
 =SML
 fun €delete_theory_from_global_tables› (thyn : int) : unit = (
 	let	val {con_env, ty_env, ...} = pp'get_theory thyn;
 		val {name, ...} = pp'get_theory_info thyn;
 		val consts = map fst(oe_flatten con_env);
 		val types = map fst(oe_flatten con_env);
-		fun folder (n, dict) = (
-			case e_lookup n dict of
-				Nil => dict
+		fun folder (n, dicts) = (
+			case le_lookup n dicts of
+				Nil => dicts
 			|	Value thyns => (
 				case thyns less thyn of
 					[] => (
-					e_delete n dict
+					le_delete n dicts
 				) |	some => (
-					e_enter n some dict
+					le_enter n some dicts
 				)
 			)
 		);
@@ -1653,7 +1697,7 @@ fun €not_in_scope› (thyn : int) : bool = (
 =SML
 fun €get_const_theory› (c : string) : string = (
 	let	val _ = check_clean "get_const_theory";
-	in	case e_lookup c (!(#const_thys global_tables)) of
+	in	case le_lookup c (!(#const_thys global_tables)) of
 		Value thyns => (
 		case thyns drop not_in_scope of
 			[thyn] => pp'get_theory_name thyn
@@ -1665,7 +1709,7 @@ fun €get_const_theory› (c : string) : string = (
 =SML
 fun €get_type_theory› (ty : string) : string = (
 	let	val _ = check_clean "get_type_theory";
-	in	case e_lookup ty (!(#type_thys global_tables)) of
+	in	case le_lookup ty (!(#type_thys global_tables)) of
 		Value thyns => (
 		case thyns drop not_in_scope of
 			[thyn] => pp'get_theory_name thyn
@@ -1678,7 +1722,7 @@ In the following, we allow for the constant being a literal by looking for it in
 =SML
 fun €get_const_type› (c : string) : TYPE OPT = (
 	let	val _ = check_clean "get_const_type";
-	in	case e_lookup c (!(#const_thys global_tables)) of
+	in	case le_lookup c (!(#const_thys global_tables)) of
 		Value thyns => (
 		case thyns drop not_in_scope of
 			[thyn] => pp'get_const_type thyn c
@@ -1690,7 +1734,7 @@ fun €get_const_type› (c : string) : TYPE OPT = (
 =SML
 fun €get_type_arity› (ty : string) : int OPT = (
 	let	val _ = check_clean "get_type_arity";
-	in	case e_lookup ty (!(#type_thys global_tables)) of
+	in	case le_lookup ty (!(#type_thys global_tables)) of
 		Value thyns => (
 		case thyns drop not_in_scope of
 			[thyn] => pp'get_type_arity thyn ty
@@ -2083,8 +2127,8 @@ end);
 =SML
 fun €kernel_interface_diagnostics› (reset : bool) :
 	{clean_flag : bool,
-	const_thys : int list E_DICT,
-	type_thys: int list E_DICT,
+	const_thys : int list E_DICT list,
+	type_thys: int list E_DICT list,
 	int_thy_names : int E_DICT,
 	in_scope : int list} = (
 	let	val {clean_flag, const_thys, type_thys,
@@ -2116,27 +2160,5 @@ open KernelInterface;
 \small
 \printindex
 \end{document}
-=IGN
-pp'new_theory "banana";
-rebuild_global_tables();
-pp'new_type("BOOL", 0);
-e_flatten(!(#int_thy_names global_tables));
-e_flatten(!(#type_thys global_tables));
-pp'open_theory 1;
-pp'new_type("NUM", 0);
-rebuild_global_tables();
-e_flatten(!(#type_thys global_tables));
-DynamicArray.sub_opt(#in_scope global_tables, 0);
-DynamicArray.sub_opt(#in_scope global_tables, 1);
-DynamicArray.sub_opt(#in_scope global_tables, 2);
-pp'open_theory 0;
-rebuild_global_tables();
-pp'new_const("abc", mk_ctype("BOOL", []));
-rebuild_global_tables();
-e_flatten(!(#const_thys global_tables));
-pp'open_theory 1;
-pp'new_const("abcd", mk_ctype("NUM", []));
-rebuild_global_tables();
-e_flatten(!(#const_thys global_tables));
 
 
