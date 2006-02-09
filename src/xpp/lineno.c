@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: lineno.c,v 1.8 2004/11/23 15:52:51 rda Exp rda $ 
+ * $Id: lineno.c,v 1.9 2005/01/27 17:08:05 rda Exp rda $ 
  *
  * lineno.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -392,19 +392,11 @@ static void goto_line_no_cb(
 			ok_dialog(cbdata->shell_w, line_no_too_big1);
 		}
 	} else {
-		XmTextSetTopCharacter(cbdata->text_w, left);
-		XtVaGetValues(cbdata->text_w, XmNrows, &nrows, NULL);
-		if(line_no > (scroll = nrows / 2)) {
-			XmTextScroll(cbdata->text_w, -scroll);
-		}
+		XmTextShowPosition(cbdata->text_w, left);
 		XmTextSetSelection(cbdata->text_w,
 				left, right, CurrentTime);
 	}
-
-	XmTextSetSelection(
-		cbdata->line_no_w,
-		0, XmTextGetLastPosition(cbdata->line_no_w),
-		CurrentTime);
+	set_input_focus(cbdata->line_no_w);
 }
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
@@ -436,7 +428,7 @@ long int get_line_no(Widget text_w)
  * line_no_to_offset returns the character offset of the 
  * first and last characters of a given line in a text widget.
  * first is set to  -(nlines + 1), where nlines is the total number
- * of line in the file if number out of range.
+ * of lines in the file if number out of range.
  * first is set to NO_MEMORY if not enough memory to do the job.
  * last is unchanged in these two error cases.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
