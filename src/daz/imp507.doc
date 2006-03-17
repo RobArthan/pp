@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.308 $ $RCSfile: imp507.doc,v $ $Date: 2006/02/10 17:25:17 $
+% imp507.doc %Z% $Revision: 1.309 $ $RCSfile: imp507.doc,v $ $Date: 2006/03/17 14:42:40 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.308 $%
+\def\SCCSversion{$Revision: 1.309 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/02/10 17:25:17 $%
+\TPPdate{\FormatDate{$Date: 2006/03/17 14:42:40 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -244,6 +244,7 @@ Use clauses in package specifications now propagate into the package body.
 \item[Issue 1.308] Fixed ancient flaw in {\em end\_scope\_comp\_unit}.
 \item[Issue 1.309] Towards enhancement 117: elimination of the ``internal theory'' for a package specification.
 \item[Issue 1.310] First clean compile for enhancement 117.
+\item[Issue 1.311] Debugging enhancement 117.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -587,16 +588,16 @@ fun €in_scope_dict›
 		dec_labels = dec_labels}
 );
 =TEX
-The following refines the specification by providing the ability to extend the existing dictionary rather than just replacing it.
-If the optional first argument is non-nil, its value with the list of new variables entered into it replaces the dictionary.
-If the optional first argument is nil, the new variables are entered into the existing dictionary.
+The following adds variables into a environment dictionary taking type information from some other (or maybe the same) dictionary.
+In fact, the two dictionaries are the same except when we are updating package with-dictionaries.
 =SML
-fun €dict_vc_vars›
+fun €dict_vc_vars1›
+	(ty_dict : ENV_DICT)
 	({canon, aliases} : PREFIX_INFO)
 	(dict : ENV_DICT, 
 	new_vc_vars : VAR_DECL list) : ENV_DICT = (
 		let	fun mk_var_info zn tmark = (
-				{tipe = Value (type_of_tmark dict tmark),
+				{tipe = Value (type_of_tmark ty_dict tmark),
 				canon_name = zn,
 				info = EIEnvVar{kind = VKVar, tmark = tmark}}
 			);
@@ -611,6 +612,14 @@ fun €dict_vc_vars›
 			val vars_infos = flat(map aux2 vars_tmarks);
 		in	add_to_env_dict dict vars_infos
 		end
+);
+=TEX
+=SML
+fun €dict_vc_vars›
+	(pfx_info : PREFIX_INFO)
+	(dict : ENV_DICT, 
+	new_vc_vars : VAR_DECL list) : ENV_DICT = (
+	dict_vc_vars1 dict pfx_info (dict, new_vc_vars)
 );
 =TEX
 The following refines the specification by providing the ability to extend the existing dictionary rather than just replacing it.
@@ -1408,7 +1417,7 @@ fun €package_vc_vars›
 		zmod				=	zmod,
 		decl				=	decl,
 		local_dict				=	dict_vc_vars pfx_info (local_dict, new_vc_vars),
-		with_dict				=	dict_vc_vars pfx_info (with_dict, new_vc_vars)
+		with_dict				=	dict_vc_vars1 local_dict pfx_info (with_dict, new_vc_vars)
 	}	
 );
 =TEX
@@ -2236,12 +2245,12 @@ fun €with_pack_prefix_info› (pack_name : ID list) : PREFIX_INFO = (
 );
 =TEX
 =SML
-fun €current_prefix_info› (() : unit) : PREFIX_INFO = (
-	if	test_flag #pack_spec_flag 1
+fun €current_prefix_info› (n  : int) : PREFIX_INFO = (
+	if	test_flag #pack_spec_flag n
 	then	let	val pack = #block_name(#declab (block 1));
 		in	pack_spec_prefix_info [pack]
 		end
-	else if	test_flag #pack_body_flag 1
+	else if	test_flag #pack_body_flag n
 	then	let	val pack = #block_name(#declab (block 1));
 		in	pack_body_prefix_info [pack]
 		end
@@ -3329,11 +3338,6 @@ fun  €get_parent_name› ((): unit) : string = (
 	(hd o rev o get_parents) (!script_name)
 );
 =TEX
-=SML
-fun €pack_spec_name› (name : string) : string = (
-	(trans_id name) ^ "spec"
-);
-=TEX
 The following are used to describe the compilation unit that is present in the
 current theory, based on its name. This is to do with implementing
 check 17.
@@ -3365,32 +3369,6 @@ fun €pack_body_desc› (name : string) : string = (
 =SML
 fun €subprogram_desc› (name : string) : string = (
 	name ^ " (subprogram)"
-);
-=TEX
-
-In the following, the spec theories and related theories are made as children of the parent of the script theory.
-The new theory becomes the current theory (unless an exception is raised in which case the script theory is made current).
-=SML
-fun €new_package_spec_theory› (pars : string list) (name : string) : unit = (
-	let	val thy = pack_spec_name name;
-	in	(	open_theory("cn");
-			new_theory_aux pars thy;
-			set_cn_created();
-			add_script_theory thy;
-			lazy_open_theory thy )
-		handle Fail _ => (
-			lazy_open_theory (!script_name);
-			fail "new_package_spec_theory"
-			507023 [fn()=>thy, fn()=>name]
-		);
-		set_cu (pack_spec_desc name)
-	end
-);
-=TEX
-=SML
-fun €open_package_spec_theory› (name : string) : unit = (
-	open_theory (pack_spec_name name);
-	set_cu (pack_spec_desc name)
 );
 =TEX
 The full name of a subunit theory:
@@ -3739,9 +3717,9 @@ fun €basic_decl_pack_spec› (basic_decl : BASIC_DECL) : unit = (
 		val package = case (s_lookup block_name1 (!pack_env)) of
 			Value p => p
 		|	Nil => error "basic_decl_pack_spec" 507001 [];
-		val para_info_opt = trans_basic_decl1 current_cn_env [] basic_decl;
+		val para_info_opt = trans_basic_decl1 current_cn_env [block_name1] basic_decl;
 		val pfx_info = pack_spec_prefix_info [block_name1];
-		val _ = update_envs_basic_decl pfx_info;
+		val _ = update_envs_basic_decl pfx_info basic_decl;
 	in	pack_env :=
 		s_enter
 		block_name1
@@ -3759,12 +3737,13 @@ fun €basic_decl_pack_spec› (basic_decl : BASIC_DECL) : unit = (
 fun €basic_decl_otherwise› (basic_decl : BASIC_DECL) : unit = (
 	let	val side = set_current_ti_context [];
 		val para_info_opt = trans_basic_decl1 current_cn_env [] basic_decl;
-		val _ = update_envs_basic_decl empty_prefix_info;
+		val pfx_info = current_prefix_info 1;
+		val _ = update_envs_basic_decl pfx_info basic_decl;
 	in
 		case para_info_opt of
 			Value para_infos => (
 				map bd_store_para para_infos;
-				add_consts_types_env empty_prefix_info basic_decl
+				add_consts_types_env pfx_info basic_decl
 		)|	Nil =>	fail "basic_decl_otherwise" 507041 []
 	end
 );
@@ -3867,7 +3846,7 @@ The schema conjunction from the specification is implemented as sequential compo
 =SML
 fun €update_envs_var› (var_decl : VAR_DECL) : unit = (
 	if	test_flag #declabel_flag 1
-	then	let	val pfx_info = current_prefix_info ();
+	then	let	val pfx_info = current_prefix_info 1;
 		in	update_subunit_env_var pfx_info var_decl;
 			update_dec_env_var pfx_info var_decl;	
 			update_spec_env_var pfx_info var_decl
@@ -3951,7 +3930,7 @@ fun €add_var_env› (var_decl : VAR_DECL) : unit = (
 		val av_names = flat (map z_names_of_z_dec avs);
 		val vars = #vars var_decl;
 		val zids_in_scope = (current_cn_env, av_names);
-		val pfx_info = current_prefix_info ();
+		val pfx_info = current_prefix_info 1;
 	in	map (check_new_z_id zids_in_scope) vars;
 		check_new_spark_ids current_cn_env vars;
 		blocks :=
@@ -4607,7 +4586,7 @@ The schema conjunction from the specification is implemented as sequential compo
 =SML
 fun €update_envs_inf_proc› (id : ID) : unit = (
 	if	test_flag #declabel_flag 2 andalso test_flag #formal_body_flag 1
-	then	let	val pfx_info = current_prefix_info();
+	then	let	val pfx_info = current_prefix_info 2;
 		in	update_subunit_env_inf_proc pfx_info id;
 			update_dec_env_inf_proc pfx_info id;
 			update_spec_env_inf_proc pfx_info id
@@ -5323,7 +5302,7 @@ fun €update_envs_form_fun›
 =SML
 fun €stub_spec_fun› (form_fun : FORMAL_FUN) : unit = (
 	stub_spec_proc_fun (#spec form_fun) (#globals form_fun);
-	update_envs_form_fun (current_prefix_info()) form_fun
+	update_envs_form_fun (current_prefix_info 2) form_fun
 );
 =TEX
 \subsection{The SID function inf\_fun}
@@ -5344,17 +5323,21 @@ fun €prefix_informal_fun›
 local
 val €informal_function_gvar› : Z_EXP = Ò Informal_Function Æ;
 val €informal_function_ty› : TYPE = dest_z_power_type( snd(dest_const(informal_function_gvar)));
-in
-fun €inf_fun_decl› (f: INFORMAL_FUN) : (Z_DECL * Z_ID) = (
-	let	val pf = prefix_informal_fun (current_prefix_info()) f;
+fun €inf_fun_decl›
+	(pfx_info : PREFIX_INFO)
+	(f: INFORMAL_FUN) : (Z_DECL * Z_ID) = (
+	let	val pf = prefix_informal_fun pfx_info f;
 		val {name = zn, ...} = pf;
 		val zexp = informal_function_gvar;
 		val zvar = mk_z_lvar(zn, informal_function_ty, [])
 	in	(mk_z_dec([zvar], zexp), zn)
 	end
 );
-fun €trans_informal_fun› (f : INFORMAL_FUN) : PARAINFO = (
-	let	val (dec, n) = inf_fun_decl f;
+in
+fun €trans_informal_fun›
+	(pfx_info : PREFIX_INFO)
+	(f : INFORMAL_FUN) : PARAINFO = (
+	let	val (dec, n) = inf_fun_decl pfx_info f;
 	in	AxDesInfo([], mk_z_decl[dec], Nil, [(n, informal_function_ty)])
 	end
 );
@@ -5378,14 +5361,14 @@ fun €add_fun_env›
 The decision of which of the following two functions to call is made in $inf\_fun$
 =SML
 fun €inf_fun_pack_spec› (inf_fun: INFORMAL_FUN) : unit = (
-	let	val test_save = test_store_para(trans_informal_fun inf_fun);
-		val block2 = block 2;
+	let	val block2 = block 2;
 		val block_name2 = #block_name(#declab block2);
 		val package =
 			(force_value(s_lookup block_name2 (!pack_env)))
 			handle Fail _ =>
 			error "inf_fun_pack_spec" 507012 [fn()=>block_name2];
 		val pfx_info = pack_spec_prefix_info [block_name2];
+		val _ = store_para(trans_informal_fun pfx_info inf_fun);
 	in	pack_env :=
 		s_enter
 		block_name2
@@ -5395,14 +5378,14 @@ fun €inf_fun_pack_spec› (inf_fun: INFORMAL_FUN) : unit = (
 );
 =TEX
 =SML
-fun €inf_fun_otherwise›  (inf_fun  as {name, ...}: INFORMAL_FUN): unit = (
+fun €inf_fun_otherwise› 
+	(pfx_info : PREFIX_INFO)
+	(inf_fun  as {name, ...}: INFORMAL_FUN): unit = (
 	case current_cn_env (trans_id name) of
 		Nil =>  (
-		let	val pfx_info = current_prefix_info();
-		in	store_para(trans_informal_fun inf_fun);
+			store_para(trans_informal_fun pfx_info inf_fun);
 			add_fun_env pfx_info false [] inf_fun;
 			update_envs_fun pfx_info false [] inf_fun
-		end
 	) |	Value( {info = EIEnvFunction {formal =false, ...}, ...} ) => (
 			()
 	) |	Value _ =>  (
@@ -5411,7 +5394,7 @@ fun €inf_fun_otherwise›  (inf_fun  as {name, ...}: INFORMAL_FUN): unit = (
 );
 =TEX
 =SML
-fun €inf_fun_pack_body› (name : ID) : unit = (
+fun €inf_fun_pack_body› (name : ID) : PREFIX_INFO = (
 	if	test_flag #pack_body_flag 2
 	then	let	val block2 = block 2;
 			val block_name2 = #block_name(#declab block2);
@@ -5420,20 +5403,23 @@ fun €inf_fun_pack_body› (name : ID) : unit = (
 				error "inf_fun" 507012
 						[fn()=>block_name2];
 			val formal_funs4 = #formal_funs package4;
-		in	if	any formal_funs4
+			val pfx_info = pack_body_prefix_info [block_name2];
+		in	(if	any formal_funs4
 				(fn f => #name(#informal_fun f) = name)
 			then	cn_soundness_warning "inf_fun" 507135 [fn()=>name, fn () => block_name2]
-			else	()
+			else	());
+			pfx_info
 		end
-	else	()
+	else	empty_prefix_info
 );
 =TEX
 =SML
 fun €inf_fun› (informal_fun as {name, ...}: INFORMAL_FUN): unit = (
-	inf_fun_pack_body name;
-	(if	test_flag #pack_spec_flag 2
-	then	inf_fun_pack_spec
-	else	inf_fun_otherwise) informal_fun
+	if	test_flag #pack_spec_flag 2
+	then	inf_fun_pack_spec informal_fun
+	else	let	val pfx_info = inf_fun_pack_body name;
+		in	inf_fun_otherwise pfx_info informal_fun
+		end
 );
 =TEX
 \subsection{The SID function form\_fun}
@@ -5475,17 +5461,17 @@ fun €z_var_decl› (cnenv : CN_ENV) (zname : Z_ID) : Z_DECL = (
 	else	mk_z_schema_dec(var_sig cnenv zname, "")
 );
 =TEX
-The following expects the formal function name to have been prefixed as necessary.
 =SML
-fun €trans_formal_fun› (cnenv : CN_ENV)
-			(form_fun as {
-			spec as {pre, post, ...},
-			informal_fun as {formal_pars, ...},
-			globals,
-			renames = Nil} : FORMAL_FUN)
-				: PARAINFO * Z_PRED * Z_PRED * Z_ID = (
-	let	val pfx_info = current_prefix_info();
-		val pff = prefix_formal_fun pfx_info form_fun;
+fun €trans_formal_fun›
+	(pfx_info : PREFIX_INFO)
+	(cnenv : CN_ENV)
+	(form_fun as {
+		spec as {pre, post, ...},
+		informal_fun as {formal_pars, ...},
+		globals,
+		renames = Nil} : FORMAL_FUN)
+			: PARAINFO * Z_PRED * Z_PRED * Z_ID = (
+	let	val pff = prefix_formal_fun pfx_info form_fun;
 		val zn = #name(#informal_fun pff);
 		val dec = fun_decl cnenv pff;
 		val pardecs = map z_par_decl formal_pars
@@ -5502,9 +5488,9 @@ fun €trans_formal_fun› (cnenv : CN_ENV)
 		val pred = z_forall_opt(globdecs, z_forall_opt(pardecs, imp));
 	in	(AxDesInfo([], mk_z_decl[dec], Value pred, ntys), z_pre, z_post, zn)
 	end
-) | trans_formal_fun cnenv {informal_fun as {name = new_n, ...}, renames = Value old_zn, ...} = (
+) | trans_formal_fun pfx_info cnenv {informal_fun as {name = new_n, ...}, renames = Value old_zn, ...} = (
 	let	val tm = zid cnenv old_zn;
-		val pfx = #canon(current_prefix_info());
+		val pfx = #canon pfx_info;
 		val new_zn = prefix_trans_id pfx new_n;
 	in	(AbbDefInfo(new_zn, [], tm), mk_t, mk_t, new_zn)
 	end
@@ -5548,9 +5534,11 @@ fun €subs_exp_for_exp_in_pred› (pred : Z_PRED, e1 : Z_EXP, e2 : Z_EXP) : Z_PRED 
 );
 =TEX
 =SML
-fun €store_trans_formal_fun› (cnenv : CN_ENV)
+fun €store_trans_formal_fun›
+	(pfx_info : PREFIX_INFO)
+	(cnenv : CN_ENV)
 		(ff : FORMAL_FUN) : unit = (
-	let	val (para, _, _, cname) = trans_formal_fun cnenv ff;
+	let	val (para, _, _, cname) = trans_formal_fun pfx_info cnenv ff;
 		val cty_opt = get_const_type (hol_const_name cname);
 		val pred = case para of
 			AxDesInfo(_, _, Value pred, _) => pred
@@ -5584,9 +5572,15 @@ fun €form_fun_pack_spec› (form_fun as {
 	spec = {w, w0, pre, post},
 	globals,
 	renames = zno} : FORMAL_FUN) : unit = (
-	let	val (z_para, z_pre, z_post, _) =
-			(trans_formal_fun current_cn_env form_fun);
-		val _ = store_para z_para;
+	let	val block2 = block 2;
+		val block_name2 = #block_name(#declab block2);
+		val package =
+			(force_value(s_lookup block_name2 (!pack_env)))
+			handle Fail _ =>
+			error "form_fun_pack_spec" 507012 [fn()=>block_name2];
+		val pfx_info = pack_spec_prefix_info [block_name2];
+		val (z_para, z_pre, z_post, _) =
+			(trans_formal_fun pfx_info current_cn_env form_fun);
 		val form_fun1 = {
 			informal_fun = informal_fun,
 			spec = {
@@ -5596,13 +5590,7 @@ fun €form_fun_pack_spec› (form_fun as {
 				post = z_quote (z_post, Nil)},
 			globals = globals,
 			renames = zno};
-		val block2 = block 2;
-		val block_name2 = #block_name(#declab block2);
-		val package =
-			(force_value(s_lookup block_name2 (!pack_env)))
-			handle Fail _ =>
-			error "form_fun_pack_spec" 507012 [fn()=>block_name2];
-		val pfx_info = pack_spec_prefix_info [block_name2];
+		val _ = store_para z_para;
 	in	pack_env :=
 		s_enter
 		block_name2
@@ -5624,7 +5612,7 @@ fun €form_fun_pack_body_common› (implicit : bool)
 			error "form_fun_pack_body" 507012 [fn()=>block_name2];
 		val formal_funs4 = #formal_funs package4;
 		val pfx_info = pack_body_prefix_info [block_name2];
-	in	store_trans_formal_fun current_cn_env form_fun;
+	in	store_trans_formal_fun pfx_info current_cn_env form_fun;
 		add_fun_env pfx_info true (#globals form_fun) (#informal_fun form_fun);
 		update_envs_form_fun pfx_info form_fun;
 		if	any
@@ -5848,8 +5836,8 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 			handle Fail _ =>
 			fail "form_fun_subunit" 507011
 	 			[fn()=>block_name2, fn()=>block_name1];
-		val pfx_info = current_prefix_info();
-	in	store_trans_formal_fun current_cn_env form_fun;
+		val pfx_info = current_prefix_info 2;
+	in	store_trans_formal_fun pfx_info current_cn_env form_fun;
 		add_fun_env pfx_info true (#globals form_fun) (#informal_fun form_fun);
 		update_envs_form_fun pfx_info form_fun;
 		subunit_env := s_delete tbn1_bn2 (!subunit_env);
@@ -5860,7 +5848,7 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 		val st = STSpecNoIvars{spec= #spec form_fun,
 				label="", is_assertion = false};
 		val in_scope4 = subprog_flatten_env(!blocks);
-		val pfx_info = current_prefix_info();
+		val pfx_info = current_prefix_info 2;
 		val fun_header4 = prefix_informal_fun pfx_info
 			(#informal_fun form_fun);
 		val wp_env4 :WP_ENV = {
@@ -5894,8 +5882,8 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 =TEX
 =SML
 fun €form_fun_otherwise› (form_fun: FORMAL_FUN) : unit = (
-	let	val pfx_info = current_prefix_info();
-	in	store_trans_formal_fun current_cn_env form_fun;
+	let	val pfx_info = current_prefix_info 2;
+	in	store_trans_formal_fun pfx_info current_cn_env form_fun;
 		add_fun_env pfx_info true (#globals form_fun) (#informal_fun form_fun);
 		update_envs_form_fun pfx_info form_fun
 	end
@@ -6040,7 +6028,7 @@ The schema conjunction from the specification is implemented as sequential compo
 =SML
 fun €update_envs_proc› (procs_spec as {name, ...} : PROCEDURE_SPECIFICATION) : unit = (
 	if	test_flag #declabel_flag 2 andalso test_flag #formal_body_flag 1
-	then	let	val pfx_info = current_prefix_info();
+	then	let	val pfx_info = current_prefix_info 2;
 		in	update_subunit_env_proc pfx_info;
 			update_dec_env_proc pfx_info;	
 			update_spec_env_proc pfx_info
@@ -6103,7 +6091,7 @@ fun €add_proc_env› (name : ID) : unit = (
 			);
 		in	if	already_there
 			then	()
-			else	let	val pfx_info = current_prefix_info();
+			else	let	val pfx_info = current_prefix_info 2;
 					val block1' = block_formal_proc Nil pfx_info (block1,
 							current_formal_proc1);
 					val block2' = block_formal_proc Nil pfx_info (block2,
@@ -6126,7 +6114,7 @@ fun €add_proc_env› (name : ID) : unit = (
 			);
 		in	if	already_there
 			then	()
-			else	let	val pfx_info = current_prefix_info();
+			else	let	val pfx_info = current_prefix_info 2;
 					val block1' = block_informal_proc Nil pfx_info (block1, zn);
 					val block2' = block_informal_proc Nil pfx_info (block2, zn);
 				in	blocks :=
@@ -6177,7 +6165,7 @@ fun €vcs_body_fun› (st : STATEMENT) : SPEC = (
 		val fun_dec = fun_decl current_cn_env current_formal_fun1;
 		val _ = set_in_scope_ti_context1(in_scope, [fun_dec]);
 		val env = cn_env_of_in_scope in_scope1;
-		val pfx_info = current_prefix_info();
+		val pfx_info = current_prefix_info 2;
 		val fun_header = prefix_informal_fun pfx_info
 			(#informal_fun current_formal_fun1);
 		val wp_env : WP_ENV = {
@@ -6285,10 +6273,10 @@ the IUCT project in 1997 and then again even more radically in 2006.
 fun €new_scope_with› (ident : ID) : unit = (
 	case s_lookup ident (!pack_env) of
 		Nil => ()
-	|	Value (package as {with_dict, ...}) => (
+	|	Value (package as {with_dict, zmod, ...}) => (
 		let	val block = block_flags(empty_block, false_flags);
 			val block = block_dict (block, with_dict);
-		in	new_parent_aux true (pack_spec_name ident);
+		in	new_parent_aux true zmod;
 			blocks := new_scope_common(block :: !blocks)
 		end
 	)
@@ -6615,7 +6603,7 @@ in
 	Nil => ()
 	| Value formal_proc3 => 
 (let	val block1 = block 1;
-	val pfx_info = current_prefix_info();
+	val pfx_info = current_prefix_info 1;
 in	blocks :=
 		(block_formal_proc Nil pfx_info (block1, formal_proc3) 
 		:: tl (!blocks))
@@ -6779,7 +6767,7 @@ fun €renames_fun_otherwise›
 			formal_pars =map mk_ps new_pars_tmarks_defs ,
 			par_names_defs = par_names_defs,
 			return_type = old_return_tmark};
-		val pfx_info = current_prefix_info();
+		val pfx_info = current_prefix_info 1;
 		val _ = add_fun_env pfx_info true old_deps inffun;
 		val _ = update_envs_fun pfx_info true old_deps inffun;
 		val new_zname = trans_id new;
@@ -6818,7 +6806,7 @@ fun €renames_opsym›
 			formal_pars =map mk_ps new_pars_tmarks_defs ,
 			par_names_defs = par_names_defs,
 			return_type =res_tmark};
-		val pfx_info = current_prefix_info();
+		val pfx_info = current_prefix_info 1;
 		val _ = add_fun_env pfx_info true [] inffun;
 		val _ = update_envs_fun pfx_info  true [] inffun;
 		val parainfo = AbbDefInfo(new_zname, [], tm);
@@ -6890,7 +6878,7 @@ The schema conjunction from the specification is implemented as sequential compo
 =SML
 fun €update_envs_renamings› (renamings :  (Z_ID * Z_ID OPT) list) : unit = (
 	if	test_flag #declabel_flag 1
-	then	let	val pfx_info = current_prefix_info();
+	then	let	val pfx_info = current_prefix_info 1;
 		in	update_subunit_env_renamings pfx_info renamings;
 			update_dec_env_renamings pfx_info renamings;	
 			update_spec_env_renamings pfx_info renamings
@@ -6939,7 +6927,7 @@ fun €renames_object_common›
 				handle Fail _ => [];
 			val av_names = flat (map z_names_of_z_dec avs);
 			val zids_in_scope = (current_cn_env, av_names);
-			val pfx_info = current_prefix_info();
+			val pfx_info = current_prefix_info 1;
 		in	map (check_new_z_id zids_in_scope) [new_zname];
 			check_new_spark_ids current_cn_env [new_zname];
 			blocks :=
@@ -7260,7 +7248,7 @@ fun €use_pack› (name : ID)  : unit = (
 		val avs = #aux_vars (force_value package_opt) handle Fail _ => [];
 		val av_names = flat (map z_names_of_z_dec avs);
 		val zids_in_scope = (current_cn_env, av_names);
-		val pfx_info = current_prefix_info();
+		val pfx_info = current_prefix_info 1;
 		val block1' = block_renamings pfx_info (block1, new_subs);
 		val dict1' = #dict(#in_scope(#declab(block1')));
 		val dict1'' = add_used_package dict1'  name;
@@ -7802,7 +7790,7 @@ and €do_declaration› (y as (DDeclarationKSlot (
 	let	val (formal, globals, inffun) =
 			do_function_spec implicit x;
 		val _ = end_scope();
-		val pfx_info = current_prefix_info();
+		val pfx_info = current_prefix_info 1;
 	in	add_fun_env pfx_info formal globals inffun;
 		update_envs_fun pfx_info formal globals inffun
 	end
@@ -7922,18 +7910,13 @@ The following reflects the SID functions for $package\_specification$:
 *)
 and €do_package_spec› (decl as {name, visible_decs, private_decs, annotation, ...}
 			: DECLARATION PACKAGE_DECLARATION) = (
-	let	val thy_name = pack_spec_name name;
-	in	if	not (thy_name mem get_theory_names())
-		then (	new_scope_pack_spec name decl;
-			do_annotation annotation;
-			map (check_fail () do_declaration) visible_decs;
-			(case private_decs of
-				Value pds =>  (map (check_fail () do_declaration) pds; ())
-			|	Nil =>  ());
-			end_scope() )
-		else	fail "do_package_name" 507040
-			[(fn()=>name), (fn()=>thy_name)]
-	end
+	new_scope_pack_spec name decl;
+	do_annotation annotation;
+	map (check_fail () do_declaration) visible_decs;
+	(case private_decs of
+		Value pds =>  (map (check_fail () do_declaration) pds; ())
+	|	Nil =>  ());
+	end_scope()
 )
 (*
 =TEX
@@ -7955,7 +7938,7 @@ and €do_function_stub› (
 	let	val (formal, globals, inffun) =
 			do_function_spec false fun_spec;
 		val _ = end_scope();
-		val pfx_info = current_prefix_info();
+		val pfx_info = current_prefix_info 1;
 	in	add_fun_env pfx_info formal globals inffun;
 		update_envs_fun pfx_info formal globals inffun
 	end;
@@ -7981,7 +7964,7 @@ and €do_external_function_stub› (
 	let	val (formal, globals, inffun) =
 			do_function_spec implicit fun_spec;
 		val _ = end_scope();
-		val pfx_info = current_prefix_info();
+		val pfx_info = current_prefix_info 1;
 	in	add_fun_env pfx_info formal globals inffun;
 		update_envs_fun pfx_info formal globals inffun
 	end
@@ -8016,7 +7999,7 @@ and €do_proper_body› (y as (PBProcedure
 		map (check_fail () do_declaration) declarative_part;
 		vcs_body (check_fail (STNull SNImplicit) do_statement statement);
 		end_scope();
-		let	val pfx_info = current_prefix_info();
+		let	val pfx_info = current_prefix_info 1;
 		in	add_fun_env pfx_info formal globals inffun;
 			update_envs_fun pfx_info formal globals inffun
 		end
