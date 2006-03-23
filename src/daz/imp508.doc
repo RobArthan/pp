@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp508.doc   %Z% $Date: 2006/03/17 14:42:40 $ $Revision: 1.132 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2006/03/18 13:17:52 $ $Revision: 1.133 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.132 $%
+\def\SCCSversion{$Revision: 1.133 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/03/17 14:42:40 $%
+\TPPdate{\FormatDate{$Date: 2006/03/18 13:17:52 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -157,6 +157,10 @@ the cache theory before calling {\it term\_of\_z\_tm}.
 \item[Issue 1.131] Iterated set unions are now formed left-associatively.
 \item[Issue 1.132] Towards enhancement 117: support for expanded forms of type and constant names in Z translation of basic declarations.
 \item[Issue 1.133] Aliasing in pre- and post-conditions is now only supported for Ada variables (not constants etc.).
+\item[Issue 1.134] Division of responsibility between adjustment
+and translation of basic declarations is changed by enhancement 117. Now, the translation stage must take care of mapping
+names to their canonical forms (since this must be done uniformly for both defining and applies occurrences of the names).
+
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -404,10 +408,6 @@ fun Ûz_slideÝ (exp1 : Z_EXP, exp2 : Z_EXP) : Z_EXP = (
 =SML
 val Ûz_succÝ : Z_EXP = ñsucc®;
 =TEX
-In {\it zid}, the auxiliary function {\it aux} implements the retry technique
-that supports access to variables in enclosing package or subprogram bodies.
-Only one level of retry is supported (since the SPARK rules don't allow nesting
-of package names in this context).
 =SML
 fun ÛzidÝ (env : CN_ENV) (id : Z_ID) : Z_EXP = (
 	let	val {tipe, canon_name, info} = (
@@ -2707,6 +2707,15 @@ end);
 =TEX
 \subsection{Translating Array Types}
 =SML
+fun Ûreal_nameÝ (env : CN_ENV) (tm : TMARK) : TMARK = (
+	let	val ztm = trans_id tm;
+	in	case env ztm of
+			Value{canon_name, ...} => canon_name
+		|	_ => ztm
+	end
+);
+=TEX
+=SML
 fun Ûarray_attrib_auxÝ (env : CN_ENV) (zid‰1 : Z_ID) (zid‰2 : Z_ID, i : int) : PARAINFO list = (
 let	val z_e_e = z_eq_eq "type";
 in
@@ -2722,21 +2731,24 @@ The handler below catches failures from {\it hd}.
 fun Ûarray_attribÝ (env : CN_ENV) (zid : Z_ID, zids : Z_ID list) : PARAINFO list = (
 	let	val aux = array_attrib_aux env zid;
 		val zids_is = combine zids (interval 1 (length zids));
-	in	aux (hd zids, 0) @
+		val hd_zids = hd zids
+		handle Fail _ => fail "array_attrib" 508035 [];
+	in	aux (hd_zids, 0) @
 		flat (map aux zids_is)
-	end	handle Fail _ => fail "array_attrib" 508035 [] 
+	end
 );
 =TEX
 =SML
 fun Ûbasic_decl_con_arrayÝ (env : CN_ENV) (pfx : Z_ID list) (name : ID)
 		({index=index, comp=comp} : ARRAY_DEF) : PARAINFO list = (
 	let	val zname = prefix_trans_id pfx name;
-		val zindex = z_many_cross (map (zid env o trans_id) index);
+		val rindex = map (real_name env) index;
+		val zindex = z_many_cross (map (zid env) rindex);
 		val zcomp = trans_id comp;
 		val z_e_e = z_eq_eq "type";
 	in
 		[z_e_e(zname, z_tfun(zindex, zid env zcomp))] @
-		array_attrib env (zname, index)
+		array_attrib env (zname, rindex)
 	end
 );
 =TEX
@@ -3088,8 +3100,7 @@ a subtype which gives rise to an axiomatic description rather than an abbreviati
 =SML
 fun Ûbasic_decl_subtype_axdesÝ (env : CN_ENV) (zvar : Z_ID) (tmark : TMARK)
 	: PARAINFO list = (
-	let	val ztmark = trans_id tmark;
-		val zexp = z_powerset (zid env tmark)
+	let	val zexp = z_powerset (zid env tmark)
 			handle Fail _ =>
 			fail "trans_basic_decl" 508051 [fn () => tmark];
 		val z_a = z_ax "subtype";
@@ -3136,8 +3147,8 @@ fun Ûbasic_decl_subtype_range_conÝ (env : CN_ENV) (pfx : Z_ID list)
 	(name : ID) (tmark : TMARK) (range : EXP RANGE) : PARAINFO list = (
 	let	val {lo, hi} = dest_range (adjust_range env range);
 		val zname = prefix_trans_id pfx name;
-		val ztmark = trans_id tmark;
-		val ztype = type_of(zid env ztmark
+		val rtmark = real_name env tmark;
+		val ztype = type_of(zid env rtmark
 			handle Fail _ =>
 			fail "trans_basic_decl" 508051 [fn () => tmark]);
 		val te_lo = trans_exp1 env lo;
@@ -3149,16 +3160,16 @@ fun Ûbasic_decl_subtype_range_conÝ (env : CN_ENV) (pfx : Z_ID list)
 			then	let	val vcs = range_check_vcs name l h;
 				in	z_e_e(zname, z_rng(l, h)) ::
 					range_con_attrib env
-					(zname, ztmark, {lo=lo,hi=hi}) @ vcs
+					(zname, rtmark, {lo=lo,hi=hi}) @ vcs
 				end
 			else if	ztype =: z_real_set_type
 			then	let	(* val vcs = range_check_vcs name l h *);
 					val unwanted = ["FIRST", "LAST"];
-					val tas = type_attrs unwanted tmark;
+					val tas = type_attrs unwanted rtmark;
 					val tas_paras = map
 						(fn attr =>
 						z_e_e(zname ^^ attr,
-						 zid env (trans_id tmark ^^ attr))) tas;
+						 zid env (rtmark ^^ attr))) tas;
 				in	z_e_e(zname, z_rng(l, h)) ::
 					tas_paras @
 					[ z_e_e(zname ^^ zfst, l),
@@ -3182,12 +3193,13 @@ fun Ûbasic_decl_subtype_index_conÝ (env : CN_ENV) (pfx : Z_ID list)
 	(name : ID) (tmark : TMARK) (ci : EXP list) : PARAINFO list = (
 let	val zname = prefix_trans_id pfx name;
 	val index = map name_to_tmark ci;
-	val zindex = map trans_id index;
-	val domain = z_many_cross(map (zid env) zindex);
-	val set_comp = index_con_set_comp env tmark domain;
+	val rindex = map (real_name env) index;
+	val domain = z_many_cross(map (zid env) rindex);
+	val rtmark = real_name env tmark;
+	val set_comp = index_con_set_comp env rtmark domain;
 	val z_e_e = z_eq_eq "subtype";
 	val abb_def = z_e_e (zname, set_comp);
-in	abb_def :: array_attrib env (zname, zindex)
+in	abb_def :: array_attrib env (zname, rindex)
 end
 );
 =TEX
@@ -3222,14 +3234,15 @@ fun Ûbasic_decl_subtype_disc_conÝ (env : CN_ENV) (pfx : Z_ID list)
 fun Ûbasic_decl_subtype_no_conÝ (env : CN_ENV) (pfx : Z_ID list)
 	(name : ID) (tmark : TMARK) : PARAINFO list = (
 let	val zname = prefix_trans_id pfx name;
-	val zexp = zid env (trans_id tmark);
+	val rtmark = real_name env tmark;
+	val zexp = zid env rtmark;
 	val zvar_ty = dest_z_power_type(type_of zexp)
 		handle Fail _ => fail "trans_basic_decl" 508051 [fn () => tmark];
 	val z_e_e = z_eq_eq "subtype";
 	val abb_def = z_e_e (zname, zexp);
-	val tas = type_attrs [] tmark;
+	val tas = type_attrs [] rtmark;
 	val tas_paras = map (fn attr => z_e_e(zname ^^ attr, 
-		zid env (trans_id tmark ^^ attr))) tas;
+		zid env (rtmark ^^ attr))) tas;
 in	
 	(abb_def :: tas_paras)
 end);
@@ -3609,32 +3622,25 @@ val Ûuniversal_discrete_typeÝ : TMARK = "universal_discrete";
 =SML
 val Ûgen_id_countersÝ : int S_DICT ref = ref initial_s_dict;
 val Ûreset_gen_id_countersÝ : unit -> unit = (fn () => gen_id_counters := initial_s_dict);
-fun Ûreal_nameÝ (env : CN_ENV) (tm : TMARK) : TMARK = (
-	let	val ztm = trans_id tm;
-	in	case env ztm of
-			Value{canon_name, ...} => canon_name
-		|	_ => ztm
-	end
-);
 val Ûgenerate_id_from_tmarkÝ : CN_ENV -> TMARK -> TMARK = (
 	fn	env =>
 	fn	tmark =>
-	let	val tmark' = real_name env tmark;
-		fun aux i = (
-			let	val name = tmark' ^ "s" ^ string_of_int i;
+	let	fun aux i = (
+			let	val tag = "s"  ^ string_of_int i;
+				val name = real_name env tmark ^ tag;
 			in let	val (zname, _) = dest_const(mk_z_gvar(name, BOOL, []));
 			in	get_const_theory zname;
 				aux (i+1)
-			end	handle Fail _ => (i, name)
+			end	handle Fail _ => (i, tag)
 			end
 		);
 		val start = (
-			case s_lookup tmark' (!gen_id_counters) of
+			case s_lookup tmark (!gen_id_counters) of
 				Value j => j + 1
 			|	Nil => 1);
-		val (newi, res) = aux start;
-	in	gen_id_counters := s_enter tmark' newi (!gen_id_counters);
-		res
+		val (newi, tag) = aux start;
+	in	gen_id_counters := s_enter tmark newi (!gen_id_counters);
+		tmark ^ tag
 	end
 );
 =TEX
@@ -3650,7 +3656,7 @@ fun Ûsi_generate_idÝ (env : CN_ENV) : SI_SUB_IND -> TMARK = (
 fun Ûadjust_subtypeÝ (env : CN_ENV)
 	(si as {tmark, con} : CONSTRAINT SUB_IND) : BASIC_DECL list * TMARK = (
 	case con of
-		CNoCon => ([], real_name env tmark)
+		CNoCon => ([], tmark)
 	|	_ => (
 		let	val name = generate_id env si;
 		in	([BDSubtypeDecl {
@@ -3703,7 +3709,7 @@ with more than one range.
 =SML
 fun Ûresolve_constraintÝ (env : CN_ENV) (tmark : TMARK)
 	(c as SIDiscriminantCon[e] : SI_CONSTRAINT) : SI_CONSTRAINT = (
-	case env (real_name env tmark) of
+	case env tmark of
 		Value{info = EIEnvRecordType {comp_names, num_discs}, ...}=> (
 			case e of
 				EArrayAggPos{comps,...} => (
@@ -3808,19 +3814,19 @@ fun Ûadjust_comp_declÝ (env : CN_ENV) (disc : DISCRIMINANT_SPECIFICATION list)
 			EDiscreteRange(DRRange rng)
 		) | adjust_range (SIDiscreteRangeSubInd{
 			con = CNoCon, tmark}) = (
-			EId (real_name env tmark)
+			EId tmark
 		) | adjust_range _ = fail "adjust_comp_decl" 508105 [fn _ => hd vars];
 	in	case resolve_constraint env tmark con of
 			SIIndexCon ranges => (
 			if	any ranges is_dep_range
 				then	([],
-					({vars = vars, tmark = real_name env tmark},
+					({vars = vars, tmark = tmark},
 					 CCIndexCon(map adjust_range ranges)))
 			else	default()
 		) |	SIDiscriminantCon exps => (
 			if	any exps (is_dep_exp disc)
 			then	([],
-				({vars = vars, tmark = real_name env tmark},
+				({vars = vars, tmark = tmark},
 				 CCDiscCon exps))
 			else default()
 		) |	_ => default()
@@ -3841,7 +3847,7 @@ fun Ûadjust_subtype_declÝ (env : CN_ENV)
 	(name : ID, {tmark, con = con1} : SI_SUB_IND) : BASIC_DECL list = (
 	let	val con = resolve_constraint env tmark con1;
 		val (newdecl', con') = adjust_constraint env con;
-		val si' = {tmark = real_name env tmark, con = con'};
+		val si' = {tmark = tmark, con = con'};
 	in	newdecl' @ [BDSubtypeDecl {name = name, sub_ind = si'}]
 	end
 );
@@ -3886,7 +3892,7 @@ merge into one here:
 fun Ûadjust_var_declÝ (env : CN_ENV)
 	 ({vars, t as {tmark, con}} : SI_VAR_DECL) : SI_BASIC_DECL list * VAR_DECL = (
 	case con of
-		SINoCon => ([], {vars = vars, tmark = real_name env tmark})
+		SINoCon => ([], {vars = vars, tmark = tmark})
 	|	_ => (
 		let	val name = si_generate_id env t;
 			val basic_decl = SISubtypeDecl{name = name, type_def = t};

@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.312 $ $RCSfile: imp507.doc,v $ $Date: 2006/03/22 16:09:40 $
+% imp507.doc %Z% $Revision: 1.313 $ $RCSfile: imp507.doc,v $ $Date: 2006/03/22 17:15:33 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.312 $%
+\def\SCCSversion{$Revision: 1.313 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/03/22 16:09:40 $%
+\TPPdate{\FormatDate{$Date: 2006/03/22 17:15:33 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -246,7 +246,7 @@ Use clauses in package specifications now propagate into the package body.
 \item[Issue 1.310] First clean compile for enhancement 117.
 \item[Issue 1.311] Debugging enhancement 117.
 \item[Issue 1.312] Beginnings of enhancement 118: systematic naming of scripts.
-\item[Issue 1.313] More debugging of enhancement 117.
+\item[Issue 1.313, 1.314] More debugging of enhancement 117.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -594,13 +594,13 @@ Some of the ones required by the spec are introduced later on to get the diction
 =TEX
 We will need to be able to convert an Ada type mark into the HOL type for elements of the Ada type:
 =SML
-fun Ûtype_of_tmarkÝ (dict : ENV_DICT) (tmark : TMARK) : TYPE = (
-	let	val set_ty =
+fun Ûtype_of_tmarkÝ (dict : ENV_DICT) (tmark : TMARK) : TYPE * Z_ID = (
+	let	val (set_ty, can_n) =
 			case env_of_env_dict dict (trans_id tmark) of
-				Value {tipe = Value ty, info = EIEnvRecordType _, ...} => ty
-			|	Value {tipe = Value ty, info = EIEnvOtherType, ...} => ty
+				Value {tipe = Value ty, info = EIEnvRecordType _, canon_name, ...} => (ty, canon_name)
+			|	Value {tipe = Value ty, info = EIEnvOtherType, canon_name, ...} => (ty, canon_name)
 			|	_ => fail "type_of_tmark" 507127 [fn _ => tmark];
-	in	dest_z_power_type set_ty
+	in	(dest_z_power_type set_ty, can_n)
 		handle Fail _ => fail "type_of_tmark" 507128 [fn _ => tmark]
 	end
 );
@@ -625,9 +625,12 @@ fun Ûdict_vc_vars1Ý
 	(dict : ENV_DICT, 
 	new_vc_vars : VAR_DECL list) : ENV_DICT = (
 		let	fun mk_var_info zn tmark = (
-				{tipe = Value (type_of_tmark ty_dict tmark),
-				canon_name = zn,
-				info = EIEnvVar{kind = VKVar, tmark = tmark}}
+				let	val (ty, can_tmark) = type_of_tmark ty_dict tmark;
+				in
+					{tipe = Value ty,
+					canon_name = zn,
+					info = EIEnvVar{kind = VKVar, tmark = can_tmark}}
+				end
 			);
 			fun aux1 {vars, tmark} = map (fn v => (v, prefix_trans_id canon v, tmark)) vars;
 			val vars_tmarks = flat (map aux1 new_vc_vars);
@@ -724,15 +727,20 @@ fun Ûin_scope_vc_log_consÝ
 ) | in_scope_vc_log_cons (Value dict) ({dict = _, dec_labels} , new_vc_log_cons)= (
 	in_scope_vc_log_cons Nil ({dict = dict, dec_labels = dec_labels}, new_vc_log_cons)
 );
+=TEX
 =SML
-fun Ûdict_vc_parsÝ
+fun Ûdict_vc_pars1Ý
+	(ty_dict : ENV_DICT)
 	({canon, aliases} : PREFIX_INFO)
 	(dict : ENV_DICT, 
 	new_vc_pars : PARAM_SPEC list) : ENV_DICT = (
 		let	fun mk_par_info zn tmark mode = (
-				{tipe = Value(type_of_tmark dict tmark),
+				let	val (ty, can_tmark) = type_of_tmark ty_dict tmark;
+				in
+				{tipe = Value ty,
 				canon_name = zn,
-				info = EIEnvVar{kind = VKPar mode, tmark = tmark}}
+				info = EIEnvVar{kind = VKPar mode, tmark = can_tmark}}
+				end
 			);
 			fun aux1 {var_decl = {vars, tmark}, mode = mode} = (
 				map (fn v => (v, prefix_trans_id canon v, tmark, mode)) vars
@@ -749,6 +757,13 @@ fun Ûdict_vc_parsÝ
 		end
 );
 =TEX
+=SML
+fun Ûdict_vc_parsÝ
+	(pfx_info : PREFIX_INFO)
+	(dict : ENV_DICT, 
+	new_vc_pars : PARAM_SPEC list) : ENV_DICT = (
+	dict_vc_pars1 dict pfx_info (dict, new_vc_pars)
+);
 =TEX
 =SML
 fun Ûin_scope_vc_parsÝ
@@ -3157,10 +3172,10 @@ fun 	add_vcs_rcud( 	[] : string list, [] : ROUTE OPT list,
 This is used just to undo the effect of the \textit{\slshape z\_quote} at the end of 
 \textit{\slshape vcs}. 
 =SML
-fun term_from_quote(zt : Z_TM) : TERM = 
+fun term_of_quote(zt : Z_TM) : TERM = 
 	case zt of 
 		ZTmQuotation(t,ty) => t
-	|	_ => fail "term_from_quote" 507085 [];
+	|	_ => fail "term_of_quote" 507085 [];
 
 fun mk_vcco_context
 (	w : ID list, pre : TERM, post: TERM, till : TERM, return : TERM,
@@ -3206,8 +3221,8 @@ fun store_vc_context_and_origin
 					vc_names, 
 					mk_vcco_context(
 						#w(#spec spclab),
-						term_from_quote(#pre(#spec spclab)),
-						term_from_quote(#post(#spec spclab)),						
+						term_of_quote(#pre(#spec spclab)),
+						term_of_quote(#post(#spec spclab)),						
 						#till(#wp_env spclab),
 						#return(#wp_env spclab),
 						#named_tills(#wp_env spclab),
@@ -5544,6 +5559,8 @@ fun Ûstore_trans_formal_funÝ
 );
 =TEX
 The decision of which of the four cases to apply is made in $form\_fun$
+
+Note that {\em form\_fun\_pack\_body} and {\em form\_fun\_pack\_body\_aux} depend on {\em form\_fun\_pack\_spec} always producing type-checked pre- and post-conditions for the formal function that just need the term quotation stripped off with {\em term\_of\_quote}.
 =TEX
 =SML
 fun Ûform_fun_pack_specÝ (form_fun as {
@@ -5650,10 +5667,10 @@ fun Ûform_fun_pack_body_commonÝ (implicit : bool)
 		else	(check_not_implicit implicit; Nil)
 	end
 );
-=SML
 =TEX
 The VC generator is responsible for distinguishing between specification statements with and without initial variables.
 Here, we follow the parser in generating the form without initial variables for it to modify as necessary.
+
 =SML
 fun Ûform_fun_pack_bodyÝ
 	(block2 : BLOCK, formal_fun3 : FORMAL_FUN,
@@ -5670,8 +5687,8 @@ fun Ûform_fun_pack_bodyÝ
 		val body_pfx_info = pack_body_prefix_info [block_name2];
 		val afunc = trans_formal_fun_name spec_pfx_info current_cn_env (Value package4) formal_fun3;
 		val cfunc = trans_formal_fun_name body_pfx_info current_cn_env Nil form_fun;
-		val pre5 = z_pred_of_z_tm  current_cn_env (#pre spec5);
-		val post5 = z_pred_of_z_tm  current_cn_env (#post spec5);
+		val pre5 = term_of_quote (#pre spec5);
+		val post5 = term_of_quote (#post spec5);
 		fun subs5 p = subs_exp_for_exp_in_pred(p, afunc, cfunc);
 		val spec5a : SPEC = {
 			w = [],
@@ -5730,8 +5747,8 @@ fun Ûform_fun_pack_body_auxÝ
 		val conc_zids =  (map  trans_id o flat o flat o map (map #vars) o map fst o map snd)
 				ud2_rel_image cup (glob_vars diff aux_zids);
 		val save_ti_context = e_get_ti_context();
-		val pre3 = z_pred_of_z_tm  current_cn_env (#pre spec3);
-		val post3 = z_pred_of_z_tm  current_cn_env (#post spec3);
+		val pre3 = term_of_quote (#pre spec3);
+		val post3 = term_of_quote (#post spec3);
 		val pre5_matrix = z_many_and(z_pred_of_z_tm  current_cn_env (#pre spec3)::invs);
 		val pre5 = z_quote (z_exists (aux_vars, pre5_matrix), Nil);
 		val spec_pfx_info = pack_spec_prefix_info [block_name2];
@@ -6274,7 +6291,8 @@ fun Ûinit_pack_body_dictÝ (name : Z_ID,
 			|	EIEnvVar _ => true
 			|	_ => (
 				case env_of_env_dict with_dict canon_name of
-					Value _ => false
+					Value {info = EIEnvOther, ...}  => true
+				|	Value _  => false
 				|	Nil => true
 			)
 		);
@@ -6887,10 +6905,10 @@ fun Ûrenames_object_commonÝ
 	in	bd_store_para parainfo; Value (new_zname, Nil)
 	end	handle Fail msg => (
 		let
-			val _  =
+			val can_n  =
 			case current_cn_env old_zname of 
-				Value {info = EIEnvVar _ , ...}=> ()
-			|	Value {info = EIEnvAuxVar _, ...} => ()
+				Value {info = EIEnvVar _, canon_name, ...}=> canon_name
+			|	Value {info = EIEnvAuxVar _, canon_name, ...} => canon_name
 			|	_ => fail "" 0 [] (* caught immediately *);
 		in	case current_cn_env new_zname of
 				Value{canon_name = orig', info = EIEnvVar _, ...} => (
@@ -6899,7 +6917,7 @@ fun Ûrenames_object_commonÝ
 					else	fail "" 0 [] (* caught immediately *)
 			) |	Value _ => fail "" 0 [] (* caught immediately *)
 			|	Nil =>
-		let	val renaming = (new_zname, Value old_zname);
+		let	val renaming = (new_zname, Value can_n);
 			val block1 = block 1
 			handle Fail _ => error "add_var_env" 507006 [];
 			val block_name1 = #block_name(#declab block1);
@@ -7010,7 +7028,7 @@ fun Ûrenames_packÝ (old_name : ID , new_name : ID)  : unit = (
 					[fn _ => old_name, fn _ => new_name];
 		val _ = check_pack_complete pack;
 		val {vc_vars, consts_types, formal_procs, informal_procs, informal_funs, formal_funs, obj_renamings,
-			aux_vars, zmod, decl, local_dict =_, with_dict = _} = pack;
+			zmod, decl, aux_vars = _, local_dict, with_dict = _} = pack;
 		fun const_def id = (
 			BDConstDecl{
 				consts= [prefix_id new_name id],
@@ -7041,15 +7059,15 @@ fun Ûrenames_packÝ (old_name : ID , new_name : ID)  : unit = (
 		fun do_renaming (new, old)   = (
 			renames_object
 			{new_name = prefix_id new_name new, 
-			 old_name = curr_real_name(prefix_id old_name old),
+			 old_name = case env_of_env_dict local_dict old of
+				Value {canon_name, ...} => canon_name
+			|	Nil => old,
 			 tmark = ""}
 		);
 		val vars = flat (map #vars vc_vars);
 		val _ = (map do_renaming o (fn v => combine v v)) vars;
 		val rens = mapfilter (Combinators.I ** force_value) obj_renamings;
 		val _ = map do_renaming rens;
-		val avls_to_do = map z_names_of_z_dec aux_vars;
-		val _ = map (map do_renaming o (fn l => combine l l)) avls_to_do;
 		fun untrans_par  (par_names_defs : (ID * Z_EXP OPT) list) 
 			({var_decl = {vars, tmark}, mode} : PARAM_SPEC)
 			 : PARAMETER_SPECIFICATION = (
@@ -7166,10 +7184,12 @@ fun Ûupdate_envs_used_packageÝ (name : ID)  : unit = (
 	else	()
 );
 =TEX
+The following function returns the new identifiers that are introduced when a package is referenced in a use clause.
+This does not include auxiliary variables as of version 2.7.7 (enhancement 117).
 =SML
 fun Ûnew_idsÝ (p : PACKAGE) : ID list = (
 	let	val {vc_vars, consts_types, formal_procs,
-			informal_funs, formal_funs, aux_vars, obj_renamings, ...} = p;
+			informal_funs, formal_funs, obj_renamings, ...} = p;
 		val v = flat (map #vars vc_vars);
 		fun do_enums ({type_def,...} : TYPE_DEF TYPE_DECL) = (
 			case type_def of
@@ -7186,11 +7206,10 @@ fun Ûnew_idsÝ (p : PACKAGE) : ID list = (
 		val p = map #name formal_procs;
 		val f1 = map #name informal_funs;
 		val f2 = map (#name o #informal_fun) formal_funs;
-		val a = flat (map z_names_of_z_dec aux_vars);
 		val rens = map fst obj_renamings;
 	 
 	in
-		list_cup [v, c_t_ident_s, p, f1, f2, a, rens]
+		list_cup [v, c_t_ident_s, p, f1, f2, rens]
 	end
 );
 =TEX
@@ -7217,7 +7236,8 @@ fun Ûuse_packÝ (name : ID)  : unit = (
 			|	Nil  => fail "use_pack" 507063 [fn _ => name];
 		val _ = check_pack_complete pack;
 		val {vc_vars, consts_types, formal_procs, informal_procs, informal_funs, formal_funs, obj_renamings,
-			aux_vars, zmod, decl, local_dict = _, with_dict = _} = pack;
+			zmod, decl, aux_vars = _, 
+			local_dict = _, with_dict = _} = pack;
 		val newidl = new_ids pack;
 		fun prefix_id ident n = trans_id (ident dot n);
 		fun do_id id = (trans_id id, Value (prefix_id name id));
@@ -7226,10 +7246,8 @@ fun Ûuse_packÝ (name : ID)  : unit = (
 			handle Fail _ => error "add_var_env" 507006 [];
 		val block_name1 = #block_name(#declab block1);
 		val package_opt = s_lookup block_name1 (!pack_env);
-		val avs = #aux_vars (force_value package_opt) handle Fail _ => [];
-		val av_names = flat (map z_names_of_z_dec avs);
-		val zids_in_scope = (current_cn_env, av_names);
-		val pfx_info = current_prefix_info 1;
+		val zids_in_scope = (current_cn_env, []);
+		val pfx_info = empty_prefix_info;
 		val block1' = block_renamings pfx_info (block1, new_subs);
 		val dict1' = #dict(#in_scope(#declab(block1')));
 		val dict1'' = add_used_package dict1'  name;
