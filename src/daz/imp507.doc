@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.313 $ $RCSfile: imp507.doc,v $ $Date: 2006/03/22 17:15:33 $
+% imp507.doc %Z% $Revision: 1.314 $ $RCSfile: imp507.doc,v $ $Date: 2006/03/23 17:34:48 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.313 $%
+\def\SCCSversion{$Revision: 1.314 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/03/22 17:15:33 $%
+\TPPdate{\FormatDate{$Date: 2006/03/23 17:34:48 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -1562,7 +1562,8 @@ fun €package_formal_fun›
 	({vc_vars, consts_types, formal_procs, informal_procs, informal_funs,
 		formal_funs, aux_vars, obj_renamings, zmod, decl, local_dict, with_dict}
 	: PACKAGE,
-	new_formal_fun : FORMAL_FUN) : PACKAGE = (
+	new_formal_fun as {renames as Nil, ...} : FORMAL_FUN)
+	: PACKAGE = (
 	{	vc_vars				=	vc_vars,
 		consts_types			=	consts_types,
 		formal_procs			=	formal_procs,
@@ -1574,6 +1575,28 @@ fun €package_formal_fun›
 		zmod				=	zmod,
 		decl				=	decl,
 		local_dict				=	dict_formal_fun pfx_info (local_dict, new_formal_fun),
+		with_dict				=	dict_formal_fun (with_pack_prefix_info pfx_info) (with_dict, new_formal_fun)
+	}
+) | package_formal_fun
+	pfx_info
+	({vc_vars, consts_types, formal_procs, informal_procs, informal_funs,
+		formal_funs, aux_vars, obj_renamings, zmod, decl, local_dict, with_dict}
+	: PACKAGE,
+	new_formal_fun as {
+		renames as (Value old),
+		informal_fun as {name = new, ...}, ...} : FORMAL_FUN)
+	: PACKAGE = (
+	{	vc_vars				=	vc_vars,
+		consts_types			=	consts_types,
+		formal_procs			=	formal_procs,
+		informal_procs			=	informal_procs,
+		informal_funs			=	informal_funs,
+		formal_funs			=	formal_funs @ [new_formal_fun],	
+		aux_vars			=	aux_vars,	
+		obj_renamings			=	obj_renamings,
+		zmod				=	zmod,
+		decl				=	decl,
+		local_dict				=	dict_renamings pfx_info (local_dict, [(new, Value old)]),
 		with_dict				=	dict_formal_fun (with_pack_prefix_info pfx_info) (with_dict, new_formal_fun)
 	}
 );
@@ -2265,13 +2288,6 @@ fun €pack_body_prefix_info› (pack_name : ID list) : PREFIX_INFO = (
 );
 =TEX
 =SML
-fun €with_pack_prefix_info› (pack_name : ID list) : PREFIX_INFO = (
-	let	val canon = map trans_id pack_name;
-	in	{canon = canon, aliases = []}
-	end
-);
-=TEX
-=SML
 fun €current_prefix_info› (n  : int) : PREFIX_INFO = (
 	if	test_flag #pack_spec_flag n
 	then	let	val pack = #block_name(#declab (block 1));
@@ -2282,6 +2298,19 @@ fun €current_prefix_info› (n  : int) : PREFIX_INFO = (
 		in	pack_body_prefix_info [pack]
 		end
 	else	empty_prefix_info
+);
+=TEX
+=SML
+fun €find_pack_spec_prefix_info› (():unit) : PREFIX_INFO = (
+	let	fun aux [] = empty_prefix_info
+		|   aux (blk as {declab as {block_name, flags, ...}, ...}
+			:: blks : ENV) = (
+			if	#pack_spec_flag flags
+			then	pack_spec_prefix_info[block_name]
+			else	aux blks
+		);
+	in	aux (!blocks)
+	end
 );
 =TEX
 \subsection{$flatten\_env$}
@@ -3711,7 +3740,7 @@ fun €basic_decl_pack_spec› (basic_decl : BASIC_DECL) : unit = (
 		val package = case (s_lookup block_name1 (!pack_env)) of
 			Value p => p
 		|	Nil => error "basic_decl_pack_spec" 507001 [];
-		val para_info_opt = trans_basic_decl1 current_cn_env [block_name1] basic_decl;
+		val para_info_opt = trans_basic_decl1 (current_cn_env, [block_name1]) basic_decl;
 		val pfx_info = pack_spec_prefix_info [block_name1];
 		val _ = update_envs_basic_decl pfx_info basic_decl;
 	in	pack_env :=
@@ -3730,7 +3759,7 @@ fun €basic_decl_pack_spec› (basic_decl : BASIC_DECL) : unit = (
 =SML
 fun €basic_decl_otherwise› (basic_decl : BASIC_DECL) : unit = (
 	let	val side = set_current_ti_context [];
-		val para_info_opt = trans_basic_decl1 current_cn_env [] basic_decl;
+		val para_info_opt = trans_basic_decl1 (current_cn_env, []) basic_decl;
 		val pfx_info = current_prefix_info 1;
 		val _ = update_envs_basic_decl pfx_info basic_decl;
 	in
@@ -6280,6 +6309,9 @@ fun €new_scope_with› (ident : ID) : unit = (
 =TEX
 \subsection{The SID function new\_scope\_pack\_body}
 =TEX
+The method used below is to take the local dictionary for the package and filter out unwanted items from it.
+The things to be filtered out comprise everything defined in the package (and therefore in the with-dictionary) except the types, constants and variables.
+We use {\em env\_of\_env\_dict1} because we do not want to exclude things that are not actually declared in the with-dictionary (e.g., constants declared in withed packages).
 =SML
 fun €init_pack_body_dict› (name : Z_ID,
 	package as {with_dict, local_dict, ...} : PACKAGE) : ENV_DICT = (
@@ -6290,9 +6322,8 @@ fun €init_pack_body_dict› (name : Z_ID,
 			|	EIEnvConstant _ => true
 			|	EIEnvVar _ => true
 			|	_ => (
-				case env_of_env_dict with_dict canon_name of
-					Value {info = EIEnvOther, ...}  => true
-				|	Value _  => false
+				case env_of_env_dict1 with_dict canon_name of
+					Value _  => false
 				|	Nil => true
 			)
 		);
@@ -6637,6 +6668,7 @@ fun €combine_param_specs› (old : PARAM_SPEC list) (new : PARAM_SPEC list) : PARA
 	in	Value (merge [] (combine old' new'))
 	end	handle Fail _ => Nil
 );
+=TEX
 =SML
 fun €renames_fun_pack_spec›
 	({subprogram_specification = ss as SSFunction {formal_part, designator, return, ...},
@@ -6647,92 +6679,70 @@ fun €renames_fun_pack_spec›
 		val package2 = force_value(
 			s_lookup block_name1 (!pack_env))
 			handle _ => fail "renames_fun_pack_spec" 507012 [fn ()=> block_name1];
-		val pfx_info = pack_spec_prefix_info [block_name1];
-		val ffs = #formal_funs package2;
+		val pfx_info as {canon, ... } = pack_spec_prefix_info [block_name1];
 		val old_name = (case opack of  Value pack => pack dot old | Nil => old);
 		val old_zname =  trans_id old_name;
-		val new_zname  = trans_id designator;
-		val ffo = Value (find ffs (fn {informal_fun = {name, ...},...} => name = old_name))
-			handle Fail _ => Nil;
+		val new_zname  = prefix_trans_id canon designator;
 		val new_pars = map mk_param_spec formal_part;
 		val (_, new_par_names_defs) = get_name_and_par_names_defs ss;
-	in	 case ffo of
-			Value (ff as {informal_fun = {formal_pars, return_type, ...}, globals, ...}) => (
-			let	val zn = trans_id (block_name1 dot old);
-				val new_formal_pars = force_value (
-					combine_param_specs formal_pars new_pars);
+	in	case current_cn_env old_zname of 
+			Value {	canon_name = zn,
+				info = EIEnvFunction {
+					formal = true,
+					deps = old_deps,
+					pars = old_pars,
+					return_tmark = old_return_tmark}, ...}  => (
+			let	val (_, par_names_defs) = get_name_and_par_names_defs ss;
+				val tm = zid current_cn_env zn;
+				val old_tmarks = map #tmark old_pars;
+				val (new_par_names, new_defs) = split par_names_defs;
+				val new_pars_tmarks_defs = combine new_par_names
+					(combine old_tmarks new_defs);
+				fun mk_ps (name, (tmark, _)) : PARAM_SPEC = (
+					{mode = MSparkIn true, var_decl = {vars = [name], tmark = tmark}}
+				);
+
+				val new_if = 					{name = designator,
+					formal_pars = map mk_ps new_pars_tmarks_defs ,
+					par_names_defs = par_names_defs,
+					return_type = old_return_tmark};
+				val _ = add_fun_env
+pfx_info true
+					old_deps
+					new_if;
+				val parainfo = AbbDefInfo(new_zname, [], tm);
 				val new_ff = {
-					informal_fun = {
-						name = trans_id designator,
-						formal_pars = new_formal_pars,
-						par_names_defs = new_par_names_defs,
-						return_type = return_type},
+					informal_fun = new_if,
 					spec = dummy_spec,
-					globals = globals,
+					globals = old_deps,
 					renames = Value zn};					
 			in	pack_env :=
 				s_enter
 				block_name1
-				(package_formal_fun pfx_info(package2, new_ff))
-				(!pack_env)
+				(package_formal_fun pfx_info (package2, new_ff))
+				(!pack_env);
+				bd_store_para parainfo; ()
 			end
-		) |	Nil =>  (
-			case current_cn_env old_zname of 
-				Value {	canon_name = zn,
-					info = EIEnvFunction {
-						formal = true,
-						deps = old_deps,
-						pars = old_pars,
-						return_tmark = old_return_tmark}, ...}  => (
-				let	val (_, par_names_defs) = get_name_and_par_names_defs ss;
-					val tm = zid current_cn_env zn;
-					val old_tmarks = map #tmark old_pars;
-					val (new_par_names, new_defs) = split par_names_defs;
-					val new_pars_tmarks_defs = combine new_par_names
-						(combine old_tmarks new_defs);
-					fun mk_ps (name, (tmark, _)) : PARAM_SPEC = (
-						{mode = MSparkIn true, var_decl = {vars = [name], tmark = tmark}}
-					);
-
-					val new_if = 					{name = trans_id designator,
-						formal_pars =map mk_ps new_pars_tmarks_defs ,
-						par_names_defs = par_names_defs,
-						return_type = old_return_tmark};
-					val _ = add_fun_env
-pfx_info true
-						old_deps
-						new_if;
-					val parainfo = AbbDefInfo(new_zname, [], tm);
-					val new_ff = {
-						informal_fun = new_if,
-					spec = dummy_spec,
-					globals = old_deps,
-					renames = Value zn};					
-				in	pack_env :=
-					s_enter
-					block_name1
-					(package_formal_fun pfx_info (package2, new_ff))
-					(!pack_env);
-					bd_store_para parainfo; ()
-				end
-			) |	_ =>  ( (* missing or informal *)
-				let	val (_, par_names_defs) = get_name_and_par_names_defs ss;
-					val new_if ={
-						name = designator,
-						formal_pars =map mk_param_spec formal_part ,
-						par_names_defs = par_names_defs,
-						return_type = curr_real_name return};
-					val ifs = #informal_funs package2;
-				in	pack_env :=
-					s_enter
-					block_name1
-					(package_informal_fun pfx_info (package2, new_if))
-					(!pack_env)
-				end
-			)
+		) |	_ =>  ( (* missing or informal *)
+			let	val (_, par_names_defs) = get_name_and_par_names_defs ss;
+				val new_if = {
+					name = designator,
+					formal_pars =map mk_param_spec formal_part ,
+					par_names_defs = par_names_defs,
+					return_type = curr_real_name return};
+				val ifs = #informal_funs package2;
+				val tm = zid current_cn_env old_zname;
+				val parainfo = AbbDefInfo(new_zname, [], tm);
+			in	pack_env :=
+				s_enter
+				block_name1
+				(package_informal_fun pfx_info (package2, new_if))
+				(!pack_env);
+				bd_store_para parainfo; ()
+			end
 		)
 	end 
-) | renames_fun_pack_spec _ = () (* Caller willl never make this happen *); 
+) | renames_fun_pack_spec _ = () (* Caller will never make this happen *); 
 =TEX
 =SML
 fun €renames_fun_otherwise›
@@ -6763,7 +6773,7 @@ fun €renames_fun_otherwise›
 		);
 		val inffun = 
 			{name = new_zname,
-			formal_pars =map mk_ps new_pars_tmarks_defs ,
+			formal_pars = map mk_ps new_pars_tmarks_defs ,
 			par_names_defs = par_names_defs,
 			return_type = old_return_tmark};
 		val pfx_info = current_prefix_info 1;
@@ -7562,13 +7572,15 @@ fun €extract_vardecls› ((bd::more) : BASIC_DECL list) : VAR_DECL list = (
 	|	_ => extract_vardecls more
 ) | extract_vardecls _ = [];
 =TEX
+The following has to allow for the way the universal discrete type as a special (which will get prefixed with the package name).
 =SML
 fun €check_adjust_basic_decls› (bds : SI_BASIC_DECL list) : BASIC_DECL list = (
-	let	fun check1 (SIPragma _) = (
+	let	val pfx_info as {canon, ...} = find_pack_spec_prefix_info();
+		fun check1 (SIPragma _) = (
 			cn_soundness_warning "check_adjust_basic_decls" 507018 []
 		)  | check1 _ = ();
 	in	map check1 bds;
-		adjust_basic_decls current_cn_env bds
+		adjust_basic_decls (current_cn_env, canon) bds
 	end
 );
 =TEX
