@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.32 2005/09/05 16:25:21 rda Exp rda $
+ * $Id: cmdline.c,v 2.33 2005/09/05 16:51:27 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -20,7 +20,7 @@
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 #define _cmdline
 
-enum { MAX_HISTORY = 40};
+enum {MAX_HISTORY = 100};
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
  * include files:
