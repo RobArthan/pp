@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.316 $ $RCSfile: imp507.doc,v $ $Date: 2006/03/28 09:57:42 $
+% imp507.doc %Z% $Revision: 1.317 $ $RCSfile: imp507.doc,v $ $Date: 2006/03/29 08:07:09 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.316 $%
+\def\SCCSversion{$Revision: 1.317 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/03/28 09:57:42 $%
+\TPPdate{\FormatDate{$Date: 2006/03/29 08:07:09 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -246,9 +246,12 @@ Use clauses in package specifications now propagate into the package body.
 \item[Issue 1.310] First clean compile for enhancement 117.
 \item[Issue 1.311] Debugging enhancement 117.
 \item[Issue 1.312] Beginnings of enhancement 118: systematic naming of scripts.
-\item[Issue 1.313, 1.314] More debugging of enhancement 117.
-\item[Issue 1.315] Automated state management.
-\item[Issue 1.313] Enhancement 118: it is now an error to misname a script.
+\item[Issues 1.313--1.315] More debugging of enhancement 117.
+\item[Issue 1.316] Automated state management.
+\item[Issue 1.317] Enhancement 118: it is now an error to misname a script.
+\item[Issue 1.318] Under enhancement 117, names of Ada entities used in Z must now be in the canonical form.
+Adjusted treatment of frames and ò-lists accordingly.
+Also some work towards improved error handling that will be required for this enhancement.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -3484,11 +3487,14 @@ fun €add_init_vars_speclab› ({spec as {w, pre, post, ...},
 		fun aux acc ((v, v0) :: more) = (
 			case env_of_env_dict dict v of
 				Value {tipe, canon_name, info} => (
-					aux
+				if	v = canon_name
+				then	aux
 					((v0, 
 					{tipe = tipe,
-					canon_name = canon_name ^"â0",
-					info = info})::acc) more
+					canon_name = v0,
+					info = info})::acc)
+					more
+				else	aux acc more
 			) |	Nil => aux acc more
 		) | aux acc [] = acc;
 		val dict' = add_to_env_dict dict (aux [] vs_v0s);
@@ -3504,6 +3510,35 @@ fun €add_init_vars_speclab› ({spec as {w, pre, post, ...},
 );
 =TEX
 =SML
+local
+fun €non_ada_ids› (env : CN_ENV) (vs : Z_EXP list) : Z_EXP list = (
+	vs drop (fn v =>
+		case  env (fst(dest_var v)) of
+		Value {info = EIEnvAuxVar _, ...} => false
+	|	Value {info = EIEnvLogCon _, ...} => false
+	|	Value _ => true
+	|	Nil => false)
+);
+fun €opt_s› [_] () = ""
+|  opt_s _ () = "s";
+fun €is_are› [_] () = "is"
+|  is_are _ () = "are";
+fun  report (env : CN_ENV) number (term, vars) = (
+	let val svars = Sort.sort term_order vars;
+		val (badvs, offset) =
+		case non_ada_ids env svars of
+			[] => (svars, 0)
+		|	some => (some, 1);
+	in
+		fail "call_vcs" (number+offset)
+		[ fn () => string_of_term term,
+		 (fn () => format_list string_of_term badvs ", "),
+		 opt_s svars,
+		 is_are svars]
+	end
+);
+
+in
 fun €terms_of_vcs›
 	(sl : SPECLAB)
 	(acc : TERM list)
@@ -3523,46 +3558,21 @@ fun €terms_of_vcs›
 	in	case all_error_frees of
 			[] => rev acc
 		|	_ => 
-		let	fun ada_id v = (
-				case  #env(#wp_env sl) (fst(dest_var v)) of
-				Value {info = EIEnvAuxVar _, ...} => false
-			|	Value {info = EIEnvLogCon _, ...} => false
-			|	Value _ => true
-			|	Nil => false
-			);
-			fun opt_s [_] () = ""
-			|  opt_s _ () = "s";
-			fun is_are [_] () = "is"
-			|  is_are _ () = "are";
-			val pre_frees = frees pre;
+		let	val pre_frees = frees pre;
 			val post_frees = frees post;
 			val pre_post_frees = pre_frees term_union post_frees;
 			val other_error_frees = all_error_frees term_diff pre_post_frees;
 			val pre_post_error_frees = all_error_frees term_diff other_error_frees;
 			val post_error_frees = pre_post_error_frees term_diff pre_frees;
 			val pre_error_frees = pre_post_error_frees term_diff post_error_frees;
-			fun  report number (term, vars) = (
-				let val svars = Sort.sort term_order vars;
-					val (badvs, offset) =
-					case svars drop ada_id of
-						[] => (svars, 0)
-					|	some => (some, 1);
-				in
-					fail "call_vcs" (number+offset)
-					[ fn () => string_of_term term,
-					 (fn () => format_list string_of_term badvs ", "),
-					 opt_s svars,
-					 is_are svars]
-				end
-			);
 		in	case post_error_frees of
-				_::_ =>  report 507121 (post, post_error_frees)
+				_::_ =>  report (#env(#wp_env sl)) 507121 (post, post_error_frees)
 			|	[] =>  (
 				case pre_error_frees of
 					_::_ => (
-					report 507123 (pre, pre_error_frees)
+					report (#env(#wp_env sl)) 507123 (pre, pre_error_frees)
 				) |	[] =>  (
-					map (report 507125)
+					map (report (#env(#wp_env sl)) 507125)
 					(map (fn t => (t, frees t)) (rev acc)
 						drop (fn(_, vs) => is_nil vs))
 				)
@@ -3570,6 +3580,7 @@ fun €terms_of_vcs›
 		end
 	end
 );
+end;
 =TEX
 =SML
 fun €call_vcs›
@@ -5960,6 +5971,7 @@ fun €curr_form_fun› (formal_fun : FORMAL_FUN) : unit = (
 \section{FORMAL PARAMETERS}\label{FORMALPARAMETERS}
 \subsection{The SID function formal\_part}
 =TEX
+Note that under the new canonical naming scheme for the Z parts of compliance arguments, the following should not be used when processing Z variables (e.g., those in a frame).
 =SML
 fun €curr_real_name› (n : ID) : Z_ID = (
 	let	val zn = trans_id n;
@@ -7546,7 +7558,7 @@ fun expand_names (ns : Z_ID list) : Z_ID list = (
 				force_value o get_const_type) (hol_const_name n))
 			handle Fail _ => [n]
 		);
-	in	flat (map (aux o curr_real_name) ns)
+	in	flat (map aux ns)
 	end
 );
 =TEX
@@ -8093,7 +8105,7 @@ fun €do_context_compilation_unit›
 		|   get_withs_uses (wacc, uacc) (CIUse u::more) = (
 			get_withs_uses (wacc, u::uacc) more
 		) |   get_withs_uses accs (CIPragma _::more) = (
-			cn_soundness_warning "do_contexxt_compilation_unit" 507018 [];
+			cn_soundness_warning "do_context_compilation_unit" 507018 [];
 			get_withs_uses accs more
 		);
 		fun get_pack_spec_withs_uses (comp_unit as CUProperBody(PBPackage {name , ...})) = (
