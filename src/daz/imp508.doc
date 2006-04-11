@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp508.doc   %Z% $Date: 2006/03/24 16:40:29 $ $Revision: 1.135 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2006/04/07 09:50:33 $ $Revision: 1.136 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.135 $%
+\def\SCCSversion{$Revision: 1.136 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/03/24 16:40:29 $%
+\TPPdate{\FormatDate{$Date: 2006/04/07 09:50:33 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -164,6 +164,7 @@ names to their canonical forms (since this must be done uniformly for both defin
 However, the adjustment stage needs to be generating new names properly in the light of what the translation stage will do with them.
 \item[Issue 1.136] Under enhancement 117, names of Ada entities used in Z must now be in the canonical form.
 Removed code that supported use of aliases.
+\item[Issue 1.137] Under enhancement 117, checks on use of names in Z are now given a uniform treatment.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -768,7 +769,7 @@ val _ = new_flag{
 	default=fun_false} handle Fail _ => ();
 =TEX
 =FULLVERSION
-fun €show_typing_context› (t : TERM, r:TERM) = (
+fun €show_typing_context› (t : TERM OPT) = (
 	if	!cn_show_typing_context
 	then	let	val cur_thy = get_current_theory_name();
 			val zlib = (get_ancestors "z_library" less "z_library")
@@ -782,13 +783,15 @@ fun €show_typing_context› (t : TERM, r:TERM) = (
 			diag_line
 			(case zlib of [] => "Ancestors:"
 			| _ => "Ancestors (up to z_library):");
-			map (diag_line o (curry (op^) "  ")) ancs;
+			app (diag_line o (curry (op^) "  ")) ancs;
 			diag_line
 			(case tic of [] => "No type inference context."
 			| _ => "Type inference context:");
-			map (diag_line o do1tici) tic;
-			diag_line ("Type-checked term: " ^ string_of_term t);
-			diag_line ("Renamed term: " ^ string_of_term r);
+			app (diag_line o do1tici) tic;
+			(case t of
+				Value tm => 
+			diag_line ("Type-checked term: " ^ string_of_term tm)
+			|	Nil => ());
 			()
 		end
 	else	()
@@ -803,7 +806,7 @@ fun €term_of_z_para› ((ZParaTerm (gpars, tm, _)) : Z_PARA) : TERM = (
     end
 ) | term_of_z_para _ = (fail "z_term_recogniser" 49001 []);
 =CUTDOWNVERSION
-fun €term_of_z_para› () = mk_t;
+7fun €term_of_z_para› () = mk_t;
 =TEX
 
 =SML
@@ -813,28 +816,86 @@ val €init_var_suffix› : string = "â0";
 The following function decorates a string with a subscript ``0'' and is used to give the initial version of a variable name.
 =SMLPLAIN
 fun €init_var› (name : string) : string = name ^ init_var_suffix;
-fun €base_var_name› (n : string)  : string = (
+fun €dest_init_var› (n : string)  : string * string = (
 	case rev (explode n) of 
-		"0" :: "â" ::  more => implode(rev more)
-	|	_ =>  n
-);
-
-fun €z_predexp_of_z_tm› (sub : Z_PRED -> Z_PRED)  (z_tm : Z_TM) : Z_PRED = (
-	 let	val standard = get_flag "standard_z_terms";
-		val z_para = ZParaTerm ([], z_tm, Nil);
-		val type_checked = type_check_z_para
-					 {standard = standard, allow_frees = true} z_para;
-		val para = z_para_of_zinferred type_checked;
-		val tm = term_of_z_para para;
-		val res = sub tm;
-	 in	show_typing_context (tm, res);
-		res
-	 end
+		"0" :: "â" ::  more => (implode(rev more), init_var_suffix)
+	|	_ =>  (n, "")
 );
 =TEX
 =SML
-fun €z_predexp_of_z_tm1› (env : CN_ENV)  (z_tm : Z_TM) : Z_PRED = (
-	z_predexp_of_z_tm (fn tm => tm) z_tm
+fun €undeclared_ids› (env : CN_ENV) (vs : Z_ID list) : Z_ID list = (
+	vs drop (fn v =>
+		case  env (fst(dest_init_var v)) of
+		Value _ => true
+	|	Nil => false)
+);
+=TEX
+=SML
+fun €noncanonical_ids› (env : CN_ENV) (vs : Z_ID list) : string list = (
+	let	fun aux acc [] = rev acc
+		|   aux acc (v :: more) = (
+			let	val (n, sfx) = dest_init_var v;
+			in	case  env n of
+			Value {canon_name, ...} =>
+				if	n = canon_name
+				then	aux acc more
+				else	aux (n ^ " (" ^  canon_name  ^ sfx ^ ")"::acc) more
+			|	Nil => aux acc more
+			end
+		);
+	in	aux [] vs
+	end
+);
+=TEX
+=SML
+fun €z_free_var_report› (msg : int) (tmo : TERM OPT) (things : string list) : unit = (
+	let	val opt_s = case things of [_] => "" |  _ => "s";
+		val is_are = case things of [_] => "is" |  _ => "are";
+		val hdr1 = case tmo of
+			Nil => ""
+		|	Value tm => get_error_message 508018 [string_of_term tm] ^ " ";
+		val hdr2 = get_error_message msg [opt_s, is_are];
+	in	diag_line(hdr1 ^ hdr2);
+		app diag_line((Sort.sort Sort.string_order) things)
+	end
+);
+=TEX
+=SML
+fun €z_predexp_of_z_tm_report› (env : CN_ENV) (tmo : TERM OPT) (vs : Z_ID list) : unit = (
+	case undeclared_ids env vs of
+		udvs as (_::_) => (
+			z_free_var_report 508010 tmo udvs;
+			fail "z_predexp_of_z_tm" 508019 []
+	) |	[] => (
+		case noncanonical_ids env vs of
+			ncvs as (_::_) => (
+				z_free_var_report 508011 tmo ncvs;
+			fail "z_predexp_of_z_tm" 508019 []
+		) |	[] => ()
+	)
+);
+=TEX
+=SML
+fun €z_predexp_of_z_tm› (env : CN_ENV)  (z_tm : Z_TM) : Z_PRED = (
+	 let	fun mk_tm () = (
+			let	val standard = get_flag "standard_z_terms";
+				val z_para = ZParaTerm ([], z_tm, Nil);
+				val type_checked = type_check_z_para
+					 {standard = standard, allow_frees = true} z_para;
+				val para = z_para_of_zinferred type_checked;
+				val tm = term_of_z_para para;
+			in	Value tm
+			end	handle Fail _ => Nil
+		);
+		val tmo = mk_tm();
+	 in	show_typing_context tmo;
+		(case diag_free_vars () of
+			[] => ()
+		|	fvs => z_predexp_of_z_tm_report env tmo fvs);
+		(case tmo of
+			Value tm => tm
+		|	_ => fail "z_predexp_of_z_tm" 508019 [])
+	 end
 );
 =TEX
 =SML
@@ -2029,7 +2090,7 @@ The function $exp\_string\_lit$ is defined in section \ref{StringLiterals}.
 \subsection{Translating Auxiliary Expressions}
 =SML
 and €exp_auxiliary_exp› (env : CN_ENV) (ae : Z_TM) : Z_EXP = (
-	z_predexp_of_z_tm1 env ae
+	z_predexp_of_z_tm env ae
 )
 =TEX
 \subsection{Translating Discrete Range Expressions}

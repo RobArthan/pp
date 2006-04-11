@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.317 $ $RCSfile: imp507.doc,v $ $Date: 2006/03/29 08:07:09 $
+% imp507.doc %Z% $Revision: 1.318 $ $RCSfile: imp507.doc,v $ $Date: 2006/04/07 09:48:32 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.317 $%
+\def\SCCSversion{$Revision: 1.318 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/03/29 08:07:09 $%
+\TPPdate{\FormatDate{$Date: 2006/04/07 09:48:32 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -252,6 +252,7 @@ Use clauses in package specifications now propagate into the package body.
 \item[Issue 1.318] Under enhancement 117, names of Ada entities used in Z must now be in the canonical form.
 Adjusted treatment of frames and ˜-lists accordingly.
 Also some work towards improved error handling that will be required for this enhancement.
+\item[Issue 1.319] Under enhancement 117, checks on use of names in Z are now given a uniform treatment.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -373,7 +374,10 @@ In some places, we need to form the HOL term corresponding to a Z predicate.
 This may require coercion of a schema into a predicate:
 =SML
 fun Ûz_pred_of_z_tmÝ (env : CN_ENV)  (zt : Z_TM) : Z_PRED = (
-	let	val tm = z_predexp_of_z_tm1 env zt;
+	case zt of
+		ZTmQuotation (tm, _) => tm
+	|	_ =>
+	let	val tm = z_predexp_of_z_tm env zt;
 	in	if	type_of tm =: BOOL
 		then	tm
 		else	mk_z_schema_pred (tm, "")
@@ -3510,35 +3514,6 @@ fun Ûadd_init_vars_speclabÝ ({spec as {w, pre, post, ...},
 );
 =TEX
 =SML
-local
-fun Ûnon_ada_idsÝ (env : CN_ENV) (vs : Z_EXP list) : Z_EXP list = (
-	vs drop (fn v =>
-		case  env (fst(dest_var v)) of
-		Value {info = EIEnvAuxVar _, ...} => false
-	|	Value {info = EIEnvLogCon _, ...} => false
-	|	Value _ => true
-	|	Nil => false)
-);
-fun Ûopt_sÝ [_] () = ""
-|  opt_s _ () = "s";
-fun Ûis_areÝ [_] () = "is"
-|  is_are _ () = "are";
-fun  report (env : CN_ENV) number (term, vars) = (
-	let val svars = Sort.sort term_order vars;
-		val (badvs, offset) =
-		case non_ada_ids env svars of
-			[] => (svars, 0)
-		|	some => (some, 1);
-	in
-		fail "call_vcs" (number+offset)
-		[ fn () => string_of_term term,
-		 (fn () => format_list string_of_term badvs ", "),
-		 opt_s svars,
-		 is_are svars]
-	end
-);
-
-in
 fun Ûterms_of_vcsÝ
 	(sl : SPECLAB)
 	(acc : TERM list)
@@ -3554,7 +3529,11 @@ fun Ûterms_of_vcsÝ
 	in	recur (tm :: acc) gs_pre_post more
 	end
 ) | terms_of_vcs sl acc (globals, pre, post) [] = (
-	let	val all_error_frees = list_term_union (map frees acc);
+	let	fun report (env : CN_ENV) msg1 msg2 (term, vars) = (
+			z_free_var_report msg1 (Value term) (map string_of_term vars);
+			fail "term_of_vcs" msg2 []
+		);
+		val all_error_frees = list_term_union (map frees acc);
 	in	case all_error_frees of
 			[] => rev acc
 		|	_ => 
@@ -3566,13 +3545,13 @@ fun Ûterms_of_vcsÝ
 			val post_error_frees = pre_post_error_frees term_diff pre_frees;
 			val pre_error_frees = pre_post_error_frees term_diff post_error_frees;
 		in	case post_error_frees of
-				_::_ =>  report (#env(#wp_env sl)) 507121 (post, post_error_frees)
+				_::_ =>  report (#env(#wp_env sl)) 507121 507123 (post, post_error_frees)
 			|	[] =>  (
 				case pre_error_frees of
 					_::_ => (
-					report (#env(#wp_env sl)) 507123 (pre, pre_error_frees)
+					report (#env(#wp_env sl)) 507121 507122 (pre, pre_error_frees)
 				) |	[] =>  (
-					map (report (#env(#wp_env sl)) 507125)
+					map (report (#env(#wp_env sl)) 507124 507125)
 					(map (fn t => (t, frees t)) (rev acc)
 						drop (fn(_, vs) => is_nil vs))
 				)
@@ -3580,7 +3559,6 @@ fun Ûterms_of_vcsÝ
 		end
 	end
 );
-end;
 =TEX
 =SML
 fun Ûcall_vcsÝ
@@ -4238,7 +4216,7 @@ fun Ûadd_log_con_envÝ (defs : LOG_CON_DEF list) : unit = (
 		val block1 = block 1;
 		val side = set_current_ti_context[];
 		fun make_decl (x, t) = (
-			let	val zt = z_predexp_of_z_tm1 current_cn_env t;
+			let	val zt = z_predexp_of_z_tm current_cn_env t;
 				val zvar = mk_z_lvar(x, (dest_z_power_type o type_of) zt, []);
 			in	mk_z_dec([zvar], zt)
 			end
@@ -4325,10 +4303,12 @@ fun Ûfor_paramÝ (i : ID, tmark : TMARK) : unit = (
 		val block2 = block 2;
 		val param_spec = {	mode = MSparkIn false,
 					var_decl = {vars = [i], tmark = tmark}};
-		val for_vars = #current_for_vars block2;
-	in	blocks := block_vc_pars Nil empty_prefix_info (block1, [param_spec])
+		val new_for_vars = #current_for_vars block2 grab param_spec;
+	in	blocks := block_current_for_vars(
+					block_vc_pars Nil empty_prefix_info (block1, [param_spec]),
+					new_for_vars)
 				:: block_current_for_vars
-					(block2, for_vars grab param_spec)
+					(block2, new_for_vars)
 				:: (tl o tl) (!blocks)
 	end
 );
@@ -6089,11 +6069,11 @@ fun Ûconformant_specsÝ
 		 : FORMAL_PROC)
 		: bool = (
 	let	val _ = set_current_ti_context(ti_context_of_formal_proc current_cn_env fpA);
-		val tpreA = z_predexp_of_z_tm Combinators.I preA;
-		val tpostA = z_predexp_of_z_tm Combinators.I postA;
+		val tpreA = z_predexp_of_z_tm current_cn_env preA;
+		val tpostA = z_predexp_of_z_tm current_cn_env postA;
 		val _ = set_current_ti_context(ti_context_of_formal_proc current_cn_env fpB);
-		val tpreB = z_predexp_of_z_tm Combinators.I preB;
-		val tpostB = z_predexp_of_z_tm Combinators.I postB;
+		val tpreB = z_predexp_of_z_tm current_cn_env preB;
+		val tpostB = z_predexp_of_z_tm current_cn_env postB;
 	in	gA = gB andalso wA = wB andalso w0A = w0B andalso
 		tpreA ~=$ tpreB andalso tpostA ~=$ tpostB
 	end
@@ -6390,7 +6370,7 @@ fun Ûaux_varÝ (av : AUX_VAR) : unit = (
 		|	Nil => error "aux_var" 507001 [];
 		val {aux, t} = av;
 		val side = set_current_ti_context[];
-		val zt = z_predexp_of_z_tm1 current_cn_env t;
+		val zt = z_predexp_of_z_tm current_cn_env t;
 		val zvar = mk_z_lvar(aux, (dest_z_power_type o type_of) zt, []);
 		val zdecl = mk_z_dec([zvar], zt);
 		val aux_vars1 = #aux_vars package drop (fn x => zdecl =$ x);
@@ -6425,7 +6405,7 @@ fun Ûud_fun_of_using_decÝ (ud : USING_DEC)
 			handle Fail _ =>
 			error "ud_fun_of_using_dec" 507012 [fn()=>block_name1];
 		val side = set_current_ti_context (#aux_vars package);
-		val (id, _, _) = (dest_z_lvar o z_predexp_of_z_tm1 current_cn_env) aux;
+		val (id, _, _) = (dest_z_lvar o z_predexp_of_z_tm current_cn_env) aux;
 	in	(id, (concrete_vars, z_pred_of_z_tm current_cn_env invariant))
 	end
 );
