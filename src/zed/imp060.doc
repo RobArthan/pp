@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp060.doc   %Z% $Date: 2006/01/24 14:03:48 $ $Revision: 1.28 $ $RCSfile: imp060.doc,v $
+% imp060.doc   %Z% $Date: 2006/01/25 13:03:04 $ $Revision: 1.29 $ $RCSfile: imp060.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -21,10 +21,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of the Z Lexical Analyser}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP060}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.28 $%
+\def\SCCSversion{$Revision: 1.29 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/01/24 14:03:48 $%
+\TPPdate{\FormatDate{$Date: 2006/01/25 13:03:04 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -101,8 +101,9 @@ symbols known to the reader/writer.
 \item[Issue 1.25] New forms of stub in templates. Dollar escape can now be used to introduce arbitrary identifiers.
 \item[Issue 1.26] `,,' now available as a synonym for `...'.
 \item[Issue 1.27] Option to require distinguishing subscripts on all schema operations.
-\end{description}
 \item[Issue 1.28, 1.29] Tidier design of the \$-feature.
+\item[Issue 1.30] Added support for floating point literals
+\end{description}
 \subsection{Changes Forecast}
 None.
 \section{GENERAL}
@@ -145,6 +146,7 @@ datatype ÛZ_TOKENÝ	=
 	|	ÛZTCharÝ of string
 	|	ÛZTStringÝ of string
 	|	ÛZTNumberÝ of INTEGER
+	|	ÛZTFloatÝ of INTEGER * INTEGER * INTEGER
 =TEX
 \subsubsection{Paragraph Separators}
 The following constructors correspond to paragraph
@@ -609,21 +611,85 @@ fun  Ûrec_symbolÝ (st : LEX_STATE) : LEX_STATE = (
 			else	raise Unrecognised)
 );
 =TEX
-\subsection{Recognition of Numbers}
+\subsection{Recognition of Integer and Floating Point Literals}
 =SML
-fun Ûis_numberÝ s = all (explode s) (fn s'=> is_digit s');
+fun Ûis_pointÝ ("." : string) = true 
+|   is_point _ = false;
 =TEX
 =SML
-fun Ûrec_numberÝ (st : LEX_STATE) : LEX_STATE = (
-let	fun aux st =
-		if next is_digit st
-		then aux (collect st)
-		else st;
+fun Ûis_eÝ ("e" : string) = true 
+|   is_e _ = false;
+=TEX
+=SML
+fun Ûis_minusÝ ("~" : string) = true 
+|   is_minus _ = false;
+=TEX
+=SML
+fun Ûdo_numberÝ (st : LEX_STATE as (ch::_, _)) : (string * (string * string OPT) OPT) * LEX_STATE = (
+let
+	fun in_exp acc (st as (ch::more, _)) = (
+		if	next is_digit st
+		then	in_exp (ch :: acc) (collect st)
+		else	(Value(implode(rev acc)), st)
+	) | in_exp acc st = (Value(implode(rev acc)), st);
+	fun exp_sign (st as (ch::more, _)) = (
+		if	next is_minus st
+		then	let	val st1 = collect st;
+			in	if	next is_digit st1
+				then	in_exp ["~"] st1
+				else	(Nil, st)
+			end
+		else if	next is_digit st
+		then	in_exp [ch] (collect st)
+		else	(Nil, st)
+	) | exp_sign st = (Nil, st);
+	fun exp_e st = (
+		if	next is_e st
+		then	let	val st1 = collect st;
+			in	case exp_sign st1 of
+					r as (Value _, _) => r
+				| _ =>	(Nil, st)
+			end
+		else	(Nil, st)
+	);
+	fun after_point acc (st as (ch::more, _)) = (
+		if	next is_digit st
+		then	after_point (ch :: acc) (collect st)
+		else	let	val (r, st1) = exp_e st;
+			in	(Value(implode(rev acc), r), st1)
+			end
+	) | after_point acc st = (Value(implode(rev acc), Nil), st);
+	fun before_point acc  (st as (ch::more, _)) = (
+		if	next is_digit st
+		then	before_point (ch::acc) (collect st)
+		else if	next is_point st
+		then	let	val st1 = collect st;
+			in	if	next is_digit st1
+				then	let	val (r, st2) = after_point [] st1;
+					in	((implode(rev acc), r), st2)
+					end
+				else	((implode(rev acc), Nil), st)
+			end
+		else	((implode(rev acc), Nil), st)
+	) | before_point acc st = ((implode(rev acc), Nil), st);
 in
 	if next is_digit st
-	then aux (collect st)
+	then before_point [ch] (collect st)
 	else raise Unrecognised
-end);
+end
+) | do_number _ = raise Unrecognised;
+=TEX
+=SML
+val Ûrec_numberÝ : LEX_STATE -> LEX_STATE = snd o do_number;
+=TEX
+=SML
+fun Ûclassify_numberÝ (s : string) : Z_TOKEN OPT = (
+	((case fst(do_number(explode s, Unknown)) of
+		(i, Nil) => Value(ZTNumber(natural_of_string i))
+	|	(b, Value(a, Nil)) => Value(ZTFloat(natural_of_string (b^a), int_of_integer(size a), zero))
+	|	(b, Value(a, Value e)) => Value(ZTFloat(natural_of_string (b^a), int_of_integer(size a), integer_of_string e))
+	) handle Fail _ => Nil) handle Unrecognised => Nil
+);
 =TEX
 \subsection{Recognition of Identifiers}
 To recognise identifiers we first need auxiliaries to recognise the
@@ -765,7 +831,28 @@ end);
 =TEX
 The following recognises a valid Z identifier.
 =SML
-fun Ûrec_identifierÝ (st : LEX_STATE) : LEX_STATE = (
+fun Ûrec_identifierÝ (st as ("."::more, r): LEX_STATE) : LEX_STATE = (
+	let	fun aux2 acc [] = rev acc
+		|   aux2 acc (chs as ("."::_)) = rev acc @ " "::chs
+		|   aux2 acc (chs as (ch::more)) = (
+			if	is_digit ch
+			then	aux2 (ch::acc) more
+			else	rev (ch::acc) @ more
+		);
+		fun aux1 acc [] = rev acc
+		|   aux1 acc (chs as (ch::more)) = (
+			if	is_space ch
+			then	aux1 (ch::acc) more
+			else if	is_digit ch
+			then	aux2 (ch::acc) more
+			else	rev (ch::acc) @ more
+		);
+	in	if	next is_digit (more, r)
+		orelse	next is_space (more, r)
+		then	rec_symbol_id(aux1 ["."] more, r)
+		else	rec_symbol_id st
+	end
+) | Ûrec_identifierÝ st = (
 	rec_symbol_id st
 	handle Unrecognised =>
 		rec_alphanumeric_id st
@@ -821,9 +908,9 @@ fun Ûlex_stringÝ (ip : string list) : Z_TOKEN list = (
 			ZTId s' => (
 				if is_decoration s'
 				then (ZTDecor s')::lex_string ip'
-				else if is_number s'
-				then (ZTNumber (natural_of_string s'))::lex_string ip'
-				else (ZTId s')::lex_string ip'
+				else case classify_number s' of
+					Value zt => zt :: lex_string ip'
+				|	Nil => (ZTId s')::lex_string ip'
 			)| other => other :: lex_string ip'
 		)|st' as (ip', Unknown) => (
 			error
@@ -910,8 +997,13 @@ end; (* of structure Lex *)
 ñô®;
 ñð®;
 ñ(®;
+ñ((q = ‘x®.2))®;
 
 fun z s = ZLex.z_lex [Lex.Text s];
 
+z ".1  ";
+ñ¬ñ(x, y)®®.1®;
+
+rec_identifier (explode ".1)) ", Unknown);
 
 °
