@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp508.doc   %Z% $Date: 2006/04/11 13:31:14 $ $Revision: 1.137 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2006/04/12 13:40:30 $ $Revision: 1.138 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.137 $%
+\def\SCCSversion{$Revision: 1.138 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/04/11 13:31:14 $%
+\TPPdate{\FormatDate{$Date: 2006/04/12 13:40:30 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -166,6 +166,7 @@ However, the adjustment stage needs to be generating new names properly in the l
 Removed code that supported use of aliases.
 \item[Issue 1.137] Under enhancement 117, checks on use of names in Z are now given a uniform treatment.
 \item[Issue 1.138] Support for general expanded names under enhancement 117.
+\item[Issue 1.139] Ada real literals are now translated into Z floating point literals.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -230,8 +231,8 @@ val Ûz_int_int_rel_typeÝ = type_of ñú ¸ ú®;
 val Ûú_tmÝ = ñú®;
 =TEX
 =SML
-val Ûz_real_typeÝ = type_ofñ0 e 0®;
-val Ûz_real_set_typeÝ = type_ofñ{0 e 0}®;
+val Ûz_real_typeÝ = type_ofñ0.0®;
+val Ûz_real_set_typeÝ = type_ofñ{0.0}®;
 val Û¯_tmÝ = ñ¯®;
 =TEX
 \section{Evaluation of Constant Expressions}
@@ -434,16 +435,6 @@ fun ÛzidÝ (env : CN_ENV) (id : Z_ID) : Z_EXP = (
 =TEX
 =SML
 val Ûz_numÝ : INTEGER -> Z_EXP = mk_z_signed_int;
-=TEX
-The following could be improved when more support for Z reals is
-available.
-=SML
-val Ûz_real_termÝ : TERM = ña e b®;
-fun Ûz_realÝ (i : INTEGER, e : INTEGER) : Z_EXP = (
-	cn_subst
-	[(mk_z_signed_int i, "a"), (mk_z_signed_int e, "b")]
-	z_real_term
-);
 =TEX
 =SML
 val Ûz_real_to_integer_termÝ : TERM = ñreal_to_integer a®;
@@ -1320,46 +1311,42 @@ fun Ûexp_int_litÝ (n : INT_REAL_LIT) : Z_EXP = (
 local
 	open Lex;
 in
-fun trans_real (r : INT_REAL_LIT) : INTEGER * INTEGER = (
-	let	fun adjust ([] : string list, exp : int) = (
-			(["0"], 0)
-		) | adjust ("0"::more, exp) = (
-			adjust(more, exp + 1)
-		) | adjust (other, exp) = (
-			(other, exp)
-		);
-		fun exponent (acc, exp) [] = (
+fun trans_real (r : INT_REAL_LIT) : Z_EXP * Z_EXP * Z_EXP = (
+	let	fun exponent _ [] = (
 			fail "trans_real" 508025 [fn _ => r]
-		) | exponent (acc, exp) chs = (
-			let	val (acc', exp') = adjust (acc, exp);
-				val i = integer_of_string (implode(rev acc'));
+		) | exponent (bef, aft) chs = (
+			let	val x = integer_of_string (bef^aft);
+				val p = integer_of_int(size aft);
 				val e = integer_of_string (implode chs);
-			in	(i, e @+ integer_of_int exp')
+			in	(x, p, e)
 			end	handle Fail _ => fail "trans_real" 508025 [fn _ => r]
 		);
-		fun  after_point (acc, exp) (ch :: chs) = (
+		fun  after_point (bef, aft) (ch :: chs) = (
 			if	is_digit ch
-			then	after_point (ch::acc, exp - 1) chs
+			then	after_point (bef, ch::aft) chs
 			else if	ch = "E" orelse ch = "e"
-			then	exponent (acc, exp) chs
+			then	exponent (bef, implode(rev aft)) chs
 			else	fail "trans_real" 508025 [fn _ => r]
-		) | after_point (acc, exp) [] = (
-			let	val (acc', exp') = adjust (acc, exp);
-				val i = integer_of_string (implode(rev acc'));
-			in	(i, integer_of_int exp')
+		) | after_point (bef, aft) [] = (
+			let	val afts = implode (rev aft);
+				val x = integer_of_string (bef^afts);
+				val p = integer_of_int(size afts);
+				val e = zero;
+			in	(x, p, e)
 			end	handle Fail _ => fail "trans_real" 508025 [fn _ => r]
 			
 		);
-		fun before_point acc ("." :: chs) = (
-			after_point (acc, 0) chs
-		) | before_point acc (ch :: chs) = (
+		fun before_point bef ("." :: chs) = (
+			after_point (implode(rev bef), []) chs
+		) | before_point bef (ch :: chs) = (
 			if	is_digit ch
-			then	before_point (ch::acc) chs
+			then	before_point (ch::bef) chs
 			else	fail "trans_real" 508025 [fn _ => r]
-		) | before_point acc [] = (
-			after_point (acc, 0) []
+		) | before_point bef [] = (
+			after_point (implode(rev bef), []) []
 		);
-	in	before_point [] ((explode r) less "_")
+		val (x, p, e) = before_point [] ((explode r) less "_");
+	in	(mk_z_signed_int x, mk_z_signed_int p, mk_z_signed_int e)
 	end
 );
 end;
@@ -1367,7 +1354,7 @@ end;
 \subsubsection{The Function $exp\_real\_lit$}
 =SML
 fun Ûexp_real_litÝ (n : INT_REAL_LIT) : Z_EXP = (
-	z_real (trans_real n)
+	mk_z_float (trans_real n)
 );
 =TEX
 \subsection{Character Literals}{\label{CharacterLiterals}
@@ -3566,7 +3553,7 @@ fun Ûdc_int_exponÝ
 ) | dc_int_expon _ _ = fail "domain_conds" 508070 [];
 =TEX
 =SML
-val Ûz_real_zeroÝ = z_real(trans_real "0.0");
+val Ûz_real_zeroÝ = mk_z_float(trans_real "0.0");
 fun Ûdc_non_zero_real_rhsÝ
 	(dc : Z_EXP -> Z_PRED list)
 	((_, [arg]) : Z_EXP * Z_EXP list) : Z_PRED list = (
