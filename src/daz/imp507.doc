@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.320 $ $RCSfile: imp507.doc,v $ $Date: 2006/04/12 13:40:30 $
+% imp507.doc %Z% $Revision: 1.321 $ $RCSfile: imp507.doc,v $ $Date: 2006/04/13 10:49:43 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.320 $%
+\def\SCCSversion{$Revision: 1.321 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/04/12 13:40:30 $%
+\TPPdate{\FormatDate{$Date: 2006/04/13 10:49:43 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -255,6 +255,7 @@ Also some work towards improved error handling that will be required for this en
 \item[Issue 1.319] Under enhancement 117, checks on use of names in Z are now given a uniform treatment.
 \item[Issue 1.320] Support for general expanded names.
 \item[Issue 1.321] Implicit declarations are now allowed for subprograms that were informal in the package specification.
+\item[Issue 1.322] Fixing issues with renamings in package specifications.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -791,15 +792,17 @@ fun Ûin_scope_vc_parsÝ
 	in_scope_vc_pars Nil pfx_info ({dict = dict, dec_labels = dec_labels}, new_vc_pars)
 );
 =TEX
-The additional optional environment dictionary does not make sense for the following update function:
+In the following, the first dictionary argument is the one that contains information about the names being aliased.
+The two dictionaries will be the same except when a renaming in a package declaration is being added to the package with-dictionary.
 =SML
 fun Ûdict_renamingsÝ
 	({canon, aliases} : PREFIX_INFO)
-	(dict : ENV_DICT, 
+	(dict1 : ENV_DICT)
+	(dict2 : ENV_DICT, 
 	renamings : (Z_ID * Z_ID OPT) list) : ENV_DICT = (
 		let	fun mk_renamed_info (new, orig) = (
 				(new,
-				case env_of_env_dict dict orig of
+				case env_of_env_dict dict1 orig of
 					Value info => info
 				|	Nil => fail "in_scope_renamings" 507129
 					[fn _ => orig])				
@@ -811,7 +814,7 @@ fun Ûdict_renamingsÝ
 				map (fn ap => (prefix_trans_id ap new, inf)) aliases
 			);
 			val names_infos = flat(map prefix base_names_infos);
-		in	add_to_env_dict dict names_infos
+		in	add_to_env_dict dict2 names_infos
 		end
 );
 =TEX
@@ -823,7 +826,7 @@ fun Ûin_scope_renamingsÝ
 		dict = dict,
 		dec_labels = _} : IN_SCOPE, 
 	renamings : (Z_ID * Z_ID OPT) list) : IN_SCOPE = (
-		let			val new_dict = dict_renamings pfx_info (dict, renamings);
+		let			val new_dict = dict_renamings pfx_info dict (dict, renamings);
 		in	in_scope_dict(in_scope, new_dict)
 		end
 );
@@ -1624,8 +1627,8 @@ fun Ûpackage_formal_funÝ
 		obj_renamings			=	obj_renamings,
 		zmod				=	zmod,
 		decl				=	decl,
-		local_dict				=	dict_renamings pfx_info (local_dict, [(new, Value old)]),
-		with_dict				=	dict_formal_fun (with_pack_prefix_info pfx_info) (with_dict, new_formal_fun)
+		local_dict				=	dict_renamings pfx_info local_dict (local_dict, [(new, Value old)]),
+		with_dict				=	dict_renamings (with_pack_prefix_info pfx_info) local_dict (with_dict, [(new, Value old)])
 	}
 );
 =TEX
@@ -1646,8 +1649,8 @@ fun Ûpackage_obj_renamingÝ
 		obj_renamings			= obj_renamings @ [new_obj_renaming],
 		zmod				=	zmod,
 		decl				=	decl,
-		local_dict				=	dict_renamings pfx_info (local_dict, [new_obj_renaming]),
-		with_dict				=	dict_renamings (with_pack_prefix_info pfx_info) (with_dict, [new_obj_renaming])	}	
+		local_dict				=	dict_renamings pfx_info local_dict (local_dict, [new_obj_renaming]),
+		with_dict				=	dict_renamings (with_pack_prefix_info pfx_info) local_dict (with_dict, [new_obj_renaming])	}	
 );
 =TEX
 =SML
@@ -6996,14 +6999,17 @@ we do the appropriate work for variable renaming. Thus {\it renames\_object\_com
 below does the work of both {\it renames\_var\_common} and {\it renames\_const}, hence
 the change of name. Likewise for {\it renames\_object\_pack\_spec}.
 =SML
+
 fun Ûrenames_object_commonÝ
+	(pfx : Z_ID list)
 	({new_name, old_name, ...}
 		: OBJECT_RENAMING) : (Z_ID * Z_ID OPT) OPT = (
 	let	val old_zname =  trans_id old_name;
-		val new_zname = trans_id new_name;
+		val simple_new_zname = trans_id new_name;
+		val new_zname = prefix_trans_id pfx new_name;
 	in let	val tm = zid current_cn_env old_zname;
 		val parainfo = AbbDefInfo(new_zname, [], tm);
-	in	bd_store_para parainfo; Value (new_zname, Nil)
+	in	bd_store_para parainfo; Value (simple_new_zname, Nil)
 	end	handle Fail msg => (
 		let
 			val can_n  =
@@ -7018,7 +7024,8 @@ fun Ûrenames_object_commonÝ
 					else	fail "" 0 [] (* caught immediately *)
 			) |	Value _ => fail "" 0 [] (* caught immediately *)
 			|	Nil =>
-		let	val renaming = (new_zname, Value can_n);
+		let	val simple_renaming = (simple_new_zname, Value can_n)
+			val renaming = (new_zname, Value can_n);
 			val block1 = block 1
 			handle Fail _ => error "add_var_env" 507006 [];
 			val block_name1 = #block_name(#declab block1);
@@ -7034,7 +7041,7 @@ fun Ûrenames_object_commonÝ
 			blocks :=
 			block_renamings pfx_info (block1, [renaming]):: tl (!blocks);
 			update_envs_renamings [renaming];
-			Value renaming
+			Value simple_renaming
 		end
 		end
 	)
@@ -7053,7 +7060,7 @@ fun Ûrenames_object_pack_specÝ (obj_ren : OBJECT_RENAMING) : unit = (
 			Value p => p
 		|	Nil => error "renames_object_pack_spec" 507001 [fn _=>bn1];
 		val pfx_info = pack_spec_prefix_info block_name1;
-	in	case renames_object_common obj_ren of
+	in	case renames_object_common block_name1 obj_ren of
 			Nil => ()
 		|	Value renaming =>
 			pack_env :=
@@ -7069,7 +7076,7 @@ fun Ûrenames_objectÝ (obj_ren : OBJECT_RENAMING)
 	: unit = (
 	if	test_flag #pack_spec_flag 1
 	then	renames_object_pack_spec obj_ren
-	else	(renames_object_common obj_ren; ())
+	else	(renames_object_common [] obj_ren; ())
 );
 =TEX
 =SML
@@ -7369,7 +7376,7 @@ fun Ûuse_packÝ (name : ID)  : unit = (
 					(package_local_dict(
 						package,
 						add_used_package
-						(dict_renamings pfx_info (local_dict, new_subs))
+						(dict_renamings pfx_info local_dict (local_dict, new_subs))
 						name))
 					(!pack_env)
 			) |	_ => ()
