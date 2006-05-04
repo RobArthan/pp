@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% %Z% $Date: 2006/01/17 17:14:06 $ $Revision: 1.48 $ $RCSfile: imp036.doc,v $
+% %Z% $Date: 2006/03/28 09:11:59 $ $Revision: 1.49 $ $RCSfile: imp036.doc,v $
 =TEX
 % TQtemplate.tex
 \documentstyle[hol1,11pt,TQ]{article}
@@ -21,10 +21,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{HOL PDS System Initialisation}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP036}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.48 $%
+\def\SCCSversion{$Revision: 1.49 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/01/17 17:14:06 $%
+\TPPdate{\FormatDate{$Date: 2006/03/28 09:11:59 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{ML Literate Script}
@@ -143,7 +143,9 @@ Made {\it load\_files} print file names containing `Q' properly.
 \item[Issue 1.45] {\em pending\_reset\_ksc\_functions} has been renamed as {\em pending\_reset\_kernel\_interface}.
 \item[Issue 1.46] Made it better at reporting exceptions; updated to reflect kernel interface reform.
 \item[Issue 1.47] The prefix for private interfaces is now $pp'$ rather than $icl'$.
-\item[Issue 1.48] Added $new\_save\_fun$.
+\item[Issue 1.48] Moved restoring of the current theory forwards.
+\item[Issue 1.49] Added $new\_save\_fun$.
+\item[Issue 1.50] Initialisation scripts are now run after all the initialisation functions.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -211,6 +213,37 @@ fun €get_save_funs› (() : unit) : (unit -> unit) list = (
 	!save_funs
 );
 =TEX
+=SML		
+fun €load_scripts› (() : unit) : unit = (
+let	fun expand s = (
+		let	fun  aux "\081" = "Q"
+			|   aux ch = ch;
+		in	implode (map aux(explode s))
+		end
+	);
+	fun aux acc [] = (if is_nil acc
+		then []
+		else [implode (rev acc)]
+	) | aux acc ("," :: rest) = (
+		if is_nil acc
+		then aux [] rest
+		else (implode(rev acc) :: aux [] rest)
+	) | aux acc (a :: rest) = aux (a::acc) rest;
+	fun aux1 [] = ()
+	| aux1 (a :: x) = (
+		((use_file1 a 
+			handle (Io _) => 
+			warn "load_scripts" 36012 [fn _ => expand a])
+			handle _ =>
+			warn "load_scripts" 36005 [fn _ => expand a]
+		);
+		aux1 x);
+	val source = ExtendedIO.get_env "hol_initialisation_scripts";
+	val scripts = aux [] (explode source);
+in
+	(aux1 scripts)
+end);
+=TEX
 =SML
 fun €print_exn› (Fail mess) = (
 	diag_string(get_error_message
@@ -239,6 +272,7 @@ fun €init› (() : unit) : unit = (
 		val _ = go fs1;
 		val fs2 = !init_funs from length fs1;
 		val _ = go fs2;
+		val _ = load_scripts();
 	in	()
 	end
 );
@@ -493,7 +527,7 @@ fun €init_theory_hierarchy› () : unit = (
 	handle _ => ()
 );
 
-val initial1 = Initialisation.new_init_fun init_theory_hierarchy;
+val _ = Initialisation.new_init_fun init_theory_hierarchy;
 =TEX
 Note that we deliberately catch any exceptions in the above.
 
@@ -520,7 +554,7 @@ fun €init_current_state› () : unit = (
 	()
 );
 
-val initial2 = Initialisation.new_init_fun init_current_state;
+val _ = Initialisation.new_init_fun init_current_state;
 =TEX
 Note that we deliberately catch any exceptions in the above.
 \subsubsection{Line Length}
@@ -538,46 +572,8 @@ in
 	else set_line_length ll);())
 end);
 
-val initial3 = Initialisation.new_init_fun init_line_length;
+val _ = Initialisation.new_init_fun init_line_length;
 =TEX
-
-\subsubsection{Initialisation Scripts}
-=SML		
-local
-	fun expand s = (
-		let	fun  aux "\081" = "Q"
-			|   aux ch = ch;
-		in	implode (map aux(explode s))
-		end
-	);
-		
-	fun aux acc [] = (if is_nil acc
-		then []
-		else [implode (rev acc)]
-	) | aux acc ("," :: rest) = (
-		if is_nil acc
-		then aux [] rest
-		else (implode(rev acc) :: aux [] rest)
-	) | aux acc (a :: rest) = aux (a::acc) rest;
-	fun aux1 [] = ()
-	| aux1 (a :: x) = (
-		((use_file1 a 
-			handle (Io _) => 
-			warn "load_scripts" 36012 [fn _ => expand a])
-			handle _ =>
-			warn "load_scripts" 36005 [fn _ => expand a]
-		);
-		aux1 x);
-in		
-fun €load_scripts› () : unit = (
-let	val source = get_shell_var "hol_initialisation_scripts";
-	val scripts = aux [] (explode source);
-in
-	(aux1 scripts)
-end)
-end;
-
-val initial4 = Initialisation.new_init_fun load_scripts;
 =TEX
 Note that we deliberately catch any exceptions in the above.
 
@@ -621,7 +617,7 @@ fun €pp'set_banner› (Value (ban:string)) : string = (
 ) | pp'set_banner Nil = !system_banner;
 =TEX
 =SML
-val initial5 = Initialisation.new_init_fun print_banner;
+val _ = Initialisation.new_init_fun print_banner;
 =TEX
 \subsection{Control of Garbage Collector Messages}
 With SML/NJ, we have to tell the garbage collector what to do at the start of
@@ -643,12 +639,12 @@ local
 		PPCompiler.gc_messages (!gc_message_flag)
 	);
 in
-	val initial6 = Initialisation.new_init_fun init_gc_messages;
+	val _ = Initialisation.new_init_fun init_gc_messages;
 end;
 =TEX
 \subsubsection{Prompt}
 =SML
-val initial7 = Initialisation.new_init_fun use_terminal;
+val _ = Initialisation.new_init_fun use_terminal;
 =TEX
 =SML
 end (* of structure HOLSystem *);
