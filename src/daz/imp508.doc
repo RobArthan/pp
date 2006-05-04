@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp508.doc   %Z% $Date: 2006/04/12 13:40:30 $ $Revision: 1.138 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2006/04/20 11:24:43 $ $Revision: 1.139 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.138 $%
+\def\SCCSversion{$Revision: 1.139 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/04/12 13:40:30 $%
+\TPPdate{\FormatDate{$Date: 2006/04/20 11:24:43 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -167,6 +167,7 @@ Removed code that supported use of aliases.
 \item[Issue 1.137] Under enhancement 117, checks on use of names in Z are now given a uniform treatment.
 \item[Issue 1.138] Support for general expanded names under enhancement 117.
 \item[Issue 1.139] Ada real literals are now translated into Z floating point literals.
+\item[(Issue 1.140] Improved error messages for numeric literals.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1174,7 +1175,7 @@ fun Ûrecog_exponent_partÝ (dec as {base,m,expon} : NUMERIC, (c::rest) : NUMBERS)
 
 		"_" =>	recog_exponent_part (dec, rest)
 		|"+" => recog_exponent_part ({base=base,m=m, expon=expon@[c]}, rest)
-		|_ =>	fail "trans_int" 508025 []
+		|_ =>	fail "trans_int" 508110 [fn _ => implode (c::rest)]
 
 ) | recog_exponent_part (other, []) = (
 	(other, [])
@@ -1189,12 +1190,15 @@ fun Ûrecog_basedÝ (nb as {base,m,expon} : NUMERIC, (c::rest) : NUMBERS)
 
 		"_" =>	recog_based (nb, rest)
 		|"#" => recog_numeric true (nb, rest)
-		|_ =>	fail "trans_int" 508025 []
+		|_ =>	fail "trans_int" 508111 [(fn _ => c)]
 
 ) | recog_based (other, []) = (
-	fail "recog_based" 0 []
+	fail "recog_based" 508112 []
 )
+(*
+=TEX
 =SML
+*)
 and Ûrecog_numericÝ (have_base : bool) (num as {base,m,expon} : NUMERIC, (c::rest) : NUMBERS)
 		: (NUMERIC * NUMBERS) = (
 	if is_digit c
@@ -1206,7 +1210,7 @@ and Ûrecog_numericÝ (have_base : bool) (num as {base,m,expon} : NUMERIC, (c::res
 		|"E" => recog_exponent_part (num, rest)
 		|_ =>	if not have_base andalso c = "#"
 			then	recog_based ({base=m, m=[], expon=expon}, rest)
-			else	fail "trans_int" 508025 []
+			else	fail "trans_int" 508111 [(fn _ => c)]
 ) | recog_numeric _ other = other;
 =TEX
 \subsubsection{Phase 2: Generating Integer Literals}
@@ -1222,26 +1226,31 @@ val Ûextended_digitsÝ : (string * INTEGER) list = (
 );
 =TEX
 =SML
-val ten = @@"10";
 fun Ûbased_to_integerÝ (base:int) (sl:string list) : INTEGER = (
-	if base = 10
-	then	(natural_of_string o implode) sl handle _ => zero
-	else	let	val valid = extended_digits to (base-1);
-			val sl' = map CaseIndependence.to_upper sl;
-			val f = lassoc3 valid;
-			val ibase = integer_of_int base;
-			fun aux (c::rest) = (
-				f c @+ ibase @* aux rest
-			) | aux _ = zero;
-		in
-			(aux o rev) sl' handle _ =>
-				fail "trans_int" 508025 []
-		end
+	let	val valid = extended_digits to (base-1);
+		val sl' = map CaseIndependence.to_upper sl;
+		fun f d = (
+			lassoc3 valid d
+			handle Fail _ =>
+			fail "trans_int" 508113
+			[(fn _ => d), (fn _ => string_of_int base)]
+		);
+		val ibase = integer_of_int base;
+		fun aux (c::rest) = (
+			f c @+ ibase @* aux rest
+		) | aux [] = zero;
+	in	(aux o rev) sl'
+	end
 );
 =TEX
 =SML
 fun Ûsigned_nat_of_numbersÝ (sl : NUMBERS) : int = (
-	let	val f = nat_of_string o implode;
+	let	fun f n = (
+			(nat_of_string o implode) n
+			handle Fail _ =>
+			fail "trans_int" 508114
+			[fn _ => implode n]
+		);
 	in
 		case sl of
 		("+"::n) => f n
@@ -1267,7 +1276,7 @@ The failure case below is caught by $trans\_int$.
 fun Ûconvert_base_expÝ ((base, m, expon) : (int*INTEGER*int)) : INTEGER = (
 	if expon >= 0
 	then	m @* basepow base expon
-	else	fail "trans_int" 508025 []
+	else	fail "trans_int" 508115 [fn _ => string_of_int expon]
 );
 =TEX
 =SML
@@ -1276,7 +1285,7 @@ fun Ûconvert_base_expÝ ((base, m, expon) : (int*INTEGER*int)) : INTEGER = (
 fun Ûnumeric_to_int_litÝ ({base,m,expon} : NUMERIC) : INTEGER = (
 let	val nbase = (nat_of_string o implode) base handle _ => 10;
 	val nm = based_to_integer nbase m;
-	val nexpon = signed_nat_of_numbers expon handle _ => 0;
+	val nexpon = case expon of [] => 0 | _ => signed_nat_of_numbers expon;
 in
 	if	nbase = 10 andalso nexpon = 0
 	then	nm
@@ -1291,7 +1300,7 @@ in (* of local ... in *)
 fun Ûtrans_intÝ (i : INT_REAL_LIT) : INTEGER = (
 	( (numeric_to_int_lit o fst o recog_numeric false)
 		({base=[], m=[], expon=[]}, explode i)
-	) handle Fail _ => fail "trans_int" 508025 [fn()=>i]
+	)
 );
 =TEX
 =SML
@@ -1313,20 +1322,20 @@ local
 in
 fun trans_real (r : INT_REAL_LIT) : Z_EXP * Z_EXP * Z_EXP = (
 	let	fun exponent _ [] = (
-			fail "trans_real" 508025 [fn _ => r]
+			fail "trans_real" 508116 []
 		) | exponent (bef, aft) chs = (
 			let	val x = integer_of_string (bef^aft);
 				val p = integer_of_int(size aft);
 				val e = integer_of_string (implode chs);
 			in	(x, p, e)
-			end	handle Fail _ => fail "trans_real" 508025 [fn _ => r]
+			end	handle Fail _ => fail "trans_real" 508110 [fn _ => implode chs]
 		);
 		fun  after_point (bef, aft) (ch :: chs) = (
 			if	is_digit ch
 			then	after_point (bef, ch::aft) chs
 			else if	ch = "E" orelse ch = "e"
 			then	exponent (bef, implode(rev aft)) chs
-			else	fail "trans_real" 508025 [fn _ => r]
+			else	fail "trans_real" 508111 [fn _ => ch]
 		) | after_point (bef, aft) [] = (
 			let	val afts = implode (rev aft);
 				val x = integer_of_string (bef^afts);
@@ -1334,18 +1343,18 @@ fun trans_real (r : INT_REAL_LIT) : Z_EXP * Z_EXP * Z_EXP = (
 				val e = zero;
 			in	(x, p, e)
 			end	handle Fail _ => fail "trans_real" 508025 [fn _ => r]
-			
+			(* shouldn't happen *)	
 		);
 		fun before_point bef ("." :: chs) = (
 			after_point (implode(rev bef), []) chs
 		) | before_point bef (ch :: chs) = (
 			if	is_digit ch
 			then	before_point (ch::bef) chs
-			else	fail "trans_real" 508025 [fn _ => r]
+			else	fail "trans_real" 508113 [(fn _ => ch), (fn _ => "10")]
 		) | before_point bef [] = (
 			after_point (implode(rev bef), []) []
 		);
-		val (x, p, e) = before_point [] ((explode r) less "_");
+		val (x, p, e) = before_point [] (explode r less "_");
 	in	(mk_z_signed_int x, mk_z_signed_int p, mk_z_signed_int e)
 	end
 );
@@ -2102,7 +2111,9 @@ and Ûexp_discrete_rangeÝ (env : CN_ENV) (dr : DISCRETE_RANGE) : Z_EXP = (
 =SML
 and Ûtrans_expÝ (env : CN_ENV) ((EId id) : EXP) : Z_EXP = exp_id env id
   | trans_exp env (EIntReal n) = (
-		(exp_int_lit n) handle Fail _ => exp_real_lit n
+	if	"." mem explode n
+	then	exp_real_lit n
+	else	exp_int_lit n
 ) | trans_exp env (e as EArrayAggPos _) = exp_array_agg env e
   | trans_exp env (e as EArrayAggPosOthers _) = exp_array_agg env e
   | trans_exp env (e as EArrayAggOthers _) = exp_array_agg env e
@@ -3553,7 +3564,7 @@ fun Ûdc_int_exponÝ
 ) | dc_int_expon _ _ = fail "domain_conds" 508070 [];
 =TEX
 =SML
-val Ûz_real_zeroÝ = mk_z_float(trans_real "0.0");
+val Ûz_real_zeroÝ = ñ0.0®;
 fun Ûdc_non_zero_real_rhsÝ
 	(dc : Z_EXP -> Z_PRED list)
 	((_, [arg]) : Z_EXP * Z_EXP list) : Z_PRED list = (
