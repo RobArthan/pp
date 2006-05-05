@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.321 $ $RCSfile: imp507.doc,v $ $Date: 2006/04/13 10:49:43 $
+% imp507.doc %Z% $Revision: 1.322 $ $RCSfile: imp507.doc,v $ $Date: 2006/05/04 12:26:54 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.321 $%
+\def\SCCSversion{$Revision: 1.322 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/04/13 10:49:43 $%
+\TPPdate{\FormatDate{$Date: 2006/05/04 12:26:54 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -256,6 +256,7 @@ Also some work towards improved error handling that will be required for this en
 \item[Issue 1.320] Support for general expanded names.
 \item[Issue 1.321] Implicit declarations are now allowed for subprograms that were informal in the package specification.
 \item[Issue 1.322] Fixing issues with renamings in package specifications.
+\item[Issue 1.323] Function and constant renamings are now handled in the environments rather than with abbreviation definitions.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -998,6 +999,7 @@ fun €in_scope_consts_types›
 fun €env_entries_of_fun›
 	({canon, aliases} : PREFIX_INFO)
 	(formal : bool)
+	(old_name : Z_ID OPT)
 	(globals : Z_ID list)
 	({name, formal_pars, par_names_defs, return_type} : INFORMAL_FUN)
 	: (Z_ID * ENV_INFO) list = (
@@ -1014,7 +1016,9 @@ fun €env_entries_of_fun›
 			handle Fail _ => error "fun_name_par_names" 507078[];
 		val zn = prefix_trans_id canon name;
 		val env_inf = {tipe = Nil,
-			canon_name = zn,
+			canon_name = case old_name of
+				Value old_zn => old_zn
+			|	Nil => zn,
 			info = 	EIEnvFunction {formal = formal,
 				 deps = globals,
 				 pars = par_infos,
@@ -1028,7 +1032,7 @@ fun €env_entries_of_fun›
 fun €dict_informal_fun›
 	(pfx_info : PREFIX_INFO)
 	(dict : ENV_DICT, inf_fun : INFORMAL_FUN) : ENV_DICT = (
-	let	val entries = env_entries_of_fun pfx_info false [] inf_fun;
+	let	val entries = env_entries_of_fun pfx_info false Nil [] inf_fun;
 	in	add_to_env_dict dict entries
 	end
 );
@@ -1036,9 +1040,10 @@ fun €dict_informal_fun›
 =SML
 fun €dict_formal_fun›
 	(pfx_info : PREFIX_INFO)
+	(old_zname : Z_ID OPT)
 	(dict : ENV_DICT, form_fun as
 		{informal_fun, globals, ...}: FORMAL_FUN) : ENV_DICT = (
-	let	val entries = env_entries_of_fun pfx_info true globals informal_fun;
+	let	val entries = env_entries_of_fun pfx_info true old_zname globals informal_fun;
 	in	add_to_env_dict dict entries
 	end
 );
@@ -1076,12 +1081,13 @@ fun €package_consts_types›
 fun €in_scope_fun›
 	(pfx_info : PREFIX_INFO)
 	(formal : bool)
+	(old_zname : Z_ID OPT)
 	(globals : Z_ID list)
 	(in_scope as {
 		dict = d,
 		dec_labels = _} : IN_SCOPE, 
 	new_function: INFORMAL_FUN) : IN_SCOPE = (
-	let	val entries = env_entries_of_fun pfx_info formal globals new_function;
+	let	val entries = env_entries_of_fun pfx_info formal old_zname globals new_function;
 		val new_d = add_to_env_dict d entries;
 
 	in	in_scope_dict(in_scope, new_d)
@@ -1593,7 +1599,7 @@ fun €package_formal_fun›
 	({vc_vars, consts_types, formal_procs, informal_procs, informal_funs,
 		formal_funs, aux_vars, obj_renamings, zmod, decl, local_dict, with_dict}
 	: PACKAGE,
-	new_formal_fun as {renames as Nil, ...} : FORMAL_FUN)
+	new_formal_fun as {renames, ...} : FORMAL_FUN)
 	: PACKAGE = (
 	{	vc_vars				=	vc_vars,
 		consts_types			=	consts_types,
@@ -1605,30 +1611,8 @@ fun €package_formal_fun›
 		obj_renamings			=	obj_renamings,
 		zmod				=	zmod,
 		decl				=	decl,
-		local_dict				=	dict_formal_fun pfx_info (local_dict, new_formal_fun),
-		with_dict				=	dict_formal_fun (with_pack_prefix_info pfx_info) (with_dict, new_formal_fun)
-	}
-) | package_formal_fun
-	pfx_info
-	({vc_vars, consts_types, formal_procs, informal_procs, informal_funs,
-		formal_funs, aux_vars, obj_renamings, zmod, decl, local_dict, with_dict}
-	: PACKAGE,
-	new_formal_fun as {
-		renames as (Value old),
-		informal_fun as {name = new, ...}, ...} : FORMAL_FUN)
-	: PACKAGE = (
-	{	vc_vars				=	vc_vars,
-		consts_types			=	consts_types,
-		formal_procs			=	formal_procs,
-		informal_procs			=	informal_procs,
-		informal_funs			=	informal_funs,
-		formal_funs			=	formal_funs @ [new_formal_fun],	
-		aux_vars			=	aux_vars,	
-		obj_renamings			=	obj_renamings,
-		zmod				=	zmod,
-		decl				=	decl,
-		local_dict				=	dict_renamings pfx_info local_dict (local_dict, [(new, Value old)]),
-		with_dict				=	dict_renamings (with_pack_prefix_info pfx_info) local_dict (with_dict, [(new, Value old)])
+		local_dict				=	dict_formal_fun pfx_info renames (local_dict, new_formal_fun),
+		with_dict				=	dict_formal_fun (with_pack_prefix_info pfx_info) renames (with_dict, new_formal_fun)
 	}
 );
 =TEX
@@ -5309,6 +5293,7 @@ This is analogous to {\it update\_envs\_proc}, but as we need to distinguish for
 fun €update_subunit_env_fun›
 	(pfx_info : PREFIX_INFO)
 	(formal : bool)
+	(old_zname : Z_ID OPT)
 	(globals : Z_ID list)
 	(inffun : INFORMAL_FUN) : unit = (
 	let	val dec_lab1 = #dec_lab (block 1);
@@ -5319,7 +5304,7 @@ fun €update_subunit_env_fun›
 					: string * SUBUNIT) = (
 			if	dec_lab1 mem dec_labels
 			then	(id1_id2,
-				subunit_in_scope (s, in_scope_fun pfx_info formal globals (in_scope, inffun)))
+				subunit_in_scope (s, in_scope_fun pfx_info formal old_zname globals (in_scope, inffun)))
 			else	id1_id2_s
 		);
 	in	subunit_env := map do1_subunit (!subunit_env)
@@ -5331,6 +5316,7 @@ label.
 fun €update_dec_env_fun›
 	(pfx_info : PREFIX_INFO)
 	(formal : bool)
+	(old_zname : Z_ID OPT)
 	(globals : Z_ID list)
 	(inffun : INFORMAL_FUN) : unit = (
 	let	val dec_lab1 = #dec_lab (block 1);
@@ -5341,7 +5327,7 @@ fun €update_dec_env_fun›
 					: string * DECLAB) = (
 			if	dec_lab1 mem dec_labels
 			then	(dec_label,
-				declab_in_scope (s,  in_scope_fun pfx_info formal globals (in_scope, inffun)))
+				declab_in_scope (s,  in_scope_fun pfx_info formal old_zname globals (in_scope, inffun)))
 			else	dec_label_s
 		);
 	in	dec_env := map do1_dec_label (!dec_env)
@@ -5354,6 +5340,7 @@ The identifiers in the variable declaration are translated first.
 fun €update_spec_env_fun›
 	(pfx_info : PREFIX_INFO)
 	(formal : bool)
+	(old_zname : Z_ID OPT)
 	(globals : Z_ID list)
 	(inffun : INFORMAL_FUN) : unit = (
 	let	val dec_lab1 = #dec_lab (block 1);
@@ -5365,7 +5352,7 @@ fun €update_spec_env_fun›
 					: string * SPECLAB) = (
 			if	dec_lab1 mem dec_labels
 			then	(spec_label,
-				speclab_in_scope (s,  in_scope_fun pfx_info formal globals (in_scope, inffun)))
+				speclab_in_scope (s,  in_scope_fun pfx_info formal old_zname globals (in_scope, inffun)))
 			else	spec_label_s
 		);
 	in	spec_env := map do1_spec_label (!spec_env)
@@ -5376,12 +5363,13 @@ fun €update_spec_env_fun›
 fun €update_envs_fun›
 	(pfx_info : PREFIX_INFO)
 	(formal : bool)
+	(old_zname : Z_ID OPT)
 	(globals : Z_ID list)
 	(inffun : INFORMAL_FUN) : unit = (
 	if	test_flag #declabel_flag 1
-	then	(update_subunit_env_fun pfx_info formal globals inffun;
-		 update_dec_env_fun pfx_info formal globals inffun;	
-		 update_spec_env_fun pfx_info formal globals inffun)
+	then	(update_subunit_env_fun pfx_info formal old_zname globals inffun;
+		 update_dec_env_fun pfx_info formal old_zname globals inffun;	
+		 update_spec_env_fun pfx_info formal old_zname globals inffun)
 	else	()
 );
 =TEX
@@ -5389,7 +5377,8 @@ fun €update_envs_fun›
 fun €update_envs_form_fun›
 	(pfx_info : PREFIX_INFO)
 	(formfun : FORMAL_FUN) : unit = (
-	update_envs_fun pfx_info true (#globals formfun) (#informal_fun formfun)
+	update_envs_fun pfx_info true
+	(#renames formfun) (#globals formfun) (#informal_fun formfun)
 );
 =TEX
 \subsection{The SID function stub\_spec\_fun}
@@ -5441,10 +5430,11 @@ end;
 fun €add_fun_env›
 	(pfx_info : PREFIX_INFO)
 	(formal : bool)
+	(old_zname : Z_ID OPT)
 	(globals : Z_ID list)
 	(inf_fun : INFORMAL_FUN) : unit = (
 	let	val	block1 as {declab ={in_scope as {dict, ...}, ...}, ...} = block 1;
-		val entries = env_entries_of_fun pfx_info formal globals inf_fun;
+		val entries = env_entries_of_fun pfx_info formal old_zname globals inf_fun;
 		val new_dict = add_to_env_dict dict entries;
 		val	in_scope1a = in_scope_dict(in_scope, new_dict);
 		val	block1a = block_in_scope(block1, in_scope1a)
@@ -5479,8 +5469,8 @@ fun €inf_fun_otherwise›
 	case current_cn_env (trans_id name) of
 		Nil =>  (
 			store_para(trans_informal_fun pfx_info inf_fun);
-			add_fun_env pfx_info false [] inf_fun;
-			update_envs_fun pfx_info false [] inf_fun
+			add_fun_env pfx_info false Nil [] inf_fun;
+			update_envs_fun pfx_info false Nil [] inf_fun
 	) |	Value( {info = EIEnvFunction {formal =false, ...}, ...} ) => (
 			()
 	) |	Value _ =>  (
@@ -5714,7 +5704,7 @@ fun €form_fun_pack_body_common› (implicit : bool)
 		val formal_funs4 = #formal_funs package4;
 		val pfx_info = body_prefix_info block_name2;
 	in	store_trans_formal_fun pfx_info current_cn_env form_fun;
-		add_fun_env pfx_info true (#globals form_fun) (#informal_fun form_fun);
+		add_fun_env pfx_info true Nil (#globals form_fun) (#informal_fun form_fun);
 		update_envs_form_fun pfx_info form_fun;
 		if	any
 			formal_funs4
@@ -5947,7 +5937,7 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 	 			[fn()=>simple_name block_name2, fn()=>bn1];
 		val pfx_info = current_prefix_info 2;
 	in	store_trans_formal_fun pfx_info current_cn_env form_fun;
-		add_fun_env pfx_info true (#globals form_fun) (#informal_fun form_fun);
+		add_fun_env pfx_info true Nil (#globals form_fun) (#informal_fun form_fun);
 		update_envs_form_fun pfx_info form_fun;
 		subunit_env := s_delete tbn1_bn2 (!subunit_env);
 		deletion_info := s_enter tbn1_bn2 subunit3 (!deletion_info);
@@ -5994,7 +5984,7 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 fun €form_fun_otherwise› (form_fun: FORMAL_FUN) : unit = (
 	let	val pfx_info = current_prefix_info 2;
 	in	store_trans_formal_fun pfx_info current_cn_env form_fun;
-		add_fun_env pfx_info true (#globals form_fun) (#informal_fun form_fun);
+		add_fun_env pfx_info true Nil (#globals form_fun) (#informal_fun form_fun);
 		update_envs_form_fun pfx_info form_fun
 	end
 );
@@ -6780,14 +6770,13 @@ fun €renames_fun_pack_spec›
 		val new_pars = map mk_param_spec formal_part;
 		val (_, new_par_names_defs) = get_name_and_par_names_defs ss;
 	in	case current_cn_env old_zname of 
-			Value {	canon_name = zn,
+			Value {	canon_name = can_n,
 				info = EIEnvFunction {
 					formal = true,
 					deps = old_deps,
 					pars = old_pars,
 					return_tmark = old_return_tmark}, ...}  => (
 			let	val (_, par_names_defs) = get_name_and_par_names_defs ss;
-				val tm = zid current_cn_env zn;
 				val old_tmarks = map #tmark old_pars;
 				val (new_par_names, new_defs) = split par_names_defs;
 				val new_pars_tmarks_defs = combine new_par_names
@@ -6801,21 +6790,20 @@ fun €renames_fun_pack_spec›
 					par_names_defs = par_names_defs,
 					return_type = old_return_tmark};
 				val _ = add_fun_env
-pfx_info true
+pfx_info true (Value can_n)
 					old_deps
 					new_if;
-				val parainfo = AbbDefInfo(new_zname, [], tm);
+				val _ = update_envs_fun pfx_info true (Value can_n) old_deps new_if;
 				val new_ff = {
 					informal_fun = new_if,
 					spec = dummy_spec,
 					globals = old_deps,
-					renames = Value zn};					
+					renames = Value can_n};					
 			in	pack_env :=
 				s_enter
 				bn1
 				(package_formal_fun pfx_info (package2, new_ff))
-				(!pack_env);
-				bd_store_para parainfo; ()
+				(!pack_env)
 			end
 		) |	_ =>  ( (* missing or informal *)
 			let	val (_, par_names_defs) = get_name_and_par_names_defs ss;
@@ -6825,18 +6813,15 @@ pfx_info true
 					par_names_defs = par_names_defs,
 					return_type = curr_real_name return};
 				val ifs = #informal_funs package2;
-				val tm = zid current_cn_env old_zname;
-				val parainfo = AbbDefInfo(new_zname, [], tm);
 			in	pack_env :=
 				s_enter
 				bn1
 				(package_informal_fun pfx_info (package2, new_if))
-				(!pack_env);
-				bd_store_para parainfo; ()
+				(!pack_env)
 			end
 		)
 	end 
-) | renames_fun_pack_spec _ = () (* Caller will never make this happen *); 
+) | renames_fun_pack_spec _ = () (* Caller will never make this happen *);
 =TEX
 =SML
 fun €renames_fun_otherwise›
@@ -6846,17 +6831,16 @@ fun €renames_fun_otherwise›
 	let	val old_name = (case opack of  Value pack => pack dot old | Nil => old);
 		val old_zname =  trans_id old_name;
 		val (new, par_names_defs) = get_name_and_par_names_defs ss;
-	in let	val (old_deps, old_pars, old_return_tmark) = force_value(
+	in let	val (can_n, old_deps, old_pars, old_return_tmark) = force_value(
 		case current_cn_env old_zname of 
-			Value {	canon_name = zn,
+			Value {	canon_name = can_n,
 				info = EIEnvFunction {
 					formal = _,
 					deps,
 					pars,
 					return_tmark}, ...}  => (
-				Value (deps, pars, return_tmark)
+				Value (can_n, deps, pars, return_tmark)
 			) | _ => Nil);
-		val tm = zid current_cn_env old_zname;
 		val old_tmarks = map #tmark old_pars;
 		val (new_par_names, new_defs) = split par_names_defs;
 		val new_pars_tmarks_defs = combine new_par_names
@@ -6867,15 +6851,13 @@ fun €renames_fun_otherwise›
 		);
 		val inffun = 
 			{name = new_zname,
-			formal_pars = map mk_ps new_pars_tmarks_defs ,
+			formal_pars = map mk_ps new_pars_tmarks_defs,
 			par_names_defs = par_names_defs,
 			return_type = old_return_tmark};
 		val pfx_info = current_prefix_info 1;
-		val _ = add_fun_env pfx_info true old_deps inffun;
-		val _ = update_envs_fun pfx_info true old_deps inffun;
-		val new_zname = trans_id new;
-		val parainfo = AbbDefInfo(new_zname, [], tm);
-	in	bd_store_para parainfo; ()
+		val _ = add_fun_env pfx_info true (Value can_n) old_deps inffun;
+		val _ = update_envs_fun pfx_info true (Value can_n) old_deps inffun;
+	in	()
 	end	handle Fail _ =>
 			fail "renames_fun_otherwise" 507064
 			[fn _ => old_name, fn _ => new]
@@ -6900,18 +6882,18 @@ fun €renames_opsym›
 		val  (par_names, defs) = split par_names_defs;
 		val (tm, tmks, res_tmark) =
 			force_value (resolve_opsym current_cn_env name2 formal_part tmark);
-		val new_pars_tmarks_defs = combine  par_names (combine tmks defs);
+		val new_pars_tmarks_defs = combine par_names (combine tmks defs);
 		val new_zname = trans_id new;
 		fun mk_ps (name, (tmark, _)) : PARAM_SPEC = (
 			{mode = MSparkIn true, var_decl = {vars = [name], tmark = tmark}}
 		);
 		val inffun = {name = new_zname,
-			formal_pars =map mk_ps new_pars_tmarks_defs ,
+			formal_pars = map mk_ps new_pars_tmarks_defs ,
 			par_names_defs = par_names_defs,
 			return_type =res_tmark};
 		val pfx_info = current_prefix_info 1;
-		val _ = add_fun_env pfx_info true [] inffun;
-		val _ = update_envs_fun pfx_info  true [] inffun;
+		val _ = add_fun_env pfx_info true Nil [] inffun;
+		val _ = update_envs_fun pfx_info true Nil [] inffun;
 		val parainfo = AbbDefInfo(new_zname, [], tm);
 	in	bd_store_para parainfo; ()
 	end	handle Fail msg =>
@@ -6999,7 +6981,6 @@ we do the appropriate work for variable renaming. Thus {\it renames\_object\_com
 below does the work of both {\it renames\_var\_common} and {\it renames\_const}, hence
 the change of name. Likewise for {\it renames\_object\_pack\_spec}.
 =SML
-
 fun €renames_object_common›
 	(pfx : Z_ID list)
 	({new_name, old_name, ...}
@@ -7007,23 +6988,18 @@ fun €renames_object_common›
 	let	val old_zname =  trans_id old_name;
 		val simple_new_zname = trans_id new_name;
 		val new_zname = prefix_trans_id pfx new_name;
-	in let	val tm = zid current_cn_env old_zname;
-		val parainfo = AbbDefInfo(new_zname, [], tm);
-	in	bd_store_para parainfo; Value (simple_new_zname, Nil)
-	end	handle Fail msg => (
-		let
-			val can_n  =
+		val can_n  =
 			case current_cn_env old_zname of 
-				Value {info = EIEnvVar _, canon_name, ...}=> canon_name
-			|	Value {info = EIEnvAuxVar _, canon_name, ...} => canon_name
-			|	_ => fail "" 0 [] (* caught immediately *);
-		in	case current_cn_env new_zname of
-				Value{canon_name = orig', info = EIEnvVar _, ...} => (
-					if	orig' = old_zname
-					then	Nil
-					else	fail "" 0 [] (* caught immediately *)
-			) |	Value _ => fail "" 0 [] (* caught immediately *)
-			|	Nil =>
+				Value {canon_name, ...} => canon_name
+			|	Nil => fail "renames_object_common" 507129 [fn () => old_zname] (* caught immediately *);
+	in	case current_cn_env new_zname of
+			Value{canon_name = orig', ...} => (
+				if	orig' = old_zname
+				then	Nil
+				else	fail "renames_object_common" 507064
+				[fn _ =>old_name, fn _ => new_name]
+
+		) |	Nil => (
 		let	val simple_renaming = (simple_new_zname, Value can_n)
 			val renaming = (new_zname, Value can_n);
 			val block1 = block 1
@@ -7043,13 +7019,8 @@ fun €renames_object_common›
 			update_envs_renamings [renaming];
 			Value simple_renaming
 		end
-		end
-	)
-	end	handle Fail _ => (
-		fail "renames_object_common" 507064
-		[fn _ =>old_name, fn _ => new_name];
-		Nil
-	)
+		)
+	end
 );
 =TEX
 =SML
@@ -7905,8 +7876,8 @@ and €do_declaration› (y as (DDeclarationKSlot (
 			do_function_spec implicit x;
 		val _ = end_scope();
 		val pfx_info = current_prefix_info 1;
-	in	add_fun_env pfx_info formal globals inffun;
-		update_envs_fun pfx_info formal globals inffun
+	in	add_fun_env pfx_info formal Nil globals inffun;
+		update_envs_fun pfx_info formal Nil globals inffun
 	end
 ) | do_declaration (y as (DPackageDeclaration x) : DECLARATION) = (
 	do_package_spec x
@@ -8053,8 +8024,8 @@ and €do_function_stub› (
 			do_function_spec false fun_spec;
 		val _ = end_scope();
 		val pfx_info = current_prefix_info 1;
-	in	add_fun_env pfx_info formal globals inffun;
-		update_envs_fun pfx_info formal globals inffun
+	in	add_fun_env pfx_info formal Nil globals inffun;
+		update_envs_fun pfx_info formal Nil globals inffun
 	end;
 	end_stub()
 )
@@ -8079,8 +8050,8 @@ and €do_external_function_stub› (
 			do_function_spec implicit fun_spec;
 		val _ = end_scope();
 		val pfx_info = current_prefix_info 1;
-	in	add_fun_env pfx_info formal globals inffun;
-		update_envs_fun pfx_info formal globals inffun
+	in	add_fun_env pfx_info formal Nil globals inffun;
+		update_envs_fun pfx_info formal Nil globals inffun
 	end
 )
 (*
@@ -8114,8 +8085,8 @@ and €do_proper_body› (y as (PBProcedure
 		vcs_body (check_fail (STNull SNImplicit) do_statement statement);
 		end_scope();
 		let	val pfx_info = current_prefix_info 1;
-		in	add_fun_env pfx_info formal globals inffun;
-			update_envs_fun pfx_info formal globals inffun
+		in	add_fun_env pfx_info formal Nil globals inffun;
+			update_envs_fun pfx_info formal Nil globals inffun
 		end
 	end
 ) | do_proper_body (y as (PBPackage 
