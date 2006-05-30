@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.322 $ $RCSfile: imp507.doc,v $ $Date: 2006/05/04 12:26:54 $
+% imp507.doc %Z% $Revision: 1.323 $ $RCSfile: imp507.doc,v $ $Date: 2006/05/05 11:02:42 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.322 $%
+\def\SCCSversion{$Revision: 1.323 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/05/04 12:26:54 $%
+\TPPdate{\FormatDate{$Date: 2006/05/05 11:02:42 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -257,6 +257,8 @@ Also some work towards improved error handling that will be required for this en
 \item[Issue 1.321] Implicit declarations are now allowed for subprograms that were informal in the package specification.
 \item[Issue 1.322] Fixing issues with renamings in package specifications.
 \item[Issue 1.323] Function and constant renamings are now handled in the environments rather than with abbreviation definitions.
+\item[Issue 1.324] Fixed problem where raising an exception can prevent the original current theory being restored (issue 155).
+Some tidying in preparation for issue 139.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -7583,8 +7585,8 @@ fun Ûupdate_spark_progÝ (comp : KSLOT_COMPILATION_UNIT list) : unit = (
 );
 =TEX
 =SML
-fun Ûnew_k_slotÝ (label : LABEL, sort : REPL_SORT, theory : string) : unit = (
-	(repl_env := s_extend label (UnReplaced (sort, theory)) (!repl_env))
+fun Ûnew_k_slotÝ (label : LABEL, sort : REPL_SORT) : unit = (
+	(repl_env := s_extend label (UnReplaced (sort, get_current_theory_name())) (!repl_env))
 			handle Fail _ => fail "new_k_slot" 507005 [fn () => label]
 );
 =TEX
@@ -7602,7 +7604,7 @@ Except where an annotation occurs as a statement or a declaration, we need to re
 fun Ûdo_annotationÝ (anns : ANNOTATION) : unit = (
 	let	fun do_ann (ANString _) = ()
 		|   do_ann (ANKSlot {content, label}) = (
-			new_k_slot(label, RSAnnotation, get_current_theory_name())
+			new_k_slot(label, RSAnnotation)
 		);
 	in	map (check_fail () do_ann) anns; ()
 	end
@@ -7698,7 +7700,7 @@ and Ûdo_statementÝ (y as (STNull _) : STATEMENT) : STATEMENT = (y
 ) | do_statement (y as (STSpecNoIvars {spec, label, is_assertion}) : STATEMENT) = (
 	if	not is_assertion
 	then	let	val expanded = {spec = expand_frame spec, label = label};
-			val _ = new_k_slot (label, RSSpecStatement, get_current_theory_name());
+			val _ = new_k_slot (label, RSSpecStatement);
 			val spec' = spec_stmt expanded;
 		in	STSpecNoIvars {spec = spec', label = label, is_assertion = false}
 		end
@@ -7764,7 +7766,7 @@ and Ûdo_statementÝ (y as (STNull _) : STATEMENT) : STATEMENT = (y
 ) | do_statement (y as (STGoto x) : STATEMENT)  = (y
 ) | do_statement (y as (STProcNoIvars x) : STATEMENT) = (y
 ) | do_statement (y as (STKSlot {label, content}) : STATEMENT) = (
-	new_k_slot(label, RSStatement, get_current_theory_name());
+	new_k_slot(label, RSStatement);
 	k_slot_stmt label;
 	y
 ) | do_statement (y as (STPragma _) : STATEMENT) = (
@@ -7777,7 +7779,7 @@ and Ûdo_statementÝ (y as (STNull _) : STATEMENT) : STATEMENT = (y
 	error "do_statement" 507019 []
 ) | do_statement (y as (SLogCon (log_con as {defs, spec, pre1, label})) : STATEMENT) = (
 	let	val expanded_spec = expand_frame spec;
-		val _ = new_k_slot(label, RSSpecStatement, get_current_theory_name());
+		val _ = new_k_slot(label, RSSpecStatement);
 		val _ = add_log_con_env defs;
 		val spec' = spec_stmt {spec = expanded_spec, label = label};
 		val _ = remove_log_con_env();
@@ -7839,7 +7841,7 @@ and Ûdo_declarationÝ (y as (DDeclarationKSlot (
 	in	(case s_lookup ident (!pack_env) of
 			Value _ => ( pack_stub ident
 		) |	Nil => ());
-		new_k_slot(label, rsty, get_current_theory_name())
+		new_k_slot(label, rsty)
 	end;
 	k_slot_dec label;
 	update_envs_k_slot label
@@ -8205,7 +8207,7 @@ The following reflects the need to register compilation k-slots .
 fun Ûdo_kslot_compilation_unitÝ
 	(y as (KCUKSlot {label, content}) : KSLOT_COMPILATION_UNIT) : unit = (
 	set_bottom_block_name (kslot_compilation_unit_name y);
-	new_k_slot (label, RSCompilation, get_current_theory_name())
+	new_k_slot (label, RSCompilation)
 ) | do_kslot_compilation_unit
 	(y as (KCUUnit x) : KSLOT_COMPILATION_UNIT) = (
 	set_bottom_block_name (kslot_compilation_unit_name y);
@@ -8347,7 +8349,7 @@ are called.
 fun Ûsco_statementÝ (y as (STNull _) : STATEMENT) : unit = ( ()
 ) | sco_statement (y as (STAssign x) : STATEMENT) = ( ()
 ) | sco_statement (y as (STSpecNoIvars {spec, label, is_assertion}) : STATEMENT) = ( 
-	new_k_slot(label, RSSpecStatement, get_current_theory_name())
+	new_k_slot(label, RSSpecStatement)
 ) | sco_statement (y as (STSemicolon (x1, x2)) : STATEMENT) = (
 	sco_statement x1;
 	sco_statement x2
@@ -8379,7 +8381,7 @@ fun Ûsco_statementÝ (y as (STNull _) : STATEMENT) : unit = ( ()
 ) | sco_statement (y as (STGoto x) : STATEMENT)  = ( ()
 ) | sco_statement (y as (STProcNoIvars x) : STATEMENT) = ( ()
 ) | sco_statement (y as (STKSlot {label, content}) : STATEMENT) = (
-	new_k_slot(label, RSStatement, get_current_theory_name())
+	new_k_slot(label, RSStatement)
 ) | sco_statement (y as (STPragma _) : STATEMENT) = ( ()
 ) | sco_statement (y as (STAnnotation _) : STATEMENT) = ( ()
 ) | sco_statement (y as (SSpecIvars x) : STATEMENT) = (
@@ -8387,7 +8389,7 @@ fun Ûsco_statementÝ (y as (STNull _) : STATEMENT) : unit = ( ()
 ) | sco_statement (y as (SForNonStatic x) : STATEMENT) = (
 	error "sco_statement" 507019 []
 ) | sco_statement (y as (SLogCon (log_con as {defs, spec, pre1, label})) : STATEMENT) = (
-	new_k_slot(label, RSSpecStatement, get_current_theory_name())
+	new_k_slot(label, RSSpecStatement)
 ) | sco_statement (y as (SProcIvars x) : STATEMENT) = (
 	error "sco_statement" 507019 []
 ) | sco_statement (SBlockStatement {declarative_part = Nil, statement = s, name}) = (
@@ -8407,7 +8409,7 @@ and Ûsco_declarationÝ (y as (DDeclarationKSlot (
 				|	DKPrivate => RSPrivatePart
 				|	DKVisible => RSVisiblePart;
 		val ident = trans_id label;
-	in	new_k_slot(label, rsty, get_current_theory_name())
+	in	new_k_slot(label, rsty)
 	end
 ) | sco_declaration (y as (DProperBody x) : DECLARATION) = (
 	sco_proper_body x
@@ -8472,7 +8474,7 @@ fun Ûsco_context_compilation_unitÝ
 =SML
 fun Ûsco_kslot_compilation_unitÝ
 	(y as (KCUKSlot {label, content}) : KSLOT_COMPILATION_UNIT) : unit = (
-	new_k_slot (label, RSCompilation, get_current_theory_name())
+	new_k_slot (label, RSCompilation)
 ) | sco_kslot_compilation_unit
 	(y as (KCUUnit x) : KSLOT_COMPILATION_UNIT) = (
 	sco_context_compilation_unit x
@@ -8565,12 +8567,16 @@ with
 *)
 (*
 =TEX
-It is now important not to save the state if an exception is raised. 
+It is now important not to save the state if an exception is raised.
+The function {\em check\_fail} and this code communicate using the ref
+variable {\em exception\_handled} so that this code can tidy up and restore
+things if {\em check\_fail} has detected and then recovered from an error.
 =SML
 *)
 
 	fun Ûcommon_z_generatorÝ (sco : bool) (w : WEB_CLAUSE) : unit = (
 		let	val save_zg_state = get_z_generator_state();
+			val curr_thy = get_current_theory_name ();
 			val pp_state = checkpoint "cn";
 			val save_ti_cxt = e_get_ti_context();
 			fun reset () = (
@@ -8578,10 +8584,8 @@ It is now important not to save the state if an exception is raised.
 				set_z_generator_state save_zg_state;
 				e_set_ti_context save_ti_cxt;
 				exception_handled := false;
-				let	val thy = get_current_theory_name ();
-				in	rollback pp_state;
-					lazy_open_theory thy handle Fail _ => ()
-				end
+				rollback pp_state;
+				(lazy_open_theory curr_thy handle Fail _ => ())
 			);
 		in	diag_vc_args := [];
 			diag_basic_decl_list := [];
