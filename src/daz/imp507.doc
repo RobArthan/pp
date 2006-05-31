@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.323 $ $RCSfile: imp507.doc,v $ $Date: 2006/05/05 11:02:42 $
+% imp507.doc %Z% $Revision: 1.324 $ $RCSfile: imp507.doc,v $ $Date: 2006/05/30 13:05:09 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.323 $%
+\def\SCCSversion{$Revision: 1.324 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/05/05 11:02:42 $%
+\TPPdate{\FormatDate{$Date: 2006/05/30 13:05:09 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -259,6 +259,7 @@ Also some work towards improved error handling that will be required for this en
 \item[Issue 1.323] Function and constant renamings are now handled in the environments rather than with abbreviation definitions.
 \item[Issue 1.324] Fixed problem where raising an exception can prevent the original current theory being restored (issue 155).
 Some tidying in preparation for issue 139.
+\item[Issue 1.325] Allowed for rationalised data type for subunits.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -348,7 +349,7 @@ fun Ûproper_body_nameÝ (pb : PROPER_BODY)
 fun Ûsubunit_nameÝ ({name, proper_body} : COMP_SUBUNIT)
 	: string * string = (
 	let	val (body_name, tag) = proper_body_name proper_body;
-	in	(name ^ "o" ^ body_name, tag)
+	in	(prefix_trans_id name body_name, tag)
 	end
 );
 fun Ûcompilation_unit_nameÝ (cu : COMPILATION_UNIT)
@@ -3430,8 +3431,8 @@ fun  Ûget_parent_nameÝ ((): unit) : string = (
 =TEX
 The full name of a subunit theory:
 =SML
-fun Ûtrans_subunit_nameÝ  (unit_name : Z_ID list, su_name : string) : Z_ID = (
-	prefix_trans_id unit_name su_name ^ stub_tag
+fun Ûtrans_subunit_nameÝ  (su_name : Z_ID) : Z_ID = (
+	su_name ^ stub_tag
 );
 =TEX
 In the following the call to the {\Product} function $duplicate\_theory$ creates a new theory which is a copy of the script theory.
@@ -3470,9 +3471,10 @@ fun Ûmake_moduleÝ (thy : Z_ID) : unit = (
 );
 =TEX
 =SML
-fun Ûnew_parent_subunit_theoryÝ (unit_name : string, x : PROPER_BODY) : unit = (
+fun Ûnew_parent_subunit_theoryÝ (unit_name : Z_ID list, x : PROPER_BODY) : unit = (
 	let	val (body_name, _) = proper_body_name x;
-		val thy = trans_subunit_name([unit_name], body_name);
+		val su_name = prefix_trans_id unit_name body_name;
+		val thy = trans_subunit_name su_name;
 	in	new_parent_aux false thy;
 		()
 	end
@@ -4458,8 +4460,9 @@ fun Ûsubunit_form_infÝ (ident : ID, is_inf : bool) : unit = (
 				handle Fail _ =>
 				fail "subunit_form_inf" 507011
 						[fn()=>expanded_name block_name, fn()=>ident];
-			val dummy = new_parent_aux false
-				 (trans_subunit_name(block_name, ident));
+			val su_name = prefix_trans_id block_name ident;
+			val _ = new_parent_aux false
+				 (trans_subunit_name su_name);
 			val in_scope' = #in_scope subunit1;
 			val block' = block_in_scope(block, in_scope');
 		in	blocks := new_scope_common (Value "")(block' :: tl (!blocks));
@@ -4521,17 +4524,11 @@ fun ÛstubÝ (() : unit) : unit = (
 	if	test_flag #stub_flag 2
 	then	let	val block1 = block 1;
 			val block2 = block 2;
-			val block3 = block 3;
 			val block_name1 = #block_name (#declab block1);
 			val block_name2 = #block_name (#declab block2);
-			val block_name3 = #block_name (#declab block3);
 			val id2 = simple_name block_name1;
-			val id1 =
-				if	test_flag #subunit_flag 3
-				then	[simple_name block_name3, simple_name block_name2]
-				else	[simple_name block_name2];
-			val id1_id2 = prefix_trans_id id1 id2;
-			val tid1_id2 = subunit_env_index id1 id2;
+			val id1 = block_name2;
+			val id1_id2 = subunit_env_index id1 id2;
 			val subunit = {
 				in_scope	=	flatten_env(!blocks),
 				specif		=	dummy_spec,
@@ -4539,8 +4536,8 @@ fun ÛstubÝ (() : unit) : unit = (
 				zmod		=	id1_id2,
 				globs		=	[]
 			};
-		in	make_module(trans_subunit_name(id1, id2));
-			subunit_env := s_enter tid1_id2 subunit (!subunit_env)
+		in	make_module(trans_subunit_name id1_id2);
+			subunit_env := s_enter id1_id2 subunit (!subunit_env)
 		end
 	else	()
 );
@@ -4555,12 +4552,8 @@ fun Ûstub_spec_proc_funÝ
 			val block3 = block 3;
 			val block_name1 = #block_name (#declab block1);
 			val block_name2 = #block_name (#declab block2);
-			val block_name3 = #block_name (#declab block3);
 			val id2 = simple_name block_name1;
-			val id1 =
-				if	test_flag #subunit_flag 3
-				then	[simple_name block_name3, simple_name block_name2]
-				else	[simple_name block_name2];
+			val id1 = block_name2;
 			val tid1_id2 = subunit_env_index id1 id2;
 			val subunit = force_value(s_lookup tid1_id2(!subunit_env))
 				handle Fail _ =>
@@ -7381,7 +7374,7 @@ fun Ûend_stubÝ (():unit) : unit = (
 =TEX
 \subsection{The SID function new\_scope\_subunit}
 =SML
-fun Ûnew_scope_subunitÝ (ident : ID) : unit = (
+fun Ûnew_scope_subunitÝ (ident : ID list) : unit = (
 	let	val flags = {
 			pack_spec_flag = false,
 			pack_body_flag = false,
@@ -7394,8 +7387,10 @@ fun Ûnew_scope_subunitÝ (ident : ID) : unit = (
 			till_flag = false,
 			body_flag = true
 		};
-		val block = block_flags(empty_block, flags);
-	in	blocks := new_scope_common(Value ident)(block :: !blocks)
+		val block = block_block_name(
+			block_flags(empty_block, flags),
+			ident);
+	in	blocks := new_scope_common (Value"") (block :: !blocks)
 	end
 );
 =TEX
@@ -7405,13 +7400,8 @@ fun Ûnew_scope_subunitÝ (ident : ID) : unit = (
 =SML
 fun Ûpack_stubÝ (ident : ID) : unit = (
 	let	val block1 = block 1;
-		val block2 = block 2;
 		val block_name1 = #block_name (#declab block1);
-		val block_name2 = #block_name (#declab block2);
-		val id1 =
-			if	test_flag #subunit_flag 2
-			then	[simple_name block_name2, simple_name block_name1]
-			else	[simple_name block_name1];
+		val id1 = block_name1;
 		val id1_ident = prefix_trans_id id1 ident;
 		val tid1_ident = subunit_env_index id1 ident;
 		val subunit = {
@@ -7421,8 +7411,8 @@ fun Ûpack_stubÝ (ident : ID) : unit = (
 			zmod		=	id1_ident,
 			globs		=	[]
 		};
-	in	make_module(trans_subunit_name(id1, ident));
-		subunit_env := s_enter tid1_ident subunit (!subunit_env)
+	in	make_module(trans_subunit_name id1_ident);
+		subunit_env := s_enter id1_ident subunit (!subunit_env)
 	end
 );
 =TEX
@@ -8256,7 +8246,7 @@ in	case (s_lookup label (!repl_env), comp) of
 					update_replacement_env
 						(name, ReplaceComp{label = name, comp=comp});
 					do_compilation_unit []
-						(CUSubUnit {name=label, proper_body=pb})
+						(CUSubUnit {name=[label], proper_body=pb})
 			) |	_ => (fail "do_web_clause" 507065 [fn _ => label])
 	) | _ => fail "do_web_clause" 507065 [fn _ => label]
 end
@@ -8498,7 +8488,7 @@ in	case (s_lookup label (!repl_env), comp) of
 					update_replacement_env
 						(name, ReplaceComp{label = name, comp=comp});
 					sco_compilation_unit
-						(CUSubUnit {name=label, proper_body=pb})
+						(CUSubUnit {name=[label], proper_body=pb})
 			) |	_ => (fail "sco_web_clause" 507065 [fn _ => label])
 	) | _ => fail "sco_web_clause" 507065 [fn _ => label]
 end
