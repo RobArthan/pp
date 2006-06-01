@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.324 $ $RCSfile: imp507.doc,v $ $Date: 2006/05/30 13:05:09 $
+% imp507.doc %Z% $Revision: 1.325 $ $RCSfile: imp507.doc,v $ $Date: 2006/05/31 09:52:27 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.324 $%
+\def\SCCSversion{$Revision: 1.325 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/05/30 13:05:09 $%
+\TPPdate{\FormatDate{$Date: 2006/05/31 09:52:27 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -260,6 +260,7 @@ Also some work towards improved error handling that will be required for this en
 \item[Issue 1.324] Fixed problem where raising an exception can prevent the original current theory being restored (issue 155).
 Some tidying in preparation for issue 139.
 \item[Issue 1.325] Allowed for rationalised data type for subunits.
+\item[Issue 1.326] ``1 theory per subprogram'' --- issue 139.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -556,7 +557,7 @@ fun €save_z_generator_state› (() : unit) : unit = (
 =TEX
 =SML
 fun €get_saved_z_generator_state› (s : string) : Z_GENERATOR_STATE = (
-	let	val s' = case s of "-" => get_current_theory_name() | _ => s;
+	let	val s' = case s of "-" => !script_name | _ => s;
 	in	case e_lookup s' (!state_db) of
 			Value st => st
 		|	Nil => fail "get_saved_z_generator_state" 507070 [fn _ => s]
@@ -3293,17 +3294,15 @@ fun store_vc_context_and_origin
 =TEX
 \subsubsection{Adding VCs}
 =SML
-fun €make_label_prefix› (wcn : string) : string = (
-	"vc" ^ wcn ^ "_"
-);
 =TEX
+Usually, the distinctive label used in forming a 
 =SML
-fun €store_vc_term› (label : LABEL) (tm : TERM) : string = (
-	let	val bbn = get_bottom_block_name ();
-		val vc_lab =	make_label_prefix
-				(if 	bbn = "" orelse bbn = label
-				then	label
-				else	bbn);
+fun €store_vc_term› (opt_lab : LABEL OPT) (tm : TERM) : string = (
+	let	fun €make_label_prefix› wcn = "vc" ^ wcn ^ "_";
+		val vc_lab = make_label_prefix
+			(case opt_lab of
+				Value lab => lab
+			|	Nil => get_bottom_block_name ());
 		fun aux i = (
 			let val vc_name = vc_lab ^ string_of_int i;
 			in	if (get_conjecture "-" vc_name; false)
@@ -3320,10 +3319,10 @@ For various reasons, the underlying {\Product} operations of adding a new parent
 In order for the Z document generator to be able to output the necessary commands in the right place, we step the current level before storing a VC.
 
 =SML
-fun €store_vcs› (	label : LABEL, vcs: TERM list, osl : SPECLAB OPT, 
+fun €store_vcs› (opt_lab : LABEL OPT, vcs: TERM list, osl : SPECLAB OPT, 
 		routes : ROUTE OPT list, vcg_ctxt : VC_GEN_CONTEXT ) 					: unit = (
 	let	val _ = pp'Kernel.pp'step_current_level();
-		val vc_names = map (store_vc_term label)  vcs;
+		val vc_names = map (store_vc_term opt_lab)  vcs;
 	in	
 		store_vc_context_and_origin(osl, vc_names, routes, 
 			map (expanded_name o #block_name o #declab) (!blocks), vcg_ctxt )
@@ -3339,13 +3338,8 @@ Currently VCs cannot be generic, and so the interface below does not cater for g
 fun €store_para› (para : PARAINFO) : unit = (
 	case para of
 		ConjectureInfo(Value n, [], pred) => (
-			let	val bbn = get_bottom_block_name();
-			in	set_bottom_block_name n;
-				store_vcs(n, [pred], Nil, [Nil], 
-					VCG_basic_declaration
-				);
-				set_bottom_block_name bbn
-			end
+			store_vcs(Value n, [pred], Nil, [Nil], 
+				VCG_basic_declaration)
 	) |	_ => update_theory_db_with_parainfo para
 );
 =TEX
@@ -3413,14 +3407,9 @@ The material in this section uses the following function, which is also required
 infix dot;
 fun (x : ID) €dot› (y : ID) = x ^ "." ^ y;
 =TEX
-The following forms two identifiers into an index string for $subunit\_env$.
-Working on the principle that $(trans\_id$ $o$ $trans\_id)$ equals $trans\_id$,
-and that sometimes the arguments will already be translated:
-we translate both sides of the pair we are looking up, and combine them with a dot.
+The following forms the index string for $subunit\_env$, which is simply the Z translation of the expanded name of the subprogram.
 =SML
-fun €subunit_env_index› (id1 : Z_ID list) (id2 : ID) : Z_ID = (
-	prefix_trans_id id1 id2
-);
+val €subunit_env_index› : ID list -> ID -> Z_ID = prefix_trans_id;
 =TEX
 The following function returns the name of the parent of the script theory.
 =SML
@@ -3428,24 +3417,24 @@ fun  €get_parent_name› ((): unit) : string = (
 	(hd o rev o get_parents) (!script_name)
 );
 =TEX
-=TEX
 The full name of a subunit theory:
 =SML
 fun €trans_subunit_name›  (su_name : Z_ID) : Z_ID = (
 	su_name ^ stub_tag
 );
 =TEX
-In the following the call to the {\Product} function $duplicate\_theory$ creates a new theory which is a copy of the script theory.
-The script theory is made the current theory.
+In the following the call to the {\Product} function $duplicate\_theory$ creates a new theory which is a copy of the current theory (without changing the current theory).
 =SML
-fun €make_module› (thy : Z_ID) : unit = (
+fun €make_module› (err_no : int) (msg_insert : string)
+	(thy : Z_ID) : unit = (
 	let	fun delete_vc n = ((delete_conjecture n; ())
 						handle Fail _ => ());
-		val _ = duplicate_theory (!script_name, thy)
+		val cur_thy = get_current_theory_name();
+		val _ = duplicate_theory (cur_thy, thy)
 			handle Fail _ => (
-				lazy_open_theory (!script_name);
-				fail "make_module" 507026
-				[fn()=>thy, fn()=>thy]
+				lazy_open_theory cur_thy;
+				fail "make_module" err_no
+				[fn()=>thy, fn()=>msg_insert]
 			);
 		val _ = set_cn_created();
 		val _ = add_script_theory thy;
@@ -3454,7 +3443,7 @@ fun €make_module› (thy : Z_ID) : unit = (
 			(map delete_vc o flat o map fst o get_conjectures) thy
 		);
 		val _ = do_in_theory thy make_adjustments ();
-		val _ = lazy_open_theory (!script_name);
+		val _ = lazy_open_theory cur_thy;
 		val thy_level = current_level();
 	in	(	
 			update_user_datum cn_subunit_ud_key
@@ -3463,7 +3452,7 @@ fun €make_module› (thy : Z_ID) : unit = (
 			()
 		)
 		handle Fail _ => (
-			lazy_open_theory (!script_name);
+			lazy_open_theory cur_thy;
 			fail "make_module" 507026
 			[fn()=>thy, fn()=>thy]
 		)
@@ -4079,7 +4068,7 @@ fun €vcs_speclabel_aux› (just_checking : bool) ({label, statement = s} : REFINED
 		};
 		val (vcs, routes, spec) = call_vcs Nil (speclab, statement)
 	in	if just_checking then () 
-		else 	store_vcs (label, vcs, 
+		else 	store_vcs (Value label, vcs, 
 				Value (speclab_update_spec(speclab,spec)), routes,
 				VCG_refinement
 			);
@@ -4448,8 +4437,6 @@ The SID function $end\_scope$ used in processing these has already been defined 
 \section{PROCEDURES}\label{PROCEDURES}
 \subsection{The SID function subunit\_form}
 This SID function and the next are best handled by a common function with a parameter to determine what to do.
-Note that the block name must be in the translated form (i.e. had $trans\_id$
-applied to it).
 =SML
 fun €subunit_form_inf› (ident : ID, is_inf : bool) : unit = (
 	if	test_flag #subunit_flag 1
@@ -4536,7 +4523,7 @@ fun €stub› (() : unit) : unit = (
 				zmod		=	id1_id2,
 				globs		=	[]
 			};
-		in	make_module(trans_subunit_name id1_id2);
+		in	make_module 507026 id1_id2 (trans_subunit_name id1_id2);
 			subunit_env := s_enter id1_id2 subunit (!subunit_env)
 		end
 	else	()
@@ -4744,7 +4731,7 @@ fun €vcs_body_proc_aux› (st : STATEMENT)
 			in_scope = in_scope1,
 			block_name = block_name1
 		};
-	in	(#name current_formal_proc1,
+	in	(expanded_name block_name1,
 		 call_vcs (Value(#globals current_formal_proc1)) (speclab, st), speclab)
 	end	
 );
@@ -4905,6 +4892,8 @@ fun €check_not_implicit› (implicit : bool) : unit = (
 	then	fail "check_not_implicit" 507137 []
 	else	()
 );
+=TEX
+
 =SML
 fun €form_proc_pack_body_common› 
 	(implicit : bool) (form_proc: FORMAL_PROC)
@@ -4994,7 +4983,7 @@ fun €form_proc_pack_body›
 	(form_proc: FORMAL_PROC) : SPEC = (
 	let	val (vcs, routes, spec) = call_vcs_spec (Value(#globals form_proc)) (speclab5, #spec form_proc);
 	in	store_vcs (
-			#name formal_proc3, vcs, 
+			Nil, vcs, 
 			Value (speclab_update_spec(speclab5,spec)), routes,
 			VCG_subprogram_spec
 		);
@@ -5088,7 +5077,7 @@ fun €form_proc_pack_body_aux›
 		};
 		val (vcs, routes, spec) = call_vcs_spec (Value(#globals form_proc)) (speclab5a, #spec form_proc);
 	in	store_vcs (
-			#name formal_proc3, vcs, 
+			Nil, vcs, 
 			Value (speclab_update_spec(speclab5a,spec)), routes,
 			VCG_subprogram_spec
 		);
@@ -5143,7 +5132,7 @@ fun €form_proc_subunit› (form_proc: FORMAL_PROC) : unit = (
 		};
 		val (resulting_vcs, routes, spec) = call_vcs_spec (Value(#globals form_proc)) (speclab4, #spec form_proc)
 	in	store_vcs (
-			bn1, resulting_vcs, 
+			Nil, resulting_vcs, 
 			Value (speclab_update_spec(speclab4,spec)), routes,
 			VCG_subunit_spec
 		)
@@ -5795,7 +5784,7 @@ fun €form_fun_pack_body›
 	in	if	globals = globals3
 		then	let	val (vcs, routes, spec) = call_vcs (Value globals) (speclab5a, st);
 			in	store_vcs (
-					bn2, vcs, 
+					Nil, vcs, 
 					Value (speclab_update_spec(speclab5,spec)), 
 					routes, VCG_subprogram_spec)
 			end
@@ -5888,7 +5877,7 @@ fun €form_fun_pack_body_aux›
 	in	case globals diff conc_zids of
 			[] => (
 			store_vcs (
-				#name (#informal_fun formal_fun3), vcs, 
+				Nil, vcs, 
 				Value (speclab_update_spec(speclab5a,spec)), 
 				routes, VCG_subprogram_spec)
 		) |	rogues => (
@@ -5966,7 +5955,7 @@ fun €form_fun_subunit› (form_fun: FORMAL_FUN) : unit = (
 		val _ = check_globals_fun bn1 globals globals3;
 		val (vcs, routes, spec) = call_vcs (Value globals) (speclab4, st);
 	in	store_vcs (
-			bn1, vcs, 
+			Nil, vcs, 
 			Value (speclab_update_spec(speclab4,spec)), routes,
 			VCG_subunit_spec
 		) 
@@ -6222,9 +6211,16 @@ fun €add_proc_env› (name : ID) : unit = (
 =TEX
 \subsection{The SID function subprogram\_implementation}
 =SML
-fun €subprogram_implementation› ((): unit) : unit = (
-	let	val block1 = block 1;
-	in	blocks := (block_body_flag (block1, true) :: tl(!blocks))
+fun €subprogram_implementation› {is_proc : bool} : string = (
+	let	val old_cur_thy = get_current_theory_name();
+		val block1 = block 1;
+		val en = expanded_name (#block_name (#declab block1));
+		val thyn = en ^ (if is_proc then proc_tag else fun_tag);
+	in	(if	thyn <> !script_name
+		then	(make_module 507139 en thyn; open_theory thyn)
+		else	());
+		blocks := (block_body_flag (block1, true) :: tl(!blocks));
+		old_cur_thy
 	end
 );
 =TEX
@@ -6235,7 +6231,7 @@ The decision about which support function to call (if any) is made in $vcs\_body
 fun €vcs_body_proc› (st : STATEMENT) : SPEC = (
 	let	val (lab, (vcs, routes, spec), speclab ) = vcs_body_proc_aux st;
 	in	store_vcs (
-			lab, vcs, 
+			Value lab, vcs, 
 			Value (speclab_update_spec(speclab,spec)), routes,
 			VCG_subprogram_body
 		);
@@ -6295,7 +6291,7 @@ fun €vcs_body_fun› (st : STATEMENT) : SPEC = (
 		};
 		val (vcs, routes, spec) = call_vcs (Value(#globals current_formal_fun1)) (speclab, st);
 	in	store_vcs(
-			(#name o #informal_fun) current_formal_fun1, vcs,
+			Value (expanded_name block_name1), vcs,
 			Value (speclab_update_spec(speclab,spec)), routes,
 			VCG_subprogram_body
 		);
@@ -6571,7 +6567,7 @@ fun €vcs_aux_initial› (st : STATEMENT) : SPEC = (
 		};
 		val (vcs, routes, res_spec) = call_vcs Nil (speclab, st)
 	in	store_vcs(
-			bn1, vcs, 
+			Nil, vcs, 
 			Value (speclab_update_spec(speclab,res_spec)), routes,
 			VCG_package_init
 		);
@@ -7402,8 +7398,7 @@ fun €pack_stub› (ident : ID) : unit = (
 	let	val block1 = block 1;
 		val block_name1 = #block_name (#declab block1);
 		val id1 = block_name1;
-		val id1_ident = prefix_trans_id id1 ident;
-		val tid1_ident = subunit_env_index id1 ident;
+		val id1_ident = subunit_env_index id1 ident;
 		val subunit = {
 			in_scope	=	flatten_env(!blocks),
 			specif		=	dummy_spec,
@@ -7411,7 +7406,7 @@ fun €pack_stub› (ident : ID) : unit = (
 			zmod		=	id1_ident,
 			globs		=	[]
 		};
-	in	make_module(trans_subunit_name id1_ident);
+	in	make_module 507026 id1_ident (trans_subunit_name id1_ident);
 		subunit_env := s_enter id1_ident subunit (!subunit_env)
 	end
 );
@@ -8063,23 +8058,27 @@ and €do_proper_body› (y as (PBProcedure
 	: unit = (
 	do_procedure_spec false procedure_spec;
 	add_proc_env name;
-	subprogram_implementation ();
-	map (check_fail () do_declaration) declarative_part;
-	vcs_body (check_fail (STNull SNImplicit) do_statement statement);
-	update_envs_proc procedure_spec;
-	end_scope()
+	let	val old_cur_thy =	subprogram_implementation {is_proc = true};
+	in	map (check_fail () do_declaration) declarative_part;
+		vcs_body (check_fail (STNull SNImplicit) do_statement statement);
+		update_envs_proc procedure_spec;
+		end_scope();
+		open_theory old_cur_thy
+	end
 ) | do_proper_body (y as (PBFunction 
 	{function_spec as {designator,...}, declarative_part, statement, ...}) : PROPER_BODY) = (
 	let	val (formal, globals, inffun) =
 			do_function_spec false function_spec;
-	in	subprogram_implementation ();
+		val old_cur_thy = subprogram_implementation {is_proc = false};
+	in
 		map (check_fail () do_declaration) declarative_part;
 		vcs_body (check_fail (STNull SNImplicit) do_statement statement);
 		end_scope();
 		let	val pfx_info = current_prefix_info 1;
 		in	add_fun_env pfx_info formal Nil globals inffun;
 			update_envs_fun pfx_info formal Nil globals inffun
-		end
+		end;
+		open_theory old_cur_thy
 	end
 ) | do_proper_body (y as (PBPackage 
 	{name, decls, statement, annotation, ...}) : PROPER_BODY) = (
