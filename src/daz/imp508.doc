@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp508.doc   %Z% $Date: 2006/05/04 15:26:01 $ $Revision: 1.140 $ $RCSfile: imp508.doc,v $
+% imp508.doc   %Z% $Date: 2006/05/05 11:02:42 $ $Revision: 1.141 $ $RCSfile: imp508.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Declaration and Expression Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP508}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.140 $%
+\def\SCCSversion{$Revision: 1.141 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/05/04 15:26:01 $%
+\TPPdate{\FormatDate{$Date: 2006/05/05 11:02:42 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -169,6 +169,7 @@ Removed code that supported use of aliases.
 \item[Issue 1.139] Ada real literals are now translated into Z floating point literals.
 \item[Issue 1.140] Improved error messages for numeric literals.
 \item[Issue 1.141] Function renaming is now dealt with through the environment.
+\item[Issue 1.142] Further improvements to error messages for numeric literals.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -1161,10 +1162,15 @@ type ÛNUMERICÝ =
 
 \subsubsection{Phase 1: Recognising Integer Literals}
 
-Integer literals may not contain a point and must have a minus sign in the exponent.
+Integer literals may not contain a point and must not have a minus sign in the exponent.
 
-Failures in the supporting functions below are all caught and handled in
-{\it trans\_int} (which can include the literal being translated in its error message).
+Failures in the supporting functions below are passed on by
+{\it trans\_int}. (Previously, failures here were used to signal interpretation as a real literal, but that gave poor error reporting. The code now follows ALRM in using the presence of a point to distinguish real literals).
+
+The code below assumes that the input provided by the lexical analyser will conform to the ALRM lexis,
+with all alphabetics converted to upper case.
+The based integer part of a based literal may contain letters in the range `G' to `Z' (and the code below will generate an appropriate error message).
+The exponent part of a literal (of any kind) may have a sign (and the code below will generate an appropriate error message if the exponent of an integer literal has a minus sign).
 
 In the exponent part when there is a sign, it is just copied into the number. The parser has already ensured that $+$ and $-$ can only appear at the start of an exponent, so a further check is not required here.
 =SML
@@ -1284,13 +1290,20 @@ fun Ûconvert_base_expÝ ((base, m, expon) : (int*INTEGER*int)) : INTEGER = (
 =TEX
 =SML
 fun Ûnumeric_to_int_litÝ ({base,m,expon} : NUMERIC) : INTEGER = (
-let	val nbase = (nat_of_string o implode) base handle _ => 10;
+let	val nbase = case implode base of 
+		"" => 10
+	|	b => (
+		nat_of_string b handle _ =>
+		fail "trans_int" 508117 [fn () => b]
+	);
 	val nm = based_to_integer nbase m;
 	val nexpon = case expon of [] => 0 | _ => signed_nat_of_numbers expon;
 in
 	if	nbase = 10 andalso nexpon = 0
 	then	nm
-	else	convert_base_exp (nbase,nm,nexpon)
+	else	if nbase >= 2 andalso nbase <= 16
+	then	convert_base_exp (nbase,nm,nexpon)
+	else	fail "trans_int" 508117 [fn () => implode base]
 end);
 =TEX
 \subsubsection{The Function $trans\_int$}
