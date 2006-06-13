@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: lineno.c,v 1.9 2005/01/27 17:08:05 rda Exp rda $ 
+ * $Id: lineno.c,v 1.10 2006/02/09 12:16:19 rda Exp rda $ 
  *
  * lineno.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -392,7 +392,13 @@ static void goto_line_no_cb(
 			ok_dialog(cbdata->shell_w, line_no_too_big1);
 		}
 	} else {
-		XmTextShowPosition(cbdata->text_w, left);
+		XtVaGetValues(cbdata->text_w, XmNrows, &nrows, NULL);
+		if(line_no > (scroll = nrows / 2)) {
+			XmTextSetTopCharacter(cbdata->text_w, left);
+			XmTextScroll(cbdata->text_w, -scroll);
+		} else {
+			XmTextSetTopCharacter(cbdata->text_w, (XmTextPosition) 0);
+		}
 		XmTextSetSelection(cbdata->text_w,
 				left, right, CurrentTime);
 	}
