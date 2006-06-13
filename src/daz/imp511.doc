@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp511.doc   %Z% $Revision: 1.30 $ $RCSfile: imp511.doc,v $ $Date: 2004/11/10 16:47:56 $
+% imp511.doc   %Z% $Revision: 1.31 $ $RCSfile: imp511.doc,v $ $Date: 2005/12/16 13:46:01 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Output Function}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP511}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.30 $%
+\def\SCCSversion{$Revision: 1.31 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2004/11/10 16:47:56 $%
+\TPPdate{\FormatDate{$Date: 2005/12/16 13:46:01 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -92,6 +92,8 @@ July 14th 1997, being a problem with formatting Z definitions.
 \item[Issue 1.29] DAZ-specific updates to banner for open source release
 \item[Issue 1.30] Now applies {\em translate\_for\_output} to output file names.
 \item[Issue 1.31] Allowed for kernel interface reform.
+\item[Issue 1.32] Enhancement 157: Z output function now outputs all theories associated with a script theory.
+Also general tidy-up.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -109,12 +111,8 @@ The detailed design for this material is in \cite{ISS/HAT/DAZ/DTD511}.  The modu
 \subsection{Preamble}
 =SML
 structure €CNZOutput› : CNZOutput = struct
-local
 =SML
-        open PrettyPrinter;
-        open ZUserInterfaceSupport;
-=SML
-in
+	open PrettyPrinter ZUserInterfaceSupport CNZGenerator;
 =TEX
 
 \subsection{Dictionary}
@@ -134,8 +132,7 @@ datatype Z_DOC_PARAGRAPH = PTAxiom of THM
                            | PTDefn of THM
                            | PTVC of string * TERM
                            | PTFixity of CLASS * TEMPLATE
-                           | PTSpec of string
-                           | PTSubunit of string * int
+                           | PTSubprog of string * int
                            | PTParent of string;
 =TEX
 
@@ -149,24 +146,24 @@ Function to add a new element to our sorted list.
 
 =SML
 local
-    fun add_sorted [] ab = [ab]
-    |   add_sorted (rest as ((xy as (x, _))::xs)) (ab as (a, _) : int*'a) =
-        (   if a<x
-            then (ab :: rest) 
-            else xy :: add_sorted xs ab
+    fun add_sorted acc [] ab = rev(ab::acc)
+    |   add_sorted acc (rest as ((xy as (x, _))::xs)) (ab as (a, _) : int*'a) =
+        (   if	a < x
+            then	rev acc @ (ab :: rest) 
+            else	add_sorted (xy :: acc) xs ab
 	);
 in
     fun €add_sorted_to_list› (xs : (int*'a) list)
-        (x : int*'a) = (add_sorted xs x)
+        (x : int*'a) = (add_sorted [] xs x)
 end;
 =TEX
 
 Function to remove everything in the sorted list before a given number.
 
 =SML
-fun €delete_sorted› ([]) (n : int) = []
-|   delete_sorted ((a,b)::xs) (n : int) =
-    (if a<=n then delete_sorted xs n else (a,b) :: delete_sorted xs n);
+fun €delete_sorted› (ixs : (int * 'a) list) (n : int) : (int * 'a) list = (
+	ixs drop (fn (i, _) => i <= n)
+);
 =TEX
 
 Functions to add a single element of each type to our dictionary.
@@ -189,10 +186,8 @@ fun €add_sort_vc› (dict) ((nms, (num, tm)) : (string list * (int * TERM))) =
     end;
 fun €add_sort_fix› (dict) ((clss, tmpl) : (CLASS * TEMPLATE)) =
     add_sorted_to_list dict (z_output_fixity_num, (PTFixity (clss, tmpl)));
-fun €add_sort_create_spec› (dict) ((num, thy) : int * string) =
-    add_sorted_to_list dict (num, (PTSpec thy));
-fun €add_sort_create_subunit› (dict) ((num, (thy,level)) : int * (string * int)) =
-    add_sorted_to_list dict (num, (PTSubunit (thy,level)));
+fun €add_sort_create_subprog› (dict) ((num, (thy,level)) : int * (string * int)) =
+    add_sorted_to_list dict (num, (PTSubprog (thy,level)));
 fun €add_sort_new_parent› (dict) ((num, thy) : int * string) =
     add_sorted_to_list dict (num, (PTParent thy));
 =TEX
@@ -210,11 +205,12 @@ Functions to add lists of elements to our dictionary.
 =SML
 fun €aux_fold› (f : 'a list -> 'b -> 'a list)
 	(old : 'a list) (toadd : 'b list) : 'a list = (
-let fun aux d [] = d
-    | aux d (a :: x) = aux (f d a) x;
-in
-	aux old toadd
-end);
+	let	fun aux d [] = d
+		| aux d (a :: x) = aux (f d a) x;
+	in
+		aux old toadd
+	end
+);
 =TEX
 
 =SML
@@ -226,41 +222,30 @@ val €add_sort_vcs›  = aux_fold add_sort_vc;
 
 val €add_sort_fixs› = aux_fold add_sort_fix;
 
-
-val €add_sort_create_specs› = aux_fold (fn dict => fn spec => 
-    let val thy = (fst o dest_ud_string) spec;
-        val num = (fst o dest_ud_int o hd o snd o dest_ud_string) spec;
+val €add_sort_create_subprogs› = aux_fold (fn dict => fn subprog =>
+    let val thy = (fst o dest_ud_string) subprog;
+        val num = (fst o dest_ud_int o hd o snd o dest_ud_string) subprog;
+        val thy_level = (fst o dest_ud_int o hd o snd o dest_ud_int o hd o snd o dest_ud_string) subprog;
     in
-        add_sort_create_spec dict (num, thy)
-    end);
-
-val €add_sort_create_subunits› = aux_fold (fn dict => fn subunit =>
-    let val thy = (fst o dest_ud_string) subunit;
-        val num = (fst o dest_ud_int o hd o snd o dest_ud_string) subunit;
-        val thy_level = (fst o dest_ud_int o hd o snd o dest_ud_int o hd o snd o dest_ud_string) subunit;
-    in
-        add_sort_create_subunit dict (num, (thy,thy_level))
-    end);
+        add_sort_create_subprog dict (num, (thy,thy_level))
+    end handle Fail _ => error "fmt_z_document" 511011 [get_current_theory_name]);
 
 val €add_sort_new_parents› = aux_fold (fn dict => fn parent => 
     let val thy = (fst o dest_ud_string) parent;
         val num = (fst o dest_ud_int o hd o snd o dest_ud_string) parent;
     in
         add_sort_new_parent dict (num, thy)
-    end);
+    end handle Fail _ => error "fmt_z_document" 511011 [get_current_theory_name]);
 =TEX 
 
 These functions get some of the information we require from the theory user data.
 
 =SML
-fun €get_create_specs› (thy : string) : USER_DATUM list =
-    (rev o snd o dest_ud_string o get_user_datum thy) "CN'createspec"
-        handle Fail _ => [];
-fun €get_create_subunits› (thy : string) : USER_DATUM list =
-    (rev o snd o dest_ud_string o get_user_datum thy) "CN'createsubunit"
+fun €get_create_subprogs› (thy : string) : USER_DATUM list =
+    (rev o snd o dest_ud_string o get_user_datum thy) cn_subprog_ud_key
         handle Fail _ => [];
 fun €get_new_parents› (thy : string) : USER_DATUM list =
-    (rev o snd o dest_ud_string o get_user_datum thy) "CN'newparent"
+    (rev o snd o dest_ud_string o get_user_datum thy) cn_new_parent_ud_key
         handle Fail _ => [];
 =TEX
 
@@ -287,10 +272,8 @@ fun €add_fixs› (dict) (thyn : string) =
     in
         add_sort_fixs dict fixs
     end;
-fun €add_create_specs› (dict) (thyn : string) =
-    add_sort_create_specs dict (get_create_specs thyn);
-fun €add_create_subunits› (dict) (thyn : string) =
-    add_sort_create_subunits dict (get_create_subunits thyn);
+fun €add_create_subprogs› (dict) (thyn : string) =
+    add_sort_create_subprogs dict (get_create_subprogs thyn);
 fun €add_new_parents› (dict) (thyn : string) =
     add_sort_new_parents dict (get_new_parents thyn);
 
@@ -574,25 +557,29 @@ Reference variables holding text about the number of VCs in a theory.
 =SML
 val vc_text : string list ref = ref [];
 =TEX
-
-Formatting functions for the creation of a package specification theory.
+The following function forms the output dictionary for a theory from a given level on.
 =SML
-fun €fmt_create_spec› (thy : string) =
-    let val old_thy = get_current_theory_name();
-        val father = (hd o rev o get_parents) thy;
+fun €form_z_output_dict› (thyn : string) (level : int)
+	: (int * Z_DOC_PARAGRAPH) list = (
+    let val z_output_dict = [] : (int*(Z_DOC_PARAGRAPH)) list;
+        val z_output_dict = add_axioms z_output_dict thyn;
+        val z_output_dict = add_defns z_output_dict thyn;
+        val z_output_dict = add_vcs z_output_dict thyn;
+        val z_output_dict = add_fixs z_output_dict thyn
+        val z_output_dict = add_create_subprogs z_output_dict thyn;
+        val z_output_dict = add_new_parents z_output_dict thyn;
+        val z_output_dict = delete_sorted z_output_dict level;
     in
-        ["open_theory \""^father^"\";"]@[""]@
-        ["new_theory \""^thy^"\";"]@[""]@
-        (fmt_z_document thy ~1 false)@
-        ["open_theory \""^old_thy^"\";"]
-        handle Fail _ =>
-        fail "fmt_create_spec" 511003 [fn()=>thy]
+	z_output_dict
     end
+);
 =TEX
 
-Formatting functions for the creation of a subunit specification theory.
+
+Formatting functions for the creation of a subprogram or stub theory.
 =SML
-and €fmt_create_subunit› (thy : string, level : int) =
+fun €fmt_create_subprog› (done : string list)
+	(thy : string, level : int) : string list =
     let val old_thy = get_current_theory_name();
         val father = (hd o rev o get_parents) thy;
     in
@@ -600,73 +587,71 @@ and €fmt_create_subunit› (thy : string, level : int) =
         ["duplicate_theory (\""^old_thy^"\", \""^thy^"\");"]@
 	 ["open_theory \""^thy^"\";"] @
 	 ["delete_all_conjectures();"]@
-        (fmt_z_document thy level false)@
+        (fmt_z_document thy level done)@
         ["open_theory \""^old_thy^"\";"]
         handle Fail _ =>
-        fail "fmt_create_subunit" 511004 [fn()=>thy]
+        fail "fmt_create_subprog" 511004 [fn()=>thy]
    end
+(*
 =TEX
 
 Formatting functions for Z Paragraphs.
 =SML
-and €fmt_paragraph› (PTAxiom thm) = (fmt_axioms thm)
-|   fmt_paragraph (PTDefn thm) = (fmt_defns thm)
-|   fmt_paragraph (PTVC nmtm) = (fmt_vcs nmtm)
-|   fmt_paragraph (PTFixity ct) = (fmt_fixs ct)
-|   fmt_paragraph (PTSpec thy) = (fmt_create_spec thy)
-|   fmt_paragraph (PTSubunit su) = (fmt_create_subunit su)
-|   fmt_paragraph (PTParent thy) = (fmt_new_parent thy)
-and €fmt_paragraphs› ((n,l)::ls : (int*(Z_DOC_PARAGRAPH)) list) = (
-let	val paral = fmt_paragraph l
+*)
+and €fmt_paragraph› (_ : string list)
+	(PTAxiom thm : Z_DOC_PARAGRAPH) : string list = (fmt_axioms thm)
+|   fmt_paragraph _ (PTDefn thm) = (fmt_defns thm)
+|   fmt_paragraph _ (PTVC nmtm) = (fmt_vcs nmtm)
+|   fmt_paragraph _ (PTFixity ct) = (fmt_fixs ct)
+|   fmt_paragraph done (PTSubprog su) = (fmt_create_subprog done su)
+|   fmt_paragraph _ (PTParent thy) = (fmt_new_parent thy)
+(*
+=TEX
+=SML
+*)
+and €fmt_paragraphs› (done : string list) ((n,l)::ls : (int*(Z_DOC_PARAGRAPH)) list)
+	: string list = (
+let	val paral = fmt_paragraph done l
 			handle (Fail f) =>
 			["(* " ^ get_message_text f ^ " *)"];
 in
-	paral @ [""] @ (fmt_paragraphs ls)
+	paral @ [""] @ (fmt_paragraphs done ls)
 end
-) |   fmt_paragraphs ([]) = []
+) |   fmt_paragraphs _ [] = []
+(*
 =TEX
 
 Formatting function for the whole Z Document.  Takes as arguments the name of a theory, an integer and a flag.
 The integer is a cutoff, only objects with indices greater than this will be printed.
-This means to print the entire theory this needs to be < 0, it -1.
-The cutoff is used so that subunit theories can be created with $duplicate\_theory$.
-The flag is for whether to printout information relating to theories generated by this theory or not.
+This means to print the entire theory this needs to be < 0.
+The cutoff is used so that subprogram and stub theories can be created with $duplicate\_theory$.
 
 =SML
-and €form_z_output_dict› (thyn : string) (level : int) (flag : bool) = (
-    let val z_output_dict = [] : (int*(Z_DOC_PARAGRAPH)) list;
-        val z_output_dict = add_axioms z_output_dict thyn;
-        val z_output_dict = add_defns z_output_dict thyn;
-        val z_output_dict = add_vcs z_output_dict thyn;
-        val z_output_dict = add_fixs z_output_dict thyn
-        val z_output_dict = if flag=true then (add_create_specs z_output_dict thyn) else z_output_dict;
-        val z_output_dict = if flag=true then (add_create_subunits z_output_dict thyn) else z_output_dict;
-        val z_output_dict = add_new_parents z_output_dict thyn;
-        val z_output_dict = delete_sorted z_output_dict level;
-    in
-	z_output_dict
-    end)
+*)
+and €fmt_z_document› (thyn : string) (level : int)
+	(done : string list) : string list = (
+	if	thyn mem done
+	then	error "fmt_z_document" 511010 [fn () => thyn]
+	else	();
+	let val old_thy = get_current_theory_name();
+		val z_output_dict = form_z_output_dict thyn level;
+		val dummy1 = open_theory thyn;
+		val st = fmt_paragraphs (thyn::done) z_output_dict;
+		val dummy2 = open_theory old_thy;
+		val noofvcs = (string_of_int o length o get_conjectures) thyn;
+		val vcs = ["(* Number of VCs in theory \""^thyn^"\" : "^noofvcs^" *)",""];
+	in
+		vc_text := !vc_text @ vcs;
+		st
+   	end     handle (f as Fail _) => reraise f "fmt_z_document"
+);
 =TEX
 =SML
-and €fmt_z_document› (thyn : string) (level : int) (flag : bool) = 
-    let val old_thy = get_current_theory_name();
-        val z_output_dict = form_z_output_dict thyn level flag;
-        val dummy1 = open_theory thyn;
-        val st = fmt_paragraphs z_output_dict;
-        val dummy2 = open_theory old_thy;
-        val noofvcs = (string_of_int o length o get_conjectures) thyn;
-        val vcs = ["(* Number of VCs in theory \""^thyn^"\" : "^noofvcs^" *)",""];
-    in
-        vc_text := !vc_text @ vcs;
-        st
-    end     handle (f as Fail _) =>
-            reraise f "fmt_z_document";
-=TEX
-=SML
-fun €fmt_paragraphs1›  (out : string -> unit) 
-	(ls : (int*(Z_DOC_PARAGRAPH)) list) = (
+fun €fmt_paragraphs1›  (done : string list)
+	(out : string -> unit) 
+	(ls : (int*(Z_DOC_PARAGRAPH)) list) : unit = (
 let fun aux ((n, l) : int*(Z_DOC_PARAGRAPH)) = (
-	let	val paral = fmt_paragraph l
+	let	val paral = fmt_paragraph done l
 				handle (Fail f) =>
 				["(* " ^ get_message_text f ^ " *)"];
 	in
@@ -674,17 +659,17 @@ let fun aux ((n, l) : int*(Z_DOC_PARAGRAPH)) = (
 		out ""
 	end);
 in
-	map aux ls
+	app aux ls
 end);
 =TEX
-Now a function to format a document while knowing an output function:
+Now a function to format a document given an output function:
 =SML
 fun €fmt_z_document1› (out : string -> unit) (thyn : string) 
-	(level : int) (flag : bool) : unit = 
+	(level : int) : unit = 
     let val old_thy = get_current_theory_name();
-        val z_output_dict = form_z_output_dict thyn level flag;
+        val z_output_dict = form_z_output_dict thyn level;
         val dummy1 = open_theory thyn;
-        val st = fmt_paragraphs1 out z_output_dict;
+        val st = fmt_paragraphs1 [thyn] out z_output_dict;
         val dummy2 = open_theory old_thy;
         val noofvcs = (string_of_int o length o get_conjectures) thyn;
         val vcs = ["(* Number of VCs in theory \""^thyn^"\" : "^noofvcs^" *)",""];
@@ -699,7 +684,7 @@ fun €fmt_z_document1› (out : string -> unit) (thyn : string)
 Functions to print the Z Document to the the screen or to a file.
 
 =SML
-fun fmt_doc (out : string -> unit) ( thy : string ) : unit = (
+fun fmt_doc (out : string -> unit) (thy : string) : unit = (
 	let	val thyn = if thy = "-" then get_current_theory_name() else thy;
 		val father = (hd o rev o get_parents) thyn;
 		val side1 = vc_text := [];
@@ -710,7 +695,7 @@ fun fmt_doc (out : string -> unit) ( thy : string ) : unit = (
 			::	[""]
 		);
 	in	map out part1;
-		fmt_z_document1 out thyn ~1 true;
+		fmt_z_document1 out thyn ~1;
 		map out (!vc_text);
 		vc_text := []
 	end
@@ -732,7 +717,6 @@ fun €output_z_document› ({out_file : string, script : string}) =
 
 \subsection{End of structure CNZOutput}
 =SML
-end (* of local open ... in ... end *);
 end (* of structure CNZOutput *);
 =TEX
 
