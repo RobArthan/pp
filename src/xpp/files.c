@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: files.c,v 2.32 2004/11/23 16:20:51 rda Exp rda $
+ * $Id: files.c,v 2.33 2006/01/15 14:11:02 rda Exp rda $
  *
  * files.c -  file operations for the X/Motif ProofPower Interface
  *
@@ -736,11 +736,13 @@ file_status check_file_status(char *name)
  * save_file: store contents of a text widget into a named file
  * which will presumably already exist and may be overwritten
  * without confirmation.
+ * The w argument is used as the parent for error messages dialogues
  * Implements `save' as opposed to `save as' in a file menu
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 
 Boolean save_file(
 	Widget	text,
+	Widget	w,
 	char	*name)
 {
 	char *buf;
@@ -748,7 +750,7 @@ Boolean save_file(
 	static struct stat status;
 	char *msg;
 	if(global_options.read_only) {
-		if(!file_yes_no_dialog(text, save_read_only_message, name, "Confirm Save")) {
+		if(!file_yes_no_dialog(w, save_read_only_message, name, "Confirm Save")) {
 			return False;
 		}
 		set_read_only(False);
@@ -760,16 +762,16 @@ Boolean save_file(
 		case FS_OK: msg = NULL; break;
 	}
 	if(msg != NULL) {
-		if(!file_yes_no_dialog(text, msg, name, "Confirm Save")) {
+		if(!file_yes_no_dialog(w, msg, name, "Confirm Save")) {
 			return False;
 		}
 	}
 	if(stat(name, &status) == 0 && access(name, W_OK) != 0) {
-		file_error_dialog(text, cant_write_message, name);
+		file_error_dialog(w, cant_write_message, name);
 		return False;
 	}
 	buf = XmTextGetString(text);
-	success = store_file_contents(text, name, buf);
+	success = store_file_contents(w, name, buf);
 	if(success) {
 		if(stat(name, &status) == 0) { /* strange if this fails */
 			current_file_status = &status;
@@ -954,7 +956,7 @@ Boolean open_file(
 		}
 		return True;
 	}
-	if((buf = get_file_contents(text, name, cmdLine,
+	if((buf = get_file_contents(w, name, cmdLine,
 			False, foAction, &new_status, &binary, &file_type))
 				!= NULL) {
 		read_only_message = read_only_access_message(name, &new_status);

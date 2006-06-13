@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.94 2006/01/14 15:39:01 rda Exp rda $
+ * $Id: mainw.c,v 2.95 2006/01/15 14:11:02 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -1063,7 +1063,7 @@ static void file_menu_op(int op)
 					if(fname) {XtFree(fname);}
 					break; /* user cancelled! */
 		} else {
-			if(save_file(script, fname)) {
+			if(save_file(script, root, fname)) {
 				flash_file_name(fname);
 				set_icon_name_and_title();
 				reinit_changed(True, False);

@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.29 2005/09/02 11:57:26 rda Exp rda $
+ * $Id: options.c,v 2.30 2005/09/16 16:19:33 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -563,7 +563,7 @@ static void apply_cb(
 		if(strcmp(new_cmd, global_options.command_line)) {
 			XtFree(global_options.command_line);
 			global_options.command_line = new_cmd;
-			if(yes_no_dialog(root, restart_message, confirm_restart)) {
+			if(yes_no_dialog(shell, restart_message, confirm_restart)) {
 				restart_application();
 			}
 		} else {

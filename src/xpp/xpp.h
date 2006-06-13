@@ -146,6 +146,7 @@ typedef enum {
 		char	*name);
 	extern Boolean save_file(
 		Widget	text,
+		Widget	dialog,
 		char	*name);
 	extern Boolean save_file_as(
 		Widget	text,

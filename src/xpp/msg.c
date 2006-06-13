@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2006/01/15 14:11:02 $ $Revision: 2.44 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2006/01/16 17:53:41 $ $Revision: 2.45 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -211,6 +211,7 @@ Boolean yes_no_dialog(Widget w, char *question, char *title)
 	XtVaSetValues(dialog, XmNmessageString, text, NULL);
 	XmStringFree(text);
 	XtManageChild(dialog);
+	XtVaSetValues(XtParent(dialog), XmNtransientFor, w, NULL);
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 	beep();
@@ -265,6 +266,7 @@ Boolean quit_new_dialog(Widget w, char *question)
 	XtVaSetValues(dialog, XmNmessageString, text, NULL);
 	XmStringFree(text);
 	XtManageChild(dialog);
+	XtVaSetValues(XtParent(dialog), XmNtransientFor, w, NULL);
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 	beep();
@@ -324,6 +326,7 @@ int yes_no_cancel_dialog(Widget w, char *question)
 	XtVaSetValues(dialog, XmNmessageString, text, NULL);
 	XmStringFree(text);
 	XtManageChild(dialog);
+	XtVaSetValues(XtParent(dialog), XmNtransientFor, w, NULL);
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 	beep();
@@ -421,6 +424,7 @@ void ok_dialog(Widget w, char *msg)
 	XtVaSetValues(dialog, XmNmessageString, text, NULL);
 	XmStringFree(text);
 	XtManageChild(dialog);
+	XtVaSetValues(XtParent(dialog), XmNtransientFor, w, NULL);
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 	beep();
@@ -479,6 +483,7 @@ void memory_warning_dialog(Widget w, Boolean show)
 		return;
 	}
 	XtManageChild(dialog);
+	XtVaSetValues(XtParent(dialog), XmNtransientFor, w, NULL);
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 	beep();
@@ -534,6 +539,7 @@ void nomemory_dialog(Widget w, Boolean show)
 		return;
 	}
 	XtManageChild(dialog);
+	XtVaSetValues(XtParent(dialog), XmNtransientFor, w, NULL);
 	XtPopup(XtParent(dialog), XtGrabNone);
 	XmProcessTraversal(dialog, XmTRAVERSE_HOME);
 	beep();
@@ -631,6 +637,7 @@ char *file_dialog(Widget w, Widget *dialog, char *opn, Boolean reset)
 
 	XmTextFieldShowPosition(dialog_text, last_pos);
 
+	XtVaSetValues(XtParent(*dialog), XmNtransientFor, w, NULL);
 	XtPopup(XtParent(*dialog), XtGrabNone);
 
 	XmProcessTraversal(dialog_text, XmTRAVERSE_CURRENT);
