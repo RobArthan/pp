@@ -17,10 +17,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of Product Types}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP059}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.39 $%
+\def\SCCSversion{$Revision: 1.40 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/12/16 09:13:32 $%
+\TPPdate{\FormatDate{$Date: 2005/12/16 09:59:36 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -114,6 +114,7 @@ Update for SML'97 port.
 \item[Issue 1.36] Copyright and banner updates for open source release.
 \item[Issue 1.37] PPHol-specific updates for open source release
 \item[Issues 1.38, 1.39] Allowed for kernel interface and symbol table reform.
+\item[Issue 1.40] {\em force\_get\_cache\_theory} now creates a new cache theory rather than using the current theory if existing cache theories are all unusable.
 \end{description}
 \subsection{Changes Forecast}
 Anyone doing any extra work on this code should seriously consider
@@ -579,25 +580,25 @@ end;
 Now the derived cache theory functions:
 =SML
 local
-	fun aux1 [] = []
-	| aux1 (a :: x) = ((
+	fun find_usable_cache_theories [] = []
+	| find_usable_cache_theories (a :: x) = ((
 	let	val {inscope = inscope, ...} = get_theory_info a;
 	in
 		if inscope
-		then a :: aux1 x
-		else aux1 x
+		then a :: find_usable_cache_theories x
+		else find_usable_cache_theories x
 	end)
-	handle (Fail _) => aux1 x);
+	handle (Fail _) => find_usable_cache_theories x);
 in	
 fun Ûget_valid_cache_theoriesÝ () = (
-	aux1(get_cache_theories ())
+	find_usable_cache_theories(get_cache_theories ())
 );
 end;
 =TEX
 =SML
 local
-	fun aux [] = Nil
-	| aux (a :: x) = ((
+	fun find_usable_cache_theory [] = Nil
+	| find_usable_cache_theory (a :: x) = (
 	let	val {status = status, inscope = inscope, ...} = get_theory_info a;
 	in
 		if status = TSNormal andalso inscope
@@ -605,23 +606,44 @@ local
 			in
 				if (pt = a) orelse not(a mem (get_ancestors pt))
 				then Value a
-				else aux x
+				else find_usable_cache_theory x
 			end)
-		else aux x
-	end)
-	handle (Fail _) => aux x);
+		else find_usable_cache_theory x
+	end	handle (Fail _) => find_usable_cache_theory x
+	);
 
-	fun aux1 [] = (
+	fun make_new_cache_theory () = (
 	let	val cur_thy = get_current_theory_name();
-		val {status = status,  ...} = get_theory_info cur_thy;
+		val all_thys = get_theory_names();
+		fun make_name i = (
+			let	val n = "cache'" ^ string_of_int i;
+			in	if	not(n mem all_thys)
+				then	n
+				else	make_name (i+1)
+			end
+		);
+		val new_thy = make_name 0;
+	in let	val par_thy = hd(get_cache_theories())
+		handle Fail _ =>
+		pp'Kernel.pp'get_pervasive_theory_name();
 	in
-		if status = TSNormal
-		then (set_cache_theories
-			(get_current_theory_name() :: get_cache_theories ());
-			get_current_theory_name())
-		else fail "force_get_cache_theory" 59008 [fn _ => cur_thy]
-	end)	
-	| aux1 (a :: x) = ((
+		open_theory par_thy;
+		new_theory new_thy;
+		open_theory cur_thy;
+		new_parent new_thy;
+		set_cache_theories (new_thy :: get_cache_theories ());
+		comment "force_get_cache_theory" 59020 [fn _ => new_thy];
+		new_thy
+	end	handle Fail _ => (
+		open_theory cur_thy;
+		delete_theory new_thy handle Fail _ => ();
+		fail "force_get_cache_theory" 59008 [fn _ => cur_thy]
+		)
+	end
+	);
+	fun get_new_cache_theory [] = (
+		make_new_cache_theory ()
+	) | get_new_cache_theory (a :: x) = (
 	let	val {status = status, inscope = inscope, ...} = get_theory_info a;
 	in
 		if status = TSNormal
@@ -629,22 +651,22 @@ local
 			in
 				if (pt = a) orelse not(a mem (get_ancestors pt))
 				then (new_parent a; a)
-				else aux1 x
+				else get_new_cache_theory x
 			end)
-		else aux1 x
-	end)
-	handle (Fail _) => aux1 x);
+		else get_new_cache_theory x
+	end	handle (Fail _) => get_new_cache_theory x
+	);
 in	
 fun Ûget_cache_theoryÝ () = (
-	case aux(get_cache_theories ()) of
+	case find_usable_cache_theory(get_cache_theories ()) of
 	Value a => a
 	| _ => fail "get_cache_theory" 59002 [get_current_theory_name]
 );
 
 fun Ûforce_get_cache_theoryÝ () = (
-	case aux(get_cache_theories ()) of
+	case find_usable_cache_theory(get_cache_theories ()) of
 	Value a => a
-	| _ => aux1(get_cache_theories ())
+	| _ => get_new_cache_theory(get_cache_theories ())
 );
 end;
 =TEX
