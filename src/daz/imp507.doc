@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.327 $ $RCSfile: imp507.doc,v $ $Date: 2006/06/13 16:01:43 $
+% imp507.doc %Z% $Revision: 1.328 $ $RCSfile: imp507.doc,v $ $Date: 2006/06/14 09:04:22 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.327 $%
+\def\SCCSversion{$Revision: 1.328 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/06/13 16:01:43 $%
+\TPPdate{\FormatDate{$Date: 2006/06/14 09:04:22 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -263,6 +263,7 @@ Some tidying in preparation for issue 139.
 \item[Issue 1.326] ``1 theory per subprogram'' --- issue 139.
 \item[Issue 1.327] Removed redundant definitions relating to the late (unlamented) package spec theories.
 \item[Issue 1.328] Added {\em get\_script\_theories}.
+\item[Issue 1.329] Fixing problems with nested packages.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -6364,8 +6365,10 @@ fun Ûnew_scope_pack_specÝ (ident : ID)  (decl : DECLARATION PACKAGE_DECLARATION)
 			till_flag = false,
 			body_flag = false
 		};
-		val block = block_flags(empty_block, flags);
-	in	blocks := new_scope_common(Value ident)(block :: !blocks);
+		val block = block_block_name(
+				block_flags(empty_block, flags),
+				[ident]);
+	in	blocks := new_scope_common(Value "")(block :: !blocks);
 		pack_env := s_extend ident (empty_package decl) (!pack_env) 
 	end	handle Fail _ => fail "new_scope_pack_spec" 507007 [fn () => ident]
 );
@@ -6381,13 +6384,32 @@ the IUCT project in 1997 and then again even more radically in 2006.
 fun Ûnew_scope_withÝ (ident : ID) : unit = (
 	case s_lookup ident (!pack_env) of
 		Nil => ()
-	|	Value (package as {with_dict, zmod, ...}) => (
+	|	Value {with_dict, zmod, ...} => (
 		let	val block = block_flags(empty_block, false_flags);
 			val block = block_dict (block, with_dict);
 		in	new_parent_aux true zmod;
 			blocks := new_scope_common Nil (block :: !blocks)
 		end
 	)
+);
+=TEX
+\subsection{The SID function update\_envs\_pack\_spec}
+
+In {\it update\_envs\_pack\_spec}, if we are processing a nested package we enter everything from the packages with-dictionary into the top block of the running environment. 
+=TEX
+=SML
+fun Ûupdate_envs_pack_specÝ (ident : ID) : unit = (
+if	test_flag #body_flag 1
+then	case s_lookup ident (!pack_env) of
+		Nil => fail "update_envs_pack_spec" 507060 [fn _ => ident]
+	|Value {with_dict, ...} => (
+		let	val block = block 1
+			handle Fail _ => error "aux_var" 507006 [];
+			val block = block_dict (block, with_dict);
+		in	blocks := block :: tl(!blocks)
+		end
+	)
+else	()
 );
 =TEX
 \subsection{The SID function new\_scope\_pack\_body}
@@ -8003,7 +8025,8 @@ and Ûdo_package_specÝ (decl as {name, visible_decs, private_decs, annotation, ..
 	(case private_decs of
 		Value pds =>  (map (check_fail () do_declaration) pds; ())
 	|	Nil =>  ());
-	end_scope()
+	end_scope();
+	update_envs_pack_spec name
 )
 (*
 =TEX
