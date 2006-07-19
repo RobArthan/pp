@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.328 $ $RCSfile: imp507.doc,v $ $Date: 2006/06/14 09:04:22 $
+% imp507.doc %Z% $Revision: 1.329 $ $RCSfile: imp507.doc,v $ $Date: 2006/07/07 08:36:42 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.328 $%
+\def\SCCSversion{$Revision: 1.329 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/06/14 09:04:22 $%
+\TPPdate{\FormatDate{$Date: 2006/07/07 08:36:42 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -264,6 +264,7 @@ Some tidying in preparation for issue 139.
 \item[Issue 1.327] Removed redundant definitions relating to the late (unlamented) package spec theories.
 \item[Issue 1.328] Added {\em get\_script\_theories}.
 \item[Issue 1.329] Fixing problems with nested packages.
+\item[Issue 1.330] Improved error reporting in {\em trans\_formal\_fun}.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -5550,26 +5551,40 @@ fun Ûz_var_declÝ (cnenv : CN_ENV) (zname : Z_ID) : Z_DECL = (
 =SML
 fun Ûtrans_formal_funÝ
 	(pfx_info : PREFIX_INFO)
-	(cnenv : CN_ENV)
+	(env : CN_ENV)
 	(form_fun as {
 		spec as {pre, post, ...},
-		informal_fun as {formal_pars, ...},
+		informal_fun as {formal_pars, name = simple_name, ...},
 		globals,
 		renames = Nil} : FORMAL_FUN)
 			: PARAINFO * Z_PRED * Z_PRED * Z_ID = (
 	let	val pff = prefix_formal_fun pfx_info form_fun;
 		val zn = #name(#informal_fun pff);
-		val dec = fun_decl cnenv pff;
+		val env' =
+			if	zn = simple_name
+			then env
+			else	fn n =>
+				if	n = simple_name
+			then	Value{
+					tipe = Nil,
+					info = EIEnvFunction {
+						formal = false,
+						deps = [],
+						pars = [],
+						return_tmark = ""},
+					canon_name = zn}
+			else	env n;
+		val dec = fun_decl env' pff;
 		val pardecs = map z_par_decl formal_pars
 			handle exn => pass_on exn "z_par_decl" "trans_formal_fun";
-		val globdecs = map (z_var_decl cnenv) globals
+		val globdecs = map (z_var_decl env') globals
 			handle exn => pass_on exn "z_var_decl" "trans_formal_fun";
 		val ntys = (map dest_var o fst o dest_z_dec) dec;
 		val new_ti_cxt = frees dec term_union flat
 				(map frees (pardecs @ globdecs));
 		val side = set_current_ti_context new_ti_cxt;
-		val z_pre = z_pred_of_z_tm cnenv pre;
-		val z_post = z_pred_of_z_tm cnenv post;
+		val z_pre = z_pred_of_z_tm env' pre;
+		val z_post = z_pred_of_z_tm env' post;
 		val imp = z_imp(z_pre, z_post);
 		val pred = z_forall_opt(globdecs, z_forall_opt(pardecs, imp));
 	in	(AxDesInfo([], mk_z_decl[dec], Value pred, ntys), z_pre, z_post, zn)
