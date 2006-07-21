@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.330 $ $RCSfile: imp507.doc,v $ $Date: 2006/07/19 16:14:39 $
+% imp507.doc %Z% $Revision: 1.331 $ $RCSfile: imp507.doc,v $ $Date: 2006/07/20 12:17:15 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.330 $%
+\def\SCCSversion{$Revision: 1.331 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/07/19 16:14:39 $%
+\TPPdate{\FormatDate{$Date: 2006/07/20 12:17:15 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -266,6 +266,7 @@ Some tidying in preparation for issue 139.
 \item[Issue 1.329] Fixing problems with nested packages.
 \item[Issue 1.330] Improved error reporting in {\em trans\_formal\_fun}.
 \item[Issue 1.331] Fixed inappropriate processing of use type clauses in {\em do_\context\_compilation\_unit}.
+\item[Issue 1.332] Issue 162: stub theory mechanism now generalised to a context theory mechanism applying to all nested subprograms.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -298,7 +299,7 @@ val €pack_spec_tag› : string = "'spec";
 val €pack_body_tag› : string = "'body";
 val €fun_tag› : string = "'func";
 val €proc_tag› : string = "'proc";
-val €stub_tag› : string = "'stub";
+val €context_tag› : string = "'context";
 =TEX
 The following functions are used to identify names for web clauses, in the naming of VCs and to form script names.
 =SML
@@ -2444,6 +2445,7 @@ We collect together here those parts of the code concerned with this which do no
 The following are the user data key reserved for the Compliance Tool.
 =SML
 val €cn_theories_ud_key› = "CN'theories";
+val €cn_context_ud_key› = "CN'createcontext";
 val €cn_subprog_ud_key› = "CN'createsubprog";
 val €cn_new_parent_ud_key› = "CN'newparent";
 val €cn_script_library_theories_ud_key› = "CN'script_library_theories";
@@ -3412,12 +3414,6 @@ fun  €get_parent_name› ((): unit) : string = (
 	(hd o rev o get_parents) (!script_name)
 );
 =TEX
-The full name of a subunit theory:
-=SML
-fun €trans_subunit_name›  (su_name : Z_ID) : Z_ID = (
-	su_name ^ stub_tag
-);
-=TEX
 In the following the call to the {\Product} function $duplicate\_theory$ creates a new theory which is a copy of the current theory (without changing the current theory).
 =SML
 fun €make_module› (err_no : int) (msg_insert : string)
@@ -3425,13 +3421,13 @@ fun €make_module› (err_no : int) (msg_insert : string)
 	let	fun delete_vc n = ((delete_conjecture n; ())
 						handle Fail _ => ());
 		val cur_thy = get_current_theory_name();
+		val _ = pp'Kernel.pp'step_current_level();
 		val _ = duplicate_theory (cur_thy, thy)
 			handle Fail _ => (
 				lazy_open_theory cur_thy;
 				fail "make_module" err_no
 				[fn()=>thy, fn()=>msg_insert]
 			);
-		val _ = set_cn_created();
 		val _ = add_script_theory thy;
 		fun make_adjustments () = (
 			set_duplicate_keys (thy, !script_name);
@@ -3441,9 +3437,8 @@ fun €make_module› (err_no : int) (msg_insert : string)
 		val _ = lazy_open_theory cur_thy;
 		val thy_level = current_level();
 	in	(	
-			update_user_datum cn_subprog_ud_key
-				(UD_String(thy, [UD_Int (current_level(),
-				[UD_Int (thy_level, [])])]));
+			update_user_datum cn_context_ud_key
+				(UD_String(thy, [UD_Int (thy_level, [])]));
 			()
 		)
 		handle Fail _ => (
@@ -3455,10 +3450,35 @@ fun €make_module› (err_no : int) (msg_insert : string)
 );
 =TEX
 =SML
+fun €make_subprog_module› (err_no : int) (msg_insert : string)
+	(thy : Z_ID) : unit = (
+	let	val cur_thy = get_current_theory_name();
+		val _ = pp'Kernel.pp'step_current_level();
+		val _ = new_theory thy
+			handle Fail _ => (
+				lazy_open_theory cur_thy;
+				fail "make_subprog_module" err_no
+				[fn()=>thy, fn()=>msg_insert]
+			);
+		val _ = set_cn_created ();
+		val _ = open_theory cur_thy;
+		val _ = add_script_theory thy;
+		val thy_level = current_level();
+	in	update_user_datum cn_subprog_ud_key
+				(UD_String(thy, [UD_Int (thy_level, [])]))
+		handle Fail _ => (
+			lazy_open_theory cur_thy;
+			fail "make_subprog_module" 507026
+			[fn()=>thy, fn()=>thy]
+		)
+	end
+);
+=TEX
+=SML
 fun €new_parent_subunit_theory› (unit_name : Z_ID list, x : PROPER_BODY) : unit = (
 	let	val (body_name, _) = proper_body_name x;
 		val su_name = prefix_trans_id unit_name body_name;
-		val thy = trans_subunit_name su_name;
+		val thy = su_name ^ context_tag;
 	in	new_parent_aux false thy;
 		()
 	end
@@ -3467,8 +3487,10 @@ fun €new_parent_subunit_theory› (unit_name : Z_ID list, x : PROPER_BODY) : unit 
 =SML
 fun get_script_theories (script : string) : string list = (
 	let	fun get_branches (thy : string) : string list = (
-			(map fst o mapfilter dest_ud_string o rev o snd o dest_ud_string o get_user_datum thy) cn_subprog_ud_key
-			handle Fail _ => []
+			((map fst o mapfilter dest_ud_string o rev o snd o dest_ud_string o get_user_datum thy) cn_context_ud_key
+			handle Fail _ => []) @
+			((map fst o mapfilter dest_ud_string o rev o snd o dest_ud_string o get_user_datum thy) cn_subprog_ud_key
+			handle Fail _ => [])
 		);
 		fun go route thy = (
 			if	thy mem route
@@ -4466,8 +4488,7 @@ fun €subunit_form_inf› (ident : ID, is_inf : bool) : unit = (
 				fail "subunit_form_inf" 507011
 						[fn()=>expanded_name block_name, fn()=>ident];
 			val su_name = prefix_trans_id block_name ident;
-			val _ = new_parent_aux false
-				 (trans_subunit_name su_name);
+			val _ = new_parent_aux false (su_name ^ context_tag);
 			val in_scope' = #in_scope subunit1;
 			val block' = block_in_scope(block, in_scope');
 		in	blocks := new_scope_common (Value "")(block' :: tl (!blocks));
@@ -4541,7 +4562,7 @@ fun €stub› (() : unit) : unit = (
 				zmod		=	id1_id2,
 				globs		=	[]
 			};
-		in	make_module 507026 id1_id2 (trans_subunit_name id1_id2);
+		in	make_module 507026 id1_id2 (id1_id2 ^ context_tag);
 			subunit_env := s_enter id1_id2 subunit (!subunit_env)
 		end
 	else	()
@@ -6247,9 +6268,14 @@ fun €subprogram_implementation› {is_proc : bool} : string = (
 	let	val old_cur_thy = get_current_theory_name();
 		val block1 = block 1;
 		val en = expanded_name (#block_name (#declab block1));
-		val thyn = en ^ (if is_proc then proc_tag else fun_tag);
-	in	(if	thyn <> !script_name
-		then	(make_module 507139 en thyn; open_theory thyn)
+		val sp_thyn = en ^ (if is_proc then proc_tag else fun_tag);
+	in	(if	sp_thyn <> !script_name
+		then	let	val cxt_thyn = en ^ context_tag;
+			in	make_module 507139 en cxt_thyn;
+				open_theory cxt_thyn;
+				make_subprog_module 507139 en sp_thyn;
+				open_theory sp_thyn 
+			end
 		else	());
 		blocks := (block_body_flag (block1, true) :: tl(!blocks));
 		old_cur_thy
@@ -7459,7 +7485,7 @@ fun €pack_stub› (ident : ID) : unit = (
 			zmod		=	id1_ident,
 			globs		=	[]
 		};
-	in	make_module 507026 id1_ident (trans_subunit_name id1_ident);
+	in	make_module 507026 id1_ident (id1_ident ^ context_tag);
 		subunit_env := s_enter id1_ident subunit (!subunit_env)
 	end
 );

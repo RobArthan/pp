@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp511.doc   %Z% $Revision: 1.31 $ $RCSfile: imp511.doc,v $ $Date: 2005/12/16 13:46:01 $
+% imp511.doc   %Z% $Revision: 1.32 $ $RCSfile: imp511.doc,v $ $Date: 2006/06/13 16:01:43 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Output Function}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP511}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.31 $%
+\def\SCCSversion{$Revision: 1.32 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/12/16 13:46:01 $%
+\TPPdate{\FormatDate{$Date: 2006/06/13 16:01:43 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -94,6 +94,7 @@ July 14th 1997, being a problem with formatting Z definitions.
 \item[Issue 1.31] Allowed for kernel interface reform.
 \item[Issue 1.32] Enhancement 157: Z output function now outputs all theories associated with a script theory.
 Also general tidy-up.
+\item[Issue 1.33] Issue 162: stub theory mechanism now generalised to a context theory mechanism applying to all nested subprograms.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -128,12 +129,14 @@ fun €dest_ud_int› (UD_Int (n, uds)) = (n, uds)
 
 Datatype used while storing information in the Dictionary.
 =SML
-datatype Z_DOC_PARAGRAPH = PTAxiom of THM
-                           | PTDefn of THM
-                           | PTVC of string * TERM
-                           | PTFixity of CLASS * TEMPLATE
-                           | PTSubprog of string * int
-                           | PTParent of string;
+datatype €Z_DOC_PARAGRAPH› =
+		€PTAxiom of THM
+|		€PTDefn› of THM
+|		€PTVC› of string * TERM
+|		€PTFixity› of CLASS * TEMPLATE
+|		€PTContext› of string * int
+|		€PTSubprog› of string * int
+|		€PTParent› of string;
 =TEX
 
 Number governing the position of the fixity paragraphs in the output document.  Set to zero ensures they all appear at the beginning.
@@ -186,6 +189,8 @@ fun €add_sort_vc› (dict) ((nms, (num, tm)) : (string list * (int * TERM))) =
     end;
 fun €add_sort_fix› (dict) ((clss, tmpl) : (CLASS * TEMPLATE)) =
     add_sorted_to_list dict (z_output_fixity_num, (PTFixity (clss, tmpl)));
+fun €add_sort_create_context› (dict) ((num, (thy,level)) : int * (string * int)) =
+    add_sorted_to_list dict (num, (PTContext (thy,level)));
 fun €add_sort_create_subprog› (dict) ((num, (thy,level)) : int * (string * int)) =
     add_sorted_to_list dict (num, (PTSubprog (thy,level)));
 fun €add_sort_new_parent› (dict) ((num, thy) : int * string) =
@@ -222,10 +227,18 @@ val €add_sort_vcs›  = aux_fold add_sort_vc;
 
 val €add_sort_fixs› = aux_fold add_sort_fix;
 
+val €add_sort_create_contexts› = aux_fold (fn dict => fn subprog =>
+    let val thy = (fst o dest_ud_string) subprog;
+        val num = (fst o dest_ud_int o hd o snd o dest_ud_string) subprog;
+        val thy_level = (fst o dest_ud_int o hd o snd o dest_ud_string) subprog;
+    in
+        add_sort_create_context dict (num, (thy,thy_level))
+    end handle Fail _ => error "fmt_z_document" 511011 [get_current_theory_name]);
+
 val €add_sort_create_subprogs› = aux_fold (fn dict => fn subprog =>
     let val thy = (fst o dest_ud_string) subprog;
         val num = (fst o dest_ud_int o hd o snd o dest_ud_string) subprog;
-        val thy_level = (fst o dest_ud_int o hd o snd o dest_ud_int o hd o snd o dest_ud_string) subprog;
+        val thy_level = (fst o dest_ud_int o hd o snd o dest_ud_string) subprog;
     in
         add_sort_create_subprog dict (num, (thy,thy_level))
     end handle Fail _ => error "fmt_z_document" 511011 [get_current_theory_name]);
@@ -241,6 +254,9 @@ val €add_sort_new_parents› = aux_fold (fn dict => fn parent =>
 These functions get some of the information we require from the theory user data.
 
 =SML
+fun €get_create_contexts› (thy : string) : USER_DATUM list =
+    (rev o snd o dest_ud_string o get_user_datum thy) cn_context_ud_key
+        handle Fail _ => [];
 fun €get_create_subprogs› (thy : string) : USER_DATUM list =
     (rev o snd o dest_ud_string o get_user_datum thy) cn_subprog_ud_key
         handle Fail _ => [];
@@ -272,6 +288,8 @@ fun €add_fixs› (dict) (thyn : string) =
     in
         add_sort_fixs dict fixs
     end;
+fun €add_create_contexts› (dict) (thyn : string) =
+    add_sort_create_contexts dict (get_create_contexts thyn);
 fun €add_create_subprogs› (dict) (thyn : string) =
     add_sort_create_subprogs dict (get_create_subprogs thyn);
 fun €add_new_parents› (dict) (thyn : string) =
@@ -561,24 +579,24 @@ The following function forms the output dictionary for a theory from a given lev
 =SML
 fun €form_z_output_dict› (thyn : string) (level : int)
 	: (int * Z_DOC_PARAGRAPH) list = (
-    let val z_output_dict = [] : (int*(Z_DOC_PARAGRAPH)) list;
-        val z_output_dict = add_axioms z_output_dict thyn;
-        val z_output_dict = add_defns z_output_dict thyn;
-        val z_output_dict = add_vcs z_output_dict thyn;
-        val z_output_dict = add_fixs z_output_dict thyn
-        val z_output_dict = add_create_subprogs z_output_dict thyn;
-        val z_output_dict = add_new_parents z_output_dict thyn;
-        val z_output_dict = delete_sorted z_output_dict level;
-    in
-	z_output_dict
-    end
+   	 let	val z_output_dict = [] : (int*(Z_DOC_PARAGRAPH)) list;
+		val z_output_dict = add_axioms z_output_dict thyn;
+		val z_output_dict = add_defns z_output_dict thyn;
+		val z_output_dict = add_vcs z_output_dict thyn;
+		val z_output_dict = add_fixs z_output_dict thyn
+		val z_output_dict = add_create_contexts z_output_dict thyn;
+		val z_output_dict = add_create_subprogs z_output_dict thyn;
+		val z_output_dict = add_new_parents z_output_dict thyn;
+		val z_output_dict = delete_sorted z_output_dict level;
+	in	z_output_dict
+    	end
 );
 =TEX
 
 
-Formatting functions for the creation of a subprogram or stub theory.
+Formatting functions for the creation of a context theory.
 =SML
-fun €fmt_create_subprog› (done : string list)
+fun €fmt_create_context› (done : string list)
 	(thy : string, level : int) : string list =
     let val old_thy = get_current_theory_name();
         val father = (hd o rev o get_parents) thy;
@@ -590,7 +608,26 @@ fun €fmt_create_subprog› (done : string list)
         (fmt_z_document thy level done)@
         ["open_theory \""^old_thy^"\";"]
         handle Fail _ =>
-        fail "fmt_create_subprog" 511004 [fn()=>thy]
+        fail "fmt_create_context" 511004 [fn()=>thy]
+   end
+(*
+=TEX
+
+
+Formatting functions for the creation of a subprogram theory.
+=SML
+*)
+and €fmt_create_subprog› (done : string list)
+	(thy : string, level : int) : string list =
+    let val old_thy = get_current_theory_name();
+        val father = (hd o rev o get_parents) thy;
+    in
+        ["open_theory \""^father^"\";"]@
+        ["new_theory \""^thy^"\";"]@
+        (fmt_z_document thy ~1 done)@
+        ["open_theory \""^old_thy^"\";"]
+        handle Fail _ =>
+        fail "fmt_create_subprog" 511005 [fn()=>thy]
    end
 (*
 =TEX
@@ -603,6 +640,7 @@ and €fmt_paragraph› (_ : string list)
 |   fmt_paragraph _ (PTDefn thm) = (fmt_defns thm)
 |   fmt_paragraph _ (PTVC nmtm) = (fmt_vcs nmtm)
 |   fmt_paragraph _ (PTFixity ct) = (fmt_fixs ct)
+|   fmt_paragraph done (PTContext su) = (fmt_create_context done su)
 |   fmt_paragraph done (PTSubprog su) = (fmt_create_subprog done su)
 |   fmt_paragraph _ (PTParent thy) = (fmt_new_parent thy)
 (*
