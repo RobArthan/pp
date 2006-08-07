@@ -1,5 +1,5 @@
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: mainw.c,v 2.95 2006/01/15 14:11:02 rda Exp rda $
+ * $Id: mainw.c,v 2.96 2006/06/13 11:23:03 rda Exp rda $
  *
  * mainw.c -  main window operations for the X/Motif ProofPower
  * Interface
@@ -1082,7 +1082,7 @@ static void file_menu_op(int op)
 			want_to_continue,
 			confirm_save_as)) {
 			for(first_go = True; ; first_go = False) {
-				fname = file_dialog(frame, &dialog, "Save", first_go);
+				fname = file_dialog(frame, &dialog, "Save", "Save File As", first_go);
 				if(!fname) {
 					break; /* user cancelled! */
 				} else if(save_file_as(script, dialog, fname)) {
@@ -1109,7 +1109,7 @@ static void file_menu_op(int op)
 		if((buf = get_selection(script, no_selection_message))
 			!= NULL) {
 			for(first_go = True; ; first_go = False) {
-				fname = file_dialog(frame, &dialog, "Save Selection", first_go);
+				fname = file_dialog(frame, &dialog, "Save Selection", "Save Selection As", first_go);
 				if(!fname) {
 					break; /* user cancelled! */
 				} else {
@@ -1133,7 +1133,7 @@ static void file_menu_op(int op)
 			confirm_open)) {
 			pause_undo(undo_ptr);
 			for(first_go = True; ; first_go = False) {
-				fname = file_dialog(frame, &dialog, "Open", first_go);
+				fname = file_dialog(frame, &dialog, "Open", "Open File", first_go);
 				if(!fname) {
 						break; /* user cancelled! */
 				} else {
@@ -1157,7 +1157,7 @@ static void file_menu_op(int op)
 		break;
 	case FILE_MENU_INCLUDE:
 		for(first_go = True; ; first_go = False) {
-			fname = file_dialog(frame, &dialog, "Include", first_go);
+			fname = file_dialog(frame, &dialog, "Include", "Include File", first_go);
 			if(!fname) {
 				break; /* user cancelled! */
 			} else {

@@ -219,7 +219,8 @@ typedef enum {
 	extern char *file_dialog(
 		Widget	parent_w,
 		Widget	*dialog,
-		char	*opn,
+		char	*button_label,
+		char	*title,
 		Boolean	reset);
 	extern void startup_dialog(
 		Widget	w,

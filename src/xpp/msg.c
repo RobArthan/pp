@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2006/06/13 11:23:03 $ $Revision: 2.46 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2006/07/03 15:06:52 $ $Revision: 2.47 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -562,8 +562,9 @@ static void ok_cb(
  * The dialogue is the infamous Motif FileSelectionDialog.
  * The file selection widget create/used is returned in `dialog'.
  * It is caller's responsibility to pop the dialog down.
- * `opn' is the label to use on the ``OK'' button (i.e. it's
- * ``Save'' or ``Open'' or whatever.
+ * `button_label' is the label to use on the ``OK'' button (e.g.,
+ * ``Save'' or ``Open''. `title' is the dialogue title
+ * (e.g., "Save File As").
  * reset is true if the filename text widget is to be reset
  * before bringing the dialogue up.
  * The return value is the user's chosen file name if any or NULL
@@ -575,10 +576,10 @@ static void	file_cancel_cb(CALLBACK_ARGS),
 		file_ok_cb(CALLBACK_ARGS),
 		file_help_cb(CALLBACK_ARGS);
 
-char *file_dialog(Widget w, Widget *dialog, char *opn, Boolean reset)
+char *file_dialog(Widget w, Widget *dialog, char *button_label, char *title, Boolean reset)
 {
 	Widget dialog_text;
-	XmString s, title;
+	XmString s;
 	Atom WM_DELETE_WINDOW;
 	static int reply;	/* 0 = not replied/YES/NO*/
 	char *file_name;
@@ -601,22 +602,21 @@ char *file_dialog(Widget w, Widget *dialog, char *opn, Boolean reset)
 		XmAddWMProtocolCallback(XtParent(*dialog),
 			WM_DELETE_WINDOW, file_cancel_cb,
 			&reply);
-		title = XmStringCreateSimple("Select A File");
 		XtVaSetValues(*dialog,
 			XmNdialogStyle,		XmDIALOG_FULL_APPLICATION_MODAL,
-			XmNdialogTitle, 	title,
 			NULL);
-		XmStringFree(title);
 	}
 
-	dialog_text = XmFileSelectionBoxGetChild(*dialog, XmDIALOG_TEXT);
+	s = XmStringCreateSimple(title);
+	XtVaSetValues(*dialog,
+		XmNdialogTitle, 	s,
+		NULL);
+	XmStringFree(s);
 
-	s = XmStringCreateSimple(opn);
-
+	s = XmStringCreateSimple(button_label);
 	XtVaSetValues(*dialog,
 		XmNokLabelString,	s,
 		NULL);
-
 	XmStringFree(s);
 
 	XtManageChild(*dialog);
@@ -630,6 +630,8 @@ char *file_dialog(Widget w, Widget *dialog, char *opn, Boolean reset)
 
 		XmStringFree(dir_mask);
 	}
+
+	dialog_text = XmFileSelectionBoxGetChild(*dialog, XmDIALOG_TEXT);
 
 	last_pos = XmTextFieldGetLastPosition(dialog_text);
 	
