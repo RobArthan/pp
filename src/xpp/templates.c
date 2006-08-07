@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: templates.c,v 2.29 2005/01/26 17:49:20 rda Exp rda $ 
+ * $Id: templates.c,v 2.30 2005/01/27 17:07:06 rda Exp rda $ 
  *
  * templates.c - support for templates for the X/Motif ProofPower Interface
  *
@@ -256,7 +256,8 @@ Boolean init_templates_tool(Widget w)
 	fbase = (template_table_size + 1) & ~0x01;
 
 	shell = XtVaCreatePopupShell("xpp-Templates",
-			xmDialogShellWidgetClass, w,
+		xmDialogShellWidgetClass,		w,
+		XmNtitle,			"Templates",
 		NULL); 
 #ifdef EDITRES
 	add_edit_res_handler(shell);

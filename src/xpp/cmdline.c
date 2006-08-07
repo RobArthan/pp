@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: cmdline.c,v 2.33 2005/09/05 16:51:27 rda Exp rda $
+ * $Id: cmdline.c,v 2.34 2006/03/28 09:00:32 rda Exp rda $
  *
  * cmdline.c -  single line command window for the X/Motif
  *		ProofPower Interface
@@ -148,6 +148,7 @@ void add_command_line_tool(Widget text_w)
 	shell = XtVaCreatePopupShell("xpp-Command-Line",
 		transientShellWidgetClass,	root,
 		XmNdeleteResponse,		XmUNMAP,
+		XmNtitle,			"Command Line",
 		NULL); 
 #ifdef EDITRES
 	add_edit_res_handler(shell);

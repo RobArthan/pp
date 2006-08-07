@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: search.c,v 2.61 2005/01/27 17:08:05 rda Exp rda $ 
+ * $Id: search.c,v 2.62 2005/09/01 11:50:49 rda Exp rda $ 
  *
  * search.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -237,6 +237,7 @@ Boolean add_search_tool(Widget text_w)
 	shell = XtVaCreatePopupShell("xpp-Search-and-Replace",
 		transientShellWidgetClass, text_w,
 		XmNdeleteResponse,		XmUNMAP,
+		XmNtitle,			"Search and Replace",
 		NULL); 
 #ifdef EDITRES
 	add_edit_res_handler(shell);

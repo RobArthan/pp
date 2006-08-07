@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: options.c,v 2.30 2005/09/16 16:19:33 rda Exp rda $
+ * $Id: options.c,v 2.31 2006/06/13 11:23:03 rda Exp rda $
  *
  * options.c -  tools for setting up global option variables
  *
@@ -127,6 +127,7 @@ void init_options(Widget owner_w)
 
 	shell = XtVaCreatePopupShell("xpp-Options",
 		xmDialogShellWidgetClass, owner_w,
+		XmNtitle,			"Options",
 		NULL); 
 #ifdef EDITRES
 	add_edit_res_handler(shell);

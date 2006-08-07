@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * $Id: lineno.c,v 1.10 2006/02/09 12:16:19 rda Exp rda $ 
+ * $Id: lineno.c,v 1.11 2006/06/13 13:51:36 rda Exp rda $ 
  *
  * lineno.c - support for search & replace for the X/Motif ProofPower Interface
  *
@@ -148,6 +148,7 @@ Boolean add_line_no_tool(Widget text_w)
 	shell = XtVaCreatePopupShell("xpp-Line-Number",
 		transientShellWidgetClass, text_w,
 		XmNdeleteResponse,		XmUNMAP,
+		XmNtitle,			"Goto Line",
 		NULL); 
 #ifdef EDITRES
 	add_edit_res_handler(shell);
