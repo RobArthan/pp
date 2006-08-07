@@ -1,6 +1,6 @@
 
 /* **** **** **** **** **** **** **** **** **** **** **** ****
- * %Z% $Date: 2006/07/03 15:06:52 $ $Revision: 2.47 $ $RCSfile: msg.c,v $
+ * %Z% $Date: 2006/08/07 10:33:17 $ $Revision: 2.48 $ $RCSfile: msg.c,v $
  *
  * msg.c - support for message dialogues for the X/Motif ProofPower Interface
  *
@@ -667,6 +667,8 @@ char *file_dialog(Widget w, Widget *dialog, char *button_label, char *title, Boo
  * interactively if required. Note that the widget cmd_form
  * is needed even if we have a command line - it becomes the unmanaged work area
  * for the file selection box which makes the Empty File button go in the right place.
+ * Note that both FileSelectionBox and MessageBox are subclasses
+ * of BulletinBoard and so both have a dialogTitle resource.
  * **** **** **** **** **** **** **** **** **** **** **** **** */
 static void	startup_quit_cb(CALLBACK_ARGS),
 		startup_help_cb(CALLBACK_ARGS);
@@ -711,6 +713,13 @@ void startup_dialog(Widget w, char **cmd_line, char **file_name)
 			NULL);
 		XmStringFree(s);
 	}
+
+	s = XmStringCreateSimple("New Session Options");
+	XtVaSetValues(dialog,
+		XmNdialogTitle,	s,
+		NULL);
+	XmStringFree(s);
+	
 #ifdef EDITRES
 	add_edit_res_handler(dialog);
 #endif
