@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp501.doc   %Z% $Date: 2006/01/26 12:29:09 $ $Revision: 1.72 $ $RCSfile: imp501.doc,v $
+% imp501.doc   %Z% $Date: 2006/06/12 16:42:00 $ $Revision: 1.73 $ $RCSfile: imp501.doc,v $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Compliance Notation Lexical Analyser}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP501}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.72 $%
+\def\SCCSversion{$Revision: 1.73 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/01/26 12:29:09 $%
+\TPPdate{\FormatDate{$Date: 2006/06/12 16:42:00 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -111,6 +111,7 @@ used as identifiers.
 \item[Issue 1.71] Added new keyword \verb"$implicit".
 \item[Issue 1.72] A `\$' not followed by an identifier no longer provokes an error.
 \item[Issue 1.73] Removed dead code from {\em rec\_numeric}.
+\item[Issue 1.74] The character that distinguishes SPARK annotations can now be specified by the user.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -370,6 +371,36 @@ fun €is_dollar›  (c : string) = (
 );
 =TEX
 =SML
+val €cn_spark_annotation_char› : string ref = ref "#";
+val _ = new_string_control{
+	name = "cn_spark_annotation_char",
+	check = (fn c => if size c = 1 then true else
+		fail "set_string_control" 501005 []),
+	control = cn_spark_annotation_char,
+	default = (fn () => "#")} handle Fail _ => ();
+=TEX
+=SML
+fun €is_annotation›  (c : string) = (
+		size c = 3
+	andalso	substring(c, 0, 2) = "--"
+	andalso 	substring(c, 2, 1) = !cn_spark_annotation_char
+);
+=TEX
+=SML
+val €cn_ignore_spark_annotations› : bool ref = ref false;
+val _ = new_flag{
+	name = "cn_ignore_spark_annotations",
+	check = fun_true,
+	control = cn_ignore_spark_annotations,
+	default = fun_false} handle Fail _ => ();
+=TEX
+=SML
+fun €is_comment›  (c : string) = (
+		c = "--"
+	orelse	(!cn_ignore_spark_annotations andalso is_annotation c)
+);
+=TEX
+=SML
 fun €is_numericliteral› (s : string) = (
 	case explode s of
 	i::rest =>	is_digit i
@@ -405,8 +436,7 @@ val €delimiter› : string list list =
 	(Sort.sort (switch(Sort.lexicographic Sort.string_order)) o map explode)
 ["&", "'", "(", ")", "*", "+", ",", "-", ".", "/", ":", ";", "<", "=", 
  ">", "|", "=>", "..", "**", ":=", "/=", ">=", "<=", "<<", ">>", "<>",
- "á",  "Ñ", "ò", "[", "]", "{","}", "∑", "˚", "˝", "ß","¢", "√", "!√", "È", "!È",
- "--", "--#"];
+ "á",  "Ñ", "ò", "[", "]", "{","}", "∑", "˚", "˝", "ß","¢", "√", "!√", "È", "!È"];
 =TEX
 =SML
 fun €has_prefix› (x::more : ''a list) (p : ''a list) : bool = (
@@ -459,7 +489,6 @@ val €ada_classes› :  CN_LEX_CLASS S_DICT = [
 	("CASE",	LCCase),
 	(":",		LCColon),
 	(",",		LCComma),
-	("--",		LCComment),
 	("CONSTANT",	LCConstant),
 	("DECLARE",	LCDeclare),
 	("DELTA",	LCDelta),
@@ -560,30 +589,12 @@ val €cn_reserved_word_classes› :  CN_LEX_CLASS S_DICT = [
 ];
 =TEX
 =SML
-val €rec_annotation_class› = ("--#",		LCAnnotation);
-=TEX
-=SML
-val €ignore_annotation_class› =  ("--#",		LCComment);
-=TEX
-=SML
-val €rec_annotation_class_table› : CN_LEX_CLASS E_DICT
-	= list_e_merge initial_e_dict (rec_annotation_class::ada_classes @ cn_sym_classes);
-=TEX
-=SML
-val €ignore_annotation_class_table› : CN_LEX_CLASS E_DICT
-	= list_e_merge initial_e_dict (ignore_annotation_class::ada_classes @ cn_sym_classes);
+val €class_table› : CN_LEX_CLASS E_DICT
+	= list_e_merge initial_e_dict (ada_classes @ cn_sym_classes);
 =TEX
 =SML
 val €reserved_word_table› : CN_LEX_CLASS E_DICT
 	= list_e_merge initial_e_dict cn_reserved_word_classes;
-=TEX
-=SML
-val €cn_ignore_spark_annotations› : bool ref = ref false;
-val _ = new_flag{
-	name="cn_ignore_spark_annotations",
-	check=fun_true,
-	control=cn_ignore_spark_annotations,
-	default=fun_false} handle Fail _ => ();
 =TEX
 In the following, the first parameter distinguishes between the calls made
 while just scanning the input (e.g., to find the end of a specification statement)
@@ -607,12 +618,12 @@ in
 				),
 			CNText ("$" ^ converted))
 		end
+	else if	is_comment what (* must test for this before testing for annotations : see code of is_comment *)
+	then	(LCComment, CNText what)
+	else if	is_annotation what
+	then	(LCAnnotation, CNText what)
 	else	let	val converted = convert what;
-		val table =
-			if	!cn_ignore_spark_annotations
-			then	ignore_annotation_class_table
-			else	rec_annotation_class_table
-		in	(case e_lookup converted table of
+		in	(case e_lookup converted class_table of
 			Value cl => cl
 			|	Nil	=> (
 					if	is_numericliteral what
@@ -639,12 +650,23 @@ $rec\_delimiter$ returns an appropriately updated state if the input
 begins with a delimiter symbol, if not it raises $Unrecognised$.
 =SML
 fun  €rec_delimiter› ( (cs, _) : LEX_STATE ) : LEX_STATE = (
-	if next_is_delimiter cs
+	if	next_is_delimiter cs
 	then	let	val tk = get_next_delimiter cs;
         	in	(cs from size tk, Known tk)
 		end
 	else	raise Unrecognised
 );
+=TEX
+$rec\_delimiter$ returns an appropriately updated state if the input
+begins with a delimiter symbol, if not it raises $Unrecognised$.
+=SML
+fun  €rec_comment_or_annotation› ( (cs as ("-"::"-":: (more1 as (c::more2))), _) : LEX_STATE ) : LEX_STATE = (
+	if	c = !cn_spark_annotation_char
+	then	(more2, Known ("--" ^ c))
+	else	(more1, Known "--")
+) | rec_comment_or_annotation ((cs as ("-"::"-":: more)), _) = (
+	(more, Known "--")
+) | rec_comment_or_annotation _ = raise Unrecognised;
 =TEX
 \subsection{Recognition of Identifiers}
 The following simply picks up the next identifier:
@@ -758,7 +780,7 @@ fun €rec_keyword› (st : LEX_STATE) : LEX_STATE = (
 =TEX
 \subsection{Recognition of Character Literals}
 =SML
-fun €rec_characterliteral› (st : LEX_STATE) : LEX_STATE = (
+fun €rec_character_literal› (st : LEX_STATE) : LEX_STATE = (
 	if next is_prime st
 	then	let	val st' = collect st;
 			val st'' = collect st';
@@ -791,11 +813,13 @@ Function $rec\_next\_token$ picks off the next token from the input
 using the other recognisers.
 =SML
 fun €rec_next_token› (st : LEX_STATE) : LEX_STATE = (
-	(((((((rec_identifier st))
+	((((((((rec_identifier st))
 	handle Unrecognised =>
-		(rec_characterliteral st))
+		(rec_character_literal st))
 	handle Unrecognised =>
 		(rec_primedid st))
+	handle Unrecognised =>
+		(rec_comment_or_annotation st))
 	handle Unrecognised =>
 		(rec_delimiter st))
 	handle Unrecognised =>
@@ -863,10 +887,10 @@ fun €spark_annotation_aux› (acc : string) (pending_tfo : string)
 );
 =TEX
 =SML
-fun €spark_annotation› 
+fun €spark_annotation› (comment_tok : string)
 		(slist : string list) (rest : INPUT list)
 	: (CN_LEX_ITEM * string list * INPUT list)  = (
-	spark_annotation_aux "--#"  "" slist rest
+	spark_annotation_aux comment_tok "" slist rest
 );
 =TEX
 \subsection{Arbitrary Ada}
@@ -1137,7 +1161,7 @@ fun €spark_xtext› (slist : string list) (rest : INPUT list) : CN_LEX_ITEM list  
 					end
 				)|(LCAnnotation, Nil) => (
 					let val (tok, srest', rest') =
-						spark_annotation srest rest;
+						spark_annotation s srest rest;
 					in	tok :: spark_xtext srest' rest'
 					end
 				)|(LCArbitraryAda, Nil) => (
@@ -1192,72 +1216,8 @@ end (* of structure CNLex *);
 \printindex
 \end{document}
 =IGN
-open CNLex;
-
-fun mk_ih s =
-	{left_input=[],left_text=[],right_text=explode s, right_input=[],
-		bracket_depth=0} : INPUT_HANDLE;
-
-val terml = [LCIdentifier, LCRSqBrack];
-val c'="hihgjghj";
-val {left_input, left_text, right_text, right_input, bracket_depth}=
-	(mk_ih "bc[de∑f]gIDENTIFIER,hi]kjm");
-
-find_in_text [LCFatDot, LCRSqBrack] (mk_ih "x");
-find_in_text [LCFatDot, LCRSqBrack] (mk_ih "xdfdf]");
-find_in_text [LCFatDot, LCRSqBrack] (mk_ih "abc∑");
-find_in_text [LCFatDot, LCRSqBrack] (mk_ih "abc∑def");
-find_in_text [LCFatDot, LCRSqBrack] (mk_ih "abc[def]ghi]");
-find_in_text [LCFatDot, LCRSqBrack] (mk_ih "bc[de∑f]ghi]kjm");
-find_in_text [LCBy] (mk_ih "==,BY],hihgjghj]IdentifierRkjm");
-find_in_text [LCImplement]
-	(mk_ih "==,[IMPLEMENT],hihgjghj Implement Rkjm");
-=IGN
-fun mk_ih s =
-	{left_input=[],left_text=[],right_text=explode s, right_input=[],
-		bracket_depth=0} : INPUT_HANDLE;
-
-val terml = [LCIdentifier, LCRSqBrack];
-val c'="hihgjghj";
-val {left_input, left_text, right_text, right_input, bracket_depth}=
-	(mk_ih "bc[de∑f]gIDENTIFIER,hi]kjm");
-
-find_in_text [LCFatDot, LCRSqBrack] (mk_ih "x");
-find_in_text [LCFatDot, LCRSqBrack] (mk_ih "xdfdf]");
-find_in_text [LCFatDot, LCRSqBrack] (mk_ih "abc∑");
-find_in_text [LCFatDot, LCRSqBrack] (mk_ih "abc∑def");
-find_in_text [LCFatDot, LCRSqBrack] (mk_ih "abc[def]ghi]");
-find_in_text [LCFatDot, LCRSqBrack] (mk_ih "bc[de∑f]ghi]kjm");
-find_in_text [LCBy] (mk_ih "==,BY],hihgjghj]IdentifierRkjm");
-find_in_text [LCImplement]
-	(mk_ih "==,[IMPLEMENT],hihgjghj Implement Rkjm");
-=IGN
-read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc]"];
-read_until [LCFatDot, LCRSqBrack] [Lex.Text "ab(c∑",Lex.String"x",
-				Lex.Text "de∑f)]g"];
-read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc"];
-read_until ["]"] [Lex.Text "pre, post]"];
-read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc]"];
-read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc]"];
-read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc]"];
-read_until [LCFatDot, LCRSqBrack] [Lex.Text "abc]"];
-=IGN
 val spark_lex = CNLex.cn_lex (Combinators.I);
-spark_lex [Lex.Text "abcd def (12)"];
-spark_lex [Lex.Text "-- abcd def (12) \n xyz (10);"];
-spark_lex [Lex.Text "foo(); \n -- abcd def (12) \n xyz (10);"];
-spark_lex [Lex.Text "foo(); \n -- abcd def (12)", Lex.String "str",
-	Lex.Text "def", Lex.Text"ghi \n xyz (10);"];
-spark_lex [Lex.Text "--#       X"];
-spark_lex [Lex.Text "--#\tX"];
-spark_lex [Lex.Text "--#\nX"];
-spark_lex [Lex.Text "--# abcdef", Lex.String "boo"];
-spark_lex [Lex.Text "--# abcdef", Lex.String "boo", Lex.Text"def\n\n\nf();"];
-spark_lex [Lex.String "a\"\"bcd"];
-spark_lex [Lex.Text "pragma foo ; "];
-spark_lex [Lex.Text "pragma foo -- \n-- (( 9   ; "];
-spark_lex [Lex.Text "(1) !È any \n", Lex.Text " old ", Lex.String "rubbish"];
-spark_lex [Lex.Text "(1) !√ x := 20;"];
-
-spark_lex [Lex.Text "Ñ [f = ", Lex.Text "];"];
-
+spark_lex [Lex.Text "abcd def (12) --"];
+spark_lex [Lex.Text "abcd def (12) --# banana"];
+set_string_control("cn_spark_annotation_char", "$");
+spark_lex [Lex.Text "abcd def (12) --$ banana"];
