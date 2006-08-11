@@ -142,6 +142,7 @@ Corrected treatment of given set paragraph with a constraint.
 \item[Issue 1.66, 1.67] Added some missing index brackets and fixed {\em ident\_of\_string}.
 \item[Issue 1.68] Added {\em diag\_free\_vars} hook for the Compliance Tool, plus major tidy-up to pass flags around by parameter rather than through global variables.
 \item[Issue 1.71] Added support for floating point literals
+\item[Issue 1.72] Fixed type-checking of let expressions.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -433,6 +434,7 @@ datatype ÛZ_DETAILSÝ	=
 	|	FailedBinding of IDENT list
 	|	FailedGlobalVar of IDENT
 	|	FailedFreeVar of IDENT
+	|	FailedLet of IDENT * EXTYPE * EXTYPE
 	|	FailedActual1 of IDENT * int
 	|	FailedActual2 of Z_TM list * EXTYPE list
 	|	FailedConstrained of Z_TM * EXTYPE * Z_TM
@@ -745,6 +747,9 @@ fun Ûprint_z_errorÝ ((FailedZTm (term, env, details)) : Z_ERROR_INFO) = (
 		()
 	) | FailedGlobalVar id => (
 		report 62341 []; not_a_globvar id
+	) | FailedLet (id, ty1, ty2) => (
+		report 62351 [format_ident id];
+		incompatible_comps [(id, ty1)] [(id, ty2)]
 	) | FailedFreeVar id => (
 		report 62631 []; report 62632 [];
 		report 62004 [format_ident id]
@@ -1214,15 +1219,6 @@ environment is not extended at this point.
 The following function achieves this; it type infers each
 declaration  in the outer environment, where necessary,
 with a view to finding out its signature variables. 
-
-=IGN
-fun Ûti_dec_pass_1Ý (_ : Z_TI_PARS) (_ : Z_ENV) (_: Z_DEC) : Z_DEC * (IDENT * EXTYPE) list = raise Div;
-fun ti_z_dec_pass_2 (_ : Z_TI_PARS) (_ : Z_ENV) (_ : Z_DEC * (IDENT * EXTYPE) list) : Z_DEC * (IDENT * EXTYPE) list = raise Div;
-fun list_ti_z_dec (_ : Z_TI_PARS) (_ : Z_ENV) (_ : Z_DEC list) : (Z_DEC list * Z_ENV * (IDENT * EXTYPE) list) = raise Div;
-fun ti_z_schtext (_ : Z_TI_PARS) (_ : Z_ENV) (_ : Z_SCH_TEXT)
-	: Z_SCH_TEXT * Z_ENV * (IDENT * EXTYPE) = raise Div;
-fun ti_z_tm (_ : Z_TI_PARS) (_ : Z_ENV) (_ : Z_TM) : Z_TM * EXTYPE = raise Div;
-fun list_ti_z_tm (_ : Z_TI_PARS) (_ : Z_ENV) (tml : Z_TM list) : (Z_TM * EXTYPE) list = raise Div;
 
 =TEX
 =SML
@@ -2292,15 +2288,21 @@ end
 =TEX
 
 \subsection{Let Expressions}
-
 =SML
 *)
  | ti_z_tm pars env (term as ZTmLet (eqdefl, tm)) = (
 let	val (abbl, defl) = split eqdefl;
-	val (defl', tyl') = split (list_ti_z_tm pars env defl);
-	val abbtyl' = combine abbl tyl';
+	val tyl = map (fn i => ExVartype(Unknown(next_name()))) abbl;
+	val abbtyl = combine abbl tyl;
+	val env' = dec_boundvars env abbtyl;
+	val (defl', tyl') = split (list_ti_z_tm pars env' defl);
 	val eqdefl' = combine abbl defl';
-	val env' = dec_boundvars env abbtyl';
+	fun aux((i, ty1), ty2) = (
+		unify zti_subs (ty1, ty2)
+		handle Fail _ => 
+		raise ZExn (FailedZTm (term, env', FailedLet (i, ty1, ty2)))
+	);
+	val _ = app aux (combine abbtyl tyl');
 	val (tm', ty') = ti_z_tm pars env' tm;
 in	(ZTmLet (eqdefl', tm'), ty')
 end
