@@ -17,10 +17,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation of the Z Language Expressions}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP042}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.43 $%
+\def\SCCSversion{$Revision: 1.44 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2005/09/07 10:52:05 $%
+\TPPdate{\FormatDate{$Date: 2006/04/20 09:15:43 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{SML Literate Script}
@@ -114,7 +114,9 @@ Fixing $Z\__ELIM\_C$.
 \item[Issue 1.39] PPZed-specific updates for open source release
 \item[Issue 1.40] The Z universal set is now called ƒ.
 \item[Issue 1.41] Stopped it relying on accidental behaviour of {\em binding\_gen\_semantic\_const} when passed a variable of the right type as an argument (it has now been corrected to fail in this case as it should).
+\item[Issues 1.42, 1.43] Added support for let-expressions.
 \item[Issue 1.44] Added support for floating point literals
+\item[Issue 1.45] Improved {\em z\_let\_conv}.
 \end{description}
 \subsection{Changes Forecast}
 None.
@@ -538,9 +540,24 @@ val Ûz_let_convÝ = (fn tm =>
 	let	val thm1 = z_let_conv1 tm
 		handle Fail _ => term_fail "z_let_conv" 47211 [tm];
 	in let	val (defs, b) = dest_z_let tm;
-		val subs = map (fn (n, t) => (t, mk_var(n, type_of t))) defs;
+		fun expand_defs i ns vs tpl = (
+			let	val subs = combine (dest_z_tuple tpl) vs;
+				val tpl' = subst subs tpl;
+				val i' = length(frees tpl' drop (fn v => not(v term_mem vs)));
+			in	if	i' > 0
+				andalso	(i = ~1 orelse i' < i)
+				then	expand_defs i' ns vs tpl'
+				else	let	val ts = dest_z_tuple tpl'
+					in	(combine ts vs, combine ns ts)
+					end
+ 			end
+		);
+		val ns = map fst defs;
+		val vs = map (fn (n, t) => mk_var(n, type_of t)) defs;
+		val tpl = mk_z_tuple(map snd defs);
+		val (subs, edefs) = expand_defs ~1 ns vs tpl;
 		val wit = mk_z_binding(
-			Sort.sort (fn (s1, _) => fn (s2, _) => Sort.string_order s1 s2) defs);
+			Sort.sort (fn (s1, _) => fn (s2, _) => Sort.string_order s1 s2) edefs);
 		val r = subst subs b;
 		val mu_tm = snd(dest_eq(concl thm1));
 		val thm2 = µ_elim r (conv_rule (TRY_C z_µ_elim_conv1)(z_Í_rule mu_tm));
