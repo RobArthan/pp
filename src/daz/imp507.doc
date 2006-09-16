@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.335 $ $RCSfile: imp507.doc,v $ $Date: 2006/08/10 11:23:32 $
+% imp507.doc %Z% $Revision: 1.336 $ $RCSfile: imp507.doc,v $ $Date: 2006/08/25 16:17:51 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.335 $%
+\def\SCCSversion{$Revision: 1.336 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/08/10 11:23:32 $%
+\TPPdate{\FormatDate{$Date: 2006/08/25 16:17:51 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -271,6 +271,7 @@ Some tidying in preparation for issue 139.
 \item[Issue 1.334] {\em new\_scope\_with} now checks that auxiliary variables do not clash with names that are already in scope.
 \item[Issue 1.335] Multiple auxiliary variables are now allowed in one Z declaration.
 \item[Issue 1.336] Fixed mistreatment of expanded names in {\em renames\_object\_comon}.
+\item[Issue 1.337] Added {\em SCOPE\_ENV} and the {\em open\_scope} command.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -480,6 +481,7 @@ val €env0› : ENV = [empty_block];
 We also require initial values for the SPARK program and replacement environments discussed in \cite{ISS/HAT/DAZ/DTD513}
 =SML
 val €repl_env0› : REPL_ENV = initial_s_dict;
+val €scope_env0› : SCOPE_ENV = initial_e_dict;
 val €spark_prog0› : SPARK_PROG = [];
 =TEX
 For uniformity, we give the initial value for the theory name and deletion
@@ -497,13 +499,14 @@ val €init_z_generator_state› : Z_GENERATOR_STATE = (
 		spec_env = spec_env0,
 		blocks = env0,
 		repl_env = repl_env0,
+		scope_env = scope_env0,
 		spark_prog = spark_prog0,
 		script_name = script_name0,
 		deletion_info = deletion_info0}
 );
 =TEX
 \subsection{The Global State}
-For convenience in the implementation, the eight components of the state are held in eight assignable variables.
+For convenience in the implementation, each component of the state is held in an assignable variable.
 =SML
 val €pack_env› : PACK_ENV ref = ref pack_env0;
 val €subunit_env› : SUBUNIT_ENV ref = ref subunit_env0;
@@ -511,6 +514,7 @@ val €dec_env› : DEC_ENV ref = ref dec_env0;
 val €spec_env› : SPEC_ENV ref = ref spec_env0;
 val €blocks› : ENV ref = ref env0;
 val €repl_env› : REPL_ENV ref = ref repl_env0;
+val €scope_env› : SCOPE_ENV ref = ref scope_env0;
 val €spark_prog› : SPARK_PROG ref = ref spark_prog0;
 val €script_name› : string ref = ref script_name0;
 val €deletion_info› : SUBUNIT_ENV ref = ref deletion_info0;
@@ -524,6 +528,7 @@ fun €set_z_generator_state› ({
 		spec_env = new_spec_env,
 		blocks = new_blocks,
 		repl_env = new_repl_env,
+		scope_env = new_scope_env,
 		spark_prog = new_spark_prog,
 		script_name = new_script_name,
 		deletion_info = new_deletion_info
@@ -534,6 +539,7 @@ fun €set_z_generator_state› ({
 		spec_env := new_spec_env;
 		blocks := new_blocks;
 		repl_env := new_repl_env;
+		scope_env := new_scope_env;
 		spark_prog := new_spark_prog;
 		script_name := new_script_name;
 		deletion_info := new_deletion_info
@@ -547,6 +553,7 @@ fun €get_z_generator_state› (() : unit) : Z_GENERATOR_STATE = (
 		spec_env = !spec_env,
 		blocks = !blocks,
 		repl_env = !repl_env,
+		scope_env = !scope_env,
 		spark_prog = !spark_prog,
 		script_name = !script_name,
 		deletion_info = !deletion_info}
@@ -2537,8 +2544,7 @@ let	val dummy = if (get_cn_created "-")
 				fn () => act_thyn,
 				fn () => exp_thyn]
 		else	();
-in	set_user_datum(cn_compilation_unit_ud_key, UD_String (exp_thyn ,[]))
-
+in	set_user_datum(cn_compilation_unit_ud_key, UD_String (act_thyn ,[]))
 end);
 =TEX
 The following is necessary when the key has been set incorrectly.
@@ -6275,7 +6281,14 @@ fun €subprogram_implementation› {is_proc : bool} : string = (
 		val block1 = block 1;
 		val en = expanded_name (#block_name (#declab block1));
 		val sp_thyn = en ^ (if is_proc then proc_tag else fun_tag);
-	in	(if	sp_thyn <> !script_name
+		val scope_entry = {theory = sp_thyn, deferred = false};
+	in	(scope_env :=
+		e_extend en scope_entry (!scope_env)
+		handle Fail _ => (
+			fail "subprogram_implementation" 507143
+			[fn () => en]
+		));
+		(if	sp_thyn <> !script_name
 		then	let	val cxt_thyn = en ^ context_tag;
 			in	make_module 507139 en cxt_thyn;
 				open_theory cxt_thyn;
@@ -6515,7 +6528,13 @@ fun €new_scope_pack_body› (ident : ID) : unit = (
 		val _ = 	(if old_subunit_flag then () else new_parent_aux false (#zmod package1));
 		val dict = init_pack_body_dict(ident, package1);
 		val block = block_dict(block_flags(empty_block, flags), dict);
-	in	blocks := new_scope_common (Value ident) (block :: !blocks)
+		val scope_entry = {theory = ident ^ pack_body_tag, deferred = false};
+	in	(scope_env :=
+		e_extend ident scope_entry (!scope_env)
+		handle Fail _ => (
+			fail "new_scope_pack_body" 507143
+			[fn () => ident]));
+		blocks := new_scope_common (Value ident) (block :: !blocks)
 	end	
 );
 =TEX
@@ -7674,10 +7693,45 @@ fun €new_k_slot› (label : LABEL, sort : REPL_SORT) : unit = (
 \section{INVOKING THE SID FUNCTIONS}
 =TEX
 =SML
-fun €open_label_theory› (lab : string) : unit = (
-	case s_lookup lab (!repl_env) of
-		Value(UnReplaced(_, thy)) => lazy_open_theory thy
-	|	_ => ()
+fun €open_scope› (n: string) : unit = (
+	let	val zn = trans_id (CaseIndependence.to_upper n);
+	in	case e_lookup zn (!scope_env) of
+			Value {theory, deferred} => (
+			if	not deferred
+			then	open_theory theory
+				handle Fail _ =>
+				fail "open_scope" 507145
+				[fn()=>theory, fn()=>n]
+			else	let	val cxt_thyn = zn ^ context_tag;
+			in	open_theory cxt_thyn
+				handle Fail _ =>
+				fail "open_scope" 507145
+				[fn()=>cxt_thyn, fn()=>n];	
+				make_subprog_module 507139 zn theory;
+				open_theory theory 
+				handle Fail _ =>
+				fail "open_scope" 507145
+				[fn()=>theory, fn()=>n]
+			end
+		) |	Nil =>	fail "open_scope" 507146
+				[fn()=>n]
+	end
+);
+=TEX
+=SML
+fun €check_label_theory› (lab : string) : unit = (
+	let	fun subprog_name acc [] = implode(rev acc)
+		|   subprog_name acc ("o"::more) = subprog_name ("."::acc) more
+		|   subprog_name acc ("'"::_) = subprog_name acc []
+		|   subprog_name acc (c::more) = subprog_name (c::acc) more;
+	in	case s_lookup lab (!repl_env) of
+		Value(UnReplaced(_, thy)) => (
+			if	get_current_theory_name() = thy
+			then	()
+			else	fail "check_label_theory" 507144
+				[fn() => lab, fn() => subprog_name [] (explode thy)]
+		) |	_ => ()
+	end
 );
 =TEX
 Except where an annotation occurs as a statement or a declaration, we need to record the k-slots in an annotation in the replacement environment:
@@ -8326,7 +8380,7 @@ let	val {label=label, comp=comp} = x;
 in	case (s_lookup label (!repl_env), comp) of
 		(Value (UnReplaced _), _) => (
 		let	val current_theory = get_current_theory_name ();
-		in	open_label_theory label;
+		in	check_label_theory label;
 			update_replacement_env(label, ReplaceComp x);
 			map (check_fail () do_kslot_compilation_unit) (#comp x);
 			lazy_open_theory current_theory
@@ -8345,7 +8399,7 @@ end
 ) | do_web_clause (y as (WCReplacedByPrivatePart x) : WEB_CLAUSE) = (
 let	val {label=label, private=private} = x;
 	val current_theory = get_current_theory_name ();
-in	open_label_theory label;
+in	check_label_theory label;
 	update_replacement_env(label, ReplacePPart x);
 	set_bottom_block_name label;
 	new_scope_dec_replace 
@@ -8359,7 +8413,7 @@ end
 ) | do_web_clause (y as (WCReplacedByVisiblePart x) : WEB_CLAUSE) = (
 let	val {label=label,visible=visible} = x;
 	val current_theory = get_current_theory_name ();
-in	open_label_theory label;
+in	check_label_theory label;
 	update_replacement_env(label, ReplaceVPart x);
 	set_bottom_block_name label;
 	new_scope_dec_replace  
@@ -8373,7 +8427,7 @@ end
 ) | do_web_clause (y as (WCReplacedByDecl x) : WEB_CLAUSE) = (
 let	val {label=label,decls=decls} = x;
 	val current_theory = get_current_theory_name ();
-in	open_label_theory label;
+in	check_label_theory label;
 	update_replacement_env(label, ReplaceDecl x);
 	set_bottom_block_name label;
 	new_scope_dec_replace x;
@@ -8385,7 +8439,7 @@ end
 ) | do_web_clause (y as (WCRefinedBy x) : WEB_CLAUSE) = (
 let	val {label=label,statement=statement} = x;
 	val current_theory = get_current_theory_name ();
-in	open_label_theory label;
+in	check_label_theory label;
 	set_bottom_block_name label;
 	new_scope_speclabel label;
 	let	val expanded_statement = do_refinement_rhs statement;
@@ -8400,7 +8454,7 @@ end
 let	val {label=label,statement=statement} = x;
 	val current_theory = get_current_theory_name ();
 in	cn_soundness_warning "do_web_clause" 507134 [];
-	open_label_theory label;
+	check_label_theory label;
 	set_bottom_block_name label;
 	new_scope_stmt_label label;
 	let	val expanded_statement = do_refinement_rhs statement;
@@ -8720,6 +8774,7 @@ each section of chapter 3 of the specification.
 					spec_env = spec_env0,
 					blocks = env0,
 					repl_env = repl_env,
+					scope_env = scope_env0,
 					spark_prog = spark_prog,
 					script_name = script_name,
 					deletion_info = deletion_info0}
@@ -8730,6 +8785,7 @@ each section of chapter 3 of the specification.
 				spec_env = spec_env0,
 				blocks = env0,
 				repl_env = repl_env0,
+				scope_env = scope_env0,
 				spark_prog = spark_prog0,
 				script_name = script_name,
 				deletion_info = deletion_info0});
@@ -9027,6 +9083,7 @@ fun €delete_script› (scr : string) : unit = (
 			spec_env = spec_env0,
 			blocks = env0,
 			repl_env = repl_env0,
+			scope_env = scope_env0,
 			spark_prog = spark_prog0,
 			script_name = !script_name,
 			deletion_info = !deletion_info};
