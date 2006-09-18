@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.337 $ $RCSfile: imp507.doc,v $ $Date: 2006/09/16 14:05:04 $
+% imp507.doc %Z% $Revision: 1.338 $ $RCSfile: imp507.doc,v $ $Date: 2006/09/17 15:46:50 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.337 $%
+\def\SCCSversion{$Revision: 1.338 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/09/16 14:05:04 $%
+\TPPdate{\FormatDate{$Date: 2006/09/17 15:46:50 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -273,6 +273,7 @@ Some tidying in preparation for issue 139.
 \item[Issue 1.336] Fixed mistreatment of expanded names in {\em renames\_object\_comon}.
 \item[Issue 1.337] Added {\em SCOPE\_ENV} and the {\em open\_scope} command.
 \item[Issue 1.338] Added support for deferred subprograms.
+\item[Issue 1.339] Issue 189: early type-checking now carried out for all procedures to avoid unsoundness problem in {\em vc\_body\_proc}.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -2415,6 +2416,35 @@ fun €expand_schema_sigs› (ns : Z_ID list) : Z_ID list = (
 	end
 );
 =SML
+fun €subprog_flatten_env_aux› (_ : ID, _ : Z_ID list) ([] : ENV) : IN_SCOPE = (
+	empty_in_scope
+) |  subprog_flatten_env_aux (name, globals1) (blocks as (block1 ::_)) = (
+	let	fun aux1 acc (b::bs:ENV) = (
+			if simple_name(#block_name(#declab b)) <> name
+			then rev acc
+			else aux1 (b::acc) bs
+		) | aux1 acc [] = rev acc;
+		fun aux2 acc (b::bs:ENV) = (
+			if simple_name(#block_name(#declab b)) = name
+			then aux1 (b::acc) bs
+			else aux2 (b::acc) bs
+		) | aux2 acc [] = rev acc;
+		val blocks2 = aux2 [] blocks;
+		val {dict, dec_labels} = flatten_env blocks2;
+		val {vc_vars, vc_pars, vc_aux_vars, vc_log_cons} = get_local_vars dict;
+		val globals = expand_schema_sigs globals1;
+		val cn_scope =
+			globals cup
+			vc_vars cup
+			vc_pars cup
+			vc_aux_vars cup
+			vc_log_cons;
+	in	{dict = set_cn_scope dict cn_scope,
+		dec_labels = dec_labels}
+	end
+);
+=TEX
+=SML
 fun €subprog_flatten_env› ([] : ENV) : IN_SCOPE = (
 	empty_in_scope
 ) |  subprog_flatten_env (blocks : ENV) = (
@@ -2422,31 +2452,7 @@ fun €subprog_flatten_env› ([] : ENV) : IN_SCOPE = (
 		val flags = #flags (#declab block1);
 	in	if	not(#formal_body_flag flags)
 		then	flatten_env blocks
-		else	let	val (name, globals1) = subprog_info block1;
-				fun aux1 acc (b::bs:ENV) = (
-					if simple_name(#block_name(#declab b)) <> name
-					then rev acc
-					else aux1 (b::acc) bs
-				) | aux1 acc [] = rev acc;
-				fun aux2 acc (b::bs:ENV) = (
-					if simple_name(#block_name(#declab b)) = name
-					then aux1 (b::acc) bs
-					else aux2 (b::acc) bs
-				) | aux2 acc [] = rev acc;
-				val blocks2 = aux2 [] blocks;
-				val {dict, dec_labels} = flatten_env blocks2;
-				val {vc_vars, vc_pars, vc_aux_vars, vc_log_cons} =
-					get_local_vars dict;
-				val globals = expand_schema_sigs globals1;
-				val cn_scope =
-					globals cup
-					vc_vars cup
-					vc_pars cup
-					vc_aux_vars cup
-					vc_log_cons;
-			in	{dict = set_cn_scope dict cn_scope,
-				dec_labels = dec_labels}
-			end
+		else	subprog_flatten_env_aux (subprog_info block1) blocks
 	end
 );
 =TEX
@@ -4777,57 +4783,6 @@ fun €vcs_body_proc_aux› (st : STATEMENT)
 	end	
 );
 =TEX
-
-=SML
-fun €check_formal_proc› (formal_proc : FORMAL_PROC) : SPEC = (
-let
-	(* mimic curr_form_proc & mimic being in proc body *)
-	val block1 = block 1;
-	val block2 = block 2;
-	val dummy1 = (blocks :=
-		block_current_formal_proc (block1, formal_proc) :: tl(!blocks));
-	
-	(* pretend to be in a package body *)
-	val {block_name = block_name2,
-		flags = flags2,
-		using_decs = using_decs2,
-		in_scope = in_scope2}  = #declab block2;
-	val bn2 = simple_name block_name2;
-	val new_flags2 = {
-			pack_spec_flag = false,
-			pack_body_flag = true,
-			stub_flag = #stub_flag flags2,
-			subunit_flag = #subunit_flag flags2,
-			formal_body_flag = true,
-			fun_flag = #fun_flag flags2,
-			declabel_flag = #declabel_flag flags2,
-			speclabel_flag = #speclabel_flag flags2,
-			till_flag = #till_flag flags2,
-			body_flag = true
-		};
-	val package =
-			(force_value(s_lookup bn2 (!pack_env)))
-			handle Fail _ =>
-			error "check_formal_proc" 507012 [fn()=>bn2];
-	val new_in_scope2 = in_scope_vc_aux_vars Nil (in_scope2,  #aux_vars package);
-	val new_declab2 =  {block_name = block_name2,
-		flags = new_flags2,
-		using_decs = using_decs2,
-		in_scope = new_in_scope2};
-	val new_block2 = block_declab (block2, new_declab2);
-	val dummy2 = (blocks := (block 1 :: (new_block2 :: tl(tl (!blocks)))));
-	(* create the vcs for a null statement *)
-	val (_, (vcs, routes, spec), _ ) = vcs_body_proc_aux (STNull SNImplicit)
-		handle (exn as Fail _) =>
-		(blocks :=
-		block1 :: block2 :: tl(tl(!blocks));
-		raise exn);
-	(* undo mimic of curr_form_proc & flag2 changes *)
-	val dummyu1 = (blocks :=
-		block1 :: block2 :: tl(tl(!blocks)));
-in	spec
-end);
-=TEX
 =SML
 fun €subs_formals_spec› (
 	pars : PARAM_SPEC list,
@@ -4878,7 +4833,7 @@ fun €form_proc_pack_spec› (form_proc as {
 			handle Fail _ =>
 			error "form_proc_pack_spec" 507012 [fn()=>bn2];
 		val (formal_ids1, spec1) =
-			subs_formals_spec(formal_ids, check_formal_proc form_proc, map fst par_names_defs);
+			subs_formals_spec(formal_ids, spec, map fst par_names_defs);
 		val form_proc1 = {
 			name = name,
 			formal_ids = formal_ids1,
@@ -5185,30 +5140,31 @@ fun €form_proc_subunit› (form_proc: FORMAL_PROC) : unit = (
 );
 =TEX
 =SML
-fun €check_stub_spec_proc› (form_proc: FORMAL_PROC) : unit = (
-	if	test_flag #stub_flag 2
-	then	let	val block1 = block 1;
-			val block_name1 = #block_name(#declab block1);
-			val in_scope = flatten_env(!blocks);
-			val wp_env :WP_ENV = {
-				env = cn_env_of_in_scope in_scope,
-				till = mk_z_true,
-				named_tills = [],
-				return = mk_z_true,
-				fun_header = dummy_informal_fun
-			};
-			val speclab : SPECLAB = {
-				spec = #spec form_proc,
-				formal_body_flag = false,
-				fun_flag = false,
-				till_flag = false,
-				wp_env = wp_env,
-				in_scope = in_scope,
-				block_name = block_name1
-			};
-		in	 call_vcs (Value(#globals form_proc)) (speclab, (STNull SNImplicit)); ()
-		end
-	else	()
+fun €check_formal_proc› (form_proc as
+	{name, spec, globals, formal_ids, par_names_defs} : FORMAL_PROC) : FORMAL_PROC = (
+	let	val block1 = block 1;
+		val block_name1 = #block_name(#declab block1);
+		val in_scope = subprog_flatten_env_aux (name, globals) (!blocks);
+		val wp_env :WP_ENV = {
+			env = cn_env_of_in_scope in_scope,
+			till = mk_z_true,
+			named_tills = [],
+			return = mk_z_true,
+			fun_header = dummy_informal_fun
+		};
+		val speclab : SPECLAB = {
+			spec = #spec form_proc,
+			formal_body_flag = false,
+			fun_flag = false,
+			till_flag = false,
+			wp_env = wp_env,
+			in_scope = in_scope,
+			block_name = block_name1
+		};
+		val (_, _, tc_spec) = call_vcs (Value(#globals form_proc)) (speclab, (STNull SNImplicit));
+	in	{name = name, spec = tc_spec, globals = globals,
+			formal_ids = formal_ids, par_names_defs = par_names_defs}
+	end
 );
 =TEX
 =SML
@@ -8098,14 +8054,13 @@ and €do_procedure_spec› (implicit : bool) (
 		val eg = expand_names globals;
 		val all_globs = #w esp @ eg @ flat (map #idlist formal_part);
 		val par_names_defs = get_par_names_defs formal_part;
-		val formal_proc : FORMAL_PROC =
+		val formal_proc : FORMAL_PROC = check_formal_proc
 		{name=name, spec=esp, globals = all_globs, formal_ids = map mk_param_spec formal_part,
 			par_names_defs = par_names_defs};
 	in	check_19 current_cn_env (Value eg) esp;
 		curr_form_proc formal_proc;
 		form_proc implicit formal_proc;
-		stub_spec_proc formal_proc;
-		check_stub_spec_proc formal_proc
+		stub_spec_proc formal_proc
 	end
 ) | €do_procedure_spec› (implicit : bool) (
 	{name, formal_part, spec as Nil, annotation, globals} : PROCEDURE_SPECIFICATION) = (
