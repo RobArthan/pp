@@ -8,7 +8,7 @@ See the file LICENSE for your rights to use and change this file.
 
 Contact: Rob Arthan < rda@lemma-one.com >
 ********************************************************************************
-% imp507.doc %Z% $Revision: 1.338 $ $RCSfile: imp507.doc,v $ $Date: 2006/09/17 15:46:50 $
+% imp507.doc %Z% $Revision: 1.339 $ $RCSfile: imp507.doc,v $ $Date: 2006/09/18 13:42:12 $
 =TEX
 \documentstyle[hol1,11pt,TQ]{article}
 \ftlinepenalty=9999
@@ -20,10 +20,10 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{Implementation: Z Generator}  %% Mandatory field
 \TPPref{ISS/HAT/DAZ/IMP507}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.338 $%
+\def\SCCSversion{$Revision: 1.339 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
-\TPPdate{\FormatDate{$Date: 2006/09/17 15:46:50 $%
+\TPPdate{\FormatDate{$Date: 2006/09/18 13:42:12 $%
 }}
 \TPPstatus{Draft}			%% Mandatory field
 \TPPtype{Specification}
@@ -274,6 +274,7 @@ Some tidying in preparation for issue 139.
 \item[Issue 1.337] Added {\em SCOPE\_ENV} and the {\em open\_scope} command.
 \item[Issue 1.338] Added support for deferred subprograms.
 \item[Issue 1.339] Issue 189: early type-checking now carried out for all procedures to avoid unsoundness problem in {\em vc\_body\_proc}.
+\item[Issue 1.340] Change to parametrisation of {\em new\_script} etc.
 \end{description}
 \subsection{Changes Forecast}
 \pagebreak
@@ -8695,6 +8696,16 @@ fun €get_replacement› (lab : string) : REPLACEMENT OPT = (
 );
 =TEX
 =SML
+fun €mk_thy_name› (caller : string) (name : string, unit_type : string) : string = (
+	let	val t = CaseIndependence.to_lower unit_type;
+		val n = trans_id(CaseIndependence.to_upper name);
+	in	if	not(t mem ["spec", "body", "proc", "func"])
+		then	fail caller 507151 [fn() => unit_type]
+		else	n ^ "'" ^ t
+	end
+);
+=TEX
+=SML
 abstype €CN_STATE› =
 	CNState of Z_GENERATOR_STATE *
 	Z_GENERATOR_STATE E_DICT *
@@ -8801,48 +8812,27 @@ each section of chapter 3 of the specification.
 expected to see in the following.
 =SML
 *)
-	fun €do_new_script› (continue : bool)
-		{name : string} = (
-		let	val old_state = get_z_generator_state ();
-			val old_state_db = !state_db;
-			val old_exn_log = !exception_log;
-			val thy = get_current_theory_name();
-		in
-		(	lazy_open_theory "cn";
-			new_theory_aux [] name;
-			set_cn_created();
-			set_continuation_flag continue;
-			CaseIndependence.reset_names ();
-			init_cn_z_generator continue name
-		) handle ex => (
-			set_z_generator_state old_state;
-			state_db := old_state_db;
-			exception_log := old_exn_log;
-			lazy_open_theory thy;
-			reraise ex "new_script"
-			)
-		end		
-	);
 (*
 =TEX
 Again, {init\_cn\_z\_generator\_state} does the state-saving that one might have
 expected to see in the following.
 =SML
 *)
-	fun €do_new_script1› (continue : bool)
-		{	name : string,
+	fun €do_new_script1› (caller : string) (continue : bool)
+		{	name : string, unit_type : string,
 			library_theories : string list} : unit = (
-		let	val old_state = get_z_generator_state ();
+		let	val thy_name = mk_thy_name caller (name, unit_type);
+			val old_state = get_z_generator_state ();
 			val old_state_db = !state_db;
 			val old_exn_log = !exception_log;
 			val thy = get_current_theory_name();
 		in
 		(	lazy_open_theory "cn";
-			new_theory_aux [] name;
+			new_theory_aux [] thy_name;
 			set_cn_created();
 			set_continuation_flag continue;
 			CaseIndependence.reset_names ();
-			init_cn_z_generator continue name;
+			init_cn_z_generator continue thy_name;
 			(map (fn t => new_parent_aux false t
 				handle (Fail m) =>
 				fail "new_script1"
@@ -8863,16 +8853,23 @@ expected to see in the following.
 =TEX
 =SML
 *)
-	val €new_script› : {name : string} -> unit
-		= do_new_script false;
+	fun €new_script› {name : string, unit_type : string} : unit = (
+	do_new_script1 "new_script" false
+		{name = name, unit_type = unit_type, library_theories = []}
+	);
+
 	val €new_script1› :
-		{name : string, library_theories : string list} -> unit
-		= do_new_script1 false;
-	val €new_continuation_script› : {name : string} -> unit
-		= do_new_script true;
+		{name : string, unit_type : string, library_theories : string list} -> unit
+		= do_new_script1 "new_script1" false;
+
+	fun €new_continuation_script› {name : string, unit_type : string} : unit = (
+	do_new_script1 "new_continuation_script" true
+		{name = name, unit_type = unit_type, library_theories = []}
+	);
+
 	val €new_continuation_script1› :
-		{name : string, library_theories : string list} -> unit
-		= do_new_script1 true;
+		{name : string, unit_type : string, library_theories : string list} -> unit
+		= do_new_script1 "new_continuation_script1" true;
 
 	fun €get_cn_state› (() : unit) : CN_STATE = (
 		CNState (get_z_generator_state(), !state_db, !exception_log)
@@ -9058,8 +9055,9 @@ fun €delete_theories› (thys : string list) : unit= (
 );
 =TEX
 =SML
-fun €delete_script› (scr : string) : unit = (
-	let	val saved_zg_state = get_z_generator_state();
+fun €delete_script› {name : string, unit_type : string} : unit = (
+	let	val scr = mk_thy_name "delete_script" (name, unit_type);
+		val saved_zg_state = get_z_generator_state();
 	in let	val (thys, sus, packs) = delete_script_aux scr;
 		fun restore_subunit_entry (k, x) = (
 			subunit_env := s_enter k x (!subunit_env)
