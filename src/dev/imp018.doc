@@ -20,7 +20,7 @@ Contact: Rob Arthan < rda@lemma-one.com >
 %\TPPpart{}
 \TPPtitle{SLR Parser Driver}  %% Mandatory field
 \TPPref{DS/FMU/IED/IMP018}  %% Mandatory field
-\def\SCCSversion{$Revision: 1.19 $%
+\def\SCCSversion{$Revision: 1.20 $%
 }
 \TPPissue{\SCCSversion}  %% Mandatory field
 %\TPPdate{}  %% Mandatory field (with sensible default)
@@ -89,6 +89,7 @@ signature constraint on $SlrpDriver$.
 \item[Issue 1.19] Removed some unused code.
 \item[Issue 1.20] Changed use of {\it lassoc3} to {\it s\_lookup} where possible, since
 a monomorphic look-up is known to use less memory on at least some ML compilers.
+\item[Issue 1.21] The lexical classifier function is now called only once for each token read.
 \end{description}
 \subsection{Changes forecast}
 \pagebreak
@@ -284,21 +285,25 @@ fun Ûslrp'parseÝ
 	let	open PPArray;
 		val init_ss = [s0];
 		val init_is = [];
+		fun next st = (
+			let	val (tok, st') = reader st;
+			in	(classify tok, tok, st')
+			end
+		);
 		val fetch_action = lookup_action resolver actions;
 		val fetch_reducer = lookup_reducer reducers;
 		val fetch_goto = lookup_goto gotos;
-		fun go (tok, st) = (fn (ss, is) =>
-			let	val lc = classify tok;
-				val s = hd ss;
+		fun go (x as (lc, tok, st)) = (fn (ss, is) =>
+			let	val s = hd ss;
 			in	case fetch_action tok is s lc of 
-					Shift s' => go (reader st)((s' :: ss), Token(tok, lc) :: is)
+					Shift s' => go (next st)((s' :: ss), Token(tok, lc) :: is)
 				|	Reduce((nt, alt), r) => (
 						let	val reducer = fetch_reducer nt alt;
 							val A = reducer is;
 							val ss' = ss from r;
 							val is' = is from r;
 							val s' = fetch_goto (hd ss') nt;
-						in go (tok, st) (s' :: ss', Parsed A :: is')
+						in go x (s' :: ss', Parsed A :: is')
 						end
 				) |	Accept => ((ss, is)
 				) |	Error =>(
@@ -306,7 +311,7 @@ fun Ûslrp'parseÝ
 							val ss' = ss from n;
 							val is' = is from n;
 						in	case ss' of
-								_::_ => go (tok', st') (ss', is')
+								_::_ => go (classify tok', tok', st') (ss', is')
 							|	[] =>
 								raise PARSER_ERROR
 								"error recovery failed"
@@ -318,7 +323,7 @@ fun Ûslrp'parseÝ
 		);
 	in
 		(fn st => (
-			case go (reader st) (init_ss, init_is)of
+			case go (next st) (init_ss, init_is)of
 				(_, [Parsed res]) => res
 			|	_ => raise PARSER_ERROR "stacks corrupt at end of parse"))
 	end
