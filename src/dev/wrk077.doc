@@ -44,9 +44,9 @@ fairly complete parser for the full ANSI-C language.}
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.1 $%
+\def\Version{$Revision: 1.2 $%
 }
-\def\Date{\FormatDate{$Date: 2006/10/05 15:04:43 $%
+\def\Date{\FormatDate{$Date: 2006/10/07 10:47:15 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -128,12 +128,12 @@ Use this as appropriate wherever it does not cause LALR(1) conflicts (which is e
 \item
 * Extend declaration\_list to allow empty lists, and exploit this to abbreviate the productions that use it.
 \item
-* Allow declaration\_specifiers rather than just specifier_qualifier_list at the beginning of a struct\_declaration (leaving a later phase to reject a struct\_declaration with a storage class).
+Add a new non-terminal type\_declarator which is like declarator but having a typedef name as the name being declared.
+Similarly add init\_type\_declarator\_list, struct\_type\_declarator\_list etc.
+Change declaration\_specifiers to require at least one type specifier and at most one typedef name, and add a new non-terminal declaration\_modifiers for a sequence of storage class specifiers and type qualifiers (i.e., what would have been a declaration\_specifiers with no type specifiers).
+This gives a new case in the production for declaration and then it is safe to add a further alternative allowing an init\_type\_declarator after a declaration\_specifiers.
 \item
-Generalise declarator etc. to allow typedef names and add a new construct
-non\_type\_declarator for a declarator that does not comprise a typedef name on its own.
-Use non\_type\_declarator in place of declarator wherever necessary to eliminate LALR(1)
-conflicts.
+Similarly change specifier\_qualifier list to require at least one type specifier and at most one typedef name and so add an alternative allowing a struct\_type\_declarator\_list after a specifier\_qualifier list.
 \end{itemize}
 
 \subsection{Translation Units}
@@ -151,38 +151,51 @@ conflicts.
 =TEX
 =DUMPMORE wrk077.grm.txt
 €function_definition›
-	= declarator, declaration_list, compound_statement
-	| declaration_specifiers, declarator, declaration_list, compound_statement
+	= declarator, declaration_list_opt, compound_statement
+	| declaration_specifiers, declarator, declaration_list_opt, compound_statement
 	;
 =TEX
 \subsection{Declarations}
 
 =TEX
-The following production will need an action function in the working grammar.
 =DUMPMORE wrk077.grm.txt
-€declaration›				(* REFERENCE ONLY *)
-	= declaration_specifiers, `;`
+€declaration›
+	= declaration_modifiers, `;`
+	| declaration_specifiers, `;`
+	| declaration_modifiers, init_declarator_list, `;`
 	| declaration_specifiers, init_declarator_list, `;`
+	| declaration_specifiers, init_type_declarator_list, `;`
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
-€declaration_list›
+€declaration_list_opt›
 	=
-	| declaration_list, declaration
+	| declaration_list_opt, declaration
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€declaration_modifiers›
+	= storage_class_specifier
+	| storage_class_specifier, declaration_modifiers
+	| type_qualifier
+	| type_qualifier, declaration_modifiers
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
 €declaration_specifiers›
-	= storage_class_specifier
-	| storage_class_specifier, declaration_specifiers
-	| type_specifier
-	| type_specifier, declaration_specifiers
-	| type_qualifier
-	| type_qualifier, declaration_specifiers
+	= type_specifier, reserved_declaration_specifiers
+	| declaration_modifiers, type_specifier, reserved_declaration_specifiers
+	;
+=DUMPMORE wrk077.grm.txt
+€reserved_declaration_specifiers›
+	=
+	| reserved_declaration_specifiers, reserved_type_specifier
+	| reserved_declaration_specifiers, type_qualifier
+	| reserved_declaration_specifiers, storage_class_specifier
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
-€storage_class_specifier›			(* REFERENCE ONLY *)
+€storage_class_specifier›
 	= `auto`
 	| `register`
 	| `static`
@@ -191,7 +204,7 @@ The following production will need an action function in the working grammar.
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
-€type_specifier›				(* REFERENCE ONLY *)
+€reserved_type_specifier›
 	= `void`
 	| `char`
 	| `short`
@@ -203,6 +216,11 @@ The following production will need an action function in the working grammar.
 	| `unsigned`
 	| struct_or_union_specifier
 	| enum_specifier
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€type_specifier›
+	= reserved_type_specifier
 	| typedef_name
 	;
 =TEX
@@ -213,7 +231,7 @@ The following production will need an action function in the working grammar.
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
-€struct_or_union_specifier›		(* REFERENCE ONLY *)
+€struct_or_union_specifier›
 	= struct_or_union, `{`, struct_declaration_list, `}`
 	| struct_or_union, identifier_or_typedef_name, `{`, struct_declaration_list, `}`
 	| struct_or_union, identifier_or_typedef_name
@@ -235,6 +253,14 @@ The following production will need an action function in the working grammar.
 €init_declarator_list›
 	= init_declarator
 	| init_declarator_list, `,`, init_declarator
+	| init_declarator_list, `,`, init_type_declarator
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€init_type_declarator_list›
+	= init_type_declarator
+	| init_type_declarator_list, `,`, init_declarator
+	| init_type_declarator_list, `,`, init_type_declarator
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -244,11 +270,20 @@ The following production will need an action function in the working grammar.
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
-€struct_declaration›
-	= declaration_specifiers, struct_declarator_list, `;`
+€init_type_declarator›
+	= type_declarator
+	| type_declarator, `=`, initializer
 	;
 =TEX
+=TEX
 =DUMPMORE wrk077.grm.txt
+€struct_declaration›
+	= qualifier_list, struct_declarator_list, `;`
+	| specifier_qualifier_list, struct_declarator_list, `;`
+	| specifier_qualifier_list, struct_type_declarator_list, `;`
+	;
+=TEX
+=DUMPMORE decl.grm.txt
 €specifier_qualifier_list›
 	= type_specifier
 	| type_specifier, specifier_qualifier_list
@@ -257,9 +292,35 @@ The following production will need an action function in the working grammar.
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
+€qualifier_list›
+	= type_qualifier
+	| type_qualifier, declaration_modifiers
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€specifier_qualifier_list›
+	= type_specifier, reserved_specifier_qualifiers
+	| qualifier_list, type_specifier, reserved_specifier_qualifiers
+	;
+=DUMPMORE wrk077.grm.txt
+€reserved_specifier_qualifiers›
+	=
+	| reserved_specifier_qualifiers, reserved_type_specifier
+	| reserved_specifier_qualifiers, type_qualifier
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
 €struct_declarator_list›
 	= struct_declarator
 	| struct_declarator_list, `,`, struct_declarator
+	| struct_declarator_list, `,`, struct_type_declarator
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€struct_type_declarator_list›
+	= struct_type_declarator
+	| struct_type_declarator_list, `,`, struct_type_declarator
+	| struct_type_declarator_list, `,`, struct_declarator
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -267,6 +328,12 @@ The following production will need an action function in the working grammar.
 	= declarator
 	| `:`, constant_expression
 	| declarator, `:`, constant_expression
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€struct_type_declarator›
+	= type_declarator
+	| type_declarator, `:`, constant_expression
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -283,7 +350,7 @@ The following production will need an action function in the working grammar.
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
-€enumerator›				(* REFERENCE ONLY *)
+€enumerator›
 	= identifier_or_typedef_name
 	| identifier_or_typedef_name, `=`, constant_expression
 	;
@@ -294,11 +361,17 @@ The following production will need an action function in the working grammar.
 	| pointer, direct_declarator
 	;
 =TEX
-In the first alternative below, the intention is that a {\tt typedef} name may appear as an identifier, e.g., when a variable in an inner scope has the same name as a {\tt typedef} name in an outer scope.
-However, expressing that in the grammar leads to
-an ambiguous grammar with many LALR(1) conflicts.
 =DUMPMORE wrk077.grm.txt
-€direct_declarator›		(* REFERENCE ONLY *)
+€type_declarator›
+	= type_direct_declarator
+	| pointer, type_direct_declarator
+	;
+=TEX
+In the following note that there is just one identifier or typedef\_name at the
+heart of the declarator (i.e., the name the declarator, declares).
+The distinction between identifier or typedef\_name declarators then ripples up through the grammar.
+=DUMPMORE wrk077.grm.txt
+€direct_declarator›
 	= identifier
 	| `(`, declarator, `)`
 	| direct_declarator, `[`, `]`
@@ -306,6 +379,17 @@ an ambiguous grammar with many LALR(1) conflicts.
 	| direct_declarator, `(`, `)`
 	| direct_declarator, `(`, parameter_type_list, `)`
 	| direct_declarator, `(`, identifier_list, `)`
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€type_direct_declarator›
+	= typedef_name
+	| `(`, type_declarator, `)`
+	| type_direct_declarator, `[`, `]`
+	| type_direct_declarator, `[`, constant_expression, `]`
+	| type_direct_declarator, `(`, `)`
+	| type_direct_declarator, `(`, parameter_type_list, `)`
+	| type_direct_declarator, `(`, identifier_list, `)`
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -343,7 +427,7 @@ an ambiguous grammar with many LALR(1) conflicts.
 =TEX
 The following production is only used for old style formal parameter lists, in which {\tt typedef} names are (following {\tt gcc} at least) not to be treated as identifiers.
 =DUMPMORE wrk077.grm.txt
-€identifier_list›			(* REFERENCE ONLY *)
+€identifier_list›
 	= identifier
 	| identifier_list, `,`, identifier
 	;
@@ -362,8 +446,10 @@ The following production is only used for old style formal parameter lists, in w
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
-€type_name›			(* REFERENCE ONLY *)
-	= specifier_qualifier_list
+€type_name›
+	= qualifier_list
+	| qualifier_list, abstract_declarator
+	| specifier_qualifier_list
 	| specifier_qualifier_list, abstract_declarator
 	;
 =TEX
@@ -422,9 +508,9 @@ Where it does not introduce LALR(1) conflicts, we use the following production t
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
-€compound_statement›			(* REFERENCE ONLY *)
-	= `{`, declaration_list, `}`
-	| `{`, declaration_list, statement_list, `}`
+€compound_statement›
+	= `{`, declaration_list_opt, `}`
+	| `{`, declaration_list_opt, statement_list, `}`
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -644,7 +730,7 @@ enumeration constants and other identifiers does not affect the parsing.
 =TEX
 We add productions for {\it string} and identifier just to keep the naming scheme uniform.
 =DUMPMORE wrk077.grm.txt
-€string›			(* REFERENCE ONLY *)
+€string›
 	= String
 	;
 =DUMPMORE wrk077.grm.txt
