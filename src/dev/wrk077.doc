@@ -44,9 +44,9 @@ fairly complete parser for the full ANSI-C language.}
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.3 $%
+\def\Version{$Revision: 1.4 $%
 }
-\def\Date{\FormatDate{$Date: 2006/10/07 13:16:49 $%
+\def\Date{\FormatDate{$Date: 2006/10/07 13:25:41 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -102,7 +102,7 @@ Lemma 1 Development Library
 
 \section{Introduction}
 \subsection{Scope}
-This document is part of some preparatory work on the C language.
+This document is part of the {\Slrp} test suite.
 
 \subsection{Purpose and Background}
 This document is part of the {\Slrp} test suite and also provides an example of
@@ -111,33 +111,73 @@ various techniques of interest to users of {\Slrp}.
 \subsection{Overview}
 This document provides a grammar in the {\Slrp} format that can support the full C language.
 I.e., unlike the grammar of \cite{LEMMA1/DEV/WRK063}, this grammar caters for the numerous
-rather obscure consequences of the definitions of C, for example, the rule that says structure member names are in a separate namespace .
+rather obscure consequences of the definitions of C, for example, the rule that says structure member names are in a separate namespace.
 
 =TEX
 \section{THE GRAMMAR} \label{GRAMMAR}
 Our starting point is the reference grammar given in \cite{LEMMA1/DEV/WRK063}
-which is itself based on the 1990 standard \cite{ansi90} and the grammar given in.
+which is itself based on the 1990 standard \cite{ansi90} and the grammar given in
+\cite{Kernighan88}.
+Note that all of these grammars leave some essentially syntactic issues unspecified, 
+i.e., they expect some syntax errors to be detected after parsing.
+For example, the declarator at the beginning of a function definition must contain a parameter list, but none of the grammars captures this constraint.
+
+There are two main problems with the reference grammar of \cite{LEMMA1/DEV/WRK063}:
+
+\begin{enumerate}
+\item
+The problem identified in \cite{LEMMA1/DEV/WRK063} whereby {\tt typedef} names
+have to be distinguished from ordinary identifiers by processing their declarations as
+they are encountered.
+For example, to parse  `{\tt typedef int I; I i;}' properly according to the reference grammar,
+one must take the first `{\tt I}' as an {\em identifier} and the second `{\tt I}' as a {\em typedef\_name}.
+\item
+The kind of problem pointed out in example 3 of section 6.5.6 of \cite{ansi90}, whereby {\tt typedef} names may be redeclared in inner scopes.
+This leads to some oddities as in the following example:
+\begin{verbatim}
+    typedef int I, J;
+    void f(void)
+    {
+        I I;               /* legal - declares a variable I */
+        J;                 /* legal but useless, declares nothing */
+        struct {
+            int J:4;       /* bitfield of type int and width 4 named J */
+            const J:5;     /* bitfield of type const J and width 5 with no name */
+            J j:6;         /* bitfield of type J and width 6 named j */
+        } x;
+     }
+\end{verbatim}
+\end{enumerate}
+The solution to the first problem is fairly straightforward: one must simply ensure that the parsing action functions can be called at the appropriate time to process the declarations.
+The solution to the second problm is more complicated: we adopt a trick believed to go back to early versions of the {\tt gcc} compiler: we adjust the grammar to reflect the fact that 
+the type specifier part of a declaration can contain at most one {\tt typedef} name.
+This means that the second `{\tt I}' in the declaration `{\tt I I;}' above must be a declarator and cannot be a type specifier.
 
 The following records the various changes that have been made to the grammar of \cite{LEMMA1/DEV/WRK063}.
 
 \begin{itemize}
 \item
-Introduce a new non-terminal  identifier\_or\_typedef\_name for
+Introduce a new non-terminal  {\em identifier\_or\_typedef\_name} for
 use in situations such as statement labels where either an identifier or a typedef name is allowed.
-Use this as appropriate wherever it does not cause LALR(1) conflicts (which is everywhere except in a direct\_declarator).
+Use this as appropriate wherever it does not cause LALR(1) conflicts (which is everywhere except in a {\em direct\_declarator}).
 \item
-* Change declaration\_list into declaration\_list\_opt allowing empty lists, and exploit this to abbreviate the productions that use it.
-Similarly for init\_declarator\_list.
-Do the gcc trick, which amounts to this:
-\begin{itemize}
+Change {\em declaration\_list} into {\em declaration\_list\_opt} allowing empty lists, and exploit this to abbreviate the productions that use it.
+Similarly for {\em init\_declarator\_list}.
+Do the gcc trick, which applies to the three different types of declarations as follows:
+\begin{description}
+\item[Variable and constant declarations:]
+add a new non-terminal {\em type\_declarator} which is like {\em declarator} but having a typedef name as the name being declared.
+Similarly add {\em init\_type\_declarator\_list}, {\em struct\_type\_declarator\_list} etc.
+Change {\em declaration\_specifiers} to have at least one type specifier and at most one typedef name, and add a new non-terminal {\em declaration\_modifiers} for a sequence of storage class specifiers and type qualifiers (i.e., what would have been a {\em declaration\_specifiers} with no type specifiers).
+This gives a new case in the production for declaration and then it is safe to add a further alternative allowing an {\em init\_type\_declarator} after a {\em declaration\_specifiers}.
+\item[Structure and union member declarations:]
+change {\em specifier\_qualifier} list to have at least one type specifier and at most one {\em typedef\_name} and so add an alternative allowing a {\em struct\_type\_declarator\_list} after a {\em specifier\_qualifier} list in a {\em struct\_declaration}.
 \item
-Add a new non-terminal type\_declarator which is like declarator but having a typedef name as the name being declared.
-Similarly add init\_type\_declarator\_list, struct\_type\_declarator\_list etc.
-Change declaration\_specifiers to require at least one type specifier and at most one typedef name, and add a new non-terminal declaration\_modifiers for a sequence of storage class specifiers and type qualifiers (i.e., what would have been a declaration\_specifiers with no type specifiers).
-This gives a new case in the production for declaration and then it is safe to add a further alternative allowing an init\_type\_declarator after a declaration\_specifiers.
-\item
-Similarly change specifier\_qualifier list to require at least one type specifier and at most one typedef name and so add an alternative allowing a struct\_type\_declarator\_list after a specifier\_qualifier list.
-\end{itemize}
+\item[Parameter declarations:]
+Add new non-terminals {\em parameter\_direct\_declarator} and {\em parameter\_declarator}.
+{\em parameter\_direct\_declarator} is the union of {\em declarator}, {\em type\_declarator} and {\em abstract\_declarator}, but expressed in a separate recursion.
+Use {\em parameter\_declarator} in {\em parameter\_declaration} in place of the separate alternatives for {\em declarator} and {\em abstract\_declarator}.
+\end{description}
 \end{itemize}
 
 \subsection{Translation Units}
@@ -164,9 +204,14 @@ Similarly change specifier\_qualifier list to require at least one type specifie
 =TEX
 =DUMPMORE wrk077.grm.txt
 €declaration›
-	= declaration_modifiers, init_declarator_list_opt, `;`
-	| declaration_specifiers, init_declarator_list_opt, `;`
-	| declaration_specifiers, init_type_declarator_list, `;`
+	= declaration_modifiers, init_declarator_list_opt, end_declaration, `;`
+	| declaration_specifiers, init_declarator_list_opt, end_declaration, `;`
+	| declaration_specifiers, init_type_declarator_list, end_declaration, `;`
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€end_declaration›
+	=
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -234,9 +279,21 @@ Similarly change specifier\_qualifier list to require at least one type specifie
 =TEX
 =DUMPMORE wrk077.grm.txt
 €struct_or_union_specifier›
-	= struct_or_union, `{`, struct_declaration_list, `}`
-	| struct_or_union, identifier_or_typedef_name, `{`, struct_declaration_list, `}`
+	= struct_or_union, begin_members,
+		`{`, struct_declaration_list, end_members, `}`
+	| struct_or_union, identifier_or_typedef_name, begin_members,
+		`{`, struct_declaration_list, end_members, `}`
 	| struct_or_union, identifier_or_typedef_name
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€begin_members›
+	= 
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€end_members›
+	= 
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -375,9 +432,9 @@ Similarly change specifier\_qualifier list to require at least one type specifie
 	| pointer, type_direct_declarator
 	;
 =TEX
-In the following note that there is just one identifier or typedef\_name at the
+In the following note that there is just one identifier or {\em typedef\_name} at the
 heart of the declarator (i.e., the name the declarator, declares).
-The distinction between identifier or typedef\_name declarators then ripples up through the grammar.
+The distinction between identifier or {\em typedef\_name} declarators then ripples up through the grammar.
 =DUMPMORE wrk077.grm.txt
 €direct_declarator›
 	= identifier
@@ -428,9 +485,28 @@ The distinction between identifier or typedef\_name declarators then ripples up 
 =TEX
 =DUMPMORE wrk077.grm.txt
 €parameter_declaration›
-	= declaration_specifiers, declarator
-	| declaration_specifiers
-	| declaration_specifiers, abstract_declarator
+	= declaration_specifiers
+	| declaration_specifiers, parameter_declarator
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€parameter_declarator›
+	= parameter_direct_declarator
+	| pointer, parameter_direct_declarator
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€parameter_direct_declarator›
+	= identifier
+	| typedef_name
+	| `(`, parameter_declarator, `)`
+	| `(`, `)`
+	| `[`, `]`
+	| parameter_direct_declarator, `[`, `]`
+	| parameter_direct_declarator, `[`, constant_expression, `]`
+	| parameter_direct_declarator, `(`, `)`
+	| parameter_direct_declarator, `(`, parameter_type_list, `)`
+	| parameter_direct_declarator, `(`, identifier_list, `)`
 	;
 =TEX
 The following production is only used for old style formal parameter lists, in which {\tt typedef} names are (following {\tt gcc} at least) not to be treated as identifiers.
@@ -481,7 +557,7 @@ The following production is only used for old style formal parameter lists, in w
 	| direct_abstract_declarator, `(`, parameter_type_list, `)`
 	;
 =TEX
-The production for {\it typedef\_name} has to be modified, since the grammar becomes ambiguous
+The production for {\em typedef\_name} has to be modified, since the grammar becomes ambiguous
 if typedef names cannot be distinugished from other names. E.g., to decide whether the
 expression ``{\tt(X)(x)}'' is a cast or a function call, one needs to know whether ``{\tt X}''
 denotes a type.
