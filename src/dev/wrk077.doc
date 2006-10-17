@@ -44,9 +44,9 @@ fairly complete parser for the full ANSI-C language.}
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.4 $%
+\def\Version{$Revision: 1.5 $%
 }
-\def\Date{\FormatDate{$Date: 2006/10/07 13:25:41 $%
+\def\Date{\FormatDate{$Date: 2006/10/16 15:35:28 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -126,14 +126,15 @@ There are two main problems with the reference grammar of \cite{LEMMA1/DEV/WRK06
 
 \begin{enumerate}
 \item
-The problem identified in \cite{LEMMA1/DEV/WRK063} whereby {\tt typedef} names
-have to be distinguished from ordinary identifiers by processing their declarations as
-they are encountered.
+The grannar assumes that {\tt typedef} names
+can be distinguished from ordinary identifiers when necessary.
+This means that ther declarations must be analysed as they are encountered to maintain a timely record of what names are {\tt typedef} names.
 For example, to parse  `{\tt typedef int I; I i;}' properly according to the reference grammar,
 one must take the first `{\tt I}' as an {\em identifier} and the second `{\tt I}' as a {\em typedef\_name}.
 \item
 The kind of problem pointed out in example 3 of section 6.5.6 of \cite{ansi90}, whereby {\tt typedef} names may be redeclared in inner scopes.
 This leads to some oddities as in the following example:
+{\small
 \begin{verbatim}
     typedef int I, J;
     void f(void)
@@ -141,15 +142,16 @@ This leads to some oddities as in the following example:
         I I;               /* legal - declares a variable I */
         J;                 /* legal but useless, declares nothing */
         struct {
-            int J:4;       /* bitfield of type int and width 4 named J */
-            const J:5;     /* bitfield of type const J and width 5 with no name */
-            J j:6;         /* bitfield of type J and width 6 named j */
+            int J:4;       /* bitfield: type `int'; width 4; name J */
+            const J:5;     /* bitfield: type `const J'; width 5; nameless */
+            J j:6;         /* bitfield: type `J'; width 6; name j */
         } x;
      }
-\end{verbatim}
+\end{verbatim}}
 \end{enumerate}
+
 The solution to the first problem is fairly straightforward: one must simply ensure that the parsing action functions can be called at the appropriate time to process the declarations.
-The solution to the second problm is more complicated: we adopt a trick believed to go back to early versions of the {\tt gcc} compiler: we adjust the grammar to reflect the fact that 
+The solution to the second problem is more complicated: we adopt a trick believed to go back to early versions of the {\tt gcc} compiler: we adjust the grammar to reflect the fact that 
 the type specifier part of a declaration can contain at most one {\tt typedef} name.
 This means that the second `{\tt I}' in the declaration `{\tt I I;}' above must be a declarator and cannot be a type specifier.
 
@@ -169,15 +171,20 @@ Do the gcc trick, which applies to the three different types of declarations as 
 add a new non-terminal {\em type\_declarator} which is like {\em declarator} but having a typedef name as the name being declared.
 Similarly add {\em init\_type\_declarator\_list}, {\em struct\_type\_declarator\_list} etc.
 Change {\em declaration\_specifiers} to have at least one type specifier and at most one typedef name, and add a new non-terminal {\em declaration\_modifiers} for a sequence of storage class specifiers and type qualifiers (i.e., what would have been a {\em declaration\_specifiers} with no type specifiers).
-This gives a new case in the production for declaration and then it is safe to add a further alternative allowing an {\em init\_type\_declarator} after a {\em declaration\_specifiers}.
+Add a new production {\em declaration\_modifiers} to represent what was previously a {\em declaration\_specifiers} with no type specifiers.
+This gives a new case in the production for declaration and then it becomes safe to add a further alternative allowing an {\em init\_type\_declarator} after a {\em declaration\_specifiers}.
 \item[Structure and union member declarations:]
 change {\em specifier\_qualifier} list to have at least one type specifier and at most one {\em typedef\_name} and so add an alternative allowing a {\em struct\_type\_declarator\_list} after a {\em specifier\_qualifier} list in a {\em struct\_declaration}.
 \item
 \item[Parameter declarations:]
 Add new non-terminals {\em parameter\_direct\_declarator} and {\em parameter\_declarator}.
-{\em parameter\_direct\_declarator} is the union of {\em declarator}, {\em type\_declarator} and {\em abstract\_declarator}, but expressed in a separate recursion.
+{\em parameter\_direct\_declarator} is the union of {\em declarator}, {\em type\_declarator} and {\em abstract\_declarator}, but expressed in a separate recursion to avoid LALR(1) conflicts.
 Use {\em parameter\_declarator} in {\em parameter\_declaration} in place of the separate alternatives for {\em declarator} and {\em abstract\_declarator}.
 \end{description}
+\item
+Add in new non-terminals, {\em do\_end\_declaration}, {\em do\_begin\_members} etc. at the points in the syntax where an action function needs to be invoked (namely at the end of each declaration, and immediately before the braces in compound statements and in structure, union and enum declarations, see section~\ref{actions} below).
+Each of these non-terminals generates an empty language.
+As the non-terminal is immediately before a terminal symbol (a semicolon or a brace) in the production it appears in, the LR(1) automaton in the generated parser is guaranteed to call the action function before reading the token after the semicolon or brace.
 \end{itemize}
 
 \subsection{Translation Units}
@@ -204,14 +211,9 @@ Use {\em parameter\_declarator} in {\em parameter\_declaration} in place of the 
 =TEX
 =DUMPMORE wrk077.grm.txt
 €declaration›
-	= declaration_modifiers, init_declarator_list_opt, end_declaration, `;`
-	| declaration_specifiers, init_declarator_list_opt, end_declaration, `;`
-	| declaration_specifiers, init_type_declarator_list, end_declaration, `;`
-	;
-=TEX
-=DUMPMORE wrk077.grm.txt
-€end_declaration›
-	=
+	= declaration_modifiers, init_declarator_list_opt, do_end_declaration, `;`
+	| declaration_specifiers, init_declarator_list_opt, do_end_declaration, `;`
+	| declaration_specifiers, init_type_declarator_list, do_end_declaration, `;`
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -233,6 +235,7 @@ Use {\em parameter\_declarator} in {\em parameter\_declaration} in place of the 
 	= type_specifier, reserved_declaration_specifiers
 	| declaration_modifiers, type_specifier, reserved_declaration_specifiers
 	;
+=TEX
 =DUMPMORE wrk077.grm.txt
 €reserved_declaration_specifiers›
 	=
@@ -279,21 +282,11 @@ Use {\em parameter\_declarator} in {\em parameter\_declaration} in place of the 
 =TEX
 =DUMPMORE wrk077.grm.txt
 €struct_or_union_specifier›
-	= struct_or_union, begin_members,
-		`{`, struct_declaration_list, end_members, `}`
-	| struct_or_union, identifier_or_typedef_name, begin_members,
-		`{`, struct_declaration_list, end_members, `}`
+	= struct_or_union, do_begin_members,
+		`{`, struct_declaration_list, do_end_members, `}`
+	| struct_or_union, identifier_or_typedef_name, do_begin_members,
+		`{`, struct_declaration_list, do_end_members, `}`
 	| struct_or_union, identifier_or_typedef_name
-	;
-=TEX
-=DUMPMORE wrk077.grm.txt
-€begin_members›
-	= 
-	;
-=TEX
-=DUMPMORE wrk077.grm.txt
-€end_members›
-	= 
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -343,7 +336,7 @@ Use {\em parameter\_declarator} in {\em parameter\_declaration} in place of the 
 =TEX
 =DUMPMORE wrk077.grm.txt
 €struct_declaration›
-	= qualifier_list, struct_declarator_list, `;`
+	= type_qualifier_list, struct_declarator_list, `;`
 	| specifier_qualifier_list, struct_declarator_list, `;`
 	| specifier_qualifier_list, struct_type_declarator_list, `;`
 	;
@@ -357,16 +350,11 @@ Use {\em parameter\_declarator} in {\em parameter\_declaration} in place of the 
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
-€qualifier_list›
-	= type_qualifier
-	| type_qualifier, declaration_modifiers
-	;
-=TEX
-=DUMPMORE wrk077.grm.txt
 €specifier_qualifier_list›
 	= type_specifier, reserved_specifier_qualifiers
-	| qualifier_list, type_specifier, reserved_specifier_qualifiers
+	| type_qualifier_list, type_specifier, reserved_specifier_qualifiers
 	;
+=TEX
 =DUMPMORE wrk077.grm.txt
 €reserved_specifier_qualifiers›
 	=
@@ -531,8 +519,8 @@ The following production is only used for old style formal parameter lists, in w
 =TEX
 =DUMPMORE wrk077.grm.txt
 €type_name›
-	= qualifier_list
-	| qualifier_list, abstract_declarator
+	= type_qualifier_list
+	| type_qualifier_list, abstract_declarator
 	| specifier_qualifier_list
 	| specifier_qualifier_list, abstract_declarator
 	;
@@ -593,8 +581,10 @@ Where it does not introduce LALR(1) conflicts, we use the following production t
 =TEX
 =DUMPMORE wrk077.grm.txt
 €compound_statement›
-	= `{`, declaration_list_opt, `}`
-	| `{`, declaration_list_opt, statement_list, `}`
+	= do_begin_compound_statement,
+	 `{`, declaration_list_opt, do_end_compound_statement, `}`
+	| do_begin_compound_statement,
+	 `{`, declaration_list_opt, statement_list, do_end_compound_statement, `}`
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -767,6 +757,8 @@ To avoid 7 extra cases in the following, we introduce a new production for an op
 	| `sizeof`, unary_expression
 	| `sizeof`, `(`, type_name, `)`
 	;
+=TEX
+=DUMPMORE wrk077.grm.txt
 €unary_operator›
 	= `&`
 	| `*`
@@ -817,9 +809,37 @@ We add productions for {\it string} and identifier just to keep the naming schem
 €string›
 	= String
 	;
+=TEX
 =DUMPMORE wrk077.grm.txt
 €identifier›
 	= Identifier
+	;
+=TEX
+\subsection{Action Functions}~\label{actions}
+Finally we give the empty productions for the points at which an action function must be called.
+=DUMPMORE wrk077.grm.txt
+€do_end_declaration›
+	=
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€do_begin_members›
+	= 
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€do_end_members›
+	= 
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€do_begin_compound_statement›
+	=
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€do_end_compound_statement›
+	=
 	;
 =TEX
 =SH
