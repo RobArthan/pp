@@ -44,9 +44,9 @@ fairly complete parser for the full ANSI-C language.}
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.5 $%
+\def\Version{$Revision: 1.6 $%
 }
-\def\Date{\FormatDate{$Date: 2006/10/16 15:35:28 $%
+\def\Date{\FormatDate{$Date: 2006/10/17 16:48:05 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -84,7 +84,7 @@ fairly complete parser for the full ANSI-C language.}
 
 \subsection{Changes Forecast}
 
-As determined by experience with the template.
+Parser code to be added.
 
 %%%%% DISTRIBUTION LIST
 
@@ -126,8 +126,8 @@ There are two main problems with the reference grammar of \cite{LEMMA1/DEV/WRK06
 
 \begin{enumerate}
 \item
-The grannar assumes that {\tt typedef} names
-can be distinguished from ordinary identifiers when necessary.
+The grannar as presented effectively assumes that {\tt typedef} names
+comprise a distinguished subset of the set of identifers.
 This means that ther declarations must be analysed as they are encountered to maintain a timely record of what names are {\tt typedef} names.
 For example, to parse  `{\tt typedef int I; I i;}' properly according to the reference grammar,
 one must take the first `{\tt I}' as an {\em identifier} and the second `{\tt I}' as a {\em typedef\_name}.
@@ -150,12 +150,27 @@ This leads to some oddities as in the following example:
 \end{verbatim}}
 \end{enumerate}
 
-The solution to the first problem is fairly straightforward: one must simply ensure that the parsing action functions can be called at the appropriate time to process the declarations.
-The solution to the second problem is more complicated: we adopt a trick believed to go back to early versions of the {\tt gcc} compiler: we adjust the grammar to reflect the fact that 
-the type specifier part of a declaration can contain at most one {\tt typedef} name.
-This means that the second `{\tt I}' in the declaration `{\tt I I;}' above must be a declarator and cannot be a type specifier.
+The solution to the first problem is fairly straightforward: one must simply ensure that the parsing action functions are called at the appropriate time to process declarations maintaining a record of which names are currently {\tt typedef} names.
+This needs to be take into account the C scope rules: in particular, it must
+take into account section 6.2.1 of \cite{ansi90}: {\em each enumeration constant has scope that begins
+just after its defining enumerator \ldots Any other identifier has scope that begins just after
+the completion of its declarator.}
+
+The solution to the second problem is more complicated: we adopt a trick that goes back to early versions of the {\tt gcc} compiler\footnote{Recent versions of {|tt gcc} use a hand-coded recursive descent parser for C and C++.}.
+The {\tt gcc} trick exploits the following points from \cite{ansi90}:
+\begin{description}
+\item[6.7.1] {\it If the declarator includes an identifier list, \ldots. An identifier declared as
+a {\tt typedef name} shall not be redecared as a parameter.}
+
+(This is taken to apply to all declarators, not just those in function definitions. It means that an old-style parameter list can't redefine a {\tt typedef} name.)
+\item[6.5.6] {\it If the identifier is redeclared in an inner scope or is declared as a member of a structure or union in the same or an inner scope, the type specifiers shall not be omitted in the inner declaration.}
+\item[6.5.2] {\em Each list of type specifiers shall be one of the following sets \ldots}
+
+(The list implies that the type specifier part of a declaration can contain at most one {\tt typedef} name and that {\tt typedef} name cannot be mixed with other kinds of type specifier so that the second `{\tt I}' in the declaration `{\tt I I;}' above must be a declarator and cannot be a type specifier.)
+\end{description}
 
 The following records the various changes that have been made to the grammar of \cite{LEMMA1/DEV/WRK063}.
+If the changes are made incrementally, then, at each stage, the only LALR(1) conflict is the shift/reduce conflict caused by the dangling else problem.
 
 \begin{itemize}
 \item
@@ -164,7 +179,8 @@ use in situations such as statement labels where either an identifier or a typed
 Use this as appropriate wherever it does not cause LALR(1) conflicts (which is everywhere except in a {\em direct\_declarator}).
 \item
 Change {\em declaration\_list} into {\em declaration\_list\_opt} allowing empty lists, and exploit this to abbreviate the productions that use it.
-Similarly for {\em init\_declarator\_list}.
+Similarly for {\em init\_declarator\_list} and {\em identifier\_list}.
+\item
 Do the gcc trick, which applies to the three different types of declarations as follows:
 \begin{description}
 \item[Variable and constant declarations:]
@@ -172,20 +188,23 @@ add a new non-terminal {\em type\_declarator} which is like {\em declarator} but
 Similarly add {\em init\_type\_declarator\_list}, {\em struct\_type\_declarator\_list} etc.
 Change {\em declaration\_specifiers} to have at least one type specifier and at most one typedef name, and add a new non-terminal {\em declaration\_modifiers} for a sequence of storage class specifiers and type qualifiers (i.e., what would have been a {\em declaration\_specifiers} with no type specifiers).
 Add a new production {\em declaration\_modifiers} to represent what was previously a {\em declaration\_specifiers} with no type specifiers.
-This gives a new case in the production for declaration and then it becomes safe to add a further alternative allowing an {\em init\_type\_declarator} after a {\em declaration\_specifiers}.
+This gives a new case in the production for {\em declaration} and then it becomes safe to add a further alternative allowing an {\em init\_type\_declarator} after a {\em declaration\_specifiers}.
 \item[Structure and union member declarations:]
-change {\em specifier\_qualifier} list to have at least one type specifier and at most one {\em typedef\_name} and so add an alternative allowing a {\em struct\_type\_declarator\_list} after a {\em specifier\_qualifier} list in a {\em struct\_declaration}.
+change {\em specifier\_qualifier\_list} to have at least one type specifier and at most one {\em typedef\_name} and so add an alternative allowing a {\em struct\_type\_declarator\_list} after a {\em specifier\_qualifier} list in a {\em struct\_declaration}.
 \item
 \item[Parameter declarations:]
 Add new non-terminals {\em parameter\_direct\_declarator} and {\em parameter\_declarator}.
-{\em parameter\_direct\_declarator} is the union of {\em declarator}, {\em type\_declarator} and {\em abstract\_declarator}, but expressed in a separate recursion to avoid LALR(1) conflicts.
+{\em parameter\_direct\_declarator} is the union of {\em direct\_declarator}, {\em type\_direct\_declarator} and {\em direct\_abstract\_declarator} expressed in a separate recursion to avoid LALR(1) conflicts.
 Use {\em parameter\_declarator} in {\em parameter\_declaration} in place of the separate alternatives for {\em declarator} and {\em abstract\_declarator}.
 \end{description}
 \item
-Add in new non-terminals, {\em do\_end\_declaration}, {\em do\_begin\_members} etc. at the points in the syntax where an action function needs to be invoked (namely at the end of each declaration, and immediately before the braces in compound statements and in structure, union and enum declarations, see section~\ref{actions} below).
-Each of these non-terminals generates an empty language.
-As the non-terminal is immediately before a terminal symbol (a semicolon or a brace) in the production it appears in, the LR(1) automaton in the generated parser is guaranteed to call the action function before reading the token after the semicolon or brace.
+Add in new non-terminals, {\em do\_begin\_members} etc. at the points in the syntax where an action function needs to be invoked, see section~\ref{actions} below.
+Each of these non-terminals had a name beginning `{\em do\_}' and generates an empty language.
 \end{itemize}
+
+[Remark: The 1999 revision of the C standard, \cite{ansi99}, requires a type specifier in
+each of the three sorts of declaration, and so the non-terminals {\em declaration\_specifiers}
+and {\em specification\_qualifier\_list} as modified here are what is required in C99.]
 
 \subsection{Translation Units}
 =DUMP wrk077.grm.txt
@@ -250,7 +269,7 @@ As the non-terminal is immediately before a terminal symbol (a semicolon or a br
 	| `register`
 	| `static`
 	| `extern`
-	| `typedef`
+	| do_typedef, `typedef`
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -307,11 +326,13 @@ As the non-terminal is immediately before a terminal symbol (a semicolon or a br
 	| init_declarator_list
 	;
 =TEX
+Note that it would not introduce an LALR(1) conflict to allow an {\em init\_type\_declarator} in the second and subsequent members of the list below.
+However, section 6.5.6 of \cite{ansi90} does not allow this extra generality:
+if `{\tt I}' has been declared as a {\tt typedef} name, a redeclaration such as `{\tt const J, I;}' without a type specifier is not allowed.
 =DUMPMORE wrk077.grm.txt
 €init_declarator_list›
 	= init_declarator
 	| init_declarator_list, `,`, init_declarator
-	| init_declarator_list, `,`, init_type_declarator
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -362,11 +383,12 @@ As the non-terminal is immediately before a terminal symbol (a semicolon or a br
 	| reserved_specifier_qualifiers, type_qualifier
 	;
 =TEX
+The comment about {\em innit\_declarator\_list} above also applies, {\it mutatis mutandis} to
+{\em struct\_declarator\_list}.
 =DUMPMORE wrk077.grm.txt
 €struct_declarator_list›
 	= struct_declarator
 	| struct_declarator_list, `,`, struct_declarator
-	| struct_declarator_list, `,`, struct_type_declarator
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -391,15 +413,17 @@ As the non-terminal is immediately before a terminal symbol (a semicolon or a br
 =TEX
 =DUMPMORE wrk077.grm.txt
 €enum_specifier›
-	= `enum`, `{`, enumerator_list, `}`
-	| `enum`, identifier_or_typedef_name, `{`, enumerator_list, `}`
+	= `enum`, do_begin_enumerators,
+		`{`, enumerator_list, do_end_enumerators, `}`
+	| `enum`, identifier_or_typedef_name, do_begin_enumerators,
+		`{`, enumerator_list, do_end_enumerators, `}`
 	| `enum`, identifier_or_typedef_name
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
 €enumerator_list›
-	= enumerator
-	| enumerator_list, `,`, enumerator
+	= enumerator, do_enumerator
+	| enumerator_list, `,`, enumerator, do_enumerator
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -410,13 +434,13 @@ As the non-terminal is immediately before a terminal symbol (a semicolon or a br
 =TEX
 =DUMPMORE wrk077.grm.txt
 €declarator›
-	= direct_declarator
+	= direct_declarator, do_declarator
 	| pointer, direct_declarator
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
 €type_declarator›
-	= type_direct_declarator
+	= type_direct_declarator, do_declarator
 	| pointer, type_direct_declarator
 	;
 =TEX
@@ -429,9 +453,10 @@ The distinction between identifier or {\em typedef\_name} declarators then rippl
 	| `(`, declarator, `)`
 	| direct_declarator, `[`, `]`
 	| direct_declarator, `[`, constant_expression, `]`
-	| direct_declarator, `(`, `)`
-	| direct_declarator, `(`, parameter_type_list, `)`
-	| direct_declarator, `(`, identifier_list, `)`
+	| direct_declarator, do_begin_parameters,
+		`(`, parameter_type_list, do_end_parameters, `)`
+	| direct_declarator, do_begin_parameters,
+		`(`, identifier_list_opt, do_end_parameters, `)`
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -440,9 +465,10 @@ The distinction between identifier or {\em typedef\_name} declarators then rippl
 	| `(`, type_declarator, `)`
 	| type_direct_declarator, `[`, `]`
 	| type_direct_declarator, `[`, constant_expression, `]`
-	| type_direct_declarator, `(`, `)`
-	| type_direct_declarator, `(`, parameter_type_list, `)`
-	| type_direct_declarator, `(`, identifier_list, `)`
+	| type_direct_declarator, do_begin_parameters,
+		`(`, parameter_type_list, do_end_parameters, `)`
+	| type_direct_declarator, do_begin_parameters,
+		`(`, identifier_list_opt, do_end_parameters,` )`
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -479,29 +505,29 @@ The distinction between identifier or {\em typedef\_name} declarators then rippl
 =TEX
 =DUMPMORE wrk077.grm.txt
 €parameter_declarator›
-	= parameter_direct_declarator
-	| pointer, parameter_direct_declarator
+	= parameter_direct_declarator, do_declarator
+	| pointer, parameter_direct_declarator, do_declarator
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
 €parameter_direct_declarator›
-	= identifier
-	| typedef_name
+	= identifier_or_typedef_name
 	| `(`, parameter_declarator, `)`
 	| `(`, `)`
 	| `[`, `]`
 	| parameter_direct_declarator, `[`, `]`
 	| parameter_direct_declarator, `[`, constant_expression, `]`
-	| parameter_direct_declarator, `(`, `)`
-	| parameter_direct_declarator, `(`, parameter_type_list, `)`
-	| parameter_direct_declarator, `(`, identifier_list, `)`
+	| parameter_direct_declarator, do_begin_parameters,
+		`(`, parameter_type_list, do_end_parameters, `)`
+	| parameter_direct_declarator, do_begin_parameters,
+		`(`, identifier_list_opt, do_end_parameters, `)`
 	;
 =TEX
 The following production is only used for old style formal parameter lists, in which {\tt typedef} names are (following {\tt gcc} at least) not to be treated as identifiers.
 =DUMPMORE wrk077.grm.txt
-€identifier_list›
-	= identifier
-	| identifier_list, `,`, identifier
+€identifier_list_opt›
+	=
+	| identifier, `,`, identifier_list_opt
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -602,7 +628,7 @@ Where it does not introduce LALR(1) conflicts, we use the following production t
 This is where the shift/reduce conflict arises. The statement ``{\tt if(a) if(b) f(); else g();}''
 can be parsed so that the else-part belongs to the inner if-statement or the outer one
 according to the following grammar. The resolution is that it should belong to the
-inner if-statement, i.e., reduce.
+inner if-statement, i.e., shift.
 =DUMPMORE wrk077.grm.txt
 €selection_statement›
 	= `if`, `(`, expression, `)`, statement
@@ -816,10 +842,15 @@ We add productions for {\it string} and identifier just to keep the naming schem
 	;
 =TEX
 \subsection{Action Functions}~\label{actions}
-Finally we give the empty productions for the points at which an action function must be called.
+=TEX
 =DUMPMORE wrk077.grm.txt
 €do_end_declaration›
-	=
+	= 
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€do_typedef›
+	= 
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -829,6 +860,36 @@ Finally we give the empty productions for the points at which an action function
 =TEX
 =DUMPMORE wrk077.grm.txt
 €do_end_members›
+	= 
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€do_begin_enumerators›
+	= 
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€do_end_enumerators›
+	= 
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€do_declarator›
+	= 
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€do_enumerator›
+	= 
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€do_begin_parameters›
+	= 
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€do_end_parameters›
 	= 
 	;
 =TEX
