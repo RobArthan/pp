@@ -44,9 +44,9 @@ fairly complete parser for the full ANSI-C language.}
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.6 $%
+\def\Version{$Revision: 1.7 $%
 }
-\def\Date{\FormatDate{$Date: 2006/10/17 16:48:05 $%
+\def\Date{\FormatDate{$Date: 2006/10/18 15:05:27 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -110,13 +110,12 @@ various techniques of interest to users of {\Slrp}.
 
 \subsection{Overview}
 This document provides a grammar in the {\Slrp} format that can support the full C language.
-I.e., unlike the grammar of \cite{LEMMA1/DEV/WRK063}, this grammar caters for the numerous
-rather obscure consequences of the definitions of C, for example, the rule that says structure member names are in a separate namespace.
+I.e., unlike the grammar of \cite{LEMMA1/DEV/WRK063}, this grammar caters for all the consequences of the definitions of C, for example, the rule that says structure member names are in a separate namespace.
 
 =TEX
 \section{THE GRAMMAR} \label{GRAMMAR}
 Our starting point is the reference grammar given in \cite{LEMMA1/DEV/WRK063}
-which is itself based on the 1990 standard \cite{ansi90} and the grammar given in
+which is a {\Slrp} verion of the grammars given in the 1990 standard \cite{ansi90} and in
 \cite{Kernighan88}.
 Note that all of these grammars leave some essentially syntactic issues unspecified, 
 i.e., they expect some syntax errors to be detected after parsing.
@@ -132,8 +131,8 @@ This means that ther declarations must be analysed as they are encountered to ma
 For example, to parse  `{\tt typedef int I; I i;}' properly according to the reference grammar,
 one must take the first `{\tt I}' as an {\em identifier} and the second `{\tt I}' as a {\em typedef\_name}.
 \item
-The kind of problem pointed out in example 3 of section 6.5.6 of \cite{ansi90}, whereby {\tt typedef} names may be redeclared in inner scopes.
-This leads to some oddities as in the following example:
+The C language allows {\tt typedef} names to be redeclared in inner scopes either as {\tt typdef} names or as ordinary identifiers.
+This leads to the kind of oddity pointed out in example 3 of section 6.5.6 of \cite{ansi90}, and also in the following example:
 {\small
 \begin{verbatim}
     typedef int I, J;
@@ -151,22 +150,47 @@ This leads to some oddities as in the following example:
 \end{enumerate}
 
 The solution to the first problem is fairly straightforward: one must simply ensure that the parsing action functions are called at the appropriate time to process declarations maintaining a record of which names are currently {\tt typedef} names.
-This needs to be take into account the C scope rules: in particular, it must
+This needs to take into account the C scope rules: in particular, it must
 take into account section 6.2.1 of \cite{ansi90}: {\em each enumeration constant has scope that begins
-just after its defining enumerator \ldots Any other identifier has scope that begins just after
+just after its defining enumerator [\ldots] Any other identifier has scope that begins just after
 the completion of its declarator.}
+Some of the consequences of the scope rules may be seen in the following (correct) example:
 
-The solution to the second problem is more complicated: we adopt a trick that goes back to early versions of the {\tt gcc} compiler\footnote{Recent versions of {|tt gcc} use a hand-coded recursive descent parser for C and C++.}.
+\begin{verbatim}
+typedef int A, AFA(A A);
+int f(void)
+{
+    A A = &A - &A;
+    return A; /* 0 */
+}
+A g(A g)
+{
+    return g;
+}
+int h(void)
+{
+    struct {
+        enum {A = (A)1001, B = A + 110, K} x;
+    } z;
+    z.x = B;
+    return z.x; /* 1111 */
+}
+\end{verbatim}
+
+The solution to the second problem is more involved: we adopt a trick that goes back to early versions of the {\tt gcc} compiler\footnote{Recent versions of {|tt gcc} use a hand-coded recursive descent parser for C and C++.}.
 The {\tt gcc} trick exploits the following points from \cite{ansi90}:
 \begin{description}
 \item[6.7.1] {\it If the declarator includes an identifier list, \ldots. An identifier declared as
-a {\tt typedef name} shall not be redecared as a parameter.}
+a {\tt typedef name} shall not be redeclared as a parameter.}
 
 (This is taken to apply to all declarators, not just those in function definitions. It means that an old-style parameter list can't redefine a {\tt typedef} name.)
 \item[6.5.6] {\it If the identifier is redeclared in an inner scope or is declared as a member of a structure or union in the same or an inner scope, the type specifiers shall not be omitted in the inner declaration.}
+
+(So in `{\tt const J;}' in the above example, `{\tt J}' must not be taken as a declarator that redeclares the outer {\tt typedef} name `{\tt J}'.)
+
 \item[6.5.2] {\em Each list of type specifiers shall be one of the following sets \ldots}
 
-(The list implies that the type specifier part of a declaration can contain at most one {\tt typedef} name and that {\tt typedef} name cannot be mixed with other kinds of type specifier so that the second `{\tt I}' in the declaration `{\tt I I;}' above must be a declarator and cannot be a type specifier.)
+(This implies that the type specifier part of a declaration can contain at most one {\tt typedef} name and that {\tt typedef} name cannot be mixed with other kinds of type specifier so that the second `{\tt I}' in the declaration `{\tt I I;}' above must be a declarator and cannot be a type specifier.)
 \end{description}
 
 The following records the various changes that have been made to the grammar of \cite{LEMMA1/DEV/WRK063}.
@@ -186,7 +210,7 @@ Do the gcc trick, which applies to the three different types of declarations as 
 \item[Variable and constant declarations:]
 add a new non-terminal {\em type\_declarator} which is like {\em declarator} but having a typedef name as the name being declared.
 Similarly add {\em init\_type\_declarator\_list}, {\em struct\_type\_declarator\_list} etc.
-Change {\em declaration\_specifiers} to have at least one type specifier and at most one typedef name, and add a new non-terminal {\em declaration\_modifiers} for a sequence of storage class specifiers and type qualifiers (i.e., what would have been a {\em declaration\_specifiers} with no type specifiers).
+Change {\em declaration\_specifiers} to have at least one type specifier and at most one typedef name.
 Add a new production {\em declaration\_modifiers} to represent what was previously a {\em declaration\_specifiers} with no type specifiers.
 This gives a new case in the production for {\em declaration} and then it becomes safe to add a further alternative allowing an {\em init\_type\_declarator} after a {\em declaration\_specifiers}.
 \item[Structure and union member declarations:]
@@ -198,8 +222,9 @@ Add new non-terminals {\em parameter\_direct\_declarator} and {\em parameter\_de
 Use {\em parameter\_declarator} in {\em parameter\_declaration} in place of the separate alternatives for {\em declarator} and {\em abstract\_declarator}.
 \end{description}
 \item
-Add in new non-terminals, {\em do\_begin\_members} etc. at the points in the syntax where an action function needs to be invoked, see section~\ref{actions} below.
-Each of these non-terminals had a name beginning `{\em do\_}' and generates an empty language.
+Add in new non-terminals, {\em do\_push\_members} etc. at the points in the syntax where an action function needs to be invoked, see section~\ref{actions} below.
+Each of these non-terminals has a name beginning `{\em do\_}' and generates an empty language.
+For convenience, add an extra non-terminal {\em enumerator\_name} to carry the action associated with the identifier in an {\em enumerator].
 \end{itemize}
 
 [Remark: The 1999 revision of the C standard, \cite{ansi99}, requires a type specifier in
@@ -301,10 +326,10 @@ and {\em specification\_qualifier\_list} as modified here are what is required i
 =TEX
 =DUMPMORE wrk077.grm.txt
 €struct_or_union_specifier›
-	= struct_or_union, do_begin_members,
-		`{`, struct_declaration_list, do_end_members, `}`
-	| struct_or_union, identifier_or_typedef_name, do_begin_members,
-		`{`, struct_declaration_list, do_end_members, `}`
+	= struct_or_union, do_push_members,
+		`{`, struct_declaration_list, do_pop_members, `}`
+	| struct_or_union, identifier_or_typedef_name, do_push_members,
+		`{`, struct_declaration_list, do_pop_members, `}`
 	| struct_or_union, identifier_or_typedef_name
 	;
 =TEX
@@ -322,7 +347,7 @@ and {\em specification\_qualifier\_list} as modified here are what is required i
 =TEX
 =DUMPMORE wrk077.grm.txt
 €init_declarator_list_opt›
-	= 
+	=
 	| init_declarator_list
 	;
 =TEX
@@ -413,10 +438,8 @@ The comment about {\em innit\_declarator\_list} above also applies, {\it mutatis
 =TEX
 =DUMPMORE wrk077.grm.txt
 €enum_specifier›
-	= `enum`, do_begin_enumerators,
-		`{`, enumerator_list, do_end_enumerators, `}`
-	| `enum`, identifier_or_typedef_name, do_begin_enumerators,
-		`{`, enumerator_list, do_end_enumerators, `}`
+	= `enum`,`{`, enumerator_list, `}`
+	| `enum`, identifier_or_typedef_name, `{`, enumerator_list, `}`
 	| `enum`, identifier_or_typedef_name
 	;
 =TEX
@@ -428,20 +451,25 @@ The comment about {\em innit\_declarator\_list} above also applies, {\it mutatis
 =TEX
 =DUMPMORE wrk077.grm.txt
 €enumerator›
-	= identifier_or_typedef_name
-	| identifier_or_typedef_name, `=`, constant_expression
+	= enumerator_name
+	| enumerator_name, `=`, constant_expression
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€enumerator_name›
+	= identifier_or_typedef_name, do_enumerator_name
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
 €declarator›
 	= direct_declarator, do_declarator
-	| pointer, direct_declarator
+	| pointer, direct_declarator, do_declarator
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
 €type_declarator›
 	= type_direct_declarator, do_declarator
-	| pointer, type_direct_declarator
+	| pointer, type_direct_declarator, do_declarator
 	;
 =TEX
 In the following note that there is just one identifier or {\em typedef\_name} at the
@@ -449,26 +477,26 @@ heart of the declarator (i.e., the name the declarator, declares).
 The distinction between identifier or {\em typedef\_name} declarators then ripples up through the grammar.
 =DUMPMORE wrk077.grm.txt
 €direct_declarator›
-	= identifier
+	= identifier, do_declarator_name
 	| `(`, declarator, `)`
 	| direct_declarator, `[`, `]`
 	| direct_declarator, `[`, constant_expression, `]`
-	| direct_declarator, do_begin_parameters,
-		`(`, parameter_type_list, do_end_parameters, `)`
-	| direct_declarator, do_begin_parameters,
-		`(`, identifier_list_opt, do_end_parameters, `)`
+	| direct_declarator, do_push_parameters,
+		`(`, parameter_type_list, do_pop_parameters, `)`
+	| direct_declarator, do_push_parameters,
+		`(`, identifier_list_opt, do_pop_parameters, `)`
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
 €type_direct_declarator›
-	= typedef_name
+	= typedef_name, do_declarator_name
 	| `(`, type_declarator, `)`
 	| type_direct_declarator, `[`, `]`
 	| type_direct_declarator, `[`, constant_expression, `]`
-	| type_direct_declarator, do_begin_parameters,
-		`(`, parameter_type_list, do_end_parameters, `)`
-	| type_direct_declarator, do_begin_parameters,
-		`(`, identifier_list_opt, do_end_parameters,` )`
+	| type_direct_declarator, do_push_parameters,
+		`(`, parameter_type_list, do_pop_parameters, `)`
+	| type_direct_declarator, do_push_parameters,
+		`(`, identifier_list_opt, do_pop_parameters,` )`
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -511,23 +539,29 @@ The distinction between identifier or {\em typedef\_name} declarators then rippl
 =TEX
 =DUMPMORE wrk077.grm.txt
 €parameter_direct_declarator›
-	= identifier_or_typedef_name
+	= identifier_or_typedef_name, do_declarator_name
 	| `(`, parameter_declarator, `)`
-	| `(`, `)`
-	| `[`, `]`
+	| `(`, `)`, do_abstract_declarator
+	| `[`, `]`, do_abstract_declarator
 	| parameter_direct_declarator, `[`, `]`
 	| parameter_direct_declarator, `[`, constant_expression, `]`
-	| parameter_direct_declarator, do_begin_parameters,
-		`(`, parameter_type_list, do_end_parameters, `)`
-	| parameter_direct_declarator, do_begin_parameters,
-		`(`, identifier_list_opt, do_end_parameters, `)`
+	| parameter_direct_declarator, do_push_parameters,
+		`(`, parameter_type_list, do_pop_parameters, `)`
+	| parameter_direct_declarator, do_push_parameters,
+		`(`, identifier_list_opt, do_pop_parameters, `)`
 	;
 =TEX
-The following production is only used for old style formal parameter lists, in which {\tt typedef} names are (following {\tt gcc} at least) not to be treated as identifiers.
 =DUMPMORE wrk077.grm.txt
 €identifier_list_opt›
 	=
-	| identifier, `,`, identifier_list_opt
+	| identifier_list
+	;
+=TEX
+The following production is only used for old style formal parameter lists, in which {\tt typedef} names are not to be treated as identifiers.
+=DUMPMORE wrk077.grm.txt
+€identifier_list›
+	= identifier
+	| identifier_list, `,`, identifier
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -571,13 +605,12 @@ The following production is only used for old style formal parameter lists, in w
 	| direct_abstract_declarator, `(`, parameter_type_list, `)`
 	;
 =TEX
-The production for {\em typedef\_name} has to be modified, since the grammar becomes ambiguous
-if typedef names cannot be distinugished from other names. E.g., to decide whether the
-expression ``{\tt(X)(x)}'' is a cast or a function call, one needs to know whether ``{\tt X}''
-denotes a type.
+We need an action function, {zem red\_typedef\_name} here to record the {\tt typedef} name.
 =DUMPMORE wrk077.grm.txt
 €typedef_name› =
-	TypeDefName;
+	TypedefName
+	(red_typedef_name x1)
+	;
 =TEX
 However, the C name space rules imply that there a {\tt typedef} name may be used as an identifier in several places, e.g., as a structure tag.
 Where it does not introduce LALR(1) conflicts, we use the following production to achieve this:
@@ -607,10 +640,10 @@ Where it does not introduce LALR(1) conflicts, we use the following production t
 =TEX
 =DUMPMORE wrk077.grm.txt
 €compound_statement›
-	= do_begin_compound_statement,
-	 `{`, declaration_list_opt, do_end_compound_statement, `}`
-	| do_begin_compound_statement,
-	 `{`, declaration_list_opt, statement_list, do_end_compound_statement, `}`
+	= do_push_compound_statement,
+	 `{`, declaration_list_opt, do_pop_compound_statement, `}`
+	| do_push_compound_statement,
+	 `{`, declaration_list_opt, statement_list, do_pop_compound_statement, `}`
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -830,81 +863,629 @@ enumeration constants and other identifiers does not affect the parsing.
 	| FloatingConstant
 	;
 =TEX
-We add productions for {\it string} and identifier just to keep the naming scheme uniform.
+For the convenience of the lexical analyser, we have the grammar express concatenation of string elemements:
+
 =DUMPMORE wrk077.grm.txt
 €string›
 	= String
+	| string, String
 	;
 =TEX
+We need an action function, {zem red\_identifier} here to record the identifier.
 =DUMPMORE wrk077.grm.txt
 €identifier›
 	= Identifier
+	(red_identifier x1)
 	;
 =TEX
 \subsection{Action Functions}~\label{actions}
 =TEX
 =DUMPMORE wrk077.grm.txt
 €do_end_declaration›
-	= 
+	=
+	(red_do_end_declaration ())
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
 €do_typedef›
-	= 
+	=
+	(red_do_typedef ())
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
-€do_begin_members›
-	= 
+€do_push_members›
+	=
+	(red_do_push_members ())
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
-€do_end_members›
-	= 
+€do_pop_members›
+	=
+	(red_do_pop_members ())
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
-€do_begin_enumerators›
-	= 
-	;
-=TEX
-=DUMPMORE wrk077.grm.txt
-€do_end_enumerators›
-	= 
+€do_enumerator_name›
+	=
+	(red_do_enumerator_name ())
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
 €do_declarator›
-	= 
+	=
+	(red_do_declarator ())
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€do_declarator_name›
+	=
+	(red_do_declarator_name ())
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€do_abstract_declarator›
+	=
+	(red_do_abstract_declarator ())
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
 €do_enumerator›
-	= 
-	;
-=TEX
-=DUMPMORE wrk077.grm.txt
-€do_begin_parameters›
-	= 
-	;
-=TEX
-=DUMPMORE wrk077.grm.txt
-€do_end_parameters›
-	= 
-	;
-=TEX
-=DUMPMORE wrk077.grm.txt
-€do_begin_compound_statement›
 	=
+	(red_do_enumerator ())
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
-€do_end_compound_statement›
+€do_push_parameters›
 	=
+	(red_do_push_parameters ())
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€do_pop_parameters›
+	=
+	(red_do_pop_parameters ())
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€do_push_compound_statement›
+	=
+	(red_do_push_compound_statement ())
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€do_pop_compound_statement›
+	=
+	(red_do_pop_compound_statement ())
 	;
 =TEX
 =SH
 slrp -g -l 2  -f wrk077.grm.txt >wrk077.grm.run
+=TEX
+\newpage
+\section{PARSER IMPLEMENTATION}\label{PARSER}
+\subsection{Compiling the {\Slrp} library code}
+The following source files need to be loaded if we are not building the parser on top of
+a {\Product} database or the {\Slrp} database:
+=SML
+map use [
+	"dtd108.sml",	(* Portability infrastructure *)
+	"imp108.sml",
+	"dtd002.sml",	(* System control and error reporting *)
+	"imp002.sml",
+	"dtd001.sml",	(* Standard ML utilities *)
+	"imp001.sml"];
+=TEX
+The following source files need to be loaded if we are not building the parser on top of
+the {\Slrp} database:
+=SML
+map use [
+	"dtd018.sml",	(* SLRP parser driver *)
+	"imp018.sml",
+	"dtd118.sml",	(* Generic SLRP parser support *)
+	"imp118.sml"
+	];
+=TEX
+=SML
+open GenericSlrpParser;
+=TEX
+\subsection{Parser State}
+We distinguish the various types of scope in which identifiers and {\tt typedef} names can be declared.
+
+=SML
+datatype €SCOPE› =
+		€External› 
+	|	€StructUnion›
+	|	€Parameters›
+	|	€Block›;
+=TEX
+We need to track the type definitions in the input, which we do by manipulating
+a state defined as follows (and in which when we push a new frame, we
+copy the dictionary from the outer frame into it).
+=SML
+type €STATE› = {
+	scope : SCOPE,
+	type_names : unit E_DICT,
+	type_def : bool,
+	declarator_names : string OPT list,
+	current_name : string};
+
+val €type_env› : unit E_DICT list ref = ref [initial_e_dict];
+=TEX
+We also need to keep track of when we are in a type definition and when we are
+inside the declarator-list that declares the members of a struct or union or in a formal
+parameter list in a declarator (and these
+can be nested, so we have a counter giving the nesting depth).
+=SML
+val €in_type_def› : bool ref = ref false;
+val €str_un_fpar_nesting› : int ref = ref 0;
+=TEX
+=SML
+fun €reset_state› () = (
+	type_env := [initial_e_dict];
+	in_type_def := false;
+	str_un_fpar_nesting := 0
+);
+=TEX
+\subsection{Classifier Function}
+The classifier function differs from the generic one in that it must check the type environment
+to see whether an identifier is a {\tt typedef} name.
+=SML
+fun €c_classifier› ((LCIdentifier "Identifier", (s, _)) : LEX_CLASS LEX_VALUE)
+	: LEX_CLASS = (
+	case e_lookup s (hd(!type_env)) of
+		Value () => LCIdentifier "TypeDefName"
+	|	Nil => LCIdentifier "Identifier"
+) | c_classifier (lc, _) = lc;
+=TEX
+\subsection{Reduction Actions}
+=TEX
+When called with the {\it -g} option on our grammar, {\Slrp} will generate the action
+code automatically for each rule that does not contain any action code. The automatically
+generated action is a call on the function {\it generic\_reducer}. Our custom reduction
+functions simply update the parser state as necessary and then make the same
+call on {\it generic\_reducer} as the automatically generated code would make:
+
+=TEX
+=SML
+fun €red_declaration› (nt, i) (x1,x2) stk = (
+	(* declaration = unterminated_declaration, `;` *)
+	in_type_def := false;
+	generic_reducer (nt, i) [x1,x2] stk
+);
+=TEX
+=SML
+fun €red_storage_class_specifier_5› (nt, i) (x1) stk = (
+	(* storage_class_specifier = `typedef` *)
+	in_type_def := true;
+	generic_reducer (nt, i) [x1] stk
+);
+=TEX
+=SML
+fun €red_begin_members› (nt, i) (x1) stk = (
+	(* begin_members = `{` *)
+	str_un_fpar_nesting := !str_un_fpar_nesting + 1;
+	generic_reducer (nt, i) [x1] stk
+);
+=TEX
+=SML
+fun €red_end_members› (nt, i) (x1) stk = (
+	(* end_members = `}` *)
+	str_un_fpar_nesting := !str_un_fpar_nesting - 1;
+	generic_reducer (nt, i) [x1] stk
+);
+=TEX
+=SML
+val €red_begin_formal_params› = red_begin_members;
+=TEX
+=SML
+val €red_end_formal_params› = red_end_members;
+=TEX
+=SML
+fun €red_begin_block› (nt, i) (x1) stk = (
+	(* begin_block = `{` *)
+	type_env := hd(!type_env) :: !type_env;
+	generic_reducer (nt, i) [x1] stk
+);
+=TEX
+=SML
+fun €red_end_block› (nt, i) (x1) stk = (
+	(* end_block = `}` *)
+	type_env := tl (!type_env);
+	generic_reducer (nt, i) [x1] stk
+);
+=TEX
+=SML
+fun €red_direct_declarator_1› (nt, i) (x1) stk = (
+	(* direct_declarator = identifier *)
+	(case x1 of
+		Parsed(Node(_, [Leaf(LCIdentifier _, (s, _))])) => (
+			if	!in_type_def andalso !str_un_fpar_nesting = 0
+			then	type_env := e_enter s () (hd(!type_env)) :: tl (!type_env)
+			else	()
+		) | _ => ()
+	);
+	generic_reducer (nt, i) [x1] stk
+);
+=TEX
+\subsection{Lexical Analyser}
+=TEX
+Now we construct the lexical analyser.
+\subsection{Comments}
+=SML
+fun €skip_to_end_of_comment› ("*" :: "/"::more) = Value more
+|   skip_to_end_of_comment (_::more) = skip_to_end_of_comment more
+|   skip_to_end_of_comment [] = Nil;
+=TEX
+Since they are otherwise lexically illegal, we recognise C++-style single line comments as well
+as the standard ANSI ones. Similarly, we treat preprocessor directives as comments (to
+skip over the ``\verb!#line!'' directives that {\tt cc -E} typically generates).
+=SML
+fun €rec_comment› ((chs, status as (Continuation (_, InComment))) : LEX_CLASS LEX_STATE)
+	: LEX_CLASS LEX_STATE = (
+	case skip_to_end_of_comment chs of
+		Value rest => (rest, Comment)
+	|	Nil => ([], status)
+) | rec_comment (chs, status as Continuation _) = (
+	(chs, Unknown)
+) | rec_comment ("/" :: "*"  :: chs, status) = (
+	case skip_to_end_of_comment chs of
+		Value rest => (rest, Comment)
+	|	Nil => ([], Continuation(get_line_number(), InComment))
+) | rec_comment ("/" :: "/"  :: chs, status) = (([], Comment)
+) | rec_comment ("#" :: chs, status) = (([], Comment)
+) | rec_comment (chs, _) = (chs, Unknown);
+=TEX
+\subsection{Keywords and Identifiers}
+=SML
+val €keyword_dict› : string E_DICT =
+	list_e_merge initial_e_dict (map (fn s => (s, s)) [
+	"auto", "break", "case", "char", "const", "continue", "default", "double",
+	"do", "else", "enum", "extern", "float", "for", "goto", "if",
+	"int", "long", "register", "return", "short", "signed", "sizeof", "static",
+	"struct", "switch", "typedef", "union", "unsigned", "void", "volatile", "while"
+]);
+=TEX
+The following could be implemented more efficiently by adapting some of the analogous code
+from IMP118.
+=SML
+fun €c_is_alpha› ch = (
+		"a" <= ch andalso ch <= "z"
+	orelse	"A" <= ch andalso ch <= "Z"
+	orelse	ch = "_"
+);
+=TEX
+=SML
+fun €is_digit› ch = "0" <= ch andalso ch <= "9";
+=TEX
+=SML
+val €is_alnum› = c_is_alpha fun_or is_digit;
+=TEX
+=SML
+fun €get_ident› [] = Nil
+| get_ident (chs as (ch :: more)) = (
+	let	fun aux acc [] = Value(implode(rev acc), [])
+		|   aux acc (c::more) = (
+			if	is_alnum c
+			then	aux (c::acc) more
+			else	Value(implode(rev acc), c::more)
+		);
+	in	if	c_is_alpha ch
+		then	aux [ch] more
+		else	Nil
+	end
+);
+=TEX
+=SML
+fun €rec_ident› ((chs, status) : LEX_CLASS LEX_STATE) : LEX_CLASS LEX_STATE = (
+	case get_ident chs of
+		Value(n, more) => (
+			case e_lookup n keyword_dict of
+				Value s =>(
+					 (more,
+					 Known (LCString s, (s, get_line_number())))
+			) |	Nil => (
+					 (more,
+					 Known (LCIdentifier "Identifier",
+						(n, get_line_number())))
+			)
+	) |	Nil => (chs, Unknown)
+);
+=TEX
+\subsection{Integer Constants}
+=SML
+fun €is_int_type_char› "u" = true
+|   is_int_type_char "U" = true
+|   is_int_type_char "l" = true
+|   is_int_type_char "L" = true
+|   is_int_type_char _ = false;
+=TEX
+=SML
+fun €is_hexit› ch = (
+		is_digit ch
+	orelse	("a" <= ch andalso ch <= "f")
+	orelse	("A" <=  ch andalso ch <= "F")
+);
+=TEX
+=SML
+fun €get_integer› [] = Nil
+| get_integer (chs as (ch :: more)) = (
+	let	fun aux1 acc [] = Value(implode(rev acc), [])
+		|    aux1 acc (c::more) = (
+			if	is_int_type_char c
+			then	aux1 (c::acc) more
+			else	Value(implode(rev acc), c::more)
+		);
+		fun aux2 test acc [] = Value(implode(rev acc), [])
+		|   aux2 test acc (c::more) = (
+			if	test c
+			then	aux2 test (c::acc) more
+			else if	is_int_type_char c
+			then	aux1 (c::acc) more
+			else	Value(implode(rev acc), c::more)
+		);
+		fun aux3 acc ("x" :: more) = aux2 is_hexit ("x"::acc) more
+		|   aux3 acc ("X" :: more) = aux2 is_digit ("X"::acc) more
+		|   aux3 acc chs = aux2 is_digit acc chs;
+	in	if	is_digit ch
+		then	aux3 [ch] more
+		else	Nil
+	end
+);
+=TEX
+=SML
+fun €rec_integer› ((chs, status) : LEX_CLASS LEX_STATE) : LEX_CLASS LEX_STATE = (
+	case get_integer chs of
+		Value(n, more) => (
+			 (more,
+			 Known (LCIdentifier "IntegerConstant", (n, get_line_number())))
+	) |	Nil => (chs, Unknown)
+);
+=TEX
+\subsection{Character Constants}
+We widen the lexis of character constants to allow any sequence of characters
+inside single quote marks, using backslash as an escape character. I.e., we are
+deferring the check that the character constant actually denotes a single valid
+character to a later stage of processing (not implemented here).
+=SML
+fun €get_char_const› acc ("'"::more) = (implode(rev ("'"::acc)), more)
+|   get_char_const acc ("\\"::ch::more) = get_char_const (ch::"\\"::acc) more
+|   get_char_const acc (ch::more) = get_char_const (ch::acc) more
+|   get_char_const acc [] = (
+	raise LexFail (get_line_number(), "unmatched character quotation symbol")
+);
+=TEX
+=SML
+fun €rec_char_const› (("'"::chs, status) : LEX_CLASS LEX_STATE) : LEX_CLASS LEX_STATE = (
+	let	val (this, rest) = get_char_const ["'"] chs
+	in	(rest, Known(LCIdentifier "CharacterConstant", (this, get_line_number())))
+	end
+) | rec_char_const (chs, _) = (chs, Unknown);
+=TEX
+\subsection{Floating Constants}
+=SML
+fun €is_floating_type_char› "f" = true
+|   is_floating_type_char "F" = true
+|   is_floating_type_char "l" = true
+|   is_floating_type_char "L" = true
+|   is_floating_type_char _ = false;
+=TEX
+=SML
+fun €is_floating_exp_char› "e" = true
+|   is_floating_exp_char "E" = true
+|   is_floating_exp_char _ = false;
+=TEX
+=SML
+fun €get_floating› [] = Nil
+| get_floating chs = (
+	let	fun do_type_char acc [] = Value(rev acc, [])
+		|    do_type_char acc (c::more) = (
+			if	is_floating_type_char c
+			then	Value(rev(c::acc),  more)
+			else	Value(rev acc, c::more)
+		);
+		fun do_exp_rest acc [] = Value (rev acc, [])
+		|   do_exp_rest acc (chs as (c::more)) = (
+			if	is_digit c
+			then	do_exp_rest (c::acc) more
+			else	do_type_char acc chs
+		);
+		fun do_exp e_char acc (chs as ("-"::(more as (ch::_)))) = (
+			if	is_digit ch
+			then	do_exp_rest ("-"::e_char::acc) more
+			else	Value(rev acc, e_char :: chs)
+		) | do_exp e_char acc (chs as (ch::more)) = (
+			if	is_digit ch
+			then	do_exp_rest (ch::e_char::acc) more
+			else	Value(rev acc, e_char :: chs)
+		) | do_exp e_char acc [] = Value(rev acc, [e_char]);
+		fun do_frac_part got_digit acc [] = (
+			if	got_digit
+			then	Value(rev acc, [])
+			else	Nil
+		) | do_frac_part got_digit acc (c::more) = (
+			if	is_digit c
+			then	do_frac_part true (c::acc) more
+			else if	got_digit
+			then	if	is_floating_exp_char c
+				then	do_exp c acc more
+				else if	is_floating_type_char c
+				then	do_type_char (c::acc) more
+				else	Value(rev acc, c::more)
+			else	Nil
+		);
+		fun do_point got_digit acc ("." :: more) = (
+			do_frac_part got_digit ("."::acc) more
+		) | do_point got_digit acc chs = do_frac_part got_digit acc chs;
+		fun do_int_part _ _ [] =Nil
+		|   do_int_part got_digit acc (c::more) = (
+			if	is_digit c
+			then	do_int_part true (c::acc) more
+			else	do_point got_digit acc (c::more)
+		);
+	in	case do_int_part false [] chs of
+			Value (chs, more) => (
+				if	"." mem chs
+				orelse	any chs is_floating_exp_char
+				then	Value(implode chs, more)
+				else	Nil
+		) |	Nil => Nil
+	end
+);
+=TEX
+=SML
+fun €rec_floating› ((chs, status) : LEX_CLASS LEX_STATE) : LEX_CLASS LEX_STATE = (
+	case get_floating chs of
+		Value(n, more) => (
+			 (more,
+			 Known (LCIdentifier "FloatingConstant", (n, get_line_number())))
+	) |	Nil => (chs, Unknown)
+);
+=TEX
+\subsection{String Constants}
+The grammar takes care of the treatment of adjacent string literals.
+=SML
+fun €get_string_lit› acc ("\""::more) = (implode(rev ("\""::acc)), more)
+|   get_string_lit acc ("\\"::ch::more) = get_string_lit (ch::"\\"::acc) more
+|   get_string_lit acc (ch::more) = get_string_lit (ch::acc) more
+|   get_string_lit acc [] = (
+	raise LexFail (get_line_number(), "unmatched string quotation symbol")
+);
+=TEX
+=SML
+fun €rec_string_lit› (("\""::chs, status) : LEX_CLASS LEX_STATE) : LEX_CLASS LEX_STATE = (
+	let	val (this, rest) = get_string_lit ["\""] chs
+	in	(rest, Known(LCIdentifier "String", (this, get_line_number())))
+	end
+) | rec_string_lit (chs, _) = (chs, Unknown);
+=TEX
+=TEX
+\subsection{Operators}
+=SML
+val €operator_dict› : string E_DICT =
+	list_e_merge initial_e_dict (map (fn s => (s, s)) [
+	"!=", "!", "\037=", "\037", "&&", "&=", "&", "(",
+	")", "*=", "*", "++", "+=", "+", ",", "--",
+	"-=", "->", "-", "...", ".", "/=", "/", ":",
+	";", "<<=", "<<", "<=", "<", "==", "=", ">=",
+	">>=", ">>", ">", "?", "[", "]", "^=", "^",
+	"{", "|=", "|", "||", "}", "~"
+]);
+=TEX
+In the following the magic number 2 is 1 less than the maximum length of an operator symbol.
+=SML
+fun  €get_operator› chs = (
+	let	fun aux ~1 = Nil
+		|    aux i = (
+			case e_lookup (implode (chs to i)) operator_dict of
+				Value s => Value(s, chs from(i+1))
+			|	Nil => aux (i-1)
+		);
+	in	aux 2
+	end
+);
+=TEX
+=SML
+fun €rec_operator› ((chs, status) : LEX_CLASS LEX_STATE) : LEX_CLASS LEX_STATE = (
+	case get_operator chs of
+		Value(n, more) => (
+			(more, Known (LCString n, (n, get_line_number())))
+	) |	Nil => (chs, Unknown)
+);
+=TEX
+In the following, it is important that we do comments before anything else and floating constants
+before operators or integer constants.
+=SML
+val €rec_any› = rec_first[
+	rec_comment,
+	rec_ident,
+	rec_floating,
+	rec_operator,
+	rec_integer,
+	rec_string_lit,
+	rec_char_const];
+=TEX
+\subsection{Resolver Function}
+There is one shift/reduce conflict as shown in the following outline extract from the {\Slrp} listing:
+=GFT SLRP Output
++++ State Table +++
+...
+210:	selection_statement = `if`, `(`, expression, `)`, statement.
+	selection_statement = `if`, `(`, expression, `)`, statement., `else`, statement
+...
+348:	...
+	selection_statement = `if`, `(`, expression, `)`, statement, `else`., statement
+	...
+...
++++ Conflicts +++
+
+LALR(1) lookahead sets resolved 12 conflicts
+
+1 conflict detected (1 shift/reduce, 0 reduce/reduce)
+
+State 210 on symbol `else`
+	Reduce by selection_statement = `if`, `(`, expression, `)`, statement | ...
+	Shift to 348
+=TEX
+The conflict arises when the statement forming the then-part of the if-statement is
+itself an if-statement with no else-part (yet). The resolution is to shift, which means that
+the else-part is given to the inner if-statement. (If we were to reduce, then the parser would
+not work: a valid input such as ``{\tt while(a) if(b) f(x); else g(x);}'' would be unparseable).
+
+The upshot of all this is that the resolver function is extremely simple:
+=SML
+fun €c_resolver› _ = DoShift;
+=TEX
+\subsection{The Parser}
+The parser is now completed in two easy stages:
+first include the Standard ML code generated by {\Slrp}:
+=IGN
+use_file"c1.grm";
+=INCLUDE
+c1.grm.sml
+=TEX
+Second, {\it et voila}, instantiate the function {\it slrp'gen\_parser} generated
+by {\Slrp} to use our resolver, classifier etc.
+=SML
+fun c_parse_file name = (
+	reset_state();
+	slrp'gen_parser c_resolver c_classifier
+	(default_error string_of_lex_value)
+	(gen_reader LCEos rec_any (in_char_stream_of_file name))
+	([], true)
+);
+=TEX
+\subsection{Some Simple Tests}
+=DUMP wrk063.1.c
+#define MSG "Hello World!\n"
+#define LEN_MSG (sizeof MSG - 1)
+#define STDOUT 1
+int main(int argc, char **argv)
+{
+	return (write(STDOUT, MSG, LEN_MSG) != LEN_MSG);
+}
+=TEX
+=SH
+cc -E wrk063.1.c >wrk063.1.i
+=SML
+print_tree (c_parse_file"wrk063.1.i");
+=TEX
+=DUMP wrk063.2.c
+long int ________ = 99;
+float a_ = 100E45f;
+long double _x = 1.2e-9l;
+double _ = .1;
+float t = .1e3, y = .99999E-7;
+static long unsigned int zz____z;
+int yyy = 1234567;
+char c = 'x';
+char d = '\'';
+char e = '\\';
+char *p1 = "", *p2 = "a", *p3 = "a"/* comment */"b" "c",
+	*p4 = "\\\"";
+=SH
+cc -E wrk063.2.c >wrk063.2.i
+=SML
+print_tree (c_parse_file"wrk063.2.i");
 =TEX
 \newpage
 \section{INDEX}
