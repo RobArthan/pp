@@ -44,9 +44,9 @@ fairly complete parser for the full ANSI-C language.}
 
 %%%%% THE FOLLOWING DEFAULTS WILL GENERALLY BE RIGHT:
 
-\def\Version{$Revision: 1.8 $%
+\def\Version{$Revision: 1.9 $%
 }
-\def\Date{\FormatDate{$Date: 2006/10/19 16:53:55 $%
+\def\Date{\FormatDate{$Date: 2006/10/21 16:10:03 $%
 }}
 
 %%%%% NOW BEGIN THE DOCUMENT AND MAKE THE FRONT PAGE
@@ -426,7 +426,7 @@ The comment about {\em innit\_declarator\_list} above also applies, {\it mutatis
 =DUMPMORE wrk077.grm.txt
 €struct_declarator›
 	= declarator
-	| `:`, constant_expression
+	| `:`, constant_expression, do_abstract_declarator
 	| declarator, `:`, constant_expression
 	;
 =TEX
@@ -438,15 +438,17 @@ The comment about {\em innit\_declarator\_list} above also applies, {\it mutatis
 =TEX
 =DUMPMORE wrk077.grm.txt
 €enum_specifier›
-	= `enum`,`{`, enumerator_list, `}`
-	| `enum`, identifier_or_typedef_name, `{`, enumerator_list, `}`
+	= `enum`, do_push_enumerators,
+		`{`, enumerator_list, `}`, do_pop_enumerators
+	| `enum`, identifier_or_typedef_name, do_push_enumerators,
+		`{`, enumerator_list, `}`, do_pop_enumerators
 	| `enum`, identifier_or_typedef_name
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
 €enumerator_list›
-	= enumerator, do_enumerator
-	| enumerator_list, `,`, enumerator, do_enumerator
+	= enumerator, do_declaration
+	| enumerator_list, `,`, enumerator, do_declaration
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -457,7 +459,7 @@ The comment about {\em innit\_declarator\_list} above also applies, {\it mutatis
 =TEX
 =DUMPMORE wrk077.grm.txt
 €enumerator_name›
-	= identifier_or_typedef_name, do_enumerator_name
+	= identifier_or_typedef_name, do_declaration_name
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -527,7 +529,7 @@ The distinction between identifier or {\em typedef\_name} declarators then rippl
 =TEX
 =DUMPMORE wrk077.grm.txt
 €parameter_declaration›
-	= declaration_specifiers
+	= declaration_specifiers, do_abstract_declarator
 	| declaration_specifiers, parameter_declarator
 	;
 =TEX
@@ -544,6 +546,7 @@ The distinction between identifier or {\em typedef\_name} declarators then rippl
 	| `(`, parameter_declarator, `)`
 	| `(`, `)`, do_abstract_declarator
 	| `[`, `]`, do_abstract_declarator
+	| `[`, constant_expression, `]`, do_abstract_declarator
 	| parameter_direct_declarator, `[`, `]`
 	| parameter_direct_declarator, `[`, constant_expression, `]`
 	| parameter_direct_declarator, do_push_parameters,
@@ -906,15 +909,21 @@ We need an action function, {zem red\_identifier} here to record the identifier.
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
-€do_enumerator_name›
-	=
-	(red_do_enumerator_name ())
-	;
-=TEX
-=DUMPMORE wrk077.grm.txt
 €do_declaration›
 	=
 	(red_do_declaration ())
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€do_push_enumerators›
+	=
+	(red_do_push_enumerators ())
+	;
+=TEX
+=DUMPMORE wrk077.grm.txt
+€do_pop_enumerators›
+	=
+	(red_do_pop_enumerators ())
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -927,12 +936,6 @@ We need an action function, {zem red\_identifier} here to record the identifier.
 €do_abstract_declarator›
 	=
 	(red_do_abstract_declarator ())
-	;
-=TEX
-=DUMPMORE wrk077.grm.txt
-€do_enumerator›
-	=
-	(red_do_enumerator ())
 	;
 =TEX
 =DUMPMORE wrk077.grm.txt
@@ -974,13 +977,16 @@ slrp -g -l 2  -f wrk077.grm.txt >wrk077.grm.run
 The following source files need to be loaded if we are not building the parser on top of
 a {\Product} database or the {\Slrp} database:
 =SML
-map use [
+case OS.Process.getEnv "SLRPONHOLDB" of
+	NONE => (
+app use [
 	"dtd108.sml",	(* Portability infrastructure *)
 	"imp108.sml",
 	"dtd002.sml",	(* System control and error reporting *)
 	"imp002.sml",
 	"dtd001.sml",	(* Standard ML utilities *)
-	"imp001.sml"];
+	"imp001.sml"]
+) |	_ => ();
 =TEX
 The following source files need to be loaded if we are not building the parser on top of
 the {\Slrp} database:
@@ -995,135 +1001,151 @@ map use [
 =SML
 open GenericSlrpParser;
 =TEX
+=SML
+val €debug› : bool ref = ref false;
+fun €diag_print› (new_line : bool) (s : string) : unit = (
+	if	!debug
+	then	(output(std_out, s);
+		if	new_line
+		then	output(std_out, "\n")
+		else	())
+	else	()
+);
+=TEX
 \subsection{Parser State}
 We distinguish the various types of scope in which identifiers and {\tt typedef} names can be declared.
-
 =SML
 datatype €SCOPE› =
-		€External› 
+		€Declaration› 
+	|	€Typedef›
 	|	€StructUnion›
-	|	€Parameters›
-	|	€Block›;
+	|	€Enumerators›
+	|	€Parameters›;
 =TEX
 We need to track the type definitions in the input, which we do by manipulating
 a stack of frames defined as follows (and in which when we push a new frame, we
 copy the dictionary from the outer frame into it).
 
-When a parameter list or struct is being parsed, {\em parenum\_names} holds the list of identifiers declared in the current parameter list or struct.
-This can include enumerator names as well as the parameter names.
+When a parameter list, struct, union or enum is being parsed, the frame includes a list of the identifiers declared in the parameter list, struct, union or enum.
+This will include the parameter names (in the case of a parameter list) together with any names declared in {\tt enum} specifiers int the parameter list, struct, union or enum.
 The list is an optional value enabling the special case of the first parameter list in a declarator to be detected.
-At the end of processing a parameter list, if this list is not present in the outer frame, then the list from the top of
+This approach deals with monstrosities such as:
+
+\begin{verbatim}
+int (*f(enum{X = 1} a))(enum{X = 2} b)
+{
+    printf("X = %d\n", (int) X); /* prints `X = 1' */
+    return 0;
+}
+\end{verbatim}
+
+At the end of processing a parameter list, if the list of local identifiers is not already present in the immediately enclosing frame, then the list from the top of
 the stack is copied into the outer frame.
+Then, when a block is encountered the names in the list are removed from the list of {\tt typedef} names.
 This is how the parameters cross over into the statement part of a function definition.
+
+Similarly, at the end of processing a struct, union or enum, when the frame for the struct or union is popped off the stack, all elements of the list of local identifiers are removed from the list of {\tt typedef} names in the immediately enclosing frame.
+
+
 =SML
 type €FRAME› = {
 	scope : SCOPE,
 	typedef_names : unit E_DICT,
-	typedef : bool,
-	parenum_names : string list OPT};
+	local_identifiers : string list OPT};
 =TEX
 =SML
 val €initial_frame› : FRAME = {
-	scope = External,
+	scope = Declaration,
 	typedef_names = initial_e_dict,
-	typedef = false,
-	parenum_names = Nil};
+	local_identifiers = Nil};
 =TEX
 =SML
 val €stack› : FRAME list ref = ref [initial_frame];
 val €current_name› : string ref = ref "* dummy name *";
+val €declaration_names› : string OPT list ref = ref [];
+=TEX
+=SML
+fun €reset_state› (():unit) : unit = (
+	stack := [initial_frame];
+	current_name := "* dummy name *";
+	declaration_names := []
+);
 =TEX
 =SML
 fun €set_scope› (new_scope : SCOPE) : unit = (
 	case !stack of
-		{scope, typedef_names, typedef, parenum_names} :: more =>
+		{scope, typedef_names, local_identifiers} :: more =>
 			stack :=
 			{scope = new_scope,
 			 typedef_names = typedef_names,
-			 typedef = typedef,
-			 parenum_names = parenum_names
+			 local_identifiers = local_identifiers
 			} :: more
 	|	_ => ()
+);
+=TEX
+=SML
+fun €get_scope› (():unit) : SCOPE = (
+	#scope(hd(!stack))
 );
 =TEX
 =SML
 fun €set_typedef_names› (new_typedef_names : unit E_DICT) : unit = (
 	case !stack of
-		{scope, typedef_names, typedef, parenum_names} :: more =>
+		{scope, typedef_names, local_identifiers} :: more =>
 			stack :=
 			{scope = scope,
 			 typedef_names = new_typedef_names,
-			 typedef = typedef,
-			 parenum_names = parenum_names
+			 local_identifiers = local_identifiers
 			} :: more
 	|	_ => ()
+);
+=TEX
+=SML
+fun €get_typedef_names› (():unit) : unit E_DICT = (
+	#typedef_names(hd(!stack))
 );
 =TEX
 =SML
 fun €declare_typedef_name› (new_typedef_name : string) : unit = (
-	case !stack of
-		{scope, typedef_names, typedef, parenum_names} :: more =>
-			stack :=
-			{scope = scope,
-			 typedef_names = e_enter new_typedef_name () typedef_names,
-			 typedef = typedef,
-			 parenum_names = parenum_names
-			} :: more
-	|	_ => ()
+diag_print true ("Declaring typedef: "  ^ new_typedef_name);
+	set_typedef_names
+	(e_enter new_typedef_name () (#typedef_names(hd(!stack))))
 );
 =TEX
 =SML
 fun €undeclare_typedef_name› (identifier : string) : unit = (
+diag_print true ("Undeclaring typedef: "  ^ identifier);
+	set_typedef_names
+	(e_delete identifier (#typedef_names(hd(!stack))))
+);
+=TEX
+=SML
+fun €set_local_identifiers› (new_local_identifiers : string list OPT) : unit = (
 	case !stack of
-		{scope, typedef_names, typedef, parenum_names} :: more =>
+		{scope, typedef_names, local_identifiers} :: more =>
 			stack :=
 			{scope = scope,
-			 typedef_names = e_delete identifier typedef_names,
-			 typedef = typedef,
-			 parenum_names = parenum_names
+			 typedef_names = typedef_names,
+			 local_identifiers = new_local_identifiers
 			} :: more
 	|	_ => ()
 );
 =TEX
 =SML
-fun €set_typedef› (new_typedef : bool) : unit = (
-	case !stack of
-		{scope, typedef_names, typedef, parenum_names} :: more =>
-			stack :=
-			{scope = scope,
-			 typedef_names = typedef_names,
-			 typedef = new_typedef,
-			 parenum_names = parenum_names
-			} :: more
-	|	_ => ()
+fun €get_local_identifiers› (():unit) : string list = (
+	case #local_identifiers(hd(!stack)) of
+		Value dns => dns
+	|	Nil => []
 );
 =TEX
 =SML
-fun €declare_parenum› (identifier : string) : unit = (
-	case !stack of
-		{scope, typedef_names, typedef, parenum_names} :: more =>
-			stack :=
-			{scope = scope,
-			 typedef_names = typedef_names,
-			 typedef = typedef,
-			 parenum_names = case parenum_names of
-					Value ps => Value(identifier::ps)
-				|	Nil => Value [identifier]
-			} :: more
-	|	_ => ()
-);
-=TEX
-=SML
-fun €set_parenum_names› (new_parenum_names : string list OPT) : unit = (
-	case !stack of
-		{scope, typedef_names, typedef, parenum_names} :: more =>
-			stack :=
-			{scope = scope,
-			 typedef_names = typedef_names,
-			 typedef = typedef,
-			 parenum_names = new_parenum_names
-			} :: more
-	|	_ => ()
+fun €declare_identifier› (identifier : string) : unit = (
+diag_print true ("Declaring identifier: "  ^ identifier);
+	set_local_identifiers
+	(case #local_identifiers(hd(!stack)) of
+		Value dns => Value(identifier::dns)
+	|	Nil => Value [identifier]);
+	undeclare_typedef_name identifier
 );
 =TEX
 =SML
@@ -1137,31 +1159,53 @@ fun €push_scope› (scope : SCOPE) : unit = (
 =TEX
 =SML
 fun €pop_scope› (():unit) : unit = (
-	let	val {parenum_names, scope, ...} = hd(!stack);
+	let	val scope = get_scope();
+		val lis = get_local_identifiers();
 	in	stack := tl(!stack);
-		(case (scope, #parenum_names (hd(!stack))) of
-			(Parameters, Nil) => set_parenum_names parenum_names
+		(case (scope, #local_identifiers (hd(!stack))) of
+			(Parameters, Nil) => set_local_identifiers (Value lis)
+		|	(StructUnion, _) => app undeclare_typedef_name lis 
+		|	(Enumerators, _) => app undeclare_typedef_name lis 
 		|	_ => ())
 	end
 );
 =TEX
-\subsection{Classifier Function}
-The classifier function differs from the generic one in that it must check the top frame
-to see whether an identifier is a {\tt typedef} name.
 =SML
-fun €c_classifier› ((LCIdentifier "Identifier", (s, _)) : LEX_CLASS LEX_VALUE)
+fun €declare› (name : string) : unit = (
+	case get_scope() of
+		Declaration => declare_identifier name
+	|	Typedef => declare_typedef_name name
+	|	StructUnion => ()
+	|	Enumerators => declare_identifier name
+	|	Parameters => declare_identifier name
+);
+=TEX
+\subsection{Classifier Function}
+The classifier function differs from the generic one in that it must first check the list of local identifiers in the current frame and then the list of {\tt typdef} names.
+=SML
+fun €act_c_classifier› ((LCIdentifier "Identifier", (s, _)) : LEX_CLASS LEX_VALUE)
 	: LEX_CLASS = (
-	let	val {scope, typedef_names, typedef, parenum_names} = hd(!stack);
-	in	if	(case parenum_names of
-				Value ps => s mem ps
-			|	Nil => false)
-		orelse	(case e_lookup s typedef_names of
-				Value _ => false
-			|	Nil => true)
-		then	LCIdentifier "Identifier"
-		else	LCIdentifier "TypeDefName"
+	if	s mem get_local_identifiers()
+	orelse	(case e_lookup s (get_typedef_names()) of
+			Value _ => false
+		|	Nil => true)
+	then	LCIdentifier "Identifier"
+	else	LCIdentifier "TypedefName"
+) | act_c_classifier (lc, _) = lc;
+=TEX
+=SML
+fun €c_classifier› (tok as (_, (s, n)) : LEX_CLASS LEX_VALUE)
+	: LEX_CLASS = (
+	let	val res = act_c_classifier tok;
+		fun aux (LCIdentifier x) = x
+		|   aux (LCString x) = "`" ^ x ^ "`"
+		|   aux (LCEos) = "<end-of-input>";
+	in	diag_print true ("Classifying " ^ s ^ 
+			" on line " ^ string_of_int n ^
+			" as " ^ aux res);
+		res
 	end
-) | c_classifier (lc, _) = lc;
+);
 =TEX
 \subsection{Reduction Actions}
 =TEX
@@ -1172,94 +1216,123 @@ functions simply update the parser state as necessary and then make the same
 call on {\it generic\_reducer} as the automatically generated code would make:
 =TEX
 =SML
-fun red_do_end_declaration (nt, i) () stk = (
+fun €red_typedef_name› (x1) = (
+	(* typedef_name = TypedefName *)
+	(case x1 of
+		Token((_, (name, _)), _) => current_name := name
+	|	_ => raise PARSER_ERROR "invalid argument to red_typedef_name");
+	generic_reducer ("typedef_name", 1) [x1] []
+);
+=TEX
+=SML
+fun €red_identifier› (x1) = (
+	(* identifier = Identifier *)
+	(case x1 of
+		Token((_, (name, _)), _) => current_name := name
+	|	_ => raise PARSER_ERROR "invalid argument to red_identifier");
+	generic_reducer ("identifier", 1) [x1] []
+);
+=TEX
+=SML
+fun €red_do_end_declaration› () = (
 	(* do_end_declaration =  *)
-	set_typedef false;
-	set_parenum_names Nil;
-	generic_reducer (nt, i) [] stk
+	set_scope Declaration;
+	set_local_identifiers Nil;
+	generic_reducer ("do_end_declaration", 1) [] []
 );
 =TEX
 =SML
-fun red_do_typedef (nt, i) () stk = (
+fun €red_do_typedef› () = (
 	(* do_typedef =  *)
-	set_typedef true;
-	generic_reducer (nt, i) [] stk
+	set_scope Typedef;
+	generic_reducer ("do_type_def", 1) [] []
 );
 =TEX
 =SML
-fun red_do_push_members (nt, i) () stk = (
+fun €red_do_push_members› () = (
 	(* do_push_members =  *)
 	push_scope StructUnion;
-	generic_reducer (nt, i) [] stk
+	generic_reducer ("do_push_members", 1) [] []
 );
 =TEX
 =SML
-fun red_do_pop_members (nt, i) () stk = (
+fun €red_do_pop_members› () = (
 	(* do_pop_members =  *)
-	pop_scope();
-	generic_reducer (nt, i) [] stk
+	pop_scope ();
+	generic_reducer ("do_pop_members", 1) [] []
 );
 =TEX
 =SML
-fun red_do_enumerator_name (nt, i) () stk = (
-	(* do_enumerator_name =  *)
-	declare_parenum (!current_name);
-	generic_reducer (nt, i) [] stk
-);
-=TEX
-=SML
-fun red_do_declaration (nt, i) () stk = (
+fun €red_do_declaration› () = (
 	(* do_declaration =  *)
-	(* TBS *)
-	generic_reducer (nt, i) [] stk
+	(case hd(!declaration_names) of
+		Value name => declare name
+	|	Nil => ());
+	declaration_names := tl(!declaration_names);
+	generic_reducer ("do_declaration", 1) [] []
 );
 =TEX
 =SML
-fun red_do_declaration_name (nt, i) () stk = (
+fun €red_do_push_enumerators› () = (
+	(* do_push_enumerators =  *)
+	push_scope Enumerators;
+	generic_reducer ("do_push_enumerators", 1) [] []
+);
+=TEX
+=SML
+fun €red_do_pop_enumerators› () = (
+	(* do_pop_enumerators =  *)
+	pop_scope ();
+	generic_reducer ("do_pop_enumerators", 1) [] []
+);
+=TEX
+=SML
+fun €red_do_declaration_name› () = (
 	(* do_declaration_name =  *)
-	generic_reducer (nt, i) [] stk
+	declaration_names := (Value (!current_name)) :: !declaration_names;
+	generic_reducer ("do_declaration_name", 1) [] []
 );
 =TEX
 =SML
-fun red_do_abstract_declarator (nt, i) () stk = (
+fun €red_do_abstract_declarator› () = (
 	(* do_abstract_declarator =  *)
-	generic_reducer (nt, i) [] stk
+	declaration_names := Nil :: !declaration_names;
+	generic_reducer ("do_abstract_declarator", 1) [] []
 );
 =TEX
 =SML
-fun red_do_enumerator (nt, i) () stk = (
-	(* do_enumerator =  *)
-	generic_reducer (nt, i) [] stk
-);
-=TEX
-=SML
-fun red_do_push_parameters (nt, i) () stk = (
+fun €red_do_push_parameters› () = (
 	(* do_push_parameters =  *)
-	generic_reducer (nt, i) [] stk
+	push_scope Parameters;
+	generic_reducer ("do_push_paramters", 1) [] []
 );
 =TEX
 =SML
-fun red_do_pop_parameters (nt, i) () stk = (
+fun €red_do_pop_parameters› () = (
 	(* do_pop_parameters =  *)
-	generic_reducer (nt, i) [] stk
+	pop_scope();
+	generic_reducer ("do_pop_parameters", 1) [] []
 );
 =TEX
 =SML
-fun red_do_parameter_identifier(nt, i) () stk = (
+fun €red_do_parameter_identifier› () = (
 	(* do_parameter_identifier =  *)
-	generic_reducer (nt, i) [] stk
+	declare (!current_name);
+	generic_reducer ("do_parameter_identifier", 1) [] []
 );
 =TEX
 =SML
-fun red_do_push_compound_statement (nt, i) () stk = (
+fun €red_do_push_compound_statement› () = (
 	(* do_push_compound_statement =  *)
-	generic_reducer (nt, i) [] stk
+	push_scope Declaration;
+	generic_reducer ("do_push_compound_statement", 1) [] []
 );
 =TEX
 =SML
-fun red_do_pop_compound_statement (nt, i) () stk = (
+fun €red_do_pop_compound_statement› () = (
 	(* do_pop_compound_statement =  *)
-	generic_reducer (nt, i) [] stk
+	pop_scope ();
+	generic_reducer ("do_pop_compound_statement", 1) [] []
 );
 =TEX
 \subsection{Lexical Analyser}
@@ -1275,7 +1348,9 @@ Since they are otherwise lexically illegal, we recognise C++-style single line c
 as the standard ANSI ones. Similarly, we treat preprocessor directives as comments (to
 skip over the ``\verb!#line!'' directives that {\tt cc -E} typically generates).
 =SML
-fun €rec_comment› ((chs, status as (Continuation (_, InComment))) : LEX_CLASS LEX_STATE)
+fun €rec_comment› (
+	(chs, status as (Continuation (_, InComment)))
+		: LEX_CLASS LEX_STATE)
 	: LEX_CLASS LEX_STATE = (
 	case skip_to_end_of_comment chs of
 		Value rest => (rest, Comment)
@@ -1331,7 +1406,8 @@ fun €get_ident› [] = Nil
 );
 =TEX
 =SML
-fun €rec_ident› ((chs, status) : LEX_CLASS LEX_STATE) : LEX_CLASS LEX_STATE = (
+fun €rec_ident› ((chs, status) : LEX_CLASS LEX_STATE)
+	: LEX_CLASS LEX_STATE = (
 	case get_ident chs of
 		Value(n, more) => (
 			case e_lookup n keyword_dict of
@@ -1388,7 +1464,8 @@ fun €get_integer› [] = Nil
 );
 =TEX
 =SML
-fun €rec_integer› ((chs, status) : LEX_CLASS LEX_STATE) : LEX_CLASS LEX_STATE = (
+fun €rec_integer› ((chs, status) : LEX_CLASS LEX_STATE)
+	: LEX_CLASS LEX_STATE = (
 	case get_integer chs of
 		Value(n, more) => (
 			 (more,
@@ -1410,7 +1487,8 @@ fun €get_char_const› acc ("'"::more) = (implode(rev ("'"::acc)), more)
 );
 =TEX
 =SML
-fun €rec_char_const› (("'"::chs, status) : LEX_CLASS LEX_STATE) : LEX_CLASS LEX_STATE = (
+fun €rec_char_const› (("'"::chs, status) : LEX_CLASS LEX_STATE)
+	: LEX_CLASS LEX_STATE = (
 	let	val (this, rest) = get_char_const ["'"] chs
 	in	(rest, Known(LCIdentifier "CharacterConstant", (this, get_line_number())))
 	end
@@ -1429,6 +1507,7 @@ fun €is_floating_exp_char› "e" = true
 |   is_floating_exp_char "E" = true
 |   is_floating_exp_char _ = false;
 =TEX
+\ftlinepenalty=9999
 =SML
 fun €get_floating› [] = Nil
 | get_floating chs = (
@@ -1488,7 +1567,8 @@ fun €get_floating› [] = Nil
 );
 =TEX
 =SML
-fun €rec_floating› ((chs, status) : LEX_CLASS LEX_STATE) : LEX_CLASS LEX_STATE = (
+fun €rec_floating› ((chs, status) : LEX_CLASS LEX_STATE)
+	: LEX_CLASS LEX_STATE = (
 	case get_floating chs of
 		Value(n, more) => (
 			 (more,
@@ -1507,7 +1587,8 @@ fun €get_string_lit› acc ("\""::more) = (implode(rev ("\""::acc)), more)
 );
 =TEX
 =SML
-fun €rec_string_lit› (("\""::chs, status) : LEX_CLASS LEX_STATE) : LEX_CLASS LEX_STATE = (
+fun €rec_string_lit› (("\""::chs, status) : LEX_CLASS LEX_STATE)
+	: LEX_CLASS LEX_STATE = (
 	let	val (this, rest) = get_string_lit ["\""] chs
 	in	(rest, Known(LCIdentifier "String", (this, get_line_number())))
 	end
@@ -1540,7 +1621,8 @@ fun  €get_operator› chs = (
 );
 =TEX
 =SML
-fun €rec_operator› ((chs, status) : LEX_CLASS LEX_STATE) : LEX_CLASS LEX_STATE = (
+fun €rec_operator› ((chs, status) : LEX_CLASS LEX_STATE)
+	: LEX_CLASS LEX_STATE = (
 	case get_operator chs of
 		Value(n, more) => (
 			(more, Known (LCString n, (n, get_line_number())))
@@ -1590,13 +1672,32 @@ The upshot of all this is that the resolver function is extremely simple:
 =SML
 fun €c_resolver› _ = DoShift;
 =TEX
+\section{Error Handler}
+We give an error handler that can print out line numbers.
+=SML
+fun €c_error›
+	(do_tok : 'lc LEX_VALUE -> string)
+	(tok as (_, (_, n)): 'lc LEX_VALUE,
+	 stk : ('lc LEX_VALUE, 'lc, 'pp)INPUT_STACK,
+	 _ : STATE_STACK, st : 'st)
+	: ('lc LEX_VALUE * 'st *int) = (
+	raw_diag_line("*** ERROR Syntax error on line " ^ string_of_int n);
+	if	any stk (fn Token _ => true | _ => false)
+	then	raw_diag_line
+		(do_tok tok ^
+			" not expected after: "
+				^ format_stack do_tok stk)
+	else raw_diag_line(do_tok tok ^ " not expected here");
+	raise SYNTAX_ERROR
+);
+=TEX
 \subsection{The Parser}
 The parser is now completed in two easy stages:
 first include the Standard ML code generated by {\Slrp}:
 =IGN
-use_file"c1.grm";
+use_file"wrk077.grm.sml";
 =INCLUDE
-c1.grm.sml
+wrk077.grm.sml
 =TEX
 Second, {\it et voila}, instantiate the function {\it slrp'gen\_parser} generated
 by {\Slrp} to use our resolver, classifier etc.
@@ -1604,7 +1705,7 @@ by {\Slrp} to use our resolver, classifier etc.
 fun c_parse_file name = (
 	reset_state();
 	slrp'gen_parser c_resolver c_classifier
-	(default_error string_of_lex_value)
+	(c_error string_of_lex_value)
 	(gen_reader LCEos rec_any (in_char_stream_of_file name))
 	([], true)
 );
@@ -1623,6 +1724,8 @@ int main(int argc, char **argv)
 cc -E wrk063.1.c >wrk063.1.i
 =SML
 print_tree (c_parse_file"wrk063.1.i");
+=IGN
+print_tree (c_parse_file"t.c");
 =TEX
 =DUMP wrk063.2.c
 long int ________ = 99;
@@ -1650,3 +1753,47 @@ print_tree (c_parse_file"wrk063.2.i");
 
 
 =IGN
+=IGN
+rm -rf t
+mkdir t
+cd t
+ln -s ~/pp/RCS  .
+co `make -f xpp.mkf packinglist`
+make -f xpp.mkf help.c
+for f in *.c
+do
+	b=`basename $f .c`
+	echo "typedef int __builtin_va_list;" > $b.i
+	cc -E -DLINUX $b.c |
+		sed -e '/__extension__/s/__extension__/ /g' \
+			-e '/__const/s/__const/ /g' \
+			-e '/__restrict/s/__restrict/ /g' \
+			-e '/__inline__/s/__inline__/ /g' \
+			-e '/__attribute__.*;/s/__attribute__.*;/;/g' \
+			-e '/({.*})/s/({.*})/(___NON_STANDARD_GCC_EXPRESSION___)/g' \
+		 >> $b.i
+done
+
+fun f (Leaf _) = 1
+|   f (Node(_, children)) = (
+	1 + fold (op +) (map f children) 0
+);
+f (c_parse_file "t/cmdline.i");
+f (c_parse_file "t/diag.i");
+f (c_parse_file "t/files.i");
+f (c_parse_file "t/help.i");
+f (c_parse_file "t/mainw.i");
+f (c_parse_file "t/menus.i");
+f (c_parse_file "t/msg.i");
+f (c_parse_file "t/options.i");
+f (c_parse_file "t/palette.i");
+f (c_parse_file "t/pixmaps.i");
+f (c_parse_file "t/pterm.i");
+f (c_parse_file "t/search.i");
+f (c_parse_file "t/templates.i");
+f (c_parse_file "t/undo.i");
+f (c_parse_file "t/xmisc.i");
+f (c_parse_file "t/xpp.i");
+
+
+f (c_parse_file "t/temp.i");
